@@ -12,6 +12,7 @@ import {
   findParent,
   flattenNodes,
   getTaskProgress,
+  imageSourceCandidates,
   mergeAppearance,
   nodeSearchText,
   normalizeDocument,
@@ -72,6 +73,9 @@ export interface MindMapEditorOptions {
   showTaskProgress: boolean;
   autoFitOnOpen: boolean;
   historyLimit: number;
+  imageFailoverEnabled: boolean;
+  imageFailoverTimeoutSeconds: number;
+  imageFailoverUseLocalFallback: boolean;
 }
 
 interface NodeEditValues {
@@ -942,6 +946,7 @@ export class MindMapEditor {
   private resizeObserver: ResizeObserver | null = null;
   private branchClipboard: MindMapNode | null = null;
   private searchQuery = "";
+  private readonly imageLoadTimers = new Set<number>();
 
   constructor(app: App, host: HTMLElement, document: MindMapDocument, callbacks: MindMapEditorCallbacks, options: MindMapEditorOptions) {
     this.app = app;
@@ -957,6 +962,7 @@ export class MindMapEditor {
   }
 
   destroy(): void {
+    this.clearImageLoadTimers();
     this.cleanupCallbacks.forEach((callback) => callback());
     this.cleanupCallbacks = [];
     this.resizeObserver?.disconnect();
@@ -1112,6 +1118,11 @@ export class MindMapEditor {
     this.resizeObserver.observe(this.viewportEl);
   }
 
+  private clearImageLoadTimers(): void {
+    for (const timer of this.imageLoadTimers) window.clearTimeout(timer);
+    this.imageLoadTimers.clear();
+  }
+
   private addToolbarButton(icon: string, label: string, action: () => void): HTMLButtonElement {
     const button = this.toolbarEl.createEl("button", { cls: "clickable-icon mmc-toolbar-button", attr: { "aria-label": label, title: label } });
     setIcon(button, icon);
@@ -1179,6 +1190,7 @@ export class MindMapEditor {
   }
 
   private render(): void {
+    this.clearImageLoadTimers();
     this.renderNavigation();
     const appearance = this.getAppearance();
     this.applyAppearance(appearance);
@@ -1241,20 +1253,90 @@ export class MindMapEditor {
       let prefixRendered = false;
       for (const block of blocks) {
         if (block.type === "image") {
-          const resolved = this.callbacks.resolveImage(block.source);
           const wrap = content.createDiv({ cls: "mmc-node-image-block" });
-          const image = wrap.createEl("img", { cls: "mmc-node-image", attr: { alt: block.alt ?? (nodePlainText(node) || "图片"), loading: "lazy" } });
-          if (resolved) {
-            image.src = resolved;
-            image.setAttr("title", "点击放大图片");
-            image.addEventListener("click", (event) => {
-              event.stopPropagation();
-              new ImagePreviewModal(this.app, resolved, block.alt ?? "图片预览").open();
-            });
-          } else {
-            image.addClass("is-unresolved");
-            image.setAttr("title", `找不到图片：${block.source}`);
-          }
+          const image = wrap.createEl("img", { cls: "mmc-node-image is-loading", attr: { alt: block.alt ?? (nodePlainText(node) || "图片") } });
+          const candidates = this.options.imageFailoverEnabled
+            ? imageSourceCandidates(block, this.options.imageFailoverUseLocalFallback)
+            : imageSourceCandidates(block, false).slice(0, 1);
+          let activeResolved: string | null = null;
+          let attemptToken = 0;
+          let attemptTimer: number | null = null;
+          const clearAttemptTimer = (): void => {
+            if (attemptTimer === null) return;
+            window.clearTimeout(attemptTimer);
+            this.imageLoadTimers.delete(attemptTimer);
+            attemptTimer = null;
+          };
+          const markRemoteFailure = (source: string): void => {
+            const remote = block.remoteSources?.find((item) => item.url === source);
+            if (!remote) return;
+            remote.lastFailureAt = new Date().toISOString();
+            remote.failureCount = Math.min(1000000, (remote.failureCount ?? 0) + 1);
+          };
+          const tryCandidate = (index: number): void => {
+            clearAttemptTimer();
+            const candidate = candidates[index];
+            attemptToken += 1;
+            const token = attemptToken;
+            if (!candidate) {
+              activeResolved = null;
+              image.removeAttribute("src");
+              image.removeClass("is-loading");
+              image.addClass("is-unresolved");
+              image.setAttr("title", "所有图片镜像均不可用");
+              this.callbacks.onChange(this.getDocument());
+              this.markSaving();
+              return;
+            }
+            const resolved = this.callbacks.resolveImage(candidate.source);
+            if (!resolved) {
+              markRemoteFailure(candidate.source);
+              tryCandidate(index + 1);
+              return;
+            }
+            const probe = new Image();
+            const fail = (): void => {
+              if (token !== attemptToken) return;
+              clearAttemptTimer();
+              markRemoteFailure(candidate.source);
+              if (this.options.imageFailoverEnabled) tryCandidate(index + 1);
+              else {
+                image.removeClass("is-loading");
+                image.addClass("is-unresolved");
+                image.setAttr("title", `图片加载失败：${candidate.source}`);
+              }
+            };
+            probe.onload = () => {
+              if (token !== attemptToken || probe.naturalWidth <= 0) return;
+              clearAttemptTimer();
+              activeResolved = resolved;
+              image.src = resolved;
+              image.removeClass("is-loading");
+              image.removeClass("is-unresolved");
+              image.setAttr("title", index === 0 ? "点击放大图片" : `已自动切换到：${candidate.label}`);
+              const switched = candidate.source !== block.source;
+              const remote = block.remoteSources?.find((item) => item.url === candidate.source);
+              if (remote) remote.lastSuccessAt = new Date().toISOString();
+              if (!switched) return;
+              const previous = block.remoteSources?.find((item) => item.url === block.source);
+              block.source = candidate.source;
+              syncNodeLegacyFields(node);
+              this.callbacks.onChange(this.getDocument());
+              this.markSaving();
+              const previousLabel = previous?.hostName || "当前图床";
+              new Notice(`图片地址失效，已从 ${previousLabel} 自动切换到 ${candidate.label}`, 6000);
+            };
+            probe.onerror = fail;
+            const timeoutMs = Math.max(2, Math.min(30, this.options.imageFailoverTimeoutSeconds)) * 1000;
+            attemptTimer = window.setTimeout(fail, timeoutMs);
+            this.imageLoadTimers.add(attemptTimer);
+            probe.src = resolved;
+          };
+          image.addEventListener("click", (event) => {
+            event.stopPropagation();
+            if (activeResolved) new ImagePreviewModal(this.app, activeResolved, block.alt ?? "图片预览").open();
+          });
+          tryCandidate(0);
           continue;
         }
         if (!block.text.trim()) continue;

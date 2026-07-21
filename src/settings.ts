@@ -95,6 +95,9 @@ export interface MindMapStudioSettings {
   autoUploadDelaySeconds: number;
   autoUploadHostIds: string[];
   deleteLocalAfterUpload: boolean;
+  imageFailoverEnabled: boolean;
+  imageFailoverTimeoutSeconds: number;
+  imageFailoverUseLocalFallback: boolean;
 }
 
 export const DEFAULT_SETTINGS: MindMapStudioSettings = {
@@ -130,7 +133,10 @@ export const DEFAULT_SETTINGS: MindMapStudioSettings = {
   autoUploadEnabled: false,
   autoUploadDelaySeconds: 10,
   autoUploadHostIds: [],
-  deleteLocalAfterUpload: true
+  deleteLocalAfterUpload: true,
+  imageFailoverEnabled: true,
+  imageFailoverTimeoutSeconds: 8,
+  imageFailoverUseLocalFallback: true
 };
 
 export function settingsToAppearance(settings: MindMapStudioSettings): MindMapAppearance {
@@ -196,6 +202,41 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
         }));
 
     containerEl.createEl("h3", { text: "图片与图床" });
+
+    new Setting(containerEl)
+      .setName("远程图片自动故障转移")
+      .setDesc("当前图床地址加载失败或超时后，按镜像顺序尝试下一地址；成功后自动将可用地址保存为新的主地址。")
+      .addToggle((toggle) => toggle
+        .setValue(this.plugin.settings.imageFailoverEnabled)
+        .onChange(async (value) => {
+          this.plugin.settings.imageFailoverEnabled = value;
+          await this.plugin.saveSettings();
+          this.display();
+        }));
+
+    if (this.plugin.settings.imageFailoverEnabled) {
+      new Setting(containerEl)
+        .setName("单个镜像等待时间")
+        .setDesc("图片在该时间内未成功加载，就尝试下一个镜像。范围 2–30 秒。")
+        .addSlider((slider) => slider
+          .setLimits(2, 30, 1)
+          .setDynamicTooltip()
+          .setValue(this.plugin.settings.imageFailoverTimeoutSeconds)
+          .onChange(async (value) => {
+            this.plugin.settings.imageFailoverTimeoutSeconds = value;
+            await this.plugin.saveSettings();
+          }));
+
+      new Setting(containerEl)
+        .setName("本地副本作为最后回退")
+        .setDesc("远程镜像全部失效时，如果本地图片仍存在，则最后尝试本地副本。")
+        .addToggle((toggle) => toggle
+          .setValue(this.plugin.settings.imageFailoverUseLocalFallback)
+          .onChange(async (value) => {
+            this.plugin.settings.imageFailoverUseLocalFallback = value;
+            await this.plugin.saveSettings();
+          }));
+    }
 
     new Setting(containerEl)
       .setName("粘贴图片后自动上传")

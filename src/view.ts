@@ -114,7 +114,10 @@ export class MindMapStudioView extends TextFileView {
       defaultAppearance: settingsToAppearance(this.plugin.settings),
       showTaskProgress: this.plugin.settings.showTaskProgress,
       autoFitOnOpen: this.plugin.settings.autoFitOnOpen,
-      historyLimit: this.plugin.settings.historyLimit
+      historyLimit: this.plugin.settings.historyLimit,
+      imageFailoverEnabled: this.plugin.settings.imageFailoverEnabled,
+      imageFailoverTimeoutSeconds: this.plugin.settings.imageFailoverTimeoutSeconds,
+      imageFailoverUseLocalFallback: this.plugin.settings.imageFailoverUseLocalFallback
     };
   }
 

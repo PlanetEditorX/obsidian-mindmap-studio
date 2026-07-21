@@ -130,6 +130,23 @@ try {
   assert.equal(mixedReopened.root.content?.[0]?.localSource, "Assets/first.png");
   assert.equal(mixedReopened.root.content?.[0]?.remoteSources?.length, 2);
   assert.match(model.documentToMarkdown(mixedReopened), /!\[第一张\]\(https:\/\/cdn-a\.example\/first\.png\)/);
+  const failoverBlock = mixedReopened.root.content?.[0];
+  assert.equal(failoverBlock?.type, "image");
+  if (failoverBlock?.type === "image") {
+    const initialCandidates = model.imageSourceCandidates(failoverBlock, true);
+    assert.deepEqual(initialCandidates.map((item) => item.source), [
+      "https://cdn-a.example/first.png",
+      "https://cdn-b.example/first.png",
+      "Assets/first.png"
+    ]);
+    failoverBlock.source = "https://cdn-b.example/first.png";
+    const rotatedCandidates = model.imageSourceCandidates(failoverBlock, true);
+    assert.deepEqual(rotatedCandidates.map((item) => item.source), [
+      "https://cdn-b.example/first.png",
+      "https://cdn-a.example/first.png",
+      "Assets/first.png"
+    ], "after a failover, the active mirror should be tried first and the remaining mirrors should follow without duplicates");
+  }
 
   const pureImage = model.normalizeDocument({
     title: "纯图片",
@@ -249,6 +266,10 @@ try {
   assert.match(editorSource, /上传当前图片/);
   assert.match(editorSource, /onScheduleAutoUpload/);
   assert.match(editorSource, /syncNodeLegacyFields/);
+  assert.match(editorSource, /imageSourceCandidates/);
+  assert.match(editorSource, /所有图片镜像均不可用/);
+  assert.match(editorSource, /图片地址失效，已从/);
+  assert.match(editorSource, /imageFailoverTimeoutSeconds/);
 
   const settingsSource = await readFile("src/settings.ts", "utf8");
   assert.match(settingsSource, /autoUploadEnabled/);
@@ -256,6 +277,9 @@ try {
   assert.match(settingsSource, /autoUploadHostIds/);
   assert.match(settingsSource, /检测 API 连通性/);
   assert.match(settingsSource, /新增图床/);
+  assert.match(settingsSource, /远程图片自动故障转移/);
+  assert.match(settingsSource, /单个镜像等待时间/);
+  assert.match(settingsSource, /本地副本作为最后回退/);
 
   const cssSource = await readFile("styles.css", "utf8");
   assert.match(cssSource, /\.mmc-parent-navigation-button[\s\S]*min-height:\s*44px/);
@@ -273,7 +297,7 @@ try {
   const manifest = JSON.parse(await readFile("manifest.json", "utf8"));
   assert.equal(manifest.id, "mindmap-studio");
   assert.equal(manifest.name, "MindMap Studio");
-  assert.equal(manifest.version, "1.0.0");
+  assert.equal(manifest.version, "1.1.0");
 
   console.log("All MindMap Studio tests passed.");
 } finally {

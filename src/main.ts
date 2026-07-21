@@ -213,7 +213,12 @@ export default class MindMapStudioPlugin extends Plugin {
         ? Math.max(0, Math.min(300, Math.round(raw.autoUploadDelaySeconds)))
         : DEFAULT_SETTINGS.autoUploadDelaySeconds,
       autoUploadHostIds: selectedIds,
-      deleteLocalAfterUpload: raw.deleteLocalAfterUpload !== false
+      deleteLocalAfterUpload: raw.deleteLocalAfterUpload !== false,
+      imageFailoverEnabled: raw.imageFailoverEnabled !== false,
+      imageFailoverTimeoutSeconds: typeof raw.imageFailoverTimeoutSeconds === "number"
+        ? Math.max(2, Math.min(30, Math.round(raw.imageFailoverTimeoutSeconds)))
+        : DEFAULT_SETTINGS.imageFailoverTimeoutSeconds,
+      imageFailoverUseLocalFallback: raw.imageFailoverUseLocalFallback !== false
     } as MindMapStudioSettings;
     if (raw.backgroundPattern === undefined && raw.showGrid === false) this.settings.backgroundPattern = "none";
   }

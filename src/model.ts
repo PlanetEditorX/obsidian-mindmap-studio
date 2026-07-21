@@ -44,6 +44,17 @@ export interface MindMapImageRemoteSource {
   hostName?: string;
   url: string;
   uploadedAt?: string;
+  lastSuccessAt?: string;
+  lastFailureAt?: string;
+  failureCount?: number;
+}
+
+export interface MindMapImageSourceCandidate {
+  source: string;
+  label: string;
+  hostId?: string;
+  hostName?: string;
+  kind: "current" | "remote" | "local";
 }
 
 export interface MindMapImageContentBlock {
@@ -397,7 +408,12 @@ function normalizeContentBlock(input: unknown): MindMapContentBlock | null {
           hostId,
           hostName: typeof item.hostName === "string" && item.hostName.trim() ? item.hostName.trim().slice(0, 200) : undefined,
           url,
-          uploadedAt: typeof item.uploadedAt === "string" && item.uploadedAt.trim() ? item.uploadedAt.trim().slice(0, 80) : undefined
+          uploadedAt: typeof item.uploadedAt === "string" && item.uploadedAt.trim() ? item.uploadedAt.trim().slice(0, 80) : undefined,
+          lastSuccessAt: typeof item.lastSuccessAt === "string" && item.lastSuccessAt.trim() ? item.lastSuccessAt.trim().slice(0, 80) : undefined,
+          lastFailureAt: typeof item.lastFailureAt === "string" && item.lastFailureAt.trim() ? item.lastFailureAt.trim().slice(0, 80) : undefined,
+          failureCount: typeof item.failureCount === "number" && Number.isFinite(item.failureCount)
+            ? Math.max(0, Math.min(1000000, Math.floor(item.failureCount)))
+            : undefined
         }];
       })
       : undefined;
@@ -410,6 +426,44 @@ function normalizeContentBlock(input: unknown): MindMapContentBlock | null {
     return { id, type: "text", text, richText };
   }
   return null;
+}
+
+export function imageSourceCandidates(block: MindMapImageContentBlock, includeLocal = true): MindMapImageSourceCandidate[] {
+  const candidates: MindMapImageSourceCandidate[] = [];
+  const seen = new Set<string>();
+  const add = (candidate: MindMapImageSourceCandidate): void => {
+    const source = candidate.source.trim();
+    if (!source || seen.has(source)) return;
+    seen.add(source);
+    candidates.push({ ...candidate, source });
+  };
+
+  const currentRemote = block.remoteSources?.find((item) => item.url === block.source);
+  add({
+    source: block.source,
+    label: currentRemote?.hostName || (currentRemote ? "当前图床" : "当前图片"),
+    hostId: currentRemote?.hostId,
+    hostName: currentRemote?.hostName,
+    kind: "current"
+  });
+  const remotes = block.remoteSources ?? [];
+  const currentIndex = remotes.findIndex((item) => item.url === block.source);
+  const orderedRemotes = currentIndex >= 0
+    ? [...remotes.slice(currentIndex + 1), ...remotes.slice(0, currentIndex)]
+    : remotes;
+  for (const remote of orderedRemotes) {
+    add({
+      source: remote.url,
+      label: remote.hostName || "备用图床",
+      hostId: remote.hostId,
+      hostName: remote.hostName,
+      kind: "remote"
+    });
+  }
+  if (includeLocal && block.localSource) {
+    add({ source: block.localSource, label: "本地副本", kind: "local" });
+  }
+  return candidates;
 }
 
 export function nodeContentBlocks(node: Pick<MindMapNode, "content" | "text" | "richText" | "image">): MindMapContentBlock[] {
