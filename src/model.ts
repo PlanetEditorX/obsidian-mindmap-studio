@@ -1,11 +1,45 @@
+/**
+ * @file model.ts
+ * @description MindMap Studio 的领域模型与序列化层。
+ *
+ * 定义 .mindmap 稳定数据结构，并负责旧版本兼容、字段规范化、富文本、内容块、节点树、Markdown 导入导出及图片镜像候选源排序。
+ */
+
+/**
+ * LayoutMode 类型定义，用于限制可接受值并让序列化数据保持稳定。
+ */
 export type LayoutMode = "right" | "balanced";
+/**
+ * DisplayMode 类型定义，用于限制可接受值并让序列化数据保持稳定。
+ */
 export type DisplayMode = "mindmap" | "outline" | "article";
+/**
+ * ThemeMode 类型定义，用于限制可接受值并让序列化数据保持稳定。
+ */
 export type ThemeMode = "auto" | "light" | "dark";
+/**
+ * NodeShape 类型定义，用于限制可接受值并让序列化数据保持稳定。
+ */
 export type NodeShape = "rounded" | "pill" | "rectangle";
+/**
+ * TaskStatus 类型定义，用于限制可接受值并让序列化数据保持稳定。
+ */
 export type TaskStatus = "todo" | "doing" | "done";
+/**
+ * BackgroundPattern 类型定义，用于限制可接受值并让序列化数据保持稳定。
+ */
 export type BackgroundPattern = "none" | "grid" | "dots";
+/**
+ * EdgeStyle 类型定义，用于限制可接受值并让序列化数据保持稳定。
+ */
 export type EdgeStyle = "curved" | "straight" | "elbow";
+/**
+ * EdgeWidthMode 类型定义，用于限制可接受值并让序列化数据保持稳定。
+ */
 export type EdgeWidthMode = "uniform" | "tapered";
+/**
+ * MindMapThemePresetId 类型定义，用于限制可接受值并让序列化数据保持稳定。
+ */
 export type MindMapThemePresetId =
   | "classic-indigo"
   | "ocean-blue"
@@ -17,10 +51,22 @@ export type MindMapThemePresetId =
   | "minimal-ink"
   | "dark-neon"
   | "mint-clean";
+/**
+ * FontFamilyMode 类型定义，用于限制可接受值并让序列化数据保持稳定。
+ */
 export type FontFamilyMode = "obsidian" | "sans" | "serif" | "mono" | "custom";
+/**
+ * TableAlignment 类型定义，用于限制可接受值并让序列化数据保持稳定。
+ */
 export type TableAlignment = "left" | "center" | "right";
+/**
+ * NodeTextAlign 类型定义，用于限制可接受值并让序列化数据保持稳定。
+ */
 export type NodeTextAlign = "left" | "center" | "right";
 
+/**
+ * MindMapTextStyle 的结构化数据约定。字段会在模块边界传递，用于保持类型安全和版本兼容。
+ */
 export interface MindMapTextStyle {
   bold?: boolean;
   italic?: boolean;
@@ -29,11 +75,17 @@ export interface MindMapTextStyle {
   color?: string;
 }
 
+/**
+ * MindMapTextRun 的结构化数据约定。字段会在模块边界传递，用于保持类型安全和版本兼容。
+ */
 export interface MindMapTextRun {
   text: string;
   style?: MindMapTextStyle;
 }
 
+/**
+ * MindMapTable 的结构化数据约定。字段会在模块边界传递，用于保持类型安全和版本兼容。
+ */
 export interface MindMapTable {
   headers: string[];
   rows: string[][];
@@ -41,11 +93,17 @@ export interface MindMapTable {
   source?: "manual" | "markdown" | "children";
 }
 
+/**
+ * MindMapCodeBlock 的结构化数据约定。字段会在模块边界传递，用于保持类型安全和版本兼容。
+ */
 export interface MindMapCodeBlock {
   language?: string;
   code: string;
 }
 
+/**
+ * MindMapTextContentBlock 的结构化数据约定。字段会在模块边界传递，用于保持类型安全和版本兼容。
+ */
 export interface MindMapTextContentBlock {
   id: string;
   type: "text";
@@ -53,6 +111,9 @@ export interface MindMapTextContentBlock {
   richText?: MindMapTextRun[];
 }
 
+/**
+ * MindMapImageRemoteSource 的结构化数据约定。字段会在模块边界传递，用于保持类型安全和版本兼容。
+ */
 export interface MindMapImageRemoteSource {
   hostId: string;
   hostName?: string;
@@ -63,6 +124,9 @@ export interface MindMapImageRemoteSource {
   failureCount?: number;
 }
 
+/**
+ * MindMapImageSourceCandidate 的结构化数据约定。字段会在模块边界传递，用于保持类型安全和版本兼容。
+ */
 export interface MindMapImageSourceCandidate {
   source: string;
   label: string;
@@ -71,6 +135,9 @@ export interface MindMapImageSourceCandidate {
   kind: "current" | "remote" | "local";
 }
 
+/**
+ * MindMapImageContentBlock 的结构化数据约定。字段会在模块边界传递，用于保持类型安全和版本兼容。
+ */
 export interface MindMapImageContentBlock {
   id: string;
   type: "image";
@@ -82,13 +149,22 @@ export interface MindMapImageContentBlock {
   remoteSources?: MindMapImageRemoteSource[];
 }
 
+/**
+ * MindMapContentBlock 类型定义，用于限制可接受值并让序列化数据保持稳定。
+ */
 export type MindMapContentBlock = MindMapTextContentBlock | MindMapImageContentBlock;
 
+/**
+ * MindMapSubmap 的结构化数据约定。字段会在模块边界传递，用于保持类型安全和版本兼容。
+ */
 export interface MindMapSubmap {
   path: string;
   title?: string;
 }
 
+/**
+ * MindMapNavigation 的结构化数据约定。字段会在模块边界传递，用于保持类型安全和版本兼容。
+ */
 export interface MindMapNavigation {
   parentPath: string;
   parentNodeId?: string;
@@ -96,6 +172,9 @@ export interface MindMapNavigation {
   parentNodeText?: string;
 }
 
+/**
+ * MindMapAppearance 的结构化数据约定。字段会在模块边界传递，用于保持类型安全和版本兼容。
+ */
 export interface MindMapAppearance {
   themePreset?: MindMapThemePresetId;
   backgroundColor?: string;
@@ -123,6 +202,9 @@ export interface MindMapAppearance {
   underline?: boolean;
 }
 
+/**
+ * MindMapNodeStyle 的结构化数据约定。字段会在模块边界传递，用于保持类型安全和版本兼容。
+ */
 export interface MindMapNodeStyle {
   color?: string;
   textColor?: string;
@@ -138,6 +220,9 @@ export interface MindMapNodeStyle {
   minHeight?: number;
 }
 
+/**
+ * MindMapNode 的结构化数据约定。字段会在模块边界传递，用于保持类型安全和版本兼容。
+ */
 export interface MindMapNode {
   id: string;
   text: string;
@@ -160,11 +245,17 @@ export interface MindMapNode {
   children: MindMapNode[];
 }
 
+/**
+ * MindMapDocumentView 的结构化数据约定。字段会在模块边界传递，用于保持类型安全和版本兼容。
+ */
 export interface MindMapDocumentView {
   mode?: DisplayMode;
   readOnly?: boolean;
 }
 
+/**
+ * MindMapDocument 的结构化数据约定。字段会在模块边界传递，用于保持类型安全和版本兼容。
+ */
 export interface MindMapDocument {
   version: 10;
   title: string;
@@ -176,6 +267,9 @@ export interface MindMapDocument {
   root: MindMapNode;
 }
 
+/**
+ * TaskProgress 的结构化数据约定。字段会在模块边界传递，用于保持类型安全和版本兼容。
+ */
 export interface TaskProgress {
   done: number;
   total: number;
@@ -184,15 +278,31 @@ export interface TaskProgress {
 export const MINDMAP_CODE_BLOCK = "mindmap-json";
 const LEGACY_CODE_BLOCKS = ["smm-json", "mmc-json"] as const;
 
+/**
+ * 执行“new id”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+ * @returns 计算、解析或序列化后的字符串结果。
+ */
 export function newId(): string {
   const random = Math.random().toString(36).slice(2, 9);
   return `n_${Date.now().toString(36)}_${random}`;
 }
 
+/**
+ * 创建node，并保持模型、界面和持久化状态的一致性。
+ *
+ * @param text 要显示、搜索、解析或写入的文本。
+ * @returns 当前操作生成、查找或规范化后的结果。
+ */
 export function createNode(text = "新节点"): MindMapNode {
   return { id: newId(), text, children: [] };
 }
 
+/**
+ * 创建default document，并保持模型、界面和持久化状态的一致性。
+ *
+ * @param title 文档、节点或导出文件的显示标题。
+ * @returns 当前操作生成、查找或规范化后的结果。
+ */
 export function createDefaultDocument(title = "新思维导图"): MindMapDocument {
   return {
     version: 10,
@@ -210,21 +320,47 @@ export function createDefaultDocument(title = "新思维导图"): MindMapDocumen
   };
 }
 
+/**
+ * 校验并规范化color，并保持模型、界面和持久化状态的一致性。
+ *
+ * @param value 待校验、转换或比较的输入值。
+ * @returns 计算、解析或序列化后的字符串结果。
+ */
 function normalizeColor(value: unknown): string | undefined {
   if (typeof value !== "string") return undefined;
   const trimmed = value.trim();
   return /^#[0-9a-f]{6}$/i.test(trimmed) ? trimmed : undefined;
 }
 
+/**
+ * 校验并规范化number，并保持模型、界面和持久化状态的一致性。
+ *
+ * @param value 待校验、转换或比较的输入值。
+ * @param min 该参数用于 normalize number 流程中的输入或控制。
+ * @param max 该参数用于 normalize number 流程中的输入或控制。
+ * @returns 计算得到的数值结果。
+ */
 function normalizeNumber(value: unknown, min: number, max: number): number | undefined {
   if (typeof value !== "number" || !Number.isFinite(value)) return undefined;
   return Math.min(max, Math.max(min, value));
 }
 
+/**
+ * 校验并规范化boolean override，并保持模型、界面和持久化状态的一致性。
+ *
+ * @param value 待校验、转换或比较的输入值。
+ * @returns 当前操作生成、查找或规范化后的结果。
+ */
 function normalizeBooleanOverride(value: unknown): boolean | undefined {
   return typeof value === "boolean" ? value : undefined;
 }
 
+/**
+ * 校验并规范化appearance，并保持模型、界面和持久化状态的一致性。
+ *
+ * @param input 可能来自磁盘、剪贴板或旧版本的不可信输入。
+ * @returns 当前操作生成、查找或规范化后的结果。
+ */
 function normalizeAppearance(input: Partial<MindMapAppearance> | undefined): MindMapAppearance | undefined {
   if (!input) return undefined;
   const backgroundPattern: BackgroundPattern | undefined = input.backgroundPattern === "none" || input.backgroundPattern === "grid" || input.backgroundPattern === "dots"
@@ -278,10 +414,23 @@ function normalizeAppearance(input: Partial<MindMapAppearance> | undefined): Min
   return Object.values(appearance).some((value) => value !== undefined) ? appearance : undefined;
 }
 
+/**
+ * 合并appearance，并保持模型、界面和持久化状态的一致性。
+ *
+ * @param base 被覆盖或合并的基础配置。
+ * @param override 覆盖基础配置的可选字段。
+ * @returns 当前操作生成、查找或规范化后的结果。
+ */
 export function mergeAppearance(base: MindMapAppearance | undefined, override: MindMapAppearance | undefined): MindMapAppearance {
   return { ...(base ?? {}), ...(override ?? {}) };
 }
 
+/**
+ * 校验并规范化style，并保持模型、界面和持久化状态的一致性。
+ *
+ * @param input 可能来自磁盘、剪贴板或旧版本的不可信输入。
+ * @returns 当前操作生成、查找或规范化后的结果。
+ */
 function normalizeStyle(input: Partial<MindMapNodeStyle> | undefined): MindMapNodeStyle | undefined {
   if (!input) return undefined;
   const shape: NodeShape | undefined = input.shape === "pill" || input.shape === "rectangle" || input.shape === "rounded"
@@ -304,6 +453,12 @@ function normalizeStyle(input: Partial<MindMapNodeStyle> | undefined): MindMapNo
   return Object.values(style).some((value) => value !== undefined) ? style : undefined;
 }
 
+/**
+ * 校验并规范化text style，并保持模型、界面和持久化状态的一致性。
+ *
+ * @param input 可能来自磁盘、剪贴板或旧版本的不可信输入。
+ * @returns 当前操作生成、查找或规范化后的结果。
+ */
 function normalizeTextStyle(input: Partial<MindMapTextStyle> | undefined): MindMapTextStyle | undefined {
   if (!input) return undefined;
   const style: MindMapTextStyle = {
@@ -316,10 +471,23 @@ function normalizeTextStyle(input: Partial<MindMapTextStyle> | undefined): MindM
   return Object.values(style).some((value) => value !== undefined) ? style : undefined;
 }
 
+/**
+ * 执行“text style key”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+ *
+ * @param style 要应用、比较或规范化的样式。
+ * @returns 计算、解析或序列化后的字符串结果。
+ */
 function textStyleKey(style: MindMapTextStyle | undefined): string {
   return JSON.stringify(style ?? {});
 }
 
+/**
+ * 校验并规范化rich text，并保持模型、界面和持久化状态的一致性。
+ *
+ * @param input 可能来自磁盘、剪贴板或旧版本的不可信输入。
+ * @param fallbackText 该参数用于 normalize rich text 流程中的输入或控制。
+ * @returns 按当前规则构建的集合结果。
+ */
 export function normalizeRichText(input: unknown, fallbackText = ""): MindMapTextRun[] | undefined {
   if (!Array.isArray(input)) return undefined;
   const runs: MindMapTextRun[] = [];
@@ -361,10 +529,24 @@ export function normalizeRichText(input: unknown, fallbackText = ""): MindMapTex
   return runs.some((run) => run.style && Object.values(run.style).some((value) => value !== undefined)) ? runs : undefined;
 }
 
+/**
+ * 执行“rich text plain text”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+ *
+ * @param runs 按字符样式拆分的富文本运行段。
+ * @param fallbackText 该参数用于 rich text plain text 流程中的输入或控制。
+ * @returns 计算、解析或序列化后的字符串结果。
+ */
 export function richTextPlainText(runs: MindMapTextRun[] | undefined, fallbackText = ""): string {
   return runs?.map((run) => run.text).join("") ?? fallbackText;
 }
 
+/**
+ * 执行“rich text character styles”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+ *
+ * @param runs 按字符样式拆分的富文本运行段。
+ * @param fallbackText 该参数用于 rich text character styles 流程中的输入或控制。
+ * @returns 按当前规则构建的集合结果。
+ */
 export function richTextCharacterStyles(runs: MindMapTextRun[] | undefined, fallbackText = ""): MindMapTextStyle[] {
   const text = richTextPlainText(runs, fallbackText);
   const styles: MindMapTextStyle[] = Array.from({ length: text.length }, () => ({}));
@@ -379,6 +561,13 @@ export function richTextCharacterStyles(runs: MindMapTextRun[] | undefined, fall
   return styles;
 }
 
+/**
+ * 执行“character styles to rich text”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+ *
+ * @param text 要显示、搜索、解析或写入的文本。
+ * @param styles 该参数用于 character styles to rich text 流程中的输入或控制。
+ * @returns 按当前规则构建的集合结果。
+ */
 export function characterStylesToRichText(text: string, styles: MindMapTextStyle[]): MindMapTextRun[] | undefined {
   if (!text) return undefined;
   const runs: MindMapTextRun[] = [];
@@ -395,6 +584,15 @@ export function characterStylesToRichText(text: string, styles: MindMapTextStyle
   return normalizeRichText(runs, text);
 }
 
+/**
+ * 在纯文本被编辑后，尽可能保留原字符位置附近的富文本样式。它通过公共前缀和后缀映射样式，新增字符继承邻近样式，删除字符则自动丢弃对应区间。
+ *
+ * @param previousText 该参数用于 reconcile rich text after edit 流程中的输入或控制。
+ * @param previousRuns 该参数用于 reconcile rich text after edit 流程中的输入或控制。
+ * @param nextText 该参数用于 reconcile rich text after edit 流程中的输入或控制。
+ * @returns 按当前规则构建的集合结果。
+ * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
+ */
 export function reconcileRichTextAfterEdit(
   previousText: string,
   previousRuns: MindMapTextRun[] | undefined,
@@ -420,6 +618,17 @@ export function reconcileRichTextAfterEdit(
   return characterStylesToRichText(nextText, nextStyles);
 }
 
+/**
+ * 对字符半开区间应用或取消指定富文本样式，并重新合并连续、样式相同的文本段，避免产生大量碎片化运行段。
+ *
+ * @param text 要显示、搜索、解析或写入的文本。
+ * @param runs 按字符样式拆分的富文本运行段。
+ * @param start 该参数用于 apply rich text style range 流程中的输入或控制。
+ * @param end 该参数用于 apply rich text style range 流程中的输入或控制。
+ * @param patch 该参数用于 apply rich text style range 流程中的输入或控制。
+ * @returns 按当前规则构建的集合结果。
+ * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
+ */
 export function applyRichTextStyleRange(
   text: string,
   runs: MindMapTextRun[] | undefined,
@@ -439,6 +648,12 @@ export function applyRichTextStyleRange(
 }
 
 
+/**
+ * 校验并规范化content block，并保持模型、界面和持久化状态的一致性。
+ *
+ * @param input 可能来自磁盘、剪贴板或旧版本的不可信输入。
+ * @returns 当前操作生成、查找或规范化后的结果。
+ */
 function normalizeContentBlock(input: unknown): MindMapContentBlock | null {
   if (!input || typeof input !== "object") return null;
   const candidate = input as Partial<MindMapContentBlock>;
@@ -482,6 +697,14 @@ function normalizeContentBlock(input: unknown): MindMapContentBlock | null {
   return null;
 }
 
+/**
+ * 为图片内容块构建有序、去重的加载候选列表。顺序从当前地址开始轮转到其他远程镜像，最后按设置选择本地地址，从而支持失效图床自动切换。
+ *
+ * @param block 当前内容块，通常是文字块或图片块。
+ * @param includeLocal 是否把本地图片地址作为最终回退候选。
+ * @returns 按当前规则构建的集合结果。
+ * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
+ */
 export function imageSourceCandidates(block: MindMapImageContentBlock, includeLocal = true): MindMapImageSourceCandidate[] {
   const candidates: MindMapImageSourceCandidate[] = [];
   const seen = new Set<string>();
@@ -520,6 +743,12 @@ export function imageSourceCandidates(block: MindMapImageContentBlock, includeLo
   return candidates;
 }
 
+/**
+ * 执行“node content blocks”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+ *
+ * @param node 当前处理的节点。
+ * @returns 按当前规则构建的集合结果。
+ */
 export function nodeContentBlocks(node: Pick<MindMapNode, "content" | "text" | "richText" | "image">): MindMapContentBlock[] {
   if (Array.isArray(node.content) && node.content.length) {
     const normalized = node.content.map(normalizeContentBlock).filter((block): block is MindMapContentBlock => Boolean(block));
@@ -534,16 +763,34 @@ export function nodeContentBlocks(node: Pick<MindMapNode, "content" | "text" | "
   return blocks;
 }
 
+/**
+ * 执行“node plain text”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+ *
+ * @param node 当前处理的节点。
+ * @returns 计算、解析或序列化后的字符串结果。
+ */
 export function nodePlainText(node: Pick<MindMapNode, "content" | "text" | "richText" | "image">): string {
   const blocks = nodeContentBlocks(node);
   return blocks.filter((block): block is MindMapTextContentBlock => block.type === "text").map((block) => block.text).join(" ").trim();
 }
 
+/**
+ * 执行“node primary text”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+ *
+ * @param node 当前处理的节点。
+ * @returns 计算、解析或序列化后的字符串结果。
+ */
 export function nodePrimaryText(node: Pick<MindMapNode, "content" | "text" | "richText" | "image">): string {
   const first = nodeContentBlocks(node).find((block): block is MindMapTextContentBlock => block.type === "text");
   return first?.text.trim() ?? "";
 }
 
+/**
+ * 将新的有序 content 内容块同步回 text、richText 和 image 等旧字段。该桥接保证旧版本插件、旧导出逻辑和新内容块模型能够同时工作。
+ *
+ * @param node 当前处理的节点。
+ * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
+ */
 export function syncNodeLegacyFields(node: MindMapNode): void {
   const blocks = nodeContentBlocks(node);
   node.content = blocks.length ? blocks : undefined;
@@ -555,10 +802,22 @@ export function syncNodeLegacyFields(node: MindMapNode): void {
 }
 
 
+/**
+ * 校验并规范化cell，并保持模型、界面和持久化状态的一致性。
+ *
+ * @param value 待校验、转换或比较的输入值。
+ * @returns 计算、解析或序列化后的字符串结果。
+ */
 function normalizeCell(value: unknown): string {
   return typeof value === "string" ? value.trim().slice(0, 2000) : String(value ?? "").trim().slice(0, 2000);
 }
 
+/**
+ * 校验并规范化table，并保持模型、界面和持久化状态的一致性。
+ *
+ * @param input 可能来自磁盘、剪贴板或旧版本的不可信输入。
+ * @returns 当前操作生成、查找或规范化后的结果。
+ */
 function normalizeTable(input: Partial<MindMapTable> | undefined): MindMapTable | undefined {
   if (!input || !Array.isArray(input.headers)) return undefined;
   const headers = input.headers.map(normalizeCell).slice(0, 12);
@@ -577,6 +836,12 @@ function normalizeTable(input: Partial<MindMapTable> | undefined): MindMapTable 
   return { headers, rows, alignments, source };
 }
 
+/**
+ * 校验并规范化code，并保持模型、界面和持久化状态的一致性。
+ *
+ * @param input 可能来自磁盘、剪贴板或旧版本的不可信输入。
+ * @returns 当前操作生成、查找或规范化后的结果。
+ */
 function normalizeCode(input: Partial<MindMapCodeBlock> | undefined): MindMapCodeBlock | undefined {
   if (!input || typeof input.code !== "string" || !input.code.trim()) return undefined;
   const language = typeof input.language === "string" && input.language.trim()
@@ -585,6 +850,12 @@ function normalizeCode(input: Partial<MindMapCodeBlock> | undefined): MindMapCod
   return { language, code: input.code.replace(/\r\n/g, "\n").slice(0, 100000) };
 }
 
+/**
+ * 校验并规范化submap，并保持模型、界面和持久化状态的一致性。
+ *
+ * @param input 可能来自磁盘、剪贴板或旧版本的不可信输入。
+ * @returns 当前操作生成、查找或规范化后的结果。
+ */
 function normalizeSubmap(input: Partial<MindMapSubmap> | undefined): MindMapSubmap | undefined {
   if (!input || typeof input.path !== "string" || !input.path.trim()) return undefined;
   return {
@@ -593,6 +864,12 @@ function normalizeSubmap(input: Partial<MindMapSubmap> | undefined): MindMapSubm
   };
 }
 
+/**
+ * 校验并规范化navigation，并保持模型、界面和持久化状态的一致性。
+ *
+ * @param input 可能来自磁盘、剪贴板或旧版本的不可信输入。
+ * @returns 当前操作生成、查找或规范化后的结果。
+ */
 function normalizeNavigation(input: Partial<MindMapNavigation> | undefined): MindMapNavigation | undefined {
   if (!input || typeof input.parentPath !== "string" || !input.parentPath.trim()) return undefined;
   return {
@@ -603,10 +880,22 @@ function normalizeNavigation(input: Partial<MindMapNavigation> | undefined): Min
   };
 }
 
+/**
+ * 校验并规范化task，并保持模型、界面和持久化状态的一致性。
+ *
+ * @param value 待校验、转换或比较的输入值。
+ * @returns 当前操作生成、查找或规范化后的结果。
+ */
 function normalizeTask(value: unknown): TaskStatus | undefined {
   return value === "todo" || value === "doing" || value === "done" ? value : undefined;
 }
 
+/**
+ * 校验并规范化tags，并保持模型、界面和持久化状态的一致性。
+ *
+ * @param value 待校验、转换或比较的输入值。
+ * @returns 计算、解析或序列化后的字符串结果。
+ */
 function normalizeTags(value: unknown): string[] | undefined {
   if (!Array.isArray(value)) return undefined;
   const tags = Array.from(new Set(value
@@ -617,6 +906,13 @@ function normalizeTags(value: unknown): string[] | undefined {
   return tags.length ? tags : undefined;
 }
 
+/**
+ * 校验并规范化node，并保持模型、界面和持久化状态的一致性。
+ *
+ * @param input 可能来自磁盘、剪贴板或旧版本的不可信输入。
+ * @param fallbackText 该参数用于 normalize node 流程中的输入或控制。
+ * @returns 当前操作生成、查找或规范化后的结果。
+ */
 function normalizeNode(input: Partial<MindMapNode> | undefined, fallbackText: string): MindMapNode {
   const fallbackNodeText = typeof input?.text === "string" ? input.text : fallbackText;
   const normalizedContent = Array.isArray(input?.content)
@@ -656,6 +952,12 @@ function normalizeNode(input: Partial<MindMapNode> | undefined, fallbackText: st
   };
 }
 
+/**
+ * 校验并规范化document view，并保持模型、界面和持久化状态的一致性。
+ *
+ * @param input 可能来自磁盘、剪贴板或旧版本的不可信输入。
+ * @returns 当前操作生成、查找或规范化后的结果。
+ */
 function normalizeDocumentView(input: Partial<MindMapDocumentView> | undefined): MindMapDocumentView | undefined {
   if (!input) return undefined;
   const mode: DisplayMode | undefined = input.mode === "outline" || input.mode === "article" || input.mode === "mindmap"
@@ -665,6 +967,14 @@ function normalizeDocumentView(input: Partial<MindMapDocumentView> | undefined):
   return mode !== undefined || readOnly !== undefined ? { mode, readOnly } : undefined;
 }
 
+/**
+ * 把任意版本或不完整的输入对象转换为当前版本的 MindMapDocument。该函数会递归规范化节点、外观、视图状态和兼容字段，并保证根节点、数组及必需标识始终存在。
+ *
+ * @param input 可能来自磁盘、剪贴板或旧版本的不可信输入。
+ * @param fallbackTitle 无法从内容中取得标题时使用的回退标题。
+ * @returns 当前操作生成、查找或规范化后的结果。
+ * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
+ */
 export function normalizeDocument(input: Partial<MindMapDocument> | undefined, fallbackTitle = "思维导图"): MindMapDocument {
   const title = typeof input?.title === "string" && input.title.trim() ? input.title.trim() : fallbackTitle;
   return {
@@ -679,11 +989,25 @@ export function normalizeDocument(input: Partial<MindMapDocument> | undefined, f
   };
 }
 
+/**
+ * 在保存前再次规范化文档，并输出带缩进的稳定 JSON。这样可移除运行时临时值，同时保留可选兼容字段。
+ *
+ * @param doc 要处理或写回的思维导图文档。
+ * @returns 计算、解析或序列化后的字符串结果。
+ * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
+ */
 export function serializeDocument(doc: MindMapDocument): string {
   const normalized = normalizeDocument(doc, doc.title);
   return `${JSON.stringify(normalized, null, 2)}\n`;
 }
 
+/**
+ * 解析json document，并保持模型、界面和持久化状态的一致性。
+ *
+ * @param value 待校验、转换或比较的输入值。
+ * @param fallbackTitle 无法从内容中取得标题时使用的回退标题。
+ * @returns 当前操作生成、查找或规范化后的结果。
+ */
 function parseJsonDocument(value: string, fallbackTitle: string): MindMapDocument | null {
   try {
     return normalizeDocument(JSON.parse(value) as Partial<MindMapDocument>, fallbackTitle);
@@ -692,12 +1016,27 @@ function parseJsonDocument(value: string, fallbackTitle: string): MindMapDocumen
   }
 }
 
+/**
+ * 执行“extract fenced json”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+ *
+ * @param source 待解析或渲染的原始文本。
+ * @param language 该参数用于 extract fenced json 流程中的输入或控制。
+ * @returns 计算、解析或序列化后的字符串结果。
+ */
 function extractFencedJson(source: string, language: string): string | null {
   const escaped = language.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const match = source.match(new RegExp("```" + escaped + "\\s*([\\s\\S]*?)```", "i"));
   return match?.[1]?.trim() ?? null;
 }
 
+/**
+ * 解析磁盘中的 .mindmap 文本。优先识别当前原始 JSON 格式，同时兼容历史 Markdown 围栏 JSON；解析失败时返回包含回退标题的安全默认文档，避免视图崩溃。
+ *
+ * @param source 待解析或渲染的原始文本。
+ * @param fallbackTitle 无法从内容中取得标题时使用的回退标题。
+ * @returns 当前操作生成、查找或规范化后的结果。
+ * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
+ */
 export function parseDocument(source: string, fallbackTitle = "思维导图"): MindMapDocument {
   const trimmed = source.trim();
   if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
@@ -715,10 +1054,22 @@ export function parseDocument(source: string, fallbackTitle = "思维导图"): M
   return markdownToDocument(source, fallbackTitle);
 }
 
+/**
+ * 执行“clone document”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+ *
+ * @param doc 要处理或写回的思维导图文档。
+ * @returns 当前操作生成、查找或规范化后的结果。
+ */
 export function cloneDocument(doc: MindMapDocument): MindMapDocument {
   return JSON.parse(JSON.stringify(doc)) as MindMapDocument;
 }
 
+/**
+ * 执行“clone node with fresh ids”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+ *
+ * @param node 当前处理的节点。
+ * @returns 当前操作生成、查找或规范化后的结果。
+ */
 export function cloneNodeWithFreshIds(node: MindMapNode): MindMapNode {
   const clone = JSON.parse(JSON.stringify(node)) as MindMapNode;
   walkNodes(clone, (current) => {
@@ -727,6 +1078,12 @@ export function cloneNodeWithFreshIds(node: MindMapNode): MindMapNode {
   return clone;
 }
 
+/**
+ * 递归遍历nodes，并保持模型、界面和持久化状态的一致性。
+ *
+ * @param root 节点树的根节点。
+ * @param visitor 该参数用于 walk nodes 流程中的输入或控制。
+ */
 export function walkNodes(root: MindMapNode, visitor: (node: MindMapNode, parent: MindMapNode | null) => void): void {
   const visit = (node: MindMapNode, parent: MindMapNode | null): void => {
     visitor(node, parent);
@@ -735,12 +1092,25 @@ export function walkNodes(root: MindMapNode, visitor: (node: MindMapNode, parent
   visit(root, null);
 }
 
+/**
+ * 展平nodes，并保持模型、界面和持久化状态的一致性。
+ *
+ * @param root 节点树的根节点。
+ * @returns 按当前规则构建的集合结果。
+ */
 export function flattenNodes(root: MindMapNode): MindMapNode[] {
   const nodes: MindMapNode[] = [];
   walkNodes(root, (node) => nodes.push(node));
   return nodes;
 }
 
+/**
+ * 查找node，并保持模型、界面和持久化状态的一致性。
+ *
+ * @param root 节点树的根节点。
+ * @param id 目标对象或节点的稳定标识。
+ * @returns 当前操作生成、查找或规范化后的结果。
+ */
 export function findNode(root: MindMapNode, id: string): MindMapNode | null {
   let result: MindMapNode | null = null;
   walkNodes(root, (node) => {
@@ -749,6 +1119,13 @@ export function findNode(root: MindMapNode, id: string): MindMapNode | null {
   return result;
 }
 
+/**
+ * 查找parent，并保持模型、界面和持久化状态的一致性。
+ *
+ * @param root 节点树的根节点。
+ * @param id 目标对象或节点的稳定标识。
+ * @returns 当前操作生成、查找或规范化后的结果。
+ */
 export function findParent(root: MindMapNode, id: string): MindMapNode | null {
   let result: MindMapNode | null = null;
   walkNodes(root, (node, parent) => {
@@ -757,6 +1134,13 @@ export function findParent(root: MindMapNode, id: string): MindMapNode | null {
   return result;
 }
 
+/**
+ * 查找ancestors，并保持模型、界面和持久化状态的一致性。
+ *
+ * @param root 节点树的根节点。
+ * @param id 目标对象或节点的稳定标识。
+ * @returns 按当前规则构建的集合结果。
+ */
 export function findAncestors(root: MindMapNode, id: string): MindMapNode[] {
   const path: MindMapNode[] = [];
   const visit = (node: MindMapNode): boolean => {
@@ -771,10 +1155,24 @@ export function findAncestors(root: MindMapNode, id: string): MindMapNode[] {
   return visit(root) ? path : [];
 }
 
+/**
+ * 判断node，并保持模型、界面和持久化状态的一致性。
+ *
+ * @param root 节点树的根节点。
+ * @param id 目标对象或节点的稳定标识。
+ * @returns 操作条件是否成立或处理是否成功。
+ */
 export function containsNode(root: MindMapNode, id: string): boolean {
   return findNode(root, id) !== null;
 }
 
+/**
+ * 删除node，并保持模型、界面和持久化状态的一致性。
+ *
+ * @param root 节点树的根节点。
+ * @param id 目标对象或节点的稳定标识。
+ * @returns 操作条件是否成立或处理是否成功。
+ */
 export function removeNode(root: MindMapNode, id: string): boolean {
   for (let index = 0; index < root.children.length; index += 1) {
     if (root.children[index]?.id === id) {
@@ -787,6 +1185,12 @@ export function removeNode(root: MindMapNode, id: string): boolean {
   return false;
 }
 
+/**
+ * 遍历并收集wiki links，并保持模型、界面和持久化状态的一致性。
+ *
+ * @param root 节点树的根节点。
+ * @returns 计算、解析或序列化后的字符串结果。
+ */
 export function collectWikiLinks(root: MindMapNode): Set<string> {
   const links = new Set<string>();
   const pattern = /\[\[([^\]|#]+)(?:#[^\]|]+)?(?:\|[^\]]+)?\]\]/g;
@@ -808,11 +1212,23 @@ export function collectWikiLinks(root: MindMapNode): Set<string> {
   return links;
 }
 
+/**
+ * 执行“extract first wiki link”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+ *
+ * @param value 待校验、转换或比较的输入值。
+ * @returns 计算、解析或序列化后的字符串结果。
+ */
 export function extractFirstWikiLink(value: string): string | null {
   const match = value.match(/\[\[([^\]|#]+(?:#[^\]|]+)?)(?:\|[^\]]+)?\]\]/);
   return match?.[1]?.trim() ?? null;
 }
 
+/**
+ * 读取并返回task progress，并保持模型、界面和持久化状态的一致性。
+ *
+ * @param root 节点树的根节点。
+ * @returns 当前操作生成、查找或规范化后的结果。
+ */
 export function getTaskProgress(root: MindMapNode): TaskProgress {
   let done = 0;
   let total = 0;
@@ -824,6 +1240,12 @@ export function getTaskProgress(root: MindMapNode): TaskProgress {
   return { done, total };
 }
 
+/**
+ * 执行“node search text”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+ *
+ * @param node 当前处理的节点。
+ * @returns 计算、解析或序列化后的字符串结果。
+ */
 export function nodeSearchText(node: MindMapNode): string {
   return [nodePlainText(node), node.note, node.link, ...nodeContentBlocks(node).map((block) => block.type === "image" ? `${block.source} ${block.alt ?? ""}` : block.text), node.icon, node.submap?.path, node.code?.language, node.code?.code, ...(node.table?.headers ?? []), ...(node.table?.rows.flat() ?? []), ...(node.tags ?? [])]
     .filter((value): value is string => Boolean(value))
@@ -831,6 +1253,12 @@ export function nodeSearchText(node: MindMapNode): string {
     .toLocaleLowerCase();
 }
 
+/**
+ * 执行“task prefix”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+ *
+ * @param task 该参数用于 task prefix 流程中的输入或控制。
+ * @returns 计算、解析或序列化后的字符串结果。
+ */
 function taskPrefix(task: TaskStatus | undefined): string {
   if (task === "done") return "[x] ";
   if (task === "doing") return "[-] ";
@@ -838,10 +1266,23 @@ function taskPrefix(task: TaskStatus | undefined): string {
   return "";
 }
 
+/**
+ * 转义inline markdown，并保持模型、界面和持久化状态的一致性。
+ *
+ * @param value 待校验、转换或比较的输入值。
+ * @returns 计算、解析或序列化后的字符串结果。
+ */
 function escapeInlineMarkdown(value: string): string {
   return value.replace(/([\\`*_{}\[\]<>])/g, "\\$1");
 }
 
+/**
+ * 执行“rich text to markdown”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+ *
+ * @param runs 按字符样式拆分的富文本运行段。
+ * @param fallbackText 该参数用于 rich text to markdown 流程中的输入或控制。
+ * @returns 计算、解析或序列化后的字符串结果。
+ */
 export function richTextToMarkdown(runs: MindMapTextRun[] | undefined, fallbackText: string): string {
   if (!runs?.length) return escapeInlineMarkdown(fallbackText);
   return runs.map((run) => {
@@ -857,6 +1298,12 @@ export function richTextToMarkdown(runs: MindMapTextRun[] | undefined, fallbackT
   }).join("");
 }
 
+/**
+ * 执行“table to markdown”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+ *
+ * @param table 待编辑、转换或导出的表格数据。
+ * @returns 计算、解析或序列化后的字符串结果。
+ */
 export function tableToMarkdown(table: MindMapTable): string {
   const escapeCell = (value: string): string => value.replaceAll("|", "\\|").replaceAll("\n", "<br>");
   const headers = `| ${table.headers.map(escapeCell).join(" | ")} |`;
@@ -869,6 +1316,12 @@ export function tableToMarkdown(table: MindMapTable): string {
   return [headers, separator, ...rows].join("\n");
 }
 
+/**
+ * 执行“split markdown table row”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+ *
+ * @param line 该参数用于 split markdown table row 流程中的输入或控制。
+ * @returns 计算、解析或序列化后的字符串结果。
+ */
 function splitMarkdownTableRow(line: string): string[] {
   const value = line.trim().replace(/^\|/, "").replace(/\|$/, "");
   const cells: string[] = [];
@@ -884,6 +1337,12 @@ function splitMarkdownTableRow(line: string): string[] {
   return cells;
 }
 
+/**
+ * 解析markdown table，并保持模型、界面和持久化状态的一致性。
+ *
+ * @param markdown 待解析或生成的 Markdown 文本。
+ * @returns 当前操作生成、查找或规范化后的结果。
+ */
 export function parseMarkdownTable(markdown: string): MindMapTable | null {
   const lines = markdown.split(/\r?\n/);
   for (let index = 0; index < lines.length - 1; index += 1) {
@@ -912,12 +1371,24 @@ export function parseMarkdownTable(markdown: string): MindMapTable | null {
   return null;
 }
 
+/**
+ * 解析fenced code，并保持模型、界面和持久化状态的一致性。
+ *
+ * @param markdown 待解析或生成的 Markdown 文本。
+ * @returns 当前操作生成、查找或规范化后的结果。
+ */
 export function parseFencedCode(markdown: string): MindMapCodeBlock | null {
   const match = markdown.match(/```([^\n`]*)\n([\s\S]*?)\n```/);
   if (!match) return null;
   return normalizeCode({ language: match[1]?.trim(), code: match[2] ?? "" }) ?? null;
 }
 
+/**
+ * 执行“children to table”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+ *
+ * @param node 当前处理的节点。
+ * @returns 当前操作生成、查找或规范化后的结果。
+ */
 export function childrenToTable(node: MindMapNode): MindMapTable | null {
   if (!node.children.length) return null;
   return {
@@ -934,6 +1405,12 @@ export function childrenToTable(node: MindMapNode): MindMapTable | null {
   };
 }
 
+/**
+ * 执行“document to markdown”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+ *
+ * @param doc 要处理或写回的思维导图文档。
+ * @returns 计算、解析或序列化后的字符串结果。
+ */
 export function documentToMarkdown(doc: MindMapDocument): string {
   const renderBlocks = (node: MindMapNode): string[] => {
     const result: string[] = [];
@@ -970,6 +1447,12 @@ export function documentToMarkdown(doc: MindMapDocument): string {
   return lines.join("\n");
 }
 
+/**
+ * 解析task text，并保持模型、界面和持久化状态的一致性。
+ *
+ * @param value 待校验、转换或比较的输入值。
+ * @returns 计算、解析或序列化后的字符串结果。
+ */
 function parseTaskText(value: string): { text: string; task?: TaskStatus } {
   const match = value.match(/^\[( |x|X|-)\]\s+(.+)$/);
   if (!match) return { text: value };
@@ -978,6 +1461,13 @@ function parseTaskText(value: string): { text: string; task?: TaskStatus } {
   return { text: match[2]?.trim() || "任务", task };
 }
 
+/**
+ * 执行“markdown to document”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+ *
+ * @param markdown 待解析或生成的 Markdown 文本。
+ * @param fallbackTitle 无法从内容中取得标题时使用的回退标题。
+ * @returns 当前操作生成、查找或规范化后的结果。
+ */
 export function markdownToDocument(markdown: string, fallbackTitle = "思维导图"): MindMapDocument {
   const doc = createDefaultDocument(fallbackTitle);
   doc.root.children = [];

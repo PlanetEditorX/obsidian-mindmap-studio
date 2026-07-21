@@ -1,3 +1,10 @@
+/**
+ * @file main.ts
+ * @description 插件入口与跨文件服务层。
+ *
+ * 注册视图、命令和 Markdown 处理器，并提供父子导图、搜索、图片、图床、迁移、全局模式和设置持久化。
+ */
+
 import {
   Menu,
   Notice,
@@ -44,6 +51,9 @@ import type { DisplayMode } from "./model";
 export const MINDMAP_EXTENSION = "mindmap";
 const LEGACY_SUFFIX = ".smm.md";
 
+/**
+ * MindMapStudioPlugin 的主要实现类。负责封装相关状态、生命周期和对外操作，避免调用方直接操作内部数据结构。
+ */
 export default class MindMapStudioPlugin extends Plugin {
   settings: MindMapStudioSettings = DEFAULT_SETTINGS;
   private legacyMigrationPath: string | null = null;
@@ -51,6 +61,9 @@ export default class MindMapStudioPlugin extends Plugin {
   private searchIndex!: MindMapSearchIndex;
   private searchIndexReady: Promise<void> = Promise.resolve();
 
+  /**
+   * 执行“onload”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+   */
   async onload(): Promise<void> {
     await this.loadSettings();
     const pluginDir = this.manifest.dir ?? normalizePath(`${this.app.vault.configDir}/plugins/${this.manifest.id}`);
@@ -203,6 +216,9 @@ export default class MindMapStudioPlugin extends Plugin {
     this.registerMarkdownPostProcessor((element, context) => void this.processMindMapEmbeds(element, context));
   }
 
+  /**
+   * 执行“onunload”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+   */
   onunload(): void {
     for (const timer of this.autoUploadTimers.values()) window.clearTimeout(timer);
     this.autoUploadTimers.clear();
@@ -210,10 +226,16 @@ export default class MindMapStudioPlugin extends Plugin {
     this.app.workspace.detachLeavesOfType(VIEW_TYPE_MINDMAP_STUDIO);
   }
 
+  /**
+   * 打开global search，并保持模型、界面和持久化状态的一致性。
+   */
   openGlobalSearch(): void {
     void this.openGlobalSearchAfterIndexReady();
   }
 
+  /**
+   * 打开global search after index ready，并保持模型、界面和持久化状态的一致性。
+   */
   private async openGlobalSearchAfterIndexReady(): Promise<void> {
     await this.searchIndexReady;
     new GlobalMindMapSearchModal(
@@ -225,6 +247,12 @@ export default class MindMapStudioPlugin extends Plugin {
     ).open();
   }
 
+  /**
+   * 打开map family search，并保持模型、界面和持久化状态的一致性。
+   *
+   * @param file 目标 Obsidian 文件对象。
+   * @param currentDocument 该参数用于 open map family search 流程中的输入或控制。
+   */
   async openMapFamilySearch(file: TFile, currentDocument?: MindMapDocument): Promise<void> {
     await this.searchIndexReady;
     let familyPaths = await this.searchIndex.refreshFamily(file.path, currentDocument);
@@ -244,6 +272,9 @@ export default class MindMapStudioPlugin extends Plugin {
     ).open();
   }
 
+  /**
+   * 重建global search index，并保持模型、界面和持久化状态的一致性。
+   */
   async rebuildGlobalSearchIndex(): Promise<void> {
     new Notice("正在重建思维导图搜索索引…");
     await this.searchIndex.rebuildAll();
@@ -251,10 +282,18 @@ export default class MindMapStudioPlugin extends Plugin {
     new Notice(`搜索索引已重建：${status.files} 个导图，${status.nodes} 个节点`);
   }
 
+  /**
+   * 读取并返回global search index status，并保持模型、界面和持久化状态的一致性。
+   */
   getGlobalSearchIndexStatus() {
     return this.searchIndex.getStatus();
   }
 
+  /**
+   * 打开global search result，并保持模型、界面和持久化状态的一致性。
+   *
+   * @param result 该参数用于 open global search result 流程中的输入或控制。
+   */
   private async openGlobalSearchResult(result: MindMapSearchResult): Promise<void> {
     const file = this.app.vault.getAbstractFileByPath(result.filePath);
     if (!(file instanceof TFile) || !this.isMindMapFile(file)) {
@@ -265,6 +304,9 @@ export default class MindMapStudioPlugin extends Plugin {
     await this.openAsMindMap(file, undefined, result.nodeId);
   }
 
+  /**
+   * 加载settings，并保持模型、界面和持久化状态的一致性。
+   */
   async loadSettings(): Promise<void> {
     let loaded = await this.loadData() as Partial<MindMapStudioSettings> | null;
     // One-time migration after the public rename from mindmap-canvas to mindmap-studio.
@@ -371,10 +413,19 @@ export default class MindMapStudioPlugin extends Plugin {
     }
   }
 
+  /**
+   * 保存settings，并保持模型、界面和持久化状态的一致性。
+   */
   async saveSettings(): Promise<void> {
     await this.saveData(this.settings);
   }
 
+  /**
+   * 保存全局显示模式并通知所有已打开 MindMapStudioView 同步切换。之后打开的父导图、子导图和普通导图都会继承该模式。
+   *
+   * @param mode 当前布局或显示模式。
+   * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
+   */
   async setGlobalDisplayMode(mode: DisplayMode): Promise<void> {
     if (!this.settings.visibleModes.includes(mode)) return;
     if (this.settings.defaultViewMode !== mode) {
@@ -386,18 +437,30 @@ export default class MindMapStudioPlugin extends Plugin {
     }
   }
 
+  /**
+   * 执行“reset all settings”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+   */
   async resetAllSettings(): Promise<void> {
     this.settings = JSON.parse(JSON.stringify(DEFAULT_SETTINGS)) as MindMapStudioSettings;
     await this.saveSettings();
     this.refreshOpenViews();
   }
 
+  /**
+   * 刷新open views，并保持模型、界面和持久化状态的一致性。
+   */
   refreshOpenViews(): void {
     for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE_MINDMAP_STUDIO)) {
       if (leaf.view instanceof MindMapStudioView) leaf.view.refreshAppearance();
     }
   }
 
+  /**
+   * 创建configured document，并保持模型、界面和持久化状态的一致性。
+   *
+   * @param title 文档、节点或导出文件的显示标题。
+   * @returns 当前操作生成、查找或规范化后的结果。
+   */
   createConfiguredDocument(title: string): MindMapDocument {
     const document = createDefaultDocument(title);
     document.layout = this.settings.defaultLayout;
@@ -407,6 +470,13 @@ export default class MindMapStudioPlugin extends Plugin {
     return document;
   }
 
+  /**
+   * 解析并确定mind map file，并保持模型、界面和持久化状态的一致性。
+   *
+   * @param path 仓库内目标路径。
+   * @param sourcePath 该参数用于 resolve mind map file 流程中的输入或控制。
+   * @returns 当前操作生成、查找或规范化后的结果。
+   */
   private resolveMindMapFile(path: string, sourcePath = ""): TFile | null {
     const cleaned = path.replace(/^\[\[|\]\]$/g, "").split("|")[0]?.trim() ?? path;
     const normalized = normalizePath(cleaned);
@@ -416,10 +486,23 @@ export default class MindMapStudioPlugin extends Plugin {
     return linked instanceof TFile && this.isMindMapFile(linked) ? linked : null;
   }
 
+  /**
+   * 执行“read mind map document”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+   *
+   * @param file 目标 Obsidian 文件对象。
+   * @returns 异步操作完成后的结果。
+   */
   private async readMindMapDocument(file: TFile): Promise<MindMapDocument> {
     return parseDocument(await this.app.vault.cachedRead(file), file.basename);
   }
 
+  /**
+   * 查找node depth，并保持模型、界面和持久化状态的一致性。
+   *
+   * @param root 节点树的根节点。
+   * @param nodeId 目标节点的稳定标识。
+   * @returns 计算得到的数值结果。
+   */
   private findNodeDepth(root: MindMapNode, nodeId: string): number | null {
     const visit = (node: MindMapNode, depth: number): number | null => {
       if (node.id === nodeId) return depth;
@@ -432,6 +515,14 @@ export default class MindMapStudioPlugin extends Plugin {
     return visit(root, 0);
   }
 
+  /**
+   * 执行“compute article base depth”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+   *
+   * @param file 目标 Obsidian 文件对象。
+   * @param document 要处理的思维导图文档。
+   * @param visited 该参数用于 compute article base depth 流程中的输入或控制。
+   * @returns 计算得到的数值结果。
+   */
   private async computeArticleBaseDepth(file: TFile, document: MindMapDocument, visited = new Set<string>()): Promise<number> {
     if (visited.has(file.path) || !document.navigation?.parentPath) return 0;
     visited.add(file.path);
@@ -453,6 +544,14 @@ export default class MindMapStudioPlugin extends Plugin {
     return parentBase + Math.max(1, localDepth ?? 1);
   }
 
+  /**
+   * 沿子导图 navigation.parentPath 逐级回溯父文件，计算当前子导图在整篇文章中的基础标题深度、完整面包屑和顶层目录数据，并防止循环引用。
+   *
+   * @param file 目标 Obsidian 文件对象。
+   * @param document 要处理的思维导图文档。
+   * @returns 计算得到的数值结果。
+   * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
+   */
   async buildArticleContext(file: TFile, document: MindMapDocument): Promise<{ baseDepth: number; tocEntries: ArticleTocEntry[]; showToc: boolean }> {
     const baseDepth = await this.computeArticleBaseDepth(file, document);
     const isTopLevel = !document.navigation?.parentPath;
@@ -461,6 +560,9 @@ export default class MindMapStudioPlugin extends Plugin {
     const tocEntries: ArticleTocEntry[] = [];
     const visitedFiles = new Set<string>([file.path]);
     let hasSubmaps = false;
+    /**
+     * Item 类型定义，用于限制可接受值并让序列化数据保持稳定。
+     */
     type Item = { node: MindMapNode; file: TFile; document: MindMapDocument; breadcrumb: string[] };
 
     const processItems = async (items: Item[], depth: number): Promise<void> => {
@@ -522,6 +624,12 @@ export default class MindMapStudioPlugin extends Plugin {
     return { baseDepth, tocEntries, showToc: hasSubmaps && tocEntries.length > 0 };
   }
 
+  /**
+   * 读取并返回available path，并保持模型、界面和持久化状态的一致性。
+   *
+   * @param preferredPath 该参数用于 get available path 流程中的输入或控制。
+   * @returns 计算、解析或序列化后的字符串结果。
+   */
   async getAvailablePath(preferredPath: string): Promise<string> {
     const normalized = normalizePath(preferredPath);
     if (!this.app.vault.getAbstractFileByPath(normalized)) return normalized;
@@ -533,6 +641,12 @@ export default class MindMapStudioPlugin extends Plugin {
     return `${base} ${index}${extension}`;
   }
 
+  /**
+   * 创建mind map，并保持模型、界面和持久化状态的一致性。
+   *
+   * @param options 控制当前操作行为的可选配置。
+   * @returns 异步操作完成后的结果。
+   */
   async createMindMap(options: {
     insertIntoCurrent?: boolean;
     folder?: string;
@@ -556,6 +670,13 @@ export default class MindMapStudioPlugin extends Plugin {
     return file;
   }
 
+  /**
+   * 打开as mind map，并保持模型、界面和持久化状态的一致性。
+   *
+   * @param file 目标 Obsidian 文件对象。
+   * @param preferredLeaf 该参数用于 open as mind map 流程中的输入或控制。
+   * @param focusNodeId 该参数用于 open as mind map 流程中的输入或控制。
+   */
   async openAsMindMap(file: TFile, preferredLeaf?: WorkspaceLeaf, focusNodeId?: string): Promise<void> {
     const leaf = preferredLeaf ?? this.app.workspace.getLeaf(false);
     await leaf.setViewState({
@@ -569,6 +690,14 @@ export default class MindMapStudioPlugin extends Plugin {
     }
   }
 
+  /**
+   * 保存pasted image，并保持模型、界面和持久化状态的一致性。
+   *
+   * @param blob 该参数用于 save pasted image 流程中的输入或控制。
+   * @param suggestedName 该参数用于 save pasted image 流程中的输入或控制。
+   * @param sourceFile 该参数用于 save pasted image 流程中的输入或控制。
+   * @returns 计算、解析或序列化后的字符串结果。
+   */
   async savePastedImage(blob: Blob, suggestedName: string, sourceFile: TFile | null): Promise<string> {
     // 图片资源目录按当前脑图所在目录解析，而不是按仓库根目录解析。
     // 例如 Projects/Plan.mindmap + MindMap Assets =>
@@ -588,6 +717,13 @@ export default class MindMapStudioPlugin extends Plugin {
     return path;
   }
 
+  /**
+   * 执行“read image source”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+   *
+   * @param source 待解析或渲染的原始文本。
+   * @param sourceFile 该参数用于 read image source 流程中的输入或控制。
+   * @returns 计算、解析或序列化后的字符串结果。
+   */
   async readImageSource(source: string, sourceFile: TFile | null): Promise<{ blob: Blob; suggestedName: string } | null> {
     const raw = source.trim();
     if (!raw || /^https?:\/\//i.test(raw) || /^data:/i.test(raw) || /^blob:/i.test(raw)) return null;
@@ -600,17 +736,34 @@ export default class MindMapStudioPlugin extends Plugin {
     return { blob: new Blob([binary], { type: this.mimeFromFilename(file.name) }), suggestedName: file.name };
   }
 
+  /**
+   * 读取并返回image host choices，并保持模型、界面和持久化状态的一致性。
+   * @returns 按当前规则构建的集合结果。
+   */
   getImageHostChoices(): ImageHostChoice[] {
     return this.settings.imageHosts
       .filter((host) => host.enabled && Boolean(host.endpoint.trim()))
       .map((host) => ({ id: host.id, name: host.name }));
   }
 
+  /**
+   * 读取并返回default upload host ids，并保持模型、界面和持久化状态的一致性。
+   * @returns 计算、解析或序列化后的字符串结果。
+   */
   getDefaultUploadHostIds(): string[] {
     const enabled = new Set(this.getImageHostChoices().map((host) => host.id));
     return this.settings.autoUploadHostIds.filter((id) => enabled.has(id));
   }
 
+  /**
+   * 把同一张图片上传到多个已配置图床，分别收集成功与失败结果。只有所有选中图床成功且文档保存完成后，调用方才允许删除本地文件。
+   *
+   * @param blob 该参数用于 upload image to hosts 流程中的输入或控制。
+   * @param suggestedName 该参数用于 upload image to hosts 流程中的输入或控制。
+   * @param hostIds 需要执行上传的图床标识列表。
+   * @returns 异步操作完成后的结果。
+   * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
+   */
   async uploadImageToHosts(blob: Blob, suggestedName: string, hostIds: string[]): Promise<ImageHostUploadBatch> {
     const requested = Array.from(new Set(hostIds));
     const hosts = requested
@@ -638,6 +791,11 @@ export default class MindMapStudioPlugin extends Plugin {
     };
   }
 
+  /**
+   * 执行“test image host”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+   *
+   * @param hostId 该参数用于 test image host 流程中的输入或控制。
+   */
   async testImageHost(hostId: string): Promise<void> {
     const host = this.settings.imageHosts.find((item) => item.id === hostId);
     if (!host) {
@@ -667,6 +825,16 @@ export default class MindMapStudioPlugin extends Plugin {
     }
   }
 
+  /**
+   * 安排延迟执行auto upload，并保持模型、界面和持久化状态的一致性。
+   *
+   * @param file 目标 Obsidian 文件对象。
+   * @param nodeId 目标节点的稳定标识。
+   * @param blockId 该参数用于 schedule auto upload 流程中的输入或控制。
+   * @param localPath 该参数用于 schedule auto upload 流程中的输入或控制。
+   * @param suggestedName 该参数用于 schedule auto upload 流程中的输入或控制。
+   * @returns 操作条件是否成立或处理是否成功。
+   */
   scheduleAutoUpload(file: TFile | null, nodeId: string, blockId: string, localPath: string, suggestedName: string): boolean {
     if (!file || !this.settings.autoUploadEnabled) return false;
     const hostIds = this.getDefaultUploadHostIds();
@@ -686,6 +854,17 @@ export default class MindMapStudioPlugin extends Plugin {
     return true;
   }
 
+  /**
+   * 执行延迟自动上传任务。它确认节点和图片块仍存在、读取本地资源、上传到默认图床、更新远程镜像列表并保存；任一图床失败时保留本地文件。
+   *
+   * @param mindMapPath 该参数用于 run auto upload task 流程中的输入或控制。
+   * @param nodeId 目标节点的稳定标识。
+   * @param blockId 该参数用于 run auto upload task 流程中的输入或控制。
+   * @param localPath 该参数用于 run auto upload task 流程中的输入或控制。
+   * @param suggestedName 该参数用于 run auto upload task 流程中的输入或控制。
+   * @param hostIds 需要执行上传的图床标识列表。
+   * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
+   */
   private async runAutoUploadTask(
     mindMapPath: string,
     nodeId: string,
@@ -748,6 +927,14 @@ export default class MindMapStudioPlugin extends Plugin {
     }
   }
 
+  /**
+   * 上传image to host config，并保持模型、界面和持久化状态的一致性。
+   *
+   * @param host 当前图床配置或图床选择项。
+   * @param blob 该参数用于 upload image to host config 流程中的输入或控制。
+   * @param suggestedName 该参数用于 upload image to host config 流程中的输入或控制。
+   * @returns 计算、解析或序列化后的字符串结果。
+   */
   private async uploadImageToHostConfig(host: ImageHostConfig, blob: Blob, suggestedName: string): Promise<string> {
     const endpoint = host.endpoint.trim();
     if (!endpoint) throw new Error("上传 API 为空");
@@ -802,12 +989,23 @@ export default class MindMapStudioPlugin extends Plugin {
     throw new Error("返回结果中没有找到图片网址");
   }
 
+  /**
+   * 执行“flush open view”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+   *
+   * @param path 仓库内目标路径。
+   */
   private async flushOpenView(path: string): Promise<void> {
     for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE_MINDMAP_STUDIO)) {
       if (leaf.view instanceof MindMapStudioView && leaf.view.file?.path === path) await leaf.view.save();
     }
   }
 
+  /**
+   * 刷新open mind map，并保持模型、界面和持久化状态的一致性。
+   *
+   * @param file 目标 Obsidian 文件对象。
+   * @param document 要处理的思维导图文档。
+   */
   private async refreshOpenMindMap(file: TFile, document: MindMapDocument): Promise<void> {
     const source = serializeDocument(document);
     for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE_MINDMAP_STUDIO)) {
@@ -815,6 +1013,15 @@ export default class MindMapStudioPlugin extends Plugin {
     }
   }
 
+  /**
+   * 在删除本地图片前进行最终安全检查：远程源必须存在、当前文档必须已保存、资源路径必须是仓库内文件且没有其他节点继续引用。
+   *
+   * @param localPath 该参数用于 delete local asset if safe 流程中的输入或控制。
+   * @param currentMindMapPath 该参数用于 delete local asset if safe 流程中的输入或控制。
+   * @param blockId 该参数用于 delete local asset if safe 流程中的输入或控制。
+   * @returns 操作条件是否成立或处理是否成功。
+   * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
+   */
   private async deleteLocalAssetIfSafe(localPath: string, currentMindMapPath: string, blockId: string): Promise<boolean> {
     const normalized = normalizePath(localPath);
     const target = this.app.vault.getAbstractFileByPath(normalized);
@@ -844,11 +1051,25 @@ export default class MindMapStudioPlugin extends Plugin {
     }
   }
 
+  /**
+   * 执行“mime from filename”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+   *
+   * @param filename 该参数用于 mime from filename 流程中的输入或控制。
+   * @returns 计算、解析或序列化后的字符串结果。
+   */
   private mimeFromFilename(filename: string): string {
     const extension = filename.split(".").at(-1)?.toLowerCase();
     return ({ png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp", svg: "image/svg+xml", bmp: "image/bmp", avif: "image/avif" } as Record<string, string>)[extension ?? ""] ?? "application/octet-stream";
   }
 
+  /**
+   * 在父导图资源目录下创建子导图文件，写入 parentPath、parentNodeId 和 parentTitle，并把生成路径回写到父节点，实现可靠的双向导航。
+   *
+   * @param parentFile 该参数用于 create submap file 流程中的输入或控制。
+   * @param node 当前处理的节点。
+   * @returns 异步操作完成后的结果。
+   * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
+   */
   async createSubmapFile(parentFile: TFile, node: MindMapNode): Promise<MindMapSubmap> {
     const title = (nodePlainText(node) || "子导图").trim();
     const document = this.createConfiguredDocument(title);
@@ -877,6 +1098,14 @@ export default class MindMapStudioPlugin extends Plugin {
     return { path: file.path, title: file.basename };
   }
 
+  /**
+   * 打开mind map path，并保持模型、界面和持久化状态的一致性。
+   *
+   * @param path 仓库内目标路径。
+   * @param sourcePath 该参数用于 open mind map path 流程中的输入或控制。
+   * @param preferredLeaf 该参数用于 open mind map path 流程中的输入或控制。
+   * @param focusNodeId 该参数用于 open mind map path 流程中的输入或控制。
+   */
   async openMindMapPath(path: string, sourcePath = "", preferredLeaf?: WorkspaceLeaf, focusNodeId?: string): Promise<void> {
     const normalized = normalizePath(path.replace(/^\[\[|\]\]$/g, ""));
     const direct = this.app.vault.getAbstractFileByPath(normalized);
@@ -888,6 +1117,11 @@ export default class MindMapStudioPlugin extends Plugin {
     await this.openAsMindMap(resolved, preferredLeaf, focusNodeId);
   }
 
+  /**
+   * 执行“ensure folder path”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+   *
+   * @param folder 目标 Obsidian 文件夹对象。
+   */
   private async ensureFolderPath(folder: string): Promise<void> {
     const normalized = normalizePath(folder);
     if (!normalized || this.app.vault.getAbstractFileByPath(normalized) instanceof TFolder) return;
@@ -899,6 +1133,13 @@ export default class MindMapStudioPlugin extends Plugin {
     }
   }
 
+  /**
+   * 迁移legacy file，并保持模型、界面和持久化状态的一致性。
+   *
+   * @param file 目标 Obsidian 文件对象。
+   * @param openAfter 该参数用于 migrate legacy file 流程中的输入或控制。
+   * @returns 异步操作完成后的结果。
+   */
   async migrateLegacyFile(file: TFile, openAfter = true): Promise<TFile | null> {
     if (!this.isLegacyMindMapFile(file)) return null;
     if (this.legacyMigrationPath === file.path) return null;
@@ -931,14 +1172,31 @@ export default class MindMapStudioPlugin extends Plugin {
     }
   }
 
+  /**
+   * 判断mind map file，并保持模型、界面和持久化状态的一致性。
+   *
+   * @param file 目标 Obsidian 文件对象。
+   * @returns 操作条件是否成立或处理是否成功。
+   */
   isMindMapFile(file: TFile): boolean {
     return file.extension.toLowerCase() === MINDMAP_EXTENSION;
   }
 
+  /**
+   * 判断legacy mind map file，并保持模型、界面和持久化状态的一致性。
+   *
+   * @param file 目标 Obsidian 文件对象。
+   * @returns 操作条件是否成立或处理是否成功。
+   */
   isLegacyMindMapFile(file: TFile): boolean {
     return file.path.toLowerCase().endsWith(LEGACY_SUFFIX);
   }
 
+  /**
+   * 转换markdown file，并保持模型、界面和持久化状态的一致性。
+   *
+   * @param file 目标 Obsidian 文件对象。
+   */
   private async convertMarkdownFile(file: TFile): Promise<void> {
     const source = await this.app.vault.read(file);
     const title = file.basename;
@@ -949,6 +1207,13 @@ export default class MindMapStudioPlugin extends Plugin {
     await this.createMindMap({ document, title: `${title} 脑图`, folder: file.parent?.path ?? "" });
   }
 
+  /**
+   * 解析并确定folder，并保持模型、界面和持久化状态的一致性。
+   *
+   * @param explicitFolder 该参数用于 resolve folder 流程中的输入或控制。
+   * @param activeFile 该参数用于 resolve folder 流程中的输入或控制。
+   * @returns 计算、解析或序列化后的字符串结果。
+   */
   private async resolveFolder(explicitFolder: string | undefined, activeFile: TFile | null): Promise<string> {
     const candidate = explicitFolder ?? (this.settings.defaultFolder || activeFile?.parent?.path || "");
     if (!candidate) return "";
@@ -959,6 +1224,10 @@ export default class MindMapStudioPlugin extends Plugin {
     return normalized;
   }
 
+  /**
+   * 构建new title，并保持模型、界面和持久化状态的一致性。
+   * @returns 计算、解析或序列化后的字符串结果。
+   */
   private buildNewTitle(): string {
     const now = new Date();
     const two = (value: number): string => String(value).padStart(2, "0");
@@ -966,15 +1235,34 @@ export default class MindMapStudioPlugin extends Plugin {
     return `${this.settings.filePrefix} ${stamp}`.trim();
   }
 
+  /**
+   * 执行“sanitize filename”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+   *
+   * @param value 待校验、转换或比较的输入值。
+   * @returns 计算、解析或序列化后的字符串结果。
+   */
   private sanitizeFilename(value: string): string {
     return value.replace(/[\\/:*?"<>|#[\]]/g, "-").replace(/\s+/g, " ").trim() || "思维导图";
   }
 
+  /**
+   * 读取并返回source title，并保持模型、界面和持久化状态的一致性。
+   *
+   * @param context 该参数用于 get source title 流程中的输入或控制。
+   * @returns 计算、解析或序列化后的字符串结果。
+   */
   private getSourceTitle(context: MarkdownPostProcessorContext): string {
     const sourceFile = this.app.vault.getAbstractFileByPath(context.sourcePath);
     return sourceFile instanceof TFile ? sourceFile.basename : "思维导图";
   }
 
+  /**
+   * 注册 Markdown 代码块静态渲染，并在阅读模式中解析嵌入的思维导图源。静态预览不会修改原文件。
+   *
+   * @param element 该参数用于 process mind map embeds 流程中的输入或控制。
+   * @param context 该参数用于 process mind map embeds 流程中的输入或控制。
+   * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
+   */
   private async processMindMapEmbeds(element: HTMLElement, context: MarkdownPostProcessorContext): Promise<void> {
     const embeds = Array.from(element.querySelectorAll<HTMLElement>(".internal-embed"));
     for (const embed of embeds) {

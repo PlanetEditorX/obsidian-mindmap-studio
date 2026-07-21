@@ -1,3 +1,10 @@
+/**
+ * @file editor.ts
+ * @description MindMap Studio 核心交互编辑器。
+ *
+ * 负责三种视图、节点操作、富文本、图片、表格、代码、子导图、拖拽、尺寸、搜索、历史记录、只读锁和图床容灾。
+ */
+
 import { App, Menu, Modal, Notice, setIcon } from "obsidian";
 import {
   cloneDocument,
@@ -56,6 +63,9 @@ import type { ImageHostChoice, ImageHostUploadBatch } from "./settings";
 import { appearanceFromThemePreset, MINDMAP_THEME_PRESETS } from "./themes";
 import { buildArticleNodeInfo, DISPLAY_MODE_ICONS, DISPLAY_MODE_LABELS, type ArticleTocEntry } from "./modes";
 
+/**
+ * MindMapEditorCallbacks 的结构化数据约定。字段会在模块边界传递，用于保持类型安全和版本兼容。
+ */
 export interface MindMapEditorCallbacks {
   onChange: (document: MindMapDocument) => void;
   onOpenLink: (link: string) => void | Promise<void>;
@@ -77,6 +87,9 @@ export interface MindMapEditorCallbacks {
   onRenderCode: (block: MindMapCodeBlock, container: HTMLElement) => void | Promise<void>;
 }
 
+/**
+ * MindMapEditorOptions 的结构化数据约定。字段会在模块边界传递，用于保持类型安全和版本兼容。
+ */
 export interface MindMapEditorOptions {
   defaultNodeShape: NodeShape;
   defaultAppearance: MindMapAppearance;
@@ -93,6 +106,9 @@ export interface MindMapEditorOptions {
   showArticleToc: boolean;
 }
 
+/**
+ * NodeEditValues 的结构化数据约定。字段会在模块边界传递，用于保持类型安全和版本兼容。
+ */
 interface NodeEditValues {
   content: MindMapContentBlock[];
   note: string;
@@ -115,10 +131,24 @@ interface NodeEditValues {
   minHeight?: number;
 }
 
+/**
+ * 执行“style equals”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+ *
+ * @param left 该参数用于 style equals 流程中的输入或控制。
+ * @param right 该参数用于 style equals 流程中的输入或控制。
+ * @returns 操作条件是否成立或处理是否成功。
+ */
 function styleEquals(left: MindMapTextStyle | undefined, right: MindMapTextStyle | undefined): boolean {
   return JSON.stringify(left ?? {}) === JSON.stringify(right ?? {});
 }
 
+/**
+ * 渲染rich text runs，并保持模型、界面和持久化状态的一致性。
+ *
+ * @param container 接收渲染内容的 DOM 容器。
+ * @param runs 按字符样式拆分的富文本运行段。
+ * @param fallbackText 该参数用于 render rich text runs 流程中的输入或控制。
+ */
 function renderRichTextRuns(container: HTMLElement, runs: MindMapTextRun[] | undefined, fallbackText: string): void {
   container.empty();
   if (!runs?.length) {
@@ -137,6 +167,13 @@ function renderRichTextRuns(container: HTMLElement, runs: MindMapTextRun[] | und
   }
 }
 
+/**
+ * 执行“style from element”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+ *
+ * @param element 该参数用于 style from element 流程中的输入或控制。
+ * @param inherited 该参数用于 style from element 流程中的输入或控制。
+ * @returns 当前操作生成、查找或规范化后的结果。
+ */
 function styleFromElement(element: HTMLElement, inherited: MindMapTextStyle): MindMapTextStyle {
   const style: MindMapTextStyle = { ...inherited };
   const tag = element.tagName.toLowerCase();
@@ -163,6 +200,12 @@ function styleFromElement(element: HTMLElement, inherited: MindMapTextStyle): Mi
   return style;
 }
 
+/**
+ * 执行“read rich text editor”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+ *
+ * @param editor 该参数用于 read rich text editor 流程中的输入或控制。
+ * @returns 计算、解析或序列化后的字符串结果。
+ */
 function readRichTextEditor(editor: HTMLElement): { text: string; richText?: MindMapTextRun[] } {
   const rawRuns: MindMapTextRun[] = [];
   const visit = (node: Node, inherited: MindMapTextStyle): void => {
@@ -190,13 +233,26 @@ function readRichTextEditor(editor: HTMLElement): { text: string; richText?: Min
   return { text: richTextPlainText(richText, fallback).trim(), richText };
 }
 
+/**
+ * ImagePreviewModal 的主要实现类。负责封装相关状态、生命周期和对外操作，避免调用方直接操作内部数据结构。
+ */
 class ImagePreviewModal extends Modal {
   private scale = 1;
 
+  /**
+   * 创建 ImagePreviewModal 实例，保存依赖和初始状态；实际 DOM 构建通常在 onOpen() 或后续渲染流程中完成。
+   *
+   * @param app Obsidian 应用实例，用于访问仓库、工作区和 UI 服务。
+   * @param source 待解析或渲染的原始文本。
+   * @param alt 该参数用于 constructor 流程中的输入或控制。
+   */
   constructor(app: App, private readonly source: string, private readonly alt: string) {
     super(app);
   }
 
+  /**
+   * 在弹窗或视图打开时创建界面、绑定事件并把当前数据填入控件。
+   */
   onOpen(): void {
     this.modalEl.addClass("mmc-image-preview-modal");
     this.titleEl.setText(this.alt || "图片预览");
@@ -234,10 +290,21 @@ class ImagePreviewModal extends Modal {
   }
 }
 
+/**
+ * ImageHostPickerModal 的主要实现类。负责封装相关状态、生命周期和对外操作，避免调用方直接操作内部数据结构。
+ */
 class ImageHostPickerModal extends Modal {
   private resolved = false;
   private readonly selected = new Set<string>();
 
+  /**
+   * 创建 ImageHostPickerModal 实例，保存依赖和初始状态；实际 DOM 构建通常在 onOpen() 或后续渲染流程中完成。
+   *
+   * @param app Obsidian 应用实例，用于访问仓库、工作区和 UI 服务。
+   * @param hosts 可供用户选择或执行上传的图床列表。
+   * @param initialIds 该参数用于 constructor 流程中的输入或控制。
+   * @param resolveSelection 该参数用于 constructor 流程中的输入或控制。
+   */
   constructor(
     app: App,
     private readonly hosts: ImageHostChoice[],
@@ -248,6 +315,9 @@ class ImageHostPickerModal extends Modal {
     initialIds.forEach((id) => this.selected.add(id));
   }
 
+  /**
+   * 在弹窗或视图打开时创建界面、绑定事件并把当前数据填入控件。
+   */
   onOpen(): void {
     this.titleEl.setText("选择上传图床");
     this.contentEl.addClass("mms-image-host-picker");
@@ -280,11 +350,22 @@ class ImageHostPickerModal extends Modal {
     });
   }
 
+  /**
+   * 在弹窗或视图关闭时释放临时 DOM、计时器和事件状态。
+   */
   onClose(): void {
     if (!this.resolved) this.resolveSelection(null);
   }
 }
 
+/**
+ * 执行“choose image hosts”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+ *
+ * @param app Obsidian 应用实例，用于访问仓库、工作区和 UI 服务。
+ * @param hosts 可供用户选择或执行上传的图床列表。
+ * @param initialIds 该参数用于 choose image hosts 流程中的输入或控制。
+ * @returns 计算、解析或序列化后的字符串结果。
+ */
 function chooseImageHosts(app: App, hosts: ImageHostChoice[], initialIds: string[]): Promise<string[] | null> {
   if (!hosts.length) {
     new Notice("没有可用图床，请先在插件设置中配置并启用图床");
@@ -295,6 +376,9 @@ function chooseImageHosts(app: App, hosts: ImageHostChoice[], initialIds: string
   return new Promise((resolve) => new ImageHostPickerModal(app, hosts, initial.length ? initial : [hosts[0]!.id], resolve).open());
 }
 
+/**
+ * NodeEditModal 的主要实现类。负责封装相关状态、生命周期和对外操作，避免调用方直接操作内部数据结构。
+ */
 class NodeEditModal extends Modal {
   private readonly node: MindMapNode;
   private readonly defaultShape: NodeShape;
@@ -304,6 +388,15 @@ class NodeEditModal extends Modal {
   private closeWithoutFlush = false;
   private outsidePointerHandler: ((event: PointerEvent) => void) | null = null;
 
+  /**
+   * 创建 NodeEditModal 实例，保存依赖和初始状态；实际 DOM 构建通常在 onOpen() 或后续渲染流程中完成。
+   *
+   * @param app Obsidian 应用实例，用于访问仓库、工作区和 UI 服务。
+   * @param node 当前处理的节点。
+   * @param defaultShape 该参数用于 constructor 流程中的输入或控制。
+   * @param callbacks 编辑器向视图层发送事件的一组回调。
+   * @param submit 该参数用于 constructor 流程中的输入或控制。
+   */
   constructor(
     app: App,
     node: MindMapNode,
@@ -318,6 +411,9 @@ class NodeEditModal extends Modal {
     this.submit = submit;
   }
 
+  /**
+   * 在弹窗或视图打开时创建界面、绑定事件并把当前数据填入控件。
+   */
   onOpen(): void {
     this.titleEl.setText("编辑节点内容");
     this.contentEl.addClass("mmc-node-edit-modal");
@@ -698,6 +794,9 @@ class NodeEditModal extends Modal {
     window.setTimeout(() => document.addEventListener("pointerdown", this.outsidePointerHandler!, true), 0);
   }
 
+  /**
+   * 在弹窗或视图关闭时释放临时 DOM、计时器和事件状态。
+   */
   onClose(): void {
     if (!this.closeWithoutFlush) this.saveOnClose?.();
     if (this.outsidePointerHandler) document.removeEventListener("pointerdown", this.outsidePointerHandler, true);
@@ -705,11 +804,22 @@ class NodeEditModal extends Modal {
   }
 }
 
+/**
+ * AppearanceModal 的主要实现类。负责封装相关状态、生命周期和对外操作，避免调用方直接操作内部数据结构。
+ */
 class AppearanceModal extends Modal {
   private readonly appearance: MindMapAppearance;
   private readonly submit: (appearance: MindMapAppearance) => void;
   private readonly reset: () => void;
 
+  /**
+   * 创建 AppearanceModal 实例，保存依赖和初始状态；实际 DOM 构建通常在 onOpen() 或后续渲染流程中完成。
+   *
+   * @param app Obsidian 应用实例，用于访问仓库、工作区和 UI 服务。
+   * @param appearance 导图外观配置。
+   * @param submit 该参数用于 constructor 流程中的输入或控制。
+   * @param reset 该参数用于 constructor 流程中的输入或控制。
+   */
   constructor(app: App, appearance: MindMapAppearance, submit: (appearance: MindMapAppearance) => void, reset: () => void) {
     super(app);
     this.appearance = appearance;
@@ -717,6 +827,9 @@ class AppearanceModal extends Modal {
     this.reset = reset;
   }
 
+  /**
+   * 在弹窗或视图打开时创建界面、绑定事件并把当前数据填入控件。
+   */
   onOpen(): void {
     this.titleEl.setText("当前脑图外观");
     this.contentEl.addClass("mmc-appearance-modal");
@@ -938,16 +1051,29 @@ class AppearanceModal extends Modal {
   }
 }
 
+/**
+ * OutlineModal 的主要实现类。负责封装相关状态、生命周期和对外操作，避免调用方直接操作内部数据结构。
+ */
 class OutlineModal extends Modal {
   private readonly markdown: string;
   private readonly onExport: () => void;
 
+  /**
+   * 创建 OutlineModal 实例，保存依赖和初始状态；实际 DOM 构建通常在 onOpen() 或后续渲染流程中完成。
+   *
+   * @param app Obsidian 应用实例，用于访问仓库、工作区和 UI 服务。
+   * @param markdown 待解析或生成的 Markdown 文本。
+   * @param onExport 该参数用于 constructor 流程中的输入或控制。
+   */
   constructor(app: App, markdown: string, onExport: () => void) {
     super(app);
     this.markdown = markdown;
     this.onExport = onExport;
   }
 
+  /**
+   * 在弹窗或视图打开时创建界面、绑定事件并把当前数据填入控件。
+   */
   onOpen(): void {
     this.titleEl.setText("Markdown 大纲");
     const textarea = this.contentEl.createEl("textarea", { cls: "mmc-outline-textarea" });
@@ -966,16 +1092,30 @@ class OutlineModal extends Modal {
     });
   }
 
+  /**
+   * 在弹窗或视图关闭时释放临时 DOM、计时器和事件状态。
+   */
   onClose(): void {
     this.contentEl.empty();
   }
 }
 
+/**
+ * SearchNodesModal 的主要实现类。负责封装相关状态、生命周期和对外操作，避免调用方直接操作内部数据结构。
+ */
 class SearchNodesModal extends Modal {
   private readonly nodes: MindMapNode[];
   private readonly onQuery: (query: string) => void;
   private readonly onSelect: (node: MindMapNode) => void;
 
+  /**
+   * 创建 SearchNodesModal 实例，保存依赖和初始状态；实际 DOM 构建通常在 onOpen() 或后续渲染流程中完成。
+   *
+   * @param app Obsidian 应用实例，用于访问仓库、工作区和 UI 服务。
+   * @param nodes 该参数用于 constructor 流程中的输入或控制。
+   * @param onQuery 该参数用于 constructor 流程中的输入或控制。
+   * @param onSelect 该参数用于 constructor 流程中的输入或控制。
+   */
   constructor(app: App, nodes: MindMapNode[], onQuery: (query: string) => void, onSelect: (node: MindMapNode) => void) {
     super(app);
     this.nodes = nodes;
@@ -983,6 +1123,9 @@ class SearchNodesModal extends Modal {
     this.onSelect = onSelect;
   }
 
+  /**
+   * 在弹窗或视图打开时创建界面、绑定事件并把当前数据填入控件。
+   */
   onOpen(): void {
     this.titleEl.setText("搜索节点");
     this.modalEl.addClass("mmc-search-modal");
@@ -1030,11 +1173,22 @@ class SearchNodesModal extends Modal {
   }
 }
 
+/**
+ * JsonTransferModal 的主要实现类。负责封装相关状态、生命周期和对外操作，避免调用方直接操作内部数据结构。
+ */
 class JsonTransferModal extends Modal {
   private readonly document: MindMapDocument;
   private readonly onImport: (document: MindMapDocument) => void;
   private readonly onExport: (json: string) => void;
 
+  /**
+   * 创建 JsonTransferModal 实例，保存依赖和初始状态；实际 DOM 构建通常在 onOpen() 或后续渲染流程中完成。
+   *
+   * @param app Obsidian 应用实例，用于访问仓库、工作区和 UI 服务。
+   * @param document 要处理的思维导图文档。
+   * @param onImport 该参数用于 constructor 流程中的输入或控制。
+   * @param onExport 该参数用于 constructor 流程中的输入或控制。
+   */
   constructor(app: App, document: MindMapDocument, onImport: (document: MindMapDocument) => void, onExport: (json: string) => void) {
     super(app);
     this.document = document;
@@ -1042,6 +1196,9 @@ class JsonTransferModal extends Modal {
     this.onExport = onExport;
   }
 
+  /**
+   * 在弹窗或视图打开时创建界面、绑定事件并把当前数据填入控件。
+   */
   onOpen(): void {
     this.titleEl.setText("JSON 导入 / 导出");
     const description = this.contentEl.createEl("p", { text: "可以复制当前 JSON，也可以粘贴其他 MindMap Studio 文档 JSON 后导入。" });
@@ -1072,6 +1229,9 @@ class JsonTransferModal extends Modal {
   }
 }
 
+/**
+ * MindMapEditor 的主要实现类。负责封装相关状态、生命周期和对外操作，避免调用方直接操作内部数据结构。
+ */
 export class MindMapEditor {
   private readonly app: App;
   private readonly host: HTMLElement;
@@ -1111,6 +1271,15 @@ export class MindMapEditor {
   private readOnly: boolean;
   private readonly imageLoadTimers = new Set<number>();
 
+  /**
+   * 创建 MindMapEditor 实例，保存依赖和初始状态；实际 DOM 构建通常在 onOpen() 或后续渲染流程中完成。
+   *
+   * @param app Obsidian 应用实例，用于访问仓库、工作区和 UI 服务。
+   * @param host 当前图床配置或图床选择项。
+   * @param document 要处理的思维导图文档。
+   * @param callbacks 编辑器向视图层发送事件的一组回调。
+   * @param options 控制当前操作行为的可选配置。
+   */
   constructor(app: App, host: HTMLElement, document: MindMapDocument, callbacks: MindMapEditorCallbacks, options: MindMapEditorOptions) {
     this.app = app;
     this.host = host;
@@ -1126,6 +1295,9 @@ export class MindMapEditor {
     if (this.options.autoFitOnOpen) window.setTimeout(() => this.fitToView(), 50);
   }
 
+  /**
+   * 执行“destroy”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+   */
   destroy(): void {
     this.clearImageLoadTimers();
     this.cleanupCallbacks.forEach((callback) => callback());
@@ -1135,6 +1307,12 @@ export class MindMapEditor {
     this.host.empty();
   }
 
+  /**
+   * 更新并应用document，并保持模型、界面和持久化状态的一致性。
+   *
+   * @param document 要处理的思维导图文档。
+   * @param resetHistory 该参数用于 set document 流程中的输入或控制。
+   */
   setDocument(document: MindMapDocument, resetHistory = true): void {
     this.document = cloneDocument(document);
     this.currentMode = this.resolveMode(this.options.defaultViewMode);
@@ -1148,6 +1326,11 @@ export class MindMapEditor {
     if (this.options.autoFitOnOpen) window.setTimeout(() => this.fitToView(), 20);
   }
 
+  /**
+   * 更新并应用options，并保持模型、界面和持久化状态的一致性。
+   *
+   * @param options 控制当前操作行为的可选配置。
+   */
   setOptions(options: MindMapEditorOptions): void {
     const modesChanged = JSON.stringify(this.options.visibleModes) !== JSON.stringify(options.visibleModes);
     const globalModeChanged = this.options.defaultViewMode !== options.defaultViewMode;
@@ -1166,6 +1349,12 @@ export class MindMapEditor {
     this.render();
   }
 
+  /**
+   * 更新并应用display mode，并保持模型、界面和持久化状态的一致性。
+   *
+   * @param mode 当前布局或显示模式。
+   * @param notifyGlobal 该参数用于 set display mode 流程中的输入或控制。
+   */
   setDisplayMode(mode: DisplayMode, notifyGlobal = true): void {
     if (!this.options.visibleModes.includes(mode)) return;
     this.currentMode = mode;
@@ -1174,10 +1363,18 @@ export class MindMapEditor {
     if (mode === "mindmap" && this.options.autoFitOnOpen) window.setTimeout(() => this.fitToView(), 20);
   }
 
+  /**
+   * 应用global display mode，并保持模型、界面和持久化状态的一致性。
+   *
+   * @param mode 当前布局或显示模式。
+   */
   applyGlobalDisplayMode(mode: DisplayMode): void {
     this.setDisplayMode(mode, false);
   }
 
+  /**
+   * 切换read only，并保持模型、界面和持久化状态的一致性。
+   */
   toggleReadOnly(): void {
     this.readOnly = !this.readOnly;
     this.persistReadOnlyState();
@@ -1185,28 +1382,49 @@ export class MindMapEditor {
     new Notice(this.readOnly ? "已进入只读模式" : "已进入编辑模式");
   }
 
+  /**
+   * 读取并返回document，并保持模型、界面和持久化状态的一致性。
+   * @returns 当前操作生成、查找或规范化后的结果。
+   */
   getDocument(): MindMapDocument {
     return cloneDocument(this.document);
   }
 
+  /**
+   * 执行“mark saved”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+   */
   markSaved(): void {
     this.statusEl.setText("已保存");
     this.rootEl.removeClass("is-dirty");
   }
 
+  /**
+   * 执行“mark saving”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+   */
   markSaving(): void {
     this.statusEl.setText("保存中…");
     this.rootEl.addClass("is-dirty");
   }
 
+  /**
+   * 定位相关数据，并保持模型、界面和持久化状态的一致性。
+   */
   focus(): void {
     this.rootEl.focus();
   }
 
+  /**
+   * 定位node by id，并保持模型、界面和持久化状态的一致性。
+   *
+   * @param id 目标对象或节点的稳定标识。
+   */
   focusNodeById(id: string): void {
     if (findNode(this.document.root, id)) this.focusNode(id);
   }
 
+  /**
+   * 构建ui，并保持模型、界面和持久化状态的一致性。
+   */
   private buildUi(): void {
     this.host.empty();
     this.rootEl = this.host.createDiv({ cls: "mmc-editor" });
@@ -1335,11 +1553,20 @@ export class MindMapEditor {
     this.resizeObserver.observe(this.viewportEl);
   }
 
+  /**
+   * 解析并确定mode，并保持模型、界面和持久化状态的一致性。
+   *
+   * @param preferred 该参数用于 resolve mode 流程中的输入或控制。
+   * @returns 当前操作生成、查找或规范化后的结果。
+   */
   private resolveMode(preferred: DisplayMode): DisplayMode {
     if (this.options.visibleModes.includes(preferred)) return preferred;
     return this.options.visibleModes[0] ?? "mindmap";
   }
 
+  /**
+   * 执行“persist read only state”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+   */
   private persistReadOnlyState(): void {
     this.document.view = { ...(this.document.view ?? {}), readOnly: this.readOnly };
     delete this.document.view.mode;
@@ -1347,6 +1574,9 @@ export class MindMapEditor {
     this.markSaving();
   }
 
+  /**
+   * 执行“update mode ui”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+   */
   private updateModeUi(): void {
     for (const [mode, button] of this.modeButtons) button.toggleClass("is-active", mode === this.currentMode);
     this.lockButton.empty();
@@ -1361,17 +1591,33 @@ export class MindMapEditor {
     }
   }
 
+  /**
+   * 执行“ensure editable”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+   * @returns 操作条件是否成立或处理是否成功。
+   */
   private ensureEditable(): boolean {
     if (!this.readOnly) return true;
     new Notice("当前为只读模式，请先点击锁按钮切换到编辑模式");
     return false;
   }
 
+  /**
+   * 执行“clear image load timers”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+   */
   private clearImageLoadTimers(): void {
     for (const timer of this.imageLoadTimers) window.clearTimeout(timer);
     this.imageLoadTimers.clear();
   }
 
+  /**
+   * 添加toolbar button，并保持模型、界面和持久化状态的一致性。
+   *
+   * @param icon 该参数用于 add toolbar button 流程中的输入或控制。
+   * @param label 该参数用于 add toolbar button 流程中的输入或控制。
+   * @param action 该参数用于 add toolbar button 流程中的输入或控制。
+   * @param editOnly 该参数用于 add toolbar button 流程中的输入或控制。
+   * @returns 当前操作生成、查找或规范化后的结果。
+   */
   private addToolbarButton(icon: string, label: string, action: () => void, editOnly = false): HTMLButtonElement {
     const button = this.toolbarEl.createEl("button", { cls: "clickable-icon mmc-toolbar-button", attr: { "aria-label": label, title: label, type: "button" } });
     setIcon(button, icon);
@@ -1387,14 +1633,27 @@ export class MindMapEditor {
     return button;
   }
 
+  /**
+   * 添加toolbar separator，并保持模型、界面和持久化状态的一致性。
+   */
   private addToolbarSeparator(): void {
     this.toolbarEl.createSpan({ cls: "mmc-toolbar-separator" });
   }
 
+  /**
+   * 读取并返回appearance，并保持模型、界面和持久化状态的一致性。
+   * @returns 当前操作生成、查找或规范化后的结果。
+   */
   private getAppearance(): MindMapAppearance {
     return mergeAppearance(this.options.defaultAppearance, this.document.appearance);
   }
 
+  /**
+   * 执行“font family css”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+   *
+   * @param appearance 导图外观配置。
+   * @returns 计算、解析或序列化后的字符串结果。
+   */
   private fontFamilyCss(appearance: MindMapAppearance): string {
     if (appearance.fontFamily === "serif") return 'Georgia, "Times New Roman", serif';
     if (appearance.fontFamily === "mono") return '"SFMono-Regular", Consolas, "Liberation Mono", monospace';
@@ -1403,6 +1662,11 @@ export class MindMapEditor {
     return "var(--font-interface)";
   }
 
+  /**
+   * 应用appearance，并保持模型、界面和持久化状态的一致性。
+   *
+   * @param appearance 导图外观配置。
+   */
   private applyAppearance(appearance: MindMapAppearance): void {
     const setOrRemove = (name: string, value: string | undefined): void => {
       if (value) this.rootEl.style.setProperty(name, value);
@@ -1424,6 +1688,10 @@ export class MindMapEditor {
     this.viewportEl.toggleClass("pattern-none", !appearance.backgroundPattern || appearance.backgroundPattern === "none");
   }
 
+  /**
+   * 在画布左上角或文档顶部渲染父子导图导航。导图模式使用固定悬浮面包屑，文章和大纲模式使用文档流导航，均保持当前全局显示模式。
+   * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
+   */
   private renderNavigation(): void {
     this.navigationBarEl.empty();
     this.canvasBreadcrumbEl.empty();
@@ -1488,6 +1756,12 @@ export class MindMapEditor {
     this.navigationBarEl.createDiv({ cls: "mmc-parent-navigation-path", text: navigation.parentPath });
   }
 
+  /**
+   * 执行“update node primary text”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+   *
+   * @param node 当前处理的节点。
+   * @param value 待校验、转换或比较的输入值。
+   */
   private updateNodePrimaryText(node: MindMapNode, value: string): void {
     const next = value.replace(/\s+/g, " ").trim();
     const blocks = nodeContentBlocks(node);
@@ -1503,6 +1777,13 @@ export class MindMapEditor {
     if (node.id === this.document.root.id && next) this.document.title = next;
   }
 
+  /**
+   * 创建并配置inline editable，并保持模型、界面和持久化状态的一致性。
+   *
+   * @param element 该参数用于 make inline editable 流程中的输入或控制。
+   * @param node 当前处理的节点。
+   * @param placeholder 该参数用于 make inline editable 流程中的输入或控制。
+   */
   private makeInlineEditable(element: HTMLElement, node: MindMapNode, placeholder: string): void {
     element.contentEditable = this.readOnly ? "false" : "true";
     element.setAttr("role", "textbox");
@@ -1532,6 +1813,12 @@ export class MindMapEditor {
     });
   }
 
+  /**
+   * 添加inline node actions，并保持模型、界面和持久化状态的一致性。
+   *
+   * @param container 接收渲染内容的 DOM 容器。
+   * @param node 当前处理的节点。
+   */
   private addInlineNodeActions(container: HTMLElement, node: MindMapNode): void {
     if (this.readOnly) return;
     const actions = container.createDiv({ cls: "mms-inline-node-actions" });
@@ -1545,6 +1832,10 @@ export class MindMapEditor {
     if (node.id !== this.document.root.id) action("trash-2", "删除节点", () => this.deleteSelected());
   }
 
+  /**
+   * 按照节点层级渲染可编辑大纲。节点标题、备注和子导图链接仍映射到同一份数据，任何修改都会通过统一变更链同步到导图和文章模式。
+   * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
+   */
   private renderOutline(): void {
     this.outlineEl.empty();
     const page = this.outlineEl.createDiv({ cls: "mms-outline-page" });
@@ -1604,6 +1895,13 @@ export class MindMapEditor {
     this.document.root.children.forEach((child) => visit(child, 1));
   }
 
+  /**
+   * 渲染article content，并保持模型、界面和持久化状态的一致性。
+   *
+   * @param container 接收渲染内容的 DOM 容器。
+   * @param node 当前处理的节点。
+   * @param treatTextAsBody 该参数用于 render article content 流程中的输入或控制。
+   */
   private renderArticleContent(container: HTMLElement, node: MindMapNode, treatTextAsBody: boolean): void {
     const blocks = nodeContentBlocks(node);
     let firstTextHandled = false;
@@ -1638,6 +1936,10 @@ export class MindMapEditor {
     }
   }
 
+  /**
+   * 渲染文章目录页、章节编号、正文和跨子导图链接。顶层父导图可展示递归目录；子导图根据文章上下文继续父级编号。
+   * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
+   */
   private renderArticle(): void {
     this.articleEl.empty();
     const page = this.articleEl.createDiv({ cls: "mms-article-page" });
@@ -1708,6 +2010,9 @@ export class MindMapEditor {
     }
   }
 
+  /**
+   * 渲染相关数据，并保持模型、界面和持久化状态的一致性。
+   */
   private render(): void {
     this.clearImageLoadTimers();
     this.renderNavigation();
@@ -1723,6 +2028,10 @@ export class MindMapEditor {
     else this.renderMindMap();
   }
 
+  /**
+   * 渲染可交互导图画布：计算布局、绘制连接线和节点、恢复选择状态、绑定拖拽与尺寸手柄、安装子导图整节点入口，并启动图片镜像加载探测。
+   * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
+   */
   private renderMindMap(): void {
     const appearance = this.getAppearance();
     this.layout = computeLayout(this.document.root, this.document.layout, appearance.fontSize ?? 14);
@@ -2078,6 +2387,9 @@ export class MindMapEditor {
     this.applyTransform();
   }
 
+  /**
+   * 应用transform，并保持模型、界面和持久化状态的一致性。
+   */
   private applyTransform(): void {
     const rect = this.viewportEl.getBoundingClientRect();
     this.sceneEl.style.transform = `translate(${rect.width / 2 + this.panX}px, ${rect.height / 2 + this.panY}px) scale(${this.zoom})`;
@@ -2085,6 +2397,11 @@ export class MindMapEditor {
     this.zoomStatusEl?.setText(`${Math.round(this.zoom * 100)}%`);
   }
 
+  /**
+   * 执行“select node”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+   *
+   * @param id 目标对象或节点的稳定标识。
+   */
   private selectNode(id: string | null): void {
     this.selectedId = id ?? "";
     this.rootEl.querySelectorAll(".mmc-node.is-selected, .mms-outline-row.is-selected, .mms-article-node.is-selected")
@@ -2095,16 +2412,29 @@ export class MindMapEditor {
     this.articleEl.querySelector<HTMLElement>(`.mms-article-node[data-node-id="${CSS.escape(id)}"]`)?.addClass("is-selected");
   }
 
+  /**
+   * 执行“selected node”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+   * @returns 当前操作生成、查找或规范化后的结果。
+   */
   private selectedNode(): MindMapNode | null {
     return this.selectedId ? findNode(this.document.root, this.selectedId) : null;
   }
 
+  /**
+   * 创建configured node，并保持模型、界面和持久化状态的一致性。
+   *
+   * @param text 要显示、搜索、解析或写入的文本。
+   * @returns 当前操作生成、查找或规范化后的结果。
+   */
   private createConfiguredNode(text = "新节点"): MindMapNode {
     const node = createNode(text);
     if (this.options.defaultNodeShape !== "rounded") node.style = { shape: this.options.defaultNodeShape };
     return node;
   }
 
+  /**
+   * 添加child，并保持模型、界面和持久化状态的一致性。
+   */
   private addChild(): void {
     if (!this.ensureEditable()) return;
     const selected = this.selectedNode() ?? this.document.root;
@@ -2117,6 +2447,9 @@ export class MindMapEditor {
     this.editSelected();
   }
 
+  /**
+   * 添加sibling，并保持模型、界面和持久化状态的一致性。
+   */
   private addSibling(): void {
     if (!this.ensureEditable()) return;
     const selected = this.selectedNode();
@@ -2135,6 +2468,9 @@ export class MindMapEditor {
     this.editSelected();
   }
 
+  /**
+   * 编辑selected，并保持模型、界面和持久化状态的一致性。
+   */
   private editSelected(): void {
     if (!this.ensureEditable()) return;
     const selected = this.selectedNode();
@@ -2189,6 +2525,9 @@ export class MindMapEditor {
     }).open();
   }
 
+  /**
+   * 删除selected，并保持模型、界面和持久化状态的一致性。
+   */
   private deleteSelected(): void {
     if (!this.ensureEditable()) return;
     const selected = this.selectedNode();
@@ -2203,6 +2542,9 @@ export class MindMapEditor {
     });
   }
 
+  /**
+   * 切换collapse，并保持模型、界面和持久化状态的一致性。
+   */
   private toggleCollapse(): void {
     const selected = this.selectedNode();
     if (!selected || !selected.children.length) return;
@@ -2214,6 +2556,9 @@ export class MindMapEditor {
     this.mutate(() => { selected.collapsed = !selected.collapsed; });
   }
 
+  /**
+   * 切换task，并保持模型、界面和持久化状态的一致性。
+   */
   private cycleTask(): void {
     if (!this.ensureEditable()) return;
     const selected = this.selectedNode();
@@ -2222,12 +2567,18 @@ export class MindMapEditor {
     this.mutate(() => { selected.task = next[selected.task ?? ""]; });
   }
 
+  /**
+   * 切换layout，并保持模型、界面和持久化状态的一致性。
+   */
   private toggleLayout(): void {
     if (!this.ensureEditable()) return;
     this.mutate(() => { this.document.layout = this.document.layout === "right" ? "balanced" : "right"; });
     window.setTimeout(() => this.fitToView(), 20);
   }
 
+  /**
+   * 编辑appearance，并保持模型、界面和持久化状态的一致性。
+   */
   private editAppearance(): void {
     if (!this.ensureEditable()) return;
     new AppearanceModal(
@@ -2238,6 +2589,9 @@ export class MindMapEditor {
     ).open();
   }
 
+  /**
+   * 编辑table，并保持模型、界面和持久化状态的一致性。
+   */
   private editTable(): void {
     if (!this.ensureEditable()) return;
     const selected = this.selectedNode() ?? this.document.root;
@@ -2246,6 +2600,9 @@ export class MindMapEditor {
     }).open();
   }
 
+  /**
+   * 转换children to table，并保持模型、界面和持久化状态的一致性。
+   */
   private convertChildrenToTable(): void {
     if (!this.ensureEditable()) return;
     const selected = this.selectedNode() ?? this.document.root;
@@ -2258,6 +2615,9 @@ export class MindMapEditor {
     new Notice("已生成子节点表格；原子节点已保留并收起");
   }
 
+  /**
+   * 删除table，并保持模型、界面和持久化状态的一致性。
+   */
   private removeTable(): void {
     if (!this.ensureEditable()) return;
     const selected = this.selectedNode();
@@ -2268,6 +2628,9 @@ export class MindMapEditor {
     });
   }
 
+  /**
+   * 编辑code，并保持模型、界面和持久化状态的一致性。
+   */
   private editCode(): void {
     if (!this.ensureEditable()) return;
     const selected = this.selectedNode() ?? this.document.root;
@@ -2276,6 +2639,9 @@ export class MindMapEditor {
     }).open();
   }
 
+  /**
+   * 删除code，并保持模型、界面和持久化状态的一致性。
+   */
   private removeCode(): void {
     if (!this.ensureEditable()) return;
     const selected = this.selectedNode();
@@ -2283,6 +2649,10 @@ export class MindMapEditor {
     this.mutate(() => { selected.code = undefined; });
   }
 
+  /**
+   * 如果节点已有子导图则打开；否则创建独立 .mindmap 文件并在父节点与子文件导航元数据中建立双向关系。
+   * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
+   */
   private async createOrOpenSubmap(): Promise<void> {
     const selected = this.selectedNode() ?? this.document.root;
     if (selected.submap) {
@@ -2300,6 +2670,12 @@ export class MindMapEditor {
     }
   }
 
+  /**
+   * 渲染node table，并保持模型、界面和持久化状态的一致性。
+   *
+   * @param content 该参数用于 render node table 流程中的输入或控制。
+   * @param node 当前处理的节点。
+   */
   private renderNodeTable(content: HTMLElement, node: MindMapNode): void {
     if (!node.table) return;
     const wrap = content.createDiv({ cls: "mmc-node-table-wrap" });
@@ -2322,6 +2698,12 @@ export class MindMapEditor {
     wrap.addEventListener("dblclick", (event) => { event.stopPropagation(); this.selectNode(node.id); this.editTable(); });
   }
 
+  /**
+   * 渲染node code，并保持模型、界面和持久化状态的一致性。
+   *
+   * @param content 该参数用于 render node code 流程中的输入或控制。
+   * @param node 当前处理的节点。
+   */
   private renderNodeCode(content: HTMLElement, node: MindMapNode): void {
     if (!node.code) return;
     const block = content.createDiv({ cls: "mmc-code-block" });
@@ -2340,6 +2722,12 @@ export class MindMapEditor {
     block.addEventListener("dblclick", (event) => { event.stopPropagation(); this.selectNode(node.id); this.editCode(); });
   }
 
+  /**
+   * 处理编辑器内粘贴：优先识别图片并保存为本地资源，其次识别表格、代码块、JSON 分支或普通文本。图片可按设置进入延迟自动上传流程。
+   *
+   * @param event 触发当前交互的浏览器或 Obsidian 事件。
+   * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
+   */
   private async handlePaste(event: ClipboardEvent): Promise<void> {
     if (this.readOnly) return;
     const target = event.target as HTMLElement;
@@ -2397,6 +2785,9 @@ export class MindMapEditor {
     }
   }
 
+  /**
+   * 打开selected link，并保持模型、界面和持久化状态的一致性。
+   */
   private openSelectedLink(): void {
     const selected = this.selectedNode();
     if (!selected) return;
@@ -2408,6 +2799,12 @@ export class MindMapEditor {
     void this.callbacks.onOpenLink(link);
   }
 
+  /**
+   * 判断parent navigation backlink，并保持模型、界面和持久化状态的一致性。
+   *
+   * @param node 当前处理的节点。
+   * @returns 操作条件是否成立或处理是否成功。
+   */
   private isParentNavigationBacklink(node: MindMapNode): boolean {
     const navigation = this.document.navigation;
     if (!navigation?.parentPath) return false;
@@ -2419,17 +2816,29 @@ export class MindMapEditor {
     return candidate === navigation.parentPath;
   }
 
+  /**
+   * 读取并返回node link，并保持模型、界面和持久化状态的一致性。
+   *
+   * @param node 当前处理的节点。
+   * @returns 计算、解析或序列化后的字符串结果。
+   */
   private getNodeLink(node: MindMapNode): string | null {
     const explicit = node.link?.trim();
     if (explicit && !this.isParentNavigationBacklink(node)) return explicit;
     return extractFirstWikiLink(nodePlainText(node)) || extractFirstWikiLink(node.note ?? "");
   }
 
+  /**
+   * 执行“show outline”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+   */
   private showOutline(): void {
     const markdown = documentToMarkdown(this.document);
     new OutlineModal(this.app, markdown, () => void this.callbacks.onExportMarkdown(markdown)).open();
   }
 
+  /**
+   * 执行“show json transfer”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+   */
   private showJsonTransfer(): void {
     if (!this.ensureEditable()) return;
     new JsonTransferModal(
@@ -2440,10 +2849,19 @@ export class MindMapEditor {
     ).open();
   }
 
+  /**
+   * 打开search，并保持模型、界面和持久化状态的一致性。
+   */
   private openSearch(): void {
     this.callbacks.onSearchMapFamily();
   }
 
+  /**
+   * 定位指定节点。必要时先展开全部祖先、切换到可显示该节点的视图并重渲染，然后选中节点并将其平滑移动到可视区域中央。
+   *
+   * @param id 目标对象或节点的稳定标识。
+   * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
+   */
   private focusNode(id: string): void {
     const ancestors = findAncestors(this.document.root, id);
     const collapsed = ancestors.filter((node) => node.collapsed);
@@ -2464,6 +2882,11 @@ export class MindMapEditor {
     }, 20);
   }
 
+  /**
+   * 定位node，并保持模型、界面和持久化状态的一致性。
+   *
+   * @param id 目标对象或节点的稳定标识。
+   */
   private centerNode(id: string): void {
     if (this.currentMode !== "mindmap") return;
     const position = this.layout.byId.get(id);
@@ -2473,6 +2896,11 @@ export class MindMapEditor {
     this.applyTransform();
   }
 
+  /**
+   * 打开context menu，并保持模型、界面和持久化状态的一致性。
+   *
+   * @param event 触发当前交互的浏览器或 Obsidian 事件。
+   */
   private openContextMenu(event: MouseEvent): void {
     const selected = this.selectedNode();
     const menu = new Menu();
@@ -2519,6 +2947,10 @@ export class MindMapEditor {
     menu.showAtMouseEvent(event);
   }
 
+  /**
+   * 复制selected branch，并保持模型、界面和持久化状态的一致性。
+   * @returns 操作条件是否成立或处理是否成功。
+   */
   private async copySelectedBranch(): Promise<boolean> {
     const selected = this.selectedNode();
     if (!selected) return false;
@@ -2533,6 +2965,9 @@ export class MindMapEditor {
     return true;
   }
 
+  /**
+   * 粘贴as child，并保持模型、界面和持久化状态的一致性。
+   */
   private async pasteAsChild(): Promise<void> {
     const selected = this.selectedNode() ?? this.document.root;
     let sourceNode: MindMapNode | null = null;
@@ -2555,6 +2990,12 @@ export class MindMapEditor {
     });
   }
 
+  /**
+   * 解析clipboard node，并保持模型、界面和持久化状态的一致性。
+   *
+   * @param text 要显示、搜索、解析或写入的文本。
+   * @returns 当前操作生成、查找或规范化后的结果。
+   */
   private parseClipboardNode(text: string): MindMapNode | null {
     try {
       const parsed = JSON.parse(text) as { type?: string; node?: Partial<MindMapNode>; root?: Partial<MindMapNode>; text?: string; children?: unknown[] };
@@ -2566,6 +3007,9 @@ export class MindMapEditor {
     }
   }
 
+  /**
+   * 复制生成selected，并保持模型、界面和持久化状态的一致性。
+   */
   private duplicateSelected(): void {
     if (!this.ensureEditable()) return;
     const selected = this.selectedNode();
@@ -2583,12 +3027,25 @@ export class MindMapEditor {
     });
   }
 
+  /**
+   * 判断reparent，并保持模型、界面和持久化状态的一致性。
+   *
+   * @param draggedId 该参数用于 can reparent 流程中的输入或控制。
+   * @param targetId 该参数用于 can reparent 流程中的输入或控制。
+   * @returns 操作条件是否成立或处理是否成功。
+   */
   private canReparent(draggedId: string | null, targetId: string): boolean {
     if (!draggedId || draggedId === this.document.root.id || draggedId === targetId) return false;
     const dragged = findNode(this.document.root, draggedId);
     return Boolean(dragged && !containsNode(dragged, targetId));
   }
 
+  /**
+   * 执行“reparent node”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+   *
+   * @param draggedId 该参数用于 reparent node 流程中的输入或控制。
+   * @param targetId 该参数用于 reparent node 流程中的输入或控制。
+   */
   private reparentNode(draggedId: string, targetId: string): void {
     if (!this.ensureEditable()) return;
     if (!this.canReparent(draggedId, targetId)) return;
@@ -2603,6 +3060,11 @@ export class MindMapEditor {
     });
   }
 
+  /**
+   * 替换document，并保持模型、界面和持久化状态的一致性。
+   *
+   * @param document 要处理的思维导图文档。
+   */
   private replaceDocument(document: MindMapDocument): void {
     if (!this.ensureEditable()) return;
     this.history.push(JSON.stringify(this.document));
@@ -2616,6 +3078,12 @@ export class MindMapEditor {
     window.setTimeout(() => this.fitToView(), 20);
   }
 
+  /**
+   * 所有用户可撤销写操作的统一入口。调用前克隆当前文档写入撤销栈，执行修改，规范化和重渲染，再通知视图自动保存；只读状态会在更上层阻止进入该流程。
+   *
+   * @param action 该参数用于 mutate 流程中的输入或控制。
+   * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
+   */
   private mutate(action: () => void): void {
     if (!this.ensureEditable()) return;
     this.history.push(JSON.stringify(this.document));
@@ -2627,11 +3095,17 @@ export class MindMapEditor {
     this.render();
   }
 
+  /**
+   * 裁剪history，并保持模型、界面和持久化状态的一致性。
+   */
   private trimHistory(): void {
     const limit = Math.max(10, Math.min(500, this.options.historyLimit));
     while (this.history.length > limit) this.history.shift();
   }
 
+  /**
+   * 撤销相关数据，并保持模型、界面和持久化状态的一致性。
+   */
   private undo(): void {
     if (!this.ensureEditable()) return;
     const previous = this.history.pop();
@@ -2644,6 +3118,9 @@ export class MindMapEditor {
     this.render();
   }
 
+  /**
+   * 重做相关数据，并保持模型、界面和持久化状态的一致性。
+   */
   private redo(): void {
     if (!this.ensureEditable()) return;
     const next = this.future.pop();
@@ -2657,6 +3134,9 @@ export class MindMapEditor {
     this.render();
   }
 
+  /**
+   * 执行“fit to view”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+   */
   private fitToView(): void {
     const rect = this.viewportEl.getBoundingClientRect();
     const width = Math.max(1, this.layout.maxX - this.layout.minX + 100);
@@ -2669,15 +3149,31 @@ export class MindMapEditor {
     this.applyTransform();
   }
 
+  /**
+   * 更新并应用zoom，并保持模型、界面和持久化状态的一致性。
+   *
+   * @param value 待校验、转换或比较的输入值。
+   */
   private setZoom(value: number): void {
     this.zoom = this.clampZoom(value);
     this.applyTransform();
   }
 
+  /**
+   * 执行“clamp zoom”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+   *
+   * @param value 待校验、转换或比较的输入值。
+   * @returns 计算得到的数值结果。
+   */
   private clampZoom(value: number): number {
     return Math.min(2.5, Math.max(0.2, value));
   }
 
+  /**
+   * 执行“navigate selection”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+   *
+   * @param direction 该参数用于 navigate selection 流程中的输入或控制。
+   */
   private navigateSelection(direction: "parent" | "child" | "previous" | "next"): void {
     const selected = this.selectedNode() ?? this.document.root;
     let target: MindMapNode | null = null;
@@ -2697,6 +3193,11 @@ export class MindMapEditor {
     }
   }
 
+  /**
+   * 处理keydown，并保持模型、界面和持久化状态的一致性。
+   *
+   * @param event 触发当前交互的浏览器或 Obsidian 事件。
+   */
   private handleKeydown(event: KeyboardEvent): void {
     const target = event.target as HTMLElement;
     if (target.matches("input, textarea, select, [contenteditable='true']")) return;

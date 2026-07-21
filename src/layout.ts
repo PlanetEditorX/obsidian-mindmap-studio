@@ -1,5 +1,15 @@
+/**
+ * @file layout.ts
+ * @description 思维导图布局计算与 SVG 导出模块。
+ *
+ * 根据可见节点、自定义尺寸、布局方向和外观配置计算坐标、边界、连接线路径与层级线宽，并使用同一结果生成 SVG。
+ */
+
 import { nodeContentBlocks, nodePlainText, type EdgeStyle, type FontFamilyMode, type LayoutMode, type MindMapAppearance, type MindMapNode, type MindMapTextRun, type NodeShape } from "./model";
 
+/**
+ * NodePosition 的结构化数据约定。字段会在模块边界传递，用于保持类型安全和版本兼容。
+ */
 export interface NodePosition {
   node: MindMapNode;
   parentId: string | null;
@@ -11,6 +21,9 @@ export interface NodePosition {
   height: number;
 }
 
+/**
+ * LayoutResult 的结构化数据约定。字段会在模块边界传递，用于保持类型安全和版本兼容。
+ */
 export interface LayoutResult {
   nodes: NodePosition[];
   byId: Map<string, NodePosition>;
@@ -25,10 +38,24 @@ const NODE_WIDTH = 176;
 const H_GAP = 112;
 const V_GAP = 24;
 
+/**
+ * 执行“visible children”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+ *
+ * @param node 当前处理的节点。
+ * @returns 按当前规则构建的集合结果。
+ */
 function visibleChildren(node: MindMapNode): MindMapNode[] {
   return node.collapsed ? [] : node.children;
 }
 
+/**
+ * 执行“estimated text lines”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+ *
+ * @param text 要显示、搜索、解析或写入的文本。
+ * @param width 该参数用于 estimated text lines 流程中的输入或控制。
+ * @param fontSize 该参数用于 estimated text lines 流程中的输入或控制。
+ * @returns 计算得到的数值结果。
+ */
 function estimatedTextLines(text: string, width: number, fontSize: number): number {
   const available = Math.max(44, width - 48);
   const averageGlyphWidth = Math.max(5.5, fontSize * 0.62);
@@ -36,6 +63,14 @@ function estimatedTextLines(text: string, width: number, fontSize: number): numb
   return Math.max(1, text.split(/\r?\n/).reduce((sum, line) => sum + Math.max(1, Math.ceil(Math.max(1, line.length) / charsPerLine)), 0));
 }
 
+/**
+ * 执行“node dimensions”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+ *
+ * @param node 当前处理的节点。
+ * @param depth 节点在树或文章结构中的零基层级。
+ * @param defaultFontSize 未单独设置字号时使用的默认字号。
+ * @returns 计算得到的数值结果。
+ */
 function nodeDimensions(node: MindMapNode, depth: number, defaultFontSize = 14): { width: number; height: number } {
   const fontSize = node.style?.fontSize ?? defaultFontSize;
   const manualWidth = node.style?.width;
@@ -82,6 +117,14 @@ function nodeDimensions(node: MindMapNode, depth: number, defaultFontSize = 14):
   return { width, height: Math.min(1200, height) };
 }
 
+/**
+ * 执行“subtree height”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+ *
+ * @param node 当前处理的节点。
+ * @param depth 节点在树或文章结构中的零基层级。
+ * @param defaultFontSize 未单独设置字号时使用的默认字号。
+ * @returns 计算得到的数值结果。
+ */
 function subtreeHeight(node: MindMapNode, depth: number, defaultFontSize = 14): number {
   const ownHeight = nodeDimensions(node, depth, defaultFontSize).height;
   const children = visibleChildren(node);
@@ -90,6 +133,19 @@ function subtreeHeight(node: MindMapNode, depth: number, defaultFontSize = 14): 
   return Math.max(ownHeight, childrenHeight);
 }
 
+/**
+ * 执行“layout branch”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+ *
+ * @param node 当前处理的节点。
+ * @param parentId 该参数用于 layout branch 流程中的输入或控制。
+ * @param parentX 该参数用于 layout branch 流程中的输入或控制。
+ * @param parentWidth 该参数用于 layout branch 流程中的输入或控制。
+ * @param side 该参数用于 layout branch 流程中的输入或控制。
+ * @param depth 节点在树或文章结构中的零基层级。
+ * @param centerY 该参数用于 layout branch 流程中的输入或控制。
+ * @param output 该参数用于 layout branch 流程中的输入或控制。
+ * @param defaultFontSize 未单独设置字号时使用的默认字号。
+ */
 function layoutBranch(
   node: MindMapNode,
   parentId: string,
@@ -118,6 +174,15 @@ function layoutBranch(
   });
 }
 
+/**
+ * 计算当前可见节点的尺寸、坐标、深度和整体边界。折叠节点的后代不会参与布局；节点自定义宽度和最小高度会直接影响子树占位与连接线端点。
+ *
+ * @param root 节点树的根节点。
+ * @param mode 当前布局或显示模式。
+ * @param defaultFontSize 未单独设置字号时使用的默认字号。
+ * @returns 当前操作生成、查找或规范化后的结果。
+ * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
+ */
 export function computeLayout(root: MindMapNode, mode: LayoutMode, defaultFontSize = 14): LayoutResult {
   const rootDimensions = nodeDimensions(root, 0, defaultFontSize);
   const nodes: NodePosition[] = [
@@ -173,6 +238,13 @@ export function computeLayout(root: MindMapNode, mode: LayoutMode, defaultFontSi
 }
 
 
+/**
+ * 构建branch color map，并保持模型、界面和持久化状态的一致性。
+ *
+ * @param root 节点树的根节点。
+ * @param colors 该参数用于 build branch color map 流程中的输入或控制。
+ * @returns 计算、解析或序列化后的字符串结果。
+ */
 export function buildBranchColorMap(root: MindMapNode, colors: string[] | undefined): Map<string, string> {
   const result = new Map<string, string>();
   if (!colors?.length) return result;
@@ -184,6 +256,15 @@ export function buildBranchColorMap(root: MindMapNode, colors: string[] | undefi
   return result;
 }
 
+/**
+ * 根据连接线模式计算指定层级的线宽。统一模式始终返回起始宽度；渐细模式会按当前实际最大深度插值，并保证最深层达到最小宽度。
+ *
+ * @param appearance 导图外观配置。
+ * @param depth 节点在树或文章结构中的零基层级。
+ * @param maxDepth 当前可见树的最大层级，用于归一化计算。
+ * @returns 计算得到的数值结果。
+ * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
+ */
 export function edgeWidthForDepth(appearance: MindMapAppearance, depth: number, maxDepth = 5): number {
   const maximum = Math.max(0.5, Math.min(8, appearance.edgeWidth ?? 2.2));
   if (appearance.edgeWidthMode !== "tapered") return maximum;
@@ -196,6 +277,14 @@ export function edgeWidthForDepth(appearance: MindMapAppearance, depth: number, 
   return Number((maximum + (minimum - maximum) * progress).toFixed(3));
 }
 
+/**
+ * 执行“edge path”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+ *
+ * @param parent 当前节点的父节点；根节点场景可能为空。
+ * @param child 该参数用于 edge path 流程中的输入或控制。
+ * @param style 要应用、比较或规范化的样式。
+ * @returns 计算、解析或序列化后的字符串结果。
+ */
 export function edgePath(parent: NodePosition, child: NodePosition, style: EdgeStyle = "curved"): string {
   const parentX = parent.x + (child.side >= 0 ? parent.width / 2 : -parent.width / 2);
   const childX = child.x - (child.side >= 0 ? child.width / 2 : -child.width / 2);
@@ -205,6 +294,12 @@ export function edgePath(parent: NodePosition, child: NodePosition, style: EdgeS
   return `M ${parentX} ${parent.y} C ${middleX} ${parent.y}, ${middleX} ${child.y}, ${childX} ${child.y}`;
 }
 
+/**
+ * 转义xml，并保持模型、界面和持久化状态的一致性。
+ *
+ * @param value 待校验、转换或比较的输入值。
+ * @returns 计算、解析或序列化后的字符串结果。
+ */
 export function escapeXml(value: string): string {
   return value.replace(/[<>&"']/g, (character) => {
     const entities: Record<string, string> = { "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;", "'": "&apos;" };
@@ -212,16 +307,35 @@ export function escapeXml(value: string): string {
   });
 }
 
+/**
+ * 执行“valid color”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+ *
+ * @param value 待校验、转换或比较的输入值。
+ * @param fallback 该参数用于 valid color 流程中的输入或控制。
+ * @returns 计算、解析或序列化后的字符串结果。
+ */
 function validColor(value: string | undefined, fallback: string): string {
   return value && /^#[0-9a-f]{6}$/i.test(value) ? value : fallback;
 }
 
+/**
+ * 执行“svg radius”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+ *
+ * @param shape 该参数用于 svg radius 流程中的输入或控制。
+ * @returns 计算得到的数值结果。
+ */
 function svgRadius(shape: NodeShape | undefined): number {
   if (shape === "rectangle") return 3;
   if (shape === "pill") return 28;
   return 14;
 }
 
+/**
+ * 执行“task glyph”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+ *
+ * @param node 当前处理的节点。
+ * @returns 计算、解析或序列化后的字符串结果。
+ */
 function taskGlyph(node: MindMapNode): string {
   if (node.task === "done") return "✓ ";
   if (node.task === "doing") return "◐ ";
@@ -229,6 +343,13 @@ function taskGlyph(node: MindMapNode): string {
   return "";
 }
 
+/**
+ * 执行“truncate runs”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+ *
+ * @param runs 按字符样式拆分的富文本运行段。
+ * @param maxLength 该参数用于 truncate runs 流程中的输入或控制。
+ * @returns 按当前规则构建的集合结果。
+ */
 function truncateRuns(runs: MindMapTextRun[], maxLength: number): MindMapTextRun[] {
   const result: MindMapTextRun[] = [];
   let remaining = maxLength;
@@ -248,6 +369,16 @@ function truncateRuns(runs: MindMapTextRun[], maxLength: number): MindMapTextRun
   return result;
 }
 
+/**
+ * 执行“rich text tspans”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+ *
+ * @param runs 按字符样式拆分的富文本运行段。
+ * @param fallbackText 该参数用于 rich text tspans 流程中的输入或控制。
+ * @param prefix 该参数用于 rich text tspans 流程中的输入或控制。
+ * @param foreground 该参数用于 rich text tspans 流程中的输入或控制。
+ * @param maxChars 该参数用于 rich text tspans 流程中的输入或控制。
+ * @returns 计算、解析或序列化后的字符串结果。
+ */
 function richTextTspans(runs: MindMapTextRun[] | undefined, fallbackText: string, prefix: string, foreground: string, maxChars = 160): string {
   const source: MindMapTextRun[] = [
     ...(prefix ? [{ text: prefix }] : []),
@@ -267,6 +398,14 @@ function richTextTspans(runs: MindMapTextRun[] | undefined, fallbackText: string
   }).join("");
 }
 
+/**
+ * 执行“svg wrapped lines”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+ *
+ * @param text 要显示、搜索、解析或写入的文本。
+ * @param width 该参数用于 svg wrapped lines 流程中的输入或控制。
+ * @param fontSize 该参数用于 svg wrapped lines 流程中的输入或控制。
+ * @returns 计算、解析或序列化后的字符串结果。
+ */
 function svgWrappedLines(text: string, width: number, fontSize: number): string[] {
   const available = Math.max(44, width - 32);
   const maxChars = Math.max(4, Math.floor(available / Math.max(5.5, fontSize * .62)));
@@ -278,6 +417,13 @@ function svgWrappedLines(text: string, width: number, fontSize: number): string[
   return lines.length ? lines : [""];
 }
 
+/**
+ * 执行“svg font family”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+ *
+ * @param mode 当前布局或显示模式。
+ * @param customFont 该参数用于 svg font family 流程中的输入或控制。
+ * @returns 计算、解析或序列化后的字符串结果。
+ */
 function svgFontFamily(mode: FontFamilyMode | undefined, customFont: string | undefined): string {
   if (mode === "serif") return 'Georgia,"Times New Roman",serif';
   if (mode === "mono") return '"SFMono-Regular",Consolas,"Liberation Mono",monospace';
@@ -285,6 +431,16 @@ function svgFontFamily(mode: FontFamilyMode | undefined, customFont: string | un
   return 'Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif';
 }
 
+/**
+ * 使用与编辑画布一致的布局、文本对齐、节点尺寸、主题颜色、富文本和渐细连线生成独立 SVG 字符串。导出过程不依赖 DOM。
+ *
+ * @param root 节点树的根节点。
+ * @param mode 当前布局或显示模式。
+ * @param title 文档、节点或导出文件的显示标题。
+ * @param appearance 导图外观配置。
+ * @returns 计算、解析或序列化后的字符串结果。
+ * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
+ */
 export function documentToSvg(root: MindMapNode, mode: LayoutMode, title: string, appearance: MindMapAppearance = {}): string {
   const defaultFontSize = appearance.fontSize ?? 14;
   const layout = computeLayout(root, mode, defaultFontSize);

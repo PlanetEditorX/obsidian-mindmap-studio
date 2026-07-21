@@ -1,3 +1,10 @@
+/**
+ * @file global-search.ts
+ * @description 本地全局搜索索引与导图族搜索模块。
+ *
+ * 索引缓存节点文字、文件路径和层级，监听文件变化增量更新，并递归解析父导图与子导图。
+ */
+
 import { App, Modal, Notice, TFile, normalizePath, setIcon } from "obsidian";
 import {
   nodeContentBlocks,
@@ -8,6 +15,9 @@ import {
   type MindMapNode
 } from "./model";
 
+/**
+ * MindMapSearchEntry 的结构化数据约定。字段会在模块边界传递，用于保持类型安全和版本兼容。
+ */
 export interface MindMapSearchEntry {
   key: string;
   filePath: string;
@@ -29,12 +39,18 @@ export interface MindMapSearchEntry {
   parentMapPath?: string;
 }
 
+/**
+ * MindMapSearchResult 的结构化数据约定。字段会在模块边界传递，用于保持类型安全和版本兼容。
+ */
 export interface MindMapSearchResult extends MindMapSearchEntry {
   score: number;
   matchedKind: string;
   snippet: string;
 }
 
+/**
+ * IndexedMindMapFile 的结构化数据约定。字段会在模块边界传递，用于保持类型安全和版本兼容。
+ */
 interface IndexedMindMapFile {
   mtime: number;
   size: number;
@@ -43,12 +59,18 @@ interface IndexedMindMapFile {
   entries: MindMapSearchEntry[];
 }
 
+/**
+ * PersistedMindMapSearchIndex 的结构化数据约定。字段会在模块边界传递，用于保持类型安全和版本兼容。
+ */
 interface PersistedMindMapSearchIndex {
   version: 2;
   generatedAt: string;
   files: Record<string, IndexedMindMapFile>;
 }
 
+/**
+ * MindMapSearchIndexStatus 的结构化数据约定。字段会在模块边界传递，用于保持类型安全和版本兼容。
+ */
 export interface MindMapSearchIndexStatus {
   ready: boolean;
   building: boolean;
@@ -57,16 +79,35 @@ export interface MindMapSearchIndexStatus {
   lastBuiltAt?: string;
 }
 
+/**
+ * 校验并规范化d，并保持模型、界面和持久化状态的一致性。
+ *
+ * @param value 待校验、转换或比较的输入值。
+ * @returns 计算、解析或序列化后的字符串结果。
+ */
 function normalized(value: string): string {
   return value.normalize("NFKC").toLocaleLowerCase().replace(/\s+/g, " ").trim();
 }
 
+/**
+ * 执行“compact”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+ *
+ * @param value 待校验、转换或比较的输入值。
+ * @param max 该参数用于 compact 流程中的输入或控制。
+ * @returns 计算、解析或序列化后的字符串结果。
+ */
 function compact(value: string | undefined, max = 180): string | undefined {
   const text = value?.replace(/\s+/g, " ").trim();
   if (!text) return undefined;
   return text.length > max ? `${text.slice(0, max - 1)}…` : text;
 }
 
+/**
+ * 执行“node display text”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+ *
+ * @param node 当前处理的节点。
+ * @returns 计算、解析或序列化后的字符串结果。
+ */
 function nodeDisplayText(node: MindMapNode): string {
   const text = nodePlainText(node).trim();
   if (text) return text;
@@ -76,6 +117,12 @@ function nodeDisplayText(node: MindMapNode): string {
   return "未命名节点";
 }
 
+/**
+ * 执行“field values”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+ *
+ * @param node 当前处理的节点。
+ * @returns 计算、解析或序列化后的字符串结果。
+ */
 function fieldValues(node: MindMapNode): Array<{ kind: string; value: string }> {
   const values: Array<{ kind: string; value: string }> = [];
   const text = nodePlainText(node).trim();
@@ -96,6 +143,13 @@ function fieldValues(node: MindMapNode): Array<{ kind: string; value: string }> 
   return values;
 }
 
+/**
+ * 构建search entries，并保持模型、界面和持久化状态的一致性。
+ *
+ * @param document 要处理的思维导图文档。
+ * @param filePath 仓库内 .mindmap 文件路径。
+ * @returns 按当前规则构建的集合结果。
+ */
 export function buildSearchEntries(document: MindMapDocument, filePath: string): MindMapSearchEntry[] {
   const entries: MindMapSearchEntry[] = [];
   const visit = (node: MindMapNode, ancestors: string[], depth: number): void => {
@@ -131,6 +185,13 @@ export function buildSearchEntries(document: MindMapDocument, filePath: string):
   return entries;
 }
 
+/**
+ * 合并hierarchy，并保持模型、界面和持久化状态的一致性。
+ *
+ * @param prefix 该参数用于 merge hierarchy 流程中的输入或控制。
+ * @param suffix 该参数用于 merge hierarchy 流程中的输入或控制。
+ * @returns 计算、解析或序列化后的字符串结果。
+ */
 function mergeHierarchy(prefix: string[], suffix: string[]): string[] {
   const left = prefix.map((item) => item.trim()).filter(Boolean);
   const right = suffix.map((item) => item.trim()).filter(Boolean);
@@ -207,6 +268,13 @@ export function resolveHierarchicalEntries(files: Record<string, IndexedMindMapF
   return resolvedEntries;
 }
 
+/**
+ * 执行“result snippet”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+ *
+ * @param entry 该参数用于 result snippet 流程中的输入或控制。
+ * @param query 用户输入的搜索关键词。
+ * @returns 计算、解析或序列化后的字符串结果。
+ */
 function resultSnippet(entry: MindMapSearchEntry, query: string): { kind: string; snippet: string } {
   const queryNormalized = normalized(query);
   const candidates: Array<{ kind: string; value?: string }> = [
@@ -224,6 +292,14 @@ function resultSnippet(entry: MindMapSearchEntry, query: string): { kind: string
   };
 }
 
+/**
+ * 执行“search entries”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+ *
+ * @param entries 该参数用于 search entries 流程中的输入或控制。
+ * @param query 用户输入的搜索关键词。
+ * @param limit 允许返回或保留的最大条目数。
+ * @returns 按当前规则构建的集合结果。
+ */
 export function searchEntries(entries: MindMapSearchEntry[], query: string, limit = 100): MindMapSearchResult[] {
   const phrase = normalized(query);
   if (!phrase) return [];
@@ -251,6 +327,14 @@ export function searchEntries(entries: MindMapSearchEntry[], query: string, limi
   return results.sort((left, right) => right.score - left.score || left.filePath.localeCompare(right.filePath) || left.depth - right.depth).slice(0, limit);
 }
 
+/**
+ * 从当前文件向上寻找最顶层父导图，再向下递归收集全部后代子导图，形成 Ctrl/Cmd+F 使用的“当前导图族”搜索范围。
+ *
+ * @param files 该参数用于 collect indexed family paths 流程中的输入或控制。
+ * @param rootPath 该参数用于 collect indexed family paths 流程中的输入或控制。
+ * @returns 计算、解析或序列化后的字符串结果。
+ * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
+ */
 export function collectIndexedFamilyPaths(
   files: Record<string, { entries: MindMapSearchEntry[] }>,
   rootPath: string
@@ -275,6 +359,9 @@ export function collectIndexedFamilyPaths(
   return family;
 }
 
+/**
+ * MindMapSearchIndex 的主要实现类。负责封装相关状态、生命周期和对外操作，避免调用方直接操作内部数据结构。
+ */
 export class MindMapSearchIndex {
   private data: PersistedMindMapSearchIndex = { version: 2, generatedAt: new Date(0).toISOString(), files: {} };
   private ready = false;
@@ -283,17 +370,30 @@ export class MindMapSearchIndex {
   private readonly fileTimers = new Map<string, number>();
   private rebuildPromise: Promise<void> | null = null;
 
+  /**
+   * 创建 MindMapSearchIndex 实例，保存依赖和初始状态；实际 DOM 构建通常在 onOpen() 或后续渲染流程中完成。
+   *
+   * @param app Obsidian 应用实例，用于访问仓库、工作区和 UI 服务。
+   * @param indexPath 该参数用于 constructor 流程中的输入或控制。
+   * @param extension 该参数用于 constructor 流程中的输入或控制。
+   */
   constructor(
     private readonly app: App,
     private readonly indexPath: string,
     private readonly extension = "mindmap"
   ) {}
 
+  /**
+   * 执行“initialize”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+   */
   async initialize(): Promise<void> {
     await this.load();
     await this.rebuildChangedFiles();
   }
 
+  /**
+   * 执行“destroy”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+   */
   destroy(): void {
     if (this.saveTimer !== null) window.clearTimeout(this.saveTimer);
     for (const timer of this.fileTimers.values()) window.clearTimeout(timer);
@@ -301,12 +401,22 @@ export class MindMapSearchIndex {
     void this.saveNow();
   }
 
+  /**
+   * 读取并返回status，并保持模型、界面和持久化状态的一致性。
+   * @returns 当前操作生成、查找或规范化后的结果。
+   */
   getStatus(): MindMapSearchIndexStatus {
     const files = Object.keys(this.data.files).length;
     const nodes = Object.values(this.data.files).reduce((sum, file) => sum + file.entries.length, 0);
     return { ready: this.ready, building: this.building, files, nodes, lastBuiltAt: this.data.generatedAt };
   }
 
+  /**
+   * 执行“all entries”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+   *
+   * @param filePaths 该参数用于 all entries 流程中的输入或控制。
+   * @returns 按当前规则构建的集合结果。
+   */
   allEntries(filePaths?: ReadonlySet<string>): MindMapSearchEntry[] {
     const resolved = resolveHierarchicalEntries(this.data.files);
     if (!filePaths) return resolved;
@@ -314,6 +424,12 @@ export class MindMapSearchIndex {
     return resolved.filter((entry) => normalizedPaths.has(normalizePath(entry.filePath)));
   }
 
+  /**
+   * 读取并返回scoped status，并保持模型、界面和持久化状态的一致性。
+   *
+   * @param filePaths 该参数用于 get scoped status 流程中的输入或控制。
+   * @returns 计算得到的数值结果。
+   */
   getScopedStatus(filePaths: ReadonlySet<string>): { files: number; nodes: number } {
     const normalizedPaths = new Set(Array.from(filePaths, (path) => normalizePath(path)));
     let files = 0;
@@ -327,6 +443,14 @@ export class MindMapSearchIndex {
     return { files, nodes };
   }
 
+  /**
+   * 执行“search”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+   *
+   * @param query 用户输入的搜索关键词。
+   * @param limit 允许返回或保留的最大条目数。
+   * @param filePaths 该参数用于 search 流程中的输入或控制。
+   * @returns 按当前规则构建的集合结果。
+   */
   search(query: string, limit = 100, filePaths?: ReadonlySet<string>): MindMapSearchResult[] {
     return searchEntries(this.allEntries(filePaths), query, limit);
   }
@@ -413,6 +537,12 @@ export class MindMapSearchIndex {
     return family;
   }
 
+  /**
+   * 执行“queue file”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+   *
+   * @param file 目标 Obsidian 文件对象。
+   * @param delay 该参数用于 queue file 流程中的输入或控制。
+   */
   queueFile(file: TFile, delay = 500): void {
     if (file.extension.toLocaleLowerCase() !== this.extension) return;
     const previous = this.fileTimers.get(file.path);
@@ -424,6 +554,11 @@ export class MindMapSearchIndex {
     this.fileTimers.set(file.path, timer);
   }
 
+  /**
+   * 删除file，并保持模型、界面和持久化状态的一致性。
+   *
+   * @param path 仓库内目标路径。
+   */
   removeFile(path: string): void {
     const normalizedPath = normalizePath(path);
     if (!this.data.files[normalizedPath]) return;
@@ -432,23 +567,41 @@ export class MindMapSearchIndex {
     this.scheduleSave();
   }
 
+  /**
+   * 执行“rename file”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+   *
+   * @param file 目标 Obsidian 文件对象。
+   * @param oldPath 该参数用于 rename file 流程中的输入或控制。
+   */
   renameFile(file: TFile, oldPath: string): void {
     this.removeFile(oldPath);
     this.queueFile(file, 50);
   }
 
+  /**
+   * 重建all，并保持模型、界面和持久化状态的一致性。
+   */
   async rebuildAll(): Promise<void> {
     if (this.rebuildPromise) return this.rebuildPromise;
     this.rebuildPromise = this.performRebuild(true).finally(() => { this.rebuildPromise = null; });
     return this.rebuildPromise;
   }
 
+  /**
+   * 重建changed files，并保持模型、界面和持久化状态的一致性。
+   */
   private async rebuildChangedFiles(): Promise<void> {
     if (this.rebuildPromise) return this.rebuildPromise;
     this.rebuildPromise = this.performRebuild(false).finally(() => { this.rebuildPromise = null; });
     return this.rebuildPromise;
   }
 
+  /**
+   * 执行全量或增量索引重建。它比较文件修改时间，仅解析变化的 .mindmap 文件，删除失效记录，随后重新解析跨文件层级并安排持久化。
+   *
+   * @param force 该参数用于 perform rebuild 流程中的输入或控制。
+   * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
+   */
   private async performRebuild(force: boolean): Promise<void> {
     this.building = true;
     try {
@@ -470,6 +623,12 @@ export class MindMapSearchIndex {
     }
   }
 
+  /**
+   * 读取并解析单个 .mindmap 文件，生成节点级搜索条目和子导图引用。读取或解析失败时移除该文件的旧索引，防止返回过期结果。
+   *
+   * @param file 目标 Obsidian 文件对象。
+   * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
+   */
   private async indexFile(file: TFile): Promise<void> {
     try {
       const source = await this.app.vault.cachedRead(file);
@@ -489,6 +648,12 @@ export class MindMapSearchIndex {
     }
   }
 
+  /**
+   * 递归遍历nodes，并保持模型、界面和持久化状态的一致性。
+   *
+   * @param root 节点树的根节点。
+   * @returns 当前操作生成、查找或规范化后的结果。
+   */
   private *walkNodes(root: MindMapNode): Generator<MindMapNode> {
     const stack: MindMapNode[] = [root];
     while (stack.length) {
@@ -499,6 +664,13 @@ export class MindMapSearchIndex {
     }
   }
 
+  /**
+   * 解析并确定submap file，并保持模型、界面和持久化状态的一致性。
+   *
+   * @param rawPath 该参数用于 resolve submap file 流程中的输入或控制。
+   * @param sourcePath 该参数用于 resolve submap file 流程中的输入或控制。
+   * @returns 当前操作生成、查找或规范化后的结果。
+   */
   private resolveSubmapFile(rawPath: string | undefined, sourcePath: string): TFile | null {
     const raw = rawPath?.trim();
     if (!raw) return null;
@@ -510,6 +682,9 @@ export class MindMapSearchIndex {
     return resolved instanceof TFile && resolved.extension.toLocaleLowerCase() === this.extension ? resolved : null;
   }
 
+  /**
+   * 加载相关数据，并保持模型、界面和持久化状态的一致性。
+   */
   private async load(): Promise<void> {
     try {
       if (!(await this.app.vault.adapter.exists(this.indexPath))) {
@@ -535,6 +710,9 @@ export class MindMapSearchIndex {
     }
   }
 
+  /**
+   * 安排延迟执行save，并保持模型、界面和持久化状态的一致性。
+   */
   private scheduleSave(): void {
     if (this.saveTimer !== null) window.clearTimeout(this.saveTimer);
     this.saveTimer = window.setTimeout(() => {
@@ -543,6 +721,9 @@ export class MindMapSearchIndex {
     }, 800);
   }
 
+  /**
+   * 保存now，并保持模型、界面和持久化状态的一致性。
+   */
   private async saveNow(): Promise<void> {
     try {
       await this.app.vault.adapter.write(this.indexPath, JSON.stringify(this.data));
@@ -552,6 +733,13 @@ export class MindMapSearchIndex {
   }
 }
 
+/**
+ * 执行“append highlighted text”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+ *
+ * @param container 接收渲染内容的 DOM 容器。
+ * @param text 要显示、搜索、解析或写入的文本。
+ * @param query 用户输入的搜索关键词。
+ */
 function appendHighlightedText(container: HTMLElement, text: string, query: string): void {
   const phrase = query.trim();
   if (!phrase) {
@@ -570,6 +758,9 @@ function appendHighlightedText(container: HTMLElement, text: string, query: stri
   if (index + phrase.length < text.length) container.appendText(text.slice(index + phrase.length));
 }
 
+/**
+ * GlobalMindMapSearchModal 的主要实现类。负责封装相关状态、生命周期和对外操作，避免调用方直接操作内部数据结构。
+ */
 export class GlobalMindMapSearchModal extends Modal {
   private inputEl!: HTMLInputElement;
   private resultsEl!: HTMLDivElement;
@@ -577,6 +768,18 @@ export class GlobalMindMapSearchModal extends Modal {
   private activeIndex = -1;
   private renderedResults: MindMapSearchResult[] = [];
 
+  /**
+   * 创建 GlobalMindMapSearchModal 实例，保存依赖和初始状态；实际 DOM 构建通常在 onOpen() 或后续渲染流程中完成。
+   *
+   * @param app Obsidian 应用实例，用于访问仓库、工作区和 UI 服务。
+   * @param index 当前元素在同级或列表中的零基索引。
+   * @param maxResults 该参数用于 constructor 流程中的输入或控制。
+   * @param onOpenResult 该参数用于 constructor 流程中的输入或控制。
+   * @param onRebuild 该参数用于 constructor 流程中的输入或控制。
+   * @param scopePaths 该参数用于 constructor 流程中的输入或控制。
+   * @param scopeTitle 该参数用于 constructor 流程中的输入或控制。
+   * @param scopeDescription 该参数用于 constructor 流程中的输入或控制。
+   */
   constructor(
     app: App,
     private readonly index: MindMapSearchIndex,
@@ -590,6 +793,9 @@ export class GlobalMindMapSearchModal extends Modal {
     super(app);
   }
 
+  /**
+   * 在弹窗或视图打开时创建界面、绑定事件并把当前数据填入控件。
+   */
   onOpen(): void {
     this.modalEl.addClass("mms-global-search-modal");
     this.titleEl.setText(this.scopeTitle);
@@ -636,10 +842,18 @@ export class GlobalMindMapSearchModal extends Modal {
     window.setTimeout(() => this.inputEl.focus(), 20);
   }
 
+  /**
+   * 在弹窗或视图关闭时释放临时 DOM、计时器和事件状态。
+   */
   onClose(): void {
     this.contentEl.empty();
   }
 
+  /**
+   * 渲染results，并保持模型、界面和持久化状态的一致性。
+   *
+   * @param query 用户输入的搜索关键词。
+   */
   private renderResults(query: string): void {
     this.resultsEl.empty();
     this.activeIndex = -1;
@@ -686,12 +900,22 @@ export class GlobalMindMapSearchModal extends Modal {
     this.setActive(0);
   }
 
+  /**
+   * 执行“move active”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+   *
+   * @param delta 该参数用于 move active 流程中的输入或控制。
+   */
   private moveActive(delta: number): void {
     if (!this.renderedResults.length) return;
     const next = this.activeIndex < 0 ? 0 : (this.activeIndex + delta + this.renderedResults.length) % this.renderedResults.length;
     this.setActive(next);
   }
 
+  /**
+   * 更新并应用active，并保持模型、界面和持久化状态的一致性。
+   *
+   * @param index 当前元素在同级或列表中的零基索引。
+   */
   private setActive(index: number): void {
     this.activeIndex = index;
     const buttons = Array.from(this.resultsEl.querySelectorAll<HTMLButtonElement>(".mms-global-search-result"));
@@ -699,6 +923,11 @@ export class GlobalMindMapSearchModal extends Modal {
     buttons[index]?.scrollIntoView({ block: "nearest" });
   }
 
+  /**
+   * 打开result，并保持模型、界面和持久化状态的一致性。
+   *
+   * @param result 该参数用于 open result 流程中的输入或控制。
+   */
   private async openResult(result: MindMapSearchResult): Promise<void> {
     this.close();
     await this.onOpenResult(result);

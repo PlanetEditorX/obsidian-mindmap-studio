@@ -1,5 +1,31 @@
 # MindMap Studio for Obsidian
 
+## 1.5.1 源码注释与开发者文档
+
+本版本不改变导图功能和 `.mindmap` 数据格式，重点补齐源码可维护性：
+
+- 11 个 TypeScript 模块均增加模块级职责说明；
+- 376 个类型、接口、类、构造函数、顶层函数和类方法均带 JSDoc；
+- 参数、返回值、兼容行为和关键副作用在源码中说明；
+- 关键流程增加 `@remarks` 维护提示；
+- `npm test` 现在会检查注释覆盖率，新增未注释函数会使测试失败；
+- 新增完整架构、数据模型、特殊功能、函数参考和开发维护文档。
+
+### 开发者文档
+
+- [架构说明](docs/ARCHITECTURE.md)
+- [数据模型](docs/DATA_MODEL.md)
+- [特殊功能实现](docs/SPECIAL_FEATURES.md)
+- [完整函数与类参考](docs/FUNCTION_REFERENCE.md)
+- [开发与维护指南](docs/DEVELOPMENT.md)
+
+函数参考可通过以下命令从源码重新生成：
+
+```bash
+npm run docs:generate
+npm run docs:check
+```
+
 ## 1.5.0 子导图整块点击、文字对齐和节点尺寸
 
 导图模式中的子导图节点现在把整个节点作为进入范围。鼠标点击节点标题或标题附近的空白区域都会直接进入子导图，不再需要精确命中文字。右键节点仍可打开编辑菜单；键盘聚焦后按 Enter 或空格也可以进入。

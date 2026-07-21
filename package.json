@@ -1,13 +1,15 @@
 {
   "name": "obsidian-mindmap-studio",
-  "version": "1.5.0",
+  "version": "1.5.1",
   "description": "Editable local-first .mindmap diagrams for Obsidian with synchronized mind map, outline, and article modes, read-only locking, global search, themes, rich content, image mirrors, tables, code, and exports.",
   "main": "main.js",
   "scripts": {
     "dev": "node esbuild.config.mjs",
     "build": "tsc --noEmit --skipLibCheck && node esbuild.config.mjs production",
     "release": "npm run build && node scripts/release.mjs",
-    "test": "node scripts/test.mjs"
+    "test": "node scripts/test.mjs && node scripts/check-docs.mjs",
+    "docs:generate": "node scripts/generate-function-reference.mjs",
+    "docs:check": "node scripts/check-docs.mjs"
   },
   "keywords": [
     "obsidian",

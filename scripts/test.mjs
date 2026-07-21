@@ -563,7 +563,7 @@ export const setIcon = () => {};
   const manifest = JSON.parse(await readFile("manifest.json", "utf8"));
   assert.equal(manifest.id, "mindmap-studio");
   assert.equal(manifest.name, "MindMap Studio");
-  assert.equal(manifest.version, "1.5.0");
+  assert.equal(manifest.version, "1.5.1");
   assert.match(cssSource, /\.mms-global-search-modal/);
   assert.match(cssSource, /\.mms-global-search-result/);
 

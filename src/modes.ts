@@ -1,3 +1,10 @@
+/**
+ * @file modes.ts
+ * @description 三种显示模式共享的模式与文章编号工具。
+ *
+ * 导图、大纲和文章模式读取同一节点树；本模块负责中文序号、标题判定、子导图层级续接与可见模式容错。
+ */
+
 import type { DisplayMode, MindMapNode } from "./model";
 import { nodePrimaryText } from "./model";
 
@@ -15,6 +22,12 @@ export const DISPLAY_MODE_ICONS: Record<DisplayMode, string> = {
 
 const CHINESE_DIGITS = ["零", "一", "二", "三", "四", "五", "六", "七", "八", "九"];
 
+/**
+ * 执行“chinese number”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+ *
+ * @param value 待校验、转换或比较的输入值。
+ * @returns 计算、解析或序列化后的字符串结果。
+ */
 export function chineseNumber(value: number): string {
   const safe = Math.max(0, Math.floor(value));
   if (safe < 10) return CHINESE_DIGITS[safe] ?? String(safe);
@@ -27,6 +40,14 @@ export function chineseNumber(value: number): string {
   return String(safe);
 }
 
+/**
+ * 将文章标题深度和同级序号转换为“第一章、第一节、一、（一）、1.、（1）”等常见中文文章编号，更深层级使用可读的循环规则。
+ *
+ * @param depth 节点在树或文章结构中的零基层级。
+ * @param index 当前元素在同级或列表中的零基索引。
+ * @returns 计算、解析或序列化后的字符串结果。
+ * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
+ */
 export function articleNumberLabel(depth: number, index: number): string {
   const cn = chineseNumber(index);
   if (depth === 1) return `第${cn}章`;
@@ -48,6 +69,9 @@ export function isArticleHeading(node: MindMapNode): boolean {
   return node.children.length > 0 || Boolean(node.submap?.path);
 }
 
+/**
+ * ArticleNodeInfo 的结构化数据约定。字段会在模块边界传递，用于保持类型安全和版本兼容。
+ */
 export interface ArticleNodeInfo {
   node: MindMapNode;
   depth: number;
@@ -59,6 +83,9 @@ export interface ArticleNodeInfo {
   anchor: string;
 }
 
+/**
+ * ArticleTocEntry 的结构化数据约定。字段会在模块边界传递，用于保持类型安全和版本兼容。
+ */
 export interface ArticleTocEntry {
   filePath: string;
   nodeId: string;
@@ -104,6 +131,12 @@ export function buildArticleNodeInfo(root: MindMapNode, baseDepth = 0): ArticleN
   return result;
 }
 
+/**
+ * 校验并规范化visible modes，并保持模型、界面和持久化状态的一致性。
+ *
+ * @param modes 该参数用于 normalize visible modes 流程中的输入或控制。
+ * @returns 按当前规则构建的集合结果。
+ */
 export function normalizeVisibleModes(modes: unknown): DisplayMode[] {
   const raw = Array.isArray(modes) ? modes : [];
   const result: DisplayMode[] = [];

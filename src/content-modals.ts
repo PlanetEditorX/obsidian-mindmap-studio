@@ -1,3 +1,10 @@
+/**
+ * @file content-modals.ts
+ * @description 表格与代码块编辑弹窗。
+ *
+ * 弹窗收集结构化输入；实际文档写入、撤销记录和自动保存由 MindMapEditor 统一处理。
+ */
+
 import { App, Modal, Notice } from "obsidian";
 import {
   parseFencedCode,
@@ -8,6 +15,12 @@ import {
   type TableAlignment
 } from "./model";
 
+/**
+ * 执行“clone table”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+ *
+ * @param table 待编辑、转换或导出的表格数据。
+ * @returns 当前操作生成、查找或规范化后的结果。
+ */
 function cloneTable(table: MindMapTable | undefined): MindMapTable {
   if (!table) {
     return {
@@ -20,18 +33,31 @@ function cloneTable(table: MindMapTable | undefined): MindMapTable {
   return JSON.parse(JSON.stringify(table)) as MindMapTable;
 }
 
+/**
+ * TableEditModal 的主要实现类。负责封装相关状态、生命周期和对外操作，避免调用方直接操作内部数据结构。
+ */
 export class TableEditModal extends Modal {
   private table: MindMapTable;
   private readonly submit: (table: MindMapTable) => void;
   private gridEl!: HTMLDivElement;
   private markdownEl!: HTMLTextAreaElement;
 
+  /**
+   * 创建 TableEditModal 实例，保存依赖和初始状态；实际 DOM 构建通常在 onOpen() 或后续渲染流程中完成。
+   *
+   * @param app Obsidian 应用实例，用于访问仓库、工作区和 UI 服务。
+   * @param table 待编辑、转换或导出的表格数据。
+   * @param submit 该参数用于 constructor 流程中的输入或控制。
+   */
   constructor(app: App, table: MindMapTable | undefined, submit: (table: MindMapTable) => void) {
     super(app);
     this.table = cloneTable(table);
     this.submit = submit;
   }
 
+  /**
+   * 在弹窗或视图打开时创建界面、绑定事件并把当前数据填入控件。
+   */
   onOpen(): void {
     this.titleEl.setText("插入或编辑表格");
     this.contentEl.addClass("mmc-table-modal");
@@ -119,6 +145,9 @@ export class TableEditModal extends Modal {
     });
   }
 
+  /**
+   * 渲染grid，并保持模型、界面和持久化状态的一致性。
+   */
   private renderGrid(): void {
     this.gridEl.empty();
     const table = this.gridEl.createEl("table");
@@ -143,6 +172,9 @@ export class TableEditModal extends Modal {
     });
   }
 
+  /**
+   * 遍历并收集grid，并保持模型、界面和持久化状态的一致性。
+   */
   private collectGrid(): void {
     const headers = Array.from(this.gridEl.querySelectorAll<HTMLInputElement>('input[data-kind="header"]'));
     headers.forEach((input) => {
@@ -164,16 +196,29 @@ export class TableEditModal extends Modal {
   }
 }
 
+/**
+ * CodeEditModal 的主要实现类。负责封装相关状态、生命周期和对外操作，避免调用方直接操作内部数据结构。
+ */
 export class CodeEditModal extends Modal {
   private readonly block: MindMapCodeBlock | undefined;
   private readonly submit: (block: MindMapCodeBlock) => void;
 
+  /**
+   * 创建 CodeEditModal 实例，保存依赖和初始状态；实际 DOM 构建通常在 onOpen() 或后续渲染流程中完成。
+   *
+   * @param app Obsidian 应用实例，用于访问仓库、工作区和 UI 服务。
+   * @param block 当前内容块，通常是文字块或图片块。
+   * @param submit 该参数用于 constructor 流程中的输入或控制。
+   */
   constructor(app: App, block: MindMapCodeBlock | undefined, submit: (block: MindMapCodeBlock) => void) {
     super(app);
     this.block = block;
     this.submit = submit;
   }
 
+  /**
+   * 在弹窗或视图打开时创建界面、绑定事件并把当前数据填入控件。
+   */
   onOpen(): void {
     this.titleEl.setText("插入或编辑代码");
     this.contentEl.addClass("mmc-code-modal");

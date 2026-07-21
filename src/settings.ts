@@ -1,3 +1,10 @@
+/**
+ * @file settings.ts
+ * @description 插件设置模型和设置页。
+ *
+ * 集中管理显示模式、节点默认样式、图床、图片容灾、搜索索引和一键恢复，并在保存后刷新打开视图。
+ */
+
 import { App, Notice, PluginSettingTab, Setting } from "obsidian";
 import type MindMapStudioPlugin from "./main";
 import type {
@@ -15,9 +22,18 @@ import type {
 } from "./model";
 import { appearanceFromThemePreset, MINDMAP_THEME_PRESETS } from "./themes";
 
+/**
+ * ImageHostBodyMode 类型定义，用于限制可接受值并让序列化数据保持稳定。
+ */
 export type ImageHostBodyMode = "multipart" | "raw";
+/**
+ * ImageHostMethod 类型定义，用于限制可接受值并让序列化数据保持稳定。
+ */
 export type ImageHostMethod = "POST" | "PUT";
 
+/**
+ * ImageHostConfig 的结构化数据约定。字段会在模块边界传递，用于保持类型安全和版本兼容。
+ */
 export interface ImageHostConfig {
   id: string;
   name: string;
@@ -30,28 +46,46 @@ export interface ImageHostConfig {
   responsePath: string;
 }
 
+/**
+ * ImageHostChoice 的结构化数据约定。字段会在模块边界传递，用于保持类型安全和版本兼容。
+ */
 export interface ImageHostChoice {
   id: string;
   name: string;
 }
 
+/**
+ * ImageHostUploadSuccess 的结构化数据约定。字段会在模块边界传递，用于保持类型安全和版本兼容。
+ */
 export interface ImageHostUploadSuccess {
   hostId: string;
   hostName: string;
   url: string;
 }
 
+/**
+ * ImageHostUploadFailure 的结构化数据约定。字段会在模块边界传递，用于保持类型安全和版本兼容。
+ */
 export interface ImageHostUploadFailure {
   hostId: string;
   hostName: string;
   error: string;
 }
 
+/**
+ * ImageHostUploadBatch 的结构化数据约定。字段会在模块边界传递，用于保持类型安全和版本兼容。
+ */
 export interface ImageHostUploadBatch {
   successes: ImageHostUploadSuccess[];
   failures: ImageHostUploadFailure[];
 }
 
+/**
+ * 创建image host config，并保持模型、界面和持久化状态的一致性。
+ *
+ * @param index 当前元素在同级或列表中的零基索引。
+ * @returns 当前操作生成、查找或规范化后的结果。
+ */
 export function createImageHostConfig(index = 1): ImageHostConfig {
   return {
     id: `host_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`,
@@ -66,6 +100,9 @@ export function createImageHostConfig(index = 1): ImageHostConfig {
   };
 }
 
+/**
+ * MindMapStudioSettings 的结构化数据约定。字段会在模块边界传递，用于保持类型安全和版本兼容。
+ */
 export interface MindMapStudioSettings {
   defaultFolder: string;
   filePrefix: string;
@@ -166,6 +203,12 @@ export const DEFAULT_SETTINGS: MindMapStudioSettings = {
   defaultViewMode: "mindmap"
 };
 
+/**
+ * 更新并应用tings to appearance，并保持模型、界面和持久化状态的一致性。
+ *
+ * @param settings 插件当前设置对象。
+ * @returns 当前操作生成、查找或规范化后的结果。
+ */
 export function settingsToAppearance(settings: MindMapStudioSettings): MindMapAppearance {
   return {
     themePreset: settings.defaultThemePreset,
@@ -195,6 +238,12 @@ export function settingsToAppearance(settings: MindMapStudioSettings): MindMapAp
   };
 }
 
+/**
+ * 应用theme preset to settings，并保持模型、界面和持久化状态的一致性。
+ *
+ * @param settings 插件当前设置对象。
+ * @param presetId 内置主题预设标识。
+ */
 export function applyThemePresetToSettings(settings: MindMapStudioSettings, presetId: MindMapThemePresetId): void {
   const appearance = appearanceFromThemePreset(presetId);
   settings.defaultThemePreset = presetId;
@@ -223,14 +272,27 @@ export function applyThemePresetToSettings(settings: MindMapStudioSettings, pres
   settings.defaultTextUnderline = appearance.underline === true;
 }
 
+/**
+ * MindMapStudioSettingTab 的主要实现类。负责封装相关状态、生命周期和对外操作，避免调用方直接操作内部数据结构。
+ */
 export class MindMapStudioSettingTab extends PluginSettingTab {
   private readonly plugin: MindMapStudioPlugin;
 
+  /**
+   * 创建 MindMapStudioSettingTab 实例，保存依赖和初始状态；实际 DOM 构建通常在 onOpen() 或后续渲染流程中完成。
+   *
+   * @param app Obsidian 应用实例，用于访问仓库、工作区和 UI 服务。
+   * @param plugin MindMap Studio 插件实例，用于调用跨文件服务和读取设置。
+   */
   constructor(app: App, plugin: MindMapStudioPlugin) {
     super(app, plugin);
     this.plugin = plugin;
   }
 
+  /**
+   * 构建完整插件设置页，包括主题、显示模式、节点默认值、搜索、图片、图床容灾和恢复初始设置。所有控件写入后立即保存并刷新打开视图。
+   * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
+   */
   display(): void {
     const { containerEl } = this;
     containerEl.empty();
@@ -954,6 +1016,17 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
         }));
   }
 
+  /**
+   * 添加optional color setting，并保持模型、界面和持久化状态的一致性。
+   *
+   * @param container 接收渲染内容的 DOM 容器。
+   * @param name 该参数用于 add optional color setting 流程中的输入或控制。
+   * @param description 该参数用于 add optional color setting 流程中的输入或控制。
+   * @param getValue 该参数用于 add optional color setting 流程中的输入或控制。
+   * @param setValue 该参数用于 add optional color setting 流程中的输入或控制。
+   * @param fallback 该参数用于 add optional color setting 流程中的输入或控制。
+   * @param allowReset 该参数用于 add optional color setting 流程中的输入或控制。
+   */
   private addOptionalColorSetting(
     container: HTMLElement,
     name: string,
@@ -983,6 +1056,9 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
     }
   }
 
+  /**
+   * 保存and refresh，并保持模型、界面和持久化状态的一致性。
+   */
   private async saveAndRefresh(): Promise<void> {
     await this.plugin.saveSettings();
     this.plugin.refreshOpenViews();

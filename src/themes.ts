@@ -1,5 +1,15 @@
+/**
+ * @file themes.ts
+ * @description 内置主题预设模块。
+ *
+ * 主题同时覆盖画布、节点、字体、分支颜色和连接线，应用后仍允许用户继续覆盖单项外观。
+ */
+
 import type { MindMapAppearance, MindMapThemePresetId } from "./model";
 
+/**
+ * MindMapThemePreset 的结构化数据约定。字段会在模块边界传递，用于保持类型安全和版本兼容。
+ */
 export interface MindMapThemePreset {
   id: MindMapThemePresetId;
   name: string;
@@ -260,10 +270,22 @@ export const MINDMAP_THEME_PRESETS: readonly MindMapThemePreset[] = [
   }
 ] as const;
 
+/**
+ * 读取并返回mind map theme preset，并保持模型、界面和持久化状态的一致性。
+ *
+ * @param id 目标对象或节点的稳定标识。
+ * @returns 当前操作生成、查找或规范化后的结果。
+ */
 export function getMindMapThemePreset(id: MindMapThemePresetId | undefined): MindMapThemePreset | undefined {
   return MINDMAP_THEME_PRESETS.find((preset) => preset.id === id);
 }
 
+/**
+ * 执行“appearance from theme preset”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+ *
+ * @param id 目标对象或节点的稳定标识。
+ * @returns 当前操作生成、查找或规范化后的结果。
+ */
 export function appearanceFromThemePreset(id: MindMapThemePresetId): MindMapAppearance {
   const preset = getMindMapThemePreset(id) ?? MINDMAP_THEME_PRESETS[0];
   return {
