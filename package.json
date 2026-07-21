@@ -1,0 +1,26 @@
+{
+  "name": "obsidian-mindmap-studio",
+  "version": "0.9.0",
+  "description": "A local-first editable mind map editor for Obsidian using dedicated .mindmap files",
+  "main": "main.js",
+  "scripts": {
+    "dev": "node esbuild.config.mjs",
+    "build": "tsc --noEmit --skipLibCheck && node esbuild.config.mjs production",
+    "release": "npm run build && node scripts/release.mjs",
+    "test": "node scripts/test.mjs"
+  },
+  "keywords": [
+    "obsidian",
+    "mind-map",
+    "mindmap"
+  ],
+  "author": "MindMap Studio",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "builtin-modules": "^5.0.0",
+    "esbuild": "^0.25.0",
+    "obsidian": "^1.13.1",
+    "typescript": "^5.8.0"
+  }
+}

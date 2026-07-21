@@ -1,0 +1,9 @@
+{
+  "id": "mindmap-studio",
+  "name": "MindMap Studio",
+  "version": "0.9.0",
+  "minAppVersion": "1.5.0",
+  "description": "Editable .mindmap diagrams with ordered text/image blocks, pure-image nodes, image zoom, local assets, configurable image-host uploads, nested maps, tables, code, rich text, and exports.",
+  "author": "MindMap Studio",
+  "isDesktopOnly": false
+}

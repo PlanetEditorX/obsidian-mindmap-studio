@@ -1,0 +1,50 @@
+{
+  "version": 7,
+  "title": "示例子导图",
+  "layout": "right",
+  "theme": "auto",
+  "navigation": {
+    "parentPath": "examples/示例脑图.mindmap",
+    "parentNodeId": "submap-example",
+    "parentTitle": "示例脑图",
+    "parentNodeText": "子导图"
+  },
+  "root": {
+    "id": "submap-root",
+    "text": "示例子导图",
+    "content": [
+      {
+        "id": "submap-root-text",
+        "type": "text",
+        "text": "示例子导图"
+      }
+    ],
+    "link": "[[examples/示例脑图.mindmap]]",
+    "children": [
+      {
+        "id": "submap-child-1",
+        "text": "点击顶部导航返回父导图",
+        "content": [
+          {
+            "id": "submap-child-1-text",
+            "type": "text",
+            "text": "点击顶部导航返回父导图"
+          }
+        ],
+        "children": []
+      },
+      {
+        "id": "submap-child-2",
+        "text": "子导图仍是完整可编辑文件",
+        "content": [
+          {
+            "id": "submap-child-2-text",
+            "type": "text",
+            "text": "子导图仍是完整可编辑文件"
+          }
+        ],
+        "children": []
+      }
+    ]
+  }
+}
