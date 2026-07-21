@@ -1,9 +1,9 @@
 {
   "id": "mindmap-studio",
   "name": "MindMap Studio",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "minAppVersion": "1.5.0",
-  "description": "Editable local-first .mindmap diagrams with global indexed search across nodes and submaps, XMind-style themes, tapered connectors, image mirror failover, rich content blocks, tables, code, and exports.",
+  "description": "Editable local-first .mindmap diagrams with synchronized mind map, outline, and article modes, read-only locking, global search, themes, rich content, images, tables, code, and exports.",
   "author": "MindMap Studio",
   "isDesktopOnly": false
 }

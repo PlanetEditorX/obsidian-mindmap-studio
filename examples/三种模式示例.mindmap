@@ -1,0 +1,128 @@
+{
+  "version": 10,
+  "title": "中国文学示例",
+  "layout": "right",
+  "theme": "auto",
+  "view": {
+    "mode": "mindmap",
+    "readOnly": false
+  },
+  "root": {
+    "id": "literature-root",
+    "text": "中国文学示例",
+    "children": [
+      {
+        "id": "preface",
+        "text": "前言",
+        "skipArticleNumbering": true,
+        "note": "这个节点在文章模式中显示为无编号前言，并且不会占用章节序号。",
+        "children": [
+          {
+            "id": "preface-body",
+            "text": "本示例用于演示导图、大纲与文章三种同步模式。",
+            "children": []
+          }
+        ]
+      },
+      {
+        "id": "tang-poetry",
+        "text": "唐诗",
+        "children": [
+          {
+            "id": "li-bai",
+            "text": "李白",
+            "children": [
+              {
+                "id": "li-bai-style",
+                "text": "诗歌风格",
+                "children": [
+                  {
+                    "id": "romantic",
+                    "text": "想象瑰丽，语言自然，具有鲜明的浪漫主义色彩。",
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "id": "quiet-night",
+                "text": "代表作包括《静夜思》《望庐山瀑布》等。",
+                "children": []
+              }
+            ]
+          },
+          {
+            "id": "du-fu",
+            "text": "杜甫",
+            "children": [
+              {
+                "id": "du-fu-body",
+                "text": "作品关注社会现实，被后世称为诗史。",
+                "children": []
+              }
+            ]
+          },
+          {
+            "id": "tang-note",
+            "text": "唐诗题材丰富，形式成熟，是中国古典诗歌的重要高峰。",
+            "children": []
+          }
+        ]
+      },
+      {
+        "id": "song-ci",
+        "text": "宋词",
+        "children": [
+          {
+            "id": "su-shi",
+            "text": "苏轼",
+            "children": [
+              {
+                "id": "su-shi-body",
+                "text": "豪放词代表人物之一，题材广阔，风格旷达。",
+                "children": []
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "appendix",
+        "text": "附录：阅读提示",
+        "skipArticleNumbering": true,
+        "children": [
+          {
+            "id": "appendix-body",
+            "text": "切换到文章模式查看自动目录与编号；切换到大纲模式查看完整层级。",
+            "children": []
+          }
+        ]
+      }
+    ]
+  },
+  "appearance": {
+    "themePreset": "paper-note",
+    "backgroundColor": "#fffdf7",
+    "backgroundPattern": "dots",
+    "patternColor": "#c7bca8",
+    "fontFamily": "serif",
+    "fontSize": 15,
+    "rootColor": "#92400e",
+    "rootTextColor": "#ffffff",
+    "nodeColor": "#fffaf0",
+    "textColor": "#3f2d20",
+    "nodeBorderColor": "#d6c4a8",
+    "nodeBorderWidth": 1,
+    "edgeColor": "#a16207",
+    "edgeStyle": "curved",
+    "edgeWidth": 4,
+    "edgeWidthMode": "tapered",
+    "edgeMinWidth": 1,
+    "colorfulBranches": true,
+    "branchColors": [
+      "#a16207",
+      "#9a3412",
+      "#166534",
+      "#7c3aed"
+    ]
+  }
+}

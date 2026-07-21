@@ -1,5 +1,5 @@
 {
-  "version": 8,
+  "version": 10,
   "title": "示例子导图",
   "layout": "right",
   "theme": "auto",
@@ -46,5 +46,9 @@
         "children": []
       }
     ]
+  },
+  "view": {
+    "mode": "mindmap",
+    "readOnly": false
   }
 }

@@ -1,4 +1,5 @@
 export type LayoutMode = "right" | "balanced";
+export type DisplayMode = "mindmap" | "outline" | "article";
 export type ThemeMode = "auto" | "light" | "dark";
 export type NodeShape = "rounded" | "pill" | "rectangle";
 export type TaskStatus = "todo" | "doing" | "done";
@@ -147,18 +148,26 @@ export interface MindMapNode {
   icon?: string;
   tags?: string[];
   task?: TaskStatus;
+  /** Skip automatic article numbering for prefaces, notes, appendices, etc. */
+  skipArticleNumbering?: boolean;
   style?: MindMapNodeStyle;
   collapsed?: boolean;
   children: MindMapNode[];
 }
 
+export interface MindMapDocumentView {
+  mode?: DisplayMode;
+  readOnly?: boolean;
+}
+
 export interface MindMapDocument {
-  version: 9;
+  version: 10;
   title: string;
   layout: LayoutMode;
   theme: ThemeMode;
   appearance?: MindMapAppearance;
   navigation?: MindMapNavigation;
+  view?: MindMapDocumentView;
   root: MindMapNode;
 }
 
@@ -181,7 +190,7 @@ export function createNode(text = "新节点"): MindMapNode {
 
 export function createDefaultDocument(title = "新思维导图"): MindMapDocument {
   return {
-    version: 9,
+    version: 10,
     title,
     layout: "right",
     theme: "auto",
@@ -521,6 +530,11 @@ export function nodePlainText(node: Pick<MindMapNode, "content" | "text" | "rich
   return blocks.filter((block): block is MindMapTextContentBlock => block.type === "text").map((block) => block.text).join(" ").trim();
 }
 
+export function nodePrimaryText(node: Pick<MindMapNode, "content" | "text" | "richText" | "image">): string {
+  const first = nodeContentBlocks(node).find((block): block is MindMapTextContentBlock => block.type === "text");
+  return first?.text.trim() ?? "";
+}
+
 export function syncNodeLegacyFields(node: MindMapNode): void {
   const blocks = nodeContentBlocks(node);
   node.content = blocks.length ? blocks : undefined;
@@ -624,6 +638,7 @@ function normalizeNode(input: Partial<MindMapNode> | undefined, fallbackText: st
     icon: typeof input?.icon === "string" && input.icon.trim() ? input.icon.trim().slice(0, 12) : undefined,
     tags: normalizeTags(input?.tags),
     task: normalizeTask(input?.task),
+    skipArticleNumbering: input?.skipArticleNumbering === true || undefined,
     style: normalizeStyle(input?.style),
     collapsed: input?.collapsed === true || undefined,
     children: Array.isArray(input?.children)
@@ -632,15 +647,25 @@ function normalizeNode(input: Partial<MindMapNode> | undefined, fallbackText: st
   };
 }
 
+function normalizeDocumentView(input: Partial<MindMapDocumentView> | undefined): MindMapDocumentView | undefined {
+  if (!input) return undefined;
+  const mode: DisplayMode | undefined = input.mode === "outline" || input.mode === "article" || input.mode === "mindmap"
+    ? input.mode
+    : undefined;
+  const readOnly = input.readOnly === true ? true : input.readOnly === false ? false : undefined;
+  return mode !== undefined || readOnly !== undefined ? { mode, readOnly } : undefined;
+}
+
 export function normalizeDocument(input: Partial<MindMapDocument> | undefined, fallbackTitle = "思维导图"): MindMapDocument {
   const title = typeof input?.title === "string" && input.title.trim() ? input.title.trim() : fallbackTitle;
   return {
-    version: 9,
+    version: 10,
     title,
     layout: input?.layout === "balanced" ? "balanced" : "right",
     theme: input?.theme === "light" || input?.theme === "dark" ? input.theme : "auto",
     appearance: normalizeAppearance(input?.appearance),
     navigation: normalizeNavigation(input?.navigation),
+    view: normalizeDocumentView(input?.view),
     root: normalizeNode(input?.root, title)
   };
 }

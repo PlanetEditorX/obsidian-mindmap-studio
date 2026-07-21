@@ -19,6 +19,7 @@ import {
   newId,
   nodeContentBlocks,
   nodePlainText,
+  nodePrimaryText,
   syncNodeLegacyFields,
   parseFencedCode,
   parseMarkdownTable,
@@ -29,6 +30,7 @@ import {
   applyRichTextStyleRange,
   reconcileRichTextAfterEdit,
   type BackgroundPattern,
+  type DisplayMode,
   type EdgeStyle,
   type EdgeWidthMode,
   type FontFamilyMode,
@@ -51,6 +53,7 @@ import { buildBranchColorMap, computeLayout, documentToSvg, edgePath, edgeWidthF
 import { CodeEditModal, TableEditModal } from "./content-modals";
 import type { ImageHostChoice, ImageHostUploadBatch } from "./settings";
 import { appearanceFromThemePreset, MINDMAP_THEME_PRESETS } from "./themes";
+import { buildArticleNodeInfo, DISPLAY_MODE_ICONS, DISPLAY_MODE_LABELS } from "./modes";
 
 export interface MindMapEditorCallbacks {
   onChange: (document: MindMapDocument) => void;
@@ -67,6 +70,7 @@ export interface MindMapEditorCallbacks {
   onScheduleAutoUpload: (nodeId: string, blockId: string, localPath: string, suggestedName: string) => boolean;
   onCreateSubmap: (node: MindMapNode) => Promise<MindMapSubmap>;
   onOpenMindMap: (path: string, focusNodeId?: string) => void | Promise<void>;
+  onSearchMapFamily: () => void;
   onGlobalSearch: () => void;
   onRenderCode: (block: MindMapCodeBlock, container: HTMLElement) => void | Promise<void>;
 }
@@ -80,6 +84,8 @@ export interface MindMapEditorOptions {
   imageFailoverEnabled: boolean;
   imageFailoverTimeoutSeconds: number;
   imageFailoverUseLocalFallback: boolean;
+  visibleModes: DisplayMode[];
+  defaultViewMode: DisplayMode;
 }
 
 interface NodeEditValues {
@@ -89,6 +95,7 @@ interface NodeEditValues {
   icon: string;
   tags: string[];
   task?: TaskStatus;
+  skipArticleNumbering?: boolean;
   color?: string;
   textColor?: string;
   borderColor?: string;
@@ -575,6 +582,11 @@ class NodeEditModal extends Modal {
     const tagsInput = tagsLabel.createEl("input", { type: "text" });
     tagsInput.value = this.node.tags?.join(", ") ?? "";
 
+    const numberingLabel = detailsGrid.createEl("label", { cls: "mmc-checkbox-label" });
+    const numberingInput = numberingLabel.createEl("input", { type: "checkbox" });
+    numberingInput.checked = this.node.skipArticleNumbering === true;
+    numberingLabel.createSpan({ text: "文章模式不自动编号（前言、注释等）" });
+
     const styleGrid = form.createDiv({ cls: "mmc-form-grid mmc-style-grid" });
     const colorControl = (labelText: string, current: string | undefined, fallback: string): [HTMLInputElement, HTMLInputElement] => {
       const label = styleGrid.createEl("label", { text: labelText });
@@ -625,6 +637,7 @@ class NodeEditModal extends Modal {
         note: noteInput.value.trim(), link: linkInput.value.trim(), icon: iconInput.value.trim().slice(0, 12),
         tags: Array.from(new Set(tagsInput.value.split(/[,，]/).map((tag) => tag.trim().replace(/^#/, "")).filter(Boolean))).slice(0, 12),
         task: task === "todo" || task === "doing" || task === "done" ? task : undefined,
+        skipArticleNumbering: numberingInput.checked || undefined,
         color: colorToggle.checked ? colorInput.value : undefined,
         textColor: textColorToggle.checked ? textColorInput.value : undefined,
         borderColor: borderColorToggle.checked ? borderColorInput.value : undefined,
@@ -647,7 +660,7 @@ class NodeEditModal extends Modal {
     scheduleAutoSave = (): void => { if (timer !== null) window.clearTimeout(timer); timer = window.setTimeout(() => saveNow("autosave"), 280); };
     this.saveOnClose = () => { saveNow("commit"); };
 
-    [iconInput, taskSelect, shapeSelect, tagsInput, borderWidthInput, fontSizeInput, boldInput, italicInput, underlineInput, noteInput, linkInput]
+    [iconInput, taskSelect, shapeSelect, tagsInput, numberingInput, borderWidthInput, fontSizeInput, boldInput, italicInput, underlineInput, noteInput, linkInput]
       .forEach((input) => { input.addEventListener("input", scheduleAutoSave); input.addEventListener("change", scheduleAutoSave); });
 
     const buttons = form.createDiv({ cls: "mmc-form-actions" });
@@ -957,7 +970,7 @@ class SearchNodesModal extends Modal {
         const button = results.createEl("button", { cls: "mmc-search-result", type: "button" });
         const title = button.createDiv({ cls: "mmc-search-result-title" });
         if (node.icon) title.createSpan({ text: `${node.icon} ` });
-        title.createSpan({ text: nodePlainText(node) || "图片节点" });
+        title.createSpan({ text: nodePrimaryText(node) || "图片节点" });
         const details = [node.task ? ({ todo: "待办", doing: "进行中", done: "已完成" } as const)[node.task] : "", ...(node.tags ?? []).map((tag) => `#${tag}`)]
           .filter(Boolean)
           .join(" · ");
@@ -1036,11 +1049,16 @@ export class MindMapEditor {
   private toolbarEl!: HTMLDivElement;
   private navigationBarEl!: HTMLDivElement;
   private viewportEl!: HTMLDivElement;
+  private outlineEl!: HTMLDivElement;
+  private articleEl!: HTMLDivElement;
   private sceneEl!: HTMLDivElement;
   private nodesLayerEl!: HTMLDivElement;
   private edgesSvg!: SVGSVGElement;
   private statusEl!: HTMLSpanElement;
   private zoomStatusEl!: HTMLSpanElement;
+  private lockButton!: HTMLButtonElement;
+  private readonly modeButtons = new Map<DisplayMode, HTMLButtonElement>();
+  private readonly editControls: HTMLElement[] = [];
   private document: MindMapDocument;
   private layout: LayoutResult;
   private selectedId: string;
@@ -1056,6 +1074,8 @@ export class MindMapEditor {
   private resizeObserver: ResizeObserver | null = null;
   private branchClipboard: MindMapNode | null = null;
   private searchQuery = "";
+  private currentMode: DisplayMode;
+  private readOnly: boolean;
   private readonly imageLoadTimers = new Set<number>();
 
   constructor(app: App, host: HTMLElement, document: MindMapDocument, callbacks: MindMapEditorCallbacks, options: MindMapEditorOptions) {
@@ -1064,6 +1084,8 @@ export class MindMapEditor {
     this.callbacks = callbacks;
     this.options = options;
     this.document = cloneDocument(document);
+    this.currentMode = this.resolveMode(this.document.view?.mode ?? options.defaultViewMode);
+    this.readOnly = this.document.view?.readOnly === true;
     this.selectedId = this.document.root.id;
     this.layout = computeLayout(this.document.root, this.document.layout, this.getAppearance().fontSize ?? 14);
     this.buildUi();
@@ -1082,6 +1104,8 @@ export class MindMapEditor {
 
   setDocument(document: MindMapDocument, resetHistory = true): void {
     this.document = cloneDocument(document);
+    this.currentMode = this.resolveMode(this.document.view?.mode ?? this.options.defaultViewMode);
+    this.readOnly = this.document.view?.readOnly === true;
     this.selectedId = this.document.root.id;
     if (resetHistory) {
       this.history = [];
@@ -1092,8 +1116,39 @@ export class MindMapEditor {
   }
 
   setOptions(options: MindMapEditorOptions): void {
+    const modesChanged = JSON.stringify(this.options.visibleModes) !== JSON.stringify(options.visibleModes);
     this.options = options;
+    const resolved = this.resolveMode(this.currentMode);
+    if (resolved !== this.currentMode) {
+      this.currentMode = resolved;
+      this.document.view = { ...(this.document.view ?? {}), mode: resolved, readOnly: this.readOnly };
+      this.callbacks.onChange(this.getDocument());
+    }
+    if (modesChanged) {
+      this.cleanupCallbacks.forEach((callback) => callback());
+      this.cleanupCallbacks = [];
+      this.resizeObserver?.disconnect();
+      this.resizeObserver = null;
+      this.modeButtons.clear();
+      this.editControls.splice(0);
+      this.buildUi();
+    }
     this.render();
+  }
+
+  setDisplayMode(mode: DisplayMode): void {
+    if (!this.options.visibleModes.includes(mode)) return;
+    this.currentMode = mode;
+    this.persistViewState();
+    this.render();
+    if (mode === "mindmap" && this.options.autoFitOnOpen) window.setTimeout(() => this.fitToView(), 20);
+  }
+
+  toggleReadOnly(): void {
+    this.readOnly = !this.readOnly;
+    this.persistViewState();
+    this.render();
+    new Notice(this.readOnly ? "已进入只读模式" : "已进入编辑模式");
   }
 
   getDocument(): MindMapDocument {
@@ -1130,34 +1185,50 @@ export class MindMapEditor {
     this.edgesSvg.classList.add("mmc-edges");
     this.sceneEl.appendChild(this.edgesSvg);
     this.nodesLayerEl = this.sceneEl.createDiv({ cls: "mmc-nodes-layer" });
-    this.addToolbarButton("plus-circle", "添加子节点（Tab）", () => this.addChild());
-    this.addToolbarButton("list-plus", "添加同级节点（Enter）", () => this.addSibling());
-    this.addToolbarButton("pencil", "编辑节点（F2）", () => this.editSelected());
-    this.addToolbarButton("copy-plus", "克隆分支（Ctrl/Cmd+D）", () => this.duplicateSelected());
-    this.addToolbarButton("trash-2", "删除节点（Delete）", () => this.deleteSelected());
+    this.outlineEl = this.rootEl.createDiv({ cls: "mms-outline-view" });
+    this.articleEl = this.rootEl.createDiv({ cls: "mms-article-view" });
+
+    const modeGroup = this.toolbarEl.createDiv({ cls: "mms-mode-switcher" });
+    for (const mode of this.options.visibleModes) {
+      const button = modeGroup.createEl("button", {
+        cls: "mms-mode-button",
+        attr: { type: "button", title: `${DISPLAY_MODE_LABELS[mode]}模式` }
+      });
+      setIcon(button, DISPLAY_MODE_ICONS[mode]);
+      button.createSpan({ text: DISPLAY_MODE_LABELS[mode] });
+      button.addEventListener("click", () => this.setDisplayMode(mode));
+      this.modeButtons.set(mode, button);
+    }
+    this.lockButton = this.addToolbarButton("lock-open", "切换只读 / 编辑模式", () => this.toggleReadOnly());
     this.addToolbarSeparator();
-    this.addToolbarButton("circle-check-big", "切换任务状态（Ctrl/Cmd+Enter）", () => this.cycleTask());
-    this.addToolbarButton("fold-vertical", "展开/收起节点（Space）", () => this.toggleCollapse());
+    this.addToolbarButton("plus-circle", "添加子节点（Tab）", () => this.addChild(), true);
+    this.addToolbarButton("list-plus", "添加同级节点（Enter）", () => this.addSibling(), true);
+    this.addToolbarButton("pencil", "编辑节点（F2）", () => this.editSelected(), true);
+    this.addToolbarButton("copy-plus", "克隆分支（Ctrl/Cmd+D）", () => this.duplicateSelected(), true);
+    this.addToolbarButton("trash-2", "删除节点（Delete）", () => this.deleteSelected(), true);
+    this.addToolbarSeparator();
+    this.addToolbarButton("circle-check-big", "切换任务状态（Ctrl/Cmd+Enter）", () => this.cycleTask(), true);
+    this.addToolbarButton("fold-vertical", "展开/收起节点（Space）", () => this.toggleCollapse(), true);
     this.addToolbarButton("link", "打开节点链接", () => this.openSelectedLink());
-    this.addToolbarButton("search", "搜索当前导图（Ctrl/Cmd+F）", () => this.openSearch());
+    this.addToolbarButton("search", "搜索当前导图及全部子导图（Ctrl/Cmd+F）", () => this.openSearch());
     this.addToolbarButton("file-search", "全局搜索所有导图（Ctrl/Cmd+Shift+F）", () => this.callbacks.onGlobalSearch());
     this.addToolbarSeparator();
-    this.addToolbarButton("table-2", "插入或编辑表格", () => this.editTable());
-    this.addToolbarButton("code-2", "插入或编辑代码", () => this.editCode());
-    this.addToolbarButton("image-plus", "粘贴图片到当前节点（Ctrl/Cmd+V）", () => new Notice("先复制图片，再选中节点并按 Ctrl/Cmd+V"));
+    this.addToolbarButton("table-2", "插入或编辑表格", () => this.editTable(), true);
+    this.addToolbarButton("code-2", "插入或编辑代码", () => this.editCode(), true);
+    this.addToolbarButton("image-plus", "粘贴图片到当前节点（Ctrl/Cmd+V）", () => new Notice("先复制图片，再选中节点并按 Ctrl/Cmd+V"), true);
     this.addToolbarButton("network", "创建或进入子导图", () => void this.createOrOpenSubmap());
     this.addToolbarSeparator();
-    this.addToolbarButton("undo-2", "撤销（Ctrl/Cmd+Z）", () => this.undo());
-    this.addToolbarButton("redo-2", "重做（Ctrl/Cmd+Y）", () => this.redo());
+    this.addToolbarButton("undo-2", "撤销（Ctrl/Cmd+Z）", () => this.undo(), true);
+    this.addToolbarButton("redo-2", "重做（Ctrl/Cmd+Y）", () => this.redo(), true);
     this.addToolbarSeparator();
     this.addToolbarButton("zoom-in", "放大", () => this.setZoom(this.zoom * 1.15));
     this.addToolbarButton("zoom-out", "缩小", () => this.setZoom(this.zoom / 1.15));
     this.addToolbarButton("maximize", "适应画布", () => this.fitToView());
-    this.addToolbarButton("git-fork", "切换单侧/双侧布局", () => this.toggleLayout());
-    this.addToolbarButton("palette", "当前脑图外观", () => this.editAppearance());
+    this.addToolbarButton("git-fork", "切换单侧/双侧布局", () => this.toggleLayout(), true);
+    this.addToolbarButton("palette", "当前脑图外观", () => this.editAppearance(), true);
     this.addToolbarSeparator();
     this.addToolbarButton("file-text", "查看 Markdown 大纲", () => this.showOutline());
-    this.addToolbarButton("braces", "JSON 导入 / 导出", () => this.showJsonTransfer());
+    this.addToolbarButton("braces", "JSON 导入 / 导出", () => this.showJsonTransfer(), true);
     this.addToolbarButton("image", "导出 SVG", () => void this.callbacks.onExportSvg(documentToSvg(this.document.root, this.document.layout, this.document.title, this.getAppearance())));
 
     const spacer = this.toolbarEl.createSpan({ cls: "mmc-toolbar-spacer" });
@@ -1229,15 +1300,51 @@ export class MindMapEditor {
     this.resizeObserver.observe(this.viewportEl);
   }
 
+  private resolveMode(preferred: DisplayMode): DisplayMode {
+    if (this.options.visibleModes.includes(preferred)) return preferred;
+    return this.options.visibleModes[0] ?? "mindmap";
+  }
+
+  private persistViewState(): void {
+    this.document.view = { mode: this.currentMode, readOnly: this.readOnly };
+    this.callbacks.onChange(this.getDocument());
+    this.markSaving();
+  }
+
+  private updateModeUi(): void {
+    for (const [mode, button] of this.modeButtons) button.toggleClass("is-active", mode === this.currentMode);
+    this.lockButton.empty();
+    setIcon(this.lockButton, this.readOnly ? "lock" : "lock-open");
+    this.lockButton.setAttr("aria-label", this.readOnly ? "当前只读，点击切换到编辑模式" : "当前可编辑，点击切换到只读模式");
+    this.lockButton.setAttr("title", this.readOnly ? "只读模式" : "编辑模式");
+    this.lockButton.toggleClass("is-active", this.readOnly);
+    this.rootEl.toggleClass("is-read-only", this.readOnly);
+    for (const control of this.editControls) {
+      if (control instanceof HTMLButtonElement || control instanceof HTMLInputElement || control instanceof HTMLSelectElement) control.disabled = this.readOnly;
+      control.toggleClass("is-read-only-disabled", this.readOnly);
+    }
+  }
+
+  private ensureEditable(): boolean {
+    if (!this.readOnly) return true;
+    new Notice("当前为只读模式，请先点击锁按钮切换到编辑模式");
+    return false;
+  }
+
   private clearImageLoadTimers(): void {
     for (const timer of this.imageLoadTimers) window.clearTimeout(timer);
     this.imageLoadTimers.clear();
   }
 
-  private addToolbarButton(icon: string, label: string, action: () => void): HTMLButtonElement {
-    const button = this.toolbarEl.createEl("button", { cls: "clickable-icon mmc-toolbar-button", attr: { "aria-label": label, title: label } });
+  private addToolbarButton(icon: string, label: string, action: () => void, editOnly = false): HTMLButtonElement {
+    const button = this.toolbarEl.createEl("button", { cls: "clickable-icon mmc-toolbar-button", attr: { "aria-label": label, title: label, type: "button" } });
     setIcon(button, icon);
+    if (editOnly) {
+      button.addClass("mms-edit-only-control");
+      this.editControls.push(button);
+    }
     button.addEventListener("click", () => {
+      if (editOnly && this.readOnly) return;
       action();
       this.focus();
     });
@@ -1302,11 +1409,212 @@ export class MindMapEditor {
     this.navigationBarEl.createDiv({ cls: "mmc-parent-navigation-path", text: navigation.parentPath });
   }
 
+  private updateNodePrimaryText(node: MindMapNode, value: string): void {
+    const next = value.replace(/\s+/g, " ").trim();
+    const blocks = nodeContentBlocks(node);
+    const firstText = blocks.find((block): block is MindMapTextContentBlock => block.type === "text");
+    if (firstText) {
+      firstText.text = next;
+      firstText.richText = undefined;
+    } else if (next) {
+      blocks.unshift({ id: newId(), type: "text", text: next });
+    }
+    node.content = blocks.filter((block) => block.type !== "text" || block.text.trim());
+    syncNodeLegacyFields(node);
+    if (node.id === this.document.root.id && next) this.document.title = next;
+  }
+
+  private makeInlineEditable(element: HTMLElement, node: MindMapNode, placeholder: string): void {
+    element.contentEditable = this.readOnly ? "false" : "true";
+    element.setAttr("role", "textbox");
+    element.setAttr("aria-label", placeholder);
+    if (!element.textContent?.trim()) element.dataset.placeholder = placeholder;
+    if (this.readOnly) return;
+    let original = nodePrimaryText(node);
+    element.addEventListener("focus", () => { original = nodePrimaryText(node); });
+    element.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        element.blur();
+      }
+      if (event.key === "Escape") {
+        event.preventDefault();
+        element.setText(original);
+        element.blur();
+      }
+    });
+    element.addEventListener("blur", () => {
+      const next = (element.textContent ?? "").replace(/\s+/g, " ").trim();
+      if (next === original || (!next && node.id === this.document.root.id)) {
+        element.setText(original);
+        return;
+      }
+      this.mutate(() => this.updateNodePrimaryText(node, next));
+    });
+  }
+
+  private addInlineNodeActions(container: HTMLElement, node: MindMapNode): void {
+    if (this.readOnly) return;
+    const actions = container.createDiv({ cls: "mms-inline-node-actions" });
+    const action = (icon: string, label: string, handler: () => void): void => {
+      const button = actions.createEl("button", { cls: "clickable-icon", attr: { type: "button", title: label, "aria-label": label } });
+      setIcon(button, icon);
+      button.addEventListener("click", (event) => { event.stopPropagation(); this.selectNode(node.id); handler(); });
+    };
+    action("pencil", "完整编辑", () => this.editSelected());
+    action("plus", "添加子节点", () => this.addChild());
+    if (node.id !== this.document.root.id) action("trash-2", "删除节点", () => this.deleteSelected());
+  }
+
+  private renderOutline(): void {
+    this.outlineEl.empty();
+    const page = this.outlineEl.createDiv({ cls: "mms-outline-page" });
+    const titleRow = page.createDiv({ cls: `mms-outline-row is-root${this.selectedId === this.document.root.id ? " is-selected" : ""}` });
+    titleRow.dataset.nodeId = this.document.root.id;
+    const title = titleRow.createDiv({ cls: "mms-outline-title is-root-title", text: nodePrimaryText(this.document.root) || this.document.title });
+    this.makeInlineEditable(title, this.document.root, "导图标题");
+    this.addInlineNodeActions(titleRow, this.document.root);
+    titleRow.addEventListener("click", () => this.selectNode(this.document.root.id));
+
+    const list = page.createDiv({ cls: "mms-outline-list" });
+    const visit = (node: MindMapNode, depth: number): void => {
+      const item = list.createDiv({ cls: `mms-outline-item depth-${Math.min(depth, 8)}` });
+      item.style.setProperty("--mms-outline-depth", String(depth));
+      const row = item.createDiv({ cls: `mms-outline-row${this.selectedId === node.id ? " is-selected" : ""}` });
+      row.dataset.nodeId = node.id;
+      row.createSpan({ cls: "mms-outline-bullet", text: node.children.length ? "◆" : "•" });
+      if (node.task) {
+        const task = row.createEl("input", { type: "checkbox", cls: "mms-outline-task" });
+        task.checked = node.task === "done";
+        task.disabled = this.readOnly;
+        task.addEventListener("change", (event) => {
+          event.stopPropagation();
+          this.selectNode(node.id);
+          this.mutate(() => { node.task = task.checked ? "done" : "todo"; });
+        });
+      }
+      const text = row.createDiv({ cls: "mms-outline-title", text: nodePlainText(node) || "图片节点" });
+      this.makeInlineEditable(text, node, "节点文字");
+      if (node.skipArticleNumbering) row.createSpan({ cls: "mms-outline-badge", text: "文章不编号" });
+      if (node.submap) {
+        const submap = row.createEl("button", { cls: "mms-outline-submap", text: "进入子导图", attr: { type: "button" } });
+        submap.addEventListener("click", (event) => { event.stopPropagation(); void this.callbacks.onOpenMindMap(node.submap!.path); });
+      }
+      this.addInlineNodeActions(row, node);
+      row.addEventListener("click", () => this.selectNode(node.id));
+      row.addEventListener("dblclick", () => { this.selectNode(node.id); if (!this.readOnly) this.editSelected(); });
+      if (node.note) item.createDiv({ cls: "mms-outline-note", text: node.note });
+      node.children.forEach((child) => visit(child, depth + 1));
+    };
+    this.document.root.children.forEach((child) => visit(child, 1));
+  }
+
+  private renderArticleContent(container: HTMLElement, node: MindMapNode, treatTextAsBody: boolean): void {
+    const blocks = nodeContentBlocks(node);
+    let firstTextHandled = false;
+    for (const block of blocks) {
+      if (block.type === "text") {
+        if (!treatTextAsBody && !firstTextHandled) { firstTextHandled = true; continue; }
+        firstTextHandled = true;
+        const paragraph = container.createEl("p", { cls: "mms-article-paragraph" });
+        renderRichTextRuns(paragraph, block.richText, block.text);
+        if (treatTextAsBody) this.makeInlineEditable(paragraph, node, "正文");
+      } else {
+        const resolved = this.callbacks.resolveImage(block.source);
+        const image = container.createEl("img", { cls: "mms-article-image", attr: { src: resolved ?? block.source, alt: block.alt ?? "图片" } });
+        image.addEventListener("click", () => new ImagePreviewModal(this.app, resolved ?? block.source, block.alt ?? "图片").open());
+      }
+    }
+    if (node.note) container.createEl("p", { cls: "mms-article-note", text: node.note });
+    if (node.table) {
+      const wrap = container.createDiv({ cls: "mms-article-table-wrap" });
+      const table = wrap.createEl("table", { cls: "mms-article-table" });
+      const tr = table.createEl("thead").createEl("tr");
+      node.table.headers.forEach((header) => tr.createEl("th", { text: header }));
+      const body = table.createEl("tbody");
+      node.table.rows.forEach((row) => {
+        const rowEl = body.createEl("tr");
+        node.table!.headers.forEach((_, index) => rowEl.createEl("td", { text: row[index] ?? "" }));
+      });
+    }
+    if (node.code) {
+      const code = container.createDiv({ cls: "mms-article-code markdown-rendered" });
+      void this.callbacks.onRenderCode(node.code, code);
+    }
+  }
+
+  private renderArticle(): void {
+    this.articleEl.empty();
+    const page = this.articleEl.createDiv({ cls: "mms-article-page" });
+    const title = page.createEl("h1", { cls: "mms-article-document-title", text: nodePrimaryText(this.document.root) || this.document.title });
+    this.makeInlineEditable(title, this.document.root, "文章标题");
+    this.addInlineNodeActions(page, this.document.root);
+
+    const infos = buildArticleNodeInfo(this.document.root);
+    const headings = infos.filter((info) => info.isHeading);
+    if (headings.length) {
+      const toc = page.createEl("nav", { cls: "mms-article-toc" });
+      toc.createEl("h2", { text: "目录" });
+      const list = toc.createEl("ol");
+      for (const info of headings) {
+        const item = list.createEl("li", { cls: `depth-${Math.min(info.depth, 8)}` });
+        item.style.setProperty("--mms-article-depth", String(info.depth));
+        const link = item.createEl("a", { text: info.displayTitle || "未命名标题", href: `#${info.anchor}` });
+        link.addEventListener("click", (event) => {
+          event.preventDefault();
+          this.articleEl.querySelector<HTMLElement>(`#${CSS.escape(info.anchor)}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+        });
+      }
+    }
+
+    for (const info of infos) {
+      const section = page.createEl("section", { cls: `mms-article-node depth-${Math.min(info.depth, 8)}${this.selectedId === info.node.id ? " is-selected" : ""}` });
+      section.dataset.nodeId = info.node.id;
+      section.id = info.anchor;
+      section.addEventListener("click", () => this.selectNode(info.node.id));
+      if (info.isHeading) {
+        const level = Math.min(6, info.depth + 1);
+        const heading = section.createEl(`h${level}` as keyof HTMLElementTagNameMap, { cls: "mms-article-heading" });
+        if (info.label) heading.createSpan({ cls: "mms-article-number", text: info.label });
+        const headingText = heading.createSpan({ cls: "mms-article-heading-text", text: info.title });
+        this.makeInlineEditable(headingText, info.node, "章节标题");
+        if (info.skipped) heading.createSpan({ cls: "mms-article-skip-badge", text: "不编号" });
+        this.addInlineNodeActions(heading, info.node);
+        this.renderArticleContent(section, info.node, false);
+      } else {
+        const firstTextBlock = nodeContentBlocks(info.node).find((block): block is MindMapTextContentBlock => block.type === "text");
+        if (firstTextBlock || !this.readOnly) {
+          const paragraph = section.createEl("p", { cls: "mms-article-leaf-text" });
+          if (firstTextBlock) renderRichTextRuns(paragraph, firstTextBlock.richText, firstTextBlock.text);
+          this.makeInlineEditable(paragraph, info.node, "正文段落");
+        }
+        this.addInlineNodeActions(section, info.node);
+        this.renderArticleContent(section, info.node, false);
+      }
+      if (info.node.submap) {
+        const submap = section.createEl("button", { cls: "mms-article-submap", text: `进入子导图：${info.node.submap.title ?? info.node.submap.path}`, attr: { type: "button" } });
+        submap.addEventListener("click", (event) => { event.stopPropagation(); void this.callbacks.onOpenMindMap(info.node.submap!.path); });
+      }
+    }
+  }
+
   private render(): void {
     this.clearImageLoadTimers();
     this.renderNavigation();
     const appearance = this.getAppearance();
     this.applyAppearance(appearance);
+    this.updateModeUi();
+    this.viewportEl.toggleClass("is-hidden", this.currentMode !== "mindmap");
+    this.outlineEl.toggleClass("is-hidden", this.currentMode !== "outline");
+    this.articleEl.toggleClass("is-hidden", this.currentMode !== "article");
+    this.rootEl.dataset.displayMode = this.currentMode;
+    if (this.currentMode === "outline") this.renderOutline();
+    else if (this.currentMode === "article") this.renderArticle();
+    else this.renderMindMap();
+  }
+
+  private renderMindMap(): void {
+    const appearance = this.getAppearance();
     this.layout = computeLayout(this.document.root, this.document.layout, appearance.fontSize ?? 14);
     const branchColorMap = appearance.colorfulBranches ? buildBranchColorMap(this.document.root, appearance.branchColors) : new Map<string, string>();
     this.nodesLayerEl.empty();
@@ -1344,7 +1652,7 @@ export class MindMapEditor {
       nodeEl.style.top = `${position.y}px`;
       nodeEl.style.width = `${position.width}px`;
       nodeEl.style.minHeight = `${position.height}px`;
-      nodeEl.draggable = position.depth > 0;
+      nodeEl.draggable = position.depth > 0 && !this.readOnly;
       if (this.selectedId === node.id) nodeEl.addClass("is-selected");
       if (this.searchQuery && nodeSearchText(node).includes(this.searchQuery)) nodeEl.addClass("is-search-match");
       if (node.task) nodeEl.addClass(`task-${node.task}`);
@@ -1537,7 +1845,7 @@ export class MindMapEditor {
       nodeEl.addEventListener("dblclick", (event) => {
         event.stopPropagation();
         this.selectNode(node.id);
-        this.editSelected();
+        if (!this.readOnly) this.editSelected();
       });
       nodeEl.addEventListener("contextmenu", (event) => {
         event.preventDefault();
@@ -1546,6 +1854,7 @@ export class MindMapEditor {
         this.openContextMenu(event);
       });
       nodeEl.addEventListener("dragstart", (event) => {
+        if (this.readOnly) { event.preventDefault(); return; }
         this.draggingId = node.id;
         event.dataTransfer?.setData("text/plain", node.id);
         if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
@@ -1581,8 +1890,12 @@ export class MindMapEditor {
 
   private selectNode(id: string | null): void {
     this.selectedId = id ?? "";
-    this.nodesLayerEl.querySelectorAll(".mmc-node.is-selected").forEach((element) => element.removeClass("is-selected"));
-    if (id) this.nodesLayerEl.querySelector<HTMLElement>(`.mmc-node[data-node-id="${CSS.escape(id)}"]`)?.addClass("is-selected");
+    this.rootEl.querySelectorAll(".mmc-node.is-selected, .mms-outline-row.is-selected, .mms-article-node.is-selected")
+      .forEach((element) => element.removeClass("is-selected"));
+    if (!id) return;
+    this.nodesLayerEl.querySelector<HTMLElement>(`.mmc-node[data-node-id="${CSS.escape(id)}"]`)?.addClass("is-selected");
+    this.outlineEl.querySelector<HTMLElement>(`.mms-outline-row[data-node-id="${CSS.escape(id)}"]`)?.addClass("is-selected");
+    this.articleEl.querySelector<HTMLElement>(`.mms-article-node[data-node-id="${CSS.escape(id)}"]`)?.addClass("is-selected");
   }
 
   private selectedNode(): MindMapNode | null {
@@ -1596,6 +1909,7 @@ export class MindMapEditor {
   }
 
   private addChild(): void {
+    if (!this.ensureEditable()) return;
     const selected = this.selectedNode() ?? this.document.root;
     const node = this.createConfiguredNode();
     this.mutate(() => {
@@ -1607,6 +1921,7 @@ export class MindMapEditor {
   }
 
   private addSibling(): void {
+    if (!this.ensureEditable()) return;
     const selected = this.selectedNode();
     if (!selected || selected.id === this.document.root.id) {
       this.addChild();
@@ -1624,6 +1939,7 @@ export class MindMapEditor {
   }
 
   private editSelected(): void {
+    if (!this.ensureEditable()) return;
     const selected = this.selectedNode();
     if (!selected) return;
     let historyCaptured = false;
@@ -1650,6 +1966,7 @@ export class MindMapEditor {
       selected.icon = values.icon || undefined;
       selected.tags = values.tags.length ? values.tags : undefined;
       selected.task = values.task;
+      selected.skipArticleNumbering = values.skipArticleNumbering || undefined;
       const style = {
         color: values.color,
         textColor: values.textColor,
@@ -1673,6 +1990,7 @@ export class MindMapEditor {
   }
 
   private deleteSelected(): void {
+    if (!this.ensureEditable()) return;
     const selected = this.selectedNode();
     if (!selected || selected.id === this.document.root.id) {
       new Notice("根节点不能删除");
@@ -1688,10 +2006,16 @@ export class MindMapEditor {
   private toggleCollapse(): void {
     const selected = this.selectedNode();
     if (!selected || !selected.children.length) return;
+    if (this.readOnly) {
+      selected.collapsed = !selected.collapsed;
+      this.render();
+      return;
+    }
     this.mutate(() => { selected.collapsed = !selected.collapsed; });
   }
 
   private cycleTask(): void {
+    if (!this.ensureEditable()) return;
     const selected = this.selectedNode();
     if (!selected) return;
     const next: Record<string, TaskStatus | undefined> = { "": "todo", todo: "doing", doing: "done", done: undefined };
@@ -1699,11 +2023,13 @@ export class MindMapEditor {
   }
 
   private toggleLayout(): void {
+    if (!this.ensureEditable()) return;
     this.mutate(() => { this.document.layout = this.document.layout === "right" ? "balanced" : "right"; });
     window.setTimeout(() => this.fitToView(), 20);
   }
 
   private editAppearance(): void {
+    if (!this.ensureEditable()) return;
     new AppearanceModal(
       this.app,
       this.getAppearance(),
@@ -1713,6 +2039,7 @@ export class MindMapEditor {
   }
 
   private editTable(): void {
+    if (!this.ensureEditable()) return;
     const selected = this.selectedNode() ?? this.document.root;
     new TableEditModal(this.app, selected.table, (table) => {
       this.mutate(() => { selected.table = table; });
@@ -1720,6 +2047,7 @@ export class MindMapEditor {
   }
 
   private convertChildrenToTable(): void {
+    if (!this.ensureEditable()) return;
     const selected = this.selectedNode() ?? this.document.root;
     const table = childrenToTable(selected);
     if (!table) { new Notice("当前节点没有可转换的子节点"); return; }
@@ -1731,6 +2059,7 @@ export class MindMapEditor {
   }
 
   private removeTable(): void {
+    if (!this.ensureEditable()) return;
     const selected = this.selectedNode();
     if (!selected?.table) return;
     this.mutate(() => {
@@ -1740,6 +2069,7 @@ export class MindMapEditor {
   }
 
   private editCode(): void {
+    if (!this.ensureEditable()) return;
     const selected = this.selectedNode() ?? this.document.root;
     new CodeEditModal(this.app, selected.code, (code) => {
       this.mutate(() => { selected.code = code; });
@@ -1747,6 +2077,7 @@ export class MindMapEditor {
   }
 
   private removeCode(): void {
+    if (!this.ensureEditable()) return;
     const selected = this.selectedNode();
     if (!selected?.code) return;
     this.mutate(() => { selected.code = undefined; });
@@ -1758,6 +2089,7 @@ export class MindMapEditor {
       await this.callbacks.onOpenMindMap(selected.submap.path);
       return;
     }
+    if (!this.ensureEditable()) return;
     try {
       const submap = await this.callbacks.onCreateSubmap(selected);
       this.mutate(() => { selected.submap = submap; });
@@ -1809,6 +2141,7 @@ export class MindMapEditor {
   }
 
   private async handlePaste(event: ClipboardEvent): Promise<void> {
+    if (this.readOnly) return;
     const target = event.target as HTMLElement;
     if (target.matches("input, textarea, select, [contenteditable='true']")) return;
     const data = event.clipboardData;
@@ -1885,6 +2218,7 @@ export class MindMapEditor {
   }
 
   private showJsonTransfer(): void {
+    if (!this.ensureEditable()) return;
     new JsonTransferModal(
       this.app,
       this.getDocument(),
@@ -1894,29 +2228,31 @@ export class MindMapEditor {
   }
 
   private openSearch(): void {
-    new SearchNodesModal(
-      this.app,
-      flattenNodes(this.document.root),
-      (query) => {
-        this.searchQuery = query;
-        this.render();
-      },
-      (node) => this.focusNode(node.id)
-    ).open();
+    this.callbacks.onSearchMapFamily();
   }
 
   private focusNode(id: string): void {
     const ancestors = findAncestors(this.document.root, id);
     const collapsed = ancestors.filter((node) => node.collapsed);
     if (collapsed.length) {
-      this.mutate(() => collapsed.forEach((node) => { node.collapsed = false; }));
+      if (this.readOnly) collapsed.forEach((node) => { node.collapsed = false; });
+      else this.mutate(() => collapsed.forEach((node) => { node.collapsed = false; }));
     }
     this.selectedId = id;
     this.render();
-    window.setTimeout(() => this.centerNode(id), 20);
+    window.setTimeout(() => {
+      if (this.currentMode === "mindmap") this.centerNode(id);
+      else {
+        const selector = this.currentMode === "outline"
+          ? `.mms-outline-row[data-node-id="${CSS.escape(id)}"]`
+          : `.mms-article-node[data-node-id="${CSS.escape(id)}"]`;
+        this.rootEl.querySelector<HTMLElement>(selector)?.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    }, 20);
   }
 
   private centerNode(id: string): void {
+    if (this.currentMode !== "mindmap") return;
     const position = this.layout.byId.get(id);
     if (!position) return;
     this.panX = -position.x * this.zoom;
@@ -1927,6 +2263,13 @@ export class MindMapEditor {
   private openContextMenu(event: MouseEvent): void {
     const selected = this.selectedNode();
     const menu = new Menu();
+    if (this.readOnly) {
+      if (selected?.submap) menu.addItem((item) => item.setTitle("进入子导图").setIcon("network").onClick(() => void this.createOrOpenSubmap()));
+      menu.addItem((item) => item.setTitle("打开链接").setIcon("link").onClick(() => this.openSelectedLink()));
+      menu.addItem((item) => item.setTitle("复制分支").setIcon("copy").onClick(() => void this.copySelectedBranch()));
+      menu.showAtMouseEvent(event);
+      return;
+    }
     menu.addItem((item) => item.setTitle("添加子节点").setIcon("plus-circle").onClick(() => this.addChild()));
     menu.addItem((item) => item.setTitle("添加同级节点").setIcon("list-plus").onClick(() => this.addSibling()));
     menu.addItem((item) => item.setTitle("编辑节点").setIcon("pencil").onClick(() => this.editSelected()));
@@ -1943,6 +2286,10 @@ export class MindMapEditor {
     menu.addItem((item) => item.setTitle("粘贴为子节点").setIcon("clipboard-paste").onClick(() => void this.pasteAsChild()));
     menu.addSeparator();
     menu.addItem((item) => item.setTitle(`任务状态：${selected?.task === "done" ? "已完成" : selected?.task === "doing" ? "进行中" : selected?.task === "todo" ? "待办" : "无"}`).setIcon("circle-check-big").onClick(() => this.cycleTask()));
+    menu.addItem((item) => item
+      .setTitle(selected?.skipArticleNumbering ? "文章模式：恢复自动编号" : "文章模式：不参与自动编号")
+      .setIcon("list-ordered")
+      .onClick(() => { if (selected) this.mutate(() => { selected.skipArticleNumbering = selected.skipArticleNumbering ? undefined : true; }); }));
     menu.addItem((item) => item.setTitle("展开/收起").setIcon("fold-vertical").onClick(() => this.toggleCollapse()));
     menu.addItem((item) => item.setTitle("打开链接").setIcon("link").onClick(() => this.openSelectedLink()));
     menu.addSeparator();
@@ -1953,7 +2300,7 @@ export class MindMapEditor {
   private async copySelectedBranch(): Promise<boolean> {
     const selected = this.selectedNode();
     if (!selected) return false;
-    this.branchClipboard = cloneDocument({ version: 9, title: nodePlainText(selected) || "图片节点", layout: "right", theme: "auto", root: selected }).root;
+    this.branchClipboard = cloneDocument({ version: 10, title: nodePlainText(selected) || "图片节点", layout: "right", theme: "auto", root: selected }).root;
     const payload = JSON.stringify({ type: "mindmap-studio-node", version: 1, node: selected }, null, 2);
     try {
       await navigator.clipboard.writeText(payload);
@@ -1998,6 +2345,7 @@ export class MindMapEditor {
   }
 
   private duplicateSelected(): void {
+    if (!this.ensureEditable()) return;
     const selected = this.selectedNode();
     if (!selected || selected.id === this.document.root.id) {
       new Notice("请选择非根节点后克隆分支");
@@ -2020,6 +2368,7 @@ export class MindMapEditor {
   }
 
   private reparentNode(draggedId: string, targetId: string): void {
+    if (!this.ensureEditable()) return;
     if (!this.canReparent(draggedId, targetId)) return;
     const dragged = findNode(this.document.root, draggedId);
     const target = findNode(this.document.root, targetId);
@@ -2033,6 +2382,7 @@ export class MindMapEditor {
   }
 
   private replaceDocument(document: MindMapDocument): void {
+    if (!this.ensureEditable()) return;
     this.history.push(JSON.stringify(this.document));
     this.trimHistory();
     this.future = [];
@@ -2045,6 +2395,7 @@ export class MindMapEditor {
   }
 
   private mutate(action: () => void): void {
+    if (!this.ensureEditable()) return;
     this.history.push(JSON.stringify(this.document));
     this.trimHistory();
     this.future = [];
@@ -2060,6 +2411,7 @@ export class MindMapEditor {
   }
 
   private undo(): void {
+    if (!this.ensureEditable()) return;
     const previous = this.history.pop();
     if (!previous) return;
     this.future.push(JSON.stringify(this.document));
@@ -2071,6 +2423,7 @@ export class MindMapEditor {
   }
 
   private redo(): void {
+    if (!this.ensureEditable()) return;
     const next = this.future.pop();
     if (!next) return;
     this.history.push(JSON.stringify(this.document));
@@ -2142,6 +2495,22 @@ export class MindMapEditor {
     if (mod && key === "f") {
       event.preventDefault();
       this.openSearch();
+      return;
+    }
+    if (this.readOnly) {
+      if (["arrowleft", "arrowright", "arrowup", "arrowdown"].includes(key)) {
+        event.preventDefault();
+        const direction = key === "arrowleft" ? "parent" : key === "arrowright" ? "child" : key === "arrowup" ? "previous" : "next";
+        this.navigateSelection(direction);
+      } else if (event.key === "+" || event.key === "=") {
+        event.preventDefault(); this.setZoom(this.zoom * 1.15);
+      } else if (event.key === "-") {
+        event.preventDefault(); this.setZoom(this.zoom / 1.15);
+      } else if (mod && key === "0") {
+        event.preventDefault(); this.fitToView();
+      } else if (event.key === " ") {
+        event.preventDefault(); this.toggleCollapse();
+      }
       return;
     }
     if (mod && key === "d") {

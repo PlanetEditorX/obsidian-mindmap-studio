@@ -1,0 +1,40 @@
+{
+  "version": 10,
+  "title": "唐诗",
+  "layout": "right",
+  "theme": "auto",
+  "navigation": {
+    "parentPath": "古诗.mindmap",
+    "parentNodeId": "tang-node",
+    "parentTitle": "古诗",
+    "parentNodeText": "唐诗"
+  },
+  "root": {
+    "id": "tang-root",
+    "text": "唐诗",
+    "link": "[[古诗.mindmap]]",
+    "children": [
+      {
+        "id": "libai-node",
+        "text": "李白",
+        "note": "静夜思、望庐山瀑布",
+        "children": [
+          {
+            "id": "jingyesi-node",
+            "text": "静夜思",
+            "children": []
+          }
+        ]
+      },
+      {
+        "id": "dufu-node",
+        "text": "杜甫",
+        "children": []
+      }
+    ]
+  },
+  "view": {
+    "mode": "mindmap",
+    "readOnly": false
+  }
+}

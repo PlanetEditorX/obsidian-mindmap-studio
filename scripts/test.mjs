@@ -9,6 +9,7 @@ const tempDir = await mkdtemp(join(tmpdir(), "mindmap-studio-test-"));
 const outfile = join(tempDir, "model.cjs");
 const layoutOutfile = join(tempDir, "layout.cjs");
 const searchOutfile = join(tempDir, "global-search.cjs");
+const modesOutfile = join(tempDir, "modes.cjs");
 const obsidianStub = join(tempDir, "obsidian-stub.mjs");
 
 try {
@@ -23,6 +24,14 @@ try {
   await build({
     entryPoints: ["src/layout.ts"],
     outfile: layoutOutfile,
+    bundle: true,
+    platform: "node",
+    format: "cjs",
+    logLevel: "silent"
+  });
+  await build({
+    entryPoints: ["src/modes.ts"],
+    outfile: modesOutfile,
     bundle: true,
     platform: "node",
     format: "cjs",
@@ -49,6 +58,7 @@ export const setIcon = () => {};
   const model = require(outfile);
   const layout = require(layoutOutfile);
   const globalSearch = require(searchOutfile);
+  const modes = require(modesOutfile);
   const document = model.createDefaultDocument("测试脑图");
   document.appearance = {
     backgroundColor: "#fef3c7",
@@ -79,7 +89,7 @@ export const setIcon = () => {};
 
   const reopened = model.parseDocument(serialized, "fallback");
   assert.equal(reopened.title, "测试脑图");
-  assert.equal(reopened.version, 9);
+  assert.equal(reopened.version, 10);
   assert.equal(reopened.appearance?.backgroundPattern, "dots");
   assert.equal(reopened.appearance?.edgeStyle, "elbow");
   assert.equal(reopened.appearance?.edgeWidthMode, "tapered");
@@ -89,6 +99,51 @@ export const setIcon = () => {};
   assert.deepEqual(reopened.appearance?.branchColors, ["#dc2626", "#2563eb"]);
   assert.equal(reopened.appearance?.underline, true);
   assert.equal(reopened.root.children.at(-1)?.text, "保存后仍可编辑");
+
+  const viewDocument = model.normalizeDocument({
+    title: "三种模式",
+    view: { mode: "article", readOnly: true },
+    root: {
+      id: "article-root",
+      text: "中国古诗",
+      children: [
+        {
+          id: "preface", text: "前言", skipArticleNumbering: true, children: [
+            { id: "preface-body", text: "这是一段不参与章节编号的说明", children: [] }
+          ]
+        },
+        {
+          id: "chapter-one", text: "唐诗", children: [
+            { id: "section-one", text: "李白", children: [
+              { id: "leaf-one", text: "静夜思", children: [] }
+            ] },
+            { id: "section-leaf", text: "章节引言", children: [] },
+            { id: "section-two", text: "杜甫", children: [
+              { id: "subheading", text: "现实主义", children: [
+                { id: "deep-leaf", text: "诗史", children: [] }
+              ] }
+            ] }
+          ]
+        },
+        { id: "chapter-two", text: "宋词", children: [{ id: "song-body", text: "词人概览", children: [] }] }
+      ]
+    }
+  }, "fallback");
+  assert.equal(viewDocument.view?.mode, "article");
+  assert.equal(viewDocument.view?.readOnly, true);
+  assert.equal(viewDocument.root.children[0]?.skipArticleNumbering, true);
+  const articleInfo = modes.buildArticleNodeInfo(viewDocument.root);
+  const byId = new Map(articleInfo.map((item) => [item.node.id, item]));
+  assert.equal(byId.get("preface")?.label, "", "prefaces marked as skipped must not be numbered");
+  assert.equal(byId.get("chapter-one")?.label, "第一章", "skipped siblings must not consume chapter numbers");
+  assert.equal(byId.get("section-one")?.label, "第一节");
+  assert.equal(byId.get("leaf-one")?.label, "", "terminal nodes are article body and must not receive another number");
+  assert.equal(byId.get("section-two")?.label, "第二节");
+  assert.equal(byId.get("subheading")?.label, "一、");
+  assert.equal(byId.get("deep-leaf")?.label, "");
+  assert.equal(byId.get("chapter-two")?.label, "第二章");
+  assert.deepEqual(modes.normalizeVisibleModes(["article", "mindmap", "article"]), ["article", "mindmap"]);
+  assert.deepEqual(modes.normalizeVisibleModes([]), ["mindmap", "outline", "article"]);
 
   const styled = model.normalizeDocument({
     title: "样式",
@@ -306,9 +361,53 @@ export const setIcon = () => {};
   assert.equal(globalSearch.searchEntries(searchEntries, "眼镜盒 待处理")[0]?.nodeId, "deep-child");
   assert.equal(globalSearch.searchEntries(searchEntries, "globalsearch")[0]?.nodeId, "deep-child");
 
+  const poetryParent = model.normalizeDocument({
+    title: "古诗",
+    root: {
+      id: "poetry-root",
+      text: "古诗",
+      children: [{
+        id: "tang-node",
+        text: "唐诗",
+        submap: { path: "MindMap Assets/古诗/唐诗.mindmap", title: "唐诗" },
+        children: []
+      }]
+    }
+  }, "fallback");
+  const tangChild = model.normalizeDocument({
+    title: "唐诗",
+    navigation: { parentPath: "古诗.mindmap", parentNodeId: "tang-node", parentTitle: "古诗", parentNodeText: "唐诗" },
+    root: {
+      id: "tang-root",
+      text: "唐诗",
+      children: [{ id: "libai-node", text: "李白", note: "静夜思", children: [] }]
+    }
+  }, "fallback");
+  const hierarchyEntries = globalSearch.resolveHierarchicalEntries({
+    "古诗.mindmap": { mtime: 1, size: 1, title: "古诗", entries: globalSearch.buildSearchEntries(poetryParent, "古诗.mindmap") },
+    "MindMap Assets/古诗/唐诗.mindmap": {
+      mtime: 1, size: 1, title: "唐诗", navigation: tangChild.navigation,
+      entries: globalSearch.buildSearchEntries(tangChild, "MindMap Assets/古诗/唐诗.mindmap")
+    }
+  });
+  const tangRootEntry = hierarchyEntries.find((entry) => entry.nodeId === "tang-root");
+  const libaiEntry = hierarchyEntries.find((entry) => entry.nodeId === "libai-node");
+  assert.deepEqual(tangRootEntry?.hierarchyBreadcrumb, ["古诗", "唐诗"], "child-map root must inherit the parent node path without duplicating 唐诗");
+  assert.deepEqual(libaiEntry?.hierarchyBreadcrumb, ["古诗", "唐诗", "李白"]);
+  assert.equal(globalSearch.searchEntries(hierarchyEntries, "古诗 唐诗 李白")[0]?.nodeId, "libai-node", "global search must match the full parent-child map hierarchy");
+  const familyPaths = globalSearch.collectIndexedFamilyPaths({
+    "古诗.mindmap": { entries: globalSearch.buildSearchEntries(poetryParent, "古诗.mindmap") },
+    "MindMap Assets/古诗/唐诗.mindmap": { entries: globalSearch.buildSearchEntries(tangChild, "MindMap Assets/古诗/唐诗.mindmap") }
+  }, "古诗.mindmap");
+  assert.deepEqual(Array.from(familyPaths), ["古诗.mindmap", "MindMap Assets/古诗/唐诗.mindmap"], "current-map search must include recursively linked child maps without recreating them");
+  const familyEntries = hierarchyEntries.filter((entry) => familyPaths.has(entry.filePath));
+  assert.equal(globalSearch.searchEntries(familyEntries, "李白")[0]?.filePath, "MindMap Assets/古诗/唐诗.mindmap", "searching from 古诗 must find 李白 in the 唐诗 child map");
+
   const mainSource = await readFile("src/main.ts", "utf8");
   assert.match(mainSource, /registerExtensions\(\[MINDMAP_EXTENSION\], VIEW_TYPE_MINDMAP_STUDIO\)/);
   assert.match(mainSource, /global-search-mind-maps/);
+  assert.match(mainSource, /openMapFamilySearch/);
+  assert.match(mainSource, /refreshFamily/);
   assert.match(mainSource, /mindmap-search-index\.json/);
   assert.match(mainSource, /MINDMAP_EXTENSION = "mindmap"/);
   assert.match(mainSource, /\[parentFolder, configuredAssets, parentMapFolder\]/, "submaps must be stored below the parent-local asset folder");
@@ -323,6 +422,11 @@ export const setIcon = () => {};
   assert.match(mainSource, /requestUrl/);
   assert.match(mainSource, /multipart\/form-data/);
   assert.match(mainSource, /plugins\/mindmap-canvas\/data\.json/, "renamed plugin should migrate old settings");
+  const globalSearchSource = await readFile("src/global-search.ts", "utf8");
+  assert.match(globalSearchSource, /resolveHierarchicalEntries/);
+  assert.match(globalSearchSource, /古诗 › 唐诗/);
+  assert.match(globalSearchSource, /first climb to the top parent/);
+  assert.match(globalSearchSource, /version: 2/);
   const editorSource = await readFile("src/editor.ts", "utf8");
   assert.doesNotMatch(editorSource, /execCommand/, "rich-text formatting must not use browser-wide execCommand behavior");
   assert.match(editorSource, /selectionStart/);
@@ -353,6 +457,15 @@ export const setIcon = () => {};
   assert.match(editorSource, /图片地址失效，已从/);
   assert.match(editorSource, /imageFailoverTimeoutSeconds/);
 
+  assert.match(editorSource, /mms-mode-switcher/);
+  assert.match(editorSource, /toggleReadOnly/);
+  assert.match(editorSource, /renderOutline/);
+  assert.match(editorSource, /renderArticle/);
+  assert.match(editorSource, /skipArticleNumbering/);
+  assert.match(editorSource, /DISPLAY_MODE_LABELS/);
+  assert.match(mainSource, /switch-to-\$\{mode\}-mode/);
+  assert.match(mainSource, /toggle-mind-map-read-only/);
+
   const settingsSource = await readFile("src/settings.ts", "utf8");
   assert.match(settingsSource, /autoUploadEnabled/);
   assert.match(settingsSource, /autoUploadDelaySeconds/);
@@ -362,6 +475,10 @@ export const setIcon = () => {};
   assert.match(settingsSource, /远程图片自动故障转移/);
   assert.match(settingsSource, /单个镜像等待时间/);
   assert.match(settingsSource, /本地副本作为最后回退/);
+
+  assert.match(settingsSource, /visibleModes/);
+  assert.match(settingsSource, /新建导图默认模式/);
+  assert.match(settingsSource, /一键还原所有插件设置/);
 
   const cssSource = await readFile("styles.css", "utf8");
   assert.match(cssSource, /\.mmc-parent-navigation-button[\s\S]*min-height:\s*44px/);
@@ -375,6 +492,10 @@ export const setIcon = () => {};
   assert.match(cssSource, /\.mms-image-host-card/);
   assert.match(cssSource, /\.mms-image-host-picker-item/);
   assert.match(cssSource, /--mmc-current-edge-width/);
+  assert.match(cssSource, /\.mms-mode-switcher/);
+  assert.match(cssSource, /\.mms-outline-view/);
+  assert.match(cssSource, /\.mms-article-view/);
+  assert.match(cssSource, /\.mms-article-toc/);
   assert.match(editorSource, /setAttribute\("stroke-width"/);
   assert.match(editorSource, /setProperty\("stroke-width"[\s\S]*"important"/);
 
@@ -382,7 +503,7 @@ export const setIcon = () => {};
   const manifest = JSON.parse(await readFile("manifest.json", "utf8"));
   assert.equal(manifest.id, "mindmap-studio");
   assert.equal(manifest.name, "MindMap Studio");
-  assert.equal(manifest.version, "1.3.0");
+  assert.equal(manifest.version, "1.4.0");
   assert.match(cssSource, /\.mms-global-search-modal/);
   assert.match(cssSource, /\.mms-global-search-result/);
 

@@ -2,6 +2,7 @@ import { App, Notice, PluginSettingTab, Setting } from "obsidian";
 import type MindMapStudioPlugin from "./main";
 import type {
   BackgroundPattern,
+  DisplayMode,
   EdgeStyle,
   EdgeWidthMode,
   FontFamilyMode,
@@ -109,6 +110,8 @@ export interface MindMapStudioSettings {
   imageFailoverTimeoutSeconds: number;
   imageFailoverUseLocalFallback: boolean;
   globalSearchMaxResults: number;
+  visibleModes: DisplayMode[];
+  defaultViewMode: DisplayMode;
 }
 
 export const DEFAULT_SETTINGS: MindMapStudioSettings = {
@@ -155,7 +158,9 @@ export const DEFAULT_SETTINGS: MindMapStudioSettings = {
   imageFailoverEnabled: true,
   imageFailoverTimeoutSeconds: 8,
   imageFailoverUseLocalFallback: true,
-  globalSearchMaxResults: 100
+  globalSearchMaxResults: 100,
+  visibleModes: ["mindmap", "outline", "article"],
+  defaultViewMode: "mindmap"
 };
 
 export function settingsToAppearance(settings: MindMapStudioSettings): MindMapAppearance {
@@ -260,6 +265,59 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
         void this.saveAndRefresh().then(() => this.display());
       });
     }
+
+    containerEl.createEl("h3", { text: "显示模式" });
+
+    containerEl.createEl("p", {
+      cls: "setting-item-description",
+      text: "导图、大纲和文章模式共享同一份节点数据。在任意模式中的修改都会同步到其他模式。"
+    });
+
+    const modeGrid = containerEl.createDiv({ cls: "mms-mode-settings-grid" });
+    const modeOptions: Array<{ id: DisplayMode; name: string; description: string }> = [
+      { id: "mindmap", name: "导图模式", description: "默认的可视化思维导图画布。" },
+      { id: "outline", name: "大纲模式", description: "按照节点层级显示可编辑大纲。" },
+      { id: "article", name: "文章模式", description: "生成目录和章节编号的文章视图。" }
+    ];
+    for (const mode of modeOptions) {
+      const label = modeGrid.createEl("label", { cls: "mms-mode-setting-card" });
+      const checkbox = label.createEl("input", { type: "checkbox" });
+      checkbox.checked = this.plugin.settings.visibleModes.includes(mode.id);
+      const copy = label.createDiv({ cls: "mms-mode-setting-copy" });
+      copy.createEl("strong", { text: mode.name });
+      copy.createEl("span", { text: mode.description });
+      checkbox.addEventListener("change", async () => {
+        const next = new Set(this.plugin.settings.visibleModes);
+        if (checkbox.checked) next.add(mode.id);
+        else next.delete(mode.id);
+        if (!next.size) {
+          checkbox.checked = true;
+          new Notice("至少需要保留一种显示模式");
+          return;
+        }
+        this.plugin.settings.visibleModes = modeOptions.map((item) => item.id).filter((id) => next.has(id));
+        if (!this.plugin.settings.visibleModes.includes(this.plugin.settings.defaultViewMode)) {
+          this.plugin.settings.defaultViewMode = this.plugin.settings.visibleModes[0] ?? "mindmap";
+        }
+        await this.saveAndRefresh();
+        this.display();
+      });
+    }
+
+    new Setting(containerEl)
+      .setName("新建导图默认模式")
+      .setDesc("只列出上方已启用的模式。")
+      .addDropdown((dropdown) => {
+        const labels: Record<DisplayMode, string> = { mindmap: "导图模式", outline: "大纲模式", article: "文章模式" };
+        for (const mode of this.plugin.settings.visibleModes) dropdown.addOption(mode, labels[mode]);
+        dropdown.setValue(this.plugin.settings.visibleModes.includes(this.plugin.settings.defaultViewMode)
+          ? this.plugin.settings.defaultViewMode
+          : this.plugin.settings.visibleModes[0] ?? "mindmap");
+        dropdown.onChange(async (value) => {
+          this.plugin.settings.defaultViewMode = value as DisplayMode;
+          await this.plugin.saveSettings();
+        });
+      });
 
     containerEl.createEl("h3", { text: "文件与布局" });
 
@@ -861,6 +919,21 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
           } finally {
             button.setDisabled(false);
           }
+        }));
+
+    containerEl.createEl("h3", { text: "恢复初始设置" });
+    new Setting(containerEl)
+      .setName("一键还原所有插件设置")
+      .setDesc("恢复显示模式、主题、资源目录、图床、搜索和编辑选项。不会删除或修改任何 .mindmap 文件。")
+      .addButton((button) => button
+        .setWarning()
+        .setButtonText("恢复初始设置")
+        .onClick(async () => {
+          const confirmed = window.confirm("确定恢复 MindMap Studio 的全部插件设置吗？脑图文件不会被删除。");
+          if (!confirmed) return;
+          await this.plugin.resetAllSettings();
+          new Notice("已恢复初始设置");
+          this.display();
         }));
   }
 

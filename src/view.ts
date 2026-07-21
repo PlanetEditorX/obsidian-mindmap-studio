@@ -1,7 +1,7 @@
 import { MarkdownRenderer, Notice, TextFileView, TFile, normalizePath, type WorkspaceLeaf } from "obsidian";
 import type MindMapStudioPlugin from "./main";
 import { MindMapEditor } from "./editor";
-import { parseDocument, serializeDocument, type MindMapDocument } from "./model";
+import { parseDocument, serializeDocument, type DisplayMode, type MindMapDocument } from "./model";
 import { settingsToAppearance } from "./settings";
 
 export const VIEW_TYPE_MINDMAP_STUDIO = "mindmap-studio-view";
@@ -68,6 +68,7 @@ export class MindMapStudioView extends TextFileView {
           await this.save();
           await this.plugin.openMindMapPath(path, this.file?.path ?? "", this.leaf, focusNodeId);
         },
+        onSearchMapFamily: () => void this.openMapFamilySearch(),
         onGlobalSearch: () => this.plugin.openGlobalSearch(),
         onRenderCode: async (block, container) => {
           const longestFence = Math.max(2, ...Array.from(block.code.matchAll(/`+/g), (match) => match[0].length));
@@ -106,6 +107,16 @@ export class MindMapStudioView extends TextFileView {
     await super.onClose();
   }
 
+  private async openMapFamilySearch(): Promise<void> {
+    const file = this.file;
+    if (!file) {
+      new Notice("当前导图尚未保存，无法搜索子导图");
+      return;
+    }
+    await this.save();
+    await this.plugin.openMapFamilySearch(file, this.editor?.getDocument() ?? this.document ?? undefined);
+  }
+
   refreshAppearance(): void {
     this.applyViewClasses();
     this.editor?.setOptions(this.getEditorOptions());
@@ -119,6 +130,14 @@ export class MindMapStudioView extends TextFileView {
     this.editor.focusNodeById(nodeId);
   }
 
+  setDisplayMode(mode: DisplayMode): void {
+    this.editor?.setDisplayMode(mode);
+  }
+
+  toggleReadOnly(): void {
+    this.editor?.toggleReadOnly();
+  }
+
   private getEditorOptions() {
     return {
       defaultNodeShape: this.plugin.settings.defaultNodeShape,
@@ -128,7 +147,9 @@ export class MindMapStudioView extends TextFileView {
       historyLimit: this.plugin.settings.historyLimit,
       imageFailoverEnabled: this.plugin.settings.imageFailoverEnabled,
       imageFailoverTimeoutSeconds: this.plugin.settings.imageFailoverTimeoutSeconds,
-      imageFailoverUseLocalFallback: this.plugin.settings.imageFailoverUseLocalFallback
+      imageFailoverUseLocalFallback: this.plugin.settings.imageFailoverUseLocalFallback,
+      visibleModes: [...this.plugin.settings.visibleModes],
+      defaultViewMode: this.plugin.settings.defaultViewMode
     };
   }
 

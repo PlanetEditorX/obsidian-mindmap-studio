@@ -15,6 +15,10 @@ export interface MindMapSearchEntry {
   nodeId: string;
   nodeText: string;
   breadcrumb: string[];
+  /** Full hierarchy including parent maps, e.g. 古诗 › 唐诗 › 李白. */
+  hierarchyBreadcrumb?: string[];
+  /** Map chain only, e.g. 古诗 › 唐诗. */
+  mapHierarchy?: string[];
   depth: number;
   searchableText: string;
   note?: string;
@@ -35,11 +39,12 @@ interface IndexedMindMapFile {
   mtime: number;
   size: number;
   title: string;
+  navigation?: MindMapDocument["navigation"];
   entries: MindMapSearchEntry[];
 }
 
 interface PersistedMindMapSearchIndex {
-  version: 1;
+  version: 2;
   generatedAt: string;
   files: Record<string, IndexedMindMapFile>;
 }
@@ -126,13 +131,89 @@ export function buildSearchEntries(document: MindMapDocument, filePath: string):
   return entries;
 }
 
+function mergeHierarchy(prefix: string[], suffix: string[]): string[] {
+  const left = prefix.map((item) => item.trim()).filter(Boolean);
+  const right = suffix.map((item) => item.trim()).filter(Boolean);
+  if (!left.length) return right;
+  if (!right.length) return left;
+  const merged = [...left];
+  for (const item of right) {
+    if (normalized(merged.at(-1) ?? "") === normalized(item)) continue;
+    merged.push(item);
+  }
+  return merged;
+}
+
+/** Resolve parent/child map relations into paths such as 古诗 › 唐诗 › 李白. */
+export function resolveHierarchicalEntries(files: Record<string, IndexedMindMapFile>): MindMapSearchEntry[] {
+  const lineageCache = new Map<string, string[]>();
+  const normalizedFiles = new Map<string, IndexedMindMapFile>();
+  Object.entries(files).forEach(([path, file]) => normalizedFiles.set(normalizePath(path), file));
+
+  const resolveLineage = (filePath: string, visiting = new Set<string>()): string[] => {
+    const path = normalizePath(filePath);
+    const cached = lineageCache.get(path);
+    if (cached) return cached;
+    const file = normalizedFiles.get(path);
+    const navigation = file?.navigation;
+    if (!file || !navigation?.parentPath) {
+      lineageCache.set(path, []);
+      return [];
+    }
+    if (visiting.has(path)) {
+      const fallback = [navigation.parentTitle, navigation.parentNodeText].filter((item): item is string => Boolean(item?.trim()));
+      lineageCache.set(path, fallback);
+      return fallback;
+    }
+
+    const nextVisiting = new Set(visiting);
+    nextVisiting.add(path);
+    const parentPath = normalizePath(navigation.parentPath);
+    const parentFile = normalizedFiles.get(parentPath);
+    if (!parentFile) {
+      const fallback = [navigation.parentTitle, navigation.parentNodeText].filter((item): item is string => Boolean(item?.trim()));
+      lineageCache.set(path, fallback);
+      return fallback;
+    }
+
+    const parentLineage = resolveLineage(parentPath, nextVisiting);
+    const sourceEntry = navigation.parentNodeId
+      ? parentFile.entries.find((entry) => entry.nodeId === navigation.parentNodeId)
+      : undefined;
+    const parentLocalPath = sourceEntry?.breadcrumb?.length
+      ? sourceEntry.breadcrumb
+      : [parentFile.title, navigation.parentNodeText].filter((item): item is string => Boolean(item?.trim()));
+    const resolved = mergeHierarchy(parentLineage, parentLocalPath);
+    lineageCache.set(path, resolved);
+    return resolved;
+  };
+
+  const resolvedEntries: MindMapSearchEntry[] = [];
+  for (const [rawPath, file] of Object.entries(files)) {
+    const filePath = normalizePath(rawPath);
+    const lineage = resolveLineage(filePath);
+    const localRoot = file.entries[0]?.breadcrumb?.[0] ?? file.title;
+    const mapHierarchy = mergeHierarchy(lineage, [localRoot]);
+    for (const entry of file.entries) {
+      const hierarchyBreadcrumb = mergeHierarchy(lineage, entry.breadcrumb);
+      resolvedEntries.push({
+        ...entry,
+        hierarchyBreadcrumb,
+        mapHierarchy,
+        searchableText: normalized(`${entry.searchableText} ${hierarchyBreadcrumb.join(" ")} ${mapHierarchy.join(" ")}`)
+      });
+    }
+  }
+  return resolvedEntries;
+}
+
 function resultSnippet(entry: MindMapSearchEntry, query: string): { kind: string; snippet: string } {
   const queryNormalized = normalized(query);
   const candidates: Array<{ kind: string; value?: string }> = [
     { kind: "节点文字", value: entry.nodeText },
     { kind: "备注", value: entry.note },
     { kind: "标签", value: entry.tags?.join("、") },
-    { kind: "路径", value: entry.breadcrumb.join(" › ") },
+    { kind: "层级路径", value: (entry.hierarchyBreadcrumb ?? entry.breadcrumb).join(" › ") },
     { kind: "文件", value: `${entry.fileTitle} ${entry.filePath}` },
     { kind: "内容", value: entry.searchableText }
   ];
@@ -152,7 +233,7 @@ export function searchEntries(entries: MindMapSearchEntry[], query: string, limi
     if (!terms.every((term) => entry.searchableText.includes(term))) continue;
     const nodeText = normalized(entry.nodeText);
     const fileTitle = normalized(entry.fileTitle);
-    const breadcrumb = normalized(entry.breadcrumb.join(" "));
+    const breadcrumb = normalized((entry.hierarchyBreadcrumb ?? entry.breadcrumb).join(" "));
     let score = 0;
     if (nodeText === phrase) score += 500;
     else if (nodeText.startsWith(phrase)) score += 320;
@@ -170,8 +251,32 @@ export function searchEntries(entries: MindMapSearchEntry[], query: string, limi
   return results.sort((left, right) => right.score - left.score || left.filePath.localeCompare(right.filePath) || left.depth - right.depth).slice(0, limit);
 }
 
+export function collectIndexedFamilyPaths(
+  files: Record<string, { entries: MindMapSearchEntry[] }>,
+  rootPath: string
+): Set<string> {
+  const normalizedFiles = new Map(Object.entries(files).map(([path, value]) => [normalizePath(path), value]));
+  const family = new Set<string>();
+  const queue = [normalizePath(rootPath)];
+  while (queue.length) {
+    const path = normalizePath(queue.shift() ?? "");
+    if (!path || family.has(path) || !normalizedFiles.has(path)) continue;
+    family.add(path);
+    const indexed = normalizedFiles.get(path);
+    for (const entry of indexed?.entries ?? []) {
+      const childPath = entry.submapPath ? normalizePath(entry.submapPath) : "";
+      if (childPath && normalizedFiles.has(childPath) && !family.has(childPath)) queue.push(childPath);
+    }
+    for (const [candidatePath, candidate] of normalizedFiles) {
+      const parentPath = candidate.entries[0]?.parentMapPath;
+      if (parentPath && normalizePath(parentPath) === path && !family.has(candidatePath)) queue.push(candidatePath);
+    }
+  }
+  return family;
+}
+
 export class MindMapSearchIndex {
-  private data: PersistedMindMapSearchIndex = { version: 1, generatedAt: new Date(0).toISOString(), files: {} };
+  private data: PersistedMindMapSearchIndex = { version: 2, generatedAt: new Date(0).toISOString(), files: {} };
   private ready = false;
   private building = false;
   private saveTimer: number | null = null;
@@ -202,12 +307,110 @@ export class MindMapSearchIndex {
     return { ready: this.ready, building: this.building, files, nodes, lastBuiltAt: this.data.generatedAt };
   }
 
-  allEntries(): MindMapSearchEntry[] {
-    return Object.values(this.data.files).flatMap((file) => file.entries);
+  allEntries(filePaths?: ReadonlySet<string>): MindMapSearchEntry[] {
+    const resolved = resolveHierarchicalEntries(this.data.files);
+    if (!filePaths) return resolved;
+    const normalizedPaths = new Set(Array.from(filePaths, (path) => normalizePath(path)));
+    return resolved.filter((entry) => normalizedPaths.has(normalizePath(entry.filePath)));
   }
 
-  search(query: string, limit = 100): MindMapSearchResult[] {
-    return searchEntries(this.allEntries(), query, limit);
+  getScopedStatus(filePaths: ReadonlySet<string>): { files: number; nodes: number } {
+    const normalizedPaths = new Set(Array.from(filePaths, (path) => normalizePath(path)));
+    let files = 0;
+    let nodes = 0;
+    for (const path of normalizedPaths) {
+      const indexed = this.data.files[path];
+      if (!indexed) continue;
+      files += 1;
+      nodes += indexed.entries.length;
+    }
+    return { files, nodes };
+  }
+
+  search(query: string, limit = 100, filePaths?: ReadonlySet<string>): MindMapSearchResult[] {
+    return searchEntries(this.allEntries(filePaths), query, limit);
+  }
+
+  /**
+   * Refresh a parent map and every recursively linked child map, then return the
+   * exact set of files that belongs to that map family. This is deliberately
+   * on-demand so an existing child map is searchable without recreating it or
+   * manually rebuilding the whole-vault index.
+   */
+  async refreshFamily(rootPath: string, currentDocument?: MindMapDocument): Promise<Set<string>> {
+    const normalizedRoot = normalizePath(rootPath);
+    const family = new Set<string>();
+    const documents = new Map<string, MindMapDocument>();
+    if (currentDocument) documents.set(normalizedRoot, currentDocument);
+
+    // If search is opened from a child map, first climb to the top parent so
+    // “唐诗” still belongs to the complete “古诗 › 唐诗” map family.
+    let familyRoot = normalizedRoot;
+    let climbDocument = currentDocument;
+    const climbed = new Set<string>();
+    while (climbDocument?.navigation?.parentPath && !climbed.has(familyRoot)) {
+      climbed.add(familyRoot);
+      const parent = this.resolveSubmapFile(climbDocument.navigation.parentPath, familyRoot);
+      if (!parent) break;
+      familyRoot = parent.path;
+      try {
+        climbDocument = parseDocument(await this.app.vault.cachedRead(parent), parent.basename);
+        documents.set(parent.path, climbDocument);
+      } catch (error) {
+        console.warn(`MindMap Studio could not read parent map ${parent.path}`, error);
+        break;
+      }
+    }
+
+    const queue: string[] = [familyRoot];
+    while (queue.length) {
+      const path = normalizePath(queue.shift() ?? "");
+      if (!path || family.has(path)) continue;
+      const file = this.app.vault.getAbstractFileByPath(path);
+      if (!(file instanceof TFile) || file.extension.toLocaleLowerCase() !== this.extension) continue;
+      family.add(path);
+
+      let document = documents.get(path);
+      if (!document) {
+        try {
+          document = parseDocument(await this.app.vault.cachedRead(file), file.basename);
+        } catch (error) {
+          console.warn(`MindMap Studio could not read map family member ${path}`, error);
+          continue;
+        }
+      }
+
+      this.data.files[path] = {
+        mtime: file.stat.mtime,
+        size: file.stat.size,
+        title: document.title,
+        navigation: document.navigation,
+        entries: buildSearchEntries(document, path)
+      };
+
+      for (const node of this.walkNodes(document.root)) {
+        const child = this.resolveSubmapFile(node.submap?.path, path);
+        if (child && !family.has(child.path)) queue.push(child.path);
+      }
+
+      // Compatibility fallback: a child document also records its parent path.
+      // This recovers older maps whose parent node lost the submap field.
+      for (const [candidatePath, indexed] of Object.entries(this.data.files)) {
+        const parentPath = indexed.navigation?.parentPath ?? indexed.entries[0]?.parentMapPath;
+        const resolvedParent = this.resolveSubmapFile(parentPath, candidatePath);
+        if (resolvedParent?.path === path && !family.has(candidatePath)) queue.push(candidatePath);
+      }
+    }
+
+    // Merge relationships already present in the index. This covers older child
+    // maps that only retain navigation.parentPath and no longer have a matching
+    // submap field on the parent node.
+    for (const indexedPath of collectIndexedFamilyPaths(this.data.files, normalizedRoot)) family.add(indexedPath);
+
+    this.data.generatedAt = new Date().toISOString();
+    this.ready = true;
+    this.scheduleSave();
+    return family;
   }
 
   queueFile(file: TFile, delay = 500): void {
@@ -275,6 +478,7 @@ export class MindMapSearchIndex {
         mtime: file.stat.mtime,
         size: file.stat.size,
         title: document.title,
+        navigation: document.navigation,
         entries: buildSearchEntries(document, file.path)
       };
       this.data.generatedAt = new Date().toISOString();
@@ -285,6 +489,27 @@ export class MindMapSearchIndex {
     }
   }
 
+  private *walkNodes(root: MindMapNode): Generator<MindMapNode> {
+    const stack: MindMapNode[] = [root];
+    while (stack.length) {
+      const node = stack.pop();
+      if (!node) continue;
+      yield node;
+      for (let index = node.children.length - 1; index >= 0; index -= 1) stack.push(node.children[index]);
+    }
+  }
+
+  private resolveSubmapFile(rawPath: string | undefined, sourcePath: string): TFile | null {
+    const raw = rawPath?.trim();
+    if (!raw) return null;
+    const unwrapped = raw.replace(/^!?\[\[|\]\]$/g, "").split("|")[0]?.split("#")[0]?.trim() ?? raw;
+    const normalizedPath = normalizePath(unwrapped);
+    const direct = this.app.vault.getAbstractFileByPath(normalizedPath);
+    if (direct instanceof TFile && direct.extension.toLocaleLowerCase() === this.extension) return direct;
+    const resolved = this.app.metadataCache.getFirstLinkpathDest(unwrapped, sourcePath);
+    return resolved instanceof TFile && resolved.extension.toLocaleLowerCase() === this.extension ? resolved : null;
+  }
+
   private async load(): Promise<void> {
     try {
       if (!(await this.app.vault.adapter.exists(this.indexPath))) {
@@ -292,17 +517,20 @@ export class MindMapSearchIndex {
         return;
       }
       const parsed = JSON.parse(await this.app.vault.adapter.read(this.indexPath)) as Partial<PersistedMindMapSearchIndex>;
-      if (parsed.version === 1 && parsed.files && typeof parsed.files === "object") {
+      if (parsed.version === 2 && parsed.files && typeof parsed.files === "object") {
         this.data = {
-          version: 1,
+          version: 2,
           generatedAt: typeof parsed.generatedAt === "string" ? parsed.generatedAt : new Date(0).toISOString(),
           files: parsed.files as Record<string, IndexedMindMapFile>
         };
+      } else {
+        // The previous flat index did not persist navigation metadata. Rebuild it.
+        this.data = { version: 2, generatedAt: new Date(0).toISOString(), files: {} };
       }
       this.ready = true;
     } catch (error) {
       console.warn("MindMap Studio could not load the global search index", error);
-      this.data = { version: 1, generatedAt: new Date(0).toISOString(), files: {} };
+      this.data = { version: 2, generatedAt: new Date(0).toISOString(), files: {} };
       this.ready = true;
     }
   }
@@ -354,21 +582,24 @@ export class GlobalMindMapSearchModal extends Modal {
     private readonly index: MindMapSearchIndex,
     private readonly maxResults: number,
     private readonly onOpenResult: (result: MindMapSearchResult) => void | Promise<void>,
-    private readonly onRebuild: () => Promise<void>
+    private readonly onRebuild: () => Promise<void>,
+    private readonly scopePaths?: ReadonlySet<string>,
+    private readonly scopeTitle = "全局搜索思维导图",
+    private readonly scopeDescription = "所有导图、子节点和子导图"
   ) {
     super(app);
   }
 
   onOpen(): void {
     this.modalEl.addClass("mms-global-search-modal");
-    this.titleEl.setText("全局搜索思维导图");
+    this.titleEl.setText(this.scopeTitle);
     const searchRow = this.contentEl.createDiv({ cls: "mms-global-search-row" });
     const icon = searchRow.createSpan({ cls: "mms-global-search-icon" });
     setIcon(icon, "search");
     this.inputEl = searchRow.createEl("input", {
       type: "search",
       cls: "mms-global-search-input",
-      attr: { placeholder: "搜索所有导图、子节点和子导图…", autocomplete: "off", spellcheck: "false" }
+      attr: { placeholder: `搜索${this.scopeDescription}…`, autocomplete: "off", spellcheck: "false" }
     });
     const rebuild = searchRow.createEl("button", { cls: "mms-global-search-rebuild", attr: { type: "button", title: "重建搜索索引" } });
     setIcon(rebuild, "refresh-cw");
@@ -413,20 +644,21 @@ export class GlobalMindMapSearchModal extends Modal {
     this.resultsEl.empty();
     this.activeIndex = -1;
     const status = this.index.getStatus();
+    const scopedStatus = this.scopePaths ? this.index.getScopedStatus(this.scopePaths) : { files: status.files, nodes: status.nodes };
     const trimmed = query.trim();
     if (!trimmed) {
       this.renderedResults = [];
-      this.summaryEl.setText(status.building
-        ? `正在建立索引，已收录 ${status.files} 个导图、${status.nodes} 个节点…`
-        : `已索引 ${status.files} 个导图、${status.nodes} 个节点。输入关键词开始搜索。`);
+      this.summaryEl.setText(status.building && !this.scopePaths
+        ? `正在建立索引，已收录 ${scopedStatus.files} 个导图、${scopedStatus.nodes} 个节点…`
+        : `搜索范围包含 ${scopedStatus.files} 个导图、${scopedStatus.nodes} 个节点。输入关键词开始搜索。`);
       const hint = this.resultsEl.createDiv({ cls: "mms-global-search-empty" });
       hint.createDiv({ text: "搜索范围" });
-      hint.createEl("p", { text: "节点文字、富文本、备注、标签、表格、代码、链接、折叠分支和所有子导图。" });
+      hint.createEl("p", { text: `${this.scopeDescription}中的节点文字、富文本、备注、标签、表格、代码、链接及折叠分支。` });
       return;
     }
 
-    this.renderedResults = this.index.search(trimmed, this.maxResults);
-    this.summaryEl.setText(`找到 ${this.renderedResults.length}${this.renderedResults.length >= this.maxResults ? "+" : ""} 个结果 · 索引 ${status.files} 个导图 / ${status.nodes} 个节点`);
+    this.renderedResults = this.index.search(trimmed, this.maxResults, this.scopePaths);
+    this.summaryEl.setText(`找到 ${this.renderedResults.length}${this.renderedResults.length >= this.maxResults ? "+" : ""} 个结果 · 范围 ${scopedStatus.files} 个导图 / ${scopedStatus.nodes} 个节点`);
     if (!this.renderedResults.length) {
       this.resultsEl.createDiv({ cls: "mms-global-search-empty", text: status.building ? "索引仍在建立，请稍后重试。" : "没有匹配结果。" });
       return;
@@ -441,9 +673,9 @@ export class GlobalMindMapSearchModal extends Modal {
       badges.createSpan({ cls: "mms-global-search-badge", text: result.matchedKind });
       if (result.isSubmapDocument) badges.createSpan({ cls: "mms-global-search-badge is-submap", text: "子导图" });
       const file = button.createDiv({ cls: "mms-global-search-result-file" });
-      file.createSpan({ text: result.fileTitle });
+      file.createSpan({ text: result.mapHierarchy?.join(" › ") || result.fileTitle });
       file.createSpan({ cls: "mms-global-search-result-path", text: result.filePath });
-      button.createDiv({ cls: "mms-global-search-result-breadcrumb", text: result.breadcrumb.join(" › ") });
+      button.createDiv({ cls: "mms-global-search-result-breadcrumb", text: (result.hierarchyBreadcrumb ?? result.breadcrumb).join(" › ") });
       if (result.snippet && result.snippet !== result.nodeText) {
         const snippet = button.createDiv({ cls: "mms-global-search-result-snippet" });
         appendHighlightedText(snippet, result.snippet, trimmed);

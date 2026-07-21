@@ -1,5 +1,5 @@
 {
-  "version": 9,
+  "version": 10,
   "title": "MindMap Studio 主题与内容示例",
   "layout": "right",
   "theme": "auto",
@@ -181,5 +181,9 @@
       "#db2777",
       "#ea580c"
     ]
+  },
+  "view": {
+    "mode": "mindmap",
+    "readOnly": false
   }
 }

@@ -38,6 +38,8 @@ import {
 import { renderStaticMindMap, renderStaticSource } from "./static-render";
 import { MindMapStudioView, VIEW_TYPE_MINDMAP_STUDIO } from "./view";
 import { GlobalMindMapSearchModal, MindMapSearchIndex, type MindMapSearchResult } from "./global-search";
+import { normalizeVisibleModes } from "./modes";
+import type { DisplayMode } from "./model";
 
 export const MINDMAP_EXTENSION = "mindmap";
 const LEGACY_SUFFIX = ".smm.md";
@@ -47,12 +49,13 @@ export default class MindMapStudioPlugin extends Plugin {
   private legacyMigrationPath: string | null = null;
   private readonly autoUploadTimers = new Map<string, number>();
   private searchIndex!: MindMapSearchIndex;
+  private searchIndexReady: Promise<void> = Promise.resolve();
 
   async onload(): Promise<void> {
     await this.loadSettings();
     const pluginDir = this.manifest.dir ?? normalizePath(`${this.app.vault.configDir}/plugins/${this.manifest.id}`);
     this.searchIndex = new MindMapSearchIndex(this.app, normalizePath(`${pluginDir}/mindmap-search-index.json`), MINDMAP_EXTENSION);
-    void this.searchIndex.initialize();
+    this.searchIndexReady = this.searchIndex.initialize();
 
     this.registerView(VIEW_TYPE_MINDMAP_STUDIO, (leaf) => new MindMapStudioView(leaf, this));
     // A dedicated extension is the key to reliable reopening: Obsidian routes every
@@ -78,6 +81,28 @@ export default class MindMapStudioPlugin extends Plugin {
       id: "new-mind-map",
       name: "新建思维导图",
       callback: () => void this.createMindMap()
+    });
+    for (const [mode, name] of [["mindmap", "切换到导图模式"], ["outline", "切换到大纲模式"], ["article", "切换到文章模式"]] as Array<[DisplayMode, string]>) {
+      this.addCommand({
+        id: `switch-to-${mode}-mode`,
+        name,
+        checkCallback: (checking) => {
+          const view = this.app.workspace.activeLeaf?.view;
+          const available = view instanceof MindMapStudioView && this.settings.visibleModes.includes(mode);
+          if (!checking && available && view instanceof MindMapStudioView) view.setDisplayMode(mode);
+          return available;
+        }
+      });
+    }
+    this.addCommand({
+      id: "toggle-mind-map-read-only",
+      name: "切换导图只读 / 编辑模式",
+      checkCallback: (checking) => {
+        const view = this.app.workspace.activeLeaf?.view;
+        const available = view instanceof MindMapStudioView;
+        if (!checking && available && view instanceof MindMapStudioView) view.toggleReadOnly();
+        return available;
+      }
     });
     this.addCommand({
       id: "new-mind-map-and-embed",
@@ -186,12 +211,36 @@ export default class MindMapStudioPlugin extends Plugin {
   }
 
   openGlobalSearch(): void {
+    void this.openGlobalSearchAfterIndexReady();
+  }
+
+  private async openGlobalSearchAfterIndexReady(): Promise<void> {
+    await this.searchIndexReady;
     new GlobalMindMapSearchModal(
       this.app,
       this.searchIndex,
       this.settings.globalSearchMaxResults,
       (result) => this.openGlobalSearchResult(result),
       () => this.searchIndex.rebuildAll()
+    ).open();
+  }
+
+  async openMapFamilySearch(file: TFile, currentDocument?: MindMapDocument): Promise<void> {
+    await this.searchIndexReady;
+    let familyPaths = await this.searchIndex.refreshFamily(file.path, currentDocument);
+    new GlobalMindMapSearchModal(
+      this.app,
+      this.searchIndex,
+      this.settings.globalSearchMaxResults,
+      (result) => this.openGlobalSearchResult(result),
+      async () => {
+        const refreshed = await this.searchIndex.refreshFamily(file.path, currentDocument);
+        familyPaths.clear();
+        for (const path of refreshed) familyPaths.add(path);
+      },
+      familyPaths,
+      "搜索当前导图及子导图",
+      `“${file.basename}”及递归关联的全部子导图`
     ).open();
   }
 
@@ -286,6 +335,10 @@ export default class MindMapStudioPlugin extends Plugin {
       globalSearchMaxResults: typeof raw.globalSearchMaxResults === "number"
         ? Math.max(20, Math.min(500, Math.round(raw.globalSearchMaxResults)))
         : DEFAULT_SETTINGS.globalSearchMaxResults,
+      visibleModes: normalizeVisibleModes(raw.visibleModes),
+      defaultViewMode: raw.defaultViewMode === "outline" || raw.defaultViewMode === "article" || raw.defaultViewMode === "mindmap"
+        ? raw.defaultViewMode
+        : DEFAULT_SETTINGS.defaultViewMode,
       defaultThemePreset: [
         "classic-indigo", "ocean-blue", "forest-green", "sunset-orange", "lavender-dream",
         "candy-pop", "paper-note", "minimal-ink", "dark-neon", "mint-clean"
@@ -310,10 +363,19 @@ export default class MindMapStudioPlugin extends Plugin {
         : hadStoredSettings ? [] : [...DEFAULT_SETTINGS.branchColors]
     } as MindMapStudioSettings;
     if (raw.backgroundPattern === undefined && raw.showGrid === false) this.settings.backgroundPattern = "none";
+    if (!this.settings.visibleModes.includes(this.settings.defaultViewMode)) {
+      this.settings.defaultViewMode = this.settings.visibleModes[0] ?? "mindmap";
+    }
   }
 
   async saveSettings(): Promise<void> {
     await this.saveData(this.settings);
+  }
+
+  async resetAllSettings(): Promise<void> {
+    this.settings = JSON.parse(JSON.stringify(DEFAULT_SETTINGS)) as MindMapStudioSettings;
+    await this.saveSettings();
+    this.refreshOpenViews();
   }
 
   refreshOpenViews(): void {
@@ -327,6 +389,7 @@ export default class MindMapStudioPlugin extends Plugin {
     document.layout = this.settings.defaultLayout;
     document.theme = this.settings.defaultTheme;
     document.appearance = settingsToAppearance(this.settings);
+    document.view = { mode: this.settings.defaultViewMode, readOnly: false };
     return document;
   }
 
