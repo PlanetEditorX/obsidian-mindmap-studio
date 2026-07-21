@@ -39,11 +39,22 @@ export interface MindMapTextContentBlock {
   richText?: MindMapTextRun[];
 }
 
+export interface MindMapImageRemoteSource {
+  hostId: string;
+  hostName?: string;
+  url: string;
+  uploadedAt?: string;
+}
+
 export interface MindMapImageContentBlock {
   id: string;
   type: "image";
   source: string;
   alt?: string;
+  /** Original local vault path retained until every selected image host succeeds. */
+  localSource?: string;
+  /** Mirror URLs returned by one or more configured image hosts. */
+  remoteSources?: MindMapImageRemoteSource[];
 }
 
 export type MindMapContentBlock = MindMapTextContentBlock | MindMapImageContentBlock;
@@ -112,7 +123,7 @@ export interface MindMapNode {
 }
 
 export interface MindMapDocument {
-  version: 7;
+  version: 8;
   title: string;
   layout: LayoutMode;
   theme: ThemeMode;
@@ -140,7 +151,7 @@ export function createNode(text = "新节点"): MindMapNode {
 
 export function createDefaultDocument(title = "新思维导图"): MindMapDocument {
   return {
-    version: 7,
+    version: 8,
     title,
     layout: "right",
     theme: "auto",
@@ -368,10 +379,29 @@ function normalizeContentBlock(input: unknown): MindMapContentBlock | null {
   const candidate = input as Partial<MindMapContentBlock>;
   const id = typeof candidate.id === "string" && candidate.id.trim() ? candidate.id.trim().slice(0, 160) : newId();
   if (candidate.type === "image") {
-    const source = typeof candidate.source === "string" ? candidate.source.trim().slice(0, 2000) : "";
+    const image = candidate as Partial<MindMapImageContentBlock>;
+    const source = typeof image.source === "string" ? image.source.trim().slice(0, 2000) : "";
     if (!source) return null;
-    const alt = typeof candidate.alt === "string" && candidate.alt.trim() ? candidate.alt.trim().slice(0, 500) : undefined;
-    return { id, type: "image", source, alt };
+    const alt = typeof image.alt === "string" && image.alt.trim() ? image.alt.trim().slice(0, 500) : undefined;
+    const localSource = typeof image.localSource === "string" && image.localSource.trim()
+      ? image.localSource.trim().slice(0, 2000)
+      : undefined;
+    const remoteSources = Array.isArray(image.remoteSources)
+      ? image.remoteSources.slice(0, 12).flatMap((raw) => {
+        if (!raw || typeof raw !== "object") return [];
+        const item = raw as Partial<MindMapImageRemoteSource>;
+        const hostId = typeof item.hostId === "string" ? item.hostId.trim().slice(0, 160) : "";
+        const url = typeof item.url === "string" ? item.url.trim().slice(0, 4000) : "";
+        if (!hostId || !/^https?:\/\//i.test(url)) return [];
+        return [{
+          hostId,
+          hostName: typeof item.hostName === "string" && item.hostName.trim() ? item.hostName.trim().slice(0, 200) : undefined,
+          url,
+          uploadedAt: typeof item.uploadedAt === "string" && item.uploadedAt.trim() ? item.uploadedAt.trim().slice(0, 80) : undefined
+        }];
+      })
+      : undefined;
+    return { id, type: "image", source, alt, localSource, remoteSources: remoteSources?.length ? remoteSources : undefined };
   }
   if (candidate.type === "text") {
     const fallbackText = typeof candidate.text === "string" ? candidate.text.replace(/\r?\n/g, " ").slice(0, 20000) : "";
@@ -515,7 +545,7 @@ function normalizeNode(input: Partial<MindMapNode> | undefined, fallbackText: st
 export function normalizeDocument(input: Partial<MindMapDocument> | undefined, fallbackTitle = "思维导图"): MindMapDocument {
   const title = typeof input?.title === "string" && input.title.trim() ? input.title.trim() : fallbackTitle;
   return {
-    version: 7,
+    version: 8,
     title,
     layout: input?.layout === "balanced" ? "balanced" : "right",
     theme: input?.theme === "light" || input?.theme === "dark" ? input.theme : "auto",

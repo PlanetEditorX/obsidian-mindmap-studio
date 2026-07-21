@@ -1,4 +1,4 @@
-import { App, PluginSettingTab, Setting } from "obsidian";
+import { App, Notice, PluginSettingTab, Setting } from "obsidian";
 import type MindMapStudioPlugin from "./main";
 import type {
   BackgroundPattern,
@@ -11,6 +11,55 @@ import type {
 } from "./model";
 
 export type ImageHostBodyMode = "multipart" | "raw";
+export type ImageHostMethod = "POST" | "PUT";
+
+export interface ImageHostConfig {
+  id: string;
+  name: string;
+  enabled: boolean;
+  endpoint: string;
+  method: ImageHostMethod;
+  bodyMode: ImageHostBodyMode;
+  fieldName: string;
+  headers: string;
+  responsePath: string;
+}
+
+export interface ImageHostChoice {
+  id: string;
+  name: string;
+}
+
+export interface ImageHostUploadSuccess {
+  hostId: string;
+  hostName: string;
+  url: string;
+}
+
+export interface ImageHostUploadFailure {
+  hostId: string;
+  hostName: string;
+  error: string;
+}
+
+export interface ImageHostUploadBatch {
+  successes: ImageHostUploadSuccess[];
+  failures: ImageHostUploadFailure[];
+}
+
+export function createImageHostConfig(index = 1): ImageHostConfig {
+  return {
+    id: `host_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`,
+    name: `图床 ${index}`,
+    enabled: true,
+    endpoint: "",
+    method: "POST",
+    bodyMode: "multipart",
+    fieldName: "file",
+    headers: "",
+    responsePath: "data.url"
+  };
+}
 
 export interface MindMapStudioSettings {
   defaultFolder: string;
@@ -41,12 +90,11 @@ export interface MindMapStudioSettings {
   defaultTextBold: boolean;
   defaultTextItalic: boolean;
   defaultTextUnderline: boolean;
-  imageHostEndpoint: string;
-  imageHostMethod: string;
-  imageHostBodyMode: ImageHostBodyMode;
-  imageHostFieldName: string;
-  imageHostHeaders: string;
-  imageHostResponsePath: string;
+  imageHosts: ImageHostConfig[];
+  autoUploadEnabled: boolean;
+  autoUploadDelaySeconds: number;
+  autoUploadHostIds: string[];
+  deleteLocalAfterUpload: boolean;
 }
 
 export const DEFAULT_SETTINGS: MindMapStudioSettings = {
@@ -78,12 +126,11 @@ export const DEFAULT_SETTINGS: MindMapStudioSettings = {
   defaultTextBold: false,
   defaultTextItalic: false,
   defaultTextUnderline: false,
-  imageHostEndpoint: "",
-  imageHostMethod: "POST",
-  imageHostBodyMode: "multipart",
-  imageHostFieldName: "file",
-  imageHostHeaders: "",
-  imageHostResponsePath: "data.url"
+  imageHosts: [],
+  autoUploadEnabled: false,
+  autoUploadDelaySeconds: 10,
+  autoUploadHostIds: [],
+  deleteLocalAfterUpload: true
 };
 
 export function settingsToAppearance(settings: MindMapStudioSettings): MindMapAppearance {
@@ -151,54 +198,158 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
     containerEl.createEl("h3", { text: "图片与图床" });
 
     new Setting(containerEl)
-      .setName("图床上传地址")
-      .setDesc("可选。填写支持 HTTP 上传的 API 地址；未配置时，‘上传到图床’按钮会提示先配置。")
-      .addText((text) => text
-        .setPlaceholder("https://example.com/api/upload")
-        .setValue(this.plugin.settings.imageHostEndpoint)
-        .onChange(async (value) => { this.plugin.settings.imageHostEndpoint = value.trim(); await this.plugin.saveSettings(); }));
+      .setName("粘贴图片后自动上传")
+      .setDesc("图片会先保存到当前脑图的本地资源文件夹，再按设定延迟上传。只有全部目标图床成功后，才会切换为远程网址。")
+      .addToggle((toggle) => toggle
+        .setValue(this.plugin.settings.autoUploadEnabled)
+        .onChange(async (value) => {
+          this.plugin.settings.autoUploadEnabled = value;
+          await this.plugin.saveSettings();
+          this.display();
+        }));
 
-    new Setting(containerEl)
-      .setName("上传请求方法")
-      .setDesc("绝大多数图床使用 POST，少数对象存储上传接口使用 PUT。")
-      .addDropdown((dropdown) => dropdown
-        .addOption("POST", "POST")
-        .addOption("PUT", "PUT")
-        .setValue(this.plugin.settings.imageHostMethod)
-        .onChange(async (value) => { this.plugin.settings.imageHostMethod = value; await this.plugin.saveSettings(); }));
+    if (this.plugin.settings.autoUploadEnabled) {
+      new Setting(containerEl)
+        .setName("自动上传延迟")
+        .setDesc("粘贴后等待 0–300 秒再上传，便于撤销或继续编辑。")
+        .addSlider((slider) => slider
+          .setLimits(0, 300, 1)
+          .setDynamicTooltip()
+          .setValue(this.plugin.settings.autoUploadDelaySeconds)
+          .onChange(async (value) => {
+            this.plugin.settings.autoUploadDelaySeconds = value;
+            await this.plugin.saveSettings();
+          }));
 
-    new Setting(containerEl)
-      .setName("上传请求格式")
-      .setDesc("大多数图床使用 multipart/form-data；少数接口直接接收图片二进制。")
-      .addDropdown((dropdown) => dropdown
-        .addOption("multipart", "multipart/form-data")
-        .addOption("raw", "原始二进制")
-        .setValue(this.plugin.settings.imageHostBodyMode)
-        .onChange(async (value) => { this.plugin.settings.imageHostBodyMode = value as ImageHostBodyMode; await this.plugin.saveSettings(); }));
+      new Setting(containerEl)
+        .setName("全部成功后删除本地图片")
+        .setDesc("插件会先写入远程网址并保存脑图，再检查图片是否被其他脑图引用；确认安全后才删除本地文件。任一图床失败时会保留本地图片。")
+        .addToggle((toggle) => toggle
+          .setValue(this.plugin.settings.deleteLocalAfterUpload)
+          .onChange(async (value) => {
+            this.plugin.settings.deleteLocalAfterUpload = value;
+            await this.plugin.saveSettings();
+          }));
+    }
 
-    new Setting(containerEl)
-      .setName("文件字段名")
-      .setDesc("multipart 模式下图片字段的名称，常见值为 file、image 或 source。")
-      .addText((text) => text
-        .setPlaceholder("file")
-        .setValue(this.plugin.settings.imageHostFieldName)
-        .onChange(async (value) => { this.plugin.settings.imageHostFieldName = value.trim() || "file"; await this.plugin.saveSettings(); }));
+    const hosts = this.plugin.settings.imageHosts;
+    const hostsHeader = containerEl.createDiv({ cls: "mms-image-hosts-header" });
+    hostsHeader.createEl("h4", { text: "图床配置" });
+    const addHost = hostsHeader.createEl("button", { text: "新增图床", attr: { type: "button" } });
+    addHost.addEventListener("click", () => {
+      const host = createImageHostConfig(hosts.length + 1);
+      this.plugin.settings.imageHosts.push(host);
+      void this.plugin.saveSettings().then(() => this.display());
+    });
 
-    new Setting(containerEl)
-      .setName("自定义请求头（JSON）")
-      .setDesc('例如 {"Authorization":"Bearer token"}。敏感令牌会保存在插件 data.json 中，请只在可信仓库中使用。')
-      .addTextArea((text) => text
-        .setPlaceholder('{"Authorization":"Bearer ..."}')
-        .setValue(this.plugin.settings.imageHostHeaders)
-        .onChange(async (value) => { this.plugin.settings.imageHostHeaders = value.trim(); await this.plugin.saveSettings(); }));
+    if (!hosts.length) {
+      containerEl.createDiv({ cls: "setting-item-description mms-image-host-empty", text: "尚未配置图床。新增后可以测试上传接口，并选择一个或多个自动上传目标。" });
+    }
 
-    new Setting(containerEl)
-      .setName("响应图片地址字段")
-      .setDesc("用点号读取 JSON 返回值，例如 data.url、result.image；留空时自动尝试常见字段。")
-      .addText((text) => text
-        .setPlaceholder("data.url")
-        .setValue(this.plugin.settings.imageHostResponsePath)
-        .onChange(async (value) => { this.plugin.settings.imageHostResponsePath = value.trim(); await this.plugin.saveSettings(); }));
+    hosts.forEach((host, index) => {
+      const card = containerEl.createDiv({ cls: "mms-image-host-card" });
+      const title = card.createDiv({ cls: "mms-image-host-card-title" });
+      title.createEl("strong", { text: host.name || `图床 ${index + 1}` });
+      const status = title.createSpan({ cls: "mms-image-host-status", text: host.enabled ? "已启用" : "已停用" });
+      status.toggleClass("is-enabled", host.enabled);
+
+      new Setting(card)
+        .setName("名称")
+        .addText((text) => text
+          .setValue(host.name)
+          .setPlaceholder(`图床 ${index + 1}`)
+          .onChange(async (value) => {
+            host.name = value.trim() || `图床 ${index + 1}`;
+            await this.plugin.saveSettings();
+          }))
+        .addToggle((toggle) => toggle
+          .setTooltip("启用该图床")
+          .setValue(host.enabled)
+          .onChange(async (value) => {
+            host.enabled = value;
+            if (!value) this.plugin.settings.autoUploadHostIds = this.plugin.settings.autoUploadHostIds.filter((id) => id !== host.id);
+            await this.plugin.saveSettings();
+            this.display();
+          }));
+
+      new Setting(card)
+        .setName("上传 API")
+        .addText((text) => text
+          .setPlaceholder("https://example.com/api/upload")
+          .setValue(host.endpoint)
+          .onChange(async (value) => { host.endpoint = value.trim(); await this.plugin.saveSettings(); }));
+
+      new Setting(card)
+        .setName("请求方法与格式")
+        .addDropdown((dropdown) => dropdown
+          .addOption("POST", "POST")
+          .addOption("PUT", "PUT")
+          .setValue(host.method)
+          .onChange(async (value) => { host.method = value as ImageHostMethod; await this.plugin.saveSettings(); }))
+        .addDropdown((dropdown) => dropdown
+          .addOption("multipart", "multipart/form-data")
+          .addOption("raw", "原始二进制")
+          .setValue(host.bodyMode)
+          .onChange(async (value) => { host.bodyMode = value as ImageHostBodyMode; await this.plugin.saveSettings(); }));
+
+      new Setting(card)
+        .setName("文件字段名")
+        .setDesc("multipart 模式常见值：file、image、source。")
+        .addText((text) => text
+          .setValue(host.fieldName)
+          .setPlaceholder("file")
+          .onChange(async (value) => { host.fieldName = value.trim() || "file"; await this.plugin.saveSettings(); }));
+
+      new Setting(card)
+        .setName("请求头 JSON")
+        .setDesc("例如 Authorization、X-API-Key。密钥保存在插件 data.json。")
+        .addTextArea((text) => text
+          .setValue(host.headers)
+          .setPlaceholder('{"Authorization":"Bearer ..."}')
+          .onChange(async (value) => { host.headers = value.trim(); await this.plugin.saveSettings(); }));
+
+      new Setting(card)
+        .setName("返回网址字段")
+        .setDesc("例如 data.url；留空会尝试常见字段。")
+        .addText((text) => text
+          .setValue(host.responsePath)
+          .setPlaceholder("data.url")
+          .onChange(async (value) => { host.responsePath = value.trim(); await this.plugin.saveSettings(); }));
+
+      const isAutoTarget = this.plugin.settings.autoUploadHostIds.includes(host.id);
+      new Setting(card)
+        .setName("自动上传目标")
+        .setDesc("自动上传可以同时选择多个图床；手动上传时仍可临时选择其他组合。")
+        .addToggle((toggle) => toggle
+          .setValue(isAutoTarget)
+          .setDisabled(!host.enabled)
+          .onChange(async (value) => {
+            const selected = new Set(this.plugin.settings.autoUploadHostIds);
+            if (value) selected.add(host.id); else selected.delete(host.id);
+            this.plugin.settings.autoUploadHostIds = Array.from(selected);
+            await this.plugin.saveSettings();
+          }));
+
+      const actions = card.createDiv({ cls: "mms-image-host-actions" });
+      const test = actions.createEl("button", { text: "检测 API 连通性", attr: { type: "button" } });
+      test.addEventListener("click", () => {
+        test.disabled = true;
+        test.setText("检测中…");
+        void this.plugin.testImageHost(host.id).finally(() => {
+          test.disabled = false;
+          test.setText("检测 API 连通性");
+        });
+      });
+      const remove = actions.createEl("button", { text: "删除图床", cls: "mod-warning", attr: { type: "button" } });
+      remove.addEventListener("click", () => {
+        this.plugin.settings.imageHosts = this.plugin.settings.imageHosts.filter((item) => item.id !== host.id);
+        this.plugin.settings.autoUploadHostIds = this.plugin.settings.autoUploadHostIds.filter((id) => id !== host.id);
+        void this.plugin.saveSettings().then(() => {
+          new Notice(`已删除图床：${host.name}`);
+          this.display();
+        });
+      });
+    });
 
     new Setting(containerEl)
       .setName("新文件名前缀")

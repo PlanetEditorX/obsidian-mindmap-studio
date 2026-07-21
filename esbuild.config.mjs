@@ -2,7 +2,7 @@ import esbuild from "esbuild";
 import process from "process";
 import builtins from "builtin-modules";
 
-const banner = `/* MindMap Canvas - MIT License */`;
+const banner = `/* MindMap Studio - MIT License */`;
 const context = await esbuild.context({
   banner: { js: banner },
   entryPoints: ["src/main.ts"],

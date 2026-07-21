@@ -11,19 +11,28 @@ import {
 } from "obsidian";
 import {
   createDefaultDocument,
+  findNode,
+  flattenNodes,
   markdownToDocument,
+  nodeContentBlocks,
   nodePlainText,
   syncNodeLegacyFields,
   parseDocument,
   serializeDocument,
   type MindMapDocument,
+  type MindMapImageContentBlock,
   type MindMapNode,
   type MindMapSubmap
 } from "./model";
 import {
   DEFAULT_SETTINGS,
   MindMapStudioSettingTab,
+  createImageHostConfig,
   settingsToAppearance,
+  type ImageHostChoice,
+  type ImageHostConfig,
+  type ImageHostUploadBatch,
+  type ImageHostUploadSuccess,
   type MindMapStudioSettings
 } from "./settings";
 import { renderStaticMindMap, renderStaticSource } from "./static-render";
@@ -35,6 +44,7 @@ const LEGACY_SUFFIX = ".smm.md";
 export default class MindMapStudioPlugin extends Plugin {
   settings: MindMapStudioSettings = DEFAULT_SETTINGS;
   private legacyMigrationPath: string | null = null;
+  private readonly autoUploadTimers = new Map<string, number>();
 
   async onload(): Promise<void> {
     await this.loadSettings();
@@ -138,6 +148,8 @@ export default class MindMapStudioPlugin extends Plugin {
   }
 
   onunload(): void {
+    for (const timer of this.autoUploadTimers.values()) window.clearTimeout(timer);
+    this.autoUploadTimers.clear();
     this.app.workspace.detachLeavesOfType(VIEW_TYPE_MINDMAP_STUDIO);
   }
 
@@ -155,8 +167,55 @@ export default class MindMapStudioPlugin extends Plugin {
         console.warn("MindMap Studio could not migrate the old settings file", error);
       }
     }
-    this.settings = Object.assign({}, DEFAULT_SETTINGS, loaded);
-    if (loaded?.backgroundPattern === undefined && loaded?.showGrid === false) this.settings.backgroundPattern = "none";
+    const raw = (loaded ?? {}) as Partial<MindMapStudioSettings> & Record<string, unknown>;
+    let imageHosts: ImageHostConfig[] = Array.isArray(raw.imageHosts)
+      ? raw.imageHosts.slice(0, 20).flatMap((item, index) => {
+        if (!item || typeof item !== "object") return [];
+        const candidate = item as Partial<ImageHostConfig>;
+        const host = createImageHostConfig(index + 1);
+        host.id = typeof candidate.id === "string" && candidate.id.trim() ? candidate.id.trim().slice(0, 160) : host.id;
+        host.name = typeof candidate.name === "string" && candidate.name.trim() ? candidate.name.trim().slice(0, 120) : host.name;
+        host.enabled = candidate.enabled !== false;
+        host.endpoint = typeof candidate.endpoint === "string" ? candidate.endpoint.trim().slice(0, 4000) : "";
+        host.method = candidate.method === "PUT" ? "PUT" : "POST";
+        host.bodyMode = candidate.bodyMode === "raw" ? "raw" : "multipart";
+        host.fieldName = typeof candidate.fieldName === "string" && candidate.fieldName.trim() ? candidate.fieldName.trim().slice(0, 120) : "file";
+        host.headers = typeof candidate.headers === "string" ? candidate.headers.trim().slice(0, 20000) : "";
+        host.responsePath = typeof candidate.responsePath === "string" ? candidate.responsePath.trim().slice(0, 500) : "data.url";
+        return [host];
+      })
+      : [];
+
+    // Migrate the single-host settings used by MindMap Studio 0.9.x.
+    const legacyEndpoint = typeof raw.imageHostEndpoint === "string" ? raw.imageHostEndpoint.trim() : "";
+    if (!imageHosts.length && legacyEndpoint) {
+      const host = createImageHostConfig(1);
+      host.name = "原图床";
+      host.endpoint = legacyEndpoint;
+      host.method = raw.imageHostMethod === "PUT" ? "PUT" : "POST";
+      host.bodyMode = raw.imageHostBodyMode === "raw" ? "raw" : "multipart";
+      host.fieldName = typeof raw.imageHostFieldName === "string" && raw.imageHostFieldName.trim() ? raw.imageHostFieldName.trim() : "file";
+      host.headers = typeof raw.imageHostHeaders === "string" ? raw.imageHostHeaders.trim() : "";
+      host.responsePath = typeof raw.imageHostResponsePath === "string" ? raw.imageHostResponsePath.trim() : "data.url";
+      imageHosts = [host];
+    }
+
+    const enabledIds = new Set(imageHosts.filter((host) => host.enabled).map((host) => host.id));
+    const selectedIds = Array.isArray(raw.autoUploadHostIds)
+      ? raw.autoUploadHostIds.filter((id): id is string => typeof id === "string" && enabledIds.has(id))
+      : [];
+    this.settings = {
+      ...DEFAULT_SETTINGS,
+      ...raw,
+      imageHosts,
+      autoUploadEnabled: raw.autoUploadEnabled === true,
+      autoUploadDelaySeconds: typeof raw.autoUploadDelaySeconds === "number"
+        ? Math.max(0, Math.min(300, Math.round(raw.autoUploadDelaySeconds)))
+        : DEFAULT_SETTINGS.autoUploadDelaySeconds,
+      autoUploadHostIds: selectedIds,
+      deleteLocalAfterUpload: raw.deleteLocalAfterUpload !== false
+    } as MindMapStudioSettings;
+    if (raw.backgroundPattern === undefined && raw.showGrid === false) this.settings.backgroundPattern = "none";
   }
 
   async saveSettings(): Promise<void> {
@@ -243,31 +302,185 @@ export default class MindMapStudioPlugin extends Plugin {
     return path;
   }
 
-  async uploadImageToHost(blob: Blob, suggestedName: string): Promise<string> {
-    const endpoint = this.settings.imageHostEndpoint.trim();
-    if (!endpoint) {
-      new Notice("请先在 MindMap Studio 设置中配置图床上传地址");
-      throw new Error("Image host endpoint is not configured");
-    }
-    let headers: Record<string, string> = {};
-    if (this.settings.imageHostHeaders.trim()) {
+  async readImageSource(source: string, sourceFile: TFile | null): Promise<{ blob: Blob; suggestedName: string } | null> {
+    const raw = source.trim();
+    if (!raw || /^https?:\/\//i.test(raw) || /^data:/i.test(raw) || /^blob:/i.test(raw)) return null;
+    const wikiMatch = raw.match(/^!?\[\[([\s\S]+?)\]\]$/);
+    const target = (wikiMatch?.[1] ?? raw).split("|")[0]?.split("#")[0]?.trim() ?? raw;
+    const direct = this.app.vault.getAbstractFileByPath(normalizePath(target));
+    const file = direct instanceof TFile ? direct : this.app.metadataCache.getFirstLinkpathDest(target, sourceFile?.path ?? "");
+    if (!(file instanceof TFile)) return null;
+    const binary = await this.app.vault.readBinary(file);
+    return { blob: new Blob([binary], { type: this.mimeFromFilename(file.name) }), suggestedName: file.name };
+  }
+
+  getImageHostChoices(): ImageHostChoice[] {
+    return this.settings.imageHosts
+      .filter((host) => host.enabled && Boolean(host.endpoint.trim()))
+      .map((host) => ({ id: host.id, name: host.name }));
+  }
+
+  getDefaultUploadHostIds(): string[] {
+    const enabled = new Set(this.getImageHostChoices().map((host) => host.id));
+    return this.settings.autoUploadHostIds.filter((id) => enabled.has(id));
+  }
+
+  async uploadImageToHosts(blob: Blob, suggestedName: string, hostIds: string[]): Promise<ImageHostUploadBatch> {
+    const requested = Array.from(new Set(hostIds));
+    const hosts = requested
+      .map((id) => this.settings.imageHosts.find((host) => host.id === id))
+      .filter((host): host is ImageHostConfig => Boolean(host?.enabled && host.endpoint.trim()));
+    if (!hosts.length) throw new Error("没有选择可用图床");
+    const settled = await Promise.all(hosts.map(async (host) => {
       try {
-        const parsed = JSON.parse(this.settings.imageHostHeaders) as unknown;
-        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("headers must be an object");
-        headers = Object.fromEntries(Object.entries(parsed as Record<string, unknown>).map(([key, value]) => [key, String(value)]));
+        const url = await this.uploadImageToHostConfig(host, blob, suggestedName);
+        return { ok: true as const, value: { hostId: host.id, hostName: host.name, url } };
       } catch (error) {
-        new Notice("图床请求头 JSON 格式错误");
-        throw error;
+        return {
+          ok: false as const,
+          value: {
+            hostId: host.id,
+            hostName: host.name,
+            error: error instanceof Error ? error.message : String(error)
+          }
+        };
       }
+    }));
+    return {
+      successes: settled.filter((item): item is { ok: true; value: ImageHostUploadSuccess } => item.ok).map((item) => item.value),
+      failures: settled.filter((item): item is { ok: false; value: { hostId: string; hostName: string; error: string } } => !item.ok).map((item) => item.value)
+    };
+  }
+
+  async testImageHost(hostId: string): Promise<void> {
+    const host = this.settings.imageHosts.find((item) => item.id === hostId);
+    if (!host) {
+      new Notice("找不到该图床配置");
+      return;
+    }
+    if (!host.endpoint.trim()) {
+      new Notice(`请先填写 ${host.name} 的上传 API`);
+      return;
+    }
+    // A real 1×1 transparent PNG tests authentication, request format and response parsing.
+    const png = new Uint8Array([
+      137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82,
+      0, 0, 0, 1, 0, 0, 0, 1, 8, 6, 0, 0, 0, 31, 21, 196, 137,
+      0, 0, 0, 13, 73, 68, 65, 84, 8, 215, 99, 248, 207, 192, 240, 31,
+      0, 5, 0, 1, 255, 137, 153, 61, 29, 0, 0, 0, 0, 73, 69, 78, 68,
+      174, 66, 96, 130
+    ]);
+    const started = performance.now();
+    try {
+      const url = await this.uploadImageToHostConfig(host, new Blob([png], { type: "image/png" }), "mindmap-studio-api-test.png");
+      const elapsed = Math.max(1, Math.round(performance.now() - started));
+      new Notice(`${host.name} 连接成功（${elapsed} ms）\n${url}`, 8000);
+    } catch (error) {
+      console.error("MindMap Studio image host connectivity test failed", error);
+      new Notice(`${host.name} 连接失败：${error instanceof Error ? error.message : String(error)}`, 8000);
+    }
+  }
+
+  scheduleAutoUpload(file: TFile | null, nodeId: string, blockId: string, localPath: string, suggestedName: string): boolean {
+    if (!file || !this.settings.autoUploadEnabled) return false;
+    const hostIds = this.getDefaultUploadHostIds();
+    if (!hostIds.length) {
+      new Notice("图片已保存到本地；自动上传未选择可用图床", 5000);
+      return false;
+    }
+    const key = `${file.path}::${nodeId}::${blockId}`;
+    const existing = this.autoUploadTimers.get(key);
+    if (existing !== undefined) window.clearTimeout(existing);
+    const delay = Math.max(0, Math.min(300, this.settings.autoUploadDelaySeconds)) * 1000;
+    const timer = window.setTimeout(() => {
+      this.autoUploadTimers.delete(key);
+      void this.runAutoUploadTask(file.path, nodeId, blockId, localPath, suggestedName, hostIds);
+    }, delay);
+    this.autoUploadTimers.set(key, timer);
+    return true;
+  }
+
+  private async runAutoUploadTask(
+    mindMapPath: string,
+    nodeId: string,
+    blockId: string,
+    localPath: string,
+    suggestedName: string,
+    hostIds: string[]
+  ): Promise<void> {
+    try {
+      await this.flushOpenView(mindMapPath);
+      const mapFile = this.app.vault.getAbstractFileByPath(mindMapPath);
+      const localFile = this.app.vault.getAbstractFileByPath(normalizePath(localPath));
+      if (!(mapFile instanceof TFile) || !(localFile instanceof TFile)) return;
+      const document = parseDocument(await this.app.vault.read(mapFile), mapFile.basename);
+      const node = findNode(document.root, nodeId);
+      const block = node?.content?.find((item): item is MindMapImageContentBlock => item.type === "image" && item.id === blockId);
+      if (!node || !block || (block.source !== localPath && block.localSource !== localPath)) return;
+
+      const binary = await this.app.vault.readBinary(localFile);
+      const blob = new Blob([binary], { type: this.mimeFromFilename(localFile.name) });
+      const batch = await this.uploadImageToHosts(blob, suggestedName || localFile.name, hostIds);
+      const uploadedAt = new Date().toISOString();
+      const remoteByHost = new Map((block.remoteSources ?? []).map((item) => [item.hostId, item]));
+      for (const success of batch.successes) {
+        remoteByHost.set(success.hostId, { ...success, uploadedAt });
+      }
+      block.remoteSources = Array.from(remoteByHost.values());
+      block.localSource = localPath;
+
+      const allSucceeded = batch.failures.length === 0 && batch.successes.length === hostIds.length;
+      if (allSucceeded && batch.successes[0]) block.source = batch.successes[0].url;
+      syncNodeLegacyFields(node);
+      await this.app.vault.modify(mapFile, serializeDocument(document));
+      await this.refreshOpenMindMap(mapFile, document);
+
+      let deleted = false;
+      if (allSucceeded && this.settings.deleteLocalAfterUpload) {
+        deleted = await this.deleteLocalAssetIfSafe(localPath, mindMapPath, blockId);
+        if (deleted) {
+          block.localSource = undefined;
+          await this.app.vault.modify(mapFile, serializeDocument(document));
+          await this.refreshOpenMindMap(mapFile, document);
+        }
+      }
+
+      if (allSucceeded) {
+        const targets = batch.successes.map((item) => item.hostName).join("、");
+        const suffix = this.settings.deleteLocalAfterUpload
+          ? deleted ? "，本地图片已安全删除" : "，本地图片因仍被引用或删除失败而保留"
+          : "，本地图片已保留";
+        new Notice(`图片已上传到 ${targets}${suffix}`, 7000);
+      } else {
+        const ok = batch.successes.map((item) => item.hostName).join("、") || "无";
+        const failed = batch.failures.map((item) => `${item.hostName}：${item.error}`).join("；");
+        new Notice(`图片仅部分上传成功。成功：${ok}；失败：${failed}。本地图片已保留。`, 9000);
+      }
+    } catch (error) {
+      console.error("MindMap Studio automatic image upload failed", error);
+      new Notice(`图片自动上传失败，本地图片已保留：${error instanceof Error ? error.message : String(error)}`, 8000);
+    }
+  }
+
+  private async uploadImageToHostConfig(host: ImageHostConfig, blob: Blob, suggestedName: string): Promise<string> {
+    const endpoint = host.endpoint.trim();
+    if (!endpoint) throw new Error("上传 API 为空");
+    let headers: Record<string, string> = {};
+    if (host.headers.trim()) {
+      const parsed = JSON.parse(host.headers) as unknown;
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("请求头 JSON 必须是对象");
+      headers = Object.fromEntries(Object.entries(parsed as Record<string, unknown>).map(([key, value]) => [key, String(value)]));
     }
     const filename = this.sanitizeFilename(suggestedName || "mindmap-image.png");
     const mime = blob.type || "application/octet-stream";
     let body: ArrayBuffer;
     let contentType = mime;
-    if (this.settings.imageHostBodyMode === "multipart") {
+    if (host.bodyMode === "multipart") {
       const boundary = `----MindMapStudio${Date.now().toString(16)}${Math.random().toString(16).slice(2)}`;
       const encoder = new TextEncoder();
-      const head = encoder.encode(`--${boundary}\r\nContent-Disposition: form-data; name="${(this.settings.imageHostFieldName || "file").replaceAll('"', "")}"; filename="${filename.replaceAll('"', "")}"\r\nContent-Type: ${mime}\r\n\r\n`);
+      const fieldName = (host.fieldName || "file").replaceAll('"', "");
+      const safeFilename = filename.replaceAll('"', "");
+      const head = encoder.encode(`--${boundary}\r\nContent-Disposition: form-data; name="${fieldName}"; filename="${safeFilename}"\r\nContent-Type: ${mime}\r\n\r\n`);
       const file = new Uint8Array(await blob.arrayBuffer());
       const tail = encoder.encode(`\r\n--${boundary}--\r\n`);
       const combined = new Uint8Array(head.length + file.length + tail.length);
@@ -279,7 +492,7 @@ export default class MindMapStudioPlugin extends Plugin {
     }
     const response = await requestUrl({
       url: endpoint,
-      method: (this.settings.imageHostMethod || "POST").toUpperCase(),
+      method: host.method,
       contentType,
       headers,
       body,
@@ -291,8 +504,7 @@ export default class MindMapStudioPlugin extends Plugin {
       try { payload = JSON.parse(response.text); } catch { payload = response.text; }
     }
     const getPath = (value: unknown, path: string): unknown => path.split(".").filter(Boolean).reduce<unknown>((current, key) => current && typeof current === "object" ? (current as Record<string, unknown>)[key] : undefined, value);
-    const configured = this.settings.imageHostResponsePath.trim();
-    const candidates = [configured, "data.url", "url", "result.url", "result.image", "image.url", "src"].filter(Boolean);
+    const candidates = [host.responsePath.trim(), "data.url", "url", "result.url", "result.image", "image.url", "src"].filter(Boolean);
     for (const path of candidates) {
       const value = getPath(payload, path);
       if (typeof value === "string" && /^https?:\/\//i.test(value.trim())) return value.trim();
@@ -301,7 +513,54 @@ export default class MindMapStudioPlugin extends Plugin {
       const match = payload.match(/https?:\/\/[^\s"'<>]+/i);
       if (match?.[0]) return match[0];
     }
-    throw new Error("图床返回结果中没有找到图片网址");
+    throw new Error("返回结果中没有找到图片网址");
+  }
+
+  private async flushOpenView(path: string): Promise<void> {
+    for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE_MINDMAP_STUDIO)) {
+      if (leaf.view instanceof MindMapStudioView && leaf.view.file?.path === path) await leaf.view.save();
+    }
+  }
+
+  private async refreshOpenMindMap(file: TFile, document: MindMapDocument): Promise<void> {
+    const source = serializeDocument(document);
+    for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE_MINDMAP_STUDIO)) {
+      if (leaf.view instanceof MindMapStudioView && leaf.view.file?.path === file.path) leaf.view.setViewData(source, false);
+    }
+  }
+
+  private async deleteLocalAssetIfSafe(localPath: string, currentMindMapPath: string, blockId: string): Promise<boolean> {
+    const normalized = normalizePath(localPath);
+    const target = this.app.vault.getAbstractFileByPath(normalized);
+    if (!(target instanceof TFile)) return false;
+    const current = this.app.vault.getAbstractFileByPath(currentMindMapPath);
+    if (current instanceof TFile) {
+      const doc = parseDocument(await this.app.vault.read(current), current.basename);
+      const stillUsed = flattenNodes(doc.root).some((node) => nodeContentBlocks(node).some((block) =>
+        block.type === "image" && block.id !== blockId && (block.source === normalized || block.localSource === normalized)));
+      if (stillUsed) return false;
+    }
+    for (const file of this.app.vault.getFiles()) {
+      if (file.path === currentMindMapPath || file.extension.toLowerCase() !== MINDMAP_EXTENSION) continue;
+      try {
+        const text = await this.app.vault.cachedRead(file);
+        if (text.includes(normalized)) return false;
+      } catch {
+        // Ignore an unreadable unrelated map and keep checking other files.
+      }
+    }
+    try {
+      await this.app.vault.delete(target);
+      return true;
+    } catch (error) {
+      console.warn("MindMap Studio could not delete uploaded local image", error);
+      return false;
+    }
+  }
+
+  private mimeFromFilename(filename: string): string {
+    const extension = filename.split(".").at(-1)?.toLowerCase();
+    return ({ png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp", svg: "image/svg+xml", bmp: "image/bmp", avif: "image/avif" } as Record<string, string>)[extension ?? ""] ?? "application/octet-stream";
   }
 
   async createSubmapFile(parentFile: TFile, node: MindMapNode): Promise<MindMapSubmap> {

@@ -1374,3 +1374,107 @@
   transition: width 80ms ease-out, height 80ms ease-out;
   cursor: zoom-in;
 }
+
+/* Multi-image-host settings and picker */
+.mms-image-hosts-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 18px 0 8px;
+}
+
+.mms-image-hosts-header h4 {
+  margin: 0;
+}
+
+.mms-image-host-card {
+  margin: 12px 0;
+  padding: 14px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  background: var(--background-secondary);
+}
+
+.mms-image-host-card-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.mms-image-host-status {
+  padding: 2px 8px;
+  border-radius: 999px;
+  color: var(--text-muted);
+  background: var(--background-modifier-hover);
+  font-size: var(--font-ui-smaller);
+}
+
+.mms-image-host-status.is-enabled {
+  color: var(--text-success);
+  background: color-mix(in srgb, var(--color-green) 14%, transparent);
+}
+
+.mms-image-host-actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.mms-image-host-empty {
+  padding: 10px 0 16px;
+}
+
+.mms-image-host-picker-list {
+  display: grid;
+  gap: 8px;
+  margin: 14px 0;
+}
+
+.mms-image-host-picker-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 38px;
+  padding: 8px 10px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-s);
+  background: var(--background-secondary);
+}
+
+.mms-image-host-picker-item input[type="checkbox"] {
+  width: 16px !important;
+  height: 16px !important;
+  margin: 0;
+  flex: 0 0 auto;
+}
+
+.mms-image-mirrors {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin-top: 8px;
+  font-size: var(--font-ui-smaller);
+}
+
+.mms-image-mirrors-label {
+  color: var(--text-muted);
+}
+
+@media (max-width: 600px) {
+  .mms-image-host-card .setting-item {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .mms-image-host-card .setting-item-control {
+    width: 100%;
+    justify-content: flex-start;
+  }
+}

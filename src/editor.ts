@@ -46,6 +46,7 @@ import {
 } from "./model";
 import { computeLayout, documentToSvg, edgePath, type LayoutResult } from "./layout";
 import { CodeEditModal, TableEditModal } from "./content-modals";
+import type { ImageHostChoice, ImageHostUploadBatch } from "./settings";
 
 export interface MindMapEditorCallbacks {
   onChange: (document: MindMapDocument) => void;
@@ -55,7 +56,11 @@ export interface MindMapEditorCallbacks {
   onExportJson: (json: string) => void | Promise<void>;
   resolveImage: (source: string) => string | null;
   onSavePastedImage: (blob: Blob, suggestedName: string) => Promise<string>;
-  onUploadImage: (blob: Blob, suggestedName: string) => Promise<string>;
+  getImageHosts: () => ImageHostChoice[];
+  getDefaultUploadHostIds: () => string[];
+  onUploadImage: (blob: Blob, suggestedName: string, hostIds: string[]) => Promise<ImageHostUploadBatch>;
+  onReadImageSource: (source: string) => Promise<{ blob: Blob; suggestedName: string } | null>;
+  onScheduleAutoUpload: (nodeId: string, blockId: string, localPath: string, suggestedName: string) => boolean;
   onCreateSubmap: (node: MindMapNode) => Promise<MindMapSubmap>;
   onOpenMindMap: (path: string, focusNodeId?: string) => void | Promise<void>;
   onRenderCode: (block: MindMapCodeBlock, container: HTMLElement) => void | Promise<void>;
@@ -206,10 +211,71 @@ class ImagePreviewModal extends Modal {
   }
 }
 
+class ImageHostPickerModal extends Modal {
+  private resolved = false;
+  private readonly selected = new Set<string>();
+
+  constructor(
+    app: App,
+    private readonly hosts: ImageHostChoice[],
+    initialIds: string[],
+    private readonly resolveSelection: (ids: string[] | null) => void
+  ) {
+    super(app);
+    initialIds.forEach((id) => this.selected.add(id));
+  }
+
+  onOpen(): void {
+    this.titleEl.setText("选择上传图床");
+    this.contentEl.addClass("mms-image-host-picker");
+    this.contentEl.createEl("p", {
+      cls: "setting-item-description",
+      text: "可以选择一个或多个图床。全部上传成功后，第一项的地址会作为节点当前显示地址，其余地址会作为镜像保存。"
+    });
+    const list = this.contentEl.createDiv({ cls: "mms-image-host-picker-list" });
+    for (const host of this.hosts) {
+      const label = list.createEl("label", { cls: "mms-image-host-picker-item" });
+      const checkbox = label.createEl("input", { type: "checkbox" });
+      checkbox.checked = this.selected.has(host.id);
+      checkbox.addEventListener("change", () => {
+        if (checkbox.checked) this.selected.add(host.id); else this.selected.delete(host.id);
+      });
+      label.createSpan({ text: host.name });
+    }
+    const actions = this.contentEl.createDiv({ cls: "modal-button-container" });
+    const cancel = actions.createEl("button", { text: "取消", attr: { type: "button" } });
+    cancel.addEventListener("click", () => this.close());
+    const confirm = actions.createEl("button", { text: "确定", cls: "mod-cta", attr: { type: "button" } });
+    confirm.addEventListener("click", () => {
+      if (!this.selected.size) {
+        new Notice("请至少选择一个图床");
+        return;
+      }
+      this.resolved = true;
+      this.resolveSelection(Array.from(this.selected));
+      this.close();
+    });
+  }
+
+  onClose(): void {
+    if (!this.resolved) this.resolveSelection(null);
+  }
+}
+
+function chooseImageHosts(app: App, hosts: ImageHostChoice[], initialIds: string[]): Promise<string[] | null> {
+  if (!hosts.length) {
+    new Notice("没有可用图床，请先在插件设置中配置并启用图床");
+    return Promise.resolve(null);
+  }
+  const allowed = new Set(hosts.map((host) => host.id));
+  const initial = initialIds.filter((id) => allowed.has(id));
+  return new Promise((resolve) => new ImageHostPickerModal(app, hosts, initial.length ? initial : [hosts[0]!.id], resolve).open());
+}
+
 class NodeEditModal extends Modal {
   private readonly node: MindMapNode;
   private readonly defaultShape: NodeShape;
-  private readonly callbacks: Pick<MindMapEditorCallbacks, "resolveImage" | "onSavePastedImage" | "onUploadImage">;
+  private readonly callbacks: Pick<MindMapEditorCallbacks, "resolveImage" | "onSavePastedImage" | "getImageHosts" | "getDefaultUploadHostIds" | "onUploadImage" | "onReadImageSource">;
   private readonly submit: (values: NodeEditValues, mode: "autosave" | "commit") => void;
   private saveOnClose: (() => void) | null = null;
   private closeWithoutFlush = false;
@@ -219,7 +285,7 @@ class NodeEditModal extends Modal {
     app: App,
     node: MindMapNode,
     defaultShape: NodeShape,
-    callbacks: Pick<MindMapEditorCallbacks, "resolveImage" | "onSavePastedImage" | "onUploadImage">,
+    callbacks: Pick<MindMapEditorCallbacks, "resolveImage" | "onSavePastedImage" | "getImageHosts" | "getDefaultUploadHostIds" | "onUploadImage" | "onReadImageSource">,
     submit: (values: NodeEditValues, mode: "autosave" | "commit") => void
   ) {
     super(app);
@@ -329,25 +395,82 @@ class NodeEditModal extends Modal {
     };
 
     const chooseImage = (block: MindMapImageContentBlock, mode: "local" | "remote", refresh: () => void): void => {
-      const input = document.createElement("input");
-      input.type = "file";
-      input.accept = "image/*";
-      input.addEventListener("change", () => {
-        const file = input.files?.[0];
-        if (!file) return;
-        const operation = mode === "remote"
-          ? this.callbacks.onUploadImage(file, file.name)
-          : this.callbacks.onSavePastedImage(file, file.name);
-        void operation.then((path) => {
-          block.source = path;
-          if (!block.alt) block.alt = file.name.replace(/\.[^.]+$/, "");
-          refresh(); scheduleAutoSave();
-        }).catch((error) => {
-          console.error("MindMap Studio image operation failed", error);
-          new Notice(mode === "remote" ? "上传图床失败" : "保存图片失败");
+      void (async () => {
+        let hostIds: string[] = [];
+        if (mode === "remote") {
+          const chosen = await chooseImageHosts(this.app, this.callbacks.getImageHosts(), this.callbacks.getDefaultUploadHostIds());
+          if (!chosen) return;
+          hostIds = chosen;
+        }
+        const file = await new Promise<File | null>((resolve) => {
+          const input = document.createElement("input");
+          input.type = "file";
+          input.accept = "image/*";
+          input.addEventListener("change", () => resolve(input.files?.[0] ?? null), { once: true });
+          input.click();
         });
+        if (!file) return;
+        if (mode === "local") {
+          const path = await this.callbacks.onSavePastedImage(file, file.name);
+          block.source = path;
+          block.localSource = path;
+          block.remoteSources = undefined;
+        } else {
+          const batch = await this.callbacks.onUploadImage(file, file.name, hostIds);
+          if (!batch.successes.length) {
+            const message = batch.failures.map((item) => `${item.hostName}：${item.error}`).join("；") || "未知错误";
+            throw new Error(message);
+          }
+          const uploadedAt = new Date().toISOString();
+          block.source = batch.successes[0]!.url;
+          block.localSource = undefined;
+          block.remoteSources = batch.successes.map((item) => ({ ...item, uploadedAt }));
+          if (batch.failures.length) {
+            new Notice(`部分图床上传失败：${batch.failures.map((item) => item.hostName).join("、")}`, 7000);
+          } else {
+            new Notice(`已上传到：${batch.successes.map((item) => item.hostName).join("、")}`);
+          }
+        }
+        if (!block.alt) block.alt = file.name.replace(/\.[^.]+$/, "");
+        refresh();
+        scheduleAutoSave();
+      })().catch((error) => {
+        console.error("MindMap Studio image operation failed", error);
+        new Notice(`${mode === "remote" ? "上传图床" : "保存图片"}失败：${error instanceof Error ? error.message : String(error)}`, 7000);
       });
-      input.click();
+    };
+
+    const uploadExistingImage = (block: MindMapImageContentBlock, refresh: () => void): void => {
+      void (async () => {
+        const chosen = await chooseImageHosts(this.app, this.callbacks.getImageHosts(), this.callbacks.getDefaultUploadHostIds());
+        if (!chosen) return;
+        const readableSource = block.localSource || block.source;
+        const image = await this.callbacks.onReadImageSource(readableSource);
+        if (!image) {
+          new Notice("当前图片不是可读取的本地文件；请使用‘上传到图床’重新选择图片");
+          return;
+        }
+        const batch = await this.callbacks.onUploadImage(image.blob, image.suggestedName, chosen);
+        if (!batch.successes.length) {
+          throw new Error(batch.failures.map((item) => `${item.hostName}：${item.error}`).join("；") || "上传失败");
+        }
+        const uploadedAt = new Date().toISOString();
+        const existing = new Map((block.remoteSources ?? []).map((item) => [item.hostId, item]));
+        batch.successes.forEach((item) => existing.set(item.hostId, { ...item, uploadedAt }));
+        block.remoteSources = Array.from(existing.values());
+        block.localSource = readableSource;
+        if (!batch.failures.length) block.source = batch.successes[0]!.url;
+        refresh();
+        scheduleAutoSave();
+        if (batch.failures.length) {
+          new Notice(`部分图床上传失败，本地图片已保留：${batch.failures.map((item) => item.hostName).join("、")}`, 7000);
+        } else {
+          new Notice(`当前图片已上传到：${batch.successes.map((item) => item.hostName).join("、")}`);
+        }
+      })().catch((error) => {
+        console.error("MindMap Studio existing image upload failed", error);
+        new Notice(`上传当前图片失败：${error instanceof Error ? error.message : String(error)}`, 7000);
+      });
     };
 
     const renderBlocks = (): void => {
@@ -384,13 +507,38 @@ class NodeEditModal extends Modal {
           const source = sourceLabel.createEl("input", { type: "text", attr: { placeholder: "仓库路径、[[图片]] 或 https://..." } });
           const altLabel = body.createEl("label", { text: "图片说明（可选）" });
           const alt = altLabel.createEl("input", { type: "text", attr: { placeholder: "图片说明" } });
-          source.addEventListener("input", () => { block.source = source.value.trim(); refresh(); scheduleAutoSave(); });
+          source.addEventListener("input", () => {
+            const next = source.value.trim();
+            if (next !== block.source) {
+              block.source = next;
+              block.localSource = undefined;
+              block.remoteSources = undefined;
+            }
+            refresh();
+            scheduleAutoSave();
+          });
           alt.addEventListener("input", () => { block.alt = alt.value.trim() || undefined; scheduleAutoSave(); });
           const actions = body.createDiv({ cls: "mmc-image-block-actions" });
           const local = actions.createEl("button", { text: "保存到仓库", attr: { type: "button" } });
           local.addEventListener("click", () => chooseImage(block, "local", refresh));
-          const remote = actions.createEl("button", { text: "上传到图床", attr: { type: "button" } });
+          const remote = actions.createEl("button", { text: "选择文件并上传", attr: { type: "button" } });
           remote.addEventListener("click", () => chooseImage(block, "remote", refresh));
+          if (block.localSource || (block.source && !/^https?:\/\//i.test(block.source))) {
+            const uploadCurrent = actions.createEl("button", { text: "上传当前图片", attr: { type: "button" } });
+            uploadCurrent.addEventListener("click", () => uploadExistingImage(block, refresh));
+          }
+          if (block.remoteSources?.length) {
+            const mirrors = body.createDiv({ cls: "mms-image-mirrors" });
+            mirrors.createSpan({ cls: "mms-image-mirrors-label", text: "远程镜像：" });
+            block.remoteSources.forEach((item, mirrorIndex) => {
+              const link = mirrors.createEl("a", {
+                text: item.hostName || `图床 ${mirrorIndex + 1}`,
+                href: item.url,
+                attr: { target: "_blank", rel: "noopener" }
+              });
+              link.addEventListener("click", (event) => event.stopPropagation());
+            });
+          }
           refresh();
         }
       });
@@ -1271,7 +1419,10 @@ export class MindMapEditor {
     new NodeEditModal(this.app, selected, this.options.defaultNodeShape, {
       resolveImage: this.callbacks.resolveImage,
       onSavePastedImage: this.callbacks.onSavePastedImage,
-      onUploadImage: this.callbacks.onUploadImage
+      getImageHosts: this.callbacks.getImageHosts,
+      getDefaultUploadHostIds: this.callbacks.getDefaultUploadHostIds,
+      onUploadImage: this.callbacks.onUploadImage,
+      onReadImageSource: this.callbacks.onReadImageSource
     }, (values) => {
       // A continuously open editor may autosave many times. Capture one undo
       // snapshot for the whole editing session instead of one snapshot per keypress.
@@ -1459,14 +1610,17 @@ export class MindMapEditor {
       const selected = this.selectedNode() ?? this.document.root;
       try {
         const extension = blob.type.split("/")[1]?.replace("jpeg", "jpg") || "png";
-        const path = await this.callbacks.onSavePastedImage(blob, `mindmap-image.${extension}`);
+        const filename = `mindmap-image.${extension}`;
+        const path = await this.callbacks.onSavePastedImage(blob, filename);
+        const imageBlock: MindMapImageContentBlock = { id: newId(), type: "image", source: path, localSource: path };
         this.mutate(() => {
           const blocks = nodeContentBlocks(selected);
-          blocks.push({ id: newId(), type: "image", source: path });
+          blocks.push(imageBlock);
           selected.content = blocks;
           syncNodeLegacyFields(selected);
         });
-        new Notice(`图片已保存：${path}`);
+        const scheduled = this.callbacks.onScheduleAutoUpload(selected.id, imageBlock.id, path, filename);
+        new Notice(scheduled ? `图片已保存，等待自动上传：${path}` : `图片已保存：${path}`);
       } catch (error) {
         console.error("MindMap Studio paste image failed", error);
         new Notice("粘贴图片失败");
@@ -1588,7 +1742,7 @@ export class MindMapEditor {
   private async copySelectedBranch(): Promise<boolean> {
     const selected = this.selectedNode();
     if (!selected) return false;
-    this.branchClipboard = cloneDocument({ version: 7, title: nodePlainText(selected) || "图片节点", layout: "right", theme: "auto", root: selected }).root;
+    this.branchClipboard = cloneDocument({ version: 8, title: nodePlainText(selected) || "图片节点", layout: "right", theme: "auto", root: selected }).root;
     const payload = JSON.stringify({ type: "mindmap-studio-node", version: 1, node: selected }, null, 2);
     try {
       await navigator.clipboard.writeText(payload);

@@ -54,7 +54,11 @@ export class MindMapStudioView extends TextFileView {
         onExportJson: async (json) => this.exportTextFile("json", json),
         resolveImage: (source) => this.resolveImage(source),
         onSavePastedImage: async (blob, suggestedName) => this.plugin.savePastedImage(blob, suggestedName, this.file),
-        onUploadImage: async (blob, suggestedName) => this.plugin.uploadImageToHost(blob, suggestedName),
+        getImageHosts: () => this.plugin.getImageHostChoices(),
+        getDefaultUploadHostIds: () => this.plugin.getDefaultUploadHostIds(),
+        onUploadImage: async (blob, suggestedName, hostIds) => this.plugin.uploadImageToHosts(blob, suggestedName, hostIds),
+        onReadImageSource: async (source) => this.plugin.readImageSource(source, this.file),
+        onScheduleAutoUpload: (nodeId, blockId, localPath, suggestedName) => this.plugin.scheduleAutoUpload(this.file, nodeId, blockId, localPath, suggestedName),
         onCreateSubmap: async (node) => {
           if (!this.file) throw new Error("当前脑图尚未关联文件");
           return this.plugin.createSubmapFile(this.file, node);

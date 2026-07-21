@@ -1,5 +1,29 @@
 # Changelog
 
+## 1.0.0
+
+### Added
+
+- Added multiple independently configurable image hosts with per-host name, enable switch, API URL, method, body mode, field name, headers, and response path.
+- Added real upload connectivity tests using a 1×1 transparent PNG.
+- Added manual single- or multi-host selection for new image uploads and existing local image blocks.
+- Added delayed automatic upload after clipboard paste, with a configurable 0–300 second delay and selectable default targets.
+- Added remote mirror metadata to image blocks so one image can retain URLs from several hosts.
+- Added safe local cleanup: the map is saved with the remote URL first, other maps are checked for references, and only then may the local file be deleted.
+- Added partial-failure fallback that keeps the local image active and records successful mirrors without deleting the file.
+
+### Changed
+
+- Upgraded the document schema to version 8.
+- Migrated the former single-image-host configuration into the new multi-host list on first load.
+- Renamed the image action to distinguish choosing a new file from uploading the current local image.
+
+### Safety
+
+- Automatic deletion only runs after every selected host succeeds.
+- A local image is retained when another `.mindmap` file still references it or deletion fails.
+- API test uploads may create a tiny test image on the configured host.
+
 ## 0.9.0
 
 - Renamed the plugin from **MindMap Canvas** to **MindMap Studio** to avoid confusion with Obsidian Canvas.

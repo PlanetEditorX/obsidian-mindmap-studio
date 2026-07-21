@@ -52,7 +52,7 @@ try {
 
   const reopened = model.parseDocument(serialized, "fallback");
   assert.equal(reopened.title, "测试脑图");
-  assert.equal(reopened.version, 7);
+  assert.equal(reopened.version, 8);
   assert.equal(reopened.appearance?.backgroundPattern, "dots");
   assert.equal(reopened.appearance?.edgeStyle, "elbow");
   assert.equal(reopened.appearance?.underline, true);
@@ -106,7 +106,17 @@ try {
       id: "mixed-root",
       text: "",
       content: [
-        { id: "img-1", type: "image", source: "Assets/first.png", alt: "第一张" },
+        {
+          id: "img-1",
+          type: "image",
+          source: "https://cdn-a.example/first.png",
+          alt: "第一张",
+          localSource: "Assets/first.png",
+          remoteSources: [
+            { hostId: "host-a", hostName: "图床 A", url: "https://cdn-a.example/first.png", uploadedAt: "2026-07-20T00:00:00.000Z" },
+            { hostId: "host-b", hostName: "图床 B", url: "https://cdn-b.example/first.png" }
+          ]
+        },
         { id: "text-1", type: "text", text: "图片后文字" },
         { id: "img-2", type: "image", source: "https://example.com/second.png", alt: "第二张" },
         { id: "text-2", type: "text", text: "最后文字", richText: [{ text: "最后", style: { bold: true } }, { text: "文字" }] }
@@ -117,7 +127,9 @@ try {
   const mixedReopened = model.parseDocument(model.serializeDocument(mixedContent), "fallback");
   assert.deepEqual(mixedReopened.root.content?.map((block) => block.type), ["image", "text", "image", "text"]);
   assert.equal(model.nodePlainText(mixedReopened.root), "图片后文字 最后文字");
-  assert.match(model.documentToMarkdown(mixedReopened), /!\[第一张\]\(Assets\/first\.png\)/);
+  assert.equal(mixedReopened.root.content?.[0]?.localSource, "Assets/first.png");
+  assert.equal(mixedReopened.root.content?.[0]?.remoteSources?.length, 2);
+  assert.match(model.documentToMarkdown(mixedReopened), /!\[第一张\]\(https:\/\/cdn-a\.example\/first\.png\)/);
 
   const pureImage = model.normalizeDocument({
     title: "纯图片",
@@ -210,7 +222,11 @@ try {
   assert.match(mainSource, /\[sourceFolder, configuredFolder\]/, "pasted images must use the current map's parent-local asset folder");
   assert.match(mainSource, /sourceFile\?\.parent\?\.path/, "pasted image paths must be based on the active mind map directory");
   assert.match(mainSource, /parentTitle: parentFile\.basename/);
-  assert.match(mainSource, /uploadImageToHost/);
+  assert.match(mainSource, /uploadImageToHosts/);
+  assert.match(mainSource, /scheduleAutoUpload/);
+  assert.match(mainSource, /runAutoUploadTask/);
+  assert.match(mainSource, /deleteLocalAssetIfSafe/);
+  assert.match(mainSource, /testImageHost/);
   assert.match(mainSource, /requestUrl/);
   assert.match(mainSource, /multipart\/form-data/);
   assert.match(mainSource, /plugins\/mindmap-canvas\/data\.json/, "renamed plugin should migrate old settings");
@@ -229,8 +245,17 @@ try {
   assert.doesNotMatch(editorSource, /切换所选文字删除线/, "strikethrough must be hidden from the common formatting toolbar");
   assert.match(editorSource, /可排序的文字块和图片块/);
   assert.match(editorSource, /ImagePreviewModal/);
-  assert.match(editorSource, /上传到图床/);
+  assert.match(editorSource, /选择上传图床/);
+  assert.match(editorSource, /上传当前图片/);
+  assert.match(editorSource, /onScheduleAutoUpload/);
   assert.match(editorSource, /syncNodeLegacyFields/);
+
+  const settingsSource = await readFile("src/settings.ts", "utf8");
+  assert.match(settingsSource, /autoUploadEnabled/);
+  assert.match(settingsSource, /autoUploadDelaySeconds/);
+  assert.match(settingsSource, /autoUploadHostIds/);
+  assert.match(settingsSource, /检测 API 连通性/);
+  assert.match(settingsSource, /新增图床/);
 
   const cssSource = await readFile("styles.css", "utf8");
   assert.match(cssSource, /\.mmc-parent-navigation-button[\s\S]*min-height:\s*44px/);
@@ -241,12 +266,14 @@ try {
   assert.match(cssSource, /\.mmc-image-preview-stage/);
   assert.match(cssSource, /\.mmc-content-block-list/);
   assert.match(cssSource, /cursor:\s*zoom-in/);
+  assert.match(cssSource, /\.mms-image-host-card/);
+  assert.match(cssSource, /\.mms-image-host-picker-item/);
 
 
   const manifest = JSON.parse(await readFile("manifest.json", "utf8"));
   assert.equal(manifest.id, "mindmap-studio");
   assert.equal(manifest.name, "MindMap Studio");
-  assert.equal(manifest.version, "0.9.0");
+  assert.equal(manifest.version, "1.0.0");
 
   console.log("All MindMap Studio tests passed.");
 } finally {
