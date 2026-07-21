@@ -38,7 +38,7 @@ import {
 import { renderStaticMindMap, renderStaticSource } from "./static-render";
 import { MindMapStudioView, VIEW_TYPE_MINDMAP_STUDIO } from "./view";
 import { GlobalMindMapSearchModal, MindMapSearchIndex, type MindMapSearchResult } from "./global-search";
-import { normalizeVisibleModes } from "./modes";
+import { articleNumberLabel, isArticleHeading, normalizeVisibleModes, type ArticleTocEntry } from "./modes";
 import type { DisplayMode } from "./model";
 
 export const MINDMAP_EXTENSION = "mindmap";
@@ -339,6 +339,9 @@ export default class MindMapStudioPlugin extends Plugin {
       defaultViewMode: raw.defaultViewMode === "outline" || raw.defaultViewMode === "article" || raw.defaultViewMode === "mindmap"
         ? raw.defaultViewMode
         : DEFAULT_SETTINGS.defaultViewMode,
+      defaultNodeTextAlign: raw.defaultNodeTextAlign === "left" || raw.defaultNodeTextAlign === "right" || raw.defaultNodeTextAlign === "center"
+        ? raw.defaultNodeTextAlign
+        : DEFAULT_SETTINGS.defaultNodeTextAlign,
       defaultThemePreset: [
         "classic-indigo", "ocean-blue", "forest-green", "sunset-orange", "lavender-dream",
         "candy-pop", "paper-note", "minimal-ink", "dark-neon", "mint-clean"
@@ -372,6 +375,17 @@ export default class MindMapStudioPlugin extends Plugin {
     await this.saveData(this.settings);
   }
 
+  async setGlobalDisplayMode(mode: DisplayMode): Promise<void> {
+    if (!this.settings.visibleModes.includes(mode)) return;
+    if (this.settings.defaultViewMode !== mode) {
+      this.settings.defaultViewMode = mode;
+      await this.saveSettings();
+    }
+    for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE_MINDMAP_STUDIO)) {
+      if (leaf.view instanceof MindMapStudioView) leaf.view.applyGlobalDisplayMode(mode);
+    }
+  }
+
   async resetAllSettings(): Promise<void> {
     this.settings = JSON.parse(JSON.stringify(DEFAULT_SETTINGS)) as MindMapStudioSettings;
     await this.saveSettings();
@@ -389,8 +403,123 @@ export default class MindMapStudioPlugin extends Plugin {
     document.layout = this.settings.defaultLayout;
     document.theme = this.settings.defaultTheme;
     document.appearance = settingsToAppearance(this.settings);
-    document.view = { mode: this.settings.defaultViewMode, readOnly: false };
+    document.view = { readOnly: false };
     return document;
+  }
+
+  private resolveMindMapFile(path: string, sourcePath = ""): TFile | null {
+    const cleaned = path.replace(/^\[\[|\]\]$/g, "").split("|")[0]?.trim() ?? path;
+    const normalized = normalizePath(cleaned);
+    const direct = this.app.vault.getAbstractFileByPath(normalized);
+    if (direct instanceof TFile && this.isMindMapFile(direct)) return direct;
+    const linked = this.app.metadataCache.getFirstLinkpathDest(cleaned, sourcePath);
+    return linked instanceof TFile && this.isMindMapFile(linked) ? linked : null;
+  }
+
+  private async readMindMapDocument(file: TFile): Promise<MindMapDocument> {
+    return parseDocument(await this.app.vault.cachedRead(file), file.basename);
+  }
+
+  private findNodeDepth(root: MindMapNode, nodeId: string): number | null {
+    const visit = (node: MindMapNode, depth: number): number | null => {
+      if (node.id === nodeId) return depth;
+      for (const child of node.children) {
+        const found = visit(child, depth + 1);
+        if (found !== null) return found;
+      }
+      return null;
+    };
+    return visit(root, 0);
+  }
+
+  private async computeArticleBaseDepth(file: TFile, document: MindMapDocument, visited = new Set<string>()): Promise<number> {
+    if (visited.has(file.path) || !document.navigation?.parentPath) return 0;
+    visited.add(file.path);
+    const parentFile = this.resolveMindMapFile(document.navigation.parentPath, file.path);
+    if (!parentFile) return 0;
+    const parentDocument = await this.readMindMapDocument(parentFile);
+    const parentBase = await this.computeArticleBaseDepth(parentFile, parentDocument, visited);
+    let localDepth = document.navigation.parentNodeId
+      ? this.findNodeDepth(parentDocument.root, document.navigation.parentNodeId)
+      : null;
+    if (localDepth === null) {
+      const currentPath = normalizePath(file.path);
+      const linkedParent = flattenNodes(parentDocument.root).find((node) => {
+        if (!node.submap?.path) return false;
+        return this.resolveMindMapFile(node.submap.path, parentFile.path)?.path === currentPath;
+      });
+      if (linkedParent) localDepth = this.findNodeDepth(parentDocument.root, linkedParent.id);
+    }
+    return parentBase + Math.max(1, localDepth ?? 1);
+  }
+
+  async buildArticleContext(file: TFile, document: MindMapDocument): Promise<{ baseDepth: number; tocEntries: ArticleTocEntry[]; showToc: boolean }> {
+    const baseDepth = await this.computeArticleBaseDepth(file, document);
+    const isTopLevel = !document.navigation?.parentPath;
+    if (!isTopLevel) return { baseDepth, tocEntries: [], showToc: false };
+
+    const tocEntries: ArticleTocEntry[] = [];
+    const visitedFiles = new Set<string>([file.path]);
+    let hasSubmaps = false;
+    type Item = { node: MindMapNode; file: TFile; document: MindMapDocument; breadcrumb: string[] };
+
+    const processItems = async (items: Item[], depth: number): Promise<void> => {
+      let numberedIndex = 0;
+      for (const item of items) {
+        const { node, file: sourceFile, breadcrumb } = item;
+        const heading = isArticleHeading(node);
+        const skipped = node.skipArticleNumbering === true;
+        if (heading && !skipped) numberedIndex += 1;
+        const label = heading && !skipped ? articleNumberLabel(depth, numberedIndex) : "";
+        const title = nodePlainText(node) || (heading ? "未命名标题" : "");
+        const nextBreadcrumb = [...breadcrumb, title || "未命名标题"];
+        if (heading) {
+          tocEntries.push({
+            filePath: sourceFile.path,
+            nodeId: node.id,
+            depth,
+            label,
+            title,
+            displayTitle: label ? `${label} ${title}` : title,
+            breadcrumb: nextBreadcrumb
+          });
+        }
+
+        const descendants: Item[] = node.children.map((child) => ({
+          node: child,
+          file: sourceFile,
+          document: item.document,
+          breadcrumb: nextBreadcrumb
+        }));
+        if (node.submap?.path) {
+          hasSubmaps = true;
+          const childFile = this.resolveMindMapFile(node.submap.path, sourceFile.path);
+          if (childFile && !visitedFiles.has(childFile.path)) {
+            visitedFiles.add(childFile.path);
+            try {
+              const childDocument = await this.readMindMapDocument(childFile);
+              descendants.push(...childDocument.root.children.map((child) => ({
+                node: child,
+                file: childFile,
+                document: childDocument,
+                breadcrumb: nextBreadcrumb
+              })));
+            } catch (error) {
+              console.warn(`MindMap Studio could not read child map for article TOC: ${childFile.path}`, error);
+            }
+          }
+        }
+        if (descendants.length) await processItems(descendants, depth + 1);
+      }
+    };
+
+    await processItems(document.root.children.map((node) => ({
+      node,
+      file,
+      document,
+      breadcrumb: [nodePlainText(document.root) || document.title]
+    })), 1);
+    return { baseDepth, tocEntries, showToc: hasSubmaps && tocEntries.length > 0 };
   }
 
   async getAvailablePath(preferredPath: string): Promise<string> {
@@ -725,7 +854,9 @@ export default class MindMapStudioPlugin extends Plugin {
     const document = this.createConfiguredDocument(title);
     document.root.content = [{ id: document.root.id + "_title", type: "text", text: title }];
     syncNodeLegacyFields(document.root);
-    document.root.link = `[[${parentFile.path}]]`;
+    // 1.4.2: parent navigation is handled by the dedicated breadcrumb bar,
+    // not by injecting a backlink onto the submap root node.
+    document.root.link = undefined;
     document.title = title;
     document.navigation = {
       parentPath: parentFile.path,

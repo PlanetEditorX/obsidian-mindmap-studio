@@ -3,6 +3,7 @@ import type MindMapStudioPlugin from "./main";
 import { MindMapEditor } from "./editor";
 import { parseDocument, serializeDocument, type DisplayMode, type MindMapDocument } from "./model";
 import { settingsToAppearance } from "./settings";
+import type { ArticleTocEntry } from "./modes";
 
 export const VIEW_TYPE_MINDMAP_STUDIO = "mindmap-studio-view";
 
@@ -12,6 +13,11 @@ export class MindMapStudioView extends TextFileView {
   private document: MindMapDocument | null = null;
   private savedTimer: number | null = null;
   private pendingFocusNodeId: string | null = null;
+  private articleBaseDepth = 0;
+  private articleTocEntries: ArticleTocEntry[] = [];
+  private showArticleToc = false;
+  private articleContextToken = 0;
+  private articleContextTimer: number | null = null;
 
   constructor(leaf: WorkspaceLeaf, plugin: MindMapStudioPlugin) {
     super(leaf);
@@ -38,6 +44,9 @@ export class MindMapStudioView extends TextFileView {
   setViewData(data: string, clear: boolean): void {
     const title = this.file?.basename ?? "思维导图";
     this.document = parseDocument(data, title);
+    this.articleBaseDepth = 0;
+    this.articleTocEntries = [];
+    this.showArticleToc = false;
     this.applyViewClasses();
 
     if (!this.editor || clear) {
@@ -48,6 +57,7 @@ export class MindMapStudioView extends TextFileView {
           this.document = document;
           this.requestSave();
           this.scheduleSavedIndicator();
+          this.scheduleArticleContextRefresh(320);
         },
         onOpenLink: async (link) => this.openLink(link),
         onExportSvg: async (svg) => this.exportTextFile("svg", svg),
@@ -70,6 +80,7 @@ export class MindMapStudioView extends TextFileView {
         },
         onSearchMapFamily: () => void this.openMapFamilySearch(),
         onGlobalSearch: () => this.plugin.openGlobalSearch(),
+        onDisplayModeChange: (mode) => this.plugin.setGlobalDisplayMode(mode),
         onRenderCode: async (block, container) => {
           const longestFence = Math.max(2, ...Array.from(block.code.matchAll(/`+/g), (match) => match[0].length));
           const fence = "`".repeat(longestFence + 1);
@@ -86,6 +97,7 @@ export class MindMapStudioView extends TextFileView {
       this.pendingFocusNodeId = null;
       window.setTimeout(() => this.editor?.focusNodeById(nodeId), 20);
     }
+    this.scheduleArticleContextRefresh(0);
   }
 
   clear(): void {
@@ -102,6 +114,8 @@ export class MindMapStudioView extends TextFileView {
 
   async onClose(): Promise<void> {
     if (this.savedTimer !== null) window.clearTimeout(this.savedTimer);
+    if (this.articleContextTimer !== null) window.clearTimeout(this.articleContextTimer);
+    this.articleContextToken += 1;
     this.editor?.destroy();
     this.editor = null;
     await super.onClose();
@@ -134,6 +148,10 @@ export class MindMapStudioView extends TextFileView {
     this.editor?.setDisplayMode(mode);
   }
 
+  applyGlobalDisplayMode(mode: DisplayMode): void {
+    this.editor?.applyGlobalDisplayMode(mode);
+  }
+
   toggleReadOnly(): void {
     this.editor?.toggleReadOnly();
   }
@@ -149,8 +167,36 @@ export class MindMapStudioView extends TextFileView {
       imageFailoverTimeoutSeconds: this.plugin.settings.imageFailoverTimeoutSeconds,
       imageFailoverUseLocalFallback: this.plugin.settings.imageFailoverUseLocalFallback,
       visibleModes: [...this.plugin.settings.visibleModes],
-      defaultViewMode: this.plugin.settings.defaultViewMode
+      defaultViewMode: this.plugin.settings.defaultViewMode,
+      articleBaseDepth: this.articleBaseDepth,
+      articleTocEntries: [...this.articleTocEntries],
+      showArticleToc: this.showArticleToc
     };
+  }
+
+  private scheduleArticleContextRefresh(delay: number): void {
+    if (this.articleContextTimer !== null) window.clearTimeout(this.articleContextTimer);
+    this.articleContextTimer = window.setTimeout(() => {
+      this.articleContextTimer = null;
+      void this.refreshArticleContext();
+    }, Math.max(0, delay));
+  }
+
+  private async refreshArticleContext(): Promise<void> {
+    const file = this.file;
+    const document = this.editor?.getDocument() ?? this.document;
+    if (!file || !document) return;
+    const token = ++this.articleContextToken;
+    try {
+      const context = await this.plugin.buildArticleContext(file, document);
+      if (token !== this.articleContextToken || this.file?.path !== file.path) return;
+      this.articleBaseDepth = context.baseDepth;
+      this.articleTocEntries = context.tocEntries;
+      this.showArticleToc = context.showToc;
+      this.editor?.setOptions(this.getEditorOptions());
+    } catch (error) {
+      console.warn("MindMap Studio article context refresh failed", error);
+    }
   }
 
   private applyViewClasses(): void {

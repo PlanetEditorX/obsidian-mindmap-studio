@@ -1,5 +1,74 @@
 # 更新记录
 
+## 1.5.0
+
+- 子导图节点改为整块可点击：点击节点文字或周围空白区域都会直接进入对应子导图，不再要求精确点中文字。
+- 子导图节点增加完整悬停和键盘焦点反馈；右键菜单仍可编辑、调整样式和执行其他节点操作。
+- 新增全局节点文字对齐设置：左对齐、居中、右对齐。
+- 节点编辑窗口新增单节点文字对齐覆盖，可选择跟随全局或独立设置。
+- 新增节点宽度和最小高度设置，宽度范围 100–900 像素，高度范围 36–600 像素。
+- 选中节点后显示右下角拖动控制点，可直接调整节点大小；双击控制点或右键“恢复节点自动大小”可还原。
+- 节点文字根据实际宽度自动换行；加宽后可保持单行，缩窄后自动形成多行。
+- 布局计算、连线位置和 SVG 导出同步使用自定义节点尺寸、文字对齐和换行结果。
+- 新增尺寸和对齐字段均为可选字段，现有 `.mindmap` 文件无需迁移。
+
+## 1.4.7
+
+- 优化导图模式中子导图标题的鼠标悬停效果。
+- 修复子导图标题继承文字块 `width: 100%` 后，悬停背景铺满整行形成灰色横条的问题。
+- 子导图链接现在只包裹标题文字本身，不改变节点原有背景、圆角和配色。
+- 悬停反馈改为短下划线展开和右上箭头轻微移动；键盘聚焦仍保留清晰但紧凑的可访问性轮廓。
+
+## 1.4.6
+
+- 合并导图模式中的子导图节点标题与进入入口。
+- 删除节点下方重复显示的同名“进入子导图”卡片。
+- 子导图节点的第一段文字现在直接作为链接，标题末尾显示轻量箭头。
+- 点击标题进入子导图；点击节点其他区域仍用于选中，编辑可继续使用双击节点空白区域、F2 或右键菜单。
+- 纯图片或无文字的子导图节点使用右上角小型箭头入口，不再生成同名文字。
+- 节点高度不再为重复子导图卡片额外预留空间，导图更紧凑。
+- SVG 导出以标题末尾箭头表示子导图，不再绘制重复卡片。
+
+## 1.4.5
+
+- 修复节点编辑器中“文章模式不自动编号”复选框被通用输入框样式拉成长条的问题。
+- 复选框恢复为固定 16×16 像素的小方框，与说明文字横向居中对齐。
+- 该选项独占一整行，并增加轻量边框和背景，窄窗口下也不会变形。
+
+# Changelog
+
+## 1.4.4
+
+- Replaced the parent-map control attached to the root node with a fixed breadcrumb overlay in the upper-left corner of mind-map mode.
+- Added a conventional back-arrow button plus “parent › current” breadcrumb text.
+- The navigation stays fixed while the canvas pans or zooms and no longer changes the root node's appearance.
+- Added responsive truncation, keyboard focus styling, translucent theme-aware background, and mobile sizing.
+
+## 1.4.3
+- Replace the abrupt top-right circular parent-return marker with an attached breadcrumb tab on the upper-left edge of the submap root node.
+- The tab shows a left arrow and the parent-map title, uses the current root-node theme colors, and truncates long titles without covering the node content.
+- In mind-map mode, parent navigation is handled by the root-node tab; outline and article modes continue to use the full-width parent breadcrumb bar.
+- The return control stops node selection and drag interactions, supports keyboard focus, and opens the recorded parent node directly.
+
+## 1.4.2
+- Remove the unconventional top-right round parent-back button from submap root nodes. Parent navigation now relies on the dedicated top breadcrumb/navigation bar.
+- Existing submaps that still contain an auto-generated parent wiki-link on the root node will no longer render that floating dot button.
+- Newly created submaps no longer write the parent file link into the root node.
+
+# 更新记录
+
+## 1.4.1
+
+- 修复文章模式中独立子导图节点没有生成编号的问题。
+- 子导图节点现在即使没有本地子节点，只要存在 `submap.path` 也会被识别为文章标题。
+- 文章编号跨父子导图连续计算：父导图的“第一章”进入子导图后继续为“第一节”，不会重新从章开始。
+- 显示模式改为全局记忆；切换模式后，之后打开的所有父导图和子导图保持同一模式。
+- 每个 `.mindmap` 文件中旧的 `view.mode` 仅作兼容读取，不再控制打开模式；只读状态仍按文件保存。
+- 大纲和文章模式中的子导图入口改为节点标题文字超链接，移除独立“进入子导图”按钮。
+- 顶层文章模式新增跨子导图的独立目录页。
+- 目录递归收录后代子导图的章节标题，点击可打开对应文件并定位节点。
+- 现有父子导图无需重新创建，数据结构版本保持 10。
+
 ## 1.4.0
 
 - 新增导图、大纲、文章三种同步显示模式。

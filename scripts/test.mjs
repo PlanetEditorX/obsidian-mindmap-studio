@@ -77,7 +77,8 @@ export const setIcon = () => {};
     branchColors: ["#dc2626", "#2563eb"],
     bold: true,
     italic: true,
-    underline: true
+    underline: true,
+    nodeTextAlign: "left"
   };
   document.root.children[0].children.push({ id: "depth-2", text: "二级节点", children: [{ id: "depth-3", text: "三级节点", children: [] }] });
   document.root.children.push({ id: "saved-node", text: "保存后仍可编辑", children: [] });
@@ -98,6 +99,7 @@ export const setIcon = () => {};
   assert.equal(reopened.appearance?.rootColor, "#c2410c");
   assert.deepEqual(reopened.appearance?.branchColors, ["#dc2626", "#2563eb"]);
   assert.equal(reopened.appearance?.underline, true);
+  assert.equal(reopened.appearance?.nodeTextAlign, "left");
   assert.equal(reopened.root.children.at(-1)?.text, "保存后仍可编辑");
 
   const viewDocument = model.normalizeDocument({
@@ -142,6 +144,22 @@ export const setIcon = () => {};
   assert.equal(byId.get("subheading")?.label, "一、");
   assert.equal(byId.get("deep-leaf")?.label, "");
   assert.equal(byId.get("chapter-two")?.label, "第二章");
+  const linkedArticleRoot = model.normalizeDocument({
+    title: "古诗",
+    root: {
+      id: "linked-root", text: "古诗", children: [
+        { id: "linked-chapter", text: "唐诗", submap: { path: "Assets/古诗/唐诗.mindmap" }, children: [] }
+      ]
+    }
+  }, "fallback");
+  const linkedInfo = modes.buildArticleNodeInfo(linkedArticleRoot.root);
+  assert.equal(linkedInfo[0]?.label, "第一章", "a node backed by a child map must still be numbered as a heading");
+  const childMapInfo = modes.buildArticleNodeInfo({
+    id: "child-root", text: "唐诗", children: [
+      { id: "poet", text: "李白", children: [{ id: "poem", text: "静夜思", children: [] }] }
+    ]
+  }, 1);
+  assert.equal(childMapInfo[0]?.label, "第一节", "a child map must continue numbering from its parent article depth");
   assert.deepEqual(modes.normalizeVisibleModes(["article", "mindmap", "article"]), ["article", "mindmap"]);
   assert.deepEqual(modes.normalizeVisibleModes([]), ["mindmap", "outline", "article"]);
 
@@ -153,7 +171,7 @@ export const setIcon = () => {};
       children: [{
         id: "child",
         text: "子",
-        style: { bold: false, italic: true, underline: true, fontSize: 22, borderWidth: 2 },
+        style: { bold: false, italic: true, underline: true, fontSize: 22, borderWidth: 2, textAlign: "right", width: 230, minHeight: 96 },
         children: []
       }]
     }
@@ -161,6 +179,15 @@ export const setIcon = () => {};
   assert.equal(styled.root.children[0]?.style?.bold, false, "explicit false style overrides must survive normalization");
   assert.equal(styled.root.children[0]?.style?.underline, true);
   assert.equal(styled.root.children[0]?.style?.fontSize, 22);
+  assert.equal(styled.root.children[0]?.style?.textAlign, "right");
+  assert.equal(styled.root.children[0]?.style?.width, 230);
+  assert.equal(styled.root.children[0]?.style?.minHeight, 96);
+  const sizedLayout = layout.computeLayout(styled.root, "right", 14);
+  const sizedPosition = sizedLayout.byId.get("child");
+  assert.equal(sizedPosition?.width, 230, "manual node width must drive layout");
+  assert.ok((sizedPosition?.height ?? 0) >= 96, "manual node minimum height must drive layout");
+  const alignedSvg = layout.documentToSvg(styled.root, "right", styled.title, { nodeTextAlign: "left" });
+  assert.match(alignedSvg, /text-anchor="end"/, "per-node right alignment must survive SVG export");
 
   const richTextDocument = model.normalizeDocument({
     title: "局部富文本",
@@ -410,6 +437,7 @@ export const setIcon = () => {};
   assert.match(mainSource, /refreshFamily/);
   assert.match(mainSource, /mindmap-search-index\.json/);
   assert.match(mainSource, /MINDMAP_EXTENSION = "mindmap"/);
+  assert.match(mainSource, /defaultNodeTextAlign/);
   assert.match(mainSource, /\[parentFolder, configuredAssets, parentMapFolder\]/, "submaps must be stored below the parent-local asset folder");
   assert.match(mainSource, /\[sourceFolder, configuredFolder\]/, "pasted images must use the current map's parent-local asset folder");
   assert.match(mainSource, /sourceFile\?\.parent\?\.path/, "pasted image paths must be based on the active mind map directory");
@@ -475,9 +503,11 @@ export const setIcon = () => {};
   assert.match(settingsSource, /远程图片自动故障转移/);
   assert.match(settingsSource, /单个镜像等待时间/);
   assert.match(settingsSource, /本地副本作为最后回退/);
+  assert.match(settingsSource, /默认节点文字对齐/);
+  assert.match(settingsSource, /defaultNodeTextAlign/);
 
   assert.match(settingsSource, /visibleModes/);
-  assert.match(settingsSource, /新建导图默认模式/);
+  assert.match(settingsSource, /当前全局显示模式/);
   assert.match(settingsSource, /一键还原所有插件设置/);
 
   const cssSource = await readFile("styles.css", "utf8");
@@ -486,6 +516,9 @@ export const setIcon = () => {};
   assert.match(cssSource, /\.mmc-parent-navigation-title[\s\S]*line-height:\s*1\.35/);
   assert.match(cssSource, /\.mmc-appearance-style-options[\s\S]*grid-template-columns:\s*repeat\(3/);
   assert.match(cssSource, /\.mmc-appearance-style-option input\[type="checkbox"\][\s\S]*width:\s*16px !important/);
+  assert.match(editorSource, /mmc-article-numbering-option/);
+  assert.match(cssSource, /\.mmc-node-edit-modal label\.mmc-article-numbering-option input\[type="checkbox"\][\s\S]*width:\s*16px !important/);
+  assert.match(cssSource, /\.mmc-node-edit-modal label\.mmc-article-numbering-option[\s\S]*flex-direction:\s*row/);
   assert.match(cssSource, /\.mmc-image-preview-stage/);
   assert.match(cssSource, /\.mmc-content-block-list/);
   assert.match(cssSource, /cursor:\s*zoom-in/);
@@ -496,14 +529,41 @@ export const setIcon = () => {};
   assert.match(cssSource, /\.mms-outline-view/);
   assert.match(cssSource, /\.mms-article-view/);
   assert.match(cssSource, /\.mms-article-toc/);
+  assert.match(cssSource, /\.mms-submap-text-link/);
+  assert.match(editorSource, /mmc-node-text\$\{isSubmapTitle \? " is-submap-link"/);
+  assert.match(editorSource, /mmc-submap-inline-indicator/);
+  assert.match(editorSource, /mmc-submap-corner-link/);
+  assert.doesNotMatch(editorSource, /mmc-submap-card/, "mind-map nodes must not render a duplicate named submap card");
+  assert.match(cssSource, /\.mmc-node-text\.is-submap-link/);
+  assert.match(cssSource, /\.mmc-node-text-block \.mmc-node-text\.is-submap-link[\s\S]*width:\s*100%/);
+  assert.match(cssSource, /\.mmc-node\.is-submap-node[\s\S]*cursor:\s*pointer/);
+  assert.match(cssSource, /\.mmc-node-resize-handle/);
+  assert.match(cssSource, /\.mmc-node\.is-selected > \.mmc-node-resize-handle[\s\S]*display:\s*block/);
+  assert.match(cssSource, /white-space:\s*pre-wrap/);
+  assert.match(editorSource, /if \(node\.submap\) void this\.callbacks\.onOpenMindMap\(node\.submap\.path\)/, "the whole linked node must open its child map");
+  assert.match(editorSource, /拖动调整节点宽度和最小高度/);
+  assert.match(editorSource, /恢复节点自动大小/);
+  assert.match(editorSource, /节点宽度（100–900）/);
+  assert.match(editorSource, /文字对齐/);
+  assert.match(cssSource, /\.mmc-submap-corner-link/);
+  assert.doesNotMatch(cssSource, /\.mmc-submap-card/, "obsolete duplicate submap-card styling should be removed");
+  assert.match(editorSource, /onDisplayModeChange/);
+  assert.match(editorSource, /articleBaseDepth/);
+  assert.match(mainSource, /buildArticleContext/);
   assert.match(editorSource, /setAttribute\("stroke-width"/);
   assert.match(editorSource, /setProperty\("stroke-width"[\s\S]*"important"/);
+  assert.match(editorSource, /mmc-canvas-breadcrumb/);
+  assert.match(editorSource, /showCanvasBreadcrumb = hasParent && this\.currentMode === "mindmap"/);
+  assert.doesNotMatch(editorSource, /mmc-parent-node-return/, "the root node must not carry a parent-return decoration");
+  assert.match(cssSource, /\.mmc-canvas-breadcrumb[\s\S]*position:\s*absolute/);
+  assert.match(cssSource, /\.mmc-canvas-breadcrumb-shell[\s\S]*backdrop-filter:\s*blur/);
+  assert.match(cssSource, /\.mmc-canvas-breadcrumb-parent[\s\S]*text-overflow:\s*ellipsis/);
 
 
   const manifest = JSON.parse(await readFile("manifest.json", "utf8"));
   assert.equal(manifest.id, "mindmap-studio");
   assert.equal(manifest.name, "MindMap Studio");
-  assert.equal(manifest.version, "1.4.0");
+  assert.equal(manifest.version, "1.5.0");
   assert.match(cssSource, /\.mms-global-search-modal/);
   assert.match(cssSource, /\.mms-global-search-result/);
 

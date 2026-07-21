@@ -29,36 +29,57 @@ function visibleChildren(node: MindMapNode): MindMapNode[] {
   return node.collapsed ? [] : node.children;
 }
 
+function estimatedTextLines(text: string, width: number, fontSize: number): number {
+  const available = Math.max(44, width - 48);
+  const averageGlyphWidth = Math.max(5.5, fontSize * 0.62);
+  const charsPerLine = Math.max(4, Math.floor(available / averageGlyphWidth));
+  return Math.max(1, text.split(/\r?\n/).reduce((sum, line) => sum + Math.max(1, Math.ceil(Math.max(1, line.length) / charsPerLine)), 0));
+}
+
 function nodeDimensions(node: MindMapNode, depth: number, defaultFontSize = 14): { width: number; height: number } {
   const fontSize = node.style?.fontSize ?? defaultFontSize;
+  const manualWidth = node.style?.width;
   const extraWidth = Math.max(0, fontSize - 14) * 4;
-  let width = (depth === 0 ? ROOT_WIDTH : NODE_WIDTH) + extraWidth;
-  let height = 28 + Math.max(0, fontSize - 14) * 1.4;
   const blocks = nodeContentBlocks(node);
-  if (!blocks.length) height += depth === 0 ? 34 : 26;
-  for (const block of blocks) {
-    if (block.type === "image") { width = Math.max(width, 240); height += 132; }
-    else {
-      const length = Math.max(1, block.text.length);
-      width = Math.max(width, Math.min(460, 80 + Math.min(length, 42) * fontSize * 0.62));
-      height += Math.max(30, Math.ceil(length / 34) * (fontSize + 8));
+  let width = manualWidth ?? ((depth === 0 ? ROOT_WIDTH : NODE_WIDTH) + extraWidth);
+
+  if (!manualWidth) {
+    for (const block of blocks) {
+      if (block.type === "image") width = Math.max(width, 240);
+      else {
+        const longestLine = Math.max(1, ...block.text.split(/\r?\n/).map((line) => line.length));
+        width = Math.max(width, Math.min(460, 80 + Math.min(longestLine, 58) * fontSize * 0.62));
+      }
+    }
+    if (node.table) {
+      const columns = Math.max(1, node.table.headers.length);
+      width = Math.min(720, Math.max(300, columns * 124));
+    }
+    if (node.code) {
+      const lines = node.code.code.split(/\r?\n/);
+      const longest = Math.max(20, ...lines.slice(0, 80).map((line) => line.length));
+      width = Math.min(720, Math.max(380, longest * 7.2 + 42));
     }
   }
+
+  width = Math.min(900, Math.max(100, width));
+  let height = 28 + Math.max(0, fontSize - 14) * 1.4;
+  if (!blocks.length) height += depth === 0 ? 34 : 26;
+  for (const block of blocks) {
+    if (block.type === "image") height += 132;
+    else height += Math.max(30, estimatedTextLines(block.text, width, fontSize) * (fontSize + 8));
+  }
   if (node.tags?.length) height += 20;
-  if (node.submap) { width = Math.max(width, 220); height += 30; }
   if (node.table) {
-    const columns = Math.max(1, node.table.headers.length);
     const visibleRows = Math.min(10, node.table.rows.length);
-    width = Math.min(720, Math.max(300, columns * 124));
     height += 42 + visibleRows * 31 + (node.table.rows.length > visibleRows ? 24 : 0);
   }
   if (node.code) {
     const lines = node.code.code.split(/\r?\n/);
-    const longest = Math.max(20, ...lines.slice(0, 80).map((line) => line.length));
-    width = Math.min(720, Math.max(380, longest * 7.2 + 42));
     height += Math.min(390, Math.max(100, Math.min(lines.length, 18) * 20 + 48));
   }
-  return { width, height: Math.min(560, height) };
+  height = Math.max(height, node.style?.minHeight ?? 0);
+  return { width, height: Math.min(1200, height) };
 }
 
 function subtreeHeight(node: MindMapNode, depth: number, defaultFontSize = 14): number {
@@ -227,12 +248,12 @@ function truncateRuns(runs: MindMapTextRun[], maxLength: number): MindMapTextRun
   return result;
 }
 
-function richTextTspans(runs: MindMapTextRun[] | undefined, fallbackText: string, prefix: string, foreground: string): string {
+function richTextTspans(runs: MindMapTextRun[] | undefined, fallbackText: string, prefix: string, foreground: string, maxChars = 160): string {
   const source: MindMapTextRun[] = [
     ...(prefix ? [{ text: prefix }] : []),
     ...(runs?.length ? runs : [{ text: fallbackText }])
   ];
-  return truncateRuns(source, 42).map((run) => {
+  return truncateRuns(source, maxChars).map((run) => {
     const style = run.style;
     const attributes: string[] = [];
     if (style?.color) attributes.push(`fill="${validColor(style.color, foreground)}"`);
@@ -244,6 +265,17 @@ function richTextTspans(runs: MindMapTextRun[] | undefined, fallbackText: string
     if (decorations.length) attributes.push(`text-decoration="${decorations.join(" ")}"`);
     return `<tspan ${attributes.join(" ")}>${escapeXml(run.text)}</tspan>`;
   }).join("");
+}
+
+function svgWrappedLines(text: string, width: number, fontSize: number): string[] {
+  const available = Math.max(44, width - 32);
+  const maxChars = Math.max(4, Math.floor(available / Math.max(5.5, fontSize * .62)));
+  const lines: string[] = [];
+  for (const sourceLine of text.split(/\r?\n/)) {
+    if (!sourceLine) { lines.push(""); continue; }
+    for (let index = 0; index < sourceLine.length; index += maxChars) lines.push(sourceLine.slice(index, index + maxChars));
+  }
+  return lines.length ? lines : [""];
 }
 
 function svgFontFamily(mode: FontFamilyMode | undefined, customFont: string | undefined): string {
@@ -288,10 +320,14 @@ export function documentToSvg(root: MindMapNode, mode: LayoutMode, title: string
     const border = validColor(node.style?.borderColor, isRoot ? background : branchColor ?? validColor(appearance.nodeBorderColor, "#94a3b8"));
     const borderWidth = node.style?.borderWidth ?? appearance.nodeBorderWidth ?? (isRoot ? 2 : 1);
     const prefix = `${node.icon ? `${node.icon} ` : ""}${taskGlyph(node)}`;
+    const textAlign = node.style?.textAlign ?? appearance.nodeTextAlign ?? "center";
+    const textAnchor = textAlign === "left" ? "start" : textAlign === "right" ? "end" : "middle";
+    const textX = textAlign === "left" ? x + 16 : textAlign === "right" ? x + position.width - 16 : position.x;
     const contentBlocks = nodeContentBlocks(node);
     let contentY = y + 28;
     const contentParts: string[] = [];
     let prefixUsed = false;
+    let submapMarkerUsed = false;
     for (const block of contentBlocks) {
       if (block.type === "image") {
         contentParts.push(`<rect x="${position.x - 70}" y="${contentY - 14}" width="140" height="94" rx="8" fill="rgba(127,127,127,.12)"/><text x="${position.x}" y="${contentY + 38}" text-anchor="middle" fill="${foreground}" font-size="12">🖼 ${escapeXml((block.alt ?? "图片").slice(0, 20))}</text>`);
@@ -299,17 +335,28 @@ export function documentToSvg(root: MindMapNode, mode: LayoutMode, title: string
       } else if (block.text.trim()) {
         const blockPrefix = prefixUsed ? "" : prefix;
         prefixUsed = true;
-        contentParts.push(`<text x="${position.x}" y="${contentY}" text-anchor="middle" fill="${foreground}" font-size="${node.style?.fontSize ?? defaultFontSize}">${richTextTspans(block.richText, block.text, blockPrefix, foreground)}</text>`);
-        contentY += (node.style?.fontSize ?? defaultFontSize) + 15;
+        const suffix: string = node.submap && !submapMarkerUsed ? "  ↗" : "";
+        submapMarkerUsed = submapMarkerUsed || Boolean(suffix);
+        const fontSize = node.style?.fontSize ?? defaultFontSize;
+        const plainText = `${blockPrefix}${block.text}${suffix}`;
+        const lines = svgWrappedLines(plainText, position.width, fontSize);
+        if (lines.length === 1) {
+          const maxChars = Math.max(42, Math.floor((position.width - 32) / Math.max(5.5, fontSize * .62)));
+          const submapSuffix = suffix ? `<tspan fill="${foreground}" opacity=".72">${escapeXml(suffix)}</tspan>` : "";
+          contentParts.push(`<text x="${textX}" y="${contentY}" text-anchor="${textAnchor}" fill="${foreground}" font-size="${fontSize}">${richTextTspans(block.richText, block.text, blockPrefix, foreground, maxChars)}${submapSuffix}</text>`);
+        } else {
+          lines.forEach((line, index) => contentParts.push(`<text x="${textX}" y="${contentY + index * (fontSize + 8)}" text-anchor="${textAnchor}" fill="${foreground}" font-size="${fontSize}">${escapeXml(line)}</text>`));
+        }
+        contentY += lines.length * (fontSize + 8);
       }
     }
-    if (!contentBlocks.length) contentParts.push(`<text x="${position.x}" y="${contentY}" text-anchor="middle" fill="${foreground}" font-size="${node.style?.fontSize ?? defaultFontSize}">${escapeXml(prefix || nodePlainText(node) || "图片节点")}</text>`);
+    if (!contentBlocks.length) {
+      const fontSize = node.style?.fontSize ?? defaultFontSize;
+      const lines = svgWrappedLines(`${prefix || nodePlainText(node) || "图片节点"}${node.submap ? "  ↗" : ""}`, position.width, fontSize);
+      lines.forEach((line, index) => contentParts.push(`<text x="${textX}" y="${contentY + index * (fontSize + 8)}" text-anchor="${textAnchor}" fill="${foreground}" font-size="${fontSize}">${escapeXml(line)}</text>`));
+    }
     let richY = contentY + 10;
     const richParts: string[] = [];
-    if (node.submap) {
-      richParts.push(`<rect x="${x + 12}" y="${richY}" width="${position.width - 24}" height="25" rx="6" fill="rgba(99,102,241,.10)" stroke="${foreground}" stroke-opacity=".28" stroke-dasharray="4 3"/><text x="${position.x}" y="${richY + 17}" text-anchor="middle" fill="${foreground}" font-size="10">↳ ${escapeXml((node.submap.title ?? node.submap.path).slice(0, 54))}</text>`);
-      richY += 34;
-    }
     if (node.table) {
       const rows = [node.table.headers, ...node.table.rows.slice(0, 8)];
       rows.forEach((row, index) => {

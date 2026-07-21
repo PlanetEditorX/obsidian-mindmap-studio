@@ -183,7 +183,7 @@
   color: var(--mmc-node-text);
   box-shadow: 0 3px 12px rgba(15, 23, 42, 0.12);
   cursor: pointer;
-  transition: box-shadow 120ms ease, border-color 120ms ease, opacity 120ms ease, transform 120ms ease;
+  transition: box-shadow 120ms ease, border-color 120ms ease, opacity 120ms ease, transform 120ms ease, filter 120ms ease;
 }
 
 .mmc-node.shape-rounded { border-radius: 14px; }
@@ -201,6 +201,156 @@
   background: var(--mmc-root-bg);
   color: var(--mmc-root-text);
   font-weight: 700;
+}
+
+/* 1.4.4: mind-map mode uses a fixed canvas breadcrumb instead of decorating the root node. */
+.mmc-canvas-breadcrumb {
+  position: absolute;
+  z-index: 24;
+  top: 14px;
+  left: 14px;
+  max-width: min(560px, calc(100% - 28px));
+  pointer-events: none;
+}
+
+.mmc-canvas-breadcrumb.is-hidden {
+  display: none;
+}
+
+.mmc-canvas-breadcrumb-shell {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  max-width: 100%;
+  min-height: 40px;
+  padding: 4px 10px 4px 4px;
+  box-sizing: border-box;
+  border: 1px solid color-mix(in srgb, var(--background-modifier-border) 76%, transparent);
+  border-radius: 13px;
+  background: color-mix(in srgb, var(--background-primary) 86%, transparent);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12), 0 1px 2px rgba(15, 23, 42, 0.08);
+  backdrop-filter: blur(12px) saturate(1.08);
+  -webkit-backdrop-filter: blur(12px) saturate(1.08);
+  color: var(--text-normal);
+  pointer-events: auto;
+  user-select: none;
+}
+
+.mmc-canvas-breadcrumb-back {
+  appearance: none;
+  display: grid;
+  flex: 0 0 31px;
+  width: 31px;
+  height: 31px;
+  min-width: 31px;
+  min-height: 31px;
+  margin: 0;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--interactive-accent) 11%, transparent);
+  color: var(--text-accent);
+  box-shadow: none;
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease, transform 120ms ease;
+}
+
+.mmc-canvas-breadcrumb-back:hover {
+  background: color-mix(in srgb, var(--interactive-accent) 20%, transparent);
+  color: var(--interactive-accent);
+  transform: translateX(-1px);
+}
+
+.mmc-canvas-breadcrumb-back:active {
+  transform: translateX(-2px);
+}
+
+.mmc-canvas-breadcrumb-back:focus-visible,
+.mmc-canvas-breadcrumb-parent:focus-visible {
+  outline: 2px solid var(--interactive-accent);
+  outline-offset: 2px;
+}
+
+.mmc-canvas-breadcrumb-back svg {
+  width: 17px;
+  height: 17px;
+  stroke-width: 2.15;
+}
+
+.mmc-canvas-breadcrumb-trail {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  overflow: hidden;
+  font-family: var(--mmc-font-family);
+  font-size: var(--font-ui-small);
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.mmc-canvas-breadcrumb-parent {
+  appearance: none;
+  display: inline-block;
+  min-width: 0;
+  max-width: 210px;
+  height: auto;
+  margin: 0;
+  padding: 3px 2px;
+  overflow: hidden;
+  border: 0;
+  background: transparent;
+  color: var(--text-accent);
+  box-shadow: none;
+  font: inherit;
+  font-weight: 650;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.mmc-canvas-breadcrumb-parent:hover {
+  color: var(--interactive-accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.mmc-canvas-breadcrumb-separator {
+  flex: 0 0 auto;
+  padding: 0 6px;
+  color: var(--text-faint);
+  font-size: 15px;
+}
+
+.mmc-canvas-breadcrumb-current {
+  min-width: 0;
+  max-width: 260px;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 520px) {
+  .mmc-canvas-breadcrumb {
+    top: 10px;
+    left: 10px;
+    max-width: calc(100% - 20px);
+  }
+
+  .mmc-canvas-breadcrumb-shell {
+    max-width: 100%;
+  }
+
+  .mmc-canvas-breadcrumb-parent {
+    max-width: 42vw;
+  }
+
+  .mmc-canvas-breadcrumb-current {
+    max-width: 34vw;
+  }
 }
 
 .mmc-node.is-bold .mmc-node-text {
@@ -252,6 +402,69 @@
   gap: 5px;
 }
 
+.mmc-node.text-align-left .mmc-node-main { justify-content: flex-start; }
+.mmc-node.text-align-center .mmc-node-main { justify-content: center; }
+.mmc-node.text-align-right .mmc-node-main { justify-content: flex-end; }
+.mmc-node.text-align-left .mmc-node-text.is-submap-link { justify-content: flex-start; }
+.mmc-node.text-align-center .mmc-node-text.is-submap-link { justify-content: center; }
+.mmc-node.text-align-right .mmc-node-text.is-submap-link { justify-content: flex-end; }
+
+.mmc-node.is-submap-node {
+  cursor: pointer;
+}
+
+.mmc-node.is-submap-node:hover {
+  filter: brightness(1.025);
+  box-shadow: 0 6px 20px rgba(15, 23, 42, 0.20), 0 0 0 2px color-mix(in srgb, var(--mmc-selection) 16%, transparent);
+}
+
+.mmc-node.is-submap-node:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--mmc-selection) 58%, transparent);
+  outline-offset: 3px;
+}
+
+.mmc-node-resize-handle {
+  position: absolute;
+  display: none;
+  z-index: 8;
+  right: -6px;
+  bottom: -6px;
+  width: 14px;
+  height: 14px;
+  box-sizing: border-box;
+  border: 2px solid var(--background-primary);
+  border-radius: 5px;
+  background: var(--mmc-selection);
+  box-shadow: 0 1px 5px rgba(15, 23, 42, .28);
+  cursor: nwse-resize;
+  touch-action: none;
+}
+
+.mmc-node.is-selected > .mmc-node-resize-handle {
+  display: block;
+}
+
+.mmc-node-resize-handle::after {
+  content: "";
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  width: 4px;
+  height: 4px;
+  border-right: 1px solid rgba(255,255,255,.9);
+  border-bottom: 1px solid rgba(255,255,255,.9);
+}
+
+.mmc-node-resize-handle:focus-visible {
+  outline: 2px solid var(--interactive-accent);
+  outline-offset: 2px;
+}
+
+.mmc-node.is-resizing {
+  transition: none;
+  user-select: none;
+}
+
 .mmc-node-icon,
 .mmc-task-icon {
   flex: 0 0 auto;
@@ -277,13 +490,17 @@
   overflow: hidden;
   font-size: 14px;
   line-height: 1.35;
-  text-align: center;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  text-align: var(--mmc-node-text-align, center);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .mmc-rich-run {
-  white-space: pre;
+  min-width: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .mmc-rich-text-field-label {
@@ -556,6 +773,40 @@
 
 .mmc-check-label input {
   width: auto;
+}
+
+/* Keep standalone node-editor checkboxes compact. The generic modal input rule
+   above intentionally makes text fields full width, but must not stretch checks. */
+.mmc-node-edit-modal label.mmc-checkbox-label,
+.mmc-node-edit-modal label.mmc-article-numbering-option {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 9px;
+  min-height: 34px;
+  padding: 7px 9px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-s);
+  background: var(--background-secondary-alt);
+  cursor: pointer;
+}
+
+.mmc-node-edit-modal label.mmc-checkbox-label input[type="checkbox"],
+.mmc-node-edit-modal label.mmc-article-numbering-option input[type="checkbox"] {
+  flex: 0 0 16px;
+  width: 16px !important;
+  min-width: 16px !important;
+  max-width: 16px !important;
+  height: 16px !important;
+  margin: 0;
+  padding: 0;
+}
+
+.mmc-node-edit-modal label.mmc-checkbox-label > span,
+.mmc-node-edit-modal label.mmc-article-numbering-option > span {
+  min-width: 0;
+  line-height: 1.45;
 }
 
 .mmc-outline-textarea,
@@ -883,26 +1134,82 @@
   font-size: inherit;
 }
 
-.mmc-submap-card {
+/* Sub-map nodes use the whole node as the navigation target. The title keeps
+   only a small indicator, so alignment and wrapping behave exactly like a
+   normal node instead of creating a narrow text-only hit area. */
+.mmc-node-text-block .mmc-node-text.is-submap-link,
+.mmc-node-text.is-submap-link {
   display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
   align-items: center;
-  justify-content: center;
   width: 100%;
-  min-height: 28px;
-  padding: 4px 8px;
-  gap: 6px;
-  overflow: hidden;
-  border: 1px dashed color-mix(in srgb, currentColor 36%, transparent);
-  border-radius: 7px;
-  background: color-mix(in srgb, var(--interactive-accent) 9%, transparent);
-  color: inherit;
-  font-size: 11px;
-  cursor: pointer;
+  max-width: 100%;
+  gap: 5px;
+  padding: 0;
+  background: transparent !important;
+  cursor: inherit;
+  text-decoration: none;
 }
 
-.mmc-submap-card svg { width: 15px; height: 15px; flex: 0 0 auto; }
-.mmc-submap-card span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.mmc-submap-card:hover { background: color-mix(in srgb, var(--interactive-accent) 18%, transparent); }
+.mmc-submap-inline-indicator {
+  display: inline-flex;
+  flex: 0 0 auto;
+  width: 13px;
+  height: 13px;
+  opacity: .52;
+  transform: translateY(-1px);
+  transition: opacity 140ms ease, transform 160ms ease;
+}
+
+.mmc-submap-inline-indicator svg {
+  width: 13px;
+  height: 13px;
+  stroke-width: 2;
+}
+
+.mmc-node.is-submap-node:hover .mmc-submap-inline-indicator,
+.mmc-node.is-submap-node:focus-visible .mmc-submap-inline-indicator {
+  opacity: .96;
+  transform: translate(1px, -2px);
+}
+
+.mmc-submap-corner-link {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+  min-height: 24px;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, currentColor 24%, transparent);
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--background-primary) 72%, transparent);
+  color: inherit;
+  opacity: .72;
+  cursor: pointer;
+  backdrop-filter: blur(5px);
+}
+
+.mmc-submap-corner-link:hover,
+.mmc-submap-corner-link:focus-visible {
+  opacity: 1;
+  background: color-mix(in srgb, currentColor 11%, var(--background-primary));
+  outline: 2px solid color-mix(in srgb, var(--interactive-accent) 46%, transparent);
+  outline-offset: 1px;
+}
+
+.mmc-submap-corner-link svg {
+  width: 13px;
+  height: 13px;
+  stroke-width: 2;
+}
+
 
 .mmc-table-modal,
 .mmc-code-modal {
@@ -1560,9 +1867,10 @@
   overflow: hidden;
   font-size: var(--font-ui-smaller);
   line-height: 1.25;
-  text-align: center;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  text-align: var(--mmc-node-text-align, center);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .mmc-appearance-modal textarea {
@@ -1637,9 +1945,10 @@
   overflow: hidden;
   font-size: var(--font-ui-smaller);
   line-height: 1.2;
-  text-align: center;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  text-align: var(--mmc-node-text-align, center);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 @media (max-width: 900px) {
@@ -2237,3 +2546,70 @@
 }
 
 .mms-article-page > .mms-inline-node-actions { opacity: 1; justify-content: center; margin: -18px 0 18px; }
+
+/* 1.4.1: sub-map nodes are text links in outline/article modes. */
+.mms-submap-text-link {
+  color: var(--text-accent) !important;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.mms-submap-text-link:hover,
+.mms-submap-text-link:focus {
+  color: var(--text-accent-hover, var(--interactive-accent-hover)) !important;
+  text-decoration-thickness: 2px;
+}
+
+.mms-outline-row > a.mms-outline-title {
+  display: block;
+  border-radius: var(--radius-s);
+}
+
+.mms-article-heading > a.mms-article-heading-text {
+  display: inline-block;
+  min-width: 0;
+}
+
+/* A real directory page for the top-level article map family. */
+.mms-article-toc-page {
+  min-height: 280px;
+  margin: 0 0 48px;
+  padding: clamp(24px, 4vw, 44px);
+  break-after: page;
+  page-break-after: always;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--interactive-accent) 5%, transparent), transparent 110px),
+    var(--background-secondary);
+}
+
+.mms-article-toc-page > h2 {
+  margin-bottom: 22px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--background-modifier-border);
+  font-size: 1.45em;
+  text-align: center;
+}
+
+.mms-article-toc-page li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 2px;
+  margin: 8px 0;
+}
+
+.mms-article-toc-breadcrumb {
+  display: block;
+  overflow: hidden;
+  color: var(--text-faint);
+  font-size: var(--font-ui-smaller);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mms-article-number {
+  min-width: max-content;
+  font-weight: 700;
+  white-space: nowrap;
+}

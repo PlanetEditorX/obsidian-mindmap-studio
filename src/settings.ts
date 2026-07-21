@@ -10,6 +10,7 @@ import type {
   MindMapAppearance,
   MindMapThemePresetId,
   NodeShape,
+  NodeTextAlign,
   ThemeMode
 } from "./model";
 import { appearanceFromThemePreset, MINDMAP_THEME_PRESETS } from "./themes";
@@ -98,6 +99,7 @@ export interface MindMapStudioSettings {
   textColor: string;
   nodeBorderColor: string;
   nodeBorderWidth: number;
+  defaultNodeTextAlign: NodeTextAlign;
   defaultTextBold: boolean;
   defaultTextItalic: boolean;
   defaultTextUnderline: boolean;
@@ -147,6 +149,7 @@ export const DEFAULT_SETTINGS: MindMapStudioSettings = {
   textColor: "#172033",
   nodeBorderColor: "#c7d2fe",
   nodeBorderWidth: 1,
+  defaultNodeTextAlign: "center",
   defaultTextBold: false,
   defaultTextItalic: false,
   defaultTextUnderline: false,
@@ -185,6 +188,7 @@ export function settingsToAppearance(settings: MindMapStudioSettings): MindMapAp
     textColor: settings.textColor || undefined,
     nodeBorderColor: settings.nodeBorderColor || undefined,
     nodeBorderWidth: settings.nodeBorderWidth,
+    nodeTextAlign: settings.defaultNodeTextAlign,
     bold: settings.defaultTextBold,
     italic: settings.defaultTextItalic,
     underline: settings.defaultTextUnderline
@@ -213,6 +217,7 @@ export function applyThemePresetToSettings(settings: MindMapStudioSettings, pres
   settings.textColor = appearance.textColor ?? "";
   settings.nodeBorderColor = appearance.nodeBorderColor ?? "";
   settings.nodeBorderWidth = appearance.nodeBorderWidth ?? 1;
+  settings.defaultNodeTextAlign = appearance.nodeTextAlign ?? "center";
   settings.defaultTextBold = appearance.bold === true;
   settings.defaultTextItalic = appearance.italic === true;
   settings.defaultTextUnderline = appearance.underline === true;
@@ -305,8 +310,8 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
     }
 
     new Setting(containerEl)
-      .setName("新建导图默认模式")
-      .setDesc("只列出上方已启用的模式。")
+      .setName("当前全局显示模式")
+      .setDesc("这里与工具栏模式按钮同步。选择后，之后打开的父导图和所有子导图都会继续使用该模式。")
       .addDropdown((dropdown) => {
         const labels: Record<DisplayMode, string> = { mindmap: "导图模式", outline: "大纲模式", article: "文章模式" };
         for (const mode of this.plugin.settings.visibleModes) dropdown.addOption(mode, labels[mode]);
@@ -314,8 +319,7 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
           ? this.plugin.settings.defaultViewMode
           : this.plugin.settings.visibleModes[0] ?? "mindmap");
         dropdown.onChange(async (value) => {
-          this.plugin.settings.defaultViewMode = value as DisplayMode;
-          await this.plugin.saveSettings();
+          await this.plugin.setGlobalDisplayMode(value as DisplayMode);
         });
       });
 
@@ -654,6 +658,19 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
       async (value) => { this.plugin.settings.textColor = value; },
       "#0f172a"
     );
+
+    new Setting(containerEl)
+      .setName("默认节点文字对齐")
+      .setDesc("控制未单独设置对齐方式的节点；节点编辑窗口仍可覆盖。")
+      .addDropdown((dropdown) => dropdown
+        .addOption("left", "左对齐")
+        .addOption("center", "居中")
+        .addOption("right", "右对齐")
+        .setValue(this.plugin.settings.defaultNodeTextAlign)
+        .onChange(async (value) => {
+          this.plugin.settings.defaultNodeTextAlign = value as NodeTextAlign;
+          await this.saveAndRefresh();
+        }));
 
     new Setting(containerEl)
       .setName("默认文字加粗")

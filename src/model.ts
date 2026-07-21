@@ -19,6 +19,7 @@ export type MindMapThemePresetId =
   | "mint-clean";
 export type FontFamilyMode = "obsidian" | "sans" | "serif" | "mono" | "custom";
 export type TableAlignment = "left" | "center" | "right";
+export type NodeTextAlign = "left" | "center" | "right";
 
 export interface MindMapTextStyle {
   bold?: boolean;
@@ -116,6 +117,7 @@ export interface MindMapAppearance {
   textColor?: string;
   nodeBorderColor?: string;
   nodeBorderWidth?: number;
+  nodeTextAlign?: NodeTextAlign;
   bold?: boolean;
   italic?: boolean;
   underline?: boolean;
@@ -131,6 +133,9 @@ export interface MindMapNodeStyle {
   italic?: boolean;
   underline?: boolean;
   fontSize?: number;
+  textAlign?: NodeTextAlign;
+  width?: number;
+  minHeight?: number;
 }
 
 export interface MindMapNode {
@@ -265,6 +270,7 @@ function normalizeAppearance(input: Partial<MindMapAppearance> | undefined): Min
     textColor: normalizeColor(input.textColor),
     nodeBorderColor: normalizeColor(input.nodeBorderColor),
     nodeBorderWidth: normalizeNumber(input.nodeBorderWidth, 0, 6),
+    nodeTextAlign: input.nodeTextAlign === "left" || input.nodeTextAlign === "right" || input.nodeTextAlign === "center" ? input.nodeTextAlign : undefined,
     bold: normalizeBooleanOverride(input.bold),
     italic: normalizeBooleanOverride(input.italic),
     underline: normalizeBooleanOverride(input.underline)
@@ -290,7 +296,10 @@ function normalizeStyle(input: Partial<MindMapNodeStyle> | undefined): MindMapNo
     bold: normalizeBooleanOverride(input.bold),
     italic: normalizeBooleanOverride(input.italic),
     underline: normalizeBooleanOverride(input.underline),
-    fontSize: normalizeNumber(input.fontSize, 10, 32)
+    fontSize: normalizeNumber(input.fontSize, 10, 32),
+    textAlign: input.textAlign === "left" || input.textAlign === "right" || input.textAlign === "center" ? input.textAlign : undefined,
+    width: normalizeNumber(input.width, 100, 900),
+    minHeight: normalizeNumber(input.minHeight, 36, 600)
   };
   return Object.values(style).some((value) => value !== undefined) ? style : undefined;
 }

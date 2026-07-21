@@ -46,6 +46,7 @@ import {
   type MindMapTextRun,
   type MindMapTextStyle,
   type NodeShape,
+  type NodeTextAlign,
   type TaskStatus,
   removeNode
 } from "./model";
@@ -53,7 +54,7 @@ import { buildBranchColorMap, computeLayout, documentToSvg, edgePath, edgeWidthF
 import { CodeEditModal, TableEditModal } from "./content-modals";
 import type { ImageHostChoice, ImageHostUploadBatch } from "./settings";
 import { appearanceFromThemePreset, MINDMAP_THEME_PRESETS } from "./themes";
-import { buildArticleNodeInfo, DISPLAY_MODE_ICONS, DISPLAY_MODE_LABELS } from "./modes";
+import { buildArticleNodeInfo, DISPLAY_MODE_ICONS, DISPLAY_MODE_LABELS, type ArticleTocEntry } from "./modes";
 
 export interface MindMapEditorCallbacks {
   onChange: (document: MindMapDocument) => void;
@@ -72,6 +73,7 @@ export interface MindMapEditorCallbacks {
   onOpenMindMap: (path: string, focusNodeId?: string) => void | Promise<void>;
   onSearchMapFamily: () => void;
   onGlobalSearch: () => void;
+  onDisplayModeChange: (mode: DisplayMode) => void | Promise<void>;
   onRenderCode: (block: MindMapCodeBlock, container: HTMLElement) => void | Promise<void>;
 }
 
@@ -86,6 +88,9 @@ export interface MindMapEditorOptions {
   imageFailoverUseLocalFallback: boolean;
   visibleModes: DisplayMode[];
   defaultViewMode: DisplayMode;
+  articleBaseDepth: number;
+  articleTocEntries: ArticleTocEntry[];
+  showArticleToc: boolean;
 }
 
 interface NodeEditValues {
@@ -105,6 +110,9 @@ interface NodeEditValues {
   italic?: boolean;
   underline?: boolean;
   fontSize?: number;
+  textAlign?: NodeTextAlign;
+  width?: number;
+  minHeight?: number;
 }
 
 function styleEquals(left: MindMapTextStyle | undefined, right: MindMapTextStyle | undefined): boolean {
@@ -582,7 +590,9 @@ class NodeEditModal extends Modal {
     const tagsInput = tagsLabel.createEl("input", { type: "text" });
     tagsInput.value = this.node.tags?.join(", ") ?? "";
 
-    const numberingLabel = detailsGrid.createEl("label", { cls: "mmc-checkbox-label" });
+    const numberingLabel = detailsGrid.createEl("label", {
+      cls: "mmc-checkbox-label mmc-article-numbering-option",
+    });
     const numberingInput = numberingLabel.createEl("input", { type: "checkbox" });
     numberingInput.checked = this.node.skipArticleNumbering === true;
     numberingLabel.createSpan({ text: "文章模式不自动编号（前言、注释等）" });
@@ -608,6 +618,17 @@ class NodeEditModal extends Modal {
     };
     const borderWidthInput = numberControl("边框粗细", this.node.style?.borderWidth, 0, 6, .5);
     const fontSizeInput = numberControl("字号", this.node.style?.fontSize, 10, 32, 1);
+    const widthInput = numberControl("节点宽度（100–900）", this.node.style?.width, 100, 900, 10);
+    widthInput.placeholder = "自动宽度";
+    const minHeightInput = numberControl("节点最小高度（36–600）", this.node.style?.minHeight, 36, 600, 10);
+    minHeightInput.placeholder = "自动高度";
+    const alignLabel = styleGrid.createEl("label", { text: "文字对齐" });
+    const alignSelect = alignLabel.createEl("select");
+    alignSelect.createEl("option", { text: "跟随全局", attr: { value: "inherit" } });
+    alignSelect.createEl("option", { text: "左对齐", attr: { value: "left" } });
+    alignSelect.createEl("option", { text: "居中", attr: { value: "center" } });
+    alignSelect.createEl("option", { text: "右对齐", attr: { value: "right" } });
+    alignSelect.value = this.node.style?.textAlign ?? "inherit";
     const booleanControl = (labelText: string, current: boolean | undefined): HTMLSelectElement => {
       const label = styleGrid.createEl("label", { text: labelText });
       const select = label.createEl("select");
@@ -644,7 +665,10 @@ class NodeEditModal extends Modal {
         borderWidth: parseNumber(borderWidthInput.value, 0, 6),
         shape: shape === "pill" || shape === "rectangle" || shape === "rounded" ? shape : undefined,
         bold: parseBool(boldInput.value), italic: parseBool(italicInput.value), underline: parseBool(underlineInput.value),
-        fontSize: parseNumber(fontSizeInput.value, 10, 32)
+        fontSize: parseNumber(fontSizeInput.value, 10, 32),
+        textAlign: alignSelect.value === "left" || alignSelect.value === "right" || alignSelect.value === "center" ? alignSelect.value : undefined,
+        width: parseNumber(widthInput.value, 100, 900),
+        minHeight: parseNumber(minHeightInput.value, 36, 600)
       };
     };
 
@@ -660,7 +684,7 @@ class NodeEditModal extends Modal {
     scheduleAutoSave = (): void => { if (timer !== null) window.clearTimeout(timer); timer = window.setTimeout(() => saveNow("autosave"), 280); };
     this.saveOnClose = () => { saveNow("commit"); };
 
-    [iconInput, taskSelect, shapeSelect, tagsInput, numberingInput, borderWidthInput, fontSizeInput, boldInput, italicInput, underlineInput, noteInput, linkInput]
+    [iconInput, taskSelect, shapeSelect, tagsInput, numberingInput, borderWidthInput, fontSizeInput, widthInput, minHeightInput, alignSelect, boldInput, italicInput, underlineInput, noteInput, linkInput]
       .forEach((input) => { input.addEventListener("input", scheduleAutoSave); input.addEventListener("change", scheduleAutoSave); });
 
     const buttons = form.createDiv({ cls: "mmc-form-actions" });
@@ -739,6 +763,12 @@ class AppearanceModal extends Modal {
     const fontSizeLabel = grid.createEl("label", { text: "字号（10–30）" });
     const fontSizeInput = fontSizeLabel.createEl("input", { type: "number", attr: { min: "10", max: "30", step: "1" } });
     fontSizeInput.value = String(this.appearance.fontSize ?? 14);
+    const nodeTextAlignLabel = grid.createEl("label", { text: "节点文字对齐" });
+    const nodeTextAlignSelect = nodeTextAlignLabel.createEl("select");
+    nodeTextAlignSelect.createEl("option", { text: "左对齐", attr: { value: "left" } });
+    nodeTextAlignSelect.createEl("option", { text: "居中", attr: { value: "center" } });
+    nodeTextAlignSelect.createEl("option", { text: "右对齐", attr: { value: "right" } });
+    nodeTextAlignSelect.value = this.appearance.nodeTextAlign ?? "center";
 
     const rootColor = addColor("中心主题颜色", this.appearance.rootColor, "#4f46e5");
     const rootTextColor = addColor("中心主题文字", this.appearance.rootTextColor, "#ffffff");
@@ -816,6 +846,7 @@ class AppearanceModal extends Modal {
       fontSelect.value = appearance.fontFamily ?? "obsidian";
       customFontInput.value = appearance.customFont ?? "";
       fontSizeInput.value = String(appearance.fontSize ?? 14);
+      nodeTextAlignSelect.value = appearance.nodeTextAlign ?? "center";
       setColor(rootColor, appearance.rootColor, "#4f46e5");
       setColor(rootTextColor, appearance.rootTextColor, "#ffffff");
       setColor(nodeColor, appearance.nodeColor, "#ffffff");
@@ -883,6 +914,7 @@ class AppearanceModal extends Modal {
         fontFamily: fontSelect.value as FontFamilyMode,
         customFont: fontSelect.value === "custom" ? customFontInput.value.trim().slice(0, 120) || undefined : undefined,
         fontSize: clamp(fontSizeInput.value, 10, 30, 14),
+        nodeTextAlign: nodeTextAlignSelect.value as NodeTextAlign,
         rootColor: rootColor.toggle.checked ? rootColor.input.value : undefined,
         rootTextColor: rootTextColor.toggle.checked ? rootTextColor.input.value : undefined,
         nodeColor: nodeColor.toggle.checked ? nodeColor.input.value : undefined,
@@ -1048,6 +1080,7 @@ export class MindMapEditor {
   private rootEl!: HTMLDivElement;
   private toolbarEl!: HTMLDivElement;
   private navigationBarEl!: HTMLDivElement;
+  private canvasBreadcrumbEl!: HTMLDivElement;
   private viewportEl!: HTMLDivElement;
   private outlineEl!: HTMLDivElement;
   private articleEl!: HTMLDivElement;
@@ -1084,7 +1117,7 @@ export class MindMapEditor {
     this.callbacks = callbacks;
     this.options = options;
     this.document = cloneDocument(document);
-    this.currentMode = this.resolveMode(this.document.view?.mode ?? options.defaultViewMode);
+    this.currentMode = this.resolveMode(options.defaultViewMode);
     this.readOnly = this.document.view?.readOnly === true;
     this.selectedId = this.document.root.id;
     this.layout = computeLayout(this.document.root, this.document.layout, this.getAppearance().fontSize ?? 14);
@@ -1104,7 +1137,7 @@ export class MindMapEditor {
 
   setDocument(document: MindMapDocument, resetHistory = true): void {
     this.document = cloneDocument(document);
-    this.currentMode = this.resolveMode(this.document.view?.mode ?? this.options.defaultViewMode);
+    this.currentMode = this.resolveMode(this.options.defaultViewMode);
     this.readOnly = this.document.view?.readOnly === true;
     this.selectedId = this.document.root.id;
     if (resetHistory) {
@@ -1117,13 +1150,10 @@ export class MindMapEditor {
 
   setOptions(options: MindMapEditorOptions): void {
     const modesChanged = JSON.stringify(this.options.visibleModes) !== JSON.stringify(options.visibleModes);
+    const globalModeChanged = this.options.defaultViewMode !== options.defaultViewMode;
     this.options = options;
-    const resolved = this.resolveMode(this.currentMode);
-    if (resolved !== this.currentMode) {
-      this.currentMode = resolved;
-      this.document.view = { ...(this.document.view ?? {}), mode: resolved, readOnly: this.readOnly };
-      this.callbacks.onChange(this.getDocument());
-    }
+    const resolved = this.resolveMode(globalModeChanged ? options.defaultViewMode : this.currentMode);
+    if (resolved !== this.currentMode) this.currentMode = resolved;
     if (modesChanged) {
       this.cleanupCallbacks.forEach((callback) => callback());
       this.cleanupCallbacks = [];
@@ -1136,17 +1166,21 @@ export class MindMapEditor {
     this.render();
   }
 
-  setDisplayMode(mode: DisplayMode): void {
+  setDisplayMode(mode: DisplayMode, notifyGlobal = true): void {
     if (!this.options.visibleModes.includes(mode)) return;
     this.currentMode = mode;
-    this.persistViewState();
     this.render();
+    if (notifyGlobal) void this.callbacks.onDisplayModeChange(mode);
     if (mode === "mindmap" && this.options.autoFitOnOpen) window.setTimeout(() => this.fitToView(), 20);
+  }
+
+  applyGlobalDisplayMode(mode: DisplayMode): void {
+    this.setDisplayMode(mode, false);
   }
 
   toggleReadOnly(): void {
     this.readOnly = !this.readOnly;
-    this.persistViewState();
+    this.persistReadOnlyState();
     this.render();
     new Notice(this.readOnly ? "已进入只读模式" : "已进入编辑模式");
   }
@@ -1180,6 +1214,7 @@ export class MindMapEditor {
     this.toolbarEl = this.rootEl.createDiv({ cls: "mmc-toolbar" });
     this.navigationBarEl = this.rootEl.createDiv({ cls: "mmc-parent-navigation" });
     this.viewportEl = this.rootEl.createDiv({ cls: "mmc-viewport" });
+    this.canvasBreadcrumbEl = this.viewportEl.createDiv({ cls: "mmc-canvas-breadcrumb is-hidden" });
     this.sceneEl = this.viewportEl.createDiv({ cls: "mmc-scene" });
     this.edgesSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     this.edgesSvg.classList.add("mmc-edges");
@@ -1265,7 +1300,7 @@ export class MindMapEditor {
 
     const pointerDown = (event: PointerEvent): void => {
       const target = event.target as HTMLElement;
-      if (target.closest(".mmc-node")) return;
+      if (target.closest(".mmc-node, .mmc-canvas-breadcrumb")) return;
       if (event.button !== 0 && event.button !== 1) return;
       this.panning = true;
       this.panStart = { x: event.clientX, y: event.clientY, panX: this.panX, panY: this.panY };
@@ -1305,8 +1340,9 @@ export class MindMapEditor {
     return this.options.visibleModes[0] ?? "mindmap";
   }
 
-  private persistViewState(): void {
-    this.document.view = { mode: this.currentMode, readOnly: this.readOnly };
+  private persistReadOnlyState(): void {
+    this.document.view = { ...(this.document.view ?? {}), readOnly: this.readOnly };
+    delete this.document.view.mode;
     this.callbacks.onChange(this.getDocument());
     this.markSaving();
   }
@@ -1390,22 +1426,65 @@ export class MindMapEditor {
 
   private renderNavigation(): void {
     this.navigationBarEl.empty();
+    this.canvasBreadcrumbEl.empty();
     const navigation = this.document.navigation;
-    this.navigationBarEl.toggleClass("is-hidden", !navigation?.parentPath);
+    const hasParent = Boolean(navigation?.parentPath);
+    const showNavigationBar = hasParent && this.currentMode !== "mindmap";
+    const showCanvasBreadcrumb = hasParent && this.currentMode === "mindmap";
+    this.navigationBarEl.toggleClass("is-hidden", !showNavigationBar);
+    this.canvasBreadcrumbEl.toggleClass("is-hidden", !showCanvasBreadcrumb);
     if (!navigation?.parentPath) return;
 
+    const parentTitle = navigation.parentTitle
+      ?? navigation.parentPath.split("/").at(-1)?.replace(/\.mindmap$/i, "")
+      ?? "父导图";
+    const currentTitle = nodePlainText(this.document.root) || this.document.title || "当前导图";
+    const returnTitle = navigation.parentNodeText
+      ? `返回父导图：${parentTitle}（来源节点：${navigation.parentNodeText}）`
+      : `返回父导图：${parentTitle}`;
+    const openParent = (): void => {
+      void this.callbacks.onOpenMindMap(navigation.parentPath, navigation.parentNodeId);
+    };
+
+    if (showCanvasBreadcrumb) {
+      const shell = this.canvasBreadcrumbEl.createDiv({ cls: "mmc-canvas-breadcrumb-shell" });
+      const backButton = shell.createEl("button", {
+        cls: "mmc-canvas-breadcrumb-back",
+        attr: { type: "button", title: returnTitle, "aria-label": returnTitle }
+      });
+      setIcon(backButton, "arrow-left");
+      backButton.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        openParent();
+      });
+
+      const trail = shell.createDiv({ cls: "mmc-canvas-breadcrumb-trail" });
+      const parent = trail.createEl("button", {
+        cls: "mmc-canvas-breadcrumb-parent",
+        text: parentTitle,
+        attr: { type: "button", title: returnTitle }
+      });
+      parent.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        openParent();
+      });
+      trail.createSpan({ cls: "mmc-canvas-breadcrumb-separator", text: "›" });
+      trail.createSpan({ cls: "mmc-canvas-breadcrumb-current", text: currentTitle });
+      shell.setAttr("title", navigation.parentPath);
+    }
+
+    if (!showNavigationBar) return;
     const button = this.navigationBarEl.createEl("button", {
       cls: "mmc-parent-navigation-button",
-      attr: {
-        type: "button",
-        title: `返回父导图：${navigation.parentPath}`
-      }
+      attr: { type: "button", title: returnTitle }
     });
     setIcon(button, "arrow-left");
     const labels = button.createDiv({ cls: "mmc-parent-navigation-labels" });
-    labels.createDiv({ cls: "mmc-parent-navigation-title", text: `返回父导图：${navigation.parentTitle ?? navigation.parentPath.split("/").at(-1)?.replace(/\.mindmap$/i, "") ?? "父导图"}` });
+    labels.createDiv({ cls: "mmc-parent-navigation-title", text: `返回父导图：${parentTitle}` });
     if (navigation.parentNodeText) labels.createDiv({ cls: "mmc-parent-navigation-node", text: `来源节点：${navigation.parentNodeText}` });
-    button.addEventListener("click", () => void this.callbacks.onOpenMindMap(navigation.parentPath, navigation.parentNodeId));
+    button.addEventListener("click", openParent);
     this.navigationBarEl.createDiv({ cls: "mmc-parent-navigation-path", text: navigation.parentPath });
   }
 
@@ -1482,7 +1561,7 @@ export class MindMapEditor {
       item.style.setProperty("--mms-outline-depth", String(depth));
       const row = item.createDiv({ cls: `mms-outline-row${this.selectedId === node.id ? " is-selected" : ""}` });
       row.dataset.nodeId = node.id;
-      row.createSpan({ cls: "mms-outline-bullet", text: node.children.length ? "◆" : "•" });
+      row.createSpan({ cls: "mms-outline-bullet", text: node.children.length || node.submap ? "◆" : "•" });
       if (node.task) {
         const task = row.createEl("input", { type: "checkbox", cls: "mms-outline-task" });
         task.checked = node.task === "done";
@@ -1493,16 +1572,32 @@ export class MindMapEditor {
           this.mutate(() => { node.task = task.checked ? "done" : "todo"; });
         });
       }
-      const text = row.createDiv({ cls: "mms-outline-title", text: nodePlainText(node) || "图片节点" });
-      this.makeInlineEditable(text, node, "节点文字");
-      if (node.skipArticleNumbering) row.createSpan({ cls: "mms-outline-badge", text: "文章不编号" });
+      const label = nodePlainText(node) || (node.submap?.title ?? "图片节点");
       if (node.submap) {
-        const submap = row.createEl("button", { cls: "mms-outline-submap", text: "进入子导图", attr: { type: "button" } });
-        submap.addEventListener("click", (event) => { event.stopPropagation(); void this.callbacks.onOpenMindMap(node.submap!.path); });
+        const link = row.createEl("a", {
+          cls: "mms-outline-title mms-submap-text-link",
+          text: label,
+          href: node.submap.path,
+          attr: { title: `打开子导图：${node.submap.title ?? node.submap.path}` }
+        });
+        link.addEventListener("click", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          this.selectNode(node.id);
+          void this.callbacks.onOpenMindMap(node.submap!.path);
+        });
+      } else {
+        const text = row.createDiv({ cls: "mms-outline-title", text: label });
+        this.makeInlineEditable(text, node, "节点文字");
       }
+      if (node.skipArticleNumbering) row.createSpan({ cls: "mms-outline-badge", text: "文章不编号" });
       this.addInlineNodeActions(row, node);
       row.addEventListener("click", () => this.selectNode(node.id));
-      row.addEventListener("dblclick", () => { this.selectNode(node.id); if (!this.readOnly) this.editSelected(); });
+      row.addEventListener("dblclick", () => {
+        this.selectNode(node.id);
+        if (node.submap) void this.callbacks.onOpenMindMap(node.submap.path);
+        else if (!this.readOnly) this.editSelected();
+      });
       if (node.note) item.createDiv({ cls: "mms-outline-note", text: node.note });
       node.children.forEach((child) => visit(child, depth + 1));
     };
@@ -1550,23 +1645,27 @@ export class MindMapEditor {
     this.makeInlineEditable(title, this.document.root, "文章标题");
     this.addInlineNodeActions(page, this.document.root);
 
-    const infos = buildArticleNodeInfo(this.document.root);
-    const headings = infos.filter((info) => info.isHeading);
-    if (headings.length) {
-      const toc = page.createEl("nav", { cls: "mms-article-toc" });
-      toc.createEl("h2", { text: "目录" });
-      const list = toc.createEl("ol");
-      for (const info of headings) {
-        const item = list.createEl("li", { cls: `depth-${Math.min(info.depth, 8)}` });
-        item.style.setProperty("--mms-article-depth", String(info.depth));
-        const link = item.createEl("a", { text: info.displayTitle || "未命名标题", href: `#${info.anchor}` });
+    if (this.options.showArticleToc && this.options.articleTocEntries.length) {
+      const tocPage = page.createEl("nav", { cls: "mms-article-toc mms-article-toc-page" });
+      tocPage.createEl("h2", { text: "目录" });
+      const list = tocPage.createEl("ol");
+      for (const entry of this.options.articleTocEntries) {
+        const item = list.createEl("li", { cls: `depth-${Math.min(entry.depth, 8)}` });
+        item.style.setProperty("--mms-article-depth", String(entry.depth));
+        const link = item.createEl("a", {
+          text: entry.displayTitle || entry.title || "未命名标题",
+          href: entry.filePath,
+          attr: { title: entry.breadcrumb.join(" › ") }
+        });
         link.addEventListener("click", (event) => {
           event.preventDefault();
-          this.articleEl.querySelector<HTMLElement>(`#${CSS.escape(info.anchor)}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+          void this.callbacks.onOpenMindMap(entry.filePath, entry.nodeId);
         });
+        if (entry.breadcrumb.length > 1) item.createSpan({ cls: "mms-article-toc-breadcrumb", text: entry.breadcrumb.join(" › ") });
       }
     }
 
+    const infos = buildArticleNodeInfo(this.document.root, this.options.articleBaseDepth);
     for (const info of infos) {
       const section = page.createEl("section", { cls: `mms-article-node depth-${Math.min(info.depth, 8)}${this.selectedId === info.node.id ? " is-selected" : ""}` });
       section.dataset.nodeId = info.node.id;
@@ -1576,8 +1675,23 @@ export class MindMapEditor {
         const level = Math.min(6, info.depth + 1);
         const heading = section.createEl(`h${level}` as keyof HTMLElementTagNameMap, { cls: "mms-article-heading" });
         if (info.label) heading.createSpan({ cls: "mms-article-number", text: info.label });
-        const headingText = heading.createSpan({ cls: "mms-article-heading-text", text: info.title });
-        this.makeInlineEditable(headingText, info.node, "章节标题");
+        if (info.node.submap) {
+          const headingLink = heading.createEl("a", {
+            cls: "mms-article-heading-text mms-submap-text-link",
+            text: info.title,
+            href: info.node.submap.path,
+            attr: { title: `打开子导图：${info.node.submap.title ?? info.node.submap.path}` }
+          });
+          headingLink.addEventListener("click", (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            this.selectNode(info.node.id);
+            void this.callbacks.onOpenMindMap(info.node.submap!.path);
+          });
+        } else {
+          const headingText = heading.createSpan({ cls: "mms-article-heading-text", text: info.title });
+          this.makeInlineEditable(headingText, info.node, "章节标题");
+        }
         if (info.skipped) heading.createSpan({ cls: "mms-article-skip-badge", text: "不编号" });
         this.addInlineNodeActions(heading, info.node);
         this.renderArticleContent(section, info.node, false);
@@ -1590,10 +1704,6 @@ export class MindMapEditor {
         }
         this.addInlineNodeActions(section, info.node);
         this.renderArticleContent(section, info.node, false);
-      }
-      if (info.node.submap) {
-        const submap = section.createEl("button", { cls: "mms-article-submap", text: `进入子导图：${info.node.submap.title ?? info.node.submap.path}`, attr: { type: "button" } });
-        submap.addEventListener("click", (event) => { event.stopPropagation(); void this.callbacks.onOpenMindMap(info.node.submap!.path); });
       }
     }
   }
@@ -1645,13 +1755,15 @@ export class MindMapEditor {
     for (const position of this.layout.nodes) {
       const node = position.node;
       const shape = node.style?.shape ?? this.options.defaultNodeShape;
-      const classes = ["mmc-node", position.depth === 0 ? "is-root" : "", `shape-${shape}`].filter(Boolean).join(" ");
+      const textAlign = node.style?.textAlign ?? appearance.nodeTextAlign ?? "center";
+      const classes = ["mmc-node", position.depth === 0 ? "is-root" : "", node.submap ? "is-submap-node" : "", `shape-${shape}`, `text-align-${textAlign}`].filter(Boolean).join(" ");
       const nodeEl = this.nodesLayerEl.createDiv({ cls: classes });
       nodeEl.dataset.nodeId = node.id;
       nodeEl.style.left = `${position.x}px`;
       nodeEl.style.top = `${position.y}px`;
       nodeEl.style.width = `${position.width}px`;
       nodeEl.style.minHeight = `${position.height}px`;
+      nodeEl.style.setProperty("--mmc-node-text-align", textAlign);
       nodeEl.draggable = position.depth > 0 && !this.readOnly;
       if (this.selectedId === node.id) nodeEl.addClass("is-selected");
       if (this.searchQuery && nodeSearchText(node).includes(this.searchQuery)) nodeEl.addClass("is-search-match");
@@ -1783,21 +1895,40 @@ export class MindMapEditor {
           task.setAttr("aria-label", node.task === "done" ? "已完成" : node.task === "doing" ? "进行中" : "待办");
         }
         if (!prefixRendered && node.icon) main.createSpan({ cls: "mmc-node-icon", text: node.icon });
+        const isSubmapTitle = Boolean(node.submap) && !prefixRendered;
         prefixRendered = true;
-        const textEl = main.createDiv({ cls: "mmc-node-text" });
+        const textEl = main.createDiv({ cls: `mmc-node-text${isSubmapTitle ? " is-submap-link" : ""}` });
         renderRichTextRuns(textEl, block.richText, block.text);
         textEl.style.fontSize = `${node.style?.fontSize ?? appearance.fontSize ?? 14}px`;
-        textEl.setAttr("aria-label", block.text);
+        textEl.setAttr("aria-label", isSubmapTitle ? `打开子导图：${block.text}` : block.text);
+        if (isSubmapTitle) {
+          const indicator = textEl.createSpan({ cls: "mmc-submap-inline-indicator", attr: { "aria-hidden": "true" } });
+          setIcon(indicator, "arrow-up-right");
+          textEl.setAttr("title", `打开子导图：${node.submap!.title ?? node.submap!.path}`);
+        }
       }
 
-      if (node.submap) {
-        const submapButton = content.createEl("button", { cls: "mmc-submap-card", attr: { "aria-label": `进入子导图 ${node.submap.title ?? node.submap.path}` } });
-        setIcon(submapButton, "network");
-        submapButton.createSpan({ text: node.submap.title ?? node.submap.path.split("/").at(-1)?.replace(/\.mindmap$/i, "") ?? "子导图" });
-        submapButton.addEventListener("click", (event) => {
+      if (node.submap && !hasTextBlock) {
+        const submapIcon = nodeEl.createEl("button", {
+          cls: "mmc-submap-corner-link",
+          attr: {
+            "aria-label": `打开子导图：${node.submap.title ?? node.submap.path}`,
+            title: `打开子导图：${node.submap.title ?? node.submap.path}`
+          }
+        });
+        setIcon(submapIcon, "arrow-up-right");
+        submapIcon.addEventListener("click", (event) => {
+          event.preventDefault();
           event.stopPropagation();
           void this.callbacks.onOpenMindMap(node.submap!.path);
         });
+      }
+
+      if (node.submap) {
+        nodeEl.setAttr("role", "link");
+        nodeEl.setAttr("tabindex", "0");
+        nodeEl.setAttr("aria-label", `打开子导图：${node.submap.title ?? node.submap.path}`);
+        nodeEl.setAttr("title", `打开子导图：${node.submap.title ?? node.submap.path}；右键可编辑节点`);
       }
 
       if (node.table) this.renderNodeTable(content, node);
@@ -1838,14 +1969,80 @@ export class MindMapEditor {
         });
       }
 
+      if (!this.readOnly) {
+        const resizeHandle = nodeEl.createDiv({
+          cls: "mmc-node-resize-handle",
+          attr: { role: "separator", tabindex: "0", "aria-label": "拖动调整节点宽度和最小高度", title: "拖动调整节点大小；双击恢复自动大小" }
+        });
+        resizeHandle.setAttr("draggable", "false");
+        resizeHandle.addEventListener("click", (event) => { event.preventDefault(); event.stopPropagation(); });
+        resizeHandle.addEventListener("dblclick", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          this.mutate(() => {
+            const next = { ...(node.style ?? {}), width: undefined, minHeight: undefined };
+            node.style = Object.values(next).some((value) => value !== undefined) ? next : undefined;
+          });
+        });
+        resizeHandle.addEventListener("pointerdown", (event) => {
+          if (event.button !== 0) return;
+          event.preventDefault();
+          event.stopPropagation();
+          const startX = event.clientX;
+          const startY = event.clientY;
+          const startWidth = position.width;
+          const startHeight = position.height;
+          let previewWidth = startWidth;
+          let previewHeight = startHeight;
+          resizeHandle.setPointerCapture(event.pointerId);
+          nodeEl.addClass("is-resizing");
+          const move = (moveEvent: PointerEvent): void => {
+            const scale = Math.max(.1, this.zoom);
+            previewWidth = Math.min(900, Math.max(100, startWidth + (moveEvent.clientX - startX) / scale));
+            previewHeight = Math.min(600, Math.max(36, startHeight + (moveEvent.clientY - startY) / scale));
+            nodeEl.style.width = `${Math.round(previewWidth)}px`;
+            nodeEl.style.minHeight = `${Math.round(previewHeight)}px`;
+          };
+          const finish = (upEvent: PointerEvent): void => {
+            resizeHandle.removeEventListener("pointermove", move);
+            resizeHandle.removeEventListener("pointerup", finish);
+            resizeHandle.removeEventListener("pointercancel", finish);
+            if (resizeHandle.hasPointerCapture(upEvent.pointerId)) resizeHandle.releasePointerCapture(upEvent.pointerId);
+            nodeEl.removeClass("is-resizing");
+            this.mutate(() => {
+              node.style = {
+                ...(node.style ?? {}),
+                width: Math.round(previewWidth),
+                minHeight: Math.round(previewHeight)
+              };
+            });
+          };
+          resizeHandle.addEventListener("pointermove", move);
+          resizeHandle.addEventListener("pointerup", finish);
+          resizeHandle.addEventListener("pointercancel", finish);
+        });
+      }
+
       nodeEl.addEventListener("click", (event) => {
         event.stopPropagation();
         this.selectNode(node.id);
+        if (node.submap) void this.callbacks.onOpenMindMap(node.submap.path);
       });
+      if (node.submap) {
+        nodeEl.addEventListener("keydown", (event) => {
+          if (event.key !== "Enter" && event.key !== " ") return;
+          event.preventDefault();
+          event.stopPropagation();
+          this.selectNode(node.id);
+          void this.callbacks.onOpenMindMap(node.submap!.path);
+        });
+      }
       nodeEl.addEventListener("dblclick", (event) => {
         event.stopPropagation();
         this.selectNode(node.id);
-        if (!this.readOnly) this.editSelected();
+        if (node.submap) {
+          void this.callbacks.onOpenMindMap(node.submap.path);
+        } else if (!this.readOnly) this.editSelected();
       });
       nodeEl.addEventListener("contextmenu", (event) => {
         event.preventDefault();
@@ -1976,7 +2173,10 @@ export class MindMapEditor {
         bold: values.bold,
         italic: values.italic,
         underline: values.underline,
-        fontSize: values.fontSize
+        fontSize: values.fontSize,
+        textAlign: values.textAlign,
+        width: values.width,
+        minHeight: values.minHeight
       };
       selected.style = Object.values(style).some((value) => value !== undefined) ? style : undefined;
       if (selected.id === this.document.root.id) {
@@ -2208,8 +2408,21 @@ export class MindMapEditor {
     void this.callbacks.onOpenLink(link);
   }
 
+  private isParentNavigationBacklink(node: MindMapNode): boolean {
+    const navigation = this.document.navigation;
+    if (!navigation?.parentPath) return false;
+    if (node.id !== this.document.root.id) return false;
+    const explicit = node.link?.trim();
+    if (!explicit) return false;
+    const candidate = explicit.startsWith("[[") ? extractFirstWikiLink(explicit) : explicit.split("|")[0]?.split("#")[0]?.trim();
+    if (!candidate) return false;
+    return candidate === navigation.parentPath;
+  }
+
   private getNodeLink(node: MindMapNode): string | null {
-    return node.link?.trim() || extractFirstWikiLink(nodePlainText(node)) || extractFirstWikiLink(node.note ?? "");
+    const explicit = node.link?.trim();
+    if (explicit && !this.isParentNavigationBacklink(node)) return explicit;
+    return extractFirstWikiLink(nodePlainText(node)) || extractFirstWikiLink(node.note ?? "");
   }
 
   private showOutline(): void {
@@ -2273,6 +2486,15 @@ export class MindMapEditor {
     menu.addItem((item) => item.setTitle("添加子节点").setIcon("plus-circle").onClick(() => this.addChild()));
     menu.addItem((item) => item.setTitle("添加同级节点").setIcon("list-plus").onClick(() => this.addSibling()));
     menu.addItem((item) => item.setTitle("编辑节点").setIcon("pencil").onClick(() => this.editSelected()));
+    if (selected?.style?.width !== undefined || selected?.style?.minHeight !== undefined) {
+      menu.addItem((item) => item.setTitle("恢复节点自动大小").setIcon("maximize-2").onClick(() => {
+        if (!selected) return;
+        this.mutate(() => {
+          const next = { ...(selected.style ?? {}), width: undefined, minHeight: undefined };
+          selected.style = Object.values(next).some((value) => value !== undefined) ? next : undefined;
+        });
+      }));
+    }
     menu.addItem((item) => item.setTitle("克隆分支").setIcon("copy-plus").onClick(() => this.duplicateSelected()));
     menu.addSeparator();
     menu.addItem((item) => item.setTitle(selected?.table ? "编辑表格" : "插入表格").setIcon("table-2").onClick(() => this.editTable()));

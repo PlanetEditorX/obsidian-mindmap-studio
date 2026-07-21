@@ -1,3 +1,54 @@
+# Upgrade notes
+
+## 升级到 1.5.0
+
+本次新增子导图整块点击、节点文字对齐、自定义宽度和最小高度。新增数据都保存在节点 `style` 或脑图 `appearance` 的可选字段中，数据版本仍为 10。现有 `.mindmap` 文件可以直接打开，不需要重新创建节点或子导图。
+
+升级后：
+
+- 点击子导图节点任意非控件区域会直接进入子导图；
+- 右键子导图节点仍可编辑；
+- 选中普通节点后可拖动右下角控制点调整大小；
+- 节点编辑窗口可精确设置宽度、最小高度和文字对齐；
+- 插件设置可统一选择默认文字对齐方式。
+
+覆盖旧插件目录并重新启用即可。
+
+## 升级到 1.4.6
+
+本次只调整子导图节点的显示和交互，不修改 `.mindmap` 数据结构。覆盖插件目录并重新启用即可。升级后，导图模式会移除节点下方重复的同名子导图卡片，改为点击节点标题文字进入子导图；纯图片节点使用小型箭头入口。
+
+## 升级到 1.4.5
+
+本次仅修复节点编辑窗口的复选框排版，不修改 `.mindmap` 数据格式，也不需要迁移文件。覆盖插件目录并重新启用即可。
+
+
+## 1.4.4
+
+No data migration is required. Parent navigation in mind-map mode moved from the root node to a fixed upper-left breadcrumb overlay. Existing parent/child links continue to work unchanged.
+
+# 升级到 MindMap Studio 1.4.3
+
+1. 关闭 Obsidian 中的 MindMap Studio。
+2. 用 1.4.3 安装包中的 `mindmap-studio` 文件夹覆盖旧目录。
+3. 重启 Obsidian 或重新启用插件。
+
+`.mindmap` 数据结构没有变化，现有父导图和子导图无需迁移。升级后，导图模式中的父导图返回入口会显示为贴合根节点左上边缘的标签，不再是右上角圆点。大纲和文章模式仍使用页面顶部的父导图导航条。
+
+---
+# 升级到 MindMap Studio 1.4.1
+
+1. 关闭 Obsidian 中的 MindMap Studio。
+2. 用 1.4.1 安装包中的 `mindmap-studio` 文件夹覆盖旧目录。
+3. 重启 Obsidian 或重新启用插件。
+
+现有 `.mindmap` 文件无需转换，数据版本仍为 10。已有子导图不需要重新创建，也不需要重建搜索索引。
+
+升级后，显示模式改为全局记忆：在任意导图点击“导图 / 大纲 / 文章”后，之后打开的全部父导图和子导图都会保持该模式。旧文件中的 `view.mode` 不再决定打开模式；每个文件的只读状态仍然独立保存。
+
+文章模式会根据子导图的 `navigation.parentPath`、`parentNodeId` 以及父节点的 `submap.path` 计算跨文件层级。顶层父导图包含子导图时会生成递归目录页。
+
+---
 # 升级到 MindMap Studio 1.4.0
 
 1. 关闭 Obsidian 中的 MindMap Studio。

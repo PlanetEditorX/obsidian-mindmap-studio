@@ -39,8 +39,13 @@ export function articleNumberLabel(depth: number, index: number): string {
   return depth % 2 === 1 ? `${alphabet}.` : `（${alphabet}）`;
 }
 
+/**
+ * A node is an article heading when it owns local descendants or represents a
+ * linked child map. A sub-map node is therefore still a chapter/section even
+ * when its children live in another .mindmap file.
+ */
 export function isArticleHeading(node: MindMapNode): boolean {
-  return node.children.length > 0;
+  return node.children.length > 0 || Boolean(node.submap?.path);
 }
 
 export interface ArticleNodeInfo {
@@ -54,7 +59,24 @@ export interface ArticleNodeInfo {
   anchor: string;
 }
 
-export function buildArticleNodeInfo(root: MindMapNode): ArticleNodeInfo[] {
+export interface ArticleTocEntry {
+  filePath: string;
+  nodeId: string;
+  depth: number;
+  label: string;
+  title: string;
+  displayTitle: string;
+  breadcrumb: string[];
+}
+
+/**
+ * Build the article representation for one physical .mindmap file.
+ * `baseDepth` is the absolute article depth represented by this file's root.
+ * For a top-level map it is 0; for a child map linked from a chapter it is 1,
+ * so that the child map's first descendants become sections rather than a new
+ * set of chapters.
+ */
+export function buildArticleNodeInfo(root: MindMapNode, baseDepth = 0): ArticleNodeInfo[] {
   const result: ArticleNodeInfo[] = [];
   const visitChildren = (parent: MindMapNode, depth: number): void => {
     let numberedIndex = 0;
@@ -78,7 +100,7 @@ export function buildArticleNodeInfo(root: MindMapNode): ArticleNodeInfo[] {
       if (child.children.length) visitChildren(child, depth + 1);
     }
   };
-  visitChildren(root, 1);
+  visitChildren(root, Math.max(0, baseDepth) + 1);
   return result;
 }
 
