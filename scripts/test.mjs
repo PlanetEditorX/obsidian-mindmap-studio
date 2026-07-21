@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFile, rm, mkdtemp } from "node:fs/promises";
+import { readFile, writeFile, rm, mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createRequire } from "node:module";
@@ -8,6 +8,8 @@ import { build } from "esbuild";
 const tempDir = await mkdtemp(join(tmpdir(), "mindmap-studio-test-"));
 const outfile = join(tempDir, "model.cjs");
 const layoutOutfile = join(tempDir, "layout.cjs");
+const searchOutfile = join(tempDir, "global-search.cjs");
+const obsidianStub = join(tempDir, "obsidian-stub.mjs");
 
 try {
   await build({
@@ -26,10 +28,27 @@ try {
     format: "cjs",
     logLevel: "silent"
   });
+  await writeFile(obsidianStub, `export class App {}
+export class Modal { constructor() {} }
+export class Notice {}
+export class TFile {}
+export const normalizePath = (value) => value;
+export const setIcon = () => {};
+`);
+  await build({
+    entryPoints: ["src/global-search.ts"],
+    outfile: searchOutfile,
+    bundle: true,
+    platform: "node",
+    format: "cjs",
+    alias: { obsidian: obsidianStub },
+    logLevel: "silent"
+  });
 
   const require = createRequire(import.meta.url);
   const model = require(outfile);
   const layout = require(layoutOutfile);
+  const globalSearch = require(searchOutfile);
   const document = model.createDefaultDocument("测试脑图");
   document.appearance = {
     backgroundColor: "#fef3c7",
@@ -195,9 +214,10 @@ try {
   const branchMap = layout.buildBranchColorMap(document.root, document.appearance.branchColors);
   assert.equal(branchMap.get(document.root.children[0].id), "#dc2626");
   assert.equal(branchMap.get("depth-3"), "#dc2626", "descendants should inherit their first-level branch color");
-  assert.equal(layout.edgeWidthForDepth(document.appearance, 1), 3);
-  assert.equal(layout.edgeWidthForDepth(document.appearance, 3), 2);
-  assert.equal(layout.edgeWidthForDepth(document.appearance, 5), 1);
+  assert.equal(layout.edgeWidthForDepth(document.appearance, 1, 3), 3);
+  assert.equal(layout.edgeWidthForDepth(document.appearance, 2, 3), 2);
+  assert.equal(layout.edgeWidthForDepth(document.appearance, 3, 3), 1);
+  assert.equal(layout.edgeWidthForDepth(document.appearance, 2, 2), 1, "the deepest edge in a shallow map must reach the configured minimum");
 
   const svg = layout.documentToSvg(document.root, document.layout, document.title, document.appearance);
   assert.match(svg, /pattern id="mmc-pattern"/);
@@ -255,8 +275,41 @@ try {
   assert.match(richSvg, /typescript/);
   assert.match(richSvg, /苹果/);
 
+  const indexedDocument = model.normalizeDocument({
+    title: "项目总览",
+    root: {
+      id: "search-root",
+      text: "主项目",
+      children: [{
+        id: "hidden-child",
+        text: "折叠的关键节点",
+        note: "供应链风险",
+        collapsed: true,
+        children: [{
+          id: "deep-child",
+          text: "深层子节点",
+          tags: ["重点", "美国站"],
+          table: { headers: ["商品", "状态"], rows: [["眼镜盒", "待处理"]] },
+          code: { language: "javascript", code: "const globalSearch = true;" },
+          submap: { path: "Assets/项目总览/供应商.mindmap", title: "供应商" },
+          children: []
+        }]
+      }]
+    },
+    navigation: { parentPath: "父导图.mindmap", parentTitle: "父导图" }
+  }, "fallback");
+  const searchEntries = globalSearch.buildSearchEntries(indexedDocument, "Projects/项目总览.mindmap");
+  assert.equal(searchEntries.length, 3, "global index must include collapsed and deep child nodes");
+  assert.equal(searchEntries[2].isSubmapDocument, true);
+  assert.match(searchEntries[2].searchableText, /供应商\.mindmap/);
+  assert.equal(globalSearch.searchEntries(searchEntries, "供应链风险")[0]?.nodeId, "hidden-child");
+  assert.equal(globalSearch.searchEntries(searchEntries, "眼镜盒 待处理")[0]?.nodeId, "deep-child");
+  assert.equal(globalSearch.searchEntries(searchEntries, "globalsearch")[0]?.nodeId, "deep-child");
+
   const mainSource = await readFile("src/main.ts", "utf8");
   assert.match(mainSource, /registerExtensions\(\[MINDMAP_EXTENSION\], VIEW_TYPE_MINDMAP_STUDIO\)/);
+  assert.match(mainSource, /global-search-mind-maps/);
+  assert.match(mainSource, /mindmap-search-index\.json/);
   assert.match(mainSource, /MINDMAP_EXTENSION = "mindmap"/);
   assert.match(mainSource, /\[parentFolder, configuredAssets, parentMapFolder\]/, "submaps must be stored below the parent-local asset folder");
   assert.match(mainSource, /\[sourceFolder, configuredFolder\]/, "pasted images must use the current map's parent-local asset folder");
@@ -321,12 +374,17 @@ try {
   assert.match(cssSource, /cursor:\s*zoom-in/);
   assert.match(cssSource, /\.mms-image-host-card/);
   assert.match(cssSource, /\.mms-image-host-picker-item/);
+  assert.match(cssSource, /--mmc-current-edge-width/);
+  assert.match(editorSource, /setAttribute\("stroke-width"/);
+  assert.match(editorSource, /setProperty\("stroke-width"[\s\S]*"important"/);
 
 
   const manifest = JSON.parse(await readFile("manifest.json", "utf8"));
   assert.equal(manifest.id, "mindmap-studio");
   assert.equal(manifest.name, "MindMap Studio");
-  assert.equal(manifest.version, "1.2.0");
+  assert.equal(manifest.version, "1.3.0");
+  assert.match(cssSource, /\.mms-global-search-modal/);
+  assert.match(cssSource, /\.mms-global-search-result/);
 
   console.log("All MindMap Studio tests passed.");
 } finally {

@@ -1,7 +1,7 @@
 {
   "name": "obsidian-mindmap-studio",
-  "version": "1.2.0",
-  "description": "A local-first editable mind map editor for Obsidian using dedicated .mindmap files",
+  "version": "1.3.0",
+  "description": "Editable local-first .mindmap diagrams for Obsidian with global indexed search, nested maps, XMind-style themes, rich content blocks, image mirrors, tables, code, and exports.",
   "main": "main.js",
   "scripts": {
     "dev": "node esbuild.config.mjs",

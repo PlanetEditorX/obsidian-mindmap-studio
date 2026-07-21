@@ -163,11 +163,15 @@ export function buildBranchColorMap(root: MindMapNode, colors: string[] | undefi
   return result;
 }
 
-export function edgeWidthForDepth(appearance: MindMapAppearance, depth: number): number {
+export function edgeWidthForDepth(appearance: MindMapAppearance, depth: number, maxDepth = 5): number {
   const maximum = Math.max(0.5, Math.min(8, appearance.edgeWidth ?? 2.2));
   if (appearance.edgeWidthMode !== "tapered") return maximum;
   const minimum = Math.max(0.25, Math.min(maximum, appearance.edgeMinWidth ?? Math.min(1, maximum)));
-  const progress = Math.min(1, Math.max(0, depth - 1) / 4);
+  const deepest = Math.max(1, Math.floor(maxDepth));
+  // The first edge stays at the configured maximum. The deepest visible edge
+  // reaches the configured minimum, so tapering remains obvious even in a
+  // shallow two- or three-level map.
+  const progress = deepest <= 1 ? 0 : Math.min(1, Math.max(0, depth - 1) / (deepest - 1));
   return Number((maximum + (minimum - maximum) * progress).toFixed(3));
 }
 
@@ -260,12 +264,13 @@ export function documentToSvg(root: MindMapNode, mode: LayoutMode, title: string
   const edgeStyle = appearance.edgeStyle ?? "curved";
   const defaultEdge = validColor(appearance.edgeColor, "#7c8aa5");
   const branchColorMap = appearance.colorfulBranches ? buildBranchColorMap(root, appearance.branchColors) : new Map<string, string>();
+  const maxDepth = Math.max(1, ...layout.nodes.map((position) => position.depth));
   const edges = layout.nodes
     .filter((position) => position.parentId)
     .map((position) => {
       const parent = position.parentId ? layout.byId.get(position.parentId) : undefined;
       const stroke = validColor(position.node.style?.color, branchColorMap.get(position.node.id) ?? defaultEdge);
-      const width = edgeWidthForDepth(appearance, position.depth);
+      const width = edgeWidthForDepth(appearance, position.depth, maxDepth);
       return parent ? `<path d="${edgePath(parent, position, edgeStyle)}" fill="none" stroke="${stroke}" stroke-width="${width}" stroke-linecap="round" stroke-linejoin="round" opacity="0.8"/>` : "";
     })
     .join("\n");

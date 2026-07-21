@@ -108,6 +108,7 @@ export interface MindMapStudioSettings {
   imageFailoverEnabled: boolean;
   imageFailoverTimeoutSeconds: number;
   imageFailoverUseLocalFallback: boolean;
+  globalSearchMaxResults: number;
 }
 
 export const DEFAULT_SETTINGS: MindMapStudioSettings = {
@@ -153,7 +154,8 @@ export const DEFAULT_SETTINGS: MindMapStudioSettings = {
   deleteLocalAfterUpload: true,
   imageFailoverEnabled: true,
   imageFailoverTimeoutSeconds: 8,
-  imageFailoverUseLocalFallback: true
+  imageFailoverUseLocalFallback: true,
+  globalSearchMaxResults: 100
 };
 
 export function settingsToAppearance(settings: MindMapStudioSettings): MindMapAppearance {
@@ -822,6 +824,43 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
         .onChange(async (value) => {
           this.plugin.settings.embedMaxHeight = value;
           await this.plugin.saveSettings();
+        }));
+
+
+    containerEl.createEl("h3", { text: "全局搜索索引" });
+    const searchStatus = this.plugin.getGlobalSearchIndexStatus();
+    containerEl.createEl("p", {
+      cls: "setting-item-description",
+      text: searchStatus.building
+        ? `正在建立索引；当前已收录 ${searchStatus.files} 个导图、${searchStatus.nodes} 个节点。`
+        : `本地索引已收录 ${searchStatus.files} 个导图、${searchStatus.nodes} 个节点。索引文件仅保存在插件目录，不会上传网络。`
+    });
+
+    new Setting(containerEl)
+      .setName("单次最多显示结果")
+      .setDesc("范围 20–500。索引会搜索整个仓库中的所有 .mindmap 文件。")
+      .addSlider((slider) => slider
+        .setLimits(20, 500, 10)
+        .setDynamicTooltip()
+        .setValue(this.plugin.settings.globalSearchMaxResults)
+        .onChange(async (value) => {
+          this.plugin.settings.globalSearchMaxResults = value;
+          await this.plugin.saveSettings();
+        }));
+
+    new Setting(containerEl)
+      .setName("重建搜索索引")
+      .setDesc("当文件由外部同步工具批量修改，或搜索结果与实际内容不一致时使用。")
+      .addButton((button) => button
+        .setButtonText("立即重建")
+        .onClick(async () => {
+          button.setDisabled(true);
+          try {
+            await this.plugin.rebuildGlobalSearchIndex();
+            this.display();
+          } finally {
+            button.setDisabled(false);
+          }
         }));
   }
 

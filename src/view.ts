@@ -11,6 +11,7 @@ export class MindMapStudioView extends TextFileView {
   private editor: MindMapEditor | null = null;
   private document: MindMapDocument | null = null;
   private savedTimer: number | null = null;
+  private pendingFocusNodeId: string | null = null;
 
   constructor(leaf: WorkspaceLeaf, plugin: MindMapStudioPlugin) {
     super(leaf);
@@ -67,6 +68,7 @@ export class MindMapStudioView extends TextFileView {
           await this.save();
           await this.plugin.openMindMapPath(path, this.file?.path ?? "", this.leaf, focusNodeId);
         },
+        onGlobalSearch: () => this.plugin.openGlobalSearch(),
         onRenderCode: async (block, container) => {
           const longestFence = Math.max(2, ...Array.from(block.code.matchAll(/`+/g), (match) => match[0].length));
           const fence = "`".repeat(longestFence + 1);
@@ -77,6 +79,11 @@ export class MindMapStudioView extends TextFileView {
     } else {
       this.editor.setDocument(this.document, false);
       this.editor.setOptions(this.getEditorOptions());
+    }
+    if (this.pendingFocusNodeId && this.editor) {
+      const nodeId = this.pendingFocusNodeId;
+      this.pendingFocusNodeId = null;
+      window.setTimeout(() => this.editor?.focusNodeById(nodeId), 20);
     }
   }
 
@@ -105,7 +112,11 @@ export class MindMapStudioView extends TextFileView {
   }
 
   focusNode(nodeId: string): void {
-    this.editor?.focusNodeById(nodeId);
+    if (!this.editor) {
+      this.pendingFocusNodeId = nodeId;
+      return;
+    }
+    this.editor.focusNodeById(nodeId);
   }
 
   private getEditorOptions() {

@@ -37,6 +37,7 @@ import {
 } from "./settings";
 import { renderStaticMindMap, renderStaticSource } from "./static-render";
 import { MindMapStudioView, VIEW_TYPE_MINDMAP_STUDIO } from "./view";
+import { GlobalMindMapSearchModal, MindMapSearchIndex, type MindMapSearchResult } from "./global-search";
 
 export const MINDMAP_EXTENSION = "mindmap";
 const LEGACY_SUFFIX = ".smm.md";
@@ -45,9 +46,13 @@ export default class MindMapStudioPlugin extends Plugin {
   settings: MindMapStudioSettings = DEFAULT_SETTINGS;
   private legacyMigrationPath: string | null = null;
   private readonly autoUploadTimers = new Map<string, number>();
+  private searchIndex!: MindMapSearchIndex;
 
   async onload(): Promise<void> {
     await this.loadSettings();
+    const pluginDir = this.manifest.dir ?? normalizePath(`${this.app.vault.configDir}/plugins/${this.manifest.id}`);
+    this.searchIndex = new MindMapSearchIndex(this.app, normalizePath(`${pluginDir}/mindmap-search-index.json`), MINDMAP_EXTENSION);
+    void this.searchIndex.initialize();
 
     this.registerView(VIEW_TYPE_MINDMAP_STUDIO, (leaf) => new MindMapStudioView(leaf, this));
     // A dedicated extension is the key to reliable reopening: Obsidian routes every
@@ -56,7 +61,19 @@ export default class MindMapStudioPlugin extends Plugin {
     this.addSettingTab(new MindMapStudioSettingTab(this.app, this));
 
     this.addRibbonIcon("brain-circuit", "新建思维导图", () => void this.createMindMap());
+    this.addRibbonIcon("search", "全局搜索思维导图", () => this.openGlobalSearch());
 
+    this.addCommand({
+      id: "global-search-mind-maps",
+      name: "全局搜索所有思维导图",
+      hotkeys: [{ modifiers: ["Mod", "Shift"], key: "F" }],
+      callback: () => this.openGlobalSearch()
+    });
+    this.addCommand({
+      id: "rebuild-mind-map-search-index",
+      name: "重建思维导图搜索索引",
+      callback: () => void this.rebuildGlobalSearchIndex()
+    });
     this.addCommand({
       id: "new-mind-map",
       name: "新建思维导图",
@@ -131,6 +148,20 @@ export default class MindMapStudioPlugin extends Plugin {
       window.setTimeout(() => void this.migrateLegacyFile(file, true), 0);
     }));
 
+    this.registerEvent(this.app.vault.on("create", (file) => {
+      if (file instanceof TFile && this.isMindMapFile(file)) this.searchIndex.queueFile(file, 80);
+    }));
+    this.registerEvent(this.app.vault.on("modify", (file) => {
+      if (file instanceof TFile && this.isMindMapFile(file)) this.searchIndex.queueFile(file);
+    }));
+    this.registerEvent(this.app.vault.on("delete", (file) => {
+      if (file instanceof TFile && file.extension.toLowerCase() === MINDMAP_EXTENSION) this.searchIndex.removeFile(file.path);
+    }));
+    this.registerEvent(this.app.vault.on("rename", (file, oldPath) => {
+      if (file instanceof TFile && this.isMindMapFile(file)) this.searchIndex.renameFile(file, oldPath);
+      else if (oldPath.toLowerCase().endsWith(`.${MINDMAP_EXTENSION}`)) this.searchIndex.removeFile(oldPath);
+    }));
+
     this.registerMarkdownCodeBlockProcessor("mindmap", (source, el, ctx) => {
       renderStaticSource(el, source, this.getSourceTitle(ctx), settingsToAppearance(this.settings));
     });
@@ -150,7 +181,39 @@ export default class MindMapStudioPlugin extends Plugin {
   onunload(): void {
     for (const timer of this.autoUploadTimers.values()) window.clearTimeout(timer);
     this.autoUploadTimers.clear();
+    this.searchIndex?.destroy();
     this.app.workspace.detachLeavesOfType(VIEW_TYPE_MINDMAP_STUDIO);
+  }
+
+  openGlobalSearch(): void {
+    new GlobalMindMapSearchModal(
+      this.app,
+      this.searchIndex,
+      this.settings.globalSearchMaxResults,
+      (result) => this.openGlobalSearchResult(result),
+      () => this.searchIndex.rebuildAll()
+    ).open();
+  }
+
+  async rebuildGlobalSearchIndex(): Promise<void> {
+    new Notice("正在重建思维导图搜索索引…");
+    await this.searchIndex.rebuildAll();
+    const status = this.searchIndex.getStatus();
+    new Notice(`搜索索引已重建：${status.files} 个导图，${status.nodes} 个节点`);
+  }
+
+  getGlobalSearchIndexStatus() {
+    return this.searchIndex.getStatus();
+  }
+
+  private async openGlobalSearchResult(result: MindMapSearchResult): Promise<void> {
+    const file = this.app.vault.getAbstractFileByPath(result.filePath);
+    if (!(file instanceof TFile) || !this.isMindMapFile(file)) {
+      this.searchIndex.removeFile(result.filePath);
+      new Notice(`搜索结果对应的导图已不存在：${result.filePath}`);
+      return;
+    }
+    await this.openAsMindMap(file, undefined, result.nodeId);
   }
 
   async loadSettings(): Promise<void> {
@@ -220,6 +283,9 @@ export default class MindMapStudioPlugin extends Plugin {
         ? Math.max(2, Math.min(30, Math.round(raw.imageFailoverTimeoutSeconds)))
         : DEFAULT_SETTINGS.imageFailoverTimeoutSeconds,
       imageFailoverUseLocalFallback: raw.imageFailoverUseLocalFallback !== false,
+      globalSearchMaxResults: typeof raw.globalSearchMaxResults === "number"
+        ? Math.max(20, Math.min(500, Math.round(raw.globalSearchMaxResults)))
+        : DEFAULT_SETTINGS.globalSearchMaxResults,
       defaultThemePreset: [
         "classic-indigo", "ocean-blue", "forest-green", "sunset-orange", "lavender-dream",
         "candy-pop", "paper-note", "minimal-ink", "dark-neon", "mint-clean"

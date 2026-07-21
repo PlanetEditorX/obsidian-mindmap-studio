@@ -67,6 +67,7 @@ export interface MindMapEditorCallbacks {
   onScheduleAutoUpload: (nodeId: string, blockId: string, localPath: string, suggestedName: string) => boolean;
   onCreateSubmap: (node: MindMapNode) => Promise<MindMapSubmap>;
   onOpenMindMap: (path: string, focusNodeId?: string) => void | Promise<void>;
+  onGlobalSearch: () => void;
   onRenderCode: (block: MindMapCodeBlock, container: HTMLElement) => void | Promise<void>;
 }
 
@@ -1138,7 +1139,8 @@ export class MindMapEditor {
     this.addToolbarButton("circle-check-big", "切换任务状态（Ctrl/Cmd+Enter）", () => this.cycleTask());
     this.addToolbarButton("fold-vertical", "展开/收起节点（Space）", () => this.toggleCollapse());
     this.addToolbarButton("link", "打开节点链接", () => this.openSelectedLink());
-    this.addToolbarButton("search", "搜索节点（Ctrl/Cmd+F）", () => this.openSearch());
+    this.addToolbarButton("search", "搜索当前导图（Ctrl/Cmd+F）", () => this.openSearch());
+    this.addToolbarButton("file-search", "全局搜索所有导图（Ctrl/Cmd+Shift+F）", () => this.callbacks.onGlobalSearch());
     this.addToolbarSeparator();
     this.addToolbarButton("table-2", "插入或编辑表格", () => this.editTable());
     this.addToolbarButton("code-2", "插入或编辑代码", () => this.editCode());
@@ -1310,6 +1312,8 @@ export class MindMapEditor {
     this.nodesLayerEl.empty();
     while (this.edgesSvg.firstChild) this.edgesSvg.removeChild(this.edgesSvg.firstChild);
 
+    const maxDepth = Math.max(1, ...this.layout.nodes.map((position) => position.depth));
+
     for (const position of this.layout.nodes) {
       if (!position.parentId) continue;
       const parent = this.layout.byId.get(position.parentId);
@@ -1320,7 +1324,13 @@ export class MindMapEditor {
       const branchColor = branchColorMap.get(position.node.id);
       if (position.node.style?.color) path.style.stroke = position.node.style.color;
       else if (branchColor) path.style.stroke = branchColor;
-      path.style.strokeWidth = `${edgeWidthForDepth(appearance, position.depth)}px`;
+      const edgeWidth = edgeWidthForDepth(appearance, position.depth, maxDepth);
+      // Set both the SVG presentation attribute and an inline CSS variable.
+      // This prevents community-theme rules from forcing every edge back to
+      // the same width.
+      path.setAttribute("stroke-width", String(edgeWidth));
+      path.style.setProperty("--mmc-current-edge-width", `${edgeWidth}px`);
+      path.style.setProperty("stroke-width", `${edgeWidth}px`, "important");
       this.edgesSvg.appendChild(path);
     }
 
@@ -2122,6 +2132,11 @@ export class MindMapEditor {
       event.preventDefault();
       this.callbacks.onChange(this.getDocument());
       this.markSaving();
+      return;
+    }
+    if (mod && event.shiftKey && key === "f") {
+      event.preventDefault();
+      this.callbacks.onGlobalSearch();
       return;
     }
     if (mod && key === "f") {
