@@ -1,26 +1,26 @@
 {
-  "version": 8,
-  "title": "MindMap Studio 内容块示例",
+  "version": 9,
+  "title": "MindMap Studio 主题与内容示例",
   "layout": "right",
   "theme": "auto",
   "root": {
     "id": "root-demo",
-    "text": "MindMap Studio 内容块示例",
+    "text": "MindMap Studio 主题与内容示例",
     "content": [
       {
         "id": "root-text",
         "type": "text",
-        "text": "MindMap Studio 内容块示例",
+        "text": "MindMap Studio 主题与内容示例",
         "richText": [
           {
             "text": "MindMap Studio",
             "style": {
               "bold": true,
-              "color": "#4f46e5"
+              "color": "#ffffff"
             }
           },
           {
-            "text": " 内容块示例"
+            "text": " 主题与内容示例"
           }
         ]
       }
@@ -37,7 +37,46 @@
             "alt": "纯图片节点"
           }
         ],
-        "children": []
+        "children": [
+          {
+            "id": "theme-depth-2",
+            "text": "二级分支",
+            "content": [
+              {
+                "id": "theme-depth-2-text",
+                "type": "text",
+                "text": "二级分支"
+              }
+            ],
+            "children": [
+              {
+                "id": "theme-depth-3",
+                "text": "三级分支",
+                "content": [
+                  {
+                    "id": "theme-depth-3-text",
+                    "type": "text",
+                    "text": "三级分支"
+                  }
+                ],
+                "children": [
+                  {
+                    "id": "theme-depth-4",
+                    "text": "四级分支（连线更细）",
+                    "content": [
+                      {
+                        "id": "theme-depth-4-text",
+                        "type": "text",
+                        "text": "四级分支（连线更细）"
+                      }
+                    ],
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          }
+        ]
       },
       {
         "id": "mixed-node",
@@ -113,6 +152,34 @@
         },
         "children": []
       }
+    ]
+  },
+  "appearance": {
+    "themePreset": "classic-indigo",
+    "backgroundColor": "#f8fafc",
+    "backgroundPattern": "grid",
+    "patternColor": "#94a3b8",
+    "fontFamily": "sans",
+    "fontSize": 14,
+    "rootColor": "#4f46e5",
+    "rootTextColor": "#ffffff",
+    "nodeColor": "#ffffff",
+    "textColor": "#172033",
+    "nodeBorderColor": "#c7d2fe",
+    "nodeBorderWidth": 1,
+    "edgeColor": "#6366f1",
+    "edgeStyle": "curved",
+    "edgeWidth": 4.2,
+    "edgeWidthMode": "tapered",
+    "edgeMinWidth": 1.2,
+    "colorfulBranches": true,
+    "branchColors": [
+      "#4f46e5",
+      "#0284c7",
+      "#0f766e",
+      "#7c3aed",
+      "#db2777",
+      "#ea580c"
     ]
   }
 }

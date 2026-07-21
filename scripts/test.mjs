@@ -36,13 +36,21 @@ try {
     backgroundPattern: "dots",
     fontFamily: "serif",
     fontSize: 18,
+    themePreset: "sunset-orange",
+    rootColor: "#c2410c",
+    rootTextColor: "#ffffff",
     edgeColor: "#dc2626",
     edgeWidth: 3,
     edgeStyle: "elbow",
+    edgeWidthMode: "tapered",
+    edgeMinWidth: 1,
+    colorfulBranches: true,
+    branchColors: ["#dc2626", "#2563eb"],
     bold: true,
     italic: true,
     underline: true
   };
+  document.root.children[0].children.push({ id: "depth-2", text: "二级节点", children: [{ id: "depth-3", text: "三级节点", children: [] }] });
   document.root.children.push({ id: "saved-node", text: "保存后仍可编辑", children: [] });
 
   const serialized = model.serializeDocument(document);
@@ -52,9 +60,14 @@ try {
 
   const reopened = model.parseDocument(serialized, "fallback");
   assert.equal(reopened.title, "测试脑图");
-  assert.equal(reopened.version, 8);
+  assert.equal(reopened.version, 9);
   assert.equal(reopened.appearance?.backgroundPattern, "dots");
   assert.equal(reopened.appearance?.edgeStyle, "elbow");
+  assert.equal(reopened.appearance?.edgeWidthMode, "tapered");
+  assert.equal(reopened.appearance?.edgeMinWidth, 1);
+  assert.equal(reopened.appearance?.themePreset, "sunset-orange");
+  assert.equal(reopened.appearance?.rootColor, "#c2410c");
+  assert.deepEqual(reopened.appearance?.branchColors, ["#dc2626", "#2563eb"]);
   assert.equal(reopened.appearance?.underline, true);
   assert.equal(reopened.root.children.at(-1)?.text, "保存后仍可编辑");
 
@@ -179,9 +192,19 @@ try {
   const editedStyles = model.richTextCharacterStyles(editedRuns, "1A23456789012");
   assert.equal(editedStyles[2]?.bold, true, "styles after inserted text should stay attached to unchanged suffix");
 
+  const branchMap = layout.buildBranchColorMap(document.root, document.appearance.branchColors);
+  assert.equal(branchMap.get(document.root.children[0].id), "#dc2626");
+  assert.equal(branchMap.get("depth-3"), "#dc2626", "descendants should inherit their first-level branch color");
+  assert.equal(layout.edgeWidthForDepth(document.appearance, 1), 3);
+  assert.equal(layout.edgeWidthForDepth(document.appearance, 3), 2);
+  assert.equal(layout.edgeWidthForDepth(document.appearance, 5), 1);
+
   const svg = layout.documentToSvg(document.root, document.layout, document.title, document.appearance);
   assert.match(svg, /pattern id="mmc-pattern"/);
   assert.match(svg, /stroke-width="3"/);
+  assert.match(svg, /stroke-width="2"/);
+  assert.match(svg, /stroke="#dc2626"/, "branch colors should be exported");
+  assert.match(svg, /fill="#c2410c"/, "root theme color should be exported");
   assert.match(svg, /font-style="italic"/);
   assert.match(svg, /text-decoration="underline"/);
   assert.match(svg, /L .* L .* L /, "elbow connectors should be exported as segmented lines");
@@ -258,6 +281,12 @@ try {
   assert.doesNotMatch(editorSource, /已自动保存；可继续编辑|等待自动保存|正在自动保存/, "autosave status text must stay hidden");
   assert.match(editorSource, /mmc-rich-color-button/);
   assert.match(editorSource, /mmc-rich-color-line/);
+  assert.match(editorSource, /MINDMAP_THEME_PRESETS/);
+  assert.match(editorSource, /edgeWidthForDepth/);
+  const themeSource = await readFile("src/themes.ts", "utf8");
+  assert.match(themeSource, /经典靛蓝/);
+  assert.match(themeSource, /暗夜霓虹/);
+  assert.ok((themeSource.match(/id: "/g) ?? []).length >= 10, "at least ten built-in themes should be available");
   assert.match(editorSource, /this\.modalEl\.contains\(event\.target as Node\)/, "clicking outside the modal should close after flushing autosave");
   assert.doesNotMatch(editorSource, /切换所选文字删除线/, "strikethrough must be hidden from the common formatting toolbar");
   assert.match(editorSource, /可排序的文字块和图片块/);
@@ -297,7 +326,7 @@ try {
   const manifest = JSON.parse(await readFile("manifest.json", "utf8"));
   assert.equal(manifest.id, "mindmap-studio");
   assert.equal(manifest.name, "MindMap Studio");
-  assert.equal(manifest.version, "1.1.0");
+  assert.equal(manifest.version, "1.2.0");
 
   console.log("All MindMap Studio tests passed.");
 } finally {

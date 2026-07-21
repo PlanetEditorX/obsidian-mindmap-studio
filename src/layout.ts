@@ -151,6 +151,26 @@ export function computeLayout(root: MindMapNode, mode: LayoutMode, defaultFontSi
   return { nodes, byId, minX, maxX, minY, maxY };
 }
 
+
+export function buildBranchColorMap(root: MindMapNode, colors: string[] | undefined): Map<string, string> {
+  const result = new Map<string, string>();
+  if (!colors?.length) return result;
+  const visit = (node: MindMapNode, color: string): void => {
+    result.set(node.id, color);
+    node.children.forEach((child) => visit(child, color));
+  };
+  root.children.forEach((child, index) => visit(child, colors[index % colors.length]!));
+  return result;
+}
+
+export function edgeWidthForDepth(appearance: MindMapAppearance, depth: number): number {
+  const maximum = Math.max(0.5, Math.min(8, appearance.edgeWidth ?? 2.2));
+  if (appearance.edgeWidthMode !== "tapered") return maximum;
+  const minimum = Math.max(0.25, Math.min(maximum, appearance.edgeMinWidth ?? Math.min(1, maximum)));
+  const progress = Math.min(1, Math.max(0, depth - 1) / 4);
+  return Number((maximum + (minimum - maximum) * progress).toFixed(3));
+}
+
 export function edgePath(parent: NodePosition, child: NodePosition, style: EdgeStyle = "curved"): string {
   const parentX = parent.x + (child.side >= 0 ? parent.width / 2 : -parent.width / 2);
   const childX = child.x - (child.side >= 0 ? child.width / 2 : -child.width / 2);
@@ -238,14 +258,15 @@ export function documentToSvg(root: MindMapNode, mode: LayoutMode, title: string
   const offsetX = padding - layout.minX;
   const offsetY = padding - layout.minY;
   const edgeStyle = appearance.edgeStyle ?? "curved";
-  const edgeWidth = appearance.edgeWidth ?? 2.2;
   const defaultEdge = validColor(appearance.edgeColor, "#7c8aa5");
+  const branchColorMap = appearance.colorfulBranches ? buildBranchColorMap(root, appearance.branchColors) : new Map<string, string>();
   const edges = layout.nodes
     .filter((position) => position.parentId)
     .map((position) => {
       const parent = position.parentId ? layout.byId.get(position.parentId) : undefined;
-      const stroke = validColor(position.node.style?.color, defaultEdge);
-      return parent ? `<path d="${edgePath(parent, position, edgeStyle)}" fill="none" stroke="${stroke}" stroke-width="${edgeWidth}" stroke-linecap="round" stroke-linejoin="round" opacity="0.8"/>` : "";
+      const stroke = validColor(position.node.style?.color, branchColorMap.get(position.node.id) ?? defaultEdge);
+      const width = edgeWidthForDepth(appearance, position.depth);
+      return parent ? `<path d="${edgePath(parent, position, edgeStyle)}" fill="none" stroke="${stroke}" stroke-width="${width}" stroke-linecap="round" stroke-linejoin="round" opacity="0.8"/>` : "";
     })
     .join("\n");
 
@@ -254,11 +275,12 @@ export function documentToSvg(root: MindMapNode, mode: LayoutMode, title: string
     const x = position.x - position.width / 2;
     const y = position.y - position.height / 2;
     const isRoot = position.depth === 0;
-    const defaultBackground = isRoot ? "#4f46e5" : validColor(appearance.nodeColor, "#ffffff");
-    const defaultText = isRoot ? "#ffffff" : validColor(appearance.textColor, "#0f172a");
+    const defaultBackground = isRoot ? validColor(appearance.rootColor, "#4f46e5") : validColor(appearance.nodeColor, "#ffffff");
+    const defaultText = isRoot ? validColor(appearance.rootTextColor, "#ffffff") : validColor(appearance.textColor, "#0f172a");
     const background = validColor(node.style?.color, defaultBackground);
     const foreground = validColor(node.style?.textColor, defaultText);
-    const border = validColor(node.style?.borderColor, isRoot ? background : validColor(appearance.nodeBorderColor, "#94a3b8"));
+    const branchColor = branchColorMap.get(node.id);
+    const border = validColor(node.style?.borderColor, isRoot ? background : branchColor ?? validColor(appearance.nodeBorderColor, "#94a3b8"));
     const borderWidth = node.style?.borderWidth ?? appearance.nodeBorderWidth ?? (isRoot ? 2 : 1);
     const prefix = `${node.icon ? `${node.icon} ` : ""}${taskGlyph(node)}`;
     const contentBlocks = nodeContentBlocks(node);

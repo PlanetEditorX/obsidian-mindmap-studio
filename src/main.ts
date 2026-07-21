@@ -167,6 +167,7 @@ export default class MindMapStudioPlugin extends Plugin {
         console.warn("MindMap Studio could not migrate the old settings file", error);
       }
     }
+    const hadStoredSettings = loaded !== null && loaded !== undefined;
     const raw = (loaded ?? {}) as Partial<MindMapStudioSettings> & Record<string, unknown>;
     let imageHosts: ImageHostConfig[] = Array.isArray(raw.imageHosts)
       ? raw.imageHosts.slice(0, 20).flatMap((item, index) => {
@@ -218,7 +219,29 @@ export default class MindMapStudioPlugin extends Plugin {
       imageFailoverTimeoutSeconds: typeof raw.imageFailoverTimeoutSeconds === "number"
         ? Math.max(2, Math.min(30, Math.round(raw.imageFailoverTimeoutSeconds)))
         : DEFAULT_SETTINGS.imageFailoverTimeoutSeconds,
-      imageFailoverUseLocalFallback: raw.imageFailoverUseLocalFallback !== false
+      imageFailoverUseLocalFallback: raw.imageFailoverUseLocalFallback !== false,
+      defaultThemePreset: [
+        "classic-indigo", "ocean-blue", "forest-green", "sunset-orange", "lavender-dream",
+        "candy-pop", "paper-note", "minimal-ink", "dark-neon", "mint-clean"
+      ].includes(String(raw.defaultThemePreset)) ? raw.defaultThemePreset as MindMapStudioSettings["defaultThemePreset"] : DEFAULT_SETTINGS.defaultThemePreset,
+      edgeWidthMode: raw.edgeWidthMode === "uniform" || raw.edgeWidthMode === "tapered"
+        ? raw.edgeWidthMode
+        : hadStoredSettings ? "uniform" : DEFAULT_SETTINGS.edgeWidthMode,
+      edgeMinWidth: typeof raw.edgeMinWidth === "number"
+        ? Math.max(0.25, Math.min(8, raw.edgeMinWidth))
+        : DEFAULT_SETTINGS.edgeMinWidth,
+      rootColor: typeof raw.rootColor === "string" && /^#[0-9a-f]{6}$/i.test(raw.rootColor)
+        ? raw.rootColor
+        : hadStoredSettings ? "" : DEFAULT_SETTINGS.rootColor,
+      rootTextColor: typeof raw.rootTextColor === "string" && /^#[0-9a-f]{6}$/i.test(raw.rootTextColor)
+        ? raw.rootTextColor
+        : hadStoredSettings ? "" : DEFAULT_SETTINGS.rootTextColor,
+      colorfulBranches: typeof raw.colorfulBranches === "boolean"
+        ? raw.colorfulBranches
+        : hadStoredSettings ? false : DEFAULT_SETTINGS.colorfulBranches,
+      branchColors: Array.isArray(raw.branchColors)
+        ? raw.branchColors.filter((value): value is string => typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value)).slice(0, 12)
+        : hadStoredSettings ? [] : [...DEFAULT_SETTINGS.branchColors]
     } as MindMapStudioSettings;
     if (raw.backgroundPattern === undefined && raw.showGrid === false) this.settings.backgroundPattern = "none";
   }

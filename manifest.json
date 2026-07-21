@@ -1,9 +1,9 @@
 {
   "id": "mindmap-studio",
   "name": "MindMap Studio",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "minAppVersion": "1.5.0",
-  "description": "Editable local-first .mindmap diagrams with ordered content blocks, multi-image-host uploads, automatic mirror failover, nested maps, tables, code, rich text, and exports.",
+  "description": "Editable local-first .mindmap diagrams with XMind-style theme presets, tapered connectors, multi-image-host failover, ordered content blocks, nested maps, tables, code, rich text, and exports.",
   "author": "MindMap Studio",
   "isDesktopOnly": false
 }

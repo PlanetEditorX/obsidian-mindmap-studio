@@ -3,12 +3,15 @@ import type MindMapStudioPlugin from "./main";
 import type {
   BackgroundPattern,
   EdgeStyle,
+  EdgeWidthMode,
   FontFamilyMode,
   LayoutMode,
   MindMapAppearance,
+  MindMapThemePresetId,
   NodeShape,
   ThemeMode
 } from "./model";
+import { appearanceFromThemePreset, MINDMAP_THEME_PRESETS } from "./themes";
 
 export type ImageHostBodyMode = "multipart" | "raw";
 export type ImageHostMethod = "POST" | "PUT";
@@ -74,6 +77,7 @@ export interface MindMapStudioSettings {
   autoFitOnOpen: boolean;
   historyLimit: number;
   embedMaxHeight: number;
+  defaultThemePreset: MindMapThemePresetId;
   backgroundColor: string;
   backgroundPattern: BackgroundPattern;
   backgroundPatternColor: string;
@@ -83,6 +87,12 @@ export interface MindMapStudioSettings {
   edgeColor: string;
   edgeWidth: number;
   edgeStyle: EdgeStyle;
+  edgeWidthMode: EdgeWidthMode;
+  edgeMinWidth: number;
+  rootColor: string;
+  rootTextColor: string;
+  colorfulBranches: boolean;
+  branchColors: string[];
   nodeBackgroundColor: string;
   textColor: string;
   nodeBorderColor: string;
@@ -113,18 +123,25 @@ export const DEFAULT_SETTINGS: MindMapStudioSettings = {
   autoFitOnOpen: true,
   historyLimit: 120,
   embedMaxHeight: 520,
-  backgroundColor: "",
+  defaultThemePreset: "classic-indigo",
+  backgroundColor: "#f8fafc",
   backgroundPattern: "grid",
   backgroundPatternColor: "#94a3b8",
   fontFamily: "obsidian",
   customFont: "",
   fontSize: 14,
-  edgeColor: "",
-  edgeWidth: 2.2,
+  edgeColor: "#6366f1",
+  edgeWidth: 4.2,
   edgeStyle: "curved",
-  nodeBackgroundColor: "",
-  textColor: "",
-  nodeBorderColor: "",
+  edgeWidthMode: "tapered",
+  edgeMinWidth: 1.2,
+  rootColor: "#4f46e5",
+  rootTextColor: "#ffffff",
+  colorfulBranches: true,
+  branchColors: ["#4f46e5", "#0284c7", "#0f766e", "#7c3aed", "#db2777", "#ea580c"],
+  nodeBackgroundColor: "#ffffff",
+  textColor: "#172033",
+  nodeBorderColor: "#c7d2fe",
   nodeBorderWidth: 1,
   defaultTextBold: false,
   defaultTextItalic: false,
@@ -141,6 +158,7 @@ export const DEFAULT_SETTINGS: MindMapStudioSettings = {
 
 export function settingsToAppearance(settings: MindMapStudioSettings): MindMapAppearance {
   return {
+    themePreset: settings.defaultThemePreset,
     backgroundColor: settings.backgroundColor || undefined,
     backgroundPattern: settings.backgroundPattern,
     patternColor: settings.backgroundPatternColor || undefined,
@@ -150,6 +168,12 @@ export function settingsToAppearance(settings: MindMapStudioSettings): MindMapAp
     edgeColor: settings.edgeColor || undefined,
     edgeWidth: settings.edgeWidth,
     edgeStyle: settings.edgeStyle,
+    edgeWidthMode: settings.edgeWidthMode,
+    edgeMinWidth: settings.edgeMinWidth,
+    rootColor: settings.rootColor || undefined,
+    rootTextColor: settings.rootTextColor || undefined,
+    colorfulBranches: settings.colorfulBranches,
+    branchColors: settings.branchColors.length ? [...settings.branchColors] : undefined,
     nodeColor: settings.nodeBackgroundColor || undefined,
     textColor: settings.textColor || undefined,
     nodeBorderColor: settings.nodeBorderColor || undefined,
@@ -158,6 +182,33 @@ export function settingsToAppearance(settings: MindMapStudioSettings): MindMapAp
     italic: settings.defaultTextItalic,
     underline: settings.defaultTextUnderline
   };
+}
+
+export function applyThemePresetToSettings(settings: MindMapStudioSettings, presetId: MindMapThemePresetId): void {
+  const appearance = appearanceFromThemePreset(presetId);
+  settings.defaultThemePreset = presetId;
+  settings.backgroundColor = appearance.backgroundColor ?? "";
+  settings.backgroundPattern = appearance.backgroundPattern ?? "none";
+  settings.backgroundPatternColor = appearance.patternColor ?? "#94a3b8";
+  settings.fontFamily = appearance.fontFamily ?? "obsidian";
+  settings.customFont = appearance.customFont ?? "";
+  settings.fontSize = appearance.fontSize ?? 14;
+  settings.edgeColor = appearance.edgeColor ?? "";
+  settings.edgeWidth = appearance.edgeWidth ?? 2.2;
+  settings.edgeStyle = appearance.edgeStyle ?? "curved";
+  settings.edgeWidthMode = appearance.edgeWidthMode ?? "uniform";
+  settings.edgeMinWidth = appearance.edgeMinWidth ?? Math.min(1, settings.edgeWidth);
+  settings.rootColor = appearance.rootColor ?? "";
+  settings.rootTextColor = appearance.rootTextColor ?? "";
+  settings.colorfulBranches = appearance.colorfulBranches === true;
+  settings.branchColors = appearance.branchColors ? [...appearance.branchColors] : [];
+  settings.nodeBackgroundColor = appearance.nodeColor ?? "";
+  settings.textColor = appearance.textColor ?? "";
+  settings.nodeBorderColor = appearance.nodeBorderColor ?? "";
+  settings.nodeBorderWidth = appearance.nodeBorderWidth ?? 1;
+  settings.defaultTextBold = appearance.bold === true;
+  settings.defaultTextItalic = appearance.italic === true;
+  settings.defaultTextUnderline = appearance.underline === true;
 }
 
 export class MindMapStudioSettingTab extends PluginSettingTab {
@@ -176,6 +227,37 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
       cls: "setting-item-description",
       text: "这里设置全局默认外观。打开脑图后，也可以点击工具栏中的调色板，为当前脑图单独保存一套样式。"
     });
+
+    containerEl.createEl("h3", { text: "主题模板" });
+
+    new Setting(containerEl)
+      .setName("默认主题")
+      .setDesc("选择后会一次应用背景、节点、分支配色、字体和连线样式；之后仍可继续修改单项设置。")
+      .addDropdown((dropdown) => {
+        for (const preset of MINDMAP_THEME_PRESETS) dropdown.addOption(preset.id, preset.name);
+        dropdown.setValue(this.plugin.settings.defaultThemePreset);
+        dropdown.onChange(async (value) => {
+          applyThemePresetToSettings(this.plugin.settings, value as MindMapThemePresetId);
+          await this.saveAndRefresh();
+          this.display();
+        });
+      });
+
+    const themePreview = containerEl.createDiv({ cls: "mms-theme-preview-row" });
+    for (const preset of MINDMAP_THEME_PRESETS) {
+      const card = themePreview.createEl("button", {
+        cls: `mms-theme-preview-card${preset.id === this.plugin.settings.defaultThemePreset ? " is-selected" : ""}`,
+        attr: { type: "button", title: preset.description }
+      });
+      const swatches = card.createDiv({ cls: "mms-theme-preview-swatches" });
+      const colors = [preset.appearance.rootColor, ...(preset.appearance.branchColors ?? []).slice(0, 4)].filter((color): color is string => Boolean(color));
+      colors.forEach((color) => { const dot = swatches.createSpan(); dot.style.backgroundColor = color; });
+      card.createDiv({ cls: "mms-theme-preview-name", text: preset.name });
+      card.addEventListener("click", () => {
+        applyThemePresetToSettings(this.plugin.settings, preset.id);
+        void this.saveAndRefresh().then(() => this.display());
+      });
+    }
 
     containerEl.createEl("h3", { text: "文件与布局" });
 
@@ -416,7 +498,7 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
         }));
 
     new Setting(containerEl)
-      .setName("默认主题")
+      .setName("默认明暗模式")
       .addDropdown((dropdown) => dropdown
         .addOption("auto", "跟随 Obsidian")
         .addOption("light", "浅色")
@@ -542,6 +624,24 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
 
     containerEl.createEl("h3", { text: "节点样式" });
 
+    this.addOptionalColorSetting(
+      containerEl,
+      "中心主题颜色",
+      "根节点的背景颜色。主题模板会自动设置。",
+      () => this.plugin.settings.rootColor,
+      async (value) => { this.plugin.settings.rootColor = value; },
+      "#4f46e5"
+    );
+
+    this.addOptionalColorSetting(
+      containerEl,
+      "中心主题文字颜色",
+      "根节点的文字颜色。",
+      () => this.plugin.settings.rootTextColor,
+      async (value) => { this.plugin.settings.rootTextColor = value; },
+      "#ffffff"
+    );
+
     new Setting(containerEl)
       .setName("默认节点形状")
       .setDesc("只影响未单独设置形状的节点。")
@@ -588,6 +688,27 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
     containerEl.createEl("h3", { text: "连线样式" });
 
     new Setting(containerEl)
+      .setName("彩色分支")
+      .setDesc("按照中心主题的一级分支分配颜色，同一分支的节点边框和连线保持一致。")
+      .addToggle((toggle) => toggle
+        .setValue(this.plugin.settings.colorfulBranches)
+        .onChange(async (value) => {
+          this.plugin.settings.colorfulBranches = value;
+          await this.saveAndRefresh();
+        }));
+
+    new Setting(containerEl)
+      .setName("分支颜色")
+      .setDesc("使用逗号分隔的十六进制颜色，一级分支会循环使用。")
+      .addTextArea((text) => text
+        .setPlaceholder("#4f46e5, #0284c7, #0f766e")
+        .setValue(this.plugin.settings.branchColors.join(", "))
+        .onChange(async (value) => {
+          this.plugin.settings.branchColors = value.split(/[,，\s]+/).map((item) => item.trim()).filter((item) => /^#[0-9a-f]{6}$/i.test(item)).slice(0, 12);
+          await this.saveAndRefresh();
+        }));
+
+    new Setting(containerEl)
       .setName("连线类型")
       .addDropdown((dropdown) => dropdown
         .addOption("curved", "曲线")
@@ -609,16 +730,44 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
     );
 
     new Setting(containerEl)
-      .setName("连线粗细")
-      .setDesc("范围 0.5–8 像素。")
+      .setName("连线粗细模式")
+      .setDesc("“从粗到细”会让靠近中心主题的线最粗，越深层越细。")
+      .addDropdown((dropdown) => dropdown
+        .addOption("uniform", "统一粗细")
+        .addOption("tapered", "从粗到细")
+        .setValue(this.plugin.settings.edgeWidthMode)
+        .onChange(async (value) => {
+          this.plugin.settings.edgeWidthMode = value as EdgeWidthMode;
+          await this.saveAndRefresh();
+          this.display();
+        }));
+
+    new Setting(containerEl)
+      .setName(this.plugin.settings.edgeWidthMode === "tapered" ? "起始粗细" : "连线粗细")
+      .setDesc("靠近中心主题的连线宽度，范围 0.5–8 像素。")
       .addSlider((slider) => slider
-        .setLimits(0.5, 8, 0.5)
+        .setLimits(0.5, 8, 0.25)
         .setDynamicTooltip()
         .setValue(this.plugin.settings.edgeWidth)
         .onChange(async (value) => {
           this.plugin.settings.edgeWidth = value;
+          if (this.plugin.settings.edgeMinWidth > value) this.plugin.settings.edgeMinWidth = value;
           await this.saveAndRefresh();
         }));
+
+    if (this.plugin.settings.edgeWidthMode === "tapered") {
+      new Setting(containerEl)
+        .setName("末端最细宽度")
+        .setDesc("深层分支不会细于该值，范围 0.25–4 像素。")
+        .addSlider((slider) => slider
+          .setLimits(0.25, 4, 0.25)
+          .setDynamicTooltip()
+          .setValue(this.plugin.settings.edgeMinWidth)
+          .onChange(async (value) => {
+            this.plugin.settings.edgeMinWidth = Math.min(value, this.plugin.settings.edgeWidth);
+            await this.saveAndRefresh();
+          }));
+    }
 
     containerEl.createEl("h3", { text: "编辑与兼容" });
 

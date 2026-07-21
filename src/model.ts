@@ -4,6 +4,18 @@ export type NodeShape = "rounded" | "pill" | "rectangle";
 export type TaskStatus = "todo" | "doing" | "done";
 export type BackgroundPattern = "none" | "grid" | "dots";
 export type EdgeStyle = "curved" | "straight" | "elbow";
+export type EdgeWidthMode = "uniform" | "tapered";
+export type MindMapThemePresetId =
+  | "classic-indigo"
+  | "ocean-blue"
+  | "forest-green"
+  | "sunset-orange"
+  | "lavender-dream"
+  | "candy-pop"
+  | "paper-note"
+  | "minimal-ink"
+  | "dark-neon"
+  | "mint-clean";
 export type FontFamilyMode = "obsidian" | "sans" | "serif" | "mono" | "custom";
 export type TableAlignment = "left" | "center" | "right";
 
@@ -83,6 +95,7 @@ export interface MindMapNavigation {
 }
 
 export interface MindMapAppearance {
+  themePreset?: MindMapThemePresetId;
   backgroundColor?: string;
   backgroundPattern?: BackgroundPattern;
   patternColor?: string;
@@ -92,6 +105,12 @@ export interface MindMapAppearance {
   edgeColor?: string;
   edgeWidth?: number;
   edgeStyle?: EdgeStyle;
+  edgeWidthMode?: EdgeWidthMode;
+  edgeMinWidth?: number;
+  rootColor?: string;
+  rootTextColor?: string;
+  colorfulBranches?: boolean;
+  branchColors?: string[];
   nodeColor?: string;
   textColor?: string;
   nodeBorderColor?: string;
@@ -134,7 +153,7 @@ export interface MindMapNode {
 }
 
 export interface MindMapDocument {
-  version: 8;
+  version: 9;
   title: string;
   layout: LayoutMode;
   theme: ThemeMode;
@@ -162,7 +181,7 @@ export function createNode(text = "新节点"): MindMapNode {
 
 export function createDefaultDocument(title = "新思维导图"): MindMapDocument {
   return {
-    version: 8,
+    version: 9,
     title,
     layout: "right",
     theme: "auto",
@@ -203,10 +222,21 @@ function normalizeAppearance(input: Partial<MindMapAppearance> | undefined): Min
   const edgeStyle: EdgeStyle | undefined = input.edgeStyle === "curved" || input.edgeStyle === "straight" || input.edgeStyle === "elbow"
     ? input.edgeStyle
     : undefined;
+  const edgeWidthMode: EdgeWidthMode | undefined = input.edgeWidthMode === "uniform" || input.edgeWidthMode === "tapered"
+    ? input.edgeWidthMode
+    : undefined;
+  const themePreset: MindMapThemePresetId | undefined = [
+    "classic-indigo", "ocean-blue", "forest-green", "sunset-orange", "lavender-dream",
+    "candy-pop", "paper-note", "minimal-ink", "dark-neon", "mint-clean"
+  ].includes(String(input.themePreset)) ? input.themePreset as MindMapThemePresetId : undefined;
+  const branchColors = Array.isArray(input.branchColors)
+    ? input.branchColors.map(normalizeColor).filter((color): color is string => Boolean(color)).slice(0, 12)
+    : undefined;
   const customFont = typeof input.customFont === "string" && input.customFont.trim()
     ? input.customFont.trim().slice(0, 120)
     : undefined;
   const appearance: MindMapAppearance = {
+    themePreset,
     backgroundColor: normalizeColor(input.backgroundColor),
     backgroundPattern,
     patternColor: normalizeColor(input.patternColor),
@@ -216,6 +246,12 @@ function normalizeAppearance(input: Partial<MindMapAppearance> | undefined): Min
     edgeColor: normalizeColor(input.edgeColor),
     edgeWidth: normalizeNumber(input.edgeWidth, 0.5, 8),
     edgeStyle,
+    edgeWidthMode,
+    edgeMinWidth: normalizeNumber(input.edgeMinWidth, 0.25, 8),
+    rootColor: normalizeColor(input.rootColor),
+    rootTextColor: normalizeColor(input.rootTextColor),
+    colorfulBranches: normalizeBooleanOverride(input.colorfulBranches),
+    branchColors: branchColors?.length ? branchColors : undefined,
     nodeColor: normalizeColor(input.nodeColor),
     textColor: normalizeColor(input.textColor),
     nodeBorderColor: normalizeColor(input.nodeBorderColor),
@@ -599,7 +635,7 @@ function normalizeNode(input: Partial<MindMapNode> | undefined, fallbackText: st
 export function normalizeDocument(input: Partial<MindMapDocument> | undefined, fallbackTitle = "思维导图"): MindMapDocument {
   const title = typeof input?.title === "string" && input.title.trim() ? input.title.trim() : fallbackTitle;
   return {
-    version: 8,
+    version: 9,
     title,
     layout: input?.layout === "balanced" ? "balanced" : "right",
     theme: input?.theme === "light" || input?.theme === "dark" ? input.theme : "auto",

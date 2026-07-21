@@ -30,8 +30,10 @@ import {
   reconcileRichTextAfterEdit,
   type BackgroundPattern,
   type EdgeStyle,
+  type EdgeWidthMode,
   type FontFamilyMode,
   type MindMapAppearance,
+  type MindMapThemePresetId,
   type MindMapDocument,
   type MindMapCodeBlock,
   type MindMapContentBlock,
@@ -45,9 +47,10 @@ import {
   type TaskStatus,
   removeNode
 } from "./model";
-import { computeLayout, documentToSvg, edgePath, type LayoutResult } from "./layout";
+import { buildBranchColorMap, computeLayout, documentToSvg, edgePath, edgeWidthForDepth, type LayoutResult } from "./layout";
 import { CodeEditModal, TableEditModal } from "./content-modals";
 import type { ImageHostChoice, ImageHostUploadBatch } from "./settings";
+import { appearanceFromThemePreset, MINDMAP_THEME_PRESETS } from "./themes";
 
 export interface MindMapEditorCallbacks {
   onChange: (document: MindMapDocument) => void;
@@ -680,7 +683,13 @@ class AppearanceModal extends Modal {
     this.titleEl.setText("当前脑图外观");
     this.contentEl.addClass("mmc-appearance-modal");
     const form = this.contentEl.createEl("form");
-    form.createEl("p", { cls: "setting-item-description", text: "这些设置只保存到当前 .mindmap 文件，不会修改插件全局默认值。" });
+    form.createEl("p", { cls: "setting-item-description", text: "先选择一套主题，再按需要修改背景、节点、字体和连线。设置只保存到当前 .mindmap 文件。" });
+
+    let selectedPreset: MindMapThemePresetId = this.appearance.themePreset ?? "classic-indigo";
+    const themeSection = form.createDiv({ cls: "mmc-theme-picker" });
+    themeSection.createDiv({ cls: "mmc-theme-picker-title", text: "主题模板" });
+    const themeGrid = themeSection.createDiv({ cls: "mmc-theme-card-grid" });
+    const themeCards = new Map<MindMapThemePresetId, HTMLButtonElement>();
 
     const grid = form.createDiv({ cls: "mmc-form-grid mmc-appearance-grid" });
     const addColor = (labelText: string, value: string | undefined, fallback: string): { toggle: HTMLInputElement; input: HTMLInputElement } => {
@@ -717,21 +726,50 @@ class AppearanceModal extends Modal {
     const fontSizeInput = fontSizeLabel.createEl("input", { type: "number", attr: { min: "10", max: "30", step: "1" } });
     fontSizeInput.value = String(this.appearance.fontSize ?? 14);
 
-    const edgeColor = addColor("连线颜色", this.appearance.edgeColor, "#7c8aa5");
-    const edgeStyleLabel = grid.createEl("label", { text: "连线类型" });
-    const edgeStyleSelect = edgeStyleLabel.createEl("select");
-    for (const [value, label] of [["curved", "曲线"], ["straight", "直线"], ["elbow", "折线"]] as const) edgeStyleSelect.createEl("option", { text: label, attr: { value } });
-    edgeStyleSelect.value = this.appearance.edgeStyle ?? "curved";
-    const edgeWidthLabel = grid.createEl("label", { text: "连线粗细（0.5–8）" });
-    const edgeWidthInput = edgeWidthLabel.createEl("input", { type: "number", attr: { min: "0.5", max: "8", step: "0.5" } });
-    edgeWidthInput.value = String(this.appearance.edgeWidth ?? 2.2);
-
+    const rootColor = addColor("中心主题颜色", this.appearance.rootColor, "#4f46e5");
+    const rootTextColor = addColor("中心主题文字", this.appearance.rootTextColor, "#ffffff");
     const nodeColor = addColor("节点背景色", this.appearance.nodeColor, "#ffffff");
     const textColor = addColor("文字颜色", this.appearance.textColor, "#0f172a");
     const borderColor = addColor("节点边框颜色", this.appearance.nodeBorderColor, "#94a3b8");
     const borderWidthLabel = grid.createEl("label", { text: "边框粗细（0–6）" });
     const borderWidthInput = borderWidthLabel.createEl("input", { type: "number", attr: { min: "0", max: "6", step: "0.5" } });
     borderWidthInput.value = String(this.appearance.nodeBorderWidth ?? 1);
+
+    const edgeColor = addColor("连线颜色", this.appearance.edgeColor, "#7c8aa5");
+    const edgeStyleLabel = grid.createEl("label", { text: "连线类型" });
+    const edgeStyleSelect = edgeStyleLabel.createEl("select");
+    for (const [value, label] of [["curved", "曲线"], ["straight", "直线"], ["elbow", "折线"]] as const) edgeStyleSelect.createEl("option", { text: label, attr: { value } });
+    edgeStyleSelect.value = this.appearance.edgeStyle ?? "curved";
+
+    const edgeWidthModeLabel = grid.createEl("label", { text: "连线粗细模式" });
+    const edgeWidthModeSelect = edgeWidthModeLabel.createEl("select");
+    edgeWidthModeSelect.createEl("option", { text: "统一粗细", attr: { value: "uniform" } });
+    edgeWidthModeSelect.createEl("option", { text: "从粗到细", attr: { value: "tapered" } });
+    edgeWidthModeSelect.value = this.appearance.edgeWidthMode ?? "tapered";
+
+    const edgeWidthLabel = grid.createEl("label", { text: "起始粗细（0.5–8）" });
+    const edgeWidthInput = edgeWidthLabel.createEl("input", { type: "number", attr: { min: "0.5", max: "8", step: "0.25" } });
+    edgeWidthInput.value = String(this.appearance.edgeWidth ?? 4.2);
+    const edgeMinWidthLabel = grid.createEl("label", { text: "末端最细（0.25–4）" });
+    const edgeMinWidthInput = edgeMinWidthLabel.createEl("input", { type: "number", attr: { min: "0.25", max: "4", step: "0.25" } });
+    edgeMinWidthInput.value = String(this.appearance.edgeMinWidth ?? 1.2);
+    const updateEdgeMin = (): void => {
+      const tapered = edgeWidthModeSelect.value === "tapered";
+      edgeMinWidthInput.disabled = !tapered;
+      edgeMinWidthLabel.toggleClass("is-disabled", !tapered);
+      edgeWidthLabel.childNodes[0]!.textContent = tapered ? "起始粗细（0.5–8）" : "连线粗细（0.5–8）";
+    };
+    edgeWidthModeSelect.addEventListener("change", updateEdgeMin);
+    updateEdgeMin();
+
+    const branchLabel = grid.createEl("label", { text: "彩色分支" });
+    const branchToggleRow = branchLabel.createDiv({ cls: "mmc-toggle-row" });
+    const colorfulBranches = branchToggleRow.createEl("input", { type: "checkbox" });
+    colorfulBranches.checked = this.appearance.colorfulBranches === true;
+    branchToggleRow.createSpan({ text: "按一级分支循环配色" });
+    const branchColorsLabel = grid.createEl("label", { text: "分支颜色（逗号分隔）" });
+    const branchColorsInput = branchColorsLabel.createEl("textarea", { attr: { rows: "2", placeholder: "#4f46e5, #0284c7, #0f766e" } });
+    branchColorsInput.value = (this.appearance.branchColors ?? []).join(", ");
 
     const textStyleSection = form.createDiv({ cls: "mmc-appearance-text-style" });
     textStyleSection.createDiv({ cls: "mmc-appearance-text-style-title", text: "文字样式" });
@@ -747,10 +785,73 @@ class AppearanceModal extends Modal {
     const italic = addCheck("文字斜体", this.appearance.italic === true);
     const underline = addCheck("文字下划线", this.appearance.underline === true);
 
+    const setColor = (control: { toggle: HTMLInputElement; input: HTMLInputElement }, value: string | undefined, fallback: string): void => {
+      control.toggle.checked = Boolean(value);
+      control.input.value = value ?? fallback;
+      control.input.disabled = !control.toggle.checked;
+    };
+    const updateSelectedCards = (): void => {
+      for (const [id, card] of themeCards) card.toggleClass("is-selected", id === selectedPreset);
+    };
+    const applyPreset = (presetId: MindMapThemePresetId): void => {
+      selectedPreset = presetId;
+      const appearance = appearanceFromThemePreset(presetId);
+      setColor(background, appearance.backgroundColor, "#f8fafc");
+      patternSelect.value = appearance.backgroundPattern ?? "none";
+      setColor(patternColor, appearance.patternColor, "#94a3b8");
+      fontSelect.value = appearance.fontFamily ?? "obsidian";
+      customFontInput.value = appearance.customFont ?? "";
+      fontSizeInput.value = String(appearance.fontSize ?? 14);
+      setColor(rootColor, appearance.rootColor, "#4f46e5");
+      setColor(rootTextColor, appearance.rootTextColor, "#ffffff");
+      setColor(nodeColor, appearance.nodeColor, "#ffffff");
+      setColor(textColor, appearance.textColor, "#0f172a");
+      setColor(borderColor, appearance.nodeBorderColor, "#94a3b8");
+      borderWidthInput.value = String(appearance.nodeBorderWidth ?? 1);
+      setColor(edgeColor, appearance.edgeColor, "#7c8aa5");
+      edgeStyleSelect.value = appearance.edgeStyle ?? "curved";
+      edgeWidthModeSelect.value = appearance.edgeWidthMode ?? "uniform";
+      edgeWidthInput.value = String(appearance.edgeWidth ?? 2.2);
+      edgeMinWidthInput.value = String(appearance.edgeMinWidth ?? 1);
+      colorfulBranches.checked = appearance.colorfulBranches === true;
+      branchColorsInput.value = (appearance.branchColors ?? []).join(", ");
+      bold.checked = appearance.bold === true;
+      italic.checked = appearance.italic === true;
+      underline.checked = appearance.underline === true;
+      updateCustomFont();
+      updateEdgeMin();
+      updateSelectedCards();
+    };
+
+    for (const preset of MINDMAP_THEME_PRESETS) {
+      const card = themeGrid.createEl("button", { cls: "mmc-theme-card", attr: { type: "button", title: preset.description } });
+      themeCards.set(preset.id, card);
+      const preview = card.createDiv({ cls: "mmc-theme-card-preview" });
+      preview.style.backgroundColor = preset.appearance.backgroundColor ?? "#ffffff";
+      const root = preview.createSpan({ cls: "mmc-theme-card-root" });
+      root.style.backgroundColor = preset.appearance.rootColor ?? "#4f46e5";
+      const branches = preview.createDiv({ cls: "mmc-theme-card-branches" });
+      (preset.appearance.branchColors ?? [preset.appearance.edgeColor ?? "#7c8aa5"]).slice(0, 4).forEach((color, index) => {
+        const line = branches.createSpan();
+        line.style.backgroundColor = color;
+        line.style.width = `${28 - index * 4}px`;
+        line.style.height = `${Math.max(2, 5 - index)}px`;
+      });
+      card.createDiv({ cls: "mmc-theme-card-name", text: preset.name });
+      card.addEventListener("click", () => applyPreset(preset.id));
+    }
+    updateSelectedCards();
+
     const clamp = (value: string, min: number, max: number, fallback: number): number => {
       const parsed = Number(value);
       return Number.isFinite(parsed) ? Math.min(max, Math.max(min, parsed)) : fallback;
     };
+    const parseBranchColors = (): string[] => branchColorsInput.value
+      .split(/[,，\s]+/)
+      .map((value) => value.trim())
+      .filter((value) => /^#[0-9a-f]{6}$/i.test(value))
+      .slice(0, 12);
+
     const actions = form.createDiv({ cls: "mmc-modal-actions" });
     const reset = actions.createEl("button", { text: "恢复全局默认", type: "button" });
     const cancel = actions.createEl("button", { text: "取消", type: "button" });
@@ -759,20 +860,28 @@ class AppearanceModal extends Modal {
     cancel.addEventListener("click", () => this.close());
     form.addEventListener("submit", (event) => {
       event.preventDefault();
+      const maxWidth = clamp(edgeWidthInput.value, 0.5, 8, 4.2);
       this.submit({
+        themePreset: selectedPreset,
         backgroundColor: background.toggle.checked ? background.input.value : undefined,
         backgroundPattern: patternSelect.value as BackgroundPattern,
         patternColor: patternColor.toggle.checked ? patternColor.input.value : undefined,
         fontFamily: fontSelect.value as FontFamilyMode,
         customFont: fontSelect.value === "custom" ? customFontInput.value.trim().slice(0, 120) || undefined : undefined,
         fontSize: clamp(fontSizeInput.value, 10, 30, 14),
-        edgeColor: edgeColor.toggle.checked ? edgeColor.input.value : undefined,
-        edgeWidth: clamp(edgeWidthInput.value, 0.5, 8, 2.2),
-        edgeStyle: edgeStyleSelect.value as EdgeStyle,
+        rootColor: rootColor.toggle.checked ? rootColor.input.value : undefined,
+        rootTextColor: rootTextColor.toggle.checked ? rootTextColor.input.value : undefined,
         nodeColor: nodeColor.toggle.checked ? nodeColor.input.value : undefined,
         textColor: textColor.toggle.checked ? textColor.input.value : undefined,
         nodeBorderColor: borderColor.toggle.checked ? borderColor.input.value : undefined,
         nodeBorderWidth: clamp(borderWidthInput.value, 0, 6, 1),
+        edgeColor: edgeColor.toggle.checked ? edgeColor.input.value : undefined,
+        edgeWidth: maxWidth,
+        edgeStyle: edgeStyleSelect.value as EdgeStyle,
+        edgeWidthMode: edgeWidthModeSelect.value as EdgeWidthMode,
+        edgeMinWidth: Math.min(maxWidth, clamp(edgeMinWidthInput.value, 0.25, 4, 1.2)),
+        colorfulBranches: colorfulBranches.checked,
+        branchColors: parseBranchColors(),
         bold: bold.checked,
         italic: italic.checked,
         underline: underline.checked
@@ -1157,6 +1266,8 @@ export class MindMapEditor {
     setOrRemove("--mmc-canvas", appearance.backgroundColor);
     setOrRemove("--mmc-pattern-color", appearance.patternColor);
     setOrRemove("--mmc-edge", appearance.edgeColor);
+    setOrRemove("--mmc-root-bg", appearance.rootColor);
+    setOrRemove("--mmc-root-text", appearance.rootTextColor);
     setOrRemove("--mmc-node-bg", appearance.nodeColor);
     setOrRemove("--mmc-node-text", appearance.textColor);
     setOrRemove("--mmc-node-border", appearance.nodeBorderColor);
@@ -1195,6 +1306,7 @@ export class MindMapEditor {
     const appearance = this.getAppearance();
     this.applyAppearance(appearance);
     this.layout = computeLayout(this.document.root, this.document.layout, appearance.fontSize ?? 14);
+    const branchColorMap = appearance.colorfulBranches ? buildBranchColorMap(this.document.root, appearance.branchColors) : new Map<string, string>();
     this.nodesLayerEl.empty();
     while (this.edgesSvg.firstChild) this.edgesSvg.removeChild(this.edgesSvg.firstChild);
 
@@ -1205,7 +1317,10 @@ export class MindMapEditor {
       const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
       path.setAttribute("d", edgePath(parent, position, appearance.edgeStyle ?? "curved"));
       path.setAttribute("class", `mmc-edge depth-${Math.min(position.depth, 6)}`);
+      const branchColor = branchColorMap.get(position.node.id);
       if (position.node.style?.color) path.style.stroke = position.node.style.color;
+      else if (branchColor) path.style.stroke = branchColor;
+      path.style.strokeWidth = `${edgeWidthForDepth(appearance, position.depth)}px`;
       this.edgesSvg.appendChild(path);
     }
 
@@ -1231,11 +1346,15 @@ export class MindMapEditor {
       if (italic) nodeEl.addClass("is-italic");
       if (underline) nodeEl.addClass("is-underlined");
       if (node.note) nodeEl.setAttr("title", node.note);
+      const branchColor = branchColorMap.get(node.id);
       if (node.style?.color) nodeEl.style.backgroundColor = node.style.color;
+      else if (isRoot && appearance.rootColor) nodeEl.style.backgroundColor = appearance.rootColor;
       else if (!isRoot && appearance.nodeColor) nodeEl.style.backgroundColor = appearance.nodeColor;
       if (node.style?.textColor) nodeEl.style.color = node.style.textColor;
+      else if (isRoot && appearance.rootTextColor) nodeEl.style.color = appearance.rootTextColor;
       else if (!isRoot && appearance.textColor) nodeEl.style.color = appearance.textColor;
       if (node.style?.borderColor) nodeEl.style.borderColor = node.style.borderColor;
+      else if (!isRoot && branchColor) nodeEl.style.borderColor = branchColor;
       else if (!isRoot && appearance.nodeBorderColor) nodeEl.style.borderColor = appearance.nodeBorderColor;
       nodeEl.style.borderWidth = `${node.style?.borderWidth ?? appearance.nodeBorderWidth ?? (isRoot ? 2 : 1)}px`;
 
@@ -1824,7 +1943,7 @@ export class MindMapEditor {
   private async copySelectedBranch(): Promise<boolean> {
     const selected = this.selectedNode();
     if (!selected) return false;
-    this.branchClipboard = cloneDocument({ version: 8, title: nodePlainText(selected) || "图片节点", layout: "right", theme: "auto", root: selected }).root;
+    this.branchClipboard = cloneDocument({ version: 9, title: nodePlainText(selected) || "图片节点", layout: "right", theme: "auto", root: selected }).root;
     const payload = JSON.stringify({ type: "mindmap-studio-node", version: 1, node: selected }, null, 2);
     try {
       await navigator.clipboard.writeText(payload);
