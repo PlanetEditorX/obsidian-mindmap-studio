@@ -594,8 +594,8 @@ export default class MindMapStudioPlugin extends Plugin {
         const label = heading && !skipped ? articleNumberLabel(depth, numberedIndex) : "";
         const title = nodePlainText(node) || (heading ? "未命名标题" : "");
         const nextBreadcrumb = [...breadcrumb, title || "未命名标题"];
-        if (heading) {
-          tocEntries.push({
+        const tocEntry: ArticleTocEntry | null = heading
+          ? {
             filePath: sourceFile.path,
             nodeId: node.id,
             depth,
@@ -603,8 +603,9 @@ export default class MindMapStudioPlugin extends Plugin {
             title,
             displayTitle: label ? `${label} ${title}` : title,
             breadcrumb: nextBreadcrumb
-          });
-        }
+          }
+          : null;
+        if (tocEntry) tocEntries.push(tocEntry);
 
         const descendants: Item[] = node.children.map((child) => ({
           node: child,
@@ -615,6 +616,10 @@ export default class MindMapStudioPlugin extends Plugin {
         if (node.submap?.path) {
           hasSubmaps = true;
           const childFile = this.resolveMindMapFile(node.submap.path, sourceFile.path);
+          if (childFile && tocEntry) {
+            tocEntry.filePath = childFile.path;
+            tocEntry.nodeId = undefined;
+          }
           if (childFile && !visitedFiles.has(childFile.path)) {
             visitedFiles.add(childFile.path);
             try {

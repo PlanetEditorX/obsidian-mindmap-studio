@@ -88,7 +88,7 @@ export interface ArticleNodeInfo {
  */
 export interface ArticleTocEntry {
   filePath: string;
-  nodeId: string;
+  nodeId?: string;
   depth: number;
   label: string;
   title: string;
