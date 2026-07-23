@@ -1956,8 +1956,6 @@ export class MindMapEditor {
     this.addToolbarButton("undo", "undo-2", "撤销（Ctrl/Cmd+Z）", () => this.undo(), true);
     this.addToolbarButton("redo", "redo-2", "重做（Ctrl/Cmd+Y）", () => this.redo(), true);
     this.addToolbarSeparator();
-    this.addToolbarButton("zoom-out", "minus", "缩小", () => this.setZoom(this.zoom / 1.15), false, true);
-    this.addToolbarButton("zoom-in", "plus", "放大", () => this.setZoom(this.zoom * 1.15), false, true);
     this.addToolbarButton("fit", "maximize", "适应画布", () => this.fitToView());
     this.addToolbarButton("layout", "git-fork", "切换单侧/双侧布局", () => this.toggleLayout(), true);
     this.addToolbarButton("appearance", "palette", "当前脑图外观", () => this.editAppearance(), true);
@@ -1972,7 +1970,14 @@ export class MindMapEditor {
     this.applyToolbarOrder();
     const spacer = this.toolbarEl.createSpan({ cls: "mmc-toolbar-spacer" });
     spacer.setAttr("aria-hidden", "true");
-    this.zoomStatusEl = this.toolbarEl.createSpan({ cls: "mmc-zoom-status", text: "100%" });
+    const zoomControl = this.toolbarEl.createDiv({ cls: "mmc-zoom-control" });
+    const zoomOut = zoomControl.createEl("button", { cls: "clickable-icon mmc-zoom-step", attr: { type: "button", title: "缩小", "aria-label": "缩小" } });
+    setIcon(zoomOut, "minus");
+    zoomOut.addEventListener("click", () => { this.setZoom(this.zoom / 1.15); this.focus(); });
+    this.zoomStatusEl = zoomControl.createSpan({ cls: "mmc-zoom-status", text: "100%" });
+    const zoomIn = zoomControl.createEl("button", { cls: "clickable-icon mmc-zoom-step", attr: { type: "button", title: "放大", "aria-label": "放大" } });
+    setIcon(zoomIn, "plus");
+    zoomIn.addEventListener("click", () => { this.setZoom(this.zoom * 1.15); this.focus(); });
     this.statusEl = this.toolbarEl.createSpan({ cls: "mmc-save-status", text: "已保存" });
 
     const keydown = (event: KeyboardEvent): void => this.handleKeydown(event);
@@ -2080,20 +2085,13 @@ export class MindMapEditor {
       event.preventDefault();
       this.openAllNodesContextMenu(event);
     };
-    const toolbarContextMenu = (event: MouseEvent): void => {
-      event.preventDefault();
-      event.stopPropagation();
-      this.openAllNodesContextMenu(event);
-    };
     this.viewportEl.addEventListener("contextmenu", canvasContextMenu);
-    this.toolbarEl.addEventListener("contextmenu", toolbarContextMenu);
     this.cleanupCallbacks.push(() => {
       this.viewportEl.removeEventListener("pointerdown", pointerDown);
       this.viewportEl.removeEventListener("pointermove", pointerMove);
       this.viewportEl.removeEventListener("pointerup", pointerUp);
       this.viewportEl.removeEventListener("pointercancel", pointerUp);
       this.viewportEl.removeEventListener("contextmenu", canvasContextMenu);
-      this.toolbarEl.removeEventListener("contextmenu", toolbarContextMenu);
     });
 
     this.resizeObserver = new ResizeObserver(() => this.applyTransform());
@@ -2178,11 +2176,11 @@ export class MindMapEditor {
    * @param editOnly 该参数用于 add toolbar button 流程中的输入或控制。
    * @returns 当前操作生成、查找或规范化后的结果。
    */
-  private addToolbarButton(id: string, icon: string, label: string, action: () => void, editOnly = false, alwaysVisible = false): HTMLButtonElement {
+  private addToolbarButton(id: string, icon: string, label: string, action: () => void, editOnly = false): HTMLButtonElement {
     const button = this.toolbarEl.createEl("button", { cls: "clickable-icon mmc-toolbar-button", attr: { "aria-label": label, title: label, type: "button" } });
     button.dataset.toolbarId = id;
     setIcon(button, icon);
-    button.toggleClass("is-hidden", !alwaysVisible && !this.options.visibleToolbarItems.includes(id));
+    button.toggleClass("is-hidden", !this.options.visibleToolbarItems.includes(id));
     if (editOnly) {
       button.addClass("mms-edit-only-control");
       this.editControls.push(button);
