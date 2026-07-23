@@ -584,10 +584,19 @@ export const setIcon = () => {};
   assert.match(cssSource, /\.mmc-canvas-breadcrumb-parent[\s\S]*text-overflow:\s*ellipsis/);
 
 
+  const packageJson = JSON.parse(await readFile("package.json", "utf8"));
+  const packageLock = JSON.parse(await readFile("package-lock.json", "utf8"));
   const manifest = JSON.parse(await readFile("manifest.json", "utf8"));
+  const versions = JSON.parse(await readFile("versions.json", "utf8"));
+  const currentVersion = packageJson.version;
+
+  assert.match(currentVersion, /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/, "package version must be valid semver");
   assert.equal(manifest.id, "mindmap-studio");
   assert.equal(manifest.name, "MindMap Studio");
-  assert.equal(manifest.version, "1.6.0");
+  assert.equal(manifest.version, currentVersion, "manifest version must match package.json");
+  assert.equal(packageLock.version, currentVersion, "package-lock version must match package.json");
+  assert.equal(packageLock.packages?.[""]?.version, currentVersion, "package-lock root package version must match package.json");
+  assert.equal(versions[currentVersion], manifest.minAppVersion, "versions.json must contain the current version and minAppVersion");
   assert.match(cssSource, /\.mms-global-search-modal/);
   assert.match(cssSource, /\.mms-global-search-result/);
 
