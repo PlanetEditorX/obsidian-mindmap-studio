@@ -46,7 +46,7 @@ import {
 import { renderStaticMindMap, renderStaticSource } from "./static-render";
 import { MindMapStudioView, VIEW_TYPE_MINDMAP_STUDIO } from "./view";
 import { GlobalMindMapSearchModal, MindMapSearchIndex, type MindMapSearchResult } from "./global-search";
-import { articleNumberLabel, isArticleHeading, normalizeVisibleModes, type ArticleTocEntry } from "./modes";
+import { articleNumberLabel, isArticleHeading, normalizeVisibleModes, type ArticlePageNavigation, type ArticleTocEntry } from "./modes";
 import type { DisplayMode } from "./model";
 
 export const MINDMAP_EXTENSION = "mindmap";
@@ -571,13 +571,22 @@ export default class MindMapStudioPlugin extends Plugin {
    * @returns 计算得到的数值结果。
    * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
    */
-  async buildArticleContext(file: TFile, document: MindMapDocument): Promise<{ baseDepth: number; tocEntries: ArticleTocEntry[]; showToc: boolean }> {
+  async buildArticleContext(file: TFile, document: MindMapDocument): Promise<{ baseDepth: number; tocEntries: ArticleTocEntry[]; showToc: boolean; navigation?: ArticlePageNavigation }> {
     const baseDepth = await this.computeArticleBaseDepth(file, document);
-    const isTopLevel = !document.navigation?.parentPath;
-    if (!isTopLevel) return { baseDepth, tocEntries: [], showToc: false };
+    let topFile = file;
+    let topDocument = document;
+    const ancestorPaths = new Set<string>([file.path]);
+    while (topDocument.navigation?.parentPath) {
+      const parentFile = this.resolveMindMapFile(topDocument.navigation.parentPath, topFile.path);
+      if (!parentFile || ancestorPaths.has(parentFile.path)) break;
+      ancestorPaths.add(parentFile.path);
+      topFile = parentFile;
+      topDocument = await this.readMindMapDocument(parentFile);
+    }
+    const isTopLevel = topFile.path === file.path;
 
     const tocEntries: ArticleTocEntry[] = [];
-    const visitedFiles = new Set<string>([file.path]);
+    const visitedFiles = new Set<string>([topFile.path]);
     let hasSubmaps = false;
     /**
      * Item 类型定义，用于限制可接受值并让序列化数据保持稳定。
@@ -639,13 +648,30 @@ export default class MindMapStudioPlugin extends Plugin {
       }
     };
 
-    await processItems(document.root.children.map((node) => ({
+    await processItems(topDocument.root.children.map((node) => ({
       node,
-      file,
-      document,
-      breadcrumb: [nodePlainText(document.root) || document.title]
+      file: topFile,
+      document: topDocument,
+      breadcrumb: [nodePlainText(topDocument.root) || topDocument.title]
     })), 1);
-    return { baseDepth, tocEntries, showToc: hasSubmaps && tocEntries.length > 0 };
+    const currentIndex = tocEntries.findIndex((entry) => entry.filePath === file.path);
+    const parentFile = document.navigation?.parentPath
+      ? this.resolveMindMapFile(document.navigation.parentPath, file.path)
+      : null;
+    const navigation: ArticlePageNavigation | undefined = tocEntries.length
+      ? {
+        entries: tocEntries,
+        currentIndex: Math.max(0, currentIndex),
+        homePath: topFile.path,
+        parentPath: parentFile?.path
+      }
+      : undefined;
+    return {
+      baseDepth,
+      tocEntries: isTopLevel ? tocEntries : [],
+      showToc: isTopLevel && hasSubmaps && tocEntries.length > 0,
+      navigation
+    };
   }
 
   /**

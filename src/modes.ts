@@ -96,6 +96,14 @@ export interface ArticleTocEntry {
   breadcrumb: string[];
 }
 
+/** Navigation state shared by every page in one article map family. */
+export interface ArticlePageNavigation {
+  entries: ArticleTocEntry[];
+  currentIndex: number;
+  homePath: string;
+  parentPath?: string;
+}
+
 /**
  * Build the article representation for one physical .mindmap file.
  * `baseDepth` is the absolute article depth represented by this file's root.

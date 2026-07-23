@@ -65,7 +65,7 @@ import { buildBranchColorMap, computeLayout, documentToSvg, edgePath, edgeWidthF
 import { CodeEditModal, TableEditModal } from "./content-modals";
 import { TOOLBAR_ITEMS, type ImageHostChoice, type ImageHostUploadBatch } from "./settings";
 import { appearanceFromThemePreset, MINDMAP_THEME_PRESETS } from "./themes";
-import { buildArticleNodeInfo, DISPLAY_MODE_ICONS, DISPLAY_MODE_LABELS, type ArticleTocEntry } from "./modes";
+import { buildArticleNodeInfo, DISPLAY_MODE_ICONS, DISPLAY_MODE_LABELS, type ArticlePageNavigation, type ArticleTocEntry } from "./modes";
 
 /**
  * MindMapEditorCallbacks 的结构化数据约定。字段会在模块边界传递，用于保持类型安全和版本兼容。
@@ -85,6 +85,7 @@ export interface MindMapEditorCallbacks {
   onScheduleAutoUpload: (nodeId: string, blockId: string, localPath: string, suggestedName: string) => boolean;
   onCreateSubmap: (node: MindMapNode) => Promise<MindMapSubmap>;
   onOpenMindMap: (path: string, focusNodeId?: string) => void | Promise<void>;
+  onOpenArticleDirectory: (path: string) => void | Promise<void>;
   onSearchMapFamily: () => void;
   onGlobalSearch: () => void;
   onDisplayModeChange: (mode: DisplayMode) => void | Promise<void>;
@@ -108,6 +109,7 @@ export interface MindMapEditorOptions {
   articleBaseDepth: number;
   articleTocEntries: ArticleTocEntry[];
   showArticleToc: boolean;
+  articleNavigation?: ArticlePageNavigation;
   nodeEditorPosition: "center" | "right";
   richTextShortcuts: {
     bold: string;
@@ -1609,6 +1611,7 @@ export class MindMapEditor {
   private readOnly: boolean;
   private readonly imageLoadTimers = new Set<number>();
   private inlineEditingId: string | null = null;
+  private articleNavigationIndex: number | null = null;
 
   /**
    * 创建 MindMapEditor 实例，保存依赖和初始状态；实际 DOM 构建通常在 onOpen() 或后续渲染流程中完成。
@@ -1675,6 +1678,8 @@ export class MindMapEditor {
     const toolbarChanged = JSON.stringify(this.options.visibleToolbarItems) !== JSON.stringify(options.visibleToolbarItems)
       || JSON.stringify(this.options.toolbarItemOrder) !== JSON.stringify(options.toolbarItemOrder);
     const globalModeChanged = this.options.defaultViewMode !== options.defaultViewMode;
+    const navigationChanged = JSON.stringify(this.options.articleNavigation) !== JSON.stringify(options.articleNavigation);
+    if (navigationChanged) this.articleNavigationIndex = null;
     this.options = options;
     const resolved = this.resolveMode(globalModeChanged ? options.defaultViewMode : this.currentMode);
     if (resolved !== this.currentMode) this.currentMode = resolved;
@@ -1761,7 +1766,20 @@ export class MindMapEditor {
    * @param id 目标对象或节点的稳定标识。
    */
   focusNodeById(id: string): void {
-    if (findNode(this.document.root, id)) this.focusNode(id);
+    if (!findNode(this.document.root, id)) return;
+    const navigationIndex = this.options.articleNavigation?.entries.findIndex((entry) => entry.nodeId === id) ?? -1;
+    if (navigationIndex >= 0) this.articleNavigationIndex = navigationIndex;
+    this.focusNode(id);
+  }
+
+  /**
+   * Switches the current top-level document to its generated article directory.
+   */
+  showArticleDirectory(): void {
+    this.currentMode = "article";
+    this.mutate(() => {
+      this.document.view = { ...(this.document.view ?? {}), articleLandingMode: "toc" };
+    });
   }
 
   /**
@@ -2411,6 +2429,38 @@ export class MindMapEditor {
         this.addInlineNodeActions(section, info.node);
         this.renderArticleContent(section, info.node, false);
       }
+    }
+    this.renderArticlePager(page);
+  }
+
+  /**
+   * Renders previous, parent, next, and end navigation for a child article page.
+   *
+   * @param page Article page container.
+   */
+  private renderArticlePager(page: HTMLElement): void {
+    const navigation = this.options.articleNavigation;
+    if (!navigation?.parentPath || !navigation.entries.length) return;
+    const index = this.articleNavigationIndex ?? navigation.currentIndex;
+    const previous = index > 0 ? navigation.entries[index - 1] : undefined;
+    const next = index < navigation.entries.length - 1 ? navigation.entries[index + 1] : undefined;
+    const pager = page.createEl("nav", { cls: "mms-article-pager", attr: { "aria-label": "文章前后页导航" } });
+    const addTarget = (className: string, prefix: string, entry: ArticleTocEntry): void => {
+      const link = pager.createEl("button", {
+        cls: className,
+        text: `${prefix}${entry.displayTitle || entry.title}`,
+        attr: { type: "button", title: entry.breadcrumb.join(" › ") }
+      });
+      link.addEventListener("click", () => void this.callbacks.onOpenMindMap(entry.filePath, entry.nodeId));
+    };
+    if (previous) addTarget("mms-article-pager-previous", previous.depth <= 1 ? "上一章 " : "上一节 ", previous);
+    else pager.createSpan({ cls: "mms-article-pager-placeholder" });
+    const parent = pager.createEl("button", { cls: "mms-article-pager-parent", text: "返回上一级", attr: { type: "button" } });
+    parent.addEventListener("click", () => void this.callbacks.onOpenMindMap(navigation.parentPath!));
+    if (next) addTarget("mms-article-pager-next", next.depth <= 1 ? "下一章 " : "下一节 ", next);
+    else {
+      const end = pager.createEl("button", { cls: "mms-article-pager-end", text: "END", attr: { type: "button", title: "返回总目录" } });
+      end.addEventListener("click", () => void this.callbacks.onOpenArticleDirectory(navigation.homePath));
     }
   }
 
@@ -4006,6 +4056,11 @@ export class MindMapEditor {
     if (mod && key === "f") {
       event.preventDefault();
       this.openSearch();
+      return;
+    }
+    if (this.currentMode === "article" && event.key === "Escape" && this.options.articleNavigation?.parentPath) {
+      event.preventDefault();
+      void this.callbacks.onOpenMindMap(this.options.articleNavigation.parentPath);
       return;
     }
     if (this.readOnly) {

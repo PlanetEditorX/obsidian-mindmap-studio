@@ -10,7 +10,7 @@ import type MindMapStudioPlugin from "./main";
 import { MindMapEditor } from "./editor";
 import { parseDocument, serializeDocument, type DisplayMode, type MindMapDocument } from "./model";
 import { settingsToAppearance } from "./settings";
-import type { ArticleTocEntry } from "./modes";
+import type { ArticlePageNavigation, ArticleTocEntry } from "./modes";
 
 export const VIEW_TYPE_MINDMAP_STUDIO = "mindmap-studio-view";
 
@@ -26,6 +26,7 @@ export class MindMapStudioView extends TextFileView {
   private articleBaseDepth = 0;
   private articleTocEntries: ArticleTocEntry[] = [];
   private showArticleToc = false;
+  private articleNavigation: ArticlePageNavigation | undefined;
   private articleContextToken = 0;
   private articleContextTimer: number | null = null;
 
@@ -87,6 +88,7 @@ export class MindMapStudioView extends TextFileView {
     this.articleBaseDepth = 0;
     this.articleTocEntries = [];
     this.showArticleToc = false;
+    this.articleNavigation = undefined;
     this.applyViewClasses();
 
     if (!this.editor || clear) {
@@ -118,6 +120,11 @@ export class MindMapStudioView extends TextFileView {
           await this.save();
           await this.plugin.openMindMapPath(path, this.file?.path ?? "", this.leaf, focusNodeId);
         },
+        onOpenArticleDirectory: async (path) => {
+          await this.save();
+          await this.plugin.openMindMapPath(path, this.file?.path ?? "", this.leaf);
+          if (this.leaf.view instanceof MindMapStudioView) this.leaf.view.showArticleDirectory();
+        },
         onSearchMapFamily: () => void this.openMapFamilySearch(),
         onGlobalSearch: () => this.plugin.openGlobalSearch(),
         onDisplayModeChange: (mode) => this.plugin.setGlobalDisplayMode(mode),
@@ -148,6 +155,13 @@ export class MindMapStudioView extends TextFileView {
     this.editor = null;
     this.document = null;
     this.contentEl.empty();
+  }
+
+  /**
+   * Displays and persists the generated directory for the top-level article.
+   */
+  showArticleDirectory(): void {
+    this.editor?.showArticleDirectory();
   }
 
   /**
@@ -257,7 +271,8 @@ export class MindMapStudioView extends TextFileView {
       toolbarItemOrder: [...this.plugin.settings.toolbarItemOrder],
       articleBaseDepth: this.articleBaseDepth,
       articleTocEntries: [...this.articleTocEntries],
-      showArticleToc: this.showArticleToc
+      showArticleToc: this.showArticleToc,
+      articleNavigation: this.articleNavigation
     };
   }
 
@@ -288,6 +303,7 @@ export class MindMapStudioView extends TextFileView {
       this.articleBaseDepth = context.baseDepth;
       this.articleTocEntries = context.tocEntries;
       this.showArticleToc = context.showToc;
+      this.articleNavigation = context.navigation;
       this.editor?.setOptions(this.getEditorOptions());
     } catch (error) {
       console.warn("MindMap Studio article context refresh failed", error);
