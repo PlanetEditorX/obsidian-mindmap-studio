@@ -21,6 +21,7 @@ import {
   flattenNodes,
   getTaskProgress,
   imageSourceCandidates,
+  indentedTextToMarkdown,
   mergeAppearance,
   nodeSearchText,
   normalizeDocument,
@@ -3731,8 +3732,9 @@ export class MindMapEditor {
       return;
     }
 
+    const htmlBranch = this.parseClipboardHtml(data.getData("text/html"));
     const text = data.getData("text/plain");
-    if (!text.trim()) return;
+    if (!text.trim() && !htmlBranch) return;
     const selected = this.selectedNode() ?? this.document.root;
     const table = parseMarkdownTable(text);
     if (table) {
@@ -3748,7 +3750,7 @@ export class MindMapEditor {
       new Notice(`已识别并插入${code.language ? ` ${code.language}` : ""}代码`);
       return;
     }
-    const branch = this.parseClipboardNode(text);
+    const branch = htmlBranch ?? this.parseClipboardNode(text);
     if (branch) {
       event.preventDefault();
       const clone = cloneNodeWithFreshIds(branch);
@@ -4032,15 +4034,47 @@ export class MindMapEditor {
       if (!trimmed) return null;
       const looksLikeMarkdown = /^(?:#{1,6}\s+|[-*+]\s+|\d+[.)]\s+)/m.test(trimmed);
       if (looksLikeMarkdown || trimmed.includes("\n")) {
-        const markdown = looksLikeMarkdown
-          ? trimmed
-          : trimmed.split(/\r?\n/).filter((line) => line.trim()).map((line) => `- ${line.trim()}`).join("\n");
+        const markdown = looksLikeMarkdown ? trimmed : indentedTextToMarkdown(text);
         const document = markdownToDocument(markdown, "粘贴内容");
         if (document.root.text === "粘贴内容" && document.root.children.length === 1) return document.root.children[0] ?? null;
         return document.root;
       }
       return createNode(trimmed);
     }
+  }
+
+  /**
+   * Extracts a nested branch from HTML list data exposed by rich clipboard
+   * providers such as desktop mind-map applications.
+   *
+   * @param html Clipboard HTML.
+   * @returns Parsed branch, or null when the HTML has no nested list.
+   */
+  private parseClipboardHtml(html: string): MindMapNode | null {
+    if (!html.trim() || typeof DOMParser === "undefined") return null;
+    const document = new DOMParser().parseFromString(html, "text/html");
+    const firstList = document.body.querySelector("ul, ol");
+    if (!firstList) return null;
+    const parseItem = (item: Element): MindMapNode => {
+      const clone = item.cloneNode(true) as HTMLElement;
+      clone.querySelectorAll("ul, ol").forEach((list) => list.remove());
+      const node = createNode(clone.textContent?.trim() || "节点");
+      const nested = Array.from(item.children).find((child) => child.matches("ul, ol"));
+      if (nested) {
+        node.children = Array.from(nested.children)
+          .filter((child) => child.matches("li"))
+          .map(parseItem);
+      }
+      return node;
+    };
+    const roots = Array.from(firstList.children)
+      .filter((child) => child.matches("li"))
+      .map(parseItem);
+    if (!roots.length) return null;
+    if (roots.length === 1) return roots[0] ?? null;
+    const root = createNode("粘贴内容");
+    root.children = roots;
+    return root;
   }
 
   /**

@@ -1637,3 +1637,32 @@ export function markdownToDocument(markdown: string, fallbackTitle = "思维导�
   if (!doc.root.children.length) doc.root.children.push(createNode("主题 1"));
   return doc;
 }
+
+/**
+ * Converts tab- or space-indented outline text (including XMind clipboard
+ * fallback text) into Markdown while preserving its hierarchy.
+ *
+ * @param text Plain outline text.
+ * @returns Nested Markdown suitable for `markdownToDocument`.
+ */
+export function indentedTextToMarkdown(text: string): string {
+  const lines = text.split(/\r?\n/)
+    .map((line) => {
+      const match = line.match(/^([ \t]*)(.*?)\s*$/);
+      const whitespace = (match?.[1] ?? "").replaceAll("\t", "    ").length;
+      return { indent: whitespace, text: match?.[2]?.trim() ?? "" };
+    })
+    .filter((line) => line.text);
+  if (!lines.length) return "";
+
+  const indentationLevels = Array.from(new Set(lines.map((line) => line.indent))).sort((a, b) => a - b);
+  const levelOf = (indent: number): number => Math.max(0, indentationLevels.indexOf(indent));
+  const hasHierarchy = lines.slice(1).some((line) => levelOf(line.indent) > levelOf(lines[0]!.indent));
+
+  return lines.map((line, index) => {
+    const level = levelOf(line.indent);
+    if (index === 0 && hasHierarchy) return `# ${line.text}`;
+    const adjustedLevel = hasHierarchy ? Math.max(0, level - levelOf(lines[0]!.indent) - 1) : level;
+    return `${"  ".repeat(adjustedLevel)}- ${line.text}`;
+  }).join("\n");
+}
