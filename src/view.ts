@@ -8,9 +8,10 @@
 import { MarkdownRenderer, Notice, TextFileView, TFile, normalizePath, type WorkspaceLeaf } from "obsidian";
 import type MindMapStudioPlugin from "./main";
 import { MindMapEditor } from "./editor";
-import { parseDocument, serializeDocument, type DisplayMode, type MindMapDocument } from "./model";
+import { documentToMarkdown, parseDocument, serializeDocument, type DisplayMode, type MindMapDocument } from "./model";
 import { settingsToAppearance } from "./settings";
 import type { ArticlePageNavigation, ArticleTocEntry, ReadingSection } from "./modes";
+import { readingSectionsToHtml } from "./import-export";
 
 export const VIEW_TYPE_MINDMAP_STUDIO = "mindmap-studio-view";
 
@@ -107,10 +108,7 @@ export class MindMapStudioView extends TextFileView {
         onExportSvg: async (svg) => this.exportTextFile("svg", svg),
         onExportMarkdown: async (markdown) => this.exportTextFile("md", markdown),
         onExportJson: async (json) => this.exportTextFile("json", json),
-        onExportDocument: async (format, html) => {
-          if (format === "pdf") this.printHtmlToPdf(html);
-          else await this.exportTextFile(format, html);
-        },
+        onExportDocument: async (format) => this.exportArticleFamily(format),
         resolveImage: (source) => this.resolveImage(source),
         onSavePastedImage: async (blob, suggestedName) => this.plugin.savePastedImage(blob, suggestedName, this.file),
         getImageHosts: () => this.plugin.getImageHostChoices(),
@@ -392,6 +390,31 @@ export class MindMapStudioView extends TextFileView {
     const path = await this.plugin.getAvailablePath(normalizePath(`${parentPath ? `${parentPath}/` : ""}${baseName}.${extension}`));
     await this.app.vault.create(path, content);
     new Notice(`已导出：${path}`);
+  }
+
+  /**
+   * Exports the current map family as one continuous document. A top-level
+   * directory uses its already collected reading sections; a child page starts
+   * at the current map and recursively includes descendants only.
+   *
+   * @param format Requested portable document format.
+   */
+  private async exportArticleFamily(format: "html" | "doc" | "pdf" | "md"): Promise<void> {
+    const file = this.file;
+    const document = this.document;
+    if (!file || !document) return;
+    await this.save();
+    const sections = this.showArticleToc && this.readingSections.length
+      ? this.readingSections
+      : await this.plugin.buildDescendantReadingSections(file, document);
+    if (format === "md") {
+      const markdown = sections.map((section) => documentToMarkdown(section.document)).join("\n\n---\n\n");
+      await this.exportTextFile("md", markdown);
+      return;
+    }
+    const html = readingSectionsToHtml(sections);
+    if (format === "pdf") this.printHtmlToPdf(html);
+    else await this.exportTextFile(format, html);
   }
 
   /**

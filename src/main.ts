@@ -701,6 +701,39 @@ export default class MindMapStudioPlugin extends Plugin {
   }
 
   /**
+   * Collects the current map and every reachable child map without walking up
+   * to its parent. This is the export counterpart of continuous reading.
+   *
+   * @param file Current physical mind-map file.
+   * @param document Current parsed mind-map document.
+   * @returns Ordered maps with their absolute depth relative to the current map.
+   */
+  async buildDescendantReadingSections(file: TFile, document: MindMapDocument): Promise<ReadingSection[]> {
+    const sections: ReadingSection[] = [{ filePath: file.path, document, baseDepth: 0 }];
+    const visited = new Set<string>([file.path]);
+    const visit = async (nodes: MindMapNode[], sourceFile: TFile, depth: number): Promise<void> => {
+      for (const node of nodes) {
+        if (node.submap?.path) {
+          const childFile = this.resolveMindMapFile(node.submap.path, sourceFile.path);
+          if (childFile && !visited.has(childFile.path)) {
+            visited.add(childFile.path);
+            try {
+              const childDocument = await this.readMindMapDocument(childFile);
+              sections.push({ filePath: childFile.path, document: childDocument, baseDepth: depth });
+              await visit(childDocument.root.children, childFile, depth + 1);
+            } catch (error) {
+              console.warn(`MindMap Studio could not read child map for export: ${childFile.path}`, error);
+            }
+          }
+        }
+        if (node.children.length) await visit(node.children, sourceFile, depth + 1);
+      }
+    };
+    await visit(document.root.children, file, 1);
+    return sections;
+  }
+
+  /**
    * 读取并返回available path，并保持模型、界面和持久化状态的一致性。
    *
    * @param preferredPath 该参数用于 get available path 流程中的输入或控制。

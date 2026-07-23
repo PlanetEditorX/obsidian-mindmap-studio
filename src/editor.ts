@@ -68,7 +68,7 @@ import { CodeEditModal, TableEditModal } from "./content-modals";
 import { TOOLBAR_ITEMS, type ImageHostChoice, type ImageHostUploadBatch } from "./settings";
 import { appearanceFromThemePreset, MINDMAP_THEME_PRESETS } from "./themes";
 import { buildArticleNodeInfo, DISPLAY_MODE_ICONS, DISPLAY_MODE_LABELS, type ArticlePageNavigation, type ArticleTocEntry, type ReadingSection } from "./modes";
-import { documentToHtml, xmindToDocument } from "./import-export";
+import { xmindToDocument } from "./import-export";
 
 /**
  * MindMapEditorCallbacks 的结构化数据约定。字段会在模块边界传递，用于保持类型安全和版本兼容。
@@ -79,7 +79,7 @@ export interface MindMapEditorCallbacks {
   onExportSvg: (svg: string) => void | Promise<void>;
   onExportMarkdown: (markdown: string) => void | Promise<void>;
   onExportJson: (json: string) => void | Promise<void>;
-  onExportDocument: (format: "html" | "doc" | "pdf", html: string) => void | Promise<void>;
+  onExportDocument: (format: "html" | "doc" | "pdf" | "md") => void | Promise<void>;
   resolveImage: (source: string) => string | null;
   onSavePastedImage: (blob: Blob, suggestedName: string) => Promise<string>;
   getImageHosts: () => ImageHostChoice[];
@@ -2496,6 +2496,7 @@ export class MindMapEditor {
         firstTextHandled = true;
         const paragraph = container.createEl("p", { cls: "mms-article-paragraph" });
         renderRichTextRuns(paragraph, block.richText, block.text);
+        this.markWrappedArticleParagraph(paragraph);
         if (treatTextAsBody) this.makeInlineEditable(paragraph, node, "正文");
       } else {
         const resolved = this.callbacks.resolveImage(block.source);
@@ -2519,6 +2520,23 @@ export class MindMapEditor {
       const code = container.createDiv({ cls: "mms-article-code markdown-rendered" });
       void this.callbacks.onRenderCode(node.code, code);
     }
+  }
+
+  /**
+   * Adds a two-character first-line indent only when a body paragraph actually
+   * occupies more than one rendered line.
+   *
+   * @param paragraph Rendered article body paragraph.
+   */
+  private markWrappedArticleParagraph(paragraph: HTMLParagraphElement): void {
+    window.requestAnimationFrame(() => {
+      if (!paragraph.isConnected || !paragraph.textContent?.trim()) return;
+      const range = document.createRange();
+      range.selectNodeContents(paragraph);
+      const lineTops = new Set(Array.from(range.getClientRects(), (rect) => Math.round(rect.top)));
+      paragraph.toggleClass("is-multiline", lineTops.size > 1);
+      range.detach();
+    });
   }
 
   /**
@@ -2598,7 +2616,10 @@ export class MindMapEditor {
         const firstTextBlock = nodeContentBlocks(info.node).find((block): block is MindMapTextContentBlock => block.type === "text");
         if (firstTextBlock || !this.readOnly) {
           const paragraph = section.createEl("p", { cls: "mms-article-leaf-text" });
-          if (firstTextBlock) renderRichTextRuns(paragraph, firstTextBlock.richText, firstTextBlock.text);
+          if (firstTextBlock) {
+            renderRichTextRuns(paragraph, firstTextBlock.richText, firstTextBlock.text);
+            this.markWrappedArticleParagraph(paragraph);
+          }
           this.makeInlineEditable(paragraph, info.node, "正文段落");
         }
         this.addInlineNodeActions(section, info.node);
@@ -3751,6 +3772,7 @@ export class MindMapEditor {
           if (firstTextBlock) {
             const paragraph = nodeSection.createEl("p", { cls: "mms-article-leaf-text" });
             renderRichTextRuns(paragraph, firstTextBlock.richText, firstTextBlock.text);
+            this.markWrappedArticleParagraph(paragraph);
           }
           this.renderArticleContent(nodeSection, info.node, false);
         }
@@ -3982,11 +4004,8 @@ export class MindMapEditor {
    * Opens the HTML, Word, PDF, and Markdown export chooser.
    */
   private showDocumentExport(): void {
-    const markdown = documentToMarkdown(this.document);
-    const html = documentToHtml(this.document);
     new DocumentExportModal(this.app, (format) => {
-      if (format === "md") void this.callbacks.onExportMarkdown(markdown);
-      else void this.callbacks.onExportDocument(format, html);
+      void this.callbacks.onExportDocument(format);
     }).open();
   }
 

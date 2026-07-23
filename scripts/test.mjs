@@ -83,6 +83,12 @@ export const setIcon = () => {};
   assert.equal(importedXmind.root.text, "XMind 根");
   assert.equal(importedXmind.root.children[0]?.text, "分支 A");
   assert.match(importExport.documentToHtml(importedXmind), /<!doctype html>/);
+  const mergedHtml = importExport.readingSectionsToHtml([
+    { filePath: "root.mindmap", document: importedXmind, baseDepth: 0 },
+    { filePath: "child.mindmap", document: model.createDefaultDocument("子导图"), baseDepth: 1 }
+  ]);
+  assert.match(mergedHtml, /XMind 根/);
+  assert.match(mergedHtml, /子导图/);
   document.appearance = {
     backgroundColor: "#fef3c7",
     backgroundPattern: "dots",
@@ -542,6 +548,8 @@ export const setIcon = () => {};
   assert.match(mainSource, /testImageHost/);
   assert.match(mainSource, /requestUrl/);
   assert.match(mainSource, /multipart\/form-data/);
+  assert.match(mainSource, /buildDescendantReadingSections/);
+  assert.match(mainSource, /MindMap Studio could not read child map for export/);
   assert.match(mainSource, /plugins\/mindmap-canvas\/data\.json/, "renamed plugin should migrate old settings");
   const globalSearchSource = await readFile("src/global-search.ts", "utf8");
   assert.match(globalSearchSource, /resolveHierarchicalEntries/);
@@ -549,6 +557,8 @@ export const setIcon = () => {};
   assert.match(globalSearchSource, /first climb to the top parent/);
   assert.match(globalSearchSource, /version: 2/);
   const editorSource = await readFile("src/editor.ts", "utf8");
+  assert.match(editorSource, /markWrappedArticleParagraph/);
+  assert.match(editorSource, /lineTops\.size > 1/);
   assert.doesNotMatch(editorSource, /execCommand/, "rich-text formatting must not use browser-wide execCommand behavior");
   assert.match(editorSource, /selectionStart/);
   assert.match(editorSource, /文字样式预览/);
@@ -561,6 +571,10 @@ export const setIcon = () => {};
   assert.match(editorSource, /mmc-rich-color-line/);
   assert.match(editorSource, /MINDMAP_THEME_PRESETS/);
   assert.match(editorSource, /edgeWidthForDepth/);
+  const viewSource = await readFile("src/view.ts", "utf8");
+  assert.match(viewSource, /exportArticleFamily/);
+  assert.match(viewSource, /readingSectionsToHtml\(sections\)/);
+  assert.match(viewSource, /buildDescendantReadingSections\(file, document\)/);
   const themeSource = await readFile("src/themes.ts", "utf8");
   assert.match(themeSource, /经典靛蓝/);
   assert.match(themeSource, /暗夜霓虹/);

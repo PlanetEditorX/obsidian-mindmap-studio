@@ -3005,6 +3005,11 @@
   line-height: var(--mms-article-line-height, 1.85);
 }
 
+.mms-article-leaf-text.is-multiline,
+.mms-article-paragraph.is-multiline {
+  text-indent: 2em;
+}
+
 .mms-article-image {
   display: block;
   max-width: min(100%, 760px);
