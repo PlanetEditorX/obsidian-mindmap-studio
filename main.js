@@ -5978,10 +5978,8 @@ function fieldValues(node) {
   if ((_d = node.icon) == null ? void 0 : _d.trim()) values.push({ kind: "\u56FE\u6807", value: node.icon });
   if (node.task) values.push({ kind: "\u4EFB\u52A1", value: node.task });
   if ((_e = node.submap) == null ? void 0 : _e.path) values.push({ kind: "\u5B50\u5BFC\u56FE", value: `${(_f = node.submap.title) != null ? _f : ""} ${node.submap.path}` });
-  if (node.code) values.push({
-    kind: "\u4EE3\u7801", value: `${(_g = node.code.language) != null ? _g : ""}
-${node.code.code}`
-  });
+  if (node.code) values.push({ kind: "\u4EE3\u7801", value: `${(_g = node.code.language) != null ? _g : ""}
+${node.code.code}` });
   if (node.table) values.push({ kind: "\u8868\u683C", value: [...node.table.headers, ...node.table.rows.flat()].join(" ") });
   const imageValues = nodeContentBlocks(node).filter((block) => block.type === "image").map((block) => {
     var _a2, _b2;
