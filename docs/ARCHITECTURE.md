@@ -40,6 +40,8 @@ editor-types.ts  model.ts         layout.ts          modes.ts       global-searc
 - `themes.ts`：内置主题预设。
 - `article-style.ts`：文章样式预设和纯样式解析，不依赖编辑器 DOM。
 - `editor-types.ts`：编辑器回调与运行参数契约，隔离插件服务和 UI 实现。
+- `rich-text-dom.ts`：富文本运行段与 `contenteditable` DOM 的双向转换，以及 MathJax 渲染。
+- `editor-modals.ts`：图片预览、节点搜索、Markdown 大纲和文档导出等弱状态弹窗。
 - `content-modals.ts`：表格、代码编辑弹窗。
 - `static-render.ts`：Markdown 阅读模式中的只读 SVG 预览。
 - `styles.css`：编辑器、三种模式、弹窗、搜索、尺寸手柄和响应式样式。
@@ -242,5 +244,9 @@ mindmap-search-index.json
 3. `editor.ts` 只调用契约，不直接依赖插件主类。
 
 新增文章样式预设时，应在 `article-style.ts` 中维护预设和解析逻辑，文章渲染与样式编辑弹窗共用同一个解析入口。
+
+富文本字符样式的规范化属于 `model.ts`，DOM 解析和渲染属于 `rich-text-dom.ts`。不要让模型层依赖浏览器 DOM 或 MathJax。
+
+新增不直接修改编辑器内部状态的弹窗时，应优先放入 `editor-modals.ts`，通过构造参数和回调与 `MindMapEditor` 通信。
 
 新增跨文件功能时，应放在 `main.ts` 或专用服务类中，由 `view.ts` 和 `editor.ts` 通过回调调用。

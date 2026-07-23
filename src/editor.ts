@@ -5,7 +5,7 @@
  * 负责三种视图、节点操作、富文本、图片、表格、代码、子导图、拖拽、尺寸、搜索、历史记录、只读锁和图床容灾。
  */
 
-import { App, finishRenderMath, loadMathJax, Menu, Modal, Notice, renderMath, setIcon } from "obsidian";
+import { App, finishRenderMath, Menu, Modal, Notice, renderMath, setIcon } from "obsidian";
 import {
   cloneDocument,
   cloneNodeWithFreshIds,
@@ -32,8 +32,6 @@ import {
   syncNodeLegacyFields,
   parseFencedCode,
   parseMarkdownTable,
-  normalizeRichText,
-  richTextPlainText,
   richTextCharacterStyles,
   characterStylesToRichText,
   applyRichTextStyleRange,
@@ -54,7 +52,6 @@ import {
   type MindMapNode,
   type MindMapTextContentBlock,
   type MindMapSubmap,
-  type MindMapTextRun,
   type MindMapTextStyle,
   type NodeShape,
   type NodeTextAlign,
@@ -71,6 +68,8 @@ import { buildArticleNodeInfo, DISPLAY_MODE_ICONS, DISPLAY_MODE_LABELS, type Art
 import { xmindToDocument } from "./import-export";
 import { ARTICLE_STYLE_PRESETS, resolveArticleStyle } from "./article-style";
 import type { MindMapEditorCallbacks, MindMapEditorOptions } from "./editor-types";
+import { ensureMathJax, readRichTextEditor, renderRichTextRuns } from "./rich-text-dom";
+import { DocumentExportModal, ImagePreviewModal, OutlineModal, SearchNodesModal } from "./editor-modals";
 export type { MindMapEditorCallbacks, MindMapEditorOptions } from "./editor-types";
 
 /**
@@ -96,214 +95,6 @@ interface NodeEditValues {
   textAlign?: NodeTextAlign;
   width?: number;
   minHeight?: number;
-}
-
-/**
- * 执行“style equals”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
- *
- * @param left 该参数用于 style equals 流程中的输入或控制。
- * @param right 该参数用于 style equals 流程中的输入或控制。
- * @returns 操作条件是否成立或处理是否成功。
- */
-function styleEquals(left: MindMapTextStyle | undefined, right: MindMapTextStyle | undefined): boolean {
-  return JSON.stringify(left ?? {}) === JSON.stringify(right ?? {});
-}
-
-let mathJaxReady = false;
-let mathJaxLoading: Promise<void> | null = null;
-
-/**
- * 确保 Obsidian 的 MathJax 运行时已加载。
- *
- * @returns MathJax 可安全渲染时完成的 Promise。
- */
-function ensureMathJax(): Promise<void> {
-  if (mathJaxReady) return Promise.resolve();
-  mathJaxLoading ??= loadMathJax().then(() => { mathJaxReady = true; });
-  return mathJaxLoading;
-}
-
-/**
- * 渲染rich text runs，并保持模型、界面和持久化状态的一致性。
- *
- * @param container 接收渲染内容的 DOM 容器。
- * @param runs 按字符样式拆分的富文本运行段。
- * @param fallbackText 该参数用于 render rich text runs 流程中的输入或控制。
- * @param latex 是否识别 $...$ 与 $$...$$ LaTeX 公式。
- */
-function renderRichTextRuns(container: HTMLElement, runs: MindMapTextRun[] | undefined, fallbackText: string, latex = true): void {
-  container.empty();
-  const sourceRuns = runs?.length ? runs : [{ text: fallbackText }];
-  const hasMath = latex && sourceRuns.some((run) => /(\$\$[\s\S]+?\$\$|\$[^$\n]+?\$)/.test(run.text));
-  if (hasMath && !mathJaxReady) {
-    sourceRuns.forEach((run) => container.createSpan({ cls: "mmc-rich-run", text: run.text }));
-    void ensureMathJax().then(() => {
-      if (container.isConnected) renderRichTextRuns(container, runs, fallbackText, latex);
-    }).catch(() => undefined);
-    return;
-  }
-  let renderedMath = false;
-  const append = (text: string, style: MindMapTextStyle | undefined): void => {
-    const span = container.createSpan({ cls: "mmc-rich-run", text });
-    const run = { style };
-    if (run.style?.bold !== undefined) span.style.fontWeight = run.style.bold ? "700" : "400";
-    if (run.style?.italic !== undefined) span.style.fontStyle = run.style.italic ? "italic" : "normal";
-    const decorations: string[] = [];
-    if (run.style?.underline) decorations.push("underline");
-    if (run.style?.strike) decorations.push("line-through");
-    if (decorations.length) span.style.textDecorationLine = decorations.join(" ");
-    if (run.style?.color) span.style.color = run.style.color;
-  };
-  for (const run of sourceRuns) {
-    if (!latex) {
-      append(run.text, run.style);
-      continue;
-    }
-    const pattern = /(\$\$[\s\S]+?\$\$|\$[^$\n]+?\$)/g;
-    let offset = 0;
-    for (const match of run.text.matchAll(pattern)) {
-      const index = match.index ?? 0;
-      if (index > offset) append(run.text.slice(offset, index), run.style);
-      const token = match[0];
-      const display = token.startsWith("$$");
-      const source = token.slice(display ? 2 : 1, display ? -2 : -1).trim();
-      try {
-        const math = renderMath(source, display);
-        math.addClass("mms-node-math");
-        math.toggleClass("is-display", display);
-        container.appendChild(math);
-        renderedMath = true;
-      } catch {
-        append(token, run.style);
-      }
-      offset = index + token.length;
-    }
-    if (offset < run.text.length) append(run.text.slice(offset), run.style);
-  }
-  if (renderedMath) void finishRenderMath();
-}
-
-/**
- * 执行“style from element”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
- *
- * @param element 该参数用于 style from element 流程中的输入或控制。
- * @param inherited 该参数用于 style from element 流程中的输入或控制。
- * @returns 当前操作生成、查找或规范化后的结果。
- */
-function styleFromElement(element: HTMLElement, inherited: MindMapTextStyle): MindMapTextStyle {
-  const style: MindMapTextStyle = { ...inherited };
-  const tag = element.tagName.toLowerCase();
-  if (tag === "b" || tag === "strong") style.bold = true;
-  if (tag === "i" || tag === "em") style.italic = true;
-  if (tag === "u") style.underline = true;
-  if (tag === "s" || tag === "strike" || tag === "del") style.strike = true;
-  const inline = element.style;
-  if (inline.fontWeight && (inline.fontWeight === "bold" || Number(inline.fontWeight) >= 600)) style.bold = true;
-  if (inline.fontStyle === "italic") style.italic = true;
-  const decoration = `${inline.textDecoration} ${inline.textDecorationLine}`;
-  if (decoration.includes("underline")) style.underline = true;
-  if (decoration.includes("line-through")) style.strike = true;
-  const fontColor = tag === "font" ? element.getAttribute("color") : null;
-  const color = inline.color || fontColor || "";
-  if (color) {
-    const probe = document.createElement("span");
-    probe.style.color = color;
-    document.body.appendChild(probe);
-    const normalized = getComputedStyle(probe).color.match(/\d+/g)?.slice(0, 3).map(Number);
-    probe.remove();
-    if (normalized?.length === 3) style.color = `#${normalized.map((value) => value.toString(16).padStart(2, "0")).join("")}`;
-  }
-  return style;
-}
-
-/**
- * 执行“read rich text editor”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
- *
- * @param editor 该参数用于 read rich text editor 流程中的输入或控制。
- * @returns 计算、解析或序列化后的字符串结果。
- */
-function readRichTextEditor(editor: HTMLElement): { text: string; richText?: MindMapTextRun[] } {
-  const rawRuns: MindMapTextRun[] = [];
-  const visit = (node: Node, inherited: MindMapTextStyle): void => {
-    if (node.nodeType === Node.TEXT_NODE) {
-      const text = (node.textContent ?? "").replace(/\r\n?/g, "\n");
-      if (!text) return;
-      const style = Object.values(inherited).some((value) => value !== undefined) ? { ...inherited } : undefined;
-      const previous = rawRuns.at(-1);
-      if (previous && styleEquals(previous.style, style)) previous.text += text;
-      else rawRuns.push({ text, style });
-      return;
-    }
-    if (!(node instanceof HTMLElement)) return;
-    if (node.tagName === "BR") {
-      rawRuns.push({ text: "\n" });
-      return;
-    }
-    const style = styleFromElement(node, inherited);
-    node.childNodes.forEach((child) => visit(child, style));
-    if (["DIV", "P"].includes(node.tagName) && rawRuns.length && !rawRuns.at(-1)?.text.endsWith("\n")) rawRuns.push({ text: "\n" });
-  };
-  editor.childNodes.forEach((child) => visit(child, {}));
-  const fallback = editor.innerText.replace(/\r\n?/g, "\n").trim();
-  const richText = normalizeRichText(rawRuns, fallback);
-  return { text: richTextPlainText(richText, fallback).trim(), richText };
-}
-
-/**
- * ImagePreviewModal 的主要实现类。负责封装相关状态、生命周期和对外操作，避免调用方直接操作内部数据结构。
- */
-class ImagePreviewModal extends Modal {
-  private scale = 1;
-
-  /**
-   * 创建 ImagePreviewModal 实例，保存依赖和初始状态；实际 DOM 构建通常在 onOpen() 或后续渲染流程中完成。
-   *
-   * @param app Obsidian 应用实例，用于访问仓库、工作区和 UI 服务。
-   * @param source 待解析或渲染的原始文本。
-   * @param alt 该参数用于 constructor 流程中的输入或控制。
-   */
-  constructor(app: App, private readonly source: string, private readonly alt: string) {
-    super(app);
-  }
-
-  /**
-   * 在弹窗或视图打开时创建界面、绑定事件并把当前数据填入控件。
-   */
-  onOpen(): void {
-    this.modalEl.addClass("mmc-image-preview-modal");
-    this.titleEl.setText(this.alt || "图片预览");
-    const toolbar = this.contentEl.createDiv({ cls: "mmc-image-preview-toolbar" });
-    const imageWrap = this.contentEl.createDiv({ cls: "mmc-image-preview-stage" });
-    const image = imageWrap.createEl("img", { attr: { src: this.source, alt: this.alt || "图片" } });
-    let baseWidth = 0;
-    let baseHeight = 0;
-    const applyScale = (): void => {
-      if (!baseWidth || !baseHeight) return;
-      image.style.width = `${Math.max(1, Math.round(baseWidth * this.scale))}px`;
-      image.style.height = `${Math.max(1, Math.round(baseHeight * this.scale))}px`;
-    };
-    image.addEventListener("load", () => {
-      const availableWidth = Math.max(320, imageWrap.clientWidth * 0.9);
-      const availableHeight = Math.max(220, imageWrap.clientHeight * 0.9);
-      const fit = Math.min(1, availableWidth / Math.max(1, image.naturalWidth), availableHeight / Math.max(1, image.naturalHeight));
-      baseWidth = Math.max(1, image.naturalWidth * fit);
-      baseHeight = Math.max(1, image.naturalHeight * fit);
-      applyScale();
-    });
-    const button = (label: string, action: () => void): void => {
-      const el = toolbar.createEl("button", { text: label, attr: { type: "button" } });
-      el.addEventListener("click", action);
-    };
-    button("−", () => { this.scale = Math.max(0.2, this.scale - 0.2); applyScale(); });
-    button("100%", () => { this.scale = 1; applyScale(); });
-    button("+", () => { this.scale = Math.min(5, this.scale + 0.2); applyScale(); });
-    imageWrap.addEventListener("wheel", (event) => {
-      event.preventDefault();
-      this.scale = Math.min(5, Math.max(0.2, this.scale + (event.deltaY < 0 ? 0.15 : -0.15)));
-      applyScale();
-    }, { passive: false });
-    image.addEventListener("dblclick", () => { this.scale = 1; applyScale(); });
-  }
 }
 
 /**
@@ -1351,169 +1142,6 @@ class AppearanceModal extends Modal {
       this.close();
     });
     window.setTimeout(() => save.focus(), 20);
-  }
-}
-
-/**
- * OutlineModal 的主要实现类。负责封装相关状态、生命周期和对外操作，避免调用方直接操作内部数据结构。
- */
-class OutlineModal extends Modal {
-  private readonly markdown: string;
-  private readonly onExport: () => void;
-
-  /**
-   * 创建 OutlineModal 实例，保存依赖和初始状态；实际 DOM 构建通常在 onOpen() 或后续渲染流程中完成。
-   *
-   * @param app Obsidian 应用实例，用于访问仓库、工作区和 UI 服务。
-   * @param markdown 待解析或生成的 Markdown 文本。
-   * @param onExport 该参数用于 constructor 流程中的输入或控制。
-   */
-  constructor(app: App, markdown: string, onExport: () => void) {
-    super(app);
-    this.markdown = markdown;
-    this.onExport = onExport;
-  }
-
-  /**
-   * 在弹窗或视图打开时创建界面、绑定事件并把当前数据填入控件。
-   */
-  onOpen(): void {
-    this.titleEl.setText("Markdown 大纲");
-    const textarea = this.contentEl.createEl("textarea", { cls: "mmc-outline-textarea" });
-    textarea.value = this.markdown;
-    textarea.readOnly = true;
-    const actions = this.contentEl.createDiv({ cls: "mmc-modal-actions" });
-    const copy = actions.createEl("button", { text: "复制" });
-    const exportButton = actions.createEl("button", { text: "导出为 .md", cls: "mod-cta" });
-    copy.addEventListener("click", () => {
-      void navigator.clipboard.writeText(this.markdown);
-      new Notice("已复制 Markdown 大纲");
-    });
-    exportButton.addEventListener("click", () => {
-      this.onExport();
-      this.close();
-    });
-  }
-
-  /**
-   * 在弹窗或视图关闭时释放临时 DOM、计时器和事件状态。
-   */
-  onClose(): void {
-    this.contentEl.empty();
-  }
-}
-
-/**
- * SearchNodesModal 的主要实现类。负责封装相关状态、生命周期和对外操作，避免调用方直接操作内部数据结构。
- */
-class SearchNodesModal extends Modal {
-  private readonly nodes: MindMapNode[];
-  private readonly onQuery: (query: string) => void;
-  private readonly onSelect: (node: MindMapNode) => void;
-
-  /**
-   * 创建 SearchNodesModal 实例，保存依赖和初始状态；实际 DOM 构建通常在 onOpen() 或后续渲染流程中完成。
-   *
-   * @param app Obsidian 应用实例，用于访问仓库、工作区和 UI 服务。
-   * @param nodes 该参数用于 constructor 流程中的输入或控制。
-   * @param onQuery 该参数用于 constructor 流程中的输入或控制。
-   * @param onSelect 该参数用于 constructor 流程中的输入或控制。
-   */
-  constructor(app: App, nodes: MindMapNode[], onQuery: (query: string) => void, onSelect: (node: MindMapNode) => void) {
-    super(app);
-    this.nodes = nodes;
-    this.onQuery = onQuery;
-    this.onSelect = onSelect;
-  }
-
-  /**
-   * 在弹窗或视图打开时创建界面、绑定事件并把当前数据填入控件。
-   */
-  onOpen(): void {
-    this.titleEl.setText("搜索节点");
-    this.modalEl.addClass("mmc-search-modal");
-    const input = this.contentEl.createEl("input", { type: "search", cls: "mmc-search-input", attr: { placeholder: "搜索文字、备注、标签或链接…" } });
-    const count = this.contentEl.createDiv({ cls: "mmc-search-count" });
-    const results = this.contentEl.createDiv({ cls: "mmc-search-results" });
-
-    const renderResults = (): void => {
-      const query = input.value.trim().toLocaleLowerCase();
-      this.onQuery(query);
-      results.empty();
-      const matches = query
-        ? this.nodes.filter((node) => nodeSearchText(node).includes(query)).slice(0, 80)
-        : this.nodes.slice(0, 40);
-      count.setText(query ? `找到 ${matches.length} 个节点` : `共 ${this.nodes.length} 个节点`);
-      for (const node of matches) {
-        const button = results.createEl("button", { cls: "mmc-search-result", type: "button" });
-        const title = button.createDiv({ cls: "mmc-search-result-title" });
-        if (node.icon) title.createSpan({ text: `${node.icon} ` });
-        title.createSpan({ text: nodePrimaryText(node) || "图片节点" });
-        const details = [node.task ? ({ todo: "待办", doing: "进行中", done: "已完成" } as const)[node.task] : "", ...(node.tags ?? []).map((tag) => `#${tag}`)]
-          .filter(Boolean)
-          .join(" · ");
-        if (details) button.createDiv({ cls: "mmc-search-result-meta", text: details });
-        button.addEventListener("click", () => {
-          this.onSelect(node);
-          this.close();
-        });
-      }
-      if (!matches.length) results.createDiv({ cls: "mmc-empty-state", text: "没有匹配的节点" });
-    };
-
-    input.addEventListener("input", renderResults);
-    input.addEventListener("keydown", (event) => {
-      if (event.key === "Enter") {
-        const first = results.querySelector<HTMLButtonElement>(".mmc-search-result");
-        if (first) {
-          event.preventDefault();
-          first.click();
-        }
-      }
-    });
-    renderResults();
-    window.setTimeout(() => input.focus(), 20);
-  }
-}
-
-/**
- * Presents the portable document export formats.
- */
-class DocumentExportModal extends Modal {
-  private readonly exportFormat: (format: "html" | "doc" | "pdf" | "md") => void;
-
-  /**
-   * Creates a document export chooser.
-   *
-   * @param app Obsidian application.
-   * @param exportFormat Export callback.
-   */
-  constructor(app: App, exportFormat: (format: "html" | "doc" | "pdf" | "md") => void) {
-    super(app);
-    this.exportFormat = exportFormat;
-  }
-
-  /**
-   * Builds export format buttons.
-   */
-  onOpen(): void {
-    this.titleEl.setText("导出文档");
-    this.contentEl.createEl("p", { cls: "setting-item-description", text: "选择适合阅读、编辑或打印的格式。" });
-    const formats = this.contentEl.createDiv({ cls: "mms-document-export-grid" });
-    for (const [format, title, description] of [
-      ["html", "HTML", "独立网页，可用浏览器打开"],
-      ["doc", "Word", "Word 兼容文档（.doc）"],
-      ["pdf", "PDF", "打开打印版并另存为 PDF"],
-      ["md", "Markdown", "保留标题和节点层级"]
-    ] as const) {
-      const button = formats.createEl("button", { attr: { type: "button" } });
-      button.createEl("strong", { text: title });
-      button.createSpan({ text: description });
-      button.addEventListener("click", () => {
-        this.exportFormat(format);
-        this.close();
-      });
-    }
   }
 }
 

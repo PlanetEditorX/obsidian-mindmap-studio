@@ -1,6 +1,6 @@
 {
   "name": "obsidian-mindmap-studio",
-  "version": "1.8.5",
+  "version": "1.8.4",
   "description": "Editable local-first .mindmap diagrams for Obsidian with synchronized mind map, outline, and article modes, read-only locking, global search, themes, rich content, image mirrors, tables, code, and exports.",
   "main": "main.js",
   "scripts": {
