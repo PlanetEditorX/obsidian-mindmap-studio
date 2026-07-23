@@ -168,6 +168,7 @@ export interface MindMapStudioSettings {
   richTextUnderlineShortcut: string;
   richTextColorShortcut: string;
   visibleToolbarItems: string[];
+  toolbarItemOrder: string[];
 }
 
 export const DEFAULT_SETTINGS: MindMapStudioSettings = {
@@ -224,7 +225,8 @@ export const DEFAULT_SETTINGS: MindMapStudioSettings = {
   richTextItalicShortcut: "Ctrl+I",
   richTextUnderlineShortcut: "Ctrl+U",
   richTextColorShortcut: "Ctrl+Shift+C",
-  visibleToolbarItems: TOOLBAR_ITEMS.map(([id]) => id)
+  visibleToolbarItems: TOOLBAR_ITEMS.map(([id]) => id),
+  toolbarItemOrder: TOOLBAR_ITEMS.map(([id]) => id)
 };
 
 /**
@@ -414,16 +416,49 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
       cls: "setting-item-description",
       text: "选择需要显示在脑图顶部工具栏中的操作。显示模式切换、缩放比例和保存状态始终保留。"
     });
+    const defaultToolbarOrder: string[] = TOOLBAR_ITEMS.map(([id]) => id);
+    const knownToolbarItems = new Map<string, string>(TOOLBAR_ITEMS);
+    const toolbarOrder = [
+      ...this.plugin.settings.toolbarItemOrder.filter((id) => knownToolbarItems.has(id)),
+      ...defaultToolbarOrder.filter((id) => !this.plugin.settings.toolbarItemOrder.includes(id))
+    ];
+    this.plugin.settings.toolbarItemOrder = toolbarOrder;
+    new Setting(containerEl)
+      .setName("工具栏顺序")
+      .setDesc("使用上下按钮调整顺序；隐藏的项目也会保留当前位置。")
+      .addButton((button) => button
+        .setButtonText("恢复默认顺序")
+        .onClick(async () => {
+          this.plugin.settings.toolbarItemOrder = [...defaultToolbarOrder];
+          await this.saveAndRefresh();
+          this.display();
+        }));
     const toolbarGrid = containerEl.createDiv({ cls: "mms-toolbar-settings-grid" });
-    for (const [id, labelText] of TOOLBAR_ITEMS) {
-      const label = toolbarGrid.createEl("label", { cls: "mms-toolbar-setting-item" });
+    for (const [index, id] of toolbarOrder.entries()) {
+      const row = toolbarGrid.createDiv({ cls: "mms-toolbar-setting-item" });
+      const label = row.createEl("label", { cls: "mms-toolbar-setting-label" });
       const checkbox = label.createEl("input", { type: "checkbox" });
       checkbox.checked = this.plugin.settings.visibleToolbarItems.includes(id);
-      label.createSpan({ text: labelText });
+      label.createSpan({ text: knownToolbarItems.get(id) ?? id });
+      const controls = row.createDiv({ cls: "mms-toolbar-order-controls" });
+      const upButton = controls.createEl("button", { text: "↑", attr: { type: "button", "aria-label": "上移" } });
+      const downButton = controls.createEl("button", { text: "↓", attr: { type: "button", "aria-label": "下移" } });
+      upButton.disabled = index === 0;
+      downButton.disabled = index === toolbarOrder.length - 1;
+      const move = async (offset: number): Promise<void> => {
+        const target = index + offset;
+        if (target < 0 || target >= toolbarOrder.length) return;
+        [toolbarOrder[index], toolbarOrder[target]] = [toolbarOrder[target], toolbarOrder[index]];
+        this.plugin.settings.toolbarItemOrder = [...toolbarOrder];
+        await this.saveAndRefresh();
+        this.display();
+      };
+      upButton.addEventListener("click", () => void move(-1));
+      downButton.addEventListener("click", () => void move(1));
       checkbox.addEventListener("change", async () => {
         const selected = new Set(this.plugin.settings.visibleToolbarItems);
         if (checkbox.checked) selected.add(id); else selected.delete(id);
-        this.plugin.settings.visibleToolbarItems = TOOLBAR_ITEMS.map(([itemId]) => itemId).filter((itemId) => selected.has(itemId));
+        this.plugin.settings.visibleToolbarItems = toolbarOrder.filter((itemId) => selected.has(itemId));
         await this.saveAndRefresh();
       });
     }

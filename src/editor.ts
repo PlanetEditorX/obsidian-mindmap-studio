@@ -114,6 +114,7 @@ export interface MindMapEditorOptions {
     color: string;
   };
   visibleToolbarItems: string[];
+  toolbarItemOrder: string[];
 }
 
 /**
@@ -1558,7 +1559,8 @@ export class MindMapEditor {
    */
   setOptions(options: MindMapEditorOptions): void {
     const modesChanged = JSON.stringify(this.options.visibleModes) !== JSON.stringify(options.visibleModes);
-    const toolbarChanged = JSON.stringify(this.options.visibleToolbarItems) !== JSON.stringify(options.visibleToolbarItems);
+    const toolbarChanged = JSON.stringify(this.options.visibleToolbarItems) !== JSON.stringify(options.visibleToolbarItems)
+      || JSON.stringify(this.options.toolbarItemOrder) !== JSON.stringify(options.toolbarItemOrder);
     const globalModeChanged = this.options.defaultViewMode !== options.defaultViewMode;
     this.options = options;
     const resolved = this.resolveMode(globalModeChanged ? options.defaultViewMode : this.currentMode);
@@ -1711,6 +1713,7 @@ export class MindMapEditor {
     this.addToolbarButton("json", "braces", "JSON 导入 / 导出", () => this.showJsonTransfer(), true);
     this.addToolbarButton("export-svg", "image", "导出 SVG", () => void this.callbacks.onExportSvg(documentToSvg(this.document.root, this.document.layout, this.document.title, this.getAppearance())));
 
+    this.applyToolbarOrder();
     const spacer = this.toolbarEl.createSpan({ cls: "mmc-toolbar-spacer" });
     spacer.setAttr("aria-hidden", "true");
     this.zoomStatusEl = this.toolbarEl.createSpan({ cls: "mmc-zoom-status", text: "100%" });
@@ -1769,11 +1772,26 @@ export class MindMapEditor {
     this.viewportEl.addEventListener("pointermove", pointerMove);
     this.viewportEl.addEventListener("pointerup", pointerUp);
     this.viewportEl.addEventListener("pointercancel", pointerUp);
+    const canvasContextMenu = (event: MouseEvent): void => {
+      const target = event.target as HTMLElement;
+      if (target.closest(".mmc-node, .mmc-canvas-breadcrumb")) return;
+      event.preventDefault();
+      this.openAllNodesContextMenu(event);
+    };
+    const toolbarContextMenu = (event: MouseEvent): void => {
+      event.preventDefault();
+      event.stopPropagation();
+      this.openAllNodesContextMenu(event);
+    };
+    this.viewportEl.addEventListener("contextmenu", canvasContextMenu);
+    this.toolbarEl.addEventListener("contextmenu", toolbarContextMenu);
     this.cleanupCallbacks.push(() => {
       this.viewportEl.removeEventListener("pointerdown", pointerDown);
       this.viewportEl.removeEventListener("pointermove", pointerMove);
       this.viewportEl.removeEventListener("pointerup", pointerUp);
       this.viewportEl.removeEventListener("pointercancel", pointerUp);
+      this.viewportEl.removeEventListener("contextmenu", canvasContextMenu);
+      this.toolbarEl.removeEventListener("contextmenu", toolbarContextMenu);
     });
 
     this.resizeObserver = new ResizeObserver(() => this.applyTransform());
@@ -1848,6 +1866,7 @@ export class MindMapEditor {
    */
   private addToolbarButton(id: string, icon: string, label: string, action: () => void, editOnly = false): HTMLButtonElement {
     const button = this.toolbarEl.createEl("button", { cls: "clickable-icon mmc-toolbar-button", attr: { "aria-label": label, title: label, type: "button" } });
+    button.dataset.toolbarId = id;
     setIcon(button, icon);
     button.toggleClass("is-hidden", !this.options.visibleToolbarItems.includes(id));
     if (editOnly) {
@@ -1860,6 +1879,23 @@ export class MindMapEditor {
       this.focus();
     });
     return button;
+  }
+
+  /**
+   * Applies the user-defined order to toolbar buttons.
+   */
+  private applyToolbarOrder(): void {
+    const buttons = new Map<string, HTMLButtonElement>();
+    for (const button of Array.from(this.toolbarEl.querySelectorAll<HTMLButtonElement>("[data-toolbar-id]"))) {
+      const id = button.dataset.toolbarId;
+      if (id) buttons.set(id, button);
+    }
+    for (const separator of Array.from(this.toolbarEl.querySelectorAll(".mmc-toolbar-separator"))) separator.remove();
+    const order = [...this.options.toolbarItemOrder, ...TOOLBAR_ITEMS.map(([id]) => id)];
+    for (const id of new Set(order)) {
+      const button = buttons.get(id);
+      if (button) this.toolbarEl.appendChild(button);
+    }
   }
 
   /**
@@ -3064,6 +3100,25 @@ export class MindMapEditor {
   }
 
   /**
+   * Expands or collapses every branch while keeping the root visible.
+   *
+   * @param collapsed Whether branches should be collapsed.
+   */
+  private setAllNodesCollapsed(collapsed: boolean): void {
+    const apply = (): void => {
+      for (const node of flattenNodes(this.document.root)) {
+        node.collapsed = node === this.document.root ? false : collapsed && node.children.length > 0;
+      }
+    };
+    if (this.readOnly) {
+      apply();
+      this.render();
+      return;
+    }
+    this.mutate(apply);
+  }
+
+  /**
    * 切换task，并保持模型、界面和持久化状态的一致性。
    */
   private cycleTask(): void {
@@ -3452,6 +3507,24 @@ export class MindMapEditor {
     menu.addItem((item) => item.setTitle("打开链接").setIcon("link").onClick(() => this.openSelectedLink()));
     menu.addSeparator();
     menu.addItem((item) => item.setTitle("删除节点").setIcon("trash-2").onClick(() => this.deleteSelected()));
+    menu.showAtMouseEvent(event);
+  }
+
+  /**
+   * Opens the canvas and toolbar context menu for global branch visibility.
+   *
+   * @param event Mouse event used to position the menu.
+   */
+  private openAllNodesContextMenu(event: MouseEvent): void {
+    const menu = new Menu();
+    menu.addItem((item) => item
+      .setTitle("展开所有节点")
+      .setIcon("unfold-vertical")
+      .onClick(() => this.setAllNodesCollapsed(false)));
+    menu.addItem((item) => item
+      .setTitle("收起所有节点")
+      .setIcon("fold-vertical")
+      .onClick(() => this.setAllNodesCollapsed(true)));
     menu.showAtMouseEvent(event);
   }
 

@@ -885,7 +885,7 @@
 
 .mms-toolbar-settings-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
   gap: 6px 12px;
   margin-bottom: 18px;
 }
@@ -899,8 +899,28 @@
   background: var(--background-secondary);
 }
 
-.mms-toolbar-setting-item input {
+.mms-toolbar-setting-label {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.mms-toolbar-setting-label input {
   margin: 0;
+}
+
+.mms-toolbar-order-controls {
+  display: flex;
+  gap: 3px;
+}
+
+.mms-toolbar-order-controls button {
+  width: 25px;
+  height: 25px;
+  min-width: 25px;
+  padding: 0;
 }
 
 .mmc-inline-format-bar.is-hidden {

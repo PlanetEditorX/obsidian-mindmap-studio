@@ -254,6 +254,7 @@ export class MindMapStudioView extends TextFileView {
         color: this.plugin.settings.richTextColorShortcut
       },
       visibleToolbarItems: [...this.plugin.settings.visibleToolbarItems],
+      toolbarItemOrder: [...this.plugin.settings.toolbarItemOrder],
       articleBaseDepth: this.articleBaseDepth,
       articleTocEntries: [...this.articleTocEntries],
       showArticleToc: this.showArticleToc

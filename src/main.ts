@@ -34,6 +34,7 @@ import {
 import {
   DEFAULT_SETTINGS,
   MindMapStudioSettingTab,
+  TOOLBAR_ITEMS,
   createImageHostConfig,
   settingsToAppearance,
   type ImageHostChoice,
@@ -381,6 +382,13 @@ export default class MindMapStudioPlugin extends Plugin {
       visibleToolbarItems: Array.isArray(raw.visibleToolbarItems)
         ? raw.visibleToolbarItems.filter((id): id is string => typeof id === "string")
         : [...DEFAULT_SETTINGS.visibleToolbarItems],
+      toolbarItemOrder: (() => {
+        const validIds = new Set<string>(TOOLBAR_ITEMS.map(([id]) => id));
+        const stored = Array.isArray(raw.toolbarItemOrder)
+          ? raw.toolbarItemOrder.filter((id): id is string => typeof id === "string" && validIds.has(id))
+          : [];
+        return [...new Set([...stored, ...DEFAULT_SETTINGS.toolbarItemOrder])];
+      })(),
       defaultViewMode: raw.defaultViewMode === "outline" || raw.defaultViewMode === "article" || raw.defaultViewMode === "mindmap"
         ? raw.defaultViewMode
         : DEFAULT_SETTINGS.defaultViewMode,
