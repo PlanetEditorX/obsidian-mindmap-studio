@@ -2448,18 +2448,23 @@ export class MindMapEditor {
     const addTarget = (className: string, prefix: string, entry: ArticleTocEntry): void => {
       const link = pager.createEl("button", {
         cls: className,
-        text: `${prefix}${entry.displayTitle || entry.title}`,
         attr: { type: "button", title: entry.breadcrumb.join(" › ") }
       });
+      link.createSpan({ cls: "mms-article-pager-direction", text: prefix.trim() });
+      link.createSpan({ cls: "mms-article-pager-title", text: entry.displayTitle || entry.title });
       link.addEventListener("click", () => void this.callbacks.onOpenMindMap(entry.filePath, entry.nodeId));
     };
     if (previous) addTarget("mms-article-pager-previous", previous.depth <= 1 ? "上一章 " : "上一节 ", previous);
     else pager.createSpan({ cls: "mms-article-pager-placeholder" });
-    const parent = pager.createEl("button", { cls: "mms-article-pager-parent", text: "返回上一级", attr: { type: "button" } });
+    const parent = pager.createEl("button", { cls: "mms-article-pager-parent", attr: { type: "button", title: "返回上一级" } });
+    setIcon(parent, "corner-left-up");
+    parent.createSpan({ text: "返回上一级" });
     parent.addEventListener("click", () => void this.callbacks.onOpenMindMap(navigation.parentPath!));
     if (next) addTarget("mms-article-pager-next", next.depth <= 1 ? "下一章 " : "下一节 ", next);
     else {
-      const end = pager.createEl("button", { cls: "mms-article-pager-end", text: "END", attr: { type: "button", title: "返回总目录" } });
+      const end = pager.createEl("button", { cls: "mms-article-pager-end", attr: { type: "button", title: "返回总目录" } });
+      end.createSpan({ cls: "mms-article-pager-direction", text: "阅读完成" });
+      end.createSpan({ cls: "mms-article-pager-title", text: "END · 返回目录" });
       end.addEventListener("click", () => void this.callbacks.onOpenArticleDirectory(navigation.homePath));
     }
   }
