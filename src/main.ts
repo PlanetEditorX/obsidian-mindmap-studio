@@ -397,7 +397,8 @@ export default class MindMapStudioPlugin extends Plugin {
         : DEFAULT_SETTINGS.defaultNodeTextAlign,
       defaultThemePreset: [
         "classic-indigo", "ocean-blue", "forest-green", "sunset-orange", "lavender-dream",
-        "candy-pop", "paper-note", "minimal-ink", "dark-neon", "mint-clean"
+        "candy-pop", "paper-note", "minimal-ink", "dark-neon", "mint-clean",
+        "spectrum-flow", "executive-navy", "botanical-calm", "midnight-signal", "sketchbook-warm", "monochrome-air"
       ].includes(String(raw.defaultThemePreset)) ? raw.defaultThemePreset as MindMapStudioSettings["defaultThemePreset"] : DEFAULT_SETTINGS.defaultThemePreset,
       edgeWidthMode: raw.edgeWidthMode === "uniform" || raw.edgeWidthMode === "tapered"
         ? raw.edgeWidthMode

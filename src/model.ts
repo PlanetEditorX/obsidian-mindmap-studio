@@ -50,7 +50,13 @@ export type MindMapThemePresetId =
   | "paper-note"
   | "minimal-ink"
   | "dark-neon"
-  | "mint-clean";
+  | "mint-clean"
+  | "spectrum-flow"
+  | "executive-navy"
+  | "botanical-calm"
+  | "midnight-signal"
+  | "sketchbook-warm"
+  | "monochrome-air";
 /**
  * FontFamilyMode 类型定义，用于限制可接受值并让序列化数据保持稳定。
  */
@@ -377,7 +383,8 @@ function normalizeAppearance(input: Partial<MindMapAppearance> | undefined): Min
     : undefined;
   const themePreset: MindMapThemePresetId | undefined = [
     "classic-indigo", "ocean-blue", "forest-green", "sunset-orange", "lavender-dream",
-    "candy-pop", "paper-note", "minimal-ink", "dark-neon", "mint-clean"
+    "candy-pop", "paper-note", "minimal-ink", "dark-neon", "mint-clean",
+    "spectrum-flow", "executive-navy", "botanical-calm", "midnight-signal", "sketchbook-warm", "monochrome-air"
   ].includes(String(input.themePreset)) ? input.themePreset as MindMapThemePresetId : undefined;
   const branchColors = Array.isArray(input.branchColors)
     ? input.branchColors.map(normalizeColor).filter((color): color is string => Boolean(color)).slice(0, 12)
