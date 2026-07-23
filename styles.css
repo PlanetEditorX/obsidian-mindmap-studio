@@ -2815,11 +2815,13 @@
 .mms-reading-progress {
   position: sticky;
   z-index: 12;
-  top: 0;
+  top: 8px;
   display: flex;
   align-items: center;
   justify-content: flex-end;
+  width: min(900px, calc(100% - 32px));
   min-height: 32px;
+  margin: 8px auto -40px;
   overflow: hidden;
   padding: 0 12px;
   border: 1px solid var(--background-modifier-border);
@@ -2843,40 +2845,25 @@
 }
 
 .mms-reading-progress.position-bottom {
-  top: auto;
-  bottom: 0;
+  top: calc(100% - 40px);
 }
 
 .mms-reading-progress.position-left,
 .mms-reading-progress.position-right {
-  top: calc(50% - 90px);
-  width: 40px;
-  min-height: 180px;
-  margin-bottom: -180px;
-  padding: 10px 0;
-  justify-content: center;
+  top: calc(50% - 16px);
+  width: 124px;
+  min-height: 32px;
+  margin-right: 0;
+  margin-bottom: -40px;
+  padding: 0 10px;
 }
 
 .mms-reading-progress.position-left {
-  margin-left: -54px;
+  margin-left: calc(50% - 590px);
 }
 
 .mms-reading-progress.position-right {
-  margin-left: calc(100% + 14px);
-}
-
-.mms-reading-progress.position-left .mms-reading-progress-bar,
-.mms-reading-progress.position-right .mms-reading-progress-bar {
-  inset: auto 0 0;
-  width: 100%;
-  height: var(--mms-reading-progress, 0%);
-  transition: height 160ms ease;
-}
-
-.mms-reading-progress.position-left span,
-.mms-reading-progress.position-right span {
-  writing-mode: vertical-rl;
-  text-orientation: mixed;
+  margin-left: calc(50% + 466px);
 }
 
 .mms-reading-toc {
@@ -3095,27 +3082,24 @@
   line-height: 1.35;
 }
 
-@media (max-width: 700px) {
+@media (max-width: 1180px) {
   .mms-reading-progress.position-left,
   .mms-reading-progress.position-right {
-    top: 0;
-    width: auto;
+    top: 8px;
+    width: min(900px, calc(100% - 32px));
     min-height: 32px;
-    margin: 0;
+    margin: 8px auto -40px;
     padding: 0 12px;
     justify-content: flex-end;
   }
+}
 
-  .mms-reading-progress.position-left .mms-reading-progress-bar,
-  .mms-reading-progress.position-right .mms-reading-progress-bar {
-    inset: 0 auto 0 0;
-    width: var(--mms-reading-progress, 0%);
-    height: 100%;
-  }
-
-  .mms-reading-progress.position-left span,
-  .mms-reading-progress.position-right span {
-    writing-mode: horizontal-tb;
+@media (max-width: 700px) {
+  .mms-reading-progress,
+  .mms-reading-progress.position-left,
+  .mms-reading-progress.position-right {
+    width: calc(100% - 12px);
+    margin-top: 6px;
   }
 
   .mms-article-pager {

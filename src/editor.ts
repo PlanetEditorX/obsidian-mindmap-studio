@@ -3707,12 +3707,12 @@ export class MindMapEditor {
       ? this.options.readingSections
       : [{ filePath: this.options.articleNavigation?.homePath ?? "", document: this.document, baseDepth: 0 }];
     const style = resolveArticleStyle(this.document.articleStyle);
-    const page = this.articleEl.createDiv({ cls: `mms-article-page mms-reading-page article-${style.preset}` });
-    page.createEl("h1", { cls: "mms-article-document-title", text: nodePrimaryText(sections[0]!.document.root) || sections[0]!.document.title });
-    const progress = page.createDiv({ cls: `mms-reading-progress position-${this.options.readingProgressPosition}` });
+    const progress = this.articleEl.createDiv({ cls: `mms-reading-progress position-${this.options.readingProgressPosition}` });
     progress.createDiv({ cls: "mms-reading-progress-bar" });
     progress.style.setProperty("--mms-reading-progress", `${Math.round(this.options.readingProgress * 100)}%`);
     progress.createSpan({ text: `阅读进度 ${Math.round(this.options.readingProgress * 100)}%` });
+    const page = this.articleEl.createDiv({ cls: `mms-article-page mms-reading-page article-${style.preset}` });
+    page.createEl("h1", { cls: "mms-article-document-title", text: nodePrimaryText(sections[0]!.document.root) || sections[0]!.document.title });
 
     const toc = page.createEl("nav", { cls: "mms-article-toc mms-reading-toc" });
     toc.createEl("h2", { text: "全书目录" });
