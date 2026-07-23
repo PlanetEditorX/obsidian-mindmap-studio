@@ -391,15 +391,24 @@
   box-shadow: 0 0 0 calc(4px / var(--mmc-zoom, 1)) color-mix(in srgb, var(--color-green) 25%, transparent);
 }
 
-.mmc-editor[data-node-visual-style="xmind"] .mmc-node {
+.mmc-editor[data-node-visual-style="branch"] .mmc-node {
   padding: 9px 14px;
   border-radius: 10px;
   box-shadow: none;
 }
 
-.mmc-editor[data-node-visual-style="xmind"] .mmc-node.is-root {
+.mmc-editor[data-node-visual-style="branch"] .mmc-node.is-root {
   padding: 9px 18px;
   border-radius: 11px;
+}
+
+.mmc-editor[data-node-visual-style="branch"] .mmc-edge,
+.mmc-editor[data-node-visual-style="branch"] .mmc-edge.depth-2,
+.mmc-editor[data-node-visual-style="branch"] .mmc-edge.depth-3,
+.mmc-editor[data-node-visual-style="branch"] .mmc-edge.depth-4,
+.mmc-editor[data-node-visual-style="branch"] .mmc-edge.depth-5,
+.mmc-editor[data-node-visual-style="branch"] .mmc-edge.depth-6 {
+  opacity: 1;
 }
 
 .mmc-node.is-multi-selected {

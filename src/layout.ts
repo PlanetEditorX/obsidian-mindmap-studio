@@ -76,7 +76,7 @@ function nodeDimensions(node: MindMapNode, depth: number, defaultFontSize = 14, 
   const manualWidth = node.style?.width;
   const extraWidth = Math.max(0, fontSize - 14) * 4;
   const blocks = nodeContentBlocks(node);
-  const fitted = visualStyle === "xmind";
+  const fitted = visualStyle === "branch";
   let width = manualWidth ?? (fitted
     ? ((depth === 0 ? 146 : 92) + extraWidth)
     : ((depth === 0 ? ROOT_WIDTH : NODE_WIDTH) + extraWidth));
@@ -86,8 +86,10 @@ function nodeDimensions(node: MindMapNode, depth: number, defaultFontSize = 14, 
       if (block.type === "image") width = Math.max(width, 240);
       else {
         const longestLine = Math.max(1, ...block.text.split(/\r?\n/).map((line) => line.length));
-        const horizontalPadding = fitted ? (depth === 0 ? 42 : 34) : 80;
-        width = Math.max(width, Math.min(fitted ? 520 : 460, horizontalPadding + Math.min(longestLine, 58) * fontSize * 0.62));
+        const visualUnits = Array.from(block.text.split(/\r?\n/).sort((a, b) => b.length - a.length)[0] ?? "")
+          .reduce((sum, character) => sum + (/[\u2e80-\u9fff\uff00-\uffef]/u.test(character) ? 1 : .62), 0);
+        const horizontalPadding = fitted ? (depth === 0 ? 48 : 58) : 80;
+        width = Math.max(width, Math.min(fitted ? 620 : 460, horizontalPadding + Math.min(visualUnits, 58) * fontSize));
       }
     }
     if (node.table) {
@@ -133,7 +135,8 @@ function subtreeHeight(node: MindMapNode, depth: number, defaultFontSize = 14, v
   const ownHeight = nodeDimensions(node, depth, defaultFontSize, visualStyle).height;
   const children = visibleChildren(node);
   if (!children.length) return ownHeight;
-  const childrenHeight = children.reduce((sum, child) => sum + subtreeHeight(child, depth + 1, defaultFontSize, visualStyle), 0) + V_GAP * (children.length - 1);
+  const verticalGap = visualStyle === "branch" ? 18 : V_GAP;
+  const childrenHeight = children.reduce((sum, child) => sum + subtreeHeight(child, depth + 1, defaultFontSize, visualStyle), 0) + verticalGap * (children.length - 1);
   return Math.max(ownHeight, childrenHeight);
 }
 
@@ -163,8 +166,8 @@ function layoutBranch(
   visualStyle: NodeVisualStyle = "card"
 ): void {
   const dimensions = nodeDimensions(node, depth, defaultFontSize, visualStyle);
-  const horizontalGap = H_GAP;
-  const verticalGap = V_GAP;
+  const horizontalGap = visualStyle === "branch" ? 54 : H_GAP;
+  const verticalGap = visualStyle === "branch" ? 18 : V_GAP;
   const x = parentX + side * (parentWidth / 2 + horizontalGap + dimensions.width / 2);
   output.push({ node, parentId, x, y: centerY, depth, side, ...dimensions });
   const children = visibleChildren(node);
@@ -192,7 +195,7 @@ function layoutBranch(
  */
 export function computeLayout(root: MindMapNode, mode: LayoutMode, defaultFontSize = 14, visualStyle: NodeVisualStyle = "card"): LayoutResult {
   const rootDimensions = nodeDimensions(root, 0, defaultFontSize, visualStyle);
-  const verticalGap = V_GAP;
+  const verticalGap = visualStyle === "branch" ? 18 : V_GAP;
   const nodes: NodePosition[] = [
     { node: root, parentId: null, x: 0, y: 0, depth: 0, side: 0, ...rootDimensions }
   ];
@@ -303,7 +306,7 @@ export function edgePath(parent: NodePosition, child: NodePosition, style: EdgeS
 }
 
 /**
- * Builds an orthogonal branch with rounded corners for the XMind-inspired
+ * Builds an orthogonal branch with rounded corners for the rounded-branch
  * visual style without relying on external assets.
  *
  * @param parent Parent node layout.
@@ -495,7 +498,7 @@ export function documentToSvg(root: MindMapNode, mode: LayoutMode, title: string
       const stroke = validColor(position.node.style?.color, branchColorMap.get(position.node.id) ?? defaultEdge);
       const width = edgeWidthForDepth(appearance, position.depth, maxDepth);
       if (!parent) return "";
-      const path = appearance.nodeVisualStyle === "xmind"
+      const path = appearance.nodeVisualStyle === "branch"
         ? roundedElbowEdgePath(parent, position)
         : edgePath(parent, position, edgeStyle);
       return `<path d="${path}" fill="none" stroke="${stroke}" stroke-width="${width}" stroke-linecap="round" stroke-linejoin="round" opacity="0.8"/>`;
