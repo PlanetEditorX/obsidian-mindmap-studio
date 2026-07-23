@@ -608,6 +608,7 @@ export const setIcon = () => {};
   assert.match(editorSource, /拖动调整节点宽度和最小高度/);
   assert.match(editorSource, /dropPositionForEvent/);
   assert.match(editorSource, /moveNodeRelative/);
+  assert.match(editorSource, /requestedIds[\s\S]*findAncestors[\s\S]*moveOrder/, "multi-selection drag should move top-level selected nodes as one ordered batch");
   assert.match(cssSource, /\.mmc-node\.is-drop-before::before/);
   assert.match(cssSource, /\.mmc-node\.is-drop-after::after/);
   assert.match(cssSource, /\.mmc-node\.is-drop-child-right/);

@@ -2964,7 +2964,10 @@ export class MindMapEditor {
         this.draggingId = node.id;
         event.dataTransfer?.setData("text/plain", node.id);
         if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
-        nodeEl.addClass("is-dragging");
+        const draggingIds = this.selectedIds.has(node.id) ? this.selectedIds : new Set([node.id]);
+        for (const draggingId of draggingIds) {
+          this.nodesLayerEl.querySelector<HTMLElement>(`[data-node-id="${CSS.escape(draggingId)}"]`)?.addClass("is-dragging");
+        }
       });
       nodeEl.addEventListener("dragover", (event) => {
         if (!this.canMoveNode(this.draggingId, node.id)) return;
@@ -4067,8 +4070,14 @@ export class MindMapEditor {
    */
   private canMoveNode(draggedId: string | null, targetId: string): boolean {
     if (!draggedId || draggedId === this.document.root.id || draggedId === targetId) return false;
-    const dragged = findNode(this.document.root, draggedId);
-    return Boolean(dragged && !containsNode(dragged, targetId));
+    const candidateIds = this.selectedIds.has(draggedId) && this.selectedIds.size > 1
+      ? Array.from(this.selectedIds)
+      : [draggedId];
+    if (candidateIds.includes(targetId) || candidateIds.includes(this.document.root.id)) return false;
+    return candidateIds.every((id) => {
+      const dragged = findNode(this.document.root, id);
+      return Boolean(dragged && !containsNode(dragged, targetId));
+    });
   }
 
   /**
@@ -4117,13 +4126,27 @@ export class MindMapEditor {
    */
   private moveNode(draggedId: string, targetId: string, position: NodeDropPosition): void {
     if (!this.ensureEditable() || !this.canMoveNode(draggedId, targetId)) return;
+    const requestedIds = this.selectedIds.has(draggedId) && this.selectedIds.size > 1
+      ? new Set(this.selectedIds)
+      : new Set([draggedId]);
+    const draggedIds = flattenNodes(this.document.root)
+      .filter((node) => requestedIds.has(node.id))
+      .filter((node) => !findAncestors(this.document.root, node.id).some((ancestor) => requestedIds.has(ancestor.id)))
+      .map((node) => node.id);
+    if (!draggedIds.length) return;
     const snapshot = JSON.stringify(this.document);
-    const changed = moveNodeRelative(this.document.root, draggedId, targetId, position);
+    const moveOrder = position === "after" ? [...draggedIds].reverse() : draggedIds;
+    let changed = false;
+    for (const id of moveOrder) {
+      changed = moveNodeRelative(this.document.root, id, targetId, position) || changed;
+    }
     if (!changed) return;
     this.history.push(snapshot);
     this.trimHistory();
     this.future = [];
     this.selectedId = draggedId;
+    this.selectedIds.clear();
+    for (const id of requestedIds) this.selectedIds.add(id);
     this.callbacks.onChange(this.getDocument());
     this.markSaving();
     this.render();
