@@ -55,6 +55,7 @@ import {
   type NodeShape,
   type NodeTextAlign,
   type TaskStatus,
+  removeNode,
   type NodeDropPosition,
   moveNodeRelative
 } from "./model";
