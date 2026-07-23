@@ -545,6 +545,33 @@ function removeNode(root, id) {
   }
   return false;
 }
+function moveNodeRelative(root, draggedId, targetId, position) {
+  if (draggedId === root.id || draggedId === targetId) return false;
+  const dragged = findNode(root, draggedId);
+  const target = findNode(root, targetId);
+  if (!dragged || !target || containsNode(dragged, targetId)) return false;
+  const oldParent = findParent(root, draggedId);
+  if (!oldParent) return false;
+  const oldIndex = oldParent.children.findIndex((child) => child.id === draggedId);
+  if (oldIndex < 0) return false;
+  if (position === "child") {
+    if (oldParent.id === target.id && oldIndex === target.children.length - 1) return false;
+    oldParent.children.splice(oldIndex, 1);
+    target.children.push(dragged);
+    target.collapsed = false;
+    return true;
+  }
+  if (target.id === root.id) return false;
+  const targetParent = findParent(root, targetId);
+  if (!targetParent) return false;
+  const targetIndexBeforeRemoval = targetParent.children.findIndex((child) => child.id === targetId);
+  if (targetIndexBeforeRemoval < 0) return false;
+  let insertIndex = targetIndexBeforeRemoval + (position === "after" ? 1 : 0);
+  if (oldParent.id === targetParent.id && oldIndex < insertIndex) insertIndex -= 1;
+  oldParent.children.splice(oldIndex, 1);
+  targetParent.children.splice(insertIndex, 0, dragged);
+  return true;
+}
 function extractFirstWikiLink(value) {
   var _a, _b;
   const match = value.match(/\[\[([^\]|#]+(?:#[^\]|]+)?)(?:\|[^\]]+)?\]\]/);
@@ -3278,6 +3305,7 @@ var MindMapEditor = class {
     this.history = [];
     this.future = [];
     this.draggingId = null;
+    this.dragDropPosition = null;
     this.panning = false;
     this.panStart = { x: 0, y: 0, panX: 0, panY: 0 };
     this.cleanupCallbacks = [];
@@ -4350,22 +4378,31 @@ var MindMapEditor = class {
         nodeEl.addClass("is-dragging");
       });
       nodeEl.addEventListener("dragover", (event) => {
-        if (!this.canReparent(this.draggingId, node.id)) return;
+        if (!this.canMoveNode(this.draggingId, node.id)) return;
         event.preventDefault();
         if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
-        nodeEl.addClass("is-drop-target");
+        const position = this.dropPositionForEvent(event, nodeEl, node.id);
+        this.dragDropPosition = position;
+        this.clearDropIndicators();
+        nodeEl.addClasses(["is-drop-target", `is-drop-${position}`]);
       });
-      nodeEl.addEventListener("dragleave", () => nodeEl.removeClass("is-drop-target"));
+      nodeEl.addEventListener("dragleave", (event) => {
+        if (event.relatedTarget instanceof Node && nodeEl.contains(event.relatedTarget)) return;
+        nodeEl.removeClasses(["is-drop-target", "is-drop-before", "is-drop-child", "is-drop-after"]);
+      });
       nodeEl.addEventListener("drop", (event) => {
         var _a2, _b2, _c2;
         event.preventDefault();
-        nodeEl.removeClass("is-drop-target");
+        const position = this.dragDropPosition != null ? this.dragDropPosition : this.dropPositionForEvent(event, nodeEl, node.id);
+        this.clearDropIndicators();
         const draggedId = (_c2 = (_b2 = this.draggingId) != null ? _b2 : (_a2 = event.dataTransfer) == null ? void 0 : _a2.getData("text/plain")) != null ? _c2 : null;
-        if (draggedId) this.reparentNode(draggedId, node.id);
+        if (draggedId) this.moveNode(draggedId, node.id, position);
       });
       nodeEl.addEventListener("dragend", () => {
         this.draggingId = null;
-        this.nodesLayerEl.querySelectorAll(".is-dragging, .is-drop-target").forEach((element) => element.removeClasses(["is-dragging", "is-drop-target"]));
+        this.dragDropPosition = null;
+        this.clearDropIndicators();
+        this.nodesLayerEl.querySelectorAll(".is-dragging").forEach((element) => element.removeClass("is-dragging"));
       });
     }
     this.applyTransform();
@@ -5037,29 +5074,34 @@ var MindMapEditor = class {
    * @param targetId 该参数用于 can reparent 流程中的输入或控制。
    * @returns 操作条件是否成立或处理是否成功。
    */
-  canReparent(draggedId, targetId) {
+  canMoveNode(draggedId, targetId) {
     if (!draggedId || draggedId === this.document.root.id || draggedId === targetId) return false;
     const dragged = findNode(this.document.root, draggedId);
     return Boolean(dragged && !containsNode(dragged, targetId));
   }
-  /**
-   * 执行“reparent node”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
-   *
-   * @param draggedId 该参数用于 reparent node 流程中的输入或控制。
-   * @param targetId 该参数用于 reparent node 流程中的输入或控制。
-   */
-  reparentNode(draggedId, targetId) {
-    if (!this.ensureEditable()) return;
-    if (!this.canReparent(draggedId, targetId)) return;
-    const dragged = findNode(this.document.root, draggedId);
-    const target = findNode(this.document.root, targetId);
-    if (!dragged || !target) return;
-    this.mutate(() => {
-      removeNode(this.document.root, draggedId);
-      target.children.push(dragged);
-      target.collapsed = false;
-      this.selectedId = draggedId;
-    });
+  dropPositionForEvent(event, targetEl, targetId) {
+    if (targetId === this.document.root.id) return "child";
+    const rect = targetEl.getBoundingClientRect();
+    const ratio = rect.height > 0 ? (event.clientY - rect.top) / rect.height : 0.5;
+    if (ratio < 0.28) return "before";
+    if (ratio > 0.72) return "after";
+    return "child";
+  }
+  clearDropIndicators() {
+    this.nodesLayerEl.querySelectorAll(".is-drop-target, .is-drop-before, .is-drop-child, .is-drop-after").forEach((element) => element.removeClasses(["is-drop-target", "is-drop-before", "is-drop-child", "is-drop-after"]));
+  }
+  moveNode(draggedId, targetId, position) {
+    if (!this.ensureEditable() || !this.canMoveNode(draggedId, targetId)) return;
+    const snapshot = JSON.stringify(this.document);
+    const changed = moveNodeRelative(this.document.root, draggedId, targetId, position);
+    if (!changed) return;
+    this.history.push(snapshot);
+    this.trimHistory();
+    this.future = [];
+    this.selectedId = draggedId;
+    this.callbacks.onChange(this.getDocument());
+    this.markSaving();
+    this.render();
   }
   /**
    * 替换document，并保持模型、界面和持久化状态的一致性。

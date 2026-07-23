@@ -102,6 +102,26 @@ export const setIcon = () => {};
   assert.equal(reopened.appearance?.nodeTextAlign, "left");
   assert.equal(reopened.root.children.at(-1)?.text, "保存后仍可编辑");
 
+  const reorderRoot = model.normalizeDocument({
+    title: "同级拖动排序",
+    root: {
+      id: "drag-root", text: "根", children: [
+        { id: "drag-a", text: "A", children: [] },
+        { id: "drag-b", text: "B", children: [] },
+        { id: "drag-c", text: "C", children: [{ id: "drag-c-child", text: "C1", children: [] }] }
+      ]
+    }
+  }, "fallback").root;
+  assert.equal(model.moveNodeRelative(reorderRoot, "drag-c", "drag-a", "before"), true);
+  assert.deepEqual(reorderRoot.children.map((node) => node.id), ["drag-c", "drag-a", "drag-b"], "a sibling must move upward before the target");
+  assert.equal(model.moveNodeRelative(reorderRoot, "drag-c", "drag-b", "after"), true);
+  assert.deepEqual(reorderRoot.children.map((node) => node.id), ["drag-a", "drag-b", "drag-c"], "a sibling must move downward after the target");
+  assert.equal(model.moveNodeRelative(reorderRoot, "drag-a", "drag-c", "child"), true);
+  assert.deepEqual(reorderRoot.children.map((node) => node.id), ["drag-b", "drag-c"]);
+  assert.deepEqual(reorderRoot.children[1]?.children.map((node) => node.id), ["drag-c-child", "drag-a"], "dropping in the center must preserve child reparenting");
+  assert.equal(model.moveNodeRelative(reorderRoot, "drag-c", "drag-c-child", "child"), false, "a node cannot move inside its own descendant");
+  assert.equal(model.moveNodeRelative(reorderRoot, "drag-root", "drag-b", "before"), false, "the root node cannot be moved");
+
   const viewDocument = model.normalizeDocument({
     title: "三种模式",
     view: { mode: "article", readOnly: true },
@@ -542,6 +562,10 @@ export const setIcon = () => {};
   assert.match(cssSource, /white-space:\s*pre-wrap/);
   assert.match(editorSource, /if \(node\.submap\) void this\.callbacks\.onOpenMindMap\(node\.submap\.path\)/, "the whole linked node must open its child map");
   assert.match(editorSource, /拖动调整节点宽度和最小高度/);
+  assert.match(editorSource, /dropPositionForEvent/);
+  assert.match(editorSource, /moveNodeRelative/);
+  assert.match(cssSource, /\.mmc-node\.is-drop-before::before/);
+  assert.match(cssSource, /\.mmc-node\.is-drop-after::after/);
   assert.match(editorSource, /恢复节点自动大小/);
   assert.match(editorSource, /节点宽度（100–900）/);
   assert.match(editorSource, /文字对齐/);
@@ -563,7 +587,7 @@ export const setIcon = () => {};
   const manifest = JSON.parse(await readFile("manifest.json", "utf8"));
   assert.equal(manifest.id, "mindmap-studio");
   assert.equal(manifest.name, "MindMap Studio");
-  assert.equal(manifest.version, "1.5.1");
+  assert.equal(manifest.version, "1.6.0");
   assert.match(cssSource, /\.mms-global-search-modal/);
   assert.match(cssSource, /\.mms-global-search-result/);
 

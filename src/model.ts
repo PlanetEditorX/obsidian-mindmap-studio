@@ -1185,6 +1185,56 @@ export function removeNode(root: MindMapNode, id: string): boolean {
   return false;
 }
 
+/** 可用于节点拖放的目标位置。 */
+export type NodeDropPosition = "before" | "child" | "after";
+
+/**
+ * 将节点移动到目标节点之前、之后或目标节点内部。
+ *
+ * @param root 节点树的根节点。
+ * @param draggedId 被移动节点的稳定标识。
+ * @param targetId 接收拖放的目标节点标识。
+ * @param position 相对目标节点的插入位置。
+ * @returns 实际发生结构变更时返回 true；非法移动或无变化时返回 false。
+ * @remarks 该函数只修改传入节点树，不负责撤销栈、保存或界面重渲染。调用方应在统一编辑事务中执行。
+ */
+export function moveNodeRelative(root: MindMapNode, draggedId: string, targetId: string, position: NodeDropPosition): boolean {
+  if (draggedId === root.id || draggedId === targetId) return false;
+  const dragged = findNode(root, draggedId);
+  const target = findNode(root, targetId);
+  if (!dragged || !target || containsNode(dragged, targetId)) return false;
+
+  const oldParent = findParent(root, draggedId);
+  if (!oldParent) return false;
+  const oldIndex = oldParent.children.findIndex((child) => child.id === draggedId);
+  if (oldIndex < 0) return false;
+
+  if (position === "child") {
+    if (oldParent.id === target.id && oldIndex === target.children.length - 1) return false;
+    oldParent.children.splice(oldIndex, 1);
+    target.children.push(dragged);
+    target.collapsed = false;
+    return true;
+  }
+
+  if (target.id === root.id) return false;
+  const targetParent = findParent(root, targetId);
+  if (!targetParent) return false;
+  const targetIndexBeforeRemoval = targetParent.children.findIndex((child) => child.id === targetId);
+  if (targetIndexBeforeRemoval < 0) return false;
+
+  let insertIndex = targetIndexBeforeRemoval + (position === "after" ? 1 : 0);
+  if (oldParent.id === targetParent.id) {
+    const currentDesiredIndex = position === "after" ? targetIndexBeforeRemoval + 1 : targetIndexBeforeRemoval;
+    if (oldIndex === currentDesiredIndex || (position === "after" && oldIndex === targetIndexBeforeRemoval + 1)) return false;
+    if (oldIndex < insertIndex) insertIndex -= 1;
+  }
+
+  oldParent.children.splice(oldIndex, 1);
+  targetParent.children.splice(insertIndex, 0, dragged);
+  return true;
+}
+
 /**
  * 遍历并收集wiki links，并保持模型、界面和持久化状态的一致性。
  *

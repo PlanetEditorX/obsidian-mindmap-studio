@@ -55,7 +55,8 @@ import {
   type NodeShape,
   type NodeTextAlign,
   type TaskStatus,
-  removeNode
+  type NodeDropPosition,
+  moveNodeRelative
 } from "./model";
 import { buildBranchColorMap, computeLayout, documentToSvg, edgePath, edgeWidthForDepth, type LayoutResult } from "./layout";
 import { CodeEditModal, TableEditModal } from "./content-modals";
@@ -1261,6 +1262,7 @@ export class MindMapEditor {
   private history: string[] = [];
   private future: string[] = [];
   private draggingId: string | null = null;
+  private dragDropPosition: NodeDropPosition | null = null;
   private panning = false;
   private panStart = { x: 0, y: 0, panX: 0, panY: 0 };
   private cleanupCallbacks: Array<() => void> = [];
@@ -2367,21 +2369,30 @@ export class MindMapEditor {
         nodeEl.addClass("is-dragging");
       });
       nodeEl.addEventListener("dragover", (event) => {
-        if (!this.canReparent(this.draggingId, node.id)) return;
+        if (!this.canMoveNode(this.draggingId, node.id)) return;
         event.preventDefault();
         if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
-        nodeEl.addClass("is-drop-target");
+        const position = this.dropPositionForEvent(event, nodeEl, node.id);
+        this.dragDropPosition = position;
+        this.clearDropIndicators();
+        nodeEl.addClasses(["is-drop-target", `is-drop-${position}`]);
       });
-      nodeEl.addEventListener("dragleave", () => nodeEl.removeClass("is-drop-target"));
+      nodeEl.addEventListener("dragleave", (event) => {
+        if (event.relatedTarget instanceof Node && nodeEl.contains(event.relatedTarget)) return;
+        nodeEl.removeClasses(["is-drop-target", "is-drop-before", "is-drop-child", "is-drop-after"]);
+      });
       nodeEl.addEventListener("drop", (event) => {
         event.preventDefault();
-        nodeEl.removeClass("is-drop-target");
+        const position = this.dragDropPosition ?? this.dropPositionForEvent(event, nodeEl, node.id);
+        this.clearDropIndicators();
         const draggedId = this.draggingId ?? event.dataTransfer?.getData("text/plain") ?? null;
-        if (draggedId) this.reparentNode(draggedId, node.id);
+        if (draggedId) this.moveNode(draggedId, node.id, position);
       });
       nodeEl.addEventListener("dragend", () => {
         this.draggingId = null;
-        this.nodesLayerEl.querySelectorAll(".is-dragging, .is-drop-target").forEach((element) => element.removeClasses(["is-dragging", "is-drop-target"]));
+        this.dragDropPosition = null;
+        this.clearDropIndicators();
+        this.nodesLayerEl.querySelectorAll(".is-dragging").forEach((element) => element.removeClass("is-dragging"));
       });
     }
     this.applyTransform();
@@ -3034,30 +3045,54 @@ export class MindMapEditor {
    * @param targetId 该参数用于 can reparent 流程中的输入或控制。
    * @returns 操作条件是否成立或处理是否成功。
    */
-  private canReparent(draggedId: string | null, targetId: string): boolean {
+  private canMoveNode(draggedId: string | null, targetId: string): boolean {
     if (!draggedId || draggedId === this.document.root.id || draggedId === targetId) return false;
     const dragged = findNode(this.document.root, draggedId);
     return Boolean(dragged && !containsNode(dragged, targetId));
   }
 
   /**
-   * 执行“reparent node”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+   * 根据指针在目标节点垂直方向的位置判断拖放意图。根节点仅接受子节点放置，避免产生根节点同级。
    *
-   * @param draggedId 该参数用于 reparent node 流程中的输入或控制。
-   * @param targetId 该参数用于 reparent node 流程中的输入或控制。
+   * @param event 当前拖放事件。
+   * @param targetEl 目标节点 DOM。
+   * @param targetId 目标节点标识。
+   * @returns 上方 28% 为 before，下方 28% 为 after，中间区域为 child。
    */
-  private reparentNode(draggedId: string, targetId: string): void {
-    if (!this.ensureEditable()) return;
-    if (!this.canReparent(draggedId, targetId)) return;
-    const dragged = findNode(this.document.root, draggedId);
-    const target = findNode(this.document.root, targetId);
-    if (!dragged || !target) return;
-    this.mutate(() => {
-      removeNode(this.document.root, draggedId);
-      target.children.push(dragged);
-      target.collapsed = false;
-      this.selectedId = draggedId;
-    });
+  private dropPositionForEvent(event: DragEvent, targetEl: HTMLElement, targetId: string): NodeDropPosition {
+    if (targetId === this.document.root.id) return "child";
+    const rect = targetEl.getBoundingClientRect();
+    const ratio = rect.height > 0 ? (event.clientY - rect.top) / rect.height : .5;
+    if (ratio < .28) return "before";
+    if (ratio > .72) return "after";
+    return "child";
+  }
+
+  /** 清理全部拖放目标样式，防止跨节点移动时残留指示线。 */
+  private clearDropIndicators(): void {
+    this.nodesLayerEl.querySelectorAll(".is-drop-target, .is-drop-before, .is-drop-child, .is-drop-after")
+      .forEach((element) => element.removeClasses(["is-drop-target", "is-drop-before", "is-drop-child", "is-drop-after"]));
+  }
+
+  /**
+   * 在统一编辑事务中移动节点，支持同级前后排序和改变父子关系。
+   *
+   * @param draggedId 被移动节点标识。
+   * @param targetId 目标节点标识。
+   * @param position 相对目标节点的放置位置。
+   */
+  private moveNode(draggedId: string, targetId: string, position: NodeDropPosition): void {
+    if (!this.ensureEditable() || !this.canMoveNode(draggedId, targetId)) return;
+    const snapshot = JSON.stringify(this.document);
+    const changed = moveNodeRelative(this.document.root, draggedId, targetId, position);
+    if (!changed) return;
+    this.history.push(snapshot);
+    this.trimHistory();
+    this.future = [];
+    this.selectedId = draggedId;
+    this.callbacks.onChange(this.getDocument());
+    this.markSaving();
+    this.render();
   }
 
   /**

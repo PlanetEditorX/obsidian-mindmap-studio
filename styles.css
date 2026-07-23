@@ -381,7 +381,32 @@
 
 .mmc-node.is-drop-target {
   border-color: var(--color-green);
+}
+
+.mmc-node.is-drop-child {
   box-shadow: 0 0 0 calc(4px / var(--mmc-zoom, 1)) color-mix(in srgb, var(--color-green) 25%, transparent);
+}
+
+.mmc-node.is-drop-before::before,
+.mmc-node.is-drop-after::after {
+  content: "";
+  position: absolute;
+  z-index: 5;
+  left: 8%;
+  width: 84%;
+  height: calc(3px / var(--mmc-zoom, 1));
+  border-radius: 999px;
+  background: var(--color-green);
+  box-shadow: 0 0 0 calc(2px / var(--mmc-zoom, 1)) color-mix(in srgb, var(--color-green) 18%, transparent);
+  pointer-events: none;
+}
+
+.mmc-node.is-drop-before::before {
+  top: calc(-8px / var(--mmc-zoom, 1));
+}
+
+.mmc-node.is-drop-after::after {
+  bottom: calc(-8px / var(--mmc-zoom, 1));
 }
 
 .mmc-node-content {

@@ -1,0 +1,189 @@
+{
+  "version": 10,
+  "title": "MindMap Studio 主题与内容示例",
+  "layout": "right",
+  "theme": "auto",
+  "root": {
+    "id": "root-demo",
+    "text": "MindMap Studio 主题与内容示例",
+    "content": [
+      {
+        "id": "root-text",
+        "type": "text",
+        "text": "MindMap Studio 主题与内容示例",
+        "richText": [
+          {
+            "text": "MindMap Studio",
+            "style": {
+              "bold": true,
+              "color": "#ffffff"
+            }
+          },
+          {
+            "text": " 主题与内容示例"
+          }
+        ]
+      }
+    ],
+    "children": [
+      {
+        "id": "pure-image",
+        "text": "",
+        "content": [
+          {
+            "id": "pure-image-block",
+            "type": "image",
+            "source": "MindMap Assets/demo.svg",
+            "alt": "纯图片节点"
+          }
+        ],
+        "children": [
+          {
+            "id": "theme-depth-2",
+            "text": "二级分支",
+            "content": [
+              {
+                "id": "theme-depth-2-text",
+                "type": "text",
+                "text": "二级分支"
+              }
+            ],
+            "children": [
+              {
+                "id": "theme-depth-3",
+                "text": "三级分支",
+                "content": [
+                  {
+                    "id": "theme-depth-3-text",
+                    "type": "text",
+                    "text": "三级分支"
+                  }
+                ],
+                "children": [
+                  {
+                    "id": "theme-depth-4",
+                    "text": "四级分支（连线更细）",
+                    "content": [
+                      {
+                        "id": "theme-depth-4-text",
+                        "type": "text",
+                        "text": "四级分支（连线更细）"
+                      }
+                    ],
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "mixed-node",
+        "text": "图片前的文字 图片后的文字",
+        "content": [
+          {
+            "id": "before-text",
+            "type": "text",
+            "text": "图片前的文字",
+            "richText": [
+              {
+                "text": "图片前",
+                "style": {
+                  "bold": true
+                }
+              },
+              {
+                "text": "的文字"
+              }
+            ]
+          },
+          {
+            "id": "middle-image",
+            "type": "image",
+            "source": "MindMap Assets/demo.svg",
+            "alt": "可点击放大的示例图片"
+          },
+          {
+            "id": "after-text",
+            "type": "text",
+            "text": "图片后的文字",
+            "richText": [
+              {
+                "text": "图片后",
+                "style": {
+                  "underline": true,
+                  "color": "#dc2626"
+                }
+              },
+              {
+                "text": "的文字"
+              }
+            ]
+          }
+        ],
+        "children": []
+      },
+      {
+        "id": "upload-node",
+        "text": "图床上传",
+        "content": [
+          {
+            "id": "upload-text",
+            "type": "text",
+            "text": "编辑节点后，可选择保存到仓库或上传到图床"
+          }
+        ],
+        "children": []
+      },
+      {
+        "id": "submap-example",
+        "text": "子导图",
+        "content": [
+          {
+            "id": "submap-text",
+            "type": "text",
+            "text": "子导图"
+          }
+        ],
+        "submap": {
+          "path": "examples/MindMap Assets/示例脑图/示例子导图.mindmap",
+          "title": "示例子导图"
+        },
+        "children": []
+      }
+    ]
+  },
+  "appearance": {
+    "themePreset": "classic-indigo",
+    "backgroundColor": "#f8fafc",
+    "backgroundPattern": "grid",
+    "patternColor": "#94a3b8",
+    "fontFamily": "sans",
+    "fontSize": 14,
+    "rootColor": "#4f46e5",
+    "rootTextColor": "#ffffff",
+    "nodeColor": "#ffffff",
+    "textColor": "#172033",
+    "nodeBorderColor": "#c7d2fe",
+    "nodeBorderWidth": 1,
+    "edgeColor": "#6366f1",
+    "edgeStyle": "curved",
+    "edgeWidth": 4.2,
+    "edgeWidthMode": "tapered",
+    "edgeMinWidth": 1.2,
+    "colorfulBranches": true,
+    "branchColors": [
+      "#4f46e5",
+      "#0284c7",
+      "#0f766e",
+      "#7c3aed",
+      "#db2777",
+      "#ea580c"
+    ]
+  },
+  "view": {
+    "mode": "mindmap",
+    "readOnly": false
+  }
+}
