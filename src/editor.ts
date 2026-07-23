@@ -848,6 +848,13 @@ class NodeEditModal extends Modal {
     }
     this.contentEl.empty();
   }
+
+  /**
+   * 右侧面板与画布快速输入并存时，释放 Modal 的全局按键作用域。
+   */
+  releaseKeyboardScope(): void {
+    this.app.keymap.popScope(this.scope);
+  }
 }
 
 /**
@@ -2783,7 +2790,7 @@ export class MindMapEditor {
     const selected = this.selectedNode();
     if (!selected) return;
     let historyCaptured = false;
-    new NodeEditModal(this.app, selected, this.options.defaultNodeShape, {
+    const modal = new NodeEditModal(this.app, selected, this.options.defaultNodeShape, {
       resolveImage: this.callbacks.resolveImage,
       onSavePastedImage: this.callbacks.onSavePastedImage,
       getImageHosts: this.callbacks.getImageHosts,
@@ -2837,7 +2844,11 @@ export class MindMapEditor {
       } else {
         this.render();
       }
-    }, this.options.nodeEditorPosition, this.viewportEl).open();
+    }, this.options.nodeEditorPosition, this.viewportEl);
+    modal.open();
+    if (this.options.nodeEditorPosition === "right" && this.inlineEditingId === selected.id) {
+      modal.releaseKeyboardScope();
+    }
   }
 
   /**

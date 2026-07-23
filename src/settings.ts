@@ -207,7 +207,7 @@ export const DEFAULT_SETTINGS: MindMapStudioSettings = {
   visibleModes: ["mindmap", "outline", "article"],
   defaultViewMode: "mindmap"
   ,
-  nodeEditorPosition: "right",
+  nodeEditorPosition: "center",
   richTextBoldShortcut: "Ctrl+B",
   richTextItalicShortcut: "Ctrl+I",
   richTextUnderlineShortcut: "Ctrl+U",
