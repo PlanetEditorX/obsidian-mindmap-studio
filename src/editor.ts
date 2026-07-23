@@ -1708,7 +1708,7 @@ export class MindMapEditor {
     this.options = options;
     this.document = cloneDocument(document);
     this.currentMode = this.resolveMode(options.defaultViewMode);
-    this.readOnly = this.document.view?.readOnly === true;
+    this.readOnly = this.currentMode === "article" || this.document.view?.readOnly === true;
     this.selectedId = this.document.root.id;
     const initialAppearance = this.getAppearance();
     this.layout = computeLayout(this.document.root, this.document.layout, initialAppearance.fontSize ?? 14, initialAppearance.nodeVisualStyle ?? "card");
@@ -1738,7 +1738,7 @@ export class MindMapEditor {
   setDocument(document: MindMapDocument, resetHistory = true): void {
     this.document = cloneDocument(document);
     this.currentMode = this.resolveMode(this.options.defaultViewMode);
-    this.readOnly = this.document.view?.readOnly === true;
+    this.readOnly = this.currentMode === "article" || this.document.view?.readOnly === true;
     this.selectedId = this.document.root.id;
     if (resetHistory) {
       this.history = [];
@@ -1762,7 +1762,15 @@ export class MindMapEditor {
     if (navigationChanged) this.articleNavigationIndex = null;
     this.options = options;
     const resolved = this.resolveMode(globalModeChanged ? options.defaultViewMode : this.currentMode);
-    if (resolved !== this.currentMode) this.currentMode = resolved;
+    if (resolved !== this.currentMode) {
+      const previousMode = this.currentMode;
+      this.currentMode = resolved;
+      this.readOnly = resolved === "article"
+        ? true
+        : previousMode === "article"
+          ? this.document.view?.readOnly === true
+          : this.readOnly;
+    }
     if (modesChanged || toolbarChanged) {
       this.cleanupCallbacks.forEach((callback) => callback());
       this.cleanupCallbacks = [];
@@ -1784,7 +1792,13 @@ export class MindMapEditor {
    */
   setDisplayMode(mode: DisplayMode, notifyGlobal = true): void {
     if (!this.options.visibleModes.includes(mode)) return;
+    const previousMode = this.currentMode;
     this.currentMode = mode;
+    if (mode === "article" && previousMode !== "article") {
+      this.readOnly = true;
+    } else if (previousMode === "article" && mode !== "article") {
+      this.readOnly = this.document.view?.readOnly === true;
+    }
     this.render();
     if (notifyGlobal) void this.callbacks.onDisplayModeChange(mode);
     if (mode === "mindmap" && this.options.autoFitOnOpen) window.setTimeout(() => this.fitToView(), 20);
@@ -1804,7 +1818,7 @@ export class MindMapEditor {
    */
   toggleReadOnly(): void {
     this.readOnly = !this.readOnly;
-    this.persistReadOnlyState();
+    if (this.currentMode !== "article") this.persistReadOnlyState();
     this.render();
     new Notice(this.readOnly ? "已进入只读模式" : "已进入编辑模式");
   }
