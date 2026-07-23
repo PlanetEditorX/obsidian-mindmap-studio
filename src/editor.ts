@@ -936,8 +936,13 @@ class FormulaEditModal extends Modal {
       ["矩阵", "\\begin{bmatrix} a & b \\\\ c & d \\end{bmatrix}", "矩阵"],
       ["方程组", "\\begin{cases} x+y=1 \\\\ x-y=0 \\end{cases}", "方程组"]
     ];
+    const arithmetic: Array<[string, string, string]> = [
+      ["+", "+", "加"], ["−", "-", "减"], ["×", "\\times", "乘"], ["÷", "\\div", "除"],
+      ["·", "\\cdot", "点乘"], ["∗", "\\ast", "星号乘"], ["/", "/", "斜线除"],
+      ["a⁄b", "\\frac{a}{b}", "分数"], ["±", "\\pm", "正负"], ["∓", "\\mp", "负正"],
+      ["=", "=", "等于"], ["%", "\\%", "百分号"], [":", ":", "比"]
+    ];
     const relations: Array<[string, string, string]> = [
-      ["±", "\\pm", "加减"], ["×", "\\times", "乘"], ["÷", "\\div", "除"],
       ["≠", "\\neq", "不等于"], ["≈", "\\approx", "约等于"], ["≡", "\\equiv", "恒等于"],
       ["≢", "\\not\\equiv", "不恒等于"], ["≥", "\\geq", "大于等于"], ["≫", "\\gg", "远大于"],
       ["≤", "\\leq", "小于等于"], ["≪", "\\ll", "远小于"], ["∼", "\\sim", "相似"],
@@ -945,6 +950,8 @@ class FormulaEditModal extends Modal {
     ];
     this.contentEl.createDiv({ cls: "mms-formula-section-title", text: "常用结构" });
     const palette = this.contentEl.createDiv({ cls: "mms-formula-palette" });
+    this.contentEl.createDiv({ cls: "mms-formula-section-title", text: "基本运算" });
+    const arithmeticPalette = this.contentEl.createDiv({ cls: "mms-formula-palette mms-formula-operators" });
     this.contentEl.createDiv({ cls: "mms-formula-section-title", text: "关系符号" });
     const relationPalette = this.contentEl.createDiv({ cls: "mms-formula-palette mms-formula-relations" });
     const source = this.contentEl.createEl("textarea", {
@@ -981,6 +988,13 @@ class FormulaEditModal extends Modal {
     };
     for (const [label, template, title] of templates) {
       const button = palette.createEl("button", { text: label, attr: { type: "button", title } });
+      button.addEventListener("click", () => insert(template));
+    }
+    for (const [label, template, title] of arithmetic) {
+      const button = arithmeticPalette.createEl("button", {
+        text: label,
+        attr: { type: "button", title: `${title}（${template}）` }
+      });
       button.addEventListener("click", () => insert(template));
     }
     for (const [label, template, title] of relations) {

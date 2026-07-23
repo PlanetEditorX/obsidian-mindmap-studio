@@ -840,7 +840,8 @@
   font-weight: var(--font-semibold);
 }
 
-.mms-formula-relations {
+.mms-formula-relations,
+.mms-formula-operators {
   grid-template-columns: repeat(auto-fit, minmax(48px, 1fr));
 }
 
