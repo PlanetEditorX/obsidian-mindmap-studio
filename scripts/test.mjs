@@ -587,6 +587,8 @@ export const setIcon = () => {};
   assert.match(editorSource, /currentMode !== "article" && this\.currentMode !== "reading"\) this\.persistReadOnlyState/, "temporary reading modes must not overwrite the document read-only preference");
   assert.match(editorSource, /private renderReading\(\)/);
   assert.match(editorSource, /onReadingProgressChange/);
+  assert.match(editorSource, /renderArticleContent\(chapter, section\.document\.root, false\)/, "continuous reading should include root-node body content");
+  assert.match(editorSource, /firstTextBlock[\s\S]*mms-article-leaf-text[\s\S]*renderRichTextRuns/, "continuous reading should include leaf-node primary text");
   assert.match(editorSource, /selection && !selection\.isCollapsed && selection\.toString\(\)/, "read-only copy should preserve native selected-text copying");
   assert.match(editorSource, /createElementNS\("http:\/\/www\.w3\.org\/2000\/svg", "svg"\)/, "theme cards should use stable SVG previews");
   assert.match(editorSource, /删除子导图 \/ 移除链接/);

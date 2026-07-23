@@ -3735,14 +3735,22 @@ export class MindMapEditor {
       const chapter = page.createEl("article", { cls: "mms-reading-book-section" });
       chapter.id = anchor;
       chapter.createEl("h2", { cls: "mms-reading-map-title", text: nodePrimaryText(section.document.root) || section.document.title });
+      this.renderArticleContent(chapter, section.document.root, false);
       for (const info of buildArticleNodeInfo(section.document.root, section.baseDepth)) {
         const nodeSection = chapter.createEl("section", { cls: `mms-article-node depth-${Math.min(info.depth, 8)}` });
         nodeSection.id = `reading-${section.filePath.replace(/[^a-zA-Z0-9_-]/g, "-")}-${info.node.id.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
         if (info.isHeading) {
           const level = Math.min(6, info.depth + 1);
           nodeSection.createEl(`h${level}` as keyof HTMLElementTagNameMap, { text: info.displayTitle || info.title });
+          this.renderArticleContent(nodeSection, info.node, false);
+        } else {
+          const firstTextBlock = nodeContentBlocks(info.node).find((block): block is MindMapTextContentBlock => block.type === "text");
+          if (firstTextBlock) {
+            const paragraph = nodeSection.createEl("p", { cls: "mms-article-leaf-text" });
+            renderRichTextRuns(paragraph, firstTextBlock.richText, firstTextBlock.text);
+          }
+          this.renderArticleContent(nodeSection, info.node, false);
         }
-        this.renderArticleContent(nodeSection, info.node, false);
       }
     }
 
