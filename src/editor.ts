@@ -5,7 +5,7 @@
  * 负责三种视图、节点操作、富文本、图片、表格、代码、子导图、拖拽、尺寸、搜索、历史记录、只读锁和图床容灾。
  */
 
-import { App, finishRenderMath, Menu, Modal, Notice, renderMath, setIcon } from "obsidian";
+import { App, finishRenderMath, loadMathJax, Menu, Modal, Notice, renderMath, setIcon } from "obsidian";
 import {
   cloneDocument,
   cloneNodeWithFreshIds,
@@ -152,6 +152,20 @@ function styleEquals(left: MindMapTextStyle | undefined, right: MindMapTextStyle
   return JSON.stringify(left ?? {}) === JSON.stringify(right ?? {});
 }
 
+let mathJaxReady = false;
+let mathJaxLoading: Promise<void> | null = null;
+
+/**
+ * 确保 Obsidian 的 MathJax 运行时已加载。
+ *
+ * @returns MathJax 可安全渲染时完成的 Promise。
+ */
+function ensureMathJax(): Promise<void> {
+  if (mathJaxReady) return Promise.resolve();
+  mathJaxLoading ??= loadMathJax().then(() => { mathJaxReady = true; });
+  return mathJaxLoading;
+}
+
 /**
  * 渲染rich text runs，并保持模型、界面和持久化状态的一致性。
  *
@@ -163,6 +177,14 @@ function styleEquals(left: MindMapTextStyle | undefined, right: MindMapTextStyle
 function renderRichTextRuns(container: HTMLElement, runs: MindMapTextRun[] | undefined, fallbackText: string, latex = true): void {
   container.empty();
   const sourceRuns = runs?.length ? runs : [{ text: fallbackText }];
+  const hasMath = latex && sourceRuns.some((run) => /(\$\$[\s\S]+?\$\$|\$[^$\n]+?\$)/.test(run.text));
+  if (hasMath && !mathJaxReady) {
+    sourceRuns.forEach((run) => container.createSpan({ cls: "mmc-rich-run", text: run.text }));
+    void ensureMathJax().then(() => {
+      if (container.isConnected) renderRichTextRuns(container, runs, fallbackText, latex);
+    }).catch(() => undefined);
+    return;
+  }
   let renderedMath = false;
   const append = (text: string, style: MindMapTextStyle | undefined): void => {
     const span = container.createSpan({ cls: "mmc-rich-run", text });
@@ -882,6 +904,95 @@ class NodeEditModal extends Modal {
    */
   releaseKeyboardScope(): void {
     this.app.keymap.popScope(this.scope);
+  }
+}
+
+/**
+ * 图形化 LaTeX 公式编辑器，提供常用结构按钮与实时 MathJax 预览。
+ */
+class FormulaEditModal extends Modal {
+  /**
+   * @param app Obsidian 应用实例。
+   * @param submit 保存公式源码的回调。
+   */
+  constructor(app: App, private readonly submit: (source: string) => void) {
+    super(app);
+  }
+
+  /** 构建公式模板、源码输入和实时预览。 */
+  onOpen(): void {
+    this.titleEl.setText("插入 LaTeX 公式");
+    this.contentEl.addClass("mms-formula-editor");
+    this.contentEl.createEl("p", {
+      cls: "setting-item-description",
+      text: "点击常用结构快速组合公式，也可以直接修改 LaTeX 源码。保存后节点会显示公式而不是源码。"
+    });
+    const templates: Array<[string, string, string]> = [
+      ["x²", "x^{2}", "上标"], ["xᵢ", "x_{i}", "下标"], ["a⁄b", "\\frac{a}{b}", "分数"],
+      ["√x", "\\sqrt{x}", "根号"], ["Σ", "\\sum_{i=1}^{n} x_i", "求和"],
+      ["∫", "\\int_{a}^{b} f(x)\\,dx", "积分"], ["lim", "\\lim_{x\\to\\infty} f(x)", "极限"],
+      ["α", "\\alpha", "希腊字母"], ["→", "\\overrightarrow{AB}", "向量"],
+      ["()", "\\left( \\frac{a}{b} \\right)", "自适应括号"],
+      ["矩阵", "\\begin{bmatrix} a & b \\\\ c & d \\end{bmatrix}", "矩阵"],
+      ["方程组", "\\begin{cases} x+y=1 \\\\ x-y=0 \\end{cases}", "方程组"]
+    ];
+    const palette = this.contentEl.createDiv({ cls: "mms-formula-palette" });
+    const source = this.contentEl.createEl("textarea", {
+      cls: "mms-formula-source",
+      attr: { rows: "5", spellcheck: "false", placeholder: "\\frac{a}{b}" }
+    });
+    const preview = this.contentEl.createDiv({ cls: "mms-formula-preview" });
+    let previewToken = 0;
+    const updatePreview = (): void => {
+      const token = ++previewToken;
+      const value = source.value.trim();
+      preview.empty();
+      if (!value) {
+        preview.createSpan({ cls: "setting-item-description", text: "公式预览" });
+        return;
+      }
+      void ensureMathJax().then(() => {
+        if (token !== previewToken || !preview.isConnected) return;
+        preview.empty();
+        try {
+          preview.appendChild(renderMath(value, true));
+          void finishRenderMath();
+        } catch {
+          preview.createSpan({ cls: "mod-warning", text: "公式语法暂时无法渲染" });
+        }
+      });
+    };
+    const insert = (template: string): void => {
+      const start = source.selectionStart ?? source.value.length;
+      const end = source.selectionEnd ?? start;
+      source.setRangeText(template, start, end, "end");
+      source.focus();
+      updatePreview();
+    };
+    for (const [label, template, title] of templates) {
+      const button = palette.createEl("button", { text: label, attr: { type: "button", title } });
+      button.addEventListener("click", () => insert(template));
+    }
+    source.addEventListener("input", updatePreview);
+    const actions = this.contentEl.createDiv({ cls: "modal-button-container" });
+    actions.createEl("button", { text: "取消", attr: { type: "button" } }).addEventListener("click", () => this.close());
+    const save = actions.createEl("button", { text: "插入公式", cls: "mod-cta", attr: { type: "button" } });
+    save.addEventListener("click", () => {
+      const value = source.value.trim();
+      if (!value) {
+        new Notice("请先输入或选择一个公式");
+        return;
+      }
+      this.submit(value);
+      this.close();
+    });
+    updatePreview();
+    source.focus();
+  }
+
+  /** 清理公式编辑器 DOM。 */
+  onClose(): void {
+    this.contentEl.empty();
   }
 }
 
@@ -3291,6 +3402,7 @@ export class MindMapEditor {
     menu.addItem((item) => item.setTitle("克隆分支").setIcon("copy-plus").onClick(() => this.duplicateSelected()));
     menu.addSeparator();
     menu.addItem((item) => item.setTitle(selected?.table ? "编辑表格" : "插入表格").setIcon("table-2").onClick(() => this.editTable()));
+    menu.addItem((item) => item.setTitle("插入 LaTeX 公式").setIcon("sigma").onClick(() => this.insertFormula()));
     menu.addItem((item) => item.setTitle("将子节点生成表格").setIcon("table-properties").onClick(() => this.convertChildrenToTable()));
     if (selected?.table) menu.addItem((item) => item.setTitle("移除表格").setIcon("table-2").onClick(() => this.removeTable()));
     menu.addItem((item) => item.setTitle(selected?.code ? "编辑代码" : "插入代码").setIcon("code-2").onClick(() => this.editCode()));
@@ -3310,6 +3422,29 @@ export class MindMapEditor {
     menu.addSeparator();
     menu.addItem((item) => item.setTitle("删除节点").setIcon("trash-2").onClick(() => this.deleteSelected()));
     menu.showAtMouseEvent(event);
+  }
+
+  /**
+   * 打开图形化公式编辑器并把生成的公式追加到当前节点。
+   */
+  private insertFormula(): void {
+    if (!this.ensureEditable()) return;
+    const selected = this.selectedNode() ?? this.document.root;
+    new FormulaEditModal(this.app, (source) => {
+      this.mutate(() => {
+        const blocks = nodeContentBlocks(selected);
+        const formula = `$$${source}$$`;
+        const emptyText = blocks.find((block): block is MindMapTextContentBlock => block.type === "text" && !block.text.trim());
+        if (emptyText) {
+          emptyText.text = formula;
+          emptyText.richText = undefined;
+        } else {
+          blocks.push({ id: newId(), type: "text", text: formula });
+        }
+        selected.content = blocks;
+        syncNodeLegacyFields(selected);
+      });
+    }).open();
   }
 
   /**

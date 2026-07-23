@@ -73,6 +73,10 @@
   height: 32px;
 }
 
+.mmc-toolbar-button.is-hidden {
+  display: none;
+}
+
 .mmc-toolbar-separator {
   flex: 0 0 auto;
   width: 1px;
@@ -815,6 +819,44 @@
   display: flex;
   justify-content: center;
   margin: 4px 0;
+}
+
+.mms-formula-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.mms-formula-palette {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(64px, 1fr));
+  gap: 6px;
+}
+
+.mms-formula-palette button {
+  min-height: 36px;
+  padding: 5px 8px;
+  font-size: var(--font-ui-medium);
+}
+
+.mms-formula-source {
+  width: 100%;
+  min-height: 100px;
+  resize: vertical;
+  font-family: var(--font-monospace);
+}
+
+.mms-formula-preview {
+  display: flex;
+  min-height: 76px;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+  overflow: auto;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  background: var(--background-secondary);
+  font-size: 1.15em;
 }
 
 .mms-toolbar-settings-grid {
