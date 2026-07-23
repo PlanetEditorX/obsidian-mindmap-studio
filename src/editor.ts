@@ -106,6 +106,13 @@ export interface MindMapEditorOptions {
   articleBaseDepth: number;
   articleTocEntries: ArticleTocEntry[];
   showArticleToc: boolean;
+  nodeEditorPosition: "center" | "right";
+  richTextShortcuts: {
+    bold: string;
+    italic: string;
+    underline: string;
+    color: string;
+  };
 }
 
 /**
@@ -404,7 +411,8 @@ class NodeEditModal extends Modal {
     node: MindMapNode,
     defaultShape: NodeShape,
     callbacks: Pick<MindMapEditorCallbacks, "resolveImage" | "onSavePastedImage" | "getImageHosts" | "getDefaultUploadHostIds" | "onUploadImage" | "onReadImageSource">,
-    submit: (values: NodeEditValues, mode: "autosave" | "commit") => void
+    submit: (values: NodeEditValues, mode: "autosave" | "commit") => void,
+    private readonly position: "center" | "right" = "center"
   ) {
     super(app);
     this.node = node;
@@ -417,6 +425,7 @@ class NodeEditModal extends Modal {
    * 在弹窗或视图打开时创建界面、绑定事件并把当前数据填入控件。
    */
   onOpen(): void {
+    this.modalEl.toggleClass("mms-node-editor-right", this.position === "right");
     this.titleEl.setText("编辑节点内容");
     this.contentEl.addClass("mmc-node-edit-modal");
     const form = this.contentEl.createDiv({ cls: "mmc-node-edit-form" });
@@ -2354,13 +2363,14 @@ export class MindMapEditor {
         this.selectNode(node.id);
         if (node.submap) {
           void this.callbacks.onOpenMindMap(node.submap.path);
-        } else if (!this.readOnly) this.editSelected();
+        } else if (!this.readOnly) this.beginInlineEdit(node.id);
       });
       nodeEl.addEventListener("contextmenu", (event) => {
         event.preventDefault();
         event.stopPropagation();
         this.selectNode(node.id);
-        this.openContextMenu(event);
+        if (event.shiftKey || this.readOnly) this.openContextMenu(event);
+        else this.editSelected();
       });
       nodeEl.addEventListener("dragstart", (event) => {
         if (this.readOnly) { event.preventDefault(); return; }
@@ -2445,18 +2455,159 @@ export class MindMapEditor {
   }
 
   /**
+   * 判断键盘事件是否匹配用户配置的组合键。
+   *
+   * @param event 当前键盘事件。
+   * @param shortcut 形如 Ctrl+B 或 Ctrl+Shift+C 的快捷键文本。
+   * @returns 当前事件是否与快捷键一致。
+   */
+  private shortcutMatches(event: KeyboardEvent, shortcut: string): boolean {
+    const parts = shortcut.toLowerCase().split("+").map((part) => part.trim()).filter(Boolean);
+    if (!parts.length) return false;
+    const wantsMod = parts.includes("ctrl") || parts.includes("cmd") || parts.includes("mod");
+    return event.key.toLowerCase() === parts.at(-1)
+      && (event.ctrlKey || event.metaKey) === wantsMod
+      && event.shiftKey === parts.includes("shift")
+      && event.altKey === parts.includes("alt");
+  }
+
+  /** 在节点本体中启动轻量富文本输入。 */
+  private beginInlineEdit(nodeId: string): void {
+    if (this.readOnly) return;
+    const node = findNode(this.document.root, nodeId);
+    if (!node) return;
+    this.selectNode(nodeId);
+    if (this.currentMode !== "mindmap") {
+      const scope = this.currentMode === "outline" ? this.outlineEl : this.articleEl;
+      scope.querySelector<HTMLElement>(`[data-node-id="${CSS.escape(nodeId)}"] [contenteditable="true"]`)?.focus();
+      return;
+    }
+    const nodeEl = this.nodesLayerEl.querySelector<HTMLElement>(`.mmc-node[data-node-id="${CSS.escape(nodeId)}"]`);
+    const content = nodeEl?.querySelector<HTMLElement>(".mmc-node-content");
+    if (!nodeEl || !content) return;
+    let editor = content.querySelector<HTMLElement>(".mmc-node-text");
+    if (!editor) editor = content.createDiv({ cls: "mmc-node-main mmc-node-text-block" }).createDiv({ cls: "mmc-node-text" });
+    editor.contentEditable = "true";
+    editor.spellcheck = true;
+    editor.addClass("is-inline-editing");
+    editor.setAttr("role", "textbox");
+    editor.setAttr("aria-label", "输入节点文字");
+    const firstText = nodeContentBlocks(node).find((block): block is MindMapTextContentBlock => block.type === "text");
+    renderRichTextRuns(editor, firstText?.richText, firstText?.text ?? nodePlainText(node));
+
+    let historyCaptured = false;
+    const save = (): void => {
+      const values = readRichTextEditor(editor!);
+      if (!historyCaptured) {
+        this.history.push(JSON.stringify(this.document));
+        this.trimHistory();
+        this.future = [];
+        historyCaptured = true;
+      }
+      const blocks = nodeContentBlocks(node);
+      let block = blocks.find((item): item is MindMapTextContentBlock => item.type === "text");
+      if (!block) {
+        block = { id: newId(), type: "text", text: "" };
+        blocks.unshift(block);
+      }
+      block.text = values.text;
+      block.richText = values.richText;
+      node.content = blocks;
+      syncNodeLegacyFields(node);
+      if (node.id === this.document.root.id && values.text) this.document.title = values.text;
+      this.callbacks.onChange(this.getDocument());
+      this.markSaving();
+    };
+    const color = nodeEl.createEl("input", {
+      cls: "mmc-inline-color",
+      type: "color",
+      attr: { title: `字体颜色（${this.options.richTextShortcuts.color}）`, "aria-label": "所选文字颜色" }
+    });
+    color.value = "#172033";
+    let savedSelection: { start: number; end: number } | null = null;
+    const rememberSelection = (): { start: number; end: number } | null => {
+      const selection = window.getSelection();
+      if (!selection?.rangeCount) return null;
+      const range = selection.getRangeAt(0);
+      if (!editor!.contains(range.commonAncestorContainer)) return null;
+      const before = range.cloneRange();
+      before.selectNodeContents(editor!);
+      before.setEnd(range.startContainer, range.startOffset);
+      savedSelection = { start: before.toString().length, end: before.toString().length + range.toString().length };
+      return savedSelection;
+    };
+    const applyStyle = (patch: Partial<MindMapTextStyle>): void => {
+      const selected = rememberSelection() ?? savedSelection;
+      if (!selected || selected.start === selected.end) {
+        new Notice("请先选择需要设置格式的文字");
+        return;
+      }
+      save();
+      const blocks = nodeContentBlocks(node);
+      const block = blocks.find((item): item is MindMapTextContentBlock => item.type === "text");
+      if (!block) return;
+      const key = Object.keys(patch)[0] as keyof MindMapTextStyle;
+      if (key !== "color") {
+        const styles = richTextCharacterStyles(block.richText, block.text);
+        const enabled = styles.slice(selected.start, selected.end).every((style) => style[key] === true);
+        patch = { [key]: !enabled };
+      }
+      block.richText = applyRichTextStyleRange(block.text, block.richText, selected.start, selected.end, patch);
+      renderRichTextRuns(editor!, block.richText, block.text);
+      save();
+    };
+    color.addEventListener("pointerdown", (event) => {
+      event.stopPropagation();
+      rememberSelection();
+    });
+    color.addEventListener("input", () => {
+      applyStyle({ color: color.value });
+    });
+    editor.addEventListener("input", save);
+    editor.addEventListener("keydown", (event) => {
+      const command = this.shortcutMatches(event, this.options.richTextShortcuts.bold) ? "bold"
+        : this.shortcutMatches(event, this.options.richTextShortcuts.italic) ? "italic"
+          : this.shortcutMatches(event, this.options.richTextShortcuts.underline) ? "underline" : null;
+      if (command) {
+        event.preventDefault();
+        applyStyle({ [command]: true });
+      } else if (this.shortcutMatches(event, this.options.richTextShortcuts.color)) {
+        event.preventDefault();
+        rememberSelection();
+        color.click();
+      } else if (event.key === "Escape") {
+        event.preventDefault();
+        editor!.blur();
+      }
+    });
+    editor.addEventListener("blur", (event) => {
+      if (event.relatedTarget === color) return;
+      save();
+      color.remove();
+      this.render();
+    }, { once: true });
+    editor.focus();
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(editor);
+    range.collapse(false);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+  }
+
+  /**
    * 添加child，并保持模型、界面和持久化状态的一致性。
    */
   private addChild(): void {
     if (!this.ensureEditable()) return;
     const selected = this.selectedNode() ?? this.document.root;
-    const node = this.createConfiguredNode();
+    const node = this.createConfiguredNode("");
     this.mutate(() => {
       selected.collapsed = false;
       selected.children.push(node);
       this.selectedId = node.id;
     });
-    this.editSelected();
+    window.setTimeout(() => this.beginInlineEdit(node.id), 0);
   }
 
   /**
@@ -2471,13 +2622,13 @@ export class MindMapEditor {
     }
     const parent = findParent(this.document.root, selected.id);
     if (!parent) return;
-    const node = this.createConfiguredNode();
+    const node = this.createConfiguredNode("");
     this.mutate(() => {
       const index = parent.children.findIndex((child) => child.id === selected.id);
       parent.children.splice(index + 1, 0, node);
       this.selectedId = node.id;
     });
-    this.editSelected();
+    window.setTimeout(() => this.beginInlineEdit(node.id), 0);
   }
 
   /**
@@ -2534,7 +2685,7 @@ export class MindMapEditor {
       this.callbacks.onChange(this.getDocument());
       this.markSaving();
       this.render();
-    }).open();
+    }, this.options.nodeEditorPosition).open();
   }
 
   /**

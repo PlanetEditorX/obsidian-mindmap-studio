@@ -246,6 +246,13 @@ export class MindMapStudioView extends TextFileView {
       imageFailoverUseLocalFallback: this.plugin.settings.imageFailoverUseLocalFallback,
       visibleModes: [...this.plugin.settings.visibleModes],
       defaultViewMode: this.plugin.settings.defaultViewMode,
+      nodeEditorPosition: this.plugin.settings.nodeEditorPosition,
+      richTextShortcuts: {
+        bold: this.plugin.settings.richTextBoldShortcut,
+        italic: this.plugin.settings.richTextItalicShortcut,
+        underline: this.plugin.settings.richTextUnderlineShortcut,
+        color: this.plugin.settings.richTextColorShortcut
+      },
       articleBaseDepth: this.articleBaseDepth,
       articleTocEntries: [...this.articleTocEntries],
       showArticleToc: this.showArticleToc

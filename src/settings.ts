@@ -151,6 +151,11 @@ export interface MindMapStudioSettings {
   globalSearchMaxResults: number;
   visibleModes: DisplayMode[];
   defaultViewMode: DisplayMode;
+  nodeEditorPosition: "center" | "right";
+  richTextBoldShortcut: string;
+  richTextItalicShortcut: string;
+  richTextUnderlineShortcut: string;
+  richTextColorShortcut: string;
 }
 
 export const DEFAULT_SETTINGS: MindMapStudioSettings = {
@@ -201,6 +206,12 @@ export const DEFAULT_SETTINGS: MindMapStudioSettings = {
   globalSearchMaxResults: 100,
   visibleModes: ["mindmap", "outline", "article"],
   defaultViewMode: "mindmap"
+  ,
+  nodeEditorPosition: "center",
+  richTextBoldShortcut: "Ctrl+B",
+  richTextItalicShortcut: "Ctrl+I",
+  richTextUnderlineShortcut: "Ctrl+U",
+  richTextColorShortcut: "Ctrl+Shift+C"
 };
 
 /**
@@ -386,6 +397,39 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
       });
 
     containerEl.createEl("h3", { text: "文件与布局" });
+
+    new Setting(containerEl)
+      .setName("节点编辑器显示位置")
+      .setDesc("居中时使用弹窗；靠右时作为右侧编辑面板显示，保存或点击面板外会自动收起。")
+      .addDropdown((dropdown) => dropdown
+        .addOption("center", "居中弹窗")
+        .addOption("right", "右侧面板")
+        .setValue(this.plugin.settings.nodeEditorPosition)
+        .onChange(async (value) => {
+          this.plugin.settings.nodeEditorPosition = value === "right" ? "right" : "center";
+          await this.saveAndRefresh();
+        }));
+
+    containerEl.createEl("h3", { text: "节点快速输入快捷键" });
+    containerEl.createEl("p", {
+      cls: "setting-item-description",
+      text: "Tab/Enter 创建节点后可直接输入。以下快捷键作用于节点内已选择的文字；格式示例：Ctrl+B、Ctrl+Shift+C、Alt+U。"
+    });
+    const shortcutSetting = (name: string, key: keyof Pick<MindMapStudioSettings,
+      "richTextBoldShortcut" | "richTextItalicShortcut" | "richTextUnderlineShortcut" | "richTextColorShortcut">): void => {
+      new Setting(containerEl)
+        .setName(name)
+        .addText((text) => text
+          .setValue(this.plugin.settings[key])
+          .onChange(async (value) => {
+            this.plugin.settings[key] = value.trim();
+            await this.plugin.saveSettings();
+          }));
+    };
+    shortcutSetting("加粗", "richTextBoldShortcut");
+    shortcutSetting("斜体", "richTextItalicShortcut");
+    shortcutSetting("下划线", "richTextUnderlineShortcut");
+    shortcutSetting("字体颜色", "richTextColorShortcut");
 
     new Setting(containerEl)
       .setName("默认保存文件夹")
