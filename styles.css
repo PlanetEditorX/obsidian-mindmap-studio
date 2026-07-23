@@ -833,6 +833,17 @@
   gap: 6px;
 }
 
+.mms-formula-section-title {
+  margin-bottom: -6px;
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+  font-weight: var(--font-semibold);
+}
+
+.mms-formula-relations {
+  grid-template-columns: repeat(auto-fit, minmax(48px, 1fr));
+}
+
 .mms-formula-palette button {
   min-height: 36px;
   padding: 5px 8px;
