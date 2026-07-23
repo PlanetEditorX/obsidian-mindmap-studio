@@ -88,6 +88,7 @@ export interface MindMapEditorCallbacks {
   onReadImageSource: (source: string) => Promise<{ blob: Blob; suggestedName: string } | null>;
   onScheduleAutoUpload: (nodeId: string, blockId: string, localPath: string, suggestedName: string) => boolean;
   onCreateSubmap: (node: MindMapNode) => Promise<MindMapSubmap>;
+  onDeleteSubmap: (submap: MindMapSubmap) => Promise<boolean>;
   onOpenMindMap: (path: string, focusNodeId?: string) => void | Promise<void>;
   onOpenArticleDirectory: (path: string) => void | Promise<void>;
   onSearchMapFamily: () => void;
@@ -1738,7 +1739,7 @@ export class MindMapEditor {
     this.readOnly = this.currentMode === "article" || this.document.view?.readOnly === true;
     this.selectedId = this.document.root.id;
     const initialAppearance = this.getAppearance();
-    this.layout = computeLayout(this.document.root, this.document.layout, initialAppearance.fontSize ?? 14, initialAppearance.nodeVisualStyle ?? "card");
+    this.layout = computeLayout(this.document.root, this.document.layout, initialAppearance.fontSize ?? 14, initialAppearance.nodeVisualStyle ?? "card", initialAppearance);
     this.buildUi();
     this.render();
     if (this.options.autoFitOnOpen) window.setTimeout(() => this.fitToView(), 50);
@@ -1955,8 +1956,8 @@ export class MindMapEditor {
     this.addToolbarButton("undo", "undo-2", "撤销（Ctrl/Cmd+Z）", () => this.undo(), true);
     this.addToolbarButton("redo", "redo-2", "重做（Ctrl/Cmd+Y）", () => this.redo(), true);
     this.addToolbarSeparator();
-    this.addToolbarButton("zoom-in", "zoom-in", "放大", () => this.setZoom(this.zoom * 1.15));
-    this.addToolbarButton("zoom-out", "zoom-out", "缩小", () => this.setZoom(this.zoom / 1.15));
+    this.addToolbarButton("zoom-out", "minus", "缩小", () => this.setZoom(this.zoom / 1.15), false, true);
+    this.addToolbarButton("zoom-in", "plus", "放大", () => this.setZoom(this.zoom * 1.15), false, true);
     this.addToolbarButton("fit", "maximize", "适应画布", () => this.fitToView());
     this.addToolbarButton("layout", "git-fork", "切换单侧/双侧布局", () => this.toggleLayout(), true);
     this.addToolbarButton("appearance", "palette", "当前脑图外观", () => this.editAppearance(), true);
@@ -2177,11 +2178,11 @@ export class MindMapEditor {
    * @param editOnly 该参数用于 add toolbar button 流程中的输入或控制。
    * @returns 当前操作生成、查找或规范化后的结果。
    */
-  private addToolbarButton(id: string, icon: string, label: string, action: () => void, editOnly = false): HTMLButtonElement {
+  private addToolbarButton(id: string, icon: string, label: string, action: () => void, editOnly = false, alwaysVisible = false): HTMLButtonElement {
     const button = this.toolbarEl.createEl("button", { cls: "clickable-icon mmc-toolbar-button", attr: { "aria-label": label, title: label, type: "button" } });
     button.dataset.toolbarId = id;
     setIcon(button, icon);
-    button.toggleClass("is-hidden", !this.options.visibleToolbarItems.includes(id));
+    button.toggleClass("is-hidden", !alwaysVisible && !this.options.visibleToolbarItems.includes(id));
     if (editOnly) {
       button.addClass("mms-edit-only-control");
       this.editControls.push(button);
@@ -2669,7 +2670,7 @@ export class MindMapEditor {
    */
   private renderMindMap(): void {
     const appearance = this.getAppearance();
-    this.layout = computeLayout(this.document.root, this.document.layout, appearance.fontSize ?? 14, appearance.nodeVisualStyle ?? "card");
+    this.layout = computeLayout(this.document.root, this.document.layout, appearance.fontSize ?? 14, appearance.nodeVisualStyle ?? "card", appearance);
     const branchColorMap = appearance.colorfulBranches ? buildBranchColorMap(this.document.root, appearance.branchColors) : new Map<string, string>();
     this.nodesLayerEl.empty();
     while (this.edgesSvg.firstChild) this.edgesSvg.removeChild(this.edgesSvg.firstChild);
@@ -3686,6 +3687,27 @@ export class MindMapEditor {
   }
 
   /**
+   * Deletes the selected node's submap file when present and clears stale
+   * links when the file was already removed outside the plugin.
+   */
+  private async deleteSelectedSubmap(): Promise<void> {
+    if (!this.ensureEditable()) return;
+    const selected = this.selectedNode();
+    if (!selected?.submap) return;
+    const confirmed = window.confirm(`删除子导图“${selected.submap.title ?? selected.submap.path}”及其链接？\n如果文件已不存在，将只移除失效链接。`);
+    if (!confirmed) return;
+    const submap = { ...selected.submap };
+    try {
+      const deleted = await this.callbacks.onDeleteSubmap(submap);
+      this.mutate(() => { selected.submap = undefined; });
+      new Notice(deleted ? "已删除子导图并移除链接" : "子导图文件不存在，已移除失效链接");
+    } catch (error) {
+      console.error("MindMap Studio delete submap failed", error);
+      new Notice("删除子导图失败");
+    }
+  }
+
+  /**
    * 渲染node table，并保持模型、界面和持久化状态的一致性。
    *
    * @param content 该参数用于 render node table 流程中的输入或控制。
@@ -3960,6 +3982,7 @@ export class MindMapEditor {
     menu.addItem((item) => item.setTitle(selected?.code ? "编辑代码" : "插入代码").setIcon("code-2").onClick(() => this.editCode()));
     if (selected?.code) menu.addItem((item) => item.setTitle("移除代码").setIcon("eraser").onClick(() => this.removeCode()));
     menu.addItem((item) => item.setTitle(selected?.submap ? "进入子导图" : "创建子导图").setIcon("network").onClick(() => void this.createOrOpenSubmap()));
+    if (selected?.submap) menu.addItem((item) => item.setTitle("删除子导图 / 移除链接").setIcon("unlink").onClick(() => void this.deleteSelectedSubmap()));
     menu.addSeparator();
     menu.addItem((item) => item.setTitle("复制分支").setIcon("copy").onClick(() => void this.copySelectedBranch()));
     menu.addItem((item) => item.setTitle("粘贴为子节点").setIcon("clipboard-paste").onClick(() => void this.pasteAsChild()));

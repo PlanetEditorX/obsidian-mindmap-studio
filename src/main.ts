@@ -405,6 +405,15 @@ export default class MindMapStudioPlugin extends Plugin {
       defaultNodeTextAlign: raw.defaultNodeTextAlign === "left" || raw.defaultNodeTextAlign === "right" || raw.defaultNodeTextAlign === "center"
         ? raw.defaultNodeTextAlign
         : DEFAULT_SETTINGS.defaultNodeTextAlign,
+      nodeWidthMode: raw.nodeWidthMode === "fixed" || raw.nodeWidthMode === "auto"
+        ? raw.nodeWidthMode
+        : DEFAULT_SETTINGS.nodeWidthMode,
+      defaultNodeWidth: typeof raw.defaultNodeWidth === "number"
+        ? Math.max(100, Math.min(900, Math.round(raw.defaultNodeWidth)))
+        : DEFAULT_SETTINGS.defaultNodeWidth,
+      autoNodeMaxWidth: typeof raw.autoNodeMaxWidth === "number"
+        ? Math.max(120, Math.min(900, Math.round(raw.autoNodeMaxWidth)))
+        : DEFAULT_SETTINGS.autoNodeMaxWidth,
       defaultThemePreset: [
         "classic-indigo", "ocean-blue", "forest-green", "sunset-orange", "lavender-dream",
         "candy-pop", "paper-note", "minimal-ink", "dark-neon", "mint-clean",
@@ -1149,6 +1158,20 @@ export default class MindMapStudioPlugin extends Plugin {
     const path = await this.getAvailablePath(normalizePath(`${submapFolder}/${this.sanitizeFilename(title)}.${MINDMAP_EXTENSION}`));
     const file = await this.app.vault.create(path, serializeDocument(document));
     return { path: file.path, title: file.basename };
+  }
+
+  /**
+   * Moves a linked child mind-map file to the system trash.
+   *
+   * @param parentFile Parent map used to resolve relative paths.
+   * @param submap Stored child-map link.
+   * @returns Whether a physical child-map file was found and deleted.
+   */
+  async deleteSubmapFile(parentFile: TFile, submap: MindMapSubmap): Promise<boolean> {
+    const target = this.resolveMindMapFile(submap.path, parentFile.path);
+    if (!target) return false;
+    await this.app.vault.trash(target, true);
+    return true;
   }
 
   /**

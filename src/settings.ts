@@ -122,6 +122,9 @@ export interface MindMapStudioSettings {
   defaultLayout: LayoutMode;
   defaultTheme: ThemeMode;
   defaultNodeShape: NodeShape;
+  nodeWidthMode: "fixed" | "auto";
+  defaultNodeWidth: number;
+  autoNodeMaxWidth: number;
   redirectLegacyFiles: boolean;
   showGrid: boolean;
   showTaskProgress: boolean;
@@ -180,6 +183,9 @@ export const DEFAULT_SETTINGS: MindMapStudioSettings = {
   defaultLayout: "right",
   defaultTheme: "auto",
   defaultNodeShape: "rounded",
+  nodeWidthMode: "auto",
+  defaultNodeWidth: 176,
+  autoNodeMaxWidth: 460,
   redirectLegacyFiles: true,
   showGrid: true,
   showTaskProgress: true,
@@ -240,6 +246,9 @@ export const DEFAULT_SETTINGS: MindMapStudioSettings = {
  */
 export function settingsToAppearance(settings: MindMapStudioSettings): MindMapAppearance {
   return {
+    nodeWidthMode: settings.nodeWidthMode,
+    defaultNodeWidth: settings.defaultNodeWidth,
+    autoNodeMaxWidth: settings.autoNodeMaxWidth,
     themePreset: settings.defaultThemePreset,
     backgroundColor: settings.backgroundColor || undefined,
     backgroundPattern: settings.backgroundPattern,
@@ -918,6 +927,43 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
         .setValue(this.plugin.settings.defaultNodeShape)
         .onChange(async (value) => {
           this.plugin.settings.defaultNodeShape = value as NodeShape;
+          await this.saveAndRefresh();
+        }));
+
+    new Setting(containerEl)
+      .setName("节点宽度模式")
+      .setDesc("固定宽度统一显示；自动宽度会依据文字长度伸缩，并在达到最大宽度后换行。")
+      .addDropdown((dropdown) => dropdown
+        .addOption("auto", "自动宽度")
+        .addOption("fixed", "固定宽度")
+        .setValue(this.plugin.settings.nodeWidthMode)
+        .onChange(async (value) => {
+          this.plugin.settings.nodeWidthMode = value === "fixed" ? "fixed" : "auto";
+          await this.saveAndRefresh();
+          this.display();
+        }));
+
+    new Setting(containerEl)
+      .setName("固定节点宽度")
+      .setDesc("固定宽度模式下使用，范围 100–900 像素。")
+      .addText((text) => text
+        .setValue(String(this.plugin.settings.defaultNodeWidth))
+        .onChange(async (value) => {
+          const parsed = Number(value);
+          if (!Number.isFinite(parsed)) return;
+          this.plugin.settings.defaultNodeWidth = Math.max(100, Math.min(900, Math.round(parsed)));
+          await this.saveAndRefresh();
+        }));
+
+    new Setting(containerEl)
+      .setName("自动宽度上限")
+      .setDesc("自动宽度达到此值后换行；手动拖动节点宽度仍可突破该上限。范围 120–900 像素。")
+      .addText((text) => text
+        .setValue(String(this.plugin.settings.autoNodeMaxWidth))
+        .onChange(async (value) => {
+          const parsed = Number(value);
+          if (!Number.isFinite(parsed)) return;
+          this.plugin.settings.autoNodeMaxWidth = Math.max(120, Math.min(900, Math.round(parsed)));
           await this.saveAndRefresh();
         }));
 

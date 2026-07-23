@@ -120,6 +120,10 @@ export class MindMapStudioView extends TextFileView {
           if (!this.file) throw new Error("当前脑图尚未关联文件");
           return this.plugin.createSubmapFile(this.file, node);
         },
+        onDeleteSubmap: async (submap) => {
+          if (!this.file) return false;
+          return this.plugin.deleteSubmapFile(this.file, submap);
+        },
         onOpenMindMap: async (path, focusNodeId) => {
           await this.save();
           await this.plugin.openMindMapPath(path, this.file?.path ?? "", this.leaf, focusNodeId);

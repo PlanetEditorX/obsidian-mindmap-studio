@@ -251,6 +251,25 @@ export const setIcon = () => {};
   assert.match(layout.roundedElbowEdgePath(branchLayout.nodes[0], branchLayout.nodes[1]), /\bQ\b/, "rounded branch style should use rounded elbow connectors");
   branchFixture.appearance = { nodeVisualStyle: "compact" };
   assert.equal(model.normalizeDocument(branchFixture).appearance?.nodeVisualStyle, "branch", "legacy compact style should migrate to rounded branch style");
+  const widthFixture = model.createDefaultDocument("Width");
+  widthFixture.root.children[0].text = "This is a deliberately long node title that should wrap at the configured maximum width";
+  const automaticWidthLayout = layout.computeLayout(widthFixture.root, "right", 14, "card", {
+    nodeWidthMode: "auto",
+    autoNodeMaxWidth: 220
+  });
+  assert.equal(automaticWidthLayout.nodes[1].width, 220, "automatic nodes should stop at the configured maximum width");
+  widthFixture.root.children[0].style = { width: 340 };
+  const manualWidthLayout = layout.computeLayout(widthFixture.root, "right", 14, "card", {
+    nodeWidthMode: "auto",
+    autoNodeMaxWidth: 220
+  });
+  assert.equal(manualWidthLayout.nodes[1].width, 340, "manual width should be allowed to exceed the automatic maximum");
+  widthFixture.root.children[0].style = undefined;
+  const fixedWidthLayout = layout.computeLayout(widthFixture.root, "right", 14, "card", {
+    nodeWidthMode: "fixed",
+    defaultNodeWidth: 240
+  });
+  assert.equal(fixedWidthLayout.nodes[1].width, 240, "fixed width mode should use the configured node width");
   const xmindClipboard = "世界历史\n\t古代史\n\t\t中国\n\t\t希腊\n\t近代史";
   const xmindMarkdown = model.indentedTextToMarkdown(xmindClipboard);
   const pastedXmind = model.markdownToDocument(xmindMarkdown, "粘贴内容");
@@ -568,6 +587,9 @@ export const setIcon = () => {};
   assert.match(editorSource, /currentMode !== "article"\) this\.persistReadOnlyState/, "temporary article editing must not overwrite the document read-only preference");
   assert.match(editorSource, /selection && !selection\.isCollapsed && selection\.toString\(\)/, "read-only copy should preserve native selected-text copying");
   assert.match(editorSource, /createElementNS\("http:\/\/www\.w3\.org\/2000\/svg", "svg"\)/, "theme cards should use stable SVG previews");
+  assert.match(editorSource, /删除子导图 \/ 移除链接/);
+  assert.match(editorSource, /alwaysVisible && !this\.options\.visibleToolbarItems\.includes/);
+  assert.match(mainSource, /vault\.trash\(target, true\)/, "submap deletion should use the system trash");
   assert.match(editorSource, /skipArticleNumbering/);
   assert.match(editorSource, /DISPLAY_MODE_LABELS/);
   assert.match(mainSource, /switch-to-\$\{mode\}-mode/);
@@ -584,6 +606,8 @@ export const setIcon = () => {};
   assert.match(settingsSource, /本地副本作为最后回退/);
   assert.match(settingsSource, /默认节点文字对齐/);
   assert.match(settingsSource, /defaultNodeTextAlign/);
+  assert.match(settingsSource, /节点宽度模式/);
+  assert.match(settingsSource, /自动宽度上限/);
   assert.match(settingsSource, /文章目录最大层级/);
   assert.match(mainSource, /articleTocMaxDepth:[\s\S]*Math\.max\(1, Math\.min\(8/);
   assert.match(editorSource, /item\.depth <= this\.options\.articleTocMaxDepth/, "article TOC rendering should honor the configured maximum depth");

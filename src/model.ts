@@ -39,6 +39,8 @@ export type ThemeMode = "auto" | "light" | "dark";
 export type NodeShape = "rounded" | "pill" | "rectangle";
 /** Overall sizing and density used when rendering mind-map nodes. */
 export type NodeVisualStyle = "card" | "branch";
+/** Default width calculation used for nodes without a manual width. */
+export type NodeWidthMode = "fixed" | "auto";
 /**
  * TaskStatus 类型定义，用于限制可接受值并让序列化数据保持稳定。
  */
@@ -201,6 +203,9 @@ export interface MindMapNavigation {
  */
 export interface MindMapAppearance {
   nodeVisualStyle?: NodeVisualStyle;
+  nodeWidthMode?: NodeWidthMode;
+  defaultNodeWidth?: number;
+  autoNodeMaxWidth?: number;
   themePreset?: MindMapThemePresetId;
   backgroundColor?: string;
   backgroundPattern?: BackgroundPattern;
@@ -421,6 +426,9 @@ function normalizeAppearance(input: Partial<MindMapAppearance> | undefined): Min
       : rawNodeVisualStyle === "branch" || rawNodeVisualStyle === legacyBranchStyle || rawNodeVisualStyle === "compact"
         ? "branch"
         : undefined,
+    nodeWidthMode: input.nodeWidthMode === "fixed" || input.nodeWidthMode === "auto" ? input.nodeWidthMode : undefined,
+    defaultNodeWidth: normalizeNumber(input.defaultNodeWidth, 100, 900),
+    autoNodeMaxWidth: normalizeNumber(input.autoNodeMaxWidth, 120, 900),
     themePreset,
     backgroundColor: normalizeColor(input.backgroundColor),
     backgroundPattern,
