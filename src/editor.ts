@@ -37,6 +37,8 @@ import {
   applyRichTextStyleRange,
   reconcileRichTextAfterEdit,
   type BackgroundPattern,
+  type ArticleStyle,
+  type ArticleStylePresetId,
   type DisplayMode,
   type EdgeStyle,
   type EdgeWidthMode,
@@ -115,6 +117,24 @@ export interface MindMapEditorOptions {
   };
   visibleToolbarItems: string[];
   toolbarItemOrder: string[];
+}
+
+const ARTICLE_STYLE_PRESETS: Record<ArticleStylePresetId, ArticleStyle> = {
+  classic: { preset: "classic", tocStyle: "card", fontSize: 16, lineHeight: 1.85 },
+  book: { preset: "book", fontFamily: "Georgia, 'Noto Serif SC', serif", textColor: "#332b24", headingColor: "#241c16", accentColor: "#8b5e3c", backgroundColor: "#fffdf7", tocStyle: "lines", fontSize: 17, lineHeight: 2 },
+  modern: { preset: "modern", fontFamily: "Inter, 'Microsoft YaHei', sans-serif", textColor: "#243247", headingColor: "#12213a", accentColor: "#2563eb", backgroundColor: "#f8fafc", tocStyle: "card", fontSize: 16, lineHeight: 1.75 },
+  minimal: { preset: "minimal", fontFamily: "Arial, 'Microsoft YaHei', sans-serif", textColor: "#27272a", headingColor: "#18181b", accentColor: "#52525b", backgroundColor: "#ffffff", tocStyle: "plain", fontSize: 15, lineHeight: 1.8 }
+};
+
+/**
+ * Resolves a preset and its per-document overrides into one article style.
+ *
+ * @param style Stored article style.
+ * @returns Complete style values for rendering.
+ */
+function resolveArticleStyle(style: ArticleStyle | undefined): ArticleStyle {
+  const preset = style?.preset ?? "classic";
+  return { ...ARTICLE_STYLE_PRESETS[preset], ...(style ?? {}), preset };
 }
 
 /**
@@ -1029,6 +1049,97 @@ class FormulaEditModal extends Modal {
 }
 
 /**
+ * Modal for selecting an article preset and overriding its typography and colors.
+ */
+class ArticleStyleModal extends Modal {
+  private readonly style: ArticleStyle;
+  private readonly submitStyle: (style: ArticleStyle) => void;
+
+  /**
+   * Creates an article style editor.
+   *
+   * @param app Obsidian application.
+   * @param style Current document style.
+   * @param submit Callback receiving the edited style.
+   */
+  constructor(app: App, style: ArticleStyle | undefined, submit: (style: ArticleStyle) => void) {
+    super(app);
+    this.style = resolveArticleStyle(style);
+    this.submitStyle = submit;
+  }
+
+  /**
+   * Builds the article style preset and customization controls.
+   */
+  onOpen(): void {
+    this.titleEl.setText("文章样式");
+    this.contentEl.addClass("mms-article-style-modal");
+    const form = this.contentEl.createEl("form");
+    const grid = form.createDiv({ cls: "mmc-form-grid" });
+    const presetLabel = grid.createEl("label", { text: "样式预设" });
+    const preset = presetLabel.createEl("select");
+    for (const [id, name] of [["classic", "经典文档"], ["book", "书籍阅读"], ["modern", "现代报告"], ["minimal", "极简留白"]] as const) {
+      preset.createEl("option", { text: name, attr: { value: id } });
+    }
+    const addText = (labelText: string): HTMLInputElement => {
+      const label = grid.createEl("label", { text: labelText });
+      return label.createEl("input", { type: "text" });
+    };
+    const fontFamily = addText("字体");
+    const addColor = (labelText: string): HTMLInputElement => {
+      const label = grid.createEl("label", { text: labelText });
+      return label.createEl("input", { type: "color" });
+    };
+    const textColor = addColor("正文颜色");
+    const headingColor = addColor("标题颜色");
+    const accentColor = addColor("强调色");
+    const backgroundColor = addColor("纸张背景");
+    const tocLabel = grid.createEl("label", { text: "目录样式" });
+    const tocStyle = tocLabel.createEl("select");
+    for (const [id, name] of [["card", "卡片"], ["plain", "简洁"], ["lines", "引导线"]] as const) {
+      tocStyle.createEl("option", { text: name, attr: { value: id } });
+    }
+    const sizeLabel = grid.createEl("label", { text: "正文字号" });
+    const fontSize = sizeLabel.createEl("input", { type: "number", attr: { min: "12", max: "24", step: "1" } });
+    const lineLabel = grid.createEl("label", { text: "正文行高" });
+    const lineHeight = lineLabel.createEl("input", { type: "number", attr: { min: "1.2", max: "2.4", step: "0.05" } });
+    const fill = (style: ArticleStyle): void => {
+      const resolved = resolveArticleStyle(style);
+      preset.value = resolved.preset;
+      fontFamily.value = resolved.fontFamily ?? "";
+      textColor.value = resolved.textColor ?? "#20242c";
+      headingColor.value = resolved.headingColor ?? "#111827";
+      accentColor.value = resolved.accentColor ?? "#7c3aed";
+      backgroundColor.value = resolved.backgroundColor ?? "#ffffff";
+      tocStyle.value = resolved.tocStyle ?? "card";
+      fontSize.value = String(resolved.fontSize ?? 16);
+      lineHeight.value = String(resolved.lineHeight ?? 1.85);
+    };
+    fill(this.style);
+    preset.addEventListener("change", () => fill(ARTICLE_STYLE_PRESETS[preset.value as ArticleStylePresetId]));
+    const actions = form.createDiv({ cls: "mmc-modal-actions" });
+    const cancel = actions.createEl("button", { text: "取消", type: "button" });
+    actions.createEl("button", { text: "应用", type: "submit", cls: "mod-cta" });
+    cancel.addEventListener("click", () => this.close());
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      this.submitStyle({
+        preset: preset.value as ArticleStylePresetId,
+        fontFamily: fontFamily.value.trim() || undefined,
+        textColor: textColor.value,
+        headingColor: headingColor.value,
+        accentColor: accentColor.value,
+        backgroundColor: backgroundColor.value,
+        tocStyle: tocStyle.value as ArticleStyle["tocStyle"],
+        fontSize: Math.max(12, Math.min(24, Number(fontSize.value) || 16)),
+        lineHeight: Math.max(1.2, Math.min(2.4, Number(lineHeight.value) || 1.85))
+      });
+      this.close();
+    });
+  }
+}
+
+/**
  * AppearanceModal 的主要实现类。负责封装相关状态、生命周期和对外操作，避免调用方直接操作内部数据结构。
  */
 class AppearanceModal extends Modal {
@@ -1474,6 +1585,8 @@ export class MindMapEditor {
   private statusEl!: HTMLSpanElement;
   private zoomStatusEl!: HTMLSpanElement;
   private lockButton!: HTMLButtonElement;
+  private articleLandingButton!: HTMLButtonElement;
+  private articleStyleButton!: HTMLButtonElement;
   private readonly modeButtons = new Map<DisplayMode, HTMLButtonElement>();
   private readonly editControls: HTMLElement[] = [];
   private document: MindMapDocument;
@@ -1708,6 +1821,8 @@ export class MindMapEditor {
     this.addToolbarButton("fit", "maximize", "适应画布", () => this.fitToView());
     this.addToolbarButton("layout", "git-fork", "切换单侧/双侧布局", () => this.toggleLayout(), true);
     this.addToolbarButton("appearance", "palette", "当前脑图外观", () => this.editAppearance(), true);
+    this.articleLandingButton = this.addToolbarButton("article-landing", "list-tree", "切换目录 / 总导图", () => this.toggleArticleLanding());
+    this.articleStyleButton = this.addToolbarButton("article-style", "paintbrush", "文章样式", () => this.editArticleStyle(), true);
     this.addToolbarSeparator();
     this.addToolbarButton("markdown", "file-text", "查看 Markdown 大纲", () => this.showOutline());
     this.addToolbarButton("json", "braces", "JSON 导入 / 导出", () => this.showJsonTransfer(), true);
@@ -1824,6 +1939,18 @@ export class MindMapEditor {
    */
   private updateModeUi(): void {
     for (const [mode, button] of this.modeButtons) button.toggleClass("is-active", mode === this.currentMode);
+    const isArticle = this.currentMode === "article";
+    const hasLandingChoice = isArticle && this.options.showArticleToc;
+    this.articleLandingButton.toggleClass("is-hidden", !hasLandingChoice || !this.options.visibleToolbarItems.includes("article-landing"));
+    this.articleStyleButton.toggleClass("is-hidden", !isArticle || !this.options.visibleToolbarItems.includes("article-style"));
+    if (hasLandingChoice) {
+      const showingMap = this.document.view?.articleLandingMode === "map";
+      this.articleLandingButton.setAttr("aria-label", showingMap ? "显示目录" : "显示总导图");
+      this.articleLandingButton.setAttr("title", showingMap ? "显示目录" : "显示总导图");
+      this.articleLandingButton.empty();
+      setIcon(this.articleLandingButton, showingMap ? "list-tree" : "network");
+      this.articleLandingButton.toggleClass("is-active", showingMap);
+    }
     this.lockButton.empty();
     setIcon(this.lockButton, this.readOnly ? "lock" : "lock-open");
     this.lockButton.setAttr("aria-label", this.readOnly ? "当前只读，点击切换到编辑模式" : "当前可编辑，点击切换到只读模式");
@@ -2207,7 +2334,15 @@ export class MindMapEditor {
    */
   private renderArticle(): void {
     this.articleEl.empty();
-    const page = this.articleEl.createDiv({ cls: "mms-article-page" });
+    const articleStyle = resolveArticleStyle(this.document.articleStyle);
+    const page = this.articleEl.createDiv({ cls: `mms-article-page article-${articleStyle.preset} toc-${articleStyle.tocStyle ?? "card"}` });
+    if (articleStyle.fontFamily) page.style.setProperty("--mms-article-font", articleStyle.fontFamily);
+    if (articleStyle.textColor) page.style.setProperty("--mms-article-text", articleStyle.textColor);
+    if (articleStyle.headingColor) page.style.setProperty("--mms-article-heading", articleStyle.headingColor);
+    if (articleStyle.accentColor) page.style.setProperty("--mms-article-accent", articleStyle.accentColor);
+    if (articleStyle.backgroundColor) page.style.setProperty("--mms-article-paper", articleStyle.backgroundColor);
+    page.style.setProperty("--mms-article-font-size", `${articleStyle.fontSize ?? 16}px`);
+    page.style.setProperty("--mms-article-line-height", String(articleStyle.lineHeight ?? 1.85));
     const title = page.createEl("h1", { cls: "mms-article-document-title", text: nodePrimaryText(this.document.root) || this.document.title });
     this.makeInlineEditable(title, this.document.root, "文章标题");
     this.addInlineNodeActions(page, this.document.root);
@@ -2230,6 +2365,7 @@ export class MindMapEditor {
         });
         if (entry.breadcrumb.length > 1) item.createSpan({ cls: "mms-article-toc-breadcrumb", text: entry.breadcrumb.join(" › ") });
       }
+      return;
     }
 
     const infos = buildArticleNodeInfo(this.document.root, this.options.articleBaseDepth);
@@ -2284,12 +2420,15 @@ export class MindMapEditor {
     const appearance = this.getAppearance();
     this.applyAppearance(appearance);
     this.updateModeUi();
-    this.viewportEl.toggleClass("is-hidden", this.currentMode !== "mindmap");
+    const articleMap = this.currentMode === "article"
+      && this.options.showArticleToc
+      && this.document.view?.articleLandingMode === "map";
+    this.viewportEl.toggleClass("is-hidden", this.currentMode !== "mindmap" && !articleMap);
     this.outlineEl.toggleClass("is-hidden", this.currentMode !== "outline");
-    this.articleEl.toggleClass("is-hidden", this.currentMode !== "article");
+    this.articleEl.toggleClass("is-hidden", this.currentMode !== "article" || articleMap);
     this.rootEl.dataset.displayMode = this.currentMode;
     if (this.currentMode === "outline") this.renderOutline();
-    else if (this.currentMode === "article") this.renderArticle();
+    else if (this.currentMode === "article" && !articleMap) this.renderArticle();
     else this.renderMindMap();
   }
 
@@ -3136,6 +3275,28 @@ export class MindMapEditor {
     if (!this.ensureEditable()) return;
     this.mutate(() => { this.document.layout = this.document.layout === "right" ? "balanced" : "right"; });
     window.setTimeout(() => this.fitToView(), 20);
+  }
+
+  /**
+   * Switches the top-level article between its directory and interactive map.
+   */
+  private toggleArticleLanding(): void {
+    if (this.currentMode !== "article" || !this.options.showArticleToc) return;
+    const current = this.document.view?.articleLandingMode ?? "toc";
+    this.mutate(() => {
+      this.document.view = { ...(this.document.view ?? {}), articleLandingMode: current === "toc" ? "map" : "toc" };
+    });
+    if (current === "toc") window.setTimeout(() => this.fitToView(), 20);
+  }
+
+  /**
+   * Opens article preset and typography controls for the current document.
+   */
+  private editArticleStyle(): void {
+    if (!this.ensureEditable()) return;
+    new ArticleStyleModal(this.app, this.document.articleStyle, (style) => {
+      this.mutate(() => { this.document.articleStyle = style; });
+    }).open();
   }
 
   /**

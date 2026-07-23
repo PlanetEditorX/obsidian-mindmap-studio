@@ -80,6 +80,17 @@ export const setIcon = () => {};
     underline: true,
     nodeTextAlign: "left"
   };
+  document.view = { articleLandingMode: "toc" };
+  document.articleStyle = {
+    preset: "book",
+    textColor: "#332b24",
+    headingColor: "#241c16",
+    accentColor: "#8b5e3c",
+    backgroundColor: "#fffdf7",
+    tocStyle: "lines",
+    fontSize: 17,
+    lineHeight: 2
+  };
   document.root.children[0].children.push({ id: "depth-2", text: "二级节点", children: [{ id: "depth-3", text: "三级节点", children: [] }] });
   document.root.children.push({ id: "saved-node", text: "保存后仍可编辑", children: [] });
 
@@ -100,6 +111,10 @@ export const setIcon = () => {};
   assert.deepEqual(reopened.appearance?.branchColors, ["#dc2626", "#2563eb"]);
   assert.equal(reopened.appearance?.underline, true);
   assert.equal(reopened.appearance?.nodeTextAlign, "left");
+  assert.equal(reopened.view?.articleLandingMode, "toc");
+  assert.equal(reopened.articleStyle?.preset, "book");
+  assert.equal(reopened.articleStyle?.tocStyle, "lines");
+  assert.equal(reopened.articleStyle?.fontSize, 17);
   assert.equal(reopened.root.children.at(-1)?.text, "保存后仍可编辑");
 
   const reorderRoot = model.normalizeDocument({

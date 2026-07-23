@@ -379,9 +379,16 @@ export default class MindMapStudioPlugin extends Plugin {
         ? Math.max(20, Math.min(500, Math.round(raw.globalSearchMaxResults)))
         : DEFAULT_SETTINGS.globalSearchMaxResults,
       visibleModes: normalizeVisibleModes(raw.visibleModes),
-      visibleToolbarItems: Array.isArray(raw.visibleToolbarItems)
-        ? raw.visibleToolbarItems.filter((id): id is string => typeof id === "string")
-        : [...DEFAULT_SETTINGS.visibleToolbarItems],
+      visibleToolbarItems: (() => {
+        const visible = Array.isArray(raw.visibleToolbarItems)
+          ? raw.visibleToolbarItems.filter((id): id is string => typeof id === "string")
+          : [...DEFAULT_SETTINGS.visibleToolbarItems];
+        const previousOrder = Array.isArray(raw.toolbarItemOrder) ? raw.toolbarItemOrder : [];
+        for (const id of ["article-landing", "article-style"]) {
+          if (!previousOrder.includes(id) && !visible.includes(id)) visible.push(id);
+        }
+        return visible;
+      })(),
       toolbarItemOrder: (() => {
         const validIds = new Set<string>(TOOLBAR_ITEMS.map(([id]) => id));
         const stored = Array.isArray(raw.toolbarItemOrder)

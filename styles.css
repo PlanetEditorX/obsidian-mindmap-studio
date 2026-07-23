@@ -2625,7 +2625,10 @@
   min-height: calc(100% - 32px);
   margin: 16px auto 48px;
   padding: clamp(28px, 5vw, 64px);
-  background: var(--background-primary);
+  background: var(--mms-article-paper, var(--background-primary));
+  color: var(--mms-article-text, var(--text-normal));
+  font-family: var(--mms-article-font, inherit);
+  font-size: var(--mms-article-font-size, 16px);
   border: 1px solid var(--background-modifier-border);
   border-radius: var(--radius-l);
   box-shadow: 0 10px 32px rgba(0, 0, 0, .08);
@@ -2637,6 +2640,7 @@
   text-align: center;
   border-bottom: 2px solid var(--background-modifier-border);
   outline: none;
+  color: var(--mms-article-heading, inherit);
 }
 
 .mms-article-toc {
@@ -2645,6 +2649,20 @@
   background: var(--background-secondary);
   border: 1px solid var(--background-modifier-border);
   border-radius: var(--radius-m);
+}
+
+.mms-article-page.toc-plain .mms-article-toc {
+  padding-inline: 0;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+
+.mms-article-page.toc-lines .mms-article-toc {
+  background: transparent;
+  border-width: 0 0 0 3px;
+  border-color: var(--mms-article-accent, var(--interactive-accent));
+  border-radius: 0;
 }
 
 .mms-article-toc h2 {
@@ -2669,7 +2687,7 @@
 }
 
 .mms-article-toc a:hover {
-  color: var(--text-accent);
+  color: var(--mms-article-accent, var(--text-accent));
   text-decoration: underline;
 }
 
@@ -2689,11 +2707,12 @@
   gap: 8px;
   margin-top: 1.7em;
   outline: none;
+  color: var(--mms-article-heading, inherit);
 }
 
 .mms-article-number {
   flex: 0 0 auto;
-  color: var(--text-accent);
+  color: var(--mms-article-accent, var(--text-accent));
 }
 
 .mms-article-heading-text {
@@ -2715,7 +2734,14 @@
   padding: 10px 14px;
   color: var(--text-muted);
   background: var(--background-secondary);
-  border-left: 3px solid var(--interactive-accent);
+  border-left: 3px solid var(--mms-article-accent, var(--interactive-accent));
+}
+
+.mms-article-leaf-text,
+.mms-article-paragraph,
+.mms-article-note {
+  font-size: var(--mms-article-font-size, 16px);
+  line-height: var(--mms-article-line-height, 1.85);
 }
 
 .mms-article-image {
@@ -2817,7 +2843,7 @@
 
 /* 1.4.1: sub-map nodes are text links in outline/article modes. */
 .mms-submap-text-link {
-  color: var(--text-accent) !important;
+  color: var(--mms-article-accent, var(--text-accent)) !important;
   text-decoration: underline;
   text-decoration-thickness: 1px;
   text-underline-offset: 3px;

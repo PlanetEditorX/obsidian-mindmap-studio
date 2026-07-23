@@ -13,6 +13,22 @@ export type LayoutMode = "right" | "balanced";
  * DisplayMode 类型定义，用于限制可接受值并让序列化数据保持稳定。
  */
 export type DisplayMode = "mindmap" | "outline" | "article";
+/** Top-level article landing content. */
+export type ArticleLandingMode = "toc" | "map";
+/** Built-in article presentation presets. */
+export type ArticleStylePresetId = "classic" | "book" | "modern" | "minimal";
+/** Per-document article presentation overrides. */
+export interface ArticleStyle {
+  preset: ArticleStylePresetId;
+  fontFamily?: string;
+  textColor?: string;
+  headingColor?: string;
+  accentColor?: string;
+  backgroundColor?: string;
+  tocStyle?: "card" | "plain" | "lines";
+  fontSize?: number;
+  lineHeight?: number;
+}
 /**
  * ThemeMode 类型定义，用于限制可接受值并让序列化数据保持稳定。
  */
@@ -257,6 +273,7 @@ export interface MindMapNode {
 export interface MindMapDocumentView {
   mode?: DisplayMode;
   readOnly?: boolean;
+  articleLandingMode?: ArticleLandingMode;
 }
 
 /**
@@ -270,6 +287,7 @@ export interface MindMapDocument {
   appearance?: MindMapAppearance;
   navigation?: MindMapNavigation;
   view?: MindMapDocumentView;
+  articleStyle?: ArticleStyle;
   root: MindMapNode;
 }
 
@@ -971,7 +989,40 @@ function normalizeDocumentView(input: Partial<MindMapDocumentView> | undefined):
     ? input.mode
     : undefined;
   const readOnly = input.readOnly === true ? true : input.readOnly === false ? false : undefined;
-  return mode !== undefined || readOnly !== undefined ? { mode, readOnly } : undefined;
+  const articleLandingMode = input.articleLandingMode === "map" || input.articleLandingMode === "toc"
+    ? input.articleLandingMode
+    : undefined;
+  return mode !== undefined || readOnly !== undefined || articleLandingMode !== undefined
+    ? { mode, readOnly, articleLandingMode }
+    : undefined;
+}
+
+/**
+ * Normalizes per-document article presentation settings.
+ *
+ * @param input Untrusted serialized style data.
+ * @returns A safe article style, or undefined when none is present.
+ */
+function normalizeArticleStyle(input: Partial<ArticleStyle> | undefined): ArticleStyle | undefined {
+  if (!input) return undefined;
+  const preset: ArticleStylePresetId = input.preset === "book" || input.preset === "modern" || input.preset === "minimal"
+    ? input.preset
+    : "classic";
+  const color = (value: unknown): string | undefined => typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value) ? value : undefined;
+  const tocStyle = input.tocStyle === "plain" || input.tocStyle === "lines" ? input.tocStyle : input.tocStyle === "card" ? "card" : undefined;
+  const fontSize = typeof input.fontSize === "number" ? Math.max(12, Math.min(24, input.fontSize)) : undefined;
+  const lineHeight = typeof input.lineHeight === "number" ? Math.max(1.2, Math.min(2.4, input.lineHeight)) : undefined;
+  return {
+    preset,
+    fontFamily: typeof input.fontFamily === "string" ? input.fontFamily.trim().slice(0, 120) || undefined : undefined,
+    textColor: color(input.textColor),
+    headingColor: color(input.headingColor),
+    accentColor: color(input.accentColor),
+    backgroundColor: color(input.backgroundColor),
+    tocStyle,
+    fontSize,
+    lineHeight
+  };
 }
 
 /**
@@ -992,6 +1043,7 @@ export function normalizeDocument(input: Partial<MindMapDocument> | undefined, f
     appearance: normalizeAppearance(input?.appearance),
     navigation: normalizeNavigation(input?.navigation),
     view: normalizeDocumentView(input?.view),
+    articleStyle: normalizeArticleStyle(input?.articleStyle),
     root: normalizeNode(input?.root, title)
   };
 }
