@@ -1821,7 +1821,7 @@ export class MindMapEditor {
     this.addToolbarButton("fit", "maximize", "适应画布", () => this.fitToView());
     this.addToolbarButton("layout", "git-fork", "切换单侧/双侧布局", () => this.toggleLayout(), true);
     this.addToolbarButton("appearance", "palette", "当前脑图外观", () => this.editAppearance(), true);
-    this.articleLandingButton = this.addToolbarButton("article-landing", "list-tree", "切换目录 / 总导图", () => this.toggleArticleLanding());
+    this.articleLandingButton = this.addToolbarButton("article-landing", "list-tree", "切换目录 / 原始文章", () => this.toggleArticleLanding());
     this.articleStyleButton = this.addToolbarButton("article-style", "paintbrush", "文章样式", () => this.editArticleStyle(), true);
     this.addToolbarSeparator();
     this.addToolbarButton("markdown", "file-text", "查看 Markdown 大纲", () => this.showOutline());
@@ -1944,12 +1944,12 @@ export class MindMapEditor {
     this.articleLandingButton.toggleClass("is-hidden", !hasLandingChoice || !this.options.visibleToolbarItems.includes("article-landing"));
     this.articleStyleButton.toggleClass("is-hidden", !isArticle || !this.options.visibleToolbarItems.includes("article-style"));
     if (hasLandingChoice) {
-      const showingMap = this.document.view?.articleLandingMode === "map";
-      this.articleLandingButton.setAttr("aria-label", showingMap ? "显示目录" : "显示总导图");
-      this.articleLandingButton.setAttr("title", showingMap ? "显示目录" : "显示总导图");
+      const showingArticle = this.document.view?.articleLandingMode === "article";
+      this.articleLandingButton.setAttr("aria-label", showingArticle ? "显示目录" : "显示原始文章");
+      this.articleLandingButton.setAttr("title", showingArticle ? "显示目录" : "显示原始文章");
       this.articleLandingButton.empty();
-      setIcon(this.articleLandingButton, showingMap ? "list-tree" : "network");
-      this.articleLandingButton.toggleClass("is-active", showingMap);
+      setIcon(this.articleLandingButton, showingArticle ? "list-tree" : "file-text");
+      this.articleLandingButton.toggleClass("is-active", showingArticle);
     }
     this.lockButton.empty();
     setIcon(this.lockButton, this.readOnly ? "lock" : "lock-open");
@@ -2347,7 +2347,10 @@ export class MindMapEditor {
     this.makeInlineEditable(title, this.document.root, "文章标题");
     this.addInlineNodeActions(page, this.document.root);
 
-    if (this.options.showArticleToc && this.options.articleTocEntries.length) {
+    const directoryOnly = this.options.showArticleToc
+      && this.options.articleTocEntries.length > 0
+      && this.document.view?.articleLandingMode !== "article";
+    if (directoryOnly) {
       const tocPage = page.createEl("nav", { cls: "mms-article-toc mms-article-toc-page" });
       tocPage.createEl("h2", { text: "目录" });
       const list = tocPage.createEl("ol");
@@ -2420,15 +2423,12 @@ export class MindMapEditor {
     const appearance = this.getAppearance();
     this.applyAppearance(appearance);
     this.updateModeUi();
-    const articleMap = this.currentMode === "article"
-      && this.options.showArticleToc
-      && this.document.view?.articleLandingMode === "map";
-    this.viewportEl.toggleClass("is-hidden", this.currentMode !== "mindmap" && !articleMap);
+    this.viewportEl.toggleClass("is-hidden", this.currentMode !== "mindmap");
     this.outlineEl.toggleClass("is-hidden", this.currentMode !== "outline");
-    this.articleEl.toggleClass("is-hidden", this.currentMode !== "article" || articleMap);
+    this.articleEl.toggleClass("is-hidden", this.currentMode !== "article");
     this.rootEl.dataset.displayMode = this.currentMode;
     if (this.currentMode === "outline") this.renderOutline();
-    else if (this.currentMode === "article" && !articleMap) this.renderArticle();
+    else if (this.currentMode === "article") this.renderArticle();
     else this.renderMindMap();
   }
 
@@ -3278,15 +3278,14 @@ export class MindMapEditor {
   }
 
   /**
-   * Switches the top-level article between its directory and interactive map.
+   * Switches the top-level article between its generated directory and original article content.
    */
   private toggleArticleLanding(): void {
     if (this.currentMode !== "article" || !this.options.showArticleToc) return;
     const current = this.document.view?.articleLandingMode ?? "toc";
     this.mutate(() => {
-      this.document.view = { ...(this.document.view ?? {}), articleLandingMode: current === "toc" ? "map" : "toc" };
+      this.document.view = { ...(this.document.view ?? {}), articleLandingMode: current === "toc" ? "article" : "toc" };
     });
-    if (current === "toc") window.setTimeout(() => this.fitToView(), 20);
   }
 
   /**

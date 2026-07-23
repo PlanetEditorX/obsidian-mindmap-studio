@@ -30,7 +30,7 @@ export const TOOLBAR_ITEMS = [
   ["code", "代码"], ["image", "粘贴图片"], ["submap", "子导图"],
   ["undo", "撤销"], ["redo", "重做"], ["zoom-in", "放大"], ["zoom-out", "缩小"],
   ["fit", "适应画布"], ["layout", "切换布局"], ["appearance", "脑图外观"],
-  ["article-landing", "目录/总导图"], ["article-style", "文章样式"],
+  ["article-landing", "目录/原始文章"], ["article-style", "文章样式"],
   ["markdown", "Markdown 大纲"], ["json", "JSON 导入/导出"], ["export-svg", "导出 SVG"]
 ] as const;
 

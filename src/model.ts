@@ -14,7 +14,7 @@ export type LayoutMode = "right" | "balanced";
  */
 export type DisplayMode = "mindmap" | "outline" | "article";
 /** Top-level article landing content. */
-export type ArticleLandingMode = "toc" | "map";
+export type ArticleLandingMode = "toc" | "article";
 /** Built-in article presentation presets. */
 export type ArticleStylePresetId = "classic" | "book" | "modern" | "minimal";
 /** Per-document article presentation overrides. */
@@ -989,9 +989,11 @@ function normalizeDocumentView(input: Partial<MindMapDocumentView> | undefined):
     ? input.mode
     : undefined;
   const readOnly = input.readOnly === true ? true : input.readOnly === false ? false : undefined;
-  const articleLandingMode = input.articleLandingMode === "map" || input.articleLandingMode === "toc"
-    ? input.articleLandingMode
-    : undefined;
+  const articleLandingMode: ArticleLandingMode | undefined = input.articleLandingMode === "toc"
+    ? "toc"
+    : input.articleLandingMode === "article" || (input.articleLandingMode as string | undefined) === "map"
+      ? "article"
+      : undefined;
   return mode !== undefined || readOnly !== undefined || articleLandingMode !== undefined
     ? { mode, readOnly, articleLandingMode }
     : undefined;

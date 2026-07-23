@@ -116,6 +116,8 @@ export const setIcon = () => {};
   assert.equal(reopened.articleStyle?.tocStyle, "lines");
   assert.equal(reopened.articleStyle?.fontSize, 17);
   assert.equal(reopened.root.children.at(-1)?.text, "保存后仍可编辑");
+  const legacyArticleLanding = model.normalizeDocument({ view: { articleLandingMode: "map" } }, "兼容测试");
+  assert.equal(legacyArticleLanding.view?.articleLandingMode, "article", "the short-lived map state must migrate to original article content");
 
   const reorderRoot = model.normalizeDocument({
     title: "同级拖动排序",
