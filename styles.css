@@ -1430,6 +1430,18 @@
   transform: translate(1px, -2px);
 }
 
+.mmc-node.is-submap-node:hover .mmc-node-text.is-submap-link,
+.mmc-node.is-submap-node:focus-visible .mmc-node-text.is-submap-link {
+  text-decoration-line: underline;
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 3px;
+}
+
+.mmc-node.is-submap-node.task-done:hover .mmc-node-text.is-submap-link,
+.mmc-node.is-submap-node.task-done:focus-visible .mmc-node-text.is-submap-link {
+  text-decoration-line: line-through underline;
+}
+
 .mmc-submap-corner-link {
   position: absolute;
   top: 7px;
