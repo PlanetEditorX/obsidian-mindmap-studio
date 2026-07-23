@@ -12,7 +12,7 @@ export type LayoutMode = "right" | "balanced";
 /**
  * DisplayMode 类型定义，用于限制可接受值并让序列化数据保持稳定。
  */
-export type DisplayMode = "mindmap" | "outline" | "article";
+export type DisplayMode = "mindmap" | "outline" | "article" | "reading";
 /** Top-level article landing content. */
 export type ArticleLandingMode = "toc" | "article";
 /** Built-in article presentation presets. */

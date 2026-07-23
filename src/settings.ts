@@ -166,6 +166,8 @@ export interface MindMapStudioSettings {
   globalSearchMaxResults: number;
   visibleModes: DisplayMode[];
   defaultViewMode: DisplayMode;
+  readingProgress: Record<string, number>;
+  readingModeInitialized: boolean;
   articleTocMaxDepth: number;
   nodeEditorPosition: "center" | "right";
   richTextBoldShortcut: string;
@@ -225,9 +227,11 @@ export const DEFAULT_SETTINGS: MindMapStudioSettings = {
   imageFailoverTimeoutSeconds: 8,
   imageFailoverUseLocalFallback: true,
   globalSearchMaxResults: 100,
-  visibleModes: ["mindmap", "outline", "article"],
+  visibleModes: ["mindmap", "outline", "article", "reading"],
   defaultViewMode: "mindmap"
   ,
+  readingProgress: {},
+  readingModeInitialized: true,
   articleTocMaxDepth: 3,
   nodeEditorPosition: "center",
   richTextBoldShortcut: "Ctrl+B",
@@ -382,7 +386,8 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
     const modeOptions: Array<{ id: DisplayMode; name: string; description: string }> = [
       { id: "mindmap", name: "导图模式", description: "默认的可视化思维导图画布。" },
       { id: "outline", name: "大纲模式", description: "按照节点层级显示可编辑大纲。" },
-      { id: "article", name: "文章模式", description: "生成目录和章节编号的文章视图。" }
+      { id: "article", name: "文章模式", description: "生成目录和章节编号的文章视图。" },
+      { id: "reading", name: "通读模式", description: "合并父导图、子导图和孙导图，像一本书一样连续阅读。" }
     ];
     for (const mode of modeOptions) {
       const label = modeGrid.createEl("label", { cls: "mms-mode-setting-card" });
@@ -413,7 +418,7 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
       .setName("当前全局显示模式")
       .setDesc("这里与工具栏模式按钮同步。选择后，之后打开的父导图和所有子导图都会继续使用该模式。")
       .addDropdown((dropdown) => {
-        const labels: Record<DisplayMode, string> = { mindmap: "导图模式", outline: "大纲模式", article: "文章模式" };
+        const labels: Record<DisplayMode, string> = { mindmap: "导图模式", outline: "大纲模式", article: "文章模式", reading: "通读模式" };
         for (const mode of this.plugin.settings.visibleModes) dropdown.addOption(mode, labels[mode]);
         dropdown.setValue(this.plugin.settings.visibleModes.includes(this.plugin.settings.defaultViewMode)
           ? this.plugin.settings.defaultViewMode

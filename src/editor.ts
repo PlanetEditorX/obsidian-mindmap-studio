@@ -67,7 +67,7 @@ import { buildBranchColorMap, computeLayout, documentToSvg, edgePath, edgeWidthF
 import { CodeEditModal, TableEditModal } from "./content-modals";
 import { TOOLBAR_ITEMS, type ImageHostChoice, type ImageHostUploadBatch } from "./settings";
 import { appearanceFromThemePreset, MINDMAP_THEME_PRESETS } from "./themes";
-import { buildArticleNodeInfo, DISPLAY_MODE_ICONS, DISPLAY_MODE_LABELS, type ArticlePageNavigation, type ArticleTocEntry } from "./modes";
+import { buildArticleNodeInfo, DISPLAY_MODE_ICONS, DISPLAY_MODE_LABELS, type ArticlePageNavigation, type ArticleTocEntry, type ReadingSection } from "./modes";
 import { documentToHtml, xmindToDocument } from "./import-export";
 
 /**
@@ -94,6 +94,7 @@ export interface MindMapEditorCallbacks {
   onSearchMapFamily: () => void;
   onGlobalSearch: () => void;
   onDisplayModeChange: (mode: DisplayMode) => void | Promise<void>;
+  onReadingProgressChange: (path: string, progress: number) => void | Promise<void>;
   onRenderCode: (block: MindMapCodeBlock, container: HTMLElement) => void | Promise<void>;
 }
 
@@ -116,6 +117,8 @@ export interface MindMapEditorOptions {
   articleTocMaxDepth: number;
   showArticleToc: boolean;
   articleNavigation?: ArticlePageNavigation;
+  readingSections: ReadingSection[];
+  readingProgress: number;
   nodeEditorPosition: "center" | "right";
   richTextShortcuts: {
     bold: string;
@@ -1720,6 +1723,7 @@ export class MindMapEditor {
   private readonly imageLoadTimers = new Set<number>();
   private inlineEditingId: string | null = null;
   private articleNavigationIndex: number | null = null;
+  private readingProgressTimer: number | null = null;
 
   /**
    * 创建 MindMapEditor 实例，保存依赖和初始状态；实际 DOM 构建通常在 onOpen() 或后续渲染流程中完成。
@@ -1737,7 +1741,7 @@ export class MindMapEditor {
     this.options = options;
     this.document = cloneDocument(document);
     this.currentMode = this.resolveMode(options.defaultViewMode);
-    this.readOnly = this.currentMode === "article" || this.document.view?.readOnly === true;
+    this.readOnly = this.currentMode === "article" || this.currentMode === "reading" || this.document.view?.readOnly === true;
     this.selectedId = this.document.root.id;
     const initialAppearance = this.getAppearance();
     this.layout = computeLayout(this.document.root, this.document.layout, initialAppearance.fontSize ?? 14, initialAppearance.nodeVisualStyle ?? "card", initialAppearance);
@@ -1751,6 +1755,7 @@ export class MindMapEditor {
    */
   destroy(): void {
     this.clearImageLoadTimers();
+    if (this.readingProgressTimer !== null) window.clearTimeout(this.readingProgressTimer);
     this.cleanupCallbacks.forEach((callback) => callback());
     this.cleanupCallbacks = [];
     this.resizeObserver?.disconnect();
@@ -1767,7 +1772,7 @@ export class MindMapEditor {
   setDocument(document: MindMapDocument, resetHistory = true): void {
     this.document = cloneDocument(document);
     this.currentMode = this.resolveMode(this.options.defaultViewMode);
-    this.readOnly = this.currentMode === "article" || this.document.view?.readOnly === true;
+    this.readOnly = this.currentMode === "article" || this.currentMode === "reading" || this.document.view?.readOnly === true;
     this.selectedId = this.document.root.id;
     if (resetHistory) {
       this.history = [];
@@ -1794,9 +1799,9 @@ export class MindMapEditor {
     if (resolved !== this.currentMode) {
       const previousMode = this.currentMode;
       this.currentMode = resolved;
-      this.readOnly = resolved === "article"
+      this.readOnly = resolved === "article" || resolved === "reading"
         ? true
-        : previousMode === "article"
+          : previousMode === "article" || previousMode === "reading"
           ? this.document.view?.readOnly === true
           : this.readOnly;
     }
@@ -1823,9 +1828,9 @@ export class MindMapEditor {
     if (!this.options.visibleModes.includes(mode)) return;
     const previousMode = this.currentMode;
     this.currentMode = mode;
-    if (mode === "article" && previousMode !== "article") {
+    if ((mode === "article" || mode === "reading") && mode !== previousMode) {
       this.readOnly = true;
-    } else if (previousMode === "article" && mode !== "article") {
+    } else if ((previousMode === "article" || previousMode === "reading") && mode !== "article" && mode !== "reading") {
       this.readOnly = this.document.view?.readOnly === true;
     }
     this.render();
@@ -1847,7 +1852,7 @@ export class MindMapEditor {
    */
   toggleReadOnly(): void {
     this.readOnly = !this.readOnly;
-    if (this.currentMode !== "article") this.persistReadOnlyState();
+    if (this.currentMode !== "article" && this.currentMode !== "reading") this.persistReadOnlyState();
     this.render();
     new Notice(this.readOnly ? "已进入只读模式" : "已进入编辑模式");
   }
@@ -2656,10 +2661,11 @@ export class MindMapEditor {
     this.updateModeUi();
     this.viewportEl.toggleClass("is-hidden", this.currentMode !== "mindmap");
     this.outlineEl.toggleClass("is-hidden", this.currentMode !== "outline");
-    this.articleEl.toggleClass("is-hidden", this.currentMode !== "article");
+    this.articleEl.toggleClass("is-hidden", this.currentMode !== "article" && this.currentMode !== "reading");
     this.rootEl.dataset.displayMode = this.currentMode;
     if (this.currentMode === "outline") this.renderOutline();
     else if (this.currentMode === "article") this.renderArticle();
+    else if (this.currentMode === "reading") this.renderReading();
     else this.renderMindMap();
   }
 
@@ -3688,6 +3694,74 @@ export class MindMapEditor {
       console.error("MindMap Studio create submap failed", error);
       new Notice("创建子导图失败");
     }
+  }
+
+  /**
+   * Renders every map in the current parent/child family as one continuous,
+   * read-only book with an integrated directory and persisted progress.
+   */
+  private renderReading(): void {
+    this.articleEl.empty();
+    const sections = this.options.readingSections.length
+      ? this.options.readingSections
+      : [{ filePath: this.options.articleNavigation?.homePath ?? "", document: this.document, baseDepth: 0 }];
+    const style = resolveArticleStyle(this.document.articleStyle);
+    const page = this.articleEl.createDiv({ cls: `mms-article-page mms-reading-page article-${style.preset}` });
+    page.createEl("h1", { cls: "mms-article-document-title", text: nodePrimaryText(sections[0]!.document.root) || sections[0]!.document.title });
+    const progress = page.createDiv({ cls: "mms-reading-progress" });
+    const progressBar = progress.createDiv({ cls: "mms-reading-progress-bar" });
+    progressBar.style.width = `${Math.round(this.options.readingProgress * 100)}%`;
+    progress.createSpan({ text: `阅读进度 ${Math.round(this.options.readingProgress * 100)}%` });
+
+    const toc = page.createEl("nav", { cls: "mms-article-toc mms-reading-toc" });
+    toc.createEl("h2", { text: "全书目录" });
+    const tocList = toc.createEl("ol");
+    for (const entry of this.options.articleTocEntries.filter((item) => item.depth <= this.options.articleTocMaxDepth)) {
+      const fileKey = entry.filePath.replace(/[^a-zA-Z0-9_-]/g, "-");
+      const anchor = entry.nodeId
+        ? `reading-${fileKey}-${entry.nodeId.replace(/[^a-zA-Z0-9_-]/g, "-")}`
+        : `reading-file-${fileKey}`;
+      const item = tocList.createEl("li");
+      item.addClass(`depth-${Math.min(entry.depth, 8)}`);
+      const link = item.createEl("a", { text: entry.displayTitle || entry.title, href: `#${anchor}` });
+      link.addEventListener("click", (event) => {
+        event.preventDefault();
+        page.querySelector<HTMLElement>(`#${CSS.escape(anchor)}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    }
+
+    for (const section of sections) {
+      const anchor = `reading-file-${section.filePath.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
+      const chapter = page.createEl("article", { cls: "mms-reading-book-section" });
+      chapter.id = anchor;
+      chapter.createEl("h2", { cls: "mms-reading-map-title", text: nodePrimaryText(section.document.root) || section.document.title });
+      for (const info of buildArticleNodeInfo(section.document.root, section.baseDepth)) {
+        const nodeSection = chapter.createEl("section", { cls: `mms-article-node depth-${Math.min(info.depth, 8)}` });
+        nodeSection.id = `reading-${section.filePath.replace(/[^a-zA-Z0-9_-]/g, "-")}-${info.node.id.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
+        if (info.isHeading) {
+          const level = Math.min(6, info.depth + 1);
+          nodeSection.createEl(`h${level}` as keyof HTMLElementTagNameMap, { text: info.displayTitle || info.title });
+        }
+        this.renderArticleContent(nodeSection, info.node, false);
+      }
+    }
+
+    window.setTimeout(() => {
+      const maximum = Math.max(0, this.articleEl.scrollHeight - this.articleEl.clientHeight);
+      this.articleEl.scrollTop = maximum * this.options.readingProgress;
+    }, 20);
+    this.articleEl.onscroll = () => {
+      const maximum = Math.max(1, this.articleEl.scrollHeight - this.articleEl.clientHeight);
+      const next = Math.max(0, Math.min(1, this.articleEl.scrollTop / maximum));
+      progressBar.style.width = `${Math.round(next * 100)}%`;
+      progress.lastElementChild?.replaceChildren(`阅读进度 ${Math.round(next * 100)}%`);
+      if (this.readingProgressTimer !== null) window.clearTimeout(this.readingProgressTimer);
+      this.readingProgressTimer = window.setTimeout(() => {
+        this.readingProgressTimer = null;
+        const homePath = this.options.articleNavigation?.homePath ?? sections[0]?.filePath ?? "";
+        if (homePath) void this.callbacks.onReadingProgressChange(homePath, next);
+      }, 500);
+    };
   }
 
   /**

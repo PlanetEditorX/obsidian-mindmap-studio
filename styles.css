@@ -2807,6 +2807,56 @@
   border-radius: var(--radius-m);
 }
 
+.mms-reading-page {
+  position: relative;
+  padding-bottom: 120px;
+}
+
+.mms-reading-progress {
+  position: sticky;
+  z-index: 12;
+  top: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-height: 32px;
+  overflow: hidden;
+  padding: 0 12px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--background-primary) 92%, transparent);
+  backdrop-filter: blur(10px);
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.mms-reading-progress-bar {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: color-mix(in srgb, var(--interactive-accent) 18%, transparent);
+  transition: width 160ms ease;
+}
+
+.mms-reading-progress span {
+  position: relative;
+}
+
+.mms-reading-toc {
+  margin-block: 28px 52px;
+}
+
+.mms-reading-book-section {
+  padding-top: 28px;
+  margin-top: 48px;
+  border-top: 1px solid var(--background-modifier-border);
+}
+
+.mms-reading-map-title {
+  margin-bottom: 28px;
+  color: var(--mms-article-heading, var(--text-normal));
+  font-size: 1.7em;
+}
+
 .mms-article-page.toc-plain .mms-article-toc {
   padding-inline: 0;
   background: transparent;

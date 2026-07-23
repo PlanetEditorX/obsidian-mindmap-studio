@@ -46,7 +46,7 @@ import {
 import { renderStaticMindMap, renderStaticSource } from "./static-render";
 import { MindMapStudioView, VIEW_TYPE_MINDMAP_STUDIO } from "./view";
 import { GlobalMindMapSearchModal, MindMapSearchIndex, type MindMapSearchResult } from "./global-search";
-import { articleNumberLabel, isArticleHeading, normalizeVisibleModes, type ArticlePageNavigation, type ArticleTocEntry } from "./modes";
+import { articleNumberLabel, isArticleHeading, normalizeVisibleModes, type ArticlePageNavigation, type ArticleTocEntry, type ReadingSection } from "./modes";
 import type { DisplayMode } from "./model";
 
 export const MINDMAP_EXTENSION = "mindmap";
@@ -378,7 +378,12 @@ export default class MindMapStudioPlugin extends Plugin {
       globalSearchMaxResults: typeof raw.globalSearchMaxResults === "number"
         ? Math.max(20, Math.min(500, Math.round(raw.globalSearchMaxResults)))
         : DEFAULT_SETTINGS.globalSearchMaxResults,
-      visibleModes: normalizeVisibleModes(raw.visibleModes),
+      visibleModes: (() => {
+        const modes = normalizeVisibleModes(raw.visibleModes);
+        if (raw.readingModeInitialized !== true && !modes.includes("reading")) modes.push("reading");
+        return modes;
+      })(),
+      readingModeInitialized: true,
       visibleToolbarItems: (() => {
         const visible = Array.isArray(raw.visibleToolbarItems)
           ? raw.visibleToolbarItems.filter((id): id is string => typeof id === "string")
@@ -396,9 +401,12 @@ export default class MindMapStudioPlugin extends Plugin {
           : [];
         return [...new Set([...stored, ...DEFAULT_SETTINGS.toolbarItemOrder])];
       })(),
-      defaultViewMode: raw.defaultViewMode === "outline" || raw.defaultViewMode === "article" || raw.defaultViewMode === "mindmap"
+      defaultViewMode: raw.defaultViewMode === "outline" || raw.defaultViewMode === "article" || raw.defaultViewMode === "mindmap" || raw.defaultViewMode === "reading"
         ? raw.defaultViewMode
         : DEFAULT_SETTINGS.defaultViewMode,
+      readingProgress: typeof raw.readingProgress === "object" && raw.readingProgress
+        ? Object.fromEntries(Object.entries(raw.readingProgress).filter((entry): entry is [string, number] => typeof entry[1] === "number").map(([path, value]) => [path, Math.max(0, Math.min(1, value))]))
+        : {},
       articleTocMaxDepth: typeof raw.articleTocMaxDepth === "number"
         ? Math.max(1, Math.min(8, Math.round(raw.articleTocMaxDepth)))
         : DEFAULT_SETTINGS.articleTocMaxDepth,
@@ -583,7 +591,7 @@ export default class MindMapStudioPlugin extends Plugin {
    * @returns 计算得到的数值结果。
    * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
    */
-  async buildArticleContext(file: TFile, document: MindMapDocument): Promise<{ baseDepth: number; tocEntries: ArticleTocEntry[]; showToc: boolean; navigation?: ArticlePageNavigation }> {
+  async buildArticleContext(file: TFile, document: MindMapDocument): Promise<{ baseDepth: number; tocEntries: ArticleTocEntry[]; showToc: boolean; navigation?: ArticlePageNavigation; readingSections: ReadingSection[] }> {
     const baseDepth = await this.computeArticleBaseDepth(file, document);
     let topFile = file;
     let topDocument = document;
@@ -598,6 +606,7 @@ export default class MindMapStudioPlugin extends Plugin {
     const isTopLevel = topFile.path === file.path;
 
     const tocEntries: ArticleTocEntry[] = [];
+    const readingSections: ReadingSection[] = [{ filePath: topFile.path, document: topDocument, baseDepth: 0 }];
     const visitedFiles = new Set<string>([topFile.path]);
     let hasSubmaps = false;
     /**
@@ -645,6 +654,7 @@ export default class MindMapStudioPlugin extends Plugin {
             visitedFiles.add(childFile.path);
             try {
               const childDocument = await this.readMindMapDocument(childFile);
+              readingSections.push({ filePath: childFile.path, document: childDocument, baseDepth: depth });
               descendants.push(...childDocument.root.children.map((child) => ({
                 node: child,
                 file: childFile,
@@ -680,9 +690,10 @@ export default class MindMapStudioPlugin extends Plugin {
       : undefined;
     return {
       baseDepth,
-      tocEntries: isTopLevel ? tocEntries : [],
+      tocEntries,
       showToc: isTopLevel && hasSubmaps && tocEntries.length > 0,
       navigation
+      ,readingSections
     };
   }
 

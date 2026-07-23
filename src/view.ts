@@ -10,7 +10,7 @@ import type MindMapStudioPlugin from "./main";
 import { MindMapEditor } from "./editor";
 import { parseDocument, serializeDocument, type DisplayMode, type MindMapDocument } from "./model";
 import { settingsToAppearance } from "./settings";
-import type { ArticlePageNavigation, ArticleTocEntry } from "./modes";
+import type { ArticlePageNavigation, ArticleTocEntry, ReadingSection } from "./modes";
 
 export const VIEW_TYPE_MINDMAP_STUDIO = "mindmap-studio-view";
 
@@ -27,6 +27,7 @@ export class MindMapStudioView extends TextFileView {
   private articleTocEntries: ArticleTocEntry[] = [];
   private showArticleToc = false;
   private articleNavigation: ArticlePageNavigation | undefined;
+  private readingSections: ReadingSection[] = [];
   private articleContextToken = 0;
   private articleContextTimer: number | null = null;
 
@@ -89,6 +90,7 @@ export class MindMapStudioView extends TextFileView {
     this.articleTocEntries = [];
     this.showArticleToc = false;
     this.articleNavigation = undefined;
+    this.readingSections = [];
     this.applyViewClasses();
 
     if (!this.editor || clear) {
@@ -136,6 +138,10 @@ export class MindMapStudioView extends TextFileView {
         onSearchMapFamily: () => void this.openMapFamilySearch(),
         onGlobalSearch: () => this.plugin.openGlobalSearch(),
         onDisplayModeChange: (mode) => this.plugin.setGlobalDisplayMode(mode),
+        onReadingProgressChange: async (path, progress) => {
+          this.plugin.settings.readingProgress[path] = progress;
+          await this.plugin.saveSettings();
+        },
         onRenderCode: async (block, container) => {
           const longestFence = Math.max(2, ...Array.from(block.code.matchAll(/`+/g), (match) => match[0].length));
           const fence = "`".repeat(longestFence + 1);
@@ -282,6 +288,8 @@ export class MindMapStudioView extends TextFileView {
       articleTocMaxDepth: this.plugin.settings.articleTocMaxDepth,
       showArticleToc: this.showArticleToc,
       articleNavigation: this.articleNavigation
+      ,readingSections: this.readingSections
+      ,readingProgress: this.articleNavigation ? (this.plugin.settings.readingProgress[this.articleNavigation.homePath] ?? 0) : 0
     };
   }
 
@@ -313,6 +321,7 @@ export class MindMapStudioView extends TextFileView {
       this.articleTocEntries = context.tocEntries;
       this.showArticleToc = context.showToc;
       this.articleNavigation = context.navigation;
+      this.readingSections = context.readingSections;
       this.editor?.setOptions(this.getEditorOptions());
     } catch (error) {
       console.warn("MindMap Studio article context refresh failed", error);

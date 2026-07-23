@@ -221,7 +221,7 @@ export const setIcon = () => {};
   }, 1);
   assert.equal(childMapInfo[0]?.label, "第一节", "a child map must continue numbering from its parent article depth");
   assert.deepEqual(modes.normalizeVisibleModes(["article", "mindmap", "article"]), ["article", "mindmap"]);
-  assert.deepEqual(modes.normalizeVisibleModes([]), ["mindmap", "outline", "article"]);
+  assert.deepEqual(modes.normalizeVisibleModes([]), ["mindmap", "outline", "article", "reading"]);
 
   const styled = model.normalizeDocument({
     title: "样式",
@@ -582,9 +582,11 @@ export const setIcon = () => {};
   assert.match(editorSource, /toggleReadOnly/);
   assert.match(editorSource, /renderOutline/);
   assert.match(editorSource, /renderArticle/);
-  assert.match(editorSource, /currentMode === "article" \|\| this\.document\.view\?\.readOnly === true/, "article mode should initialize as read-only");
-  assert.match(editorSource, /mode === "article" && previousMode !== "article"[\s\S]*this\.readOnly = true/, "entering article mode should reset to reading mode");
-  assert.match(editorSource, /currentMode !== "article"\) this\.persistReadOnlyState/, "temporary article editing must not overwrite the document read-only preference");
+  assert.match(editorSource, /currentMode === "article" \|\| this\.currentMode === "reading" \|\| this\.document\.view\?\.readOnly === true/, "article and reading modes should initialize as read-only");
+  assert.match(editorSource, /\(mode === "article" \|\| mode === "reading"\) && mode !== previousMode[\s\S]*this\.readOnly = true/, "entering article or reading mode should reset to reading state");
+  assert.match(editorSource, /currentMode !== "article" && this\.currentMode !== "reading"\) this\.persistReadOnlyState/, "temporary reading modes must not overwrite the document read-only preference");
+  assert.match(editorSource, /private renderReading\(\)/);
+  assert.match(editorSource, /onReadingProgressChange/);
   assert.match(editorSource, /selection && !selection\.isCollapsed && selection\.toString\(\)/, "read-only copy should preserve native selected-text copying");
   assert.match(editorSource, /createElementNS\("http:\/\/www\.w3\.org\/2000\/svg", "svg"\)/, "theme cards should use stable SVG previews");
   assert.match(editorSource, /删除子导图 \/ 移除链接/);

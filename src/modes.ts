@@ -5,20 +5,29 @@
  * 导图、大纲和文章模式读取同一节点树；本模块负责中文序号、标题判定、子导图层级续接与可见模式容错。
  */
 
-import type { DisplayMode, MindMapNode } from "./model";
+import type { DisplayMode, MindMapDocument, MindMapNode } from "./model";
 import { nodePrimaryText } from "./model";
 
 export const DISPLAY_MODE_LABELS: Record<DisplayMode, string> = {
   mindmap: "导图",
   outline: "大纲",
   article: "文章"
+  ,reading: "通读"
 };
 
 export const DISPLAY_MODE_ICONS: Record<DisplayMode, string> = {
   mindmap: "brain-circuit",
   outline: "list-tree",
   article: "notebook-text"
+  ,reading: "book-open-text"
 };
+
+/** One physical map merged into the continuous reading view. */
+export interface ReadingSection {
+  filePath: string;
+  document: MindMapDocument;
+  baseDepth: number;
+}
 
 const CHINESE_DIGITS = ["零", "一", "二", "三", "四", "五", "六", "七", "八", "九"];
 
@@ -149,7 +158,7 @@ export function normalizeVisibleModes(modes: unknown): DisplayMode[] {
   const raw = Array.isArray(modes) ? modes : [];
   const result: DisplayMode[] = [];
   for (const value of raw) {
-    if ((value === "mindmap" || value === "outline" || value === "article") && !result.includes(value)) result.push(value);
+    if ((value === "mindmap" || value === "outline" || value === "article" || value === "reading") && !result.includes(value)) result.push(value);
   }
-  return result.length ? result : ["mindmap", "outline", "article"];
+  return result.length ? result : ["mindmap", "outline", "article", "reading"];
 }
