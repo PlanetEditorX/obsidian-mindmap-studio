@@ -65,89 +65,13 @@ import {
 } from "./model";
 import { buildBranchColorMap, computeLayout, documentToSvg, edgePath, edgeWidthForDepth, roundedElbowEdgePath, type LayoutResult } from "./layout";
 import { CodeEditModal, TableEditModal } from "./content-modals";
-import { TOOLBAR_ITEMS, type ImageHostChoice, type ImageHostUploadBatch } from "./settings";
+import { TOOLBAR_ITEMS, type ImageHostChoice } from "./settings";
 import { appearanceFromThemePreset, MINDMAP_THEME_PRESETS } from "./themes";
 import { buildArticleNodeInfo, DISPLAY_MODE_ICONS, DISPLAY_MODE_LABELS, type ArticlePageNavigation, type ArticleTocEntry, type ReadingSection } from "./modes";
 import { xmindToDocument } from "./import-export";
-
-/**
- * MindMapEditorCallbacks 的结构化数据约定。字段会在模块边界传递，用于保持类型安全和版本兼容。
- */
-export interface MindMapEditorCallbacks {
-  onChange: (document: MindMapDocument) => void;
-  onOpenLink: (link: string) => void | Promise<void>;
-  onExportSvg: (svg: string) => void | Promise<void>;
-  onExportMarkdown: (markdown: string) => void | Promise<void>;
-  onExportJson: (json: string) => void | Promise<void>;
-  onExportDocument: (format: "html" | "doc" | "pdf" | "md") => void | Promise<void>;
-  resolveImage: (source: string) => string | null;
-  onSavePastedImage: (blob: Blob, suggestedName: string) => Promise<string>;
-  getImageHosts: () => ImageHostChoice[];
-  getDefaultUploadHostIds: () => string[];
-  onUploadImage: (blob: Blob, suggestedName: string, hostIds: string[]) => Promise<ImageHostUploadBatch>;
-  onReadImageSource: (source: string) => Promise<{ blob: Blob; suggestedName: string } | null>;
-  onScheduleAutoUpload: (nodeId: string, blockId: string, localPath: string, suggestedName: string) => boolean;
-  onCreateSubmap: (node: MindMapNode) => Promise<MindMapSubmap>;
-  onDeleteSubmap: (submap: MindMapSubmap) => Promise<boolean>;
-  onOpenMindMap: (path: string, focusNodeId?: string) => void | Promise<void>;
-  onOpenArticleDirectory: (path: string) => void | Promise<void>;
-  onSearchMapFamily: () => void;
-  onGlobalSearch: () => void;
-  onDisplayModeChange: (mode: DisplayMode) => void | Promise<void>;
-  onReadingProgressChange: (path: string, progress: number) => void | Promise<void>;
-  onRenderCode: (block: MindMapCodeBlock, container: HTMLElement) => void | Promise<void>;
-}
-
-/**
- * MindMapEditorOptions 的结构化数据约定。字段会在模块边界传递，用于保持类型安全和版本兼容。
- */
-export interface MindMapEditorOptions {
-  defaultNodeShape: NodeShape;
-  defaultAppearance: MindMapAppearance;
-  showTaskProgress: boolean;
-  autoFitOnOpen: boolean;
-  historyLimit: number;
-  imageFailoverEnabled: boolean;
-  imageFailoverTimeoutSeconds: number;
-  imageFailoverUseLocalFallback: boolean;
-  visibleModes: DisplayMode[];
-  defaultViewMode: DisplayMode;
-  articleBaseDepth: number;
-  articleTocEntries: ArticleTocEntry[];
-  articleTocMaxDepth: number;
-  showArticleToc: boolean;
-  articleNavigation?: ArticlePageNavigation;
-  readingSections: ReadingSection[];
-  readingProgress: number;
-  readingProgressPosition: "top" | "bottom" | "left" | "right";
-  nodeEditorPosition: "center" | "right";
-  richTextShortcuts: {
-    bold: string;
-    italic: string;
-    underline: string;
-    color: string;
-  };
-  visibleToolbarItems: string[];
-  toolbarItemOrder: string[];
-}
-
-const ARTICLE_STYLE_PRESETS: Record<ArticleStylePresetId, ArticleStyle> = {
-  classic: { preset: "classic", tocStyle: "card", fontSize: 16, lineHeight: 1.85 },
-  book: { preset: "book", fontFamily: "Georgia, 'Noto Serif SC', serif", textColor: "#332b24", headingColor: "#241c16", accentColor: "#8b5e3c", backgroundColor: "#fffdf7", tocStyle: "lines", fontSize: 17, lineHeight: 2 },
-  modern: { preset: "modern", fontFamily: "Inter, 'Microsoft YaHei', sans-serif", textColor: "#243247", headingColor: "#12213a", accentColor: "#2563eb", backgroundColor: "#f8fafc", tocStyle: "card", fontSize: 16, lineHeight: 1.75 },
-  minimal: { preset: "minimal", fontFamily: "Arial, 'Microsoft YaHei', sans-serif", textColor: "#27272a", headingColor: "#18181b", accentColor: "#52525b", backgroundColor: "#ffffff", tocStyle: "plain", fontSize: 15, lineHeight: 1.8 }
-};
-
-/**
- * Resolves a preset and its per-document overrides into one article style.
- *
- * @param style Stored article style.
- * @returns Complete style values for rendering.
- */
-function resolveArticleStyle(style: ArticleStyle | undefined): ArticleStyle {
-  const preset = style?.preset ?? "classic";
-  return { ...ARTICLE_STYLE_PRESETS[preset], ...(style ?? {}), preset };
-}
+import { ARTICLE_STYLE_PRESETS, resolveArticleStyle } from "./article-style";
+import type { MindMapEditorCallbacks, MindMapEditorOptions } from "./editor-types";
+export type { MindMapEditorCallbacks, MindMapEditorOptions } from "./editor-types";
 
 /**
  * NodeEditValues 的结构化数据约定。字段会在模块边界传递，用于保持类型安全和版本兼容。
