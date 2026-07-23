@@ -2904,11 +2904,14 @@ export class MindMapEditor {
         const position = this.dropPositionForEvent(event, nodeEl, node.id);
         this.dragDropPosition = position;
         this.clearDropIndicators();
-        nodeEl.addClasses(["is-drop-target", `is-drop-${position}`]);
+        const indicator = position === "child" && this.isRightChildDrop(event, nodeEl)
+          ? "is-drop-child-right"
+          : `is-drop-${position}`;
+        nodeEl.addClasses(["is-drop-target", indicator]);
       });
       nodeEl.addEventListener("dragleave", (event) => {
         if (event.relatedTarget instanceof Node && nodeEl.contains(event.relatedTarget)) return;
-        nodeEl.removeClasses(["is-drop-target", "is-drop-before", "is-drop-child", "is-drop-after"]);
+        nodeEl.removeClasses(["is-drop-target", "is-drop-before", "is-drop-child", "is-drop-child-right", "is-drop-after"]);
       });
       nodeEl.addEventListener("drop", (event) => {
         event.preventDefault();
@@ -3955,26 +3958,40 @@ export class MindMapEditor {
   }
 
   /**
-   * 根据指针在目标节点垂直方向的位置判断拖放意图。根节点仅接受子节点放置，避免产生根节点同级。
+   * 根据指针在目标节点的位置判断拖放意图。右侧和中间均成为子级；根节点仅接受子节点放置。
    *
    * @param event 当前拖放事件。
    * @param targetEl 目标节点 DOM。
    * @param targetId 目标节点标识。
-   * @returns 上方 28% 为 before，下方 28% 为 after，中间区域为 child。
+   * @returns 右侧 28% 或中间区域为 child，上方 28% 为 before，下方 28% 为 after。
    */
   private dropPositionForEvent(event: DragEvent, targetEl: HTMLElement, targetId: string): NodeDropPosition {
     if (targetId === this.document.root.id) return "child";
     const rect = targetEl.getBoundingClientRect();
+    if (this.isRightChildDrop(event, targetEl)) return "child";
     const ratio = rect.height > 0 ? (event.clientY - rect.top) / rect.height : .5;
     if (ratio < .28) return "before";
     if (ratio > .72) return "after";
     return "child";
   }
 
+  /**
+   * Checks whether the pointer is in the explicit right-side child drop zone.
+   *
+   * @param event Current drag event.
+   * @param targetEl Target node element.
+   * @returns Whether the rightmost 28% is active.
+   */
+  private isRightChildDrop(event: DragEvent, targetEl: HTMLElement): boolean {
+    const rect = targetEl.getBoundingClientRect();
+    const ratio = rect.width > 0 ? (event.clientX - rect.left) / rect.width : .5;
+    return ratio > .72;
+  }
+
   /** 清理全部拖放目标样式，防止跨节点移动时残留指示线。 */
   private clearDropIndicators(): void {
-    this.nodesLayerEl.querySelectorAll(".is-drop-target, .is-drop-before, .is-drop-child, .is-drop-after")
-      .forEach((element) => element.removeClasses(["is-drop-target", "is-drop-before", "is-drop-child", "is-drop-after"]));
+    this.nodesLayerEl.querySelectorAll(".is-drop-target, .is-drop-before, .is-drop-child, .is-drop-child-right, .is-drop-after")
+      .forEach((element) => element.removeClasses(["is-drop-target", "is-drop-before", "is-drop-child", "is-drop-child-right", "is-drop-after"]));
   }
 
   /**

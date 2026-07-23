@@ -391,6 +391,26 @@
   box-shadow: 0 0 0 calc(4px / var(--mmc-zoom, 1)) color-mix(in srgb, var(--color-green) 25%, transparent);
 }
 
+.mmc-node.is-drop-child-right {
+  box-shadow: inset calc(-7px / var(--mmc-zoom, 1)) 0 0 color-mix(in srgb, var(--color-green) 72%, transparent),
+    0 0 0 calc(4px / var(--mmc-zoom, 1)) color-mix(in srgb, var(--color-green) 18%, transparent);
+}
+
+.mmc-node.is-drop-child-right::after {
+  content: "添加到子级 →";
+  position: absolute;
+  z-index: 6;
+  right: calc(10px / var(--mmc-zoom, 1));
+  bottom: calc(6px / var(--mmc-zoom, 1));
+  padding: calc(2px / var(--mmc-zoom, 1)) calc(6px / var(--mmc-zoom, 1));
+  border-radius: 999px;
+  background: var(--color-green);
+  color: white;
+  font-size: calc(10px / var(--mmc-zoom, 1));
+  line-height: 1.4;
+  pointer-events: none;
+}
+
 .mmc-node.is-drop-before::before,
 .mmc-node.is-drop-after::after {
   content: "";

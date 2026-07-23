@@ -606,6 +606,7 @@ export const setIcon = () => {};
   assert.match(editorSource, /moveNodeRelative/);
   assert.match(cssSource, /\.mmc-node\.is-drop-before::before/);
   assert.match(cssSource, /\.mmc-node\.is-drop-after::after/);
+  assert.match(cssSource, /\.mmc-node\.is-drop-child-right/);
   assert.match(editorSource, /恢复节点自动大小/);
   assert.match(editorSource, /节点宽度（100–900）/);
   assert.match(editorSource, /文字对齐/);
