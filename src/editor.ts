@@ -1332,15 +1332,41 @@ class AppearanceModal extends Modal {
       themeCards.set(preset.id, card);
       const preview = card.createDiv({ cls: "mmc-theme-card-preview" });
       preview.style.backgroundColor = preset.appearance.backgroundColor ?? "#ffffff";
-      const root = preview.createSpan({ cls: "mmc-theme-card-root" });
-      root.style.backgroundColor = preset.appearance.rootColor ?? "#4f46e5";
-      const branches = preview.createDiv({ cls: "mmc-theme-card-branches" });
-      (preset.appearance.branchColors ?? [preset.appearance.edgeColor ?? "#7c8aa5"]).slice(0, 4).forEach((color, index) => {
-        const line = branches.createSpan();
-        line.style.backgroundColor = color;
-        line.style.width = `${28 - index * 4}px`;
-        line.style.height = `${Math.max(2, 5 - index)}px`;
+      const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      svg.setAttribute("viewBox", "0 0 112 44");
+      svg.setAttribute("aria-hidden", "true");
+      const colors = preset.appearance.branchColors ?? [preset.appearance.edgeColor ?? "#7c8aa5"];
+      const rootColorValue = preset.appearance.rootColor ?? "#4f46e5";
+      const rootNode = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+      rootNode.setAttribute("x", "8");
+      rootNode.setAttribute("y", "15");
+      rootNode.setAttribute("width", "32");
+      rootNode.setAttribute("height", "14");
+      rootNode.setAttribute("rx", "5");
+      rootNode.setAttribute("fill", rootColorValue);
+      svg.appendChild(rootNode);
+      [8, 19, 30].forEach((y, index) => {
+        const color = colors[index % colors.length] ?? rootColorValue;
+        const edge = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        edge.setAttribute("d", `M 40 22 C 51 22, 50 ${y + 3}, 61 ${y + 3} L 70 ${y + 3}`);
+        edge.setAttribute("fill", "none");
+        edge.setAttribute("stroke", color);
+        edge.setAttribute("stroke-width", index === 0 ? "2.6" : "2");
+        edge.setAttribute("stroke-linecap", "round");
+        svg.appendChild(edge);
+        const childNode = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+        childNode.setAttribute("x", "70");
+        childNode.setAttribute("y", String(y));
+        childNode.setAttribute("width", String(31 - index * 3));
+        childNode.setAttribute("height", "7");
+        childNode.setAttribute("rx", "3");
+        childNode.setAttribute("fill", color);
+        childNode.setAttribute("fill-opacity", ".22");
+        childNode.setAttribute("stroke", color);
+        childNode.setAttribute("stroke-width", ".8");
+        svg.appendChild(childNode);
       });
+      preview.appendChild(svg);
       card.createDiv({ cls: "mmc-theme-card-name", text: preset.name });
       card.addEventListener("click", () => applyPreset(preset.id));
     }
@@ -4370,6 +4396,13 @@ export class MindMapEditor {
       return;
     }
     if (this.readOnly) {
+      if (mod && key === "c") {
+        const selection = window.getSelection();
+        if (selection && !selection.isCollapsed && selection.toString()) return;
+        event.preventDefault();
+        void this.copySelectedBranch();
+        return;
+      }
       if (["arrowleft", "arrowright", "arrowup", "arrowdown"].includes(key)) {
         event.preventDefault();
         const direction = key === "arrowleft" ? "parent" : key === "arrowright" ? "child" : key === "arrowup" ? "previous" : "next";

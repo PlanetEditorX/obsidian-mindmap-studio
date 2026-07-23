@@ -566,6 +566,8 @@ export const setIcon = () => {};
   assert.match(editorSource, /currentMode === "article" \|\| this\.document\.view\?\.readOnly === true/, "article mode should initialize as read-only");
   assert.match(editorSource, /mode === "article" && previousMode !== "article"[\s\S]*this\.readOnly = true/, "entering article mode should reset to reading mode");
   assert.match(editorSource, /currentMode !== "article"\) this\.persistReadOnlyState/, "temporary article editing must not overwrite the document read-only preference");
+  assert.match(editorSource, /selection && !selection\.isCollapsed && selection\.toString\(\)/, "read-only copy should preserve native selected-text copying");
+  assert.match(editorSource, /createElementNS\("http:\/\/www\.w3\.org\/2000\/svg", "svg"\)/, "theme cards should use stable SVG previews");
   assert.match(editorSource, /skipArticleNumbering/);
   assert.match(editorSource, /DISPLAY_MODE_LABELS/);
   assert.match(mainSource, /switch-to-\$\{mode\}-mode/);
@@ -588,6 +590,7 @@ export const setIcon = () => {};
   assert.match(settingsSource, /一键还原所有插件设置/);
 
   const cssSource = await readFile("styles.css", "utf8");
+  assert.match(cssSource, /\.mmc-editor\.is-read-only \.mmc-node[\s\S]*user-select:\s*text/, "read-only views should allow text selection");
   assert.match(cssSource, /\.mmc-parent-navigation-button[\s\S]*min-height:\s*44px/);
   assert.match(cssSource, /\.mmc-parent-navigation-button[\s\S]*height:\s*auto !important/);
   assert.match(cssSource, /\.mmc-parent-navigation-title[\s\S]*line-height:\s*1\.35/);
