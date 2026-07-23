@@ -1665,6 +1665,7 @@ export class MindMapEditor {
   private document: MindMapDocument;
   private layout: LayoutResult;
   private selectedId: string;
+  private readonly selectedIds = new Set<string>();
   private zoom = 1;
   private panX = 0;
   private panY = 0;
@@ -1955,6 +1956,52 @@ export class MindMapEditor {
       const target = event.target as HTMLElement;
       if (target.closest(".mmc-node, .mmc-canvas-breadcrumb")) return;
       if (event.button !== 0 && event.button !== 1) return;
+      if (event.button === 0 && event.shiftKey) {
+        const viewportRect = this.viewportEl.getBoundingClientRect();
+        const startX = event.clientX - viewportRect.left;
+        const startY = event.clientY - viewportRect.top;
+        const baseSelection = new Set(this.selectedIds);
+        if (this.selectedId) baseSelection.add(this.selectedId);
+        baseSelection.delete(this.document.root.id);
+        const marquee = this.viewportEl.createDiv({ cls: "mmc-selection-marquee" });
+        marquee.style.left = `${startX}px`;
+        marquee.style.top = `${startY}px`;
+        this.viewportEl.setPointerCapture(event.pointerId);
+        const moveSelection = (moveEvent: PointerEvent): void => {
+          const currentX = moveEvent.clientX - viewportRect.left;
+          const currentY = moveEvent.clientY - viewportRect.top;
+          marquee.style.left = `${Math.min(startX, currentX)}px`;
+          marquee.style.top = `${Math.min(startY, currentY)}px`;
+          marquee.style.width = `${Math.abs(currentX - startX)}px`;
+          marquee.style.height = `${Math.abs(currentY - startY)}px`;
+          const left = Math.min(event.clientX, moveEvent.clientX);
+          const right = Math.max(event.clientX, moveEvent.clientX);
+          const top = Math.min(event.clientY, moveEvent.clientY);
+          const bottom = Math.max(event.clientY, moveEvent.clientY);
+          this.selectedIds.clear();
+          for (const id of baseSelection) this.selectedIds.add(id);
+          for (const nodeEl of Array.from(this.nodesLayerEl.querySelectorAll<HTMLElement>(".mmc-node[data-node-id]"))) {
+            const rect = nodeEl.getBoundingClientRect();
+            if (rect.right >= left && rect.left <= right && rect.bottom >= top && rect.top <= bottom) {
+              const id = nodeEl.dataset.nodeId;
+              if (id && id !== this.document.root.id) this.selectedIds.add(id);
+            }
+          }
+          this.selectedId = Array.from(this.selectedIds).at(-1) ?? "";
+          this.applySelectionClasses();
+        };
+        const finishSelection = (upEvent: PointerEvent): void => {
+          this.viewportEl.removeEventListener("pointermove", moveSelection);
+          this.viewportEl.removeEventListener("pointerup", finishSelection);
+          this.viewportEl.removeEventListener("pointercancel", finishSelection);
+          if (this.viewportEl.hasPointerCapture(upEvent.pointerId)) this.viewportEl.releasePointerCapture(upEvent.pointerId);
+          marquee.remove();
+        };
+        this.viewportEl.addEventListener("pointermove", moveSelection);
+        this.viewportEl.addEventListener("pointerup", finishSelection);
+        this.viewportEl.addEventListener("pointercancel", finishSelection);
+        return;
+      }
       this.panning = true;
       this.panStart = { x: event.clientX, y: event.clientY, panX: this.panX, panY: this.panY };
       this.viewportEl.setPointerCapture(event.pointerId);
@@ -2545,6 +2592,13 @@ export class MindMapEditor {
    * 渲染相关数据，并保持模型、界面和持久化状态的一致性。
    */
   private render(): void {
+    for (const id of Array.from(this.selectedIds)) {
+      if (!findNode(this.document.root, id)) this.selectedIds.delete(id);
+    }
+    if (this.selectedId && !this.selectedIds.has(this.selectedId)) {
+      this.selectedIds.clear();
+      this.selectedIds.add(this.selectedId);
+    }
     this.clearImageLoadTimers();
     this.renderNavigation();
     const appearance = this.getAppearance();
@@ -2605,7 +2659,8 @@ export class MindMapEditor {
       nodeEl.style.minHeight = `${position.height}px`;
       nodeEl.style.setProperty("--mmc-node-text-align", textAlign);
       nodeEl.draggable = position.depth > 0 && !this.readOnly;
-      if (this.selectedId === node.id) nodeEl.addClass("is-selected");
+      if (this.selectedId === node.id || this.selectedIds.has(node.id)) nodeEl.addClass("is-selected");
+      if (this.selectedIds.size > 1 && this.selectedIds.has(node.id)) nodeEl.addClass("is-multi-selected");
       if (this.searchQuery && nodeSearchText(node).includes(this.searchQuery)) nodeEl.addClass("is-search-match");
       if (node.task) nodeEl.addClass(`task-${node.task}`);
       const isRoot = position.depth === 0;
@@ -2865,6 +2920,10 @@ export class MindMapEditor {
 
       nodeEl.addEventListener("click", (event) => {
         event.stopPropagation();
+        if (event.shiftKey) {
+          this.toggleNodeSelection(node.id);
+          return;
+        }
         this.selectNode(node.id);
         if (node.submap) void this.callbacks.onOpenMindMap(node.submap.path);
       });
@@ -2946,13 +3005,39 @@ export class MindMapEditor {
    * @param id 目标对象或节点的稳定标识。
    */
   private selectNode(id: string | null): void {
+    this.selectedIds.clear();
     this.selectedId = id ?? "";
-    this.rootEl.querySelectorAll(".mmc-node.is-selected, .mms-outline-row.is-selected, .mms-article-node.is-selected")
-      .forEach((element) => element.removeClass("is-selected"));
-    if (!id) return;
-    this.nodesLayerEl.querySelector<HTMLElement>(`.mmc-node[data-node-id="${CSS.escape(id)}"]`)?.addClass("is-selected");
-    this.outlineEl.querySelector<HTMLElement>(`.mms-outline-row[data-node-id="${CSS.escape(id)}"]`)?.addClass("is-selected");
-    this.articleEl.querySelector<HTMLElement>(`.mms-article-node[data-node-id="${CSS.escape(id)}"]`)?.addClass("is-selected");
+    if (id) this.selectedIds.add(id);
+    this.applySelectionClasses();
+  }
+
+  /**
+   * Adds or removes one node from the current multi-selection.
+   *
+   * @param id Node identifier.
+   */
+  private toggleNodeSelection(id: string): void {
+    if (id === this.document.root.id) return;
+    if (this.selectedIds.has(id)) this.selectedIds.delete(id);
+    else this.selectedIds.add(id);
+    this.selectedId = Array.from(this.selectedIds).at(-1) ?? "";
+    this.applySelectionClasses();
+  }
+
+  /**
+   * Synchronizes selection classes across all editor views.
+   */
+  private applySelectionClasses(): void {
+    this.rootEl.querySelectorAll(".is-selected, .is-multi-selected")
+      .forEach((element) => element.removeClasses(["is-selected", "is-multi-selected"]));
+    for (const id of this.selectedIds) {
+      const multi = this.selectedIds.size > 1;
+      for (const scope of [this.nodesLayerEl, this.outlineEl, this.articleEl]) {
+        const element = scope.querySelector<HTMLElement>(`[data-node-id="${CSS.escape(id)}"]`);
+        element?.addClass("is-selected");
+        if (multi) element?.addClass("is-multi-selected");
+      }
+    }
   }
 
   /**
@@ -3342,6 +3427,23 @@ export class MindMapEditor {
    */
   private deleteSelected(): void {
     if (!this.ensureEditable()) return;
+    const batch = Array.from(this.selectedIds)
+      .filter((id) => id !== this.document.root.id)
+      .filter((id, _index, ids) => {
+        const node = findNode(this.document.root, id);
+        return Boolean(node && !ids.some((otherId) => otherId !== id && node && containsNode(findNode(this.document.root, otherId) ?? this.document.root, id)));
+      });
+    if (batch.length > 1) {
+      const fallback = findParent(this.document.root, this.selectedId)?.id ?? this.document.root.id;
+      this.mutate(() => {
+        for (const id of batch) removeNode(this.document.root, id);
+        this.selectedIds.clear();
+        this.selectedId = fallback;
+        this.selectedIds.add(fallback);
+      });
+      new Notice(`已删除 ${batch.length} 个所选节点`);
+      return;
+    }
     const selected = this.selectedNode();
     if (!selected || selected.id === this.document.root.id) {
       new Notice("根节点不能删除");
@@ -3351,6 +3453,8 @@ export class MindMapEditor {
     this.mutate(() => {
       removeNode(this.document.root, selected.id);
       this.selectedId = parent?.id ?? this.document.root.id;
+      this.selectedIds.clear();
+      this.selectedIds.add(this.selectedId);
     });
   }
 
