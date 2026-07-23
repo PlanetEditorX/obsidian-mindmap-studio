@@ -3709,8 +3709,10 @@ export class MindMapEditor {
     const style = resolveArticleStyle(this.document.articleStyle);
     const progress = this.articleEl.createDiv({ cls: `mms-reading-progress position-${this.options.readingProgressPosition}` });
     progress.createDiv({ cls: "mms-reading-progress-bar" });
-    progress.style.setProperty("--mms-reading-progress", `${Math.round(this.options.readingProgress * 100)}%`);
-    progress.createSpan({ text: `阅读进度 ${Math.round(this.options.readingProgress * 100)}%` });
+    const initialProgress = `${Math.round(this.options.readingProgress * 100)}%`;
+    progress.style.setProperty("--mms-reading-progress", initialProgress);
+    progress.dataset.progress = initialProgress;
+    progress.createSpan({ text: `阅读进度 ${initialProgress}` });
     const page = this.articleEl.createDiv({ cls: `mms-article-page mms-reading-page article-${style.preset}` });
     page.createEl("h1", { cls: "mms-article-document-title", text: nodePrimaryText(sections[0]!.document.root) || sections[0]!.document.title });
 
@@ -3762,8 +3764,10 @@ export class MindMapEditor {
     this.articleEl.onscroll = () => {
       const maximum = Math.max(1, this.articleEl.scrollHeight - this.articleEl.clientHeight);
       const next = Math.max(0, Math.min(1, this.articleEl.scrollTop / maximum));
-      progress.style.setProperty("--mms-reading-progress", `${Math.round(next * 100)}%`);
-      progress.lastElementChild?.replaceChildren(`阅读进度 ${Math.round(next * 100)}%`);
+      const nextProgress = `${Math.round(next * 100)}%`;
+      progress.style.setProperty("--mms-reading-progress", nextProgress);
+      progress.dataset.progress = nextProgress;
+      progress.lastElementChild?.replaceChildren(`阅读进度 ${nextProgress}`);
       if (this.readingProgressTimer !== null) window.clearTimeout(this.readingProgressTimer);
       this.readingProgressTimer = window.setTimeout(() => {
         this.readingProgressTimer = null;

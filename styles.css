@@ -2845,25 +2845,55 @@
 }
 
 .mms-reading-progress.position-bottom {
-  top: calc(100% - 40px);
+  top: calc(100% - 76px);
 }
 
 .mms-reading-progress.position-left,
 .mms-reading-progress.position-right {
-  top: calc(50% - 16px);
-  width: 124px;
-  min-height: 32px;
+  top: calc(50% - 36px);
+  width: 72px;
+  min-height: 72px;
   margin-right: 0;
-  margin-bottom: -40px;
-  padding: 0 10px;
+  margin-bottom: -80px;
+  padding: 0;
+  justify-content: center;
+  border-radius: 50%;
+  background: conic-gradient(
+    var(--interactive-accent) var(--mms-reading-progress, 0%),
+    var(--background-modifier-border) 0
+  );
+  box-shadow: 0 6px 20px rgba(0, 0, 0, .14);
 }
 
 .mms-reading-progress.position-left {
-  margin-left: calc(50% - 590px);
+  margin-left: calc(50% - 538px);
 }
 
 .mms-reading-progress.position-right {
   margin-left: calc(50% + 466px);
+}
+
+.mms-reading-progress.position-left .mms-reading-progress-bar,
+.mms-reading-progress.position-right .mms-reading-progress-bar {
+  inset: 5px;
+  width: auto;
+  border-radius: 50%;
+  background: var(--mms-article-paper, var(--background-primary));
+  transition: none;
+}
+
+.mms-reading-progress.position-left span,
+.mms-reading-progress.position-right span {
+  display: none;
+}
+
+.mms-reading-progress.position-left::after,
+.mms-reading-progress.position-right::after {
+  position: relative;
+  content: attr(data-progress);
+  color: var(--text-normal);
+  font-size: 13px;
+  font-weight: 600;
 }
 
 .mms-reading-toc {
@@ -3082,7 +3112,7 @@
   line-height: 1.35;
 }
 
-@media (max-width: 1180px) {
+@media (max-width: 1100px) {
   .mms-reading-progress.position-left,
   .mms-reading-progress.position-right {
     top: 8px;
@@ -3091,6 +3121,27 @@
     margin: 8px auto -40px;
     padding: 0 12px;
     justify-content: flex-end;
+    border-radius: 9px;
+    background: color-mix(in srgb, var(--background-primary) 92%, transparent);
+    box-shadow: none;
+  }
+
+  .mms-reading-progress.position-left .mms-reading-progress-bar,
+  .mms-reading-progress.position-right .mms-reading-progress-bar {
+    inset: 0 auto 0 0;
+    width: var(--mms-reading-progress, 0%);
+    border-radius: 0;
+    background: color-mix(in srgb, var(--interactive-accent) 18%, transparent);
+  }
+
+  .mms-reading-progress.position-left span,
+  .mms-reading-progress.position-right span {
+    display: block;
+  }
+
+  .mms-reading-progress.position-left::after,
+  .mms-reading-progress.position-right::after {
+    content: none;
   }
 }
 
