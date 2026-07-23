@@ -1,0 +1,63 @@
+name: Build and Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          registry-url: https://registry.npmjs.org
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
+
+      - name: Check generated docs
+        run: npm run docs:check
+
+      - name: Build plugin
+        run: npm run build
+
+      - name: Verify plugin files
+        run: |
+          test -s main.js
+          test -s manifest.json
+          test -s styles.css
+          node --check main.js
+
+      - name: Prepare install artifact
+        shell: bash
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          mkdir -p "artifact/mindmap-studio"
+          cp main.js manifest.json styles.css "artifact/mindmap-studio/"
+          printf '%s' "$VERSION" > artifact/VERSION
+
+      - name: Upload install artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mindmap-studio-${{ github.sha }}
+          path: artifact/
+          if-no-files-found: error
+          retention-days: 14

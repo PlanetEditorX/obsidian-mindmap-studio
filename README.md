@@ -583,3 +583,34 @@ styles.css
 ```
 
 点击左箭头或父导图名称即可返回，并定位到父导图中的来源节点。该导航固定在画布左上角，不会随着导图平移或缩放，也不会再附着到中心节点上。大纲和文章模式继续使用页面顶部的父导图导航。
+
+## GitHub Actions 自动构建与发布
+
+仓库包含两个工作流：
+
+- `Build and Test`：提交到 `main`、Pull Request 或手动运行时执行 `npm ci`、测试、文档检查和构建，并上传可安装插件构建产物。
+- `Create Release`：在 Actions 页面手动运行，选择 `patch`、`minor` 或 `major`。工作流会同步更新 `package.json`、`package-lock.json`、`manifest.json` 和 `versions.json`，构建插件，提交版本变更，创建 `vX.Y.Z` 标签，并发布安装 ZIP、源码 ZIP 和 SHA-256 校验文件。
+
+首次使用前，请在仓库设置中确认：
+
+```text
+Settings → Actions → General → Workflow permissions
+```
+
+选择：
+
+```text
+Read and write permissions
+```
+
+同时建议启用：
+
+```text
+Allow GitHub Actions to create and approve pull requests
+```
+
+发布时进入：
+
+```text
+Actions → Create Release → Run workflow
+```

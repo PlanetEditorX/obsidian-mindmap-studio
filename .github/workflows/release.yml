@@ -1,0 +1,138 @@
+name: Create Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_type:
+        description: Version increment
+        required: true
+        default: patch
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+      prerelease:
+        description: Mark GitHub release as prerelease
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main branch
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          registry-url: https://registry.npmjs.org
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Calculate next version
+        id: version
+        shell: bash
+        run: |
+          CURRENT=$(node -p "require('./package.json').version")
+          NEXT=$(node -e '
+            const [major, minor, patch] = process.argv[1].split(".").map(Number);
+            const type = process.argv[2];
+            if (type === "major") console.log(`${major + 1}.0.0`);
+            else if (type === "minor") console.log(`${major}.${minor + 1}.0`);
+            else console.log(`${major}.${minor}.${patch + 1}`);
+          ' "$CURRENT" "${{ inputs.release_type }}")
+          echo "current=$CURRENT" >> "$GITHUB_OUTPUT"
+          echo "next=$NEXT" >> "$GITHUB_OUTPUT"
+          echo "tag=v$NEXT" >> "$GITHUB_OUTPUT"
+
+      - name: Sync version files
+        run: node scripts/sync-version.mjs "${{ steps.version.outputs.next }}"
+
+      - name: Run tests
+        run: npm test
+
+      - name: Check generated docs
+        run: npm run docs:check
+
+      - name: Build plugin
+        run: npm run build
+
+      - name: Verify build
+        run: |
+          test -s main.js
+          test -s manifest.json
+          test -s styles.css
+          node --check main.js
+          test "$(node -p "require('./package.json').version")" = "${{ steps.version.outputs.next }}"
+          test "$(node -p "require('./manifest.json').version")" = "${{ steps.version.outputs.next }}"
+
+      - name: Commit version update
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package.json package-lock.json manifest.json versions.json main.js
+          git commit -m "chore(release): v${{ steps.version.outputs.next }}"
+
+      - name: Create release archives
+        shell: bash
+        run: |
+          VERSION="${{ steps.version.outputs.next }}"
+          INSTALL_NAME="mindmap-studio-${VERSION}-install.zip"
+          SOURCE_NAME="obsidian-mindmap-studio-${VERSION}-source.zip"
+          CHECKSUM_NAME="mindmap-studio-${VERSION}-checksums.txt"
+
+          rm -rf release-package
+          mkdir -p release-package/mindmap-studio
+          cp main.js manifest.json styles.css release-package/mindmap-studio/
+
+          (cd release-package && zip -r "../$INSTALL_NAME" mindmap-studio -x '*.DS_Store')
+
+          git archive --format=zip \
+            --prefix="obsidian-mindmap-studio-${VERSION}/" \
+            --output="$SOURCE_NAME" HEAD
+
+          sha256sum "$INSTALL_NAME" "$SOURCE_NAME" > "$CHECKSUM_NAME"
+
+          unzip -l "$INSTALL_NAME"
+          test "$(unzip -Z1 "$INSTALL_NAME" | grep -c '^mindmap-studio/[^/]*$')" -eq 3
+          test "$(unzip -Z1 "$INSTALL_NAME" | grep -c '^mindmap-studio/$')" -eq 1
+
+      - name: Tag and push release
+        shell: bash
+        run: |
+          git tag "${{ steps.version.outputs.tag }}"
+          git push origin HEAD:main
+          git push origin "${{ steps.version.outputs.tag }}"
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          VERSION="${{ steps.version.outputs.next }}"
+          PRERELEASE_FLAG=""
+          if [ "${{ inputs.prerelease }}" = "true" ]; then PRERELEASE_FLAG="--prerelease"; fi
+          gh release create "v${VERSION}" \
+            "mindmap-studio-${VERSION}-install.zip" \
+            "obsidian-mindmap-studio-${VERSION}-source.zip" \
+            "mindmap-studio-${VERSION}-checksums.txt" \
+            --title "MindMap Studio v${VERSION}" \
+            --generate-notes \
+            $PRERELEASE_FLAG
