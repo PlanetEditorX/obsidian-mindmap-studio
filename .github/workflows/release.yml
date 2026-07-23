@@ -6,22 +6,6 @@ on:
       - Build and Test
     types:
       - completed
-  workflow_dispatch:
-    inputs:
-      release_type:
-        description: Version increment
-        required: true
-        default: patch
-        type: choice
-        options:
-          - patch
-          - minor
-          - major
-      prerelease:
-        description: Mark GitHub release as prerelease
-        required: true
-        default: false
-        type: boolean
 
 permissions:
   contents: write
@@ -33,13 +17,10 @@ concurrency:
 jobs:
   changes:
     if: >-
-      github.event_name == 'workflow_dispatch' ||
-      (
-        github.event.workflow_run.conclusion == 'success' &&
-        github.event.workflow_run.event == 'push' &&
-        github.event.workflow_run.head_branch == 'main' &&
-        github.event.workflow_run.actor.login != 'github-actions[bot]'
-      )
+      github.event.workflow_run.conclusion == 'success' &&
+      (github.event.workflow_run.event == 'push' || github.event.workflow_run.event == 'workflow_dispatch') &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.actor.login != 'github-actions[bot]'
     runs-on: ubuntu-latest
     outputs:
       should_release: ${{ steps.filter.outputs.should_release }}
@@ -47,14 +28,24 @@ jobs:
       - name: Checkout tested commit
         uses: actions/checkout@v6
         with:
-          ref: ${{ github.event.workflow_run.head_sha || 'main' }}
+          ref: ${{ github.event.workflow_run.head_sha }}
           fetch-depth: 0
 
       - name: Check release-related changes
         id: filter
         shell: bash
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          git fetch origin main --tags
+
+          TESTED_SHA="${{ github.event.workflow_run.head_sha }}"
+          MAIN_SHA=$(git rev-parse origin/main)
+          if [ "$TESTED_SHA" != "$MAIN_SHA" ]; then
+            echo "Tested commit is no longer the latest main commit; skipping obsolete release."
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [ "${{ github.event.workflow_run.event }}" = "workflow_dispatch" ]; then
             echo "should_release=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
@@ -75,7 +66,7 @@ jobs:
       - name: Checkout main branch
         uses: actions/checkout@v6
         with:
-          ref: ${{ github.event.workflow_run.head_sha || 'main' }}
+          ref: ${{ github.event.workflow_run.head_sha }}
           fetch-depth: 0
 
       - name: Setup Node.js
@@ -92,14 +83,29 @@ jobs:
         id: version
         shell: bash
         run: |
+          git fetch origin --tags
           CURRENT=$(node -p "require('./package.json').version")
+          LATEST_TAG=$(git tag -l 'v[0-9]*' --sort=-v:refname | head -n 1)
+          LATEST=${LATEST_TAG#v}
+          BASE=$(node -e '
+            const versions = process.argv.slice(1).filter(Boolean);
+            versions.sort((a, b) => {
+              const left = a.split(".").map(Number);
+              const right = b.split(".").map(Number);
+              return (right[0] - left[0]) || (right[1] - left[1]) || (right[2] - left[2]);
+            });
+            console.log(versions[0]);
+          ' "$CURRENT" "$LATEST")
           NEXT=$(node -e '
             const [major, minor, patch] = process.argv[1].split(".").map(Number);
-            const type = process.argv[2];
-            if (type === "major") console.log(`${major + 1}.0.0`);
-            else if (type === "minor") console.log(`${major}.${minor + 1}.0`);
-            else console.log(`${major}.${minor}.${patch + 1}`);
-          ' "$CURRENT" "${{ inputs.release_type || 'patch' }}")
+            console.log(`${major}.${minor}.${patch + 1}`);
+          ' "$BASE")
+          while git rev-parse -q --verify "refs/tags/v$NEXT" >/dev/null; do
+            NEXT=$(node -e '
+              const [major, minor, patch] = process.argv[1].split(".").map(Number);
+              console.log(`${major}.${minor}.${patch + 1}`);
+            ' "$NEXT")
+          done
           echo "current=$CURRENT" >> "$GITHUB_OUTPUT"
           echo "next=$NEXT" >> "$GITHUB_OUTPUT"
           echo "tag=v$NEXT" >> "$GITHUB_OUTPUT"
@@ -176,12 +182,9 @@ jobs:
         shell: bash
         run: |
           VERSION="${{ steps.version.outputs.next }}"
-          PRERELEASE_FLAG=""
-          if [ "${{ inputs.prerelease || false }}" = "true" ]; then PRERELEASE_FLAG="--prerelease"; fi
           gh release create "v${VERSION}" \
             "mindmap-studio-${VERSION}-install.zip" \
             "obsidian-mindmap-studio-${VERSION}-source.zip" \
             "mindmap-studio-${VERSION}-checksums.txt" \
             --title "MindMap Studio v${VERSION}" \
-            --generate-notes \
-            $PRERELEASE_FLAG
+            --generate-notes
