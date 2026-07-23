@@ -38,7 +38,7 @@ export type ThemeMode = "auto" | "light" | "dark";
  */
 export type NodeShape = "rounded" | "pill" | "rectangle";
 /** Overall sizing and density used when rendering mind-map nodes. */
-export type NodeVisualStyle = "card" | "compact";
+export type NodeVisualStyle = "card" | "xmind";
 /**
  * TaskStatus 类型定义，用于限制可接受值并让序列化数据保持稳定。
  */
@@ -390,6 +390,7 @@ function normalizeBooleanOverride(value: unknown): boolean | undefined {
  */
 function normalizeAppearance(input: Partial<MindMapAppearance> | undefined): MindMapAppearance | undefined {
   if (!input) return undefined;
+  const rawNodeVisualStyle = String(input.nodeVisualStyle ?? "");
   const backgroundPattern: BackgroundPattern | undefined = input.backgroundPattern === "none" || input.backgroundPattern === "grid" || input.backgroundPattern === "dots"
     ? input.backgroundPattern
     : undefined;
@@ -414,7 +415,11 @@ function normalizeAppearance(input: Partial<MindMapAppearance> | undefined): Min
     ? input.customFont.trim().slice(0, 120)
     : undefined;
   const appearance: MindMapAppearance = {
-    nodeVisualStyle: input.nodeVisualStyle === "card" || input.nodeVisualStyle === "compact" ? input.nodeVisualStyle : undefined,
+    nodeVisualStyle: rawNodeVisualStyle === "card"
+      ? "card"
+      : rawNodeVisualStyle === "xmind" || rawNodeVisualStyle === "compact"
+        ? "xmind"
+        : undefined,
     themePreset,
     backgroundColor: normalizeColor(input.backgroundColor),
     backgroundPattern,

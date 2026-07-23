@@ -76,9 +76,9 @@ function nodeDimensions(node: MindMapNode, depth: number, defaultFontSize = 14, 
   const manualWidth = node.style?.width;
   const extraWidth = Math.max(0, fontSize - 14) * 4;
   const blocks = nodeContentBlocks(node);
-  const compact = visualStyle === "compact";
-  let width = manualWidth ?? (compact
-    ? ((depth === 0 ? 146 : 68) + extraWidth)
+  const fitted = visualStyle === "xmind";
+  let width = manualWidth ?? (fitted
+    ? ((depth === 0 ? 146 : 92) + extraWidth)
     : ((depth === 0 ? ROOT_WIDTH : NODE_WIDTH) + extraWidth));
 
   if (!manualWidth) {
@@ -86,8 +86,8 @@ function nodeDimensions(node: MindMapNode, depth: number, defaultFontSize = 14, 
       if (block.type === "image") width = Math.max(width, 240);
       else {
         const longestLine = Math.max(1, ...block.text.split(/\r?\n/).map((line) => line.length));
-        const horizontalPadding = compact ? (depth === 0 ? 42 : 28) : 80;
-        width = Math.max(width, Math.min(compact ? 520 : 460, horizontalPadding + Math.min(longestLine, 58) * fontSize * 0.62));
+        const horizontalPadding = fitted ? (depth === 0 ? 42 : 34) : 80;
+        width = Math.max(width, Math.min(fitted ? 520 : 460, horizontalPadding + Math.min(longestLine, 58) * fontSize * 0.62));
       }
     }
     if (node.table) {
@@ -101,12 +101,12 @@ function nodeDimensions(node: MindMapNode, depth: number, defaultFontSize = 14, 
     }
   }
 
-  width = Math.min(900, Math.max(compact ? 56 : 100, width));
-  let height = (compact ? 12 : 28) + Math.max(0, fontSize - 14) * 1.4;
-  if (!blocks.length) height += depth === 0 ? (compact ? 32 : 34) : (compact ? 24 : 26);
+  width = Math.min(900, Math.max(fitted ? 80 : 100, width));
+  let height = 28 + Math.max(0, fontSize - 14) * 1.4;
+  if (!blocks.length) height += depth === 0 ? 34 : 26;
   for (const block of blocks) {
     if (block.type === "image") height += 132;
-    else height += Math.max(compact ? 24 : 30, estimatedTextLines(block.text, width, fontSize) * (fontSize + (compact ? 6 : 8)));
+    else height += Math.max(30, estimatedTextLines(block.text, width, fontSize) * (fontSize + 8));
   }
   if (node.tags?.length) height += 20;
   if (node.table) {
@@ -133,8 +133,7 @@ function subtreeHeight(node: MindMapNode, depth: number, defaultFontSize = 14, v
   const ownHeight = nodeDimensions(node, depth, defaultFontSize, visualStyle).height;
   const children = visibleChildren(node);
   if (!children.length) return ownHeight;
-  const gap = visualStyle === "compact" ? 14 : V_GAP;
-  const childrenHeight = children.reduce((sum, child) => sum + subtreeHeight(child, depth + 1, defaultFontSize, visualStyle), 0) + gap * (children.length - 1);
+  const childrenHeight = children.reduce((sum, child) => sum + subtreeHeight(child, depth + 1, defaultFontSize, visualStyle), 0) + V_GAP * (children.length - 1);
   return Math.max(ownHeight, childrenHeight);
 }
 
@@ -164,8 +163,8 @@ function layoutBranch(
   visualStyle: NodeVisualStyle = "card"
 ): void {
   const dimensions = nodeDimensions(node, depth, defaultFontSize, visualStyle);
-  const horizontalGap = visualStyle === "compact" ? 58 : H_GAP;
-  const verticalGap = visualStyle === "compact" ? 14 : V_GAP;
+  const horizontalGap = H_GAP;
+  const verticalGap = V_GAP;
   const x = parentX + side * (parentWidth / 2 + horizontalGap + dimensions.width / 2);
   output.push({ node, parentId, x, y: centerY, depth, side, ...dimensions });
   const children = visibleChildren(node);
@@ -193,7 +192,7 @@ function layoutBranch(
  */
 export function computeLayout(root: MindMapNode, mode: LayoutMode, defaultFontSize = 14, visualStyle: NodeVisualStyle = "card"): LayoutResult {
   const rootDimensions = nodeDimensions(root, 0, defaultFontSize, visualStyle);
-  const verticalGap = visualStyle === "compact" ? 14 : V_GAP;
+  const verticalGap = V_GAP;
   const nodes: NodePosition[] = [
     { node: root, parentId: null, x: 0, y: 0, depth: 0, side: 0, ...rootDimensions }
   ];
@@ -301,6 +300,33 @@ export function edgePath(parent: NodePosition, child: NodePosition, style: EdgeS
   const middleX = parentX + (childX - parentX) * 0.5;
   if (style === "elbow") return `M ${parentX} ${parent.y} L ${middleX} ${parent.y} L ${middleX} ${child.y} L ${childX} ${child.y}`;
   return `M ${parentX} ${parent.y} C ${middleX} ${parent.y}, ${middleX} ${child.y}, ${childX} ${child.y}`;
+}
+
+/**
+ * Builds an orthogonal branch with rounded corners for the XMind-inspired
+ * visual style without relying on external assets.
+ *
+ * @param parent Parent node layout.
+ * @param child Child node layout.
+ * @returns SVG path data for a rounded elbow connector.
+ */
+export function roundedElbowEdgePath(parent: NodePosition, child: NodePosition): string {
+  const parentX = parent.x + (child.side >= 0 ? parent.width / 2 : -parent.width / 2);
+  const childX = child.x - (child.side >= 0 ? child.width / 2 : -child.width / 2);
+  const middleX = parentX + (childX - parentX) * .5;
+  const deltaY = child.y - parent.y;
+  if (Math.abs(deltaY) < .5) return `M ${parentX} ${parent.y} L ${childX} ${child.y}`;
+  const directionX = Math.sign(childX - parentX) || 1;
+  const directionY = Math.sign(deltaY);
+  const radius = Math.min(16, Math.abs(childX - parentX) / 4, Math.abs(deltaY) / 2);
+  return [
+    `M ${parentX} ${parent.y}`,
+    `L ${middleX - directionX * radius} ${parent.y}`,
+    `Q ${middleX} ${parent.y} ${middleX} ${parent.y + directionY * radius}`,
+    `L ${middleX} ${child.y - directionY * radius}`,
+    `Q ${middleX} ${child.y} ${middleX + directionX * radius} ${child.y}`,
+    `L ${childX} ${child.y}`
+  ].join(" ");
 }
 
 /**
@@ -468,7 +494,11 @@ export function documentToSvg(root: MindMapNode, mode: LayoutMode, title: string
       const parent = position.parentId ? layout.byId.get(position.parentId) : undefined;
       const stroke = validColor(position.node.style?.color, branchColorMap.get(position.node.id) ?? defaultEdge);
       const width = edgeWidthForDepth(appearance, position.depth, maxDepth);
-      return parent ? `<path d="${edgePath(parent, position, edgeStyle)}" fill="none" stroke="${stroke}" stroke-width="${width}" stroke-linecap="round" stroke-linejoin="round" opacity="0.8"/>` : "";
+      if (!parent) return "";
+      const path = appearance.nodeVisualStyle === "xmind"
+        ? roundedElbowEdgePath(parent, position)
+        : edgePath(parent, position, edgeStyle);
+      return `<path d="${path}" fill="none" stroke="${stroke}" stroke-width="${width}" stroke-linecap="round" stroke-linejoin="round" opacity="0.8"/>`;
     })
     .join("\n");
 

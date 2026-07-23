@@ -62,7 +62,7 @@ import {
   type NodeDropPosition,
   moveNodeRelative
 } from "./model";
-import { buildBranchColorMap, computeLayout, documentToSvg, edgePath, edgeWidthForDepth, type LayoutResult } from "./layout";
+import { buildBranchColorMap, computeLayout, documentToSvg, edgePath, edgeWidthForDepth, roundedElbowEdgePath, type LayoutResult } from "./layout";
 import { CodeEditModal, TableEditModal } from "./content-modals";
 import { TOOLBAR_ITEMS, type ImageHostChoice, type ImageHostUploadBatch } from "./settings";
 import { appearanceFromThemePreset, MINDMAP_THEME_PRESETS } from "./themes";
@@ -1219,7 +1219,7 @@ class AppearanceModal extends Modal {
     const nodeVisualStyleLabel = grid.createEl("label", { text: "节点视觉样式" });
     const nodeVisualStyleSelect = nodeVisualStyleLabel.createEl("select");
     nodeVisualStyleSelect.createEl("option", { text: "卡片节点（当前样式）", attr: { value: "card" } });
-    nodeVisualStyleSelect.createEl("option", { text: "紧凑分支", attr: { value: "compact" } });
+    nodeVisualStyleSelect.createEl("option", { text: "圆角分支（XMind 风格）", attr: { value: "xmind" } });
     nodeVisualStyleSelect.value = this.appearance.nodeVisualStyle ?? "card";
     const nodeTextAlignLabel = grid.createEl("label", { text: "节点文字对齐" });
     const nodeTextAlignSelect = nodeTextAlignLabel.createEl("select");
@@ -1372,7 +1372,7 @@ class AppearanceModal extends Modal {
         fontFamily: fontSelect.value as FontFamilyMode,
         customFont: fontSelect.value === "custom" ? customFontInput.value.trim().slice(0, 120) || undefined : undefined,
         fontSize: clamp(fontSizeInput.value, 10, 30, 14),
-        nodeVisualStyle: nodeVisualStyleSelect.value as "card" | "compact",
+        nodeVisualStyle: nodeVisualStyleSelect.value as "card" | "xmind",
         nodeTextAlign: nodeTextAlignSelect.value as NodeTextAlign,
         rootColor: rootColor.toggle.checked ? rootColor.input.value : undefined,
         rootTextColor: rootTextColor.toggle.checked ? rootTextColor.input.value : undefined,
@@ -2639,7 +2639,9 @@ export class MindMapEditor {
       const parent = this.layout.byId.get(position.parentId);
       if (!parent) continue;
       const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-      path.setAttribute("d", edgePath(parent, position, appearance.edgeStyle ?? "curved"));
+      path.setAttribute("d", appearance.nodeVisualStyle === "xmind"
+        ? roundedElbowEdgePath(parent, position)
+        : edgePath(parent, position, appearance.edgeStyle ?? "curved"));
       path.setAttribute("class", `mmc-edge depth-${Math.min(position.depth, 6)}`);
       const branchColor = branchColorMap.get(position.node.id);
       if (position.node.style?.color) path.style.stroke = position.node.style.color;
@@ -2682,7 +2684,7 @@ export class MindMapEditor {
       const branchColor = branchColorMap.get(node.id);
       if (node.style?.color) nodeEl.style.backgroundColor = node.style.color;
       else if (isRoot && appearance.rootColor) nodeEl.style.backgroundColor = appearance.rootColor;
-      else if (!isRoot && branchColor && appearance.nodeVisualStyle === "compact") {
+      else if (!isRoot && branchColor && appearance.nodeVisualStyle === "xmind") {
         nodeEl.style.backgroundColor = `color-mix(in srgb, ${branchColor} 16%, ${appearance.nodeColor ?? "#ffffff"})`;
       } else if (!isRoot && appearance.nodeColor) nodeEl.style.backgroundColor = appearance.nodeColor;
       if (node.style?.textColor) nodeEl.style.color = node.style.textColor;
