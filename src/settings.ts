@@ -169,6 +169,7 @@ export interface MindMapStudioSettings {
   readingProgress: Record<string, number>;
   readingModeInitialized: boolean;
   articleTocMaxDepth: number;
+  readingProgressPosition: "top" | "bottom" | "left" | "right";
   nodeEditorPosition: "center" | "right";
   richTextBoldShortcut: string;
   richTextItalicShortcut: string;
@@ -233,6 +234,7 @@ export const DEFAULT_SETTINGS: MindMapStudioSettings = {
   readingProgress: {},
   readingModeInitialized: true,
   articleTocMaxDepth: 3,
+  readingProgressPosition: "top",
   nodeEditorPosition: "center",
   richTextBoldShortcut: "Ctrl+B",
   richTextItalicShortcut: "Ctrl+I",
@@ -440,6 +442,20 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
             await this.saveAndRefresh();
           });
       });
+
+    new Setting(containerEl)
+      .setName("通读进度条位置")
+      .setDesc("控制阅读进度显示在页面上方、下方、左侧或右侧。")
+      .addDropdown((dropdown) => dropdown
+        .addOption("top", "上方")
+        .addOption("bottom", "下方")
+        .addOption("left", "左侧")
+        .addOption("right", "右侧")
+        .setValue(this.plugin.settings.readingProgressPosition)
+        .onChange(async (value) => {
+          this.plugin.settings.readingProgressPosition = value === "bottom" || value === "left" || value === "right" ? value : "top";
+          await this.saveAndRefresh();
+        }));
 
     containerEl.createEl("h3", { text: "工具栏内容" });
     containerEl.createEl("p", {

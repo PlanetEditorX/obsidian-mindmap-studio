@@ -290,6 +290,7 @@ export class MindMapStudioView extends TextFileView {
       articleNavigation: this.articleNavigation
       ,readingSections: this.readingSections
       ,readingProgress: this.articleNavigation ? (this.plugin.settings.readingProgress[this.articleNavigation.homePath] ?? 0) : 0
+      ,readingProgressPosition: this.plugin.settings.readingProgressPosition
     };
   }
 

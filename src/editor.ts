@@ -119,6 +119,7 @@ export interface MindMapEditorOptions {
   articleNavigation?: ArticlePageNavigation;
   readingSections: ReadingSection[];
   readingProgress: number;
+  readingProgressPosition: "top" | "bottom" | "left" | "right";
   nodeEditorPosition: "center" | "right";
   richTextShortcuts: {
     bold: string;
@@ -3708,9 +3709,9 @@ export class MindMapEditor {
     const style = resolveArticleStyle(this.document.articleStyle);
     const page = this.articleEl.createDiv({ cls: `mms-article-page mms-reading-page article-${style.preset}` });
     page.createEl("h1", { cls: "mms-article-document-title", text: nodePrimaryText(sections[0]!.document.root) || sections[0]!.document.title });
-    const progress = page.createDiv({ cls: "mms-reading-progress" });
-    const progressBar = progress.createDiv({ cls: "mms-reading-progress-bar" });
-    progressBar.style.width = `${Math.round(this.options.readingProgress * 100)}%`;
+    const progress = page.createDiv({ cls: `mms-reading-progress position-${this.options.readingProgressPosition}` });
+    progress.createDiv({ cls: "mms-reading-progress-bar" });
+    progress.style.setProperty("--mms-reading-progress", `${Math.round(this.options.readingProgress * 100)}%`);
     progress.createSpan({ text: `阅读进度 ${Math.round(this.options.readingProgress * 100)}%` });
 
     const toc = page.createEl("nav", { cls: "mms-article-toc mms-reading-toc" });
@@ -3761,7 +3762,7 @@ export class MindMapEditor {
     this.articleEl.onscroll = () => {
       const maximum = Math.max(1, this.articleEl.scrollHeight - this.articleEl.clientHeight);
       const next = Math.max(0, Math.min(1, this.articleEl.scrollTop / maximum));
-      progressBar.style.width = `${Math.round(next * 100)}%`;
+      progress.style.setProperty("--mms-reading-progress", `${Math.round(next * 100)}%`);
       progress.lastElementChild?.replaceChildren(`阅读进度 ${Math.round(next * 100)}%`);
       if (this.readingProgressTimer !== null) window.clearTimeout(this.readingProgressTimer);
       this.readingProgressTimer = window.setTimeout(() => {
