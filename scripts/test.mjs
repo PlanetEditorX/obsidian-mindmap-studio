@@ -656,6 +656,8 @@ export const setIcon = () => {};
   assert.match(cssSource, /\.mmc-node\.is-drop-before::before/);
   assert.match(cssSource, /\.mmc-node\.is-drop-after::after/);
   assert.match(cssSource, /\.mmc-node\.is-drop-child-right/);
+  assert.match(editorSource, /showDropPreview\(node\.id, position\)/);
+  assert.match(cssSource, /\.mmc-drop-preview[\s\S]*pointer-events:\s*none/);
   assert.match(editorSource, /mmc-selection-marquee/);
   assert.match(editorSource, /toggleNodeSelection/);
   assert.match(cssSource, /\.mmc-selection-marquee/);

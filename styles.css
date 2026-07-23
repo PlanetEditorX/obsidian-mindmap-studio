@@ -446,6 +446,69 @@
     0 0 0 calc(4px / var(--mmc-zoom, 1)) color-mix(in srgb, var(--color-green) 18%, transparent);
 }
 
+.mmc-drop-preview {
+  position: absolute;
+  z-index: 14;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  padding: 7px 12px;
+  transform: translate(-50%, -50%);
+  border: 2px dashed color-mix(in srgb, var(--color-green) 82%, white);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--color-green) 13%, var(--mmc-node-bg));
+  box-shadow: 0 0 0 5px color-mix(in srgb, var(--color-green) 12%, transparent), 0 8px 24px rgba(15, 23, 42, .16);
+  color: var(--mmc-node-text);
+  pointer-events: none;
+  animation: mmc-drop-preview-in 110ms ease-out;
+}
+
+.mmc-drop-preview::before {
+  content: "";
+  position: absolute;
+  background: color-mix(in srgb, var(--color-green) 80%, white);
+  border-radius: 999px;
+}
+
+.mmc-drop-preview.is-before::before,
+.mmc-drop-preview.is-after::before {
+  left: -18px;
+  right: -18px;
+  height: 3px;
+}
+
+.mmc-drop-preview.is-before::before { bottom: -14px; }
+.mmc-drop-preview.is-after::before { top: -14px; }
+
+.mmc-drop-preview.is-child::before {
+  top: 50%;
+  right: 100%;
+  width: 54px;
+  height: 3px;
+}
+
+.mmc-drop-preview-label {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mmc-drop-preview-hint {
+  color: var(--text-muted);
+  font-size: 10px;
+  line-height: 1.25;
+}
+
+@keyframes mmc-drop-preview-in {
+  from { opacity: 0; transform: translate(-50%, -50%) scale(.94); }
+  to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+
 .mmc-node.is-drop-child-right::after {
   content: "添加到子级 →";
   position: absolute;

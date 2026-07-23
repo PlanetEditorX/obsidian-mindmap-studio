@@ -1708,6 +1708,7 @@ export class MindMapEditor {
   private future: string[] = [];
   private draggingId: string | null = null;
   private dragDropPosition: NodeDropPosition | null = null;
+  private dropPreviewEl: HTMLElement | null = null;
   private panning = false;
   private panStart = { x: 0, y: 0, panX: 0, panY: 0 };
   private cleanupCallbacks: Array<() => void> = [];
@@ -2670,6 +2671,7 @@ export class MindMapEditor {
     const appearance = this.getAppearance();
     this.layout = computeLayout(this.document.root, this.document.layout, appearance.fontSize ?? 14, appearance.nodeVisualStyle ?? "card", appearance);
     const branchColorMap = appearance.colorfulBranches ? buildBranchColorMap(this.document.root, appearance.branchColors) : new Map<string, string>();
+    this.clearDropPreview();
     this.nodesLayerEl.empty();
     while (this.edgesSvg.firstChild) this.edgesSvg.removeChild(this.edgesSvg.firstChild);
 
@@ -3025,15 +3027,18 @@ export class MindMapEditor {
           ? "is-drop-child-right"
           : `is-drop-${position}`;
         nodeEl.addClasses(["is-drop-target", indicator]);
+        this.showDropPreview(node.id, position);
       });
       nodeEl.addEventListener("dragleave", (event) => {
         if (event.relatedTarget instanceof Node && nodeEl.contains(event.relatedTarget)) return;
         nodeEl.removeClasses(["is-drop-target", "is-drop-before", "is-drop-child", "is-drop-child-right", "is-drop-after"]);
+        this.clearDropPreview();
       });
       nodeEl.addEventListener("drop", (event) => {
         event.preventDefault();
         const position = this.dragDropPosition ?? this.dropPositionForEvent(event, nodeEl, node.id);
         this.clearDropIndicators();
+        this.clearDropPreview();
         const draggedId = this.draggingId ?? event.dataTransfer?.getData("text/plain") ?? null;
         if (draggedId) this.moveNode(draggedId, node.id, position);
       });
@@ -3041,6 +3046,7 @@ export class MindMapEditor {
         this.draggingId = null;
         this.dragDropPosition = null;
         this.clearDropIndicators();
+        this.clearDropPreview();
         this.nodesLayerEl.querySelectorAll(".is-dragging").forEach((element) => element.removeClass("is-dragging"));
       });
     }
@@ -4215,6 +4221,55 @@ export class MindMapEditor {
   private clearDropIndicators(): void {
     this.nodesLayerEl.querySelectorAll(".is-drop-target, .is-drop-before, .is-drop-child, .is-drop-child-right, .is-drop-after")
       .forEach((element) => element.removeClasses(["is-drop-target", "is-drop-before", "is-drop-child", "is-drop-child-right", "is-drop-after"]));
+  }
+
+  /**
+   * Renders a magnetic placeholder at the exact location represented by the
+   * current before, child, or after drop zone.
+   *
+   * @param targetId Drop target node identifier.
+   * @param position Relative drop position.
+   */
+  private showDropPreview(targetId: string, position: NodeDropPosition): void {
+    const target = this.layout.byId.get(targetId);
+    const dragged = this.draggingId ? this.layout.byId.get(this.draggingId) : null;
+    if (!target || !dragged) return;
+    if (this.dropPreviewEl?.dataset.targetId === targetId && this.dropPreviewEl.dataset.position === position) return;
+    this.clearDropPreview();
+    const selectedCount = this.selectedIds.has(dragged.node.id) ? this.selectedIds.size : 1;
+    const preview = this.nodesLayerEl.createDiv({ cls: `mmc-drop-preview is-${position}` });
+    preview.dataset.targetId = targetId;
+    preview.dataset.position = position;
+    const width = Math.min(260, Math.max(100, dragged.width));
+    const height = Math.min(72, Math.max(38, dragged.height));
+    let x = target.x;
+    let y = target.y;
+    if (position === "before") y -= target.height / 2 + height / 2 + 12;
+    if (position === "after") y += target.height / 2 + height / 2 + 12;
+    if (position === "child") {
+      const side = target.side === -1 ? -1 : 1;
+      const gap = this.getAppearance().nodeVisualStyle === "branch" ? 54 : 112;
+      x += side * (target.width / 2 + gap + width / 2);
+    }
+    preview.style.left = `${x}px`;
+    preview.style.top = `${y}px`;
+    preview.style.width = `${width}px`;
+    preview.style.height = `${height}px`;
+    preview.createSpan({
+      cls: "mmc-drop-preview-label",
+      text: selectedCount > 1 ? `移动 ${selectedCount} 个节点` : nodePrimaryText(dragged.node) || "节点"
+    });
+    preview.createSpan({
+      cls: "mmc-drop-preview-hint",
+      text: position === "child" ? "作为子节点" : position === "before" ? "插入到上方" : "插入到下方"
+    });
+    this.dropPreviewEl = preview;
+  }
+
+  /** Removes the temporary magnetic drop placeholder. */
+  private clearDropPreview(): void {
+    this.dropPreviewEl?.remove();
+    this.dropPreviewEl = null;
   }
 
   /**
