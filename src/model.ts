@@ -37,6 +37,8 @@ export type ThemeMode = "auto" | "light" | "dark";
  * NodeShape 类型定义，用于限制可接受值并让序列化数据保持稳定。
  */
 export type NodeShape = "rounded" | "pill" | "rectangle";
+/** Overall sizing and density used when rendering mind-map nodes. */
+export type NodeVisualStyle = "card" | "compact";
 /**
  * TaskStatus 类型定义，用于限制可接受值并让序列化数据保持稳定。
  */
@@ -198,6 +200,7 @@ export interface MindMapNavigation {
  * MindMapAppearance 的结构化数据约定。字段会在模块边界传递，用于保持类型安全和版本兼容。
  */
 export interface MindMapAppearance {
+  nodeVisualStyle?: NodeVisualStyle;
   themePreset?: MindMapThemePresetId;
   backgroundColor?: string;
   backgroundPattern?: BackgroundPattern;
@@ -411,6 +414,7 @@ function normalizeAppearance(input: Partial<MindMapAppearance> | undefined): Min
     ? input.customFont.trim().slice(0, 120)
     : undefined;
   const appearance: MindMapAppearance = {
+    nodeVisualStyle: input.nodeVisualStyle === "card" || input.nodeVisualStyle === "compact" ? input.nodeVisualStyle : undefined,
     themePreset,
     backgroundColor: normalizeColor(input.backgroundColor),
     backgroundPattern,

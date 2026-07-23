@@ -391,6 +391,17 @@
   box-shadow: 0 0 0 calc(4px / var(--mmc-zoom, 1)) color-mix(in srgb, var(--color-green) 25%, transparent);
 }
 
+.mmc-editor[data-node-visual-style="compact"] .mmc-node {
+  padding: 6px 12px;
+  border-radius: 9px;
+  box-shadow: 0 1px 4px rgb(15 23 42 / 10%);
+}
+
+.mmc-editor[data-node-visual-style="compact"] .mmc-node.is-root {
+  padding: 9px 18px;
+  border-radius: 11px;
+}
+
 .mmc-node.is-multi-selected {
   outline: calc(2px / var(--mmc-zoom, 1)) dashed color-mix(in srgb, var(--mmc-selection) 75%, white);
   outline-offset: calc(4px / var(--mmc-zoom, 1));

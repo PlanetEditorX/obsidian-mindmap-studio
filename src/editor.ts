@@ -1216,6 +1216,11 @@ class AppearanceModal extends Modal {
     const fontSizeLabel = grid.createEl("label", { text: "字号（10–30）" });
     const fontSizeInput = fontSizeLabel.createEl("input", { type: "number", attr: { min: "10", max: "30", step: "1" } });
     fontSizeInput.value = String(this.appearance.fontSize ?? 14);
+    const nodeVisualStyleLabel = grid.createEl("label", { text: "节点视觉样式" });
+    const nodeVisualStyleSelect = nodeVisualStyleLabel.createEl("select");
+    nodeVisualStyleSelect.createEl("option", { text: "卡片节点（当前样式）", attr: { value: "card" } });
+    nodeVisualStyleSelect.createEl("option", { text: "紧凑分支", attr: { value: "compact" } });
+    nodeVisualStyleSelect.value = this.appearance.nodeVisualStyle ?? "card";
     const nodeTextAlignLabel = grid.createEl("label", { text: "节点文字对齐" });
     const nodeTextAlignSelect = nodeTextAlignLabel.createEl("select");
     nodeTextAlignSelect.createEl("option", { text: "左对齐", attr: { value: "left" } });
@@ -1367,6 +1372,7 @@ class AppearanceModal extends Modal {
         fontFamily: fontSelect.value as FontFamilyMode,
         customFont: fontSelect.value === "custom" ? customFontInput.value.trim().slice(0, 120) || undefined : undefined,
         fontSize: clamp(fontSizeInput.value, 10, 30, 14),
+        nodeVisualStyle: nodeVisualStyleSelect.value as "card" | "compact",
         nodeTextAlign: nodeTextAlignSelect.value as NodeTextAlign,
         rootColor: rootColor.toggle.checked ? rootColor.input.value : undefined,
         rootTextColor: rootTextColor.toggle.checked ? rootTextColor.input.value : undefined,
@@ -1703,7 +1709,8 @@ export class MindMapEditor {
     this.currentMode = this.resolveMode(options.defaultViewMode);
     this.readOnly = this.document.view?.readOnly === true;
     this.selectedId = this.document.root.id;
-    this.layout = computeLayout(this.document.root, this.document.layout, this.getAppearance().fontSize ?? 14);
+    const initialAppearance = this.getAppearance();
+    this.layout = computeLayout(this.document.root, this.document.layout, initialAppearance.fontSize ?? 14, initialAppearance.nodeVisualStyle ?? "card");
     this.buildUi();
     this.render();
     if (this.options.autoFitOnOpen) window.setTimeout(() => this.fitToView(), 50);
@@ -2212,6 +2219,7 @@ export class MindMapEditor {
     this.rootEl.style.setProperty("--mmc-font-family", this.fontFamilyCss(appearance));
     this.rootEl.style.setProperty("--mmc-edge-width", `${appearance.edgeWidth ?? 2.2}px`);
     this.rootEl.style.setProperty("--mmc-node-border-width", `${appearance.nodeBorderWidth ?? 1}px`);
+    this.rootEl.dataset.nodeVisualStyle = appearance.nodeVisualStyle ?? "card";
     this.viewportEl.toggleClass("pattern-grid", appearance.backgroundPattern === "grid");
     this.viewportEl.toggleClass("pattern-dots", appearance.backgroundPattern === "dots");
     this.viewportEl.toggleClass("pattern-none", !appearance.backgroundPattern || appearance.backgroundPattern === "none");
@@ -2619,7 +2627,7 @@ export class MindMapEditor {
    */
   private renderMindMap(): void {
     const appearance = this.getAppearance();
-    this.layout = computeLayout(this.document.root, this.document.layout, appearance.fontSize ?? 14);
+    this.layout = computeLayout(this.document.root, this.document.layout, appearance.fontSize ?? 14, appearance.nodeVisualStyle ?? "card");
     const branchColorMap = appearance.colorfulBranches ? buildBranchColorMap(this.document.root, appearance.branchColors) : new Map<string, string>();
     this.nodesLayerEl.empty();
     while (this.edgesSvg.firstChild) this.edgesSvg.removeChild(this.edgesSvg.firstChild);
@@ -2674,7 +2682,9 @@ export class MindMapEditor {
       const branchColor = branchColorMap.get(node.id);
       if (node.style?.color) nodeEl.style.backgroundColor = node.style.color;
       else if (isRoot && appearance.rootColor) nodeEl.style.backgroundColor = appearance.rootColor;
-      else if (!isRoot && appearance.nodeColor) nodeEl.style.backgroundColor = appearance.nodeColor;
+      else if (!isRoot && branchColor && appearance.nodeVisualStyle === "compact") {
+        nodeEl.style.backgroundColor = `color-mix(in srgb, ${branchColor} 16%, ${appearance.nodeColor ?? "#ffffff"})`;
+      } else if (!isRoot && appearance.nodeColor) nodeEl.style.backgroundColor = appearance.nodeColor;
       if (node.style?.textColor) nodeEl.style.color = node.style.textColor;
       else if (isRoot && appearance.rootTextColor) nodeEl.style.color = appearance.rootTextColor;
       else if (!isRoot && appearance.textColor) nodeEl.style.color = appearance.textColor;

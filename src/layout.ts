@@ -5,7 +5,7 @@
  * 根据可见节点、自定义尺寸、布局方向和外观配置计算坐标、边界、连接线路径与层级线宽，并使用同一结果生成 SVG。
  */
 
-import { nodeContentBlocks, nodePlainText, type EdgeStyle, type FontFamilyMode, type LayoutMode, type MindMapAppearance, type MindMapNode, type MindMapTextRun, type NodeShape } from "./model";
+import { nodeContentBlocks, nodePlainText, type EdgeStyle, type FontFamilyMode, type LayoutMode, type MindMapAppearance, type MindMapNode, type MindMapTextRun, type NodeShape, type NodeVisualStyle } from "./model";
 
 /**
  * NodePosition 的结构化数据约定。字段会在模块边界传递，用于保持类型安全和版本兼容。
@@ -71,19 +71,23 @@ function estimatedTextLines(text: string, width: number, fontSize: number): numb
  * @param defaultFontSize 未单独设置字号时使用的默认字号。
  * @returns 计算得到的数值结果。
  */
-function nodeDimensions(node: MindMapNode, depth: number, defaultFontSize = 14): { width: number; height: number } {
+function nodeDimensions(node: MindMapNode, depth: number, defaultFontSize = 14, visualStyle: NodeVisualStyle = "card"): { width: number; height: number } {
   const fontSize = node.style?.fontSize ?? defaultFontSize;
   const manualWidth = node.style?.width;
   const extraWidth = Math.max(0, fontSize - 14) * 4;
   const blocks = nodeContentBlocks(node);
-  let width = manualWidth ?? ((depth === 0 ? ROOT_WIDTH : NODE_WIDTH) + extraWidth);
+  const compact = visualStyle === "compact";
+  let width = manualWidth ?? (compact
+    ? ((depth === 0 ? 146 : 68) + extraWidth)
+    : ((depth === 0 ? ROOT_WIDTH : NODE_WIDTH) + extraWidth));
 
   if (!manualWidth) {
     for (const block of blocks) {
       if (block.type === "image") width = Math.max(width, 240);
       else {
         const longestLine = Math.max(1, ...block.text.split(/\r?\n/).map((line) => line.length));
-        width = Math.max(width, Math.min(460, 80 + Math.min(longestLine, 58) * fontSize * 0.62));
+        const horizontalPadding = compact ? (depth === 0 ? 42 : 28) : 80;
+        width = Math.max(width, Math.min(compact ? 520 : 460, horizontalPadding + Math.min(longestLine, 58) * fontSize * 0.62));
       }
     }
     if (node.table) {
@@ -97,12 +101,12 @@ function nodeDimensions(node: MindMapNode, depth: number, defaultFontSize = 14):
     }
   }
 
-  width = Math.min(900, Math.max(100, width));
-  let height = 28 + Math.max(0, fontSize - 14) * 1.4;
-  if (!blocks.length) height += depth === 0 ? 34 : 26;
+  width = Math.min(900, Math.max(compact ? 56 : 100, width));
+  let height = (compact ? 12 : 28) + Math.max(0, fontSize - 14) * 1.4;
+  if (!blocks.length) height += depth === 0 ? (compact ? 32 : 34) : (compact ? 24 : 26);
   for (const block of blocks) {
     if (block.type === "image") height += 132;
-    else height += Math.max(30, estimatedTextLines(block.text, width, fontSize) * (fontSize + 8));
+    else height += Math.max(compact ? 24 : 30, estimatedTextLines(block.text, width, fontSize) * (fontSize + (compact ? 6 : 8)));
   }
   if (node.tags?.length) height += 20;
   if (node.table) {
@@ -125,11 +129,12 @@ function nodeDimensions(node: MindMapNode, depth: number, defaultFontSize = 14):
  * @param defaultFontSize 未单独设置字号时使用的默认字号。
  * @returns 计算得到的数值结果。
  */
-function subtreeHeight(node: MindMapNode, depth: number, defaultFontSize = 14): number {
-  const ownHeight = nodeDimensions(node, depth, defaultFontSize).height;
+function subtreeHeight(node: MindMapNode, depth: number, defaultFontSize = 14, visualStyle: NodeVisualStyle = "card"): number {
+  const ownHeight = nodeDimensions(node, depth, defaultFontSize, visualStyle).height;
   const children = visibleChildren(node);
   if (!children.length) return ownHeight;
-  const childrenHeight = children.reduce((sum, child) => sum + subtreeHeight(child, depth + 1, defaultFontSize), 0) + V_GAP * (children.length - 1);
+  const gap = visualStyle === "compact" ? 14 : V_GAP;
+  const childrenHeight = children.reduce((sum, child) => sum + subtreeHeight(child, depth + 1, defaultFontSize, visualStyle), 0) + gap * (children.length - 1);
   return Math.max(ownHeight, childrenHeight);
 }
 
@@ -155,22 +160,25 @@ function layoutBranch(
   depth: number,
   centerY: number,
   output: NodePosition[],
-  defaultFontSize = 14
+  defaultFontSize = 14,
+  visualStyle: NodeVisualStyle = "card"
 ): void {
-  const dimensions = nodeDimensions(node, depth, defaultFontSize);
-  const x = parentX + side * (parentWidth / 2 + H_GAP + dimensions.width / 2);
+  const dimensions = nodeDimensions(node, depth, defaultFontSize, visualStyle);
+  const horizontalGap = visualStyle === "compact" ? 58 : H_GAP;
+  const verticalGap = visualStyle === "compact" ? 14 : V_GAP;
+  const x = parentX + side * (parentWidth / 2 + horizontalGap + dimensions.width / 2);
   output.push({ node, parentId, x, y: centerY, depth, side, ...dimensions });
   const children = visibleChildren(node);
   if (!children.length) return;
 
-  const heights = children.map((child) => subtreeHeight(child, depth + 1, defaultFontSize));
-  const totalHeight = heights.reduce((sum, childHeight) => sum + childHeight, 0) + V_GAP * (children.length - 1);
+  const heights = children.map((child) => subtreeHeight(child, depth + 1, defaultFontSize, visualStyle));
+  const totalHeight = heights.reduce((sum, childHeight) => sum + childHeight, 0) + verticalGap * (children.length - 1);
   let cursor = centerY - totalHeight / 2;
   children.forEach((child, index) => {
-    const childHeight = heights[index] ?? nodeDimensions(child, depth + 1, defaultFontSize).height;
+    const childHeight = heights[index] ?? nodeDimensions(child, depth + 1, defaultFontSize, visualStyle).height;
     const childCenter = cursor + childHeight / 2;
-    layoutBranch(child, node.id, x, dimensions.width, side, depth + 1, childCenter, output, defaultFontSize);
-    cursor += childHeight + V_GAP;
+    layoutBranch(child, node.id, x, dimensions.width, side, depth + 1, childCenter, output, defaultFontSize, visualStyle);
+    cursor += childHeight + verticalGap;
   });
 }
 
@@ -183,8 +191,9 @@ function layoutBranch(
  * @returns 当前操作生成、查找或规范化后的结果。
  * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
  */
-export function computeLayout(root: MindMapNode, mode: LayoutMode, defaultFontSize = 14): LayoutResult {
-  const rootDimensions = nodeDimensions(root, 0, defaultFontSize);
+export function computeLayout(root: MindMapNode, mode: LayoutMode, defaultFontSize = 14, visualStyle: NodeVisualStyle = "card"): LayoutResult {
+  const rootDimensions = nodeDimensions(root, 0, defaultFontSize, visualStyle);
+  const verticalGap = visualStyle === "compact" ? 14 : V_GAP;
   const nodes: NodePosition[] = [
     { node: root, parentId: null, x: 0, y: 0, depth: 0, side: 0, ...rootDimensions }
   ];
@@ -195,8 +204,8 @@ export function computeLayout(root: MindMapNode, mode: LayoutMode, defaultFontSi
     const right: MindMapNode[] = [];
     let leftHeight = 0;
     let rightHeight = 0;
-    for (const child of [...children].sort((a, b) => subtreeHeight(b, 1, defaultFontSize) - subtreeHeight(a, 1, defaultFontSize))) {
-      const height = subtreeHeight(child, 1, defaultFontSize) + V_GAP;
+    for (const child of [...children].sort((a, b) => subtreeHeight(b, 1, defaultFontSize, visualStyle) - subtreeHeight(a, 1, defaultFontSize, visualStyle))) {
+      const height = subtreeHeight(child, 1, defaultFontSize, visualStyle) + verticalGap;
       if (leftHeight <= rightHeight) {
         left.push(child);
         leftHeight += height;
@@ -207,25 +216,25 @@ export function computeLayout(root: MindMapNode, mode: LayoutMode, defaultFontSi
     }
 
     const placeSide = (items: MindMapNode[], side: -1 | 1): void => {
-      const heights = items.map((child) => subtreeHeight(child, 1, defaultFontSize));
-      const total = heights.reduce((sum, value) => sum + value, 0) + V_GAP * Math.max(0, items.length - 1);
+      const heights = items.map((child) => subtreeHeight(child, 1, defaultFontSize, visualStyle));
+      const total = heights.reduce((sum, value) => sum + value, 0) + verticalGap * Math.max(0, items.length - 1);
       let cursor = -total / 2;
       items.forEach((child, index) => {
-        const height = heights[index] ?? nodeDimensions(child, 1, defaultFontSize).height;
-        layoutBranch(child, root.id, 0, rootDimensions.width, side, 1, cursor + height / 2, nodes, defaultFontSize);
-        cursor += height + V_GAP;
+        const height = heights[index] ?? nodeDimensions(child, 1, defaultFontSize, visualStyle).height;
+        layoutBranch(child, root.id, 0, rootDimensions.width, side, 1, cursor + height / 2, nodes, defaultFontSize, visualStyle);
+        cursor += height + verticalGap;
       });
     };
     placeSide(left, -1);
     placeSide(right, 1);
   } else {
-    const heights = children.map((child) => subtreeHeight(child, 1, defaultFontSize));
-    const total = heights.reduce((sum, value) => sum + value, 0) + V_GAP * Math.max(0, children.length - 1);
+    const heights = children.map((child) => subtreeHeight(child, 1, defaultFontSize, visualStyle));
+    const total = heights.reduce((sum, value) => sum + value, 0) + verticalGap * Math.max(0, children.length - 1);
     let cursor = -total / 2;
     children.forEach((child, index) => {
-      const height = heights[index] ?? nodeDimensions(child, 1, defaultFontSize).height;
-      layoutBranch(child, root.id, 0, rootDimensions.width, 1, 1, cursor + height / 2, nodes, defaultFontSize);
-      cursor += height + V_GAP;
+      const height = heights[index] ?? nodeDimensions(child, 1, defaultFontSize, visualStyle).height;
+      layoutBranch(child, root.id, 0, rootDimensions.width, 1, 1, cursor + height / 2, nodes, defaultFontSize, visualStyle);
+      cursor += height + verticalGap;
     });
   }
 
@@ -443,7 +452,7 @@ function svgFontFamily(mode: FontFamilyMode | undefined, customFont: string | un
  */
 export function documentToSvg(root: MindMapNode, mode: LayoutMode, title: string, appearance: MindMapAppearance = {}): string {
   const defaultFontSize = appearance.fontSize ?? 14;
-  const layout = computeLayout(root, mode, defaultFontSize);
+  const layout = computeLayout(root, mode, defaultFontSize, appearance.nodeVisualStyle ?? "card");
   const padding = 72;
   const width = Math.max(320, layout.maxX - layout.minX + padding * 2);
   const height = Math.max(220, layout.maxY - layout.minY + padding * 2);
