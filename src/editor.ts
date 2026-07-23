@@ -397,6 +397,7 @@ class NodeEditModal extends Modal {
   private closeWithoutFlush = false;
   private outsidePointerHandler: ((event: PointerEvent) => void) | null = null;
   private resizeHandler: (() => void) | null = null;
+  private externalNodeHandler: ((event: Event) => void) | null = null;
 
   /**
    * 创建 NodeEditModal 实例，保存依赖和初始状态；实际 DOM 构建通常在 onOpen() 或后续渲染流程中完成。
@@ -700,6 +701,15 @@ class NodeEditModal extends Modal {
     const addImage = actionRow.createEl("button", { text: "+ 图片", attr: { type: "button" } });
     addImage.addEventListener("click", () => { workingBlocks.push({ id: newId(), type: "image", source: "" }); renderBlocks(); scheduleAutoSave(); });
     renderBlocks();
+    if (this.position === "right" && this.panelHost) {
+      this.externalNodeHandler = (event: Event): void => {
+        const detail = (event as CustomEvent<{ nodeId?: string }>).detail;
+        if (detail?.nodeId !== this.node.id) return;
+        workingBlocks = JSON.parse(JSON.stringify(nodeContentBlocks(this.node))) as MindMapContentBlock[];
+        renderBlocks();
+      };
+      this.panelHost.addEventListener("mms-inline-node-change", this.externalNodeHandler);
+    }
 
     const detailsGrid = form.createDiv({ cls: "mmc-form-grid" });
     const iconLabel = detailsGrid.createEl("label", { text: "图标或 Emoji" });
@@ -820,6 +830,7 @@ class NodeEditModal extends Modal {
 
     this.outsidePointerHandler = (event: PointerEvent): void => {
       if (this.modalEl.contains(event.target as Node)) return;
+      if (this.position === "right" && event.target instanceof HTMLElement && event.target.closest(".mmc-node")) return;
       this.saveOnClose?.(); this.closeWithoutFlush = true; this.close();
     };
     window.setTimeout(() => document.addEventListener("pointerdown", this.outsidePointerHandler!, true), 0);
@@ -832,6 +843,9 @@ class NodeEditModal extends Modal {
     if (!this.closeWithoutFlush) this.saveOnClose?.();
     if (this.outsidePointerHandler) document.removeEventListener("pointerdown", this.outsidePointerHandler, true);
     if (this.resizeHandler) window.removeEventListener("resize", this.resizeHandler);
+    if (this.externalNodeHandler && this.panelHost) {
+      this.panelHost.removeEventListener("mms-inline-node-change", this.externalNodeHandler);
+    }
     this.contentEl.empty();
   }
 }
@@ -1303,6 +1317,7 @@ export class MindMapEditor {
   private currentMode: DisplayMode;
   private readOnly: boolean;
   private readonly imageLoadTimers = new Set<number>();
+  private inlineEditingId: string | null = null;
 
   /**
    * 创建 MindMapEditor 实例，保存依赖和初始状态；实际 DOM 构建通常在 onOpen() 或后续渲染流程中完成。
@@ -1379,6 +1394,7 @@ export class MindMapEditor {
       this.editControls.splice(0);
       this.buildUi();
     }
+    if (this.inlineEditingId && !modesChanged && !globalModeChanged) return;
     this.render();
   }
 
@@ -2497,6 +2513,8 @@ export class MindMapEditor {
     const node = findNode(this.document.root, nodeId);
     if (!node) return;
     this.selectNode(nodeId);
+    this.inlineEditingId = nodeId;
+    if (this.options.nodeEditorPosition === "right") this.editSelected();
     if (this.currentMode !== "mindmap") {
       const scope = this.currentMode === "outline" ? this.outlineEl : this.articleEl;
       scope.querySelector<HTMLElement>(`[data-node-id="${CSS.escape(nodeId)}"] [contenteditable="true"]`)?.focus();
@@ -2537,6 +2555,7 @@ export class MindMapEditor {
       if (node.id === this.document.root.id && values.text) this.document.title = values.text;
       this.callbacks.onChange(this.getDocument());
       this.markSaving();
+      this.viewportEl.dispatchEvent(new CustomEvent("mms-inline-node-change", { detail: { nodeId } }));
     };
     const color = nodeEl.createEl("input", {
       cls: "mmc-inline-color",
@@ -2630,29 +2649,52 @@ export class MindMapEditor {
       }, 0);
     });
     editor.addEventListener("input", save);
-    editor.addEventListener("keydown", (event) => {
+    let lastHandledShortcut = "";
+    const handleFormatShortcut = (event: KeyboardEvent): boolean => {
       const command = this.shortcutMatches(event, this.options.richTextShortcuts.bold) ? "bold"
         : this.shortcutMatches(event, this.options.richTextShortcuts.italic) ? "italic"
           : this.shortcutMatches(event, this.options.richTextShortcuts.underline) ? "underline" : null;
       if (command) {
         event.preventDefault();
         event.stopPropagation();
+        event.stopImmediatePropagation();
+        lastHandledShortcut = `${command}:${event.timeStamp}`;
         applyStyle({ [command]: true });
+        return true;
       } else if (this.shortcutMatches(event, this.options.richTextShortcuts.color)) {
         event.preventDefault();
         event.stopPropagation();
+        event.stopImmediatePropagation();
+        lastHandledShortcut = `color:${event.timeStamp}`;
         colorInteraction = true;
         rememberSelection();
         color.click();
+        return true;
       } else if (event.key === "Escape") {
         event.preventDefault();
         editor!.blur();
       }
+      return false;
+    };
+    editor.addEventListener("keydown", handleFormatShortcut, true);
+    const windowShortcut = (event: KeyboardEvent): void => {
+      if (document.activeElement === editor) handleFormatShortcut(event);
+    };
+    window.addEventListener("keydown", windowShortcut, true);
+    editor.addEventListener("beforeinput", (event) => {
+      const command = event.inputType === "formatBold" ? "bold"
+        : event.inputType === "formatItalic" ? "italic"
+          : event.inputType === "formatUnderline" ? "underline" : null;
+      if (!command || lastHandledShortcut.startsWith(`${command}:`)) return;
+      event.preventDefault();
+      applyStyle({ [command]: true });
     });
     let editingFinished = false;
     editor.addEventListener("blur", (event) => {
       if (editingFinished || event.relatedTarget === color || colorInteraction) return;
       editingFinished = true;
+      this.inlineEditingId = null;
+      window.removeEventListener("keydown", windowShortcut, true);
       save();
       color.remove();
       this.render();
