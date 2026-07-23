@@ -396,6 +396,7 @@ class NodeEditModal extends Modal {
   private saveOnClose: (() => void) | null = null;
   private closeWithoutFlush = false;
   private outsidePointerHandler: ((event: PointerEvent) => void) | null = null;
+  private resizeHandler: (() => void) | null = null;
 
   /**
    * 创建 NodeEditModal 实例，保存依赖和初始状态；实际 DOM 构建通常在 onOpen() 或后续渲染流程中完成。
@@ -405,6 +406,8 @@ class NodeEditModal extends Modal {
    * @param defaultShape 该参数用于 constructor 流程中的输入或控制。
    * @param callbacks 编辑器向视图层发送事件的一组回调。
    * @param submit 该参数用于 constructor 流程中的输入或控制。
+   * @param position 编辑器显示在居中弹窗还是右侧画布面板。
+   * @param panelHost 右侧面板需要限制在其中的画布元素。
    */
   constructor(
     app: App,
@@ -412,7 +415,8 @@ class NodeEditModal extends Modal {
     defaultShape: NodeShape,
     callbacks: Pick<MindMapEditorCallbacks, "resolveImage" | "onSavePastedImage" | "getImageHosts" | "getDefaultUploadHostIds" | "onUploadImage" | "onReadImageSource">,
     submit: (values: NodeEditValues, mode: "autosave" | "commit") => void,
-    private readonly position: "center" | "right" = "center"
+    private readonly position: "center" | "right" = "center",
+    private readonly panelHost?: HTMLElement
   ) {
     super(app);
     this.node = node;
@@ -426,6 +430,22 @@ class NodeEditModal extends Modal {
    */
   onOpen(): void {
     this.modalEl.toggleClass("mms-node-editor-right", this.position === "right");
+    if (this.position === "right" && this.panelHost) {
+      const positionPanel = (): void => {
+        const rect = this.panelHost!.getBoundingClientRect();
+        const container = this.modalEl.parentElement;
+        if (!container) return;
+        container.style.left = `${rect.left}px`;
+        container.style.top = `${rect.top}px`;
+        container.style.width = `${rect.width}px`;
+        container.style.height = `${rect.height}px`;
+        container.style.right = "auto";
+        container.style.bottom = "auto";
+      };
+      this.resizeHandler = positionPanel;
+      positionPanel();
+      window.addEventListener("resize", positionPanel);
+    }
     this.titleEl.setText("编辑节点内容");
     this.contentEl.addClass("mmc-node-edit-modal");
     const form = this.contentEl.createDiv({ cls: "mmc-node-edit-form" });
@@ -811,6 +831,7 @@ class NodeEditModal extends Modal {
   onClose(): void {
     if (!this.closeWithoutFlush) this.saveOnClose?.();
     if (this.outsidePointerHandler) document.removeEventListener("pointerdown", this.outsidePointerHandler, true);
+    if (this.resizeHandler) window.removeEventListener("resize", this.resizeHandler);
     this.contentEl.empty();
   }
 }
@@ -2369,8 +2390,7 @@ export class MindMapEditor {
         event.preventDefault();
         event.stopPropagation();
         this.selectNode(node.id);
-        if (event.shiftKey || this.readOnly) this.openContextMenu(event);
-        else this.editSelected();
+        this.openContextMenu(event);
       });
       nodeEl.addEventListener("dragstart", (event) => {
         if (this.readOnly) { event.preventDefault(); return; }
@@ -2524,6 +2544,7 @@ export class MindMapEditor {
       attr: { title: `字体颜色（${this.options.richTextShortcuts.color}）`, "aria-label": "所选文字颜色" }
     });
     color.value = "#172033";
+    let colorInteraction = false;
     let savedSelection: { start: number; end: number } | null = null;
     const rememberSelection = (): { start: number; end: number } | null => {
       const selection = window.getSelection();
@@ -2535,6 +2556,36 @@ export class MindMapEditor {
       before.setEnd(range.startContainer, range.startOffset);
       savedSelection = { start: before.toString().length, end: before.toString().length + range.toString().length };
       return savedSelection;
+    };
+    const restoreSelection = (selected: { start: number; end: number }): void => {
+      const walker = document.createTreeWalker(editor!, NodeFilter.SHOW_TEXT);
+      let node = walker.nextNode();
+      let offset = 0;
+      let startNode: Node | null = null;
+      let endNode: Node | null = null;
+      let startOffset = 0;
+      let endOffset = 0;
+      while (node) {
+        const length = node.textContent?.length ?? 0;
+        if (!startNode && selected.start <= offset + length) {
+          startNode = node;
+          startOffset = Math.max(0, selected.start - offset);
+        }
+        if (!endNode && selected.end <= offset + length) {
+          endNode = node;
+          endOffset = Math.max(0, selected.end - offset);
+          break;
+        }
+        offset += length;
+        node = walker.nextNode();
+      }
+      if (!startNode || !endNode) return;
+      const range = document.createRange();
+      range.setStart(startNode, startOffset);
+      range.setEnd(endNode, endOffset);
+      const selection = window.getSelection();
+      selection?.removeAllRanges();
+      selection?.addRange(range);
     };
     const applyStyle = (patch: Partial<MindMapTextStyle>): void => {
       const selected = rememberSelection() ?? savedSelection;
@@ -2555,13 +2606,28 @@ export class MindMapEditor {
       block.richText = applyRichTextStyleRange(block.text, block.richText, selected.start, selected.end, patch);
       renderRichTextRuns(editor!, block.richText, block.text);
       save();
+      editor!.focus();
+      restoreSelection(selected);
     };
     color.addEventListener("pointerdown", (event) => {
       event.stopPropagation();
+      colorInteraction = true;
       rememberSelection();
     });
     color.addEventListener("input", () => {
       applyStyle({ color: color.value });
+      window.setTimeout(() => { colorInteraction = false; }, 0);
+    });
+    color.addEventListener("change", () => {
+      colorInteraction = false;
+      editor!.focus();
+      if (savedSelection) restoreSelection(savedSelection);
+    });
+    color.addEventListener("blur", () => {
+      window.setTimeout(() => {
+        colorInteraction = false;
+        if (!editingFinished && document.body.contains(editor!)) editor!.focus();
+      }, 0);
     });
     editor.addEventListener("input", save);
     editor.addEventListener("keydown", (event) => {
@@ -2570,9 +2636,12 @@ export class MindMapEditor {
           : this.shortcutMatches(event, this.options.richTextShortcuts.underline) ? "underline" : null;
       if (command) {
         event.preventDefault();
+        event.stopPropagation();
         applyStyle({ [command]: true });
       } else if (this.shortcutMatches(event, this.options.richTextShortcuts.color)) {
         event.preventDefault();
+        event.stopPropagation();
+        colorInteraction = true;
         rememberSelection();
         color.click();
       } else if (event.key === "Escape") {
@@ -2580,12 +2649,14 @@ export class MindMapEditor {
         editor!.blur();
       }
     });
+    let editingFinished = false;
     editor.addEventListener("blur", (event) => {
-      if (event.relatedTarget === color) return;
+      if (editingFinished || event.relatedTarget === color || colorInteraction) return;
+      editingFinished = true;
       save();
       color.remove();
       this.render();
-    }, { once: true });
+    });
     editor.focus();
     const selection = window.getSelection();
     const range = document.createRange();
@@ -2685,7 +2756,7 @@ export class MindMapEditor {
       this.callbacks.onChange(this.getDocument());
       this.markSaving();
       this.render();
-    }, this.options.nodeEditorPosition).open();
+    }, this.options.nodeEditorPosition, this.viewportEl).open();
   }
 
   /**
