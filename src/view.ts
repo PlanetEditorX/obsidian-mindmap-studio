@@ -105,6 +105,10 @@ export class MindMapStudioView extends TextFileView {
         onExportSvg: async (svg) => this.exportTextFile("svg", svg),
         onExportMarkdown: async (markdown) => this.exportTextFile("md", markdown),
         onExportJson: async (json) => this.exportTextFile("json", json),
+        onExportDocument: async (format, html) => {
+          if (format === "pdf") this.printHtmlToPdf(html);
+          else await this.exportTextFile(format, html);
+        },
         resolveImage: (source) => this.resolveImage(source),
         onSavePastedImage: async (blob, suggestedName) => this.plugin.savePastedImage(blob, suggestedName, this.file),
         getImageHosts: () => this.plugin.getImageHostChoices(),
@@ -366,12 +370,34 @@ export class MindMapStudioView extends TextFileView {
    * @param extension 该参数用于 export text file 流程中的输入或控制。
    * @param content 该参数用于 export text file 流程中的输入或控制。
    */
-  private async exportTextFile(extension: "svg" | "md" | "json", content: string): Promise<void> {
+  private async exportTextFile(extension: "svg" | "md" | "json" | "html" | "doc", content: string): Promise<void> {
     const file = this.file;
     const parentPath = file?.parent?.path ?? "";
     const baseName = file?.basename ?? this.document?.title ?? "思维导图";
     const path = await this.plugin.getAvailablePath(normalizePath(`${parentPath ? `${parentPath}/` : ""}${baseName}.${extension}`));
     await this.app.vault.create(path, content);
     new Notice(`已导出：${path}`);
+  }
+
+  /**
+   * Opens standalone HTML in a print window so the user can save it as PDF.
+   *
+   * @param html Complete printable HTML document.
+   */
+  private printHtmlToPdf(html: string): void {
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) {
+      new Notice("无法打开打印窗口，请允许弹出窗口后重试");
+      return;
+    }
+    printWindow.document.open();
+    printWindow.document.write(html);
+    printWindow.document.close();
+    printWindow.addEventListener("load", () => {
+      window.setTimeout(() => {
+        printWindow.focus();
+        printWindow.print();
+      }, 100);
+    }, { once: true });
   }
 }

@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createRequire } from "node:module";
 import { build } from "esbuild";
+import { strToU8, zipSync } from "fflate";
 import { nextVersion } from "./next-version.mjs";
 
 assert.equal(nextVersion("1.6.8"), "1.6.9");
@@ -15,12 +16,21 @@ const outfile = join(tempDir, "model.cjs");
 const layoutOutfile = join(tempDir, "layout.cjs");
 const searchOutfile = join(tempDir, "global-search.cjs");
 const modesOutfile = join(tempDir, "modes.cjs");
+const importExportOutfile = join(tempDir, "import-export.cjs");
 const obsidianStub = join(tempDir, "obsidian-stub.mjs");
 
 try {
   await build({
     entryPoints: ["src/model.ts"],
     outfile,
+    bundle: true,
+    platform: "node",
+    format: "cjs",
+    logLevel: "silent"
+  });
+  await build({
+    entryPoints: ["src/import-export.ts"],
+    outfile: importExportOutfile,
     bundle: true,
     platform: "node",
     format: "cjs",
@@ -64,7 +74,15 @@ export const setIcon = () => {};
   const layout = require(layoutOutfile);
   const globalSearch = require(searchOutfile);
   const modes = require(modesOutfile);
+  const importExport = require(importExportOutfile);
   const document = model.createDefaultDocument("测试脑图");
+  const xmindArchive = zipSync({
+    "content.json": strToU8(JSON.stringify([{ rootTopic: { title: "XMind 根", children: { attached: [{ title: "分支 A" }] } } }]))
+  });
+  const importedXmind = importExport.xmindToDocument(xmindArchive.buffer, "fallback");
+  assert.equal(importedXmind.root.text, "XMind 根");
+  assert.equal(importedXmind.root.children[0]?.text, "分支 A");
+  assert.match(importExport.documentToHtml(importedXmind), /<!doctype html>/);
   document.appearance = {
     backgroundColor: "#fef3c7",
     backgroundPattern: "dots",

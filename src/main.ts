@@ -384,7 +384,7 @@ export default class MindMapStudioPlugin extends Plugin {
           ? raw.visibleToolbarItems.filter((id): id is string => typeof id === "string")
           : [...DEFAULT_SETTINGS.visibleToolbarItems];
         const previousOrder = Array.isArray(raw.toolbarItemOrder) ? raw.toolbarItemOrder : [];
-        for (const id of ["article-landing", "article-style"]) {
+        for (const id of ["article-landing", "article-style", "export-document"]) {
           if (!previousOrder.includes(id) && !visible.includes(id)) visible.push(id);
         }
         return visible;

@@ -13,6 +13,7 @@ import {
   containsNode,
   createNode,
   documentToMarkdown,
+  markdownToDocument,
   extractFirstWikiLink,
   findAncestors,
   findNode,
@@ -66,6 +67,7 @@ import { CodeEditModal, TableEditModal } from "./content-modals";
 import { TOOLBAR_ITEMS, type ImageHostChoice, type ImageHostUploadBatch } from "./settings";
 import { appearanceFromThemePreset, MINDMAP_THEME_PRESETS } from "./themes";
 import { buildArticleNodeInfo, DISPLAY_MODE_ICONS, DISPLAY_MODE_LABELS, type ArticlePageNavigation, type ArticleTocEntry } from "./modes";
+import { documentToHtml, xmindToDocument } from "./import-export";
 
 /**
  * MindMapEditorCallbacks 的结构化数据约定。字段会在模块边界传递，用于保持类型安全和版本兼容。
@@ -76,6 +78,7 @@ export interface MindMapEditorCallbacks {
   onExportSvg: (svg: string) => void | Promise<void>;
   onExportMarkdown: (markdown: string) => void | Promise<void>;
   onExportJson: (json: string) => void | Promise<void>;
+  onExportDocument: (format: "html" | "doc" | "pdf", html: string) => void | Promise<void>;
   resolveImage: (source: string) => string | null;
   onSavePastedImage: (blob: Blob, suggestedName: string) => Promise<string>;
   getImageHosts: () => ImageHostChoice[];
@@ -1511,6 +1514,47 @@ class SearchNodesModal extends Modal {
 }
 
 /**
+ * Presents the portable document export formats.
+ */
+class DocumentExportModal extends Modal {
+  private readonly exportFormat: (format: "html" | "doc" | "pdf" | "md") => void;
+
+  /**
+   * Creates a document export chooser.
+   *
+   * @param app Obsidian application.
+   * @param exportFormat Export callback.
+   */
+  constructor(app: App, exportFormat: (format: "html" | "doc" | "pdf" | "md") => void) {
+    super(app);
+    this.exportFormat = exportFormat;
+  }
+
+  /**
+   * Builds export format buttons.
+   */
+  onOpen(): void {
+    this.titleEl.setText("导出文档");
+    this.contentEl.createEl("p", { cls: "setting-item-description", text: "选择适合阅读、编辑或打印的格式。" });
+    const formats = this.contentEl.createDiv({ cls: "mms-document-export-grid" });
+    for (const [format, title, description] of [
+      ["html", "HTML", "独立网页，可用浏览器打开"],
+      ["doc", "Word", "Word 兼容文档（.doc）"],
+      ["pdf", "PDF", "打开打印版并另存为 PDF"],
+      ["md", "Markdown", "保留标题和节点层级"]
+    ] as const) {
+      const button = formats.createEl("button", { attr: { type: "button" } });
+      button.createEl("strong", { text: title });
+      button.createSpan({ text: description });
+      button.addEventListener("click", () => {
+        this.exportFormat(format);
+        this.close();
+      });
+    }
+  }
+}
+
+/**
  * JsonTransferModal 的主要实现类。负责封装相关状态、生命周期和对外操作，避免调用方直接操作内部数据结构。
  */
 class JsonTransferModal extends Modal {
@@ -1544,11 +1588,38 @@ class JsonTransferModal extends Modal {
     textarea.value = JSON.stringify(this.document, null, 2);
     const actions = this.contentEl.createDiv({ cls: "mmc-modal-actions mmc-json-actions" });
     const copy = actions.createEl("button", { text: "复制 JSON" });
+    const importFileButton = actions.createEl("button", { text: "导入 XMind / Markdown", attr: { type: "button" } });
     const exportButton = actions.createEl("button", { text: "导出 .json" });
     const importButton = actions.createEl("button", { text: "导入并替换", cls: "mod-warning" });
     copy.addEventListener("click", () => {
       void navigator.clipboard.writeText(textarea.value);
       new Notice("已复制 JSON");
+    });
+    importFileButton.addEventListener("click", () => {
+      const input = document.createElement("input");
+      input.type = "file";
+      input.accept = ".xmind,.md,.markdown,.json";
+      input.addEventListener("change", () => {
+        const file = input.files?.[0];
+        if (!file) return;
+        void (async () => {
+          try {
+            const extension = file.name.split(".").at(-1)?.toLowerCase();
+            const imported = extension === "xmind"
+              ? xmindToDocument(await file.arrayBuffer(), file.name.replace(/\.xmind$/i, ""))
+              : extension === "json"
+                ? normalizeDocument(JSON.parse(await file.text()) as Partial<MindMapDocument>, this.document.title)
+                : markdownToDocument(await file.text(), file.name.replace(/\.(?:md|markdown)$/i, ""));
+            this.onImport(imported);
+            new Notice(`已导入：${file.name}`);
+            this.close();
+          } catch (error) {
+            console.error("MindMap Studio file import failed", error);
+            new Notice(error instanceof Error ? error.message : "文件导入失败");
+          }
+        })();
+      }, { once: true });
+      input.click();
     });
     exportButton.addEventListener("click", () => this.onExport(textarea.value));
     importButton.addEventListener("click", () => {
@@ -1844,6 +1915,7 @@ export class MindMapEditor {
     this.addToolbarSeparator();
     this.addToolbarButton("markdown", "file-text", "查看 Markdown 大纲", () => this.showOutline());
     this.addToolbarButton("json", "braces", "JSON 导入 / 导出", () => this.showJsonTransfer(), true);
+    this.addToolbarButton("export-document", "file-output", "导出 HTML / Word / PDF / Markdown", () => this.showDocumentExport());
     this.addToolbarButton("export-svg", "image", "导出 SVG", () => void this.callbacks.onExportSvg(documentToSvg(this.document.root, this.document.layout, this.document.title, this.getAppearance())));
 
     this.applyToolbarOrder();
@@ -3627,6 +3699,18 @@ export class MindMapEditor {
   }
 
   /**
+   * Opens the HTML, Word, PDF, and Markdown export chooser.
+   */
+  private showDocumentExport(): void {
+    const markdown = documentToMarkdown(this.document);
+    const html = documentToHtml(this.document);
+    new DocumentExportModal(this.app, (format) => {
+      if (format === "md") void this.callbacks.onExportMarkdown(markdown);
+      else void this.callbacks.onExportDocument(format, html);
+    }).open();
+  }
+
+  /**
    * 打开search，并保持模型、界面和持久化状态的一致性。
    */
   private openSearch(): void {
@@ -3822,7 +3906,18 @@ export class MindMapEditor {
       if (!input) return null;
       return normalizeDocument({ title: input.text ?? "粘贴节点", root: input as MindMapNode }, input.text ?? "粘贴节点").root;
     } catch {
-      return null;
+      const trimmed = text.trim();
+      if (!trimmed) return null;
+      const looksLikeMarkdown = /^(?:#{1,6}\s+|[-*+]\s+|\d+[.)]\s+)/m.test(trimmed);
+      if (looksLikeMarkdown || trimmed.includes("\n")) {
+        const markdown = looksLikeMarkdown
+          ? trimmed
+          : trimmed.split(/\r?\n/).filter((line) => line.trim()).map((line) => `- ${line.trim()}`).join("\n");
+        const document = markdownToDocument(markdown, "粘贴内容");
+        if (document.root.text === "粘贴内容" && document.root.children.length === 1) return document.root.children[0] ?? null;
+        return document.root;
+      }
+      return createNode(trimmed);
     }
   }
 
