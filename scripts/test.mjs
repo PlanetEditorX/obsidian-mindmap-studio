@@ -584,6 +584,9 @@ export const setIcon = () => {};
   assert.match(settingsSource, /本地副本作为最后回退/);
   assert.match(settingsSource, /默认节点文字对齐/);
   assert.match(settingsSource, /defaultNodeTextAlign/);
+  assert.match(settingsSource, /文章目录最大层级/);
+  assert.match(mainSource, /articleTocMaxDepth:[\s\S]*Math\.max\(1, Math\.min\(8/);
+  assert.match(editorSource, /item\.depth <= this\.options\.articleTocMaxDepth/, "article TOC rendering should honor the configured maximum depth");
 
   assert.match(settingsSource, /visibleModes/);
   assert.match(settingsSource, /当前全局显示模式/);

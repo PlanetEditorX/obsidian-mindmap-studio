@@ -399,6 +399,9 @@ export default class MindMapStudioPlugin extends Plugin {
       defaultViewMode: raw.defaultViewMode === "outline" || raw.defaultViewMode === "article" || raw.defaultViewMode === "mindmap"
         ? raw.defaultViewMode
         : DEFAULT_SETTINGS.defaultViewMode,
+      articleTocMaxDepth: typeof raw.articleTocMaxDepth === "number"
+        ? Math.max(1, Math.min(8, Math.round(raw.articleTocMaxDepth)))
+        : DEFAULT_SETTINGS.articleTocMaxDepth,
       defaultNodeTextAlign: raw.defaultNodeTextAlign === "left" || raw.defaultNodeTextAlign === "right" || raw.defaultNodeTextAlign === "center"
         ? raw.defaultNodeTextAlign
         : DEFAULT_SETTINGS.defaultNodeTextAlign,

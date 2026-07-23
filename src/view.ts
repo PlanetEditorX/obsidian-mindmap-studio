@@ -275,6 +275,7 @@ export class MindMapStudioView extends TextFileView {
       toolbarItemOrder: [...this.plugin.settings.toolbarItemOrder],
       articleBaseDepth: this.articleBaseDepth,
       articleTocEntries: [...this.articleTocEntries],
+      articleTocMaxDepth: this.plugin.settings.articleTocMaxDepth,
       showArticleToc: this.showArticleToc,
       articleNavigation: this.articleNavigation
     };

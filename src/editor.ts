@@ -112,6 +112,7 @@ export interface MindMapEditorOptions {
   defaultViewMode: DisplayMode;
   articleBaseDepth: number;
   articleTocEntries: ArticleTocEntry[];
+  articleTocMaxDepth: number;
   showArticleToc: boolean;
   articleNavigation?: ArticlePageNavigation;
   nodeEditorPosition: "center" | "right";
@@ -2540,7 +2541,7 @@ export class MindMapEditor {
       const tocPage = page.createEl("nav", { cls: "mms-article-toc mms-article-toc-page" });
       tocPage.createEl("h2", { text: "目录" });
       const list = tocPage.createEl("ol");
-      for (const entry of this.options.articleTocEntries) {
+      for (const entry of this.options.articleTocEntries.filter((item) => item.depth <= this.options.articleTocMaxDepth)) {
         const item = list.createEl("li", { cls: `depth-${Math.min(entry.depth, 8)}` });
         item.style.setProperty("--mms-article-depth", String(entry.depth));
         const link = item.createEl("a", {

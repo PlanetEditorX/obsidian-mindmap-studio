@@ -163,6 +163,7 @@ export interface MindMapStudioSettings {
   globalSearchMaxResults: number;
   visibleModes: DisplayMode[];
   defaultViewMode: DisplayMode;
+  articleTocMaxDepth: number;
   nodeEditorPosition: "center" | "right";
   richTextBoldShortcut: string;
   richTextItalicShortcut: string;
@@ -221,6 +222,7 @@ export const DEFAULT_SETTINGS: MindMapStudioSettings = {
   visibleModes: ["mindmap", "outline", "article"],
   defaultViewMode: "mindmap"
   ,
+  articleTocMaxDepth: 3,
   nodeEditorPosition: "center",
   richTextBoldShortcut: "Ctrl+B",
   richTextItalicShortcut: "Ctrl+I",
@@ -410,6 +412,19 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
         dropdown.onChange(async (value) => {
           await this.plugin.setGlobalDisplayMode(value as DisplayMode);
         });
+      });
+
+    new Setting(containerEl)
+      .setName("文章目录最大层级")
+      .setDesc("限制目录页显示的层级深度，不影响文章内容以及上一篇/下一篇导航。")
+      .addDropdown((dropdown) => {
+        for (let depth = 1; depth <= 8; depth += 1) dropdown.addOption(String(depth), `${depth} 层`);
+        dropdown
+          .setValue(String(this.plugin.settings.articleTocMaxDepth))
+          .onChange(async (value) => {
+            this.plugin.settings.articleTocMaxDepth = Math.max(1, Math.min(8, Number(value) || 3));
+            await this.saveAndRefresh();
+          });
       });
 
     containerEl.createEl("h3", { text: "工具栏内容" });
