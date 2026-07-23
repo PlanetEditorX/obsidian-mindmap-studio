@@ -495,7 +495,7 @@ export function normalizeRichText(input: unknown, fallbackText = ""): MindMapTex
     if (!raw || typeof raw !== "object") continue;
     const candidate = raw as Partial<MindMapTextRun>;
     if (typeof candidate.text !== "string" || !candidate.text) continue;
-    const text = candidate.text.replace(/\r?\n/g, " ").slice(0, 10000);
+    const text = candidate.text.replace(/\r\n?/g, "\n").slice(0, 10000);
     if (!text) continue;
     const style = normalizeTextStyle(candidate.style);
     const previous = runs.at(-1);
@@ -689,7 +689,7 @@ function normalizeContentBlock(input: unknown): MindMapContentBlock | null {
     return { id, type: "image", source, alt, localSource, remoteSources: remoteSources?.length ? remoteSources : undefined };
   }
   if (candidate.type === "text") {
-    const fallbackText = typeof candidate.text === "string" ? candidate.text.replace(/\r?\n/g, " ").slice(0, 20000) : "";
+    const fallbackText = typeof candidate.text === "string" ? candidate.text.replace(/\r\n?/g, "\n").slice(0, 20000) : "";
     const richText = normalizeRichText(candidate.richText, fallbackText);
     const text = richTextPlainText(richText, fallbackText);
     return { id, type: "text", text, richText };

@@ -253,6 +253,7 @@ export class MindMapStudioView extends TextFileView {
         underline: this.plugin.settings.richTextUnderlineShortcut,
         color: this.plugin.settings.richTextColorShortcut
       },
+      visibleToolbarItems: [...this.plugin.settings.visibleToolbarItems],
       articleBaseDepth: this.articleBaseDepth,
       articleTocEntries: [...this.articleTocEntries],
       showArticleToc: this.showArticleToc

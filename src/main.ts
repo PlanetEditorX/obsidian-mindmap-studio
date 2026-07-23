@@ -378,6 +378,9 @@ export default class MindMapStudioPlugin extends Plugin {
         ? Math.max(20, Math.min(500, Math.round(raw.globalSearchMaxResults)))
         : DEFAULT_SETTINGS.globalSearchMaxResults,
       visibleModes: normalizeVisibleModes(raw.visibleModes),
+      visibleToolbarItems: Array.isArray(raw.visibleToolbarItems)
+        ? raw.visibleToolbarItems.filter((id): id is string => typeof id === "string")
+        : [...DEFAULT_SETTINGS.visibleToolbarItems],
       defaultViewMode: raw.defaultViewMode === "outline" || raw.defaultViewMode === "article" || raw.defaultViewMode === "mindmap"
         ? raw.defaultViewMode
         : DEFAULT_SETTINGS.defaultViewMode,

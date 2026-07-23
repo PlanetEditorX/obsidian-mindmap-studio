@@ -5,7 +5,7 @@
  * 负责三种视图、节点操作、富文本、图片、表格、代码、子导图、拖拽、尺寸、搜索、历史记录、只读锁和图床容灾。
  */
 
-import { App, Menu, Modal, Notice, setIcon } from "obsidian";
+import { App, finishRenderMath, Menu, Modal, Notice, renderMath, setIcon } from "obsidian";
 import {
   cloneDocument,
   cloneNodeWithFreshIds,
@@ -61,7 +61,7 @@ import {
 } from "./model";
 import { buildBranchColorMap, computeLayout, documentToSvg, edgePath, edgeWidthForDepth, type LayoutResult } from "./layout";
 import { CodeEditModal, TableEditModal } from "./content-modals";
-import type { ImageHostChoice, ImageHostUploadBatch } from "./settings";
+import { TOOLBAR_ITEMS, type ImageHostChoice, type ImageHostUploadBatch } from "./settings";
 import { appearanceFromThemePreset, MINDMAP_THEME_PRESETS } from "./themes";
 import { buildArticleNodeInfo, DISPLAY_MODE_ICONS, DISPLAY_MODE_LABELS, type ArticleTocEntry } from "./modes";
 
@@ -113,6 +113,7 @@ export interface MindMapEditorOptions {
     underline: string;
     color: string;
   };
+  visibleToolbarItems: string[];
 }
 
 /**
@@ -157,15 +158,15 @@ function styleEquals(left: MindMapTextStyle | undefined, right: MindMapTextStyle
  * @param container 接收渲染内容的 DOM 容器。
  * @param runs 按字符样式拆分的富文本运行段。
  * @param fallbackText 该参数用于 render rich text runs 流程中的输入或控制。
+ * @param latex 是否识别 $...$ 与 $$...$$ LaTeX 公式。
  */
-function renderRichTextRuns(container: HTMLElement, runs: MindMapTextRun[] | undefined, fallbackText: string): void {
+function renderRichTextRuns(container: HTMLElement, runs: MindMapTextRun[] | undefined, fallbackText: string, latex = true): void {
   container.empty();
-  if (!runs?.length) {
-    container.setText(fallbackText);
-    return;
-  }
-  for (const run of runs) {
-    const span = container.createSpan({ cls: "mmc-rich-run", text: run.text });
+  const sourceRuns = runs?.length ? runs : [{ text: fallbackText }];
+  let renderedMath = false;
+  const append = (text: string, style: MindMapTextStyle | undefined): void => {
+    const span = container.createSpan({ cls: "mmc-rich-run", text });
+    const run = { style };
     if (run.style?.bold !== undefined) span.style.fontWeight = run.style.bold ? "700" : "400";
     if (run.style?.italic !== undefined) span.style.fontStyle = run.style.italic ? "italic" : "normal";
     const decorations: string[] = [];
@@ -173,7 +174,34 @@ function renderRichTextRuns(container: HTMLElement, runs: MindMapTextRun[] | und
     if (run.style?.strike) decorations.push("line-through");
     if (decorations.length) span.style.textDecorationLine = decorations.join(" ");
     if (run.style?.color) span.style.color = run.style.color;
+  };
+  for (const run of sourceRuns) {
+    if (!latex) {
+      append(run.text, run.style);
+      continue;
+    }
+    const pattern = /(\$\$[\s\S]+?\$\$|\$[^$\n]+?\$)/g;
+    let offset = 0;
+    for (const match of run.text.matchAll(pattern)) {
+      const index = match.index ?? 0;
+      if (index > offset) append(run.text.slice(offset, index), run.style);
+      const token = match[0];
+      const display = token.startsWith("$$");
+      const source = token.slice(display ? 2 : 1, display ? -2 : -1).trim();
+      try {
+        const math = renderMath(source, display);
+        math.addClass("mms-node-math");
+        math.toggleClass("is-display", display);
+        container.appendChild(math);
+        renderedMath = true;
+      } catch {
+        append(token, run.style);
+      }
+      offset = index + token.length;
+    }
+    if (offset < run.text.length) append(run.text.slice(offset), run.style);
   }
+  if (renderedMath) void finishRenderMath();
 }
 
 /**
@@ -219,7 +247,7 @@ function readRichTextEditor(editor: HTMLElement): { text: string; richText?: Min
   const rawRuns: MindMapTextRun[] = [];
   const visit = (node: Node, inherited: MindMapTextStyle): void => {
     if (node.nodeType === Node.TEXT_NODE) {
-      const text = (node.textContent ?? "").replace(/\r?\n/g, " ");
+      const text = (node.textContent ?? "").replace(/\r\n?/g, "\n");
       if (!text) return;
       const style = Object.values(inherited).some((value) => value !== undefined) ? { ...inherited } : undefined;
       const previous = rawRuns.at(-1);
@@ -229,15 +257,15 @@ function readRichTextEditor(editor: HTMLElement): { text: string; richText?: Min
     }
     if (!(node instanceof HTMLElement)) return;
     if (node.tagName === "BR") {
-      rawRuns.push({ text: " " });
+      rawRuns.push({ text: "\n" });
       return;
     }
     const style = styleFromElement(node, inherited);
     node.childNodes.forEach((child) => visit(child, style));
-    if (["DIV", "P"].includes(node.tagName) && rawRuns.length && !rawRuns.at(-1)?.text.endsWith(" ")) rawRuns.push({ text: " " });
+    if (["DIV", "P"].includes(node.tagName) && rawRuns.length && !rawRuns.at(-1)?.text.endsWith("\n")) rawRuns.push({ text: "\n" });
   };
   editor.childNodes.forEach((child) => visit(child, {}));
-  const fallback = editor.textContent?.replace(/\s+/g, " ").trim() ?? "";
+  const fallback = editor.innerText.replace(/\r\n?/g, "\n").trim();
   const richText = normalizeRichText(rawRuns, fallback);
   return { text: richTextPlainText(richText, fallback).trim(), richText };
 }
@@ -1388,11 +1416,12 @@ export class MindMapEditor {
    */
   setOptions(options: MindMapEditorOptions): void {
     const modesChanged = JSON.stringify(this.options.visibleModes) !== JSON.stringify(options.visibleModes);
+    const toolbarChanged = JSON.stringify(this.options.visibleToolbarItems) !== JSON.stringify(options.visibleToolbarItems);
     const globalModeChanged = this.options.defaultViewMode !== options.defaultViewMode;
     this.options = options;
     const resolved = this.resolveMode(globalModeChanged ? options.defaultViewMode : this.currentMode);
     if (resolved !== this.currentMode) this.currentMode = resolved;
-    if (modesChanged) {
+    if (modesChanged || toolbarChanged) {
       this.cleanupCallbacks.forEach((callback) => callback());
       this.cleanupCallbacks = [];
       this.resizeObserver?.disconnect();
@@ -1401,7 +1430,7 @@ export class MindMapEditor {
       this.editControls.splice(0);
       this.buildUi();
     }
-    if (this.inlineEditingId && !modesChanged && !globalModeChanged) return;
+    if (this.inlineEditingId && !modesChanged && !toolbarChanged && !globalModeChanged) return;
     this.render();
   }
 
@@ -1508,37 +1537,37 @@ export class MindMapEditor {
       button.addEventListener("click", () => this.setDisplayMode(mode));
       this.modeButtons.set(mode, button);
     }
-    this.lockButton = this.addToolbarButton("lock-open", "切换只读 / 编辑模式", () => this.toggleReadOnly());
+    this.lockButton = this.addToolbarButton("lock", "lock-open", "切换只读 / 编辑模式", () => this.toggleReadOnly());
     this.addToolbarSeparator();
-    this.addToolbarButton("plus-circle", "添加子节点（Tab）", () => this.addChild(), true);
-    this.addToolbarButton("list-plus", "添加同级节点（Enter）", () => this.addSibling(), true);
-    this.addToolbarButton("pencil", "编辑节点（F2）", () => this.editSelected(), true);
-    this.addToolbarButton("copy-plus", "克隆分支（Ctrl/Cmd+D）", () => this.duplicateSelected(), true);
-    this.addToolbarButton("trash-2", "删除节点（Delete）", () => this.deleteSelected(), true);
+    this.addToolbarButton("add-child", "plus-circle", "添加子节点（Tab）", () => this.addChild(), true);
+    this.addToolbarButton("add-sibling", "list-plus", "添加同级节点（Enter）", () => this.addSibling(), true);
+    this.addToolbarButton("edit", "pencil", "编辑节点（F2）", () => this.editSelected(), true);
+    this.addToolbarButton("duplicate", "copy-plus", "克隆分支（Ctrl/Cmd+D）", () => this.duplicateSelected(), true);
+    this.addToolbarButton("delete", "trash-2", "删除节点（Delete）", () => this.deleteSelected(), true);
     this.addToolbarSeparator();
-    this.addToolbarButton("circle-check-big", "切换任务状态（Ctrl/Cmd+Enter）", () => this.cycleTask(), true);
-    this.addToolbarButton("fold-vertical", "展开/收起节点（Space）", () => this.toggleCollapse(), true);
-    this.addToolbarButton("link", "打开节点链接", () => this.openSelectedLink());
-    this.addToolbarButton("search", "搜索当前导图及全部子导图（Ctrl/Cmd+F）", () => this.openSearch());
-    this.addToolbarButton("file-search", "全局搜索所有导图（Ctrl/Cmd+Shift+F）", () => this.callbacks.onGlobalSearch());
+    this.addToolbarButton("task", "circle-check-big", "切换任务状态（Ctrl/Cmd+Enter）", () => this.cycleTask(), true);
+    this.addToolbarButton("collapse", "fold-vertical", "展开/收起节点（Space）", () => this.toggleCollapse(), true);
+    this.addToolbarButton("link", "link", "打开节点链接", () => this.openSelectedLink());
+    this.addToolbarButton("search", "search", "搜索当前导图及全部子导图（Ctrl/Cmd+F）", () => this.openSearch());
+    this.addToolbarButton("global-search", "file-search", "全局搜索所有导图（Ctrl/Cmd+Shift+F）", () => this.callbacks.onGlobalSearch());
     this.addToolbarSeparator();
-    this.addToolbarButton("table-2", "插入或编辑表格", () => this.editTable(), true);
-    this.addToolbarButton("code-2", "插入或编辑代码", () => this.editCode(), true);
-    this.addToolbarButton("image-plus", "粘贴图片到当前节点（Ctrl/Cmd+V）", () => new Notice("先复制图片，再选中节点并按 Ctrl/Cmd+V"), true);
-    this.addToolbarButton("network", "创建或进入子导图", () => void this.createOrOpenSubmap());
+    this.addToolbarButton("table", "table-2", "插入或编辑表格", () => this.editTable(), true);
+    this.addToolbarButton("code", "code-2", "插入或编辑代码", () => this.editCode(), true);
+    this.addToolbarButton("image", "image-plus", "粘贴图片到当前节点（Ctrl/Cmd+V）", () => new Notice("先复制图片，再选中节点并按 Ctrl/Cmd+V"), true);
+    this.addToolbarButton("submap", "network", "创建或进入子导图", () => void this.createOrOpenSubmap());
     this.addToolbarSeparator();
-    this.addToolbarButton("undo-2", "撤销（Ctrl/Cmd+Z）", () => this.undo(), true);
-    this.addToolbarButton("redo-2", "重做（Ctrl/Cmd+Y）", () => this.redo(), true);
+    this.addToolbarButton("undo", "undo-2", "撤销（Ctrl/Cmd+Z）", () => this.undo(), true);
+    this.addToolbarButton("redo", "redo-2", "重做（Ctrl/Cmd+Y）", () => this.redo(), true);
     this.addToolbarSeparator();
-    this.addToolbarButton("zoom-in", "放大", () => this.setZoom(this.zoom * 1.15));
-    this.addToolbarButton("zoom-out", "缩小", () => this.setZoom(this.zoom / 1.15));
-    this.addToolbarButton("maximize", "适应画布", () => this.fitToView());
-    this.addToolbarButton("git-fork", "切换单侧/双侧布局", () => this.toggleLayout(), true);
-    this.addToolbarButton("palette", "当前脑图外观", () => this.editAppearance(), true);
+    this.addToolbarButton("zoom-in", "zoom-in", "放大", () => this.setZoom(this.zoom * 1.15));
+    this.addToolbarButton("zoom-out", "zoom-out", "缩小", () => this.setZoom(this.zoom / 1.15));
+    this.addToolbarButton("fit", "maximize", "适应画布", () => this.fitToView());
+    this.addToolbarButton("layout", "git-fork", "切换单侧/双侧布局", () => this.toggleLayout(), true);
+    this.addToolbarButton("appearance", "palette", "当前脑图外观", () => this.editAppearance(), true);
     this.addToolbarSeparator();
-    this.addToolbarButton("file-text", "查看 Markdown 大纲", () => this.showOutline());
-    this.addToolbarButton("braces", "JSON 导入 / 导出", () => this.showJsonTransfer(), true);
-    this.addToolbarButton("image", "导出 SVG", () => void this.callbacks.onExportSvg(documentToSvg(this.document.root, this.document.layout, this.document.title, this.getAppearance())));
+    this.addToolbarButton("markdown", "file-text", "查看 Markdown 大纲", () => this.showOutline());
+    this.addToolbarButton("json", "braces", "JSON 导入 / 导出", () => this.showJsonTransfer(), true);
+    this.addToolbarButton("export-svg", "image", "导出 SVG", () => void this.callbacks.onExportSvg(documentToSvg(this.document.root, this.document.layout, this.document.title, this.getAppearance())));
 
     const spacer = this.toolbarEl.createSpan({ cls: "mmc-toolbar-spacer" });
     spacer.setAttr("aria-hidden", "true");
@@ -1668,15 +1697,17 @@ export class MindMapEditor {
   /**
    * 添加toolbar button，并保持模型、界面和持久化状态的一致性。
    *
+   * @param id 工具栏项目设置标识。
    * @param icon 该参数用于 add toolbar button 流程中的输入或控制。
    * @param label 该参数用于 add toolbar button 流程中的输入或控制。
    * @param action 该参数用于 add toolbar button 流程中的输入或控制。
    * @param editOnly 该参数用于 add toolbar button 流程中的输入或控制。
    * @returns 当前操作生成、查找或规范化后的结果。
    */
-  private addToolbarButton(icon: string, label: string, action: () => void, editOnly = false): HTMLButtonElement {
+  private addToolbarButton(id: string, icon: string, label: string, action: () => void, editOnly = false): HTMLButtonElement {
     const button = this.toolbarEl.createEl("button", { cls: "clickable-icon mmc-toolbar-button", attr: { "aria-label": label, title: label, type: "button" } });
     setIcon(button, icon);
+    button.toggleClass("is-hidden", !this.options.visibleToolbarItems.includes(id));
     if (editOnly) {
       button.addClass("mms-edit-only-control");
       this.editControls.push(button);
@@ -2538,7 +2569,7 @@ export class MindMapEditor {
     editor.setAttr("role", "textbox");
     editor.setAttr("aria-label", "输入节点文字");
     const firstText = nodeContentBlocks(node).find((block): block is MindMapTextContentBlock => block.type === "text");
-    renderRichTextRuns(editor, firstText?.richText, firstText?.text ?? nodePlainText(node));
+    renderRichTextRuns(editor, firstText?.richText, firstText?.text ?? nodePlainText(node), false);
 
     let historyCaptured = false;
     const save = (): void => {
@@ -2623,7 +2654,7 @@ export class MindMapEditor {
         patch = { [key]: !enabled };
       }
       block.richText = applyRichTextStyleRange(block.text, block.richText, selected.start, selected.end, patch);
-      renderRichTextRuns(editor!, block.richText, block.text);
+      renderRichTextRuns(editor!, block.richText, block.text, false);
       save();
       editor!.focus();
       restoreSelection(selected);
@@ -2671,6 +2702,14 @@ export class MindMapEditor {
     editor.addEventListener("input", save);
     let lastHandledShortcut = "";
     const handleFormatShortcut = (event: KeyboardEvent): boolean => {
+      if (event.key === "Enter" && !event.shiftKey) {
+        event.preventDefault();
+        event.stopPropagation();
+        event.stopImmediatePropagation();
+        save();
+        editor!.blur();
+        return true;
+      }
       const command = this.shortcutMatches(event, this.options.richTextShortcuts.bold) ? "bold"
         : this.shortcutMatches(event, this.options.richTextShortcuts.italic) ? "italic"
           : this.shortcutMatches(event, this.options.richTextShortcuts.underline) ? "underline" : null;
@@ -2840,7 +2879,7 @@ export class MindMapEditor {
           `.mmc-node[data-node-id="${CSS.escape(selected.id)}"] .mmc-node-text.is-inline-editing`
         );
         const textBlock = nodeContentBlocks(selected).find((block): block is MindMapTextContentBlock => block.type === "text");
-        if (inline && document.activeElement !== inline) renderRichTextRuns(inline, textBlock?.richText, textBlock?.text ?? "");
+        if (inline && document.activeElement !== inline) renderRichTextRuns(inline, textBlock?.richText, textBlock?.text ?? "", false);
       } else {
         this.render();
       }

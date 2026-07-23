@@ -803,6 +803,40 @@
   white-space: nowrap;
 }
 
+.mms-node-math {
+  display: inline-flex;
+  max-width: 100%;
+  align-items: center;
+  overflow-x: auto;
+  vertical-align: middle;
+}
+
+.mms-node-math.is-display {
+  display: flex;
+  justify-content: center;
+  margin: 4px 0;
+}
+
+.mms-toolbar-settings-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 6px 12px;
+  margin-bottom: 18px;
+}
+
+.mms-toolbar-setting-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: var(--radius-s);
+  background: var(--background-secondary);
+}
+
+.mms-toolbar-setting-item input {
+  margin: 0;
+}
+
 .mmc-inline-format-bar.is-hidden {
   display: none;
 }

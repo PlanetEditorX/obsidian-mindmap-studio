@@ -22,6 +22,17 @@ import type {
 } from "./model";
 import { appearanceFromThemePreset, MINDMAP_THEME_PRESETS } from "./themes";
 
+export const TOOLBAR_ITEMS = [
+  ["lock", "只读/编辑模式"], ["add-child", "添加子节点"], ["add-sibling", "添加同级节点"],
+  ["edit", "完整编辑节点"], ["duplicate", "克隆分支"], ["delete", "删除节点"],
+  ["task", "任务状态"], ["collapse", "展开/收起"], ["link", "打开链接"],
+  ["search", "搜索导图"], ["global-search", "全局搜索"], ["table", "表格"],
+  ["code", "代码"], ["image", "粘贴图片"], ["submap", "子导图"],
+  ["undo", "撤销"], ["redo", "重做"], ["zoom-in", "放大"], ["zoom-out", "缩小"],
+  ["fit", "适应画布"], ["layout", "切换布局"], ["appearance", "脑图外观"],
+  ["markdown", "Markdown 大纲"], ["json", "JSON 导入/导出"], ["export-svg", "导出 SVG"]
+] as const;
+
 /**
  * ImageHostBodyMode 类型定义，用于限制可接受值并让序列化数据保持稳定。
  */
@@ -156,6 +167,7 @@ export interface MindMapStudioSettings {
   richTextItalicShortcut: string;
   richTextUnderlineShortcut: string;
   richTextColorShortcut: string;
+  visibleToolbarItems: string[];
 }
 
 export const DEFAULT_SETTINGS: MindMapStudioSettings = {
@@ -211,7 +223,8 @@ export const DEFAULT_SETTINGS: MindMapStudioSettings = {
   richTextBoldShortcut: "Ctrl+B",
   richTextItalicShortcut: "Ctrl+I",
   richTextUnderlineShortcut: "Ctrl+U",
-  richTextColorShortcut: "Ctrl+Shift+C"
+  richTextColorShortcut: "Ctrl+Shift+C",
+  visibleToolbarItems: TOOLBAR_ITEMS.map(([id]) => id)
 };
 
 /**
@@ -395,6 +408,25 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
           await this.plugin.setGlobalDisplayMode(value as DisplayMode);
         });
       });
+
+    containerEl.createEl("h3", { text: "工具栏内容" });
+    containerEl.createEl("p", {
+      cls: "setting-item-description",
+      text: "选择需要显示在脑图顶部工具栏中的操作。显示模式切换、缩放比例和保存状态始终保留。"
+    });
+    const toolbarGrid = containerEl.createDiv({ cls: "mms-toolbar-settings-grid" });
+    for (const [id, labelText] of TOOLBAR_ITEMS) {
+      const label = toolbarGrid.createEl("label", { cls: "mms-toolbar-setting-item" });
+      const checkbox = label.createEl("input", { type: "checkbox" });
+      checkbox.checked = this.plugin.settings.visibleToolbarItems.includes(id);
+      label.createSpan({ text: labelText });
+      checkbox.addEventListener("change", async () => {
+        const selected = new Set(this.plugin.settings.visibleToolbarItems);
+        if (checkbox.checked) selected.add(id); else selected.delete(id);
+        this.plugin.settings.visibleToolbarItems = TOOLBAR_ITEMS.map(([itemId]) => itemId).filter((itemId) => selected.has(itemId));
+        await this.saveAndRefresh();
+      });
+    }
 
     containerEl.createEl("h3", { text: "文件与布局" });
 
