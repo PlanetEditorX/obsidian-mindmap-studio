@@ -808,17 +808,29 @@
 }
 
 .mms-node-math {
-  display: inline-flex;
+  display: inline-block;
   max-width: 100%;
-  align-items: center;
-  overflow-x: auto;
+  overflow: visible !important;
   vertical-align: middle;
+  scrollbar-width: none;
 }
 
 .mms-node-math.is-display {
   display: flex;
+  max-width: none;
+  align-items: center;
   justify-content: center;
   margin: 4px 0;
+}
+
+.mms-node-math mjx-container {
+  max-width: 100%;
+  overflow: visible !important;
+}
+
+.mms-node-math::-webkit-scrollbar,
+.mms-node-math mjx-container::-webkit-scrollbar {
+  display: none;
 }
 
 .mms-formula-editor {
