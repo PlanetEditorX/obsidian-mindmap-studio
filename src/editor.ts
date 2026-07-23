@@ -2557,13 +2557,6 @@ export class MindMapEditor {
       this.markSaving();
       this.viewportEl.dispatchEvent(new CustomEvent("mms-inline-node-change", { detail: { nodeId } }));
     };
-    const color = nodeEl.createEl("input", {
-      cls: "mmc-inline-color",
-      type: "color",
-      attr: { title: `字体颜色（${this.options.richTextShortcuts.color}）`, "aria-label": "所选文字颜色" }
-    });
-    color.value = "#172033";
-    let colorInteraction = false;
     let savedSelection: { start: number; end: number } | null = null;
     const rememberSelection = (): { start: number; end: number } | null => {
       const selection = window.getSelection();
@@ -2628,26 +2621,46 @@ export class MindMapEditor {
       editor!.focus();
       restoreSelection(selected);
     };
+    const formatBar = nodeEl.createDiv({ cls: "mmc-inline-format-bar is-hidden" });
+    const formatButton = (label: string, title: string, style: "bold" | "italic" | "underline"): void => {
+      const button = formatBar.createEl("button", { text: label, attr: { type: "button", title, "aria-label": title } });
+      button.addClass(`is-${style}`);
+      button.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+      });
+      button.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        applyStyle({ [style]: true });
+      });
+    };
+    formatButton("B", `加粗（${this.options.richTextShortcuts.bold}）`, "bold");
+    formatButton("I", `斜体（${this.options.richTextShortcuts.italic}）`, "italic");
+    formatButton("U", `下划线（${this.options.richTextShortcuts.underline}）`, "underline");
+    const colorLabel = formatBar.createEl("label", { cls: "mmc-inline-format-color", attr: { title: "文字颜色" } });
+    colorLabel.createSpan({ text: "A" });
+    const color = colorLabel.createEl("input", { type: "color", attr: { "aria-label": "文字颜色" } });
+    color.value = "#ef4444";
     color.addEventListener("pointerdown", (event) => {
       event.stopPropagation();
-      colorInteraction = true;
       rememberSelection();
     });
-    color.addEventListener("input", () => {
-      applyStyle({ color: color.value });
-      window.setTimeout(() => { colorInteraction = false; }, 0);
-    });
+    color.addEventListener("input", () => applyStyle({ color: color.value }));
     color.addEventListener("change", () => {
-      colorInteraction = false;
       editor!.focus();
       if (savedSelection) restoreSelection(savedSelection);
     });
-    color.addEventListener("blur", () => {
-      window.setTimeout(() => {
-        colorInteraction = false;
-        if (!editingFinished && document.body.contains(editor!)) editor!.focus();
-      }, 0);
-    });
+    const updateFormatBar = (): void => {
+      const selected = rememberSelection();
+      formatBar.toggleClass("is-hidden", !selected || selected.start === selected.end);
+    };
+    editor.addEventListener("mouseup", updateFormatBar);
+    editor.addEventListener("keyup", updateFormatBar);
+    const selectionChange = (): void => {
+      if (document.activeElement === editor) updateFormatBar();
+    };
+    document.addEventListener("selectionchange", selectionChange);
     editor.addEventListener("input", save);
     let lastHandledShortcut = "";
     const handleFormatShortcut = (event: KeyboardEvent): boolean => {
@@ -2666,7 +2679,6 @@ export class MindMapEditor {
         event.stopPropagation();
         event.stopImmediatePropagation();
         lastHandledShortcut = `color:${event.timeStamp}`;
-        colorInteraction = true;
         rememberSelection();
         color.click();
         return true;
@@ -2681,6 +2693,13 @@ export class MindMapEditor {
       if (document.activeElement === editor) handleFormatShortcut(event);
     };
     window.addEventListener("keydown", windowShortcut, true);
+    const windowShortcutFallback = (event: KeyboardEvent): void => {
+      if (document.activeElement !== editor) return;
+      const handledAt = Number(lastHandledShortcut.split(":").at(-1) ?? 0);
+      if (handledAt && event.timeStamp - handledAt < 1000) return;
+      handleFormatShortcut(event);
+    };
+    window.addEventListener("keyup", windowShortcutFallback, true);
     editor.addEventListener("beforeinput", (event) => {
       const command = event.inputType === "formatBold" ? "bold"
         : event.inputType === "formatItalic" ? "italic"
@@ -2691,21 +2710,33 @@ export class MindMapEditor {
     });
     let editingFinished = false;
     editor.addEventListener("blur", (event) => {
-      if (editingFinished || event.relatedTarget === color || colorInteraction) return;
+      const related = event.relatedTarget;
+      if (editingFinished || (related instanceof Node && (formatBar.contains(related)
+        || document.querySelector(".mms-node-editor-right")?.contains(related)))) return;
       editingFinished = true;
       this.inlineEditingId = null;
       window.removeEventListener("keydown", windowShortcut, true);
+      window.removeEventListener("keyup", windowShortcutFallback, true);
+      document.removeEventListener("selectionchange", selectionChange);
       save();
-      color.remove();
+      formatBar.remove();
       this.render();
     });
-    editor.focus();
-    const selection = window.getSelection();
-    const range = document.createRange();
-    range.selectNodeContents(editor);
-    range.collapse(false);
-    selection?.removeAllRanges();
-    selection?.addRange(range);
+    const focusAtEnd = (): void => {
+      if (!document.body.contains(editor!)) return;
+      editor!.focus();
+      const selection = window.getSelection();
+      const range = document.createRange();
+      range.selectNodeContents(editor!);
+      range.collapse(false);
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+    };
+    focusAtEnd();
+    if (this.options.nodeEditorPosition === "right") {
+      window.requestAnimationFrame(focusAtEnd);
+      window.setTimeout(focusAtEnd, 50);
+    }
   }
 
   /**
@@ -2797,7 +2828,15 @@ export class MindMapEditor {
       }
       this.callbacks.onChange(this.getDocument());
       this.markSaving();
-      this.render();
+      if (this.inlineEditingId === selected.id) {
+        const inline = this.nodesLayerEl.querySelector<HTMLElement>(
+          `.mmc-node[data-node-id="${CSS.escape(selected.id)}"] .mmc-node-text.is-inline-editing`
+        );
+        const textBlock = nodeContentBlocks(selected).find((block): block is MindMapTextContentBlock => block.type === "text");
+        if (inline && document.activeElement !== inline) renderRichTextRuns(inline, textBlock?.richText, textBlock?.text ?? "");
+      } else {
+        this.render();
+      }
     }, this.options.nodeEditorPosition, this.viewportEl).open();
   }
 
