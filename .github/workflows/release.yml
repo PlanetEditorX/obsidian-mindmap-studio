@@ -111,8 +111,14 @@ jobs:
           sha256sum "$INSTALL_NAME" "$SOURCE_NAME" > "$CHECKSUM_NAME"
 
           unzip -l "$INSTALL_NAME"
-          test "$(unzip -Z1 "$INSTALL_NAME" | grep -c '^mindmap-studio/[^/]*$')" -eq 3
-          test "$(unzip -Z1 "$INSTALL_NAME" | grep -c '^mindmap-studio/$')" -eq 1
+
+          EXPECTED_FILES=$(printf '%s\n' \
+            'mindmap-studio/main.js' \
+            'mindmap-studio/manifest.json' \
+            'mindmap-studio/styles.css' | sort)
+          ACTUAL_FILES=$(unzip -Z1 "$INSTALL_NAME" | grep -v '/$' | sort)
+
+          test "$ACTUAL_FILES" = "$EXPECTED_FILES"
 
       - name: Tag and push release
         shell: bash
