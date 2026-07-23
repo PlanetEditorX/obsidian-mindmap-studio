@@ -4,6 +4,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createRequire } from "node:module";
 import { build } from "esbuild";
+import { nextVersion } from "./next-version.mjs";
+
+assert.equal(nextVersion("1.6.8"), "1.6.9");
+assert.equal(nextVersion("1.6.9"), "1.7.0");
+assert.equal(nextVersion("1.9.9"), "1.10.0");
 
 const tempDir = await mkdtemp(join(tmpdir(), "mindmap-studio-test-"));
 const outfile = join(tempDir, "model.cjs");

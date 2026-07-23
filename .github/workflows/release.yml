@@ -96,15 +96,9 @@ jobs:
             });
             console.log(versions[0]);
           ' "$CURRENT" "$LATEST")
-          NEXT=$(node -e '
-            const [major, minor, patch] = process.argv[1].split(".").map(Number);
-            console.log(`${major}.${minor}.${patch + 1}`);
-          ' "$BASE")
+          NEXT=$(node scripts/next-version.mjs "$BASE")
           while git rev-parse -q --verify "refs/tags/v$NEXT" >/dev/null; do
-            NEXT=$(node -e '
-              const [major, minor, patch] = process.argv[1].split(".").map(Number);
-              console.log(`${major}.${minor}.${patch + 1}`);
-            ' "$NEXT")
+            NEXT=$(node scripts/next-version.mjs "$NEXT")
           done
           echo "current=$CURRENT" >> "$GITHUB_OUTPUT"
           echo "next=$NEXT" >> "$GITHUB_OUTPUT"
