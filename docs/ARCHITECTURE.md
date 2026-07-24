@@ -32,7 +32,8 @@ src/
 │   ├── article-renderer.ts     文章目录、正文与分页渲染
 │   ├── rich-text-dom.ts        富文本 DOM 转换
 │   ├── node-image-actions.ts   节点图片操作
-│   └── node-rich-text-editor.ts 节点富文本编辑
+│   ├── node-rich-text-editor.ts 节点富文本编辑
+│   └── selection-format-toolbar.ts 文章/大纲选区悬浮格式栏
 ├── article/
 │   ├── modes.ts                文章结构、编号与阅读分段
 │   └── article-style.ts        文章样式解析
@@ -59,6 +60,7 @@ src/
 - `src/editor/clipboard-import.ts`：剪贴板 JSON、Markdown、缩进文本和 HTML 列表的节点分支解析。
 - `src/editor/node-image-actions.ts`：节点图片选择、本地保存、图床上传和远程镜像合并。
 - `src/editor/node-rich-text-editor.ts`：节点文字块的选区样式、颜色、格式清理和实时预览。
+- `src/editor/selection-format-toolbar.ts`：文章和大纲模式内联编辑时随文字选区显示的加粗、斜体、下划线及颜色工具栏。
 - `src/editor/content-modals.ts`：表格、代码编辑弹窗。
 - `src/render/static-render.ts`：Markdown 阅读模式中的只读 SVG 预览。
 - `styles.css`：编辑器、三种模式、弹窗、搜索、尺寸手柄和响应式样式。

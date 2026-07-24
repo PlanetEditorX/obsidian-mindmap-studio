@@ -81,6 +81,7 @@ import { DocumentHistory } from "./history-manager";
 import { renderOutlineMode } from "./outline-renderer";
 import { markWrappedArticleParagraph, renderArticleMode, renderArticleNodeContent, type ArticleRendererOptions } from "./article-renderer";
 import { appendChild, deleteNodes, insertSiblingAfter, nextTaskStatus, setAllBranchesCollapsed, topLevelSelectedNodeIds } from "./node-actions";
+import { attachSelectionFormatToolbar, type SelectionFormatToolbarHandle } from "./selection-format-toolbar";
 export type { MindMapEditorCallbacks, MindMapEditorOptions } from "./editor-types";
 
 /**
@@ -1395,13 +1396,13 @@ export class MindMapEditor {
    * @param node 当前处理的节点。
    * @param value 待校验、转换或比较的输入值。
    */
-  private updateNodePrimaryText(node: MindMapNode, value: string): void {
-    const next = value.replace(/\s+/g, " ").trim();
+  private updateNodePrimaryText(node: MindMapNode, value: { text: string; richText?: MindMapTextContentBlock["richText"] }): void {
+    const next = value.text.replace(/\s+/g, " ").trim();
     const blocks = nodeContentBlocks(node);
     const firstText = blocks.find((block): block is MindMapTextContentBlock => block.type === "text");
     if (firstText) {
       firstText.text = next;
-      firstText.richText = undefined;
+      firstText.richText = value.richText;
     } else if (next) {
       blocks.unshift({ id: newId(), type: "text", text: next });
     }
@@ -1423,8 +1424,18 @@ export class MindMapEditor {
     element.setAttr("aria-label", placeholder);
     if (!element.textContent?.trim()) element.dataset.placeholder = placeholder;
     if (this.readOnly) return;
-    let original = nodePrimaryText(node);
-    element.addEventListener("focus", () => { original = nodePrimaryText(node); });
+    const initialBlock = nodeContentBlocks(node).find((block): block is MindMapTextContentBlock => block.type === "text");
+    renderRichTextRuns(element, initialBlock?.richText, initialBlock?.text ?? nodePrimaryText(node), false);
+    let original = readRichTextEditor(element);
+    let toolbar: SelectionFormatToolbarHandle | null = null;
+    element.addEventListener("focus", () => {
+      original = readRichTextEditor(element);
+      toolbar ??= attachSelectionFormatToolbar({
+        editor: element,
+        shortcuts: this.options.richTextShortcuts,
+        shortcutMatches: (event, shortcut) => this.shortcutMatches(event, shortcut)
+      });
+    });
     element.addEventListener("keydown", (event) => {
       if (event.key === "Enter") {
         event.preventDefault();
@@ -1432,14 +1443,18 @@ export class MindMapEditor {
       }
       if (event.key === "Escape") {
         event.preventDefault();
-        element.setText(original);
+        renderRichTextRuns(element, original.richText, original.text, false);
         element.blur();
       }
     });
-    element.addEventListener("blur", () => {
-      const next = (element.textContent ?? "").replace(/\s+/g, " ").trim();
-      if (next === original || (!next && node.id === this.document.root.id)) {
-        element.setText(original);
+    element.addEventListener("blur", (event) => {
+      if (toolbar?.contains(event.relatedTarget)) return;
+      const next = readRichTextEditor(element);
+      toolbar?.cleanup();
+      toolbar = null;
+      if ((!next.text && node.id === this.document.root.id)
+        || JSON.stringify(next) === JSON.stringify(original)) {
+        renderRichTextRuns(element, original.richText, original.text, false);
         return;
       }
       this.mutate(() => this.updateNodePrimaryText(node, next));
