@@ -29,6 +29,15 @@ export interface ReadingSection {
   baseDepth: number;
 }
 
+/**
+ * Encodes a file path or node id into a collision-free DOM anchor component.
+ * Percent markers remain visible as underscores, so different Chinese paths
+ * cannot collapse to the same replacement string.
+ */
+export function readingAnchorPart(value: string): string {
+  return encodeURIComponent(value).replace(/%/g, "_");
+}
+
 const CHINESE_DIGITS = ["零", "一", "二", "三", "四", "五", "六", "七", "八", "九"];
 
 /**

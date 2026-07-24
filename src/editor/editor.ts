@@ -60,7 +60,7 @@ import { resolveLayoutCollisions } from "../render/collision-layout";
 import { CodeEditModal, TableEditModal } from "./content-modals";
 import { TOOLBAR_ITEMS } from "../settings";
 import { appearanceFromThemePreset, MINDMAP_THEME_PRESETS } from "../themes";
-import { buildArticleNodeInfo, DISPLAY_MODE_ICONS, DISPLAY_MODE_LABELS, type ArticlePageNavigation, type ArticleTocEntry, type ReadingSection } from "../article/modes";
+import { buildArticleNodeInfo, DISPLAY_MODE_ICONS, DISPLAY_MODE_LABELS, readingAnchorPart, type ArticlePageNavigation, type ArticleTocEntry, type ReadingSection } from "../article/modes";
 import { resolveArticleStyle } from "../article/article-style";
 import type { MindMapEditorCallbacks, MindMapEditorOptions } from "./editor-types";
 import { readRichTextEditor, renderRichTextRuns } from "./rich-text-dom";
@@ -2728,9 +2728,9 @@ export class MindMapEditor {
     toc.createEl("h2", { text: "全书目录" });
     const tocList = toc.createEl("ol");
     for (const entry of tocEntries) {
-      const fileKey = entry.filePath.replace(/[^a-zA-Z0-9_-]/g, "-");
+      const fileKey = readingAnchorPart(entry.filePath);
       const anchor = entry.nodeId
-        ? `reading-${fileKey}-${entry.nodeId.replace(/[^a-zA-Z0-9_-]/g, "-")}`
+        ? `reading-${fileKey}-${readingAnchorPart(entry.nodeId)}`
         : `reading-file-${fileKey}`;
       const item = tocList.createEl("li");
       item.addClass(`depth-${Math.min(entry.depth, 8)}`);
@@ -2743,7 +2743,8 @@ export class MindMapEditor {
     }
 
     for (const section of contentSections) {
-      const anchor = `reading-file-${section.filePath.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
+      const fileKey = readingAnchorPart(section.filePath);
+      const anchor = `reading-file-${fileKey}`;
       const chapter = page.createEl("article", { cls: "mms-reading-book-section" });
       chapter.id = anchor;
       const sectionEntry = tocEntries.find((entry) => entry.filePath === section.filePath && !entry.nodeId);
@@ -2754,7 +2755,7 @@ export class MindMapEditor {
       this.renderArticleContent(chapter, section.document.root, false);
       for (const info of buildArticleNodeInfo(section.document.root, section.baseDepth)) {
         const nodeSection = chapter.createEl("section", { cls: `mms-article-node depth-${Math.min(info.depth, 8)}` });
-        nodeSection.id = `reading-${section.filePath.replace(/[^a-zA-Z0-9_-]/g, "-")}-${info.node.id.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
+        nodeSection.id = `reading-${fileKey}-${readingAnchorPart(info.node.id)}`;
         if (info.isHeading) {
           const level = Math.min(6, info.depth + 1);
           nodeSection.createEl(`h${level}` as keyof HTMLElementTagNameMap, { text: info.displayTitle || info.title });

@@ -312,6 +312,11 @@ export const setIcon = () => {};
   assert.equal(childMapInfo[0]?.label, "第一节", "a child map must continue numbering from its parent article depth");
   assert.deepEqual(modes.normalizeVisibleModes(["article", "mindmap", "article"]), ["article", "mindmap"]);
   assert.deepEqual(modes.normalizeVisibleModes([]), ["mindmap", "outline", "article", "reading"]);
+  assert.notEqual(
+    modes.readingAnchorPart("MindMap Assets/世界.mindmap"),
+    modes.readingAnchorPart("MindMap Assets/中国.mindmap"),
+    "Chinese child-map paths must produce unique continuous-reading anchors"
+  );
 
   const styled = model.normalizeDocument({
     title: "样式",
