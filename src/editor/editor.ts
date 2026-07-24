@@ -56,6 +56,7 @@ import {
   moveNodeRelative
 } from "../core/model";
 import { buildBranchColorMap, computeLayout, documentToSvg, edgePath, edgeWidthForDepth, roundedElbowEdgePath, type LayoutResult } from "../render/layout";
+import { resolveLayoutCollisions } from "../render/collision-layout";
 import { CodeEditModal, TableEditModal } from "./content-modals";
 import { TOOLBAR_ITEMS } from "../settings";
 import { appearanceFromThemePreset, MINDMAP_THEME_PRESETS } from "../themes";
@@ -756,6 +757,7 @@ export class MindMapEditor {
   private panStart = { x: 0, y: 0, panX: 0, panY: 0 };
   private cleanupCallbacks: Array<() => void> = [];
   private resizeObserver: ResizeObserver | null = null;
+  private measuredLayoutFrame: number | null = null;
   private branchClipboard: MindMapNode | null = null;
   private searchQuery = "";
   private currentMode: DisplayMode;
@@ -801,6 +803,8 @@ export class MindMapEditor {
     this.cleanupCallbacks = [];
     this.resizeObserver?.disconnect();
     this.resizeObserver = null;
+    if (this.measuredLayoutFrame !== null) window.cancelAnimationFrame(this.measuredLayoutFrame);
+    this.measuredLayoutFrame = null;
     this.host.empty();
   }
 
@@ -1140,7 +1144,12 @@ export class MindMapEditor {
       this.viewportEl.removeEventListener("contextmenu", canvasContextMenu);
     });
 
-    this.resizeObserver = new ResizeObserver(() => this.applyTransform());
+    this.resizeObserver = new ResizeObserver((entries) => {
+      if (entries.some((entry) => entry.target === this.viewportEl)) this.applyTransform();
+      if (entries.some((entry) => entry.target instanceof HTMLElement && entry.target.hasClass("mmc-node"))) {
+        this.scheduleMeasuredMindMapLayout();
+      }
+    });
     this.resizeObserver.observe(this.viewportEl);
   }
 
@@ -1550,29 +1559,7 @@ export class MindMapEditor {
     this.nodesLayerEl.empty();
     while (this.edgesSvg.firstChild) this.edgesSvg.removeChild(this.edgesSvg.firstChild);
 
-    const maxDepth = Math.max(1, ...this.layout.nodes.map((position) => position.depth));
-
-    for (const position of this.layout.nodes) {
-      if (!position.parentId) continue;
-      const parent = this.layout.byId.get(position.parentId);
-      if (!parent) continue;
-      const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-      path.setAttribute("d", appearance.nodeVisualStyle === "branch"
-        ? roundedElbowEdgePath(parent, position)
-        : edgePath(parent, position, appearance.edgeStyle ?? "curved"));
-      path.setAttribute("class", `mmc-edge depth-${Math.min(position.depth, 6)}`);
-      const branchColor = branchColorMap.get(position.node.id);
-      if (position.node.style?.color) path.style.stroke = position.node.style.color;
-      else if (branchColor) path.style.stroke = branchColor;
-      const edgeWidth = edgeWidthForDepth(appearance, position.depth, maxDepth);
-      // Set both the SVG presentation attribute and an inline CSS variable.
-      // This prevents community-theme rules from forcing every edge back to
-      // the same width.
-      path.setAttribute("stroke-width", String(edgeWidth));
-      path.style.setProperty("--mmc-current-edge-width", `${edgeWidth}px`);
-      path.style.setProperty("stroke-width", `${edgeWidth}px`, "important");
-      this.edgesSvg.appendChild(path);
-    }
+    this.renderMindMapEdges(appearance, branchColorMap);
 
     for (const position of this.layout.nodes) {
       const node = position.node;
@@ -1924,8 +1911,88 @@ export class MindMapEditor {
         this.clearDropPreview();
         this.nodesLayerEl.querySelectorAll(".is-dragging").forEach((element) => element.removeClass("is-dragging"));
       });
+      this.resizeObserver?.observe(nodeEl);
     }
+    this.scheduleMeasuredMindMapLayout();
     this.applyTransform();
+  }
+
+  /** 使用当前布局坐标重新绘制全部连接线。 */
+  private renderMindMapEdges(appearance: MindMapAppearance, branchColorMap: Map<string, string>): void {
+    while (this.edgesSvg.firstChild) this.edgesSvg.removeChild(this.edgesSvg.firstChild);
+    const maxDepth = Math.max(1, ...this.layout.nodes.map((position) => position.depth));
+    for (const position of this.layout.nodes) {
+      if (!position.parentId) continue;
+      const parent = this.layout.byId.get(position.parentId);
+      if (!parent) continue;
+      const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      path.setAttribute("d", appearance.nodeVisualStyle === "branch"
+        ? roundedElbowEdgePath(parent, position)
+        : edgePath(parent, position, appearance.edgeStyle ?? "curved"));
+      path.setAttribute("class", `mmc-edge depth-${Math.min(position.depth, 6)}`);
+      const branchColor = branchColorMap.get(position.node.id);
+      if (position.node.style?.color) path.style.stroke = position.node.style.color;
+      else if (branchColor) path.style.stroke = branchColor;
+      const edgeWidth = edgeWidthForDepth(appearance, position.depth, maxDepth);
+      path.setAttribute("stroke-width", String(edgeWidth));
+      path.style.setProperty("--mmc-current-edge-width", `${edgeWidth}px`);
+      path.style.setProperty("stroke-width", `${edgeWidth}px`, "important");
+      this.edgesSvg.appendChild(path);
+    }
+  }
+
+  /** 合并同一帧内的节点尺寸变化，避免表格和图片加载触发重复布局。 */
+  private scheduleMeasuredMindMapLayout(): void {
+    if (this.measuredLayoutFrame !== null || this.currentMode !== "mindmap") return;
+    this.measuredLayoutFrame = window.requestAnimationFrame(() => {
+      this.measuredLayoutFrame = null;
+      this.applyMeasuredMindMapLayout();
+    });
+  }
+
+  /**
+   * 使用浏览器实际渲染尺寸重新执行碰撞避让。
+   *
+   * 表格、代码和图片节点的真实高度可能大于模型估算值，因此必须在 DOM
+   * 完成排版后更新包围盒、节点坐标、连接线和画布边界。
+   */
+  private applyMeasuredMindMapLayout(): void {
+    if (this.currentMode !== "mindmap" || !this.nodesLayerEl.isConnected) return;
+    const appearance = this.getAppearance();
+    const measured = new Map<string, { width: number; height: number }>();
+    this.nodesLayerEl.querySelectorAll<HTMLElement>(".mmc-node[data-node-id]").forEach((element) => {
+      const id = element.dataset.nodeId;
+      if (!id) return;
+      measured.set(id, {
+        width: Math.max(1, element.offsetWidth),
+        height: Math.max(1, element.offsetHeight)
+      });
+    });
+    if (!measured.size) return;
+
+    const next = computeLayout(this.document.root, this.document.layout, appearance.fontSize ?? 14, appearance.nodeVisualStyle ?? "card", appearance);
+    for (const position of next.nodes) {
+      const dimensions = measured.get(position.node.id);
+      if (!dimensions) continue;
+      position.width = dimensions.width;
+      position.height = dimensions.height;
+    }
+    resolveLayoutCollisions(next.nodes, appearance.nodeVisualStyle === "branch" ? 18 : 24);
+    next.byId = new Map(next.nodes.map((position) => [position.node.id, position]));
+    next.minX = Math.min(...next.nodes.map((position) => position.x - position.width / 2));
+    next.maxX = Math.max(...next.nodes.map((position) => position.x + position.width / 2));
+    next.minY = Math.min(...next.nodes.map((position) => position.y - position.height / 2));
+    next.maxY = Math.max(...next.nodes.map((position) => position.y + position.height / 2));
+    this.layout = next;
+
+    for (const position of this.layout.nodes) {
+      const element = this.nodesLayerEl.querySelector<HTMLElement>(`.mmc-node[data-node-id="${CSS.escape(position.node.id)}"]`);
+      if (!element) continue;
+      element.style.left = `${position.x}px`;
+      element.style.top = `${position.y}px`;
+    }
+    const branchColorMap = appearance.colorfulBranches ? buildBranchColorMap(this.document.root, appearance.branchColors) : new Map<string, string>();
+    this.renderMindMapEdges(appearance, branchColorMap);
   }
 
   /**
