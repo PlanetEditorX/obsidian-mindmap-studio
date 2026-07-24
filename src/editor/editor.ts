@@ -418,8 +418,19 @@ class NodeEditModal extends Modal {
     closeButton.addEventListener("click", () => { if (saveNow("commit", true)) { this.closeWithoutFlush = true; this.close(); } });
 
     this.outsidePointerHandler = (event: PointerEvent): void => {
-      if (this.modalEl.contains(event.target as Node)) return;
-      if (this.position === "right" && event.target instanceof HTMLElement && event.target.closest(".mmc-node")) return;
+      const targetNode = event.target as Node | null;
+      const targetElement = targetNode instanceof Element ? targetNode : targetNode?.parentElement;
+      if (targetNode && this.modalEl.contains(targetNode)) return;
+
+      // 图床选择、图片预览等子弹窗拥有独立的 modal-container。
+      // 它们打开期间的点击（包括遮罩和关闭按钮）不应关闭节点编辑面板。
+      const ownModalContainer = this.modalEl.closest(".modal-container");
+      const targetModal = targetElement?.closest(".modal");
+      const targetModalContainer = targetElement?.closest(".modal-container");
+      if (targetModal && targetModal !== this.modalEl) return;
+      if (targetModalContainer && ownModalContainer && targetModalContainer !== ownModalContainer) return;
+
+      if (this.position === "right" && targetElement?.closest(".mmc-node")) return;
       this.saveOnClose?.(); this.closeWithoutFlush = true; this.close();
     };
     window.setTimeout(() => document.addEventListener("pointerdown", this.outsidePointerHandler!, true), 0);
