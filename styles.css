@@ -2738,6 +2738,14 @@
   margin-left: calc(max(0, var(--mms-outline-depth) - 1) * 22px);
 }
 
+.mms-outline-item.is-content-only > .mms-outline-row {
+  display: none;
+}
+
+.mms-outline-item.is-content-only > .mms-outline-content {
+  margin-top: 0;
+}
+
 .mms-outline-row {
   display: flex;
   align-items: center;

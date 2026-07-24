@@ -51,6 +51,10 @@ export function renderOutlineMode(container: HTMLElement, options: OutlineRender
   const visit = (node: MindMapNode, depth: number): void => {
     const item = list.createDiv({ cls: `mms-outline-item depth-${Math.min(depth, 8)}` });
     item.style.setProperty("--mms-outline-depth", String(depth));
+    const firstTextBlock = nodeContentBlocks(node).find((block): block is MindMapTextContentBlock => block.type === "text");
+    const contentOnly = !firstTextBlock?.text.trim() && !node.submap
+      && Boolean(node.table || node.code || node.note || nodeContentBlocks(node).some((block) => block.type === "image"));
+    item.toggleClass("is-content-only", contentOnly);
     const row = item.createDiv({ cls: `mms-outline-row${options.selectedId === node.id ? " is-selected" : ""}` });
     row.dataset.nodeId = node.id;
     row.createSpan({ cls: "mms-outline-bullet", text: node.children.length || node.submap ? "◆" : "•" });
@@ -105,7 +109,15 @@ function renderOutlineContent(container: HTMLElement, node: MindMapNode, depth: 
 
   const content = container.createDiv({ cls: "mms-outline-content" });
   content.style.setProperty("--mms-outline-content-depth", String(depth));
-  content.addEventListener("click", (event) => event.stopPropagation());
+  content.addEventListener("click", (event) => {
+    event.stopPropagation();
+    options.selectNode(node.id);
+  });
+  content.addEventListener("dblclick", (event) => {
+    event.stopPropagation();
+    options.selectNode(node.id);
+    if (!options.readOnly) options.editSelected();
+  });
   for (const block of additionalText) {
     const paragraph = content.createDiv({ cls: "mms-outline-text-block" });
     renderRichTextRuns(paragraph, block.richText, block.text);

@@ -699,6 +699,8 @@ export const setIcon = () => {};
 
   assert.match(editorSource, /mms-mode-switcher/);
   assert.match(editorSource, /toggleReadOnly/);
+  assert.match(editorSource, /scrollPosition = scroller \? \{ top: scroller\.scrollTop, left: scroller\.scrollLeft \}/);
+  assert.match(editorSource, /window\.requestAnimationFrame\(restore\)/, "switching edit state must restore the current scroll position after rerender");
   assert.match(editorSource, /renderOutline/);
   assert.match(editorSource, /renderArticle/);
   assert.match(editorSource, /currentMode === "article" \|\| this\.currentMode === "reading" \|\| this\.document\.view\?\.readOnly === true/, "article and reading modes should initialize as read-only");
@@ -736,6 +738,7 @@ export const setIcon = () => {};
   assert.match(settingsSource, /通读进度条位置/);
   assert.match(mainSource, /articleTocMaxDepth:[\s\S]*Math\.max\(1, Math\.min\(8/);
   assert.match(articleRendererSource, /item\.depth <= options\.articleTocMaxDepth/, "article TOC rendering should honor the configured maximum depth");
+  assert.match(articleRendererSource, /if \(firstTextBlock\?\.text\.trim\(\)\)/, "table-only article nodes must not create an empty body placeholder");
   assert.match(editorSource, /position-\$\{this\.options\.readingProgressPosition\}/);
 
   assert.match(settingsSource, /visibleModes/);
@@ -756,6 +759,8 @@ export const setIcon = () => {};
   assert.match(importExport.documentToHtml(importedXmind), /\.body-paragraph\{[^}]*text-indent:2em/, "exported articles must preserve uniform paragraph indentation");
   assert.match(cssSource, /\.mms-outline-table-wrap[\s\S]*max-height:\s*320px/);
   assert.match(cssSource, /\.mms-outline-table th[\s\S]*position:\s*sticky/);
+  assert.match(outlineRendererSource, /is-content-only/);
+  assert.match(cssSource, /\.mms-outline-item\.is-content-only > \.mms-outline-row[\s\S]*display:\s*none/, "content-only outline nodes must not leave an empty title row");
   assert.match(cssSource, /\.mmc-node-edit-modal label\.mmc-article-numbering-option[\s\S]*flex-direction:\s*row/);
   assert.match(cssSource, /\.mmc-image-preview-stage/);
   assert.match(cssSource, /\.mmc-content-block-list/);

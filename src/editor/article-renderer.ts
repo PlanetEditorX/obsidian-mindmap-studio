@@ -68,11 +68,9 @@ export function renderArticleMode(container: HTMLElement, options: ArticleRender
       renderArticleNodeContent(section, info.node, false, options);
     } else {
       const firstTextBlock = nodeContentBlocks(info.node).find((block): block is MindMapTextContentBlock => block.type === "text");
-      if (firstTextBlock || !options.readOnly) {
+      if (firstTextBlock?.text.trim()) {
         const paragraph = section.createEl("p", { cls: "mms-article-leaf-text" });
-        if (firstTextBlock) {
-          renderRichTextRuns(paragraph, firstTextBlock.richText, firstTextBlock.text);
-        }
+        renderRichTextRuns(paragraph, firstTextBlock.richText, firstTextBlock.text);
         options.makeInlineEditable(paragraph, info.node, "正文段落");
       }
       options.addInlineNodeActions(section, info.node);

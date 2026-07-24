@@ -896,9 +896,23 @@ export class MindMapEditor {
    * 切换read only，并保持模型、界面和持久化状态的一致性。
    */
   toggleReadOnly(): void {
+    const scroller = this.currentMode === "outline"
+      ? this.outlineEl
+      : this.currentMode === "article" || this.currentMode === "reading"
+        ? this.articleEl
+        : null;
+    const scrollPosition = scroller ? { top: scroller.scrollTop, left: scroller.scrollLeft } : null;
     this.readOnly = !this.readOnly;
     if (this.currentMode !== "article" && this.currentMode !== "reading") this.persistReadOnlyState();
     this.render();
+    if (scroller && scrollPosition) {
+      const restore = (): void => {
+        scroller.scrollTop = scrollPosition.top;
+        scroller.scrollLeft = scrollPosition.left;
+      };
+      restore();
+      window.requestAnimationFrame(restore);
+    }
     new Notice(this.readOnly ? "已进入只读模式" : "已进入编辑模式");
   }
 
