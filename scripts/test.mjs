@@ -20,6 +20,7 @@ const importExportOutfile = join(tempDir, "import-export.cjs");
 const historyOutfile = join(tempDir, "history-manager.cjs");
 const dragDropOutfile = join(tempDir, "drag-drop.cjs");
 const nodeActionsOutfile = join(tempDir, "node-actions.cjs");
+const collisionOutfile = join(tempDir, "collision-layout.cjs");
 const obsidianStub = join(tempDir, "obsidian-stub.mjs");
 
 try {
@@ -79,6 +80,14 @@ try {
     format: "cjs",
     logLevel: "silent"
   });
+  await build({
+    entryPoints: ["src/render/collision-layout.ts"],
+    outfile: collisionOutfile,
+    bundle: true,
+    platform: "node",
+    format: "cjs",
+    logLevel: "silent"
+  });
   await writeFile(obsidianStub, `export class App {}
 export class Modal { constructor() {} }
 export class Notice {}
@@ -105,6 +114,7 @@ export const setIcon = () => {};
   const { DocumentHistory } = require(historyOutfile);
   const dragDrop = require(dragDropOutfile);
   const nodeActions = require(nodeActionsOutfile);
+  const collisionLayout = require(collisionOutfile);
   const document = model.createDefaultDocument("测试脑图");
   const xmindArchive = zipSync({
     "content.json": strToU8(JSON.stringify([{ rootTopic: { title: "XMind 根", children: { attached: [{ title: "分支 A" }] } } }]))
@@ -227,6 +237,20 @@ export const setIcon = () => {};
   assert.equal(actionRoot.children[0]?.collapsed, true);
   assert.equal(nodeActions.deleteNodes(actionRoot, ["action-a"]), 1);
   assert.deepEqual(actionRoot.children.map((node) => node.id), ["action-b"]);
+
+  const collisionNodes = [
+    { node: { id: "collision-root" }, parentId: null, x: 0, y: 0, width: 220, height: 120 },
+    { node: { id: "collision-a" }, parentId: "collision-root", x: 120, y: 0, width: 220, height: 100 },
+    { node: { id: "collision-a1" }, parentId: "collision-a", x: 400, y: 0, width: 80, height: 80 }
+  ];
+  assert.ok(collisionLayout.resolveLayoutCollisions(collisionNodes, 24) > 0);
+  const rootBox = collisionNodes[0];
+  const branchBox = collisionNodes[1];
+  assert.ok(
+    branchBox.y - branchBox.height / 2 >= rootBox.y + rootBox.height / 2 + 24,
+    "a colliding branch must move away from the fixed root with the requested gap"
+  );
+  assert.equal(collisionNodes[2].y - collisionNodes[1].y, 0, "moving a branch must translate its descendants together");
 
   const viewDocument = model.normalizeDocument({
     title: "三种模式",

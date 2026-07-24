@@ -3588,13 +3588,37 @@ private getSourceTitle(context: MarkdownPostProcessorContext): string
 private async processMindMapEmbeds(element: HTMLElement, context: MarkdownPostProcessorContext): Promise<void>
 ```
 
+## `src/render/collision-layout.ts`
+
+导图节点包围盒碰撞检测与子树纵向避让。
+
+### 接口 `CollisionNode`
+
+源码：`src/render/collision-layout.ts:7`
+
+参见源码中的实现和调用位置。
+
+```ts
+export interface CollisionNode
+```
+
+### 函数 `resolveLayoutCollisions`
+
+源码：`src/render/collision-layout.ts:23`
+
+检测相交的节点矩形，并把其中一棵子树整体向下移动。
+
+```ts
+export function resolveLayoutCollisions<T extends CollisionNode>(nodes: T[], verticalGap: number): number
+```
+
 ## `src/render/layout.ts`
 
 渲染领域的布局计算与 SVG 导出模块。
 
 ### 接口 `NodePosition`
 
-源码：`src/render/layout.ts:13`
+源码：`src/render/layout.ts:14`
 
 NodePosition 的结构化数据约定。字段会在模块边界传递，用于保持类型安全和版本兼容。
 
@@ -3604,7 +3628,7 @@ export interface NodePosition
 
 ### 接口 `LayoutResult`
 
-源码：`src/render/layout.ts:27`
+源码：`src/render/layout.ts:28`
 
 LayoutResult 的结构化数据约定。字段会在模块边界传递，用于保持类型安全和版本兼容。
 
@@ -3614,7 +3638,7 @@ export interface LayoutResult
 
 ### 函数 `visibleChildren`
 
-源码：`src/render/layout.ts:47`
+源码：`src/render/layout.ts:48`
 
 执行“visible children”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
 
@@ -3624,7 +3648,7 @@ function visibleChildren(node: MindMapNode): MindMapNode[]
 
 ### 函数 `estimatedTextLines`
 
-源码：`src/render/layout.ts:59`
+源码：`src/render/layout.ts:60`
 
 执行“estimated text lines”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
 
@@ -3634,7 +3658,7 @@ function estimatedTextLines(text: string, width: number, fontSize: number): numb
 
 ### 函数 `nodeDimensions`
 
-源码：`src/render/layout.ts:74`
+源码：`src/render/layout.ts:75`
 
 执行“node dimensions”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
 
@@ -3644,7 +3668,7 @@ function nodeDimensions(node: MindMapNode, depth: number, defaultFontSize = 14, 
 
 ### 函数 `subtreeHeight`
 
-源码：`src/render/layout.ts:140`
+源码：`src/render/layout.ts:141`
 
 执行“subtree height”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
 
@@ -3654,7 +3678,7 @@ function subtreeHeight(node: MindMapNode, depth: number, defaultFontSize = 14, v
 
 ### 函数 `layoutBranch`
 
-源码：`src/render/layout.ts:162`
+源码：`src/render/layout.ts:163`
 
 执行“layout branch”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
 
@@ -3664,7 +3688,7 @@ function layoutBranch( node: MindMapNode, parentId: string, parentX: number, par
 
 ### 函数 `computeLayout`
 
-源码：`src/render/layout.ts:203`
+源码：`src/render/layout.ts:204`
 
 计算当前可见节点的尺寸、坐标、深度和整体边界。折叠节点的后代不会参与布局；节点自定义宽度和最小高度会直接影响子树占位与连接线端点。
 
@@ -3674,7 +3698,7 @@ export function computeLayout(root: MindMapNode, mode: LayoutMode, defaultFontSi
 
 ### 函数 `buildBranchColorMap`
 
-源码：`src/render/layout.ts:266`
+源码：`src/render/layout.ts:268`
 
 构建branch color map，并保持模型、界面和持久化状态的一致性。
 
@@ -3684,7 +3708,7 @@ export function buildBranchColorMap(root: MindMapNode, colors: string[] | undefi
 
 ### 函数 `edgeWidthForDepth`
 
-源码：`src/render/layout.ts:286`
+源码：`src/render/layout.ts:288`
 
 根据连接线模式计算指定层级的线宽。统一模式始终返回起始宽度；渐细模式会按当前实际最大深度插值，并保证最深层达到最小宽度。
 
@@ -3694,7 +3718,7 @@ export function edgeWidthForDepth(appearance: MindMapAppearance, depth: number, 
 
 ### 函数 `edgePath`
 
-源码：`src/render/layout.ts:306`
+源码：`src/render/layout.ts:308`
 
 执行“edge path”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
 
@@ -3704,7 +3728,7 @@ export function edgePath(parent: NodePosition, child: NodePosition, style: EdgeS
 
 ### 函数 `roundedElbowEdgePath`
 
-源码：`src/render/layout.ts:323`
+源码：`src/render/layout.ts:325`
 
 Builds an orthogonal branch with rounded corners for the rounded-branch visual style without relying on external assets.
 
@@ -3714,7 +3738,7 @@ export function roundedElbowEdgePath(parent: NodePosition, child: NodePosition):
 
 ### 函数 `escapeXml`
 
-源码：`src/render/layout.ts:348`
+源码：`src/render/layout.ts:350`
 
 转义xml，并保持模型、界面和持久化状态的一致性。
 
@@ -3724,7 +3748,7 @@ export function escapeXml(value: string): string
 
 ### 函数 `validColor`
 
-源码：`src/render/layout.ts:362`
+源码：`src/render/layout.ts:364`
 
 执行“valid color”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
 
@@ -3734,7 +3758,7 @@ function validColor(value: string | undefined, fallback: string): string
 
 ### 函数 `svgRadius`
 
-源码：`src/render/layout.ts:372`
+源码：`src/render/layout.ts:374`
 
 执行“svg radius”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
 
@@ -3744,7 +3768,7 @@ function svgRadius(shape: NodeShape | undefined): number
 
 ### 函数 `taskGlyph`
 
-源码：`src/render/layout.ts:384`
+源码：`src/render/layout.ts:386`
 
 执行“task glyph”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
 
@@ -3754,7 +3778,7 @@ function taskGlyph(node: MindMapNode): string
 
 ### 函数 `truncateRuns`
 
-源码：`src/render/layout.ts:398`
+源码：`src/render/layout.ts:400`
 
 执行“truncate runs”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
 
@@ -3764,7 +3788,7 @@ function truncateRuns(runs: MindMapTextRun[], maxLength: number): MindMapTextRun
 
 ### 函数 `richTextTspans`
 
-源码：`src/render/layout.ts:427`
+源码：`src/render/layout.ts:429`
 
 执行“rich text tspans”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
 
@@ -3774,7 +3798,7 @@ function richTextTspans(runs: MindMapTextRun[] | undefined, fallbackText: string
 
 ### 函数 `svgWrappedLines`
 
-源码：`src/render/layout.ts:454`
+源码：`src/render/layout.ts:456`
 
 执行“svg wrapped lines”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
 
@@ -3784,7 +3808,7 @@ function svgWrappedLines(text: string, width: number, fontSize: number): string[
 
 ### 函数 `svgFontFamily`
 
-源码：`src/render/layout.ts:472`
+源码：`src/render/layout.ts:474`
 
 执行“svg font family”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
 
@@ -3794,7 +3818,7 @@ function svgFontFamily(mode: FontFamilyMode | undefined, customFont: string | un
 
 ### 函数 `documentToSvg`
 
-源码：`src/render/layout.ts:489`
+源码：`src/render/layout.ts:491`
 
 使用与编辑画布一致的布局、文本对齐、节点尺寸、主题颜色、富文本和渐细连线生成独立 SVG 字符串。导出过程不依赖 DOM。
 

@@ -38,6 +38,7 @@ src/
 │   └── article-style.ts        文章样式解析
 ├── render/
 │   ├── layout.ts               坐标、连线与 SVG
+│   ├── collision-layout.ts     节点碰撞检测与子树避让
 │   └── static-render.ts        阅读模式静态预览
 ├── search/
 │   └── global-search.ts        本地增量索引与搜索

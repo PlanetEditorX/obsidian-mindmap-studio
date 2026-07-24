@@ -6,6 +6,7 @@
  */
 
 import { nodeContentBlocks, nodePlainText, type EdgeStyle, type FontFamilyMode, type LayoutMode, type MindMapAppearance, type MindMapNode, type MindMapTextRun, type NodeShape, type NodeVisualStyle } from "../core/model";
+import { resolveLayoutCollisions } from "./collision-layout";
 
 /**
  * NodePosition 的结构化数据约定。字段会在模块边界传递，用于保持类型安全和版本兼容。
@@ -247,6 +248,7 @@ export function computeLayout(root: MindMapNode, mode: LayoutMode, defaultFontSi
     });
   }
 
+  resolveLayoutCollisions(nodes, verticalGap);
   const byId = new Map(nodes.map((position) => [position.node.id, position]));
   const minX = Math.min(...nodes.map((position) => position.x - position.width / 2));
   const maxX = Math.max(...nodes.map((position) => position.x + position.width / 2));
