@@ -68,11 +68,9 @@ export function readingSectionsToHtml(sections: ReadingSection[]): string {
   const renderNode = (node: MindMapNode, depth: number): string => {
     const level = Math.min(6, Math.max(2, depth + 1));
     const title = escapeHtml(nodePlainText(node) || "未命名");
-    const noteClass = node.note && Array.from(node.note).length > 42 ? "note is-multiline" : "note";
-    const note = node.note ? `<p class="${noteClass}">${escapeHtml(node.note)}</p>` : "";
+    const note = node.note ? `<p class="note">${escapeHtml(node.note)}</p>` : "";
     if (!node.children.length && !node.submap) {
-      const paragraphClass = Array.from(nodePlainText(node)).length > 42 ? "body-paragraph is-multiline" : "body-paragraph";
-      return `<p class="${paragraphClass}">${title}</p>${note}`;
+      return `<p class="body-paragraph">${title}</p>${note}`;
     }
     const children = node.children.map((child) => renderNode(child, depth + 1)).join("");
     return `<section><h${level}>${title}</h${level}>${note}${children}</section>`;
@@ -90,8 +88,7 @@ export function readingSectionsToHtml(sections: ReadingSection[]): string {
 <title>${title}</title><style>
 body{max-width:860px;margin:40px auto;padding:0 28px;color:#20242c;font:16px/1.85 system-ui,"Microsoft YaHei",sans-serif}
 h1{text-align:center;border-bottom:2px solid #ddd;padding-bottom:18px}h2,h3,h4,h5,h6{margin-top:1.7em;color:#172033}
-section{break-inside:auto}.map-section+.map-section{margin-top:3em;border-top:1px solid #ddd}.body-paragraph{margin:.75em 0;text-align:justify}.note{padding:10px 14px;color:#555;background:#f6f7f9;border-left:3px solid #6366f1}
-.is-multiline{text-indent:2em}
+section{break-inside:auto}.map-section+.map-section{margin-top:3em;border-top:1px solid #ddd}.body-paragraph{margin:.75em 0;text-align:justify;text-indent:2em}.note{padding:10px 14px;color:#555;background:#f6f7f9;border-left:3px solid #6366f1}
 @media print{body{margin:0;max-width:none}a{color:inherit}}
 </style></head><body><article><h1>${title}</h1>${body}</article></body></html>`;
 }

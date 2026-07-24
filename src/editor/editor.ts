@@ -79,7 +79,7 @@ import { renderNodeRichTextEditor } from "./node-rich-text-editor";
 import { canMoveNodes, isRightChildZone, resolveDropPosition } from "./drag-drop";
 import { DocumentHistory } from "./history-manager";
 import { renderOutlineMode } from "./outline-renderer";
-import { markWrappedArticleParagraph, renderArticleMode, renderArticleNodeContent, type ArticleRendererOptions } from "./article-renderer";
+import { renderArticleMode, renderArticleNodeContent, type ArticleRendererOptions } from "./article-renderer";
 import { appendChild, deleteNodes, insertSiblingAfter, nextTaskStatus, setAllBranchesCollapsed, topLevelSelectedNodeIds } from "./node-actions";
 import { attachSelectionFormatToolbar, type SelectionFormatToolbarHandle } from "./selection-format-toolbar";
 export type { MindMapEditorCallbacks, MindMapEditorOptions } from "./editor-types";
@@ -1534,11 +1534,6 @@ export class MindMapEditor {
     renderArticleNodeContent(container, node, treatTextAsBody, this.articleRendererOptions());
   }
 
-  /** 将文章段落换行检测委托给文章模式模块。 */
-  private markWrappedArticleParagraph(paragraph: HTMLParagraphElement): void {
-    markWrappedArticleParagraph(paragraph);
-  }
-
   /**
    * 渲染相关数据，并保持模型、界面和持久化状态的一致性。
    */
@@ -2690,7 +2685,6 @@ export class MindMapEditor {
           if (firstTextBlock) {
             const paragraph = nodeSection.createEl("p", { cls: "mms-article-leaf-text" });
             renderRichTextRuns(paragraph, firstTextBlock.richText, firstTextBlock.text);
-            this.markWrappedArticleParagraph(paragraph);
           }
           this.renderArticleContent(nodeSection, info.node, false);
         }

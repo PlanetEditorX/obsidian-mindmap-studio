@@ -72,7 +72,6 @@ export function renderArticleMode(container: HTMLElement, options: ArticleRender
         const paragraph = section.createEl("p", { cls: "mms-article-leaf-text" });
         if (firstTextBlock) {
           renderRichTextRuns(paragraph, firstTextBlock.richText, firstTextBlock.text);
-          markWrappedArticleParagraph(paragraph);
         }
         options.makeInlineEditable(paragraph, info.node, "正文段落");
       }
@@ -136,7 +135,6 @@ export function renderArticleNodeContent(container: HTMLElement, node: MindMapNo
       firstTextHandled = true;
       const paragraph = container.createEl("p", { cls: "mms-article-paragraph" });
       renderRichTextRuns(paragraph, block.richText, block.text);
-      markWrappedArticleParagraph(paragraph);
       if (treatTextAsBody) options.makeInlineEditable(paragraph, node, "正文");
     } else {
       const resolved = options.callbacks.resolveImage(block.source);
@@ -156,18 +154,6 @@ export function renderArticleNodeContent(container: HTMLElement, node: MindMapNo
     });
   }
   if (node.code) void options.callbacks.onRenderCode(node.code, container.createDiv({ cls: "mms-article-code markdown-rendered" }));
-}
-
-/** 在正文实际换行时增加多行段落标记。 */
-export function markWrappedArticleParagraph(paragraph: HTMLParagraphElement): void {
-  window.requestAnimationFrame(() => {
-    if (!paragraph.isConnected || !paragraph.textContent?.trim()) return;
-    const range = document.createRange();
-    range.selectNodeContents(paragraph);
-    const lineTops = new Set(Array.from(range.getClientRects(), (rect) => Math.round(rect.top)));
-    paragraph.toggleClass("is-multiline", lineTops.size > 1);
-    range.detach();
-  });
 }
 
 /** 渲染子文章上一节、父级、下一节与阅读完成导航。 */

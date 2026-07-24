@@ -3160,8 +3160,8 @@
   line-height: var(--mms-article-line-height, 1.85);
 }
 
-.mms-article-leaf-text.is-multiline,
-.mms-article-paragraph.is-multiline {
+.mms-article-leaf-text,
+.mms-article-paragraph {
   text-indent: 2em;
 }
 
