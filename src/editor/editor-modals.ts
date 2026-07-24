@@ -12,6 +12,7 @@ import {
   type ArticleStyle,
   type ArticleStylePresetId,
   type MindMapDocument,
+  type MindMapImageSourceCandidate,
   type MindMapNode
 } from "../core/model";
 import { ensureMathJax } from "./rich-text-dom";
@@ -124,8 +125,16 @@ export class ImagePreviewModal extends Modal {
    * @param app Obsidian 应用实例。
    * @param source 图片资源地址。
    * @param alt 图片说明。
+   * @param sources 当前图片已经保存的图床镜像及本地来源。
+   * @param resolveSource 将仓库路径转换为可显示地址的解析器。
    */
-  constructor(app: App, private readonly source: string, private readonly alt: string) {
+  constructor(
+    app: App,
+    private readonly source: string,
+    private readonly alt: string,
+    private readonly sources: MindMapImageSourceCandidate[] = [],
+    private readonly resolveSource?: (source: string) => string | null
+  ) {
     super(app);
   }
 
@@ -136,8 +145,10 @@ export class ImagePreviewModal extends Modal {
     this.modalEl.addClass("mmc-image-preview-modal");
     this.titleEl.setText(this.alt || "图片预览");
     const toolbar = this.contentEl.createDiv({ cls: "mmc-image-preview-toolbar" });
+    const sourceBar = this.contentEl.createDiv({ cls: "mmc-image-preview-sources" });
     const imageWrap = this.contentEl.createDiv({ cls: "mmc-image-preview-stage" });
     const image = imageWrap.createEl("img", { attr: { src: this.source, alt: this.alt || "图片" } });
+    let sourceStatus: HTMLSpanElement;
     let baseWidth = 0;
     let baseHeight = 0;
     const applyScale = (): void => {
@@ -152,6 +163,12 @@ export class ImagePreviewModal extends Modal {
       baseWidth = Math.max(1, image.naturalWidth * fit);
       baseHeight = Math.max(1, image.naturalHeight * fit);
       applyScale();
+      sourceStatus.setText(`${sourceStatus.dataset.label ?? "当前图片"} · ${image.naturalWidth}×${image.naturalHeight}`);
+      sourceBar.removeClass("has-error");
+    });
+    image.addEventListener("error", () => {
+      sourceStatus.setText(`${sourceStatus.dataset.label ?? "当前图片"} · 加载失败`);
+      sourceBar.addClass("has-error");
     });
     const button = (label: string, action: () => void): void => {
       const element = toolbar.createEl("button", { text: label, attr: { type: "button" } });
@@ -160,6 +177,44 @@ export class ImagePreviewModal extends Modal {
     button("−", () => { this.scale = Math.max(0.2, this.scale - 0.2); applyScale(); });
     button("100%", () => { this.scale = 1; applyScale(); });
     button("+", () => { this.scale = Math.min(5, this.scale + 0.2); applyScale(); });
+
+    const candidates = this.sources.length
+      ? this.sources
+      : [{ source: this.source, label: "当前图片", kind: "current" as const }];
+    const sourceButtons: HTMLButtonElement[] = [];
+    sourceBar.createSpan({ cls: "mmc-image-preview-sources-label", text: "图片来源：" });
+    const switchSource = (candidate: MindMapImageSourceCandidate, sourceButton: HTMLButtonElement): void => {
+      const resolved = this.resolveSource?.(candidate.source) ?? candidate.source;
+      this.scale = 1;
+      baseWidth = 0;
+      baseHeight = 0;
+      sourceStatus.dataset.label = candidate.label;
+      sourceStatus.setText(`${candidate.label} · 加载中…`);
+      sourceBar.removeClass("has-error");
+      sourceButtons.forEach((item) => item.removeClass("is-active"));
+      sourceButton.addClass("is-active");
+      image.removeAttribute("style");
+      image.src = resolved;
+    };
+    for (const candidate of candidates) {
+      const sourceButton = sourceBar.createEl("button", {
+        text: candidate.label,
+        cls: "mmc-image-preview-source-button",
+        attr: { type: "button", title: `预览来源：${candidate.label}` }
+      });
+      sourceButtons.push(sourceButton);
+      sourceButton.addEventListener("click", () => switchSource(candidate, sourceButton));
+    }
+    sourceStatus = sourceBar.createSpan({ cls: "mmc-image-preview-source-status", text: "当前图片" });
+    const initialIndex = Math.max(0, candidates.findIndex((candidate) => {
+      const resolved = this.resolveSource?.(candidate.source) ?? candidate.source;
+      return resolved === this.source || candidate.source === this.source;
+    }));
+    const initialCandidate = candidates[initialIndex]!;
+    const initialButton = sourceButtons[initialIndex]!;
+    sourceStatus.dataset.label = initialCandidate.label;
+    initialButton.addClass("is-active");
+
     imageWrap.addEventListener("wheel", (event) => {
       event.preventDefault();
       this.scale = Math.min(5, Math.max(0.2, this.scale + (event.deltaY < 0 ? 0.15 : -0.15)));

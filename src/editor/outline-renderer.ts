@@ -5,6 +5,7 @@
 
 import { App } from "obsidian";
 import {
+  imageSourceCandidates,
   nodeContentBlocks,
   nodePlainText,
   nodePrimaryText,
@@ -129,7 +130,13 @@ function renderOutlineContent(container: HTMLElement, node: MindMapNode, depth: 
     const figure = content.createEl("figure", { cls: "mms-outline-image" });
     if (resolved) {
       const image = figure.createEl("img", { attr: { src: resolved, alt: block.alt ?? "图片", loading: "lazy" } });
-      image.addEventListener("click", () => new ImagePreviewModal(options.app, resolved, block.alt ?? "图片").open());
+      image.addEventListener("click", () => new ImagePreviewModal(
+        options.app,
+        resolved,
+        block.alt ?? "图片",
+        imageSourceCandidates(block, true),
+        options.resolveImage
+      ).open());
     } else {
       figure.createDiv({ cls: "mms-outline-image-placeholder", text: "图片无法加载" });
     }

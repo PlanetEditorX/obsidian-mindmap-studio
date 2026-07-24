@@ -225,7 +225,13 @@ class NodeEditModal extends Modal {
             const resolved = this.callbacks.resolveImage(block.source);
             if (resolved) {
               const img = preview.createEl("img", { attr: { src: resolved, alt: block.alt || "图片" } });
-              img.addEventListener("click", () => new ImagePreviewModal(this.app, resolved, block.alt || "图片").open());
+              img.addEventListener("click", () => new ImagePreviewModal(
+                this.app,
+                resolved,
+                block.alt || "图片",
+                imageSourceCandidates(block, true),
+                (source) => this.callbacks.resolveImage(source)
+              ).open());
             } else preview.createDiv({ cls: "mmc-image-placeholder", text: block.source ? "无法加载图片" : "尚未选择图片" });
             source.value = block.source;
             alt.value = block.alt ?? "";
@@ -1789,7 +1795,13 @@ export class MindMapEditor {
           };
           image.addEventListener("click", (event) => {
             event.stopPropagation();
-            if (activeResolved) new ImagePreviewModal(this.app, activeResolved, block.alt ?? "图片预览").open();
+            if (activeResolved) new ImagePreviewModal(
+              this.app,
+              activeResolved,
+              block.alt ?? "图片预览",
+              imageSourceCandidates(block, true),
+              (source) => this.callbacks.resolveImage(source)
+            ).open();
           });
           tryCandidate(0);
           continue;

@@ -5,6 +5,7 @@
 
 import { App, setIcon } from "obsidian";
 import {
+  imageSourceCandidates,
   nodeContentBlocks,
   nodePrimaryText,
   type MindMapDocument,
@@ -138,7 +139,13 @@ export function renderArticleNodeContent(container: HTMLElement, node: MindMapNo
     } else {
       const resolved = options.callbacks.resolveImage(block.source);
       const image = container.createEl("img", { cls: "mms-article-image", attr: { src: resolved ?? block.source, alt: block.alt ?? "图片" } });
-      image.addEventListener("click", () => new ImagePreviewModal(options.app, resolved ?? block.source, block.alt ?? "图片").open());
+      image.addEventListener("click", () => new ImagePreviewModal(
+        options.app,
+        resolved ?? block.source,
+        block.alt ?? "图片",
+        imageSourceCandidates(block, true),
+        (source) => options.callbacks.resolveImage(source)
+      ).open());
     }
   }
   if (node.note) container.createEl("p", { cls: "mms-article-note", text: node.note });
