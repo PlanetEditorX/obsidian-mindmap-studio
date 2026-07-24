@@ -40,6 +40,7 @@ export function renderArticleMode(container: HTMLElement, options: ArticleRender
   container.empty();
   const articleStyle = resolveArticleStyle(options.document.articleStyle);
   const page = container.createDiv({ cls: `mms-article-page article-${articleStyle.preset} toc-${articleStyle.tocStyle ?? "card"}` });
+  page.dataset.nodeId = options.document.root.id;
   applyArticleStyle(page, articleStyle);
   const title = page.createEl("h1", { cls: "mms-article-document-title", text: nodePrimaryText(options.document.root) || options.document.title });
   options.makeInlineEditable(title, options.document.root, "文章标题");

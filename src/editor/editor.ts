@@ -109,6 +109,13 @@ interface NodeEditValues {
   minHeight?: number;
 }
 
+/** 文章与大纲模式之间同步阅读位置的语义锚点。 */
+interface ReadingPositionAnchor {
+  nodeId: string;
+  nodeRatio: number;
+  viewportRatio: number;
+}
+
 /**
  * NodeEditModal 的主要实现类。负责封装相关状态、生命周期和对外操作，避免调用方直接操作内部数据结构。
  */
@@ -872,6 +879,7 @@ export class MindMapEditor {
   setDisplayMode(mode: DisplayMode, notifyGlobal = true): void {
     if (!this.options.visibleModes.includes(mode)) return;
     const previousMode = this.currentMode;
+    const readingAnchor = this.captureReadingPosition(previousMode);
     this.currentMode = mode;
     if ((mode === "article" || mode === "reading") && mode !== previousMode) {
       this.readOnly = true;
@@ -879,6 +887,7 @@ export class MindMapEditor {
       this.readOnly = this.document.view?.readOnly === true;
     }
     this.render();
+    if (readingAnchor) this.restoreReadingPosition(mode, readingAnchor);
     if (notifyGlobal) void this.callbacks.onDisplayModeChange(mode);
     if (mode === "mindmap" && this.options.autoFitOnOpen) window.setTimeout(() => this.fitToView(), 20);
   }
@@ -890,6 +899,51 @@ export class MindMapEditor {
    */
   applyGlobalDisplayMode(mode: DisplayMode): void {
     this.setDisplayMode(mode, false);
+  }
+
+  /** 捕获文章或大纲视口中当前阅读节点及节点内部进度。 */
+  private captureReadingPosition(mode: DisplayMode): ReadingPositionAnchor | null {
+    const scroller = mode === "outline" ? this.outlineEl : mode === "article" ? this.articleEl : null;
+    if (!scroller || !scroller.isConnected) return null;
+    const viewport = scroller.getBoundingClientRect();
+    const viewportRatio = .35;
+    const anchorY = viewport.top + viewport.height * viewportRatio;
+    const candidates = Array.from(scroller.querySelectorAll<HTMLElement>("[data-node-id]"))
+      .map((element) => ({ element, rect: element.getBoundingClientRect() }))
+      .filter(({ rect }) => rect.height > 0);
+    if (!candidates.length) return null;
+    const containing = candidates
+      .filter(({ rect }) => anchorY >= rect.top && anchorY <= rect.bottom)
+      .sort((left, right) => left.rect.height - right.rect.height)[0];
+    const nearest = containing ?? candidates.sort((left, right) => {
+      const leftDistance = anchorY < left.rect.top ? left.rect.top - anchorY : anchorY - left.rect.bottom;
+      const rightDistance = anchorY < right.rect.top ? right.rect.top - anchorY : anchorY - right.rect.bottom;
+      return leftDistance - rightDistance;
+    })[0];
+    const nodeId = nearest?.element.dataset.nodeId;
+    if (!nearest || !nodeId) return null;
+    return {
+      nodeId,
+      nodeRatio: Math.max(0, Math.min(1, (anchorY - nearest.rect.top) / nearest.rect.height)),
+      viewportRatio
+    };
+  }
+
+  /** 在目标模式中恢复对应节点和节点内部的阅读位置。 */
+  private restoreReadingPosition(mode: DisplayMode, anchor: ReadingPositionAnchor): void {
+    const scroller = mode === "outline" ? this.outlineEl : mode === "article" ? this.articleEl : null;
+    if (!scroller) return;
+    const restore = (): void => {
+      const target = scroller.querySelector<HTMLElement>(`[data-node-id="${CSS.escape(anchor.nodeId)}"]`);
+      if (!target) return;
+      const viewport = scroller.getBoundingClientRect();
+      const rect = target.getBoundingClientRect();
+      const targetY = rect.top + rect.height * anchor.nodeRatio;
+      const desiredY = viewport.top + viewport.height * anchor.viewportRatio;
+      scroller.scrollTop += targetY - desiredY;
+    };
+    restore();
+    window.requestAnimationFrame(restore);
   }
 
   /**

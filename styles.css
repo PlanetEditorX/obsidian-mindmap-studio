@@ -2744,6 +2744,7 @@
 
 .mms-outline-item.is-content-only > .mms-outline-content {
   margin-top: 0;
+  margin-left: 8px;
 }
 
 .mms-outline-row {
@@ -2818,7 +2819,7 @@
 .mms-outline-content {
   display: grid;
   gap: 8px;
-  margin: 2px 8px 10px calc(31px + max(0, var(--mms-outline-content-depth) - 1) * 22px);
+  margin: 2px 8px 10px 31px;
   padding: 8px 10px;
   overflow: hidden;
   border-left: 2px solid color-mix(in srgb, var(--interactive-accent) 24%, transparent);

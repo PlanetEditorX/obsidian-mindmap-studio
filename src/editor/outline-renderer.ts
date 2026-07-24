@@ -39,6 +39,7 @@ export function renderOutlineMode(container: HTMLElement, options: OutlineRender
   container.empty();
   const page = container.createDiv({ cls: "mms-outline-page" });
   const root = options.document.root;
+  page.dataset.nodeId = root.id;
   const titleRow = page.createDiv({ cls: `mms-outline-row is-root${options.selectedId === root.id ? " is-selected" : ""}` });
   titleRow.dataset.nodeId = root.id;
   const title = titleRow.createDiv({ cls: "mms-outline-title is-root-title", text: nodePrimaryText(root) || options.document.title });
@@ -50,6 +51,7 @@ export function renderOutlineMode(container: HTMLElement, options: OutlineRender
   const list = page.createDiv({ cls: "mms-outline-list" });
   const visit = (node: MindMapNode, depth: number): void => {
     const item = list.createDiv({ cls: `mms-outline-item depth-${Math.min(depth, 8)}` });
+    item.dataset.nodeId = node.id;
     item.style.setProperty("--mms-outline-depth", String(depth));
     const firstTextBlock = nodeContentBlocks(node).find((block): block is MindMapTextContentBlock => block.type === "text");
     const contentOnly = !firstTextBlock?.text.trim() && !node.submap
