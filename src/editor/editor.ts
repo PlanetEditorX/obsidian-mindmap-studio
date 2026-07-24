@@ -1486,6 +1486,7 @@ export class MindMapEditor {
    */
   private renderOutline(): void {
     renderOutlineMode(this.outlineEl, {
+      app: this.app,
       document: this.document,
       selectedId: this.selectedId,
       readOnly: this.readOnly,
@@ -1494,7 +1495,9 @@ export class MindMapEditor {
       addInlineNodeActions: (container, node) => this.addInlineNodeActions(container, node),
       mutate: (action) => this.mutate(action),
       editSelected: () => this.editSelected(),
-      openMindMap: (path) => this.callbacks.onOpenMindMap(path)
+      openMindMap: (path) => this.callbacks.onOpenMindMap(path),
+      resolveImage: this.callbacks.resolveImage,
+      renderCode: this.callbacks.onRenderCode
     });
   }
 
