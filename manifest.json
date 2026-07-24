@@ -1,7 +1,7 @@
 {
   "id": "mindmap-studio",
   "name": "MindMap Studio",
-  "version": "1.8.4",
+  "version": "1.9.7",
   "minAppVersion": "1.5.0",
   "description": "Editable local-first .mindmap diagrams with synchronized mind map, outline, and article modes, read-only locking, global search, themes, rich content, images, tables, code, and exports.",
   "author": "MindMap Studio",
