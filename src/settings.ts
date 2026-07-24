@@ -321,6 +321,7 @@ export function applyThemePresetToSettings(settings: MindMapStudioSettings, pres
  */
 export class MindMapStudioSettingTab extends PluginSettingTab {
   private readonly plugin: MindMapStudioPlugin;
+  private readonly expandedImageHostIds = new Set<string>();
 
   /**
    * 创建 MindMapStudioSettingTab 实例，保存依赖和初始状态；实际 DOM 构建通常在 onOpen() 或后续渲染流程中完成。
@@ -653,13 +654,19 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
     }
 
     hosts.forEach((host, index) => {
-      const card = containerEl.createDiv({ cls: "mms-image-host-card" });
-      const title = card.createDiv({ cls: "mms-image-host-card-title" });
+      const card = containerEl.createEl("details", { cls: "mms-image-host-card" });
+      card.open = this.expandedImageHostIds.has(host.id);
+      card.addEventListener("toggle", () => {
+        if (card.open) this.expandedImageHostIds.add(host.id);
+        else this.expandedImageHostIds.delete(host.id);
+      });
+      const title = card.createEl("summary", { cls: "mms-image-host-card-title" });
       title.createEl("strong", { text: host.name || `图床 ${index + 1}` });
       const status = title.createSpan({ cls: "mms-image-host-status", text: host.enabled ? "已启用" : "已停用" });
       status.toggleClass("is-enabled", host.enabled);
+      const body = card.createDiv({ cls: "mms-image-host-card-body" });
 
-      new Setting(card)
+      new Setting(body)
         .setName("名称")
         .addText((text) => text
           .setValue(host.name)
@@ -678,14 +685,14 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
             this.display();
           }));
 
-      new Setting(card)
+      new Setting(body)
         .setName("上传 API")
         .addText((text) => text
           .setPlaceholder("https://example.com/api/upload")
           .setValue(host.endpoint)
           .onChange(async (value) => { host.endpoint = value.trim(); await this.plugin.saveSettings(); }));
 
-      new Setting(card)
+      new Setting(body)
         .setName("请求方法与格式")
         .addDropdown((dropdown) => dropdown
           .addOption("POST", "POST")
@@ -698,7 +705,7 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
           .setValue(host.bodyMode)
           .onChange(async (value) => { host.bodyMode = value as ImageHostBodyMode; await this.plugin.saveSettings(); }));
 
-      new Setting(card)
+      new Setting(body)
         .setName("文件字段名")
         .setDesc("multipart 模式常见值：file、image、source。")
         .addText((text) => text
@@ -706,7 +713,7 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
           .setPlaceholder("file")
           .onChange(async (value) => { host.fieldName = value.trim() || "file"; await this.plugin.saveSettings(); }));
 
-      new Setting(card)
+      new Setting(body)
         .setName("请求头 JSON")
         .setDesc("例如 Authorization、X-API-Key。密钥保存在插件 data.json。")
         .addTextArea((text) => text
@@ -714,7 +721,7 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
           .setPlaceholder('{"Authorization":"Bearer ..."}')
           .onChange(async (value) => { host.headers = value.trim(); await this.plugin.saveSettings(); }));
 
-      new Setting(card)
+      new Setting(body)
         .setName("返回网址字段")
         .setDesc("例如 data.url；留空会尝试常见字段。")
         .addText((text) => text
@@ -723,7 +730,7 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
           .onChange(async (value) => { host.responsePath = value.trim(); await this.plugin.saveSettings(); }));
 
       const isAutoTarget = this.plugin.settings.autoUploadHostIds.includes(host.id);
-      new Setting(card)
+      new Setting(body)
         .setName("自动上传目标")
         .setDesc("自动上传可以同时选择多个图床；手动上传时仍可临时选择其他组合。")
         .addToggle((toggle) => toggle
@@ -736,7 +743,7 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
             await this.plugin.saveSettings();
           }));
 
-      const actions = card.createDiv({ cls: "mms-image-host-actions" });
+      const actions = body.createDiv({ cls: "mms-image-host-actions" });
       const test = actions.createEl("button", { text: "检测 API 连通性", attr: { type: "button" } });
       test.addEventListener("click", () => {
         test.disabled = true;
@@ -748,6 +755,7 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
       });
       const remove = actions.createEl("button", { text: "删除图床", cls: "mod-warning", attr: { type: "button" } });
       remove.addEventListener("click", () => {
+        this.expandedImageHostIds.delete(host.id);
         this.plugin.settings.imageHosts = this.plugin.settings.imageHosts.filter((item) => item.id !== host.id);
         this.plugin.settings.autoUploadHostIds = this.plugin.settings.autoUploadHostIds.filter((id) => id !== host.id);
         void this.plugin.saveSettings().then(() => {

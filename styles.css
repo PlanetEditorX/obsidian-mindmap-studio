@@ -2198,7 +2198,7 @@
 
 .mms-image-host-card {
   margin: 12px 0;
-  padding: 14px;
+  overflow: hidden;
   border: 1px solid var(--background-modifier-border);
   border-radius: var(--radius-m);
   background: var(--background-secondary);
@@ -2207,10 +2207,44 @@
 .mms-image-host-card-title {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 10px;
-  padding-bottom: 8px;
+  padding: 14px;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+.mms-image-host-card-title::-webkit-details-marker {
+  display: none;
+}
+
+.mms-image-host-card-title::before {
+  content: "›";
+  flex: 0 0 auto;
+  color: var(--text-muted);
+  font-size: 1.35em;
+  line-height: 1;
+  transition: transform 120ms ease;
+}
+
+.mms-image-host-card[open] > .mms-image-host-card-title::before {
+  transform: rotate(90deg);
+}
+
+.mms-image-host-card-title strong {
+  flex: 1 1 auto;
+}
+
+.mms-image-host-card-title:hover {
+  background: var(--background-modifier-hover);
+}
+
+.mms-image-host-card[open] > .mms-image-host-card-title {
   border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.mms-image-host-card-body {
+  padding: 0 14px 14px;
 }
 
 .mms-image-host-status {
