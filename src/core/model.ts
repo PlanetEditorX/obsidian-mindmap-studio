@@ -5,6 +5,19 @@
  * 定义 .mindmap 稳定数据结构，并负责旧版本兼容、字段规范化、富文本、内容块、节点树、Markdown 导入导出及图片镜像候选源排序。
  */
 
+import { walkNodes } from "./node-tree";
+export {
+  containsNode,
+  findAncestors,
+  findNode,
+  findParent,
+  flattenNodes,
+  moveNodeRelative,
+  removeNode,
+  walkNodes
+} from "./node-tree";
+export type { NodeDropPosition } from "./node-tree";
+
 /**
  * LayoutMode 类型定义，用于限制可接受值并让序列化数据保持稳定。
  */
@@ -1155,163 +1168,6 @@ export function cloneNodeWithFreshIds(node: MindMapNode): MindMapNode {
     current.id = newId();
   });
   return clone;
-}
-
-/**
- * 递归遍历nodes，并保持模型、界面和持久化状态的一致性。
- *
- * @param root 节点树的根节点。
- * @param visitor 该参数用于 walk nodes 流程中的输入或控制。
- */
-export function walkNodes(root: MindMapNode, visitor: (node: MindMapNode, parent: MindMapNode | null) => void): void {
-  const visit = (node: MindMapNode, parent: MindMapNode | null): void => {
-    visitor(node, parent);
-    node.children.forEach((child) => visit(child, node));
-  };
-  visit(root, null);
-}
-
-/**
- * 展平nodes，并保持模型、界面和持久化状态的一致性。
- *
- * @param root 节点树的根节点。
- * @returns 按当前规则构建的集合结果。
- */
-export function flattenNodes(root: MindMapNode): MindMapNode[] {
-  const nodes: MindMapNode[] = [];
-  walkNodes(root, (node) => nodes.push(node));
-  return nodes;
-}
-
-/**
- * 查找node，并保持模型、界面和持久化状态的一致性。
- *
- * @param root 节点树的根节点。
- * @param id 目标对象或节点的稳定标识。
- * @returns 当前操作生成、查找或规范化后的结果。
- */
-export function findNode(root: MindMapNode, id: string): MindMapNode | null {
-  let result: MindMapNode | null = null;
-  walkNodes(root, (node) => {
-    if (node.id === id) result = node;
-  });
-  return result;
-}
-
-/**
- * 查找parent，并保持模型、界面和持久化状态的一致性。
- *
- * @param root 节点树的根节点。
- * @param id 目标对象或节点的稳定标识。
- * @returns 当前操作生成、查找或规范化后的结果。
- */
-export function findParent(root: MindMapNode, id: string): MindMapNode | null {
-  let result: MindMapNode | null = null;
-  walkNodes(root, (node, parent) => {
-    if (node.id === id) result = parent;
-  });
-  return result;
-}
-
-/**
- * 查找ancestors，并保持模型、界面和持久化状态的一致性。
- *
- * @param root 节点树的根节点。
- * @param id 目标对象或节点的稳定标识。
- * @returns 按当前规则构建的集合结果。
- */
-export function findAncestors(root: MindMapNode, id: string): MindMapNode[] {
-  const path: MindMapNode[] = [];
-  const visit = (node: MindMapNode): boolean => {
-    if (node.id === id) return true;
-    for (const child of node.children) {
-      path.push(node);
-      if (visit(child)) return true;
-      path.pop();
-    }
-    return false;
-  };
-  return visit(root) ? path : [];
-}
-
-/**
- * 判断node，并保持模型、界面和持久化状态的一致性。
- *
- * @param root 节点树的根节点。
- * @param id 目标对象或节点的稳定标识。
- * @returns 操作条件是否成立或处理是否成功。
- */
-export function containsNode(root: MindMapNode, id: string): boolean {
-  return findNode(root, id) !== null;
-}
-
-/**
- * 删除node，并保持模型、界面和持久化状态的一致性。
- *
- * @param root 节点树的根节点。
- * @param id 目标对象或节点的稳定标识。
- * @returns 操作条件是否成立或处理是否成功。
- */
-export function removeNode(root: MindMapNode, id: string): boolean {
-  for (let index = 0; index < root.children.length; index += 1) {
-    if (root.children[index]?.id === id) {
-      root.children.splice(index, 1);
-      return true;
-    }
-    const child = root.children[index];
-    if (child && removeNode(child, id)) return true;
-  }
-  return false;
-}
-
-/** 可用于节点拖放的目标位置。 */
-export type NodeDropPosition = "before" | "child" | "after";
-
-/**
- * 将节点移动到目标节点之前、之后或目标节点内部。
- *
- * @param root 节点树的根节点。
- * @param draggedId 被移动节点的稳定标识。
- * @param targetId 接收拖放的目标节点标识。
- * @param position 相对目标节点的插入位置。
- * @returns 实际发生结构变更时返回 true；非法移动或无变化时返回 false。
- * @remarks 该函数只修改传入节点树，不负责撤销栈、保存或界面重渲染。调用方应在统一编辑事务中执行。
- */
-export function moveNodeRelative(root: MindMapNode, draggedId: string, targetId: string, position: NodeDropPosition): boolean {
-  if (draggedId === root.id || draggedId === targetId) return false;
-  const dragged = findNode(root, draggedId);
-  const target = findNode(root, targetId);
-  if (!dragged || !target || containsNode(dragged, targetId)) return false;
-
-  const oldParent = findParent(root, draggedId);
-  if (!oldParent) return false;
-  const oldIndex = oldParent.children.findIndex((child) => child.id === draggedId);
-  if (oldIndex < 0) return false;
-
-  if (position === "child") {
-    if (oldParent.id === target.id && oldIndex === target.children.length - 1) return false;
-    oldParent.children.splice(oldIndex, 1);
-    target.children.push(dragged);
-    target.collapsed = false;
-    return true;
-  }
-
-  if (target.id === root.id) return false;
-  const targetParent = findParent(root, targetId);
-  if (!targetParent) return false;
-  const targetIndexBeforeRemoval = targetParent.children.findIndex((child) => child.id === targetId);
-  if (targetIndexBeforeRemoval < 0) return false;
-
-  let insertIndex = targetIndexBeforeRemoval + (position === "after" ? 1 : 0);
-  if (oldParent.id === targetParent.id) {
-    const currentDesiredIndex = position === "after" ? targetIndexBeforeRemoval + 1 : targetIndexBeforeRemoval;
-    if (oldIndex === currentDesiredIndex || (position === "after" && oldIndex === targetIndexBeforeRemoval + 1)) return false;
-    if (oldIndex < insertIndex) insertIndex -= 1;
-  }
-
-  oldParent.children.splice(oldIndex, 1);
-  targetParent.children.splice(insertIndex, 0, dragged);
-  return true;
 }
 
 /**

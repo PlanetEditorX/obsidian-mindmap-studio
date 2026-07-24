@@ -75,6 +75,8 @@ import {
 import { parseClipboardHtml, parseClipboardNode } from "./clipboard-import";
 import { selectNodeImage, uploadCurrentNodeImage } from "./node-image-actions";
 import { renderNodeRichTextEditor } from "./node-rich-text-editor";
+import { canMoveNodes, isRightChildZone, resolveDropPosition } from "./drag-drop";
+import { DocumentHistory } from "./history-manager";
 export type { MindMapEditorCallbacks, MindMapEditorOptions } from "./editor-types";
 
 /**
@@ -743,8 +745,7 @@ export class MindMapEditor {
   private zoom = 1;
   private panX = 0;
   private panY = 0;
-  private history: string[] = [];
-  private future: string[] = [];
+  private readonly history: DocumentHistory;
   private draggingId: string | null = null;
   private dragDropPosition: NodeDropPosition | null = null;
   private dropPreviewEl: HTMLElement | null = null;
@@ -775,6 +776,7 @@ export class MindMapEditor {
     this.host = host;
     this.callbacks = callbacks;
     this.options = options;
+    this.history = new DocumentHistory(() => this.options.historyLimit);
     this.document = cloneDocument(document);
     this.currentMode = this.resolveMode(options.defaultViewMode);
     this.readOnly = this.currentMode === "article" || this.currentMode === "reading" || this.document.view?.readOnly === true;
@@ -811,8 +813,7 @@ export class MindMapEditor {
     this.readOnly = this.currentMode === "article" || this.currentMode === "reading" || this.document.view?.readOnly === true;
     this.selectedId = this.document.root.id;
     if (resetHistory) {
-      this.history = [];
-      this.future = [];
+      this.history.reset();
     }
     this.render();
     if (this.options.autoFitOnOpen) window.setTimeout(() => this.fitToView(), 20);
@@ -2086,7 +2087,7 @@ export class MindMapEditor {
         const position = this.dropPositionForEvent(event, nodeEl, node.id);
         this.dragDropPosition = position;
         this.clearDropIndicators();
-        const indicator = position === "child" && this.isRightChildDrop(event, nodeEl)
+        const indicator = position === "child" && isRightChildZone(event, nodeEl.getBoundingClientRect())
           ? "is-drop-child-right"
           : `is-drop-${position}`;
         nodeEl.addClasses(["is-drop-target", indicator]);
@@ -2234,9 +2235,7 @@ export class MindMapEditor {
     const save = (): void => {
       const values = readRichTextEditor(editor!);
       if (!historyCaptured) {
-        this.history.push(JSON.stringify(this.document));
-        this.trimHistory();
-        this.future = [];
+        this.history.capture(this.document);
         historyCaptured = true;
       }
       const blocks = nodeContentBlocks(node);
@@ -2499,9 +2498,7 @@ export class MindMapEditor {
       // A continuously open editor may autosave many times. Capture one undo
       // snapshot for the whole editing session instead of one snapshot per keypress.
       if (!historyCaptured) {
-        this.history.push(JSON.stringify(this.document));
-        this.trimHistory();
-        this.future = [];
+        this.history.capture(this.document);
         historyCaptured = true;
       }
       selected.content = values.content;
@@ -3256,15 +3253,7 @@ export class MindMapEditor {
    * @returns 操作条件是否成立或处理是否成功。
    */
   private canMoveNode(draggedId: string | null, targetId: string): boolean {
-    if (!draggedId || draggedId === this.document.root.id || draggedId === targetId) return false;
-    const candidateIds = this.selectedIds.has(draggedId) && this.selectedIds.size > 1
-      ? Array.from(this.selectedIds)
-      : [draggedId];
-    if (candidateIds.includes(targetId) || candidateIds.includes(this.document.root.id)) return false;
-    return candidateIds.every((id) => {
-      const dragged = findNode(this.document.root, id);
-      return Boolean(dragged && !containsNode(dragged, targetId));
-    });
+    return canMoveNodes(this.document.root, this.selectedIds, draggedId, targetId);
   }
 
   /**
@@ -3276,26 +3265,8 @@ export class MindMapEditor {
    * @returns 右侧 28% 或中间区域为 child，上方 28% 为 before，下方 28% 为 after。
    */
   private dropPositionForEvent(event: DragEvent, targetEl: HTMLElement, targetId: string): NodeDropPosition {
-    if (targetId === this.document.root.id) return "child";
     const rect = targetEl.getBoundingClientRect();
-    if (this.isRightChildDrop(event, targetEl)) return "child";
-    const ratio = rect.height > 0 ? (event.clientY - rect.top) / rect.height : .5;
-    if (ratio < .28) return "before";
-    if (ratio > .72) return "after";
-    return "child";
-  }
-
-  /**
-   * Checks whether the pointer is in the explicit right-side child drop zone.
-   *
-   * @param event Current drag event.
-   * @param targetEl Target node element.
-   * @returns Whether the rightmost 28% is active.
-   */
-  private isRightChildDrop(event: DragEvent, targetEl: HTMLElement): boolean {
-    const rect = targetEl.getBoundingClientRect();
-    const ratio = rect.width > 0 ? (event.clientX - rect.left) / rect.width : .5;
-    return ratio > .72;
+    return resolveDropPosition(event, rect, targetId === this.document.root.id);
   }
 
   /** 清理全部拖放目标样式，防止跨节点移动时残留指示线。 */
@@ -3370,16 +3341,14 @@ export class MindMapEditor {
       .filter((node) => !findAncestors(this.document.root, node.id).some((ancestor) => requestedIds.has(ancestor.id)))
       .map((node) => node.id);
     if (!draggedIds.length) return;
-    const snapshot = JSON.stringify(this.document);
+    const historyDocument = cloneDocument(this.document);
     const moveOrder = position === "after" ? [...draggedIds].reverse() : draggedIds;
     let changed = false;
     for (const id of moveOrder) {
       changed = moveNodeRelative(this.document.root, id, targetId, position) || changed;
     }
     if (!changed) return;
-    this.history.push(snapshot);
-    this.trimHistory();
-    this.future = [];
+    this.history.capture(historyDocument);
     this.selectedId = draggedId;
     this.selectedIds.clear();
     for (const id of requestedIds) this.selectedIds.add(id);
@@ -3395,9 +3364,7 @@ export class MindMapEditor {
    */
   private replaceDocument(document: MindMapDocument): void {
     if (!this.ensureEditable()) return;
-    this.history.push(JSON.stringify(this.document));
-    this.trimHistory();
-    this.future = [];
+    this.history.capture(this.document);
     this.document = cloneDocument(document);
     this.selectedId = this.document.root.id;
     this.callbacks.onChange(this.getDocument());
@@ -3414,9 +3381,7 @@ export class MindMapEditor {
    */
   private mutate(action: () => void): void {
     if (!this.ensureEditable()) return;
-    this.history.push(JSON.stringify(this.document));
-    this.trimHistory();
-    this.future = [];
+    this.history.capture(this.document);
     action();
     this.callbacks.onChange(this.getDocument());
     this.markSaving();
@@ -3424,22 +3389,13 @@ export class MindMapEditor {
   }
 
   /**
-   * 裁剪history，并保持模型、界面和持久化状态的一致性。
-   */
-  private trimHistory(): void {
-    const limit = Math.max(10, Math.min(500, this.options.historyLimit));
-    while (this.history.length > limit) this.history.shift();
-  }
-
-  /**
    * 撤销相关数据，并保持模型、界面和持久化状态的一致性。
    */
   private undo(): void {
     if (!this.ensureEditable()) return;
-    const previous = this.history.pop();
+    const previous = this.history.undo(this.document);
     if (!previous) return;
-    this.future.push(JSON.stringify(this.document));
-    this.document = JSON.parse(previous) as MindMapDocument;
+    this.document = previous;
     this.selectedId = this.document.root.id;
     this.callbacks.onChange(this.getDocument());
     this.markSaving();
@@ -3451,11 +3407,9 @@ export class MindMapEditor {
    */
   private redo(): void {
     if (!this.ensureEditable()) return;
-    const next = this.future.pop();
+    const next = this.history.redo(this.document);
     if (!next) return;
-    this.history.push(JSON.stringify(this.document));
-    this.trimHistory();
-    this.document = JSON.parse(next) as MindMapDocument;
+    this.document = next;
     this.selectedId = this.document.root.id;
     this.callbacks.onChange(this.getDocument());
     this.markSaving();

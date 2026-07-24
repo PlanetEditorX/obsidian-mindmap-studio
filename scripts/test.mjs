@@ -17,6 +17,8 @@ const layoutOutfile = join(tempDir, "layout.cjs");
 const searchOutfile = join(tempDir, "global-search.cjs");
 const modesOutfile = join(tempDir, "modes.cjs");
 const importExportOutfile = join(tempDir, "import-export.cjs");
+const historyOutfile = join(tempDir, "history-manager.cjs");
+const dragDropOutfile = join(tempDir, "drag-drop.cjs");
 const obsidianStub = join(tempDir, "obsidian-stub.mjs");
 
 try {
@@ -52,6 +54,22 @@ try {
     format: "cjs",
     logLevel: "silent"
   });
+  await build({
+    entryPoints: ["src/editor/history-manager.ts"],
+    outfile: historyOutfile,
+    bundle: true,
+    platform: "node",
+    format: "cjs",
+    logLevel: "silent"
+  });
+  await build({
+    entryPoints: ["src/editor/drag-drop.ts"],
+    outfile: dragDropOutfile,
+    bundle: true,
+    platform: "node",
+    format: "cjs",
+    logLevel: "silent"
+  });
   await writeFile(obsidianStub, `export class App {}
 export class Modal { constructor() {} }
 export class Notice {}
@@ -75,6 +93,8 @@ export const setIcon = () => {};
   const globalSearch = require(searchOutfile);
   const modes = require(modesOutfile);
   const importExport = require(importExportOutfile);
+  const { DocumentHistory } = require(historyOutfile);
+  const dragDrop = require(dragDropOutfile);
   const document = model.createDefaultDocument("测试脑图");
   const xmindArchive = zipSync({
     "content.json": strToU8(JSON.stringify([{ rootTopic: { title: "XMind 根", children: { attached: [{ title: "分支 A" }] } } }]))
@@ -167,6 +187,19 @@ export const setIcon = () => {};
   assert.deepEqual(reorderRoot.children[1]?.children.map((node) => node.id), ["drag-c-child", "drag-a"], "dropping in the center must preserve child reparenting");
   assert.equal(model.moveNodeRelative(reorderRoot, "drag-c", "drag-c-child", "child"), false, "a node cannot move inside its own descendant");
   assert.equal(model.moveNodeRelative(reorderRoot, "drag-root", "drag-b", "before"), false, "the root node cannot be moved");
+  assert.equal(dragDrop.canMoveNodes(reorderRoot, new Set(), "drag-b", "drag-c"), true);
+  assert.equal(dragDrop.canMoveNodes(reorderRoot, new Set(), "drag-c", "drag-c-child"), false);
+  assert.equal(dragDrop.resolveDropPosition({ clientX: 95, clientY: 50 }, { left: 0, top: 0, width: 100, height: 100 }, false), "child");
+  assert.equal(dragDrop.resolveDropPosition({ clientX: 50, clientY: 10 }, { left: 0, top: 0, width: 100, height: 100 }, false), "before");
+
+  const history = new DocumentHistory(() => 10);
+  const historyFirst = model.createDefaultDocument("历史一");
+  const historySecond = model.createDefaultDocument("历史二");
+  history.capture(historyFirst);
+  assert.equal(history.undo(historySecond)?.title, "历史一");
+  assert.equal(history.redo(historyFirst)?.title, "历史二");
+  history.reset();
+  assert.equal(history.undo(historySecond), null);
 
   const viewDocument = model.normalizeDocument({
     title: "三种模式",
