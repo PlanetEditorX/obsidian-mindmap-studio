@@ -44,6 +44,7 @@ editor-types.ts  model.ts         layout.ts          modes.ts       global-searc
 - `editor-modals.ts`：图片预览、图床选择、公式编辑、文章样式、节点搜索、JSON/文件导入、Markdown 大纲和文档导出等弹窗。
 - `clipboard-import.ts`：剪贴板 JSON、Markdown、缩进文本和 HTML 列表的节点分支解析。
 - `node-image-actions.ts`：节点图片选择、本地保存、图床上传和远程镜像合并。
+- `node-rich-text-editor.ts`：节点文字块的选区样式、颜色、格式清理和实时预览。
 - `content-modals.ts`：表格、代码编辑弹窗。
 - `static-render.ts`：Markdown 阅读模式中的只读 SVG 预览。
 - `styles.css`：编辑器、三种模式、弹窗、搜索、尺寸手柄和响应式样式。
@@ -254,5 +255,7 @@ mindmap-search-index.json
 剪贴板格式兼容应集中在 `clipboard-import.ts`。编辑器只负责读取剪贴板、插入解析后的节点和记录撤销历史。
 
 节点编辑弹窗中的图片 I/O 应通过 `node-image-actions.ts` 完成。弹窗只在操作成功后刷新预览并触发自动保存。
+
+节点文字块的字符级格式编辑应通过 `node-rich-text-editor.ts` 完成，弹窗只提供内容块容器和变更回调。
 
 新增跨文件功能时，应放在 `main.ts` 或专用服务类中，由 `view.ts` 和 `editor.ts` 通过回调调用。

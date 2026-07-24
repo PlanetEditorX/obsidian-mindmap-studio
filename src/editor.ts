@@ -32,7 +32,6 @@ import {
   richTextCharacterStyles,
   characterStylesToRichText,
   applyRichTextStyleRange,
-  reconcileRichTextAfterEdit,
   type BackgroundPattern,
   type ArticleStyle,
   type DisplayMode,
@@ -75,6 +74,7 @@ import {
 } from "./editor-modals";
 import { parseClipboardHtml, parseClipboardNode } from "./clipboard-import";
 import { selectNodeImage, uploadCurrentNodeImage } from "./node-image-actions";
+import { renderNodeRichTextEditor } from "./node-rich-text-editor";
 export type { MindMapEditorCallbacks, MindMapEditorOptions } from "./editor-types";
 
 /**
@@ -182,86 +182,6 @@ class NodeEditModal extends Modal {
     const cloneBlocks = (): MindMapContentBlock[] => JSON.parse(JSON.stringify(workingBlocks)) as MindMapContentBlock[];
     const validBlocks = (): MindMapContentBlock[] => cloneBlocks().filter((block) => block.type === "image" ? Boolean(block.source.trim()) : Boolean(block.text.trim()));
 
-    const renderTextBlock = (container: HTMLElement, block: MindMapTextContentBlock): void => {
-      const toolbar = container.createDiv({ cls: "mmc-rich-text-toolbar" });
-      const source = container.createEl("textarea", {
-        cls: "mmc-rich-text-source",
-        attr: { rows: "3", spellcheck: "true", placeholder: "输入文字；可以全部删除，让节点只保留图片" }
-      });
-      source.value = block.text;
-      let savedStart = source.value.length;
-      let savedEnd = source.value.length;
-      const selection = container.createDiv({ cls: "mmc-rich-selection-status" });
-      container.createDiv({ cls: "mmc-rich-preview-label", text: "文字样式预览" });
-      const preview = container.createDiv({ cls: "mmc-rich-text-preview" });
-      const updatePreview = (): void => {
-        renderRichTextRuns(preview, block.richText, block.text || "预览文字");
-        preview.toggleClass("is-placeholder", !block.text);
-      };
-      const remember = (): void => {
-        savedStart = source.selectionStart ?? 0;
-        savedEnd = source.selectionEnd ?? savedStart;
-        const from = Math.min(savedStart, savedEnd);
-        const to = Math.max(savedStart, savedEnd);
-        selection.setText(from === to ? `光标位置：${from + 1}` : `已选择第 ${from + 1}–${to} 个字符`);
-      };
-      const range = (): { start: number; end: number } | null => {
-        const start = Math.max(0, Math.min(block.text.length, Math.min(savedStart, savedEnd)));
-        const end = Math.max(start, Math.min(block.text.length, Math.max(savedStart, savedEnd)));
-        if (start === end) {
-          new Notice("请先选择需要设置格式的文字");
-          source.focus();
-          return null;
-        }
-        source.focus(); source.setSelectionRange(start, end);
-        return { start, end };
-      };
-      const styleButton = (label: string, title: string, action: () => void, cls = ""): HTMLButtonElement => {
-        const btn = toolbar.createEl("button", { cls: `mmc-rich-toolbar-button ${cls}`.trim(), text: label, attr: { type: "button", title } });
-        btn.addEventListener("mousedown", (event) => event.preventDefault());
-        btn.addEventListener("click", (event) => { event.preventDefault(); action(); });
-        return btn;
-      };
-      const applyBoolean = (key: "bold" | "italic" | "underline"): void => {
-        const selected = range(); if (!selected) return;
-        const styles = richTextCharacterStyles(block.richText, block.text);
-        const enabled = styles.slice(selected.start, selected.end).every((style) => style[key] === true);
-        block.richText = applyRichTextStyleRange(block.text, block.richText, selected.start, selected.end, { [key]: !enabled });
-        updatePreview(); scheduleAutoSave(); source.setSelectionRange(selected.start, selected.end); remember();
-      };
-      styleButton("B", "加粗所选文字", () => applyBoolean("bold"), "is-bold");
-      styleButton("I", "斜体所选文字", () => applyBoolean("italic"), "is-italic");
-      styleButton("U", "给所选文字加下划线", () => applyBoolean("underline"), "is-underline");
-      const colorLabel = toolbar.createEl("label", { cls: "mmc-rich-color-button", attr: { title: "修改所选文字颜色" } });
-      colorLabel.createSpan({ text: "颜色" });
-      const colorLine = colorLabel.createSpan({ cls: "mmc-rich-color-line" });
-      const color = colorLabel.createEl("input", { type: "color", attr: { "aria-label": "文字颜色" } });
-      color.value = "#ef4444";
-      colorLine.style.backgroundColor = color.value;
-      color.addEventListener("input", () => { colorLine.style.backgroundColor = color.value; });
-      color.addEventListener("change", () => {
-        const selected = range(); if (!selected) return;
-        block.richText = applyRichTextStyleRange(block.text, block.richText, selected.start, selected.end, { color: color.value });
-        updatePreview(); scheduleAutoSave();
-      });
-      styleButton("清除格式", "清除所选文字格式", () => {
-        const selected = range(); if (!selected) return;
-        block.richText = applyRichTextStyleRange(block.text, block.richText, selected.start, selected.end, null);
-        updatePreview(); scheduleAutoSave();
-      }, "is-wide");
-      source.addEventListener("select", remember);
-      source.addEventListener("keyup", remember);
-      source.addEventListener("mouseup", remember);
-      source.addEventListener("input", () => {
-        const next = source.value.replace(/\r?\n/g, " ");
-        block.richText = reconcileRichTextAfterEdit(block.text, block.richText, next);
-        block.text = next;
-        source.value = next;
-        remember(); updatePreview(); scheduleAutoSave();
-      });
-      updatePreview(); remember();
-    };
-
     const renderBlocks = (): void => {
       blocksEl.empty();
       workingBlocks.forEach((block, index) => {
@@ -278,7 +198,11 @@ class NodeEditModal extends Modal {
         control("arrow-down", "下移", () => { [workingBlocks[index + 1], workingBlocks[index]] = [workingBlocks[index]!, workingBlocks[index + 1]!]; renderBlocks(); scheduleAutoSave(); }, index === workingBlocks.length - 1);
         control("trash-2", "删除内容块", () => { workingBlocks.splice(index, 1); renderBlocks(); scheduleAutoSave(); });
         if (block.type === "text") {
-          renderTextBlock(card.createDiv({ cls: "mmc-content-block-body" }), block);
+          renderNodeRichTextEditor(
+            card.createDiv({ cls: "mmc-content-block-body" }),
+            block,
+            scheduleAutoSave
+          );
         } else {
           const body = card.createDiv({ cls: "mmc-content-block-body mmc-image-block-editor" });
           const preview = body.createDiv({ cls: "mmc-image-block-preview" });
