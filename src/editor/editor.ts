@@ -1,6 +1,6 @@
 /**
  * @file editor.ts
- * @description MindMap Studio 核心交互编辑器。
+ * @description 编辑器领域的核心交互控制器。
  *
  * 负责三种视图、节点操作、富文本、图片、表格、代码、子导图、拖拽、尺寸、搜索、历史记录、只读锁和图床容灾。
  */
@@ -54,13 +54,13 @@ import {
   removeNode,
   type NodeDropPosition,
   moveNodeRelative
-} from "./model";
-import { buildBranchColorMap, computeLayout, documentToSvg, edgePath, edgeWidthForDepth, roundedElbowEdgePath, type LayoutResult } from "./layout";
+} from "../core/model";
+import { buildBranchColorMap, computeLayout, documentToSvg, edgePath, edgeWidthForDepth, roundedElbowEdgePath, type LayoutResult } from "../render/layout";
 import { CodeEditModal, TableEditModal } from "./content-modals";
-import { TOOLBAR_ITEMS } from "./settings";
-import { appearanceFromThemePreset, MINDMAP_THEME_PRESETS } from "./themes";
-import { buildArticleNodeInfo, DISPLAY_MODE_ICONS, DISPLAY_MODE_LABELS, type ArticlePageNavigation, type ArticleTocEntry, type ReadingSection } from "./modes";
-import { resolveArticleStyle } from "./article-style";
+import { TOOLBAR_ITEMS } from "../settings";
+import { appearanceFromThemePreset, MINDMAP_THEME_PRESETS } from "../themes";
+import { buildArticleNodeInfo, DISPLAY_MODE_ICONS, DISPLAY_MODE_LABELS, type ArticlePageNavigation, type ArticleTocEntry, type ReadingSection } from "../article/modes";
+import { resolveArticleStyle } from "../article/article-style";
 import type { MindMapEditorCallbacks, MindMapEditorOptions } from "./editor-types";
 import { readRichTextEditor, renderRichTextRuns } from "./rich-text-dom";
 import {

@@ -21,7 +21,7 @@ const obsidianStub = join(tempDir, "obsidian-stub.mjs");
 
 try {
   await build({
-    entryPoints: ["src/model.ts"],
+    entryPoints: ["src/core/model.ts"],
     outfile,
     bundle: true,
     platform: "node",
@@ -29,7 +29,7 @@ try {
     logLevel: "silent"
   });
   await build({
-    entryPoints: ["src/import-export.ts"],
+    entryPoints: ["src/import/import-export.ts"],
     outfile: importExportOutfile,
     bundle: true,
     platform: "node",
@@ -37,7 +37,7 @@ try {
     logLevel: "silent"
   });
   await build({
-    entryPoints: ["src/layout.ts"],
+    entryPoints: ["src/render/layout.ts"],
     outfile: layoutOutfile,
     bundle: true,
     platform: "node",
@@ -45,7 +45,7 @@ try {
     logLevel: "silent"
   });
   await build({
-    entryPoints: ["src/modes.ts"],
+    entryPoints: ["src/article/modes.ts"],
     outfile: modesOutfile,
     bundle: true,
     platform: "node",
@@ -60,7 +60,7 @@ export const normalizePath = (value) => value;
 export const setIcon = () => {};
 `);
   await build({
-    entryPoints: ["src/global-search.ts"],
+    entryPoints: ["src/search/global-search.ts"],
     outfile: searchOutfile,
     bundle: true,
     platform: "node",
@@ -551,14 +551,14 @@ export const setIcon = () => {};
   assert.match(mainSource, /buildDescendantReadingSections/);
   assert.match(mainSource, /MindMap Studio could not read child map for export/);
   assert.match(mainSource, /plugins\/mindmap-canvas\/data\.json/, "renamed plugin should migrate old settings");
-  const globalSearchSource = await readFile("src/global-search.ts", "utf8");
+  const globalSearchSource = await readFile("src/search/global-search.ts", "utf8");
   assert.match(globalSearchSource, /resolveHierarchicalEntries/);
   assert.match(globalSearchSource, /古诗 › 唐诗/);
   assert.match(globalSearchSource, /first climb to the top parent/);
   assert.match(globalSearchSource, /version: 2/);
-  const editorSource = await readFile("src/editor.ts", "utf8");
-  const editorModalSource = await readFile("src/editor-modals.ts", "utf8");
-  const nodeRichTextSource = await readFile("src/node-rich-text-editor.ts", "utf8");
+  const editorSource = await readFile("src/editor/editor.ts", "utf8");
+  const editorModalSource = await readFile("src/editor/editor-modals.ts", "utf8");
+  const nodeRichTextSource = await readFile("src/editor/node-rich-text-editor.ts", "utf8");
   assert.match(editorSource, /markWrappedArticleParagraph/);
   assert.match(editorSource, /lineTops\.size > 1/);
   assert.doesNotMatch(nodeRichTextSource, /execCommand/, "rich-text formatting must not use browser-wide execCommand behavior");

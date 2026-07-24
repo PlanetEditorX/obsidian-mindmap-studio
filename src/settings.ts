@@ -19,7 +19,7 @@ import type {
   NodeShape,
   NodeTextAlign,
   ThemeMode
-} from "./model";
+} from "./core/model";
 import { appearanceFromThemePreset, MINDMAP_THEME_PRESETS } from "./themes";
 
 export const TOOLBAR_ITEMS = [

@@ -1,6 +1,6 @@
 /**
  * @file global-search.ts
- * @description 本地全局搜索索引与导图族搜索模块。
+ * @description 搜索领域的本地索引与导图族搜索模块。
  *
  * 索引缓存节点文字、文件路径和层级，监听文件变化增量更新，并递归解析父导图与子导图。
  */
@@ -13,7 +13,7 @@ import {
   parseDocument,
   type MindMapDocument,
   type MindMapNode
-} from "./model";
+} from "../core/model";
 
 /**
  * MindMapSearchEntry 的结构化数据约定。字段会在模块边界传递，用于保持类型安全和版本兼容。

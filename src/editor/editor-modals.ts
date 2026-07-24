@@ -1,6 +1,6 @@
 /**
  * @file editor-modals.ts
- * @description 与编辑器状态弱耦合的通用预览、搜索和导出弹窗。
+ * @description 编辑器领域的通用预览、搜索和导出弹窗。
  */
 
 import { App, finishRenderMath, Modal, Notice, renderMath } from "obsidian";
@@ -13,11 +13,11 @@ import {
   type ArticleStylePresetId,
   type MindMapDocument,
   type MindMapNode
-} from "./model";
+} from "../core/model";
 import { ensureMathJax } from "./rich-text-dom";
-import { ARTICLE_STYLE_PRESETS, resolveArticleStyle } from "./article-style";
-import type { ImageHostChoice } from "./settings";
-import { xmindToDocument } from "./import-export";
+import { ARTICLE_STYLE_PRESETS, resolveArticleStyle } from "../article/article-style";
+import type { ImageHostChoice } from "../settings";
+import { xmindToDocument } from "../import/import-export";
 
 /**
  * 选择一个或多个图片上传目标。

@@ -7,11 +7,11 @@
 
 import { MarkdownRenderer, Notice, TextFileView, TFile, normalizePath, type WorkspaceLeaf } from "obsidian";
 import type MindMapStudioPlugin from "./main";
-import { MindMapEditor } from "./editor";
-import { documentToMarkdown, parseDocument, serializeDocument, type DisplayMode, type MindMapDocument } from "./model";
+import { MindMapEditor } from "./editor/editor";
+import { documentToMarkdown, parseDocument, serializeDocument, type DisplayMode, type MindMapDocument } from "./core/model";
 import { settingsToAppearance } from "./settings";
-import type { ArticlePageNavigation, ArticleTocEntry, ReadingSection } from "./modes";
-import { readingSectionsToHtml } from "./import-export";
+import type { ArticlePageNavigation, ArticleTocEntry, ReadingSection } from "./article/modes";
+import { readingSectionsToHtml } from "./import/import-export";
 
 export const VIEW_TYPE_MINDMAP_STUDIO = "mindmap-studio-view";
 

@@ -4,13 +4,25 @@ import path from "node:path";
 import ts from "typescript";
 
 const srcDir = path.resolve("src");
-const files = (await readdir(srcDir)).filter((file) => file.endsWith(".ts")).sort();
+async function collectTypeScriptFiles(directory) {
+  const entries = await readdir(directory, { withFileTypes: true });
+  const files = await Promise.all(entries.map(async (entry) => {
+    const entryPath = path.join(directory, entry.name);
+    if (entry.isDirectory()) return collectTypeScriptFiles(entryPath);
+    return entry.isFile() && entry.name.endsWith(".ts") ? [entryPath] : [];
+  }));
+  return files.flat().sort();
+}
+
+const files = await collectTypeScriptFiles(srcDir);
 const missing = [];
 let documentedDeclarations = 0;
 
-for (const file of files) {
-  const source = await readFile(path.join(srcDir, file), "utf8");
-  assert.match(source, new RegExp(`@file\\s+${file.replace(".", "\\.")}`), `${file} must contain a module-level @file comment`);
+for (const filePath of files) {
+  const file = path.relative(srcDir, filePath).replaceAll("\\", "/");
+  const source = await readFile(filePath, "utf8");
+  const baseName = path.basename(file);
+  assert.match(source, new RegExp(`@file\\s+${baseName.replace(".", "\\.")}`), `${file} must contain a module-level @file comment`);
   const sf = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
   function visit(node, className = "") {
     const nextClass = ts.isClassDeclaration(node) && node.name ? node.name.text : className;

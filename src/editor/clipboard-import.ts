@@ -1,6 +1,6 @@
 /**
  * @file clipboard-import.ts
- * @description 将 JSON、Markdown、缩进文本和 HTML 列表解析为可粘贴的节点分支。
+ * @description 编辑器剪贴板内容的节点分支解析。
  */
 
 import {
@@ -9,7 +9,7 @@ import {
   markdownToDocument,
   normalizeDocument,
   type MindMapNode
-} from "./model";
+} from "../core/model";
 
 /**
  * 解析剪贴板纯文本中的节点 JSON、Markdown 或缩进文本。

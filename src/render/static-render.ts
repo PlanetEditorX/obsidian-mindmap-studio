@@ -1,13 +1,13 @@
 /**
  * @file static-render.ts
- * @description Markdown 阅读模式的只读导图渲染入口。
+ * @description 渲染领域的 Markdown 只读导图入口。
  *
  * 复用模型和 SVG 导出逻辑，保证嵌入预览与可编辑视图的布局和主题尽量一致。
  */
 
 import type { App, TFile } from "obsidian";
 import { documentToSvg } from "./layout";
-import { mergeAppearance, parseDocument, type MindMapAppearance, type MindMapDocument } from "./model";
+import { mergeAppearance, parseDocument, type MindMapAppearance, type MindMapDocument } from "../core/model";
 
 /**
  * 渲染static mind map，并保持模型、界面和持久化状态的一致性。

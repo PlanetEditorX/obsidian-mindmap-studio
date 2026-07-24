@@ -1,12 +1,12 @@
 /**
  * @file modes.ts
- * @description 三种显示模式共享的模式与文章编号工具。
+ * @description 文章领域与显示模式共享的编号工具。
  *
  * 导图、大纲和文章模式读取同一节点树；本模块负责中文序号、标题判定、子导图层级续接与可见模式容错。
  */
 
-import type { DisplayMode, MindMapDocument, MindMapNode } from "./model";
-import { nodePrimaryText } from "./model";
+import type { DisplayMode, MindMapDocument, MindMapNode } from "../core/model";
+import { nodePrimaryText } from "../core/model";
 
 export const DISPLAY_MODE_LABELS: Record<DisplayMode, string> = {
   mindmap: "导图",

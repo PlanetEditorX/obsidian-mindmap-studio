@@ -1,6 +1,6 @@
 /**
  * @file node-rich-text-editor.ts
- * @description 节点内容弹窗中的富文本块编辑、选区样式和实时预览。
+ * @description 节点编辑器领域的富文本块编辑、选区样式和预览。
  */
 
 import { Notice } from "obsidian";
@@ -9,7 +9,7 @@ import {
   reconcileRichTextAfterEdit,
   richTextCharacterStyles,
   type MindMapTextContentBlock
-} from "./model";
+} from "../core/model";
 import { renderRichTextRuns } from "./rich-text-dom";
 
 /**

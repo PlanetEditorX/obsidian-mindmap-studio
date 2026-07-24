@@ -1,10 +1,10 @@
 /**
  * @file node-image-actions.ts
- * @description 节点编辑器中的本地图片保存、图床上传和镜像合并操作。
+ * @description 节点编辑器领域的图片保存、图床上传和镜像合并。
  */
 
 import { App, Notice } from "obsidian";
-import type { MindMapImageContentBlock } from "./model";
+import type { MindMapImageContentBlock } from "../core/model";
 import type { MindMapEditorCallbacks } from "./editor-types";
 import { chooseImageHosts } from "./editor-modals";
 

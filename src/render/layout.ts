@@ -1,11 +1,11 @@
 /**
  * @file layout.ts
- * @description 思维导图布局计算与 SVG 导出模块。
+ * @description 渲染领域的布局计算与 SVG 导出模块。
  *
  * 根据可见节点、自定义尺寸、布局方向和外观配置计算坐标、边界、连接线路径与层级线宽，并使用同一结果生成 SVG。
  */
 
-import { nodeContentBlocks, nodePlainText, type EdgeStyle, type FontFamilyMode, type LayoutMode, type MindMapAppearance, type MindMapNode, type MindMapTextRun, type NodeShape, type NodeVisualStyle } from "./model";
+import { nodeContentBlocks, nodePlainText, type EdgeStyle, type FontFamilyMode, type LayoutMode, type MindMapAppearance, type MindMapNode, type MindMapTextRun, type NodeShape, type NodeVisualStyle } from "../core/model";
 
 /**
  * NodePosition 的结构化数据约定。字段会在模块边界传递，用于保持类型安全和版本兼容。

@@ -1,6 +1,6 @@
 /**
  * @file editor-types.ts
- * @description 编辑器与 Obsidian 宿主层之间的稳定类型契约。
+ * @description 编辑器领域与 Obsidian 宿主层之间的稳定类型契约。
  */
 
 import type {
@@ -11,9 +11,9 @@ import type {
   MindMapNode,
   MindMapSubmap,
   NodeShape
-} from "./model";
-import type { ArticlePageNavigation, ArticleTocEntry, ReadingSection } from "./modes";
-import type { ImageHostChoice, ImageHostUploadBatch } from "./settings";
+} from "../core/model";
+import type { ArticlePageNavigation, ArticleTocEntry, ReadingSection } from "../article/modes";
+import type { ImageHostChoice, ImageHostUploadBatch } from "../settings";
 
 /**
  * Host services consumed by the editor.

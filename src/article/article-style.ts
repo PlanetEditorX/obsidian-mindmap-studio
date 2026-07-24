@@ -1,9 +1,9 @@
 /**
  * @file article-style.ts
- * @description 文章模式的样式预设与解析，不依赖编辑器 DOM。
+ * @description 文章领域的样式预设与解析。
  */
 
-import type { ArticleStyle, ArticleStylePresetId } from "./model";
+import type { ArticleStyle, ArticleStylePresetId } from "../core/model";
 
 export const ARTICLE_STYLE_PRESETS: Readonly<Record<ArticleStylePresetId, ArticleStyle>> = {
   classic: { preset: "classic", tocStyle: "card", fontSize: 16, lineHeight: 1.85 },

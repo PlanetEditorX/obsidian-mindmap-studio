@@ -30,7 +30,7 @@ import {
   type MindMapImageContentBlock,
   type MindMapNode,
   type MindMapSubmap
-} from "./model";
+} from "./core/model";
 import {
   DEFAULT_SETTINGS,
   MindMapStudioSettingTab,
@@ -43,11 +43,11 @@ import {
   type ImageHostUploadSuccess,
   type MindMapStudioSettings
 } from "./settings";
-import { renderStaticMindMap, renderStaticSource } from "./static-render";
+import { renderStaticMindMap, renderStaticSource } from "./render/static-render";
 import { MindMapStudioView, VIEW_TYPE_MINDMAP_STUDIO } from "./view";
-import { GlobalMindMapSearchModal, MindMapSearchIndex, type MindMapSearchResult } from "./global-search";
-import { articleNumberLabel, isArticleHeading, normalizeVisibleModes, type ArticlePageNavigation, type ArticleTocEntry, type ReadingSection } from "./modes";
-import type { DisplayMode } from "./model";
+import { GlobalMindMapSearchModal, MindMapSearchIndex, type MindMapSearchResult } from "./search/global-search";
+import { articleNumberLabel, isArticleHeading, normalizeVisibleModes, type ArticlePageNavigation, type ArticleTocEntry, type ReadingSection } from "./article/modes";
+import type { DisplayMode } from "./core/model";
 
 export const MINDMAP_EXTENSION = "mindmap";
 const LEGACY_SUFFIX = ".smm.md";

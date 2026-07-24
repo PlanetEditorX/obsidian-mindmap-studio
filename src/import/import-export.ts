@@ -1,11 +1,11 @@
 /**
  * @file import-export.ts
- * @description XMind import and portable article export helpers.
+ * @description 导入导出领域的 XMind 与文章文档转换工具。
  */
 
 import { strFromU8, unzipSync } from "fflate";
-import { createDefaultDocument, createNode, nodePlainText, type MindMapDocument, type MindMapNode } from "./model";
-import type { ReadingSection } from "./modes";
+import { createDefaultDocument, createNode, nodePlainText, type MindMapDocument, type MindMapNode } from "../core/model";
+import type { ReadingSection } from "../article/modes";
 
 /** Minimal modern XMind topic shape used during import. */
 type XMindTopic = {

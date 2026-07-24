@@ -4,7 +4,17 @@ import ts from "typescript";
 
 const srcDir = path.resolve("src");
 const output = path.resolve("docs/FUNCTION_REFERENCE.md");
-const files = (await readdir(srcDir)).filter((file) => file.endsWith(".ts")).sort();
+async function collectTypeScriptFiles(directory) {
+  const entries = await readdir(directory, { withFileTypes: true });
+  const files = await Promise.all(entries.map(async (entry) => {
+    const entryPath = path.join(directory, entry.name);
+    if (entry.isDirectory()) return collectTypeScriptFiles(entryPath);
+    return entry.isFile() && entry.name.endsWith(".ts") ? [entryPath] : [];
+  }));
+  return files.flat().sort();
+}
+
+const files = await collectTypeScriptFiles(srcDir);
 const lines = [
   "# 函数与类参考",
   "",
@@ -24,8 +34,9 @@ function cleanComment(raw) {
     .trim();
 }
 
-for (const file of files) {
-  const source = await readFile(path.join(srcDir, file), "utf8");
+for (const filePath of files) {
+  const file = path.relative(srcDir, filePath).replaceAll("\\", "/");
+  const source = await readFile(filePath, "utf8");
   const sf = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
   const moduleComment = source.match(/@description\s+([^\n*]+)/)?.[1]?.trim() ?? "";
   lines.push(`## \`src/${file}\``, "", moduleComment, "");

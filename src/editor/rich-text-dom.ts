@@ -1,6 +1,6 @@
 /**
  * @file rich-text-dom.ts
- * @description 富文本模型与可编辑 DOM 之间的渲染、解析和 MathJax 适配。
+ * @description 编辑器领域中富文本模型与可编辑 DOM 的转换。
  */
 
 import { finishRenderMath, loadMathJax, renderMath } from "obsidian";
@@ -9,7 +9,7 @@ import {
   richTextPlainText,
   type MindMapTextRun,
   type MindMapTextStyle
-} from "./model";
+} from "../core/model";
 
 let mathJaxReady = false;
 let mathJaxLoading: Promise<void> | null = null;

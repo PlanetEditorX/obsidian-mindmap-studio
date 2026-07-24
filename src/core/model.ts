@@ -1,6 +1,6 @@
 /**
  * @file model.ts
- * @description MindMap Studio 的领域模型与序列化层。
+ * @description 核心领域模型与序列化层。
  *
  * 定义 .mindmap 稳定数据结构，并负责旧版本兼容、字段规范化、富文本、内容块、节点树、Markdown 导入导出及图片镜像候选源排序。
  */

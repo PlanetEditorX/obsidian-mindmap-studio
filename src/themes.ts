@@ -5,7 +5,7 @@
  * 主题同时覆盖画布、节点、字体、分支颜色和连接线，应用后仍允许用户继续覆盖单项外观。
  */
 
-import type { MindMapAppearance, MindMapThemePresetId } from "./model";
+import type { MindMapAppearance, MindMapThemePresetId } from "./core/model";
 
 /**
  * MindMapThemePreset 的结构化数据约定。字段会在模块边界传递，用于保持类型安全和版本兼容。

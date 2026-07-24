@@ -1,6 +1,6 @@
 /**
  * @file content-modals.ts
- * @description 表格与代码块编辑弹窗。
+ * @description 编辑器领域的表格与代码块弹窗。
  *
  * 弹窗收集结构化输入；实际文档写入、撤销记录和自动保存由 MindMapEditor 统一处理。
  */
@@ -13,7 +13,7 @@ import {
   type MindMapCodeBlock,
   type MindMapTable,
   type TableAlignment
-} from "./model";
+} from "../core/model";
 
 /**
  * 执行“clone table”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
