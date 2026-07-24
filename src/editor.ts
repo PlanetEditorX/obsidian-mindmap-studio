@@ -5,7 +5,7 @@
  * 负责三种视图、节点操作、富文本、图片、表格、代码、子导图、拖拽、尺寸、搜索、历史记录、只读锁和图床容灾。
  */
 
-import { App, finishRenderMath, Menu, Modal, Notice, renderMath, setIcon } from "obsidian";
+import { App, Menu, Modal, Notice, setIcon } from "obsidian";
 import {
   cloneDocument,
   cloneNodeWithFreshIds,
@@ -38,7 +38,6 @@ import {
   reconcileRichTextAfterEdit,
   type BackgroundPattern,
   type ArticleStyle,
-  type ArticleStylePresetId,
   type DisplayMode,
   type EdgeStyle,
   type EdgeWidthMode,
@@ -66,10 +65,10 @@ import { TOOLBAR_ITEMS, type ImageHostChoice } from "./settings";
 import { appearanceFromThemePreset, MINDMAP_THEME_PRESETS } from "./themes";
 import { buildArticleNodeInfo, DISPLAY_MODE_ICONS, DISPLAY_MODE_LABELS, type ArticlePageNavigation, type ArticleTocEntry, type ReadingSection } from "./modes";
 import { xmindToDocument } from "./import-export";
-import { ARTICLE_STYLE_PRESETS, resolveArticleStyle } from "./article-style";
+import { resolveArticleStyle } from "./article-style";
 import type { MindMapEditorCallbacks, MindMapEditorOptions } from "./editor-types";
-import { ensureMathJax, readRichTextEditor, renderRichTextRuns } from "./rich-text-dom";
-import { DocumentExportModal, ImagePreviewModal, OutlineModal, SearchNodesModal } from "./editor-modals";
+import { readRichTextEditor, renderRichTextRuns } from "./rich-text-dom";
+import { ArticleStyleModal, DocumentExportModal, FormulaEditModal, ImagePreviewModal, OutlineModal, SearchNodesModal } from "./editor-modals";
 export type { MindMapEditorCallbacks, MindMapEditorOptions } from "./editor-types";
 
 /**
@@ -652,217 +651,6 @@ class NodeEditModal extends Modal {
    */
   releaseKeyboardScope(): void {
     this.app.keymap.popScope(this.scope);
-  }
-}
-
-/**
- * 图形化 LaTeX 公式编辑器，提供常用结构按钮与实时 MathJax 预览。
- */
-class FormulaEditModal extends Modal {
-  /**
-   * @param app Obsidian 应用实例。
-   * @param submit 保存公式源码的回调。
-   */
-  constructor(app: App, private readonly submit: (source: string) => void) {
-    super(app);
-  }
-
-  /** 构建公式模板、源码输入和实时预览。 */
-  onOpen(): void {
-    this.titleEl.setText("插入 LaTeX 公式");
-    this.contentEl.addClass("mms-formula-editor");
-    this.contentEl.createEl("p", {
-      cls: "setting-item-description",
-      text: "点击常用结构快速组合公式，也可以直接修改 LaTeX 源码。保存后节点会显示公式而不是源码。"
-    });
-    const templates: Array<[string, string, string]> = [
-      ["x²", "x^{2}", "上标"], ["xᵢ", "x_{i}", "下标"], ["a⁄b", "\\frac{a}{b}", "分数"],
-      ["√x", "\\sqrt{x}", "根号"], ["Σ", "\\sum_{i=1}^{n} x_i", "求和"],
-      ["∫", "\\int_{a}^{b} f(x)\\,dx", "积分"], ["lim", "\\lim_{x\\to\\infty} f(x)", "极限"],
-      ["α", "\\alpha", "希腊字母"], ["→", "\\overrightarrow{AB}", "向量"],
-      ["()", "\\left( \\frac{a}{b} \\right)", "自适应括号"],
-      ["矩阵", "\\begin{bmatrix} a & b \\\\ c & d \\end{bmatrix}", "矩阵"],
-      ["方程组", "\\begin{cases} x+y=1 \\\\ x-y=0 \\end{cases}", "方程组"]
-    ];
-    const arithmetic: Array<[string, string, string]> = [
-      ["+", " + ", "加"], ["−", " - ", "减"], ["×", " \\times ", "乘"], ["÷", " \\div ", "除"],
-      ["·", " \\cdot ", "点乘"], ["∗", " \\ast ", "星号乘"], ["/", " / ", "斜线除"],
-      ["a⁄b", "\\frac{a}{b}", "分数"], ["±", " \\pm ", "正负"], ["∓", " \\mp ", "负正"],
-      ["=", " = ", "等于"], ["%", " \\% ", "百分号"], [":", " : ", "比"]
-    ];
-    const relations: Array<[string, string, string]> = [
-      ["≠", " \\neq ", "不等于"], ["≈", " \\approx ", "约等于"], ["≡", " \\equiv ", "恒等于"],
-      ["≢", " \\not\\equiv ", "不恒等于"], ["≥", " \\geq ", "大于等于"], ["≫", " \\gg ", "远大于"],
-      ["≤", " \\leq ", "小于等于"], ["≪", " \\ll ", "远小于"], ["∼", " \\sim ", "相似"],
-      ["≃", " \\simeq ", "渐近相等"], ["≅", " \\cong ", "全等"]
-    ];
-    this.contentEl.createDiv({ cls: "mms-formula-section-title", text: "常用结构" });
-    const palette = this.contentEl.createDiv({ cls: "mms-formula-palette" });
-    this.contentEl.createDiv({ cls: "mms-formula-section-title", text: "基本运算" });
-    const arithmeticPalette = this.contentEl.createDiv({ cls: "mms-formula-palette mms-formula-operators" });
-    this.contentEl.createDiv({ cls: "mms-formula-section-title", text: "关系符号" });
-    const relationPalette = this.contentEl.createDiv({ cls: "mms-formula-palette mms-formula-relations" });
-    const source = this.contentEl.createEl("textarea", {
-      cls: "mms-formula-source",
-      attr: { rows: "5", spellcheck: "false", placeholder: "\\frac{a}{b}" }
-    });
-    const preview = this.contentEl.createDiv({ cls: "mms-formula-preview" });
-    let previewToken = 0;
-    const updatePreview = (): void => {
-      const token = ++previewToken;
-      const value = source.value.trim();
-      preview.empty();
-      if (!value) {
-        preview.createSpan({ cls: "setting-item-description", text: "公式预览" });
-        return;
-      }
-      void ensureMathJax().then(() => {
-        if (token !== previewToken || !preview.isConnected) return;
-        preview.empty();
-        try {
-          preview.appendChild(renderMath(value, true));
-          void finishRenderMath();
-        } catch {
-          preview.createSpan({ cls: "mod-warning", text: "公式语法暂时无法渲染" });
-        }
-      });
-    };
-    const insert = (template: string): void => {
-      const start = source.selectionStart ?? source.value.length;
-      const end = source.selectionEnd ?? start;
-      source.setRangeText(template, start, end, "end");
-      source.focus();
-      updatePreview();
-    };
-    for (const [label, template, title] of templates) {
-      const button = palette.createEl("button", { text: label, attr: { type: "button", title } });
-      button.addEventListener("click", () => insert(template));
-    }
-    for (const [label, template, title] of arithmetic) {
-      const button = arithmeticPalette.createEl("button", {
-        text: label,
-        attr: { type: "button", title: `${title}（${template}）` }
-      });
-      button.addEventListener("click", () => insert(template));
-    }
-    for (const [label, template, title] of relations) {
-      const button = relationPalette.createEl("button", {
-        text: label,
-        attr: { type: "button", title: `${title}（${template}）` }
-      });
-      button.addEventListener("click", () => insert(template));
-    }
-    source.addEventListener("input", updatePreview);
-    const actions = this.contentEl.createDiv({ cls: "modal-button-container" });
-    actions.createEl("button", { text: "取消", attr: { type: "button" } }).addEventListener("click", () => this.close());
-    const save = actions.createEl("button", { text: "插入公式", cls: "mod-cta", attr: { type: "button" } });
-    save.addEventListener("click", () => {
-      const value = source.value.trim();
-      if (!value) {
-        new Notice("请先输入或选择一个公式");
-        return;
-      }
-      this.submit(value);
-      this.close();
-    });
-    updatePreview();
-    source.focus();
-  }
-
-  /** 清理公式编辑器 DOM。 */
-  onClose(): void {
-    this.contentEl.empty();
-  }
-}
-
-/**
- * Modal for selecting an article preset and overriding its typography and colors.
- */
-class ArticleStyleModal extends Modal {
-  private readonly style: ArticleStyle;
-  private readonly submitStyle: (style: ArticleStyle) => void;
-
-  /**
-   * Creates an article style editor.
-   *
-   * @param app Obsidian application.
-   * @param style Current document style.
-   * @param submit Callback receiving the edited style.
-   */
-  constructor(app: App, style: ArticleStyle | undefined, submit: (style: ArticleStyle) => void) {
-    super(app);
-    this.style = resolveArticleStyle(style);
-    this.submitStyle = submit;
-  }
-
-  /**
-   * Builds the article style preset and customization controls.
-   */
-  onOpen(): void {
-    this.titleEl.setText("文章样式");
-    this.contentEl.addClass("mms-article-style-modal");
-    const form = this.contentEl.createEl("form");
-    const grid = form.createDiv({ cls: "mmc-form-grid" });
-    const presetLabel = grid.createEl("label", { text: "样式预设" });
-    const preset = presetLabel.createEl("select");
-    for (const [id, name] of [["classic", "经典文档"], ["book", "书籍阅读"], ["modern", "现代报告"], ["minimal", "极简留白"]] as const) {
-      preset.createEl("option", { text: name, attr: { value: id } });
-    }
-    const addText = (labelText: string): HTMLInputElement => {
-      const label = grid.createEl("label", { text: labelText });
-      return label.createEl("input", { type: "text" });
-    };
-    const fontFamily = addText("字体");
-    const addColor = (labelText: string): HTMLInputElement => {
-      const label = grid.createEl("label", { text: labelText });
-      return label.createEl("input", { type: "color" });
-    };
-    const textColor = addColor("正文颜色");
-    const headingColor = addColor("标题颜色");
-    const accentColor = addColor("强调色");
-    const backgroundColor = addColor("纸张背景");
-    const tocLabel = grid.createEl("label", { text: "目录样式" });
-    const tocStyle = tocLabel.createEl("select");
-    for (const [id, name] of [["card", "卡片"], ["plain", "简洁"], ["lines", "引导线"]] as const) {
-      tocStyle.createEl("option", { text: name, attr: { value: id } });
-    }
-    const sizeLabel = grid.createEl("label", { text: "正文字号" });
-    const fontSize = sizeLabel.createEl("input", { type: "number", attr: { min: "12", max: "24", step: "1" } });
-    const lineLabel = grid.createEl("label", { text: "正文行高" });
-    const lineHeight = lineLabel.createEl("input", { type: "number", attr: { min: "1.2", max: "2.4", step: "0.05" } });
-    const fill = (style: ArticleStyle): void => {
-      const resolved = resolveArticleStyle(style);
-      preset.value = resolved.preset;
-      fontFamily.value = resolved.fontFamily ?? "";
-      textColor.value = resolved.textColor ?? "#20242c";
-      headingColor.value = resolved.headingColor ?? "#111827";
-      accentColor.value = resolved.accentColor ?? "#7c3aed";
-      backgroundColor.value = resolved.backgroundColor ?? "#ffffff";
-      tocStyle.value = resolved.tocStyle ?? "card";
-      fontSize.value = String(resolved.fontSize ?? 16);
-      lineHeight.value = String(resolved.lineHeight ?? 1.85);
-    };
-    fill(this.style);
-    preset.addEventListener("change", () => fill(ARTICLE_STYLE_PRESETS[preset.value as ArticleStylePresetId]));
-    const actions = form.createDiv({ cls: "mmc-modal-actions" });
-    const cancel = actions.createEl("button", { text: "取消", type: "button" });
-    actions.createEl("button", { text: "应用", type: "submit", cls: "mod-cta" });
-    cancel.addEventListener("click", () => this.close());
-    form.addEventListener("submit", (event) => {
-      event.preventDefault();
-      this.submitStyle({
-        preset: preset.value as ArticleStylePresetId,
-        fontFamily: fontFamily.value.trim() || undefined,
-        textColor: textColor.value,
-        headingColor: headingColor.value,
-        accentColor: accentColor.value,
-        backgroundColor: backgroundColor.value,
-        tocStyle: tocStyle.value as ArticleStyle["tocStyle"],
-        fontSize: Math.max(12, Math.min(24, Number(fontSize.value) || 16)),
-        lineHeight: Math.max(1.2, Math.min(2.4, Number(lineHeight.value) || 1.85))
-      });
-      this.close();
-    });
   }
 }
 
