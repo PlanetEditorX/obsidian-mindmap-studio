@@ -13,7 +13,6 @@ import {
   containsNode,
   createNode,
   documentToMarkdown,
-  markdownToDocument,
   extractFirstWikiLink,
   findAncestors,
   findNode,
@@ -21,10 +20,8 @@ import {
   flattenNodes,
   getTaskProgress,
   imageSourceCandidates,
-  indentedTextToMarkdown,
   mergeAppearance,
   nodeSearchText,
-  normalizeDocument,
   newId,
   nodeContentBlocks,
   nodePlainText,
@@ -77,6 +74,7 @@ import {
   OutlineModal,
   SearchNodesModal
 } from "./editor-modals";
+import { parseClipboardHtml, parseClipboardNode } from "./clipboard-import";
 export type { MindMapEditorCallbacks, MindMapEditorOptions } from "./editor-types";
 
 /**
@@ -3089,7 +3087,7 @@ export class MindMapEditor {
       return;
     }
 
-    const htmlBranch = this.parseClipboardHtml(data.getData("text/html"));
+    const htmlBranch = parseClipboardHtml(data.getData("text/html"));
     const text = data.getData("text/plain");
     if (!text.trim() && !htmlBranch) return;
     const selected = this.selectedNode() ?? this.document.root;
@@ -3107,7 +3105,7 @@ export class MindMapEditor {
       new Notice(`已识别并插入${code.language ? ` ${code.language}` : ""}代码`);
       return;
     }
-    const branch = htmlBranch ?? this.parseClipboardNode(text);
+    const branch = htmlBranch ?? parseClipboardNode(text);
     if (branch) {
       event.preventDefault();
       const clone = cloneNodeWithFreshIds(branch);
@@ -3355,7 +3353,7 @@ export class MindMapEditor {
     let sourceNode: MindMapNode | null = null;
     try {
       const text = await navigator.clipboard.readText();
-      if (text.trim()) sourceNode = this.parseClipboardNode(text);
+      if (text.trim()) sourceNode = parseClipboardNode(text);
     } catch {
       // Browser clipboard permission can be unavailable; use internal clipboard.
     }
@@ -3370,66 +3368,6 @@ export class MindMapEditor {
       selected.children.push(clone);
       this.selectedId = clone.id;
     });
-  }
-
-  /**
-   * 解析clipboard node，并保持模型、界面和持久化状态的一致性。
-   *
-   * @param text 要显示、搜索、解析或写入的文本。
-   * @returns 当前操作生成、查找或规范化后的结果。
-   */
-  private parseClipboardNode(text: string): MindMapNode | null {
-    try {
-      const parsed = JSON.parse(text) as { type?: string; node?: Partial<MindMapNode>; root?: Partial<MindMapNode>; text?: string; children?: unknown[] };
-      const input = (parsed.type === "mindmap-studio-node" || parsed.type === "mmc-lite-node" || parsed.type === "smm-lite-node") && parsed.node ? parsed.node : parsed.root ?? (typeof parsed.text === "string" && Array.isArray(parsed.children) ? parsed : null);
-      if (!input) return null;
-      return normalizeDocument({ title: input.text ?? "粘贴节点", root: input as MindMapNode }, input.text ?? "粘贴节点").root;
-    } catch {
-      const trimmed = text.trim();
-      if (!trimmed) return null;
-      const looksLikeMarkdown = /^(?:#{1,6}\s+|[-*+]\s+|\d+[.)]\s+)/m.test(trimmed);
-      if (looksLikeMarkdown || trimmed.includes("\n")) {
-        const markdown = looksLikeMarkdown ? trimmed : indentedTextToMarkdown(text);
-        const document = markdownToDocument(markdown, "粘贴内容");
-        if (document.root.text === "粘贴内容" && document.root.children.length === 1) return document.root.children[0] ?? null;
-        return document.root;
-      }
-      return createNode(trimmed);
-    }
-  }
-
-  /**
-   * Extracts a nested branch from HTML list data exposed by rich clipboard
-   * providers such as desktop mind-map applications.
-   *
-   * @param html Clipboard HTML.
-   * @returns Parsed branch, or null when the HTML has no nested list.
-   */
-  private parseClipboardHtml(html: string): MindMapNode | null {
-    if (!html.trim() || typeof DOMParser === "undefined") return null;
-    const document = new DOMParser().parseFromString(html, "text/html");
-    const firstList = document.body.querySelector("ul, ol");
-    if (!firstList) return null;
-    const parseItem = (item: Element): MindMapNode => {
-      const clone = item.cloneNode(true) as HTMLElement;
-      clone.querySelectorAll("ul, ol").forEach((list) => list.remove());
-      const node = createNode(clone.textContent?.trim() || "节点");
-      const nested = Array.from(item.children).find((child) => child.matches("ul, ol"));
-      if (nested) {
-        node.children = Array.from(nested.children)
-          .filter((child) => child.matches("li"))
-          .map(parseItem);
-      }
-      return node;
-    };
-    const roots = Array.from(firstList.children)
-      .filter((child) => child.matches("li"))
-      .map(parseItem);
-    if (!roots.length) return null;
-    if (roots.length === 1) return roots[0] ?? null;
-    const root = createNode("粘贴内容");
-    root.children = roots;
-    return root;
   }
 
   /**
