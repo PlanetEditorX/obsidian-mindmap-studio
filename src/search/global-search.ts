@@ -328,7 +328,7 @@ export function searchEntries(entries: MindMapSearchEntry[], query: string, limi
 }
 
 /**
- * 从当前文件向上寻找最顶层父导图，再向下递归收集全部后代子导图，形成 Ctrl/Cmd+F 使用的“当前导图族”搜索范围。
+ * 从当前文件向上寻找最顶层父导图，再向下递归收集全部后代子导图，形成 Ctrl/Cmd+Shift+F 使用的“当前导图族”搜索范围。
  *
  * @param files 该参数用于 collect indexed family paths 流程中的输入或控制。
  * @param rootPath 该参数用于 collect indexed family paths 流程中的输入或控制。

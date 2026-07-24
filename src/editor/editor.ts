@@ -1064,8 +1064,8 @@ export class MindMapEditor {
     this.addToolbarButton("task", "circle-check-big", "切换任务状态（Ctrl/Cmd+Enter）", () => this.cycleTask(), true);
     this.addToolbarButton("collapse", "fold-vertical", "展开/收起节点（Space）", () => this.toggleCollapse(), true);
     this.addToolbarButton("link", "link", "打开节点链接", () => this.openSelectedLink());
-    this.addToolbarButton("search", "search", "搜索当前导图及全部子导图（Ctrl/Cmd+F）", () => this.openSearch());
-    this.addToolbarButton("global-search", "file-search", "全局搜索所有导图（Ctrl/Cmd+Shift+F）", () => this.callbacks.onGlobalSearch());
+    this.addToolbarButton("search", "search", "搜索当前导图及全部子导图（Ctrl/Cmd+Shift+F）", () => this.openSearch());
+    this.addToolbarButton("global-search", "file-search", "全局搜索所有导图", () => this.callbacks.onGlobalSearch());
     this.addToolbarSeparator();
     this.addToolbarButton("table", "table-2", "插入或编辑表格", () => this.editTable(), true);
     this.addToolbarButton("code", "code-2", "插入或编辑代码", () => this.editCode(), true);
@@ -3434,14 +3434,13 @@ export class MindMapEditor {
     const key = event.key.toLowerCase();
     const findKey = key === "f" || event.code === "KeyF";
 
+    // Ctrl/Cmd+F 保留给 Obsidian；导图族搜索使用 Ctrl/Cmd+Shift+F。
     // 搜索快捷键必须先于可编辑元素过滤处理，否则在正文、标题或节点编辑时会被忽略。
-    // 捕获阶段配合物理按键兜底，可避免 Obsidian/浏览器抢先处理及非英文键盘布局失效。
-    if (mod && findKey && !event.altKey) {
+    if (mod && event.shiftKey && findKey && !event.altKey) {
       event.preventDefault();
       event.stopPropagation();
       if (event.repeat) return;
-      if (event.shiftKey) this.callbacks.onGlobalSearch();
-      else this.openSearch();
+      this.openSearch();
       return;
     }
 

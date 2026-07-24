@@ -4092,7 +4092,7 @@ export function searchEntries(entries: MindMapSearchEntry[], query: string, limi
 
 源码：`src/search/global-search.ts:338`
 
-从当前文件向上寻找最顶层父导图，再向下递归收集全部后代子导图，形成 Ctrl/Cmd+F 使用的“当前导图族”搜索范围。
+从当前文件向上寻找最顶层父导图，再向下递归收集全部后代子导图，形成 Ctrl/Cmd+Shift+F 使用的“当前导图族”搜索范围。
 
 ```ts
 export function collectIndexedFamilyPaths( files: Record<string,
