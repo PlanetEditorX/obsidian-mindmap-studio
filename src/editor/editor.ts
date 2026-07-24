@@ -2718,16 +2718,23 @@ export class MindMapEditor {
     const page = this.articleEl.createDiv({ cls: `mms-article-page mms-reading-page article-${style.preset}` });
     page.createEl("h1", { cls: "mms-article-document-title", text: nodePrimaryText(sections[0]!.document.root) || sections[0]!.document.title });
 
+    // 存在子导图时，顶级导图只承担书名与目录组织，不再作为正文重复显示。
+    const contentSections = sections.length > 1 ? sections.slice(1) : sections;
+    const contentPaths = new Set(contentSections.map((section) => section.filePath));
+    const tocEntries = this.options.articleTocEntries.filter(
+      (entry) => entry.depth <= this.options.articleTocMaxDepth && contentPaths.has(entry.filePath)
+    );
     const toc = page.createEl("nav", { cls: "mms-article-toc mms-reading-toc" });
     toc.createEl("h2", { text: "全书目录" });
     const tocList = toc.createEl("ol");
-    for (const entry of this.options.articleTocEntries.filter((item) => item.depth <= this.options.articleTocMaxDepth)) {
+    for (const entry of tocEntries) {
       const fileKey = entry.filePath.replace(/[^a-zA-Z0-9_-]/g, "-");
       const anchor = entry.nodeId
         ? `reading-${fileKey}-${entry.nodeId.replace(/[^a-zA-Z0-9_-]/g, "-")}`
         : `reading-file-${fileKey}`;
       const item = tocList.createEl("li");
       item.addClass(`depth-${Math.min(entry.depth, 8)}`);
+      item.style.setProperty("--mms-article-depth", String(entry.depth));
       const link = item.createEl("a", { text: entry.displayTitle || entry.title, href: `#${anchor}` });
       link.addEventListener("click", (event) => {
         event.preventDefault();
@@ -2735,11 +2742,15 @@ export class MindMapEditor {
       });
     }
 
-    for (const section of sections) {
+    for (const section of contentSections) {
       const anchor = `reading-file-${section.filePath.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
       const chapter = page.createEl("article", { cls: "mms-reading-book-section" });
       chapter.id = anchor;
-      chapter.createEl("h2", { cls: "mms-reading-map-title", text: nodePrimaryText(section.document.root) || section.document.title });
+      const sectionEntry = tocEntries.find((entry) => entry.filePath === section.filePath && !entry.nodeId);
+      chapter.createEl("h2", {
+        cls: "mms-reading-map-title",
+        text: sectionEntry?.displayTitle || nodePrimaryText(section.document.root) || section.document.title
+      });
       this.renderArticleContent(chapter, section.document.root, false);
       for (const info of buildArticleNodeInfo(section.document.root, section.baseDepth)) {
         const nodeSection = chapter.createEl("section", { cls: `mms-article-node depth-${Math.min(info.depth, 8)}` });
