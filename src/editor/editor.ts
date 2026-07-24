@@ -1100,8 +1100,8 @@ export class MindMapEditor {
     this.statusEl = this.toolbarEl.createSpan({ cls: "mmc-save-status", text: "已保存" });
 
     const keydown = (event: KeyboardEvent): void => this.handleKeydown(event);
-    this.rootEl.addEventListener("keydown", keydown);
-    this.cleanupCallbacks.push(() => this.rootEl.removeEventListener("keydown", keydown));
+    this.rootEl.addEventListener("keydown", keydown, true);
+    this.cleanupCallbacks.push(() => this.rootEl.removeEventListener("keydown", keydown, true));
 
     const paste = (event: ClipboardEvent): void => { void this.handlePaste(event); };
     this.rootEl.addEventListener("paste", paste);
@@ -3430,24 +3430,27 @@ export class MindMapEditor {
    */
   private handleKeydown(event: KeyboardEvent): void {
     const target = event.target as HTMLElement;
-    if (target.matches("input, textarea, select, [contenteditable='true']")) return;
     const mod = event.ctrlKey || event.metaKey;
     const key = event.key.toLowerCase();
+    const findKey = key === "f" || event.code === "KeyF";
+
+    // 搜索快捷键必须先于可编辑元素过滤处理，否则在正文、标题或节点编辑时会被忽略。
+    // 捕获阶段配合物理按键兜底，可避免 Obsidian/浏览器抢先处理及非英文键盘布局失效。
+    if (mod && findKey && !event.altKey) {
+      event.preventDefault();
+      event.stopPropagation();
+      if (event.repeat) return;
+      if (event.shiftKey) this.callbacks.onGlobalSearch();
+      else this.openSearch();
+      return;
+    }
+
+    if (target.matches("input, textarea, select, [contenteditable='true']")) return;
 
     if (mod && key === "s") {
       event.preventDefault();
       this.callbacks.onChange(this.getDocument());
       this.markSaving();
-      return;
-    }
-    if (mod && event.shiftKey && key === "f") {
-      event.preventDefault();
-      this.callbacks.onGlobalSearch();
-      return;
-    }
-    if (mod && key === "f") {
-      event.preventDefault();
-      this.openSearch();
       return;
     }
     if (this.currentMode === "article" && event.key === "Escape" && this.options.articleNavigation?.parentPath) {
