@@ -77,6 +77,9 @@ import { selectNodeImage, uploadCurrentNodeImage } from "./node-image-actions";
 import { renderNodeRichTextEditor } from "./node-rich-text-editor";
 import { canMoveNodes, isRightChildZone, resolveDropPosition } from "./drag-drop";
 import { DocumentHistory } from "./history-manager";
+import { renderOutlineMode } from "./outline-renderer";
+import { markWrappedArticleParagraph, renderArticleMode, renderArticleNodeContent, type ArticleRendererOptions } from "./article-renderer";
+import { appendChild, deleteNodes, insertSiblingAfter, nextTaskStatus, setAllBranchesCollapsed, topLevelSelectedNodeIds } from "./node-actions";
 export type { MindMapEditorCallbacks, MindMapEditorOptions } from "./editor-types";
 
 /**
@@ -1458,120 +1461,16 @@ export class MindMapEditor {
    * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
    */
   private renderOutline(): void {
-    this.outlineEl.empty();
-    const page = this.outlineEl.createDiv({ cls: "mms-outline-page" });
-    const titleRow = page.createDiv({ cls: `mms-outline-row is-root${this.selectedId === this.document.root.id ? " is-selected" : ""}` });
-    titleRow.dataset.nodeId = this.document.root.id;
-    const title = titleRow.createDiv({ cls: "mms-outline-title is-root-title", text: nodePrimaryText(this.document.root) || this.document.title });
-    this.makeInlineEditable(title, this.document.root, "导图标题");
-    this.addInlineNodeActions(titleRow, this.document.root);
-    titleRow.addEventListener("click", () => this.selectNode(this.document.root.id));
-
-    const list = page.createDiv({ cls: "mms-outline-list" });
-    const visit = (node: MindMapNode, depth: number): void => {
-      const item = list.createDiv({ cls: `mms-outline-item depth-${Math.min(depth, 8)}` });
-      item.style.setProperty("--mms-outline-depth", String(depth));
-      const row = item.createDiv({ cls: `mms-outline-row${this.selectedId === node.id ? " is-selected" : ""}` });
-      row.dataset.nodeId = node.id;
-      row.createSpan({ cls: "mms-outline-bullet", text: node.children.length || node.submap ? "◆" : "•" });
-      if (node.task) {
-        const task = row.createEl("input", { type: "checkbox", cls: "mms-outline-task" });
-        task.checked = node.task === "done";
-        task.disabled = this.readOnly;
-        task.addEventListener("change", (event) => {
-          event.stopPropagation();
-          this.selectNode(node.id);
-          this.mutate(() => { node.task = task.checked ? "done" : "todo"; });
-        });
-      }
-      const label = nodePlainText(node) || (node.submap?.title ?? "图片节点");
-      if (node.submap) {
-        const link = row.createEl("a", {
-          cls: "mms-outline-title mms-submap-text-link",
-          text: label,
-          href: node.submap.path,
-          attr: { title: `打开子导图：${node.submap.title ?? node.submap.path}` }
-        });
-        link.addEventListener("click", (event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          this.selectNode(node.id);
-          void this.callbacks.onOpenMindMap(node.submap!.path);
-        });
-      } else {
-        const text = row.createDiv({ cls: "mms-outline-title", text: label });
-        this.makeInlineEditable(text, node, "节点文字");
-      }
-      if (node.skipArticleNumbering) row.createSpan({ cls: "mms-outline-badge", text: "文章不编号" });
-      this.addInlineNodeActions(row, node);
-      row.addEventListener("click", () => this.selectNode(node.id));
-      row.addEventListener("dblclick", () => {
-        this.selectNode(node.id);
-        if (node.submap) void this.callbacks.onOpenMindMap(node.submap.path);
-        else if (!this.readOnly) this.editSelected();
-      });
-      if (node.note) item.createDiv({ cls: "mms-outline-note", text: node.note });
-      node.children.forEach((child) => visit(child, depth + 1));
-    };
-    this.document.root.children.forEach((child) => visit(child, 1));
-  }
-
-  /**
-   * 渲染article content，并保持模型、界面和持久化状态的一致性。
-   *
-   * @param container 接收渲染内容的 DOM 容器。
-   * @param node 当前处理的节点。
-   * @param treatTextAsBody 该参数用于 render article content 流程中的输入或控制。
-   */
-  private renderArticleContent(container: HTMLElement, node: MindMapNode, treatTextAsBody: boolean): void {
-    const blocks = nodeContentBlocks(node);
-    let firstTextHandled = false;
-    for (const block of blocks) {
-      if (block.type === "text") {
-        if (!treatTextAsBody && !firstTextHandled) { firstTextHandled = true; continue; }
-        firstTextHandled = true;
-        const paragraph = container.createEl("p", { cls: "mms-article-paragraph" });
-        renderRichTextRuns(paragraph, block.richText, block.text);
-        this.markWrappedArticleParagraph(paragraph);
-        if (treatTextAsBody) this.makeInlineEditable(paragraph, node, "正文");
-      } else {
-        const resolved = this.callbacks.resolveImage(block.source);
-        const image = container.createEl("img", { cls: "mms-article-image", attr: { src: resolved ?? block.source, alt: block.alt ?? "图片" } });
-        image.addEventListener("click", () => new ImagePreviewModal(this.app, resolved ?? block.source, block.alt ?? "图片").open());
-      }
-    }
-    if (node.note) container.createEl("p", { cls: "mms-article-note", text: node.note });
-    if (node.table) {
-      const wrap = container.createDiv({ cls: "mms-article-table-wrap" });
-      const table = wrap.createEl("table", { cls: "mms-article-table" });
-      const tr = table.createEl("thead").createEl("tr");
-      node.table.headers.forEach((header) => tr.createEl("th", { text: header }));
-      const body = table.createEl("tbody");
-      node.table.rows.forEach((row) => {
-        const rowEl = body.createEl("tr");
-        node.table!.headers.forEach((_, index) => rowEl.createEl("td", { text: row[index] ?? "" }));
-      });
-    }
-    if (node.code) {
-      const code = container.createDiv({ cls: "mms-article-code markdown-rendered" });
-      void this.callbacks.onRenderCode(node.code, code);
-    }
-  }
-
-  /**
-   * Adds a two-character first-line indent only when a body paragraph actually
-   * occupies more than one rendered line.
-   *
-   * @param paragraph Rendered article body paragraph.
-   */
-  private markWrappedArticleParagraph(paragraph: HTMLParagraphElement): void {
-    window.requestAnimationFrame(() => {
-      if (!paragraph.isConnected || !paragraph.textContent?.trim()) return;
-      const range = document.createRange();
-      range.selectNodeContents(paragraph);
-      const lineTops = new Set(Array.from(range.getClientRects(), (rect) => Math.round(rect.top)));
-      paragraph.toggleClass("is-multiline", lineTops.size > 1);
-      range.detach();
+    renderOutlineMode(this.outlineEl, {
+      document: this.document,
+      selectedId: this.selectedId,
+      readOnly: this.readOnly,
+      selectNode: (id) => this.selectNode(id),
+      makeInlineEditable: (element, node, placeholder) => this.makeInlineEditable(element, node, placeholder),
+      addInlineNodeActions: (container, node) => this.addInlineNodeActions(container, node),
+      mutate: (action) => this.mutate(action),
+      editSelected: () => this.editSelected(),
+      openMindMap: (path) => this.callbacks.onOpenMindMap(path)
     });
   }
 
@@ -1580,125 +1479,37 @@ export class MindMapEditor {
    * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
    */
   private renderArticle(): void {
-    this.articleEl.empty();
-    const articleStyle = resolveArticleStyle(this.document.articleStyle);
-    const page = this.articleEl.createDiv({ cls: `mms-article-page article-${articleStyle.preset} toc-${articleStyle.tocStyle ?? "card"}` });
-    if (articleStyle.fontFamily) page.style.setProperty("--mms-article-font", articleStyle.fontFamily);
-    if (articleStyle.textColor) page.style.setProperty("--mms-article-text", articleStyle.textColor);
-    if (articleStyle.headingColor) page.style.setProperty("--mms-article-heading", articleStyle.headingColor);
-    if (articleStyle.accentColor) page.style.setProperty("--mms-article-accent", articleStyle.accentColor);
-    if (articleStyle.backgroundColor) page.style.setProperty("--mms-article-paper", articleStyle.backgroundColor);
-    page.style.setProperty("--mms-article-font-size", `${articleStyle.fontSize ?? 16}px`);
-    page.style.setProperty("--mms-article-line-height", String(articleStyle.lineHeight ?? 1.85));
-    const title = page.createEl("h1", { cls: "mms-article-document-title", text: nodePrimaryText(this.document.root) || this.document.title });
-    this.makeInlineEditable(title, this.document.root, "文章标题");
-    this.addInlineNodeActions(page, this.document.root);
-
-    const directoryOnly = this.options.showArticleToc
-      && this.options.articleTocEntries.length > 0
-      && this.document.view?.articleLandingMode !== "article";
-    if (directoryOnly) {
-      const tocPage = page.createEl("nav", { cls: "mms-article-toc mms-article-toc-page" });
-      tocPage.createEl("h2", { text: "目录" });
-      const list = tocPage.createEl("ol");
-      for (const entry of this.options.articleTocEntries.filter((item) => item.depth <= this.options.articleTocMaxDepth)) {
-        const item = list.createEl("li", { cls: `depth-${Math.min(entry.depth, 8)}` });
-        item.style.setProperty("--mms-article-depth", String(entry.depth));
-        const link = item.createEl("a", {
-          text: entry.displayTitle || entry.title || "未命名标题",
-          href: entry.filePath,
-          attr: { title: entry.breadcrumb.join(" › ") }
-        });
-        link.addEventListener("click", (event) => {
-          event.preventDefault();
-          void this.callbacks.onOpenMindMap(entry.filePath, entry.nodeId);
-        });
-        if (entry.breadcrumb.length > 1) item.createSpan({ cls: "mms-article-toc-breadcrumb", text: entry.breadcrumb.join(" › ") });
-      }
-      return;
-    }
-
-    const infos = buildArticleNodeInfo(this.document.root, this.options.articleBaseDepth);
-    for (const info of infos) {
-      const section = page.createEl("section", { cls: `mms-article-node depth-${Math.min(info.depth, 8)}${this.selectedId === info.node.id ? " is-selected" : ""}` });
-      section.dataset.nodeId = info.node.id;
-      section.id = info.anchor;
-      section.addEventListener("click", () => this.selectNode(info.node.id));
-      if (info.isHeading) {
-        const level = Math.min(6, info.depth + 1);
-        const heading = section.createEl(`h${level}` as keyof HTMLElementTagNameMap, { cls: "mms-article-heading" });
-        if (info.label) heading.createSpan({ cls: "mms-article-number", text: info.label });
-        if (info.node.submap) {
-          const headingLink = heading.createEl("a", {
-            cls: "mms-article-heading-text mms-submap-text-link",
-            text: info.title,
-            href: info.node.submap.path,
-            attr: { title: `打开子导图：${info.node.submap.title ?? info.node.submap.path}` }
-          });
-          headingLink.addEventListener("click", (event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            this.selectNode(info.node.id);
-            void this.callbacks.onOpenMindMap(info.node.submap!.path);
-          });
-        } else {
-          const headingText = heading.createSpan({ cls: "mms-article-heading-text", text: info.title });
-          this.makeInlineEditable(headingText, info.node, "章节标题");
-        }
-        if (info.skipped) heading.createSpan({ cls: "mms-article-skip-badge", text: "不编号" });
-        this.addInlineNodeActions(heading, info.node);
-        this.renderArticleContent(section, info.node, false);
-      } else {
-        const firstTextBlock = nodeContentBlocks(info.node).find((block): block is MindMapTextContentBlock => block.type === "text");
-        if (firstTextBlock || !this.readOnly) {
-          const paragraph = section.createEl("p", { cls: "mms-article-leaf-text" });
-          if (firstTextBlock) {
-            renderRichTextRuns(paragraph, firstTextBlock.richText, firstTextBlock.text);
-            this.markWrappedArticleParagraph(paragraph);
-          }
-          this.makeInlineEditable(paragraph, info.node, "正文段落");
-        }
-        this.addInlineNodeActions(section, info.node);
-        this.renderArticleContent(section, info.node, false);
-      }
-    }
-    this.renderArticlePager(page);
+    renderArticleMode(this.articleEl, this.articleRendererOptions());
   }
 
-  /**
-   * Renders previous, parent, next, and end navigation for a child article page.
-   *
-   * @param page Article page container.
-   */
-  private renderArticlePager(page: HTMLElement): void {
-    const navigation = this.options.articleNavigation;
-    if (!navigation?.parentPath || !navigation.entries.length) return;
-    const index = this.articleNavigationIndex ?? navigation.currentIndex;
-    const previous = index > 0 ? navigation.entries[index - 1] : undefined;
-    const next = index < navigation.entries.length - 1 ? navigation.entries[index + 1] : undefined;
-    const pager = page.createEl("nav", { cls: "mms-article-pager", attr: { "aria-label": "文章前后页导航" } });
-    const addTarget = (className: string, prefix: string, entry: ArticleTocEntry): void => {
-      const link = pager.createEl("button", {
-        cls: className,
-        attr: { type: "button", title: entry.breadcrumb.join(" › ") }
-      });
-      link.createSpan({ cls: "mms-article-pager-direction", text: prefix.trim() });
-      link.createSpan({ cls: "mms-article-pager-title", text: entry.displayTitle || entry.title });
-      link.addEventListener("click", () => void this.callbacks.onOpenMindMap(entry.filePath, entry.nodeId));
+  /** 构造文章渲染器所需的最小状态边界。 */
+  private articleRendererOptions(): ArticleRendererOptions {
+    return {
+      app: this.app,
+      document: this.document,
+      selectedId: this.selectedId,
+      readOnly: this.readOnly,
+      articleBaseDepth: this.options.articleBaseDepth,
+      showArticleToc: this.options.showArticleToc,
+      articleTocEntries: this.options.articleTocEntries,
+      articleTocMaxDepth: this.options.articleTocMaxDepth,
+      articleNavigation: this.options.articleNavigation,
+      articleNavigationIndex: this.articleNavigationIndex,
+      callbacks: this.callbacks,
+      selectNode: (id) => this.selectNode(id),
+      makeInlineEditable: (element, node, placeholder) => this.makeInlineEditable(element, node, placeholder),
+      addInlineNodeActions: (container, node) => this.addInlineNodeActions(container, node)
     };
-    if (previous) addTarget("mms-article-pager-previous", previous.depth <= 1 ? "上一章 " : "上一节 ", previous);
-    else pager.createSpan({ cls: "mms-article-pager-placeholder" });
-    const parent = pager.createEl("button", { cls: "mms-article-pager-parent", attr: { type: "button", title: "返回上一级" } });
-    setIcon(parent, "corner-left-up");
-    parent.createSpan({ text: "返回上一级" });
-    parent.addEventListener("click", () => void this.callbacks.onOpenMindMap(navigation.parentPath!));
-    if (next) addTarget("mms-article-pager-next", next.depth <= 1 ? "下一章 " : "下一节 ", next);
-    else {
-      const end = pager.createEl("button", { cls: "mms-article-pager-end", attr: { type: "button", title: "返回总目录" } });
-      end.createSpan({ cls: "mms-article-pager-direction", text: "阅读完成" });
-      end.createSpan({ cls: "mms-article-pager-title", text: "END · 返回目录" });
-      end.addEventListener("click", () => void this.callbacks.onOpenArticleDirectory(navigation.homePath));
-    }
+  }
+
+  /** 将文章内容块渲染委托给文章模式模块。 */
+  private renderArticleContent(container: HTMLElement, node: MindMapNode, treatTextAsBody: boolean): void {
+    renderArticleNodeContent(container, node, treatTextAsBody, this.articleRendererOptions());
+  }
+
+  /** 将文章段落换行检测委托给文章模式模块。 */
+  private markWrappedArticleParagraph(paragraph: HTMLParagraphElement): void {
+    markWrappedArticleParagraph(paragraph);
   }
 
   /**
@@ -2451,8 +2262,7 @@ export class MindMapEditor {
     const selected = this.selectedNode() ?? this.document.root;
     const node = this.createConfiguredNode("");
     this.mutate(() => {
-      selected.collapsed = false;
-      selected.children.push(node);
+      appendChild(selected, node);
       this.selectedId = node.id;
     });
     window.setTimeout(() => this.beginInlineEdit(node.id), 0);
@@ -2472,8 +2282,7 @@ export class MindMapEditor {
     if (!parent) return;
     const node = this.createConfiguredNode("");
     this.mutate(() => {
-      const index = parent.children.findIndex((child) => child.id === selected.id);
-      parent.children.splice(index + 1, 0, node);
+      insertSiblingAfter(this.document.root, selected.id, node);
       this.selectedId = node.id;
     });
     window.setTimeout(() => this.beginInlineEdit(node.id), 0);
@@ -2551,16 +2360,11 @@ export class MindMapEditor {
    */
   private deleteSelected(): void {
     if (!this.ensureEditable()) return;
-    const batch = Array.from(this.selectedIds)
-      .filter((id) => id !== this.document.root.id)
-      .filter((id, _index, ids) => {
-        const node = findNode(this.document.root, id);
-        return Boolean(node && !ids.some((otherId) => otherId !== id && node && containsNode(findNode(this.document.root, otherId) ?? this.document.root, id)));
-      });
+    const batch = topLevelSelectedNodeIds(this.document.root, this.selectedIds);
     if (batch.length > 1) {
       const fallback = findParent(this.document.root, this.selectedId)?.id ?? this.document.root.id;
       this.mutate(() => {
-        for (const id of batch) removeNode(this.document.root, id);
+        deleteNodes(this.document.root, batch);
         this.selectedIds.clear();
         this.selectedId = fallback;
         this.selectedIds.add(fallback);
@@ -2575,7 +2379,7 @@ export class MindMapEditor {
     }
     const parent = findParent(this.document.root, selected.id);
     this.mutate(() => {
-      removeNode(this.document.root, selected.id);
+      deleteNodes(this.document.root, [selected.id]);
       this.selectedId = parent?.id ?? this.document.root.id;
       this.selectedIds.clear();
       this.selectedIds.add(this.selectedId);
@@ -2603,9 +2407,7 @@ export class MindMapEditor {
    */
   private setAllNodesCollapsed(collapsed: boolean): void {
     const apply = (): void => {
-      for (const node of flattenNodes(this.document.root)) {
-        node.collapsed = node === this.document.root ? false : collapsed && node.children.length > 0;
-      }
+      setAllBranchesCollapsed(this.document.root, collapsed);
     };
     if (this.readOnly) {
       apply();
@@ -2622,8 +2424,7 @@ export class MindMapEditor {
     if (!this.ensureEditable()) return;
     const selected = this.selectedNode();
     if (!selected) return;
-    const next: Record<string, TaskStatus | undefined> = { "": "todo", todo: "doing", doing: "done", done: undefined };
-    this.mutate(() => { selected.task = next[selected.task ?? ""]; });
+    this.mutate(() => { selected.task = nextTaskStatus(selected.task); });
   }
 
   /**

@@ -19,6 +19,7 @@ const modesOutfile = join(tempDir, "modes.cjs");
 const importExportOutfile = join(tempDir, "import-export.cjs");
 const historyOutfile = join(tempDir, "history-manager.cjs");
 const dragDropOutfile = join(tempDir, "drag-drop.cjs");
+const nodeActionsOutfile = join(tempDir, "node-actions.cjs");
 const obsidianStub = join(tempDir, "obsidian-stub.mjs");
 
 try {
@@ -70,6 +71,14 @@ try {
     format: "cjs",
     logLevel: "silent"
   });
+  await build({
+    entryPoints: ["src/editor/node-actions.ts"],
+    outfile: nodeActionsOutfile,
+    bundle: true,
+    platform: "node",
+    format: "cjs",
+    logLevel: "silent"
+  });
   await writeFile(obsidianStub, `export class App {}
 export class Modal { constructor() {} }
 export class Notice {}
@@ -95,6 +104,7 @@ export const setIcon = () => {};
   const importExport = require(importExportOutfile);
   const { DocumentHistory } = require(historyOutfile);
   const dragDrop = require(dragDropOutfile);
+  const nodeActions = require(nodeActionsOutfile);
   const document = model.createDefaultDocument("测试脑图");
   const xmindArchive = zipSync({
     "content.json": strToU8(JSON.stringify([{ rootTopic: { title: "XMind 根", children: { attached: [{ title: "分支 A" }] } } }]))
@@ -200,6 +210,23 @@ export const setIcon = () => {};
   assert.equal(history.redo(historyFirst)?.title, "历史二");
   history.reset();
   assert.equal(history.undo(historySecond), null);
+
+  const actionRoot = model.normalizeDocument({
+    root: {
+      id: "action-root", text: "根", children: [
+        { id: "action-a", text: "A", children: [{ id: "action-a1", text: "A1", children: [] }] },
+        { id: "action-b", text: "B", children: [] }
+      ]
+    }
+  }, "节点操作").root;
+  assert.deepEqual(nodeActions.topLevelSelectedNodeIds(actionRoot, ["action-a", "action-a1"]), ["action-a"]);
+  assert.equal(nodeActions.nextTaskStatus(undefined), "todo");
+  assert.equal(nodeActions.nextTaskStatus("done"), undefined);
+  nodeActions.setAllBranchesCollapsed(actionRoot, true);
+  assert.equal(actionRoot.collapsed, false);
+  assert.equal(actionRoot.children[0]?.collapsed, true);
+  assert.equal(nodeActions.deleteNodes(actionRoot, ["action-a"]), 1);
+  assert.deepEqual(actionRoot.children.map((node) => node.id), ["action-b"]);
 
   const viewDocument = model.normalizeDocument({
     title: "三种模式",
@@ -592,8 +619,11 @@ export const setIcon = () => {};
   const editorSource = await readFile("src/editor/editor.ts", "utf8");
   const editorModalSource = await readFile("src/editor/editor-modals.ts", "utf8");
   const nodeRichTextSource = await readFile("src/editor/node-rich-text-editor.ts", "utf8");
+  const articleRendererSource = await readFile("src/editor/article-renderer.ts", "utf8");
+  const outlineRendererSource = await readFile("src/editor/outline-renderer.ts", "utf8");
   assert.match(editorSource, /markWrappedArticleParagraph/);
-  assert.match(editorSource, /lineTops\.size > 1/);
+  assert.match(articleRendererSource, /lineTops\.size > 1/);
+  assert.match(outlineRendererSource, /renderOutlineMode/);
   assert.doesNotMatch(nodeRichTextSource, /execCommand/, "rich-text formatting must not use browser-wide execCommand behavior");
   assert.match(nodeRichTextSource, /selectionStart/);
   assert.match(nodeRichTextSource, /文字样式预览/);
@@ -665,7 +695,7 @@ export const setIcon = () => {};
   assert.match(settingsSource, /文章目录最大层级/);
   assert.match(settingsSource, /通读进度条位置/);
   assert.match(mainSource, /articleTocMaxDepth:[\s\S]*Math\.max\(1, Math\.min\(8/);
-  assert.match(editorSource, /item\.depth <= this\.options\.articleTocMaxDepth/, "article TOC rendering should honor the configured maximum depth");
+  assert.match(articleRendererSource, /item\.depth <= options\.articleTocMaxDepth/, "article TOC rendering should honor the configured maximum depth");
   assert.match(editorSource, /position-\$\{this\.options\.readingProgressPosition\}/);
 
   assert.match(settingsSource, /visibleModes/);

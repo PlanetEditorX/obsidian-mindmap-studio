@@ -27,6 +27,9 @@ src/
 │   ├── clipboard-import.ts     剪贴板分支解析
 │   ├── drag-drop.ts            拖放合法性与落点计算
 │   ├── history-manager.ts      有界撤销与重做快照
+│   ├── node-actions.ts         节点结构与状态操作
+│   ├── outline-renderer.ts     大纲模式递归渲染
+│   ├── article-renderer.ts     文章目录、正文与分页渲染
 │   ├── rich-text-dom.ts        富文本 DOM 转换
 │   ├── node-image-actions.ts   节点图片操作
 │   └── node-rich-text-editor.ts 节点富文本编辑
