@@ -7,12 +7,110 @@ import { App, finishRenderMath, Modal, Notice, renderMath } from "obsidian";
 import {
   nodePrimaryText,
   nodeSearchText,
+  markdownToDocument,
+  normalizeDocument,
   type ArticleStyle,
   type ArticleStylePresetId,
+  type MindMapDocument,
   type MindMapNode
 } from "./model";
 import { ensureMathJax } from "./rich-text-dom";
 import { ARTICLE_STYLE_PRESETS, resolveArticleStyle } from "./article-style";
+import type { ImageHostChoice } from "./settings";
+import { xmindToDocument } from "./import-export";
+
+/**
+ * 选择一个或多个图片上传目标。
+ */
+class ImageHostPickerModal extends Modal {
+  private resolved = false;
+  private readonly selected = new Set<string>();
+
+  /**
+   * 创建图床选择弹窗。
+   *
+   * @param app Obsidian 应用实例。
+   * @param hosts 可用图床。
+   * @param initialIds 默认选中的图床 ID。
+   * @param resolveSelection 选择结果回调。
+   */
+  constructor(
+    app: App,
+    private readonly hosts: ImageHostChoice[],
+    initialIds: string[],
+    private readonly resolveSelection: (ids: string[] | null) => void
+  ) {
+    super(app);
+    initialIds.forEach((id) => this.selected.add(id));
+  }
+
+  /**
+   * 创建图床多选列表。
+   */
+  onOpen(): void {
+    this.titleEl.setText("选择上传图床");
+    this.contentEl.addClass("mms-image-host-picker");
+    this.contentEl.createEl("p", {
+      cls: "setting-item-description",
+      text: "可以选择一个或多个图床。全部上传成功后，第一项的地址会作为节点当前显示地址，其余地址会作为镜像保存。"
+    });
+    const list = this.contentEl.createDiv({ cls: "mms-image-host-picker-list" });
+    for (const host of this.hosts) {
+      const label = list.createEl("label", { cls: "mms-image-host-picker-item" });
+      const checkbox = label.createEl("input", { type: "checkbox" });
+      checkbox.checked = this.selected.has(host.id);
+      checkbox.addEventListener("change", () => {
+        if (checkbox.checked) this.selected.add(host.id);
+        else this.selected.delete(host.id);
+      });
+      label.createSpan({ text: host.name });
+    }
+    const actions = this.contentEl.createDiv({ cls: "modal-button-container" });
+    actions.createEl("button", { text: "取消", attr: { type: "button" } })
+      .addEventListener("click", () => this.close());
+    const confirm = actions.createEl("button", { text: "确定", cls: "mod-cta", attr: { type: "button" } });
+    confirm.addEventListener("click", () => {
+      if (!this.selected.size) {
+        new Notice("请至少选择一个图床");
+        return;
+      }
+      this.resolved = true;
+      this.resolveSelection(Array.from(this.selected));
+      this.close();
+    });
+  }
+
+  /**
+   * 未确认时返回取消结果。
+   */
+  onClose(): void {
+    if (!this.resolved) this.resolveSelection(null);
+  }
+}
+
+/**
+ * 打开图床选择器，并过滤已经失效的默认 ID。
+ *
+ * @param app Obsidian 应用实例。
+ * @param hosts 可用图床。
+ * @param initialIds 默认图床 ID。
+ * @returns 用户选择的图床 ID；取消时返回 null。
+ */
+export function chooseImageHosts(
+  app: App,
+  hosts: ImageHostChoice[],
+  initialIds: string[]
+): Promise<string[] | null> {
+  if (!hosts.length) {
+    new Notice("没有可用图床，请先在插件设置中配置并启用图床");
+    return Promise.resolve(null);
+  }
+  const allowed = new Set(hosts.map((host) => host.id));
+  const initial = initialIds.filter((id) => allowed.has(id));
+  return new Promise((resolve) => {
+    new ImageHostPickerModal(app, hosts, initial.length ? initial : [hosts[0]!.id], resolve).open();
+  });
+}
 
 /**
  * 提供图片缩放和滚轮预览。
@@ -286,6 +384,89 @@ export class ArticleStyleModal extends Modal {
         lineHeight: Math.max(1.2, Math.min(2.4, Number(lineHeight.value) || 1.85))
       });
       this.close();
+    });
+  }
+}
+
+/**
+ * 导入、导出或替换完整的思维导图 JSON。
+ */
+export class JsonTransferModal extends Modal {
+  /**
+   * 创建 JSON 传输弹窗。
+   *
+   * @param app Obsidian 应用实例。
+   * @param document 当前思维导图文档。
+   * @param onImport 导入完成回调。
+   * @param onExport 导出回调。
+   */
+  constructor(
+    app: App,
+    private readonly document: MindMapDocument,
+    private readonly onImport: (document: MindMapDocument) => void,
+    private readonly onExport: (json: string) => void
+  ) {
+    super(app);
+  }
+
+  /**
+   * 创建 JSON 文本区和文件导入操作。
+   */
+  onOpen(): void {
+    this.titleEl.setText("JSON 导入 / 导出");
+    const description = this.contentEl.createEl("p", {
+      text: "可以复制当前 JSON，也可以粘贴其他 MindMap Studio 文档 JSON 后导入。"
+    });
+    description.addClass("setting-item-description");
+    const textarea = this.contentEl.createEl("textarea", { cls: "mmc-json-textarea" });
+    textarea.value = JSON.stringify(this.document, null, 2);
+    const actions = this.contentEl.createDiv({ cls: "mmc-modal-actions mmc-json-actions" });
+    const copy = actions.createEl("button", { text: "复制 JSON" });
+    const importFileButton = actions.createEl("button", { text: "导入 XMind / Markdown", attr: { type: "button" } });
+    const exportButton = actions.createEl("button", { text: "导出 .json" });
+    const importButton = actions.createEl("button", { text: "导入并替换", cls: "mod-warning" });
+    copy.addEventListener("click", () => {
+      void navigator.clipboard.writeText(textarea.value);
+      new Notice("已复制 JSON");
+    });
+    importFileButton.addEventListener("click", () => {
+      const input = document.createElement("input");
+      input.type = "file";
+      input.accept = ".xmind,.md,.markdown,.json";
+      input.addEventListener("change", () => {
+        const file = input.files?.[0];
+        if (!file) return;
+        void (async () => {
+          try {
+            const extension = file.name.split(".").at(-1)?.toLowerCase();
+            const imported = extension === "xmind"
+              ? xmindToDocument(await file.arrayBuffer(), file.name.replace(/\.xmind$/i, ""))
+              : extension === "json"
+                ? normalizeDocument(JSON.parse(await file.text()) as Partial<MindMapDocument>, this.document.title)
+                : markdownToDocument(await file.text(), file.name.replace(/\.(?:md|markdown)$/i, ""));
+            this.onImport(imported);
+            new Notice(`已导入：${file.name}`);
+            this.close();
+          } catch (error) {
+            console.error("MindMap Studio file import failed", error);
+            new Notice(error instanceof Error ? error.message : "文件导入失败");
+          }
+        })();
+      }, { once: true });
+      input.click();
+    });
+    exportButton.addEventListener("click", () => this.onExport(textarea.value));
+    importButton.addEventListener("click", () => {
+      try {
+        const parsed = JSON.parse(textarea.value) as Partial<MindMapDocument>;
+        const normalized = normalizeDocument(parsed, this.document.title);
+        this.onImport(normalized);
+        new Notice("JSON 已导入");
+        this.close();
+      } catch (error) {
+        console.error("MindMap Studio JSON import failed", error);
+        new Notice("JSON 格式无效，请检查后重试");
+      }
     });
   }
 }

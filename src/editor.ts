@@ -61,14 +61,22 @@ import {
 } from "./model";
 import { buildBranchColorMap, computeLayout, documentToSvg, edgePath, edgeWidthForDepth, roundedElbowEdgePath, type LayoutResult } from "./layout";
 import { CodeEditModal, TableEditModal } from "./content-modals";
-import { TOOLBAR_ITEMS, type ImageHostChoice } from "./settings";
+import { TOOLBAR_ITEMS } from "./settings";
 import { appearanceFromThemePreset, MINDMAP_THEME_PRESETS } from "./themes";
 import { buildArticleNodeInfo, DISPLAY_MODE_ICONS, DISPLAY_MODE_LABELS, type ArticlePageNavigation, type ArticleTocEntry, type ReadingSection } from "./modes";
-import { xmindToDocument } from "./import-export";
 import { resolveArticleStyle } from "./article-style";
 import type { MindMapEditorCallbacks, MindMapEditorOptions } from "./editor-types";
 import { readRichTextEditor, renderRichTextRuns } from "./rich-text-dom";
-import { ArticleStyleModal, DocumentExportModal, FormulaEditModal, ImagePreviewModal, OutlineModal, SearchNodesModal } from "./editor-modals";
+import {
+  ArticleStyleModal,
+  chooseImageHosts,
+  DocumentExportModal,
+  FormulaEditModal,
+  ImagePreviewModal,
+  JsonTransferModal,
+  OutlineModal,
+  SearchNodesModal
+} from "./editor-modals";
 export type { MindMapEditorCallbacks, MindMapEditorOptions } from "./editor-types";
 
 /**
@@ -94,92 +102,6 @@ interface NodeEditValues {
   textAlign?: NodeTextAlign;
   width?: number;
   minHeight?: number;
-}
-
-/**
- * ImageHostPickerModal 的主要实现类。负责封装相关状态、生命周期和对外操作，避免调用方直接操作内部数据结构。
- */
-class ImageHostPickerModal extends Modal {
-  private resolved = false;
-  private readonly selected = new Set<string>();
-
-  /**
-   * 创建 ImageHostPickerModal 实例，保存依赖和初始状态；实际 DOM 构建通常在 onOpen() 或后续渲染流程中完成。
-   *
-   * @param app Obsidian 应用实例，用于访问仓库、工作区和 UI 服务。
-   * @param hosts 可供用户选择或执行上传的图床列表。
-   * @param initialIds 该参数用于 constructor 流程中的输入或控制。
-   * @param resolveSelection 该参数用于 constructor 流程中的输入或控制。
-   */
-  constructor(
-    app: App,
-    private readonly hosts: ImageHostChoice[],
-    initialIds: string[],
-    private readonly resolveSelection: (ids: string[] | null) => void
-  ) {
-    super(app);
-    initialIds.forEach((id) => this.selected.add(id));
-  }
-
-  /**
-   * 在弹窗或视图打开时创建界面、绑定事件并把当前数据填入控件。
-   */
-  onOpen(): void {
-    this.titleEl.setText("选择上传图床");
-    this.contentEl.addClass("mms-image-host-picker");
-    this.contentEl.createEl("p", {
-      cls: "setting-item-description",
-      text: "可以选择一个或多个图床。全部上传成功后，第一项的地址会作为节点当前显示地址，其余地址会作为镜像保存。"
-    });
-    const list = this.contentEl.createDiv({ cls: "mms-image-host-picker-list" });
-    for (const host of this.hosts) {
-      const label = list.createEl("label", { cls: "mms-image-host-picker-item" });
-      const checkbox = label.createEl("input", { type: "checkbox" });
-      checkbox.checked = this.selected.has(host.id);
-      checkbox.addEventListener("change", () => {
-        if (checkbox.checked) this.selected.add(host.id); else this.selected.delete(host.id);
-      });
-      label.createSpan({ text: host.name });
-    }
-    const actions = this.contentEl.createDiv({ cls: "modal-button-container" });
-    const cancel = actions.createEl("button", { text: "取消", attr: { type: "button" } });
-    cancel.addEventListener("click", () => this.close());
-    const confirm = actions.createEl("button", { text: "确定", cls: "mod-cta", attr: { type: "button" } });
-    confirm.addEventListener("click", () => {
-      if (!this.selected.size) {
-        new Notice("请至少选择一个图床");
-        return;
-      }
-      this.resolved = true;
-      this.resolveSelection(Array.from(this.selected));
-      this.close();
-    });
-  }
-
-  /**
-   * 在弹窗或视图关闭时释放临时 DOM、计时器和事件状态。
-   */
-  onClose(): void {
-    if (!this.resolved) this.resolveSelection(null);
-  }
-}
-
-/**
- * 执行“choose image hosts”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
- *
- * @param app Obsidian 应用实例，用于访问仓库、工作区和 UI 服务。
- * @param hosts 可供用户选择或执行上传的图床列表。
- * @param initialIds 该参数用于 choose image hosts 流程中的输入或控制。
- * @returns 计算、解析或序列化后的字符串结果。
- */
-function chooseImageHosts(app: App, hosts: ImageHostChoice[], initialIds: string[]): Promise<string[] | null> {
-  if (!hosts.length) {
-    new Notice("没有可用图床，请先在插件设置中配置并启用图床");
-    return Promise.resolve(null);
-  }
-  const allowed = new Set(hosts.map((host) => host.id));
-  const initial = initialIds.filter((id) => allowed.has(id));
-  return new Promise((resolve) => new ImageHostPickerModal(app, hosts, initial.length ? initial : [hosts[0]!.id], resolve).open());
 }
 
 /**
@@ -930,89 +852,6 @@ class AppearanceModal extends Modal {
       this.close();
     });
     window.setTimeout(() => save.focus(), 20);
-  }
-}
-
-/**
- * JsonTransferModal 的主要实现类。负责封装相关状态、生命周期和对外操作，避免调用方直接操作内部数据结构。
- */
-class JsonTransferModal extends Modal {
-  private readonly document: MindMapDocument;
-  private readonly onImport: (document: MindMapDocument) => void;
-  private readonly onExport: (json: string) => void;
-
-  /**
-   * 创建 JsonTransferModal 实例，保存依赖和初始状态；实际 DOM 构建通常在 onOpen() 或后续渲染流程中完成。
-   *
-   * @param app Obsidian 应用实例，用于访问仓库、工作区和 UI 服务。
-   * @param document 要处理的思维导图文档。
-   * @param onImport 该参数用于 constructor 流程中的输入或控制。
-   * @param onExport 该参数用于 constructor 流程中的输入或控制。
-   */
-  constructor(app: App, document: MindMapDocument, onImport: (document: MindMapDocument) => void, onExport: (json: string) => void) {
-    super(app);
-    this.document = document;
-    this.onImport = onImport;
-    this.onExport = onExport;
-  }
-
-  /**
-   * 在弹窗或视图打开时创建界面、绑定事件并把当前数据填入控件。
-   */
-  onOpen(): void {
-    this.titleEl.setText("JSON 导入 / 导出");
-    const description = this.contentEl.createEl("p", { text: "可以复制当前 JSON，也可以粘贴其他 MindMap Studio 文档 JSON 后导入。" });
-    description.addClass("setting-item-description");
-    const textarea = this.contentEl.createEl("textarea", { cls: "mmc-json-textarea" });
-    textarea.value = JSON.stringify(this.document, null, 2);
-    const actions = this.contentEl.createDiv({ cls: "mmc-modal-actions mmc-json-actions" });
-    const copy = actions.createEl("button", { text: "复制 JSON" });
-    const importFileButton = actions.createEl("button", { text: "导入 XMind / Markdown", attr: { type: "button" } });
-    const exportButton = actions.createEl("button", { text: "导出 .json" });
-    const importButton = actions.createEl("button", { text: "导入并替换", cls: "mod-warning" });
-    copy.addEventListener("click", () => {
-      void navigator.clipboard.writeText(textarea.value);
-      new Notice("已复制 JSON");
-    });
-    importFileButton.addEventListener("click", () => {
-      const input = document.createElement("input");
-      input.type = "file";
-      input.accept = ".xmind,.md,.markdown,.json";
-      input.addEventListener("change", () => {
-        const file = input.files?.[0];
-        if (!file) return;
-        void (async () => {
-          try {
-            const extension = file.name.split(".").at(-1)?.toLowerCase();
-            const imported = extension === "xmind"
-              ? xmindToDocument(await file.arrayBuffer(), file.name.replace(/\.xmind$/i, ""))
-              : extension === "json"
-                ? normalizeDocument(JSON.parse(await file.text()) as Partial<MindMapDocument>, this.document.title)
-                : markdownToDocument(await file.text(), file.name.replace(/\.(?:md|markdown)$/i, ""));
-            this.onImport(imported);
-            new Notice(`已导入：${file.name}`);
-            this.close();
-          } catch (error) {
-            console.error("MindMap Studio file import failed", error);
-            new Notice(error instanceof Error ? error.message : "文件导入失败");
-          }
-        })();
-      }, { once: true });
-      input.click();
-    });
-    exportButton.addEventListener("click", () => this.onExport(textarea.value));
-    importButton.addEventListener("click", () => {
-      try {
-        const parsed = JSON.parse(textarea.value) as Partial<MindMapDocument>;
-        const normalized = normalizeDocument(parsed, this.document.title);
-        this.onImport(normalized);
-        new Notice("JSON 已导入");
-        this.close();
-      } catch (error) {
-        console.error("MindMap Studio JSON import failed", error);
-        new Notice("JSON 格式无效，请检查后重试");
-      }
-    });
   }
 }
 

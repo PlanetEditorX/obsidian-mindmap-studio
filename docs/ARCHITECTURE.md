@@ -41,7 +41,7 @@ editor-types.ts  model.ts         layout.ts          modes.ts       global-searc
 - `article-style.ts`：文章样式预设和纯样式解析，不依赖编辑器 DOM。
 - `editor-types.ts`：编辑器回调与运行参数契约，隔离插件服务和 UI 实现。
 - `rich-text-dom.ts`：富文本运行段与 `contenteditable` DOM 的双向转换，以及 MathJax 渲染。
-- `editor-modals.ts`：图片预览、公式编辑、文章样式、节点搜索、Markdown 大纲和文档导出等弱状态弹窗。
+- `editor-modals.ts`：图片预览、图床选择、公式编辑、文章样式、节点搜索、JSON/文件导入、Markdown 大纲和文档导出等弹窗。
 - `content-modals.ts`：表格、代码编辑弹窗。
 - `static-render.ts`：Markdown 阅读模式中的只读 SVG 预览。
 - `styles.css`：编辑器、三种模式、弹窗、搜索、尺寸手柄和响应式样式。
