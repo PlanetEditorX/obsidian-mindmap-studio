@@ -66,7 +66,6 @@ import type { MindMapEditorCallbacks, MindMapEditorOptions } from "./editor-type
 import { readRichTextEditor, renderRichTextRuns } from "./rich-text-dom";
 import {
   ArticleStyleModal,
-  chooseImageHosts,
   DocumentExportModal,
   FormulaEditModal,
   ImagePreviewModal,
@@ -75,6 +74,7 @@ import {
   SearchNodesModal
 } from "./editor-modals";
 import { parseClipboardHtml, parseClipboardNode } from "./clipboard-import";
+import { selectNodeImage, uploadCurrentNodeImage } from "./node-image-actions";
 export type { MindMapEditorCallbacks, MindMapEditorOptions } from "./editor-types";
 
 /**
@@ -262,85 +262,6 @@ class NodeEditModal extends Modal {
       updatePreview(); remember();
     };
 
-    const chooseImage = (block: MindMapImageContentBlock, mode: "local" | "remote", refresh: () => void): void => {
-      void (async () => {
-        let hostIds: string[] = [];
-        if (mode === "remote") {
-          const chosen = await chooseImageHosts(this.app, this.callbacks.getImageHosts(), this.callbacks.getDefaultUploadHostIds());
-          if (!chosen) return;
-          hostIds = chosen;
-        }
-        const file = await new Promise<File | null>((resolve) => {
-          const input = document.createElement("input");
-          input.type = "file";
-          input.accept = "image/*";
-          input.addEventListener("change", () => resolve(input.files?.[0] ?? null), { once: true });
-          input.click();
-        });
-        if (!file) return;
-        if (mode === "local") {
-          const path = await this.callbacks.onSavePastedImage(file, file.name);
-          block.source = path;
-          block.localSource = path;
-          block.remoteSources = undefined;
-        } else {
-          const batch = await this.callbacks.onUploadImage(file, file.name, hostIds);
-          if (!batch.successes.length) {
-            const message = batch.failures.map((item) => `${item.hostName}：${item.error}`).join("；") || "未知错误";
-            throw new Error(message);
-          }
-          const uploadedAt = new Date().toISOString();
-          block.source = batch.successes[0]!.url;
-          block.localSource = undefined;
-          block.remoteSources = batch.successes.map((item) => ({ ...item, uploadedAt }));
-          if (batch.failures.length) {
-            new Notice(`部分图床上传失败：${batch.failures.map((item) => item.hostName).join("、")}`, 7000);
-          } else {
-            new Notice(`已上传到：${batch.successes.map((item) => item.hostName).join("、")}`);
-          }
-        }
-        if (!block.alt) block.alt = file.name.replace(/\.[^.]+$/, "");
-        refresh();
-        scheduleAutoSave();
-      })().catch((error) => {
-        console.error("MindMap Studio image operation failed", error);
-        new Notice(`${mode === "remote" ? "上传图床" : "保存图片"}失败：${error instanceof Error ? error.message : String(error)}`, 7000);
-      });
-    };
-
-    const uploadExistingImage = (block: MindMapImageContentBlock, refresh: () => void): void => {
-      void (async () => {
-        const chosen = await chooseImageHosts(this.app, this.callbacks.getImageHosts(), this.callbacks.getDefaultUploadHostIds());
-        if (!chosen) return;
-        const readableSource = block.localSource || block.source;
-        const image = await this.callbacks.onReadImageSource(readableSource);
-        if (!image) {
-          new Notice("当前图片不是可读取的本地文件；请使用‘上传到图床’重新选择图片");
-          return;
-        }
-        const batch = await this.callbacks.onUploadImage(image.blob, image.suggestedName, chosen);
-        if (!batch.successes.length) {
-          throw new Error(batch.failures.map((item) => `${item.hostName}：${item.error}`).join("；") || "上传失败");
-        }
-        const uploadedAt = new Date().toISOString();
-        const existing = new Map((block.remoteSources ?? []).map((item) => [item.hostId, item]));
-        batch.successes.forEach((item) => existing.set(item.hostId, { ...item, uploadedAt }));
-        block.remoteSources = Array.from(existing.values());
-        block.localSource = readableSource;
-        if (!batch.failures.length) block.source = batch.successes[0]!.url;
-        refresh();
-        scheduleAutoSave();
-        if (batch.failures.length) {
-          new Notice(`部分图床上传失败，本地图片已保留：${batch.failures.map((item) => item.hostName).join("、")}`, 7000);
-        } else {
-          new Notice(`当前图片已上传到：${batch.successes.map((item) => item.hostName).join("、")}`);
-        }
-      })().catch((error) => {
-        console.error("MindMap Studio existing image upload failed", error);
-        new Notice(`上传当前图片失败：${error instanceof Error ? error.message : String(error)}`, 7000);
-      });
-    };
-
     const renderBlocks = (): void => {
       blocksEl.empty();
       workingBlocks.forEach((block, index) => {
@@ -388,12 +309,25 @@ class NodeEditModal extends Modal {
           alt.addEventListener("input", () => { block.alt = alt.value.trim() || undefined; scheduleAutoSave(); });
           const actions = body.createDiv({ cls: "mmc-image-block-actions" });
           const local = actions.createEl("button", { text: "保存到仓库", attr: { type: "button" } });
-          local.addEventListener("click", () => chooseImage(block, "local", refresh));
+          const applyImageAction = (action: Promise<boolean>): void => {
+            void action.then((changed) => {
+              if (!changed) return;
+              refresh();
+              scheduleAutoSave();
+            });
+          };
+          local.addEventListener("click", () => {
+            applyImageAction(selectNodeImage(this.app, block, "local", this.callbacks));
+          });
           const remote = actions.createEl("button", { text: "选择文件并上传", attr: { type: "button" } });
-          remote.addEventListener("click", () => chooseImage(block, "remote", refresh));
+          remote.addEventListener("click", () => {
+            applyImageAction(selectNodeImage(this.app, block, "remote", this.callbacks));
+          });
           if (block.localSource || (block.source && !/^https?:\/\//i.test(block.source))) {
             const uploadCurrent = actions.createEl("button", { text: "上传当前图片", attr: { type: "button" } });
-            uploadCurrent.addEventListener("click", () => uploadExistingImage(block, refresh));
+            uploadCurrent.addEventListener("click", () => {
+              applyImageAction(uploadCurrentNodeImage(this.app, block, this.callbacks));
+            });
           }
           if (block.remoteSources?.length) {
             const mirrors = body.createDiv({ cls: "mms-image-mirrors" });
