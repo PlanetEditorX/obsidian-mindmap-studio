@@ -788,6 +788,7 @@ export class MindMapEditor {
   private measuredLayoutFrame: number | null = null;
   private branchClipboard: MindMapNode[] | null = null;
   private searchQuery = "";
+  private lastRichTextColor = "#ef4444";
   private currentMode: DisplayMode;
   private readOnly: boolean;
   private readonly imageLoadTimers = new Set<number>();
@@ -2424,18 +2425,50 @@ export class MindMapEditor {
     formatButton("B", `加粗（${this.options.richTextShortcuts.bold}）`, "bold");
     formatButton("I", `斜体（${this.options.richTextShortcuts.italic}）`, "italic");
     formatButton("U", `下划线（${this.options.richTextShortcuts.underline}）`, "underline");
-    const colorLabel = formatBar.createEl("label", { cls: "mmc-inline-format-color", attr: { title: "文字颜色" } });
-    colorLabel.createSpan({ text: "A" });
-    const color = colorLabel.createEl("input", { type: "color", attr: { "aria-label": "文字颜色" } });
-    color.value = "#ef4444";
-    color.addEventListener("pointerdown", (event) => {
+    const colorBtn = formatBar.createEl("button", { cls: "mmc-color-btn", attr: { type: "button", title: "文字颜色" } });
+    colorBtn.createSpan({ text: "A" });
+    colorBtn.style.textDecorationColor = this.lastRichTextColor;
+
+    const popover = formatBar.createDiv({ cls: "mms-color-popover is-hidden" });
+    const COMMON_COLORS = ["#ef4444","#f97316","#eab308","#22c55e","#06b6d4","#3b82f6","#8b5cf6","#ec4899","#6b7280","#1f2937"];
+    for (const swatch of COMMON_COLORS) {
+      const dot = popover.createEl("button", { attr: { type: "button", "data-color": swatch } });
+      dot.style.backgroundColor = swatch;
+      dot.addEventListener("click", () => {
+        this.lastRichTextColor = swatch;
+        colorBtn.style.textDecorationColor = swatch;
+        applyStyle({ color: swatch });
+        popover.addClass("is-hidden");
+        editor!.focus();
+      });
+    }
+    const customRow = popover.createDiv({ cls: "mms-color-popover-row" });
+    const lastDot = customRow.createEl("button", { cls: "mms-color-last", attr: { type: "button", title: "上次颜色" } });
+    lastDot.style.backgroundColor = this.lastRichTextColor;
+    lastDot.addEventListener("click", () => {
+      applyStyle({ color: this.lastRichTextColor });
+      popover.addClass("is-hidden");
+      editor!.focus();
+    });
+    const nativeInput = customRow.createEl("input", { attr: { type: "color", "aria-label": "自定义" } });
+    nativeInput.value = this.lastRichTextColor;
+    nativeInput.addEventListener("input", () => {
+      this.lastRichTextColor = nativeInput.value;
+      colorBtn.style.textDecorationColor = nativeInput.value;
+      lastDot.style.backgroundColor = nativeInput.value;
+      applyStyle({ color: nativeInput.value });
+      popover.addClass("is-hidden");
+      editor!.focus();
+    });
+    colorBtn.addEventListener("click", (event) => {
       event.stopPropagation();
       rememberSelection();
+      popover.toggleClass("is-hidden", !popover.hasClass("is-hidden"));
     });
-    color.addEventListener("input", () => applyStyle({ color: color.value }));
-    color.addEventListener("change", () => {
-      editor!.focus();
-      if (savedSelection) restoreSelection(savedSelection);
+    document.addEventListener("pointerdown", (closeEvent) => {
+      if (!formatBar.contains(closeEvent.target as Node) && !popover.contains(closeEvent.target as Node)) {
+        popover.addClass("is-hidden");
+      }
     });
     const updateFormatBar = (): void => {
       const selected = rememberSelection();
@@ -2474,7 +2507,7 @@ export class MindMapEditor {
         event.stopImmediatePropagation();
         lastHandledShortcut = `color:${event.timeStamp}`;
         rememberSelection();
-        color.click();
+        applyStyle({ color: this.lastRichTextColor });
         return true;
       } else if (event.key === "Escape") {
         event.preventDefault();

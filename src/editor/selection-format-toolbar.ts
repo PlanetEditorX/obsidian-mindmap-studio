@@ -1,3 +1,9 @@
+const COMMON_COLORS = [
+  "#ef4444", "#f97316", "#eab308", "#22c55e", "#06b6d4",
+  "#3b82f6", "#8b5cf6", "#ec4899", "#6b7280", "#1f2937"
+];
+let lastColor = "#ef4444";
+
 /**
  * @file selection-format-toolbar.ts
  * @description 文章、大纲和画布内联编辑可复用的文字选区悬浮格式栏。
@@ -130,12 +136,58 @@ export function attachSelectionFormatToolbar(options: SelectionFormatToolbarOpti
   button("B", `加粗（${options.shortcuts.bold}）`, "bold");
   button("I", `斜体（${options.shortcuts.italic}）`, "italic");
   button("U", `下划线（${options.shortcuts.underline}）`, "underline");
-  const colorLabel = toolbar.createEl("label", { cls: "mms-selection-format-color", attr: { title: "文字颜色" } });
-  colorLabel.createSpan({ text: "A" });
-  const color = colorLabel.createEl("input", { type: "color", attr: { "aria-label": "文字颜色" } });
-  color.value = "#ef4444";
-  color.addEventListener("pointerdown", () => { rememberSelection(); });
-  color.addEventListener("input", () => applyStyle({ color: color.value }));
+  // Color button with popover: common swatches + last color + custom picker
+  const colorBtn = toolbar.createEl("button", {
+    cls: "mms-color-btn",
+    attr: { type: "button", title: "文字颜色" }
+  });
+  colorBtn.createSpan({ text: "A" });
+  colorBtn.style.textDecorationColor = lastColor;
+
+  const popover = toolbar.createDiv({ cls: "mms-color-popover is-hidden" });
+  // Common color swatches
+  for (const swatch of COMMON_COLORS) {
+    const dot = popover.createEl("button", { attr: { type: "button", "data-color": swatch } });
+    dot.style.backgroundColor = swatch;
+    dot.addEventListener("click", () => {
+      lastColor = swatch;
+      colorBtn.style.textDecorationColor = swatch;
+      applyStyle({ color: swatch });
+      popover.addClass("is-hidden");
+    });
+  }
+  // Last color row + native picker
+  const customRow = popover.createDiv({ cls: "mms-color-popover-row" });
+  const lastDot = customRow.createEl("button", {
+    cls: "mms-color-last",
+    attr: { type: "button", title: "上次颜色" }
+  });
+  lastDot.style.backgroundColor = lastColor;
+  lastDot.addEventListener("click", () => {
+    applyStyle({ color: lastColor });
+    popover.addClass("is-hidden");
+  });
+  const nativeInput = customRow.createEl("input", {
+    attr: { type: "color", "aria-label": "自定义" }
+  });
+  nativeInput.value = lastColor;
+  nativeInput.addEventListener("input", () => {
+    lastColor = nativeInput.value;
+    colorBtn.style.textDecorationColor = nativeInput.value;
+    lastDot.style.backgroundColor = nativeInput.value;
+    applyStyle({ color: nativeInput.value });
+    popover.addClass("is-hidden");
+  });
+
+  colorBtn.addEventListener("click", () => {
+    rememberSelection();
+    popover.toggleClass("is-hidden", !popover.hasClass("is-hidden"));
+  });
+  document.addEventListener("pointerdown", (closeEvent) => {
+    if (!toolbar.contains(closeEvent.target as Node) && !popover.contains(closeEvent.target as Node)) {
+      popover.addClass("is-hidden");
+    }
+  });
 
   const update = (): void => {
     const selected = rememberSelection();
@@ -152,7 +204,7 @@ export function attachSelectionFormatToolbar(options: SelectionFormatToolbarOpti
     } else if (options.shortcutMatches(event, options.shortcuts.color)) {
       event.preventDefault();
       rememberSelection();
-      color.click();
+      applyStyle({ color: lastColor });
     }
   };
   editor.addEventListener("mouseup", update);
