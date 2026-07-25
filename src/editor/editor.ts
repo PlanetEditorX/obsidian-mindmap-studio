@@ -3277,11 +3277,8 @@ export class MindMapEditor {
     try {
       const submap = await this.callbacks.onExtractToSubmap(selected);
       this.mutate(() => {
-        const parent = findParent(this.document.root, selected.id);
-        if (parent) {
-          const idx = parent.children.findIndex((child) => child.id === selected.id);
-          if (idx >= 0) parent.children.splice(idx, 1);
-        }
+        selected.children = [];
+        selected.submap = submap;
       });
       await this.callbacks.onOpenMindMap(submap.path);
     } catch (error) {
