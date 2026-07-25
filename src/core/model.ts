@@ -1463,6 +1463,7 @@ export function markdownToDocument(markdown: string, fallbackTitle = "思维导�
   let hasLeadingContent = false;
   let skippingTableOfContents = false;
   let tableLines: string[] = [];
+  const hasMultipleH1 = (markdown.match(/^#[ 	]+\S/gm) || []).length > 1;
 
   const applyMarkdownText = (node: MindMapNode, value: string, fallback = "节点", forceBold = false): void => {
     const source = value.trim() || fallback;
@@ -1541,11 +1542,17 @@ export function markdownToDocument(markdown: string, fallbackTitle = "思维导�
         continue;
       }
       skippingTableOfContents = false;
-      if (level === 1 && !rootAssigned && !doc.root.children.length && !hasLeadingContent) {
+      if (level === 1 && !rootAssigned && !doc.root.children.length && !hasLeadingContent && !hasMultipleH1) {
         applyMarkdownText(doc.root, text);
         doc.title = doc.root.text;
         rootAssigned = true;
         stack.length = 1;
+      } else if (level === 1) {
+        const node = createMarkdownNode(text);
+        stack.length = 1;
+        doc.root.children.push(node);
+        stack.push({ level, node, kind: "heading" });
+        rootAssigned = true;
       } else {
         const node = createMarkdownNode(text);
         while (stack.length > 1 && (stack.at(-1)?.level ?? 0) >= level) stack.pop();
