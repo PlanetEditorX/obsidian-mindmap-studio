@@ -57,7 +57,7 @@ src/
 - `src/editor/editor-types.ts`：编辑器回调与运行参数契约，隔离插件服务和 UI 实现。
 - `src/editor/rich-text-dom.ts`：富文本运行段与 `contenteditable` DOM 的双向转换，以及 MathJax 渲染。
 - `src/editor/editor-modals.ts`：图片预览、图床选择、公式编辑、文章样式、节点搜索、JSON/文件导入、Markdown 大纲和文档导出等弹窗。
-- `src/editor/clipboard-import.ts`：剪贴板 JSON、Markdown、缩进文本和 HTML 列表的节点分支解析。
+- `src/editor/clipboard-import.ts`：剪贴板 JSON、Markdown、缩进文本和 HTML 列表的单节点或有序多节点分支解析。
 - `src/editor/node-image-actions.ts`：节点图片选择、本地保存、图床上传和远程镜像合并。
 - `src/editor/node-rich-text-editor.ts`：节点文字块的选区样式、颜色、格式清理和实时预览。
 - `src/editor/selection-format-toolbar.ts`：文章和大纲模式内联编辑时随文字选区显示的加粗、斜体、下划线及颜色工具栏。

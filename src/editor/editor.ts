@@ -73,7 +73,7 @@ import {
   OutlineModal,
   SearchNodesModal
 } from "./editor-modals";
-import { parseClipboardHtml, parseClipboardNode } from "./clipboard-import";
+import { parseClipboardHtml, parseClipboardNodes } from "./clipboard-import";
 import { selectNodeImage, uploadCurrentNodeImage } from "./node-image-actions";
 import { renderNodeRichTextEditor } from "./node-rich-text-editor";
 import { canMoveNodes, isRightChildZone, resolveDropPosition } from "./drag-drop";
@@ -783,7 +783,7 @@ export class MindMapEditor {
   private cleanupCallbacks: Array<() => void> = [];
   private resizeObserver: ResizeObserver | null = null;
   private measuredLayoutFrame: number | null = null;
-  private branchClipboard: MindMapNode | null = null;
+  private branchClipboard: MindMapNode[] | null = null;
   private searchQuery = "";
   private currentMode: DisplayMode;
   private readOnly: boolean;
@@ -2532,8 +2532,8 @@ export class MindMapEditor {
   private deleteSelected(): void {
     if (!this.ensureEditable()) return;
     const batch = topLevelSelectedNodeIds(this.document.root, this.selectedIds);
-    if (batch.length > 1) {
-      const fallback = findParent(this.document.root, this.selectedId)?.id ?? this.document.root.id;
+    if (this.selectedIds.size > 1 && batch.length) {
+      const fallback = findParent(this.document.root, batch[0])?.id ?? this.document.root.id;
       this.mutate(() => {
         deleteNodes(this.document.root, batch);
         this.selectedIds.clear();
@@ -2943,11 +2943,17 @@ export class MindMapEditor {
       new Notice(`已识别并插入${code.language ? ` ${code.language}` : ""}代码`);
       return;
     }
-    const branch = htmlBranch ?? parseClipboardNode(text);
-    if (branch) {
+    const sourceNodes = htmlBranch ? [htmlBranch] : parseClipboardNodes(text);
+    if (sourceNodes?.length) {
       event.preventDefault();
-      const clone = cloneNodeWithFreshIds(branch);
-      this.mutate(() => { selected.collapsed = false; selected.children.push(clone); this.selectedId = clone.id; });
+      const clones = sourceNodes.map((node) => cloneNodeWithFreshIds(node));
+      this.mutate(() => {
+        selected.collapsed = false;
+        selected.children.push(...clones);
+        this.selectedIds.clear();
+        for (const clone of clones) this.selectedIds.add(clone.id);
+        this.selectedId = clones[clones.length - 1]?.id ?? selected.id;
+      });
     }
   }
 
@@ -3166,45 +3172,59 @@ export class MindMapEditor {
   }
 
   /**
-   * 复制selected branch，并保持模型、界面和持久化状态的一致性。
+   * 将当前分支或多选集合中的顶层分支复制到系统和插件内部剪贴板。
    * @returns 操作条件是否成立或处理是否成功。
+   * @remarks 多选时必须排除已由所选祖先覆盖的后代，避免粘贴或剪切后重复分支。
    */
   private async copySelectedBranch(): Promise<boolean> {
     const selected = this.selectedNode();
     if (!selected) return false;
-    this.branchClipboard = cloneDocument({ version: 10, title: nodePlainText(selected) || "图片节点", layout: "right", theme: "auto", root: selected }).root;
-    const payload = JSON.stringify({ type: "mindmap-studio-node", version: 1, node: selected }, null, 2);
+    const selectedIds = topLevelSelectedNodeIds(this.document.root, this.selectedIds);
+    const sourceNodes = this.selectedIds.size > 1 && selectedIds.length
+      ? flattenNodes(this.document.root).filter((node) => selectedIds.includes(node.id))
+      : [selected];
+    this.branchClipboard = sourceNodes.map((node) => cloneDocument({
+      version: 10,
+      title: nodePlainText(node) || "图片节点",
+      layout: "right",
+      theme: "auto",
+      root: node
+    }).root);
+    const payload = JSON.stringify({ type: "mindmap-studio-node", version: 2, nodes: sourceNodes }, null, 2);
     try {
       await navigator.clipboard.writeText(payload);
-      new Notice("已复制节点分支");
+      new Notice(sourceNodes.length > 1 ? `已复制 ${sourceNodes.length} 个节点分支` : "已复制节点分支");
     } catch {
-      new Notice("节点分支已复制到插件内部剪贴板");
+      new Notice(sourceNodes.length > 1 ? `${sourceNodes.length} 个节点分支已复制到插件内部剪贴板` : "节点分支已复制到插件内部剪贴板");
     }
     return true;
   }
 
   /**
-   * 粘贴as child，并保持模型、界面和持久化状态的一致性。
+   * 将剪贴板中的一个或多个分支按顺序粘贴为当前节点的子节点。
+   * @remarks 所有粘贴分支都会生成新 ID，并成为新的多选集合，避免与来源节点冲突。
    */
   private async pasteAsChild(): Promise<void> {
     const selected = this.selectedNode() ?? this.document.root;
-    let sourceNode: MindMapNode | null = null;
+    let sourceNodes: MindMapNode[] | null = null;
     try {
       const text = await navigator.clipboard.readText();
-      if (text.trim()) sourceNode = parseClipboardNode(text);
+      if (text.trim()) sourceNodes = parseClipboardNodes(text);
     } catch {
       // Browser clipboard permission can be unavailable; use internal clipboard.
     }
-    sourceNode ??= this.branchClipboard;
-    if (!sourceNode) {
+    sourceNodes ??= this.branchClipboard;
+    if (!sourceNodes?.length) {
       new Notice("剪贴板中没有可粘贴的 MindMap 节点");
       return;
     }
-    const clone = cloneNodeWithFreshIds(sourceNode);
+    const clones = sourceNodes.map((node) => cloneNodeWithFreshIds(node));
     this.mutate(() => {
       selected.collapsed = false;
-      selected.children.push(clone);
-      this.selectedId = clone.id;
+      selected.children.push(...clones);
+      this.selectedIds.clear();
+      for (const clone of clones) this.selectedIds.add(clone.id);
+      this.selectedId = clones[clones.length - 1]?.id ?? selected.id;
     });
   }
 

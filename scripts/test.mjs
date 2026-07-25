@@ -21,6 +21,7 @@ const historyOutfile = join(tempDir, "history-manager.cjs");
 const dragDropOutfile = join(tempDir, "drag-drop.cjs");
 const nodeActionsOutfile = join(tempDir, "node-actions.cjs");
 const collisionOutfile = join(tempDir, "collision-layout.cjs");
+const clipboardOutfile = join(tempDir, "clipboard-import.cjs");
 const obsidianStub = join(tempDir, "obsidian-stub.mjs");
 
 try {
@@ -88,6 +89,14 @@ try {
     format: "cjs",
     logLevel: "silent"
   });
+  await build({
+    entryPoints: ["src/editor/clipboard-import.ts"],
+    outfile: clipboardOutfile,
+    bundle: true,
+    platform: "node",
+    format: "cjs",
+    logLevel: "silent"
+  });
   await writeFile(obsidianStub, `export class App {}
 export class Modal { constructor() {} }
 export class Notice {}
@@ -115,6 +124,7 @@ export const setIcon = () => {};
   const dragDrop = require(dragDropOutfile);
   const nodeActions = require(nodeActionsOutfile);
   const collisionLayout = require(collisionOutfile);
+  const clipboardImport = require(clipboardOutfile);
   const document = model.createDefaultDocument("测试脑图");
   const xmindArchive = zipSync({
     "content.json": strToU8(JSON.stringify([{ rootTopic: { title: "XMind 根", children: { attached: [{ title: "分支 A" }] } } }]))
@@ -237,6 +247,18 @@ export const setIcon = () => {};
   assert.equal(actionRoot.children[0]?.collapsed, true);
   assert.equal(nodeActions.deleteNodes(actionRoot, ["action-a"]), 1);
   assert.deepEqual(actionRoot.children.map((node) => node.id), ["action-b"]);
+
+  const pastedBranches = clipboardImport.parseClipboardNodes(JSON.stringify({
+    type: "mindmap-studio-node",
+    version: 2,
+    nodes: [
+      { id: "clipboard-a", text: "分支 A", children: [{ id: "clipboard-a1", text: "分支 A1", children: [] }] },
+      { id: "clipboard-b", text: "分支 B", children: [] }
+    ]
+  }));
+  assert.deepEqual(pastedBranches?.map((node) => node.text), ["分支 A", "分支 B"], "multi-node clipboard payloads must preserve branch order");
+  assert.equal(pastedBranches?.[0]?.children[0]?.text, "分支 A1", "multi-node clipboard payloads must retain each branch subtree");
+  assert.equal(clipboardImport.parseClipboardNode(JSON.stringify({ type: "mindmap-studio-node", version: 1, node: { text: "旧格式", children: [] } }))?.text, "旧格式", "single-node clipboard payloads must remain compatible");
 
   const collisionNodes = [
     { node: { id: "collision-root" }, parentId: null, x: 0, y: 0, width: 220, height: 120 },
@@ -651,6 +673,7 @@ export const setIcon = () => {};
   const articleRendererSource = await readFile("src/editor/article-renderer.ts", "utf8");
   const outlineRendererSource = await readFile("src/editor/outline-renderer.ts", "utf8");
   const selectionToolbarSource = await readFile("src/editor/selection-format-toolbar.ts", "utf8");
+  const clipboardImportSource = await readFile("src/editor/clipboard-import.ts", "utf8");
   assert.match(editorSource, /addEventListener\("keydown", keydown, true\)/, "editor shortcuts must run in the capture phase");
   assert.match(editorSource, /const findKey = key === "f" \|\| event\.code === "KeyF"/, "search shortcuts must support non-English keyboard layouts");
   const handleKeydownStart = editorSource.indexOf("private handleKeydown(event: KeyboardEvent): void");
@@ -839,6 +862,10 @@ export const setIcon = () => {};
   assert.match(editorSource, /dropPositionForEvent/);
   assert.match(editorSource, /moveNodeRelative/);
   assert.match(editorSource, /requestedIds[\s\S]*findAncestors[\s\S]*moveOrder/, "multi-selection drag should move top-level selected nodes as one ordered batch");
+  assert.match(editorSource, /topLevelSelectedNodeIds\(this\.document\.root, this\.selectedIds\)[\s\S]*flattenNodes\(this\.document\.root\)[\s\S]*nodes: sourceNodes/, "multi-selection copy must serialize the ordered top-level branches");
+  assert.match(editorSource, /this\.selectedIds\.size > 1 && batch\.length/, "multi-selection deletion must use the same top-level branches as copying");
+  assert.match(editorSource, /parseClipboardNodes\(text\)[\s\S]*selected\.children\.push\(\.\.\.clones\)/, "multi-selection paste must append every copied branch");
+  assert.match(clipboardImportSource, /export function parseClipboardNodes/, "clipboard imports must recognize multi-node payloads");
   assert.match(cssSource, /\.mmc-node\.is-drop-before::before/);
   assert.match(cssSource, /\.mmc-node\.is-drop-after::after/);
   assert.match(cssSource, /\.mmc-node\.is-drop-child-right/);
