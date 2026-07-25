@@ -132,12 +132,15 @@ export interface ArticlePageNavigation {
 export function buildArticleNodeInfo(root: MindMapNode, baseDepth = 0): ArticleNodeInfo[] {
   const result: ArticleNodeInfo[] = [];
   const visitChildren = (parent: MindMapNode, depth: number): void => {
+    // If any sibling is a heading, number ALL non-skipped siblings for consistency
+    const hasAnyHeading = parent.children.some((child) => isArticleHeading(child));
     let numberedIndex = 0;
     for (const child of parent.children) {
       const isHeading = isArticleHeading(child);
       const skipped = child.skipArticleNumbering === true;
-      if (isHeading && !skipped) numberedIndex += 1;
-      const label = isHeading && !skipped ? articleNumberLabel(depth, numberedIndex) : "";
+      const shouldNumber = !skipped && hasAnyHeading;
+      if (shouldNumber) numberedIndex += 1;
+      const label = shouldNumber ? articleNumberLabel(depth, numberedIndex) : "";
       const title = nodePrimaryText(child) || (isHeading ? "未命名标题" : "");
       const displayTitle = label ? `${label} ${title}` : title;
       result.push({

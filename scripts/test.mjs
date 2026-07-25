@@ -347,7 +347,7 @@ export const setIcon = () => {};
   assert.equal(byId.get("chapter-one")?.label, "第一章", "skipped siblings must not consume chapter numbers");
   assert.equal(byId.get("section-one")?.label, "第一节");
   assert.equal(byId.get("leaf-one")?.label, "", "terminal nodes are article body and must not receive another number");
-  assert.equal(byId.get("section-two")?.label, "第二节");
+  assert.equal(byId.get("section-two")?.label, "第三节", "section-leaf now consumes section number, shifting subsequent siblings");
   assert.equal(byId.get("subheading")?.label, "一、");
   assert.equal(byId.get("deep-leaf")?.label, "");
   assert.equal(byId.get("chapter-two")?.label, "第二章");
