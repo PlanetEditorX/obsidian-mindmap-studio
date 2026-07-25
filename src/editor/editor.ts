@@ -41,6 +41,7 @@ import {
   type MindMapAppearance,
   type MindMapThemePresetId,
   type MindMapDocument,
+  type MindMapDocumentView,
   type MindMapCodeBlock,
   type MindMapContentBlock,
   type MindMapImageContentBlock,
@@ -818,7 +819,17 @@ export class MindMapEditor {
     this.layout = computeLayout(this.document.root, this.document.layout, initialAppearance.fontSize ?? 14, initialAppearance.nodeVisualStyle ?? "card", initialAppearance);
     this.buildUi();
     this.render();
-    if (this.options.autoFitOnOpen) window.setTimeout(() => this.fitToView(), 50);
+    const savedZoom = this.document.view?.zoom;
+    if (savedZoom && savedZoom !== 1) {
+      window.setTimeout(() => {
+        this.zoom = savedZoom;
+        if (typeof this.document.view?.panX === "number") this.panX = this.document.view.panX;
+        if (typeof this.document.view?.panY === "number") this.panY = this.document.view.panY;
+        this.applyTransform();
+      }, 50);
+    } else if (this.options.autoFitOnOpen) {
+      window.setTimeout(() => this.fitToView(), 50);
+    }
   }
 
   /**
@@ -996,6 +1007,12 @@ export class MindMapEditor {
    * @returns 当前操作生成、查找或规范化后的结果。
    */
   getDocument(): MindMapDocument {
+    if (this.zoom !== 1 || this.panX !== 0 || this.panY !== 0) {
+      this.document.view = { ...(this.document.view ?? {}), zoom: this.zoom, panX: this.panX, panY: this.panY };
+    } else {
+      const { zoom, panX, panY, ...rest } = this.document.view ?? {};
+      this.document.view = Object.keys(rest).length ? rest as MindMapDocumentView : undefined;
+    }
     return cloneDocument(this.document);
   }
 
