@@ -341,10 +341,9 @@ export default class MindMapStudioPlugin extends Plugin {
         const nodeIds = new Set(fileResults.map((r) => r.nodeId));
         const visit = (node: MindMapNode): void => {
           if (!nodeIds.has(node.id)) return;
-          // Only replace if the node's own text contains the search term
-          // (search may match via breadcrumb, which should not trigger replace)
-          const nodeTextLower = (node.text ?? "").toLocaleLowerCase();
-          if (!nodeTextLower.includes(replaceQ.toLocaleLowerCase())) return;
+          // Attempt replacement across text, richText runs, and note.
+          // The early-exit check is omitted so regex searches and matches
+          // found via notes/richText also trigger replacement.
           const oldText = node.text;
           const newText = replaceIn(oldText);
           if (newText !== oldText) {

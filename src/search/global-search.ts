@@ -963,7 +963,6 @@ export class GlobalMindMapSearchModal extends Modal {
     }
 
     this.renderedResults = this.index.search(trimmed, this.maxResults, this.scopePaths, this.useRegex)
-      .filter((r) => r.nodeText.toLocaleLowerCase().includes(trimmed.toLocaleLowerCase()));
       this.summaryEl.setText(`找到 ${this.renderedResults.length}${this.renderedResults.length >= this.maxResults ? "+" : ""} 个结果 · 范围 ${scopedStatus.files} 个导图 / ${scopedStatus.nodes} 个节点`);
     if (!this.renderedResults.length) {
       this.resultsEl.createDiv({ cls: "mms-global-search-empty", text: status.building ? "索引仍在建立，请稍后重试。" : "没有匹配结果。" });

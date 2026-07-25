@@ -703,6 +703,39 @@ export const setIcon = () => {};
   assert.equal(globalSearch.searchEntries(searchEntries, "GLOBAL", 100, true)[0]?.nodeId, "deep-child", "regex search with /gi flag is case-insensitive");
   assert.equal(globalSearch.searchEntries(searchEntries, "[", 100, true).length, 0, "invalid regex returns empty results gracefully");
 
+  // Search results via note/tag/code should appear even when nodeText does not contain the term
+  // (regression guard for the removed .filter() in renderResults)
+  const noteMatch = globalSearch.searchEntries(searchEntries, "供应链");
+  assert.equal(noteMatch[0].nodeText.indexOf("供应链"), -1, "search matched via note, not via nodeText — the old .filter() would have incorrectly hidden this result");
+  assert.equal(noteMatch[0].nodeId, "hidden-child");
+  assert.notEqual(noteMatch[0].nodeText.toLocaleLowerCase().indexOf("供应链"), -1 ? 0 : -1, "node text may not contain the search term");
+
+  // Regex search via note field
+  const regexNote = globalSearch.searchEntries(searchEntries, "供应链.*", 100, true);
+  assert.equal(regexNote.length, 1, "regex search via note must return the node");
+  assert.equal(regexNote[0].nodeId, "hidden-child");
+
+  // Search matches via tag
+  const tagMatch = globalSearch.searchEntries(searchEntries, "美国站");
+  assert.equal(tagMatch.length, 1, "search via tag must return the node");
+  assert.equal(tagMatch[0].nodeId, "deep-child");
+
+  // Search matches via code block
+  const codeMatch = globalSearch.searchEntries(searchEntries, "globalsearch");
+  assert.equal(codeMatch.length, 1, "search via code must return the node");
+  assert.equal(codeMatch[0].nodeId, "deep-child");
+
+  // Search matches via table cell
+  const tableMatch = globalSearch.searchEntries(searchEntries, "眼镜盒");
+  assert.equal(tableMatch.length, 1, "search via table must return the node");
+  assert.equal(tableMatch[0].nodeId, "deep-child");
+
+  // Search matches via submap path
+  const submapMatch = globalSearch.searchEntries(searchEntries, "供应商");
+  assert.equal(submapMatch.length, 1, "search via submap path must return the node");
+  assert.equal(submapMatch[0].nodeId, "deep-child");
+
+
   const poetryParent = model.normalizeDocument({
     title: "古诗",
     root: {
