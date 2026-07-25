@@ -3731,3 +3731,7 @@
 .mmc-ctrl-resize.is-ctrl-held .mmc-node.is-selected > .mmc-node-resize-handle {
   display: block !important;
 }
+/* In read-only article/reading mode, hide hover-revealed node actions */.mmc-editor.is-read-only .mms-inline-node-actions {
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
