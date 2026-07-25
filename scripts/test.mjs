@@ -894,14 +894,16 @@ export const setIcon = () => {};
   assert.match(settingsSource, /通读进度条位置/);
   assert.match(settingsSource, /回到顶部按钮显示时机/);
   assert.match(settingsSource, /returnToTopVisibility/);
-  assert.match(settingsSource, /1页、2页、1%、50%/);
+  assert.match(settingsSource, /可拖动或直接输入 0–100/);
+  assert.match(settingsSource, /setLimits\(0, 100, 1\)/, "return-to-top threshold must use a 0–100 percent slider");
+  assert.match(settingsSource, /setPlaceholder\("0–100"\)/, "return-to-top threshold must allow direct percentage input");
   assert.match(settingsSource, /function normalizeReturnToTopVisibility/);
   assert.match(mainSource, /articleTocMaxDepth:[\s\S]*Math\.max\(1, Math\.min\(8/);
   assert.match(mainSource, /returnToTopVisibility: normalizeReturnToTopVisibility\(raw\.returnToTopVisibility\)/, "stored return-to-top visibility thresholds must be normalized");
   assert.match(articleRendererSource, /item\.depth <= options\.articleTocMaxDepth/, "article TOC rendering should honor the configured maximum depth");
   assert.match(articleRendererSource, /if \(firstTextBlock\?\.text\.trim\(\)\)/, "table-only article nodes must not create an empty body placeholder");
   assert.match(editorSource, /position-\$\{this\.options\.readingProgressPosition\}/);
-  assert.match(editorSource, /threshold\.endsWith\("%"\)[\s\S]*?progress \* 100 > amount[\s\S]*?scrollTop > clientHeight \* amount[\s\S]*?button\.toggleClass\("is-visible", visible\)/, "return-to-top visibility must honor a custom page or percentage threshold");
+  assert.match(editorSource, /progress \* 100 >= this\.options\.returnToTopVisibility[\s\S]*?button\.toggleClass\("is-visible", visible\)/, "return-to-top visibility must honor the configured percentage threshold");
 
   assert.match(settingsSource, /visibleModes/);
   assert.match(settingsSource, /当前全局显示模式/);

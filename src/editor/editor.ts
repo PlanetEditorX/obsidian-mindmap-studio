@@ -2846,11 +2846,7 @@ export class MindMapEditor {
     const updateVisibility = (): void => {
       const { scrollTop, clientHeight, scrollHeight } = this.articleEl;
       const progress = scrollTop / Math.max(1, scrollHeight - clientHeight);
-      const threshold = this.options.returnToTopVisibility.trim();
-      const amount = Number.parseFloat(threshold);
-      const visible = threshold.endsWith("%")
-        ? progress * 100 > amount
-        : scrollTop > clientHeight * amount;
+      const visible = progress * 100 >= this.options.returnToTopVisibility;
       button.toggleClass("is-visible", visible);
     };
     this.articleEl.addEventListener("scroll", updateVisibility);

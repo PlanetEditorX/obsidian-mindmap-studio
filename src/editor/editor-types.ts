@@ -68,7 +68,7 @@ export interface MindMapEditorOptions {
   readingSections: ReadingSection[];
   readingProgress: number;
   readingProgressPosition: "top" | "bottom" | "left" | "right";
-  returnToTopVisibility: string;
+  returnToTopVisibility: number;
   nodeEditorPosition: "center" | "right";
   richTextShortcuts: {
     bold: string;

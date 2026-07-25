@@ -5,7 +5,7 @@
  * 集中管理显示模式、节点默认样式、图床、图片容灾、搜索索引和一键恢复，并在保存后刷新打开视图。
  */
 
-import { App, Notice, PluginSettingTab, Setting } from "obsidian";
+import { App, Notice, PluginSettingTab, Setting, SliderComponent, TextComponent } from "obsidian";
 import type MindMapStudioPlugin from "./main";
 import type {
   BackgroundPattern,
@@ -170,7 +170,7 @@ export interface MindMapStudioSettings {
   readingModeInitialized: boolean;
   articleTocMaxDepth: number;
   readingProgressPosition: "top" | "bottom" | "left" | "right";
-  returnToTopVisibility: string;
+  returnToTopVisibility: number;
   nodeEditorPosition: "center" | "right";
   richTextBoldShortcut: string;
   richTextItalicShortcut: string;
@@ -236,7 +236,7 @@ export const DEFAULT_SETTINGS: MindMapStudioSettings = {
   readingModeInitialized: true,
   articleTocMaxDepth: 3,
   readingProgressPosition: "top",
-  returnToTopVisibility: "1页",
+  returnToTopVisibility: 10,
   nodeEditorPosition: "center",
   richTextBoldShortcut: "Ctrl+B",
   richTextItalicShortcut: "Ctrl+I",
@@ -249,21 +249,23 @@ export const DEFAULT_SETTINGS: MindMapStudioSettings = {
 /**
  * Normalizes the article return-to-top threshold while preserving compatibility with older fixed presets.
  */
-export function normalizeReturnToTopVisibility(value: unknown): string {
-  const legacy: Record<string, string> = {
-    "page-1": "1页",
-    "page-2": "2页",
-    "progress-1": "1%",
-    "progress-2": "2%"
+export function normalizeReturnToTopVisibility(value: unknown): number {
+  const legacy: Record<string, number> = {
+    "page-1": 10,
+    "page-2": 20,
+    "progress-1": 1,
+    "progress-2": 2
   };
-  const source = typeof value === "string" ? (legacy[value] ?? value).trim() : "";
-  const match = source.match(/^(\d+(?:\.\d+)?)\s*(页|pages?|%)?$/i);
-  if (!match) return DEFAULT_SETTINGS.returnToTopVisibility;
-  const amount = Number(match[1]);
-  if (!Number.isFinite(amount) || amount <= 0) return DEFAULT_SETTINGS.returnToTopVisibility;
-  const unit = match[2] === "%" ? "%" : "页";
-  const limited = unit === "%" ? Math.min(100, amount) : amount;
-  return `${Number(limited.toFixed(2))}${unit}`;
+  if (typeof value === "number" && Number.isFinite(value)) return Math.max(0, Math.min(100, value));
+  if (typeof value !== "string") return DEFAULT_SETTINGS.returnToTopVisibility;
+  if (legacy[value] !== undefined) return legacy[value];
+  const source = value.trim();
+  if (!source) return DEFAULT_SETTINGS.returnToTopVisibility;
+  const legacyPages = source.match(/^(\d+(?:\.\d+)?)\s*(页|pages?)$/i);
+  if (legacyPages) return Math.max(0, Math.min(100, Number(legacyPages[1]) * 10));
+  const amount = Number(source.endsWith("%") ? source.slice(0, -1) : source);
+  if (!Number.isFinite(amount)) return DEFAULT_SETTINGS.returnToTopVisibility;
+  return Math.max(0, Math.min(100, amount));
 }
 
 /**
@@ -480,16 +482,32 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
           await this.saveAndRefresh();
         }));
 
+    let returnToTopSlider: SliderComponent | null = null;
+    let returnToTopInput: TextComponent | null = null;
+    const saveReturnToTopVisibility = async (value: unknown): Promise<void> => {
+      const normalized = normalizeReturnToTopVisibility(value);
+      this.plugin.settings.returnToTopVisibility = normalized;
+      returnToTopSlider?.setValue(normalized);
+      returnToTopInput?.setValue(String(normalized));
+      await this.saveAndRefresh();
+    };
     new Setting(containerEl)
       .setName("回到顶部按钮显示时机")
-      .setDesc("文章和通读模式中，按钮默认隐藏。输入滚动页数或阅读进度百分比，例如 1页、2页、1%、50%。")
-      .addText((text) => text
-        .setPlaceholder("例如：1页 或 50%")
-        .setValue(this.plugin.settings.returnToTopVisibility)
-        .onChange(async (value) => {
-          this.plugin.settings.returnToTopVisibility = normalizeReturnToTopVisibility(value);
-          await this.saveAndRefresh();
-        }));
+      .setDesc("文章和通读模式中，按钮默认隐藏；阅读进度达到设定百分比后显示。可拖动或直接输入 0–100。")
+      .addSlider((slider) => {
+        returnToTopSlider = slider;
+        return slider
+          .setLimits(0, 100, 1)
+          .setValue(this.plugin.settings.returnToTopVisibility)
+          .onChange(saveReturnToTopVisibility);
+      })
+      .addText((text) => {
+        returnToTopInput = text;
+        return text
+          .setPlaceholder("0–100")
+          .setValue(String(this.plugin.settings.returnToTopVisibility))
+          .onChange(saveReturnToTopVisibility);
+      });
 
     containerEl.createEl("h3", { text: "工具栏内容" });
     containerEl.createEl("p", {
