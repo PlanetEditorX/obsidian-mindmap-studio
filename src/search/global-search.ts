@@ -845,6 +845,8 @@ export class GlobalMindMapSearchModal extends Modal {
   onOpen(): void {
     this.modalEl.addClass("mms-global-search-modal");
     this.titleEl.setText(this.scopeTitle);
+
+    // Search bar
     const searchRow = this.contentEl.createDiv({ cls: "mms-global-search-row" });
     const icon = searchRow.createSpan({ cls: "mms-global-search-icon" });
     setIcon(icon, "search");
@@ -858,8 +860,22 @@ export class GlobalMindMapSearchModal extends Modal {
       attr: { type: "button", title: "正则搜索" }
     });
     regexBtn.setText(".*");
-    const rebuild = searchRow.createEl("button", { cls: "mms-global-search-rebuild", attr: { type: "button", title: "重建搜索索引" } });
+
+    // Replace bar (always visible)
+    this.replaceRowEl = this.contentEl.createDiv({ cls: "mms-global-search-replace-row" });
+    const replaceAllBtn = this.replaceRowEl.createEl("button", {
+      cls: "mms-global-search-replace-all",
+      attr: { type: "button", title: "全部替换" }
+    });
+    setIcon(replaceAllBtn, "check-check");
+    this.replaceInputEl = this.replaceRowEl.createEl("input", {
+      type: "text",
+      cls: "mms-global-search-replace-input",
+      attr: { placeholder: "替换为…", autocomplete: "off" }
+    });
+    const rebuild = this.replaceRowEl.createEl("button", { cls: "mms-global-search-rebuild", attr: { type: "button", title: "重建索引" } });
     setIcon(rebuild, "refresh-cw");
+
     this.summaryEl = this.contentEl.createDiv({ cls: "mms-global-search-summary" });
     this.resultsEl = this.contentEl.createDiv({ cls: "mms-global-search-results" });
 
@@ -883,6 +899,24 @@ export class GlobalMindMapSearchModal extends Modal {
       regexBtn.toggleClass("is-active", this.useRegex);
       render();
     });
+
+    replaceAllBtn.addEventListener("click", async () => {
+      if (!this.renderedResults.length) return;
+      if (!this.onReplaceAll) { new Notice("当前模式不支持替换操作。"); return; }
+      replaceAllBtn.disabled = true;
+      replaceAllBtn.setText("替换中…");
+      try {
+        await this.onReplaceAll(this.renderedResults, this.inputEl.value, this.replaceInputEl.value.trim(), this.useRegex);
+        new Notice(`已替换全部结果，正在重建索引…`);
+        this.renderedResults = [];
+        this.summaryEl.setText("已替换所有匹配节点。请重新搜索以刷新结果。");
+        this.resultsEl.empty();
+        this.resultsEl.createDiv({ cls: "mms-global-search-empty", text: "已替换所有匹配节点，请输入新关键词搜索。" });
+      } finally {
+        replaceAllBtn.disabled = false;
+        setIcon(replaceAllBtn, "check-check");
+      }
+    });
     rebuild.addEventListener("click", async () => {
       rebuild.disabled = true;
       this.summaryEl.setText("正在重建索引…");
@@ -892,36 +926,6 @@ export class GlobalMindMapSearchModal extends Modal {
         render();
       } finally {
         rebuild.disabled = false;
-      }
-    });
-
-    // Replace section
-    this.replaceRowEl = this.contentEl.createDiv({ cls: "mms-global-search-replace-row" });
-    const replaceLabel = this.replaceRowEl.createSpan({ cls: "mms-global-search-replace-label" });
-    setIcon(replaceLabel, "search-check");
-    this.replaceInputEl = this.replaceRowEl.createEl("input", {
-      type: "text",
-      cls: "mms-global-search-replace-input",
-      attr: { placeholder: "替换为…", autocomplete: "off" }
-    });
-    const replaceAllBtn = this.replaceRowEl.createEl("button", {
-      cls: "mms-global-search-replace-all",
-      attr: { type: "button", title: "全部替换" }
-    });
-    setIcon(replaceAllBtn, "check-check");
-    replaceAllBtn.addEventListener("click", async () => {
-      if (!this.renderedResults.length) return;
-      if (!this.onReplaceAll) { new Notice("当前模式不支持替换操作。"); return; }
-      replaceAllBtn.disabled = true;
-      replaceAllBtn.setText("替换中…");
-      try {
-        await this.onReplaceAll(this.renderedResults, this.inputEl.value, this.replaceInputEl.value.trim(), this.useRegex);
-        new Notice(`已替换 ${this.renderedResults.length} 个节点，正在重建索引…`);
-        await this.onRebuild();
-        render();
-      } finally {
-        replaceAllBtn.disabled = false;
-        setIcon(replaceAllBtn, "check-check");
       }
     });
 
@@ -949,8 +953,7 @@ export class GlobalMindMapSearchModal extends Modal {
     const trimmed = query.trim();
     if (!trimmed) {
       this.renderedResults = [];
-            this.replaceRowEl.style.display = "";
-      this.summaryEl.setText(status.building && !this.scopePaths
+            this.summaryEl.setText(status.building && !this.scopePaths
         ? `正在建立索引，已收录 ${scopedStatus.files} 个导图、${scopedStatus.nodes} 个节点…`
         : `搜索范围包含 ${scopedStatus.files} 个导图、${scopedStatus.nodes} 个节点。输入关键词开始搜索。`);
       const hint = this.resultsEl.createDiv({ cls: "mms-global-search-empty" });
@@ -960,10 +963,8 @@ export class GlobalMindMapSearchModal extends Modal {
     }
 
     this.renderedResults = this.index.search(trimmed, this.maxResults, this.scopePaths, this.useRegex);
-          this.replaceRowEl.style.display = "flex";
       this.summaryEl.setText(`找到 ${this.renderedResults.length}${this.renderedResults.length >= this.maxResults ? "+" : ""} 个结果 · 范围 ${scopedStatus.files} 个导图 / ${scopedStatus.nodes} 个节点`);
     if (!this.renderedResults.length) {
-      this.replaceRowEl.style.display = "";
       this.resultsEl.createDiv({ cls: "mms-global-search-empty", text: status.building ? "索引仍在建立，请稍后重试。" : "没有匹配结果。" });
       return;
     }
@@ -990,8 +991,12 @@ export class GlobalMindMapSearchModal extends Modal {
         try {
           await this.onReplaceAll([result], this.inputEl.value, replacement, this.useRegex);
           new Notice("已替换此节点");
-          const trimmed = this.inputEl.value.trim();
-          if (trimmed) this.renderResults(trimmed);
+          const idx = this.renderedResults.indexOf(result);
+          if (idx >= 0) {
+            this.renderedResults.splice(idx, 1);
+            const trimmed = this.inputEl.value.trim();
+            if (trimmed) this.renderResults(trimmed);
+          }
         } finally {
           replaceOneBtn.disabled = false;
         }
