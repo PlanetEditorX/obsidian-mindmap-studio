@@ -1433,7 +1433,7 @@ export default class MindMapStudioPlugin extends Plugin {
    * @param value 待校验、转换或比较的输入值。
    * @returns 计算、解析或序列化后的字符串结果。
    */
-  private sanitizeFilename(value: string): string {
+  sanitizeFilename(value: string): string {
     return value.replace(/[\\/:*?"<>|#[\]]/g, "-").replace(/\s+/g, " ").trim() || "思维导图";
   }
 

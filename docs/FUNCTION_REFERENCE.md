@@ -3769,7 +3769,7 @@ private buildNewTitle(): string
 执行“sanitize filename”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
 
 ```ts
-private sanitizeFilename(value: string): string
+sanitizeFilename(value: string): string
 ```
 
 ### 方法 `MindMapStudioPlugin.getSourceTitle`
@@ -4644,7 +4644,7 @@ export interface MindMapStudioSettings
 
 ### 函数 `normalizeReturnToTopVisibility`
 
-源码：`src/settings.ts:256`
+源码：`src/settings.ts:258`
 
 Normalizes the article return-to-top threshold while preserving compatibility with older fixed presets.
 
@@ -4654,7 +4654,7 @@ export function normalizeReturnToTopVisibility(value: unknown): number
 
 ### 函数 `settingsToAppearance`
 
-源码：`src/settings.ts:281`
+源码：`src/settings.ts:283`
 
 更新并应用tings to appearance，并保持模型、界面和持久化状态的一致性。
 
@@ -4664,7 +4664,7 @@ export function settingsToAppearance(settings: MindMapStudioSettings): MindMapAp
 
 ### 函数 `applyThemePresetToSettings`
 
-源码：`src/settings.ts:319`
+源码：`src/settings.ts:321`
 
 应用theme preset to settings，并保持模型、界面和持久化状态的一致性。
 
@@ -4674,7 +4674,7 @@ export function applyThemePresetToSettings(settings: MindMapStudioSettings, pres
 
 ### 类 `MindMapStudioSettingTab`
 
-源码：`src/settings.ts:350`
+源码：`src/settings.ts:352`
 
 MindMapStudioSettingTab 的主要实现类。负责封装相关状态、生命周期和对外操作，避免调用方直接操作内部数据结构。
 
@@ -4684,7 +4684,7 @@ export class MindMapStudioSettingTab extends PluginSettingTab
 
 ### 构造函数 `MindMapStudioSettingTab.constructor`
 
-源码：`src/settings.ts:360`
+源码：`src/settings.ts:362`
 
 创建 MindMapStudioSettingTab 实例，保存依赖和初始状态；实际 DOM 构建通常在 onOpen() 或后续渲染流程中完成。
 
@@ -4694,7 +4694,7 @@ constructor(app: App, plugin: MindMapStudioPlugin)
 
 ### 方法 `MindMapStudioSettingTab.display`
 
-源码：`src/settings.ts:369`
+源码：`src/settings.ts:371`
 
 构建完整插件设置页，包括主题、显示模式、节点默认值、搜索、图片、图床容灾和恢复初始设置。所有控件写入后立即保存并刷新打开视图。
 
@@ -4704,7 +4704,7 @@ display(): void
 
 ### 方法 `MindMapStudioSettingTab.addOptionalColorSetting`
 
-源码：`src/settings.ts:1299`
+源码：`src/settings.ts:1301`
 
 添加optional color setting，并保持模型、界面和持久化状态的一致性。
 
@@ -4714,7 +4714,7 @@ private addOptionalColorSetting( container: HTMLElement, name: string, descripti
 
 ### 方法 `MindMapStudioSettingTab.saveAndRefresh`
 
-源码：`src/settings.ts:1331`
+源码：`src/settings.ts:1333`
 
 保存and refresh，并保持模型、界面和持久化状态的一致性。
 

@@ -130,6 +130,7 @@ export interface MindMapStudioSettings {
   resizeModifier: "none" | "ctrl";
   twoFingerGestureAction: "zoom" | "pan";
   showTaskProgress: boolean;
+  syncTitleToFilename?: boolean;
   autoFitOnOpen: boolean;
   historyLimit: number;
   embedMaxHeight: number;
@@ -197,6 +198,7 @@ export const DEFAULT_SETTINGS: MindMapStudioSettings = {
   resizeModifier: "none",
   twoFingerGestureAction: "zoom",
   showTaskProgress: true,
+  syncTitleToFilename: true,
   autoFitOnOpen: true,
   historyLimit: 120,
   embedMaxHeight: 520,
