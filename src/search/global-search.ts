@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file global-search.ts
  * @description 搜索领域的本地索引与导图族搜索模块。
  *
@@ -910,7 +910,7 @@ export class GlobalMindMapSearchModal extends Modal {
     });
     setIcon(replaceAllBtn, "check-check");
     replaceAllBtn.addEventListener("click", async () => {
-      if (!this.renderedResults.length || !this.replaceInputEl.value.trim()) return;
+      if (!this.renderedResults.length) return;
       if (!this.onReplaceAll) { new Notice("当前模式不支持替换操作。"); return; }
       replaceAllBtn.disabled = true;
       replaceAllBtn.setText("替换中…");
@@ -949,7 +949,7 @@ export class GlobalMindMapSearchModal extends Modal {
     const trimmed = query.trim();
     if (!trimmed) {
       this.renderedResults = [];
-            this.replaceRowEl.style.display = "flex";
+            this.replaceRowEl.style.display = "";
       this.summaryEl.setText(status.building && !this.scopePaths
         ? `正在建立索引，已收录 ${scopedStatus.files} 个导图、${scopedStatus.nodes} 个节点…`
         : `搜索范围包含 ${scopedStatus.files} 个导图、${scopedStatus.nodes} 个节点。输入关键词开始搜索。`);
@@ -963,6 +963,7 @@ export class GlobalMindMapSearchModal extends Modal {
           this.replaceRowEl.style.display = "flex";
       this.summaryEl.setText(`找到 ${this.renderedResults.length}${this.renderedResults.length >= this.maxResults ? "+" : ""} 个结果 · 范围 ${scopedStatus.files} 个导图 / ${scopedStatus.nodes} 个节点`);
     if (!this.renderedResults.length) {
+      this.replaceRowEl.style.display = "";
       this.resultsEl.createDiv({ cls: "mms-global-search-empty", text: status.building ? "索引仍在建立，请稍后重试。" : "没有匹配结果。" });
       return;
     }
@@ -983,7 +984,7 @@ export class GlobalMindMapSearchModal extends Modal {
       replaceOneBtn.addEventListener("click", async (event) => {
         event.stopPropagation();
         const replacement = this.replaceInputEl.value.trim();
-        if (!replacement) { new Notice("请先输入替换文本。"); return; }
+        
         if (!this.onReplaceAll) { new Notice("当前模式不支持替换操作。"); return; }
         replaceOneBtn.disabled = true;
         try {
