@@ -1460,22 +1460,32 @@ export function markdownToDocument(markdown: string, fallbackTitle = "思维导�
   let rootAssigned = false;
   let currentBoldTheme: MindMapNode | null = null;
   let currentBoldNode: MindMapNode | null = null;
+  let hasLeadingContent = false;
+  let skippingTableOfContents = false;
 
   for (const rawLine of markdown.split(/\r?\n/)) {
     const line = rawLine.trimEnd();
-    if (!line.trim() || line.trimStart().startsWith("---") || line.trimStart().startsWith("```") || /^\s*>/.test(line)) continue;
+    if (!line.trim() || line.trimStart().startsWith("---") || line.trimStart().startsWith("```") || /^\s*\|.*\|\s*$/.test(line)) continue;
 
     const heading = line.match(/^\s*(#{1,6})\s+(.+?)\s*$/);
     const bullet = line.match(/^(\s*)[-*+]\s+(.+?)\s*$/);
     const numbered = line.match(/^(\s*)\d+[.)]\s+(.+?)\s*$/);
     const boldOutline = line.match(/^\s*\*\*(.+?)\*\*\s*$/);
+    const quote = line.match(/^\s*>\s*(.+?)\s*$/);
 
     if (heading) {
       currentBoldTheme = null;
       currentBoldNode = null;
       const level = heading[1]?.length ?? 1;
       const text = heading[2]?.trim() ?? "节点";
-      if (level === 1 && !rootAssigned) {
+      if (!rootAssigned && !doc.root.children.length && /^目录(?:\s|$)/.test(text)) {
+        hasLeadingContent = true;
+        skippingTableOfContents = true;
+        stack.length = 1;
+        continue;
+      }
+      skippingTableOfContents = false;
+      if (level === 1 && !rootAssigned && !doc.root.children.length && !hasLeadingContent) {
         doc.root.text = text;
         doc.title = text;
         rootAssigned = true;
@@ -1487,6 +1497,15 @@ export function markdownToDocument(markdown: string, fallbackTitle = "思维导�
         parent.children.push(node);
         stack.push({ level, node, kind: "heading" });
       }
+      continue;
+    }
+
+    if (skippingTableOfContents) continue;
+
+    if (quote) {
+      const parent = stack.at(-1)?.node ?? doc.root;
+      parent.children.push(createNode(quote[1]?.trim() || "引用"));
+      hasLeadingContent ||= !rootAssigned;
       continue;
     }
 
@@ -1529,7 +1548,12 @@ export function markdownToDocument(markdown: string, fallbackTitle = "思维导�
 
     if (currentBoldNode) {
       currentBoldNode.children.push(createNode(line.trim()));
+      continue;
     }
+
+    const parent = stack.at(-1)?.node;
+    if (parent && parent !== doc.root) parent.children.push(createNode(line.trim()));
+    else hasLeadingContent = true;
   }
 
   if (!doc.root.children.length) doc.root.children.push(createNode("主题 1"));

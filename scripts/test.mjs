@@ -572,6 +572,40 @@ export const setIcon = () => {};
   assert.deepEqual(boldOutlineDocument.root.children.map((node) => node.text), ["主题一 · 写时代，不负韶华", "主题二 · 写政务，初心为民"], "bold theme markers must remain sibling branches");
   assert.deepEqual(boldOutlineDocument.root.children[0]?.children.map((node) => node.text), ["与时偕行 · 顺势而为", "好标题"], "plain text and secondary bold labels must stay under their current theme");
   assert.deepEqual(boldOutlineDocument.root.children[0]?.children[1]?.children.map((node) => node.text), ["画好时代发展的\"同心圆\"", "赓续时代薪火，书写崭新篇章"]);
+  const markdownWithTableOfContents = `## 目录
+
+| 序号 | 主题 |
+| --- | --- |
+| 01 | 主题一 |
+
+---
+
+# 主题一 · 写时代，不负韶华
+
+> 与时偕行 · 顺势而为
+
+## 好标题
+
+- 画好时代发展的"同心圆"
+
+## 好段落
+
+### 回顾百年
+
+这是一段需要保留的正文。
+
+---
+
+# 主题二 · 写政务，初心为民
+
+## 好标题
+
+- 政府有为，市场有效`;
+  const tableOfContentsDocument = model.markdownToDocument(markdownWithTableOfContents, "相丽君-红宝书");
+  assert.equal(tableOfContentsDocument.root.text, "相丽君-红宝书", "a table of contents before the first H1 must keep the filename-derived root node");
+  assert.deepEqual(tableOfContentsDocument.root.children.map((node) => node.text), ["主题一 · 写时代，不负韶华", "主题二 · 写政务，初心为民"], "top-level themes after a table of contents must remain siblings");
+  assert.deepEqual(tableOfContentsDocument.root.children[0]?.children.map((node) => node.text), ["与时偕行 · 顺势而为", "好标题", "好段落"], "quotes and headings must remain inside their current theme");
+  assert.equal(tableOfContentsDocument.root.children[0]?.children[2]?.children[0]?.children[0]?.text, "这是一段需要保留的正文。", "body paragraphs must remain below their nearest heading");
 
 
   const markdownTable = `| 名称 | 数量 | 状态 |
