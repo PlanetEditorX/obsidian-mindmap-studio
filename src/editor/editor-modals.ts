@@ -469,7 +469,7 @@ export class JsonTransferModal extends Modal {
    * 创建 JSON 文本区和文件导入操作。
    */
   onOpen(): void {
-    this.titleEl.setText("JSON 导入 / 导出");
+    this.titleEl.setText("导入 / 导出");
     const description = this.contentEl.createEl("p", {
       text: "可以复制当前 JSON，也可以导入 MindMap Studio JSON、XMind 或 Markdown 文件。"
     });
