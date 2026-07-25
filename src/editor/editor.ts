@@ -1592,6 +1592,7 @@ export class MindMapEditor {
    */
   private renderArticle(): void {
     renderArticleMode(this.articleEl, this.articleRendererOptions());
+    this.addArticleScrollToTopButton();
   }
 
   /** 构造文章渲染器所需的最小状态边界。 */
@@ -2825,6 +2826,19 @@ export class MindMapEditor {
         if (homePath) void this.callbacks.onReadingProgressChange(homePath, next);
       }, 500);
     };
+    this.addArticleScrollToTopButton();
+  }
+
+  /**
+   * Adds the shared floating control used to return article and continuous-reading views to their top.
+   */
+  private addArticleScrollToTopButton(): void {
+    const button = this.articleEl.createEl("button", {
+      cls: "mms-article-scroll-top",
+      attr: { type: "button", title: "回到顶部", "aria-label": "回到顶部" }
+    });
+    setIcon(button, "arrow-up");
+    button.addEventListener("click", () => this.articleEl.scrollTo({ top: 0, behavior: "smooth" }));
   }
 
   /**
