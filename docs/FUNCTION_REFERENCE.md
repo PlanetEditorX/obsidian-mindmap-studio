@@ -3200,7 +3200,7 @@ export function xmindToDocument(source: ArrayBuffer, fallbackTitle = "XMind 导�
 
 ### 函数 `documentToHtml`
 
-源码：`src/import/import-export.ts:97`
+源码：`src/import/import-export.ts:101`
 
 Produces a standalone article-style HTML document suitable for browsers, Word-compatible .doc files, and printing to PDF.
 
@@ -3210,7 +3210,7 @@ export function documentToHtml(document: MindMapDocument): string
 
 ### 函数 `readingSectionsToHtml`
 
-源码：`src/import/import-export.ts:108`
+源码：`src/import/import-export.ts:112`
 
 Produces one portable article from a map and all recursively collected child maps in the same order used by continuous reading mode.
 

@@ -137,7 +137,7 @@ export const setIcon = () => {};
       },
       {
         id: "sheet-child",
-        rootTopic: { title: "子导图", children: { attached: [{ title: "子主题 1", children: { attached: [{ title: "子主题 2" }] } }] } }
+        rootTopic: { id: "topic-child-root", title: "子导图", children: { attached: [{ title: "子主题 1", children: { attached: [{ title: "子主题 2" }] } }] } }
       },
       { id: "sheet-extra", rootTopic: { title: "未链接画布", children: { attached: [{ title: "独立主题" }] } } }
     ]))
@@ -148,6 +148,21 @@ export const setIcon = () => {};
   assert.equal(importedXmind.root.children[1]?.text, "子导图", "linked XMind sheets must remain nested below their source topic");
   assert.equal(importedXmind.root.children[1]?.children[0]?.children[0]?.text, "子主题 2", "linked XMind sheets must retain every nested topic");
   assert.equal(importedXmind.root.children[2]?.text, "未链接画布", "XMind sheets without a link must still be imported instead of discarded");
+  const rootTopicLinkedArchive = zipSync({
+    "content.json": strToU8(JSON.stringify([
+      {
+        id: "sheet-parent",
+        rootTopic: { title: "父导图", children: { attached: [{ title: "节点 A", href: "xmind:#topic-child-root" }] } }
+      },
+      {
+        id: "sheet-child",
+        rootTopic: { id: "topic-child-root", title: "节点 A", children: { attached: [{ title: "子导图内容" }] } }
+      }
+    ]))
+  });
+  const rootTopicLinkedDocument = importExport.xmindToDocument(rootTopicLinkedArchive.buffer, "fallback");
+  assert.deepEqual(rootTopicLinkedDocument.root.children.map((node) => node.text), ["节点 A"], "a sheet linked by its root topic ID must not be imported again as an orphan branch");
+  assert.equal(rootTopicLinkedDocument.root.children[0]?.children[0]?.text, "子导图内容", "a root-topic-ID link must merge the child map content into its source node");
   assert.match(importExport.documentToHtml(importedXmind), /<!doctype html>/);
   const mergedHtml = importExport.readingSectionsToHtml([
     { filePath: "root.mindmap", document: importedXmind, baseDepth: 0 },

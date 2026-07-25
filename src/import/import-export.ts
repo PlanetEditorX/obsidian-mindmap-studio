@@ -37,7 +37,11 @@ export function xmindToDocument(source: ArrayBuffer, fallbackTitle = "XMind 导�
   const sheets = JSON.parse(strFromU8(content)) as XMindSheet[];
   const sheet = sheets.find((item) => item.rootTopic) ?? sheets[0];
   if (!sheet?.rootTopic) throw new Error("XMind 文件中没有可导入的主题");
-  const sheetById = new Map(sheets.flatMap((item) => item.id ? [[item.id, item] as const] : []));
+  const sheetById = new Map<string, XMindSheet>();
+  for (const item of sheets) {
+    if (item.id) sheetById.set(item.id, item);
+    if (item.rootTopic?.id) sheetById.set(item.rootTopic.id, item);
+  }
   const importedSheets = new Set<XMindSheet>();
   const sheetReference = (topic: XMindTopic): string | null => {
     const match = topic.href?.match(/(?:xmind:)?#([^?#]+)/i);
