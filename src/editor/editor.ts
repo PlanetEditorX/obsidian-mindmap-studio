@@ -789,6 +789,7 @@ export class MindMapEditor {
   private branchClipboard: MindMapNode[] | null = null;
   private searchQuery = "";
   private lastRichTextColor = "#ef4444";
+  private resizeModifier: "none" | "ctrl" = "none";
   private currentMode: DisplayMode;
   private readOnly: boolean;
   private readonly imageLoadTimers = new Set<number>();
@@ -811,6 +812,7 @@ export class MindMapEditor {
     this.host = host;
     this.callbacks = callbacks;
     this.options = options;
+    this.resizeModifier = options.resizeModifier;
     this.history = new DocumentHistory(() => this.options.historyLimit);
     this.document = cloneDocument(document);
     this.currentMode = this.resolveMode(options.defaultViewMode);

@@ -127,6 +127,7 @@ export interface MindMapStudioSettings {
   autoNodeMaxWidth: number;
   redirectLegacyFiles: boolean;
   showGrid: boolean;
+  resizeModifier: "none" | "ctrl";
   twoFingerGestureAction: "zoom" | "pan";
   showTaskProgress: boolean;
   autoFitOnOpen: boolean;
@@ -193,6 +194,7 @@ export const DEFAULT_SETTINGS: MindMapStudioSettings = {
   autoNodeMaxWidth: 460,
   redirectLegacyFiles: true,
   showGrid: true,
+  resizeModifier: "none",
   twoFingerGestureAction: "zoom",
   showTaskProgress: true,
   autoFitOnOpen: true,

@@ -57,6 +57,7 @@ export interface MindMapEditorOptions {
   showTaskProgress: boolean;
   autoFitOnOpen: boolean;
   twoFingerGestureAction: "zoom" | "pan";
+  resizeModifier: "none" | "ctrl";
   historyLimit: number;
   imageFailoverEnabled: boolean;
   imageFailoverTimeoutSeconds: number;
