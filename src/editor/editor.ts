@@ -2082,6 +2082,17 @@ export class MindMapEditor {
           void this.callbacks.onOpenMindMap(node.submap.path);
         } else if (!this.readOnly) this.beginInlineEdit(node.id);
       });
+    // Quad-click (four rapid clicks) opens the full node edit modal
+    let lastDblClick = 0;
+    nodeEl.addEventListener("dblclick", (quadEvent) => {
+      const now = Date.now();
+      if (now - lastDblClick < 500 && lastDblClick > 0) {
+        lastDblClick = 0;
+        if (!this.readOnly) this.editSelected();
+      } else {
+        lastDblClick = now;
+      }
+    });
       nodeEl.addEventListener("contextmenu", (event) => {
         event.preventDefault();
         event.stopPropagation();
