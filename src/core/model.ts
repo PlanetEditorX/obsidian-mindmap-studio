@@ -1456,8 +1456,10 @@ function parseTaskText(value: string): { text: string; task?: TaskStatus } {
 export function markdownToDocument(markdown: string, fallbackTitle = "思维导图"): MindMapDocument {
   const doc = createDefaultDocument(fallbackTitle);
   doc.root.children = [];
-  const stack: Array<{ level: number; node: MindMapNode; kind: "root" | "heading" | "list" }> = [{ level: 0, node: doc.root, kind: "root" }];
+  const stack: Array<{ level: number; node: MindMapNode; kind: "root" | "heading" | "list" | "bold" }> = [{ level: 0, node: doc.root, kind: "root" }];
   let rootAssigned = false;
+  let currentBoldTheme: MindMapNode | null = null;
+  let currentBoldNode: MindMapNode | null = null;
 
   for (const rawLine of markdown.split(/\r?\n/)) {
     const line = rawLine.trimEnd();
@@ -1466,8 +1468,11 @@ export function markdownToDocument(markdown: string, fallbackTitle = "思维导�
     const heading = line.match(/^\s*(#{1,6})\s+(.+?)\s*$/);
     const bullet = line.match(/^(\s*)[-*+]\s+(.+?)\s*$/);
     const numbered = line.match(/^(\s*)\d+[.)]\s+(.+?)\s*$/);
+    const boldOutline = line.match(/^\s*\*\*(.+?)\*\*\s*$/);
 
     if (heading) {
+      currentBoldTheme = null;
+      currentBoldNode = null;
       const level = heading[1]?.length ?? 1;
       const text = heading[2]?.trim() ?? "节点";
       if (level === 1 && !rootAssigned) {
@@ -1485,11 +1490,32 @@ export function markdownToDocument(markdown: string, fallbackTitle = "思维导�
       continue;
     }
 
+    if (boldOutline) {
+      const text = boldOutline[1]?.trim() || "节点";
+      if (!rootAssigned && !doc.root.children.length && stack.length === 1) {
+        doc.root.text = text;
+        doc.title = text;
+        rootAssigned = true;
+        currentBoldNode = doc.root;
+        continue;
+      }
+      const isTheme = /^主题\s*[一二三四五六七八九十百千万零〇○0-9]+/.test(text);
+      const parent = isTheme ? doc.root : currentBoldTheme ?? doc.root;
+      const node = createNode(text);
+      parent.children.push(node);
+      currentBoldNode = node;
+      if (isTheme) currentBoldTheme = node;
+      stack.length = 1;
+      if (currentBoldTheme && node !== currentBoldTheme) stack.push({ level: 2, node: currentBoldTheme, kind: "bold" });
+      stack.push({ level: isTheme ? 2 : 3, node, kind: "bold" });
+      continue;
+    }
+
     const listMatch = bullet ?? numbered;
     if (listMatch) {
       const spaces = (listMatch[1] ?? "").replaceAll("\t", "  ").length;
-      const headingLevel = [...stack].reverse().find((entry) => entry.kind === "heading")?.level ?? 1;
-      const level = headingLevel + Math.floor(spaces / 2) + 1;
+      const parentLevel = [...stack].reverse().find((entry) => entry.kind === "heading" || entry.kind === "bold")?.level ?? 1;
+      const level = parentLevel + Math.floor(spaces / 2) + 1;
       const parsed = parseTaskText((listMatch[2] ?? "节点").trim());
       const node = createNode(parsed.text);
       node.task = parsed.task;
@@ -1497,6 +1523,12 @@ export function markdownToDocument(markdown: string, fallbackTitle = "思维导�
       const parent = stack.at(-1)?.node ?? doc.root;
       parent.children.push(node);
       stack.push({ level, node, kind: "list" });
+      currentBoldNode = node;
+      continue;
+    }
+
+    if (currentBoldNode) {
+      currentBoldNode.children.push(createNode(line.trim()));
     }
   }
 

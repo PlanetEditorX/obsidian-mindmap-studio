@@ -553,6 +553,25 @@ export const setIcon = () => {};
   const mixedMarkdownDocument = model.markdownToDocument(mixedMarkdown, "fallback");
   assert.deepEqual(mixedMarkdownDocument.root.children.map((node) => node.text), ["研发", "运营"], "Markdown headings must remain top-level branches");
   assert.equal(mixedMarkdownDocument.root.children[0]?.children[0]?.children[0]?.text, "子任务 A1", "lists below a Markdown heading must remain nested below that heading");
+  const boldOutlineMarkdown = `**相丽君—红宝书**
+
+**主题一 · 写时代，不负韶华**
+与时偕行 · 顺势而为
+
+**好标题**
+画好时代发展的"同心圆"
+赓续时代薪火，书写崭新篇章
+
+**主题二 · 写政务，初心为民**
+政润民心 · 行践初心
+
+**好标题**
+政府有为，市场有效`;
+  const boldOutlineDocument = model.markdownToDocument(boldOutlineMarkdown, "fallback");
+  assert.equal(boldOutlineDocument.root.text, "相丽君—红宝书", "the first standalone bold line must become the imported root node");
+  assert.deepEqual(boldOutlineDocument.root.children.map((node) => node.text), ["主题一 · 写时代，不负韶华", "主题二 · 写政务，初心为民"], "bold theme markers must remain sibling branches");
+  assert.deepEqual(boldOutlineDocument.root.children[0]?.children.map((node) => node.text), ["与时偕行 · 顺势而为", "好标题"], "plain text and secondary bold labels must stay under their current theme");
+  assert.deepEqual(boldOutlineDocument.root.children[0]?.children[1]?.children.map((node) => node.text), ["画好时代发展的\"同心圆\"", "赓续时代薪火，书写崭新篇章"]);
 
 
   const markdownTable = `| 名称 | 数量 | 状态 |
