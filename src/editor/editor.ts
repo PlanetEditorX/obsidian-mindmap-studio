@@ -2110,9 +2110,22 @@ export class MindMapEditor {
   }
 
   /**
-   * 执行“select node”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+   * Selects every non-root node so bulk operations never affect the protected main node.
+   */
+  private selectAllNodesExceptRoot(): void {
+    const ids = flattenNodes(this.document.root)
+      .filter((node) => node.id !== this.document.root.id)
+      .map((node) => node.id);
+    this.selectedIds.clear();
+    for (const id of ids) this.selectedIds.add(id);
+    this.selectedId = ids.at(-1) ?? "";
+    this.applySelectionClasses();
+  }
+
+  /**
+   * Selects one node and clears any prior multi-selection.
    *
-   * @param id 目标对象或节点的稳定标识。
+   * @param id Stable identifier of the node to select, or null to clear the selection.
    */
   private selectNode(id: string | null): void {
     this.selectedIds.clear();
@@ -3502,6 +3515,13 @@ export class MindMapEditor {
     }
 
     if (target.matches("input, textarea, select, [contenteditable='true']")) return;
+
+    if (mod && key === "a") {
+      event.preventDefault();
+      event.stopPropagation();
+      this.selectAllNodesExceptRoot();
+      return;
+    }
 
     if (mod && key === "s") {
       event.preventDefault();

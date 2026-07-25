@@ -770,6 +770,8 @@ export const setIcon = () => {};
   assert.ok(searchShortcutIndex >= 0 && searchShortcutIndex < editableTargetGuardIndex, "search shortcuts must work while an editable element has focus");
   assert.match(handleKeydownSource, /if \(mod && event\.shiftKey && findKey && !event\.altKey\) \{[\s\S]*?event\.preventDefault\(\);[\s\S]*?event\.stopPropagation\(\);[\s\S]*?this\.openSearch\(\)/);
   assert.doesNotMatch(handleKeydownSource, /if \(mod && findKey && !event\.altKey\)/, "Ctrl/Cmd+F must remain available to Obsidian");
+  assert.match(handleKeydownSource, /if \(mod && key === "a"\) \{[\s\S]*?event\.preventDefault\(\);[\s\S]*?event\.stopPropagation\(\);[\s\S]*?this\.selectAllNodesExceptRoot\(\)/, "Ctrl/Cmd+A must select mind-map nodes instead of page text");
+  assert.match(editorSource, /private selectAllNodesExceptRoot\(\): void \{[\s\S]*?flattenNodes\(this\.document\.root\)[\s\S]*?node\.id !== this\.document\.root\.id[\s\S]*?this\.selectedIds\.add\(id\)/, "select all must include all descendants while excluding the root node");
   assert.match(editorSource, /搜索当前导图及全部子导图（Ctrl\/Cmd\+Shift\+F）/);
   assert.match(editorSource, /"全局搜索所有导图"/);
   assert.doesNotMatch(editorSource, /markWrappedArticleParagraph/);
