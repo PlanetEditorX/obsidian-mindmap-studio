@@ -813,6 +813,7 @@ export class MindMapEditor {
     this.callbacks = callbacks;
     this.options = options;
     this.resizeModifier = options.resizeModifier;
+    if (this.resizeModifier === "ctrl") this.rootEl.addClass("mmc-ctrl-resize");
     this.history = new DocumentHistory(() => this.options.historyLimit);
     this.document = cloneDocument(document);
     this.currentMode = this.resolveMode(options.defaultViewMode);
@@ -1156,7 +1157,23 @@ export class MindMapEditor {
 
     const keydown = (event: KeyboardEvent): void => this.handleKeydown(event);
     this.rootEl.addEventListener("keydown", keydown, true);
-    this.cleanupCallbacks.push(() => this.rootEl.removeEventListener("keydown", keydown, true));
+    // Ctrl-hold tracking for resize modifier
+    const ctrlTracker = (trackEvent: KeyboardEvent): void => {
+      if (this.resizeModifier !== "ctrl") return;
+      if (trackEvent.type === "keydown" && (trackEvent.key === "Control" || trackEvent.key === "Meta")) {
+        this.rootEl.addClass("is-ctrl-held");
+      } else if (trackEvent.type === "keyup" && (trackEvent.key === "Control" || trackEvent.key === "Meta")) {
+        this.rootEl.removeClass("is-ctrl-held");
+      }
+    };
+    document.addEventListener("keydown", ctrlTracker);
+    document.addEventListener("keyup", ctrlTracker);
+    this.cleanupCallbacks.push(() => {
+      document.removeEventListener("keydown", ctrlTracker);
+      document.removeEventListener("keyup", ctrlTracker);
+    });
+
+        this.cleanupCallbacks.push(() => this.rootEl.removeEventListener("keydown", keydown, true));
 
     const paste = (event: ClipboardEvent): void => { void this.handlePaste(event); };
     this.rootEl.addEventListener("paste", paste);
@@ -2002,6 +2019,7 @@ export class MindMapEditor {
         });
         resizeHandle.addEventListener("pointerdown", (event) => {
           if (event.button !== 0) return;
+          if (this.resizeModifier === "ctrl" && !event.ctrlKey && !event.metaKey) return;
           event.preventDefault();
           event.stopPropagation();
           const startX = event.clientX;
