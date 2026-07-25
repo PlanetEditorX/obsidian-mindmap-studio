@@ -51,10 +51,16 @@ export function deleteNodes(root: MindMapNode, ids: Iterable<string>): number {
   return removed;
 }
 
-/** 展开或折叠全部分支，并始终保持根节点展开。 */
-export function setAllBranchesCollapsed(root: MindMapNode, collapsed: boolean): void {
+/**
+ * 展开或折叠节点分支，并可选地将传入节点本身也设为折叠状态。
+ *
+ * @param root 要处理的根节点。
+ * @param collapsed 是否折叠包含子节点的分支。
+ * @param includeRoot 是否将 root 也作为可折叠分支处理；导入文档时保持 false，粘贴分支时使用 true。
+ */
+export function setAllBranchesCollapsed(root: MindMapNode, collapsed: boolean, includeRoot = false): void {
   for (const node of flattenNodes(root)) {
-    node.collapsed = node === root ? false : collapsed && node.children.length > 0;
+    node.collapsed = (includeRoot || node !== root) && collapsed && node.children.length > 0;
   }
 }
 

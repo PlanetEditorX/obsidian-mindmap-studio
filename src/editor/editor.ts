@@ -2947,6 +2947,7 @@ export class MindMapEditor {
     if (sourceNodes?.length) {
       event.preventDefault();
       const clones = sourceNodes.map((node) => cloneNodeWithFreshIds(node));
+      clones.forEach((clone) => setAllBranchesCollapsed(clone, true, true));
       this.mutate(() => {
         selected.collapsed = false;
         selected.children.push(...clones);
@@ -3219,6 +3220,7 @@ export class MindMapEditor {
       return;
     }
     const clones = sourceNodes.map((node) => cloneNodeWithFreshIds(node));
+    clones.forEach((clone) => setAllBranchesCollapsed(clone, true, true));
     this.mutate(() => {
       selected.collapsed = false;
       selected.children.push(...clones);

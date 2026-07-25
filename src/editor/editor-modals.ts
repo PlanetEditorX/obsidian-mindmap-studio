@@ -19,6 +19,7 @@ import { ensureMathJax } from "./rich-text-dom";
 import { ARTICLE_STYLE_PRESETS, resolveArticleStyle } from "../article/article-style";
 import type { ImageHostChoice } from "../settings";
 import { xmindToDocument } from "../import/import-export";
+import { setAllBranchesCollapsed } from "./node-actions";
 
 /**
  * 选择一个或多个图片上传目标。
@@ -511,6 +512,7 @@ export class JsonTransferModal extends Modal {
                 ? normalizeDocument(JSON.parse(source as string) as Partial<MindMapDocument>, this.document.title)
                 : markdownToDocument(source as string, file.name.replace(/\.(?:md|markdown)$/i, ""));
             await updateImportProgress(85, "正在生成思维导图");
+            setAllBranchesCollapsed(imported.root, true);
             this.onImport(imported);
             await updateImportProgress(100, "导入完成");
             new Notice(`已导入：${file.name}`);
@@ -530,6 +532,7 @@ export class JsonTransferModal extends Modal {
       try {
         const parsed = JSON.parse(textarea.value) as Partial<MindMapDocument>;
         const normalized = normalizeDocument(parsed, this.document.title);
+        setAllBranchesCollapsed(normalized.root, true);
         this.onImport(normalized);
         new Notice("JSON 已导入");
         this.close();
