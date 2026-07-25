@@ -698,6 +698,10 @@ export const setIcon = () => {};
   assert.equal(globalSearch.searchEntries(searchEntries, "供应链风险")[0]?.nodeId, "hidden-child");
   assert.equal(globalSearch.searchEntries(searchEntries, "眼镜盒 待处理")[0]?.nodeId, "deep-child");
   assert.equal(globalSearch.searchEntries(searchEntries, "globalsearch")[0]?.nodeId, "deep-child");
+  assert.equal(globalSearch.searchEntries(searchEntries, "供应链风险", 100, false)[0]?.nodeId, "hidden-child", "plain search still works with useRegex=false");
+  assert.equal(globalSearch.searchEntries(searchEntries, "待处.*", 100, true)[0]?.nodeId, "deep-child", "regex search matches with .* pattern");
+  assert.equal(globalSearch.searchEntries(searchEntries, "GLOBAL", 100, true)[0]?.nodeId, "deep-child", "regex search with /gi flag is case-insensitive");
+  assert.equal(globalSearch.searchEntries(searchEntries, "[", 100, true).length, 0, "invalid regex returns empty results gracefully");
 
   const poetryParent = model.normalizeDocument({
     title: "古诗",
@@ -765,6 +769,10 @@ export const setIcon = () => {};
   assert.match(mainSource, /plugins\/mindmap-canvas\/data\.json/, "renamed plugin should migrate old settings");
   const globalSearchSource = await readFile("src/search/global-search.ts", "utf8");
   assert.match(globalSearchSource, /resolveHierarchicalEntries/);
+  assert.match(globalSearchSource, /useRegex/, "search functions should support regex mode");
+  assert.match(mainSource, /replaceAllInSearchResults/, "main module should support search-and-replace");
+  assert.match(globalSearchSource, /mms-global-search-regex/, "search modal should include a regex toggle button");
+  assert.match(globalSearchSource, /mms-global-search-replace-row/, "search modal should include a replace row");
   assert.match(globalSearchSource, /古诗 › 唐诗/);
   assert.match(globalSearchSource, /first climb to the top parent/);
   assert.match(globalSearchSource, /version: 2/);
@@ -1038,6 +1046,8 @@ export const setIcon = () => {};
   assert.equal(versions[currentVersion], manifest.minAppVersion, "versions.json must contain the current version and minAppVersion");
   assert.match(cssSource, /\.mms-global-search-modal/);
   assert.match(cssSource, /\.mms-global-search-result/);
+  assert.match(cssSource, /mms-global-search-regex/, "CSS should style the regex toggle button");
+  assert.match(cssSource, /mms-global-search-replace-row/, "CSS should style the replace section");
 
   console.log("All MindMap Studio tests passed.");
 } finally {

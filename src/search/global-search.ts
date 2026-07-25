@@ -275,8 +275,8 @@ export function resolveHierarchicalEntries(files: Record<string, IndexedMindMapF
  * @param query 用户输入的搜索关键词。
  * @returns 计算、解析或序列化后的字符串结果。
  */
-function resultSnippet(entry: MindMapSearchEntry, query: string): { kind: string; snippet: string } {
-  const queryNormalized = normalized(query);
+function resultSnippet(entry: MindMapSearchEntry, query: string, useRegex = false): { kind: string; snippet: string } {
+  const queryNormalized = useRegex ? query : normalized(query);
   const candidates: Array<{ kind: string; value?: string }> = [
     { kind: "节点文字", value: entry.nodeText },
     { kind: "备注", value: entry.note },
@@ -285,7 +285,15 @@ function resultSnippet(entry: MindMapSearchEntry, query: string): { kind: string
     { kind: "文件", value: `${entry.fileTitle} ${entry.filePath}` },
     { kind: "内容", value: entry.searchableText }
   ];
-  const matched = candidates.find((candidate) => candidate.value && normalized(candidate.value).includes(queryNormalized));
+  let matched;
+  if (useRegex) {
+    try {
+      const regex = new RegExp(query, "gi");
+      matched = candidates.find((candidate) => candidate.value && regex.test(candidate.value));
+    } catch { /* invalid regex */ }
+  } else {
+    matched = candidates.find((candidate) => candidate.value && normalized(candidate.value).includes(queryNormalized));
+  }
   return {
     kind: matched?.kind ?? "内容",
     snippet: compact(matched?.value ?? entry.nodeText, 220) ?? entry.nodeText
@@ -300,7 +308,25 @@ function resultSnippet(entry: MindMapSearchEntry, query: string): { kind: string
  * @param limit 允许返回或保留的最大条目数。
  * @returns 按当前规则构建的集合结果。
  */
-export function searchEntries(entries: MindMapSearchEntry[], query: string, limit = 100): MindMapSearchResult[] {
+export function searchEntries(entries: MindMapSearchEntry[], query: string, limit = 100, useRegex = false): MindMapSearchResult[] {
+  if (useRegex) {
+    let regex: RegExp;
+    try { regex = new RegExp(query, "gi"); } catch { return []; }
+    const results: MindMapSearchResult[] = [];
+    for (const entry of entries) {
+      if (!regex.test(entry.searchableText)) continue;
+      regex.lastIndex = 0;
+      const nodeText = entry.nodeText;
+      const fileTitle = entry.fileTitle;
+      let score = 0;
+      if (nodeText && regex.test(nodeText)) { score += 500; regex.lastIndex = 0; }
+      if (fileTitle && regex.test(fileTitle)) { score += 180; regex.lastIndex = 0; }
+      score += Math.max(0, 25 - entry.depth * 2);
+      const { kind, snippet } = resultSnippet(entry, query, true);
+      results.push({ ...entry, score, matchedKind: kind, snippet });
+    }
+    return results.sort((left, right) => right.score - left.score || left.filePath.localeCompare(right.filePath) || left.depth - right.depth).slice(0, limit);
+  }
   const phrase = normalized(query);
   if (!phrase) return [];
   const terms = phrase.split(/\s+/).filter(Boolean);
@@ -451,8 +477,8 @@ export class MindMapSearchIndex {
    * @param filePaths 该参数用于 search 流程中的输入或控制。
    * @returns 按当前规则构建的集合结果。
    */
-  search(query: string, limit = 100, filePaths?: ReadonlySet<string>): MindMapSearchResult[] {
-    return searchEntries(this.allEntries(filePaths), query, limit);
+  search(query: string, limit = 100, filePaths?: ReadonlySet<string>, useRegex = false): MindMapSearchResult[] {
+    return searchEntries(this.allEntries(filePaths), query, limit, useRegex);
   }
 
   /**
@@ -740,9 +766,25 @@ export class MindMapSearchIndex {
  * @param text 要显示、搜索、解析或写入的文本。
  * @param query 用户输入的搜索关键词。
  */
-function appendHighlightedText(container: HTMLElement, text: string, query: string): void {
+function appendHighlightedText(container: HTMLElement, text: string, query: string, useRegex = false): void {
   const phrase = query.trim();
   if (!phrase) {
+    container.setText(text);
+    return;
+  }
+  if (useRegex) {
+    let regex: RegExp;
+    try { regex = new RegExp(phrase, "gi"); } catch { container.setText(text); return; }
+    let lastIndex = 0;
+    let match: RegExpExecArray | null;
+    let hasMatch = false;
+    while ((match = regex.exec(text)) !== null) {
+      hasMatch = true;
+      if (match.index > lastIndex) container.appendText(text.slice(lastIndex, match.index));
+      container.createEl("mark", { text: match[0] });
+      lastIndex = regex.lastIndex;
+    }
+    if (hasMatch) { if (lastIndex < text.length) container.appendText(text.slice(lastIndex)); return; }
     container.setText(text);
     return;
   }
@@ -765,8 +807,11 @@ export class GlobalMindMapSearchModal extends Modal {
   private inputEl!: HTMLInputElement;
   private resultsEl!: HTMLDivElement;
   private summaryEl!: HTMLDivElement;
+  private replaceRowEl!: HTMLDivElement;
+  private replaceInputEl!: HTMLInputElement;
   private activeIndex = -1;
   private renderedResults: MindMapSearchResult[] = [];
+  private useRegex = false;
 
   /**
    * 创建 GlobalMindMapSearchModal 实例，保存依赖和初始状态；实际 DOM 构建通常在 onOpen() 或后续渲染流程中完成。
@@ -786,6 +831,7 @@ export class GlobalMindMapSearchModal extends Modal {
     private readonly maxResults: number,
     private readonly onOpenResult: (result: MindMapSearchResult) => void | Promise<void>,
     private readonly onRebuild: () => Promise<void>,
+    private readonly onReplaceAll?: (results: MindMapSearchResult[], query: string, replacement: string, useRegex: boolean) => Promise<void>,
     private readonly scopePaths?: ReadonlySet<string>,
     private readonly scopeTitle = "全局搜索思维导图",
     private readonly scopeDescription = "所有导图、子节点和子导图"
@@ -807,6 +853,11 @@ export class GlobalMindMapSearchModal extends Modal {
       cls: "mms-global-search-input",
       attr: { placeholder: `搜索${this.scopeDescription}…`, autocomplete: "off", spellcheck: "false" }
     });
+    const regexBtn = searchRow.createEl("button", {
+      cls: "mms-global-search-regex",
+      attr: { type: "button", title: "正则搜索" }
+    });
+    regexBtn.setText(".*");
     const rebuild = searchRow.createEl("button", { cls: "mms-global-search-rebuild", attr: { type: "button", title: "重建搜索索引" } });
     setIcon(rebuild, "refresh-cw");
     this.summaryEl = this.contentEl.createDiv({ cls: "mms-global-search-summary" });
@@ -827,6 +878,11 @@ export class GlobalMindMapSearchModal extends Modal {
         if (result) void this.openResult(result);
       }
     });
+    regexBtn.addEventListener("click", () => {
+      this.useRegex = !this.useRegex;
+      regexBtn.toggleClass("is-active", this.useRegex);
+      render();
+    });
     rebuild.addEventListener("click", async () => {
       rebuild.disabled = true;
       this.summaryEl.setText("正在重建索引…");
@@ -838,6 +894,37 @@ export class GlobalMindMapSearchModal extends Modal {
         rebuild.disabled = false;
       }
     });
+
+    // Replace section
+    this.replaceRowEl = this.contentEl.createDiv({ cls: "mms-global-search-replace-row" });
+    const replaceLabel = this.replaceRowEl.createSpan({ cls: "mms-global-search-replace-label" });
+    setIcon(replaceLabel, "search-check");
+    this.replaceInputEl = this.replaceRowEl.createEl("input", {
+      type: "text",
+      cls: "mms-global-search-replace-input",
+      attr: { placeholder: "替换为…", autocomplete: "off" }
+    });
+    const replaceAllBtn = this.replaceRowEl.createEl("button", {
+      cls: "mms-global-search-replace-all",
+      attr: { type: "button", title: "全部替换" }
+    });
+    setIcon(replaceAllBtn, "check-check");
+    replaceAllBtn.addEventListener("click", async () => {
+      if (!this.renderedResults.length || !this.replaceInputEl.value.trim()) return;
+      if (!this.onReplaceAll) { new Notice("当前模式不支持替换操作。"); return; }
+      replaceAllBtn.disabled = true;
+      replaceAllBtn.setText("替换中…");
+      try {
+        await this.onReplaceAll(this.renderedResults, this.inputEl.value, this.replaceInputEl.value.trim(), this.useRegex);
+        new Notice(`已替换 ${this.renderedResults.length} 个节点，正在重建索引…`);
+        await this.onRebuild();
+        render();
+      } finally {
+        replaceAllBtn.disabled = false;
+        setIcon(replaceAllBtn, "check-check");
+      }
+    });
+
     this.renderResults("");
     window.setTimeout(() => this.inputEl.focus(), 20);
   }
@@ -862,6 +949,7 @@ export class GlobalMindMapSearchModal extends Modal {
     const trimmed = query.trim();
     if (!trimmed) {
       this.renderedResults = [];
+            this.replaceRowEl.style.display = "none";
       this.summaryEl.setText(status.building && !this.scopePaths
         ? `正在建立索引，已收录 ${scopedStatus.files} 个导图、${scopedStatus.nodes} 个节点…`
         : `搜索范围包含 ${scopedStatus.files} 个导图、${scopedStatus.nodes} 个节点。输入关键词开始搜索。`);
@@ -871,8 +959,9 @@ export class GlobalMindMapSearchModal extends Modal {
       return;
     }
 
-    this.renderedResults = this.index.search(trimmed, this.maxResults, this.scopePaths);
-    this.summaryEl.setText(`找到 ${this.renderedResults.length}${this.renderedResults.length >= this.maxResults ? "+" : ""} 个结果 · 范围 ${scopedStatus.files} 个导图 / ${scopedStatus.nodes} 个节点`);
+    this.renderedResults = this.index.search(trimmed, this.maxResults, this.scopePaths, this.useRegex);
+          this.replaceRowEl.style.display = "";
+      this.summaryEl.setText(`找到 ${this.renderedResults.length}${this.renderedResults.length >= this.maxResults ? "+" : ""} 个结果 · 范围 ${scopedStatus.files} 个导图 / ${scopedStatus.nodes} 个节点`);
     if (!this.renderedResults.length) {
       this.resultsEl.createDiv({ cls: "mms-global-search-empty", text: status.building ? "索引仍在建立，请稍后重试。" : "没有匹配结果。" });
       return;
@@ -882,7 +971,7 @@ export class GlobalMindMapSearchModal extends Modal {
       const button = this.resultsEl.createEl("button", { cls: "mms-global-search-result", attr: { type: "button" } });
       const header = button.createDiv({ cls: "mms-global-search-result-header" });
       const title = header.createDiv({ cls: "mms-global-search-result-title" });
-      appendHighlightedText(title, result.nodeText, trimmed);
+      appendHighlightedText(title, result.nodeText, trimmed, this.useRegex);
       const badges = header.createDiv({ cls: "mms-global-search-result-badges" });
       badges.createSpan({ cls: "mms-global-search-badge", text: result.matchedKind });
       if (result.isSubmapDocument) badges.createSpan({ cls: "mms-global-search-badge is-submap", text: "子导图" });
@@ -892,7 +981,7 @@ export class GlobalMindMapSearchModal extends Modal {
       button.createDiv({ cls: "mms-global-search-result-breadcrumb", text: (result.hierarchyBreadcrumb ?? result.breadcrumb).join(" › ") });
       if (result.snippet && result.snippet !== result.nodeText) {
         const snippet = button.createDiv({ cls: "mms-global-search-result-snippet" });
-        appendHighlightedText(snippet, result.snippet, trimmed);
+        appendHighlightedText(snippet, result.snippet, trimmed, this.useRegex);
       }
       button.addEventListener("mouseenter", () => this.setActive(index));
       button.addEventListener("click", () => void this.openResult(result));

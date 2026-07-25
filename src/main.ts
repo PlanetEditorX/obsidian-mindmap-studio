@@ -245,7 +245,8 @@ export default class MindMapStudioPlugin extends Plugin {
       this.searchIndex,
       this.settings.globalSearchMaxResults,
       (result) => this.openGlobalSearchResult(result),
-      () => this.searchIndex.rebuildAll()
+      () => this.searchIndex.rebuildAll(),
+      (results, query, replacement, useRegex) => this.replaceAllInSearchResults(results, query, replacement, useRegex)
     ).open();
   }
 
@@ -268,6 +269,7 @@ export default class MindMapStudioPlugin extends Plugin {
         familyPaths.clear();
         for (const path of refreshed) familyPaths.add(path);
       },
+      (results, query, replacement, useRegex) => this.replaceAllInSearchResults(results, query, replacement, useRegex),
       familyPaths,
       "搜索当前导图及子导图",
       `“${file.basename}”及递归关联的全部子导图`
@@ -304,6 +306,58 @@ export default class MindMapStudioPlugin extends Plugin {
       return;
     }
     await this.openAsMindMap(file, undefined, result.nodeId);
+  }
+
+  /**
+   * 批量替换搜索结果中的节点文字。
+   */
+  private async replaceAllInSearchResults(results: MindMapSearchResult[], query: string, replacement: string, useRegex: boolean): Promise<void> {
+    const byFile = new Map<string, MindMapSearchResult[]>();
+    for (const result of results) {
+      const list = byFile.get(result.filePath);
+      if (list) list.push(result); else byFile.set(result.filePath, [result]);
+    }
+    const replaceIn = (text: string): string => {
+      if (useRegex) {
+        try { return text.replace(new RegExp(query, "g"), replacement); }
+        catch { return text; }
+      }
+      return text.replaceAll(query, replacement);
+    };
+    // We need the original query from the modal; store it temporarily
+    for (const [filePath, fileResults] of byFile) {
+      const file = this.app.vault.getAbstractFileByPath(filePath);
+      if (!(file instanceof TFile)) continue;
+      try {
+        const content = await this.app.vault.read(file);
+        const doc = parseDocument(content, file.basename);
+        const nodeIds = new Set(fileResults.map((r) => r.nodeId));
+        const visit = (node: MindMapNode): void => {
+          if (!nodeIds.has(node.id)) return;
+          const oldText = node.text;
+          const newText = replaceIn(oldText);
+          if (newText !== oldText) {
+            node.text = newText;
+            if (node.richText) {
+              for (const run of node.richText) {
+                const oldRun = run.text;
+                const newRun = replaceIn(oldRun);
+                if (newRun !== oldRun) run.text = newRun;
+              }
+            }
+          }
+          if (node.note) {
+            const newNote = replaceIn(node.note);
+            if (newNote !== node.note) node.note = newNote;
+          }
+          for (const child of node.children) visit(child);
+        };
+        visit(doc.root);
+        await this.app.vault.modify(file, serializeDocument(doc));
+      } catch (err) {
+        console.warn(`MindMap Studio could not replace in ${filePath}:`, err);
+      }
+    }
   }
 
   /**
