@@ -36,6 +36,7 @@ import {
   MindMapStudioSettingTab,
   TOOLBAR_ITEMS,
   createImageHostConfig,
+  normalizeReturnToTopVisibility,
   settingsToAppearance,
   type ImageHostChoice,
   type ImageHostConfig,
@@ -413,6 +414,7 @@ export default class MindMapStudioPlugin extends Plugin {
       readingProgressPosition: raw.readingProgressPosition === "bottom" || raw.readingProgressPosition === "left" || raw.readingProgressPosition === "right"
         ? raw.readingProgressPosition
         : "top",
+      returnToTopVisibility: normalizeReturnToTopVisibility(raw.returnToTopVisibility),
       defaultNodeTextAlign: raw.defaultNodeTextAlign === "left" || raw.defaultNodeTextAlign === "right" || raw.defaultNodeTextAlign === "center"
         ? raw.defaultNodeTextAlign
         : DEFAULT_SETTINGS.defaultNodeTextAlign,

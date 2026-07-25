@@ -170,6 +170,7 @@ export interface MindMapStudioSettings {
   readingModeInitialized: boolean;
   articleTocMaxDepth: number;
   readingProgressPosition: "top" | "bottom" | "left" | "right";
+  returnToTopVisibility: string;
   nodeEditorPosition: "center" | "right";
   richTextBoldShortcut: string;
   richTextItalicShortcut: string;
@@ -235,6 +236,7 @@ export const DEFAULT_SETTINGS: MindMapStudioSettings = {
   readingModeInitialized: true,
   articleTocMaxDepth: 3,
   readingProgressPosition: "top",
+  returnToTopVisibility: "1页",
   nodeEditorPosition: "center",
   richTextBoldShortcut: "Ctrl+B",
   richTextItalicShortcut: "Ctrl+I",
@@ -243,6 +245,26 @@ export const DEFAULT_SETTINGS: MindMapStudioSettings = {
   visibleToolbarItems: TOOLBAR_ITEMS.map(([id]) => id),
   toolbarItemOrder: TOOLBAR_ITEMS.map(([id]) => id)
 };
+
+/**
+ * Normalizes the article return-to-top threshold while preserving compatibility with older fixed presets.
+ */
+export function normalizeReturnToTopVisibility(value: unknown): string {
+  const legacy: Record<string, string> = {
+    "page-1": "1页",
+    "page-2": "2页",
+    "progress-1": "1%",
+    "progress-2": "2%"
+  };
+  const source = typeof value === "string" ? (legacy[value] ?? value).trim() : "";
+  const match = source.match(/^(\d+(?:\.\d+)?)\s*(页|pages?|%)?$/i);
+  if (!match) return DEFAULT_SETTINGS.returnToTopVisibility;
+  const amount = Number(match[1]);
+  if (!Number.isFinite(amount) || amount <= 0) return DEFAULT_SETTINGS.returnToTopVisibility;
+  const unit = match[2] === "%" ? "%" : "页";
+  const limited = unit === "%" ? Math.min(100, amount) : amount;
+  return `${Number(limited.toFixed(2))}${unit}`;
+}
 
 /**
  * 更新并应用tings to appearance，并保持模型、界面和持久化状态的一致性。
@@ -455,6 +477,17 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
         .setValue(this.plugin.settings.readingProgressPosition)
         .onChange(async (value) => {
           this.plugin.settings.readingProgressPosition = value === "bottom" || value === "left" || value === "right" ? value : "top";
+          await this.saveAndRefresh();
+        }));
+
+    new Setting(containerEl)
+      .setName("回到顶部按钮显示时机")
+      .setDesc("文章和通读模式中，按钮默认隐藏。输入滚动页数或阅读进度百分比，例如 1页、2页、1%、50%。")
+      .addText((text) => text
+        .setPlaceholder("例如：1页 或 50%")
+        .setValue(this.plugin.settings.returnToTopVisibility)
+        .onChange(async (value) => {
+          this.plugin.settings.returnToTopVisibility = normalizeReturnToTopVisibility(value);
           await this.saveAndRefresh();
         }));
 

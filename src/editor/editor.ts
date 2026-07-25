@@ -791,6 +791,7 @@ export class MindMapEditor {
   private inlineEditingId: string | null = null;
   private articleNavigationIndex: number | null = null;
   private readingProgressTimer: number | null = null;
+  private articleScrollButtonCleanup: (() => void) | null = null;
 
   /**
    * 创建 MindMapEditor 实例，保存依赖和初始状态；实际 DOM 构建通常在 onOpen() 或后续渲染流程中完成。
@@ -824,6 +825,7 @@ export class MindMapEditor {
   destroy(): void {
     this.clearImageLoadTimers();
     if (this.readingProgressTimer !== null) window.clearTimeout(this.readingProgressTimer);
+    this.articleScrollButtonCleanup?.();
     this.cleanupCallbacks.forEach((callback) => callback());
     this.cleanupCallbacks = [];
     this.resizeObserver?.disconnect();
@@ -1591,6 +1593,7 @@ export class MindMapEditor {
    * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
    */
   private renderArticle(): void {
+    this.articleEl.onscroll = null;
     renderArticleMode(this.articleEl, this.articleRendererOptions());
     this.addArticleScrollToTopButton();
   }
@@ -2833,12 +2836,29 @@ export class MindMapEditor {
    * Adds the shared floating control used to return article and continuous-reading views to their top.
    */
   private addArticleScrollToTopButton(): void {
+    this.articleScrollButtonCleanup?.();
     const button = this.articleEl.createEl("button", {
       cls: "mms-article-scroll-top",
       attr: { type: "button", title: "回到顶部", "aria-label": "回到顶部" }
     });
     setIcon(button, "arrow-up");
     button.addEventListener("click", () => this.articleEl.scrollTo({ top: 0, behavior: "smooth" }));
+    const updateVisibility = (): void => {
+      const { scrollTop, clientHeight, scrollHeight } = this.articleEl;
+      const progress = scrollTop / Math.max(1, scrollHeight - clientHeight);
+      const threshold = this.options.returnToTopVisibility.trim();
+      const amount = Number.parseFloat(threshold);
+      const visible = threshold.endsWith("%")
+        ? progress * 100 > amount
+        : scrollTop > clientHeight * amount;
+      button.toggleClass("is-visible", visible);
+    };
+    this.articleEl.addEventListener("scroll", updateVisibility);
+    this.articleScrollButtonCleanup = () => {
+      this.articleEl.removeEventListener("scroll", updateVisibility);
+      this.articleScrollButtonCleanup = null;
+    };
+    updateVisibility();
   }
 
   /**
