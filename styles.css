@@ -103,6 +103,22 @@
   text-align: right;
 }
 
+.mmc-zoom-input {
+  width: 52px;
+  min-height: 26px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+
+.mmc-zoom-input:focus {
+  background: var(--background-primary);
+  box-shadow: 0 0 0 1px var(--interactive-accent);
+}
+
 .mmc-editor.is-dirty .mmc-save-status {
   color: var(--text-accent);
 }
@@ -112,6 +128,7 @@
   flex: 1 1 auto;
   min-height: 0;
   overflow: hidden;
+  touch-action: none;
   cursor: grab;
   background-color: var(--mmc-canvas);
   touch-action: none;
@@ -1432,8 +1449,7 @@
   .mmc-toolbar-separator {
     display: none;
   }
-  .mmc-save-status,
-  .mmc-zoom-status {
+  .mmc-save-status {
     display: none;
   }
   .mmc-node {

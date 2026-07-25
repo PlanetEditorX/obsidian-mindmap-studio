@@ -761,7 +761,7 @@ export class MindMapEditor {
   private nodesLayerEl!: HTMLDivElement;
   private edgesSvg!: SVGSVGElement;
   private statusEl!: HTMLSpanElement;
-  private zoomStatusEl!: HTMLSpanElement;
+  private zoomStatusEl!: HTMLInputElement;
   private lockButton!: HTMLButtonElement;
   private articleLandingButton!: HTMLButtonElement;
   private articleStyleButton!: HTMLButtonElement;
@@ -780,6 +780,8 @@ export class MindMapEditor {
   private dropPreviewEl: HTMLElement | null = null;
   private panning = false;
   private panStart = { x: 0, y: 0, panX: 0, panY: 0 };
+  private readonly touchPointers = new Map<number, { x: number; y: number }>();
+  private touchGesture: { centerX: number; centerY: number; distance: number; zoom: number; panX: number; panY: number } | null = null;
   private cleanupCallbacks: Array<() => void> = [];
   private resizeObserver: ResizeObserver | null = null;
   private measuredLayoutFrame: number | null = null;
@@ -1112,7 +1114,21 @@ export class MindMapEditor {
     const zoomOut = zoomControl.createEl("button", { cls: "clickable-icon mmc-zoom-step", attr: { type: "button", title: "缩小", "aria-label": "缩小" } });
     setIcon(zoomOut, "minus");
     zoomOut.addEventListener("click", () => { this.setZoom(this.zoom / 1.15); this.focus(); });
-    this.zoomStatusEl = zoomControl.createSpan({ cls: "mmc-zoom-status", text: "100%" });
+    this.zoomStatusEl = zoomControl.createEl("input", {
+      cls: "mmc-zoom-status mmc-zoom-input",
+      attr: { type: "text", inputmode: "decimal", title: "输入缩放百分比", "aria-label": "输入缩放百分比" }
+    });
+    this.zoomStatusEl.value = "100%";
+    this.zoomStatusEl.addEventListener("change", () => this.applyZoomInput());
+    this.zoomStatusEl.addEventListener("focus", () => this.zoomStatusEl.select());
+    this.zoomStatusEl.addEventListener("keydown", (event) => {
+      event.stopPropagation();
+      if (event.key === "Enter") this.zoomStatusEl.blur();
+      if (event.key === "Escape") {
+        this.applyTransform();
+        this.zoomStatusEl.blur();
+      }
+    });
     const zoomIn = zoomControl.createEl("button", { cls: "clickable-icon mmc-zoom-step", attr: { type: "button", title: "放大", "aria-label": "放大" } });
     setIcon(zoomIn, "plus");
     zoomIn.addEventListener("click", () => { this.setZoom(this.zoom * 1.15); this.focus(); });
@@ -1130,6 +1146,12 @@ export class MindMapEditor {
       const wheelTarget = event.target as HTMLElement;
       if (wheelTarget.closest(".mmc-node-table-wrap, .mmc-code-block")) return;
       event.preventDefault();
+      if (this.options.twoFingerGestureAction === "pan") {
+        this.panX -= event.deltaX;
+        this.panY -= event.deltaY;
+        this.applyTransform();
+        return;
+      }
       const rect = this.viewportEl.getBoundingClientRect();
       const pointerX = event.clientX - rect.left - rect.width / 2;
       const pointerY = event.clientY - rect.top - rect.height / 2;
@@ -1149,6 +1171,22 @@ export class MindMapEditor {
       const target = event.target as HTMLElement;
       if (target.closest(".mmc-node, .mmc-canvas-breadcrumb")) return;
       if (event.button !== 0 && event.button !== 1) return;
+      if (event.pointerType === "touch") {
+        event.preventDefault();
+        this.touchPointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+        this.viewportEl.setPointerCapture(event.pointerId);
+        if (this.touchPointers.size >= 2) {
+          this.panning = false;
+          this.viewportEl.removeClass("is-panning");
+          this.beginTwoFingerGesture();
+        } else {
+          this.panning = true;
+          this.panStart = { x: event.clientX, y: event.clientY, panX: this.panX, panY: this.panY };
+          this.viewportEl.addClass("is-panning");
+          this.selectNode(null);
+        }
+        return;
+      }
       if (event.button === 0 && event.shiftKey) {
         const viewportRect = this.viewportEl.getBoundingClientRect();
         const startX = event.clientX - viewportRect.left;
@@ -1202,12 +1240,33 @@ export class MindMapEditor {
       this.selectNode(null);
     };
     const pointerMove = (event: PointerEvent): void => {
+      if (event.pointerType === "touch" && this.touchPointers.has(event.pointerId)) {
+        this.touchPointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+        if (this.touchPointers.size >= 2) {
+          this.updateTwoFingerGesture();
+          return;
+        }
+      }
       if (!this.panning) return;
       this.panX = this.panStart.panX + event.clientX - this.panStart.x;
       this.panY = this.panStart.panY + event.clientY - this.panStart.y;
       this.applyTransform();
     };
     const pointerUp = (event: PointerEvent): void => {
+      if (event.pointerType === "touch" && this.touchPointers.delete(event.pointerId)) {
+        if (this.viewportEl.hasPointerCapture(event.pointerId)) this.viewportEl.releasePointerCapture(event.pointerId);
+        this.touchGesture = null;
+        const remainingPointer = this.touchPointers.values().next().value as { x: number; y: number } | undefined;
+        if (remainingPointer) {
+          this.panning = true;
+          this.panStart = { x: remainingPointer.x, y: remainingPointer.y, panX: this.panX, panY: this.panY };
+          this.viewportEl.addClass("is-panning");
+        } else {
+          this.panning = false;
+          this.viewportEl.removeClass("is-panning");
+        }
+        return;
+      }
       if (!this.panning) return;
       this.panning = false;
       if (this.viewportEl.hasPointerCapture(event.pointerId)) this.viewportEl.releasePointerCapture(event.pointerId);
@@ -2110,7 +2169,7 @@ export class MindMapEditor {
     const rect = this.viewportEl.getBoundingClientRect();
     this.sceneEl.style.transform = `translate(${rect.width / 2 + this.panX}px, ${rect.height / 2 + this.panY}px) scale(${this.zoom})`;
     this.rootEl.style.setProperty("--mmc-zoom", String(this.zoom));
-    this.zoomStatusEl?.setText(`${Math.round(this.zoom * 100)}%`);
+    if (this.zoomStatusEl) this.zoomStatusEl.value = `${Math.round(this.zoom * 100)}%`;
   }
 
   /**
@@ -3486,6 +3545,66 @@ export class MindMapEditor {
    */
   private setZoom(value: number): void {
     this.zoom = this.clampZoom(value);
+    this.applyTransform();
+  }
+
+  /**
+   * 解析工具栏中的缩放百分比输入，并将有效值应用到画布。
+   */
+  private applyZoomInput(): void {
+    const percent = Number(this.zoomStatusEl.value.trim().replace(/%$/, ""));
+    if (!Number.isFinite(percent) || percent <= 0) {
+      this.applyTransform();
+      return;
+    }
+    this.setZoom(percent / 100);
+  }
+
+  /**
+   * 记录当前双指手势的初始中心点、间距和画布位置。
+   */
+  private beginTwoFingerGesture(): void {
+    const [first, second] = Array.from(this.touchPointers.values());
+    if (!first || !second) return;
+    this.touchGesture = {
+      centerX: (first.x + second.x) / 2,
+      centerY: (first.y + second.y) / 2,
+      distance: Math.max(1, Math.hypot(second.x - first.x, second.y - first.y)),
+      zoom: this.zoom,
+      panX: this.panX,
+      panY: this.panY
+    };
+  }
+
+  /**
+   * 按设置将双指手势解释为缩放或画布平移。
+   */
+  private updateTwoFingerGesture(): void {
+    if (!this.touchGesture) this.beginTwoFingerGesture();
+    const gesture = this.touchGesture;
+    const [first, second] = Array.from(this.touchPointers.values());
+    if (!gesture || !first || !second) return;
+    const centerX = (first.x + second.x) / 2;
+    const centerY = (first.y + second.y) / 2;
+    if (this.options.twoFingerGestureAction === "pan") {
+      this.panX = gesture.panX + centerX - gesture.centerX;
+      this.panY = gesture.panY + centerY - gesture.centerY;
+      this.applyTransform();
+      return;
+    }
+
+    const distance = Math.max(1, Math.hypot(second.x - first.x, second.y - first.y));
+    const nextZoom = this.clampZoom(gesture.zoom * distance / gesture.distance);
+    const rect = this.viewportEl.getBoundingClientRect();
+    const initialX = gesture.centerX - rect.left - rect.width / 2;
+    const initialY = gesture.centerY - rect.top - rect.height / 2;
+    const worldX = (initialX - gesture.panX) / gesture.zoom;
+    const worldY = (initialY - gesture.panY) / gesture.zoom;
+    const currentX = centerX - rect.left - rect.width / 2;
+    const currentY = centerY - rect.top - rect.height / 2;
+    this.zoom = nextZoom;
+    this.panX = currentX - worldX * nextZoom;
+    this.panY = currentY - worldY * nextZoom;
     this.applyTransform();
   }
 

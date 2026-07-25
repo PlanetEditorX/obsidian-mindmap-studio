@@ -127,6 +127,7 @@ export interface MindMapStudioSettings {
   autoNodeMaxWidth: number;
   redirectLegacyFiles: boolean;
   showGrid: boolean;
+  twoFingerGestureAction: "zoom" | "pan";
   showTaskProgress: boolean;
   autoFitOnOpen: boolean;
   historyLimit: number;
@@ -192,6 +193,7 @@ export const DEFAULT_SETTINGS: MindMapStudioSettings = {
   autoNodeMaxWidth: 460,
   redirectLegacyFiles: true,
   showGrid: true,
+  twoFingerGestureAction: "zoom",
   showTaskProgress: true,
   autoFitOnOpen: true,
   historyLimit: 120,
@@ -454,6 +456,18 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
           await this.plugin.setGlobalDisplayMode(value as DisplayMode);
         });
       });
+
+    new Setting(containerEl)
+      .setName("双指手势")
+      .setDesc("在导图画布上使用两根手指时，可选择以指间距离缩放，或以双指中心点移动画布。")
+      .addDropdown((dropdown) => dropdown
+        .addOption("zoom", "放大缩小")
+        .addOption("pan", "移动画布")
+        .setValue(this.plugin.settings.twoFingerGestureAction)
+        .onChange(async (value) => {
+          this.plugin.settings.twoFingerGestureAction = value === "pan" ? "pan" : "zoom";
+          await this.saveAndRefresh();
+        }));
 
     new Setting(containerEl)
       .setName("文章目录最大层级")
