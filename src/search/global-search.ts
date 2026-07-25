@@ -962,7 +962,8 @@ export class GlobalMindMapSearchModal extends Modal {
       return;
     }
 
-    this.renderedResults = this.index.search(trimmed, this.maxResults, this.scopePaths, this.useRegex);
+    this.renderedResults = this.index.search(trimmed, this.maxResults, this.scopePaths, this.useRegex)
+      .filter((r) => r.nodeText.toLocaleLowerCase().includes(trimmed.toLocaleLowerCase()));
       this.summaryEl.setText(`找到 ${this.renderedResults.length}${this.renderedResults.length >= this.maxResults ? "+" : ""} 个结果 · 范围 ${scopedStatus.files} 个导图 / ${scopedStatus.nodes} 个节点`);
     if (!this.renderedResults.length) {
       this.resultsEl.createDiv({ cls: "mms-global-search-empty", text: status.building ? "索引仍在建立，请稍后重试。" : "没有匹配结果。" });
@@ -1029,11 +1030,8 @@ export class GlobalMindMapSearchModal extends Modal {
       const file = button.createDiv({ cls: "mms-global-search-result-file" });
       file.createSpan({ text: result.mapHierarchy?.join(" › ") || result.fileTitle });
       file.createSpan({ cls: "mms-global-search-result-path", text: result.filePath });
-      button.createDiv({ cls: "mms-global-search-result-breadcrumb", text: (result.hierarchyBreadcrumb ?? result.breadcrumb).join(" › ") });
-      if (result.snippet && result.snippet !== result.nodeText) {
-        const snippet = button.createDiv({ cls: "mms-global-search-result-snippet" });
-        appendHighlightedText(snippet, result.snippet, query, this.useRegex);
-      }
+
+
       button.addEventListener("mouseenter", () => this.setActive(index));
       button.addEventListener("click", () => void this.openResult(result));
     });
