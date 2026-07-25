@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file modes.ts
  * @description 文章领域与显示模式共享的编号工具。
  *
