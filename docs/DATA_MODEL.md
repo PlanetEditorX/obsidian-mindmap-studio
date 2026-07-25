@@ -47,6 +47,9 @@ interface MindMapNode {
   table?: MindMapTable;
   code?: MindMapCodeBlock;
   submap?: MindMapSubmap;
+  articleNumberingMode?: "none" | "manual";
+  articleNumberingLevel?: number;
+  /** @deprecated 兼容旧文件；等价于 articleNumberingMode: "none"。 */
   skipArticleNumbering?: boolean;
   style?: MindMapNodeStyle;
 }
@@ -60,7 +63,12 @@ interface MindMapNode {
 - `text`、`richText`、`image` 是兼容字段，由 `syncNodeLegacyFields()` 与内容块同步。
 - `collapsed` 只影响导图可见布局，不删除后代。
 - `submap` 表示该节点关联独立子导图文件。
-- `skipArticleNumbering` 仅影响文章模式编号，不改变树层级。
+- `articleNumberingMode` 缺失时表示自动；`none` 表示关闭编号；`manual` 表示使用手动文章层级。
+- `articleNumberingLevel` 仅在手动模式下生效，规范化时限制为 `1–8`。
+- 手动模式会把末端节点提升为文章标题，并让后代从该层级继续递增；它不改变导图中的真实 `children` 结构。
+- 根节点的手动层级作为整张导图的编号基准，根标题本身仍不添加编号。
+- `skipArticleNumbering` 是兼容旧文件的弃用字段；读取时迁移为 `articleNumberingMode: "none"`，保存时继续写入兼容别名。
+- 不同文章层级使用独立的同级计数器，混用“一、”和“1.”时不会互相占用序号。
 
 ## 4. 有序内容块
 

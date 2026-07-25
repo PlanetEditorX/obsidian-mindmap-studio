@@ -5,7 +5,7 @@
 
 import { strFromU8, unzipSync } from "fflate";
 import { createDefaultDocument, createNode, nodePlainText, type MindMapDocument, type MindMapNode } from "../core/model";
-import type { ReadingSection } from "../article/modes";
+import { buildArticleNodeInfo, type ReadingSection } from "../article/modes";
 
 /** 新版 XMind 导入时需要保留的主题字段与画布链接。 */
 type XMindTopic = {
@@ -110,23 +110,22 @@ export function documentToHtml(document: MindMapDocument): string {
  * @returns Complete standalone HTML source.
  */
 export function readingSectionsToHtml(sections: ReadingSection[]): string {
-  const renderNode = (node: MindMapNode, depth: number): string => {
-    const level = Math.min(6, Math.max(2, depth + 1));
-    const title = escapeHtml(nodePlainText(node) || "未命名");
-    const note = node.note ? `<p class="note">${escapeHtml(node.note)}</p>` : "";
-    if (!node.children.length && !node.submap) {
-      return `<p class="body-paragraph">${title}</p>${note}`;
-    }
-    const children = node.children.map((child) => renderNode(child, depth + 1)).join("");
-    return `<section><h${level}>${title}</h${level}>${note}${children}</section>`;
-  };
+  const renderArticleNode = (document: MindMapDocument, baseDepth: number): string => buildArticleNodeInfo(document.root, baseDepth)
+    .map((info) => {
+      const title = escapeHtml(info.displayTitle || info.title || "未命名");
+      const note = info.node.note ? `<p class="note">${escapeHtml(info.node.note)}</p>` : "";
+      if (!info.isHeading) return `<p class="body-paragraph">${title}</p>${note}`;
+      const level = Math.min(6, Math.max(2, info.depth + 1));
+      return `<section><h${level}>${title}</h${level}>${note}</section>`;
+    })
+    .join("");
   const first = sections[0]?.document;
   const title = escapeHtml(first ? (nodePlainText(first.root) || first.title) : "导出文档");
   const body = sections.map(({ document, baseDepth }, index) => {
     const sectionTitle = escapeHtml(nodePlainText(document.root) || document.title);
     const headingLevel = Math.min(6, Math.max(1, baseDepth + 1));
     const heading = index === 0 ? "" : `<h${headingLevel}>${sectionTitle}</h${headingLevel}>`;
-    return `<section class="map-section">${heading}${document.root.children.map((child) => renderNode(child, baseDepth + 1)).join("")}</section>`;
+    return `<section class="map-section">${heading}${renderArticleNode(document, baseDepth)}</section>`;
   }).join("");
   return `<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width">

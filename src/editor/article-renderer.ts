@@ -62,7 +62,9 @@ export function renderArticleMode(container: HTMLElement, options: ArticleRender
     section.addEventListener("click", () => options.selectNode(info.node.id));
     if (info.isHeading) {
       const level = Math.min(6, info.depth + 1);
-      const heading = section.createEl(`h${level}` as keyof HTMLElementTagNameMap, { cls: "mms-article-heading" });
+      const heading = section.createEl(`h${level}` as keyof HTMLElementTagNameMap, {
+        cls: `mms-article-heading${/[、.）]$/.test(info.label) ? " is-compact-number" : ""}`
+      });
       if (info.label) heading.createSpan({ cls: "mms-article-number", text: info.label });
       renderHeading(heading, info.node, info.title, options);
       if (info.skipped) heading.createSpan({ cls: "mms-article-skip-badge", text: "不编号" });

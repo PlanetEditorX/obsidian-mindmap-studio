@@ -1,4 +1,4 @@
-﻿import assert from "node:assert/strict";
+import assert from "node:assert/strict";
 import { readFile, writeFile, rm, mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -367,6 +367,104 @@ export const setIcon = () => {};
     ]
   }, 1);
   assert.equal(childMapInfo[0]?.label, "第一节", "a child map must continue numbering from its parent article depth");
+
+  const normalizedManualNumbering = model.normalizeDocument({
+    title: "手动文章层级兼容",
+    root: {
+      id: "manual-normalize-root",
+      text: "根",
+      articleNumberingMode: "manual",
+      articleNumberingLevel: 99,
+      children: [{ id: "legacy-skip", text: "旧版不编号", skipArticleNumbering: true, children: [] }]
+    }
+  }, "fallback");
+  assert.equal(normalizedManualNumbering.root.articleNumberingMode, "manual");
+  assert.equal(normalizedManualNumbering.root.articleNumberingLevel, 8, "manual article levels must be clamped to the supported range");
+  assert.equal(normalizedManualNumbering.root.children[0]?.articleNumberingMode, "none", "legacy skipArticleNumbering must migrate to the new none mode");
+  assert.equal(normalizedManualNumbering.root.children[0]?.skipArticleNumbering, true, "the legacy alias must remain serializable for backward compatibility");
+
+  const idiomDocument = model.normalizeDocument({
+    title: "成语辨析",
+    root: {
+      id: "idiom-root",
+      text: "成语辨析",
+      children: [{
+        id: "idiom-title",
+        text: "相得益彰",
+        articleNumberingMode: "manual",
+        articleNumberingLevel: 3,
+        children: [
+          { id: "idiom-meaning", text: "词义：两个人或两种事物互相配合，双方的长处和作用更能显示出来。", articleNumberingMode: "manual", articleNumberingLevel: 4, children: [] },
+          { id: "idiom-confusing", text: "易混淆成语", articleNumberingMode: "manual", articleNumberingLevel: 4, children: [{ id: "idiom-similar", text: "相辅相成：两种事物互相配合，互相促成，缺一不可。", children: [] }] },
+          { id: "idiom-difference", text: "区分", articleNumberingMode: "manual", articleNumberingLevel: 4, children: [{ id: "idiom-difference-body", text: "相得益彰重在效果好；相辅相成重在缺一不可。", children: [] }] }
+        ]
+      }]
+    }
+  }, "fallback");
+  const idiomInfo = new Map(modes.buildArticleNodeInfo(idiomDocument.root).map((item) => [item.node.id, item]));
+  assert.equal(idiomInfo.get("idiom-title")?.displayTitle, "一、相得益彰", "level 3 manual headings must use Chinese list numbering without an extra space");
+  assert.equal(idiomInfo.get("idiom-meaning")?.displayTitle, "（一）词义：两个人或两种事物互相配合，双方的长处和作用更能显示出来。");
+  assert.equal(idiomInfo.get("idiom-confusing")?.displayTitle, "（二）易混淆成语");
+  assert.equal(idiomInfo.get("idiom-difference")?.displayTitle, "（三）区分");
+  assert.equal(idiomInfo.get("idiom-meaning")?.isHeading, true, "a manually numbered terminal node must render as a heading");
+  assert.equal(idiomInfo.get("idiom-similar")?.label, "", "ordinary descendant text must remain article body");
+
+  const arabicDocument = model.normalizeDocument({
+    title: "数字编号",
+    root: {
+      id: "arabic-root",
+      text: "数字编号",
+      children: [{
+        id: "arabic-title",
+        text: "相得益彰",
+        articleNumberingMode: "manual",
+        articleNumberingLevel: 5,
+        children: [{ id: "arabic-meaning", text: "词义", articleNumberingMode: "manual", articleNumberingLevel: 6, children: [] }]
+      }]
+    }
+  }, "fallback");
+  const arabicInfo = new Map(modes.buildArticleNodeInfo(arabicDocument.root).map((item) => [item.node.id, item]));
+  assert.equal(arabicInfo.get("arabic-title")?.displayTitle, "1.相得益彰");
+  assert.equal(arabicInfo.get("arabic-meaning")?.displayTitle, "（1）词义");
+
+  const rootBaselineDocument = model.normalizeDocument({
+    title: "根节点基准",
+    root: {
+      id: "baseline-root",
+      text: "根",
+      articleNumberingMode: "manual",
+      articleNumberingLevel: 2,
+      children: [{ id: "baseline-topic", text: "相得益彰", children: [{ id: "baseline-body", text: "正文", children: [] }] }]
+    }
+  }, "fallback");
+  assert.equal(modes.articleChildStartLevel(rootBaselineDocument.root), 3);
+  assert.equal(modes.buildArticleNodeInfo(rootBaselineDocument.root)[0]?.displayTitle, "一、相得益彰", "a manual root baseline must shift automatic first-level headings");
+
+  const mixedLevelDocument = model.normalizeDocument({
+    title: "混合编号",
+    root: {
+      id: "mixed-root",
+      text: "根",
+      children: [
+        { id: "mixed-cn-1", text: "中文一", articleNumberingMode: "manual", articleNumberingLevel: 3, children: [] },
+        { id: "mixed-num-1", text: "数字一", articleNumberingMode: "manual", articleNumberingLevel: 5, children: [] },
+        { id: "mixed-cn-2", text: "中文二", articleNumberingMode: "manual", articleNumberingLevel: 3, children: [] },
+        { id: "mixed-num-2", text: "数字二", articleNumberingMode: "manual", articleNumberingLevel: 5, children: [] }
+      ]
+    }
+  }, "fallback");
+  const mixedInfo = new Map(modes.buildArticleNodeInfo(mixedLevelDocument.root).map((item) => [item.node.id, item]));
+  assert.equal(mixedInfo.get("mixed-cn-1")?.label, "一、");
+  assert.equal(mixedInfo.get("mixed-cn-2")?.label, "二、");
+  assert.equal(mixedInfo.get("mixed-num-1")?.label, "1.", "different manual levels must maintain independent counters");
+  assert.equal(mixedInfo.get("mixed-num-2")?.label, "2.");
+  assert.equal(modes.articleDisplayTitle("第一章", "标题"), "第一章 标题");
+  assert.equal(modes.articleDisplayTitle("一、", "标题"), "一、标题");
+
+  const idiomHtml = importExport.documentToHtml(idiomDocument);
+  assert.match(idiomHtml, /一、相得益彰/, "HTML export must preserve manual article numbering");
+  assert.match(idiomHtml, /（一）词义/, "HTML export must render manually numbered leaf nodes as headings");
+
   assert.deepEqual(modes.normalizeVisibleModes(["article", "mindmap", "article"]), ["article", "mindmap"]);
   assert.deepEqual(modes.normalizeVisibleModes([]), ["mindmap", "outline", "article", "reading"]);
   assert.notEqual(
@@ -945,6 +1043,11 @@ export const setIcon = () => {};
   assert.doesNotMatch(editorSource, /toolbarEl\.addEventListener\("contextmenu"/, "expand/collapse-all context menu should not be bound to the toolbar");
   assert.match(mainSource, /vault\.trash\(target, true\)/, "submap deletion should use the system trash");
   assert.match(editorSource, /skipArticleNumbering/);
+  assert.match(editorSource, /文章编号方式/);
+  assert.match(editorSource, /手动文章层级/);
+  assert.match(editorSource, /articleNumberingLevel/);
+  assert.match(articleRendererSource, /is-compact-number/, "punctuation-style numbering must not insert an artificial visual gap");
+  assert.match(mainSource, /const numberedIndexes = new Map<number, number>\(\)/, "cross-file TOC numbering must count each manual level independently");
   assert.match(editorSource, /DISPLAY_MODE_LABELS/);
   assert.match(mainSource, /switch-to-\$\{mode\}-mode/);
   assert.match(mainSource, /toggle-mind-map-read-only/);
@@ -994,8 +1097,8 @@ export const setIcon = () => {};
   assert.match(cssSource, /\.mmc-parent-navigation-title[\s\S]*line-height:\s*1\.35/);
   assert.match(cssSource, /\.mmc-appearance-style-options[\s\S]*grid-template-columns:\s*repeat\(3/);
   assert.match(cssSource, /\.mmc-appearance-style-option input\[type="checkbox"\][\s\S]*width:\s*16px !important/);
-  assert.match(editorSource, /mmc-article-numbering-option/);
-  assert.match(cssSource, /\.mmc-node-edit-modal label\.mmc-article-numbering-option input\[type="checkbox"\][\s\S]*width:\s*16px !important/);
+  assert.match(editorSource, /mmc-article-numbering-control/);
+  assert.match(cssSource, /\.mmc-node-edit-modal label\.mmc-article-numbering-control[\s\S]*display:\s*grid/);
   assert.match(cssSource, /\.mms-selection-format-toolbar[\s\S]*position:\s*fixed/);
   assert.match(cssSource, /\.mms-article-scroll-top\s*\{[\s\S]*?position:\s*fixed[\s\S]*?right:\s*28px[\s\S]*?bottom:\s*28px/, "article and continuous-reading return-to-top control must float at the lower right");
   assert.match(cssSource, /\.mms-article-scroll-top\s*\{[\s\S]*?opacity:\s*0[\s\S]*?pointer-events:\s*none/, "return-to-top control must be hidden before the configured threshold");
@@ -1008,7 +1111,8 @@ export const setIcon = () => {};
   assert.match(cssSource, /\.mms-outline-table th[\s\S]*position:\s*sticky/);
   assert.match(outlineRendererSource, /is-content-only/);
   assert.match(cssSource, /\.mms-outline-item\.is-content-only > \.mms-outline-row[\s\S]*display:\s*none/, "content-only outline nodes must not leave an empty title row");
-  assert.match(cssSource, /\.mmc-node-edit-modal label\.mmc-article-numbering-option[\s\S]*flex-direction:\s*row/);
+  assert.match(cssSource, /\.mmc-node-edit-modal \.mmc-article-numbering-help[\s\S]*grid-column:\s*1 \/ -1/);
+  assert.match(cssSource, /\.mms-article-heading\.is-compact-number[\s\S]*gap:\s*0/);
   assert.match(cssSource, /\.mmc-image-preview-stage/);
   assert.match(cssSource, /\.mmc-image-preview-source-button\.is-active/);
   assert.match(cssSource, /\.mmc-image-preview-sources\.has-error/);

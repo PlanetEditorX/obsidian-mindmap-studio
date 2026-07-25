@@ -28,6 +28,8 @@ export type LayoutMode = "right" | "balanced";
 export type DisplayMode = "mindmap" | "outline" | "article" | "reading";
 /** Top-level article landing content. */
 export type ArticleLandingMode = "toc" | "article";
+/** Per-node article numbering override; undefined keeps automatic behavior. */
+export type ArticleNumberingMode = "none" | "manual";
 /** Built-in article presentation presets. */
 export type ArticleStylePresetId = "classic" | "book" | "modern" | "minimal";
 /** Per-document article presentation overrides. */
@@ -281,7 +283,11 @@ export interface MindMapNode {
   icon?: string;
   tags?: string[];
   task?: TaskStatus;
-  /** Skip automatic article numbering for prefaces, notes, appendices, etc. */
+  /** Disable numbering or force a manually selected article level; undefined keeps automatic behavior. */
+  articleNumberingMode?: ArticleNumberingMode;
+  /** Manual article level from 1 to 8. It is only active when articleNumberingMode is manual. */
+  articleNumberingLevel?: number;
+  /** @deprecated Legacy alias for articleNumberingMode: "none". */
   skipArticleNumbering?: boolean;
   style?: MindMapNodeStyle;
   collapsed?: boolean;
@@ -988,6 +994,13 @@ function normalizeNode(input: Partial<MindMapNode> | undefined, fallbackText: st
   const textBlocks = normalizedContent.filter((block): block is MindMapTextContentBlock => block.type === "text");
   const imageBlocks = normalizedContent.filter((block): block is MindMapImageContentBlock => block.type === "image");
   const text = textBlocks.map((block) => block.text).join(" ").trim();
+  const requestedNumberingMode = input?.articleNumberingMode;
+  const articleNumberingMode: ArticleNumberingMode | undefined = requestedNumberingMode === "manual" || requestedNumberingMode === "none"
+    ? requestedNumberingMode
+    : input?.skipArticleNumbering === true ? "none" : undefined;
+  const articleNumberingLevel = articleNumberingMode === "manual" && Number.isFinite(input?.articleNumberingLevel)
+    ? Math.min(8, Math.max(1, Math.floor(input?.articleNumberingLevel ?? 1)))
+    : undefined;
   return {
     id: typeof input?.id === "string" && input.id ? input.id : newId(),
     text,
@@ -1002,7 +1015,9 @@ function normalizeNode(input: Partial<MindMapNode> | undefined, fallbackText: st
     icon: typeof input?.icon === "string" && input.icon.trim() ? input.icon.trim().slice(0, 12) : undefined,
     tags: normalizeTags(input?.tags),
     task: normalizeTask(input?.task),
-    skipArticleNumbering: input?.skipArticleNumbering === true || undefined,
+    articleNumberingMode,
+    articleNumberingLevel,
+    skipArticleNumbering: articleNumberingMode === "none" || undefined,
     style: normalizeStyle(input?.style),
     collapsed: input?.collapsed === true || undefined,
     children: Array.isArray(input?.children)

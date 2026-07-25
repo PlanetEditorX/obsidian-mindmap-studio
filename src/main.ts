@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @file main.ts
  * @description 插件入口与跨文件服务层。
  *
@@ -47,7 +47,18 @@ import {
 import { renderStaticMindMap, renderStaticSource } from "./render/static-render";
 import { MindMapStudioView, VIEW_TYPE_MINDMAP_STUDIO } from "./view";
 import { GlobalMindMapSearchModal, MindMapSearchIndex, type MindMapSearchResult } from "./search/global-search";
-import { articleNumberLabel, isArticleHeading, normalizeVisibleModes, type ArticlePageNavigation, type ArticleTocEntry, type ReadingSection } from "./article/modes";
+import {
+  articleChildStartLevel,
+  articleDisplayTitle,
+  articleNumberLabel,
+  buildArticleNodeInfo,
+  isArticleHeading,
+  normalizeVisibleModes,
+  resolveArticleNumbering,
+  type ArticlePageNavigation,
+  type ArticleTocEntry,
+  type ReadingSection
+} from "./article/modes";
 import type { DisplayMode } from "./core/model";
 
 export const MINDMAP_EXTENSION = "mindmap";
@@ -608,22 +619,15 @@ export default class MindMapStudioPlugin extends Plugin {
   }
 
   /**
-   * 查找node depth，并保持模型、界面和持久化状态的一致性。
+   * 按自动或手动文章层级查找目标节点的绝对深度，而不是直接使用物理树深度。
    *
    * @param root 节点树的根节点。
    * @param nodeId 目标节点的稳定标识。
-   * @returns 计算得到的数值结果。
+   * @param baseDepth 当前物理导图根节点的跨文件基础层级。
+   * @returns 目标节点的文章层级；不存在时返回 null。
    */
-  private findNodeDepth(root: MindMapNode, nodeId: string): number | null {
-    const visit = (node: MindMapNode, depth: number): number | null => {
-      if (node.id === nodeId) return depth;
-      for (const child of node.children) {
-        const found = visit(child, depth + 1);
-        if (found !== null) return found;
-      }
-      return null;
-    };
-    return visit(root, 0);
+  private findArticleNodeDepth(root: MindMapNode, nodeId: string, baseDepth = 0): number | null {
+    return buildArticleNodeInfo(root, baseDepth).find((entry) => entry.node.id === nodeId)?.depth ?? null;
   }
 
   /**
@@ -641,18 +645,17 @@ export default class MindMapStudioPlugin extends Plugin {
     if (!parentFile) return 0;
     const parentDocument = await this.readMindMapDocument(parentFile);
     const parentBase = await this.computeArticleBaseDepth(parentFile, parentDocument, visited);
-    let localDepth = document.navigation.parentNodeId
-      ? this.findNodeDepth(parentDocument.root, document.navigation.parentNodeId)
-      : null;
-    if (localDepth === null) {
+    let parentNodeId = document.navigation.parentNodeId;
+    if (!parentNodeId) {
       const currentPath = normalizePath(file.path);
-      const linkedParent = flattenNodes(parentDocument.root).find((node) => {
+      parentNodeId = flattenNodes(parentDocument.root).find((node) => {
         if (!node.submap?.path) return false;
         return this.resolveMindMapFile(node.submap.path, parentFile.path)?.path === currentPath;
-      });
-      if (linkedParent) localDepth = this.findNodeDepth(parentDocument.root, linkedParent.id);
+      })?.id;
     }
-    return parentBase + Math.max(1, localDepth ?? 1);
+    return parentNodeId
+      ? this.findArticleNodeDepth(parentDocument.root, parentNodeId, parentBase) ?? parentBase + 1
+      : parentBase + 1;
   }
 
   /**
@@ -686,24 +689,27 @@ export default class MindMapStudioPlugin extends Plugin {
      */
     type Item = { node: MindMapNode; file: TFile; document: MindMapDocument; breadcrumb: string[] };
 
-    const processItems = async (items: Item[], depth: number): Promise<void> => {
-      let numberedIndex = 0;
+    const processItems = async (items: Item[], defaultLevel: number): Promise<void> => {
+      const siblingHasHeading = items.some(({ node }) => isArticleHeading(node) || node.articleNumberingMode === "manual");
+      const numberedIndexes = new Map<number, number>();
       for (const item of items) {
         const { node, file: sourceFile, breadcrumb } = item;
-        const heading = isArticleHeading(node);
-        const skipped = node.skipArticleNumbering === true;
-        if (heading && !skipped) numberedIndex += 1;
-        const label = heading && !skipped ? articleNumberLabel(depth, numberedIndex) : "";
-        const title = nodePlainText(node) || (heading ? "未命名标题" : "");
+        const numbering = resolveArticleNumbering(node, defaultLevel, siblingHasHeading);
+        const numberedIndex = numbering.shouldNumber && !numbering.skipped
+          ? (numberedIndexes.get(numbering.level) ?? 0) + 1
+          : 0;
+        if (numberedIndex) numberedIndexes.set(numbering.level, numberedIndex);
+        const label = numberedIndex ? articleNumberLabel(numbering.level, numberedIndex) : "";
+        const title = nodePlainText(node) || (numbering.isHeading ? "未命名标题" : "");
         const nextBreadcrumb = [...breadcrumb, title || "未命名标题"];
-        const tocEntry: ArticleTocEntry | null = heading
+        const tocEntry: ArticleTocEntry | null = numbering.isHeading
           ? {
             filePath: sourceFile.path,
             nodeId: node.id,
-            depth,
+            depth: numbering.level,
             label,
             title,
-            displayTitle: label ? `${label} ${title}` : title,
+            displayTitle: articleDisplayTitle(label, title),
             breadcrumb: nextBreadcrumb
           }
           : null;
@@ -726,7 +732,7 @@ export default class MindMapStudioPlugin extends Plugin {
             visitedFiles.add(childFile.path);
             try {
               const childDocument = await this.readMindMapDocument(childFile);
-              readingSections.push({ filePath: childFile.path, document: childDocument, baseDepth: depth });
+              readingSections.push({ filePath: childFile.path, document: childDocument, baseDepth: numbering.level });
               descendants.push(...childDocument.root.children.map((child) => ({
                 node: child,
                 file: childFile,
@@ -738,7 +744,7 @@ export default class MindMapStudioPlugin extends Plugin {
             }
           }
         }
-        if (descendants.length) await processItems(descendants, depth + 1);
+        if (descendants.length) await processItems(descendants, numbering.level + 1);
       }
     };
 
@@ -747,7 +753,7 @@ export default class MindMapStudioPlugin extends Plugin {
       file: topFile,
       document: topDocument,
       breadcrumb: [nodePlainText(topDocument.root) || topDocument.title]
-    })), 1);
+    })), articleChildStartLevel(topDocument.root));
     const currentIndex = tocEntries.findIndex((entry) => entry.filePath === file.path);
     const parentFile = document.navigation?.parentPath
       ? this.resolveMindMapFile(document.navigation.parentPath, file.path)
@@ -780,25 +786,27 @@ export default class MindMapStudioPlugin extends Plugin {
   async buildDescendantReadingSections(file: TFile, document: MindMapDocument): Promise<ReadingSection[]> {
     const sections: ReadingSection[] = [{ filePath: file.path, document, baseDepth: 0 }];
     const visited = new Set<string>([file.path]);
-    const visit = async (nodes: MindMapNode[], sourceFile: TFile, depth: number): Promise<void> => {
+    const visit = async (nodes: MindMapNode[], sourceFile: TFile, defaultLevel: number): Promise<void> => {
+      const siblingHasHeading = nodes.some((node) => isArticleHeading(node) || node.articleNumberingMode === "manual");
       for (const node of nodes) {
+        const numbering = resolveArticleNumbering(node, defaultLevel, siblingHasHeading);
         if (node.submap?.path) {
           const childFile = this.resolveMindMapFile(node.submap.path, sourceFile.path);
           if (childFile && !visited.has(childFile.path)) {
             visited.add(childFile.path);
             try {
               const childDocument = await this.readMindMapDocument(childFile);
-              sections.push({ filePath: childFile.path, document: childDocument, baseDepth: depth });
-              await visit(childDocument.root.children, childFile, depth + 1);
+              sections.push({ filePath: childFile.path, document: childDocument, baseDepth: numbering.level });
+              await visit(childDocument.root.children, childFile, articleChildStartLevel(childDocument.root, numbering.level));
             } catch (error) {
               console.warn(`MindMap Studio could not read child map for export: ${childFile.path}`, error);
             }
           }
         }
-        if (node.children.length) await visit(node.children, sourceFile, depth + 1);
+        if (node.children.length) await visit(node.children, sourceFile, numbering.level + 1);
       }
     };
-    await visit(document.root.children, file, 1);
+    await visit(document.root.children, file, articleChildStartLevel(document.root));
     return sections;
   }
 

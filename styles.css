@@ -1,4 +1,4 @@
-﻿/* MindMap Studio */
+/* MindMap Studio */
 .workspace-leaf-content[data-type="mindmap-studio-view"] .view-content,
 .workspace-leaf-content[data-type="mindmap-canvas-view"] .view-content {
   padding: 0;
@@ -1282,8 +1282,7 @@
 
 /* Keep standalone node-editor checkboxes compact. The generic modal input rule
    above intentionally makes text fields full width, but must not stretch checks. */
-.mmc-node-edit-modal label.mmc-checkbox-label,
-.mmc-node-edit-modal label.mmc-article-numbering-option {
+.mmc-node-edit-modal label.mmc-checkbox-label {
   grid-column: 1 / -1;
   display: flex;
   flex-direction: row;
@@ -1297,8 +1296,7 @@
   cursor: pointer;
 }
 
-.mmc-node-edit-modal label.mmc-checkbox-label input[type="checkbox"],
-.mmc-node-edit-modal label.mmc-article-numbering-option input[type="checkbox"] {
+.mmc-node-edit-modal label.mmc-checkbox-label input[type="checkbox"] {
   flex: 0 0 16px;
   width: 16px !important;
   min-width: 16px !important;
@@ -1308,10 +1306,29 @@
   padding: 0;
 }
 
-.mmc-node-edit-modal label.mmc-checkbox-label > span,
-.mmc-node-edit-modal label.mmc-article-numbering-option > span {
+.mmc-node-edit-modal label.mmc-checkbox-label > span {
   min-width: 0;
   line-height: 1.45;
+}
+
+.mmc-node-edit-modal label.mmc-article-numbering-control {
+  display: grid;
+  gap: 6px;
+}
+
+.mmc-node-edit-modal label.mmc-article-numbering-control > span {
+  font-size: var(--font-ui-small);
+  color: var(--text-muted);
+}
+
+.mmc-node-edit-modal label.mmc-article-numbering-control.is-disabled,
+.mmc-node-edit-modal .mmc-article-numbering-help.is-disabled {
+  opacity: .55;
+}
+
+.mmc-node-edit-modal .mmc-article-numbering-help {
+  grid-column: 1 / -1;
+  margin-top: -3px;
 }
 
 .mmc-outline-textarea,
@@ -3334,6 +3351,10 @@
   color: var(--mms-article-heading, inherit);
 }
 
+.mms-article-heading.is-compact-number {
+  gap: 0;
+}
+
 .mms-article-number {
   flex: 0 0 auto;
   color: var(--mms-article-accent, var(--text-accent));
@@ -3731,7 +3752,8 @@
 .mmc-ctrl-resize.is-ctrl-held .mmc-node.is-selected > .mmc-node-resize-handle {
   display: block !important;
 }
-/* In read-only article/reading mode, hide hover-revealed node actions */.mmc-editor.is-read-only .mms-inline-node-actions {
+/* In read-only article/reading mode, hide hover-revealed node actions */
+.mmc-editor.is-read-only .mms-inline-node-actions {
   opacity: 0 !important;
   pointer-events: none !important;
 }

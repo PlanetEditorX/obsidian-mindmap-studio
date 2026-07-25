@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @file editor.ts
  * @description 编辑器领域的核心交互控制器。
  *
@@ -34,6 +34,7 @@ import {
   applyRichTextStyleRange,
   type BackgroundPattern,
   type ArticleStyle,
+  type ArticleNumberingMode,
   type DisplayMode,
   type EdgeStyle,
   type EdgeWidthMode,
@@ -61,7 +62,7 @@ import { resolveLayoutCollisions } from "../render/collision-layout";
 import { CodeEditModal, TableEditModal } from "./content-modals";
 import { TOOLBAR_ITEMS } from "../settings";
 import { appearanceFromThemePreset, MINDMAP_THEME_PRESETS } from "../themes";
-import { buildArticleNodeInfo, DISPLAY_MODE_ICONS, DISPLAY_MODE_LABELS, readingAnchorPart, type ArticlePageNavigation, type ArticleTocEntry, type ReadingSection } from "../article/modes";
+import { articleNumberLabel, buildArticleNodeInfo, DISPLAY_MODE_ICONS, DISPLAY_MODE_LABELS, readingAnchorPart, type ArticlePageNavigation, type ArticleTocEntry, type ReadingSection } from "../article/modes";
 import { resolveArticleStyle } from "../article/article-style";
 import type { MindMapEditorCallbacks, MindMapEditorOptions } from "./editor-types";
 import { readRichTextEditor, renderRichTextRuns } from "./rich-text-dom";
@@ -95,7 +96,8 @@ interface NodeEditValues {
   icon: string;
   tags: string[];
   task?: TaskStatus;
-  skipArticleNumbering?: boolean;
+  articleNumberingMode?: ArticleNumberingMode;
+  articleNumberingLevel?: number;
   color?: string;
   textColor?: string;
   borderColor?: string;
@@ -323,12 +325,34 @@ class NodeEditModal extends Modal {
     const tagsInput = tagsLabel.createEl("input", { type: "text" });
     tagsInput.value = this.node.tags?.join(", ") ?? "";
 
-    const numberingLabel = detailsGrid.createEl("label", {
-      cls: "mmc-checkbox-label mmc-article-numbering-option",
+    const numberingModeLabel = detailsGrid.createEl("label", { cls: "mmc-article-numbering-control" });
+    numberingModeLabel.createSpan({ text: "文章编号方式" });
+    const numberingModeSelect = numberingModeLabel.createEl("select");
+    numberingModeSelect.createEl("option", { text: "自动（按树层级与标题结构）", attr: { value: "auto" } });
+    numberingModeSelect.createEl("option", { text: "关闭（不显示且不占序号）", attr: { value: "none" } });
+    numberingModeSelect.createEl("option", { text: "手动层级（末端节点也作为标题）", attr: { value: "manual" } });
+    numberingModeSelect.value = this.node.articleNumberingMode ?? (this.node.skipArticleNumbering === true ? "none" : "auto");
+
+    const numberingLevelLabel = detailsGrid.createEl("label", { cls: "mmc-article-numbering-control mmc-article-numbering-level" });
+    numberingLevelLabel.createSpan({ text: "手动文章层级" });
+    const numberingLevelSelect = numberingLevelLabel.createEl("select");
+    for (let level = 1; level <= 8; level += 1) {
+      numberingLevelSelect.createEl("option", { text: `${level} 级 · ${articleNumberLabel(level, 1)}示例`, attr: { value: String(level) } });
+    }
+    numberingLevelSelect.value = String(this.node.articleNumberingLevel ?? 1);
+    const numberingHelp = detailsGrid.createDiv({
+      cls: "setting-item-description mmc-article-numbering-help",
+      text: "手动层级会覆盖当前节点的自动层级，后代从该层级继续递增；设置根节点层级时，一级子节点从下一层开始。"
     });
-    const numberingInput = numberingLabel.createEl("input", { type: "checkbox" });
-    numberingInput.checked = this.node.skipArticleNumbering === true;
-    numberingLabel.createSpan({ text: "文章模式不自动编号（前言、注释等）" });
+    const updateNumberingLevelState = (): void => {
+      const manual = numberingModeSelect.value === "manual";
+      numberingLevelSelect.disabled = !manual;
+      numberingLevelLabel.toggleClass("is-disabled", !manual);
+      numberingHelp.toggleClass("is-disabled", !manual);
+    };
+    numberingModeSelect.addEventListener("change", () => { updateNumberingLevelState(); scheduleAutoSave(); });
+    numberingLevelSelect.addEventListener("change", scheduleAutoSave);
+    updateNumberingLevelState();
 
     const styleGrid = form.createDiv({ cls: "mmc-form-grid mmc-style-grid" });
     const colorControl = (labelText: string, current: string | undefined, fallback: string): [HTMLInputElement, HTMLInputElement] => {
@@ -391,7 +415,10 @@ class NodeEditModal extends Modal {
         note: noteInput.value.trim(), link: linkInput.value.trim(), icon: iconInput.value.trim().slice(0, 12),
         tags: Array.from(new Set(tagsInput.value.split(/[,，]/).map((tag) => tag.trim().replace(/^#/, "")).filter(Boolean))).slice(0, 12),
         task: task === "todo" || task === "doing" || task === "done" ? task : undefined,
-        skipArticleNumbering: numberingInput.checked || undefined,
+        articleNumberingMode: numberingModeSelect.value === "manual" || numberingModeSelect.value === "none"
+          ? numberingModeSelect.value
+          : undefined,
+        articleNumberingLevel: numberingModeSelect.value === "manual" ? Number(numberingLevelSelect.value) : undefined,
         color: colorToggle.checked ? colorInput.value : undefined,
         textColor: textColorToggle.checked ? textColorInput.value : undefined,
         borderColor: borderColorToggle.checked ? borderColorInput.value : undefined,
@@ -417,7 +444,7 @@ class NodeEditModal extends Modal {
     scheduleAutoSave = (): void => { if (timer !== null) window.clearTimeout(timer); timer = window.setTimeout(() => saveNow("autosave"), 280); };
     this.saveOnClose = () => { saveNow("commit"); };
 
-    [iconInput, taskSelect, shapeSelect, tagsInput, numberingInput, borderWidthInput, fontSizeInput, widthInput, minHeightInput, alignSelect, boldInput, italicInput, underlineInput, noteInput, linkInput]
+    [iconInput, taskSelect, shapeSelect, tagsInput, numberingModeSelect, numberingLevelSelect, borderWidthInput, fontSizeInput, widthInput, minHeightInput, alignSelect, boldInput, italicInput, underlineInput, noteInput, linkInput]
       .forEach((input) => { input.addEventListener("input", scheduleAutoSave); input.addEventListener("change", scheduleAutoSave); });
 
     const buttons = form.createDiv({ cls: "mmc-form-actions" });
@@ -2660,7 +2687,9 @@ export class MindMapEditor {
       selected.icon = values.icon || undefined;
       selected.tags = values.tags.length ? values.tags : undefined;
       selected.task = values.task;
-      selected.skipArticleNumbering = values.skipArticleNumbering || undefined;
+      selected.articleNumberingMode = values.articleNumberingMode;
+      selected.articleNumberingLevel = values.articleNumberingMode === "manual" ? values.articleNumberingLevel : undefined;
+      selected.skipArticleNumbering = values.articleNumberingMode === "none" || undefined;
       const style = {
         color: values.color,
         textColor: values.textColor,
@@ -3337,10 +3366,18 @@ export class MindMapEditor {
     menu.addItem((item) => item.setTitle("粘贴为子节点").setIcon("clipboard-paste").onClick(() => void this.pasteAsChild()));
     menu.addSeparator();
     menu.addItem((item) => item.setTitle(`任务状态：${selected?.task === "done" ? "已完成" : selected?.task === "doing" ? "进行中" : selected?.task === "todo" ? "待办" : "无"}`).setIcon("circle-check-big").onClick(() => this.cycleTask()));
+    const numberingDisabled = selected?.articleNumberingMode === "none" || selected?.skipArticleNumbering === true;
     menu.addItem((item) => item
-      .setTitle(selected?.skipArticleNumbering ? "文章模式：恢复自动编号" : "文章模式：不参与自动编号")
+      .setTitle(numberingDisabled ? "文章编号：恢复自动" : "文章编号：关闭")
       .setIcon("list-ordered")
-      .onClick(() => { if (selected) this.mutate(() => { selected.skipArticleNumbering = selected.skipArticleNumbering ? undefined : true; }); }));
+      .onClick(() => {
+        if (!selected) return;
+        this.mutate(() => {
+          selected.articleNumberingMode = numberingDisabled ? undefined : "none";
+          selected.articleNumberingLevel = undefined;
+          selected.skipArticleNumbering = numberingDisabled ? undefined : true;
+        });
+      }));
     menu.addItem((item) => item.setTitle("展开/收起").setIcon("fold-vertical").onClick(() => this.toggleCollapse()));
     menu.addItem((item) => item.setTitle("打开链接").setIcon("link").onClick(() => this.openSelectedLink()));
     menu.addSeparator();

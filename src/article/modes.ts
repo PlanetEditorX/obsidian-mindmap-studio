@@ -1,8 +1,8 @@
-﻿/**
+/**
  * @file modes.ts
  * @description 文章领域与显示模式共享的编号工具。
  *
- * 导图、大纲和文章模式读取同一节点树；本模块负责中文序号、标题判定、子导图层级续接与可见模式容错。
+ * 导图、大纲和文章模式读取同一节点树；本模块负责中文序号、标题判定、手动文章层级、子导图层级续接与可见模式容错。
  */
 
 import type { DisplayMode, MindMapDocument, MindMapNode } from "../core/model";
@@ -11,15 +11,15 @@ import { nodePrimaryText } from "../core/model";
 export const DISPLAY_MODE_LABELS: Record<DisplayMode, string> = {
   mindmap: "导图",
   outline: "大纲",
-  article: "文章"
-  ,reading: "通读"
+  article: "文章",
+  reading: "通读"
 };
 
 export const DISPLAY_MODE_ICONS: Record<DisplayMode, string> = {
   mindmap: "brain-circuit",
   outline: "list-tree",
-  article: "notebook-text"
-  ,reading: "book-open-text"
+  article: "notebook-text",
+  reading: "book-open-text"
 };
 
 /** One physical map merged into the continuous reading view. */
@@ -59,11 +59,11 @@ export function chineseNumber(value: number): string {
 }
 
 /**
- * 将文章标题深度和同级序号转换为“第一章、第一节、一、（一）、1.、（1）”等常见中文文章编号，更深层级使用可读的循环规则。
+ * 将文章标题层级和同级序号转换为“第一章、第一节、一、（一）、1.、（1）”等常见中文文章编号，更深层级使用可读的循环规则。
  *
- * @param depth 节点在树或文章结构中的零基层级。
- * @param index 当前元素在同级或列表中的零基索引。
- * @returns 计算、解析或序列化后的字符串结果。
+ * @param depth 节点在文章结构中的一基层级。
+ * @param index 当前元素在同级或列表中的一基序号。
+ * @returns 对应层级的文章编号文本。
  * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
  */
 export function articleNumberLabel(depth: number, index: number): string {
@@ -79,12 +79,68 @@ export function articleNumberLabel(depth: number, index: number): string {
 }
 
 /**
+ * 按编号末尾标点决定标题是否需要空格，使“第一章 标题”与“一、标题”“1.标题”等格式同时保持自然。
+ *
+ * @param label 已计算的文章编号。
+ * @param title 节点标题文字。
+ * @returns 可直接显示在文章和目录中的完整标题。
+ */
+export function articleDisplayTitle(label: string, title: string): string {
+  if (!label) return title;
+  return /[、.）]$/.test(label) ? `${label}${title}` : `${label} ${title}`;
+}
+
+/**
  * A node is an article heading when it owns local descendants or represents a
  * linked child map. A sub-map node is therefore still a chapter/section even
  * when its children live in another .mindmap file.
  */
 export function isArticleHeading(node: MindMapNode): boolean {
   return node.children.length > 0 || Boolean(node.submap?.path);
+}
+
+/** 文章节点在自动、关闭或手动层级规则下的解析结果。 */
+export interface ArticleNumberingResolution {
+  level: number;
+  isHeading: boolean;
+  skipped: boolean;
+  shouldNumber: boolean;
+}
+
+/**
+ * 解析单个节点的文章编号状态。手动模式会强制末端节点作为标题，并使用指定层级；关闭模式兼容旧版 skipArticleNumbering 字段。
+ *
+ * @param node 要解析的节点。
+ * @param defaultLevel 根据父节点层级推导出的默认文章层级。
+ * @param siblingHasHeading 当前同级中是否存在自然标题或手动标题。
+ * @returns 供文章正文、目录和子导图深度计算共同使用的编号状态。
+ */
+export function resolveArticleNumbering(node: MindMapNode, defaultLevel: number, siblingHasHeading: boolean): ArticleNumberingResolution {
+  const mode = node.articleNumberingMode ?? (node.skipArticleNumbering === true ? "none" : "auto");
+  const manual = mode === "manual";
+  const requestedLevel = Number.isFinite(node.articleNumberingLevel) ? Math.floor(node.articleNumberingLevel ?? defaultLevel) : defaultLevel;
+  const level = manual ? Math.min(8, Math.max(1, requestedLevel)) : Math.max(1, Math.floor(defaultLevel));
+  return {
+    level,
+    isHeading: isArticleHeading(node) || manual,
+    skipped: mode === "none",
+    shouldNumber: mode === "manual" || (mode === "auto" && siblingHasHeading)
+  };
+}
+
+/**
+ * 计算一个物理导图根节点的首级子节点应使用的文章层级。根节点手动层级只作为基准，不会给文档标题本身添加编号。
+ *
+ * @param root 当前物理导图的根节点。
+ * @param baseDepth 当前文件根节点在跨文件文章中的基础层级。
+ * @returns 首级子节点的默认文章层级。
+ */
+export function articleChildStartLevel(root: MindMapNode, baseDepth = 0): number {
+  const normalizedBaseDepth = Math.max(0, Math.floor(baseDepth));
+  const rootBaseDepth = root.articleNumberingMode === "manual" && Number.isFinite(root.articleNumberingLevel)
+    ? Math.min(8, Math.max(1, Math.floor(root.articleNumberingLevel ?? normalizedBaseDepth)))
+    : normalizedBaseDepth;
+  return rootBaseDepth + 1;
 }
 
 /**
@@ -125,38 +181,40 @@ export interface ArticlePageNavigation {
 /**
  * Build the article representation for one physical .mindmap file.
  * `baseDepth` is the absolute article depth represented by this file's root.
- * For a top-level map it is 0; for a child map linked from a chapter it is 1,
- * so that the child map's first descendants become sections rather than a new
- * set of chapters.
+ * A manually configured node replaces its inferred level and its descendants
+ * continue from that level. Manually configured leaf nodes become headings.
+ *
+ * @param root 当前物理导图的根节点。
+ * @param baseDepth 根节点在整篇文章中的绝对基础层级。
+ * @returns 按显示顺序展开的文章节点信息。
  */
 export function buildArticleNodeInfo(root: MindMapNode, baseDepth = 0): ArticleNodeInfo[] {
   const result: ArticleNodeInfo[] = [];
-  const visitChildren = (parent: MindMapNode, depth: number): void => {
-    // If any sibling is a heading, number ALL non-skipped siblings for consistency
-    const hasAnyHeading = parent.children.some((child) => isArticleHeading(child));
-    let numberedIndex = 0;
+  const visitChildren = (parent: MindMapNode, defaultLevel: number): void => {
+    const siblingHasHeading = parent.children.some((child) => isArticleHeading(child) || child.articleNumberingMode === "manual");
+    const numberedIndexes = new Map<number, number>();
     for (const child of parent.children) {
-      const isHeading = isArticleHeading(child);
-      const skipped = child.skipArticleNumbering === true;
-      const shouldNumber = !skipped && hasAnyHeading;
-      if (shouldNumber) numberedIndex += 1;
-      const label = shouldNumber ? articleNumberLabel(depth, numberedIndex) : "";
-      const title = nodePrimaryText(child) || (isHeading ? "未命名标题" : "");
-      const displayTitle = label ? `${label} ${title}` : title;
+      const numbering = resolveArticleNumbering(child, defaultLevel, siblingHasHeading);
+      const numberedIndex = numbering.shouldNumber && !numbering.skipped
+        ? (numberedIndexes.get(numbering.level) ?? 0) + 1
+        : 0;
+      if (numberedIndex) numberedIndexes.set(numbering.level, numberedIndex);
+      const label = numberedIndex ? articleNumberLabel(numbering.level, numberedIndex) : "";
+      const title = nodePrimaryText(child) || (numbering.isHeading ? "未命名标题" : "");
       result.push({
         node: child,
-        depth,
+        depth: numbering.level,
         label,
         title,
-        displayTitle,
-        isHeading,
-        skipped,
+        displayTitle: articleDisplayTitle(label, title),
+        isHeading: numbering.isHeading,
+        skipped: numbering.skipped,
         anchor: `mindmap-article-${child.id.replace(/[^a-zA-Z0-9_-]/g, "-")}`
       });
-      if (child.children.length) visitChildren(child, depth + 1);
+      if (child.children.length) visitChildren(child, numbering.level + 1);
     }
   };
-  visitChildren(root, Math.max(0, baseDepth) + 1);
+  visitChildren(root, articleChildStartLevel(root, baseDepth));
   return result;
 }
 

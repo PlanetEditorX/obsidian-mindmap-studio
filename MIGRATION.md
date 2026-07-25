@@ -1,5 +1,11 @@
 # Upgrade notes
 
+## 手动文章层级
+
+本次改动不提升 `.mindmap` 数据版本。节点新增两个可选字段：`articleNumberingMode` 和 `articleNumberingLevel`。旧文件缺少这些字段时继续使用自动编号；旧版 `skipArticleNumbering: true` 会规范化为关闭编号，并保留兼容别名。
+
+现有文件无需批量迁移。只有用户在节点编辑器中选择“关闭”或“手动层级”时，才会写入新字段。手动层级限制为 1–8，并同时用于文章正文、目录、通读、子导图和导出。
+
 ## 升级到 1.6.0
 
 本版本新增同级节点拖拽排序，但不改变 `.mindmap` 数据结构。直接覆盖 `.obsidian/plugins/mindmap-studio/` 中的 `main.js`、`manifest.json` 和 `styles.css` 后重新加载插件即可。现有导图、节点顺序、子导图和资源文件无需迁移。
