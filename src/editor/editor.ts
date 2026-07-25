@@ -1146,6 +1146,21 @@ export class MindMapEditor {
       const wheelTarget = event.target as HTMLElement;
       if (wheelTarget.closest(".mmc-node-table-wrap, .mmc-code-block")) return;
       event.preventDefault();
+      // Shift+???????????????
+      if (event.shiftKey) {
+        const rect = this.viewportEl.getBoundingClientRect();
+        const pointerX = event.clientX - rect.left - rect.width / 2;
+        const pointerY = event.clientY - rect.top - rect.height / 2;
+        const oldZoom = this.zoom;
+        const nextZoom = this.clampZoom(this.zoom * (event.deltaY < 0 ? 1.1 : 0.9));
+        const worldX = (pointerX - this.panX) / oldZoom;
+        const worldY = (pointerY - this.panY) / oldZoom;
+        this.zoom = nextZoom;
+        this.panX = pointerX - worldX * nextZoom;
+        this.panY = pointerY - worldY * nextZoom;
+        this.applyTransform();
+        return;
+      }
       if (this.options.twoFingerGestureAction === "pan") {
         this.panX -= event.deltaX;
         this.panY -= event.deltaY;

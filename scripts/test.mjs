@@ -884,6 +884,7 @@ export const setIcon = () => {};
   assert.match(editorSource, /mmc-zoom-control[\s\S]*mmc-zoom-step[\s\S]*mmc-zoom-status[\s\S]*mmc-zoom-step/, "zoom buttons should flank the percentage in a dedicated control");
   assert.match(editorSource, /mmc-zoom-input[\s\S]*inputmode: "decimal"[\s\S]*applyZoomInput/, "the zoom percentage should accept manual input");
   assert.match(editorSource, /twoFingerGestureAction === "pan"[\s\S]*this\.panX -= event\.deltaX/, "two-finger trackpad gestures should support canvas panning");
+  assert.match(editorSource, /event\.shiftKey[\s\S]*clampZoom[\s\S]*applyTransform/, "Shift+scroll should zoom regardless of gesture setting");
   assert.match(editorSource, /beginTwoFingerGesture\(\)[\s\S]*updateTwoFingerGesture\(\)/, "two-finger touch gestures should use the configured action");
   assert.doesNotMatch(editorSource, /toolbarEl\.addEventListener\("contextmenu"/, "expand/collapse-all context menu should not be bound to the toolbar");
   assert.match(mainSource, /vault\.trash\(target, true\)/, "submap deletion should use the system trash");
