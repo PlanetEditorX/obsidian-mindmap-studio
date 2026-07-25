@@ -816,7 +816,20 @@ export const setIcon = () => {};
   const articleRendererSource = await readFile("src/editor/article-renderer.ts", "utf8");
   const outlineRendererSource = await readFile("src/editor/outline-renderer.ts", "utf8");
   const selectionToolbarSource = await readFile("src/editor/selection-format-toolbar.ts", "utf8");
-  const clipboardImportSource = await readFile("src/editor/clipboard-import.ts", "utf8");
+  // Pasting Markdown with multiple siblings unwraps the "paste content" wrapper
+  const pastedMulti = clipboardImport.parseClipboardNodes("- 第一条\n- 第二条\n- 第三条");
+  assert.ok(pastedMulti, "multi-line markdown must parse successfully");
+  assert.equal(pastedMulti.length, 3, "multi-line markdown must produce 3 sibling nodes, not 1 wrapper");
+  assert.equal(pastedMulti[0]?.text, "第一条");
+  assert.equal(pastedMulti[1]?.text, "第二条");
+  assert.equal(pastedMulti[2]?.text, "第三条");
+  // Single-item paste still works as before
+  const pastedSingle = clipboardImport.parseClipboardNodes("- 单条内容");
+  assert.ok(pastedSingle, "single-item markdown must parse");
+  assert.equal(pastedSingle.length, 1, "single-item markdown must produce 1 node");
+  assert.equal(pastedSingle[0]?.text, "单条内容");
+
+    const clipboardImportSource = await readFile("src/editor/clipboard-import.ts", "utf8");
   assert.match(editorSource, /addEventListener\("keydown", keydown, true\)/, "editor shortcuts must run in the capture phase");
   assert.match(editorSource, /const findKey = key === "f" \|\| event\.code === "KeyF"/, "search shortcuts must support non-English keyboard layouts");
   const handleKeydownStart = editorSource.indexOf("private handleKeydown(event: KeyboardEvent): void");

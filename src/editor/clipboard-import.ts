@@ -62,8 +62,12 @@ export function parseClipboardNodes(text: string): MindMapNode[] | null {
     if (looksLikeMarkdown || trimmed.includes("\n")) {
       const markdown = looksLikeMarkdown ? trimmed : indentedTextToMarkdown(text);
       const document = markdownToDocument(markdown, "粘贴内容");
-      if (document.root.text === "粘贴内容" && document.root.children.length === 1) {
-        return document.root.children[0] ? [document.root.children[0]] : null;
+      if (document.root.text === "粘贴内容") {
+        if (document.root.children.length === 1) {
+          return document.root.children[0] ? [document.root.children[0]] : null;
+        }
+        // Multiple children: unwrap directly without the wrapper node
+        return document.root.children.length ? document.root.children : null;
       }
       return [document.root];
     }
@@ -99,7 +103,8 @@ export function parseClipboardHtml(html: string): MindMapNode | null {
     .map(parseItem);
   if (!roots.length) return null;
   if (roots.length === 1) return roots[0] ?? null;
+  // Multiple roots: unwrap directly, the caller wraps in its own parent
   const root = createNode("粘贴内容");
   root.children = roots;
-  return root;
+  return roots.length ? root : null;
 }

@@ -1218,7 +1218,7 @@ export function parseClipboardNodes(text: string): MindMapNode[] | null
 
 ### 函数 `parseClipboardHtml`
 
-源码：`src/editor/clipboard-import.ts:80`
+源码：`src/editor/clipboard-import.ts:84`
 
 解析富剪贴板提供的嵌套 HTML 列表。
 
