@@ -470,9 +470,17 @@ export class JsonTransferModal extends Modal {
   onOpen(): void {
     this.titleEl.setText("JSON 导入 / 导出");
     const description = this.contentEl.createEl("p", {
-      text: "可以复制当前 JSON，也可以粘贴其他 MindMap Studio 文档 JSON 后导入。"
+      text: "可以复制当前 JSON，也可以导入 MindMap Studio JSON、XMind 或 Markdown 文件。"
     });
     description.addClass("setting-item-description");
+    const importProgress = this.contentEl.createDiv({ cls: "mmc-import-progress" });
+    const progressBar = importProgress.createEl("progress", { attr: { max: "100", value: "0" } });
+    const progressStatus = importProgress.createSpan({ text: "等待选择导入文件" });
+    const updateImportProgress = async (value: number, status: string): Promise<void> => {
+      progressBar.value = value;
+      progressStatus.setText(`${value}% · ${status}`);
+      await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+    };
     const textarea = this.contentEl.createEl("textarea", { cls: "mmc-json-textarea" });
     textarea.value = JSON.stringify(this.document, null, 2);
     const actions = this.contentEl.createDiv({ cls: "mmc-modal-actions mmc-json-actions" });
@@ -494,17 +502,24 @@ export class JsonTransferModal extends Modal {
         void (async () => {
           try {
             const extension = file.name.split(".").at(-1)?.toLowerCase();
+            await updateImportProgress(10, `正在读取 ${file.name}`);
+            const source = extension === "xmind" ? await file.arrayBuffer() : await file.text();
+            await updateImportProgress(55, extension === "xmind" ? "正在解析 XMind 画布和主题" : extension === "json" ? "正在校验 JSON 文档" : "正在解析 Markdown 标题和列表");
             const imported = extension === "xmind"
-              ? xmindToDocument(await file.arrayBuffer(), file.name.replace(/\.xmind$/i, ""))
+              ? xmindToDocument(source as ArrayBuffer, file.name.replace(/\.xmind$/i, ""))
               : extension === "json"
-                ? normalizeDocument(JSON.parse(await file.text()) as Partial<MindMapDocument>, this.document.title)
-                : markdownToDocument(await file.text(), file.name.replace(/\.(?:md|markdown)$/i, ""));
+                ? normalizeDocument(JSON.parse(source as string) as Partial<MindMapDocument>, this.document.title)
+                : markdownToDocument(source as string, file.name.replace(/\.(?:md|markdown)$/i, ""));
+            await updateImportProgress(85, "正在生成思维导图");
             this.onImport(imported);
+            await updateImportProgress(100, "导入完成");
             new Notice(`已导入：${file.name}`);
-            this.close();
+            window.setTimeout(() => this.close(), 180);
           } catch (error) {
             console.error("MindMap Studio file import failed", error);
-            new Notice(error instanceof Error ? error.message : "文件导入失败");
+            const message = error instanceof Error ? error.message : "文件导入失败";
+            progressStatus.setText(`导入失败：${message}`);
+            new Notice(message);
           }
         })();
       }, { once: true });

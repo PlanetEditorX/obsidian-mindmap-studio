@@ -1560,7 +1560,7 @@ onOpen(): void
 
 ### 类 `OutlineModal`
 
-源码：`src/editor/editor-modals.ts:532`
+源码：`src/editor/editor-modals.ts:547`
 
 显示只读 Markdown 大纲并提供复制和导出入口。
 
@@ -1570,7 +1570,7 @@ export class OutlineModal extends Modal
 
 ### 构造函数 `OutlineModal.constructor`
 
-源码：`src/editor/editor-modals.ts:540`
+源码：`src/editor/editor-modals.ts:555`
 
 创建 Markdown 大纲弹窗。
 
@@ -1580,7 +1580,7 @@ constructor(app: App, private readonly markdown: string, private readonly onExpo
 
 ### 方法 `OutlineModal.onOpen`
 
-源码：`src/editor/editor-modals.ts:547`
+源码：`src/editor/editor-modals.ts:562`
 
 创建大纲内容和操作按钮。
 
@@ -1590,7 +1590,7 @@ onOpen(): void
 
 ### 方法 `OutlineModal.onClose`
 
-源码：`src/editor/editor-modals.ts:568`
+源码：`src/editor/editor-modals.ts:583`
 
 清理大纲弹窗 DOM。
 
@@ -1600,7 +1600,7 @@ onClose(): void
 
 ### 类 `SearchNodesModal`
 
-源码：`src/editor/editor-modals.ts:576`
+源码：`src/editor/editor-modals.ts:591`
 
 搜索当前文档中的节点。
 
@@ -1610,7 +1610,7 @@ export class SearchNodesModal extends Modal
 
 ### 构造函数 `SearchNodesModal.constructor`
 
-源码：`src/editor/editor-modals.ts:585`
+源码：`src/editor/editor-modals.ts:600`
 
 创建节点搜索弹窗。
 
@@ -1620,7 +1620,7 @@ constructor( app: App, private readonly nodes: MindMapNode[], private readonly o
 
 ### 方法 `SearchNodesModal.onOpen`
 
-源码：`src/editor/editor-modals.ts:597`
+源码：`src/editor/editor-modals.ts:612`
 
 创建搜索框和匹配结果列表。
 
@@ -1630,7 +1630,7 @@ onOpen(): void
 
 ### 类 `DocumentExportModal`
 
-源码：`src/editor/editor-modals.ts:645`
+源码：`src/editor/editor-modals.ts:660`
 
 提供可移植文档格式的导出选择。
 
@@ -1640,7 +1640,7 @@ export class DocumentExportModal extends Modal
 
 ### 构造函数 `DocumentExportModal.constructor`
 
-源码：`src/editor/editor-modals.ts:652`
+源码：`src/editor/editor-modals.ts:667`
 
 创建文档导出格式弹窗。
 
@@ -1650,7 +1650,7 @@ constructor(app: App, private readonly exportFormat: (format: "html" | "doc" | "
 
 ### 方法 `DocumentExportModal.onOpen`
 
-源码：`src/editor/editor-modals.ts:659`
+源码：`src/editor/editor-modals.ts:674`
 
 创建各导出格式按钮。
 
