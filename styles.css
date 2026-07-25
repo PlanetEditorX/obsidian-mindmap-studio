@@ -2670,12 +2670,13 @@
 .mms-global-search-result-header {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   justify-content: space-between;
   min-width: 0;
 }
 
 .mms-global-search-result-title {
+  flex: 1;
   min-width: 0;
   overflow: hidden;
   font-size: var(--font-ui-medium);
@@ -2697,6 +2698,7 @@
   flex: 0 0 auto;
   align-items: center;
   gap: 4px;
+  flex-shrink: 0;
 }
 
 .mms-global-search-badge {

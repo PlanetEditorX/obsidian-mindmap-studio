@@ -968,12 +968,34 @@ export class GlobalMindMapSearchModal extends Modal {
       this.resultsEl.createDiv({ cls: "mms-global-search-empty", text: status.building ? "索引仍在建立，请稍后重试。" : "没有匹配结果。" });
       return;
     }
+    this.renderResultItems(trimmed);
+  }
 
+
+  /**
+   * 从当前 renderedResults 列表重新渲染结果，不重新查询索引。
+   */
+  private renderResultList(): void {
+    this.resultsEl.empty();
+    this.activeIndex = -1;
+    const query = this.inputEl.value.trim();
+    this.summaryEl.setText(`找到 ${this.renderedResults.length} 个结果`);
+    if (!this.renderedResults.length) {
+      this.resultsEl.createDiv({ cls: "mms-global-search-empty", text: "已替换所有匹配节点。" });
+      return;
+    }
+    this.renderResultItems(query);
+  }
+
+  /**
+   * 渲染结果列表项。
+   */
+  private renderResultItems(query: string): void {
     this.renderedResults.forEach((result, index) => {
       const button = this.resultsEl.createEl("button", { cls: "mms-global-search-result", attr: { type: "button" } });
       const header = button.createDiv({ cls: "mms-global-search-result-header" });
       const title = header.createDiv({ cls: "mms-global-search-result-title" });
-      appendHighlightedText(title, result.nodeText, trimmed, this.useRegex);
+      appendHighlightedText(title, result.nodeText, query, this.useRegex);
       const badges = header.createDiv({ cls: "mms-global-search-result-badges" });
       badges.createSpan({ cls: "mms-global-search-badge", text: result.matchedKind });
       if (result.isSubmapDocument) badges.createSpan({ cls: "mms-global-search-badge is-submap", text: "子导图" });
@@ -994,8 +1016,7 @@ export class GlobalMindMapSearchModal extends Modal {
           const idx = this.renderedResults.indexOf(result);
           if (idx >= 0) {
             this.renderedResults.splice(idx, 1);
-            const trimmed = this.inputEl.value.trim();
-            if (trimmed) this.renderResults(trimmed);
+            this.renderResultList();
           }
         } finally {
           replaceOneBtn.disabled = false;
@@ -1007,7 +1028,7 @@ export class GlobalMindMapSearchModal extends Modal {
       button.createDiv({ cls: "mms-global-search-result-breadcrumb", text: (result.hierarchyBreadcrumb ?? result.breadcrumb).join(" › ") });
       if (result.snippet && result.snippet !== result.nodeText) {
         const snippet = button.createDiv({ cls: "mms-global-search-result-snippet" });
-        appendHighlightedText(snippet, result.snippet, trimmed, this.useRegex);
+        appendHighlightedText(snippet, result.snippet, query, this.useRegex);
       }
       button.addEventListener("mouseenter", () => this.setActive(index));
       button.addEventListener("click", () => void this.openResult(result));
