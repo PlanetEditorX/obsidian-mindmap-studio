@@ -167,16 +167,8 @@ function renderArticlePager(page: HTMLElement, options: ArticleRendererOptions):
   const navigation = options.articleNavigation;
   if (!navigation?.parentPath || !navigation.entries.length) return;
   const index = options.articleNavigationIndex ?? navigation.currentIndex;
-  // Skip entries within the same file — navigate at the file (chapter) level
-  const currentFile = navigation.entries[index]?.filePath;
-  let previous: ArticleTocEntry | undefined;
-  for (let i = index - 1; i >= 0; i--) {
-    if (navigation.entries[i].filePath !== currentFile) { previous = navigation.entries[i]; break; }
-  }
-  let next: ArticleTocEntry | undefined;
-  for (let i = index + 1; i < navigation.entries.length; i++) {
-    if (navigation.entries[i].filePath !== currentFile) { next = navigation.entries[i]; break; }
-  }
+  const previous = index > 0 ? navigation.entries[index - 1] : undefined;
+  const next = index < navigation.entries.length - 1 ? navigation.entries[index + 1] : undefined;
   const pager = page.createEl("nav", { cls: "mms-article-pager", attr: { "aria-label": "文章前后页导航" } });
   const addTarget = (className: string, prefix: string, entry: ArticleTocEntry): void => {
     const link = pager.createEl("button", { cls: className, attr: { type: "button", title: entry.breadcrumb.join(" › ") } });
