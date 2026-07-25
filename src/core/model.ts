@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file model.ts
  * @description 核心领域模型与序列化层。
  *
@@ -1462,6 +1462,7 @@ export function markdownToDocument(markdown: string, fallbackTitle = "思维导�
   let currentBoldNode: MindMapNode | null = null;
   let hasLeadingContent = false;
   let skippingTableOfContents = false;
+  let tableLines: string[] = [];
 
   const applyMarkdownText = (node: MindMapNode, value: string, fallback = "节点", forceBold = false): void => {
     const source = value.trim() || fallback;
@@ -1504,7 +1505,23 @@ export function markdownToDocument(markdown: string, fallbackTitle = "思维导�
 
   for (const rawLine of markdown.split(/\r?\n/)) {
     const line = rawLine.trimEnd();
-    if (!line.trim() || line.trimStart().startsWith("---") || line.trimStart().startsWith("```") || /^\s*\|.*\|\s*$/.test(line)) continue;
+    // Buffer consecutive table lines
+    if (/^\s*\|.*\|\s*$/.test(line)) {
+      if (!skippingTableOfContents) tableLines.push(line);
+      continue;
+    }
+    // Flush buffered table when hitting a non-table line
+    if (tableLines.length >= 2) {
+      const tableStr = tableLines.join('\n');
+      const parsed = parseMarkdownTable(tableStr);
+      if (parsed) {
+        const target = currentBoldNode ?? stack.at(-1)?.node ?? doc.root;
+        target.table = parsed;
+      }
+    }
+    tableLines = [];
+
+    if (!line.trim() || line.trimStart().startsWith("---") || line.trimStart().startsWith("```")) continue;
 
     const heading = line.match(/^\s*(#{1,6})\s+(.+?)\s*$/);
     const bullet = line.match(/^(\s*)[-*+]\s+(.+?)\s*$/);
@@ -1595,6 +1612,15 @@ export function markdownToDocument(markdown: string, fallbackTitle = "思维导�
     else hasLeadingContent = true;
   }
 
+  // Flush trailing table buffer
+  if (tableLines.length >= 2) {
+    const tableStr = tableLines.join('\n');
+    const parsed = parseMarkdownTable(tableStr);
+    if (parsed) {
+      const target = currentBoldNode ?? stack.at(-1)?.node ?? doc.root;
+      target.table = parsed;
+    }
+  }
   if (!doc.root.children.length) doc.root.children.push(createNode("主题 1"));
   return doc;
 }
