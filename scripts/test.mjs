@@ -127,11 +127,27 @@ export const setIcon = () => {};
   const clipboardImport = require(clipboardOutfile);
   const document = model.createDefaultDocument("测试脑图");
   const xmindArchive = zipSync({
-    "content.json": strToU8(JSON.stringify([{ rootTopic: { title: "XMind 根", children: { attached: [{ title: "分支 A" }] } } }]))
+    "content.json": strToU8(JSON.stringify([
+      {
+        id: "sheet-main",
+        rootTopic: {
+          title: "XMind 根",
+          children: { attached: [{ title: "分支 A" }, { title: "子导图", href: "xmind:#sheet-child" }] }
+        }
+      },
+      {
+        id: "sheet-child",
+        rootTopic: { title: "子导图", children: { attached: [{ title: "子主题 1", children: { attached: [{ title: "子主题 2" }] } }] } }
+      },
+      { id: "sheet-extra", rootTopic: { title: "未链接画布", children: { attached: [{ title: "独立主题" }] } } }
+    ]))
   });
   const importedXmind = importExport.xmindToDocument(xmindArchive.buffer, "fallback");
   assert.equal(importedXmind.root.text, "XMind 根");
   assert.equal(importedXmind.root.children[0]?.text, "分支 A");
+  assert.equal(importedXmind.root.children[1]?.text, "子导图", "linked XMind sheets must remain nested below their source topic");
+  assert.equal(importedXmind.root.children[1]?.children[0]?.children[0]?.text, "子主题 2", "linked XMind sheets must retain every nested topic");
+  assert.equal(importedXmind.root.children[2]?.text, "未链接画布", "XMind sheets without a link must still be imported instead of discarded");
   assert.match(importExport.documentToHtml(importedXmind), /<!doctype html>/);
   const mergedHtml = importExport.readingSectionsToHtml([
     { filePath: "root.mindmap", document: importedXmind, baseDepth: 0 },
@@ -529,6 +545,10 @@ export const setIcon = () => {};
   const fromMarkdown = model.parseDocument(markdown, "fallback");
   assert.equal(fromMarkdown.root.text, "根节点");
   assert.equal(fromMarkdown.root.children[0]?.children[0]?.text, "子节点 B");
+  const mixedMarkdown = "# 项目\n## 研发\n- 任务 A\n  - 子任务 A1\n## 运营\n- 任务 B";
+  const mixedMarkdownDocument = model.markdownToDocument(mixedMarkdown, "fallback");
+  assert.deepEqual(mixedMarkdownDocument.root.children.map((node) => node.text), ["研发", "运营"], "Markdown headings must remain top-level branches");
+  assert.equal(mixedMarkdownDocument.root.children[0]?.children[0]?.children[0]?.text, "子任务 A1", "lists below a Markdown heading must remain nested below that heading");
 
 
   const markdownTable = `| 名称 | 数量 | 状态 |

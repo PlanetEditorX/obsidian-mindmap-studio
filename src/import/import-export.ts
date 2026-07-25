@@ -7,15 +7,24 @@ import { strFromU8, unzipSync } from "fflate";
 import { createDefaultDocument, createNode, nodePlainText, type MindMapDocument, type MindMapNode } from "../core/model";
 import type { ReadingSection } from "../article/modes";
 
-/** Minimal modern XMind topic shape used during import. */
+/** 新版 XMind 导入时需要保留的主题字段与画布链接。 */
 type XMindTopic = {
+  id?: string;
   title?: string;
   notes?: { plain?: { content?: string } };
-  children?: { attached?: XMindTopic[]; detached?: XMindTopic[] };
+  href?: string;
+  children?: Record<string, XMindTopic[] | undefined>;
+};
+
+/** 新版 XMind 画布及其根主题的最小数据形状。 */
+type XMindSheet = {
+  id?: string;
+  title?: string;
+  rootTopic?: XMindTopic;
 };
 
 /**
- * Imports a modern XMind archive containing content.json.
+ * 导入包含 content.json 的新版 XMind 归档，保留嵌套主题、画布链接和未链接画布。
  *
  * @param source Raw .xmind bytes.
  * @param fallbackTitle Filename-derived fallback title.
@@ -25,17 +34,49 @@ export function xmindToDocument(source: ArrayBuffer, fallbackTitle = "XMind 导�
   const archive = unzipSync(new Uint8Array(source));
   const content = archive["content.json"];
   if (!content) throw new Error("仅支持包含 content.json 的新版 XMind 文件");
-  const sheets = JSON.parse(strFromU8(content)) as Array<{ title?: string; rootTopic?: XMindTopic }>;
+  const sheets = JSON.parse(strFromU8(content)) as XMindSheet[];
   const sheet = sheets.find((item) => item.rootTopic) ?? sheets[0];
   if (!sheet?.rootTopic) throw new Error("XMind 文件中没有可导入的主题");
+  const sheetById = new Map(sheets.flatMap((item) => item.id ? [[item.id, item] as const] : []));
+  const importedSheets = new Set<XMindSheet>();
+  const sheetReference = (topic: XMindTopic): string | null => {
+    const match = topic.href?.match(/(?:xmind:)?#([^?#]+)/i);
+    return match?.[1] ?? null;
+  };
   const convert = (topic: XMindTopic): MindMapNode => {
     const node = createNode(topic.title?.trim() || "未命名主题");
     node.note = topic.notes?.plain?.content?.trim() || undefined;
-    const children = [...(topic.children?.attached ?? []), ...(topic.children?.detached ?? [])];
+    const children = Object.values(topic.children ?? {}).flatMap((items) => items ?? []);
     node.children = children.map(convert);
     return node;
   };
-  const root = convert(sheet.rootTopic);
+  const convertSheet = (current: XMindSheet, ancestors: Set<XMindSheet>): MindMapNode => {
+    const rootTopic = current.rootTopic;
+    if (!rootTopic) return createNode(current.title?.trim() || "未命名画布");
+    importedSheets.add(current);
+    ancestors.add(current);
+    const root = convert(rootTopic);
+    const attachLinkedSheets = (topic: XMindTopic, node: MindMapNode): void => {
+      const linkedSheet = sheetById.get(sheetReference(topic) ?? "");
+      if (linkedSheet?.rootTopic && !ancestors.has(linkedSheet)) {
+        const linkedRoot = convertSheet(linkedSheet, ancestors);
+        if (linkedRoot.text === node.text) node.children.push(...linkedRoot.children);
+        else node.children.push(linkedRoot);
+      }
+      const topicChildren = Object.values(topic.children ?? {}).flatMap((items) => items ?? []);
+      topicChildren.forEach((child, index) => {
+        const childNode = node.children[index];
+        if (childNode) attachLinkedSheets(child, childNode);
+      });
+    };
+    attachLinkedSheets(rootTopic, root);
+    ancestors.delete(current);
+    return root;
+  };
+  const root = convertSheet(sheet, new Set());
+  for (const extraSheet of sheets) {
+    if (extraSheet.rootTopic && !importedSheets.has(extraSheet)) root.children.push(convertSheet(extraSheet, new Set()));
+  }
   const title = root.text || sheet.title || fallbackTitle;
   return { ...createDefaultDocument(title), title, root };
 }

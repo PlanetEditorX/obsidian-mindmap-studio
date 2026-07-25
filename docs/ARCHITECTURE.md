@@ -44,7 +44,7 @@ src/
 ├── search/
 │   └── global-search.ts        本地增量索引与搜索
 ├── import/
-│   └── import-export.ts        XMind 导入与文章导出
+│   └── import-export.ts        XMind 多画布导入与文章导出
 ├── settings.ts                 设置与默认值
 └── themes.ts                   主题预设
 ```

@@ -1016,7 +1016,7 @@ export function markdownToDocument(markdown: string, fallbackTitle = "思维导�
 
 ### 函数 `indentedTextToMarkdown`
 
-源码：`src/core/model.ts:1513`
+源码：`src/core/model.ts:1514`
 
 Converts tab- or space-indented outline text (including XMind clipboard fallback text) into Markdown while preserving its hierarchy.
 
@@ -3152,17 +3152,27 @@ export function attachSelectionFormatToolbar(options: SelectionFormatToolbarOpti
 
 源码：`src/import/import-export.ts:11`
 
-Minimal modern XMind topic shape used during import.
+新版 XMind 导入时需要保留的主题字段与画布链接。
 
 ```ts
 type XMindTopic =
 ```
 
+### 类型 `XMindSheet`
+
+源码：`src/import/import-export.ts:20`
+
+新版 XMind 画布及其根主题的最小数据形状。
+
+```ts
+type XMindSheet =
+```
+
 ### 函数 `xmindToDocument`
 
-源码：`src/import/import-export.ts:24`
+源码：`src/import/import-export.ts:33`
 
-Imports a modern XMind archive containing content.json.
+导入包含 content.json 的新版 XMind 归档，保留嵌套主题、画布链接和未链接画布。
 
 ```ts
 export function xmindToDocument(source: ArrayBuffer, fallbackTitle = "XMind 导入"): MindMapDocument
@@ -3170,7 +3180,7 @@ export function xmindToDocument(source: ArrayBuffer, fallbackTitle = "XMind 导�
 
 ### 函数 `documentToHtml`
 
-源码：`src/import/import-export.ts:56`
+源码：`src/import/import-export.ts:97`
 
 Produces a standalone article-style HTML document suitable for browsers, Word-compatible .doc files, and printing to PDF.
 
@@ -3180,7 +3190,7 @@ export function documentToHtml(document: MindMapDocument): string
 
 ### 函数 `readingSectionsToHtml`
 
-源码：`src/import/import-export.ts:67`
+源码：`src/import/import-export.ts:108`
 
 Produces one portable article from a map and all recursively collected child maps in the same order used by continuous reading mode.
 

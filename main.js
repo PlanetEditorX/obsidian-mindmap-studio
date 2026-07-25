@@ -796,10 +796,10 @@ function parseTaskText(value) {
   return { text: ((_a2 = match[2]) == null ? void 0 : _a2.trim()) || "\u4EFB\u52A1", task };
 }
 function markdownToDocument(markdown, fallbackTitle = "\u601D\u7EF4\u5BFC\u56FE") {
-  var _a2, _b2, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n;
+  var _a2, _b2, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p;
   const doc = createDefaultDocument(fallbackTitle);
   doc.root.children = [];
-  const stack = [{ level: 0, node: doc.root }];
+  const stack = [{ level: 0, node: doc.root, kind: "root" }];
   let rootAssigned = false;
   for (const rawLine of markdown.split(/\r?\n/)) {
     const line = rawLine.trimEnd();
@@ -820,21 +820,22 @@ function markdownToDocument(markdown, fallbackTitle = "\u601D\u7EF4\u5BFC\u56FE"
         while (stack.length > 1 && ((_f = (_e = stack.at(-1)) == null ? void 0 : _e.level) != null ? _f : 0) >= level) stack.pop();
         const parent = (_h = (_g = stack.at(-1)) == null ? void 0 : _g.node) != null ? _h : doc.root;
         parent.children.push(node);
-        stack.push({ level, node });
+        stack.push({ level, node, kind: "heading" });
       }
       continue;
     }
     const listMatch = bullet != null ? bullet : numbered;
     if (listMatch) {
       const spaces = ((_i = listMatch[1]) != null ? _i : "").replaceAll("	", "  ").length;
-      const level = Math.floor(spaces / 2) + 2;
-      const parsed = parseTaskText(((_j = listMatch[2]) != null ? _j : "\u8282\u70B9").trim());
+      const headingLevel = (_k = (_j = [...stack].reverse().find((entry) => entry.kind === "heading")) == null ? void 0 : _j.level) != null ? _k : 1;
+      const level = headingLevel + Math.floor(spaces / 2) + 1;
+      const parsed = parseTaskText(((_l = listMatch[2]) != null ? _l : "\u8282\u70B9").trim());
       const node = createNode(parsed.text);
       node.task = parsed.task;
-      while (stack.length > 1 && ((_l = (_k = stack.at(-1)) == null ? void 0 : _k.level) != null ? _l : 0) >= level) stack.pop();
-      const parent = (_n = (_m = stack.at(-1)) == null ? void 0 : _m.node) != null ? _n : doc.root;
+      while (stack.length > 1 && ((_n = (_m = stack.at(-1)) == null ? void 0 : _m.level) != null ? _n : 0) >= level) stack.pop();
+      const parent = (_p = (_o = stack.at(-1)) == null ? void 0 : _o.node) != null ? _p : doc.root;
       parent.children.push(node);
-      stack.push({ level, node });
+      stack.push({ level, node, kind: "list" });
     }
   }
   if (!doc.root.children.length) doc.root.children.push(createNode("\u4E3B\u9898 1"));
@@ -3413,15 +3414,50 @@ function xmindToDocument(source, fallbackTitle = "XMind \u5BFC\u5165") {
   const sheets = JSON.parse(strFromU8(content));
   const sheet = (_a2 = sheets.find((item) => item.rootTopic)) != null ? _a2 : sheets[0];
   if (!(sheet == null ? void 0 : sheet.rootTopic)) throw new Error("XMind \u6587\u4EF6\u4E2D\u6CA1\u6709\u53EF\u5BFC\u5165\u7684\u4E3B\u9898");
+  const sheetById = new Map(sheets.flatMap((item) => item.id ? [[item.id, item]] : []));
+  const importedSheets = /* @__PURE__ */ new Set();
+  const sheetReference = (topic) => {
+    var _a3, _b2;
+    const match = (_a3 = topic.href) == null ? void 0 : _a3.match(/(?:xmind:)?#([^?#]+)/i);
+    return (_b2 = match == null ? void 0 : match[1]) != null ? _b2 : null;
+  };
   const convert = (topic) => {
-    var _a3, _b2, _c, _d, _e, _f, _g, _h;
+    var _a3, _b2, _c, _d, _e;
     const node = createNode(((_a3 = topic.title) == null ? void 0 : _a3.trim()) || "\u672A\u547D\u540D\u4E3B\u9898");
     node.note = ((_d = (_c = (_b2 = topic.notes) == null ? void 0 : _b2.plain) == null ? void 0 : _c.content) == null ? void 0 : _d.trim()) || void 0;
-    const children = [...(_f = (_e = topic.children) == null ? void 0 : _e.attached) != null ? _f : [], ...(_h = (_g = topic.children) == null ? void 0 : _g.detached) != null ? _h : []];
+    const children = Object.values((_e = topic.children) != null ? _e : {}).flatMap((items) => items != null ? items : []);
     node.children = children.map(convert);
     return node;
   };
-  const root = convert(sheet.rootTopic);
+  const convertSheet = (current, ancestors) => {
+    var _a3;
+    const rootTopic = current.rootTopic;
+    if (!rootTopic) return createNode(((_a3 = current.title) == null ? void 0 : _a3.trim()) || "\u672A\u547D\u540D\u753B\u5E03");
+    importedSheets.add(current);
+    ancestors.add(current);
+    const root2 = convert(rootTopic);
+    const attachLinkedSheets = (topic, node) => {
+      var _a4, _b2;
+      const linkedSheet = sheetById.get((_a4 = sheetReference(topic)) != null ? _a4 : "");
+      if ((linkedSheet == null ? void 0 : linkedSheet.rootTopic) && !ancestors.has(linkedSheet)) {
+        const linkedRoot = convertSheet(linkedSheet, ancestors);
+        if (linkedRoot.text === node.text) node.children.push(...linkedRoot.children);
+        else node.children.push(linkedRoot);
+      }
+      const topicChildren = Object.values((_b2 = topic.children) != null ? _b2 : {}).flatMap((items) => items != null ? items : []);
+      topicChildren.forEach((child, index) => {
+        const childNode = node.children[index];
+        if (childNode) attachLinkedSheets(child, childNode);
+      });
+    };
+    attachLinkedSheets(rootTopic, root2);
+    ancestors.delete(current);
+    return root2;
+  };
+  const root = convertSheet(sheet, /* @__PURE__ */ new Set());
+  for (const extraSheet of sheets) {
+    if (extraSheet.rootTopic && !importedSheets.has(extraSheet)) root.children.push(convertSheet(extraSheet, /* @__PURE__ */ new Set()));
+  }
   const title = root.text || sheet.title || fallbackTitle;
   return { ...createDefaultDocument(title), title, root };
 }

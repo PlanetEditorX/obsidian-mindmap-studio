@@ -1456,7 +1456,7 @@ function parseTaskText(value: string): { text: string; task?: TaskStatus } {
 export function markdownToDocument(markdown: string, fallbackTitle = "思维导图"): MindMapDocument {
   const doc = createDefaultDocument(fallbackTitle);
   doc.root.children = [];
-  const stack: Array<{ level: number; node: MindMapNode }> = [{ level: 0, node: doc.root }];
+  const stack: Array<{ level: number; node: MindMapNode; kind: "root" | "heading" | "list" }> = [{ level: 0, node: doc.root, kind: "root" }];
   let rootAssigned = false;
 
   for (const rawLine of markdown.split(/\r?\n/)) {
@@ -1480,7 +1480,7 @@ export function markdownToDocument(markdown: string, fallbackTitle = "思维导�
         while (stack.length > 1 && (stack.at(-1)?.level ?? 0) >= level) stack.pop();
         const parent = stack.at(-1)?.node ?? doc.root;
         parent.children.push(node);
-        stack.push({ level, node });
+        stack.push({ level, node, kind: "heading" });
       }
       continue;
     }
@@ -1488,14 +1488,15 @@ export function markdownToDocument(markdown: string, fallbackTitle = "思维导�
     const listMatch = bullet ?? numbered;
     if (listMatch) {
       const spaces = (listMatch[1] ?? "").replaceAll("\t", "  ").length;
-      const level = Math.floor(spaces / 2) + 2;
+      const headingLevel = [...stack].reverse().find((entry) => entry.kind === "heading")?.level ?? 1;
+      const level = headingLevel + Math.floor(spaces / 2) + 1;
       const parsed = parseTaskText((listMatch[2] ?? "节点").trim());
       const node = createNode(parsed.text);
       node.task = parsed.task;
       while (stack.length > 1 && (stack.at(-1)?.level ?? 0) >= level) stack.pop();
       const parent = stack.at(-1)?.node ?? doc.root;
       parent.children.push(node);
-      stack.push({ level, node });
+      stack.push({ level, node, kind: "list" });
     }
   }
 
