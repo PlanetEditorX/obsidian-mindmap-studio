@@ -267,6 +267,7 @@ export class MindMapStudioView extends TextFileView {
       showTaskProgress: this.plugin.settings.showTaskProgress,
       autoFitOnOpen: this.plugin.settings.autoFitOnOpen,
       twoFingerGestureAction: this.plugin.settings.twoFingerGestureAction,
+      scrollWheelAction: this.plugin.settings.scrollWheelAction,
       historyLimit: this.plugin.settings.historyLimit,
       imageFailoverEnabled: this.plugin.settings.imageFailoverEnabled,
       imageFailoverTimeoutSeconds: this.plugin.settings.imageFailoverTimeoutSeconds,

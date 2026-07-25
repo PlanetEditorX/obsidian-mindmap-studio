@@ -128,6 +128,7 @@ export interface MindMapStudioSettings {
   redirectLegacyFiles: boolean;
   showGrid: boolean;
   twoFingerGestureAction: "zoom" | "pan";
+  scrollWheelAction: "zoom" | "pan";
   showTaskProgress: boolean;
   autoFitOnOpen: boolean;
   historyLimit: number;
@@ -194,6 +195,7 @@ export const DEFAULT_SETTINGS: MindMapStudioSettings = {
   redirectLegacyFiles: true,
   showGrid: true,
   twoFingerGestureAction: "zoom",
+  scrollWheelAction: "zoom",
   showTaskProgress: true,
   autoFitOnOpen: true,
   historyLimit: 120,
@@ -466,6 +468,18 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
         .setValue(this.plugin.settings.twoFingerGestureAction)
         .onChange(async (value) => {
           this.plugin.settings.twoFingerGestureAction = value === "pan" ? "pan" : "zoom";
+          await this.saveAndRefresh();
+        }));
+
+    new Setting(containerEl)
+      .setName("滚轮手势")
+      .setDesc("使用鼠标滚轮或触控板双指滚动时，可选择缩放画布或平移画布。")
+      .addDropdown((dropdown) => dropdown
+        .addOption("zoom", "放大缩小")
+        .addOption("pan", "移动画布")
+        .setValue(this.plugin.settings.scrollWheelAction)
+        .onChange(async (value) => {
+          this.plugin.settings.scrollWheelAction = value === "pan" ? "pan" : "zoom";
           await this.saveAndRefresh();
         }));
 
