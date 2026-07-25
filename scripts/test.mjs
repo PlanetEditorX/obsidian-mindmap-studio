@@ -898,6 +898,7 @@ export const setIcon = () => {};
 
   assert.match(editorSource, /mms-mode-switcher/);
   assert.match(editorSource, /toggleReadOnly/);
+  assert.match(editorSource, /Quad-click/, "quadruple-click opens the full node edit modal");
   assert.match(editorSource, /captureReadingPosition/);
   assert.match(editorSource, /restoreReadingPosition/);
   assert.match(editorSource, /nodeRatio: Math\.max\(0, Math\.min\(1/);
