@@ -1146,7 +1146,7 @@ export class MindMapEditor {
       const wheelTarget = event.target as HTMLElement;
       if (wheelTarget.closest(".mmc-node-table-wrap, .mmc-code-block")) return;
       event.preventDefault();
-      if (this.options.scrollWheelAction === "pan") {
+      if (this.options.twoFingerGestureAction === "pan") {
         this.panX -= event.deltaX;
         this.panY -= event.deltaY;
         this.applyTransform();

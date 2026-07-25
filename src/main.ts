@@ -416,7 +416,6 @@ export default class MindMapStudioPlugin extends Plugin {
         : "top",
       returnToTopVisibility: normalizeReturnToTopVisibility(raw.returnToTopVisibility),
       twoFingerGestureAction: raw.twoFingerGestureAction === "pan" ? "pan" : "zoom",
-      scrollWheelAction: raw.scrollWheelAction === "pan" ? "pan" : "zoom",
       defaultNodeTextAlign: raw.defaultNodeTextAlign === "left" || raw.defaultNodeTextAlign === "right" || raw.defaultNodeTextAlign === "center"
         ? raw.defaultNodeTextAlign
         : DEFAULT_SETTINGS.defaultNodeTextAlign,
