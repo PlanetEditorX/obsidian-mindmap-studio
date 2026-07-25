@@ -1463,6 +1463,45 @@ export function markdownToDocument(markdown: string, fallbackTitle = "思维导�
   let hasLeadingContent = false;
   let skippingTableOfContents = false;
 
+  const applyMarkdownText = (node: MindMapNode, value: string, fallback = "节点", forceBold = false): void => {
+    const source = value.trim() || fallback;
+    if (forceBold) {
+      node.text = source;
+      node.richText = normalizeRichText([{ text: source, style: { bold: true } }], source);
+      return;
+    }
+
+    const runs: MindMapTextRun[] = [];
+    const boldPattern = /\*\*(.+?)\*\*/g;
+    let cursor = 0;
+    let match: RegExpExecArray | null;
+    while ((match = boldPattern.exec(source))) {
+      const before = source.slice(cursor, match.index);
+      const boldText = match[1] ?? "";
+      if (before) runs.push({ text: before });
+      if (boldText) runs.push({ text: boldText, style: { bold: true } });
+      cursor = match.index + match[0].length;
+    }
+
+    if (!runs.length) {
+      node.text = source;
+      node.richText = undefined;
+      return;
+    }
+
+    const after = source.slice(cursor);
+    if (after) runs.push({ text: after });
+    const text = runs.map((run) => run.text).join("");
+    node.text = text || fallback;
+    node.richText = normalizeRichText(runs, node.text);
+  };
+
+  const createMarkdownNode = (value: string, fallback = "节点", forceBold = false): MindMapNode => {
+    const node = createNode();
+    applyMarkdownText(node, value, fallback, forceBold);
+    return node;
+  };
+
   for (const rawLine of markdown.split(/\r?\n/)) {
     const line = rawLine.trimEnd();
     if (!line.trim() || line.trimStart().startsWith("---") || line.trimStart().startsWith("```") || /^\s*\|.*\|\s*$/.test(line)) continue;
@@ -1486,12 +1525,12 @@ export function markdownToDocument(markdown: string, fallbackTitle = "思维导�
       }
       skippingTableOfContents = false;
       if (level === 1 && !rootAssigned && !doc.root.children.length && !hasLeadingContent) {
-        doc.root.text = text;
-        doc.title = text;
+        applyMarkdownText(doc.root, text);
+        doc.title = doc.root.text;
         rootAssigned = true;
         stack.length = 1;
       } else {
-        const node = createNode(text);
+        const node = createMarkdownNode(text);
         while (stack.length > 1 && (stack.at(-1)?.level ?? 0) >= level) stack.pop();
         const parent = stack.at(-1)?.node ?? doc.root;
         parent.children.push(node);
@@ -1504,7 +1543,7 @@ export function markdownToDocument(markdown: string, fallbackTitle = "思维导�
 
     if (quote) {
       const parent = stack.at(-1)?.node ?? doc.root;
-      parent.children.push(createNode(quote[1]?.trim() || "引用"));
+      parent.children.push(createMarkdownNode(quote[1]?.trim() || "引用"));
       hasLeadingContent ||= !rootAssigned;
       continue;
     }
@@ -1512,15 +1551,15 @@ export function markdownToDocument(markdown: string, fallbackTitle = "思维导�
     if (boldOutline) {
       const text = boldOutline[1]?.trim() || "节点";
       if (!rootAssigned && !doc.root.children.length && stack.length === 1) {
-        doc.root.text = text;
-        doc.title = text;
+        applyMarkdownText(doc.root, text, "节点", true);
+        doc.title = doc.root.text;
         rootAssigned = true;
         currentBoldNode = doc.root;
         continue;
       }
       const isTheme = /^主题\s*[一二三四五六七八九十百千万零〇○0-9]+/.test(text);
       const parent = isTheme ? doc.root : currentBoldTheme ?? doc.root;
-      const node = createNode(text);
+      const node = createMarkdownNode(text, "节点", true);
       parent.children.push(node);
       currentBoldNode = node;
       if (isTheme) currentBoldTheme = node;
@@ -1536,7 +1575,7 @@ export function markdownToDocument(markdown: string, fallbackTitle = "思维导�
       const parentLevel = [...stack].reverse().find((entry) => entry.kind === "heading" || entry.kind === "bold")?.level ?? 1;
       const level = parentLevel + Math.floor(spaces / 2) + 1;
       const parsed = parseTaskText((listMatch[2] ?? "节点").trim());
-      const node = createNode(parsed.text);
+      const node = createMarkdownNode(parsed.text);
       node.task = parsed.task;
       while (stack.length > 1 && (stack.at(-1)?.level ?? 0) >= level) stack.pop();
       const parent = stack.at(-1)?.node ?? doc.root;
@@ -1547,12 +1586,12 @@ export function markdownToDocument(markdown: string, fallbackTitle = "思维导�
     }
 
     if (currentBoldNode) {
-      currentBoldNode.children.push(createNode(line.trim()));
+      currentBoldNode.children.push(createMarkdownNode(line.trim()));
       continue;
     }
 
     const parent = stack.at(-1)?.node;
-    if (parent && parent !== doc.root) parent.children.push(createNode(line.trim()));
+    if (parent && parent !== doc.root) parent.children.push(createMarkdownNode(line.trim()));
     else hasLeadingContent = true;
   }
 

@@ -570,8 +570,17 @@ export const setIcon = () => {};
   const boldOutlineDocument = model.markdownToDocument(boldOutlineMarkdown, "fallback");
   assert.equal(boldOutlineDocument.root.text, "相丽君—红宝书", "the first standalone bold line must become the imported root node");
   assert.deepEqual(boldOutlineDocument.root.children.map((node) => node.text), ["主题一 · 写时代，不负韶华", "主题二 · 写政务，初心为民"], "bold theme markers must remain sibling branches");
+  assert.equal(boldOutlineDocument.root.richText?.[0]?.style?.bold, true, "standalone bold root text must use the rich-text bold style");
+  assert.equal(boldOutlineDocument.root.children[0]?.richText?.[0]?.style?.bold, true, "standalone bold theme text must use the rich-text bold style");
   assert.deepEqual(boldOutlineDocument.root.children[0]?.children.map((node) => node.text), ["与时偕行 · 顺势而为", "好标题"], "plain text and secondary bold labels must stay under their current theme");
   assert.deepEqual(boldOutlineDocument.root.children[0]?.children[1]?.children.map((node) => node.text), ["画好时代发展的\"同心圆\"", "赓续时代薪火，书写崭新篇章"]);
+  const richMarkdownDocument = model.markdownToDocument("# 根节点\n- **凡益之道，与时偕行。** ——《周易》", "fallback");
+  const richMarkdownNode = richMarkdownDocument.root.children[0];
+  assert.equal(richMarkdownNode?.text, "凡益之道，与时偕行。 ——《周易》", "Markdown bold markers must not remain in imported node text");
+  assert.equal(richMarkdownNode?.richText?.[0]?.text, "凡益之道，与时偕行。");
+  assert.equal(richMarkdownNode?.richText?.[0]?.style?.bold, true, "Markdown bold text must retain its rich-text bold style");
+  assert.equal(richMarkdownNode?.richText?.[1]?.text, " ——《周易》");
+  assert.match(model.documentToMarkdown(richMarkdownDocument), /\*\*凡益之道，与时偕行。\*\* ——《周易》/);
   const markdownWithTableOfContents = `## 目录
 
 | 序号 | 主题 |
