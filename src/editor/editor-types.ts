@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file editor-types.ts
  * @description 编辑器领域与 Obsidian 宿主层之间的稳定类型契约。
  */
@@ -37,6 +37,8 @@ export interface MindMapEditorCallbacks {
   onScheduleAutoUpload: (nodeId: string, blockId: string, localPath: string, suggestedName: string) => boolean;
   onCreateSubmap: (node: MindMapNode) => Promise<MindMapSubmap>;
   onDeleteSubmap: (submap: MindMapSubmap) => Promise<boolean>;
+  onExtractToSubmap: (node: MindMapNode) => Promise<MindMapSubmap>;
+  onMergeFromSubmap: () => Promise<void>;
   onOpenMindMap: (path: string, focusNodeId?: string) => void | Promise<void>;
   onOpenArticleDirectory: (path: string) => void | Promise<void>;
   onSearchMapFamily: () => void;

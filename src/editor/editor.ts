@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file editor.ts
  * @description 编辑器领域的核心交互控制器。
  *
@@ -3248,7 +3248,9 @@ export class MindMapEditor {
     menu.addItem((item) => item.setTitle(selected?.code ? "编辑代码" : "插入代码").setIcon("code-2").onClick(() => this.editCode()));
     if (selected?.code) menu.addItem((item) => item.setTitle("移除代码").setIcon("eraser").onClick(() => this.removeCode()));
     menu.addItem((item) => item.setTitle(selected?.submap ? "进入子导图" : "创建子导图").setIcon("network").onClick(() => void this.createOrOpenSubmap()));
+    if (!selected?.submap && selected !== this.document.root) menu.addItem((item) => item.setTitle("提取为子导图").setIcon("layers").onClick(() => void this.extractToSubmap()));
     if (selected?.submap) menu.addItem((item) => item.setTitle("删除子导图 / 移除链接").setIcon("unlink").onClick(() => void this.deleteSelectedSubmap()));
+    if (this.document.navigation?.parentPath && selected === this.document.root) menu.addItem((item) => item.setTitle("合并回主导图").setIcon("merge").onClick(() => void this.mergeFromSubmap()));
     menu.addSeparator();
     menu.addItem((item) => item.setTitle("复制分支").setIcon("copy").onClick(() => void this.copySelectedBranch()));
     menu.addItem((item) => item.setTitle("粘贴为子节点").setIcon("clipboard-paste").onClick(() => void this.pasteAsChild()));
@@ -3263,6 +3265,42 @@ export class MindMapEditor {
     menu.addSeparator();
     menu.addItem((item) => item.setTitle("删除节点").setIcon("trash-2").onClick(() => this.deleteSelected()));
     menu.showAtMouseEvent(event);
+  }
+
+  /**
+   * 将选中节点及其后代提取为子导图文件，然后从当前文档移除该节点。
+   */
+  private async extractToSubmap(): Promise<void> {
+    const selected = this.selectedNode();
+    if (!selected || selected === this.document.root) return;
+    if (!this.ensureEditable()) return;
+    try {
+      const submap = await this.callbacks.onExtractToSubmap(selected);
+      this.mutate(() => {
+        const parent = findParent(this.document.root, selected.id);
+        if (parent) {
+          const idx = parent.children.findIndex((child) => child.id === selected.id);
+          if (idx >= 0) parent.children.splice(idx, 1);
+        }
+      });
+      await this.callbacks.onOpenMindMap(submap.path);
+    } catch (error) {
+      console.error('MindMap Studio extract to submap failed', error);
+      new Notice('提取子导图失败');
+    }
+  }
+
+  /**
+   * 将当前子导图合并回父导图并删除该子导图文件。
+   */
+  private async mergeFromSubmap(): Promise<void> {
+    if (!this.ensureEditable()) return;
+    try {
+      await this.callbacks.onMergeFromSubmap();
+    } catch (error) {
+      console.error('MindMap Studio merge from submap failed', error);
+      new Notice('合并子导图失败');
+    }
   }
 
   /**

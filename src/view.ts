@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file view.ts
  * @description Obsidian TextFileView 适配层。
  *
@@ -123,6 +123,16 @@ export class MindMapStudioView extends TextFileView {
         onDeleteSubmap: async (submap) => {
           if (!this.file) return false;
           return this.plugin.deleteSubmapFile(this.file, submap);
+        },
+        onExtractToSubmap: async (node) => {
+          if (!this.file) throw new Error("当前脑图尚未关联文件");
+          await this.save();
+          return this.plugin.extractToSubmap(this.file, node);
+        },
+        onMergeFromSubmap: async () => {
+          if (!this.file) { new Notice("当前脑图尚未关联文件"); return; }
+          await this.save();
+          await this.plugin.mergeFromSubmap(this.file);
         },
         onOpenMindMap: async (path, focusNodeId) => {
           await this.save();

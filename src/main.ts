@@ -1475,4 +1475,76 @@ export default class MindMapStudioPlugin extends Plugin {
       }
     }
   }
+
+  /**
+   * 将指定节点及其后代提取为独立子导图文件。
+   * @param parentFile 当前父导图文件。
+   * @param node 要提取的节点（及其后代）。
+   * @returns 创建的子导图引用。
+   * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
+   */
+  async extractToSubmap(parentFile: TFile, node: MindMapNode): Promise<MindMapSubmap> {
+    const title = (nodePlainText(node) || "子导图").trim();
+    const document = this.createConfiguredDocument(title);
+    document.root.children = JSON.parse(JSON.stringify(node.children)) as MindMapNode[];
+    if (node.content) document.root.content = JSON.parse(JSON.stringify(node.content)) as MindMapNode["content"];
+    if (node.richText) document.root.richText = JSON.parse(JSON.stringify(node.richText));
+    document.root.note = node.note;
+    document.root.tags = node.tags?.slice();
+    document.root.task = node.task;
+    document.root.icon = node.icon;
+    if (node.code) document.root.code = JSON.parse(JSON.stringify(node.code));
+    if (node.table) document.root.table = JSON.parse(JSON.stringify(node.table));
+    document.root.link = undefined;
+    syncNodeLegacyFields(document.root);
+    document.title = title;
+    document.navigation = {
+      parentPath: parentFile.path,
+      parentNodeId: node.id,
+      parentTitle: parentFile.basename,
+      parentNodeText: nodePlainText(node) || undefined
+    };
+    const parentFolder = parentFile.parent?.path ?? "";
+    const configuredAssets = normalizePath(this.settings.assetFolder || "MindMap Assets");
+    const parentMapFolder = this.sanitizeFilename(parentFile.basename);
+    const submapFolder = normalizePath([parentFolder, configuredAssets, parentMapFolder].filter(Boolean).join("/"));
+    await this.ensureFolderPath(submapFolder);
+    const path = await this.getAvailablePath(normalizePath(submapFolder + "/" + this.sanitizeFilename(title) + "." + MINDMAP_EXTENSION));
+    const file = await this.app.vault.create(path, serializeDocument(document));
+    return { path: file.path, title: file.basename };
+  }
+
+  /**
+   * 将当前子导图合并回其父导图。
+   * @param submapFile 当前子导图文件。
+   * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
+   */
+  async mergeFromSubmap(submapFile: TFile): Promise<void> {
+    const submapContent = await this.app.vault.read(submapFile);
+    const submapDoc = parseDocument(submapContent, submapFile.basename);
+    const parentPath = submapDoc.navigation?.parentPath;
+    if (!parentPath) { new Notice("此子导图没有父导图引用，无法合并"); return; }
+    const parentFile = this.app.vault.getAbstractFileByPath(normalizePath(parentPath));
+    if (!(parentFile instanceof TFile)) { new Notice("父导图文件不存在"); return; }
+    const parentContent = await this.app.vault.read(parentFile);
+    const parentDoc = parseDocument(parentContent, parentFile.basename);
+    let targetNode: MindMapNode | null = null;
+    const searchParent = (node: MindMapNode): void => {
+      if (targetNode) return;
+      if (node.submap?.path) {
+        const resolved = this.resolveMindMapFile(node.submap.path, parentFile.path);
+        if (resolved?.path === submapFile.path) { targetNode = node; return; }
+      }
+      for (const child of node.children) searchParent(child);
+    };
+    searchParent(parentDoc.root);
+    if (!targetNode) { new Notice("父导图中找不到链接到该子导图的节点"); return; }
+    const merged = JSON.parse(JSON.stringify(submapDoc.root.children)) as MindMapNode[];
+    (targetNode as MindMapNode).children.push(...merged);
+    (targetNode as MindMapNode).submap = undefined;
+    await this.app.vault.modify(parentFile, serializeDocument(parentDoc));
+    await this.app.vault.trash(submapFile, true);
+    new Notice("已合并到 " + parentFile.basename + " 并删除子导图");
+    await this.openMindMapPath(parentFile.path, "", undefined);
+  }
 }
