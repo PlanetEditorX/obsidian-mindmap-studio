@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file main.ts
  * @description 插件入口与跨文件服务层。
  *
@@ -311,20 +311,27 @@ export default class MindMapStudioPlugin extends Plugin {
   /**
    * 批量替换搜索结果中的节点文字。
    */
-  private async replaceAllInSearchResults(results: MindMapSearchResult[], query: string, replacement: string, useRegex: boolean): Promise<void> {
+  private async replaceAllInSearchResults(results: MindMapSearchResult[], query: string, replacement: string, useRegex: boolean): Promise<number> {
     const byFile = new Map<string, MindMapSearchResult[]>();
     for (const result of results) {
       const list = byFile.get(result.filePath);
       if (list) list.push(result); else byFile.set(result.filePath, [result]);
     }
+    const replaceQ = query.trim();
     const replaceIn = (text: string): string => {
+      if (!replaceQ || !text) return text;
       if (useRegex) {
-        try { return text.replace(new RegExp(query, "g"), replacement); }
+        try { return text.replace(new RegExp(replaceQ, "g"), replacement); }
         catch { return text; }
       }
-      return text.replaceAll(query, replacement);
+      // Case-insensitive replace to match search behavior
+      try {
+        const escaped = replaceQ.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        return text.replace(new RegExp(escaped, "gi"), replacement);
+      } catch { return text; }
     };
     // We need the original query from the modal; store it temporarily
+    let modifiedCount = 0;
     for (const [filePath, fileResults] of byFile) {
       const file = this.app.vault.getAbstractFileByPath(filePath);
       if (!(file instanceof TFile)) continue;
@@ -334,10 +341,15 @@ export default class MindMapStudioPlugin extends Plugin {
         const nodeIds = new Set(fileResults.map((r) => r.nodeId));
         const visit = (node: MindMapNode): void => {
           if (!nodeIds.has(node.id)) return;
+          // Only replace if the node's own text contains the search term
+          // (search may match via breadcrumb, which should not trigger replace)
+          const nodeTextLower = (node.text ?? "").toLocaleLowerCase();
+          if (!nodeTextLower.includes(replaceQ.toLocaleLowerCase())) return;
           const oldText = node.text;
           const newText = replaceIn(oldText);
           if (newText !== oldText) {
             node.text = newText;
+            modifiedCount += 1;
             if (node.richText) {
               for (const run of node.richText) {
                 const oldRun = run.text;
@@ -350,14 +362,14 @@ export default class MindMapStudioPlugin extends Plugin {
             const newNote = replaceIn(node.note);
             if (newNote !== node.note) node.note = newNote;
           }
-          for (const child of node.children) visit(child);
         };
         visit(doc.root);
-        await this.app.vault.modify(file, serializeDocument(doc));
+        if (modifiedCount > 0) await this.app.vault.modify(file, serializeDocument(doc));
       } catch (err) {
         console.warn(`MindMap Studio could not replace in ${filePath}:`, err);
       }
     }
+    return modifiedCount;
   }
 
   /**

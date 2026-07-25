@@ -831,7 +831,7 @@ export class GlobalMindMapSearchModal extends Modal {
     private readonly maxResults: number,
     private readonly onOpenResult: (result: MindMapSearchResult) => void | Promise<void>,
     private readonly onRebuild: () => Promise<void>,
-    private readonly onReplaceAll?: (results: MindMapSearchResult[], query: string, replacement: string, useRegex: boolean) => Promise<void>,
+    private readonly onReplaceAll?: (results: MindMapSearchResult[], query: string, replacement: string, useRegex: boolean) => Promise<number>,
     private readonly scopePaths?: ReadonlySet<string>,
     private readonly scopeTitle = "全局搜索思维导图",
     private readonly scopeDescription = "所有导图、子节点和子导图"
@@ -1011,12 +1011,16 @@ export class GlobalMindMapSearchModal extends Modal {
         if (!this.onReplaceAll) { new Notice("当前模式不支持替换操作。"); return; }
         replaceOneBtn.disabled = true;
         try {
-          await this.onReplaceAll([result], this.inputEl.value, replacement, this.useRegex);
-          new Notice("已替换此节点");
-          const idx = this.renderedResults.indexOf(result);
-          if (idx >= 0) {
-            this.renderedResults.splice(idx, 1);
-            this.renderResultList();
+          const count = await this.onReplaceAll([result], this.inputEl.value, replacement, this.useRegex);
+          if (count > 0) {
+            new Notice("已替换此节点");
+            const idx = this.renderedResults.indexOf(result);
+            if (idx >= 0) {
+              this.renderedResults.splice(idx, 1);
+              this.renderResultList();
+            }
+          } else {
+            new Notice("节点文字中未找到匹配，未作替换");
           }
         } finally {
           replaceOneBtn.disabled = false;
