@@ -3674,7 +3674,7 @@ async createSubmapFile(parentFile: TFile, node: MindMapNode): Promise<MindMapSub
 
 ### 方法 `MindMapStudioPlugin.deleteSubmapFile`
 
-源码：`src/main.ts:1286`
+源码：`src/main.ts:1287`
 
 Moves a linked child mind-map file to the system trash.
 
@@ -3684,7 +3684,7 @@ async deleteSubmapFile(parentFile: TFile, submap: MindMapSubmap): Promise<boolea
 
 ### 方法 `MindMapStudioPlugin.openMindMapPath`
 
-源码：`src/main.ts:1301`
+源码：`src/main.ts:1302`
 
 打开mind map path，并保持模型、界面和持久化状态的一致性。
 
@@ -3694,7 +3694,7 @@ async openMindMapPath(path: string, sourcePath = "", preferredLeaf?: WorkspaceLe
 
 ### 方法 `MindMapStudioPlugin.ensureFolderPath`
 
-源码：`src/main.ts:1317`
+源码：`src/main.ts:1318`
 
 执行“ensure folder path”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
 
@@ -3704,7 +3704,7 @@ private async ensureFolderPath(folder: string): Promise<void>
 
 ### 方法 `MindMapStudioPlugin.migrateLegacyFile`
 
-源码：`src/main.ts:1335`
+源码：`src/main.ts:1336`
 
 迁移legacy file，并保持模型、界面和持久化状态的一致性。
 
@@ -3714,7 +3714,7 @@ async migrateLegacyFile(file: TFile, openAfter = true): Promise<TFile | null>
 
 ### 方法 `MindMapStudioPlugin.isMindMapFile`
 
-源码：`src/main.ts:1373`
+源码：`src/main.ts:1374`
 
 判断mind map file，并保持模型、界面和持久化状态的一致性。
 
@@ -3724,7 +3724,7 @@ isMindMapFile(file: TFile): boolean
 
 ### 方法 `MindMapStudioPlugin.isLegacyMindMapFile`
 
-源码：`src/main.ts:1383`
+源码：`src/main.ts:1384`
 
 判断legacy mind map file，并保持模型、界面和持久化状态的一致性。
 
@@ -3734,7 +3734,7 @@ isLegacyMindMapFile(file: TFile): boolean
 
 ### 方法 `MindMapStudioPlugin.convertMarkdownFile`
 
-源码：`src/main.ts:1392`
+源码：`src/main.ts:1393`
 
 转换markdown file，并保持模型、界面和持久化状态的一致性。
 
@@ -3744,7 +3744,7 @@ private async convertMarkdownFile(file: TFile): Promise<void>
 
 ### 方法 `MindMapStudioPlugin.resolveFolder`
 
-源码：`src/main.ts:1409`
+源码：`src/main.ts:1410`
 
 解析并确定folder，并保持模型、界面和持久化状态的一致性。
 
@@ -3754,7 +3754,7 @@ private async resolveFolder(explicitFolder: string | undefined, activeFile: TFil
 
 ### 方法 `MindMapStudioPlugin.buildNewTitle`
 
-源码：`src/main.ts:1423`
+源码：`src/main.ts:1424`
 
 构建new title，并保持模型、界面和持久化状态的一致性。
 
@@ -3764,7 +3764,7 @@ private buildNewTitle(): string
 
 ### 方法 `MindMapStudioPlugin.sanitizeFilename`
 
-源码：`src/main.ts:1436`
+源码：`src/main.ts:1437`
 
 执行“sanitize filename”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
 
@@ -3774,7 +3774,7 @@ sanitizeFilename(value: string): string
 
 ### 方法 `MindMapStudioPlugin.getSourceTitle`
 
-源码：`src/main.ts:1446`
+源码：`src/main.ts:1447`
 
 读取并返回source title，并保持模型、界面和持久化状态的一致性。
 
@@ -3784,7 +3784,7 @@ private getSourceTitle(context: MarkdownPostProcessorContext): string
 
 ### 方法 `MindMapStudioPlugin.processMindMapEmbeds`
 
-源码：`src/main.ts:1458`
+源码：`src/main.ts:1459`
 
 注册 Markdown 代码块静态渲染，并在阅读模式中解析嵌入的思维导图源。静态预览不会修改原文件。
 
@@ -3794,7 +3794,7 @@ private async processMindMapEmbeds(element: HTMLElement, context: MarkdownPostPr
 
 ### 方法 `MindMapStudioPlugin.extractToSubmap`
 
-源码：`src/main.ts:1487`
+源码：`src/main.ts:1488`
 
 将指定节点及其后代提取为独立子导图文件。
 
@@ -3804,7 +3804,7 @@ async extractToSubmap(parentFile: TFile, node: MindMapNode): Promise<MindMapSubm
 
 ### 方法 `MindMapStudioPlugin.mergeFromSubmap`
 
-源码：`src/main.ts:1523`
+源码：`src/main.ts:1524`
 
 将当前子导图合并回其父导图。
 

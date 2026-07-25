@@ -1251,6 +1251,7 @@ export default class MindMapStudioPlugin extends Plugin {
   async createSubmapFile(parentFile: TFile, node: MindMapNode): Promise<MindMapSubmap> {
     const title = (nodePlainText(node) || "子导图").trim();
     const document = this.createConfiguredDocument(title);
+    document.root.children = [];
     document.root.content = [{ id: document.root.id + "_title", type: "text", text: title }];
     syncNodeLegacyFields(document.root);
     // 1.4.2: parent navigation is handled by the dedicated breadcrumb bar,
