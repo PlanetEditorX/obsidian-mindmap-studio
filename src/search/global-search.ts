@@ -949,7 +949,7 @@ export class GlobalMindMapSearchModal extends Modal {
     const trimmed = query.trim();
     if (!trimmed) {
       this.renderedResults = [];
-            this.replaceRowEl.style.display = "none";
+            this.replaceRowEl.style.display = "flex";
       this.summaryEl.setText(status.building && !this.scopePaths
         ? `正在建立索引，已收录 ${scopedStatus.files} 个导图、${scopedStatus.nodes} 个节点…`
         : `搜索范围包含 ${scopedStatus.files} 个导图、${scopedStatus.nodes} 个节点。输入关键词开始搜索。`);
@@ -960,7 +960,7 @@ export class GlobalMindMapSearchModal extends Modal {
     }
 
     this.renderedResults = this.index.search(trimmed, this.maxResults, this.scopePaths, this.useRegex);
-          this.replaceRowEl.style.display = "";
+          this.replaceRowEl.style.display = "flex";
       this.summaryEl.setText(`找到 ${this.renderedResults.length}${this.renderedResults.length >= this.maxResults ? "+" : ""} 个结果 · 范围 ${scopedStatus.files} 个导图 / ${scopedStatus.nodes} 个节点`);
     if (!this.renderedResults.length) {
       this.resultsEl.createDiv({ cls: "mms-global-search-empty", text: status.building ? "索引仍在建立，请稍后重试。" : "没有匹配结果。" });
@@ -975,6 +975,26 @@ export class GlobalMindMapSearchModal extends Modal {
       const badges = header.createDiv({ cls: "mms-global-search-result-badges" });
       badges.createSpan({ cls: "mms-global-search-badge", text: result.matchedKind });
       if (result.isSubmapDocument) badges.createSpan({ cls: "mms-global-search-badge is-submap", text: "子导图" });
+      const replaceOneBtn = header.createEl("button", {
+        cls: "mms-global-search-replace-one",
+        attr: { type: "button", title: "替换此节点" }
+      });
+      setIcon(replaceOneBtn, "rotate-ccw");
+      replaceOneBtn.addEventListener("click", async (event) => {
+        event.stopPropagation();
+        const replacement = this.replaceInputEl.value.trim();
+        if (!replacement) { new Notice("请先输入替换文本。"); return; }
+        if (!this.onReplaceAll) { new Notice("当前模式不支持替换操作。"); return; }
+        replaceOneBtn.disabled = true;
+        try {
+          await this.onReplaceAll([result], this.inputEl.value, replacement, this.useRegex);
+          new Notice("已替换此节点");
+          const trimmed = this.inputEl.value.trim();
+          if (trimmed) this.renderResults(trimmed);
+        } finally {
+          replaceOneBtn.disabled = false;
+        }
+      });
       const file = button.createDiv({ cls: "mms-global-search-result-file" });
       file.createSpan({ text: result.mapHierarchy?.join(" › ") || result.fileTitle });
       file.createSpan({ cls: "mms-global-search-result-path", text: result.filePath });

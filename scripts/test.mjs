@@ -773,6 +773,7 @@ export const setIcon = () => {};
   assert.match(mainSource, /replaceAllInSearchResults/, "main module should support search-and-replace");
   assert.match(globalSearchSource, /mms-global-search-regex/, "search modal should include a regex toggle button");
   assert.match(globalSearchSource, /mms-global-search-replace-row/, "search modal should include a replace row");
+  assert.match(globalSearchSource, /mms-global-search-replace-one/, "search results should include a per-result replace button");
   assert.match(globalSearchSource, /古诗 › 唐诗/);
   assert.match(globalSearchSource, /first climb to the top parent/);
   assert.match(globalSearchSource, /version: 2/);
@@ -1048,6 +1049,7 @@ export const setIcon = () => {};
   assert.match(cssSource, /\.mms-global-search-result/);
   assert.match(cssSource, /mms-global-search-regex/, "CSS should style the regex toggle button");
   assert.match(cssSource, /mms-global-search-replace-row/, "CSS should style the replace section");
+  assert.match(cssSource, /mms-global-search-replace-one/, "CSS should style the per-result replace button");
 
   console.log("All MindMap Studio tests passed.");
 } finally {
