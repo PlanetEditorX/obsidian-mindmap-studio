@@ -3083,7 +3083,7 @@ export class MindMapEditor {
   private async handlePaste(event: ClipboardEvent): Promise<void> {
     if (this.readOnly) return;
     const target = event.target as HTMLElement;
-    if (target.matches("input, textarea, select, [contenteditable='true']")) return;
+    if (target.closest("input, textarea, select, [contenteditable='true']")) return;
     const data = event.clipboardData;
     if (!data) return;
     const imageItem = Array.from(data.items).find((item) => item.kind === "file" && item.type.startsWith("image/"));
@@ -3130,7 +3130,24 @@ export class MindMapEditor {
       new Notice(`已识别并插入${code.language ? ` ${code.language}` : ""}代码`);
       return;
     }
-    const sourceNodes = htmlBranch ? [htmlBranch] : parseClipboardNodes(text);
+    // Plain single-line text: replace node content instead of creating child
+    if (!htmlBranch && !table && !code) {
+      const plainText = text.trim();
+      if (plainText && !plainText.includes(String.fromCharCode(10)) && !/^(?:#{1,6}\s+|[-*+]\s+|\d+[.)]\s+)/m.test(plainText)) {
+        event.preventDefault();
+        try { JSON.parse(plainText); } catch {
+          // Not JSON → plain text paste: set node text
+          this.mutate(() => {
+            selected.text = plainText;
+            selected.richText = undefined;
+            syncNodeLegacyFields(selected);
+          });
+          return;
+        }
+      }
+    }
+
+        const sourceNodes = htmlBranch ? [htmlBranch] : parseClipboardNodes(text);
     if (sourceNodes?.length) {
       event.preventDefault();
       const clones = sourceNodes.map((node) => cloneNodeWithFreshIds(node));
@@ -3783,7 +3800,7 @@ export class MindMapEditor {
       return;
     }
 
-    if (target.matches("input, textarea, select, [contenteditable='true']")) return;
+    if (target.closest("input, textarea, select, [contenteditable='true']")) return;
 
     if (mod && key === "a") {
       event.preventDefault();

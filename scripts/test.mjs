@@ -823,7 +823,7 @@ export const setIcon = () => {};
   const handleKeydownEnd = editorSource.indexOf("\n  private ", handleKeydownStart + 1);
   const handleKeydownSource = editorSource.slice(handleKeydownStart, handleKeydownEnd);
   const searchShortcutIndex = handleKeydownSource.indexOf("if (mod && event.shiftKey && findKey && !event.altKey)");
-  const editableTargetGuardIndex = handleKeydownSource.indexOf('if (target.matches("input, textarea, select, [contenteditable=\'true\']")) return;');
+  const editableTargetGuardIndex = handleKeydownSource.indexOf('if (target.closest("input, textarea, select, [contenteditable=\'true\']")) return;');
   assert.ok(searchShortcutIndex >= 0 && searchShortcutIndex < editableTargetGuardIndex, "search shortcuts must work while an editable element has focus");
   assert.match(handleKeydownSource, /if \(mod && event\.shiftKey && findKey && !event\.altKey\) \{[\s\S]*?event\.preventDefault\(\);[\s\S]*?event\.stopPropagation\(\);[\s\S]*?this\.openSearch\(\)/);
   assert.doesNotMatch(handleKeydownSource, /if \(mod && findKey && !event\.altKey\)/, "Ctrl/Cmd+F must remain available to Obsidian");
