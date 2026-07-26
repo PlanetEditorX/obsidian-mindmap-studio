@@ -3505,10 +3505,12 @@
   transform: translateY(-50%);
 }
 
-.mms-article-node:hover .mms-article-collapse-toggle,
-.mms-article-node:focus-within .mms-article-collapse-toggle,
-.mms-reading-book-section:hover .mms-article-collapse-toggle,
-.mms-reading-book-section:focus-within .mms-article-collapse-toggle {
+.mms-article-heading:hover .mms-article-collapse-toggle,
+.mms-article-heading:focus-within .mms-article-collapse-toggle,
+.mms-article-section-heading:hover .mms-article-collapse-toggle,
+.mms-article-section-heading:focus-within .mms-article-collapse-toggle,
+.mms-reading-map-title:hover .mms-article-collapse-toggle,
+.mms-reading-map-title:focus-within .mms-article-collapse-toggle {
   opacity: 1;
 }
 

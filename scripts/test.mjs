@@ -1425,7 +1425,7 @@ export const setIcon = () => {};
   assert.match(cssSource, /\.mms-article-node\.is-collapsed-by-heading/, "collapsed article sections must be hidden by CSS");
   assert.match(cssSource, /\.mms-reading-book-section\.is-section-collapsed/, "collapsed reading chapters must hide chapter content");
   assert.match(cssSource, /\.mms-article-collapse-toggle\s*\{[\s\S]*opacity:\s*0[\s\S]*pointer-events:\s*auto/, "the floating collapse control must stay interactive while hidden");
-  assert.match(cssSource, /\.mms-article-node:hover \.mms-article-collapse-toggle[\s\S]*opacity:\s*1/, "hovering a section must reveal its collapse control without remounting it");
+  assert.match(cssSource, /\.mms-article-heading:hover \.mms-article-collapse-toggle[\s\S]*\.mms-reading-map-title:hover \.mms-article-collapse-toggle[\s\S]*opacity:\s*1/, "only the hovered heading must reveal its own collapse control without remounting it");
 
 
   const packageJson = JSON.parse(await readFile("package.json", "utf8"));
