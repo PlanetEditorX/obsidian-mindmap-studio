@@ -1943,7 +1943,10 @@ export class MindMapEditor {
       const targetIndex = Math.round(index * (targets.length - 1) / Math.max(1, count - 1));
       const target = targets[targetIndex]!;
       const label = this.articleMiniMapTargetLabel(target);
-      const marker = track.createEl("button", { cls: "mms-article-minimap-marker", attr: { type: "button", "aria-label": label } });
+      const marker = track.createEl("button", {
+        cls: "mms-article-minimap-marker",
+        attr: { type: "button", "aria-label": label, "data-tooltip": label }
+      });
       const depth = this.articleMiniMapDepth(target);
       marker.dataset.minimapTargetIndex = String(targetIndex);
       marker.style.width = "44px";
@@ -1961,7 +1964,7 @@ export class MindMapEditor {
     return Math.max(1, Math.min(8, Number(target.className.match(/depth-(\d+)/)?.[1] ?? 1)));
   }
 
-  /** Returns a concise chapter label for the native minimap-marker tooltip. */
+  /** Returns a concise chapter label for the minimap marker tooltip. */
   private articleMiniMapTargetLabel(target: HTMLElement): string {
     return target.querySelector<HTMLElement>("h1, h2, h3, h4, h5, h6")?.textContent?.trim().slice(0, 160)
       || target.textContent?.trim().slice(0, 160)
