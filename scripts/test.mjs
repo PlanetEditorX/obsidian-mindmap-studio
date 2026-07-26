@@ -705,6 +705,7 @@ export const setIcon = () => {};
   assert.equal(layout.edgeWidthForDepth(document.appearance, 2, 3), 2);
   assert.equal(layout.edgeWidthForDepth(document.appearance, 3, 3), 1);
   assert.equal(layout.edgeWidthForDepth(document.appearance, 2, 2), 1, "the deepest edge in a shallow map must reach the configured minimum");
+  assert.equal(layout.edgeWidthForDepth({ edgeWidth: 4.2, edgeWidthMode: "tapered", edgeMinWidth: 1.2 }, 3, 3), 1.2, "theme edge widths with one decimal place must remain valid taper endpoints");
 
   const svg = layout.documentToSvg(document.root, document.layout, document.title, document.appearance);
   assert.match(svg, /pattern id="mmc-pattern"/);
@@ -1030,6 +1031,8 @@ export const setIcon = () => {};
   assert.match(nodeRichTextSource, /mmc-rich-color-line/);
   assert.match(editorSource, /MINDMAP_THEME_PRESETS/);
   assert.match(editorSource, /edgeWidthForDepth/);
+  assert.match(editorSource, /edgeWidthInput = edgeWidthLabel\.createEl\("input", \{ type: "number", attr: \{ min: "0\.5", max: "8", step: "0\.05" \} \}\)/, "appearance modal must accept the one-decimal edge widths used by themes");
+  assert.match(editorSource, /edgeMinWidthInput = edgeMinWidthLabel\.createEl\("input", \{ type: "number", attr: \{ min: "0\.25", max: "4", step: "0\.05" \} \}\)/, "appearance modal must accept one-decimal tapered endpoints without browser validation errors");
   assert.match(editorSource, /element\.offsetHeight/, "collision layout must use the browser-rendered node height");
   assert.match(editorSource, /applyMeasuredMindMapLayout/);
   assert.match(editorSource, /this\.resizeObserver\?\.observe\(nodeEl\)/, "table and image size changes must trigger a measured reflow");
@@ -1136,6 +1139,7 @@ export const setIcon = () => {};
   assert.match(mainSource, /toggle-mind-map-read-only/);
 
   const settingsSource = await readFile("src/settings.ts", "utf8");
+  assert.match(settingsSource, /\.setLimits\(0\.5, 8, 0\.05\)[\s\S]*\.setLimits\(0\.25, 4, 0\.05\)/, "global edge-width controls must use the same precision as the appearance modal");
   assert.match(settingsSource, /autoUploadEnabled/);
   assert.match(settingsSource, /autoUploadDelaySeconds/);
   assert.match(settingsSource, /autoUploadHostIds/);

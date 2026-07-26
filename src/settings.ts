@@ -1162,7 +1162,7 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
       .setName(this.plugin.settings.edgeWidthMode === "tapered" ? "起始粗细" : "连线粗细")
       .setDesc("靠近中心主题的连线宽度，范围 0.5–8 像素。")
       .addSlider((slider) => slider
-        .setLimits(0.5, 8, 0.25)
+        .setLimits(0.5, 8, 0.05)
         .setDynamicTooltip()
         .setValue(this.plugin.settings.edgeWidth)
         .onChange(async (value) => {
@@ -1176,7 +1176,7 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
         .setName("末端最细宽度")
         .setDesc("深层分支不会细于该值，范围 0.25–4 像素。")
         .addSlider((slider) => slider
-          .setLimits(0.25, 4, 0.25)
+          .setLimits(0.25, 4, 0.05)
           .setDynamicTooltip()
           .setValue(this.plugin.settings.edgeMinWidth)
           .onChange(async (value) => {

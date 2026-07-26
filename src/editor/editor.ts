@@ -682,10 +682,10 @@ class AppearanceModal extends Modal {
     edgeWidthModeSelect.value = this.appearance.edgeWidthMode ?? "tapered";
 
     const edgeWidthLabel = grid.createEl("label", { text: "起始粗细（0.5–8）" });
-    const edgeWidthInput = edgeWidthLabel.createEl("input", { type: "number", attr: { min: "0.5", max: "8", step: "0.25" } });
+    const edgeWidthInput = edgeWidthLabel.createEl("input", { type: "number", attr: { min: "0.5", max: "8", step: "0.05" } });
     edgeWidthInput.value = String(this.appearance.edgeWidth ?? 4.2);
     const edgeMinWidthLabel = grid.createEl("label", { text: "末端最细（0.25–4）" });
-    const edgeMinWidthInput = edgeMinWidthLabel.createEl("input", { type: "number", attr: { min: "0.25", max: "4", step: "0.25" } });
+    const edgeMinWidthInput = edgeMinWidthLabel.createEl("input", { type: "number", attr: { min: "0.25", max: "4", step: "0.05" } });
     edgeMinWidthInput.value = String(this.appearance.edgeMinWidth ?? 1.2);
     const updateEdgeMin = (): void => {
       const tapered = edgeWidthModeSelect.value === "tapered";
