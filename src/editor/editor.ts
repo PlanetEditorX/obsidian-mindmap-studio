@@ -1933,9 +1933,7 @@ export class MindMapEditor {
   private renderArticleMiniMap(): void {
     this.clearArticleMiniMap();
     if ((this.document.view?.articleMiniMap ?? this.options.showArticleMiniMap) !== true) return;
-    const maxDepth = this.effectiveArticleTocMaxDepth();
-    const targets = Array.from(this.articleEl.querySelectorAll<HTMLElement>(".mms-article-node[data-node-id], .mms-reading-book-section"))
-      .filter((target) => this.articleMiniMapDepth(target) <= maxDepth);
+    const targets = this.articleMiniMapTargets();
     if (targets.length < 2) return;
     const miniMap = this.rootEl.createDiv({ cls: "mms-article-minimap", attr: { role: "navigation", "aria-label": "文章缩略导航图" } });
     const track = miniMap.createDiv({ cls: "mms-article-minimap-track" });
@@ -1965,13 +1963,20 @@ export class MindMapEditor {
     return Math.max(1, Math.min(8, Number(target.className.match(/depth-(\d+)/)?.[1] ?? 1)));
   }
 
+  /** Returns only the current page's highest structural categories for the minimap. */
+  private articleMiniMapTargets(): HTMLElement[] {
+    const maxDepth = this.effectiveArticleTocMaxDepth();
+    const visibleTargets = Array.from(this.articleEl.querySelectorAll<HTMLElement>(".mms-article-node[data-node-id], .mms-reading-book-section"))
+      .filter((target) => this.articleMiniMapDepth(target) <= maxDepth);
+    const highestDepth = Math.min(...visibleTargets.map((target) => this.articleMiniMapDepth(target)));
+    return visibleTargets.filter((target) => this.articleMiniMapDepth(target) === highestDepth);
+  }
+
   /** Updates the dark marker to match the article section currently being read. */
   private updateArticleMiniMapActiveMarker(): void {
     const miniMap = this.articleMiniMapEl;
     if (!miniMap) return;
-    const maxDepth = this.effectiveArticleTocMaxDepth();
-    const targets = Array.from(this.articleEl.querySelectorAll<HTMLElement>(".mms-article-node[data-node-id], .mms-reading-book-section"))
-      .filter((target) => this.articleMiniMapDepth(target) <= maxDepth);
+    const targets = this.articleMiniMapTargets();
     if (!targets.length) return;
     const readingTop = this.articleEl.getBoundingClientRect().top + Math.min(132, this.articleEl.clientHeight * .28);
     let activeIndex = 0;
@@ -1997,7 +2002,8 @@ export class MindMapEditor {
     };
     const revealFromCorner = (event: PointerEvent): void => {
       const rootRect = this.rootEl.getBoundingClientRect();
-      if (event.clientX >= rootRect.right - 132 && event.clientY <= rootRect.top + 190) reveal();
+      const center = rootRect.top + rootRect.height / 2;
+      if (event.clientX >= rootRect.right - 132 && Math.abs(event.clientY - center) <= rootRect.height * .34) reveal();
     };
     const updateActive = (): void => this.updateArticleMiniMapActiveMarker();
     this.rootEl.addEventListener("pointermove", revealFromCorner);

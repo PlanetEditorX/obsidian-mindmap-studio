@@ -1188,6 +1188,8 @@ export const setIcon = () => {};
   assert.match(editorSource, /private renderArticleMiniMap\(\): void/, "article and reading views must render a structural minimap navigator");
   assert.match(editorSource, /private updateArticleMiniMapVisibility\(\): void/, "the article minimap must respond to available reading width");
   assert.match(editorSource, /private updateArticleMiniMapActiveMarker\(\): void/, "the article minimap must highlight the current reading section");
+  assert.match(editorSource, /private articleMiniMapTargets\(\): HTMLElement\[\]/, "the article minimap must select only the current page's highest categories");
+  assert.match(editorSource, /articleMiniMapDepth\(target\) === highestDepth/, "minimap entries must exclude lower-level nodes");
   assert.match(editorSource, /this\.effectiveArticleTocMaxDepth\(\)/, "the article minimap must use the configured TOC depth limit");
   assert.match(editorSource, /10_000/, "the article minimap should automatically hide after ten seconds of inactivity");
   assert.match(editorSource, /const taper = \.66 \+ \.34/, "minimap markers must form a wider center and narrower ends");
@@ -1251,7 +1253,7 @@ export const setIcon = () => {};
   assert.match(settingsSource, /一键还原所有插件设置/);
 
   const cssSource = await readFile("styles.css", "utf8");
-  assert.match(cssSource, /\.mms-article-minimap[\s\S]*position:\s*absolute/, "the reading minimap must be anchored in the upper-right corner");
+  assert.match(cssSource, /\.mms-article-minimap[\s\S]*top:\s*50%[\s\S]*transform:\s*translateY\(-50%\)/, "the reading minimap must be centered on the right edge");
   assert.match(cssSource, /\.mms-article-minimap[\s\S]*width:\s*74px/, "the reading minimap should provide a wider click target");
   assert.match(cssSource, /\.mms-article-minimap\.is-hidden[\s\S]*display:\s*none/, "the minimap must disappear when the page edge is too close");
   assert.match(cssSource, /\.mms-article-minimap\.is-idle-hidden[\s\S]*opacity:\s*0/, "the minimap must fade when idle");

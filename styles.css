@@ -2907,7 +2907,7 @@
 .mms-article-minimap {
   position: absolute;
   z-index: 12;
-  top: 58px;
+  top: 50%;
   right: 14px;
   width: 74px;
   max-height: min(58vh, 520px);
@@ -2917,6 +2917,7 @@
   border-radius: 0;
   background: transparent;
   box-shadow: none;
+  transform: translateY(-50%);
 }
 
 .mms-article-minimap.is-hidden {
