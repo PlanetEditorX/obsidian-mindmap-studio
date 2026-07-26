@@ -68,10 +68,10 @@ export function renderArticleMode(container: HTMLElement, options: ArticleRender
   }
 
   for (const info of buildArticleNodeInfo(options.document.root, options.articleBaseDepth)) {
-    const section = page.createEl("section", { cls: `mms-article-node depth-${Math.min(info.depth, 8)}${options.selectedId === info.node.id ? " is-selected" : ""}` });
+    const section = page.createEl("section", { cls: `mms-article-node depth-${Math.min(info.depth, 8)}${!options.readOnly && options.selectedId === info.node.id ? " is-selected" : ""}` });
     section.dataset.nodeId = info.node.id;
     section.id = info.anchor;
-    section.addEventListener("click", () => options.selectNode(info.node.id));
+    if (!options.readOnly) section.addEventListener("click", () => options.selectNode(info.node.id));
     if (info.isHeading) {
       const level = Math.min(6, info.depth + 1);
       const heading = section.createEl(`h${level}` as keyof HTMLElementTagNameMap, {

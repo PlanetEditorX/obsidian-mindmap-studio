@@ -1510,6 +1510,8 @@ export class MindMapEditor {
 
   /** Updates edit affordances in the existing DOM without rebuilding the map or article. */
   private applyReadOnlyStateToRenderedContent(): void {
+    if (this.readOnly) this.articleEl.querySelectorAll(".is-selected, .is-multi-selected")
+      .forEach((element) => element.removeClasses(["is-selected", "is-multi-selected"]));
     this.rootEl.querySelectorAll<HTMLElement>("[data-mms-inline-editable='true']").forEach((element) => {
       // Edit mode uses click-to-activate lines. Keeping inactive lines as
       // ordinary text preserves the reading layout and avoids interception by
