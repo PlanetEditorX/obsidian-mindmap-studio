@@ -99,7 +99,7 @@ export function isArticleHeading(node: MindMapNode): boolean {
   return node.children.length > 0 || Boolean(node.submap?.path);
 }
 
-/** 文章节点在自动、关闭或手动层级规则下的解析结果。 */
+/** 文章节点在自动、关闭或手动最高层级规则下的解析结果。 */
 export interface ArticleNumberingResolution {
   level: number;
   isHeading: boolean;
@@ -108,11 +108,13 @@ export interface ArticleNumberingResolution {
 }
 
 /**
- * 解析单个节点的文章编号状态。手动模式会强制末端节点作为标题，并使用指定层级；关闭模式兼容旧版 skipArticleNumbering 字段。
+ * 解析单个节点的文章编号状态。手动模式只覆盖当前节点所在子树的最高文章层级，
+ * 不再强制末端节点标题化；同级中只要存在自然标题，普通末端节点也会按同级标题编号，
+ * 从而避免首个“词义”等节点丢失序号。关闭模式兼容旧版 skipArticleNumbering 字段。
  *
  * @param node 要解析的节点。
  * @param defaultLevel 根据父节点层级推导出的默认文章层级。
- * @param siblingHasHeading 当前同级中是否存在自然标题或手动标题。
+ * @param siblingHasHeading 当前同级中是否存在自然标题。
  * @returns 供文章正文、目录和子导图深度计算共同使用的编号状态。
  */
 export function resolveArticleNumbering(node: MindMapNode, defaultLevel: number, siblingHasHeading: boolean): ArticleNumberingResolution {
@@ -120,16 +122,18 @@ export function resolveArticleNumbering(node: MindMapNode, defaultLevel: number,
   const manual = mode === "manual";
   const requestedLevel = Number.isFinite(node.articleNumberingLevel) ? Math.floor(node.articleNumberingLevel ?? defaultLevel) : defaultLevel;
   const level = manual ? Math.min(8, Math.max(1, requestedLevel)) : Math.max(1, Math.floor(defaultLevel));
+  const isHeading = isArticleHeading(node) || siblingHasHeading;
   return {
     level,
-    isHeading: isArticleHeading(node) || manual,
+    isHeading,
     skipped: mode === "none",
-    shouldNumber: mode === "manual" || (mode === "auto" && siblingHasHeading)
+    shouldNumber: mode !== "none" && isHeading
   };
 }
 
 /**
- * 计算一个物理导图根节点的首级子节点应使用的文章层级。根节点手动层级只作为基准，不会给文档标题本身添加编号。
+ * 计算一个物理导图根节点的首级子节点应使用的文章层级。根节点的手动层级表示
+ * 当前脑图正文的最高可见层级，文档标题本身不编号，一级子节点直接使用所选层级。
  *
  * @param root 当前物理导图的根节点。
  * @param baseDepth 当前文件根节点在跨文件文章中的基础层级。
@@ -137,10 +141,9 @@ export function resolveArticleNumbering(node: MindMapNode, defaultLevel: number,
  */
 export function articleChildStartLevel(root: MindMapNode, baseDepth = 0): number {
   const normalizedBaseDepth = Math.max(0, Math.floor(baseDepth));
-  const rootBaseDepth = root.articleNumberingMode === "manual" && Number.isFinite(root.articleNumberingLevel)
+  return root.articleNumberingMode === "manual" && Number.isFinite(root.articleNumberingLevel)
     ? Math.min(8, Math.max(1, Math.floor(root.articleNumberingLevel ?? normalizedBaseDepth)))
-    : normalizedBaseDepth;
-  return rootBaseDepth + 1;
+    : normalizedBaseDepth + 1;
 }
 
 /**
@@ -181,8 +184,10 @@ export interface ArticlePageNavigation {
 /**
  * Build the article representation for one physical .mindmap file.
  * `baseDepth` is the absolute article depth represented by this file's root.
- * A manually configured node replaces its inferred level and its descendants
- * continue from that level. Manually configured leaf nodes become headings.
+ * A manually configured node replaces its inferred highest level and its
+ * descendants continue from that level. Heading/body classification remains
+ * structural: leaf peers of headings become same-level headings, while an
+ * isolated terminal node remains body text.
  *
  * @param root 当前物理导图的根节点。
  * @param baseDepth 根节点在整篇文章中的绝对基础层级。
@@ -191,7 +196,7 @@ export interface ArticlePageNavigation {
 export function buildArticleNodeInfo(root: MindMapNode, baseDepth = 0): ArticleNodeInfo[] {
   const result: ArticleNodeInfo[] = [];
   const visitChildren = (parent: MindMapNode, defaultLevel: number): void => {
-    const siblingHasHeading = parent.children.some((child) => isArticleHeading(child) || child.articleNumberingMode === "manual");
+    const siblingHasHeading = parent.children.some((child) => isArticleHeading(child));
     const numberedIndexes = new Map<number, number>();
     for (const child of parent.children) {
       const numbering = resolveArticleNumbering(child, defaultLevel, siblingHasHeading);

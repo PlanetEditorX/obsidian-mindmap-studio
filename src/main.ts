@@ -690,7 +690,7 @@ export default class MindMapStudioPlugin extends Plugin {
     type Item = { node: MindMapNode; file: TFile; document: MindMapDocument; breadcrumb: string[] };
 
     const processItems = async (items: Item[], defaultLevel: number): Promise<void> => {
-      const siblingHasHeading = items.some(({ node }) => isArticleHeading(node) || node.articleNumberingMode === "manual");
+      const siblingHasHeading = items.some(({ node }) => isArticleHeading(node));
       const numberedIndexes = new Map<number, number>();
       for (const item of items) {
         const { node, file: sourceFile, breadcrumb } = item;
@@ -787,7 +787,7 @@ export default class MindMapStudioPlugin extends Plugin {
     const sections: ReadingSection[] = [{ filePath: file.path, document, baseDepth: 0 }];
     const visited = new Set<string>([file.path]);
     const visit = async (nodes: MindMapNode[], sourceFile: TFile, defaultLevel: number): Promise<void> => {
-      const siblingHasHeading = nodes.some((node) => isArticleHeading(node) || node.articleNumberingMode === "manual");
+      const siblingHasHeading = nodes.some((node) => isArticleHeading(node));
       for (const node of nodes) {
         const numbering = resolveArticleNumbering(node, defaultLevel, siblingHasHeading);
         if (node.submap?.path) {

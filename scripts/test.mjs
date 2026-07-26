@@ -347,7 +347,9 @@ export const setIcon = () => {};
   assert.equal(byId.get("chapter-one")?.label, "第一章", "skipped siblings must not consume chapter numbers");
   assert.equal(byId.get("section-one")?.label, "第一节");
   assert.equal(byId.get("leaf-one")?.label, "", "terminal nodes are article body and must not receive another number");
-  assert.equal(byId.get("section-two")?.label, "第三节", "section-leaf now consumes section number, shifting subsequent siblings");
+  assert.equal(byId.get("section-leaf")?.isHeading, true, "a terminal peer of section headings must remain a numbered heading");
+  assert.equal(byId.get("section-leaf")?.label, "第二节", "the first terminal peer must not lose its numbering");
+  assert.equal(byId.get("section-two")?.label, "第三节", "the numbered terminal peer must consume the section counter");
   assert.equal(byId.get("subheading")?.label, "一、");
   assert.equal(byId.get("deep-leaf")?.label, "");
   assert.equal(byId.get("chapter-two")?.label, "第二章");
@@ -388,57 +390,86 @@ export const setIcon = () => {};
     root: {
       id: "idiom-root",
       text: "成语辨析",
-      children: [{
-        id: "idiom-title",
-        text: "相得益彰",
-        articleNumberingMode: "manual",
-        articleNumberingLevel: 3,
-        children: [
-          { id: "idiom-meaning", text: "词义：两个人或两种事物互相配合，双方的长处和作用更能显示出来。", articleNumberingMode: "manual", articleNumberingLevel: 4, children: [] },
-          { id: "idiom-confusing", text: "易混淆成语", articleNumberingMode: "manual", articleNumberingLevel: 4, children: [{ id: "idiom-similar", text: "相辅相成：两种事物互相配合，互相促成，缺一不可。", children: [] }] },
-          { id: "idiom-difference", text: "区分", articleNumberingMode: "manual", articleNumberingLevel: 4, children: [{ id: "idiom-difference-body", text: "相得益彰重在效果好；相辅相成重在缺一不可。", children: [] }] }
-        ]
-      }]
+      articleNumberingMode: "manual",
+      articleNumberingLevel: 5,
+      children: [
+        {
+          id: "idiom-title-1",
+          text: "相得益彰",
+          children: [
+            { id: "idiom-meaning-1", text: "词义：两个人或两种事物互相配合，双方的长处和作用更能显示出来。", children: [] },
+            { id: "idiom-confusing-1", text: "易混淆成语", children: [{ id: "idiom-similar-1", text: "相辅相成：两种事物互相配合，互相促成，缺一不可。", children: [] }] },
+            { id: "idiom-difference-1", text: "区分", children: [{ id: "idiom-difference-body-1", text: "相得益彰重在效果好；相辅相成重在缺一不可。", children: [] }] }
+          ]
+        },
+        {
+          id: "idiom-title-2",
+          text: "方兴未艾",
+          children: [
+            { id: "idiom-meaning-2", text: "词义：事物正在兴起、发展，一时不会终止，多形容新生事物正在蓬勃发展。", children: [] },
+            { id: "idiom-confusing-2", text: "易混淆成语", children: [{ id: "idiom-similar-2", text: "如火如荼：形容旺盛、热烈或激烈。", children: [] }] },
+            { id: "idiom-difference-2", text: "区分", children: [{ id: "idiom-difference-body-2", text: "方兴未艾重在正在发展；如火如荼重在已经旺盛。", children: [] }] }
+          ]
+        }
+      ]
     }
   }, "fallback");
   const idiomInfo = new Map(modes.buildArticleNodeInfo(idiomDocument.root).map((item) => [item.node.id, item]));
-  assert.equal(idiomInfo.get("idiom-title")?.displayTitle, "一、相得益彰", "level 3 manual headings must use Chinese list numbering without an extra space");
-  assert.equal(idiomInfo.get("idiom-meaning")?.displayTitle, "（一）词义：两个人或两种事物互相配合，双方的长处和作用更能显示出来。");
-  assert.equal(idiomInfo.get("idiom-confusing")?.displayTitle, "（二）易混淆成语");
-  assert.equal(idiomInfo.get("idiom-difference")?.displayTitle, "（三）区分");
-  assert.equal(idiomInfo.get("idiom-meaning")?.isHeading, true, "a manually numbered terminal node must render as a heading");
-  assert.equal(idiomInfo.get("idiom-similar")?.label, "", "ordinary descendant text must remain article body");
+  assert.equal(idiomInfo.get("idiom-title-1")?.displayTitle, "1.相得益彰", "the center-node manual level must define the visible highest level directly");
+  assert.equal(idiomInfo.get("idiom-meaning-1")?.displayTitle, "（1）词义：两个人或两种事物互相配合，双方的长处和作用更能显示出来。", "the first terminal peer must retain its number");
+  assert.equal(idiomInfo.get("idiom-confusing-1")?.displayTitle, "（2）易混淆成语");
+  assert.equal(idiomInfo.get("idiom-difference-1")?.displayTitle, "（3）区分");
+  assert.equal(idiomInfo.get("idiom-title-2")?.displayTitle, "2.方兴未艾");
+  assert.equal(idiomInfo.get("idiom-meaning-2")?.displayTitle, "（1）词义：事物正在兴起、发展，一时不会终止，多形容新生事物正在蓬勃发展。", "child counters must restart for each parent");
+  assert.equal(idiomInfo.get("idiom-meaning-1")?.isHeading, true, "a terminal peer of natural headings must render as a heading without a manual leaf override");
+  assert.equal(idiomInfo.get("idiom-similar-1")?.label, "", "ordinary descendant text must remain article body");
+
+  const isolatedManualLeaf = model.normalizeDocument({
+    title: "孤立末端节点",
+    root: {
+      id: "isolated-root",
+      text: "根",
+      children: [{ id: "isolated-leaf", text: "正文", articleNumberingMode: "manual", articleNumberingLevel: 4, children: [] }]
+    }
+  }, "fallback");
+  const isolatedInfo = modes.buildArticleNodeInfo(isolatedManualLeaf.root)[0];
+  assert.equal(isolatedInfo?.isHeading, false, "manual highest-level configuration must not force an isolated terminal node into a heading");
+  assert.equal(isolatedInfo?.label, "");
 
   const arabicDocument = model.normalizeDocument({
     title: "数字编号",
     root: {
       id: "arabic-root",
       text: "数字编号",
+      articleNumberingMode: "manual",
+      articleNumberingLevel: 5,
       children: [{
         id: "arabic-title",
         text: "相得益彰",
-        articleNumberingMode: "manual",
-        articleNumberingLevel: 5,
-        children: [{ id: "arabic-meaning", text: "词义", articleNumberingMode: "manual", articleNumberingLevel: 6, children: [] }]
+        children: [
+          { id: "arabic-meaning", text: "词义", children: [] },
+          { id: "arabic-section", text: "区分", children: [{ id: "arabic-body", text: "正文", children: [] }] }
+        ]
       }]
     }
   }, "fallback");
   const arabicInfo = new Map(modes.buildArticleNodeInfo(arabicDocument.root).map((item) => [item.node.id, item]));
   assert.equal(arabicInfo.get("arabic-title")?.displayTitle, "1.相得益彰");
   assert.equal(arabicInfo.get("arabic-meaning")?.displayTitle, "（1）词义");
+  assert.equal(arabicInfo.get("arabic-section")?.displayTitle, "（2）区分");
 
   const rootBaselineDocument = model.normalizeDocument({
-    title: "根节点基准",
+    title: "根节点最高层级",
     root: {
       id: "baseline-root",
       text: "根",
       articleNumberingMode: "manual",
-      articleNumberingLevel: 2,
+      articleNumberingLevel: 5,
       children: [{ id: "baseline-topic", text: "相得益彰", children: [{ id: "baseline-body", text: "正文", children: [] }] }]
     }
   }, "fallback");
-  assert.equal(modes.articleChildStartLevel(rootBaselineDocument.root), 3);
-  assert.equal(modes.buildArticleNodeInfo(rootBaselineDocument.root)[0]?.displayTitle, "一、相得益彰", "a manual root baseline must shift automatic first-level headings");
+  assert.equal(modes.articleChildStartLevel(rootBaselineDocument.root), 5);
+  assert.equal(modes.buildArticleNodeInfo(rootBaselineDocument.root)[0]?.displayTitle, "1.相得益彰", "a manual center-node level must be the visible highest level, not one level above it");
 
   const mixedLevelDocument = model.normalizeDocument({
     title: "混合编号",
@@ -446,10 +477,10 @@ export const setIcon = () => {};
       id: "mixed-root",
       text: "根",
       children: [
-        { id: "mixed-cn-1", text: "中文一", articleNumberingMode: "manual", articleNumberingLevel: 3, children: [] },
-        { id: "mixed-num-1", text: "数字一", articleNumberingMode: "manual", articleNumberingLevel: 5, children: [] },
-        { id: "mixed-cn-2", text: "中文二", articleNumberingMode: "manual", articleNumberingLevel: 3, children: [] },
-        { id: "mixed-num-2", text: "数字二", articleNumberingMode: "manual", articleNumberingLevel: 5, children: [] }
+        { id: "mixed-cn-1", text: "中文一", articleNumberingMode: "manual", articleNumberingLevel: 3, children: [{ id: "mixed-cn-1-body", text: "正文", children: [] }] },
+        { id: "mixed-num-1", text: "数字一", articleNumberingMode: "manual", articleNumberingLevel: 5, children: [{ id: "mixed-num-1-body", text: "正文", children: [] }] },
+        { id: "mixed-cn-2", text: "中文二", articleNumberingMode: "manual", articleNumberingLevel: 3, children: [{ id: "mixed-cn-2-body", text: "正文", children: [] }] },
+        { id: "mixed-num-2", text: "数字二", articleNumberingMode: "manual", articleNumberingLevel: 5, children: [{ id: "mixed-num-2-body", text: "正文", children: [] }] }
       ]
     }
   }, "fallback");
@@ -462,8 +493,8 @@ export const setIcon = () => {};
   assert.equal(modes.articleDisplayTitle("一、", "标题"), "一、标题");
 
   const idiomHtml = importExport.documentToHtml(idiomDocument);
-  assert.match(idiomHtml, /一、相得益彰/, "HTML export must preserve manual article numbering");
-  assert.match(idiomHtml, /（一）词义/, "HTML export must render manually numbered leaf nodes as headings");
+  assert.match(idiomHtml, /1\.相得益彰/, "HTML export must preserve the custom highest article level");
+  assert.match(idiomHtml, /（1）词义/, "HTML export must retain the first numbered terminal peer");
 
   assert.deepEqual(modes.normalizeVisibleModes(["article", "mindmap", "article"]), ["article", "mindmap"]);
   assert.deepEqual(modes.normalizeVisibleModes([]), ["mindmap", "outline", "article", "reading"]);
@@ -1044,7 +1075,14 @@ export const setIcon = () => {};
   assert.match(mainSource, /vault\.trash\(target, true\)/, "submap deletion should use the system trash");
   assert.match(editorSource, /skipArticleNumbering/);
   assert.match(editorSource, /文章编号方式/);
-  assert.match(editorSource, /手动文章层级/);
+  assert.match(editorSource, /手动层级（自定义最高层级）/);
+  assert.match(editorSource, /最高文章层级/);
+  assert.match(editorSource, /createArticleNumberingControls[\s\S]*AppearanceModal/, "node editing and current-map appearance must share article-numbering controls");
+  assert.match(editorSource, /previousMode === "mindmap"\) this\.persistMindMapViewportState\(\)/, "leaving mind-map mode must persist zoom and pan");
+  assert.match(editorSource, /initializeMindMapViewport\(50\)/);
+  assert.match(editorSource, /private persistMindMapViewportState\(\): void/);
+  assert.match(editorSource, /if \(mode === "mindmap"\) \{[\s\S]*mindMapViewportInitialized[\s\S]*applyTransform/, "returning to mind-map mode must restore the existing transform instead of always fitting");
+  assert.doesNotMatch(editorSource, /mode === "mindmap" && this\.options\.autoFitOnOpen\) window\.setTimeout\(\(\) => this\.fitToView\(\), 20\);/, "mode switching must not unconditionally fit the canvas");
   assert.match(editorSource, /articleNumberingLevel/);
   assert.match(articleRendererSource, /is-compact-number/, "punctuation-style numbering must not insert an artificial visual gap");
   assert.match(mainSource, /const numberedIndexes = new Map<number, number>\(\)/, "cross-file TOC numbering must count each manual level independently");

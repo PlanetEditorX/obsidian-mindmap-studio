@@ -42,7 +42,6 @@ import {
   type MindMapAppearance,
   type MindMapThemePresetId,
   type MindMapDocument,
-  type MindMapDocumentView,
   type MindMapCodeBlock,
   type MindMapContentBlock,
   type MindMapImageContentBlock,
@@ -110,6 +109,75 @@ interface NodeEditValues {
   textAlign?: NodeTextAlign;
   width?: number;
   minHeight?: number;
+}
+
+/** 当前节点或中心节点保存的文章编号覆盖设置。 */
+interface ArticleNumberingValues {
+  articleNumberingMode?: ArticleNumberingMode;
+  articleNumberingLevel?: number;
+}
+
+/** 文章编号控件返回的读取句柄。 */
+interface ArticleNumberingControls {
+  read: () => ArticleNumberingValues;
+}
+
+/**
+ * 创建节点编辑与“当前脑图外观”共用的文章编号控件，确保两处设置语义和文案一致。
+ * 手动层级表示当前节点所在子树的最高文章层级；中心节点本身不编号，一级子节点直接使用所选层级。
+ *
+ * @param container 承载表单控件的网格容器。
+ * @param currentMode 当前保存的编号覆盖模式；undefined 表示自动。
+ * @param currentLevel 当前保存的手动最高层级。
+ * @param onChange 控件变化后需要执行的可选回调，例如节点编辑自动保存。
+ * @returns 可在提交时读取规范化文章编号设置的句柄。
+ */
+function createArticleNumberingControls(
+  container: HTMLElement,
+  currentMode: ArticleNumberingMode | undefined,
+  currentLevel: number | undefined,
+  onChange?: () => void
+): ArticleNumberingControls {
+  const numberingModeLabel = container.createEl("label", { cls: "mmc-article-numbering-control" });
+  numberingModeLabel.createSpan({ text: "文章编号方式" });
+  const numberingModeSelect = numberingModeLabel.createEl("select");
+  numberingModeSelect.createEl("option", { text: "自动（按树层级与标题结构）", attr: { value: "auto" } });
+  numberingModeSelect.createEl("option", { text: "关闭（不显示且不占序号）", attr: { value: "none" } });
+  numberingModeSelect.createEl("option", { text: "手动层级（自定义最高层级）", attr: { value: "manual" } });
+  numberingModeSelect.value = currentMode ?? "auto";
+
+  const numberingLevelLabel = container.createEl("label", { cls: "mmc-article-numbering-control mmc-article-numbering-level" });
+  numberingLevelLabel.createSpan({ text: "最高文章层级" });
+  const numberingLevelSelect = numberingLevelLabel.createEl("select");
+  for (let level = 1; level <= 8; level += 1) {
+    numberingLevelSelect.createEl("option", { text: `${level} 级 · ${articleNumberLabel(level, 1)}示例`, attr: { value: String(level) } });
+  }
+  numberingLevelSelect.value = String(currentLevel ?? 1);
+  const numberingHelp = container.createDiv({
+    cls: "setting-item-description mmc-article-numbering-help",
+    text: "手动层级用于定义当前节点所在子树的最高文章层级；编辑中心节点时，一级子节点直接使用所选层级。末端节点是否作为标题仍由同级结构自动判断。"
+  });
+  const updateNumberingLevelState = (): void => {
+    const manual = numberingModeSelect.value === "manual";
+    numberingLevelSelect.disabled = !manual;
+    numberingLevelLabel.toggleClass("is-disabled", !manual);
+    numberingHelp.toggleClass("is-disabled", !manual);
+  };
+  numberingModeSelect.addEventListener("change", () => {
+    updateNumberingLevelState();
+    onChange?.();
+  });
+  numberingLevelSelect.addEventListener("change", () => onChange?.());
+  updateNumberingLevelState();
+
+  return {
+    read: () => ({
+      articleNumberingMode: numberingModeSelect.value === "manual" || numberingModeSelect.value === "none"
+        ? numberingModeSelect.value
+        : undefined,
+      articleNumberingLevel: numberingModeSelect.value === "manual" ? Number(numberingLevelSelect.value) : undefined
+    })
+  };
 }
 
 /** 文章与大纲模式之间同步阅读位置的语义锚点。 */
@@ -325,34 +393,12 @@ class NodeEditModal extends Modal {
     const tagsInput = tagsLabel.createEl("input", { type: "text" });
     tagsInput.value = this.node.tags?.join(", ") ?? "";
 
-    const numberingModeLabel = detailsGrid.createEl("label", { cls: "mmc-article-numbering-control" });
-    numberingModeLabel.createSpan({ text: "文章编号方式" });
-    const numberingModeSelect = numberingModeLabel.createEl("select");
-    numberingModeSelect.createEl("option", { text: "自动（按树层级与标题结构）", attr: { value: "auto" } });
-    numberingModeSelect.createEl("option", { text: "关闭（不显示且不占序号）", attr: { value: "none" } });
-    numberingModeSelect.createEl("option", { text: "手动层级（末端节点也作为标题）", attr: { value: "manual" } });
-    numberingModeSelect.value = this.node.articleNumberingMode ?? (this.node.skipArticleNumbering === true ? "none" : "auto");
-
-    const numberingLevelLabel = detailsGrid.createEl("label", { cls: "mmc-article-numbering-control mmc-article-numbering-level" });
-    numberingLevelLabel.createSpan({ text: "手动文章层级" });
-    const numberingLevelSelect = numberingLevelLabel.createEl("select");
-    for (let level = 1; level <= 8; level += 1) {
-      numberingLevelSelect.createEl("option", { text: `${level} 级 · ${articleNumberLabel(level, 1)}示例`, attr: { value: String(level) } });
-    }
-    numberingLevelSelect.value = String(this.node.articleNumberingLevel ?? 1);
-    const numberingHelp = detailsGrid.createDiv({
-      cls: "setting-item-description mmc-article-numbering-help",
-      text: "手动层级会覆盖当前节点的自动层级，后代从该层级继续递增；设置根节点层级时，一级子节点从下一层开始。"
-    });
-    const updateNumberingLevelState = (): void => {
-      const manual = numberingModeSelect.value === "manual";
-      numberingLevelSelect.disabled = !manual;
-      numberingLevelLabel.toggleClass("is-disabled", !manual);
-      numberingHelp.toggleClass("is-disabled", !manual);
-    };
-    numberingModeSelect.addEventListener("change", () => { updateNumberingLevelState(); scheduleAutoSave(); });
-    numberingLevelSelect.addEventListener("change", scheduleAutoSave);
-    updateNumberingLevelState();
+    const numberingControls = createArticleNumberingControls(
+      detailsGrid,
+      this.node.articleNumberingMode ?? (this.node.skipArticleNumbering === true ? "none" : undefined),
+      this.node.articleNumberingLevel,
+      () => scheduleAutoSave()
+    );
 
     const styleGrid = form.createDiv({ cls: "mmc-form-grid mmc-style-grid" });
     const colorControl = (labelText: string, current: string | undefined, fallback: string): [HTMLInputElement, HTMLInputElement] => {
@@ -410,15 +456,14 @@ class NodeEditModal extends Modal {
       if (!content.length) { if (showNotice) new Notice("节点至少需要一个文字块或图片块"); return null; }
       const task = taskSelect.value;
       const shape = shapeSelect.value;
+      const numbering = numberingControls.read();
       return {
         content,
         note: noteInput.value.trim(), link: linkInput.value.trim(), icon: iconInput.value.trim().slice(0, 12),
         tags: Array.from(new Set(tagsInput.value.split(/[,，]/).map((tag) => tag.trim().replace(/^#/, "")).filter(Boolean))).slice(0, 12),
         task: task === "todo" || task === "doing" || task === "done" ? task : undefined,
-        articleNumberingMode: numberingModeSelect.value === "manual" || numberingModeSelect.value === "none"
-          ? numberingModeSelect.value
-          : undefined,
-        articleNumberingLevel: numberingModeSelect.value === "manual" ? Number(numberingLevelSelect.value) : undefined,
+        articleNumberingMode: numbering.articleNumberingMode,
+        articleNumberingLevel: numbering.articleNumberingLevel,
         color: colorToggle.checked ? colorInput.value : undefined,
         textColor: textColorToggle.checked ? textColorInput.value : undefined,
         borderColor: borderColorToggle.checked ? borderColorInput.value : undefined,
@@ -444,7 +489,7 @@ class NodeEditModal extends Modal {
     scheduleAutoSave = (): void => { if (timer !== null) window.clearTimeout(timer); timer = window.setTimeout(() => saveNow("autosave"), 280); };
     this.saveOnClose = () => { saveNow("commit"); };
 
-    [iconInput, taskSelect, shapeSelect, tagsInput, numberingModeSelect, numberingLevelSelect, borderWidthInput, fontSizeInput, widthInput, minHeightInput, alignSelect, boldInput, italicInput, underlineInput, noteInput, linkInput]
+    [iconInput, taskSelect, shapeSelect, tagsInput, borderWidthInput, fontSizeInput, widthInput, minHeightInput, alignSelect, boldInput, italicInput, underlineInput, noteInput, linkInput]
       .forEach((input) => { input.addEventListener("input", scheduleAutoSave); input.addEventListener("change", scheduleAutoSave); });
 
     const buttons = form.createDiv({ cls: "mmc-form-actions" });
@@ -496,7 +541,8 @@ class NodeEditModal extends Modal {
  */
 class AppearanceModal extends Modal {
   private readonly appearance: MindMapAppearance;
-  private readonly submit: (appearance: MindMapAppearance) => void;
+  private readonly numbering: ArticleNumberingValues;
+  private readonly submit: (appearance: MindMapAppearance, numbering: ArticleNumberingValues) => void;
   private readonly reset: () => void;
 
   /**
@@ -504,12 +550,20 @@ class AppearanceModal extends Modal {
    *
    * @param app Obsidian 应用实例，用于访问仓库、工作区和 UI 服务。
    * @param appearance 导图外观配置。
+   * @param numbering 当前中心节点保存的文章编号覆盖设置。
    * @param submit 该参数用于 constructor 流程中的输入或控制。
    * @param reset 该参数用于 constructor 流程中的输入或控制。
    */
-  constructor(app: App, appearance: MindMapAppearance, submit: (appearance: MindMapAppearance) => void, reset: () => void) {
+  constructor(
+    app: App,
+    appearance: MindMapAppearance,
+    numbering: ArticleNumberingValues,
+    submit: (appearance: MindMapAppearance, numbering: ArticleNumberingValues) => void,
+    reset: () => void
+  ) {
     super(app);
     this.appearance = appearance;
+    this.numbering = numbering;
     this.submit = submit;
     this.reset = reset;
   }
@@ -521,7 +575,16 @@ class AppearanceModal extends Modal {
     this.titleEl.setText("当前脑图外观");
     this.contentEl.addClass("mmc-appearance-modal");
     const form = this.contentEl.createEl("form");
-    form.createEl("p", { cls: "setting-item-description", text: "先选择一套主题，再按需要修改背景、节点、字体和连线。设置只保存到当前 .mindmap 文件。" });
+    form.createEl("p", { cls: "setting-item-description", text: "先选择一套主题，再按需要修改背景、节点、字体、连线和文章编号。设置只保存到当前 .mindmap 文件。" });
+
+    const numberingSection = form.createDiv({ cls: "mmc-appearance-article-numbering" });
+    numberingSection.createDiv({ cls: "mmc-theme-picker-title", text: "文章编号" });
+    const numberingGrid = numberingSection.createDiv({ cls: "mmc-form-grid mmc-appearance-grid" });
+    const numberingControls = createArticleNumberingControls(
+      numberingGrid,
+      this.numbering.articleNumberingMode,
+      this.numbering.articleNumberingLevel
+    );
 
     let selectedPreset: MindMapThemePresetId = this.appearance.themePreset ?? "classic-indigo";
     const themeSection = form.createDiv({ cls: "mmc-theme-picker" });
@@ -763,7 +826,7 @@ class AppearanceModal extends Modal {
         bold: bold.checked,
         italic: italic.checked,
         underline: underline.checked
-      });
+      }, numberingControls.read());
       this.close();
     });
     window.setTimeout(() => save.focus(), 20);
@@ -802,6 +865,7 @@ export class MindMapEditor {
   private zoom = 1;
   private panX = 0;
   private panY = 0;
+  private mindMapViewportInitialized = false;
   private readonly history: DocumentHistory;
   private draggingId: string | null = null;
   private dragDropPosition: NodeDropPosition | null = null;
@@ -850,17 +914,7 @@ export class MindMapEditor {
     this.layout = computeLayout(this.document.root, this.document.layout, initialAppearance.fontSize ?? 14, initialAppearance.nodeVisualStyle ?? "card", initialAppearance);
     this.buildUi();
     this.render();
-    const savedZoom = this.document.view?.zoom;
-    if (savedZoom && savedZoom !== 1) {
-      window.setTimeout(() => {
-        this.zoom = savedZoom;
-        if (typeof this.document.view?.panX === "number") this.panX = this.document.view.panX;
-        if (typeof this.document.view?.panY === "number") this.panY = this.document.view.panY;
-        this.applyTransform();
-      }, 50);
-    } else if (this.options.autoFitOnOpen) {
-      window.setTimeout(() => this.fitToView(), 50);
-    }
+    this.initializeMindMapViewport(50);
   }
 
   /**
@@ -894,7 +948,7 @@ export class MindMapEditor {
       this.history.reset();
     }
     this.render();
-    if (this.options.autoFitOnOpen) window.setTimeout(() => this.fitToView(), 20);
+    this.initializeMindMapViewport(20);
   }
 
   /**
@@ -911,8 +965,10 @@ export class MindMapEditor {
     if (navigationChanged) this.articleNavigationIndex = null;
     this.options = options;
     const resolved = this.resolveMode(globalModeChanged ? options.defaultViewMode : this.currentMode);
-    if (resolved !== this.currentMode) {
-      const previousMode = this.currentMode;
+    const previousMode = this.currentMode;
+    const modeChanged = resolved !== previousMode;
+    if (modeChanged) {
+      if (previousMode === "mindmap") this.persistMindMapViewportState();
       this.currentMode = resolved;
       this.readOnly = resolved === "article" || resolved === "reading"
         ? true
@@ -931,6 +987,10 @@ export class MindMapEditor {
     }
     if (this.inlineEditingId && !modesChanged && !toolbarChanged && !globalModeChanged) return;
     this.render();
+    if (modeChanged && this.currentMode === "mindmap") {
+      if (!this.mindMapViewportInitialized && this.options.autoFitOnOpen) window.setTimeout(() => this.fitToView(), 20);
+      else window.setTimeout(() => this.applyTransform(), 20);
+    }
   }
 
   /**
@@ -942,6 +1002,7 @@ export class MindMapEditor {
   setDisplayMode(mode: DisplayMode, notifyGlobal = true): void {
     if (!this.options.visibleModes.includes(mode)) return;
     const previousMode = this.currentMode;
+    if (previousMode === "mindmap") this.persistMindMapViewportState();
     const readingAnchor = this.captureReadingPosition(previousMode);
     this.currentMode = mode;
     if ((mode === "article" || mode === "reading") && mode !== previousMode) {
@@ -952,7 +1013,10 @@ export class MindMapEditor {
     this.render();
     if (readingAnchor) this.restoreReadingPosition(mode, readingAnchor);
     if (notifyGlobal) void this.callbacks.onDisplayModeChange(mode);
-    if (mode === "mindmap" && this.options.autoFitOnOpen) window.setTimeout(() => this.fitToView(), 20);
+    if (mode === "mindmap") {
+      if (!this.mindMapViewportInitialized && this.options.autoFitOnOpen) window.setTimeout(() => this.fitToView(), 20);
+      else window.setTimeout(() => this.applyTransform(), 20);
+    }
   }
 
   /**
@@ -1038,12 +1102,7 @@ export class MindMapEditor {
    * @returns 当前操作生成、查找或规范化后的结果。
    */
   getDocument(): MindMapDocument {
-    if (this.zoom !== 1 || this.panX !== 0 || this.panY !== 0) {
-      this.document.view = { ...(this.document.view ?? {}), zoom: this.zoom, panX: this.panX, panY: this.panY };
-    } else {
-      const { zoom, panX, panY, ...rest } = this.document.view ?? {};
-      this.document.view = Object.keys(rest).length ? rest as MindMapDocumentView : undefined;
-    }
+    this.persistMindMapViewportState();
     return cloneDocument(this.document);
   }
 
@@ -1222,12 +1281,14 @@ export class MindMapEditor {
         this.zoom = nextZoom;
         this.panX = pointerX - worldX * nextZoom;
         this.panY = pointerY - worldY * nextZoom;
+        this.mindMapViewportInitialized = true;
         this.applyTransform();
         return;
       }
       if (this.options.twoFingerGestureAction === "pan") {
         this.panX -= event.deltaX;
         this.panY -= event.deltaY;
+        this.mindMapViewportInitialized = true;
         this.applyTransform();
         return;
       }
@@ -1241,6 +1302,7 @@ export class MindMapEditor {
       this.zoom = nextZoom;
       this.panX = pointerX - worldX * nextZoom;
       this.panY = pointerY - worldY * nextZoom;
+      this.mindMapViewportInitialized = true;
       this.applyTransform();
     };
     this.viewportEl.addEventListener("wheel", wheel, { passive: false });
@@ -1329,6 +1391,7 @@ export class MindMapEditor {
       if (!this.panning) return;
       this.panX = this.panStart.panX + event.clientX - this.panStart.x;
       this.panY = this.panStart.panY + event.clientY - this.panStart.y;
+      this.mindMapViewportInitialized = true;
       this.applyTransform();
     };
     const pointerUp = (event: PointerEvent): void => {
@@ -2837,8 +2900,22 @@ export class MindMapEditor {
     new AppearanceModal(
       this.app,
       this.getAppearance(),
-      (appearance) => this.mutate(() => { this.document.appearance = appearance; }),
-      () => this.mutate(() => { this.document.appearance = undefined; })
+      {
+        articleNumberingMode: this.document.root.articleNumberingMode ?? (this.document.root.skipArticleNumbering === true ? "none" : undefined),
+        articleNumberingLevel: this.document.root.articleNumberingLevel
+      },
+      (appearance, numbering) => this.mutate(() => {
+        this.document.appearance = appearance;
+        this.document.root.articleNumberingMode = numbering.articleNumberingMode;
+        this.document.root.articleNumberingLevel = numbering.articleNumberingMode === "manual" ? numbering.articleNumberingLevel : undefined;
+        this.document.root.skipArticleNumbering = numbering.articleNumberingMode === "none" || undefined;
+      }),
+      () => this.mutate(() => {
+        this.document.appearance = undefined;
+        this.document.root.articleNumberingMode = undefined;
+        this.document.root.articleNumberingLevel = undefined;
+        this.document.root.skipArticleNumbering = undefined;
+      })
     ).open();
   }
 
@@ -3319,6 +3396,7 @@ export class MindMapEditor {
     if (!position) return;
     this.panX = -position.x * this.zoom;
     this.panY = -position.y * this.zoom;
+    this.mindMapViewportInitialized = true;
     this.applyTransform();
   }
 
@@ -3720,7 +3798,44 @@ export class MindMapEditor {
     const centerY = (this.layout.minY + this.layout.maxY) / 2;
     this.panX = -centerX * this.zoom;
     this.panY = -centerY * this.zoom;
+    this.mindMapViewportInitialized = true;
     this.applyTransform();
+  }
+
+  /**
+   * 从文档视图状态恢复导图缩放与平移。没有已保存状态时，只在导图当前可见且启用自动适应时执行一次自适应；
+   * 若首次打开就是文章或通读模式，则把自适应延迟到第一次进入导图模式，避免在隐藏画布上计算出错误缩放。
+   *
+   * @param delay 应用已保存变换或自动适应前的延迟毫秒数。
+   */
+  private initializeMindMapViewport(delay: number): void {
+    const saved = this.document.view;
+    const hasSavedViewport = typeof saved?.zoom === "number"
+      || typeof saved?.panX === "number"
+      || typeof saved?.panY === "number";
+    this.zoom = typeof saved?.zoom === "number" ? this.clampZoom(saved.zoom) : 1;
+    this.panX = typeof saved?.panX === "number" ? saved.panX : 0;
+    this.panY = typeof saved?.panY === "number" ? saved.panY : 0;
+    this.mindMapViewportInitialized = hasSavedViewport || !this.options.autoFitOnOpen;
+    if (hasSavedViewport || !this.options.autoFitOnOpen) {
+      window.setTimeout(() => this.applyTransform(), delay);
+    } else if (this.currentMode === "mindmap") {
+      window.setTimeout(() => this.fitToView(), delay);
+    }
+  }
+
+  /**
+   * 把当前导图缩放和平移写回文档视图状态。该方法在离开导图模式和序列化文档前调用，
+   * 因此文章、大纲和通读模式重渲染不会把用户视口恢复为默认自适应大小。
+   */
+  private persistMindMapViewportState(): void {
+    if (!this.mindMapViewportInitialized) return;
+    this.document.view = {
+      ...(this.document.view ?? {}),
+      zoom: this.zoom,
+      panX: this.panX,
+      panY: this.panY
+    };
   }
 
   /**
@@ -3730,6 +3845,7 @@ export class MindMapEditor {
    */
   private setZoom(value: number): void {
     this.zoom = this.clampZoom(value);
+    this.mindMapViewportInitialized = true;
     this.applyTransform();
   }
 
@@ -3774,6 +3890,7 @@ export class MindMapEditor {
     if (this.options.twoFingerGestureAction === "pan") {
       this.panX = gesture.panX + centerX - gesture.centerX;
       this.panY = gesture.panY + centerY - gesture.centerY;
+      this.mindMapViewportInitialized = true;
       this.applyTransform();
       return;
     }
@@ -3790,6 +3907,7 @@ export class MindMapEditor {
     this.zoom = nextZoom;
     this.panX = currentX - worldX * nextZoom;
     this.panY = currentY - worldY * nextZoom;
+    this.mindMapViewportInitialized = true;
     this.applyTransform();
   }
 
