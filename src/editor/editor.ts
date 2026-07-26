@@ -1124,7 +1124,7 @@ export class MindMapEditor {
       restore();
       window.requestAnimationFrame(restore);
     }
-    new Notice(this.readOnly ? "已进入只读模式" : "已进入编辑模式");
+    new Notice(this.readOnly ? "已进入阅读模式" : "已进入编辑模式");
   }
 
   /**
@@ -1209,7 +1209,7 @@ export class MindMapEditor {
       button.addEventListener("click", () => this.setDisplayMode(mode));
       this.modeButtons.set(mode, button);
     }
-    this.lockButton = this.addToolbarButton("lock", "lock-open", "切换只读 / 编辑模式", () => this.toggleReadOnly());
+    this.lockButton = this.addToolbarButton("lock", "lock-open", "切换阅读 / 编辑模式", () => this.toggleReadOnly());
     this.addToolbarSeparator();
     this.addToolbarButton("add-child", "plus-circle", "添加子节点（Tab）", () => this.addChild(), true);
     this.addToolbarButton("add-sibling", "list-plus", "添加同级节点（Enter）", () => this.addSibling(), true);
@@ -1500,6 +1500,7 @@ export class MindMapEditor {
   private applyReadOnlyStateToRenderedContent(): void {
     this.rootEl.querySelectorAll<HTMLElement>("[data-mms-inline-editable='true']").forEach((element) => {
       element.contentEditable = this.readOnly ? "false" : "true";
+      if (this.readOnly) element.removeClass("is-inline-editing");
     });
     if (this.currentMode !== "mindmap") return;
     this.nodesLayerEl.querySelectorAll<HTMLElement>(".mmc-node").forEach((nodeEl) => {
@@ -1526,10 +1527,11 @@ export class MindMapEditor {
     }
     this.lockButton.empty();
     setIcon(this.lockButton, this.readOnly ? "lock" : "lock-open");
-    this.lockButton.setAttr("aria-label", this.readOnly ? "当前只读，点击切换到编辑模式" : "当前可编辑，点击切换到只读模式");
-    this.lockButton.setAttr("title", this.readOnly ? "只读模式" : "编辑模式");
+    this.lockButton.setAttr("aria-label", this.readOnly ? "当前为阅读模式，点击切换到编辑模式" : "当前可编辑，点击切换到阅读模式");
+    this.lockButton.setAttr("title", this.readOnly ? "阅读模式" : "编辑模式");
     this.lockButton.toggleClass("is-active", this.readOnly);
     this.rootEl.toggleClass("is-read-only", this.readOnly);
+    this.rootEl.toggleClass("is-reading", this.readOnly);
     for (const control of this.editControls) {
       if (control instanceof HTMLButtonElement || control instanceof HTMLInputElement || control instanceof HTMLSelectElement) control.disabled = this.readOnly;
       control.toggleClass("is-read-only-disabled", this.readOnly);
@@ -1542,7 +1544,7 @@ export class MindMapEditor {
    */
   private ensureEditable(): boolean {
     if (!this.readOnly) return true;
-    new Notice("当前为只读模式，请先点击锁按钮切换到编辑模式");
+    new Notice("当前为阅读模式，请先点击锁按钮切换到编辑模式");
     return false;
   }
 
@@ -1763,6 +1765,7 @@ export class MindMapEditor {
     element.addEventListener("focus", () => {
       if (this.readOnly) return;
       original = readRichTextEditor(element);
+      element.addClass("is-inline-editing");
       toolbar ??= attachSelectionFormatToolbar({
         editor: element,
         shortcuts: this.options.richTextShortcuts,
@@ -1784,6 +1787,7 @@ export class MindMapEditor {
     element.addEventListener("blur", (event) => {
       if (this.readOnly) return;
       if (toolbar?.contains(event.relatedTarget)) return;
+      element.removeClass("is-inline-editing");
       const next = readRichTextEditor(element);
       toolbar?.cleanup();
       toolbar = null;

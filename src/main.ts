@@ -124,7 +124,7 @@ export default class MindMapStudioPlugin extends Plugin {
     }
     this.addCommand({
       id: "toggle-mind-map-read-only",
-      name: "切换导图只读 / 编辑模式",
+      name: "切换导图阅读 / 编辑模式",
       checkCallback: (checking) => {
         const view = this.app.workspace.activeLeaf?.view;
         const available = view instanceof MindMapStudioView;

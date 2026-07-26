@@ -2980,6 +2980,32 @@
   border-radius: var(--radius-s);
 }
 
+/* Reading typography stays unchanged. Only the focused line makes room for
+   its editing frame, so entering edit mode does not reflow the whole article. */
+.mms-outline-title.is-inline-editing {
+  margin-block: 5px;
+  padding: 6px 8px;
+  background: var(--background-primary-alt);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--interactive-accent) 42%, transparent);
+  border-radius: var(--radius-s);
+}
+
+.mms-article-heading-text.is-inline-editing,
+.mms-article-leaf-text.is-inline-editing,
+.mms-article-paragraph.is-inline-editing {
+  margin-top: calc(.75em + 9px);
+  margin-bottom: calc(.75em + 9px);
+  padding: 7px 10px;
+  background: var(--background-primary-alt);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--interactive-accent) 42%, transparent);
+  border-radius: var(--radius-s);
+}
+
+.mms-article-heading-text.is-inline-editing {
+  margin-top: 6px;
+  margin-bottom: 6px;
+}
+
 .mms-outline-note {
   margin: 0 8px 6px calc(24px + max(0, var(--mms-outline-depth) - 1) * 22px);
   color: var(--text-muted);
@@ -3098,6 +3124,10 @@
   gap: 2px;
   opacity: 0;
   transition: opacity .12s ease;
+}
+
+.mmc-editor.is-reading .mms-inline-node-actions {
+  display: none !important;
 }
 
 .mms-outline-row:hover .mms-inline-node-actions,
