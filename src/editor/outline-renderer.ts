@@ -135,6 +135,8 @@ function renderOutlineContent(container: HTMLElement, node: MindMapNode, depth: 
     const figure = content.createEl("figure", { cls: "mms-outline-image" });
     if (resolved) {
       const image = figure.createEl("img", { attr: { src: resolved, alt: block.alt ?? "图片", loading: "lazy" } });
+      if (block.width) image.style.width = `${block.width}px`;
+      if (block.height) image.style.height = `${block.height}px`;
       image.addEventListener("click", () => new ImagePreviewModal(
         options.app,
         resolved,

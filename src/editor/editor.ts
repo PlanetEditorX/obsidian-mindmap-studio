@@ -313,6 +313,19 @@ class NodeEditModal extends Modal {
           const source = sourceLabel.createEl("input", { type: "text", attr: { placeholder: "仓库路径、[[图片]] 或 https://..." } });
           const altLabel = body.createEl("label", { text: "图片说明（可选）" });
           const alt = altLabel.createEl("input", { type: "text", attr: { placeholder: "图片说明" } });
+          const sizeGrid = body.createDiv({ cls: "mmc-image-size-inputs" });
+          const addSizeInput = (labelText: string, key: "width" | "height"): void => {
+            const label = sizeGrid.createEl("label", { text: labelText });
+            const input = label.createEl("input", { type: "number", attr: { min: "20", max: "2000", step: "1", placeholder: "自动" } });
+            input.value = block[key] === undefined ? "" : String(block[key]);
+            input.addEventListener("input", () => {
+              const value = Number(input.value);
+              block[key] = input.value && Number.isFinite(value) ? Math.max(20, Math.min(2000, Math.round(value))) : undefined;
+              scheduleAutoSave();
+            });
+          };
+          addSizeInput("显示宽度（px）", "width");
+          addSizeInput("显示高度（px）", "height");
           source.addEventListener("input", () => {
             const next = source.value.trim();
             if (next !== block.source) {
@@ -1249,6 +1262,7 @@ export class MindMapEditor {
     this.addToolbarSeparator();
     this.addToolbarButton("task", "circle-check-big", "切换任务状态（Ctrl/Cmd+Enter）", () => this.cycleTask(), true);
     this.addToolbarButton("collapse", "fold-vertical", "展开/收起节点（Space）", () => this.toggleCollapse(), true);
+    this.addToolbarButton("collapse-all", "chevrons-up-down", "展开/折叠全部子项", () => this.toggleAllNodesCollapsed());
     this.addToolbarButton("link", "link", "打开节点链接", () => this.openSelectedLink());
     this.addToolbarButton("search", "search", "搜索当前导图及全部子导图（Ctrl/Cmd+Shift+F）", () => this.openSearch());
     this.addToolbarButton("global-search", "file-search", "全局搜索所有导图", () => this.callbacks.onGlobalSearch());
@@ -1558,6 +1572,10 @@ export class MindMapEditor {
       "is-hidden",
       this.currentMode !== "mindmap" || !this.options.visibleToolbarItems.includes("submap")
     );
+    this.toolbarEl.querySelector<HTMLElement>("[data-toolbar-id='collapse-all']")?.toggleClass(
+      "is-hidden",
+      this.currentMode !== "mindmap" || !this.options.visibleToolbarItems.includes("collapse-all")
+    );
     if (hasLandingChoice) {
       const showingArticle = this.document.view?.articleLandingMode === "article";
       this.articleLandingButton.setAttr("aria-label", showingArticle ? "显示目录" : "显示原始文章");
@@ -1797,7 +1815,7 @@ export class MindMapEditor {
     element.contentEditable = "false";
     element.dataset.mmsInlineEditable = "true";
     element.setAttr("role", "textbox");
-    element.setAttr("aria-label", placeholder);
+    element.removeAttribute("aria-label");
     if (!element.textContent?.trim()) element.dataset.placeholder = placeholder;
     const initialBlock = nodeContentBlocks(node).find((block): block is MindMapTextContentBlock => block.type === "text");
     if (!this.readOnly) renderRichTextRuns(element, initialBlock?.richText, initialBlock?.text ?? nodePrimaryText(node), false);
@@ -1829,6 +1847,13 @@ export class MindMapEditor {
         renderRichTextRuns(element, original.richText, original.text, false);
         element.blur();
       }
+    });
+    element.addEventListener("paste", (event) => {
+      const text = event.clipboardData?.getData("text/plain") ?? "";
+      const copiedNodes = parseClipboardNodes(text);
+      if (!copiedNodes || !/^\s*\{/.test(text)) return;
+      event.preventDefault();
+      document.execCommand("insertText", false, copiedNodes.map((copied) => nodePlainText(copied)).join("\n"));
     });
     element.addEventListener("blur", (event) => {
       if (this.readOnly) return;
@@ -2140,6 +2165,8 @@ export class MindMapEditor {
         if (block.type === "image") {
           const wrap = content.createDiv({ cls: "mmc-node-image-block" });
           const image = wrap.createEl("img", { cls: "mmc-node-image is-loading", attr: { alt: block.alt ?? (nodePlainText(node) || "图片") } });
+          if (block.width) image.style.width = `${block.width}px`;
+          if (block.height) image.style.height = `${block.height}px`;
           const candidates = this.options.imageFailoverEnabled
             ? imageSourceCandidates(block, this.options.imageFailoverUseLocalFallback)
             : imageSourceCandidates(block, false).slice(0, 1);
@@ -3082,6 +3109,12 @@ export class MindMapEditor {
       return;
     }
     this.mutate(apply);
+  }
+
+  /** Toggles every non-root branch between fully expanded and fully collapsed. */
+  private toggleAllNodesCollapsed(): void {
+    const branches = flattenNodes(this.document.root).filter((node) => node !== this.document.root && node.children.length > 0);
+    this.setAllNodesCollapsed(branches.some((node) => !node.collapsed));
   }
 
   /**

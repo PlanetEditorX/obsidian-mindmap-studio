@@ -184,6 +184,10 @@ export interface MindMapImageContentBlock {
   type: "image";
   source: string;
   alt?: string;
+  /** Optional rendered image width in pixels. Omitted values use the view default. */
+  width?: number;
+  /** Optional rendered image height in pixels. Omitted values preserve the image ratio. */
+  height?: number;
   /** Original local vault path retained until every selected image host succeeds. */
   localSource?: string;
   /** Mirror URLs returned by one or more configured image hosts. */
@@ -732,6 +736,12 @@ function normalizeContentBlock(input: unknown): MindMapContentBlock | null {
     const source = typeof image.source === "string" ? image.source.trim().slice(0, 2000) : "";
     if (!source) return null;
     const alt = typeof image.alt === "string" && image.alt.trim() ? image.alt.trim().slice(0, 500) : undefined;
+    const width = typeof image.width === "number" && Number.isFinite(image.width)
+      ? Math.max(20, Math.min(2000, Math.round(image.width)))
+      : undefined;
+    const height = typeof image.height === "number" && Number.isFinite(image.height)
+      ? Math.max(20, Math.min(2000, Math.round(image.height)))
+      : undefined;
     const localSource = typeof image.localSource === "string" && image.localSource.trim()
       ? image.localSource.trim().slice(0, 2000)
       : undefined;
@@ -755,7 +765,7 @@ function normalizeContentBlock(input: unknown): MindMapContentBlock | null {
         }];
       })
       : undefined;
-    return { id, type: "image", source, alt, localSource, remoteSources: remoteSources?.length ? remoteSources : undefined };
+    return { id, type: "image", source, alt, width, height, localSource, remoteSources: remoteSources?.length ? remoteSources : undefined };
   }
   if (candidate.type === "text") {
     const fallbackText = typeof candidate.text === "string" ? candidate.text.replace(/\r\n?/g, "\n").slice(0, 20000) : "";

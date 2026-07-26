@@ -154,6 +154,8 @@ export function renderArticleNodeContent(container: HTMLElement, node: MindMapNo
     } else {
       const resolved = options.callbacks.resolveImage(block.source);
       const image = container.createEl("img", { cls: "mms-article-image", attr: { src: resolved ?? block.source, alt: block.alt ?? "图片" } });
+      if (block.width) image.style.width = `${block.width}px`;
+      if (block.height) image.style.height = `${block.height}px`;
       image.addEventListener("click", () => new ImagePreviewModal(
         options.app,
         resolved ?? block.source,

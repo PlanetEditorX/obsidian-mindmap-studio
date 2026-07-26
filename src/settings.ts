@@ -25,7 +25,7 @@ import { appearanceFromThemePreset, MINDMAP_THEME_PRESETS } from "./themes";
 export const TOOLBAR_ITEMS = [
   ["lock", "阅读/编辑模式"], ["add-child", "添加子节点"], ["add-sibling", "添加同级节点"],
   ["edit", "完整编辑节点"], ["duplicate", "克隆分支"], ["delete", "删除节点"],
-  ["task", "任务状态"], ["collapse", "展开/收起"], ["link", "打开链接"],
+  ["task", "任务状态"], ["collapse", "展开/收起"], ["collapse-all", "展开/折叠全部"], ["link", "打开链接"],
   ["search", "搜索导图"], ["global-search", "全局搜索"], ["table", "表格"],
   ["code", "代码"], ["image", "粘贴图片"], ["submap", "子导图"],
   ["undo", "撤销"], ["redo", "重做"],

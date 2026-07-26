@@ -89,7 +89,7 @@ function nodeDimensions(node: MindMapNode, depth: number, defaultFontSize = 14, 
 
   if (!manualWidth && automatic) {
     for (const block of blocks) {
-      if (block.type === "image") width = Math.max(width, 240);
+      if (block.type === "image") width = Math.max(width, Math.min(900, (block.width ?? 240) + 28));
       else {
         const longestLine = Math.max(1, ...block.text.split(/\r?\n/).map((line) => line.length));
         const visualUnits = Array.from(block.text.split(/\r?\n/).sort((a, b) => b.length - a.length)[0] ?? "")
@@ -114,7 +114,7 @@ function nodeDimensions(node: MindMapNode, depth: number, defaultFontSize = 14, 
   let height = 28 + Math.max(0, fontSize - 14) * 1.4;
   if (!blocks.length) height += depth === 0 ? 34 : 26;
   for (const block of blocks) {
-    if (block.type === "image") height += 132;
+    if (block.type === "image") height += (block.height ?? 110) + 22;
     else height += Math.max(30, estimatedTextLines(block.text, width, fontSize) * (fontSize + 8));
   }
   if (node.tags?.length) height += 20;

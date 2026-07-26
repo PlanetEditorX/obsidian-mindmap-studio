@@ -2049,10 +2049,23 @@
 
 .mmc-node-image-block .mmc-node-image {
   width: 100%;
+  max-width: 100%;
   height: 110px;
   object-fit: contain;
   cursor: zoom-in;
   user-select: none;
+}
+
+.mmc-image-size-inputs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.mmc-image-size-inputs label {
+  display: grid;
+  gap: 4px;
+  font-size: var(--font-ui-smaller);
 }
 
 .mmc-node-meta-only {
