@@ -1489,11 +1489,13 @@ export class MindMapEditor {
 
     this.resizeObserver = new ResizeObserver((entries) => {
       if (entries.some((entry) => entry.target === this.viewportEl)) this.applyTransform();
+      if (entries.some((entry) => entry.target === this.rootEl)) this.updateArticleMiniMapVisibility();
       if (entries.some((entry) => entry.target instanceof HTMLElement && entry.target.hasClass("mmc-node"))) {
         this.scheduleMeasuredMindMapLayout();
       }
     });
     this.resizeObserver.observe(this.viewportEl);
+    this.resizeObserver.observe(this.rootEl);
   }
 
   /**
@@ -1917,6 +1919,18 @@ export class MindMapEditor {
       marker.addEventListener("click", () => target.scrollIntoView({ behavior: "smooth", block: "center" }));
     }
     this.articleMiniMapEl = miniMap;
+    this.updateArticleMiniMapVisibility();
+  }
+
+  /** Hides the minimap when the article page leaves insufficient right-side gutter. */
+  private updateArticleMiniMapVisibility(): void {
+    const miniMap = this.articleMiniMapEl;
+    const page = this.articleEl.querySelector<HTMLElement>(".mms-article-page");
+    if (!miniMap || !page) return;
+    const pageRect = page.getBoundingClientRect();
+    const rootRect = this.rootEl.getBoundingClientRect();
+    const requiredGutter = Math.max(84, miniMap.getBoundingClientRect().width + 22);
+    miniMap.toggleClass("is-hidden", rootRect.right - pageRect.right < requiredGutter);
   }
 
   /** 构造文章渲染器所需的最小状态边界。 */

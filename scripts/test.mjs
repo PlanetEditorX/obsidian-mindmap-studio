@@ -1181,6 +1181,9 @@ export const setIcon = () => {};
   assert.match(editorSource, /titleEl\.setText\("主题与外观"\)/, "the current-map appearance dialog must use the new theme-and-appearance name");
   assert.match(editorSource, /阅读缩略导航图/, "the current-map appearance dialog must offer a minimap override");
   assert.match(editorSource, /private renderArticleMiniMap\(\): void/, "article and reading views must render a structural minimap navigator");
+  assert.match(editorSource, /private updateArticleMiniMapVisibility\(\): void/, "the article minimap must respond to available reading width");
+  assert.match(editorSource, /rootRect\.right - pageRect\.right < requiredGutter/, "the minimap must hide when the page has no safe right gutter");
+  assert.match(editorSource, /this\.resizeObserver\.observe\(this\.rootEl\)/, "opening a sidebar must re-evaluate minimap visibility without rebuilding the article");
   assert.match(editorSource, /target\.scrollIntoView\(\{ behavior: "smooth", block: "center" \}\)/, "minimap markers must navigate to their article targets");
   assert.match(editorSource, /this\.currentMode !== "mindmap" \|\| !this\.options\.visibleToolbarItems\.includes\("submap"\)/, "submap toolbar actions must remain hidden outside mind-map mode");
   assert.match(editorSource, /this\.document\.view\?\.articleTocMaxDepth, this\.options\.articleTocMaxDepth/, "article and reading modes must resolve the document TOC override before the plugin setting");
@@ -1240,6 +1243,8 @@ export const setIcon = () => {};
 
   const cssSource = await readFile("styles.css", "utf8");
   assert.match(cssSource, /\.mms-article-minimap[\s\S]*position:\s*absolute/, "the reading minimap must be anchored in the upper-right corner");
+  assert.match(cssSource, /\.mms-article-minimap[\s\S]*width:\s*58px/, "the reading minimap should provide a wider click target");
+  assert.match(cssSource, /\.mms-article-minimap\.is-hidden[\s\S]*display:\s*none/, "the minimap must disappear when the page edge is too close");
   assert.match(cssSource, /\.mms-article-minimap-marker[\s\S]*cursor:\s*pointer/, "minimap markers must be clickable");
   assert.match(cssSource, /\.mmc-editor\.is-read-only \.mmc-node[\s\S]*user-select:\s*text/, "read-only views should allow text selection");
   assert.match(cssSource, /\.mmc-parent-navigation-button[\s\S]*min-height:\s*44px/);

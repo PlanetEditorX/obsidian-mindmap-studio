@@ -720,7 +720,7 @@
   display: inline-flex !important;
   align-items: center;
   justify-content: center;
-  width: 44px;
+  width: 58px;
   min-width: 44px;
   height: 30px;
   margin: 0;
@@ -2896,7 +2896,7 @@
   z-index: 12;
   top: 58px;
   right: 14px;
-  width: 44px;
+  width: 58px;
   max-height: min(58vh, 520px);
   padding: 8px 6px;
   overflow: auto;
@@ -2904,6 +2904,10 @@
   border-radius: var(--radius-m);
   background: color-mix(in srgb, var(--background-primary) 90%, transparent);
   box-shadow: 0 6px 20px rgba(0, 0, 0, .16);
+}
+
+.mms-article-minimap.is-hidden {
+  display: none;
 }
 
 .mms-article-minimap-track {
