@@ -926,6 +926,8 @@ export class MindMapEditor {
   private readingProgressTimer: number | null = null;
   private readOnlyPersistTimer: number | null = null;
   private articleMiniMapEl: HTMLElement | null = null;
+  private articleMiniMapHideTimer: number | null = null;
+  private articleMiniMapCleanup: (() => void) | null = null;
   private articleScrollButtonCleanup: (() => void) | null = null;
 
   /**
@@ -963,6 +965,7 @@ export class MindMapEditor {
     this.clearImageLoadTimers();
     if (this.readingProgressTimer !== null) window.clearTimeout(this.readingProgressTimer);
     if (this.readOnlyPersistTimer !== null) window.clearTimeout(this.readOnlyPersistTimer);
+    this.clearArticleMiniMap();
     this.articleScrollButtonCleanup?.();
     this.cleanupCallbacks.forEach((callback) => callback());
     this.cleanupCallbacks = [];
@@ -1903,10 +1906,11 @@ export class MindMapEditor {
 
   /** Renders a compact structural navigator for article and continuous reading views. */
   private renderArticleMiniMap(): void {
-    this.articleMiniMapEl?.remove();
-    this.articleMiniMapEl = null;
+    this.clearArticleMiniMap();
     if ((this.document.view?.articleMiniMap ?? this.options.showArticleMiniMap) !== true) return;
-    const targets = Array.from(this.articleEl.querySelectorAll<HTMLElement>(".mms-article-node[data-node-id], .mms-reading-book-section"));
+    const maxDepth = this.effectiveArticleTocMaxDepth();
+    const targets = Array.from(this.articleEl.querySelectorAll<HTMLElement>(".mms-article-node[data-node-id], .mms-reading-book-section"))
+      .filter((target) => this.articleMiniMapDepth(target) <= maxDepth);
     if (targets.length < 2) return;
     const miniMap = this.rootEl.createDiv({ cls: "mms-article-minimap", attr: { role: "navigation", "aria-label": "文章缩略导航图" } });
     const track = miniMap.createDiv({ cls: "mms-article-minimap-track" });
@@ -1915,11 +1919,81 @@ export class MindMapEditor {
       const targetIndex = Math.round(index * (targets.length - 1) / Math.max(1, count - 1));
       const target = targets[targetIndex]!;
       const marker = track.createEl("button", { cls: "mms-article-minimap-marker", attr: { type: "button", title: target.textContent?.trim().slice(0, 120) || "跳转" } });
-      marker.style.setProperty("--mms-minimap-depth", String(Math.min(8, Number(target.className.match(/depth-(\d+)/)?.[1] ?? 1))));
+      const depth = this.articleMiniMapDepth(target);
+      const indent = (depth - 1) * 5;
+      marker.dataset.minimapTargetIndex = String(targetIndex);
+      marker.style.marginLeft = `${indent}px`;
+      marker.style.width = `calc(100% - ${indent}px)`;
+      marker.style.height = `${Math.max(2, 8 - depth)}px`;
       marker.addEventListener("click", () => target.scrollIntoView({ behavior: "smooth", block: "center" }));
     }
     this.articleMiniMapEl = miniMap;
+    this.bindArticleMiniMapInteractions();
     this.updateArticleMiniMapVisibility();
+    this.updateArticleMiniMapActiveMarker();
+  }
+
+  /** Returns the structural article depth represented by a minimap target. */
+  private articleMiniMapDepth(target: HTMLElement): number {
+    return Math.max(1, Math.min(8, Number(target.className.match(/depth-(\d+)/)?.[1] ?? 1)));
+  }
+
+  /** Updates the dark marker to match the article section currently being read. */
+  private updateArticleMiniMapActiveMarker(): void {
+    const miniMap = this.articleMiniMapEl;
+    if (!miniMap) return;
+    const maxDepth = this.effectiveArticleTocMaxDepth();
+    const targets = Array.from(this.articleEl.querySelectorAll<HTMLElement>(".mms-article-node[data-node-id], .mms-reading-book-section"))
+      .filter((target) => this.articleMiniMapDepth(target) <= maxDepth);
+    if (!targets.length) return;
+    const readingTop = this.articleEl.getBoundingClientRect().top + Math.min(132, this.articleEl.clientHeight * .28);
+    let activeIndex = 0;
+    targets.forEach((target, index) => {
+      if (target.getBoundingClientRect().top <= readingTop) activeIndex = index;
+    });
+    miniMap.querySelectorAll<HTMLElement>(".mms-article-minimap-marker").forEach((marker) => {
+      marker.toggleClass("is-active", Number(marker.dataset.minimapTargetIndex) === activeIndex);
+    });
+  }
+
+  /** Keeps the navigator discoverable while preventing it from permanently occupying the page edge. */
+  private bindArticleMiniMapInteractions(): void {
+    const miniMap = this.articleMiniMapEl;
+    if (!miniMap) return;
+    const reveal = (): void => {
+      miniMap.removeClass("is-idle-hidden");
+      if (this.articleMiniMapHideTimer !== null) window.clearTimeout(this.articleMiniMapHideTimer);
+      this.articleMiniMapHideTimer = window.setTimeout(() => {
+        this.articleMiniMapHideTimer = null;
+        if (!miniMap.matches(":hover")) miniMap.addClass("is-idle-hidden");
+      }, 10_000);
+    };
+    const revealFromCorner = (event: PointerEvent): void => {
+      const rootRect = this.rootEl.getBoundingClientRect();
+      if (event.clientX >= rootRect.right - 132 && event.clientY <= rootRect.top + 190) reveal();
+    };
+    const updateActive = (): void => this.updateArticleMiniMapActiveMarker();
+    this.rootEl.addEventListener("pointermove", revealFromCorner);
+    miniMap.addEventListener("pointerenter", reveal);
+    miniMap.addEventListener("pointerdown", reveal);
+    this.articleEl.addEventListener("scroll", updateActive);
+    this.articleMiniMapCleanup = () => {
+      this.rootEl.removeEventListener("pointermove", revealFromCorner);
+      miniMap.removeEventListener("pointerenter", reveal);
+      miniMap.removeEventListener("pointerdown", reveal);
+      this.articleEl.removeEventListener("scroll", updateActive);
+      this.articleMiniMapCleanup = null;
+    };
+    reveal();
+  }
+
+  /** Removes minimap listeners and pending timers before the next article render. */
+  private clearArticleMiniMap(): void {
+    if (this.articleMiniMapHideTimer !== null) window.clearTimeout(this.articleMiniMapHideTimer);
+    this.articleMiniMapHideTimer = null;
+    this.articleMiniMapCleanup?.();
+    this.articleMiniMapEl?.remove();
+    this.articleMiniMapEl = null;
   }
 
   /** Hides the minimap when the article page leaves insufficient right-side gutter. */
@@ -1929,7 +2003,7 @@ export class MindMapEditor {
     if (!miniMap || !page) return;
     const pageRect = page.getBoundingClientRect();
     const rootRect = this.rootEl.getBoundingClientRect();
-    const requiredGutter = Math.max(84, miniMap.getBoundingClientRect().width + 22);
+    const requiredGutter = Math.max(108, miniMap.getBoundingClientRect().width + 28);
     miniMap.toggleClass("is-hidden", rootRect.right - pageRect.right < requiredGutter);
   }
 
@@ -1970,8 +2044,7 @@ export class MindMapEditor {
    * 渲染相关数据，并保持模型、界面和持久化状态的一致性。
    */
   private render(): void {
-    this.articleMiniMapEl?.remove();
-    this.articleMiniMapEl = null;
+    this.clearArticleMiniMap();
     for (const id of Array.from(this.selectedIds)) {
       if (!findNode(this.document.root, id)) this.selectedIds.delete(id);
     }
@@ -3230,6 +3303,7 @@ export class MindMapEditor {
       this.renderArticleContent(chapter, section.document.root, false);
       for (const info of buildArticleNodeInfo(section.document.root, section.baseDepth)) {
         const nodeSection = chapter.createEl("section", { cls: `mms-article-node depth-${Math.min(info.depth, 8)}` });
+        nodeSection.dataset.nodeId = info.node.id;
         nodeSection.id = `reading-${fileKey}-${readingAnchorPart(info.node.id)}`;
         if (info.isHeading) {
           const level = Math.min(6, info.depth + 1);
@@ -3251,6 +3325,7 @@ export class MindMapEditor {
     window.setTimeout(() => {
       const maximum = Math.max(0, this.articleEl.scrollHeight - this.articleEl.clientHeight);
       this.articleEl.scrollTop = maximum * this.options.readingProgress;
+      this.updateArticleMiniMapActiveMarker();
     }, 20);
     this.articleEl.onscroll = () => {
       const maximum = Math.max(1, this.articleEl.scrollHeight - this.articleEl.clientHeight);

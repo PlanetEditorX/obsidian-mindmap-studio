@@ -497,7 +497,7 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName("文章/通读缩略导航图")
-      .setDesc("在文章和通读模式右上角显示结构缩略图；点击可快速跳转到对应位置。当前脑图可在“主题与外观”中单独覆盖。")
+      .setDesc("在文章和通读模式右上角显示结构缩略图；点击可快速跳转，当前章节会高亮。导航图沿用文章目录层级，并会在空闲 10 秒后自动隐藏。当前脑图可在“主题与外观”中单独覆盖。")
       .addToggle((toggle) => toggle
         .setValue(this.plugin.settings.showArticleMiniMap)
         .onChange(async (value) => {
