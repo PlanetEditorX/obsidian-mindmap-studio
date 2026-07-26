@@ -909,6 +909,8 @@ export class MindMapEditor {
   private readOnly: boolean;
   private readonly imageLoadTimers = new Set<number>();
   private inlineEditingId: string | null = null;
+  private pendingInlineEditNodeId: string | null = null;
+  private pendingInlineEditTimer: number | null = null;
   private readingProgressTimer: number | null = null;
   private articleScrollButtonCleanup: (() => void) | null = null;
 
@@ -945,6 +947,9 @@ export class MindMapEditor {
    */
   destroy(): void {
     this.clearImageLoadTimers();
+    if (this.pendingInlineEditTimer !== null) window.clearTimeout(this.pendingInlineEditTimer);
+    this.pendingInlineEditTimer = null;
+    this.pendingInlineEditNodeId = null;
     if (this.readingProgressTimer !== null) window.clearTimeout(this.readingProgressTimer);
     this.articleScrollButtonCleanup?.();
     this.cleanupCallbacks.forEach((callback) => callback());
@@ -2196,18 +2201,7 @@ export class MindMapEditor {
         this.selectNode(node.id);
         if (node.submap) {
           void this.callbacks.onOpenMindMap(node.submap.path);
-        } else if (!this.readOnly) this.beginInlineEdit(node.id);
-      });
-    // Quad-click (four rapid clicks) opens the full node edit modal
-    let lastDblClick = 0;
-    nodeEl.addEventListener("dblclick", (quadEvent) => {
-      const now = Date.now();
-      if (now - lastDblClick < 500 && lastDblClick > 0) {
-        lastDblClick = 0;
-        if (!this.readOnly) this.editSelected();
-      } else {
-        lastDblClick = now;
-      }
+        } else this.handleNodeDoubleClick(node.id);
     });
       nodeEl.addEventListener("contextmenu", (event) => {
         event.preventDefault();
@@ -2441,6 +2435,32 @@ export class MindMapEditor {
       && (event.ctrlKey || event.metaKey) === wantsMod
       && event.shiftKey === parts.includes("shift")
       && event.altKey === parts.includes("alt");
+  }
+
+  /**
+   * Distinguishes a double-click quick edit from a four-click full edit.
+   * Waiting briefly keeps the first double-click from replacing the node DOM
+   * before a user can complete the second double-click.
+   *
+   * @param nodeId Node targeted by the double-click sequence.
+   */
+  private handleNodeDoubleClick(nodeId: string): void {
+    if (this.readOnly) return;
+    if (this.pendingInlineEditNodeId === nodeId && this.pendingInlineEditTimer !== null) {
+      window.clearTimeout(this.pendingInlineEditTimer);
+      this.pendingInlineEditTimer = null;
+      this.pendingInlineEditNodeId = null;
+      this.editSelected();
+      return;
+    }
+    if (this.pendingInlineEditTimer !== null) window.clearTimeout(this.pendingInlineEditTimer);
+    this.pendingInlineEditNodeId = nodeId;
+    this.pendingInlineEditTimer = window.setTimeout(() => {
+      this.pendingInlineEditTimer = null;
+      const pendingNodeId = this.pendingInlineEditNodeId;
+      this.pendingInlineEditNodeId = null;
+      if (pendingNodeId === nodeId) this.beginInlineEdit(nodeId);
+    }, 450);
   }
 
   /** 在节点本体中启动轻量富文本输入。 */
