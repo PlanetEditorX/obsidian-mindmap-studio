@@ -352,11 +352,13 @@ export default class MindMapStudioPlugin extends Plugin {
         const doc = parseDocument(content, file.basename);
         const nodeIds = new Set(fileResults.map((r) => r.nodeId));
         let fileModified = false;
+        const changedNodeIds = new Set<string>();
         for (const nodeId of nodeIds) {
           const node = findNode(doc.root, nodeId);
           if (!node) continue;
           let nodeModified = false;
-          for (const block of nodeContentBlocks(node)) {
+          const contentBlocks = nodeContentBlocks(node);
+          for (const block of contentBlocks) {
             if (block.type !== "text") continue;
             const nextText = replaceIn(block.text);
             if (nextText === block.text) continue;
@@ -372,11 +374,29 @@ export default class MindMapStudioPlugin extends Plugin {
             }
           }
           if (!nodeModified) continue;
+          // nodeContentBlocks() returns normalized copies for compatibility.
+          // Persist those changed copies before syncing legacy fields, otherwise
+          // syncNodeLegacyFields() would read the old content and undo the edit.
+          node.content = contentBlocks;
           syncNodeLegacyFields(node);
-          modifiedCount += 1;
+          changedNodeIds.add(nodeId);
           fileModified = true;
         }
-        if (fileModified) await this.app.vault.modify(file, serializeDocument(doc));
+        if (!fileModified) continue;
+
+        await this.app.vault.modify(file, serializeDocument(doc));
+        const persisted = parseDocument(await this.app.vault.read(file), file.basename);
+        for (const nodeId of changedNodeIds) {
+          const expectedNode = findNode(doc.root, nodeId);
+          const persistedNode = findNode(persisted.root, nodeId);
+          if (!expectedNode || !persistedNode) continue;
+          if (nodePlainText(expectedNode) !== nodePlainText(persistedNode)) continue;
+          if (expectedNode.note !== persistedNode.note) continue;
+          modifiedCount += 1;
+        }
+        // An open editor retains its own document instance. Refresh it from the
+        // persisted replacement so a later editor save cannot restore old text.
+        await this.refreshOpenMindMap(file, persisted);
       } catch (err) {
         console.warn(`MindMap Studio could not replace in ${filePath}:`, err);
       }

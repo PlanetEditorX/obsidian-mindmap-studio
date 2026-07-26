@@ -911,6 +911,26 @@ export const setIcon = () => {};
     "search must not match descendants through their breadcrumb or file context"
   );
 
+  const replacementDocument = model.normalizeDocument({
+    title: "替换测试",
+    root: {
+      id: "replacement-root",
+      text: "解题方法论1234567",
+      content: [{ id: "replacement-content", type: "text", text: "解题方法论1234567" }],
+      children: []
+    }
+  }, "fallback");
+  const replacementNode = model.findNode(replacementDocument.root, "replacement-root");
+  assert.ok(replacementNode, "replacement test must locate the indexed node");
+  const replacementBlocks = model.nodeContentBlocks(replacementNode);
+  const replacementTextBlock = replacementBlocks.find((block) => block.type === "text");
+  assert.ok(replacementTextBlock, "replacement test node must include a text content block");
+  replacementTextBlock.text = replacementTextBlock.text.replace("1234567", "已替换");
+  replacementNode.content = replacementBlocks;
+  model.syncNodeLegacyFields(replacementNode);
+  const persistedReplacement = model.parseDocument(model.serializeDocument(replacementDocument), "替换测试");
+  assert.equal(model.nodePlainText(persistedReplacement.root), "解题方法论已替换", "replaced content blocks must be written back before legacy fields are synchronized");
+
 
   const poetryParent = model.normalizeDocument({
     title: "古诗",
@@ -981,7 +1001,8 @@ export const setIcon = () => {};
   assert.match(globalSearchSource, /useRegex/, "search functions should support regex mode");
   assert.match(mainSource, /replaceAllInSearchResults/, "main module should support search-and-replace");
   assert.match(mainSource, /const node = findNode\(doc\.root, nodeId\)/, "search replacement must target the indexed result node instead of only the root node");
-  assert.match(mainSource, /nodeContentBlocks\(node\)[\s\S]*reconcileRichTextAfterEdit[\s\S]*syncNodeLegacyFields\(node\)/, "search replacement must update content blocks while preserving rich-text styles and legacy fields");
+  assert.match(mainSource, /const contentBlocks = nodeContentBlocks\(node\);[\s\S]*reconcileRichTextAfterEdit[\s\S]*node\.content = contentBlocks;[\s\S]*syncNodeLegacyFields\(node\)/, "search replacement must write normalized content blocks back before synchronizing legacy fields");
+  assert.match(mainSource, /await this\.app\.vault\.modify\(file, serializeDocument\(doc\)\);[\s\S]*const persisted = parseDocument\(await this\.app\.vault\.read\(file\), file\.basename\);[\s\S]*await this\.refreshOpenMindMap\(file, persisted\)/, "replacement success must be based on persisted content and refresh open editors");
   assert.match(globalSearchSource, /mms-global-search-regex/, "search modal should include a regex toggle button");
   assert.match(globalSearchSource, /mms-global-search-replace-row/, "search modal should include a replace row");
   assert.match(globalSearchSource, /mms-global-search-replace-one/, "search results should include a per-result replace button");
