@@ -896,6 +896,21 @@ export const setIcon = () => {};
   assert.equal(submapMatch.length, 1, "search via submap path must return the node");
   assert.equal(submapMatch[0].nodeId, "deep-child");
 
+  const directNodeSearchDocument = model.normalizeDocument({
+    title: "仅用于上下文的标题",
+    root: {
+      id: "direct-root",
+      text: "解题方法论1234567",
+      children: [{ id: "context-only-child", text: "不包含搜索词的子节点", children: [] }]
+    }
+  }, "fallback");
+  const directNodeSearchEntries = globalSearch.buildSearchEntries(directNodeSearchDocument, "测试/上下文.mindmap");
+  assert.deepEqual(
+    globalSearch.searchEntries(directNodeSearchEntries, "1234567").map((result) => result.nodeId),
+    ["direct-root"],
+    "search must not match descendants through their breadcrumb or file context"
+  );
+
 
   const poetryParent = model.normalizeDocument({
     title: "古诗",
@@ -930,7 +945,7 @@ export const setIcon = () => {};
   const libaiEntry = hierarchyEntries.find((entry) => entry.nodeId === "libai-node");
   assert.deepEqual(tangRootEntry?.hierarchyBreadcrumb, ["古诗", "唐诗"], "child-map root must inherit the parent node path without duplicating 唐诗");
   assert.deepEqual(libaiEntry?.hierarchyBreadcrumb, ["古诗", "唐诗", "李白"]);
-  assert.equal(globalSearch.searchEntries(hierarchyEntries, "古诗 唐诗 李白")[0]?.nodeId, "libai-node", "global search must match the full parent-child map hierarchy");
+  assert.equal(globalSearch.searchEntries(hierarchyEntries, "古诗 唐诗 李白").length, 0, "hierarchy paths must remain display-only context");
   const familyPaths = globalSearch.collectIndexedFamilyPaths({
     "古诗.mindmap": { entries: globalSearch.buildSearchEntries(poetryParent, "古诗.mindmap") },
     "MindMap Assets/古诗/唐诗.mindmap": { entries: globalSearch.buildSearchEntries(tangChild, "MindMap Assets/古诗/唐诗.mindmap") }
@@ -970,6 +985,7 @@ export const setIcon = () => {};
   assert.match(globalSearchSource, /mms-global-search-regex/, "search modal should include a regex toggle button");
   assert.match(globalSearchSource, /mms-global-search-replace-row/, "search modal should include a replace row");
   assert.match(globalSearchSource, /mms-global-search-replace-one/, "search results should include a per-result replace button");
+  assert.match(globalSearchSource, /role: "button", tabindex: "0"/, "result rows must not nest a replace button inside another button");
   assert.match(globalSearchSource, /古诗 › 唐诗/);
   assert.match(globalSearchSource, /first climb to the top parent/);
   assert.match(globalSearchSource, /version: 2/);

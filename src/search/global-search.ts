@@ -156,10 +156,11 @@ export function buildSearchEntries(document: MindMapDocument, filePath: string):
     const display = nodeDisplayText(node);
     const fields = fieldValues(node);
     const breadcrumb = [...ancestors, display];
+    // The index intentionally contains only values that belong to this node.
+    // Breadcrumbs and file metadata are display context, rather than searchable
+    // content: including them makes a child appear as a false-positive match
+    // whenever one of its ancestors contains the query.
     const searchText = normalized([
-      document.title,
-      filePath,
-      ...breadcrumb,
       nodeSearchText(node),
       ...fields.map((field) => field.value)
     ].join(" "));
@@ -260,8 +261,7 @@ export function resolveHierarchicalEntries(files: Record<string, IndexedMindMapF
       resolvedEntries.push({
         ...entry,
         hierarchyBreadcrumb,
-        mapHierarchy,
-        searchableText: normalized(`${entry.searchableText} ${hierarchyBreadcrumb.join(" ")} ${mapHierarchy.join(" ")}`)
+        mapHierarchy
       });
     }
   }
@@ -281,8 +281,6 @@ function resultSnippet(entry: MindMapSearchEntry, query: string, useRegex = fals
     { kind: "节点文字", value: entry.nodeText },
     { kind: "备注", value: entry.note },
     { kind: "标签", value: entry.tags?.join("、") },
-    { kind: "层级路径", value: (entry.hierarchyBreadcrumb ?? entry.breadcrumb).join(" › ") },
-    { kind: "文件", value: `${entry.fileTitle} ${entry.filePath}` },
     { kind: "内容", value: entry.searchableText }
   ];
   let matched;
@@ -317,10 +315,8 @@ export function searchEntries(entries: MindMapSearchEntry[], query: string, limi
       if (!regex.test(entry.searchableText)) continue;
       regex.lastIndex = 0;
       const nodeText = entry.nodeText;
-      const fileTitle = entry.fileTitle;
       let score = 0;
       if (nodeText && regex.test(nodeText)) { score += 500; regex.lastIndex = 0; }
-      if (fileTitle && regex.test(fileTitle)) { score += 180; regex.lastIndex = 0; }
       score += Math.max(0, 25 - entry.depth * 2);
       const { kind, snippet } = resultSnippet(entry, query, true);
       results.push({ ...entry, score, matchedKind: kind, snippet });
@@ -334,15 +330,10 @@ export function searchEntries(entries: MindMapSearchEntry[], query: string, limi
   for (const entry of entries) {
     if (!terms.every((term) => entry.searchableText.includes(term))) continue;
     const nodeText = normalized(entry.nodeText);
-    const fileTitle = normalized(entry.fileTitle);
-    const breadcrumb = normalized((entry.hierarchyBreadcrumb ?? entry.breadcrumb).join(" "));
     let score = 0;
     if (nodeText === phrase) score += 500;
     else if (nodeText.startsWith(phrase)) score += 320;
     else if (nodeText.includes(phrase)) score += 230;
-    if (fileTitle === phrase) score += 180;
-    else if (fileTitle.includes(phrase)) score += 90;
-    if (breadcrumb.includes(phrase)) score += 70;
     if (normalized(entry.tags?.join(" ") ?? "").includes(phrase)) score += 100;
     if (normalized(entry.note ?? "").includes(phrase)) score += 60;
     if (entry.isSubmapDocument) score += 5;
@@ -906,8 +897,12 @@ export class GlobalMindMapSearchModal extends Modal {
       replaceAllBtn.disabled = true;
       replaceAllBtn.setText("替换中…");
       try {
-        await this.onReplaceAll(this.renderedResults, this.inputEl.value, this.replaceInputEl.value.trim(), this.useRegex);
-        new Notice(`已替换全部结果，正在重建索引…`);
+        const count = await this.onReplaceAll(this.renderedResults, this.inputEl.value, this.replaceInputEl.value.trim(), this.useRegex);
+        if (!count) {
+          new Notice("节点文字或备注中未找到匹配，未作替换");
+          return;
+        }
+        new Notice(`已替换 ${count} 个节点，正在重建索引…`);
         this.renderedResults = [];
         this.summaryEl.setText("已替换所有匹配节点。请重新搜索以刷新结果。");
         this.resultsEl.empty();
@@ -992,8 +987,14 @@ export class GlobalMindMapSearchModal extends Modal {
    */
   private renderResultItems(query: string): void {
     this.renderedResults.forEach((result, index) => {
-      const button = this.resultsEl.createEl("button", { cls: "mms-global-search-result", attr: { type: "button" } });
-      const header = button.createDiv({ cls: "mms-global-search-result-header" });
+      // A result contains its own replace button, so the outer interactive
+      // surface must not itself be a button. Nested buttons are invalid HTML
+      // and cause browsers to split result rows into overlapping elements.
+      const item = this.resultsEl.createDiv({
+        cls: "mms-global-search-result",
+        attr: { role: "button", tabindex: "0" }
+      });
+      const header = item.createDiv({ cls: "mms-global-search-result-header" });
       const title = header.createDiv({ cls: "mms-global-search-result-title" });
       appendHighlightedText(title, result.nodeText, query, this.useRegex);
       const badges = header.createDiv({ cls: "mms-global-search-result-badges" });
@@ -1026,13 +1027,17 @@ export class GlobalMindMapSearchModal extends Modal {
           replaceOneBtn.disabled = false;
         }
       });
-      const file = button.createDiv({ cls: "mms-global-search-result-file" });
-      file.createSpan({ text: result.mapHierarchy?.join(" › ") || result.fileTitle });
+      const file = item.createDiv({ cls: "mms-global-search-result-file" });
+      file.createSpan({ text: result.fileTitle });
       file.createSpan({ cls: "mms-global-search-result-path", text: result.filePath });
 
-
-      button.addEventListener("mouseenter", () => this.setActive(index));
-      button.addEventListener("click", () => void this.openResult(result));
+      item.addEventListener("mouseenter", () => this.setActive(index));
+      item.addEventListener("click", () => void this.openResult(result));
+      item.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        event.preventDefault();
+        void this.openResult(result);
+      });
     });
     this.setActive(0);
   }
