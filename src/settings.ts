@@ -475,7 +475,7 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName("文章目录最大层级")
-      .setDesc("限制目录页显示的层级深度，不影响文章内容以及上一篇/下一篇导航。")
+      .setDesc("限制目录页显示的相对结构层级，不受“第一章、1.、（1）”等编号起始层级影响，也不影响文章内容及上一篇/下一篇导航。")
       .addDropdown((dropdown) => {
         for (let depth = 1; depth <= 8; depth += 1) dropdown.addOption(String(depth), `${depth} 层`);
         dropdown

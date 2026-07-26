@@ -689,7 +689,7 @@ export default class MindMapStudioPlugin extends Plugin {
      */
     type Item = { node: MindMapNode; file: TFile; document: MindMapDocument; breadcrumb: string[] };
 
-    const processItems = async (items: Item[], defaultLevel: number): Promise<void> => {
+    const processItems = async (items: Item[], defaultLevel: number, structureDepth: number): Promise<void> => {
       const siblingHasHeading = items.some(({ node }) => isArticleHeading(node));
       const numberedIndexes = new Map<number, number>();
       for (const item of items) {
@@ -707,6 +707,7 @@ export default class MindMapStudioPlugin extends Plugin {
             filePath: sourceFile.path,
             nodeId: node.id,
             depth: numbering.level,
+            tocDepth: structureDepth,
             label,
             title,
             displayTitle: articleDisplayTitle(label, title),
@@ -744,7 +745,7 @@ export default class MindMapStudioPlugin extends Plugin {
             }
           }
         }
-        if (descendants.length) await processItems(descendants, numbering.level + 1);
+        if (descendants.length) await processItems(descendants, numbering.level + 1, structureDepth + 1);
       }
     };
 
@@ -753,7 +754,7 @@ export default class MindMapStudioPlugin extends Plugin {
       file: topFile,
       document: topDocument,
       breadcrumb: [nodePlainText(topDocument.root) || topDocument.title]
-    })), articleChildStartLevel(topDocument.root));
+    })), articleChildStartLevel(topDocument.root), 1);
     const currentIndex = tocEntries.findIndex((entry) => entry.filePath === file.path);
     const parentFile = document.navigation?.parentPath
       ? this.resolveMindMapFile(document.navigation.parentPath, file.path)

@@ -12,7 +12,7 @@ import {
   type MindMapNode,
   type MindMapTextContentBlock
 } from "../core/model";
-import { buildArticleNodeInfo, type ArticlePageNavigation, type ArticleTocEntry } from "../article/modes";
+import { articleTocDepth, buildArticleNodeInfo, type ArticlePageNavigation, type ArticleTocEntry } from "../article/modes";
 import { resolveArticleStyle } from "../article/article-style";
 import type { MindMapEditorCallbacks } from "./editor-types";
 import { ImagePreviewModal } from "./editor-modals";
@@ -100,9 +100,10 @@ function renderDirectory(page: HTMLElement, options: ArticleRendererOptions): vo
   const tocPage = page.createEl("nav", { cls: "mms-article-toc mms-article-toc-page" });
   tocPage.createEl("h2", { text: "目录" });
   const list = tocPage.createEl("ol");
-  for (const entry of options.articleTocEntries.filter((item) => item.depth <= options.articleTocMaxDepth)) {
-    const item = list.createEl("li", { cls: `depth-${Math.min(entry.depth, 8)}` });
-    item.style.setProperty("--mms-article-depth", String(entry.depth));
+  for (const entry of options.articleTocEntries.filter((item) => articleTocDepth(item) <= options.articleTocMaxDepth)) {
+    const tocDepth = articleTocDepth(entry);
+    const item = list.createEl("li", { cls: `depth-${Math.min(tocDepth, 8)}` });
+    item.style.setProperty("--mms-article-depth", String(tocDepth));
     const link = item.createEl("a", { text: entry.displayTitle || entry.title || "未命名标题", href: entry.filePath, attr: { title: entry.breadcrumb.join(" › ") } });
     link.addEventListener("click", (event) => {
       event.preventDefault();

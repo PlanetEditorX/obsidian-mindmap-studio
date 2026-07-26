@@ -61,7 +61,7 @@ import { resolveLayoutCollisions } from "../render/collision-layout";
 import { CodeEditModal, TableEditModal } from "./content-modals";
 import { TOOLBAR_ITEMS } from "../settings";
 import { appearanceFromThemePreset, MINDMAP_THEME_PRESETS } from "../themes";
-import { articleNumberLabel, buildArticleNodeInfo, DISPLAY_MODE_ICONS, DISPLAY_MODE_LABELS, readingAnchorPart, type ArticlePageNavigation, type ArticleTocEntry, type ReadingSection } from "../article/modes";
+import { articleNumberLabel, articleTocDepth, buildArticleNodeInfo, DISPLAY_MODE_ICONS, DISPLAY_MODE_LABELS, readingAnchorPart, type ArticlePageNavigation, type ArticleTocEntry, type ReadingSection } from "../article/modes";
 import { resolveArticleStyle } from "../article/article-style";
 import type { MindMapEditorCallbacks, MindMapEditorOptions } from "./editor-types";
 import { readRichTextEditor, renderRichTextRuns } from "./rich-text-dom";
@@ -3023,7 +3023,7 @@ export class MindMapEditor {
     const contentSections = sections.length > 1 ? sections.slice(1) : sections;
     const contentPaths = new Set(contentSections.map((section) => section.filePath));
     const tocEntries = this.options.articleTocEntries.filter(
-      (entry) => entry.depth <= this.options.articleTocMaxDepth && contentPaths.has(entry.filePath)
+      (entry) => articleTocDepth(entry) <= this.options.articleTocMaxDepth && contentPaths.has(entry.filePath)
     );
     const toc = page.createEl("nav", { cls: "mms-article-toc mms-reading-toc" });
     toc.createEl("h2", { text: "全书目录" });
@@ -3033,9 +3033,10 @@ export class MindMapEditor {
       const anchor = entry.nodeId
         ? `reading-${fileKey}-${readingAnchorPart(entry.nodeId)}`
         : `reading-file-${fileKey}`;
+      const tocDepth = articleTocDepth(entry);
       const item = tocList.createEl("li");
-      item.addClass(`depth-${Math.min(entry.depth, 8)}`);
-      item.style.setProperty("--mms-article-depth", String(entry.depth));
+      item.addClass(`depth-${Math.min(tocDepth, 8)}`);
+      item.style.setProperty("--mms-article-depth", String(tocDepth));
       const link = item.createEl("a", { text: entry.displayTitle || entry.title, href: `#${anchor}` });
       link.addEventListener("click", (event) => {
         event.preventDefault();

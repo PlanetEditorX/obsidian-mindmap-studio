@@ -166,11 +166,26 @@ export interface ArticleNodeInfo {
 export interface ArticleTocEntry {
   filePath: string;
   nodeId?: string;
+  /** 文章编号层级，例如 5 表示使用“1.”。 */
   depth: number;
+  /** 目录中的相对结构层级；与手动编号层级相互独立。 */
+  tocDepth?: number;
   label: string;
   title: string;
   displayTitle: string;
   breadcrumb: string[];
+}
+
+/**
+ * 返回目录项的相对结构层级。新数据优先使用 tocDepth；缺少该字段时回退到旧版 depth，
+ * 以兼容运行期构造的旧对象和第三方调用。
+ *
+ * @param entry 文章目录项。
+ * @returns 从 1 开始的目录结构层级。
+ */
+export function articleTocDepth(entry: ArticleTocEntry): number {
+  const raw = Number.isFinite(entry.tocDepth) ? entry.tocDepth : entry.depth;
+  return Math.max(1, Math.floor(raw ?? 1));
 }
 
 /** Navigation state shared by every page in one article map family. */
