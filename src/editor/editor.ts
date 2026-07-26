@@ -2127,6 +2127,8 @@ export class MindMapEditor {
       articleTocEntries: this.options.articleTocEntries,
       articleTocMaxDepth: this.effectiveArticleTocMaxDepth(),
       articleLeafBulletsEnabled: this.options.articleLeafBulletsEnabled,
+      articleLeafBulletColor: this.options.articleLeafBulletColor,
+      articleLeafBulletStyle: this.options.articleLeafBulletStyle,
       articleNavigation: this.options.articleNavigation,
       callbacks: this.callbacks,
       selectNode: (id) => this.selectNode(id),
@@ -3473,6 +3475,10 @@ export class MindMapEditor {
           const firstTextBlock = nodeContentBlocks(info.node).find((block): block is MindMapTextContentBlock => block.type === "text");
           if (firstTextBlock) {
             const paragraph = nodeSection.createEl("p", { cls: `mms-article-leaf-text${this.options.articleLeafBulletsEnabled ? " is-bulleted" : ""}` });
+            if (this.options.articleLeafBulletsEnabled) {
+              paragraph.dataset.bulletStyle = this.options.articleLeafBulletStyle;
+              if (this.options.articleLeafBulletColor) paragraph.style.setProperty("--mms-article-bullet-color", this.options.articleLeafBulletColor);
+            }
             renderRichTextRuns(paragraph, firstTextBlock.richText, firstTextBlock.text);
           }
           this.renderArticleContent(nodeSection, info.node, false);

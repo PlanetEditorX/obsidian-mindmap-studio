@@ -302,6 +302,8 @@ export class MindMapStudioView extends TextFileView {
       showArticleMiniMap: this.plugin.settings.showArticleMiniMap,
       articleSectionCollapseEnabled: this.plugin.settings.articleSectionCollapseEnabled,
       articleLeafBulletsEnabled: this.plugin.settings.articleLeafBulletsEnabled,
+      articleLeafBulletColor: this.plugin.settings.articleLeafBulletColor,
+      articleLeafBulletStyle: this.plugin.settings.articleLeafBulletStyle,
       showArticleToc: this.showArticleToc,
       articleNavigation: this.articleNavigation
       ,readingSections: this.readingSections

@@ -49,6 +49,9 @@ export type ImageHostMethod = "POST" | "PUT";
  */
 export type ResizeModifier = "ctrl";
 
+/** Visual shape used for unnumbered terminal article bullets. */
+export type ArticleLeafBulletStyle = "solid" | "hollow" | "square" | "dash";
+
 /**
  * ImageHostConfig 的结构化数据约定。字段会在模块边界传递，用于保持类型安全和版本兼容。
  */
@@ -184,6 +187,10 @@ export interface MindMapStudioSettings {
   articleSectionCollapseEnabled: boolean;
   /** Shows a bullet before unnumbered terminal article paragraphs. */
   articleLeafBulletsEnabled: boolean;
+  /** Empty follows the article accent color; otherwise a hex color used by terminal bullets. */
+  articleLeafBulletColor: string;
+  /** Shape and fill treatment used by terminal article bullets. */
+  articleLeafBulletStyle: ArticleLeafBulletStyle;
   /** Hides the configured per-map asset folder in Obsidian's File Explorer. */
   hideAssetFolderInFileExplorer: boolean;
   /** Enables custom File Explorer filters without changing vault files. */
@@ -264,6 +271,8 @@ export const DEFAULT_SETTINGS: MindMapStudioSettings = {
   showArticleMiniMap: true,
   articleSectionCollapseEnabled: false,
   articleLeafBulletsEnabled: false,
+  articleLeafBulletColor: "",
+  articleLeafBulletStyle: "solid",
   hideAssetFolderInFileExplorer: false,
   hideConfiguredFilesInFileExplorer: false,
   hiddenFileExtensions: "",
@@ -535,13 +544,46 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName("末端正文圆点")
-      .setDesc("为没有文章编号的末端节点正文添加主题色圆点，便于快速区分要点。")
+      .setDesc("为没有文章编号的末端节点正文添加项目符号，便于快速区分要点。")
       .addToggle((toggle) => toggle
         .setValue(this.plugin.settings.articleLeafBulletsEnabled)
         .onChange(async (value) => {
           this.plugin.settings.articleLeafBulletsEnabled = value;
           await this.saveAndRefresh();
+          this.display();
         }));
+
+    if (this.plugin.settings.articleLeafBulletsEnabled) {
+      new Setting(containerEl)
+        .setName("末端正文项目符号样式")
+        .setDesc("可选择实心圆、空心圆、实心方块或短横线。")
+        .addDropdown((dropdown) => dropdown
+          .addOption("solid", "实心圆")
+          .addOption("hollow", "空心圆")
+          .addOption("square", "实心方块")
+          .addOption("dash", "短横线")
+          .setValue(this.plugin.settings.articleLeafBulletStyle)
+          .onChange(async (value) => {
+            this.plugin.settings.articleLeafBulletStyle = value === "hollow" || value === "square" || value === "dash" ? value : "solid";
+            await this.saveAndRefresh();
+          }));
+      new Setting(containerEl)
+        .setName("末端正文项目符号颜色")
+        .setDesc("留空时跟随当前文章主题强调色；可指定任意颜色。")
+        .addColorPicker((picker) => picker
+          .setValue(this.plugin.settings.articleLeafBulletColor || "#ef4444")
+          .onChange(async (value) => {
+            this.plugin.settings.articleLeafBulletColor = value;
+            await this.saveAndRefresh();
+          }))
+        .addButton((button) => button
+          .setButtonText("跟随主题")
+          .onClick(async () => {
+            this.plugin.settings.articleLeafBulletColor = "";
+            await this.saveAndRefresh();
+            this.display();
+          }));
+    }
 
     new Setting(containerEl)
       .setName("通读进度条位置")

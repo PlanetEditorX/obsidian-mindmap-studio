@@ -1406,6 +1406,7 @@ export const setIcon = () => {};
   assert.match(editorSource, /articleBaseDepth/);
   assert.match(editorSource, /installArticleSectionCollapse/, "article headings must support Markdown-style section collapse");
   assert.match(editorSource, /articleLeafBulletsEnabled/, "article terminal bullets must follow the global setting");
+  assert.match(editorSource, /articleLeafBulletStyle/, "article terminal bullets must pass the selected visual style to reading mode");
   assert.match(mainSource, /buildArticleContext/);
   assert.match(mainSource, /shouldHideFileExplorerPath/, "File Explorer filters must use the tested pure matcher");
   assert.match(editorSource, /setAttribute\("stroke-width"/);
@@ -1417,6 +1418,9 @@ export const setIcon = () => {};
   assert.match(cssSource, /\.mmc-canvas-breadcrumb-shell[\s\S]*backdrop-filter:\s*blur/);
   assert.match(cssSource, /\.mmc-canvas-breadcrumb-parent[\s\S]*text-overflow:\s*ellipsis/);
   assert.match(cssSource, /\.mms-article-leaf-text\.is-bulleted::before/, "terminal article bullets need dedicated styling");
+  assert.match(cssSource, /data-bullet-style="hollow"/, "terminal bullets must support hollow-circle rendering");
+  assert.match(cssSource, /data-bullet-style="square"/, "terminal bullets must support square rendering");
+  assert.match(cssSource, /data-bullet-style="dash"/, "terminal bullets must support dash rendering");
   assert.match(cssSource, /\.mms-article-node\.is-collapsed-by-heading/, "collapsed article sections must be hidden by CSS");
 
 

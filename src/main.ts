@@ -524,6 +524,12 @@ export default class MindMapStudioPlugin extends Plugin {
       showArticleMiniMap: raw.showArticleMiniMap !== false,
       articleSectionCollapseEnabled: raw.articleSectionCollapseEnabled === true,
       articleLeafBulletsEnabled: raw.articleLeafBulletsEnabled === true,
+      articleLeafBulletColor: typeof raw.articleLeafBulletColor === "string" && /^#[0-9a-f]{6}$/i.test(raw.articleLeafBulletColor)
+        ? raw.articleLeafBulletColor
+        : "",
+      articleLeafBulletStyle: raw.articleLeafBulletStyle === "hollow" || raw.articleLeafBulletStyle === "square" || raw.articleLeafBulletStyle === "dash"
+        ? raw.articleLeafBulletStyle
+        : "solid",
       hideAssetFolderInFileExplorer: raw.hideAssetFolderInFileExplorer === true,
       hideConfiguredFilesInFileExplorer: raw.hideConfiguredFilesInFileExplorer === true,
       hiddenFileExtensions: typeof raw.hiddenFileExtensions === "string" ? raw.hiddenFileExtensions.slice(0, 2000) : "",

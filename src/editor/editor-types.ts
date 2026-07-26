@@ -13,7 +13,7 @@ import type {
   NodeShape
 } from "../core/model";
 import type { ArticlePageNavigation, ArticleTocEntry, ReadingSection } from "../article/modes";
-import type { ImageHostChoice, ImageHostUploadBatch, ResizeModifier } from "../settings";
+import type { ArticleLeafBulletStyle, ImageHostChoice, ImageHostUploadBatch, ResizeModifier } from "../settings";
 
 /**
  * Host services consumed by the editor.
@@ -70,6 +70,8 @@ export interface MindMapEditorOptions {
   showArticleMiniMap: boolean;
   articleSectionCollapseEnabled: boolean;
   articleLeafBulletsEnabled: boolean;
+  articleLeafBulletColor: string;
+  articleLeafBulletStyle: ArticleLeafBulletStyle;
   showArticleToc: boolean;
   articleNavigation?: ArticlePageNavigation;
   readingSections: ReadingSection[];

@@ -23,6 +23,7 @@ import { resolveArticleStyle } from "../article/article-style";
 import type { MindMapEditorCallbacks } from "./editor-types";
 import { ImagePreviewModal } from "./editor-modals";
 import { renderRichTextRuns } from "./rich-text-dom";
+import type { ArticleLeafBulletStyle } from "../settings";
 
 /** 文章渲染所需的编辑器状态和回调。 */
 export interface ArticleRendererOptions {
@@ -35,6 +36,8 @@ export interface ArticleRendererOptions {
   articleTocEntries: ArticleTocEntry[];
   articleTocMaxDepth: number;
   articleLeafBulletsEnabled: boolean;
+  articleLeafBulletColor: string;
+  articleLeafBulletStyle: ArticleLeafBulletStyle;
   articleNavigation?: ArticlePageNavigation;
   callbacks: Pick<MindMapEditorCallbacks, "resolveImage" | "onRenderCode" | "onOpenMindMap" | "onOpenArticleDirectory">;
   selectNode: (id: string) => void;
@@ -87,6 +90,7 @@ export function renderArticleMode(container: HTMLElement, options: ArticleRender
       const firstTextBlock = nodeContentBlocks(info.node).find((block): block is MindMapTextContentBlock => block.type === "text");
       if (firstTextBlock?.text.trim()) {
         const paragraph = section.createEl("p", { cls: `mms-article-leaf-text${options.articleLeafBulletsEnabled ? " is-bulleted" : ""}` });
+        applyArticleLeafBulletStyle(paragraph, options);
         renderRichTextRuns(paragraph, firstTextBlock.richText, firstTextBlock.text);
         options.makeInlineEditable(paragraph, info.node, "正文段落");
       }
@@ -95,6 +99,13 @@ export function renderArticleMode(container: HTMLElement, options: ArticleRender
     }
   }
   renderArticlePager(page, options);
+}
+
+/** Applies the configured terminal bullet color and visual style to one article paragraph. */
+function applyArticleLeafBulletStyle(paragraph: HTMLElement, options: ArticleRendererOptions): void {
+  if (!options.articleLeafBulletsEnabled) return;
+  paragraph.dataset.bulletStyle = options.articleLeafBulletStyle;
+  if (options.articleLeafBulletColor) paragraph.style.setProperty("--mms-article-bullet-color", options.articleLeafBulletColor);
 }
 
 /** 将解析后的文章样式写入文章页 CSS 变量。 */
