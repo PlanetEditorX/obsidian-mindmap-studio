@@ -61,7 +61,7 @@ import { resolveLayoutCollisions } from "../render/collision-layout";
 import { CodeEditModal, TableEditModal } from "./content-modals";
 import { TOOLBAR_ITEMS } from "../settings";
 import { appearanceFromThemePreset, MINDMAP_THEME_PRESETS } from "../themes";
-import { articleNumberLabel, articleTocDepth, buildArticleNodeInfo, DISPLAY_MODE_ICONS, DISPLAY_MODE_LABELS, readingAnchorPart, type ArticlePageNavigation, type ArticleTocEntry, type ReadingSection } from "../article/modes";
+import { articleNumberLabel, articleTocDepth, buildArticleNodeInfo, DISPLAY_MODE_ICONS, DISPLAY_MODE_LABELS, readingAnchorPart, resolveArticleTocMaxDepth, type ArticlePageNavigation, type ArticleTocEntry, type ReadingSection } from "../article/modes";
 import { resolveArticleStyle } from "../article/article-style";
 import type { MindMapEditorCallbacks, MindMapEditorOptions } from "./editor-types";
 import { readRichTextEditor, renderRichTextRuns } from "./rich-text-dom";
@@ -542,7 +542,9 @@ class NodeEditModal extends Modal {
 class AppearanceModal extends Modal {
   private readonly appearance: MindMapAppearance;
   private readonly numbering: ArticleNumberingValues;
-  private readonly submit: (appearance: MindMapAppearance, numbering: ArticleNumberingValues) => void;
+  private readonly articleTocMaxDepth: number | undefined;
+  private readonly globalArticleTocMaxDepth: number;
+  private readonly submit: (appearance: MindMapAppearance, numbering: ArticleNumberingValues, articleTocMaxDepth: number | undefined) => void;
   private readonly reset: () => void;
 
   /**
@@ -551,6 +553,8 @@ class AppearanceModal extends Modal {
    * @param app Obsidian 应用实例，用于访问仓库、工作区和 UI 服务。
    * @param appearance 导图外观配置。
    * @param numbering 当前中心节点保存的文章编号覆盖设置。
+   * @param articleTocMaxDepth 当前脑图保存的目录最大层级覆盖值；undefined 表示跟随插件设置。
+   * @param globalArticleTocMaxDepth 插件设置中的目录最大层级，用于界面提示和回退。
    * @param submit 该参数用于 constructor 流程中的输入或控制。
    * @param reset 该参数用于 constructor 流程中的输入或控制。
    */
@@ -558,12 +562,16 @@ class AppearanceModal extends Modal {
     app: App,
     appearance: MindMapAppearance,
     numbering: ArticleNumberingValues,
-    submit: (appearance: MindMapAppearance, numbering: ArticleNumberingValues) => void,
+    articleTocMaxDepth: number | undefined,
+    globalArticleTocMaxDepth: number,
+    submit: (appearance: MindMapAppearance, numbering: ArticleNumberingValues, articleTocMaxDepth: number | undefined) => void,
     reset: () => void
   ) {
     super(app);
     this.appearance = appearance;
     this.numbering = numbering;
+    this.articleTocMaxDepth = articleTocMaxDepth;
+    this.globalArticleTocMaxDepth = resolveArticleTocMaxDepth(undefined, globalArticleTocMaxDepth);
     this.submit = submit;
     this.reset = reset;
   }
@@ -575,16 +583,30 @@ class AppearanceModal extends Modal {
     this.titleEl.setText("当前脑图外观");
     this.contentEl.addClass("mmc-appearance-modal");
     const form = this.contentEl.createEl("form");
-    form.createEl("p", { cls: "setting-item-description", text: "先选择一套主题，再按需要修改背景、节点、字体、连线和文章编号。设置只保存到当前 .mindmap 文件。" });
+    form.createEl("p", { cls: "setting-item-description", text: "先选择一套主题，再按需要修改背景、节点、字体、连线、文章编号和目录层级。设置只保存到当前 .mindmap 文件。" });
 
     const numberingSection = form.createDiv({ cls: "mmc-appearance-article-numbering" });
-    numberingSection.createDiv({ cls: "mmc-theme-picker-title", text: "文章编号" });
+    numberingSection.createDiv({ cls: "mmc-theme-picker-title", text: "文章编号与目录" });
     const numberingGrid = numberingSection.createDiv({ cls: "mmc-form-grid mmc-appearance-grid" });
     const numberingControls = createArticleNumberingControls(
       numberingGrid,
       this.numbering.articleNumberingMode,
       this.numbering.articleNumberingLevel
     );
+    const tocDepthLabel = numberingGrid.createEl("label", { text: "目录最大层级" });
+    const tocDepthSelect = tocDepthLabel.createEl("select");
+    tocDepthSelect.createEl("option", {
+      text: `跟随插件设置（当前 ${this.globalArticleTocMaxDepth} 层）`,
+      attr: { value: "" }
+    });
+    for (let depth = 1; depth <= 8; depth += 1) {
+      tocDepthSelect.createEl("option", { text: `${depth} 层`, attr: { value: String(depth) } });
+    }
+    tocDepthSelect.value = Number.isFinite(this.articleTocMaxDepth) ? String(resolveArticleTocMaxDepth(this.articleTocMaxDepth, this.globalArticleTocMaxDepth)) : "";
+    tocDepthLabel.createDiv({
+      cls: "setting-item-description",
+      text: "同时用于文章模式目录和通读模式全书目录。手动选择后优先于插件全局设置。"
+    });
 
     let selectedPreset: MindMapThemePresetId = this.appearance.themePreset ?? "classic-indigo";
     const themeSection = form.createDiv({ cls: "mmc-theme-picker" });
@@ -826,7 +848,9 @@ class AppearanceModal extends Modal {
         bold: bold.checked,
         italic: italic.checked,
         underline: underline.checked
-      }, numberingControls.read());
+      }, numberingControls.read(), tocDepthSelect.value
+        ? resolveArticleTocMaxDepth(Number(tocDepthSelect.value), this.globalArticleTocMaxDepth)
+        : undefined);
       this.close();
     });
     window.setTimeout(() => save.focus(), 20);
@@ -1809,7 +1833,7 @@ export class MindMapEditor {
       articleBaseDepth: this.options.articleBaseDepth,
       showArticleToc: this.options.showArticleToc,
       articleTocEntries: this.options.articleTocEntries,
-      articleTocMaxDepth: this.options.articleTocMaxDepth,
+      articleTocMaxDepth: this.effectiveArticleTocMaxDepth(),
       articleNavigation: this.options.articleNavigation,
       articleNavigationIndex: this.articleNavigationIndex,
       callbacks: this.callbacks,
@@ -1817,6 +1841,15 @@ export class MindMapEditor {
       makeInlineEditable: (element, node, placeholder) => this.makeInlineEditable(element, node, placeholder),
       addInlineNodeActions: (container, node) => this.addInlineNodeActions(container, node)
     };
+  }
+
+  /**
+   * 返回当前脑图实际使用的目录最大层级。文档级覆盖优先，未设置时跟随插件全局选项。
+   *
+   * @returns 文章模式和通读模式共同使用的 1–8 层目录限制。
+   */
+  private effectiveArticleTocMaxDepth(): number {
+    return resolveArticleTocMaxDepth(this.document.view?.articleTocMaxDepth, this.options.articleTocMaxDepth);
   }
 
   /** 将文章内容块渲染委托给文章模式模块。 */
@@ -2904,17 +2937,27 @@ export class MindMapEditor {
         articleNumberingMode: this.document.root.articleNumberingMode ?? (this.document.root.skipArticleNumbering === true ? "none" : undefined),
         articleNumberingLevel: this.document.root.articleNumberingLevel
       },
-      (appearance, numbering) => this.mutate(() => {
+      this.document.view?.articleTocMaxDepth,
+      this.options.articleTocMaxDepth,
+      (appearance, numbering, articleTocMaxDepth) => this.mutate(() => {
         this.document.appearance = appearance;
         this.document.root.articleNumberingMode = numbering.articleNumberingMode;
         this.document.root.articleNumberingLevel = numbering.articleNumberingMode === "manual" ? numbering.articleNumberingLevel : undefined;
         this.document.root.skipArticleNumbering = numbering.articleNumberingMode === "none" || undefined;
+        const view = { ...(this.document.view ?? {}) };
+        if (articleTocMaxDepth === undefined) delete view.articleTocMaxDepth;
+        else view.articleTocMaxDepth = articleTocMaxDepth;
+        this.document.view = Object.keys(view).length ? view : undefined;
       }),
       () => this.mutate(() => {
         this.document.appearance = undefined;
         this.document.root.articleNumberingMode = undefined;
         this.document.root.articleNumberingLevel = undefined;
         this.document.root.skipArticleNumbering = undefined;
+        if (this.document.view) {
+          delete this.document.view.articleTocMaxDepth;
+          if (!Object.keys(this.document.view).length) this.document.view = undefined;
+        }
       })
     ).open();
   }
@@ -3022,8 +3065,9 @@ export class MindMapEditor {
     // 存在子导图时，顶级导图只承担书名与目录组织，不再作为正文重复显示。
     const contentSections = sections.length > 1 ? sections.slice(1) : sections;
     const contentPaths = new Set(contentSections.map((section) => section.filePath));
+    const articleTocMaxDepth = this.effectiveArticleTocMaxDepth();
     const tocEntries = this.options.articleTocEntries.filter(
-      (entry) => articleTocDepth(entry) <= this.options.articleTocMaxDepth && contentPaths.has(entry.filePath)
+      (entry) => articleTocDepth(entry) <= articleTocMaxDepth && contentPaths.has(entry.filePath)
     );
     const toc = page.createEl("nav", { cls: "mms-article-toc mms-reading-toc" });
     toc.createEl("h2", { text: "全书目录" });

@@ -301,6 +301,8 @@ export interface MindMapDocumentView {
   mode?: DisplayMode;
   readOnly?: boolean;
   articleLandingMode?: ArticleLandingMode;
+  /** Per-document article/reading directory depth override; undefined follows the plugin setting. */
+  articleTocMaxDepth?: number;
   zoom?: number;
   panX?: number;
   panY?: number;
@@ -1043,11 +1045,14 @@ function normalizeDocumentView(input: Partial<MindMapDocumentView> | undefined):
     : input.articleLandingMode === "article" || (input.articleLandingMode as string | undefined) === "map"
       ? "article"
       : undefined;
+  const articleTocMaxDepth = typeof input.articleTocMaxDepth === "number" && Number.isFinite(input.articleTocMaxDepth)
+    ? Math.max(1, Math.min(8, Math.round(input.articleTocMaxDepth)))
+    : undefined;
   const zoom = typeof input.zoom === "number" ? Math.min(2.5, Math.max(0.2, input.zoom)) : undefined;
   const panX = typeof input.panX === "number" && Number.isFinite(input.panX) ? input.panX : undefined;
   const panY = typeof input.panY === "number" && Number.isFinite(input.panY) ? input.panY : undefined;
-  return mode !== undefined || readOnly !== undefined || articleLandingMode !== undefined || zoom !== undefined || panX !== undefined || panY !== undefined
-    ? { mode, readOnly, articleLandingMode, zoom, panX, panY }
+  return mode !== undefined || readOnly !== undefined || articleLandingMode !== undefined || articleTocMaxDepth !== undefined || zoom !== undefined || panX !== undefined || panY !== undefined
+    ? { mode, readOnly, articleLandingMode, articleTocMaxDepth, zoom, panX, panY }
     : undefined;
 }
 

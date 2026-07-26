@@ -190,7 +190,7 @@ export const setIcon = () => {};
     underline: true,
     nodeTextAlign: "left"
   };
-  document.view = { articleLandingMode: "toc" };
+  document.view = { articleLandingMode: "toc", articleTocMaxDepth: 6 };
   document.articleStyle = {
     preset: "book",
     textColor: "#332b24",
@@ -222,6 +222,7 @@ export const setIcon = () => {};
   assert.equal(reopened.appearance?.underline, true);
   assert.equal(reopened.appearance?.nodeTextAlign, "left");
   assert.equal(reopened.view?.articleLandingMode, "toc");
+  assert.equal(reopened.view?.articleTocMaxDepth, 6, "per-document TOC depth overrides must survive serialization");
   assert.equal(reopened.articleStyle?.preset, "book");
   assert.equal(reopened.articleStyle?.tocStyle, "lines");
   assert.equal(reopened.articleStyle?.fontSize, 17);
@@ -474,6 +475,9 @@ export const setIcon = () => {};
   assert.equal(modes.articleTocDepth(manualLevelTocEntry), 1, "TOC depth must remain relative when numbering starts at level 5");
   assert.deepEqual([manualLevelTocEntry].filter((entry) => modes.articleTocDepth(entry) <= 3), [manualLevelTocEntry], "a level-5 numbered heading must remain visible in a three-level TOC when it is structurally top-level");
   assert.equal(modes.articleTocDepth({ filePath: "legacy.mindmap", depth: 2, label: "第一节", title: "旧目录", displayTitle: "第一节 旧目录", breadcrumb: [] }), 2, "legacy TOC entries without tocDepth must fall back to numbering depth");
+  assert.equal(modes.resolveArticleTocMaxDepth(undefined, 4), 4, "documents without a TOC override must follow the plugin setting");
+  assert.equal(modes.resolveArticleTocMaxDepth(7, 4), 7, "a per-document TOC override must take priority over the plugin setting");
+  assert.equal(modes.resolveArticleTocMaxDepth(99, 4), 8, "per-document TOC depth overrides must be clamped to the supported range");
 
   const mixedLevelDocument = model.normalizeDocument({
     title: "混合编号",
@@ -1092,8 +1096,13 @@ export const setIcon = () => {};
   assert.match(mainSource, /const numberedIndexes = new Map<number, number>\(\)/, "cross-file TOC numbering must count each manual level independently");
   assert.match(mainSource, /tocDepth: structureDepth/, "cross-file TOC entries must store structural depth separately from numbering depth");
   assert.match(mainSource, /processItems\(descendants, numbering\.level \+ 1, structureDepth \+ 1\)/, "cross-file TOC structural depth must advance independently");
-  assert.match(editorSource, /articleTocDepth\(entry\) <= this\.options\.articleTocMaxDepth/, "continuous-reading TOC filtering must use structural depth");
+  assert.match(editorSource, /const articleTocMaxDepth = this\.effectiveArticleTocMaxDepth\(\)[\s\S]*articleTocDepth\(entry\) <= articleTocMaxDepth/, "continuous-reading TOC filtering must use the effective per-document structural-depth limit");
   assert.match(articleRendererSource, /articleTocDepth\(item\) <= options\.articleTocMaxDepth/, "article directory filtering must use structural depth");
+  assert.match(editorSource, /跟随插件设置（当前 \$\{this\.globalArticleTocMaxDepth\} 层）/, "current-map appearance must offer a follow-plugin TOC-depth option");
+  assert.match(editorSource, /this\.document\.view\?\.articleTocMaxDepth, this\.options\.articleTocMaxDepth/, "article and reading modes must resolve the document TOC override before the plugin setting");
+  assert.match(editorSource, /同时用于文章模式目录和通读模式全书目录/, "the current-map TOC-depth control must describe both affected modes");
+  assert.match(mainSource, /showToc: isTopLevel && tocEntries\.length > 0/, "a single top-level map with headings must expose an article directory even without child maps");
+  assert.match(articleRendererSource, /const hasDirectory = options\.showArticleToc[\s\S]*if \(hasDirectory\) renderDirectory\(page, options\)/, "original article content must retain an inline directory");
   assert.match(editorSource, /DISPLAY_MODE_LABELS/);
   assert.match(mainSource, /switch-to-\$\{mode\}-mode/);
   assert.match(mainSource, /toggle-mind-map-read-only/);

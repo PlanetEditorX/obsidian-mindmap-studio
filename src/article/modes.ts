@@ -188,6 +188,19 @@ export function articleTocDepth(entry: ArticleTocEntry): number {
   return Math.max(1, Math.floor(raw ?? 1));
 }
 
+/**
+ * 解析文章和通读目录使用的最大相对结构层级。当前脑图存在覆盖值时优先使用，
+ * 否则跟随插件全局设置；两者都异常时回退到 3 层。
+ *
+ * @param documentOverride 当前 .mindmap 文件保存的目录层级覆盖值。
+ * @param pluginDefault 插件设置中的全局目录最大层级。
+ * @returns 1 到 8 之间的有效目录最大层级。
+ */
+export function resolveArticleTocMaxDepth(documentOverride: number | undefined, pluginDefault: number): number {
+  const source = typeof documentOverride === "number" && Number.isFinite(documentOverride) ? documentOverride : pluginDefault;
+  return Math.max(1, Math.min(8, Math.round(Number.isFinite(source) ? source : 3)));
+}
+
 /** Navigation state shared by every page in one article map family. */
 export interface ArticlePageNavigation {
   entries: ArticleTocEntry[];
