@@ -939,6 +939,7 @@ export class MindMapEditor {
   private readingProgressTimer: number | null = null;
   private readOnlyPersistTimer: number | null = null;
   private articleMiniMapEl: HTMLElement | null = null;
+  private articleMiniMapTooltipEl: HTMLElement | null = null;
   private articleMiniMapHideTimer: number | null = null;
   private articleMiniMapCleanup: (() => void) | null = null;
   private readonly collapsedArticleSectionIds = new Set<string>();
@@ -1938,6 +1939,7 @@ export class MindMapEditor {
     const targets = this.articleMiniMapTargets();
     if (targets.length < 2) return;
     const miniMap = this.rootEl.createDiv({ cls: "mms-article-minimap" });
+    this.articleMiniMapTooltipEl = this.rootEl.createDiv({ cls: "mms-article-minimap-tooltip" });
     const track = miniMap.createDiv({ cls: "mms-article-minimap-track" });
     const count = Math.min(72, targets.length);
     const highestDepth = Math.min(...targets.map((target) => this.articleMiniMapDepth(target)));
@@ -1954,6 +1956,10 @@ export class MindMapEditor {
       marker.style.width = "44px";
       marker.style.height = `${depth === highestDepth ? 8 : 4}px`;
       marker.addEventListener("click", () => this.scrollToArticleMiniMapTarget(target));
+      marker.addEventListener("pointerenter", () => this.showArticleMiniMapTooltip(marker, label));
+      marker.addEventListener("focus", () => this.showArticleMiniMapTooltip(marker, label));
+      marker.addEventListener("pointerleave", () => this.hideArticleMiniMapTooltip());
+      marker.addEventListener("blur", () => this.hideArticleMiniMapTooltip());
     }
     this.articleMiniMapEl = miniMap;
     this.bindArticleMiniMapInteractions(track);
@@ -1966,11 +1972,28 @@ export class MindMapEditor {
     return Math.max(1, Math.min(8, Number(target.className.match(/depth-(\d+)/)?.[1] ?? 1)));
   }
 
-  /** Returns a concise chapter label for the minimap marker tooltip. */
+  /** Returns the complete chapter label for the minimap marker tooltip. */
   private articleMiniMapTargetLabel(target: HTMLElement): string {
-    return target.querySelector<HTMLElement>("h1, h2, h3, h4, h5, h6")?.textContent?.trim().slice(0, 160)
-      || target.textContent?.trim().slice(0, 160)
+    return target.querySelector<HTMLElement>("h1, h2, h3, h4, h5, h6")?.textContent?.trim()
+      || target.textContent?.trim()
       || "跳转到章节";
+  }
+
+  /** Shows a complete chapter label above its marker without clipping it to the navigator width. */
+  private showArticleMiniMapTooltip(marker: HTMLElement, label: string): void {
+    const tooltip = this.articleMiniMapTooltipEl;
+    if (!tooltip) return;
+    const rootRect = this.rootEl.getBoundingClientRect();
+    const markerRect = marker.getBoundingClientRect();
+    tooltip.setText(label);
+    tooltip.style.right = `${Math.max(12, rootRect.right - markerRect.right)}px`;
+    tooltip.style.bottom = `${Math.max(8, rootRect.bottom - markerRect.top + 9)}px`;
+    tooltip.addClass("is-visible");
+  }
+
+  /** Hides the standalone chapter label when its marker is no longer focused. */
+  private hideArticleMiniMapTooltip(): void {
+    this.articleMiniMapTooltipEl?.removeClass("is-visible");
   }
 
   /** Scrolls the article container to the exact top position of a minimap target. */
@@ -2025,7 +2048,10 @@ export class MindMapEditor {
       if (this.articleMiniMapHideTimer !== null) window.clearTimeout(this.articleMiniMapHideTimer);
       this.articleMiniMapHideTimer = window.setTimeout(() => {
         this.articleMiniMapHideTimer = null;
-        if (!miniMap.matches(":hover")) miniMap.addClass("is-idle-hidden");
+        if (!miniMap.matches(":hover")) {
+          miniMap.addClass("is-idle-hidden");
+          this.hideArticleMiniMapTooltip();
+        }
       }, 10_000);
     };
     const revealFromCorner = (event: PointerEvent): void => {
@@ -2073,7 +2099,9 @@ export class MindMapEditor {
     this.articleMiniMapHideTimer = null;
     this.articleMiniMapCleanup?.();
     this.articleMiniMapEl?.remove();
+    this.articleMiniMapTooltipEl?.remove();
     this.articleMiniMapEl = null;
+    this.articleMiniMapTooltipEl = null;
   }
 
   /** Hides the minimap when the article page leaves insufficient right-side gutter. */
