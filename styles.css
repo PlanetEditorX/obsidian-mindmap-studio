@@ -3487,9 +3487,17 @@
   flex: 0 0 auto;
   width: 22px;
   height: 22px;
-  margin-right: 5px;
+  display: none;
+  margin-left: 5px;
   padding: 3px;
   color: var(--text-muted);
+}
+
+.mms-article-heading:hover .mms-article-collapse-toggle,
+.mms-article-heading:focus-within .mms-article-collapse-toggle,
+.mms-article-section-heading:hover .mms-article-collapse-toggle,
+.mms-article-section-heading:focus-within .mms-article-collapse-toggle {
+  display: inline-flex;
 }
 
 .mms-article-collapse-toggle:hover {

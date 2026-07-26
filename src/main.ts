@@ -603,10 +603,13 @@ export default class MindMapStudioPlugin extends Plugin {
     if (this.fileExplorerFilterTimer !== null) return;
     this.fileExplorerFilterTimer = window.setTimeout(() => {
       this.fileExplorerFilterTimer = null;
-      document.querySelectorAll<HTMLElement>(".nav-file[data-path], .nav-folder[data-path], .tree-item[data-path]").forEach((element) => {
+      document.querySelectorAll<HTMLElement>(".nav-files-container [data-path], .workspace-leaf-content[data-type='file-explorer'] [data-path]").forEach((element) => {
         const path = element.dataset.path;
         if (!path) return;
-        element.toggleClass("mms-file-explorer-hidden", shouldHideFileExplorerPath(path, this.settings));
+        const fileItem = element.closest<HTMLElement>(".tree-item")
+          ?? element.closest<HTMLElement>(".nav-file, .nav-folder")
+          ?? element;
+        fileItem.toggleClass("mms-file-explorer-hidden", shouldHideFileExplorerPath(path, this.settings));
       });
     }, 80);
   }
