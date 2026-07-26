@@ -3756,12 +3756,15 @@
 .mms-color-btn {
   position: relative;
 }
-/* Ctrl-modifier resize: hide handles by default, show when Ctrl is held */
-.mmc-ctrl-resize .mmc-node.is-selected > .mmc-node-resize-handle {
+/* Ctrl/Cmd resize: reveal the hovered node's handle without covering its child counter. */
+.mmc-ctrl-resize .mmc-node > .mmc-node-resize-handle {
   display: none !important;
 }
-.mmc-ctrl-resize.is-ctrl-held .mmc-node.is-selected > .mmc-node-resize-handle {
+.mmc-ctrl-resize.is-ctrl-held .mmc-node:hover > .mmc-node-resize-handle {
   display: block !important;
+}
+.mmc-ctrl-resize.is-ctrl-held .mmc-node:hover > .mmc-fold-button {
+  display: none;
 }
 /* In read-only article/reading mode, hide hover-revealed node actions */
 .mmc-editor.is-read-only .mms-inline-node-actions {
