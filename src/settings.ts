@@ -136,7 +136,8 @@ export interface MindMapStudioSettings {
   resizeModifier: ResizeModifier;
   twoFingerGestureAction: "zoom" | "pan";
   showTaskProgress: boolean;
-  syncTitleToFilename?: boolean;
+  /** Whether saving a mind map renames its file to the root node title. */
+  syncTitleToFilename: boolean;
   autoFitOnOpen: boolean;
   historyLimit: number;
   embedMaxHeight: number;
@@ -848,6 +849,16 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
         .setValue(this.plugin.settings.filePrefix)
         .onChange(async (value) => {
           this.plugin.settings.filePrefix = value.trim() || "思维导图";
+          await this.plugin.saveSettings();
+        }));
+
+    new Setting(containerEl)
+      .setName("中心节点标题同步文件名")
+      .setDesc("保存导图时，将 .mindmap 文件名同步为中心节点标题；同名文件会自动追加序号。子导图会同时更新父导图入口和子导图导航。")
+      .addToggle((toggle) => toggle
+        .setValue(this.plugin.settings.syncTitleToFilename)
+        .onChange(async (value) => {
+          this.plugin.settings.syncTitleToFilename = value;
           await this.plugin.saveSettings();
         }));
 

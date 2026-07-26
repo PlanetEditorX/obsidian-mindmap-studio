@@ -193,6 +193,9 @@ export class MindMapStudioView extends TextFileView {
    */
   async save(clear?: boolean): Promise<void> {
     await super.save(clear);
+    const file = this.file;
+    const document = this.editor?.getDocument() ?? this.document;
+    if (file && document) await this.plugin.syncMindMapTitleToFilename(file, document);
     this.editor?.markSaved();
   }
 

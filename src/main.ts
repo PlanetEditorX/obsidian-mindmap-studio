@@ -447,6 +447,7 @@ export default class MindMapStudioPlugin extends Plugin {
         ? Math.max(0, Math.min(300, Math.round(raw.autoUploadDelaySeconds)))
         : DEFAULT_SETTINGS.autoUploadDelaySeconds,
       autoUploadHostIds: selectedIds,
+      syncTitleToFilename: raw.syncTitleToFilename !== false,
       deleteLocalAfterUpload: raw.deleteLocalAfterUpload !== false,
       imageFailoverEnabled: raw.imageFailoverEnabled !== false,
       imageFailoverTimeoutSeconds: typeof raw.imageFailoverTimeoutSeconds === "number"
@@ -858,6 +859,64 @@ export default class MindMapStudioPlugin extends Plugin {
     }
     await this.openAsMindMap(file);
     return file;
+  }
+
+  /**
+   * Synchronizes a saved map's filename with its root node title and preserves
+   * parent/child navigation references when the map is linked as a submap.
+   *
+   * @param file Saved mind-map file to rename when its title changed.
+   * @param document Persisted document whose root node supplies the filename.
+   * @returns The current file, or the renamed file when synchronization occurred.
+   */
+  async syncMindMapTitleToFilename(file: TFile, document: MindMapDocument): Promise<TFile> {
+    if (!this.settings.syncTitleToFilename) return file;
+    const title = nodePlainText(document.root).trim();
+    const filename = this.sanitizeFilename(title);
+    if (!title || filename === file.basename) return file;
+
+    const oldPath = file.path;
+    const parentPath = file.parent?.path ?? "";
+    const targetPath = await this.getAvailablePath(normalizePath(`${parentPath ? `${parentPath}/` : ""}${filename}.${MINDMAP_EXTENSION}`));
+    if (targetPath === oldPath) return file;
+
+    await this.app.vault.rename(file, targetPath);
+    const renamed = this.app.vault.getAbstractFileByPath(targetPath);
+    if (!(renamed instanceof TFile)) return file;
+
+    await this.updateParentSubmapReference(renamed, oldPath, document.navigation?.parentPath, document.navigation?.parentNodeId);
+    await this.updateChildSubmapNavigation(renamed, oldPath, document);
+    return renamed;
+  }
+
+  /** Updates the parent node that links to a renamed child map. */
+  private async updateParentSubmapReference(file: TFile, oldPath: string, parentPath: string | undefined, parentNodeId: string | undefined): Promise<void> {
+    if (!parentPath) return;
+    const parentFile = this.resolveMindMapFile(parentPath, oldPath);
+    if (!parentFile) return;
+    const parentDocument = await this.readMindMapDocument(parentFile);
+    const linkedNode = parentNodeId ? findNode(parentDocument.root, parentNodeId) : undefined;
+    const node = linkedNode ?? flattenNodes(parentDocument.root).find((candidate) => normalizePath(candidate.submap?.path ?? "") === oldPath);
+    if (!node?.submap) return;
+    node.submap.path = file.path;
+    node.submap.title = file.basename;
+    await this.app.vault.modify(parentFile, serializeDocument(parentDocument));
+    await this.refreshOpenMindMap(parentFile, parentDocument);
+  }
+
+  /** Updates navigation metadata in child maps after their parent map was renamed. */
+  private async updateChildSubmapNavigation(file: TFile, oldPath: string, document: MindMapDocument): Promise<void> {
+    for (const node of flattenNodes(document.root)) {
+      if (!node.submap?.path) continue;
+      const childFile = this.resolveMindMapFile(node.submap.path, file.path);
+      if (!childFile) continue;
+      const childDocument = await this.readMindMapDocument(childFile);
+      if (childDocument.navigation?.parentPath !== oldPath) continue;
+      childDocument.navigation.parentPath = file.path;
+      childDocument.navigation.parentTitle = file.basename;
+      await this.app.vault.modify(childFile, serializeDocument(childDocument));
+      await this.refreshOpenMindMap(childFile, childDocument);
+    }
   }
 
   /**
