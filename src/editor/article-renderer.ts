@@ -12,7 +12,13 @@ import {
   type MindMapNode,
   type MindMapTextContentBlock
 } from "../core/model";
-import { articleTocDepth, buildArticleNodeInfo, type ArticlePageNavigation, type ArticleTocEntry } from "../article/modes";
+import {
+  articleTocDepth,
+  buildArticleNodeInfo,
+  currentArticlePageEntry,
+  type ArticlePageNavigation,
+  type ArticleTocEntry
+} from "../article/modes";
 import { resolveArticleStyle } from "../article/article-style";
 import type { MindMapEditorCallbacks } from "./editor-types";
 import { ImagePreviewModal } from "./editor-modals";
@@ -29,7 +35,6 @@ export interface ArticleRendererOptions {
   articleTocEntries: ArticleTocEntry[];
   articleTocMaxDepth: number;
   articleNavigation?: ArticlePageNavigation;
-  articleNavigationIndex: number | null;
   callbacks: Pick<MindMapEditorCallbacks, "resolveImage" | "onRenderCode" | "onOpenMindMap" | "onOpenArticleDirectory">;
   selectNode: (id: string) => void;
   makeInlineEditable: (element: HTMLElement, node: MindMapNode, placeholder: string) => void;
@@ -43,8 +48,15 @@ export function renderArticleMode(container: HTMLElement, options: ArticleRender
   const page = container.createDiv({ cls: `mms-article-page article-${articleStyle.preset} toc-${articleStyle.tocStyle ?? "card"}` });
   page.dataset.nodeId = options.document.root.id;
   applyArticleStyle(page, articleStyle);
-  const title = page.createEl("h1", { cls: "mms-article-document-title", text: nodePrimaryText(options.document.root) || options.document.title });
-  options.makeInlineEditable(title, options.document.root, "文章标题");
+  const pageEntry = currentArticlePageEntry(options.articleNavigation);
+  const rootTitle = nodePrimaryText(options.document.root) || options.document.title;
+  const title = page.createEl("h1", { cls: "mms-article-document-title" });
+  if (pageEntry?.label) {
+    const separator = /[、.）]$/.test(pageEntry.label) ? "" : " ";
+    title.createSpan({ cls: "mms-article-number", text: `${pageEntry.label}${separator}` });
+  }
+  const titleText = title.createSpan({ cls: "mms-article-document-title-text", text: rootTitle });
+  options.makeInlineEditable(titleText, options.document.root, "文章标题");
   options.addInlineNodeActions(page, options.document.root);
 
   const directoryOnly = options.showArticleToc
@@ -165,11 +177,11 @@ export function renderArticleNodeContent(container: HTMLElement, node: MindMapNo
   if (node.code) void options.callbacks.onRenderCode(node.code, container.createDiv({ cls: "mms-article-code markdown-rendered" }));
 }
 
-/** 渲染子文章上一节、父级、下一节与阅读完成导航。 */
+/** 渲染同层兄弟文章页的上一篇、父级、下一篇与阅读完成导航。 */
 function renderArticlePager(page: HTMLElement, options: ArticleRendererOptions): void {
   const navigation = options.articleNavigation;
   if (!navigation?.parentPath || !navigation.entries.length) return;
-  const index = options.articleNavigationIndex ?? navigation.currentIndex;
+  const index = navigation.currentIndex;
   const previous = index > 0 ? navigation.entries[index - 1] : undefined;
   const next = index < navigation.entries.length - 1 ? navigation.entries[index + 1] : undefined;
   const pager = page.createEl("nav", { cls: "mms-article-pager", attr: { "aria-label": "文章前后页导航" } });

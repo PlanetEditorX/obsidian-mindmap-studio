@@ -479,6 +479,29 @@ export const setIcon = () => {};
   assert.equal(modes.resolveArticleTocMaxDepth(7, 4), 7, "a per-document TOC override must take priority over the plugin setting");
   assert.equal(modes.resolveArticleTocMaxDepth(99, 4), 8, "per-document TOC depth overrides must be clamped to the supported range");
 
+  const recursiveBookEntries = [
+    { filePath: "世界.mindmap", depth: 1, tocDepth: 1, label: "第一章", title: "世界", displayTitle: "第一章 世界", breadcrumb: ["基础常识", "世界"] },
+    { filePath: "世界.mindmap", nodeId: "world-history", depth: 2, tocDepth: 2, label: "第一节", title: "世界历史", displayTitle: "第一节 世界历史", breadcrumb: ["基础常识", "世界", "世界历史"] },
+    { filePath: "世界.mindmap", nodeId: "civilizations", depth: 2, tocDepth: 2, label: "第二节", title: "四大文明古国", displayTitle: "第二节 四大文明古国", breadcrumb: ["基础常识", "世界", "四大文明古国"] },
+    { filePath: "中国.mindmap", depth: 1, tocDepth: 1, label: "第二章", title: "中国", displayTitle: "第二章 中国", breadcrumb: ["基础常识", "中国"] },
+    { filePath: "中国.mindmap", nodeId: "ancient-china", depth: 2, tocDepth: 2, label: "第一节", title: "中国古代史", displayTitle: "第一节 中国古代史", breadcrumb: ["基础常识", "中国", "中国古代史"] }
+  ];
+  const worldPages = modes.resolveArticleSiblingPages(recursiveBookEntries, "世界.mindmap");
+  assert.deepEqual(worldPages.entries.map((entry) => entry.displayTitle), ["第一章 世界", "第二章 中国"], "article paging must skip headings inside the current physical page and move to the next sibling page");
+  assert.equal(worldPages.currentIndex, 0);
+  assert.equal(worldPages.currentEntry?.displayTitle, "第一章 世界");
+  assert.equal(modes.currentArticlePageEntry({ ...worldPages, homePath: "基础常识.mindmap", parentPath: "基础常识.mindmap" })?.displayTitle, "第一章 世界", "child-map article titles must use their complete numbered directory title");
+  assert.equal(modes.currentArticlePageEntry({ ...worldPages, homePath: "基础常识.mindmap" }), undefined, "the top-level book file must keep its own document title");
+
+  const nestedPageEntries = [
+    ...recursiveBookEntries,
+    { filePath: "世界历史.mindmap", depth: 2, tocDepth: 2, label: "第一节", title: "世界历史", displayTitle: "第一节 世界历史", breadcrumb: ["基础常识", "世界", "世界历史"] },
+    { filePath: "文明古国.mindmap", depth: 2, tocDepth: 2, label: "第二节", title: "四大文明古国", displayTitle: "第二节 四大文明古国", breadcrumb: ["基础常识", "世界", "四大文明古国"] },
+    { filePath: "中国古代史.mindmap", depth: 2, tocDepth: 2, label: "第一节", title: "中国古代史", displayTitle: "第一节 中国古代史", breadcrumb: ["基础常识", "中国", "中国古代史"] }
+  ];
+  const worldSectionPages = modes.resolveArticleSiblingPages(nestedPageEntries, "世界历史.mindmap");
+  assert.deepEqual(worldSectionPages.entries.map((entry) => entry.displayTitle), ["第一节 世界历史", "第二节 四大文明古国"], "nested pages must navigate among siblings under the same parent only");
+
   const mixedLevelDocument = model.normalizeDocument({
     title: "混合编号",
     root: {
@@ -1103,6 +1126,10 @@ export const setIcon = () => {};
   assert.match(editorSource, /同时用于文章模式目录和通读模式全书目录/, "the current-map TOC-depth control must describe both affected modes");
   assert.match(mainSource, /let hasSubmaps = false[\s\S]*hasSubmaps = true[\s\S]*showToc: isTopLevel && hasSubmaps && tocEntries\.length > 0/, "article directory availability must retain the original child-map requirement");
   assert.match(articleRendererSource, /const directoryOnly = options\.showArticleToc[\s\S]*articleLandingMode !== "article"[\s\S]*renderDirectory\(page, options\);[\s\S]*return;/, "article mode must switch between a pure directory page and the original article body");
+  assert.match(mainSource, /resolveArticleSiblingPages\(tocEntries, file\.path\)/, "article pagination context must be built from physical sibling pages instead of the flattened recursive TOC");
+  assert.match(articleRendererSource, /const pageEntry = currentArticlePageEntry\(options\.articleNavigation\)[\s\S]*mms-article-number[\s\S]*mms-article-document-title-text/, "child article pages must render the generated number before the editable root title");
+  assert.match(articleRendererSource, /const index = navigation\.currentIndex;/, "article paging must remain anchored to the current physical page");
+  assert.doesNotMatch(articleRendererSource + editorSource, /articleNavigationIndex/, "in-page node focus must not maintain a second pagination index");
   assert.doesNotMatch(articleRendererSource, /if \(hasDirectory\) renderDirectory\(page, options\)/, "the original article body must not receive an inline directory");
   assert.match(editorSource, /DISPLAY_MODE_LABELS/);
   assert.match(mainSource, /switch-to-\$\{mode\}-mode/);

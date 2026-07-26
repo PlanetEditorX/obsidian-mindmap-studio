@@ -909,7 +909,6 @@ export class MindMapEditor {
   private readOnly: boolean;
   private readonly imageLoadTimers = new Set<number>();
   private inlineEditingId: string | null = null;
-  private articleNavigationIndex: number | null = null;
   private readingProgressTimer: number | null = null;
   private articleScrollButtonCleanup: (() => void) | null = null;
 
@@ -985,8 +984,6 @@ export class MindMapEditor {
     const toolbarChanged = JSON.stringify(this.options.visibleToolbarItems) !== JSON.stringify(options.visibleToolbarItems)
       || JSON.stringify(this.options.toolbarItemOrder) !== JSON.stringify(options.toolbarItemOrder);
     const globalModeChanged = this.options.defaultViewMode !== options.defaultViewMode;
-    const navigationChanged = JSON.stringify(this.options.articleNavigation) !== JSON.stringify(options.articleNavigation);
-    if (navigationChanged) this.articleNavigationIndex = null;
     this.options = options;
     const resolved = this.resolveMode(globalModeChanged ? options.defaultViewMode : this.currentMode);
     const previousMode = this.currentMode;
@@ -1160,8 +1157,6 @@ export class MindMapEditor {
    */
   focusNodeById(id: string): void {
     if (!findNode(this.document.root, id)) return;
-    const navigationIndex = this.options.articleNavigation?.entries.findIndex((entry) => entry.nodeId === id) ?? -1;
-    if (navigationIndex >= 0) this.articleNavigationIndex = navigationIndex;
     this.focusNode(id);
   }
 
@@ -1835,7 +1830,6 @@ export class MindMapEditor {
       articleTocEntries: this.options.articleTocEntries,
       articleTocMaxDepth: this.effectiveArticleTocMaxDepth(),
       articleNavigation: this.options.articleNavigation,
-      articleNavigationIndex: this.articleNavigationIndex,
       callbacks: this.callbacks,
       selectNode: (id) => this.selectNode(id),
       makeInlineEditable: (element, node, placeholder) => this.makeInlineEditable(element, node, placeholder),

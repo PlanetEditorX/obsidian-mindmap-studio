@@ -3179,6 +3179,10 @@
   color: var(--mms-article-heading, inherit);
 }
 
+.mms-article-document-title-text {
+  outline: none;
+}
+
 .mms-article-toc {
   margin: 0 0 38px;
   padding: 20px 24px;

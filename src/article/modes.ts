@@ -201,12 +201,65 @@ export function resolveArticleTocMaxDepth(documentOverride: number | undefined, 
   return Math.max(1, Math.min(8, Math.round(Number.isFinite(source) ? source : 3)));
 }
 
-/** Navigation state shared by every page in one article map family. */
+/** Navigation state shared by every physical article page in one map family. */
 export interface ArticlePageNavigation {
+  /** Physical sibling pages at the current structural level, never in-page child headings. */
   entries: ArticleTocEntry[];
+  /** Current physical page index within entries. */
   currentIndex: number;
   homePath: string;
   parentPath?: string;
+}
+
+/** 当前物理文章页及其同层兄弟页的解析结果。 */
+export interface ArticleSiblingPageResolution {
+  entries: ArticleTocEntry[];
+  currentIndex: number;
+  currentEntry?: ArticleTocEntry;
+}
+
+/** 比较两个目录面包屑片段是否完全一致。 */
+function sameBreadcrumb(left: string[], right: string[]): boolean {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
+/**
+ * 从递归全书目录中提取当前物理文件对应的同层兄弟页面。目录中的普通节点仍用于目录展示，
+ * 但不会进入上一篇/下一篇分页；因此打开“第一章”后会直接切换到“第二章”，而不会进入
+ * 当前文件内部的“第一节、第二节”。嵌套页面按相同规则在其父级下寻找兄弟页。
+ *
+ * @param entries 整个父子导图家族的递归目录项。
+ * @param currentFilePath 当前打开的物理 .mindmap 文件路径。
+ * @returns 当前页面、同层兄弟页面及当前页面在兄弟列表中的位置。
+ */
+export function resolveArticleSiblingPages(entries: ArticleTocEntry[], currentFilePath: string): ArticleSiblingPageResolution {
+  const currentEntry = entries.find((entry) => entry.filePath === currentFilePath && !entry.nodeId);
+  if (!currentEntry) return { entries: [], currentIndex: 0 };
+  const structuralDepth = articleTocDepth(currentEntry);
+  const parentBreadcrumb = currentEntry.breadcrumb.slice(0, -1);
+  const siblingEntries = entries.filter((entry) => (
+    !entry.nodeId
+    && articleTocDepth(entry) === structuralDepth
+    && sameBreadcrumb(entry.breadcrumb.slice(0, -1), parentBreadcrumb)
+  ));
+  const currentIndex = siblingEntries.findIndex((entry) => entry.filePath === currentFilePath);
+  return {
+    entries: siblingEntries,
+    currentIndex: Math.max(0, currentIndex),
+    currentEntry
+  };
+}
+
+/**
+ * 返回文章页顶部应显示的目录编号标题。只有子导图物理页面使用该标题；顶层总目录文件
+ * 继续使用自身中心节点标题，避免把第一章误显示为整本书标题。
+ *
+ * @param navigation 当前页面的文章分页上下文。
+ * @returns 例如“第一章 世界”的完整标题；无法解析时返回 undefined。
+ */
+export function currentArticlePageEntry(navigation: ArticlePageNavigation | undefined): ArticleTocEntry | undefined {
+  if (!navigation?.parentPath) return undefined;
+  return navigation.entries[navigation.currentIndex];
 }
 
 /**

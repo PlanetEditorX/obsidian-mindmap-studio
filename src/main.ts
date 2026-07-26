@@ -55,6 +55,7 @@ import {
   isArticleHeading,
   normalizeVisibleModes,
   resolveArticleNumbering,
+  resolveArticleSiblingPages,
   type ArticlePageNavigation,
   type ArticleTocEntry,
   type ReadingSection
@@ -755,14 +756,14 @@ export default class MindMapStudioPlugin extends Plugin {
       document: topDocument,
       breadcrumb: [nodePlainText(topDocument.root) || topDocument.title]
     })), articleChildStartLevel(topDocument.root), 1);
-    const currentIndex = tocEntries.findIndex((entry) => entry.filePath === file.path);
+    const siblingPages = resolveArticleSiblingPages(tocEntries, file.path);
     const parentFile = document.navigation?.parentPath
       ? this.resolveMindMapFile(document.navigation.parentPath, file.path)
       : null;
     const navigation: ArticlePageNavigation | undefined = tocEntries.length
       ? {
-        entries: tocEntries,
-        currentIndex: Math.max(0, currentIndex),
+        entries: siblingPages.entries,
+        currentIndex: siblingPages.currentIndex,
         homePath: topFile.path,
         parentPath: parentFile?.path
       }
