@@ -197,7 +197,7 @@
   align-items: center;
   justify-content: center;
   box-sizing: border-box;
-  padding: 9px 29px 11px 13px;
+  padding: 9px 13px 11px;
   transform: translate(-50%, -50%);
   border: var(--mmc-node-border-width) solid var(--mmc-node-border);
   background: var(--mmc-node-bg);
@@ -217,7 +217,7 @@
 }
 
 .mmc-node.is-root {
-  padding-right: 18px;
+  padding-right: 13px;
   border-color: color-mix(in srgb, var(--mmc-root-bg) 80%, #000000);
   background: var(--mmc-root-bg);
   color: var(--mmc-root-text);

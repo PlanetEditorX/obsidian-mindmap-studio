@@ -1243,6 +1243,8 @@ export const setIcon = () => {};
   assert.match(cssSource, /\.mmc-ctrl-resize\.is-ctrl-held \.mmc-node:hover > \.mmc-node-resize-handle[\s\S]*display:\s*block !important/, "Ctrl/Cmd resize must reveal only the hovered node's handle");
   assert.match(cssSource, /\.mmc-ctrl-resize\.is-ctrl-held \.mmc-node:hover > \.mmc-fold-button[\s\S]*display:\s*none/, "the child counter must hide while the hovered node shows its resize handle");
   assert.match(cssSource, /\.mmc-fold-button\s*\{[\s\S]*right:\s*-11px[\s\S]*bottom:\s*-11px[\s\S]*transform:\s*none/, "child counters must remain at the lower-right corner");
+  assert.match(cssSource, /\.mmc-node\s*\{[\s\S]*padding:\s*9px 13px 11px/, "node content must keep equal horizontal padding after the fold control moved to the corner");
+  assert.match(cssSource, /\.mmc-node\.is-root\s*\{[\s\S]*padding-right:\s*13px/, "root-node text must remain horizontally centered");
   assert.match(cssSource, /\.mmc-node-resize-handle\s*\{[\s\S]*right:\s*-7px[\s\S]*bottom:\s*-7px/, "resize control must remain anchored at the lower-right corner");
   assert.match(cssSource, /white-space:\s*pre-wrap/);
   assert.match(editorSource, /if \(node\.submap\) void this\.callbacks\.onOpenMindMap\(node\.submap\.path\)/, "the whole linked node must open its child map");
