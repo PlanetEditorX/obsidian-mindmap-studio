@@ -1,0 +1,4073 @@
+"use strict";
+/**
+ * @file editor.ts
+ * @description 编辑器领域的核心交互控制器。
+ *
+ * 负责三种视图、节点操作、富文本、图片、表格、代码、子导图、拖拽、尺寸、搜索、历史记录、只读锁和图床容灾。
+ */
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.MindMapEditor = void 0;
+const obsidian_1 = require("obsidian");
+const model_1 = require("../core/model");
+const layout_1 = require("../render/layout");
+const collision_layout_1 = require("../render/collision-layout");
+const content_modals_1 = require("./content-modals");
+const settings_1 = require("../settings");
+const themes_1 = require("../themes");
+const modes_1 = require("../article/modes");
+const article_style_1 = require("../article/article-style");
+const rich_text_dom_1 = require("./rich-text-dom");
+const editor_modals_1 = require("./editor-modals");
+const clipboard_import_1 = require("./clipboard-import");
+const node_image_actions_1 = require("./node-image-actions");
+const node_rich_text_editor_1 = require("./node-rich-text-editor");
+const drag_drop_1 = require("./drag-drop");
+const history_manager_1 = require("./history-manager");
+const outline_renderer_1 = require("./outline-renderer");
+const article_renderer_1 = require("./article-renderer");
+const node_actions_1 = require("./node-actions");
+const selection_format_toolbar_1 = require("./selection-format-toolbar");
+/**
+ * 创建节点编辑与“当前脑图外观”共用的文章编号控件，确保两处设置语义和文案一致。
+ * 手动层级表示当前节点所在子树的最高文章层级；中心节点本身不编号，一级子节点直接使用所选层级。
+ *
+ * @param container 承载表单控件的网格容器。
+ * @param currentMode 当前保存的编号覆盖模式；undefined 表示自动。
+ * @param currentLevel 当前保存的手动最高层级。
+ * @param onChange 控件变化后需要执行的可选回调，例如节点编辑自动保存。
+ * @returns 可在提交时读取规范化文章编号设置的句柄。
+ */
+function createArticleNumberingControls(container, currentMode, currentLevel, onChange) {
+    const numberingModeLabel = container.createEl("label", { cls: "mmc-article-numbering-control" });
+    numberingModeLabel.createSpan({ text: "文章编号方式" });
+    const numberingModeSelect = numberingModeLabel.createEl("select");
+    numberingModeSelect.createEl("option", { text: "自动（按树层级与标题结构）", attr: { value: "auto" } });
+    numberingModeSelect.createEl("option", { text: "关闭（不显示且不占序号）", attr: { value: "none" } });
+    numberingModeSelect.createEl("option", { text: "手动层级（自定义最高层级）", attr: { value: "manual" } });
+    numberingModeSelect.value = currentMode ?? "auto";
+    const numberingLevelLabel = container.createEl("label", { cls: "mmc-article-numbering-control mmc-article-numbering-level" });
+    numberingLevelLabel.createSpan({ text: "最高文章层级" });
+    const numberingLevelSelect = numberingLevelLabel.createEl("select");
+    for (let level = 1; level <= 8; level += 1) {
+        numberingLevelSelect.createEl("option", { text: `${level} 级 · ${(0, modes_1.articleNumberLabel)(level, 1)}示例`, attr: { value: String(level) } });
+    }
+    numberingLevelSelect.value = String(currentLevel ?? 1);
+    const numberingHelp = container.createDiv({
+        cls: "setting-item-description mmc-article-numbering-help",
+        text: "手动层级用于定义当前节点所在子树的最高文章层级；编辑中心节点时，一级子节点直接使用所选层级。末端节点是否作为标题仍由同级结构自动判断。"
+    });
+    const updateNumberingLevelState = () => {
+        const manual = numberingModeSelect.value === "manual";
+        numberingLevelSelect.disabled = !manual;
+        numberingLevelLabel.toggleClass("is-disabled", !manual);
+        numberingHelp.toggleClass("is-disabled", !manual);
+    };
+    numberingModeSelect.addEventListener("change", () => {
+        updateNumberingLevelState();
+        onChange?.();
+    });
+    numberingLevelSelect.addEventListener("change", () => onChange?.());
+    updateNumberingLevelState();
+    return {
+        read: () => ({
+            articleNumberingMode: numberingModeSelect.value === "manual" || numberingModeSelect.value === "none"
+                ? numberingModeSelect.value
+                : undefined,
+            articleNumberingLevel: numberingModeSelect.value === "manual" ? Number(numberingLevelSelect.value) : undefined
+        })
+    };
+}
+/**
+ * NodeEditModal 的主要实现类。负责封装相关状态、生命周期和对外操作，避免调用方直接操作内部数据结构。
+ */
+class NodeEditModal extends obsidian_1.Modal {
+    /**
+     * 创建 NodeEditModal 实例，保存依赖和初始状态；实际 DOM 构建通常在 onOpen() 或后续渲染流程中完成。
+     *
+     * @param app Obsidian 应用实例，用于访问仓库、工作区和 UI 服务。
+     * @param node 当前处理的节点。
+     * @param defaultShape 该参数用于 constructor 流程中的输入或控制。
+     * @param callbacks 编辑器向视图层发送事件的一组回调。
+     * @param submit 该参数用于 constructor 流程中的输入或控制。
+     * @param position 编辑器显示在居中弹窗还是右侧画布面板。
+     * @param panelHost 右侧面板需要限制在其中的画布元素。
+     */
+    constructor(app, node, defaultShape, callbacks, submit, position = "center", panelHost) {
+        super(app);
+        this.position = position;
+        this.panelHost = panelHost;
+        this.saveOnClose = null;
+        this.closeWithoutFlush = false;
+        this.outsidePointerHandler = null;
+        this.resizeHandler = null;
+        this.externalNodeHandler = null;
+        this.node = node;
+        this.defaultShape = defaultShape;
+        this.callbacks = callbacks;
+        this.submit = submit;
+    }
+    /**
+     * 在弹窗或视图打开时创建界面、绑定事件并把当前数据填入控件。
+     */
+    onOpen() {
+        this.modalEl.toggleClass("mms-node-editor-right", this.position === "right");
+        if (this.position === "right" && this.panelHost) {
+            const positionPanel = () => {
+                const rect = this.panelHost.getBoundingClientRect();
+                const container = this.modalEl.parentElement;
+                if (!container)
+                    return;
+                container.style.left = `${rect.left}px`;
+                container.style.top = `${rect.top}px`;
+                container.style.width = `${rect.width}px`;
+                container.style.height = `${rect.height}px`;
+                container.style.right = "auto";
+                container.style.bottom = "auto";
+            };
+            this.resizeHandler = positionPanel;
+            positionPanel();
+            window.addEventListener("resize", positionPanel);
+        }
+        this.titleEl.setText("编辑节点内容");
+        this.contentEl.addClass("mmc-node-edit-modal");
+        const form = this.contentEl.createDiv({ cls: "mmc-node-edit-form" });
+        form.createEl("p", {
+            cls: "setting-item-description",
+            text: "节点内容由可排序的文字块和图片块组成。可以只保留图片，也可以组合为图片→文字、文字→图片，或文字→图片→文字。"
+        });
+        let workingBlocks = JSON.parse(JSON.stringify((0, model_1.nodeContentBlocks)(this.node)));
+        if (!workingBlocks.length)
+            workingBlocks = [{ id: (0, model_1.newId)(), type: "text", text: "新节点" }];
+        let scheduleAutoSave = () => undefined;
+        const actionRow = form.createDiv({ cls: "mmc-content-block-actions" });
+        const blocksEl = form.createDiv({ cls: "mmc-content-block-list" });
+        const cloneBlocks = () => JSON.parse(JSON.stringify(workingBlocks));
+        const validBlocks = () => cloneBlocks().filter((block) => block.type === "image" ? Boolean(block.source.trim()) : Boolean(block.text.trim()));
+        const renderBlocks = () => {
+            blocksEl.empty();
+            workingBlocks.forEach((block, index) => {
+                const card = blocksEl.createDiv({ cls: `mmc-content-block is-${block.type}` });
+                const header = card.createDiv({ cls: "mmc-content-block-header" });
+                header.createSpan({ cls: "mmc-content-block-title", text: block.type === "text" ? `文字块 ${index + 1}` : `图片块 ${index + 1}` });
+                const controls = header.createDiv({ cls: "mmc-content-block-controls" });
+                const control = (icon, title, action, disabled = false) => {
+                    const btn = controls.createEl("button", { cls: "clickable-icon", attr: { type: "button", title, "aria-label": title } });
+                    (0, obsidian_1.setIcon)(btn, icon);
+                    btn.disabled = disabled;
+                    btn.addEventListener("click", (event) => { event.preventDefault(); action(); });
+                };
+                control("arrow-up", "上移", () => { [workingBlocks[index - 1], workingBlocks[index]] = [workingBlocks[index], workingBlocks[index - 1]]; renderBlocks(); scheduleAutoSave(); }, index === 0);
+                control("arrow-down", "下移", () => { [workingBlocks[index + 1], workingBlocks[index]] = [workingBlocks[index], workingBlocks[index + 1]]; renderBlocks(); scheduleAutoSave(); }, index === workingBlocks.length - 1);
+                control("trash-2", "删除内容块", () => { workingBlocks.splice(index, 1); renderBlocks(); scheduleAutoSave(); });
+                if (block.type === "text") {
+                    (0, node_rich_text_editor_1.renderNodeRichTextEditor)(card.createDiv({ cls: "mmc-content-block-body" }), block, scheduleAutoSave);
+                }
+                else {
+                    const body = card.createDiv({ cls: "mmc-content-block-body mmc-image-block-editor" });
+                    const preview = body.createDiv({ cls: "mmc-image-block-preview" });
+                    const refresh = () => {
+                        preview.empty();
+                        const resolved = this.callbacks.resolveImage(block.source);
+                        if (resolved) {
+                            const img = preview.createEl("img", { attr: { src: resolved, alt: block.alt || "图片" } });
+                            img.addEventListener("click", () => new editor_modals_1.ImagePreviewModal(this.app, resolved, block.alt || "图片", (0, model_1.imageSourceCandidates)(block, true), (source) => this.callbacks.resolveImage(source)).open());
+                        }
+                        else
+                            preview.createDiv({ cls: "mmc-image-placeholder", text: block.source ? "无法加载图片" : "尚未选择图片" });
+                        source.value = block.source;
+                        alt.value = block.alt ?? "";
+                    };
+                    const sourceLabel = body.createEl("label", { text: "图片路径或网址" });
+                    const source = sourceLabel.createEl("input", { type: "text", attr: { placeholder: "仓库路径、[[图片]] 或 https://..." } });
+                    const altLabel = body.createEl("label", { text: "图片说明（可选）" });
+                    const alt = altLabel.createEl("input", { type: "text", attr: { placeholder: "图片说明" } });
+                    source.addEventListener("input", () => {
+                        const next = source.value.trim();
+                        if (next !== block.source) {
+                            block.source = next;
+                            block.localSource = undefined;
+                            block.remoteSources = undefined;
+                        }
+                        refresh();
+                        scheduleAutoSave();
+                    });
+                    alt.addEventListener("input", () => { block.alt = alt.value.trim() || undefined; scheduleAutoSave(); });
+                    const actions = body.createDiv({ cls: "mmc-image-block-actions" });
+                    const local = actions.createEl("button", { text: "保存到仓库", attr: { type: "button" } });
+                    const applyImageAction = (action) => {
+                        void action.then((changed) => {
+                            if (!changed)
+                                return;
+                            refresh();
+                            scheduleAutoSave();
+                        });
+                    };
+                    local.addEventListener("click", () => {
+                        applyImageAction((0, node_image_actions_1.selectNodeImage)(this.app, block, "local", this.callbacks));
+                    });
+                    const remote = actions.createEl("button", { text: "选择文件并上传", attr: { type: "button" } });
+                    remote.addEventListener("click", () => {
+                        applyImageAction((0, node_image_actions_1.selectNodeImage)(this.app, block, "remote", this.callbacks));
+                    });
+                    if (block.localSource || (block.source && !/^https?:\/\//i.test(block.source))) {
+                        const uploadCurrent = actions.createEl("button", { text: "上传当前图片", attr: { type: "button" } });
+                        uploadCurrent.addEventListener("click", () => {
+                            applyImageAction((0, node_image_actions_1.uploadCurrentNodeImage)(this.app, block, this.callbacks));
+                        });
+                    }
+                    if (block.remoteSources?.length) {
+                        const mirrors = body.createDiv({ cls: "mms-image-mirrors" });
+                        mirrors.createSpan({ cls: "mms-image-mirrors-label", text: "远程镜像：" });
+                        block.remoteSources.forEach((item, mirrorIndex) => {
+                            const link = mirrors.createEl("a", {
+                                text: item.hostName || `图床 ${mirrorIndex + 1}`,
+                                href: item.url,
+                                attr: { target: "_blank", rel: "noopener" }
+                            });
+                            link.addEventListener("click", (event) => event.stopPropagation());
+                        });
+                    }
+                    refresh();
+                }
+            });
+            if (!workingBlocks.length)
+                blocksEl.createDiv({ cls: "mmc-empty-content-hint", text: "当前没有内容块。请添加文字或图片。" });
+        };
+        const addText = actionRow.createEl("button", { text: "+ 文字", attr: { type: "button" } });
+        addText.addEventListener("click", () => { workingBlocks.push({ id: (0, model_1.newId)(), type: "text", text: "" }); renderBlocks(); scheduleAutoSave(); });
+        const addImage = actionRow.createEl("button", { text: "+ 图片", attr: { type: "button" } });
+        addImage.addEventListener("click", () => { workingBlocks.push({ id: (0, model_1.newId)(), type: "image", source: "" }); renderBlocks(); scheduleAutoSave(); });
+        renderBlocks();
+        if (this.position === "right" && this.panelHost) {
+            this.externalNodeHandler = (event) => {
+                const detail = event.detail;
+                if (detail?.nodeId !== this.node.id)
+                    return;
+                workingBlocks = JSON.parse(JSON.stringify((0, model_1.nodeContentBlocks)(this.node)));
+                renderBlocks();
+            };
+            this.panelHost.addEventListener("mms-inline-node-change", this.externalNodeHandler);
+        }
+        const detailsGrid = form.createDiv({ cls: "mmc-form-grid" });
+        const iconLabel = detailsGrid.createEl("label", { text: "图标或 Emoji" });
+        const iconInput = iconLabel.createEl("input", { type: "text", attr: { placeholder: "例如 💡" } });
+        iconInput.value = this.node.icon ?? "";
+        const taskLabel = detailsGrid.createEl("label", { text: "任务状态" });
+        const taskSelect = taskLabel.createEl("select");
+        for (const [value, label] of [["", "无"], ["todo", "待办"], ["doing", "进行中"], ["done", "已完成"]])
+            taskSelect.createEl("option", { text: label, attr: { value } });
+        taskSelect.value = this.node.task ?? "";
+        const shapeLabel = detailsGrid.createEl("label", { text: "节点形状" });
+        const shapeSelect = shapeLabel.createEl("select");
+        for (const [value, label] of [["rounded", "圆角"], ["pill", "胶囊"], ["rectangle", "直角"]])
+            shapeSelect.createEl("option", { text: label, attr: { value } });
+        shapeSelect.value = this.node.style?.shape ?? this.defaultShape;
+        const tagsLabel = detailsGrid.createEl("label", { text: "标签（逗号分隔）" });
+        const tagsInput = tagsLabel.createEl("input", { type: "text" });
+        tagsInput.value = this.node.tags?.join(", ") ?? "";
+        const numberingControls = createArticleNumberingControls(detailsGrid, this.node.articleNumberingMode ?? (this.node.skipArticleNumbering === true ? "none" : undefined), this.node.articleNumberingLevel, () => scheduleAutoSave());
+        const styleGrid = form.createDiv({ cls: "mmc-form-grid mmc-style-grid" });
+        const colorControl = (labelText, current, fallback) => {
+            const label = styleGrid.createEl("label", { text: labelText });
+            const row = label.createDiv({ cls: "mmc-color-row" });
+            const toggle = row.createEl("input", { type: "checkbox" });
+            const color = row.createEl("input", { type: "color" });
+            toggle.checked = Boolean(current);
+            color.value = current ?? fallback;
+            color.disabled = !toggle.checked;
+            toggle.addEventListener("change", () => { color.disabled = !toggle.checked; scheduleAutoSave(); });
+            color.addEventListener("change", scheduleAutoSave);
+            return [toggle, color];
+        };
+        const [colorToggle, colorInput] = colorControl("节点颜色", this.node.style?.color, "#4f46e5");
+        const [textColorToggle, textColorInput] = colorControl("整节点文字颜色", this.node.style?.textColor, "#ffffff");
+        const [borderColorToggle, borderColorInput] = colorControl("边框颜色", this.node.style?.borderColor, "#94a3b8");
+        const numberControl = (labelText, current, min, max, step) => {
+            const label = styleGrid.createEl("label", { text: labelText });
+            const input = label.createEl("input", { type: "number", attr: { min: String(min), max: String(max), step: String(step), placeholder: "跟随默认" } });
+            input.value = current?.toString() ?? "";
+            return input;
+        };
+        const borderWidthInput = numberControl("边框粗细", this.node.style?.borderWidth, 0, 6, .5);
+        const fontSizeInput = numberControl("字号", this.node.style?.fontSize, 10, 32, 1);
+        const widthInput = numberControl("节点宽度（100–900）", this.node.style?.width, 100, 900, 10);
+        widthInput.placeholder = "自动宽度";
+        const minHeightInput = numberControl("节点最小高度（36–600）", this.node.style?.minHeight, 36, 600, 10);
+        minHeightInput.placeholder = "自动高度";
+        const alignLabel = styleGrid.createEl("label", { text: "文字对齐" });
+        const alignSelect = alignLabel.createEl("select");
+        alignSelect.createEl("option", { text: "跟随全局", attr: { value: "inherit" } });
+        alignSelect.createEl("option", { text: "左对齐", attr: { value: "left" } });
+        alignSelect.createEl("option", { text: "居中", attr: { value: "center" } });
+        alignSelect.createEl("option", { text: "右对齐", attr: { value: "right" } });
+        alignSelect.value = this.node.style?.textAlign ?? "inherit";
+        const booleanControl = (labelText, current) => {
+            const label = styleGrid.createEl("label", { text: labelText });
+            const select = label.createEl("select");
+            select.createEl("option", { text: "跟随默认", attr: { value: "inherit" } });
+            select.createEl("option", { text: "开启", attr: { value: "true" } });
+            select.createEl("option", { text: "关闭", attr: { value: "false" } });
+            select.value = current === undefined ? "inherit" : current ? "true" : "false";
+            return select;
+        };
+        const boldInput = booleanControl("整节点加粗", this.node.style?.bold);
+        const italicInput = booleanControl("整节点斜体", this.node.style?.italic);
+        const underlineInput = booleanControl("整节点下划线", this.node.style?.underline);
+        const noteLabel = form.createEl("label", { text: "备注（可选）" });
+        const noteInput = noteLabel.createEl("textarea");
+        noteInput.value = this.node.note ?? "";
+        noteInput.rows = 4;
+        const linkLabel = form.createEl("label", { text: "链接（网址、笔记名或 [[双链]]）" });
+        const linkInput = linkLabel.createEl("input", { type: "text" });
+        linkInput.value = this.node.link ?? "";
+        const parseBool = (value) => value === "true" ? true : value === "false" ? false : undefined;
+        const parseNumber = (value, min, max) => value.trim() && Number.isFinite(Number(value)) ? Math.min(max, Math.max(min, Number(value))) : undefined;
+        const collectValues = (showNotice) => {
+            const content = validBlocks();
+            if (!content.length) {
+                if (showNotice)
+                    new obsidian_1.Notice("节点至少需要一个文字块或图片块");
+                return null;
+            }
+            const task = taskSelect.value;
+            const shape = shapeSelect.value;
+            const numbering = numberingControls.read();
+            return {
+                content,
+                note: noteInput.value.trim(), link: linkInput.value.trim(), icon: iconInput.value.trim().slice(0, 12),
+                tags: Array.from(new Set(tagsInput.value.split(/[,，]/).map((tag) => tag.trim().replace(/^#/, "")).filter(Boolean))).slice(0, 12),
+                task: task === "todo" || task === "doing" || task === "done" ? task : undefined,
+                articleNumberingMode: numbering.articleNumberingMode,
+                articleNumberingLevel: numbering.articleNumberingLevel,
+                color: colorToggle.checked ? colorInput.value : undefined,
+                textColor: textColorToggle.checked ? textColorInput.value : undefined,
+                borderColor: borderColorToggle.checked ? borderColorInput.value : undefined,
+                borderWidth: parseNumber(borderWidthInput.value, 0, 6),
+                shape: shape === "pill" || shape === "rectangle" || shape === "rounded" ? shape : undefined,
+                bold: parseBool(boldInput.value), italic: parseBool(italicInput.value), underline: parseBool(underlineInput.value),
+                fontSize: parseNumber(fontSizeInput.value, 10, 32),
+                textAlign: alignSelect.value === "left" || alignSelect.value === "right" || alignSelect.value === "center" ? alignSelect.value : undefined,
+                width: parseNumber(widthInput.value, 100, 900),
+                minHeight: parseNumber(minHeightInput.value, 36, 600)
+            };
+        };
+        let timer = null;
+        let last = JSON.stringify(collectValues(false));
+        const saveNow = (mode, showNotice = false) => {
+            if (timer !== null) {
+                window.clearTimeout(timer);
+                timer = null;
+            }
+            const values = collectValues(showNotice);
+            if (!values)
+                return false;
+            const signature = JSON.stringify(values);
+            if (signature !== last) {
+                this.submit(values, mode);
+                last = signature;
+            }
+            return true;
+        };
+        scheduleAutoSave = () => { if (timer !== null)
+            window.clearTimeout(timer); timer = window.setTimeout(() => saveNow("autosave"), 280); };
+        this.saveOnClose = () => { saveNow("commit"); };
+        [iconInput, taskSelect, shapeSelect, tagsInput, borderWidthInput, fontSizeInput, widthInput, minHeightInput, alignSelect, boldInput, italicInput, underlineInput, noteInput, linkInput]
+            .forEach((input) => { input.addEventListener("input", scheduleAutoSave); input.addEventListener("change", scheduleAutoSave); });
+        const buttons = form.createDiv({ cls: "mmc-form-actions" });
+        const closeButton = buttons.createEl("button", { cls: "mod-cta", text: "保存并关闭", attr: { type: "button" } });
+        closeButton.addEventListener("click", () => { if (saveNow("commit", true)) {
+            this.closeWithoutFlush = true;
+            this.close();
+        } });
+        this.outsidePointerHandler = (event) => {
+            const targetNode = event.target;
+            const targetElement = targetNode instanceof Element ? targetNode : targetNode?.parentElement;
+            if (targetNode && this.modalEl.contains(targetNode))
+                return;
+            // 图床选择、图片预览等子弹窗拥有独立的 modal-container。
+            // 它们打开期间的点击（包括遮罩和关闭按钮）不应关闭节点编辑面板。
+            const ownModalContainer = this.modalEl.closest(".modal-container");
+            const targetModal = targetElement?.closest(".modal");
+            const targetModalContainer = targetElement?.closest(".modal-container");
+            if (targetModal && targetModal !== this.modalEl)
+                return;
+            if (targetModalContainer && ownModalContainer && targetModalContainer !== ownModalContainer)
+                return;
+            if (this.position === "right" && targetElement?.closest(".mmc-node"))
+                return;
+            this.saveOnClose?.();
+            this.closeWithoutFlush = true;
+            this.close();
+        };
+        window.setTimeout(() => document.addEventListener("pointerdown", this.outsidePointerHandler, true), 0);
+    }
+    /**
+     * 在弹窗或视图关闭时释放临时 DOM、计时器和事件状态。
+     */
+    onClose() {
+        if (!this.closeWithoutFlush)
+            this.saveOnClose?.();
+        if (this.outsidePointerHandler)
+            document.removeEventListener("pointerdown", this.outsidePointerHandler, true);
+        if (this.resizeHandler)
+            window.removeEventListener("resize", this.resizeHandler);
+        if (this.externalNodeHandler && this.panelHost) {
+            this.panelHost.removeEventListener("mms-inline-node-change", this.externalNodeHandler);
+        }
+        this.contentEl.empty();
+    }
+    /**
+     * 右侧面板与画布快速输入并存时，释放 Modal 的全局按键作用域。
+     */
+    releaseKeyboardScope() {
+        this.app.keymap.popScope(this.scope);
+    }
+}
+/**
+ * AppearanceModal 的主要实现类。负责封装相关状态、生命周期和对外操作，避免调用方直接操作内部数据结构。
+ */
+class AppearanceModal extends obsidian_1.Modal {
+    /**
+     * 创建 AppearanceModal 实例，保存依赖和初始状态；实际 DOM 构建通常在 onOpen() 或后续渲染流程中完成。
+     *
+     * @param app Obsidian 应用实例，用于访问仓库、工作区和 UI 服务。
+     * @param appearance 导图外观配置。
+     * @param numbering 当前中心节点保存的文章编号覆盖设置。
+     * @param articleTocMaxDepth 当前脑图保存的目录最大层级覆盖值；undefined 表示跟随插件设置。
+     * @param globalArticleTocMaxDepth 插件设置中的目录最大层级，用于界面提示和回退。
+     * @param submit 该参数用于 constructor 流程中的输入或控制。
+     * @param reset 该参数用于 constructor 流程中的输入或控制。
+     */
+    constructor(app, appearance, numbering, articleTocMaxDepth, globalArticleTocMaxDepth, submit, reset) {
+        super(app);
+        this.appearance = appearance;
+        this.numbering = numbering;
+        this.articleTocMaxDepth = articleTocMaxDepth;
+        this.globalArticleTocMaxDepth = (0, modes_1.resolveArticleTocMaxDepth)(undefined, globalArticleTocMaxDepth);
+        this.submit = submit;
+        this.reset = reset;
+    }
+    /**
+     * 在弹窗或视图打开时创建界面、绑定事件并把当前数据填入控件。
+     */
+    onOpen() {
+        this.titleEl.setText("当前脑图外观");
+        this.contentEl.addClass("mmc-appearance-modal");
+        const form = this.contentEl.createEl("form");
+        form.createEl("p", { cls: "setting-item-description", text: "先选择一套主题，再按需要修改背景、节点、字体、连线、文章编号和目录层级。设置只保存到当前 .mindmap 文件。" });
+        const numberingSection = form.createDiv({ cls: "mmc-appearance-article-numbering" });
+        numberingSection.createDiv({ cls: "mmc-theme-picker-title", text: "文章编号与目录" });
+        const numberingGrid = numberingSection.createDiv({ cls: "mmc-form-grid mmc-appearance-grid" });
+        const numberingControls = createArticleNumberingControls(numberingGrid, this.numbering.articleNumberingMode, this.numbering.articleNumberingLevel);
+        const tocDepthLabel = numberingGrid.createEl("label", { text: "目录最大层级" });
+        const tocDepthSelect = tocDepthLabel.createEl("select");
+        tocDepthSelect.createEl("option", {
+            text: `跟随插件设置（当前 ${this.globalArticleTocMaxDepth} 层）`,
+            attr: { value: "" }
+        });
+        for (let depth = 1; depth <= 8; depth += 1) {
+            tocDepthSelect.createEl("option", { text: `${depth} 层`, attr: { value: String(depth) } });
+        }
+        tocDepthSelect.value = Number.isFinite(this.articleTocMaxDepth) ? String((0, modes_1.resolveArticleTocMaxDepth)(this.articleTocMaxDepth, this.globalArticleTocMaxDepth)) : "";
+        tocDepthLabel.createDiv({
+            cls: "setting-item-description",
+            text: "同时用于文章模式目录和通读模式全书目录。手动选择后优先于插件全局设置。"
+        });
+        let selectedPreset = this.appearance.themePreset ?? "classic-indigo";
+        const themeSection = form.createDiv({ cls: "mmc-theme-picker" });
+        themeSection.createDiv({ cls: "mmc-theme-picker-title", text: "主题模板" });
+        const themeGrid = themeSection.createDiv({ cls: "mmc-theme-card-grid" });
+        const themeCards = new Map();
+        const grid = form.createDiv({ cls: "mmc-form-grid mmc-appearance-grid" });
+        const addColor = (labelText, value, fallback) => {
+            const label = grid.createEl("label", { text: labelText });
+            const row = label.createDiv({ cls: "mmc-color-row" });
+            const toggle = row.createEl("input", { type: "checkbox" });
+            const input = row.createEl("input", { type: "color" });
+            toggle.checked = Boolean(value);
+            input.value = value ?? fallback;
+            input.disabled = !toggle.checked;
+            toggle.addEventListener("change", () => { input.disabled = !toggle.checked; });
+            return { toggle, input };
+        };
+        const background = addColor("背景颜色", this.appearance.backgroundColor, "#f8fafc");
+        const patternLabel = grid.createEl("label", { text: "背景图案" });
+        const patternSelect = patternLabel.createEl("select");
+        for (const [value, label] of [["none", "无"], ["grid", "网格"], ["dots", "点阵"]])
+            patternSelect.createEl("option", { text: label, attr: { value } });
+        patternSelect.value = this.appearance.backgroundPattern ?? "grid";
+        const patternColor = addColor("图案颜色", this.appearance.patternColor, "#94a3b8");
+        const fontLabel = grid.createEl("label", { text: "字体" });
+        const fontSelect = fontLabel.createEl("select");
+        for (const [value, label] of [["obsidian", "跟随 Obsidian"], ["sans", "无衬线"], ["serif", "衬线"], ["mono", "等宽"], ["custom", "自定义"]])
+            fontSelect.createEl("option", { text: label, attr: { value } });
+        fontSelect.value = this.appearance.fontFamily ?? "obsidian";
+        const customFontLabel = grid.createEl("label", { text: "自定义字体名称" });
+        const customFontInput = customFontLabel.createEl("input", { type: "text", attr: { placeholder: "Microsoft YaHei" } });
+        customFontInput.value = this.appearance.customFont ?? "";
+        const updateCustomFont = () => { customFontInput.disabled = fontSelect.value !== "custom"; };
+        fontSelect.addEventListener("change", updateCustomFont);
+        updateCustomFont();
+        const fontSizeLabel = grid.createEl("label", { text: "字号（10–30）" });
+        const fontSizeInput = fontSizeLabel.createEl("input", { type: "number", attr: { min: "10", max: "30", step: "1" } });
+        fontSizeInput.value = String(this.appearance.fontSize ?? 14);
+        const nodeVisualStyleLabel = grid.createEl("label", { text: "节点视觉样式" });
+        const nodeVisualStyleSelect = nodeVisualStyleLabel.createEl("select");
+        nodeVisualStyleSelect.createEl("option", { text: "卡片节点", attr: { value: "card" } });
+        nodeVisualStyleSelect.createEl("option", { text: "圆角分支", attr: { value: "branch" } });
+        nodeVisualStyleSelect.value = this.appearance.nodeVisualStyle ?? "card";
+        const nodeTextAlignLabel = grid.createEl("label", { text: "节点文字对齐" });
+        const nodeTextAlignSelect = nodeTextAlignLabel.createEl("select");
+        nodeTextAlignSelect.createEl("option", { text: "左对齐", attr: { value: "left" } });
+        nodeTextAlignSelect.createEl("option", { text: "居中", attr: { value: "center" } });
+        nodeTextAlignSelect.createEl("option", { text: "右对齐", attr: { value: "right" } });
+        nodeTextAlignSelect.value = this.appearance.nodeTextAlign ?? "center";
+        const rootColor = addColor("中心主题颜色", this.appearance.rootColor, "#4f46e5");
+        const rootTextColor = addColor("中心主题文字", this.appearance.rootTextColor, "#ffffff");
+        const nodeColor = addColor("节点背景色", this.appearance.nodeColor, "#ffffff");
+        const textColor = addColor("文字颜色", this.appearance.textColor, "#0f172a");
+        const borderColor = addColor("节点边框颜色", this.appearance.nodeBorderColor, "#94a3b8");
+        const borderWidthLabel = grid.createEl("label", { text: "边框粗细（0–6）" });
+        const borderWidthInput = borderWidthLabel.createEl("input", { type: "number", attr: { min: "0", max: "6", step: "0.5" } });
+        borderWidthInput.value = String(this.appearance.nodeBorderWidth ?? 1);
+        const edgeColor = addColor("连线颜色", this.appearance.edgeColor, "#7c8aa5");
+        const edgeStyleLabel = grid.createEl("label", { text: "连线类型" });
+        const edgeStyleSelect = edgeStyleLabel.createEl("select");
+        for (const [value, label] of [["curved", "曲线"], ["straight", "直线"], ["elbow", "折线"]])
+            edgeStyleSelect.createEl("option", { text: label, attr: { value } });
+        edgeStyleSelect.value = this.appearance.edgeStyle ?? "curved";
+        const edgeWidthModeLabel = grid.createEl("label", { text: "连线粗细模式" });
+        const edgeWidthModeSelect = edgeWidthModeLabel.createEl("select");
+        edgeWidthModeSelect.createEl("option", { text: "统一粗细", attr: { value: "uniform" } });
+        edgeWidthModeSelect.createEl("option", { text: "从粗到细", attr: { value: "tapered" } });
+        edgeWidthModeSelect.value = this.appearance.edgeWidthMode ?? "tapered";
+        const edgeWidthLabel = grid.createEl("label", { text: "起始粗细（0.5–8）" });
+        const edgeWidthInput = edgeWidthLabel.createEl("input", { type: "number", attr: { min: "0.5", max: "8", step: "0.25" } });
+        edgeWidthInput.value = String(this.appearance.edgeWidth ?? 4.2);
+        const edgeMinWidthLabel = grid.createEl("label", { text: "末端最细（0.25–4）" });
+        const edgeMinWidthInput = edgeMinWidthLabel.createEl("input", { type: "number", attr: { min: "0.25", max: "4", step: "0.25" } });
+        edgeMinWidthInput.value = String(this.appearance.edgeMinWidth ?? 1.2);
+        const updateEdgeMin = () => {
+            const tapered = edgeWidthModeSelect.value === "tapered";
+            edgeMinWidthInput.disabled = !tapered;
+            edgeMinWidthLabel.toggleClass("is-disabled", !tapered);
+            edgeWidthLabel.childNodes[0].textContent = tapered ? "起始粗细（0.5–8）" : "连线粗细（0.5–8）";
+        };
+        edgeWidthModeSelect.addEventListener("change", updateEdgeMin);
+        updateEdgeMin();
+        const branchLabel = grid.createEl("label", { text: "彩色分支" });
+        const branchToggleRow = branchLabel.createDiv({ cls: "mmc-toggle-row" });
+        const colorfulBranches = branchToggleRow.createEl("input", { type: "checkbox" });
+        colorfulBranches.checked = this.appearance.colorfulBranches === true;
+        branchToggleRow.createSpan({ text: "按一级分支循环配色" });
+        const branchColorsLabel = grid.createEl("label", { text: "分支颜色（逗号分隔）" });
+        const branchColorsInput = branchColorsLabel.createEl("textarea", { attr: { rows: "2", placeholder: "#4f46e5, #0284c7, #0f766e" } });
+        branchColorsInput.value = (this.appearance.branchColors ?? []).join(", ");
+        const textStyleSection = form.createDiv({ cls: "mmc-appearance-text-style" });
+        textStyleSection.createDiv({ cls: "mmc-appearance-text-style-title", text: "文字样式" });
+        const textStyle = textStyleSection.createDiv({ cls: "mmc-appearance-style-options" });
+        const addCheck = (text, checked) => {
+            const label = textStyle.createEl("label", { cls: "mmc-appearance-style-option" });
+            const input = label.createEl("input", { type: "checkbox" });
+            input.checked = checked;
+            label.createSpan({ text });
+            return input;
+        };
+        const bold = addCheck("文字加粗", this.appearance.bold === true);
+        const italic = addCheck("文字斜体", this.appearance.italic === true);
+        const underline = addCheck("文字下划线", this.appearance.underline === true);
+        const setColor = (control, value, fallback) => {
+            control.toggle.checked = Boolean(value);
+            control.input.value = value ?? fallback;
+            control.input.disabled = !control.toggle.checked;
+        };
+        const updateSelectedCards = () => {
+            for (const [id, card] of themeCards)
+                card.toggleClass("is-selected", id === selectedPreset);
+        };
+        const applyPreset = (presetId) => {
+            selectedPreset = presetId;
+            const appearance = (0, themes_1.appearanceFromThemePreset)(presetId);
+            setColor(background, appearance.backgroundColor, "#f8fafc");
+            patternSelect.value = appearance.backgroundPattern ?? "none";
+            setColor(patternColor, appearance.patternColor, "#94a3b8");
+            fontSelect.value = appearance.fontFamily ?? "obsidian";
+            customFontInput.value = appearance.customFont ?? "";
+            fontSizeInput.value = String(appearance.fontSize ?? 14);
+            nodeTextAlignSelect.value = appearance.nodeTextAlign ?? "center";
+            setColor(rootColor, appearance.rootColor, "#4f46e5");
+            setColor(rootTextColor, appearance.rootTextColor, "#ffffff");
+            setColor(nodeColor, appearance.nodeColor, "#ffffff");
+            setColor(textColor, appearance.textColor, "#0f172a");
+            setColor(borderColor, appearance.nodeBorderColor, "#94a3b8");
+            borderWidthInput.value = String(appearance.nodeBorderWidth ?? 1);
+            setColor(edgeColor, appearance.edgeColor, "#7c8aa5");
+            edgeStyleSelect.value = appearance.edgeStyle ?? "curved";
+            edgeWidthModeSelect.value = appearance.edgeWidthMode ?? "uniform";
+            edgeWidthInput.value = String(appearance.edgeWidth ?? 2.2);
+            edgeMinWidthInput.value = String(appearance.edgeMinWidth ?? 1);
+            colorfulBranches.checked = appearance.colorfulBranches === true;
+            branchColorsInput.value = (appearance.branchColors ?? []).join(", ");
+            bold.checked = appearance.bold === true;
+            italic.checked = appearance.italic === true;
+            underline.checked = appearance.underline === true;
+            updateCustomFont();
+            updateEdgeMin();
+            updateSelectedCards();
+        };
+        for (const preset of themes_1.MINDMAP_THEME_PRESETS) {
+            const card = themeGrid.createEl("button", { cls: "mmc-theme-card", attr: { type: "button", title: preset.description } });
+            themeCards.set(preset.id, card);
+            const preview = card.createDiv({ cls: "mmc-theme-card-preview" });
+            preview.style.backgroundColor = preset.appearance.backgroundColor ?? "#ffffff";
+            const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+            svg.setAttribute("viewBox", "0 0 112 44");
+            svg.setAttribute("aria-hidden", "true");
+            const colors = preset.appearance.branchColors ?? [preset.appearance.edgeColor ?? "#7c8aa5"];
+            const rootColorValue = preset.appearance.rootColor ?? "#4f46e5";
+            const rootNode = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+            rootNode.setAttribute("x", "8");
+            rootNode.setAttribute("y", "15");
+            rootNode.setAttribute("width", "32");
+            rootNode.setAttribute("height", "14");
+            rootNode.setAttribute("rx", "5");
+            rootNode.setAttribute("fill", rootColorValue);
+            svg.appendChild(rootNode);
+            [8, 19, 30].forEach((y, index) => {
+                const color = colors[index % colors.length] ?? rootColorValue;
+                const edge = document.createElementNS("http://www.w3.org/2000/svg", "path");
+                edge.setAttribute("d", `M 40 22 C 51 22, 50 ${y + 3}, 61 ${y + 3} L 70 ${y + 3}`);
+                edge.setAttribute("fill", "none");
+                edge.setAttribute("stroke", color);
+                edge.setAttribute("stroke-width", index === 0 ? "2.6" : "2");
+                edge.setAttribute("stroke-linecap", "round");
+                svg.appendChild(edge);
+                const childNode = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+                childNode.setAttribute("x", "70");
+                childNode.setAttribute("y", String(y));
+                childNode.setAttribute("width", String(31 - index * 3));
+                childNode.setAttribute("height", "7");
+                childNode.setAttribute("rx", "3");
+                childNode.setAttribute("fill", color);
+                childNode.setAttribute("fill-opacity", ".22");
+                childNode.setAttribute("stroke", color);
+                childNode.setAttribute("stroke-width", ".8");
+                svg.appendChild(childNode);
+            });
+            preview.appendChild(svg);
+            card.createDiv({ cls: "mmc-theme-card-name", text: preset.name });
+            card.addEventListener("click", () => applyPreset(preset.id));
+        }
+        updateSelectedCards();
+        const clamp = (value, min, max, fallback) => {
+            const parsed = Number(value);
+            return Number.isFinite(parsed) ? Math.min(max, Math.max(min, parsed)) : fallback;
+        };
+        const parseBranchColors = () => branchColorsInput.value
+            .split(/[,，\s]+/)
+            .map((value) => value.trim())
+            .filter((value) => /^#[0-9a-f]{6}$/i.test(value))
+            .slice(0, 12);
+        const actions = form.createDiv({ cls: "mmc-modal-actions" });
+        const reset = actions.createEl("button", { text: "恢复全局默认", type: "button" });
+        const cancel = actions.createEl("button", { text: "取消", type: "button" });
+        const save = actions.createEl("button", { text: "应用", type: "submit", cls: "mod-cta" });
+        reset.addEventListener("click", () => { this.reset(); this.close(); });
+        cancel.addEventListener("click", () => this.close());
+        form.addEventListener("submit", (event) => {
+            event.preventDefault();
+            const maxWidth = clamp(edgeWidthInput.value, 0.5, 8, 4.2);
+            this.submit({
+                themePreset: selectedPreset,
+                backgroundColor: background.toggle.checked ? background.input.value : undefined,
+                backgroundPattern: patternSelect.value,
+                patternColor: patternColor.toggle.checked ? patternColor.input.value : undefined,
+                fontFamily: fontSelect.value,
+                customFont: fontSelect.value === "custom" ? customFontInput.value.trim().slice(0, 120) || undefined : undefined,
+                fontSize: clamp(fontSizeInput.value, 10, 30, 14),
+                nodeVisualStyle: nodeVisualStyleSelect.value,
+                nodeTextAlign: nodeTextAlignSelect.value,
+                rootColor: rootColor.toggle.checked ? rootColor.input.value : undefined,
+                rootTextColor: rootTextColor.toggle.checked ? rootTextColor.input.value : undefined,
+                nodeColor: nodeColor.toggle.checked ? nodeColor.input.value : undefined,
+                textColor: textColor.toggle.checked ? textColor.input.value : undefined,
+                nodeBorderColor: borderColor.toggle.checked ? borderColor.input.value : undefined,
+                nodeBorderWidth: clamp(borderWidthInput.value, 0, 6, 1),
+                edgeColor: edgeColor.toggle.checked ? edgeColor.input.value : undefined,
+                edgeWidth: maxWidth,
+                edgeStyle: edgeStyleSelect.value,
+                edgeWidthMode: edgeWidthModeSelect.value,
+                edgeMinWidth: Math.min(maxWidth, clamp(edgeMinWidthInput.value, 0.25, 4, 1.2)),
+                colorfulBranches: colorfulBranches.checked,
+                branchColors: parseBranchColors(),
+                bold: bold.checked,
+                italic: italic.checked,
+                underline: underline.checked
+            }, numberingControls.read(), tocDepthSelect.value
+                ? (0, modes_1.resolveArticleTocMaxDepth)(Number(tocDepthSelect.value), this.globalArticleTocMaxDepth)
+                : undefined);
+            this.close();
+        });
+        window.setTimeout(() => save.focus(), 20);
+    }
+}
+/**
+ * MindMapEditor 的主要实现类。负责封装相关状态、生命周期和对外操作，避免调用方直接操作内部数据结构。
+ */
+class MindMapEditor {
+    /**
+     * 创建 MindMapEditor 实例，保存依赖和初始状态；实际 DOM 构建通常在 onOpen() 或后续渲染流程中完成。
+     *
+     * @param app Obsidian 应用实例，用于访问仓库、工作区和 UI 服务。
+     * @param host 当前图床配置或图床选择项。
+     * @param document 要处理的思维导图文档。
+     * @param callbacks 编辑器向视图层发送事件的一组回调。
+     * @param options 控制当前操作行为的可选配置。
+     */
+    constructor(app, host, document, callbacks, options) {
+        this.modeButtons = new Map();
+        this.editControls = [];
+        this.selectedIds = new Set();
+        this.zoom = 1;
+        this.panX = 0;
+        this.panY = 0;
+        this.mindMapViewportInitialized = false;
+        this.draggingId = null;
+        this.dragDropPosition = null;
+        this.dropPreviewEl = null;
+        this.panning = false;
+        this.panStart = { x: 0, y: 0, panX: 0, panY: 0 };
+        this.touchPointers = new Map();
+        this.touchGesture = null;
+        this.cleanupCallbacks = [];
+        this.resizeObserver = null;
+        this.measuredLayoutFrame = null;
+        this.branchClipboard = null;
+        this.searchQuery = "";
+        this.lastRichTextColor = "#ef4444";
+        this.resizeModifier = "none";
+        this.imageLoadTimers = new Set();
+        this.inlineEditingId = null;
+        this.readingProgressTimer = null;
+        this.articleScrollButtonCleanup = null;
+        this.app = app;
+        this.host = host;
+        this.callbacks = callbacks;
+        this.options = options;
+        this.resizeModifier = options.resizeModifier;
+        if (this.resizeModifier === "ctrl")
+            this.rootEl.addClass("mmc-ctrl-resize");
+        this.history = new history_manager_1.DocumentHistory(() => this.options.historyLimit);
+        this.document = (0, model_1.cloneDocument)(document);
+        this.currentMode = this.resolveMode(options.defaultViewMode);
+        this.readOnly = this.currentMode === "article" || this.currentMode === "reading" || this.document.view?.readOnly === true;
+        this.selectedId = this.document.root.id;
+        const initialAppearance = this.getAppearance();
+        this.layout = (0, layout_1.computeLayout)(this.document.root, this.document.layout, initialAppearance.fontSize ?? 14, initialAppearance.nodeVisualStyle ?? "card", initialAppearance);
+        this.buildUi();
+        this.render();
+        this.initializeMindMapViewport(50);
+    }
+    /**
+     * 执行“destroy”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+     */
+    destroy() {
+        this.clearImageLoadTimers();
+        if (this.readingProgressTimer !== null)
+            window.clearTimeout(this.readingProgressTimer);
+        this.articleScrollButtonCleanup?.();
+        this.cleanupCallbacks.forEach((callback) => callback());
+        this.cleanupCallbacks = [];
+        this.resizeObserver?.disconnect();
+        this.resizeObserver = null;
+        if (this.measuredLayoutFrame !== null)
+            window.cancelAnimationFrame(this.measuredLayoutFrame);
+        this.measuredLayoutFrame = null;
+        this.host.empty();
+    }
+    /**
+     * 更新并应用document，并保持模型、界面和持久化状态的一致性。
+     *
+     * @param document 要处理的思维导图文档。
+     * @param resetHistory 该参数用于 set document 流程中的输入或控制。
+     */
+    setDocument(document, resetHistory = true) {
+        this.document = (0, model_1.cloneDocument)(document);
+        this.currentMode = this.resolveMode(this.options.defaultViewMode);
+        this.readOnly = this.currentMode === "article" || this.currentMode === "reading" || this.document.view?.readOnly === true;
+        this.selectedId = this.document.root.id;
+        if (resetHistory) {
+            this.history.reset();
+        }
+        this.render();
+        this.initializeMindMapViewport(20);
+    }
+    /**
+     * 更新并应用options，并保持模型、界面和持久化状态的一致性。
+     *
+     * @param options 控制当前操作行为的可选配置。
+     */
+    setOptions(options) {
+        const modesChanged = JSON.stringify(this.options.visibleModes) !== JSON.stringify(options.visibleModes);
+        const toolbarChanged = JSON.stringify(this.options.visibleToolbarItems) !== JSON.stringify(options.visibleToolbarItems)
+            || JSON.stringify(this.options.toolbarItemOrder) !== JSON.stringify(options.toolbarItemOrder);
+        const globalModeChanged = this.options.defaultViewMode !== options.defaultViewMode;
+        this.options = options;
+        const resolved = this.resolveMode(globalModeChanged ? options.defaultViewMode : this.currentMode);
+        const previousMode = this.currentMode;
+        const modeChanged = resolved !== previousMode;
+        if (modeChanged) {
+            if (previousMode === "mindmap")
+                this.persistMindMapViewportState();
+            this.currentMode = resolved;
+            this.readOnly = resolved === "article" || resolved === "reading"
+                ? true
+                : previousMode === "article" || previousMode === "reading"
+                    ? this.document.view?.readOnly === true
+                    : this.readOnly;
+        }
+        if (modesChanged || toolbarChanged) {
+            this.cleanupCallbacks.forEach((callback) => callback());
+            this.cleanupCallbacks = [];
+            this.resizeObserver?.disconnect();
+            this.resizeObserver = null;
+            this.modeButtons.clear();
+            this.editControls.splice(0);
+            this.buildUi();
+        }
+        if (this.inlineEditingId && !modesChanged && !toolbarChanged && !globalModeChanged)
+            return;
+        this.render();
+        if (modeChanged && this.currentMode === "mindmap") {
+            if (!this.mindMapViewportInitialized && this.options.autoFitOnOpen)
+                window.setTimeout(() => this.fitToView(), 20);
+            else
+                window.setTimeout(() => this.applyTransform(), 20);
+        }
+    }
+    /**
+     * 更新并应用display mode，并保持模型、界面和持久化状态的一致性。
+     *
+     * @param mode 当前布局或显示模式。
+     * @param notifyGlobal 该参数用于 set display mode 流程中的输入或控制。
+     */
+    setDisplayMode(mode, notifyGlobal = true) {
+        if (!this.options.visibleModes.includes(mode))
+            return;
+        const previousMode = this.currentMode;
+        if (previousMode === "mindmap")
+            this.persistMindMapViewportState();
+        const readingAnchor = this.captureReadingPosition(previousMode);
+        this.currentMode = mode;
+        if ((mode === "article" || mode === "reading") && mode !== previousMode) {
+            this.readOnly = true;
+        }
+        else if ((previousMode === "article" || previousMode === "reading") && mode !== "article" && mode !== "reading") {
+            this.readOnly = this.document.view?.readOnly === true;
+        }
+        this.render();
+        if (readingAnchor)
+            this.restoreReadingPosition(mode, readingAnchor);
+        if (notifyGlobal)
+            void this.callbacks.onDisplayModeChange(mode);
+        if (mode === "mindmap") {
+            if (!this.mindMapViewportInitialized && this.options.autoFitOnOpen)
+                window.setTimeout(() => this.fitToView(), 20);
+            else
+                window.setTimeout(() => this.applyTransform(), 20);
+        }
+    }
+    /**
+     * 应用global display mode，并保持模型、界面和持久化状态的一致性。
+     *
+     * @param mode 当前布局或显示模式。
+     */
+    applyGlobalDisplayMode(mode) {
+        this.setDisplayMode(mode, false);
+    }
+    /** 捕获文章或大纲视口中当前阅读节点及节点内部进度。 */
+    captureReadingPosition(mode) {
+        const scroller = mode === "outline" ? this.outlineEl : mode === "article" ? this.articleEl : null;
+        if (!scroller || !scroller.isConnected)
+            return null;
+        const viewport = scroller.getBoundingClientRect();
+        const viewportRatio = .35;
+        const anchorY = viewport.top + viewport.height * viewportRatio;
+        const candidates = Array.from(scroller.querySelectorAll("[data-node-id]"))
+            .map((element) => ({ element, rect: element.getBoundingClientRect() }))
+            .filter(({ rect }) => rect.height > 0);
+        if (!candidates.length)
+            return null;
+        const containing = candidates
+            .filter(({ rect }) => anchorY >= rect.top && anchorY <= rect.bottom)
+            .sort((left, right) => left.rect.height - right.rect.height)[0];
+        const nearest = containing ?? candidates.sort((left, right) => {
+            const leftDistance = anchorY < left.rect.top ? left.rect.top - anchorY : anchorY - left.rect.bottom;
+            const rightDistance = anchorY < right.rect.top ? right.rect.top - anchorY : anchorY - right.rect.bottom;
+            return leftDistance - rightDistance;
+        })[0];
+        const nodeId = nearest?.element.dataset.nodeId;
+        if (!nearest || !nodeId)
+            return null;
+        return {
+            nodeId,
+            nodeRatio: Math.max(0, Math.min(1, (anchorY - nearest.rect.top) / nearest.rect.height)),
+            viewportRatio
+        };
+    }
+    /** 在目标模式中恢复对应节点和节点内部的阅读位置。 */
+    restoreReadingPosition(mode, anchor) {
+        const scroller = mode === "outline" ? this.outlineEl : mode === "article" ? this.articleEl : null;
+        if (!scroller)
+            return;
+        const restore = () => {
+            const target = scroller.querySelector(`[data-node-id="${CSS.escape(anchor.nodeId)}"]`);
+            if (!target)
+                return;
+            const viewport = scroller.getBoundingClientRect();
+            const rect = target.getBoundingClientRect();
+            const targetY = rect.top + rect.height * anchor.nodeRatio;
+            const desiredY = viewport.top + viewport.height * anchor.viewportRatio;
+            scroller.scrollTop += targetY - desiredY;
+        };
+        restore();
+        window.requestAnimationFrame(restore);
+    }
+    /**
+     * 切换read only，并保持模型、界面和持久化状态的一致性。
+     */
+    toggleReadOnly() {
+        const scroller = this.currentMode === "outline"
+            ? this.outlineEl
+            : this.currentMode === "article" || this.currentMode === "reading"
+                ? this.articleEl
+                : null;
+        const scrollPosition = scroller ? { top: scroller.scrollTop, left: scroller.scrollLeft } : null;
+        this.readOnly = !this.readOnly;
+        if (this.currentMode !== "article" && this.currentMode !== "reading")
+            this.persistReadOnlyState();
+        this.render();
+        if (scroller && scrollPosition) {
+            const restore = () => {
+                scroller.scrollTop = scrollPosition.top;
+                scroller.scrollLeft = scrollPosition.left;
+            };
+            restore();
+            window.requestAnimationFrame(restore);
+        }
+        new obsidian_1.Notice(this.readOnly ? "已进入只读模式" : "已进入编辑模式");
+    }
+    /**
+     * 读取并返回document，并保持模型、界面和持久化状态的一致性。
+     * @returns 当前操作生成、查找或规范化后的结果。
+     */
+    getDocument() {
+        this.persistMindMapViewportState();
+        return (0, model_1.cloneDocument)(this.document);
+    }
+    /**
+     * 执行“mark saved”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+     */
+    markSaved() {
+        this.statusEl.setText("已保存");
+        this.rootEl.removeClass("is-dirty");
+    }
+    /**
+     * 执行“mark saving”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+     */
+    markSaving() {
+        this.statusEl.setText("保存中…");
+        this.rootEl.addClass("is-dirty");
+    }
+    /**
+     * 定位相关数据，并保持模型、界面和持久化状态的一致性。
+     */
+    focus() {
+        this.rootEl.focus();
+    }
+    /**
+     * 定位node by id，并保持模型、界面和持久化状态的一致性。
+     *
+     * @param id 目标对象或节点的稳定标识。
+     */
+    focusNodeById(id) {
+        if (!(0, model_1.findNode)(this.document.root, id))
+            return;
+        this.focusNode(id);
+    }
+    /**
+     * Switches the current top-level document to its generated article directory.
+     */
+    showArticleDirectory() {
+        this.currentMode = "article";
+        this.mutate(() => {
+            this.document.view = { ...(this.document.view ?? {}), articleLandingMode: "toc" };
+        });
+    }
+    /**
+     * 构建ui，并保持模型、界面和持久化状态的一致性。
+     */
+    buildUi() {
+        this.host.empty();
+        this.rootEl = this.host.createDiv({ cls: "mmc-editor" });
+        this.rootEl.tabIndex = 0;
+        this.toolbarEl = this.rootEl.createDiv({ cls: "mmc-toolbar" });
+        this.navigationBarEl = this.rootEl.createDiv({ cls: "mmc-parent-navigation" });
+        this.viewportEl = this.rootEl.createDiv({ cls: "mmc-viewport" });
+        this.canvasBreadcrumbEl = this.viewportEl.createDiv({ cls: "mmc-canvas-breadcrumb is-hidden" });
+        this.sceneEl = this.viewportEl.createDiv({ cls: "mmc-scene" });
+        this.edgesSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+        this.edgesSvg.classList.add("mmc-edges");
+        this.sceneEl.appendChild(this.edgesSvg);
+        this.nodesLayerEl = this.sceneEl.createDiv({ cls: "mmc-nodes-layer" });
+        this.outlineEl = this.rootEl.createDiv({ cls: "mms-outline-view" });
+        this.articleEl = this.rootEl.createDiv({ cls: "mms-article-view" });
+        const modeGroup = this.toolbarEl.createDiv({ cls: "mms-mode-switcher" });
+        for (const mode of this.options.visibleModes) {
+            const button = modeGroup.createEl("button", {
+                cls: "mms-mode-button",
+                attr: { type: "button", title: `${modes_1.DISPLAY_MODE_LABELS[mode]}模式` }
+            });
+            (0, obsidian_1.setIcon)(button, modes_1.DISPLAY_MODE_ICONS[mode]);
+            button.createSpan({ text: modes_1.DISPLAY_MODE_LABELS[mode] });
+            button.addEventListener("click", () => this.setDisplayMode(mode));
+            this.modeButtons.set(mode, button);
+        }
+        this.lockButton = this.addToolbarButton("lock", "lock-open", "切换只读 / 编辑模式", () => this.toggleReadOnly());
+        this.addToolbarSeparator();
+        this.addToolbarButton("add-child", "plus-circle", "添加子节点（Tab）", () => this.addChild(), true);
+        this.addToolbarButton("add-sibling", "list-plus", "添加同级节点（Enter）", () => this.addSibling(), true);
+        this.addToolbarButton("edit", "pencil", "编辑节点（F2）", () => this.editSelected(), true);
+        this.addToolbarButton("duplicate", "copy-plus", "克隆分支（Ctrl/Cmd+D）", () => this.duplicateSelected(), true);
+        this.addToolbarButton("delete", "trash-2", "删除节点（Delete）", () => this.deleteSelected(), true);
+        this.addToolbarSeparator();
+        this.addToolbarButton("task", "circle-check-big", "切换任务状态（Ctrl/Cmd+Enter）", () => this.cycleTask(), true);
+        this.addToolbarButton("collapse", "fold-vertical", "展开/收起节点（Space）", () => this.toggleCollapse(), true);
+        this.addToolbarButton("link", "link", "打开节点链接", () => this.openSelectedLink());
+        this.addToolbarButton("search", "search", "搜索当前导图及全部子导图（Ctrl/Cmd+Shift+F）", () => this.openSearch());
+        this.addToolbarButton("global-search", "file-search", "全局搜索所有导图", () => this.callbacks.onGlobalSearch());
+        this.addToolbarSeparator();
+        this.addToolbarButton("table", "table-2", "插入或编辑表格", () => this.editTable(), true);
+        this.addToolbarButton("code", "code-2", "插入或编辑代码", () => this.editCode(), true);
+        this.addToolbarButton("image", "image-plus", "粘贴图片到当前节点（Ctrl/Cmd+V）", () => new obsidian_1.Notice("先复制图片，再选中节点并按 Ctrl/Cmd+V"), true);
+        this.addToolbarButton("submap", "network", "创建或进入子导图", () => void this.createOrOpenSubmap());
+        this.addToolbarSeparator();
+        this.addToolbarButton("undo", "undo-2", "撤销（Ctrl/Cmd+Z）", () => this.undo(), true);
+        this.addToolbarButton("redo", "redo-2", "重做（Ctrl/Cmd+Y）", () => this.redo(), true);
+        this.addToolbarSeparator();
+        this.addToolbarButton("fit", "maximize", "适应画布", () => this.fitToView());
+        this.addToolbarButton("layout", "git-fork", "切换单侧/双侧布局", () => this.toggleLayout(), true);
+        this.addToolbarButton("appearance", "palette", "当前脑图外观", () => this.editAppearance(), true);
+        this.articleLandingButton = this.addToolbarButton("article-landing", "list-tree", "切换目录 / 原始文章", () => this.toggleArticleLanding());
+        this.articleStyleButton = this.addToolbarButton("article-style", "paintbrush", "文章样式", () => this.editArticleStyle(), true);
+        this.addToolbarSeparator();
+        this.addToolbarButton("markdown", "file-text", "查看 Markdown 大纲", () => this.showOutline());
+        this.addToolbarButton("json", "braces", "导入 / 导出", () => this.showJsonTransfer(), true);
+        this.addToolbarButton("export-document", "file-output", "导出 HTML / Word / PDF / Markdown", () => this.showDocumentExport());
+        this.addToolbarButton("export-svg", "image", "导出 SVG", () => void this.callbacks.onExportSvg((0, layout_1.documentToSvg)(this.document.root, this.document.layout, this.document.title, this.getAppearance())));
+        this.applyToolbarOrder();
+        const spacer = this.toolbarEl.createSpan({ cls: "mmc-toolbar-spacer" });
+        spacer.setAttr("aria-hidden", "true");
+        const zoomControl = this.toolbarEl.createDiv({ cls: "mmc-zoom-control" });
+        const zoomOut = zoomControl.createEl("button", { cls: "clickable-icon mmc-zoom-step", attr: { type: "button", title: "缩小", "aria-label": "缩小" } });
+        (0, obsidian_1.setIcon)(zoomOut, "minus");
+        zoomOut.addEventListener("click", () => { this.setZoom(this.zoom / 1.15); this.focus(); });
+        this.zoomStatusEl = zoomControl.createEl("input", {
+            cls: "mmc-zoom-status mmc-zoom-input",
+            attr: { type: "text", inputmode: "decimal", title: "输入缩放百分比", "aria-label": "输入缩放百分比" }
+        });
+        this.zoomStatusEl.value = "100%";
+        this.zoomStatusEl.addEventListener("change", () => this.applyZoomInput());
+        this.zoomStatusEl.addEventListener("focus", () => this.zoomStatusEl.select());
+        this.zoomStatusEl.addEventListener("keydown", (event) => {
+            event.stopPropagation();
+            if (event.key === "Enter")
+                this.zoomStatusEl.blur();
+            if (event.key === "Escape") {
+                this.applyTransform();
+                this.zoomStatusEl.blur();
+            }
+        });
+        const zoomIn = zoomControl.createEl("button", { cls: "clickable-icon mmc-zoom-step", attr: { type: "button", title: "放大", "aria-label": "放大" } });
+        (0, obsidian_1.setIcon)(zoomIn, "plus");
+        zoomIn.addEventListener("click", () => { this.setZoom(this.zoom * 1.15); this.focus(); });
+        this.statusEl = this.toolbarEl.createSpan({ cls: "mmc-save-status", text: "已保存" });
+        const keydown = (event) => this.handleKeydown(event);
+        this.rootEl.addEventListener("keydown", keydown, true);
+        // Ctrl-hold tracking for resize modifier
+        const ctrlTracker = (trackEvent) => {
+            if (this.resizeModifier !== "ctrl")
+                return;
+            if (trackEvent.type === "keydown" && (trackEvent.key === "Control" || trackEvent.key === "Meta")) {
+                this.rootEl.addClass("is-ctrl-held");
+            }
+            else if (trackEvent.type === "keyup" && (trackEvent.key === "Control" || trackEvent.key === "Meta")) {
+                this.rootEl.removeClass("is-ctrl-held");
+            }
+        };
+        document.addEventListener("keydown", ctrlTracker);
+        document.addEventListener("keyup", ctrlTracker);
+        this.cleanupCallbacks.push(() => {
+            document.removeEventListener("keydown", ctrlTracker);
+            document.removeEventListener("keyup", ctrlTracker);
+        });
+        this.cleanupCallbacks.push(() => this.rootEl.removeEventListener("keydown", keydown, true));
+        const paste = (event) => { void this.handlePaste(event); };
+        this.rootEl.addEventListener("paste", paste);
+        this.cleanupCallbacks.push(() => this.rootEl.removeEventListener("paste", paste));
+        const wheel = (event) => {
+            const wheelTarget = event.target;
+            if (wheelTarget.closest(".mmc-node-table-wrap, .mmc-code-block"))
+                return;
+            event.preventDefault();
+            // Shift+???????????????
+            if (event.shiftKey) {
+                const rect = this.viewportEl.getBoundingClientRect();
+                const pointerX = event.clientX - rect.left - rect.width / 2;
+                const pointerY = event.clientY - rect.top - rect.height / 2;
+                const oldZoom = this.zoom;
+                const nextZoom = this.clampZoom(this.zoom * (event.deltaY < 0 ? 1.1 : 0.9));
+                const worldX = (pointerX - this.panX) / oldZoom;
+                const worldY = (pointerY - this.panY) / oldZoom;
+                this.zoom = nextZoom;
+                this.panX = pointerX - worldX * nextZoom;
+                this.panY = pointerY - worldY * nextZoom;
+                this.mindMapViewportInitialized = true;
+                this.applyTransform();
+                return;
+            }
+            if (this.options.twoFingerGestureAction === "pan") {
+                this.panX -= event.deltaX;
+                this.panY -= event.deltaY;
+                this.mindMapViewportInitialized = true;
+                this.applyTransform();
+                return;
+            }
+            const rect = this.viewportEl.getBoundingClientRect();
+            const pointerX = event.clientX - rect.left - rect.width / 2;
+            const pointerY = event.clientY - rect.top - rect.height / 2;
+            const oldZoom = this.zoom;
+            const nextZoom = this.clampZoom(this.zoom * (event.deltaY < 0 ? 1.1 : 0.9));
+            const worldX = (pointerX - this.panX) / oldZoom;
+            const worldY = (pointerY - this.panY) / oldZoom;
+            this.zoom = nextZoom;
+            this.panX = pointerX - worldX * nextZoom;
+            this.panY = pointerY - worldY * nextZoom;
+            this.mindMapViewportInitialized = true;
+            this.applyTransform();
+        };
+        this.viewportEl.addEventListener("wheel", wheel, { passive: false });
+        this.cleanupCallbacks.push(() => this.viewportEl.removeEventListener("wheel", wheel));
+        const pointerDown = (event) => {
+            const target = event.target;
+            if (target.closest(".mmc-node, .mmc-canvas-breadcrumb"))
+                return;
+            if (event.button !== 0 && event.button !== 1)
+                return;
+            if (event.pointerType === "touch") {
+                event.preventDefault();
+                this.touchPointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+                this.viewportEl.setPointerCapture(event.pointerId);
+                if (this.touchPointers.size >= 2) {
+                    this.panning = false;
+                    this.viewportEl.removeClass("is-panning");
+                    this.beginTwoFingerGesture();
+                }
+                else {
+                    this.panning = true;
+                    this.panStart = { x: event.clientX, y: event.clientY, panX: this.panX, panY: this.panY };
+                    this.viewportEl.addClass("is-panning");
+                    this.selectNode(null);
+                }
+                return;
+            }
+            if (event.button === 0 && event.shiftKey) {
+                const viewportRect = this.viewportEl.getBoundingClientRect();
+                const startX = event.clientX - viewportRect.left;
+                const startY = event.clientY - viewportRect.top;
+                const baseSelection = new Set(this.selectedIds);
+                if (this.selectedId)
+                    baseSelection.add(this.selectedId);
+                baseSelection.delete(this.document.root.id);
+                const marquee = this.viewportEl.createDiv({ cls: "mmc-selection-marquee" });
+                marquee.style.left = `${startX}px`;
+                marquee.style.top = `${startY}px`;
+                this.viewportEl.setPointerCapture(event.pointerId);
+                const moveSelection = (moveEvent) => {
+                    const currentX = moveEvent.clientX - viewportRect.left;
+                    const currentY = moveEvent.clientY - viewportRect.top;
+                    marquee.style.left = `${Math.min(startX, currentX)}px`;
+                    marquee.style.top = `${Math.min(startY, currentY)}px`;
+                    marquee.style.width = `${Math.abs(currentX - startX)}px`;
+                    marquee.style.height = `${Math.abs(currentY - startY)}px`;
+                    const left = Math.min(event.clientX, moveEvent.clientX);
+                    const right = Math.max(event.clientX, moveEvent.clientX);
+                    const top = Math.min(event.clientY, moveEvent.clientY);
+                    const bottom = Math.max(event.clientY, moveEvent.clientY);
+                    this.selectedIds.clear();
+                    for (const id of baseSelection)
+                        this.selectedIds.add(id);
+                    for (const nodeEl of Array.from(this.nodesLayerEl.querySelectorAll(".mmc-node[data-node-id]"))) {
+                        const rect = nodeEl.getBoundingClientRect();
+                        if (rect.right >= left && rect.left <= right && rect.bottom >= top && rect.top <= bottom) {
+                            const id = nodeEl.dataset.nodeId;
+                            if (id && id !== this.document.root.id)
+                                this.selectedIds.add(id);
+                        }
+                    }
+                    this.selectedId = Array.from(this.selectedIds).at(-1) ?? "";
+                    this.applySelectionClasses();
+                };
+                const finishSelection = (upEvent) => {
+                    this.viewportEl.removeEventListener("pointermove", moveSelection);
+                    this.viewportEl.removeEventListener("pointerup", finishSelection);
+                    this.viewportEl.removeEventListener("pointercancel", finishSelection);
+                    if (this.viewportEl.hasPointerCapture(upEvent.pointerId))
+                        this.viewportEl.releasePointerCapture(upEvent.pointerId);
+                    marquee.remove();
+                };
+                this.viewportEl.addEventListener("pointermove", moveSelection);
+                this.viewportEl.addEventListener("pointerup", finishSelection);
+                this.viewportEl.addEventListener("pointercancel", finishSelection);
+                return;
+            }
+            this.panning = true;
+            this.panStart = { x: event.clientX, y: event.clientY, panX: this.panX, panY: this.panY };
+            this.viewportEl.setPointerCapture(event.pointerId);
+            this.viewportEl.addClass("is-panning");
+            this.selectNode(null);
+        };
+        const pointerMove = (event) => {
+            if (event.pointerType === "touch" && this.touchPointers.has(event.pointerId)) {
+                this.touchPointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+                if (this.touchPointers.size >= 2) {
+                    this.updateTwoFingerGesture();
+                    return;
+                }
+            }
+            if (!this.panning)
+                return;
+            this.panX = this.panStart.panX + event.clientX - this.panStart.x;
+            this.panY = this.panStart.panY + event.clientY - this.panStart.y;
+            this.mindMapViewportInitialized = true;
+            this.applyTransform();
+        };
+        const pointerUp = (event) => {
+            if (event.pointerType === "touch" && this.touchPointers.delete(event.pointerId)) {
+                if (this.viewportEl.hasPointerCapture(event.pointerId))
+                    this.viewportEl.releasePointerCapture(event.pointerId);
+                this.touchGesture = null;
+                const remainingPointer = this.touchPointers.values().next().value;
+                if (remainingPointer) {
+                    this.panning = true;
+                    this.panStart = { x: remainingPointer.x, y: remainingPointer.y, panX: this.panX, panY: this.panY };
+                    this.viewportEl.addClass("is-panning");
+                }
+                else {
+                    this.panning = false;
+                    this.viewportEl.removeClass("is-panning");
+                }
+                return;
+            }
+            if (!this.panning)
+                return;
+            this.panning = false;
+            if (this.viewportEl.hasPointerCapture(event.pointerId))
+                this.viewportEl.releasePointerCapture(event.pointerId);
+            this.viewportEl.removeClass("is-panning");
+        };
+        this.viewportEl.addEventListener("pointerdown", pointerDown);
+        this.viewportEl.addEventListener("pointermove", pointerMove);
+        this.viewportEl.addEventListener("pointerup", pointerUp);
+        this.viewportEl.addEventListener("pointercancel", pointerUp);
+        const canvasContextMenu = (event) => {
+            const target = event.target;
+            if (target.closest(".mmc-node, .mmc-canvas-breadcrumb"))
+                return;
+            event.preventDefault();
+            this.openAllNodesContextMenu(event);
+        };
+        this.viewportEl.addEventListener("contextmenu", canvasContextMenu);
+        this.cleanupCallbacks.push(() => {
+            this.viewportEl.removeEventListener("pointerdown", pointerDown);
+            this.viewportEl.removeEventListener("pointermove", pointerMove);
+            this.viewportEl.removeEventListener("pointerup", pointerUp);
+            this.viewportEl.removeEventListener("pointercancel", pointerUp);
+            this.viewportEl.removeEventListener("contextmenu", canvasContextMenu);
+        });
+        this.resizeObserver = new ResizeObserver((entries) => {
+            if (entries.some((entry) => entry.target === this.viewportEl))
+                this.applyTransform();
+            if (entries.some((entry) => entry.target instanceof HTMLElement && entry.target.hasClass("mmc-node"))) {
+                this.scheduleMeasuredMindMapLayout();
+            }
+        });
+        this.resizeObserver.observe(this.viewportEl);
+    }
+    /**
+     * 解析并确定mode，并保持模型、界面和持久化状态的一致性。
+     *
+     * @param preferred 该参数用于 resolve mode 流程中的输入或控制。
+     * @returns 当前操作生成、查找或规范化后的结果。
+     */
+    resolveMode(preferred) {
+        if (this.options.visibleModes.includes(preferred))
+            return preferred;
+        return this.options.visibleModes[0] ?? "mindmap";
+    }
+    /**
+     * 执行“persist read only state”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+     */
+    persistReadOnlyState() {
+        this.document.view = { ...(this.document.view ?? {}), readOnly: this.readOnly };
+        delete this.document.view.mode;
+        this.callbacks.onChange(this.getDocument());
+        this.markSaving();
+    }
+    /**
+     * 执行“update mode ui”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+     */
+    updateModeUi() {
+        for (const [mode, button] of this.modeButtons)
+            button.toggleClass("is-active", mode === this.currentMode);
+        const isArticle = this.currentMode === "article";
+        const hasLandingChoice = isArticle && this.options.showArticleToc;
+        this.articleLandingButton.toggleClass("is-hidden", !hasLandingChoice || !this.options.visibleToolbarItems.includes("article-landing"));
+        this.articleStyleButton.toggleClass("is-hidden", !isArticle || !this.options.visibleToolbarItems.includes("article-style"));
+        if (hasLandingChoice) {
+            const showingArticle = this.document.view?.articleLandingMode === "article";
+            this.articleLandingButton.setAttr("aria-label", showingArticle ? "显示目录" : "显示原始文章");
+            this.articleLandingButton.setAttr("title", showingArticle ? "显示目录" : "显示原始文章");
+            this.articleLandingButton.empty();
+            (0, obsidian_1.setIcon)(this.articleLandingButton, showingArticle ? "list-tree" : "file-text");
+            this.articleLandingButton.toggleClass("is-active", showingArticle);
+        }
+        this.lockButton.empty();
+        (0, obsidian_1.setIcon)(this.lockButton, this.readOnly ? "lock" : "lock-open");
+        this.lockButton.setAttr("aria-label", this.readOnly ? "当前只读，点击切换到编辑模式" : "当前可编辑，点击切换到只读模式");
+        this.lockButton.setAttr("title", this.readOnly ? "只读模式" : "编辑模式");
+        this.lockButton.toggleClass("is-active", this.readOnly);
+        this.rootEl.toggleClass("is-read-only", this.readOnly);
+        for (const control of this.editControls) {
+            if (control instanceof HTMLButtonElement || control instanceof HTMLInputElement || control instanceof HTMLSelectElement)
+                control.disabled = this.readOnly;
+            control.toggleClass("is-read-only-disabled", this.readOnly);
+        }
+    }
+    /**
+     * 执行“ensure editable”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+     * @returns 操作条件是否成立或处理是否成功。
+     */
+    ensureEditable() {
+        if (!this.readOnly)
+            return true;
+        new obsidian_1.Notice("当前为只读模式，请先点击锁按钮切换到编辑模式");
+        return false;
+    }
+    /**
+     * 执行“clear image load timers”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+     */
+    clearImageLoadTimers() {
+        for (const timer of this.imageLoadTimers)
+            window.clearTimeout(timer);
+        this.imageLoadTimers.clear();
+    }
+    /**
+     * 添加toolbar button，并保持模型、界面和持久化状态的一致性。
+     *
+     * @param id 工具栏项目设置标识。
+     * @param icon 该参数用于 add toolbar button 流程中的输入或控制。
+     * @param label 该参数用于 add toolbar button 流程中的输入或控制。
+     * @param action 该参数用于 add toolbar button 流程中的输入或控制。
+     * @param editOnly 该参数用于 add toolbar button 流程中的输入或控制。
+     * @returns 当前操作生成、查找或规范化后的结果。
+     */
+    addToolbarButton(id, icon, label, action, editOnly = false) {
+        const button = this.toolbarEl.createEl("button", { cls: "clickable-icon mmc-toolbar-button", attr: { "aria-label": label, title: label, type: "button" } });
+        button.dataset.toolbarId = id;
+        (0, obsidian_1.setIcon)(button, icon);
+        button.toggleClass("is-hidden", !this.options.visibleToolbarItems.includes(id));
+        if (editOnly) {
+            button.addClass("mms-edit-only-control");
+            this.editControls.push(button);
+        }
+        button.addEventListener("click", () => {
+            if (editOnly && this.readOnly)
+                return;
+            action();
+            this.focus();
+        });
+        return button;
+    }
+    /**
+     * Applies the user-defined order to toolbar buttons.
+     */
+    applyToolbarOrder() {
+        const buttons = new Map();
+        for (const button of Array.from(this.toolbarEl.querySelectorAll("[data-toolbar-id]"))) {
+            const id = button.dataset.toolbarId;
+            if (id)
+                buttons.set(id, button);
+        }
+        for (const separator of Array.from(this.toolbarEl.querySelectorAll(".mmc-toolbar-separator")))
+            separator.remove();
+        const order = [...this.options.toolbarItemOrder, ...settings_1.TOOLBAR_ITEMS.map(([id]) => id)];
+        for (const id of new Set(order)) {
+            const button = buttons.get(id);
+            if (button)
+                this.toolbarEl.appendChild(button);
+        }
+    }
+    /**
+     * 添加toolbar separator，并保持模型、界面和持久化状态的一致性。
+     */
+    addToolbarSeparator() {
+        this.toolbarEl.createSpan({ cls: "mmc-toolbar-separator" });
+    }
+    /**
+     * 读取并返回appearance，并保持模型、界面和持久化状态的一致性。
+     * @returns 当前操作生成、查找或规范化后的结果。
+     */
+    getAppearance() {
+        return (0, model_1.mergeAppearance)(this.options.defaultAppearance, this.document.appearance);
+    }
+    /**
+     * 执行“font family css”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+     *
+     * @param appearance 导图外观配置。
+     * @returns 计算、解析或序列化后的字符串结果。
+     */
+    fontFamilyCss(appearance) {
+        if (appearance.fontFamily === "serif")
+            return 'Georgia, "Times New Roman", serif';
+        if (appearance.fontFamily === "mono")
+            return '"SFMono-Regular", Consolas, "Liberation Mono", monospace';
+        if (appearance.fontFamily === "custom" && appearance.customFont?.trim())
+            return `"${appearance.customFont.trim().replaceAll('"', '')}", sans-serif`;
+        if (appearance.fontFamily === "sans")
+            return 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+        return "var(--font-interface)";
+    }
+    /**
+     * 应用appearance，并保持模型、界面和持久化状态的一致性。
+     *
+     * @param appearance 导图外观配置。
+     */
+    applyAppearance(appearance) {
+        const setOrRemove = (name, value) => {
+            if (value)
+                this.rootEl.style.setProperty(name, value);
+            else
+                this.rootEl.style.removeProperty(name);
+        };
+        setOrRemove("--mmc-canvas", appearance.backgroundColor);
+        setOrRemove("--mmc-pattern-color", appearance.patternColor);
+        setOrRemove("--mmc-edge", appearance.edgeColor);
+        setOrRemove("--mmc-root-bg", appearance.rootColor);
+        setOrRemove("--mmc-root-text", appearance.rootTextColor);
+        setOrRemove("--mmc-node-bg", appearance.nodeColor);
+        setOrRemove("--mmc-node-text", appearance.textColor);
+        setOrRemove("--mmc-node-border", appearance.nodeBorderColor);
+        this.rootEl.style.setProperty("--mmc-font-family", this.fontFamilyCss(appearance));
+        this.rootEl.style.setProperty("--mmc-edge-width", `${appearance.edgeWidth ?? 2.2}px`);
+        this.rootEl.style.setProperty("--mmc-node-border-width", `${appearance.nodeBorderWidth ?? 1}px`);
+        this.rootEl.dataset.nodeVisualStyle = appearance.nodeVisualStyle ?? "card";
+        this.viewportEl.toggleClass("pattern-grid", appearance.backgroundPattern === "grid");
+        this.viewportEl.toggleClass("pattern-dots", appearance.backgroundPattern === "dots");
+        this.viewportEl.toggleClass("pattern-none", !appearance.backgroundPattern || appearance.backgroundPattern === "none");
+    }
+    /**
+     * 在画布左上角或文档顶部渲染父子导图导航。导图模式使用固定悬浮面包屑，文章和大纲模式使用文档流导航，均保持当前全局显示模式。
+     * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
+     */
+    renderNavigation() {
+        this.navigationBarEl.empty();
+        this.canvasBreadcrumbEl.empty();
+        const navigation = this.document.navigation;
+        const hasParent = Boolean(navigation?.parentPath);
+        const showNavigationBar = hasParent && this.currentMode !== "mindmap";
+        const showCanvasBreadcrumb = hasParent && this.currentMode === "mindmap";
+        this.navigationBarEl.toggleClass("is-hidden", !showNavigationBar);
+        this.canvasBreadcrumbEl.toggleClass("is-hidden", !showCanvasBreadcrumb);
+        if (!navigation?.parentPath)
+            return;
+        const parentTitle = navigation.parentTitle
+            ?? navigation.parentPath.split("/").at(-1)?.replace(/\.mindmap$/i, "")
+            ?? "父导图";
+        const currentTitle = (0, model_1.nodePlainText)(this.document.root) || this.document.title || "当前导图";
+        const returnTitle = navigation.parentNodeText
+            ? `返回父导图：${parentTitle}（来源节点：${navigation.parentNodeText}）`
+            : `返回父导图：${parentTitle}`;
+        const openParent = () => {
+            void this.callbacks.onOpenMindMap(navigation.parentPath, navigation.parentNodeId);
+        };
+        if (showCanvasBreadcrumb) {
+            const shell = this.canvasBreadcrumbEl.createDiv({ cls: "mmc-canvas-breadcrumb-shell" });
+            const backButton = shell.createEl("button", {
+                cls: "mmc-canvas-breadcrumb-back",
+                attr: { type: "button", title: returnTitle, "aria-label": returnTitle }
+            });
+            (0, obsidian_1.setIcon)(backButton, "arrow-left");
+            backButton.addEventListener("click", (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                openParent();
+            });
+            const trail = shell.createDiv({ cls: "mmc-canvas-breadcrumb-trail" });
+            const parent = trail.createEl("button", {
+                cls: "mmc-canvas-breadcrumb-parent",
+                text: parentTitle,
+                attr: { type: "button", title: returnTitle }
+            });
+            parent.addEventListener("click", (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                openParent();
+            });
+            trail.createSpan({ cls: "mmc-canvas-breadcrumb-separator", text: "›" });
+            trail.createSpan({ cls: "mmc-canvas-breadcrumb-current", text: currentTitle });
+            shell.setAttr("title", navigation.parentPath);
+        }
+        if (!showNavigationBar)
+            return;
+        const button = this.navigationBarEl.createEl("button", {
+            cls: "mmc-parent-navigation-button",
+            attr: { type: "button", title: returnTitle }
+        });
+        (0, obsidian_1.setIcon)(button, "arrow-left");
+        const labels = button.createDiv({ cls: "mmc-parent-navigation-labels" });
+        labels.createDiv({ cls: "mmc-parent-navigation-title", text: `返回父导图：${parentTitle}` });
+        if (navigation.parentNodeText)
+            labels.createDiv({ cls: "mmc-parent-navigation-node", text: `来源节点：${navigation.parentNodeText}` });
+        button.addEventListener("click", openParent);
+        this.navigationBarEl.createDiv({ cls: "mmc-parent-navigation-path", text: navigation.parentPath });
+    }
+    /**
+     * 执行“update node primary text”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+     *
+     * @param node 当前处理的节点。
+     * @param value 待校验、转换或比较的输入值。
+     */
+    updateNodePrimaryText(node, value) {
+        const next = value.text.replace(/\s+/g, " ").trim();
+        const blocks = (0, model_1.nodeContentBlocks)(node);
+        const firstText = blocks.find((block) => block.type === "text");
+        if (firstText) {
+            firstText.text = next;
+            firstText.richText = value.richText;
+        }
+        else if (next) {
+            blocks.unshift({ id: (0, model_1.newId)(), type: "text", text: next });
+        }
+        node.content = blocks.filter((block) => block.type !== "text" || block.text.trim());
+        (0, model_1.syncNodeLegacyFields)(node);
+        if (node.id === this.document.root.id && next)
+            this.document.title = next;
+    }
+    /**
+     * 创建并配置inline editable，并保持模型、界面和持久化状态的一致性。
+     *
+     * @param element 该参数用于 make inline editable 流程中的输入或控制。
+     * @param node 当前处理的节点。
+     * @param placeholder 该参数用于 make inline editable 流程中的输入或控制。
+     */
+    makeInlineEditable(element, node, placeholder) {
+        element.contentEditable = this.readOnly ? "false" : "true";
+        element.setAttr("role", "textbox");
+        element.setAttr("aria-label", placeholder);
+        if (!element.textContent?.trim())
+            element.dataset.placeholder = placeholder;
+        if (this.readOnly)
+            return;
+        const initialBlock = (0, model_1.nodeContentBlocks)(node).find((block) => block.type === "text");
+        (0, rich_text_dom_1.renderRichTextRuns)(element, initialBlock?.richText, initialBlock?.text ?? (0, model_1.nodePrimaryText)(node), false);
+        let original = (0, rich_text_dom_1.readRichTextEditor)(element);
+        let toolbar = null;
+        element.addEventListener("focus", () => {
+            original = (0, rich_text_dom_1.readRichTextEditor)(element);
+            toolbar ?? (toolbar = (0, selection_format_toolbar_1.attachSelectionFormatToolbar)({
+                editor: element,
+                shortcuts: this.options.richTextShortcuts,
+                shortcutMatches: (event, shortcut) => this.shortcutMatches(event, shortcut)
+            }));
+        });
+        element.addEventListener("keydown", (event) => {
+            if (event.key === "Enter") {
+                event.preventDefault();
+                element.blur();
+            }
+            if (event.key === "Escape") {
+                event.preventDefault();
+                (0, rich_text_dom_1.renderRichTextRuns)(element, original.richText, original.text, false);
+                element.blur();
+            }
+        });
+        element.addEventListener("blur", (event) => {
+            if (toolbar?.contains(event.relatedTarget))
+                return;
+            const next = (0, rich_text_dom_1.readRichTextEditor)(element);
+            toolbar?.cleanup();
+            toolbar = null;
+            if ((!next.text && node.id === this.document.root.id)
+                || JSON.stringify(next) === JSON.stringify(original)) {
+                (0, rich_text_dom_1.renderRichTextRuns)(element, original.richText, original.text, false);
+                return;
+            }
+            this.mutate(() => this.updateNodePrimaryText(node, next));
+        });
+    }
+    /**
+     * 添加inline node actions，并保持模型、界面和持久化状态的一致性。
+     *
+     * @param container 接收渲染内容的 DOM 容器。
+     * @param node 当前处理的节点。
+     */
+    addInlineNodeActions(container, node) {
+        if (this.readOnly)
+            return;
+        const actions = container.createDiv({ cls: "mms-inline-node-actions" });
+        const action = (icon, label, handler) => {
+            const button = actions.createEl("button", { cls: "clickable-icon", attr: { type: "button", title: label, "aria-label": label } });
+            (0, obsidian_1.setIcon)(button, icon);
+            button.addEventListener("click", (event) => { event.stopPropagation(); this.selectNode(node.id); handler(); });
+        };
+        action("pencil", "完整编辑", () => this.editSelected());
+        action("plus", "添加子节点", () => this.addChild());
+        if (node.id !== this.document.root.id)
+            action("trash-2", "删除节点", () => this.deleteSelected());
+    }
+    /**
+     * 按照节点层级渲染可编辑大纲。节点标题、备注和子导图链接仍映射到同一份数据，任何修改都会通过统一变更链同步到导图和文章模式。
+     * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
+     */
+    renderOutline() {
+        (0, outline_renderer_1.renderOutlineMode)(this.outlineEl, {
+            app: this.app,
+            document: this.document,
+            selectedId: this.selectedId,
+            readOnly: this.readOnly,
+            selectNode: (id) => this.selectNode(id),
+            makeInlineEditable: (element, node, placeholder) => this.makeInlineEditable(element, node, placeholder),
+            addInlineNodeActions: (container, node) => this.addInlineNodeActions(container, node),
+            mutate: (action) => this.mutate(action),
+            editSelected: () => this.editSelected(),
+            openMindMap: (path) => this.callbacks.onOpenMindMap(path),
+            resolveImage: this.callbacks.resolveImage,
+            renderCode: this.callbacks.onRenderCode
+        });
+    }
+    /**
+     * 渲染文章目录页、章节编号、正文和跨子导图链接。顶层父导图可展示递归目录；子导图根据文章上下文继续父级编号。
+     * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
+     */
+    renderArticle() {
+        this.articleEl.onscroll = null;
+        (0, article_renderer_1.renderArticleMode)(this.articleEl, this.articleRendererOptions());
+        this.addArticleScrollToTopButton();
+    }
+    /** 构造文章渲染器所需的最小状态边界。 */
+    articleRendererOptions() {
+        return {
+            app: this.app,
+            document: this.document,
+            selectedId: this.selectedId,
+            readOnly: this.readOnly,
+            articleBaseDepth: this.options.articleBaseDepth,
+            showArticleToc: this.options.showArticleToc,
+            articleTocEntries: this.options.articleTocEntries,
+            articleTocMaxDepth: this.effectiveArticleTocMaxDepth(),
+            articleNavigation: this.options.articleNavigation,
+            callbacks: this.callbacks,
+            selectNode: (id) => this.selectNode(id),
+            makeInlineEditable: (element, node, placeholder) => this.makeInlineEditable(element, node, placeholder),
+            addInlineNodeActions: (container, node) => this.addInlineNodeActions(container, node)
+        };
+    }
+    /**
+     * 返回当前脑图实际使用的目录最大层级。文档级覆盖优先，未设置时跟随插件全局选项。
+     *
+     * @returns 文章模式和通读模式共同使用的 1–8 层目录限制。
+     */
+    effectiveArticleTocMaxDepth() {
+        return (0, modes_1.resolveArticleTocMaxDepth)(this.document.view?.articleTocMaxDepth, this.options.articleTocMaxDepth);
+    }
+    /** 将文章内容块渲染委托给文章模式模块。 */
+    renderArticleContent(container, node, treatTextAsBody) {
+        (0, article_renderer_1.renderArticleNodeContent)(container, node, treatTextAsBody, this.articleRendererOptions());
+    }
+    /**
+     * 渲染相关数据，并保持模型、界面和持久化状态的一致性。
+     */
+    render() {
+        for (const id of Array.from(this.selectedIds)) {
+            if (!(0, model_1.findNode)(this.document.root, id))
+                this.selectedIds.delete(id);
+        }
+        if (this.selectedId && !this.selectedIds.has(this.selectedId)) {
+            this.selectedIds.clear();
+            this.selectedIds.add(this.selectedId);
+        }
+        this.clearImageLoadTimers();
+        this.renderNavigation();
+        const appearance = this.getAppearance();
+        this.applyAppearance(appearance);
+        this.updateModeUi();
+        this.viewportEl.toggleClass("is-hidden", this.currentMode !== "mindmap");
+        this.outlineEl.toggleClass("is-hidden", this.currentMode !== "outline");
+        this.articleEl.toggleClass("is-hidden", this.currentMode !== "article" && this.currentMode !== "reading");
+        this.rootEl.dataset.displayMode = this.currentMode;
+        if (this.currentMode === "outline")
+            this.renderOutline();
+        else if (this.currentMode === "article")
+            this.renderArticle();
+        else if (this.currentMode === "reading")
+            this.renderReading();
+        else
+            this.renderMindMap();
+    }
+    /**
+     * 渲染可交互导图画布：计算布局、绘制连接线和节点、恢复选择状态、绑定拖拽与尺寸手柄、安装子导图整节点入口，并启动图片镜像加载探测。
+     * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
+     */
+    renderMindMap() {
+        const appearance = this.getAppearance();
+        this.layout = (0, layout_1.computeLayout)(this.document.root, this.document.layout, appearance.fontSize ?? 14, appearance.nodeVisualStyle ?? "card", appearance);
+        const branchColorMap = appearance.colorfulBranches ? (0, layout_1.buildBranchColorMap)(this.document.root, appearance.branchColors) : new Map();
+        this.clearDropPreview();
+        this.nodesLayerEl.empty();
+        while (this.edgesSvg.firstChild)
+            this.edgesSvg.removeChild(this.edgesSvg.firstChild);
+        this.renderMindMapEdges(appearance, branchColorMap);
+        for (const position of this.layout.nodes) {
+            const node = position.node;
+            const shape = node.style?.shape ?? this.options.defaultNodeShape;
+            const textAlign = node.style?.textAlign ?? appearance.nodeTextAlign ?? "center";
+            const classes = ["mmc-node", position.depth === 0 ? "is-root" : "", node.submap ? "is-submap-node" : "", `shape-${shape}`, `text-align-${textAlign}`].filter(Boolean).join(" ");
+            const nodeEl = this.nodesLayerEl.createDiv({ cls: classes });
+            nodeEl.dataset.nodeId = node.id;
+            nodeEl.style.left = `${position.x}px`;
+            nodeEl.style.top = `${position.y}px`;
+            nodeEl.style.width = `${position.width}px`;
+            nodeEl.style.minHeight = `${position.height}px`;
+            nodeEl.style.setProperty("--mmc-node-text-align", textAlign);
+            nodeEl.draggable = position.depth > 0 && !this.readOnly;
+            if (this.selectedId === node.id || this.selectedIds.has(node.id))
+                nodeEl.addClass("is-selected");
+            if (this.selectedIds.size > 1 && this.selectedIds.has(node.id))
+                nodeEl.addClass("is-multi-selected");
+            if (this.searchQuery && (0, model_1.nodeSearchText)(node).includes(this.searchQuery))
+                nodeEl.addClass("is-search-match");
+            if (node.task)
+                nodeEl.addClass(`task-${node.task}`);
+            const isRoot = position.depth === 0;
+            const bold = node.style?.bold ?? appearance.bold ?? false;
+            const italic = node.style?.italic ?? appearance.italic ?? false;
+            const underline = node.style?.underline ?? appearance.underline ?? false;
+            if (bold)
+                nodeEl.addClass("is-bold");
+            if (italic)
+                nodeEl.addClass("is-italic");
+            if (underline)
+                nodeEl.addClass("is-underlined");
+            if (node.note)
+                nodeEl.setAttr("title", node.note);
+            const branchColor = branchColorMap.get(node.id);
+            if (node.style?.color)
+                nodeEl.style.backgroundColor = node.style.color;
+            else if (isRoot && appearance.rootColor)
+                nodeEl.style.backgroundColor = appearance.rootColor;
+            else if (!isRoot && branchColor && appearance.nodeVisualStyle === "branch") {
+                nodeEl.style.backgroundColor = `color-mix(in srgb, ${branchColor} 16%, ${appearance.nodeColor ?? "#ffffff"})`;
+            }
+            else if (!isRoot && appearance.nodeColor)
+                nodeEl.style.backgroundColor = appearance.nodeColor;
+            if (node.style?.textColor)
+                nodeEl.style.color = node.style.textColor;
+            else if (isRoot && appearance.rootTextColor)
+                nodeEl.style.color = appearance.rootTextColor;
+            else if (!isRoot && appearance.textColor)
+                nodeEl.style.color = appearance.textColor;
+            if (node.style?.borderColor)
+                nodeEl.style.borderColor = node.style.borderColor;
+            else if (!isRoot && branchColor && appearance.nodeVisualStyle === "branch") {
+                nodeEl.style.borderColor = `color-mix(in srgb, ${branchColor} 38%, transparent)`;
+            }
+            else if (!isRoot && branchColor)
+                nodeEl.style.borderColor = branchColor;
+            else if (!isRoot && appearance.nodeBorderColor)
+                nodeEl.style.borderColor = appearance.nodeBorderColor;
+            nodeEl.style.borderWidth = `${node.style?.borderWidth ?? appearance.nodeBorderWidth ?? (isRoot ? 2 : 1)}px`;
+            const content = nodeEl.createDiv({ cls: "mmc-node-content" });
+            const blocks = (0, model_1.nodeContentBlocks)(node);
+            const hasTextBlock = blocks.some((block) => block.type === "text" && block.text.trim());
+            if ((node.task || node.icon) && !hasTextBlock) {
+                const meta = content.createDiv({ cls: "mmc-node-main mmc-node-meta-only" });
+                if (node.task) {
+                    const task = meta.createSpan({ cls: `mmc-task-icon task-${node.task}`, text: node.task === "done" ? "✓" : node.task === "doing" ? "◐" : "○" });
+                    task.setAttr("aria-label", node.task === "done" ? "已完成" : node.task === "doing" ? "进行中" : "待办");
+                }
+                if (node.icon)
+                    meta.createSpan({ cls: "mmc-node-icon", text: node.icon });
+            }
+            let prefixRendered = false;
+            for (const block of blocks) {
+                if (block.type === "image") {
+                    const wrap = content.createDiv({ cls: "mmc-node-image-block" });
+                    const image = wrap.createEl("img", { cls: "mmc-node-image is-loading", attr: { alt: block.alt ?? ((0, model_1.nodePlainText)(node) || "图片") } });
+                    const candidates = this.options.imageFailoverEnabled
+                        ? (0, model_1.imageSourceCandidates)(block, this.options.imageFailoverUseLocalFallback)
+                        : (0, model_1.imageSourceCandidates)(block, false).slice(0, 1);
+                    let activeResolved = null;
+                    let attemptToken = 0;
+                    let attemptTimer = null;
+                    const clearAttemptTimer = () => {
+                        if (attemptTimer === null)
+                            return;
+                        window.clearTimeout(attemptTimer);
+                        this.imageLoadTimers.delete(attemptTimer);
+                        attemptTimer = null;
+                    };
+                    const markRemoteFailure = (source) => {
+                        const remote = block.remoteSources?.find((item) => item.url === source);
+                        if (!remote)
+                            return;
+                        remote.lastFailureAt = new Date().toISOString();
+                        remote.failureCount = Math.min(1000000, (remote.failureCount ?? 0) + 1);
+                    };
+                    const tryCandidate = (index) => {
+                        clearAttemptTimer();
+                        const candidate = candidates[index];
+                        attemptToken += 1;
+                        const token = attemptToken;
+                        if (!candidate) {
+                            activeResolved = null;
+                            image.removeAttribute("src");
+                            image.removeClass("is-loading");
+                            image.addClass("is-unresolved");
+                            image.setAttr("title", "所有图片镜像均不可用");
+                            this.callbacks.onChange(this.getDocument());
+                            this.markSaving();
+                            return;
+                        }
+                        const resolved = this.callbacks.resolveImage(candidate.source);
+                        if (!resolved) {
+                            markRemoteFailure(candidate.source);
+                            tryCandidate(index + 1);
+                            return;
+                        }
+                        const probe = new Image();
+                        const fail = () => {
+                            if (token !== attemptToken)
+                                return;
+                            clearAttemptTimer();
+                            markRemoteFailure(candidate.source);
+                            if (this.options.imageFailoverEnabled)
+                                tryCandidate(index + 1);
+                            else {
+                                image.removeClass("is-loading");
+                                image.addClass("is-unresolved");
+                                image.setAttr("title", `图片加载失败：${candidate.source}`);
+                            }
+                        };
+                        probe.onload = () => {
+                            if (token !== attemptToken || probe.naturalWidth <= 0)
+                                return;
+                            clearAttemptTimer();
+                            activeResolved = resolved;
+                            image.src = resolved;
+                            image.removeClass("is-loading");
+                            image.removeClass("is-unresolved");
+                            image.setAttr("title", index === 0 ? "点击放大图片" : `已自动切换到：${candidate.label}`);
+                            const switched = candidate.source !== block.source;
+                            const remote = block.remoteSources?.find((item) => item.url === candidate.source);
+                            if (remote)
+                                remote.lastSuccessAt = new Date().toISOString();
+                            if (!switched)
+                                return;
+                            const previous = block.remoteSources?.find((item) => item.url === block.source);
+                            block.source = candidate.source;
+                            (0, model_1.syncNodeLegacyFields)(node);
+                            this.callbacks.onChange(this.getDocument());
+                            this.markSaving();
+                            const previousLabel = previous?.hostName || "当前图床";
+                            new obsidian_1.Notice(`图片地址失效，已从 ${previousLabel} 自动切换到 ${candidate.label}`, 6000);
+                        };
+                        probe.onerror = fail;
+                        const timeoutMs = Math.max(2, Math.min(30, this.options.imageFailoverTimeoutSeconds)) * 1000;
+                        attemptTimer = window.setTimeout(fail, timeoutMs);
+                        this.imageLoadTimers.add(attemptTimer);
+                        probe.src = resolved;
+                    };
+                    image.addEventListener("click", (event) => {
+                        event.stopPropagation();
+                        if (activeResolved)
+                            new editor_modals_1.ImagePreviewModal(this.app, activeResolved, block.alt ?? "图片预览", (0, model_1.imageSourceCandidates)(block, true), (source) => this.callbacks.resolveImage(source)).open();
+                    });
+                    tryCandidate(0);
+                    continue;
+                }
+                if (!block.text.trim())
+                    continue;
+                const main = content.createDiv({ cls: "mmc-node-main mmc-node-text-block" });
+                if (!prefixRendered && node.task) {
+                    const task = main.createSpan({ cls: `mmc-task-icon task-${node.task}`, text: node.task === "done" ? "✓" : node.task === "doing" ? "◐" : "○" });
+                    task.setAttr("aria-label", node.task === "done" ? "已完成" : node.task === "doing" ? "进行中" : "待办");
+                }
+                if (!prefixRendered && node.icon)
+                    main.createSpan({ cls: "mmc-node-icon", text: node.icon });
+                const isSubmapTitle = Boolean(node.submap) && !prefixRendered;
+                prefixRendered = true;
+                const textEl = main.createDiv({ cls: `mmc-node-text${isSubmapTitle ? " is-submap-link" : ""}` });
+                (0, rich_text_dom_1.renderRichTextRuns)(textEl, block.richText, block.text);
+                textEl.style.fontSize = `${node.style?.fontSize ?? appearance.fontSize ?? 14}px`;
+                textEl.setAttr("aria-label", isSubmapTitle ? `打开子导图：${block.text}` : block.text);
+                if (isSubmapTitle) {
+                    const indicator = textEl.createSpan({ cls: "mmc-submap-inline-indicator", attr: { "aria-hidden": "true" } });
+                    (0, obsidian_1.setIcon)(indicator, "arrow-up-right");
+                    textEl.setAttr("title", `打开子导图：${node.submap.title ?? node.submap.path}`);
+                }
+            }
+            if (node.submap && !hasTextBlock) {
+                const submapIcon = nodeEl.createEl("button", {
+                    cls: "mmc-submap-corner-link",
+                    attr: {
+                        "aria-label": `打开子导图：${node.submap.title ?? node.submap.path}`,
+                        title: `打开子导图：${node.submap.title ?? node.submap.path}`
+                    }
+                });
+                (0, obsidian_1.setIcon)(submapIcon, "arrow-up-right");
+                submapIcon.addEventListener("click", (event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    void this.callbacks.onOpenMindMap(node.submap.path);
+                });
+            }
+            if (node.submap) {
+                nodeEl.setAttr("role", "link");
+                nodeEl.setAttr("tabindex", "0");
+                nodeEl.setAttr("aria-label", `打开子导图：${node.submap.title ?? node.submap.path}`);
+                nodeEl.setAttr("title", `打开子导图：${node.submap.title ?? node.submap.path}；右键可编辑节点`);
+            }
+            if (node.table)
+                this.renderNodeTable(content, node);
+            if (node.code)
+                this.renderNodeCode(content, node);
+            if (node.tags?.length) {
+                const tags = content.createDiv({ cls: "mmc-node-tags" });
+                node.tags.slice(0, 4).forEach((tag) => tags.createSpan({ cls: "mmc-node-tag", text: `#${tag}` }));
+            }
+            if (this.options.showTaskProgress && node.children.length) {
+                const progress = (0, model_1.getTaskProgress)(node);
+                if (progress.total) {
+                    const percent = Math.round((progress.done / progress.total) * 100);
+                    const progressEl = nodeEl.createDiv({ cls: "mmc-task-progress", attr: { title: `${progress.done}/${progress.total} 个任务已完成` } });
+                    progressEl.createDiv({ cls: "mmc-task-progress-bar", attr: { style: `width:${percent}%` } });
+                    progressEl.createSpan({ text: `${percent}%` });
+                }
+            }
+            if (node.children.length) {
+                const fold = nodeEl.createEl("button", { cls: "mmc-fold-button", attr: { "aria-label": node.collapsed ? "展开" : "收起" } });
+                fold.setText(node.collapsed ? `+${node.children.length}` : "−");
+                fold.addEventListener("click", (event) => {
+                    event.stopPropagation();
+                    this.selectNode(node.id);
+                    this.toggleCollapse();
+                });
+            }
+            const link = this.getNodeLink(node);
+            if (link) {
+                const linkButton = nodeEl.createEl("button", { cls: "mmc-node-link", attr: { "aria-label": `打开 ${link}` } });
+                (0, obsidian_1.setIcon)(linkButton, "external-link");
+                linkButton.addEventListener("click", (event) => {
+                    event.stopPropagation();
+                    void this.callbacks.onOpenLink(link);
+                });
+            }
+            if (!this.readOnly) {
+                const resizeHandle = nodeEl.createDiv({
+                    cls: "mmc-node-resize-handle",
+                    attr: { role: "separator", tabindex: "0", "aria-label": "拖动调整节点宽度和最小高度", title: "拖动调整节点大小；双击恢复自动大小" }
+                });
+                resizeHandle.setAttr("draggable", "false");
+                resizeHandle.addEventListener("click", (event) => { event.preventDefault(); event.stopPropagation(); });
+                resizeHandle.addEventListener("dblclick", (event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    this.mutate(() => {
+                        const next = { ...(node.style ?? {}), width: undefined, minHeight: undefined };
+                        node.style = Object.values(next).some((value) => value !== undefined) ? next : undefined;
+                    });
+                });
+                resizeHandle.addEventListener("pointerdown", (event) => {
+                    if (event.button !== 0)
+                        return;
+                    if (this.resizeModifier === "ctrl" && !event.ctrlKey && !event.metaKey)
+                        return;
+                    event.preventDefault();
+                    event.stopPropagation();
+                    const startX = event.clientX;
+                    const startY = event.clientY;
+                    const startWidth = position.width;
+                    const startHeight = position.height;
+                    let previewWidth = startWidth;
+                    let previewHeight = startHeight;
+                    resizeHandle.setPointerCapture(event.pointerId);
+                    nodeEl.addClass("is-resizing");
+                    const move = (moveEvent) => {
+                        const scale = Math.max(.1, this.zoom);
+                        previewWidth = Math.min(900, Math.max(100, startWidth + (moveEvent.clientX - startX) / scale));
+                        previewHeight = Math.min(600, Math.max(36, startHeight + (moveEvent.clientY - startY) / scale));
+                        nodeEl.style.width = `${Math.round(previewWidth)}px`;
+                        nodeEl.style.minHeight = `${Math.round(previewHeight)}px`;
+                    };
+                    const finish = (upEvent) => {
+                        resizeHandle.removeEventListener("pointermove", move);
+                        resizeHandle.removeEventListener("pointerup", finish);
+                        resizeHandle.removeEventListener("pointercancel", finish);
+                        if (resizeHandle.hasPointerCapture(upEvent.pointerId))
+                            resizeHandle.releasePointerCapture(upEvent.pointerId);
+                        nodeEl.removeClass("is-resizing");
+                        this.mutate(() => {
+                            node.style = {
+                                ...(node.style ?? {}),
+                                width: Math.round(previewWidth),
+                                minHeight: Math.round(previewHeight)
+                            };
+                        });
+                    };
+                    resizeHandle.addEventListener("pointermove", move);
+                    resizeHandle.addEventListener("pointerup", finish);
+                    resizeHandle.addEventListener("pointercancel", finish);
+                });
+            }
+            nodeEl.addEventListener("click", (event) => {
+                event.stopPropagation();
+                if (event.shiftKey) {
+                    this.toggleNodeSelection(node.id);
+                    return;
+                }
+                this.selectNode(node.id);
+                if (node.submap)
+                    void this.callbacks.onOpenMindMap(node.submap.path);
+            });
+            if (node.submap) {
+                nodeEl.addEventListener("keydown", (event) => {
+                    if (event.key !== "Enter" && event.key !== " ")
+                        return;
+                    event.preventDefault();
+                    event.stopPropagation();
+                    this.selectNode(node.id);
+                    void this.callbacks.onOpenMindMap(node.submap.path);
+                });
+            }
+            nodeEl.addEventListener("dblclick", (event) => {
+                event.stopPropagation();
+                this.selectNode(node.id);
+                if (node.submap) {
+                    void this.callbacks.onOpenMindMap(node.submap.path);
+                }
+                else if (!this.readOnly)
+                    this.beginInlineEdit(node.id);
+            });
+            // Quad-click (four rapid clicks) opens the full node edit modal
+            let lastDblClick = 0;
+            nodeEl.addEventListener("dblclick", (quadEvent) => {
+                const now = Date.now();
+                if (now - lastDblClick < 500 && lastDblClick > 0) {
+                    lastDblClick = 0;
+                    if (!this.readOnly)
+                        this.editSelected();
+                }
+                else {
+                    lastDblClick = now;
+                }
+            });
+            nodeEl.addEventListener("contextmenu", (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                this.selectNode(node.id);
+                this.openContextMenu(event);
+            });
+            nodeEl.addEventListener("dragstart", (event) => {
+                if (this.readOnly) {
+                    event.preventDefault();
+                    return;
+                }
+                this.draggingId = node.id;
+                event.dataTransfer?.setData("text/plain", node.id);
+                if (event.dataTransfer)
+                    event.dataTransfer.effectAllowed = "move";
+                const draggingIds = this.selectedIds.has(node.id) ? this.selectedIds : new Set([node.id]);
+                for (const draggingId of draggingIds) {
+                    this.nodesLayerEl.querySelector(`[data-node-id="${CSS.escape(draggingId)}"]`)?.addClass("is-dragging");
+                }
+            });
+            nodeEl.addEventListener("dragover", (event) => {
+                if (!this.canMoveNode(this.draggingId, node.id))
+                    return;
+                event.preventDefault();
+                if (event.dataTransfer)
+                    event.dataTransfer.dropEffect = "move";
+                const position = this.dropPositionForEvent(event, nodeEl, node.id);
+                this.dragDropPosition = position;
+                this.clearDropIndicators();
+                const indicator = position === "child" && (0, drag_drop_1.isRightChildZone)(event, nodeEl.getBoundingClientRect())
+                    ? "is-drop-child-right"
+                    : `is-drop-${position}`;
+                nodeEl.addClasses(["is-drop-target", indicator]);
+                this.showDropPreview(node.id, position);
+            });
+            nodeEl.addEventListener("dragleave", (event) => {
+                if (event.relatedTarget instanceof Node && nodeEl.contains(event.relatedTarget))
+                    return;
+                nodeEl.removeClasses(["is-drop-target", "is-drop-before", "is-drop-child", "is-drop-child-right", "is-drop-after"]);
+                this.clearDropPreview();
+            });
+            nodeEl.addEventListener("drop", (event) => {
+                event.preventDefault();
+                const position = this.dragDropPosition ?? this.dropPositionForEvent(event, nodeEl, node.id);
+                this.clearDropIndicators();
+                this.clearDropPreview();
+                const draggedId = this.draggingId ?? event.dataTransfer?.getData("text/plain") ?? null;
+                if (draggedId)
+                    this.moveNode(draggedId, node.id, position);
+            });
+            nodeEl.addEventListener("dragend", () => {
+                this.draggingId = null;
+                this.dragDropPosition = null;
+                this.clearDropIndicators();
+                this.clearDropPreview();
+                this.nodesLayerEl.querySelectorAll(".is-dragging").forEach((element) => element.removeClass("is-dragging"));
+            });
+            this.resizeObserver?.observe(nodeEl);
+        }
+        this.scheduleMeasuredMindMapLayout();
+        this.applyTransform();
+    }
+    /** 使用当前布局坐标重新绘制全部连接线。 */
+    renderMindMapEdges(appearance, branchColorMap) {
+        while (this.edgesSvg.firstChild)
+            this.edgesSvg.removeChild(this.edgesSvg.firstChild);
+        const maxDepth = Math.max(1, ...this.layout.nodes.map((position) => position.depth));
+        for (const position of this.layout.nodes) {
+            if (!position.parentId)
+                continue;
+            const parent = this.layout.byId.get(position.parentId);
+            if (!parent)
+                continue;
+            const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+            path.setAttribute("d", appearance.nodeVisualStyle === "branch"
+                ? (0, layout_1.roundedElbowEdgePath)(parent, position)
+                : (0, layout_1.edgePath)(parent, position, appearance.edgeStyle ?? "curved"));
+            path.setAttribute("class", `mmc-edge depth-${Math.min(position.depth, 6)}`);
+            const branchColor = branchColorMap.get(position.node.id);
+            if (position.node.style?.color)
+                path.style.stroke = position.node.style.color;
+            else if (branchColor)
+                path.style.stroke = branchColor;
+            const edgeWidth = (0, layout_1.edgeWidthForDepth)(appearance, position.depth, maxDepth);
+            path.setAttribute("stroke-width", String(edgeWidth));
+            path.style.setProperty("--mmc-current-edge-width", `${edgeWidth}px`);
+            path.style.setProperty("stroke-width", `${edgeWidth}px`, "important");
+            this.edgesSvg.appendChild(path);
+        }
+    }
+    /** 合并同一帧内的节点尺寸变化，避免表格和图片加载触发重复布局。 */
+    scheduleMeasuredMindMapLayout() {
+        if (this.measuredLayoutFrame !== null || this.currentMode !== "mindmap")
+            return;
+        this.measuredLayoutFrame = window.requestAnimationFrame(() => {
+            this.measuredLayoutFrame = null;
+            this.applyMeasuredMindMapLayout();
+        });
+    }
+    /**
+     * 使用浏览器实际渲染尺寸重新执行碰撞避让。
+     *
+     * 表格、代码和图片节点的真实高度可能大于模型估算值，因此必须在 DOM
+     * 完成排版后更新包围盒、节点坐标、连接线和画布边界。
+     */
+    applyMeasuredMindMapLayout() {
+        if (this.currentMode !== "mindmap" || !this.nodesLayerEl.isConnected)
+            return;
+        const appearance = this.getAppearance();
+        const measured = new Map();
+        this.nodesLayerEl.querySelectorAll(".mmc-node[data-node-id]").forEach((element) => {
+            const id = element.dataset.nodeId;
+            if (!id)
+                return;
+            measured.set(id, {
+                width: Math.max(1, element.offsetWidth),
+                height: Math.max(1, element.offsetHeight)
+            });
+        });
+        if (!measured.size)
+            return;
+        const next = (0, layout_1.computeLayout)(this.document.root, this.document.layout, appearance.fontSize ?? 14, appearance.nodeVisualStyle ?? "card", appearance);
+        for (const position of next.nodes) {
+            const dimensions = measured.get(position.node.id);
+            if (!dimensions)
+                continue;
+            position.width = dimensions.width;
+            position.height = dimensions.height;
+        }
+        (0, collision_layout_1.resolveLayoutCollisions)(next.nodes, appearance.nodeVisualStyle === "branch" ? 18 : 24);
+        next.byId = new Map(next.nodes.map((position) => [position.node.id, position]));
+        next.minX = Math.min(...next.nodes.map((position) => position.x - position.width / 2));
+        next.maxX = Math.max(...next.nodes.map((position) => position.x + position.width / 2));
+        next.minY = Math.min(...next.nodes.map((position) => position.y - position.height / 2));
+        next.maxY = Math.max(...next.nodes.map((position) => position.y + position.height / 2));
+        this.layout = next;
+        for (const position of this.layout.nodes) {
+            const element = this.nodesLayerEl.querySelector(`.mmc-node[data-node-id="${CSS.escape(position.node.id)}"]`);
+            if (!element)
+                continue;
+            element.style.left = `${position.x}px`;
+            element.style.top = `${position.y}px`;
+        }
+        const branchColorMap = appearance.colorfulBranches ? (0, layout_1.buildBranchColorMap)(this.document.root, appearance.branchColors) : new Map();
+        this.renderMindMapEdges(appearance, branchColorMap);
+    }
+    /**
+     * 应用transform，并保持模型、界面和持久化状态的一致性。
+     */
+    applyTransform() {
+        const rect = this.viewportEl.getBoundingClientRect();
+        this.sceneEl.style.transform = `translate(${rect.width / 2 + this.panX}px, ${rect.height / 2 + this.panY}px) scale(${this.zoom})`;
+        this.rootEl.style.setProperty("--mmc-zoom", String(this.zoom));
+        if (this.zoomStatusEl)
+            this.zoomStatusEl.value = `${Math.round(this.zoom * 100)}%`;
+    }
+    /**
+     * Selects every non-root node so bulk operations never affect the protected main node.
+     */
+    selectAllNodesExceptRoot() {
+        const ids = (0, model_1.flattenNodes)(this.document.root)
+            .filter((node) => node.id !== this.document.root.id)
+            .map((node) => node.id);
+        this.selectedIds.clear();
+        for (const id of ids)
+            this.selectedIds.add(id);
+        this.selectedId = ids.at(-1) ?? "";
+        this.applySelectionClasses();
+    }
+    /**
+     * Selects one node and clears any prior multi-selection.
+     *
+     * @param id Stable identifier of the node to select, or null to clear the selection.
+     */
+    selectNode(id) {
+        this.selectedIds.clear();
+        this.selectedId = id ?? "";
+        if (id)
+            this.selectedIds.add(id);
+        this.applySelectionClasses();
+    }
+    /**
+     * Adds or removes one node from the current multi-selection.
+     *
+     * @param id Node identifier.
+     */
+    toggleNodeSelection(id) {
+        if (id === this.document.root.id)
+            return;
+        if (this.selectedIds.has(id))
+            this.selectedIds.delete(id);
+        else
+            this.selectedIds.add(id);
+        this.selectedId = Array.from(this.selectedIds).at(-1) ?? "";
+        this.applySelectionClasses();
+    }
+    /**
+     * Synchronizes selection classes across all editor views.
+     */
+    applySelectionClasses() {
+        this.rootEl.querySelectorAll(".is-selected, .is-multi-selected")
+            .forEach((element) => element.removeClasses(["is-selected", "is-multi-selected"]));
+        for (const id of this.selectedIds) {
+            const multi = this.selectedIds.size > 1;
+            for (const scope of [this.nodesLayerEl, this.outlineEl, this.articleEl]) {
+                const element = scope.querySelector(`[data-node-id="${CSS.escape(id)}"]`);
+                element?.addClass("is-selected");
+                if (multi)
+                    element?.addClass("is-multi-selected");
+            }
+        }
+    }
+    /**
+     * 执行“selected node”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+     * @returns 当前操作生成、查找或规范化后的结果。
+     */
+    selectedNode() {
+        return this.selectedId ? (0, model_1.findNode)(this.document.root, this.selectedId) : null;
+    }
+    /**
+     * 创建configured node，并保持模型、界面和持久化状态的一致性。
+     *
+     * @param text 要显示、搜索、解析或写入的文本。
+     * @returns 当前操作生成、查找或规范化后的结果。
+     */
+    createConfiguredNode(text = "新节点") {
+        const node = (0, model_1.createNode)(text);
+        if (this.options.defaultNodeShape !== "rounded")
+            node.style = { shape: this.options.defaultNodeShape };
+        return node;
+    }
+    /**
+     * 判断键盘事件是否匹配用户配置的组合键。
+     *
+     * @param event 当前键盘事件。
+     * @param shortcut 形如 Ctrl+B 或 Ctrl+Shift+C 的快捷键文本。
+     * @returns 当前事件是否与快捷键一致。
+     */
+    shortcutMatches(event, shortcut) {
+        const parts = shortcut.toLowerCase().split("+").map((part) => part.trim()).filter(Boolean);
+        if (!parts.length)
+            return false;
+        const wantsMod = parts.includes("ctrl") || parts.includes("cmd") || parts.includes("mod");
+        return event.key.toLowerCase() === parts.at(-1)
+            && (event.ctrlKey || event.metaKey) === wantsMod
+            && event.shiftKey === parts.includes("shift")
+            && event.altKey === parts.includes("alt");
+    }
+    /** 在节点本体中启动轻量富文本输入。 */
+    beginInlineEdit(nodeId) {
+        if (this.readOnly)
+            return;
+        const node = (0, model_1.findNode)(this.document.root, nodeId);
+        if (!node)
+            return;
+        this.selectNode(nodeId);
+        this.inlineEditingId = nodeId;
+        if (this.options.nodeEditorPosition === "right")
+            this.editSelected();
+        if (this.currentMode !== "mindmap") {
+            const scope = this.currentMode === "outline" ? this.outlineEl : this.articleEl;
+            scope.querySelector(`[data-node-id="${CSS.escape(nodeId)}"] [contenteditable="true"]`)?.focus();
+            return;
+        }
+        const nodeEl = this.nodesLayerEl.querySelector(`.mmc-node[data-node-id="${CSS.escape(nodeId)}"]`);
+        const content = nodeEl?.querySelector(".mmc-node-content");
+        if (!nodeEl || !content)
+            return;
+        let editor = content.querySelector(".mmc-node-text");
+        if (!editor)
+            editor = content.createDiv({ cls: "mmc-node-main mmc-node-text-block" }).createDiv({ cls: "mmc-node-text" });
+        editor.contentEditable = "true";
+        editor.spellcheck = true;
+        editor.addClass("is-inline-editing");
+        editor.setAttr("role", "textbox");
+        editor.setAttr("aria-label", "输入节点文字");
+        const firstText = (0, model_1.nodeContentBlocks)(node).find((block) => block.type === "text");
+        (0, rich_text_dom_1.renderRichTextRuns)(editor, firstText?.richText, firstText?.text ?? (0, model_1.nodePlainText)(node), false);
+        let historyCaptured = false;
+        const save = () => {
+            const values = (0, rich_text_dom_1.readRichTextEditor)(editor);
+            if (!historyCaptured) {
+                this.history.capture(this.document);
+                historyCaptured = true;
+            }
+            const blocks = (0, model_1.nodeContentBlocks)(node);
+            let block = blocks.find((item) => item.type === "text");
+            if (!block) {
+                block = { id: (0, model_1.newId)(), type: "text", text: "" };
+                blocks.unshift(block);
+            }
+            block.text = values.text;
+            block.richText = values.richText;
+            node.content = blocks;
+            (0, model_1.syncNodeLegacyFields)(node);
+            if (node.id === this.document.root.id && values.text)
+                this.document.title = values.text;
+            this.callbacks.onChange(this.getDocument());
+            this.markSaving();
+            this.viewportEl.dispatchEvent(new CustomEvent("mms-inline-node-change", { detail: { nodeId } }));
+        };
+        let savedSelection = null;
+        const rememberSelection = () => {
+            const selection = window.getSelection();
+            if (!selection?.rangeCount)
+                return null;
+            const range = selection.getRangeAt(0);
+            if (!editor.contains(range.commonAncestorContainer))
+                return null;
+            const before = range.cloneRange();
+            before.selectNodeContents(editor);
+            before.setEnd(range.startContainer, range.startOffset);
+            savedSelection = { start: before.toString().length, end: before.toString().length + range.toString().length };
+            return savedSelection;
+        };
+        const restoreSelection = (selected) => {
+            const walker = document.createTreeWalker(editor, NodeFilter.SHOW_TEXT);
+            let node = walker.nextNode();
+            let offset = 0;
+            let startNode = null;
+            let endNode = null;
+            let startOffset = 0;
+            let endOffset = 0;
+            while (node) {
+                const length = node.textContent?.length ?? 0;
+                if (!startNode && selected.start <= offset + length) {
+                    startNode = node;
+                    startOffset = Math.max(0, selected.start - offset);
+                }
+                if (!endNode && selected.end <= offset + length) {
+                    endNode = node;
+                    endOffset = Math.max(0, selected.end - offset);
+                    break;
+                }
+                offset += length;
+                node = walker.nextNode();
+            }
+            if (!startNode || !endNode)
+                return;
+            const range = document.createRange();
+            range.setStart(startNode, startOffset);
+            range.setEnd(endNode, endOffset);
+            const selection = window.getSelection();
+            selection?.removeAllRanges();
+            selection?.addRange(range);
+        };
+        const applyStyle = (patch) => {
+            const selected = rememberSelection() ?? savedSelection;
+            if (!selected || selected.start === selected.end) {
+                new obsidian_1.Notice("请先选择需要设置格式的文字");
+                return;
+            }
+            save();
+            const blocks = (0, model_1.nodeContentBlocks)(node);
+            const block = blocks.find((item) => item.type === "text");
+            if (!block)
+                return;
+            const key = Object.keys(patch)[0];
+            if (key !== "color") {
+                const styles = (0, model_1.richTextCharacterStyles)(block.richText, block.text);
+                const enabled = styles.slice(selected.start, selected.end).every((style) => style[key] === true);
+                patch = { [key]: !enabled };
+            }
+            block.richText = (0, model_1.applyRichTextStyleRange)(block.text, block.richText, selected.start, selected.end, patch);
+            (0, rich_text_dom_1.renderRichTextRuns)(editor, block.richText, block.text, false);
+            save();
+            editor.focus();
+            restoreSelection(selected);
+        };
+        const formatBar = nodeEl.createDiv({ cls: "mmc-inline-format-bar is-hidden" });
+        const formatButton = (label, title, style) => {
+            const button = formatBar.createEl("button", { text: label, attr: { type: "button", title, "aria-label": title } });
+            button.addClass(`is-${style}`);
+            button.addEventListener("pointerdown", (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+            });
+            button.addEventListener("click", (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                applyStyle({ [style]: true });
+            });
+        };
+        formatButton("B", `加粗（${this.options.richTextShortcuts.bold}）`, "bold");
+        formatButton("I", `斜体（${this.options.richTextShortcuts.italic}）`, "italic");
+        formatButton("U", `下划线（${this.options.richTextShortcuts.underline}）`, "underline");
+        const colorBtn = formatBar.createEl("button", { cls: "mmc-color-btn", attr: { type: "button", title: "文字颜色" } });
+        colorBtn.createSpan({ text: "A" });
+        colorBtn.style.textDecorationColor = this.lastRichTextColor;
+        const popover = formatBar.createDiv({ cls: "mms-color-popover is-hidden" });
+        const COMMON_COLORS = ["#ef4444", "#f97316", "#eab308", "#22c55e", "#06b6d4", "#3b82f6", "#8b5cf6", "#ec4899", "#6b7280", "#1f2937"];
+        for (const swatch of COMMON_COLORS) {
+            const dot = popover.createEl("button", { attr: { type: "button", "data-color": swatch } });
+            dot.style.backgroundColor = swatch;
+            dot.addEventListener("click", () => {
+                this.lastRichTextColor = swatch;
+                colorBtn.style.textDecorationColor = swatch;
+                applyStyle({ color: swatch });
+                popover.addClass("is-hidden");
+                editor.focus();
+            });
+        }
+        const customRow = popover.createDiv({ cls: "mms-color-popover-row" });
+        const lastDot = customRow.createEl("button", { cls: "mms-color-last", attr: { type: "button", title: "上次颜色" } });
+        lastDot.style.backgroundColor = this.lastRichTextColor;
+        lastDot.addEventListener("click", () => {
+            applyStyle({ color: this.lastRichTextColor });
+            popover.addClass("is-hidden");
+            editor.focus();
+        });
+        const nativeInput = customRow.createEl("input", { attr: { type: "color", "aria-label": "自定义" } });
+        nativeInput.value = this.lastRichTextColor;
+        nativeInput.addEventListener("input", () => {
+            this.lastRichTextColor = nativeInput.value;
+            colorBtn.style.textDecorationColor = nativeInput.value;
+            lastDot.style.backgroundColor = nativeInput.value;
+            applyStyle({ color: nativeInput.value });
+            popover.addClass("is-hidden");
+            editor.focus();
+        });
+        colorBtn.addEventListener("click", (event) => {
+            event.stopPropagation();
+            rememberSelection();
+            popover.toggleClass("is-hidden", !popover.hasClass("is-hidden"));
+        });
+        document.addEventListener("pointerdown", (closeEvent) => {
+            if (!formatBar.contains(closeEvent.target) && !popover.contains(closeEvent.target)) {
+                popover.addClass("is-hidden");
+            }
+        });
+        const updateFormatBar = () => {
+            const selected = rememberSelection();
+            formatBar.toggleClass("is-hidden", !selected || selected.start === selected.end);
+        };
+        editor.addEventListener("mouseup", updateFormatBar);
+        editor.addEventListener("keyup", updateFormatBar);
+        const selectionChange = () => {
+            if (document.activeElement === editor)
+                updateFormatBar();
+        };
+        document.addEventListener("selectionchange", selectionChange);
+        editor.addEventListener("input", save);
+        let lastHandledShortcut = "";
+        const handleFormatShortcut = (event) => {
+            if (event.key === "Enter" && !event.shiftKey) {
+                event.preventDefault();
+                event.stopPropagation();
+                event.stopImmediatePropagation();
+                save();
+                editor.blur();
+                return true;
+            }
+            const command = this.shortcutMatches(event, this.options.richTextShortcuts.bold) ? "bold"
+                : this.shortcutMatches(event, this.options.richTextShortcuts.italic) ? "italic"
+                    : this.shortcutMatches(event, this.options.richTextShortcuts.underline) ? "underline" : null;
+            if (command) {
+                event.preventDefault();
+                event.stopPropagation();
+                event.stopImmediatePropagation();
+                lastHandledShortcut = `${command}:${event.timeStamp}`;
+                applyStyle({ [command]: true });
+                return true;
+            }
+            else if (this.shortcutMatches(event, this.options.richTextShortcuts.color)) {
+                event.preventDefault();
+                event.stopPropagation();
+                event.stopImmediatePropagation();
+                lastHandledShortcut = `color:${event.timeStamp}`;
+                rememberSelection();
+                applyStyle({ color: this.lastRichTextColor });
+                return true;
+            }
+            else if (event.key === "Escape") {
+                event.preventDefault();
+                editor.blur();
+            }
+            return false;
+        };
+        editor.addEventListener("keydown", handleFormatShortcut, true);
+        const windowShortcut = (event) => {
+            if (document.activeElement === editor)
+                handleFormatShortcut(event);
+        };
+        window.addEventListener("keydown", windowShortcut, true);
+        const windowShortcutFallback = (event) => {
+            if (document.activeElement !== editor)
+                return;
+            const handledAt = Number(lastHandledShortcut.split(":").at(-1) ?? 0);
+            if (handledAt && event.timeStamp - handledAt < 1000)
+                return;
+            handleFormatShortcut(event);
+        };
+        window.addEventListener("keyup", windowShortcutFallback, true);
+        editor.addEventListener("beforeinput", (event) => {
+            const command = event.inputType === "formatBold" ? "bold"
+                : event.inputType === "formatItalic" ? "italic"
+                    : event.inputType === "formatUnderline" ? "underline" : null;
+            if (!command || lastHandledShortcut.startsWith(`${command}:`))
+                return;
+            event.preventDefault();
+            applyStyle({ [command]: true });
+        });
+        let editingFinished = false;
+        editor.addEventListener("blur", (event) => {
+            const related = event.relatedTarget;
+            if (editingFinished || (related instanceof Node && (formatBar.contains(related)
+                || document.querySelector(".mms-node-editor-right")?.contains(related))))
+                return;
+            editingFinished = true;
+            this.inlineEditingId = null;
+            window.removeEventListener("keydown", windowShortcut, true);
+            window.removeEventListener("keyup", windowShortcutFallback, true);
+            document.removeEventListener("selectionchange", selectionChange);
+            save();
+            formatBar.remove();
+            this.render();
+        });
+        const focusAtEnd = () => {
+            if (!document.body.contains(editor))
+                return;
+            editor.focus();
+            const selection = window.getSelection();
+            const range = document.createRange();
+            range.selectNodeContents(editor);
+            range.collapse(false);
+            selection?.removeAllRanges();
+            selection?.addRange(range);
+        };
+        focusAtEnd();
+        if (this.options.nodeEditorPosition === "right") {
+            window.requestAnimationFrame(focusAtEnd);
+            window.setTimeout(focusAtEnd, 50);
+        }
+    }
+    /**
+     * 添加child，并保持模型、界面和持久化状态的一致性。
+     */
+    addChild() {
+        if (!this.ensureEditable())
+            return;
+        const selected = this.selectedNode() ?? this.document.root;
+        const node = this.createConfiguredNode("");
+        this.mutate(() => {
+            (0, node_actions_1.appendChild)(selected, node);
+            this.selectedId = node.id;
+        });
+        window.setTimeout(() => this.beginInlineEdit(node.id), 0);
+    }
+    /**
+     * 添加sibling，并保持模型、界面和持久化状态的一致性。
+     */
+    addSibling() {
+        if (!this.ensureEditable())
+            return;
+        const selected = this.selectedNode();
+        if (!selected || selected.id === this.document.root.id) {
+            this.addChild();
+            return;
+        }
+        const parent = (0, model_1.findParent)(this.document.root, selected.id);
+        if (!parent)
+            return;
+        const node = this.createConfiguredNode("");
+        this.mutate(() => {
+            (0, node_actions_1.insertSiblingAfter)(this.document.root, selected.id, node);
+            this.selectedId = node.id;
+        });
+        window.setTimeout(() => this.beginInlineEdit(node.id), 0);
+    }
+    /**
+     * 编辑selected，并保持模型、界面和持久化状态的一致性。
+     */
+    editSelected() {
+        if (!this.ensureEditable())
+            return;
+        const selected = this.selectedNode();
+        if (!selected)
+            return;
+        let historyCaptured = false;
+        const modal = new NodeEditModal(this.app, selected, this.options.defaultNodeShape, {
+            resolveImage: this.callbacks.resolveImage,
+            onSavePastedImage: this.callbacks.onSavePastedImage,
+            getImageHosts: this.callbacks.getImageHosts,
+            getDefaultUploadHostIds: this.callbacks.getDefaultUploadHostIds,
+            onUploadImage: this.callbacks.onUploadImage,
+            onReadImageSource: this.callbacks.onReadImageSource
+        }, (values) => {
+            // A continuously open editor may autosave many times. Capture one undo
+            // snapshot for the whole editing session instead of one snapshot per keypress.
+            if (!historyCaptured) {
+                this.history.capture(this.document);
+                historyCaptured = true;
+            }
+            selected.content = values.content;
+            (0, model_1.syncNodeLegacyFields)(selected);
+            selected.note = values.note || undefined;
+            selected.link = values.link || undefined;
+            selected.icon = values.icon || undefined;
+            selected.tags = values.tags.length ? values.tags : undefined;
+            selected.task = values.task;
+            selected.articleNumberingMode = values.articleNumberingMode;
+            selected.articleNumberingLevel = values.articleNumberingMode === "manual" ? values.articleNumberingLevel : undefined;
+            selected.skipArticleNumbering = values.articleNumberingMode === "none" || undefined;
+            const style = {
+                color: values.color,
+                textColor: values.textColor,
+                borderColor: values.borderColor,
+                borderWidth: values.borderWidth,
+                shape: values.shape,
+                bold: values.bold,
+                italic: values.italic,
+                underline: values.underline,
+                fontSize: values.fontSize,
+                textAlign: values.textAlign,
+                width: values.width,
+                minHeight: values.minHeight
+            };
+            selected.style = Object.values(style).some((value) => value !== undefined) ? style : undefined;
+            if (selected.id === this.document.root.id) {
+                const title = (0, model_1.nodePlainText)(selected);
+                if (title)
+                    this.document.title = title;
+            }
+            this.callbacks.onChange(this.getDocument());
+            this.markSaving();
+            if (this.inlineEditingId === selected.id) {
+                const inline = this.nodesLayerEl.querySelector(`.mmc-node[data-node-id="${CSS.escape(selected.id)}"] .mmc-node-text.is-inline-editing`);
+                const textBlock = (0, model_1.nodeContentBlocks)(selected).find((block) => block.type === "text");
+                if (inline && document.activeElement !== inline)
+                    (0, rich_text_dom_1.renderRichTextRuns)(inline, textBlock?.richText, textBlock?.text ?? "", false);
+            }
+            else {
+                this.render();
+            }
+        }, this.options.nodeEditorPosition, this.viewportEl);
+        modal.open();
+        if (this.options.nodeEditorPosition === "right" && this.inlineEditingId === selected.id) {
+            modal.releaseKeyboardScope();
+        }
+    }
+    /**
+     * 删除selected，并保持模型、界面和持久化状态的一致性。
+     */
+    deleteSelected() {
+        if (!this.ensureEditable())
+            return;
+        const batch = (0, node_actions_1.topLevelSelectedNodeIds)(this.document.root, this.selectedIds);
+        if (this.selectedIds.size > 1 && batch.length) {
+            const fallback = (0, model_1.findParent)(this.document.root, batch[0])?.id ?? this.document.root.id;
+            this.mutate(() => {
+                (0, node_actions_1.deleteNodes)(this.document.root, batch);
+                this.selectedIds.clear();
+                this.selectedId = fallback;
+                this.selectedIds.add(fallback);
+            });
+            new obsidian_1.Notice(`已删除 ${batch.length} 个所选节点`);
+            return;
+        }
+        const selected = this.selectedNode();
+        if (!selected || selected.id === this.document.root.id) {
+            new obsidian_1.Notice("根节点不能删除");
+            return;
+        }
+        const parent = (0, model_1.findParent)(this.document.root, selected.id);
+        this.mutate(() => {
+            (0, node_actions_1.deleteNodes)(this.document.root, [selected.id]);
+            this.selectedId = parent?.id ?? this.document.root.id;
+            this.selectedIds.clear();
+            this.selectedIds.add(this.selectedId);
+        });
+    }
+    /**
+     * 切换collapse，并保持模型、界面和持久化状态的一致性。
+     */
+    toggleCollapse() {
+        const selected = this.selectedNode();
+        if (!selected || !selected.children.length)
+            return;
+        if (this.readOnly) {
+            selected.collapsed = !selected.collapsed;
+            this.render();
+            return;
+        }
+        this.mutate(() => { selected.collapsed = !selected.collapsed; });
+    }
+    /**
+     * Expands or collapses every branch while keeping the root visible.
+     *
+     * @param collapsed Whether branches should be collapsed.
+     */
+    setAllNodesCollapsed(collapsed) {
+        const apply = () => {
+            (0, node_actions_1.setAllBranchesCollapsed)(this.document.root, collapsed);
+        };
+        if (this.readOnly) {
+            apply();
+            this.render();
+            return;
+        }
+        this.mutate(apply);
+    }
+    /**
+     * 切换task，并保持模型、界面和持久化状态的一致性。
+     */
+    cycleTask() {
+        if (!this.ensureEditable())
+            return;
+        const selected = this.selectedNode();
+        if (!selected)
+            return;
+        this.mutate(() => { selected.task = (0, node_actions_1.nextTaskStatus)(selected.task); });
+    }
+    /**
+     * 切换layout，并保持模型、界面和持久化状态的一致性。
+     */
+    toggleLayout() {
+        if (!this.ensureEditable())
+            return;
+        this.mutate(() => { this.document.layout = this.document.layout === "right" ? "balanced" : "right"; });
+        window.setTimeout(() => this.fitToView(), 20);
+    }
+    /**
+     * Switches the top-level article between its generated directory and original article content.
+     */
+    toggleArticleLanding() {
+        if (this.currentMode !== "article" || !this.options.showArticleToc)
+            return;
+        const current = this.document.view?.articleLandingMode ?? "toc";
+        this.mutate(() => {
+            this.document.view = { ...(this.document.view ?? {}), articleLandingMode: current === "toc" ? "article" : "toc" };
+        });
+    }
+    /**
+     * Opens article preset and typography controls for the current document.
+     */
+    editArticleStyle() {
+        if (!this.ensureEditable())
+            return;
+        new editor_modals_1.ArticleStyleModal(this.app, this.document.articleStyle, (style) => {
+            this.mutate(() => { this.document.articleStyle = style; });
+        }).open();
+    }
+    /**
+     * 编辑appearance，并保持模型、界面和持久化状态的一致性。
+     */
+    editAppearance() {
+        if (!this.ensureEditable())
+            return;
+        new AppearanceModal(this.app, this.getAppearance(), {
+            articleNumberingMode: this.document.root.articleNumberingMode ?? (this.document.root.skipArticleNumbering === true ? "none" : undefined),
+            articleNumberingLevel: this.document.root.articleNumberingLevel
+        }, this.document.view?.articleTocMaxDepth, this.options.articleTocMaxDepth, (appearance, numbering, articleTocMaxDepth) => this.mutate(() => {
+            this.document.appearance = appearance;
+            this.document.root.articleNumberingMode = numbering.articleNumberingMode;
+            this.document.root.articleNumberingLevel = numbering.articleNumberingMode === "manual" ? numbering.articleNumberingLevel : undefined;
+            this.document.root.skipArticleNumbering = numbering.articleNumberingMode === "none" || undefined;
+            const view = { ...(this.document.view ?? {}) };
+            if (articleTocMaxDepth === undefined)
+                delete view.articleTocMaxDepth;
+            else
+                view.articleTocMaxDepth = articleTocMaxDepth;
+            this.document.view = Object.keys(view).length ? view : undefined;
+        }), () => this.mutate(() => {
+            this.document.appearance = undefined;
+            this.document.root.articleNumberingMode = undefined;
+            this.document.root.articleNumberingLevel = undefined;
+            this.document.root.skipArticleNumbering = undefined;
+            if (this.document.view) {
+                delete this.document.view.articleTocMaxDepth;
+                if (!Object.keys(this.document.view).length)
+                    this.document.view = undefined;
+            }
+        })).open();
+    }
+    /**
+     * 编辑table，并保持模型、界面和持久化状态的一致性。
+     */
+    editTable() {
+        if (!this.ensureEditable())
+            return;
+        const selected = this.selectedNode() ?? this.document.root;
+        new content_modals_1.TableEditModal(this.app, selected.table, (table) => {
+            this.mutate(() => { selected.table = table; });
+        }).open();
+    }
+    /**
+     * 转换children to table，并保持模型、界面和持久化状态的一致性。
+     */
+    convertChildrenToTable() {
+        if (!this.ensureEditable())
+            return;
+        const selected = this.selectedNode() ?? this.document.root;
+        const table = (0, model_1.childrenToTable)(selected);
+        if (!table) {
+            new obsidian_1.Notice("当前节点没有可转换的子节点");
+            return;
+        }
+        this.mutate(() => {
+            selected.table = table;
+            selected.collapsed = true;
+        });
+        new obsidian_1.Notice("已生成子节点表格；原子节点已保留并收起");
+    }
+    /**
+     * 删除table，并保持模型、界面和持久化状态的一致性。
+     */
+    removeTable() {
+        if (!this.ensureEditable())
+            return;
+        const selected = this.selectedNode();
+        if (!selected?.table)
+            return;
+        this.mutate(() => {
+            selected.table = undefined;
+            if (selected.children.length)
+                selected.collapsed = false;
+        });
+    }
+    /**
+     * 编辑code，并保持模型、界面和持久化状态的一致性。
+     */
+    editCode() {
+        if (!this.ensureEditable())
+            return;
+        const selected = this.selectedNode() ?? this.document.root;
+        new content_modals_1.CodeEditModal(this.app, selected.code, (code) => {
+            this.mutate(() => { selected.code = code; });
+        }).open();
+    }
+    /**
+     * 删除code，并保持模型、界面和持久化状态的一致性。
+     */
+    removeCode() {
+        if (!this.ensureEditable())
+            return;
+        const selected = this.selectedNode();
+        if (!selected?.code)
+            return;
+        this.mutate(() => { selected.code = undefined; });
+    }
+    /**
+     * 如果节点已有子导图则打开；否则创建独立 .mindmap 文件并在父节点与子文件导航元数据中建立双向关系。
+     * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
+     */
+    async createOrOpenSubmap() {
+        const selected = this.selectedNode() ?? this.document.root;
+        if (selected.submap) {
+            await this.callbacks.onOpenMindMap(selected.submap.path);
+            return;
+        }
+        if (!this.ensureEditable())
+            return;
+        try {
+            const submap = await this.callbacks.onCreateSubmap(selected);
+            this.mutate(() => { selected.submap = submap; });
+            await this.callbacks.onOpenMindMap(submap.path);
+        }
+        catch (error) {
+            console.error("MindMap Studio create submap failed", error);
+            new obsidian_1.Notice("创建子导图失败");
+        }
+    }
+    /**
+     * Renders every map in the current parent/child family as one continuous,
+     * read-only book with an integrated directory and persisted progress.
+     */
+    renderReading() {
+        this.articleEl.empty();
+        const sections = this.options.readingSections.length
+            ? this.options.readingSections
+            : [{ filePath: this.options.articleNavigation?.homePath ?? "", document: this.document, baseDepth: 0 }];
+        const style = (0, article_style_1.resolveArticleStyle)(this.document.articleStyle);
+        const progress = this.articleEl.createDiv({ cls: `mms-reading-progress position-${this.options.readingProgressPosition}` });
+        progress.createDiv({ cls: "mms-reading-progress-bar" });
+        const initialProgress = `${Math.round(this.options.readingProgress * 100)}%`;
+        progress.style.setProperty("--mms-reading-progress", initialProgress);
+        progress.dataset.progress = initialProgress;
+        progress.createSpan({ text: `阅读进度 ${initialProgress}` });
+        const page = this.articleEl.createDiv({ cls: `mms-article-page mms-reading-page article-${style.preset}` });
+        page.createEl("h1", { cls: "mms-article-document-title", text: (0, model_1.nodePrimaryText)(sections[0].document.root) || sections[0].document.title });
+        // 存在子导图时，顶级导图只承担书名与目录组织，不再作为正文重复显示。
+        const contentSections = sections.length > 1 ? sections.slice(1) : sections;
+        const contentPaths = new Set(contentSections.map((section) => section.filePath));
+        const articleTocMaxDepth = this.effectiveArticleTocMaxDepth();
+        const tocEntries = this.options.articleTocEntries.filter((entry) => (0, modes_1.articleTocDepth)(entry) <= articleTocMaxDepth && contentPaths.has(entry.filePath));
+        const toc = page.createEl("nav", { cls: "mms-article-toc mms-reading-toc" });
+        toc.createEl("h2", { text: "全书目录" });
+        const tocList = toc.createEl("ol");
+        for (const entry of tocEntries) {
+            const fileKey = (0, modes_1.readingAnchorPart)(entry.filePath);
+            const anchor = entry.nodeId
+                ? `reading-${fileKey}-${(0, modes_1.readingAnchorPart)(entry.nodeId)}`
+                : `reading-file-${fileKey}`;
+            const tocDepth = (0, modes_1.articleTocDepth)(entry);
+            const item = tocList.createEl("li");
+            item.addClass(`depth-${Math.min(tocDepth, 8)}`);
+            item.style.setProperty("--mms-article-depth", String(tocDepth));
+            const link = item.createEl("a", { text: entry.displayTitle || entry.title, href: `#${anchor}` });
+            link.addEventListener("click", (event) => {
+                event.preventDefault();
+                page.querySelector(`#${CSS.escape(anchor)}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+            });
+        }
+        for (const section of contentSections) {
+            const fileKey = (0, modes_1.readingAnchorPart)(section.filePath);
+            const anchor = `reading-file-${fileKey}`;
+            const chapter = page.createEl("article", { cls: "mms-reading-book-section" });
+            chapter.id = anchor;
+            const sectionEntry = tocEntries.find((entry) => entry.filePath === section.filePath && !entry.nodeId);
+            chapter.createEl("h2", {
+                cls: "mms-reading-map-title",
+                text: sectionEntry?.displayTitle || (0, model_1.nodePrimaryText)(section.document.root) || section.document.title
+            });
+            this.renderArticleContent(chapter, section.document.root, false);
+            for (const info of (0, modes_1.buildArticleNodeInfo)(section.document.root, section.baseDepth)) {
+                const nodeSection = chapter.createEl("section", { cls: `mms-article-node depth-${Math.min(info.depth, 8)}` });
+                nodeSection.id = `reading-${fileKey}-${(0, modes_1.readingAnchorPart)(info.node.id)}`;
+                if (info.isHeading) {
+                    const level = Math.min(6, info.depth + 1);
+                    nodeSection.createEl(`h${level}`, { text: info.displayTitle || info.title });
+                    this.renderArticleContent(nodeSection, info.node, false);
+                }
+                else {
+                    const firstTextBlock = (0, model_1.nodeContentBlocks)(info.node).find((block) => block.type === "text");
+                    if (firstTextBlock) {
+                        const paragraph = nodeSection.createEl("p", { cls: "mms-article-leaf-text" });
+                        (0, rich_text_dom_1.renderRichTextRuns)(paragraph, firstTextBlock.richText, firstTextBlock.text);
+                    }
+                    this.renderArticleContent(nodeSection, info.node, false);
+                }
+            }
+        }
+        window.setTimeout(() => {
+            const maximum = Math.max(0, this.articleEl.scrollHeight - this.articleEl.clientHeight);
+            this.articleEl.scrollTop = maximum * this.options.readingProgress;
+        }, 20);
+        this.articleEl.onscroll = () => {
+            const maximum = Math.max(1, this.articleEl.scrollHeight - this.articleEl.clientHeight);
+            const next = Math.max(0, Math.min(1, this.articleEl.scrollTop / maximum));
+            const nextProgress = `${Math.round(next * 100)}%`;
+            progress.style.setProperty("--mms-reading-progress", nextProgress);
+            progress.dataset.progress = nextProgress;
+            progress.lastElementChild?.replaceChildren(`阅读进度 ${nextProgress}`);
+            if (this.readingProgressTimer !== null)
+                window.clearTimeout(this.readingProgressTimer);
+            this.readingProgressTimer = window.setTimeout(() => {
+                this.readingProgressTimer = null;
+                const homePath = this.options.articleNavigation?.homePath ?? sections[0]?.filePath ?? "";
+                if (homePath)
+                    void this.callbacks.onReadingProgressChange(homePath, next);
+            }, 500);
+        };
+        this.addArticleScrollToTopButton();
+    }
+    /**
+     * Adds the shared floating control used to return article and continuous-reading views to their top.
+     */
+    addArticleScrollToTopButton() {
+        this.articleScrollButtonCleanup?.();
+        const button = this.articleEl.createEl("button", {
+            cls: "mms-article-scroll-top",
+            attr: { type: "button", title: "回到顶部", "aria-label": "回到顶部" }
+        });
+        (0, obsidian_1.setIcon)(button, "arrow-up");
+        button.addEventListener("click", () => this.articleEl.scrollTo({ top: 0, behavior: "smooth" }));
+        const updateVisibility = () => {
+            const { scrollTop, clientHeight, scrollHeight } = this.articleEl;
+            const progress = scrollTop / Math.max(1, scrollHeight - clientHeight);
+            const visible = progress * 100 >= this.options.returnToTopVisibility;
+            button.toggleClass("is-visible", visible);
+        };
+        this.articleEl.addEventListener("scroll", updateVisibility);
+        this.articleScrollButtonCleanup = () => {
+            this.articleEl.removeEventListener("scroll", updateVisibility);
+            this.articleScrollButtonCleanup = null;
+        };
+        updateVisibility();
+    }
+    /**
+     * Deletes the selected node's submap file when present and clears stale
+     * links when the file was already removed outside the plugin.
+     */
+    async deleteSelectedSubmap() {
+        if (!this.ensureEditable())
+            return;
+        const selected = this.selectedNode();
+        if (!selected?.submap)
+            return;
+        const confirmed = window.confirm(`删除子导图“${selected.submap.title ?? selected.submap.path}”及其链接？\n如果文件已不存在，将只移除失效链接。`);
+        if (!confirmed)
+            return;
+        const submap = { ...selected.submap };
+        try {
+            const deleted = await this.callbacks.onDeleteSubmap(submap);
+            this.mutate(() => { selected.submap = undefined; });
+            new obsidian_1.Notice(deleted ? "已删除子导图并移除链接" : "子导图文件不存在，已移除失效链接");
+        }
+        catch (error) {
+            console.error("MindMap Studio delete submap failed", error);
+            new obsidian_1.Notice("删除子导图失败");
+        }
+    }
+    /**
+     * 渲染node table，并保持模型、界面和持久化状态的一致性。
+     *
+     * @param content 该参数用于 render node table 流程中的输入或控制。
+     * @param node 当前处理的节点。
+     */
+    renderNodeTable(content, node) {
+        if (!node.table)
+            return;
+        const wrap = content.createDiv({ cls: "mmc-node-table-wrap" });
+        const table = wrap.createEl("table", { cls: "mmc-node-table" });
+        const head = table.createEl("thead").createEl("tr");
+        node.table.headers.forEach((header, index) => {
+            const cell = head.createEl("th", { text: header || `列 ${index + 1}` });
+            cell.style.textAlign = node.table?.alignments?.[index] ?? "left";
+        });
+        const body = table.createEl("tbody");
+        node.table.rows.forEach((row) => {
+            const tr = body.createEl("tr");
+            node.table.headers.forEach((_, index) => {
+                const cell = tr.createEl("td", { text: row[index] ?? "" });
+                cell.style.textAlign = node.table?.alignments?.[index] ?? "left";
+            });
+        });
+        wrap.addEventListener("pointerdown", (event) => event.stopPropagation());
+        wrap.addEventListener("dragstart", (event) => event.preventDefault());
+        wrap.addEventListener("dblclick", (event) => { event.stopPropagation(); this.selectNode(node.id); this.editTable(); });
+    }
+    /**
+     * 渲染node code，并保持模型、界面和持久化状态的一致性。
+     *
+     * @param content 该参数用于 render node code 流程中的输入或控制。
+     * @param node 当前处理的节点。
+     */
+    renderNodeCode(content, node) {
+        if (!node.code)
+            return;
+        const block = content.createDiv({ cls: "mmc-code-block" });
+        const header = block.createDiv({ cls: "mmc-code-header" });
+        header.createSpan({ text: node.code.language || "code" });
+        const copy = header.createEl("button", { cls: "clickable-icon", attr: { "aria-label": "复制代码" } });
+        (0, obsidian_1.setIcon)(copy, "copy");
+        copy.addEventListener("click", (event) => {
+            event.stopPropagation();
+            void navigator.clipboard.writeText(node.code.code).then(() => new obsidian_1.Notice("代码已复制"));
+        });
+        const rendered = block.createDiv({ cls: "mmc-code-rendered markdown-rendered" });
+        void this.callbacks.onRenderCode(node.code, rendered);
+        block.addEventListener("pointerdown", (event) => event.stopPropagation());
+        block.addEventListener("dragstart", (event) => event.preventDefault());
+        block.addEventListener("dblclick", (event) => { event.stopPropagation(); this.selectNode(node.id); this.editCode(); });
+    }
+    /**
+     * 处理编辑器内粘贴：优先识别图片并保存为本地资源，其次识别表格、代码块、JSON 分支或普通文本。图片可按设置进入延迟自动上传流程。
+     *
+     * @param event 触发当前交互的浏览器或 Obsidian 事件。
+     * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
+     */
+    async handlePaste(event) {
+        if (this.readOnly)
+            return;
+        const target = event.target;
+        if (target.closest("input, textarea, select, [contenteditable='true']"))
+            return;
+        const data = event.clipboardData;
+        if (!data)
+            return;
+        const imageItem = Array.from(data.items).find((item) => item.kind === "file" && item.type.startsWith("image/"));
+        if (imageItem) {
+            const blob = imageItem.getAsFile();
+            if (!blob)
+                return;
+            event.preventDefault();
+            const selected = this.selectedNode() ?? this.document.root;
+            try {
+                const extension = blob.type.split("/")[1]?.replace("jpeg", "jpg") || "png";
+                const filename = `mindmap-image.${extension}`;
+                const path = await this.callbacks.onSavePastedImage(blob, filename);
+                const imageBlock = { id: (0, model_1.newId)(), type: "image", source: path, localSource: path };
+                this.mutate(() => {
+                    const blocks = (0, model_1.nodeContentBlocks)(selected);
+                    blocks.push(imageBlock);
+                    selected.content = blocks;
+                    (0, model_1.syncNodeLegacyFields)(selected);
+                });
+                const scheduled = this.callbacks.onScheduleAutoUpload(selected.id, imageBlock.id, path, filename);
+                new obsidian_1.Notice(scheduled ? `图片已保存，等待自动上传：${path}` : `图片已保存：${path}`);
+            }
+            catch (error) {
+                console.error("MindMap Studio paste image failed", error);
+                new obsidian_1.Notice("粘贴图片失败");
+            }
+            return;
+        }
+        const htmlBranch = (0, clipboard_import_1.parseClipboardHtml)(data.getData("text/html"));
+        const text = data.getData("text/plain");
+        if (!text.trim() && !htmlBranch)
+            return;
+        const selected = this.selectedNode() ?? this.document.root;
+        const table = (0, model_1.parseMarkdownTable)(text);
+        if (table) {
+            event.preventDefault();
+            this.mutate(() => { selected.table = table; });
+            new obsidian_1.Notice("已识别并插入 Markdown 表格");
+            return;
+        }
+        const code = (0, model_1.parseFencedCode)(text);
+        if (code) {
+            event.preventDefault();
+            this.mutate(() => { selected.code = code; });
+            new obsidian_1.Notice(`已识别并插入${code.language ? ` ${code.language}` : ""}代码`);
+            return;
+        }
+        // Plain single-line text: replace node content instead of creating child
+        if (!htmlBranch && !table && !code) {
+            const plainText = text.trim();
+            if (plainText && !plainText.includes(String.fromCharCode(10)) && !/^(?:#{1,6}\s+|[-*+]\s+|\d+[.)]\s+)/m.test(plainText)) {
+                event.preventDefault();
+                try {
+                    JSON.parse(plainText);
+                }
+                catch {
+                    // Not JSON → plain text paste: set node text
+                    this.mutate(() => {
+                        selected.text = plainText;
+                        selected.richText = undefined;
+                        (0, model_1.syncNodeLegacyFields)(selected);
+                    });
+                    return;
+                }
+            }
+        }
+        const sourceNodes = htmlBranch ? [htmlBranch] : (0, clipboard_import_1.parseClipboardNodes)(text);
+        if (sourceNodes?.length) {
+            event.preventDefault();
+            const clones = sourceNodes.map((node) => (0, model_1.cloneNodeWithFreshIds)(node));
+            clones.forEach((clone) => (0, node_actions_1.setAllBranchesCollapsed)(clone, true, true));
+            this.mutate(() => {
+                selected.collapsed = false;
+                selected.children.push(...clones);
+                this.selectedIds.clear();
+                for (const clone of clones)
+                    this.selectedIds.add(clone.id);
+                this.selectedId = clones[clones.length - 1]?.id ?? selected.id;
+            });
+        }
+    }
+    /**
+     * 打开selected link，并保持模型、界面和持久化状态的一致性。
+     */
+    openSelectedLink() {
+        const selected = this.selectedNode();
+        if (!selected)
+            return;
+        const link = this.getNodeLink(selected);
+        if (!link) {
+            new obsidian_1.Notice("当前节点没有链接；可按 F2 添加链接或在文字中写入 [[笔记名]]");
+            return;
+        }
+        void this.callbacks.onOpenLink(link);
+    }
+    /**
+     * 判断parent navigation backlink，并保持模型、界面和持久化状态的一致性。
+     *
+     * @param node 当前处理的节点。
+     * @returns 操作条件是否成立或处理是否成功。
+     */
+    isParentNavigationBacklink(node) {
+        const navigation = this.document.navigation;
+        if (!navigation?.parentPath)
+            return false;
+        if (node.id !== this.document.root.id)
+            return false;
+        const explicit = node.link?.trim();
+        if (!explicit)
+            return false;
+        const candidate = explicit.startsWith("[[") ? (0, model_1.extractFirstWikiLink)(explicit) : explicit.split("|")[0]?.split("#")[0]?.trim();
+        if (!candidate)
+            return false;
+        return candidate === navigation.parentPath;
+    }
+    /**
+     * 读取并返回node link，并保持模型、界面和持久化状态的一致性。
+     *
+     * @param node 当前处理的节点。
+     * @returns 计算、解析或序列化后的字符串结果。
+     */
+    getNodeLink(node) {
+        const explicit = node.link?.trim();
+        if (explicit && !this.isParentNavigationBacklink(node))
+            return explicit;
+        return (0, model_1.extractFirstWikiLink)((0, model_1.nodePlainText)(node)) || (0, model_1.extractFirstWikiLink)(node.note ?? "");
+    }
+    /**
+     * 执行“show outline”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+     */
+    showOutline() {
+        const markdown = (0, model_1.documentToMarkdown)(this.document);
+        new editor_modals_1.OutlineModal(this.app, markdown, () => void this.callbacks.onExportMarkdown(markdown)).open();
+    }
+    /**
+     * 执行“show json transfer”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+     */
+    showJsonTransfer() {
+        if (!this.ensureEditable())
+            return;
+        new editor_modals_1.JsonTransferModal(this.app, this.getDocument(), (document) => this.replaceDocument(document), (json) => void this.callbacks.onExportJson(json)).open();
+    }
+    /**
+     * Opens the HTML, Word, PDF, and Markdown export chooser.
+     */
+    showDocumentExport() {
+        new editor_modals_1.DocumentExportModal(this.app, (format) => {
+            void this.callbacks.onExportDocument(format);
+        }).open();
+    }
+    /**
+     * 打开search，并保持模型、界面和持久化状态的一致性。
+     */
+    openSearch() {
+        this.callbacks.onSearchMapFamily();
+    }
+    /**
+     * 定位指定节点。必要时先展开全部祖先、切换到可显示该节点的视图并重渲染，然后选中节点并将其平滑移动到可视区域中央。
+     *
+     * @param id 目标对象或节点的稳定标识。
+     * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
+     */
+    focusNode(id) {
+        const ancestors = (0, model_1.findAncestors)(this.document.root, id);
+        const collapsed = ancestors.filter((node) => node.collapsed);
+        if (collapsed.length) {
+            if (this.readOnly)
+                collapsed.forEach((node) => { node.collapsed = false; });
+            else
+                this.mutate(() => collapsed.forEach((node) => { node.collapsed = false; }));
+        }
+        this.selectedId = id;
+        this.render();
+        window.setTimeout(() => {
+            if (this.currentMode === "mindmap")
+                this.centerNode(id);
+            else {
+                const selector = this.currentMode === "outline"
+                    ? `.mms-outline-row[data-node-id="${CSS.escape(id)}"]`
+                    : `.mms-article-node[data-node-id="${CSS.escape(id)}"]`;
+                this.rootEl.querySelector(selector)?.scrollIntoView({ behavior: "smooth", block: "center" });
+            }
+        }, 20);
+    }
+    /**
+     * 定位node，并保持模型、界面和持久化状态的一致性。
+     *
+     * @param id 目标对象或节点的稳定标识。
+     */
+    centerNode(id) {
+        if (this.currentMode !== "mindmap")
+            return;
+        const position = this.layout.byId.get(id);
+        if (!position)
+            return;
+        this.panX = -position.x * this.zoom;
+        this.panY = -position.y * this.zoom;
+        this.mindMapViewportInitialized = true;
+        this.applyTransform();
+    }
+    /**
+     * 打开context menu，并保持模型、界面和持久化状态的一致性。
+     *
+     * @param event 触发当前交互的浏览器或 Obsidian 事件。
+     */
+    openContextMenu(event) {
+        const selected = this.selectedNode();
+        const menu = new obsidian_1.Menu();
+        if (this.readOnly) {
+            if (selected?.submap)
+                menu.addItem((item) => item.setTitle("进入子导图").setIcon("network").onClick(() => void this.createOrOpenSubmap()));
+            menu.addItem((item) => item.setTitle("打开链接").setIcon("link").onClick(() => this.openSelectedLink()));
+            menu.addItem((item) => item.setTitle("复制分支").setIcon("copy").onClick(() => void this.copySelectedBranch()));
+            menu.showAtMouseEvent(event);
+            return;
+        }
+        menu.addItem((item) => item.setTitle("添加子节点").setIcon("plus-circle").onClick(() => this.addChild()));
+        menu.addItem((item) => item.setTitle("添加同级节点").setIcon("list-plus").onClick(() => this.addSibling()));
+        menu.addItem((item) => item.setTitle("编辑节点").setIcon("pencil").onClick(() => this.editSelected()));
+        if (selected?.style?.width !== undefined || selected?.style?.minHeight !== undefined) {
+            menu.addItem((item) => item.setTitle("恢复节点自动大小").setIcon("maximize-2").onClick(() => {
+                if (!selected)
+                    return;
+                this.mutate(() => {
+                    const next = { ...(selected.style ?? {}), width: undefined, minHeight: undefined };
+                    selected.style = Object.values(next).some((value) => value !== undefined) ? next : undefined;
+                });
+            }));
+        }
+        menu.addItem((item) => item.setTitle("克隆分支").setIcon("copy-plus").onClick(() => this.duplicateSelected()));
+        menu.addSeparator();
+        menu.addItem((item) => item.setTitle(selected?.table ? "编辑表格" : "插入表格").setIcon("table-2").onClick(() => this.editTable()));
+        menu.addItem((item) => item.setTitle("插入 LaTeX 公式").setIcon("sigma").onClick(() => this.insertFormula()));
+        menu.addItem((item) => item.setTitle("将子节点生成表格").setIcon("table-properties").onClick(() => this.convertChildrenToTable()));
+        if (selected?.table)
+            menu.addItem((item) => item.setTitle("移除表格").setIcon("table-2").onClick(() => this.removeTable()));
+        menu.addItem((item) => item.setTitle(selected?.code ? "编辑代码" : "插入代码").setIcon("code-2").onClick(() => this.editCode()));
+        if (selected?.code)
+            menu.addItem((item) => item.setTitle("移除代码").setIcon("eraser").onClick(() => this.removeCode()));
+        menu.addItem((item) => item.setTitle(selected?.submap ? "进入子导图" : "创建子导图").setIcon("network").onClick(() => void this.createOrOpenSubmap()));
+        if (!selected?.submap && selected !== this.document.root)
+            menu.addItem((item) => item.setTitle("提取为子导图").setIcon("layers").onClick(() => void this.extractToSubmap()));
+        if (selected?.submap)
+            menu.addItem((item) => item.setTitle("删除子导图 / 移除链接").setIcon("unlink").onClick(() => void this.deleteSelectedSubmap()));
+        if (this.document.navigation?.parentPath && selected === this.document.root)
+            menu.addItem((item) => item.setTitle("合并回主导图").setIcon("merge").onClick(() => void this.mergeFromSubmap()));
+        menu.addSeparator();
+        menu.addItem((item) => item.setTitle("复制分支").setIcon("copy").onClick(() => void this.copySelectedBranch()));
+        menu.addItem((item) => item.setTitle("粘贴为子节点").setIcon("clipboard-paste").onClick(() => void this.pasteAsChild()));
+        menu.addSeparator();
+        menu.addItem((item) => item.setTitle(`任务状态：${selected?.task === "done" ? "已完成" : selected?.task === "doing" ? "进行中" : selected?.task === "todo" ? "待办" : "无"}`).setIcon("circle-check-big").onClick(() => this.cycleTask()));
+        const numberingDisabled = selected?.articleNumberingMode === "none" || selected?.skipArticleNumbering === true;
+        menu.addItem((item) => item
+            .setTitle(numberingDisabled ? "文章编号：恢复自动" : "文章编号：关闭")
+            .setIcon("list-ordered")
+            .onClick(() => {
+            if (!selected)
+                return;
+            this.mutate(() => {
+                selected.articleNumberingMode = numberingDisabled ? undefined : "none";
+                selected.articleNumberingLevel = undefined;
+                selected.skipArticleNumbering = numberingDisabled ? undefined : true;
+            });
+        }));
+        menu.addItem((item) => item.setTitle("展开/收起").setIcon("fold-vertical").onClick(() => this.toggleCollapse()));
+        menu.addItem((item) => item.setTitle("打开链接").setIcon("link").onClick(() => this.openSelectedLink()));
+        menu.addSeparator();
+        menu.addItem((item) => item.setTitle("删除节点").setIcon("trash-2").onClick(() => this.deleteSelected()));
+        menu.showAtMouseEvent(event);
+    }
+    /**
+     * 将选中节点及其后代提取为子导图文件，然后从当前文档移除该节点。
+     */
+    async extractToSubmap() {
+        const selected = this.selectedNode();
+        if (!selected || selected === this.document.root)
+            return;
+        if (!this.ensureEditable())
+            return;
+        try {
+            const submap = await this.callbacks.onExtractToSubmap(selected);
+            this.mutate(() => {
+                selected.children = [];
+                selected.submap = submap;
+            });
+            await this.callbacks.onOpenMindMap(submap.path);
+        }
+        catch (error) {
+            console.error('MindMap Studio extract to submap failed', error);
+            new obsidian_1.Notice('提取子导图失败');
+        }
+    }
+    /**
+     * 将当前子导图合并回父导图并删除该子导图文件。
+     */
+    async mergeFromSubmap() {
+        if (!this.ensureEditable())
+            return;
+        try {
+            await this.callbacks.onMergeFromSubmap();
+        }
+        catch (error) {
+            console.error('MindMap Studio merge from submap failed', error);
+            new obsidian_1.Notice('合并子导图失败');
+        }
+    }
+    /**
+     * Opens the canvas and toolbar context menu for global branch visibility.
+     *
+     * @param event Mouse event used to position the menu.
+     */
+    openAllNodesContextMenu(event) {
+        const menu = new obsidian_1.Menu();
+        menu.addItem((item) => item
+            .setTitle("展开所有节点")
+            .setIcon("unfold-vertical")
+            .onClick(() => this.setAllNodesCollapsed(false)));
+        menu.addItem((item) => item
+            .setTitle("收起所有节点")
+            .setIcon("fold-vertical")
+            .onClick(() => this.setAllNodesCollapsed(true)));
+        menu.showAtMouseEvent(event);
+    }
+    /**
+     * 打开图形化公式编辑器并把生成的公式追加到当前节点。
+     */
+    insertFormula() {
+        if (!this.ensureEditable())
+            return;
+        const selected = this.selectedNode() ?? this.document.root;
+        new editor_modals_1.FormulaEditModal(this.app, (source) => {
+            this.mutate(() => {
+                const blocks = (0, model_1.nodeContentBlocks)(selected);
+                const formula = `$$${source}$$`;
+                const emptyText = blocks.find((block) => block.type === "text" && !block.text.trim());
+                if (emptyText) {
+                    emptyText.text = formula;
+                    emptyText.richText = undefined;
+                }
+                else {
+                    blocks.push({ id: (0, model_1.newId)(), type: "text", text: formula });
+                }
+                selected.content = blocks;
+                (0, model_1.syncNodeLegacyFields)(selected);
+            });
+        }).open();
+    }
+    /**
+     * 将当前分支或多选集合中的顶层分支复制到系统和插件内部剪贴板。
+     * @returns 操作条件是否成立或处理是否成功。
+     * @remarks 多选时必须排除已由所选祖先覆盖的后代，避免粘贴或剪切后重复分支。
+     */
+    async copySelectedBranch() {
+        const selected = this.selectedNode();
+        if (!selected)
+            return false;
+        const selectedIds = (0, node_actions_1.topLevelSelectedNodeIds)(this.document.root, this.selectedIds);
+        const sourceNodes = this.selectedIds.size > 1 && selectedIds.length
+            ? (0, model_1.flattenNodes)(this.document.root).filter((node) => selectedIds.includes(node.id))
+            : [selected];
+        this.branchClipboard = sourceNodes.map((node) => (0, model_1.cloneDocument)({
+            version: 10,
+            title: (0, model_1.nodePlainText)(node) || "图片节点",
+            layout: "right",
+            theme: "auto",
+            root: node
+        }).root);
+        const payload = JSON.stringify({ type: "mindmap-studio-node", version: 2, nodes: sourceNodes }, null, 2);
+        try {
+            await navigator.clipboard.writeText(payload);
+            new obsidian_1.Notice(sourceNodes.length > 1 ? `已复制 ${sourceNodes.length} 个节点分支` : "已复制节点分支");
+        }
+        catch {
+            new obsidian_1.Notice(sourceNodes.length > 1 ? `${sourceNodes.length} 个节点分支已复制到插件内部剪贴板` : "节点分支已复制到插件内部剪贴板");
+        }
+        return true;
+    }
+    /**
+     * 将剪贴板中的一个或多个分支按顺序粘贴为当前节点的子节点。
+     * @remarks 所有粘贴分支都会生成新 ID，并成为新的多选集合，避免与来源节点冲突。
+     */
+    async pasteAsChild() {
+        const selected = this.selectedNode() ?? this.document.root;
+        let sourceNodes = null;
+        try {
+            const text = await navigator.clipboard.readText();
+            if (text.trim())
+                sourceNodes = (0, clipboard_import_1.parseClipboardNodes)(text);
+        }
+        catch {
+            // Browser clipboard permission can be unavailable; use internal clipboard.
+        }
+        sourceNodes ?? (sourceNodes = this.branchClipboard);
+        if (!sourceNodes?.length) {
+            new obsidian_1.Notice("剪贴板中没有可粘贴的 MindMap 节点");
+            return;
+        }
+        const clones = sourceNodes.map((node) => (0, model_1.cloneNodeWithFreshIds)(node));
+        clones.forEach((clone) => (0, node_actions_1.setAllBranchesCollapsed)(clone, true, true));
+        this.mutate(() => {
+            selected.collapsed = false;
+            selected.children.push(...clones);
+            this.selectedIds.clear();
+            for (const clone of clones)
+                this.selectedIds.add(clone.id);
+            this.selectedId = clones[clones.length - 1]?.id ?? selected.id;
+        });
+    }
+    /**
+     * 复制生成selected，并保持模型、界面和持久化状态的一致性。
+     */
+    duplicateSelected() {
+        if (!this.ensureEditable())
+            return;
+        const selected = this.selectedNode();
+        if (!selected || selected.id === this.document.root.id) {
+            new obsidian_1.Notice("请选择非根节点后克隆分支");
+            return;
+        }
+        const parent = (0, model_1.findParent)(this.document.root, selected.id);
+        if (!parent)
+            return;
+        const clone = (0, model_1.cloneNodeWithFreshIds)(selected);
+        this.mutate(() => {
+            const index = parent.children.findIndex((child) => child.id === selected.id);
+            parent.children.splice(index + 1, 0, clone);
+            this.selectedId = clone.id;
+        });
+    }
+    /**
+     * 判断reparent，并保持模型、界面和持久化状态的一致性。
+     *
+     * @param draggedId 该参数用于 can reparent 流程中的输入或控制。
+     * @param targetId 该参数用于 can reparent 流程中的输入或控制。
+     * @returns 操作条件是否成立或处理是否成功。
+     */
+    canMoveNode(draggedId, targetId) {
+        return (0, drag_drop_1.canMoveNodes)(this.document.root, this.selectedIds, draggedId, targetId);
+    }
+    /**
+     * 根据指针在目标节点的位置判断拖放意图。右侧和中间均成为子级；根节点仅接受子节点放置。
+     *
+     * @param event 当前拖放事件。
+     * @param targetEl 目标节点 DOM。
+     * @param targetId 目标节点标识。
+     * @returns 右侧 28% 或中间区域为 child，上方 28% 为 before，下方 28% 为 after。
+     */
+    dropPositionForEvent(event, targetEl, targetId) {
+        const rect = targetEl.getBoundingClientRect();
+        return (0, drag_drop_1.resolveDropPosition)(event, rect, targetId === this.document.root.id);
+    }
+    /** 清理全部拖放目标样式，防止跨节点移动时残留指示线。 */
+    clearDropIndicators() {
+        this.nodesLayerEl.querySelectorAll(".is-drop-target, .is-drop-before, .is-drop-child, .is-drop-child-right, .is-drop-after")
+            .forEach((element) => element.removeClasses(["is-drop-target", "is-drop-before", "is-drop-child", "is-drop-child-right", "is-drop-after"]));
+    }
+    /**
+     * Renders a magnetic placeholder at the exact location represented by the
+     * current before, child, or after drop zone.
+     *
+     * @param targetId Drop target node identifier.
+     * @param position Relative drop position.
+     */
+    showDropPreview(targetId, position) {
+        const target = this.layout.byId.get(targetId);
+        const dragged = this.draggingId ? this.layout.byId.get(this.draggingId) : null;
+        if (!target || !dragged)
+            return;
+        if (this.dropPreviewEl?.dataset.targetId === targetId && this.dropPreviewEl.dataset.position === position)
+            return;
+        this.clearDropPreview();
+        const selectedCount = this.selectedIds.has(dragged.node.id) ? this.selectedIds.size : 1;
+        const preview = this.nodesLayerEl.createDiv({ cls: `mmc-drop-preview is-${position}` });
+        preview.dataset.targetId = targetId;
+        preview.dataset.position = position;
+        const width = Math.min(260, Math.max(100, dragged.width));
+        const height = Math.min(72, Math.max(38, dragged.height));
+        let x = target.x;
+        let y = target.y;
+        if (position === "before")
+            y -= target.height / 2 + height / 2 + 12;
+        if (position === "after")
+            y += target.height / 2 + height / 2 + 12;
+        if (position === "child") {
+            const side = target.side === -1 ? -1 : 1;
+            const gap = this.getAppearance().nodeVisualStyle === "branch" ? 54 : 112;
+            x += side * (target.width / 2 + gap + width / 2);
+        }
+        preview.style.left = `${x}px`;
+        preview.style.top = `${y}px`;
+        preview.style.width = `${width}px`;
+        preview.style.height = `${height}px`;
+        preview.createSpan({
+            cls: "mmc-drop-preview-label",
+            text: selectedCount > 1 ? `移动 ${selectedCount} 个节点` : (0, model_1.nodePrimaryText)(dragged.node) || "节点"
+        });
+        preview.createSpan({
+            cls: "mmc-drop-preview-hint",
+            text: position === "child" ? "作为子节点" : position === "before" ? "插入到上方" : "插入到下方"
+        });
+        this.dropPreviewEl = preview;
+    }
+    /** Removes the temporary magnetic drop placeholder. */
+    clearDropPreview() {
+        this.dropPreviewEl?.remove();
+        this.dropPreviewEl = null;
+    }
+    /**
+     * 在统一编辑事务中移动节点，支持同级前后排序和改变父子关系。
+     *
+     * @param draggedId 被移动节点标识。
+     * @param targetId 目标节点标识。
+     * @param position 相对目标节点的放置位置。
+     */
+    moveNode(draggedId, targetId, position) {
+        if (!this.ensureEditable() || !this.canMoveNode(draggedId, targetId))
+            return;
+        const requestedIds = this.selectedIds.has(draggedId) && this.selectedIds.size > 1
+            ? new Set(this.selectedIds)
+            : new Set([draggedId]);
+        const draggedIds = (0, model_1.flattenNodes)(this.document.root)
+            .filter((node) => requestedIds.has(node.id))
+            .filter((node) => !(0, model_1.findAncestors)(this.document.root, node.id).some((ancestor) => requestedIds.has(ancestor.id)))
+            .map((node) => node.id);
+        if (!draggedIds.length)
+            return;
+        const historyDocument = (0, model_1.cloneDocument)(this.document);
+        const moveOrder = position === "after" ? [...draggedIds].reverse() : draggedIds;
+        let changed = false;
+        for (const id of moveOrder) {
+            changed = (0, model_1.moveNodeRelative)(this.document.root, id, targetId, position) || changed;
+        }
+        if (!changed)
+            return;
+        this.history.capture(historyDocument);
+        this.selectedId = draggedId;
+        this.selectedIds.clear();
+        for (const id of requestedIds)
+            this.selectedIds.add(id);
+        this.callbacks.onChange(this.getDocument());
+        this.markSaving();
+        this.render();
+    }
+    /**
+     * 替换document，并保持模型、界面和持久化状态的一致性。
+     *
+     * @param document 要处理的思维导图文档。
+     */
+    replaceDocument(document) {
+        if (!this.ensureEditable())
+            return;
+        this.history.capture(this.document);
+        this.document = (0, model_1.cloneDocument)(document);
+        this.selectedId = this.document.root.id;
+        this.callbacks.onChange(this.getDocument());
+        this.markSaving();
+        this.render();
+        window.setTimeout(() => this.fitToView(), 20);
+    }
+    /**
+     * 所有用户可撤销写操作的统一入口。调用前克隆当前文档写入撤销栈，执行修改，规范化和重渲染，再通知视图自动保存；只读状态会在更上层阻止进入该流程。
+     *
+     * @param action 该参数用于 mutate 流程中的输入或控制。
+     * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
+     */
+    mutate(action) {
+        if (!this.ensureEditable())
+            return;
+        this.history.capture(this.document);
+        action();
+        this.callbacks.onChange(this.getDocument());
+        this.markSaving();
+        this.render();
+    }
+    /**
+     * 撤销相关数据，并保持模型、界面和持久化状态的一致性。
+     */
+    undo() {
+        if (!this.ensureEditable())
+            return;
+        const previous = this.history.undo(this.document);
+        if (!previous)
+            return;
+        this.document = previous;
+        this.selectedId = this.document.root.id;
+        this.callbacks.onChange(this.getDocument());
+        this.markSaving();
+        this.render();
+    }
+    /**
+     * 重做相关数据，并保持模型、界面和持久化状态的一致性。
+     */
+    redo() {
+        if (!this.ensureEditable())
+            return;
+        const next = this.history.redo(this.document);
+        if (!next)
+            return;
+        this.document = next;
+        this.selectedId = this.document.root.id;
+        this.callbacks.onChange(this.getDocument());
+        this.markSaving();
+        this.render();
+    }
+    /**
+     * 执行“fit to view”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+     */
+    fitToView() {
+        const rect = this.viewportEl.getBoundingClientRect();
+        const width = Math.max(1, this.layout.maxX - this.layout.minX + 100);
+        const height = Math.max(1, this.layout.maxY - this.layout.minY + 100);
+        this.zoom = this.clampZoom(Math.min((rect.width - 40) / width, (rect.height - 40) / height, 1.25));
+        const centerX = (this.layout.minX + this.layout.maxX) / 2;
+        const centerY = (this.layout.minY + this.layout.maxY) / 2;
+        this.panX = -centerX * this.zoom;
+        this.panY = -centerY * this.zoom;
+        this.mindMapViewportInitialized = true;
+        this.applyTransform();
+    }
+    /**
+     * 从文档视图状态恢复导图缩放与平移。没有已保存状态时，只在导图当前可见且启用自动适应时执行一次自适应；
+     * 若首次打开就是文章或通读模式，则把自适应延迟到第一次进入导图模式，避免在隐藏画布上计算出错误缩放。
+     *
+     * @param delay 应用已保存变换或自动适应前的延迟毫秒数。
+     */
+    initializeMindMapViewport(delay) {
+        const saved = this.document.view;
+        const hasSavedViewport = typeof saved?.zoom === "number"
+            || typeof saved?.panX === "number"
+            || typeof saved?.panY === "number";
+        this.zoom = typeof saved?.zoom === "number" ? this.clampZoom(saved.zoom) : 1;
+        this.panX = typeof saved?.panX === "number" ? saved.panX : 0;
+        this.panY = typeof saved?.panY === "number" ? saved.panY : 0;
+        this.mindMapViewportInitialized = hasSavedViewport || !this.options.autoFitOnOpen;
+        if (hasSavedViewport || !this.options.autoFitOnOpen) {
+            window.setTimeout(() => this.applyTransform(), delay);
+        }
+        else if (this.currentMode === "mindmap") {
+            window.setTimeout(() => this.fitToView(), delay);
+        }
+    }
+    /**
+     * 把当前导图缩放和平移写回文档视图状态。该方法在离开导图模式和序列化文档前调用，
+     * 因此文章、大纲和通读模式重渲染不会把用户视口恢复为默认自适应大小。
+     */
+    persistMindMapViewportState() {
+        if (!this.mindMapViewportInitialized)
+            return;
+        this.document.view = {
+            ...(this.document.view ?? {}),
+            zoom: this.zoom,
+            panX: this.panX,
+            panY: this.panY
+        };
+    }
+    /**
+     * 更新并应用zoom，并保持模型、界面和持久化状态的一致性。
+     *
+     * @param value 待校验、转换或比较的输入值。
+     */
+    setZoom(value) {
+        this.zoom = this.clampZoom(value);
+        this.mindMapViewportInitialized = true;
+        this.applyTransform();
+    }
+    /**
+     * 解析工具栏中的缩放百分比输入，并将有效值应用到画布。
+     */
+    applyZoomInput() {
+        const percent = Number(this.zoomStatusEl.value.trim().replace(/%$/, ""));
+        if (!Number.isFinite(percent) || percent <= 0) {
+            this.applyTransform();
+            return;
+        }
+        this.setZoom(percent / 100);
+    }
+    /**
+     * 记录当前双指手势的初始中心点、间距和画布位置。
+     */
+    beginTwoFingerGesture() {
+        const [first, second] = Array.from(this.touchPointers.values());
+        if (!first || !second)
+            return;
+        this.touchGesture = {
+            centerX: (first.x + second.x) / 2,
+            centerY: (first.y + second.y) / 2,
+            distance: Math.max(1, Math.hypot(second.x - first.x, second.y - first.y)),
+            zoom: this.zoom,
+            panX: this.panX,
+            panY: this.panY
+        };
+    }
+    /**
+     * 按设置将双指手势解释为缩放或画布平移。
+     */
+    updateTwoFingerGesture() {
+        if (!this.touchGesture)
+            this.beginTwoFingerGesture();
+        const gesture = this.touchGesture;
+        const [first, second] = Array.from(this.touchPointers.values());
+        if (!gesture || !first || !second)
+            return;
+        const centerX = (first.x + second.x) / 2;
+        const centerY = (first.y + second.y) / 2;
+        if (this.options.twoFingerGestureAction === "pan") {
+            this.panX = gesture.panX + centerX - gesture.centerX;
+            this.panY = gesture.panY + centerY - gesture.centerY;
+            this.mindMapViewportInitialized = true;
+            this.applyTransform();
+            return;
+        }
+        const distance = Math.max(1, Math.hypot(second.x - first.x, second.y - first.y));
+        const nextZoom = this.clampZoom(gesture.zoom * distance / gesture.distance);
+        const rect = this.viewportEl.getBoundingClientRect();
+        const initialX = gesture.centerX - rect.left - rect.width / 2;
+        const initialY = gesture.centerY - rect.top - rect.height / 2;
+        const worldX = (initialX - gesture.panX) / gesture.zoom;
+        const worldY = (initialY - gesture.panY) / gesture.zoom;
+        const currentX = centerX - rect.left - rect.width / 2;
+        const currentY = centerY - rect.top - rect.height / 2;
+        this.zoom = nextZoom;
+        this.panX = currentX - worldX * nextZoom;
+        this.panY = currentY - worldY * nextZoom;
+        this.mindMapViewportInitialized = true;
+        this.applyTransform();
+    }
+    /**
+     * 执行“clamp zoom”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+     *
+     * @param value 待校验、转换或比较的输入值。
+     * @returns 计算得到的数值结果。
+     */
+    clampZoom(value) {
+        return Math.min(2.5, Math.max(0.2, value));
+    }
+    /**
+     * 执行“navigate selection”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+     *
+     * @param direction 该参数用于 navigate selection 流程中的输入或控制。
+     */
+    navigateSelection(direction) {
+        const selected = this.selectedNode() ?? this.document.root;
+        let target = null;
+        if (direction === "parent")
+            target = (0, model_1.findParent)(this.document.root, selected.id);
+        if (direction === "child")
+            target = selected.children[0] ?? null;
+        if (direction === "previous" || direction === "next") {
+            const parent = (0, model_1.findParent)(this.document.root, selected.id);
+            if (parent) {
+                const index = parent.children.findIndex((child) => child.id === selected.id);
+                const offset = direction === "previous" ? -1 : 1;
+                target = parent.children[index + offset] ?? null;
+            }
+        }
+        if (target) {
+            this.selectNode(target.id);
+            this.centerNode(target.id);
+        }
+    }
+    /**
+     * 处理keydown，并保持模型、界面和持久化状态的一致性。
+     *
+     * @param event 触发当前交互的浏览器或 Obsidian 事件。
+     */
+    handleKeydown(event) {
+        const target = event.target;
+        const mod = event.ctrlKey || event.metaKey;
+        const key = event.key.toLowerCase();
+        const findKey = key === "f" || event.code === "KeyF";
+        // Ctrl/Cmd+F 保留给 Obsidian；导图族搜索使用 Ctrl/Cmd+Shift+F。
+        // 搜索快捷键必须先于可编辑元素过滤处理，否则在正文、标题或节点编辑时会被忽略。
+        if (mod && event.shiftKey && findKey && !event.altKey) {
+            event.preventDefault();
+            event.stopPropagation();
+            if (event.repeat)
+                return;
+            this.openSearch();
+            return;
+        }
+        if (target.closest("input, textarea, select, [contenteditable='true']"))
+            return;
+        if (mod && key === "a") {
+            event.preventDefault();
+            event.stopPropagation();
+            this.selectAllNodesExceptRoot();
+            return;
+        }
+        if (mod && key === "s") {
+            event.preventDefault();
+            this.callbacks.onChange(this.getDocument());
+            this.markSaving();
+            return;
+        }
+        if (this.currentMode === "article" && event.key === "Escape" && this.options.articleNavigation?.parentPath) {
+            event.preventDefault();
+            void this.callbacks.onOpenMindMap(this.options.articleNavigation.parentPath);
+            return;
+        }
+        if (this.readOnly) {
+            if (mod && key === "c") {
+                const selection = window.getSelection();
+                if (selection && !selection.isCollapsed && selection.toString())
+                    return;
+                event.preventDefault();
+                void this.copySelectedBranch();
+                return;
+            }
+            if (["arrowleft", "arrowright", "arrowup", "arrowdown"].includes(key)) {
+                event.preventDefault();
+                const direction = key === "arrowleft" ? "parent" : key === "arrowright" ? "child" : key === "arrowup" ? "previous" : "next";
+                this.navigateSelection(direction);
+            }
+            else if (event.key === "+" || event.key === "=") {
+                event.preventDefault();
+                this.setZoom(this.zoom * 1.15);
+            }
+            else if (event.key === "-") {
+                event.preventDefault();
+                this.setZoom(this.zoom / 1.15);
+            }
+            else if (mod && key === "0") {
+                event.preventDefault();
+                this.fitToView();
+            }
+            else if (event.key === " ") {
+                event.preventDefault();
+                this.toggleCollapse();
+            }
+            return;
+        }
+        if (mod && key === "d") {
+            event.preventDefault();
+            this.duplicateSelected();
+            return;
+        }
+        if (mod && key === "c") {
+            event.preventDefault();
+            void this.copySelectedBranch();
+            return;
+        }
+        if (mod && key === "x") {
+            event.preventDefault();
+            void this.copySelectedBranch().then((copied) => { if (copied)
+                this.deleteSelected(); });
+            return;
+        }
+        if (mod && event.key === "Enter") {
+            event.preventDefault();
+            this.cycleTask();
+            return;
+        }
+        if (mod && key === "z" && !event.shiftKey) {
+            event.preventDefault();
+            this.undo();
+            return;
+        }
+        if ((mod && key === "y") || (mod && event.shiftKey && key === "z")) {
+            event.preventDefault();
+            this.redo();
+            return;
+        }
+        switch (event.key) {
+            case "Tab":
+                event.preventDefault();
+                this.addChild();
+                break;
+            case "Enter":
+                event.preventDefault();
+                this.addSibling();
+                break;
+            case "Delete":
+            case "Backspace":
+                event.preventDefault();
+                this.deleteSelected();
+                break;
+            case "F2":
+                event.preventDefault();
+                this.editSelected();
+                break;
+            case " ":
+                event.preventDefault();
+                this.toggleCollapse();
+                break;
+            case "ArrowLeft":
+                event.preventDefault();
+                this.navigateSelection("parent");
+                break;
+            case "ArrowRight":
+                event.preventDefault();
+                this.navigateSelection("child");
+                break;
+            case "ArrowUp":
+                event.preventDefault();
+                this.navigateSelection("previous");
+                break;
+            case "ArrowDown":
+                event.preventDefault();
+                this.navigateSelection("next");
+                break;
+            case "+":
+            case "=":
+                event.preventDefault();
+                this.setZoom(this.zoom * 1.15);
+                break;
+            case "-":
+                event.preventDefault();
+                this.setZoom(this.zoom / 1.15);
+                break;
+            case "0":
+                if (mod) {
+                    event.preventDefault();
+                    this.fitToView();
+                }
+                break;
+            default:
+                break;
+        }
+    }
+}
+exports.MindMapEditor = MindMapEditor;

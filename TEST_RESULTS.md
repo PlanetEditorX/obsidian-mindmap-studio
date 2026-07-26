@@ -1,6 +1,9 @@
-# MindMap Studio 1.15.2 同层文章分页修复测试结果
+# MindMap Studio 1.15.2 文章导航手型光标修复测试结果
 
 ## 本次修改
+
+- 文章页底部上一篇、下一篇、返回上一级和阅读完成/返回目录按钮统一使用手型光标。
+- 使用 `cursor: pointer !important` 覆盖 Obsidian 主题可能提供的默认按钮光标；禁用状态使用 `not-allowed`。
 
 - 文章页底部上一篇/下一篇不再使用递归全书目录的相邻项。
 - 分页候选改为当前物理 `.mindmap` 页在同一父级、同一目录结构层级下的兄弟子导图。
@@ -21,6 +24,7 @@
 - `npm run docs:generate`：通过，已重新生成 `docs/FUNCTION_REFERENCE.md`。
 - `npm test`：通过。
 - 文档覆盖检查：通过，27 个 TypeScript 模块、509 个命名声明均有 JSDoc。
+- 新增 CSS 回归断言，覆盖文章分页按钮、文章/大纲父导图返回按钮和导图面包屑返回按钮的手型光标。
 - `npm run build`：通过，已从当前 TypeScript 源码重新生成 `main.js`。
 - `node --check main.js`：通过。
 - Obsidian API 运行时替身加载冒烟检查：通过。

@@ -273,7 +273,7 @@
   background: color-mix(in srgb, var(--interactive-accent) 11%, transparent);
   color: var(--text-accent);
   box-shadow: none;
-  cursor: pointer;
+  cursor: pointer !important;
   transition: background-color 120ms ease, color 120ms ease, transform 120ms ease;
 }
 
@@ -328,7 +328,7 @@
   line-height: 1.2;
   text-overflow: ellipsis;
   white-space: nowrap;
-  cursor: pointer;
+  cursor: pointer !important;
 }
 
 .mmc-canvas-breadcrumb-parent:hover {
@@ -1895,7 +1895,7 @@
   line-height: 1.35;
   text-align: left;
   white-space: normal;
-  cursor: pointer;
+  cursor: pointer !important;
   transition: background-color 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
 }
 
@@ -3455,7 +3455,12 @@
   text-align: left;
   white-space: normal;
   box-shadow: none;
+  cursor: pointer !important;
   transition: border-color 150ms ease, background-color 150ms ease, transform 150ms ease;
+}
+
+.mms-article-pager button:disabled {
+  cursor: not-allowed !important;
 }
 
 .mms-article-pager button:hover {
