@@ -1935,22 +1935,22 @@ export class MindMapEditor {
     if ((this.document.view?.articleMiniMap ?? this.options.showArticleMiniMap) !== true) return;
     const targets = this.articleMiniMapTargets();
     if (targets.length < 2) return;
-    const miniMap = this.rootEl.createDiv({ cls: "mms-article-minimap", attr: { role: "navigation", "aria-label": "文章缩略导航图" } });
+    const miniMap = this.rootEl.createDiv({ cls: "mms-article-minimap" });
     const track = miniMap.createDiv({ cls: "mms-article-minimap-track" });
     const count = Math.min(72, targets.length);
     const highestDepth = Math.min(...targets.map((target) => this.articleMiniMapDepth(target)));
     for (let index = 0; index < count; index += 1) {
       const targetIndex = Math.round(index * (targets.length - 1) / Math.max(1, count - 1));
       const target = targets[targetIndex]!;
-      const marker = track.createEl("button", { cls: "mms-article-minimap-marker", attr: { type: "button", title: target.textContent?.trim().slice(0, 120) || "跳转" } });
+      const marker = track.createEl("button", { cls: "mms-article-minimap-marker", attr: { type: "button" } });
       const depth = this.articleMiniMapDepth(target);
       marker.dataset.minimapTargetIndex = String(targetIndex);
-      marker.style.width = "54px";
+      marker.style.width = "34px";
       marker.style.height = `${depth === highestDepth ? 7 : 3}px`;
       marker.addEventListener("click", () => target.scrollIntoView({ behavior: "smooth", block: "center" }));
     }
     this.articleMiniMapEl = miniMap;
-    this.bindArticleMiniMapInteractions();
+    this.bindArticleMiniMapInteractions(track);
     this.updateArticleMiniMapVisibility();
     this.updateArticleMiniMapActiveMarker();
   }
@@ -1987,8 +1987,16 @@ export class MindMapEditor {
     });
   }
 
+  /** Expands the nearest marker and progressively shortens its vertical neighbours. */
+  private updateArticleMiniMapMarkerHover(focusedIndex: number | null): void {
+    this.articleMiniMapEl?.querySelectorAll<HTMLElement>(".mms-article-minimap-marker").forEach((marker, index) => {
+      const emphasis = focusedIndex === null ? 0 : Math.max(0, 1 - Math.abs(index - focusedIndex) / 3);
+      marker.style.width = `${Math.round(34 + emphasis * 14)}px`;
+    });
+  }
+
   /** Keeps the navigator discoverable while preventing it from permanently occupying the page edge. */
-  private bindArticleMiniMapInteractions(): void {
+  private bindArticleMiniMapInteractions(track: HTMLElement): void {
     const miniMap = this.articleMiniMapEl;
     if (!miniMap) return;
     const reveal = (): void => {
@@ -2005,14 +2013,33 @@ export class MindMapEditor {
       if (event.clientX >= rootRect.right - 132 && Math.abs(event.clientY - center) <= rootRect.height * .34) reveal();
     };
     const updateActive = (): void => this.updateArticleMiniMapActiveMarker();
+    const updateHover = (event: PointerEvent): void => {
+      const markers = Array.from(track.querySelectorAll<HTMLElement>(".mms-article-minimap-marker"));
+      let nearestIndex = 0;
+      let nearestDistance = Number.POSITIVE_INFINITY;
+      markers.forEach((marker, index) => {
+        const rect = marker.getBoundingClientRect();
+        const distance = Math.abs(event.clientY - (rect.top + rect.height / 2));
+        if (distance < nearestDistance) {
+          nearestDistance = distance;
+          nearestIndex = index;
+        }
+      });
+      this.updateArticleMiniMapMarkerHover(markers.length ? nearestIndex : null);
+    };
+    const resetHover = (): void => this.updateArticleMiniMapMarkerHover(null);
     this.rootEl.addEventListener("pointermove", revealFromCorner);
     miniMap.addEventListener("pointerenter", reveal);
     miniMap.addEventListener("pointerdown", reveal);
+    track.addEventListener("pointermove", updateHover);
+    track.addEventListener("pointerleave", resetHover);
     this.articleEl.addEventListener("scroll", updateActive);
     this.articleMiniMapCleanup = () => {
       this.rootEl.removeEventListener("pointermove", revealFromCorner);
       miniMap.removeEventListener("pointerenter", reveal);
       miniMap.removeEventListener("pointerdown", reveal);
+      track.removeEventListener("pointermove", updateHover);
+      track.removeEventListener("pointerleave", resetHover);
       this.articleEl.removeEventListener("scroll", updateActive);
       this.articleMiniMapCleanup = null;
     };
