@@ -993,8 +993,9 @@ export class MindMapEditor {
     if (modeChanged) {
       if (previousMode === "mindmap") this.persistMindMapViewportState();
       this.currentMode = resolved;
+      const preserveReadingEdit = previousMode === "reading" && resolved === "article" && !this.readOnly;
       this.readOnly = resolved === "article" || resolved === "reading"
-        ? true
+        ? !preserveReadingEdit
           : previousMode === "article" || previousMode === "reading"
           ? this.document.view?.readOnly === true
           : this.readOnly;
@@ -1113,6 +1114,17 @@ export class MindMapEditor {
       document.activeElement.blur();
     }
     this.readOnly = !this.readOnly;
+    if (this.currentMode === "reading" && !this.readOnly) {
+      // A continuous book can contain several .mindmap files. Editing it in
+      // place would silently write only the current file, so enter the current
+      // map's article editor instead of presenting a non-interactive book.
+      this.currentMode = "article";
+      this.persistReadOnlyState();
+      this.render();
+      void this.callbacks.onDisplayModeChange("article");
+      new Notice("通读模式已切换为文章编辑模式");
+      return;
+    }
     if (this.currentMode !== "article" && this.currentMode !== "reading") this.persistReadOnlyState();
     this.updateModeUi();
     this.applyReadOnlyStateToRenderedContent();
