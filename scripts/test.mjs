@@ -1405,6 +1405,7 @@ export const setIcon = () => {};
   assert.match(editorSource, /onDisplayModeChange/);
   assert.match(editorSource, /articleBaseDepth/);
   assert.match(editorSource, /installArticleSectionCollapse/, "article headings must support Markdown-style section collapse");
+  assert.match(editorSource, /installReadingChapterCollapse/, "continuous-reading chapter titles must support collapse");
   assert.match(editorSource, /articleLeafBulletsEnabled/, "article terminal bullets must follow the global setting");
   assert.match(editorSource, /articleLeafBulletStyle/, "article terminal bullets must pass the selected visual style to reading mode");
   assert.match(mainSource, /buildArticleContext/);
@@ -1422,6 +1423,9 @@ export const setIcon = () => {};
   assert.match(cssSource, /data-bullet-style="square"/, "terminal bullets must support square rendering");
   assert.match(cssSource, /data-bullet-style="dash"/, "terminal bullets must support dash rendering");
   assert.match(cssSource, /\.mms-article-node\.is-collapsed-by-heading/, "collapsed article sections must be hidden by CSS");
+  assert.match(cssSource, /\.mms-reading-book-section\.is-section-collapsed/, "collapsed reading chapters must hide chapter content");
+  assert.match(cssSource, /\.mms-article-collapse-toggle\s*\{[\s\S]*opacity:\s*0[\s\S]*pointer-events:\s*auto/, "the floating collapse control must stay interactive while hidden");
+  assert.match(cssSource, /\.mms-article-node:hover \.mms-article-collapse-toggle[\s\S]*opacity:\s*1/, "hovering a section must reveal its collapse control without remounting it");
 
 
   const packageJson = JSON.parse(await readFile("package.json", "utf8"));

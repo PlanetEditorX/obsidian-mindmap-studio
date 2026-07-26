@@ -2192,6 +2192,34 @@ export class MindMapEditor {
       });
     });
     apply();
+    this.installReadingChapterCollapse();
+  }
+
+  /** Adds the same collapse control to top-level chapters in continuous reading mode. */
+  private installReadingChapterCollapse(): void {
+    const chapters = Array.from(this.articleEl.querySelectorAll<HTMLElement>(".mms-reading-book-section"));
+    chapters.forEach((chapter, index) => {
+      const heading = chapter.querySelector<HTMLElement>(":scope > .mms-reading-map-title");
+      if (!heading || chapter.children.length < 2) return;
+      const key = `reading-chapter:${chapter.id || index}`;
+      const toggle = heading.createEl("button", {
+        cls: "clickable-icon mms-article-collapse-toggle",
+        attr: { type: "button", "aria-label": "展开或折叠本章" }
+      });
+      const apply = (): void => {
+        const collapsed = this.collapsedArticleSectionIds.has(key);
+        chapter.toggleClass("is-section-collapsed", collapsed);
+        setIcon(toggle, collapsed ? "chevron-right" : "chevron-down");
+      };
+      toggle.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        if (this.collapsedArticleSectionIds.has(key)) this.collapsedArticleSectionIds.delete(key);
+        else this.collapsedArticleSectionIds.add(key);
+        apply();
+      });
+      apply();
+    });
   }
 
   /**

@@ -3419,6 +3419,7 @@
 }
 
 .mms-reading-map-title {
+  position: relative;
   margin-bottom: 28px;
   color: var(--mms-article-heading, var(--text-normal));
   font-size: 1.7em;
@@ -3494,16 +3495,21 @@
   right: 100%;
   width: 22px;
   height: 22px;
-  display: none;
-  margin-right: 7px;
+  display: inline-flex;
+  margin-right: 0;
   padding: 3px;
   color: var(--text-muted);
+  opacity: 0;
+  pointer-events: auto;
+  transition: opacity 120ms ease, color 120ms ease, background 120ms ease;
   transform: translateY(-50%);
 }
 
 .mms-article-node:hover .mms-article-collapse-toggle,
-.mms-article-node:focus-within .mms-article-collapse-toggle {
-  display: inline-flex;
+.mms-article-node:focus-within .mms-article-collapse-toggle,
+.mms-reading-book-section:hover .mms-article-collapse-toggle,
+.mms-reading-book-section:focus-within .mms-article-collapse-toggle {
+  opacity: 1;
 }
 
 .mms-article-collapse-toggle:hover {
@@ -3514,6 +3520,10 @@
 
 .mms-article-node.is-section-collapsed > :not(.mms-article-heading):not(.mms-article-section-heading),
 .mms-article-node.is-collapsed-by-heading {
+  display: none;
+}
+
+.mms-reading-book-section.is-section-collapsed > :not(.mms-reading-map-title) {
   display: none;
 }
 
