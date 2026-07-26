@@ -59,7 +59,7 @@ import {
 import { buildBranchColorMap, computeLayout, documentToSvg, edgePath, edgeWidthForDepth, roundedElbowEdgePath, type LayoutResult } from "../render/layout";
 import { resolveLayoutCollisions } from "../render/collision-layout";
 import { CodeEditModal, TableEditModal } from "./content-modals";
-import { TOOLBAR_ITEMS } from "../settings";
+import { TOOLBAR_ITEMS, type ResizeModifier } from "../settings";
 import { appearanceFromThemePreset, MINDMAP_THEME_PRESETS } from "../themes";
 import { articleNumberLabel, articleTocDepth, buildArticleNodeInfo, DISPLAY_MODE_ICONS, DISPLAY_MODE_LABELS, readingAnchorPart, resolveArticleTocMaxDepth, type ArticlePageNavigation, type ArticleTocEntry, type ReadingSection } from "../article/modes";
 import { resolveArticleStyle } from "../article/article-style";
@@ -904,7 +904,7 @@ export class MindMapEditor {
   private branchClipboard: MindMapNode[] | null = null;
   private searchQuery = "";
   private lastRichTextColor = "#ef4444";
-  private resizeModifier: "none" | "ctrl" = "none";
+  private resizeModifier: ResizeModifier = "ctrl";
   private currentMode: DisplayMode;
   private readOnly: boolean;
   private readonly imageLoadTimers = new Set<number>();
@@ -927,7 +927,6 @@ export class MindMapEditor {
     this.callbacks = callbacks;
     this.options = options;
     this.resizeModifier = options.resizeModifier;
-    if (this.resizeModifier === "ctrl") this.rootEl.addClass("mmc-ctrl-resize");
     this.history = new DocumentHistory(() => this.options.historyLimit);
     this.document = cloneDocument(document);
     this.currentMode = this.resolveMode(options.defaultViewMode);
@@ -936,6 +935,7 @@ export class MindMapEditor {
     const initialAppearance = this.getAppearance();
     this.layout = computeLayout(this.document.root, this.document.layout, initialAppearance.fontSize ?? 14, initialAppearance.nodeVisualStyle ?? "card", initialAppearance);
     this.buildUi();
+    if (this.resizeModifier === "ctrl") this.rootEl.addClass("mmc-ctrl-resize");
     this.render();
     this.initializeMindMapViewport(50);
   }

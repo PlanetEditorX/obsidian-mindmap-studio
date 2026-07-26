@@ -4742,9 +4742,19 @@ ImageHostMethod 类型定义，用于限制可接受值并让序列化数据保�
 export type ImageHostMethod = "POST" | "PUT";
 ```
 
+### 类型 `ResizeModifier`
+
+源码：`src/settings.ts:50`
+
+Controls whether a node-size drag starts immediately or only while Ctrl/Cmd is held. Shift remains reserved for node multi-selection and marquee selection.
+
+```ts
+export type ResizeModifier = "none" | "ctrl";
+```
+
 ### 接口 `ImageHostConfig`
 
-源码：`src/settings.ts:49`
+源码：`src/settings.ts:55`
 
 ImageHostConfig 的结构化数据约定。字段会在模块边界传递，用于保持类型安全和版本兼容。
 
@@ -4754,7 +4764,7 @@ export interface ImageHostConfig
 
 ### 接口 `ImageHostChoice`
 
-源码：`src/settings.ts:64`
+源码：`src/settings.ts:70`
 
 ImageHostChoice 的结构化数据约定。字段会在模块边界传递，用于保持类型安全和版本兼容。
 
@@ -4764,7 +4774,7 @@ export interface ImageHostChoice
 
 ### 接口 `ImageHostUploadSuccess`
 
-源码：`src/settings.ts:72`
+源码：`src/settings.ts:78`
 
 ImageHostUploadSuccess 的结构化数据约定。字段会在模块边界传递，用于保持类型安全和版本兼容。
 
@@ -4774,7 +4784,7 @@ export interface ImageHostUploadSuccess
 
 ### 接口 `ImageHostUploadFailure`
 
-源码：`src/settings.ts:81`
+源码：`src/settings.ts:87`
 
 ImageHostUploadFailure 的结构化数据约定。字段会在模块边界传递，用于保持类型安全和版本兼容。
 
@@ -4784,7 +4794,7 @@ export interface ImageHostUploadFailure
 
 ### 接口 `ImageHostUploadBatch`
 
-源码：`src/settings.ts:90`
+源码：`src/settings.ts:96`
 
 ImageHostUploadBatch 的结构化数据约定。字段会在模块边界传递，用于保持类型安全和版本兼容。
 
@@ -4794,7 +4804,7 @@ export interface ImageHostUploadBatch
 
 ### 函数 `createImageHostConfig`
 
-源码：`src/settings.ts:101`
+源码：`src/settings.ts:107`
 
 创建image host config，并保持模型、界面和持久化状态的一致性。
 
@@ -4804,7 +4814,7 @@ export function createImageHostConfig(index = 1): ImageHostConfig
 
 ### 接口 `MindMapStudioSettings`
 
-源码：`src/settings.ts:118`
+源码：`src/settings.ts:124`
 
 MindMapStudioSettings 的结构化数据约定。字段会在模块边界传递，用于保持类型安全和版本兼容。
 
@@ -4814,7 +4824,7 @@ export interface MindMapStudioSettings
 
 ### 函数 `normalizeReturnToTopVisibility`
 
-源码：`src/settings.ts:258`
+源码：`src/settings.ts:264`
 
 Normalizes the article return-to-top threshold while preserving compatibility with older fixed presets.
 
@@ -4824,7 +4834,7 @@ export function normalizeReturnToTopVisibility(value: unknown): number
 
 ### 函数 `settingsToAppearance`
 
-源码：`src/settings.ts:283`
+源码：`src/settings.ts:289`
 
 更新并应用tings to appearance，并保持模型、界面和持久化状态的一致性。
 
@@ -4834,7 +4844,7 @@ export function settingsToAppearance(settings: MindMapStudioSettings): MindMapAp
 
 ### 函数 `applyThemePresetToSettings`
 
-源码：`src/settings.ts:321`
+源码：`src/settings.ts:327`
 
 应用theme preset to settings，并保持模型、界面和持久化状态的一致性。
 
@@ -4844,7 +4854,7 @@ export function applyThemePresetToSettings(settings: MindMapStudioSettings, pres
 
 ### 类 `MindMapStudioSettingTab`
 
-源码：`src/settings.ts:352`
+源码：`src/settings.ts:358`
 
 MindMapStudioSettingTab 的主要实现类。负责封装相关状态、生命周期和对外操作，避免调用方直接操作内部数据结构。
 
@@ -4854,7 +4864,7 @@ export class MindMapStudioSettingTab extends PluginSettingTab
 
 ### 构造函数 `MindMapStudioSettingTab.constructor`
 
-源码：`src/settings.ts:362`
+源码：`src/settings.ts:368`
 
 创建 MindMapStudioSettingTab 实例，保存依赖和初始状态；实际 DOM 构建通常在 onOpen() 或后续渲染流程中完成。
 
@@ -4864,7 +4874,7 @@ constructor(app: App, plugin: MindMapStudioPlugin)
 
 ### 方法 `MindMapStudioSettingTab.display`
 
-源码：`src/settings.ts:371`
+源码：`src/settings.ts:377`
 
 构建完整插件设置页，包括主题、显示模式、节点默认值、搜索、图片、图床容灾和恢复初始设置。所有控件写入后立即保存并刷新打开视图。
 
@@ -4874,7 +4884,7 @@ display(): void
 
 ### 方法 `MindMapStudioSettingTab.addOptionalColorSetting`
 
-源码：`src/settings.ts:1301`
+源码：`src/settings.ts:1319`
 
 添加optional color setting，并保持模型、界面和持久化状态的一致性。
 
@@ -4884,7 +4894,7 @@ private addOptionalColorSetting( container: HTMLElement, name: string, descripti
 
 ### 方法 `MindMapStudioSettingTab.saveAndRefresh`
 
-源码：`src/settings.ts:1333`
+源码：`src/settings.ts:1351`
 
 保存and refresh，并保持模型、界面和持久化状态的一致性。
 

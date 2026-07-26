@@ -13,7 +13,7 @@ import type {
   NodeShape
 } from "../core/model";
 import type { ArticlePageNavigation, ArticleTocEntry, ReadingSection } from "../article/modes";
-import type { ImageHostChoice, ImageHostUploadBatch } from "../settings";
+import type { ImageHostChoice, ImageHostUploadBatch, ResizeModifier } from "../settings";
 
 /**
  * Host services consumed by the editor.
@@ -57,7 +57,7 @@ export interface MindMapEditorOptions {
   showTaskProgress: boolean;
   autoFitOnOpen: boolean;
   twoFingerGestureAction: "zoom" | "pan";
-  resizeModifier: "none" | "ctrl";
+  resizeModifier: ResizeModifier;
   historyLimit: number;
   imageFailoverEnabled: boolean;
   imageFailoverTimeoutSeconds: number;

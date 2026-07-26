@@ -44,6 +44,12 @@ export type ImageHostBodyMode = "multipart" | "raw";
 export type ImageHostMethod = "POST" | "PUT";
 
 /**
+ * Controls whether a node-size drag starts immediately or only while Ctrl/Cmd is held.
+ * Shift remains reserved for node multi-selection and marquee selection.
+ */
+export type ResizeModifier = "none" | "ctrl";
+
+/**
  * ImageHostConfig 的结构化数据约定。字段会在模块边界传递，用于保持类型安全和版本兼容。
  */
 export interface ImageHostConfig {
@@ -127,7 +133,7 @@ export interface MindMapStudioSettings {
   autoNodeMaxWidth: number;
   redirectLegacyFiles: boolean;
   showGrid: boolean;
-  resizeModifier: "none" | "ctrl";
+  resizeModifier: ResizeModifier;
   twoFingerGestureAction: "zoom" | "pan";
   showTaskProgress: boolean;
   syncTitleToFilename?: boolean;
@@ -195,7 +201,7 @@ export const DEFAULT_SETTINGS: MindMapStudioSettings = {
   autoNodeMaxWidth: 460,
   redirectLegacyFiles: true,
   showGrid: true,
-  resizeModifier: "none",
+  resizeModifier: "ctrl",
   twoFingerGestureAction: "zoom",
   showTaskProgress: true,
   syncTitleToFilename: true,
@@ -470,6 +476,18 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
         .setValue(this.plugin.settings.twoFingerGestureAction)
         .onChange(async (value) => {
           this.plugin.settings.twoFingerGestureAction = value === "pan" ? "pan" : "zoom";
+          await this.saveAndRefresh();
+        }));
+
+    new Setting(containerEl)
+      .setName("拖动调整节点大小")
+      .setDesc("默认按住 Ctrl（macOS 为 Cmd）再拖动右下角控制点，避免与节点点击、拖拽及 Shift 多选冲突；也可改为直接拖动。")
+      .addDropdown((dropdown) => dropdown
+        .addOption("ctrl", "按住 Ctrl / Cmd")
+        .addOption("none", "直接拖动")
+        .setValue(this.plugin.settings.resizeModifier)
+        .onChange(async (value) => {
+          this.plugin.settings.resizeModifier = value === "none" ? "none" : "ctrl";
           await this.saveAndRefresh();
         }));
 
