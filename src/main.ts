@@ -23,6 +23,7 @@ import {
   markdownToDocument,
   nodeContentBlocks,
   nodePlainText,
+  reconcileRichTextAfterEdit,
   syncNodeLegacyFields,
   parseDocument,
   serializeDocument,
@@ -342,7 +343,6 @@ export default class MindMapStudioPlugin extends Plugin {
         return text.replace(new RegExp(escaped, "gi"), replacement);
       } catch { return text; }
     };
-    // We need the original query from the modal; store it temporarily
     let modifiedCount = 0;
     for (const [filePath, fileResults] of byFile) {
       const file = this.app.vault.getAbstractFileByPath(filePath);
@@ -351,31 +351,32 @@ export default class MindMapStudioPlugin extends Plugin {
         const content = await this.app.vault.read(file);
         const doc = parseDocument(content, file.basename);
         const nodeIds = new Set(fileResults.map((r) => r.nodeId));
-        const visit = (node: MindMapNode): void => {
-          if (!nodeIds.has(node.id)) return;
-          // Attempt replacement across text, richText runs, and note.
-          // The early-exit check is omitted so regex searches and matches
-          // found via notes/richText also trigger replacement.
-          const oldText = node.text;
-          const newText = replaceIn(oldText);
-          if (newText !== oldText) {
-            node.text = newText;
-            modifiedCount += 1;
-            if (node.richText) {
-              for (const run of node.richText) {
-                const oldRun = run.text;
-                const newRun = replaceIn(oldRun);
-                if (newRun !== oldRun) run.text = newRun;
-              }
-            }
+        let fileModified = false;
+        for (const nodeId of nodeIds) {
+          const node = findNode(doc.root, nodeId);
+          if (!node) continue;
+          let nodeModified = false;
+          for (const block of nodeContentBlocks(node)) {
+            if (block.type !== "text") continue;
+            const nextText = replaceIn(block.text);
+            if (nextText === block.text) continue;
+            block.richText = reconcileRichTextAfterEdit(block.text, block.richText, nextText);
+            block.text = nextText;
+            nodeModified = true;
           }
           if (node.note) {
             const newNote = replaceIn(node.note);
-            if (newNote !== node.note) node.note = newNote;
+            if (newNote !== node.note) {
+              node.note = newNote;
+              nodeModified = true;
+            }
           }
-        };
-        visit(doc.root);
-        if (modifiedCount > 0) await this.app.vault.modify(file, serializeDocument(doc));
+          if (!nodeModified) continue;
+          syncNodeLegacyFields(node);
+          modifiedCount += 1;
+          fileModified = true;
+        }
+        if (fileModified) await this.app.vault.modify(file, serializeDocument(doc));
       } catch (err) {
         console.warn(`MindMap Studio could not replace in ${filePath}:`, err);
       }

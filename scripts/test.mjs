@@ -965,6 +965,8 @@ export const setIcon = () => {};
   assert.match(globalSearchSource, /resolveHierarchicalEntries/);
   assert.match(globalSearchSource, /useRegex/, "search functions should support regex mode");
   assert.match(mainSource, /replaceAllInSearchResults/, "main module should support search-and-replace");
+  assert.match(mainSource, /const node = findNode\(doc\.root, nodeId\)/, "search replacement must target the indexed result node instead of only the root node");
+  assert.match(mainSource, /nodeContentBlocks\(node\)[\s\S]*reconcileRichTextAfterEdit[\s\S]*syncNodeLegacyFields\(node\)/, "search replacement must update content blocks while preserving rich-text styles and legacy fields");
   assert.match(globalSearchSource, /mms-global-search-regex/, "search modal should include a regex toggle button");
   assert.match(globalSearchSource, /mms-global-search-replace-row/, "search modal should include a replace row");
   assert.match(globalSearchSource, /mms-global-search-replace-one/, "search results should include a per-result replace button");
@@ -1314,6 +1316,7 @@ export const setIcon = () => {};
   assert.match(cssSource, /mms-global-search-regex/, "CSS should style the regex toggle button");
   assert.match(cssSource, /mms-global-search-replace-row/, "CSS should style the replace section");
   assert.match(cssSource, /mms-global-search-replace-one/, "CSS should style the per-result replace button");
+  assert.match(cssSource, /\.mms-global-search-result-title\s*\{[\s\S]*overflow-wrap:\s*anywhere[\s\S]*white-space:\s*normal/, "long search result titles must wrap instead of being truncated");
 
   console.log("All MindMap Studio tests passed.");
 } finally {
