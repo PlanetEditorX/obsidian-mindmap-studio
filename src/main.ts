@@ -493,7 +493,9 @@ export default class MindMapStudioPlugin extends Plugin {
         : "top",
       returnToTopVisibility: normalizeReturnToTopVisibility(raw.returnToTopVisibility),
       twoFingerGestureAction: raw.twoFingerGestureAction === "pan" ? "pan" : "zoom",
-      resizeModifier: raw.resizeModifier === "none" ? "none" : "ctrl",
+      // Older releases allowed direct resizing. Always migrate it to Ctrl/Cmd so
+      // selecting a node never reveals a resize handle by itself.
+      resizeModifier: "ctrl",
       defaultNodeTextAlign: raw.defaultNodeTextAlign === "left" || raw.defaultNodeTextAlign === "right" || raw.defaultNodeTextAlign === "center"
         ? raw.defaultNodeTextAlign
         : DEFAULT_SETTINGS.defaultNodeTextAlign,

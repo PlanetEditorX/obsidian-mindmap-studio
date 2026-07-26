@@ -926,7 +926,7 @@ export class MindMapEditor {
     this.host = host;
     this.callbacks = callbacks;
     this.options = options;
-    this.resizeModifier = options.resizeModifier;
+    this.resizeModifier = "ctrl";
     this.history = new DocumentHistory(() => this.options.historyLimit);
     this.document = cloneDocument(document);
     this.currentMode = this.resolveMode(options.defaultViewMode);
@@ -935,7 +935,7 @@ export class MindMapEditor {
     const initialAppearance = this.getAppearance();
     this.layout = computeLayout(this.document.root, this.document.layout, initialAppearance.fontSize ?? 14, initialAppearance.nodeVisualStyle ?? "card", initialAppearance);
     this.buildUi();
-    if (this.resizeModifier === "ctrl") this.rootEl.addClass("mmc-ctrl-resize");
+    this.rootEl.addClass("mmc-ctrl-resize");
     this.render();
     this.initializeMindMapViewport(50);
   }
@@ -1264,7 +1264,6 @@ export class MindMapEditor {
     this.rootEl.addEventListener("keydown", keydown, true);
     // Ctrl-hold tracking for resize modifier
     const ctrlTracker = (trackEvent: KeyboardEvent): void => {
-      if (this.resizeModifier !== "ctrl") return;
       if (trackEvent.type === "keydown" && (trackEvent.key === "Control" || trackEvent.key === "Meta")) {
         this.rootEl.addClass("is-ctrl-held");
       } else if (trackEvent.type === "keyup" && (trackEvent.key === "Control" || trackEvent.key === "Meta")) {
@@ -2136,7 +2135,7 @@ export class MindMapEditor {
         });
         resizeHandle.addEventListener("pointerdown", (event) => {
           if (event.button !== 0) return;
-          if (this.resizeModifier === "ctrl" && !event.ctrlKey && !event.metaKey) return;
+          if (!event.ctrlKey && !event.metaKey) return;
           event.preventDefault();
           event.stopPropagation();
           const startX = event.clientX;

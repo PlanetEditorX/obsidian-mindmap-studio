@@ -619,10 +619,6 @@
   touch-action: none;
 }
 
-.mmc-node.is-selected > .mmc-node-resize-handle {
-  display: block;
-}
-
 .mmc-node-resize-handle::after {
   content: "";
   position: absolute;
@@ -873,9 +869,9 @@
 
 .mmc-fold-button {
   right: -11px;
-  top: 50%;
-  bottom: auto;
-  transform: translateY(-50%);
+  top: auto;
+  bottom: -11px;
+  transform: none;
 }
 
 .mmc-node-link {
@@ -3756,7 +3752,7 @@
 .mms-color-btn {
   position: relative;
 }
-/* Ctrl/Cmd resize: reveal the hovered node's handle without covering its child counter. */
+/* Ctrl/Cmd resize: replace the lower-right child counter only on the hovered node. */
 .mmc-ctrl-resize .mmc-node > .mmc-node-resize-handle {
   display: none !important;
 }
