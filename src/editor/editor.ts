@@ -1815,7 +1815,7 @@ export class MindMapEditor {
     element.contentEditable = "false";
     element.dataset.mmsInlineEditable = "true";
     element.setAttr("role", "textbox");
-    element.removeAttribute("aria-label");
+    element.setAttr("aria-label", placeholder);
     if (!element.textContent?.trim()) element.dataset.placeholder = placeholder;
     const initialBlock = nodeContentBlocks(node).find((block): block is MindMapTextContentBlock => block.type === "text");
     if (!this.readOnly) renderRichTextRuns(element, initialBlock?.richText, initialBlock?.text ?? nodePrimaryText(node), false);
@@ -1942,12 +1942,13 @@ export class MindMapEditor {
     for (let index = 0; index < count; index += 1) {
       const targetIndex = Math.round(index * (targets.length - 1) / Math.max(1, count - 1));
       const target = targets[targetIndex]!;
-      const marker = track.createEl("button", { cls: "mms-article-minimap-marker", attr: { type: "button" } });
+      const label = this.articleMiniMapTargetLabel(target);
+      const marker = track.createEl("button", { cls: "mms-article-minimap-marker", attr: { type: "button", title: label, "aria-label": label } });
       const depth = this.articleMiniMapDepth(target);
       marker.dataset.minimapTargetIndex = String(targetIndex);
-      marker.style.width = "34px";
-      marker.style.height = `${depth === highestDepth ? 7 : 3}px`;
-      marker.addEventListener("click", () => target.scrollIntoView({ behavior: "smooth", block: "center" }));
+      marker.style.width = "44px";
+      marker.style.height = `${depth === highestDepth ? 8 : 4}px`;
+      marker.addEventListener("click", () => this.scrollToArticleMiniMapTarget(target));
     }
     this.articleMiniMapEl = miniMap;
     this.bindArticleMiniMapInteractions(track);
@@ -1958,6 +1959,21 @@ export class MindMapEditor {
   /** Returns the structural article depth represented by a minimap target. */
   private articleMiniMapDepth(target: HTMLElement): number {
     return Math.max(1, Math.min(8, Number(target.className.match(/depth-(\d+)/)?.[1] ?? 1)));
+  }
+
+  /** Returns a concise chapter label for the native minimap-marker tooltip. */
+  private articleMiniMapTargetLabel(target: HTMLElement): string {
+    return target.querySelector<HTMLElement>("h1, h2, h3, h4, h5, h6")?.textContent?.trim().slice(0, 160)
+      || target.textContent?.trim().slice(0, 160)
+      || "跳转到章节";
+  }
+
+  /** Scrolls the article container to the exact top position of a minimap target. */
+  private scrollToArticleMiniMapTarget(target: HTMLElement): void {
+    const articleRect = this.articleEl.getBoundingClientRect();
+    const targetRect = target.getBoundingClientRect();
+    const top = this.articleEl.scrollTop + targetRect.top - articleRect.top;
+    this.articleEl.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
   }
 
   /** Returns the current page's highest and next-highest structural categories for the minimap. */
@@ -1977,7 +1993,7 @@ export class MindMapEditor {
     if (!miniMap) return;
     const targets = this.articleMiniMapTargets();
     if (!targets.length) return;
-    const readingTop = this.articleEl.getBoundingClientRect().top + Math.min(132, this.articleEl.clientHeight * .28);
+    const readingTop = this.articleEl.getBoundingClientRect().top + 2;
     let activeIndex = 0;
     targets.forEach((target, index) => {
       if (target.getBoundingClientRect().top <= readingTop) activeIndex = index;
@@ -1991,7 +2007,7 @@ export class MindMapEditor {
   private updateArticleMiniMapMarkerHover(focusedIndex: number | null): void {
     this.articleMiniMapEl?.querySelectorAll<HTMLElement>(".mms-article-minimap-marker").forEach((marker, index) => {
       const emphasis = focusedIndex === null ? 0 : Math.max(0, 1 - Math.abs(index - focusedIndex) / 3);
-      marker.style.width = `${Math.round(34 + emphasis * 14)}px`;
+      marker.style.width = `${Math.round(44 + emphasis * 18)}px`;
     });
   }
 

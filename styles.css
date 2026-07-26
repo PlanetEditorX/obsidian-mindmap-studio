@@ -2909,10 +2909,11 @@
   z-index: 12;
   top: 50%;
   right: 14px;
-  width: 54px;
+  width: 78px;
   max-height: min(58vh, 520px);
   padding: 0;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
   border: 0;
   border-radius: 0;
   background: transparent;
@@ -2933,7 +2934,7 @@
 .mms-article-minimap-track {
   display: grid;
   justify-items: center;
-  gap: 6px;
+  gap: 8px;
 }
 
 .mms-article-minimap-marker {
