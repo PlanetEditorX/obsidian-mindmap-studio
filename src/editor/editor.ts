@@ -910,6 +910,7 @@ export class MindMapEditor {
   private readonly imageLoadTimers = new Set<number>();
   private inlineEditingId: string | null = null;
   private readingProgressTimer: number | null = null;
+  private readOnlyPersistTimer: number | null = null;
   private articleScrollButtonCleanup: (() => void) | null = null;
 
   /**
@@ -946,6 +947,7 @@ export class MindMapEditor {
   destroy(): void {
     this.clearImageLoadTimers();
     if (this.readingProgressTimer !== null) window.clearTimeout(this.readingProgressTimer);
+    if (this.readOnlyPersistTimer !== null) window.clearTimeout(this.readOnlyPersistTimer);
     this.articleScrollButtonCleanup?.();
     this.cleanupCallbacks.forEach((callback) => callback());
     this.cleanupCallbacks = [];
@@ -1104,9 +1106,16 @@ export class MindMapEditor {
         ? this.articleEl
         : null;
     const scrollPosition = scroller ? { top: scroller.scrollTop, left: scroller.scrollLeft } : null;
+    if (!this.readOnly && document.activeElement instanceof HTMLElement
+      && document.activeElement.dataset.mmsInlineEditable === "true") {
+      // Commit a focused inline edit before locking it, just as a normal blur
+      // would. This avoids discarding text while keeping the toggle render-free.
+      document.activeElement.blur();
+    }
     this.readOnly = !this.readOnly;
     if (this.currentMode !== "article" && this.currentMode !== "reading") this.persistReadOnlyState();
-    this.render();
+    this.updateModeUi();
+    this.applyReadOnlyStateToRenderedContent();
     if (scroller && scrollPosition) {
       const restore = (): void => {
         scroller.scrollTop = scrollPosition.top;
@@ -1477,8 +1486,25 @@ export class MindMapEditor {
   private persistReadOnlyState(): void {
     this.document.view = { ...(this.document.view ?? {}), readOnly: this.readOnly };
     delete this.document.view.mode;
-    this.callbacks.onChange(this.getDocument());
-    this.markSaving();
+    if (this.readOnlyPersistTimer !== null) window.clearTimeout(this.readOnlyPersistTimer);
+    // State changes must not wait for a full document clone and serialization
+    // before the lock icon and existing content become interactive.
+    this.readOnlyPersistTimer = window.setTimeout(() => {
+      this.readOnlyPersistTimer = null;
+      this.callbacks.onChange(this.getDocument());
+      this.markSaving();
+    }, 0);
+  }
+
+  /** Updates edit affordances in the existing DOM without rebuilding the map or article. */
+  private applyReadOnlyStateToRenderedContent(): void {
+    this.rootEl.querySelectorAll<HTMLElement>("[data-mms-inline-editable='true']").forEach((element) => {
+      element.contentEditable = this.readOnly ? "false" : "true";
+    });
+    if (this.currentMode !== "mindmap") return;
+    this.nodesLayerEl.querySelectorAll<HTMLElement>(".mmc-node").forEach((nodeEl) => {
+      nodeEl.draggable = !this.readOnly && !nodeEl.hasClass("is-root");
+    });
   }
 
   /**
@@ -1726,15 +1752,16 @@ export class MindMapEditor {
    */
   private makeInlineEditable(element: HTMLElement, node: MindMapNode, placeholder: string): void {
     element.contentEditable = this.readOnly ? "false" : "true";
+    element.dataset.mmsInlineEditable = "true";
     element.setAttr("role", "textbox");
     element.setAttr("aria-label", placeholder);
     if (!element.textContent?.trim()) element.dataset.placeholder = placeholder;
-    if (this.readOnly) return;
     const initialBlock = nodeContentBlocks(node).find((block): block is MindMapTextContentBlock => block.type === "text");
-    renderRichTextRuns(element, initialBlock?.richText, initialBlock?.text ?? nodePrimaryText(node), false);
+    if (!this.readOnly) renderRichTextRuns(element, initialBlock?.richText, initialBlock?.text ?? nodePrimaryText(node), false);
     let original = readRichTextEditor(element);
     let toolbar: SelectionFormatToolbarHandle | null = null;
     element.addEventListener("focus", () => {
+      if (this.readOnly) return;
       original = readRichTextEditor(element);
       toolbar ??= attachSelectionFormatToolbar({
         editor: element,
@@ -1743,6 +1770,7 @@ export class MindMapEditor {
       });
     });
     element.addEventListener("keydown", (event) => {
+      if (this.readOnly) return;
       if (event.key === "Enter") {
         event.preventDefault();
         element.blur();
@@ -1754,6 +1782,7 @@ export class MindMapEditor {
       }
     });
     element.addEventListener("blur", (event) => {
+      if (this.readOnly) return;
       if (toolbar?.contains(event.relatedTarget)) return;
       const next = readRichTextEditor(element);
       toolbar?.cleanup();
@@ -1774,7 +1803,6 @@ export class MindMapEditor {
    * @param node 当前处理的节点。
    */
   private addInlineNodeActions(container: HTMLElement, node: MindMapNode): void {
-    if (this.readOnly) return;
     const actions = container.createDiv({ cls: "mms-inline-node-actions" });
     const action = (icon: string, label: string, handler: () => void): void => {
       const button = actions.createEl("button", { cls: "clickable-icon", attr: { type: "button", title: label, "aria-label": label } });
@@ -2118,7 +2146,7 @@ export class MindMapEditor {
         });
       }
 
-      if (!this.readOnly) {
+      {
         const resizeHandle = nodeEl.createDiv({
           cls: "mmc-node-resize-handle",
           attr: { role: "separator", tabindex: "0", "aria-label": "拖动调整节点宽度和最小高度", title: "拖动调整节点大小；双击恢复自动大小" }
@@ -2126,6 +2154,7 @@ export class MindMapEditor {
         resizeHandle.setAttr("draggable", "false");
         resizeHandle.addEventListener("click", (event) => { event.preventDefault(); event.stopPropagation(); });
         resizeHandle.addEventListener("dblclick", (event) => {
+          if (this.readOnly) return;
           event.preventDefault();
           event.stopPropagation();
           this.mutate(() => {
@@ -2134,6 +2163,7 @@ export class MindMapEditor {
           });
         });
         resizeHandle.addEventListener("pointerdown", (event) => {
+          if (this.readOnly) return;
           if (event.button !== 0) return;
           if (!event.ctrlKey && !event.metaKey) return;
           event.preventDefault();

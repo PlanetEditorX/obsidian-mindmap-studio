@@ -3761,6 +3761,10 @@
 .mmc-ctrl-resize.is-ctrl-held .mmc-node:hover > .mmc-fold-button {
   display: none;
 }
+.mmc-editor.is-read-only .mmc-node-resize-handle {
+  display: none !important;
+  pointer-events: none !important;
+}
 /* In read-only article/reading mode, hide hover-revealed node actions */
 .mmc-editor.is-read-only .mms-inline-node-actions {
   opacity: 0 !important;
