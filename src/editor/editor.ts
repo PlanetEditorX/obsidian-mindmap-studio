@@ -909,8 +909,6 @@ export class MindMapEditor {
   private readOnly: boolean;
   private readonly imageLoadTimers = new Set<number>();
   private inlineEditingId: string | null = null;
-  private pendingInlineEditNodeId: string | null = null;
-  private pendingInlineEditTimer: number | null = null;
   private readingProgressTimer: number | null = null;
   private articleScrollButtonCleanup: (() => void) | null = null;
 
@@ -947,9 +945,6 @@ export class MindMapEditor {
    */
   destroy(): void {
     this.clearImageLoadTimers();
-    if (this.pendingInlineEditTimer !== null) window.clearTimeout(this.pendingInlineEditTimer);
-    this.pendingInlineEditTimer = null;
-    this.pendingInlineEditNodeId = null;
     if (this.readingProgressTimer !== null) window.clearTimeout(this.readingProgressTimer);
     this.articleScrollButtonCleanup?.();
     this.cleanupCallbacks.forEach((callback) => callback());
@@ -2201,8 +2196,11 @@ export class MindMapEditor {
         this.selectNode(node.id);
         if (node.submap) {
           void this.callbacks.onOpenMindMap(node.submap.path);
-        } else this.handleNodeDoubleClick(node.id);
-    });
+        } else if (!this.readOnly) {
+          if (this.isNearNodeEdge(event, nodeEl)) this.editSelected();
+          else this.beginInlineEdit(node.id);
+        }
+      });
       nodeEl.addEventListener("contextmenu", (event) => {
         event.preventDefault();
         event.stopPropagation();
@@ -2438,29 +2436,21 @@ export class MindMapEditor {
   }
 
   /**
-   * Distinguishes a double-click quick edit from a four-click full edit.
-   * Waiting briefly keeps the first double-click from replacing the node DOM
-   * before a user can complete the second double-click.
+   * Returns whether a double-click landed in the edge band reserved for the
+   * full node editor instead of the central quick-edit area.
    *
-   * @param nodeId Node targeted by the double-click sequence.
+   * @param event Double-click position to inspect.
+   * @param nodeEl Rendered node element that defines the hit area.
    */
-  private handleNodeDoubleClick(nodeId: string): void {
-    if (this.readOnly) return;
-    if (this.pendingInlineEditNodeId === nodeId && this.pendingInlineEditTimer !== null) {
-      window.clearTimeout(this.pendingInlineEditTimer);
-      this.pendingInlineEditTimer = null;
-      this.pendingInlineEditNodeId = null;
-      this.editSelected();
-      return;
-    }
-    if (this.pendingInlineEditTimer !== null) window.clearTimeout(this.pendingInlineEditTimer);
-    this.pendingInlineEditNodeId = nodeId;
-    this.pendingInlineEditTimer = window.setTimeout(() => {
-      this.pendingInlineEditTimer = null;
-      const pendingNodeId = this.pendingInlineEditNodeId;
-      this.pendingInlineEditNodeId = null;
-      if (pendingNodeId === nodeId) this.beginInlineEdit(nodeId);
-    }, 450);
+  private isNearNodeEdge(event: MouseEvent, nodeEl: HTMLElement): boolean {
+    const rect = nodeEl.getBoundingClientRect();
+    const distance = Math.min(
+      event.clientX - rect.left,
+      rect.right - event.clientX,
+      event.clientY - rect.top,
+      rect.bottom - event.clientY
+    );
+    return distance <= 18;
   }
 
   /** 在节点本体中启动轻量富文本输入。 */

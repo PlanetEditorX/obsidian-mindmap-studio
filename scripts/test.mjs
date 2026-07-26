@@ -1074,9 +1074,8 @@ export const setIcon = () => {};
 
   assert.match(editorSource, /mms-mode-switcher/);
   assert.match(editorSource, /toggleReadOnly/);
-  assert.match(editorSource, /handleNodeDoubleClick/, "double-click handling must distinguish quick and full node editing");
-  assert.match(editorSource, /pendingInlineEditNodeId === nodeId[\s\S]*this\.editSelected\(\)/, "four clicks must cancel quick editing and open the full node editor");
-  assert.match(editorSource, /window\.setTimeout\([\s\S]*this\.beginInlineEdit\(nodeId\)[\s\S]*450\)/, "a double-click must enter quick editing only after the four-click window closes");
+  assert.match(editorSource, /isNearNodeEdge\(event, nodeEl\)\) this\.editSelected\(\);[\s\S]*else this\.beginInlineEdit\(node\.id\)/, "edge double-clicks must open the full editor while the center remains a quick edit");
+  assert.match(editorSource, /private isNearNodeEdge\(event: MouseEvent, nodeEl: HTMLElement\): boolean[\s\S]*return distance <= 18/, "the node edge hit area must be explicit and stable");
   assert.match(editorSource, /captureReadingPosition/);
   assert.match(editorSource, /restoreReadingPosition/);
   assert.match(editorSource, /nodeRatio: Math\.max\(0, Math\.min\(1/);
