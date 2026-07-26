@@ -123,7 +123,7 @@ interface ArticleNumberingControls {
 }
 
 /**
- * 创建节点编辑与“当前脑图外观”共用的文章编号控件，确保两处设置语义和文案一致。
+ * 创建节点编辑与“主题与外观”共用的文章编号控件，确保两处设置语义和文案一致。
  * 手动层级表示当前节点所在子树的最高文章层级；中心节点本身不编号，一级子节点直接使用所选层级。
  *
  * @param container 承载表单控件的网格容器。
@@ -208,7 +208,9 @@ class NodeEditModal extends Modal {
    * @param node 当前处理的节点。
    * @param defaultShape 该参数用于 constructor 流程中的输入或控制。
    * @param callbacks 编辑器向视图层发送事件的一组回调。
-   * @param submit 该参数用于 constructor 流程中的输入或控制。
+   * @param articleMiniMap 当前脑图保存的阅读缩略导航图覆盖值；undefined 表示跟随插件设置。
+   * @param globalArticleMiniMap 插件设置中的阅读缩略导航图默认值，用于界面提示和回退。
+   * @param submit 提交主题、文章编号、目录及缩略导航图配置的回调。
    * @param position 编辑器显示在居中弹窗还是右侧画布面板。
    * @param panelHost 右侧面板需要限制在其中的画布元素。
    */
@@ -544,7 +546,9 @@ class AppearanceModal extends Modal {
   private readonly numbering: ArticleNumberingValues;
   private readonly articleTocMaxDepth: number | undefined;
   private readonly globalArticleTocMaxDepth: number;
-  private readonly submit: (appearance: MindMapAppearance, numbering: ArticleNumberingValues, articleTocMaxDepth: number | undefined) => void;
+  private readonly articleMiniMap: boolean | undefined;
+  private readonly globalArticleMiniMap: boolean;
+  private readonly submit: (appearance: MindMapAppearance, numbering: ArticleNumberingValues, articleTocMaxDepth: number | undefined, articleMiniMap: boolean | undefined) => void;
   private readonly reset: () => void;
 
   /**
@@ -564,7 +568,9 @@ class AppearanceModal extends Modal {
     numbering: ArticleNumberingValues,
     articleTocMaxDepth: number | undefined,
     globalArticleTocMaxDepth: number,
-    submit: (appearance: MindMapAppearance, numbering: ArticleNumberingValues, articleTocMaxDepth: number | undefined) => void,
+    articleMiniMap: boolean | undefined,
+    globalArticleMiniMap: boolean,
+    submit: (appearance: MindMapAppearance, numbering: ArticleNumberingValues, articleTocMaxDepth: number | undefined, articleMiniMap: boolean | undefined) => void,
     reset: () => void
   ) {
     super(app);
@@ -572,6 +578,8 @@ class AppearanceModal extends Modal {
     this.numbering = numbering;
     this.articleTocMaxDepth = articleTocMaxDepth;
     this.globalArticleTocMaxDepth = resolveArticleTocMaxDepth(undefined, globalArticleTocMaxDepth);
+    this.articleMiniMap = articleMiniMap;
+    this.globalArticleMiniMap = globalArticleMiniMap;
     this.submit = submit;
     this.reset = reset;
   }
@@ -580,7 +588,7 @@ class AppearanceModal extends Modal {
    * 在弹窗或视图打开时创建界面、绑定事件并把当前数据填入控件。
    */
   onOpen(): void {
-    this.titleEl.setText("当前脑图外观");
+    this.titleEl.setText("主题与外观");
     this.contentEl.addClass("mmc-appearance-modal");
     const form = this.contentEl.createEl("form");
     form.createEl("p", { cls: "setting-item-description", text: "先选择一套主题，再按需要修改背景、节点、字体、连线、文章编号和目录层级。设置只保存到当前 .mindmap 文件。" });
@@ -607,6 +615,12 @@ class AppearanceModal extends Modal {
       cls: "setting-item-description",
       text: "同时用于文章模式目录和通读模式全书目录。手动选择后优先于插件全局设置。"
     });
+    const miniMapLabel = numberingGrid.createEl("label", { text: "阅读缩略导航图" });
+    const miniMapSelect = miniMapLabel.createEl("select");
+    miniMapSelect.createEl("option", { text: `跟随插件设置（当前${this.globalArticleMiniMap ? "显示" : "隐藏"}）`, attr: { value: "" } });
+    miniMapSelect.createEl("option", { text: "显示", attr: { value: "show" } });
+    miniMapSelect.createEl("option", { text: "隐藏", attr: { value: "hide" } });
+    miniMapSelect.value = this.articleMiniMap === undefined ? "" : this.articleMiniMap ? "show" : "hide";
 
     let selectedPreset: MindMapThemePresetId = this.appearance.themePreset ?? "classic-indigo";
     const themeSection = form.createDiv({ cls: "mmc-theme-picker" });
@@ -850,7 +864,7 @@ class AppearanceModal extends Modal {
         underline: underline.checked
       }, numberingControls.read(), tocDepthSelect.value
         ? resolveArticleTocMaxDepth(Number(tocDepthSelect.value), this.globalArticleTocMaxDepth)
-        : undefined);
+        : undefined, miniMapSelect.value === "show" ? true : miniMapSelect.value === "hide" ? false : undefined);
       this.close();
     });
     window.setTimeout(() => save.focus(), 20);
@@ -911,6 +925,7 @@ export class MindMapEditor {
   private inlineEditingId: string | null = null;
   private readingProgressTimer: number | null = null;
   private readOnlyPersistTimer: number | null = null;
+  private articleMiniMapEl: HTMLElement | null = null;
   private articleScrollButtonCleanup: (() => void) | null = null;
 
   /**
@@ -1245,7 +1260,7 @@ export class MindMapEditor {
     this.addToolbarSeparator();
     this.addToolbarButton("fit", "maximize", "适应画布", () => this.fitToView());
     this.addToolbarButton("layout", "git-fork", "切换单侧/双侧布局", () => this.toggleLayout(), true);
-    this.addToolbarButton("appearance", "palette", "当前脑图外观", () => this.editAppearance(), true);
+    this.addToolbarButton("appearance", "palette", "主题与外观", () => this.editAppearance(), true);
     this.articleLandingButton = this.addToolbarButton("article-landing", "list-tree", "切换目录 / 原始文章", () => this.toggleArticleLanding());
     this.articleStyleButton = this.addToolbarButton("article-style", "paintbrush", "文章样式", () => this.editArticleStyle(), true);
     this.addToolbarSeparator();
@@ -1534,6 +1549,10 @@ export class MindMapEditor {
     const hasLandingChoice = isArticle && this.options.showArticleToc;
     this.articleLandingButton.toggleClass("is-hidden", !hasLandingChoice || !this.options.visibleToolbarItems.includes("article-landing"));
     this.articleStyleButton.toggleClass("is-hidden", !isArticle || !this.options.visibleToolbarItems.includes("article-style"));
+    this.toolbarEl.querySelector<HTMLElement>("[data-toolbar-id='submap']")?.toggleClass(
+      "is-hidden",
+      this.currentMode !== "mindmap" || !this.options.visibleToolbarItems.includes("submap")
+    );
     if (hasLandingChoice) {
       const showingArticle = this.document.view?.articleLandingMode === "article";
       this.articleLandingButton.setAttr("aria-label", showingArticle ? "显示目录" : "显示原始文章");
@@ -1877,6 +1896,27 @@ export class MindMapEditor {
     this.articleEl.onscroll = null;
     renderArticleMode(this.articleEl, this.articleRendererOptions());
     this.addArticleScrollToTopButton();
+    this.renderArticleMiniMap();
+  }
+
+  /** Renders a compact structural navigator for article and continuous reading views. */
+  private renderArticleMiniMap(): void {
+    this.articleMiniMapEl?.remove();
+    this.articleMiniMapEl = null;
+    if ((this.document.view?.articleMiniMap ?? this.options.showArticleMiniMap) !== true) return;
+    const targets = Array.from(this.articleEl.querySelectorAll<HTMLElement>(".mms-article-node[data-node-id], .mms-reading-book-section"));
+    if (targets.length < 2) return;
+    const miniMap = this.rootEl.createDiv({ cls: "mms-article-minimap", attr: { role: "navigation", "aria-label": "文章缩略导航图" } });
+    const track = miniMap.createDiv({ cls: "mms-article-minimap-track" });
+    const count = Math.min(72, targets.length);
+    for (let index = 0; index < count; index += 1) {
+      const targetIndex = Math.round(index * (targets.length - 1) / Math.max(1, count - 1));
+      const target = targets[targetIndex]!;
+      const marker = track.createEl("button", { cls: "mms-article-minimap-marker", attr: { type: "button", title: target.textContent?.trim().slice(0, 120) || "跳转" } });
+      marker.style.setProperty("--mms-minimap-depth", String(Math.min(8, Number(target.className.match(/depth-(\d+)/)?.[1] ?? 1))));
+      marker.addEventListener("click", () => target.scrollIntoView({ behavior: "smooth", block: "center" }));
+    }
+    this.articleMiniMapEl = miniMap;
   }
 
   /** 构造文章渲染器所需的最小状态边界。 */
@@ -1916,6 +1956,8 @@ export class MindMapEditor {
    * 渲染相关数据，并保持模型、界面和持久化状态的一致性。
    */
   private render(): void {
+    this.articleMiniMapEl?.remove();
+    this.articleMiniMapEl = null;
     for (const id of Array.from(this.selectedIds)) {
       if (!findNode(this.document.root, id)) this.selectedIds.delete(id);
     }
@@ -3007,7 +3049,9 @@ export class MindMapEditor {
       },
       this.document.view?.articleTocMaxDepth,
       this.options.articleTocMaxDepth,
-      (appearance, numbering, articleTocMaxDepth) => this.mutate(() => {
+      this.document.view?.articleMiniMap,
+      this.options.showArticleMiniMap,
+      (appearance, numbering, articleTocMaxDepth, articleMiniMap) => this.mutate(() => {
         this.document.appearance = appearance;
         this.document.root.articleNumberingMode = numbering.articleNumberingMode;
         this.document.root.articleNumberingLevel = numbering.articleNumberingMode === "manual" ? numbering.articleNumberingLevel : undefined;
@@ -3015,6 +3059,8 @@ export class MindMapEditor {
         const view = { ...(this.document.view ?? {}) };
         if (articleTocMaxDepth === undefined) delete view.articleTocMaxDepth;
         else view.articleTocMaxDepth = articleTocMaxDepth;
+        if (articleMiniMap === undefined) delete view.articleMiniMap;
+        else view.articleMiniMap = articleMiniMap;
         this.document.view = Object.keys(view).length ? view : undefined;
       }),
       () => this.mutate(() => {
@@ -3024,6 +3070,7 @@ export class MindMapEditor {
         this.document.root.skipArticleNumbering = undefined;
         if (this.document.view) {
           delete this.document.view.articleTocMaxDepth;
+          delete this.document.view.articleMiniMap;
           if (!Object.keys(this.document.view).length) this.document.view = undefined;
         }
       })
@@ -3184,6 +3231,8 @@ export class MindMapEditor {
         }
       }
     }
+
+    this.renderArticleMiniMap();
 
     window.setTimeout(() => {
       const maximum = Math.max(0, this.articleEl.scrollHeight - this.articleEl.clientHeight);

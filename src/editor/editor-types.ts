@@ -67,6 +67,7 @@ export interface MindMapEditorOptions {
   articleBaseDepth: number;
   articleTocEntries: ArticleTocEntry[];
   articleTocMaxDepth: number;
+  showArticleMiniMap: boolean;
   showArticleToc: boolean;
   articleNavigation?: ArticlePageNavigation;
   readingSections: ReadingSection[];

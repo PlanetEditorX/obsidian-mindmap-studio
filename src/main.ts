@@ -510,6 +510,7 @@ export default class MindMapStudioPlugin extends Plugin {
       articleTocMaxDepth: typeof raw.articleTocMaxDepth === "number"
         ? Math.max(1, Math.min(8, Math.round(raw.articleTocMaxDepth)))
         : DEFAULT_SETTINGS.articleTocMaxDepth,
+      showArticleMiniMap: raw.showArticleMiniMap !== false,
       readingProgressPosition: raw.readingProgressPosition === "bottom" || raw.readingProgressPosition === "left" || raw.readingProgressPosition === "right"
         ? raw.readingProgressPosition
         : "top",

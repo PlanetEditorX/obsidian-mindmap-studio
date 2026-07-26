@@ -29,7 +29,7 @@ export const TOOLBAR_ITEMS = [
   ["search", "搜索导图"], ["global-search", "全局搜索"], ["table", "表格"],
   ["code", "代码"], ["image", "粘贴图片"], ["submap", "子导图"],
   ["undo", "撤销"], ["redo", "重做"],
-  ["fit", "适应画布"], ["layout", "切换布局"], ["appearance", "脑图外观"],
+  ["fit", "适应画布"], ["layout", "切换布局"], ["appearance", "主题与外观"],
   ["article-landing", "目录/原始文章"], ["article-style", "文章样式"],
   ["markdown", "Markdown 大纲"], ["json", "导入文件 / JSON"], ["export-document", "导出文档"], ["export-svg", "导出 SVG"]
 ] as const;
@@ -179,6 +179,7 @@ export interface MindMapStudioSettings {
   readingProgress: Record<string, number>;
   readingModeInitialized: boolean;
   articleTocMaxDepth: number;
+  showArticleMiniMap: boolean;
   readingProgressPosition: "top" | "bottom" | "left" | "right";
   returnToTopVisibility: number;
   nodeEditorPosition: "center" | "right";
@@ -248,6 +249,7 @@ export const DEFAULT_SETTINGS: MindMapStudioSettings = {
   readingProgress: {},
   readingModeInitialized: true,
   articleTocMaxDepth: 3,
+  showArticleMiniMap: true,
   readingProgressPosition: "top",
   returnToTopVisibility: 10,
   nodeEditorPosition: "center",
@@ -492,6 +494,16 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
             await this.saveAndRefresh();
           });
       });
+
+    new Setting(containerEl)
+      .setName("文章/通读缩略导航图")
+      .setDesc("在文章和通读模式右上角显示结构缩略图；点击可快速跳转到对应位置。当前脑图可在“主题与外观”中单独覆盖。")
+      .addToggle((toggle) => toggle
+        .setValue(this.plugin.settings.showArticleMiniMap)
+        .onChange(async (value) => {
+          this.plugin.settings.showArticleMiniMap = value;
+          await this.saveAndRefresh();
+        }));
 
     new Setting(containerEl)
       .setName("通读进度条位置")
