@@ -2898,12 +2898,12 @@
   right: 14px;
   width: 74px;
   max-height: min(58vh, 520px);
-  padding: 8px 6px;
+  padding: 8px 10px;
   overflow: auto;
-  border: 1px solid var(--background-modifier-border);
-  border-radius: var(--radius-m);
-  background: color-mix(in srgb, var(--background-primary) 90%, transparent);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, .16);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 .mms-article-minimap.is-hidden {
@@ -2918,6 +2918,7 @@
 
 .mms-article-minimap-track {
   display: grid;
+  justify-items: center;
   gap: 6px;
 }
 
@@ -2927,8 +2928,8 @@
   padding: 0;
   border: 0;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--text-muted) 58%, var(--background-modifier-border));
-  opacity: .72;
+  background: color-mix(in srgb, var(--text-muted) 72%, transparent);
+  opacity: .78;
   cursor: pointer;
 }
 

@@ -1920,10 +1920,12 @@ export class MindMapEditor {
       const target = targets[targetIndex]!;
       const marker = track.createEl("button", { cls: "mms-article-minimap-marker", attr: { type: "button", title: target.textContent?.trim().slice(0, 120) || "跳转" } });
       const depth = this.articleMiniMapDepth(target);
-      const indent = (depth - 1) * 5;
+      const midpoint = Math.max(1, count - 1) / 2;
+      const taper = .66 + .34 * (1 - Math.abs(index - midpoint) / midpoint);
+      const markerWidth = Math.round(54 * taper);
       marker.dataset.minimapTargetIndex = String(targetIndex);
-      marker.style.marginLeft = `${indent}px`;
-      marker.style.width = `calc(100% - ${indent}px)`;
+      marker.style.marginLeft = `${Math.round((54 - markerWidth) / 2)}px`;
+      marker.style.width = `${markerWidth}px`;
       marker.style.height = `${Math.max(2, 8 - depth)}px`;
       marker.addEventListener("click", () => target.scrollIntoView({ behavior: "smooth", block: "center" }));
     }
@@ -2069,7 +2071,7 @@ export class MindMapEditor {
 
   /**
    * 渲染可交互导图画布：计算布局、绘制连接线和节点、恢复选择状态、绑定拖拽与尺寸手柄、安装子导图整节点入口，并启动图片镜像加载探测。
-   * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
+ * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
    */
   private renderMindMap(): void {
     const appearance = this.getAppearance();
