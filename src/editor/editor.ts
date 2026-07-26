@@ -1938,18 +1938,15 @@ export class MindMapEditor {
     const miniMap = this.rootEl.createDiv({ cls: "mms-article-minimap", attr: { role: "navigation", "aria-label": "文章缩略导航图" } });
     const track = miniMap.createDiv({ cls: "mms-article-minimap-track" });
     const count = Math.min(72, targets.length);
+    const highestDepth = Math.min(...targets.map((target) => this.articleMiniMapDepth(target)));
     for (let index = 0; index < count; index += 1) {
       const targetIndex = Math.round(index * (targets.length - 1) / Math.max(1, count - 1));
       const target = targets[targetIndex]!;
       const marker = track.createEl("button", { cls: "mms-article-minimap-marker", attr: { type: "button", title: target.textContent?.trim().slice(0, 120) || "跳转" } });
       const depth = this.articleMiniMapDepth(target);
-      const midpoint = Math.max(1, count - 1) / 2;
-      const taper = .66 + .34 * (1 - Math.abs(index - midpoint) / midpoint);
-      const markerWidth = Math.round(54 * taper);
       marker.dataset.minimapTargetIndex = String(targetIndex);
-      marker.style.marginLeft = `${Math.round((54 - markerWidth) / 2)}px`;
-      marker.style.width = `${markerWidth}px`;
-      marker.style.height = `${Math.max(2, 8 - depth)}px`;
+      marker.style.width = "54px";
+      marker.style.height = `${depth === highestDepth ? 7 : 3}px`;
       marker.addEventListener("click", () => target.scrollIntoView({ behavior: "smooth", block: "center" }));
     }
     this.articleMiniMapEl = miniMap;
@@ -1963,13 +1960,15 @@ export class MindMapEditor {
     return Math.max(1, Math.min(8, Number(target.className.match(/depth-(\d+)/)?.[1] ?? 1)));
   }
 
-  /** Returns only the current page's highest structural categories for the minimap. */
+  /** Returns the current page's highest and next-highest structural categories for the minimap. */
   private articleMiniMapTargets(): HTMLElement[] {
     const maxDepth = this.effectiveArticleTocMaxDepth();
     const visibleTargets = Array.from(this.articleEl.querySelectorAll<HTMLElement>(".mms-article-node[data-node-id], .mms-reading-book-section"))
       .filter((target) => this.articleMiniMapDepth(target) <= maxDepth);
-    const highestDepth = Math.min(...visibleTargets.map((target) => this.articleMiniMapDepth(target)));
-    return visibleTargets.filter((target) => this.articleMiniMapDepth(target) === highestDepth);
+    const includedDepths = Array.from(new Set(visibleTargets.map((target) => this.articleMiniMapDepth(target))))
+      .sort((left, right) => left - right)
+      .slice(0, 2);
+    return visibleTargets.filter((target) => includedDepths.includes(this.articleMiniMapDepth(target)));
   }
 
   /** Updates the dark marker to match the article section currently being read. */
