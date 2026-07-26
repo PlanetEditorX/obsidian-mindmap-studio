@@ -683,6 +683,7 @@ export default class MindMapStudioPlugin extends Plugin {
     const tocEntries: ArticleTocEntry[] = [];
     const readingSections: ReadingSection[] = [{ filePath: topFile.path, document: topDocument, baseDepth: 0 }];
     const visitedFiles = new Set<string>([topFile.path]);
+    let hasSubmaps = false;
     /**
      * Item 类型定义，用于限制可接受值并让序列化数据保持稳定。
      */
@@ -722,6 +723,7 @@ export default class MindMapStudioPlugin extends Plugin {
           breadcrumb: nextBreadcrumb
         }));
         if (node.submap?.path) {
+          hasSubmaps = true;
           const childFile = this.resolveMindMapFile(node.submap.path, sourceFile.path);
           if (childFile && tocEntry) {
             tocEntry.filePath = childFile.path;
@@ -768,7 +770,7 @@ export default class MindMapStudioPlugin extends Plugin {
     return {
       baseDepth,
       tocEntries,
-      showToc: isTopLevel && tocEntries.length > 0,
+      showToc: isTopLevel && hasSubmaps && tocEntries.length > 0,
       navigation
       ,readingSections
     };

@@ -47,13 +47,13 @@ export function renderArticleMode(container: HTMLElement, options: ArticleRender
   options.makeInlineEditable(title, options.document.root, "文章标题");
   options.addInlineNodeActions(page, options.document.root);
 
-  const hasDirectory = options.showArticleToc && options.articleTocEntries.length > 0;
-  const directoryOnly = hasDirectory && options.document.view?.articleLandingMode !== "article";
+  const directoryOnly = options.showArticleToc
+    && options.articleTocEntries.length > 0
+    && options.document.view?.articleLandingMode !== "article";
   if (directoryOnly) {
     renderDirectory(page, options);
     return;
   }
-  if (hasDirectory) renderDirectory(page, options);
 
   for (const info of buildArticleNodeInfo(options.document.root, options.articleBaseDepth)) {
     const section = page.createEl("section", { cls: `mms-article-node depth-${Math.min(info.depth, 8)}${options.selectedId === info.node.id ? " is-selected" : ""}` });
