@@ -1118,6 +1118,8 @@ export const setIcon = () => {};
   assert.doesNotMatch(toggleReadOnlySource, /this\.render\(\)/, "read-only toggles must not trigger a full mind-map or article render");
   assert.match(editorSource, /private applyReadOnlyStateToRenderedContent\(\): void[\s\S]*data-mms-inline-editable[\s\S]*nodeEl\.draggable/, "the fast path must update inline editors and node dragging in place");
   assert.match(editorSource, /dataset\.mmsInlineEditable = "true"[\s\S]*if \(this\.readOnly\) return;[\s\S]*attachSelectionFormatToolbar/, "inline editor listeners must remain available when read-only content becomes editable");
+  assert.match(editorSource, /element\.addEventListener\("pointerdown"[\s\S]*element\.contentEditable = "true"[\s\S]*element\.contentEditable = "false"/, "editing mode must activate and release one inline text line at a time");
+  assert.match(editorSource, /private activateInlineEditable\(element: HTMLElement\): void/, "keyboard quick-edit must activate the same click-to-edit line path");
   assert.match(editorSource, /已进入阅读模式/, "the non-editing state must be presented as reading mode");
   assert.match(editorSource, /element\.addClass\("is-inline-editing"\)[\s\S]*element\.removeClass\("is-inline-editing"\)/, "only the focused inline text should enter the editing-frame state");
   assert.match(editorSource, /isNearNodeEdge\(event, nodeEl\)\) this\.editSelected\(\);[\s\S]*else this\.beginInlineEdit\(node\.id\)/, "edge double-clicks must open the full editor while the center remains a quick edit");

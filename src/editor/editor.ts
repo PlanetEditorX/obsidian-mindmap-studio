@@ -1499,8 +1499,11 @@ export class MindMapEditor {
   /** Updates edit affordances in the existing DOM without rebuilding the map or article. */
   private applyReadOnlyStateToRenderedContent(): void {
     this.rootEl.querySelectorAll<HTMLElement>("[data-mms-inline-editable='true']").forEach((element) => {
-      element.contentEditable = this.readOnly ? "false" : "true";
-      if (this.readOnly) element.removeClass("is-inline-editing");
+      // Edit mode uses click-to-activate lines. Keeping inactive lines as
+      // ordinary text preserves the reading layout and avoids interception by
+      // thousands of contenteditable elements.
+      element.contentEditable = "false";
+      element.removeClass("is-inline-editing");
     });
     if (this.currentMode !== "mindmap") return;
     this.nodesLayerEl.querySelectorAll<HTMLElement>(".mmc-node").forEach((nodeEl) => {
@@ -1753,7 +1756,7 @@ export class MindMapEditor {
    * @param placeholder 该参数用于 make inline editable 流程中的输入或控制。
    */
   private makeInlineEditable(element: HTMLElement, node: MindMapNode, placeholder: string): void {
-    element.contentEditable = this.readOnly ? "false" : "true";
+    element.contentEditable = "false";
     element.dataset.mmsInlineEditable = "true";
     element.setAttr("role", "textbox");
     element.setAttr("aria-label", placeholder);
@@ -1762,6 +1765,11 @@ export class MindMapEditor {
     if (!this.readOnly) renderRichTextRuns(element, initialBlock?.richText, initialBlock?.text ?? nodePrimaryText(node), false);
     let original = readRichTextEditor(element);
     let toolbar: SelectionFormatToolbarHandle | null = null;
+    element.addEventListener("pointerdown", () => {
+      if (this.readOnly || element.contentEditable === "true") return;
+      this.selectNode(node.id);
+      element.contentEditable = "true";
+    });
     element.addEventListener("focus", () => {
       if (this.readOnly) return;
       original = readRichTextEditor(element);
@@ -1789,6 +1797,7 @@ export class MindMapEditor {
       if (toolbar?.contains(event.relatedTarget)) return;
       element.removeClass("is-inline-editing");
       const next = readRichTextEditor(element);
+      element.contentEditable = "false";
       toolbar?.cleanup();
       toolbar = null;
       if ((!next.text && node.id === this.document.root.id)
@@ -1798,6 +1807,13 @@ export class MindMapEditor {
       }
       this.mutate(() => this.updateNodePrimaryText(node, next));
     });
+  }
+
+  /** Activates one article or outline line without changing the surrounding layout. */
+  private activateInlineEditable(element: HTMLElement): void {
+    if (this.readOnly) return;
+    element.contentEditable = "true";
+    element.focus();
   }
 
   /**
@@ -2497,7 +2513,8 @@ export class MindMapEditor {
     if (this.options.nodeEditorPosition === "right") this.editSelected();
     if (this.currentMode !== "mindmap") {
       const scope = this.currentMode === "outline" ? this.outlineEl : this.articleEl;
-      scope.querySelector<HTMLElement>(`[data-node-id="${CSS.escape(nodeId)}"] [contenteditable="true"]`)?.focus();
+      const inlineElement = scope.querySelector<HTMLElement>(`[data-node-id="${CSS.escape(nodeId)}"] [data-mms-inline-editable="true"]`);
+      if (inlineElement) this.activateInlineEditable(inlineElement);
       return;
     }
     const nodeEl = this.nodesLayerEl.querySelector<HTMLElement>(`.mmc-node[data-node-id="${CSS.escape(nodeId)}"]`);
