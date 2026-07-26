@@ -1,0 +1,27 @@
+{
+  "nodes": [
+    {
+      "id": "pipeline:.github/workflows/ci.yml",
+      "type": "pipeline",
+      "name": "ci.yml",
+      "filePath": ".github/workflows/ci.yml",
+      "summary": "yaml infra file (63 lines)",
+      "tags": [
+        "yaml",
+        "infra"
+      ]
+    },
+    {
+      "id": "pipeline:.github/workflows/release.yml",
+      "type": "pipeline",
+      "name": "release.yml",
+      "filePath": ".github/workflows/release.yml",
+      "summary": "yaml infra file (184 lines)",
+      "tags": [
+        "yaml",
+        "infra"
+      ]
+    }
+  ],
+  "edges": []
+}

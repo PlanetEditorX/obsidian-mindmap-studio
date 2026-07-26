@@ -1,0 +1,815 @@
+{
+  "nodes": [
+    {
+      "id": "file:src/render/collision-layout.ts",
+      "type": "file",
+      "name": "collision-layout.ts",
+      "filePath": "src/render/collision-layout.ts",
+      "summary": "typescript code file (93 lines)",
+      "tags": [
+        "typescript",
+        "code"
+      ]
+    },
+    {
+      "id": "function:src/render/collision-layout.ts:resolveLayoutCollisions",
+      "type": "function",
+      "name": "resolveLayoutCollisions",
+      "filePath": "src/render/collision-layout.ts",
+      "summary": "Function resolveLayoutCollisions in src/render/collision-layout.ts",
+      "tags": [
+        "typescript",
+        "function"
+      ]
+    },
+    {
+      "id": "file:src/render/layout.ts",
+      "type": "file",
+      "name": "layout.ts",
+      "filePath": "src/render/layout.ts",
+      "summary": "typescript code file (606 lines)",
+      "tags": [
+        "typescript",
+        "code"
+      ]
+    },
+    {
+      "id": "function:src/render/layout.ts:visibleChildren",
+      "type": "function",
+      "name": "visibleChildren",
+      "filePath": "src/render/layout.ts",
+      "summary": "Function visibleChildren in src/render/layout.ts",
+      "tags": [
+        "typescript",
+        "function"
+      ]
+    },
+    {
+      "id": "function:src/render/layout.ts:estimatedTextLines",
+      "type": "function",
+      "name": "estimatedTextLines",
+      "filePath": "src/render/layout.ts",
+      "summary": "Function estimatedTextLines in src/render/layout.ts",
+      "tags": [
+        "typescript",
+        "function"
+      ]
+    },
+    {
+      "id": "function:src/render/layout.ts:nodeDimensions",
+      "type": "function",
+      "name": "nodeDimensions",
+      "filePath": "src/render/layout.ts",
+      "summary": "Function nodeDimensions in src/render/layout.ts",
+      "tags": [
+        "typescript",
+        "function"
+      ]
+    },
+    {
+      "id": "function:src/render/layout.ts:subtreeHeight",
+      "type": "function",
+      "name": "subtreeHeight",
+      "filePath": "src/render/layout.ts",
+      "summary": "Function subtreeHeight in src/render/layout.ts",
+      "tags": [
+        "typescript",
+        "function"
+      ]
+    },
+    {
+      "id": "function:src/render/layout.ts:layoutBranch",
+      "type": "function",
+      "name": "layoutBranch",
+      "filePath": "src/render/layout.ts",
+      "summary": "Function layoutBranch in src/render/layout.ts",
+      "tags": [
+        "typescript",
+        "function"
+      ]
+    },
+    {
+      "id": "function:src/render/layout.ts:computeLayout",
+      "type": "function",
+      "name": "computeLayout",
+      "filePath": "src/render/layout.ts",
+      "summary": "Function computeLayout in src/render/layout.ts",
+      "tags": [
+        "typescript",
+        "function"
+      ]
+    },
+    {
+      "id": "function:src/render/layout.ts:buildBranchColorMap",
+      "type": "function",
+      "name": "buildBranchColorMap",
+      "filePath": "src/render/layout.ts",
+      "summary": "Function buildBranchColorMap in src/render/layout.ts",
+      "tags": [
+        "typescript",
+        "function"
+      ]
+    },
+    {
+      "id": "function:src/render/layout.ts:edgeWidthForDepth",
+      "type": "function",
+      "name": "edgeWidthForDepth",
+      "filePath": "src/render/layout.ts",
+      "summary": "Function edgeWidthForDepth in src/render/layout.ts",
+      "tags": [
+        "typescript",
+        "function"
+      ]
+    },
+    {
+      "id": "function:src/render/layout.ts:edgePath",
+      "type": "function",
+      "name": "edgePath",
+      "filePath": "src/render/layout.ts",
+      "summary": "Function edgePath in src/render/layout.ts",
+      "tags": [
+        "typescript",
+        "function"
+      ]
+    },
+    {
+      "id": "function:src/render/layout.ts:roundedElbowEdgePath",
+      "type": "function",
+      "name": "roundedElbowEdgePath",
+      "filePath": "src/render/layout.ts",
+      "summary": "Function roundedElbowEdgePath in src/render/layout.ts",
+      "tags": [
+        "typescript",
+        "function"
+      ]
+    },
+    {
+      "id": "function:src/render/layout.ts:escapeXml",
+      "type": "function",
+      "name": "escapeXml",
+      "filePath": "src/render/layout.ts",
+      "summary": "Function escapeXml in src/render/layout.ts",
+      "tags": [
+        "typescript",
+        "function"
+      ]
+    },
+    {
+      "id": "function:src/render/layout.ts:validColor",
+      "type": "function",
+      "name": "validColor",
+      "filePath": "src/render/layout.ts",
+      "summary": "Function validColor in src/render/layout.ts",
+      "tags": [
+        "typescript",
+        "function"
+      ]
+    },
+    {
+      "id": "function:src/render/layout.ts:svgRadius",
+      "type": "function",
+      "name": "svgRadius",
+      "filePath": "src/render/layout.ts",
+      "summary": "Function svgRadius in src/render/layout.ts",
+      "tags": [
+        "typescript",
+        "function"
+      ]
+    },
+    {
+      "id": "function:src/render/layout.ts:taskGlyph",
+      "type": "function",
+      "name": "taskGlyph",
+      "filePath": "src/render/layout.ts",
+      "summary": "Function taskGlyph in src/render/layout.ts",
+      "tags": [
+        "typescript",
+        "function"
+      ]
+    },
+    {
+      "id": "function:src/render/layout.ts:truncateRuns",
+      "type": "function",
+      "name": "truncateRuns",
+      "filePath": "src/render/layout.ts",
+      "summary": "Function truncateRuns in src/render/layout.ts",
+      "tags": [
+        "typescript",
+        "function"
+      ]
+    },
+    {
+      "id": "function:src/render/layout.ts:richTextTspans",
+      "type": "function",
+      "name": "richTextTspans",
+      "filePath": "src/render/layout.ts",
+      "summary": "Function richTextTspans in src/render/layout.ts",
+      "tags": [
+        "typescript",
+        "function"
+      ]
+    },
+    {
+      "id": "function:src/render/layout.ts:svgWrappedLines",
+      "type": "function",
+      "name": "svgWrappedLines",
+      "filePath": "src/render/layout.ts",
+      "summary": "Function svgWrappedLines in src/render/layout.ts",
+      "tags": [
+        "typescript",
+        "function"
+      ]
+    },
+    {
+      "id": "function:src/render/layout.ts:svgFontFamily",
+      "type": "function",
+      "name": "svgFontFamily",
+      "filePath": "src/render/layout.ts",
+      "summary": "Function svgFontFamily in src/render/layout.ts",
+      "tags": [
+        "typescript",
+        "function"
+      ]
+    },
+    {
+      "id": "function:src/render/layout.ts:documentToSvg",
+      "type": "function",
+      "name": "documentToSvg",
+      "filePath": "src/render/layout.ts",
+      "summary": "Function documentToSvg in src/render/layout.ts",
+      "tags": [
+        "typescript",
+        "function"
+      ]
+    },
+    {
+      "id": "file:src/render/static-render.ts",
+      "type": "file",
+      "name": "static-render.ts",
+      "filePath": "src/render/static-render.ts",
+      "summary": "typescript code file (52 lines)",
+      "tags": [
+        "typescript",
+        "code"
+      ]
+    },
+    {
+      "id": "function:src/render/static-render.ts:renderStaticMindMap",
+      "type": "function",
+      "name": "renderStaticMindMap",
+      "filePath": "src/render/static-render.ts",
+      "summary": "Function renderStaticMindMap in src/render/static-render.ts",
+      "tags": [
+        "typescript",
+        "function"
+      ]
+    },
+    {
+      "id": "function:src/render/static-render.ts:renderStaticSource",
+      "type": "function",
+      "name": "renderStaticSource",
+      "filePath": "src/render/static-render.ts",
+      "summary": "Function renderStaticSource in src/render/static-render.ts",
+      "tags": [
+        "typescript",
+        "function"
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "source": "file:src/render/collision-layout.ts",
+      "target": "function:src/render/collision-layout.ts:resolveLayoutCollisions",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/render/collision-layout.ts",
+      "target": "function:src/render/collision-layout.ts:resolveLayoutCollisions",
+      "type": "exports",
+      "weight": 0.8
+    },
+    {
+      "source": "file:src/render/layout.ts",
+      "target": "function:src/render/layout.ts:visibleChildren",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/render/layout.ts",
+      "target": "function:src/render/layout.ts:estimatedTextLines",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/render/layout.ts",
+      "target": "function:src/render/layout.ts:nodeDimensions",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/render/layout.ts",
+      "target": "function:src/render/layout.ts:subtreeHeight",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/render/layout.ts",
+      "target": "function:src/render/layout.ts:layoutBranch",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/render/layout.ts",
+      "target": "function:src/render/layout.ts:computeLayout",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/render/layout.ts",
+      "target": "function:src/render/layout.ts:buildBranchColorMap",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/render/layout.ts",
+      "target": "function:src/render/layout.ts:edgeWidthForDepth",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/render/layout.ts",
+      "target": "function:src/render/layout.ts:edgePath",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/render/layout.ts",
+      "target": "function:src/render/layout.ts:roundedElbowEdgePath",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/render/layout.ts",
+      "target": "function:src/render/layout.ts:escapeXml",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/render/layout.ts",
+      "target": "function:src/render/layout.ts:validColor",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/render/layout.ts",
+      "target": "function:src/render/layout.ts:svgRadius",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/render/layout.ts",
+      "target": "function:src/render/layout.ts:taskGlyph",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/render/layout.ts",
+      "target": "function:src/render/layout.ts:truncateRuns",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/render/layout.ts",
+      "target": "function:src/render/layout.ts:richTextTspans",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/render/layout.ts",
+      "target": "function:src/render/layout.ts:svgWrappedLines",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/render/layout.ts",
+      "target": "function:src/render/layout.ts:svgFontFamily",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/render/layout.ts",
+      "target": "function:src/render/layout.ts:documentToSvg",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/render/layout.ts",
+      "target": "function:src/render/layout.ts:computeLayout",
+      "type": "exports",
+      "weight": 0.8
+    },
+    {
+      "source": "file:src/render/layout.ts",
+      "target": "function:src/render/layout.ts:buildBranchColorMap",
+      "type": "exports",
+      "weight": 0.8
+    },
+    {
+      "source": "file:src/render/layout.ts",
+      "target": "function:src/render/layout.ts:edgeWidthForDepth",
+      "type": "exports",
+      "weight": 0.8
+    },
+    {
+      "source": "file:src/render/layout.ts",
+      "target": "function:src/render/layout.ts:edgePath",
+      "type": "exports",
+      "weight": 0.8
+    },
+    {
+      "source": "file:src/render/layout.ts",
+      "target": "function:src/render/layout.ts:roundedElbowEdgePath",
+      "type": "exports",
+      "weight": 0.8
+    },
+    {
+      "source": "file:src/render/layout.ts",
+      "target": "function:src/render/layout.ts:escapeXml",
+      "type": "exports",
+      "weight": 0.8
+    },
+    {
+      "source": "file:src/render/layout.ts",
+      "target": "function:src/render/layout.ts:documentToSvg",
+      "type": "exports",
+      "weight": 0.8
+    },
+    {
+      "source": "file:src/render/static-render.ts",
+      "target": "function:src/render/static-render.ts:renderStaticMindMap",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/render/static-render.ts",
+      "target": "function:src/render/static-render.ts:renderStaticSource",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/render/static-render.ts",
+      "target": "function:src/render/static-render.ts:renderStaticMindMap",
+      "type": "exports",
+      "weight": 0.8
+    },
+    {
+      "source": "file:src/render/static-render.ts",
+      "target": "function:src/render/static-render.ts:renderStaticSource",
+      "type": "exports",
+      "weight": 0.8
+    },
+    {
+      "source": "file:src/render/layout.ts",
+      "target": "file:src/render/collision-layout.ts",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:src/render/static-render.ts",
+      "target": "file:src/render/layout.ts",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "function:src/render/layout.ts:nodeDimensions",
+      "target": "function:src/render/layout.ts:estimatedTextLines",
+      "type": "calls",
+      "weight": 0.8
+    },
+    {
+      "source": "function:src/render/layout.ts:subtreeHeight",
+      "target": "function:src/render/layout.ts:nodeDimensions",
+      "type": "calls",
+      "weight": 0.8
+    },
+    {
+      "source": "function:src/render/layout.ts:subtreeHeight",
+      "target": "function:src/render/layout.ts:visibleChildren",
+      "type": "calls",
+      "weight": 0.8
+    },
+    {
+      "source": "function:src/render/layout.ts:subtreeHeight",
+      "target": "function:src/render/layout.ts:subtreeHeight",
+      "type": "calls",
+      "weight": 0.8
+    },
+    {
+      "source": "function:src/render/layout.ts:layoutBranch",
+      "target": "function:src/render/layout.ts:nodeDimensions",
+      "type": "calls",
+      "weight": 0.8
+    },
+    {
+      "source": "function:src/render/layout.ts:layoutBranch",
+      "target": "function:src/render/layout.ts:visibleChildren",
+      "type": "calls",
+      "weight": 0.8
+    },
+    {
+      "source": "function:src/render/layout.ts:layoutBranch",
+      "target": "function:src/render/layout.ts:subtreeHeight",
+      "type": "calls",
+      "weight": 0.8
+    },
+    {
+      "source": "function:src/render/layout.ts:layoutBranch",
+      "target": "function:src/render/layout.ts:nodeDimensions",
+      "type": "calls",
+      "weight": 0.8
+    },
+    {
+      "source": "function:src/render/layout.ts:layoutBranch",
+      "target": "function:src/render/layout.ts:layoutBranch",
+      "type": "calls",
+      "weight": 0.8
+    },
+    {
+      "source": "function:src/render/layout.ts:computeLayout",
+      "target": "function:src/render/layout.ts:nodeDimensions",
+      "type": "calls",
+      "weight": 0.8
+    },
+    {
+      "source": "function:src/render/layout.ts:computeLayout",
+      "target": "function:src/render/layout.ts:visibleChildren",
+      "type": "calls",
+      "weight": 0.8
+    },
+    {
+      "source": "function:src/render/layout.ts:computeLayout",
+      "target": "function:src/render/layout.ts:subtreeHeight",
+      "type": "calls",
+      "weight": 0.8
+    },
+    {
+      "source": "function:src/render/layout.ts:computeLayout",
+      "target": "function:src/render/layout.ts:subtreeHeight",
+      "type": "calls",
+      "weight": 0.8
+    },
+    {
+      "source": "function:src/render/layout.ts:computeLayout",
+      "target": "function:src/render/layout.ts:subtreeHeight",
+      "type": "calls",
+      "weight": 0.8
+    },
+    {
+      "source": "function:src/render/layout.ts:computeLayout",
+      "target": "function:src/render/layout.ts:subtreeHeight",
+      "type": "calls",
+      "weight": 0.8
+    },
+    {
+      "source": "function:src/render/layout.ts:computeLayout",
+      "target": "function:src/render/layout.ts:nodeDimensions",
+      "type": "calls",
+      "weight": 0.8
+    },
+    {
+      "source": "function:src/render/layout.ts:computeLayout",
+      "target": "function:src/render/layout.ts:layoutBranch",
+      "type": "calls",
+      "weight": 0.8
+    },
+    {
+      "source": "function:src/render/layout.ts:computeLayout",
+      "target": "function:src/render/collision-layout.ts:resolveLayoutCollisions",
+      "type": "calls",
+      "weight": 0.8
+    },
+    {
+      "source": "function:src/render/layout.ts:richTextTspans",
+      "target": "function:src/render/layout.ts:truncateRuns",
+      "type": "calls",
+      "weight": 0.8
+    },
+    {
+      "source": "function:src/render/layout.ts:richTextTspans",
+      "target": "function:src/render/layout.ts:validColor",
+      "type": "calls",
+      "weight": 0.8
+    },
+    {
+      "source": "function:src/render/layout.ts:richTextTspans",
+      "target": "function:src/render/layout.ts:escapeXml",
+      "type": "calls",
+      "weight": 0.8
+    },
+    {
+      "source": "function:src/render/layout.ts:documentToSvg",
+      "target": "function:src/render/layout.ts:computeLayout",
+      "type": "calls",
+      "weight": 0.8
+    },
+    {
+      "source": "function:src/render/layout.ts:documentToSvg",
+      "target": "function:src/render/layout.ts:validColor",
+      "type": "calls",
+      "weight": 0.8
+    },
+    {
+      "source": "function:src/render/layout.ts:documentToSvg",
+      "target": "function:src/render/layout.ts:buildBranchColorMap",
+      "type": "calls",
+      "weight": 0.8
+    },
+    {
+      "source": "function:src/render/layout.ts:documentToSvg",
+      "target": "function:src/render/layout.ts:validColor",
+      "type": "calls",
+      "weight": 0.8
+    },
+    {
+      "source": "function:src/render/layout.ts:documentToSvg",
+      "target": "function:src/render/layout.ts:edgeWidthForDepth",
+      "type": "calls",
+      "weight": 0.8
+    },
+    {
+      "source": "function:src/render/layout.ts:documentToSvg",
+      "target": "function:src/render/layout.ts:roundedElbowEdgePath",
+      "type": "calls",
+      "weight": 0.8
+    },
+    {
+      "source": "function:src/render/layout.ts:documentToSvg",
+      "target": "function:src/render/layout.ts:edgePath",
+      "type": "calls",
+      "weight": 0.8
+    },
+    {
+      "source": "function:src/render/layout.ts:documentToSvg",
+      "target": "function:src/render/layout.ts:validColor",
+      "type": "calls",
+      "weight": 0.8
+    },
+    {
+      "source": "function:src/render/layout.ts:documentToSvg",
+      "target": "function:src/render/layout.ts:validColor",
+      "type": "calls",
+      "weight": 0.8
+    },
+    {
+      "source": "function:src/render/layout.ts:documentToSvg",
+      "target": "function:src/render/layout.ts:validColor",
+      "type": "calls",
+      "weight": 0.8
+    },
+    {
+      "source": "function:src/render/layout.ts:documentToSvg",
+      "target": "function:src/render/layout.ts:validColor",
+      "type": "calls",
+      "weight": 0.8
+    },
+    {
+      "source": "function:src/render/layout.ts:documentToSvg",
+      "target": "function:src/render/layout.ts:validColor",
+      "type": "calls",
+      "weight": 0.8
+    },
+    {
+      "source": "function:src/render/layout.ts:documentToSvg",
+      "target": "function:src/render/layout.ts:validColor",
+      "type": "calls",
+      "weight": 0.8
+    },
+    {
+      "source": "function:src/render/layout.ts:documentToSvg",
+      "target": "function:src/render/layout.ts:validColor",
+      "type": "calls",
+      "weight": 0.8
+    },
+    {
+      "source": "function:src/render/layout.ts:documentToSvg",
+      "target": "function:src/render/layout.ts:validColor",
+      "type": "calls",
+      "weight": 0.8
+    },
+    {
+      "source": "function:src/render/layout.ts:documentToSvg",
+      "target": "function:src/render/layout.ts:taskGlyph",
+      "type": "calls",
+      "weight": 0.8
+    },
+    {
+      "source": "function:src/render/layout.ts:documentToSvg",
+      "target": "function:src/render/layout.ts:escapeXml",
+      "type": "calls",
+      "weight": 0.8
+    },
+    {
+      "source": "function:src/render/layout.ts:documentToSvg",
+      "target": "function:src/render/layout.ts:svgWrappedLines",
+      "type": "calls",
+      "weight": 0.8
+    },
+    {
+      "source": "function:src/render/layout.ts:documentToSvg",
+      "target": "function:src/render/layout.ts:escapeXml",
+      "type": "calls",
+      "weight": 0.8
+    },
+    {
+      "source": "function:src/render/layout.ts:documentToSvg",
+      "target": "function:src/render/layout.ts:richTextTspans",
+      "type": "calls",
+      "weight": 0.8
+    },
+    {
+      "source": "function:src/render/layout.ts:documentToSvg",
+      "target": "function:src/render/layout.ts:escapeXml",
+      "type": "calls",
+      "weight": 0.8
+    },
+    {
+      "source": "function:src/render/layout.ts:documentToSvg",
+      "target": "function:src/render/layout.ts:svgWrappedLines",
+      "type": "calls",
+      "weight": 0.8
+    },
+    {
+      "source": "function:src/render/layout.ts:documentToSvg",
+      "target": "function:src/render/layout.ts:escapeXml",
+      "type": "calls",
+      "weight": 0.8
+    },
+    {
+      "source": "function:src/render/layout.ts:documentToSvg",
+      "target": "function:src/render/layout.ts:escapeXml",
+      "type": "calls",
+      "weight": 0.8
+    },
+    {
+      "source": "function:src/render/layout.ts:documentToSvg",
+      "target": "function:src/render/layout.ts:escapeXml",
+      "type": "calls",
+      "weight": 0.8
+    },
+    {
+      "source": "function:src/render/layout.ts:documentToSvg",
+      "target": "function:src/render/layout.ts:escapeXml",
+      "type": "calls",
+      "weight": 0.8
+    },
+    {
+      "source": "function:src/render/layout.ts:documentToSvg",
+      "target": "function:src/render/layout.ts:escapeXml",
+      "type": "calls",
+      "weight": 0.8
+    },
+    {
+      "source": "function:src/render/layout.ts:documentToSvg",
+      "target": "function:src/render/layout.ts:svgRadius",
+      "type": "calls",
+      "weight": 0.8
+    },
+    {
+      "source": "function:src/render/layout.ts:documentToSvg",
+      "target": "function:src/render/layout.ts:validColor",
+      "type": "calls",
+      "weight": 0.8
+    },
+    {
+      "source": "function:src/render/layout.ts:documentToSvg",
+      "target": "function:src/render/layout.ts:validColor",
+      "type": "calls",
+      "weight": 0.8
+    },
+    {
+      "source": "function:src/render/layout.ts:documentToSvg",
+      "target": "function:src/render/layout.ts:escapeXml",
+      "type": "calls",
+      "weight": 0.8
+    },
+    {
+      "source": "function:src/render/layout.ts:documentToSvg",
+      "target": "function:src/render/layout.ts:svgFontFamily",
+      "type": "calls",
+      "weight": 0.8
+    },
+    {
+      "source": "function:src/render/static-render.ts:renderStaticMindMap",
+      "target": "function:src/render/layout.ts:documentToSvg",
+      "type": "calls",
+      "weight": 0.8
+    },
+    {
+      "source": "function:src/render/static-render.ts:renderStaticSource",
+      "target": "function:src/render/static-render.ts:renderStaticMindMap",
+      "type": "calls",
+      "weight": 0.8
+    }
+  ]
+}

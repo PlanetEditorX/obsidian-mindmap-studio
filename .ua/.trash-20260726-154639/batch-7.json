@@ -1,0 +1,209 @@
+{
+  "nodes": [
+    {
+      "id": "file:esbuild.config.mjs",
+      "type": "file",
+      "name": "esbuild.config.mjs",
+      "filePath": "esbuild.config.mjs",
+      "summary": "javascript code file (24 lines)",
+      "tags": [
+        "javascript",
+        "code"
+      ]
+    },
+    {
+      "id": "file:scripts/check-docs.mjs",
+      "type": "file",
+      "name": "check-docs.mjs",
+      "filePath": "scripts/check-docs.mjs",
+      "summary": "javascript code file (60 lines)",
+      "tags": [
+        "javascript",
+        "code"
+      ]
+    },
+    {
+      "id": "function:scripts/check-docs.mjs:collectTypeScriptFiles",
+      "type": "function",
+      "name": "collectTypeScriptFiles",
+      "filePath": "scripts/check-docs.mjs",
+      "summary": "Function collectTypeScriptFiles in scripts/check-docs.mjs",
+      "tags": [
+        "javascript",
+        "function"
+      ]
+    },
+    {
+      "id": "file:scripts/generate-function-reference.mjs",
+      "type": "file",
+      "name": "generate-function-reference.mjs",
+      "filePath": "scripts/generate-function-reference.mjs",
+      "summary": "javascript code file (71 lines)",
+      "tags": [
+        "javascript",
+        "code"
+      ]
+    },
+    {
+      "id": "function:scripts/generate-function-reference.mjs:collectTypeScriptFiles",
+      "type": "function",
+      "name": "collectTypeScriptFiles",
+      "filePath": "scripts/generate-function-reference.mjs",
+      "summary": "Function collectTypeScriptFiles in scripts/generate-function-reference.mjs",
+      "tags": [
+        "javascript",
+        "function"
+      ]
+    },
+    {
+      "id": "function:scripts/generate-function-reference.mjs:cleanComment",
+      "type": "function",
+      "name": "cleanComment",
+      "filePath": "scripts/generate-function-reference.mjs",
+      "summary": "Function cleanComment in scripts/generate-function-reference.mjs",
+      "tags": [
+        "javascript",
+        "function"
+      ]
+    },
+    {
+      "id": "file:scripts/next-version.mjs",
+      "type": "file",
+      "name": "next-version.mjs",
+      "filePath": "scripts/next-version.mjs",
+      "summary": "javascript code file (23 lines)",
+      "tags": [
+        "javascript",
+        "code"
+      ]
+    },
+    {
+      "id": "function:scripts/next-version.mjs:nextVersion",
+      "type": "function",
+      "name": "nextVersion",
+      "filePath": "scripts/next-version.mjs",
+      "summary": "Function nextVersion in scripts/next-version.mjs",
+      "tags": [
+        "javascript",
+        "function"
+      ]
+    },
+    {
+      "id": "file:scripts/release.mjs",
+      "type": "file",
+      "name": "release.mjs",
+      "filePath": "scripts/release.mjs",
+      "summary": "javascript code file (6 lines)",
+      "tags": [
+        "javascript",
+        "code"
+      ]
+    },
+    {
+      "id": "file:scripts/sync-version.mjs",
+      "type": "file",
+      "name": "sync-version.mjs",
+      "filePath": "scripts/sync-version.mjs",
+      "summary": "javascript code file (29 lines)",
+      "tags": [
+        "javascript",
+        "code"
+      ]
+    },
+    {
+      "id": "function:scripts/sync-version.mjs:readJson",
+      "type": "function",
+      "name": "readJson",
+      "filePath": "scripts/sync-version.mjs",
+      "summary": "Function readJson in scripts/sync-version.mjs",
+      "tags": [
+        "javascript",
+        "function"
+      ]
+    },
+    {
+      "id": "function:scripts/sync-version.mjs:writeJson",
+      "type": "function",
+      "name": "writeJson",
+      "filePath": "scripts/sync-version.mjs",
+      "summary": "Function writeJson in scripts/sync-version.mjs",
+      "tags": [
+        "javascript",
+        "function"
+      ]
+    },
+    {
+      "id": "file:scripts/test.mjs",
+      "type": "file",
+      "name": "test.mjs",
+      "filePath": "scripts/test.mjs",
+      "summary": "javascript code file (1296 lines)",
+      "tags": [
+        "javascript",
+        "code"
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "source": "file:scripts/check-docs.mjs",
+      "target": "function:scripts/check-docs.mjs:collectTypeScriptFiles",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:scripts/generate-function-reference.mjs",
+      "target": "function:scripts/generate-function-reference.mjs:collectTypeScriptFiles",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:scripts/generate-function-reference.mjs",
+      "target": "function:scripts/generate-function-reference.mjs:cleanComment",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:scripts/next-version.mjs",
+      "target": "function:scripts/next-version.mjs:nextVersion",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:scripts/next-version.mjs",
+      "target": "function:scripts/next-version.mjs:nextVersion",
+      "type": "exports",
+      "weight": 0.8
+    },
+    {
+      "source": "file:scripts/sync-version.mjs",
+      "target": "function:scripts/sync-version.mjs:readJson",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:scripts/sync-version.mjs",
+      "target": "function:scripts/sync-version.mjs:writeJson",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:scripts/test.mjs",
+      "target": "file:scripts/next-version.mjs",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "function:scripts/check-docs.mjs:collectTypeScriptFiles",
+      "target": "function:scripts/generate-function-reference.mjs:collectTypeScriptFiles",
+      "type": "calls",
+      "weight": 0.8
+    },
+    {
+      "source": "function:scripts/generate-function-reference.mjs:collectTypeScriptFiles",
+      "target": "function:scripts/generate-function-reference.mjs:collectTypeScriptFiles",
+      "type": "calls",
+      "weight": 0.8
+    }
+  ]
+}

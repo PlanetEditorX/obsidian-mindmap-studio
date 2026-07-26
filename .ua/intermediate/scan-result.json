@@ -1,0 +1,466 @@
+{
+  "scriptCompleted": true,
+  "projectName": "obsidian-mindmap-studio",
+  "projectDescription": "Editable local-first .mindmap diagrams for Obsidian with synchronized mind map, outline, and article modes, read-only locking, global search, themes, rich content, image mirrors, tables, code, and exports.",
+  "languages": [
+    "yaml",
+    "markdown",
+    "javascript",
+    "json",
+    "typescript",
+    "css"
+  ],
+  "frameworks": [
+    "Obsidian"
+  ],
+  "entryPoint": "src/main.ts",
+  "fileCount": 45,
+  "filteredByIgnore": 43,
+  "estimatedComplexity": "moderate",
+  "stats": {
+    "filesScanned": 45,
+    "byCategory": {
+      "infra": 2,
+      "docs": 4,
+      "code": 34,
+      "config": 4,
+      "markup": 1
+    },
+    "byLanguage": {
+      "yaml": 2,
+      "markdown": 4,
+      "javascript": 7,
+      "json": 4,
+      "typescript": 27,
+      "css": 1
+    }
+  },
+  "files": [
+    {
+      "path": ".github/workflows/ci.yml",
+      "language": "yaml",
+      "sizeLines": 63,
+      "fileCategory": "infra"
+    },
+    {
+      "path": ".github/workflows/release.yml",
+      "language": "yaml",
+      "sizeLines": 184,
+      "fileCategory": "infra"
+    },
+    {
+      "path": "CHANGELOG.md",
+      "language": "markdown",
+      "sizeLines": 229,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "MIGRATION.md",
+      "language": "markdown",
+      "sizeLines": 144,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "README.md",
+      "language": "markdown",
+      "sizeLines": 697,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "TEST_RESULTS.md",
+      "language": "markdown",
+      "sizeLines": 38,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "esbuild.config.mjs",
+      "language": "javascript",
+      "sizeLines": 24,
+      "fileCategory": "code"
+    },
+    {
+      "path": "manifest.json",
+      "language": "json",
+      "sizeLines": 9,
+      "fileCategory": "config"
+    },
+    {
+      "path": "package.json",
+      "language": "json",
+      "sizeLines": 31,
+      "fileCategory": "config"
+    },
+    {
+      "path": "scripts/check-docs.mjs",
+      "language": "javascript",
+      "sizeLines": 60,
+      "fileCategory": "code"
+    },
+    {
+      "path": "scripts/generate-function-reference.mjs",
+      "language": "javascript",
+      "sizeLines": 71,
+      "fileCategory": "code"
+    },
+    {
+      "path": "scripts/next-version.mjs",
+      "language": "javascript",
+      "sizeLines": 23,
+      "fileCategory": "code"
+    },
+    {
+      "path": "scripts/release.mjs",
+      "language": "javascript",
+      "sizeLines": 6,
+      "fileCategory": "code"
+    },
+    {
+      "path": "scripts/sync-version.mjs",
+      "language": "javascript",
+      "sizeLines": 29,
+      "fileCategory": "code"
+    },
+    {
+      "path": "scripts/test.mjs",
+      "language": "javascript",
+      "sizeLines": 1296,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/article/article-style.ts",
+      "language": "typescript",
+      "sizeLines": 24,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/article/modes.ts",
+      "language": "typescript",
+      "sizeLines": 320,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/core/model.ts",
+      "language": "typescript",
+      "sizeLines": 1688,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/core/node-tree.ts",
+      "language": "typescript",
+      "sizeLines": 118,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/editor/article-renderer.ts",
+      "language": "typescript",
+      "sizeLines": 207,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/editor/clipboard-import.ts",
+      "language": "typescript",
+      "sizeLines": 110,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/editor/content-modals.ts",
+      "language": "typescript",
+      "sizeLines": 260,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/editor/drag-drop.ts",
+      "language": "typescript",
+      "sizeLines": 53,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/editor/editor-modals.ts",
+      "language": "typescript",
+      "sizeLines": 696,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/editor/editor-types.ts",
+      "language": "typescript",
+      "sizeLines": 84,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/editor/editor.ts",
+      "language": "typescript",
+      "sizeLines": 4139,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/editor/history-manager.ts",
+      "language": "typescript",
+      "sizeLines": 77,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/editor/node-actions.ts",
+      "language": "typescript",
+      "sizeLines": 76,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/editor/node-image-actions.ts",
+      "language": "typescript",
+      "sizeLines": 135,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/editor/node-rich-text-editor.ts",
+      "language": "typescript",
+      "sizeLines": 151,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/editor/outline-renderer.ts",
+      "language": "typescript",
+      "sizeLines": 166,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/editor/rich-text-dom.ts",
+      "language": "typescript",
+      "sizeLines": 171,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/editor/selection-format-toolbar.ts",
+      "language": "typescript",
+      "sizeLines": 226,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/import/import-export.ts",
+      "language": "typescript",
+      "sizeLines": 138,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/main.ts",
+      "language": "typescript",
+      "sizeLines": 1561,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/render/collision-layout.ts",
+      "language": "typescript",
+      "sizeLines": 93,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/render/layout.ts",
+      "language": "typescript",
+      "sizeLines": 606,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/render/static-render.ts",
+      "language": "typescript",
+      "sizeLines": 52,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/search/global-search.ts",
+      "language": "typescript",
+      "sizeLines": 1072,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/settings.ts",
+      "language": "typescript",
+      "sizeLines": 1337,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/themes.ts",
+      "language": "typescript",
+      "sizeLines": 446,
+      "fileCategory": "code"
+    },
+    {
+      "path": "src/view.ts",
+      "language": "typescript",
+      "sizeLines": 454,
+      "fileCategory": "code"
+    },
+    {
+      "path": "styles.css",
+      "language": "css",
+      "sizeLines": 3768,
+      "fileCategory": "markup"
+    },
+    {
+      "path": "tsconfig.json",
+      "language": "json",
+      "sizeLines": 21,
+      "fileCategory": "config"
+    },
+    {
+      "path": "versions.json",
+      "language": "json",
+      "sizeLines": 111,
+      "fileCategory": "config"
+    }
+  ],
+  "importMap": {
+    ".github/workflows/ci.yml": [],
+    ".github/workflows/release.yml": [],
+    "CHANGELOG.md": [],
+    "MIGRATION.md": [],
+    "README.md": [],
+    "TEST_RESULTS.md": [],
+    "esbuild.config.mjs": [],
+    "manifest.json": [],
+    "package.json": [],
+    "scripts/check-docs.mjs": [],
+    "scripts/generate-function-reference.mjs": [],
+    "scripts/next-version.mjs": [],
+    "scripts/release.mjs": [],
+    "scripts/sync-version.mjs": [],
+    "scripts/test.mjs": [
+      "scripts/next-version.mjs"
+    ],
+    "src/article/article-style.ts": [
+      "src/core/model.ts"
+    ],
+    "src/article/modes.ts": [
+      "src/core/model.ts"
+    ],
+    "src/core/model.ts": [
+      "src/core/node-tree.ts"
+    ],
+    "src/core/node-tree.ts": [
+      "src/core/model.ts"
+    ],
+    "src/editor/article-renderer.ts": [
+      "src/article/article-style.ts",
+      "src/article/modes.ts",
+      "src/core/model.ts",
+      "src/editor/editor-modals.ts",
+      "src/editor/editor-types.ts",
+      "src/editor/rich-text-dom.ts"
+    ],
+    "src/editor/clipboard-import.ts": [
+      "src/core/model.ts"
+    ],
+    "src/editor/content-modals.ts": [
+      "src/core/model.ts"
+    ],
+    "src/editor/drag-drop.ts": [
+      "src/core/model.ts"
+    ],
+    "src/editor/editor-modals.ts": [
+      "src/article/article-style.ts",
+      "src/core/model.ts",
+      "src/editor/node-actions.ts",
+      "src/editor/rich-text-dom.ts",
+      "src/import/import-export.ts",
+      "src/settings.ts"
+    ],
+    "src/editor/editor-types.ts": [
+      "src/article/modes.ts",
+      "src/core/model.ts",
+      "src/settings.ts"
+    ],
+    "src/editor/editor.ts": [
+      "src/article/article-style.ts",
+      "src/article/modes.ts",
+      "src/core/model.ts",
+      "src/editor/article-renderer.ts",
+      "src/editor/clipboard-import.ts",
+      "src/editor/content-modals.ts",
+      "src/editor/drag-drop.ts",
+      "src/editor/editor-modals.ts",
+      "src/editor/editor-types.ts",
+      "src/editor/history-manager.ts",
+      "src/editor/node-actions.ts",
+      "src/editor/node-image-actions.ts",
+      "src/editor/node-rich-text-editor.ts",
+      "src/editor/outline-renderer.ts",
+      "src/editor/rich-text-dom.ts",
+      "src/editor/selection-format-toolbar.ts",
+      "src/render/collision-layout.ts",
+      "src/render/layout.ts",
+      "src/settings.ts",
+      "src/themes.ts"
+    ],
+    "src/editor/history-manager.ts": [
+      "src/core/model.ts"
+    ],
+    "src/editor/node-actions.ts": [
+      "src/core/model.ts"
+    ],
+    "src/editor/node-image-actions.ts": [
+      "src/core/model.ts",
+      "src/editor/editor-modals.ts",
+      "src/editor/editor-types.ts"
+    ],
+    "src/editor/node-rich-text-editor.ts": [
+      "src/core/model.ts",
+      "src/editor/rich-text-dom.ts"
+    ],
+    "src/editor/outline-renderer.ts": [
+      "src/article/modes.ts",
+      "src/core/model.ts",
+      "src/editor/editor-modals.ts",
+      "src/editor/editor-types.ts",
+      "src/editor/rich-text-dom.ts"
+    ],
+    "src/editor/rich-text-dom.ts": [
+      "src/core/model.ts"
+    ],
+    "src/editor/selection-format-toolbar.ts": [
+      "src/core/model.ts",
+      "src/editor/rich-text-dom.ts"
+    ],
+    "src/import/import-export.ts": [
+      "src/article/modes.ts",
+      "src/core/model.ts"
+    ],
+    "src/main.ts": [
+      "src/article/modes.ts",
+      "src/core/model.ts",
+      "src/render/static-render.ts",
+      "src/search/global-search.ts",
+      "src/settings.ts",
+      "src/view.ts"
+    ],
+    "src/render/collision-layout.ts": [],
+    "src/render/layout.ts": [
+      "src/core/model.ts",
+      "src/render/collision-layout.ts"
+    ],
+    "src/render/static-render.ts": [
+      "src/core/model.ts",
+      "src/render/layout.ts"
+    ],
+    "src/search/global-search.ts": [
+      "src/core/model.ts"
+    ],
+    "src/settings.ts": [
+      "src/core/model.ts",
+      "src/main.ts",
+      "src/themes.ts"
+    ],
+    "src/themes.ts": [
+      "src/core/model.ts"
+    ],
+    "src/view.ts": [
+      "src/article/modes.ts",
+      "src/core/model.ts",
+      "src/editor/editor.ts",
+      "src/import/import-export.ts",
+      "src/main.ts",
+      "src/settings.ts"
+    ],
+    "styles.css": [],
+    "tsconfig.json": [],
+    "versions.json": []
+  },
+  "readmeSnippet": "# MindMap Studio for Obsidian\n\n## 1.6.0 \u540c\u7ea7\u8282\u70b9\u81ea\u7531\u62d6\u52a8\u6392\u5e8f\n\n\u5bfc\u56fe\u6a21\u5f0f\u73b0\u5728\u652f\u6301\u6309\u843d\u70b9\u51b3\u5b9a\u62d6\u62fd\u7ed3\u679c\uff1a\n\n- \u62d6\u5230\u76ee\u6807\u8282\u70b9\u4e0a\u65b9\uff1a\u63d2\u5165\u76ee\u6807\u4e4b\u524d\uff1b\n- \u62d6\u5230\u76ee\u6807\u8282\u70b9\u4e0b\u65b9\uff1a\u63d2\u5165\u76ee\u6807\u4e4b\u540e\uff1b\n- \u62d6\u5230\u76ee\u6807\u8282\u70b9\u4e2d\u95f4\uff1a\u6210\u4e3a\u76ee\u6807\u7684\u5b50\u8282\u70b9\u3002\n\n\u62d6\u52a8\u8fc7\u7a0b\u4e2d\u4f1a\u663e\u793a\u63d2\u5165\u7ebf\u6216\u5b50\u8282\u70b9\u9ad8\u4eae\u3002\u6392\u5e8f\u4f1a\u540c\u6b65\u5230\u5927\u7eb2\u548c\u6587\u7ae0\u6a21\u5f0f\uff0c\u5e76\u652f\u6301\u64a4\u9500\u3001\u91cd\u505a\u548c\u81ea\u52a8\u4fdd\u5b58\u3002\u73b0\u6709 `.mindmap` \u6587\u4ef6\u65e0\u9700\u8fc1\u79fb\u3002\n\n## 1.5.1 \u6e90\u7801\u6ce8\u91ca\u4e0e\u5f00\u53d1\u8005\u6587\u6863\n\n\u672c\u7248\u672c\u4e0d\u6539\u53d8\u5bfc\u56fe\u529f\u80fd\u548c `.mindmap` \u6570\u636e\u683c\u5f0f\uff0c\u91cd\u70b9\u8865\u9f50\u6e90\u7801\u53ef\u7ef4\u62a4\u6027\uff1a\n\n- 11 \u4e2a TypeScript \u6a21\u5757\u5747\u589e\u52a0\u6a21\u5757\u7ea7\u804c\u8d23\u8bf4\u660e\uff1b\n- 376 \u4e2a\u7c7b\u578b\u3001\u63a5\u53e3\u3001\u7c7b\u3001\u6784\u9020\u51fd\u6570\u3001\u9876\u5c42\u51fd\u6570\u548c\u7c7b\u65b9\u6cd5\u5747\u5e26 JSDoc\uff1b\n- \u53c2\u6570\u3001\u8fd4\u56de\u503c\u3001\u517c\u5bb9\u884c\u4e3a\u548c\u5173\u952e\u526f\u4f5c\u7528\u5728\u6e90\u7801\u4e2d\u8bf4\u660e\uff1b\n- \u5173\u952e\u6d41\u7a0b\u589e\u52a0 `@remarks` \u7ef4\u62a4\u63d0\u793a\uff1b\n- `npm test` \u73b0\u5728\u4f1a\u68c0\u67e5\u6ce8\u91ca\u8986\u76d6\u7387\uff0c\u65b0\u589e\u672a\u6ce8\u91ca\u51fd\u6570\u4f1a\u4f7f\u6d4b\u8bd5\u5931\u8d25\uff1b\n- \u65b0\u589e\u5b8c\u6574\u67b6\u6784\u3001\u6570\u636e\u6a21\u578b\u3001\u7279\u6b8a\u529f\u80fd\u3001\u51fd\u6570\u53c2\u8003\u548c\u5f00\u53d1\u7ef4\u62a4\u6587\u6863\u3002\n\n### \u5f00\u53d1\u8005\u6587\u6863\n\n- [\u67b6\u6784\u8bf4\u660e](docs/ARCHITECTURE.md)\n- [\u6570\u636e\u6a21\u578b](docs/DATA_MODEL.md)\n- [\u7279\u6b8a\u529f\u80fd\u5b9e\u73b0](docs/SPECIAL_FEATURES.md)\n- [\u5b8c\u6574\u51fd\u6570\u4e0e\u7c7b\u53c2\u8003](docs/FUNCTION_REFERENCE.md)\n- [\u5f00\u53d1\u4e0e\u7ef4\u62a4\u6307\u5357](docs/DEVELOPMENT.md)\n\n\u51fd\u6570\u53c2\u8003\u53ef\u901a\u8fc7\u4ee5\u4e0b\u547d\u4ee4\u4ece\u6e90\u7801\u91cd\u65b0\u751f\u6210\uff1a\n\n```bash\nnpm run docs:generate\nnpm run docs:check\n```\n\n## 1.5.0 \u5b50\u5bfc\u56fe\u6574\u5757\u70b9\u51fb\u3001\u6587\u5b57\u5bf9\u9f50\u548c\u8282\u70b9\u5c3a\u5bf8\n\n\u5bfc\u56fe\u6a21\u5f0f\u4e2d\u7684\u5b50\u5bfc\u56fe\u8282\u70b9\u73b0\u5728\u628a\u6574\u4e2a\u8282\u70b9\u4f5c\u4e3a\u8fdb\u5165\u8303\u56f4\u3002\u9f20\u6807\u70b9\u51fb\u8282\u70b9\u6807\u9898\u6216\u6807\u9898\u9644\u8fd1\u7684\u7a7a\u767d\u533a\u57df\u90fd\u4f1a\u76f4\u63a5\u8fdb\u5165\u5b50\u5bfc\u56fe\uff0c\u4e0d\u518d\u9700\u8981\u7cbe\u786e\u547d\u4e2d\u6587\u5b57\u3002\u53f3\u952e\u8282\u70b9\u4ecd\u53ef\u6253\u5f00\u7f16\u8f91\u83dc\u5355\uff1b\u952e\u76d8\u805a\u7126\u540e\u6309 Enter \u6216\u7a7a\u683c\u4e5f\u53ef\u4ee5\u8fdb\u5165\u3002\n\n### \u8282\u70b9\u6587\u5b57\u5bf9\u9f50\n\n\u53ef\u4ee5\u5728\u4e24\u5904\u63a7\u5236\uff1a\n\n- `\u8bbe\u7f6e \u2192 MindMap Studio \u2192 \u9ed8\u8ba4\u8282\u70b9\u6587\u5b57\u5bf9\u9f50`\uff1a\u7edf\u4e00\u63a7\u5236\u6240\u6709\u672a\u5355\u72ec\u8bbe\u7f6e\u7684\u8282\u70b9\uff1b\n- `\u7f16\u8f91\u8282\u70b9\u5185\u5bb9 \u2192 \u6587\u5b57\u5bf9\u9f50`\uff1a\u8ba9\u5f53\u524d\u8282\u70b9\u8ddf\u968f\u5168\u5c40\u3001\u5de6\u5bf9\u9f50\u3001\u5c45\u4e2d\u6216\u53f3\u5bf9\u9f50\u3002\n\n\u5bf9\u9f50\u65b9\u5f0f\u4f1a\u4f5c\u7528\u4e8e\u666e\u901a\u6587\u5b57\u3001\u5bcc\u6587\u672c\u548c\u5b50\u5bfc\u56fe\u6807\u9898\uff0c\u5e76\u540c\u6b65\u5230 SVG \u5bfc\u51fa\u3002\n\n### \u8282\u70b9\u5bbd\u5ea6\u4e0e\u9ad8\u5ea6\n\n\u9009\u4e2d\u8282\u70b9\u540e\uff0c\u53f3\u4e0b\u89d2\u4f1a\u51fa\u73b0\u4e00\u4e2a\u5c0f\u578b\u5c3a\u5bf8\u63a7\u5236\u70b9\uff1a\n\n- \u5411\u5de6\u53f3\u62d6\u52a8\u8c03\u6574\u5bbd\u5ea6\uff1b\n- \u5411\u4e0a\u4e0b\u62d6\u52a8\u8c03\u6574\u6700\u5c0f\u9ad8\u5ea6\uff1b\n- \u53cc\u51fb\u63a7\u5236\u70b9\u6062\u590d\u81ea\u52a8\u5927\u5c0f\uff1b\n- \u53f3\u952e\u8282\u70b9\u4e5f\u53ef\u4ee5\u9009\u62e9\u201c\u6062\u590d\u8282\u70b9\u81ea\u52a8\u5927\u5c0f\u201d\u3002\n\n\u7f16\u8f91\u8282\u70b9\u7a97\u53e3\u8fd8\u63d0\u4f9b\u7cbe\u786e\u6570\u503c\uff1a\n\n```text\n\u8282\u70b9\u5bbd\u5ea6\uff1a100\u2013900 px\n\u8282\u70b9\u6700\u5c0f\u9ad8\u5ea6\uff1a36\u2013600 px\n```\n\n\u6587\u5b57\u4f1a\u6839\u636e\u8282\u70b9\u5bbd\u5ea6\u81ea\u52a8\u6362\u884c\u3002\u5bbd\u5ea6\u8db3\u591f\u5927\u65f6\u4fdd\u6301\u4e00\u884c\uff1b\u7f29\u5c0f\u5bbd\u5ea6\u540e\u4f1a\u81ea\u52a8\u6392\u6210\u591a\u884c\uff0c\u5e03\u5c40\u548c\u8fde\u63a5\u7ebf\u4f1a\u91cd\u65b0\u8ba1\u7b97\u3002\u9ad8\u5ea6\u5c5e\u4e8e\u201c\u6700\u5c0f\u9ad8\u5ea6\u201d\uff0c\u5185\u5bb9\u8f83\u591a\u65f6\u8282\u70b9\u4ecd\u4f1a\u81ea\u52a8\u589e\u9ad8\uff0c\u4e0d\u4f1a\u88c1\u6389\u6587\u5b57\u3002\n\n\u73b0\u6709 `.mindmap` \u6587\u4ef6\u4e0d\u9700\u8981\u8f6c\u6362\u3002\n\nMindMap Studio \u662f\u4e00\u4e2a\u672c\u5730\u4f18\u5148\u3001\u53ef\u91cd\u65b0\u6253\u5f00\u7ee7\u7eed\u7f16\u8f91\u7684 Obsidian \u601d\u7ef4\u5bfc\u56fe\u63d2\u4ef6\u3002\u8111\u56fe\u4fdd\u5b58\u4e3a\u72ec\u7acb\u7684 `.mindmap` JSON \u6587\u4ef6\uff0c\u4e0d\u4f1a\u5728\u7b2c\u4e8c\u6b21\u6253\u5f00\u65f6\u53d8\u6210 Markdown \u6e90\u7801\u6216\u9759\u6001\u56fe\u7247\u3002\n\n## 1.4.6 \u5b50\u5bfc\u56fe\u8282\u70b9\u5165\u53e3\u5408\u5e76\n\n\u5bfc\u56fe\u6a21\u5f0f\u4e2d\uff0c\u5173\u8054\u5b50\u5bfc\u56fe\u7684\u8282\u70b9\u4e0d\u518d\u5728\u6807\u9898\u4e0b\u65b9\u663e\u793a\u4e00\u4e2a\u91cd\u590d\u7684\u540c\u540d\u201c\u8fdb\u5165\u5b50\u5bfc\u56fe\u201d\u6309\u94ae\u3002\u8282\u70b9\u7b2c\u4e00\u6bb5\u6807\u9898\u6587\u5b57\u672c\u8eab\u5c31\u662f\u5b50\u5bfc\u56fe\u5165\u53e3\uff0c\u672b\u5c3e\u4f7f\u7528\u8f7b\u91cf\u7bad\u5934\u63d0\u793a\uff1a\n\n```text\n\u674e\u767d \u2197\n```\n\n- \u70b9\u51fb\u5b50\u5bfc\u56fe\u8282\u70b9\u7684\u6587\u5b57\u6216\u7a7a\u767d\u533a\u57df\u90fd\u4f1a\u76f4\u63a5\u8fdb\u5165\u5bf9\u5e94\u5b50\u5bfc\u56fe\uff1b\n- \u53f3\u952e\u8282\u70b9\u53ef\u7ee7\u7eed\u7f16\u8f91\u3001\u8c03\u6574\u6837\u5f0f\u6216\u6267\u884c\u5176\u4ed6\u64cd\u4f5c\uff1b\n- \u7eaf\u56fe\u7247\u8282\u70b9\u6ca1\u6709\u6807\u9898\u65f6\uff0c\u8282\u70b9\u53f3\u4e0a\u89d2\u4f1a\u663e\u793a\u4e00\u4e2a\u5c0f\u578b\u7bad\u5934\u5165\u53e3\uff1b\n- \u5927\u7eb2\u548c\u6587\u7ae0\u6a21\u5f0f\u7ee7\u7eed\u4f7f\u7528\u6807\u9898\u6587\u5b57\u8d85\u94fe\u63a5\u3002\n\n\u5df2\u6709 `.mindmap` \u6587\u4ef6\u4e0d\u9700\u8981\u8fc1\u79fb\u3002\n\n\n## 1.4.5 \u754c\u9762\u4fee\u590d\n\n\u8be5\u7248\u672c\u66fe\u4fee\u590d\u201c\u6587\u7ae0\u6a21\u5f0f\u4e0d\u81ea\u52a8\u7f16\u53f7\u201d\u590d\u9009\u6846\u7684\u5c3a\u5bf8\u95ee\u9898\u3002\u5f53\u524d\u7248\u672c\u5df2\u5c06\u5b83\u5347\u7ea7\u4e3a\u201c\u81ea\u52a8 / \u5173\u95ed / \u624b\u52a8\u5c42\u7ea7\u201d\u4e0b\u62c9\u914d\u7f6e\u3002\n\n\n## 1.4.1 \u6587\u7ae0\u7f16\u53f7\u3001\u5168\u5c40\u6a21\u5f0f\u548c\u7236\u5b50\u5bfc\u56fe\u76ee\u5f55\u4fee\u590d\n\n\u672c\u7248\u4fee\u590d 1.4.0 \u4e2d\u6587\u7ae0\u7f16\u53f7\u672a\u8986\u76d6\u72ec\u7acb\u5b50\u5bfc\u56fe\u7684\u95ee\u9898\u3002\u6587\u7ae0\u5c42\u7ea7\u73b0\u5728\u4f1a\u8de8 `.mindmap` \u6587\u4ef6\u7ee7\u7eed\u8ba1\u7b97\uff1a\u9876\u5c42\u7236\u5bfc\u56fe\u4e2d\u7684\u5b50\u5bfc\u56fe\u8282\u70b9\u53ef\u663e\u793a\u4e3a\u201c\u7b2c\u4e00\u7ae0\u201d\uff0c\u8fdb\u5165\u8be5\u5b50\u5bfc\u56fe\u540e\uff0c\u5b83\u7684\u7b2c\u4e00\u4e2a\u6709\u4e0b\u7ea7\u8282\u70b9\u4f1a\u7ee7\u7eed\u663e\u793a\u4e3a\u201c\u7b2c\u4e00\u8282\u201d\uff0c\u4e0d\u4f1a\u91cd\u65b0\u4ece\u201c\u7b2c\u4e00\u7ae0\u201d\u5f00\u59cb\u3002\n\n\u4f8b\u5982\uff1a\n\n```text\n\u53e4\u8bd7.mindmap\n\u2514\u2500\u2500 \u5510\u8bd7\uff08\u5b50\u5bfc\u56fe\uff09       \u2192 \u7b2c\u4e00\u7ae0 \u5510\u8bd7\n    \u2514\u2500\u2500 \u674e\u767d\uff08\u6709\u5b50\u7ea7\uff09   \u2192 \u7b2c\u4e00\u8282 \u674e\u767d\n        \u2514\u2500\u2500 \u9759\u591c\u601d       \u2192 \u672b\u7aef\u6b63\u6587\uff0c\u4e0d\u7f16\u53f7\n```\n\n\u5b50\u5bfc\u56fe\u8282\u70b9\u5373\u4f7f\u6ca1\u6709\u672c\u5730 `children`\uff0c\u53ea\u8981\u4fdd\u5b58\u4e86 `submap.path`\uff0c\u4e5f\u4f1a\u88ab\u8bc6\u522b\u4e3a\u6587\u7ae0\u6807\u9898\u3002\u539f\u6765\u7684\u201c\u53ea\u6709\u6709\u4e0b\u7ea7\u7684\u8282\u70b9\u624d\u7f16\u53f7\u201d\u548c\u201c\u6587\u7ae0\u6a21\u5f0f\u4e0d\u81ea\u52a8\u7f16\u53f7\u201d\u89c4\u5219\u7ee7\u7eed\u6709\u6548\u3002\n\n### \u6a21\u5f0f\u6539\u4e3a\u5168\u5c40\u8bb0\u5fc6\n\n\u70b9\u51fb\u5de5\u5177\u680f\u4e2d\u7684\u201c\u5bfc\u56fe / \u5927\u7eb2 / \u6587\u7ae0\u201d\u540e\uff0c\u9009\u62e9\u4f1a\u4fdd\u5b58\u4e3a\u63d2\u4ef6\u7684\u5168\u5c40\u5f53\u524d\u6a21\u5f0f\u3002\u4e4b\u540e\u6253\u5f00\u7236\u5bfc\u56fe\u3001\u5b50\u5bfc\u56fe\u6216\u5176\u4ed6 `.mindmap` \u6587\u4ef6\uff0c\u90fd\u4f1a\u7ee7\u7eed\u4f7f\u7528\u540c\u4e00\u79cd\u6a21\u5f0f\u3002\u6bcf\u4e2a\u6587\u4ef6\u4e0d\u518d\u5404\u81ea\u8bb0\u5fc6\u4e0d\u540c\u6a21\u5f0f\uff1b\u53ea\u8bfb\u9501\u4ecd\u6309\u6587\u4ef6\u4fdd\u5b58\u3002\n\n### \u5b50\u5bfc\u56fe\u6587\u5b57\u94fe\u63a5\n\n\u5728\u5927\u7eb2\u548c\u6587\u7ae0\u6a21\u5f0f\u4e2d\uff0c\u5b50\u5bfc\u56fe\u8282\u70b9\u4e0d\u518d\u663e\u793a\u5355\u72ec\u7684\u201c\u8fdb\u5165\u5b50\u5bfc\u56fe\u201d\u6309\u94ae\u3002\u8282\u70b9\u6807\u9898\u672c\u8eab\u4f1a\u663e\u793a\u4e3a\u8d85\u94fe\u63a5\u6837\u5f0f\uff0c\u70b9\u51fb\u6587\u5b57\u5373\u53ef\u8fdb\u5165\u5bf9\u5e94\u5b50\u5bfc\u56fe\uff0c\u5e76\u7ee7\u7eed\u4fdd\u6301\u5f53\u524d\u5168\u5c40\u6a21\u5f0f\u3002\u5b8c\u6574\u7f16\u8f91\u4ecd\u53ef\u4f7f\u7528\u8282\u70b9\u65c1\u7684\u94c5\u7b14\u6309\u94ae\u3002\n\n### \u9876\u5c42\u6587\u7ae0\u76ee\u5f55\u9875\n\n\u5f53\u5f53\u524d\u6587\u4ef6\u662f\u6700\u4e0a\u5c42\u7236\u5bfc\u56fe\u5e76\u4e14\u5305\u542b\u5b50\u5bfc\u56fe\u65f6\uff0c\u6587\u7ae0\u6a21\u5f0f\u4f1a\u5728\u6b63\u6587\u524d\u751f\u6210\u72ec\u7acb\u76ee\u5f55\u9875\u3002\u76ee\u5f55\u4f1a\u9012\u5f52\u8bfb\u53d6\u5168\u90e8\u540e\u4ee3\u5b50\u5bfc\u56fe\uff0c\u663e\u793a\u8de8\u6587\u4ef6\u7684\u7ae0\u3001\u8282\u7b49\u7f16\u53f7\uff1b\u70b9\u51fb\u76ee\u5f55\u9879\u53ef\u6253\u5f00\u5bf9\u5e94\u5bfc\u56fe\u5e76\u5b9a\u4f4d\u5230\u5177\u4f53\u8282\u70b9\u3002\u5b50\u5bfc\u56fe\u9875\u9762\u4e0d\u4f1a\u91cd\u590d\u751f\u6210\u6574\u68f5\u5bfc\u56fe\u65cf\u76ee\u5f55\u3002\n\n\u5df2\u6709\u7236\u5b50\u5bfc\u56fe\u4e0d\u9700\u8981\u91cd\u65b0\u521b\u5efa\uff0c\u4e5f\u4e0d\u9700\u8981\u91cd\u5efa\u641c\u7d22\u7d22\u5f15\u3002\n\n## 1.4.0 \u5bfc\u56fe\u3001\u5927\u7eb2\u4e0e\u6587\u7ae0\u4e09\u79cd\u540c\u6b65\u6a21\u5f0f\n\n\u540c\u4e00\u4e2a `.mindmap` \u6587\u4ef6\u73b0\u5728\u53ef\u4ee5\u4f7f\u7528\u4e09\u79cd\u8868\u73b0\u65b9\u5f0f\uff0c\u4e09\u8005\u5171\u7528\u540c\u4e00\u68f5\u8282\u70b9\u6811\uff0c\u4e0d\u4f1a\u590d\u5236\u6570\u636e\uff1a\n\n- **\u5bfc\u56fe\u6a21\u5f0f**\uff1a\u539f\u6765\u7684\u53ef\u7f29\u653e\u3001\u53ef\u62d6\u52a8\u601d\u7ef4\u5bfc\u56fe\u753b\u5e03\uff1b\n- **\u5927\u7eb2\u6a21\u5f0f**\uff1a\u6309\u7167\u8282\u70b9\u5c42\u7ea7\u663e\u793a\u7f29\u8fdb\u5927\u7eb2\uff1b\n- **\u6587\u7ae0\u6a21\u5f0f**\uff1a\u6839\u636e\u5c42\u7ea7\u751f\u6210\u76ee\u5f55\u3001\u7ae0\u8282\u6807\u9898\u548c\u6b63\u6587\u3002\n\n\u5728\u4efb\u610f\u6a21\u5f0f\u4fee\u6539\u8282\u70b9\uff0c\u5176\u4ed6\u6a21\u5f0f\u4f1a\u7acb\u5373\u540c\u6b65\u3002\u4f8b\u5982\u5728\u6587\u7ae0\u6a21\u5f0f\u628a\u201c\u5510\u8bd7\u201d\u6539\u6210\u201c\u5510\u4ee3\u8bd7\u6b4c\u201d\uff0c\u5207\u56de\u5bfc\u56fe\u548c\u5927\u7eb2\u540e\u4f1a\u770b\u5230\u540c\u6837\u7684\u5185\u5bb9\u3002\u53ea\u8bfb\u72b6\u6001\u4f1a\u5199\u5165 `.mindmap` \u6587\u4ef6\uff1b\u663e\u793a\u6a21\u5f0f\u4ece 1.4.1 \u8d77\u6539\u4e3a\u5168\u5c40\u8bb0\u5fc6\uff0c\u6253\u5f00\u4efb\u610f\u7236\u5bfc\u56fe\u6216\u5b50\u5bfc\u56fe\u90fd\u4f1a\u7ee7\u7eed\u4f7f\u7528\u6700\u8fd1\u9009\u62e9\u7684\u6a21\u5f0f\u3002\n\n### \u6a21\u5f0f\u5207\u6362\u4e0e\u53ea\u8bfb\u9501\n\n\u5de5\u5177\u680f\u5de6\u4fa7\u65b0\u589e\u6a21\u5f0f\u5207\u6362\u6309\u94ae\u548c\u9501\u6309\u94ae\uff1a\n\n```text\n\u5bfc\u56fe \uff5c \u5927\u7eb2 \uff5c \u6587\u7ae0 \uff5c \ud83d\udd13/\ud83d\udd12\n```\n\n\u9501\u5b9a\u540e\u53ea\u80fd\u67e5\u770b\u3001\u641c\u7d22\u3001\u6253\u5f00\u94fe\u63a5\u3001\u8fdb\u5165\u5b50\u5bfc\u56fe\u3001\u7f29\u653e\u548c\u5e73\u79fb\u3002\u65b0\u589e\u3001\u5220\u9664\u3001\u62d6\u62fd\u3001\u7c98\u8d34\u3001\u6837\u5f0f\u4fee\u6539\u548c\u8282\u70b9\u7f16\u8f91\u90fd\u4f1a\u505c\u7528\u3002\u53ea\u8bfb\u72b6\u6001\u4e0b\u4ecd\u53ef\u4e34\u65f6\u5c55\u5f00\u6216\u6536\u8d77\u5206\u652f\uff0c\u4f46\u4e0d\u4f1a\u628a\u6298\u53e0\u72b6\u6001\u5199\u56de\u6587\u4ef6\u3002\n\n\u547d\u4ee4\u9762\u677f\u65b0\u589e\uff1a\n\n```text\n\u5207\u6362\u5230\u5bfc\u56fe\u6a21\u5f0f\n\u5207\u6362\u5230\u5927\u7eb2\u6a21\u5f0f\n\u5207\u6362\u5230\u6587\u7ae0\u6a21\u5f0f\n\u5207\u6362\u5bfc\u56fe\u53ea\u8bfb / \u7f16\u8f91\u6a21\u5f0f\n```\n\n### \u5927\u7eb2\u6a21\u5f0f\n\n\u5927\u7eb2\u6a21\u5f0f\u4f1a\u5c55\u5f00\u663e\u793a\u6240\u6709\u5c42\u7ea7\uff0c\u5305\u62ec\u5bfc\u56fe\u4e2d\u5df2\u6298\u53e0\u7684\u8282\u70b9\u3002\u53ef\u4ee5\uff1a\n\n- \u76f4\u63a5\u70b9\u51fb\u8282\u70b9\u6587\u5b57\u8fdb\u884c\u7f16\u8f91\uff1b\n- \u53cc\u51fb\u6253\u5f00\u5b8c\u6574\u8282\u70b9\u7f16\u8f91\u5668\uff1b"
+}

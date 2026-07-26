@@ -1,0 +1,726 @@
+{
+  "nodes": [
+    {
+      "id": "file:src/article/modes.ts",
+      "type": "file",
+      "name": "modes.ts",
+      "filePath": "src/article/modes.ts",
+      "summary": "typescript code file (320 lines)",
+      "tags": [
+        "typescript",
+        "code"
+      ]
+    },
+    {
+      "id": "function:src/article/modes.ts:readingAnchorPart",
+      "type": "function",
+      "name": "readingAnchorPart",
+      "filePath": "src/article/modes.ts",
+      "summary": "Function readingAnchorPart in src/article/modes.ts",
+      "tags": [
+        "typescript",
+        "function"
+      ]
+    },
+    {
+      "id": "function:src/article/modes.ts:chineseNumber",
+      "type": "function",
+      "name": "chineseNumber",
+      "filePath": "src/article/modes.ts",
+      "summary": "Function chineseNumber in src/article/modes.ts",
+      "tags": [
+        "typescript",
+        "function"
+      ]
+    },
+    {
+      "id": "function:src/article/modes.ts:articleNumberLabel",
+      "type": "function",
+      "name": "articleNumberLabel",
+      "filePath": "src/article/modes.ts",
+      "summary": "Function articleNumberLabel in src/article/modes.ts",
+      "tags": [
+        "typescript",
+        "function"
+      ]
+    },
+    {
+      "id": "function:src/article/modes.ts:articleDisplayTitle",
+      "type": "function",
+      "name": "articleDisplayTitle",
+      "filePath": "src/article/modes.ts",
+      "summary": "Function articleDisplayTitle in src/article/modes.ts",
+      "tags": [
+        "typescript",
+        "function"
+      ]
+    },
+    {
+      "id": "function:src/article/modes.ts:isArticleHeading",
+      "type": "function",
+      "name": "isArticleHeading",
+      "filePath": "src/article/modes.ts",
+      "summary": "Function isArticleHeading in src/article/modes.ts",
+      "tags": [
+        "typescript",
+        "function"
+      ]
+    },
+    {
+      "id": "function:src/article/modes.ts:resolveArticleNumbering",
+      "type": "function",
+      "name": "resolveArticleNumbering",
+      "filePath": "src/article/modes.ts",
+      "summary": "Function resolveArticleNumbering in src/article/modes.ts",
+      "tags": [
+        "typescript",
+        "function"
+      ]
+    },
+    {
+      "id": "function:src/article/modes.ts:articleChildStartLevel",
+      "type": "function",
+      "name": "articleChildStartLevel",
+      "filePath": "src/article/modes.ts",
+      "summary": "Function articleChildStartLevel in src/article/modes.ts",
+      "tags": [
+        "typescript",
+        "function"
+      ]
+    },
+    {
+      "id": "function:src/article/modes.ts:articleTocDepth",
+      "type": "function",
+      "name": "articleTocDepth",
+      "filePath": "src/article/modes.ts",
+      "summary": "Function articleTocDepth in src/article/modes.ts",
+      "tags": [
+        "typescript",
+        "function"
+      ]
+    },
+    {
+      "id": "function:src/article/modes.ts:resolveArticleTocMaxDepth",
+      "type": "function",
+      "name": "resolveArticleTocMaxDepth",
+      "filePath": "src/article/modes.ts",
+      "summary": "Function resolveArticleTocMaxDepth in src/article/modes.ts",
+      "tags": [
+        "typescript",
+        "function"
+      ]
+    },
+    {
+      "id": "function:src/article/modes.ts:sameBreadcrumb",
+      "type": "function",
+      "name": "sameBreadcrumb",
+      "filePath": "src/article/modes.ts",
+      "summary": "Function sameBreadcrumb in src/article/modes.ts",
+      "tags": [
+        "typescript",
+        "function"
+      ]
+    },
+    {
+      "id": "function:src/article/modes.ts:resolveArticleSiblingPages",
+      "type": "function",
+      "name": "resolveArticleSiblingPages",
+      "filePath": "src/article/modes.ts",
+      "summary": "Function resolveArticleSiblingPages in src/article/modes.ts",
+      "tags": [
+        "typescript",
+        "function"
+      ]
+    },
+    {
+      "id": "function:src/article/modes.ts:currentArticlePageEntry",
+      "type": "function",
+      "name": "currentArticlePageEntry",
+      "filePath": "src/article/modes.ts",
+      "summary": "Function currentArticlePageEntry in src/article/modes.ts",
+      "tags": [
+        "typescript",
+        "function"
+      ]
+    },
+    {
+      "id": "function:src/article/modes.ts:buildArticleNodeInfo",
+      "type": "function",
+      "name": "buildArticleNodeInfo",
+      "filePath": "src/article/modes.ts",
+      "summary": "Function buildArticleNodeInfo in src/article/modes.ts",
+      "tags": [
+        "typescript",
+        "function"
+      ]
+    },
+    {
+      "id": "function:src/article/modes.ts:normalizeVisibleModes",
+      "type": "function",
+      "name": "normalizeVisibleModes",
+      "filePath": "src/article/modes.ts",
+      "summary": "Function normalizeVisibleModes in src/article/modes.ts",
+      "tags": [
+        "typescript",
+        "function"
+      ]
+    },
+    {
+      "id": "file:src/import/import-export.ts",
+      "type": "file",
+      "name": "import-export.ts",
+      "filePath": "src/import/import-export.ts",
+      "summary": "typescript code file (138 lines)",
+      "tags": [
+        "typescript",
+        "code"
+      ]
+    },
+    {
+      "id": "function:src/import/import-export.ts:xmindToDocument",
+      "type": "function",
+      "name": "xmindToDocument",
+      "filePath": "src/import/import-export.ts",
+      "summary": "Function xmindToDocument in src/import/import-export.ts",
+      "tags": [
+        "typescript",
+        "function"
+      ]
+    },
+    {
+      "id": "function:src/import/import-export.ts:escapeHtml",
+      "type": "function",
+      "name": "escapeHtml",
+      "filePath": "src/import/import-export.ts",
+      "summary": "Function escapeHtml in src/import/import-export.ts",
+      "tags": [
+        "typescript",
+        "function"
+      ]
+    },
+    {
+      "id": "function:src/import/import-export.ts:documentToHtml",
+      "type": "function",
+      "name": "documentToHtml",
+      "filePath": "src/import/import-export.ts",
+      "summary": "Function documentToHtml in src/import/import-export.ts",
+      "tags": [
+        "typescript",
+        "function"
+      ]
+    },
+    {
+      "id": "function:src/import/import-export.ts:readingSectionsToHtml",
+      "type": "function",
+      "name": "readingSectionsToHtml",
+      "filePath": "src/import/import-export.ts",
+      "summary": "Function readingSectionsToHtml in src/import/import-export.ts",
+      "tags": [
+        "typescript",
+        "function"
+      ]
+    },
+    {
+      "id": "file:src/main.ts",
+      "type": "file",
+      "name": "main.ts",
+      "filePath": "src/main.ts",
+      "summary": "typescript code file (1562 lines)",
+      "tags": [
+        "typescript",
+        "code"
+      ]
+    },
+    {
+      "id": "class:src/main.ts:MindMapStudioPlugin",
+      "type": "class",
+      "name": "MindMapStudioPlugin",
+      "filePath": "src/main.ts",
+      "summary": "Class MindMapStudioPlugin in src/main.ts",
+      "tags": [
+        "typescript",
+        "class"
+      ]
+    },
+    {
+      "id": "file:src/settings.ts",
+      "type": "file",
+      "name": "settings.ts",
+      "filePath": "src/settings.ts",
+      "summary": "typescript code file (1337 lines)",
+      "tags": [
+        "typescript",
+        "code"
+      ]
+    },
+    {
+      "id": "function:src/settings.ts:createImageHostConfig",
+      "type": "function",
+      "name": "createImageHostConfig",
+      "filePath": "src/settings.ts",
+      "summary": "Function createImageHostConfig in src/settings.ts",
+      "tags": [
+        "typescript",
+        "function"
+      ]
+    },
+    {
+      "id": "function:src/settings.ts:normalizeReturnToTopVisibility",
+      "type": "function",
+      "name": "normalizeReturnToTopVisibility",
+      "filePath": "src/settings.ts",
+      "summary": "Function normalizeReturnToTopVisibility in src/settings.ts",
+      "tags": [
+        "typescript",
+        "function"
+      ]
+    },
+    {
+      "id": "function:src/settings.ts:settingsToAppearance",
+      "type": "function",
+      "name": "settingsToAppearance",
+      "filePath": "src/settings.ts",
+      "summary": "Function settingsToAppearance in src/settings.ts",
+      "tags": [
+        "typescript",
+        "function"
+      ]
+    },
+    {
+      "id": "function:src/settings.ts:applyThemePresetToSettings",
+      "type": "function",
+      "name": "applyThemePresetToSettings",
+      "filePath": "src/settings.ts",
+      "summary": "Function applyThemePresetToSettings in src/settings.ts",
+      "tags": [
+        "typescript",
+        "function"
+      ]
+    },
+    {
+      "id": "class:src/settings.ts:MindMapStudioSettingTab",
+      "type": "class",
+      "name": "MindMapStudioSettingTab",
+      "filePath": "src/settings.ts",
+      "summary": "Class MindMapStudioSettingTab in src/settings.ts",
+      "tags": [
+        "typescript",
+        "class"
+      ]
+    },
+    {
+      "id": "file:src/view.ts",
+      "type": "file",
+      "name": "view.ts",
+      "filePath": "src/view.ts",
+      "summary": "typescript code file (454 lines)",
+      "tags": [
+        "typescript",
+        "code"
+      ]
+    },
+    {
+      "id": "class:src/view.ts:MindMapStudioView",
+      "type": "class",
+      "name": "MindMapStudioView",
+      "filePath": "src/view.ts",
+      "summary": "Class MindMapStudioView in src/view.ts",
+      "tags": [
+        "typescript",
+        "class"
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "source": "file:src/article/modes.ts",
+      "target": "function:src/article/modes.ts:readingAnchorPart",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/article/modes.ts",
+      "target": "function:src/article/modes.ts:chineseNumber",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/article/modes.ts",
+      "target": "function:src/article/modes.ts:articleNumberLabel",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/article/modes.ts",
+      "target": "function:src/article/modes.ts:articleDisplayTitle",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/article/modes.ts",
+      "target": "function:src/article/modes.ts:isArticleHeading",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/article/modes.ts",
+      "target": "function:src/article/modes.ts:resolveArticleNumbering",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/article/modes.ts",
+      "target": "function:src/article/modes.ts:articleChildStartLevel",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/article/modes.ts",
+      "target": "function:src/article/modes.ts:articleTocDepth",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/article/modes.ts",
+      "target": "function:src/article/modes.ts:resolveArticleTocMaxDepth",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/article/modes.ts",
+      "target": "function:src/article/modes.ts:sameBreadcrumb",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/article/modes.ts",
+      "target": "function:src/article/modes.ts:resolveArticleSiblingPages",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/article/modes.ts",
+      "target": "function:src/article/modes.ts:currentArticlePageEntry",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/article/modes.ts",
+      "target": "function:src/article/modes.ts:buildArticleNodeInfo",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/article/modes.ts",
+      "target": "function:src/article/modes.ts:normalizeVisibleModes",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/article/modes.ts",
+      "target": "function:src/article/modes.ts:readingAnchorPart",
+      "type": "exports",
+      "weight": 0.8
+    },
+    {
+      "source": "file:src/article/modes.ts",
+      "target": "function:src/article/modes.ts:chineseNumber",
+      "type": "exports",
+      "weight": 0.8
+    },
+    {
+      "source": "file:src/article/modes.ts",
+      "target": "function:src/article/modes.ts:articleNumberLabel",
+      "type": "exports",
+      "weight": 0.8
+    },
+    {
+      "source": "file:src/article/modes.ts",
+      "target": "function:src/article/modes.ts:articleDisplayTitle",
+      "type": "exports",
+      "weight": 0.8
+    },
+    {
+      "source": "file:src/article/modes.ts",
+      "target": "function:src/article/modes.ts:isArticleHeading",
+      "type": "exports",
+      "weight": 0.8
+    },
+    {
+      "source": "file:src/article/modes.ts",
+      "target": "function:src/article/modes.ts:resolveArticleNumbering",
+      "type": "exports",
+      "weight": 0.8
+    },
+    {
+      "source": "file:src/article/modes.ts",
+      "target": "function:src/article/modes.ts:articleChildStartLevel",
+      "type": "exports",
+      "weight": 0.8
+    },
+    {
+      "source": "file:src/article/modes.ts",
+      "target": "function:src/article/modes.ts:articleTocDepth",
+      "type": "exports",
+      "weight": 0.8
+    },
+    {
+      "source": "file:src/article/modes.ts",
+      "target": "function:src/article/modes.ts:resolveArticleTocMaxDepth",
+      "type": "exports",
+      "weight": 0.8
+    },
+    {
+      "source": "file:src/article/modes.ts",
+      "target": "function:src/article/modes.ts:resolveArticleSiblingPages",
+      "type": "exports",
+      "weight": 0.8
+    },
+    {
+      "source": "file:src/article/modes.ts",
+      "target": "function:src/article/modes.ts:currentArticlePageEntry",
+      "type": "exports",
+      "weight": 0.8
+    },
+    {
+      "source": "file:src/article/modes.ts",
+      "target": "function:src/article/modes.ts:buildArticleNodeInfo",
+      "type": "exports",
+      "weight": 0.8
+    },
+    {
+      "source": "file:src/article/modes.ts",
+      "target": "function:src/article/modes.ts:normalizeVisibleModes",
+      "type": "exports",
+      "weight": 0.8
+    },
+    {
+      "source": "file:src/import/import-export.ts",
+      "target": "function:src/import/import-export.ts:xmindToDocument",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/import/import-export.ts",
+      "target": "function:src/import/import-export.ts:escapeHtml",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/import/import-export.ts",
+      "target": "function:src/import/import-export.ts:documentToHtml",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/import/import-export.ts",
+      "target": "function:src/import/import-export.ts:readingSectionsToHtml",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/import/import-export.ts",
+      "target": "function:src/import/import-export.ts:xmindToDocument",
+      "type": "exports",
+      "weight": 0.8
+    },
+    {
+      "source": "file:src/import/import-export.ts",
+      "target": "function:src/import/import-export.ts:documentToHtml",
+      "type": "exports",
+      "weight": 0.8
+    },
+    {
+      "source": "file:src/import/import-export.ts",
+      "target": "function:src/import/import-export.ts:readingSectionsToHtml",
+      "type": "exports",
+      "weight": 0.8
+    },
+    {
+      "source": "file:src/main.ts",
+      "target": "class:src/main.ts:MindMapStudioPlugin",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/settings.ts",
+      "target": "function:src/settings.ts:createImageHostConfig",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/settings.ts",
+      "target": "function:src/settings.ts:normalizeReturnToTopVisibility",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/settings.ts",
+      "target": "function:src/settings.ts:settingsToAppearance",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/settings.ts",
+      "target": "function:src/settings.ts:applyThemePresetToSettings",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/settings.ts",
+      "target": "class:src/settings.ts:MindMapStudioSettingTab",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/settings.ts",
+      "target": "function:src/settings.ts:createImageHostConfig",
+      "type": "exports",
+      "weight": 0.8
+    },
+    {
+      "source": "file:src/settings.ts",
+      "target": "function:src/settings.ts:normalizeReturnToTopVisibility",
+      "type": "exports",
+      "weight": 0.8
+    },
+    {
+      "source": "file:src/settings.ts",
+      "target": "function:src/settings.ts:settingsToAppearance",
+      "type": "exports",
+      "weight": 0.8
+    },
+    {
+      "source": "file:src/settings.ts",
+      "target": "function:src/settings.ts:applyThemePresetToSettings",
+      "type": "exports",
+      "weight": 0.8
+    },
+    {
+      "source": "file:src/settings.ts",
+      "target": "class:src/settings.ts:MindMapStudioSettingTab",
+      "type": "exports",
+      "weight": 0.8
+    },
+    {
+      "source": "file:src/view.ts",
+      "target": "class:src/view.ts:MindMapStudioView",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/view.ts",
+      "target": "class:src/view.ts:MindMapStudioView",
+      "type": "exports",
+      "weight": 0.8
+    },
+    {
+      "source": "file:src/import/import-export.ts",
+      "target": "file:src/article/modes.ts",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:src/main.ts",
+      "target": "file:src/article/modes.ts",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:src/main.ts",
+      "target": "file:src/settings.ts",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:src/main.ts",
+      "target": "file:src/view.ts",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:src/settings.ts",
+      "target": "file:src/main.ts",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:src/view.ts",
+      "target": "file:src/article/modes.ts",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:src/view.ts",
+      "target": "file:src/import/import-export.ts",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:src/view.ts",
+      "target": "file:src/main.ts",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:src/view.ts",
+      "target": "file:src/settings.ts",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "function:src/article/modes.ts:articleNumberLabel",
+      "target": "function:src/article/modes.ts:chineseNumber",
+      "type": "calls",
+      "weight": 0.8
+    },
+    {
+      "source": "function:src/article/modes.ts:resolveArticleNumbering",
+      "target": "function:src/article/modes.ts:isArticleHeading",
+      "type": "calls",
+      "weight": 0.8
+    },
+    {
+      "source": "function:src/article/modes.ts:resolveArticleSiblingPages",
+      "target": "function:src/article/modes.ts:articleTocDepth",
+      "type": "calls",
+      "weight": 0.8
+    },
+    {
+      "source": "function:src/article/modes.ts:resolveArticleSiblingPages",
+      "target": "function:src/article/modes.ts:articleTocDepth",
+      "type": "calls",
+      "weight": 0.8
+    },
+    {
+      "source": "function:src/article/modes.ts:resolveArticleSiblingPages",
+      "target": "function:src/article/modes.ts:sameBreadcrumb",
+      "type": "calls",
+      "weight": 0.8
+    },
+    {
+      "source": "function:src/article/modes.ts:buildArticleNodeInfo",
+      "target": "function:src/article/modes.ts:articleChildStartLevel",
+      "type": "calls",
+      "weight": 0.8
+    },
+    {
+      "source": "function:src/import/import-export.ts:documentToHtml",
+      "target": "function:src/import/import-export.ts:readingSectionsToHtml",
+      "type": "calls",
+      "weight": 0.8
+    },
+    {
+      "source": "function:src/import/import-export.ts:readingSectionsToHtml",
+      "target": "function:src/import/import-export.ts:escapeHtml",
+      "type": "calls",
+      "weight": 0.8
+    },
+    {
+      "source": "function:src/import/import-export.ts:readingSectionsToHtml",
+      "target": "function:src/import/import-export.ts:escapeHtml",
+      "type": "calls",
+      "weight": 0.8
+    }
+  ]
+}

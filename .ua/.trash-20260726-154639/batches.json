@@ -1,0 +1,2042 @@
+{
+  "schemaVersion": 1,
+  "algorithm": "louvain",
+  "totalFiles": 45,
+  "totalBatches": 7,
+  "exportsByPath": {
+    "esbuild.config.mjs": [],
+    "scripts/check-docs.mjs": [],
+    "scripts/generate-function-reference.mjs": [],
+    "scripts/next-version.mjs": [
+      "nextVersion"
+    ],
+    "scripts/release.mjs": [],
+    "scripts/sync-version.mjs": [],
+    "scripts/test.mjs": [],
+    "src/article/article-style.ts": [
+      "ARTICLE_STYLE_PRESETS",
+      "resolveArticleStyle"
+    ],
+    "src/article/modes.ts": [
+      "DISPLAY_MODE_LABELS",
+      "DISPLAY_MODE_ICONS",
+      "readingAnchorPart",
+      "chineseNumber",
+      "articleNumberLabel",
+      "articleDisplayTitle",
+      "isArticleHeading",
+      "resolveArticleNumbering",
+      "articleChildStartLevel",
+      "articleTocDepth",
+      "resolveArticleTocMaxDepth",
+      "resolveArticleSiblingPages",
+      "currentArticlePageEntry",
+      "buildArticleNodeInfo",
+      "normalizeVisibleModes"
+    ],
+    "src/core/model.ts": [
+      "containsNode",
+      "findAncestors",
+      "findNode",
+      "findParent",
+      "flattenNodes",
+      "moveNodeRelative",
+      "removeNode",
+      "walkNodes",
+      "NodeDropPosition",
+      "MINDMAP_CODE_BLOCK",
+      "newId",
+      "createNode",
+      "createDefaultDocument",
+      "mergeAppearance",
+      "normalizeRichText",
+      "richTextPlainText",
+      "richTextCharacterStyles",
+      "characterStylesToRichText",
+      "reconcileRichTextAfterEdit",
+      "applyRichTextStyleRange",
+      "imageSourceCandidates",
+      "nodeContentBlocks",
+      "nodePlainText",
+      "nodePrimaryText",
+      "syncNodeLegacyFields",
+      "normalizeDocument",
+      "serializeDocument",
+      "parseDocument",
+      "cloneDocument",
+      "cloneNodeWithFreshIds",
+      "collectWikiLinks",
+      "extractFirstWikiLink",
+      "getTaskProgress",
+      "nodeSearchText",
+      "richTextToMarkdown",
+      "tableToMarkdown",
+      "parseMarkdownTable",
+      "parseFencedCode",
+      "childrenToTable",
+      "documentToMarkdown",
+      "markdownToDocument",
+      "indentedTextToMarkdown"
+    ],
+    "src/core/node-tree.ts": [
+      "walkNodes",
+      "flattenNodes",
+      "findNode",
+      "findParent",
+      "findAncestors",
+      "containsNode",
+      "removeNode",
+      "moveNodeRelative"
+    ],
+    "src/editor/article-renderer.ts": [
+      "renderArticleMode",
+      "renderArticleNodeContent"
+    ],
+    "src/editor/clipboard-import.ts": [
+      "parseClipboardNode",
+      "parseClipboardNodes",
+      "parseClipboardHtml"
+    ],
+    "src/editor/content-modals.ts": [
+      "TableEditModal",
+      "CodeEditModal"
+    ],
+    "src/editor/drag-drop.ts": [
+      "canMoveNodes",
+      "resolveDropPosition",
+      "isRightChildZone"
+    ],
+    "src/editor/editor-modals.ts": [
+      "chooseImageHosts",
+      "ImagePreviewModal",
+      "FormulaEditModal",
+      "ArticleStyleModal",
+      "JsonTransferModal",
+      "OutlineModal",
+      "SearchNodesModal",
+      "DocumentExportModal"
+    ],
+    "src/editor/editor-types.ts": [],
+    "src/editor/editor.ts": [
+      "MindMapEditorCallbacks",
+      "MindMapEditorOptions",
+      "MindMapEditor"
+    ],
+    "src/editor/history-manager.ts": [
+      "DocumentHistory"
+    ],
+    "src/editor/node-actions.ts": [
+      "appendChild",
+      "insertSiblingAfter",
+      "topLevelSelectedNodeIds",
+      "deleteNodes",
+      "setAllBranchesCollapsed",
+      "nextTaskStatus"
+    ],
+    "src/editor/node-image-actions.ts": [
+      "selectNodeImage",
+      "uploadCurrentNodeImage"
+    ],
+    "src/editor/node-rich-text-editor.ts": [
+      "renderNodeRichTextEditor"
+    ],
+    "src/editor/outline-renderer.ts": [
+      "renderOutlineMode"
+    ],
+    "src/editor/rich-text-dom.ts": [
+      "ensureMathJax",
+      "renderRichTextRuns",
+      "readRichTextEditor"
+    ],
+    "src/editor/selection-format-toolbar.ts": [
+      "attachSelectionFormatToolbar"
+    ],
+    "src/import/import-export.ts": [
+      "xmindToDocument",
+      "documentToHtml",
+      "readingSectionsToHtml"
+    ],
+    "src/main.ts": [
+      "MINDMAP_EXTENSION",
+      "default"
+    ],
+    "src/render/collision-layout.ts": [
+      "resolveLayoutCollisions"
+    ],
+    "src/render/layout.ts": [
+      "computeLayout",
+      "buildBranchColorMap",
+      "edgeWidthForDepth",
+      "edgePath",
+      "roundedElbowEdgePath",
+      "escapeXml",
+      "documentToSvg"
+    ],
+    "src/render/static-render.ts": [
+      "renderStaticMindMap",
+      "renderStaticSource"
+    ],
+    "src/search/global-search.ts": [
+      "buildSearchEntries",
+      "resolveHierarchicalEntries",
+      "searchEntries",
+      "collectIndexedFamilyPaths",
+      "MindMapSearchIndex",
+      "GlobalMindMapSearchModal"
+    ],
+    "src/settings.ts": [
+      "TOOLBAR_ITEMS",
+      "createImageHostConfig",
+      "DEFAULT_SETTINGS",
+      "normalizeReturnToTopVisibility",
+      "settingsToAppearance",
+      "applyThemePresetToSettings",
+      "MindMapStudioSettingTab"
+    ],
+    "src/themes.ts": [
+      "MINDMAP_THEME_PRESETS",
+      "getMindMapThemePreset",
+      "appearanceFromThemePreset"
+    ],
+    "src/view.ts": [
+      "VIEW_TYPE_MINDMAP_STUDIO",
+      "MindMapStudioView"
+    ]
+  },
+  "batches": [
+    {
+      "batchIndex": 1,
+      "files": [
+        {
+          "path": "src/core/model.ts",
+          "language": "typescript",
+          "sizeLines": 1688,
+          "fileCategory": "code"
+        },
+        {
+          "path": "src/core/node-tree.ts",
+          "language": "typescript",
+          "sizeLines": 118,
+          "fileCategory": "code"
+        },
+        {
+          "path": "src/editor/clipboard-import.ts",
+          "language": "typescript",
+          "sizeLines": 110,
+          "fileCategory": "code"
+        },
+        {
+          "path": "src/editor/content-modals.ts",
+          "language": "typescript",
+          "sizeLines": 260,
+          "fileCategory": "code"
+        },
+        {
+          "path": "src/editor/drag-drop.ts",
+          "language": "typescript",
+          "sizeLines": 53,
+          "fileCategory": "code"
+        },
+        {
+          "path": "src/editor/editor.ts",
+          "language": "typescript",
+          "sizeLines": 4139,
+          "fileCategory": "code"
+        },
+        {
+          "path": "src/editor/history-manager.ts",
+          "language": "typescript",
+          "sizeLines": 77,
+          "fileCategory": "code"
+        },
+        {
+          "path": "src/editor/node-rich-text-editor.ts",
+          "language": "typescript",
+          "sizeLines": 151,
+          "fileCategory": "code"
+        },
+        {
+          "path": "src/editor/rich-text-dom.ts",
+          "language": "typescript",
+          "sizeLines": 171,
+          "fileCategory": "code"
+        },
+        {
+          "path": "src/editor/selection-format-toolbar.ts",
+          "language": "typescript",
+          "sizeLines": 226,
+          "fileCategory": "code"
+        },
+        {
+          "path": "src/search/global-search.ts",
+          "language": "typescript",
+          "sizeLines": 1072,
+          "fileCategory": "code"
+        },
+        {
+          "path": "src/themes.ts",
+          "language": "typescript",
+          "sizeLines": 446,
+          "fileCategory": "code"
+        }
+      ],
+      "batchImportData": {
+        "src/core/model.ts": [
+          "src/core/node-tree.ts"
+        ],
+        "src/core/node-tree.ts": [
+          "src/core/model.ts"
+        ],
+        "src/editor/clipboard-import.ts": [
+          "src/core/model.ts"
+        ],
+        "src/editor/content-modals.ts": [
+          "src/core/model.ts"
+        ],
+        "src/editor/drag-drop.ts": [
+          "src/core/model.ts"
+        ],
+        "src/editor/editor.ts": [
+          "src/article/article-style.ts",
+          "src/article/modes.ts",
+          "src/core/model.ts",
+          "src/editor/article-renderer.ts",
+          "src/editor/clipboard-import.ts",
+          "src/editor/content-modals.ts",
+          "src/editor/drag-drop.ts",
+          "src/editor/editor-modals.ts",
+          "src/editor/editor-types.ts",
+          "src/editor/history-manager.ts",
+          "src/editor/node-actions.ts",
+          "src/editor/node-image-actions.ts",
+          "src/editor/node-rich-text-editor.ts",
+          "src/editor/outline-renderer.ts",
+          "src/editor/rich-text-dom.ts",
+          "src/editor/selection-format-toolbar.ts",
+          "src/render/collision-layout.ts",
+          "src/render/layout.ts",
+          "src/settings.ts",
+          "src/themes.ts"
+        ],
+        "src/editor/history-manager.ts": [
+          "src/core/model.ts"
+        ],
+        "src/editor/node-rich-text-editor.ts": [
+          "src/core/model.ts",
+          "src/editor/rich-text-dom.ts"
+        ],
+        "src/editor/rich-text-dom.ts": [
+          "src/core/model.ts"
+        ],
+        "src/editor/selection-format-toolbar.ts": [
+          "src/core/model.ts",
+          "src/editor/rich-text-dom.ts"
+        ],
+        "src/search/global-search.ts": [
+          "src/core/model.ts"
+        ],
+        "src/themes.ts": [
+          "src/core/model.ts"
+        ]
+      },
+      "neighborMap": {
+        "src/core/model.ts": [
+          {
+            "path": "src/article/article-style.ts",
+            "batchIndex": 2,
+            "symbols": [
+              "ARTICLE_STYLE_PRESETS",
+              "resolveArticleStyle"
+            ]
+          },
+          {
+            "path": "src/article/modes.ts",
+            "batchIndex": 3,
+            "symbols": [
+              "DISPLAY_MODE_LABELS",
+              "DISPLAY_MODE_ICONS",
+              "readingAnchorPart",
+              "chineseNumber",
+              "articleNumberLabel",
+              "articleDisplayTitle",
+              "isArticleHeading",
+              "resolveArticleNumbering",
+              "articleChildStartLevel",
+              "articleTocDepth",
+              "resolveArticleTocMaxDepth",
+              "resolveArticleSiblingPages",
+              "currentArticlePageEntry",
+              "buildArticleNodeInfo",
+              "normalizeVisibleModes"
+            ]
+          },
+          {
+            "path": "src/editor/article-renderer.ts",
+            "batchIndex": 2,
+            "symbols": [
+              "renderArticleMode",
+              "renderArticleNodeContent"
+            ]
+          },
+          {
+            "path": "src/editor/editor-modals.ts",
+            "batchIndex": 2,
+            "symbols": [
+              "chooseImageHosts",
+              "ImagePreviewModal",
+              "FormulaEditModal",
+              "ArticleStyleModal",
+              "JsonTransferModal",
+              "OutlineModal",
+              "SearchNodesModal",
+              "DocumentExportModal"
+            ]
+          },
+          {
+            "path": "src/editor/editor-types.ts",
+            "batchIndex": 2,
+            "symbols": []
+          },
+          {
+            "path": "src/editor/node-actions.ts",
+            "batchIndex": 2,
+            "symbols": [
+              "appendChild",
+              "insertSiblingAfter",
+              "topLevelSelectedNodeIds",
+              "deleteNodes",
+              "setAllBranchesCollapsed",
+              "nextTaskStatus"
+            ]
+          },
+          {
+            "path": "src/editor/node-image-actions.ts",
+            "batchIndex": 2,
+            "symbols": [
+              "selectNodeImage",
+              "uploadCurrentNodeImage"
+            ]
+          },
+          {
+            "path": "src/editor/outline-renderer.ts",
+            "batchIndex": 2,
+            "symbols": [
+              "renderOutlineMode"
+            ]
+          },
+          {
+            "path": "src/import/import-export.ts",
+            "batchIndex": 3,
+            "symbols": [
+              "xmindToDocument",
+              "documentToHtml",
+              "readingSectionsToHtml"
+            ]
+          },
+          {
+            "path": "src/main.ts",
+            "batchIndex": 3,
+            "symbols": [
+              "MINDMAP_EXTENSION",
+              "default"
+            ]
+          },
+          {
+            "path": "src/render/layout.ts",
+            "batchIndex": 4,
+            "symbols": [
+              "computeLayout",
+              "buildBranchColorMap",
+              "edgeWidthForDepth",
+              "edgePath",
+              "roundedElbowEdgePath",
+              "escapeXml",
+              "documentToSvg"
+            ]
+          },
+          {
+            "path": "src/render/static-render.ts",
+            "batchIndex": 4,
+            "symbols": [
+              "renderStaticMindMap",
+              "renderStaticSource"
+            ]
+          },
+          {
+            "path": "src/settings.ts",
+            "batchIndex": 3,
+            "symbols": [
+              "TOOLBAR_ITEMS",
+              "createImageHostConfig",
+              "DEFAULT_SETTINGS",
+              "normalizeReturnToTopVisibility",
+              "settingsToAppearance",
+              "applyThemePresetToSettings",
+              "MindMapStudioSettingTab"
+            ]
+          },
+          {
+            "path": "src/view.ts",
+            "batchIndex": 3,
+            "symbols": [
+              "VIEW_TYPE_MINDMAP_STUDIO",
+              "MindMapStudioView"
+            ]
+          }
+        ],
+        "src/editor/editor.ts": [
+          {
+            "path": "src/article/article-style.ts",
+            "batchIndex": 2,
+            "symbols": [
+              "ARTICLE_STYLE_PRESETS",
+              "resolveArticleStyle"
+            ]
+          },
+          {
+            "path": "src/article/modes.ts",
+            "batchIndex": 3,
+            "symbols": [
+              "DISPLAY_MODE_LABELS",
+              "DISPLAY_MODE_ICONS",
+              "readingAnchorPart",
+              "chineseNumber",
+              "articleNumberLabel",
+              "articleDisplayTitle",
+              "isArticleHeading",
+              "resolveArticleNumbering",
+              "articleChildStartLevel",
+              "articleTocDepth",
+              "resolveArticleTocMaxDepth",
+              "resolveArticleSiblingPages",
+              "currentArticlePageEntry",
+              "buildArticleNodeInfo",
+              "normalizeVisibleModes"
+            ]
+          },
+          {
+            "path": "src/editor/article-renderer.ts",
+            "batchIndex": 2,
+            "symbols": [
+              "renderArticleMode",
+              "renderArticleNodeContent"
+            ]
+          },
+          {
+            "path": "src/editor/editor-modals.ts",
+            "batchIndex": 2,
+            "symbols": [
+              "chooseImageHosts",
+              "ImagePreviewModal",
+              "FormulaEditModal",
+              "ArticleStyleModal",
+              "JsonTransferModal",
+              "OutlineModal",
+              "SearchNodesModal",
+              "DocumentExportModal"
+            ]
+          },
+          {
+            "path": "src/editor/editor-types.ts",
+            "batchIndex": 2,
+            "symbols": []
+          },
+          {
+            "path": "src/editor/node-actions.ts",
+            "batchIndex": 2,
+            "symbols": [
+              "appendChild",
+              "insertSiblingAfter",
+              "topLevelSelectedNodeIds",
+              "deleteNodes",
+              "setAllBranchesCollapsed",
+              "nextTaskStatus"
+            ]
+          },
+          {
+            "path": "src/editor/node-image-actions.ts",
+            "batchIndex": 2,
+            "symbols": [
+              "selectNodeImage",
+              "uploadCurrentNodeImage"
+            ]
+          },
+          {
+            "path": "src/editor/outline-renderer.ts",
+            "batchIndex": 2,
+            "symbols": [
+              "renderOutlineMode"
+            ]
+          },
+          {
+            "path": "src/render/collision-layout.ts",
+            "batchIndex": 4,
+            "symbols": [
+              "resolveLayoutCollisions"
+            ]
+          },
+          {
+            "path": "src/render/layout.ts",
+            "batchIndex": 4,
+            "symbols": [
+              "computeLayout",
+              "buildBranchColorMap",
+              "edgeWidthForDepth",
+              "edgePath",
+              "roundedElbowEdgePath",
+              "escapeXml",
+              "documentToSvg"
+            ]
+          },
+          {
+            "path": "src/settings.ts",
+            "batchIndex": 3,
+            "symbols": [
+              "TOOLBAR_ITEMS",
+              "createImageHostConfig",
+              "DEFAULT_SETTINGS",
+              "normalizeReturnToTopVisibility",
+              "settingsToAppearance",
+              "applyThemePresetToSettings",
+              "MindMapStudioSettingTab"
+            ]
+          },
+          {
+            "path": "src/view.ts",
+            "batchIndex": 3,
+            "symbols": [
+              "VIEW_TYPE_MINDMAP_STUDIO",
+              "MindMapStudioView"
+            ]
+          }
+        ],
+        "src/editor/rich-text-dom.ts": [
+          {
+            "path": "src/editor/article-renderer.ts",
+            "batchIndex": 2,
+            "symbols": [
+              "renderArticleMode",
+              "renderArticleNodeContent"
+            ]
+          },
+          {
+            "path": "src/editor/editor-modals.ts",
+            "batchIndex": 2,
+            "symbols": [
+              "chooseImageHosts",
+              "ImagePreviewModal",
+              "FormulaEditModal",
+              "ArticleStyleModal",
+              "JsonTransferModal",
+              "OutlineModal",
+              "SearchNodesModal",
+              "DocumentExportModal"
+            ]
+          },
+          {
+            "path": "src/editor/outline-renderer.ts",
+            "batchIndex": 2,
+            "symbols": [
+              "renderOutlineMode"
+            ]
+          }
+        ],
+        "src/search/global-search.ts": [
+          {
+            "path": "src/main.ts",
+            "batchIndex": 3,
+            "symbols": [
+              "MINDMAP_EXTENSION",
+              "default"
+            ]
+          }
+        ],
+        "src/themes.ts": [
+          {
+            "path": "src/settings.ts",
+            "batchIndex": 3,
+            "symbols": [
+              "TOOLBAR_ITEMS",
+              "createImageHostConfig",
+              "DEFAULT_SETTINGS",
+              "normalizeReturnToTopVisibility",
+              "settingsToAppearance",
+              "applyThemePresetToSettings",
+              "MindMapStudioSettingTab"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "batchIndex": 2,
+      "files": [
+        {
+          "path": "src/article/article-style.ts",
+          "language": "typescript",
+          "sizeLines": 24,
+          "fileCategory": "code"
+        },
+        {
+          "path": "src/editor/article-renderer.ts",
+          "language": "typescript",
+          "sizeLines": 207,
+          "fileCategory": "code"
+        },
+        {
+          "path": "src/editor/editor-modals.ts",
+          "language": "typescript",
+          "sizeLines": 696,
+          "fileCategory": "code"
+        },
+        {
+          "path": "src/editor/editor-types.ts",
+          "language": "typescript",
+          "sizeLines": 84,
+          "fileCategory": "code"
+        },
+        {
+          "path": "src/editor/node-actions.ts",
+          "language": "typescript",
+          "sizeLines": 76,
+          "fileCategory": "code"
+        },
+        {
+          "path": "src/editor/node-image-actions.ts",
+          "language": "typescript",
+          "sizeLines": 135,
+          "fileCategory": "code"
+        },
+        {
+          "path": "src/editor/outline-renderer.ts",
+          "language": "typescript",
+          "sizeLines": 166,
+          "fileCategory": "code"
+        }
+      ],
+      "batchImportData": {
+        "src/article/article-style.ts": [
+          "src/core/model.ts"
+        ],
+        "src/editor/article-renderer.ts": [
+          "src/article/article-style.ts",
+          "src/article/modes.ts",
+          "src/core/model.ts",
+          "src/editor/editor-modals.ts",
+          "src/editor/editor-types.ts",
+          "src/editor/rich-text-dom.ts"
+        ],
+        "src/editor/editor-modals.ts": [
+          "src/article/article-style.ts",
+          "src/core/model.ts",
+          "src/editor/node-actions.ts",
+          "src/editor/rich-text-dom.ts",
+          "src/import/import-export.ts",
+          "src/settings.ts"
+        ],
+        "src/editor/editor-types.ts": [
+          "src/article/modes.ts",
+          "src/core/model.ts",
+          "src/settings.ts"
+        ],
+        "src/editor/node-actions.ts": [
+          "src/core/model.ts"
+        ],
+        "src/editor/node-image-actions.ts": [
+          "src/core/model.ts",
+          "src/editor/editor-modals.ts",
+          "src/editor/editor-types.ts"
+        ],
+        "src/editor/outline-renderer.ts": [
+          "src/article/modes.ts",
+          "src/core/model.ts",
+          "src/editor/editor-modals.ts",
+          "src/editor/editor-types.ts",
+          "src/editor/rich-text-dom.ts"
+        ]
+      },
+      "neighborMap": {
+        "src/article/article-style.ts": [
+          {
+            "path": "src/core/model.ts",
+            "batchIndex": 1,
+            "symbols": [
+              "containsNode",
+              "findAncestors",
+              "findNode",
+              "findParent",
+              "flattenNodes",
+              "moveNodeRelative",
+              "removeNode",
+              "walkNodes",
+              "NodeDropPosition",
+              "MINDMAP_CODE_BLOCK",
+              "newId",
+              "createNode",
+              "createDefaultDocument",
+              "mergeAppearance",
+              "normalizeRichText",
+              "richTextPlainText",
+              "richTextCharacterStyles",
+              "characterStylesToRichText",
+              "reconcileRichTextAfterEdit",
+              "applyRichTextStyleRange",
+              "imageSourceCandidates",
+              "nodeContentBlocks",
+              "nodePlainText",
+              "nodePrimaryText",
+              "syncNodeLegacyFields",
+              "normalizeDocument",
+              "serializeDocument",
+              "parseDocument",
+              "cloneDocument",
+              "cloneNodeWithFreshIds",
+              "collectWikiLinks",
+              "extractFirstWikiLink",
+              "getTaskProgress",
+              "nodeSearchText",
+              "richTextToMarkdown",
+              "tableToMarkdown",
+              "parseMarkdownTable",
+              "parseFencedCode",
+              "childrenToTable",
+              "documentToMarkdown",
+              "markdownToDocument",
+              "indentedTextToMarkdown"
+            ]
+          },
+          {
+            "path": "src/editor/editor.ts",
+            "batchIndex": 1,
+            "symbols": [
+              "MindMapEditorCallbacks",
+              "MindMapEditorOptions",
+              "MindMapEditor"
+            ]
+          }
+        ],
+        "src/editor/article-renderer.ts": [
+          {
+            "path": "src/article/modes.ts",
+            "batchIndex": 3,
+            "symbols": [
+              "DISPLAY_MODE_LABELS",
+              "DISPLAY_MODE_ICONS",
+              "readingAnchorPart",
+              "chineseNumber",
+              "articleNumberLabel",
+              "articleDisplayTitle",
+              "isArticleHeading",
+              "resolveArticleNumbering",
+              "articleChildStartLevel",
+              "articleTocDepth",
+              "resolveArticleTocMaxDepth",
+              "resolveArticleSiblingPages",
+              "currentArticlePageEntry",
+              "buildArticleNodeInfo",
+              "normalizeVisibleModes"
+            ]
+          },
+          {
+            "path": "src/core/model.ts",
+            "batchIndex": 1,
+            "symbols": [
+              "containsNode",
+              "findAncestors",
+              "findNode",
+              "findParent",
+              "flattenNodes",
+              "moveNodeRelative",
+              "removeNode",
+              "walkNodes",
+              "NodeDropPosition",
+              "MINDMAP_CODE_BLOCK",
+              "newId",
+              "createNode",
+              "createDefaultDocument",
+              "mergeAppearance",
+              "normalizeRichText",
+              "richTextPlainText",
+              "richTextCharacterStyles",
+              "characterStylesToRichText",
+              "reconcileRichTextAfterEdit",
+              "applyRichTextStyleRange",
+              "imageSourceCandidates",
+              "nodeContentBlocks",
+              "nodePlainText",
+              "nodePrimaryText",
+              "syncNodeLegacyFields",
+              "normalizeDocument",
+              "serializeDocument",
+              "parseDocument",
+              "cloneDocument",
+              "cloneNodeWithFreshIds",
+              "collectWikiLinks",
+              "extractFirstWikiLink",
+              "getTaskProgress",
+              "nodeSearchText",
+              "richTextToMarkdown",
+              "tableToMarkdown",
+              "parseMarkdownTable",
+              "parseFencedCode",
+              "childrenToTable",
+              "documentToMarkdown",
+              "markdownToDocument",
+              "indentedTextToMarkdown"
+            ]
+          },
+          {
+            "path": "src/editor/rich-text-dom.ts",
+            "batchIndex": 1,
+            "symbols": [
+              "ensureMathJax",
+              "renderRichTextRuns",
+              "readRichTextEditor"
+            ]
+          },
+          {
+            "path": "src/editor/editor.ts",
+            "batchIndex": 1,
+            "symbols": [
+              "MindMapEditorCallbacks",
+              "MindMapEditorOptions",
+              "MindMapEditor"
+            ]
+          }
+        ],
+        "src/editor/editor-modals.ts": [
+          {
+            "path": "src/core/model.ts",
+            "batchIndex": 1,
+            "symbols": [
+              "containsNode",
+              "findAncestors",
+              "findNode",
+              "findParent",
+              "flattenNodes",
+              "moveNodeRelative",
+              "removeNode",
+              "walkNodes",
+              "NodeDropPosition",
+              "MINDMAP_CODE_BLOCK",
+              "newId",
+              "createNode",
+              "createDefaultDocument",
+              "mergeAppearance",
+              "normalizeRichText",
+              "richTextPlainText",
+              "richTextCharacterStyles",
+              "characterStylesToRichText",
+              "reconcileRichTextAfterEdit",
+              "applyRichTextStyleRange",
+              "imageSourceCandidates",
+              "nodeContentBlocks",
+              "nodePlainText",
+              "nodePrimaryText",
+              "syncNodeLegacyFields",
+              "normalizeDocument",
+              "serializeDocument",
+              "parseDocument",
+              "cloneDocument",
+              "cloneNodeWithFreshIds",
+              "collectWikiLinks",
+              "extractFirstWikiLink",
+              "getTaskProgress",
+              "nodeSearchText",
+              "richTextToMarkdown",
+              "tableToMarkdown",
+              "parseMarkdownTable",
+              "parseFencedCode",
+              "childrenToTable",
+              "documentToMarkdown",
+              "markdownToDocument",
+              "indentedTextToMarkdown"
+            ]
+          },
+          {
+            "path": "src/editor/rich-text-dom.ts",
+            "batchIndex": 1,
+            "symbols": [
+              "ensureMathJax",
+              "renderRichTextRuns",
+              "readRichTextEditor"
+            ]
+          },
+          {
+            "path": "src/import/import-export.ts",
+            "batchIndex": 3,
+            "symbols": [
+              "xmindToDocument",
+              "documentToHtml",
+              "readingSectionsToHtml"
+            ]
+          },
+          {
+            "path": "src/settings.ts",
+            "batchIndex": 3,
+            "symbols": [
+              "TOOLBAR_ITEMS",
+              "createImageHostConfig",
+              "DEFAULT_SETTINGS",
+              "normalizeReturnToTopVisibility",
+              "settingsToAppearance",
+              "applyThemePresetToSettings",
+              "MindMapStudioSettingTab"
+            ]
+          },
+          {
+            "path": "src/editor/editor.ts",
+            "batchIndex": 1,
+            "symbols": [
+              "MindMapEditorCallbacks",
+              "MindMapEditorOptions",
+              "MindMapEditor"
+            ]
+          }
+        ],
+        "src/editor/editor-types.ts": [
+          {
+            "path": "src/article/modes.ts",
+            "batchIndex": 3,
+            "symbols": [
+              "DISPLAY_MODE_LABELS",
+              "DISPLAY_MODE_ICONS",
+              "readingAnchorPart",
+              "chineseNumber",
+              "articleNumberLabel",
+              "articleDisplayTitle",
+              "isArticleHeading",
+              "resolveArticleNumbering",
+              "articleChildStartLevel",
+              "articleTocDepth",
+              "resolveArticleTocMaxDepth",
+              "resolveArticleSiblingPages",
+              "currentArticlePageEntry",
+              "buildArticleNodeInfo",
+              "normalizeVisibleModes"
+            ]
+          },
+          {
+            "path": "src/core/model.ts",
+            "batchIndex": 1,
+            "symbols": [
+              "containsNode",
+              "findAncestors",
+              "findNode",
+              "findParent",
+              "flattenNodes",
+              "moveNodeRelative",
+              "removeNode",
+              "walkNodes",
+              "NodeDropPosition",
+              "MINDMAP_CODE_BLOCK",
+              "newId",
+              "createNode",
+              "createDefaultDocument",
+              "mergeAppearance",
+              "normalizeRichText",
+              "richTextPlainText",
+              "richTextCharacterStyles",
+              "characterStylesToRichText",
+              "reconcileRichTextAfterEdit",
+              "applyRichTextStyleRange",
+              "imageSourceCandidates",
+              "nodeContentBlocks",
+              "nodePlainText",
+              "nodePrimaryText",
+              "syncNodeLegacyFields",
+              "normalizeDocument",
+              "serializeDocument",
+              "parseDocument",
+              "cloneDocument",
+              "cloneNodeWithFreshIds",
+              "collectWikiLinks",
+              "extractFirstWikiLink",
+              "getTaskProgress",
+              "nodeSearchText",
+              "richTextToMarkdown",
+              "tableToMarkdown",
+              "parseMarkdownTable",
+              "parseFencedCode",
+              "childrenToTable",
+              "documentToMarkdown",
+              "markdownToDocument",
+              "indentedTextToMarkdown"
+            ]
+          },
+          {
+            "path": "src/settings.ts",
+            "batchIndex": 3,
+            "symbols": [
+              "TOOLBAR_ITEMS",
+              "createImageHostConfig",
+              "DEFAULT_SETTINGS",
+              "normalizeReturnToTopVisibility",
+              "settingsToAppearance",
+              "applyThemePresetToSettings",
+              "MindMapStudioSettingTab"
+            ]
+          },
+          {
+            "path": "src/editor/editor.ts",
+            "batchIndex": 1,
+            "symbols": [
+              "MindMapEditorCallbacks",
+              "MindMapEditorOptions",
+              "MindMapEditor"
+            ]
+          }
+        ],
+        "src/editor/node-actions.ts": [
+          {
+            "path": "src/core/model.ts",
+            "batchIndex": 1,
+            "symbols": [
+              "containsNode",
+              "findAncestors",
+              "findNode",
+              "findParent",
+              "flattenNodes",
+              "moveNodeRelative",
+              "removeNode",
+              "walkNodes",
+              "NodeDropPosition",
+              "MINDMAP_CODE_BLOCK",
+              "newId",
+              "createNode",
+              "createDefaultDocument",
+              "mergeAppearance",
+              "normalizeRichText",
+              "richTextPlainText",
+              "richTextCharacterStyles",
+              "characterStylesToRichText",
+              "reconcileRichTextAfterEdit",
+              "applyRichTextStyleRange",
+              "imageSourceCandidates",
+              "nodeContentBlocks",
+              "nodePlainText",
+              "nodePrimaryText",
+              "syncNodeLegacyFields",
+              "normalizeDocument",
+              "serializeDocument",
+              "parseDocument",
+              "cloneDocument",
+              "cloneNodeWithFreshIds",
+              "collectWikiLinks",
+              "extractFirstWikiLink",
+              "getTaskProgress",
+              "nodeSearchText",
+              "richTextToMarkdown",
+              "tableToMarkdown",
+              "parseMarkdownTable",
+              "parseFencedCode",
+              "childrenToTable",
+              "documentToMarkdown",
+              "markdownToDocument",
+              "indentedTextToMarkdown"
+            ]
+          },
+          {
+            "path": "src/editor/editor.ts",
+            "batchIndex": 1,
+            "symbols": [
+              "MindMapEditorCallbacks",
+              "MindMapEditorOptions",
+              "MindMapEditor"
+            ]
+          }
+        ],
+        "src/editor/node-image-actions.ts": [
+          {
+            "path": "src/core/model.ts",
+            "batchIndex": 1,
+            "symbols": [
+              "containsNode",
+              "findAncestors",
+              "findNode",
+              "findParent",
+              "flattenNodes",
+              "moveNodeRelative",
+              "removeNode",
+              "walkNodes",
+              "NodeDropPosition",
+              "MINDMAP_CODE_BLOCK",
+              "newId",
+              "createNode",
+              "createDefaultDocument",
+              "mergeAppearance",
+              "normalizeRichText",
+              "richTextPlainText",
+              "richTextCharacterStyles",
+              "characterStylesToRichText",
+              "reconcileRichTextAfterEdit",
+              "applyRichTextStyleRange",
+              "imageSourceCandidates",
+              "nodeContentBlocks",
+              "nodePlainText",
+              "nodePrimaryText",
+              "syncNodeLegacyFields",
+              "normalizeDocument",
+              "serializeDocument",
+              "parseDocument",
+              "cloneDocument",
+              "cloneNodeWithFreshIds",
+              "collectWikiLinks",
+              "extractFirstWikiLink",
+              "getTaskProgress",
+              "nodeSearchText",
+              "richTextToMarkdown",
+              "tableToMarkdown",
+              "parseMarkdownTable",
+              "parseFencedCode",
+              "childrenToTable",
+              "documentToMarkdown",
+              "markdownToDocument",
+              "indentedTextToMarkdown"
+            ]
+          },
+          {
+            "path": "src/editor/editor.ts",
+            "batchIndex": 1,
+            "symbols": [
+              "MindMapEditorCallbacks",
+              "MindMapEditorOptions",
+              "MindMapEditor"
+            ]
+          }
+        ],
+        "src/editor/outline-renderer.ts": [
+          {
+            "path": "src/article/modes.ts",
+            "batchIndex": 3,
+            "symbols": [
+              "DISPLAY_MODE_LABELS",
+              "DISPLAY_MODE_ICONS",
+              "readingAnchorPart",
+              "chineseNumber",
+              "articleNumberLabel",
+              "articleDisplayTitle",
+              "isArticleHeading",
+              "resolveArticleNumbering",
+              "articleChildStartLevel",
+              "articleTocDepth",
+              "resolveArticleTocMaxDepth",
+              "resolveArticleSiblingPages",
+              "currentArticlePageEntry",
+              "buildArticleNodeInfo",
+              "normalizeVisibleModes"
+            ]
+          },
+          {
+            "path": "src/core/model.ts",
+            "batchIndex": 1,
+            "symbols": [
+              "containsNode",
+              "findAncestors",
+              "findNode",
+              "findParent",
+              "flattenNodes",
+              "moveNodeRelative",
+              "removeNode",
+              "walkNodes",
+              "NodeDropPosition",
+              "MINDMAP_CODE_BLOCK",
+              "newId",
+              "createNode",
+              "createDefaultDocument",
+              "mergeAppearance",
+              "normalizeRichText",
+              "richTextPlainText",
+              "richTextCharacterStyles",
+              "characterStylesToRichText",
+              "reconcileRichTextAfterEdit",
+              "applyRichTextStyleRange",
+              "imageSourceCandidates",
+              "nodeContentBlocks",
+              "nodePlainText",
+              "nodePrimaryText",
+              "syncNodeLegacyFields",
+              "normalizeDocument",
+              "serializeDocument",
+              "parseDocument",
+              "cloneDocument",
+              "cloneNodeWithFreshIds",
+              "collectWikiLinks",
+              "extractFirstWikiLink",
+              "getTaskProgress",
+              "nodeSearchText",
+              "richTextToMarkdown",
+              "tableToMarkdown",
+              "parseMarkdownTable",
+              "parseFencedCode",
+              "childrenToTable",
+              "documentToMarkdown",
+              "markdownToDocument",
+              "indentedTextToMarkdown"
+            ]
+          },
+          {
+            "path": "src/editor/rich-text-dom.ts",
+            "batchIndex": 1,
+            "symbols": [
+              "ensureMathJax",
+              "renderRichTextRuns",
+              "readRichTextEditor"
+            ]
+          },
+          {
+            "path": "src/editor/editor.ts",
+            "batchIndex": 1,
+            "symbols": [
+              "MindMapEditorCallbacks",
+              "MindMapEditorOptions",
+              "MindMapEditor"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "batchIndex": 3,
+      "files": [
+        {
+          "path": "src/article/modes.ts",
+          "language": "typescript",
+          "sizeLines": 320,
+          "fileCategory": "code"
+        },
+        {
+          "path": "src/import/import-export.ts",
+          "language": "typescript",
+          "sizeLines": 138,
+          "fileCategory": "code"
+        },
+        {
+          "path": "src/main.ts",
+          "language": "typescript",
+          "sizeLines": 1561,
+          "fileCategory": "code"
+        },
+        {
+          "path": "src/settings.ts",
+          "language": "typescript",
+          "sizeLines": 1337,
+          "fileCategory": "code"
+        },
+        {
+          "path": "src/view.ts",
+          "language": "typescript",
+          "sizeLines": 454,
+          "fileCategory": "code"
+        }
+      ],
+      "batchImportData": {
+        "src/article/modes.ts": [
+          "src/core/model.ts"
+        ],
+        "src/import/import-export.ts": [
+          "src/article/modes.ts",
+          "src/core/model.ts"
+        ],
+        "src/main.ts": [
+          "src/article/modes.ts",
+          "src/core/model.ts",
+          "src/render/static-render.ts",
+          "src/search/global-search.ts",
+          "src/settings.ts",
+          "src/view.ts"
+        ],
+        "src/settings.ts": [
+          "src/core/model.ts",
+          "src/main.ts",
+          "src/themes.ts"
+        ],
+        "src/view.ts": [
+          "src/article/modes.ts",
+          "src/core/model.ts",
+          "src/editor/editor.ts",
+          "src/import/import-export.ts",
+          "src/main.ts",
+          "src/settings.ts"
+        ]
+      },
+      "neighborMap": {
+        "src/article/modes.ts": [
+          {
+            "path": "src/core/model.ts",
+            "batchIndex": 1,
+            "symbols": [
+              "containsNode",
+              "findAncestors",
+              "findNode",
+              "findParent",
+              "flattenNodes",
+              "moveNodeRelative",
+              "removeNode",
+              "walkNodes",
+              "NodeDropPosition",
+              "MINDMAP_CODE_BLOCK",
+              "newId",
+              "createNode",
+              "createDefaultDocument",
+              "mergeAppearance",
+              "normalizeRichText",
+              "richTextPlainText",
+              "richTextCharacterStyles",
+              "characterStylesToRichText",
+              "reconcileRichTextAfterEdit",
+              "applyRichTextStyleRange",
+              "imageSourceCandidates",
+              "nodeContentBlocks",
+              "nodePlainText",
+              "nodePrimaryText",
+              "syncNodeLegacyFields",
+              "normalizeDocument",
+              "serializeDocument",
+              "parseDocument",
+              "cloneDocument",
+              "cloneNodeWithFreshIds",
+              "collectWikiLinks",
+              "extractFirstWikiLink",
+              "getTaskProgress",
+              "nodeSearchText",
+              "richTextToMarkdown",
+              "tableToMarkdown",
+              "parseMarkdownTable",
+              "parseFencedCode",
+              "childrenToTable",
+              "documentToMarkdown",
+              "markdownToDocument",
+              "indentedTextToMarkdown"
+            ]
+          },
+          {
+            "path": "src/editor/article-renderer.ts",
+            "batchIndex": 2,
+            "symbols": [
+              "renderArticleMode",
+              "renderArticleNodeContent"
+            ]
+          },
+          {
+            "path": "src/editor/editor-types.ts",
+            "batchIndex": 2,
+            "symbols": []
+          },
+          {
+            "path": "src/editor/editor.ts",
+            "batchIndex": 1,
+            "symbols": [
+              "MindMapEditorCallbacks",
+              "MindMapEditorOptions",
+              "MindMapEditor"
+            ]
+          },
+          {
+            "path": "src/editor/outline-renderer.ts",
+            "batchIndex": 2,
+            "symbols": [
+              "renderOutlineMode"
+            ]
+          }
+        ],
+        "src/import/import-export.ts": [
+          {
+            "path": "src/core/model.ts",
+            "batchIndex": 1,
+            "symbols": [
+              "containsNode",
+              "findAncestors",
+              "findNode",
+              "findParent",
+              "flattenNodes",
+              "moveNodeRelative",
+              "removeNode",
+              "walkNodes",
+              "NodeDropPosition",
+              "MINDMAP_CODE_BLOCK",
+              "newId",
+              "createNode",
+              "createDefaultDocument",
+              "mergeAppearance",
+              "normalizeRichText",
+              "richTextPlainText",
+              "richTextCharacterStyles",
+              "characterStylesToRichText",
+              "reconcileRichTextAfterEdit",
+              "applyRichTextStyleRange",
+              "imageSourceCandidates",
+              "nodeContentBlocks",
+              "nodePlainText",
+              "nodePrimaryText",
+              "syncNodeLegacyFields",
+              "normalizeDocument",
+              "serializeDocument",
+              "parseDocument",
+              "cloneDocument",
+              "cloneNodeWithFreshIds",
+              "collectWikiLinks",
+              "extractFirstWikiLink",
+              "getTaskProgress",
+              "nodeSearchText",
+              "richTextToMarkdown",
+              "tableToMarkdown",
+              "parseMarkdownTable",
+              "parseFencedCode",
+              "childrenToTable",
+              "documentToMarkdown",
+              "markdownToDocument",
+              "indentedTextToMarkdown"
+            ]
+          },
+          {
+            "path": "src/editor/editor-modals.ts",
+            "batchIndex": 2,
+            "symbols": [
+              "chooseImageHosts",
+              "ImagePreviewModal",
+              "FormulaEditModal",
+              "ArticleStyleModal",
+              "JsonTransferModal",
+              "OutlineModal",
+              "SearchNodesModal",
+              "DocumentExportModal"
+            ]
+          }
+        ],
+        "src/main.ts": [
+          {
+            "path": "src/core/model.ts",
+            "batchIndex": 1,
+            "symbols": [
+              "containsNode",
+              "findAncestors",
+              "findNode",
+              "findParent",
+              "flattenNodes",
+              "moveNodeRelative",
+              "removeNode",
+              "walkNodes",
+              "NodeDropPosition",
+              "MINDMAP_CODE_BLOCK",
+              "newId",
+              "createNode",
+              "createDefaultDocument",
+              "mergeAppearance",
+              "normalizeRichText",
+              "richTextPlainText",
+              "richTextCharacterStyles",
+              "characterStylesToRichText",
+              "reconcileRichTextAfterEdit",
+              "applyRichTextStyleRange",
+              "imageSourceCandidates",
+              "nodeContentBlocks",
+              "nodePlainText",
+              "nodePrimaryText",
+              "syncNodeLegacyFields",
+              "normalizeDocument",
+              "serializeDocument",
+              "parseDocument",
+              "cloneDocument",
+              "cloneNodeWithFreshIds",
+              "collectWikiLinks",
+              "extractFirstWikiLink",
+              "getTaskProgress",
+              "nodeSearchText",
+              "richTextToMarkdown",
+              "tableToMarkdown",
+              "parseMarkdownTable",
+              "parseFencedCode",
+              "childrenToTable",
+              "documentToMarkdown",
+              "markdownToDocument",
+              "indentedTextToMarkdown"
+            ]
+          },
+          {
+            "path": "src/render/static-render.ts",
+            "batchIndex": 4,
+            "symbols": [
+              "renderStaticMindMap",
+              "renderStaticSource"
+            ]
+          },
+          {
+            "path": "src/search/global-search.ts",
+            "batchIndex": 1,
+            "symbols": [
+              "buildSearchEntries",
+              "resolveHierarchicalEntries",
+              "searchEntries",
+              "collectIndexedFamilyPaths",
+              "MindMapSearchIndex",
+              "GlobalMindMapSearchModal"
+            ]
+          }
+        ],
+        "src/settings.ts": [
+          {
+            "path": "src/core/model.ts",
+            "batchIndex": 1,
+            "symbols": [
+              "containsNode",
+              "findAncestors",
+              "findNode",
+              "findParent",
+              "flattenNodes",
+              "moveNodeRelative",
+              "removeNode",
+              "walkNodes",
+              "NodeDropPosition",
+              "MINDMAP_CODE_BLOCK",
+              "newId",
+              "createNode",
+              "createDefaultDocument",
+              "mergeAppearance",
+              "normalizeRichText",
+              "richTextPlainText",
+              "richTextCharacterStyles",
+              "characterStylesToRichText",
+              "reconcileRichTextAfterEdit",
+              "applyRichTextStyleRange",
+              "imageSourceCandidates",
+              "nodeContentBlocks",
+              "nodePlainText",
+              "nodePrimaryText",
+              "syncNodeLegacyFields",
+              "normalizeDocument",
+              "serializeDocument",
+              "parseDocument",
+              "cloneDocument",
+              "cloneNodeWithFreshIds",
+              "collectWikiLinks",
+              "extractFirstWikiLink",
+              "getTaskProgress",
+              "nodeSearchText",
+              "richTextToMarkdown",
+              "tableToMarkdown",
+              "parseMarkdownTable",
+              "parseFencedCode",
+              "childrenToTable",
+              "documentToMarkdown",
+              "markdownToDocument",
+              "indentedTextToMarkdown"
+            ]
+          },
+          {
+            "path": "src/themes.ts",
+            "batchIndex": 1,
+            "symbols": [
+              "MINDMAP_THEME_PRESETS",
+              "getMindMapThemePreset",
+              "appearanceFromThemePreset"
+            ]
+          },
+          {
+            "path": "src/editor/editor-modals.ts",
+            "batchIndex": 2,
+            "symbols": [
+              "chooseImageHosts",
+              "ImagePreviewModal",
+              "FormulaEditModal",
+              "ArticleStyleModal",
+              "JsonTransferModal",
+              "OutlineModal",
+              "SearchNodesModal",
+              "DocumentExportModal"
+            ]
+          },
+          {
+            "path": "src/editor/editor-types.ts",
+            "batchIndex": 2,
+            "symbols": []
+          },
+          {
+            "path": "src/editor/editor.ts",
+            "batchIndex": 1,
+            "symbols": [
+              "MindMapEditorCallbacks",
+              "MindMapEditorOptions",
+              "MindMapEditor"
+            ]
+          }
+        ],
+        "src/view.ts": [
+          {
+            "path": "src/core/model.ts",
+            "batchIndex": 1,
+            "symbols": [
+              "containsNode",
+              "findAncestors",
+              "findNode",
+              "findParent",
+              "flattenNodes",
+              "moveNodeRelative",
+              "removeNode",
+              "walkNodes",
+              "NodeDropPosition",
+              "MINDMAP_CODE_BLOCK",
+              "newId",
+              "createNode",
+              "createDefaultDocument",
+              "mergeAppearance",
+              "normalizeRichText",
+              "richTextPlainText",
+              "richTextCharacterStyles",
+              "characterStylesToRichText",
+              "reconcileRichTextAfterEdit",
+              "applyRichTextStyleRange",
+              "imageSourceCandidates",
+              "nodeContentBlocks",
+              "nodePlainText",
+              "nodePrimaryText",
+              "syncNodeLegacyFields",
+              "normalizeDocument",
+              "serializeDocument",
+              "parseDocument",
+              "cloneDocument",
+              "cloneNodeWithFreshIds",
+              "collectWikiLinks",
+              "extractFirstWikiLink",
+              "getTaskProgress",
+              "nodeSearchText",
+              "richTextToMarkdown",
+              "tableToMarkdown",
+              "parseMarkdownTable",
+              "parseFencedCode",
+              "childrenToTable",
+              "documentToMarkdown",
+              "markdownToDocument",
+              "indentedTextToMarkdown"
+            ]
+          },
+          {
+            "path": "src/editor/editor.ts",
+            "batchIndex": 1,
+            "symbols": [
+              "MindMapEditorCallbacks",
+              "MindMapEditorOptions",
+              "MindMapEditor"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "batchIndex": 4,
+      "files": [
+        {
+          "path": "src/render/collision-layout.ts",
+          "language": "typescript",
+          "sizeLines": 93,
+          "fileCategory": "code"
+        },
+        {
+          "path": "src/render/layout.ts",
+          "language": "typescript",
+          "sizeLines": 606,
+          "fileCategory": "code"
+        },
+        {
+          "path": "src/render/static-render.ts",
+          "language": "typescript",
+          "sizeLines": 52,
+          "fileCategory": "code"
+        }
+      ],
+      "batchImportData": {
+        "src/render/collision-layout.ts": [],
+        "src/render/layout.ts": [
+          "src/core/model.ts",
+          "src/render/collision-layout.ts"
+        ],
+        "src/render/static-render.ts": [
+          "src/core/model.ts",
+          "src/render/layout.ts"
+        ]
+      },
+      "neighborMap": {
+        "src/render/collision-layout.ts": [
+          {
+            "path": "src/editor/editor.ts",
+            "batchIndex": 1,
+            "symbols": [
+              "MindMapEditorCallbacks",
+              "MindMapEditorOptions",
+              "MindMapEditor"
+            ]
+          }
+        ],
+        "src/render/layout.ts": [
+          {
+            "path": "src/core/model.ts",
+            "batchIndex": 1,
+            "symbols": [
+              "containsNode",
+              "findAncestors",
+              "findNode",
+              "findParent",
+              "flattenNodes",
+              "moveNodeRelative",
+              "removeNode",
+              "walkNodes",
+              "NodeDropPosition",
+              "MINDMAP_CODE_BLOCK",
+              "newId",
+              "createNode",
+              "createDefaultDocument",
+              "mergeAppearance",
+              "normalizeRichText",
+              "richTextPlainText",
+              "richTextCharacterStyles",
+              "characterStylesToRichText",
+              "reconcileRichTextAfterEdit",
+              "applyRichTextStyleRange",
+              "imageSourceCandidates",
+              "nodeContentBlocks",
+              "nodePlainText",
+              "nodePrimaryText",
+              "syncNodeLegacyFields",
+              "normalizeDocument",
+              "serializeDocument",
+              "parseDocument",
+              "cloneDocument",
+              "cloneNodeWithFreshIds",
+              "collectWikiLinks",
+              "extractFirstWikiLink",
+              "getTaskProgress",
+              "nodeSearchText",
+              "richTextToMarkdown",
+              "tableToMarkdown",
+              "parseMarkdownTable",
+              "parseFencedCode",
+              "childrenToTable",
+              "documentToMarkdown",
+              "markdownToDocument",
+              "indentedTextToMarkdown"
+            ]
+          },
+          {
+            "path": "src/editor/editor.ts",
+            "batchIndex": 1,
+            "symbols": [
+              "MindMapEditorCallbacks",
+              "MindMapEditorOptions",
+              "MindMapEditor"
+            ]
+          }
+        ],
+        "src/render/static-render.ts": [
+          {
+            "path": "src/core/model.ts",
+            "batchIndex": 1,
+            "symbols": [
+              "containsNode",
+              "findAncestors",
+              "findNode",
+              "findParent",
+              "flattenNodes",
+              "moveNodeRelative",
+              "removeNode",
+              "walkNodes",
+              "NodeDropPosition",
+              "MINDMAP_CODE_BLOCK",
+              "newId",
+              "createNode",
+              "createDefaultDocument",
+              "mergeAppearance",
+              "normalizeRichText",
+              "richTextPlainText",
+              "richTextCharacterStyles",
+              "characterStylesToRichText",
+              "reconcileRichTextAfterEdit",
+              "applyRichTextStyleRange",
+              "imageSourceCandidates",
+              "nodeContentBlocks",
+              "nodePlainText",
+              "nodePrimaryText",
+              "syncNodeLegacyFields",
+              "normalizeDocument",
+              "serializeDocument",
+              "parseDocument",
+              "cloneDocument",
+              "cloneNodeWithFreshIds",
+              "collectWikiLinks",
+              "extractFirstWikiLink",
+              "getTaskProgress",
+              "nodeSearchText",
+              "richTextToMarkdown",
+              "tableToMarkdown",
+              "parseMarkdownTable",
+              "parseFencedCode",
+              "childrenToTable",
+              "documentToMarkdown",
+              "markdownToDocument",
+              "indentedTextToMarkdown"
+            ]
+          },
+          {
+            "path": "src/main.ts",
+            "batchIndex": 3,
+            "symbols": [
+              "MINDMAP_EXTENSION",
+              "default"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "batchIndex": 5,
+      "files": [
+        {
+          "path": ".github/workflows/ci.yml",
+          "language": "yaml",
+          "sizeLines": 63,
+          "fileCategory": "infra"
+        },
+        {
+          "path": ".github/workflows/release.yml",
+          "language": "yaml",
+          "sizeLines": 184,
+          "fileCategory": "infra"
+        }
+      ],
+      "batchImportData": {
+        ".github/workflows/ci.yml": [],
+        ".github/workflows/release.yml": []
+      },
+      "neighborMap": {}
+    },
+    {
+      "batchIndex": 6,
+      "files": [
+        {
+          "path": "CHANGELOG.md",
+          "language": "markdown",
+          "sizeLines": 229,
+          "fileCategory": "docs"
+        },
+        {
+          "path": "MIGRATION.md",
+          "language": "markdown",
+          "sizeLines": 144,
+          "fileCategory": "docs"
+        },
+        {
+          "path": "README.md",
+          "language": "markdown",
+          "sizeLines": 697,
+          "fileCategory": "docs"
+        },
+        {
+          "path": "TEST_RESULTS.md",
+          "language": "markdown",
+          "sizeLines": 38,
+          "fileCategory": "docs"
+        },
+        {
+          "path": "manifest.json",
+          "language": "json",
+          "sizeLines": 9,
+          "fileCategory": "config"
+        },
+        {
+          "path": "package.json",
+          "language": "json",
+          "sizeLines": 31,
+          "fileCategory": "config"
+        },
+        {
+          "path": "styles.css",
+          "language": "css",
+          "sizeLines": 3768,
+          "fileCategory": "markup"
+        },
+        {
+          "path": "tsconfig.json",
+          "language": "json",
+          "sizeLines": 21,
+          "fileCategory": "config"
+        },
+        {
+          "path": "versions.json",
+          "language": "json",
+          "sizeLines": 111,
+          "fileCategory": "config"
+        }
+      ],
+      "batchImportData": {
+        "CHANGELOG.md": [],
+        "MIGRATION.md": [],
+        "README.md": [],
+        "TEST_RESULTS.md": [],
+        "manifest.json": [],
+        "package.json": [],
+        "styles.css": [],
+        "tsconfig.json": [],
+        "versions.json": []
+      },
+      "neighborMap": {}
+    },
+    {
+      "batchIndex": 7,
+      "files": [
+        {
+          "path": "esbuild.config.mjs",
+          "language": "javascript",
+          "sizeLines": 24,
+          "fileCategory": "code"
+        },
+        {
+          "path": "scripts/check-docs.mjs",
+          "language": "javascript",
+          "sizeLines": 60,
+          "fileCategory": "code"
+        },
+        {
+          "path": "scripts/generate-function-reference.mjs",
+          "language": "javascript",
+          "sizeLines": 71,
+          "fileCategory": "code"
+        },
+        {
+          "path": "scripts/next-version.mjs",
+          "language": "javascript",
+          "sizeLines": 23,
+          "fileCategory": "code"
+        },
+        {
+          "path": "scripts/release.mjs",
+          "language": "javascript",
+          "sizeLines": 6,
+          "fileCategory": "code"
+        },
+        {
+          "path": "scripts/sync-version.mjs",
+          "language": "javascript",
+          "sizeLines": 29,
+          "fileCategory": "code"
+        },
+        {
+          "path": "scripts/test.mjs",
+          "language": "javascript",
+          "sizeLines": 1296,
+          "fileCategory": "code"
+        }
+      ],
+      "batchImportData": {
+        "esbuild.config.mjs": [],
+        "scripts/check-docs.mjs": [],
+        "scripts/generate-function-reference.mjs": [],
+        "scripts/next-version.mjs": [],
+        "scripts/release.mjs": [],
+        "scripts/sync-version.mjs": [],
+        "scripts/test.mjs": [
+          "scripts/next-version.mjs"
+        ]
+      },
+      "neighborMap": {}
+    }
+  ]
+}

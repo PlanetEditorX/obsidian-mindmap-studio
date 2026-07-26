@@ -1,0 +1,1664 @@
+{
+  "scriptCompleted": true,
+  "filesAnalyzed": 3,
+  "filesSkipped": [],
+  "analysisOutcomes": {
+    "structure": {
+      "succeeded": 3,
+      "failed": 0
+    },
+    "callGraph": {
+      "succeeded": 3,
+      "failed": 0,
+      "skipped": 0
+    }
+  },
+  "results": [
+    {
+      "path": "src/render/collision-layout.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 93,
+      "nonEmptyLines": 88,
+      "functions": [
+        {
+          "name": "resolveLayoutCollisions",
+          "startLine": 23,
+          "endLine": 93,
+          "params": [
+            "nodes",
+            "verticalGap"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "resolveLayoutCollisions",
+          "line": 23,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "resolveLayoutCollisions",
+          "callee": "nodes.map",
+          "lineNumber": 26
+        },
+        {
+          "caller": "resolveLayoutCollisions",
+          "callee": "children.get",
+          "lineNumber": 29
+        },
+        {
+          "caller": "resolveLayoutCollisions",
+          "callee": "siblings.push",
+          "lineNumber": 30
+        },
+        {
+          "caller": "resolveLayoutCollisions",
+          "callee": "children.set",
+          "lineNumber": 31
+        },
+        {
+          "caller": "visit",
+          "callee": "result.push",
+          "lineNumber": 37
+        },
+        {
+          "caller": "visit",
+          "callee": "children.get",
+          "lineNumber": 38
+        },
+        {
+          "caller": "visit",
+          "callee": "visit",
+          "lineNumber": 38
+        },
+        {
+          "caller": "descendants",
+          "callee": "visit",
+          "lineNumber": 40
+        },
+        {
+          "caller": "moveSubtree",
+          "callee": "descendants",
+          "lineNumber": 44
+        },
+        {
+          "caller": "contains",
+          "callee": "byId.get",
+          "lineNumber": 53
+        },
+        {
+          "caller": "resolveLayoutCollisions",
+          "callee": "Math.max",
+          "lineNumber": 59
+        },
+        {
+          "caller": "resolveLayoutCollisions",
+          "callee": "[...nodes].sort",
+          "lineNumber": 62
+        },
+        {
+          "caller": "resolveLayoutCollisions",
+          "callee": "overlapsHorizontally",
+          "lineNumber": 70
+        },
+        {
+          "caller": "resolveLayoutCollisions",
+          "callee": "contains",
+          "lineNumber": 77
+        },
+        {
+          "caller": "resolveLayoutCollisions",
+          "callee": "moveSubtree",
+          "lineNumber": 83
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 1,
+        "functionCount": 1,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "src/render/layout.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 606,
+      "nonEmptyLines": 573,
+      "functions": [
+        {
+          "name": "visibleChildren",
+          "startLine": 48,
+          "endLine": 50,
+          "params": [
+            "node"
+          ]
+        },
+        {
+          "name": "estimatedTextLines",
+          "startLine": 60,
+          "endLine": 65,
+          "params": [
+            "text",
+            "width",
+            "fontSize"
+          ]
+        },
+        {
+          "name": "nodeDimensions",
+          "startLine": 75,
+          "endLine": 131,
+          "params": [
+            "node",
+            "depth",
+            "defaultFontSize",
+            "visualStyle",
+            "appearance"
+          ]
+        },
+        {
+          "name": "subtreeHeight",
+          "startLine": 141,
+          "endLine": 148,
+          "params": [
+            "node",
+            "depth",
+            "defaultFontSize",
+            "visualStyle",
+            "appearance"
+          ]
+        },
+        {
+          "name": "layoutBranch",
+          "startLine": 163,
+          "endLine": 193,
+          "params": [
+            "node",
+            "parentId",
+            "parentX",
+            "parentWidth",
+            "side",
+            "depth",
+            "centerY",
+            "output",
+            "defaultFontSize",
+            "visualStyle",
+            "appearance"
+          ]
+        },
+        {
+          "name": "computeLayout",
+          "startLine": 204,
+          "endLine": 258,
+          "params": [
+            "root",
+            "mode",
+            "defaultFontSize",
+            "visualStyle",
+            "appearance"
+          ]
+        },
+        {
+          "name": "buildBranchColorMap",
+          "startLine": 268,
+          "endLine": 277,
+          "params": [
+            "root",
+            "colors"
+          ]
+        },
+        {
+          "name": "edgeWidthForDepth",
+          "startLine": 288,
+          "endLine": 298,
+          "params": [
+            "appearance",
+            "depth",
+            "maxDepth"
+          ]
+        },
+        {
+          "name": "edgePath",
+          "startLine": 308,
+          "endLine": 315,
+          "params": [
+            "parent",
+            "child",
+            "style"
+          ]
+        },
+        {
+          "name": "roundedElbowEdgePath",
+          "startLine": 325,
+          "endLine": 342,
+          "params": [
+            "parent",
+            "child"
+          ]
+        },
+        {
+          "name": "escapeXml",
+          "startLine": 350,
+          "endLine": 355,
+          "params": [
+            "value"
+          ]
+        },
+        {
+          "name": "validColor",
+          "startLine": 364,
+          "endLine": 366,
+          "params": [
+            "value",
+            "fallback"
+          ]
+        },
+        {
+          "name": "svgRadius",
+          "startLine": 374,
+          "endLine": 378,
+          "params": [
+            "shape"
+          ]
+        },
+        {
+          "name": "taskGlyph",
+          "startLine": 386,
+          "endLine": 391,
+          "params": [
+            "node"
+          ]
+        },
+        {
+          "name": "truncateRuns",
+          "startLine": 400,
+          "endLine": 417,
+          "params": [
+            "runs",
+            "maxLength"
+          ]
+        },
+        {
+          "name": "richTextTspans",
+          "startLine": 429,
+          "endLine": 446,
+          "params": [
+            "runs",
+            "fallbackText",
+            "prefix",
+            "foreground",
+            "maxChars"
+          ]
+        },
+        {
+          "name": "svgWrappedLines",
+          "startLine": 456,
+          "endLine": 465,
+          "params": [
+            "text",
+            "width",
+            "fontSize"
+          ]
+        },
+        {
+          "name": "svgFontFamily",
+          "startLine": 474,
+          "endLine": 479,
+          "params": [
+            "mode",
+            "customFont"
+          ]
+        },
+        {
+          "name": "documentToSvg",
+          "startLine": 491,
+          "endLine": 606,
+          "params": [
+            "root",
+            "mode",
+            "title",
+            "appearance"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "computeLayout",
+          "line": 204,
+          "isDefault": false
+        },
+        {
+          "name": "buildBranchColorMap",
+          "line": 268,
+          "isDefault": false
+        },
+        {
+          "name": "edgeWidthForDepth",
+          "line": 288,
+          "isDefault": false
+        },
+        {
+          "name": "edgePath",
+          "line": 308,
+          "isDefault": false
+        },
+        {
+          "name": "roundedElbowEdgePath",
+          "line": 325,
+          "isDefault": false
+        },
+        {
+          "name": "escapeXml",
+          "line": 350,
+          "isDefault": false
+        },
+        {
+          "name": "documentToSvg",
+          "line": 491,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "estimatedTextLines",
+          "callee": "Math.max",
+          "lineNumber": 61
+        },
+        {
+          "caller": "estimatedTextLines",
+          "callee": "Math.max",
+          "lineNumber": 62
+        },
+        {
+          "caller": "estimatedTextLines",
+          "callee": "Math.max",
+          "lineNumber": 63
+        },
+        {
+          "caller": "estimatedTextLines",
+          "callee": "Math.floor",
+          "lineNumber": 63
+        },
+        {
+          "caller": "estimatedTextLines",
+          "callee": "Math.max",
+          "lineNumber": 64
+        },
+        {
+          "caller": "estimatedTextLines",
+          "callee": "text.split(/\\r?\\n/).reduce",
+          "lineNumber": 64
+        },
+        {
+          "caller": "estimatedTextLines",
+          "callee": "text.split",
+          "lineNumber": 64
+        },
+        {
+          "caller": "estimatedTextLines",
+          "callee": "Math.max",
+          "lineNumber": 64
+        },
+        {
+          "caller": "estimatedTextLines",
+          "callee": "Math.ceil",
+          "lineNumber": 64
+        },
+        {
+          "caller": "estimatedTextLines",
+          "callee": "Math.max",
+          "lineNumber": 64
+        },
+        {
+          "caller": "nodeDimensions",
+          "callee": "Math.max",
+          "lineNumber": 78
+        },
+        {
+          "caller": "nodeDimensions",
+          "callee": "nodeContentBlocks",
+          "lineNumber": 79
+        },
+        {
+          "caller": "nodeDimensions",
+          "callee": "Math.max",
+          "lineNumber": 81
+        },
+        {
+          "caller": "nodeDimensions",
+          "callee": "Math.min",
+          "lineNumber": 81
+        },
+        {
+          "caller": "nodeDimensions",
+          "callee": "Math.max",
+          "lineNumber": 83
+        },
+        {
+          "caller": "nodeDimensions",
+          "callee": "Math.min",
+          "lineNumber": 83
+        },
+        {
+          "caller": "nodeDimensions",
+          "callee": "Math.max",
+          "lineNumber": 92
+        },
+        {
+          "caller": "nodeDimensions",
+          "callee": "Math.max",
+          "lineNumber": 94
+        },
+        {
+          "caller": "nodeDimensions",
+          "callee": "block.text.split(/\\r?\\n/).map",
+          "lineNumber": 94
+        },
+        {
+          "caller": "nodeDimensions",
+          "callee": "block.text.split",
+          "lineNumber": 94
+        },
+        {
+          "caller": "nodeDimensions",
+          "callee": "Array.from(block.text.split(/\\r?\\n/).sort((a, b) => b.length - a.length)[0] ?? \"\")\n          .reduce",
+          "lineNumber": 95
+        },
+        {
+          "caller": "nodeDimensions",
+          "callee": "Array.from",
+          "lineNumber": 95
+        },
+        {
+          "caller": "nodeDimensions",
+          "callee": "block.text.split(/\\r?\\n/).sort",
+          "lineNumber": 95
+        },
+        {
+          "caller": "nodeDimensions",
+          "callee": "block.text.split",
+          "lineNumber": 95
+        },
+        {
+          "caller": "nodeDimensions",
+          "callee": "/[\\u2e80-\\u9fff\\uff00-\\uffef]/u.test",
+          "lineNumber": 96
+        },
+        {
+          "caller": "nodeDimensions",
+          "callee": "Math.max",
+          "lineNumber": 98
+        },
+        {
+          "caller": "nodeDimensions",
+          "callee": "Math.min",
+          "lineNumber": 98
+        },
+        {
+          "caller": "nodeDimensions",
+          "callee": "Math.min",
+          "lineNumber": 98
+        },
+        {
+          "caller": "nodeDimensions",
+          "callee": "Math.max",
+          "lineNumber": 102
+        },
+        {
+          "caller": "nodeDimensions",
+          "callee": "Math.min",
+          "lineNumber": 103
+        },
+        {
+          "caller": "nodeDimensions",
+          "callee": "Math.max",
+          "lineNumber": 103
+        },
+        {
+          "caller": "nodeDimensions",
+          "callee": "node.code.code.split",
+          "lineNumber": 106
+        },
+        {
+          "caller": "nodeDimensions",
+          "callee": "Math.max",
+          "lineNumber": 107
+        },
+        {
+          "caller": "nodeDimensions",
+          "callee": "lines.slice(0, 80).map",
+          "lineNumber": 107
+        },
+        {
+          "caller": "nodeDimensions",
+          "callee": "lines.slice",
+          "lineNumber": 107
+        },
+        {
+          "caller": "nodeDimensions",
+          "callee": "Math.min",
+          "lineNumber": 108
+        },
+        {
+          "caller": "nodeDimensions",
+          "callee": "Math.max",
+          "lineNumber": 108
+        },
+        {
+          "caller": "nodeDimensions",
+          "callee": "Math.min",
+          "lineNumber": 112
+        },
+        {
+          "caller": "nodeDimensions",
+          "callee": "Math.min",
+          "lineNumber": 113
+        },
+        {
+          "caller": "nodeDimensions",
+          "callee": "Math.max",
+          "lineNumber": 113
+        },
+        {
+          "caller": "nodeDimensions",
+          "callee": "Math.max",
+          "lineNumber": 114
+        },
+        {
+          "caller": "nodeDimensions",
+          "callee": "Math.max",
+          "lineNumber": 118
+        },
+        {
+          "caller": "nodeDimensions",
+          "callee": "estimatedTextLines",
+          "lineNumber": 118
+        },
+        {
+          "caller": "nodeDimensions",
+          "callee": "Math.min",
+          "lineNumber": 122
+        },
+        {
+          "caller": "nodeDimensions",
+          "callee": "node.code.code.split",
+          "lineNumber": 126
+        },
+        {
+          "caller": "nodeDimensions",
+          "callee": "Math.min",
+          "lineNumber": 127
+        },
+        {
+          "caller": "nodeDimensions",
+          "callee": "Math.max",
+          "lineNumber": 127
+        },
+        {
+          "caller": "nodeDimensions",
+          "callee": "Math.min",
+          "lineNumber": 127
+        },
+        {
+          "caller": "nodeDimensions",
+          "callee": "Math.max",
+          "lineNumber": 129
+        },
+        {
+          "caller": "nodeDimensions",
+          "callee": "Math.min",
+          "lineNumber": 130
+        },
+        {
+          "caller": "subtreeHeight",
+          "callee": "nodeDimensions",
+          "lineNumber": 142
+        },
+        {
+          "caller": "subtreeHeight",
+          "callee": "visibleChildren",
+          "lineNumber": 143
+        },
+        {
+          "caller": "subtreeHeight",
+          "callee": "children.reduce",
+          "lineNumber": 146
+        },
+        {
+          "caller": "subtreeHeight",
+          "callee": "subtreeHeight",
+          "lineNumber": 146
+        },
+        {
+          "caller": "subtreeHeight",
+          "callee": "Math.max",
+          "lineNumber": 147
+        },
+        {
+          "caller": "layoutBranch",
+          "callee": "nodeDimensions",
+          "lineNumber": 176
+        },
+        {
+          "caller": "layoutBranch",
+          "callee": "output.push",
+          "lineNumber": 180
+        },
+        {
+          "caller": "layoutBranch",
+          "callee": "visibleChildren",
+          "lineNumber": 181
+        },
+        {
+          "caller": "layoutBranch",
+          "callee": "children.map",
+          "lineNumber": 184
+        },
+        {
+          "caller": "layoutBranch",
+          "callee": "subtreeHeight",
+          "lineNumber": 184
+        },
+        {
+          "caller": "layoutBranch",
+          "callee": "heights.reduce",
+          "lineNumber": 185
+        },
+        {
+          "caller": "layoutBranch",
+          "callee": "children.forEach",
+          "lineNumber": 187
+        },
+        {
+          "caller": "layoutBranch",
+          "callee": "nodeDimensions",
+          "lineNumber": 188
+        },
+        {
+          "caller": "layoutBranch",
+          "callee": "layoutBranch",
+          "lineNumber": 190
+        },
+        {
+          "caller": "computeLayout",
+          "callee": "nodeDimensions",
+          "lineNumber": 205
+        },
+        {
+          "caller": "computeLayout",
+          "callee": "visibleChildren",
+          "lineNumber": 210
+        },
+        {
+          "caller": "computeLayout",
+          "callee": "[...children].sort",
+          "lineNumber": 217
+        },
+        {
+          "caller": "computeLayout",
+          "callee": "subtreeHeight",
+          "lineNumber": 217
+        },
+        {
+          "caller": "computeLayout",
+          "callee": "subtreeHeight",
+          "lineNumber": 217
+        },
+        {
+          "caller": "computeLayout",
+          "callee": "subtreeHeight",
+          "lineNumber": 218
+        },
+        {
+          "caller": "computeLayout",
+          "callee": "left.push",
+          "lineNumber": 220
+        },
+        {
+          "caller": "computeLayout",
+          "callee": "right.push",
+          "lineNumber": 223
+        },
+        {
+          "caller": "placeSide",
+          "callee": "items.map",
+          "lineNumber": 229
+        },
+        {
+          "caller": "placeSide",
+          "callee": "subtreeHeight",
+          "lineNumber": 229
+        },
+        {
+          "caller": "placeSide",
+          "callee": "heights.reduce",
+          "lineNumber": 230
+        },
+        {
+          "caller": "placeSide",
+          "callee": "Math.max",
+          "lineNumber": 230
+        },
+        {
+          "caller": "placeSide",
+          "callee": "items.forEach",
+          "lineNumber": 232
+        },
+        {
+          "caller": "placeSide",
+          "callee": "nodeDimensions",
+          "lineNumber": 233
+        },
+        {
+          "caller": "placeSide",
+          "callee": "layoutBranch",
+          "lineNumber": 234
+        },
+        {
+          "caller": "computeLayout",
+          "callee": "placeSide",
+          "lineNumber": 238
+        },
+        {
+          "caller": "computeLayout",
+          "callee": "placeSide",
+          "lineNumber": 239
+        },
+        {
+          "caller": "computeLayout",
+          "callee": "children.map",
+          "lineNumber": 241
+        },
+        {
+          "caller": "computeLayout",
+          "callee": "subtreeHeight",
+          "lineNumber": 241
+        },
+        {
+          "caller": "computeLayout",
+          "callee": "heights.reduce",
+          "lineNumber": 242
+        },
+        {
+          "caller": "computeLayout",
+          "callee": "Math.max",
+          "lineNumber": 242
+        },
+        {
+          "caller": "computeLayout",
+          "callee": "children.forEach",
+          "lineNumber": 244
+        },
+        {
+          "caller": "computeLayout",
+          "callee": "nodeDimensions",
+          "lineNumber": 245
+        },
+        {
+          "caller": "computeLayout",
+          "callee": "layoutBranch",
+          "lineNumber": 246
+        },
+        {
+          "caller": "computeLayout",
+          "callee": "resolveLayoutCollisions",
+          "lineNumber": 251
+        },
+        {
+          "caller": "computeLayout",
+          "callee": "nodes.map",
+          "lineNumber": 252
+        },
+        {
+          "caller": "computeLayout",
+          "callee": "Math.min",
+          "lineNumber": 253
+        },
+        {
+          "caller": "computeLayout",
+          "callee": "nodes.map",
+          "lineNumber": 253
+        },
+        {
+          "caller": "computeLayout",
+          "callee": "Math.max",
+          "lineNumber": 254
+        },
+        {
+          "caller": "computeLayout",
+          "callee": "nodes.map",
+          "lineNumber": 254
+        },
+        {
+          "caller": "computeLayout",
+          "callee": "Math.min",
+          "lineNumber": 255
+        },
+        {
+          "caller": "computeLayout",
+          "callee": "nodes.map",
+          "lineNumber": 255
+        },
+        {
+          "caller": "computeLayout",
+          "callee": "Math.max",
+          "lineNumber": 256
+        },
+        {
+          "caller": "computeLayout",
+          "callee": "nodes.map",
+          "lineNumber": 256
+        },
+        {
+          "caller": "visit",
+          "callee": "result.set",
+          "lineNumber": 272
+        },
+        {
+          "caller": "visit",
+          "callee": "node.children.forEach",
+          "lineNumber": 273
+        },
+        {
+          "caller": "visit",
+          "callee": "visit",
+          "lineNumber": 273
+        },
+        {
+          "caller": "buildBranchColorMap",
+          "callee": "root.children.forEach",
+          "lineNumber": 275
+        },
+        {
+          "caller": "buildBranchColorMap",
+          "callee": "visit",
+          "lineNumber": 275
+        },
+        {
+          "caller": "edgeWidthForDepth",
+          "callee": "Math.max",
+          "lineNumber": 289
+        },
+        {
+          "caller": "edgeWidthForDepth",
+          "callee": "Math.min",
+          "lineNumber": 289
+        },
+        {
+          "caller": "edgeWidthForDepth",
+          "callee": "Math.max",
+          "lineNumber": 291
+        },
+        {
+          "caller": "edgeWidthForDepth",
+          "callee": "Math.min",
+          "lineNumber": 291
+        },
+        {
+          "caller": "edgeWidthForDepth",
+          "callee": "Math.min",
+          "lineNumber": 291
+        },
+        {
+          "caller": "edgeWidthForDepth",
+          "callee": "Math.max",
+          "lineNumber": 292
+        },
+        {
+          "caller": "edgeWidthForDepth",
+          "callee": "Math.floor",
+          "lineNumber": 292
+        },
+        {
+          "caller": "edgeWidthForDepth",
+          "callee": "Math.min",
+          "lineNumber": 296
+        },
+        {
+          "caller": "edgeWidthForDepth",
+          "callee": "Math.max",
+          "lineNumber": 296
+        },
+        {
+          "caller": "edgeWidthForDepth",
+          "callee": "Number",
+          "lineNumber": 297
+        },
+        {
+          "caller": "edgeWidthForDepth",
+          "callee": "(maximum + (minimum - maximum) * progress).toFixed",
+          "lineNumber": 297
+        },
+        {
+          "caller": "roundedElbowEdgePath",
+          "callee": "Math.abs",
+          "lineNumber": 330
+        },
+        {
+          "caller": "roundedElbowEdgePath",
+          "callee": "Math.sign",
+          "lineNumber": 331
+        },
+        {
+          "caller": "roundedElbowEdgePath",
+          "callee": "Math.sign",
+          "lineNumber": 332
+        },
+        {
+          "caller": "roundedElbowEdgePath",
+          "callee": "Math.min",
+          "lineNumber": 333
+        },
+        {
+          "caller": "roundedElbowEdgePath",
+          "callee": "Math.abs",
+          "lineNumber": 333
+        },
+        {
+          "caller": "roundedElbowEdgePath",
+          "callee": "Math.abs",
+          "lineNumber": 333
+        },
+        {
+          "caller": "roundedElbowEdgePath",
+          "callee": "[\n    `M ${parentX} ${parent.y}`,\n    `L ${middleX - directionX * radius} ${parent.y}`,\n    `Q ${middleX} ${parent.y} ${middleX} ${parent.y + directionY * radius}`,\n    `L ${middleX} ${child.y - directionY * radius}`,\n    `Q ${middleX} ${child.y} ${middleX + directionX * radius} ${child.y}`,\n    `L ${childX} ${child.y}`\n  ].join",
+          "lineNumber": 334
+        },
+        {
+          "caller": "escapeXml",
+          "callee": "value.replace",
+          "lineNumber": 351
+        },
+        {
+          "caller": "validColor",
+          "callee": "/^#[0-9a-f]{6}$/i.test",
+          "lineNumber": 365
+        },
+        {
+          "caller": "truncateRuns",
+          "callee": "result.push",
+          "lineNumber": 407
+        },
+        {
+          "caller": "truncateRuns",
+          "callee": "result.push",
+          "lineNumber": 411
+        },
+        {
+          "caller": "truncateRuns",
+          "callee": "run.text.slice",
+          "lineNumber": 411
+        },
+        {
+          "caller": "truncateRuns",
+          "callee": "result[result.length - 1]!.text.slice",
+          "lineNumber": 415
+        },
+        {
+          "caller": "richTextTspans",
+          "callee": "truncateRuns(source, maxChars).map((run) => {\n    const style = run.style;\n    const attributes: string[] = [];\n    if (style?.color) attributes.push(`fill=\"${validColor(style.color, foreground)}\"`);\n    if (style?.bold !== undefined) attributes.push(`font-weight=\"${style.bold ? 700 : 400}\"`);\n    if (style?.italic !== undefined) attributes.push(`font-style=\"${style.italic ? \"italic\" : \"normal\"}\"`);\n    const decorations: string[] = [];\n    if (style?.underline) decorations.push(\"underline\");\n    if (style?.strike) decorations.push(\"line-through\");\n    if (decorations.length) attributes.push(`text-decoration=\"${decorations.join(\" \")}\"`);\n    return `<tspan ${attributes.join(\" \")}>${escapeXml(run.text)}</tspan>`;\n  }).join",
+          "lineNumber": 434
+        },
+        {
+          "caller": "richTextTspans",
+          "callee": "truncateRuns(source, maxChars).map",
+          "lineNumber": 434
+        },
+        {
+          "caller": "richTextTspans",
+          "callee": "truncateRuns",
+          "lineNumber": 434
+        },
+        {
+          "caller": "richTextTspans",
+          "callee": "attributes.push",
+          "lineNumber": 437
+        },
+        {
+          "caller": "richTextTspans",
+          "callee": "validColor",
+          "lineNumber": 437
+        },
+        {
+          "caller": "richTextTspans",
+          "callee": "attributes.push",
+          "lineNumber": 438
+        },
+        {
+          "caller": "richTextTspans",
+          "callee": "attributes.push",
+          "lineNumber": 439
+        },
+        {
+          "caller": "richTextTspans",
+          "callee": "decorations.push",
+          "lineNumber": 441
+        },
+        {
+          "caller": "richTextTspans",
+          "callee": "decorations.push",
+          "lineNumber": 442
+        },
+        {
+          "caller": "richTextTspans",
+          "callee": "attributes.push",
+          "lineNumber": 443
+        },
+        {
+          "caller": "richTextTspans",
+          "callee": "decorations.join",
+          "lineNumber": 443
+        },
+        {
+          "caller": "richTextTspans",
+          "callee": "attributes.join",
+          "lineNumber": 444
+        },
+        {
+          "caller": "richTextTspans",
+          "callee": "escapeXml",
+          "lineNumber": 444
+        },
+        {
+          "caller": "svgWrappedLines",
+          "callee": "Math.max",
+          "lineNumber": 457
+        },
+        {
+          "caller": "svgWrappedLines",
+          "callee": "Math.max",
+          "lineNumber": 458
+        },
+        {
+          "caller": "svgWrappedLines",
+          "callee": "Math.floor",
+          "lineNumber": 458
+        },
+        {
+          "caller": "svgWrappedLines",
+          "callee": "Math.max",
+          "lineNumber": 458
+        },
+        {
+          "caller": "svgWrappedLines",
+          "callee": "text.split",
+          "lineNumber": 460
+        },
+        {
+          "caller": "svgWrappedLines",
+          "callee": "lines.push",
+          "lineNumber": 461
+        },
+        {
+          "caller": "svgWrappedLines",
+          "callee": "lines.push",
+          "lineNumber": 462
+        },
+        {
+          "caller": "svgWrappedLines",
+          "callee": "sourceLine.slice",
+          "lineNumber": 462
+        },
+        {
+          "caller": "svgFontFamily",
+          "callee": "customFont?.trim",
+          "lineNumber": 477
+        },
+        {
+          "caller": "svgFontFamily",
+          "callee": "customFont.trim().replaceAll",
+          "lineNumber": 477
+        },
+        {
+          "caller": "svgFontFamily",
+          "callee": "customFont.trim",
+          "lineNumber": 477
+        },
+        {
+          "caller": "documentToSvg",
+          "callee": "computeLayout",
+          "lineNumber": 493
+        },
+        {
+          "caller": "documentToSvg",
+          "callee": "Math.max",
+          "lineNumber": 495
+        },
+        {
+          "caller": "documentToSvg",
+          "callee": "Math.max",
+          "lineNumber": 496
+        },
+        {
+          "caller": "documentToSvg",
+          "callee": "validColor",
+          "lineNumber": 500
+        },
+        {
+          "caller": "documentToSvg",
+          "callee": "buildBranchColorMap",
+          "lineNumber": 501
+        },
+        {
+          "caller": "documentToSvg",
+          "callee": "Math.max",
+          "lineNumber": 502
+        },
+        {
+          "caller": "documentToSvg",
+          "callee": "layout.nodes.map",
+          "lineNumber": 502
+        },
+        {
+          "caller": "documentToSvg",
+          "callee": "layout.nodes\n    .filter((position) => position.parentId)\n    .map((position) => {\n      const parent = position.parentId ? layout.byId.get(position.parentId) : undefined;\n      const stroke = validColor(position.node.style?.color, branchColorMap.get(position.node.id) ?? defaultEdge);\n      const width = edgeWidthForDepth(appearance, position.depth, maxDepth);\n      if (!parent) return \"\";\n      const path = appearance.nodeVisualStyle === \"branch\"\n        ? roundedElbowEdgePath(parent, position)\n        : edgePath(parent, position, edgeStyle);\n      return `<path d=\"${path}\" fill=\"none\" stroke=\"${stroke}\" stroke-width=\"${width}\" stroke-linecap=\"round\" stroke-linejoin=\"round\" opacity=\"0.8\"/>`;\n    })\n    .join",
+          "lineNumber": 503
+        },
+        {
+          "caller": "documentToSvg",
+          "callee": "layout.nodes\n    .filter((position) => position.parentId)\n    .map",
+          "lineNumber": 503
+        },
+        {
+          "caller": "documentToSvg",
+          "callee": "layout.nodes\n    .filter",
+          "lineNumber": 503
+        },
+        {
+          "caller": "documentToSvg",
+          "callee": "layout.byId.get",
+          "lineNumber": 506
+        },
+        {
+          "caller": "documentToSvg",
+          "callee": "validColor",
+          "lineNumber": 507
+        },
+        {
+          "caller": "documentToSvg",
+          "callee": "branchColorMap.get",
+          "lineNumber": 507
+        },
+        {
+          "caller": "documentToSvg",
+          "callee": "edgeWidthForDepth",
+          "lineNumber": 508
+        },
+        {
+          "caller": "documentToSvg",
+          "callee": "roundedElbowEdgePath",
+          "lineNumber": 511
+        },
+        {
+          "caller": "documentToSvg",
+          "callee": "edgePath",
+          "lineNumber": 512
+        },
+        {
+          "caller": "documentToSvg",
+          "callee": "layout.nodes.map((position) => {\n    const node = position.node;\n    const x = position.x - position.width / 2;\n    const y = position.y - position.height / 2;\n    const isRoot = position.depth === 0;\n    const defaultBackground = isRoot ? validColor(appearance.rootColor, \"#4f46e5\") : validColor(appearance.nodeColor, \"#ffffff\");\n    const defaultText = isRoot ? validColor(appearance.rootTextColor, \"#ffffff\") : validColor(appearance.textColor, \"#0f172a\");\n    const background = validColor(node.style?.color, defaultBackground);\n    const foreground = validColor(node.style?.textColor, defaultText);\n    const branchColor = branchColorMap.get(node.id);\n    const border = validColor(node.style?.borderColor, isRoot ? background : branchColor ?? validColor(appearance.nodeBorderColor, \"#94a3b8\"));\n    const borderWidth = node.style?.borderWidth ?? appearance.nodeBorderWidth ?? (isRoot ? 2 : 1);\n    const prefix = `${node.icon ? `${node.icon} ` : \"\"}${taskGlyph(node)}`;\n    const textAlign = node.style?.textAlign ?? appearance.nodeTextAlign ?? \"center\";\n    const textAnchor = textAlign === \"left\" ? \"start\" : textAlign === \"right\" ? \"end\" : \"middle\";\n    const textX = textAlign === \"left\" ? x + 16 : textAlign === \"right\" ? x + position.width - 16 : position.x;\n    const contentBlocks = nodeContentBlocks(node);\n    let contentY = y + 28;\n    const contentParts: string[] = [];\n    let prefixUsed = false;\n    let submapMarkerUsed = false;\n    for (const block of contentBlocks) {\n      if (block.type === \"image\") {\n        contentParts.push(`<rect x=\"${position.x - 70}\" y=\"${contentY - 14}\" width=\"140\" height=\"94\" rx=\"8\" fill=\"rgba(127,127,127,.12)\"/><text x=\"${position.x}\" y=\"${contentY + 38}\" text-anchor=\"middle\" fill=\"${foreground}\" font-size=\"12\">🖼 ${escapeXml((block.alt ?? \"图片\").slice(0, 20))}</text>`);\n        contentY += 112;\n      } else if (block.text.trim()) {\n        const blockPrefix = prefixUsed ? \"\" : prefix;\n        prefixUsed = true;\n        const suffix: string = node.submap && !submapMarkerUsed ? \"  ↗\" : \"\";\n        submapMarkerUsed = submapMarkerUsed || Boolean(suffix);\n        const fontSize = node.style?.fontSize ?? defaultFontSize;\n        const plainText = `${blockPrefix}${block.text}${suffix}`;\n        const lines = svgWrappedLines(plainText, position.width, fontSize);\n        if (lines.length === 1) {\n          const maxChars = Math.max(42, Math.floor((position.width - 32) / Math.max(5.5, fontSize * .62)));\n          const submapSuffix = suffix ? `<tspan fill=\"${foreground}\" opacity=\".72\">${escapeXml(suffix)}</tspan>` : \"\";\n          contentParts.push(`<text x=\"${textX}\" y=\"${contentY}\" text-anchor=\"${textAnchor}\" fill=\"${foreground}\" font-size=\"${fontSize}\">${richTextTspans(block.richText, block.text, blockPrefix, foreground, maxChars)}${submapSuffix}</text>`);\n        } else {\n          lines.forEach((line, index) => contentParts.push(`<text x=\"${textX}\" y=\"${contentY + index * (fontSize + 8)}\" text-anchor=\"${textAnchor}\" fill=\"${foreground}\" font-size=\"${fontSize}\">${escapeXml(line)}</text>`));\n        }\n        contentY += lines.length * (fontSize + 8);\n      }\n    }\n    if (!contentBlocks.length) {\n      const fontSize = node.style?.fontSize ?? defaultFontSize;\n      const lines = svgWrappedLines(`${prefix || nodePlainText(node) || \"图片节点\"}${node.submap ? \"  ↗\" : \"\"}`, position.width, fontSize);\n      lines.forEach((line, index) => contentParts.push(`<text x=\"${textX}\" y=\"${contentY + index * (fontSize + 8)}\" text-anchor=\"${textAnchor}\" fill=\"${foreground}\" font-size=\"${fontSize}\">${escapeXml(line)}</text>`));\n    }\n    let richY = contentY + 10;\n    const richParts: string[] = [];\n    if (node.table) {\n      const rows = [node.table.headers, ...node.table.rows.slice(0, 8)];\n      rows.forEach((row, index) => {\n        const rowText = escapeXml(row.map((cell) => cell.replaceAll(\"\\n\", \" \")).join(\"  |  \").slice(0, 100));\n        richParts.push(`<text x=\"${x + 16}\" y=\"${richY + index * 23}\" fill=\"${foreground}\" font-size=\"${index === 0 ? 10.5 : 9.5}\" font-weight=\"${index === 0 ? 700 : 400}\">${rowText}</text>`);\n      });\n      if (node.table.rows.length > 8) richParts.push(`<text x=\"${x + 16}\" y=\"${richY + rows.length * 23}\" fill=\"${foreground}\" opacity=\".65\" font-size=\"9\">… 还有 ${node.table.rows.length - 8} 行</text>`);\n    }\n    if (node.code) {\n      richParts.push(`<rect x=\"${x + 12}\" y=\"${richY - 14}\" width=\"${position.width - 24}\" height=\"${Math.min(350, Math.max(80, node.code.code.split(/\\r?\\n/).length * 17 + 34))}\" rx=\"7\" fill=\"rgba(15,23,42,.10)\"/>`);\n      richParts.push(`<text x=\"${x + 20}\" y=\"${richY + 3}\" fill=\"${foreground}\" opacity=\".7\" font-size=\"9\">${escapeXml(node.code.language || \"code\")}</text>`);\n      node.code.code.split(/\\r?\\n/).slice(0, 16).forEach((line, index) => richParts.push(`<text x=\"${x + 20}\" y=\"${richY + 23 + index * 17}\" fill=\"${foreground}\" font-size=\"9\" font-family=\"monospace\">${escapeXml(line.slice(0, 92))}</text>`));\n    }\n    const richContent = richParts.join(\"\");\n    const tags = node.tags?.length\n      ? `<text x=\"${position.x}\" y=\"${position.y + position.height / 2 - 9}\" text-anchor=\"middle\" fill=\"${foreground}\" opacity=\".72\" font-size=\"10\">${escapeXml(node.tags.map((tag) => `#${tag}`).join(\"  \").slice(0, 48))}</text>`\n      : \"\";\n    const bold = node.style?.bold ?? appearance.bold ?? false;\n    const italic = node.style?.italic ?? appearance.italic ?? false;\n    const underline = node.style?.underline ?? appearance.underline ?? false;\n    const fontSize = node.style?.fontSize ?? defaultFontSize;\n    return `<g><rect x=\"${x}\" y=\"${y}\" width=\"${position.width}\" height=\"${position.height}\" rx=\"${svgRadius(node.style?.shape)}\" fill=\"${background}\" stroke=\"${border}\" stroke-width=\"${borderWidth}\"/><g font-weight=\"${isRoot || bold ? 700 : 400}\" font-style=\"${italic ? \"italic\" : \"normal\"}\" text-decoration=\"${underline ? \"underline\" : \"none\"}\">${contentParts.join(\"\")}</g>${richContent}${tags}</g>`;\n  }).join",
+          "lineNumber": 517
+        },
+        {
+          "caller": "documentToSvg",
+          "callee": "layout.nodes.map",
+          "lineNumber": 517
+        },
+        {
+          "caller": "documentToSvg",
+          "callee": "validColor",
+          "lineNumber": 522
+        },
+        {
+          "caller": "documentToSvg",
+          "callee": "validColor",
+          "lineNumber": 522
+        },
+        {
+          "caller": "documentToSvg",
+          "callee": "validColor",
+          "lineNumber": 523
+        },
+        {
+          "caller": "documentToSvg",
+          "callee": "validColor",
+          "lineNumber": 523
+        },
+        {
+          "caller": "documentToSvg",
+          "callee": "validColor",
+          "lineNumber": 524
+        },
+        {
+          "caller": "documentToSvg",
+          "callee": "validColor",
+          "lineNumber": 525
+        },
+        {
+          "caller": "documentToSvg",
+          "callee": "branchColorMap.get",
+          "lineNumber": 526
+        },
+        {
+          "caller": "documentToSvg",
+          "callee": "validColor",
+          "lineNumber": 527
+        },
+        {
+          "caller": "documentToSvg",
+          "callee": "validColor",
+          "lineNumber": 527
+        },
+        {
+          "caller": "documentToSvg",
+          "callee": "taskGlyph",
+          "lineNumber": 529
+        },
+        {
+          "caller": "documentToSvg",
+          "callee": "nodeContentBlocks",
+          "lineNumber": 533
+        },
+        {
+          "caller": "documentToSvg",
+          "callee": "contentParts.push",
+          "lineNumber": 540
+        },
+        {
+          "caller": "documentToSvg",
+          "callee": "escapeXml",
+          "lineNumber": 540
+        },
+        {
+          "caller": "documentToSvg",
+          "callee": "(block.alt ?? \"图片\").slice",
+          "lineNumber": 540
+        },
+        {
+          "caller": "documentToSvg",
+          "callee": "block.text.trim",
+          "lineNumber": 542
+        },
+        {
+          "caller": "documentToSvg",
+          "callee": "Boolean",
+          "lineNumber": 546
+        },
+        {
+          "caller": "documentToSvg",
+          "callee": "svgWrappedLines",
+          "lineNumber": 549
+        },
+        {
+          "caller": "documentToSvg",
+          "callee": "Math.max",
+          "lineNumber": 551
+        },
+        {
+          "caller": "documentToSvg",
+          "callee": "Math.floor",
+          "lineNumber": 551
+        },
+        {
+          "caller": "documentToSvg",
+          "callee": "Math.max",
+          "lineNumber": 551
+        },
+        {
+          "caller": "documentToSvg",
+          "callee": "escapeXml",
+          "lineNumber": 552
+        },
+        {
+          "caller": "documentToSvg",
+          "callee": "contentParts.push",
+          "lineNumber": 553
+        },
+        {
+          "caller": "documentToSvg",
+          "callee": "richTextTspans",
+          "lineNumber": 553
+        },
+        {
+          "caller": "documentToSvg",
+          "callee": "lines.forEach",
+          "lineNumber": 555
+        },
+        {
+          "caller": "documentToSvg",
+          "callee": "contentParts.push",
+          "lineNumber": 555
+        },
+        {
+          "caller": "documentToSvg",
+          "callee": "escapeXml",
+          "lineNumber": 555
+        },
+        {
+          "caller": "documentToSvg",
+          "callee": "svgWrappedLines",
+          "lineNumber": 562
+        },
+        {
+          "caller": "documentToSvg",
+          "callee": "nodePlainText",
+          "lineNumber": 562
+        },
+        {
+          "caller": "documentToSvg",
+          "callee": "lines.forEach",
+          "lineNumber": 563
+        },
+        {
+          "caller": "documentToSvg",
+          "callee": "contentParts.push",
+          "lineNumber": 563
+        },
+        {
+          "caller": "documentToSvg",
+          "callee": "escapeXml",
+          "lineNumber": 563
+        },
+        {
+          "caller": "documentToSvg",
+          "callee": "node.table.rows.slice",
+          "lineNumber": 568
+        },
+        {
+          "caller": "documentToSvg",
+          "callee": "rows.forEach",
+          "lineNumber": 569
+        },
+        {
+          "caller": "documentToSvg",
+          "callee": "escapeXml",
+          "lineNumber": 570
+        },
+        {
+          "caller": "documentToSvg",
+          "callee": "row.map((cell) => cell.replaceAll(\"\\n\", \" \")).join(\"  |  \").slice",
+          "lineNumber": 570
+        },
+        {
+          "caller": "documentToSvg",
+          "callee": "row.map((cell) => cell.replaceAll(\"\\n\", \" \")).join",
+          "lineNumber": 570
+        },
+        {
+          "caller": "documentToSvg",
+          "callee": "row.map",
+          "lineNumber": 570
+        },
+        {
+          "caller": "documentToSvg",
+          "callee": "cell.replaceAll",
+          "lineNumber": 570
+        },
+        {
+          "caller": "documentToSvg",
+          "callee": "richParts.push",
+          "lineNumber": 571
+        },
+        {
+          "caller": "documentToSvg",
+          "callee": "richParts.push",
+          "lineNumber": 573
+        },
+        {
+          "caller": "documentToSvg",
+          "callee": "richParts.push",
+          "lineNumber": 576
+        },
+        {
+          "caller": "documentToSvg",
+          "callee": "Math.min",
+          "lineNumber": 576
+        },
+        {
+          "caller": "documentToSvg",
+          "callee": "Math.max",
+          "lineNumber": 576
+        },
+        {
+          "caller": "documentToSvg",
+          "callee": "node.code.code.split",
+          "lineNumber": 576
+        },
+        {
+          "caller": "documentToSvg",
+          "callee": "richParts.push",
+          "lineNumber": 577
+        },
+        {
+          "caller": "documentToSvg",
+          "callee": "escapeXml",
+          "lineNumber": 577
+        },
+        {
+          "caller": "documentToSvg",
+          "callee": "node.code.code.split(/\\r?\\n/).slice(0, 16).forEach",
+          "lineNumber": 578
+        },
+        {
+          "caller": "documentToSvg",
+          "callee": "node.code.code.split(/\\r?\\n/).slice",
+          "lineNumber": 578
+        },
+        {
+          "caller": "documentToSvg",
+          "callee": "node.code.code.split",
+          "lineNumber": 578
+        },
+        {
+          "caller": "documentToSvg",
+          "callee": "richParts.push",
+          "lineNumber": 578
+        },
+        {
+          "caller": "documentToSvg",
+          "callee": "escapeXml",
+          "lineNumber": 578
+        },
+        {
+          "caller": "documentToSvg",
+          "callee": "line.slice",
+          "lineNumber": 578
+        },
+        {
+          "caller": "documentToSvg",
+          "callee": "richParts.join",
+          "lineNumber": 580
+        },
+        {
+          "caller": "documentToSvg",
+          "callee": "escapeXml",
+          "lineNumber": 582
+        },
+        {
+          "caller": "documentToSvg",
+          "callee": "node.tags.map((tag) => `#${tag}`).join(\"  \").slice",
+          "lineNumber": 582
+        },
+        {
+          "caller": "documentToSvg",
+          "callee": "node.tags.map((tag) => `#${tag}`).join",
+          "lineNumber": 582
+        },
+        {
+          "caller": "documentToSvg",
+          "callee": "node.tags.map",
+          "lineNumber": 582
+        },
+        {
+          "caller": "documentToSvg",
+          "callee": "svgRadius",
+          "lineNumber": 588
+        },
+        {
+          "caller": "documentToSvg",
+          "callee": "contentParts.join",
+          "lineNumber": 588
+        },
+        {
+          "caller": "documentToSvg",
+          "callee": "validColor",
+          "lineNumber": 591
+        },
+        {
+          "caller": "documentToSvg",
+          "callee": "validColor",
+          "lineNumber": 592
+        },
+        {
+          "caller": "documentToSvg",
+          "callee": "Math.ceil",
+          "lineNumber": 601
+        },
+        {
+          "caller": "documentToSvg",
+          "callee": "Math.ceil",
+          "lineNumber": 601
+        },
+        {
+          "caller": "documentToSvg",
+          "callee": "Math.ceil",
+          "lineNumber": 601
+        },
+        {
+          "caller": "documentToSvg",
+          "callee": "Math.ceil",
+          "lineNumber": 601
+        },
+        {
+          "caller": "documentToSvg",
+          "callee": "escapeXml",
+          "lineNumber": 602
+        },
+        {
+          "caller": "documentToSvg",
+          "callee": "svgFontFamily",
+          "lineNumber": 603
+        }
+      ],
+      "metrics": {
+        "importCount": 2,
+        "exportCount": 7,
+        "functionCount": 19,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "src/render/static-render.ts",
+      "language": "typescript",
+      "fileCategory": "code",
+      "totalLines": 52,
+      "nonEmptyLines": 49,
+      "functions": [
+        {
+          "name": "renderStaticMindMap",
+          "startLine": 19,
+          "endLine": 40,
+          "params": [
+            "container",
+            "document",
+            "options"
+          ]
+        },
+        {
+          "name": "renderStaticSource",
+          "startLine": 50,
+          "endLine": 52,
+          "params": [
+            "container",
+            "source",
+            "fallbackTitle",
+            "defaultAppearance"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "renderStaticMindMap",
+          "line": 19,
+          "isDefault": false
+        },
+        {
+          "name": "renderStaticSource",
+          "line": 50,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "renderStaticMindMap",
+          "callee": "container.empty",
+          "lineNumber": 24
+        },
+        {
+          "caller": "renderStaticMindMap",
+          "callee": "container.addClass",
+          "lineNumber": 25
+        },
+        {
+          "caller": "renderStaticMindMap",
+          "callee": "documentToSvg",
+          "lineNumber": 26
+        },
+        {
+          "caller": "renderStaticMindMap",
+          "callee": "mergeAppearance",
+          "lineNumber": 26
+        },
+        {
+          "caller": "renderStaticMindMap",
+          "callee": "container.createEl",
+          "lineNumber": 27
+        },
+        {
+          "caller": "renderStaticMindMap",
+          "callee": "encodeURIComponent",
+          "lineNumber": 30
+        },
+        {
+          "caller": "renderStaticMindMap",
+          "callee": "image.addEventListener",
+          "lineNumber": 35
+        },
+        {
+          "caller": "renderStaticMindMap",
+          "callee": "options.app?.workspace.getLeaf(false).openFile",
+          "lineNumber": 36
+        },
+        {
+          "caller": "renderStaticMindMap",
+          "callee": "options.app?.workspace.getLeaf",
+          "lineNumber": 36
+        },
+        {
+          "caller": "renderStaticMindMap",
+          "callee": "image.setAttr",
+          "lineNumber": 38
+        },
+        {
+          "caller": "renderStaticSource",
+          "callee": "renderStaticMindMap",
+          "lineNumber": 51
+        },
+        {
+          "caller": "renderStaticSource",
+          "callee": "parseDocument",
+          "lineNumber": 51
+        }
+      ],
+      "metrics": {
+        "importCount": 2,
+        "exportCount": 2,
+        "functionCount": 2,
+        "classCount": 0
+      }
+    }
+  ]
+}

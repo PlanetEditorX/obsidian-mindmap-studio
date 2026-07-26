@@ -1,0 +1,601 @@
+{
+  "scriptCompleted": true,
+  "filesAnalyzed": 7,
+  "filesSkipped": [],
+  "analysisOutcomes": {
+    "structure": {
+      "succeeded": 7,
+      "failed": 0
+    },
+    "callGraph": {
+      "succeeded": 7,
+      "failed": 0,
+      "skipped": 0
+    }
+  },
+  "results": [
+    {
+      "path": "esbuild.config.mjs",
+      "language": "javascript",
+      "fileCategory": "code",
+      "totalLines": 24,
+      "nonEmptyLines": 22,
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "scripts/check-docs.mjs",
+      "language": "javascript",
+      "fileCategory": "code",
+      "totalLines": 60,
+      "nonEmptyLines": 56,
+      "functions": [
+        {
+          "name": "collectTypeScriptFiles",
+          "startLine": 7,
+          "endLine": 15,
+          "params": [
+            "directory"
+          ]
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "collectTypeScriptFiles",
+          "callee": "readdir",
+          "lineNumber": 8
+        },
+        {
+          "caller": "collectTypeScriptFiles",
+          "callee": "Promise.all",
+          "lineNumber": 9
+        },
+        {
+          "caller": "collectTypeScriptFiles",
+          "callee": "entries.map",
+          "lineNumber": 9
+        },
+        {
+          "caller": "collectTypeScriptFiles",
+          "callee": "path.join",
+          "lineNumber": 10
+        },
+        {
+          "caller": "collectTypeScriptFiles",
+          "callee": "entry.isDirectory",
+          "lineNumber": 11
+        },
+        {
+          "caller": "collectTypeScriptFiles",
+          "callee": "collectTypeScriptFiles",
+          "lineNumber": 11
+        },
+        {
+          "caller": "collectTypeScriptFiles",
+          "callee": "entry.isFile",
+          "lineNumber": 12
+        },
+        {
+          "caller": "collectTypeScriptFiles",
+          "callee": "entry.name.endsWith",
+          "lineNumber": 12
+        },
+        {
+          "caller": "collectTypeScriptFiles",
+          "callee": "files.flat().sort",
+          "lineNumber": 14
+        },
+        {
+          "caller": "collectTypeScriptFiles",
+          "callee": "files.flat",
+          "lineNumber": 14
+        },
+        {
+          "caller": "visit",
+          "callee": "ts.isClassDeclaration",
+          "lineNumber": 28
+        },
+        {
+          "caller": "visit",
+          "callee": "ts.isFunctionDeclaration",
+          "lineNumber": 30
+        },
+        {
+          "caller": "visit",
+          "callee": "ts.isMethodDeclaration",
+          "lineNumber": 31
+        },
+        {
+          "caller": "visit",
+          "callee": "ts.isConstructorDeclaration",
+          "lineNumber": 32
+        },
+        {
+          "caller": "visit",
+          "callee": "ts.isClassDeclaration",
+          "lineNumber": 33
+        },
+        {
+          "caller": "visit",
+          "callee": "ts.isInterfaceDeclaration",
+          "lineNumber": 34
+        },
+        {
+          "caller": "visit",
+          "callee": "ts.isTypeAliasDeclaration",
+          "lineNumber": 35
+        },
+        {
+          "caller": "visit",
+          "callee": "ts.isEnumDeclaration",
+          "lineNumber": 36
+        },
+        {
+          "caller": "visit",
+          "callee": "ts.isConstructorDeclaration",
+          "lineNumber": 38
+        },
+        {
+          "caller": "visit",
+          "callee": "ts.isMethodDeclaration",
+          "lineNumber": 41
+        },
+        {
+          "caller": "visit",
+          "callee": "node.name.getText",
+          "lineNumber": 41
+        },
+        {
+          "caller": "visit",
+          "callee": "source.slice",
+          "lineNumber": 43
+        },
+        {
+          "caller": "visit",
+          "callee": "node.getFullStart",
+          "lineNumber": 43
+        },
+        {
+          "caller": "visit",
+          "callee": "node.getStart",
+          "lineNumber": 43
+        },
+        {
+          "caller": "visit",
+          "callee": "/\\/\\*\\*[\\s\\S]*?\\*\\//.test",
+          "lineNumber": 44
+        },
+        {
+          "caller": "visit",
+          "callee": "missing.push",
+          "lineNumber": 44
+        },
+        {
+          "caller": "visit",
+          "callee": "sf.getLineAndCharacterOfPosition",
+          "lineNumber": 44
+        },
+        {
+          "caller": "visit",
+          "callee": "node.getStart",
+          "lineNumber": 44
+        },
+        {
+          "caller": "visit",
+          "callee": "ts.forEachChild",
+          "lineNumber": 47
+        },
+        {
+          "caller": "visit",
+          "callee": "visit",
+          "lineNumber": 47
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 1,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "scripts/generate-function-reference.mjs",
+      "language": "javascript",
+      "fileCategory": "code",
+      "totalLines": 71,
+      "nonEmptyLines": 66,
+      "functions": [
+        {
+          "name": "collectTypeScriptFiles",
+          "startLine": 7,
+          "endLine": 15,
+          "params": [
+            "directory"
+          ]
+        },
+        {
+          "name": "cleanComment",
+          "startLine": 25,
+          "endLine": 35,
+          "params": [
+            "raw"
+          ]
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "collectTypeScriptFiles",
+          "callee": "readdir",
+          "lineNumber": 8
+        },
+        {
+          "caller": "collectTypeScriptFiles",
+          "callee": "Promise.all",
+          "lineNumber": 9
+        },
+        {
+          "caller": "collectTypeScriptFiles",
+          "callee": "entries.map",
+          "lineNumber": 9
+        },
+        {
+          "caller": "collectTypeScriptFiles",
+          "callee": "path.join",
+          "lineNumber": 10
+        },
+        {
+          "caller": "collectTypeScriptFiles",
+          "callee": "entry.isDirectory",
+          "lineNumber": 11
+        },
+        {
+          "caller": "collectTypeScriptFiles",
+          "callee": "collectTypeScriptFiles",
+          "lineNumber": 11
+        },
+        {
+          "caller": "collectTypeScriptFiles",
+          "callee": "entry.isFile",
+          "lineNumber": 12
+        },
+        {
+          "caller": "collectTypeScriptFiles",
+          "callee": "entry.name.endsWith",
+          "lineNumber": 12
+        },
+        {
+          "caller": "collectTypeScriptFiles",
+          "callee": "files.flat().sort",
+          "lineNumber": 14
+        },
+        {
+          "caller": "collectTypeScriptFiles",
+          "callee": "files.flat",
+          "lineNumber": 14
+        },
+        {
+          "caller": "cleanComment",
+          "callee": "raw.match",
+          "lineNumber": 26
+        },
+        {
+          "caller": "cleanComment",
+          "callee": "match[1]\n    .split(\"\\n\")\n    .map((line) => line.replace(/^\\s*\\*\\s?/, \"\").trimEnd())\n    .filter((line) => !line.startsWith(\"@param\") && !line.startsWith(\"@returns\") && !line.startsWith(\"@remarks\") && !line.startsWith(\"@file\") && !line.startsWith(\"@description\"))\n    .join(\" \")\n    .replace(/\\s+/g, \" \")\n    .trim",
+          "lineNumber": 28
+        },
+        {
+          "caller": "cleanComment",
+          "callee": "match[1]\n    .split(\"\\n\")\n    .map((line) => line.replace(/^\\s*\\*\\s?/, \"\").trimEnd())\n    .filter((line) => !line.startsWith(\"@param\") && !line.startsWith(\"@returns\") && !line.startsWith(\"@remarks\") && !line.startsWith(\"@file\") && !line.startsWith(\"@description\"))\n    .join(\" \")\n    .replace",
+          "lineNumber": 28
+        },
+        {
+          "caller": "cleanComment",
+          "callee": "match[1]\n    .split(\"\\n\")\n    .map((line) => line.replace(/^\\s*\\*\\s?/, \"\").trimEnd())\n    .filter((line) => !line.startsWith(\"@param\") && !line.startsWith(\"@returns\") && !line.startsWith(\"@remarks\") && !line.startsWith(\"@file\") && !line.startsWith(\"@description\"))\n    .join",
+          "lineNumber": 28
+        },
+        {
+          "caller": "cleanComment",
+          "callee": "match[1]\n    .split(\"\\n\")\n    .map((line) => line.replace(/^\\s*\\*\\s?/, \"\").trimEnd())\n    .filter",
+          "lineNumber": 28
+        },
+        {
+          "caller": "cleanComment",
+          "callee": "match[1]\n    .split(\"\\n\")\n    .map",
+          "lineNumber": 28
+        },
+        {
+          "caller": "cleanComment",
+          "callee": "match[1]\n    .split",
+          "lineNumber": 28
+        },
+        {
+          "caller": "cleanComment",
+          "callee": "line.replace(/^\\s*\\*\\s?/, \"\").trimEnd",
+          "lineNumber": 30
+        },
+        {
+          "caller": "cleanComment",
+          "callee": "line.replace",
+          "lineNumber": 30
+        },
+        {
+          "caller": "cleanComment",
+          "callee": "line.startsWith",
+          "lineNumber": 31
+        },
+        {
+          "caller": "cleanComment",
+          "callee": "line.startsWith",
+          "lineNumber": 31
+        },
+        {
+          "caller": "cleanComment",
+          "callee": "line.startsWith",
+          "lineNumber": 31
+        },
+        {
+          "caller": "cleanComment",
+          "callee": "line.startsWith",
+          "lineNumber": 31
+        },
+        {
+          "caller": "cleanComment",
+          "callee": "line.startsWith",
+          "lineNumber": 31
+        },
+        {
+          "caller": "visit",
+          "callee": "ts.isClassDeclaration",
+          "lineNumber": 45
+        },
+        {
+          "caller": "visit",
+          "callee": "ts.isFunctionDeclaration",
+          "lineNumber": 48
+        },
+        {
+          "caller": "visit",
+          "callee": "ts.isClassDeclaration",
+          "lineNumber": 49
+        },
+        {
+          "caller": "visit",
+          "callee": "ts.isInterfaceDeclaration",
+          "lineNumber": 50
+        },
+        {
+          "caller": "visit",
+          "callee": "ts.isTypeAliasDeclaration",
+          "lineNumber": 51
+        },
+        {
+          "caller": "visit",
+          "callee": "ts.isMethodDeclaration",
+          "lineNumber": 52
+        },
+        {
+          "caller": "visit",
+          "callee": "node.name.getText",
+          "lineNumber": 52
+        },
+        {
+          "caller": "visit",
+          "callee": "ts.isConstructorDeclaration",
+          "lineNumber": 53
+        },
+        {
+          "caller": "visit",
+          "callee": "sf.getLineAndCharacterOfPosition",
+          "lineNumber": 55
+        },
+        {
+          "caller": "visit",
+          "callee": "node.getStart",
+          "lineNumber": 55
+        },
+        {
+          "caller": "visit",
+          "callee": "source.slice",
+          "lineNumber": 56
+        },
+        {
+          "caller": "visit",
+          "callee": "node.getFullStart",
+          "lineNumber": 56
+        },
+        {
+          "caller": "visit",
+          "callee": "node.getStart",
+          "lineNumber": 56
+        },
+        {
+          "caller": "visit",
+          "callee": "cleanComment",
+          "lineNumber": 57
+        },
+        {
+          "caller": "visit",
+          "callee": "node.getText(sf).split(\"{\")[0].trim().replace",
+          "lineNumber": 58
+        },
+        {
+          "caller": "visit",
+          "callee": "node.getText(sf).split(\"{\")[0].trim",
+          "lineNumber": 58
+        },
+        {
+          "caller": "visit",
+          "callee": "node.getText(sf).split",
+          "lineNumber": 58
+        },
+        {
+          "caller": "visit",
+          "callee": "node.getText",
+          "lineNumber": 58
+        },
+        {
+          "caller": "visit",
+          "callee": "signature.slice",
+          "lineNumber": 59
+        },
+        {
+          "caller": "visit",
+          "callee": "entries.push",
+          "lineNumber": 60
+        },
+        {
+          "caller": "visit",
+          "callee": "ts.forEachChild",
+          "lineNumber": 62
+        },
+        {
+          "caller": "visit",
+          "callee": "visit",
+          "lineNumber": 62
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 2,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "scripts/next-version.mjs",
+      "language": "javascript",
+      "fileCategory": "code",
+      "totalLines": 23,
+      "nonEmptyLines": 21,
+      "functions": [
+        {
+          "name": "nextVersion",
+          "startLine": 10,
+          "endLine": 19,
+          "params": [
+            "version"
+          ]
+        }
+      ],
+      "exports": [
+        {
+          "name": "nextVersion",
+          "line": 10,
+          "isDefault": false
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "nextVersion",
+          "callee": "/^(\\d+)\\.(\\d+)\\.(\\d+)$/.exec",
+          "lineNumber": 11
+        },
+        {
+          "caller": "nextVersion",
+          "callee": "Number",
+          "lineNumber": 13
+        },
+        {
+          "caller": "nextVersion",
+          "callee": "Number",
+          "lineNumber": 14
+        },
+        {
+          "caller": "nextVersion",
+          "callee": "Number",
+          "lineNumber": 15
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 1,
+        "functionCount": 1,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "scripts/release.mjs",
+      "language": "javascript",
+      "fileCategory": "code",
+      "totalLines": 6,
+      "nonEmptyLines": 6,
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "scripts/sync-version.mjs",
+      "language": "javascript",
+      "fileCategory": "code",
+      "totalLines": 29,
+      "nonEmptyLines": 23,
+      "functions": [
+        {
+          "name": "readJson",
+          "startLine": 8,
+          "endLine": 8,
+          "params": [
+            "path"
+          ]
+        },
+        {
+          "name": "writeJson",
+          "startLine": 9,
+          "endLine": 9,
+          "params": [
+            "path",
+            "value"
+          ]
+        }
+      ],
+      "callGraph": [
+        {
+          "caller": "readJson",
+          "callee": "JSON.parse",
+          "lineNumber": 8
+        },
+        {
+          "caller": "readJson",
+          "callee": "readFile",
+          "lineNumber": 8
+        },
+        {
+          "caller": "writeJson",
+          "callee": "writeFile",
+          "lineNumber": 9
+        },
+        {
+          "caller": "writeJson",
+          "callee": "JSON.stringify",
+          "lineNumber": 9
+        }
+      ],
+      "metrics": {
+        "importCount": 0,
+        "exportCount": 0,
+        "functionCount": 2,
+        "classCount": 0
+      }
+    },
+    {
+      "path": "scripts/test.mjs",
+      "language": "javascript",
+      "fileCategory": "code",
+      "totalLines": 1296,
+      "nonEmptyLines": 1222,
+      "metrics": {
+        "importCount": 1,
+        "exportCount": 0,
+        "functionCount": 0,
+        "classCount": 0
+      }
+    }
+  ]
+}

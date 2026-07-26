@@ -1,0 +1,782 @@
+{
+  "nodes": [
+    {
+      "id": "file:src/article/article-style.ts",
+      "type": "file",
+      "name": "article-style.ts",
+      "filePath": "src/article/article-style.ts",
+      "summary": "typescript code file (24 lines)",
+      "tags": [
+        "typescript",
+        "code"
+      ]
+    },
+    {
+      "id": "function:src/article/article-style.ts:resolveArticleStyle",
+      "type": "function",
+      "name": "resolveArticleStyle",
+      "filePath": "src/article/article-style.ts",
+      "summary": "Function resolveArticleStyle in src/article/article-style.ts",
+      "tags": [
+        "typescript",
+        "function"
+      ]
+    },
+    {
+      "id": "file:src/editor/article-renderer.ts",
+      "type": "file",
+      "name": "article-renderer.ts",
+      "filePath": "src/editor/article-renderer.ts",
+      "summary": "typescript code file (207 lines)",
+      "tags": [
+        "typescript",
+        "code"
+      ]
+    },
+    {
+      "id": "function:src/editor/article-renderer.ts:renderArticleMode",
+      "type": "function",
+      "name": "renderArticleMode",
+      "filePath": "src/editor/article-renderer.ts",
+      "summary": "Function renderArticleMode in src/editor/article-renderer.ts",
+      "tags": [
+        "typescript",
+        "function"
+      ]
+    },
+    {
+      "id": "function:src/editor/article-renderer.ts:applyArticleStyle",
+      "type": "function",
+      "name": "applyArticleStyle",
+      "filePath": "src/editor/article-renderer.ts",
+      "summary": "Function applyArticleStyle in src/editor/article-renderer.ts",
+      "tags": [
+        "typescript",
+        "function"
+      ]
+    },
+    {
+      "id": "function:src/editor/article-renderer.ts:renderDirectory",
+      "type": "function",
+      "name": "renderDirectory",
+      "filePath": "src/editor/article-renderer.ts",
+      "summary": "Function renderDirectory in src/editor/article-renderer.ts",
+      "tags": [
+        "typescript",
+        "function"
+      ]
+    },
+    {
+      "id": "function:src/editor/article-renderer.ts:renderHeading",
+      "type": "function",
+      "name": "renderHeading",
+      "filePath": "src/editor/article-renderer.ts",
+      "summary": "Function renderHeading in src/editor/article-renderer.ts",
+      "tags": [
+        "typescript",
+        "function"
+      ]
+    },
+    {
+      "id": "function:src/editor/article-renderer.ts:renderArticleNodeContent",
+      "type": "function",
+      "name": "renderArticleNodeContent",
+      "filePath": "src/editor/article-renderer.ts",
+      "summary": "Function renderArticleNodeContent in src/editor/article-renderer.ts",
+      "tags": [
+        "typescript",
+        "function"
+      ]
+    },
+    {
+      "id": "function:src/editor/article-renderer.ts:renderArticlePager",
+      "type": "function",
+      "name": "renderArticlePager",
+      "filePath": "src/editor/article-renderer.ts",
+      "summary": "Function renderArticlePager in src/editor/article-renderer.ts",
+      "tags": [
+        "typescript",
+        "function"
+      ]
+    },
+    {
+      "id": "file:src/editor/editor-modals.ts",
+      "type": "file",
+      "name": "editor-modals.ts",
+      "filePath": "src/editor/editor-modals.ts",
+      "summary": "typescript code file (696 lines)",
+      "tags": [
+        "typescript",
+        "code"
+      ]
+    },
+    {
+      "id": "function:src/editor/editor-modals.ts:chooseImageHosts",
+      "type": "function",
+      "name": "chooseImageHosts",
+      "filePath": "src/editor/editor-modals.ts",
+      "summary": "Function chooseImageHosts in src/editor/editor-modals.ts",
+      "tags": [
+        "typescript",
+        "function"
+      ]
+    },
+    {
+      "id": "class:src/editor/editor-modals.ts:ImageHostPickerModal",
+      "type": "class",
+      "name": "ImageHostPickerModal",
+      "filePath": "src/editor/editor-modals.ts",
+      "summary": "Class ImageHostPickerModal in src/editor/editor-modals.ts",
+      "tags": [
+        "typescript",
+        "class"
+      ]
+    },
+    {
+      "id": "class:src/editor/editor-modals.ts:ImagePreviewModal",
+      "type": "class",
+      "name": "ImagePreviewModal",
+      "filePath": "src/editor/editor-modals.ts",
+      "summary": "Class ImagePreviewModal in src/editor/editor-modals.ts",
+      "tags": [
+        "typescript",
+        "class"
+      ]
+    },
+    {
+      "id": "class:src/editor/editor-modals.ts:FormulaEditModal",
+      "type": "class",
+      "name": "FormulaEditModal",
+      "filePath": "src/editor/editor-modals.ts",
+      "summary": "Class FormulaEditModal in src/editor/editor-modals.ts",
+      "tags": [
+        "typescript",
+        "class"
+      ]
+    },
+    {
+      "id": "class:src/editor/editor-modals.ts:ArticleStyleModal",
+      "type": "class",
+      "name": "ArticleStyleModal",
+      "filePath": "src/editor/editor-modals.ts",
+      "summary": "Class ArticleStyleModal in src/editor/editor-modals.ts",
+      "tags": [
+        "typescript",
+        "class"
+      ]
+    },
+    {
+      "id": "class:src/editor/editor-modals.ts:JsonTransferModal",
+      "type": "class",
+      "name": "JsonTransferModal",
+      "filePath": "src/editor/editor-modals.ts",
+      "summary": "Class JsonTransferModal in src/editor/editor-modals.ts",
+      "tags": [
+        "typescript",
+        "class"
+      ]
+    },
+    {
+      "id": "class:src/editor/editor-modals.ts:OutlineModal",
+      "type": "class",
+      "name": "OutlineModal",
+      "filePath": "src/editor/editor-modals.ts",
+      "summary": "Class OutlineModal in src/editor/editor-modals.ts",
+      "tags": [
+        "typescript",
+        "class"
+      ]
+    },
+    {
+      "id": "class:src/editor/editor-modals.ts:SearchNodesModal",
+      "type": "class",
+      "name": "SearchNodesModal",
+      "filePath": "src/editor/editor-modals.ts",
+      "summary": "Class SearchNodesModal in src/editor/editor-modals.ts",
+      "tags": [
+        "typescript",
+        "class"
+      ]
+    },
+    {
+      "id": "class:src/editor/editor-modals.ts:DocumentExportModal",
+      "type": "class",
+      "name": "DocumentExportModal",
+      "filePath": "src/editor/editor-modals.ts",
+      "summary": "Class DocumentExportModal in src/editor/editor-modals.ts",
+      "tags": [
+        "typescript",
+        "class"
+      ]
+    },
+    {
+      "id": "file:src/editor/editor-types.ts",
+      "type": "file",
+      "name": "editor-types.ts",
+      "filePath": "src/editor/editor-types.ts",
+      "summary": "typescript code file (85 lines)",
+      "tags": [
+        "typescript",
+        "code"
+      ]
+    },
+    {
+      "id": "file:src/editor/node-actions.ts",
+      "type": "file",
+      "name": "node-actions.ts",
+      "filePath": "src/editor/node-actions.ts",
+      "summary": "typescript code file (76 lines)",
+      "tags": [
+        "typescript",
+        "code"
+      ]
+    },
+    {
+      "id": "function:src/editor/node-actions.ts:appendChild",
+      "type": "function",
+      "name": "appendChild",
+      "filePath": "src/editor/node-actions.ts",
+      "summary": "Function appendChild in src/editor/node-actions.ts",
+      "tags": [
+        "typescript",
+        "function"
+      ]
+    },
+    {
+      "id": "function:src/editor/node-actions.ts:insertSiblingAfter",
+      "type": "function",
+      "name": "insertSiblingAfter",
+      "filePath": "src/editor/node-actions.ts",
+      "summary": "Function insertSiblingAfter in src/editor/node-actions.ts",
+      "tags": [
+        "typescript",
+        "function"
+      ]
+    },
+    {
+      "id": "function:src/editor/node-actions.ts:topLevelSelectedNodeIds",
+      "type": "function",
+      "name": "topLevelSelectedNodeIds",
+      "filePath": "src/editor/node-actions.ts",
+      "summary": "Function topLevelSelectedNodeIds in src/editor/node-actions.ts",
+      "tags": [
+        "typescript",
+        "function"
+      ]
+    },
+    {
+      "id": "function:src/editor/node-actions.ts:deleteNodes",
+      "type": "function",
+      "name": "deleteNodes",
+      "filePath": "src/editor/node-actions.ts",
+      "summary": "Function deleteNodes in src/editor/node-actions.ts",
+      "tags": [
+        "typescript",
+        "function"
+      ]
+    },
+    {
+      "id": "function:src/editor/node-actions.ts:setAllBranchesCollapsed",
+      "type": "function",
+      "name": "setAllBranchesCollapsed",
+      "filePath": "src/editor/node-actions.ts",
+      "summary": "Function setAllBranchesCollapsed in src/editor/node-actions.ts",
+      "tags": [
+        "typescript",
+        "function"
+      ]
+    },
+    {
+      "id": "function:src/editor/node-actions.ts:nextTaskStatus",
+      "type": "function",
+      "name": "nextTaskStatus",
+      "filePath": "src/editor/node-actions.ts",
+      "summary": "Function nextTaskStatus in src/editor/node-actions.ts",
+      "tags": [
+        "typescript",
+        "function"
+      ]
+    },
+    {
+      "id": "file:src/editor/node-image-actions.ts",
+      "type": "file",
+      "name": "node-image-actions.ts",
+      "filePath": "src/editor/node-image-actions.ts",
+      "summary": "typescript code file (135 lines)",
+      "tags": [
+        "typescript",
+        "code"
+      ]
+    },
+    {
+      "id": "function:src/editor/node-image-actions.ts:selectImageFile",
+      "type": "function",
+      "name": "selectImageFile",
+      "filePath": "src/editor/node-image-actions.ts",
+      "summary": "Function selectImageFile in src/editor/node-image-actions.ts",
+      "tags": [
+        "typescript",
+        "function"
+      ]
+    },
+    {
+      "id": "function:src/editor/node-image-actions.ts:selectNodeImage",
+      "type": "function",
+      "name": "selectNodeImage",
+      "filePath": "src/editor/node-image-actions.ts",
+      "summary": "Function selectNodeImage in src/editor/node-image-actions.ts",
+      "tags": [
+        "typescript",
+        "function"
+      ]
+    },
+    {
+      "id": "function:src/editor/node-image-actions.ts:uploadCurrentNodeImage",
+      "type": "function",
+      "name": "uploadCurrentNodeImage",
+      "filePath": "src/editor/node-image-actions.ts",
+      "summary": "Function uploadCurrentNodeImage in src/editor/node-image-actions.ts",
+      "tags": [
+        "typescript",
+        "function"
+      ]
+    },
+    {
+      "id": "file:src/editor/outline-renderer.ts",
+      "type": "file",
+      "name": "outline-renderer.ts",
+      "filePath": "src/editor/outline-renderer.ts",
+      "summary": "typescript code file (166 lines)",
+      "tags": [
+        "typescript",
+        "code"
+      ]
+    },
+    {
+      "id": "function:src/editor/outline-renderer.ts:renderOutlineMode",
+      "type": "function",
+      "name": "renderOutlineMode",
+      "filePath": "src/editor/outline-renderer.ts",
+      "summary": "Function renderOutlineMode in src/editor/outline-renderer.ts",
+      "tags": [
+        "typescript",
+        "function"
+      ]
+    },
+    {
+      "id": "function:src/editor/outline-renderer.ts:renderOutlineContent",
+      "type": "function",
+      "name": "renderOutlineContent",
+      "filePath": "src/editor/outline-renderer.ts",
+      "summary": "Function renderOutlineContent in src/editor/outline-renderer.ts",
+      "tags": [
+        "typescript",
+        "function"
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "source": "file:src/article/article-style.ts",
+      "target": "function:src/article/article-style.ts:resolveArticleStyle",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/article/article-style.ts",
+      "target": "function:src/article/article-style.ts:resolveArticleStyle",
+      "type": "exports",
+      "weight": 0.8
+    },
+    {
+      "source": "file:src/editor/article-renderer.ts",
+      "target": "function:src/editor/article-renderer.ts:renderArticleMode",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/editor/article-renderer.ts",
+      "target": "function:src/editor/article-renderer.ts:applyArticleStyle",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/editor/article-renderer.ts",
+      "target": "function:src/editor/article-renderer.ts:renderDirectory",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/editor/article-renderer.ts",
+      "target": "function:src/editor/article-renderer.ts:renderHeading",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/editor/article-renderer.ts",
+      "target": "function:src/editor/article-renderer.ts:renderArticleNodeContent",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/editor/article-renderer.ts",
+      "target": "function:src/editor/article-renderer.ts:renderArticlePager",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/editor/article-renderer.ts",
+      "target": "function:src/editor/article-renderer.ts:renderArticleMode",
+      "type": "exports",
+      "weight": 0.8
+    },
+    {
+      "source": "file:src/editor/article-renderer.ts",
+      "target": "function:src/editor/article-renderer.ts:renderArticleNodeContent",
+      "type": "exports",
+      "weight": 0.8
+    },
+    {
+      "source": "file:src/editor/editor-modals.ts",
+      "target": "function:src/editor/editor-modals.ts:chooseImageHosts",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/editor/editor-modals.ts",
+      "target": "class:src/editor/editor-modals.ts:ImageHostPickerModal",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/editor/editor-modals.ts",
+      "target": "class:src/editor/editor-modals.ts:ImagePreviewModal",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/editor/editor-modals.ts",
+      "target": "class:src/editor/editor-modals.ts:FormulaEditModal",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/editor/editor-modals.ts",
+      "target": "class:src/editor/editor-modals.ts:ArticleStyleModal",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/editor/editor-modals.ts",
+      "target": "class:src/editor/editor-modals.ts:JsonTransferModal",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/editor/editor-modals.ts",
+      "target": "class:src/editor/editor-modals.ts:OutlineModal",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/editor/editor-modals.ts",
+      "target": "class:src/editor/editor-modals.ts:SearchNodesModal",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/editor/editor-modals.ts",
+      "target": "class:src/editor/editor-modals.ts:DocumentExportModal",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/editor/editor-modals.ts",
+      "target": "function:src/editor/editor-modals.ts:chooseImageHosts",
+      "type": "exports",
+      "weight": 0.8
+    },
+    {
+      "source": "file:src/editor/editor-modals.ts",
+      "target": "class:src/editor/editor-modals.ts:ImagePreviewModal",
+      "type": "exports",
+      "weight": 0.8
+    },
+    {
+      "source": "file:src/editor/editor-modals.ts",
+      "target": "class:src/editor/editor-modals.ts:FormulaEditModal",
+      "type": "exports",
+      "weight": 0.8
+    },
+    {
+      "source": "file:src/editor/editor-modals.ts",
+      "target": "class:src/editor/editor-modals.ts:ArticleStyleModal",
+      "type": "exports",
+      "weight": 0.8
+    },
+    {
+      "source": "file:src/editor/editor-modals.ts",
+      "target": "class:src/editor/editor-modals.ts:JsonTransferModal",
+      "type": "exports",
+      "weight": 0.8
+    },
+    {
+      "source": "file:src/editor/editor-modals.ts",
+      "target": "class:src/editor/editor-modals.ts:OutlineModal",
+      "type": "exports",
+      "weight": 0.8
+    },
+    {
+      "source": "file:src/editor/editor-modals.ts",
+      "target": "class:src/editor/editor-modals.ts:SearchNodesModal",
+      "type": "exports",
+      "weight": 0.8
+    },
+    {
+      "source": "file:src/editor/editor-modals.ts",
+      "target": "class:src/editor/editor-modals.ts:DocumentExportModal",
+      "type": "exports",
+      "weight": 0.8
+    },
+    {
+      "source": "file:src/editor/node-actions.ts",
+      "target": "function:src/editor/node-actions.ts:appendChild",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/editor/node-actions.ts",
+      "target": "function:src/editor/node-actions.ts:insertSiblingAfter",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/editor/node-actions.ts",
+      "target": "function:src/editor/node-actions.ts:topLevelSelectedNodeIds",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/editor/node-actions.ts",
+      "target": "function:src/editor/node-actions.ts:deleteNodes",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/editor/node-actions.ts",
+      "target": "function:src/editor/node-actions.ts:setAllBranchesCollapsed",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/editor/node-actions.ts",
+      "target": "function:src/editor/node-actions.ts:nextTaskStatus",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/editor/node-actions.ts",
+      "target": "function:src/editor/node-actions.ts:appendChild",
+      "type": "exports",
+      "weight": 0.8
+    },
+    {
+      "source": "file:src/editor/node-actions.ts",
+      "target": "function:src/editor/node-actions.ts:insertSiblingAfter",
+      "type": "exports",
+      "weight": 0.8
+    },
+    {
+      "source": "file:src/editor/node-actions.ts",
+      "target": "function:src/editor/node-actions.ts:topLevelSelectedNodeIds",
+      "type": "exports",
+      "weight": 0.8
+    },
+    {
+      "source": "file:src/editor/node-actions.ts",
+      "target": "function:src/editor/node-actions.ts:deleteNodes",
+      "type": "exports",
+      "weight": 0.8
+    },
+    {
+      "source": "file:src/editor/node-actions.ts",
+      "target": "function:src/editor/node-actions.ts:setAllBranchesCollapsed",
+      "type": "exports",
+      "weight": 0.8
+    },
+    {
+      "source": "file:src/editor/node-actions.ts",
+      "target": "function:src/editor/node-actions.ts:nextTaskStatus",
+      "type": "exports",
+      "weight": 0.8
+    },
+    {
+      "source": "file:src/editor/node-image-actions.ts",
+      "target": "function:src/editor/node-image-actions.ts:selectImageFile",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/editor/node-image-actions.ts",
+      "target": "function:src/editor/node-image-actions.ts:selectNodeImage",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/editor/node-image-actions.ts",
+      "target": "function:src/editor/node-image-actions.ts:uploadCurrentNodeImage",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/editor/node-image-actions.ts",
+      "target": "function:src/editor/node-image-actions.ts:selectNodeImage",
+      "type": "exports",
+      "weight": 0.8
+    },
+    {
+      "source": "file:src/editor/node-image-actions.ts",
+      "target": "function:src/editor/node-image-actions.ts:uploadCurrentNodeImage",
+      "type": "exports",
+      "weight": 0.8
+    },
+    {
+      "source": "file:src/editor/outline-renderer.ts",
+      "target": "function:src/editor/outline-renderer.ts:renderOutlineMode",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/editor/outline-renderer.ts",
+      "target": "function:src/editor/outline-renderer.ts:renderOutlineContent",
+      "type": "contains",
+      "weight": 1.0
+    },
+    {
+      "source": "file:src/editor/outline-renderer.ts",
+      "target": "function:src/editor/outline-renderer.ts:renderOutlineMode",
+      "type": "exports",
+      "weight": 0.8
+    },
+    {
+      "source": "file:src/editor/article-renderer.ts",
+      "target": "file:src/article/article-style.ts",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:src/editor/article-renderer.ts",
+      "target": "file:src/editor/editor-modals.ts",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:src/editor/article-renderer.ts",
+      "target": "file:src/editor/editor-types.ts",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:src/editor/editor-modals.ts",
+      "target": "file:src/article/article-style.ts",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:src/editor/editor-modals.ts",
+      "target": "file:src/editor/node-actions.ts",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:src/editor/node-image-actions.ts",
+      "target": "file:src/editor/editor-modals.ts",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:src/editor/node-image-actions.ts",
+      "target": "file:src/editor/editor-types.ts",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:src/editor/outline-renderer.ts",
+      "target": "file:src/editor/editor-modals.ts",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "file:src/editor/outline-renderer.ts",
+      "target": "file:src/editor/editor-types.ts",
+      "type": "imports",
+      "weight": 0.7
+    },
+    {
+      "source": "function:src/editor/article-renderer.ts:renderArticleMode",
+      "target": "function:src/article/article-style.ts:resolveArticleStyle",
+      "type": "calls",
+      "weight": 0.8
+    },
+    {
+      "source": "function:src/editor/article-renderer.ts:renderArticleMode",
+      "target": "function:src/editor/article-renderer.ts:applyArticleStyle",
+      "type": "calls",
+      "weight": 0.8
+    },
+    {
+      "source": "function:src/editor/article-renderer.ts:renderArticleMode",
+      "target": "function:src/editor/article-renderer.ts:renderDirectory",
+      "type": "calls",
+      "weight": 0.8
+    },
+    {
+      "source": "function:src/editor/article-renderer.ts:renderArticleMode",
+      "target": "function:src/editor/article-renderer.ts:renderHeading",
+      "type": "calls",
+      "weight": 0.8
+    },
+    {
+      "source": "function:src/editor/article-renderer.ts:renderArticleMode",
+      "target": "function:src/editor/article-renderer.ts:renderArticleNodeContent",
+      "type": "calls",
+      "weight": 0.8
+    },
+    {
+      "source": "function:src/editor/article-renderer.ts:renderArticleMode",
+      "target": "function:src/editor/article-renderer.ts:renderArticleNodeContent",
+      "type": "calls",
+      "weight": 0.8
+    },
+    {
+      "source": "function:src/editor/article-renderer.ts:renderArticleMode",
+      "target": "function:src/editor/article-renderer.ts:renderArticlePager",
+      "type": "calls",
+      "weight": 0.8
+    },
+    {
+      "source": "function:src/editor/node-image-actions.ts:selectNodeImage",
+      "target": "function:src/editor/editor-modals.ts:chooseImageHosts",
+      "type": "calls",
+      "weight": 0.8
+    },
+    {
+      "source": "function:src/editor/node-image-actions.ts:selectNodeImage",
+      "target": "function:src/editor/node-image-actions.ts:selectImageFile",
+      "type": "calls",
+      "weight": 0.8
+    },
+    {
+      "source": "function:src/editor/node-image-actions.ts:uploadCurrentNodeImage",
+      "target": "function:src/editor/editor-modals.ts:chooseImageHosts",
+      "type": "calls",
+      "weight": 0.8
+    },
+    {
+      "source": "function:src/editor/outline-renderer.ts:renderOutlineMode",
+      "target": "function:src/editor/outline-renderer.ts:renderOutlineContent",
+      "type": "calls",
+      "weight": 0.8
+    }
+  ]
+}
