@@ -62,6 +62,7 @@ import {
   type ReadingSection
 } from "./article/modes";
 import type { DisplayMode } from "./core/model";
+import { shouldHideFileExplorerPath } from "./file-explorer-filter";
 
 export const MINDMAP_EXTENSION = "mindmap";
 const LEGACY_SUFFIX = ".smm.md";
@@ -75,12 +76,15 @@ export default class MindMapStudioPlugin extends Plugin {
   private readonly autoUploadTimers = new Map<string, number>();
   private searchIndex!: MindMapSearchIndex;
   private searchIndexReady: Promise<void> = Promise.resolve();
+  private fileExplorerFilterTimer: number | null = null;
+  private fileExplorerObserver: MutationObserver | null = null;
 
   /**
    * 执行“onload”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
    */
   async onload(): Promise<void> {
     await this.loadSettings();
+    this.installFileExplorerFilter();
     const pluginDir = this.manifest.dir ?? normalizePath(`${this.app.vault.configDir}/plugins/${this.manifest.id}`);
     this.searchIndex = new MindMapSearchIndex(this.app, normalizePath(`${pluginDir}/mindmap-search-index.json`), MINDMAP_EXTENSION);
     this.searchIndexReady = this.searchIndex.initialize();
@@ -202,15 +206,19 @@ export default class MindMapStudioPlugin extends Plugin {
     }));
 
     this.registerEvent(this.app.vault.on("create", (file) => {
+      this.scheduleFileExplorerFilter();
       if (file instanceof TFile && this.isMindMapFile(file)) this.searchIndex.queueFile(file, 80);
     }));
     this.registerEvent(this.app.vault.on("modify", (file) => {
+      this.scheduleFileExplorerFilter();
       if (file instanceof TFile && this.isMindMapFile(file)) this.searchIndex.queueFile(file);
     }));
     this.registerEvent(this.app.vault.on("delete", (file) => {
+      this.scheduleFileExplorerFilter();
       if (file instanceof TFile && file.extension.toLowerCase() === MINDMAP_EXTENSION) this.searchIndex.removeFile(file.path);
     }));
     this.registerEvent(this.app.vault.on("rename", (file, oldPath) => {
+      this.scheduleFileExplorerFilter();
       if (file instanceof TFile && this.isMindMapFile(file)) this.searchIndex.renameFile(file, oldPath);
       else if (oldPath.toLowerCase().endsWith(`.${MINDMAP_EXTENSION}`)) this.searchIndex.removeFile(oldPath);
     }));
@@ -235,6 +243,9 @@ export default class MindMapStudioPlugin extends Plugin {
    * 执行“onunload”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
    */
   onunload(): void {
+    if (this.fileExplorerFilterTimer !== null) window.clearTimeout(this.fileExplorerFilterTimer);
+    this.fileExplorerObserver?.disconnect();
+    this.fileExplorerObserver = null;
     for (const timer of this.autoUploadTimers.values()) window.clearTimeout(timer);
     this.autoUploadTimers.clear();
     this.searchIndex?.destroy();
@@ -511,6 +522,12 @@ export default class MindMapStudioPlugin extends Plugin {
         ? Math.max(1, Math.min(8, Math.round(raw.articleTocMaxDepth)))
         : DEFAULT_SETTINGS.articleTocMaxDepth,
       showArticleMiniMap: raw.showArticleMiniMap !== false,
+      articleSectionCollapseEnabled: raw.articleSectionCollapseEnabled === true,
+      articleLeafBulletsEnabled: raw.articleLeafBulletsEnabled === true,
+      hideAssetFolderInFileExplorer: raw.hideAssetFolderInFileExplorer === true,
+      hideConfiguredFilesInFileExplorer: raw.hideConfiguredFilesInFileExplorer === true,
+      hiddenFileExtensions: typeof raw.hiddenFileExtensions === "string" ? raw.hiddenFileExtensions.slice(0, 2000) : "",
+      hiddenFileFolders: typeof raw.hiddenFileFolders === "string" ? raw.hiddenFileFolders.slice(0, 4000) : "",
       readingProgressPosition: raw.readingProgressPosition === "bottom" || raw.readingProgressPosition === "left" || raw.readingProgressPosition === "right"
         ? raw.readingProgressPosition
         : "top",
@@ -566,6 +583,32 @@ export default class MindMapStudioPlugin extends Plugin {
    */
   async saveSettings(): Promise<void> {
     await this.saveData(this.settings);
+    this.scheduleFileExplorerFilter();
+  }
+
+  /** Installs a lightweight File Explorer observer; it changes visibility only, never vault data. */
+  private installFileExplorerFilter(): void {
+    const observe = (): void => {
+      this.fileExplorerObserver?.disconnect();
+      this.fileExplorerObserver = new MutationObserver(() => this.scheduleFileExplorerFilter());
+      this.fileExplorerObserver.observe(document.body, { childList: true, subtree: true });
+      this.scheduleFileExplorerFilter();
+    };
+    this.app.workspace.onLayoutReady(observe);
+    this.register(() => this.fileExplorerObserver?.disconnect());
+  }
+
+  /** Defers File Explorer filtering so expanding a folder does not cause repeated synchronous DOM scans. */
+  private scheduleFileExplorerFilter(): void {
+    if (this.fileExplorerFilterTimer !== null) return;
+    this.fileExplorerFilterTimer = window.setTimeout(() => {
+      this.fileExplorerFilterTimer = null;
+      document.querySelectorAll<HTMLElement>(".nav-file[data-path], .nav-folder[data-path], .tree-item[data-path]").forEach((element) => {
+        const path = element.dataset.path;
+        if (!path) return;
+        element.toggleClass("mms-file-explorer-hidden", shouldHideFileExplorerPath(path, this.settings));
+      });
+    }, 80);
   }
 
   /**

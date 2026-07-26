@@ -180,6 +180,18 @@ export interface MindMapStudioSettings {
   readingModeInitialized: boolean;
   articleTocMaxDepth: number;
   showArticleMiniMap: boolean;
+  /** Enables Markdown-style collapse controls for article and continuous-reading headings. */
+  articleSectionCollapseEnabled: boolean;
+  /** Shows a bullet before unnumbered terminal article paragraphs. */
+  articleLeafBulletsEnabled: boolean;
+  /** Hides the configured per-map asset folder in Obsidian's File Explorer. */
+  hideAssetFolderInFileExplorer: boolean;
+  /** Enables custom File Explorer filters without changing vault files. */
+  hideConfiguredFilesInFileExplorer: boolean;
+  /** Comma or line-separated extensions hidden from the File Explorer. */
+  hiddenFileExtensions: string;
+  /** Comma or line-separated folder names or paths hidden from the File Explorer. */
+  hiddenFileFolders: string;
   readingProgressPosition: "top" | "bottom" | "left" | "right";
   returnToTopVisibility: number;
   nodeEditorPosition: "center" | "right";
@@ -250,6 +262,12 @@ export const DEFAULT_SETTINGS: MindMapStudioSettings = {
   readingModeInitialized: true,
   articleTocMaxDepth: 3,
   showArticleMiniMap: true,
+  articleSectionCollapseEnabled: false,
+  articleLeafBulletsEnabled: false,
+  hideAssetFolderInFileExplorer: false,
+  hideConfiguredFilesInFileExplorer: false,
+  hiddenFileExtensions: "",
+  hiddenFileFolders: "",
   readingProgressPosition: "top",
   returnToTopVisibility: 10,
   nodeEditorPosition: "center",
@@ -506,6 +524,26 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
         }));
 
     new Setting(containerEl)
+      .setName("文章标题可折叠")
+      .setDesc("在文章和通读模式的章节标题前显示折叠按钮；折叠后隐藏该标题下的子标题和正文，行为类似 Markdown 标题折叠。")
+      .addToggle((toggle) => toggle
+        .setValue(this.plugin.settings.articleSectionCollapseEnabled)
+        .onChange(async (value) => {
+          this.plugin.settings.articleSectionCollapseEnabled = value;
+          await this.saveAndRefresh();
+        }));
+
+    new Setting(containerEl)
+      .setName("末端正文圆点")
+      .setDesc("为没有文章编号的末端节点正文添加主题色圆点，便于快速区分要点。")
+      .addToggle((toggle) => toggle
+        .setValue(this.plugin.settings.articleLeafBulletsEnabled)
+        .onChange(async (value) => {
+          this.plugin.settings.articleLeafBulletsEnabled = value;
+          await this.saveAndRefresh();
+        }));
+
+    new Setting(containerEl)
       .setName("通读进度条位置")
       .setDesc("控制阅读进度显示在页面上方、下方、左侧或右侧。")
       .addDropdown((dropdown) => dropdown
@@ -654,6 +692,50 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
           this.plugin.settings.assetFolder = value.trim().replace(/^\/+|\/+$/g, "") || "MindMap Assets";
           await this.plugin.saveSettings();
         }));
+
+    new Setting(containerEl)
+      .setName("在文件浏览器隐藏资源文件夹")
+      .setDesc("仅隐藏由上方“资源文件夹”设置生成的目录及其内容，不删除或移动任何文件。")
+      .addToggle((toggle) => toggle
+        .setValue(this.plugin.settings.hideAssetFolderInFileExplorer)
+        .onChange(async (value) => {
+          this.plugin.settings.hideAssetFolderInFileExplorer = value;
+          await this.saveAndRefresh();
+        }));
+
+    new Setting(containerEl)
+      .setName("文件浏览器自定义筛选")
+      .setDesc("启用后，可按后缀或文件夹名称隐藏左侧文件浏览器项目；仅影响显示，不影响搜索、链接和文件本身。")
+      .addToggle((toggle) => toggle
+        .setValue(this.plugin.settings.hideConfiguredFilesInFileExplorer)
+        .onChange(async (value) => {
+          this.plugin.settings.hideConfiguredFilesInFileExplorer = value;
+          await this.saveAndRefresh();
+          this.display();
+        }));
+
+    if (this.plugin.settings.hideConfiguredFilesInFileExplorer) {
+      new Setting(containerEl)
+        .setName("隐藏指定后缀")
+        .setDesc("使用逗号、分号或换行分隔，例如：png, jpg, pdf。无需填写点号。")
+        .addTextArea((text) => text
+          .setPlaceholder("png, jpg, pdf")
+          .setValue(this.plugin.settings.hiddenFileExtensions)
+          .onChange(async (value) => {
+            this.plugin.settings.hiddenFileExtensions = value.trim();
+            await this.saveAndRefresh();
+          }));
+      new Setting(containerEl)
+        .setName("隐藏指定文件夹")
+        .setDesc("使用逗号、分号或换行分隔，可填写文件夹名称或仓库相对路径，例如：附件 或 项目/缓存。")
+        .addTextArea((text) => text
+          .setPlaceholder("附件\n项目/缓存")
+          .setValue(this.plugin.settings.hiddenFileFolders)
+          .onChange(async (value) => {
+            this.plugin.settings.hiddenFileFolders = value.trim();
+            await this.saveAndRefresh();
+          }));
+    }
 
     containerEl.createEl("h3", { text: "图片与图床" });
 

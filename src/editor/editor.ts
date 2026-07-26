@@ -941,6 +941,7 @@ export class MindMapEditor {
   private articleMiniMapEl: HTMLElement | null = null;
   private articleMiniMapHideTimer: number | null = null;
   private articleMiniMapCleanup: (() => void) | null = null;
+  private readonly collapsedArticleSectionIds = new Set<string>();
   private articleScrollButtonCleanup: (() => void) | null = null;
 
   /**
@@ -1925,6 +1926,7 @@ export class MindMapEditor {
   private renderArticle(): void {
     this.articleEl.onscroll = null;
     renderArticleMode(this.articleEl, this.articleRendererOptions());
+    this.installArticleSectionCollapse();
     this.addArticleScrollToTopButton();
     this.renderArticleMiniMap();
   }
@@ -2096,6 +2098,7 @@ export class MindMapEditor {
       showArticleToc: this.options.showArticleToc,
       articleTocEntries: this.options.articleTocEntries,
       articleTocMaxDepth: this.effectiveArticleTocMaxDepth(),
+      articleLeafBulletsEnabled: this.options.articleLeafBulletsEnabled,
       articleNavigation: this.options.articleNavigation,
       callbacks: this.callbacks,
       selectNode: (id) => this.selectNode(id),
@@ -2116,6 +2119,49 @@ export class MindMapEditor {
   /** 将文章内容块渲染委托给文章模式模块。 */
   private renderArticleContent(container: HTMLElement, node: MindMapNode, treatTextAsBody: boolean): void {
     renderArticleNodeContent(container, node, treatTextAsBody, this.articleRendererOptions());
+  }
+
+  /** Adds Markdown-style collapse controls to headings and hides their descendant article sections. */
+  private installArticleSectionCollapse(): void {
+    if (!this.options.articleSectionCollapseEnabled) return;
+    const sections = Array.from(this.articleEl.querySelectorAll<HTMLElement>(".mms-article-node"));
+    const depthOf = (section: HTMLElement): number => Number(section.className.match(/depth-(\d+)/)?.[1] ?? 1);
+    const keyOf = (section: HTMLElement, index: number): string => section.id || `${section.dataset.nodeId ?? "section"}-${index}`;
+    const collapsible = sections.map((section, index) => ({ section, index, key: keyOf(section, index) }))
+      .filter(({ section, index }) => {
+        const depth = depthOf(section);
+        return Boolean(section.querySelector(":scope > .mms-article-section-heading, :scope > h2, :scope > h3, :scope > h4, :scope > h5, :scope > h6"))
+          && sections.slice(index + 1).some((candidate) => depthOf(candidate) > depth);
+      });
+    const apply = (): void => {
+      sections.forEach((section) => section.removeClasses(["is-section-collapsed", "is-collapsed-by-heading"]));
+      for (const { section, index, key } of collapsible) {
+        if (!this.collapsedArticleSectionIds.has(key)) continue;
+        section.addClass("is-section-collapsed");
+        const depth = depthOf(section);
+        for (const descendant of sections.slice(index + 1)) {
+          if (depthOf(descendant) <= depth) break;
+          descendant.addClass("is-collapsed-by-heading");
+        }
+      }
+      collapsible.forEach(({ section, key }) => {
+        const toggle = section.querySelector<HTMLElement>(":scope > .mms-article-section-heading > .mms-article-collapse-toggle, :scope > h2 > .mms-article-collapse-toggle, :scope > h3 > .mms-article-collapse-toggle, :scope > h4 > .mms-article-collapse-toggle, :scope > h5 > .mms-article-collapse-toggle, :scope > h6 > .mms-article-collapse-toggle");
+        if (toggle) setIcon(toggle, this.collapsedArticleSectionIds.has(key) ? "chevron-right" : "chevron-down");
+      });
+    };
+    collapsible.forEach(({ section, key }) => {
+      const heading = section.querySelector<HTMLElement>(":scope > .mms-article-section-heading, :scope > h2, :scope > h3, :scope > h4, :scope > h5, :scope > h6");
+      if (!heading) return;
+      const toggle = heading.createEl("button", { cls: "clickable-icon mms-article-collapse-toggle", attr: { type: "button", "aria-label": "展开或折叠本节" } });
+      toggle.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        if (this.collapsedArticleSectionIds.has(key)) this.collapsedArticleSectionIds.delete(key);
+        else this.collapsedArticleSectionIds.add(key);
+        apply();
+      });
+    });
+    apply();
   }
 
   /**
@@ -3393,12 +3439,12 @@ export class MindMapEditor {
         nodeSection.id = `reading-${fileKey}-${readingAnchorPart(info.node.id)}`;
         if (info.isHeading) {
           const level = Math.min(6, info.depth + 1);
-          nodeSection.createEl(`h${level}` as keyof HTMLElementTagNameMap, { text: info.displayTitle || info.title });
+          nodeSection.createEl(`h${level}` as keyof HTMLElementTagNameMap, { cls: "mms-article-section-heading", text: info.displayTitle || info.title });
           this.renderArticleContent(nodeSection, info.node, false);
         } else {
           const firstTextBlock = nodeContentBlocks(info.node).find((block): block is MindMapTextContentBlock => block.type === "text");
           if (firstTextBlock) {
-            const paragraph = nodeSection.createEl("p", { cls: "mms-article-leaf-text" });
+            const paragraph = nodeSection.createEl("p", { cls: `mms-article-leaf-text${this.options.articleLeafBulletsEnabled ? " is-bulleted" : ""}` });
             renderRichTextRuns(paragraph, firstTextBlock.richText, firstTextBlock.text);
           }
           this.renderArticleContent(nodeSection, info.node, false);
@@ -3406,6 +3452,7 @@ export class MindMapEditor {
       }
     }
 
+    this.installArticleSectionCollapse();
     this.renderArticleMiniMap();
 
     window.setTimeout(() => {

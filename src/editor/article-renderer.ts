@@ -34,6 +34,7 @@ export interface ArticleRendererOptions {
   showArticleToc: boolean;
   articleTocEntries: ArticleTocEntry[];
   articleTocMaxDepth: number;
+  articleLeafBulletsEnabled: boolean;
   articleNavigation?: ArticlePageNavigation;
   callbacks: Pick<MindMapEditorCallbacks, "resolveImage" | "onRenderCode" | "onOpenMindMap" | "onOpenArticleDirectory">;
   selectNode: (id: string) => void;
@@ -75,7 +76,7 @@ export function renderArticleMode(container: HTMLElement, options: ArticleRender
     if (info.isHeading) {
       const level = Math.min(6, info.depth + 1);
       const heading = section.createEl(`h${level}` as keyof HTMLElementTagNameMap, {
-        cls: `mms-article-heading${/[、.）]$/.test(info.label) ? " is-compact-number" : ""}`
+        cls: `mms-article-heading mms-article-section-heading${/[、.）]$/.test(info.label) ? " is-compact-number" : ""}`
       });
       if (info.label) heading.createSpan({ cls: "mms-article-number", text: info.label });
       renderHeading(heading, info.node, info.title, options);
@@ -85,7 +86,7 @@ export function renderArticleMode(container: HTMLElement, options: ArticleRender
     } else {
       const firstTextBlock = nodeContentBlocks(info.node).find((block): block is MindMapTextContentBlock => block.type === "text");
       if (firstTextBlock?.text.trim()) {
-        const paragraph = section.createEl("p", { cls: "mms-article-leaf-text" });
+        const paragraph = section.createEl("p", { cls: `mms-article-leaf-text${options.articleLeafBulletsEnabled ? " is-bulleted" : ""}` });
         renderRichTextRuns(paragraph, firstTextBlock.richText, firstTextBlock.text);
         options.makeInlineEditable(paragraph, info.node, "正文段落");
       }

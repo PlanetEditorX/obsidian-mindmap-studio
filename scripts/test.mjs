@@ -22,6 +22,7 @@ const dragDropOutfile = join(tempDir, "drag-drop.cjs");
 const nodeActionsOutfile = join(tempDir, "node-actions.cjs");
 const collisionOutfile = join(tempDir, "collision-layout.cjs");
 const clipboardOutfile = join(tempDir, "clipboard-import.cjs");
+const fileExplorerFilterOutfile = join(tempDir, "file-explorer-filter.cjs");
 const obsidianStub = join(tempDir, "obsidian-stub.mjs");
 
 try {
@@ -97,6 +98,14 @@ try {
     format: "cjs",
     logLevel: "silent"
   });
+  await build({
+    entryPoints: ["src/file-explorer-filter.ts"],
+    outfile: fileExplorerFilterOutfile,
+    bundle: true,
+    platform: "node",
+    format: "cjs",
+    logLevel: "silent"
+  });
   await writeFile(obsidianStub, `export class App {}
 export class Modal { constructor() {} }
 export class Notice {}
@@ -125,7 +134,22 @@ export const setIcon = () => {};
   const nodeActions = require(nodeActionsOutfile);
   const collisionLayout = require(collisionOutfile);
   const clipboardImport = require(clipboardOutfile);
+  const fileExplorerFilter = require(fileExplorerFilterOutfile);
   const document = model.createDefaultDocument("测试脑图");
+  assert.deepEqual(fileExplorerFilter.normalizeHiddenFileExtensions(".PNG, jpg\nPDF; png"), ["png", "jpg", "pdf"]);
+  assert.deepEqual(fileExplorerFilter.normalizeHiddenFolderPaths("附件\n项目\\缓存, 归档"), ["附件", "项目/缓存", "归档"]);
+  assert.equal(fileExplorerFilter.shouldHideFileExplorerPath("课程/MindMap Assets/图.png", {
+    assetFolder: "MindMap Assets", hideAssetFolderInFileExplorer: true, hideConfiguredFilesInFileExplorer: false,
+    hiddenFileExtensions: "", hiddenFileFolders: ""
+  }), true, "asset folder filtering must hide its descendants without touching the vault");
+  assert.equal(fileExplorerFilter.shouldHideFileExplorerPath("项目/缓存/结果.json", {
+    assetFolder: "MindMap Assets", hideAssetFolderInFileExplorer: false, hideConfiguredFilesInFileExplorer: true,
+    hiddenFileExtensions: "png, jpg", hiddenFileFolders: "项目/缓存"
+  }), true, "custom folder filtering must support vault-relative paths");
+  assert.equal(fileExplorerFilter.shouldHideFileExplorerPath("项目/笔记.md", {
+    assetFolder: "MindMap Assets", hideAssetFolderInFileExplorer: false, hideConfiguredFilesInFileExplorer: true,
+    hiddenFileExtensions: "png", hiddenFileFolders: "缓存"
+  }), false, "unmatched files must remain visible");
   const xmindArchive = zipSync({
     "content.json": strToU8(JSON.stringify([
       {
@@ -1200,7 +1224,7 @@ export const setIcon = () => {};
   assert.match(editorSource, /private scrollToArticleMiniMapTarget\(target: HTMLElement\): void/, "minimap markers must calculate an exact container scroll target");
   assert.match(editorSource, /this\.articleEl\.scrollTo\(\{ top: Math\.max\(0, top\), behavior: "smooth" \}\)/, "minimap markers must jump to the exact article position");
   assert.match(editorSource, /private articleMiniMapTargetLabel\(target: HTMLElement\): string/, "minimap markers must restore a concise chapter tooltip");
-  assert.match(editorSource, /attr: \{ type: "button", "aria-label": label \}/, "minimap markers must expose a single Obsidian chapter label without a native tooltip");
+  assert.match(editorSource, /"aria-label": label, "data-tooltip": label/, "minimap markers must expose an accessible chapter label and an above-marker tooltip");
   assert.match(editorSource, /getBoundingClientRect\(\)\.top \+ 2/, "the active marker must align to the exact article top instead of the next section");
   assert.match(editorSource, /this\.currentMode !== "mindmap" \|\| !this\.options\.visibleToolbarItems\.includes\("submap"\)/, "submap toolbar actions must remain hidden outside mind-map mode");
   assert.match(editorSource, /this\.document\.view\?\.articleTocMaxDepth, this\.options\.articleTocMaxDepth/, "article and reading modes must resolve the document TOC override before the plugin setting");
@@ -1380,7 +1404,10 @@ export const setIcon = () => {};
   assert.doesNotMatch(cssSource, /\.mmc-submap-card/, "obsolete duplicate submap-card styling should be removed");
   assert.match(editorSource, /onDisplayModeChange/);
   assert.match(editorSource, /articleBaseDepth/);
+  assert.match(editorSource, /installArticleSectionCollapse/, "article headings must support Markdown-style section collapse");
+  assert.match(editorSource, /articleLeafBulletsEnabled/, "article terminal bullets must follow the global setting");
   assert.match(mainSource, /buildArticleContext/);
+  assert.match(mainSource, /shouldHideFileExplorerPath/, "File Explorer filters must use the tested pure matcher");
   assert.match(editorSource, /setAttribute\("stroke-width"/);
   assert.match(editorSource, /setProperty\("stroke-width"[\s\S]*"important"/);
   assert.match(editorSource, /mmc-canvas-breadcrumb/);
@@ -1389,6 +1416,8 @@ export const setIcon = () => {};
   assert.match(cssSource, /\.mmc-canvas-breadcrumb[\s\S]*position:\s*absolute/);
   assert.match(cssSource, /\.mmc-canvas-breadcrumb-shell[\s\S]*backdrop-filter:\s*blur/);
   assert.match(cssSource, /\.mmc-canvas-breadcrumb-parent[\s\S]*text-overflow:\s*ellipsis/);
+  assert.match(cssSource, /\.mms-article-leaf-text\.is-bulleted::before/, "terminal article bullets need dedicated styling");
+  assert.match(cssSource, /\.mms-article-node\.is-collapsed-by-heading/, "collapsed article sections must be hidden by CSS");
 
 
   const packageJson = JSON.parse(await readFile("package.json", "utf8"));
