@@ -1200,7 +1200,7 @@ export const setIcon = () => {};
   assert.match(editorSource, /private scrollToArticleMiniMapTarget\(target: HTMLElement\): void/, "minimap markers must calculate an exact container scroll target");
   assert.match(editorSource, /this\.articleEl\.scrollTo\(\{ top: Math\.max\(0, top\), behavior: "smooth" \}\)/, "minimap markers must jump to the exact article position");
   assert.match(editorSource, /private articleMiniMapTargetLabel\(target: HTMLElement\): string/, "minimap markers must restore a concise chapter tooltip");
-  assert.match(editorSource, /title: label, "aria-label": label/, "minimap markers must expose their chapter label on hover");
+  assert.match(editorSource, /attr: \{ type: "button", "aria-label": label \}/, "minimap markers must expose a single Obsidian chapter label without a native tooltip");
   assert.match(editorSource, /getBoundingClientRect\(\)\.top \+ 2/, "the active marker must align to the exact article top instead of the next section");
   assert.match(editorSource, /this\.currentMode !== "mindmap" \|\| !this\.options\.visibleToolbarItems\.includes\("submap"\)/, "submap toolbar actions must remain hidden outside mind-map mode");
   assert.match(editorSource, /this\.document\.view\?\.articleTocMaxDepth, this\.options\.articleTocMaxDepth/, "article and reading modes must resolve the document TOC override before the plugin setting");

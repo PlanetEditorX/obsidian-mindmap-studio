@@ -1943,7 +1943,7 @@ export class MindMapEditor {
       const targetIndex = Math.round(index * (targets.length - 1) / Math.max(1, count - 1));
       const target = targets[targetIndex]!;
       const label = this.articleMiniMapTargetLabel(target);
-      const marker = track.createEl("button", { cls: "mms-article-minimap-marker", attr: { type: "button", title: label, "aria-label": label } });
+      const marker = track.createEl("button", { cls: "mms-article-minimap-marker", attr: { type: "button", "aria-label": label } });
       const depth = this.articleMiniMapDepth(target);
       marker.dataset.minimapTargetIndex = String(targetIndex);
       marker.style.width = "44px";
