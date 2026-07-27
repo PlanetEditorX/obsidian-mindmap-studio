@@ -1175,8 +1175,16 @@ export const setIcon = () => {};
   assert.match(editorSource, /element\.addClass\("is-inline-editing"\)[\s\S]*element\.removeClass\("is-inline-editing"\)/, "only the focused inline text should enter the editing-frame state");
   assert.match(editorSource, /isNearNodeEdge\(event, nodeEl\)\) this\.editSelected\(\);[\s\S]*else this\.beginInlineEdit\(node\.id\)/, "edge double-clicks must open the full editor while the center remains a quick edit");
   assert.match(editorSource, /private isNearNodeEdge\(event: MouseEvent, nodeEl: HTMLElement\): boolean[\s\S]*return distance <= 18/, "the node edge hit area must be explicit and stable");
-  assert.match(editorSource, /captureReadingPosition/);
-  assert.match(editorSource, /restoreReadingPosition/);
+  assert.match(
+    editorSource,
+    /private captureCurrentLocation\(mode: DisplayMode\): ReadingLocation \| null/,
+    "mode switching must capture a semantic location from the active view"
+  );
+  assert.match(
+    editorSource,
+    /private restoreReadingLocation\(mode: DisplayMode, location: ReadingLocation \| null \| undefined\): ResolvedReadingLocation \| null/,
+    "mode switching must restore the shared semantic location"
+  );
   assert.match(editorSource, /nodeRatio: Math\.max\(0, Math\.min\(1/);
   assert.match(editorSource, /scroller\.scrollTop \+= targetY - desiredY/, "article and outline modes must restore the same semantic reading position");
   assert.match(editorSource, /scrollPosition = scroller \? \{ top: scroller\.scrollTop, left: scroller\.scrollLeft \}/);

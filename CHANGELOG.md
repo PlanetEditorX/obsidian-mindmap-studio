@@ -22,6 +22,7 @@
 - 抽取图床端点、Header、multipart 和响应 URL 解析工具；拒绝非 HTTP(S) 地址、复杂 Header 值和换行注入。
 - 合并空子导图与提取子导图的文档初始化、导航元数据和资源目录写入流程，避免两套逻辑漂移。
 - 独立单元测试扩展到 32 项，覆盖启动模式、跨模式语义位置、祖先/跨文件回退、目录与父挂载锚点、多视图并发保护，以及既有文件名与图床边界。
+- 修复综合回归仍检查旧方法名 `captureReadingPosition` / `restoreReadingPosition` 的问题；源码契约现验证实际的 `captureCurrentLocation` / `restoreReadingLocation` 完整方法签名。
 - 重新生成 README、开发、测试、维护和 Git 工作流文档；版本历史继续集中在本文件。
 - 从源码交付中移除 `.ua/`、`.local-test-build/` 和本地分析启动脚本，并完善 Git 忽略规则、PR/Issue 模板与 CI。
 

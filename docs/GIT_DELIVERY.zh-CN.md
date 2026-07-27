@@ -57,6 +57,20 @@ docs(reading): document persistent cross-mode navigation
 
 功能提交应包含领域状态、编辑器、视图、设置和样式；测试提交包含 `tests/`、`scripts/test.mjs` 与测试命令；说明文档单独提交，便于评审。
 
+## 从 progress-sync 初版修复 CI 断言
+
+若已经应用上一版 progress-sync，只需应用小型 CI 修复补丁：
+
+```bash
+git apply --check obsidian-mindmap-studio-1.19.2-progress-sync-r1-ci-fix.patch
+git apply obsidian-mindmap-studio-1.19.2-progress-sync-r1-ci-fix.patch
+
+git add scripts/test.mjs CHANGELOG.md TEST_RESULTS.md MODIFIED_FILES.md docs/GIT_DELIVERY.zh-CN.md
+git commit -m "test(regression): align reading location assertions with current API"
+```
+
+该补丁只更新回归契约与交付说明，不修改插件运行时代码或 `.mindmap` 数据。
+
 ## 本地与 CI 验证
 
 开发机需使用 Node.js 20 或更高版本：

@@ -20,7 +20,7 @@
 - `tests/reading-editor-contract.test.mjs`：目录/父挂载锚点、文章族切换写回和多视图并发契约。
 - `tests/filename.test.mjs`：文件名工具单元测试。
 - `tests/image-host.test.mjs`：图床工具单元测试。
-- `scripts/test.mjs`：增加显示模式、语义阅读位置、跨文件恢复和改名迁移源码契约；修正 multipart 回归断言，使其验证入口委托与工具模块实现，而非依赖字符串继续位于 `src/main.ts`。
+- `scripts/test.mjs`：增加显示模式、语义阅读位置、跨文件恢复和改名迁移源码契约；修正 multipart 模块迁移断言，并将旧的 `captureReadingPosition` / `restoreReadingPosition` 检查更新为当前 `captureCurrentLocation` / `restoreReadingLocation` 完整方法签名。
 - `scripts/check-repository.mjs`：仓库结构、版本和清洁度检查。
 - `package.json`、`package-lock.json`：分层测试、统一验证和 Node 版本要求。
 
