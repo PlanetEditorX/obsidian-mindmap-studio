@@ -71,6 +71,26 @@ git commit -m "test(regression): align reading location assertions with current 
 
 该补丁只更新回归契约与交付说明，不修改插件运行时代码或 `.mindmap` 数据。
 
+## 从 progress-sync-r1 修复比例断言
+
+若 CI 日志出现：
+
+```text
+expected: /nodeRatio: Math\.max\(0, Math\.min\(1/
+```
+
+说明回归测试仍假定比例截断位于 `src/editor/editor.ts`。当前实现已经统一迁移到 `src/article/reading-location.ts` 的 `clampRatio()`。在 r1 上应用小型修复补丁：
+
+```bash
+git apply --check obsidian-mindmap-studio-1.19.2-progress-sync-r2-ci-fix.patch
+git apply obsidian-mindmap-studio-1.19.2-progress-sync-r2-ci-fix.patch
+
+git add scripts/test.mjs CHANGELOG.md TEST_RESULTS.md MODIFIED_FILES.md docs/GIT_DELIVERY.zh-CN.md docs/CI_FIX_READING_RATIO.zh-CN.md
+git commit -m "test(regression): align ratio assertion with shared location clamp"
+```
+
+该修复只调整测试契约和交付文档，不修改运行时代码或数据格式。
+
 ## 本地与 CI 验证
 
 开发机需使用 Node.js 20 或更高版本：

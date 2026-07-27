@@ -13,6 +13,8 @@
 
 测试已改为匹配这两个私有方法的完整 TypeScript 签名，避免仅命中调用点、注释或已经废弃的方法名。该修复不改变运行时代码。
 
+后续 CI 又暴露一条同类旧断言：它要求 `nodeRatio: Math.max(0, Math.min(1, ...))` 直接出现在 `src/editor/editor.ts`。当前实现已经把比例边界统一收敛到 `src/article/reading-location.ts` 的 `clampRatio()`，并由 `normalizeReadingLocation`、`createReadingLocation` 复用。回归契约现验证共享工具及 `nodeRatio` 的调用关系；`tests/reading-location.test.mjs` 继续从行为层验证 `3 → 1`、`-1 → 0`。
+
 ## 已执行通过
 
 ### 独立单元与源码契约测试

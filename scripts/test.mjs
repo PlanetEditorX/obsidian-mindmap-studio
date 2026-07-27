@@ -1185,7 +1185,16 @@ export const setIcon = () => {};
     /private restoreReadingLocation\(mode: DisplayMode, location: ReadingLocation \| null \| undefined\): ResolvedReadingLocation \| null/,
     "mode switching must restore the shared semantic location"
   );
-  assert.match(editorSource, /nodeRatio: Math\.max\(0, Math\.min\(1/);
+  assert.match(
+    readingLocationSource,
+    /const clampRatio =/,
+    "reading progress ratios must be normalized by the shared location utility"
+  );
+  assert.match(
+    readingLocationSource,
+    /nodeRatio: clampRatio\((?:nodeRatio|input\.nodeRatio), 0\)/,
+    "persisted node ratios must use the shared clamp instead of editor-local arithmetic"
+  );
   assert.match(editorSource, /scroller\.scrollTop \+= targetY - desiredY/, "article and outline modes must restore the same semantic reading position");
   assert.match(editorSource, /scrollPosition = scroller \? \{ top: scroller\.scrollTop, left: scroller\.scrollLeft \}/);
   assert.match(editorSource, /window\.requestAnimationFrame\(restore\)/, "switching edit state must restore the current scroll position after rerender");
