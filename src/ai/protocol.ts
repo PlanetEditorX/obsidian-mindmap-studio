@@ -15,6 +15,20 @@ export interface AiChatCompletionBody {
   stream: false;
 }
 
+/**
+ * 将 OpenAI 兼容服务的基础地址或完整地址统一为 Chat Completions 端点。
+ *
+ * 例如 `https://api.example.com/v1` 会转换为
+ * `https://api.example.com/v1/chat/completions`；已经填写完整路径时保持不变。
+ */
+export function resolveAiChatCompletionsEndpoint(endpoint: string): string {
+  const normalized = endpoint.trim().replace(/\/+$/g, "");
+  if (!normalized) return "";
+  return /\/chat\/completions$/i.test(normalized)
+    ? normalized
+    : `${normalized}/chat/completions`;
+}
+
 /** 解析自定义请求头，并拒绝嵌套值、非法名称和 CRLF 注入。 */
 export function parseAiHeaders(source: string): Record<string, string> {
   const trimmed = source.trim();
@@ -48,6 +62,17 @@ export function buildChatCompletionBody(
     messages,
     temperature: profile.temperature,
     max_tokens: profile.maxOutputTokens,
+    stream: false
+  };
+}
+
+/** 构建不包含导图正文的最小连通性检测请求。 */
+export function buildAiConnectionTestBody(profile: AiProfileConfig): AiChatCompletionBody {
+  return {
+    model: profile.model.trim(),
+    messages: [{ role: "user", content: "连接检测：请只回复 OK。" }],
+    temperature: 0,
+    max_tokens: 8,
     stream: false
   };
 }

@@ -2,7 +2,7 @@
 
 ## 功能范围
 
-MindMap Studio 的 AI 助手把当前导图范围转换为 Markdown 文本，再通过用户配置的 OpenAI Chat Completions 兼容接口发送。插件内置 OpenAI、DeepSeek 和自定义接口三类配置入口，但不会附带 API 密钥。
+MindMap Studio 的 AI 助手把当前导图范围转换为 Markdown 文本，再通过用户配置的 OpenAI Chat Completions 兼容接口发送。插件内置 OpenAI、DeepSeek、硅基流动、FreeLLMAPI 和自定义接口配置入口，但不会附带 API 密钥。
 
 AI 助手不会修改 `.mindmap` 文件。回答显示在独立窗口中，可复制后由用户决定是否写回导图。
 
@@ -50,7 +50,7 @@ AI 助手不会修改 `.mindmap` 文件。回答显示在独立窗口中，可�
 打开“设置 → MindMap Studio → AI 助手”。每个接口配置包含：
 
 - 名称和启用状态；
-- OpenAI、DeepSeek 或自定义预设；
+- OpenAI、DeepSeek、硅基流动、FreeLLMAPI 或自定义预设；
 - Chat Completions 接口地址；
 - API 密钥；
 - 模型名称；
@@ -59,7 +59,27 @@ AI 助手不会修改 `.mindmap` 文件。回答显示在独立窗口中，可�
 - 系统提示词；
 - 附加请求头 JSON。
 
-切换预设会更新默认接口地址和模型名称，但不会覆盖已经填写的 API 密钥。自定义接口必须兼容 OpenAI Chat Completions 的 JSON 请求与响应结构。
+切换预设会更新默认接口地址和模型名称，但不会覆盖已经填写的 API 密钥。接口地址既可填写 `/v1` 基础地址，也可填写完整的 `/chat/completions` 地址。自定义接口必须兼容 OpenAI Chat Completions 的 JSON 请求与响应结构。
+
+内置新增预设：
+
+| 预设 | 默认接口地址 | 默认模型或模型建议 |
+|---|---|---|
+| 硅基流动 | `https://api.siliconflow.cn/v1` | `deepseek-ai/DeepSeek-V4-Flash`、`deepseek-ai/DeepSeek-V4-Pro`、`zai-org/GLM-5.2` |
+| FreeLLMAPI | 留空，由用户填写部署地址 | `auto` |
+
+模型输入框提供预设建议，但仍允许直接输入服务端支持的其他模型 ID。
+
+### 检测接口
+
+每个接口卡片都有“检测接口”按钮。检测会验证：
+
+- 基础地址或 Chat Completions 地址是否可访问；
+- API 密钥和附加请求头是否通过鉴权；
+- 当前模型是否可用；
+- 响应是否包含可读取的兼容文本。
+
+检测请求只发送“请回复 OK”的最小提示词，不包含当前页面、节点分支、文件路径或导图 Markdown。检测成功后会显示耗时、实际返回模型和短响应；失败时显示接口返回的错误信息。
 
 填写 API 密钥后，请求自动添加 Bearer `Authorization`。附加请求头只接受字符串、数字或布尔值，并拒绝非法名称、嵌套对象和 CRLF 换行注入。
 

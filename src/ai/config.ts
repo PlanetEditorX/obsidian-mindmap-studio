@@ -4,7 +4,7 @@
  */
 
 /** 可选择的 AI 接口预设类别。 */
-export type AiProviderKind = "openai" | "deepseek" | "custom";
+export type AiProviderKind = "openai" | "deepseek" | "siliconflow" | "freellmapi" | "custom";
 
 /** 单个可持久化 AI 接口配置。 */
 export interface AiProfileConfig {
@@ -45,6 +45,20 @@ export const AI_PROFILE_PRESETS: Record<AiProviderKind, AiProfilePreset> = {
     model: "deepseek-v4-flash",
     systemPrompt: "你是一个严谨的知识整理助手。请仅基于用户提供的思维导图 Markdown 回答，并明确区分原文信息与推断。"
   },
+  siliconflow: {
+    provider: "siliconflow",
+    name: "硅基流动",
+    endpoint: "https://api.siliconflow.cn/v1",
+    model: "deepseek-ai/DeepSeek-V4-Flash",
+    systemPrompt: "你是一个严谨的知识整理助手。请仅基于用户提供的思维导图 Markdown 回答，并明确区分原文信息与推断。"
+  },
+  freellmapi: {
+    provider: "freellmapi",
+    name: "FreeLLMAPI",
+    endpoint: "",
+    model: "auto",
+    systemPrompt: "你是一个严谨的知识整理助手。请仅基于用户提供的思维导图 Markdown 回答，并明确区分原文信息与推断。"
+  },
   custom: {
     provider: "custom",
     name: "自定义接口",
@@ -52,6 +66,19 @@ export const AI_PROFILE_PRESETS: Record<AiProviderKind, AiProfilePreset> = {
     model: "",
     systemPrompt: "你是一个严谨的知识整理助手。请仅基于用户提供的思维导图 Markdown 回答，并明确区分原文信息与推断。"
   }
+};
+
+/** 各预设接口在设置页提供的模型建议；文本框仍允许输入其他兼容模型。 */
+export const AI_PROVIDER_MODEL_PRESETS: Record<AiProviderKind, readonly string[]> = {
+  openai: ["gpt-4.1-mini"],
+  deepseek: ["deepseek-v4-flash"],
+  siliconflow: [
+    "deepseek-ai/DeepSeek-V4-Flash",
+    "deepseek-ai/DeepSeek-V4-Pro",
+    "zai-org/GLM-5.2"
+  ],
+  freellmapi: ["auto"],
+  custom: []
 };
 
 export const DEFAULT_AI_PROFILES: AiProfileConfig[] = [
@@ -72,6 +99,24 @@ export const DEFAULT_AI_PROFILES: AiProfileConfig[] = [
     temperature: 0.2,
     maxOutputTokens: 2048,
     headers: ""
+  },
+  {
+    id: "ai_siliconflow",
+    ...AI_PROFILE_PRESETS.siliconflow,
+    enabled: false,
+    apiKey: "",
+    temperature: 0.2,
+    maxOutputTokens: 2048,
+    headers: ""
+  },
+  {
+    id: "ai_freellmapi",
+    ...AI_PROFILE_PRESETS.freellmapi,
+    enabled: false,
+    apiKey: "",
+    temperature: 0.2,
+    maxOutputTokens: 2048,
+    headers: ""
   }
 ];
 
@@ -80,7 +125,10 @@ const clamp = (value: unknown, min: number, max: number, fallback: number): numb
   return Number.isFinite(parsed) ? Math.max(min, Math.min(max, parsed)) : fallback;
 };
 
-const providerOf = (value: unknown): AiProviderKind => value === "openai" || value === "deepseek" ? value : "custom";
+const providerOf = (value: unknown): AiProviderKind => {
+  if (value === "openai" || value === "deepseek" || value === "siliconflow" || value === "freellmapi") return value;
+  return "custom";
+};
 
 /** 创建一个可编辑的 AI 接口配置。 */
 export function createAiProfileConfig(provider: AiProviderKind, index = 1): AiProfileConfig {

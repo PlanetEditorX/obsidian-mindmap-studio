@@ -7,7 +7,14 @@ import { requestUrl } from "obsidian";
 import { normalizeHttpUrl } from "../utils/image-host";
 import type { AiProfileConfig } from "./config";
 import type { AiMarkdownPayload } from "./markdown";
-import { buildChatCompletionBody, extractAiResponseText, parseAiHeaders } from "./protocol";
+import {
+  buildAiConnectionTestBody,
+  buildChatCompletionBody,
+  extractAiResponseText,
+  parseAiHeaders,
+  resolveAiChatCompletionsEndpoint,
+  type AiChatCompletionBody
+} from "./protocol";
 
 /** AI 请求完成后返回给界面的统一结果。 */
 export interface AiCompletionResult {
@@ -20,6 +27,46 @@ export interface AiCompletionResult {
   };
 }
 
+/** AI 接口连通性检测结果。 */
+export interface AiConnectionTestResult {
+  text: string;
+  model: string;
+}
+
+/** 组装鉴权和用户自定义请求头。 */
+const buildRequestHeaders = (profile: AiProfileConfig): Record<string, string> => {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...parseAiHeaders(profile.headers)
+  };
+  if (profile.apiKey.trim()) headers.Authorization = `Bearer ${profile.apiKey.trim()}`;
+  return headers;
+};
+
+/** 发送一次 OpenAI Chat Completions 兼容请求并返回解析后的 JSON。 */
+const requestChatCompletion = async (
+  profile: AiProfileConfig,
+  body: AiChatCompletionBody
+): Promise<Record<string, unknown>> => {
+  const endpoint = normalizeHttpUrl(
+    resolveAiChatCompletionsEndpoint(profile.endpoint),
+    "AI 接口"
+  );
+  if (!profile.model.trim()) throw new Error("请先配置模型名称");
+  const response = await requestUrl({
+    url: endpoint,
+    method: "POST",
+    headers: buildRequestHeaders(profile),
+    contentType: "application/json",
+    body: JSON.stringify(body),
+    throw: true
+  });
+  const json = response.json ?? (() => {
+    try { return JSON.parse(response.text) as unknown; } catch { return null; }
+  })();
+  return json && typeof json === "object" ? json as Record<string, unknown> : {};
+};
+
 /** 发送 OpenAI Chat Completions 兼容请求。 */
 export async function requestAiCompletion(
   profile: AiProfileConfig,
@@ -27,35 +74,32 @@ export async function requestAiCompletion(
   question: string
 ): Promise<AiCompletionResult> {
   if (payload.overLimit) throw new Error("Markdown 超过当前允许上传的大小");
-  const endpoint = normalizeHttpUrl(profile.endpoint, "AI 接口");
-  if (!profile.model.trim()) throw new Error("请先配置模型名称");
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-    ...parseAiHeaders(profile.headers)
-  };
-  if (profile.apiKey.trim()) headers.Authorization = `Bearer ${profile.apiKey.trim()}`;
-  const response = await requestUrl({
-    url: endpoint,
-    method: "POST",
-    headers,
-    contentType: "application/json",
-    body: JSON.stringify(buildChatCompletionBody(profile, payload, question)),
-    throw: true
-  });
-  const json = response.json ?? (() => {
-    try { return JSON.parse(response.text) as unknown; } catch { return null; }
-  })();
+  const json = await requestChatCompletion(profile, buildChatCompletionBody(profile, payload, question));
   const text = extractAiResponseText(json);
   if (!text) throw new Error("AI 接口返回成功，但没有可读取的文本内容");
-  const record = json && typeof json === "object" ? json as Record<string, unknown> : {};
-  const usage = record.usage && typeof record.usage === "object" ? record.usage as Record<string, unknown> : undefined;
+  const usage = json.usage && typeof json.usage === "object" ? json.usage as Record<string, unknown> : undefined;
   return {
     text,
-    model: typeof record.model === "string" ? record.model : profile.model,
+    model: typeof json.model === "string" ? json.model : profile.model,
     usage: usage ? {
       promptTokens: typeof usage.prompt_tokens === "number" ? usage.prompt_tokens : undefined,
       completionTokens: typeof usage.completion_tokens === "number" ? usage.completion_tokens : undefined,
       totalTokens: typeof usage.total_tokens === "number" ? usage.total_tokens : undefined
     } : undefined
+  };
+}
+
+/**
+ * 使用最小提示词检测接口、鉴权和模型是否可用。
+ *
+ * 检测请求不会包含当前导图或节点正文。
+ */
+export async function testAiProfileConnection(profile: AiProfileConfig): Promise<AiConnectionTestResult> {
+  const json = await requestChatCompletion(profile, buildAiConnectionTestBody(profile));
+  const text = extractAiResponseText(json);
+  if (!text) throw new Error("接口返回成功，但没有可读取的检测文本");
+  return {
+    text,
+    model: typeof json.model === "string" ? json.model : profile.model
   };
 }
