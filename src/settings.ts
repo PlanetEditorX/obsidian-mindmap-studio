@@ -23,6 +23,7 @@ import type {
 import { appearanceFromThemePreset, MINDMAP_THEME_PRESETS } from "./themes";
 import type { ReadingLocation } from "./article/reading-location";
 import {
+  AI_PROVIDER_MODEL_PRESETS,
   AI_PROFILE_PRESETS,
   DEFAULT_AI_PROFILES,
   createAiProfileConfig,
@@ -730,13 +731,22 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
       if (!this.plugin.settings.defaultAiProfileId) this.plugin.settings.defaultAiProfileId = profile.id;
       void this.plugin.saveSettings().then(() => this.display());
     };
-    for (const [provider, label] of [["openai", "新增 OpenAI"], ["deepseek", "新增 DeepSeek"], ["custom", "新增自定义"]] as Array<[AiProviderKind, string]>) {
+    for (const [provider, label] of [
+      ["openai", "新增 OpenAI"],
+      ["deepseek", "新增 DeepSeek"],
+      ["siliconflow", "新增硅基流动"],
+      ["freellmapi", "新增 FreeLLMAPI"],
+      ["custom", "新增自定义"]
+    ] as Array<[AiProviderKind, string]>) {
       const button = aiHeader.createEl("button", { text: label, attr: { type: "button" } });
       button.addEventListener("click", () => addAiProfile(provider));
     }
 
     if (!this.plugin.settings.aiProfiles.length) {
-      containerEl.createDiv({ cls: "setting-item-description", text: "尚未配置 AI 接口。可使用 OpenAI、DeepSeek 预设，或添加兼容 Chat Completions 的自定义地址。" });
+      containerEl.createDiv({
+        cls: "setting-item-description",
+        text: "尚未配置 AI 接口。可使用 OpenAI、DeepSeek、硅基流动、FreeLLMAPI 预设，或添加兼容 Chat Completions 的自定义地址。"
+      });
     }
 
     this.plugin.settings.aiProfiles.forEach((profile, index) => {
@@ -769,6 +779,8 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
         .addDropdown((dropdown) => dropdown
           .addOption("openai", "OpenAI")
           .addOption("deepseek", "DeepSeek")
+          .addOption("siliconflow", "硅基流动")
+          .addOption("freellmapi", "FreeLLMAPI")
           .addOption("custom", "自定义 OpenAI 兼容接口")
           .setValue(profile.provider)
           .onChange(async (value) => {
@@ -782,8 +794,14 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
             this.display();
           }));
 
-      new Setting(body).setName("接口地址").addText((text) => text
-        .setPlaceholder("https://example.com/v1/chat/completions")
+      const endpointPlaceholder = profile.provider === "siliconflow"
+        ? "https://api.siliconflow.cn/v1"
+        : profile.provider === "freellmapi"
+          ? "http://localhost:3001/v1"
+          : "https://example.com/v1/chat/completions";
+      new Setting(body).setName("接口地址").setDesc("可填写 /v1 基础地址或完整 /chat/completions 地址。")
+        .addText((text) => text
+        .setPlaceholder(endpointPlaceholder)
         .setValue(profile.endpoint)
         .onChange(async (value) => { profile.endpoint = value.trim(); await this.plugin.saveSettings(); }));
       new Setting(body).setName("API 密钥").setDesc("留空仅适用于不需要鉴权的本地或代理接口。")
@@ -794,10 +812,22 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
             await this.plugin.saveSettings();
           });
         });
-      new Setting(body).setName("模型名称").addText((text) => text
-        .setValue(profile.model)
-        .setPlaceholder("模型 ID")
-        .onChange(async (value) => { profile.model = value.trim(); await this.plugin.saveSettings(); }));
+      const modelPresets = AI_PROVIDER_MODEL_PRESETS[profile.provider];
+      const modelListId = `mms-ai-models-${profile.id.replace(/[^A-Za-z0-9_-]/g, "-")}`;
+      const modelSetting = new Setting(body)
+        .setName("模型名称")
+        .setDesc(modelPresets.length > 1 ? "可从预设模型中选择，也可直接输入其他兼容模型 ID。" : "填写服务端支持的模型 ID。");
+      modelSetting.addText((text) => {
+        text.setValue(profile.model)
+          .setPlaceholder(profile.provider === "freellmapi" ? "auto" : "模型 ID")
+          .onChange(async (value) => { profile.model = value.trim(); await this.plugin.saveSettings(); });
+        if (modelPresets.length) text.inputEl.setAttr("list", modelListId);
+        return text;
+      });
+      if (modelPresets.length) {
+        const dataList = body.createEl("datalist", { attr: { id: modelListId } });
+        modelPresets.forEach((model) => dataList.createEl("option", { attr: { value: model } }));
+      }
       new Setting(body).setName("温度").addSlider((slider) => slider
         .setLimits(0, 2, 0.1).setDynamicTooltip().setValue(profile.temperature)
         .onChange(async (value) => { profile.temperature = value; await this.plugin.saveSettings(); }));
@@ -816,7 +846,19 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
           .setValue(profile.headers)
           .onChange(async (value) => { profile.headers = value.slice(0, 16000); await this.plugin.saveSettings(); }));
 
-      const remove = body.createEl("button", { text: "删除接口", cls: "mod-warning", attr: { type: "button" } });
+      const actions = body.createDiv({ cls: "mms-ai-profile-actions" });
+      const testButton = actions.createEl("button", { text: "检测接口", attr: { type: "button" } });
+      testButton.addEventListener("click", () => {
+        testButton.disabled = true;
+        testButton.setText("检测中…");
+        void this.plugin.saveSettings()
+          .then(() => this.plugin.testAiProfile(profile.id))
+          .finally(() => {
+            testButton.disabled = false;
+            testButton.setText("检测接口");
+          });
+      });
+      const remove = actions.createEl("button", { text: "删除接口", cls: "mod-warning", attr: { type: "button" } });
       remove.addEventListener("click", () => {
         this.plugin.settings.aiProfiles = this.plugin.settings.aiProfiles.filter((item) => item.id !== profile.id);
         if (this.plugin.settings.defaultAiProfileId === profile.id) {

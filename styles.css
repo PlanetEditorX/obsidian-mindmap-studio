@@ -3762,7 +3762,8 @@
 .mms-ai-profiles-header,
 .mms-ai-profile-title,
 .mms-ai-context-metrics,
-.mms-ai-actions {
+.mms-ai-actions,
+.mms-ai-profile-actions {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -3805,6 +3806,12 @@
 
 .mms-ai-profile-body {
   padding: 0 14px 14px;
+}
+
+.mms-ai-profile-actions {
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  margin-top: 12px;
 }
 
 .mms-ai-modal .modal-content {

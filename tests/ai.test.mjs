@@ -44,10 +44,25 @@ before(async () => {
 
 after(async () => Promise.all(cleanups.map((cleanup) => cleanup())));
 
-test("AI presets include OpenAI, DeepSeek and custom Chat Completions profiles", () => {
+test("AI presets include OpenAI, DeepSeek, SiliconFlow, FreeLLMAPI and custom profiles", () => {
   assert.equal(config.AI_PROFILE_PRESETS.openai.endpoint, "https://api.openai.com/v1/chat/completions");
   assert.equal(config.AI_PROFILE_PRESETS.deepseek.endpoint, "https://api.deepseek.com/chat/completions");
+  assert.equal(config.AI_PROFILE_PRESETS.siliconflow.endpoint, "https://api.siliconflow.cn/v1");
+  assert.equal(config.AI_PROFILE_PRESETS.siliconflow.model, "deepseek-ai/DeepSeek-V4-Flash");
+  assert.deepEqual(config.AI_PROVIDER_MODEL_PRESETS.siliconflow, [
+    "deepseek-ai/DeepSeek-V4-Flash",
+    "deepseek-ai/DeepSeek-V4-Pro",
+    "zai-org/GLM-5.2"
+  ]);
+  assert.equal(config.AI_PROFILE_PRESETS.freellmapi.endpoint, "");
+  assert.equal(config.AI_PROFILE_PRESETS.freellmapi.model, "auto");
   assert.equal(config.AI_PROFILE_PRESETS.custom.endpoint, "");
+});
+
+test("AI provider normalization preserves SiliconFlow and FreeLLMAPI presets", () => {
+  assert.equal(config.normalizeAiProfileConfig({ provider: "siliconflow" }).provider, "siliconflow");
+  assert.equal(config.normalizeAiProfileConfig({ provider: "freellmapi" }).provider, "freellmapi");
+  assert.equal(config.createAiProfileConfig("freellmapi", 1).model, "auto");
 });
 
 test("normalizeAiProfileConfig clamps unsafe numeric values and trims text", () => {
@@ -127,6 +142,24 @@ test("AI protocol builds non-streaming Markdown requests and extracts compatible
   assert.equal(protocol.extractAiResponseText({ output_text: "fallback" }), "fallback");
 });
 
+test("AI protocol accepts base URLs and builds a context-free connection check", () => {
+  assert.equal(
+    protocol.resolveAiChatCompletionsEndpoint("https://api.siliconflow.cn/v1"),
+    "https://api.siliconflow.cn/v1/chat/completions"
+  );
+  assert.equal(
+    protocol.resolveAiChatCompletionsEndpoint("https://example.com/v1/chat/completions/"),
+    "https://example.com/v1/chat/completions"
+  );
+  const profile = config.createAiProfileConfig("freellmapi", 1);
+  const body = protocol.buildAiConnectionTestBody(profile);
+  assert.equal(body.model, "auto");
+  assert.equal(body.stream, false);
+  assert.equal(body.max_tokens, 8);
+  assert.equal(body.messages.length, 1);
+  assert.doesNotMatch(body.messages[0].content, /mindmap_markdown/);
+});
+
 
 test("AI integration exposes toolbar, shortcut, page scope and node scope contracts", async () => {
   const [settingsSource, mainSource, editorSource, viewSource, modalSource] = await Promise.all([
@@ -137,7 +170,11 @@ test("AI integration exposes toolbar, shortcut, page scope and node scope contra
     readFile("src/ai/modal.ts", "utf8")
   ]);
   assert.match(settingsSource, /\["ai", "询问 AI"\]/);
+  assert.match(settingsSource, /新增硅基流动/);
+  assert.match(settingsSource, /新增 FreeLLMAPI/);
+  assert.match(settingsSource, /text: "检测接口"/);
   assert.match(mainSource, /id: "ask-ai-about-mind-map"/);
+  assert.match(mainSource, /async testAiProfile\(profileId: string\): Promise<void>/);
   assert.match(mainSource, /modifiers: \["Mod", "Shift"\], key: "A"/);
   assert.match(editorSource, /aiScopeNodeId: string \| null = null/);
   assert.match(editorSource, /询问 AI（此节点及全部子节点）/);

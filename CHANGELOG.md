@@ -14,7 +14,11 @@
 
 ### 功能
 
-- 新增 AI 助手：支持 OpenAI、DeepSeek 预设和自定义 OpenAI 兼容接口。
+- 新增硅基流动 AI 预设，默认基础地址为 `https://api.siliconflow.cn/v1`，并提供 `deepseek-ai/DeepSeek-V4-Flash`、`deepseek-ai/DeepSeek-V4-Pro`、`zai-org/GLM-5.2` 模型建议。
+- 新增 FreeLLMAPI 预设，接口地址默认留空，模型默认为 `auto`，适配用户自行部署的 OpenAI 兼容路由。
+- AI 接口卡片新增“检测接口”按钮；检测仅发送最小 `OK` 提示，不包含当前导图或节点正文。
+- AI 地址同时接受 `/v1` 基础地址和完整 `/chat/completions` 地址。
+- 新增 AI 助手：支持 OpenAI、DeepSeek、硅基流动、FreeLLMAPI 预设和自定义 OpenAI 兼容接口。
 - 工具栏新增 AI 按钮，命令面板新增 `Ctrl/Cmd+Shift+A` 快捷键；默认询问当前页面。
 - 节点右键可仅将该节点及全部子节点转换为 Markdown，页面空白处右键恢复整页范围。
 - 发送前显示节点数、字符数和 UTF-8 大小，超过可配置上限时禁止请求且不静默截断。

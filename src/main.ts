@@ -65,7 +65,11 @@ import { resolveStartupDisplayMode, shouldPersistDisplayMode } from "./article/d
 import type { DisplayMode } from "./core/model";
 import { normalizeReadingLocation, renameReadingLocationPath } from "./article/reading-location";
 import { normalizeAiProfileConfig, type AiProfileConfig } from "./ai/config";
-import { requestAiCompletion, type AiCompletionResult } from "./ai/client";
+import {
+  requestAiCompletion,
+  testAiProfileConnection,
+  type AiCompletionResult
+} from "./ai/client";
 import type { AiMarkdownPayload } from "./ai/markdown";
 import { shouldHideFileExplorerPath } from "./file-explorer-filter";
 import {
@@ -579,6 +583,33 @@ export default class MindMapStudioPlugin extends Plugin {
     const profile: AiProfileConfig | undefined = this.settings.aiProfiles.find((item) => item.id === profileId && item.enabled);
     if (!profile) throw new Error("AI 接口不存在或未启用");
     return requestAiCompletion(profile, payload, question);
+  }
+
+  /** 使用最小请求检测 AI 接口、鉴权和模型是否可用。 */
+  async testAiProfile(profileId: string): Promise<void> {
+    const profile = this.settings.aiProfiles.find((item) => item.id === profileId);
+    if (!profile) {
+      new Notice("找不到该 AI 接口配置");
+      return;
+    }
+    if (!profile.endpoint.trim()) {
+      new Notice(`请先填写 ${profile.name} 的接口地址`);
+      return;
+    }
+    if (!profile.model.trim()) {
+      new Notice(`请先填写 ${profile.name} 的模型名称`);
+      return;
+    }
+    const started = performance.now();
+    try {
+      const result = await testAiProfileConnection(profile);
+      const elapsed = Math.max(1, Math.round(performance.now() - started));
+      const preview = result.text.replace(/\s+/g, " ").trim().slice(0, 160);
+      new Notice(`${profile.name} 检测成功（${elapsed} ms）\n模型：${result.model}\n响应：${preview}`, 8000);
+    } catch (error) {
+      console.error("MindMap Studio AI connectivity test failed", error);
+      new Notice(`${profile.name} 检测失败：${error instanceof Error ? error.message : String(error)}`, 8000);
+    }
   }
 
   /** Installs a lightweight File Explorer observer; it changes visibility only, never vault data. */
