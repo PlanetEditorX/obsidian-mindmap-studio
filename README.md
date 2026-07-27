@@ -202,7 +202,7 @@ mindmap-studio/
 - [Git 工作流](docs/GIT_WORKFLOW.zh-CN.md)
 - [本次 Git 交付说明](docs/GIT_DELIVERY.zh-CN.md)
 - [函数参考](docs/FUNCTION_REFERENCE.md)
-- [升级说明](MIGRATION.md)
+- [代码清理与当前支持边界](docs/CODE_CLEANUP.zh-CN.md)
 - [更新记录](CHANGELOG.md)
 
 ## 许可证

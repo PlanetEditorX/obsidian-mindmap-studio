@@ -147,7 +147,7 @@
           }
         ],
         "submap": {
-          "path": "examples/MindMap Assets/示例脑图/示例子导图.mindmap",
+          "path": "MindMap Assets/MindMap Studio 主题与内容示例/示例子导图.mindmap",
           "title": "示例子导图"
         },
         "children": []

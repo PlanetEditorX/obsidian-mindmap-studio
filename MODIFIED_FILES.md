@@ -1,57 +1,65 @@
-# 修改文件清单
+# 当前代码清理修改清单
 
-## 代码
+## 运行时代码
 
-- `src/main.ts`：接入纯工具；合并子导图公共流程；实现会话级大纲模式、阅读位置加载、跨文件父级元数据和重命名迁移。
-- `src/article/display-mode.ts`：新增启动显示模式和持久化规则。
-- `src/article/reading-location.ts`：新增跨模式、跨物理文件的语义阅读位置与逐级回退。
-- `src/article/modes.ts`：为通读章节补充父文件与挂载节点元数据。
-- `src/editor/editor.ts`、`src/editor/editor-types.ts`：捕获、保存、恢复和跨文件导航统一阅读位置；增加目录/父挂载语义锚点，并隔离文章族切换与多视图广播中的延迟写入。
-- `src/view.ts`、`src/settings.ts`：连接插件设置、编辑器和物理文件导航。
-- `styles.css`：增加零高度通读语义锚点样式，不影响正文排版。
-- `src/utils/filename.ts`：新增跨平台文件名、扩展名、时间戳、标题和 MIME 工具。
-- `src/utils/image-host.ts`：新增端点、Header、multipart 和响应解析工具。
+- `src/main.ts`
+  - 删除 Markdown 后缀脑图识别、自动转换、菜单和打开重定向。
+  - 删除早期插件目录设置搬运、单图床设置转换和重复初始化分支。
+  - 阅读位置改名只迁移语义状态，不再维护独立滚动百分比。
+  - 内容同步统一调用 `syncNodeContentFields()`。
+- `src/core/model.ts`
+  - 删除文章编号布尔别名、外观枚举别名和围栏名称别名。
+  - 删除未使用的 Wiki 链接收集导出。
+  - 当前解析只支持原始 JSON、`mindmap-json` 和正式 Markdown 导入。
+- `src/article/modes.ts`
+  - 文章编号仅使用当前模式字段。
+  - `tocDepth` 改为必需字段，不再回退到其他层级字段。
+- `src/article/display-mode.ts`
+  - 删除无效模式类型分支，保留当前显示模式规则。
+- `src/editor/clipboard-import.ts`
+  - 删除单节点包装函数和多套载荷名称。
+  - 插件 JSON 只接受 `mindmap-studio-nodes`。
+- `src/editor/editor-modals.ts`
+  - 删除没有调用方的节点搜索弹窗。
+- `src/editor/editor.ts`、`src/editor/editor-types.ts`、`src/view.ts`、`src/settings.ts`
+  - 删除未使用导入、字段、尺寸配置和独立通读百分比持久化。
+- `src/import/import-export.ts`
+  - 删除没有调用方的单文档 HTML 包装导出。
+- `src/render/layout.ts`
+  - 删除未使用局部变量。
+- `styles.css`
+  - 删除旧视图类型选择器、孤立搜索弹窗样式、已更名富文本控件样式和其他未引用规则。
+- `tsconfig.json`
+  - 启用 `noUnusedLocals`、`noUnusedParameters`。
+  - 删除自定义 `typeRoots`。
 
 ## 测试与检查
 
-- `tests/compile-typescript.mjs`：测试期 TypeScript 模块加载器。
-- `tests/display-mode.test.mjs`：启动模式和会话持久化单元测试。
-- `tests/reading-location.test.mjs`：祖先链、跨文件链、删除回退和规范化测试。
-- `tests/reading-editor-contract.test.mjs`：目录/父挂载锚点、文章族切换写回和多视图并发契约。
-- `tests/filename.test.mjs`：文件名工具单元测试。
-- `tests/image-host.test.mjs`：图床工具单元测试。
-- `scripts/test.mjs`：增加显示模式、语义阅读位置、跨文件恢复和改名迁移源码契约；修正 multipart 模块迁移断言；将旧的阅读位置方法名检查更新为当前完整签名；将旧的编辑器内联 `nodeRatio` 截断检查更新为共享 `clampRatio()` 工具契约。
-- `scripts/check-repository.mjs`：仓库结构、版本和清洁度检查。
-- `package.json`、`package-lock.json`：分层测试、统一验证和 Node 版本要求。
+- `tests/repository-cleanup.test.mjs`
+  - 检查 TypeScript 未使用项配置。
+  - 检查插件 CSS 类引用。
+  - 检查示例文件路径。
+- `scripts/test.mjs`
+  - 删除针对已移除名称和实现位置的源码断言。
+  - 保留当前模块职责和行为契约。
+- `scripts/check-docs.mjs`
+  - 更新四模式文档要求。
+- `scripts/check-repository.mjs`
+  - 增加当前代码清理文档要求。
+- `package.json`
+  - 将仓库清洁度测试加入 `test:unit`。
+
+## 示例
+
+- 示例文件统一为 UTF-8 可读路径。
+- 删除 `%xx`、`#Uxxxx` 和重复资源目录。
+- 更新父子导图导航路径和当前文章编号字段。
 
 ## 文档
 
-- `README.md`：重写为当前产品说明。
-- `docs/PROJECT_GUIDE.zh-CN.md`：新增完整统一说明。
-- `docs/DEVELOPMENT.md`：重写开发说明。
-- `docs/TESTING.md`：更新显示模式和语义位置测试策略。
-- `docs/READING_PROGRESS_SYNC.zh-CN.md`：新增四模式进度同步、持久化和回退算法说明。
-- `docs/GIT_WORKFLOW.zh-CN.md`：新增 Git、版本、发布和回滚说明。
-- `docs/MAINTENANCE_GUIDE.zh-CN.md`：新增分析、优化和后续治理说明。
-- `docs/ARCHITECTURE.md`：补充工具层和图床流程。
-- `docs/FUNCTION_REFERENCE.md`：从当前源码重新生成。
-- `CHANGELOG.md`：更新未发布工程化变更。
-- `TEST_RESULTS.md`：重写为本次真实验证报告。
-- `CONTRIBUTING.md`、`SECURITY.md`：新增贡献和安全流程。
-
-## CI 与协作模板
-
-- `.github/workflows/ci.yml`
-- `.gitlab-ci.yml`
-- `.github/PULL_REQUEST_TEMPLATE.md`
-- `.github/ISSUE_TEMPLATE/bug_report.yml`
-- `.github/ISSUE_TEMPLATE/feature_request.yml`
-- `.gitignore`
-
-## 从交付中移除
-
-- `.ua/`
-- `.local-test-build/`
-- `start-dashboard.bat`
-
-这些是本地分析或临时构建产物，不属于源码和发布文件。
+- 新增 `docs/CODE_CLEANUP.zh-CN.md`。
+- 重写 `docs/MAINTENANCE_GUIDE.zh-CN.md`。
+- 更新 README、项目说明、架构、数据模型、开发、测试、特殊功能和阅读位置说明。
+- 重新生成 `docs/FUNCTION_REFERENCE.md`。
+- 删除累计迁移说明和一次性 CI 故障说明。
+- 更新 `CHANGELOG.md`、`TEST_RESULTS.md`、`MODIFIED_FILES.md` 和 Git 交付说明。

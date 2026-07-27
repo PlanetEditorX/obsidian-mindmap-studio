@@ -7,6 +7,7 @@ const requiredFiles = [
   "CONTRIBUTING.md",
   "SECURITY.md",
   "docs/ARCHITECTURE.md",
+  "docs/CODE_CLEANUP.zh-CN.md",
   "docs/DATA_MODEL.md",
   "docs/DEVELOPMENT.md",
   "docs/TESTING.md",

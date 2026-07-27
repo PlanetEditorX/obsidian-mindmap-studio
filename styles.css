@@ -1,6 +1,5 @@
 /* MindMap Studio */
-.workspace-leaf-content[data-type="mindmap-studio-view"] .view-content,
-.workspace-leaf-content[data-type="mindmap-canvas-view"] .view-content {
+.workspace-leaf-content[data-type="mindmap-studio-view"] .view-content {
   padding: 0;
   overflow: hidden;
 }
@@ -136,7 +135,6 @@
   user-select: none;
 }
 
-.mmc-show-grid .mmc-viewport,
 .mmc-viewport.pattern-grid {
   background-image:
     linear-gradient(color-mix(in srgb, var(--mmc-pattern-color) 18%, transparent) 1px, transparent 1px),
@@ -679,21 +677,6 @@
   word-break: break-word;
 }
 
-.mmc-rich-text-field-label {
-  margin-bottom: 6px;
-  font-size: var(--font-ui-small);
-  font-weight: var(--font-semibold);
-  color: var(--text-normal);
-}
-
-.mmc-rich-text-editor-box {
-  margin-top: 6px;
-  overflow: hidden;
-  border: 1px solid var(--background-modifier-border);
-  border-radius: 8px;
-  background: var(--background-primary);
-}
-
 .mmc-rich-text-toolbar {
   display: flex;
   align-items: center;
@@ -735,13 +718,6 @@
   cursor: pointer;
 }
 
-.mmc-rich-color-label {
-  position: relative;
-  z-index: 1;
-  transform: translateY(-1px);
-  pointer-events: none;
-}
-
 .mmc-rich-color-line {
   position: absolute;
   z-index: 1;
@@ -765,26 +741,6 @@
   opacity: 0;
   background: transparent;
   cursor: pointer;
-}
-
-.mmc-rich-text-editor {
-  min-height: 54px;
-  max-height: 150px;
-  overflow: auto;
-  padding: 11px 12px;
-  outline: none;
-  line-height: 1.55;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-
-.mmc-rich-text-editor:focus {
-  box-shadow: inset 0 0 0 2px var(--interactive-accent);
-}
-
-.mmc-rich-text-help {
-  margin: 0;
-  padding: 7px 10px 9px;
 }
 
 .mmc-node-image {
@@ -1123,44 +1079,6 @@
 .mmc-inline-format-bar button.is-italic { font-style: italic; }
 .mmc-inline-format-bar button.is-underline { text-decoration: underline; }
 
-.mmc-inline-format-color {
-  position: relative;
-  display: grid;
-  width: 27px;
-  height: 25px;
-  place-items: center;
-  border-radius: 4px;
-  color: var(--text-normal);
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.mmc-inline-format-color:hover {
-  background: var(--background-modifier-hover);
-}
-
-.mmc-inline-format-color::after {
-  position: absolute;
-  right: 5px;
-  bottom: 3px;
-  left: 5px;
-  height: 2px;
-  background: #ef4444;
-  content: "";
-}
-
-.mmc-inline-format-color input {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  margin: 0;
-  padding: 0;
-  border: 0;
-  opacity: 0.01;
-  cursor: pointer;
-}
-
 .mms-selection-format-toolbar {
   position: fixed;
   z-index: 10000;
@@ -1198,46 +1116,11 @@
 .mms-selection-format-toolbar button.is-italic { font-style: italic; }
 .mms-selection-format-toolbar button.is-underline { text-decoration: underline; }
 
-.mms-selection-format-color {
-  position: relative;
-  display: grid;
-  width: 28px;
-  height: 27px;
-  place-items: center;
-  border-radius: 4px;
-  color: var(--text-normal);
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.mms-selection-format-color::after {
-  position: absolute;
-  right: 5px;
-  bottom: 3px;
-  left: 5px;
-  height: 2px;
-  background: #ef4444;
-  content: "";
-}
-
-.mms-selection-format-color input {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  margin: 0;
-  padding: 0;
-  border: 0;
-  opacity: 0.01;
-  cursor: pointer;
-}
-
 .mmc-node-edit-modal input,
 .mmc-node-edit-modal textarea,
 .mmc-node-edit-modal select,
 .mmc-outline-textarea,
-.mmc-json-textarea,
-.mmc-search-input {
+.mmc-json-textarea {
   width: 100%;
 }
 
@@ -1267,47 +1150,6 @@
   width: 100%;
   height: 31px;
   padding: 2px;
-}
-
-.mmc-check-label {
-  flex-direction: row !important;
-  align-items: center;
-  min-height: 32px;
-}
-
-.mmc-check-label input {
-  width: auto;
-}
-
-/* Keep standalone node-editor checkboxes compact. The generic modal input rule
-   above intentionally makes text fields full width, but must not stretch checks. */
-.mmc-node-edit-modal label.mmc-checkbox-label {
-  grid-column: 1 / -1;
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: 9px;
-  min-height: 34px;
-  padding: 7px 9px;
-  border: 1px solid var(--background-modifier-border);
-  border-radius: var(--radius-s);
-  background: var(--background-secondary-alt);
-  cursor: pointer;
-}
-
-.mmc-node-edit-modal label.mmc-checkbox-label input[type="checkbox"] {
-  flex: 0 0 16px;
-  width: 16px !important;
-  min-width: 16px !important;
-  max-width: 16px !important;
-  height: 16px !important;
-  margin: 0;
-  padding: 0;
-}
-
-.mmc-node-edit-modal label.mmc-checkbox-label > span {
-  min-width: 0;
-  line-height: 1.45;
 }
 
 .mmc-node-edit-modal label.mmc-article-numbering-control {
@@ -1346,16 +1188,6 @@
   margin-top: 16px;
 }
 
-.mmc-modal-actions-hint {
-  margin-right: auto;
-  color: var(--text-muted);
-  font-size: var(--font-ui-smaller);
-}
-
-.mmc-rich-autosave-status {
-  display: none !important;
-}
-
 .mmc-json-actions {
   flex-wrap: wrap;
 }
@@ -1372,63 +1204,6 @@
   width: 100%;
   height: 8px;
   accent-color: var(--interactive-accent);
-}
-
-.mmc-search-input {
-  margin-bottom: 8px;
-}
-
-.mmc-search-count {
-  margin-bottom: 8px;
-  color: var(--text-muted);
-  font-size: var(--font-ui-smaller);
-}
-
-.mmc-search-results {
-  display: flex;
-  flex-direction: column;
-  max-height: min(55vh, 520px);
-  overflow: auto;
-  gap: 4px;
-}
-
-.mmc-search-result {
-  display: block;
-  width: 100%;
-  padding: 9px 11px;
-  border: 1px solid transparent;
-  border-radius: var(--radius-s);
-  background: transparent;
-  color: var(--text-normal);
-  text-align: left;
-}
-
-.mmc-search-result:hover,
-.mmc-search-result:focus {
-  border-color: var(--background-modifier-border-hover);
-  background: var(--background-modifier-hover);
-}
-
-.mmc-search-result-title {
-  overflow: hidden;
-  font-weight: 600;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.mmc-search-result-meta {
-  margin-top: 3px;
-  overflow: hidden;
-  color: var(--text-muted);
-  font-size: var(--font-ui-smaller);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.mmc-empty-state {
-  padding: 24px;
-  color: var(--text-muted);
-  text-align: center;
 }
 
 .mmc-static-preview {
@@ -2823,9 +2598,7 @@
     align-items: flex-start;
     gap: 4px;
   }
-  .mms-global-search-result-title,
-  .mms-global-search-result-breadcrumb,
-  .mms-global-search-result-snippet {
+  .mms-global-search-result-title {
     white-space: normal;
   }
 }
@@ -3201,16 +2974,6 @@
   font-size: 10px;
   border: 1px solid var(--background-modifier-border);
   border-radius: 999px;
-}
-
-.mms-outline-submap,
-.mms-article-submap {
-  flex: 0 0 auto;
-  padding: 3px 8px;
-  color: var(--text-accent);
-  font-size: var(--font-ui-smaller);
-  background: transparent;
-  border: 1px solid color-mix(in srgb, var(--interactive-accent) 35%, transparent);
 }
 
 .mms-inline-node-actions {

@@ -1,141 +1,110 @@
-# MindMap Studio 阅读进度同步交付验证报告
+# MindMap Studio 当前代码清理验证报告
 
-## 验证范围
+## 验证结论
 
-本报告记录“默认不恢复大纲模式”和“四模式统一阅读位置”在当前执行环境中的实际验证结果。结果严格区分已执行项目与受依赖环境阻塞的项目，不把未运行的检查标记为通过。
+本轮验证覆盖运行时代码删除、设置状态收敛、未引用代码检查、样式清理、示例路径和文档一致性。结果只记录实际执行项目。
 
-## CI 回归断言修复
+## 已通过
 
-后续 CI 日志显示综合回归已经成功加载源码，但在 `scripts/test.mjs` 中仍检查早期设计名 `captureReadingPosition`。当前实现使用统一语义位置 API：
-
-- `captureCurrentLocation(mode)`：从导图选择或滚动视口提取位置。
-- `restoreReadingLocation(mode, location)`：在目标模式恢复节点与节点内部比例。
-
-测试已改为匹配这两个私有方法的完整 TypeScript 签名，避免仅命中调用点、注释或已经废弃的方法名。该修复不改变运行时代码。
-
-后续 CI 又暴露一条同类旧断言：它要求 `nodeRatio: Math.max(0, Math.min(1, ...))` 直接出现在 `src/editor/editor.ts`。当前实现已经把比例边界统一收敛到 `src/article/reading-location.ts` 的 `clampRatio()`，并由 `normalizeReadingLocation`、`createReadingLocation` 复用。回归契约现验证共享工具及 `nodeRatio` 的调用关系；`tests/reading-location.test.mjs` 继续从行为层验证 `3 → 1`、`-1 → 0`。
-
-## 已执行通过
-
-### 独立单元与源码契约测试
-
-命令：
+### 独立测试
 
 ```bash
 npm run test:unit
 ```
 
-结果：32 项通过，0 项失败。此次 CI 断言修复后已重新执行。
+结果：`35 / 35` 通过。
 
-覆盖：
+覆盖内容：
 
-- 大纲不作为下次启动模式、可见模式回退及持久化规则。
-- 节点祖先链、跨子导图父级链、节点和子导图缺失后的逐级回退。
-- 路径重命名迁移、异常磁盘记录规范化和滚动比例边界。
-- 通读目录页节点锚点，以及子导图章节对应的父挂载节点别名。
-- 文章族上下文变化时旧键写回顺序，防止跨文件串写进度。
-- 多视图全局模式广播时取消非发起视图的延迟写入，防止反向覆盖。
-- 文件名非法字符、控制字符、Unicode、尾随点、Windows 保留名和长度限制。
-- 扩展名、时间戳、默认标题和 MIME 映射。
-- 图床 HTTP(S) 端点、Header、multipart、响应载荷和返回 URL 校验。
+- 启动模式与大纲会话级规则。
+- 四模式语义阅读位置、祖先回退、跨文件回退和路径改名。
+- 文件名与图床输入边界。
+- 编辑器阅读位置并发契约。
+- `noUnusedLocals`、`noUnusedParameters` 和默认 npm 类型解析配置。
+- 插件 CSS 类均存在当前源码或测试引用。
+- 示例文件均使用可读路径，不含 URL 编码或转义文件名。
 
-### 纯状态模块严格类型检查
-
-命令：
-
-```bash
-./node_modules/typescript/bin/tsc \
-  --noEmit \
-  --target ES2022 \
-  --module ESNext \
-  --moduleResolution node \
-  --strict \
-  --skipLibCheck \
-  src/article/display-mode.ts \
-  src/article/reading-location.ts
-```
-
-结果：通过。新增的启动模式和语义位置领域模块在严格模式下没有类型错误。
-
-### 文档覆盖检查
-
-命令：
+### 文档检查
 
 ```bash
 npm run test:docs
 ```
 
-结果：通过。当前 32 个 TypeScript 模块中的 576 个命名声明满足仓库 JSDoc 检查规则。
+结果：通过。`32` 个 TypeScript 模块中的 `567` 个命名声明满足 JSDoc 检查规则。
 
-### 仓库结构检查
-
-命令：
+### 仓库检查
 
 ```bash
 npm run test:repo
 ```
 
-结果：通过。
+结果：通过。版本文件、必需文档、README 结构、忽略规则和临时产物检查均正常。
 
-检查项包括版本文件一致、必需文档与脚本存在、README 结构有效、临时分析目录未进入交付，以及 `.gitignore` 覆盖构建和测试产物。
+### TypeScript 静态检查
 
-### 脚本语法与冲突标记
+使用仓库声明的 TypeScript 编译器 API执行：
 
-以下检查通过：
+- `32` 个 TypeScript 模块语法转译：`0` 个语法诊断。
+- 未使用局部、参数、声明和不可达代码诊断：`0`。
+- 项目内未引用导出候选：`0`。
 
-```bash
-node --check scripts/test.mjs
-node --check tests/display-mode.test.mjs
-node --check tests/reading-location.test.mjs
-node --check tests/reading-editor-contract.test.mjs
-```
+### 样式与示例检查
 
-源码及文档中未发现 Git 冲突标记。
+- 未引用的 `mmc-*` / `mms-*` CSS 类：`0`。
+- 所有 `.mindmap` 示例均可被 `JSON.parse()` 读取。
+- 编码名称的重复示例文件已删除。
+- `git diff --check` 通过。
 
-## 受环境阻塞
+## 未完成
 
-### 完整依赖安装
+### 综合回归
 
-项目已经在 `devDependencies` 中声明 `obsidian`、`esbuild`、TypeScript 和 Node 类型，并在 `dependencies` 中声明 `fflate`。当前容器不能解析 `registry.npmjs.org`，因此不能恢复完整 `node_modules`。
-
-### 综合回归、完整类型检查与生产构建
-
-以下命令依赖尚未安装的 `esbuild`、`obsidian`、`fflate` 和相关类型包，未在当前环境完成：
+已执行：
 
 ```bash
 npm run test:regression
+```
+
+当前工作目录中的依赖安装不完整，`node_modules/esbuild/index.js` 不存在，测试在模块加载阶段退出，尚未进入综合断言。
+
+### 完整类型检查与生产构建
+
+以下命令未在当前环境完成：
+
+```bash
 npm run build
 npm run verify
 ```
 
-`npm run test:regression` 在加载阶段会因缺少 `esbuild` 退出，尚未进入原有 674 项断言；这不能解释为断言通过或失败。
+原因同样是 `obsidian`、`esbuild`、`fflate` 等 npm 包未完整安装。
 
 ## 构建产物说明
 
-本交付更新的是完整 TypeScript 源码、测试、样式和说明文档。仓库中的 `main.js` 仍是此前 1.19.2 构建产物，不包含本次阅读进度同步实现，不能直接作为本功能的安装包。
-
-在网络正常的开发机或 CI 中必须执行：
+仓库根目录的 `main.js` 是清理前的构建产物，不包含本轮 TypeScript 变更。发布或安装前必须在依赖可用环境执行：
 
 ```bash
+rm -rf node_modules
 npm ci --registry=https://registry.npmjs.org/
 npm run verify
 node --check main.js
 ```
 
-随后在独立 Obsidian 测试仓库完成四模式切换、退出重开、跨子导图跳转和逐级回退冒烟测试，再提交新生成的 `main.js`。
+随后在独立 Obsidian 测试仓库验证新建、保存、重开、四模式定位、父子导图、图片和导入导出。
 
 ## 发布判定
 
-| 检查 | 状态 |
+| 项目 | 状态 |
 |---|---|
-| 独立单元与源码契约测试 | 32/32 通过 |
-| 新增纯状态模块严格类型检查 | 通过 |
-| 文档检查 | 576 个声明，通过 |
+| 独立测试 | 35 / 35 通过 |
+| 文档检查 | 567 个声明，通过 |
 | 仓库检查 | 通过 |
-| 脚本语法与冲突标记 | 通过 |
-| 原 674 项综合回归 | 未执行：缺少完整依赖 |
-| 全项目 TypeScript 检查 | 未执行：缺少 Obsidian 等依赖 |
-| 生产构建 | 未执行：缺少 esbuild 等依赖 |
-| Obsidian 宿主冒烟 | 未执行：无宿主环境 |
+| TypeScript 语法转译 | 32 个模块，0 诊断 |
+| 未使用项检查 | 0 诊断 |
+| 未引用导出候选 | 0 |
+| 未引用插件 CSS 类 | 0 |
+| 示例 JSON | 全部通过 |
+| 综合回归 | 未进入断言：依赖不完整 |
+| 完整构建 | 未执行：依赖不完整 |
+| Obsidian 宿主冒烟 | 未执行 |
 
-结论：交付物可用于审阅、应用补丁和继续集成；完成 `npm ci && npm run verify`、重新生成 `main.js` 并通过 Obsidian 手动冒烟前，不应创建正式发布标签。
+完成完整依赖安装、`npm run verify`、重新构建 `main.js` 和宿主冒烟前，不应创建正式发布标签。

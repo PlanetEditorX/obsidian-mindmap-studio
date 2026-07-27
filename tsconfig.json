@@ -1,6 +1,5 @@
 {
   "compilerOptions": {
-    "typeRoots": ["node_modules/@types", "node_modules/obsidian"],
     "inlineSourceMap": true,
     "inlineSources": true,
     "module": "ESNext",
@@ -10,12 +9,17 @@
     "strictNullChecks": true,
     "noImplicitReturns": true,
     "noFallthroughCasesInSwitch": true,
-    "noUnusedLocals": false,
-    "noUnusedParameters": false,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
     "moduleResolution": "bundler",
     "importHelpers": true,
     "esModuleInterop": true,
-    "lib": ["DOM", "ES2022"]
+    "lib": [
+      "DOM",
+      "ES2022"
+    ]
   },
-  "include": ["src/**/*.ts"]
+  "include": [
+    "src/**/*.ts"
+  ]
 }

@@ -91,7 +91,6 @@ function nodeDimensions(node: MindMapNode, depth: number, defaultFontSize = 14, 
     for (const block of blocks) {
       if (block.type === "image") width = Math.max(width, Math.min(900, (block.width ?? 240) + 28));
       else {
-        const longestLine = Math.max(1, ...block.text.split(/\r?\n/).map((line) => line.length));
         const visualUnits = Array.from(block.text.split(/\r?\n/).sort((a, b) => b.length - a.length)[0] ?? "")
           .reduce((sum, character) => sum + (/[\u2e80-\u9fff\uff00-\uffef]/u.test(character) ? 1 : .62), 0);
         const horizontalPadding = fitted ? (depth === 0 ? 48 : 58) : 80;
@@ -584,7 +583,6 @@ export function documentToSvg(root: MindMapNode, mode: LayoutMode, title: string
     const bold = node.style?.bold ?? appearance.bold ?? false;
     const italic = node.style?.italic ?? appearance.italic ?? false;
     const underline = node.style?.underline ?? appearance.underline ?? false;
-    const fontSize = node.style?.fontSize ?? defaultFontSize;
     return `<g><rect x="${x}" y="${y}" width="${position.width}" height="${position.height}" rx="${svgRadius(node.style?.shape)}" fill="${background}" stroke="${border}" stroke-width="${borderWidth}"/><g font-weight="${isRoot || bold ? 700 : 400}" font-style="${italic ? "italic" : "normal"}" text-decoration="${underline ? "underline" : "none"}">${contentParts.join("")}</g>${richContent}${tags}</g>`;
   }).join("\n");
 

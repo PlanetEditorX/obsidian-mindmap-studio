@@ -6,10 +6,10 @@ MindMap Studio 是一个本地优先的 Obsidian 思维导图插件。核心设�
 
 1. `.mindmap` 文件是唯一事实来源，搜索索引、静态预览和界面状态都不能替代原始文件。
 2. 导图、大纲、文章和通读四种模式共用同一棵节点树，任何模式中的修改都必须同步到其他模式。
-3. 所有不可信输入都必须经过模型层规范化，包括磁盘文件、旧版本文件、Markdown、剪贴板 JSON 和子导图元数据。
+3. 所有不可信输入都必须经过模型层规范化，包括磁盘文件、Markdown、剪贴板 JSON 和子导图元数据。
 4. 用户编辑必须经过统一的撤销、重做和自动保存链路。
 5. 跨文件功能集中在插件服务层，编辑器不直接自行读写仓库文件。
-6. 可选功能字段保持向后兼容，旧 `.mindmap` 文件无需重新创建。
+6. 仓库只维护当前公开数据结构；格式变更必须明确提升数据版本并提供独立转换工具。
 
 ## 2. 模块分层
 
@@ -17,7 +17,7 @@ MindMap Studio 是一个本地优先的 Obsidian 思维导图插件。核心设�
 src/
 ├── main.ts / view.ts           插件入口、Obsidian 视图与跨文件服务
 ├── core/
-│   ├── model.ts                数据模型、规范化与兼容
+│   ├── model.ts                数据模型、规范化与序列化
 │   └── node-tree.ts            节点树遍历、查找与结构移动
 ├── editor/
 │   ├── editor.ts               导图/大纲/文章 UI 与节点操作
@@ -61,7 +61,7 @@ src/
 - `src/article/article-style.ts`：文章样式预设和纯样式解析，不依赖编辑器 DOM。
 - `src/editor/editor-types.ts`：编辑器回调与运行参数契约，隔离插件服务和 UI 实现。
 - `src/editor/rich-text-dom.ts`：富文本运行段与 `contenteditable` DOM 的双向转换，以及 MathJax 渲染。
-- `src/editor/editor-modals.ts`：图片预览、图床选择、公式编辑、文章样式、节点搜索、JSON/文件导入、Markdown 大纲和文档导出等弹窗。
+- `src/editor/editor-modals.ts`：图片预览、图床选择、公式编辑、文章样式、JSON/文件导入、Markdown 大纲和文档导出等弹窗。
 - `src/editor/clipboard-import.ts`：剪贴板 JSON、Markdown、缩进文本和 HTML 列表的单节点或有序多节点分支解析。
 - `src/editor/node-image-actions.ts`：节点图片选择、本地保存、图床上传和远程镜像合并。
 - `src/editor/node-rich-text-editor.ts`：节点文字块的选区样式、颜色、格式清理和实时预览。
@@ -86,10 +86,10 @@ Obsidian 读取文本
 → 异步刷新文章父子上下文
 ```
 
-`parseDocument()` 兼容两种输入：
+`parseDocument()` 支持两种当前输入：
 
-- 当前版本的原始 JSON。
-- 早期版本使用的 Markdown 围栏 JSON。
+- 原始 JSON。
+- `mindmap-json` Markdown 围栏。
 
 解析失败不会让视图崩溃，而是返回安全默认文档。
 
@@ -116,7 +116,7 @@ Obsidian 读取文本
 1. 克隆修改前文档并压入 `history`。
 2. 清空 `future`，避免分叉历史错误复用。
 3. 执行调用方提供的修改函数。
-4. 同步新内容块与旧兼容字段。
+4. 同步有序内容块与节点派生摘要字段。
 5. 重新渲染当前模式。
 6. 通知视图保存。
 
@@ -310,7 +310,7 @@ mindmap-search-index.json
 
 新增不直接修改编辑器内部状态的弹窗时，应优先放入 `editor-modals.ts`，通过构造参数和回调与 `MindMapEditor` 通信。
 
-剪贴板格式兼容应集中在 `clipboard-import.ts`。编辑器只负责读取剪贴板、插入解析后的节点和记录撤销历史。
+剪贴板载荷解析应集中在 `clipboard-import.ts`。编辑器只负责读取剪贴板、插入解析后的节点和记录撤销历史。
 
 节点编辑弹窗中的图片 I/O 应通过 `node-image-actions.ts` 完成。弹窗只在操作成功后刷新预览并触发自动保存。
 

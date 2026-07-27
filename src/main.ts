@@ -24,7 +24,7 @@ import {
   nodeContentBlocks,
   nodePlainText,
   reconcileRichTextAfterEdit,
-  syncNodeLegacyFields,
+  syncNodeContentFields,
   parseDocument,
   serializeDocument,
   type MindMapDocument,
@@ -81,7 +81,6 @@ import {
 } from "./utils/image-host";
 
 export const MINDMAP_EXTENSION = "mindmap";
-const LEGACY_SUFFIX = ".smm.md";
 
 /**
  * MindMapStudioPlugin 的主要实现类。负责封装相关状态、生命周期和对外操作，避免调用方直接操作内部数据结构。
@@ -90,7 +89,6 @@ export default class MindMapStudioPlugin extends Plugin {
   settings: MindMapStudioSettings = DEFAULT_SETTINGS;
   /** 当前会话使用的显示模式；大纲模式不会写成下次启动默认值。 */
   private activeDisplayMode: DisplayMode = DEFAULT_SETTINGS.defaultViewMode;
-  private legacyMigrationPath: string | null = null;
   private readonly autoUploadTimers = new Map<string, number>();
   private searchIndex!: MindMapSearchIndex;
   private searchIndexReady: Promise<void> = Promise.resolve();
@@ -164,18 +162,8 @@ export default class MindMapStudioPlugin extends Plugin {
       name: "将当前 Markdown 转换为思维导图",
       checkCallback: (checking) => {
         const file = this.app.workspace.getActiveFile();
-        const available = Boolean(file && file.extension === "md" && !this.isLegacyMindMapFile(file));
+        const available = Boolean(file && file.extension === "md");
         if (!checking && available && file) void this.convertMarkdownFile(file);
-        return available;
-      }
-    });
-    this.addCommand({
-      id: "migrate-legacy-mind-map",
-      name: "将当前旧版脑图转换为 .mindmap",
-      checkCallback: (checking) => {
-        const file = this.app.workspace.getActiveFile();
-        const available = Boolean(file && this.isLegacyMindMapFile(file));
-        if (!checking && available && file) void this.migrateLegacyFile(file, true);
         return available;
       }
     });
@@ -206,21 +194,7 @@ export default class MindMapStudioPlugin extends Plugin {
           .setTitle("以可编辑思维导图打开")
           .setIcon("brain-circuit")
           .onClick(() => void this.openAsMindMap(file)));
-      } else if (this.isLegacyMindMapFile(file)) {
-        menu.addSeparator();
-        menu.addItem((item) => item
-          .setTitle("转换为新的 .mindmap 文件")
-          .setIcon("replace")
-          .onClick(() => void this.migrateLegacyFile(file, true)));
       }
-    }));
-
-    // Existing users may still have the old Markdown-backed files. When enabled,
-    // opening one creates/opens a safe .mindmap copy and leaves the original intact.
-    this.registerEvent(this.app.workspace.on("file-open", (file) => {
-      if (!file || !this.settings.redirectLegacyFiles || !this.isLegacyMindMapFile(file)) return;
-      if (this.legacyMigrationPath === file.path) return;
-      window.setTimeout(() => void this.migrateLegacyFile(file, true), 0);
     }));
 
     this.registerEvent(this.app.vault.on("create", (file) => {
@@ -237,7 +211,7 @@ export default class MindMapStudioPlugin extends Plugin {
     }));
     this.registerEvent(this.app.vault.on("rename", (file, oldPath) => {
       this.scheduleFileExplorerFilter();
-      if (file instanceof TFile && this.isMindMapFile(file)) void this.renameReadingStatePath(oldPath, file.path);
+      if (file instanceof TFile && this.isMindMapFile(file)) void this.renameReadingLocationPathInSettings(oldPath, file.path);
       if (file instanceof TFile && this.isMindMapFile(file)) this.searchIndex.renameFile(file, oldPath);
       else if (oldPath.toLowerCase().endsWith(`.${MINDMAP_EXTENSION}`)) this.searchIndex.removeFile(oldPath);
     }));
@@ -246,13 +220,6 @@ export default class MindMapStudioPlugin extends Plugin {
       renderStaticSource(el, source, this.getSourceTitle(ctx), settingsToAppearance(this.settings));
     });
     this.registerMarkdownCodeBlockProcessor("mindmap-json", (source, el, ctx) => {
-      renderStaticSource(el, source, this.getSourceTitle(ctx), settingsToAppearance(this.settings));
-    });
-    // Read-only compatibility for notes that already contain old fenced blocks.
-    this.registerMarkdownCodeBlockProcessor("smm", (source, el, ctx) => {
-      renderStaticSource(el, source, this.getSourceTitle(ctx), settingsToAppearance(this.settings));
-    });
-    this.registerMarkdownCodeBlockProcessor("smm-json", (source, el, ctx) => {
       renderStaticSource(el, source, this.getSourceTitle(ctx), settingsToAppearance(this.settings));
     });
     this.registerMarkdownPostProcessor((element, context) => void this.processMindMapEmbeds(element, context));
@@ -404,11 +371,11 @@ export default class MindMapStudioPlugin extends Plugin {
             }
           }
           if (!nodeModified) continue;
-          // nodeContentBlocks() returns normalized copies for compatibility.
-          // Persist those changed copies before syncing legacy fields, otherwise
-          // syncNodeLegacyFields() would read the old content and undo the edit.
+          // nodeContentBlocks() returns normalized copies.
+          // Persist those changed copies before syncing derived content fields, otherwise
+          // syncNodeContentFields() would read the old content and undo the edit.
           node.content = contentBlocks;
-          syncNodeLegacyFields(node);
+          syncNodeContentFields(node);
           changedNodeIds.add(nodeId);
           fileModified = true;
         }
@@ -438,22 +405,9 @@ export default class MindMapStudioPlugin extends Plugin {
    * 加载settings，并保持模型、界面和持久化状态的一致性。
    */
   async loadSettings(): Promise<void> {
-    let loaded = await this.loadData() as Partial<MindMapStudioSettings> | null;
-    // One-time migration after the public rename from mindmap-canvas to mindmap-studio.
-    if (!loaded) {
-      const oldDataPath = normalizePath(`${this.app.vault.configDir}/plugins/mindmap-canvas/data.json`);
-      try {
-        if (await this.app.vault.adapter.exists(oldDataPath)) {
-          loaded = JSON.parse(await this.app.vault.adapter.read(oldDataPath)) as Partial<MindMapStudioSettings>;
-          if (loaded) await this.saveData(loaded);
-        }
-      } catch (error) {
-        console.warn("MindMap Studio could not migrate the old settings file", error);
-      }
-    }
-    const hadStoredSettings = loaded !== null && loaded !== undefined;
+    const loaded = await this.loadData() as Partial<MindMapStudioSettings> | null;
     const raw = (loaded ?? {}) as Partial<MindMapStudioSettings> & Record<string, unknown>;
-    let imageHosts: ImageHostConfig[] = Array.isArray(raw.imageHosts)
+    const imageHosts: ImageHostConfig[] = Array.isArray(raw.imageHosts)
       ? raw.imageHosts.slice(0, 20).flatMap((item, index) => {
         if (!item || typeof item !== "object") return [];
         const candidate = item as Partial<ImageHostConfig>;
@@ -470,20 +424,6 @@ export default class MindMapStudioPlugin extends Plugin {
         return [host];
       })
       : [];
-
-    // Migrate the single-host settings used by MindMap Studio 0.9.x.
-    const legacyEndpoint = typeof raw.imageHostEndpoint === "string" ? raw.imageHostEndpoint.trim() : "";
-    if (!imageHosts.length && legacyEndpoint) {
-      const host = createImageHostConfig(1);
-      host.name = "原图床";
-      host.endpoint = legacyEndpoint;
-      host.method = raw.imageHostMethod === "PUT" ? "PUT" : "POST";
-      host.bodyMode = raw.imageHostBodyMode === "raw" ? "raw" : "multipart";
-      host.fieldName = typeof raw.imageHostFieldName === "string" && raw.imageHostFieldName.trim() ? raw.imageHostFieldName.trim() : "file";
-      host.headers = typeof raw.imageHostHeaders === "string" ? raw.imageHostHeaders.trim() : "";
-      host.responsePath = typeof raw.imageHostResponsePath === "string" ? raw.imageHostResponsePath.trim() : "data.url";
-      imageHosts = [host];
-    }
 
     const enabledIds = new Set(imageHosts.filter((host) => host.enabled).map((host) => host.id));
     const selectedIds = Array.isArray(raw.autoUploadHostIds)
@@ -508,22 +448,10 @@ export default class MindMapStudioPlugin extends Plugin {
       globalSearchMaxResults: typeof raw.globalSearchMaxResults === "number"
         ? Math.max(20, Math.min(500, Math.round(raw.globalSearchMaxResults)))
         : DEFAULT_SETTINGS.globalSearchMaxResults,
-      visibleModes: (() => {
-        const modes = normalizeVisibleModes(raw.visibleModes);
-        if (raw.readingModeInitialized !== true && !modes.includes("reading")) modes.push("reading");
-        return modes;
-      })(),
-      readingModeInitialized: true,
-      visibleToolbarItems: (() => {
-        const visible = Array.isArray(raw.visibleToolbarItems)
-          ? raw.visibleToolbarItems.filter((id): id is string => typeof id === "string")
-          : [...DEFAULT_SETTINGS.visibleToolbarItems];
-        const previousOrder = Array.isArray(raw.toolbarItemOrder) ? raw.toolbarItemOrder : [];
-        for (const id of ["article-landing", "article-style", "export-document"]) {
-          if (!previousOrder.includes(id) && !visible.includes(id)) visible.push(id);
-        }
-        return visible;
-      })(),
+      visibleModes: normalizeVisibleModes(raw.visibleModes),
+      visibleToolbarItems: Array.isArray(raw.visibleToolbarItems)
+        ? raw.visibleToolbarItems.filter((id): id is string => typeof id === "string")
+        : [...DEFAULT_SETTINGS.visibleToolbarItems],
       toolbarItemOrder: (() => {
         const validIds = new Set<string>(TOOLBAR_ITEMS.map(([id]) => id));
         const stored = Array.isArray(raw.toolbarItemOrder)
@@ -531,13 +459,9 @@ export default class MindMapStudioPlugin extends Plugin {
           : [];
         return [...new Set([...stored, ...DEFAULT_SETTINGS.toolbarItemOrder])];
       })(),
-      // 稍后结合可见模式统一解析；旧版持久化的 outline 会迁移到非大纲启动模式。
       defaultViewMode: typeof raw.defaultViewMode === "string"
         ? raw.defaultViewMode as DisplayMode
         : DEFAULT_SETTINGS.defaultViewMode,
-      readingProgress: typeof raw.readingProgress === "object" && raw.readingProgress
-        ? Object.fromEntries(Object.entries(raw.readingProgress).filter((entry): entry is [string, number] => typeof entry[1] === "number").map(([path, value]) => [path, Math.max(0, Math.min(1, value))]))
-        : {},
       readingLocations: typeof raw.readingLocations === "object" && raw.readingLocations
         ? Object.fromEntries(Object.entries(raw.readingLocations).flatMap(([path, value]) => {
           const location = normalizeReadingLocation(value);
@@ -565,9 +489,6 @@ export default class MindMapStudioPlugin extends Plugin {
         : "top",
       returnToTopVisibility: normalizeReturnToTopVisibility(raw.returnToTopVisibility),
       twoFingerGestureAction: raw.twoFingerGestureAction === "pan" ? "pan" : "zoom",
-      // Older releases allowed direct resizing. Always migrate it to Ctrl/Cmd so
-      // selecting a node never reveals a resize handle by itself.
-      resizeModifier: "ctrl",
       defaultNodeTextAlign: raw.defaultNodeTextAlign === "left" || raw.defaultNodeTextAlign === "right" || raw.defaultNodeTextAlign === "center"
         ? raw.defaultNodeTextAlign
         : DEFAULT_SETTINGS.defaultNodeTextAlign,
@@ -587,24 +508,23 @@ export default class MindMapStudioPlugin extends Plugin {
       ].includes(String(raw.defaultThemePreset)) ? raw.defaultThemePreset as MindMapStudioSettings["defaultThemePreset"] : DEFAULT_SETTINGS.defaultThemePreset,
       edgeWidthMode: raw.edgeWidthMode === "uniform" || raw.edgeWidthMode === "tapered"
         ? raw.edgeWidthMode
-        : hadStoredSettings ? "uniform" : DEFAULT_SETTINGS.edgeWidthMode,
+        : DEFAULT_SETTINGS.edgeWidthMode,
       edgeMinWidth: typeof raw.edgeMinWidth === "number"
         ? Math.max(0.25, Math.min(8, raw.edgeMinWidth))
         : DEFAULT_SETTINGS.edgeMinWidth,
       rootColor: typeof raw.rootColor === "string" && /^#[0-9a-f]{6}$/i.test(raw.rootColor)
         ? raw.rootColor
-        : hadStoredSettings ? "" : DEFAULT_SETTINGS.rootColor,
+        : DEFAULT_SETTINGS.rootColor,
       rootTextColor: typeof raw.rootTextColor === "string" && /^#[0-9a-f]{6}$/i.test(raw.rootTextColor)
         ? raw.rootTextColor
-        : hadStoredSettings ? "" : DEFAULT_SETTINGS.rootTextColor,
+        : DEFAULT_SETTINGS.rootTextColor,
       colorfulBranches: typeof raw.colorfulBranches === "boolean"
         ? raw.colorfulBranches
-        : hadStoredSettings ? false : DEFAULT_SETTINGS.colorfulBranches,
+        : DEFAULT_SETTINGS.colorfulBranches,
       branchColors: Array.isArray(raw.branchColors)
         ? raw.branchColors.filter((value): value is string => typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value)).slice(0, 12)
-        : hadStoredSettings ? [] : [...DEFAULT_SETTINGS.branchColors]
+        : [...DEFAULT_SETTINGS.branchColors]
     } as MindMapStudioSettings;
-    if (raw.backgroundPattern === undefined && raw.showGrid === false) this.settings.backgroundPattern = "none";
     this.settings.defaultViewMode = resolveStartupDisplayMode(this.settings.defaultViewMode, this.settings.visibleModes);
     this.activeDisplayMode = this.settings.defaultViewMode;
   }
@@ -673,9 +593,9 @@ export default class MindMapStudioPlugin extends Plugin {
   }
 
   /**
-   * 将文件重命名同步到阅读进度键和所有语义位置链，避免改名后恢复记录失联。
+   * 将文件重命名同步到所有语义阅读位置链，避免改名后恢复记录失联。
    */
-  private async renameReadingStatePath(oldPath: string, newPath: string): Promise<void> {
+  private async renameReadingLocationPathInSettings(oldPath: string, newPath: string): Promise<void> {
     if (oldPath === newPath) return;
     let changed = false;
     const nextLocations: MindMapStudioSettings["readingLocations"] = {};
@@ -687,11 +607,6 @@ export default class MindMapStudioPlugin extends Plugin {
         changed = true;
       }
       nextLocations[nextHomePath] = nextLocation;
-    }
-    if (Object.prototype.hasOwnProperty.call(this.settings.readingProgress, oldPath)) {
-      this.settings.readingProgress[newPath] = this.settings.readingProgress[oldPath]!;
-      delete this.settings.readingProgress[oldPath];
-      changed = true;
     }
     if (!changed) return;
     this.settings.readingLocations = nextLocations;
@@ -1291,7 +1206,7 @@ export default class MindMapStudioPlugin extends Plugin {
 
       const allSucceeded = batch.failures.length === 0 && batch.successes.length === hostIds.length;
       if (allSucceeded && batch.successes[0]) block.source = batch.successes[0].url;
-      syncNodeLegacyFields(node);
+      syncNodeContentFields(node);
       await this.app.vault.modify(mapFile, serializeDocument(document));
       await this.refreshOpenMindMap(mapFile, document);
 
@@ -1478,7 +1393,7 @@ export default class MindMapStudioPlugin extends Plugin {
       document.root.content = [{ id: `${document.root.id}_title`, type: "text", text: title }];
     }
     document.root.link = undefined;
-    syncNodeLegacyFields(document.root);
+    syncNodeContentFields(document.root);
     document.title = title;
     document.navigation = {
       parentPath: parentFile.path,
@@ -1559,45 +1474,6 @@ export default class MindMapStudioPlugin extends Plugin {
   }
 
   /**
-   * 迁移legacy file，并保持模型、界面和持久化状态的一致性。
-   *
-   * @param file 目标 Obsidian 文件对象。
-   * @param openAfter 该参数用于 migrate legacy file 流程中的输入或控制。
-   * @returns 异步操作完成后的结果。
-   */
-  async migrateLegacyFile(file: TFile, openAfter = true): Promise<TFile | null> {
-    if (!this.isLegacyMindMapFile(file)) return null;
-    if (this.legacyMigrationPath === file.path) return null;
-    this.legacyMigrationPath = file.path;
-    try {
-      const source = await this.app.vault.read(file);
-      const title = file.basename.replace(/\.smm$/i, "") || "思维导图";
-      const document = parseDocument(source, title);
-      const parentPath = file.parent?.path ?? "";
-      const preferredPath = normalizePath(`${parentPath ? `${parentPath}/` : ""}${this.sanitizeFilename(title)}.${MINDMAP_EXTENSION}`);
-      const existing = this.app.vault.getAbstractFileByPath(preferredPath);
-      let target: TFile;
-
-      if (existing instanceof TFile && this.isMindMapFile(existing)) {
-        target = existing;
-      } else {
-        const path = existing ? await this.getAvailablePath(preferredPath) : preferredPath;
-        target = await this.app.vault.create(path, serializeDocument(document));
-        new Notice(`已转换为可编辑脑图：${target.path}\n原文件已保留作为备份。`, 7000);
-      }
-
-      if (openAfter) await this.openAsMindMap(target, this.app.workspace.activeLeaf ?? undefined);
-      return target;
-    } catch (error) {
-      console.error("MindMap Studio legacy migration failed", error);
-      new Notice("旧版脑图转换失败，原文件未被修改。", 6000);
-      return null;
-    } finally {
-      this.legacyMigrationPath = null;
-    }
-  }
-
-  /**
    * 判断mind map file，并保持模型、界面和持久化状态的一致性。
    *
    * @param file 目标 Obsidian 文件对象。
@@ -1605,16 +1481,6 @@ export default class MindMapStudioPlugin extends Plugin {
    */
   isMindMapFile(file: TFile): boolean {
     return file.extension.toLowerCase() === MINDMAP_EXTENSION;
-  }
-
-  /**
-   * 判断legacy mind map file，并保持模型、界面和持久化状态的一致性。
-   *
-   * @param file 目标 Obsidian 文件对象。
-   * @returns 操作条件是否成立或处理是否成功。
-   */
-  isLegacyMindMapFile(file: TFile): boolean {
-    return file.path.toLowerCase().endsWith(LEGACY_SUFFIX);
   }
 
   /**

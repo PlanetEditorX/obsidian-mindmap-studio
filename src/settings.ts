@@ -44,12 +44,6 @@ export type ImageHostBodyMode = "multipart" | "raw";
  */
 export type ImageHostMethod = "POST" | "PUT";
 
-/**
- * Keeps node-size dragging behind the Ctrl/Cmd modifier.
- * Shift remains reserved for node multi-selection and marquee selection.
- */
-export type ResizeModifier = "ctrl";
-
 /** Visual shape used for unnumbered terminal article bullets. */
 export type ArticleLeafBulletStyle = "solid" | "hollow" | "square" | "dash";
 
@@ -135,9 +129,6 @@ export interface MindMapStudioSettings {
   nodeWidthMode: "fixed" | "auto";
   defaultNodeWidth: number;
   autoNodeMaxWidth: number;
-  redirectLegacyFiles: boolean;
-  showGrid: boolean;
-  resizeModifier: ResizeModifier;
   twoFingerGestureAction: "zoom" | "pan";
   showTaskProgress: boolean;
   /** Whether saving a mind map renames its file to the root node title. */
@@ -180,10 +171,8 @@ export interface MindMapStudioSettings {
   globalSearchMaxResults: number;
   visibleModes: DisplayMode[];
   defaultViewMode: DisplayMode;
-  readingProgress: Record<string, number>;
   /** 按文章族顶层文件保存的跨模式语义阅读位置。 */
   readingLocations: Record<string, ReadingLocation>;
-  readingModeInitialized: boolean;
   articleTocMaxDepth: number;
   showArticleMiniMap: boolean;
   /** Enables Markdown-style collapse controls for article and continuous-reading headings. */
@@ -223,9 +212,6 @@ export const DEFAULT_SETTINGS: MindMapStudioSettings = {
   nodeWidthMode: "auto",
   defaultNodeWidth: 176,
   autoNodeMaxWidth: 460,
-  redirectLegacyFiles: true,
-  showGrid: true,
-  resizeModifier: "ctrl",
   twoFingerGestureAction: "zoom",
   showTaskProgress: true,
   syncTitleToFilename: true,
@@ -267,9 +253,7 @@ export const DEFAULT_SETTINGS: MindMapStudioSettings = {
   globalSearchMaxResults: 100,
   visibleModes: ["mindmap", "outline", "article", "reading"],
   defaultViewMode: "mindmap",
-  readingProgress: {},
   readingLocations: {},
-  readingModeInitialized: true,
   articleTocMaxDepth: 3,
   showArticleMiniMap: true,
   articleSectionCollapseEnabled: false,
@@ -292,22 +276,13 @@ export const DEFAULT_SETTINGS: MindMapStudioSettings = {
 };
 
 /**
- * Normalizes the article return-to-top threshold while preserving compatibility with older fixed presets.
+ * Normalizes the article return-to-top threshold from a number or percentage string.
  */
 export function normalizeReturnToTopVisibility(value: unknown): number {
-  const legacy: Record<string, number> = {
-    "page-1": 10,
-    "page-2": 20,
-    "progress-1": 1,
-    "progress-2": 2
-  };
   if (typeof value === "number" && Number.isFinite(value)) return Math.max(0, Math.min(100, value));
   if (typeof value !== "string") return DEFAULT_SETTINGS.returnToTopVisibility;
-  if (legacy[value] !== undefined) return legacy[value];
   const source = value.trim();
   if (!source) return DEFAULT_SETTINGS.returnToTopVisibility;
-  const legacyPages = source.match(/^(\d+(?:\.\d+)?)\s*(页|pages?)$/i);
-  if (legacyPages) return Math.max(0, Math.min(100, Number(legacyPages[1]) * 10));
   const amount = Number(source.endsWith("%") ? source.slice(0, -1) : source);
   if (!Number.isFinite(amount)) return DEFAULT_SETTINGS.returnToTopVisibility;
   return Math.max(0, Math.min(100, amount));
@@ -1047,7 +1022,6 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
         .setValue(this.plugin.settings.backgroundPattern)
         .onChange(async (value) => {
           this.plugin.settings.backgroundPattern = value as BackgroundPattern;
-          this.plugin.settings.showGrid = value !== "none";
           await this.saveAndRefresh();
         }));
 
@@ -1336,17 +1310,7 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
           }));
     }
 
-    containerEl.createEl("h3", { text: "编辑与兼容" });
-
-    new Setting(containerEl)
-      .setName("打开旧版脑图时自动转换")
-      .setDesc("自动创建同名 .mindmap 文件并打开；旧文件会保留为备份，不会覆盖或删除。")
-      .addToggle((toggle) => toggle
-        .setValue(this.plugin.settings.redirectLegacyFiles)
-        .onChange(async (value) => {
-          this.plugin.settings.redirectLegacyFiles = value;
-          await this.plugin.saveSettings();
-        }));
+    containerEl.createEl("h3", { text: "编辑" });
 
     new Setting(containerEl)
       .setName("显示任务进度")

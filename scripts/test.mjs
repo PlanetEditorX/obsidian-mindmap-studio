@@ -187,7 +187,7 @@ export const setIcon = () => {};
   const rootTopicLinkedDocument = importExport.xmindToDocument(rootTopicLinkedArchive.buffer, "fallback");
   assert.deepEqual(rootTopicLinkedDocument.root.children.map((node) => node.text), ["节点 A"], "a sheet linked by its root topic ID must not be imported again as an orphan branch");
   assert.equal(rootTopicLinkedDocument.root.children[0]?.children[0]?.text, "子导图内容", "a root-topic-ID link must merge the child map content into its source node");
-  assert.match(importExport.documentToHtml(importedXmind), /<!doctype html>/);
+  assert.match(importExport.readingSectionsToHtml([{ filePath: "root.mindmap", document: importedXmind, baseDepth: 0 }]), /<!doctype html>/);
   const mergedHtml = importExport.readingSectionsToHtml([
     { filePath: "root.mindmap", document: importedXmind, baseDepth: 0 },
     { filePath: "child.mindmap", document: model.createDefaultDocument("子导图"), baseDepth: 1 }
@@ -251,9 +251,6 @@ export const setIcon = () => {};
   assert.equal(reopened.articleStyle?.tocStyle, "lines");
   assert.equal(reopened.articleStyle?.fontSize, 17);
   assert.equal(reopened.root.children.at(-1)?.text, "保存后仍可编辑");
-  const legacyArticleLanding = model.normalizeDocument({ view: { articleLandingMode: "map" } }, "兼容测试");
-  assert.equal(legacyArticleLanding.view?.articleLandingMode, "article", "the short-lived map state must migrate to original article content");
-
   const reorderRoot = model.normalizeDocument({
     title: "同级拖动排序",
     root: {
@@ -309,8 +306,7 @@ export const setIcon = () => {};
   assert.deepEqual(actionRoot.children.map((node) => node.id), ["action-b"]);
 
   const pastedBranches = clipboardImport.parseClipboardNodes(JSON.stringify({
-    type: "mindmap-studio-node",
-    version: 2,
+    type: "mindmap-studio-nodes",
     nodes: [
       { id: "clipboard-a", text: "分支 A", children: [{ id: "clipboard-a1", text: "分支 A1", children: [] }] },
       { id: "clipboard-b", text: "分支 B", children: [] }
@@ -318,7 +314,6 @@ export const setIcon = () => {};
   }));
   assert.deepEqual(pastedBranches?.map((node) => node.text), ["分支 A", "分支 B"], "multi-node clipboard payloads must preserve branch order");
   assert.equal(pastedBranches?.[0]?.children[0]?.text, "分支 A1", "multi-node clipboard payloads must retain each branch subtree");
-  assert.equal(clipboardImport.parseClipboardNode(JSON.stringify({ type: "mindmap-studio-node", version: 1, node: { text: "旧格式", children: [] } }))?.text, "旧格式", "single-node clipboard payloads must remain compatible");
 
   const collisionNodes = [
     { node: { id: "collision-root" }, parentId: null, x: 0, y: 0, width: 220, height: 120 },
@@ -342,7 +337,7 @@ export const setIcon = () => {};
       text: "中国古诗",
       children: [
         {
-          id: "preface", text: "前言", skipArticleNumbering: true, children: [
+          id: "preface", text: "前言", articleNumberingMode: "none", children: [
             { id: "preface-body", text: "这是一段不参与章节编号的说明", children: [] }
           ]
         },
@@ -365,7 +360,7 @@ export const setIcon = () => {};
   }, "fallback");
   assert.equal(viewDocument.view?.mode, "article");
   assert.equal(viewDocument.view?.readOnly, true);
-  assert.equal(viewDocument.root.children[0]?.skipArticleNumbering, true);
+  assert.equal(viewDocument.root.children[0]?.articleNumberingMode, "none");
   const articleInfo = modes.buildArticleNodeInfo(viewDocument.root);
   const byId = new Map(articleInfo.map((item) => [item.node.id, item]));
   assert.equal(byId.get("preface")?.label, "", "prefaces marked as skipped must not be numbered");
@@ -396,19 +391,18 @@ export const setIcon = () => {};
   assert.equal(childMapInfo[0]?.label, "第一节", "a child map must continue numbering from its parent article depth");
 
   const normalizedManualNumbering = model.normalizeDocument({
-    title: "手动文章层级兼容",
+    title: "手动文章层级",
     root: {
       id: "manual-normalize-root",
       text: "根",
       articleNumberingMode: "manual",
       articleNumberingLevel: 99,
-      children: [{ id: "legacy-skip", text: "旧版不编号", skipArticleNumbering: true, children: [] }]
+      children: [{ id: "numbering-none", text: "不编号", articleNumberingMode: "none", children: [] }]
     }
   }, "fallback");
   assert.equal(normalizedManualNumbering.root.articleNumberingMode, "manual");
   assert.equal(normalizedManualNumbering.root.articleNumberingLevel, 8, "manual article levels must be clamped to the supported range");
-  assert.equal(normalizedManualNumbering.root.children[0]?.articleNumberingMode, "none", "legacy skipArticleNumbering must migrate to the new none mode");
-  assert.equal(normalizedManualNumbering.root.children[0]?.skipArticleNumbering, true, "the legacy alias must remain serializable for backward compatibility");
+  assert.equal(normalizedManualNumbering.root.children[0]?.articleNumberingMode, "none", "the current numbering mode must remain stable");
 
   const idiomDocument = model.normalizeDocument({
     title: "成语辨析",
@@ -498,7 +492,7 @@ export const setIcon = () => {};
   const manualLevelTocEntry = { filePath: "book.mindmap", depth: 5, tocDepth: 1, label: "1.", title: "相得益彰", displayTitle: "1.相得益彰", breadcrumb: [] };
   assert.equal(modes.articleTocDepth(manualLevelTocEntry), 1, "TOC depth must remain relative when numbering starts at level 5");
   assert.deepEqual([manualLevelTocEntry].filter((entry) => modes.articleTocDepth(entry) <= 3), [manualLevelTocEntry], "a level-5 numbered heading must remain visible in a three-level TOC when it is structurally top-level");
-  assert.equal(modes.articleTocDepth({ filePath: "legacy.mindmap", depth: 2, label: "第一节", title: "旧目录", displayTitle: "第一节 旧目录", breadcrumb: [] }), 2, "legacy TOC entries without tocDepth must fall back to numbering depth");
+  assert.equal(modes.articleTocDepth({ filePath: "invalid.mindmap", depth: 2, tocDepth: Number.NaN, label: "第一节", title: "无效目录", displayTitle: "第一节 无效目录", breadcrumb: [] }), 1, "invalid TOC depth must use the current safe default");
   assert.equal(modes.resolveArticleTocMaxDepth(undefined, 4), 4, "documents without a TOC override must follow the plugin setting");
   assert.equal(modes.resolveArticleTocMaxDepth(7, 4), 7, "a per-document TOC override must take priority over the plugin setting");
   assert.equal(modes.resolveArticleTocMaxDepth(99, 4), 8, "per-document TOC depth overrides must be clamped to the supported range");
@@ -547,7 +541,7 @@ export const setIcon = () => {};
   assert.equal(modes.articleDisplayTitle("第一章", "标题"), "第一章 标题");
   assert.equal(modes.articleDisplayTitle("一、", "标题"), "一、标题");
 
-  const idiomHtml = importExport.documentToHtml(idiomDocument);
+  const idiomHtml = importExport.readingSectionsToHtml([{ filePath: "idiom.mindmap", document: idiomDocument, baseDepth: 0 }]);
   assert.match(idiomHtml, /1\.相得益彰/, "HTML export must preserve the custom highest article level");
   assert.match(idiomHtml, /（1）词义/, "HTML export must retain the first numbered terminal peer");
 
@@ -586,7 +580,7 @@ export const setIcon = () => {};
   assert.ok(branchLayout.nodes[1].x < cardLayout.nodes[1].x, "rounded branch style should keep branches close to their parent");
   assert.match(layout.roundedElbowEdgePath(branchLayout.nodes[0], branchLayout.nodes[1]), /\bQ\b/, "rounded branch style should use rounded elbow connectors");
   branchFixture.appearance = { nodeVisualStyle: "compact" };
-  assert.equal(model.normalizeDocument(branchFixture).appearance?.nodeVisualStyle, "branch", "legacy compact style should migrate to rounded branch style");
+  assert.equal(model.normalizeDocument(branchFixture).appearance?.nodeVisualStyle, undefined, "removed appearance aliases must not be accepted");
   const widthFixture = model.createDefaultDocument("Width");
   widthFixture.root.children[0].text = "This is a deliberately long node title that should wrap at the configured maximum width";
   const automaticWidthLayout = layout.computeLayout(widthFixture.root, "right", 14, "card", {
@@ -741,8 +735,8 @@ export const setIcon = () => {};
   assert.match(svg, /text-decoration="underline"/);
   assert.match(svg, /L .* L .* L /, "elbow connectors should be exported as segmented lines");
 
-  const legacy = `---\ntags:\n  - old-map\n---\n\n\`\`\`smm-json\n${JSON.stringify(document)}\n\`\`\``;
-  const converted = model.parseDocument(legacy, "fallback");
+  const fencedDocument = `\`\`\`mindmap-json\n${JSON.stringify(document)}\n\`\`\``;
+  const converted = model.parseDocument(fencedDocument, "fallback");
   assert.equal(converted.root.children.at(-1)?.text, "保存后仍可编辑");
 
   const markdown = "# 根节点\n- 子节点 A\n  - 子节点 B";
@@ -951,9 +945,9 @@ export const setIcon = () => {};
   assert.ok(replacementTextBlock, "replacement test node must include a text content block");
   replacementTextBlock.text = replacementTextBlock.text.replace("1234567", "已替换");
   replacementNode.content = replacementBlocks;
-  model.syncNodeLegacyFields(replacementNode);
+  model.syncNodeContentFields(replacementNode);
   const persistedReplacement = model.parseDocument(model.serializeDocument(replacementDocument), "替换测试");
-  assert.equal(model.nodePlainText(persistedReplacement.root), "解题方法论已替换", "replaced content blocks must be written back before legacy fields are synchronized");
+  assert.equal(model.nodePlainText(persistedReplacement.root), "解题方法论已替换", "replaced content blocks must be written back before derived fields are synchronized");
 
 
   const poetryParent = model.normalizeDocument({
@@ -1023,8 +1017,7 @@ export const setIcon = () => {};
   assert.match(mainSource, /MindMap Studio could not read child map for export/);
   assert.match(mainSource, /resolveStartupDisplayMode/, "startup must migrate a previously persisted outline mode");
   assert.match(mainSource, /shouldPersistDisplayMode/, "outline mode must remain session-only");
-  assert.match(mainSource, /renameReadingStatePath/, "renaming a map must preserve semantic reading state");
-  assert.match(mainSource, /plugins\/mindmap-canvas\/data\.json/, "renamed plugin should migrate old settings");
+  assert.match(mainSource, /renameReadingLocationPathInSettings/, "renaming a map must preserve semantic reading state");
   const readingLocationSource = await readFile("src/article/reading-location.ts", "utf8");
   assert.match(readingLocationSource, /nodeFallbackIds/, "semantic progress must retain the node ancestor chain");
   assert.match(readingLocationSource, /fallbacks/, "semantic progress must retain cross-file parent fallbacks");
@@ -1035,7 +1028,7 @@ export const setIcon = () => {};
   assert.match(globalSearchSource, /useRegex/, "search functions should support regex mode");
   assert.match(mainSource, /replaceAllInSearchResults/, "main module should support search-and-replace");
   assert.match(mainSource, /const node = findNode\(doc\.root, nodeId\)/, "search replacement must target the indexed result node instead of only the root node");
-  assert.match(mainSource, /const contentBlocks = nodeContentBlocks\(node\);[\s\S]*reconcileRichTextAfterEdit[\s\S]*node\.content = contentBlocks;[\s\S]*syncNodeLegacyFields\(node\)/, "search replacement must write normalized content blocks back before synchronizing legacy fields");
+  assert.match(mainSource, /const contentBlocks = nodeContentBlocks\(node\);[\s\S]*reconcileRichTextAfterEdit[\s\S]*node\.content = contentBlocks;[\s\S]*syncNodeContentFields\(node\)/, "search replacement must write normalized content blocks back before synchronizing derived content fields");
   assert.match(mainSource, /await this\.app\.vault\.modify\(file, serializeDocument\(doc\)\);[\s\S]*const persisted = parseDocument\(await this\.app\.vault\.read\(file\), file\.basename\);[\s\S]*await this\.refreshOpenMindMap\(file, persisted\)/, "replacement success must be based on persisted content and refresh open editors");
   assert.match(globalSearchSource, /mms-global-search-regex/, "search modal should include a regex toggle button");
   assert.match(globalSearchSource, /mms-global-search-replace-row/, "search modal should include a replace row");
@@ -1153,7 +1146,7 @@ export const setIcon = () => {};
   assert.match(outlineRendererSource, /imageSourceCandidates\(block, true\)/, "outline image preview must receive every stored mirror");
   assert.match(editorSource, /上传当前图片/);
   assert.match(editorSource, /onScheduleAutoUpload/);
-  assert.match(editorSource, /syncNodeLegacyFields/);
+  assert.match(editorSource, /syncNodeContentFields/);
   assert.match(editorSource, /imageSourceCandidates/);
   assert.match(editorSource, /所有图片镜像均不可用/);
   assert.match(editorSource, /图片地址失效，已从/);
@@ -1205,7 +1198,7 @@ export const setIcon = () => {};
   assert.match(editorSource, /\(mode === "article" \|\| mode === "reading"\) && mode !== previousMode[\s\S]*this\.readOnly = true/, "entering article or reading mode should reset to reading state");
   assert.match(editorSource, /currentMode !== "article" && this\.currentMode !== "reading"\) this\.persistReadOnlyState/, "temporary reading modes must not overwrite the document read-only preference");
   assert.match(editorSource, /private renderReading\(\)/);
-  assert.match(editorSource, /onReadingProgressChange/);
+  assert.match(editorSource, /mms-reading-progress/, "continuous reading must display live progress without a second persisted state");
   assert.match(editorSource, /private renderArticle\(\): void \{[\s\S]*?renderArticleMode\([\s\S]*?this\.addArticleScrollToTopButton\(\)/, "article mode must render the return-to-top control");
   assert.match(editorSource, /private renderReading\(\): void \{[\s\S]*?this\.addArticleScrollToTopButton\(\)/, "continuous reading mode must render the return-to-top control");
   assert.match(editorSource, /private addArticleScrollToTopButton\(\): void \{[\s\S]*?mms-article-scroll-top[\s\S]*?setIcon\(button, "arrow-up"\)[\s\S]*?this\.articleEl\.scrollTo\(\{ top: 0, behavior: "smooth" \}\)/, "return-to-top control must smoothly scroll the article view itself");
@@ -1225,7 +1218,6 @@ export const setIcon = () => {};
   assert.match(editorSource, /beginTwoFingerGesture\(\)[\s\S]*updateTwoFingerGesture\(\)/, "two-finger touch gestures should use the configured action");
   assert.doesNotMatch(editorSource, /toolbarEl\.addEventListener\("contextmenu"/, "expand/collapse-all context menu should not be bound to the toolbar");
   assert.match(mainSource, /vault\.trash\(target, true\)/, "submap deletion should use the system trash");
-  assert.match(editorSource, /skipArticleNumbering/);
   assert.match(editorSource, /文章编号方式/);
   assert.match(editorSource, /手动层级（自定义最高层级）/);
   assert.match(editorSource, /最高文章层级/);
@@ -1347,7 +1339,7 @@ export const setIcon = () => {};
   assert.match(cssSource, /\.mmc-canvas-breadcrumb-back\s*\{[\s\S]*?cursor:\s*pointer\s*!important/, "canvas back navigation must keep the hand cursor across Obsidian themes");
   assert.match(cssSource, /\.mmc-canvas-breadcrumb-parent\s*\{[\s\S]*?cursor:\s*pointer\s*!important/, "canvas parent breadcrumb must keep the hand cursor across Obsidian themes");
   assert.match(cssSource, /\.mms-article-leaf-text,[\s\S]*\.mms-article-paragraph[\s\S]*text-indent:\s*2em/, "all body paragraphs must use a stable two-em first-line indent");
-  assert.match(importExport.documentToHtml(importedXmind), /\.body-paragraph\{[^}]*text-indent:2em/, "exported articles must preserve uniform paragraph indentation");
+  assert.match(importExport.readingSectionsToHtml([{ filePath: "root.mindmap", document: importedXmind, baseDepth: 0 }]), /\.body-paragraph\{[^}]*text-indent:2em/, "exported articles must preserve uniform paragraph indentation");
   assert.match(cssSource, /\.mms-outline-table-wrap[\s\S]*max-height:\s*320px/);
   assert.match(cssSource, /\.mms-outline-content[\s\S]*margin:\s*2px 8px 10px 31px/, "outline content must not apply the node depth twice");
   assert.match(cssSource, /\.mms-outline-item\.is-content-only > \.mms-outline-content[\s\S]*margin-left:\s*8px/);
@@ -1404,12 +1396,8 @@ export const setIcon = () => {};
   assert.match(editorSource, /if \(node\.submap\) void this\.callbacks\.onOpenMindMap\(node\.submap\.path\)/, "the whole linked node must open its child map");
   assert.match(editorSource, /拖动调整节点宽度和最小高度/);
   assert.match(editorSource, /this\.rootEl\.addClass\("mmc-ctrl-resize"\)/, "Ctrl/Cmd resize styling must be applied after the editor root exists");
-  assert.match(editorSource, /private resizeModifier: ResizeModifier = "ctrl"/, "Ctrl/Cmd resize must be the editor default");
-  assert.match(settingsSource, /export type ResizeModifier = "ctrl"/);
-  assert.match(settingsSource, /resizeModifier: "ctrl"/, "new installations must default to Ctrl/Cmd resize");
   assert.match(settingsSource, /collapse-all/, "toolbar settings must include the expand/collapse-all control");
   assert.doesNotMatch(settingsSource, /\.setName\("拖动调整节点大小"\)/, "direct resizing must no longer be configurable");
-  assert.match(mainSource, /resizeModifier: "ctrl"/, "legacy direct-resize settings must migrate to Ctrl/Cmd mode");
   assert.match(settingsSource, /syncTitleToFilename: boolean/, "title synchronization must be a persisted setting");
   assert.match(settingsSource, /\.setName\("中心节点标题同步文件名"\)[\s\S]*\.addToggle/, "settings must expose the title-to-filename synchronization toggle");
   assert.match(mainSource, /syncTitleToFilename: raw\.syncTitleToFilename !== false/, "title synchronization must default to enabled");
@@ -1437,7 +1425,7 @@ export const setIcon = () => {};
   assert.match(editorSource, /节点宽度（100–900）/);
   assert.match(editorSource, /文字对齐/);
   assert.match(cssSource, /\.mmc-submap-corner-link/);
-  assert.doesNotMatch(cssSource, /\.mmc-submap-card/, "obsolete duplicate submap-card styling should be removed");
+  assert.doesNotMatch(cssSource, /\.mmc-submap-card/, "duplicate submap-card styling must remain removed");
   assert.match(editorSource, /onDisplayModeChange/);
   assert.match(editorSource, /articleBaseDepth/);
   assert.match(editorSource, /installArticleSectionCollapse/, "article headings must support Markdown-style section collapse");

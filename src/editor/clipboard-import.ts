@@ -12,44 +12,20 @@ import {
 } from "../core/model";
 
 /**
- * 解析剪贴板纯文本中的节点 JSON、Markdown 或缩进文本。
- *
- * @param text 剪贴板纯文本。
- * @returns 解析后的首个节点分支；空内容或不支持的 JSON 返回 null。
- */
-export function parseClipboardNode(text: string): MindMapNode | null {
-  return parseClipboardNodes(text)?.[0] ?? null;
-}
-
-/**
  * 解析剪贴板载荷中的一个或多个 MindMap Studio 节点，并保留多选分支的复制顺序。
  *
  * @param text 包含插件 JSON 载荷的剪贴板纯文本。
  * @returns 按剪贴板顺序规范化后的节点；没有可识别节点内容时返回 null。
- * @remarks 保留版本 1 的单节点载荷兼容性，使旧插件复制内容和兼容集成仍可粘贴。
  */
 export function parseClipboardNodes(text: string): MindMapNode[] | null {
   try {
     const parsed = JSON.parse(text) as {
       type?: string;
-      node?: Partial<MindMapNode>;
       nodes?: Partial<MindMapNode>[];
-      root?: Partial<MindMapNode>;
-      text?: string;
-      children?: unknown[];
     };
-    const isNodePayload = parsed.type === "mindmap-studio-node"
-      || parsed.type === "mmc-lite-node"
-      || parsed.type === "smm-lite-node";
-    const inputs = isNodePayload && Array.isArray(parsed.nodes)
+    const inputs = parsed.type === "mindmap-studio-nodes" && Array.isArray(parsed.nodes)
       ? parsed.nodes
-      : isNodePayload && parsed.node
-        ? [parsed.node]
-        : parsed.root
-          ? [parsed.root]
-          : typeof parsed.text === "string" && Array.isArray(parsed.children)
-            ? [parsed]
-            : [];
+      : [];
     if (!inputs.length) return null;
     return inputs.map((input) => normalizeDocument(
       { title: input.text ?? "粘贴节点", root: input as MindMapNode },

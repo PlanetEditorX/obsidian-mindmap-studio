@@ -4,7 +4,7 @@
   "layout": "right",
   "theme": "auto",
   "navigation": {
-    "parentPath": "examples/示例脑图.mindmap",
+    "parentPath": "MindMap Studio 主题与内容示例.mindmap",
     "parentNodeId": "submap-example",
     "parentTitle": "示例脑图",
     "parentNodeText": "子导图"

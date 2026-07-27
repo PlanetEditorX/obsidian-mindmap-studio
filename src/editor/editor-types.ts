@@ -14,7 +14,7 @@ import type {
 } from "../core/model";
 import type { ArticlePageNavigation, ArticleTocEntry, ReadingSection } from "../article/modes";
 import type { ReadingLocation } from "../article/reading-location";
-import type { ArticleLeafBulletStyle, ImageHostChoice, ImageHostUploadBatch, ResizeModifier } from "../settings";
+import type { ArticleLeafBulletStyle, ImageHostChoice, ImageHostUploadBatch } from "../settings";
 
 /**
  * Host services consumed by the editor.
@@ -46,7 +46,6 @@ export interface MindMapEditorCallbacks {
   onGlobalSearch: () => void;
   onDisplayModeChange: (mode: DisplayMode, location?: ReadingLocation) => void | Promise<void>;
   onReadingLocationChange: (path: string, location: ReadingLocation) => void | Promise<void>;
-  onReadingProgressChange: (path: string, progress: number) => void | Promise<void>;
   onRenderCode: (block: MindMapCodeBlock, container: HTMLElement) => void | Promise<void>;
 }
 
@@ -59,7 +58,6 @@ export interface MindMapEditorOptions {
   showTaskProgress: boolean;
   autoFitOnOpen: boolean;
   twoFingerGestureAction: "zoom" | "pan";
-  resizeModifier: ResizeModifier;
   historyLimit: number;
   imageFailoverEnabled: boolean;
   imageFailoverTimeoutSeconds: number;
@@ -80,7 +78,6 @@ export interface MindMapEditorOptions {
   showArticleToc: boolean;
   articleNavigation?: ArticlePageNavigation;
   readingSections: ReadingSection[];
-  readingProgress: number;
   readingProgressPosition: "top" | "bottom" | "left" | "right";
   returnToTopVisibility: number;
   nodeEditorPosition: "center" | "right";
