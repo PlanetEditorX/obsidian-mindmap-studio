@@ -3981,3 +3981,11 @@
   opacity: 0 !important;
   pointer-events: none !important;
 }
+
+/* Semantic alias for a parent-map mount node at the beginning of its child chapter. */
+.mms-reading-location-anchor {
+  display: block;
+  height: 0;
+  overflow: hidden;
+  pointer-events: none;
+}

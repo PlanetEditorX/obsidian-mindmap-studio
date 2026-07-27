@@ -1,12 +1,12 @@
-# MindMap Studio 1.19.2 优化交付验证报告
+# MindMap Studio 阅读进度同步交付验证报告
 
 ## 验证范围
 
-本报告记录本次源码优化在当前执行环境中的实际验证结果。结果分为“已执行通过”和“受依赖安装环境阻塞”，不把未执行项标记为通过。
+本报告记录“默认不恢复大纲模式”和“四模式统一阅读位置”在当前执行环境中的实际验证结果。结果严格区分已执行项目与受依赖环境阻塞的项目，不把未运行的检查标记为通过。
 
 ## 已执行通过
 
-### 独立单元测试
+### 独立单元与源码契约测试
 
 命令：
 
@@ -14,16 +14,37 @@
 npm run test:unit
 ```
 
-结果：19 项通过，0 项失败。
+结果：32 项通过，0 项失败。
 
 覆盖：
 
+- 大纲不作为下次启动模式、可见模式回退及持久化规则。
+- 节点祖先链、跨子导图父级链、节点和子导图缺失后的逐级回退。
+- 路径重命名迁移、异常磁盘记录规范化和滚动比例边界。
+- 通读目录页节点锚点，以及子导图章节对应的父挂载节点别名。
+- 文章族上下文变化时旧键写回顺序，防止跨文件串写进度。
+- 多视图全局模式广播时取消非发起视图的延迟写入，防止反向覆盖。
 - 文件名非法字符、控制字符、Unicode、尾随点、Windows 保留名和长度限制。
 - 扩展名、时间戳、默认标题和 MIME 映射。
-- 图床 HTTP(S) 端点校验。
-- Header JSON、嵌套对象、非法名称和 CRLF 注入。
-- multipart 结构、非法 MIME 和 boundary 注入。
-- JSON/文本响应解析、字段路径和 URL 协议。
+- 图床 HTTP(S) 端点、Header、multipart、响应载荷和返回 URL 校验。
+
+### 纯状态模块严格类型检查
+
+命令：
+
+```bash
+./node_modules/typescript/bin/tsc \
+  --noEmit \
+  --target ES2022 \
+  --module ESNext \
+  --moduleResolution node \
+  --strict \
+  --skipLibCheck \
+  src/article/display-mode.ts \
+  src/article/reading-location.ts
+```
+
+结果：通过。新增的启动模式和语义位置领域模块在严格模式下没有类型错误。
 
 ### 文档覆盖检查
 
@@ -33,7 +54,7 @@ npm run test:unit
 npm run test:docs
 ```
 
-结果：通过。当前 30 个 TypeScript 模块中的 557 个命名声明满足仓库 JSDoc 检查规则。
+结果：通过。当前 32 个 TypeScript 模块中的 576 个命名声明满足仓库 JSDoc 检查规则。
 
 ### 仓库结构检查
 
@@ -45,45 +66,30 @@ npm run test:repo
 
 结果：通过。
 
-检查项包括：
+检查项包括版本文件一致、必需文档与脚本存在、README 结构有效、临时分析目录未进入交付，以及 `.gitignore` 覆盖构建和测试产物。
 
-- 版本文件一致。
-- 必需文档和验证脚本存在。
-- README 不再堆叠版本标题。
-- `.ua/`、`.local-test-build/` 和本地分析脚本未进入交付。
-- `.gitignore` 覆盖构建、测试和分析产物。
+### 脚本语法与冲突标记
 
-### TypeScript 语法转译检查
+以下检查通过：
 
-新增测试加载器使用 TypeScript `transpileModule` 编译独立工具模块，全部测试文件成功加载。此前还对 30 个 TypeScript 源文件执行了语法诊断，未发现语法错误。
+```bash
+node --check scripts/test.mjs
+node --check tests/display-mode.test.mjs
+node --check tests/reading-location.test.mjs
+node --check tests/reading-editor-contract.test.mjs
+```
 
-## CI 回归修订记录
-
-GitHub Actions 首次执行综合回归时，在 `scripts/test.mjs` 的源码结构断言处失败。失败断言仍要求 `multipart/form-data` 字符串直接存在于 `src/main.ts`，但本次重构已将 multipart 构造迁移至 `src/utils/image-host.ts`。这不是上传行为失败，而是旧测试对实现文件位置的假设失效。
-
-修订后，回归检查分别验证：
-
-- `src/main.ts` 调用 `buildMultipartUploadBody`，确认入口模块委托给工具层。
-- `src/utils/image-host.ts` 保留 multipart Content-Type 构造。
-- `tests/image-host.test.mjs` 继续按行为验证完整 Content-Type 和请求体。
-
-该修订避免把已完成的模块拆分误判为功能回归，同时仍保留实现连线与输出行为两层保护。修订后已重新通过 19 项独立单元测试、557 个声明的文档检查、仓库检查，以及针对这两处源码边界的定向断言。
+源码及文档中未发现 Git 冲突标记。
 
 ## 受环境阻塞
 
 ### 完整依赖安装
 
-命令：
+项目已经在 `devDependencies` 中声明 `obsidian`、`esbuild`、TypeScript 和 Node 类型，并在 `dependencies` 中声明 `fflate`。当前容器不能解析 `registry.npmjs.org`，因此不能恢复完整 `node_modules`。
 
-```bash
-npm ci
-```
+### 综合回归、完整类型检查与生产构建
 
-当前环境配置的 npm 镜像返回 HTTP 503，且无法访问公共 npm DNS，因此无法恢复 `esbuild`、`fflate` 和 Obsidian 类型包。
-
-### 综合回归与生产构建
-
-以下命令依赖上述包，未在当前环境完成：
+以下命令依赖尚未安装的 `esbuild`、`obsidian`、`fflate` 和相关类型包，未在当前环境完成：
 
 ```bash
 npm run test:regression
@@ -91,23 +97,34 @@ npm run build
 npm run verify
 ```
 
-阻塞原因是依赖不可用，不是已观察到的断言或 TypeScript 失败。CI 或本地网络正常时必须重新执行 `npm ci && npm run verify`，通过后再创建正式版本标签。
+`npm run test:regression` 在加载阶段会因缺少 `esbuild` 退出，尚未进入原有 674 项断言；这不能解释为断言通过或失败。
 
 ## 构建产物说明
 
-源码、测试和文档已经更新。仓库中的 `main.js` 是原始 1.19.2 发布构建，不应被误认为由本次 TypeScript 源码重新构建。正式发布前必须在依赖可用环境运行 `npm run build` 并提交新生成的 `main.js`。
+本交付更新的是完整 TypeScript 源码、测试、样式和说明文档。仓库中的 `main.js` 仍是此前 1.19.2 构建产物，不包含本次阅读进度同步实现，不能直接作为本功能的安装包。
+
+在网络正常的开发机或 CI 中必须执行：
+
+```bash
+npm ci --registry=https://registry.npmjs.org/
+npm run verify
+node --check main.js
+```
+
+随后在独立 Obsidian 测试仓库完成四模式切换、退出重开、跨子导图跳转和逐级回退冒烟测试，再提交新生成的 `main.js`。
 
 ## 发布判定
 
 | 检查 | 状态 |
 |---|---|
-| 独立单元测试 | 通过 |
-| 文档检查 | 通过 |
+| 独立单元与源码契约测试 | 32/32 通过 |
+| 新增纯状态模块严格类型检查 | 通过 |
+| 文档检查 | 576 个声明，通过 |
 | 仓库检查 | 通过 |
-| 源码语法诊断 | 通过 |
-| 原 674 项综合回归 | 未执行：依赖安装阻塞 |
-| 完整类型检查 | 未执行：依赖安装阻塞 |
-| 生产构建 | 未执行：依赖安装阻塞 |
-| Obsidian 手动冒烟 | 未执行：无宿主环境 |
+| 脚本语法与冲突标记 | 通过 |
+| 原 674 项综合回归 | 未执行：缺少完整依赖 |
+| 全项目 TypeScript 检查 | 未执行：缺少 Obsidian 等依赖 |
+| 生产构建 | 未执行：缺少 esbuild 等依赖 |
+| Obsidian 宿主冒烟 | 未执行：无宿主环境 |
 
-结论：本交付可用于代码审阅、应用补丁和继续集成；在完整回归、生产构建和宿主冒烟通过前，不应直接标记为可发布版本。
+结论：交付物可用于审阅、应用补丁和继续集成；完成 `npm ci && npm run verify`、重新生成 `main.js` 并通过 Obsidian 手动冒烟前，不应创建正式发布标签。

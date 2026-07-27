@@ -5,7 +5,7 @@
 MindMap Studio 是一个本地优先的 Obsidian 思维导图插件。核心设计原则如下：
 
 1. `.mindmap` 文件是唯一事实来源，搜索索引、静态预览和界面状态都不能替代原始文件。
-2. 导图、大纲、文章三种模式共用同一棵节点树，任何模式中的修改都必须同步到其他模式。
+2. 导图、大纲、文章和通读四种模式共用同一棵节点树，任何模式中的修改都必须同步到其他模式。
 3. 所有不可信输入都必须经过模型层规范化，包括磁盘文件、旧版本文件、Markdown、剪贴板 JSON 和子导图元数据。
 4. 用户编辑必须经过统一的撤销、重做和自动保存链路。
 5. 跨文件功能集中在插件服务层，编辑器不直接自行读写仓库文件。
@@ -36,6 +36,8 @@ src/
 │   └── selection-format-toolbar.ts 文章/大纲选区悬浮格式栏
 ├── article/
 │   ├── modes.ts                文章结构、编号与阅读分段
+│   ├── display-mode.ts         启动模式和会话持久化规则
+│   ├── reading-location.ts     跨模式、跨文件语义阅读位置
 │   └── article-style.ts        文章样式解析
 ├── render/
 │   ├── layout.ts               坐标、连线与 SVG
@@ -68,7 +70,7 @@ src/
 - `src/render/static-render.ts`：Markdown 阅读模式中的只读 SVG 预览。
 - `src/utils/filename.ts`：跨平台文件名、扩展名、时间戳与图片 MIME 的纯函数。
 - `src/utils/image-host.ts`：不依赖 Obsidian 的图床输入校验、multipart 构造和响应 URL 提取。
-- `styles.css`：编辑器、三种模式、弹窗、搜索、尺寸手柄和响应式样式。
+- `styles.css`：编辑器、四种模式、弹窗、搜索、尺寸手柄和响应式样式。
 
 ## 3. 文件加载与保存流程
 
@@ -127,7 +129,7 @@ Obsidian 读取文本
 
 只读模式在进入写操作前由 `ensureEditable()` 统一阻止。
 
-## 5. 三种显示模式
+## 5. 四种显示模式
 
 ### 导图模式
 
@@ -159,11 +161,17 @@ Obsidian 读取文本
 - 子导图文章页的 H1 使用当前物理页面对应目录项的编号前缀，并将可编辑区域限制在根节点标题，避免编辑时把“第一章”等生成编号写回节点文本。
 - 子导图通过父节点的有效文章层级延续编号；手动层级会覆盖物理树深度。
 
-全局模式由 `MindMapStudioPlugin.setGlobalDisplayMode()` 保存并广播，打开任何其他 `.mindmap` 文件时继续使用最后选择的模式。
+### 通读模式
 
-文章与大纲之间切换时，编辑器记录当前视口对应的节点标识、节点内部阅读百分比和视口锚点，再在目标模式定位相同节点。该语义锚点比直接复制滚动条百分比更适合高度差异明显的文章与大纲页面。
+- 按文章族顺序合并顶层导图与可达子导图。
+- 每个章节和节点 DOM 同时标记 `filePath` 与 `nodeId`，确保滚动位置可以映射回物理导图。
+- 通读切换到其他模式时，如果目标属于子导图，由 `view.ts` 打开对应文件后再聚焦节点。
 
-导图视口由 `initializeMindMapViewport()`、`persistMindMapViewportState()` 和 `applyTransform()` 管理。离开导图模式时保存 `zoom/panX/panY`，返回时恢复原变换；只有尚未初始化且启用自动适应时才调用 `fitToView()`。
+全局模式由 `MindMapStudioPlugin.setGlobalDisplayMode()` 广播。导图、文章和通读会保存为下次启动模式；大纲只保留在当前会话，插件重新加载后通过 `resolveStartupDisplayMode()` 回到导图或其他可持久化模式。
+
+四种模式使用 `ReadingLocation` 同步阅读进度。记录包含目标物理文件、目标节点到根节点的回退链、跨子导图父挂载链、节点内部比例和视口锚点。恢复顺序为“精确节点 → 当前文件父级 → 父导图挂载节点及其父级 → 文章族根节点”。这种语义锚点不会因不同模式的页面高度差异而漂移。
+
+导图视口仍由 `initializeMindMapViewport()`、`persistMindMapViewportState()` 和 `applyTransform()` 管理；统一阅读位置优先决定聚焦节点，缩放和平移字段负责保持画布视觉状态。
 
 ## 6. 父子导图结构
 
@@ -288,7 +296,7 @@ mindmap-search-index.json
 1. 从 `ensureEditable()` 进入。
 2. 通过 `mutate()` 修改。
 3. 不直接调用仓库写入，除非属于跨文件服务。
-4. 确认三种模式都能表达修改后的数据。
+4. 确认四种模式都能表达修改后的数据。
 
 新增编辑器宿主能力时：
 
