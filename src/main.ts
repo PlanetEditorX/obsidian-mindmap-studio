@@ -61,7 +61,9 @@ import {
   type ArticleTocEntry,
   type ReadingSection
 } from "./article/modes";
+import { resolveStartupDisplayMode, shouldPersistDisplayMode } from "./article/display-mode";
 import type { DisplayMode } from "./core/model";
+import { normalizeReadingLocation, renameReadingLocationPath } from "./article/reading-location";
 import { shouldHideFileExplorerPath } from "./file-explorer-filter";
 import {
   buildCompactTimestamp,
@@ -86,6 +88,8 @@ const LEGACY_SUFFIX = ".smm.md";
  */
 export default class MindMapStudioPlugin extends Plugin {
   settings: MindMapStudioSettings = DEFAULT_SETTINGS;
+  /** 当前会话使用的显示模式；大纲模式不会写成下次启动默认值。 */
+  private activeDisplayMode: DisplayMode = DEFAULT_SETTINGS.defaultViewMode;
   private legacyMigrationPath: string | null = null;
   private readonly autoUploadTimers = new Map<string, number>();
   private searchIndex!: MindMapSearchIndex;
@@ -233,6 +237,7 @@ export default class MindMapStudioPlugin extends Plugin {
     }));
     this.registerEvent(this.app.vault.on("rename", (file, oldPath) => {
       this.scheduleFileExplorerFilter();
+      if (file instanceof TFile && this.isMindMapFile(file)) void this.renameReadingStatePath(oldPath, file.path);
       if (file instanceof TFile && this.isMindMapFile(file)) this.searchIndex.renameFile(file, oldPath);
       else if (oldPath.toLowerCase().endsWith(`.${MINDMAP_EXTENSION}`)) this.searchIndex.removeFile(oldPath);
     }));
@@ -526,11 +531,18 @@ export default class MindMapStudioPlugin extends Plugin {
           : [];
         return [...new Set([...stored, ...DEFAULT_SETTINGS.toolbarItemOrder])];
       })(),
-      defaultViewMode: raw.defaultViewMode === "outline" || raw.defaultViewMode === "article" || raw.defaultViewMode === "mindmap" || raw.defaultViewMode === "reading"
-        ? raw.defaultViewMode
+      // 稍后结合可见模式统一解析；旧版持久化的 outline 会迁移到非大纲启动模式。
+      defaultViewMode: typeof raw.defaultViewMode === "string"
+        ? raw.defaultViewMode as DisplayMode
         : DEFAULT_SETTINGS.defaultViewMode,
       readingProgress: typeof raw.readingProgress === "object" && raw.readingProgress
         ? Object.fromEntries(Object.entries(raw.readingProgress).filter((entry): entry is [string, number] => typeof entry[1] === "number").map(([path, value]) => [path, Math.max(0, Math.min(1, value))]))
+        : {},
+      readingLocations: typeof raw.readingLocations === "object" && raw.readingLocations
+        ? Object.fromEntries(Object.entries(raw.readingLocations).flatMap(([path, value]) => {
+          const location = normalizeReadingLocation(value);
+          return location ? [[path, location] as const] : [];
+        }))
         : {},
       articleTocMaxDepth: typeof raw.articleTocMaxDepth === "number"
         ? Math.max(1, Math.min(8, Math.round(raw.articleTocMaxDepth)))
@@ -593,9 +605,8 @@ export default class MindMapStudioPlugin extends Plugin {
         : hadStoredSettings ? [] : [...DEFAULT_SETTINGS.branchColors]
     } as MindMapStudioSettings;
     if (raw.backgroundPattern === undefined && raw.showGrid === false) this.settings.backgroundPattern = "none";
-    if (!this.settings.visibleModes.includes(this.settings.defaultViewMode)) {
-      this.settings.defaultViewMode = this.settings.visibleModes[0] ?? "mindmap";
-    }
+    this.settings.defaultViewMode = resolveStartupDisplayMode(this.settings.defaultViewMode, this.settings.visibleModes);
+    this.activeDisplayMode = this.settings.defaultViewMode;
   }
 
   /**
@@ -634,15 +645,25 @@ export default class MindMapStudioPlugin extends Plugin {
     }, 80);
   }
 
+  /** 返回当前会话正在使用的显示模式。大纲可在会话内同步，但不会成为下次启动默认值。 */
+  getActiveDisplayMode(): DisplayMode {
+    return this.settings.visibleModes.includes(this.activeDisplayMode)
+      ? this.activeDisplayMode
+      : this.settings.visibleModes.includes("mindmap")
+        ? "mindmap"
+        : this.settings.visibleModes[0] ?? "mindmap";
+  }
+
   /**
-   * 保存全局显示模式并通知所有已打开 MindMapStudioView 同步切换。之后打开的父导图、子导图和普通导图都会继承该模式。
+   * 同步所有已打开视图的显示模式。导图、文章和通读会持久化为下次启动模式；
+   * 大纲仅记录在当前会话，避免重新打开插件时默认进入大纲。
    *
    * @param mode 当前布局或显示模式。
-   * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
    */
   async setGlobalDisplayMode(mode: DisplayMode): Promise<void> {
     if (!this.settings.visibleModes.includes(mode)) return;
-    if (this.settings.defaultViewMode !== mode) {
+    this.activeDisplayMode = mode;
+    if (shouldPersistDisplayMode(mode) && this.settings.defaultViewMode !== mode) {
       this.settings.defaultViewMode = mode;
       await this.saveSettings();
     }
@@ -652,10 +673,37 @@ export default class MindMapStudioPlugin extends Plugin {
   }
 
   /**
+   * 将文件重命名同步到阅读进度键和所有语义位置链，避免改名后恢复记录失联。
+   */
+  private async renameReadingStatePath(oldPath: string, newPath: string): Promise<void> {
+    if (oldPath === newPath) return;
+    let changed = false;
+    const nextLocations: MindMapStudioSettings["readingLocations"] = {};
+    for (const [homePath, location] of Object.entries(this.settings.readingLocations)) {
+      const nextHomePath = homePath === oldPath ? newPath : homePath;
+      const nextLocation = renameReadingLocationPath(location, oldPath, newPath);
+      if (nextHomePath !== homePath || nextLocation.filePath !== location.filePath
+        || nextLocation.fallbacks.some((fallback, index) => fallback.filePath !== location.fallbacks[index]?.filePath)) {
+        changed = true;
+      }
+      nextLocations[nextHomePath] = nextLocation;
+    }
+    if (Object.prototype.hasOwnProperty.call(this.settings.readingProgress, oldPath)) {
+      this.settings.readingProgress[newPath] = this.settings.readingProgress[oldPath]!;
+      delete this.settings.readingProgress[oldPath];
+      changed = true;
+    }
+    if (!changed) return;
+    this.settings.readingLocations = nextLocations;
+    await this.saveSettings();
+  }
+
+  /**
    * 执行“reset all settings”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
    */
   async resetAllSettings(): Promise<void> {
     this.settings = JSON.parse(JSON.stringify(DEFAULT_SETTINGS)) as MindMapStudioSettings;
+    this.activeDisplayMode = this.settings.defaultViewMode;
     await this.saveSettings();
     this.refreshOpenViews();
   }
@@ -825,7 +873,13 @@ export default class MindMapStudioPlugin extends Plugin {
             visitedFiles.add(childFile.path);
             try {
               const childDocument = await this.readMindMapDocument(childFile);
-              readingSections.push({ filePath: childFile.path, document: childDocument, baseDepth: numbering.level });
+              readingSections.push({
+                filePath: childFile.path,
+                document: childDocument,
+                baseDepth: numbering.level,
+                parentFilePath: sourceFile.path,
+                parentNodeId: node.id
+              });
               descendants.push(...childDocument.root.children.map((child) => ({
                 node: child,
                 file: childFile,
@@ -889,7 +943,13 @@ export default class MindMapStudioPlugin extends Plugin {
             visited.add(childFile.path);
             try {
               const childDocument = await this.readMindMapDocument(childFile);
-              sections.push({ filePath: childFile.path, document: childDocument, baseDepth: numbering.level });
+              sections.push({
+                filePath: childFile.path,
+                document: childDocument,
+                baseDepth: numbering.level,
+                parentFilePath: sourceFile.path,
+                parentNodeId: node.id
+              });
               await visit(childDocument.root.children, childFile, articleChildStartLevel(childDocument.root, numbering.level));
             } catch (error) {
               console.warn(`MindMap Studio could not read child map for export: ${childFile.path}`, error);

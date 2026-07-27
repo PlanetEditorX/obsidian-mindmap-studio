@@ -2,7 +2,7 @@
  * @file editor.ts
  * @description 编辑器领域的核心交互控制器。
  *
- * 负责三种视图、节点操作、富文本、图片、表格、代码、子导图、拖拽、尺寸、搜索、历史记录、只读锁和图床容灾。
+ * 负责四种视图、节点操作、富文本、图片、表格、代码、子导图、拖拽、尺寸、搜索、历史记录、只读锁和图床容灾。
  */
 
 import { App, Menu, Modal, Notice, setIcon } from "obsidian";
@@ -63,6 +63,13 @@ import { TOOLBAR_ITEMS, type ResizeModifier } from "../settings";
 import { appearanceFromThemePreset, MINDMAP_THEME_PRESETS } from "../themes";
 import { articleNumberLabel, articleTocDepth, buildArticleNodeInfo, DISPLAY_MODE_ICONS, DISPLAY_MODE_LABELS, readingAnchorPart, resolveArticleTocMaxDepth, type ArticlePageNavigation, type ArticleTocEntry, type ReadingSection } from "../article/modes";
 import { resolveArticleStyle } from "../article/article-style";
+import {
+  createReadingLocation,
+  resolveReadingLocation,
+  sameReadingLocation,
+  type ReadingLocation,
+  type ResolvedReadingLocation
+} from "../article/reading-location";
 import type { MindMapEditorCallbacks, MindMapEditorOptions } from "./editor-types";
 import { readRichTextEditor, renderRichTextRuns } from "./rich-text-dom";
 import {
@@ -180,12 +187,6 @@ function createArticleNumberingControls(
   };
 }
 
-/** 文章与大纲模式之间同步阅读位置的语义锚点。 */
-interface ReadingPositionAnchor {
-  nodeId: string;
-  nodeRatio: number;
-  viewportRatio: number;
-}
 
 /**
  * NodeEditModal 的主要实现类。负责封装相关状态、生命周期和对外操作，避免调用方直接操作内部数据结构。
@@ -937,6 +938,10 @@ export class MindMapEditor {
   private readonly imageLoadTimers = new Set<number>();
   private inlineEditingId: string | null = null;
   private readingProgressTimer: number | null = null;
+  private readingLocationTimer: number | null = null;
+  private readingCaptureTimer: number | null = null;
+  private lastReadingLocation: ReadingLocation | null = null;
+  private pendingLocationNavigationKey: string | null = null;
   private readOnlyPersistTimer: number | null = null;
   private articleMiniMapEl: HTMLElement | null = null;
   private articleMiniMapTooltipEl: HTMLElement | null = null;
@@ -964,12 +969,17 @@ export class MindMapEditor {
     this.document = cloneDocument(document);
     this.currentMode = this.resolveMode(options.defaultViewMode);
     this.readOnly = this.currentMode === "article" || this.currentMode === "reading" || this.document.view?.readOnly === true;
-    this.selectedId = this.document.root.id;
+    this.lastReadingLocation = options.readingLocation;
+    const restoredLocation = this.resolveStoredLocation();
+    this.selectedId = restoredLocation?.filePath === options.currentFilePath
+      ? restoredLocation.nodeId
+      : this.document.root.id;
     const initialAppearance = this.getAppearance();
     this.layout = computeLayout(this.document.root, this.document.layout, initialAppearance.fontSize ?? 14, initialAppearance.nodeVisualStyle ?? "card", initialAppearance);
     this.buildUi();
     this.rootEl.addClass("mmc-ctrl-resize");
     this.render();
+    this.restoreReadingLocation(this.currentMode, this.lastReadingLocation);
     this.initializeMindMapViewport(50);
   }
 
@@ -978,7 +988,10 @@ export class MindMapEditor {
    */
   destroy(): void {
     this.clearImageLoadTimers();
+    this.rememberCurrentLocation(this.currentMode, true);
     if (this.readingProgressTimer !== null) window.clearTimeout(this.readingProgressTimer);
+    if (this.readingLocationTimer !== null) window.clearTimeout(this.readingLocationTimer);
+    if (this.readingCaptureTimer !== null) window.clearTimeout(this.readingCaptureTimer);
     if (this.readOnlyPersistTimer !== null) window.clearTimeout(this.readOnlyPersistTimer);
     this.clearArticleMiniMap();
     this.articleScrollButtonCleanup?.();
@@ -1001,35 +1014,65 @@ export class MindMapEditor {
     this.document = cloneDocument(document);
     this.currentMode = this.resolveMode(this.options.defaultViewMode);
     this.readOnly = this.currentMode === "article" || this.currentMode === "reading" || this.document.view?.readOnly === true;
-    this.selectedId = this.document.root.id;
+    const restored = this.resolveStoredLocation();
+    this.selectedId = restored?.filePath === this.options.currentFilePath ? restored.nodeId : this.document.root.id;
     if (resetHistory) {
       this.history.reset();
     }
     this.render();
+    this.restoreReadingLocation(this.currentMode, this.lastReadingLocation);
     this.initializeMindMapViewport(20);
   }
 
   /**
-   * 更新并应用options，并保持模型、界面和持久化状态的一致性。
-   *
-   * @param options 控制当前操作行为的可选配置。
+   * 更新编辑器运行参数。文章族上下文或持久化阅读位置在异步加载完成后变化时，
+   * 会重新解析节点并恢复到同一语义位置，而不是恢复旧的像素滚动值。
    */
   setOptions(options: MindMapEditorOptions): void {
-    const modesChanged = JSON.stringify(this.options.visibleModes) !== JSON.stringify(options.visibleModes);
-    const toolbarChanged = JSON.stringify(this.options.visibleToolbarItems) !== JSON.stringify(options.visibleToolbarItems)
-      || JSON.stringify(this.options.toolbarItemOrder) !== JSON.stringify(options.toolbarItemOrder);
-    const globalModeChanged = this.options.defaultViewMode !== options.defaultViewMode;
+    const previousOptions = this.options;
+    const modesChanged = JSON.stringify(previousOptions.visibleModes) !== JSON.stringify(options.visibleModes);
+    const toolbarChanged = JSON.stringify(previousOptions.visibleToolbarItems) !== JSON.stringify(options.visibleToolbarItems)
+      || JSON.stringify(previousOptions.toolbarItemOrder) !== JSON.stringify(options.toolbarItemOrder);
+    const globalModeChanged = previousOptions.defaultViewMode !== options.defaultViewMode;
+    const locationContextChanged = previousOptions.currentFilePath !== options.currentFilePath
+      || previousOptions.readingHomePath !== options.readingHomePath
+      || JSON.stringify(previousOptions.readingSections.map((section) => section.filePath)) !== JSON.stringify(options.readingSections.map((section) => section.filePath))
+      || !sameReadingLocation(previousOptions.readingLocation, options.readingLocation);
+    const readingFamilyChanged = previousOptions.readingHomePath !== options.readingHomePath;
+    if (readingFamilyChanged) {
+      // A delayed write captures the home path from this.options at execution time. Flush it
+      // against the previous family before replacing options, otherwise one tab can store the
+      // previous book's position under the newly opened book.
+      if (this.readingCaptureTimer !== null) {
+        window.clearTimeout(this.readingCaptureTimer);
+        this.readingCaptureTimer = null;
+      }
+      if (this.readingLocationTimer !== null) {
+        window.clearTimeout(this.readingLocationTimer);
+        this.readingLocationTimer = null;
+        if (previousOptions.readingHomePath && this.lastReadingLocation) {
+          void this.callbacks.onReadingLocationChange(previousOptions.readingHomePath, this.lastReadingLocation);
+        }
+      }
+      this.pendingLocationNavigationKey = null;
+      this.lastReadingLocation = options.readingLocation;
+    } else if (this.readingLocationTimer === null
+      && !sameReadingLocation(this.lastReadingLocation, options.readingLocation)) {
+      // Do not replace a locally captured, not-yet-written scroll position with stale options.
+      this.lastReadingLocation = options.readingLocation;
+    }
     this.options = options;
     const resolved = this.resolveMode(globalModeChanged ? options.defaultViewMode : this.currentMode);
     const previousMode = this.currentMode;
     const modeChanged = resolved !== previousMode;
     if (modeChanged) {
+      this.rememberCurrentLocation(previousMode, true);
       if (previousMode === "mindmap") this.persistMindMapViewportState();
       this.currentMode = resolved;
       const preserveReadingEdit = previousMode === "reading" && resolved === "article" && !this.readOnly;
       this.readOnly = resolved === "article" || resolved === "reading"
         ? !preserveReadingEdit
-          : previousMode === "article" || previousMode === "reading"
+        : previousMode === "article" || previousMode === "reading"
           ? this.document.view?.readOnly === true
           : this.readOnly;
     }
@@ -1042,25 +1085,51 @@ export class MindMapEditor {
       this.editControls.splice(0);
       this.buildUi();
     }
-    if (this.inlineEditingId && !modesChanged && !toolbarChanged && !globalModeChanged) return;
+    if (this.inlineEditingId && !modesChanged && !toolbarChanged && !globalModeChanged && !locationContextChanged) return;
     this.render();
-    if (modeChanged && this.currentMode === "mindmap") {
+    const restored = modeChanged || locationContextChanged
+      ? this.restoreReadingLocation(this.currentMode, this.lastReadingLocation)
+      : null;
+    if (restored?.filePath === this.options.currentFilePath) this.pendingLocationNavigationKey = null;
+    if (restored && this.currentMode !== "reading" && restored.filePath !== this.options.currentFilePath) {
+      const navigationKey = `${this.currentMode}\u0000${restored.filePath}\u0000${restored.nodeId}`;
+      if (this.pendingLocationNavigationKey !== navigationKey) {
+        this.pendingLocationNavigationKey = navigationKey;
+        const navigationLocation = createReadingLocation(
+          this.readingLocationSections(),
+          restored.filePath,
+          restored.nodeId,
+          restored.nodeRatio,
+          restored.viewportRatio
+        );
+        void this.callbacks.onDisplayModeChange(this.currentMode, navigationLocation);
+      }
+    }
+    if (modeChanged && this.currentMode === "mindmap" && !this.lastReadingLocation) {
       if (!this.mindMapViewportInitialized && this.options.autoFitOnOpen) window.setTimeout(() => this.fitToView(), 20);
       else window.setTimeout(() => this.applyTransform(), 20);
     }
   }
 
   /**
-   * 更新并应用display mode，并保持模型、界面和持久化状态的一致性。
-   *
-   * @param mode 当前布局或显示模式。
-   * @param notifyGlobal 该参数用于 set display mode 流程中的输入或控制。
+   * 切换显示模式，并将当前语义位置同步到目标模式。通读中的目标属于子导图时，
+   * 回调会在全局模式切换后打开对应物理文件并定位节点。
    */
-  setDisplayMode(mode: DisplayMode, notifyGlobal = true): void {
+  setDisplayMode(mode: DisplayMode, notifyGlobal = true, persistCapturedLocation = true): void {
     if (!this.options.visibleModes.includes(mode)) return;
     const previousMode = this.currentMode;
     if (previousMode === "mindmap") this.persistMindMapViewportState();
-    const readingAnchor = this.captureReadingPosition(previousMode);
+    const location = this.captureCurrentLocation(previousMode) ?? this.lastReadingLocation;
+    if (location && persistCapturedLocation) this.rememberLocation(location, true);
+    const requestedTarget = resolveReadingLocation(location, this.readingLocationSections(), this.options.currentFilePath);
+    if (mode === "article"
+      && requestedTarget?.filePath === this.options.currentFilePath
+      && requestedTarget.nodeId !== this.document.root.id
+      && this.options.showArticleToc
+      && this.document.view?.articleLandingMode !== "article") {
+      this.document.view = { ...(this.document.view ?? {}), articleLandingMode: "article" };
+      this.callbacks.onChange(this.getDocument());
+    }
     this.currentMode = mode;
     if ((mode === "article" || mode === "reading") && mode !== previousMode) {
       this.readOnly = true;
@@ -1068,29 +1137,70 @@ export class MindMapEditor {
       this.readOnly = this.document.view?.readOnly === true;
     }
     this.render();
-    if (readingAnchor) this.restoreReadingPosition(mode, readingAnchor);
-    if (notifyGlobal) void this.callbacks.onDisplayModeChange(mode);
-    if (mode === "mindmap") {
+    const resolved = this.restoreReadingLocation(mode, location);
+    const navigationLocation = resolved
+      ? createReadingLocation(this.readingLocationSections(), resolved.filePath, resolved.nodeId, resolved.nodeRatio, resolved.viewportRatio)
+      : location ?? undefined;
+    if (notifyGlobal) void this.callbacks.onDisplayModeChange(mode, navigationLocation ?? undefined);
+    if (mode === "mindmap" && !resolved) {
       if (!this.mindMapViewportInitialized && this.options.autoFitOnOpen) window.setTimeout(() => this.fitToView(), 20);
       else window.setTimeout(() => this.applyTransform(), 20);
     }
   }
 
-  /**
-   * 应用global display mode，并保持模型、界面和持久化状态的一致性。
-   *
-   * @param mode 当前布局或显示模式。
-   */
+  /** 应用其他已打开视图发出的全局模式切换，同时保留本视图自己的阅读位置。 */
   applyGlobalDisplayMode(mode: DisplayMode): void {
-    this.setDisplayMode(mode, false);
+    if (this.currentMode === mode) return;
+    // 其他视图只切换自身界面，不覆盖发起视图刚保存的统一阅读位置。
+    // 丢弃其尚未写盘的滚动回调，避免在广播完成后反向覆盖发起视图。
+    if (this.readingCaptureTimer !== null) {
+      window.clearTimeout(this.readingCaptureTimer);
+      this.readingCaptureTimer = null;
+    }
+    if (this.readingLocationTimer !== null) {
+      window.clearTimeout(this.readingLocationTimer);
+      this.readingLocationTimer = null;
+    }
+    this.setDisplayMode(mode, false, false);
   }
 
-  /** 捕获文章或大纲视口中当前阅读节点及节点内部进度。 */
-  private captureReadingPosition(mode: DisplayMode): ReadingPositionAnchor | null {
-    const scroller = mode === "outline" ? this.outlineEl : mode === "article" ? this.articleEl : null;
-    if (!scroller || !scroller.isConnected) return null;
+  /** 返回包含当前未保存文档的最新文章族快照。 */
+  private readingLocationSections(): ReadingSection[] {
+    const currentPath = this.options.currentFilePath;
+    const source = this.options.readingSections.length
+      ? this.options.readingSections
+      : [{ filePath: currentPath, document: this.document, baseDepth: 0 }];
+    return source.map((section) => section.filePath === currentPath
+      ? { ...section, document: this.document }
+      : section);
+  }
+
+  /** 解析上次保存的位置，并在节点失效时逐级回退。 */
+  private resolveStoredLocation(): ResolvedReadingLocation | null {
+    return resolveReadingLocation(
+      this.lastReadingLocation ?? this.options.readingLocation,
+      this.readingLocationSections(),
+      this.options.currentFilePath
+    );
+  }
+
+  /** 从当前模式的选择或滚动视口中提取统一语义位置。 */
+  private captureCurrentLocation(mode: DisplayMode): ReadingLocation | null {
+    const sections = this.readingLocationSections();
+    if (!sections.length) return null;
+    if (mode === "mindmap") {
+      return createReadingLocation(
+        sections,
+        this.options.currentFilePath,
+        findNode(this.document.root, this.selectedId)?.id ?? this.document.root.id,
+        0,
+        0.5
+      );
+    }
+    const scroller = mode === "outline" ? this.outlineEl : this.articleEl;
+    if (!scroller?.isConnected) return null;
     const viewport = scroller.getBoundingClientRect();
-    const viewportRatio = .35;
+    const viewportRatio = 0.35;
     const anchorY = viewport.top + viewport.height * viewportRatio;
     const candidates = Array.from(scroller.querySelectorAll<HTMLElement>("[data-node-id]"))
       .map((element) => ({ element, rect: element.getBoundingClientRect() }))
@@ -1105,29 +1215,93 @@ export class MindMapEditor {
       return leftDistance - rightDistance;
     })[0];
     const nodeId = nearest?.element.dataset.nodeId;
-    if (!nearest || !nodeId) return null;
-    return {
+    const filePath = nearest?.element.dataset.filePath ?? this.options.currentFilePath;
+    if (!nearest || !nodeId || !filePath) return null;
+    return createReadingLocation(
+      sections,
+      filePath,
       nodeId,
-      nodeRatio: Math.max(0, Math.min(1, (anchorY - nearest.rect.top) / nearest.rect.height)),
+      Math.max(0, Math.min(1, (anchorY - nearest.rect.top) / nearest.rect.height)),
       viewportRatio
-    };
+    );
   }
 
-  /** 在目标模式中恢复对应节点和节点内部的阅读位置。 */
-  private restoreReadingPosition(mode: DisplayMode, anchor: ReadingPositionAnchor): void {
-    const scroller = mode === "outline" ? this.outlineEl : mode === "article" ? this.articleEl : null;
-    if (!scroller) return;
+  /** 将统一位置写回插件设置；滚动过程会去重并延迟写盘。 */
+  private rememberLocation(location: ReadingLocation, immediate = false): void {
+    const changed = !sameReadingLocation(this.lastReadingLocation, location);
+    if (!changed && !immediate) return;
+    if (changed) this.lastReadingLocation = location;
+    if (this.readingLocationTimer !== null) window.clearTimeout(this.readingLocationTimer);
+    const persist = (): void => {
+      this.readingLocationTimer = null;
+      if (this.options.readingHomePath && this.lastReadingLocation) {
+        void this.callbacks.onReadingLocationChange(this.options.readingHomePath, this.lastReadingLocation);
+      }
+    };
+    if (immediate) persist();
+    else this.readingLocationTimer = window.setTimeout(persist, 350);
+  }
+
+  /** 捕获当前模式位置并按需立即保存。 */
+  private rememberCurrentLocation(mode: DisplayMode, immediate = false): ReadingLocation | null {
+    const location = this.captureCurrentLocation(mode);
+    if (location) this.rememberLocation(location, immediate);
+    return location;
+  }
+
+  /** 对滚动事件进行轻量防抖，避免每个像素变化都扫描章节 DOM。 */
+  private scheduleReadingLocationCapture(mode: DisplayMode): void {
+    if (this.readingCaptureTimer !== null) window.clearTimeout(this.readingCaptureTimer);
+    this.readingCaptureTimer = window.setTimeout(() => {
+      this.readingCaptureTimer = null;
+      this.rememberCurrentLocation(mode);
+    }, 160);
+  }
+
+  /**
+   * 在目标模式中恢复节点和节点内部比例。目标位于其他物理文件时只返回解析结果，
+   * 由视图层在模式同步完成后打开该文件。
+   */
+  private restoreReadingLocation(mode: DisplayMode, location: ReadingLocation | null | undefined): ResolvedReadingLocation | null {
+    const resolved = resolveReadingLocation(location, this.readingLocationSections(), this.options.currentFilePath);
+    if (!resolved) return null;
+    if (mode !== "reading" && resolved.filePath !== this.options.currentFilePath) return resolved;
+    const targetSection = this.readingLocationSections().find((section) => section.filePath === resolved.filePath);
+    const collapsedAncestors = targetSection
+      ? findAncestors(targetSection.document.root, resolved.nodeId).filter((node) => node.collapsed)
+      : [];
+    if (collapsedAncestors.length) {
+      // 恢复位置属于导航行为，不写入撤销栈；只在当前编辑器快照中展开到目标节点。
+      collapsedAncestors.forEach((node) => { node.collapsed = false; });
+      this.render();
+    }
+    if (resolved.filePath === this.options.currentFilePath && findNode(this.document.root, resolved.nodeId)) {
+      this.selectedId = resolved.nodeId;
+      this.selectedIds.clear();
+      this.selectedIds.add(resolved.nodeId);
+    }
     const restore = (): void => {
-      const target = scroller.querySelector<HTMLElement>(`[data-node-id="${CSS.escape(anchor.nodeId)}"]`);
+      if (mode === "mindmap") {
+        this.applySelectionClasses();
+        this.centerNode(resolved.nodeId);
+        return;
+      }
+      const scroller = mode === "outline" ? this.outlineEl : this.articleEl;
+      const target = Array.from(scroller.querySelectorAll<HTMLElement>("[data-node-id]"))
+        .find((element) => element.dataset.nodeId === resolved.nodeId
+          && (element.dataset.filePath ?? this.options.currentFilePath) === resolved.filePath);
       if (!target) return;
+      this.applySelectionClasses();
       const viewport = scroller.getBoundingClientRect();
       const rect = target.getBoundingClientRect();
-      const targetY = rect.top + rect.height * anchor.nodeRatio;
-      const desiredY = viewport.top + viewport.height * anchor.viewportRatio;
+      const targetY = rect.top + rect.height * resolved.nodeRatio;
+      const desiredY = viewport.top + viewport.height * resolved.viewportRatio;
       scroller.scrollTop += targetY - desiredY;
+      this.updateArticleMiniMapActiveMarker();
     };
-    restore();
-    window.requestAnimationFrame(restore);
+    window.setTimeout(restore, 20);
+    window.requestAnimationFrame(() => window.requestAnimationFrame(restore));
+    return resolved;
   }
 
   /**
@@ -1148,13 +1322,17 @@ export class MindMapEditor {
     }
     this.readOnly = !this.readOnly;
     if (this.currentMode === "reading" && !this.readOnly) {
-      // A continuous book can contain several .mindmap files. Editing it in
-      // place would silently write only the current file, so enter the current
-      // map's article editor instead of presenting a non-interactive book.
+      // 通读可能跨越多个物理文件。先记录当前章节，再进入该章节所属文件的文章编辑模式。
+      const location = this.captureCurrentLocation("reading") ?? this.lastReadingLocation;
+      if (location) this.rememberLocation(location, true);
       this.currentMode = "article";
       this.persistReadOnlyState();
       this.render();
-      void this.callbacks.onDisplayModeChange("article");
+      const resolved = this.restoreReadingLocation("article", location);
+      const navigationLocation = resolved
+        ? createReadingLocation(this.readingLocationSections(), resolved.filePath, resolved.nodeId, resolved.nodeRatio, resolved.viewportRatio)
+        : location ?? undefined;
+      void this.callbacks.onDisplayModeChange("article", navigationLocation);
       new Notice("通读模式已切换为文章编辑模式");
       return;
     }
@@ -1918,6 +2096,7 @@ export class MindMapEditor {
       resolveImage: this.callbacks.resolveImage,
       renderCode: this.callbacks.onRenderCode
     });
+    this.outlineEl.onscroll = () => this.scheduleReadingLocationCapture("outline");
   }
 
   /**
@@ -1925,7 +2104,7 @@ export class MindMapEditor {
    * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
    */
   private renderArticle(): void {
-    this.articleEl.onscroll = null;
+    this.articleEl.onscroll = () => this.scheduleReadingLocationCapture("article");
     renderArticleMode(this.articleEl, this.articleRendererOptions());
     this.installArticleSectionCollapse();
     this.addArticleScrollToTopButton();
@@ -2744,6 +2923,15 @@ export class MindMapEditor {
     this.selectedId = id ?? "";
     if (id) this.selectedIds.add(id);
     this.applySelectionClasses();
+    if (id) {
+      this.rememberLocation(createReadingLocation(
+        this.readingLocationSections(),
+        this.options.currentFilePath,
+        id,
+        0,
+        this.currentMode === "mindmap" ? 0.5 : 0.35
+      ));
+    }
   }
 
   /**
@@ -2757,6 +2945,15 @@ export class MindMapEditor {
     else this.selectedIds.add(id);
     this.selectedId = Array.from(this.selectedIds).at(-1) ?? "";
     this.applySelectionClasses();
+    if (this.selectedId) {
+      this.rememberLocation(createReadingLocation(
+        this.readingLocationSections(),
+        this.options.currentFilePath,
+        this.selectedId,
+        0,
+        this.currentMode === "mindmap" ? 0.5 : 0.35
+      ));
+    }
   }
 
   /**
@@ -3452,6 +3649,8 @@ export class MindMapEditor {
     progress.dataset.progress = initialProgress;
     progress.createSpan({ text: `阅读进度 ${initialProgress}` });
     const page = this.articleEl.createDiv({ cls: `mms-article-page mms-reading-page article-${style.preset}` });
+    page.dataset.filePath = sections[0]!.filePath;
+    page.dataset.nodeId = sections[0]!.document.root.id;
     page.createEl("h1", { cls: "mms-article-document-title", text: nodePrimaryText(sections[0]!.document.root) || sections[0]!.document.title });
 
     // 存在子导图时，顶级导图只承担书名与目录组织，不再作为正文重复显示。
@@ -3473,6 +3672,13 @@ export class MindMapEditor {
       const item = tocList.createEl("li");
       item.addClass(`depth-${Math.min(tocDepth, 8)}`);
       item.style.setProperty("--mms-article-depth", String(tocDepth));
+      if (entry.nodeId) {
+        item.dataset.filePath = entry.filePath;
+        item.dataset.nodeId = entry.nodeId;
+        // 顶层导图作为目录页时不重复渲染正文；目录项本身就是该节点的
+        // 可恢复语义锚点，并同时修复原有目录链接指向不存在元素的问题。
+        if (!contentPaths.has(entry.filePath)) item.id = anchor;
+      }
       const link = item.createEl("a", { text: entry.displayTitle || entry.title, href: `#${anchor}` });
       link.addEventListener("click", (event) => {
         event.preventDefault();
@@ -3485,6 +3691,17 @@ export class MindMapEditor {
       const anchor = `reading-file-${fileKey}`;
       const chapter = page.createEl("article", { cls: "mms-reading-book-section" });
       chapter.id = anchor;
+      chapter.dataset.filePath = section.filePath;
+      chapter.dataset.nodeId = section.document.root.id;
+      if (section.parentFilePath && section.parentNodeId) {
+        // 父导图中的子导图挂载节点与本章开头表示同一个阅读位置。
+        // 零高度别名不参与滚动捕获，但允许从导图挂载节点切换到通读时
+        // 精确定位本章，并在子导图缺失回退时回到父级目录锚点。
+        const mountAnchor = chapter.createSpan({ cls: "mms-reading-location-anchor", attr: { "aria-hidden": "true" } });
+        mountAnchor.dataset.filePath = section.parentFilePath;
+        mountAnchor.dataset.nodeId = section.parentNodeId;
+        mountAnchor.id = `reading-${readingAnchorPart(section.parentFilePath)}-${readingAnchorPart(section.parentNodeId)}`;
+      }
       const sectionEntry = tocEntries.find((entry) => entry.filePath === section.filePath && !entry.nodeId);
       chapter.createEl("h2", {
         cls: "mms-reading-map-title",
@@ -3494,6 +3711,7 @@ export class MindMapEditor {
       for (const info of buildArticleNodeInfo(section.document.root, section.baseDepth)) {
         const nodeSection = chapter.createEl("section", { cls: `mms-article-node depth-${Math.min(info.depth, 8)}` });
         nodeSection.dataset.nodeId = info.node.id;
+        nodeSection.dataset.filePath = section.filePath;
         nodeSection.id = `reading-${fileKey}-${readingAnchorPart(info.node.id)}`;
         if (info.isHeading) {
           const level = Math.min(6, info.depth + 1);
@@ -3517,12 +3735,15 @@ export class MindMapEditor {
     this.installArticleSectionCollapse();
     this.renderArticleMiniMap();
 
-    window.setTimeout(() => {
-      const maximum = Math.max(0, this.articleEl.scrollHeight - this.articleEl.clientHeight);
-      this.articleEl.scrollTop = maximum * this.options.readingProgress;
-      this.updateArticleMiniMapActiveMarker();
-    }, 20);
+    if (!this.lastReadingLocation && !this.options.readingLocation) {
+      window.setTimeout(() => {
+        const maximum = Math.max(0, this.articleEl.scrollHeight - this.articleEl.clientHeight);
+        this.articleEl.scrollTop = maximum * this.options.readingProgress;
+        this.updateArticleMiniMapActiveMarker();
+      }, 20);
+    }
     this.articleEl.onscroll = () => {
+      this.scheduleReadingLocationCapture("reading");
       const maximum = Math.max(1, this.articleEl.scrollHeight - this.articleEl.clientHeight);
       const next = Math.max(0, Math.min(1, this.articleEl.scrollTop / maximum));
       const nextProgress = `${Math.round(next * 100)}%`;
@@ -3819,6 +4040,15 @@ export class MindMapEditor {
       else this.mutate(() => collapsed.forEach((node) => { node.collapsed = false; }));
     }
     this.selectedId = id;
+    this.selectedIds.clear();
+    this.selectedIds.add(id);
+    this.rememberLocation(createReadingLocation(
+      this.readingLocationSections(),
+      this.options.currentFilePath,
+      id,
+      0,
+      this.currentMode === "mindmap" ? 0.5 : 0.35
+    ), true);
     this.render();
     window.setTimeout(() => {
       if (this.currentMode === "mindmap") this.centerNode(id);
@@ -4255,6 +4485,12 @@ export class MindMapEditor {
    * @param delay 应用已保存变换或自动适应前的延迟毫秒数。
    */
   private initializeMindMapViewport(delay: number): void {
+    const semanticTarget = this.resolveStoredLocation();
+    if (this.currentMode === "mindmap" && semanticTarget?.filePath === this.options.currentFilePath) {
+      this.mindMapViewportInitialized = true;
+      window.setTimeout(() => this.centerNode(semanticTarget.nodeId), delay);
+      return;
+    }
     const saved = this.document.view;
     const hasSavedViewport = typeof saved?.zoom === "number"
       || typeof saved?.panX === "number"

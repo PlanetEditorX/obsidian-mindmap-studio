@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @file editor-types.ts
  * @description 编辑器领域与 Obsidian 宿主层之间的稳定类型契约。
  */
@@ -13,6 +13,7 @@ import type {
   NodeShape
 } from "../core/model";
 import type { ArticlePageNavigation, ArticleTocEntry, ReadingSection } from "../article/modes";
+import type { ReadingLocation } from "../article/reading-location";
 import type { ArticleLeafBulletStyle, ImageHostChoice, ImageHostUploadBatch, ResizeModifier } from "../settings";
 
 /**
@@ -43,7 +44,8 @@ export interface MindMapEditorCallbacks {
   onOpenArticleDirectory: (path: string) => void | Promise<void>;
   onSearchMapFamily: () => void;
   onGlobalSearch: () => void;
-  onDisplayModeChange: (mode: DisplayMode) => void | Promise<void>;
+  onDisplayModeChange: (mode: DisplayMode, location?: ReadingLocation) => void | Promise<void>;
+  onReadingLocationChange: (path: string, location: ReadingLocation) => void | Promise<void>;
   onReadingProgressChange: (path: string, progress: number) => void | Promise<void>;
   onRenderCode: (block: MindMapCodeBlock, container: HTMLElement) => void | Promise<void>;
 }
@@ -64,6 +66,9 @@ export interface MindMapEditorOptions {
   imageFailoverUseLocalFallback: boolean;
   visibleModes: DisplayMode[];
   defaultViewMode: DisplayMode;
+  currentFilePath: string;
+  readingHomePath: string;
+  readingLocation: ReadingLocation | null;
   articleBaseDepth: number;
   articleTocEntries: ArticleTocEntry[];
   articleTocMaxDepth: number;

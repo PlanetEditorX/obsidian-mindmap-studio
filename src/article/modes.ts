@@ -2,7 +2,7 @@
  * @file modes.ts
  * @description 文章领域与显示模式共享的编号工具。
  *
- * 导图、大纲和文章模式读取同一节点树；本模块负责中文序号、标题判定、手动文章层级、子导图层级续接与可见模式容错。
+ * 导图、大纲、文章和通读模式读取同一节点树；本模块负责中文序号、标题判定、手动文章层级、子导图层级续接与可见模式容错。
  */
 
 import type { DisplayMode, MindMapDocument, MindMapNode } from "../core/model";
@@ -27,6 +27,10 @@ export interface ReadingSection {
   filePath: string;
   document: MindMapDocument;
   baseDepth: number;
+  /** 已解析的父导图路径，用于跨文件阅读位置逐级回退。 */
+  parentFilePath?: string;
+  /** 当前子导图在父导图中的挂载节点。 */
+  parentNodeId?: string;
 }
 
 /**

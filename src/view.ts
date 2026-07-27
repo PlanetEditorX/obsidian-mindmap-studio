@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @file view.ts
  * @description Obsidian TextFileView 适配层。
  *
@@ -145,7 +145,19 @@ export class MindMapStudioView extends TextFileView {
         },
         onSearchMapFamily: () => void this.openMapFamilySearch(),
         onGlobalSearch: () => this.plugin.openGlobalSearch(),
-        onDisplayModeChange: (mode) => this.plugin.setGlobalDisplayMode(mode),
+        onDisplayModeChange: async (mode, location) => {
+          await this.plugin.setGlobalDisplayMode(mode);
+          const currentPath = this.file?.path ?? "";
+          const targetNodeId = location?.nodeIds[0];
+          if (mode !== "reading" && location && location.filePath !== currentPath) {
+            await this.save();
+            await this.plugin.openMindMapPath(location.filePath, currentPath, this.leaf, targetNodeId);
+          }
+        },
+        onReadingLocationChange: async (path, location) => {
+          this.plugin.settings.readingLocations[path] = location;
+          await this.plugin.saveSettings();
+        },
         onReadingProgressChange: async (path, progress) => {
           this.plugin.settings.readingProgress[path] = progress;
           await this.plugin.saveSettings();
@@ -286,7 +298,13 @@ export class MindMapStudioView extends TextFileView {
       imageFailoverTimeoutSeconds: this.plugin.settings.imageFailoverTimeoutSeconds,
       imageFailoverUseLocalFallback: this.plugin.settings.imageFailoverUseLocalFallback,
       visibleModes: [...this.plugin.settings.visibleModes],
-      defaultViewMode: this.plugin.settings.defaultViewMode,
+      defaultViewMode: this.plugin.getActiveDisplayMode(),
+      currentFilePath: this.file?.path ?? "",
+      readingHomePath: this.readingSections[0]?.filePath ?? this.file?.path ?? "",
+      readingLocation: (() => {
+        const homePath = this.readingSections[0]?.filePath ?? this.file?.path ?? "";
+        return homePath ? (this.plugin.settings.readingLocations[homePath] ?? null) : null;
+      })(),
       nodeEditorPosition: this.plugin.settings.nodeEditorPosition,
       richTextShortcuts: {
         bold: this.plugin.settings.richTextBoldShortcut,

@@ -21,6 +21,7 @@ import type {
   ThemeMode
 } from "./core/model";
 import { appearanceFromThemePreset, MINDMAP_THEME_PRESETS } from "./themes";
+import type { ReadingLocation } from "./article/reading-location";
 
 export const TOOLBAR_ITEMS = [
   ["lock", "阅读/编辑模式"], ["add-child", "添加子节点"], ["add-sibling", "添加同级节点"],
@@ -180,6 +181,8 @@ export interface MindMapStudioSettings {
   visibleModes: DisplayMode[];
   defaultViewMode: DisplayMode;
   readingProgress: Record<string, number>;
+  /** 按文章族顶层文件保存的跨模式语义阅读位置。 */
+  readingLocations: Record<string, ReadingLocation>;
   readingModeInitialized: boolean;
   articleTocMaxDepth: number;
   showArticleMiniMap: boolean;
@@ -263,9 +266,9 @@ export const DEFAULT_SETTINGS: MindMapStudioSettings = {
   imageFailoverUseLocalFallback: true,
   globalSearchMaxResults: 100,
   visibleModes: ["mindmap", "outline", "article", "reading"],
-  defaultViewMode: "mindmap"
-  ,
+  defaultViewMode: "mindmap",
   readingProgress: {},
+  readingLocations: {},
   readingModeInitialized: true,
   articleTocMaxDepth: 3,
   showArticleMiniMap: true,
@@ -448,7 +451,7 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
 
     containerEl.createEl("p", {
       cls: "setting-item-description",
-      text: "导图、大纲和文章模式共享同一份节点数据。在任意模式中的修改都会同步到其他模式。"
+      text: "导图、大纲、文章和通读模式共享同一份节点数据；可编辑模式中的修改会同步到其他模式。"
     });
 
     const modeGrid = containerEl.createDiv({ cls: "mms-mode-settings-grid" });
@@ -485,12 +488,13 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName("当前全局显示模式")
-      .setDesc("这里与工具栏模式按钮同步。选择后，之后打开的父导图和所有子导图都会继续使用该模式。")
+      .setDesc("这里与工具栏模式按钮同步。导图、文章和通读会作为下次启动模式；大纲仅在当前会话生效，重新打开时回到上一次可持久化模式。")
       .addDropdown((dropdown) => {
         const labels: Record<DisplayMode, string> = { mindmap: "导图模式", outline: "大纲模式", article: "文章模式", reading: "通读模式" };
         for (const mode of this.plugin.settings.visibleModes) dropdown.addOption(mode, labels[mode]);
-        dropdown.setValue(this.plugin.settings.visibleModes.includes(this.plugin.settings.defaultViewMode)
-          ? this.plugin.settings.defaultViewMode
+        const activeMode = this.plugin.getActiveDisplayMode();
+        dropdown.setValue(this.plugin.settings.visibleModes.includes(activeMode)
+          ? activeMode
           : this.plugin.settings.visibleModes[0] ?? "mindmap");
         dropdown.onChange(async (value) => {
           await this.plugin.setGlobalDisplayMode(value as DisplayMode);
