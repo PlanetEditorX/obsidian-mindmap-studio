@@ -2,17 +2,19 @@
 
 ## 交付内容
 
-- 完整优化源码：`obsidian-mindmap-studio-1.19.2-optimized-source.zip`
-- 有效源码与文档补丁：`obsidian-mindmap-studio-1.19.2-optimized.patch`
+- 完整优化源码：`obsidian-mindmap-studio-1.19.2-optimized-r1-source.zip`
+- 有效源码与文档补丁：`obsidian-mindmap-studio-1.19.2-optimized-r1.patch`
 - 校验值：同目录 `SHA256SUMS.txt`
 
 补丁排除了原压缩包中的 `.ua/`、`.local-test-build/` 和 `start-dashboard.bat` 大型本地产物。应用补丁后需按下文显式删除这些目录。
 
+`r1` 修订同时修复了首次 CI 暴露的回归测试定位问题：multipart 实现已迁移到 `src/utils/image-host.ts`，综合测试不再错误地要求相关字符串仍直接存在于 `src/main.ts`。从上一版优化提交升级时，也可只应用独立的 `obsidian-mindmap-studio-1.19.2-optimized-r1-ci-fix.patch`。
+
 ## 方式一：以完整源码建立分支
 
 ```bash
-unzip obsidian-mindmap-studio-1.19.2-optimized-source.zip
-cd obsidian-mindmap-studio-1.19.2-optimized-source
+unzip obsidian-mindmap-studio-1.19.2-optimized-r1-source.zip
+cd obsidian-mindmap-studio-1.19.2-optimized-r1-source
 
 git init
 git switch -c refactor/maintenance-baseline
@@ -39,8 +41,8 @@ git switch -c refactor/maintenance-baseline
 检查并应用：
 
 ```bash
-git apply --check obsidian-mindmap-studio-1.19.2-optimized.patch
-git apply obsidian-mindmap-studio-1.19.2-optimized.patch
+git apply --check obsidian-mindmap-studio-1.19.2-optimized-r1.patch
+git apply obsidian-mindmap-studio-1.19.2-optimized-r1.patch
 rm -rf .ua .local-test-build start-dashboard.bat
 ```
 

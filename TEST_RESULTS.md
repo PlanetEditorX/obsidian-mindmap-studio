@@ -57,6 +57,18 @@ npm run test:repo
 
 新增测试加载器使用 TypeScript `transpileModule` 编译独立工具模块，全部测试文件成功加载。此前还对 30 个 TypeScript 源文件执行了语法诊断，未发现语法错误。
 
+## CI 回归修订记录
+
+GitHub Actions 首次执行综合回归时，在 `scripts/test.mjs` 的源码结构断言处失败。失败断言仍要求 `multipart/form-data` 字符串直接存在于 `src/main.ts`，但本次重构已将 multipart 构造迁移至 `src/utils/image-host.ts`。这不是上传行为失败，而是旧测试对实现文件位置的假设失效。
+
+修订后，回归检查分别验证：
+
+- `src/main.ts` 调用 `buildMultipartUploadBody`，确认入口模块委托给工具层。
+- `src/utils/image-host.ts` 保留 multipart Content-Type 构造。
+- `tests/image-host.test.mjs` 继续按行为验证完整 Content-Type 和请求体。
+
+该修订避免把已完成的模块拆分误判为功能回归，同时仍保留实现连线与输出行为两层保护。修订后已重新通过 19 项独立单元测试、557 个声明的文档检查、仓库检查，以及针对这两处源码边界的定向断言。
+
 ## 受环境阻塞
 
 ### 完整依赖安装
