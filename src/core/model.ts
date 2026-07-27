@@ -2,7 +2,7 @@
  * @file model.ts
  * @description 核心领域模型与序列化层。
  *
- * 定义 .mindmap 稳定数据结构，并负责旧版本兼容、字段规范化、富文本、内容块、节点树、Markdown 导入导出及图片镜像候选源排序。
+ * 定义 .mindmap 稳定数据结构，并负责字段规范化、富文本、内容块、节点树、Markdown 导入导出及图片镜像候选源排序。
  */
 
 import { walkNodes } from "./node-tree";
@@ -276,7 +276,7 @@ export interface MindMapNode {
   id: string;
   text: string;
   richText?: MindMapTextRun[];
-  /** Ordered text and image blocks. Legacy text/richText/image fields remain for compatibility. */
+  /** Ordered text and image blocks. */
   content?: MindMapContentBlock[];
   note?: string;
   link?: string;
@@ -291,8 +291,6 @@ export interface MindMapNode {
   articleNumberingMode?: ArticleNumberingMode;
   /** Manual article level from 1 to 8. It is only active when articleNumberingMode is manual. */
   articleNumberingLevel?: number;
-  /** @deprecated Legacy alias for articleNumberingMode: "none". */
-  skipArticleNumbering?: boolean;
   style?: MindMapNodeStyle;
   collapsed?: boolean;
   children: MindMapNode[];
@@ -337,8 +335,7 @@ export interface TaskProgress {
   total: number;
 }
 
-export const MINDMAP_CODE_BLOCK = "mindmap-json";
-const LEGACY_CODE_BLOCKS = ["smm-json", "mmc-json"] as const;
+const MINDMAP_CODE_BLOCK = "mindmap-json";
 
 /**
  * 执行“new id”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
@@ -420,13 +417,12 @@ function normalizeBooleanOverride(value: unknown): boolean | undefined {
 /**
  * 校验并规范化appearance，并保持模型、界面和持久化状态的一致性。
  *
- * @param input 可能来自磁盘、剪贴板或旧版本的不可信输入。
+ * @param input 可能来自磁盘、剪贴板或外部来源的不可信输入。
  * @returns 当前操作生成、查找或规范化后的结果。
  */
 function normalizeAppearance(input: Partial<MindMapAppearance> | undefined): MindMapAppearance | undefined {
   if (!input) return undefined;
   const rawNodeVisualStyle = String(input.nodeVisualStyle ?? "");
-  const legacyBranchStyle = ["x", "mind"].join("");
   const backgroundPattern: BackgroundPattern | undefined = input.backgroundPattern === "none" || input.backgroundPattern === "grid" || input.backgroundPattern === "dots"
     ? input.backgroundPattern
     : undefined;
@@ -453,7 +449,7 @@ function normalizeAppearance(input: Partial<MindMapAppearance> | undefined): Min
   const appearance: MindMapAppearance = {
     nodeVisualStyle: rawNodeVisualStyle === "card"
       ? "card"
-      : rawNodeVisualStyle === "branch" || rawNodeVisualStyle === legacyBranchStyle || rawNodeVisualStyle === "compact"
+      : rawNodeVisualStyle === "branch"
         ? "branch"
         : undefined,
     nodeWidthMode: input.nodeWidthMode === "fixed" || input.nodeWidthMode === "auto" ? input.nodeWidthMode : undefined,
@@ -501,7 +497,7 @@ export function mergeAppearance(base: MindMapAppearance | undefined, override: M
 /**
  * 校验并规范化style，并保持模型、界面和持久化状态的一致性。
  *
- * @param input 可能来自磁盘、剪贴板或旧版本的不可信输入。
+ * @param input 可能来自磁盘、剪贴板或外部来源的不可信输入。
  * @returns 当前操作生成、查找或规范化后的结果。
  */
 function normalizeStyle(input: Partial<MindMapNodeStyle> | undefined): MindMapNodeStyle | undefined {
@@ -529,7 +525,7 @@ function normalizeStyle(input: Partial<MindMapNodeStyle> | undefined): MindMapNo
 /**
  * 校验并规范化text style，并保持模型、界面和持久化状态的一致性。
  *
- * @param input 可能来自磁盘、剪贴板或旧版本的不可信输入。
+ * @param input 可能来自磁盘、剪贴板或外部来源的不可信输入。
  * @returns 当前操作生成、查找或规范化后的结果。
  */
 function normalizeTextStyle(input: Partial<MindMapTextStyle> | undefined): MindMapTextStyle | undefined {
@@ -557,7 +553,7 @@ function textStyleKey(style: MindMapTextStyle | undefined): string {
 /**
  * 校验并规范化rich text，并保持模型、界面和持久化状态的一致性。
  *
- * @param input 可能来自磁盘、剪贴板或旧版本的不可信输入。
+ * @param input 可能来自磁盘、剪贴板或外部来源的不可信输入。
  * @param fallbackText 该参数用于 normalize rich text 流程中的输入或控制。
  * @returns 按当前规则构建的集合结果。
  */
@@ -724,7 +720,7 @@ export function applyRichTextStyleRange(
 /**
  * 校验并规范化content block，并保持模型、界面和持久化状态的一致性。
  *
- * @param input 可能来自磁盘、剪贴板或旧版本的不可信输入。
+ * @param input 可能来自磁盘、剪贴板或外部来源的不可信输入。
  * @returns 当前操作生成、查找或规范化后的结果。
  */
 function normalizeContentBlock(input: unknown): MindMapContentBlock | null {
@@ -865,12 +861,12 @@ export function nodePrimaryText(node: Pick<MindMapNode, "content" | "text" | "ri
 }
 
 /**
- * 将新的有序 content 内容块同步回 text、richText 和 image 等旧字段。该桥接保证旧版本插件、旧导出逻辑和新内容块模型能够同时工作。
+ * 将有序内容块同步到节点的文本摘要、单段富文本和首张图片字段。
  *
  * @param node 当前处理的节点。
  * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
  */
-export function syncNodeLegacyFields(node: MindMapNode): void {
+export function syncNodeContentFields(node: MindMapNode): void {
   const blocks = nodeContentBlocks(node);
   node.content = blocks.length ? blocks : undefined;
   const textBlocks = blocks.filter((block): block is MindMapTextContentBlock => block.type === "text");
@@ -894,7 +890,7 @@ function normalizeCell(value: unknown): string {
 /**
  * 校验并规范化table，并保持模型、界面和持久化状态的一致性。
  *
- * @param input 可能来自磁盘、剪贴板或旧版本的不可信输入。
+ * @param input 可能来自磁盘、剪贴板或外部来源的不可信输入。
  * @returns 当前操作生成、查找或规范化后的结果。
  */
 function normalizeTable(input: Partial<MindMapTable> | undefined): MindMapTable | undefined {
@@ -918,7 +914,7 @@ function normalizeTable(input: Partial<MindMapTable> | undefined): MindMapTable 
 /**
  * 校验并规范化code，并保持模型、界面和持久化状态的一致性。
  *
- * @param input 可能来自磁盘、剪贴板或旧版本的不可信输入。
+ * @param input 可能来自磁盘、剪贴板或外部来源的不可信输入。
  * @returns 当前操作生成、查找或规范化后的结果。
  */
 function normalizeCode(input: Partial<MindMapCodeBlock> | undefined): MindMapCodeBlock | undefined {
@@ -932,7 +928,7 @@ function normalizeCode(input: Partial<MindMapCodeBlock> | undefined): MindMapCod
 /**
  * 校验并规范化submap，并保持模型、界面和持久化状态的一致性。
  *
- * @param input 可能来自磁盘、剪贴板或旧版本的不可信输入。
+ * @param input 可能来自磁盘、剪贴板或外部来源的不可信输入。
  * @returns 当前操作生成、查找或规范化后的结果。
  */
 function normalizeSubmap(input: Partial<MindMapSubmap> | undefined): MindMapSubmap | undefined {
@@ -946,7 +942,7 @@ function normalizeSubmap(input: Partial<MindMapSubmap> | undefined): MindMapSubm
 /**
  * 校验并规范化navigation，并保持模型、界面和持久化状态的一致性。
  *
- * @param input 可能来自磁盘、剪贴板或旧版本的不可信输入。
+ * @param input 可能来自磁盘、剪贴板或外部来源的不可信输入。
  * @returns 当前操作生成、查找或规范化后的结果。
  */
 function normalizeNavigation(input: Partial<MindMapNavigation> | undefined): MindMapNavigation | undefined {
@@ -988,7 +984,7 @@ function normalizeTags(value: unknown): string[] | undefined {
 /**
  * 校验并规范化node，并保持模型、界面和持久化状态的一致性。
  *
- * @param input 可能来自磁盘、剪贴板或旧版本的不可信输入。
+ * @param input 可能来自磁盘、剪贴板或外部来源的不可信输入。
  * @param fallbackText 该参数用于 normalize node 流程中的输入或控制。
  * @returns 当前操作生成、查找或规范化后的结果。
  */
@@ -1011,7 +1007,7 @@ function normalizeNode(input: Partial<MindMapNode> | undefined, fallbackText: st
   const requestedNumberingMode = input?.articleNumberingMode;
   const articleNumberingMode: ArticleNumberingMode | undefined = requestedNumberingMode === "manual" || requestedNumberingMode === "none"
     ? requestedNumberingMode
-    : input?.skipArticleNumbering === true ? "none" : undefined;
+    : undefined;
   const articleNumberingLevel = articleNumberingMode === "manual" && Number.isFinite(input?.articleNumberingLevel)
     ? Math.min(8, Math.max(1, Math.floor(input?.articleNumberingLevel ?? 1)))
     : undefined;
@@ -1031,7 +1027,6 @@ function normalizeNode(input: Partial<MindMapNode> | undefined, fallbackText: st
     task: normalizeTask(input?.task),
     articleNumberingMode,
     articleNumberingLevel,
-    skipArticleNumbering: articleNumberingMode === "none" || undefined,
     style: normalizeStyle(input?.style),
     collapsed: input?.collapsed === true || undefined,
     children: Array.isArray(input?.children)
@@ -1043,7 +1038,7 @@ function normalizeNode(input: Partial<MindMapNode> | undefined, fallbackText: st
 /**
  * 校验并规范化document view，并保持模型、界面和持久化状态的一致性。
  *
- * @param input 可能来自磁盘、剪贴板或旧版本的不可信输入。
+ * @param input 可能来自磁盘、剪贴板或外部来源的不可信输入。
  * @returns 当前操作生成、查找或规范化后的结果。
  */
 function normalizeDocumentView(input: Partial<MindMapDocumentView> | undefined): MindMapDocumentView | undefined {
@@ -1052,11 +1047,9 @@ function normalizeDocumentView(input: Partial<MindMapDocumentView> | undefined):
     ? input.mode
     : undefined;
   const readOnly = input.readOnly === true ? true : input.readOnly === false ? false : undefined;
-  const articleLandingMode: ArticleLandingMode | undefined = input.articleLandingMode === "toc"
-    ? "toc"
-    : input.articleLandingMode === "article" || (input.articleLandingMode as string | undefined) === "map"
-      ? "article"
-      : undefined;
+  const articleLandingMode: ArticleLandingMode | undefined = input.articleLandingMode === "toc" || input.articleLandingMode === "article"
+    ? input.articleLandingMode
+    : undefined;
   const articleTocMaxDepth = typeof input.articleTocMaxDepth === "number" && Number.isFinite(input.articleTocMaxDepth)
     ? Math.max(1, Math.min(8, Math.round(input.articleTocMaxDepth)))
     : undefined;
@@ -1098,9 +1091,9 @@ function normalizeArticleStyle(input: Partial<ArticleStyle> | undefined): Articl
 }
 
 /**
- * 把任意版本或不完整的输入对象转换为当前版本的 MindMapDocument。该函数会递归规范化节点、外观、视图状态和兼容字段，并保证根节点、数组及必需标识始终存在。
+ * 把不完整的输入对象转换为当前 MindMapDocument。该函数会递归规范化节点、外观和视图状态，并保证根节点、数组及必需标识始终存在。
  *
- * @param input 可能来自磁盘、剪贴板或旧版本的不可信输入。
+ * @param input 可能来自磁盘、剪贴板或外部来源的不可信输入。
  * @param fallbackTitle 无法从内容中取得标题时使用的回退标题。
  * @returns 当前操作生成、查找或规范化后的结果。
  * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
@@ -1121,7 +1114,7 @@ export function normalizeDocument(input: Partial<MindMapDocument> | undefined, f
 }
 
 /**
- * 在保存前再次规范化文档，并输出带缩进的稳定 JSON。这样可移除运行时临时值，同时保留可选兼容字段。
+ * 在保存前再次规范化文档，并输出带缩进的稳定 JSON。
  *
  * @param doc 要处理或写回的思维导图文档。
  * @returns 计算、解析或序列化后的字符串结果。
@@ -1161,7 +1154,7 @@ function extractFencedJson(source: string, language: string): string | null {
 }
 
 /**
- * 解析磁盘中的 .mindmap 文本。优先识别当前原始 JSON 格式，同时兼容历史 Markdown 围栏 JSON；解析失败时返回包含回退标题的安全默认文档，避免视图崩溃。
+ * 解析磁盘中的 .mindmap 文本。优先识别原始 JSON 和当前 mindmap-json 围栏；解析失败时按 Markdown 导入，避免视图崩溃。
  *
  * @param source 待解析或渲染的原始文本。
  * @param fallbackTitle 无法从内容中取得标题时使用的回退标题。
@@ -1175,9 +1168,8 @@ export function parseDocument(source: string, fallbackTitle = "思维导图"): M
     if (parsed) return parsed;
   }
 
-  for (const language of [MINDMAP_CODE_BLOCK, ...LEGACY_CODE_BLOCKS]) {
-    const fenced = extractFencedJson(source, language);
-    if (!fenced) continue;
+  const fenced = extractFencedJson(source, MINDMAP_CODE_BLOCK);
+  if (fenced) {
     const parsed = parseJsonDocument(fenced, fallbackTitle);
     if (parsed) return parsed;
   }
@@ -1207,33 +1199,6 @@ export function cloneNodeWithFreshIds(node: MindMapNode): MindMapNode {
     current.id = newId();
   });
   return clone;
-}
-
-/**
- * 遍历并收集wiki links，并保持模型、界面和持久化状态的一致性。
- *
- * @param root 节点树的根节点。
- * @returns 计算、解析或序列化后的字符串结果。
- */
-export function collectWikiLinks(root: MindMapNode): Set<string> {
-  const links = new Set<string>();
-  const pattern = /\[\[([^\]|#]+)(?:#[^\]|]+)?(?:\|[^\]]+)?\]\]/g;
-  walkNodes(root, (node) => {
-    const values = [nodePlainText(node), node.note ?? "", node.link ?? "", ...nodeContentBlocks(node).filter((block): block is MindMapImageContentBlock => block.type === "image").map((block) => block.source), node.submap?.path ?? ""];
-    for (const value of values) {
-      let match: RegExpExecArray | null;
-      while ((match = pattern.exec(value)) !== null) {
-        if (match[1]) links.add(match[1].trim());
-      }
-      pattern.lastIndex = 0;
-    }
-    const explicitLink = node.link?.trim();
-    if (explicitLink && !/^https?:\/\//i.test(explicitLink) && !explicitLink.includes("[[")) {
-      const target = explicitLink.split("|")[0]?.split("#")[0]?.trim();
-      if (target) links.add(target);
-    }
-  });
-  return links;
 }
 
 /**

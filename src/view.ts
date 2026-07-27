@@ -68,7 +68,7 @@ export class MindMapStudioView extends TextFileView {
   }
 
   /**
-   * 返回当前编辑器文档的序列化文本，供 Obsidian 自动保存。保存使用模型层统一序列化，确保兼容字段和版本号正确。
+   * 返回当前编辑器文档的序列化文本，供 Obsidian 自动保存。保存使用模型层统一序列化，确保字段规范和版本号正确。
    * @returns 计算、解析或序列化后的字符串结果。
    * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
    */
@@ -156,10 +156,6 @@ export class MindMapStudioView extends TextFileView {
         },
         onReadingLocationChange: async (path, location) => {
           this.plugin.settings.readingLocations[path] = location;
-          await this.plugin.saveSettings();
-        },
-        onReadingProgressChange: async (path, progress) => {
-          this.plugin.settings.readingProgress[path] = progress;
           await this.plugin.saveSettings();
         },
         onRenderCode: async (block, container) => {
@@ -292,7 +288,6 @@ export class MindMapStudioView extends TextFileView {
       showTaskProgress: this.plugin.settings.showTaskProgress,
       autoFitOnOpen: this.plugin.settings.autoFitOnOpen,
       twoFingerGestureAction: this.plugin.settings.twoFingerGestureAction,
-      resizeModifier: this.plugin.settings.resizeModifier,
       historyLimit: this.plugin.settings.historyLimit,
       imageFailoverEnabled: this.plugin.settings.imageFailoverEnabled,
       imageFailoverTimeoutSeconds: this.plugin.settings.imageFailoverTimeoutSeconds,
@@ -325,7 +320,6 @@ export class MindMapStudioView extends TextFileView {
       showArticleToc: this.showArticleToc,
       articleNavigation: this.articleNavigation
       ,readingSections: this.readingSections
-      ,readingProgress: this.articleNavigation ? (this.plugin.settings.readingProgress[this.articleNavigation.homePath] ?? 0) : 0
       ,readingProgressPosition: this.plugin.settings.readingProgressPosition
       ,returnToTopVisibility: this.plugin.settings.returnToTopVisibility
     };

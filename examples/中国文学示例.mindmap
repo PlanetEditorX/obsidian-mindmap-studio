@@ -14,7 +14,6 @@
       {
         "id": "preface",
         "text": "前言",
-        "skipArticleNumbering": true,
         "note": "这个节点在文章模式中显示为无编号前言，并且不会占用章节序号。",
         "children": [
           {
@@ -22,7 +21,8 @@
             "text": "本示例用于演示导图、大纲与文章三种同步模式。",
             "children": []
           }
-        ]
+        ],
+        "articleNumberingMode": "none"
       },
       {
         "id": "tang-poetry",
@@ -88,14 +88,14 @@
       {
         "id": "appendix",
         "text": "附录：阅读提示",
-        "skipArticleNumbering": true,
         "children": [
           {
             "id": "appendix-body",
             "text": "切换到文章模式查看自动目录与编号；切换到大纲模式查看完整层级。",
             "children": []
           }
-        ]
+        ],
+        "articleNumberingMode": "none"
       }
     ]
   },

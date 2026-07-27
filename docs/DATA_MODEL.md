@@ -2,7 +2,7 @@
 
 ## 1. 文档版本
 
-当前数据版本为 `10`。版本号表示文件结构兼容级别，不等同于插件版本号。新增可选字段且不破坏旧文件时，可以保持数据版本不变；只有需要迁移语义或改变必需结构时才提高数据版本。
+当前数据版本为 `10`。版本号表示文件结构级别，不等同于插件版本号。增加不改变现有语义的可选字段时可以保持版本不变；改变必需结构或字段语义时必须提高数据版本并提供显式转换工具。
 
 ## 2. 顶层文档
 
@@ -26,7 +26,7 @@ interface MindMapDocument {
 - `root`：唯一根节点。
 - `appearance`：该文件的外观覆盖；缺失字段继承插件设置。
 - `navigation`：当前文件是子导图时的父导图信息。
-- `view`：文件级只读状态、导图视口和文章目录覆盖等视图信息。显示模式现由全局设置控制，旧字段仍兼容读取。
+- `view`：文件级只读状态、导图视口和文章目录覆盖等视图信息。显示模式由插件全局设置控制。
 
 ## 3. 节点结构
 
@@ -49,8 +49,6 @@ interface MindMapNode {
   submap?: MindMapSubmap;
   articleNumberingMode?: "none" | "manual";
   articleNumberingLevel?: number;
-  /** @deprecated 兼容旧文件；等价于 articleNumberingMode: "none"。 */
-  skipArticleNumbering?: boolean;
   style?: MindMapNodeStyle;
 }
 ```
@@ -60,14 +58,13 @@ interface MindMapNode {
 - `id` 在同一文档中必须唯一。
 - `children` 始终是数组。
 - `content` 是当前推荐的有序内容模型。
-- `text`、`richText`、`image` 是兼容字段，由 `syncNodeLegacyFields()` 与内容块同步。
+- `text`、`richText`、`image` 是当前节点的派生摘要字段，由 `syncNodeContentFields()` 与有序内容块同步，供搜索、快速渲染和导出使用。
 - `collapsed` 只影响导图可见布局，不删除后代。
 - `submap` 表示该节点关联独立子导图文件。
 - `articleNumberingMode` 缺失时表示自动；`none` 表示关闭编号；`manual` 表示使用手动文章层级。
 - `articleNumberingLevel` 仅在手动模式下生效，规范化时限制为 `1–8`。
 - 手动模式只覆盖当前标题或中心节点子树的最高文章层级，并让后代从该层级继续递增；它不改变导图中的真实 `children` 结构，也不强制孤立末端节点成为标题。
 - 中心节点的手动层级直接作为整张导图一级内容的最高可见层级，中心标题本身仍不添加编号。
-- `skipArticleNumbering` 是兼容旧文件的弃用字段；读取时迁移为 `articleNumberingMode: "none"`，保存时继续写入兼容别名。
 - 不同文章层级使用独立的同级计数器，混用“一、”和“1.”时不会互相占用序号。
 - 同级存在自然标题时，普通末端节点按同级标题编号；孤立末端节点仍作为正文。
 - `view.zoom`、`view.panX`、`view.panY` 保存导图视口，显示模式切换不会清除这些可选字段。
@@ -122,7 +119,7 @@ interface MindMapTextRun {
 }
 ```
 
-富文本按连续字符运行段保存。相邻且样式相同的运行段会自动合并。`text` 字段始终保存所有运行段拼接后的纯文本，便于搜索、旧版本兼容和 Markdown 导出。
+富文本按连续字符运行段保存。相邻且样式相同的运行段会自动合并。`text` 字段始终保存所有运行段拼接后的纯文本，便于搜索、预览和 Markdown 导出。
 
 ## 6. 节点样式
 
@@ -226,7 +223,7 @@ interface MindMapImageRemoteSource {
 }
 ```
 
-运行时会记录最近成功和失败时间。字段都是可选的，因此旧图片数据仍可打开。
+运行时会记录最近成功和失败时间。字段都是可选的，缺失时按默认状态处理。
 
 ## 11. 规范化规则
 
@@ -238,7 +235,7 @@ interface MindMapImageRemoteSource {
 - 缺失标识自动生成。
 - 富文本运行段重新合并。
 - 内容块无效项被丢弃。
-- 旧字段迁移到新内容块。
+- 缺失的派生摘要字段根据内容块补齐。
 - 子节点递归规范化。
 
 调用方不应假设 `JSON.parse()` 后的数据已经安全。

@@ -114,7 +114,7 @@ export interface ArticleNumberingResolution {
 /**
  * 解析单个节点的文章编号状态。手动模式只覆盖当前节点所在子树的最高文章层级，
  * 不再强制末端节点标题化；同级中只要存在自然标题，普通末端节点也会按同级标题编号，
- * 从而避免首个“词义”等节点丢失序号。关闭模式兼容旧版 skipArticleNumbering 字段。
+ * 从而避免首个“词义”等节点丢失序号。
  *
  * @param node 要解析的节点。
  * @param defaultLevel 根据父节点层级推导出的默认文章层级。
@@ -122,7 +122,7 @@ export interface ArticleNumberingResolution {
  * @returns 供文章正文、目录和子导图深度计算共同使用的编号状态。
  */
 export function resolveArticleNumbering(node: MindMapNode, defaultLevel: number, siblingHasHeading: boolean): ArticleNumberingResolution {
-  const mode = node.articleNumberingMode ?? (node.skipArticleNumbering === true ? "none" : "auto");
+  const mode = node.articleNumberingMode ?? "auto";
   const manual = mode === "manual";
   const requestedLevel = Number.isFinite(node.articleNumberingLevel) ? Math.floor(node.articleNumberingLevel ?? defaultLevel) : defaultLevel;
   const level = manual ? Math.min(8, Math.max(1, requestedLevel)) : Math.max(1, Math.floor(defaultLevel));
@@ -173,7 +173,7 @@ export interface ArticleTocEntry {
   /** 文章编号层级，例如 5 表示使用“1.”。 */
   depth: number;
   /** 目录中的相对结构层级；与手动编号层级相互独立。 */
-  tocDepth?: number;
+  tocDepth: number;
   label: string;
   title: string;
   displayTitle: string;
@@ -181,15 +181,13 @@ export interface ArticleTocEntry {
 }
 
 /**
- * 返回目录项的相对结构层级。新数据优先使用 tocDepth；缺少该字段时回退到旧版 depth，
- * 以兼容运行期构造的旧对象和第三方调用。
+ * 返回目录项的相对结构层级。
  *
  * @param entry 文章目录项。
  * @returns 从 1 开始的目录结构层级。
  */
 export function articleTocDepth(entry: ArticleTocEntry): number {
-  const raw = Number.isFinite(entry.tocDepth) ? entry.tocDepth : entry.depth;
-  return Math.max(1, Math.floor(raw ?? 1));
+  return Number.isFinite(entry.tocDepth) ? Math.max(1, Math.floor(entry.tocDepth)) : 1;
 }
 
 /**

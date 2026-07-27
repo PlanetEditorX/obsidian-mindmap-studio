@@ -10,7 +10,6 @@ import {
   cloneDocument,
   cloneNodeWithFreshIds,
   childrenToTable,
-  containsNode,
   createNode,
   documentToMarkdown,
   extractFirstWikiLink,
@@ -26,14 +25,12 @@ import {
   nodeContentBlocks,
   nodePlainText,
   nodePrimaryText,
-  syncNodeLegacyFields,
+  syncNodeContentFields,
   parseFencedCode,
   parseMarkdownTable,
   richTextCharacterStyles,
-  characterStylesToRichText,
   applyRichTextStyleRange,
   type BackgroundPattern,
-  type ArticleStyle,
   type ArticleNumberingMode,
   type DisplayMode,
   type EdgeStyle,
@@ -42,26 +39,23 @@ import {
   type MindMapAppearance,
   type MindMapThemePresetId,
   type MindMapDocument,
-  type MindMapCodeBlock,
   type MindMapContentBlock,
   type MindMapImageContentBlock,
   type MindMapNode,
   type MindMapTextContentBlock,
-  type MindMapSubmap,
   type MindMapTextStyle,
   type NodeShape,
   type NodeTextAlign,
   type TaskStatus,
-  removeNode,
   type NodeDropPosition,
   moveNodeRelative
 } from "../core/model";
 import { buildBranchColorMap, computeLayout, documentToSvg, edgePath, edgeWidthForDepth, roundedElbowEdgePath, type LayoutResult } from "../render/layout";
 import { resolveLayoutCollisions } from "../render/collision-layout";
 import { CodeEditModal, TableEditModal } from "./content-modals";
-import { TOOLBAR_ITEMS, type ResizeModifier } from "../settings";
+import { TOOLBAR_ITEMS } from "../settings";
 import { appearanceFromThemePreset, MINDMAP_THEME_PRESETS } from "../themes";
-import { articleNumberLabel, articleTocDepth, buildArticleNodeInfo, DISPLAY_MODE_ICONS, DISPLAY_MODE_LABELS, readingAnchorPart, resolveArticleTocMaxDepth, type ArticlePageNavigation, type ArticleTocEntry, type ReadingSection } from "../article/modes";
+import { articleNumberLabel, articleTocDepth, buildArticleNodeInfo, DISPLAY_MODE_ICONS, DISPLAY_MODE_LABELS, readingAnchorPart, resolveArticleTocMaxDepth, type ReadingSection } from "../article/modes";
 import { resolveArticleStyle } from "../article/article-style";
 import {
   createReadingLocation,
@@ -78,8 +72,7 @@ import {
   FormulaEditModal,
   ImagePreviewModal,
   JsonTransferModal,
-  OutlineModal,
-  SearchNodesModal
+  OutlineModal
 } from "./editor-modals";
 import { parseClipboardHtml, parseClipboardNodes } from "./clipboard-import";
 import { selectNodeImage, uploadCurrentNodeImage } from "./node-image-actions";
@@ -411,7 +404,7 @@ class NodeEditModal extends Modal {
 
     const numberingControls = createArticleNumberingControls(
       detailsGrid,
-      this.node.articleNumberingMode ?? (this.node.skipArticleNumbering === true ? "none" : undefined),
+      this.node.articleNumberingMode,
       this.node.articleNumberingLevel,
       () => scheduleAutoSave()
     );
@@ -932,12 +925,10 @@ export class MindMapEditor {
   private branchClipboard: MindMapNode[] | null = null;
   private searchQuery = "";
   private lastRichTextColor = "#ef4444";
-  private resizeModifier: ResizeModifier = "ctrl";
   private currentMode: DisplayMode;
   private readOnly: boolean;
   private readonly imageLoadTimers = new Set<number>();
   private inlineEditingId: string | null = null;
-  private readingProgressTimer: number | null = null;
   private readingLocationTimer: number | null = null;
   private readingCaptureTimer: number | null = null;
   private lastReadingLocation: ReadingLocation | null = null;
@@ -964,7 +955,6 @@ export class MindMapEditor {
     this.host = host;
     this.callbacks = callbacks;
     this.options = options;
-    this.resizeModifier = "ctrl";
     this.history = new DocumentHistory(() => this.options.historyLimit);
     this.document = cloneDocument(document);
     this.currentMode = this.resolveMode(options.defaultViewMode);
@@ -989,7 +979,6 @@ export class MindMapEditor {
   destroy(): void {
     this.clearImageLoadTimers();
     this.rememberCurrentLocation(this.currentMode, true);
-    if (this.readingProgressTimer !== null) window.clearTimeout(this.readingProgressTimer);
     if (this.readingLocationTimer !== null) window.clearTimeout(this.readingLocationTimer);
     if (this.readingCaptureTimer !== null) window.clearTimeout(this.readingCaptureTimer);
     if (this.readOnlyPersistTimer !== null) window.clearTimeout(this.readOnlyPersistTimer);
@@ -1980,7 +1969,7 @@ export class MindMapEditor {
       blocks.unshift({ id: newId(), type: "text", text: next });
     }
     node.content = blocks.filter((block) => block.type !== "text" || block.text.trim());
-    syncNodeLegacyFields(node);
+    syncNodeContentFields(node);
     if (node.id === this.document.root.id && next) this.document.title = next;
   }
 
@@ -2566,7 +2555,7 @@ export class MindMapEditor {
               if (!switched) return;
               const previous = block.remoteSources?.find((item) => item.url === block.source);
               block.source = candidate.source;
-              syncNodeLegacyFields(node);
+              syncNodeContentFields(node);
               this.callbacks.onChange(this.getDocument());
               this.markSaving();
               const previousLabel = previous?.hostName || "当前图床";
@@ -3070,7 +3059,7 @@ export class MindMapEditor {
       block.text = values.text;
       block.richText = values.richText;
       node.content = blocks;
-      syncNodeLegacyFields(node);
+      syncNodeContentFields(node);
       if (node.id === this.document.root.id && values.text) this.document.title = values.text;
       this.callbacks.onChange(this.getDocument());
       this.markSaving();
@@ -3355,7 +3344,7 @@ export class MindMapEditor {
         historyCaptured = true;
       }
       selected.content = values.content;
-      syncNodeLegacyFields(selected);
+      syncNodeContentFields(selected);
       selected.note = values.note || undefined;
       selected.link = values.link || undefined;
       selected.icon = values.icon || undefined;
@@ -3363,7 +3352,6 @@ export class MindMapEditor {
       selected.task = values.task;
       selected.articleNumberingMode = values.articleNumberingMode;
       selected.articleNumberingLevel = values.articleNumberingMode === "manual" ? values.articleNumberingLevel : undefined;
-      selected.skipArticleNumbering = values.articleNumberingMode === "none" || undefined;
       const style = {
         color: values.color,
         textColor: values.textColor,
@@ -3518,7 +3506,7 @@ export class MindMapEditor {
       this.app,
       this.getAppearance(),
       {
-        articleNumberingMode: this.document.root.articleNumberingMode ?? (this.document.root.skipArticleNumbering === true ? "none" : undefined),
+        articleNumberingMode: this.document.root.articleNumberingMode,
         articleNumberingLevel: this.document.root.articleNumberingLevel
       },
       this.document.view?.articleTocMaxDepth,
@@ -3529,7 +3517,6 @@ export class MindMapEditor {
         this.document.appearance = appearance;
         this.document.root.articleNumberingMode = numbering.articleNumberingMode;
         this.document.root.articleNumberingLevel = numbering.articleNumberingMode === "manual" ? numbering.articleNumberingLevel : undefined;
-        this.document.root.skipArticleNumbering = numbering.articleNumberingMode === "none" || undefined;
         const view = { ...(this.document.view ?? {}) };
         if (articleTocMaxDepth === undefined) delete view.articleTocMaxDepth;
         else view.articleTocMaxDepth = articleTocMaxDepth;
@@ -3541,7 +3528,6 @@ export class MindMapEditor {
         this.document.appearance = undefined;
         this.document.root.articleNumberingMode = undefined;
         this.document.root.articleNumberingLevel = undefined;
-        this.document.root.skipArticleNumbering = undefined;
         if (this.document.view) {
           delete this.document.view.articleTocMaxDepth;
           delete this.document.view.articleMiniMap;
@@ -3644,7 +3630,7 @@ export class MindMapEditor {
     const style = resolveArticleStyle(this.document.articleStyle);
     const progress = this.articleEl.createDiv({ cls: `mms-reading-progress position-${this.options.readingProgressPosition}` });
     progress.createDiv({ cls: "mms-reading-progress-bar" });
-    const initialProgress = `${Math.round(this.options.readingProgress * 100)}%`;
+    const initialProgress = "0%";
     progress.style.setProperty("--mms-reading-progress", initialProgress);
     progress.dataset.progress = initialProgress;
     progress.createSpan({ text: `阅读进度 ${initialProgress}` });
@@ -3735,13 +3721,6 @@ export class MindMapEditor {
     this.installArticleSectionCollapse();
     this.renderArticleMiniMap();
 
-    if (!this.lastReadingLocation && !this.options.readingLocation) {
-      window.setTimeout(() => {
-        const maximum = Math.max(0, this.articleEl.scrollHeight - this.articleEl.clientHeight);
-        this.articleEl.scrollTop = maximum * this.options.readingProgress;
-        this.updateArticleMiniMapActiveMarker();
-      }, 20);
-    }
     this.articleEl.onscroll = () => {
       this.scheduleReadingLocationCapture("reading");
       const maximum = Math.max(1, this.articleEl.scrollHeight - this.articleEl.clientHeight);
@@ -3750,12 +3729,6 @@ export class MindMapEditor {
       progress.style.setProperty("--mms-reading-progress", nextProgress);
       progress.dataset.progress = nextProgress;
       progress.lastElementChild?.replaceChildren(`阅读进度 ${nextProgress}`);
-      if (this.readingProgressTimer !== null) window.clearTimeout(this.readingProgressTimer);
-      this.readingProgressTimer = window.setTimeout(() => {
-        this.readingProgressTimer = null;
-        const homePath = this.options.articleNavigation?.homePath ?? sections[0]?.filePath ?? "";
-        if (homePath) void this.callbacks.onReadingProgressChange(homePath, next);
-      }, 500);
     };
     this.addArticleScrollToTopButton();
   }
@@ -3885,7 +3858,7 @@ export class MindMapEditor {
           const blocks = nodeContentBlocks(selected);
           blocks.push(imageBlock);
           selected.content = blocks;
-          syncNodeLegacyFields(selected);
+          syncNodeContentFields(selected);
         });
         const scheduled = this.callbacks.onScheduleAutoUpload(selected.id, imageBlock.id, path, filename);
         new Notice(scheduled ? `图片已保存，等待自动上传：${path}` : `图片已保存：${path}`);
@@ -3924,7 +3897,7 @@ export class MindMapEditor {
           this.mutate(() => {
             selected.text = plainText;
             selected.richText = undefined;
-            syncNodeLegacyFields(selected);
+            syncNodeContentFields(selected);
           });
           return;
         }
@@ -4120,7 +4093,7 @@ export class MindMapEditor {
     menu.addItem((item) => item.setTitle("粘贴为子节点").setIcon("clipboard-paste").onClick(() => void this.pasteAsChild()));
     menu.addSeparator();
     menu.addItem((item) => item.setTitle(`任务状态：${selected?.task === "done" ? "已完成" : selected?.task === "doing" ? "进行中" : selected?.task === "todo" ? "待办" : "无"}`).setIcon("circle-check-big").onClick(() => this.cycleTask()));
-    const numberingDisabled = selected?.articleNumberingMode === "none" || selected?.skipArticleNumbering === true;
+    const numberingDisabled = selected?.articleNumberingMode === "none";
     menu.addItem((item) => item
       .setTitle(numberingDisabled ? "文章编号：恢复自动" : "文章编号：关闭")
       .setIcon("list-ordered")
@@ -4129,7 +4102,6 @@ export class MindMapEditor {
         this.mutate(() => {
           selected.articleNumberingMode = numberingDisabled ? undefined : "none";
           selected.articleNumberingLevel = undefined;
-          selected.skipArticleNumbering = numberingDisabled ? undefined : true;
         });
       }));
     menu.addItem((item) => item.setTitle("展开/收起").setIcon("fold-vertical").onClick(() => this.toggleCollapse()));
@@ -4208,7 +4180,7 @@ export class MindMapEditor {
           blocks.push({ id: newId(), type: "text", text: formula });
         }
         selected.content = blocks;
-        syncNodeLegacyFields(selected);
+        syncNodeContentFields(selected);
       });
     }).open();
   }
@@ -4232,7 +4204,7 @@ export class MindMapEditor {
       theme: "auto",
       root: node
     }).root);
-    const payload = JSON.stringify({ type: "mindmap-studio-node", version: 2, nodes: sourceNodes }, null, 2);
+    const payload = JSON.stringify({ type: "mindmap-studio-nodes", nodes: sourceNodes }, null, 2);
     try {
       await navigator.clipboard.writeText(payload);
       new Notice(sourceNodes.length > 1 ? `已复制 ${sourceNodes.length} 个节点分支` : "已复制节点分支");

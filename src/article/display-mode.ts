@@ -15,8 +15,8 @@ export function normalizeDisplayModes(value: readonly unknown[]): DisplayMode[] 
 }
 
 /**
- * 解析插件启动时允许恢复的显示模式。大纲只属于当前会话；即使旧设置中
- * 保存了 outline，重新加载插件时也优先回到导图，其次选择可见的文章或通读模式。
+ * 解析插件启动时允许恢复的显示模式。大纲只属于当前会话；
+ * 重新加载插件时优先回到导图，其次选择可见的文章或通读模式。
  */
 export function resolveStartupDisplayMode(preferred: unknown, visibleModes: readonly unknown[]): DisplayMode {
   const visible = normalizeDisplayModes(visibleModes);

@@ -43,7 +43,7 @@ npm run verify
 ```text
 fix(search): preserve node replacement results
 refactor(upload): validate image-host request data
-test(model): cover legacy navigation normalization
+test(model): cover navigation normalization
 ```
 
 PR 应说明目标、实现、兼容性、测试、风险和回滚方式。完整流程见 `docs/GIT_WORKFLOW.zh-CN.md`。

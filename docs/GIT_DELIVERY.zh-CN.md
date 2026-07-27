@@ -1,146 +1,99 @@
-# 阅读进度同步功能 Git 交付说明
+# 当前代码清理 Git 交付说明
 
-## 交付基线与内容
+## 基线
 
-本交付以 `obsidian-mindmap-studio-1.19.2-optimized-r1` 为基线，增加：
+本交付以 `progress-sync-r2` 提交 `fc66680` 为基线，清理运行时兼容支线、重复状态、未引用代码、样式和示例资源。
 
-- 大纲模式只在当前会话生效，不再作为插件重启后的启动模式。
-- 导图、大纲、文章和通读共享按节点保存的语义阅读位置。
-- 关闭、重开和重启后的进度恢复。
-- 子导图跨文件定位、节点删除逐级回退和文件改名迁移。
-- 通读目录页与父导图挂载节点锚点。
-- 文章族异步刷新和多个已打开视图之间的延迟写入隔离。
-- 对应自动测试、迁移说明和完整功能文档。
+## 提交结构
 
-交付包不包含 `node_modules`。仓库中的 `main.js` 仍是基线构建，必须安装依赖并重新构建后才能发布。
-
-## 方式一：使用完整源码
-
-```bash
-unzip obsidian-mindmap-studio-1.19.2-progress-sync-source.zip
-cd obsidian-mindmap-studio-1.19.2-progress-sync-source
-
-npm ci --registry=https://registry.npmjs.org/
-npm run verify
-node --check main.js
+```text
+refactor(core): remove obsolete compatibility paths
+test(repo): enforce current-only codebase
+docs(repo): document cleaned codebase
 ```
 
-## 方式二：在 optimized-r1 基线上应用累计补丁
+具体提交哈希以交付仓库中的 `git log --oneline` 为准。
+
+## 应用累计补丁
+
+在 `progress-sync-r2` 基线上：
 
 ```bash
 git status --short
-git switch -c feat/reading-progress-sync
+git switch -c refactor/remove-obsolete-code
 
-git apply --check obsidian-mindmap-studio-1.19.2-progress-sync.patch
-git apply obsidian-mindmap-studio-1.19.2-progress-sync.patch
+git apply --check obsidian-mindmap-studio-1.19.2-clean-current-code.patch
+git apply obsidian-mindmap-studio-1.19.2-clean-current-code.patch
 ```
 
-补丁基线必须是上一版 `optimized-r1` 完整源码，而不是未经优化的原始 1.19.2。若从原始 1.19.2 开始，应先应用 `optimized-r1` 累计补丁，或直接使用本次完整源码包/Git Bundle。
-
-## 方式三：克隆 Git Bundle
+## 保留提交历史
 
 ```bash
-git clone obsidian-mindmap-studio-1.19.2-progress-sync.git.bundle obsidian-mindmap-studio
+git switch -c refactor/remove-obsolete-code
+git am obsidian-mindmap-studio-1.19.2-clean-current-code-series.mbox
+```
+
+## 使用 Git Bundle
+
+```bash
+git clone obsidian-mindmap-studio-1.19.2-clean-current-code.git.bundle obsidian-mindmap-studio
 cd obsidian-mindmap-studio
 git log --oneline --decorate
 ```
 
-Bundle 保存基线提交、功能提交、测试提交和文档提交，适合直接审阅历史。
+## 依赖与构建
 
-## 推荐提交结构
-
-```text
-feat(reading): synchronize semantic progress across display modes
-test(reading): cover startup recovery and progress fallbacks
-docs(reading): document persistent cross-mode navigation
-```
-
-功能提交应包含领域状态、编辑器、视图、设置和样式；测试提交包含 `tests/`、`scripts/test.mjs` 与测试命令；说明文档单独提交，便于评审。
-
-## 从 progress-sync 初版修复 CI 断言
-
-若已经应用上一版 progress-sync，只需应用小型 CI 修复补丁：
-
-```bash
-git apply --check obsidian-mindmap-studio-1.19.2-progress-sync-r1-ci-fix.patch
-git apply obsidian-mindmap-studio-1.19.2-progress-sync-r1-ci-fix.patch
-
-git add scripts/test.mjs CHANGELOG.md TEST_RESULTS.md MODIFIED_FILES.md docs/GIT_DELIVERY.zh-CN.md
-git commit -m "test(regression): align reading location assertions with current API"
-```
-
-该补丁只更新回归契约与交付说明，不修改插件运行时代码或 `.mindmap` 数据。
-
-## 从 progress-sync-r1 修复比例断言
-
-若 CI 日志出现：
-
-```text
-expected: /nodeRatio: Math\.max\(0, Math\.min\(1/
-```
-
-说明回归测试仍假定比例截断位于 `src/editor/editor.ts`。当前实现已经统一迁移到 `src/article/reading-location.ts` 的 `clampRatio()`。在 r1 上应用小型修复补丁：
-
-```bash
-git apply --check obsidian-mindmap-studio-1.19.2-progress-sync-r2-ci-fix.patch
-git apply obsidian-mindmap-studio-1.19.2-progress-sync-r2-ci-fix.patch
-
-git add scripts/test.mjs CHANGELOG.md TEST_RESULTS.md MODIFIED_FILES.md docs/GIT_DELIVERY.zh-CN.md docs/CI_FIX_READING_RATIO.zh-CN.md
-git commit -m "test(regression): align ratio assertion with shared location clamp"
-```
-
-该修复只调整测试契约和交付文档，不修改运行时代码或数据格式。
-
-## 本地与 CI 验证
-
-开发机需使用 Node.js 20 或更高版本：
+源码包不包含 `node_modules`。安装依赖：
 
 ```bash
 npm ci --registry=https://registry.npmjs.org/
-npm run test:unit
-npm run test:regression
-npm run test:docs
-npm run test:repo
-npm run build
 ```
 
-统一入口：
+编辑器提示找不到 `obsidian` 类型时，确认：
+
+```text
+node_modules/obsidian/obsidian.d.ts
+```
+
+存在，然后重启 TypeScript Server。不要使用空的 `declare module "obsidian"` 隐藏依赖问题。
+
+完整验证和构建：
 
 ```bash
 npm run verify
+node --check main.js
 ```
 
-若编辑器提示“找不到模块 `obsidian` 或其相应的类型声明”，说明依赖尚未安装完整；不要添加 `declare module "obsidian"` 来隐藏错误。重新执行 `npm ci`，确认 `node_modules/obsidian/obsidian.d.ts` 存在后重启 TypeScript Server。
+## 行为变化
 
-## Obsidian 手动冒烟
+本次清理删除运行时兼容分支，属于有意的支持边界收敛：
 
-1. 在导图中选择“第二章 → 第二节 → 测试”，依次切换大纲、文章、通读和导图，确认同一节点保持聚焦。
-2. 在通读滚动到子导图章节，切换文章/大纲/导图，确认打开正确物理文件。
-3. 关闭视图、重启 Obsidian，再从顶层导图和子导图分别打开，确认恢复同一位置。
-4. 删除目标节点，确认回退到直接父级；继续删除父级，确认继续向上回退。
-5. 删除目标子导图，确认回到父导图挂载节点或目录项。
-6. 重命名顶层和子导图，确认进度路径仍有效。
-7. 同时打开多个导图，在一个视图切换模式，确认其他视图不会稍后覆盖发起视图的位置。
+- 不再自动识别和转换 Markdown 后缀脑图文件。
+- 不再读取早期设置目录或单图床字段。
+- 不再接受非当前文章编号、剪贴板载荷、外观枚举和围栏名称。
+- 不再保存独立通读滚动百分比。
 
-## 构建提交与发布
+需要处理此类数据时，应先在旧版本中导出当前 `.mindmap` JSON，或使用独立转换脚本处理备份，不应在新运行时重新加入永久别名。
 
-完整验证通过后提交重新生成的构建文件：
+## 发布前手动验证
 
-```bash
-git add main.js styles.css manifest.json
-git commit -m "build(plugin): regenerate progress-sync bundle"
-```
-
-然后再创建 Patch 版本和标签。不要在 `main.js` 尚未重建或宿主冒烟未通过时发布。
+1. 创建、编辑、保存并重新打开 `.mindmap`。
+2. 导图、大纲、文章、通读切换时保持同一节点。
+3. 关闭并重新打开后恢复语义位置。
+4. 创建、重命名、打开、合并和删除子导图。
+5. 粘贴当前插件节点载荷、Markdown、缩进文本和 HTML 列表。
+6. 本地图片、图床上传和安全删除。
+7. Markdown/XMind 导入及 Markdown/HTML/SVG 导出。
+8. 检查设置页不再出现已删除配置。
 
 ## 回滚
 
-功能尚未合并时可直接删除功能分支。已经合并时使用：
+在共享分支上按相反顺序回滚：
 
 ```bash
 git revert <docs-commit>
-git revert <test-commit>
-git revert <feature-commit>
+git revert 3fdf83b
+git revert c74c103
 ```
 
-若仅需临时停用持久化位置，可回滚功能提交；新增 `readingLocations` 位于插件设置，旧版本会忽略该字段，不影响 `.mindmap` 文件数据。
+回滚运行时代码会恢复已删除的解析和设置分支，因此应同时回滚对应测试与文档，避免仓库状态不一致。

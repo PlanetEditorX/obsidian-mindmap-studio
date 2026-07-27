@@ -92,7 +92,7 @@ export function renderOutlineMode(container: HTMLElement, options: OutlineRender
     }
     if (node.articleNumberingMode === "manual") {
       row.createSpan({ cls: "mms-outline-badge", text: `文章层级 ${node.articleNumberingLevel ?? 1} · ${articleNumberLabel(node.articleNumberingLevel ?? 1, 1)}` });
-    } else if (node.articleNumberingMode === "none" || node.skipArticleNumbering) {
+    } else if (node.articleNumberingMode === "none") {
       row.createSpan({ cls: "mms-outline-badge", text: "文章不编号" });
     }
     options.addInlineNodeActions(row, node);

@@ -54,7 +54,7 @@ for (const doc of ["docs/ARCHITECTURE.md", "docs/DATA_MODEL.md", "docs/SPECIAL_F
   await access(doc);
 }
 const special = await readFile("docs/SPECIAL_FEATURES.md", "utf8");
-for (const keyword of ["子导图", "三种显示模式", "文章编号", "图床", "镜像", "全局搜索", "节点尺寸", "只读", "撤销", "SVG"]) {
+for (const keyword of ["子导图", "四种显示模式", "文章编号", "图床", "镜像", "全局搜索", "节点尺寸", "只读", "撤销", "SVG"]) {
   assert.ok(special.includes(keyword), `SPECIAL_FEATURES.md must explain ${keyword}`);
 }
 console.log(`Documentation coverage OK: ${documentedDeclarations} named declarations documented across ${files.length} source modules.`);
