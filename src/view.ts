@@ -24,6 +24,7 @@ export class MindMapStudioView extends TextFileView {
   private document: MindMapDocument | null = null;
   private savedTimer: number | null = null;
   private pendingFocusNodeId: string | null = null;
+  private pendingFocusShouldPersist = true;
   private articleBaseDepth = 0;
   private articleTocEntries: ArticleTocEntry[] = [];
   private showArticleToc = false;
@@ -31,6 +32,7 @@ export class MindMapStudioView extends TextFileView {
   private readingSections: ReadingSection[] = [];
   private articleContextToken = 0;
   private articleContextTimer: number | null = null;
+  private preferCurrentFileOnNextContextRefresh = false;
 
   /**
    * 创建 MindMapStudioView 实例，保存依赖和初始状态；实际 DOM 构建通常在 onOpen() 或后续渲染流程中完成。
@@ -171,8 +173,10 @@ export class MindMapStudioView extends TextFileView {
     }
     if (this.pendingFocusNodeId && this.editor) {
       const nodeId = this.pendingFocusNodeId;
+      const persistLocation = this.pendingFocusShouldPersist;
       this.pendingFocusNodeId = null;
-      window.setTimeout(() => this.editor?.focusNodeById(nodeId), 20);
+      this.pendingFocusShouldPersist = true;
+      window.setTimeout(() => this.editor?.focusNodeById(nodeId, persistLocation), 20);
     }
     this.scheduleArticleContextRefresh(0);
   }
@@ -248,9 +252,28 @@ export class MindMapStudioView extends TextFileView {
   focusNode(nodeId: string): void {
     if (!this.editor) {
       this.pendingFocusNodeId = nodeId;
+      this.pendingFocusShouldPersist = true;
       return;
     }
     this.editor.focusNodeById(nodeId);
+  }
+
+  /**
+   * 标记当前文件由用户或跨模式导航显式打开。
+   *
+   * 下一次文章族上下文加载完成时以当前文件为准，避免旧的跨文件阅读记录
+   * 立即把视图跳回刚离开的父导图或子导图。
+   */
+  markExplicitNavigation(focusNodeId?: string): void {
+    this.preferCurrentFileOnNextContextRefresh = true;
+    const nodeId = focusNodeId ?? this.document?.root.id;
+    if (!nodeId) return;
+    if (!this.editor) {
+      this.pendingFocusNodeId = nodeId;
+      this.pendingFocusShouldPersist = false;
+      return;
+    }
+    this.editor.focusNodeById(nodeId, false);
   }
 
   /**
@@ -281,7 +304,7 @@ export class MindMapStudioView extends TextFileView {
   /**
    * 读取并返回editor options，并保持模型、界面和持久化状态的一致性。
    */
-  private getEditorOptions() {
+  private getEditorOptions(preferCurrentFileLocation = false) {
     return {
       defaultNodeShape: this.plugin.settings.defaultNodeShape,
       defaultAppearance: settingsToAppearance(this.plugin.settings),
@@ -300,6 +323,7 @@ export class MindMapStudioView extends TextFileView {
         const homePath = this.readingSections[0]?.filePath ?? this.file?.path ?? "";
         return homePath ? (this.plugin.settings.readingLocations[homePath] ?? null) : null;
       })(),
+      preferCurrentFileLocation,
       nodeEditorPosition: this.plugin.settings.nodeEditorPosition,
       richTextShortcuts: {
         bold: this.plugin.settings.richTextBoldShortcut,
@@ -354,7 +378,9 @@ export class MindMapStudioView extends TextFileView {
       this.showArticleToc = context.showToc;
       this.articleNavigation = context.navigation;
       this.readingSections = context.readingSections;
-      this.editor?.setOptions(this.getEditorOptions());
+      const preferCurrentFile = this.preferCurrentFileOnNextContextRefresh;
+      this.editor?.setOptions(this.getEditorOptions(preferCurrentFile));
+      this.preferCurrentFileOnNextContextRefresh = false;
     } catch (error) {
       console.warn("MindMap Studio article context refresh failed", error);
     }

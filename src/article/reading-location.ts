@@ -72,6 +72,32 @@ const clampRatio = (value: unknown, fallback: number): number => (
 );
 
 /**
+ * 将节点内部锚点换算为它当前所在的视口比例。
+ *
+ * 点击文章或大纲节点时使用真实屏幕位置，而不是强制写成固定 35%。
+ * 这样后续设置刷新或模式恢复不会把当前页面再次拉动到另一个位置。
+ */
+export function viewportAnchorRatio(
+  nodeTop: number,
+  nodeHeight: number,
+  viewportTop: number,
+  viewportHeight: number,
+  nodeRatio = 0.5,
+  fallback = 0.35
+): number {
+  if (![nodeTop, nodeHeight, viewportTop, viewportHeight].every(Number.isFinite)
+    || nodeHeight <= 0
+    || viewportHeight <= 0) {
+    return clampRatio(fallback, 0.35);
+  }
+  const normalizedNodeRatio = clampRatio(nodeRatio, 0.5);
+  return clampRatio(
+    (nodeTop + nodeHeight * normalizedNodeRatio - viewportTop) / viewportHeight,
+    fallback
+  );
+}
+
+/**
  * 返回目标节点到根节点的回退顺序：目标、直接父级、祖父级……根节点。
  */
 export function nodeFallbackIds(document: MindMapDocument, nodeId: string): string[] {

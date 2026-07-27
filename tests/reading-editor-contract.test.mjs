@@ -3,9 +3,13 @@ import { readFile } from "node:fs/promises";
 import { before, test } from "node:test";
 
 let editorSource;
+let viewSource;
+let mainSource;
 
 before(async () => {
   editorSource = await readFile("src/editor/editor.ts", "utf8");
+  viewSource = await readFile("src/view.ts", "utf8");
+  mainSource = await readFile("src/main.ts", "utf8");
 });
 
 test("continuous reading exposes semantic anchors for directory-only parent nodes", () => {
@@ -31,4 +35,25 @@ test("global mode broadcasts discard delayed writes from non-initiating views", 
   assert.match(applyGlobal, /clearTimeout\(this\.readingCaptureTimer\)/);
   assert.match(applyGlobal, /clearTimeout\(this\.readingLocationTimer\)/);
   assert.match(applyGlobal, /this\.setDisplayMode\(mode, false, false\)/);
+});
+
+test("programmatic scroll restoration cannot feed back into reading capture", () => {
+  assert.match(editorSource, /private readingCaptureBlocked = false/);
+  assert.match(editorSource, /private blockReadingLocationCapture\(\): void/);
+  assert.match(editorSource, /if \(this\.readingCaptureBlocked\) return;[\s\S]*scheduleReadingLocationCapture/);
+  assert.match(editorSource, /if \(mode !== "mindmap"\) this\.blockReadingLocationCapture\(\)/);
+});
+
+test("node clicks preserve their current viewport anchor instead of forcing 35 percent", () => {
+  assert.match(editorSource, /private createSelectionLocation\(id: string\): ReadingLocation/);
+  assert.match(editorSource, /viewportAnchorRatio\(target\.rect\.top, target\.rect\.height, viewport\.top, viewport\.height/);
+  assert.doesNotMatch(editorSource, /this\.rememberLocation\(createReadingLocation\([\s\S]{0,180}this\.currentMode === "mindmap" \? 0\.5 : 0\.35[\s\S]{0,60}\)\);/);
+});
+
+test("explicit child-map navigation wins over stale cross-file progress", () => {
+  assert.match(viewSource, /markExplicitNavigation\(focusNodeId\?: string\): void/);
+  assert.match(viewSource, /preferCurrentFileOnNextContextRefresh/);
+  assert.match(viewSource, /this\.editor\?\.setOptions\(this\.getEditorOptions\(preferCurrentFile\)\)/);
+  assert.match(mainSource, /leaf\.view\.markExplicitNavigation\(focusNodeId\)/);
+  assert.match(editorSource, /options\.preferCurrentFileLocation[\s\S]*preferredCurrentLocation/);
 });

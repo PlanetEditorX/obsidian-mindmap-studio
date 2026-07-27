@@ -67,6 +67,11 @@ export interface MindMapEditorOptions {
   currentFilePath: string;
   readingHomePath: string;
   readingLocation: ReadingLocation | null;
+  /**
+   * 当前文件由用户显式打开时，第一次文章族上下文刷新应以当前文件为准，
+   * 不能立即根据旧的跨文件阅读记录跳回另一个父/子导图。
+   */
+  preferCurrentFileLocation: boolean;
   articleBaseDepth: number;
   articleTocEntries: ArticleTocEntry[];
   articleTocMaxDepth: number;

@@ -61,6 +61,7 @@ import {
   createReadingLocation,
   resolveReadingLocation,
   sameReadingLocation,
+  viewportAnchorRatio,
   type ReadingLocation,
   type ResolvedReadingLocation
 } from "../article/reading-location";
@@ -931,6 +932,8 @@ export class MindMapEditor {
   private inlineEditingId: string | null = null;
   private readingLocationTimer: number | null = null;
   private readingCaptureTimer: number | null = null;
+  private readingCaptureReleaseTimer: number | null = null;
+  private readingCaptureBlocked = false;
   private lastReadingLocation: ReadingLocation | null = null;
   private pendingLocationNavigationKey: string | null = null;
   private readOnlyPersistTimer: number | null = null;
@@ -981,6 +984,7 @@ export class MindMapEditor {
     this.rememberCurrentLocation(this.currentMode, true);
     if (this.readingLocationTimer !== null) window.clearTimeout(this.readingLocationTimer);
     if (this.readingCaptureTimer !== null) window.clearTimeout(this.readingCaptureTimer);
+    if (this.readingCaptureReleaseTimer !== null) window.clearTimeout(this.readingCaptureReleaseTimer);
     if (this.readOnlyPersistTimer !== null) window.clearTimeout(this.readOnlyPersistTimer);
     this.clearArticleMiniMap();
     this.articleScrollButtonCleanup?.();
@@ -1019,6 +1023,15 @@ export class MindMapEditor {
    */
   setOptions(options: MindMapEditorOptions): void {
     const previousOptions = this.options;
+    const preferredCurrentLocation = options.preferCurrentFileLocation
+      ? createReadingLocation(
+        this.readingLocationSections(options),
+        options.currentFilePath,
+        findNode(this.document.root, this.selectedId)?.id ?? this.document.root.id,
+        0,
+        this.currentMode === "mindmap" ? 0.5 : 0.35
+      )
+      : null;
     const modesChanged = JSON.stringify(previousOptions.visibleModes) !== JSON.stringify(options.visibleModes);
     const toolbarChanged = JSON.stringify(previousOptions.visibleToolbarItems) !== JSON.stringify(options.visibleToolbarItems)
       || JSON.stringify(previousOptions.toolbarItemOrder) !== JSON.stringify(options.toolbarItemOrder);
@@ -1044,13 +1057,16 @@ export class MindMapEditor {
         }
       }
       this.pendingLocationNavigationKey = null;
-      this.lastReadingLocation = options.readingLocation;
+      this.lastReadingLocation = preferredCurrentLocation ?? options.readingLocation;
+    } else if (preferredCurrentLocation) {
+      this.lastReadingLocation = preferredCurrentLocation;
     } else if (this.readingLocationTimer === null
       && !sameReadingLocation(this.lastReadingLocation, options.readingLocation)) {
       // Do not replace a locally captured, not-yet-written scroll position with stale options.
       this.lastReadingLocation = options.readingLocation;
     }
     this.options = options;
+    if (preferredCurrentLocation) this.rememberLocation(preferredCurrentLocation, true);
     const resolved = this.resolveMode(globalModeChanged ? options.defaultViewMode : this.currentMode);
     const previousMode = this.currentMode;
     const modeChanged = resolved !== previousMode;
@@ -1154,10 +1170,10 @@ export class MindMapEditor {
   }
 
   /** 返回包含当前未保存文档的最新文章族快照。 */
-  private readingLocationSections(): ReadingSection[] {
-    const currentPath = this.options.currentFilePath;
-    const source = this.options.readingSections.length
-      ? this.options.readingSections
+  private readingLocationSections(options: MindMapEditorOptions = this.options): ReadingSection[] {
+    const currentPath = options.currentFilePath;
+    const source = options.readingSections.length
+      ? options.readingSections
       : [{ filePath: currentPath, document: this.document, baseDepth: 0 }];
     return source.map((section) => section.filePath === currentPath
       ? { ...section, document: this.document }
@@ -1240,11 +1256,32 @@ export class MindMapEditor {
 
   /** 对滚动事件进行轻量防抖，避免每个像素变化都扫描章节 DOM。 */
   private scheduleReadingLocationCapture(mode: DisplayMode): void {
+    if (this.readingCaptureBlocked) return;
     if (this.readingCaptureTimer !== null) window.clearTimeout(this.readingCaptureTimer);
     this.readingCaptureTimer = window.setTimeout(() => {
       this.readingCaptureTimer = null;
+      if (this.readingCaptureBlocked) return;
       this.rememberCurrentLocation(mode);
     }, 160);
+  }
+
+  /**
+   * 在程序主动恢复滚动位置期间暂停滚动采集。
+   *
+   * 修改 `scrollTop` 同样会触发 scroll 事件；若把它当成用户滚动重新保存，
+   * 会形成“恢复 → 采集 → 保存 → 再恢复”的位置反馈环。
+   */
+  private blockReadingLocationCapture(): void {
+    if (this.readingCaptureTimer !== null) {
+      window.clearTimeout(this.readingCaptureTimer);
+      this.readingCaptureTimer = null;
+    }
+    if (this.readingCaptureReleaseTimer !== null) window.clearTimeout(this.readingCaptureReleaseTimer);
+    this.readingCaptureBlocked = true;
+    this.readingCaptureReleaseTimer = window.setTimeout(() => {
+      this.readingCaptureReleaseTimer = null;
+      this.readingCaptureBlocked = false;
+    }, 240);
   }
 
   /**
@@ -1269,6 +1306,7 @@ export class MindMapEditor {
       this.selectedIds.clear();
       this.selectedIds.add(resolved.nodeId);
     }
+    if (mode !== "mindmap") this.blockReadingLocationCapture();
     const restore = (): void => {
       if (mode === "mindmap") {
         this.applySelectionClasses();
@@ -1376,9 +1414,9 @@ export class MindMapEditor {
    *
    * @param id 目标对象或节点的稳定标识。
    */
-  focusNodeById(id: string): void {
+  focusNodeById(id: string, persistLocation = true): void {
     if (!findNode(this.document.root, id)) return;
-    this.focusNode(id);
+    this.focusNode(id, persistLocation);
   }
 
   /**
@@ -2913,13 +2951,7 @@ export class MindMapEditor {
     if (id) this.selectedIds.add(id);
     this.applySelectionClasses();
     if (id) {
-      this.rememberLocation(createReadingLocation(
-        this.readingLocationSections(),
-        this.options.currentFilePath,
-        id,
-        0,
-        this.currentMode === "mindmap" ? 0.5 : 0.35
-      ));
+      this.rememberLocation(this.createSelectionLocation(id));
     }
   }
 
@@ -2935,14 +2967,40 @@ export class MindMapEditor {
     this.selectedId = Array.from(this.selectedIds).at(-1) ?? "";
     this.applySelectionClasses();
     if (this.selectedId) {
-      this.rememberLocation(createReadingLocation(
-        this.readingLocationSections(),
-        this.options.currentFilePath,
-        this.selectedId,
-        0,
-        this.currentMode === "mindmap" ? 0.5 : 0.35
-      ));
+      this.rememberLocation(this.createSelectionLocation(this.selectedId));
     }
+  }
+
+  /**
+   * 为一次节点点击构建位置。文章、大纲和通读模式保留节点当前的屏幕比例，
+   * 防止后续设置刷新把刚点击的节点强制拉到固定 35% 高度。
+   */
+  private createSelectionLocation(id: string): ReadingLocation {
+    const sections = this.readingLocationSections();
+    if (this.currentMode === "mindmap") {
+      return createReadingLocation(sections, this.options.currentFilePath, id, 0, 0.5);
+    }
+    const scroller = this.currentMode === "outline" ? this.outlineEl : this.articleEl;
+    const viewport = scroller.getBoundingClientRect();
+    const matches = Array.from(scroller.querySelectorAll<HTMLElement>("[data-node-id]"))
+      .filter((element) => element.dataset.nodeId === id)
+      .map((element) => ({ element, rect: element.getBoundingClientRect() }))
+      .filter(({ rect }) => rect.height > 0)
+      .sort((left, right) => {
+        const leftVisible = left.rect.bottom >= viewport.top && left.rect.top <= viewport.bottom ? 0 : 1;
+        const rightVisible = right.rect.bottom >= viewport.top && right.rect.top <= viewport.bottom ? 0 : 1;
+        return leftVisible - rightVisible || left.rect.height - right.rect.height;
+      });
+    const target = matches[0];
+    if (!target) return createReadingLocation(sections, this.options.currentFilePath, id, 0, 0.35);
+    const filePath = target.element.dataset.filePath ?? this.options.currentFilePath;
+    return createReadingLocation(
+      sections,
+      filePath,
+      id,
+      0.5,
+      viewportAnchorRatio(target.rect.top, target.rect.height, viewport.top, viewport.height, 0.5, 0.35)
+    );
   }
 
   /**
@@ -4005,7 +4063,7 @@ export class MindMapEditor {
    * @param id 目标对象或节点的稳定标识。
    * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
    */
-  private focusNode(id: string): void {
+  private focusNode(id: string, persistLocation = true): void {
     const ancestors = findAncestors(this.document.root, id);
     const collapsed = ancestors.filter((node) => node.collapsed);
     if (collapsed.length) {
@@ -4015,13 +4073,15 @@ export class MindMapEditor {
     this.selectedId = id;
     this.selectedIds.clear();
     this.selectedIds.add(id);
-    this.rememberLocation(createReadingLocation(
-      this.readingLocationSections(),
-      this.options.currentFilePath,
-      id,
-      0,
-      this.currentMode === "mindmap" ? 0.5 : 0.35
-    ), true);
+    if (persistLocation) {
+      this.rememberLocation(createReadingLocation(
+        this.readingLocationSections(),
+        this.options.currentFilePath,
+        id,
+        0,
+        this.currentMode === "mindmap" ? 0.5 : 0.35
+      ), true);
+    }
     this.render();
     window.setTimeout(() => {
       if (this.currentMode === "mindmap") this.centerNode(id);

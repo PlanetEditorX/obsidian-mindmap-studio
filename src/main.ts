@@ -989,7 +989,7 @@ export default class MindMapStudioPlugin extends Plugin {
    * @param preferredLeaf 该参数用于 open as mind map 流程中的输入或控制。
    * @param focusNodeId 该参数用于 open as mind map 流程中的输入或控制。
    */
-  async openAsMindMap(file: TFile, preferredLeaf?: WorkspaceLeaf, focusNodeId?: string): Promise<void> {
+  async openAsMindMap(file: TFile, preferredLeaf?: WorkspaceLeaf, focusNodeId?: string): Promise<WorkspaceLeaf> {
     const leaf = preferredLeaf ?? this.app.workspace.getLeaf(false);
     await leaf.setViewState({
       type: VIEW_TYPE_MINDMAP_STUDIO,
@@ -997,9 +997,8 @@ export default class MindMapStudioPlugin extends Plugin {
       active: true
     });
     this.app.workspace.revealLeaf(leaf);
-    if (focusNodeId && leaf.view instanceof MindMapStudioView) {
-      window.setTimeout(() => leaf.view instanceof MindMapStudioView && leaf.view.focusNode(focusNodeId), 30);
-    }
+    if (focusNodeId && leaf.view instanceof MindMapStudioView) leaf.view.markExplicitNavigation(focusNodeId);
+    return leaf;
   }
 
   /**
@@ -1454,7 +1453,8 @@ export default class MindMapStudioPlugin extends Plugin {
       new Notice(`找不到子导图：${path}`);
       return;
     }
-    await this.openAsMindMap(resolved, preferredLeaf, focusNodeId);
+    const leaf = await this.openAsMindMap(resolved, preferredLeaf);
+    if (leaf.view instanceof MindMapStudioView) leaf.view.markExplicitNavigation(focusNodeId);
   }
 
   /**

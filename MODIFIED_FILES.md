@@ -1,5 +1,22 @@
 # 当前代码清理修改清单
 
+## 节点跳转反馈环修复
+
+- `src/article/reading-location.ts`
+  - 新增视口锚点比例计算，节点点击可保留当前屏幕位置。
+- `src/editor/editor.ts`
+  - 程序恢复滚动位置期间暂停滚动采集。
+  - 节点选择改用真实视口锚点，并识别通读中的物理文件路径。
+  - 显式跨文件导航时优先采用当前文件位置。
+- `src/editor/editor-types.ts`
+  - 增加一次性“优先当前文件”上下文选项。
+- `src/view.ts`、`src/main.ts`
+  - 区分普通重新打开与显式父子导图导航，防止旧位置把视图拉回。
+- `tests/reading-location.test.mjs`、`tests/reading-editor-contract.test.mjs`
+  - 增加视口比例、程序滚动隔离和显式导航优先级测试。
+- `docs/READING_JUMP_FIX.zh-CN.md`
+  - 记录故障链路、修复策略、兼容性与验证场景。
+
 ## 运行时代码
 
 - `src/main.ts`

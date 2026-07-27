@@ -109,3 +109,10 @@ test("renameReadingLocationPath migrates the primary and parent fallback paths",
     fallbacks: [{ filePath: "library.mindmap", nodeIds: ["chapter", "book-root"] }]
   });
 });
+
+test("viewportAnchorRatio preserves the clicked node's current visual position", () => {
+  assert.equal(readingLocation.viewportAnchorRatio(420, 80, 100, 800, 0.5, 0.35), 0.45);
+  assert.equal(readingLocation.viewportAnchorRatio(-200, 100, 100, 800, 0.5, 0.35), 0);
+  assert.equal(readingLocation.viewportAnchorRatio(1000, 100, 100, 800, 0.5, 0.35), 1);
+  assert.equal(readingLocation.viewportAnchorRatio(0, 0, 0, 0, 0.5, 0.35), 0.35);
+});
