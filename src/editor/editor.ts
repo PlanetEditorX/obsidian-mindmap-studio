@@ -902,12 +902,15 @@ export class MindMapEditor {
   private lockButton!: HTMLButtonElement;
   private articleLandingButton!: HTMLButtonElement;
   private articleStyleButton!: HTMLButtonElement;
+  private aiButton!: HTMLButtonElement;
   private readonly modeButtons = new Map<DisplayMode, HTMLButtonElement>();
   private readonly editControls: HTMLElement[] = [];
   private document: MindMapDocument;
   private layout: LayoutResult;
   private selectedId: string;
   private readonly selectedIds = new Set<string>();
+  /** 仅由右键上下文设置；普通选择不会改变 AI 默认范围。 */
+  private aiScopeNodeId: string | null = null;
   private zoom = 1;
   private panX = 0;
   private panY = 0;
@@ -1377,6 +1380,12 @@ export class MindMapEditor {
     new Notice(this.readOnly ? "已进入阅读模式" : "已进入编辑模式");
   }
 
+  /** 使用最近一次右键范围询问 AI；未右键节点时默认询问当前页面。 */
+  askAi(): void {
+    if (this.aiScopeNodeId && !findNode(this.document.root, this.aiScopeNodeId)) this.aiScopeNodeId = null;
+    void this.callbacks.onAskAi(this.aiScopeNodeId ?? undefined);
+  }
+
   /**
    * 读取并返回document，并保持模型、界面和持久化状态的一致性。
    * @returns 当前操作生成、查找或规范化后的结果。
@@ -1447,6 +1456,18 @@ export class MindMapEditor {
     this.nodesLayerEl = this.sceneEl.createDiv({ cls: "mmc-nodes-layer" });
     this.outlineEl = this.rootEl.createDiv({ cls: "mms-outline-view" });
     this.articleEl = this.rootEl.createDiv({ cls: "mms-article-view" });
+    const pageContextMenu = (event: MouseEvent): void => {
+      const target = event.target as HTMLElement;
+      if (target.closest("[data-node-id]")) return;
+      event.preventDefault();
+      this.openAiScopeContextMenu(event, null);
+    };
+    this.outlineEl.addEventListener("contextmenu", pageContextMenu);
+    this.articleEl.addEventListener("contextmenu", pageContextMenu);
+    this.cleanupCallbacks.push(() => {
+      this.outlineEl.removeEventListener("contextmenu", pageContextMenu);
+      this.articleEl.removeEventListener("contextmenu", pageContextMenu);
+    });
 
     const modeGroup = this.toolbarEl.createDiv({ cls: "mms-mode-switcher" });
     for (const mode of this.options.visibleModes) {
@@ -1473,6 +1494,8 @@ export class MindMapEditor {
     this.addToolbarButton("link", "link", "打开节点链接", () => this.openSelectedLink());
     this.addToolbarButton("search", "search", "搜索当前导图及全部子导图（Ctrl/Cmd+Shift+F）", () => this.openSearch());
     this.addToolbarButton("global-search", "file-search", "全局搜索所有导图", () => this.callbacks.onGlobalSearch());
+    this.aiButton = this.addToolbarButton("ai", "sparkles", "询问 AI（当前页面，Ctrl/Cmd+Shift+A）", () => this.askAi());
+    this.updateAiScopeButton();
     this.addToolbarSeparator();
     this.addToolbarButton("table", "table-2", "插入或编辑表格", () => this.editTable(), true);
     this.addToolbarButton("code", "code-2", "插入或编辑代码", () => this.editCode(), true);
@@ -1700,6 +1723,8 @@ export class MindMapEditor {
       const target = event.target as HTMLElement;
       if (target.closest(".mmc-node, .mmc-canvas-breadcrumb")) return;
       event.preventDefault();
+      this.aiScopeNodeId = null;
+      this.updateAiScopeButton();
       this.openAllNodesContextMenu(event);
     };
     this.viewportEl.addEventListener("contextmenu", canvasContextMenu);
@@ -1759,6 +1784,7 @@ export class MindMapEditor {
       // thousands of contenteditable elements.
       element.contentEditable = "false";
       element.removeClass("is-inline-editing");
+      this.clearInlineEditingAccessibility(element);
     });
     if (this.currentMode !== "mindmap") return;
     this.nodesLayerEl.querySelectorAll<HTMLElement>(".mmc-node").forEach((nodeEl) => {
@@ -1820,6 +1846,18 @@ export class MindMapEditor {
   private clearImageLoadTimers(): void {
     for (const timer of this.imageLoadTimers) window.clearTimeout(timer);
     this.imageLoadTimers.clear();
+  }
+
+  /** 更新 AI 工具栏提示，使用户知道下一次提问会使用页面还是右键节点。 */
+  private updateAiScopeButton(): void {
+    if (!this.aiButton) return;
+    const node = this.aiScopeNodeId ? findNode(this.document.root, this.aiScopeNodeId) : null;
+    const label = node
+      ? `询问 AI（节点分支：${nodePlainText(node) || "未命名节点"}）`
+      : "询问 AI（当前页面，Ctrl/Cmd+Shift+A）";
+    this.aiButton.setAttr("aria-label", label);
+    this.aiButton.setAttr("title", label);
+    this.aiButton.toggleClass("has-node-scope", Boolean(node));
   }
 
   /**
@@ -2021,8 +2059,7 @@ export class MindMapEditor {
   private makeInlineEditable(element: HTMLElement, node: MindMapNode, placeholder: string): void {
     element.contentEditable = "false";
     element.dataset.mmsInlineEditable = "true";
-    element.setAttr("role", "textbox");
-    element.setAttr("aria-label", placeholder);
+    element.dataset.mmsEditLabel = placeholder;
     if (!element.textContent?.trim()) element.dataset.placeholder = placeholder;
     const initialBlock = nodeContentBlocks(node).find((block): block is MindMapTextContentBlock => block.type === "text");
     if (!this.readOnly) renderRichTextRuns(element, initialBlock?.richText, initialBlock?.text ?? nodePrimaryText(node), false);
@@ -2031,10 +2068,11 @@ export class MindMapEditor {
     element.addEventListener("pointerdown", () => {
       if (this.readOnly || element.contentEditable === "true") return;
       this.selectNode(node.id);
-      element.contentEditable = "true";
+      this.activateInlineEditable(element, false);
     });
     element.addEventListener("focus", () => {
       if (this.readOnly) return;
+      this.applyInlineEditingAccessibility(element);
       original = readRichTextEditor(element);
       element.addClass("is-inline-editing");
       toolbar ??= attachSelectionFormatToolbar({
@@ -2068,6 +2106,7 @@ export class MindMapEditor {
       element.removeClass("is-inline-editing");
       const next = readRichTextEditor(element);
       element.contentEditable = "false";
+      this.clearInlineEditingAccessibility(element);
       toolbar?.cleanup();
       toolbar = null;
       if ((!next.text && node.id === this.document.root.id)
@@ -2079,11 +2118,24 @@ export class MindMapEditor {
     });
   }
 
+  /** Adds textbox semantics only while an inline line is actively editable. */
+  private applyInlineEditingAccessibility(element: HTMLElement): void {
+    element.setAttr("role", "textbox");
+    element.setAttr("aria-label", element.dataset.mmsEditLabel ?? "编辑文字");
+  }
+
+  /** Removes edit-only semantics so Obsidian does not show hover tooltips on reading text. */
+  private clearInlineEditingAccessibility(element: HTMLElement): void {
+    element.removeAttribute("role");
+    element.removeAttribute("aria-label");
+  }
+
   /** Activates one article or outline line without changing the surrounding layout. */
-  private activateInlineEditable(element: HTMLElement): void {
+  private activateInlineEditable(element: HTMLElement, focus = true): void {
     if (this.readOnly) return;
     element.contentEditable = "true";
-    element.focus();
+    this.applyInlineEditingAccessibility(element);
+    if (focus) element.focus();
   }
 
   /**
@@ -2119,6 +2171,7 @@ export class MindMapEditor {
       addInlineNodeActions: (container, node) => this.addInlineNodeActions(container, node),
       mutate: (action) => this.mutate(action),
       editSelected: () => this.editSelected(),
+      openAiContextMenu: (event, nodeId) => this.openAiScopeContextMenu(event, nodeId),
       openMindMap: (path) => this.callbacks.onOpenMindMap(path),
       resolveImage: this.callbacks.resolveImage,
       renderCode: this.callbacks.onRenderCode
@@ -2338,6 +2391,7 @@ export class MindMapEditor {
       articleNavigation: this.options.articleNavigation,
       callbacks: this.callbacks,
       selectNode: (id) => this.selectNode(id),
+      openAiContextMenu: (event, nodeId) => this.openAiScopeContextMenu(event, nodeId),
       makeInlineEditable: (element, node, placeholder) => this.makeInlineEditable(element, node, placeholder),
       addInlineNodeActions: (container, node) => this.addInlineNodeActions(container, node)
     };
@@ -2787,6 +2841,8 @@ export class MindMapEditor {
       nodeEl.addEventListener("contextmenu", (event) => {
         event.preventDefault();
         event.stopPropagation();
+        this.aiScopeNodeId = node.id;
+        this.updateAiScopeButton();
         this.selectNode(node.id);
         this.openContextMenu(event);
       });
@@ -4109,6 +4165,19 @@ export class MindMapEditor {
     this.applyTransform();
   }
 
+  /** 设置右键 AI 范围并显示只包含 AI 操作的上下文菜单。 */
+  private openAiScopeContextMenu(event: MouseEvent, nodeId: string | null): void {
+    this.aiScopeNodeId = nodeId && findNode(this.document.root, nodeId) ? nodeId : null;
+    this.updateAiScopeButton();
+    if (this.aiScopeNodeId) this.selectNode(this.aiScopeNodeId);
+    const menu = new Menu();
+    menu.addItem((item) => item
+      .setTitle(this.aiScopeNodeId ? "询问 AI（此节点及全部子节点）" : "询问 AI（当前页面）")
+      .setIcon("sparkles")
+      .onClick(() => void this.callbacks.onAskAi(this.aiScopeNodeId ?? undefined)));
+    menu.showAtMouseEvent(event);
+  }
+
   /**
    * 打开context menu，并保持模型、界面和持久化状态的一致性。
    *
@@ -4117,6 +4186,11 @@ export class MindMapEditor {
   private openContextMenu(event: MouseEvent): void {
     const selected = this.selectedNode();
     const menu = new Menu();
+    menu.addItem((item) => item
+      .setTitle("询问 AI（此节点及全部子节点）")
+      .setIcon("sparkles")
+      .onClick(() => void this.callbacks.onAskAi(selected?.id)));
+    menu.addSeparator();
     if (this.readOnly) {
       if (selected?.submap) menu.addItem((item) => item.setTitle("进入子导图").setIcon("network").onClick(() => void this.createOrOpenSubmap()));
       menu.addItem((item) => item.setTitle("打开链接").setIcon("link").onClick(() => this.openSelectedLink()));
@@ -4211,6 +4285,11 @@ export class MindMapEditor {
    */
   private openAllNodesContextMenu(event: MouseEvent): void {
     const menu = new Menu();
+    menu.addItem((item) => item
+      .setTitle("询问 AI（当前页面）")
+      .setIcon("sparkles")
+      .onClick(() => void this.callbacks.onAskAi()));
+    menu.addSeparator();
     menu.addItem((item) => item
       .setTitle("展开所有节点")
       .setIcon("unfold-vertical")

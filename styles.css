@@ -3752,3 +3752,205 @@
   overflow: hidden;
   pointer-events: none;
 }
+
+/* AI assistant ----------------------------------------------------------- */
+.mmc-toolbar-button.has-node-scope {
+  color: var(--interactive-accent);
+  background: color-mix(in srgb, var(--interactive-accent) 14%, transparent);
+}
+
+.mms-ai-profiles-header,
+.mms-ai-profile-title,
+.mms-ai-context-metrics,
+.mms-ai-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mms-ai-profiles-header {
+  justify-content: space-between;
+  flex-wrap: wrap;
+  margin: 18px 0 8px;
+}
+
+.mms-ai-profiles-header h4 {
+  margin: 0 auto 0 0;
+}
+
+.mms-ai-profile-card {
+  margin: 8px 0;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 10px;
+  background: var(--background-secondary);
+}
+
+.mms-ai-profile-title {
+  padding: 12px 14px;
+  cursor: pointer;
+}
+
+.mms-ai-profile-title strong {
+  margin-right: auto;
+}
+
+.mms-ai-profile-status {
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+}
+
+.mms-ai-profile-status.is-enabled {
+  color: var(--text-success);
+}
+
+.mms-ai-profile-body {
+  padding: 0 14px 14px;
+}
+
+.mms-ai-modal .modal-content {
+  max-width: 880px;
+}
+
+.mms-ai-context-summary {
+  padding: 12px 14px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 10px;
+  background: var(--background-secondary);
+}
+
+.mms-ai-scope {
+  font-weight: 650;
+}
+
+.mms-ai-context-metrics {
+  flex-wrap: wrap;
+  margin-top: 8px;
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+}
+
+.mms-ai-context-metrics span {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--background-primary);
+}
+
+.mms-ai-context-metrics .is-over-limit,
+.mms-ai-limit-warning {
+  color: var(--text-error);
+}
+
+.mms-ai-limit-warning {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--text-error) 45%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--text-error) 8%, transparent);
+}
+
+.mms-ai-form,
+.mms-ai-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mms-ai-form {
+  margin-top: 14px;
+  gap: 14px;
+}
+
+.mms-ai-field > span {
+  font-weight: 600;
+}
+
+.mms-ai-field textarea {
+  width: 100%;
+  min-height: 120px;
+  resize: vertical;
+}
+
+.mms-ai-track {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  padding-top: 4px;
+}
+
+.mms-ai-track::before {
+  content: "";
+  position: absolute;
+  top: 18px;
+  left: 12.5%;
+  right: 12.5%;
+  height: 2px;
+  background: var(--background-modifier-border);
+}
+
+.mms-ai-track-step {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+}
+
+.mms-ai-track-dot {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 2px solid var(--background-modifier-border);
+  border-radius: 50%;
+  background: var(--background-primary);
+}
+
+.mms-ai-track-step[data-state="done"] .mms-ai-track-dot {
+  color: var(--text-on-accent);
+  border-color: var(--interactive-accent);
+  background: var(--interactive-accent);
+}
+
+.mms-ai-track-step[data-state="active"] .mms-ai-track-dot {
+  color: var(--interactive-accent);
+  border-color: var(--interactive-accent);
+  animation: mms-ai-track-flow 1s ease-in-out infinite;
+}
+
+.mms-ai-track-step[data-state="error"] .mms-ai-track-dot {
+  color: var(--text-error);
+  border-color: var(--text-error);
+}
+
+.mms-ai-status {
+  min-height: 24px;
+  color: var(--text-muted);
+}
+
+.mms-ai-result {
+  max-height: min(48vh, 520px);
+  overflow: auto;
+  padding: 14px 16px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 10px;
+  background: var(--background-secondary);
+}
+
+.mms-ai-result-meta {
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+}
+
+.mms-ai-actions {
+  justify-content: flex-end;
+}
+
+@keyframes mms-ai-track-flow {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--interactive-accent) 35%, transparent); }
+  50% { box-shadow: 0 0 0 8px transparent; }
+}

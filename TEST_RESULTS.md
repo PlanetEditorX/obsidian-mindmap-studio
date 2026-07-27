@@ -111,3 +111,45 @@ node --check main.js
 | Obsidian 宿主冒烟 | 未执行 |
 
 完成完整依赖安装、`npm run verify`、重新构建 `main.js` 和宿主冒烟前，不应创建正式发布标签。
+
+## 文字悬浮提示修复验证
+
+- `node --test tests/reading-editor-contract.test.mjs`：8 / 8 通过。
+- `npm run test:unit`：40 / 40 通过。
+- 文档声明检查：573 个命名声明通过。
+- 仓库结构检查：通过。
+- 32 个 TypeScript 源模块语法转译：通过。
+- 全项目类型检查和生产构建未完成：依赖安装在当前环境中不完整。
+
+
+## AI 助手实现验证
+
+### 已通过
+
+- `npm run test:unit`：`49 / 49` 项通过，其中 AI 专项 `9 / 9`。
+- AI 预设与配置规范化测试：OpenAI、DeepSeek、自定义。
+- 当前页面和节点子树 Markdown 转换测试。
+- UTF-8 字节大小与超限阻止测试；不进行静默截断。
+- 问题和 Markdown 显式边界测试。
+- 自定义 Header 名称、标量值和 CRLF 注入防护测试。
+- 非流式 Chat Completions 请求体与兼容响应解析测试。
+- 工具栏、`Ctrl/Cmd+Shift+A`、节点右键和空白右键源码契约测试。
+- 文档检查：`603` 个命名声明、`37` 个 TypeScript 模块通过。
+- 仓库结构检查：通过。
+- TypeScript 语法转译：`37` 个模块、`0` 个错误。
+- AI 领域模块严格类型检查：通过。
+
+### 未完成
+
+- `npm run test:regression` 在加载 `esbuild` 时退出，尚未进入综合断言。
+- `npm run build` 和新的 `main.js` 未生成。当前环境无法解析 npm registry，依赖安装报 `EAI_AGAIN`。
+- 未使用真实 OpenAI、DeepSeek 或代理密钥进行网络请求测试，避免在交付环境发送凭据或笔记内容。
+
+正式安装或发布前必须在网络和依赖正常的环境执行：
+
+```bash
+rm -rf node_modules
+npm ci --registry=https://registry.npmjs.org/
+npm run verify
+node --check main.js
+```

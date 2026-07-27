@@ -339,3 +339,8 @@ npm run verify
 - README、项目说明、数据模型和函数参考均描述当前源码。
 
 后续技术债主要是 `src/editor/editor.ts` 和 `src/main.ts` 的职责仍较重，以及综合回归脚本过于集中。此类拆分涉及大量宿主交互，应按领域逐步迁移并保留行为测试。
+
+
+## AI 助手
+
+插件可将当前页面或右键节点分支转换为 Markdown，并发送到 OpenAI、DeepSeek 或自定义 OpenAI 兼容接口。工具栏和 `Ctrl/Cmd+Shift+A` 默认使用当前页面；节点和页面空白处的右键菜单用于切换上下文范围。发送前显示 UTF-8 大小并执行上限校验。完整配置、安全和故障排查见 [AI_ASSISTANT.zh-CN.md](AI_ASSISTANT.zh-CN.md)。

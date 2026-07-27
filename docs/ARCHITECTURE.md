@@ -317,3 +317,8 @@ mindmap-search-index.json
 节点文字块的字符级格式编辑应通过 `node-rich-text-editor.ts` 完成，弹窗只提供内容块容器和变更回调。
 
 新增跨文件功能时，应放在 `main.ts` 或专用服务类中，由 `view.ts` 和 `editor.ts` 通过回调调用。
+
+
+## AI 助手边界
+
+`src/ai/` 分为四层：`config.ts` 管理预设与持久化规范化；`markdown.ts` 负责页面/节点子树导出和 UTF-8 大小预检；`protocol.ts` 构造、校验 OpenAI 兼容 JSON；`client.ts` 是唯一网络请求边界；`modal.ts` 只负责交互、轨迹和回答渲染。编辑器只传递节点 ID，视图层读取当前文档并构建不可变 Markdown 载荷，避免 AI 代码直接修改节点模型。

@@ -41,6 +41,7 @@ export interface ArticleRendererOptions {
   articleNavigation?: ArticlePageNavigation;
   callbacks: Pick<MindMapEditorCallbacks, "resolveImage" | "onRenderCode" | "onOpenMindMap" | "onOpenArticleDirectory">;
   selectNode: (id: string) => void;
+  openAiContextMenu: (event: MouseEvent, nodeId: string) => void;
   makeInlineEditable: (element: HTMLElement, node: MindMapNode, placeholder: string) => void;
   addInlineNodeActions: (container: HTMLElement, node: MindMapNode) => void;
 }
@@ -76,6 +77,7 @@ export function renderArticleMode(container: HTMLElement, options: ArticleRender
     section.dataset.nodeId = info.node.id;
     section.id = info.anchor;
     if (!options.readOnly) section.addEventListener("click", () => options.selectNode(info.node.id));
+    section.addEventListener("contextmenu", (event) => { event.preventDefault(); event.stopPropagation(); options.selectNode(info.node.id); options.openAiContextMenu(event, info.node.id); });
     if (info.isHeading) {
       const level = Math.min(6, info.depth + 1);
       const heading = section.createEl(`h${level}` as keyof HTMLElementTagNameMap, {

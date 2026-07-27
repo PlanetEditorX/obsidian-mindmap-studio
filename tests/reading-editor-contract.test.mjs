@@ -57,3 +57,15 @@ test("explicit child-map navigation wins over stale cross-file progress", () => 
   assert.match(mainSource, /leaf\.view\.markExplicitNavigation\(focusNodeId\)/);
   assert.match(editorSource, /options\.preferCurrentFileLocation[\s\S]*preferredCurrentLocation/);
 });
+
+
+test("article and outline text do not expose edit labels as hover tooltips", () => {
+  const makeInlineEditable = editorSource.match(/private makeInlineEditable\([\s\S]*?\n  \}/)?.[0] ?? "";
+  const activateInlineEditable = editorSource.match(/private activateInlineEditable\([\s\S]*?\n  \}/)?.[0] ?? "";
+  assert.match(makeInlineEditable, /element\.dataset\.mmsEditLabel = placeholder/);
+  assert.doesNotMatch(makeInlineEditable, /element\.setAttr\("aria-label", placeholder\)/);
+  assert.match(editorSource, /private applyInlineEditingAccessibility\(element: HTMLElement\): void/);
+  assert.match(editorSource, /element\.setAttr\("aria-label", element\.dataset\.mmsEditLabel \?\? "编辑文字"\)/);
+  assert.match(editorSource, /private clearInlineEditingAccessibility\(element: HTMLElement\): void[\s\S]*element\.removeAttribute\("aria-label"\)/);
+  assert.match(activateInlineEditable, /this\.applyInlineEditingAccessibility\(element\)/);
+});
