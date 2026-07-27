@@ -59,6 +59,14 @@ test("explicit child-map navigation wins over stale cross-file progress", () => 
 });
 
 
+test("inline editing activates and releases through the shared path", () => {
+  const makeInlineEditable = editorSource.match(/private makeInlineEditable\(element: HTMLElement, node: MindMapNode, placeholder: string\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
+  const activateInlineEditable = editorSource.match(/private activateInlineEditable\(element: HTMLElement, focus = true\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
+  assert.match(makeInlineEditable, /element\.addEventListener\("pointerdown"[\s\S]*this\.activateInlineEditable\(element, false\)/);
+  assert.match(activateInlineEditable, /element\.contentEditable = "true"[\s\S]*this\.applyInlineEditingAccessibility\(element\)/);
+  assert.match(makeInlineEditable, /element\.addEventListener\("blur"[\s\S]*element\.contentEditable = "false"[\s\S]*this\.clearInlineEditingAccessibility\(element\)/);
+});
+
 test("article and outline text do not expose edit labels as hover tooltips", () => {
   const makeInlineEditable = editorSource.match(/private makeInlineEditable\([\s\S]*?\n  \}/)?.[0] ?? "";
   const activateInlineEditable = editorSource.match(/private activateInlineEditable\([\s\S]*?\n  \}/)?.[0] ?? "";

@@ -116,3 +116,13 @@
 | `docs/AI_ASSISTANT.zh-CN.md` | 新增完整使用、安全与故障排查说明 |
 | `docs/GIT_DELIVERY_AI_ASSISTANT.zh-CN.md` | 新增补丁、mbox、Bundle、构建和回滚说明 |
 | `README.md`、`CHANGELOG.md`、其他文档 | 更新功能、架构、测试和隐私说明 |
+
+## 行内编辑契约测试修复
+
+| 文件 | 变更 |
+|---|---|
+| `scripts/test.mjs` | 将旧的跨文件顺序正则拆为指针委托、共享激活、失焦释放三个稳定契约，并更新 `activateInlineEditable` 当前签名 |
+| `tests/reading-editor-contract.test.mjs` | 新增共享行内编辑激活/释放路径的独立契约测试 |
+| `docs/CI_FIX_INLINE_EDIT_CONTRACT.zh-CN.md` | 记录失败原因、修复策略和验证结果 |
+| `CHANGELOG.md` | 增加未发布测试修复记录 |
+| `TEST_RESULTS.md` | 记录本轮实际测试结果 |

@@ -1160,8 +1160,28 @@ export const setIcon = () => {};
   assert.match(toggleReadOnlySource, /currentMode === "reading" && !this\.readOnly[\s\S]*this\.render\(\)[\s\S]*return;[\s\S]*this\.applyReadOnlyStateToRenderedContent\(\)/, "only the deliberate continuous-book to article-editor transition may render; ordinary toggles must use the fast path");
   assert.match(editorSource, /private applyReadOnlyStateToRenderedContent\(\): void[\s\S]*data-mms-inline-editable[\s\S]*nodeEl\.draggable/, "the fast path must update inline editors and node dragging in place");
   assert.match(editorSource, /dataset\.mmsInlineEditable = "true"[\s\S]*if \(this\.readOnly\) return;[\s\S]*attachSelectionFormatToolbar/, "inline editor listeners must remain available when read-only content becomes editable");
-  assert.match(editorSource, /element\.addEventListener\("pointerdown"[\s\S]*element\.contentEditable = "true"[\s\S]*element\.contentEditable = "false"/, "editing mode must activate and release one inline text line at a time");
-  assert.match(editorSource, /private activateInlineEditable\(element: HTMLElement\): void/, "keyboard quick-edit must activate the same click-to-edit line path");
+  const makeInlineEditableSource = editorSource.match(/private makeInlineEditable\(element: HTMLElement, node: MindMapNode, placeholder: string\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
+  const activateInlineEditableSource = editorSource.match(/private activateInlineEditable\(element: HTMLElement, focus = true\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
+  assert.match(
+    makeInlineEditableSource,
+    /element\.addEventListener\("pointerdown"[\s\S]*this\.activateInlineEditable\(element, false\)/,
+    "pointer activation must delegate to the shared inline-edit path"
+  );
+  assert.match(
+    activateInlineEditableSource,
+    /element\.contentEditable = "true"[\s\S]*this\.applyInlineEditingAccessibility\(element\)/,
+    "the shared inline-edit path must activate one text line and its edit-only accessibility"
+  );
+  assert.match(
+    makeInlineEditableSource,
+    /element\.addEventListener\("blur"[\s\S]*element\.contentEditable = "false"[\s\S]*this\.clearInlineEditingAccessibility\(element\)/,
+    "blur must release the active text line and remove edit-only accessibility"
+  );
+  assert.match(
+    editorSource,
+    /private activateInlineEditable\(element: HTMLElement, focus = true\): void/,
+    "keyboard quick-edit must activate the same click-to-edit line path"
+  );
   assert.match(editorSource, /currentMode === "reading" && !this\.readOnly[\s\S]*this\.currentMode = "article"[\s\S]*通读模式已切换为文章编辑模式/, "editing from a continuous reading book must enter a writable article view");
   assert.match(editorSource, /const preserveReadingEdit = previousMode === "reading" && resolved === "article" && !this\.readOnly/, "global article-mode propagation must preserve the current map's requested edit state");
   assert.match(editorSource, /已进入阅读模式/, "the non-editing state must be presented as reading mode");

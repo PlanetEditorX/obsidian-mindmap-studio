@@ -153,3 +153,25 @@ npm ci --registry=https://registry.npmjs.org/
 npm run verify
 node --check main.js
 ```
+
+## 行内编辑契约测试修复
+
+### 已通过
+
+- `npm run test:unit`：`50 / 50` 项通过。
+- `node --test tests/reading-editor-contract.test.mjs`：`9 / 9` 项通过。
+- `npm run test:docs`：`603` 个命名声明通过。
+- `npm run test:repo`：通过。
+- `node --check scripts/test.mjs`：通过。
+- `37` 个 TypeScript 源模块语法转译：`0` 个错误。
+- `git diff --check`：通过。
+
+修复后的回归契约分别检查：
+
+1. `pointerdown` 委托到 `activateInlineEditable(element, false)`；
+2. 共享激活方法设置 `contentEditable = "true"` 并启用编辑期辅助属性；
+3. `blur` 设置 `contentEditable = "false"` 并移除编辑期辅助属性。
+
+### 未完成
+
+`npm run test:regression` 仍无法在当前交付环境启动，因为 `esbuild` 与 `fflate` 未安装。该限制发生在测试文件加载阶段，与本次源码契约断言无关。依赖完整的 CI 中应重新执行 `npm ci && npm run verify`。
