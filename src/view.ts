@@ -12,6 +12,9 @@ import { documentToMarkdown, parseDocument, serializeDocument, type DisplayMode,
 import { settingsToAppearance } from "./settings";
 import type { ArticlePageNavigation, ArticleTocEntry, ReadingSection } from "./article/modes";
 import { readingSectionsToHtml } from "./import/import-export";
+import { AiAskModal } from "./ai/modal";
+import { enabledAiProfiles } from "./ai/config";
+import { buildAiMarkdownPayload } from "./ai/markdown";
 
 export const VIEW_TYPE_MINDMAP_STUDIO = "mindmap-studio-view";
 
@@ -147,6 +150,7 @@ export class MindMapStudioView extends TextFileView {
         },
         onSearchMapFamily: () => void this.openMapFamilySearch(),
         onGlobalSearch: () => this.plugin.openGlobalSearch(),
+        onAskAi: (nodeId) => this.openAiModal(nodeId),
         onDisplayModeChange: async (mode, location) => {
           await this.plugin.setGlobalDisplayMode(mode);
           const currentPath = this.file?.path ?? "";
@@ -299,6 +303,33 @@ export class MindMapStudioView extends TextFileView {
    */
   toggleReadOnly(): void {
     this.editor?.toggleReadOnly();
+  }
+
+  /** 打开 AI 询问窗口；默认使用当前页面，节点右键后使用该节点子树。 */
+  askAi(): void {
+    if (this.editor) this.editor.askAi();
+    else void this.openAiModal();
+  }
+
+  /** 构建 Markdown 上下文并打开 AI 窗口。 */
+  private openAiModal(nodeId?: string): void {
+    const document = this.editor?.getDocument() ?? this.document;
+    if (!document) { new Notice("当前导图尚未加载"); return; }
+    const profiles = enabledAiProfiles(this.plugin.settings.aiProfiles);
+    const payload = buildAiMarkdownPayload(
+      document,
+      nodeId,
+      this.file?.path ?? "",
+      this.plugin.settings.aiMaxInputBytes
+    );
+    new AiAskModal(this.app, {
+      payload,
+      profiles,
+      defaultProfileId: this.plugin.settings.defaultAiProfileId,
+      defaultQuestion: this.plugin.settings.aiDefaultQuestion,
+      sourcePath: this.file?.path ?? "",
+      onSubmit: async (profileId, question) => this.plugin.askAi(profileId, payload, question)
+    }).open();
   }
 
   /**

@@ -22,12 +22,19 @@ import type {
 } from "./core/model";
 import { appearanceFromThemePreset, MINDMAP_THEME_PRESETS } from "./themes";
 import type { ReadingLocation } from "./article/reading-location";
+import {
+  AI_PROFILE_PRESETS,
+  DEFAULT_AI_PROFILES,
+  createAiProfileConfig,
+  type AiProfileConfig,
+  type AiProviderKind
+} from "./ai/config";
 
 export const TOOLBAR_ITEMS = [
   ["lock", "阅读/编辑模式"], ["add-child", "添加子节点"], ["add-sibling", "添加同级节点"],
   ["edit", "完整编辑节点"], ["duplicate", "克隆分支"], ["delete", "删除节点"],
   ["task", "任务状态"], ["collapse", "展开/收起"], ["collapse-all", "展开/折叠全部"], ["link", "打开链接"],
-  ["search", "搜索导图"], ["global-search", "全局搜索"], ["table", "表格"],
+  ["search", "搜索导图"], ["global-search", "全局搜索"], ["ai", "询问 AI"], ["table", "表格"],
   ["code", "代码"], ["image", "粘贴图片"], ["submap", "子导图"],
   ["undo", "撤销"], ["redo", "重做"],
   ["fit", "适应画布"], ["layout", "切换布局"], ["appearance", "主题与外观"],
@@ -200,6 +207,12 @@ export interface MindMapStudioSettings {
   richTextColorShortcut: string;
   visibleToolbarItems: string[];
   toolbarItemOrder: string[];
+  /** OpenAI 兼容 AI 接口配置。API 密钥保存在插件 data.json 中。 */
+  aiProfiles: AiProfileConfig[];
+  defaultAiProfileId: string;
+  /** 允许发送给 AI 的 Markdown UTF-8 最大字节数。 */
+  aiMaxInputBytes: number;
+  aiDefaultQuestion: string;
 }
 
 export const DEFAULT_SETTINGS: MindMapStudioSettings = {
@@ -272,7 +285,11 @@ export const DEFAULT_SETTINGS: MindMapStudioSettings = {
   richTextUnderlineShortcut: "Ctrl+U",
   richTextColorShortcut: "Ctrl+Shift+C",
   visibleToolbarItems: TOOLBAR_ITEMS.map(([id]) => id),
-  toolbarItemOrder: TOOLBAR_ITEMS.map(([id]) => id)
+  toolbarItemOrder: TOOLBAR_ITEMS.map(([id]) => id),
+  aiProfiles: DEFAULT_AI_PROFILES.map((profile) => ({ ...profile })),
+  defaultAiProfileId: "ai_openai",
+  aiMaxInputBytes: 256 * 1024,
+  aiDefaultQuestion: "请分析这份思维导图，并回答我的问题。"
 };
 
 /**
@@ -366,6 +383,7 @@ export function applyThemePresetToSettings(settings: MindMapStudioSettings, pres
 export class MindMapStudioSettingTab extends PluginSettingTab {
   private readonly plugin: MindMapStudioPlugin;
   private readonly expandedImageHostIds = new Set<string>();
+  private readonly expandedAiProfileIds = new Set<string>();
 
   /**
    * 创建 MindMapStudioSettingTab 实例，保存依赖和初始状态；实际 DOM 构建通常在 onOpen() 或后续渲染流程中完成。
@@ -656,6 +674,157 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
         await this.saveAndRefresh();
       });
     }
+
+
+    containerEl.createEl("h3", { text: "AI 助手" });
+    containerEl.createEl("p", {
+      cls: "setting-item-description",
+      text: "AI 请求会先把当前页面或右键节点分支转换为 Markdown，再发送到所选 OpenAI 兼容接口。API 密钥保存在插件 data.json 中，请勿共享该文件。"
+    });
+
+    new Setting(containerEl)
+      .setName("Markdown 上传大小上限")
+      .setDesc("发送前会显示 UTF-8 文件大小；超过上限时禁止请求。范围 32–2048 KB。")
+      .addSlider((slider) => slider
+        .setLimits(32, 2048, 32)
+        .setDynamicTooltip()
+        .setValue(Math.round(this.plugin.settings.aiMaxInputBytes / 1024))
+        .onChange(async (value) => {
+          this.plugin.settings.aiMaxInputBytes = Math.round(value) * 1024;
+          await this.plugin.saveSettings();
+        }));
+
+    new Setting(containerEl)
+      .setName("默认问题")
+      .setDesc("打开 AI 窗口时预填，可在发送前修改。")
+      .addTextArea((text) => text
+        .setPlaceholder("请分析这份思维导图，并回答我的问题。")
+        .setValue(this.plugin.settings.aiDefaultQuestion)
+        .onChange(async (value) => {
+          this.plugin.settings.aiDefaultQuestion = value.slice(0, 4000);
+          await this.plugin.saveSettings();
+        }));
+
+    const enabledProfiles = this.plugin.settings.aiProfiles.filter((profile) => profile.enabled && profile.endpoint && profile.model);
+    new Setting(containerEl)
+      .setName("默认 AI 接口")
+      .setDesc("工具栏和快捷键优先使用该接口。")
+      .addDropdown((dropdown) => {
+        if (!enabledProfiles.length) dropdown.addOption("", "尚无可用接口");
+        enabledProfiles.forEach((profile) => dropdown.addOption(profile.id, `${profile.name} · ${profile.model}`));
+        dropdown.setValue(enabledProfiles.some((profile) => profile.id === this.plugin.settings.defaultAiProfileId)
+          ? this.plugin.settings.defaultAiProfileId
+          : enabledProfiles[0]?.id ?? "");
+        dropdown.onChange(async (value) => {
+          this.plugin.settings.defaultAiProfileId = value;
+          await this.plugin.saveSettings();
+        });
+      });
+
+    const aiHeader = containerEl.createDiv({ cls: "mms-ai-profiles-header" });
+    aiHeader.createEl("h4", { text: "接口预设与自定义" });
+    const addAiProfile = (provider: AiProviderKind): void => {
+      const profile = createAiProfileConfig(provider, this.plugin.settings.aiProfiles.length + 1);
+      this.plugin.settings.aiProfiles.push(profile);
+      this.expandedAiProfileIds.add(profile.id);
+      if (!this.plugin.settings.defaultAiProfileId) this.plugin.settings.defaultAiProfileId = profile.id;
+      void this.plugin.saveSettings().then(() => this.display());
+    };
+    for (const [provider, label] of [["openai", "新增 OpenAI"], ["deepseek", "新增 DeepSeek"], ["custom", "新增自定义"]] as Array<[AiProviderKind, string]>) {
+      const button = aiHeader.createEl("button", { text: label, attr: { type: "button" } });
+      button.addEventListener("click", () => addAiProfile(provider));
+    }
+
+    if (!this.plugin.settings.aiProfiles.length) {
+      containerEl.createDiv({ cls: "setting-item-description", text: "尚未配置 AI 接口。可使用 OpenAI、DeepSeek 预设，或添加兼容 Chat Completions 的自定义地址。" });
+    }
+
+    this.plugin.settings.aiProfiles.forEach((profile, index) => {
+      const card = containerEl.createEl("details", { cls: "mms-ai-profile-card" });
+      card.open = this.expandedAiProfileIds.has(profile.id);
+      card.addEventListener("toggle", () => {
+        if (card.open) this.expandedAiProfileIds.add(profile.id); else this.expandedAiProfileIds.delete(profile.id);
+      });
+      const summary = card.createEl("summary", { cls: "mms-ai-profile-title" });
+      summary.createEl("strong", { text: profile.name || `AI 接口 ${index + 1}` });
+      summary.createSpan({ text: profile.enabled ? "已启用" : "已停用", cls: `mms-ai-profile-status${profile.enabled ? " is-enabled" : ""}` });
+      const body = card.createDiv({ cls: "mms-ai-profile-body" });
+
+      new Setting(body)
+        .setName("名称与启用")
+        .addText((text) => text.setValue(profile.name).onChange(async (value) => {
+          profile.name = value.trim().slice(0, 120) || `AI 接口 ${index + 1}`;
+          await this.plugin.saveSettings();
+        }))
+        .addToggle((toggle) => toggle.setValue(profile.enabled).onChange(async (value) => {
+          profile.enabled = value;
+          if (value && !this.plugin.settings.defaultAiProfileId) this.plugin.settings.defaultAiProfileId = profile.id;
+          await this.plugin.saveSettings();
+          this.display();
+        }));
+
+      new Setting(body)
+        .setName("预设类型")
+        .setDesc("切换预设会更新默认接口地址和模型名称，不会覆盖 API 密钥。")
+        .addDropdown((dropdown) => dropdown
+          .addOption("openai", "OpenAI")
+          .addOption("deepseek", "DeepSeek")
+          .addOption("custom", "自定义 OpenAI 兼容接口")
+          .setValue(profile.provider)
+          .onChange(async (value) => {
+            const provider = value as AiProviderKind;
+            const preset = AI_PROFILE_PRESETS[provider];
+            profile.provider = provider;
+            profile.endpoint = preset.endpoint;
+            profile.model = preset.model;
+            if (!profile.systemPrompt.trim()) profile.systemPrompt = preset.systemPrompt;
+            await this.plugin.saveSettings();
+            this.display();
+          }));
+
+      new Setting(body).setName("接口地址").addText((text) => text
+        .setPlaceholder("https://example.com/v1/chat/completions")
+        .setValue(profile.endpoint)
+        .onChange(async (value) => { profile.endpoint = value.trim(); await this.plugin.saveSettings(); }));
+      new Setting(body).setName("API 密钥").setDesc("留空仅适用于不需要鉴权的本地或代理接口。")
+        .addText((text) => {
+          text.inputEl.type = "password";
+          return text.setPlaceholder("sk-…").setValue(profile.apiKey).onChange(async (value) => {
+            profile.apiKey = value.trim();
+            await this.plugin.saveSettings();
+          });
+        });
+      new Setting(body).setName("模型名称").addText((text) => text
+        .setValue(profile.model)
+        .setPlaceholder("模型 ID")
+        .onChange(async (value) => { profile.model = value.trim(); await this.plugin.saveSettings(); }));
+      new Setting(body).setName("温度").addSlider((slider) => slider
+        .setLimits(0, 2, 0.1).setDynamicTooltip().setValue(profile.temperature)
+        .onChange(async (value) => { profile.temperature = value; await this.plugin.saveSettings(); }));
+      new Setting(body).setName("最大输出 tokens").addText((text) => text
+        .setValue(String(profile.maxOutputTokens))
+        .onChange(async (value) => {
+          const parsed = Number(value);
+          if (Number.isFinite(parsed)) profile.maxOutputTokens = Math.max(64, Math.min(65536, Math.round(parsed)));
+          await this.plugin.saveSettings();
+        }));
+      new Setting(body).setName("系统提示词").addTextArea((text) => text
+        .setValue(profile.systemPrompt)
+        .onChange(async (value) => { profile.systemPrompt = value.slice(0, 16000); await this.plugin.saveSettings(); }));
+      new Setting(body).setName("附加请求头 JSON").setDesc("可用于代理服务，例如 {\"X-API-Key\":\"…\"}。Authorization 会在填写 API 密钥后自动添加。")
+        .addTextArea((text) => text.setPlaceholder("{}")
+          .setValue(profile.headers)
+          .onChange(async (value) => { profile.headers = value.slice(0, 16000); await this.plugin.saveSettings(); }));
+
+      const remove = body.createEl("button", { text: "删除接口", cls: "mod-warning", attr: { type: "button" } });
+      remove.addEventListener("click", () => {
+        this.plugin.settings.aiProfiles = this.plugin.settings.aiProfiles.filter((item) => item.id !== profile.id);
+        if (this.plugin.settings.defaultAiProfileId === profile.id) {
+          this.plugin.settings.defaultAiProfileId = this.plugin.settings.aiProfiles.find((item) => item.enabled)?.id ?? "";
+        }
+        void this.plugin.saveSettings().then(() => this.display());
+      });
+    });
 
     containerEl.createEl("h3", { text: "文件与布局" });
 

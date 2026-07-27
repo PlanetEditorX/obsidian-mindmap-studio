@@ -22,6 +22,7 @@ MindMap Studio 是一个本地优先的 Obsidian 思维导图插件。它使用�
 - 任务、标签、备注、链接、图标、表格和代码块。
 - 单节点和多节点复制、粘贴、删除及拖放。
 - 撤销、重做、只读锁和自动保存。
+- AI 助手：把当前页面或右键节点分支转换为 Markdown，发送到 OpenAI、DeepSeek 或自定义兼容接口。
 
 ### 父子导图
 
@@ -40,6 +41,16 @@ MindMap Studio 是一个本地优先的 Obsidian 思维导图插件。它使用�
 - 可配置响应字段路径，并兼容常见 `data.url`、`result.url` 等结构。
 - 远程镜像与本地源并存；仅在所有选定图床上传成功且确认没有其他引用时，才允许删除本地文件。
 - 文件名、扩展名、MIME、请求头和返回 URL 经过独立工具层校验。
+
+### AI 助手
+
+- 内置 OpenAI、DeepSeek 和自定义 OpenAI 兼容接口配置。
+- 工具栏按钮与 `Ctrl/Cmd+Shift+A` 默认询问当前页面。
+- 节点右键可仅发送该节点及全部子节点；页面空白处右键恢复整页范围。
+- 发送前显示节点数、字符数和 UTF-8 大小；超过设置上限时禁止请求，不静默截断。
+- 询问窗口显示“转换 Markdown、上传上下文、模型处理、接收结果”处理轨迹并渲染 Markdown 回答。
+
+详细配置、安全边界和操作方式见 [docs/AI_ASSISTANT.zh-CN.md](docs/AI_ASSISTANT.zh-CN.md)。
 
 ### 搜索、导入与导出
 
@@ -125,7 +136,8 @@ npm run verify
 - 搜索索引是可重建缓存，不替代原始文件。
 - 插件默认在本地读写 Obsidian 仓库。
 - 只有配置并触发图床上传时，图片数据才会发送到用户指定的服务。
-- 图床凭据保存在 Obsidian 插件设置数据中；请勿把包含真实令牌的设置文件提交到 Git。
+- 只有用户在 AI 窗口点击发送后，所选范围的 Markdown 才会发送到用户指定的 AI 服务。
+- 图床和 AI 凭据保存在 Obsidian 插件设置数据中；请勿把包含真实令牌的设置文件提交到 Git。
 
 数据结构详见 [docs/DATA_MODEL.md](docs/DATA_MODEL.md)。
 
@@ -137,6 +149,7 @@ src/
 ├── view.ts                    Obsidian TextFileView
 ├── core/                      数据模型与节点树
 ├── editor/                    导图、大纲、文章编辑器
+├── ai/                        AI 配置、Markdown 上下文、协议客户端与窗口
 ├── article/                   文章编号、目录与阅读结构
 ├── render/                    布局、碰撞与静态渲染
 ├── search/                    本地搜索索引
@@ -160,7 +173,7 @@ scripts/check-repository.mjs   仓库结构与版本一致性检查
 ```bash
 npm ci
 npm run dev             # 监听构建
-npm run test:unit       # 显示模式、阅读位置、文件名与图床纯工具测试
+npm run test:unit       # 显示模式、阅读位置、文件名、图床与 AI 纯工具测试
 npm run test:regression # 综合模型、布局、导入、搜索和样式回归
 npm run test:docs       # 模块头与声明 JSDoc 检查
 npm run test:repo       # 仓库清洁度和版本一致性
@@ -191,6 +204,7 @@ mindmap-studio/
 
 ## 文档
 
+- [AI 助手](docs/AI_ASSISTANT.zh-CN.md)
 - [架构说明](docs/ARCHITECTURE.md)
 - [数据模型](docs/DATA_MODEL.md)
 - [特殊功能实现](docs/SPECIAL_FEATURES.md)
@@ -200,6 +214,7 @@ mindmap-studio/
 - [完整项目说明](docs/PROJECT_GUIDE.zh-CN.md)
 - [维护与优化说明](docs/MAINTENANCE_GUIDE.zh-CN.md)
 - [Git 工作流](docs/GIT_WORKFLOW.zh-CN.md)
+- [AI 助手 Git 交付](docs/GIT_DELIVERY_AI_ASSISTANT.zh-CN.md)
 - [本次 Git 交付说明](docs/GIT_DELIVERY.zh-CN.md)
 - [函数参考](docs/FUNCTION_REFERENCE.md)
 - [代码清理与当前支持边界](docs/CODE_CLEANUP.zh-CN.md)

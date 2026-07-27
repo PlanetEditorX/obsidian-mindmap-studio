@@ -102,3 +102,8 @@
 ## CI 要求
 
 GitHub Actions 和 GitLab CI 均从干净检出开始执行 `npm ci` 与 `npm run verify`。CI 通过后才能生成安装包。安装包必须只包含 `main.js`、`manifest.json` 和 `styles.css`。
+
+
+## AI 助手测试
+
+`tests/ai.test.mjs` 覆盖预设规范化、整页与节点子树 Markdown、UTF-8 大小上限、问题/资料边界、Header 注入防护、Chat Completions 请求体、兼容响应解析，以及工具栏、快捷键和右键范围的源码契约。网络服务不参与单元测试；真实接口连接应在独立测试密钥和非敏感导图上进行手动冒烟。

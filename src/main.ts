@@ -64,6 +64,9 @@ import {
 import { resolveStartupDisplayMode, shouldPersistDisplayMode } from "./article/display-mode";
 import type { DisplayMode } from "./core/model";
 import { normalizeReadingLocation, renameReadingLocationPath } from "./article/reading-location";
+import { normalizeAiProfileConfig, type AiProfileConfig } from "./ai/config";
+import { requestAiCompletion, type AiCompletionResult } from "./ai/client";
+import type { AiMarkdownPayload } from "./ai/markdown";
 import { shouldHideFileExplorerPath } from "./file-explorer-filter";
 import {
   buildCompactTimestamp,
@@ -124,6 +127,17 @@ export default class MindMapStudioPlugin extends Plugin {
       id: "rebuild-mind-map-search-index",
       name: "重建思维导图搜索索引",
       callback: () => void this.rebuildGlobalSearchIndex()
+    });
+    this.addCommand({
+      id: "ask-ai-about-mind-map",
+      name: "询问 AI（当前页面或右键节点）",
+      hotkeys: [{ modifiers: ["Mod", "Shift"], key: "A" }],
+      checkCallback: (checking) => {
+        const view = this.app.workspace.activeLeaf?.view;
+        const available = view instanceof MindMapStudioView;
+        if (!checking && available && view instanceof MindMapStudioView) view.askAi();
+        return available;
+      }
     });
     this.addCommand({
       id: "new-mind-map",
@@ -429,6 +443,14 @@ export default class MindMapStudioPlugin extends Plugin {
     const selectedIds = Array.isArray(raw.autoUploadHostIds)
       ? raw.autoUploadHostIds.filter((id): id is string => typeof id === "string" && enabledIds.has(id))
       : [];
+    const hadAiSettings = Array.isArray(raw.aiProfiles);
+    const aiProfiles = hadAiSettings
+      ? raw.aiProfiles!.flatMap((value, index) => {
+        const profile = normalizeAiProfileConfig(value, index + 1);
+        return profile ? [profile] : [];
+      })
+      : DEFAULT_SETTINGS.aiProfiles.map((profile) => ({ ...profile }));
+    const aiProfileIds = new Set(aiProfiles.map((profile) => profile.id));
     this.settings = {
       ...DEFAULT_SETTINGS,
       ...raw,
@@ -438,6 +460,16 @@ export default class MindMapStudioPlugin extends Plugin {
         ? Math.max(0, Math.min(300, Math.round(raw.autoUploadDelaySeconds)))
         : DEFAULT_SETTINGS.autoUploadDelaySeconds,
       autoUploadHostIds: selectedIds,
+      aiProfiles,
+      defaultAiProfileId: typeof raw.defaultAiProfileId === "string" && aiProfileIds.has(raw.defaultAiProfileId)
+        ? raw.defaultAiProfileId
+        : aiProfiles.find((profile) => profile.enabled)?.id ?? aiProfiles[0]?.id ?? "",
+      aiMaxInputBytes: typeof raw.aiMaxInputBytes === "number"
+        ? Math.max(32 * 1024, Math.min(2 * 1024 * 1024, Math.round(raw.aiMaxInputBytes)))
+        : DEFAULT_SETTINGS.aiMaxInputBytes,
+      aiDefaultQuestion: typeof raw.aiDefaultQuestion === "string"
+        ? raw.aiDefaultQuestion.slice(0, 4000)
+        : DEFAULT_SETTINGS.aiDefaultQuestion,
       syncTitleToFilename: raw.syncTitleToFilename !== false,
       deleteLocalAfterUpload: raw.deleteLocalAfterUpload !== false,
       imageFailoverEnabled: raw.imageFailoverEnabled !== false,
@@ -449,9 +481,14 @@ export default class MindMapStudioPlugin extends Plugin {
         ? Math.max(20, Math.min(500, Math.round(raw.globalSearchMaxResults)))
         : DEFAULT_SETTINGS.globalSearchMaxResults,
       visibleModes: normalizeVisibleModes(raw.visibleModes),
-      visibleToolbarItems: Array.isArray(raw.visibleToolbarItems)
-        ? raw.visibleToolbarItems.filter((id): id is string => typeof id === "string")
-        : [...DEFAULT_SETTINGS.visibleToolbarItems],
+      visibleToolbarItems: (() => {
+        const knownIds = new Set<string>(TOOLBAR_ITEMS.map(([id]) => id));
+        const stored = Array.isArray(raw.visibleToolbarItems)
+          ? raw.visibleToolbarItems.filter((id): id is string => typeof id === "string" && knownIds.has(id))
+          : [...DEFAULT_SETTINGS.visibleToolbarItems];
+        if (!hadAiSettings && !stored.includes("ai")) stored.push("ai");
+        return [...new Set(stored)];
+      })(),
       toolbarItemOrder: (() => {
         const validIds = new Set<string>(TOOLBAR_ITEMS.map(([id]) => id));
         const stored = Array.isArray(raw.toolbarItemOrder)
@@ -535,6 +572,13 @@ export default class MindMapStudioPlugin extends Plugin {
   async saveSettings(): Promise<void> {
     await this.saveData(this.settings);
     this.scheduleFileExplorerFilter();
+  }
+
+  /** 使用指定 AI 配置发送当前 Markdown 上下文。 */
+  async askAi(profileId: string, payload: AiMarkdownPayload, question: string): Promise<AiCompletionResult> {
+    const profile: AiProfileConfig | undefined = this.settings.aiProfiles.find((item) => item.id === profileId && item.enabled);
+    if (!profile) throw new Error("AI 接口不存在或未启用");
+    return requestAiCompletion(profile, payload, question);
   }
 
   /** Installs a lightweight File Explorer observer; it changes visibility only, never vault data. */

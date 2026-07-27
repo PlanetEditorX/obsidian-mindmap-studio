@@ -44,6 +44,7 @@ export interface MindMapEditorCallbacks {
   onOpenArticleDirectory: (path: string) => void | Promise<void>;
   onSearchMapFamily: () => void;
   onGlobalSearch: () => void;
+  onAskAi: (nodeId?: string) => void | Promise<void>;
   onDisplayModeChange: (mode: DisplayMode, location?: ReadingLocation) => void | Promise<void>;
   onReadingLocationChange: (path: string, location: ReadingLocation) => void | Promise<void>;
   onRenderCode: (block: MindMapCodeBlock, container: HTMLElement) => void | Promise<void>;

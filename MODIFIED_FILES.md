@@ -80,3 +80,39 @@
 - 重新生成 `docs/FUNCTION_REFERENCE.md`。
 - 删除累计迁移说明和一次性 CI 故障说明。
 - 更新 `CHANGELOG.md`、`TEST_RESULTS.md`、`MODIFIED_FILES.md` 和 Git 交付说明。
+
+## 文字悬浮提示修复
+
+| 文件 | 变更 |
+|---|---|
+| `src/editor/editor.ts` | 编辑辅助属性仅在行内编辑期间启用，阅读状态不再触发文字悬浮提示 |
+| `tests/reading-editor-contract.test.mjs` | 增加静态文字不暴露编辑标签的契约测试 |
+| `docs/HOVER_TOOLTIP_FIX.zh-CN.md` | 记录问题原因、修复边界和最终行为 |
+| `CHANGELOG.md` | 增加未发布修复记录 |
+| `TEST_RESULTS.md` | 记录本次实际验证结果 |
+
+
+## AI 助手
+
+| 文件 | 变更 |
+|---|---|
+| `src/ai/config.ts` | 新增 OpenAI、DeepSeek、自定义预设以及配置规范化 |
+| `src/ai/markdown.ts` | 新增整页/节点子树 Markdown 转换、UTF-8 大小与超限判断 |
+| `src/ai/protocol.ts` | 新增安全 Header 解析、Chat Completions 请求体和响应解析 |
+| `src/ai/client.ts` | 新增唯一 AI HTTP 请求边界 |
+| `src/ai/modal.ts` | 新增范围摘要、大小提示、处理轨迹和回答窗口 |
+| `src/settings.ts` | 新增 AI 接口设置、默认接口、大小上限和默认问题 |
+| `src/main.ts` | 新增 AI 快捷命令、配置迁移和请求服务 |
+| `src/view.ts` | 根据页面或节点 ID 构建 AI 上下文 |
+| `src/editor/editor-types.ts` | 新增编辑器到宿主层的 AI 回调 |
+| `src/editor/editor.ts` | 新增工具栏按钮、节点/空白右键范围和范围状态 |
+| `src/editor/outline-renderer.ts` | 大纲节点右键传递 AI 节点范围 |
+| `src/editor/article-renderer.ts` | 文章节点右键传递 AI 节点范围 |
+| `styles.css` | 新增 AI 设置卡片、窗口、大小警告和处理轨迹样式 |
+| `tests/ai.test.mjs` | 新增 9 项 AI 配置、Markdown、协议和集成测试 |
+| `tests/compile-typescript.mjs` | 支持联合编译多个 TypeScript 测试模块 |
+| `scripts/test.mjs` | 新增 AI 集成契约并修正行内编辑辅助标签契约 |
+| `package.json` | 将 AI 测试加入 `test:unit` |
+| `docs/AI_ASSISTANT.zh-CN.md` | 新增完整使用、安全与故障排查说明 |
+| `docs/GIT_DELIVERY_AI_ASSISTANT.zh-CN.md` | 新增补丁、mbox、Bundle、构建和回滚说明 |
+| `README.md`、`CHANGELOG.md`、其他文档 | 更新功能、架构、测试和隐私说明 |

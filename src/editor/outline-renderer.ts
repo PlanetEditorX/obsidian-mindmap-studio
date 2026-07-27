@@ -29,6 +29,7 @@ export interface OutlineRendererOptions {
   addInlineNodeActions: (container: HTMLElement, node: MindMapNode) => void;
   mutate: (action: () => void) => void;
   editSelected: () => void;
+  openAiContextMenu: (event: MouseEvent, nodeId: string) => void;
   openMindMap: (path: string) => void | Promise<void>;
   resolveImage: MindMapEditorCallbacks["resolveImage"];
   renderCode: MindMapEditorCallbacks["onRenderCode"];
@@ -48,6 +49,7 @@ export function renderOutlineMode(container: HTMLElement, options: OutlineRender
   options.makeInlineEditable(title, root, "导图标题");
   options.addInlineNodeActions(titleRow, root);
   titleRow.addEventListener("click", () => options.selectNode(root.id));
+  titleRow.addEventListener("contextmenu", (event) => { event.preventDefault(); event.stopPropagation(); options.selectNode(root.id); options.openAiContextMenu(event, root.id); });
   renderOutlineContent(page, root, 0, options);
 
   const list = page.createDiv({ cls: "mms-outline-list" });
@@ -97,6 +99,7 @@ export function renderOutlineMode(container: HTMLElement, options: OutlineRender
     }
     options.addInlineNodeActions(row, node);
     row.addEventListener("click", () => options.selectNode(node.id));
+    row.addEventListener("contextmenu", (event) => { event.preventDefault(); event.stopPropagation(); options.selectNode(node.id); options.openAiContextMenu(event, node.id); });
     row.addEventListener("dblclick", () => {
       options.selectNode(node.id);
       if (node.submap) void options.openMindMap(node.submap.path);
