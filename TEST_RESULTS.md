@@ -175,3 +175,25 @@ node --check main.js
 ### 未完成
 
 `npm run test:regression` 仍无法在当前交付环境启动，因为 `esbuild` 与 `fflate` 未安装。该限制发生在测试文件加载阶段，与本次源码契约断言无关。依赖完整的 CI 中应重新执行 `npm ci && npm run verify`。
+
+## AI Markdown 渲染组件类型修复
+
+用户 CI 在所有测试通过后，于 `tsc --noEmit --skipLibCheck` 阶段报告：
+
+```text
+src/ai/modal.ts(135,96): error TS2345:
+Argument of type 'this' is not assignable to parameter of type 'Component'.
+```
+
+修复后，AI 回答由独立 `Component` 管理 MarkdownRenderer 生命周期；窗口关闭会执行 `unload()`，异步请求也通过会话标识避免继续更新已关闭窗口。
+
+本环境实际完成：
+
+- `npm run test:unit`：`50 / 50` 通过。
+- AI 专项测试：`9 / 9` 通过。
+- `npm run test:docs`：`604` 个命名声明通过。
+- `npm run test:repo`：通过。
+- `node --check scripts/test.mjs`：通过。
+- 新增源码契约：禁止再次把 `Modal` 实例作为 MarkdownRenderer 的 `Component` 参数。
+
+当前交付容器无法从 npm registry 完整恢复 `obsidian`、`esbuild` 和 `fflate`，因此未在本环境重跑全项目 `tsc` 与生产 bundle。用户提供的 CI 日志已经确认修复前唯一剩余失败位于该类型参数；修订后应在依赖完整 CI 中重新运行 `npm run verify`。

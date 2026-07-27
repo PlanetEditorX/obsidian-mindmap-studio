@@ -3,7 +3,7 @@
  * @description AI 提问窗口、Markdown 大小提示和请求处理轨迹。
  */
 
-import { MarkdownRenderer, Modal, Notice, setIcon, type App } from "obsidian";
+import { Component, MarkdownRenderer, Modal, Notice, setIcon, type App } from "obsidian";
 import type { AiProfileConfig } from "./config";
 import { formatByteSize, type AiMarkdownPayload } from "./markdown";
 import type { AiCompletionResult } from "./client";
@@ -23,6 +23,11 @@ type TraceState = "pending" | "active" | "done" | "error";
 
 /** 显示 AI 范围、输入大小、请求轨迹和 Markdown 回答。 */
 export class AiAskModal extends Modal {
+  /** 承载 MarkdownRenderer 注册的子组件，并在窗口关闭时统一释放。 */
+  private markdownRenderComponent: Component | null = null;
+  /** 标识当前打开会话，防止关闭后的异步响应继续写入旧 DOM。 */
+  private modalSession = 0;
+
   /** 保存窗口上下文并初始化 Obsidian Modal。 */
   constructor(app: App, private readonly options: AiAskModalOptions) {
     super(app);
@@ -30,6 +35,10 @@ export class AiAskModal extends Modal {
 
   /** 构建范围摘要、大小提示、处理轨迹和回答区域。 */
   onOpen(): void {
+    const session = ++this.modalSession;
+    this.markdownRenderComponent?.unload();
+    this.markdownRenderComponent = new Component();
+    this.markdownRenderComponent.load();
     this.titleEl.setText("询问 AI");
     this.modalEl.addClass("mms-ai-modal");
     const { payload, profiles } = this.options;
@@ -120,6 +129,7 @@ export class AiAskModal extends Modal {
       setStep(1, "active");
       status.setText(`正在发送 ${formatByteSize(payload.byteSize)} Markdown 上下文…`);
       const modelStageTimer = window.setTimeout(() => {
+        if (session !== this.modalSession) return;
         setStep(1, "done");
         setStep(2, "active");
         status.setText("上下文已发送，模型处理中…");
@@ -131,8 +141,16 @@ export class AiAskModal extends Modal {
           setStep(2, "done");
           setStep(3, "active");
           status.setText("已接收回答，正在渲染…");
+          if (session !== this.modalSession || !this.markdownRenderComponent) return;
           answerText = response.text;
-          await MarkdownRenderer.render(this.app, answerText, result, this.options.sourcePath, this);
+          await MarkdownRenderer.render(
+            this.app,
+            answerText,
+            result,
+            this.options.sourcePath,
+            this.markdownRenderComponent
+          );
+          if (session !== this.modalSession) return;
           result.removeClass("is-hidden");
           const usage = response.usage?.totalTokens ? ` · ${response.usage.totalTokens} tokens` : "";
           resultMeta.setText(`${response.model}${usage}`);
@@ -143,13 +161,26 @@ export class AiAskModal extends Modal {
         })
         .catch((error) => {
           window.clearTimeout(modelStageTimer);
+          if (session !== this.modalSession) return;
           const failedStage = steps[2]?.dataset.state === "active" ? 2 : 1;
           setStep(failedStage, "error");
           status.setText(error instanceof Error ? error.message : "AI 请求失败");
           console.error("MindMap Studio AI request failed", error);
         })
-        .finally(() => setBusy(false));
+        .finally(() => {
+          if (session === this.modalSession) setBusy(false);
+        });
     });
-    window.setTimeout(() => question.focus(), 20);
+    window.setTimeout(() => {
+      if (session === this.modalSession) question.focus();
+    }, 20);
+  }
+
+  /** 释放 Markdown 渲染器注册的子组件和事件，避免窗口关闭后继续更新 DOM。 */
+  onClose(): void {
+    this.modalSession += 1;
+    this.markdownRenderComponent?.unload();
+    this.markdownRenderComponent = null;
+    this.contentEl.empty();
   }
 }

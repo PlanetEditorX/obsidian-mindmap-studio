@@ -126,3 +126,13 @@
 | `docs/CI_FIX_INLINE_EDIT_CONTRACT.zh-CN.md` | 记录失败原因、修复策略和验证结果 |
 | `CHANGELOG.md` | 增加未发布测试修复记录 |
 | `TEST_RESULTS.md` | 记录本轮实际测试结果 |
+
+## AI MarkdownRenderer 生命周期类型修复
+
+| 文件 | 变更 |
+|---|---|
+| `src/ai/modal.ts` | 新增独立 `Component` 作为 MarkdownRenderer 生命周期宿主；打开时 `load()`，关闭时 `unload()`；使用会话标识阻止关闭后的异步 DOM 更新 |
+| `tests/ai.test.mjs` | 新增 Component 创建、加载、渲染参数、卸载以及禁止传入 Modal 的契约测试 |
+| `scripts/test.mjs` | 综合回归新增相同的 MarkdownRenderer 类型边界检查 |
+| `docs/CI_FIX_AI_MARKDOWN_COMPONENT.zh-CN.md` | 记录构建失败原因、代码修复与验证方式 |
+| `CHANGELOG.md`、`TEST_RESULTS.md` | 更新未发布修复和实际验证结果 |
