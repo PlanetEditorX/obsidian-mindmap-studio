@@ -45,6 +45,9 @@ src/
 │   └── global-search.ts        本地增量索引与搜索
 ├── import/
 │   └── import-export.ts        XMind 多画布导入与文章导出
+├── utils/
+│   ├── filename.ts             文件名、扩展名、时间戳与 MIME
+│   └── image-host.ts           图床端点、Header、multipart 与响应解析
 ├── settings.ts                 设置与默认值
 └── themes.ts                   主题预设
 ```
@@ -63,6 +66,8 @@ src/
 - `src/editor/selection-format-toolbar.ts`：文章和大纲模式内联编辑时随文字选区显示的加粗、斜体、下划线及颜色工具栏。
 - `src/editor/content-modals.ts`：表格、代码编辑弹窗。
 - `src/render/static-render.ts`：Markdown 阅读模式中的只读 SVG 预览。
+- `src/utils/filename.ts`：跨平台文件名、扩展名、时间戳与图片 MIME 的纯函数。
+- `src/utils/image-host.ts`：不依赖 Obsidian 的图床输入校验、multipart 构造和响应 URL 提取。
 - `styles.css`：编辑器、三种模式、弹窗、搜索、尺寸手柄和响应式样式。
 
 ## 3. 文件加载与保存流程
@@ -221,7 +226,18 @@ Obsidian 读取文本
 
 加载顺序由 `imageSourceCandidates()` 生成。图片加载错误或超时后，编辑器尝试下一个镜像；成功后更新当前地址并保存。HTTP 200 返回错误占位图无法仅凭浏览器加载事件判断。
 
-自动上传流程由插件层负责，因为它需要读取仓库二进制文件、调用网络请求并决定是否删除本地资源。
+自动上传流程由插件层负责，因为它需要读取仓库二进制文件、调用网络请求并决定是否删除本地资源。可确定的数据转换下沉到 `src/utils/image-host.ts`：端点只接受 HTTP(S)，Header 必须是无换行的扁平 JSON 对象，multipart 字段和值会清除请求头注入字符，响应地址也必须通过 HTTP(S) URL 校验。
+
+```text
+ImageHostConfig
+→ normalizeHttpUrl() / parseUploadHeaders()
+→ buildMultipartUploadBody() 或原始二进制
+→ Obsidian requestUrl()
+→ parseUploadResponsePayload()
+→ extractImageUrlFromResponse()
+→ 更新 remoteSources
+→ 满足全部安全条件后可选删除本地资源
+```
 
 ## 9. 搜索索引架构
 

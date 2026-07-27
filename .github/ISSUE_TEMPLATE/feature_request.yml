@@ -1,0 +1,27 @@
+name: 功能建议
+description: 提议新的用户能力或工作流改进
+title: "[Feature] "
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: 要解决的问题
+      description: 描述当前工作流的限制，而不只是期望按钮名称。
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 建议方案
+    validations:
+      required: true
+  - type: textarea
+    id: compatibility
+    attributes:
+      label: 数据与兼容性
+      description: 是否涉及 .mindmap 字段、导入导出、父子导图或移动端？
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: 已考虑的替代方案

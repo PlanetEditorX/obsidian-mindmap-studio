@@ -63,6 +63,20 @@ import {
 } from "./article/modes";
 import type { DisplayMode } from "./core/model";
 import { shouldHideFileExplorerPath } from "./file-explorer-filter";
+import {
+  buildCompactTimestamp,
+  buildDefaultMindMapTitle,
+  mimeTypeFromFilename,
+  sanitizeFileExtension,
+  sanitizeFilename as sanitizeCrossPlatformFilename
+} from "./utils/filename";
+import {
+  buildMultipartUploadBody,
+  extractImageUrlFromResponse,
+  normalizeHttpUrl,
+  parseUploadHeaders,
+  parseUploadResponsePayload
+} from "./utils/image-host";
 
 export const MINDMAP_EXTENSION = "mindmap";
 const LEGACY_SUFFIX = ".smm.md";
@@ -1029,10 +1043,8 @@ export default class MindMapStudioPlugin extends Plugin {
     const configuredFolder = normalizePath((this.settings.assetFolder || "MindMap Assets").replace(/^\/+|\/+$/g, ""));
     const folder = normalizePath([sourceFolder, configuredFolder].filter(Boolean).join("/"));
     await this.ensureFolderPath(folder);
-    const now = new Date();
-    const two = (value: number): string => String(value).padStart(2, "0");
-    const stamp = `${now.getFullYear()}${two(now.getMonth() + 1)}${two(now.getDate())}-${two(now.getHours())}${two(now.getMinutes())}${two(now.getSeconds())}`;
-    const extension = suggestedName.split(".").at(-1)?.replace(/[^a-z0-9]/gi, "").toLowerCase() || "png";
+    const stamp = buildCompactTimestamp(new Date());
+    const extension = sanitizeFileExtension(suggestedName, "png");
     const base = this.sanitizeFilename(sourceFile?.basename ?? "mindmap");
     const preferred = normalizePath(`${folder}/${base}-${stamp}.${extension}`);
     const path = await this.getAvailablePath(preferred);
@@ -1251,41 +1263,30 @@ export default class MindMapStudioPlugin extends Plugin {
   }
 
   /**
-   * 上传image to host config，并保持模型、界面和持久化状态的一致性。
+   * 按单个图床配置上传图片，并从 JSON 或文本响应中解析最终图片地址。
    *
-   * @param host 当前图床配置或图床选择项。
-   * @param blob 该参数用于 upload image to host config 流程中的输入或控制。
-   * @param suggestedName 该参数用于 upload image to host config 流程中的输入或控制。
-   * @returns 计算、解析或序列化后的字符串结果。
+   * @param host 图床端点、请求头、请求体模式和响应字段路径。
+   * @param blob 待上传的图片内容。
+   * @param suggestedName 上传文件名；写入 multipart 前会进行跨平台清洗。
+   * @returns 服务端返回的第一个合法 HTTP(S) 图片地址。
+   * @throws 配置、请求体或响应格式不合法，以及网络请求失败时抛出错误。
    */
   private async uploadImageToHostConfig(host: ImageHostConfig, blob: Blob, suggestedName: string): Promise<string> {
-    const endpoint = host.endpoint.trim();
-    if (!endpoint) throw new Error("上传 API 为空");
-    let headers: Record<string, string> = {};
-    if (host.headers.trim()) {
-      const parsed = JSON.parse(host.headers) as unknown;
-      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("请求头 JSON 必须是对象");
-      headers = Object.fromEntries(Object.entries(parsed as Record<string, unknown>).map(([key, value]) => [key, String(value)]));
-    }
+    const endpoint = normalizeHttpUrl(host.endpoint, "上传 API");
+    const headers = parseUploadHeaders(host.headers);
     const filename = this.sanitizeFilename(suggestedName || "mindmap-image.png");
     const mime = blob.type || "application/octet-stream";
     let body: ArrayBuffer;
     let contentType = mime;
+
     if (host.bodyMode === "multipart") {
-      const boundary = `----MindMapStudio${Date.now().toString(16)}${Math.random().toString(16).slice(2)}`;
-      const encoder = new TextEncoder();
-      const fieldName = (host.fieldName || "file").replaceAll('"', "");
-      const safeFilename = filename.replaceAll('"', "");
-      const head = encoder.encode(`--${boundary}\r\nContent-Disposition: form-data; name="${fieldName}"; filename="${safeFilename}"\r\nContent-Type: ${mime}\r\n\r\n`);
-      const file = new Uint8Array(await blob.arrayBuffer());
-      const tail = encoder.encode(`\r\n--${boundary}--\r\n`);
-      const combined = new Uint8Array(head.length + file.length + tail.length);
-      combined.set(head, 0); combined.set(file, head.length); combined.set(tail, head.length + file.length);
-      body = combined.buffer;
-      contentType = `multipart/form-data; boundary=${boundary}`;
+      const multipart = await buildMultipartUploadBody(host.fieldName, filename, mime, blob);
+      body = multipart.body;
+      contentType = multipart.contentType;
     } else {
       body = await blob.arrayBuffer();
     }
+
     const response = await requestUrl({
       url: endpoint,
       method: host.method,
@@ -1294,22 +1295,16 @@ export default class MindMapStudioPlugin extends Plugin {
       body,
       throw: true
     });
-    let payload: unknown;
-    try { payload = response.json; } catch { payload = undefined; }
-    if (!payload && response.text) {
-      try { payload = JSON.parse(response.text); } catch { payload = response.text; }
+    let responseJson: unknown;
+    try {
+      responseJson = response.json;
+    } catch {
+      responseJson = undefined;
     }
-    const getPath = (value: unknown, path: string): unknown => path.split(".").filter(Boolean).reduce<unknown>((current, key) => current && typeof current === "object" ? (current as Record<string, unknown>)[key] : undefined, value);
-    const candidates = [host.responsePath.trim(), "data.url", "url", "result.url", "result.image", "image.url", "src"].filter(Boolean);
-    for (const path of candidates) {
-      const value = getPath(payload, path);
-      if (typeof value === "string" && /^https?:\/\//i.test(value.trim())) return value.trim();
-    }
-    if (typeof payload === "string") {
-      const match = payload.match(/https?:\/\/[^\s"'<>]+/i);
-      if (match?.[0]) return match[0];
-    }
-    throw new Error("返回结果中没有找到图片网址");
+    const payload = parseUploadResponsePayload(responseJson, response.text);
+    const imageUrl = extractImageUrlFromResponse(payload, [host.responsePath]);
+    if (!imageUrl) throw new Error("返回结果中没有找到图片网址");
+    return imageUrl;
   }
 
   /**
@@ -1375,33 +1370,55 @@ export default class MindMapStudioPlugin extends Plugin {
   }
 
   /**
-   * 执行“mime from filename”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+   * 根据资源文件名推断图片 MIME，未知扩展名按二进制流处理。
    *
-   * @param filename 该参数用于 mime from filename 流程中的输入或控制。
-   * @returns 计算、解析或序列化后的字符串结果。
+   * @param filename 资源文件名或仓库路径。
+   * @returns 已知图片 MIME 或 `application/octet-stream`。
    */
   private mimeFromFilename(filename: string): string {
-    const extension = filename.split(".").at(-1)?.toLowerCase();
-    return ({ png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp", svg: "image/svg+xml", bmp: "image/bmp", avif: "image/avif" } as Record<string, string>)[extension ?? ""] ?? "application/octet-stream";
+    return mimeTypeFromFilename(filename);
   }
 
   /**
    * 在父导图资源目录下创建子导图文件，写入 parentPath、parentNodeId 和 parentTitle，并把生成路径回写到父节点，实现可靠的双向导航。
    *
-   * @param parentFile 该参数用于 create submap file 流程中的输入或控制。
-   * @param node 当前处理的节点。
-   * @returns 异步操作完成后的结果。
+   * @param parentFile 父导图文件，用于确定存储目录和回链元数据。
+   * @param node 作为子导图入口的节点；仅复制其标题，不移动后代内容。
+   * @returns 新建子导图的仓库路径与显示标题。
    * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
    */
   async createSubmapFile(parentFile: TFile, node: MindMapNode): Promise<MindMapSubmap> {
+    const document = this.buildSubmapDocument(parentFile, node, false);
+    return this.persistSubmapDocument(parentFile, node, document);
+  }
+
+  /**
+   * 创建子导图文档并统一写入双向导航元数据。
+   *
+   * @param parentFile 父导图文件。
+   * @param node 作为子导图入口的父节点。
+   * @param includeNodeContent 是否把当前节点内容与后代复制到子导图根节点。
+   * @returns 尚未写入仓库的子导图文档。
+   */
+  private buildSubmapDocument(parentFile: TFile, node: MindMapNode, includeNodeContent: boolean): MindMapDocument {
     const title = (nodePlainText(node) || "子导图").trim();
     const document = this.createConfiguredDocument(title);
-    document.root.children = [];
-    document.root.content = [{ id: document.root.id + "_title", type: "text", text: title }];
-    syncNodeLegacyFields(document.root);
-    // 1.4.2: parent navigation is handled by the dedicated breadcrumb bar,
-    // not by injecting a backlink onto the submap root node.
+    if (includeNodeContent) {
+      document.root.children = JSON.parse(JSON.stringify(node.children)) as MindMapNode[];
+      if (node.content) document.root.content = JSON.parse(JSON.stringify(node.content)) as MindMapNode["content"];
+      if (node.richText) document.root.richText = JSON.parse(JSON.stringify(node.richText));
+      document.root.note = node.note;
+      document.root.tags = node.tags?.slice();
+      document.root.task = node.task;
+      document.root.icon = node.icon;
+      if (node.code) document.root.code = JSON.parse(JSON.stringify(node.code));
+      if (node.table) document.root.table = JSON.parse(JSON.stringify(node.table));
+    } else {
+      document.root.children = [];
+      document.root.content = [{ id: `${document.root.id}_title`, type: "text", text: title }];
+    }
     document.root.link = undefined;
+    syncNodeLegacyFields(document.root);
     document.title = title;
     document.navigation = {
       parentPath: parentFile.path,
@@ -1409,14 +1426,24 @@ export default class MindMapStudioPlugin extends Plugin {
       parentTitle: parentFile.basename,
       parentNodeText: nodePlainText(node) || undefined
     };
+    return document;
+  }
 
-    // 子导图不再与父文件平铺。目录结构固定为：
-    // 父文件所在目录 / 资源文件夹 / 父导图文件名 / 子导图.mindmap
+  /**
+   * 把子导图写入父导图专属资源目录，避免多个父导图的同名子图发生路径冲突。
+   *
+   * @param parentFile 父导图文件。
+   * @param node 作为子导图入口的父节点。
+   * @param document 已完成导航元数据初始化的子导图文档。
+   * @returns 写入后的子导图路径与标题。
+   */
+  private async persistSubmapDocument(parentFile: TFile, node: MindMapNode, document: MindMapDocument): Promise<MindMapSubmap> {
     const parentFolder = parentFile.parent?.path ?? "";
     const configuredAssets = normalizePath(this.settings.assetFolder || "MindMap Assets");
     const parentMapFolder = this.sanitizeFilename(parentFile.basename);
     const submapFolder = normalizePath([parentFolder, configuredAssets, parentMapFolder].filter(Boolean).join("/"));
     await this.ensureFolderPath(submapFolder);
+    const title = (nodePlainText(node) || "子导图").trim();
     const path = await this.getAvailablePath(normalizePath(`${submapFolder}/${this.sanitizeFilename(title)}.${MINDMAP_EXTENSION}`));
     const file = await this.app.vault.create(path, serializeDocument(document));
     return { path: file.path, title: file.basename };
@@ -1567,10 +1594,7 @@ export default class MindMapStudioPlugin extends Plugin {
    * @returns 计算、解析或序列化后的字符串结果。
    */
   private buildNewTitle(): string {
-    const now = new Date();
-    const two = (value: number): string => String(value).padStart(2, "0");
-    const stamp = `${now.getFullYear()}-${two(now.getMonth() + 1)}-${two(now.getDate())} ${two(now.getHours())}${two(now.getMinutes())}`;
-    return `${this.settings.filePrefix} ${stamp}`.trim();
+    return buildDefaultMindMapTitle(this.settings.filePrefix, new Date());
   }
 
   /**
@@ -1580,7 +1604,7 @@ export default class MindMapStudioPlugin extends Plugin {
    * @returns 计算、解析或序列化后的字符串结果。
    */
   sanitizeFilename(value: string): string {
-    return value.replace(/[\\/:*?"<>|#[\]]/g, "-").replace(/\s+/g, " ").trim() || "思维导图";
+    return sanitizeCrossPlatformFilename(value);
   }
 
   /**
@@ -1631,34 +1655,8 @@ export default class MindMapStudioPlugin extends Plugin {
    * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
    */
   async extractToSubmap(parentFile: TFile, node: MindMapNode): Promise<MindMapSubmap> {
-    const title = (nodePlainText(node) || "子导图").trim();
-    const document = this.createConfiguredDocument(title);
-    document.root.children = JSON.parse(JSON.stringify(node.children)) as MindMapNode[];
-    if (node.content) document.root.content = JSON.parse(JSON.stringify(node.content)) as MindMapNode["content"];
-    if (node.richText) document.root.richText = JSON.parse(JSON.stringify(node.richText));
-    document.root.note = node.note;
-    document.root.tags = node.tags?.slice();
-    document.root.task = node.task;
-    document.root.icon = node.icon;
-    if (node.code) document.root.code = JSON.parse(JSON.stringify(node.code));
-    if (node.table) document.root.table = JSON.parse(JSON.stringify(node.table));
-    document.root.link = undefined;
-    syncNodeLegacyFields(document.root);
-    document.title = title;
-    document.navigation = {
-      parentPath: parentFile.path,
-      parentNodeId: node.id,
-      parentTitle: parentFile.basename,
-      parentNodeText: nodePlainText(node) || undefined
-    };
-    const parentFolder = parentFile.parent?.path ?? "";
-    const configuredAssets = normalizePath(this.settings.assetFolder || "MindMap Assets");
-    const parentMapFolder = this.sanitizeFilename(parentFile.basename);
-    const submapFolder = normalizePath([parentFolder, configuredAssets, parentMapFolder].filter(Boolean).join("/"));
-    await this.ensureFolderPath(submapFolder);
-    const path = await this.getAvailablePath(normalizePath(submapFolder + "/" + this.sanitizeFilename(title) + "." + MINDMAP_EXTENSION));
-    const file = await this.app.vault.create(path, serializeDocument(document));
-    return { path: file.path, title: file.basename };
+    const document = this.buildSubmapDocument(parentFile, node, true);
+    return this.persistSubmapDocument(parentFile, node, document);
   }
 
   /**

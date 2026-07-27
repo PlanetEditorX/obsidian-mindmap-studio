@@ -6,8 +6,13 @@
   "scripts": {
     "dev": "node esbuild.config.mjs",
     "build": "tsc --noEmit --skipLibCheck && node esbuild.config.mjs production",
-    "release": "npm run build && node scripts/release.mjs",
-    "test": "node scripts/test.mjs && node scripts/check-docs.mjs",
+    "release": "npm run verify && node scripts/release.mjs",
+    "test": "npm run test:unit && npm run test:regression && npm run test:docs && npm run test:repo",
+    "test:unit": "node --test tests/filename.test.mjs tests/image-host.test.mjs",
+    "test:regression": "node scripts/test.mjs",
+    "test:docs": "node scripts/check-docs.mjs",
+    "test:repo": "node scripts/check-repository.mjs",
+    "verify": "npm run test && npm run build",
     "docs:generate": "node scripts/generate-function-reference.mjs",
     "docs:check": "node scripts/check-docs.mjs"
   },
@@ -27,5 +32,8 @@
   },
   "dependencies": {
     "fflate": "^0.8.3"
+  },
+  "engines": {
+    "node": ">=20"
   }
 }

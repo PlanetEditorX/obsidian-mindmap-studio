@@ -1,133 +1,110 @@
 # 开发与维护指南
 
-## 1. 环境
+## 环境要求
+
+- Node.js 20 或更高版本。
+- npm 与仓库内 `package-lock.json` 配套使用。
+- Obsidian 1.5.0 或更高版本用于手动集成验证。
+
+首次安装：
 
 ```bash
 npm ci
-npm test
-npm run build
 ```
 
-- `npm test`：运行模型、布局、文章模式、搜索等行为测试，并执行源码注释覆盖检查。
-- `npm run docs:generate`：根据源码 JSDoc 重新生成完整函数参考。
-- `npm run docs:check`：单独检查模块注释、声明注释和特殊功能文档。
-- `npm run build`：TypeScript 类型检查后生成 `main.js`。
+禁止使用 `npm install` 随意刷新锁文件。只有依赖变更时才更新 `package.json` 与 `package-lock.json`，并在同一提交中解释原因。
 
-## 2. 注释规范
-
-所有以下声明必须有 JSDoc：
-
-- 类型别名。
-- 接口。
-- 类。
-- 构造函数。
-- 顶层函数。
-- 类方法，包括私有方法。
-
-函数注释至少应说明：
-
-1. 为什么存在，而不仅是复述函数名。
-2. 输入参数含义。
-3. 返回值含义。
-4. 是否修改文档、DOM、索引或仓库。
-5. 特殊兼容和失败行为。
-
-关键流程使用 `@remarks` 提醒维护者同步检查数据兼容、撤销保存链路和测试。
-
-匿名事件回调不要求单独 JSDoc，但复杂回调内部应使用行内注释解释非显然分支。
-
-## 3. 文档维护
-
-源码注释是函数级说明的权威来源。修改函数后：
+## 常用命令
 
 ```bash
-npm run docs:generate
-npm run docs:check
+npm run dev
+npm run test:unit
+npm run test:regression
+npm run test:docs
+npm run test:repo
+npm run build
+npm run verify
 ```
 
-架构或特殊功能发生变化时，还应更新：
+`npm run verify` 是本地提交和 CI 的统一入口。它依次执行单元测试、综合回归、文档检查、仓库检查、TypeScript 类型检查和生产构建。
 
-- `docs/ARCHITECTURE.md`
-- `docs/DATA_MODEL.md`
-- `docs/SPECIAL_FEATURES.md`
-- `README.md`
-- `CHANGELOG.md`
-
-## 4. 版本更新
-
-发布补丁版本时同步修改：
-
-- `package.json`
-- `manifest.json`
-- `versions.json`
-- `CHANGELOG.md`
-
-数据结构兼容级别由 `MindMapDocument.version` 单独控制。插件版本升级不一定需要提高数据版本。
-
-## 5. 测试重点
+## 代码边界
 
 ### 模型层
 
-- 旧文件解析。
-- 无效输入规范化。
-- 显式 `false` 样式保留。
-- 富文本编辑后样式迁移。
-- 内容块与旧字段同步。
+`src/core/model.ts` 与 `src/core/node-tree.ts` 负责稳定数据结构、兼容读取、规范化、序列化和树结构操作。磁盘数据、Markdown、剪贴板和 XMind 等不可信输入必须先进入模型层，不应在 UI 中重复实现兼容逻辑。
 
-### 布局层
+### 编辑器层
 
-- 折叠节点。
-- 自定义宽度和最小高度。
-- 自动换行。
-- 左右布局。
-- 渐细线宽实际达到最小值。
+`src/editor/` 负责交互和渲染。所有可撤销写操作应通过统一 mutation/history 链路；不要直接修改文档后绕过撤销、重绘和保存通知。
 
-### 文章模式
+### 插件服务层
 
-- 自动编号保持原有章、节和正文判定。
-- 关闭编号不占对应层级序号，并兼容 `skipArticleNumbering`。
-- 手动最高层级支持 1–8 级、中心节点直接起始、同级首个末端标题编号和后代续接；孤立末端节点仍为正文。
-- 目录过滤必须使用相对 `tocDepth`，不得使用编号 `depth`；测试应覆盖从第 5 级 `1.` 起始且目录最大层级为 3 时仍显示一级、二级目录。
-- 目录最大层级必须通过 `resolveArticleTocMaxDepth(document.view?.articleTocMaxDepth, pluginDefault)` 解析，保证文件级覆盖优先且文章/通读行为一致；测试应覆盖“跟随全局、文件覆盖、边界钳制和序列化”。
-- 文章模式必须保持“纯目录页 / 原始文章”互斥渲染；目录只在顶层脑图存在子导图时启用，禁止把目录直接插入原始文章正文顶部。
-- 分页测试必须覆盖“章页跳过本页节标题直达下一章”以及“嵌套节页仅在同一章内切换”。分页候选只能是 `nodeId` 为空的物理子导图页，并且必须与当前页具有相同 `tocDepth` 和父级面包屑。
-- 子导图文章页 H1 必须显示完整编号标题，但只能让根节点文字部分进入行内编辑，生成编号不得写回节点数据。
-- 不同有效层级的计数器相互独立。
-- 子导图目录、通读模式和导出使用父节点的有效文章层级，而不是物理树深度。
-- 顶层递归目录、跨文件定位和循环保护；原始文章正文不得内嵌目录。
-- 导图、文章、大纲和通读模式往返时缩放与平移保持不变。
-- 中心节点编辑与“主题与外观”使用相同文章编号控件。
+`src/main.ts` 负责 Obsidian 生命周期、文件系统、跨文件子导图、图床网络请求、搜索索引和设置持久化。编辑器通过回调契约请求这些能力，不直接访问仓库服务。
 
-### 搜索
+### 纯工具层
 
-- 折叠节点。
-- 子导图深层节点。
-- 表格和代码。
-- 文件重命名和删除。
-- 点击结果后定位。
+`src/utils/` 不依赖 Obsidian API，适合放置确定性转换和输入校验。新增纯函数时应同步增加 `tests/*.test.mjs` 测试，不要把可测试逻辑重新塞回 `main.ts`。
 
-### 图片
+## TypeScript 规范
 
-- 多镜像候选顺序。
-- 本地回退。
-- 任一图床失败时不删除本地文件。
-- 远程更新后兼容字段同步。
+- 保持 `noImplicitAny`、`strictNullChecks`、`noImplicitReturns` 和 `noFallthroughCasesInSwitch`。
+- 避免 `any`、`@ts-ignore` 和无说明类型断言。
+- 外部 JSON 先使用 `unknown`，完成结构校验后再收窄类型。
+- 公共接口使用稳定的类型别名或接口；跨模块避免依赖私有实现细节。
+- Promise 不应被无意丢弃；有意不等待时使用 `void` 明确标记。
 
-## 6. 发布包结构
+## 注释规范
 
-安装 ZIP 必须只有：
+每个 TypeScript 模块必须包含：
 
-```text
-mindmap-studio/
-├── main.js
-├── manifest.json
-└── styles.css
+```ts
+/**
+ * @file example.ts
+ * @description 模块职责和边界。
+ */
 ```
 
-源码 ZIP 应排除：
+函数、方法、类、接口和类型别名必须使用 JSDoc。注释应解释：
 
-- `node_modules`
-- 临时构建目录
-- 发布缓存目录
+- 为什么存在该边界或规则。
+- 输入输出和失败条件。
+- 兼容性、安全性或事务约束。
 
-发布前在全新目录执行 `npm ci`、`npm test` 和 `npm run build`，避免本地缓存掩盖依赖或生成问题。
+不要使用“执行相关内部逻辑”一类无法帮助维护者判断行为的模板化描述。修改现有函数时，应优先把该函数的模板注释改为具体语义。
+
+## 文档维护
+
+代码变更时按影响更新文档：
+
+- 架构或职责变化：`docs/ARCHITECTURE.md`。
+- 数据字段变化：`docs/DATA_MODEL.md`。
+- 用户行为变化：`README.md`、`docs/SPECIAL_FEATURES.md`。
+- 测试边界变化：`docs/TESTING.md`。
+- 开发流程变化：本文件与 `docs/GIT_WORKFLOW.zh-CN.md`。
+- 用户可见修复或功能：`CHANGELOG.md` 的“未发布”区。
+
+更新声明后运行：
+
+```bash
+npm run docs:generate
+npm run test:docs
+```
+
+## 调试建议
+
+- 先在纯工具或模型层复现，再进入 DOM 和 Obsidian 集成层。
+- 文件保存问题同时检查 `parseDocument()`、`normalizeDocument()`、`serializeDocument()` 和视图 `getViewData()`。
+- 文章编号问题确保目录、正文、通读和导出共用同一解析函数。
+- 图床问题分别验证端点、Header、请求体、响应载荷和 URL 提取。
+- 子导图问题同时检查父节点 `submap` 与子文档 `navigation`。
+
+## 发布前检查
+
+1. `npm ci` 可从空依赖目录完成。
+2. `npm run verify` 全部通过。
+3. `git status --short` 只包含预期文件。
+4. 版本文件一致。
+5. `main.js`、`manifest.json`、`styles.css` 非空。
+6. 在测试仓库中完成新建、编辑、保存、重开、导入、导出和子导图导航冒烟测试。
+7. 确认源码包不含 `.ua/`、`.local-test-build/`、`node_modules/` 或真实凭据。

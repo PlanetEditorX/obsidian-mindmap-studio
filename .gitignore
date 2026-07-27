@@ -1,3 +1,15 @@
 node_modules/
 .DS_Store
 *.log
+
+# Generated and local validation output
+coverage/
+dist/
+.local-test-build/
+
+# Local code-analysis workspace
+.ua/
+start-dashboard.bat
+
+# Local Obsidian test vault data
+.obsidian/
