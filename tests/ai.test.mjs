@@ -145,4 +145,15 @@ test("AI integration exposes toolbar, shortcut, page scope and node scope contra
   assert.match(viewSource, /buildAiMarkdownPayload/);
   assert.match(modalSource, /payload\.overLimit/);
   assert.match(modalSource, /mms-ai-track/);
+  assert.match(modalSource, /new Component\(\)/);
+  assert.match(modalSource, /this\.markdownRenderComponent\.load\(\)/);
+  assert.match(
+    modalSource,
+    /MarkdownRenderer\.render\([\s\S]*this\.markdownRenderComponent[\s\S]*\)/
+  );
+  assert.doesNotMatch(
+    modalSource,
+    /MarkdownRenderer\.render\([\s\S]*this\.options\.sourcePath,\s*this\s*\)/
+  );
+  assert.match(modalSource, /onClose\(\): void[\s\S]*markdownRenderComponent\?\.unload\(\)/);
 });
