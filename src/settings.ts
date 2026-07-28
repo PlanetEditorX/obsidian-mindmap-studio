@@ -44,7 +44,6 @@ export const TOOLBAR_ITEMS = [
   ["article-landing", "目录/原始文章"], ["article-style", "文章样式"],
   ["markdown", "Markdown 大纲"], ["json", "导入文件 / JSON"], ["export-document", "导出文档"], ["export-svg", "导出 SVG"],
   ["question", "题目节点"],
-  ["question-bank", "题库"],
 ] as const;
 
 /**
@@ -245,6 +244,8 @@ export interface MindMapStudioSettings {
   screenshotAutoRecognize: boolean;
   /** Whether structured question-node entry points are visible in the editor. */
   questionNodesEnabled: boolean;
+  /** Vault-relative folder whose mind-map files expose the full-page question-bank mode. */
+  questionBankFolder: string;
 }
 
 export const DEFAULT_SETTINGS: MindMapStudioSettings = {
@@ -332,7 +333,8 @@ export const DEFAULT_SETTINGS: MindMapStudioSettings = {
   screenshotHideObsidian: false,
   screenshotShortcut: "Ctrl+Shift+S",
   screenshotAutoRecognize: false,
-  questionNodesEnabled: false
+  questionNodesEnabled: false,
+  questionBankFolder: ""
 };
 
 /**
@@ -564,7 +566,7 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
       .setName("当前全局显示模式")
       .setDesc("这里与工具栏模式按钮同步。导图、文章和通读会作为下次启动模式；大纲仅在当前会话生效，重新打开时回到上一次可持久化模式。")
       .addDropdown((dropdown) => {
-        const labels: Record<DisplayMode, string> = { mindmap: "导图模式", outline: "大纲模式", article: "文章模式", reading: "通读模式" };
+        const labels: Record<DisplayMode, string> = { mindmap: "导图模式", outline: "大纲模式", article: "文章模式", reading: "通读模式", "question-bank": "题库模式" };
         for (const mode of this.plugin.settings.visibleModes) dropdown.addOption(mode, labels[mode]);
         const activeMode = this.plugin.getActiveDisplayMode();
         dropdown.setValue(this.plugin.settings.visibleModes.includes(activeMode)
@@ -1139,6 +1141,17 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
         .onChange(async (value) => {
           this.plugin.settings.defaultFolder = value.trim().replace(/^\/+|\/+$/g, "");
           await this.plugin.saveSettings();
+        }));
+
+    new Setting(containerEl)
+      .setName("题库文件夹")
+      .setDesc("填写仓库内文件夹路径，例如 题库。该文件夹及其子目录内的思维导图会出现“题库”整页模式，可连续自动判题；留空则不启用。")
+      .addText((text) => text
+        .setPlaceholder("题库")
+        .setValue(this.plugin.settings.questionBankFolder)
+        .onChange(async (value) => {
+          this.plugin.settings.questionBankFolder = value.trim().replace(/\\/g, "/").replace(/^\/+|\/+$/g, "");
+          await this.saveAndRefresh();
         }));
 
     new Setting(containerEl)

@@ -416,7 +416,10 @@ export class MindMapStudioView extends TextFileView {
       imageFailoverTimeoutSeconds: this.plugin.settings.imageFailoverTimeoutSeconds,
       imageFailoverUseLocalFallback: this.plugin.settings.imageFailoverUseLocalFallback,
       imageHostPriorityIds: this.plugin.getImageHostPriorityIds(),
-      visibleModes: [...this.plugin.settings.visibleModes],
+      visibleModes: [
+        ...this.plugin.settings.visibleModes,
+        ...(this.plugin.isQuestionBankFile(this.file) ? ["question-bank" as const] : [])
+      ],
       defaultViewMode: this.plugin.getActiveDisplayMode(),
       currentFilePath: this.file?.path ?? "",
       readingHomePath: this.readingSections[0]?.filePath ?? this.file?.path ?? "",
@@ -440,6 +443,7 @@ export class MindMapStudioView extends TextFileView {
       screenshotShortcut: this.plugin.settings.screenshotShortcut,
       screenshotAutoRecognize: this.plugin.settings.screenshotAutoRecognize,
       questionNodesEnabled: this.plugin.settings.questionNodesEnabled,
+      questionBankModeEnabled: this.plugin.isQuestionBankFile(this.file),
       articleBaseDepth: this.articleBaseDepth,
       articleTocEntries: [...this.articleTocEntries],
       articleTocMaxDepth: this.plugin.settings.articleTocMaxDepth,

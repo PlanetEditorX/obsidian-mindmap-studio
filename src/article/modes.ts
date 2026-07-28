@@ -12,14 +12,16 @@ export const DISPLAY_MODE_LABELS: Record<DisplayMode, string> = {
   mindmap: "导图",
   outline: "大纲",
   article: "文章",
-  reading: "通读"
+  reading: "通读",
+  "question-bank": "题库"
 };
 
 export const DISPLAY_MODE_ICONS: Record<DisplayMode, string> = {
   mindmap: "brain-circuit",
   outline: "list-tree",
   article: "notebook-text",
-  reading: "book-open-text"
+  reading: "book-open-text",
+  "question-bank": "graduation-cap"
 };
 
 /** One physical map merged into the continuous reading view. */

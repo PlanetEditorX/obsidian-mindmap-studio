@@ -4,13 +4,20 @@ import { after, before, test } from "node:test";
 import { loadTypeScriptModules } from "./compile-typescript.mjs";
 
 let model;
+let practice;
 let cleanup;
 
 before(async () => {
   ({ module: model, cleanup } = await loadTypeScriptModules([
     "src/core/node-tree.ts",
-    "src/core/model.ts"
+    "src/core/model.ts",
+    "src/editor/question-practice-mode.ts"
   ], "src/core/model.ts"));
+  ({ module: practice } = await loadTypeScriptModules([
+    "src/core/node-tree.ts",
+    "src/core/model.ts",
+    "src/editor/question-practice-mode.ts"
+  ], "src/editor/question-practice-mode.ts"));
 });
 
 after(async () => cleanup?.());
@@ -75,13 +82,30 @@ test("question normalization keeps only verifiable original-question sources", (
   assert.equal(invalid.root.question.source, undefined);
 });
 
+test("question-bank grading distinguishes single choice, multiple choice and normalized essay answers", () => {
+  const choice = model.normalizeDocument({
+    root: {
+      text: "Choice", children: [], question: {
+        mode: "choice", stem: [], tags: [], answer: [{ id: "answer", type: "text", text: "A、C" }], explanation: [],
+        options: ["A", "B", "C"].map((label) => ({ id: label, label, content: [] }))
+      }
+    }
+  }).root;
+  assert.equal(practice.isQuestionChoiceCorrect(choice, ["A", "C"]), true);
+  assert.equal(practice.isQuestionChoiceCorrect(choice, ["A"]), false);
+  assert.equal(practice.isQuestionChoiceCorrect(choice, ["A", "B", "C"]), false);
+  assert.equal(practice.isExactQuestionAnswer(" 资料 分析！", "资料分析"), true);
+  assert.equal(practice.isExactQuestionAnswer("资料理解", "资料分析"), false);
+});
+
 test("question assistant keeps an intelligent image-to-question pipeline and visible answer fields", async () => {
-  const [editorSource, articleSource, modalSource, bankSource, mainSource] = await Promise.all([
+  const [editorSource, articleSource, modalSource, practiceSource, mainSource, settingsSource] = await Promise.all([
     readFile("src/editor/editor.ts", "utf8"),
     readFile("src/editor/article-renderer.ts", "utf8"),
     readFile("src/editor/question-modal.ts", "utf8"),
-    readFile("src/editor/question-bank-modal.ts", "utf8"),
-    readFile("src/main.ts", "utf8")
+    readFile("src/editor/question-practice-mode.ts", "utf8"),
+    readFile("src/main.ts", "utf8"),
+    readFile("src/settings.ts", "utf8")
   ]);
   assert.match(editorSource, /转为题目节点并智能处理/);
   assert.match(editorSource, /renderQuestionSummary/);
@@ -91,13 +115,14 @@ test("question assistant keeps an intelligent image-to-question pipeline and vis
   assert.match(articleSource, /mms-question-panel/);
   assert.match(articleSource, /mms-question-reveal/);
   assert.match(modalSource, /AI 智能处理题目/);
-  assert.match(bankSource, /题库/);
-  assert.match(bankSource, /错题/);
-  assert.match(bankSource, /随机练习/);
-  assert.match(bankSource, /正确率/);
-  assert.match(bankSource, /答对/);
-  assert.match(bankSource, /答错/);
-  assert.match(bankSource, /onRecordPractice/);
+  assert.match(editorSource, /renderQuestionPracticeMode/);
+  assert.doesNotMatch(editorSource, /addToolbarButton\("question-bank"/);
+  assert.match(practiceSource, /提交并下一题/);
+  assert.match(practiceSource, /错题本/);
+  assert.match(practiceSource, /isQuestionChoiceCorrect/);
+  assert.match(practiceSource, /isExactQuestionAnswer/);
+  assert.match(mainSource, /isQuestionBankFile/);
+  assert.match(settingsSource, /题库文件夹/);
   assert.match(modalSource, /已由 AI 分析补齐缺失答案与解答/);
   assert.match(mainSource, /仍需基于题目独立分析/);
 });
