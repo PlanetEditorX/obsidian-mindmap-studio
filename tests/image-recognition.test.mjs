@@ -126,6 +126,16 @@ test("batch image-to-text replacement keeps every recognized item at its origina
   assert.equal(source.root.children[1].content[0].type, "image");
 });
 
+test("image-to-text replacement fills an existing empty text block", () => {
+  const source = structuredClone(document);
+  source.root.children[0].content = [text("empty-text", ""), image("only-image", "assets/only.png")];
+  const preview = recognition.previewImageTextReplacement(source, "chapter", "only-image", "识别结果");
+  const applied = recognition.applyImageTextReplacement(source, preview);
+  assert.deepEqual(applied.root.children[0].content.map((block) => [block.id, block.type, block.text]), [
+    ["empty-text", "text", "识别结果"]
+  ]);
+});
+
 test("local OCR arguments are parsed without a shell", () => {
   assert.deepEqual(localOcr.parseCommandArguments('--psm 6 -c "preserve_interword_spaces=1"'), [
     "--psm",
@@ -172,7 +182,9 @@ test("desktop-only OCR and capture APIs are loaded lazily for mobile compatibili
   }
   assert.match(ocrSource, /requireFunction\("node:child_process"\)/);
   assert.match(captureSource, /requireFunction\("electron"\)/);
-  assert.match(captureSource, /BrowserWindow\?\.getFocusedWindow\?\.\(\) \?\? null/);
+  assert.match(captureSource, /getCurrentObsidianWindow\(electronRuntime\)/);
+  assert.match(captureSource, /requireFunction\("@electron\/remote"\)/);
+  assert.match(captureSource, /await waitForWindowMinimized\(windowHandle\)/);
   assert.match(exportSource, /requireFunction\("node:fs\/promises"\)/);
   assert.match(exportSource, /showSaveDialog/);
   assert.match(editorSource, /imageRecognitionAutoConfirmDelaySeconds === 0[\s\S]*applyImageRecognitionPreview/);

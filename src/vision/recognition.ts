@@ -146,7 +146,14 @@ export function applyImageTextReplacement(document: MindMapDocument, preview: Im
   const blocks = nodeContentBlocks(node);
   const index = blocks.findIndex((item) => item.type === "image" && item.id === preview.blockId);
   if (index < 0) throw new Error("准备替换的图片已经不存在");
-  blocks[index] = { id: preview.blockId, type: "text", text: preview.text };
+  const emptyTextBlock = blocks.find((item): item is Extract<typeof item, { type: "text" }> => item.type === "text" && !item.text.trim());
+  if (emptyTextBlock) {
+    emptyTextBlock.text = preview.text;
+    delete emptyTextBlock.richText;
+    blocks.splice(index, 1);
+  } else {
+    blocks[index] = { id: preview.blockId, type: "text", text: preview.text };
+  }
   node.content = blocks;
   node.style = { ...(node.style ?? {}), textAlign: "left" };
   syncNodeContentFields(node);
