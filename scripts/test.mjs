@@ -210,6 +210,29 @@ export const setIcon = () => {};
   ]);
   assert.match(childHtml, new RegExp(`<a href="#export-1-section-1">第一章 速算技巧</a>`), "exported parent TOC entries for child maps must jump to the child page section");
   assert.doesNotMatch(childHtml, /<h2 id="export-0-mindmap-article-[^"]+">第一章 速算技巧<\/h2>/, "parent nodes linked to child maps must not be repeated in the exported HTML body");
+  const secondChapterNode = model.createNode("基期和现期");
+  secondChapterNode.submap = { path: "second-child.mindmap" };
+  parentWithChildMap.root.children.push(secondChapterNode);
+  const truncateSection = model.createNode("截位直除");
+  truncateSection.children = [model.createNode("正文")];
+  const fractionSection = model.createNode("分数比较");
+  fractionSection.children = [model.createNode("正文")];
+  childMap.root.children = [truncateSection, fractionSection];
+  const secondChildMap = model.createDefaultDocument("基期和现期");
+  const baseSection = model.createNode("基期");
+  baseSection.children = [model.createNode("正文")];
+  const currentSection = model.createNode("现期");
+  currentSection.children = [model.createNode("正文")];
+  secondChildMap.root.children = [baseSection, currentSection];
+  const nestedTocHtml = importExport.readingSectionsToHtml([
+    { filePath: "root.mindmap", document: parentWithChildMap, baseDepth: 0 },
+    { filePath: "child.mindmap", document: childMap, baseDepth: 1, parentFilePath: "root.mindmap", parentNodeId: chapterNode.id },
+    { filePath: "second-child.mindmap", document: secondChildMap, baseDepth: 1, parentFilePath: "root.mindmap", parentNodeId: secondChapterNode.id }
+  ]);
+  const nestedToc = nestedTocHtml.match(/<nav class="export-toc">([\s\S]*?)<\/nav>/)?.[1] ?? "";
+  assert.match(nestedToc, /第一章 速算技巧<\/a><ul>[\s\S]*截位直除/, "child-map sections must be nested under their parent chapter");
+  assert.ok(nestedToc.indexOf("分数比较") < nestedToc.indexOf("第二章 基期和现期"), "first chapter sections must appear before the second chapter");
+  assert.ok(nestedToc.indexOf("第二章 基期和现期") < nestedToc.indexOf("基期"), "second chapter sections must follow their own chapter");
   const childMarkdown = importExport.readingSectionsToMarkdown([
     { filePath: "root.mindmap", document: parentWithChildMap, baseDepth: 0 },
     { filePath: "child.mindmap", document: childMap, baseDepth: 1, parentFilePath: "root.mindmap", parentNodeId: chapterNode.id }

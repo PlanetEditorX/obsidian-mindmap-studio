@@ -127,6 +127,24 @@ function markdownAnchor(title: string): string {
     .replace(/^-|-$/g, "") || "section";
 }
 
+/** 将扁平的层级目录条目转换为兼容 Word 的嵌套列表。 */
+function htmlTocList(items: Array<{ depth: number; title: string; anchor: string }>): string {
+  /** 嵌套目录中的单个章节及其下级章节。 */
+  type TocBranch = { item: { title: string; anchor: string }; children: TocBranch[] };
+  const root: TocBranch[] = [];
+  const stack: Array<{ depth: number; children: TocBranch[] }> = [{ depth: 0, children: root }];
+  for (const item of items) {
+    while (stack.length > 1 && item.depth <= stack.at(-1)!.depth) stack.pop();
+    const branch: TocBranch = { item, children: [] };
+    stack.at(-1)!.children.push(branch);
+    stack.push({ depth: item.depth, children: branch.children });
+  }
+  const renderBranches = (branches: TocBranch[]): string => branches.length
+    ? `<ul>${branches.map((branch) => `<li><a href="#${branch.item.anchor}">${branch.item.title}</a>${renderBranches(branch.children)}</li>`).join("")}</ul>`
+    : "";
+  return renderBranches(root);
+}
+
 /**
  * Produces one portable article from a map and all recursively collected child
  * maps in the same order used by continuous reading mode.
@@ -139,27 +157,46 @@ export function readingSectionsToHtml(sections: ReadingSection[], tocMaxDepth = 
   const maxTocDepth = normalizedExportTocMaxDepth(tocMaxDepth);
   const tocItems: Array<{ depth: number; title: string; anchor: string }> = [];
   const childSectionAnchors = new Map<string, string>();
+  const childSectionIndexes = new Map<string, number>();
   sections.forEach((section, index) => {
     const key = parentNodeKey(section.parentFilePath, section.parentNodeId);
-    if (key) childSectionAnchors.set(key, exportAnchor(index, `section-${index}`));
+    if (key) {
+      childSectionAnchors.set(key, exportAnchor(index, `section-${index}`));
+      childSectionIndexes.set(key, index);
+    }
   });
   const pushTocItem = (depth: number, title: string, anchor: string): void => {
     if (depth <= maxTocDepth) tocItems.push({ depth, title, anchor });
+  };
+  const collectTocItems = (sectionIndex: number, visited = new Set<number>()): void => {
+    if (visited.has(sectionIndex)) return;
+    visited.add(sectionIndex);
+    const section = sections[sectionIndex];
+    if (!section) return;
+    if (sectionIndex > 0 && !parentNodeKey(section.parentFilePath, section.parentNodeId)) {
+      pushTocItem(Math.max(1, section.baseDepth), escapeHtml(nodePlainText(section.document.root) || section.document.title), exportAnchor(sectionIndex, `section-${sectionIndex}`));
+    }
+    for (const info of buildArticleNodeInfo(section.document.root, section.baseDepth)) {
+      const title = escapeHtml(info.displayTitle || info.title || "未命名");
+      const key = `${section.filePath}\u0000${info.node.id}`;
+      const childSectionIndex = childSectionIndexes.get(key);
+      if (childSectionIndex !== undefined) {
+        pushTocItem(Math.max(1, info.depth), title, exportAnchor(childSectionIndex, `section-${childSectionIndex}`));
+        collectTocItems(childSectionIndex, visited);
+      } else if (info.isHeading) {
+        pushTocItem(Math.max(1, info.depth), title, exportAnchor(sectionIndex, info.anchor));
+      }
+    }
   };
   const renderArticleNode = (filePath: string, document: MindMapDocument, baseDepth: number, sectionIndex: number): string => buildArticleNodeInfo(document.root, baseDepth)
     .map((info) => {
       const title = escapeHtml(info.displayTitle || info.title || "未命名");
       const childSectionAnchor = childSectionAnchors.get(`${filePath}\u0000${info.node.id}`);
-      if (childSectionAnchor) {
-        pushTocItem(Math.max(1, info.depth), title, childSectionAnchor);
-        return "";
-      }
+      if (childSectionAnchor) return "";
       const note = info.node.note ? `<p class="note">${escapeHtml(info.node.note)}</p>` : "";
       if (!info.isHeading) return `<p class="body-paragraph">${title}</p>${note}`;
       const level = Math.min(6, Math.max(2, info.depth + 1));
       const anchor = exportAnchor(sectionIndex, info.anchor);
-      const targetAnchor = childSectionAnchors.get(`${filePath}\u0000${info.node.id}`) ?? anchor;
-      pushTocItem(Math.max(1, info.depth), title, targetAnchor);
       return `<section><h${level} id="${anchor}"><a name="${anchor}"></a>${title}</h${level}>${note}</section>`;
     })
     .join("");
@@ -170,18 +207,18 @@ export function readingSectionsToHtml(sections: ReadingSection[], tocMaxDepth = 
     const headingLevel = Math.min(6, Math.max(1, baseDepth + 1));
     const sectionAnchor = exportAnchor(index, `section-${index}`);
     const heading = index === 0 ? "" : `<h${headingLevel} id="${sectionAnchor}"><a name="${sectionAnchor}"></a>${sectionTitle}</h${headingLevel}>`;
-    if (index > 0 && !parentNodeKey(sections[index]?.parentFilePath, sections[index]?.parentNodeId)) pushTocItem(Math.max(1, baseDepth), sectionTitle, sectionAnchor);
     return `<section class="map-section">${heading}${renderArticleNode(filePath, document, baseDepth, index)}</section>`;
   }).join("");
+  collectTocItems(0);
   const toc = tocItems.length
-    ? `<nav class="export-toc"><h2>目录</h2><ul>${tocItems.map((item) => `<li class="depth-${Math.min(8, item.depth)}"><a href="#${item.anchor}">${item.title}</a></li>`).join("")}</ul></nav>`
+    ? `<nav class="export-toc"><h2>目录</h2>${htmlTocList(tocItems)}</nav>`
     : "";
   return `<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width">
 <title>${title}</title><style>
 body{max-width:860px;margin:40px auto;padding:0 28px;color:#20242c;font:16px/1.85 system-ui,"Microsoft YaHei",sans-serif}
 h1{text-align:center;border-bottom:2px solid #ddd;padding-bottom:18px}h2,h3,h4,h5,h6{margin-top:1.7em;color:#172033}
-section{break-inside:auto}.export-toc{margin:2em 0 3em}.export-toc ul{padding-left:0;list-style:none}.export-toc li{margin:.2em 0}.export-toc .depth-2{margin-left:1em}.export-toc .depth-3{margin-left:2em}.export-toc .depth-4,.export-toc .depth-5,.export-toc .depth-6,.export-toc .depth-7,.export-toc .depth-8{margin-left:3em}.map-section+.map-section{margin-top:3em;border-top:1px solid #ddd}.body-paragraph{margin:.75em 0;text-align:justify;text-indent:2em}.note{padding:10px 14px;color:#555;background:#f6f7f9;border-left:3px solid #6366f1}
+section{break-inside:auto}.export-toc{margin:2em 0 3em}.export-toc>ul{padding-left:0;list-style:none}.export-toc ul ul{padding-left:1.5em;list-style:none}.export-toc li{margin:.2em 0}.map-section+.map-section{margin-top:3em;border-top:1px solid #ddd}.body-paragraph{margin:.75em 0;text-align:justify;text-indent:2em}.note{padding:10px 14px;color:#555;background:#f6f7f9;border-left:3px solid #6366f1}
 @media print{body{margin:0;max-width:none}a{color:inherit}}
 </style></head><body><article><h1>${title}</h1>${toc}${body}</article></body></html>`;
 }
