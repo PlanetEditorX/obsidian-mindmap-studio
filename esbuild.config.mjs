@@ -3,6 +3,7 @@ import process from "process";
 import builtins from "builtin-modules";
 
 const banner = `/* MindMap Studio - MIT License */`;
+const production = process.argv[2] === "production";
 const context = await esbuild.context({
   banner: { js: banner },
   entryPoints: ["src/main.ts"],
@@ -11,12 +12,13 @@ const context = await esbuild.context({
   format: "cjs",
   target: "es2018",
   logLevel: "info",
-  sourcemap: "inline",
+  // Inline maps duplicate every source module inside main.js and make generated-file merges impractical.
+  sourcemap: production ? false : "inline",
   treeShaking: true,
   outfile: "main.js"
 });
 
-if (process.argv[2] === "production") {
+if (production) {
   await context.rebuild();
   await context.dispose();
 } else {
