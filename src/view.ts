@@ -186,16 +186,20 @@ export class MindMapStudioView extends TextFileView {
           const longestFence = Math.max(2, ...Array.from(block.code.matchAll(/`+/g), (match) => match[0].length));
           const fence = "`".repeat(longestFence + 1);
           const markdown = `${fence}${block.language ?? ""}\n${block.code}\n${fence}`;
-          const themeClass = block.theme && block.theme !== "obsidian" ? CODE_THEME_CLASS_NAMES[block.theme] : undefined;
+          const pageCode = this.document?.appearance;
+          const collapsed = block.collapsed ?? pageCode?.codeCollapsed ?? this.plugin.settings.defaultCodeCollapsed;
+          const showLineNumbers = block.showLineNumbers ?? pageCode?.codeShowLineNumbers ?? this.plugin.settings.defaultCodeShowLineNumbers;
+          const theme = block.theme ?? pageCode?.codeTheme ?? this.plugin.settings.defaultCodeTheme;
+          const themeClass = theme !== "obsidian" ? CODE_THEME_CLASS_NAMES[theme] : undefined;
           if (themeClass) container.addClass(themeClass);
-          const rendered = block.collapsed
+          const rendered = collapsed
             ? container.createEl("details", { cls: "mms-code-collapsed" })
             : container;
-          if (block.collapsed) rendered.createEl("summary", { text: `展开 ${block.language || "code"} 代码` });
-          const target = block.collapsed ? rendered.createDiv({ cls: "mms-code-collapsed-content" }) : rendered;
+          if (collapsed) rendered.createEl("summary", { text: `展开 ${block.language || "code"} 代码` });
+          const target = collapsed ? rendered.createDiv({ cls: "mms-code-collapsed-content" }) : rendered;
           await MarkdownRenderer.render(this.app, markdown, target, this.file?.path ?? "", this);
           const pre = target.querySelector("pre");
-          if (block.showLineNumbers && pre) {
+          if (showLineNumbers && pre) {
             pre.addClass("mms-code-with-line-numbers");
             pre.setAttr("data-line-numbers", Array.from({ length: block.code.split("\n").length }, (_, index) => String(index + 1)).join("\n"));
           }

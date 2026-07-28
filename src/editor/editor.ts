@@ -615,6 +615,7 @@ class AppearanceModal extends Modal {
   private readonly globalArticleTocMaxDepth: number;
   private readonly articleMiniMap: boolean | undefined;
   private readonly globalArticleMiniMap: boolean;
+  private readonly pageCodeAppearance: MindMapAppearance;
   private readonly submit: (appearance: MindMapAppearance, numbering: ArticleNumberingValues, articleTocMaxDepth: number | undefined, articleMiniMap: boolean | undefined) => void;
   private readonly reset: () => void;
 
@@ -637,6 +638,7 @@ class AppearanceModal extends Modal {
     globalArticleTocMaxDepth: number,
     articleMiniMap: boolean | undefined,
     globalArticleMiniMap: boolean,
+    pageCodeAppearance: MindMapAppearance,
     submit: (appearance: MindMapAppearance, numbering: ArticleNumberingValues, articleTocMaxDepth: number | undefined, articleMiniMap: boolean | undefined) => void,
     reset: () => void
   ) {
@@ -647,6 +649,7 @@ class AppearanceModal extends Modal {
     this.globalArticleTocMaxDepth = resolveArticleTocMaxDepth(undefined, globalArticleTocMaxDepth);
     this.articleMiniMap = articleMiniMap;
     this.globalArticleMiniMap = globalArticleMiniMap;
+    this.pageCodeAppearance = pageCodeAppearance;
     this.submit = submit;
     this.reset = reset;
   }
@@ -688,6 +691,28 @@ class AppearanceModal extends Modal {
     miniMapSelect.createEl("option", { text: "显示", attr: { value: "show" } });
     miniMapSelect.createEl("option", { text: "隐藏", attr: { value: "hide" } });
     miniMapSelect.value = this.articleMiniMap === undefined ? "" : this.articleMiniMap ? "show" : "hide";
+
+    const codeSection = form.createDiv({ cls: "mmc-appearance-code-settings" });
+    codeSection.createDiv({ cls: "mmc-theme-picker-title", text: "页面代码设置" });
+    codeSection.createDiv({ cls: "setting-item-description", text: "优先级 2：覆盖插件全局代码设置；节点代码设置仍可单独覆盖。" });
+    const codeGrid = codeSection.createDiv({ cls: "mmc-form-grid mmc-appearance-grid" });
+    const pageCodeCollapsedLabel = codeGrid.createEl("label", { text: "默认状态" });
+    const pageCodeCollapsed = pageCodeCollapsedLabel.createEl("select");
+    pageCodeCollapsed.createEl("option", { value: "", text: "跟随全局设置" });
+    pageCodeCollapsed.createEl("option", { value: "true", text: "折叠" });
+    pageCodeCollapsed.createEl("option", { value: "false", text: "展开" });
+    pageCodeCollapsed.value = typeof this.pageCodeAppearance.codeCollapsed === "boolean" ? String(this.pageCodeAppearance.codeCollapsed) : "";
+    const pageCodeLinesLabel = codeGrid.createEl("label", { text: "行号" });
+    const pageCodeLines = pageCodeLinesLabel.createEl("select");
+    pageCodeLines.createEl("option", { value: "", text: "跟随全局设置" });
+    pageCodeLines.createEl("option", { value: "true", text: "显示" });
+    pageCodeLines.createEl("option", { value: "false", text: "隐藏" });
+    pageCodeLines.value = typeof this.pageCodeAppearance.codeShowLineNumbers === "boolean" ? String(this.pageCodeAppearance.codeShowLineNumbers) : "";
+    const pageCodeThemeLabel = codeGrid.createEl("label", { text: "代码样式" });
+    const pageCodeTheme = pageCodeThemeLabel.createEl("select");
+    pageCodeTheme.createEl("option", { value: "", text: "跟随全局设置" });
+    (["obsidian", "github", "monokai", "dracula"] as const).forEach((value) => pageCodeTheme.createEl("option", { value, text: value === "obsidian" ? "Obsidian" : value === "github" ? "GitHub" : value === "monokai" ? "Monokai" : "Dracula" }));
+    pageCodeTheme.value = this.pageCodeAppearance.codeTheme ?? "";
 
     let selectedPreset: MindMapThemePresetId = this.appearance.themePreset ?? "classic-indigo";
     const themeSection = form.createDiv({ cls: "mmc-theme-picker" });
@@ -928,7 +953,10 @@ class AppearanceModal extends Modal {
         branchColors: parseBranchColors(),
         bold: bold.checked,
         italic: italic.checked,
-        underline: underline.checked
+        underline: underline.checked,
+        ...(pageCodeCollapsed.value ? { codeCollapsed: pageCodeCollapsed.value === "true" } : {}),
+        ...(pageCodeLines.value ? { codeShowLineNumbers: pageCodeLines.value === "true" } : {}),
+        ...(pageCodeTheme.value ? { codeTheme: pageCodeTheme.value as "obsidian" | "github" | "monokai" | "dracula" } : {})
       }, numberingControls.read(), tocDepthSelect.value
         ? resolveArticleTocMaxDepth(Number(tocDepthSelect.value), this.globalArticleTocMaxDepth)
         : undefined, miniMapSelect.value === "show" ? true : miniMapSelect.value === "hide" ? false : undefined);
@@ -3978,6 +4006,7 @@ export class MindMapEditor {
       this.options.articleTocMaxDepth,
       this.document.view?.articleMiniMap,
       this.options.showArticleMiniMap,
+      this.document.appearance ?? {},
       (appearance, numbering, articleTocMaxDepth, articleMiniMap) => this.mutate(() => {
         this.document.appearance = appearance;
         this.document.root.articleNumberingMode = numbering.articleNumberingMode;
