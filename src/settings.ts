@@ -128,6 +128,9 @@ export function createImageHostConfig(index = 1): ImageHostConfig {
 /**
  * MindMapStudioSettings 的结构化数据约定。字段会在模块边界传递，用于保持类型安全和版本兼容。
  */
+export type ImageRecognitionAutoConfirmDelaySeconds = 0 | 5 | 10 | 15 | null;
+
+/** MindMap Studio 的持久化设置集合。 */
 export interface MindMapStudioSettings {
   defaultFolder: string;
   filePrefix: string;
@@ -172,6 +175,7 @@ export interface MindMapStudioSettings {
   imageHosts: ImageHostConfig[];
   autoUploadEnabled: boolean;
   autoUploadDelaySeconds: number;
+  imageRecognitionAutoConfirmDelaySeconds: ImageRecognitionAutoConfirmDelaySeconds;
   autoUploadHostIds: string[];
   deleteLocalAfterUpload: boolean;
   imageFailoverEnabled: boolean;
@@ -277,7 +281,8 @@ export const DEFAULT_SETTINGS: MindMapStudioSettings = {
   defaultTextUnderline: false,
   imageHosts: [],
   autoUploadEnabled: false,
-  autoUploadDelaySeconds: 300,
+  autoUploadDelaySeconds: 60,
+  imageRecognitionAutoConfirmDelaySeconds: null,
   autoUploadHostIds: [],
   deleteLocalAfterUpload: true,
   imageFailoverEnabled: true,
@@ -862,6 +867,24 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
           this.plugin.settings.screenshotAutoRecognize = value;
           await this.plugin.saveSettings();
         }));
+    new Setting(imageRecognitionSettings)
+      .setName("识图结果确认")
+      .setDesc("选择是否跳过手动确认。延迟确认期间仍可修改识别文字或手动确认。")
+      .addDropdown((dropdown) => dropdown
+        .addOption("manual", "手动确认")
+        .addOption("0", "直接确认")
+        .addOption("5", "5 秒后自动确认")
+        .addOption("10", "10 秒后自动确认")
+        .addOption("15", "15 秒后自动确认")
+        .setValue(this.plugin.settings.imageRecognitionAutoConfirmDelaySeconds === null
+          ? "manual"
+          : String(this.plugin.settings.imageRecognitionAutoConfirmDelaySeconds))
+        .onChange(async (value) => {
+          this.plugin.settings.imageRecognitionAutoConfirmDelaySeconds = value === "manual"
+            ? null
+            : Number(value) as 0 | 5 | 10 | 15;
+          await this.plugin.saveSettings();
+        }));
 
     const aiHeader = containerEl.createDiv({ cls: "mms-ai-profiles-header" });
     aiHeader.createEl("h4", { text: "接口预设与自定义" });
@@ -1175,15 +1198,17 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
         }));
 
     if (this.plugin.settings.autoUploadEnabled) {
-      new Setting(containerEl)
-        .setName("自动上传延迟")
-      .setDesc("粘贴或截图后默认保留本地 5 分钟，再自动上传；范围 0–300 秒，便于撤销、AI 识图或继续编辑。重新打开导图时会按本地图片时间补齐上传。")
+      const formatDelay = (minutes: number): string => minutes === 0 ? "立即上传" : `${minutes} 分钟后自动上传`;
+      const delaySetting = new Setting(containerEl)
+        .setName("本地保留时长")
+      .setDesc(`粘贴或截图后默认保留本地 ${Math.round(this.plugin.settings.autoUploadDelaySeconds / 60)} 分钟；范围 0–120 分钟。当前：${formatDelay(Math.round(this.plugin.settings.autoUploadDelaySeconds / 60))}。到期或下次打开导图发现已到期时自动上传。`)
         .addSlider((slider) => slider
-          .setLimits(0, 300, 1)
+          .setLimits(0, 120, 1)
           .setDynamicTooltip()
-          .setValue(this.plugin.settings.autoUploadDelaySeconds)
+          .setValue(Math.round(this.plugin.settings.autoUploadDelaySeconds / 60))
           .onChange(async (value) => {
-            this.plugin.settings.autoUploadDelaySeconds = value;
+            this.plugin.settings.autoUploadDelaySeconds = value * 60;
+            delaySetting.setDesc(`粘贴或截图后默认保留本地 ${value} 分钟；范围 0–120 分钟。当前：${formatDelay(value)}。到期或下次打开导图发现已到期时自动上传。`);
             await this.plugin.saveSettings();
           }));
 

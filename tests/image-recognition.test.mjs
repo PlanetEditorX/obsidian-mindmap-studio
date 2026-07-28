@@ -87,6 +87,7 @@ test("image recognition prompt identifies sequence, node and untrusted image con
 test("image-to-text preview preserves block position and rejects stale replacement", () => {
   const source = structuredClone(document);
   const preview = recognition.previewImageTextReplacement(source, "chapter", "chapter-image-1", " 第一行\n第二行 ");
+  assert.equal(preview.localSource, "assets/one.png");
   const applied = recognition.applyImageTextReplacement(source, preview);
   const blocks = applied.root.children[0].content;
   assert.deepEqual(blocks.map((block) => [block.id, block.type]), [

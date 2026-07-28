@@ -51,6 +51,7 @@ export interface ImageTextReplacementPreview {
   sourceSnapshot: string;
   imageSource: string;
   imageAlt: string;
+  localSource?: string;
   text: string;
 }
 
@@ -129,6 +130,7 @@ export function previewImageTextReplacement(
     sourceSnapshot: imageBlockSnapshot(document, nodeId, blockId),
     imageSource: block.source,
     imageAlt: block.alt ?? "",
+    localSource: block.localSource ?? (/^https?:\/\//i.test(block.source) ? undefined : block.source),
     text
   };
 }

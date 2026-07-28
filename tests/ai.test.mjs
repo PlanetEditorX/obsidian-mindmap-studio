@@ -347,7 +347,9 @@ test("AI integration exposes toolbar, shortcut, page scope and node scope contra
   assert.match(settingsSource, /imageRecognitionAiProfileId: ""/);
   assert.match(settingsSource, /AI 识图接口/);
   assert.match(settingsSource, /containerEl\.appendChild\(imageRecognitionSettings\)/);
-  assert.match(settingsSource, /autoUploadDelaySeconds: 300/);
+  assert.match(settingsSource, /autoUploadDelaySeconds: 60/);
+  assert.match(settingsSource, /imageRecognitionAutoConfirmDelaySeconds: null/);
+  assert.match(settingsSource, /setLimits\(0, 120, 1\)/);
   assert.match(settingsSource, /screenshotShortcut: "Ctrl\+Shift\+S"/);
   assert.match(mainSource, /id: "ask-ai-about-mind-map"/);
   assert.match(mainSource, /async testAiProfile\(profileId: string\): Promise<void>/);
@@ -376,6 +378,8 @@ test("AI integration exposes toolbar, shortcut, page scope and node scope contra
   assert.match(mainSource, /remoteUrl \|\| blob/);
   assert.match(mainSource, /Date\.now\(\) - localFile\.stat\.mtime/);
   assert.match(mainSource, /queueAutoUpload/);
+  assert.match(mainSource, /Math\.min\(120 \* 60, Math\.round\(raw\.autoUploadDelaySeconds\)\)/);
+  assert.match(mainSource, /deleteRecognizedImageLocalAsset/);
   assert.match(editorModalsSource, /candidate\.kind !== "local" \|\| Boolean\(this\.resolveSource/);
   assert.match(viewSource, /onProposeEdit/);
   assert.match(viewSource, /onPreviewImageTextReplacements/);
@@ -383,6 +387,8 @@ test("AI integration exposes toolbar, shortcut, page scope and node scope contra
   assert.match(editorSource, /applyAiEdit\(preview: AiEditPreview\)/);
   assert.match(editorSource, /applyLocalReplace\(preview: LocalReplacePreview\)/);
   assert.match(editorSource, /applyImageTextReplacements\(previews: ImageTextReplacementPreview\[\]\)/);
+  assert.match(editorSource, /onDeleteRecognizedImageLocalAsset/);
+  assert.match(editorSource, /autoUploadScheduleMessage/);
   assert.match(editSource, /sourceSnapshot/);
   assert.match(modalSource, /payload\.overLimit/);
   assert.match(modalSource, /AI 整理并重新生成（确认后应用）/);
@@ -391,6 +397,7 @@ test("AI integration exposes toolbar, shortcut, page scope and node scope contra
   assert.match(modalSource, /onPreviewImageTextReplacements/);
   assert.match(modalSource, /确认原位替换/);
   assert.match(modalSource, /图片识图原位替换预览/);
+  assert.match(modalSource, /imageRecognitionAutoConfirmDelaySeconds/);
   assert.match(modalSource, /defaultImageRecognitionProfileId/);
   assert.match(modalSource, /本地文字替换（不调用 AI）/);
   assert.match(modalSource, /确认应用变更/);

@@ -1491,7 +1491,7 @@ export class MindMapEditor {
       syncNodeContentFields(target);
       this.replaceDocumentFromExternalEdit(next, target.id);
       const scheduled = this.callbacks.onScheduleAutoUpload(target.id, imageBlock.id, path, capture.suggestedName);
-      new Notice(scheduled ? `截图已插入，等待自动上传：${path}` : `截图已插入：${path}`);
+      new Notice(scheduled ? `截图已插入，${this.autoUploadScheduleMessage()}` : `截图已插入：${path}`);
       if (this.options.screenshotAutoRecognize) await this.recognizeImageBlock(target.id, imageBlock.id);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -1545,6 +1545,7 @@ export class MindMapEditor {
         preview,
         resolvedImageSource: resolved,
         modeLabel: result.mode === "local-ocr" ? "本地 OCR" : result.model ? `AI · ${result.model}` : "AI 识图",
+        autoConfirmDelaySeconds: this.options.imageRecognitionAutoConfirmDelaySeconds,
         onConfirm: (value) => this.applyImageRecognitionPreview(value)
       }).open();
     } catch (error) {
@@ -1559,12 +1560,17 @@ export class MindMapEditor {
   }
 
   /** 应用用户确认的图片转文字预览，并统一接入撤销、保存和聚焦。 */
-  applyImageTextReplacements(previews: ImageTextReplacementPreview[]): boolean {
+  async applyImageTextReplacements(previews: ImageTextReplacementPreview[]): Promise<boolean> {
     if (!previews.length || !this.ensureExternalEditAllowed()) return false;
     try {
       const next = applyImageTextReplacements(this.document, previews);
       this.replaceDocumentFromExternalEdit(next, previews[previews.length - 1]!.nodeId);
-      new Notice(previews.length === 1 ? "图片已替换为识别文字" : `已在原位置替换 ${previews.length} 张图片`);
+      const deleted = await Promise.all(previews.flatMap((preview) => preview.localSource
+        ? [this.callbacks.onDeleteRecognizedImageLocalAsset(preview.localSource, preview.blockId)]
+        : []));
+      const deletedCount = deleted.filter(Boolean).length;
+      const replacementMessage = previews.length === 1 ? "图片已替换为识别文字" : `已在原位置替换 ${previews.length} 张图片`;
+      new Notice(deletedCount ? `${replacementMessage}，本地图片已删除` : replacementMessage);
       return true;
     } catch (error) {
       new Notice(error instanceof Error ? error.message : "图片替换失败");
@@ -1573,8 +1579,14 @@ export class MindMapEditor {
   }
 
   /** 应用单张图片识别预览。 */
-  private applyImageRecognitionPreview(preview: ImageTextReplacementPreview): boolean {
+  private applyImageRecognitionPreview(preview: ImageTextReplacementPreview): Promise<boolean> {
     return this.applyImageTextReplacements([preview]);
+  }
+
+  /** 格式化粘贴和截图后的自动上传提示。 */
+  private autoUploadScheduleMessage(): string {
+    const minutes = Math.round(this.options.autoUploadDelaySeconds / 60);
+    return minutes === 0 ? "将立即自动上传" : `${minutes} 分钟后自动上传`;
   }
 
   /**
@@ -4166,7 +4178,7 @@ export class MindMapEditor {
           syncNodeContentFields(selected);
         });
         const scheduled = this.callbacks.onScheduleAutoUpload(selected.id, imageBlock.id, path, filename);
-        new Notice(scheduled ? `图片已保存，等待自动上传：${path}` : `图片已保存：${path}`);
+        new Notice(scheduled ? `图片已保存，${this.autoUploadScheduleMessage()}` : `图片已保存：${path}`);
       } catch (error) {
         console.error("MindMap Studio paste image failed", error);
         new Notice("粘贴图片失败");

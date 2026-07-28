@@ -38,6 +38,7 @@ export interface MindMapEditorCallbacks {
   onUploadImage: (blob: Blob, suggestedName: string, hostIds: string[]) => Promise<ImageHostUploadBatch>;
   onReadImageSource: (source: string) => Promise<{ blob: Blob; suggestedName: string } | null>;
   onScheduleAutoUpload: (nodeId: string, blockId: string, localPath: string, suggestedName: string) => boolean;
+  onDeleteRecognizedImageLocalAsset: (localPath: string, blockId: string) => Promise<boolean>;
   onRecognizeImage: (image: RecognizableImage, blob: Blob, remoteUrl?: string) => Promise<ImageRecognitionItemResult>;
   onCaptureScreenshot: () => Promise<DesktopCaptureResult>;
   onCreateSubmap: (node: MindMapNode) => Promise<MindMapSubmap>;
@@ -100,6 +101,8 @@ export interface MindMapEditorOptions {
   visibleToolbarItems: string[];
   toolbarItemOrder: string[];
   imageRecognitionMode: "ai" | "local-ocr";
+  imageRecognitionAutoConfirmDelaySeconds: 0 | 5 | 10 | 15 | null;
+  autoUploadDelaySeconds: number;
   screenshotShortcut: string;
   screenshotAutoRecognize: boolean;
 }
