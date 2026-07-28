@@ -881,14 +881,15 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
         }));
     new Setting(imageRecognitionSettings)
       .setName("截图快捷键")
-      .setDesc("编辑器获得焦点时生效；默认 Ctrl+Shift+S，格式示例：Ctrl+Shift+S、Alt+S。Obsidian 命令面板中的快捷键仍可单独设置。")
-      .addText((text) => text
-        .setValue(this.plugin.settings.screenshotShortcut)
-        .setPlaceholder(DEFAULT_SETTINGS.screenshotShortcut)
-        .onChange(async (value) => {
-          this.plugin.settings.screenshotShortcut = value.trim().slice(0, 120) || DEFAULT_SETTINGS.screenshotShortcut;
-          await this.plugin.saveSettings();
-        }));
+      .setDesc("点击输入框后，按下 1 至 3 个键的组合即可保存；支持单键、Ctrl/Shift/Alt 与主键组合。编辑器获得焦点时生效。")
+      .addText((text) => {
+        text.setValue(this.plugin.settings.screenshotShortcut);
+        text.setPlaceholder(DEFAULT_SETTINGS.screenshotShortcut);
+        text.inputEl.readOnly = true;
+        text.inputEl.addClass("mms-shortcut-recorder");
+        text.inputEl.setAttr("aria-label", "点击后按下新的截图快捷键");
+        text.inputEl.addEventListener("keydown", (event) => void this.captureScreenshotShortcut(event, text));
+      });
     new Setting(imageRecognitionSettings)
       .setName("截图后自动识图")
       .setDesc("截图插入节点后自动运行当前识图方式并打开图片与文字对比预览；仍需确认后才替换。")
@@ -1857,6 +1858,18 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
       }
       sections = Array.from(this.containerEl.querySelectorAll<HTMLDetailsElement>(":scope > .mms-settings-section"));
     }
+    const sectionOrder = [
+      "显示模式", "主题模板", "画布背景", "字体与文字", "节点样式", "连线样式",
+      "编辑", "节点快速输入快捷键", "工具栏内容", "文件与布局", "图片与图床",
+      "AI 助手", "全局搜索索引", "管理配置"
+    ];
+    const sectionRank = new Map(sectionOrder.map((title, index) => [title, index]));
+    sections.sort((left, right) => {
+      const leftTitle = left.querySelector("summary")?.textContent?.trim() ?? "";
+      const rightTitle = right.querySelector("summary")?.textContent?.trim() ?? "";
+      return (sectionRank.get(leftTitle) ?? Number.MAX_SAFE_INTEGER) - (sectionRank.get(rightTitle) ?? Number.MAX_SAFE_INTEGER);
+    });
+    sections.forEach((section) => this.containerEl.append(section));
     for (const section of sections) {
       const matches = !query || (section.textContent?.toLocaleLowerCase().includes(query) ?? false);
       section.toggleClass("is-search-hidden", !matches);
@@ -1910,6 +1923,40 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
   private async saveAndRefresh(): Promise<void> {
     await this.plugin.saveSettings();
     this.plugin.refreshOpenViews();
+  }
+
+  /** 记录截图快捷键；修饰键必须与一个非修饰主键同时按下。 */
+  private async captureScreenshotShortcut(event: KeyboardEvent, text: TextComponent): Promise<void> {
+    event.preventDefault();
+    event.stopPropagation();
+    if (event.repeat) return;
+    if (event.key === "Escape") {
+      text.inputEl.blur();
+      return;
+    }
+    const shortcut = this.shortcutFromKeyboardEvent(event);
+    if (!shortcut) return;
+    this.plugin.settings.screenshotShortcut = shortcut;
+    text.setValue(shortcut);
+    await this.saveAndRefresh();
+    new Notice(`截图快捷键已设为 ${shortcut}`);
+    text.inputEl.blur();
+  }
+
+  /** 将实际键盘事件转换为编辑器可识别的 1 至 3 键快捷键文本。 */
+  private shortcutFromKeyboardEvent(event: KeyboardEvent): string | null {
+    if (["Control", "Shift", "Alt", "Meta"].includes(event.key)) return null;
+    const keyNames: Record<string, string> = {
+      " ": "Space",
+      "ArrowUp": "Up",
+      "ArrowDown": "Down",
+      "ArrowLeft": "Left",
+      "ArrowRight": "Right"
+    };
+    const key = keyNames[event.key] ?? (event.key.length === 1 ? event.key.toUpperCase() : event.key);
+    const modifiers = [event.ctrlKey || event.metaKey ? "Ctrl" : "", event.shiftKey ? "Shift" : "", event.altKey ? "Alt" : ""].filter(Boolean);
+    const shortcut = [...modifiers, key];
+    return shortcut.length <= 3 ? shortcut.join("+") : null;
   }
 
   /** 导出当前插件设置；桌面端优先显示系统保存位置选择器。 */
