@@ -4664,9 +4664,29 @@ function htmlTocList(items: Array<
 type TocBranch =
 ```
 
+### 函数 `escapeXml`
+
+源码：`src/import/import-export.ts:149`
+
+转义 OOXML 文本内容。
+
+```ts
+function escapeXml(value: string): string
+```
+
+### 函数 `collectExportTocItems`
+
+源码：`src/import/import-export.ts:154`
+
+将导出章节收集为父子导图顺序一致的目录项。
+
+```ts
+function collectExportTocItems(sections: ReadingSection[], maxTocDepth: number): Array<
+```
+
 ### 函数 `readingSectionsToHtml`
 
-源码：`src/import/import-export.ts:156`
+源码：`src/import/import-export.ts:195`
 
 Produces one portable article from a map and all recursively collected child maps in the same order used by continuous reading mode.
 
@@ -4674,9 +4694,19 @@ Produces one portable article from a map and all recursively collected child map
 export function readingSectionsToHtml(sections: ReadingSection[], tocMaxDepth = 3): string
 ```
 
+### 函数 `readingSectionsToDocx`
+
+源码：`src/import/import-export.ts:273`
+
+Produces a native Word document with bookmarks and internal TOC hyperlinks.
+
+```ts
+export function readingSectionsToDocx(sections: ReadingSection[], tocMaxDepth = 3): Uint8Array
+```
+
 ### 函数 `readingSectionsToMarkdown`
 
-源码：`src/import/import-export.ts:233`
+源码：`src/import/import-export.ts:326`
 
 Produces article-oriented Markdown with a linked table of contents.
 
@@ -6497,7 +6527,7 @@ export async function captureDesktopScreenshot(hideObsidian: boolean): Promise<D
 参见源码中的实现和调用位置。
 
 ```ts
-export type DesktopExportExtension = "svg" | "md" | "json" | "html" | "doc" | "pdf";
+export type DesktopExportExtension = "svg" | "md" | "json" | "html" | "doc" | "docx" | "pdf";
 ```
 
 ### 接口 `ElectronPdfWindow`
@@ -7072,9 +7102,19 @@ private resolveImage(rawSource: string): string | null
 private async exportTextFile(extension: "svg" | "md" | "json" | "html" | "doc", content: string, preferExternal = false): Promise<void>
 ```
 
+### 方法 `MindMapStudioView.exportBinaryFile`
+
+源码：`src/view.ts:567`
+
+将二进制文档写入所选位置或当前库。
+
+```ts
+private async exportBinaryFile(extension: "docx", content: Uint8Array): Promise<void>
+```
+
 ### 方法 `MindMapStudioView.exportArticleFamily`
 
-源码：`src/view.ts:573`
+源码：`src/view.ts:590`
 
 Exports the current map family as one continuous document. A top-level directory uses its already collected reading sections; a child page starts at the current map and recursively includes descendants only.
 

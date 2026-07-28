@@ -11,7 +11,7 @@ import { MindMapEditor } from "./editor/editor";
 import { parseDocument, serializeDocument, type DisplayMode, type MindMapDocument } from "./core/model";
 import { settingsToAppearance } from "./settings";
 import { resolveArticleTocMaxDepth, type ArticlePageNavigation, type ArticleTocEntry, type ReadingSection } from "./article/modes";
-import { readingSectionsToHtml, readingSectionsToMarkdown } from "./import/import-export";
+import { readingSectionsToDocx, readingSectionsToHtml, readingSectionsToMarkdown } from "./import/import-export";
 import { AiAskModal } from "./ai/modal";
 import { enabledAiProfiles } from "./ai/config";
 import { buildAiMarkdownPayload } from "./ai/markdown";
@@ -563,6 +563,23 @@ export class MindMapStudioView extends TextFileView {
     new Notice(`已导出：${path}`);
   }
 
+  /** 将二进制文档写入所选位置或当前库。 */
+  private async exportBinaryFile(extension: "docx", content: Uint8Array): Promise<void> {
+    const file = this.file;
+    const baseName = file?.basename ?? this.document?.title ?? "思维导图";
+    const desktopResult = await saveDesktopExportFile(extension, baseName, content);
+    if (desktopResult) {
+      if (desktopResult.path) new Notice(`已导出：${desktopResult.path}`);
+      return;
+    }
+    const parentPath = file?.parent?.path ?? "";
+    const path = await this.plugin.getAvailablePath(normalizePath(`${parentPath ? `${parentPath}/` : ""}${baseName}.${extension}`));
+    const binary = new ArrayBuffer(content.byteLength);
+    new Uint8Array(binary).set(content);
+    await this.app.vault.createBinary(path, binary);
+    new Notice(`已导出：${path}`);
+  }
+
   /**
    * Exports the current map family as one continuous document. A top-level
    * directory uses its already collected reading sections; a child page starts
@@ -582,6 +599,10 @@ export class MindMapStudioView extends TextFileView {
     if (format === "md") {
       const markdown = readingSectionsToMarkdown(sections, tocMaxDepth);
       await this.exportTextFile("md", markdown, true);
+      return;
+    }
+    if (format === "doc") {
+      await this.exportBinaryFile("docx", readingSectionsToDocx(sections, tocMaxDepth));
       return;
     }
     const html = readingSectionsToHtml(sections, tocMaxDepth);

@@ -611,7 +611,7 @@ export class DocumentExportModal extends Modal {
     const formats = this.contentEl.createDiv({ cls: "mms-document-export-grid" });
     for (const [format, title, description] of [
       ["html", "HTML", "独立网页，可用浏览器打开"],
-      ["doc", "Word", "Word 兼容文档（.doc）"],
+      ["doc", "Word", "Word 文档（.docx）"],
       ["pdf", "PDF", "打开打印版并另存为 PDF"],
       ["md", "Markdown", "保留标题和节点层级"]
     ] as const) {
