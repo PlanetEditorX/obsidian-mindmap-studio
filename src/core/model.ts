@@ -269,6 +269,26 @@ export interface MindMapNodeStyle {
   minHeight?: number;
 }
 
+/** A structured question can be either a multiple-choice or long-form exercise. */
+export type MindMapQuestionMode = "choice" | "essay";
+
+/** A selectable answer item in a structured question. */
+export interface MindMapQuestionOption {
+  id: string;
+  label: string;
+  content: MindMapContentBlock[];
+}
+
+/** Persisted question content attached to a mind-map node. */
+export interface MindMapQuestion {
+  mode: MindMapQuestionMode;
+  stem: MindMapContentBlock[];
+  options: MindMapQuestionOption[];
+  answer: MindMapContentBlock[];
+  explanation: MindMapContentBlock[];
+  tags: string[];
+}
+
 /**
  * MindMapNode 的结构化数据约定。字段会在模块边界传递，用于保持类型安全和版本兼容。
  */
@@ -286,6 +306,8 @@ export interface MindMapNode {
   submap?: MindMapSubmap;
   icon?: string;
   tags?: string[];
+  /** Optional structured exercise content; the node's primary content mirrors its stem. */
+  question?: MindMapQuestion;
   task?: TaskStatus;
   /** Disable numbering or force a manually selected article level; undefined keeps automatic behavior. */
   articleNumberingMode?: ArticleNumberingMode;
@@ -354,6 +376,20 @@ export function newId(): string {
  */
 export function createNode(text = "新节点"): MindMapNode {
   return { id: newId(), text, children: [] };
+}
+
+/** Creates an editable structured question with a text block for every field. */
+export function createMindMapQuestion(mode: MindMapQuestionMode = "choice"): MindMapQuestion {
+  return {
+    mode,
+    stem: [{ id: newId(), type: "text", text: "" }],
+    options: mode === "choice"
+      ? ["A", "B", "C", "D"].map((label) => ({ id: newId(), label, content: [{ id: newId(), type: "text", text: "" }] }))
+      : [],
+    answer: [{ id: newId(), type: "text", text: "" }],
+    explanation: [{ id: newId(), type: "text", text: "" }],
+    tags: []
+  };
 }
 
 /**
@@ -978,6 +1014,44 @@ function normalizeTags(value: unknown): string[] | undefined {
   return tags.length ? tags : undefined;
 }
 
+/** Normalizes an untrusted structured-question payload from persisted JSON. */
+function normalizeMindMapQuestion(value: unknown): MindMapQuestion | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const input = value as Partial<MindMapQuestion>;
+  const normalizeBlocks = (blocks: unknown): MindMapContentBlock[] => Array.isArray(blocks)
+    ? blocks.map(normalizeContentBlock).filter((block): block is MindMapContentBlock => Boolean(block))
+    : [];
+  const mode: MindMapQuestionMode = input.mode === "essay" ? "essay" : "choice";
+  const options = mode === "choice" && Array.isArray(input.options)
+    ? input.options.slice(0, 12).flatMap((option, index) => {
+      if (!option || typeof option !== "object") return [];
+      const item = option as Partial<MindMapQuestionOption>;
+      const content = normalizeBlocks(item.content);
+      return [{
+        id: typeof item.id === "string" && item.id.trim() ? item.id.trim().slice(0, 160) : newId(),
+        label: typeof item.label === "string" && item.label.trim() ? item.label.trim().slice(0, 16) : String.fromCharCode(65 + index),
+        content
+      }];
+    })
+    : [];
+  return {
+    mode,
+    stem: normalizeBlocks(input.stem),
+    options,
+    answer: normalizeBlocks(input.answer),
+    explanation: normalizeBlocks(input.explanation),
+    tags: normalizeTags(input.tags) ?? []
+  };
+}
+
+/** Mirrors question stem and tags into standard node fields used by existing renderers and exports. */
+export function syncMindMapQuestionFields(node: MindMapNode): void {
+  if (!node.question) return;
+  node.content = node.question.stem.length ? node.question.stem : undefined;
+  syncNodeContentFields(node);
+  node.tags = Array.from(new Set([...(node.tags ?? []), ...node.question.tags]));
+}
+
 /**
  * 校验并规范化node，并保持模型、界面和持久化状态的一致性。
  *
@@ -1008,7 +1082,7 @@ function normalizeNode(input: Partial<MindMapNode> | undefined, fallbackText: st
   const articleNumberingLevel = articleNumberingMode === "manual" && Number.isFinite(input?.articleNumberingLevel)
     ? Math.min(8, Math.max(1, Math.floor(input?.articleNumberingLevel ?? 1)))
     : undefined;
-  return {
+  const node: MindMapNode = {
     id: typeof input?.id === "string" && input.id ? input.id : newId(),
     text,
     richText: textBlocks.length === 1 ? textBlocks[0]?.richText : undefined,
@@ -1021,6 +1095,7 @@ function normalizeNode(input: Partial<MindMapNode> | undefined, fallbackText: st
     submap: normalizeSubmap(input?.submap),
     icon: typeof input?.icon === "string" && input.icon.trim() ? input.icon.trim().slice(0, 12) : undefined,
     tags: normalizeTags(input?.tags),
+    question: normalizeMindMapQuestion(input?.question),
     task: normalizeTask(input?.task),
     articleNumberingMode,
     articleNumberingLevel,
@@ -1030,6 +1105,8 @@ function normalizeNode(input: Partial<MindMapNode> | undefined, fallbackText: st
       ? input.children.map((child, index) => normalizeNode(child, `节点 ${index + 1}`))
       : []
   };
+  syncMindMapQuestionFields(node);
+  return node;
 }
 
 /**

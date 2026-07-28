@@ -41,6 +41,7 @@ interface MindMapNode {
   icon?: string;
   note?: string;
   tags?: string[];
+  question?: MindMapQuestion;
   link?: string;
   task?: "todo" | "doing" | "done";
   image?: string;
@@ -68,6 +69,10 @@ interface MindMapNode {
 - 不同文章层级使用独立的同级计数器，混用“一、”和“1.”时不会互相占用序号。
 - 同级存在自然标题时，普通末端节点按同级标题编号；孤立末端节点仍作为正文。
 - `view.zoom`、`view.panX`、`view.panY` 保存导图视口，显示模式切换不会清除这些可选字段。
+
+### 题目节点
+
+`question` 是可选的结构化题目数据，支持 `choice` 和 `essay` 两种模式。它包含图文题干、选择项、答案、解答及标签；题干会同步到标准 `content` 字段，保证既有的导出、搜索和阅读模式仍按普通节点工作。
 - `view.articleTocMaxDepth` 是可选的 1–8 层目录深度覆盖。字段缺失时，文章模式和通读模式跟随插件全局 `articleTocMaxDepth`；字段存在时当前脑图优先。
 
 ## 4. 有序内容块
