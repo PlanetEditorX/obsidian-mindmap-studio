@@ -4,7 +4,12 @@
  */
 
 import { Component, MarkdownRenderer, Modal, Notice, setIcon, type App } from "obsidian";
-import type { ImageRecognitionBatchResult, ImageRecognitionMode } from "../vision/recognition";
+import type {
+  ImageRecognitionBatchResult,
+  ImageRecognitionItemResult,
+  ImageRecognitionMode,
+  ImageTextReplacementPreview
+} from "../vision/recognition";
 import type { AiProfileConfig } from "./config";
 import { formatByteSize, type AiMarkdownPayload } from "./markdown";
 import type { AiCompletionResult } from "./client";
@@ -30,6 +35,8 @@ export interface AiAskModalOptions {
   onAsk: (profileId: string, question: string) => Promise<AiCompletionResult>;
   onProposeEdit: (profileId: string, instruction: string) => Promise<AiCompletionResult>;
   onRecognizeImages: (profileId: string, instruction: string) => Promise<ImageRecognitionBatchResult>;
+  onPreviewImageTextReplacements: (items: ImageRecognitionItemResult[]) => ImageTextReplacementPreview[];
+  onApplyImageTextReplacements: (previews: ImageTextReplacementPreview[]) => boolean | Promise<boolean>;
   onPreviewAiEdit: (responseText: string) => AiEditPreview;
   onApplyAiEdit: (preview: AiEditPreview) => boolean | Promise<boolean>;
   onPreviewLocalReplace: (query: string, replacement: string, caseSensitive: boolean) => LocalReplacePreview;
@@ -152,6 +159,8 @@ export class AiAskModal extends Modal {
     let answerText = "";
     let pendingAiPreview: AiEditPreview | null = null;
     let pendingReplacePreview: LocalReplacePreview | null = null;
+    let pendingImagePreviews: ImageTextReplacementPreview[] = [];
+    let imagePreviewInputs: HTMLTextAreaElement[] = [];
     const currentMode = (): AiInteractionMode => mode.value as AiInteractionMode;
     const recognitionUsesAi = (): boolean => currentMode() === "vision" && this.options.imageRecognitionMode === "ai";
     const requiresAiProfile = (): boolean => currentMode() === "ask" || currentMode() === "edit" || recognitionUsesAi();
@@ -165,6 +174,8 @@ export class AiAskModal extends Modal {
       answerText = "";
       pendingAiPreview = null;
       pendingReplacePreview = null;
+      pendingImagePreviews = [];
+      imagePreviewInputs = [];
       result.empty();
       preview.empty();
       result.addClass("is-hidden");
@@ -172,6 +183,7 @@ export class AiAskModal extends Modal {
       preview.addClass("is-hidden");
       copy.addClass("is-hidden");
       apply.addClass("is-hidden");
+      apply.setText("确认应用变更");
       steps.forEach((step, index) => { step.dataset.state = index === 0 ? "done" : "pending"; });
     };
     const setBusy = (busy: boolean): void => {
@@ -181,6 +193,7 @@ export class AiAskModal extends Modal {
       question.disabled = busy;
       findInput.disabled = busy;
       replacementInput.disabled = busy;
+      imagePreviewInputs.forEach((input) => { input.disabled = busy; });
       apply.disabled = busy;
       form.toggleClass("is-busy", busy);
     };
@@ -264,6 +277,35 @@ export class AiAskModal extends Modal {
       status.setText(replacePreview.matchCount ? "替换预览已生成，等待确认。" : "没有找到匹配文字，未修改导图。");
     };
 
+    const showImageRecognitionPreview = (batch: ImageRecognitionBatchResult): void => {
+      pendingImagePreviews = this.options.onPreviewImageTextReplacements(batch.items);
+      preview.empty();
+      preview.createEl("h3", { text: "图片识图原位替换预览" });
+      preview.createEl("p", {
+        text: "每项文字会替换其原图片所在的位置。可先逐项修改识别文字，确认后一次写入撤销历史。"
+      });
+      imagePreviewInputs = pendingImagePreviews.map((item, index) => {
+        const card = preview.createDiv({ cls: "mms-ai-image-recognition-item" });
+        card.createEl("h4", { text: `${batch.items[index]!.index}. ${batch.items[index]!.nodeLabel}` });
+        const input = card.createEl("textarea", { attr: { rows: "5", "aria-label": `第 ${batch.items[index]!.index} 张图片识别文字` } });
+        input.value = item.text;
+        return input;
+      });
+      if (batch.failed.length) {
+        const failed = preview.createDiv({ cls: "mms-ai-apply-warning" });
+        failed.setText(`未成功识别 ${batch.failed.length} 张图片；它们不会被替换。`);
+      }
+      preview.removeClass("is-hidden");
+      resultMeta.setText(`${batch.mode === "ai" ? "AI 识图" : "本地 OCR"} · 成功 ${batch.items.length}/${batch.items.length + batch.failed.length}`);
+      resultMeta.removeClass("is-hidden");
+      copy.toggleClass("is-hidden", !answerText);
+      apply.toggleClass("is-hidden", pendingImagePreviews.length === 0);
+      apply.setText("确认原位替换");
+      status.setText(batch.failed.length
+        ? `识图完成：成功 ${batch.items.length} 张，失败 ${batch.failed.length} 张。请检查后确认替换成功项。`
+        : `识图完成：请检查 ${batch.items.length} 项文字后确认原位替换。`);
+    };
+
     mode.addEventListener("change", updateMode);
     close.addEventListener("click", () => this.close());
     copy.addEventListener("click", () => {
@@ -271,11 +313,17 @@ export class AiAskModal extends Modal {
       void navigator.clipboard.writeText(answerText).then(() => new Notice(currentMode() === "vision" ? "识图结果已复制" : "AI 回答已复制"));
     });
     apply.addEventListener("click", () => {
+      const imagePreviews = pendingImagePreviews.map((preview, index) => ({
+        ...preview,
+        text: imagePreviewInputs[index]?.value.trim() ?? preview.text
+      })).filter((preview) => preview.text);
       const action = pendingAiPreview
         ? this.options.onApplyAiEdit(pendingAiPreview)
         : pendingReplacePreview
           ? this.options.onApplyLocalReplace(pendingReplacePreview)
-          : false;
+          : imagePreviews.length
+            ? this.options.onApplyImageTextReplacements(imagePreviews)
+            : false;
       setBusy(true);
       void Promise.resolve(action)
         .then((applied) => {
@@ -319,23 +367,15 @@ export class AiAskModal extends Modal {
         setStep(0, "active");
         status.setText(`正在读取并依次识别 ${this.options.imageCount} 张图片…`);
         void this.options.onRecognizeImages(provider.value, prompt)
-          .then(async (batch) => {
-            if (session !== this.modalSession || !this.markdownRenderComponent) return;
+          .then((batch) => {
+            if (session !== this.modalSession) return;
             setStep(0, "done");
             setStep(1, "done");
             setStep(2, "done");
             setStep(3, "active");
             answerText = batch.text;
-            await MarkdownRenderer.render(this.app, answerText, result, this.options.sourcePath, this.markdownRenderComponent);
-            if (session !== this.modalSession) return;
-            result.removeClass("is-hidden");
-            resultMeta.setText(`${batch.mode === "ai" ? "AI 识图" : "本地 OCR"} · 成功 ${batch.items.length}/${batch.items.length + batch.failed.length}`);
-            resultMeta.removeClass("is-hidden");
-            copy.removeClass("is-hidden");
+            showImageRecognitionPreview(batch);
             setStep(3, batch.failed.length && !batch.items.length ? "error" : "done");
-            status.setText(batch.failed.length
-              ? `识图完成：成功 ${batch.items.length} 张，失败 ${batch.failed.length} 张。`
-              : `识图完成：共处理 ${batch.items.length} 张图片。`);
           })
           .catch((error) => {
             if (session !== this.modalSession) return;

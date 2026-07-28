@@ -101,6 +101,29 @@ test("image-to-text preview preserves block position and rejects stale replaceme
   assert.throws(() => recognition.applyImageTextReplacement(source, preview), /预览后已发生变化/);
 });
 
+test("batch image-to-text replacement keeps every recognized item at its original position", () => {
+  const source = structuredClone(document);
+  const previews = [
+    recognition.previewImageTextReplacement(source, "chapter", "chapter-image-1", "第一张图片文字"),
+    recognition.previewImageTextReplacement(source, "appendix", "appendix-image", "附录图片文字")
+  ];
+  const applied = recognition.applyImageTextReplacements(source, previews);
+  const chapterBlocks = applied.root.children[0].content;
+  const appendixBlocks = applied.root.children[1].content;
+
+  assert.deepEqual(chapterBlocks.map((block) => [block.id, block.type]), [
+    ["chapter-text", "text"],
+    ["chapter-image-1", "text"],
+    ["chapter-image-2", "image"]
+  ]);
+  assert.equal(chapterBlocks[1].text, "第一张图片文字");
+  assert.deepEqual(appendixBlocks.map((block) => [block.id, block.type, block.text]), [
+    ["appendix-image", "text", "附录图片文字"]
+  ]);
+  assert.equal(source.root.children[0].content[1].type, "image");
+  assert.equal(source.root.children[1].content[0].type, "image");
+});
+
 test("local OCR arguments are parsed without a shell", () => {
   assert.deepEqual(localOcr.parseCommandArguments('--psm 6 -c "preserve_interword_spaces=1"'), [
     "--psm",

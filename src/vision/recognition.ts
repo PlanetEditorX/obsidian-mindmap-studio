@@ -150,3 +150,14 @@ export function applyImageTextReplacement(document: MindMapDocument, preview: Im
   if (node.id === next.root.id && preview.text) next.title = nodePlainText(node) || next.title;
   return next;
 }
+
+/** 批量应用已经确认的图片转文字预览；任一快照过期时不会向编辑器写入部分变更。 */
+export function applyImageTextReplacements(
+  document: MindMapDocument,
+  previews: ImageTextReplacementPreview[]
+): MindMapDocument {
+  return previews.reduce(
+    (next, preview) => applyImageTextReplacement(next, preview),
+    document
+  );
+}

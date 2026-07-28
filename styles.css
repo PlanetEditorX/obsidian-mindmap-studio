@@ -4034,6 +4034,23 @@
   overflow-wrap: anywhere;
 }
 
+.mms-ai-image-recognition-item {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--background-modifier-border);
+}
+
+.mms-ai-image-recognition-item h4 {
+  margin: 0 0 8px;
+  font-size: var(--font-ui-medium);
+}
+
+.mms-ai-image-recognition-item textarea {
+  box-sizing: border-box;
+  width: 100%;
+  resize: vertical;
+}
+
 .mms-ai-apply-warning {
   color: var(--text-warning);
 }
