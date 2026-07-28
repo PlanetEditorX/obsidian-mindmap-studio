@@ -4,7 +4,7 @@
  */
 
 /** 外部导出文件格式。 */
-export type DesktopExportExtension = "svg" | "md" | "json" | "html" | "doc" | "pdf";
+export type DesktopExportExtension = "svg" | "md" | "json" | "html" | "doc" | "docx" | "pdf";
 
 /** Electron 离屏 PDF 渲染窗口的最小接口。 */
 interface ElectronPdfWindow {

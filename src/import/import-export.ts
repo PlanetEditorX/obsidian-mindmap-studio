@@ -3,7 +3,7 @@
  * @description 导入导出领域的 XMind 与文章文档转换工具。
  */
 
-import { strFromU8, unzipSync } from "fflate";
+import { strFromU8, strToU8, unzipSync, zipSync } from "fflate";
 import { createDefaultDocument, createNode, nodePlainText, type MindMapDocument, type MindMapNode } from "../core/model";
 import { buildArticleNodeInfo, type ReadingSection } from "../article/modes";
 
@@ -145,6 +145,45 @@ function htmlTocList(items: Array<{ depth: number; title: string; anchor: string
   return renderBranches(root);
 }
 
+/** 转义 OOXML 文本内容。 */
+function escapeXml(value: string): string {
+  return escapeHtml(value).replaceAll("'", "&apos;");
+}
+
+/** 将导出章节收集为父子导图顺序一致的目录项。 */
+function collectExportTocItems(sections: ReadingSection[], maxTocDepth: number): Array<{ depth: number; title: string; anchor: string }> {
+  const items: Array<{ depth: number; title: string; anchor: string }> = [];
+  const childSections = new Map<string, number>();
+  sections.forEach((section, index) => {
+    const key = parentNodeKey(section.parentFilePath, section.parentNodeId);
+    if (key) childSections.set(key, index);
+  });
+  const collect = (sectionIndex: number, visited = new Set<number>()): void => {
+    if (visited.has(sectionIndex)) return;
+    visited.add(sectionIndex);
+    const section = sections[sectionIndex];
+    if (!section) return;
+    const push = (depth: number, title: string, anchor: string): void => {
+      if (depth <= maxTocDepth) items.push({ depth, title, anchor });
+    };
+    if (sectionIndex > 0 && !parentNodeKey(section.parentFilePath, section.parentNodeId)) {
+      push(Math.max(1, section.baseDepth), nodePlainText(section.document.root) || section.document.title, exportAnchor(sectionIndex, `section-${sectionIndex}`));
+    }
+    for (const info of buildArticleNodeInfo(section.document.root, section.baseDepth)) {
+      const title = info.displayTitle || info.title || "未命名";
+      const childIndex = childSections.get(`${section.filePath}\u0000${info.node.id}`);
+      if (childIndex !== undefined) {
+        push(Math.max(1, info.depth), title, exportAnchor(childIndex, `section-${childIndex}`));
+        collect(childIndex, visited);
+      } else if (info.isHeading) {
+        push(Math.max(1, info.depth), title, exportAnchor(sectionIndex, info.anchor));
+      }
+    }
+  };
+  collect(0);
+  return items;
+}
+
 /**
  * Produces one portable article from a map and all recursively collected child
  * maps in the same order used by continuous reading mode.
@@ -210,6 +249,7 @@ export function readingSectionsToHtml(sections: ReadingSection[], tocMaxDepth = 
     return `<section class="map-section">${heading}${renderArticleNode(filePath, document, baseDepth, index)}</section>`;
   }).join("");
   collectTocItems(0);
+  tocItems.splice(0, tocItems.length, ...collectExportTocItems(sections, maxTocDepth).map((item) => ({ ...item, title: escapeHtml(item.title) })));
   const toc = tocItems.length
     ? `<nav class="export-toc"><h2>目录</h2>${htmlTocList(tocItems)}</nav>`
     : "";
@@ -221,6 +261,59 @@ h1{text-align:center;border-bottom:2px solid #ddd;padding-bottom:18px}h2,h3,h4,h
 section{break-inside:auto}.export-toc{margin:2em 0 3em}.export-toc>ul{padding-left:0;list-style:none}.export-toc ul ul{padding-left:1.5em;list-style:none}.export-toc li{margin:.2em 0}.map-section+.map-section{margin-top:3em;border-top:1px solid #ddd}.body-paragraph{margin:.75em 0;text-align:justify;text-indent:2em}.note{padding:10px 14px;color:#555;background:#f6f7f9;border-left:3px solid #6366f1}
 @media print{body{margin:0;max-width:none}a{color:inherit}}
 </style></head><body><article><h1>${title}</h1>${toc}${body}</article></body></html>`;
+}
+
+/**
+ * Produces a native Word document with bookmarks and internal TOC hyperlinks.
+ *
+ * @param sections Ordered physical maps to merge.
+ * @param tocMaxDepth Maximum exported TOC depth resolved from current/global article settings.
+ * @returns A complete .docx archive.
+ */
+export function readingSectionsToDocx(sections: ReadingSection[], tocMaxDepth = 3): Uint8Array {
+  const maxTocDepth = normalizedExportTocMaxDepth(tocMaxDepth);
+  const first = sections[0]?.document;
+  const title = first ? (nodePlainText(first.root) || first.title) : "导出文档";
+  let bookmarkId = 1;
+  const paragraph = (text: string, style = "", indent = 0, anchor = ""): string => {
+    const properties = (style ? '<w:pStyle w:val="' + style + '"/>' : "") + (indent ? '<w:ind w:left="' + indent + '"/>' : "");
+    const bookmark = anchor ? '<w:bookmarkStart w:id="' + bookmarkId + '" w:name="' + anchor + '"/><w:bookmarkEnd w:id="' + bookmarkId++ + '"/>' : "";
+    return '<w:p><w:pPr>' + properties + '</w:pPr>' + bookmark + '<w:r><w:t xml:space="preserve">' + escapeXml(text) + '</w:t></w:r></w:p>';
+  };
+  const toc = collectExportTocItems(sections, maxTocDepth).map((item) => {
+    const indent = Math.max(0, item.depth - 1) * 720;
+    return '<w:p><w:pPr><w:ind w:left="' + indent + '"/></w:pPr><w:hyperlink w:anchor="' + item.anchor + '" w:history="1"><w:r><w:rPr><w:color w:val="0563C1"/><w:u w:val="single"/></w:rPr><w:t xml:space="preserve">' + escapeXml(item.title) + '</w:t></w:r></w:hyperlink></w:p>';
+  }).join("");
+  const childSectionAnchors = new Map<string, string>();
+  sections.forEach((section, index) => {
+    const key = parentNodeKey(section.parentFilePath, section.parentNodeId);
+    if (key) childSectionAnchors.set(key, exportAnchor(index, "section-" + index));
+  });
+  const body: string[] = [paragraph(title, "Title")];
+  if (toc) body.push(paragraph("目录", "Heading1"), toc);
+  sections.forEach(({ filePath, document, baseDepth }, sectionIndex) => {
+    if (sectionIndex > 0) {
+      body.push(paragraph(nodePlainText(document.root) || document.title, "Heading" + Math.min(6, Math.max(1, baseDepth + 1)), 0, exportAnchor(sectionIndex, "section-" + sectionIndex)));
+    }
+    for (const info of buildArticleNodeInfo(document.root, baseDepth)) {
+      if (childSectionAnchors.has(filePath + "\u0000" + info.node.id)) continue;
+      const text = info.displayTitle || info.title || "未命名";
+      body.push(info.isHeading
+        ? paragraph(text, "Heading" + Math.min(6, Math.max(2, info.depth + 1)), 0, exportAnchor(sectionIndex, info.anchor))
+        : paragraph(text));
+      if (info.node.note) body.push(paragraph(info.node.note));
+    }
+  });
+  const documentXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>' + body.join("") + '<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440"/></w:sectPr></w:body></w:document>';
+  const styles = [1, 2, 3, 4, 5, 6].map((level) => '<w:style w:type="paragraph" w:styleId="Heading' + level + '"><w:name w:val="heading ' + level + '"/><w:rPr><w:b/><w:sz w:val="' + Math.max(20, 32 - level * 2) + '"/></w:rPr></w:style>').join("");
+  const stylesXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style><w:style w:type="paragraph" w:styleId="Title"><w:name w:val="Title"/><w:rPr><w:b/><w:sz w:val="36"/></w:rPr></w:style>' + styles + '</w:styles>';
+  return zipSync({
+    "[Content_Types].xml": strToU8('<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/></Types>'),
+    "_rels/.rels": strToU8('<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>'),
+    "word/document.xml": strToU8(documentXml),
+    "word/styles.xml": strToU8(stylesXml),
+    "word/_rels/document.xml.rels": strToU8('<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"></Relationships>')
+  });
 }
 
 /**
