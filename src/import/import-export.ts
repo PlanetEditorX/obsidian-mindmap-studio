@@ -138,6 +138,11 @@ export function readingSectionsToHtml(sections: ReadingSection[], tocMaxDepth = 
   const renderArticleNode = (filePath: string, document: MindMapDocument, baseDepth: number, sectionIndex: number): string => buildArticleNodeInfo(document.root, baseDepth)
     .map((info) => {
       const title = escapeHtml(info.displayTitle || info.title || "未命名");
+      const childSectionAnchor = childSectionAnchors.get(`${filePath}\u0000${info.node.id}`);
+      if (childSectionAnchor) {
+        pushTocItem(Math.max(1, info.depth), title, childSectionAnchor);
+        return "";
+      }
       const note = info.node.note ? `<p class="note">${escapeHtml(info.node.note)}</p>` : "";
       if (!info.isHeading) return `<p class="body-paragraph">${title}</p>${note}`;
       const level = Math.min(6, Math.max(2, info.depth + 1));
@@ -154,7 +159,7 @@ export function readingSectionsToHtml(sections: ReadingSection[], tocMaxDepth = 
     const headingLevel = Math.min(6, Math.max(1, baseDepth + 1));
     const sectionAnchor = exportAnchor(index, `section-${index}`);
     const heading = index === 0 ? "" : `<h${headingLevel} id="${sectionAnchor}">${sectionTitle}</h${headingLevel}>`;
-    if (index > 0) pushTocItem(Math.max(1, baseDepth), sectionTitle, sectionAnchor);
+    if (index > 0 && !parentNodeKey(sections[index]?.parentFilePath, sections[index]?.parentNodeId)) pushTocItem(Math.max(1, baseDepth), sectionTitle, sectionAnchor);
     return `<section class="map-section">${heading}${renderArticleNode(filePath, document, baseDepth, index)}</section>`;
   }).join("");
   const toc = tocItems.length
@@ -196,11 +201,16 @@ export function readingSectionsToMarkdown(sections: ReadingSection[], tocMaxDept
       const sectionTitle = nodePlainText(document.root) || document.title;
       const heading = markdownTitle("", sectionTitle);
       const anchor = exportAnchor(sectionIndex, `section-${sectionIndex}`);
-      pushTocItem(Math.max(1, baseDepth), heading, anchor);
+      if (!parentNodeKey(sections[sectionIndex]?.parentFilePath, sections[sectionIndex]?.parentNodeId)) pushTocItem(Math.max(1, baseDepth), heading, anchor);
       body.push("", markdownHeading(Math.min(6, Math.max(1, baseDepth + 1)), anchor, heading));
     }
     for (const info of buildArticleNodeInfo(document.root, baseDepth)) {
       const heading = markdownTitle(info.label, info.title);
+      const childSectionAnchor = childSectionAnchors.get(`${filePath}\u0000${info.node.id}`);
+      if (childSectionAnchor) {
+        pushTocItem(Math.max(1, info.depth), heading, childSectionAnchor);
+        continue;
+      }
       if (!info.isHeading) {
         if (heading) body.push("", heading);
         if (info.node.note) body.push("", `> ${info.node.note.replaceAll("\n", " ")}`);
