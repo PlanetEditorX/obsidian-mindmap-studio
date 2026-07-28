@@ -3976,11 +3976,12 @@
   background: var(--background-secondary);
 }
 
-.mms-ai-checkbox {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+.mms-ai-field[hidden],
+.mms-ai-replace-panel[hidden],
+.mms-ai-track[hidden] {
+  display: none !important;
 }
+
 
 .mms-ai-edit-preview {
   max-height: min(48vh, 560px);

@@ -93,20 +93,14 @@ export class AiAskModal extends Modal {
     });
     question.value = this.options.defaultQuestion;
 
-    const replacePanel = form.createDiv({ cls: "mms-ai-replace-panel is-hidden" });
+    const replacePanel = form.createDiv({ cls: "mms-ai-replace-panel" });
+    replacePanel.hidden = true;
     const findLabel = replacePanel.createEl("label", { cls: "mms-ai-field" });
     findLabel.createSpan({ text: "查找文字" });
     const findInput = findLabel.createEl("input", { attr: { type: "text", placeholder: "例如：旧名称" } });
     const replacementLabel = replacePanel.createEl("label", { cls: "mms-ai-field" });
     replacementLabel.createSpan({ text: "替换为" });
     const replacementInput = replacementLabel.createEl("input", { attr: { type: "text", placeholder: "例如：新名称；可以留空表示删除" } });
-    const caseLabel = replacePanel.createEl("label", { cls: "mms-ai-checkbox" });
-    const caseSensitive = caseLabel.createEl("input", { attr: { type: "checkbox" } });
-    caseLabel.createSpan({ text: "区分大小写" });
-    replacePanel.createEl("p", {
-      cls: "setting-item-description",
-      text: "本地替换只处理节点文字、正文、备注和表格，不修改链接、代码、图片地址或子导图路径。"
-    });
 
     const track = form.createDiv({ cls: "mms-ai-track" });
     const steps = ["转换 Markdown", "上传上下文", "模型处理", "接收结果"].map((label, index) => {
@@ -156,7 +150,6 @@ export class AiAskModal extends Modal {
       question.disabled = busy;
       findInput.disabled = busy;
       replacementInput.disabled = busy;
-      caseSensitive.disabled = busy;
       apply.disabled = busy;
       form.toggleClass("is-busy", busy);
     };
@@ -164,10 +157,10 @@ export class AiAskModal extends Modal {
       resetOutput();
       const selected = currentMode();
       const local = selected === "replace";
-      providerLabel.toggleClass("is-hidden", local);
-      questionLabel.toggleClass("is-hidden", local);
-      replacePanel.toggleClass("is-hidden", !local);
-      track.toggleClass("is-hidden", local);
+      providerLabel.hidden = local;
+      questionLabel.hidden = local;
+      replacePanel.hidden = !local;
+      track.hidden = local;
       if (selected === "ask") {
         questionTitle.setText("问题");
         question.placeholder = "例如：总结关键观点，或回答与当前导图有关的问题。";
@@ -255,7 +248,7 @@ export class AiAskModal extends Modal {
           pendingReplacePreview = this.options.onPreviewLocalReplace(
             findInput.value,
             replacementInput.value,
-            caseSensitive.checked
+            false
           );
           showReplacePreview(pendingReplacePreview);
         } catch (error) {
