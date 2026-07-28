@@ -93,9 +93,10 @@ import {
   type LocalReplacePreview
 } from "../ai/edit";
 import {
-  applyImageTextReplacement,
+  applyImageTextReplacements,
   collectRecognizableImages,
   previewImageTextReplacement,
+  type ImageRecognitionItemResult,
   type ImageTextReplacementPreview
 } from "../vision/recognition";
 import { ImageRecognitionPreviewModal } from "../vision/modal";
@@ -1552,18 +1553,28 @@ export class MindMapEditor {
     }
   }
 
+  /** 为 AI 助手的每张识图结果创建独立且可校验的原位替换预览。 */
+  previewImageTextReplacements(items: ImageRecognitionItemResult[]): ImageTextReplacementPreview[] {
+    return items.map((item) => previewImageTextReplacement(this.document, item.nodeId, item.blockId, item.text));
+  }
+
   /** 应用用户确认的图片转文字预览，并统一接入撤销、保存和聚焦。 */
-  private applyImageRecognitionPreview(preview: ImageTextReplacementPreview): boolean {
-    if (!this.ensureExternalEditAllowed()) return false;
+  applyImageTextReplacements(previews: ImageTextReplacementPreview[]): boolean {
+    if (!previews.length || !this.ensureExternalEditAllowed()) return false;
     try {
-      const next = applyImageTextReplacement(this.document, preview);
-      this.replaceDocumentFromExternalEdit(next, preview.nodeId);
-      new Notice("图片已替换为识别文字");
+      const next = applyImageTextReplacements(this.document, previews);
+      this.replaceDocumentFromExternalEdit(next, previews[previews.length - 1]!.nodeId);
+      new Notice(previews.length === 1 ? "图片已替换为识别文字" : `已在原位置替换 ${previews.length} 张图片`);
       return true;
     } catch (error) {
       new Notice(error instanceof Error ? error.message : "图片替换失败");
       return false;
     }
+  }
+
+  /** 应用单张图片识别预览。 */
+  private applyImageRecognitionPreview(preview: ImageTextReplacementPreview): boolean {
+    return this.applyImageTextReplacements([preview]);
   }
 
   /**

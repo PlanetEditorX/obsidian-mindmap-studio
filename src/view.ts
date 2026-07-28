@@ -353,6 +353,11 @@ export class MindMapStudioView extends TextFileView {
       onAsk: async (profileId, question) => this.plugin.askAi(profileId, payload, question),
       onProposeEdit: async (profileId, instruction) => this.plugin.proposeAiEdit(profileId, payload, instruction),
       onRecognizeImages: async (profileId, instruction) => this.recognizeImages(nodeId, profileId, instruction),
+      onPreviewImageTextReplacements: (items) => {
+        if (!this.editor) throw new Error("当前导图编辑器尚未加载");
+        return this.editor.previewImageTextReplacements(items);
+      },
+      onApplyImageTextReplacements: (previews) => this.editor?.applyImageTextReplacements(previews) ?? false,
       onPreviewAiEdit: (responseText) => {
         if (!this.editor) throw new Error("当前导图编辑器尚未加载");
         return this.editor.previewAiEdit(responseText, nodeId);
@@ -384,12 +389,8 @@ export class MindMapStudioView extends TextFileView {
         failed.push({ ...image, error: error instanceof Error ? error.message : String(error) });
       }
     }
-    const text = [
-      ...items.map((item) => `## ${item.index}. ${item.nodeLabel}\n\n${item.text}`),
-      ...(failed.length ? ["## 未成功识别", ...failed.map((item) => `- 第 ${item.index} 张（${item.nodeLabel}）：${item.error}`)] : [])
-    ].join("\n\n");
     return {
-      text,
+      text: "",
       items,
       failed,
       mode: this.plugin.settings.imageRecognitionMode
