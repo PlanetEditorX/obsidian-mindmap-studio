@@ -38,7 +38,7 @@ export interface MindMapEditorCallbacks {
   onUploadImage: (blob: Blob, suggestedName: string, hostIds: string[]) => Promise<ImageHostUploadBatch>;
   onReadImageSource: (source: string) => Promise<{ blob: Blob; suggestedName: string } | null>;
   onScheduleAutoUpload: (nodeId: string, blockId: string, localPath: string, suggestedName: string) => boolean;
-  onRecognizeImage: (image: RecognizableImage, blob: Blob) => Promise<ImageRecognitionItemResult>;
+  onRecognizeImage: (image: RecognizableImage, blob: Blob, remoteUrl?: string) => Promise<ImageRecognitionItemResult>;
   onCaptureScreenshot: () => Promise<DesktopCaptureResult>;
   onCreateSubmap: (node: MindMapNode) => Promise<MindMapSubmap>;
   onDeleteSubmap: (submap: MindMapSubmap) => Promise<boolean>;

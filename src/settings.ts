@@ -277,7 +277,7 @@ export const DEFAULT_SETTINGS: MindMapStudioSettings = {
   defaultTextUnderline: false,
   imageHosts: [],
   autoUploadEnabled: false,
-  autoUploadDelaySeconds: 10,
+  autoUploadDelaySeconds: 300,
   autoUploadHostIds: [],
   deleteLocalAfterUpload: true,
   imageFailoverEnabled: true,
@@ -1166,7 +1166,7 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
     if (this.plugin.settings.autoUploadEnabled) {
       new Setting(containerEl)
         .setName("自动上传延迟")
-        .setDesc("粘贴后等待 0–300 秒再上传，便于撤销或继续编辑。")
+      .setDesc("粘贴或截图后默认保留本地 5 分钟，再自动上传；范围 0–300 秒，便于撤销、AI 识图或继续编辑。重新打开导图时会按本地图片时间补齐上传。")
         .addSlider((slider) => slider
           .setLimits(0, 300, 1)
           .setDynamicTooltip()

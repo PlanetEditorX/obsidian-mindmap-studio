@@ -346,6 +346,7 @@ test("AI integration exposes toolbar, shortcut, page scope and node scope contra
   assert.match(settingsSource, /imageRecognitionAiProfileId: ""/);
   assert.match(settingsSource, /AI 识图接口/);
   assert.match(settingsSource, /containerEl\.appendChild\(imageRecognitionSettings\)/);
+  assert.match(settingsSource, /autoUploadDelaySeconds: 300/);
   assert.match(settingsSource, /screenshotShortcut: "Ctrl\+Shift\+S"/);
   assert.match(mainSource, /id: "ask-ai-about-mind-map"/);
   assert.match(mainSource, /async testAiProfile\(profileId: string\): Promise<void>/);
@@ -367,6 +368,10 @@ test("AI integration exposes toolbar, shortcut, page scope and node scope contra
   assert.match(viewSource, /buildAiMarkdownPayload/);
   assert.match(viewSource, /defaultImageRecognitionProfileId: this\.plugin\.settings\.imageRecognitionAiProfileId \|\| this\.plugin\.settings\.defaultAiProfileId/);
   assert.match(viewSource, /screenshotShortcut: this\.plugin\.settings\.screenshotShortcut/);
+  assert.match(viewSource, /resumePendingAutoUploads\(this\.file, this\.document\)/);
+  assert.match(mainSource, /remoteUrl \|\| blob/);
+  assert.match(mainSource, /Date\.now\(\) - localFile\.stat\.mtime/);
+  assert.match(mainSource, /queueAutoUpload/);
   assert.match(viewSource, /onProposeEdit/);
   assert.match(editorSource, /applyAiEdit\(preview: AiEditPreview\)/);
   assert.match(editorSource, /applyLocalReplace\(preview: LocalReplacePreview\)/);

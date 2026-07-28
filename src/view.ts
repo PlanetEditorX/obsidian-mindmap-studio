@@ -98,6 +98,7 @@ export class MindMapStudioView extends TextFileView {
   setViewData(data: string, clear: boolean): void {
     const title = this.file?.basename ?? "思维导图";
     this.document = parseDocument(data, title);
+    if (this.file) void this.plugin.resumePendingAutoUploads(this.file, this.document);
     this.articleBaseDepth = 0;
     this.articleTocEntries = [];
     this.showArticleToc = false;
@@ -127,7 +128,7 @@ export class MindMapStudioView extends TextFileView {
         onUploadImage: async (blob, suggestedName, hostIds) => this.plugin.uploadImageToHosts(blob, suggestedName, hostIds),
         onReadImageSource: async (source) => this.plugin.readImageSource(source, this.file),
         onScheduleAutoUpload: (nodeId, blockId, localPath, suggestedName) => this.plugin.scheduleAutoUpload(this.file, nodeId, blockId, localPath, suggestedName),
-        onRecognizeImage: async (image, blob) => this.plugin.recognizeImage(image, blob),
+        onRecognizeImage: async (image, blob, remoteUrl) => this.plugin.recognizeImage(image, blob, undefined, undefined, remoteUrl),
         onCaptureScreenshot: async () => this.plugin.captureScreenshot(),
         onCreateSubmap: async (node) => {
           if (!this.file) throw new Error("当前脑图尚未关联文件");
@@ -377,7 +378,8 @@ export class MindMapStudioView extends TextFileView {
       try {
         const source = await this.plugin.readImageSource(image.source, this.file);
         if (!source) throw new Error("无法读取图片来源");
-        items.push(await this.plugin.recognizeImage(image, source.blob, profileId, instruction));
+        const remoteUrl = /^https:\/\//i.test(image.source) ? image.source : undefined;
+        items.push(await this.plugin.recognizeImage(image, source.blob, profileId, instruction, remoteUrl));
       } catch (error) {
         failed.push({ ...image, error: error instanceof Error ? error.message : String(error) });
       }

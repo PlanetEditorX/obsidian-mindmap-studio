@@ -130,15 +130,19 @@ export async function imageBlobToDataUrl(blob: Blob): Promise<string> {
 /** 使用支持视觉输入的 OpenAI 兼容模型识别单张图片。 */
 export async function requestAiImageRecognition(
   profile: AiProfileConfig,
-  blob: Blob,
+  image: Blob | string,
   prompt: string
 ): Promise<AiCompletionResult> {
-  if (!blob.size) throw new Error("待识别图片为空");
-  if (blob.size > 20 * 1024 * 1024) throw new Error("待识别图片超过 20 MB");
-  const imageDataUrl = await imageBlobToDataUrl(blob);
+  let imageUrl: string;
+  if (typeof image === "string") imageUrl = normalizeHttpUrl(image, "图片地址");
+  else {
+    if (!image.size) throw new Error("待识别图片为空");
+    if (image.size > 20 * 1024 * 1024) throw new Error("待识别图片超过 20 MB");
+    imageUrl = await imageBlobToDataUrl(image);
+  }
   let json: Record<string, unknown>;
   try {
-    json = await requestChatCompletion(profile, buildImageRecognitionCompletionBody(profile, prompt, imageDataUrl));
+    json = await requestChatCompletion(profile, buildImageRecognitionCompletionBody(profile, prompt, imageUrl));
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     throw new Error(`${message}。请确认“${profile.name}”使用支持图片输入的视觉模型；也可在设置中为 AI 识图单独选择接口。`);
