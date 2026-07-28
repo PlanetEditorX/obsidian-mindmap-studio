@@ -458,15 +458,32 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
       text: "这里设置全局默认外观。打开脑图后，也可以点击工具栏中的调色板，为当前脑图单独保存一套样式。"
     });
 
+    containerEl.createEl("h3", { text: "管理配置" });
     new Setting(containerEl)
-      .setName("导入 / 导出配置")
-      .setDesc("导出当前插件设置为 JSON 文件；导入会覆盖当前全局设置，导图文件不会受影响。")
+      .setName("导出配置")
+      .setDesc("将当前全局插件设置导出为 JSON 文件。")
       .addButton((button) => button
         .setButtonText("导出配置")
-        .onClick(() => void this.exportSettings()))
+        .onClick(() => void this.exportSettings()));
+    new Setting(containerEl)
+      .setName("导入配置")
+      .setDesc("导入 JSON 配置会覆盖当前全局设置，不会修改任何导图文件。")
       .addButton((button) => button
         .setButtonText("导入配置")
         .onClick(() => this.openSettingsImportPicker()));
+    new Setting(containerEl)
+      .setName("恢复初始配置")
+      .setDesc("恢复显示模式、主题、资源目录、图床、搜索和编辑选项。不会删除或修改任何 .mindmap 文件。")
+      .addButton((button) => button
+        .setWarning()
+        .setButtonText("恢复初始配置")
+        .onClick(async () => {
+          const confirmed = window.confirm("确定恢复 MindMap Studio 的全部插件设置吗？脑图文件不会被删除。");
+          if (!confirmed) return;
+          await this.plugin.resetAllSettings();
+          new Notice("已恢复初始设置");
+          this.display();
+        }));
 
     containerEl.createEl("h3", { text: "主题模板" });
 
@@ -1810,21 +1827,6 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
           } finally {
             button.setDisabled(false);
           }
-        }));
-
-    containerEl.createEl("h3", { text: "恢复初始设置" });
-    new Setting(containerEl)
-      .setName("一键还原所有插件设置")
-      .setDesc("恢复显示模式、主题、资源目录、图床、搜索和编辑选项。不会删除或修改任何 .mindmap 文件。")
-      .addButton((button) => button
-        .setWarning()
-        .setButtonText("恢复初始设置")
-        .onClick(async () => {
-          const confirmed = window.confirm("确定恢复 MindMap Studio 的全部插件设置吗？脑图文件不会被删除。");
-          if (!confirmed) return;
-          await this.plugin.resetAllSettings();
-          new Notice("已恢复初始设置");
-          this.display();
         }));
 
     this.organizeSettingsSections();

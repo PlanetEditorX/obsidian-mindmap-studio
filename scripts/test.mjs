@@ -1351,7 +1351,7 @@ export const setIcon = () => {};
   assert.doesNotMatch(editorSource, /textEl\.setAttr\("aria-label", isSubmapTitle/, "mind-map node text must not expose its full content as a hover tooltip");
   assert.doesNotMatch(editorSource, /textEl\.setAttr\("title", `打开子导图/, "submap node text must not expose a native hover tooltip");
   assert.doesNotMatch(editorSource, /nodeEl\.setAttr\("title", `打开子导图/, "submap node containers must not expose a native hover tooltip");
-  assert.match(settingsSource, /setName\("导入 \/ 导出配置"\)[\s\S]*setButtonText\("导出配置"\)[\s\S]*setButtonText\("导入配置"\)/, "settings must expose configuration import and export controls");
+  assert.match(settingsSource, /createEl\("h3", \{ text: "管理配置" \}\)[\s\S]*setName\("导出配置"\)[\s\S]*setName\("导入配置"\)[\s\S]*setName\("恢复初始配置"\)/, "settings must group configuration export, import, and reset controls together");
   assert.match(settingsSource, /private async exportSettings\(\): Promise<void>/, "settings export must serialize the current plugin configuration");
   assert.match(settingsSource, /private async importSettingsFile\(file: File \| undefined\): Promise<void>/, "settings import must read a selected JSON file");
   assert.match(mainSource, /async importSettings\(settings: unknown\): Promise<void>/, "imported settings must be normalized before being saved");
@@ -1445,7 +1445,7 @@ export const setIcon = () => {};
 
   assert.match(settingsSource, /visibleModes/);
   assert.match(settingsSource, /当前全局显示模式/);
-  assert.match(settingsSource, /一键还原所有插件设置/);
+  assert.match(settingsSource, /恢复初始配置/);
 
   const cssSource = await readFile("styles.css", "utf8");
   assert.match(cssSource, /\.mms-article-minimap[\s\S]*top:\s*50%[\s\S]*transform:\s*translateY\(-50%\)/, "the reading minimap must be centered on the right edge");
