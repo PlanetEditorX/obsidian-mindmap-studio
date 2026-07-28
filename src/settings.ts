@@ -1143,7 +1143,7 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
           await this.plugin.saveSettings();
         }));
 
-    containerEl.createEl("h3", { text: "题库" });
+    containerEl.createEl("h3", { text: "文件夹" });
 
     new Setting(containerEl)
       .setName("题库文件夹")

@@ -117,7 +117,8 @@ test("question assistant keeps an intelligent image-to-question pipeline and vis
   assert.match(modalSource, /AI 智能处理题目/);
   assert.match(editorSource, /renderQuestionPracticeMode/);
   assert.doesNotMatch(editorSource, /addToolbarButton\("question-bank"/);
-  assert.match(practiceSource, /提交并下一题/);
+  assert.match(practiceSource, /查看答案与解析/);
+  assert.match(practiceSource, /下一题/);
   assert.match(practiceSource, /错题本/);
   assert.match(practiceSource, /isQuestionChoiceCorrect/);
   assert.match(practiceSource, /isExactQuestionAnswer/);

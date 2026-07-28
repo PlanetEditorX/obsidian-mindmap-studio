@@ -14,6 +14,8 @@ export interface QuestionPracticeState {
   currentNodeId: string | null;
   selectedOptionIds: string[];
   essayAnswer: string;
+  answerVisible: boolean;
+  lastCorrect: boolean | null;
 }
 
 /** Dependencies required to render and persist one question-bank practice session. */
@@ -27,13 +29,17 @@ export interface QuestionPracticeOptions {
 
 /** Creates an empty practice state for an editor instance. */
 export function createQuestionPracticeState(): QuestionPracticeState {
-  return { filter: "all", currentNodeId: null, selectedOptionIds: [], essayAnswer: "" };
+  return { filter: "all", currentNodeId: null, selectedOptionIds: [], essayAnswer: "", answerVisible: false, lastCorrect: null };
 }
 
 /** Renders a full-page, sequential question practice surface. */
 export function renderQuestionPracticeMode(container: HTMLElement, options: QuestionPracticeOptions): void {
   container.empty();
-  const questions = flattenNodes(options.document.root).filter((node) => node.question && (options.state.filter === "all" || node.question.status === "wrong"));
+  const questions = flattenNodes(options.document.root).filter((node) => node.question && (
+    options.state.filter === "all"
+    || node.question.status === "wrong"
+    || (options.state.answerVisible && node.id === options.state.currentNodeId)
+  ));
   const shell = container.createDiv({ cls: "mms-question-practice-page" });
   const header = shell.createDiv({ cls: "mms-question-practice-header" });
   header.createEl("h2", { text: options.document.title || "题库练习" });
@@ -46,6 +52,8 @@ export function renderQuestionPracticeMode(container: HTMLElement, options: Ques
       options.state.currentNodeId = null;
       options.state.selectedOptionIds = [];
       options.state.essayAnswer = "";
+      options.state.answerVisible = false;
+      options.state.lastCorrect = null;
       renderQuestionPracticeMode(container, options);
     };
   }
@@ -67,24 +75,29 @@ export function renderQuestionPracticeMode(container: HTMLElement, options: Ques
     question.options.forEach((option) => {
       const choice = choices.createEl("button", { attr: { type: "button" } });
       choice.toggleClass("is-selected", options.state.selectedOptionIds.includes(option.id));
+      choice.disabled = options.state.answerVisible;
       choice.createSpan({ cls: "mms-question-practice-option-label", text: option.label });
       renderBlocks(choice, option.content, options.resolveImage);
-      choice.onclick = () => {
+      choice.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
         options.state.selectedOptionIds = multiple
           ? options.state.selectedOptionIds.includes(option.id)
             ? options.state.selectedOptionIds.filter((id) => id !== option.id)
             : [...options.state.selectedOptionIds, option.id]
           : [option.id];
         renderQuestionPracticeMode(container, options);
-      };
+      });
     });
   } else {
     const answer = shell.createEl("textarea", { cls: "mms-question-practice-answer", attr: { placeholder: "输入你的答案", rows: "7" } });
     answer.value = options.state.essayAnswer;
+    answer.disabled = options.state.answerVisible;
     answer.oninput = () => { options.state.essayAnswer = answer.value; };
   }
-  const submit = shell.createEl("button", { cls: "mod-cta mms-question-practice-submit", text: "提交并下一题", attr: { type: "button" } });
-  submit.onclick = () => {
+  if (!options.state.answerVisible) {
+    const reveal = shell.createEl("button", { cls: "mod-cta mms-question-practice-submit", text: "查看答案与解析", attr: { type: "button" } });
+    reveal.onclick = () => {
     const correct = question.mode === "choice"
       ? isQuestionChoiceCorrect(node, options.state.selectedOptionIds)
       : isExactQuestionAnswer(options.state.essayAnswer, blockText(question.answer));
@@ -92,12 +105,30 @@ export function renderQuestionPracticeMode(container: HTMLElement, options: Ques
       options.onNotice("请先作答");
       return;
     }
-    const next = questions[(currentIndex + 1) % questions.length];
-    options.state.currentNodeId = next?.id ?? null;
+    options.state.answerVisible = true;
+    options.state.lastCorrect = correct;
+    options.onRecord(node.id, correct);
+    options.onNotice(correct ? "回答正确" : "回答错误，已加入错题本");
+    renderQuestionPracticeMode(container, options);
+    };
+    return;
+  }
+  const result = shell.createDiv({ cls: `mms-question-practice-result ${options.state.lastCorrect ? "is-correct" : "is-wrong"}`, text: options.state.lastCorrect ? "回答正确" : "回答错误，已加入错题本" });
+  result.setAttr("role", "status");
+  shell.createEl("h4", { text: "参考答案" });
+  renderBlocks(shell, question.answer, options.resolveImage);
+  if (question.explanation.length) {
+    shell.createEl("h4", { text: "解析" });
+    renderBlocks(shell, question.explanation, options.resolveImage);
+  }
+  const next = shell.createEl("button", { cls: "mod-cta mms-question-practice-submit", text: "下一题", attr: { type: "button" } });
+  next.onclick = () => {
+    const nextNode = questions[(currentIndex + 1) % questions.length];
+    options.state.currentNodeId = nextNode?.id ?? null;
     options.state.selectedOptionIds = [];
     options.state.essayAnswer = "";
-    options.onRecord(node.id, correct);
-    options.onNotice(correct ? "回答正确，下一题" : "回答错误，已加入错题本");
+    options.state.answerVisible = false;
+    options.state.lastCorrect = null;
     renderQuestionPracticeMode(container, options);
   };
 }
