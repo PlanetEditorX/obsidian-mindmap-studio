@@ -87,6 +87,7 @@ MindMap Studio 是一个本地优先的 Obsidian 思维导图插件。它使用�
 
 3. 重启 Obsidian，或重新加载插件列表。
 4. 在“设置 → 第三方插件”中启用 **MindMap Studio**。
+5. MindMap Studio 设置页支持折叠分区与顶部快速搜索，可直接输入设置名称、说明或接口名定位选项。
 
 ### 从源码构建
 

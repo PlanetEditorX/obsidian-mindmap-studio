@@ -361,6 +361,9 @@ test("AI integration exposes toolbar, shortcut, page scope and node scope contra
   assert.match(editorSource, /this\.options\.screenshotShortcut \|\| "Ctrl\+Shift\+S"/);
   assert.match(settingsSource, /setIcon\("eye"/);
   assert.match(settingsSource, /显示 API 密钥/);
+  assert.match(settingsSource, /mms-settings-search/);
+  assert.match(settingsSource, /organizeSettingsSections/);
+  assert.match(settingsSource, /mms-settings-section/);
   assert.match(editorSource, /询问 AI（此节点及全部子节点）/);
   assert.match(editorSource, /询问 AI（当前页面）/);
   assert.match(editorSource, /AI 识图/);
