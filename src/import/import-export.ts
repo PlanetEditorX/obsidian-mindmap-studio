@@ -151,7 +151,7 @@ function escapeXml(value: string): string {
 }
 
 /** 将导出章节收集为父子导图顺序一致的目录项。 */
-function collectExportTocItems(sections: ReadingSection[], maxTocDepth: number): Array<{ depth: number; title: string; anchor: string }> {
+function collectExportTocItems(sections: ReadingSection[], maxTocDepth: number, includeTerminalHeadings = true): Array<{ depth: number; title: string; anchor: string }> {
   const items: Array<{ depth: number; title: string; anchor: string }> = [];
   const childSections = new Map<string, number>();
   sections.forEach((section, index) => {
@@ -175,7 +175,7 @@ function collectExportTocItems(sections: ReadingSection[], maxTocDepth: number):
       if (childIndex !== undefined) {
         push(Math.max(1, info.depth), title, exportAnchor(childIndex, `section-${childIndex}`));
         collect(childIndex, visited);
-      } else if (info.isHeading) {
+      } else if (info.isHeading && (includeTerminalHeadings || info.node.children.length > 0)) {
         push(Math.max(1, info.depth), title, exportAnchor(sectionIndex, info.anchor));
       }
     }
@@ -289,7 +289,8 @@ export function readingSectionsToDocx(sections: ReadingSection[], tocMaxDepth = 
     return anchor;
   };
   const paragraph = (text: string, style = "", indent = 0, anchor = ""): string => {
-    const headingLevel = Number(style.replace("Heading", ""));
+    const headingMatch = /^Heading([1-6])$/.exec(style);
+    const headingLevel = headingMatch ? Number(headingMatch[1]) : NaN;
     const properties = (style ? '<w:pStyle w:val="' + style + '"/>' : "")
       + (Number.isFinite(headingLevel) ? '<w:outlineLvl w:val="' + Math.max(0, headingLevel - 1) + '"/>' : "")
       + (indent ? '<w:ind w:left="' + indent + '"/>' : "");
@@ -297,7 +298,7 @@ export function readingSectionsToDocx(sections: ReadingSection[], tocMaxDepth = 
     const bookmarkEnd = anchor ? '<w:bookmarkEnd w:id="' + bookmarkId++ + '"/>' : "";
     return '<w:p><w:pPr>' + properties + '</w:pPr>' + bookmarkStart + '<w:r><w:t xml:space="preserve">' + escapeXml(text) + '</w:t></w:r>' + bookmarkEnd + '</w:p>';
   };
-  const toc = collectExportTocItems(sections, maxTocDepth).map((item) => {
+  const toc = collectExportTocItems(sections, maxTocDepth, false).map((item) => {
     const indent = Math.max(0, item.depth - 1) * 720;
     return '<w:p><w:pPr><w:ind w:left="' + indent + '"/></w:pPr><w:hyperlink w:anchor="' + wordAnchor(item.anchor) + '" w:history="1"><w:r><w:rPr><w:color w:val="0563C1"/><w:u w:val="single"/></w:rPr><w:t xml:space="preserve">' + escapeXml(item.title) + '</w:t></w:r></w:hyperlink></w:p>';
   }).join("");
@@ -315,7 +316,8 @@ export function readingSectionsToDocx(sections: ReadingSection[], tocMaxDepth = 
     for (const info of buildArticleNodeInfo(document.root, baseDepth)) {
       if (childSectionAnchors.has(filePath + "\u0000" + info.node.id)) continue;
       const text = info.displayTitle || info.title || "未命名";
-      body.push(info.isHeading
+      const isWordHeading = info.isHeading && info.node.children.length > 0;
+      body.push(isWordHeading
         ? paragraph(text, "Heading" + Math.min(6, Math.max(1, info.depth)), 0, wordAnchor(exportAnchor(sectionIndex, info.anchor)))
         : paragraph(text));
       if (info.node.note) body.push(paragraph(info.node.note));

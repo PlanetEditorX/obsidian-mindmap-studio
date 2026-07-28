@@ -4681,7 +4681,7 @@ function escapeXml(value: string): string
 将导出章节收集为父子导图顺序一致的目录项。
 
 ```ts
-function collectExportTocItems(sections: ReadingSection[], maxTocDepth: number): Array<
+function collectExportTocItems(sections: ReadingSection[], maxTocDepth: number, includeTerminalHeadings = true): Array<
 ```
 
 ### 函数 `readingSectionsToHtml`
@@ -4706,7 +4706,7 @@ export function readingSectionsToDocx(sections: ReadingSection[], tocMaxDepth = 
 
 ### 函数 `readingSectionsToMarkdown`
 
-源码：`src/import/import-export.ts:343`
+源码：`src/import/import-export.ts:345`
 
 Produces article-oriented Markdown with a linked table of contents.
 
