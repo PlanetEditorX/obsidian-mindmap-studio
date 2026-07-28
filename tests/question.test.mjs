@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import { after, before, test } from "node:test";
 import { loadTypeScriptModules } from "./compile-typescript.mjs";
 
@@ -71,4 +72,18 @@ test("question normalization keeps only verifiable original-question sources", (
     }
   });
   assert.equal(invalid.root.question.source, undefined);
+});
+
+test("question assistant keeps an intelligent image-to-question pipeline and visible answer fields", async () => {
+  const [editorSource, modalSource, mainSource] = await Promise.all([
+    readFile("src/editor/editor.ts", "utf8"),
+    readFile("src/editor/question-modal.ts", "utf8"),
+    readFile("src/main.ts", "utf8")
+  ]);
+  assert.match(editorSource, /转为题目节点并智能处理/);
+  assert.match(editorSource, /renderQuestionSummary/);
+  assert.match(editorSource, /mmc-question-summary/);
+  assert.match(modalSource, /AI 智能处理题目/);
+  assert.match(modalSource, /已由 AI 分析补齐缺失答案与解答/);
+  assert.match(mainSource, /仍需基于题目独立分析/);
 });

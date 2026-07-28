@@ -55,7 +55,7 @@ import {
 import { buildBranchColorMap, computeLayout, documentToSvg, edgePath, edgeWidthForDepth, roundedElbowEdgePath, type LayoutResult } from "../render/layout";
 import { resolveLayoutCollisions } from "../render/collision-layout";
 import { CodeEditModal, TableEditModal } from "./content-modals";
-import { QuestionEditModal } from "./question-modal";
+import { parseQuestionEnrichment, parseRecognizedQuestion, QuestionEditModal } from "./question-modal";
 import { TOOLBAR_ITEMS } from "../settings";
 import { appearanceFromThemePreset, MINDMAP_THEME_PRESETS } from "../themes";
 import { articleNumberLabel, articleTocDepth, buildArticleNodeInfo, DISPLAY_MODE_ICONS, DISPLAY_MODE_LABELS, readingAnchorPart, resolveArticleTocMaxDepth, type ReadingSection } from "../article/modes";
@@ -2935,6 +2935,7 @@ export class MindMapEditor {
 
       if (node.table) this.renderNodeTable(content, node);
       if (node.code) this.renderNodeCode(content, node);
+      if (node.question) this.renderQuestionSummary(content, node);
 
       if (node.tags?.length) {
         const tags = content.createDiv({ cls: "mmc-node-tags" });
@@ -4172,6 +4173,35 @@ export class MindMapEditor {
    * @param content 该参数用于 render node table 流程中的输入或控制。
    * @param node 当前处理的节点。
    */
+  /** Renders the non-stem fields of a structured question directly inside its map node. */
+  private renderQuestionSummary(content: HTMLElement, node: MindMapNode): void {
+    const question = node.question;
+    if (!question) return;
+    const plainText = (blocks: MindMapContentBlock[]): string => blocks
+      .map((block) => block.type === "text" ? block.text.trim() : "[图片]")
+      .filter(Boolean).join(" ");
+    const summary = content.createDiv({ cls: "mmc-question-summary" });
+    summary.createDiv({ cls: "mmc-question-kind", text: question.mode === "choice" ? "选择题" : "大题" });
+    const appendField = (label: string, value: string, cls = ""): void => {
+      if (!value) return;
+      const line = summary.createDiv({ cls: `mmc-question-field ${cls}`.trim() });
+      line.createSpan({ cls: "mmc-question-label", text: `${label}：` });
+      line.createSpan({ cls: "mmc-question-value", text: value });
+    };
+    if (question.mode === "choice") {
+      for (const option of question.options) appendField(option.label, plainText(option.content), "is-option");
+    }
+    appendField("答案", plainText(question.answer), "is-answer");
+    appendField("解答", plainText(question.explanation), "is-explanation");
+    if (question.source) {
+      const source = summary.createEl("a", { cls: "mmc-question-source", text: `原题：${question.source.title}`, href: question.source.url });
+      source.setAttr("target", "_blank");
+      source.setAttr("rel", "noopener noreferrer");
+      source.addEventListener("click", (event) => event.stopPropagation());
+    }
+  }
+
+  /** Renders the optional table payload beneath normal node and question content. */
   private renderNodeTable(content: HTMLElement, node: MindMapNode): void {
     if (!node.table) return;
     const wrap = content.createDiv({ cls: "mmc-node-table-wrap" });
@@ -4451,6 +4481,57 @@ export class MindMapEditor {
     menu.showAtMouseEvent(event);
   }
 
+  /** Converts one image block into a question node, then runs recognition, source lookup, and analysis. */
+  private async convertImageToQuestion(nodeId: string, blockId: string): Promise<void> {
+    if (!this.ensureEditable()) return;
+    const node = findNode(this.document.root, nodeId);
+    const image = node ? nodeContentBlocks(node).find((block): block is MindMapImageContentBlock => block.type === "image" && block.id === blockId) : null;
+    if (!node || !image) { new Notice("图片节点已不存在"); return; }
+    let question = createMindMapQuestion();
+    question.stem = [{ ...image }];
+    this.mutate(() => {
+      node.question = question;
+      syncMindMapQuestionFields(node);
+      this.selectedId = node.id;
+    });
+    try {
+      const source = await this.callbacks.onReadImageSource(image.source);
+      if (!source) throw new Error("无法读取题图");
+      const instruction = "识别这道原题，只返回 JSON：{\"mode\":\"choice 或 essay\",\"stem\":\"题干\",\"options\":[{\"label\":\"A\",\"content\":\"选项\"}],\"answer\":\"答案\",\"explanation\":\"解答\",\"tags\":[\"标签\"]}。无法识别的字段留空。";
+      const recognized = await this.callbacks.onRecognizeImage({
+        nodeId,
+        blockId,
+        nodeLabel: nodePlainText(node) || "题图",
+        source: image.source,
+        alt: image.alt ?? "题图",
+        index: 1,
+        total: 1
+      }, source.blob, undefined, instruction);
+      question = parseRecognizedQuestion(recognized.text, question) ?? {
+        ...question,
+        stem: [{ id: newId(), type: "text", text: recognized.text }, ...question.stem]
+      };
+      this.mutate(() => {
+        node.question = question;
+        syncMindMapQuestionFields(node);
+      });
+      const questionText = question.stem
+        .filter((block): block is MindMapTextContentBlock => block.type === "text")
+        .map((block) => block.text.trim()).filter(Boolean).join("\n");
+      if (!questionText) throw new Error("识别后没有可检索的题目文字");
+      const enriched = parseQuestionEnrichment(await this.callbacks.onEnrichQuestion(questionText), question);
+      if (!enriched) throw new Error("AI 未返回可解析的题目结果");
+      question = enriched.question;
+      this.mutate(() => {
+        node.question = question;
+        syncMindMapQuestionFields(node);
+      });
+      new Notice(enriched.found ? "已找到原题并补齐答案与解析" : "未找到可验证原题，已由 AI 分析补齐答案与解答");
+    } catch (error) {
+      new Notice(`题目智能处理失败：${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
   /** 显示图片专用右键菜单，并按当前设置启动 AI 识图或本地 OCR。 */
   private openImageContextMenu(event: MouseEvent, nodeId: string, blockId: string): void {
     const modeLabel = this.options.imageRecognitionMode === "local-ocr" ? "本地 OCR" : "AI 识图";
@@ -4459,6 +4540,12 @@ export class MindMapEditor {
       .setTitle(`${modeLabel}并转为文字`)
       .setIcon("scan-text")
       .onClick(() => void this.recognizeImageBlock(nodeId, blockId)));
+    if (this.options.questionNodesEnabled) {
+      menu.addItem((item) => item
+        .setTitle("转为题目节点并智能处理")
+        .setIcon("circle-help")
+        .onClick(() => void this.convertImageToQuestion(nodeId, blockId)));
+    }
     menu.showAtMouseEvent(event);
   }
 

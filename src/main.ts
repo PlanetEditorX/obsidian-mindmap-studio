@@ -676,7 +676,7 @@ export default class MindMapStudioPlugin extends Plugin {
     const instruction = [
       "将给出的题目整理为题库结构，并在你具备联网检索能力时搜索精确原题。",
       "只在找到可验证的原题来源时返回 found:true；必须提供可访问的 sourceUrl 和 sourceTitle。",
-      "不能联网、未找到、来源不可靠或答案无法核验时返回 found:false，且 answer、explanation 留空；绝不猜测或编造答案、解析、来源。",
+      "不能联网、未找到或来源不可靠时返回 found:false；此时仍需基于题目独立分析，补全缺失的 answer 和 explanation，但 sourceTitle、sourceUrl 必须留空，并明确不要伪造来源。",
       "只返回 JSON，不要 Markdown：{\"found\":boolean,\"mode\":\"choice|essay\",\"stem\":\"\",\"options\":[{\"label\":\"A\",\"content\":\"\"}],\"answer\":\"\",\"explanation\":\"\",\"tags\":[\"\"],\"sourceTitle\":\"\",\"sourceUrl\":\"\"}。"
     ].join("\n");
     const result = await requestAiCompletion(profile, payload, instruction);
