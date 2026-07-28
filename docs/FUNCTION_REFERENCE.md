@@ -2084,9 +2084,19 @@ function renderHeading(heading: HTMLElement, node: MindMapNode, title: string, o
 export function renderArticleNodeContent(container: HTMLElement, node: MindMapNode, treatTextAsBody: boolean, options: ArticleRendererOptions): void
 ```
 
+### 函数 `renderArticleQuestionDetails`
+
+源码：`src/editor/article-renderer.ts:209`
+
+Renders structured question options, answers, explanations, and original source in article and reading modes.
+
+```ts
+function renderArticleQuestionDetails(container: HTMLElement, node: MindMapNode): void
+```
+
 ### 函数 `renderArticlePager`
 
-源码：`src/editor/article-renderer.ts:208`
+源码：`src/editor/article-renderer.ts:236`
 
 渲染同层兄弟文章页的上一篇、父级、下一篇与阅读完成导航。
 

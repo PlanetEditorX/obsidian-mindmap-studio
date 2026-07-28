@@ -202,6 +202,34 @@ export function renderArticleNodeContent(container: HTMLElement, node: MindMapNo
     });
   }
   if (node.code) void options.callbacks.onRenderCode(node.code, container.createDiv({ cls: "mms-article-code markdown-rendered" }));
+  if (node.question) renderArticleQuestionDetails(container, node);
+}
+
+/** Renders structured question options, answers, explanations, and original source in article and reading modes. */
+function renderArticleQuestionDetails(container: HTMLElement, node: MindMapNode): void {
+  const question = node.question;
+  if (!question) return;
+  const plainText = (blocks: typeof question.stem): string => blocks
+    .map((block) => block.type === "text" ? block.text.trim() : "[图片]")
+    .filter(Boolean).join(" ");
+  const panel = container.createDiv({ cls: "mms-question-panel" });
+  panel.createDiv({ cls: "mms-question-kind", text: question.mode === "choice" ? "选择题" : "大题" });
+  const appendField = (label: string, value: string, cls = ""): void => {
+    if (!value) return;
+    const row = panel.createDiv({ cls: `mms-question-row ${cls}`.trim() });
+    row.createEl("strong", { text: `${label}：` });
+    row.createSpan({ text: value });
+  };
+  if (question.mode === "choice") {
+    for (const option of question.options) appendField(option.label, plainText(option.content), "is-option");
+  }
+  appendField("答案", plainText(question.answer), "is-answer");
+  appendField("解答", plainText(question.explanation), "is-explanation");
+  if (question.source) {
+    const source = panel.createEl("a", { cls: "mms-question-source", text: `原题来源：${question.source.title}`, href: question.source.url });
+    source.setAttr("target", "_blank");
+    source.setAttr("rel", "noopener noreferrer");
+  }
 }
 
 /** 渲染同层兄弟文章页的上一篇、父级、下一篇与阅读完成导航。 */
