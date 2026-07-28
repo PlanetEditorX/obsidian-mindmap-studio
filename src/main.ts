@@ -483,8 +483,14 @@ export default class MindMapStudioPlugin extends Plugin {
       imageHosts,
       autoUploadEnabled: raw.autoUploadEnabled === true,
       autoUploadDelaySeconds: typeof raw.autoUploadDelaySeconds === "number"
-        ? Math.max(0, Math.min(300, Math.round(raw.autoUploadDelaySeconds)))
+        ? Math.max(0, Math.min(120 * 60, Math.round(raw.autoUploadDelaySeconds)))
         : DEFAULT_SETTINGS.autoUploadDelaySeconds,
+      imageRecognitionAutoConfirmDelaySeconds: raw.imageRecognitionAutoConfirmDelaySeconds === 0
+        || raw.imageRecognitionAutoConfirmDelaySeconds === 5
+        || raw.imageRecognitionAutoConfirmDelaySeconds === 10
+        || raw.imageRecognitionAutoConfirmDelaySeconds === 15
+        ? raw.imageRecognitionAutoConfirmDelaySeconds
+        : null,
       autoUploadHostIds: selectedIds,
       aiProfiles,
       defaultAiProfileId: typeof raw.defaultAiProfileId === "string" && aiProfileIds.has(raw.defaultAiProfileId)
@@ -1331,6 +1337,12 @@ export default class MindMapStudioPlugin extends Plugin {
     }
     this.queueAutoUpload(file.path, nodeId, blockId, localPath, suggestedName, hostIds, this.settings.autoUploadDelaySeconds * 1000);
     return true;
+  }
+
+  /** 删除已被识图文字替换的本地图片；共享资源会保留。 */
+  async deleteRecognizedImageLocalAsset(mindMapPath: string, localPath: string, blockId: string): Promise<boolean> {
+    if (!mindMapPath || !localPath) return false;
+    return this.deleteLocalAssetIfSafe(localPath, mindMapPath, blockId);
   }
 
   /** 根据本地图片文件时间恢复延迟上传；到期图片在重新打开导图后立即上传。 */

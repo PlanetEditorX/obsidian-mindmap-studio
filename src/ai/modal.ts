@@ -30,6 +30,7 @@ export interface AiAskModalOptions {
   defaultQuestion: string;
   defaultImageRecognitionPrompt: string;
   imageRecognitionMode: ImageRecognitionMode;
+  imageRecognitionAutoConfirmDelaySeconds: 0 | 5 | 10 | 15 | null;
   imageCount: number;
   sourcePath: string;
   onAsk: (profileId: string, question: string) => Promise<AiCompletionResult>;
@@ -52,6 +53,7 @@ export class AiAskModal extends Modal {
   private markdownRenderComponent: Component | null = null;
   /** 标识当前打开会话，防止关闭后的异步响应继续写入旧 DOM。 */
   private modalSession = 0;
+  private imageAutoConfirmTimer: number | null = null;
 
   /** 保存窗口上下文并初始化 Obsidian Modal。 */
   constructor(app: App, private readonly options: AiAskModalOptions) {
@@ -171,6 +173,8 @@ export class AiAskModal extends Modal {
     };
     const setStep = (index: number, state: TraceState): void => { if (steps[index]) steps[index]!.dataset.state = state; };
     const resetOutput = (): void => {
+      if (this.imageAutoConfirmTimer !== null) window.clearTimeout(this.imageAutoConfirmTimer);
+      this.imageAutoConfirmTimer = null;
       answerText = "";
       pendingAiPreview = null;
       pendingReplacePreview = null;
@@ -304,6 +308,14 @@ export class AiAskModal extends Modal {
       status.setText(batch.failed.length
         ? `识图完成：成功 ${batch.items.length} 张，失败 ${batch.failed.length} 张。请检查后确认替换成功项。`
         : `识图完成：请检查 ${batch.items.length} 项文字后确认原位替换。`);
+      const delay = this.options.imageRecognitionAutoConfirmDelaySeconds;
+      if (delay !== null && pendingImagePreviews.length) {
+        apply.setText(delay ? `${delay} 秒后自动确认` : "正在自动确认");
+        this.imageAutoConfirmTimer = window.setTimeout(() => {
+          this.imageAutoConfirmTimer = null;
+          if (session === this.modalSession && pendingImagePreviews.length) apply.click();
+        }, delay * 1000);
+      }
     };
 
     mode.addEventListener("change", updateMode);
@@ -313,6 +325,8 @@ export class AiAskModal extends Modal {
       void navigator.clipboard.writeText(answerText).then(() => new Notice(currentMode() === "vision" ? "识图结果已复制" : "AI 回答已复制"));
     });
     apply.addEventListener("click", () => {
+      if (this.imageAutoConfirmTimer !== null) window.clearTimeout(this.imageAutoConfirmTimer);
+      this.imageAutoConfirmTimer = null;
       const imagePreviews = pendingImagePreviews.map((preview, index) => ({
         ...preview,
         text: imagePreviewInputs[index]?.value.trim() ?? preview.text
@@ -442,6 +456,8 @@ export class AiAskModal extends Modal {
   /** 释放 Markdown 渲染器注册的子组件和事件，避免窗口关闭后继续更新 DOM。 */
   onClose(): void {
     this.modalSession += 1;
+    if (this.imageAutoConfirmTimer !== null) window.clearTimeout(this.imageAutoConfirmTimer);
+    this.imageAutoConfirmTimer = null;
     this.markdownRenderComponent?.unload();
     this.markdownRenderComponent = null;
     this.contentEl.empty();

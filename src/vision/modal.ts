@@ -11,11 +11,14 @@ export interface ImageRecognitionPreviewModalOptions {
   preview: ImageTextReplacementPreview;
   resolvedImageSource: string;
   modeLabel: string;
+  autoConfirmDelaySeconds: 0 | 5 | 10 | 15 | null;
   onConfirm: (preview: ImageTextReplacementPreview) => boolean | Promise<boolean>;
 }
 
 /** 显示原图片与识别文字，只有用户确认后才执行替换。 */
 export class ImageRecognitionPreviewModal extends Modal {
+  private autoConfirmTimer: number | null = null;
+
   /** 保存预览参数并初始化 Obsidian Modal。 */
   constructor(app: App, private readonly options: ImageRecognitionPreviewModalOptions) {
     super(app);
@@ -46,7 +49,11 @@ export class ImageRecognitionPreviewModal extends Modal {
     const cancel = actions.createEl("button", { attr: { type: "button" }, text: "取消返回" });
     const confirm = actions.createEl("button", { cls: "mod-cta", attr: { type: "button" }, text: "确定替换" });
     cancel.addEventListener("click", () => this.close());
-    confirm.addEventListener("click", () => {
+    const confirmReplacement = (): void => {
+      if (this.autoConfirmTimer !== null) {
+        window.clearTimeout(this.autoConfirmTimer);
+        this.autoConfirmTimer = null;
+      }
       const nextText = text.value.trim();
       if (!nextText) {
         new Notice("识别文字不能为空");
@@ -64,12 +71,20 @@ export class ImageRecognitionPreviewModal extends Modal {
           confirm.disabled = false;
           new Notice(error instanceof Error ? error.message : "图片替换失败");
         });
-    });
+    };
+    confirm.addEventListener("click", confirmReplacement);
+    const delay = this.options.autoConfirmDelaySeconds;
+    if (delay !== null) {
+      confirm.setText(delay ? `${delay} 秒后自动确认` : "正在自动确认");
+      this.autoConfirmTimer = window.setTimeout(confirmReplacement, delay * 1000);
+    }
     window.setTimeout(() => text.focus(), 20);
   }
 
   /** 关闭时清空临时 DOM。 */
   onClose(): void {
+    if (this.autoConfirmTimer !== null) window.clearTimeout(this.autoConfirmTimer);
+    this.autoConfirmTimer = null;
     this.contentEl.empty();
   }
 }
