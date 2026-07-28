@@ -199,7 +199,7 @@
 - 把直接子节点转换为表格。
 - 列对齐设置。
 
-代码块支持语言名称，并通过 Obsidian Markdown 渲染器显示语法高亮。
+代码块支持语言名称、默认折叠、行号，以及 Obsidian、GitHub、Monokai、Dracula 样式，并通过 Obsidian Markdown 渲染器显示语法高亮。
 
 ## 11. 图片保存与图床
 

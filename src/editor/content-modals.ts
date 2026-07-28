@@ -252,6 +252,26 @@ export class CodeEditModal extends Modal {
     codeInput.rows = 18;
     codeInput.value = this.block?.code ?? "";
 
+    const appearance = this.contentEl.createDiv({ cls: "mmc-code-appearance" });
+    appearance.createEl("h3", { text: "显示设置" });
+    const collapsedLabel = appearance.createEl("label", { cls: "checkbox-container" });
+    const collapsedInput = collapsedLabel.createEl("input", { type: "checkbox" });
+    collapsedInput.checked = this.block?.collapsed === true;
+    collapsedLabel.createSpan({ text: "默认折叠代码" });
+    const lineNumbersLabel = appearance.createEl("label", { cls: "checkbox-container" });
+    const lineNumbersInput = lineNumbersLabel.createEl("input", { type: "checkbox" });
+    lineNumbersInput.checked = this.block?.showLineNumbers === true;
+    lineNumbersLabel.createSpan({ text: "显示行号" });
+    const themeLabel = appearance.createEl("label", { text: "代码样式" });
+    const themeSelect = themeLabel.createEl("select");
+    ([
+      ["obsidian", "Obsidian"],
+      ["github", "GitHub"],
+      ["monokai", "Monokai"],
+      ["dracula", "Dracula"]
+    ] as const).forEach(([value, label]) => themeSelect.createEl("option", { value, text: label }));
+    themeSelect.value = this.block?.theme ?? "obsidian";
+
     const detect = this.contentEl.createEl("button", { text: "识别 fenced code", type: "button" });
     detect.addEventListener("click", () => {
       const parsed = parseFencedCode(codeInput.value);
@@ -274,7 +294,13 @@ export class CodeEditModal extends Modal {
         code = fenced.code;
       }
       if (!code.trim()) { new Notice("代码内容不能为空"); return; }
-      this.submit({ language: language.replace(/[^a-z0-9_+#.-]/gi, "").slice(0, 40) || "bash", code });
+      this.submit({
+        language: language.replace(/[^a-z0-9_+#.-]/gi, "").slice(0, 40) || "bash",
+        code,
+        collapsed: collapsedInput.checked || undefined,
+        showLineNumbers: lineNumbersInput.checked || undefined,
+        theme: themeSelect.value === "github" || themeSelect.value === "monokai" || themeSelect.value === "dracula" ? themeSelect.value : "obsidian"
+      });
       this.close();
     });
   }

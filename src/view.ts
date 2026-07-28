@@ -25,6 +25,12 @@ import {
 
 export const VIEW_TYPE_MINDMAP_STUDIO = "mindmap-studio-view";
 
+const CODE_THEME_CLASS_NAMES = {
+  github: "mms-code-theme-github",
+  monokai: "mms-code-theme-monokai",
+  dracula: "mms-code-theme-dracula"
+} as const;
+
 /**
  * MindMapStudioView 的主要实现类。负责封装相关状态、生命周期和对外操作，避免调用方直接操作内部数据结构。
  */
@@ -180,7 +186,19 @@ export class MindMapStudioView extends TextFileView {
           const longestFence = Math.max(2, ...Array.from(block.code.matchAll(/`+/g), (match) => match[0].length));
           const fence = "`".repeat(longestFence + 1);
           const markdown = `${fence}${block.language ?? ""}\n${block.code}\n${fence}`;
-          await MarkdownRenderer.render(this.app, markdown, container, this.file?.path ?? "", this);
+          const themeClass = block.theme && block.theme !== "obsidian" ? CODE_THEME_CLASS_NAMES[block.theme] : undefined;
+          if (themeClass) container.addClass(themeClass);
+          const rendered = block.collapsed
+            ? container.createEl("details", { cls: "mms-code-collapsed" })
+            : container;
+          if (block.collapsed) rendered.createEl("summary", { text: `展开 ${block.language || "code"} 代码` });
+          const target = block.collapsed ? rendered.createDiv({ cls: "mms-code-collapsed-content" }) : rendered;
+          await MarkdownRenderer.render(this.app, markdown, target, this.file?.path ?? "", this);
+          const pre = target.querySelector("pre");
+          if (block.showLineNumbers && pre) {
+            pre.addClass("mms-code-with-line-numbers");
+            pre.setAttr("data-line-numbers", Array.from({ length: block.code.split("\n").length }, (_, index) => String(index + 1)).join("\n"));
+          }
         }
       }, this.getEditorOptions());
     } else {
