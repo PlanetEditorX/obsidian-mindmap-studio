@@ -3398,6 +3398,40 @@
   outline: none;
 }
 
+.mms-question-panel {
+  display: grid;
+  gap: 8px;
+  margin: 18px 0;
+  padding: 14px 16px;
+  border: 1px solid var(--background-modifier-border);
+  border-left: 3px solid var(--interactive-accent);
+  background: var(--background-secondary);
+  font-size: var(--mms-article-font-size, 16px);
+  line-height: var(--mms-article-line-height, 1.85);
+}
+
+.mms-question-kind {
+  color: var(--text-muted);
+  font-size: .85em;
+  font-weight: 700;
+}
+
+.mms-question-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 6px;
+  align-items: start;
+}
+
+.mms-question-row.is-answer {
+  color: var(--color-green);
+}
+
+.mms-question-source {
+  color: var(--text-accent);
+  font-size: .9em;
+}
+
 .mms-article-note {
   padding: 10px 14px;
   color: var(--text-muted);
