@@ -84,8 +84,10 @@ test("question assistant keeps an intelligent image-to-question pipeline and vis
   assert.match(editorSource, /转为题目节点并智能处理/);
   assert.match(editorSource, /renderQuestionSummary/);
   assert.match(editorSource, /mmc-question-summary/);
+  assert.match(editorSource, /显示答案与解析/);
   assert.match(articleSource, /renderArticleQuestionDetails/);
   assert.match(articleSource, /mms-question-panel/);
+  assert.match(articleSource, /mms-question-reveal/);
   assert.match(modalSource, /AI 智能处理题目/);
   assert.match(modalSource, /已由 AI 分析补齐缺失答案与解答/);
   assert.match(mainSource, /仍需基于题目独立分析/);

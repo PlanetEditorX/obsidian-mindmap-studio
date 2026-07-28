@@ -4182,17 +4182,30 @@ export class MindMapEditor {
       .filter(Boolean).join(" ");
     const summary = content.createDiv({ cls: "mmc-question-summary" });
     summary.createDiv({ cls: "mmc-question-kind", text: question.mode === "choice" ? "选择题" : "大题" });
-    const appendField = (label: string, value: string, cls = ""): void => {
+    const appendField = (container: HTMLElement, label: string, value: string, cls = ""): void => {
       if (!value) return;
-      const line = summary.createDiv({ cls: `mmc-question-field ${cls}`.trim() });
+      const line = container.createDiv({ cls: `mmc-question-field ${cls}`.trim() });
       line.createSpan({ cls: "mmc-question-label", text: `${label}：` });
       line.createSpan({ cls: "mmc-question-value", text: value });
     };
     if (question.mode === "choice") {
-      for (const option of question.options) appendField(option.label, plainText(option.content), "is-option");
+      for (const option of question.options) appendField(summary, option.label, plainText(option.content), "is-option");
     }
-    appendField("答案", plainText(question.answer), "is-answer");
-    appendField("解答", plainText(question.explanation), "is-explanation");
+    const answer = plainText(question.answer);
+    const explanation = plainText(question.explanation);
+    if (answer || explanation) {
+      const toggle = summary.createEl("button", { cls: "mmc-question-toggle", text: "显示答案与解析", attr: { type: "button", "aria-expanded": "false" } });
+      const reveal = summary.createDiv({ cls: "mmc-question-reveal" });
+      appendField(reveal, "答案", answer, "is-answer");
+      appendField(reveal, "解答", explanation, "is-explanation");
+      toggle.addEventListener("click", (event) => {
+        event.stopPropagation();
+        const revealed = !reveal.hasClass("is-revealed");
+        reveal.toggleClass("is-revealed", revealed);
+        toggle.setText(revealed ? "隐藏答案与解析" : "显示答案与解析");
+        toggle.setAttr("aria-expanded", String(revealed));
+      });
+    }
     if (question.source) {
       const source = summary.createEl("a", { cls: "mmc-question-source", text: `原题：${question.source.title}`, href: question.source.url });
       source.setAttr("target", "_blank");
