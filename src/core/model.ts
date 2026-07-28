@@ -272,6 +272,9 @@ export interface MindMapNodeStyle {
 /** A structured question can be either a multiple-choice or long-form exercise. */
 export type MindMapQuestionMode = "choice" | "essay";
 
+/** Learning state used by question-bank filtering and review workflows. */
+export type MindMapQuestionStatus = "unanswered" | "completed" | "favorite" | "wrong" | "mastered";
+
 /** A selectable answer item in a structured question. */
 export interface MindMapQuestionOption {
   id: string;
@@ -295,6 +298,10 @@ export interface MindMapQuestion {
   explanation: MindMapContentBlock[];
   tags: string[];
   source?: MindMapQuestionSource;
+  status: MindMapQuestionStatus;
+  attemptCount: number;
+  correctCount: number;
+  lastPracticedAt?: string;
 }
 
 /**
@@ -397,7 +404,11 @@ export function createMindMapQuestion(mode: MindMapQuestionMode = "choice"): Min
     answer: [{ id: newId(), type: "text", text: "" }],
     explanation: [{ id: newId(), type: "text", text: "" }],
     tags: [],
-    source: undefined
+    source: undefined,
+    status: "unanswered",
+    attemptCount: 0,
+    correctCount: 0,
+    lastPracticedAt: undefined
   };
 }
 
@@ -1043,6 +1054,15 @@ function normalizeMindMapQuestion(value: unknown): MindMapQuestion | undefined {
       }];
     })
     : [];
+  const status: MindMapQuestionStatus = input.status === "completed" || input.status === "favorite" || input.status === "wrong" || input.status === "mastered"
+    ? input.status
+    : "unanswered";
+  const attemptCount = typeof input.attemptCount === "number" && Number.isFinite(input.attemptCount)
+    ? Math.max(0, Math.min(1000000, Math.floor(input.attemptCount)))
+    : 0;
+  const correctCount = typeof input.correctCount === "number" && Number.isFinite(input.correctCount)
+    ? Math.max(0, Math.min(attemptCount, Math.floor(input.correctCount)))
+    : 0;
   return {
     mode,
     stem: normalizeBlocks(input.stem),
@@ -1061,6 +1081,10 @@ function normalizeMindMapQuestion(value: unknown): MindMapQuestion | undefined {
           : new Date().toISOString()
       }
       : undefined
+    ,status
+    ,attemptCount
+    ,correctCount
+    ,lastPracticedAt: typeof input.lastPracticedAt === "string" && input.lastPracticedAt.trim() ? input.lastPracticedAt.trim().slice(0, 80) : undefined
   };
 }
 

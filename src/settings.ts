@@ -44,6 +44,7 @@ export const TOOLBAR_ITEMS = [
   ["article-landing", "目录/原始文章"], ["article-style", "文章样式"],
   ["markdown", "Markdown 大纲"], ["json", "导入文件 / JSON"], ["export-document", "导出文档"], ["export-svg", "导出 SVG"],
   ["question", "题目节点"],
+  ["question-bank", "题库"],
 ] as const;
 
 /**
