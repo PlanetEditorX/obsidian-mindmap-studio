@@ -194,10 +194,24 @@ export interface MindMapImageContentBlock {
   remoteSources?: MindMapImageRemoteSource[];
 }
 
+/** A movable table block stored alongside text and images. */
+export interface MindMapTableContentBlock {
+  id: string;
+  type: "table";
+  table: MindMapTable;
+}
+
+/** A movable code block stored alongside text, images, and tables. */
+export interface MindMapCodeContentBlock {
+  id: string;
+  type: "code";
+  code: MindMapCodeBlock;
+}
+
 /**
  * MindMapContentBlock 类型定义，用于限制可接受值并让序列化数据保持稳定。
  */
-export type MindMapContentBlock = MindMapTextContentBlock | MindMapImageContentBlock;
+export type MindMapContentBlock = MindMapTextContentBlock | MindMapImageContentBlock | MindMapTableContentBlock | MindMapCodeContentBlock;
 
 /**
  * MindMapSubmap 的结构化数据约定。字段会在模块边界传递，用于保持类型安全和版本兼容。
@@ -783,6 +797,14 @@ function normalizeContentBlock(input: unknown): MindMapContentBlock | null {
   if (!input || typeof input !== "object") return null;
   const candidate = input as Partial<MindMapContentBlock>;
   const id = typeof candidate.id === "string" && candidate.id.trim() ? candidate.id.trim().slice(0, 160) : newId();
+  if (candidate.type === "table") {
+    const table = normalizeTable((candidate as Partial<MindMapTableContentBlock>).table);
+    return table ? { id, type: "table", table } : null;
+  }
+  if (candidate.type === "code") {
+    const code = normalizeCode((candidate as Partial<MindMapCodeContentBlock>).code);
+    return code ? { id, type: "code", code } : null;
+  }
   if (candidate.type === "image") {
     const image = candidate as Partial<MindMapImageContentBlock>;
     const source = typeof image.source === "string" ? image.source.trim().slice(0, 2000) : "";
@@ -877,10 +899,14 @@ export function imageSourceCandidates(block: MindMapImageContentBlock, includeLo
  * @param node 当前处理的节点。
  * @returns 按当前规则构建的集合结果。
  */
-export function nodeContentBlocks(node: Pick<MindMapNode, "content" | "text" | "richText" | "image">): MindMapContentBlock[] {
+export function nodeContentBlocks(node: Pick<MindMapNode, "content" | "text" | "richText" | "image" | "table" | "code">): MindMapContentBlock[] {
   if (Array.isArray(node.content) && node.content.length) {
     const normalized = node.content.map(normalizeContentBlock).filter((block): block is MindMapContentBlock => Boolean(block));
-    if (normalized.length) return normalized;
+    if (normalized.length) {
+      if (node.table && !normalized.some((block) => block.type === "table")) normalized.push({ id: newId(), type: "table", table: normalizeTable(node.table) ?? node.table });
+      if (node.code && !normalized.some((block) => block.type === "code")) normalized.push({ id: newId(), type: "code", code: normalizeCode(node.code) ?? node.code });
+      return normalized;
+    }
   }
   const blocks: MindMapContentBlock[] = [];
   if (node.image?.trim()) blocks.push({ id: newId(), type: "image", source: node.image.trim(), alt: node.text || undefined });
@@ -888,6 +914,8 @@ export function nodeContentBlocks(node: Pick<MindMapNode, "content" | "text" | "
     const richText = normalizeRichText(node.richText, node.text);
     blocks.push({ id: newId(), type: "text", text: richTextPlainText(richText, node.text), richText });
   }
+  if (node.table) blocks.push({ id: newId(), type: "table", table: normalizeTable(node.table) ?? node.table });
+  if (node.code) blocks.push({ id: newId(), type: "code", code: normalizeCode(node.code) ?? node.code });
   return blocks;
 }
 
@@ -924,9 +952,13 @@ export function syncNodeContentFields(node: MindMapNode): void {
   node.content = blocks.length ? blocks : undefined;
   const textBlocks = blocks.filter((block): block is MindMapTextContentBlock => block.type === "text");
   const imageBlocks = blocks.filter((block): block is MindMapImageContentBlock => block.type === "image");
+  const tableBlocks = blocks.filter((block): block is MindMapTableContentBlock => block.type === "table");
+  const codeBlocks = blocks.filter((block): block is MindMapCodeContentBlock => block.type === "code");
   node.text = textBlocks.map((block) => block.text).join(" ").trim();
   node.richText = textBlocks.length === 1 ? normalizeRichText(textBlocks[0]?.richText, textBlocks[0]?.text ?? "") : undefined;
   node.image = imageBlocks[0]?.source;
+  node.table = tableBlocks[0]?.table;
+  node.code = codeBlocks[0]?.code;
 }
 
 
@@ -1149,6 +1181,7 @@ function normalizeNode(input: Partial<MindMapNode> | undefined, fallbackText: st
       ? input.children.map((child, index) => normalizeNode(child, `节点 ${index + 1}`))
       : []
   };
+  syncNodeContentFields(node);
   syncMindMapQuestionFields(node);
   return node;
 }
@@ -1354,7 +1387,12 @@ export function getTaskProgress(root: MindMapNode): TaskProgress {
  * @returns 计算、解析或序列化后的字符串结果。
  */
 export function nodeSearchText(node: MindMapNode): string {
-  return [nodePlainText(node), node.note, node.link, ...nodeContentBlocks(node).map((block) => block.type === "image" ? `${block.source} ${block.alt ?? ""}` : block.text), node.icon, node.submap?.path, node.code?.language, node.code?.code, ...(node.table?.headers ?? []), ...(node.table?.rows.flat() ?? []), ...(node.tags ?? [])]
+  return [nodePlainText(node), node.note, node.link, ...nodeContentBlocks(node).flatMap((block) => {
+    if (block.type === "image") return `${block.source} ${block.alt ?? ""}`;
+    if (block.type === "table") return [...block.table.headers, ...block.table.rows.flat()];
+    if (block.type === "code") return [block.code.language, block.code.code];
+    return block.text;
+  }), node.icon, node.submap?.path, ...(node.tags ?? [])]
     .filter((value): value is string => Boolean(value))
     .join(" ")
     .toLocaleLowerCase();
@@ -1525,8 +1563,12 @@ export function documentToMarkdown(doc: MindMapDocument): string {
       if (block.type === "text") {
         const value = richTextToMarkdown(block.richText, block.text);
         if (value) result.push(value);
-      } else {
+      } else if (block.type === "image") {
         result.push(`![${escapeInlineMarkdown(block.alt ?? "图片")}](${block.source})`);
+      } else if (block.type === "table") {
+        result.push(tableToMarkdown(block.table));
+      } else {
+        result.push(`\`\`\`${block.code.language ?? ""}\n${block.code.code}\n\`\`\``);
       }
     }
     return result;
@@ -1546,8 +1588,6 @@ export function documentToMarkdown(doc: MindMapDocument): string {
     blocks.filter((value) => value !== firstText).forEach((value) => lines.push(`${indent}  ${value}`));
     if (node.note) lines.push(`${indent}  > ${node.note.replaceAll("\n", " ")}`);
     if (node.submap) lines.push(`${indent}  > 子导图：[[${node.submap.path}]]`);
-    if (node.table) lines.push("", ...tableToMarkdown(node.table).split("\n").map((line) => `${indent}  ${line}`), "");
-    if (node.code) lines.push(`${indent}  \`\`\`${node.code.language ?? ""}`, ...node.code.code.split("\n").map((line) => `${indent}  ${line}`), `${indent}  \`\`\``);
     node.children.forEach((child) => visit(child, depth + 1));
   };
   doc.root.children.forEach((child) => visit(child, 1));

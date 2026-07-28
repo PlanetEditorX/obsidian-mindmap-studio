@@ -169,7 +169,7 @@ export function renderArticleNodeContent(container: HTMLElement, node: MindMapNo
       paragraph.dataset.blockId = block.id;
       renderRichTextRuns(paragraph, block.richText, block.text);
       if (treatTextAsBody) options.makeInlineEditable(paragraph, node, "正文");
-    } else {
+    } else if (block.type === "image") {
       const resolved = options.callbacks.resolveImage(block.source);
       const image = container.createEl("img", { cls: "mms-article-image", attr: { src: resolved ?? block.source, alt: block.alt ?? "图片" } });
       image.dataset.blockId = block.id;
@@ -188,21 +188,27 @@ export function renderArticleNodeContent(container: HTMLElement, node: MindMapNo
         options.selectNode(node.id);
         options.openImageContextMenu(event, node.id, block.id);
       });
+    } else if (block.type === "table") {
+      renderArticleTable(container, block.table);
+    } else {
+      void options.callbacks.onRenderCode(block.code, container.createDiv({ cls: "mms-article-code markdown-rendered" }));
     }
   }
   if (node.note) container.createEl("p", { cls: "mms-article-note", text: node.note });
-  if (node.table) {
-    const table = container.createDiv({ cls: "mms-article-table-wrap" }).createEl("table", { cls: "mms-article-table" });
-    const tr = table.createEl("thead").createEl("tr");
-    node.table.headers.forEach((header) => tr.createEl("th", { text: header }));
-    const body = table.createEl("tbody");
-    node.table.rows.forEach((row) => {
-      const rowEl = body.createEl("tr");
-      node.table!.headers.forEach((_, index) => rowEl.createEl("td", { text: row[index] ?? "" }));
-    });
-  }
-  if (node.code) void options.callbacks.onRenderCode(node.code, container.createDiv({ cls: "mms-article-code markdown-rendered" }));
   if (node.question) renderArticleQuestionDetails(container, node);
+}
+
+/** Renders a movable table block in article and continuous-reading views. */
+function renderArticleTable(container: HTMLElement, tableData: MindMapNode["table"]): void {
+  if (!tableData) return;
+  const table = container.createDiv({ cls: "mms-article-table-wrap" }).createEl("table", { cls: "mms-article-table" });
+  const tr = table.createEl("thead").createEl("tr");
+  tableData.headers.forEach((header) => tr.createEl("th", { text: header }));
+  const body = table.createEl("tbody");
+  tableData.rows.forEach((row) => {
+    const rowEl = body.createEl("tr");
+    tableData.headers.forEach((_, index) => rowEl.createEl("td", { text: row[index] ?? "" }));
+  });
 }
 
 /** Renders structured question options, answers, explanations, and original source in article and reading modes. */

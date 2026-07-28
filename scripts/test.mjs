@@ -1200,7 +1200,7 @@ export const setIcon = () => {};
   assert.match(editorSource, /targetModal && targetModal !== this\.modalEl/, "nested dialogs must not close the node editor");
   assert.match(editorSource, /targetModalContainer && ownModalContainer && targetModalContainer !== ownModalContainer/, "clicking a nested dialog backdrop must keep the node editor open");
   assert.doesNotMatch(editorSource, /切换所选文字删除线/, "strikethrough must be hidden from the common formatting toolbar");
-  assert.match(editorSource, /可排序的文字块和图片块/);
+  assert.match(editorSource, /可排序的文字、图片、表格和代码块/);
   assert.match(editorSource, /显示宽度（px）/, "image blocks must expose a rendered width control");
   assert.match(editorSource, /显示高度（px）/, "image blocks must expose a rendered height control");
   assert.match(editorSource, /document\.execCommand\("insertText", false, copiedNodes\.map/, "inline editing must paste copied nodes as text instead of raw JSON");

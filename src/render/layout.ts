@@ -90,7 +90,7 @@ function nodeDimensions(node: MindMapNode, depth: number, defaultFontSize = 14, 
   if (!manualWidth && automatic) {
     for (const block of blocks) {
       if (block.type === "image") width = Math.max(width, Math.min(900, (block.width ?? 240) + 28));
-      else {
+      else if (block.type === "text") {
         const visualUnits = Array.from(block.text.split(/\r?\n/).sort((a, b) => b.length - a.length)[0] ?? "")
           .reduce((sum, character) => sum + (/[\u2e80-\u9fff\uff00-\uffef]/u.test(character) ? 1 : .62), 0);
         const horizontalPadding = fitted ? (depth === 0 ? 48 : 58) : 80;
@@ -114,7 +114,7 @@ function nodeDimensions(node: MindMapNode, depth: number, defaultFontSize = 14, 
   if (!blocks.length) height += depth === 0 ? 34 : 26;
   for (const block of blocks) {
     if (block.type === "image") height += (block.height ?? 110) + 22;
-    else height += Math.max(30, estimatedTextLines(block.text, width, fontSize) * (fontSize + 8));
+    else if (block.type === "text") height += Math.max(30, estimatedTextLines(block.text, width, fontSize) * (fontSize + 8));
   }
   if (node.tags?.length) height += 20;
   if (node.table) {
@@ -538,7 +538,7 @@ export function documentToSvg(root: MindMapNode, mode: LayoutMode, title: string
       if (block.type === "image") {
         contentParts.push(`<rect x="${position.x - 70}" y="${contentY - 14}" width="140" height="94" rx="8" fill="rgba(127,127,127,.12)"/><text x="${position.x}" y="${contentY + 38}" text-anchor="middle" fill="${foreground}" font-size="12">🖼 ${escapeXml((block.alt ?? "图片").slice(0, 20))}</text>`);
         contentY += 112;
-      } else if (block.text.trim()) {
+      } else if (block.type === "text" && block.text.trim()) {
         const blockPrefix = prefixUsed ? "" : prefix;
         prefixUsed = true;
         const suffix: string = node.submap && !submapMarkerUsed ? "  ↗" : "";

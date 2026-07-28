@@ -43,6 +43,8 @@ import {
   type MindMapDocument,
   type MindMapContentBlock,
   type MindMapImageContentBlock,
+  type MindMapTable,
+  type MindMapCodeBlock,
   type MindMapNode,
   type MindMapTextContentBlock,
   type MindMapTextStyle,
@@ -278,7 +280,7 @@ class NodeEditModal extends Modal {
     const form = this.contentEl.createDiv({ cls: "mmc-node-edit-form" });
     form.createEl("p", {
       cls: "setting-item-description",
-      text: "节点内容由可排序的文字块和图片块组成。可以只保留图片，也可以组合为图片→文字、文字→图片，或文字→图片→文字。"
+      text: "节点内容由可排序的文字、图片、表格和代码块组成，可按需要组合和调整顺序。"
     });
 
     let workingBlocks: MindMapContentBlock[] = JSON.parse(JSON.stringify(nodeContentBlocks(this.node))) as MindMapContentBlock[];
@@ -289,7 +291,12 @@ class NodeEditModal extends Modal {
     const blocksEl = form.createDiv({ cls: "mmc-content-block-list" });
 
     const cloneBlocks = (): MindMapContentBlock[] => JSON.parse(JSON.stringify(workingBlocks)) as MindMapContentBlock[];
-    const validBlocks = (): MindMapContentBlock[] => cloneBlocks().filter((block) => block.type === "image" ? Boolean(block.source.trim()) : Boolean(block.text.trim()));
+    const validBlocks = (): MindMapContentBlock[] => cloneBlocks().filter((block) => {
+      if (block.type === "image") return Boolean(block.source.trim());
+      if (block.type === "table") return Boolean(block.table.headers.some((header) => header.trim()));
+      if (block.type === "code") return Boolean(block.code.code.trim());
+      return Boolean(block.text.trim());
+    });
 
     const renderBlocks = (): void => {
       blocksEl.empty();
@@ -298,7 +305,8 @@ class NodeEditModal extends Modal {
         card.dataset.blockId = block.id;
         card.toggleClass("is-targeted", block.id === this.initialBlockId);
         const header = card.createDiv({ cls: "mmc-content-block-header" });
-        header.createSpan({ cls: "mmc-content-block-title", text: block.type === "text" ? `文字块 ${index + 1}` : `图片块 ${index + 1}` });
+        const blockTitle = block.type === "text" ? "文字块" : block.type === "image" ? "图片块" : block.type === "table" ? "表格块" : "代码块";
+        header.createSpan({ cls: "mmc-content-block-title", text: `${blockTitle} ${index + 1}` });
         const controls = header.createDiv({ cls: "mmc-content-block-controls" });
         const control = (icon: string, title: string, action: () => void, disabled = false): void => {
           const btn = controls.createEl("button", { cls: "clickable-icon", attr: { type: "button", title, "aria-label": title } });
@@ -314,7 +322,7 @@ class NodeEditModal extends Modal {
             block,
             scheduleAutoSave
           );
-        } else {
+        } else if (block.type === "image") {
           const body = card.createDiv({ cls: "mmc-content-block-body mmc-image-block-editor" });
           const preview = body.createDiv({ cls: "mmc-image-block-preview" });
           const refresh = (): void => {
@@ -396,15 +404,37 @@ class NodeEditModal extends Modal {
             });
           }
           refresh();
+        } else if (block.type === "table") {
+          const body = card.createDiv({ cls: "mmc-content-block-body" });
+          body.createDiv({ cls: "setting-item-description", text: `${block.table.headers.length} 列 · ${block.table.rows.length} 行` });
+          const edit = body.createEl("button", { text: "编辑表格", attr: { type: "button" } });
+          edit.addEventListener("click", () => new TableEditModal(this.app, block.table, (table) => {
+            block.table = table;
+            renderBlocks();
+            scheduleAutoSave();
+          }).open());
+        } else {
+          const body = card.createDiv({ cls: "mmc-content-block-body" });
+          body.createDiv({ cls: "setting-item-description", text: block.code.language || "bash" });
+          const edit = body.createEl("button", { text: "编辑代码", attr: { type: "button" } });
+          edit.addEventListener("click", () => new CodeEditModal(this.app, block.code, (code) => {
+            block.code = code;
+            renderBlocks();
+            scheduleAutoSave();
+          }).open());
         }
       });
-      if (!workingBlocks.length) blocksEl.createDiv({ cls: "mmc-empty-content-hint", text: "当前没有内容块。请添加文字或图片。" });
+      if (!workingBlocks.length) blocksEl.createDiv({ cls: "mmc-empty-content-hint", text: "当前没有内容块。请添加文字、图片、表格或代码。" });
     };
 
     const addText = actionRow.createEl("button", { text: "+ 文字", attr: { type: "button" } });
     addText.addEventListener("click", () => { workingBlocks.push({ id: newId(), type: "text", text: "" }); renderBlocks(); scheduleAutoSave(); });
     const addImage = actionRow.createEl("button", { text: "+ 图片", attr: { type: "button" } });
     addImage.addEventListener("click", () => { workingBlocks.push({ id: newId(), type: "image", source: "" }); renderBlocks(); scheduleAutoSave(); });
+    const addTable = actionRow.createEl("button", { text: "+ 表格", attr: { type: "button" } });
+    addTable.addEventListener("click", () => { workingBlocks.push({ id: newId(), type: "table", table: { headers: ["列 1", "列 2"], rows: [["", ""]], source: "manual" } }); renderBlocks(); scheduleAutoSave(); });
+    const addCode = actionRow.createEl("button", { text: "+ 代码", attr: { type: "button" } });
+    addCode.addEventListener("click", () => { workingBlocks.push({ id: newId(), type: "code", code: { language: "bash", code: "" } }); renderBlocks(); scheduleAutoSave(); });
     renderBlocks();
     if (this.position === "right" && this.panelHost) {
       this.externalNodeHandler = (event: Event): void => {
@@ -492,7 +522,7 @@ class NodeEditModal extends Modal {
     const parseNumber = (value: string, min: number, max: number): number | undefined => value.trim() && Number.isFinite(Number(value)) ? Math.min(max, Math.max(min, Number(value))) : undefined;
     const collectValues = (showNotice: boolean): NodeEditValues | null => {
       const content = validBlocks();
-      if (!content.length) { if (showNotice) new Notice("节点至少需要一个文字块或图片块"); return null; }
+      if (!content.length) { if (showNotice) new Notice("节点至少需要一个内容块"); return null; }
       const task = taskSelect.value;
       const shape = shapeSelect.value;
       const numbering = numberingControls.read();
@@ -2922,6 +2952,14 @@ export class MindMapEditor {
           tryCandidate(0);
           continue;
         }
+        if (block.type === "table") {
+          this.renderNodeTable(content, node, block.table, block.id);
+          continue;
+        }
+        if (block.type === "code") {
+          this.renderNodeCode(content, node, block.code, block.id);
+          continue;
+        }
         if (!block.text.trim()) continue;
         const main = content.createDiv({ cls: "mmc-node-main mmc-node-text-block" });
         main.dataset.blockId = block.id;
@@ -2964,8 +3002,8 @@ export class MindMapEditor {
         nodeEl.setAttr("aria-label", `打开子导图：${node.submap.title ?? node.submap.path}`);
       }
 
-      if (node.table) this.renderNodeTable(content, node);
-      if (node.code) this.renderNodeCode(content, node);
+      if (node.table && !blocks.some((block) => block.type === "table")) this.renderNodeTable(content, node, node.table);
+      if (node.code && !blocks.some((block) => block.type === "code")) this.renderNodeCode(content, node, node.code);
       if (node.question) this.renderQuestionSummary(content, node);
 
       if (node.tags?.length) {
@@ -3971,7 +4009,7 @@ export class MindMapEditor {
     if (!this.ensureEditable()) return;
     const selected = this.selectedNode() ?? this.document.root;
     new TableEditModal(this.app, selected.table, (table) => {
-      this.mutate(() => { selected.table = table; });
+      this.mutate(() => this.upsertStructuredBlock(selected, "table", table));
     }).open();
   }
 
@@ -3984,7 +4022,7 @@ export class MindMapEditor {
     const table = childrenToTable(selected);
     if (!table) { new Notice("当前节点没有可转换的子节点"); return; }
     this.mutate(() => {
-      selected.table = table;
+      this.upsertStructuredBlock(selected, "table", table);
       selected.collapsed = true;
     });
     new Notice("已生成子节点表格；原子节点已保留并收起");
@@ -3998,7 +4036,7 @@ export class MindMapEditor {
     const selected = this.selectedNode();
     if (!selected?.table) return;
     this.mutate(() => {
-      selected.table = undefined;
+      this.removeStructuredBlocks(selected, "table");
       if (selected.children.length) selected.collapsed = false;
     });
   }
@@ -4010,7 +4048,7 @@ export class MindMapEditor {
     if (!this.ensureEditable()) return;
     const selected = this.selectedNode() ?? this.document.root;
     new CodeEditModal(this.app, selected.code, (code) => {
-      this.mutate(() => { selected.code = code; });
+      this.mutate(() => this.upsertStructuredBlock(selected, "code", code));
     }).open();
   }
 
@@ -4021,7 +4059,48 @@ export class MindMapEditor {
     if (!this.ensureEditable()) return;
     const selected = this.selectedNode();
     if (!selected?.code) return;
-    this.mutate(() => { selected.code = undefined; });
+    this.mutate(() => this.removeStructuredBlocks(selected, "code"));
+  }
+
+  /**
+   * 插入或更新第一个表格内容块，并保留该块当前的排序位置。
+   *
+   * @param node 目标节点。
+   * @param type 内容块类型。
+   * @param value 表格数据。
+   */
+  private upsertStructuredBlock(node: MindMapNode, type: "table", value: MindMapTable): void;
+  /**
+   * 插入或更新第一个代码内容块，并保留该块当前的排序位置。
+   *
+   * @param node 目标节点。
+   * @param type 内容块类型。
+   * @param value 代码数据。
+   */
+  private upsertStructuredBlock(node: MindMapNode, type: "code", value: MindMapCodeBlock): void;
+  /**
+   * 插入或更新首个结构化内容块，并同步兼容旧版节点字段。
+   *
+   * @param node 目标节点。
+   * @param type 内容块类型。
+   * @param value 表格或代码数据。
+   */
+  private upsertStructuredBlock(node: MindMapNode, type: "table" | "code", value: MindMapTable | MindMapCodeBlock): void {
+    const blocks = nodeContentBlocks(node);
+    const index = blocks.findIndex((block) => block.type === type);
+    const block = type === "table"
+      ? { id: index >= 0 ? blocks[index]!.id : newId(), type, table: value as MindMapTable } as const
+      : { id: index >= 0 ? blocks[index]!.id : newId(), type, code: value as MindMapCodeBlock } as const;
+    if (index >= 0) blocks[index] = block;
+    else blocks.push(block);
+    node.content = blocks;
+    syncNodeContentFields(node);
+  }
+
+  /** Removes all matching structured blocks and mirrors the legacy node fields for compatibility. */
+  private removeStructuredBlocks(node: MindMapNode, type: "table" | "code"): void {
+    node.content = nodeContentBlocks(node).filter((block) => block.type !== type);
+    syncNodeContentFields(node);
   }
 
   /**
@@ -4254,26 +4333,25 @@ export class MindMapEditor {
   }
 
   /** Renders the optional table payload beneath normal node and question content. */
-  private renderNodeTable(content: HTMLElement, node: MindMapNode): void {
-    if (!node.table) return;
+  private renderNodeTable(content: HTMLElement, node: MindMapNode, tableData: MindMapTable, blockId?: string): void {
     const wrap = content.createDiv({ cls: "mmc-node-table-wrap" });
     const table = wrap.createEl("table", { cls: "mmc-node-table" });
     const head = table.createEl("thead").createEl("tr");
-    node.table.headers.forEach((header, index) => {
+    tableData.headers.forEach((header, index) => {
       const cell = head.createEl("th", { text: header || `列 ${index + 1}` });
-      cell.style.textAlign = node.table?.alignments?.[index] ?? "left";
+      cell.style.textAlign = tableData.alignments?.[index] ?? "left";
     });
     const body = table.createEl("tbody");
-    node.table.rows.forEach((row) => {
+    tableData.rows.forEach((row) => {
       const tr = body.createEl("tr");
-      node.table!.headers.forEach((_, index) => {
+      tableData.headers.forEach((_, index) => {
         const cell = tr.createEl("td", { text: row[index] ?? "" });
-        cell.style.textAlign = node.table?.alignments?.[index] ?? "left";
+        cell.style.textAlign = tableData.alignments?.[index] ?? "left";
       });
     });
     wrap.addEventListener("pointerdown", (event) => event.stopPropagation());
     wrap.addEventListener("dragstart", (event) => event.preventDefault());
-    wrap.addEventListener("dblclick", (event) => { event.stopPropagation(); this.selectNode(node.id); this.editTable(); });
+    wrap.addEventListener("dblclick", (event) => { event.stopPropagation(); this.selectNode(node.id); this.editSelected(blockId); });
   }
 
   /**
@@ -4282,22 +4360,21 @@ export class MindMapEditor {
    * @param content 该参数用于 render node code 流程中的输入或控制。
    * @param node 当前处理的节点。
    */
-  private renderNodeCode(content: HTMLElement, node: MindMapNode): void {
-    if (!node.code) return;
+  private renderNodeCode(content: HTMLElement, node: MindMapNode, codeData: MindMapCodeBlock, blockId?: string): void {
     const block = content.createDiv({ cls: "mmc-code-block" });
     const header = block.createDiv({ cls: "mmc-code-header" });
-    header.createSpan({ text: node.code.language || "code" });
+    header.createSpan({ text: codeData.language || "code" });
     const copy = header.createEl("button", { cls: "clickable-icon", attr: { "aria-label": "复制代码" } });
     setIcon(copy, "copy");
     copy.addEventListener("click", (event) => {
       event.stopPropagation();
-      void navigator.clipboard.writeText(node.code!.code).then(() => new Notice("代码已复制"));
+      void navigator.clipboard.writeText(codeData.code).then(() => new Notice("代码已复制"));
     });
     const rendered = block.createDiv({ cls: "mmc-code-rendered markdown-rendered" });
-    void this.callbacks.onRenderCode(node.code, rendered);
+    void this.callbacks.onRenderCode(codeData, rendered);
     block.addEventListener("pointerdown", (event) => event.stopPropagation());
     block.addEventListener("dragstart", (event) => event.preventDefault());
-    block.addEventListener("dblclick", (event) => { event.stopPropagation(); this.selectNode(node.id); this.editCode(); });
+    block.addEventListener("dblclick", (event) => { event.stopPropagation(); this.selectNode(node.id); this.editSelected(blockId); });
   }
 
   /**
@@ -4345,14 +4422,14 @@ export class MindMapEditor {
     const table = parseMarkdownTable(text);
     if (table) {
       event.preventDefault();
-      this.mutate(() => { selected.table = table; });
+      this.mutate(() => this.upsertStructuredBlock(selected, "table", table));
       new Notice("已识别并插入 Markdown 表格");
       return;
     }
     const code = parseFencedCode(text);
     if (code) {
       event.preventDefault();
-      this.mutate(() => { selected.code = code; });
+      this.mutate(() => this.upsertStructuredBlock(selected, "code", code));
       new Notice(`已识别并插入${code.language ? ` ${code.language}` : ""}代码`);
       return;
     }
