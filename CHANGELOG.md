@@ -189,6 +189,10 @@
 
 # Changelog
 
+## Unreleased
+
+- 题库新增随机练习、答对/答错记录、练习次数与正确率统计，以及按当前筛选结果汇总的标签题量；手动切换题目状态不再计为一次练习。
+
 ## 1.4.4
 
 - Replaced the parent-map control attached to the root node with a fixed breadcrumb overlay in the upper-left corner of mind-map mode.

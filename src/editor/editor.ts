@@ -3762,16 +3762,26 @@ export class MindMapEditor {
     this.editQuestion(node);
   }
 
-  /** Opens the filterable current-map question bank and records lightweight review outcomes. */
+  /** Opens the filterable current-map question bank and persists explicit review outcomes. */
   private openQuestionBank(): void {
     new QuestionBankModal(this.app, this.getDocument(), (nodeId) => this.focusNode(nodeId), (nodeId, status) => {
       const node = findNode(this.document.root, nodeId);
       if (!node?.question) return;
       this.mutate(() => {
+        node.question!.status = status;
+      });
+    }, (nodeId, correct) => {
+      const node = findNode(this.document.root, nodeId);
+      if (!node?.question) return;
+      this.mutate(() => {
         const question = node.question!;
-        question.status = status;
         question.attemptCount += 1;
-        if (status === "mastered") question.correctCount = Math.min(question.attemptCount, question.correctCount + 1);
+        if (correct) {
+          question.correctCount += 1;
+          if (question.status === "unanswered" || question.status === "wrong") question.status = "completed";
+        } else {
+          question.status = "wrong";
+        }
         question.lastPracticedAt = new Date().toISOString();
       });
     }).open();

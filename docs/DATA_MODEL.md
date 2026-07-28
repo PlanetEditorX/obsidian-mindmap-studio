@@ -74,7 +74,7 @@ interface MindMapNode {
 
 `question` 是可选的结构化题目数据，支持 `choice` 和 `essay` 两种模式。它包含图文题干、选择项、答案、解答及标签；题干会同步到标准 `content` 字段，保证既有的导出、搜索和阅读模式仍按普通节点工作。AI 找到原题后会记录 `source.title`、`source.url` 与匹配时间；仅接受 HTTP(S) 来源。未找到可验证原题时，智能处理会保留空来源并由 AI 分析补齐缺失答案和解答，供用户核对。
 
-题目还记录 `status`（未做、已做、收藏、错题、掌握）、`attemptCount`、`correctCount` 和 `lastPracticedAt`，用于当前导图题库的筛选和复盘；旧文件缺少这些字段时会自动初始化为“未做”。
+题目还记录 `status`（未做、已做、收藏、错题、掌握）、`attemptCount`、`correctCount` 和 `lastPracticedAt`，用于当前导图题库的筛选、随机练习和复盘；旧文件缺少这些字段时会自动初始化为“未做”。手动切换状态不会改变练习次数，只有在练习视图中明确标记“答对”或“答错”才会写入练习记录。
 - `view.articleTocMaxDepth` 是可选的 1–8 层目录深度覆盖。字段缺失时，文章模式和通读模式跟随插件全局 `articleTocMaxDepth`；字段存在时当前脑图优先。
 
 ## 4. 有序内容块
