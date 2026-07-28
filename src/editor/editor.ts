@@ -3409,9 +3409,13 @@ export class MindMapEditor {
     const content = nodeEl?.querySelector<HTMLElement>(".mmc-node-content");
     if (!nodeEl || !content) return;
     const blocks = nodeContentBlocks(node);
-    const textBlock = blocks.find((block): block is MindMapTextContentBlock => block.type === "text" && (!blockId || block.id === blockId))
-      ?? blocks.find((block): block is MindMapTextContentBlock => block.type === "text");
-    const activeBlockId = textBlock?.id ?? blockId ?? newId();
+    // Legacy and pasted nodes can have only `text`, so every read synthesizes a
+    // temporary block ID. Keep the DOM block ID from the double-click and turn
+    // that exact rendered block into the persisted first text block on save.
+    const textBlock = blockId
+      ? blocks.find((block): block is MindMapTextContentBlock => block.type === "text" && block.id === blockId)
+      : blocks.find((block): block is MindMapTextContentBlock => block.type === "text");
+    const activeBlockId = blockId ?? textBlock?.id ?? newId();
     let editor = content.querySelector<HTMLElement>(`.mmc-node-text[data-block-id="${CSS.escape(activeBlockId)}"]`);
     if (!editor) editor = content.createDiv({ cls: "mmc-node-main mmc-node-text-block" }).createDiv({ cls: "mmc-node-text" });
     editor.dataset.blockId = activeBlockId;
@@ -3433,7 +3437,11 @@ export class MindMapEditor {
       let block = blocks.find((item): item is MindMapTextContentBlock => item.type === "text" && item.id === activeBlockId);
       if (!block) {
         block = { id: activeBlockId, type: "text", text: "" };
-        blocks.unshift(block);
+        const legacyTextIndex = Array.isArray(node.content) && node.content.length
+          ? -1
+          : blocks.findIndex((item) => item.type === "text");
+        if (legacyTextIndex >= 0) blocks.splice(legacyTextIndex, 1, block);
+        else blocks.unshift(block);
       }
       block.text = values.text;
       block.richText = values.richText;
