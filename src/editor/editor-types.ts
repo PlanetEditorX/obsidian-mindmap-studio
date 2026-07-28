@@ -18,6 +18,9 @@ import type { ArticleLeafBulletStyle, ImageHostChoice, ImageHostUploadBatch } fr
 import type { DesktopCaptureResult } from "../utils/desktop-capture";
 import type { ImageRecognitionItemResult, RecognizableImage } from "../vision/recognition";
 
+/** 文档导出来源：连续通读全文或当前文章页。 */
+export type DocumentExportSourceMode = "reading" | "article";
+
 /**
  * Host services consumed by the editor.
  *
@@ -30,7 +33,7 @@ export interface MindMapEditorCallbacks {
   onExportSvg: (svg: string) => void | Promise<void>;
   onExportMarkdown: (markdown: string) => void | Promise<void>;
   onExportJson: (json: string) => void | Promise<void>;
-  onExportDocument: (format: "html" | "doc" | "pdf" | "md") => void | Promise<void>;
+  onExportDocument: (format: "html" | "doc" | "pdf" | "md", sourceMode: DocumentExportSourceMode) => void | Promise<void>;
   resolveImage: (source: string) => string | null;
   onSavePastedImage: (blob: Blob, suggestedName: string) => Promise<string>;
   getImageHosts: () => ImageHostChoice[];

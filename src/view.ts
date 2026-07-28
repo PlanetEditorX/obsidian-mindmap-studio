@@ -10,8 +10,9 @@ import type MindMapStudioPlugin from "./main";
 import { MindMapEditor } from "./editor/editor";
 import { parseDocument, serializeDocument, type DisplayMode, type MindMapDocument } from "./core/model";
 import { settingsToAppearance } from "./settings";
-import type { ArticlePageNavigation, ArticleTocEntry, ReadingSection } from "./article/modes";
+import { resolveArticleTocMaxDepth, type ArticlePageNavigation, type ArticleTocEntry, type ReadingSection } from "./article/modes";
 import { readingSectionsToHtml, readingSectionsToMarkdown } from "./import/import-export";
+import type { DocumentExportSourceMode } from "./editor/editor-types";
 import { AiAskModal } from "./ai/modal";
 import { enabledAiProfiles } from "./ai/config";
 import { buildAiMarkdownPayload } from "./ai/markdown";
@@ -121,7 +122,7 @@ export class MindMapStudioView extends TextFileView {
         onExportSvg: async (svg) => this.exportTextFile("svg", svg),
         onExportMarkdown: async (markdown) => this.exportTextFile("md", markdown),
         onExportJson: async (json) => this.exportTextFile("json", json),
-        onExportDocument: async (format) => this.exportArticleFamily(format),
+        onExportDocument: async (format, sourceMode) => this.exportArticleFamily(format, sourceMode),
         resolveImage: (source) => this.resolveImage(source),
         onSavePastedImage: async (blob, suggestedName) => this.plugin.savePastedImage(blob, suggestedName, this.file),
         getImageHosts: () => this.plugin.getImageHostChoices(),
@@ -569,21 +570,25 @@ export class MindMapStudioView extends TextFileView {
    * at the current map and recursively includes descendants only.
    *
    * @param format Requested portable document format.
+   * @param sourceMode Export source mode selected by the user.
    */
-  private async exportArticleFamily(format: "html" | "doc" | "pdf" | "md"): Promise<void> {
+  private async exportArticleFamily(format: "html" | "doc" | "pdf" | "md", sourceMode: DocumentExportSourceMode = "reading"): Promise<void> {
     const file = this.file;
     const document = this.document;
     if (!file || !document) return;
     await this.save();
-    const sections = this.showArticleToc && this.readingSections.length
+    const sections = sourceMode === "article"
+      ? [{ filePath: file.path, document, baseDepth: this.articleBaseDepth }]
+      : this.showArticleToc && this.readingSections.length
       ? this.readingSections
       : await this.plugin.buildDescendantReadingSections(file, document);
+    const tocMaxDepth = resolveArticleTocMaxDepth(document.view?.articleTocMaxDepth, this.plugin.settings.articleTocMaxDepth);
     if (format === "md") {
-      const markdown = readingSectionsToMarkdown(sections);
+      const markdown = readingSectionsToMarkdown(sections, tocMaxDepth);
       await this.exportTextFile("md", markdown, true);
       return;
     }
-    const html = readingSectionsToHtml(sections);
+    const html = readingSectionsToHtml(sections, tocMaxDepth);
     if (format === "pdf") this.printHtmlToPdf(html);
     else await this.exportTextFile(format, html, true);
   }
