@@ -2202,7 +2202,7 @@ export function isRightChildZone(pointer: DropPointer, rect: DropTargetRect): bo
 
 ### 类 `ImageHostPickerModal`
 
-源码：`src/editor/editor-modals.ts:25`
+源码：`src/editor/editor-modals.ts:24`
 
 选择一个或多个图片上传目标。
 
@@ -2212,7 +2212,7 @@ class ImageHostPickerModal extends Modal
 
 ### 构造函数 `ImageHostPickerModal.constructor`
 
-源码：`src/editor/editor-modals.ts:37`
+源码：`src/editor/editor-modals.ts:36`
 
 创建图床选择弹窗。
 
@@ -2222,7 +2222,7 @@ constructor( app: App, private readonly hosts: ImageHostChoice[], initialIds: st
 
 ### 方法 `ImageHostPickerModal.onOpen`
 
-源码：`src/editor/editor-modals.ts:50`
+源码：`src/editor/editor-modals.ts:49`
 
 创建图床多选列表。
 
@@ -2232,7 +2232,7 @@ onOpen(): void
 
 ### 方法 `ImageHostPickerModal.onClose`
 
-源码：`src/editor/editor-modals.ts:86`
+源码：`src/editor/editor-modals.ts:85`
 
 未确认时返回取消结果。
 
@@ -2242,7 +2242,7 @@ onClose(): void
 
 ### 函数 `chooseImageHosts`
 
-源码：`src/editor/editor-modals.ts:99`
+源码：`src/editor/editor-modals.ts:98`
 
 打开图床选择器，并过滤已经失效的默认 ID。
 
@@ -2252,7 +2252,7 @@ export function chooseImageHosts( app: App, hosts: ImageHostChoice[], initialIds
 
 ### 类 `ImagePreviewModal`
 
-源码：`src/editor/editor-modals.ts:118`
+源码：`src/editor/editor-modals.ts:117`
 
 提供图片缩放和滚轮预览。
 
@@ -2262,7 +2262,7 @@ export class ImagePreviewModal extends Modal
 
 ### 构造函数 `ImagePreviewModal.constructor`
 
-源码：`src/editor/editor-modals.ts:130`
+源码：`src/editor/editor-modals.ts:129`
 
 创建图片预览弹窗。
 
@@ -2272,7 +2272,7 @@ constructor( app: App, private readonly source: string, private readonly alt: st
 
 ### 方法 `ImagePreviewModal.onOpen`
 
-源码：`src/editor/editor-modals.ts:143`
+源码：`src/editor/editor-modals.ts:142`
 
 创建图片预览界面和缩放控制。
 
@@ -2282,7 +2282,7 @@ onOpen(): void
 
 ### 类 `FormulaEditModal`
 
-源码：`src/editor/editor-modals.ts:232`
+源码：`src/editor/editor-modals.ts:231`
 
 图形化 LaTeX 公式编辑器，提供常用结构按钮和实时预览。
 
@@ -2292,7 +2292,7 @@ export class FormulaEditModal extends Modal
 
 ### 构造函数 `FormulaEditModal.constructor`
 
-源码：`src/editor/editor-modals.ts:239`
+源码：`src/editor/editor-modals.ts:238`
 
 创建公式编辑器。
 
@@ -2302,7 +2302,7 @@ constructor(app: App, private readonly submit: (source: string) => void)
 
 ### 方法 `FormulaEditModal.onOpen`
 
-源码：`src/editor/editor-modals.ts:246`
+源码：`src/editor/editor-modals.ts:245`
 
 创建公式模板、源码输入和 MathJax 预览。
 
@@ -2312,7 +2312,7 @@ onOpen(): void
 
 ### 方法 `FormulaEditModal.onClose`
 
-源码：`src/editor/editor-modals.ts:350`
+源码：`src/editor/editor-modals.ts:349`
 
 清理公式编辑器 DOM。
 
@@ -2322,7 +2322,7 @@ onClose(): void
 
 ### 类 `ArticleStyleModal`
 
-源码：`src/editor/editor-modals.ts:358`
+源码：`src/editor/editor-modals.ts:357`
 
 编辑文章模式的预设、字体和颜色。
 
@@ -2332,7 +2332,7 @@ export class ArticleStyleModal extends Modal
 
 ### 构造函数 `ArticleStyleModal.constructor`
 
-源码：`src/editor/editor-modals.ts:368`
+源码：`src/editor/editor-modals.ts:367`
 
 创建文章样式编辑器。
 
@@ -2342,7 +2342,7 @@ constructor( app: App, style: ArticleStyle | undefined, private readonly submitS
 
 ### 方法 `ArticleStyleModal.onOpen`
 
-源码：`src/editor/editor-modals.ts:380`
+源码：`src/editor/editor-modals.ts:379`
 
 创建文章样式预设和自定义控件。
 
@@ -2352,7 +2352,7 @@ onOpen(): void
 
 ### 类 `JsonTransferModal`
 
-源码：`src/editor/editor-modals.ts:451`
+源码：`src/editor/editor-modals.ts:450`
 
 导入、导出或替换完整的思维导图 JSON。
 
@@ -2362,7 +2362,7 @@ export class JsonTransferModal extends Modal
 
 ### 构造函数 `JsonTransferModal.constructor`
 
-源码：`src/editor/editor-modals.ts:460`
+源码：`src/editor/editor-modals.ts:459`
 
 创建 JSON 传输弹窗。
 
@@ -2372,7 +2372,7 @@ constructor( app: App, private readonly document: MindMapDocument, private reado
 
 ### 方法 `JsonTransferModal.onOpen`
 
-源码：`src/editor/editor-modals.ts:472`
+源码：`src/editor/editor-modals.ts:471`
 
 创建 JSON 文本区和文件导入操作。
 
@@ -2382,7 +2382,7 @@ onOpen(): void
 
 ### 类 `OutlineModal`
 
-源码：`src/editor/editor-modals.ts:551`
+源码：`src/editor/editor-modals.ts:550`
 
 显示只读 Markdown 大纲并提供复制和导出入口。
 
@@ -2392,7 +2392,7 @@ export class OutlineModal extends Modal
 
 ### 构造函数 `OutlineModal.constructor`
 
-源码：`src/editor/editor-modals.ts:559`
+源码：`src/editor/editor-modals.ts:558`
 
 创建 Markdown 大纲弹窗。
 
@@ -2402,7 +2402,7 @@ constructor(app: App, private readonly markdown: string, private readonly onExpo
 
 ### 方法 `OutlineModal.onOpen`
 
-源码：`src/editor/editor-modals.ts:566`
+源码：`src/editor/editor-modals.ts:565`
 
 创建大纲内容和操作按钮。
 
@@ -2412,7 +2412,7 @@ onOpen(): void
 
 ### 方法 `OutlineModal.onClose`
 
-源码：`src/editor/editor-modals.ts:587`
+源码：`src/editor/editor-modals.ts:586`
 
 清理大纲弹窗 DOM。
 
@@ -2422,7 +2422,7 @@ onClose(): void
 
 ### 类 `DocumentExportModal`
 
-源码：`src/editor/editor-modals.ts:595`
+源码：`src/editor/editor-modals.ts:594`
 
 提供可移植文档格式的导出选择。
 
@@ -2432,17 +2432,17 @@ export class DocumentExportModal extends Modal
 
 ### 构造函数 `DocumentExportModal.constructor`
 
-源码：`src/editor/editor-modals.ts:602`
+源码：`src/editor/editor-modals.ts:601`
 
 创建文档导出格式弹窗。
 
 ```ts
-constructor(app: App, private readonly exportFormat: (format: "html" | "doc" | "pdf" | "md", sourceMode: DocumentExportSourceMode) => void)
+constructor(app: App, private readonly exportFormat: (format: "html" | "doc" | "pdf" | "md") => void)
 ```
 
 ### 方法 `DocumentExportModal.onOpen`
 
-源码：`src/editor/editor-modals.ts:609`
+源码：`src/editor/editor-modals.ts:608`
 
 创建各导出格式按钮。
 
@@ -2454,19 +2454,9 @@ onOpen(): void
 
 编辑器领域与 Obsidian 宿主层之间的稳定类型契约。
 
-### 类型 `DocumentExportSourceMode`
-
-源码：`src/editor/editor-types.ts:22`
-
-文档导出来源：连续通读全文或当前文章页。
-
-```ts
-export type DocumentExportSourceMode = "reading" | "article";
-```
-
 ### 接口 `MindMapEditorCallbacks`
 
-源码：`src/editor/editor-types.ts:30`
+源码：`src/editor/editor-types.ts:27`
 
 Host services consumed by the editor. Keeping these callbacks outside the editor implementation makes the UI testable without constructing the complete Obsidian plugin.
 
@@ -2476,7 +2466,7 @@ export interface MindMapEditorCallbacks
 
 ### 接口 `MindMapEditorOptions`
 
-源码：`src/editor/editor-types.ts:64`
+源码：`src/editor/editor-types.ts:61`
 
 Runtime editor configuration assembled by the view/plugin layer.
 
@@ -4638,15 +4628,25 @@ function normalizedExportTocMaxDepth(value: number): number
 
 源码：`src/import/import-export.ts:115`
 
-给 Markdown 标题附加跨渲染器更稳定的 HTML 锚点。
+生成兼容常用 Markdown 渲染器的标题片段。
 
 ```ts
-function markdownHeading(level: number, anchor: string, title: string): string
+function markdownHeading(level: number, title: string): string
+```
+
+### 函数 `markdownAnchor`
+
+源码：`src/import/import-export.ts:120`
+
+按常见 Markdown 标题规则生成目录片段。
+
+```ts
+function markdownAnchor(title: string): string
 ```
 
 ### 函数 `readingSectionsToHtml`
 
-源码：`src/import/import-export.ts:127`
+源码：`src/import/import-export.ts:138`
 
 Produces one portable article from a map and all recursively collected child maps in the same order used by continuous reading mode.
 
@@ -4656,7 +4656,7 @@ export function readingSectionsToHtml(sections: ReadingSection[], tocMaxDepth = 
 
 ### 函数 `readingSectionsToMarkdown`
 
-源码：`src/import/import-export.ts:185`
+源码：`src/import/import-export.ts:196`
 
 Produces article-oriented Markdown with a linked table of contents.
 
@@ -6477,12 +6477,32 @@ export async function captureDesktopScreenshot(hideObsidian: boolean): Promise<D
 参见源码中的实现和调用位置。
 
 ```ts
-export type DesktopExportExtension = "svg" | "md" | "json" | "html" | "doc";
+export type DesktopExportExtension = "svg" | "md" | "json" | "html" | "doc" | "pdf";
+```
+
+### 接口 `ElectronPdfWindow`
+
+源码：`src/utils/desktop-export.ts:10`
+
+Electron 离屏 PDF 渲染窗口的最小接口。
+
+```ts
+interface ElectronPdfWindow
+```
+
+### 接口 `ElectronPdfWindowConstructor`
+
+源码：`src/utils/desktop-export.ts:20`
+
+Electron 离屏 PDF 渲染窗口构造器。
+
+```ts
+interface ElectronPdfWindowConstructor
 ```
 
 ### 接口 `ElectronSaveRuntime`
 
-源码：`src/utils/desktop-export.ts:10`
+源码：`src/utils/desktop-export.ts:25`
 
 Electron 保存对话框运行时的最小接口。
 
@@ -6492,7 +6512,7 @@ interface ElectronSaveRuntime
 
 ### 接口 `NodeExportRuntime`
 
-源码：`src/utils/desktop-export.ts:20`
+源码：`src/utils/desktop-export.ts:37`
 
 Node.js 文件导出运行时的最小接口。
 
@@ -6502,7 +6522,7 @@ interface NodeExportRuntime
 
 ### 接口 `DesktopExportResult`
 
-源码：`src/utils/desktop-export.ts:33`
+源码：`src/utils/desktop-export.ts:50`
 
 桌面导出保存结果。
 
@@ -6512,7 +6532,7 @@ export interface DesktopExportResult
 
 ### 函数 `sanitizeExportFilename`
 
-源码：`src/utils/desktop-export.ts:39`
+源码：`src/utils/desktop-export.ts:56`
 
 清理文件名中跨平台不安全字符。
 
@@ -6522,7 +6542,7 @@ export function sanitizeExportFilename(name: string, fallback = "思维导图"):
 
 ### 函数 `getElectronSaveRuntime`
 
-源码：`src/utils/desktop-export.ts:44`
+源码：`src/utils/desktop-export.ts:61`
 
 从 Obsidian 桌面端获取保存对话框；不可用时返回 null。
 
@@ -6532,7 +6552,7 @@ function getElectronSaveRuntime(): ElectronSaveRuntime | null
 
 ### 函数 `getNodeExportRuntime`
 
-源码：`src/utils/desktop-export.ts:57`
+源码：`src/utils/desktop-export.ts:74`
 
 从 Obsidian 桌面端按需获取 Node.js 文件 API；移动端或受限环境返回 null。
 
@@ -6542,12 +6562,22 @@ function getNodeExportRuntime(): NodeExportRuntime | null
 
 ### 函数 `saveDesktopExportFile`
 
-源码：`src/utils/desktop-export.ts:72`
+源码：`src/utils/desktop-export.ts:89`
 
 保存导出文本到用户选择的位置；无法打开选择器时默认写入桌面。
 
 ```ts
-export async function saveDesktopExportFile(extension: DesktopExportExtension, baseName: string, content: string): Promise<DesktopExportResult | null>
+export async function saveDesktopExportFile(extension: DesktopExportExtension, baseName: string, content: string | Uint8Array): Promise<DesktopExportResult | null>
+```
+
+### 函数 `saveDesktopPdfFile`
+
+源码：`src/utils/desktop-export.ts:108`
+
+使用 Electron 的离屏窗口渲染 HTML，并直接写出 PDF，避免 Obsidian 拦截打印弹窗。
+
+```ts
+export async function saveDesktopPdfFile(baseName: string, html: string): Promise<DesktopExportResult | null>
 ```
 
 ## `src/utils/filename.ts`
@@ -6724,7 +6754,7 @@ Obsidian TextFileView 适配层。
 
 ### 类 `MindMapStudioView`
 
-源码：`src/view.ts:32`
+源码：`src/view.ts:31`
 
 MindMapStudioView 的主要实现类。负责封装相关状态、生命周期和对外操作，避免调用方直接操作内部数据结构。
 
@@ -6734,7 +6764,7 @@ export class MindMapStudioView extends TextFileView
 
 ### 构造函数 `MindMapStudioView.constructor`
 
-源码：`src/view.ts:54`
+源码：`src/view.ts:53`
 
 创建 MindMapStudioView 实例，保存依赖和初始状态；实际 DOM 构建通常在 onOpen() 或后续渲染流程中完成。
 
@@ -6744,7 +6774,7 @@ constructor(leaf: WorkspaceLeaf, plugin: MindMapStudioPlugin)
 
 ### 方法 `MindMapStudioView.getViewType`
 
-源码：`src/view.ts:63`
+源码：`src/view.ts:62`
 
 读取并返回view type，并保持模型、界面和持久化状态的一致性。
 
@@ -6754,7 +6784,7 @@ getViewType(): string
 
 ### 方法 `MindMapStudioView.getDisplayText`
 
-源码：`src/view.ts:71`
+源码：`src/view.ts:70`
 
 读取并返回display text，并保持模型、界面和持久化状态的一致性。
 
@@ -6764,7 +6794,7 @@ getDisplayText(): string
 
 ### 方法 `MindMapStudioView.getIcon`
 
-源码：`src/view.ts:79`
+源码：`src/view.ts:78`
 
 读取并返回icon，并保持模型、界面和持久化状态的一致性。
 
@@ -6774,7 +6804,7 @@ getIcon(): string
 
 ### 方法 `MindMapStudioView.getViewData`
 
-源码：`src/view.ts:88`
+源码：`src/view.ts:87`
 
 返回当前编辑器文档的序列化文本，供 Obsidian 自动保存。保存使用模型层统一序列化，确保字段规范和版本号正确。
 
@@ -6784,7 +6814,7 @@ getViewData(): string
 
 ### 方法 `MindMapStudioView.setViewData`
 
-源码：`src/view.ts:100`
+源码：`src/view.ts:99`
 
 接收 Obsidian 读取的文件文本，解析成领域文档并交给编辑器。重新加载时会保留全局显示模式，并异步刷新文章父子上下文。
 
@@ -6794,7 +6824,7 @@ setViewData(data: string, clear: boolean): void
 
 ### 方法 `MindMapStudioView.clear`
 
-源码：`src/view.ts:203`
+源码：`src/view.ts:202`
 
 执行“clear”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
 
@@ -6804,7 +6834,7 @@ clear(): void
 
 ### 方法 `MindMapStudioView.showArticleDirectory`
 
-源码：`src/view.ts:213`
+源码：`src/view.ts:212`
 
 Displays and persists the generated directory for the top-level article.
 
@@ -6814,7 +6844,7 @@ showArticleDirectory(): void
 
 ### 方法 `MindMapStudioView.save`
 
-源码：`src/view.ts:222`
+源码：`src/view.ts:221`
 
 保存相关数据，并保持模型、界面和持久化状态的一致性。
 
@@ -6824,7 +6854,7 @@ async save(clear?: boolean): Promise<void>
 
 ### 方法 `MindMapStudioView.onClose`
 
-源码：`src/view.ts:233`
+源码：`src/view.ts:232`
 
 在弹窗或视图关闭时释放临时 DOM、计时器和事件状态。
 
@@ -6834,7 +6864,7 @@ async onClose(): Promise<void>
 
 ### 方法 `MindMapStudioView.openMapFamilySearch`
 
-源码：`src/view.ts:245`
+源码：`src/view.ts:244`
 
 打开map family search，并保持模型、界面和持久化状态的一致性。
 
@@ -6844,7 +6874,7 @@ private async openMapFamilySearch(): Promise<void>
 
 ### 方法 `MindMapStudioView.refreshAppearance`
 
-源码：`src/view.ts:258`
+源码：`src/view.ts:257`
 
 刷新appearance，并保持模型、界面和持久化状态的一致性。
 
@@ -6854,7 +6884,7 @@ refreshAppearance(): void
 
 ### 方法 `MindMapStudioView.focusNode`
 
-源码：`src/view.ts:268`
+源码：`src/view.ts:267`
 
 定位node，并保持模型、界面和持久化状态的一致性。
 
@@ -6864,7 +6894,7 @@ focusNode(nodeId: string): void
 
 ### 方法 `MindMapStudioView.markExplicitNavigation`
 
-源码：`src/view.ts:283`
+源码：`src/view.ts:282`
 
 标记当前文件由用户或跨模式导航显式打开。 下一次文章族上下文加载完成时以当前文件为准，避免旧的跨文件阅读记录 立即把视图跳回刚离开的父导图或子导图。
 
@@ -6874,7 +6904,7 @@ markExplicitNavigation(focusNodeId?: string): void
 
 ### 方法 `MindMapStudioView.setDisplayMode`
 
-源码：`src/view.ts:300`
+源码：`src/view.ts:299`
 
 更新并应用display mode，并保持模型、界面和持久化状态的一致性。
 
@@ -6884,7 +6914,7 @@ setDisplayMode(mode: DisplayMode): void
 
 ### 方法 `MindMapStudioView.applyGlobalDisplayMode`
 
-源码：`src/view.ts:309`
+源码：`src/view.ts:308`
 
 应用global display mode，并保持模型、界面和持久化状态的一致性。
 
@@ -6894,7 +6924,7 @@ applyGlobalDisplayMode(mode: DisplayMode): void
 
 ### 方法 `MindMapStudioView.toggleReadOnly`
 
-源码：`src/view.ts:316`
+源码：`src/view.ts:315`
 
 切换read only，并保持模型、界面和持久化状态的一致性。
 
@@ -6904,7 +6934,7 @@ toggleReadOnly(): void
 
 ### 方法 `MindMapStudioView.askAi`
 
-源码：`src/view.ts:321`
+源码：`src/view.ts:320`
 
 打开 AI 询问窗口；默认使用当前页面，节点右键后使用该节点子树。
 
@@ -6914,7 +6944,7 @@ askAi(): void
 
 ### 方法 `MindMapStudioView.captureScreenshot`
 
-源码：`src/view.ts:327`
+源码：`src/view.ts:326`
 
 启动截图并让编辑器根据截图前焦点决定插入节点或保留剪贴板。
 
@@ -6924,7 +6954,7 @@ async captureScreenshot(): Promise<void>
 
 ### 方法 `MindMapStudioView.openAiModal`
 
-源码：`src/view.ts:336`
+源码：`src/view.ts:335`
 
 构建 Markdown 上下文并打开 AI 窗口。
 
@@ -6934,7 +6964,7 @@ private openAiModal(nodeId?: string): void
 
 ### 方法 `MindMapStudioView.recognizeImages`
 
-源码：`src/view.ts:379`
+源码：`src/view.ts:378`
 
 按节点树顺序逐张读取并识别当前页面或节点子树中的全部图片。
 
@@ -6944,7 +6974,7 @@ private async recognizeImages(nodeId: string | undefined, profileId: string, ins
 
 ### 方法 `MindMapStudioView.getEditorOptions`
 
-源码：`src/view.ts:407`
+源码：`src/view.ts:406`
 
 读取并返回editor options，并保持模型、界面和持久化状态的一致性。
 
@@ -6954,7 +6984,7 @@ private getEditorOptions(preferCurrentFileLocation = false)
 
 ### 方法 `MindMapStudioView.scheduleArticleContextRefresh`
 
-源码：`src/view.ts:463`
+源码：`src/view.ts:462`
 
 安排延迟执行article context refresh，并保持模型、界面和持久化状态的一致性。
 
@@ -6964,7 +6994,7 @@ private scheduleArticleContextRefresh(delay: number): void
 
 ### 方法 `MindMapStudioView.refreshArticleContext`
 
-源码：`src/view.ts:474`
+源码：`src/view.ts:473`
 
 刷新article context，并保持模型、界面和持久化状态的一致性。
 
@@ -6974,7 +7004,7 @@ private async refreshArticleContext(): Promise<void>
 
 ### 方法 `MindMapStudioView.applyViewClasses`
 
-源码：`src/view.ts:498`
+源码：`src/view.ts:497`
 
 应用view classes，并保持模型、界面和持久化状态的一致性。
 
@@ -6984,7 +7014,7 @@ private applyViewClasses(): void
 
 ### 方法 `MindMapStudioView.scheduleSavedIndicator`
 
-源码：`src/view.ts:507`
+源码：`src/view.ts:506`
 
 安排延迟执行saved indicator，并保持模型、界面和持久化状态的一致性。
 
@@ -6994,7 +7024,7 @@ private scheduleSavedIndicator(): void
 
 ### 方法 `MindMapStudioView.openLink`
 
-源码：`src/view.ts:517`
+源码：`src/view.ts:516`
 
 打开link，并保持模型、界面和持久化状态的一致性。
 
@@ -7004,7 +7034,7 @@ private async openLink(rawLink: string): Promise<void>
 
 ### 方法 `MindMapStudioView.resolveImage`
 
-源码：`src/view.ts:534`
+源码：`src/view.ts:533`
 
 解析并确定image，并保持模型、界面和持久化状态的一致性。
 
@@ -7014,7 +7044,7 @@ private resolveImage(rawSource: string): string | null
 
 ### 方法 `MindMapStudioView.exportTextFile`
 
-源码：`src/view.ts:551`
+源码：`src/view.ts:550`
 
 执行“export text file”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
 
@@ -7024,22 +7054,12 @@ private async exportTextFile(extension: "svg" | "md" | "json" | "html" | "doc", 
 
 ### 方法 `MindMapStudioView.exportArticleFamily`
 
-源码：`src/view.ts:575`
+源码：`src/view.ts:573`
 
 Exports the current map family as one continuous document. A top-level directory uses its already collected reading sections; a child page starts at the current map and recursively includes descendants only.
 
 ```ts
-private async exportArticleFamily(format: "html" | "doc" | "pdf" | "md", sourceMode: DocumentExportSourceMode = "reading"): Promise<void>
-```
-
-### 方法 `MindMapStudioView.printHtmlToPdf`
-
-源码：`src/view.ts:601`
-
-Opens standalone HTML in a print window so the user can save it as PDF.
-
-```ts
-private printHtmlToPdf(html: string): void
+private async exportArticleFamily(format: "html" | "doc" | "pdf" | "md"): Promise<void>
 ```
 
 ## `src/vision/local-ocr.ts`

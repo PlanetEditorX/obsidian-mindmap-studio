@@ -191,13 +191,14 @@ export const setIcon = () => {};
   const exportedHtml = importExport.readingSectionsToHtml([{ filePath: "root.mindmap", document: importedXmind, baseDepth: 0 }]);
   assert.match(exportedHtml, /<!doctype html>/);
   assert.match(exportedHtml, /<nav class="export-toc">[\s\S]*href="#export-0-mindmap-article-/, "exported HTML, Word and PDF source must keep TOC links to headings");
-  assert.match(exportedHtml, /<h2 id="export-0-mindmap-article-[^"]+">第一章 分支 A<\/h2>/, "exported headings must expose matching anchors");
+  assert.match(exportedHtml, /<h2 id="export-0-mindmap-article-[^"]+"><a name="export-0-mindmap-article-[^"]+"><\/a>第一章 分支 A<\/h2>/, "exported HTML headings must expose Word-compatible named anchors");
   assert.doesNotMatch(exportedHtml, /<ol>/, "exported HTML TOC must not show browser-generated numbering");
   const exportedMarkdown = importExport.readingSectionsToMarkdown([{ filePath: "root.mindmap", document: importedXmind, baseDepth: 0 }]);
-  assert.match(exportedMarkdown, /## 目录[\s\S]*- \[第一章 分支 A\]\(#export-0-mindmap-article-/, "exported Markdown must keep TOC links to headings");
-  assert.match(exportedMarkdown, /## <span id="export-0-mindmap-article-[^"]+"><\/span>第一章 分支 A/, "exported Markdown headings must expose matching anchors");
+  assert.match(exportedMarkdown, /## 目录[\s\S]*- \[第一章 分支 A\]\(#第一章-分支-a\)/, "exported Markdown must use standard heading links");
+  assert.match(exportedMarkdown, /## 第一章 分支 A/, "exported Markdown must use normal Markdown headings");
+  assert.doesNotMatch(exportedMarkdown, /<span\s+id=/, "exported Markdown must not expose HTML anchor spans");
   const depthLimitedMarkdown = importExport.readingSectionsToMarkdown([{ filePath: "root.mindmap", document: importedXmind, baseDepth: 0 }], 1);
-  assert.doesNotMatch(depthLimitedMarkdown.match(/## 目录[\s\S]*?(?=\n## <span|$)/)?.[0] ?? "", /子主题 1/, "exported TOC depth must follow the article TOC setting");
+  assert.doesNotMatch(depthLimitedMarkdown.match(/## 目录[\s\S]*?(?=\n## [^目录]|$)/)?.[0] ?? "", /子主题 1/, "exported TOC depth must follow the article TOC setting");
   const parentWithChildMap = model.createDefaultDocument("课程");
   const chapterNode = model.createNode("速算技巧");
   chapterNode.submap = { path: "child.mindmap" };
@@ -213,7 +214,7 @@ export const setIcon = () => {};
     { filePath: "root.mindmap", document: parentWithChildMap, baseDepth: 0 },
     { filePath: "child.mindmap", document: childMap, baseDepth: 1, parentFilePath: "root.mindmap", parentNodeId: chapterNode.id }
   ]);
-  assert.doesNotMatch(childMarkdown, /## <span id="export-0-mindmap-article-[^"]+"><\/span>第一章 速算技巧/, "parent nodes linked to child maps must not be repeated in the exported Markdown body");
+  assert.equal((childMarkdown.match(/## 第一章 速算技巧/g) ?? []).length, 1, "linked child maps must keep one standard Markdown chapter heading");
   const mergedHtml = importExport.readingSectionsToHtml([
     { filePath: "root.mindmap", document: importedXmind, baseDepth: 0 },
     { filePath: "child.mindmap", document: model.createDefaultDocument("子导图"), baseDepth: 1 }
@@ -1148,8 +1149,9 @@ export const setIcon = () => {};
   assert.match(viewSource, /exportArticleFamily/);
   assert.match(viewSource, /readingSectionsToHtml\(sections, tocMaxDepth\)/);
   assert.match(viewSource, /readingSectionsToMarkdown\(sections, tocMaxDepth\)/);
-  assert.match(viewSource, /sourceMode === "article"/);
+  assert.doesNotMatch(viewSource, /sourceMode === "article"/);
   assert.match(viewSource, /buildDescendantReadingSections\(file, document\)/);
+  assert.match(viewSource, /saveDesktopPdfFile/);
   const themeSource = await readFile("src/themes.ts", "utf8");
   assert.match(themeSource, /经典靛蓝/);
   assert.match(themeSource, /暗夜霓虹/);

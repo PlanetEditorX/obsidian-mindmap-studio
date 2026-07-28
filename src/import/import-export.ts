@@ -111,9 +111,20 @@ function normalizedExportTocMaxDepth(value: number): number {
   return Number.isFinite(value) ? Math.max(1, Math.min(8, Math.round(value))) : 3;
 }
 
-/** 给 Markdown 标题附加跨渲染器更稳定的 HTML 锚点。 */
-function markdownHeading(level: number, anchor: string, title: string): string {
-  return `${"#".repeat(level)} <span id="${anchor}"></span>${title}`;
+/** 生成兼容常用 Markdown 渲染器的标题片段。 */
+function markdownHeading(level: number, title: string): string {
+  return `${"#".repeat(level)} ${title}`;
+}
+
+/** 按常见 Markdown 标题规则生成目录片段。 */
+function markdownAnchor(title: string): string {
+  return title
+    .trim()
+    .toLocaleLowerCase()
+    .replace(/[^\p{L}\p{N}\s-]/gu, "")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "") || "section";
 }
 
 /**
@@ -149,7 +160,7 @@ export function readingSectionsToHtml(sections: ReadingSection[], tocMaxDepth = 
       const anchor = exportAnchor(sectionIndex, info.anchor);
       const targetAnchor = childSectionAnchors.get(`${filePath}\u0000${info.node.id}`) ?? anchor;
       pushTocItem(Math.max(1, info.depth), title, targetAnchor);
-      return `<section><h${level} id="${anchor}">${title}</h${level}>${note}</section>`;
+      return `<section><h${level} id="${anchor}"><a name="${anchor}"></a>${title}</h${level}>${note}</section>`;
     })
     .join("");
   const first = sections[0]?.document;
@@ -158,7 +169,7 @@ export function readingSectionsToHtml(sections: ReadingSection[], tocMaxDepth = 
     const sectionTitle = escapeHtml(nodePlainText(document.root) || document.title);
     const headingLevel = Math.min(6, Math.max(1, baseDepth + 1));
     const sectionAnchor = exportAnchor(index, `section-${index}`);
-    const heading = index === 0 ? "" : `<h${headingLevel} id="${sectionAnchor}">${sectionTitle}</h${headingLevel}>`;
+    const heading = index === 0 ? "" : `<h${headingLevel} id="${sectionAnchor}"><a name="${sectionAnchor}"></a>${sectionTitle}</h${headingLevel}>`;
     if (index > 0 && !parentNodeKey(sections[index]?.parentFilePath, sections[index]?.parentNodeId)) pushTocItem(Math.max(1, baseDepth), sectionTitle, sectionAnchor);
     return `<section class="map-section">${heading}${renderArticleNode(filePath, document, baseDepth, index)}</section>`;
   }).join("");
@@ -180,17 +191,18 @@ section{break-inside:auto}.export-toc{margin:2em 0 3em}.export-toc ul{padding-le
  *
  * @param sections Ordered physical maps to merge.
  * @param tocMaxDepth Maximum exported TOC depth resolved from current/global article settings.
- * @returns Markdown source with matching TOC links and heading anchors.
+ * @returns Standard Markdown source with linked headings.
  */
 export function readingSectionsToMarkdown(sections: ReadingSection[], tocMaxDepth = 3): string {
   const maxTocDepth = normalizedExportTocMaxDepth(tocMaxDepth);
   const first = sections[0]?.document;
   const title = first ? (nodePlainText(first.root) || first.title) : "导出文档";
   const tocItems: Array<{ depth: number; title: string; anchor: string }> = [];
-  const childSectionAnchors = new Map<string, string>();
+  const childSectionIndexes = new Map<string, number>();
+  const childSectionTitles = new Map<number, string>();
   sections.forEach((section, index) => {
     const key = parentNodeKey(section.parentFilePath, section.parentNodeId);
-    if (key) childSectionAnchors.set(key, exportAnchor(index, `section-${index}`));
+    if (key) childSectionIndexes.set(key, index);
   });
   const pushTocItem = (depth: number, itemTitle: string, anchor: string): void => {
     if (depth <= maxTocDepth) tocItems.push({ depth, title: itemTitle, anchor });
@@ -198,17 +210,18 @@ export function readingSectionsToMarkdown(sections: ReadingSection[], tocMaxDept
   const body: string[] = [];
   sections.forEach(({ filePath, document, baseDepth }, sectionIndex) => {
     if (sectionIndex > 0) {
-      const sectionTitle = nodePlainText(document.root) || document.title;
+      const sectionTitle = (childSectionTitles.get(sectionIndex) ?? nodePlainText(document.root)) || document.title;
       const heading = markdownTitle("", sectionTitle);
-      const anchor = exportAnchor(sectionIndex, `section-${sectionIndex}`);
+      const anchor = markdownAnchor(heading);
       if (!parentNodeKey(sections[sectionIndex]?.parentFilePath, sections[sectionIndex]?.parentNodeId)) pushTocItem(Math.max(1, baseDepth), heading, anchor);
-      body.push("", markdownHeading(Math.min(6, Math.max(1, baseDepth + 1)), anchor, heading));
+      body.push("", markdownHeading(Math.min(6, Math.max(1, baseDepth + 1)), heading));
     }
     for (const info of buildArticleNodeInfo(document.root, baseDepth)) {
       const heading = markdownTitle(info.label, info.title);
-      const childSectionAnchor = childSectionAnchors.get(`${filePath}\u0000${info.node.id}`);
-      if (childSectionAnchor) {
-        pushTocItem(Math.max(1, info.depth), heading, childSectionAnchor);
+      const childSectionIndex = childSectionIndexes.get(`${filePath}\u0000${info.node.id}`);
+      if (childSectionIndex !== undefined) {
+        childSectionTitles.set(childSectionIndex, heading);
+        pushTocItem(Math.max(1, info.depth), heading, markdownAnchor(heading));
         continue;
       }
       if (!info.isHeading) {
@@ -216,11 +229,10 @@ export function readingSectionsToMarkdown(sections: ReadingSection[], tocMaxDept
         if (info.node.note) body.push("", `> ${info.node.note.replaceAll("\n", " ")}`);
         continue;
       }
-      const anchor = exportAnchor(sectionIndex, info.anchor);
-      const targetAnchor = childSectionAnchors.get(`${filePath}\u0000${info.node.id}`) ?? anchor;
+      const anchor = markdownAnchor(heading);
       const level = Math.min(6, Math.max(2, info.depth + 1));
-      pushTocItem(Math.max(1, info.depth), heading, targetAnchor);
-      body.push("", markdownHeading(level, anchor, heading));
+      pushTocItem(Math.max(1, info.depth), heading, anchor);
+      body.push("", markdownHeading(level, heading));
       if (info.node.note) body.push("", `> ${info.node.note.replaceAll("\n", " ")}`);
     }
   });

@@ -12,11 +12,10 @@ import { parseDocument, serializeDocument, type DisplayMode, type MindMapDocumen
 import { settingsToAppearance } from "./settings";
 import { resolveArticleTocMaxDepth, type ArticlePageNavigation, type ArticleTocEntry, type ReadingSection } from "./article/modes";
 import { readingSectionsToHtml, readingSectionsToMarkdown } from "./import/import-export";
-import type { DocumentExportSourceMode } from "./editor/editor-types";
 import { AiAskModal } from "./ai/modal";
 import { enabledAiProfiles } from "./ai/config";
 import { buildAiMarkdownPayload } from "./ai/markdown";
-import { saveDesktopExportFile } from "./utils/desktop-export";
+import { saveDesktopExportFile, saveDesktopPdfFile } from "./utils/desktop-export";
 import {
   collectRecognizableImages,
   type ImageRecognitionBatchResult,
@@ -122,7 +121,7 @@ export class MindMapStudioView extends TextFileView {
         onExportSvg: async (svg) => this.exportTextFile("svg", svg),
         onExportMarkdown: async (markdown) => this.exportTextFile("md", markdown),
         onExportJson: async (json) => this.exportTextFile("json", json),
-        onExportDocument: async (format, sourceMode) => this.exportArticleFamily(format, sourceMode),
+        onExportDocument: async (format) => this.exportArticleFamily(format),
         resolveImage: (source) => this.resolveImage(source),
         onSavePastedImage: async (blob, suggestedName) => this.plugin.savePastedImage(blob, suggestedName, this.file),
         getImageHosts: () => this.plugin.getImageHostChoices(),
@@ -570,16 +569,13 @@ export class MindMapStudioView extends TextFileView {
    * at the current map and recursively includes descendants only.
    *
    * @param format Requested portable document format.
-   * @param sourceMode Export source mode selected by the user.
    */
-  private async exportArticleFamily(format: "html" | "doc" | "pdf" | "md", sourceMode: DocumentExportSourceMode = "reading"): Promise<void> {
+  private async exportArticleFamily(format: "html" | "doc" | "pdf" | "md"): Promise<void> {
     const file = this.file;
     const document = this.document;
     if (!file || !document) return;
     await this.save();
-    const sections = sourceMode === "article"
-      ? [{ filePath: file.path, document, baseDepth: this.articleBaseDepth }]
-      : this.showArticleToc && this.readingSections.length
+    const sections = this.showArticleToc && this.readingSections.length
       ? this.readingSections
       : await this.plugin.buildDescendantReadingSections(file, document);
     const tocMaxDepth = resolveArticleTocMaxDepth(document.view?.articleTocMaxDepth, this.plugin.settings.articleTocMaxDepth);
@@ -589,29 +585,11 @@ export class MindMapStudioView extends TextFileView {
       return;
     }
     const html = readingSectionsToHtml(sections, tocMaxDepth);
-    if (format === "pdf") this.printHtmlToPdf(html);
-    else await this.exportTextFile(format, html, true);
-  }
-
-  /**
-   * Opens standalone HTML in a print window so the user can save it as PDF.
-   *
-   * @param html Complete printable HTML document.
-   */
-  private printHtmlToPdf(html: string): void {
-    const printWindow = window.open("", "_blank");
-    if (!printWindow) {
-      new Notice("无法打开打印窗口，请允许弹出窗口后重试");
-      return;
+    if (format === "pdf") {
+      const result = await saveDesktopPdfFile(file.basename, html);
+      if (result?.path) new Notice(`已导出：${result.path}`);
+      else if (!result) new Notice("PDF 导出仅支持 Obsidian 桌面端");
     }
-    printWindow.document.open();
-    printWindow.document.write(html);
-    printWindow.document.close();
-    printWindow.addEventListener("load", () => {
-      window.setTimeout(() => {
-        printWindow.focus();
-        printWindow.print();
-      }, 100);
-    }, { once: true });
+    else await this.exportTextFile(format, html, true);
   }
 }

@@ -4309,8 +4309,8 @@ export class MindMapEditor {
    * Opens the HTML, Word, PDF, and Markdown export chooser.
    */
   private showDocumentExport(): void {
-    new DocumentExportModal(this.app, (format, sourceMode) => {
-      void this.callbacks.onExportDocument(format, sourceMode);
+    new DocumentExportModal(this.app, (format) => {
+      void this.callbacks.onExportDocument(format);
     }).open();
   }
 

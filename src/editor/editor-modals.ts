@@ -17,7 +17,6 @@ import { ARTICLE_STYLE_PRESETS, resolveArticleStyle } from "../article/article-s
 import type { ImageHostChoice } from "../settings";
 import { xmindToDocument } from "../import/import-export";
 import { setAllBranchesCollapsed } from "./node-actions";
-import type { DocumentExportSourceMode } from "./editor-types";
 
 /**
  * 选择一个或多个图片上传目标。
@@ -597,9 +596,9 @@ export class DocumentExportModal extends Modal {
    * 创建文档导出格式弹窗。
    *
    * @param app Obsidian 应用实例。
-   * @param exportFormat 格式与来源选择回调。
+   * @param exportFormat 格式选择回调。
    */
-  constructor(app: App, private readonly exportFormat: (format: "html" | "doc" | "pdf" | "md", sourceMode: DocumentExportSourceMode) => void) {
+  constructor(app: App, private readonly exportFormat: (format: "html" | "doc" | "pdf" | "md") => void) {
     super(app);
   }
 
@@ -609,18 +608,6 @@ export class DocumentExportModal extends Modal {
   onOpen(): void {
     this.titleEl.setText("导出文档");
     this.contentEl.createEl("p", { cls: "setting-item-description", text: "选择适合阅读、编辑或打印的格式。" });
-    let sourceMode: DocumentExportSourceMode = "reading";
-    const sourceRow = this.contentEl.createDiv({ cls: "setting-item" });
-    const sourceInfo = sourceRow.createDiv({ cls: "setting-item-info" });
-    sourceInfo.createDiv({ cls: "setting-item-name", text: "导出来源" });
-    sourceInfo.createDiv({ cls: "setting-item-description", text: "通读内容会合并当前文章族；当前文章页只导出正在编辑的物理导图。" });
-    const sourceControl = sourceRow.createDiv({ cls: "setting-item-control" });
-    const sourceSelect = sourceControl.createEl("select");
-    sourceSelect.createEl("option", { value: "reading", text: "通读内容" });
-    sourceSelect.createEl("option", { value: "article", text: "当前文章页" });
-    sourceSelect.addEventListener("change", () => {
-      sourceMode = sourceSelect.value === "article" ? "article" : "reading";
-    });
     const formats = this.contentEl.createDiv({ cls: "mms-document-export-grid" });
     for (const [format, title, description] of [
       ["html", "HTML", "独立网页，可用浏览器打开"],
@@ -632,7 +619,7 @@ export class DocumentExportModal extends Modal {
       button.createEl("strong", { text: title });
       button.createSpan({ text: description });
       button.addEventListener("click", () => {
-        this.exportFormat(format, sourceMode);
+        this.exportFormat(format);
         this.close();
       });
     }

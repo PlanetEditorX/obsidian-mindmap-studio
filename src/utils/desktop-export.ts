@@ -4,7 +4,22 @@
  */
 
 /** 外部导出文件格式。 */
-export type DesktopExportExtension = "svg" | "md" | "json" | "html" | "doc";
+export type DesktopExportExtension = "svg" | "md" | "json" | "html" | "doc" | "pdf";
+
+/** Electron 离屏 PDF 渲染窗口的最小接口。 */
+interface ElectronPdfWindow {
+  loadURL: (url: string) => Promise<void>;
+  webContents: {
+    printToPDF: (options: { pageSize: "A4"; printBackground: boolean }) => Promise<Uint8Array>;
+  };
+  isDestroyed: () => boolean;
+  destroy: () => void;
+}
+
+/** Electron 离屏 PDF 渲染窗口构造器。 */
+interface ElectronPdfWindowConstructor {
+  new(options: { show: boolean }): ElectronPdfWindow;
+}
 
 /** Electron 保存对话框运行时的最小接口。 */
 interface ElectronSaveRuntime {
@@ -13,7 +28,9 @@ interface ElectronSaveRuntime {
   };
   remote?: {
     dialog?: ElectronSaveRuntime["dialog"];
+    BrowserWindow?: ElectronPdfWindowConstructor;
   };
+  BrowserWindow?: ElectronPdfWindowConstructor;
 }
 
 /** Node.js 文件导出运行时的最小接口。 */
@@ -69,7 +86,7 @@ function getNodeExportRuntime(): NodeExportRuntime | null {
 }
 
 /** 保存导出文本到用户选择的位置；无法打开选择器时默认写入桌面。 */
-export async function saveDesktopExportFile(extension: DesktopExportExtension, baseName: string, content: string): Promise<DesktopExportResult | null> {
+export async function saveDesktopExportFile(extension: DesktopExportExtension, baseName: string, content: string | Uint8Array): Promise<DesktopExportResult | null> {
   const nodeRuntime = getNodeExportRuntime();
   if (!nodeRuntime) return null;
   const filename = `${sanitizeExportFilename(baseName)}.${extension}`;
@@ -85,4 +102,22 @@ export async function saveDesktopExportFile(extension: DesktopExportExtension, b
   const path = selected?.filePath || defaultPath;
   await nodeRuntime.fs.writeFile(path, content);
   return { path, selected: Boolean(selected?.filePath) };
+}
+
+/** 使用 Electron 的离屏窗口渲染 HTML，并直接写出 PDF，避免 Obsidian 拦截打印弹窗。 */
+export async function saveDesktopPdfFile(baseName: string, html: string): Promise<DesktopExportResult | null> {
+  const runtime = getElectronSaveRuntime();
+  const BrowserWindow = runtime?.remote?.BrowserWindow ?? runtime?.BrowserWindow;
+  if (!BrowserWindow) return null;
+  let printWindow: ElectronPdfWindow | null = null;
+  try {
+    printWindow = new BrowserWindow({ show: false });
+    await printWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
+    const pdf = await printWindow.webContents.printToPDF({ pageSize: "A4", printBackground: true });
+    return await saveDesktopExportFile("pdf", baseName, pdf);
+  } catch {
+    return null;
+  } finally {
+    if (printWindow && !printWindow.isDestroyed()) printWindow.destroy();
+  }
 }
