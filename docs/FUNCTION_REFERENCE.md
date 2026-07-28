@@ -4656,7 +4656,7 @@ export function readingSectionsToHtml(sections: ReadingSection[], tocMaxDepth = 
 
 ### 函数 `readingSectionsToMarkdown`
 
-源码：`src/import/import-export.ts:180`
+源码：`src/import/import-export.ts:185`
 
 Produces article-oriented Markdown with a linked table of contents.
 

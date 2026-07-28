@@ -208,6 +208,12 @@ export const setIcon = () => {};
     { filePath: "child.mindmap", document: childMap, baseDepth: 1, parentFilePath: "root.mindmap", parentNodeId: chapterNode.id }
   ]);
   assert.match(childHtml, new RegExp(`<a href="#export-1-section-1">第一章 速算技巧</a>`), "exported parent TOC entries for child maps must jump to the child page section");
+  assert.doesNotMatch(childHtml, /<h2 id="export-0-mindmap-article-[^"]+">第一章 速算技巧<\/h2>/, "parent nodes linked to child maps must not be repeated in the exported HTML body");
+  const childMarkdown = importExport.readingSectionsToMarkdown([
+    { filePath: "root.mindmap", document: parentWithChildMap, baseDepth: 0 },
+    { filePath: "child.mindmap", document: childMap, baseDepth: 1, parentFilePath: "root.mindmap", parentNodeId: chapterNode.id }
+  ]);
+  assert.doesNotMatch(childMarkdown, /## <span id="export-0-mindmap-article-[^"]+"><\/span>第一章 速算技巧/, "parent nodes linked to child maps must not be repeated in the exported Markdown body");
   const mergedHtml = importExport.readingSectionsToHtml([
     { filePath: "root.mindmap", document: importedXmind, baseDepth: 0 },
     { filePath: "child.mindmap", document: model.createDefaultDocument("子导图"), baseDepth: 1 }
