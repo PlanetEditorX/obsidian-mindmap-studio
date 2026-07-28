@@ -4706,7 +4706,7 @@ export function readingSectionsToDocx(sections: ReadingSection[], tocMaxDepth = 
 
 ### 函数 `readingSectionsToMarkdown`
 
-源码：`src/import/import-export.ts:330`
+源码：`src/import/import-export.ts:343`
 
 Produces article-oriented Markdown with a linked table of contents.
 

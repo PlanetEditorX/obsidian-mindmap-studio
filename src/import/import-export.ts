@@ -275,6 +275,19 @@ export function readingSectionsToDocx(sections: ReadingSection[], tocMaxDepth = 
   const first = sections[0]?.document;
   const title = first ? (nodePlainText(first.root) || first.title) : "导出文档";
   let bookmarkId = 1;
+  const wordAnchors = new Map<string, string>();
+  const wordAnchor = (source: string): string => {
+    const existing = wordAnchors.get(source);
+    if (existing) return existing;
+    let hash = 2166136261;
+    for (let index = 0; index < source.length; index += 1) {
+      hash ^= source.charCodeAt(index);
+      hash = Math.imul(hash, 16777619);
+    }
+    const anchor = `Mms_${wordAnchors.size.toString(36)}_${(hash >>> 0).toString(36)}`;
+    wordAnchors.set(source, anchor);
+    return anchor;
+  };
   const paragraph = (text: string, style = "", indent = 0, anchor = ""): string => {
     const headingLevel = Number(style.replace("Heading", ""));
     const properties = (style ? '<w:pStyle w:val="' + style + '"/>' : "")
@@ -286,7 +299,7 @@ export function readingSectionsToDocx(sections: ReadingSection[], tocMaxDepth = 
   };
   const toc = collectExportTocItems(sections, maxTocDepth).map((item) => {
     const indent = Math.max(0, item.depth - 1) * 720;
-    return '<w:p><w:pPr><w:ind w:left="' + indent + '"/></w:pPr><w:hyperlink w:anchor="' + item.anchor + '" w:history="1"><w:r><w:rPr><w:color w:val="0563C1"/><w:u w:val="single"/></w:rPr><w:t xml:space="preserve">' + escapeXml(item.title) + '</w:t></w:r></w:hyperlink></w:p>';
+    return '<w:p><w:pPr><w:ind w:left="' + indent + '"/></w:pPr><w:hyperlink w:anchor="' + wordAnchor(item.anchor) + '" w:history="1"><w:r><w:rPr><w:color w:val="0563C1"/><w:u w:val="single"/></w:rPr><w:t xml:space="preserve">' + escapeXml(item.title) + '</w:t></w:r></w:hyperlink></w:p>';
   }).join("");
   const childSectionAnchors = new Map<string, string>();
   sections.forEach((section, index) => {
@@ -297,13 +310,13 @@ export function readingSectionsToDocx(sections: ReadingSection[], tocMaxDepth = 
   if (toc) body.push(paragraph("目录", "Heading1"), toc);
   sections.forEach(({ filePath, document, baseDepth }, sectionIndex) => {
     if (sectionIndex > 0) {
-      body.push(paragraph(nodePlainText(document.root) || document.title, "Heading" + Math.min(6, Math.max(1, baseDepth)), 0, exportAnchor(sectionIndex, "section-" + sectionIndex)));
+      body.push(paragraph(nodePlainText(document.root) || document.title, "Heading" + Math.min(6, Math.max(1, baseDepth)), 0, wordAnchor(exportAnchor(sectionIndex, "section-" + sectionIndex))));
     }
     for (const info of buildArticleNodeInfo(document.root, baseDepth)) {
       if (childSectionAnchors.has(filePath + "\u0000" + info.node.id)) continue;
       const text = info.displayTitle || info.title || "未命名";
       body.push(info.isHeading
-        ? paragraph(text, "Heading" + Math.min(6, Math.max(1, info.depth)), 0, exportAnchor(sectionIndex, info.anchor))
+        ? paragraph(text, "Heading" + Math.min(6, Math.max(1, info.depth)), 0, wordAnchor(exportAnchor(sectionIndex, info.anchor)))
         : paragraph(text));
       if (info.node.note) body.push(paragraph(info.node.note));
     }
