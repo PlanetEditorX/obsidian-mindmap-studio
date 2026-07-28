@@ -68,6 +68,8 @@ export interface MindMapEditorOptions {
   imageFailoverEnabled: boolean;
   imageFailoverTimeoutSeconds: number;
   imageFailoverUseLocalFallback: boolean;
+  /** Enabled image host IDs ordered from highest to lowest render priority. */
+  imageHostPriorityIds: string[];
   visibleModes: DisplayMode[];
   defaultViewMode: DisplayMode;
   currentFilePath: string;

@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
-import { readFile, writeFile, rm, mkdtemp } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { readFile, writeFile, rm, mkdtemp, mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { createRequire } from "node:module";
 import { build } from "esbuild";
@@ -11,7 +10,9 @@ assert.equal(nextVersion("1.6.8"), "1.6.9");
 assert.equal(nextVersion("1.6.9"), "1.7.0");
 assert.equal(nextVersion("1.9.9"), "1.10.0");
 
-const tempDir = await mkdtemp(join(tmpdir(), "mindmap-studio-test-"));
+const tempRoot = join(process.cwd(), ".tmp");
+await mkdir(tempRoot, { recursive: true });
+const tempDir = await mkdtemp(join(tempRoot, "mindmap-studio-test-"));
 const outfile = join(tempDir, "model.cjs");
 const layoutOutfile = join(tempDir, "layout.cjs");
 const searchOutfile = join(tempDir, "global-search.cjs");
@@ -677,12 +678,18 @@ export const setIcon = () => {};
       "Assets/first.png"
     ]);
     failoverBlock.source = "https://cdn-b.example/first.png";
-    const rotatedCandidates = model.imageSourceCandidates(failoverBlock, true);
+    const rotatedCandidates = model.imageSourceCandidates(failoverBlock, true, ["host-a", "host-b"]);
     assert.deepEqual(rotatedCandidates.map((item) => item.source), [
+      "https://cdn-a.example/first.png",
+      "https://cdn-b.example/first.png",
+      "Assets/first.png"
+    ], "image mirror failover should follow configured host priority without duplicates");
+    const priorityCandidates = model.imageSourceCandidates(failoverBlock, true, ["host-b", "host-a"]);
+    assert.deepEqual(priorityCandidates.map((item) => item.source), [
       "https://cdn-b.example/first.png",
       "https://cdn-a.example/first.png",
       "Assets/first.png"
-    ], "after a failover, the active mirror should be tried first and the remaining mirrors should follow without duplicates");
+    ], "custom image host priority should be able to prefer the active mirror");
   }
 
   const pureImage = model.normalizeDocument({
@@ -1142,9 +1149,9 @@ export const setIcon = () => {};
   assert.match(editorModalSource, /图片来源：/);
   assert.match(editorModalSource, /sourceButton\.addClass\("is-active"\)/);
   assert.match(editorModalSource, /加载失败/);
-  assert.match(editorSource, /new ImagePreviewModal\([\s\S]*imageSourceCandidates\(block, true\)/, "mind-map image preview must receive every stored mirror");
-  assert.match(articleRendererSource, /imageSourceCandidates\(block, true\)/, "article image preview must receive every stored mirror");
-  assert.match(outlineRendererSource, /imageSourceCandidates\(block, true\)/, "outline image preview must receive every stored mirror");
+  assert.match(editorSource, /new ImagePreviewModal\([\s\S]*imageSourceCandidates\(block, true, this\.options\.imageHostPriorityIds\)/, "mind-map image preview must receive every stored mirror in host priority order");
+  assert.match(articleRendererSource, /imageSourceCandidates\(block, true, options\.imageHostPriorityIds\)/, "article image preview must receive every stored mirror in host priority order");
+  assert.match(outlineRendererSource, /imageSourceCandidates\(block, true, options\.imageHostPriorityIds\)/, "outline image preview must receive every stored mirror in host priority order");
   assert.match(editorSource, /上传当前图片/);
   assert.match(editorSource, /onScheduleAutoUpload/);
   assert.match(editorSource, /syncNodeContentFields/);

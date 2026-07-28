@@ -158,15 +158,22 @@ test("desktop screenshot helpers expose platform commands and stable clipboard f
 
 
 test("desktop-only OCR and capture APIs are loaded lazily for mobile compatibility", async () => {
-  const [ocrSource, captureSource] = await Promise.all([
+  const [ocrSource, captureSource, exportSource, editorSource, modalSource] = await Promise.all([
     readFile("src/vision/local-ocr.ts", "utf8"),
-    readFile("src/utils/desktop-capture.ts", "utf8")
+    readFile("src/utils/desktop-capture.ts", "utf8"),
+    readFile("src/utils/desktop-export.ts", "utf8"),
+    readFile("src/editor/editor.ts", "utf8"),
+    readFile("src/ai/modal.ts", "utf8")
   ]);
-  for (const source of [ocrSource, captureSource]) {
+  for (const source of [ocrSource, captureSource, exportSource]) {
     assert.doesNotMatch(source, /from\s+["'](?:node:|electron)/);
     assert.doesNotMatch(source, /import\s*\(["'](?:node:|electron)/);
   }
   assert.match(ocrSource, /requireFunction\("node:child_process"\)/);
   assert.match(captureSource, /requireFunction\("electron"\)/);
   assert.match(captureSource, /BrowserWindow\?\.getFocusedWindow\?\.\(\) \?\? null/);
+  assert.match(exportSource, /requireFunction\("node:fs\/promises"\)/);
+  assert.match(exportSource, /showSaveDialog/);
+  assert.match(editorSource, /imageRecognitionAutoConfirmDelaySeconds === 0[\s\S]*applyImageRecognitionPreview/);
+  assert.match(modalSource, /imageRecognitionAutoConfirmDelaySeconds === 0[\s\S]*onApplyImageTextReplacements/);
 });

@@ -1529,7 +1529,7 @@ export class MindMapEditor {
     return null;
   }
 
-  /** 识别指定图片并打开原图/文字对比预览；不会直接替换内容。 */
+  /** 识别指定图片；直接确认时后台替换，否则打开原图/文字对比预览。 */
   private async recognizeImageBlock(nodeId: string, blockId: string): Promise<void> {
     try {
       const image = collectRecognizableImages(this.document, nodeId).find((item) => item.blockId === blockId);
@@ -1540,6 +1540,10 @@ export class MindMapEditor {
       const remoteUrl = /^https:\/\//i.test(image.source) ? image.source : undefined;
       const result = await this.callbacks.onRecognizeImage(image, source.blob, remoteUrl);
       const preview = previewImageTextReplacement(this.document, nodeId, blockId, result.text);
+      if (this.options.imageRecognitionAutoConfirmDelaySeconds === 0) {
+        await this.applyImageRecognitionPreview(preview);
+        return;
+      }
       const resolved = this.callbacks.resolveImage(image.source) ?? image.source;
       new ImageRecognitionPreviewModal(this.app, {
         preview,
@@ -2370,6 +2374,7 @@ export class MindMapEditor {
       openImageContextMenu: (event, nodeId, blockId) => this.openImageContextMenu(event, nodeId, blockId),
       openMindMap: (path) => this.callbacks.onOpenMindMap(path),
       resolveImage: this.callbacks.resolveImage,
+      imageHostPriorityIds: this.options.imageHostPriorityIds,
       renderCode: this.callbacks.onRenderCode
     });
     this.outlineEl.onscroll = () => this.scheduleReadingLocationCapture("outline");
@@ -2584,6 +2589,7 @@ export class MindMapEditor {
       articleLeafBulletsEnabled: this.options.articleLeafBulletsEnabled,
       articleLeafBulletColor: this.options.articleLeafBulletColor,
       articleLeafBulletStyle: this.options.articleLeafBulletStyle,
+      imageHostPriorityIds: this.options.imageHostPriorityIds,
       articleNavigation: this.options.articleNavigation,
       callbacks: this.callbacks,
       selectNode: (id) => this.selectNode(id),
@@ -2744,7 +2750,6 @@ export class MindMapEditor {
       if (bold) nodeEl.addClass("is-bold");
       if (italic) nodeEl.addClass("is-italic");
       if (underline) nodeEl.addClass("is-underlined");
-      if (node.note) nodeEl.setAttr("title", node.note);
       const branchColor = branchColorMap.get(node.id);
       if (node.style?.color) nodeEl.style.backgroundColor = node.style.color;
       else if (isRoot && appearance.rootColor) nodeEl.style.backgroundColor = appearance.rootColor;
@@ -2780,8 +2785,8 @@ export class MindMapEditor {
           if (block.width) image.style.width = `${block.width}px`;
           if (block.height) image.style.height = `${block.height}px`;
           const candidates = this.options.imageFailoverEnabled
-            ? imageSourceCandidates(block, this.options.imageFailoverUseLocalFallback)
-            : imageSourceCandidates(block, false).slice(0, 1);
+            ? imageSourceCandidates(block, this.options.imageFailoverUseLocalFallback, this.options.imageHostPriorityIds)
+            : imageSourceCandidates(block, false, this.options.imageHostPriorityIds).slice(0, 1);
           let activeResolved: string | null = null;
           let attemptToken = 0;
           let attemptTimer: number | null = null;
@@ -2862,7 +2867,7 @@ export class MindMapEditor {
               this.app,
               activeResolved,
               block.alt ?? "图片预览",
-              imageSourceCandidates(block, true),
+              imageSourceCandidates(block, true, this.options.imageHostPriorityIds),
               (source) => this.callbacks.resolveImage(source)
             ).open();
           });

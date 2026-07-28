@@ -455,6 +455,9 @@ export default class MindMapStudioPlugin extends Plugin {
         host.id = typeof candidate.id === "string" && candidate.id.trim() ? candidate.id.trim().slice(0, 160) : host.id;
         host.name = typeof candidate.name === "string" && candidate.name.trim() ? candidate.name.trim().slice(0, 120) : host.name;
         host.enabled = candidate.enabled !== false;
+        host.priority = typeof candidate.priority === "number" && Number.isFinite(candidate.priority)
+          ? Math.max(1, Math.min(20, Math.round(candidate.priority)))
+          : index + 1;
         host.endpoint = typeof candidate.endpoint === "string" ? candidate.endpoint.trim().slice(0, 4000) : "";
         host.method = candidate.method === "PUT" ? "PUT" : "POST";
         host.bodyMode = candidate.bodyMode === "raw" ? "raw" : "multipart";
@@ -1236,7 +1239,16 @@ export default class MindMapStudioPlugin extends Plugin {
   getImageHostChoices(): ImageHostChoice[] {
     return this.settings.imageHosts
       .filter((host) => host.enabled && Boolean(host.endpoint.trim()))
+      .sort((left, right) => left.priority - right.priority || left.name.localeCompare(right.name))
       .map((host) => ({ id: host.id, name: host.name }));
+  }
+
+  /** Returns enabled image host IDs ordered by render failover priority. */
+  getImageHostPriorityIds(): string[] {
+    return this.settings.imageHosts
+      .filter((host) => host.enabled)
+      .sort((left, right) => left.priority - right.priority || left.name.localeCompare(right.name))
+      .map((host) => host.id);
   }
 
   /**
