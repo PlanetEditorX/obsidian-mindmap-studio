@@ -532,6 +532,9 @@ export default class MindMapStudioPlugin extends Plugin {
         : DEFAULT_SETTINGS.screenshotShortcut,
       screenshotAutoRecognize: raw.screenshotAutoRecognize === true,
       questionNodesEnabled: raw.questionNodesEnabled === true,
+      questionBankFolder: typeof raw.questionBankFolder === "string"
+        ? normalizePath(raw.questionBankFolder.trim().replace(/^\/+|\/+$/g, "")).slice(0, 1000)
+        : DEFAULT_SETTINGS.questionBankFolder,
       syncTitleToFilename: raw.syncTitleToFilename !== false,
       deleteLocalAfterUpload: raw.deleteLocalAfterUpload !== false,
       imageFailoverEnabled: raw.imageFailoverEnabled !== false,
@@ -789,6 +792,12 @@ export default class MindMapStudioPlugin extends Plugin {
       : this.settings.visibleModes.includes("mindmap")
         ? "mindmap"
         : this.settings.visibleModes[0] ?? "mindmap";
+  }
+
+  /** Returns whether a map path belongs to the configured question-bank folder or one of its descendants. */
+  isQuestionBankFile(file: TFile | null): boolean {
+    const folder = normalizePath(this.settings.questionBankFolder);
+    return Boolean(folder && file && (file.parent?.path === folder || file.path.startsWith(`${folder}/`)));
   }
 
   /**

@@ -109,4 +109,6 @@ export interface MindMapEditorOptions {
   screenshotShortcut: string;
   screenshotAutoRecognize: boolean;
   questionNodesEnabled: boolean;
+  /** Enables the full-page practice mode only for maps inside the configured question-bank folder. */
+  questionBankModeEnabled: boolean;
 }

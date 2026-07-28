@@ -5,7 +5,7 @@
 
 import type { DisplayMode } from "../core/model";
 
-const ALL_MODES: readonly DisplayMode[] = ["mindmap", "outline", "article", "reading"];
+const ALL_MODES: readonly DisplayMode[] = ["mindmap", "outline", "article", "reading", "question-bank"];
 
 /** 去重并过滤设置中未知的显示模式，空列表恢复为导图模式。 */
 export function normalizeDisplayModes(value: readonly unknown[]): DisplayMode[] {
@@ -29,5 +29,5 @@ export function resolveStartupDisplayMode(preferred: unknown, visibleModes: read
 
 /** 大纲模式不写入下次启动设置，其他模式保持用户最后选择。 */
 export function shouldPersistDisplayMode(mode: DisplayMode): boolean {
-  return mode !== "outline";
+  return mode !== "outline" && mode !== "question-bank";
 }

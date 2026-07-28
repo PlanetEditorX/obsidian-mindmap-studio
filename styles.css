@@ -4258,93 +4258,112 @@
   margin: 8px 0;
 }
 
-.mms-question-bank-modal .modal-content {
-  width: min(760px, 92vw);
-  max-width: 760px;
-}
-
-.mms-question-bank-filters {
-  display: grid;
-  grid-template-columns: minmax(180px, 1fr) auto auto;
-  gap: 8px;
-  margin: 12px 0;
-}
-
-.mms-question-bank-results {
-  display: grid;
-  gap: 8px;
-  max-height: 62vh;
+.mms-question-practice-view {
+  height: 100%;
   overflow: auto;
+  background: var(--background-primary);
 }
 
-.mms-question-bank-count,
-.mms-question-bank-meta {
-  color: var(--text-muted);
-  font-size: .88em;
+.mms-question-practice-page {
+  width: min(860px, 100%);
+  box-sizing: border-box;
+  margin: 0 auto;
+  padding: 32px 24px 48px;
 }
 
-.mms-question-bank-item {
-  padding: 10px;
-  border: 1px solid var(--background-modifier-border);
-  border-radius: 6px;
-}
-
-.mms-question-bank-title {
-  line-height: 1.45;
-  font-weight: 700;
-}
-
-.mms-question-bank-actions {
+.mms-question-practice-header {
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 8px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid var(--background-modifier-border);
+  padding-bottom: 14px;
 }
 
-.mms-question-bank-overview,
-.mms-question-practice-assessment {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.mms-question-practice-start {
-  justify-self: start;
-}
-
-.mms-question-practice {
-  display: grid;
-  gap: 12px;
-}
-
-.mms-question-practice h3,
-.mms-question-practice h4 {
+.mms-question-practice-header h2,
+.mms-question-practice-stem {
   margin: 0;
 }
 
-.mms-question-practice-text {
-  white-space: pre-wrap;
-  line-height: 1.6;
+.mms-question-practice-filters {
+  display: flex;
+  gap: 6px;
 }
 
-.mms-question-practice-options {
-  display: grid;
-  gap: 8px;
-}
-
-.mms-question-practice-options button {
-  min-height: 36px;
-  text-align: left;
-  white-space: pre-wrap;
-}
-
-.mms-question-practice-options button.is-selected {
+.mms-question-practice-filters button.is-active {
   color: var(--text-on-accent);
   background: var(--interactive-accent);
 }
 
+.mms-question-practice-progress {
+  margin: 24px 0 12px;
+  color: var(--text-muted);
+}
+
+.mms-question-practice-page > .mms-question-practice-text {
+  margin-top: 12px;
+}
+
+.mms-question-practice-text {
+  min-width: 0;
+  white-space: pre-wrap;
+  line-height: 1.6;
+}
+
+.mms-question-practice-choices {
+  display: grid;
+  gap: 10px;
+  margin: 22px 0;
+}
+
+.mms-question-practice-choices button {
+  display: grid;
+  grid-template-columns: 30px 1fr;
+  gap: 10px;
+  min-height: 52px;
+  padding: 12px;
+  text-align: left;
+  white-space: normal;
+}
+
+.mms-question-practice-option-label {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  font-weight: 700;
+}
+
+.mms-question-practice-answer {
+  box-sizing: border-box;
+  width: 100%;
+  margin: 22px 0;
+  resize: vertical;
+}
+
+.mms-question-practice-image {
+  display: block;
+  max-width: 100%;
+  max-height: 520px;
+  margin: 12px 0;
+  object-fit: contain;
+}
+
+.mms-question-practice-submit {
+  min-height: 38px;
+}
+
+.mms-question-practice-empty {
+  padding: 64px 16px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
 @media (max-width: 620px) {
-  .mms-question-bank-filters { grid-template-columns: 1fr; }
+  .mms-question-practice-page { padding: 20px 16px 32px; }
+  .mms-question-practice-header { align-items: flex-start; flex-direction: column; }
 }
 
 .mms-question-tags {

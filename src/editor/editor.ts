@@ -56,7 +56,7 @@ import { buildBranchColorMap, computeLayout, documentToSvg, edgePath, edgeWidthF
 import { resolveLayoutCollisions } from "../render/collision-layout";
 import { CodeEditModal, TableEditModal } from "./content-modals";
 import { parseQuestionEnrichment, parseRecognizedQuestion, QuestionEditModal } from "./question-modal";
-import { QuestionBankModal } from "./question-bank-modal";
+import { createQuestionPracticeState, renderQuestionPracticeMode } from "./question-practice-mode";
 import { TOOLBAR_ITEMS } from "../settings";
 import { appearanceFromThemePreset, MINDMAP_THEME_PRESETS } from "../themes";
 import { articleNumberLabel, articleTocDepth, buildArticleNodeInfo, DISPLAY_MODE_ICONS, DISPLAY_MODE_LABELS, readingAnchorPart, resolveArticleTocMaxDepth, type ReadingSection } from "../article/modes";
@@ -923,6 +923,7 @@ export class MindMapEditor {
   private viewportEl!: HTMLDivElement;
   private outlineEl!: HTMLDivElement;
   private articleEl!: HTMLDivElement;
+  private questionPracticeEl!: HTMLDivElement;
   private sceneEl!: HTMLDivElement;
   private nodesLayerEl!: HTMLDivElement;
   private edgesSvg!: SVGSVGElement;
@@ -975,6 +976,7 @@ export class MindMapEditor {
   private articleMiniMapCleanup: (() => void) | null = null;
   private readonly collapsedArticleSectionIds = new Set<string>();
   private articleScrollButtonCleanup: (() => void) | null = null;
+  private readonly questionPracticeState = createQuestionPracticeState();
 
   /**
    * 创建 MindMapEditor 实例，保存依赖和初始状态；实际 DOM 构建通常在 onOpen() 或后续渲染流程中完成。
@@ -993,7 +995,7 @@ export class MindMapEditor {
     this.history = new DocumentHistory(() => this.options.historyLimit);
     this.document = cloneDocument(document);
     this.currentMode = this.resolveMode(options.defaultViewMode);
-    this.readOnly = this.currentMode === "article" || this.currentMode === "reading" || this.document.view?.readOnly === true;
+    this.readOnly = this.currentMode === "article" || this.currentMode === "reading" || this.currentMode === "question-bank" || this.document.view?.readOnly === true;
     this.lastReadingLocation = options.readingLocation;
     const restoredLocation = this.resolveStoredLocation();
     this.selectedId = restoredLocation?.filePath === options.currentFilePath
@@ -1038,7 +1040,7 @@ export class MindMapEditor {
   setDocument(document: MindMapDocument, resetHistory = true): void {
     this.document = cloneDocument(document);
     this.currentMode = this.resolveMode(this.options.defaultViewMode);
-    this.readOnly = this.currentMode === "article" || this.currentMode === "reading" || this.document.view?.readOnly === true;
+    this.readOnly = this.currentMode === "article" || this.currentMode === "reading" || this.currentMode === "question-bank" || this.document.view?.readOnly === true;
     const restored = this.resolveStoredLocation();
     this.selectedId = restored?.filePath === this.options.currentFilePath ? restored.nodeId : this.document.root.id;
     if (resetHistory) {
@@ -1108,9 +1110,9 @@ export class MindMapEditor {
       if (previousMode === "mindmap") this.persistMindMapViewportState();
       this.currentMode = resolved;
       const preserveReadingEdit = previousMode === "reading" && resolved === "article" && !this.readOnly;
-      this.readOnly = resolved === "article" || resolved === "reading"
+      this.readOnly = resolved === "article" || resolved === "reading" || resolved === "question-bank"
         ? !preserveReadingEdit
-        : previousMode === "article" || previousMode === "reading"
+        : previousMode === "article" || previousMode === "reading" || previousMode === "question-bank"
           ? this.document.view?.readOnly === true
           : this.readOnly;
     }
@@ -1171,9 +1173,9 @@ export class MindMapEditor {
       this.callbacks.onChange(this.getDocument());
     }
     this.currentMode = mode;
-    if ((mode === "article" || mode === "reading") && mode !== previousMode) {
+    if ((mode === "article" || mode === "reading" || mode === "question-bank") && mode !== previousMode) {
       this.readOnly = true;
-    } else if ((previousMode === "article" || previousMode === "reading") && mode !== "article" && mode !== "reading") {
+    } else if ((previousMode === "article" || previousMode === "reading" || previousMode === "question-bank") && mode !== "article" && mode !== "reading" && mode !== "question-bank") {
       this.readOnly = this.document.view?.readOnly === true;
     }
     this.render();
@@ -1664,6 +1666,7 @@ export class MindMapEditor {
     this.nodesLayerEl = this.sceneEl.createDiv({ cls: "mmc-nodes-layer" });
     this.outlineEl = this.rootEl.createDiv({ cls: "mms-outline-view" });
     this.articleEl = this.rootEl.createDiv({ cls: "mms-article-view" });
+    this.questionPracticeEl = this.rootEl.createDiv({ cls: "mms-question-practice-view" });
     const pageContextMenu = (event: MouseEvent): void => {
       const target = event.target as HTMLElement;
       if (target.closest("[data-node-id]")) return;
@@ -1709,7 +1712,6 @@ export class MindMapEditor {
     this.addToolbarButton("code", "code-2", "插入或编辑代码", () => this.editCode(), true);
     this.addToolbarButton("image", "image-plus", "粘贴图片到当前节点（Ctrl/Cmd+V）", () => new Notice("先复制图片，再选中节点并按 Ctrl/Cmd+V"), true);
     if (this.options.questionNodesEnabled) this.addToolbarButton("question", "circle-help", "新建题目子节点", () => this.addQuestionChild(), true);
-    if (this.options.questionNodesEnabled) this.addToolbarButton("question-bank", "library-big", "打开当前导图题库", () => this.openQuestionBank());
     this.addToolbarButton("screenshot", "scan-line", `截图并插入当前节点（${this.options.screenshotShortcut || "Ctrl+Shift+S"}）`, () => void this.captureScreenshot());
     this.addToolbarButton("submap", "network", "创建或进入子导图", () => void this.createOrOpenSubmap());
     this.addToolbarSeparator();
@@ -2717,11 +2719,38 @@ export class MindMapEditor {
     this.viewportEl.toggleClass("is-hidden", this.currentMode !== "mindmap");
     this.outlineEl.toggleClass("is-hidden", this.currentMode !== "outline");
     this.articleEl.toggleClass("is-hidden", this.currentMode !== "article" && this.currentMode !== "reading");
+    this.questionPracticeEl.toggleClass("is-hidden", this.currentMode !== "question-bank");
     this.rootEl.dataset.displayMode = this.currentMode;
     if (this.currentMode === "outline") this.renderOutline();
     else if (this.currentMode === "article") this.renderArticle();
     else if (this.currentMode === "reading") this.renderReading();
+    else if (this.currentMode === "question-bank") this.renderQuestionPractice();
     else this.renderMindMap();
+  }
+
+  /** Renders the configured-folder practice surface and persists each automatic grading result. */
+  private renderQuestionPractice(): void {
+    renderQuestionPracticeMode(this.questionPracticeEl, {
+      document: this.document,
+      state: this.questionPracticeState,
+      resolveImage: this.callbacks.resolveImage,
+      onRecord: (nodeId, correct) => {
+        const node = findNode(this.document.root, nodeId);
+        if (!node?.question) return;
+        this.mutate(() => {
+          const question = node.question!;
+          question.attemptCount += 1;
+          if (correct) {
+            question.correctCount += 1;
+            if (question.status === "unanswered" || question.status === "wrong") question.status = "completed";
+          } else {
+            question.status = "wrong";
+          }
+          question.lastPracticedAt = new Date().toISOString();
+        });
+      },
+      onNotice: (message) => new Notice(message)
+    });
   }
 
   /**
@@ -3760,31 +3789,6 @@ export class MindMapEditor {
       this.selectedId = node.id;
     });
     this.editQuestion(node);
-  }
-
-  /** Opens the filterable current-map question bank and persists explicit review outcomes. */
-  private openQuestionBank(): void {
-    new QuestionBankModal(this.app, this.getDocument(), (nodeId) => this.focusNode(nodeId), (nodeId, status) => {
-      const node = findNode(this.document.root, nodeId);
-      if (!node?.question) return;
-      this.mutate(() => {
-        node.question!.status = status;
-      });
-    }, (nodeId, correct) => {
-      const node = findNode(this.document.root, nodeId);
-      if (!node?.question) return;
-      this.mutate(() => {
-        const question = node.question!;
-        question.attemptCount += 1;
-        if (correct) {
-          question.correctCount += 1;
-          if (question.status === "unanswered" || question.status === "wrong") question.status = "completed";
-        } else {
-          question.status = "wrong";
-        }
-        question.lastPracticedAt = new Date().toISOString();
-      });
-    }).open();
   }
 
   /** Opens the structured question editor and mirrors its stem into normal node content. */
