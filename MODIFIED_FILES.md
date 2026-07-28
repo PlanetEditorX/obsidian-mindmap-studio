@@ -1,34 +1,13 @@
-# AI 模式字段显示修复修改清单
+# AI 修改要求同步修复清单
 
 | 文件 | 变更 |
 |---|---|
-| `src/ai/modal.ts` | 使用原生 `hidden` 属性隔离三种操作的输入字段；本地替换只保留查找与替换输入，并固定为不区分大小写 |
-| `styles.css` | 为 AI 模式字段增加强制 `[hidden]` 规则，并删除不再使用的大小写复选框样式 |
-| `tests/ai.test.mjs` | 新增模式字段可见性契约测试，防止修改要求与替换字段再次同时显示 |
-| `docs/AI_ASSISTANT.zh-CN.md` | 说明三种模式的输入字段隔离和本地替换默认匹配规则 |
-| `CHANGELOG.md` | 记录 AI 表单字段显示修复 |
-| `TEST_RESULTS.md` | 更新本轮验证结果 |
-
-# AI 结构化编辑与本地替换修改清单
-
-| 文件 | 变更 |
-|---|---|
-| `src/ai/edit.ts` | 新增 AI Markdown 修改提案解析、页面/子树替换、稳定 ID、运行元数据保留、过期预览保护、输出限制，以及不联网的本地文字替换 |
-| `src/ai/protocol.ts` | 新增 Markdown-only AI 编辑请求体，限制编辑温度并保持非流式协议 |
-| `src/ai/client.ts` | 新增 AI 编辑提案请求边界，不直接接触或修改导图模型 |
-| `src/main.ts` | 新增 `proposeAiEdit()`，按启用的接口配置请求结构化修改提案 |
-| `src/view.ts` | 将当前页面或右键节点范围接入 AI 预览、确认应用和本地替换回调 |
-| `src/editor/editor.ts` | 新增 AI 编辑和本地替换的预览/应用入口，统一接入撤销、保存、渲染、聚焦和只读保护 |
-| `src/ai/modal.ts` | AI 窗口新增问答、AI 重整、本地替换三种模式；增加节点数和 Markdown 预览、命中预览及明确确认按钮 |
-| `styles.css` | 新增 AI 编辑预览、本地替换表单、警告和 Markdown 内容预览样式 |
-| `tests/ai.test.mjs` | AI 专项测试扩展到 17 项，覆盖结构化替换、元数据、并发保护、输出限制和离线替换边界 |
-| `scripts/test.mjs` | 综合回归增加 AI 编辑协议、预览/应用分离、过期保护、本地替换和确认按钮契约 |
-| `README.md` | 增加 AI 节点重整和本地替换功能概览 |
-| `docs/AI_ASSISTANT.zh-CN.md` | 重写为三模式完整说明，补充安全流程、范围、撤销、限制和操作示例 |
-| `docs/ARCHITECTURE.md` | 增加 `src/ai/edit.ts` 领域边界和网络层不得直接写模型的约束 |
-| `docs/TESTING.md` | 补充 AI 编辑与本地替换测试范围 |
-| `docs/SPECIAL_FEATURES.md` | 更新 AI 功能当前行为 |
-| `docs/PROJECT_GUIDE.zh-CN.md` | 更新 AI 可确认编辑和离线替换概览 |
-| `docs/FUNCTION_REFERENCE.md` | 按 38 个当前 TypeScript 模块重新生成函数参考 |
-| `CHANGELOG.md` | 记录 AI 结构化编辑、本地替换和安全限制 |
-| `TEST_RESULTS.md` | 更新本轮实际验证结果和构建限制 |
+| `src/ai/edit.ts` | 新增 AI 编辑默认修改要求，以及询问/编辑模式独立草稿的创建与切换纯函数 |
+| `src/ai/modal.ts` | 模式切换时同步加载对应输入内容；首次进入 AI 编辑显示整理导图要求，并保留两种模式各自草稿 |
+| `tests/ai.test.mjs` | 新增模式草稿行为测试和弹窗接入契约，覆盖询问、编辑、本地替换之间的来回切换 |
+| `docs/AI_ASSISTANT.zh-CN.md` | 说明默认修改要求和模式独立草稿行为 |
+| `docs/AI_EDIT_PROMPT_SYNC_FIX.zh-CN.md` | 记录问题根因、修复行为、实现边界和冒烟步骤 |
+| `README.md` | 增加 AI 输入草稿同步说明 |
+| `CHANGELOG.md` | 记录切换到 AI 编辑仍显示询问默认问题的修复 |
+| `docs/FUNCTION_REFERENCE.md` | 按当前源码重新生成函数参考 |
+| `TEST_RESULTS.md` | 更新本轮实际验证和构建结果 |
