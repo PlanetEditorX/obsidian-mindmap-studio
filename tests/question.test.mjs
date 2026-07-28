@@ -119,6 +119,10 @@ test("question assistant keeps an intelligent image-to-question pipeline and vis
   assert.match(editorSource, /const activeBlockId = blockId \?\? textBlock\?\.id \?\? newId\(\)/);
   assert.doesNotMatch(editorSource, /selected\.text = plainText/);
   assert.doesNotMatch(editorSource, /addToolbarButton\("question-bank"/);
+  const contentModalSource = await readFile("src/editor/content-modals.ts", "utf8");
+  assert.match(contentModalSource, /CODE_LANGUAGE_OPTIONS/);
+  assert.match(contentModalSource, /自定义语言/);
+  assert.match(contentModalSource, /\|\| "bash"/);
   assert.match(practiceSource, /查看答案与解析/);
   assert.match(practiceSource, /下一题/);
   assert.match(practiceSource, /错题本/);

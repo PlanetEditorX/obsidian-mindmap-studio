@@ -15,6 +15,13 @@ import {
   type TableAlignment
 } from "../core/model";
 
+const CODE_LANGUAGE_OPTIONS = [
+  ["bash", "Bash / Shell"], ["javascript", "JavaScript"], ["typescript", "TypeScript"],
+  ["python", "Python"], ["java", "Java"], ["c", "C"], ["cpp", "C++"], ["csharp", "C#"],
+  ["go", "Go"], ["rust", "Rust"], ["php", "PHP"], ["ruby", "Ruby"], ["sql", "SQL"],
+  ["html", "HTML"], ["css", "CSS"], ["json", "JSON"], ["yaml", "YAML"], ["markdown", "Markdown"], ["text", "Plain Text"]
+] as const;
+
 /**
  * 执行“clone table”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
  *
@@ -223,8 +230,22 @@ export class CodeEditModal extends Modal {
     this.titleEl.setText("插入或编辑代码");
     this.contentEl.addClass("mmc-code-modal");
     const languageLabel = this.contentEl.createEl("label", { text: "代码语言" });
-    const languageInput = languageLabel.createEl("input", { type: "text", attr: { placeholder: "javascript、python、css…" } });
-    languageInput.value = this.block?.language ?? "";
+    const languageSelect = languageLabel.createEl("select");
+    CODE_LANGUAGE_OPTIONS.forEach(([value, label]) => languageSelect.createEl("option", { value, text: label }));
+    languageSelect.createEl("option", { value: "__custom__", text: "自定义语言…" });
+    const customLanguage = languageLabel.createEl("input", { type: "text", attr: { placeholder: "输入语言标识，例如 mermaid" } });
+    const setLanguage = (value: string | undefined): void => {
+      const language = value?.trim().toLowerCase() || "bash";
+      const known = CODE_LANGUAGE_OPTIONS.some(([option]) => option === language);
+      languageSelect.value = known ? language : "__custom__";
+      customLanguage.value = known ? "" : language;
+      customLanguage.toggleClass("is-hidden", known);
+    };
+    setLanguage(this.block?.language);
+    languageSelect.onchange = () => {
+      customLanguage.toggleClass("is-hidden", languageSelect.value !== "__custom__");
+      if (languageSelect.value === "__custom__") customLanguage.focus();
+    };
 
     const codeLabel = this.contentEl.createEl("label", { text: "代码内容" });
     const codeInput = codeLabel.createEl("textarea", { cls: "mmc-code-textarea", attr: { spellcheck: "false", placeholder: "可直接粘贴代码，或粘贴 ```语言 ... ``` fenced code block" } });
@@ -235,7 +256,7 @@ export class CodeEditModal extends Modal {
     detect.addEventListener("click", () => {
       const parsed = parseFencedCode(codeInput.value);
       if (!parsed) { new Notice("没有识别到完整的 ``` fenced code block"); return; }
-      languageInput.value = parsed.language ?? "";
+      setLanguage(parsed.language);
       codeInput.value = parsed.code;
       new Notice("代码语言和内容已识别");
     });
@@ -245,7 +266,7 @@ export class CodeEditModal extends Modal {
     const save = actions.createEl("button", { text: "保存代码", type: "button", cls: "mod-cta" });
     cancel.addEventListener("click", () => this.close());
     save.addEventListener("click", () => {
-      let language = languageInput.value.trim();
+      let language = languageSelect.value === "__custom__" ? customLanguage.value.trim() : languageSelect.value;
       let code = codeInput.value;
       const fenced = parseFencedCode(code);
       if (fenced) {
@@ -253,7 +274,7 @@ export class CodeEditModal extends Modal {
         code = fenced.code;
       }
       if (!code.trim()) { new Notice("代码内容不能为空"); return; }
-      this.submit({ language: language.replace(/[^a-z0-9_+#.-]/gi, "").slice(0, 40) || undefined, code });
+      this.submit({ language: language.replace(/[^a-z0-9_+#.-]/gi, "").slice(0, 40) || "bash", code });
       this.close();
     });
   }
