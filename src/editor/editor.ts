@@ -3311,7 +3311,8 @@ export class MindMapEditor {
     const parts = shortcut.toLowerCase().split("+").map((part) => part.trim()).filter(Boolean);
     if (!parts.length) return false;
     const wantsMod = parts.includes("ctrl") || parts.includes("cmd") || parts.includes("mod");
-    return event.key.toLowerCase() === parts.at(-1)
+    const eventKey = event.key === " " ? "space" : event.key.startsWith("Arrow") ? event.key.slice(5).toLowerCase() : event.key.toLowerCase();
+    return eventKey === parts.at(-1)
       && (event.ctrlKey || event.metaKey) === wantsMod
       && event.shiftKey === parts.includes("shift")
       && event.altKey === parts.includes("alt");
