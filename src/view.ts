@@ -191,9 +191,9 @@ export class MindMapStudioView extends TextFileView {
           const expandThreshold = Math.max(0, Math.min(1000, Math.floor(this.plugin.settings.codeAutoExpandMaxLines || 0)));
           const lineNumberThreshold = Math.max(0, Math.min(1000, Math.floor(this.plugin.settings.codeAutoLineNumbersMinLines || 0)));
           const autoExpand = expandThreshold > 0 && lineCount <= expandThreshold;
-          const autoLineNumbers = lineNumberThreshold > 0 && lineCount > lineNumberThreshold;
+          const autoLineNumbers = lineNumberThreshold > 0 ? lineCount > lineNumberThreshold : undefined;
           const collapsed = block.collapsed ?? (autoExpand ? false : pageCode?.codeCollapsed ?? this.plugin.settings.defaultCodeCollapsed);
-          const showLineNumbers = block.showLineNumbers ?? (autoLineNumbers ? true : pageCode?.codeShowLineNumbers ?? this.plugin.settings.defaultCodeShowLineNumbers);
+          const showLineNumbers = block.showLineNumbers ?? autoLineNumbers ?? pageCode?.codeShowLineNumbers ?? this.plugin.settings.defaultCodeShowLineNumbers;
           const theme = block.theme ?? pageCode?.codeTheme ?? this.plugin.settings.defaultCodeTheme;
           const themeClass = theme !== "obsidian" ? CODE_THEME_CLASS_NAMES[theme] : undefined;
           if (themeClass) container.addClass(themeClass);
@@ -207,6 +207,8 @@ export class MindMapStudioView extends TextFileView {
           if (showLineNumbers && pre) {
             pre.addClass("mms-code-with-line-numbers");
             pre.setAttr("data-line-numbers", Array.from({ length: block.code.split("\n").length }, (_, index) => String(index + 1)).join("\n"));
+            pre.style.setProperty("--mms-code-line-gutter-top", getComputedStyle(pre).paddingTop);
+            pre.style.setProperty("--mms-code-line-gutter-bottom", getComputedStyle(pre).paddingBottom);
           }
         }
       }, this.getEditorOptions());

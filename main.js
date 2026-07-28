@@ -13313,7 +13313,7 @@ var MindMapStudioView = class _MindMapStudioView extends import_obsidian12.TextF
           await this.plugin.saveSettings();
         },
         onRenderCode: async (block, container) => {
-          var _a3, _b3, _c2, _d, _e, _f, _g, _h, _i, _j;
+          var _a3, _b3, _c2, _d, _e, _f, _g, _h, _i, _j, _k;
           const longestFence = Math.max(2, ...Array.from(block.code.matchAll(/`+/g), (match) => match[0].length));
           const fence = "`".repeat(longestFence + 1);
           const markdown = `${fence}${(_a3 = block.language) != null ? _a3 : ""}
@@ -13324,20 +13324,22 @@ ${fence}`;
           const expandThreshold = Math.max(0, Math.min(1e3, Math.floor(this.plugin.settings.codeAutoExpandMaxLines || 0)));
           const lineNumberThreshold = Math.max(0, Math.min(1e3, Math.floor(this.plugin.settings.codeAutoLineNumbersMinLines || 0)));
           const autoExpand = expandThreshold > 0 && lineCount <= expandThreshold;
-          const autoLineNumbers = lineNumberThreshold > 0 && lineCount > lineNumberThreshold;
+          const autoLineNumbers = lineNumberThreshold > 0 ? lineCount > lineNumberThreshold : void 0;
           const collapsed = (_d = block.collapsed) != null ? _d : autoExpand ? false : (_c2 = pageCode == null ? void 0 : pageCode.codeCollapsed) != null ? _c2 : this.plugin.settings.defaultCodeCollapsed;
-          const showLineNumbers = (_f = block.showLineNumbers) != null ? _f : autoLineNumbers ? true : (_e = pageCode == null ? void 0 : pageCode.codeShowLineNumbers) != null ? _e : this.plugin.settings.defaultCodeShowLineNumbers;
-          const theme = (_h = (_g = block.theme) != null ? _g : pageCode == null ? void 0 : pageCode.codeTheme) != null ? _h : this.plugin.settings.defaultCodeTheme;
+          const showLineNumbers = (_g = (_f = (_e = block.showLineNumbers) != null ? _e : autoLineNumbers) != null ? _f : pageCode == null ? void 0 : pageCode.codeShowLineNumbers) != null ? _g : this.plugin.settings.defaultCodeShowLineNumbers;
+          const theme = (_i = (_h = block.theme) != null ? _h : pageCode == null ? void 0 : pageCode.codeTheme) != null ? _i : this.plugin.settings.defaultCodeTheme;
           const themeClass = theme !== "obsidian" ? CODE_THEME_CLASS_NAMES[theme] : void 0;
           if (themeClass) container.addClass(themeClass);
           const rendered = collapsed ? container.createEl("details", { cls: "mms-code-collapsed" }) : container;
           if (collapsed) rendered.createEl("summary", { text: `\u5C55\u5F00 ${block.language || "code"} \u4EE3\u7801` });
           const target = collapsed ? rendered.createDiv({ cls: "mms-code-collapsed-content" }) : rendered;
-          await import_obsidian12.MarkdownRenderer.render(this.app, markdown, target, (_j = (_i = this.file) == null ? void 0 : _i.path) != null ? _j : "", this);
+          await import_obsidian12.MarkdownRenderer.render(this.app, markdown, target, (_k = (_j = this.file) == null ? void 0 : _j.path) != null ? _k : "", this);
           const pre = target.querySelector("pre");
           if (showLineNumbers && pre) {
             pre.addClass("mms-code-with-line-numbers");
             pre.setAttr("data-line-numbers", Array.from({ length: block.code.split("\n").length }, (_, index) => String(index + 1)).join("\n"));
+            pre.style.setProperty("--mms-code-line-gutter-top", getComputedStyle(pre).paddingTop);
+            pre.style.setProperty("--mms-code-line-gutter-bottom", getComputedStyle(pre).paddingBottom);
           }
         }
       }, this.getEditorOptions());

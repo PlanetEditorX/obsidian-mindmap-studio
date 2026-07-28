@@ -125,6 +125,13 @@ test("code block display settings persist while unsupported themes fall back saf
   assert.equal(typeof model.normalizeDocument({ root: { text: "One line", code: { code: "x" }, children: [] } }).root.code.collapsed, "undefined");
 });
 
+test("code line-number thresholds override inherited defaults while node settings stay first", async () => {
+  const viewSource = await readFile(new URL("../src/view.ts", import.meta.url), "utf8");
+  assert.match(viewSource, /lineNumberThreshold > 0 \? lineCount > lineNumberThreshold : undefined/);
+  assert.match(viewSource, /block\.showLineNumbers \?\? autoLineNumbers \?\? pageCode\?\.codeShowLineNumbers/);
+  assert.match(viewSource, /--mms-code-line-gutter-top/);
+});
+
 test("question-bank grading distinguishes single choice, multiple choice and normalized essay answers", () => {
   const choice = model.normalizeDocument({
     root: {
