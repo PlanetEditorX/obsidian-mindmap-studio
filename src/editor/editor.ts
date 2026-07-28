@@ -11,6 +11,7 @@ import {
   cloneNodeWithFreshIds,
   childrenToTable,
   createNode,
+  createMindMapQuestion,
   documentToMarkdown,
   extractFirstWikiLink,
   findAncestors,
@@ -26,6 +27,7 @@ import {
   nodePlainText,
   nodePrimaryText,
   syncNodeContentFields,
+  syncMindMapQuestionFields,
   parseFencedCode,
   parseMarkdownTable,
   richTextCharacterStyles,
@@ -53,6 +55,7 @@ import {
 import { buildBranchColorMap, computeLayout, documentToSvg, edgePath, edgeWidthForDepth, roundedElbowEdgePath, type LayoutResult } from "../render/layout";
 import { resolveLayoutCollisions } from "../render/collision-layout";
 import { CodeEditModal, TableEditModal } from "./content-modals";
+import { QuestionEditModal } from "./question-modal";
 import { TOOLBAR_ITEMS } from "../settings";
 import { appearanceFromThemePreset, MINDMAP_THEME_PRESETS } from "../themes";
 import { articleNumberLabel, articleTocDepth, buildArticleNodeInfo, DISPLAY_MODE_ICONS, DISPLAY_MODE_LABELS, readingAnchorPart, resolveArticleTocMaxDepth, type ReadingSection } from "../article/modes";
@@ -1062,7 +1065,8 @@ export class MindMapEditor {
       : null;
     const modesChanged = JSON.stringify(previousOptions.visibleModes) !== JSON.stringify(options.visibleModes);
     const toolbarChanged = JSON.stringify(previousOptions.visibleToolbarItems) !== JSON.stringify(options.visibleToolbarItems)
-      || JSON.stringify(previousOptions.toolbarItemOrder) !== JSON.stringify(options.toolbarItemOrder);
+      || JSON.stringify(previousOptions.toolbarItemOrder) !== JSON.stringify(options.toolbarItemOrder)
+      || previousOptions.questionNodesEnabled !== options.questionNodesEnabled;
     const globalModeChanged = previousOptions.defaultViewMode !== options.defaultViewMode;
     const locationContextChanged = previousOptions.currentFilePath !== options.currentFilePath
       || previousOptions.readingHomePath !== options.readingHomePath
@@ -1703,6 +1707,7 @@ export class MindMapEditor {
     this.addToolbarButton("table", "table-2", "插入或编辑表格", () => this.editTable(), true);
     this.addToolbarButton("code", "code-2", "插入或编辑代码", () => this.editCode(), true);
     this.addToolbarButton("image", "image-plus", "粘贴图片到当前节点（Ctrl/Cmd+V）", () => new Notice("先复制图片，再选中节点并按 Ctrl/Cmd+V"), true);
+    if (this.options.questionNodesEnabled) this.addToolbarButton("question", "circle-help", "新建题目子节点", () => this.addQuestionChild(), true);
     this.addToolbarButton("screenshot", "scan-line", `截图并插入当前节点（${this.options.screenshotShortcut || "Ctrl+Shift+S"}）`, () => void this.captureScreenshot());
     this.addToolbarButton("submap", "network", "创建或进入子导图", () => void this.createOrOpenSubmap());
     this.addToolbarSeparator();
@@ -3044,6 +3049,10 @@ export class MindMapEditor {
       nodeEl.addEventListener("dblclick", (event) => {
         event.stopPropagation();
         this.selectNode(node.id);
+        if (node.question && this.options.questionNodesEnabled) {
+          this.editQuestion(node);
+          return;
+        }
         if (node.submap) {
           void this.callbacks.onOpenMindMap(node.submap.path);
         } else if (!this.readOnly) {
@@ -3733,6 +3742,37 @@ export class MindMapEditor {
     if (this.options.nodeEditorPosition === "right" && this.inlineEditingId === selected.id) {
       modal.releaseKeyboardScope();
     }
+  }
+
+  /** Creates a structured question as a child of the selected node. */
+  private addQuestionChild(): void {
+    if (!this.ensureEditable()) return;
+    const parent = this.selectedNode() ?? this.document.root;
+    const node = this.createConfiguredNode("");
+    node.question = createMindMapQuestion();
+    syncMindMapQuestionFields(node);
+    this.mutate(() => {
+      parent.collapsed = false;
+      parent.children.push(node);
+      this.selectedId = node.id;
+    });
+    this.editQuestion(node);
+  }
+
+  /** Opens the structured question editor and mirrors its stem into normal node content. */
+  private editQuestion(node = this.selectedNode()): void {
+    if (!this.ensureEditable() || !node) return;
+    const initialQuestion = node.question ?? { ...createMindMapQuestion(), stem: nodeContentBlocks(node) };
+    new QuestionEditModal(this.app, initialQuestion, node.id, {
+      onReadImageSource: this.callbacks.onReadImageSource,
+      onRecognizeImage: this.callbacks.onRecognizeImage
+    }, (question) => {
+      this.mutate(() => {
+        node.question = question;
+        syncMindMapQuestionFields(node);
+        if (node.id === this.document.root.id && node.text) this.document.title = node.text;
+      });
+    }).open();
   }
 
   /**
@@ -4444,6 +4484,13 @@ export class MindMapEditor {
     menu.addItem((item) => item.setTitle("添加子节点").setIcon("plus-circle").onClick(() => this.addChild()));
     menu.addItem((item) => item.setTitle("添加同级节点").setIcon("list-plus").onClick(() => this.addSibling()));
     menu.addItem((item) => item.setTitle("编辑节点").setIcon("pencil").onClick(() => this.editSelected()));
+    if (this.options.questionNodesEnabled) {
+      menu.addItem((item) => item
+        .setTitle(selected?.question ? "编辑题目节点" : "转换为题目节点")
+        .setIcon("circle-help")
+        .onClick(() => this.editQuestion()));
+      menu.addItem((item) => item.setTitle("新建题目子节点").setIcon("circle-plus").onClick(() => this.addQuestionChild()));
+    }
     if (selected?.style?.width !== undefined || selected?.style?.minHeight !== undefined) {
       menu.addItem((item) => item.setTitle("恢复节点自动大小").setIcon("maximize-2").onClick(() => {
         if (!selected) return;

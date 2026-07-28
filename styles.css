@@ -4117,6 +4117,39 @@
   margin-top: 16px;
 }
 
+.mms-question-modal .modal-content {
+  max-width: 760px;
+}
+
+.mms-question-field {
+  margin: 14px 0;
+}
+
+.mms-question-field h3 {
+  margin: 0 0 6px;
+  font-size: 1em;
+}
+
+.mms-question-field textarea,
+.mms-question-field input {
+  box-sizing: border-box;
+  width: 100%;
+  margin: 4px 0;
+}
+
+.mms-question-tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 16px 0 8px;
+}
+
+.mms-question-tags button.is-active {
+  color: var(--text-on-accent);
+  background: var(--interactive-accent);
+}
+
 @media (max-width: 720px) {
   .mms-image-recognition-compare {
     grid-template-columns: 1fr;

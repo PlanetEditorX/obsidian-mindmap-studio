@@ -130,7 +130,7 @@ export class MindMapStudioView extends TextFileView {
         onReadImageSource: async (source) => this.plugin.readImageSource(source, this.file),
         onScheduleAutoUpload: (nodeId, blockId, localPath, suggestedName) => this.plugin.scheduleAutoUpload(this.file, nodeId, blockId, localPath, suggestedName),
         onDeleteRecognizedImageLocalAsset: async (localPath, blockId) => this.plugin.deleteRecognizedImageLocalAsset(this.file?.path ?? "", localPath, blockId),
-        onRecognizeImage: async (image, blob, remoteUrl) => this.plugin.recognizeImage(image, blob, undefined, undefined, remoteUrl),
+        onRecognizeImage: async (image, blob, remoteUrl, instruction) => this.plugin.recognizeImage(image, blob, undefined, instruction, remoteUrl),
         onCaptureScreenshot: async () => this.plugin.captureScreenshot(),
         onCreateSubmap: async (node) => {
           if (!this.file) throw new Error("当前脑图尚未关联文件");
@@ -438,6 +438,7 @@ export class MindMapStudioView extends TextFileView {
       autoUploadDelaySeconds: this.plugin.settings.autoUploadDelaySeconds,
       screenshotShortcut: this.plugin.settings.screenshotShortcut,
       screenshotAutoRecognize: this.plugin.settings.screenshotAutoRecognize,
+      questionNodesEnabled: this.plugin.settings.questionNodesEnabled,
       articleBaseDepth: this.articleBaseDepth,
       articleTocEntries: [...this.articleTocEntries],
       articleTocMaxDepth: this.plugin.settings.articleTocMaxDepth,

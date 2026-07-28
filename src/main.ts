@@ -531,6 +531,7 @@ export default class MindMapStudioPlugin extends Plugin {
         ? raw.screenshotShortcut.trim().slice(0, 120)
         : DEFAULT_SETTINGS.screenshotShortcut,
       screenshotAutoRecognize: raw.screenshotAutoRecognize === true,
+      questionNodesEnabled: raw.questionNodesEnabled === true,
       syncTitleToFilename: raw.syncTitleToFilename !== false,
       deleteLocalAfterUpload: raw.deleteLocalAfterUpload !== false,
       imageFailoverEnabled: raw.imageFailoverEnabled !== false,

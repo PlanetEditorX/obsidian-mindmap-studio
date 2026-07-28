@@ -42,7 +42,8 @@ export const TOOLBAR_ITEMS = [
   ["undo", "撤销"], ["redo", "重做"],
   ["fit", "适应画布"], ["layout", "切换布局"], ["appearance", "主题与外观"],
   ["article-landing", "目录/原始文章"], ["article-style", "文章样式"],
-  ["markdown", "Markdown 大纲"], ["json", "导入文件 / JSON"], ["export-document", "导出文档"], ["export-svg", "导出 SVG"]
+  ["markdown", "Markdown 大纲"], ["json", "导入文件 / JSON"], ["export-document", "导出文档"], ["export-svg", "导出 SVG"],
+  ["question", "题目节点"],
 ] as const;
 
 /**
@@ -241,6 +242,8 @@ export interface MindMapStudioSettings {
   screenshotShortcut: string;
   /** 截图插入节点后是否自动启动识图预览。 */
   screenshotAutoRecognize: boolean;
+  /** Whether structured question-node entry points are visible in the editor. */
+  questionNodesEnabled: boolean;
 }
 
 export const DEFAULT_SETTINGS: MindMapStudioSettings = {
@@ -327,7 +330,8 @@ export const DEFAULT_SETTINGS: MindMapStudioSettings = {
   localOcrExtraArgs: "--psm 6",
   screenshotHideObsidian: false,
   screenshotShortcut: "Ctrl+Shift+S",
-  screenshotAutoRecognize: false
+  screenshotAutoRecognize: false,
+  questionNodesEnabled: false
 };
 
 /**
@@ -704,6 +708,16 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
       cls: "setting-item-description",
       text: "选择需要显示在脑图顶部工具栏中的操作。显示模式切换、缩放比例和保存状态始终保留。"
     });
+    new Setting(containerEl)
+      .setName("题目节点")
+      .setDesc("开启后，在工具栏和节点右键菜单中显示选择题/大题的结构化编辑入口。")
+      .addToggle((toggle) => toggle
+        .setValue(this.plugin.settings.questionNodesEnabled)
+        .onChange(async (value) => {
+          this.plugin.settings.questionNodesEnabled = value;
+          await this.saveAndRefresh();
+        }));
+
     const defaultToolbarOrder: string[] = TOOLBAR_ITEMS.map(([id]) => id);
     const knownToolbarItems = new Map<string, string>(TOOLBAR_ITEMS);
     const toolbarOrder = [
