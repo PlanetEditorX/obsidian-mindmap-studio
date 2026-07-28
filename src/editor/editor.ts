@@ -4301,7 +4301,7 @@ export class MindMapEditor {
   }
 
   /**
-   * 处理编辑器内粘贴：优先识别图片并保存为本地资源，其次识别表格、代码块、JSON 分支或普通文本。图片可按设置进入延迟自动上传流程。
+   * 处理编辑器内粘贴：优先识别图片并保存为本地资源，其次识别表格、代码块或节点分支。普通文本也会作为当前节点的子节点插入。
    *
    * @param event 触发当前交互的浏览器或 Obsidian 事件。
    * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
@@ -4356,24 +4356,7 @@ export class MindMapEditor {
       new Notice(`已识别并插入${code.language ? ` ${code.language}` : ""}代码`);
       return;
     }
-    // Plain single-line text: replace node content instead of creating child
-    if (!htmlBranch && !table && !code) {
-      const plainText = text.trim();
-      if (plainText && !plainText.includes(String.fromCharCode(10)) && !/^(?:#{1,6}\s+|[-*+]\s+|\d+[.)]\s+)/m.test(plainText)) {
-        event.preventDefault();
-        try { JSON.parse(plainText); } catch {
-          // Not JSON → plain text paste: set node text
-          this.mutate(() => {
-            selected.text = plainText;
-            selected.richText = undefined;
-            syncNodeContentFields(selected);
-          });
-          return;
-        }
-      }
-    }
-
-        const sourceNodes = htmlBranch ? [htmlBranch] : parseClipboardNodes(text);
+    const sourceNodes = htmlBranch ? [htmlBranch] : parseClipboardNodes(text);
     if (sourceNodes?.length) {
       event.preventDefault();
       const clones = sourceNodes.map((node) => cloneNodeWithFreshIds(node));
