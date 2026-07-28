@@ -44,6 +44,7 @@ test("question normalization mirrors stem and tags into standard node fields", (
     }
   });
   assert.equal(document.root.text, "What is 2 + 2?");
+  assert.equal(document.root.question.status, "unanswered");
   assert.deepEqual(document.root.tags, ["existing", "math"]);
   assert.equal(model.nodeSearchText(document.root).includes("math"), true);
   assert.equal(model.documentToMarkdown(document).includes("What is 2 + 2?"), true);
@@ -75,10 +76,11 @@ test("question normalization keeps only verifiable original-question sources", (
 });
 
 test("question assistant keeps an intelligent image-to-question pipeline and visible answer fields", async () => {
-  const [editorSource, articleSource, modalSource, mainSource] = await Promise.all([
+  const [editorSource, articleSource, modalSource, bankSource, mainSource] = await Promise.all([
     readFile("src/editor/editor.ts", "utf8"),
     readFile("src/editor/article-renderer.ts", "utf8"),
     readFile("src/editor/question-modal.ts", "utf8"),
+    readFile("src/editor/question-bank-modal.ts", "utf8"),
     readFile("src/main.ts", "utf8")
   ]);
   assert.match(editorSource, /转为题目节点并智能处理/);
@@ -89,6 +91,8 @@ test("question assistant keeps an intelligent image-to-question pipeline and vis
   assert.match(articleSource, /mms-question-panel/);
   assert.match(articleSource, /mms-question-reveal/);
   assert.match(modalSource, /AI 智能处理题目/);
+  assert.match(bankSource, /题库/);
+  assert.match(bankSource, /错题/);
   assert.match(modalSource, /已由 AI 分析补齐缺失答案与解答/);
   assert.match(mainSource, /仍需基于题目独立分析/);
 });

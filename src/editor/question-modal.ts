@@ -11,11 +11,13 @@ import {
   type MindMapImageContentBlock,
   type MindMapQuestion,
   type MindMapQuestionMode,
-  type MindMapQuestionOption
+  type MindMapQuestionOption,
+  type MindMapQuestionStatus
 } from "../core/model";
 import type { MindMapEditorCallbacks } from "./editor-types";
 
 const QUESTION_TAGS = ["公务员", "事业单位", "申论", "职测", "言语", "判断", "数量", "资料分析"];
+const QUESTION_STATUS_LABELS: Record<MindMapQuestionStatus, string> = { unanswered: "未做", completed: "已做", favorite: "收藏", wrong: "错题", mastered: "掌握" };
 
 /** Parses a JSON-only vision result into the question fields supported by the editor. */
 export function parseRecognizedQuestion(value: string, fallback: MindMapQuestion): MindMapQuestion | null {
@@ -44,7 +46,12 @@ export function parseRecognizedQuestion(value: string, fallback: MindMapQuestion
       options,
       answer: textBlocks(parsed.answer),
       explanation: textBlocks(parsed.explanation ?? parsed.analysis),
-      tags: Array.from(new Set([...(fallback.tags ?? []), ...(Array.isArray(parsed.tags) ? parsed.tags.filter((tag): tag is string => typeof tag === "string") : [])])).slice(0, 12)
+      tags: Array.from(new Set([...(fallback.tags ?? []), ...(Array.isArray(parsed.tags) ? parsed.tags.filter((tag): tag is string => typeof tag === "string") : [])])).slice(0, 12),
+      source: fallback.source,
+      status: fallback.status,
+      attemptCount: fallback.attemptCount,
+      correctCount: fallback.correctCount,
+      lastPracticedAt: fallback.lastPracticedAt
     };
   } catch {
     return null;
@@ -111,6 +118,10 @@ export class QuestionEditModal extends Modal {
       this.draft = { ...this.draft, mode: mode.value === "essay" ? "essay" : "choice", options: mode.value === "essay" ? [] : this.draft.options.length ? this.draft.options : createMindMapQuestion("choice").options };
       this.render();
     };
+    const status = this.contentEl.createEl("select", { cls: "mms-question-status" });
+    for (const [value, label] of Object.entries(QUESTION_STATUS_LABELS)) status.createEl("option", { value, text: label });
+    status.value = this.draft.status;
+    status.onchange = () => { this.draft.status = status.value as MindMapQuestionStatus; };
     this.renderBlocks("题干", this.draft.stem, (blocks) => { this.draft.stem = blocks; });
     if (this.draft.mode === "choice") {
       for (const option of this.draft.options) this.renderBlocks(`选项 ${option.label}`, option.content, (blocks) => { option.content = blocks; });
