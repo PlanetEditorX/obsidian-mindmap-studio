@@ -65,6 +65,7 @@ test("inline editing activates and releases through the shared path", () => {
   assert.match(makeInlineEditable, /element\.addEventListener\("pointerdown"[\s\S]*this\.activateInlineEditable\(element, false\)/);
   assert.match(activateInlineEditable, /element\.contentEditable = "true"[\s\S]*this\.applyInlineEditingAccessibility\(element\)/);
   assert.match(makeInlineEditable, /element\.addEventListener\("blur"[\s\S]*element\.contentEditable = "false"[\s\S]*this\.clearInlineEditingAccessibility\(element\)/);
+  assert.match(editorSource, /if \(this\.inlineEditingId && !modesChanged && !toolbarChanged && !globalModeChanged\) return;/, "article-context refreshes must not replace an active inline editor");
 });
 
 test("article and outline text do not expose edit labels as hover tooltips", () => {
