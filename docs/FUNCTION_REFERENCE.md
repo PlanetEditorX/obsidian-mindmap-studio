@@ -6130,7 +6130,7 @@ display(): void
 
 ### 方法 `MindMapStudioSettingTab.addOptionalColorSetting`
 
-源码：`src/settings.ts:1775`
+源码：`src/settings.ts:1779`
 
 添加optional color setting，并保持模型、界面和持久化状态的一致性。
 
@@ -6140,7 +6140,7 @@ private addOptionalColorSetting( container: HTMLElement, name: string, descripti
 
 ### 方法 `MindMapStudioSettingTab.saveAndRefresh`
 
-源码：`src/settings.ts:1807`
+源码：`src/settings.ts:1811`
 
 保存and refresh，并保持模型、界面和持久化状态的一致性。
 
@@ -7002,7 +7002,7 @@ export function normalizeRecognizedText(value: string): string
 
 ### 函数 `buildImageRecognitionPrompt`
 
-源码：`src/vision/recognition.ts:85`
+源码：`src/vision/recognition.ts:90`
 
 构建单张图片的识图提示词，要求模型优先转录文字并补充必要的视觉说明。
 
@@ -7012,7 +7012,7 @@ export function buildImageRecognitionPrompt(image: RecognizableImage, instructio
 
 ### 函数 `imageBlockSnapshot`
 
-源码：`src/vision/recognition.ts:97`
+源码：`src/vision/recognition.ts:102`
 
 读取指定图片块的稳定快照，供预览应用前检测并发修改。
 
@@ -7022,7 +7022,7 @@ export function imageBlockSnapshot(document: MindMapDocument, nodeId: string, bl
 
 ### 函数 `previewImageTextReplacement`
 
-源码：`src/vision/recognition.ts:104`
+源码：`src/vision/recognition.ts:109`
 
 创建图片转文字预览；该步骤不会修改导图。
 
@@ -7032,7 +7032,7 @@ export function previewImageTextReplacement( document: MindMapDocument, nodeId: 
 
 ### 函数 `applyImageTextReplacement`
 
-源码：`src/vision/recognition.ts:128`
+源码：`src/vision/recognition.ts:133`
 
 应用已经确认且未过期的图片转文字预览，并保持原内容块位置不变。
 
