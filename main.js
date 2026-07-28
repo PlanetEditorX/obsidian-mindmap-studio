@@ -19864,6 +19864,7 @@ function shouldHideFileExplorerPath(path, settings) {
  */
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.screenshotCommandCandidates = screenshotCommandCandidates;
+exports.copyBytesToArrayBuffer = copyBytesToArrayBuffer;
 exports.pngFingerprint = pngFingerprint;
 exports.captureDesktopScreenshot = captureDesktopScreenshot;
 /** 返回当前桌面平台对应的截图命令候选，按优先级依次尝试。 */
@@ -19880,6 +19881,12 @@ function screenshotCommandCandidates(platform) {
         { command: "spectacle", args: ["-r", "-b", "-n", "--clipboard"] },
         { command: "flameshot", args: ["gui", "--clipboard"] }
     ];
+}
+/** 将任意 Uint8Array 复制为 Blob 接受的普通 ArrayBuffer，兼容 SharedArrayBuffer 类型声明。 */
+function copyBytesToArrayBuffer(bytes) {
+    const buffer = new ArrayBuffer(bytes.byteLength);
+    new Uint8Array(buffer).set(bytes);
+    return buffer;
 }
 /** 将剪贴板 PNG 二进制转换为稳定摘要，用于检测截图是否产生了新图片。 */
 function pngFingerprint(bytes) {
@@ -19983,7 +19990,7 @@ async function captureDesktopScreenshot(hideObsidian) {
         await runScreenshotCommand(nodeRuntime, screenshotCommandCandidates(nodeRuntime.platform));
         const bytes = await waitForClipboardImage(electronRuntime, beforeFingerprint);
         return {
-            blob: new Blob([bytes], { type: "image/png" }),
+            blob: new Blob([copyBytesToArrayBuffer(bytes)], { type: "image/png" }),
             suggestedName: "mindmap-screenshot.png"
         };
     }

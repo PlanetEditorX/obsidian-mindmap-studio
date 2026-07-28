@@ -55,6 +55,13 @@ export function screenshotCommandCandidates(platform: string): Array<{ command: 
   ];
 }
 
+/** 将任意 Uint8Array 复制为 Blob 接受的普通 ArrayBuffer，兼容 SharedArrayBuffer 类型声明。 */
+export function copyBytesToArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  const buffer = new ArrayBuffer(bytes.byteLength);
+  new Uint8Array(buffer).set(bytes);
+  return buffer;
+}
+
 /** 将剪贴板 PNG 二进制转换为稳定摘要，用于检测截图是否产生了新图片。 */
 export function pngFingerprint(bytes: Uint8Array): string {
   if (!bytes.length) return "";
@@ -153,7 +160,7 @@ export async function captureDesktopScreenshot(hideObsidian: boolean): Promise<D
     await runScreenshotCommand(nodeRuntime, screenshotCommandCandidates(nodeRuntime.platform));
     const bytes = await waitForClipboardImage(electronRuntime, beforeFingerprint);
     return {
-      blob: new Blob([bytes], { type: "image/png" }),
+      blob: new Blob([copyBytesToArrayBuffer(bytes)], { type: "image/png" }),
       suggestedName: "mindmap-screenshot.png"
     };
   } finally {
