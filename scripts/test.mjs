@@ -1263,7 +1263,12 @@ export const setIcon = () => {};
   assert.match(editorSource, /已进入阅读模式/, "the non-editing state must be presented as reading mode");
   assert.match(editorSource, /if \(this\.readOnly\) this\.articleEl\.querySelectorAll\("\.is-selected, \.is-multi-selected"\)/, "switching to reading mode must clear residual article selection frames");
   assert.match(editorSource, /element\.addClass\("is-inline-editing"\)[\s\S]*element\.removeClass\("is-inline-editing"\)/, "only the focused inline text should enter the editing-frame state");
-  assert.match(editorSource, /isNearNodeEdge\(event, nodeEl\)\) this\.editSelected\(\);[\s\S]*else this\.beginInlineEdit\(node\.id\)/, "edge double-clicks must open the full editor while the center remains a quick edit");
+  assert.match(editorSource, /isNearNodeEdge\(event, nodeEl\)\) this\.editSelected\(\);[\s\S]*target\.closest<HTMLElement>\("\[data-block-id\]"\)[\s\S]*this\.beginInlineEdit\(node\.id, block\.id\)/, "double-clicks must edit the exact text block while edge clicks open the full editor");
+  assert.match(editorSource, /window\.requestAnimationFrame\(\(\) => this\.beginInlineEdit\(node\.id, undefined, true\)\)/, "new Tab or Enter nodes must defer and protect inline-editor focus");
+  assert.match(editorSource, /if \(initialFocusProtected\) \{[\s\S]*window\.requestAnimationFrame\(focusAtEnd\)/, "new-node inline editing must recover from first-frame focus loss");
+  assert.match(editorSource, /textEl\.dataset\.blockId = block\.id/, "rendered text blocks must expose stable hit targets");
+  assert.match(editorSource, /wrap\.dataset\.blockId = block\.id/, "rendered image blocks must open their matching full editor card");
+  assert.match(editorSource, /private editSelected\(initialBlockId\?: string\): void/, "full node editing must accept an initially targeted content block");
   assert.match(editorSource, /private isNearNodeEdge\(event: MouseEvent, nodeEl: HTMLElement\): boolean[\s\S]*return distance <= 18/, "the node edge hit area must be explicit and stable");
   assert.match(
     editorSource,

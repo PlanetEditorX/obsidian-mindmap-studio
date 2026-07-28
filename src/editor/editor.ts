@@ -238,7 +238,8 @@ class NodeEditModal extends Modal {
     callbacks: Pick<MindMapEditorCallbacks, "resolveImage" | "onSavePastedImage" | "getImageHosts" | "getDefaultUploadHostIds" | "onUploadImage" | "onReadImageSource">,
     submit: (values: NodeEditValues, mode: "autosave" | "commit") => void,
     private readonly position: "center" | "right" = "center",
-    private readonly panelHost?: HTMLElement
+    private readonly panelHost?: HTMLElement,
+    private readonly initialBlockId?: string
   ) {
     super(app);
     this.node = node;
@@ -290,6 +291,8 @@ class NodeEditModal extends Modal {
       blocksEl.empty();
       workingBlocks.forEach((block, index) => {
         const card = blocksEl.createDiv({ cls: `mmc-content-block is-${block.type}` });
+        card.dataset.blockId = block.id;
+        card.toggleClass("is-targeted", block.id === this.initialBlockId);
         const header = card.createDiv({ cls: "mmc-content-block-header" });
         header.createSpan({ cls: "mmc-content-block-title", text: block.type === "text" ? `文字块 ${index + 1}` : `图片块 ${index + 1}` });
         const controls = header.createDiv({ cls: "mmc-content-block-controls" });
@@ -2781,6 +2784,7 @@ export class MindMapEditor {
       for (const block of blocks) {
         if (block.type === "image") {
           const wrap = content.createDiv({ cls: "mmc-node-image-block" });
+          wrap.dataset.blockId = block.id;
           const image = wrap.createEl("img", { cls: "mmc-node-image is-loading", attr: { alt: block.alt ?? (nodePlainText(node) || "图片") } });
           if (block.width) image.style.width = `${block.width}px`;
           if (block.height) image.style.height = `${block.height}px`;
@@ -2882,6 +2886,7 @@ export class MindMapEditor {
         }
         if (!block.text.trim()) continue;
         const main = content.createDiv({ cls: "mmc-node-main mmc-node-text-block" });
+        main.dataset.blockId = block.id;
         if (!prefixRendered && node.task) {
           const task = main.createSpan({ cls: `mmc-task-icon task-${node.task}`, text: node.task === "done" ? "✓" : node.task === "doing" ? "◐" : "○" });
           task.setAttr("aria-label", node.task === "done" ? "已完成" : node.task === "doing" ? "进行中" : "待办");
@@ -2890,6 +2895,7 @@ export class MindMapEditor {
         const isSubmapTitle = Boolean(node.submap) && !prefixRendered;
         prefixRendered = true;
         const textEl = main.createDiv({ cls: `mmc-node-text${isSubmapTitle ? " is-submap-link" : ""}` });
+        textEl.dataset.blockId = block.id;
         renderRichTextRuns(textEl, block.richText, block.text);
         textEl.style.fontSize = `${node.style?.fontSize ?? appearance.fontSize ?? 14}px`;
         if (isSubmapTitle) {
@@ -3040,7 +3046,13 @@ export class MindMapEditor {
           void this.callbacks.onOpenMindMap(node.submap.path);
         } else if (!this.readOnly) {
           if (this.isNearNodeEdge(event, nodeEl)) this.editSelected();
-          else this.beginInlineEdit(node.id);
+          else {
+            const target = event.target as HTMLElement;
+            const blockId = target.closest<HTMLElement>("[data-block-id]")?.dataset.blockId;
+            const block = blocks.find((item) => item.id === blockId);
+            if (block?.type === "text") this.beginInlineEdit(node.id, block.id);
+            else this.editSelected(blockId);
+          }
         }
       });
       nodeEl.addEventListener("contextmenu", (event) => {
@@ -3337,7 +3349,7 @@ export class MindMapEditor {
   }
 
   /** 在节点本体中启动轻量富文本输入。 */
-  private beginInlineEdit(nodeId: string): void {
+  private beginInlineEdit(nodeId: string, blockId?: string, protectInitialFocus = false): void {
     if (this.readOnly) return;
     const node = findNode(this.document.root, nodeId);
     if (!node) return;
@@ -3353,15 +3365,19 @@ export class MindMapEditor {
     const nodeEl = this.nodesLayerEl.querySelector<HTMLElement>(`.mmc-node[data-node-id="${CSS.escape(nodeId)}"]`);
     const content = nodeEl?.querySelector<HTMLElement>(".mmc-node-content");
     if (!nodeEl || !content) return;
-    let editor = content.querySelector<HTMLElement>(".mmc-node-text");
+    const blocks = nodeContentBlocks(node);
+    const textBlock = blocks.find((block): block is MindMapTextContentBlock => block.type === "text" && (!blockId || block.id === blockId))
+      ?? blocks.find((block): block is MindMapTextContentBlock => block.type === "text");
+    const activeBlockId = textBlock?.id ?? blockId ?? newId();
+    let editor = content.querySelector<HTMLElement>(`.mmc-node-text[data-block-id="${CSS.escape(activeBlockId)}"]`);
     if (!editor) editor = content.createDiv({ cls: "mmc-node-main mmc-node-text-block" }).createDiv({ cls: "mmc-node-text" });
+    editor.dataset.blockId = activeBlockId;
     editor.contentEditable = "true";
     editor.spellcheck = true;
     editor.addClass("is-inline-editing");
     editor.setAttr("role", "textbox");
     editor.setAttr("aria-label", "输入节点文字");
-    const firstText = nodeContentBlocks(node).find((block): block is MindMapTextContentBlock => block.type === "text");
-    renderRichTextRuns(editor, firstText?.richText, firstText?.text ?? nodePlainText(node), false);
+    renderRichTextRuns(editor, textBlock?.richText, textBlock?.text ?? nodePlainText(node), false);
 
     let historyCaptured = false;
     const save = (): void => {
@@ -3371,9 +3387,9 @@ export class MindMapEditor {
         historyCaptured = true;
       }
       const blocks = nodeContentBlocks(node);
-      let block = blocks.find((item): item is MindMapTextContentBlock => item.type === "text");
+      let block = blocks.find((item): item is MindMapTextContentBlock => item.type === "text" && item.id === activeBlockId);
       if (!block) {
-        block = { id: newId(), type: "text", text: "" };
+        block = { id: activeBlockId, type: "text", text: "" };
         blocks.unshift(block);
       }
       block.text = values.text;
@@ -3435,7 +3451,7 @@ export class MindMapEditor {
       }
       save();
       const blocks = nodeContentBlocks(node);
-      const block = blocks.find((item): item is MindMapTextContentBlock => item.type === "text");
+      const block = blocks.find((item): item is MindMapTextContentBlock => item.type === "text" && item.id === activeBlockId);
       if (!block) return;
       const key = Object.keys(patch)[0] as keyof MindMapTextStyle;
       if (key !== "color") {
@@ -3577,10 +3593,15 @@ export class MindMapEditor {
       applyStyle({ [command]: true });
     });
     let editingFinished = false;
+    let initialFocusProtected = protectInitialFocus;
     editor.addEventListener("blur", (event) => {
       const related = event.relatedTarget;
       if (editingFinished || (related instanceof Node && (formatBar.contains(related)
         || document.querySelector(".mms-node-editor-right")?.contains(related)))) return;
+      if (initialFocusProtected) {
+        window.requestAnimationFrame(focusAtEnd);
+        return;
+      }
       editingFinished = true;
       this.inlineEditingId = null;
       window.removeEventListener("keydown", windowShortcut, true);
@@ -3601,9 +3622,12 @@ export class MindMapEditor {
       selection?.addRange(range);
     };
     focusAtEnd();
-    if (this.options.nodeEditorPosition === "right") {
+    if (this.options.nodeEditorPosition === "right" || protectInitialFocus) {
       window.requestAnimationFrame(focusAtEnd);
-      window.setTimeout(focusAtEnd, 50);
+      window.setTimeout(() => {
+        initialFocusProtected = false;
+        focusAtEnd();
+      }, 50);
     }
   }
 
@@ -3618,7 +3642,7 @@ export class MindMapEditor {
       appendChild(selected, node);
       this.selectedId = node.id;
     });
-    window.setTimeout(() => this.beginInlineEdit(node.id), 0);
+    window.requestAnimationFrame(() => this.beginInlineEdit(node.id, undefined, true));
   }
 
   /**
@@ -3638,13 +3662,13 @@ export class MindMapEditor {
       insertSiblingAfter(this.document.root, selected.id, node);
       this.selectedId = node.id;
     });
-    window.setTimeout(() => this.beginInlineEdit(node.id), 0);
+    window.requestAnimationFrame(() => this.beginInlineEdit(node.id, undefined, true));
   }
 
   /**
    * 编辑selected，并保持模型、界面和持久化状态的一致性。
    */
-  private editSelected(): void {
+  private editSelected(initialBlockId?: string): void {
     if (!this.ensureEditable()) return;
     const selected = this.selectedNode();
     if (!selected) return;
@@ -3702,7 +3726,7 @@ export class MindMapEditor {
       } else {
         this.render();
       }
-    }, this.options.nodeEditorPosition, this.viewportEl);
+    }, this.options.nodeEditorPosition, this.viewportEl, initialBlockId);
     modal.open();
     if (this.options.nodeEditorPosition === "right" && this.inlineEditingId === selected.id) {
       modal.releaseKeyboardScope();
