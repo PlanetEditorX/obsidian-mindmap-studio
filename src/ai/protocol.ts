@@ -5,6 +5,7 @@
 
 import type { AiProfileConfig } from "./config";
 import { buildAiUserMessage, type AiMarkdownPayload } from "./markdown";
+import { buildAiEditUserMessage } from "./edit";
 
 /** OpenAI Chat Completions 兼容请求体的最小结构。 */
 export interface AiChatCompletionBody {
@@ -61,6 +62,29 @@ export function buildChatCompletionBody(
     model: profile.model.trim(),
     messages,
     temperature: profile.temperature,
+    max_tokens: profile.maxOutputTokens,
+    stream: false
+  };
+}
+
+
+/** 构建只返回 Markdown 修改提案的 OpenAI Chat Completions 请求体。 */
+export function buildAiEditCompletionBody(
+  profile: AiProfileConfig,
+  payload: AiMarkdownPayload,
+  instruction: string
+): AiChatCompletionBody {
+  const system = [
+    profile.systemPrompt.trim(),
+    "当前任务是生成可由程序解析的思维导图 Markdown 修改提案。只返回 Markdown，不要解释。"
+  ].filter(Boolean).join("\n\n");
+  return {
+    model: profile.model.trim(),
+    messages: [
+      ...(system ? [{ role: "system" as const, content: system }] : []),
+      { role: "user", content: buildAiEditUserMessage(instruction, payload) }
+    ],
+    temperature: Math.min(profile.temperature, 0.4),
     max_tokens: profile.maxOutputTokens,
     stream: false
   };

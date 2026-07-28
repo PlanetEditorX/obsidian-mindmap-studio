@@ -328,7 +328,18 @@ export class MindMapStudioView extends TextFileView {
       defaultProfileId: this.plugin.settings.defaultAiProfileId,
       defaultQuestion: this.plugin.settings.aiDefaultQuestion,
       sourcePath: this.file?.path ?? "",
-      onSubmit: async (profileId, question) => this.plugin.askAi(profileId, payload, question)
+      onAsk: async (profileId, question) => this.plugin.askAi(profileId, payload, question),
+      onProposeEdit: async (profileId, instruction) => this.plugin.proposeAiEdit(profileId, payload, instruction),
+      onPreviewAiEdit: (responseText) => {
+        if (!this.editor) throw new Error("当前导图编辑器尚未加载");
+        return this.editor.previewAiEdit(responseText, nodeId);
+      },
+      onApplyAiEdit: (preview) => this.editor?.applyAiEdit(preview) ?? false,
+      onPreviewLocalReplace: (query, replacement, caseSensitive) => {
+        if (!this.editor) throw new Error("当前导图编辑器尚未加载");
+        return this.editor.previewLocalReplace(query, replacement, caseSensitive, nodeId);
+      },
+      onApplyLocalReplace: (preview) => this.editor?.applyLocalReplace(preview) ?? false
     }).open();
   }
 

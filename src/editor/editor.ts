@@ -84,6 +84,14 @@ import { renderOutlineMode } from "./outline-renderer";
 import { renderArticleMode, renderArticleNodeContent, type ArticleRendererOptions } from "./article-renderer";
 import { appendChild, deleteNodes, insertSiblingAfter, nextTaskStatus, setAllBranchesCollapsed, topLevelSelectedNodeIds } from "./node-actions";
 import { attachSelectionFormatToolbar, type SelectionFormatToolbarHandle } from "./selection-format-toolbar";
+import {
+  applyAiMarkdownEdit,
+  applyLocalTextReplace,
+  previewAiMarkdownEdit,
+  previewLocalTextReplace,
+  type AiEditPreview,
+  type LocalReplacePreview
+} from "../ai/edit";
 export type { MindMapEditorCallbacks, MindMapEditorOptions } from "./editor-types";
 
 /**
@@ -1393,6 +1401,44 @@ export class MindMapEditor {
   getDocument(): MindMapDocument {
     this.persistMindMapViewportState();
     return cloneDocument(this.document);
+  }
+
+  /** 根据当前页面或节点范围生成 AI Markdown 修改预览，不直接修改文档。 */
+  previewAiEdit(responseText: string, scopeNodeId?: string): AiEditPreview {
+    return previewAiMarkdownEdit(this.document, scopeNodeId ?? null, responseText);
+  }
+
+  /** 应用用户确认的 AI 修改预览，并写入撤销历史。 */
+  applyAiEdit(preview: AiEditPreview): boolean {
+    if (!this.ensureExternalEditAllowed()) return false;
+    try {
+      const applied = applyAiMarkdownEdit(this.document, preview);
+      this.replaceDocumentFromExternalEdit(applied.document, applied.focusNodeId);
+      new Notice(`AI 修改已应用：${applied.changedNodeCount} 个节点`);
+      return true;
+    } catch (error) {
+      new Notice(error instanceof Error ? error.message : "AI 修改应用失败");
+      return false;
+    }
+  }
+
+  /** 预览当前页面或节点子树中的本地文字替换，不调用任何 AI 接口。 */
+  previewLocalReplace(query: string, replacement: string, caseSensitive = false, scopeNodeId?: string): LocalReplacePreview {
+    return previewLocalTextReplace(this.document, scopeNodeId ?? null, query, replacement, caseSensitive);
+  }
+
+  /** 应用用户确认的本地文字替换，并写入撤销历史。 */
+  applyLocalReplace(preview: LocalReplacePreview): boolean {
+    if (!this.ensureExternalEditAllowed()) return false;
+    try {
+      const applied = applyLocalTextReplace(this.document, preview);
+      this.replaceDocumentFromExternalEdit(applied.document, applied.focusNodeId);
+      new Notice(`本地替换已完成：影响 ${applied.changedNodeCount} 个节点`);
+      return true;
+    } catch (error) {
+      new Notice(error instanceof Error ? error.message : "本地替换失败");
+      return false;
+    }
   }
 
   /**
@@ -4530,10 +4576,30 @@ export class MindMapEditor {
     window.setTimeout(() => this.fitToView(), 20);
   }
 
+  /** 允许文章和通读模式应用已确认的外部编辑，但尊重用户显式保存的文档只读锁。 */
+  private ensureExternalEditAllowed(): boolean {
+    if (this.document.view?.readOnly !== true) return true;
+    new Notice("当前导图已锁定为只读，请先解除锁定再应用变更");
+    return false;
+  }
+
+  /** 用外部确认的完整文档替换当前状态，并统一接入撤销、保存、渲染和聚焦。 */
+  private replaceDocumentFromExternalEdit(document: MindMapDocument, focusNodeId: string): void {
+    this.history.capture(this.document);
+    this.document = cloneDocument(document);
+    this.selectedId = findNode(this.document.root, focusNodeId)?.id ?? this.document.root.id;
+    this.selectedIds.clear();
+    this.selectedIds.add(this.selectedId);
+    this.callbacks.onChange(this.getDocument());
+    this.markSaving();
+    this.render();
+    window.setTimeout(() => this.focusNodeById(this.selectedId), 20);
+  }
+
   /**
    * 所有用户可撤销写操作的统一入口。调用前克隆当前文档写入撤销栈，执行修改，规范化和重渲染，再通知视图自动保存；只读状态会在更上层阻止进入该流程。
    *
-   * @param action 该参数用于 mutate 流程中的输入或控制。
+   * @param action 需要在当前文档上执行的同步修改。
    * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
    */
   private mutate(action: () => void): void {

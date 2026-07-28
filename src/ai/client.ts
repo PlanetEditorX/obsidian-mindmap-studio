@@ -9,6 +9,7 @@ import type { AiProfileConfig } from "./config";
 import type { AiMarkdownPayload } from "./markdown";
 import {
   buildAiConnectionTestBody,
+  buildAiEditCompletionBody,
   buildChatCompletionBody,
   extractAiResponseText,
   parseAiHeaders,
@@ -77,6 +78,29 @@ export async function requestAiCompletion(
   const json = await requestChatCompletion(profile, buildChatCompletionBody(profile, payload, question));
   const text = extractAiResponseText(json);
   if (!text) throw new Error("AI 接口返回成功，但没有可读取的文本内容");
+  const usage = json.usage && typeof json.usage === "object" ? json.usage as Record<string, unknown> : undefined;
+  return {
+    text,
+    model: typeof json.model === "string" ? json.model : profile.model,
+    usage: usage ? {
+      promptTokens: typeof usage.prompt_tokens === "number" ? usage.prompt_tokens : undefined,
+      completionTokens: typeof usage.completion_tokens === "number" ? usage.completion_tokens : undefined,
+      totalTokens: typeof usage.total_tokens === "number" ? usage.total_tokens : undefined
+    } : undefined
+  };
+}
+
+
+/** 请求 AI 返回可解析的 Markdown 修改提案；不会直接修改导图。 */
+export async function requestAiEditProposal(
+  profile: AiProfileConfig,
+  payload: AiMarkdownPayload,
+  instruction: string
+): Promise<AiCompletionResult> {
+  if (payload.overLimit) throw new Error("Markdown 超过当前允许上传的大小");
+  const json = await requestChatCompletion(profile, buildAiEditCompletionBody(profile, payload, instruction));
+  const text = extractAiResponseText(json);
+  if (!text) throw new Error("AI 接口返回成功，但没有可读取的 Markdown 修改提案");
   const usage = json.usage && typeof json.usage === "object" ? json.usage as Record<string, unknown> : undefined;
   return {
     text,
