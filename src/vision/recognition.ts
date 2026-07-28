@@ -78,6 +78,7 @@ export function normalizeRecognizedText(value: string): string {
     // Some chat models append role/template delimiters and a second answer.
     // Only the text before those delimiters belongs to the recognition result.
     .split(/(?:}<\|assistant\|>|<\|(?:assistant|im_start|box_start|box_end)\|>)/i, 1)[0]
+    .replace(/<\|(?:begin_of_box|end_of_box)\|>/gi, "")
     .replace(/\{\|(?:markdown|text)\|\}/gi, "")
     .replace(/^\s*#{1,6}\s+/gm, "")
     .replace(/^\s*}\s*$/gm, "")

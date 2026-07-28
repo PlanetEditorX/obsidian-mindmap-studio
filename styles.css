@@ -4011,15 +4011,20 @@
   color: var(--text-warning);
 }
 
+.mms-image-recognition-modal {
+  width: min(1440px, 98vw);
+  max-width: 98vw;
+}
+
 .mms-image-recognition-modal .modal-content {
-  width: min(1280px, 96vw);
-  max-width: 96vw;
+  width: 100%;
+  max-width: none;
   overflow-x: hidden;
 }
 
 .mms-image-recognition-compare {
   display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr);
+  grid-template-columns: minmax(620px, 1fr) minmax(420px, 0.9fr);
   gap: 16px;
 }
 
@@ -4037,10 +4042,9 @@
 
 .mms-image-recognition-pane img {
   display: block;
-  width: auto;
-  height: auto;
+  width: 100%;
+  height: 460px;
   max-width: 100%;
-  max-height: min(56vh, 520px);
   margin: 0 auto;
   object-fit: contain;
   border-radius: 6px;
@@ -4067,5 +4071,9 @@
 
   .mms-image-recognition-pane textarea {
     min-height: 220px;
+  }
+
+  .mms-image-recognition-pane img {
+    height: min(56vh, 360px);
   }
 }

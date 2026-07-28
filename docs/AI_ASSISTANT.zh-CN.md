@@ -162,7 +162,7 @@ AI 编辑输出还受以下硬限制保护：
 
 | 预设 | 默认接口地址 | 默认模型或模型建议 |
 |---|---|---|
-| 硅基流动 | `https://api.siliconflow.cn/v1` | `deepseek-ai/DeepSeek-V4-Flash`、`deepseek-ai/DeepSeek-V4-Pro`、`deepseek-ai/DeepSeek-OCR`、`PaddlePaddle/PaddleOCR-VL-1.5`、`zai-org/GLM-5.2` |
+| 硅基流动 | `https://api.siliconflow.cn/v1` | `deepseek-ai/DeepSeek-V4-Flash`、`deepseek-ai/DeepSeek-V4-Pro`、`deepseek-ai/DeepSeek-OCR`、`zai-org/GLM-4.5V`、`zai-org/GLM-5.2` |
 | FreeLLMAPI | 留空，由用户填写部署地址 | `auto` |
 
 模型输入框提供预设建议，但仍允许直接输入服务端支持的其他模型 ID。

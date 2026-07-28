@@ -76,7 +76,7 @@ export const AI_PROVIDER_MODEL_PRESETS: Record<AiProviderKind, readonly string[]
     "deepseek-ai/DeepSeek-V4-Flash",
     "deepseek-ai/DeepSeek-V4-Pro",
     "deepseek-ai/DeepSeek-OCR",
-    "PaddlePaddle/PaddleOCR-VL-1.5",
+    "zai-org/GLM-4.5V",
     "zai-org/GLM-5.2"
   ],
   freellmapi: ["auto"],
