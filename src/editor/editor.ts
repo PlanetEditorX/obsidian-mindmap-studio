@@ -2892,11 +2892,9 @@ export class MindMapEditor {
         const textEl = main.createDiv({ cls: `mmc-node-text${isSubmapTitle ? " is-submap-link" : ""}` });
         renderRichTextRuns(textEl, block.richText, block.text);
         textEl.style.fontSize = `${node.style?.fontSize ?? appearance.fontSize ?? 14}px`;
-        textEl.setAttr("aria-label", isSubmapTitle ? `打开子导图：${block.text}` : block.text);
         if (isSubmapTitle) {
           const indicator = textEl.createSpan({ cls: "mmc-submap-inline-indicator", attr: { "aria-hidden": "true" } });
           setIcon(indicator, "arrow-up-right");
-          textEl.setAttr("title", `打开子导图：${node.submap!.title ?? node.submap!.path}`);
         }
       }
 
@@ -2920,7 +2918,6 @@ export class MindMapEditor {
         nodeEl.setAttr("role", "link");
         nodeEl.setAttr("tabindex", "0");
         nodeEl.setAttr("aria-label", `打开子导图：${node.submap.title ?? node.submap.path}`);
-        nodeEl.setAttr("title", `打开子导图：${node.submap.title ?? node.submap.path}；右键可编辑节点`);
       }
 
       if (node.table) this.renderNodeTable(content, node);

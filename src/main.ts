@@ -446,6 +446,11 @@ export default class MindMapStudioPlugin extends Plugin {
    */
   async loadSettings(): Promise<void> {
     const loaded = await this.loadData() as Partial<MindMapStudioSettings> | null;
+    this.applyLoadedSettings(loaded);
+  }
+
+  /** 规范化已加载或导入的插件配置，并应用到当前会话。 */
+  private applyLoadedSettings(loaded: Partial<MindMapStudioSettings> | null): void {
     const raw = (loaded ?? {}) as Partial<MindMapStudioSettings> & Record<string, unknown>;
     const imageHosts: ImageHostConfig[] = Array.isArray(raw.imageHosts)
       ? raw.imageHosts.slice(0, 20).flatMap((item, index) => {
@@ -621,6 +626,16 @@ export default class MindMapStudioPlugin extends Plugin {
     } as MindMapStudioSettings;
     this.settings.defaultViewMode = resolveStartupDisplayMode(this.settings.defaultViewMode, this.settings.visibleModes);
     this.activeDisplayMode = this.settings.defaultViewMode;
+  }
+
+  /** 导入插件配置，规范化后立即保存并刷新所有已打开视图。 */
+  async importSettings(settings: unknown): Promise<void> {
+    if (!settings || typeof settings !== "object" || Array.isArray(settings)) {
+      throw new Error("配置文件必须是一个 JSON 对象。");
+    }
+    this.applyLoadedSettings(settings as Partial<MindMapStudioSettings>);
+    await this.saveSettings();
+    this.refreshOpenViews();
   }
 
   /**

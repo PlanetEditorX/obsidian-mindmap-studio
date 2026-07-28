@@ -31,6 +31,7 @@ import {
   type AiProfileConfig,
   type AiProviderKind
 } from "./ai/config";
+import { saveDesktopExportFile } from "./utils/desktop-export";
 
 export const TOOLBAR_ITEMS = [
   ["lock", "阅读/编辑模式"], ["add-child", "添加子节点"], ["add-sibling", "添加同级节点"],
@@ -456,6 +457,16 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
       cls: "setting-item-description",
       text: "这里设置全局默认外观。打开脑图后，也可以点击工具栏中的调色板，为当前脑图单独保存一套样式。"
     });
+
+    new Setting(containerEl)
+      .setName("导入 / 导出配置")
+      .setDesc("导出当前插件设置为 JSON 文件；导入会覆盖当前全局设置，导图文件不会受影响。")
+      .addButton((button) => button
+        .setButtonText("导出配置")
+        .onClick(() => void this.exportSettings()))
+      .addButton((button) => button
+        .setButtonText("导入配置")
+        .onClick(() => this.openSettingsImportPicker()));
 
     containerEl.createEl("h3", { text: "主题模板" });
 
@@ -1897,5 +1908,47 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
   private async saveAndRefresh(): Promise<void> {
     await this.plugin.saveSettings();
     this.plugin.refreshOpenViews();
+  }
+
+  /** 导出当前插件设置；桌面端优先显示系统保存位置选择器。 */
+  private async exportSettings(): Promise<void> {
+    const content = JSON.stringify(this.plugin.settings, null, 2);
+    try {
+      const desktopResult = await saveDesktopExportFile("json", "mindmap-studio-settings", content);
+      if (desktopResult) {
+        if (desktopResult.path) new Notice(`已导出配置：${desktopResult.path}`);
+        return;
+      }
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(new Blob([content], { type: "application/json" }));
+      link.download = "mindmap-studio-settings.json";
+      link.click();
+      URL.revokeObjectURL(link.href);
+      new Notice("已导出配置文件。");
+    } catch (error) {
+      new Notice(`导出配置失败：${error instanceof Error ? error.message : "未知错误"}`);
+    }
+  }
+
+  /** 打开 JSON 配置文件选择器，并在成功导入后重新绘制设置页。 */
+  private openSettingsImportPicker(): void {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "application/json,.json";
+    input.addEventListener("change", () => void this.importSettingsFile(input.files?.[0]));
+    input.click();
+  }
+
+  /** 读取并导入用户选中的配置 JSON 文件。 */
+  private async importSettingsFile(file: File | undefined): Promise<void> {
+    if (!file) return;
+    try {
+      const parsed = JSON.parse(await file.text()) as unknown;
+      await this.plugin.importSettings(parsed);
+      new Notice("配置已导入。");
+      this.display();
+    } catch (error) {
+      new Notice(`导入配置失败：${error instanceof Error ? error.message : "请选择有效的 JSON 配置文件"}`);
+    }
   }
 }
