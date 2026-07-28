@@ -6486,9 +6486,29 @@ Electron 运行时中截图功能使用的最小宿主接口。
 interface ElectronCaptureRuntime
 ```
 
+### 接口 `ElectronWindowRuntime`
+
+源码：`src/utils/desktop-capture.ts:30`
+
+Electron 主窗口控制所需的最小运行时接口。
+
+```ts
+interface ElectronWindowRuntime
+```
+
+### 接口 `ElectronWindowHandle`
+
+源码：`src/utils/desktop-capture.ts:36`
+
+截图前临时最小化、截图后恢复所需的主窗口接口。
+
+```ts
+interface ElectronWindowHandle
+```
+
 ### 接口 `NodeCaptureRuntime`
 
-源码：`src/utils/desktop-capture.ts:29`
+源码：`src/utils/desktop-capture.ts:46`
 
 桌面截图命令使用的最小 Node.js 运行时接口。
 
@@ -6498,7 +6518,7 @@ interface NodeCaptureRuntime
 
 ### 函数 `screenshotCommandCandidates`
 
-源码：`src/utils/desktop-capture.ts:45`
+源码：`src/utils/desktop-capture.ts:62`
 
 返回当前桌面平台对应的截图命令候选，按优先级依次尝试。
 
@@ -6508,7 +6528,7 @@ export function screenshotCommandCandidates(platform: string): Array<
 
 ### 函数 `copyBytesToArrayBuffer`
 
-源码：`src/utils/desktop-capture.ts:59`
+源码：`src/utils/desktop-capture.ts:76`
 
 将任意 Uint8Array 复制为 Blob 接受的普通 ArrayBuffer，兼容 SharedArrayBuffer 类型声明。
 
@@ -6518,7 +6538,7 @@ export function copyBytesToArrayBuffer(bytes: Uint8Array): ArrayBuffer
 
 ### 函数 `pngFingerprint`
 
-源码：`src/utils/desktop-capture.ts:66`
+源码：`src/utils/desktop-capture.ts:83`
 
 将剪贴板 PNG 二进制转换为稳定摘要，用于检测截图是否产生了新图片。
 
@@ -6528,7 +6548,7 @@ export function pngFingerprint(bytes: Uint8Array): string
 
 ### 函数 `getElectronRuntime`
 
-源码：`src/utils/desktop-capture.ts:78`
+源码：`src/utils/desktop-capture.ts:95`
 
 从 Obsidian 桌面端窗口获取 Electron API；移动端或受限环境返回 null。
 
@@ -6536,9 +6556,29 @@ export function pngFingerprint(bytes: Uint8Array): string
 function getElectronRuntime(): ElectronCaptureRuntime | null
 ```
 
+### 函数 `getCurrentObsidianWindow`
+
+源码：`src/utils/desktop-capture.ts:116`
+
+从 Electron 的新旧渲染器接口中取得当前 Obsidian 主窗口。
+
+```ts
+function getCurrentObsidianWindow(runtime: ElectronCaptureRuntime): ElectronWindowHandle | null
+```
+
+### 函数 `waitForWindowMinimized`
+
+源码：`src/utils/desktop-capture.ts:124`
+
+等待窗口完成最小化，避免截图工具启动时仍捕获到 Obsidian 窗口。
+
+```ts
+async function waitForWindowMinimized(windowHandle: ElectronWindowHandle): Promise<void>
+```
+
 ### 函数 `getNodeCaptureRuntime`
 
-源码：`src/utils/desktop-capture.ts:91`
+源码：`src/utils/desktop-capture.ts:132`
 
 从 Obsidian 桌面端按需获取 Node.js API，避免移动端加载插件时静态引用 Node 模块。
 
@@ -6548,7 +6588,7 @@ function getNodeCaptureRuntime(): NodeCaptureRuntime | null
 
 ### 函数 `waitForClipboardImage`
 
-源码：`src/utils/desktop-capture.ts:105`
+源码：`src/utils/desktop-capture.ts:146`
 
 等待系统截图工具把一张新图片写入剪贴板。
 
@@ -6558,7 +6598,7 @@ async function waitForClipboardImage(runtime: ElectronCaptureRuntime, previousFi
 
 ### 函数 `executeCaptureCommand`
 
-源码：`src/utils/desktop-capture.ts:117`
+源码：`src/utils/desktop-capture.ts:158`
 
 使用 execFile 执行一个截图候选命令。
 
@@ -6568,7 +6608,7 @@ function executeCaptureCommand(runtime: NodeCaptureRuntime, command: string, arg
 
 ### 函数 `runScreenshotCommand`
 
-源码：`src/utils/desktop-capture.ts:127`
+源码：`src/utils/desktop-capture.ts:168`
 
 执行系统截图命令；交互式命令失败时继续尝试下一个候选。
 
@@ -6578,7 +6618,7 @@ async function runScreenshotCommand( runtime: NodeCaptureRuntime, candidates: Ar
 
 ### 函数 `captureDesktopScreenshot`
 
-源码：`src/utils/desktop-capture.ts:149`
+源码：`src/utils/desktop-capture.ts:190`
 
 启动交互式区域截图，可选先最小化 Obsidian，完成后恢复窗口并返回剪贴板 PNG。
 
@@ -7436,7 +7476,7 @@ export function applyImageTextReplacement(document: MindMapDocument, preview: Im
 
 ### 函数 `applyImageTextReplacements`
 
-源码：`src/vision/recognition.ts:158`
+源码：`src/vision/recognition.ts:165`
 
 批量应用已经确认的图片转文字预览；任一快照过期时不会向编辑器写入部分变更。
 

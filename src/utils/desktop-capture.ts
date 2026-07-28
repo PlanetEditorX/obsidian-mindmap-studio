@@ -23,6 +23,23 @@ interface ElectronCaptureRuntime {
       isDestroyed: () => boolean;
     } | null;
   };
+  remote?: ElectronWindowRuntime;
+}
+
+/** Electron 主窗口控制所需的最小运行时接口。 */
+interface ElectronWindowRuntime {
+  getCurrentWindow?: () => ElectronWindowHandle | null;
+  BrowserWindow?: ElectronCaptureRuntime["BrowserWindow"];
+}
+
+/** 截图前临时最小化、截图后恢复所需的主窗口接口。 */
+interface ElectronWindowHandle {
+  minimize: () => void;
+  restore: () => void;
+  show: () => void;
+  focus: () => void;
+  isDestroyed: () => boolean;
+  isMinimized?: () => boolean;
 }
 
 /** 桌面截图命令使用的最小 Node.js 运行时接口。 */
@@ -81,9 +98,33 @@ function getElectronRuntime(): ElectronCaptureRuntime | null {
     : undefined;
   if (!requireFunction) return null;
   try {
-    return requireFunction("electron") as ElectronCaptureRuntime;
+    const electron = requireFunction("electron") as ElectronCaptureRuntime;
+    if (!electron.remote) {
+      try {
+        electron.remote = requireFunction("@electron/remote") as ElectronWindowRuntime;
+      } catch {
+        // Newer desktop runtimes may intentionally omit @electron/remote.
+      }
+    }
+    return electron;
   } catch {
     return null;
+  }
+}
+
+/** 从 Electron 的新旧渲染器接口中取得当前 Obsidian 主窗口。 */
+function getCurrentObsidianWindow(runtime: ElectronCaptureRuntime): ElectronWindowHandle | null {
+  return runtime.BrowserWindow?.getFocusedWindow?.()
+    ?? runtime.remote?.getCurrentWindow?.()
+    ?? runtime.remote?.BrowserWindow?.getFocusedWindow?.()
+    ?? null;
+}
+
+/** 等待窗口完成最小化，避免截图工具启动时仍捕获到 Obsidian 窗口。 */
+async function waitForWindowMinimized(windowHandle: ElectronWindowHandle): Promise<void> {
+  const started = Date.now();
+  while (!windowHandle.isDestroyed() && !windowHandle.isMinimized?.() && Date.now() - started < 1_000) {
+    await new Promise((resolve) => setTimeout(resolve, 40));
   }
 }
 
@@ -153,11 +194,13 @@ export async function captureDesktopScreenshot(hideObsidian: boolean): Promise<D
   const beforeImage = electronRuntime.clipboard.readImage();
   const beforeBytes = beforeImage.isEmpty() ? new Uint8Array() : beforeImage.toPNG();
   const beforeFingerprint = pngFingerprint(beforeBytes);
-  // BrowserWindow is not exposed by every Obsidian renderer runtime.
-  const windowHandle = electronRuntime.BrowserWindow?.getFocusedWindow?.() ?? null;
+  const windowHandle = getCurrentObsidianWindow(electronRuntime);
   try {
-    if (hideObsidian && windowHandle && !windowHandle.isDestroyed()) windowHandle.minimize();
-    await new Promise((resolve) => setTimeout(resolve, hideObsidian ? 250 : 50));
+    if (hideObsidian && windowHandle && !windowHandle.isDestroyed()) {
+      windowHandle.minimize();
+      await waitForWindowMinimized(windowHandle);
+    }
+    await new Promise((resolve) => setTimeout(resolve, hideObsidian ? 350 : 50));
     await runScreenshotCommand(nodeRuntime, screenshotCommandCandidates(nodeRuntime.platform));
     const bytes = await waitForClipboardImage(electronRuntime, beforeFingerprint);
     return {
