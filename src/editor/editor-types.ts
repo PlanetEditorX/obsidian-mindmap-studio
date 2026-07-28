@@ -40,6 +40,7 @@ export interface MindMapEditorCallbacks {
   onScheduleAutoUpload: (nodeId: string, blockId: string, localPath: string, suggestedName: string) => boolean;
   onDeleteRecognizedImageLocalAsset: (localPath: string, blockId: string) => Promise<boolean>;
   onRecognizeImage: (image: RecognizableImage, blob: Blob, remoteUrl?: string, instruction?: string) => Promise<ImageRecognitionItemResult>;
+  onEnrichQuestion: (questionText: string) => Promise<string>;
   onCaptureScreenshot: () => Promise<DesktopCaptureResult>;
   onCreateSubmap: (node: MindMapNode) => Promise<MindMapSubmap>;
   onDeleteSubmap: (submap: MindMapSubmap) => Promise<boolean>;

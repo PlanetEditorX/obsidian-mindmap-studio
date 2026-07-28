@@ -3764,6 +3764,7 @@ export class MindMapEditor {
     if (!this.ensureEditable() || !node) return;
     const initialQuestion = node.question ?? { ...createMindMapQuestion(), stem: nodeContentBlocks(node) };
     new QuestionEditModal(this.app, initialQuestion, node.id, {
+      onEnrichQuestion: this.callbacks.onEnrichQuestion,
       onReadImageSource: this.callbacks.onReadImageSource,
       onRecognizeImage: this.callbacks.onRecognizeImage
     }, (question) => {
