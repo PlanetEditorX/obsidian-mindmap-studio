@@ -6350,7 +6350,7 @@ display(): void
 
 ### 方法 `MindMapStudioSettingTab.organizeSettingsSections`
 
-源码：`src/settings.ts:1834`
+源码：`src/settings.ts:1836`
 
 将一级设置分区折叠显示，并按顶部搜索词过滤匹配分区。
 
@@ -6360,7 +6360,7 @@ private organizeSettingsSections(): void
 
 ### 方法 `MindMapStudioSettingTab.addOptionalColorSetting`
 
-源码：`src/settings.ts:1876`
+源码：`src/settings.ts:1878`
 
 添加optional color setting，并保持模型、界面和持久化状态的一致性。
 
@@ -6370,7 +6370,7 @@ private addOptionalColorSetting( container: HTMLElement, name: string, descripti
 
 ### 方法 `MindMapStudioSettingTab.saveAndRefresh`
 
-源码：`src/settings.ts:1908`
+源码：`src/settings.ts:1910`
 
 保存and refresh，并保持模型、界面和持久化状态的一致性。
 
@@ -6380,7 +6380,7 @@ private async saveAndRefresh(): Promise<void>
 
 ### 方法 `MindMapStudioSettingTab.exportSettings`
 
-源码：`src/settings.ts:1914`
+源码：`src/settings.ts:1916`
 
 导出当前插件设置；桌面端优先显示系统保存位置选择器。
 
@@ -6390,7 +6390,7 @@ private async exportSettings(): Promise<void>
 
 ### 方法 `MindMapStudioSettingTab.openSettingsImportPicker`
 
-源码：`src/settings.ts:1934`
+源码：`src/settings.ts:1936`
 
 打开 JSON 配置文件选择器，并在成功导入后重新绘制设置页。
 
@@ -6400,7 +6400,7 @@ private openSettingsImportPicker(): void
 
 ### 方法 `MindMapStudioSettingTab.importSettingsFile`
 
-源码：`src/settings.ts:1943`
+源码：`src/settings.ts:1945`
 
 读取并导入用户选中的配置 JSON 文件。
 
