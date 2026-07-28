@@ -179,8 +179,10 @@ export interface MindMapStudioSettings {
   defaultTextUnderline: boolean;
   defaultCodeCollapsed: boolean;
   defaultCodeShowLineNumbers: boolean;
-  /** Keeps inherited single-line code expanded and without a line-number gutter. */
-  singleLineCodeSimplified: boolean;
+  /** Inherited code with no more than this many lines stays expanded; 0 disables the rule. */
+  codeAutoExpandMaxLines: number;
+  /** Inherited code with more than this many lines shows line numbers; 0 disables the rule. */
+  codeAutoLineNumbersMinLines: number;
   defaultCodeTheme: "obsidian" | "github" | "monokai" | "dracula";
   imageHosts: ImageHostConfig[];
   autoUploadEnabled: boolean;
@@ -295,7 +297,8 @@ export const DEFAULT_SETTINGS: MindMapStudioSettings = {
   defaultTextUnderline: false,
   defaultCodeCollapsed: false,
   defaultCodeShowLineNumbers: false,
-  singleLineCodeSimplified: true,
+  codeAutoExpandMaxLines: 1,
+  codeAutoLineNumbersMinLines: 8,
   defaultCodeTheme: "obsidian",
   imageHosts: [],
   autoUploadEnabled: false,
@@ -550,13 +553,27 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
         this.plugin.settings.defaultCodeShowLineNumbers = value;
         await this.saveAndRefresh();
       }));
+    const parseCodeLineThreshold = (value: string): number => Math.max(0, Math.min(1000, Math.floor(Number(value) || 0)));
     new Setting(containerEl)
-      .setName("单行代码保持展开且隐藏行号")
-      .setDesc("开启后，单行代码忽略页面和全局的折叠、行号设置；节点代码明确设置时仍可覆盖。")
-      .addToggle((toggle) => toggle.setValue(this.plugin.settings.singleLineCodeSimplified).onChange(async (value) => {
-        this.plugin.settings.singleLineCodeSimplified = value;
-        await this.saveAndRefresh();
-      }));
+      .setName("不超过多少行时保持展开")
+      .setDesc("仅影响没有节点代码设置的代码块；填 0 关闭自动展开。")
+      .addText((text) => text
+        .setPlaceholder("1")
+        .setValue(String(this.plugin.settings.codeAutoExpandMaxLines))
+        .onChange(async (value) => {
+          this.plugin.settings.codeAutoExpandMaxLines = parseCodeLineThreshold(value);
+          await this.saveAndRefresh();
+        }));
+    new Setting(containerEl)
+      .setName("超过多少行时显示行号")
+      .setDesc("仅影响没有节点代码设置的代码块；填 0 关闭自动行号。")
+      .addText((text) => text
+        .setPlaceholder("8")
+        .setValue(String(this.plugin.settings.codeAutoLineNumbersMinLines))
+        .onChange(async (value) => {
+          this.plugin.settings.codeAutoLineNumbersMinLines = parseCodeLineThreshold(value);
+          await this.saveAndRefresh();
+        }));
     new Setting(containerEl)
       .setName("代码默认样式")
       .setDesc("优先级最低；页面或节点代码设置可覆盖。")
