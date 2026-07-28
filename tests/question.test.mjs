@@ -82,6 +82,21 @@ test("question normalization keeps only verifiable original-question sources", (
   assert.equal(invalid.root.question.source, undefined);
 });
 
+test("legacy tables and code migrate into movable node content blocks", () => {
+  const document = model.normalizeDocument({
+    root: {
+      text: "Mixed content",
+      content: [{ id: "text", type: "text", text: "Before" }],
+      table: { headers: ["A"], rows: [["1"]] },
+      code: { language: "bash", code: "echo hello" },
+      children: []
+    }
+  });
+  assert.deepEqual(document.root.content.map((block) => block.type), ["text", "table", "code"]);
+  assert.equal(document.root.table.headers[0], "A");
+  assert.equal(document.root.code.language, "bash");
+});
+
 test("question-bank grading distinguishes single choice, multiple choice and normalized essay answers", () => {
   const choice = model.normalizeDocument({
     root: {
@@ -123,6 +138,8 @@ test("question assistant keeps an intelligent image-to-question pipeline and vis
   assert.match(contentModalSource, /CODE_LANGUAGE_OPTIONS/);
   assert.match(contentModalSource, /自定义语言/);
   assert.match(contentModalSource, /\|\| "bash"/);
+  assert.match(editorSource, /\+ 表格/);
+  assert.match(editorSource, /\+ 代码/);
   assert.match(practiceSource, /查看答案与解析/);
   assert.match(practiceSource, /下一题/);
   assert.match(practiceSource, /错题本/);

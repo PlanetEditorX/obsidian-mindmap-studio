@@ -241,33 +241,33 @@ function replaceTextInScope(
     let nodeChanged = false;
     const blocks = nodeContentBlocks(node);
     for (const block of blocks) {
-      if (block.type !== "text") continue;
-      const result = replaceLiteral(block.text, query, replacement, caseSensitive);
-      if (!result.count) continue;
-      block.richText = reconcileRichTextAfterEdit(block.text, block.richText, result.value);
-      block.text = result.value;
-      matchCount += result.count;
-      nodeChanged = true;
+      if (block.type === "text") {
+        const result = replaceLiteral(block.text, query, replacement, caseSensitive);
+        if (!result.count) continue;
+        block.richText = reconcileRichTextAfterEdit(block.text, block.richText, result.value);
+        block.text = result.value;
+        matchCount += result.count;
+        nodeChanged = true;
+      } else if (block.type === "table") {
+        block.table.headers = block.table.headers.map((value) => {
+          const result = replaceLiteral(value, query, replacement, caseSensitive);
+          matchCount += result.count;
+          nodeChanged ||= result.count > 0;
+          return result.value;
+        });
+        block.table.rows = block.table.rows.map((row) => row.map((value) => {
+          const result = replaceLiteral(value, query, replacement, caseSensitive);
+          matchCount += result.count;
+          nodeChanged ||= result.count > 0;
+          return result.value;
+        }));
+      }
     }
     if (node.note) {
       const result = replaceLiteral(node.note, query, replacement, caseSensitive);
       node.note = result.value;
       matchCount += result.count;
       nodeChanged ||= result.count > 0;
-    }
-    if (node.table) {
-      node.table.headers = node.table.headers.map((value) => {
-        const result = replaceLiteral(value, query, replacement, caseSensitive);
-        matchCount += result.count;
-        nodeChanged ||= result.count > 0;
-        return result.value;
-      });
-      node.table.rows = node.table.rows.map((row) => row.map((value) => {
-        const result = replaceLiteral(value, query, replacement, caseSensitive);
-        matchCount += result.count;
-        nodeChanged ||= result.count > 0;
-        return result.value;
-      }));
     }
     if (nodeChanged) {
       node.content = blocks;
