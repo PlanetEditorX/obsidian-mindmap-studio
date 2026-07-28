@@ -4355,6 +4355,24 @@
   min-height: 38px;
 }
 
+.mms-question-practice-result {
+  margin: 22px 0 14px;
+  padding: 10px 12px;
+  border-left: 3px solid var(--text-muted);
+  background: var(--background-secondary);
+  font-weight: 700;
+}
+
+.mms-question-practice-result.is-correct {
+  color: var(--color-green);
+  border-left-color: var(--color-green);
+}
+
+.mms-question-practice-result.is-wrong {
+  color: var(--color-red);
+  border-left-color: var(--color-red);
+}
+
 .mms-question-practice-empty {
   padding: 64px 16px;
   color: var(--text-muted);

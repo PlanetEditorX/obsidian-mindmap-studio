@@ -4668,7 +4668,7 @@ export interface QuestionPracticeState
 
 ### 接口 `QuestionPracticeOptions`
 
-源码：`src/editor/question-practice-mode.ts:20`
+源码：`src/editor/question-practice-mode.ts:22`
 
 Dependencies required to render and persist one question-bank practice session.
 
@@ -4678,7 +4678,7 @@ export interface QuestionPracticeOptions
 
 ### 函数 `createQuestionPracticeState`
 
-源码：`src/editor/question-practice-mode.ts:29`
+源码：`src/editor/question-practice-mode.ts:31`
 
 Creates an empty practice state for an editor instance.
 
@@ -4688,7 +4688,7 @@ export function createQuestionPracticeState(): QuestionPracticeState
 
 ### 函数 `renderQuestionPracticeMode`
 
-源码：`src/editor/question-practice-mode.ts:34`
+源码：`src/editor/question-practice-mode.ts:36`
 
 Renders a full-page, sequential question practice surface.
 
@@ -4698,7 +4698,7 @@ export function renderQuestionPracticeMode(container: HTMLElement, options: Ques
 
 ### 函数 `selectedAnswerLabels`
 
-源码：`src/editor/question-practice-mode.ts:106`
+源码：`src/editor/question-practice-mode.ts:137`
 
 Extracts option labels from the stored answer to determine whether a question is multiple-choice.
 
@@ -4708,7 +4708,7 @@ function selectedAnswerLabels(node: MindMapNode): string[]
 
 ### 函数 `isQuestionChoiceCorrect`
 
-源码：`src/editor/question-practice-mode.ts:113`
+源码：`src/editor/question-practice-mode.ts:144`
 
 Checks selected option IDs against the labels encoded in the structured answer.
 
@@ -4718,7 +4718,7 @@ export function isQuestionChoiceCorrect(node: MindMapNode, selectedIds: readonly
 
 ### 函数 `renderBlocks`
 
-源码：`src/editor/question-practice-mode.ts:120`
+源码：`src/editor/question-practice-mode.ts:151`
 
 Renders text and image blocks in their original order.
 
@@ -4728,7 +4728,7 @@ function renderBlocks(container: HTMLElement, blocks: readonly MindMapContentBlo
 
 ### 函数 `blockText`
 
-源码：`src/editor/question-practice-mode.ts:131`
+源码：`src/editor/question-practice-mode.ts:162`
 
 Joins text blocks into the stored reference answer.
 
@@ -4738,7 +4738,7 @@ function blockText(blocks: readonly MindMapContentBlock[]): string
 
 ### 函数 `isExactQuestionAnswer`
 
-源码：`src/editor/question-practice-mode.ts:136`
+源码：`src/editor/question-practice-mode.ts:167`
 
 Normalizes free-text answers for deterministic long-question comparison.
 
@@ -4748,7 +4748,7 @@ export function isExactQuestionAnswer(value: string, reference: string): boolean
 
 ### 函数 `normalizeAnswer`
 
-源码：`src/editor/question-practice-mode.ts:141`
+源码：`src/editor/question-practice-mode.ts:172`
 
 Normalizes free-text answers before deterministic long-question comparison.
 
@@ -6718,7 +6718,7 @@ display(): void
 
 ### 方法 `MindMapStudioSettingTab.organizeSettingsSections`
 
-源码：`src/settings.ts:1865`
+源码：`src/settings.ts:1867`
 
 将一级设置分区折叠显示，并按顶部搜索词过滤匹配分区。
 
@@ -6728,7 +6728,7 @@ private organizeSettingsSections(): void
 
 ### 方法 `MindMapStudioSettingTab.addOptionalColorSetting`
 
-源码：`src/settings.ts:1919`
+源码：`src/settings.ts:1921`
 
 添加optional color setting，并保持模型、界面和持久化状态的一致性。
 
@@ -6738,7 +6738,7 @@ private addOptionalColorSetting( container: HTMLElement, name: string, descripti
 
 ### 方法 `MindMapStudioSettingTab.saveAndRefresh`
 
-源码：`src/settings.ts:1951`
+源码：`src/settings.ts:1953`
 
 保存and refresh，并保持模型、界面和持久化状态的一致性。
 
@@ -6748,7 +6748,7 @@ private async saveAndRefresh(): Promise<void>
 
 ### 方法 `MindMapStudioSettingTab.captureScreenshotShortcut`
 
-源码：`src/settings.ts:1957`
+源码：`src/settings.ts:1959`
 
 记录截图快捷键；修饰键必须与一个非修饰主键同时按下。
 
@@ -6758,7 +6758,7 @@ private async captureScreenshotShortcut(event: KeyboardEvent, text: TextComponen
 
 ### 方法 `MindMapStudioSettingTab.shortcutFromKeyboardEvent`
 
-源码：`src/settings.ts:1975`
+源码：`src/settings.ts:1977`
 
 将实际键盘事件转换为编辑器可识别的 1 至 3 键快捷键文本。
 
@@ -6768,7 +6768,7 @@ private shortcutFromKeyboardEvent(event: KeyboardEvent): string | null
 
 ### 方法 `MindMapStudioSettingTab.exportSettings`
 
-源码：`src/settings.ts:1991`
+源码：`src/settings.ts:1993`
 
 导出当前插件设置；桌面端优先显示系统保存位置选择器。
 
@@ -6778,7 +6778,7 @@ private async exportSettings(): Promise<void>
 
 ### 方法 `MindMapStudioSettingTab.openSettingsImportPicker`
 
-源码：`src/settings.ts:2011`
+源码：`src/settings.ts:2013`
 
 打开 JSON 配置文件选择器，并在成功导入后重新绘制设置页。
 
@@ -6788,7 +6788,7 @@ private openSettingsImportPicker(): void
 
 ### 方法 `MindMapStudioSettingTab.importSettingsFile`
 
-源码：`src/settings.ts:2020`
+源码：`src/settings.ts:2022`
 
 读取并导入用户选中的配置 JSON 文件。
 
