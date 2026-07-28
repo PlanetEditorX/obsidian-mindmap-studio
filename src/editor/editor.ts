@@ -1118,7 +1118,9 @@ export class MindMapEditor {
       this.editControls.splice(0);
       this.buildUi();
     }
-    if (this.inlineEditingId && !modesChanged && !toolbarChanged && !globalModeChanged && !locationContextChanged) return;
+    // Article-context refreshes can update reading locations while a node is being typed.
+    // Keep the live contenteditable DOM intact unless the visible mode or toolbar actually changes.
+    if (this.inlineEditingId && !modesChanged && !toolbarChanged && !globalModeChanged) return;
     this.render();
     const restored = modeChanged || locationContextChanged
       ? this.restoreReadingLocation(this.currentMode, this.lastReadingLocation)
