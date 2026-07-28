@@ -157,7 +157,7 @@ export default class MindMapStudioPlugin extends Plugin {
     this.addCommand({
       id: "capture-mind-map-screenshot",
       name: "截图并插入当前节点或复制到剪贴板",
-      hotkeys: [{ modifiers: [], key: "F1" }],
+      hotkeys: [{ modifiers: ["Mod", "Shift"], key: "S" }],
       checkCallback: (checking) => {
         const view = this.app.workspace.activeLeaf?.view;
         const available = view instanceof MindMapStudioView;
