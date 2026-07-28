@@ -37,9 +37,10 @@ export function parseRecognizedQuestion(value: string, fallback: MindMapQuestion
       const option = item as Record<string, unknown>;
       return [{ id: newId(), label: typeof option.label === "string" ? option.label : String.fromCharCode(65 + index), content: textBlocks(option.content ?? option.text) }];
     }) : [];
+    const preservedImages = fallback.stem.filter((block): block is MindMapImageContentBlock => block.type === "image");
     return {
       mode,
-      stem: textBlocks(parsed.stem ?? parsed.question),
+      stem: [...textBlocks(parsed.stem ?? parsed.question), ...preservedImages],
       options,
       answer: textBlocks(parsed.answer),
       explanation: textBlocks(parsed.explanation ?? parsed.analysis),
@@ -62,7 +63,8 @@ export function parseQuestionEnrichment(value: string, fallback: MindMapQuestion
     const question = parseRecognizedQuestion(source, fallback) ?? fallback;
     const sourceUrl = typeof parsed.sourceUrl === "string" ? parsed.sourceUrl.trim() : "";
     const sourceTitle = typeof parsed.sourceTitle === "string" ? parsed.sourceTitle.trim() : "";
-    if (!found || !/^https?:\/\//i.test(sourceUrl) || !sourceTitle) return { found: false, question: fallback };
+    if (!found) return { found: false, question: { ...question, source: undefined } };
+    if (!/^https?:\/\//i.test(sourceUrl) || !sourceTitle) return { found: false, question: { ...question, source: undefined } };
     return {
       found: true,
       question: {
@@ -133,9 +135,7 @@ export class QuestionEditModal extends Modal {
       source.setAttr("rel", "noopener noreferrer");
     }
     const actions = this.contentEl.createDiv({ cls: "modal-button-container" });
-    const recognize = actions.createEl("button", { text: "AI 识图填充题目", attr: { type: "button" } });
-    recognize.onclick = () => void this.recognizeQuestion();
-    const enrich = actions.createEl("button", { text: "AI 转题并检索原题", attr: { type: "button" } });
+    const enrich = actions.createEl("button", { text: "AI 智能处理题目", attr: { type: "button" } });
     enrich.onclick = () => void this.convertAndEnrichQuestion();
     const save = actions.createEl("button", { text: "保存", cls: "mod-cta", attr: { type: "button" } });
     save.onclick = () => { this.onSubmit(this.draft); this.close(); };
@@ -183,7 +183,7 @@ export class QuestionEditModal extends Modal {
     }
   }
 
-  /** Converts current text or image into a question, then fills verified answers from an original-question lookup. */
+  /** Converts current text or image into a question, then looks up an original or generates missing analysis. */
   private async convertAndEnrichQuestion(): Promise<void> {
     const hasImage = [this.draft.stem, ...this.draft.options.map((option) => option.content), this.draft.answer, this.draft.explanation]
       .flat().some((block) => block.type === "image");
@@ -199,7 +199,7 @@ export class QuestionEditModal extends Modal {
       if (!result) { new Notice("AI 未返回可解析的检索结果"); return; }
       this.draft = result.question;
       this.render();
-      new Notice(result.found ? "已找到原题并补齐答案与解析，请核对后保存" : "已转换为题目节点；未找到可验证原题，未填充答案与解析");
+      new Notice(result.found ? "已找到原题并补齐答案与解析，请核对后保存" : "未找到可验证原题，已由 AI 分析补齐缺失答案与解答，请核对后保存");
     } catch (error) {
       new Notice(`原题检索失败：${error instanceof Error ? error.message : String(error)}`);
     }
