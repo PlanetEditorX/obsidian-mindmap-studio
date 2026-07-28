@@ -15,6 +15,8 @@ import type {
 import type { ArticlePageNavigation, ArticleTocEntry, ReadingSection } from "../article/modes";
 import type { ReadingLocation } from "../article/reading-location";
 import type { ArticleLeafBulletStyle, ImageHostChoice, ImageHostUploadBatch } from "../settings";
+import type { DesktopCaptureResult } from "../utils/desktop-capture";
+import type { ImageRecognitionItemResult, RecognizableImage } from "../vision/recognition";
 
 /**
  * Host services consumed by the editor.
@@ -36,6 +38,8 @@ export interface MindMapEditorCallbacks {
   onUploadImage: (blob: Blob, suggestedName: string, hostIds: string[]) => Promise<ImageHostUploadBatch>;
   onReadImageSource: (source: string) => Promise<{ blob: Blob; suggestedName: string } | null>;
   onScheduleAutoUpload: (nodeId: string, blockId: string, localPath: string, suggestedName: string) => boolean;
+  onRecognizeImage: (image: RecognizableImage, blob: Blob) => Promise<ImageRecognitionItemResult>;
+  onCaptureScreenshot: () => Promise<DesktopCaptureResult>;
   onCreateSubmap: (node: MindMapNode) => Promise<MindMapSubmap>;
   onDeleteSubmap: (submap: MindMapSubmap) => Promise<boolean>;
   onExtractToSubmap: (node: MindMapNode) => Promise<MindMapSubmap>;
@@ -95,4 +99,6 @@ export interface MindMapEditorOptions {
   };
   visibleToolbarItems: string[];
   toolbarItemOrder: string[];
+  imageRecognitionMode: "ai" | "local-ocr";
+  screenshotAutoRecognize: boolean;
 }

@@ -40,7 +40,7 @@ npm run verify
 
 ### 插件服务层
 
-`src/main.ts` 负责 Obsidian 生命周期、文件系统、跨文件子导图、图床网络请求、搜索索引和设置持久化。编辑器通过回调契约请求这些能力，不直接访问仓库服务。
+`src/main.ts` 负责 Obsidian 生命周期、文件系统、跨文件子导图、图床与 AI 网络请求、桌面截图/本地 OCR 宿主调用、搜索索引和设置持久化。编辑器通过回调契约请求这些能力，不直接访问仓库服务。
 
 ### 纯工具层
 
@@ -97,6 +97,7 @@ npm run test:docs
 - 文件保存问题同时检查 `parseDocument()`、`normalizeDocument()`、`serializeDocument()` 和视图 `getViewData()`。
 - 文章编号问题确保目录、正文、通读和导出共用同一解析函数。
 - 图床问题分别验证端点、Header、请求体、响应载荷和 URL 提取。
+- 识图问题分别验证图片读取、AI/本地 OCR 模式、不可变预览和并发快照；桌面 API 必须按需动态加载，不能让移动端在插件启动时解析 `node:*` 或 `electron`。
 - 子导图问题同时检查父节点 `submap` 与子文档 `navigation`。
 
 ## 发布前检查

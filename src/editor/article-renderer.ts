@@ -42,6 +42,7 @@ export interface ArticleRendererOptions {
   callbacks: Pick<MindMapEditorCallbacks, "resolveImage" | "onRenderCode" | "onOpenMindMap" | "onOpenArticleDirectory">;
   selectNode: (id: string) => void;
   openAiContextMenu: (event: MouseEvent, nodeId: string) => void;
+  openImageContextMenu: (event: MouseEvent, nodeId: string, blockId: string) => void;
   makeInlineEditable: (element: HTMLElement, node: MindMapNode, placeholder: string) => void;
   addInlineNodeActions: (container: HTMLElement, node: MindMapNode) => void;
 }
@@ -92,6 +93,7 @@ export function renderArticleMode(container: HTMLElement, options: ArticleRender
       const firstTextBlock = nodeContentBlocks(info.node).find((block): block is MindMapTextContentBlock => block.type === "text");
       if (firstTextBlock?.text.trim()) {
         const paragraph = section.createEl("p", { cls: `mms-article-leaf-text${options.articleLeafBulletsEnabled ? " is-bulleted" : ""}` });
+        paragraph.dataset.blockId = firstTextBlock.id;
         applyArticleLeafBulletStyle(paragraph, options);
         renderRichTextRuns(paragraph, firstTextBlock.richText, firstTextBlock.text);
         options.makeInlineEditable(paragraph, info.node, "正文段落");
@@ -163,11 +165,13 @@ export function renderArticleNodeContent(container: HTMLElement, node: MindMapNo
       if (!treatTextAsBody && !firstTextHandled) { firstTextHandled = true; continue; }
       firstTextHandled = true;
       const paragraph = container.createEl("p", { cls: "mms-article-paragraph" });
+      paragraph.dataset.blockId = block.id;
       renderRichTextRuns(paragraph, block.richText, block.text);
       if (treatTextAsBody) options.makeInlineEditable(paragraph, node, "正文");
     } else {
       const resolved = options.callbacks.resolveImage(block.source);
       const image = container.createEl("img", { cls: "mms-article-image", attr: { src: resolved ?? block.source, alt: block.alt ?? "图片" } });
+      image.dataset.blockId = block.id;
       if (block.width) image.style.width = `${block.width}px`;
       if (block.height) image.style.height = `${block.height}px`;
       image.addEventListener("click", () => new ImagePreviewModal(
@@ -177,6 +181,12 @@ export function renderArticleNodeContent(container: HTMLElement, node: MindMapNo
         imageSourceCandidates(block, true),
         (source) => options.callbacks.resolveImage(source)
       ).open());
+      image.addEventListener("contextmenu", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        options.selectNode(node.id);
+        options.openImageContextMenu(event, node.id, block.id);
+      });
     }
   }
   if (node.note) container.createEl("p", { cls: "mms-article-note", text: node.note });

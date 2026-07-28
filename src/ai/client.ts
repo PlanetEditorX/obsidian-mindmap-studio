@@ -11,6 +11,7 @@ import {
   buildAiConnectionTestBody,
   buildAiEditCompletionBody,
   buildChatCompletionBody,
+  buildImageRecognitionCompletionBody,
   extractAiResponseText,
   parseAiHeaders,
   resolveAiChatCompletionsEndpoint,
@@ -101,6 +102,43 @@ export async function requestAiEditProposal(
   const json = await requestChatCompletion(profile, buildAiEditCompletionBody(profile, payload, instruction));
   const text = extractAiResponseText(json);
   if (!text) throw new Error("AI 接口返回成功，但没有可读取的 Markdown 修改提案");
+  const usage = json.usage && typeof json.usage === "object" ? json.usage as Record<string, unknown> : undefined;
+  return {
+    text,
+    model: typeof json.model === "string" ? json.model : profile.model,
+    usage: usage ? {
+      promptTokens: typeof usage.prompt_tokens === "number" ? usage.prompt_tokens : undefined,
+      completionTokens: typeof usage.completion_tokens === "number" ? usage.completion_tokens : undefined,
+      totalTokens: typeof usage.total_tokens === "number" ? usage.total_tokens : undefined
+    } : undefined
+  };
+}
+
+
+/** 把图片 Blob 转为 Chat Completions 可直接发送的 data URL。 */
+export async function imageBlobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(reader.error ?? new Error("无法读取图片"));
+    reader.onload = () => typeof reader.result === "string"
+      ? resolve(reader.result)
+      : reject(new Error("无法生成图片 data URL"));
+    reader.readAsDataURL(blob);
+  });
+}
+
+/** 使用支持视觉输入的 OpenAI 兼容模型识别单张图片。 */
+export async function requestAiImageRecognition(
+  profile: AiProfileConfig,
+  blob: Blob,
+  prompt: string
+): Promise<AiCompletionResult> {
+  if (!blob.size) throw new Error("待识别图片为空");
+  if (blob.size > 20 * 1024 * 1024) throw new Error("待识别图片超过 20 MB");
+  const imageDataUrl = await imageBlobToDataUrl(blob);
+  const json = await requestChatCompletion(profile, buildImageRecognitionCompletionBody(profile, prompt, imageDataUrl));
+  const text = extractAiResponseText(json);
+  if (!text) throw new Error("AI 接口返回成功，但没有可读取的识图文字");
   const usage = json.usage && typeof json.usage === "object" ? json.usage as Record<string, unknown> : undefined;
   return {
     text,

@@ -319,6 +319,14 @@ mindmap-search-index.json
 新增跨文件功能时，应放在 `main.ts` 或专用服务类中，由 `view.ts` 和 `editor.ts` 通过回调调用。
 
 
+## 图片识图、OCR 与截图边界
+
+`src/vision/recognition.ts` 只负责确定性范围收集、提示词、结果规范化、不可变预览和过期快照校验；`src/vision/modal.ts` 负责原图/文字对比与确认；`src/vision/local-ocr.ts` 只在桌面功能实际触发时动态获取 Node.js API，通过 `execFile` 调用 Tesseract，避免移动端在插件加载阶段静态引用 Node 模块。AI 多模态请求仍由 `src/ai/protocol.ts` 和 `src/ai/client.ts` 构造与发送。
+
+`src/utils/desktop-capture.ts` 按平台启动系统截图工具，并从 Electron 剪贴板读取 PNG。它同样动态获取 Electron/Node API，因此插件仍可在移动端加载；移动端仅在调用桌面截图或本地 OCR 时返回明确错误。截图开始前由编辑器记录焦点节点和 `data-block-id`，系统截图期间焦点变化不会改变插入目标。截图结果先保留在系统剪贴板：存在有效目标且可编辑时才保存到资源目录并插入；否则不修改文档。
+
+图片转文字与截图插入都必须通过 `MindMapEditor.replaceDocumentFromExternalEdit()` 接入撤销、保存、重渲染和聚焦。网络层、本地 OCR 层和截图层不得直接修改 `MindMapDocument`。
+
 ## AI 助手边界
 
 `src/ai/` 按职责拆分：`config.ts` 管理预设与持久化规范化；`markdown.ts` 负责页面/节点子树导出和 UTF-8 大小预检；`protocol.ts` 构造、校验 OpenAI 兼容 JSON；`client.ts` 是唯一网络请求边界；`edit.ts` 负责 AI Markdown 提案解析、过期预览校验、范围替换和不联网的本地文字替换；`modal.ts` 只负责模式选择、处理轨迹、预览和确认。网络层不能直接写入编辑器。所有结构化变更必须先生成不可变预览，再由 `MindMapEditor` 接入撤销、保存、重渲染和聚焦流程。

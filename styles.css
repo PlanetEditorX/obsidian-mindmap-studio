@@ -4010,3 +4010,57 @@
 .mms-ai-apply-warning {
   color: var(--text-warning);
 }
+
+.mms-image-recognition-modal .modal-content {
+  width: min(920px, 92vw);
+}
+
+.mms-image-recognition-compare {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
+}
+
+.mms-image-recognition-pane {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 10px;
+  background: var(--background-secondary);
+}
+
+.mms-image-recognition-pane h3 {
+  margin-top: 0;
+}
+
+.mms-image-recognition-pane img {
+  display: block;
+  width: 100%;
+  max-height: 56vh;
+  object-fit: contain;
+  border-radius: 6px;
+  background: var(--background-primary);
+}
+
+.mms-image-recognition-pane textarea {
+  width: 100%;
+  min-height: 320px;
+  resize: vertical;
+}
+
+.mms-image-recognition-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+@media (max-width: 720px) {
+  .mms-image-recognition-compare {
+    grid-template-columns: 1fr;
+  }
+
+  .mms-image-recognition-pane textarea {
+    min-height: 220px;
+  }
+}

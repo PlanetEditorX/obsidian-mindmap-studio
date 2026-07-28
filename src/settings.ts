@@ -22,6 +22,7 @@ import type {
 } from "./core/model";
 import { appearanceFromThemePreset, MINDMAP_THEME_PRESETS } from "./themes";
 import type { ReadingLocation } from "./article/reading-location";
+import type { ImageRecognitionMode } from "./vision/recognition";
 import {
   AI_PROVIDER_MODEL_PRESETS,
   AI_PROFILE_PRESETS,
@@ -36,7 +37,7 @@ export const TOOLBAR_ITEMS = [
   ["edit", "完整编辑节点"], ["duplicate", "克隆分支"], ["delete", "删除节点"],
   ["task", "任务状态"], ["collapse", "展开/收起"], ["collapse-all", "展开/折叠全部"], ["link", "打开链接"],
   ["search", "搜索导图"], ["global-search", "全局搜索"], ["ai", "询问 AI"], ["table", "表格"],
-  ["code", "代码"], ["image", "粘贴图片"], ["submap", "子导图"],
+  ["code", "代码"], ["image", "粘贴图片"], ["screenshot", "插入截图"], ["submap", "子导图"],
   ["undo", "撤销"], ["redo", "重做"],
   ["fit", "适应画布"], ["layout", "切换布局"], ["appearance", "主题与外观"],
   ["article-landing", "目录/原始文章"], ["article-style", "文章样式"],
@@ -214,6 +215,20 @@ export interface MindMapStudioSettings {
   /** 允许发送给 AI 的 Markdown UTF-8 最大字节数。 */
   aiMaxInputBytes: number;
   aiDefaultQuestion: string;
+  /** 图片识图默认使用视觉模型或本机 OCR。 */
+  imageRecognitionMode: ImageRecognitionMode;
+  /** AI 识图和本地 OCR 结果共用的任务说明。 */
+  imageRecognitionPrompt: string;
+  /** 本机 Tesseract 可执行文件路径或命令名。 */
+  localOcrExecutable: string;
+  /** Tesseract 语言组合，例如 chi_sim+eng。 */
+  localOcrLanguage: string;
+  /** 传给 Tesseract 的附加参数，不经过 shell。 */
+  localOcrExtraArgs: string;
+  /** 截图开始前是否最小化 Obsidian。 */
+  screenshotHideObsidian: boolean;
+  /** 截图插入节点后是否自动启动识图预览。 */
+  screenshotAutoRecognize: boolean;
 }
 
 export const DEFAULT_SETTINGS: MindMapStudioSettings = {
@@ -290,7 +305,14 @@ export const DEFAULT_SETTINGS: MindMapStudioSettings = {
   aiProfiles: DEFAULT_AI_PROFILES.map((profile) => ({ ...profile })),
   defaultAiProfileId: "ai_openai",
   aiMaxInputBytes: 256 * 1024,
-  aiDefaultQuestion: "请分析这份思维导图，并回答我的问题。"
+  aiDefaultQuestion: "请分析这份思维导图，并回答我的问题。",
+  imageRecognitionMode: "ai",
+  imageRecognitionPrompt: "识别图片中的全部可见文字，并按阅读顺序转写；没有文字时简洁描述图片内容。",
+  localOcrExecutable: "tesseract",
+  localOcrLanguage: "chi_sim+eng",
+  localOcrExtraArgs: "--psm 6",
+  screenshotHideObsidian: false,
+  screenshotAutoRecognize: false
 };
 
 /**
@@ -721,6 +743,80 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
           await this.plugin.saveSettings();
         });
       });
+
+    containerEl.createEl("h4", { text: "图片识图与本地 OCR" });
+    new Setting(containerEl)
+      .setName("默认识图方式")
+      .setDesc("AI 模式使用默认 AI 接口中的视觉模型；本地 OCR 模式调用本机 Tesseract，不上传图片。")
+      .addDropdown((dropdown) => dropdown
+        .addOption("ai", "AI 视觉识图")
+        .addOption("local-ocr", "本地 Tesseract OCR")
+        .setValue(this.plugin.settings.imageRecognitionMode)
+        .onChange(async (value) => {
+          this.plugin.settings.imageRecognitionMode = value === "local-ocr" ? "local-ocr" : "ai";
+          await this.plugin.saveSettings();
+          this.display();
+        }));
+    new Setting(containerEl)
+      .setName("识图任务说明")
+      .setDesc("AI 助手批量识图、图片右键识图和截图自动识图共用。")
+      .addTextArea((text) => text
+        .setValue(this.plugin.settings.imageRecognitionPrompt)
+        .setPlaceholder("识别图片中的全部文字并按阅读顺序转写。")
+        .onChange(async (value) => {
+          this.plugin.settings.imageRecognitionPrompt = value.slice(0, 4000);
+          await this.plugin.saveSettings();
+        }));
+    if (this.plugin.settings.imageRecognitionMode === "local-ocr") {
+      new Setting(containerEl)
+        .setName("Tesseract 可执行文件")
+        .setDesc("可填写命令名 tesseract，或本机完整路径。")
+        .addText((text) => text
+          .setValue(this.plugin.settings.localOcrExecutable)
+          .setPlaceholder("tesseract")
+          .onChange(async (value) => {
+            this.plugin.settings.localOcrExecutable = value.trim().slice(0, 2000) || "tesseract";
+            await this.plugin.saveSettings();
+          }));
+      new Setting(containerEl)
+        .setName("OCR 语言")
+        .setDesc("需要本机已安装相应语言包，例如 chi_sim+eng。")
+        .addText((text) => text
+          .setValue(this.plugin.settings.localOcrLanguage)
+          .setPlaceholder("chi_sim+eng")
+          .onChange(async (value) => {
+            this.plugin.settings.localOcrLanguage = value.trim().slice(0, 240) || "chi_sim+eng";
+            await this.plugin.saveSettings();
+          }));
+      new Setting(containerEl)
+        .setName("OCR 附加参数")
+        .setDesc("参数通过 execFile 传递，不使用 shell；默认 --psm 6。")
+        .addText((text) => text
+          .setValue(this.plugin.settings.localOcrExtraArgs)
+          .setPlaceholder("--psm 6")
+          .onChange(async (value) => {
+            this.plugin.settings.localOcrExtraArgs = value.slice(0, 1000);
+            await this.plugin.saveSettings();
+          }));
+    }
+    new Setting(containerEl)
+      .setName("截图时隐藏 Obsidian")
+      .setDesc("启动系统区域截图前自动最小化，截图完成后恢复窗口。")
+      .addToggle((toggle) => toggle
+        .setValue(this.plugin.settings.screenshotHideObsidian)
+        .onChange(async (value) => {
+          this.plugin.settings.screenshotHideObsidian = value;
+          await this.plugin.saveSettings();
+        }));
+    new Setting(containerEl)
+      .setName("截图后自动识图")
+      .setDesc("截图插入节点后自动运行当前识图方式并打开图片与文字对比预览；仍需确认后才替换。")
+      .addToggle((toggle) => toggle
+        .setValue(this.plugin.settings.screenshotAutoRecognize)
+        .onChange(async (value) => {
+          this.plugin.settings.screenshotAutoRecognize = value;
+          await this.plugin.saveSettings();
+        }));
 
     const aiHeader = containerEl.createDiv({ cls: "mms-ai-profiles-header" });
     aiHeader.createEl("h4", { text: "接口预设与自定义" });

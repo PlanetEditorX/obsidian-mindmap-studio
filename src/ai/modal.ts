@@ -1,9 +1,10 @@
 /**
  * @file modal.ts
- * @description AI 问答、结构化导图编辑预览、本地替换和请求处理轨迹窗口。
+ * @description AI 问答、结构化导图编辑、批量图片识别、本地替换和请求处理轨迹窗口。
  */
 
 import { Component, MarkdownRenderer, Modal, Notice, setIcon, type App } from "obsidian";
+import type { ImageRecognitionBatchResult, ImageRecognitionMode } from "../vision/recognition";
 import type { AiProfileConfig } from "./config";
 import { formatByteSize, type AiMarkdownPayload } from "./markdown";
 import type { AiCompletionResult } from "./client";
@@ -21,9 +22,13 @@ export interface AiAskModalOptions {
   profiles: AiProfileConfig[];
   defaultProfileId: string;
   defaultQuestion: string;
+  defaultImageRecognitionPrompt: string;
+  imageRecognitionMode: ImageRecognitionMode;
+  imageCount: number;
   sourcePath: string;
   onAsk: (profileId: string, question: string) => Promise<AiCompletionResult>;
   onProposeEdit: (profileId: string, instruction: string) => Promise<AiCompletionResult>;
+  onRecognizeImages: (profileId: string, instruction: string) => Promise<ImageRecognitionBatchResult>;
   onPreviewAiEdit: (responseText: string) => AiEditPreview;
   onApplyAiEdit: (preview: AiEditPreview) => boolean | Promise<boolean>;
   onPreviewLocalReplace: (query: string, replacement: string, caseSensitive: boolean) => LocalReplacePreview;
@@ -33,7 +38,7 @@ export interface AiAskModalOptions {
 /** 单个处理轨迹步骤的视觉状态。 */
 type TraceState = "pending" | "active" | "done" | "error";
 
-/** 显示 AI 问答、修改提案确认和不联网文字替换。 */
+/** 显示 AI 问答、修改提案、批量识图确认和不联网文字替换。 */
 export class AiAskModal extends Modal {
   /** 承载 MarkdownRenderer 注册的子组件，并在窗口关闭时统一释放。 */
   private markdownRenderComponent: Component | null = null;
@@ -60,6 +65,7 @@ export class AiAskModal extends Modal {
     const metrics = summary.createDiv({ cls: "mms-ai-context-metrics" });
     metrics.createSpan({ text: `${payload.nodeCount} 个节点` });
     metrics.createSpan({ text: `${payload.characterCount.toLocaleString()} 字符` });
+    metrics.createSpan({ text: `${this.options.imageCount} 张图片` });
     const size = metrics.createSpan({ text: `${formatByteSize(payload.byteSize)} / ${formatByteSize(payload.maxInputBytes)}` });
     size.toggleClass("is-over-limit", payload.overLimit);
     summary.createEl("p", {
@@ -72,7 +78,7 @@ export class AiAskModal extends Modal {
     if (payload.overLimit) {
       this.contentEl.createDiv({
         cls: "mms-ai-limit-warning",
-        text: "当前 Markdown 超过 AI 输入大小限制。AI 问答和 AI 编辑将被阻止；本地替换仍可使用。"
+        text: "当前 Markdown 超过 AI 输入大小限制。AI 问答和 AI 编辑将被阻止；图片识图与本地替换仍可使用。"
       });
     }
 
@@ -82,6 +88,12 @@ export class AiAskModal extends Modal {
     const mode = modeLabel.createEl("select");
     mode.createEl("option", { value: "ask", text: "询问 AI（不修改导图）" });
     mode.createEl("option", { value: "edit", text: "AI 整理并重新生成（确认后应用）" });
+    mode.createEl("option", {
+      value: "vision",
+      text: this.options.imageRecognitionMode === "ai"
+        ? "图片 AI 识图（按顺序处理当前范围）"
+        : "图片本地 OCR（按顺序处理当前范围）"
+    });
     mode.createEl("option", { value: "replace", text: "本地文字替换（不调用 AI）" });
 
     const providerLabel = form.createEl("label", { cls: "mms-ai-field" });
@@ -98,7 +110,10 @@ export class AiAskModal extends Modal {
       attr: { rows: "6", placeholder: "例如：总结关键观点，或回答与当前导图有关的问题。" }
     });
     question.value = this.options.defaultQuestion;
-    let promptDraftState = createAiPromptDraftState(this.options.defaultQuestion);
+    let promptDraftState = createAiPromptDraftState(
+      this.options.defaultQuestion,
+      this.options.defaultImageRecognitionPrompt
+    );
 
     const replacePanel = form.createDiv({ cls: "mms-ai-replace-panel" });
     replacePanel.hidden = true;
@@ -136,6 +151,13 @@ export class AiAskModal extends Modal {
     let pendingAiPreview: AiEditPreview | null = null;
     let pendingReplacePreview: LocalReplacePreview | null = null;
     const currentMode = (): AiInteractionMode => mode.value as AiInteractionMode;
+    const recognitionUsesAi = (): boolean => currentMode() === "vision" && this.options.imageRecognitionMode === "ai";
+    const requiresAiProfile = (): boolean => currentMode() === "ask" || currentMode() === "edit" || recognitionUsesAi();
+    const isActionDisabled = (): boolean => {
+      if (currentMode() === "replace") return false;
+      if (currentMode() === "vision") return this.options.imageCount === 0 || (recognitionUsesAi() && !profiles.length);
+      return payload.overLimit || !profiles.length;
+    };
     const setStep = (index: number, state: TraceState): void => { if (steps[index]) steps[index]!.dataset.state = state; };
     const resetOutput = (): void => {
       answerText = "";
@@ -151,7 +173,7 @@ export class AiAskModal extends Modal {
       steps.forEach((step, index) => { step.dataset.state = index === 0 ? "done" : "pending"; });
     };
     const setBusy = (busy: boolean): void => {
-      submit.disabled = busy || (currentMode() !== "replace" && (payload.overLimit || !profiles.length));
+      submit.disabled = busy || isActionDisabled();
       provider.disabled = busy;
       mode.disabled = busy;
       question.disabled = busy;
@@ -166,11 +188,13 @@ export class AiAskModal extends Modal {
       const promptDraft = switchAiPromptDraft(promptDraftState, question.value, selected);
       promptDraftState = promptDraft.state;
       question.value = promptDraft.value;
-      const local = selected === "replace";
-      providerLabel.hidden = local;
-      questionLabel.hidden = local;
-      replacePanel.hidden = !local;
-      track.hidden = local;
+      const localReplace = selected === "replace";
+      const localRecognition = selected === "vision" && this.options.imageRecognitionMode === "local-ocr";
+      providerLabel.hidden = localReplace || localRecognition;
+      questionLabel.hidden = localReplace;
+      replacePanel.hidden = !localReplace;
+      track.hidden = localReplace;
+      copy.setText(selected === "vision" ? "复制识图结果" : "复制回答");
       if (selected === "ask") {
         questionTitle.setText("问题");
         question.placeholder = "例如：总结关键观点，或回答与当前导图有关的问题。";
@@ -181,15 +205,22 @@ export class AiAskModal extends Modal {
         question.placeholder = "例如：按主题重新整理层级，合并重复节点，并重新生成清晰的节点结构。";
         submitText.setText("生成修改预览");
         status.setText("AI 只生成 Markdown 提案；确认前不会修改导图。");
+      } else if (selected === "vision") {
+        questionTitle.setText("识图要求");
+        question.placeholder = "例如：转录全部文字并保留段落；无文字时描述图片内容。";
+        submitText.setText(`依次识别 ${this.options.imageCount} 张图片`);
+        status.setText(this.options.imageCount
+          ? `${localRecognition ? "本地 OCR" : "AI 识图"}将按节点树顺序逐张处理当前范围图片。`
+          : "当前范围没有可识别的图片。");
       } else {
         submitText.setText("预览替换");
         status.setText("本地替换不会联网，确认前不会修改导图。");
       }
-      submit.disabled = selected !== "replace" && (payload.overLimit || !profiles.length);
-      if (selected !== "replace" && !profiles.length) {
-        status.setText("没有已启用且配置完整的 AI 接口；仍可切换到本地文字替换。");
+      submit.disabled = isActionDisabled();
+      if (requiresAiProfile() && !profiles.length) {
+        status.setText("没有已启用且配置完整的 AI 接口；仍可切换到本地 OCR 或本地文字替换。");
       }
-      window.setTimeout(() => (local ? findInput : question).focus(), 20);
+      window.setTimeout(() => (localReplace ? findInput : question).focus(), 20);
     };
 
     const showEditPreview = (editPreview: AiEditPreview): void => {
@@ -230,7 +261,7 @@ export class AiAskModal extends Modal {
     close.addEventListener("click", () => this.close());
     copy.addEventListener("click", () => {
       if (!answerText) return;
-      void navigator.clipboard.writeText(answerText).then(() => new Notice("AI 回答已复制"));
+      void navigator.clipboard.writeText(answerText).then(() => new Notice(currentMode() === "vision" ? "识图结果已复制" : "AI 回答已复制"));
     });
     apply.addEventListener("click", () => {
       const action = pendingAiPreview
@@ -268,8 +299,48 @@ export class AiAskModal extends Modal {
       }
 
       const prompt = question.value.trim();
-      if (!prompt) { new Notice(currentMode() === "edit" ? "请输入修改要求" : "请输入要询问的问题"); question.focus(); return; }
-      if (!provider.value) { new Notice("请先配置并启用 AI 接口"); return; }
+      if (!prompt) {
+        new Notice(currentMode() === "edit" ? "请输入修改要求" : currentMode() === "vision" ? "请输入识图要求" : "请输入要询问的问题");
+        question.focus();
+        return;
+      }
+      if (requiresAiProfile() && !provider.value) { new Notice("请先配置并启用 AI 接口"); return; }
+
+      if (currentMode() === "vision") {
+        setBusy(true);
+        steps.forEach((step) => { step.dataset.state = "pending"; });
+        setStep(0, "active");
+        status.setText(`正在读取并依次识别 ${this.options.imageCount} 张图片…`);
+        void this.options.onRecognizeImages(provider.value, prompt)
+          .then(async (batch) => {
+            if (session !== this.modalSession || !this.markdownRenderComponent) return;
+            setStep(0, "done");
+            setStep(1, "done");
+            setStep(2, "done");
+            setStep(3, "active");
+            answerText = batch.text;
+            await MarkdownRenderer.render(this.app, answerText, result, this.options.sourcePath, this.markdownRenderComponent);
+            if (session !== this.modalSession) return;
+            result.removeClass("is-hidden");
+            resultMeta.setText(`${batch.mode === "ai" ? "AI 识图" : "本地 OCR"} · 成功 ${batch.items.length}/${batch.items.length + batch.failed.length}`);
+            resultMeta.removeClass("is-hidden");
+            copy.removeClass("is-hidden");
+            setStep(3, batch.failed.length && !batch.items.length ? "error" : "done");
+            status.setText(batch.failed.length
+              ? `识图完成：成功 ${batch.items.length} 张，失败 ${batch.failed.length} 张。`
+              : `识图完成：共处理 ${batch.items.length} 张图片。`);
+          })
+          .catch((error) => {
+            if (session !== this.modalSession) return;
+            const activeIndex = steps.findIndex((step) => step.dataset.state === "active");
+            setStep(Math.max(0, activeIndex), "error");
+            status.setText(error instanceof Error ? error.message : "图片识别失败");
+            console.error("MindMap Studio image recognition failed", error);
+          })
+          .finally(() => { if (session === this.modalSession) setBusy(false); });
+        return;
+      }
+
       setBusy(true);
       setStep(1, "active");
       status.setText(`正在发送 ${formatByteSize(payload.byteSize)} Markdown 上下文…`);

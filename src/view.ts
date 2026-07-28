@@ -15,6 +15,12 @@ import { readingSectionsToHtml } from "./import/import-export";
 import { AiAskModal } from "./ai/modal";
 import { enabledAiProfiles } from "./ai/config";
 import { buildAiMarkdownPayload } from "./ai/markdown";
+import {
+  collectRecognizableImages,
+  type ImageRecognitionBatchResult,
+  type ImageRecognitionItemResult,
+  type RecognizableImage
+} from "./vision/recognition";
 
 export const VIEW_TYPE_MINDMAP_STUDIO = "mindmap-studio-view";
 
@@ -121,6 +127,8 @@ export class MindMapStudioView extends TextFileView {
         onUploadImage: async (blob, suggestedName, hostIds) => this.plugin.uploadImageToHosts(blob, suggestedName, hostIds),
         onReadImageSource: async (source) => this.plugin.readImageSource(source, this.file),
         onScheduleAutoUpload: (nodeId, blockId, localPath, suggestedName) => this.plugin.scheduleAutoUpload(this.file, nodeId, blockId, localPath, suggestedName),
+        onRecognizeImage: async (image, blob) => this.plugin.recognizeImage(image, blob),
+        onCaptureScreenshot: async () => this.plugin.captureScreenshot(),
         onCreateSubmap: async (node) => {
           if (!this.file) throw new Error("当前脑图尚未关联文件");
           return this.plugin.createSubmapFile(this.file, node);
@@ -311,6 +319,15 @@ export class MindMapStudioView extends TextFileView {
     else void this.openAiModal();
   }
 
+  /** 启动截图并让编辑器根据截图前焦点决定插入节点或保留剪贴板。 */
+  async captureScreenshot(): Promise<void> {
+    if (!this.editor) {
+      new Notice("当前导图尚未加载");
+      return;
+    }
+    await this.editor.captureScreenshot();
+  }
+
   /** 构建 Markdown 上下文并打开 AI 窗口。 */
   private openAiModal(nodeId?: string): void {
     const document = this.editor?.getDocument() ?? this.document;
@@ -327,9 +344,13 @@ export class MindMapStudioView extends TextFileView {
       profiles,
       defaultProfileId: this.plugin.settings.defaultAiProfileId,
       defaultQuestion: this.plugin.settings.aiDefaultQuestion,
+      defaultImageRecognitionPrompt: this.plugin.settings.imageRecognitionPrompt,
+      imageRecognitionMode: this.plugin.settings.imageRecognitionMode,
+      imageCount: collectRecognizableImages(document, nodeId).length,
       sourcePath: this.file?.path ?? "",
       onAsk: async (profileId, question) => this.plugin.askAi(profileId, payload, question),
       onProposeEdit: async (profileId, instruction) => this.plugin.proposeAiEdit(profileId, payload, instruction),
+      onRecognizeImages: async (profileId, instruction) => this.recognizeImages(nodeId, profileId, instruction),
       onPreviewAiEdit: (responseText) => {
         if (!this.editor) throw new Error("当前导图编辑器尚未加载");
         return this.editor.previewAiEdit(responseText, nodeId);
@@ -341,6 +362,35 @@ export class MindMapStudioView extends TextFileView {
       },
       onApplyLocalReplace: (preview) => this.editor?.applyLocalReplace(preview) ?? false
     }).open();
+  }
+
+  /** 按节点树顺序逐张读取并识别当前页面或节点子树中的全部图片。 */
+  private async recognizeImages(nodeId: string | undefined, profileId: string, instruction: string): Promise<ImageRecognitionBatchResult> {
+    const document = this.editor?.getDocument() ?? this.document;
+    if (!document) throw new Error("当前导图尚未加载");
+    const images = collectRecognizableImages(document, nodeId);
+    if (!images.length) throw new Error("当前范围没有可识别的图片");
+    const items: ImageRecognitionItemResult[] = [];
+    const failed: Array<RecognizableImage & { error: string }> = [];
+    for (const image of images) {
+      try {
+        const source = await this.plugin.readImageSource(image.source, this.file);
+        if (!source) throw new Error("无法读取图片来源");
+        items.push(await this.plugin.recognizeImage(image, source.blob, profileId, instruction));
+      } catch (error) {
+        failed.push({ ...image, error: error instanceof Error ? error.message : String(error) });
+      }
+    }
+    const text = [
+      ...items.map((item) => `## ${item.index}. ${item.nodeLabel}\n\n${item.text}`),
+      ...(failed.length ? ["## 未成功识别", ...failed.map((item) => `- 第 ${item.index} 张（${item.nodeLabel}）：${item.error}`)] : [])
+    ].join("\n\n");
+    return {
+      text,
+      items,
+      failed,
+      mode: this.plugin.settings.imageRecognitionMode
+    };
   }
 
   /**
@@ -375,6 +425,8 @@ export class MindMapStudioView extends TextFileView {
       },
       visibleToolbarItems: [...this.plugin.settings.visibleToolbarItems],
       toolbarItemOrder: [...this.plugin.settings.toolbarItemOrder],
+      imageRecognitionMode: this.plugin.settings.imageRecognitionMode,
+      screenshotAutoRecognize: this.plugin.settings.screenshotAutoRecognize,
       articleBaseDepth: this.articleBaseDepth,
       articleTocEntries: [...this.articleTocEntries],
       articleTocMaxDepth: this.plugin.settings.articleTocMaxDepth,

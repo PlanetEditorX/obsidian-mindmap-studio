@@ -92,11 +92,24 @@ import {
   type AiEditPreview,
   type LocalReplacePreview
 } from "../ai/edit";
+import {
+  applyImageTextReplacement,
+  collectRecognizableImages,
+  previewImageTextReplacement,
+  type ImageTextReplacementPreview
+} from "../vision/recognition";
+import { ImageRecognitionPreviewModal } from "../vision/modal";
 export type { MindMapEditorCallbacks, MindMapEditorOptions } from "./editor-types";
 
 /**
  * NodeEditValues 的结构化数据约定。字段会在模块边界传递，用于保持类型安全和版本兼容。
  */
+interface ScreenshotInsertionTarget {
+  nodeId: string;
+  afterBlockId?: string;
+}
+
+/** 节点编辑弹窗读写的完整字段集合。 */
 interface NodeEditValues {
   content: MindMapContentBlock[];
   note: string;
@@ -1441,6 +1454,117 @@ export class MindMapEditor {
     }
   }
 
+  /** 启动系统截图；有编辑焦点时插入原节点，否则保留系统剪贴板中的截图。 */
+  async captureScreenshot(): Promise<void> {
+    const insertionTarget = this.screenshotInsertionTarget();
+    try {
+      const capture = await this.callbacks.onCaptureScreenshot();
+      if (!insertionTarget) {
+        new Notice("截图已复制到剪贴板；截图前没有聚焦导图节点或文章段落");
+        return;
+      }
+      if (!this.ensureExternalEditAllowed()) {
+        new Notice("截图已复制到剪贴板；当前导图只读，未插入图片");
+        return;
+      }
+      const path = await this.callbacks.onSavePastedImage(capture.blob, capture.suggestedName);
+      const imageBlock: MindMapImageContentBlock = {
+        id: newId(),
+        type: "image",
+        source: path,
+        localSource: path,
+        alt: "截图"
+      };
+      const next = cloneDocument(this.document);
+      const target = findNode(next.root, insertionTarget.nodeId);
+      if (!target) {
+        new Notice("截图已复制到剪贴板；截图前聚焦的节点已不存在");
+        return;
+      }
+      const blocks = nodeContentBlocks(target);
+      const afterIndex = insertionTarget.afterBlockId
+        ? blocks.findIndex((block) => block.id === insertionTarget.afterBlockId)
+        : -1;
+      blocks.splice(afterIndex >= 0 ? afterIndex + 1 : blocks.length, 0, imageBlock);
+      target.content = blocks;
+      syncNodeContentFields(target);
+      this.replaceDocumentFromExternalEdit(next, target.id);
+      const scheduled = this.callbacks.onScheduleAutoUpload(target.id, imageBlock.id, path, capture.suggestedName);
+      new Notice(scheduled ? `截图已插入，等待自动上传：${path}` : `截图已插入：${path}`);
+      if (this.options.screenshotAutoRecognize) await this.recognizeImageBlock(target.id, imageBlock.id);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (/取消截图操作/.test(message)) new Notice("已取消截图");
+      else {
+        console.error("MindMap Studio screenshot failed", error);
+        new Notice(`截图失败：${message}`);
+      }
+    }
+  }
+
+  /** 返回截图操作开始前实际聚焦的节点或文章段落；命令面板等外部焦点返回 null。 */
+  private screenshotInsertionTarget(): ScreenshotInsertionTarget | null {
+    const fromElement = (element: HTMLElement | null | undefined): ScreenshotInsertionTarget | null => {
+      const nodeElement = element?.closest<HTMLElement>("[data-node-id]");
+      if (!nodeElement || !this.rootEl.contains(nodeElement)) return null;
+      const nodeId = nodeElement.dataset.nodeId;
+      if (!nodeId || !findNode(this.document.root, nodeId)) return null;
+      const blockElement = element?.closest<HTMLElement>("[data-block-id]");
+      return {
+        nodeId,
+        afterBlockId: blockElement && nodeElement.contains(blockElement) ? blockElement.dataset.blockId : undefined
+      };
+    };
+    const selectionNode = window.getSelection()?.anchorNode;
+    const selectionElement = selectionNode instanceof HTMLElement ? selectionNode : selectionNode?.parentElement;
+    const selectedTarget = fromElement(selectionElement);
+    if (selectedTarget) return selectedTarget;
+    const active = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const activeTarget = fromElement(active);
+    if (activeTarget) return activeTarget;
+    if (active && this.rootEl.contains(active) && findNode(this.document.root, this.selectedId)) {
+      return { nodeId: this.selectedId };
+    }
+    return null;
+  }
+
+  /** 识别指定图片并打开原图/文字对比预览；不会直接替换内容。 */
+  private async recognizeImageBlock(nodeId: string, blockId: string): Promise<void> {
+    try {
+      const image = collectRecognizableImages(this.document, nodeId).find((item) => item.blockId === blockId);
+      if (!image) throw new Error("准备识别的图片已经不存在");
+      const source = await this.callbacks.onReadImageSource(image.source);
+      if (!source) throw new Error("无法读取该图片；请检查本地路径或远程地址");
+      new Notice(this.options.imageRecognitionMode === "local-ocr" ? "正在执行本地 OCR…" : "正在进行 AI 识图…");
+      const result = await this.callbacks.onRecognizeImage(image, source.blob);
+      const preview = previewImageTextReplacement(this.document, nodeId, blockId, result.text);
+      const resolved = this.callbacks.resolveImage(image.source) ?? image.source;
+      new ImageRecognitionPreviewModal(this.app, {
+        preview,
+        resolvedImageSource: resolved,
+        modeLabel: result.mode === "local-ocr" ? "本地 OCR" : result.model ? `AI · ${result.model}` : "AI 识图",
+        onConfirm: (value) => this.applyImageRecognitionPreview(value)
+      }).open();
+    } catch (error) {
+      console.error("MindMap Studio image recognition failed", error);
+      new Notice(error instanceof Error ? error.message : "图片识别失败");
+    }
+  }
+
+  /** 应用用户确认的图片转文字预览，并统一接入撤销、保存和聚焦。 */
+  private applyImageRecognitionPreview(preview: ImageTextReplacementPreview): boolean {
+    if (!this.ensureExternalEditAllowed()) return false;
+    try {
+      const next = applyImageTextReplacement(this.document, preview);
+      this.replaceDocumentFromExternalEdit(next, preview.nodeId);
+      new Notice("图片已替换为识别文字");
+      return true;
+    } catch (error) {
+      new Notice(error instanceof Error ? error.message : "图片替换失败");
+      return false;
+    }
+  }
+
   /**
    * 执行“mark saved”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
    */
@@ -1546,6 +1670,7 @@ export class MindMapEditor {
     this.addToolbarButton("table", "table-2", "插入或编辑表格", () => this.editTable(), true);
     this.addToolbarButton("code", "code-2", "插入或编辑代码", () => this.editCode(), true);
     this.addToolbarButton("image", "image-plus", "粘贴图片到当前节点（Ctrl/Cmd+V）", () => new Notice("先复制图片，再选中节点并按 Ctrl/Cmd+V"), true);
+    this.addToolbarButton("screenshot", "scan-line", "截图并插入当前节点（Ctrl/Cmd+Shift+S）", () => void this.captureScreenshot());
     this.addToolbarButton("submap", "network", "创建或进入子导图", () => void this.createOrOpenSubmap());
     this.addToolbarSeparator();
     this.addToolbarButton("undo", "undo-2", "撤销（Ctrl/Cmd+Z）", () => this.undo(), true);
@@ -2218,6 +2343,7 @@ export class MindMapEditor {
       mutate: (action) => this.mutate(action),
       editSelected: () => this.editSelected(),
       openAiContextMenu: (event, nodeId) => this.openAiScopeContextMenu(event, nodeId),
+      openImageContextMenu: (event, nodeId, blockId) => this.openImageContextMenu(event, nodeId, blockId),
       openMindMap: (path) => this.callbacks.onOpenMindMap(path),
       resolveImage: this.callbacks.resolveImage,
       renderCode: this.callbacks.onRenderCode
@@ -2438,6 +2564,7 @@ export class MindMapEditor {
       callbacks: this.callbacks,
       selectNode: (id) => this.selectNode(id),
       openAiContextMenu: (event, nodeId) => this.openAiScopeContextMenu(event, nodeId),
+      openImageContextMenu: (event, nodeId, blockId) => this.openImageContextMenu(event, nodeId, blockId),
       makeInlineEditable: (element, node, placeholder) => this.makeInlineEditable(element, node, placeholder),
       addInlineNodeActions: (container, node) => this.addInlineNodeActions(container, node)
     };
@@ -2714,6 +2841,12 @@ export class MindMapEditor {
               imageSourceCandidates(block, true),
               (source) => this.callbacks.resolveImage(source)
             ).open();
+          });
+          image.addEventListener("contextmenu", (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            this.selectNode(node.id);
+            this.openImageContextMenu(event, node.id, block.id);
           });
           tryCandidate(0);
           continue;
@@ -4221,6 +4354,17 @@ export class MindMapEditor {
       .setTitle(this.aiScopeNodeId ? "询问 AI（此节点及全部子节点）" : "询问 AI（当前页面）")
       .setIcon("sparkles")
       .onClick(() => void this.callbacks.onAskAi(this.aiScopeNodeId ?? undefined)));
+    menu.showAtMouseEvent(event);
+  }
+
+  /** 显示图片专用右键菜单，并按当前设置启动 AI 识图或本地 OCR。 */
+  private openImageContextMenu(event: MouseEvent, nodeId: string, blockId: string): void {
+    const modeLabel = this.options.imageRecognitionMode === "local-ocr" ? "本地 OCR" : "AI 识图";
+    const menu = new Menu();
+    menu.addItem((item) => item
+      .setTitle(`${modeLabel}并转为文字`)
+      .setIcon("scan-text")
+      .onClick(() => void this.recognizeImageBlock(nodeId, blockId)));
     menu.showAtMouseEvent(event);
   }
 
