@@ -263,6 +263,24 @@ test("AI edit protocol requires Markdown-only proposals", () => {
   assert.match(body.messages.at(-1).content, /整理并重新生成/);
 });
 
+test("AI prompt drafts switch to the edit instruction and preserve per-mode input", () => {
+  let state = edit.createAiPromptDraftState("请分析这份思维导图，并回答我的问题。");
+  let switched = edit.switchAiPromptDraft(state, "我的询问草稿", "edit");
+  state = switched.state;
+  assert.equal(switched.value, "按主题重新整理层级，合并重复节点，并重新生成清晰的导图结构。");
+
+  switched = edit.switchAiPromptDraft(state, "我的整理要求", "replace");
+  state = switched.state;
+  assert.equal(switched.value, "我的整理要求");
+
+  switched = edit.switchAiPromptDraft(state, "不应覆盖隐藏草稿", "ask");
+  state = switched.state;
+  assert.equal(switched.value, "我的询问草稿");
+
+  switched = edit.switchAiPromptDraft(state, "更新后的询问", "edit");
+  assert.equal(switched.value, "我的整理要求");
+});
+
 test("AI modal shows only the inputs required by the selected operation", async () => {
   const [modalSource, stylesSource] = await Promise.all([
     readFile("src/ai/modal.ts", "utf8"),
@@ -273,6 +291,8 @@ test("AI modal shows only the inputs required by the selected operation", async 
   assert.match(modalSource, /questionLabel\.hidden = local/);
   assert.match(modalSource, /replacePanel\.hidden = !local/);
   assert.match(modalSource, /track\.hidden = local/);
+  assert.match(modalSource, /createAiPromptDraftState\(this\.options\.defaultQuestion\)/);
+  assert.match(modalSource, /switchAiPromptDraft\(promptDraftState, question\.value, selected\)/);
   assert.match(
     modalSource,
     /onPreviewLocalReplace\([\s\S]*findInput\.value,[\s\S]*replacementInput\.value,[\s\S]*false/

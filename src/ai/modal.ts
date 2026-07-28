@@ -7,7 +7,13 @@ import { Component, MarkdownRenderer, Modal, Notice, setIcon, type App } from "o
 import type { AiProfileConfig } from "./config";
 import { formatByteSize, type AiMarkdownPayload } from "./markdown";
 import type { AiCompletionResult } from "./client";
-import type { AiEditPreview, AiInteractionMode, LocalReplacePreview } from "./edit";
+import {
+  createAiPromptDraftState,
+  switchAiPromptDraft,
+  type AiEditPreview,
+  type AiInteractionMode,
+  type LocalReplacePreview
+} from "./edit";
 
 /** 创建 AI 窗口所需的上下文、接口和安全应用回调。 */
 export interface AiAskModalOptions {
@@ -92,6 +98,7 @@ export class AiAskModal extends Modal {
       attr: { rows: "6", placeholder: "例如：总结关键观点，或回答与当前导图有关的问题。" }
     });
     question.value = this.options.defaultQuestion;
+    let promptDraftState = createAiPromptDraftState(this.options.defaultQuestion);
 
     const replacePanel = form.createDiv({ cls: "mms-ai-replace-panel" });
     replacePanel.hidden = true;
@@ -156,6 +163,9 @@ export class AiAskModal extends Modal {
     const updateMode = (): void => {
       resetOutput();
       const selected = currentMode();
+      const promptDraft = switchAiPromptDraft(promptDraftState, question.value, selected);
+      promptDraftState = promptDraft.state;
+      question.value = promptDraft.value;
       const local = selected === "replace";
       providerLabel.hidden = local;
       questionLabel.hidden = local;

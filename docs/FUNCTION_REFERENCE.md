@@ -134,9 +134,39 @@ AI 窗口支持的三种操作模式。
 export type AiInteractionMode = "ask" | "edit" | "replace";
 ```
 
+### 接口 `AiPromptDraftState`
+
+源码：`src/ai/edit.ts:29`
+
+分别保存询问和结构化编辑模式的输入草稿。
+
+```ts
+export interface AiPromptDraftState
+```
+
+### 函数 `createAiPromptDraftState`
+
+源码：`src/ai/edit.ts:36`
+
+创建 AI 弹窗的模式独立输入草稿。
+
+```ts
+export function createAiPromptDraftState(defaultQuestion: string): AiPromptDraftState
+```
+
+### 函数 `switchAiPromptDraft`
+
+源码：`src/ai/edit.ts:45`
+
+保存离开模式的输入并返回目标模式应显示的草稿。
+
+```ts
+export function switchAiPromptDraft( state: AiPromptDraftState, currentValue: string, nextMode: AiInteractionMode ):
+```
+
 ### 接口 `AiEditPreview`
 
-源码：`src/ai/edit.ts:26`
+源码：`src/ai/edit.ts:65`
 
 AI 返回 Markdown 后生成的可确认结构化修改预览。
 
@@ -146,7 +176,7 @@ export interface AiEditPreview
 
 ### 接口 `LocalReplacePreview`
 
-源码：`src/ai/edit.ts:39`
+源码：`src/ai/edit.ts:78`
 
 本地文字替换的范围、命中数量和并发校验数据。
 
@@ -156,7 +186,7 @@ export interface LocalReplacePreview
 
 ### 接口 `AppliedAiEdit`
 
-源码：`src/ai/edit.ts:52`
+源码：`src/ai/edit.ts:91`
 
 外部编辑成功应用后返回的文档和建议聚焦节点。
 
@@ -166,7 +196,7 @@ export interface AppliedAiEdit
 
 ### 函数 `aiEditScopeSnapshot`
 
-源码：`src/ai/edit.ts:59`
+源码：`src/ai/edit.ts:98`
 
 返回当前页面或节点子树的稳定快照，用于阻止把过期预览应用到已变化内容。
 
@@ -176,7 +206,7 @@ export function aiEditScopeSnapshot(document: MindMapDocument, scopeNodeId?: str
 
 ### 函数 `buildAiEditUserMessage`
 
-源码：`src/ai/edit.ts:66`
+源码：`src/ai/edit.ts:105`
 
 构建 AI 结构化编辑消息，要求模型只返回可解析 Markdown，不直接执行任何修改。
 
@@ -186,7 +216,7 @@ export function buildAiEditUserMessage(instruction: string, payload: AiMarkdownP
 
 ### 函数 `extractAiEditMarkdown`
 
-源码：`src/ai/edit.ts:84`
+源码：`src/ai/edit.ts:123`
 
 从模型回答中提取 Markdown；优先使用 markdown/md 围栏，未使用围栏时保留完整回答。
 
@@ -196,7 +226,7 @@ export function extractAiEditMarkdown(responseText: string): string
 
 ### 函数 `refreshGeneratedNodeIds`
 
-源码：`src/ai/edit.ts:91`
+源码：`src/ai/edit.ts:130`
 
 为 AI 生成的节点重新分配 ID，同时保留被替换范围根节点的稳定 ID。
 
@@ -206,7 +236,7 @@ function refreshGeneratedNodeIds(root: MindMapNode, stableRootId: string): void
 
 ### 函数 `preserveOperationalMetadata`
 
-源码：`src/ai/edit.ts:102`
+源码：`src/ai/edit.ts:141`
 
 保留 Markdown 无法可靠表达的节点运行元数据，避免 AI 整理意外断开子导图和样式。
 
@@ -216,7 +246,7 @@ function preserveOperationalMetadata(existing: MindMapNode, generated: MindMapNo
 
 ### 函数 `previewAiMarkdownEdit`
 
-源码：`src/ai/edit.ts:111`
+源码：`src/ai/edit.ts:150`
 
 解析并验证 AI 编辑结果，返回节点数量和字节大小预览，不直接修改导图。
 
@@ -226,7 +256,7 @@ export function previewAiMarkdownEdit( document: MindMapDocument, scopeNodeId: s
 
 ### 函数 `applyAiMarkdownEdit`
 
-源码：`src/ai/edit.ts:139`
+源码：`src/ai/edit.ts:178`
 
 将已经确认且仍未过期的 AI Markdown 预览应用到页面或节点子树。
 
@@ -236,7 +266,7 @@ export function applyAiMarkdownEdit(document: MindMapDocument, preview: AiEditPr
 
 ### 函数 `replaceLiteral`
 
-源码：`src/ai/edit.ts:169`
+源码：`src/ai/edit.ts:208`
 
 对字符串执行字面量替换并返回实际命中次数。
 
@@ -246,7 +276,7 @@ function replaceLiteral(value: string, query: string, replacement: string, caseS
 
 ### 函数 `replaceTextInScope`
 
-源码：`src/ai/edit.ts:181`
+源码：`src/ai/edit.ts:220`
 
 在指定节点范围内执行本地文字替换；不修改链接、代码、图片地址或子导图路径。
 
@@ -256,7 +286,7 @@ function replaceTextInScope( document: MindMapDocument, scopeNodeId: string | nu
 
 ### 函数 `previewLocalTextReplace`
 
-源码：`src/ai/edit.ts:246`
+源码：`src/ai/edit.ts:285`
 
 预览不联网的字面量替换，返回命中数和受影响节点数。
 
@@ -266,7 +296,7 @@ export function previewLocalTextReplace( document: MindMapDocument, scopeNodeId:
 
 ### 函数 `applyLocalTextReplace`
 
-源码：`src/ai/edit.ts:272`
+源码：`src/ai/edit.ts:311`
 
 应用已经确认且未过期的本地文字替换预览。
 
@@ -354,7 +384,7 @@ AI 问答、结构化导图编辑预览、本地替换和请求处理轨迹窗�
 
 ### 接口 `AiAskModalOptions`
 
-源码：`src/ai/modal.ts:13`
+源码：`src/ai/modal.ts:19`
 
 创建 AI 窗口所需的上下文、接口和安全应用回调。
 
@@ -364,7 +394,7 @@ export interface AiAskModalOptions
 
 ### 类型 `TraceState`
 
-源码：`src/ai/modal.ts:28`
+源码：`src/ai/modal.ts:34`
 
 单个处理轨迹步骤的视觉状态。
 
@@ -374,7 +404,7 @@ type TraceState = "pending" | "active" | "done" | "error";
 
 ### 类 `AiAskModal`
 
-源码：`src/ai/modal.ts:31`
+源码：`src/ai/modal.ts:37`
 
 显示 AI 问答、修改提案确认和不联网文字替换。
 
@@ -384,7 +414,7 @@ export class AiAskModal extends Modal
 
 ### 构造函数 `AiAskModal.constructor`
 
-源码：`src/ai/modal.ts:38`
+源码：`src/ai/modal.ts:44`
 
 保存窗口上下文并初始化 Obsidian Modal。
 
@@ -394,7 +424,7 @@ constructor(app: App, private readonly options: AiAskModalOptions)
 
 ### 方法 `AiAskModal.onOpen`
 
-源码：`src/ai/modal.ts:43`
+源码：`src/ai/modal.ts:49`
 
 构建模式选择、大小提示、处理轨迹、修改预览和确认应用区域。
 
@@ -404,7 +434,7 @@ onOpen(): void
 
 ### 方法 `AiAskModal.onClose`
 
-源码：`src/ai/modal.ts:322`
+源码：`src/ai/modal.ts:325`
 
 释放 Markdown 渲染器注册的子组件和事件，避免窗口关闭后继续更新 DOM。
 

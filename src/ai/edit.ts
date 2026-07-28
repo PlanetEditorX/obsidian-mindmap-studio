@@ -22,6 +22,45 @@ import { formatByteSize, utf8ByteLength, type AiMarkdownPayload } from "./markdo
 /** AI 窗口支持的三种操作模式。 */
 export type AiInteractionMode = "ask" | "edit" | "replace";
 
+/** AI 结构化编辑模式首次打开时使用的默认修改要求。 */
+export const DEFAULT_AI_EDIT_INSTRUCTION = "按主题重新整理层级，合并重复节点，并重新生成清晰的导图结构。";
+
+/** 分别保存询问和结构化编辑模式的输入草稿。 */
+export interface AiPromptDraftState {
+  activeMode: AiInteractionMode;
+  ask: string;
+  edit: string;
+}
+
+/** 创建 AI 弹窗的模式独立输入草稿。 */
+export function createAiPromptDraftState(defaultQuestion: string): AiPromptDraftState {
+  return {
+    activeMode: "ask",
+    ask: defaultQuestion,
+    edit: DEFAULT_AI_EDIT_INSTRUCTION
+  };
+}
+
+/** 保存离开模式的输入并返回目标模式应显示的草稿。 */
+export function switchAiPromptDraft(
+  state: AiPromptDraftState,
+  currentValue: string,
+  nextMode: AiInteractionMode
+): { state: AiPromptDraftState; value: string } {
+  const nextState = { ...state };
+  if (state.activeMode === "ask") nextState.ask = currentValue;
+  else if (state.activeMode === "edit") nextState.edit = currentValue;
+  nextState.activeMode = nextMode;
+  return {
+    state: nextState,
+    value: nextMode === "ask"
+      ? nextState.ask
+      : nextMode === "edit"
+        ? nextState.edit
+        : currentValue
+  };
+}
+
 /** AI 返回 Markdown 后生成的可确认结构化修改预览。 */
 export interface AiEditPreview {
   kind: "ai-edit";
