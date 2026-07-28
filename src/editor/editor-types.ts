@@ -100,5 +100,6 @@ export interface MindMapEditorOptions {
   visibleToolbarItems: string[];
   toolbarItemOrder: string[];
   imageRecognitionMode: "ai" | "local-ocr";
+  screenshotShortcut: string;
   screenshotAutoRecognize: boolean;
 }

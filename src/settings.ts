@@ -217,6 +217,8 @@ export interface MindMapStudioSettings {
   aiDefaultQuestion: string;
   /** 图片识图默认使用视觉模型或本机 OCR。 */
   imageRecognitionMode: ImageRecognitionMode;
+  /** Empty means AI image recognition follows the global default AI profile. */
+  imageRecognitionAiProfileId: string;
   /** AI 识图和本地 OCR 结果共用的任务说明。 */
   imageRecognitionPrompt: string;
   /** 本机 Tesseract 可执行文件路径或命令名。 */
@@ -227,6 +229,8 @@ export interface MindMapStudioSettings {
   localOcrExtraArgs: string;
   /** 截图开始前是否最小化 Obsidian。 */
   screenshotHideObsidian: boolean;
+  /** Editor-level screenshot shortcut used when the mind-map editor has focus. */
+  screenshotShortcut: string;
   /** 截图插入节点后是否自动启动识图预览。 */
   screenshotAutoRecognize: boolean;
 }
@@ -307,11 +311,13 @@ export const DEFAULT_SETTINGS: MindMapStudioSettings = {
   aiMaxInputBytes: 256 * 1024,
   aiDefaultQuestion: "请分析这份思维导图，并回答我的问题。",
   imageRecognitionMode: "ai",
+  imageRecognitionAiProfileId: "",
   imageRecognitionPrompt: "识别图片中的全部可见文字，并按阅读顺序转写；没有文字时简洁描述图片内容。",
   localOcrExecutable: "tesseract",
   localOcrLanguage: "chi_sim+eng",
   localOcrExtraArgs: "--psm 6",
   screenshotHideObsidian: false,
+  screenshotShortcut: "Ctrl+Shift+S",
   screenshotAutoRecognize: false
 };
 
@@ -747,7 +753,7 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
     containerEl.createEl("h4", { text: "图片识图与本地 OCR" });
     new Setting(containerEl)
       .setName("默认识图方式")
-      .setDesc("AI 模式使用默认 AI 接口中的视觉模型；本地 OCR 模式调用本机 Tesseract，不上传图片。")
+      .setDesc("AI 模式可跟随全局接口，也可单独选择视觉模型；本地 OCR 模式调用本机 Tesseract，不上传图片。")
       .addDropdown((dropdown) => dropdown
         .addOption("ai", "AI 视觉识图")
         .addOption("local-ocr", "本地 Tesseract OCR")
@@ -757,6 +763,23 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
           await this.plugin.saveSettings();
           this.display();
         }));
+    if (this.plugin.settings.imageRecognitionMode === "ai") {
+      const selectedVisionProfile = enabledProfiles.some((profile) => profile.id === this.plugin.settings.imageRecognitionAiProfileId)
+        ? this.plugin.settings.imageRecognitionAiProfileId
+        : "";
+      new Setting(containerEl)
+        .setName("AI 识图接口")
+        .setDesc("默认跟随全局 AI 接口；如果全局模型不支持图片输入，可在这里单独选择视觉模型。")
+        .addDropdown((dropdown) => {
+          dropdown.addOption("", "跟随全局 AI 接口");
+          enabledProfiles.forEach((profile) => dropdown.addOption(profile.id, `${profile.name} · ${profile.model}`));
+          dropdown.setValue(selectedVisionProfile);
+          dropdown.onChange(async (value) => {
+            this.plugin.settings.imageRecognitionAiProfileId = value;
+            await this.plugin.saveSettings();
+          });
+        });
+    }
     new Setting(containerEl)
       .setName("识图任务说明")
       .setDesc("AI 助手批量识图、图片右键识图和截图自动识图共用。")
@@ -806,6 +829,16 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
         .setValue(this.plugin.settings.screenshotHideObsidian)
         .onChange(async (value) => {
           this.plugin.settings.screenshotHideObsidian = value;
+          await this.plugin.saveSettings();
+        }));
+    new Setting(containerEl)
+      .setName("截图快捷键")
+      .setDesc("编辑器获得焦点时生效；格式示例：Ctrl+Shift+S、Alt+S。Obsidian 命令面板中的快捷键仍可单独设置。")
+      .addText((text) => text
+        .setValue(this.plugin.settings.screenshotShortcut)
+        .setPlaceholder(DEFAULT_SETTINGS.screenshotShortcut)
+        .onChange(async (value) => {
+          this.plugin.settings.screenshotShortcut = value.trim().slice(0, 120) || DEFAULT_SETTINGS.screenshotShortcut;
           await this.plugin.saveSettings();
         }));
     new Setting(containerEl)

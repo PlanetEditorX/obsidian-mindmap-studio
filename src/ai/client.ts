@@ -136,7 +136,13 @@ export async function requestAiImageRecognition(
   if (!blob.size) throw new Error("待识别图片为空");
   if (blob.size > 20 * 1024 * 1024) throw new Error("待识别图片超过 20 MB");
   const imageDataUrl = await imageBlobToDataUrl(blob);
-  const json = await requestChatCompletion(profile, buildImageRecognitionCompletionBody(profile, prompt, imageDataUrl));
+  let json: Record<string, unknown>;
+  try {
+    json = await requestChatCompletion(profile, buildImageRecognitionCompletionBody(profile, prompt, imageDataUrl));
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`${message}。请确认“${profile.name}”使用支持图片输入的视觉模型；也可在设置中为 AI 识图单独选择接口。`);
+  }
   const text = extractAiResponseText(json);
   if (!text) throw new Error("AI 接口返回成功，但没有可读取的识图文字");
   const usage = json.usage && typeof json.usage === "object" ? json.usage as Record<string, unknown> : undefined;

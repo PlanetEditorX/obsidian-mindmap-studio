@@ -100,6 +100,10 @@ test("local OCR arguments are parsed without a shell", () => {
   ]);
   assert.deepEqual(localOcr.parseCommandArguments("--user-words 'my words.txt'"), ["--user-words", "my words.txt"]);
   assert.throws(() => localOcr.parseCommandArguments("--psm '6"), /未闭合引号/);
+  assert.match(
+    localOcr.formatLocalOcrError(Object.assign(new Error("spawn tesseract ENOENT"), { code: "ENOENT" }), "tesseract"),
+    /填写 tesseract\.exe 的完整路径/
+  );
 });
 
 test("desktop screenshot helpers expose platform commands and stable clipboard fingerprints", () => {

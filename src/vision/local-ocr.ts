@@ -111,6 +111,19 @@ function executeTesseract(
   });
 }
 
+/** Formats low-level execFile failures into actionable local OCR messages. */
+export function formatLocalOcrError(error: unknown, executable: string): string {
+  const value = error as { code?: unknown; killed?: unknown; signal?: unknown; message?: unknown };
+  const message = typeof value?.message === "string" ? value.message : String(error);
+  if (value?.code === "ENOENT" || /ENOENT/i.test(message)) {
+    return `找不到 Tesseract 可执行文件“${executable}”。请先安装 Tesseract，或在设置中填写 tesseract.exe 的完整路径`;
+  }
+  if (value?.code === "ETIMEDOUT" || value?.killed === true || /timed out|timeout/i.test(message)) {
+    return "Tesseract 执行超时。请尝试降低图片尺寸，或在系统中确认 OCR 进程没有卡住";
+  }
+  return message;
+}
+
 /** 使用本机 Tesseract 可执行文件识别图片，不上传任何图片数据。 */
 export async function recognizeImageWithLocalOcr(blob: Blob, options: LocalOcrOptions): Promise<string> {
   const runtime = getLocalOcrRuntime();
@@ -132,8 +145,7 @@ export async function recognizeImageWithLocalOcr(blob: Blob, options: LocalOcrOp
     if (!text) throw new Error(stderr.trim() || "本地 OCR 没有识别到文字");
     return text;
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    throw new Error(`本地 OCR 执行失败：${message}`);
+    throw new Error(`本地 OCR 执行失败：${formatLocalOcrError(error, executable)}`);
   } finally {
     await runtime.rm(directory, { recursive: true, force: true });
   }

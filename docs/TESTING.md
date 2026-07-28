@@ -106,9 +106,9 @@ GitHub Actions 和 GitLab CI 均从干净检出开始执行 `npm ci` 与 `npm ru
 
 ## AI 助手测试
 
-`tests/ai.test.mjs` 覆盖多模态识图请求体、识图模式草稿与 UI 契约，以及预设规范化、整页与节点子树 Markdown、UTF-8 大小上限、问题/资料边界、Header 注入防护、Chat Completions 请求体、兼容响应解析、AI Markdown 提案解析、页面/子树替换、稳定根 ID、运行元数据保留、过期预览拒绝、输出节点上限、本地文字替换、富文本协调和不会修改链接/路径的边界，以及工具栏、快捷键和右键范围的源码契约。网络服务不参与单元测试；真实接口连接应在独立测试密钥和非敏感导图上进行手动冒烟。
+`tests/ai.test.mjs` 覆盖多模态识图请求体、识图模式草稿与 UI 契约，以及预设规范化、整页与节点子树 Markdown、UTF-8 大小上限、问题/资料边界、Header 注入防护、Chat Completions 请求体、兼容响应解析、AI Markdown 提案解析、页面/子树替换、稳定根 ID、运行元数据保留、过期预览拒绝、输出节点上限、本地文字替换、富文本协调和不会修改链接/路径的边界，以及工具栏、截图快捷键、独立视觉接口和右键范围的源码契约。网络服务不参与单元测试；真实接口连接应在独立测试密钥和非敏感导图上进行手动冒烟。
 
 
 ## 图片识图与截图测试
 
-`tests/image-recognition.test.mjs` 覆盖整页/节点子树图片的稳定顺序、识图提示词与文本规范化、原位置图片转文字、过期预览拒绝、Tesseract 参数的无 shell 解析、各平台截图命令候选和剪贴板 PNG 指纹。真实视觉模型、本机 Tesseract、Windows/macOS/Linux 系统截图交互属于手动冒烟测试；自动测试不上传图片，也不启动桌面截图 UI。
+`tests/image-recognition.test.mjs` 覆盖整页/节点子树图片的稳定顺序、识图提示词与文本规范化、原位置图片转文字、过期预览拒绝、Tesseract 参数的无 shell 解析、Tesseract 缺失时的 ENOENT 提示、各平台截图命令候选和剪贴板 PNG 指纹。真实视觉模型、本机 Tesseract、Windows/macOS/Linux 系统截图交互属于手动冒烟测试；自动测试不上传图片，也不启动桌面截图 UI。
