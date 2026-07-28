@@ -93,6 +93,11 @@ test("question assistant keeps an intelligent image-to-question pipeline and vis
   assert.match(modalSource, /AI 智能处理题目/);
   assert.match(bankSource, /题库/);
   assert.match(bankSource, /错题/);
+  assert.match(bankSource, /随机练习/);
+  assert.match(bankSource, /正确率/);
+  assert.match(bankSource, /答对/);
+  assert.match(bankSource, /答错/);
+  assert.match(bankSource, /onRecordPractice/);
   assert.match(modalSource, /已由 AI 分析补齐缺失答案与解答/);
   assert.match(mainSource, /仍需基于题目独立分析/);
 });

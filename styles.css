@@ -4296,8 +4296,51 @@
 
 .mms-question-bank-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
   margin-top: 8px;
+}
+
+.mms-question-bank-overview,
+.mms-question-practice-assessment {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.mms-question-practice-start {
+  justify-self: start;
+}
+
+.mms-question-practice {
+  display: grid;
+  gap: 12px;
+}
+
+.mms-question-practice h3,
+.mms-question-practice h4 {
+  margin: 0;
+}
+
+.mms-question-practice-text {
+  white-space: pre-wrap;
+  line-height: 1.6;
+}
+
+.mms-question-practice-options {
+  display: grid;
+  gap: 8px;
+}
+
+.mms-question-practice-options button {
+  min-height: 36px;
+  text-align: left;
+  white-space: pre-wrap;
+}
+
+.mms-question-practice-options button.is-selected {
+  color: var(--text-on-accent);
+  background: var(--interactive-accent);
 }
 
 @media (max-width: 620px) {
