@@ -96,7 +96,7 @@ npm ci
 npm run verify
 ```
 
-构建完成后，仓库根目录的 `main.js`、`manifest.json` 和 `styles.css` 即为安装文件。
+构建完成后，仓库根目录的 `main.js`、`manifest.json` 和 `styles.css` 即为安装文件。生产构建不会内嵌 source map；若合并时 `main.js` 冲突，应先合并 `src/` 源码，再执行 `npm run build` 重新生成它。
 
 ## 基本使用
 
