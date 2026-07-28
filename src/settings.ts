@@ -413,6 +413,8 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
   private readonly plugin: MindMapStudioPlugin;
   private readonly expandedImageHostIds = new Set<string>();
   private readonly expandedAiProfileIds = new Set<string>();
+  private readonly expandedSettingsSectionTitles = new Set<string>(["主题模板"]);
+  private settingsSearchQuery = "";
 
   /**
    * 创建 MindMapStudioSettingTab 实例，保存依赖和初始状态；实际 DOM 构建通常在 onOpen() 或后续渲染流程中完成。
@@ -433,6 +435,15 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
     const { containerEl } = this;
     containerEl.empty();
     containerEl.createEl("h2", { text: "MindMap Studio" });
+    const search = containerEl.createEl("input", {
+      cls: "mms-settings-search",
+      attr: { type: "search", placeholder: "搜索设置", "aria-label": "搜索设置" }
+    });
+    search.value = this.settingsSearchQuery;
+    search.addEventListener("input", () => {
+      this.settingsSearchQuery = search.value.trim().toLocaleLowerCase();
+      this.organizeSettingsSections();
+    });
     containerEl.createEl("p", {
       cls: "setting-item-description",
       text: "这里设置全局默认外观。打开脑图后，也可以点击工具栏中的调色板，为当前脑图单独保存一套样式。"
@@ -1763,6 +1774,40 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
           new Notice("已恢复初始设置");
           this.display();
         }));
+
+    this.organizeSettingsSections();
+  }
+
+  /** 将一级设置分区折叠显示，并按顶部搜索词过滤匹配分区。 */
+  private organizeSettingsSections(): void {
+    const query = this.settingsSearchQuery;
+    let sections = Array.from(this.containerEl.querySelectorAll<HTMLDetailsElement>(":scope > .mms-settings-section"));
+    if (!sections.length) {
+      let activeSection: HTMLDetailsElement | null = null;
+      for (const element of Array.from(this.containerEl.children)) {
+        if (element.tagName === "H3") {
+          const heading = element.textContent?.trim() || "设置";
+          const section = document.createElement("details");
+          section.addClass("mms-settings-section");
+          section.open = this.expandedSettingsSectionTitles.has(heading);
+          const summary = document.createElement("summary");
+          summary.setText(heading);
+          section.append(summary);
+          element.replaceWith(section);
+          section.addEventListener("toggle", () => {
+            if (section.open) this.expandedSettingsSectionTitles.add(heading);
+            else this.expandedSettingsSectionTitles.delete(heading);
+          });
+          activeSection = section;
+        } else if (activeSection) activeSection.append(element);
+      }
+      sections = Array.from(this.containerEl.querySelectorAll<HTMLDetailsElement>(":scope > .mms-settings-section"));
+    }
+    for (const section of sections) {
+      const matches = !query || (section.textContent?.toLocaleLowerCase().includes(query) ?? false);
+      section.toggleClass("is-search-hidden", !matches);
+      if (query && matches) section.open = true;
+    }
   }
 
   /**

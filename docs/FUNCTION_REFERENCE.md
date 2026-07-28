@@ -6130,7 +6130,7 @@ export class MindMapStudioSettingTab extends PluginSettingTab
 
 ### 构造函数 `MindMapStudioSettingTab.constructor`
 
-源码：`src/settings.ts:423`
+源码：`src/settings.ts:425`
 
 创建 MindMapStudioSettingTab 实例，保存依赖和初始状态；实际 DOM 构建通常在 onOpen() 或后续渲染流程中完成。
 
@@ -6140,7 +6140,7 @@ constructor(app: App, plugin: MindMapStudioPlugin)
 
 ### 方法 `MindMapStudioSettingTab.display`
 
-源码：`src/settings.ts:432`
+源码：`src/settings.ts:434`
 
 构建完整插件设置页，包括主题、显示模式、节点默认值、搜索、图片、图床容灾和恢复初始设置。所有控件写入后立即保存并刷新打开视图。
 
@@ -6148,9 +6148,19 @@ constructor(app: App, plugin: MindMapStudioPlugin)
 display(): void
 ```
 
+### 方法 `MindMapStudioSettingTab.organizeSettingsSections`
+
+源码：`src/settings.ts:1782`
+
+将一级设置分区折叠显示，并按顶部搜索词过滤匹配分区。
+
+```ts
+private organizeSettingsSections(): void
+```
+
 ### 方法 `MindMapStudioSettingTab.addOptionalColorSetting`
 
-源码：`src/settings.ts:1779`
+源码：`src/settings.ts:1824`
 
 添加optional color setting，并保持模型、界面和持久化状态的一致性。
 
@@ -6160,7 +6170,7 @@ private addOptionalColorSetting( container: HTMLElement, name: string, descripti
 
 ### 方法 `MindMapStudioSettingTab.saveAndRefresh`
 
-源码：`src/settings.ts:1811`
+源码：`src/settings.ts:1856`
 
 保存and refresh，并保持模型、界面和持久化状态的一致性。
 
