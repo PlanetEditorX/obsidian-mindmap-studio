@@ -4644,9 +4644,29 @@ function markdownHeading(level: number, title: string): string
 function markdownAnchor(title: string): string
 ```
 
+### 函数 `htmlTocList`
+
+源码：`src/import/import-export.ts:131`
+
+将扁平的层级目录条目转换为兼容 Word 的嵌套列表。
+
+```ts
+function htmlTocList(items: Array<
+```
+
+### 类型 `TocBranch`
+
+源码：`src/import/import-export.ts:133`
+
+嵌套目录中的单个章节及其下级章节。
+
+```ts
+type TocBranch =
+```
+
 ### 函数 `readingSectionsToHtml`
 
-源码：`src/import/import-export.ts:138`
+源码：`src/import/import-export.ts:156`
 
 Produces one portable article from a map and all recursively collected child maps in the same order used by continuous reading mode.
 
@@ -4656,7 +4676,7 @@ export function readingSectionsToHtml(sections: ReadingSection[], tocMaxDepth = 
 
 ### 函数 `readingSectionsToMarkdown`
 
-源码：`src/import/import-export.ts:196`
+源码：`src/import/import-export.ts:233`
 
 Produces article-oriented Markdown with a linked table of contents.
 
