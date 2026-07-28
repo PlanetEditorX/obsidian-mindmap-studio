@@ -283,6 +283,18 @@ export class AiAskModal extends Modal {
 
     const showImageRecognitionPreview = (batch: ImageRecognitionBatchResult): void => {
       pendingImagePreviews = this.options.onPreviewImageTextReplacements(batch.items);
+      if (this.options.imageRecognitionAutoConfirmDelaySeconds === 0 && pendingImagePreviews.length) {
+        status.setText("识图完成，正在后台原位替换…");
+        void Promise.resolve(this.options.onApplyImageTextReplacements(pendingImagePreviews))
+          .then((applied) => {
+            if (applied) this.close();
+            else if (session === this.modalSession) status.setText("变更未应用。请检查只读状态或重新识图。");
+          })
+          .catch((error) => {
+            if (session === this.modalSession) status.setText(error instanceof Error ? error.message : "应用识图结果失败");
+          });
+        return;
+      }
       preview.empty();
       preview.createEl("h3", { text: "图片识图原位替换预览" });
       preview.createEl("p", {

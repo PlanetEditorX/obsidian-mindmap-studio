@@ -33,6 +33,7 @@ export interface OutlineRendererOptions {
   openImageContextMenu: (event: MouseEvent, nodeId: string, blockId: string) => void;
   openMindMap: (path: string) => void | Promise<void>;
   resolveImage: MindMapEditorCallbacks["resolveImage"];
+  imageHostPriorityIds: string[];
   renderCode: MindMapEditorCallbacks["onRenderCode"];
 }
 
@@ -147,7 +148,7 @@ function renderOutlineContent(container: HTMLElement, node: MindMapNode, depth: 
         options.app,
         resolved,
         block.alt ?? "图片",
-        imageSourceCandidates(block, true),
+        imageSourceCandidates(block, true, options.imageHostPriorityIds),
         options.resolveImage
       ).open());
       image.addEventListener("contextmenu", (event) => {

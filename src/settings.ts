@@ -63,6 +63,8 @@ export interface ImageHostConfig {
   id: string;
   name: string;
   enabled: boolean;
+  /** Lower values are tried first when rendering remote image mirrors. */
+  priority: number;
   endpoint: string;
   method: ImageHostMethod;
   bodyMode: ImageHostBodyMode;
@@ -116,6 +118,7 @@ export function createImageHostConfig(index = 1): ImageHostConfig {
     id: `host_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`,
     name: `图床 ${index}`,
     enabled: true,
+    priority: index,
     endpoint: "",
     method: "POST",
     bodyMode: "multipart",
@@ -1246,6 +1249,7 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
       });
       const title = card.createEl("summary", { cls: "mms-image-host-card-title" });
       title.createEl("strong", { text: host.name || `图床 ${index + 1}` });
+      title.createSpan({ cls: "mms-image-host-status", text: `优先级 ${host.priority}` });
       const status = title.createSpan({ cls: "mms-image-host-status", text: host.enabled ? "已启用" : "已停用" });
       status.toggleClass("is-enabled", host.enabled);
       const body = card.createDiv({ cls: "mms-image-host-card-body" });
@@ -1275,6 +1279,18 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
           .setPlaceholder("https://example.com/api/upload")
           .setValue(host.endpoint)
           .onChange(async (value) => { host.endpoint = value.trim(); await this.plugin.saveSettings(); }));
+
+      new Setting(body)
+        .setName("加载优先级")
+        .setDesc("数值越小越优先。节点图片加载和点击放大时，会先尝试优先级最高的图床地址，失败后再尝试下一个。")
+        .addSlider((slider) => slider
+          .setLimits(1, 20, 1)
+          .setDynamicTooltip()
+          .setValue(host.priority)
+          .onChange(async (value) => {
+            host.priority = value;
+            await this.plugin.saveSettings();
+          }));
 
       new Setting(body)
         .setName("请求方法与格式")

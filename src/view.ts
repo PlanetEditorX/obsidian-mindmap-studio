@@ -15,6 +15,7 @@ import { readingSectionsToHtml } from "./import/import-export";
 import { AiAskModal } from "./ai/modal";
 import { enabledAiProfiles } from "./ai/config";
 import { buildAiMarkdownPayload } from "./ai/markdown";
+import { saveDesktopExportFile } from "./utils/desktop-export";
 import {
   collectRecognizableImages,
   type ImageRecognitionBatchResult,
@@ -413,6 +414,7 @@ export class MindMapStudioView extends TextFileView {
       imageFailoverEnabled: this.plugin.settings.imageFailoverEnabled,
       imageFailoverTimeoutSeconds: this.plugin.settings.imageFailoverTimeoutSeconds,
       imageFailoverUseLocalFallback: this.plugin.settings.imageFailoverUseLocalFallback,
+      imageHostPriorityIds: this.plugin.getImageHostPriorityIds(),
       visibleModes: [...this.plugin.settings.visibleModes],
       defaultViewMode: this.plugin.getActiveDisplayMode(),
       currentFilePath: this.file?.path ?? "",
@@ -545,10 +547,17 @@ export class MindMapStudioView extends TextFileView {
    * @param extension 该参数用于 export text file 流程中的输入或控制。
    * @param content 该参数用于 export text file 流程中的输入或控制。
    */
-  private async exportTextFile(extension: "svg" | "md" | "json" | "html" | "doc", content: string): Promise<void> {
+  private async exportTextFile(extension: "svg" | "md" | "json" | "html" | "doc", content: string, preferExternal = false): Promise<void> {
     const file = this.file;
-    const parentPath = file?.parent?.path ?? "";
     const baseName = file?.basename ?? this.document?.title ?? "思维导图";
+    if (preferExternal) {
+      const desktopResult = await saveDesktopExportFile(extension, baseName, content);
+      if (desktopResult) {
+        if (desktopResult.path) new Notice(`已导出：${desktopResult.path}`);
+        return;
+      }
+    }
+    const parentPath = file?.parent?.path ?? "";
     const path = await this.plugin.getAvailablePath(normalizePath(`${parentPath ? `${parentPath}/` : ""}${baseName}.${extension}`));
     await this.app.vault.create(path, content);
     new Notice(`已导出：${path}`);
@@ -571,12 +580,12 @@ export class MindMapStudioView extends TextFileView {
       : await this.plugin.buildDescendantReadingSections(file, document);
     if (format === "md") {
       const markdown = sections.map((section) => documentToMarkdown(section.document)).join("\n\n---\n\n");
-      await this.exportTextFile("md", markdown);
+      await this.exportTextFile("md", markdown, true);
       return;
     }
     const html = readingSectionsToHtml(sections);
     if (format === "pdf") this.printHtmlToPdf(html);
-    else await this.exportTextFile(format, html);
+    else await this.exportTextFile(format, html, true);
   }
 
   /**

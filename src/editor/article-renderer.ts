@@ -38,6 +38,7 @@ export interface ArticleRendererOptions {
   articleLeafBulletsEnabled: boolean;
   articleLeafBulletColor: string;
   articleLeafBulletStyle: ArticleLeafBulletStyle;
+  imageHostPriorityIds: string[];
   articleNavigation?: ArticlePageNavigation;
   callbacks: Pick<MindMapEditorCallbacks, "resolveImage" | "onRenderCode" | "onOpenMindMap" | "onOpenArticleDirectory">;
   selectNode: (id: string) => void;
@@ -178,7 +179,7 @@ export function renderArticleNodeContent(container: HTMLElement, node: MindMapNo
         options.app,
         resolved ?? block.source,
         block.alt ?? "图片",
-        imageSourceCandidates(block, true),
+        imageSourceCandidates(block, true, options.imageHostPriorityIds),
         (source) => options.callbacks.resolveImage(source)
       ).open());
       image.addEventListener("contextmenu", (event) => {

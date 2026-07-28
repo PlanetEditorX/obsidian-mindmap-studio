@@ -773,14 +773,15 @@ function normalizeContentBlock(input: unknown): MindMapContentBlock | null {
 }
 
 /**
- * 为图片内容块构建有序、去重的加载候选列表。顺序从当前地址开始轮转到其他远程镜像，最后按设置选择本地地址，从而支持失效图床自动切换。
+ * 为图片内容块构建有序、去重的加载候选列表。远程镜像按图床优先级排序，最后按设置选择本地地址，从而支持失效图床自动切换。
  *
  * @param block 当前内容块，通常是文字块或图片块。
  * @param includeLocal 是否把本地图片地址作为最终回退候选。
+ * @param hostPriorityIds 图床 ID 优先级，越靠前越先尝试。
  * @returns 按当前规则构建的集合结果。
  * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
  */
-export function imageSourceCandidates(block: MindMapImageContentBlock, includeLocal = true): MindMapImageSourceCandidate[] {
+export function imageSourceCandidates(block: MindMapImageContentBlock, includeLocal = true, hostPriorityIds: readonly string[] = []): MindMapImageSourceCandidate[] {
   const candidates: MindMapImageSourceCandidate[] = [];
   const seen = new Set<string>();
   const add = (candidate: MindMapImageSourceCandidate): void => {
@@ -790,27 +791,23 @@ export function imageSourceCandidates(block: MindMapImageContentBlock, includeLo
     candidates.push({ ...candidate, source });
   };
 
-  const currentRemote = block.remoteSources?.find((item) => item.url === block.source);
-  add({
-    source: block.source,
-    label: currentRemote?.hostName || (currentRemote ? "当前图床" : "当前图片"),
-    hostId: currentRemote?.hostId,
-    hostName: currentRemote?.hostName,
-    kind: "current"
-  });
+  const priority = new Map(hostPriorityIds.map((id, index) => [id, index]));
   const remotes = block.remoteSources ?? [];
-  const currentIndex = remotes.findIndex((item) => item.url === block.source);
-  const orderedRemotes = currentIndex >= 0
-    ? [...remotes.slice(currentIndex + 1), ...remotes.slice(0, currentIndex)]
-    : remotes;
+  const orderedRemotes = remotes
+    .map((remote, index) => ({ remote, index }))
+    .sort((left, right) => (priority.get(left.remote.hostId) ?? Number.MAX_SAFE_INTEGER) - (priority.get(right.remote.hostId) ?? Number.MAX_SAFE_INTEGER) || left.index - right.index)
+    .map((item) => item.remote);
   for (const remote of orderedRemotes) {
     add({
       source: remote.url,
-      label: remote.hostName || "备用图床",
+      label: remote.hostName || (remote.url === block.source ? "当前图床" : "备用图床"),
       hostId: remote.hostId,
       hostName: remote.hostName,
-      kind: "remote"
+      kind: remote.url === block.source ? "current" : "remote"
     });
+  }
+  if (!remotes.some((item) => item.url === block.source) && block.source !== block.localSource) {
+    add({ source: block.source, label: "当前图片", kind: "current" });
   }
   if (includeLocal && block.localSource) {
     add({ source: block.localSource, label: "本地副本", kind: "local" });
