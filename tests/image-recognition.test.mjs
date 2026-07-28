@@ -96,6 +96,7 @@ test("image-to-text preview preserves block position and rejects stale replaceme
     ["chapter-image-2", "image"]
   ]);
   assert.equal(blocks[1].text, "第一行\n第二行");
+  assert.equal(applied.root.children[0].style?.textAlign, "left");
   assert.equal(source.root.children[0].content[1].type, "image");
 
   source.root.children[0].content[1].source = "assets/changed.png";

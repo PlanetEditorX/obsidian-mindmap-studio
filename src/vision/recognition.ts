@@ -148,6 +148,7 @@ export function applyImageTextReplacement(document: MindMapDocument, preview: Im
   if (index < 0) throw new Error("准备替换的图片已经不存在");
   blocks[index] = { id: preview.blockId, type: "text", text: preview.text };
   node.content = blocks;
+  node.style = { ...(node.style ?? {}), textAlign: "left" };
   syncNodeContentFields(node);
   if (node.id === next.root.id && preview.text) next.title = nodePlainText(node) || next.title;
   return next;
