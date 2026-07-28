@@ -2683,7 +2683,8 @@
 /* Multi-view editor: mind map, outline, and article */
 .mmc-viewport.is-hidden,
 .mms-outline-view.is-hidden,
-.mms-article-view.is-hidden {
+.mms-article-view.is-hidden,
+.mms-question-practice-view.is-hidden {
   display: none;
 }
 
@@ -2748,7 +2749,8 @@
 }
 
 .mms-outline-view,
-.mms-article-view {
+.mms-article-view,
+.mms-question-practice-view {
   flex: 1 1 auto;
   min-height: 0;
   overflow: auto;
@@ -4259,8 +4261,6 @@
 }
 
 .mms-question-practice-view {
-  height: 100%;
-  overflow: auto;
   background: var(--background-primary);
 }
 
