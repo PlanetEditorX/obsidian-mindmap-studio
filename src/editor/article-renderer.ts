@@ -214,17 +214,29 @@ function renderArticleQuestionDetails(container: HTMLElement, node: MindMapNode)
     .filter(Boolean).join(" ");
   const panel = container.createDiv({ cls: "mms-question-panel" });
   panel.createDiv({ cls: "mms-question-kind", text: question.mode === "choice" ? "选择题" : "大题" });
-  const appendField = (label: string, value: string, cls = ""): void => {
+  const appendField = (container: HTMLElement, label: string, value: string, cls = ""): void => {
     if (!value) return;
-    const row = panel.createDiv({ cls: `mms-question-row ${cls}`.trim() });
+    const row = container.createDiv({ cls: `mms-question-row ${cls}`.trim() });
     row.createEl("strong", { text: `${label}：` });
     row.createSpan({ text: value });
   };
   if (question.mode === "choice") {
-    for (const option of question.options) appendField(option.label, plainText(option.content), "is-option");
+    for (const option of question.options) appendField(panel, option.label, plainText(option.content), "is-option");
   }
-  appendField("答案", plainText(question.answer), "is-answer");
-  appendField("解答", plainText(question.explanation), "is-explanation");
+  const answer = plainText(question.answer);
+  const explanation = plainText(question.explanation);
+  if (answer || explanation) {
+    const toggle = panel.createEl("button", { cls: "mms-question-toggle", text: "显示答案与解析", attr: { type: "button", "aria-expanded": "false" } });
+    const reveal = panel.createDiv({ cls: "mms-question-reveal" });
+    appendField(reveal, "答案", answer, "is-answer");
+    appendField(reveal, "解答", explanation, "is-explanation");
+    toggle.addEventListener("click", () => {
+      const revealed = !reveal.hasClass("is-revealed");
+      reveal.toggleClass("is-revealed", revealed);
+      toggle.setText(revealed ? "隐藏答案与解析" : "显示答案与解析");
+      toggle.setAttr("aria-expanded", String(revealed));
+    });
+  }
   if (question.source) {
     const source = panel.createEl("a", { cls: "mms-question-source", text: `原题来源：${question.source.title}`, href: question.source.url });
     source.setAttr("target", "_blank");
