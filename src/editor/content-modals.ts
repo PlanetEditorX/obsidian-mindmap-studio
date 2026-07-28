@@ -254,23 +254,30 @@ export class CodeEditModal extends Modal {
 
     const appearance = this.contentEl.createDiv({ cls: "mmc-code-appearance" });
     appearance.createEl("h3", { text: "显示设置" });
-    const collapsedLabel = appearance.createEl("label", { cls: "checkbox-container" });
-    const collapsedInput = collapsedLabel.createEl("input", { type: "checkbox" });
-    collapsedInput.checked = this.block?.collapsed === true;
-    collapsedLabel.createSpan({ text: "默认折叠代码" });
-    const lineNumbersLabel = appearance.createEl("label", { cls: "checkbox-container" });
-    const lineNumbersInput = lineNumbersLabel.createEl("input", { type: "checkbox" });
-    lineNumbersInput.checked = this.block?.showLineNumbers === true;
-    lineNumbersLabel.createSpan({ text: "显示行号" });
-    const themeLabel = appearance.createEl("label", { text: "代码样式" });
+    appearance.createDiv({ cls: "setting-item-description", text: "节点设置优先于页面“主题与外观”，页面设置优先于插件全局设置。" });
+    const displayGrid = appearance.createDiv({ cls: "mmc-code-appearance-grid" });
+    const collapsedLabel = displayGrid.createEl("label", { text: "默认状态" });
+    const collapsedSelect = collapsedLabel.createEl("select");
+    collapsedSelect.createEl("option", { value: "", text: "跟随页面代码设置" });
+    collapsedSelect.createEl("option", { value: "true", text: "折叠" });
+    collapsedSelect.createEl("option", { value: "false", text: "展开" });
+    collapsedSelect.value = typeof this.block?.collapsed === "boolean" ? String(this.block.collapsed) : "";
+    const lineNumbersLabel = displayGrid.createEl("label", { text: "行号" });
+    const lineNumbersSelect = lineNumbersLabel.createEl("select");
+    lineNumbersSelect.createEl("option", { value: "", text: "跟随页面代码设置" });
+    lineNumbersSelect.createEl("option", { value: "true", text: "显示" });
+    lineNumbersSelect.createEl("option", { value: "false", text: "隐藏" });
+    lineNumbersSelect.value = typeof this.block?.showLineNumbers === "boolean" ? String(this.block.showLineNumbers) : "";
+    const themeLabel = displayGrid.createEl("label", { text: "代码样式" });
     const themeSelect = themeLabel.createEl("select");
+    themeSelect.createEl("option", { value: "", text: "跟随页面代码设置" });
     ([
       ["obsidian", "Obsidian"],
       ["github", "GitHub"],
       ["monokai", "Monokai"],
       ["dracula", "Dracula"]
     ] as const).forEach(([value, label]) => themeSelect.createEl("option", { value, text: label }));
-    themeSelect.value = this.block?.theme ?? "obsidian";
+    themeSelect.value = this.block?.theme ?? "";
 
     const detect = this.contentEl.createEl("button", { text: "识别 fenced code", type: "button" });
     detect.addEventListener("click", () => {
@@ -297,9 +304,9 @@ export class CodeEditModal extends Modal {
       this.submit({
         language: language.replace(/[^a-z0-9_+#.-]/gi, "").slice(0, 40) || "bash",
         code,
-        collapsed: collapsedInput.checked || undefined,
-        showLineNumbers: lineNumbersInput.checked || undefined,
-        theme: themeSelect.value === "github" || themeSelect.value === "monokai" || themeSelect.value === "dracula" ? themeSelect.value : "obsidian"
+        ...(collapsedSelect.value ? { collapsed: collapsedSelect.value === "true" } : {}),
+        ...(lineNumbersSelect.value ? { showLineNumbers: lineNumbersSelect.value === "true" } : {}),
+        ...(themeSelect.value ? { theme: themeSelect.value as "obsidian" | "github" | "monokai" | "dracula" } : {})
       });
       this.close();
     });

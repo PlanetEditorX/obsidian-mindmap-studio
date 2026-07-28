@@ -4310,6 +4310,37 @@
   display: none;
 }
 
+.mmc-code-appearance {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+  padding: 12px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-s);
+  background: var(--background-secondary);
+}
+
+.mmc-code-appearance h3 { margin: 0; font-size: var(--font-ui-medium); }
+
+.mmc-code-appearance-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.mmc-code-appearance-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.mmc-code-appearance-grid select { width: 100%; }
+
+@media (max-width: 700px) {
+  .mmc-code-appearance-grid { grid-template-columns: 1fr; }
+}
+
 .mms-question-practice-page {
   width: min(860px, 100%);
   box-sizing: border-box;

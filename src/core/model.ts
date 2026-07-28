@@ -266,6 +266,10 @@ export interface MindMapAppearance {
   bold?: boolean;
   italic?: boolean;
   underline?: boolean;
+  /** Per-page code display overrides; undefined follows the global code settings. */
+  codeCollapsed?: boolean;
+  codeShowLineNumbers?: boolean;
+  codeTheme?: "obsidian" | "github" | "monokai" | "dracula";
 }
 
 /**
@@ -551,7 +555,12 @@ function normalizeAppearance(input: Partial<MindMapAppearance> | undefined): Min
     nodeTextAlign: input.nodeTextAlign === "left" || input.nodeTextAlign === "right" || input.nodeTextAlign === "center" ? input.nodeTextAlign : undefined,
     bold: normalizeBooleanOverride(input.bold),
     italic: normalizeBooleanOverride(input.italic),
-    underline: normalizeBooleanOverride(input.underline)
+    underline: normalizeBooleanOverride(input.underline),
+    codeCollapsed: normalizeBooleanOverride(input.codeCollapsed),
+    codeShowLineNumbers: normalizeBooleanOverride(input.codeShowLineNumbers),
+    codeTheme: input.codeTheme === "github" || input.codeTheme === "monokai" || input.codeTheme === "dracula" || input.codeTheme === "obsidian"
+      ? input.codeTheme
+      : undefined
   };
   return Object.values(appearance).some((value) => value !== undefined) ? appearance : undefined;
 }
@@ -1016,8 +1025,8 @@ function normalizeCode(input: Partial<MindMapCodeBlock> | undefined): MindMapCod
   return {
     language,
     code: input.code.replace(/\r\n/g, "\n").slice(0, 100000),
-    ...(input.collapsed === true ? { collapsed: true } : {}),
-    ...(input.showLineNumbers === true ? { showLineNumbers: true } : {}),
+    ...(typeof input.collapsed === "boolean" ? { collapsed: input.collapsed } : {}),
+    ...(typeof input.showLineNumbers === "boolean" ? { showLineNumbers: input.showLineNumbers } : {}),
     ...(theme ? { theme } : {})
   };
 }

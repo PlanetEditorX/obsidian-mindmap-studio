@@ -177,6 +177,9 @@ export interface MindMapStudioSettings {
   defaultTextBold: boolean;
   defaultTextItalic: boolean;
   defaultTextUnderline: boolean;
+  defaultCodeCollapsed: boolean;
+  defaultCodeShowLineNumbers: boolean;
+  defaultCodeTheme: "obsidian" | "github" | "monokai" | "dracula";
   imageHosts: ImageHostConfig[];
   autoUploadEnabled: boolean;
   autoUploadDelaySeconds: number;
@@ -288,6 +291,9 @@ export const DEFAULT_SETTINGS: MindMapStudioSettings = {
   defaultTextBold: false,
   defaultTextItalic: false,
   defaultTextUnderline: false,
+  defaultCodeCollapsed: false,
+  defaultCodeShowLineNumbers: false,
+  defaultCodeTheme: "obsidian",
   imageHosts: [],
   autoUploadEnabled: false,
   autoUploadDelaySeconds: 60,
@@ -382,6 +388,9 @@ export function settingsToAppearance(settings: MindMapStudioSettings): MindMapAp
     nodeBorderColor: settings.nodeBorderColor || undefined,
     nodeBorderWidth: settings.nodeBorderWidth,
     nodeTextAlign: settings.defaultNodeTextAlign,
+    codeCollapsed: settings.defaultCodeCollapsed,
+    codeShowLineNumbers: settings.defaultCodeShowLineNumbers,
+    codeTheme: settings.defaultCodeTheme,
     bold: settings.defaultTextBold,
     italic: settings.defaultTextItalic,
     underline: settings.defaultTextUnderline
@@ -522,6 +531,35 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
         void this.saveAndRefresh().then(() => this.display());
       });
     }
+
+    containerEl.createEl("h3", { text: "全局代码设置" });
+    new Setting(containerEl)
+      .setName("代码默认折叠")
+      .setDesc("优先级最低；页面或节点代码设置可覆盖。")
+      .addToggle((toggle) => toggle.setValue(this.plugin.settings.defaultCodeCollapsed).onChange(async (value) => {
+        this.plugin.settings.defaultCodeCollapsed = value;
+        await this.saveAndRefresh();
+      }));
+    new Setting(containerEl)
+      .setName("代码默认显示行号")
+      .setDesc("优先级最低；页面或节点代码设置可覆盖。")
+      .addToggle((toggle) => toggle.setValue(this.plugin.settings.defaultCodeShowLineNumbers).onChange(async (value) => {
+        this.plugin.settings.defaultCodeShowLineNumbers = value;
+        await this.saveAndRefresh();
+      }));
+    new Setting(containerEl)
+      .setName("代码默认样式")
+      .setDesc("优先级最低；页面或节点代码设置可覆盖。")
+      .addDropdown((dropdown) => dropdown
+        .addOption("obsidian", "Obsidian")
+        .addOption("github", "GitHub")
+        .addOption("monokai", "Monokai")
+        .addOption("dracula", "Dracula")
+        .setValue(this.plugin.settings.defaultCodeTheme)
+        .onChange(async (value) => {
+          this.plugin.settings.defaultCodeTheme = value === "github" || value === "monokai" || value === "dracula" ? value : "obsidian";
+          await this.saveAndRefresh();
+        }));
 
     containerEl.createEl("h3", { text: "显示模式" });
 

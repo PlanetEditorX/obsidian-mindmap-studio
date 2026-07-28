@@ -114,6 +114,14 @@ test("code block display settings persist while unsupported themes fall back saf
   });
   const invalid = model.normalizeDocument({ root: { text: "Code", code: { code: "x", theme: "unknown" }, children: [] } });
   assert.equal(invalid.root.code.theme, undefined);
+  const explicitOff = model.normalizeDocument({
+    appearance: { codeCollapsed: true, codeShowLineNumbers: false, codeTheme: "github" },
+    root: { text: "Code", code: { code: "x", collapsed: false, showLineNumbers: false }, children: [] }
+  });
+  assert.equal(explicitOff.appearance.codeCollapsed, true);
+  assert.equal(explicitOff.appearance.codeShowLineNumbers, false);
+  assert.equal(explicitOff.root.code.collapsed, false);
+  assert.equal(explicitOff.root.code.showLineNumbers, false);
 });
 
 test("question-bank grading distinguishes single choice, multiple choice and normalized essay answers", () => {
