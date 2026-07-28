@@ -30,6 +30,7 @@ export interface OutlineRendererOptions {
   mutate: (action: () => void) => void;
   editSelected: () => void;
   openAiContextMenu: (event: MouseEvent, nodeId: string) => void;
+  openImageContextMenu: (event: MouseEvent, nodeId: string, blockId: string) => void;
   openMindMap: (path: string) => void | Promise<void>;
   resolveImage: MindMapEditorCallbacks["resolveImage"];
   renderCode: MindMapEditorCallbacks["onRenderCode"];
@@ -131,11 +132,13 @@ function renderOutlineContent(container: HTMLElement, node: MindMapNode, depth: 
   });
   for (const block of additionalText) {
     const paragraph = content.createDiv({ cls: "mms-outline-text-block" });
+    paragraph.dataset.blockId = block.id;
     renderRichTextRuns(paragraph, block.richText, block.text);
   }
   for (const block of images) {
     const resolved = options.resolveImage(block.source);
     const figure = content.createEl("figure", { cls: "mms-outline-image" });
+    figure.dataset.blockId = block.id;
     if (resolved) {
       const image = figure.createEl("img", { attr: { src: resolved, alt: block.alt ?? "图片", loading: "lazy" } });
       if (block.width) image.style.width = `${block.width}px`;
@@ -147,6 +150,12 @@ function renderOutlineContent(container: HTMLElement, node: MindMapNode, depth: 
         imageSourceCandidates(block, true),
         options.resolveImage
       ).open());
+      image.addEventListener("contextmenu", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        options.selectNode(node.id);
+        options.openImageContextMenu(event, node.id, block.id);
+      });
     } else {
       figure.createDiv({ cls: "mms-outline-image-placeholder", text: "图片无法加载" });
     }

@@ -68,11 +68,21 @@ import { normalizeAiProfileConfig, type AiProfileConfig } from "./ai/config";
 import {
   requestAiCompletion,
   requestAiEditProposal,
+  requestAiImageRecognition,
   testAiProfileConnection,
   type AiCompletionResult
 } from "./ai/client";
 import type { AiMarkdownPayload } from "./ai/markdown";
 import { shouldHideFileExplorerPath } from "./file-explorer-filter";
+import { captureDesktopScreenshot, type DesktopCaptureResult } from "./utils/desktop-capture";
+import { recognizeImageWithLocalOcr } from "./vision/local-ocr";
+import {
+  buildImageRecognitionPrompt,
+  normalizeRecognizedText,
+  type ImageRecognitionItemResult,
+  type RecognizableImage
+} from "./vision/recognition";
+
 import {
   buildCompactTimestamp,
   buildDefaultMindMapTitle,
@@ -141,6 +151,17 @@ export default class MindMapStudioPlugin extends Plugin {
         const view = this.app.workspace.activeLeaf?.view;
         const available = view instanceof MindMapStudioView;
         if (!checking && available && view instanceof MindMapStudioView) view.askAi();
+        return available;
+      }
+    });
+    this.addCommand({
+      id: "capture-mind-map-screenshot",
+      name: "截图并插入当前节点或复制到剪贴板",
+      hotkeys: [{ modifiers: ["Mod", "Shift"], key: "S" }],
+      checkCallback: (checking) => {
+        const view = this.app.workspace.activeLeaf?.view;
+        const available = view instanceof MindMapStudioView;
+        if (!checking && available && view instanceof MindMapStudioView) void view.captureScreenshot();
         return available;
       }
     });
@@ -475,6 +496,21 @@ export default class MindMapStudioPlugin extends Plugin {
       aiDefaultQuestion: typeof raw.aiDefaultQuestion === "string"
         ? raw.aiDefaultQuestion.slice(0, 4000)
         : DEFAULT_SETTINGS.aiDefaultQuestion,
+      imageRecognitionMode: raw.imageRecognitionMode === "local-ocr" ? "local-ocr" : "ai",
+      imageRecognitionPrompt: typeof raw.imageRecognitionPrompt === "string"
+        ? raw.imageRecognitionPrompt.slice(0, 4000)
+        : DEFAULT_SETTINGS.imageRecognitionPrompt,
+      localOcrExecutable: typeof raw.localOcrExecutable === "string" && raw.localOcrExecutable.trim()
+        ? raw.localOcrExecutable.trim().slice(0, 2000)
+        : DEFAULT_SETTINGS.localOcrExecutable,
+      localOcrLanguage: typeof raw.localOcrLanguage === "string" && raw.localOcrLanguage.trim()
+        ? raw.localOcrLanguage.trim().slice(0, 240)
+        : DEFAULT_SETTINGS.localOcrLanguage,
+      localOcrExtraArgs: typeof raw.localOcrExtraArgs === "string"
+        ? raw.localOcrExtraArgs.slice(0, 1000)
+        : DEFAULT_SETTINGS.localOcrExtraArgs,
+      screenshotHideObsidian: raw.screenshotHideObsidian === true,
+      screenshotAutoRecognize: raw.screenshotAutoRecognize === true,
       syncTitleToFilename: raw.syncTitleToFilename !== false,
       deleteLocalAfterUpload: raw.deleteLocalAfterUpload !== false,
       imageFailoverEnabled: raw.imageFailoverEnabled !== false,
@@ -591,6 +627,42 @@ export default class MindMapStudioPlugin extends Plugin {
     const profile: AiProfileConfig | undefined = this.settings.aiProfiles.find((item) => item.id === profileId && item.enabled);
     if (!profile) throw new Error("AI 接口不存在或未启用");
     return requestAiEditProposal(profile, payload, instruction);
+  }
+
+  /** 使用当前识图模式处理单张图片；AI 模式可指定接口，本地 OCR 模式不会联网。 */
+  async recognizeImage(
+    image: RecognizableImage,
+    blob: Blob,
+    profileId?: string,
+    instruction?: string
+  ): Promise<ImageRecognitionItemResult> {
+    if (this.settings.imageRecognitionMode === "local-ocr") {
+      const text = await recognizeImageWithLocalOcr(blob, {
+        executable: this.settings.localOcrExecutable,
+        language: this.settings.localOcrLanguage,
+        extraArgs: this.settings.localOcrExtraArgs
+      });
+      return { ...image, text: normalizeRecognizedText(text), mode: "local-ocr" };
+    }
+    const selectedProfileId = profileId || this.settings.defaultAiProfileId;
+    const profile = this.settings.aiProfiles.find((item) => item.id === selectedProfileId && item.enabled);
+    if (!profile) throw new Error("AI 识图接口不存在或未启用");
+    const result = await requestAiImageRecognition(
+      profile,
+      blob,
+      buildImageRecognitionPrompt(image, instruction ?? this.settings.imageRecognitionPrompt)
+    );
+    return {
+      ...image,
+      text: normalizeRecognizedText(result.text),
+      mode: "ai",
+      model: result.model
+    };
+  }
+
+  /** 调用桌面系统截图工具，并根据设置决定是否临时最小化 Obsidian。 */
+  async captureScreenshot(): Promise<DesktopCaptureResult> {
+    return captureDesktopScreenshot(this.settings.screenshotHideObsidian);
   }
 
   /** 使用最小请求检测 AI 接口、鉴权和模型是否可用。 */
@@ -1118,7 +1190,22 @@ export default class MindMapStudioPlugin extends Plugin {
    */
   async readImageSource(source: string, sourceFile: TFile | null): Promise<{ blob: Blob; suggestedName: string } | null> {
     const raw = source.trim();
-    if (!raw || /^https?:\/\//i.test(raw) || /^data:/i.test(raw) || /^blob:/i.test(raw)) return null;
+    if (!raw) return null;
+    if (/^https?:\/\//i.test(raw)) {
+      const response = await requestUrl({ url: raw, method: "GET", throw: true });
+      const contentType = response.headers["content-type"]?.split(";")[0]?.trim() || this.mimeFromFilename(raw);
+      const suggestedName = (() => {
+        try { return new URL(raw).pathname.split("/").filter(Boolean).at(-1) || "remote-image.png"; }
+        catch { return "remote-image.png"; }
+      })();
+      return { blob: new Blob([response.arrayBuffer], { type: contentType }), suggestedName };
+    }
+    if (/^(?:data|blob):/i.test(raw)) {
+      const response = await fetch(raw);
+      if (!response.ok) throw new Error(`图片读取失败：HTTP ${response.status}`);
+      const blob = await response.blob();
+      return { blob, suggestedName: `inline-image.${blob.type.split("/")[1]?.replace("jpeg", "jpg") || "png"}` };
+    }
     const wikiMatch = raw.match(/^!?\[\[([\s\S]+?)\]\]$/);
     const target = (wikiMatch?.[1] ?? raw).split("|")[0]?.split("#")[0]?.trim() ?? raw;
     const direct = this.app.vault.getAbstractFileByPath(normalizePath(target));
