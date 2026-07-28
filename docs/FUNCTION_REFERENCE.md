@@ -112,7 +112,7 @@ export interface AiProfilePreset
 
 ### 函数 `createAiProfileConfig`
 
-源码：`src/ai/config.ts:134`
+源码：`src/ai/config.ts:136`
 
 创建一个可编辑的 AI 接口配置。
 
@@ -122,7 +122,7 @@ export function createAiProfileConfig(provider: AiProviderKind, index = 1): AiPr
 
 ### 函数 `normalizeAiProfileConfig`
 
-源码：`src/ai/config.ts:152`
+源码：`src/ai/config.ts:154`
 
 规范化持久化的 AI 配置，防止异常值进入请求层。
 
@@ -132,7 +132,7 @@ export function normalizeAiProfileConfig(value: unknown, index = 1): AiProfileCo
 
 ### 函数 `enabledAiProfiles`
 
-源码：`src/ai/config.ts:174`
+源码：`src/ai/config.ts:176`
 
 返回当前可用于请求的配置。
 
@@ -6130,7 +6130,7 @@ display(): void
 
 ### 方法 `MindMapStudioSettingTab.addOptionalColorSetting`
 
-源码：`src/settings.ts:1762`
+源码：`src/settings.ts:1775`
 
 添加optional color setting，并保持模型、界面和持久化状态的一致性。
 
@@ -6140,7 +6140,7 @@ private addOptionalColorSetting( container: HTMLElement, name: string, descripti
 
 ### 方法 `MindMapStudioSettingTab.saveAndRefresh`
 
-源码：`src/settings.ts:1794`
+源码：`src/settings.ts:1807`
 
 保存and refresh，并保持模型、界面和持久化状态的一致性。
 

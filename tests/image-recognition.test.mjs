@@ -134,4 +134,5 @@ test("desktop-only OCR and capture APIs are loaded lazily for mobile compatibili
   }
   assert.match(ocrSource, /requireFunction\("node:child_process"\)/);
   assert.match(captureSource, /requireFunction\("electron"\)/);
+  assert.match(captureSource, /BrowserWindow\?\.getFocusedWindow\?\.\(\) \?\? null/);
 });

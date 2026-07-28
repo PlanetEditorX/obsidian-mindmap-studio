@@ -62,6 +62,8 @@ test("AI presets include OpenAI, DeepSeek, SiliconFlow, FreeLLMAPI and custom pr
   assert.deepEqual(config.AI_PROVIDER_MODEL_PRESETS.siliconflow, [
     "deepseek-ai/DeepSeek-V4-Flash",
     "deepseek-ai/DeepSeek-V4-Pro",
+    "deepseek-ai/DeepSeek-OCR",
+    "PaddlePaddle/PaddleOCR-VL-1.5",
     "zai-org/GLM-5.2"
   ]);
   assert.equal(config.AI_PROFILE_PRESETS.freellmapi.endpoint, "");
@@ -342,17 +344,19 @@ test("AI integration exposes toolbar, shortcut, page scope and node scope contra
   assert.match(settingsSource, /text: "检测接口"/);
   assert.match(settingsSource, /imageRecognitionAiProfileId: ""/);
   assert.match(settingsSource, /AI 识图接口/);
-  assert.match(settingsSource, /screenshotShortcut: "Ctrl\+Shift\+S"/);
+  assert.match(settingsSource, /screenshotShortcut: "F1"/);
   assert.match(mainSource, /id: "ask-ai-about-mind-map"/);
   assert.match(mainSource, /async testAiProfile\(profileId: string\): Promise<void>/);
   assert.match(mainSource, /modifiers: \["Mod", "Shift"\], key: "A"/);
   assert.match(mainSource, /id: "capture-mind-map-screenshot"/);
-  assert.match(mainSource, /modifiers: \["Mod", "Shift"\], key: "S"/);
+  assert.match(mainSource, /modifiers: \[\], key: "F1"/);
   assert.match(mainSource, /imageRecognitionAiProfileId[\s\S]*aiProfileIds\.has/);
   assert.match(mainSource, /!stored\.includes\("screenshot"\)/);
   assert.match(editorSource, /aiScopeNodeId: string \| null = null/);
   assert.match(editorSource, /this\.shortcutMatches\(event, this\.options\.screenshotShortcut\)/);
-  assert.match(editorSource, /this\.options\.screenshotShortcut \|\| "Ctrl\+Shift\+S"/);
+  assert.match(editorSource, /this\.options\.screenshotShortcut \|\| "F1"/);
+  assert.match(settingsSource, /setIcon\("eye"/);
+  assert.match(settingsSource, /显示 API 密钥/);
   assert.match(editorSource, /询问 AI（此节点及全部子节点）/);
   assert.match(editorSource, /询问 AI（当前页面）/);
   assert.match(editorSource, /AI 识图/);

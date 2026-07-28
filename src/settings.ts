@@ -317,7 +317,7 @@ export const DEFAULT_SETTINGS: MindMapStudioSettings = {
   localOcrLanguage: "chi_sim+eng",
   localOcrExtraArgs: "--psm 6",
   screenshotHideObsidian: false,
-  screenshotShortcut: "Ctrl+Shift+S",
+  screenshotShortcut: "F1",
   screenshotAutoRecognize: false
 };
 
@@ -833,7 +833,7 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
         }));
     new Setting(containerEl)
       .setName("截图快捷键")
-      .setDesc("编辑器获得焦点时生效；格式示例：Ctrl+Shift+S、Alt+S。Obsidian 命令面板中的快捷键仍可单独设置。")
+      .setDesc("编辑器获得焦点时生效；默认 F1，格式示例：F1、Ctrl+Shift+S、Alt+S。Obsidian 命令面板中的快捷键仍可单独设置。")
       .addText((text) => text
         .setValue(this.plugin.settings.screenshotShortcut)
         .setPlaceholder(DEFAULT_SETTINGS.screenshotShortcut)
@@ -933,14 +933,27 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
         .setPlaceholder(endpointPlaceholder)
         .setValue(profile.endpoint)
         .onChange(async (value) => { profile.endpoint = value.trim(); await this.plugin.saveSettings(); }));
+      let apiKeyInput: HTMLInputElement | null = null;
       new Setting(body).setName("API 密钥").setDesc("留空仅适用于不需要鉴权的本地或代理接口。")
         .addText((text) => {
           text.inputEl.type = "password";
+          apiKeyInput = text.inputEl;
           return text.setPlaceholder("sk-…").setValue(profile.apiKey).onChange(async (value) => {
             profile.apiKey = value.trim();
             await this.plugin.saveSettings();
           });
-        });
+        })
+        .addExtraButton((button) => button
+          .setIcon("eye")
+          .setTooltip("显示 API 密钥")
+          .onClick(() => {
+            if (!apiKeyInput) return;
+            const visible = apiKeyInput.type === "password";
+            apiKeyInput.type = visible ? "text" : "password";
+            button.setIcon(visible ? "eye-off" : "eye");
+            button.setTooltip(visible ? "隐藏 API 密钥" : "显示 API 密钥");
+            apiKeyInput.focus();
+          }));
       const modelPresets = AI_PROVIDER_MODEL_PRESETS[profile.provider];
       const modelListId = `mms-ai-models-${profile.id.replace(/[^A-Za-z0-9_-]/g, "-")}`;
       const modelSetting = new Setting(body)
