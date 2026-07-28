@@ -344,6 +344,7 @@ test("AI integration exposes toolbar, shortcut, page scope and node scope contra
   assert.match(settingsSource, /text: "检测接口"/);
   assert.match(settingsSource, /imageRecognitionAiProfileId: ""/);
   assert.match(settingsSource, /AI 识图接口/);
+  assert.match(settingsSource, /containerEl\.appendChild\(imageRecognitionSettings\)/);
   assert.match(settingsSource, /screenshotShortcut: "F1"/);
   assert.match(mainSource, /id: "ask-ai-about-mind-map"/);
   assert.match(mainSource, /async testAiProfile\(profileId: string\): Promise<void>/);

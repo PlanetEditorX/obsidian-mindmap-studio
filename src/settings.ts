@@ -750,8 +750,9 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
         });
       });
 
-    containerEl.createEl("h4", { text: "图片识图与本地 OCR" });
-    new Setting(containerEl)
+    const imageRecognitionSettings = containerEl.createDiv({ cls: "mms-image-recognition-settings" });
+    imageRecognitionSettings.createEl("h4", { text: "图片识图与本地 OCR" });
+    new Setting(imageRecognitionSettings)
       .setName("默认识图方式")
       .setDesc("AI 模式可跟随全局接口，也可单独选择视觉模型；本地 OCR 模式调用本机 Tesseract，不上传图片。")
       .addDropdown((dropdown) => dropdown
@@ -767,7 +768,7 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
       const selectedVisionProfile = enabledProfiles.some((profile) => profile.id === this.plugin.settings.imageRecognitionAiProfileId)
         ? this.plugin.settings.imageRecognitionAiProfileId
         : "";
-      new Setting(containerEl)
+      new Setting(imageRecognitionSettings)
         .setName("AI 识图接口")
         .setDesc("默认跟随全局 AI 接口；如果全局模型不支持图片输入，可在这里单独选择视觉模型。")
         .addDropdown((dropdown) => {
@@ -780,7 +781,7 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
           });
         });
     }
-    new Setting(containerEl)
+    new Setting(imageRecognitionSettings)
       .setName("识图任务说明")
       .setDesc("AI 助手批量识图、图片右键识图和截图自动识图共用。")
       .addTextArea((text) => text
@@ -791,7 +792,7 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
           await this.plugin.saveSettings();
         }));
     if (this.plugin.settings.imageRecognitionMode === "local-ocr") {
-      new Setting(containerEl)
+      new Setting(imageRecognitionSettings)
         .setName("Tesseract 可执行文件")
         .setDesc("可填写命令名 tesseract，或本机完整路径。")
         .addText((text) => text
@@ -801,7 +802,7 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
             this.plugin.settings.localOcrExecutable = value.trim().slice(0, 2000) || "tesseract";
             await this.plugin.saveSettings();
           }));
-      new Setting(containerEl)
+      new Setting(imageRecognitionSettings)
         .setName("OCR 语言")
         .setDesc("需要本机已安装相应语言包，例如 chi_sim+eng。")
         .addText((text) => text
@@ -811,7 +812,7 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
             this.plugin.settings.localOcrLanguage = value.trim().slice(0, 240) || "chi_sim+eng";
             await this.plugin.saveSettings();
           }));
-      new Setting(containerEl)
+      new Setting(imageRecognitionSettings)
         .setName("OCR 附加参数")
         .setDesc("参数通过 execFile 传递，不使用 shell；默认 --psm 6。")
         .addText((text) => text
@@ -822,7 +823,7 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
             await this.plugin.saveSettings();
           }));
     }
-    new Setting(containerEl)
+    new Setting(imageRecognitionSettings)
       .setName("截图时隐藏 Obsidian")
       .setDesc("启动系统区域截图前自动最小化，截图完成后恢复窗口。")
       .addToggle((toggle) => toggle
@@ -831,7 +832,7 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
           this.plugin.settings.screenshotHideObsidian = value;
           await this.plugin.saveSettings();
         }));
-    new Setting(containerEl)
+    new Setting(imageRecognitionSettings)
       .setName("截图快捷键")
       .setDesc("编辑器获得焦点时生效；默认 F1，格式示例：F1、Ctrl+Shift+S、Alt+S。Obsidian 命令面板中的快捷键仍可单独设置。")
       .addText((text) => text
@@ -841,7 +842,7 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
           this.plugin.settings.screenshotShortcut = value.trim().slice(0, 120) || DEFAULT_SETTINGS.screenshotShortcut;
           await this.plugin.saveSettings();
         }));
-    new Setting(containerEl)
+    new Setting(imageRecognitionSettings)
       .setName("截图后自动识图")
       .setDesc("截图插入节点后自动运行当前识图方式并打开图片与文字对比预览；仍需确认后才替换。")
       .addToggle((toggle) => toggle
@@ -1009,6 +1010,9 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
         void this.plugin.saveSettings().then(() => this.display());
       });
     });
+
+    // Keep recognition controls beside the AI profiles they depend on.
+    containerEl.appendChild(imageRecognitionSettings);
 
     containerEl.createEl("h3", { text: "文件与布局" });
 
