@@ -8,10 +8,10 @@
 import { MarkdownRenderer, Notice, TextFileView, TFile, normalizePath, type WorkspaceLeaf } from "obsidian";
 import type MindMapStudioPlugin from "./main";
 import { MindMapEditor } from "./editor/editor";
-import { documentToMarkdown, parseDocument, serializeDocument, type DisplayMode, type MindMapDocument } from "./core/model";
+import { parseDocument, serializeDocument, type DisplayMode, type MindMapDocument } from "./core/model";
 import { settingsToAppearance } from "./settings";
 import type { ArticlePageNavigation, ArticleTocEntry, ReadingSection } from "./article/modes";
-import { readingSectionsToHtml } from "./import/import-export";
+import { readingSectionsToHtml, readingSectionsToMarkdown } from "./import/import-export";
 import { AiAskModal } from "./ai/modal";
 import { enabledAiProfiles } from "./ai/config";
 import { buildAiMarkdownPayload } from "./ai/markdown";
@@ -579,7 +579,7 @@ export class MindMapStudioView extends TextFileView {
       ? this.readingSections
       : await this.plugin.buildDescendantReadingSections(file, document);
     if (format === "md") {
-      const markdown = sections.map((section) => documentToMarkdown(section.document)).join("\n\n---\n\n");
+      const markdown = readingSectionsToMarkdown(sections);
       await this.exportTextFile("md", markdown, true);
       return;
     }
