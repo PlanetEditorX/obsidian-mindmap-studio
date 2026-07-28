@@ -188,7 +188,13 @@ export const setIcon = () => {};
   const rootTopicLinkedDocument = importExport.xmindToDocument(rootTopicLinkedArchive.buffer, "fallback");
   assert.deepEqual(rootTopicLinkedDocument.root.children.map((node) => node.text), ["节点 A"], "a sheet linked by its root topic ID must not be imported again as an orphan branch");
   assert.equal(rootTopicLinkedDocument.root.children[0]?.children[0]?.text, "子导图内容", "a root-topic-ID link must merge the child map content into its source node");
-  assert.match(importExport.readingSectionsToHtml([{ filePath: "root.mindmap", document: importedXmind, baseDepth: 0 }]), /<!doctype html>/);
+  const exportedHtml = importExport.readingSectionsToHtml([{ filePath: "root.mindmap", document: importedXmind, baseDepth: 0 }]);
+  assert.match(exportedHtml, /<!doctype html>/);
+  assert.match(exportedHtml, /<nav class="export-toc">[\s\S]*href="#export-0-mindmap-article-/, "exported HTML, Word and PDF source must keep TOC links to headings");
+  assert.match(exportedHtml, /<h2 id="export-0-mindmap-article-[^"]+">第一章 分支 A<\/h2>/, "exported headings must expose matching anchors");
+  const exportedMarkdown = importExport.readingSectionsToMarkdown([{ filePath: "root.mindmap", document: importedXmind, baseDepth: 0 }]);
+  assert.match(exportedMarkdown, /## 目录[\s\S]*- \[第一章 分支 A\]\(#export-0-mindmap-article-/, "exported Markdown must keep TOC links to headings");
+  assert.match(exportedMarkdown, /<a id="export-0-mindmap-article-[^"]+"><\/a>\n## 第一章 分支 A/, "exported Markdown headings must expose matching anchors");
   const mergedHtml = importExport.readingSectionsToHtml([
     { filePath: "root.mindmap", document: importedXmind, baseDepth: 0 },
     { filePath: "child.mindmap", document: model.createDefaultDocument("子导图"), baseDepth: 1 }

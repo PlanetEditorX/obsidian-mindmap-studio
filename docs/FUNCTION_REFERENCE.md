@@ -4584,14 +4584,54 @@ type XMindSheet =
 export function xmindToDocument(source: ArrayBuffer, fallbackTitle = "XMind 导入"): MindMapDocument
 ```
 
+### 函数 `exportAnchor`
+
+源码：`src/import/import-export.ts:95`
+
+生成跨文件导出时稳定且唯一的标题锚点。
+
+```ts
+function exportAnchor(sectionIndex: number, anchor: string): string
+```
+
+### 函数 `markdownAnchor`
+
+源码：`src/import/import-export.ts:100`
+
+把标题文本转换为 Markdown 目录可跳转的锚点片段。
+
+```ts
+function markdownAnchor(value: string): string
+```
+
+### 函数 `markdownTitle`
+
+源码：`src/import/import-export.ts:107`
+
+返回带目录编号的 Markdown 标题文本。
+
+```ts
+function markdownTitle(label: string, title: string, fallback = "未命名"): string
+```
+
 ### 函数 `readingSectionsToHtml`
 
-源码：`src/import/import-export.ts:101`
+源码：`src/import/import-export.ts:118`
 
 Produces one portable article from a map and all recursively collected child maps in the same order used by continuous reading mode.
 
 ```ts
 export function readingSectionsToHtml(sections: ReadingSection[]): string
+```
+
+### 函数 `readingSectionsToMarkdown`
+
+源码：`src/import/import-export.ts:160`
+
+Produces article-oriented Markdown with a linked table of contents.
+
+```ts
+export function readingSectionsToMarkdown(sections: ReadingSection[]): string
 ```
 
 ## `src/main.ts`
@@ -6949,12 +6989,12 @@ private resolveImage(rawSource: string): string | null
 执行“export text file”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
 
 ```ts
-private async exportTextFile(extension: "svg" | "md" | "json" | "html" | "doc", content: string): Promise<void>
+private async exportTextFile(extension: "svg" | "md" | "json" | "html" | "doc", content: string, preferExternal = false): Promise<void>
 ```
 
 ### 方法 `MindMapStudioView.exportArticleFamily`
 
-源码：`src/view.ts:571`
+源码：`src/view.ts:573`
 
 Exports the current map family as one continuous document. A top-level directory uses its already collected reading sections; a child page starts at the current map and recursively includes descendants only.
 
@@ -6964,7 +7004,7 @@ private async exportArticleFamily(format: "html" | "doc" | "pdf" | "md"): Promis
 
 ### 方法 `MindMapStudioView.printHtmlToPdf`
 
-源码：`src/view.ts:594`
+源码：`src/view.ts:596`
 
 Opens standalone HTML in a print window so the user can save it as PDF.
 
