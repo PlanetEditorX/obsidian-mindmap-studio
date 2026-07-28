@@ -1143,6 +1143,8 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
           await this.plugin.saveSettings();
         }));
 
+    containerEl.createEl("h3", { text: "题库" });
+
     new Setting(containerEl)
       .setName("题库文件夹")
       .setDesc("填写仓库内文件夹路径，例如 题库。该文件夹及其子目录内的思维导图会出现“题库”整页模式，可连续自动判题；留空则不启用。")
