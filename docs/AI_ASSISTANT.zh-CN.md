@@ -162,7 +162,7 @@ AI 编辑输出还受以下硬限制保护：
 
 | 预设 | 默认接口地址 | 默认模型或模型建议 |
 |---|---|---|
-| 硅基流动 | `https://api.siliconflow.cn/v1` | `deepseek-ai/DeepSeek-V4-Flash`、`deepseek-ai/DeepSeek-V4-Pro`、`zai-org/GLM-5.2` |
+| 硅基流动 | `https://api.siliconflow.cn/v1` | `deepseek-ai/DeepSeek-V4-Flash`、`deepseek-ai/DeepSeek-V4-Pro`、`deepseek-ai/DeepSeek-OCR`、`PaddlePaddle/PaddleOCR-VL-1.5`、`zai-org/GLM-5.2` |
 | FreeLLMAPI | 留空，由用户填写部署地址 | `auto` |
 
 模型输入框提供预设建议，但仍允许直接输入服务端支持的其他模型 ID。
@@ -180,7 +180,7 @@ AI 编辑输出还受以下硬限制保护：
 
 检测请求只发送“请回复 OK”的最小提示词，不包含当前页面、节点分支、文件路径或导图 Markdown。
 
-填写 API 密钥后，请求自动添加 Bearer `Authorization`。附加请求头只接受字符串、数字或布尔值，并拒绝非法名称、嵌套对象和 CRLF 换行注入。
+填写 API 密钥后，请求自动添加 Bearer `Authorization`。密钥输入框右侧的眼睛按钮可临时显示或隐藏当前密钥。附加请求头只接受字符串、数字或布尔值，并拒绝非法名称、嵌套对象和 CRLF 换行注入。
 
 ## 安全与隐私
 

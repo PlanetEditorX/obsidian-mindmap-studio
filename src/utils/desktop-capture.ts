@@ -14,8 +14,8 @@ interface ElectronCaptureRuntime {
   clipboard: {
     readImage: () => { isEmpty: () => boolean; toPNG: () => Uint8Array };
   };
-  BrowserWindow: {
-    getFocusedWindow: () => {
+  BrowserWindow?: {
+    getFocusedWindow?: () => {
       minimize: () => void;
       restore: () => void;
       show: () => void;
@@ -153,7 +153,8 @@ export async function captureDesktopScreenshot(hideObsidian: boolean): Promise<D
   const beforeImage = electronRuntime.clipboard.readImage();
   const beforeBytes = beforeImage.isEmpty() ? new Uint8Array() : beforeImage.toPNG();
   const beforeFingerprint = pngFingerprint(beforeBytes);
-  const windowHandle = electronRuntime.BrowserWindow.getFocusedWindow();
+  // BrowserWindow is not exposed by every Obsidian renderer runtime.
+  const windowHandle = electronRuntime.BrowserWindow?.getFocusedWindow?.() ?? null;
   try {
     if (hideObsidian && windowHandle && !windowHandle.isDestroyed()) windowHandle.minimize();
     await new Promise((resolve) => setTimeout(resolve, hideObsidian ? 250 : 50));

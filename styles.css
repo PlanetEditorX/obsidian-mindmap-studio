@@ -4012,12 +4012,14 @@
 }
 
 .mms-image-recognition-modal .modal-content {
-  width: min(920px, 92vw);
+  width: min(1280px, 96vw);
+  max-width: 96vw;
+  overflow-x: hidden;
 }
 
 .mms-image-recognition-compare {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr);
   gap: 16px;
 }
 
@@ -4036,7 +4038,8 @@
 .mms-image-recognition-pane img {
   display: block;
   width: 100%;
-  max-height: 56vh;
+  height: min(70vh, 760px);
+  max-width: 100%;
   object-fit: contain;
   border-radius: 6px;
   background: var(--background-primary);
