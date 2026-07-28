@@ -96,16 +96,24 @@ function exportAnchor(sectionIndex: number, anchor: string): string {
   return `export-${sectionIndex}-${anchor}`;
 }
 
-/** 把标题文本转换为 Markdown 目录可跳转的锚点片段。 */
-function markdownAnchor(value: string): string {
-  return value.trim().toLocaleLowerCase()
-    .replace(/[^\p{L}\p{N}\s_-]/gu, "")
-    .replace(/\s+/g, "-");
-}
-
 /** 返回带目录编号的 Markdown 标题文本。 */
 function markdownTitle(label: string, title: string, fallback = "未命名"): string {
   return [label, title || fallback].filter(Boolean).join(label && /[、.）]$/.test(label) ? "" : " ");
+}
+
+/** 返回跨文件目录项映射键。 */
+function parentNodeKey(filePath: string | undefined, nodeId: string | undefined): string | null {
+  return filePath && nodeId ? `${filePath}\u0000${nodeId}` : null;
+}
+
+/** 返回导出目录允许显示的层级。 */
+function normalizedExportTocMaxDepth(value: number): number {
+  return Number.isFinite(value) ? Math.max(1, Math.min(8, Math.round(value))) : 3;
+}
+
+/** 给 Markdown 标题附加跨渲染器更稳定的 HTML 锚点。 */
+function markdownHeading(level: number, anchor: string, title: string): string {
+  return `${"#".repeat(level)} <span id="${anchor}"></span>${title}`;
 }
 
 /**
@@ -113,40 +121,51 @@ function markdownTitle(label: string, title: string, fallback = "未命名"): st
  * maps in the same order used by continuous reading mode.
  *
  * @param sections Ordered physical maps to merge.
+ * @param tocMaxDepth Maximum exported TOC depth resolved from current/global article settings.
  * @returns Complete standalone HTML source.
  */
-export function readingSectionsToHtml(sections: ReadingSection[]): string {
+export function readingSectionsToHtml(sections: ReadingSection[], tocMaxDepth = 3): string {
+  const maxTocDepth = normalizedExportTocMaxDepth(tocMaxDepth);
   const tocItems: Array<{ depth: number; title: string; anchor: string }> = [];
-  const renderArticleNode = (document: MindMapDocument, baseDepth: number, sectionIndex: number): string => buildArticleNodeInfo(document.root, baseDepth)
+  const childSectionAnchors = new Map<string, string>();
+  sections.forEach((section, index) => {
+    const key = parentNodeKey(section.parentFilePath, section.parentNodeId);
+    if (key) childSectionAnchors.set(key, exportAnchor(index, `section-${index}`));
+  });
+  const pushTocItem = (depth: number, title: string, anchor: string): void => {
+    if (depth <= maxTocDepth) tocItems.push({ depth, title, anchor });
+  };
+  const renderArticleNode = (filePath: string, document: MindMapDocument, baseDepth: number, sectionIndex: number): string => buildArticleNodeInfo(document.root, baseDepth)
     .map((info) => {
       const title = escapeHtml(info.displayTitle || info.title || "未命名");
       const note = info.node.note ? `<p class="note">${escapeHtml(info.node.note)}</p>` : "";
       if (!info.isHeading) return `<p class="body-paragraph">${title}</p>${note}`;
       const level = Math.min(6, Math.max(2, info.depth + 1));
       const anchor = exportAnchor(sectionIndex, info.anchor);
-      tocItems.push({ depth: Math.max(1, info.depth), title, anchor });
+      const targetAnchor = childSectionAnchors.get(`${filePath}\u0000${info.node.id}`) ?? anchor;
+      pushTocItem(Math.max(1, info.depth), title, targetAnchor);
       return `<section><h${level} id="${anchor}">${title}</h${level}>${note}</section>`;
     })
     .join("");
   const first = sections[0]?.document;
   const title = escapeHtml(first ? (nodePlainText(first.root) || first.title) : "导出文档");
-  const body = sections.map(({ document, baseDepth }, index) => {
+  const body = sections.map(({ filePath, document, baseDepth }, index) => {
     const sectionTitle = escapeHtml(nodePlainText(document.root) || document.title);
     const headingLevel = Math.min(6, Math.max(1, baseDepth + 1));
     const sectionAnchor = exportAnchor(index, `section-${index}`);
     const heading = index === 0 ? "" : `<h${headingLevel} id="${sectionAnchor}">${sectionTitle}</h${headingLevel}>`;
-    if (index > 0) tocItems.push({ depth: Math.max(1, baseDepth + 1), title: sectionTitle, anchor: sectionAnchor });
-    return `<section class="map-section">${heading}${renderArticleNode(document, baseDepth, index)}</section>`;
+    if (index > 0) pushTocItem(Math.max(1, baseDepth), sectionTitle, sectionAnchor);
+    return `<section class="map-section">${heading}${renderArticleNode(filePath, document, baseDepth, index)}</section>`;
   }).join("");
   const toc = tocItems.length
-    ? `<nav class="export-toc"><h2>目录</h2><ol>${tocItems.map((item) => `<li class="depth-${Math.min(8, item.depth)}"><a href="#${item.anchor}">${item.title}</a></li>`).join("")}</ol></nav>`
+    ? `<nav class="export-toc"><h2>目录</h2><ul>${tocItems.map((item) => `<li class="depth-${Math.min(8, item.depth)}"><a href="#${item.anchor}">${item.title}</a></li>`).join("")}</ul></nav>`
     : "";
   return `<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width">
 <title>${title}</title><style>
 body{max-width:860px;margin:40px auto;padding:0 28px;color:#20242c;font:16px/1.85 system-ui,"Microsoft YaHei",sans-serif}
 h1{text-align:center;border-bottom:2px solid #ddd;padding-bottom:18px}h2,h3,h4,h5,h6{margin-top:1.7em;color:#172033}
-section{break-inside:auto}.export-toc{margin:2em 0 3em}.export-toc ol{padding-left:1.5em}.export-toc li{margin:.2em 0}.export-toc .depth-2{margin-left:1em}.export-toc .depth-3{margin-left:2em}.export-toc .depth-4,.export-toc .depth-5,.export-toc .depth-6,.export-toc .depth-7,.export-toc .depth-8{margin-left:3em}.map-section+.map-section{margin-top:3em;border-top:1px solid #ddd}.body-paragraph{margin:.75em 0;text-align:justify;text-indent:2em}.note{padding:10px 14px;color:#555;background:#f6f7f9;border-left:3px solid #6366f1}
+section{break-inside:auto}.export-toc{margin:2em 0 3em}.export-toc ul{padding-left:0;list-style:none}.export-toc li{margin:.2em 0}.export-toc .depth-2{margin-left:1em}.export-toc .depth-3{margin-left:2em}.export-toc .depth-4,.export-toc .depth-5,.export-toc .depth-6,.export-toc .depth-7,.export-toc .depth-8{margin-left:3em}.map-section+.map-section{margin-top:3em;border-top:1px solid #ddd}.body-paragraph{margin:.75em 0;text-align:justify;text-indent:2em}.note{padding:10px 14px;color:#555;background:#f6f7f9;border-left:3px solid #6366f1}
 @media print{body{margin:0;max-width:none}a{color:inherit}}
 </style></head><body><article><h1>${title}</h1>${toc}${body}</article></body></html>`;
 }
@@ -155,20 +174,30 @@ section{break-inside:auto}.export-toc{margin:2em 0 3em}.export-toc ol{padding-le
  * Produces article-oriented Markdown with a linked table of contents.
  *
  * @param sections Ordered physical maps to merge.
+ * @param tocMaxDepth Maximum exported TOC depth resolved from current/global article settings.
  * @returns Markdown source with matching TOC links and heading anchors.
  */
-export function readingSectionsToMarkdown(sections: ReadingSection[]): string {
+export function readingSectionsToMarkdown(sections: ReadingSection[], tocMaxDepth = 3): string {
+  const maxTocDepth = normalizedExportTocMaxDepth(tocMaxDepth);
   const first = sections[0]?.document;
   const title = first ? (nodePlainText(first.root) || first.title) : "导出文档";
   const tocItems: Array<{ depth: number; title: string; anchor: string }> = [];
+  const childSectionAnchors = new Map<string, string>();
+  sections.forEach((section, index) => {
+    const key = parentNodeKey(section.parentFilePath, section.parentNodeId);
+    if (key) childSectionAnchors.set(key, exportAnchor(index, `section-${index}`));
+  });
+  const pushTocItem = (depth: number, itemTitle: string, anchor: string): void => {
+    if (depth <= maxTocDepth) tocItems.push({ depth, title: itemTitle, anchor });
+  };
   const body: string[] = [];
-  sections.forEach(({ document, baseDepth }, sectionIndex) => {
+  sections.forEach(({ filePath, document, baseDepth }, sectionIndex) => {
     if (sectionIndex > 0) {
       const sectionTitle = nodePlainText(document.root) || document.title;
       const heading = markdownTitle("", sectionTitle);
-      const anchor = markdownAnchor(exportAnchor(sectionIndex, `section-${sectionIndex}`));
-      tocItems.push({ depth: Math.max(1, baseDepth + 1), title: heading, anchor });
-      body.push("", `<a id="${anchor}"></a>`, `${"#".repeat(Math.min(6, Math.max(1, baseDepth + 1)))} ${heading}`);
+      const anchor = exportAnchor(sectionIndex, `section-${sectionIndex}`);
+      pushTocItem(Math.max(1, baseDepth), heading, anchor);
+      body.push("", markdownHeading(Math.min(6, Math.max(1, baseDepth + 1)), anchor, heading));
     }
     for (const info of buildArticleNodeInfo(document.root, baseDepth)) {
       const heading = markdownTitle(info.label, info.title);
@@ -177,10 +206,11 @@ export function readingSectionsToMarkdown(sections: ReadingSection[]): string {
         if (info.node.note) body.push("", `> ${info.node.note.replaceAll("\n", " ")}`);
         continue;
       }
-      const anchor = markdownAnchor(exportAnchor(sectionIndex, info.anchor));
+      const anchor = exportAnchor(sectionIndex, info.anchor);
+      const targetAnchor = childSectionAnchors.get(`${filePath}\u0000${info.node.id}`) ?? anchor;
       const level = Math.min(6, Math.max(2, info.depth + 1));
-      tocItems.push({ depth: Math.max(1, info.depth), title: heading, anchor });
-      body.push("", `<a id="${anchor}"></a>`, `${"#".repeat(level)} ${heading}`);
+      pushTocItem(Math.max(1, info.depth), heading, targetAnchor);
+      body.push("", markdownHeading(level, anchor, heading));
       if (info.node.note) body.push("", `> ${info.node.note.replaceAll("\n", " ")}`);
     }
   });

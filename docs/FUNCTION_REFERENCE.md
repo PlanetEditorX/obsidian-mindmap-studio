@@ -2202,7 +2202,7 @@ export function isRightChildZone(pointer: DropPointer, rect: DropTargetRect): bo
 
 ### 类 `ImageHostPickerModal`
 
-源码：`src/editor/editor-modals.ts:24`
+源码：`src/editor/editor-modals.ts:25`
 
 选择一个或多个图片上传目标。
 
@@ -2212,7 +2212,7 @@ class ImageHostPickerModal extends Modal
 
 ### 构造函数 `ImageHostPickerModal.constructor`
 
-源码：`src/editor/editor-modals.ts:36`
+源码：`src/editor/editor-modals.ts:37`
 
 创建图床选择弹窗。
 
@@ -2222,7 +2222,7 @@ constructor( app: App, private readonly hosts: ImageHostChoice[], initialIds: st
 
 ### 方法 `ImageHostPickerModal.onOpen`
 
-源码：`src/editor/editor-modals.ts:49`
+源码：`src/editor/editor-modals.ts:50`
 
 创建图床多选列表。
 
@@ -2232,7 +2232,7 @@ onOpen(): void
 
 ### 方法 `ImageHostPickerModal.onClose`
 
-源码：`src/editor/editor-modals.ts:85`
+源码：`src/editor/editor-modals.ts:86`
 
 未确认时返回取消结果。
 
@@ -2242,7 +2242,7 @@ onClose(): void
 
 ### 函数 `chooseImageHosts`
 
-源码：`src/editor/editor-modals.ts:98`
+源码：`src/editor/editor-modals.ts:99`
 
 打开图床选择器，并过滤已经失效的默认 ID。
 
@@ -2252,7 +2252,7 @@ export function chooseImageHosts( app: App, hosts: ImageHostChoice[], initialIds
 
 ### 类 `ImagePreviewModal`
 
-源码：`src/editor/editor-modals.ts:117`
+源码：`src/editor/editor-modals.ts:118`
 
 提供图片缩放和滚轮预览。
 
@@ -2262,7 +2262,7 @@ export class ImagePreviewModal extends Modal
 
 ### 构造函数 `ImagePreviewModal.constructor`
 
-源码：`src/editor/editor-modals.ts:129`
+源码：`src/editor/editor-modals.ts:130`
 
 创建图片预览弹窗。
 
@@ -2272,7 +2272,7 @@ constructor( app: App, private readonly source: string, private readonly alt: st
 
 ### 方法 `ImagePreviewModal.onOpen`
 
-源码：`src/editor/editor-modals.ts:142`
+源码：`src/editor/editor-modals.ts:143`
 
 创建图片预览界面和缩放控制。
 
@@ -2282,7 +2282,7 @@ onOpen(): void
 
 ### 类 `FormulaEditModal`
 
-源码：`src/editor/editor-modals.ts:231`
+源码：`src/editor/editor-modals.ts:232`
 
 图形化 LaTeX 公式编辑器，提供常用结构按钮和实时预览。
 
@@ -2292,7 +2292,7 @@ export class FormulaEditModal extends Modal
 
 ### 构造函数 `FormulaEditModal.constructor`
 
-源码：`src/editor/editor-modals.ts:238`
+源码：`src/editor/editor-modals.ts:239`
 
 创建公式编辑器。
 
@@ -2302,7 +2302,7 @@ constructor(app: App, private readonly submit: (source: string) => void)
 
 ### 方法 `FormulaEditModal.onOpen`
 
-源码：`src/editor/editor-modals.ts:245`
+源码：`src/editor/editor-modals.ts:246`
 
 创建公式模板、源码输入和 MathJax 预览。
 
@@ -2312,7 +2312,7 @@ onOpen(): void
 
 ### 方法 `FormulaEditModal.onClose`
 
-源码：`src/editor/editor-modals.ts:349`
+源码：`src/editor/editor-modals.ts:350`
 
 清理公式编辑器 DOM。
 
@@ -2322,7 +2322,7 @@ onClose(): void
 
 ### 类 `ArticleStyleModal`
 
-源码：`src/editor/editor-modals.ts:357`
+源码：`src/editor/editor-modals.ts:358`
 
 编辑文章模式的预设、字体和颜色。
 
@@ -2332,7 +2332,7 @@ export class ArticleStyleModal extends Modal
 
 ### 构造函数 `ArticleStyleModal.constructor`
 
-源码：`src/editor/editor-modals.ts:367`
+源码：`src/editor/editor-modals.ts:368`
 
 创建文章样式编辑器。
 
@@ -2342,7 +2342,7 @@ constructor( app: App, style: ArticleStyle | undefined, private readonly submitS
 
 ### 方法 `ArticleStyleModal.onOpen`
 
-源码：`src/editor/editor-modals.ts:379`
+源码：`src/editor/editor-modals.ts:380`
 
 创建文章样式预设和自定义控件。
 
@@ -2352,7 +2352,7 @@ onOpen(): void
 
 ### 类 `JsonTransferModal`
 
-源码：`src/editor/editor-modals.ts:450`
+源码：`src/editor/editor-modals.ts:451`
 
 导入、导出或替换完整的思维导图 JSON。
 
@@ -2362,7 +2362,7 @@ export class JsonTransferModal extends Modal
 
 ### 构造函数 `JsonTransferModal.constructor`
 
-源码：`src/editor/editor-modals.ts:459`
+源码：`src/editor/editor-modals.ts:460`
 
 创建 JSON 传输弹窗。
 
@@ -2372,7 +2372,7 @@ constructor( app: App, private readonly document: MindMapDocument, private reado
 
 ### 方法 `JsonTransferModal.onOpen`
 
-源码：`src/editor/editor-modals.ts:471`
+源码：`src/editor/editor-modals.ts:472`
 
 创建 JSON 文本区和文件导入操作。
 
@@ -2382,7 +2382,7 @@ onOpen(): void
 
 ### 类 `OutlineModal`
 
-源码：`src/editor/editor-modals.ts:550`
+源码：`src/editor/editor-modals.ts:551`
 
 显示只读 Markdown 大纲并提供复制和导出入口。
 
@@ -2392,7 +2392,7 @@ export class OutlineModal extends Modal
 
 ### 构造函数 `OutlineModal.constructor`
 
-源码：`src/editor/editor-modals.ts:558`
+源码：`src/editor/editor-modals.ts:559`
 
 创建 Markdown 大纲弹窗。
 
@@ -2402,7 +2402,7 @@ constructor(app: App, private readonly markdown: string, private readonly onExpo
 
 ### 方法 `OutlineModal.onOpen`
 
-源码：`src/editor/editor-modals.ts:565`
+源码：`src/editor/editor-modals.ts:566`
 
 创建大纲内容和操作按钮。
 
@@ -2412,7 +2412,7 @@ onOpen(): void
 
 ### 方法 `OutlineModal.onClose`
 
-源码：`src/editor/editor-modals.ts:586`
+源码：`src/editor/editor-modals.ts:587`
 
 清理大纲弹窗 DOM。
 
@@ -2422,7 +2422,7 @@ onClose(): void
 
 ### 类 `DocumentExportModal`
 
-源码：`src/editor/editor-modals.ts:594`
+源码：`src/editor/editor-modals.ts:595`
 
 提供可移植文档格式的导出选择。
 
@@ -2432,17 +2432,17 @@ export class DocumentExportModal extends Modal
 
 ### 构造函数 `DocumentExportModal.constructor`
 
-源码：`src/editor/editor-modals.ts:601`
+源码：`src/editor/editor-modals.ts:602`
 
 创建文档导出格式弹窗。
 
 ```ts
-constructor(app: App, private readonly exportFormat: (format: "html" | "doc" | "pdf" | "md") => void)
+constructor(app: App, private readonly exportFormat: (format: "html" | "doc" | "pdf" | "md", sourceMode: DocumentExportSourceMode) => void)
 ```
 
 ### 方法 `DocumentExportModal.onOpen`
 
-源码：`src/editor/editor-modals.ts:608`
+源码：`src/editor/editor-modals.ts:609`
 
 创建各导出格式按钮。
 
@@ -2454,9 +2454,19 @@ onOpen(): void
 
 编辑器领域与 Obsidian 宿主层之间的稳定类型契约。
 
+### 类型 `DocumentExportSourceMode`
+
+源码：`src/editor/editor-types.ts:22`
+
+文档导出来源：连续通读全文或当前文章页。
+
+```ts
+export type DocumentExportSourceMode = "reading" | "article";
+```
+
 ### 接口 `MindMapEditorCallbacks`
 
-源码：`src/editor/editor-types.ts:27`
+源码：`src/editor/editor-types.ts:30`
 
 Host services consumed by the editor. Keeping these callbacks outside the editor implementation makes the UI testable without constructing the complete Obsidian plugin.
 
@@ -2466,7 +2476,7 @@ export interface MindMapEditorCallbacks
 
 ### 接口 `MindMapEditorOptions`
 
-源码：`src/editor/editor-types.ts:61`
+源码：`src/editor/editor-types.ts:64`
 
 Runtime editor configuration assembled by the view/plugin layer.
 
@@ -4594,19 +4604,9 @@ export function xmindToDocument(source: ArrayBuffer, fallbackTitle = "XMind 导�
 function exportAnchor(sectionIndex: number, anchor: string): string
 ```
 
-### 函数 `markdownAnchor`
-
-源码：`src/import/import-export.ts:100`
-
-把标题文本转换为 Markdown 目录可跳转的锚点片段。
-
-```ts
-function markdownAnchor(value: string): string
-```
-
 ### 函数 `markdownTitle`
 
-源码：`src/import/import-export.ts:107`
+源码：`src/import/import-export.ts:100`
 
 返回带目录编号的 Markdown 标题文本。
 
@@ -4614,24 +4614,54 @@ function markdownAnchor(value: string): string
 function markdownTitle(label: string, title: string, fallback = "未命名"): string
 ```
 
+### 函数 `parentNodeKey`
+
+源码：`src/import/import-export.ts:105`
+
+返回跨文件目录项映射键。
+
+```ts
+function parentNodeKey(filePath: string | undefined, nodeId: string | undefined): string | null
+```
+
+### 函数 `normalizedExportTocMaxDepth`
+
+源码：`src/import/import-export.ts:110`
+
+返回导出目录允许显示的层级。
+
+```ts
+function normalizedExportTocMaxDepth(value: number): number
+```
+
+### 函数 `markdownHeading`
+
+源码：`src/import/import-export.ts:115`
+
+给 Markdown 标题附加跨渲染器更稳定的 HTML 锚点。
+
+```ts
+function markdownHeading(level: number, anchor: string, title: string): string
+```
+
 ### 函数 `readingSectionsToHtml`
 
-源码：`src/import/import-export.ts:118`
+源码：`src/import/import-export.ts:127`
 
 Produces one portable article from a map and all recursively collected child maps in the same order used by continuous reading mode.
 
 ```ts
-export function readingSectionsToHtml(sections: ReadingSection[]): string
+export function readingSectionsToHtml(sections: ReadingSection[], tocMaxDepth = 3): string
 ```
 
 ### 函数 `readingSectionsToMarkdown`
 
-源码：`src/import/import-export.ts:160`
+源码：`src/import/import-export.ts:180`
 
 Produces article-oriented Markdown with a linked table of contents.
 
 ```ts
-export function readingSectionsToMarkdown(sections: ReadingSection[]): string
+export function readingSectionsToMarkdown(sections: ReadingSection[], tocMaxDepth = 3): string
 ```
 
 ## `src/main.ts`
@@ -6694,7 +6724,7 @@ Obsidian TextFileView 适配层。
 
 ### 类 `MindMapStudioView`
 
-源码：`src/view.ts:31`
+源码：`src/view.ts:32`
 
 MindMapStudioView 的主要实现类。负责封装相关状态、生命周期和对外操作，避免调用方直接操作内部数据结构。
 
@@ -6704,7 +6734,7 @@ export class MindMapStudioView extends TextFileView
 
 ### 构造函数 `MindMapStudioView.constructor`
 
-源码：`src/view.ts:53`
+源码：`src/view.ts:54`
 
 创建 MindMapStudioView 实例，保存依赖和初始状态；实际 DOM 构建通常在 onOpen() 或后续渲染流程中完成。
 
@@ -6714,7 +6744,7 @@ constructor(leaf: WorkspaceLeaf, plugin: MindMapStudioPlugin)
 
 ### 方法 `MindMapStudioView.getViewType`
 
-源码：`src/view.ts:62`
+源码：`src/view.ts:63`
 
 读取并返回view type，并保持模型、界面和持久化状态的一致性。
 
@@ -6724,7 +6754,7 @@ getViewType(): string
 
 ### 方法 `MindMapStudioView.getDisplayText`
 
-源码：`src/view.ts:70`
+源码：`src/view.ts:71`
 
 读取并返回display text，并保持模型、界面和持久化状态的一致性。
 
@@ -6734,7 +6764,7 @@ getDisplayText(): string
 
 ### 方法 `MindMapStudioView.getIcon`
 
-源码：`src/view.ts:78`
+源码：`src/view.ts:79`
 
 读取并返回icon，并保持模型、界面和持久化状态的一致性。
 
@@ -6744,7 +6774,7 @@ getIcon(): string
 
 ### 方法 `MindMapStudioView.getViewData`
 
-源码：`src/view.ts:87`
+源码：`src/view.ts:88`
 
 返回当前编辑器文档的序列化文本，供 Obsidian 自动保存。保存使用模型层统一序列化，确保字段规范和版本号正确。
 
@@ -6754,7 +6784,7 @@ getViewData(): string
 
 ### 方法 `MindMapStudioView.setViewData`
 
-源码：`src/view.ts:99`
+源码：`src/view.ts:100`
 
 接收 Obsidian 读取的文件文本，解析成领域文档并交给编辑器。重新加载时会保留全局显示模式，并异步刷新文章父子上下文。
 
@@ -6764,7 +6794,7 @@ setViewData(data: string, clear: boolean): void
 
 ### 方法 `MindMapStudioView.clear`
 
-源码：`src/view.ts:202`
+源码：`src/view.ts:203`
 
 执行“clear”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
 
@@ -6774,7 +6804,7 @@ clear(): void
 
 ### 方法 `MindMapStudioView.showArticleDirectory`
 
-源码：`src/view.ts:212`
+源码：`src/view.ts:213`
 
 Displays and persists the generated directory for the top-level article.
 
@@ -6784,7 +6814,7 @@ showArticleDirectory(): void
 
 ### 方法 `MindMapStudioView.save`
 
-源码：`src/view.ts:221`
+源码：`src/view.ts:222`
 
 保存相关数据，并保持模型、界面和持久化状态的一致性。
 
@@ -6794,7 +6824,7 @@ async save(clear?: boolean): Promise<void>
 
 ### 方法 `MindMapStudioView.onClose`
 
-源码：`src/view.ts:232`
+源码：`src/view.ts:233`
 
 在弹窗或视图关闭时释放临时 DOM、计时器和事件状态。
 
@@ -6804,7 +6834,7 @@ async onClose(): Promise<void>
 
 ### 方法 `MindMapStudioView.openMapFamilySearch`
 
-源码：`src/view.ts:244`
+源码：`src/view.ts:245`
 
 打开map family search，并保持模型、界面和持久化状态的一致性。
 
@@ -6814,7 +6844,7 @@ private async openMapFamilySearch(): Promise<void>
 
 ### 方法 `MindMapStudioView.refreshAppearance`
 
-源码：`src/view.ts:257`
+源码：`src/view.ts:258`
 
 刷新appearance，并保持模型、界面和持久化状态的一致性。
 
@@ -6824,7 +6854,7 @@ refreshAppearance(): void
 
 ### 方法 `MindMapStudioView.focusNode`
 
-源码：`src/view.ts:267`
+源码：`src/view.ts:268`
 
 定位node，并保持模型、界面和持久化状态的一致性。
 
@@ -6834,7 +6864,7 @@ focusNode(nodeId: string): void
 
 ### 方法 `MindMapStudioView.markExplicitNavigation`
 
-源码：`src/view.ts:282`
+源码：`src/view.ts:283`
 
 标记当前文件由用户或跨模式导航显式打开。 下一次文章族上下文加载完成时以当前文件为准，避免旧的跨文件阅读记录 立即把视图跳回刚离开的父导图或子导图。
 
@@ -6844,7 +6874,7 @@ markExplicitNavigation(focusNodeId?: string): void
 
 ### 方法 `MindMapStudioView.setDisplayMode`
 
-源码：`src/view.ts:299`
+源码：`src/view.ts:300`
 
 更新并应用display mode，并保持模型、界面和持久化状态的一致性。
 
@@ -6854,7 +6884,7 @@ setDisplayMode(mode: DisplayMode): void
 
 ### 方法 `MindMapStudioView.applyGlobalDisplayMode`
 
-源码：`src/view.ts:308`
+源码：`src/view.ts:309`
 
 应用global display mode，并保持模型、界面和持久化状态的一致性。
 
@@ -6864,7 +6894,7 @@ applyGlobalDisplayMode(mode: DisplayMode): void
 
 ### 方法 `MindMapStudioView.toggleReadOnly`
 
-源码：`src/view.ts:315`
+源码：`src/view.ts:316`
 
 切换read only，并保持模型、界面和持久化状态的一致性。
 
@@ -6874,7 +6904,7 @@ toggleReadOnly(): void
 
 ### 方法 `MindMapStudioView.askAi`
 
-源码：`src/view.ts:320`
+源码：`src/view.ts:321`
 
 打开 AI 询问窗口；默认使用当前页面，节点右键后使用该节点子树。
 
@@ -6884,7 +6914,7 @@ askAi(): void
 
 ### 方法 `MindMapStudioView.captureScreenshot`
 
-源码：`src/view.ts:326`
+源码：`src/view.ts:327`
 
 启动截图并让编辑器根据截图前焦点决定插入节点或保留剪贴板。
 
@@ -6894,7 +6924,7 @@ async captureScreenshot(): Promise<void>
 
 ### 方法 `MindMapStudioView.openAiModal`
 
-源码：`src/view.ts:335`
+源码：`src/view.ts:336`
 
 构建 Markdown 上下文并打开 AI 窗口。
 
@@ -6904,7 +6934,7 @@ private openAiModal(nodeId?: string): void
 
 ### 方法 `MindMapStudioView.recognizeImages`
 
-源码：`src/view.ts:378`
+源码：`src/view.ts:379`
 
 按节点树顺序逐张读取并识别当前页面或节点子树中的全部图片。
 
@@ -6914,7 +6944,7 @@ private async recognizeImages(nodeId: string | undefined, profileId: string, ins
 
 ### 方法 `MindMapStudioView.getEditorOptions`
 
-源码：`src/view.ts:406`
+源码：`src/view.ts:407`
 
 读取并返回editor options，并保持模型、界面和持久化状态的一致性。
 
@@ -6924,7 +6954,7 @@ private getEditorOptions(preferCurrentFileLocation = false)
 
 ### 方法 `MindMapStudioView.scheduleArticleContextRefresh`
 
-源码：`src/view.ts:462`
+源码：`src/view.ts:463`
 
 安排延迟执行article context refresh，并保持模型、界面和持久化状态的一致性。
 
@@ -6934,7 +6964,7 @@ private scheduleArticleContextRefresh(delay: number): void
 
 ### 方法 `MindMapStudioView.refreshArticleContext`
 
-源码：`src/view.ts:473`
+源码：`src/view.ts:474`
 
 刷新article context，并保持模型、界面和持久化状态的一致性。
 
@@ -6944,7 +6974,7 @@ private async refreshArticleContext(): Promise<void>
 
 ### 方法 `MindMapStudioView.applyViewClasses`
 
-源码：`src/view.ts:497`
+源码：`src/view.ts:498`
 
 应用view classes，并保持模型、界面和持久化状态的一致性。
 
@@ -6954,7 +6984,7 @@ private applyViewClasses(): void
 
 ### 方法 `MindMapStudioView.scheduleSavedIndicator`
 
-源码：`src/view.ts:506`
+源码：`src/view.ts:507`
 
 安排延迟执行saved indicator，并保持模型、界面和持久化状态的一致性。
 
@@ -6964,7 +6994,7 @@ private scheduleSavedIndicator(): void
 
 ### 方法 `MindMapStudioView.openLink`
 
-源码：`src/view.ts:516`
+源码：`src/view.ts:517`
 
 打开link，并保持模型、界面和持久化状态的一致性。
 
@@ -6974,7 +7004,7 @@ private async openLink(rawLink: string): Promise<void>
 
 ### 方法 `MindMapStudioView.resolveImage`
 
-源码：`src/view.ts:533`
+源码：`src/view.ts:534`
 
 解析并确定image，并保持模型、界面和持久化状态的一致性。
 
@@ -6984,7 +7014,7 @@ private resolveImage(rawSource: string): string | null
 
 ### 方法 `MindMapStudioView.exportTextFile`
 
-源码：`src/view.ts:550`
+源码：`src/view.ts:551`
 
 执行“export text file”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
 
@@ -6994,17 +7024,17 @@ private async exportTextFile(extension: "svg" | "md" | "json" | "html" | "doc", 
 
 ### 方法 `MindMapStudioView.exportArticleFamily`
 
-源码：`src/view.ts:573`
+源码：`src/view.ts:575`
 
 Exports the current map family as one continuous document. A top-level directory uses its already collected reading sections; a child page starts at the current map and recursively includes descendants only.
 
 ```ts
-private async exportArticleFamily(format: "html" | "doc" | "pdf" | "md"): Promise<void>
+private async exportArticleFamily(format: "html" | "doc" | "pdf" | "md", sourceMode: DocumentExportSourceMode = "reading"): Promise<void>
 ```
 
 ### 方法 `MindMapStudioView.printHtmlToPdf`
 
-源码：`src/view.ts:596`
+源码：`src/view.ts:601`
 
 Opens standalone HTML in a print window so the user can save it as PDF.
 
