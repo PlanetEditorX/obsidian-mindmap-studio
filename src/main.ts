@@ -641,7 +641,8 @@ export default class MindMapStudioPlugin extends Plugin {
     image: RecognizableImage,
     blob: Blob,
     profileId?: string,
-    instruction?: string
+    instruction?: string,
+    remoteUrl?: string
   ): Promise<ImageRecognitionItemResult> {
     if (this.settings.imageRecognitionMode === "local-ocr") {
       const text = await recognizeImageWithLocalOcr(blob, {
@@ -656,7 +657,7 @@ export default class MindMapStudioPlugin extends Plugin {
     if (!profile) throw new Error("AI 识图接口不存在或未启用");
     const result = await requestAiImageRecognition(
       profile,
-      blob,
+      remoteUrl || blob,
       buildImageRecognitionPrompt(image, instruction ?? this.settings.imageRecognitionPrompt)
     );
     return {
@@ -1328,16 +1329,47 @@ export default class MindMapStudioPlugin extends Plugin {
       new Notice("图片已保存到本地；自动上传未选择可用图床", 5000);
       return false;
     }
-    const key = `${file.path}::${nodeId}::${blockId}`;
+    this.queueAutoUpload(file.path, nodeId, blockId, localPath, suggestedName, hostIds, this.settings.autoUploadDelaySeconds * 1000);
+    return true;
+  }
+
+  /** 根据本地图片文件时间恢复延迟上传；到期图片在重新打开导图后立即上传。 */
+  async resumePendingAutoUploads(file: TFile, document: MindMapDocument): Promise<void> {
+    if (!this.settings.autoUploadEnabled) return;
+    const hostIds = this.getDefaultUploadHostIds();
+    if (!hostIds.length) return;
+    const delayMs = this.settings.autoUploadDelaySeconds * 1000;
+    for (const node of flattenNodes(document.root)) {
+      for (const block of nodeContentBlocks(node)) {
+        if (block.type !== "image") continue;
+        const localPath = block.localSource ?? (/^https?:\/\//i.test(block.source) ? "" : block.source);
+        const localFile = localPath ? this.app.vault.getAbstractFileByPath(normalizePath(localPath)) : null;
+        const uploaded = hostIds.every((hostId) => block.remoteSources?.some((source) => source.hostId === hostId));
+        if (!(localFile instanceof TFile) || uploaded) continue;
+        const remainingMs = Math.max(0, delayMs - Math.max(0, Date.now() - localFile.stat.mtime));
+        this.queueAutoUpload(file.path, node.id, block.id, localPath, localFile.name, hostIds, remainingMs);
+      }
+    }
+  }
+
+  /** 安排一次可去重的本地图片自动上传。 */
+  private queueAutoUpload(
+    mindMapPath: string,
+    nodeId: string,
+    blockId: string,
+    localPath: string,
+    suggestedName: string,
+    hostIds: string[],
+    delayMs: number
+  ): void {
+    const key = `${mindMapPath}::${nodeId}::${blockId}`;
     const existing = this.autoUploadTimers.get(key);
     if (existing !== undefined) window.clearTimeout(existing);
-    const delay = Math.max(0, Math.min(300, this.settings.autoUploadDelaySeconds)) * 1000;
     const timer = window.setTimeout(() => {
       this.autoUploadTimers.delete(key);
-      void this.runAutoUploadTask(file.path, nodeId, blockId, localPath, suggestedName, hostIds);
-    }, delay);
+      void this.runAutoUploadTask(mindMapPath, nodeId, blockId, localPath, suggestedName, hostIds);
+    }, Math.max(0, Math.min(300_000, delayMs)));
     this.autoUploadTimers.set(key, timer);
-    return true;
   }
 
   /**

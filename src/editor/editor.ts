@@ -1536,7 +1536,8 @@ export class MindMapEditor {
       const source = await this.callbacks.onReadImageSource(image.source);
       if (!source) throw new Error("无法读取该图片；请检查本地路径或远程地址");
       new Notice(this.options.imageRecognitionMode === "local-ocr" ? "正在执行本地 OCR…" : "正在进行 AI 识图…");
-      const result = await this.callbacks.onRecognizeImage(image, source.blob);
+      const remoteUrl = /^https:\/\//i.test(image.source) ? image.source : undefined;
+      const result = await this.callbacks.onRecognizeImage(image, source.blob, remoteUrl);
       const preview = previewImageTextReplacement(this.document, nodeId, blockId, result.text);
       const resolved = this.callbacks.resolveImage(image.source) ?? image.source;
       new ImageRecognitionPreviewModal(this.app, {
