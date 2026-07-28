@@ -1670,7 +1670,7 @@ export class MindMapEditor {
     this.addToolbarButton("table", "table-2", "插入或编辑表格", () => this.editTable(), true);
     this.addToolbarButton("code", "code-2", "插入或编辑代码", () => this.editCode(), true);
     this.addToolbarButton("image", "image-plus", "粘贴图片到当前节点（Ctrl/Cmd+V）", () => new Notice("先复制图片，再选中节点并按 Ctrl/Cmd+V"), true);
-    this.addToolbarButton("screenshot", "scan-line", `截图并插入当前节点（${this.options.screenshotShortcut || "F1"}）`, () => void this.captureScreenshot());
+    this.addToolbarButton("screenshot", "scan-line", `截图并插入当前节点（${this.options.screenshotShortcut || "Ctrl+Shift+S"}）`, () => void this.captureScreenshot());
     this.addToolbarButton("submap", "network", "创建或进入子导图", () => void this.createOrOpenSubmap());
     this.addToolbarSeparator();
     this.addToolbarButton("undo", "undo-2", "撤销（Ctrl/Cmd+Z）", () => this.undo(), true);

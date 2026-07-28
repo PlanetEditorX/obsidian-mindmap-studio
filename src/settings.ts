@@ -317,7 +317,7 @@ export const DEFAULT_SETTINGS: MindMapStudioSettings = {
   localOcrLanguage: "chi_sim+eng",
   localOcrExtraArgs: "--psm 6",
   screenshotHideObsidian: false,
-  screenshotShortcut: "F1",
+  screenshotShortcut: "Ctrl+Shift+S",
   screenshotAutoRecognize: false
 };
 
@@ -834,7 +834,7 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
         }));
     new Setting(imageRecognitionSettings)
       .setName("截图快捷键")
-      .setDesc("编辑器获得焦点时生效；默认 F1，格式示例：F1、Ctrl+Shift+S、Alt+S。Obsidian 命令面板中的快捷键仍可单独设置。")
+      .setDesc("编辑器获得焦点时生效；默认 Ctrl+Shift+S，格式示例：Ctrl+Shift+S、Alt+S。Obsidian 命令面板中的快捷键仍可单独设置。")
       .addText((text) => text
         .setValue(this.plugin.settings.screenshotShortcut)
         .setPlaceholder(DEFAULT_SETTINGS.screenshotShortcut)
