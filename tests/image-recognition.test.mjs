@@ -103,6 +103,12 @@ test("local OCR arguments are parsed without a shell", () => {
 });
 
 test("desktop screenshot helpers expose platform commands and stable clipboard fingerprints", () => {
+  const sourceBytes = new Uint8Array([1, 2, 3, 4]);
+  const copiedBuffer = desktopCapture.copyBytesToArrayBuffer(sourceBytes);
+  assert.ok(copiedBuffer instanceof ArrayBuffer);
+  assert.deepEqual([...new Uint8Array(copiedBuffer)], [1, 2, 3, 4]);
+  sourceBytes[0] = 9;
+  assert.equal(new Uint8Array(copiedBuffer)[0], 1);
   assert.deepEqual(desktopCapture.screenshotCommandCandidates("darwin"), [{ command: "screencapture", args: ["-i", "-c"] }]);
   assert.equal(desktopCapture.screenshotCommandCandidates("win32")[0].command, "SnippingTool.exe");
   assert.equal(desktopCapture.screenshotCommandCandidates("linux")[0].command, "gnome-screenshot");
