@@ -122,6 +122,7 @@ test("code block display settings persist while unsupported themes fall back saf
   assert.equal(explicitOff.appearance.codeShowLineNumbers, false);
   assert.equal(explicitOff.root.code.collapsed, false);
   assert.equal(explicitOff.root.code.showLineNumbers, false);
+  assert.equal(typeof model.normalizeDocument({ root: { text: "One line", code: { code: "x" }, children: [] } }).root.code.collapsed, "undefined");
 });
 
 test("question-bank grading distinguishes single choice, multiple choice and normalized essay answers", () => {
