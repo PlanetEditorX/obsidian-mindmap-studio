@@ -187,8 +187,9 @@ export class MindMapStudioView extends TextFileView {
           const fence = "`".repeat(longestFence + 1);
           const markdown = `${fence}${block.language ?? ""}\n${block.code}\n${fence}`;
           const pageCode = this.document?.appearance;
-          const collapsed = block.collapsed ?? pageCode?.codeCollapsed ?? this.plugin.settings.defaultCodeCollapsed;
-          const showLineNumbers = block.showLineNumbers ?? pageCode?.codeShowLineNumbers ?? this.plugin.settings.defaultCodeShowLineNumbers;
+          const inheritedSingleLine = this.plugin.settings.singleLineCodeSimplified && !block.code.includes("\n");
+          const collapsed = block.collapsed ?? (inheritedSingleLine ? false : pageCode?.codeCollapsed ?? this.plugin.settings.defaultCodeCollapsed);
+          const showLineNumbers = block.showLineNumbers ?? (inheritedSingleLine ? false : pageCode?.codeShowLineNumbers ?? this.plugin.settings.defaultCodeShowLineNumbers);
           const theme = block.theme ?? pageCode?.codeTheme ?? this.plugin.settings.defaultCodeTheme;
           const themeClass = theme !== "obsidian" ? CODE_THEME_CLASS_NAMES[theme] : undefined;
           if (themeClass) container.addClass(themeClass);

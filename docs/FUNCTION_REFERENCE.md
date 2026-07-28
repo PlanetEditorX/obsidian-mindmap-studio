@@ -6728,7 +6728,7 @@ export interface MindMapStudioSettings
 
 ### 函数 `normalizeReturnToTopVisibility`
 
-源码：`src/settings.ts:349`
+源码：`src/settings.ts:352`
 
 Normalizes the article return-to-top threshold from a number or percentage string.
 
@@ -6738,7 +6738,7 @@ export function normalizeReturnToTopVisibility(value: unknown): number
 
 ### 函数 `settingsToAppearance`
 
-源码：`src/settings.ts:365`
+源码：`src/settings.ts:368`
 
 更新并应用tings to appearance，并保持模型、界面和持久化状态的一致性。
 
@@ -6748,7 +6748,7 @@ export function settingsToAppearance(settings: MindMapStudioSettings): MindMapAp
 
 ### 函数 `applyThemePresetToSettings`
 
-源码：`src/settings.ts:406`
+源码：`src/settings.ts:409`
 
 应用theme preset to settings，并保持模型、界面和持久化状态的一致性。
 
@@ -6758,7 +6758,7 @@ export function applyThemePresetToSettings(settings: MindMapStudioSettings, pres
 
 ### 类 `MindMapStudioSettingTab`
 
-源码：`src/settings.ts:437`
+源码：`src/settings.ts:440`
 
 MindMapStudioSettingTab 的主要实现类。负责封装相关状态、生命周期和对外操作，避免调用方直接操作内部数据结构。
 
@@ -6768,7 +6768,7 @@ export class MindMapStudioSettingTab extends PluginSettingTab
 
 ### 构造函数 `MindMapStudioSettingTab.constructor`
 
-源码：`src/settings.ts:450`
+源码：`src/settings.ts:453`
 
 创建 MindMapStudioSettingTab 实例，保存依赖和初始状态；实际 DOM 构建通常在 onOpen() 或后续渲染流程中完成。
 
@@ -6778,7 +6778,7 @@ constructor(app: App, plugin: MindMapStudioPlugin)
 
 ### 方法 `MindMapStudioSettingTab.display`
 
-源码：`src/settings.ts:459`
+源码：`src/settings.ts:462`
 
 构建完整插件设置页，包括主题、显示模式、节点默认值、搜索、图片、图床容灾和恢复初始设置。所有控件写入后立即保存并刷新打开视图。
 
@@ -6788,7 +6788,7 @@ display(): void
 
 ### 方法 `MindMapStudioSettingTab.organizeSettingsSections`
 
-源码：`src/settings.ts:1905`
+源码：`src/settings.ts:1915`
 
 将一级设置分区折叠显示，并按顶部搜索词过滤匹配分区。
 
@@ -6798,7 +6798,7 @@ private organizeSettingsSections(): void
 
 ### 方法 `MindMapStudioSettingTab.addOptionalColorSetting`
 
-源码：`src/settings.ts:1959`
+源码：`src/settings.ts:1969`
 
 添加optional color setting，并保持模型、界面和持久化状态的一致性。
 
@@ -6808,7 +6808,7 @@ private addOptionalColorSetting( container: HTMLElement, name: string, descripti
 
 ### 方法 `MindMapStudioSettingTab.saveAndRefresh`
 
-源码：`src/settings.ts:1991`
+源码：`src/settings.ts:2001`
 
 保存and refresh，并保持模型、界面和持久化状态的一致性。
 
@@ -6818,7 +6818,7 @@ private async saveAndRefresh(): Promise<void>
 
 ### 方法 `MindMapStudioSettingTab.captureScreenshotShortcut`
 
-源码：`src/settings.ts:1997`
+源码：`src/settings.ts:2007`
 
 记录截图快捷键；修饰键必须与一个非修饰主键同时按下。
 
@@ -6828,7 +6828,7 @@ private async captureScreenshotShortcut(event: KeyboardEvent, text: TextComponen
 
 ### 方法 `MindMapStudioSettingTab.shortcutFromKeyboardEvent`
 
-源码：`src/settings.ts:2015`
+源码：`src/settings.ts:2025`
 
 将实际键盘事件转换为编辑器可识别的 1 至 3 键快捷键文本。
 
@@ -6838,7 +6838,7 @@ private shortcutFromKeyboardEvent(event: KeyboardEvent): string | null
 
 ### 方法 `MindMapStudioSettingTab.exportSettings`
 
-源码：`src/settings.ts:2031`
+源码：`src/settings.ts:2041`
 
 导出当前插件设置；桌面端优先显示系统保存位置选择器。
 
@@ -6848,7 +6848,7 @@ private async exportSettings(): Promise<void>
 
 ### 方法 `MindMapStudioSettingTab.openSettingsImportPicker`
 
-源码：`src/settings.ts:2051`
+源码：`src/settings.ts:2061`
 
 打开 JSON 配置文件选择器，并在成功导入后重新绘制设置页。
 
@@ -6858,7 +6858,7 @@ private openSettingsImportPicker(): void
 
 ### 方法 `MindMapStudioSettingTab.importSettingsFile`
 
-源码：`src/settings.ts:2060`
+源码：`src/settings.ts:2070`
 
 读取并导入用户选中的配置 JSON 文件。
 
@@ -7422,7 +7422,7 @@ setViewData(data: string, clear: boolean): void
 
 ### 方法 `MindMapStudioView.clear`
 
-源码：`src/view.ts:225`
+源码：`src/view.ts:226`
 
 执行“clear”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
 
@@ -7432,7 +7432,7 @@ clear(): void
 
 ### 方法 `MindMapStudioView.showArticleDirectory`
 
-源码：`src/view.ts:235`
+源码：`src/view.ts:236`
 
 Displays and persists the generated directory for the top-level article.
 
@@ -7442,7 +7442,7 @@ showArticleDirectory(): void
 
 ### 方法 `MindMapStudioView.save`
 
-源码：`src/view.ts:244`
+源码：`src/view.ts:245`
 
 保存相关数据，并保持模型、界面和持久化状态的一致性。
 
@@ -7452,7 +7452,7 @@ async save(clear?: boolean): Promise<void>
 
 ### 方法 `MindMapStudioView.onClose`
 
-源码：`src/view.ts:255`
+源码：`src/view.ts:256`
 
 在弹窗或视图关闭时释放临时 DOM、计时器和事件状态。
 
@@ -7462,7 +7462,7 @@ async onClose(): Promise<void>
 
 ### 方法 `MindMapStudioView.openMapFamilySearch`
 
-源码：`src/view.ts:267`
+源码：`src/view.ts:268`
 
 打开map family search，并保持模型、界面和持久化状态的一致性。
 
@@ -7472,7 +7472,7 @@ private async openMapFamilySearch(): Promise<void>
 
 ### 方法 `MindMapStudioView.refreshAppearance`
 
-源码：`src/view.ts:280`
+源码：`src/view.ts:281`
 
 刷新appearance，并保持模型、界面和持久化状态的一致性。
 
@@ -7482,7 +7482,7 @@ refreshAppearance(): void
 
 ### 方法 `MindMapStudioView.focusNode`
 
-源码：`src/view.ts:290`
+源码：`src/view.ts:291`
 
 定位node，并保持模型、界面和持久化状态的一致性。
 
@@ -7492,7 +7492,7 @@ focusNode(nodeId: string): void
 
 ### 方法 `MindMapStudioView.markExplicitNavigation`
 
-源码：`src/view.ts:305`
+源码：`src/view.ts:306`
 
 标记当前文件由用户或跨模式导航显式打开。 下一次文章族上下文加载完成时以当前文件为准，避免旧的跨文件阅读记录 立即把视图跳回刚离开的父导图或子导图。
 
@@ -7502,7 +7502,7 @@ markExplicitNavigation(focusNodeId?: string): void
 
 ### 方法 `MindMapStudioView.setDisplayMode`
 
-源码：`src/view.ts:322`
+源码：`src/view.ts:323`
 
 更新并应用display mode，并保持模型、界面和持久化状态的一致性。
 
@@ -7512,7 +7512,7 @@ setDisplayMode(mode: DisplayMode): void
 
 ### 方法 `MindMapStudioView.applyGlobalDisplayMode`
 
-源码：`src/view.ts:331`
+源码：`src/view.ts:332`
 
 应用global display mode，并保持模型、界面和持久化状态的一致性。
 
@@ -7522,7 +7522,7 @@ applyGlobalDisplayMode(mode: DisplayMode): void
 
 ### 方法 `MindMapStudioView.toggleReadOnly`
 
-源码：`src/view.ts:338`
+源码：`src/view.ts:339`
 
 切换read only，并保持模型、界面和持久化状态的一致性。
 
@@ -7532,7 +7532,7 @@ toggleReadOnly(): void
 
 ### 方法 `MindMapStudioView.askAi`
 
-源码：`src/view.ts:343`
+源码：`src/view.ts:344`
 
 打开 AI 询问窗口；默认使用当前页面，节点右键后使用该节点子树。
 
@@ -7542,7 +7542,7 @@ askAi(): void
 
 ### 方法 `MindMapStudioView.captureScreenshot`
 
-源码：`src/view.ts:349`
+源码：`src/view.ts:350`
 
 启动截图并让编辑器根据截图前焦点决定插入节点或保留剪贴板。
 
@@ -7552,7 +7552,7 @@ async captureScreenshot(): Promise<void>
 
 ### 方法 `MindMapStudioView.openAiModal`
 
-源码：`src/view.ts:358`
+源码：`src/view.ts:359`
 
 构建 Markdown 上下文并打开 AI 窗口。
 
@@ -7562,7 +7562,7 @@ private openAiModal(nodeId?: string): void
 
 ### 方法 `MindMapStudioView.recognizeImages`
 
-源码：`src/view.ts:401`
+源码：`src/view.ts:402`
 
 按节点树顺序逐张读取并识别当前页面或节点子树中的全部图片。
 
@@ -7572,7 +7572,7 @@ private async recognizeImages(nodeId: string | undefined, profileId: string, ins
 
 ### 方法 `MindMapStudioView.getEditorOptions`
 
-源码：`src/view.ts:429`
+源码：`src/view.ts:430`
 
 读取并返回editor options，并保持模型、界面和持久化状态的一致性。
 
@@ -7582,7 +7582,7 @@ private getEditorOptions(preferCurrentFileLocation = false)
 
 ### 方法 `MindMapStudioView.scheduleArticleContextRefresh`
 
-源码：`src/view.ts:490`
+源码：`src/view.ts:491`
 
 安排延迟执行article context refresh，并保持模型、界面和持久化状态的一致性。
 
@@ -7592,7 +7592,7 @@ private scheduleArticleContextRefresh(delay: number): void
 
 ### 方法 `MindMapStudioView.refreshArticleContext`
 
-源码：`src/view.ts:501`
+源码：`src/view.ts:502`
 
 刷新article context，并保持模型、界面和持久化状态的一致性。
 
@@ -7602,7 +7602,7 @@ private async refreshArticleContext(): Promise<void>
 
 ### 方法 `MindMapStudioView.applyViewClasses`
 
-源码：`src/view.ts:525`
+源码：`src/view.ts:526`
 
 应用view classes，并保持模型、界面和持久化状态的一致性。
 
@@ -7612,7 +7612,7 @@ private applyViewClasses(): void
 
 ### 方法 `MindMapStudioView.scheduleSavedIndicator`
 
-源码：`src/view.ts:534`
+源码：`src/view.ts:535`
 
 安排延迟执行saved indicator，并保持模型、界面和持久化状态的一致性。
 
@@ -7622,7 +7622,7 @@ private scheduleSavedIndicator(): void
 
 ### 方法 `MindMapStudioView.openLink`
 
-源码：`src/view.ts:544`
+源码：`src/view.ts:545`
 
 打开link，并保持模型、界面和持久化状态的一致性。
 
@@ -7632,7 +7632,7 @@ private async openLink(rawLink: string): Promise<void>
 
 ### 方法 `MindMapStudioView.resolveImage`
 
-源码：`src/view.ts:561`
+源码：`src/view.ts:562`
 
 解析并确定image，并保持模型、界面和持久化状态的一致性。
 
@@ -7642,7 +7642,7 @@ private resolveImage(rawSource: string): string | null
 
 ### 方法 `MindMapStudioView.exportTextFile`
 
-源码：`src/view.ts:578`
+源码：`src/view.ts:579`
 
 执行“export text file”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
 
@@ -7652,7 +7652,7 @@ private async exportTextFile(extension: "svg" | "md" | "json" | "html" | "doc", 
 
 ### 方法 `MindMapStudioView.exportBinaryFile`
 
-源码：`src/view.ts:595`
+源码：`src/view.ts:596`
 
 将二进制文档写入所选位置或当前库。
 
@@ -7662,7 +7662,7 @@ private async exportBinaryFile(extension: "docx", content: Uint8Array): Promise<
 
 ### 方法 `MindMapStudioView.exportArticleFamily`
 
-源码：`src/view.ts:618`
+源码：`src/view.ts:619`
 
 Exports the current map family as one continuous document. A top-level directory uses its already collected reading sections; a child page starts at the current map and recursively includes descendants only.
 

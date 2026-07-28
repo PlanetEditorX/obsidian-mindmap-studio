@@ -179,6 +179,8 @@ export interface MindMapStudioSettings {
   defaultTextUnderline: boolean;
   defaultCodeCollapsed: boolean;
   defaultCodeShowLineNumbers: boolean;
+  /** Keeps inherited single-line code expanded and without a line-number gutter. */
+  singleLineCodeSimplified: boolean;
   defaultCodeTheme: "obsidian" | "github" | "monokai" | "dracula";
   imageHosts: ImageHostConfig[];
   autoUploadEnabled: boolean;
@@ -293,6 +295,7 @@ export const DEFAULT_SETTINGS: MindMapStudioSettings = {
   defaultTextUnderline: false,
   defaultCodeCollapsed: false,
   defaultCodeShowLineNumbers: false,
+  singleLineCodeSimplified: true,
   defaultCodeTheme: "obsidian",
   imageHosts: [],
   autoUploadEnabled: false,
@@ -545,6 +548,13 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
       .setDesc("优先级最低；页面或节点代码设置可覆盖。")
       .addToggle((toggle) => toggle.setValue(this.plugin.settings.defaultCodeShowLineNumbers).onChange(async (value) => {
         this.plugin.settings.defaultCodeShowLineNumbers = value;
+        await this.saveAndRefresh();
+      }));
+    new Setting(containerEl)
+      .setName("单行代码保持展开且隐藏行号")
+      .setDesc("开启后，单行代码忽略页面和全局的折叠、行号设置；节点代码明确设置时仍可覆盖。")
+      .addToggle((toggle) => toggle.setValue(this.plugin.settings.singleLineCodeSimplified).onChange(async (value) => {
+        this.plugin.settings.singleLineCodeSimplified = value;
         await this.saveAndRefresh();
       }));
     new Setting(containerEl)
