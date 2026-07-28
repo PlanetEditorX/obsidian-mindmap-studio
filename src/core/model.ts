@@ -279,6 +279,13 @@ export interface MindMapQuestionOption {
   content: MindMapContentBlock[];
 }
 
+/** Verifiable provenance for an original question found by an AI-assisted lookup. */
+export interface MindMapQuestionSource {
+  title: string;
+  url: string;
+  matchedAt: string;
+}
+
 /** Persisted question content attached to a mind-map node. */
 export interface MindMapQuestion {
   mode: MindMapQuestionMode;
@@ -287,6 +294,7 @@ export interface MindMapQuestion {
   answer: MindMapContentBlock[];
   explanation: MindMapContentBlock[];
   tags: string[];
+  source?: MindMapQuestionSource;
 }
 
 /**
@@ -388,7 +396,8 @@ export function createMindMapQuestion(mode: MindMapQuestionMode = "choice"): Min
       : [],
     answer: [{ id: newId(), type: "text", text: "" }],
     explanation: [{ id: newId(), type: "text", text: "" }],
-    tags: []
+    tags: [],
+    source: undefined
   };
 }
 
@@ -1040,7 +1049,18 @@ function normalizeMindMapQuestion(value: unknown): MindMapQuestion | undefined {
     options,
     answer: normalizeBlocks(input.answer),
     explanation: normalizeBlocks(input.explanation),
-    tags: normalizeTags(input.tags) ?? []
+    tags: normalizeTags(input.tags) ?? [],
+    source: input.source && typeof input.source === "object"
+      && typeof input.source.title === "string" && input.source.title.trim()
+      && typeof input.source.url === "string" && /^https?:\/\//i.test(input.source.url.trim())
+      ? {
+        title: input.source.title.trim().slice(0, 300),
+        url: input.source.url.trim().slice(0, 2000),
+        matchedAt: typeof input.source.matchedAt === "string" && input.source.matchedAt.trim()
+          ? input.source.matchedAt.trim().slice(0, 80)
+          : new Date().toISOString()
+      }
+      : undefined
   };
 }
 

@@ -654,6 +654,35 @@ export default class MindMapStudioPlugin extends Plugin {
     return requestAiCompletion(profile, payload, question);
   }
 
+  /** Converts a transcribed question into a verified original-question lookup result when the selected model supports web retrieval. */
+  async enrichQuestion(questionText: string): Promise<string> {
+    const markdown = questionText.trim();
+    if (!markdown) throw new Error("题目内容为空，无法检索原题");
+    const profile = this.settings.aiProfiles.find((item) => item.id === this.settings.defaultAiProfileId && item.enabled);
+    if (!profile) throw new Error("默认 AI 接口不存在或未启用");
+    const byteSize = new TextEncoder().encode(markdown).byteLength;
+    const payload: AiMarkdownPayload = {
+      scope: "subtree",
+      scopeNodeId: null,
+      scopeLabel: "待检索题目",
+      filePath: "",
+      markdown,
+      byteSize,
+      characterCount: markdown.length,
+      nodeCount: 1,
+      maxInputBytes: this.settings.aiMaxInputBytes,
+      overLimit: byteSize > this.settings.aiMaxInputBytes
+    };
+    const instruction = [
+      "将给出的题目整理为题库结构，并在你具备联网检索能力时搜索精确原题。",
+      "只在找到可验证的原题来源时返回 found:true；必须提供可访问的 sourceUrl 和 sourceTitle。",
+      "不能联网、未找到、来源不可靠或答案无法核验时返回 found:false，且 answer、explanation 留空；绝不猜测或编造答案、解析、来源。",
+      "只返回 JSON，不要 Markdown：{\"found\":boolean,\"mode\":\"choice|essay\",\"stem\":\"\",\"options\":[{\"label\":\"A\",\"content\":\"\"}],\"answer\":\"\",\"explanation\":\"\",\"tags\":[\"\"],\"sourceTitle\":\"\",\"sourceUrl\":\"\"}。"
+    ].join("\n");
+    const result = await requestAiCompletion(profile, payload, instruction);
+    return result.text;
+  }
+
   /** 使用指定 AI 配置生成 Markdown 修改提案，但不直接修改导图。 */
   async proposeAiEdit(profileId: string, payload: AiMarkdownPayload, instruction: string): Promise<AiCompletionResult> {
     const profile: AiProfileConfig | undefined = this.settings.aiProfiles.find((item) => item.id === profileId && item.enabled);

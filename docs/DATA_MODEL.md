@@ -72,7 +72,7 @@ interface MindMapNode {
 
 ### 题目节点
 
-`question` 是可选的结构化题目数据，支持 `choice` 和 `essay` 两种模式。它包含图文题干、选择项、答案、解答及标签；题干会同步到标准 `content` 字段，保证既有的导出、搜索和阅读模式仍按普通节点工作。
+`question` 是可选的结构化题目数据，支持 `choice` 和 `essay` 两种模式。它包含图文题干、选择项、答案、解答及标签；题干会同步到标准 `content` 字段，保证既有的导出、搜索和阅读模式仍按普通节点工作。AI 找到原题后会记录 `source.title`、`source.url` 与匹配时间；仅接受 HTTP(S) 来源，未验证结果不会自动填入答案或解析。
 - `view.articleTocMaxDepth` 是可选的 1–8 层目录深度覆盖。字段缺失时，文章模式和通读模式跟随插件全局 `articleTocMaxDepth`；字段存在时当前脑图优先。
 
 ## 4. 有序内容块

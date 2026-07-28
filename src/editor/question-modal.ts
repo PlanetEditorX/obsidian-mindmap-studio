@@ -50,6 +50,31 @@ export function parseRecognizedQuestion(value: string, fallback: MindMapQuestion
   }
 }
 
+/** Applies an AI lookup result only when it explicitly includes a verifiable original-question source. */
+export function parseQuestionEnrichment(value: string, fallback: MindMapQuestion): { found: boolean; question: MindMapQuestion } | null {
+  const source = value.trim().replace(/^```json\s*|```$/gim, "");
+  const start = source.indexOf("{");
+  const end = source.lastIndexOf("}");
+  if (start < 0 || end <= start) return null;
+  try {
+    const parsed = JSON.parse(source.slice(start, end + 1)) as Record<string, unknown>;
+    const found = parsed.found === true;
+    const question = parseRecognizedQuestion(source, fallback) ?? fallback;
+    const sourceUrl = typeof parsed.sourceUrl === "string" ? parsed.sourceUrl.trim() : "";
+    const sourceTitle = typeof parsed.sourceTitle === "string" ? parsed.sourceTitle.trim() : "";
+    if (!found || !/^https?:\/\//i.test(sourceUrl) || !sourceTitle) return { found: false, question: fallback };
+    return {
+      found: true,
+      question: {
+        ...question,
+        source: { title: sourceTitle.slice(0, 300), url: sourceUrl.slice(0, 2000), matchedAt: new Date().toISOString() }
+      }
+    };
+  } catch {
+    return null;
+  }
+}
+
 /** Modal editor for the structured question attached to a node. */
 export class QuestionEditModal extends Modal {
   private draft: MindMapQuestion;
@@ -59,7 +84,7 @@ export class QuestionEditModal extends Modal {
     app: App,
     question: MindMapQuestion | undefined,
     private readonly nodeId: string,
-    private readonly callbacks: Pick<MindMapEditorCallbacks, "onReadImageSource" | "onRecognizeImage">,
+    private readonly callbacks: Pick<MindMapEditorCallbacks, "onEnrichQuestion" | "onReadImageSource" | "onRecognizeImage">,
     private readonly onSubmit: (question: MindMapQuestion) => void
   ) {
     super(app);
@@ -102,9 +127,16 @@ export class QuestionEditModal extends Modal {
     const customTags = this.contentEl.createEl("input", { attr: { placeholder: "补充标签，使用逗号分隔" } });
     customTags.value = this.draft.tags.filter((tag) => !QUESTION_TAGS.includes(tag)).join(", ");
     customTags.onchange = () => { this.draft.tags = Array.from(new Set([...this.draft.tags.filter((tag) => QUESTION_TAGS.includes(tag)), ...customTags.value.split(/[，,]/).map((tag) => tag.trim()).filter(Boolean)])).slice(0, 12); };
+    if (this.draft.source) {
+      const source = this.contentEl.createEl("a", { text: `原题来源：${this.draft.source.title}`, href: this.draft.source.url });
+      source.setAttr("target", "_blank");
+      source.setAttr("rel", "noopener noreferrer");
+    }
     const actions = this.contentEl.createDiv({ cls: "modal-button-container" });
     const recognize = actions.createEl("button", { text: "AI 识图填充题目", attr: { type: "button" } });
     recognize.onclick = () => void this.recognizeQuestion();
+    const enrich = actions.createEl("button", { text: "AI 转题并检索原题", attr: { type: "button" } });
+    enrich.onclick = () => void this.convertAndEnrichQuestion();
     const save = actions.createEl("button", { text: "保存", cls: "mod-cta", attr: { type: "button" } });
     save.onclick = () => { this.onSubmit(this.draft); this.close(); };
   }
@@ -130,22 +162,46 @@ export class QuestionEditModal extends Modal {
   }
 
   /** Sends the first question image to the configured vision service and applies a JSON result. */
-  private async recognizeQuestion(): Promise<void> {
+  private async recognizeQuestion(showSuccess = true): Promise<boolean> {
     const image = [this.draft.stem, ...this.draft.options.map((option) => option.content), this.draft.answer, this.draft.explanation]
       .flat().find((block): block is MindMapImageContentBlock => block.type === "image");
-    if (!image) { new Notice("请先在题干、选项、答案或解答中填写一张题图"); return; }
+    if (!image) { new Notice("请先在题干、选项、答案或解答中填写一张题图"); return false; }
     const source = await this.callbacks.onReadImageSource(image.source);
-    if (!source) { new Notice("无法读取题图"); return; }
+    if (!source) { new Notice("无法读取题图"); return false; }
     const instruction = "识别这道原题，只返回 JSON：{\"mode\":\"choice 或 essay\",\"stem\":\"题干\",\"options\":[{\"label\":\"A\",\"content\":\"选项\"}],\"answer\":\"答案\",\"explanation\":\"解答\",\"tags\":[\"标签\"]}。无法识别的字段留空。";
     try {
       const result = await this.callbacks.onRecognizeImage({ nodeId: this.nodeId, blockId: image.id, nodeLabel: "题目节点", source: image.source, alt: image.alt ?? "题图", index: 1, total: 1 }, source.blob, undefined, instruction);
       const parsed = parseRecognizedQuestion(result.text, this.draft);
-      if (!parsed) { new Notice("AI 未返回可解析的题目结构，请检查题图或模型输出"); return; }
+      if (!parsed) { new Notice("AI 未返回可解析的题目结构，请检查题图或模型输出"); return false; }
       this.draft = parsed;
       this.render();
-      new Notice("题目已由 AI 填充，请核对后保存");
+      if (showSuccess) new Notice("题目已由 AI 填充，请核对后保存");
+      return true;
     } catch (error) {
       new Notice(`题图识别失败：${error instanceof Error ? error.message : String(error)}`);
+      return false;
+    }
+  }
+
+  /** Converts current text or image into a question, then fills verified answers from an original-question lookup. */
+  private async convertAndEnrichQuestion(): Promise<void> {
+    const hasImage = [this.draft.stem, ...this.draft.options.map((option) => option.content), this.draft.answer, this.draft.explanation]
+      .flat().some((block) => block.type === "image");
+    if (hasImage && !await this.recognizeQuestion(false)) return;
+    const questionText = [
+      ...this.draft.stem,
+      ...this.draft.options.flatMap((option) => option.content)
+    ].filter((block): block is Extract<MindMapContentBlock, { type: "text" }> => block.type === "text")
+      .map((block) => block.text.trim()).filter(Boolean).join("\n");
+    if (!questionText) { new Notice("请先填写题目文字或题图"); return; }
+    try {
+      const result = parseQuestionEnrichment(await this.callbacks.onEnrichQuestion(questionText), this.draft);
+      if (!result) { new Notice("AI 未返回可解析的检索结果"); return; }
+      this.draft = result.question;
+      this.render();
+      new Notice(result.found ? "已找到原题并补齐答案与解析，请核对后保存" : "已转换为题目节点；未找到可验证原题，未填充答案与解析");
+    } catch (error) {
+      new Notice(`原题检索失败：${error instanceof Error ? error.message : String(error)}`);
     }
   }
 }

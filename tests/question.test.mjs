@@ -47,3 +47,28 @@ test("question normalization mirrors stem and tags into standard node fields", (
   assert.equal(model.nodeSearchText(document.root).includes("math"), true);
   assert.equal(model.documentToMarkdown(document).includes("What is 2 + 2?"), true);
 });
+
+test("question normalization keeps only verifiable original-question sources", () => {
+  const valid = model.normalizeDocument({
+    root: {
+      text: "Question",
+      children: [],
+      question: {
+        mode: "essay", stem: [], options: [], answer: [], explanation: [], tags: [],
+        source: { title: "Official source", url: "https://example.com/question", matchedAt: "2026-07-28" }
+      }
+    }
+  });
+  assert.equal(valid.root.question.source.url, "https://example.com/question");
+  const invalid = model.normalizeDocument({
+    root: {
+      text: "Question",
+      children: [],
+      question: {
+        mode: "essay", stem: [], options: [], answer: [], explanation: [], tags: [],
+        source: { title: "Unverified", url: "javascript:alert(1)", matchedAt: "2026-07-28" }
+      }
+    }
+  });
+  assert.equal(invalid.root.question.source, undefined);
+});
