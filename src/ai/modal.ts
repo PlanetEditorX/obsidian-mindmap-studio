@@ -21,6 +21,7 @@ export interface AiAskModalOptions {
   payload: AiMarkdownPayload;
   profiles: AiProfileConfig[];
   defaultProfileId: string;
+  defaultImageRecognitionProfileId: string;
   defaultQuestion: string;
   defaultImageRecognitionPrompt: string;
   imageRecognitionMode: ImageRecognitionMode;
@@ -100,9 +101,10 @@ export class AiAskModal extends Modal {
     providerLabel.createSpan({ text: "接口" });
     const provider = providerLabel.createEl("select");
     for (const profile of profiles) provider.createEl("option", { value: profile.id, text: `${profile.name} · ${profile.model}` });
-    provider.value = profiles.some((profile) => profile.id === this.options.defaultProfileId)
-      ? this.options.defaultProfileId
+    const defaultProfileValue = (profileId: string): string => profiles.some((profile) => profile.id === profileId)
+      ? profileId
       : profiles[0]?.id ?? "";
+    provider.value = defaultProfileValue(this.options.defaultProfileId);
 
     const questionLabel = form.createEl("label", { cls: "mms-ai-field" });
     const questionTitle = questionLabel.createSpan({ text: "问题" });
@@ -190,6 +192,11 @@ export class AiAskModal extends Modal {
       question.value = promptDraft.value;
       const localReplace = selected === "replace";
       const localRecognition = selected === "vision" && this.options.imageRecognitionMode === "local-ocr";
+      if (selected === "vision" && this.options.imageRecognitionMode === "ai") {
+        provider.value = defaultProfileValue(this.options.defaultImageRecognitionProfileId);
+      } else if (selected === "ask" || selected === "edit") {
+        provider.value = defaultProfileValue(this.options.defaultProfileId);
+      }
       providerLabel.hidden = localReplace || localRecognition;
       questionLabel.hidden = localReplace;
       replacePanel.hidden = !localReplace;

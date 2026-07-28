@@ -497,6 +497,9 @@ export default class MindMapStudioPlugin extends Plugin {
         ? raw.aiDefaultQuestion.slice(0, 4000)
         : DEFAULT_SETTINGS.aiDefaultQuestion,
       imageRecognitionMode: raw.imageRecognitionMode === "local-ocr" ? "local-ocr" : "ai",
+      imageRecognitionAiProfileId: typeof raw.imageRecognitionAiProfileId === "string" && aiProfileIds.has(raw.imageRecognitionAiProfileId)
+        ? raw.imageRecognitionAiProfileId
+        : "",
       imageRecognitionPrompt: typeof raw.imageRecognitionPrompt === "string"
         ? raw.imageRecognitionPrompt.slice(0, 4000)
         : DEFAULT_SETTINGS.imageRecognitionPrompt,
@@ -510,6 +513,9 @@ export default class MindMapStudioPlugin extends Plugin {
         ? raw.localOcrExtraArgs.slice(0, 1000)
         : DEFAULT_SETTINGS.localOcrExtraArgs,
       screenshotHideObsidian: raw.screenshotHideObsidian === true,
+      screenshotShortcut: typeof raw.screenshotShortcut === "string" && raw.screenshotShortcut.trim()
+        ? raw.screenshotShortcut.trim().slice(0, 120)
+        : DEFAULT_SETTINGS.screenshotShortcut,
       screenshotAutoRecognize: raw.screenshotAutoRecognize === true,
       syncTitleToFilename: raw.syncTitleToFilename !== false,
       deleteLocalAfterUpload: raw.deleteLocalAfterUpload !== false,
@@ -528,6 +534,7 @@ export default class MindMapStudioPlugin extends Plugin {
           ? raw.visibleToolbarItems.filter((id): id is string => typeof id === "string" && knownIds.has(id))
           : [...DEFAULT_SETTINGS.visibleToolbarItems];
         if (!hadAiSettings && !stored.includes("ai")) stored.push("ai");
+        if (!stored.includes("screenshot")) stored.push("screenshot");
         return [...new Set(stored)];
       })(),
       toolbarItemOrder: (() => {
@@ -644,7 +651,7 @@ export default class MindMapStudioPlugin extends Plugin {
       });
       return { ...image, text: normalizeRecognizedText(text), mode: "local-ocr" };
     }
-    const selectedProfileId = profileId || this.settings.defaultAiProfileId;
+    const selectedProfileId = profileId || this.settings.imageRecognitionAiProfileId || this.settings.defaultAiProfileId;
     const profile = this.settings.aiProfiles.find((item) => item.id === selectedProfileId && item.enabled);
     if (!profile) throw new Error("AI 识图接口不存在或未启用");
     const result = await requestAiImageRecognition(
