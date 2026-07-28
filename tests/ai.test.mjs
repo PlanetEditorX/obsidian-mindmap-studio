@@ -63,7 +63,7 @@ test("AI presets include OpenAI, DeepSeek, SiliconFlow, FreeLLMAPI and custom pr
     "deepseek-ai/DeepSeek-V4-Flash",
     "deepseek-ai/DeepSeek-V4-Pro",
     "deepseek-ai/DeepSeek-OCR",
-    "PaddlePaddle/PaddleOCR-VL-1.5",
+    "zai-org/GLM-4.5V",
     "zai-org/GLM-5.2"
   ]);
   assert.equal(config.AI_PROFILE_PRESETS.freellmapi.endpoint, "");
@@ -331,13 +331,14 @@ test("AI modal shows only the inputs required by the selected operation", async 
 });
 
 test("AI integration exposes toolbar, shortcut, page scope and node scope contracts", async () => {
-  const [settingsSource, mainSource, editorSource, viewSource, modalSource, editSource] = await Promise.all([
+  const [settingsSource, mainSource, editorSource, viewSource, modalSource, editSource, editorModalsSource] = await Promise.all([
     readFile("src/settings.ts", "utf8"),
     readFile("src/main.ts", "utf8"),
     readFile("src/editor/editor.ts", "utf8"),
     readFile("src/view.ts", "utf8"),
     readFile("src/ai/modal.ts", "utf8"),
-    readFile("src/ai/edit.ts", "utf8")
+    readFile("src/ai/edit.ts", "utf8"),
+    readFile("src/editor/editor-modals.ts", "utf8")
   ]);
   assert.match(settingsSource, /\["ai", "询问 AI"\]/);
   assert.match(settingsSource, /新增硅基流动/);
@@ -372,6 +373,7 @@ test("AI integration exposes toolbar, shortcut, page scope and node scope contra
   assert.match(mainSource, /remoteUrl \|\| blob/);
   assert.match(mainSource, /Date\.now\(\) - localFile\.stat\.mtime/);
   assert.match(mainSource, /queueAutoUpload/);
+  assert.match(editorModalsSource, /candidate\.kind !== "local" \|\| Boolean\(this\.resolveSource/);
   assert.match(viewSource, /onProposeEdit/);
   assert.match(editorSource, /applyAiEdit\(preview: AiEditPreview\)/);
   assert.match(editorSource, /applyLocalReplace\(preview: LocalReplacePreview\)/);

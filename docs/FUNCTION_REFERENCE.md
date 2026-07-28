@@ -2282,7 +2282,7 @@ onOpen(): void
 
 ### 类 `FormulaEditModal`
 
-源码：`src/editor/editor-modals.ts:228`
+源码：`src/editor/editor-modals.ts:231`
 
 图形化 LaTeX 公式编辑器，提供常用结构按钮和实时预览。
 
@@ -2292,7 +2292,7 @@ export class FormulaEditModal extends Modal
 
 ### 构造函数 `FormulaEditModal.constructor`
 
-源码：`src/editor/editor-modals.ts:235`
+源码：`src/editor/editor-modals.ts:238`
 
 创建公式编辑器。
 
@@ -2302,7 +2302,7 @@ constructor(app: App, private readonly submit: (source: string) => void)
 
 ### 方法 `FormulaEditModal.onOpen`
 
-源码：`src/editor/editor-modals.ts:242`
+源码：`src/editor/editor-modals.ts:245`
 
 创建公式模板、源码输入和 MathJax 预览。
 
@@ -2312,7 +2312,7 @@ onOpen(): void
 
 ### 方法 `FormulaEditModal.onClose`
 
-源码：`src/editor/editor-modals.ts:346`
+源码：`src/editor/editor-modals.ts:349`
 
 清理公式编辑器 DOM。
 
@@ -2322,7 +2322,7 @@ onClose(): void
 
 ### 类 `ArticleStyleModal`
 
-源码：`src/editor/editor-modals.ts:354`
+源码：`src/editor/editor-modals.ts:357`
 
 编辑文章模式的预设、字体和颜色。
 
@@ -2332,7 +2332,7 @@ export class ArticleStyleModal extends Modal
 
 ### 构造函数 `ArticleStyleModal.constructor`
 
-源码：`src/editor/editor-modals.ts:364`
+源码：`src/editor/editor-modals.ts:367`
 
 创建文章样式编辑器。
 
@@ -2342,7 +2342,7 @@ constructor( app: App, style: ArticleStyle | undefined, private readonly submitS
 
 ### 方法 `ArticleStyleModal.onOpen`
 
-源码：`src/editor/editor-modals.ts:376`
+源码：`src/editor/editor-modals.ts:379`
 
 创建文章样式预设和自定义控件。
 
@@ -2352,7 +2352,7 @@ onOpen(): void
 
 ### 类 `JsonTransferModal`
 
-源码：`src/editor/editor-modals.ts:447`
+源码：`src/editor/editor-modals.ts:450`
 
 导入、导出或替换完整的思维导图 JSON。
 
@@ -2362,7 +2362,7 @@ export class JsonTransferModal extends Modal
 
 ### 构造函数 `JsonTransferModal.constructor`
 
-源码：`src/editor/editor-modals.ts:456`
+源码：`src/editor/editor-modals.ts:459`
 
 创建 JSON 传输弹窗。
 
@@ -2372,7 +2372,7 @@ constructor( app: App, private readonly document: MindMapDocument, private reado
 
 ### 方法 `JsonTransferModal.onOpen`
 
-源码：`src/editor/editor-modals.ts:468`
+源码：`src/editor/editor-modals.ts:471`
 
 创建 JSON 文本区和文件导入操作。
 
@@ -2382,7 +2382,7 @@ onOpen(): void
 
 ### 类 `OutlineModal`
 
-源码：`src/editor/editor-modals.ts:547`
+源码：`src/editor/editor-modals.ts:550`
 
 显示只读 Markdown 大纲并提供复制和导出入口。
 
@@ -2392,7 +2392,7 @@ export class OutlineModal extends Modal
 
 ### 构造函数 `OutlineModal.constructor`
 
-源码：`src/editor/editor-modals.ts:555`
+源码：`src/editor/editor-modals.ts:558`
 
 创建 Markdown 大纲弹窗。
 
@@ -2402,7 +2402,7 @@ constructor(app: App, private readonly markdown: string, private readonly onExpo
 
 ### 方法 `OutlineModal.onOpen`
 
-源码：`src/editor/editor-modals.ts:562`
+源码：`src/editor/editor-modals.ts:565`
 
 创建大纲内容和操作按钮。
 
@@ -2412,7 +2412,7 @@ onOpen(): void
 
 ### 方法 `OutlineModal.onClose`
 
-源码：`src/editor/editor-modals.ts:583`
+源码：`src/editor/editor-modals.ts:586`
 
 清理大纲弹窗 DOM。
 
@@ -2422,7 +2422,7 @@ onClose(): void
 
 ### 类 `DocumentExportModal`
 
-源码：`src/editor/editor-modals.ts:591`
+源码：`src/editor/editor-modals.ts:594`
 
 提供可移植文档格式的导出选择。
 
@@ -2432,7 +2432,7 @@ export class DocumentExportModal extends Modal
 
 ### 构造函数 `DocumentExportModal.constructor`
 
-源码：`src/editor/editor-modals.ts:598`
+源码：`src/editor/editor-modals.ts:601`
 
 创建文档导出格式弹窗。
 
@@ -2442,7 +2442,7 @@ constructor(app: App, private readonly exportFormat: (format: "html" | "doc" | "
 
 ### 方法 `DocumentExportModal.onOpen`
 
-源码：`src/editor/editor-modals.ts:605`
+源码：`src/editor/editor-modals.ts:608`
 
 创建各导出格式按钮。
 
@@ -7022,7 +7022,7 @@ export function normalizeRecognizedText(value: string): string
 
 ### 函数 `buildImageRecognitionPrompt`
 
-源码：`src/vision/recognition.ts:93`
+源码：`src/vision/recognition.ts:94`
 
 构建单张图片的识图提示词，要求模型优先转录文字并补充必要的视觉说明。
 
@@ -7032,7 +7032,7 @@ export function buildImageRecognitionPrompt(image: RecognizableImage, instructio
 
 ### 函数 `imageBlockSnapshot`
 
-源码：`src/vision/recognition.ts:105`
+源码：`src/vision/recognition.ts:106`
 
 读取指定图片块的稳定快照，供预览应用前检测并发修改。
 
@@ -7042,7 +7042,7 @@ export function imageBlockSnapshot(document: MindMapDocument, nodeId: string, bl
 
 ### 函数 `previewImageTextReplacement`
 
-源码：`src/vision/recognition.ts:112`
+源码：`src/vision/recognition.ts:113`
 
 创建图片转文字预览；该步骤不会修改导图。
 
@@ -7052,7 +7052,7 @@ export function previewImageTextReplacement( document: MindMapDocument, nodeId: 
 
 ### 函数 `applyImageTextReplacement`
 
-源码：`src/vision/recognition.ts:136`
+源码：`src/vision/recognition.ts:137`
 
 应用已经确认且未过期的图片转文字预览，并保持原内容块位置不变。
 

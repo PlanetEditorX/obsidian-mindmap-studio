@@ -80,6 +80,7 @@ test("image recognition prompt identifies sequence, node and untrusted image con
     recognition.normalizeRecognizedText("## 主题\n}\n<|box_start|>text<|box_end|>The image displays a screenshot."),
     "主题"
   );
+  assert.equal(recognition.normalizeRecognizedText("A<|end_of_box|><|begin_of_box|>B"), "AB");
   assert.match(prompt, /直接把图片和本提示发送给视觉模型/);
 });
 

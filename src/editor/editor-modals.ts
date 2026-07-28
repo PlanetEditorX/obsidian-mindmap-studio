@@ -176,9 +176,12 @@ export class ImagePreviewModal extends Modal {
     button("100%", () => { this.scale = 1; applyScale(); });
     button("+", () => { this.scale = Math.min(5, this.scale + 0.2); applyScale(); });
 
-    const candidates = this.sources.length
+    const sourceCandidates = (this.sources.length
       ? this.sources
-      : [{ source: this.source, label: "当前图片", kind: "current" as const }];
+      : [{ source: this.source, label: "当前图片", kind: "current" as const }]);
+    const availableCandidates = sourceCandidates
+      .filter((candidate) => candidate.kind !== "local" || Boolean(this.resolveSource?.(candidate.source)));
+    const candidates = availableCandidates.length ? availableCandidates : sourceCandidates.slice(0, 1);
     const sourceButtons: HTMLButtonElement[] = [];
     sourceBar.createSpan({ cls: "mmc-image-preview-sources-label", text: "图片来源：" });
     const switchSource = (candidate: MindMapImageSourceCandidate, sourceButton: HTMLButtonElement): void => {
