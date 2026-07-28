@@ -1656,6 +1656,7 @@
 .mmc-table-editor-grid td textarea,
 .mmc-table-markdown,
 .mmc-code-modal input,
+.mmc-code-modal select,
 .mmc-code-textarea {
   width: 100%;
 }
@@ -4262,6 +4263,10 @@
 
 .mms-question-practice-view {
   background: var(--background-primary);
+}
+
+.mmc-code-modal input.is-hidden {
+  display: none;
 }
 
 .mms-question-practice-page {
