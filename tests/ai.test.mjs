@@ -6,6 +6,7 @@ import { loadTypeScriptModule, loadTypeScriptModules } from "./compile-typescrip
 let config;
 let markdown;
 let protocol;
+let edit;
 const cleanups = [];
 
 const node = (id, text, children = []) => ({ id, text, children });
@@ -31,11 +32,20 @@ before(async () => {
   ], "src/ai/markdown.ts");
   markdown = loadedMarkdown.module;
   cleanups.push(loadedMarkdown.cleanup);
+  const loadedEdit = await loadTypeScriptModules([
+    "src/core/node-tree.ts",
+    "src/core/model.ts",
+    "src/ai/markdown.ts",
+    "src/ai/edit.ts"
+  ], "src/ai/edit.ts");
+  edit = loadedEdit.module;
+  cleanups.push(loadedEdit.cleanup);
   const loadedProtocol = await loadTypeScriptModules([
     "src/core/node-tree.ts",
     "src/core/model.ts",
     "src/ai/config.ts",
     "src/ai/markdown.ts",
+    "src/ai/edit.ts",
     "src/ai/protocol.ts"
   ], "src/ai/protocol.ts");
   protocol = loadedProtocol.module;
@@ -161,13 +171,106 @@ test("AI protocol accepts base URLs and builds a context-free connection check",
 });
 
 
+
+
+test("AI edit proposal extracts Markdown and replaces only the selected subtree", () => {
+  const source = structuredClone(document);
+  source.root.children[0].style = { color: "#112233" };
+  source.root.children[0].submap = { path: "child.mindmap" };
+  const preview = edit.previewAiMarkdownEdit(
+    source,
+    "chapter",
+    "说明文字\n```markdown\n# 重整后的第一章\n- 核心概念\n  - 测试方法\n- 结论\n```"
+  );
+  assert.equal(preview.originalNodeCount, 2);
+  assert.equal(preview.replacementNodeCount, 4);
+  const applied = edit.applyAiMarkdownEdit(source, preview);
+  assert.equal(applied.document.root.children[0].id, "chapter");
+  assert.equal(applied.document.root.children[0].text, "重整后的第一章");
+  assert.deepEqual(applied.document.root.children[0].style, { color: "#112233" });
+  assert.deepEqual(applied.document.root.children[0].submap, { path: "child.mindmap" });
+  assert.equal(applied.document.root.children[1].text, "附录");
+});
+
+test("AI edit preview refuses stale documents and oversized node output", () => {
+  const source = structuredClone(document);
+  const preview = edit.previewAiMarkdownEdit(source, null, "# 新导图\n- A\n- B");
+  source.root.children.push(node("late", "后来新增"));
+  assert.throws(() => edit.applyAiMarkdownEdit(source, preview), /预览后已发生变化/);
+  const huge = `# 大导图\n${Array.from({ length: 5001 }, (_, index) => `- 节点 ${index}`).join("\n")}`;
+  assert.throws(() => edit.previewAiMarkdownEdit(document, null, huge), /超过 5000 个/);
+});
+
+test("local replacement previews and applies without calling AI", () => {
+  const source = structuredClone(document);
+  source.root.children[0].content = [{ id: "text-1", type: "text", text: "A 测试 A", richText: [{ text: "A", style: { bold: true } }, { text: " 测试 A" }] }];
+  source.root.children[0].text = "A 测试 A";
+  source.root.children[0].note = "a 备注";
+  source.root.children[0].table = { headers: ["A"], rows: [["a"]] };
+  const preview = edit.previewLocalTextReplace(source, "chapter", "a", "B", false);
+  assert.equal(preview.matchCount, 5);
+  assert.equal(preview.affectedNodeCount, 1);
+  const applied = edit.applyLocalTextReplace(source, preview);
+  const changed = applied.document.root.children[0];
+  assert.equal(changed.text, "B 测试 B");
+  assert.equal(changed.note, "B 备注");
+  assert.deepEqual(changed.table.headers, ["B"]);
+  assert.deepEqual(changed.table.rows, [["B"]]);
+  assert.equal(source.root.children[0].text, "A 测试 A");
+});
+
+test("local replacement excludes links, code, images and submap paths", () => {
+  const source = structuredClone(document);
+  const target = source.root.children[0];
+  target.text = "A 标题";
+  target.link = "https://example.com/A";
+  target.image = "assets/A.png";
+  target.code = { language: "text", code: "const A = 1" };
+  target.submap = { path: "books/A.mindmap", title: "A 子导图" };
+  const preview = edit.previewLocalTextReplace(source, "chapter", "A", "B", true);
+  const applied = edit.applyLocalTextReplace(source, preview);
+  const changed = applied.document.root.children[0];
+  assert.equal(changed.text, "B 标题");
+  assert.equal(changed.link, "https://example.com/A");
+  assert.equal(changed.image, "assets/A.png");
+  assert.deepEqual(changed.code, { language: "text", code: "const A = 1" });
+  assert.deepEqual(changed.submap, { path: "books/A.mindmap", title: "A 子导图" });
+});
+
+test("AI edit requires a heading and preserves page metadata", () => {
+  const source = structuredClone(document);
+  source.navigation = { parentPath: "parent.mindmap", parentNodeId: "p1" };
+  source.view = { mode: "article", readOnly: false };
+  source.root.style = { color: "#334455" };
+  assert.throws(() => edit.previewAiMarkdownEdit(source, null, "- 没有标题"), /一级 Markdown 标题/);
+  const preview = edit.previewAiMarkdownEdit(source, null, "# 重整页面\n- 新章节");
+  const applied = edit.applyAiMarkdownEdit(source, preview);
+  assert.equal(applied.document.root.id, "root");
+  assert.equal(applied.document.root.style.color, "#334455");
+  assert.deepEqual(applied.document.navigation, source.navigation);
+  assert.deepEqual(applied.document.view, source.view);
+});
+
+test("AI edit protocol requires Markdown-only proposals", () => {
+  const payload = markdown.buildAiMarkdownPayload(document, "chapter", "book.mindmap", 1024 * 1024);
+  const profile = config.createAiProfileConfig("custom", 1);
+  profile.model = "model-x";
+  profile.temperature = 1.2;
+  const body = protocol.buildAiEditCompletionBody(profile, payload, "整理并重新生成");
+  assert.equal(body.temperature, 0.4);
+  assert.equal(body.stream, false);
+  assert.match(body.messages.at(-1).content, /只返回完整 Markdown/);
+  assert.match(body.messages.at(-1).content, /整理并重新生成/);
+});
+
 test("AI integration exposes toolbar, shortcut, page scope and node scope contracts", async () => {
-  const [settingsSource, mainSource, editorSource, viewSource, modalSource] = await Promise.all([
+  const [settingsSource, mainSource, editorSource, viewSource, modalSource, editSource] = await Promise.all([
     readFile("src/settings.ts", "utf8"),
     readFile("src/main.ts", "utf8"),
     readFile("src/editor/editor.ts", "utf8"),
     readFile("src/view.ts", "utf8"),
-    readFile("src/ai/modal.ts", "utf8")
+    readFile("src/ai/modal.ts", "utf8"),
+    readFile("src/ai/edit.ts", "utf8")
   ]);
   assert.match(settingsSource, /\["ai", "询问 AI"\]/);
   assert.match(settingsSource, /新增硅基流动/);
@@ -180,7 +283,14 @@ test("AI integration exposes toolbar, shortcut, page scope and node scope contra
   assert.match(editorSource, /询问 AI（此节点及全部子节点）/);
   assert.match(editorSource, /询问 AI（当前页面）/);
   assert.match(viewSource, /buildAiMarkdownPayload/);
+  assert.match(viewSource, /onProposeEdit/);
+  assert.match(editorSource, /applyAiEdit\(preview: AiEditPreview\)/);
+  assert.match(editorSource, /applyLocalReplace\(preview: LocalReplacePreview\)/);
+  assert.match(editSource, /sourceSnapshot/);
   assert.match(modalSource, /payload\.overLimit/);
+  assert.match(modalSource, /AI 整理并重新生成（确认后应用）/);
+  assert.match(modalSource, /本地文字替换（不调用 AI）/);
+  assert.match(modalSource, /确认应用变更/);
   assert.match(modalSource, /mms-ai-track/);
   assert.match(modalSource, /new Component\(\)/);
   assert.match(modalSource, /this\.markdownRenderComponent\.load\(\)/);

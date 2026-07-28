@@ -321,4 +321,4 @@ mindmap-search-index.json
 
 ## AI 助手边界
 
-`src/ai/` 分为四层：`config.ts` 管理预设与持久化规范化；`markdown.ts` 负责页面/节点子树导出和 UTF-8 大小预检；`protocol.ts` 构造、校验 OpenAI 兼容 JSON；`client.ts` 是唯一网络请求边界；`modal.ts` 只负责交互、轨迹和回答渲染。编辑器只传递节点 ID，视图层读取当前文档并构建不可变 Markdown 载荷，避免 AI 代码直接修改节点模型。
+`src/ai/` 按职责拆分：`config.ts` 管理预设与持久化规范化；`markdown.ts` 负责页面/节点子树导出和 UTF-8 大小预检；`protocol.ts` 构造、校验 OpenAI 兼容 JSON；`client.ts` 是唯一网络请求边界；`edit.ts` 负责 AI Markdown 提案解析、过期预览校验、范围替换和不联网的本地文字替换；`modal.ts` 只负责模式选择、处理轨迹、预览和确认。网络层不能直接写入编辑器。所有结构化变更必须先生成不可变预览，再由 `MindMapEditor` 接入撤销、保存、重渲染和聚焦流程。

@@ -67,6 +67,7 @@ import { normalizeReadingLocation, renameReadingLocationPath } from "./article/r
 import { normalizeAiProfileConfig, type AiProfileConfig } from "./ai/config";
 import {
   requestAiCompletion,
+  requestAiEditProposal,
   testAiProfileConnection,
   type AiCompletionResult
 } from "./ai/client";
@@ -583,6 +584,13 @@ export default class MindMapStudioPlugin extends Plugin {
     const profile: AiProfileConfig | undefined = this.settings.aiProfiles.find((item) => item.id === profileId && item.enabled);
     if (!profile) throw new Error("AI 接口不存在或未启用");
     return requestAiCompletion(profile, payload, question);
+  }
+
+  /** 使用指定 AI 配置生成 Markdown 修改提案，但不直接修改导图。 */
+  async proposeAiEdit(profileId: string, payload: AiMarkdownPayload, instruction: string): Promise<AiCompletionResult> {
+    const profile: AiProfileConfig | undefined = this.settings.aiProfiles.find((item) => item.id === profileId && item.enabled);
+    if (!profile) throw new Error("AI 接口不存在或未启用");
+    return requestAiEditProposal(profile, payload, instruction);
   }
 
   /** 使用最小请求检测 AI 接口、鉴权和模型是否可用。 */

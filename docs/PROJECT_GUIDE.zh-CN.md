@@ -343,4 +343,4 @@ npm run verify
 
 ## AI 助手
 
-插件可将当前页面或右键节点分支转换为 Markdown，并发送到 OpenAI、DeepSeek、硅基流动、FreeLLMAPI 或自定义 OpenAI 兼容接口。硅基流动预设包含三个指定模型建议，FreeLLMAPI 默认使用 `auto` 路由并由用户填写部署地址。每个接口配置可使用最小请求执行连通性检测，检测不会发送导图正文。工具栏和 `Ctrl/Cmd+Shift+A` 默认使用当前页面；节点和页面空白处的右键菜单用于切换上下文范围。发送前显示 UTF-8 大小并执行上限校验。完整配置、安全和故障排查见 [AI_ASSISTANT.zh-CN.md](AI_ASSISTANT.zh-CN.md)。
+插件可将当前页面或右键节点分支转换为 Markdown，并发送到 OpenAI、DeepSeek、硅基流动、FreeLLMAPI 或自定义 OpenAI 兼容接口。AI 窗口提供普通问答、经预览确认的 AI 节点重整，以及完全离线的本地文字替换。AI 生成的 Markdown 必须先通过格式、大小、节点数和并发快照校验，用户确认后才替换当前页面或节点子树，并进入撤销历史。每个接口配置可使用最小请求执行连通性检测，检测不会发送导图正文。工具栏和 `Ctrl/Cmd+Shift+A` 默认使用当前页面；节点和页面空白处的右键菜单用于切换上下文范围。完整配置、安全和故障排查见 [AI_ASSISTANT.zh-CN.md](AI_ASSISTANT.zh-CN.md)。
