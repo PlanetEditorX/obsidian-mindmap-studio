@@ -263,6 +263,26 @@ test("AI edit protocol requires Markdown-only proposals", () => {
   assert.match(body.messages.at(-1).content, /整理并重新生成/);
 });
 
+test("AI modal shows only the inputs required by the selected operation", async () => {
+  const [modalSource, stylesSource] = await Promise.all([
+    readFile("src/ai/modal.ts", "utf8"),
+    readFile("styles.css", "utf8")
+  ]);
+  assert.match(modalSource, /replacePanel\.hidden = true/);
+  assert.match(modalSource, /providerLabel\.hidden = local/);
+  assert.match(modalSource, /questionLabel\.hidden = local/);
+  assert.match(modalSource, /replacePanel\.hidden = !local/);
+  assert.match(modalSource, /track\.hidden = local/);
+  assert.match(
+    modalSource,
+    /onPreviewLocalReplace\([\s\S]*findInput\.value,[\s\S]*replacementInput\.value,[\s\S]*false/
+  );
+  assert.doesNotMatch(modalSource, /区分大小写/);
+  assert.doesNotMatch(modalSource, /mms-ai-checkbox/);
+  assert.match(stylesSource, /\.mms-ai-field\[hidden\],[\s\S]*display: none !important/);
+  assert.doesNotMatch(stylesSource, /\.mms-ai-checkbox/);
+});
+
 test("AI integration exposes toolbar, shortcut, page scope and node scope contracts", async () => {
   const [settingsSource, mainSource, editorSource, viewSource, modalSource, editSource] = await Promise.all([
     readFile("src/settings.ts", "utf8"),
