@@ -97,6 +97,25 @@ test("legacy tables and code migrate into movable node content blocks", () => {
   assert.equal(document.root.code.language, "bash");
 });
 
+test("code block display settings persist while unsupported themes fall back safely", () => {
+  const document = model.normalizeDocument({
+    root: {
+      text: "Code",
+      code: { language: "typescript", code: "const value = 1;", collapsed: true, showLineNumbers: true, theme: "dracula" },
+      children: []
+    }
+  });
+  assert.deepEqual(document.root.code, {
+    language: "typescript",
+    code: "const value = 1;",
+    collapsed: true,
+    showLineNumbers: true,
+    theme: "dracula"
+  });
+  const invalid = model.normalizeDocument({ root: { text: "Code", code: { code: "x", theme: "unknown" }, children: [] } });
+  assert.equal(invalid.root.code.theme, undefined);
+});
+
 test("question-bank grading distinguishes single choice, multiple choice and normalized essay answers", () => {
   const choice = model.normalizeDocument({
     root: {

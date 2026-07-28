@@ -140,6 +140,9 @@ export interface MindMapTable {
 export interface MindMapCodeBlock {
   language?: string;
   code: string;
+  collapsed?: boolean;
+  showLineNumbers?: boolean;
+  theme?: "obsidian" | "github" | "monokai" | "dracula";
 }
 
 /**
@@ -1007,7 +1010,16 @@ function normalizeCode(input: Partial<MindMapCodeBlock> | undefined): MindMapCod
   const language = typeof input.language === "string" && input.language.trim()
     ? input.language.trim().replace(/[^a-z0-9_+#.-]/gi, "").slice(0, 40)
     : undefined;
-  return { language, code: input.code.replace(/\r\n/g, "\n").slice(0, 100000) };
+  const theme = input.theme === "github" || input.theme === "monokai" || input.theme === "dracula"
+    ? input.theme
+    : input.theme === "obsidian" ? "obsidian" : undefined;
+  return {
+    language,
+    code: input.code.replace(/\r\n/g, "\n").slice(0, 100000),
+    ...(input.collapsed === true ? { collapsed: true } : {}),
+    ...(input.showLineNumbers === true ? { showLineNumbers: true } : {}),
+    ...(theme ? { theme } : {})
+  };
 }
 
 /**

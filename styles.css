@@ -1521,6 +1521,47 @@
   font-size: inherit;
 }
 
+.mms-code-collapsed > summary {
+  cursor: pointer;
+  padding: 8px 12px;
+  color: var(--text-muted);
+  font-family: var(--font-monospace);
+  font-size: 0.82em;
+}
+
+.mms-code-collapsed-content { overflow: auto; }
+
+.mms-code-with-line-numbers {
+  position: relative;
+  padding-left: 4.2em !important;
+}
+
+.mms-code-with-line-numbers::before {
+  content: attr(data-line-numbers);
+  position: absolute;
+  inset: 10px auto 10px 0;
+  width: 3.1em;
+  padding-right: 0.65em;
+  border-right: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+  color: var(--text-faint);
+  text-align: right;
+  white-space: pre;
+  user-select: none;
+}
+
+.mms-code-theme-github pre { background: #f6f8fa; color: #24292f; }
+.mms-code-theme-github .token.comment { color: #6e7781; }
+.mms-code-theme-github .token.string { color: #0a3069; }
+.mms-code-theme-github .token.keyword { color: #cf222e; }
+.mms-code-theme-monokai pre { background: #272822; color: #f8f8f2; }
+.mms-code-theme-monokai .token.comment { color: #829b49; }
+.mms-code-theme-monokai .token.string { color: #e6db74; }
+.mms-code-theme-monokai .token.keyword { color: #f92672; }
+.mms-code-theme-dracula pre { background: #282a36; color: #f8f8f2; }
+.mms-code-theme-dracula .token.comment { color: #6272a4; }
+.mms-code-theme-dracula .token.string { color: #f1fa8c; }
+.mms-code-theme-dracula .token.keyword { color: #ff79c6; }
+
 /* Sub-map nodes use the whole node as the navigation target. The title keeps
    only a small indicator, so alignment and wrapping behave exactly like a
    normal node instead of creating a narrow text-only hit area. */
