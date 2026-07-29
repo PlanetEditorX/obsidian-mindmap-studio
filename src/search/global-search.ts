@@ -1000,11 +1000,13 @@ export class GlobalMindMapSearchModal extends Modal {
       const badges = header.createDiv({ cls: "mms-global-search-result-badges" });
       badges.createSpan({ cls: "mms-global-search-badge", text: result.matchedKind });
       if (result.isSubmapDocument) badges.createSpan({ cls: "mms-global-search-badge is-submap", text: "子导图" });
-      const replaceOneBtn = header.createEl("button", {
+      const actions = item.createDiv({ cls: "mms-global-search-result-actions" });
+      const replaceOneBtn = actions.createEl("button", {
         cls: "mms-global-search-replace-one",
         attr: { type: "button", title: "替换此节点" }
       });
       setIcon(replaceOneBtn, "rotate-ccw");
+      replaceOneBtn.createSpan({ text: "替换此节点" });
       replaceOneBtn.addEventListener("click", async (event) => {
         event.stopPropagation();
         const replacement = this.replaceInputEl.value.trim();
