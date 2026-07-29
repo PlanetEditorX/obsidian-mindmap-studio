@@ -20,3 +20,10 @@ test("selection toolbar clears every rich-text style in the selected range", () 
   assert.ok(source.indexOf("const colorBtn") < source.indexOf("const clearFormat"), "clear formatting must remain after color controls");
   assert.match(modelSource, /if \(patch === null\) styles\[index\] = \{\}/);
 });
+
+test("rich text stores recognized Markdown links and exports standard Markdown links", () => {
+  assert.match(modelSource, /link\?: string/);
+  assert.match(modelSource, /link: normalizeLinkTarget\(input\.link\)/);
+  assert.match(modelSource, /style: \{ link: linkTarget \}/);
+  assert.match(modelSource, /value = `\[\$\{value\}\]\(\$\{style\.link\}\)`/);
+});

@@ -54,7 +54,18 @@ export function renderRichTextRuns(
   container.empty();
   const sourceRuns = runs?.length ? runs : [{ text: fallbackText }];
   const append = (text: string, style: MindMapTextStyle | undefined): void => {
-    const span = container.createSpan({ cls: "mmc-rich-run", text });
+    const span = style?.link
+      ? container.createEl("a", {
+        cls: "mmc-rich-run mmc-rich-link",
+        text,
+        attr: { href: style.link, target: "_blank", rel: "noopener noreferrer" }
+      })
+      : container.createSpan({ cls: "mmc-rich-run", text });
+    if (style?.link) {
+      span.addEventListener("click", (event) => {
+        if (container.contentEditable === "true" || container.closest('[contenteditable="true"]')) event.preventDefault();
+      });
+    }
     span.toggleClass("is-inline-code", style?.code === true);
     if (style?.bold !== undefined) span.style.fontWeight = style.bold ? "700" : "400";
     if (style?.italic !== undefined) span.style.fontStyle = style.italic ? "italic" : "normal";
@@ -123,6 +134,7 @@ function styleFromElement(element: HTMLElement, inherited: MindMapTextStyle): Mi
   if (tag === "u") style.underline = true;
   if (tag === "s" || tag === "strike" || tag === "del") style.strike = true;
   if (tag === "code" || element.hasClass("is-inline-code")) style.code = true;
+  if (tag === "a") style.link = element.getAttribute("href") ?? undefined;
   const inline = element.style;
   if (inline.fontWeight && (inline.fontWeight === "bold" || Number(inline.fontWeight) >= 600)) style.bold = true;
   if (inline.fontStyle === "italic") style.italic = true;
