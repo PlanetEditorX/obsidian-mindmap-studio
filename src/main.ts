@@ -97,8 +97,10 @@ import {
   parseUploadHeaders,
   parseUploadResponsePayload
 } from "./utils/image-host";
+import { comparePluginVersions, extractPluginReleaseFiles, findPluginInstallAsset, type PluginReleaseInfo } from "./utils/plugin-update";
 
 export const MINDMAP_EXTENSION = "mindmap";
+const PLUGIN_RELEASE_URL = "https://api.github.com/repos/PlanetEditorX/obsidian-mindmap-studio/releases/latest";
 
 /**
  * MindMapStudioPlugin 的主要实现类。负责封装相关状态、生命周期和对外操作，避免调用方直接操作内部数据结构。
@@ -137,6 +139,11 @@ export default class MindMapStudioPlugin extends Plugin {
       name: "全局搜索所有思维导图",
       hotkeys: [{ modifiers: ["Mod", "Shift"], key: "F" }],
       callback: () => this.openGlobalSearch()
+    });
+    this.addCommand({
+      id: "update-mindmap-studio",
+      name: "检查并更新 MindMap Studio",
+      callback: () => void this.checkForPluginUpdate()
     });
     this.addCommand({
       id: "rebuild-mind-map-search-index",
@@ -648,6 +655,45 @@ export default class MindMapStudioPlugin extends Plugin {
   async saveSettings(): Promise<void> {
     await this.saveData(this.settings);
     this.scheduleFileExplorerFilter();
+  }
+
+  /** Checks GitHub Releases, installs a newer verified bundle, and offers an immediate reload. */
+  async checkForPluginUpdate(): Promise<"up-to-date" | "updated"> {
+    new Notice("正在检查 MindMap Studio 更新…");
+    const response = await requestUrl({
+      url: PLUGIN_RELEASE_URL,
+      method: "GET",
+      headers: { Accept: "application/vnd.github+json" },
+      throw: true
+    });
+    const release = JSON.parse(response.text) as PluginReleaseInfo;
+    const asset = findPluginInstallAsset(release);
+    if (!asset) throw new Error("最新 Release 中未找到可安装的插件包");
+    const archiveResponse = await requestUrl({ url: asset.browser_download_url, method: "GET", throw: true });
+    const update = extractPluginReleaseFiles(await archiveResponse.arrayBuffer);
+    if (update.manifest.id !== this.manifest.id) throw new Error("更新包的插件标识不匹配，已取消安装");
+    if (comparePluginVersions(update.manifest.version, this.manifest.version) <= 0) {
+      new Notice(`已是最新版本（${this.manifest.version}）`);
+      return "up-to-date";
+    }
+
+    const pluginDir = this.manifest.dir ?? normalizePath(`${this.app.vault.configDir}/plugins/${this.manifest.id}`);
+    const adapter = this.app.vault.adapter;
+    const files = [
+      { path: normalizePath(`${pluginDir}/main.js`), content: update.main },
+      { path: normalizePath(`${pluginDir}/styles.css`), content: update.styles },
+      { path: normalizePath(`${pluginDir}/manifest.json`), content: new TextEncoder().encode(update.manifestText).buffer }
+    ];
+    const originals = await Promise.all(files.map(async (file) => ({ path: file.path, content: await adapter.readBinary(file.path) })));
+    try {
+      for (const file of files) await adapter.writeBinary(file.path, file.content);
+    } catch (error) {
+      await Promise.all(originals.map((file) => adapter.writeBinary(file.path, file.content).catch(() => undefined)));
+      throw error;
+    }
+    new Notice(`MindMap Studio 已更新至 ${update.manifest.version}`);
+    if (window.confirm("更新已完成。立即重新加载 Obsidian 以启用新版本吗？")) window.location.reload();
+    return "updated";
   }
 
   /** 使用指定 AI 配置发送当前 Markdown 上下文。 */

@@ -1125,6 +1125,10 @@ udpsvd -vE 0 69 tftpd -c /
   assert.match(mainSource, /deleteLocalAssetIfSafe/);
   assert.match(mainSource, /testImageHost/);
   assert.match(mainSource, /requestUrl/);
+  assert.match(mainSource, /checkForPluginUpdate\(\): Promise<"up-to-date" \| "updated">/, "plugin must expose a one-click update workflow");
+  assert.match(mainSource, /PLUGIN_RELEASE_URL/, "plugin updates must use the configured GitHub Release endpoint");
+  assert.match(mainSource, /window\.location\.reload\(\)/, "a completed plugin update must offer an immediate reload");
+  assert.match(settingsSource, /检查插件更新/, "settings must expose a plugin update control");
   assert.match(mainSource, /buildMultipartUploadBody/, "main module must delegate multipart construction to the image-host utility");
   const imageHostSource = await readFile("src/utils/image-host.ts", "utf8");
   assert.match(imageHostSource, /multipart\/form-data/, "image-host utility must retain multipart content-type construction");

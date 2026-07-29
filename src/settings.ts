@@ -494,6 +494,24 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
         .setButtonText("导入配置")
         .onClick(() => this.openSettingsImportPicker()));
     new Setting(containerEl)
+      .setName("检查插件更新")
+      .setDesc(`当前版本 ${this.plugin.manifest.version}。从 GitHub Release 下载并校验安装包；完成后可立即重新加载 Obsidian。`)
+      .addButton((button) => button
+        .setButtonText("检查更新")
+        .onClick(async () => {
+          button.setDisabled(true);
+          button.setButtonText("检查中…");
+          try {
+            await this.plugin.checkForPluginUpdate();
+          } catch (error) {
+            console.error("MindMap Studio update failed", error);
+            new Notice(error instanceof Error ? `更新失败：${error.message}` : "更新失败");
+          } finally {
+            button.setDisabled(false);
+            button.setButtonText("检查更新");
+          }
+        }));
+    new Setting(containerEl)
       .setName("恢复初始配置")
       .setDesc("恢复显示模式、主题、资源目录、图床、搜索和编辑选项。不会删除或修改任何 .mindmap 文件。")
       .addButton((button) => button
