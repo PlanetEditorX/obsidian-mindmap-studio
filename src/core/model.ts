@@ -295,8 +295,8 @@ export interface MindMapNodeStyle {
   minHeight?: number;
 }
 
-/** A structured question can be either a multiple-choice or long-form exercise. */
-export type MindMapQuestionMode = "choice" | "essay";
+/** A structured question can be a choice, true-or-false, or long-form exercise. */
+export type MindMapQuestionMode = "choice" | "judgment" | "essay";
 
 /** Learning state used by question-bank filtering and review workflows. */
 export type MindMapQuestionStatus = "unanswered" | "completed" | "favorite" | "wrong" | "mastered";
@@ -419,15 +419,19 @@ export function createNode(text = "新节点"): MindMapNode {
   return { id: newId(), text, children: [] };
 }
 
+/** Creates the standard options used by choice and true-or-false questions. */
+function createQuestionOptions(mode: MindMapQuestionMode): MindMapQuestionOption[] {
+  const labels = mode === "judgment" ? ["正确", "错误"] : mode === "choice" ? ["A", "B", "C", "D"] : [];
+  return labels.map((label) => ({ id: newId(), label, content: [{ id: newId(), type: "text", text: label }] }));
+}
+
 /** Creates an editable structured question with a text block for every field. */
 export function createMindMapQuestion(mode: MindMapQuestionMode = "choice"): MindMapQuestion {
   return {
     mode,
     stem: [{ id: newId(), type: "text", text: "" }],
-    options: mode === "choice"
-      ? ["A", "B", "C", "D"].map((label) => ({ id: newId(), label, content: [{ id: newId(), type: "text", text: "" }] }))
-      : [],
-    answer: [{ id: newId(), type: "text", text: "" }],
+    options: createQuestionOptions(mode),
+    answer: [{ id: newId(), type: "text", text: mode === "judgment" ? "正确" : "" }],
     explanation: [{ id: newId(), type: "text", text: "" }],
     tags: [],
     source: undefined,
@@ -1136,8 +1140,8 @@ function normalizeMindMapQuestion(value: unknown): MindMapQuestion | undefined {
   const normalizeBlocks = (blocks: unknown): MindMapContentBlock[] => Array.isArray(blocks)
     ? blocks.map(normalizeContentBlock).filter((block): block is MindMapContentBlock => Boolean(block))
     : [];
-  const mode: MindMapQuestionMode = input.mode === "essay" ? "essay" : "choice";
-  const options = mode === "choice" && Array.isArray(input.options)
+  const mode: MindMapQuestionMode = input.mode === "essay" ? "essay" : input.mode === "judgment" ? "judgment" : "choice";
+  const options = mode !== "essay" && Array.isArray(input.options)
     ? input.options.slice(0, 12).flatMap((option, index) => {
       if (!option || typeof option !== "object") return [];
       const item = option as Partial<MindMapQuestionOption>;
@@ -1148,7 +1152,7 @@ function normalizeMindMapQuestion(value: unknown): MindMapQuestion | undefined {
         content
       }];
     })
-    : [];
+    : createQuestionOptions(mode);
   const status: MindMapQuestionStatus = input.status === "completed" || input.status === "favorite" || input.status === "wrong" || input.status === "mastered"
     ? input.status
     : "unanswered";

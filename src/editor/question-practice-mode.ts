@@ -67,10 +67,11 @@ export function renderQuestionPracticeMode(container: HTMLElement, options: Ques
   const question = node.question!;
   const answerLabels = selectedAnswerLabels(node);
   const multiple = question.mode === "choice" && answerLabels.length > 1;
-  shell.createDiv({ cls: "mms-question-practice-progress", text: `${currentIndex + 1} / ${questions.length} · ${question.mode === "essay" ? "大题" : multiple ? "多选题" : "单选题"}` });
+  const questionKind = question.mode === "essay" ? "大题" : question.mode === "judgment" ? "判断题" : multiple ? "多选题" : "单选题";
+  shell.createDiv({ cls: "mms-question-practice-progress", text: `${currentIndex + 1} / ${questions.length} · ${questionKind}` });
   shell.createEl("h3", { cls: "mms-question-practice-stem", text: nodePlainText(node) || "未命名题目" });
   renderBlocks(shell, question.stem, options.resolveImage);
-  if (question.mode === "choice") {
+  if (question.mode !== "essay") {
     const choices = shell.createDiv({ cls: "mms-question-practice-choices" });
     question.options.forEach((option) => {
       const choice = choices.createEl("button", { attr: { type: "button" } });
@@ -98,10 +99,12 @@ export function renderQuestionPracticeMode(container: HTMLElement, options: Ques
   if (!options.state.answerVisible) {
     const reveal = shell.createEl("button", { cls: "mod-cta mms-question-practice-submit", text: "查看答案与解析", attr: { type: "button" } });
     reveal.onclick = () => {
-    const correct = question.mode === "choice"
-      ? isQuestionChoiceCorrect(node, options.state.selectedOptionIds)
-      : isExactQuestionAnswer(options.state.essayAnswer, blockText(question.answer));
-    if ((question.mode === "choice" && !options.state.selectedOptionIds.length) || (question.mode === "essay" && !normalizeAnswer(options.state.essayAnswer))) {
+    const correct = question.mode === "essay"
+      ? isExactQuestionAnswer(options.state.essayAnswer, blockText(question.answer))
+      : question.mode === "judgment"
+        ? isQuestionJudgmentCorrect(node, options.state.selectedOptionIds)
+        : isQuestionChoiceCorrect(node, options.state.selectedOptionIds);
+    if ((question.mode !== "essay" && !options.state.selectedOptionIds.length) || (question.mode === "essay" && !normalizeAnswer(options.state.essayAnswer))) {
       options.onNotice("请先作答");
       return;
     }
@@ -147,6 +150,13 @@ export function isQuestionChoiceCorrect(node: MindMapNode, selectedIds: readonly
   return expected.size > 0 && expected.size === selected.length && selected.every((label) => expected.has(label));
 }
 
+/** Checks true-or-false answers expressed as A/B, correct/incorrect, or equivalent labels. */
+export function isQuestionJudgmentCorrect(node: MindMapNode, selectedIds: readonly string[]): boolean {
+  const selected = node.question!.options.find((option) => selectedIds.includes(option.id));
+  if (!selected) return false;
+  return normalizeJudgmentAnswer(blockText(selected.content) || selected.label) === normalizeJudgmentAnswer(blockText(node.question!.answer));
+}
+
 /** Renders text and image blocks in their original order. */
 function renderBlocks(container: HTMLElement, blocks: readonly MindMapContentBlock[], resolveImage: (source: string) => string | null): void {
   blocks.forEach((block) => {
@@ -171,4 +181,12 @@ export function isExactQuestionAnswer(value: string, reference: string): boolean
 /** Normalizes free-text answers before deterministic long-question comparison. */
 function normalizeAnswer(value: string): string {
   return value.toLocaleLowerCase().replace(/[\s\p{P}\p{S}]/gu, "");
+}
+
+/** Converts supported judgment-answer spellings into a comparable boolean. */
+function normalizeJudgmentAnswer(value: string): boolean | null {
+  const answer = normalizeAnswer(value);
+  if (["正确", "对", "是", "true", "yes", "a"].includes(answer)) return true;
+  if (["错误", "错", "否", "false", "no", "b"].includes(answer)) return false;
+  return null;
 }

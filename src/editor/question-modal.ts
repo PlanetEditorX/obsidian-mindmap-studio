@@ -31,14 +31,14 @@ export function parseRecognizedQuestion(value: string, fallback: MindMapQuestion
       const text = Array.isArray(input) ? input.join("\n") : typeof input === "string" ? input : "";
       return text.trim() ? [{ id: newId(), type: "text", text: text.trim() }] : [];
     };
-    const mode: MindMapQuestionMode = parsed.mode === "essay" ? "essay" : "choice";
+    const mode: MindMapQuestionMode = parsed.mode === "essay" ? "essay" : parsed.mode === "judgment" ? "judgment" : "choice";
     const rawOptions = Array.isArray(parsed.options) ? parsed.options : [];
     const options: MindMapQuestionOption[] = mode === "choice" ? rawOptions.slice(0, 12).flatMap((item, index) => {
       if (typeof item === "string") return [{ id: newId(), label: String.fromCharCode(65 + index), content: textBlocks(item) }];
       if (!item || typeof item !== "object") return [];
       const option = item as Record<string, unknown>;
       return [{ id: newId(), label: typeof option.label === "string" ? option.label : String.fromCharCode(65 + index), content: textBlocks(option.content ?? option.text) }];
-    }) : [];
+    }) : mode === "judgment" ? createMindMapQuestion("judgment").options : [];
     const preservedImages = fallback.stem.filter((block): block is MindMapImageContentBlock => block.type === "image");
     return {
       mode,
@@ -112,10 +112,20 @@ export class QuestionEditModal extends Modal {
     this.contentEl.createEl("h2", { text: "题目节点" });
     const mode = this.contentEl.createEl("select");
     mode.createEl("option", { value: "choice", text: "选择题" });
+    mode.createEl("option", { value: "judgment", text: "判断题" });
     mode.createEl("option", { value: "essay", text: "大题" });
     mode.value = this.draft.mode;
     mode.onchange = () => {
-      this.draft = { ...this.draft, mode: mode.value === "essay" ? "essay" : "choice", options: mode.value === "essay" ? [] : this.draft.options.length ? this.draft.options : createMindMapQuestion("choice").options };
+      const nextMode: MindMapQuestionMode = mode.value === "essay" ? "essay" : mode.value === "judgment" ? "judgment" : "choice";
+      this.draft = {
+        ...this.draft,
+        mode: nextMode,
+        options: nextMode === "essay"
+          ? []
+          : nextMode === "judgment"
+            ? createMindMapQuestion("judgment").options
+            : this.draft.mode === "choice" && this.draft.options.length ? this.draft.options : createMindMapQuestion("choice").options
+      };
       this.render();
     };
     const status = this.contentEl.createEl("select", { cls: "mms-question-status" });
@@ -123,10 +133,12 @@ export class QuestionEditModal extends Modal {
     status.value = this.draft.status;
     status.onchange = () => { this.draft.status = status.value as MindMapQuestionStatus; };
     this.renderBlocks("题干", this.draft.stem, (blocks) => { this.draft.stem = blocks; });
-    if (this.draft.mode === "choice") {
+    if (this.draft.mode !== "essay") {
       for (const option of this.draft.options) this.renderBlocks(`选项 ${option.label}`, option.content, (blocks) => { option.content = blocks; });
-      const add = this.contentEl.createEl("button", { text: "添加选项", attr: { type: "button" } });
-      add.onclick = () => { this.draft.options.push({ id: newId(), label: String.fromCharCode(65 + this.draft.options.length), content: [{ id: newId(), type: "text", text: "" }] }); this.render(); };
+      if (this.draft.mode === "choice") {
+        const add = this.contentEl.createEl("button", { text: "添加选项", attr: { type: "button" } });
+        add.onclick = () => { this.draft.options.push({ id: newId(), label: String.fromCharCode(65 + this.draft.options.length), content: [{ id: newId(), type: "text", text: "" }] }); this.render(); };
+      }
     }
     this.renderBlocks("答案", this.draft.answer, (blocks) => { this.draft.answer = blocks; });
     this.renderBlocks("解答", this.draft.explanation, (blocks) => { this.draft.explanation = blocks; });
@@ -179,7 +191,7 @@ export class QuestionEditModal extends Modal {
     if (!image) { new Notice("请先在题干、选项、答案或解答中填写一张题图"); return false; }
     const source = await this.callbacks.onReadImageSource(image.source);
     if (!source) { new Notice("无法读取题图"); return false; }
-    const instruction = "识别这道原题，只返回 JSON：{\"mode\":\"choice 或 essay\",\"stem\":\"题干\",\"options\":[{\"label\":\"A\",\"content\":\"选项\"}],\"answer\":\"答案\",\"explanation\":\"解答\",\"tags\":[\"标签\"]}。无法识别的字段留空。";
+    const instruction = "识别这道原题，只返回 JSON：{\"mode\":\"choice、judgment 或 essay\",\"stem\":\"题干\",\"options\":[{\"label\":\"A\",\"content\":\"选项\"}],\"answer\":\"答案\",\"explanation\":\"解答\",\"tags\":[\"标签\"]}。判断题 mode 为 judgment，答案使用 正确 或 错误。无法识别的字段留空。";
     try {
       const result = await this.callbacks.onRecognizeImage({ nodeId: this.nodeId, blockId: image.id, nodeLabel: "题目节点", source: image.source, alt: image.alt ?? "题图", index: 1, total: 1 }, source.blob, undefined, instruction);
       const parsed = parseRecognizedQuestion(result.text, this.draft);
