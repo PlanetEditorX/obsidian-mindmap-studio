@@ -1784,7 +1784,7 @@ export class MindMapEditor {
     this.updateAiScopeButton();
     this.addToolbarSeparator();
     this.addToolbarButton("table", "table-2", "插入或编辑表格", () => this.editTable(), true);
-    this.addToolbarButton("code", "code-2", "插入或编辑代码", () => this.editCode(), true);
+    this.addToolbarButton("code", "code-2", "插入代码", () => this.editCode(), true);
     this.addToolbarButton("image", "image-plus", "粘贴图片到当前节点（Ctrl/Cmd+V）", () => new Notice("先复制图片，再选中节点并按 Ctrl/Cmd+V"), true);
     if (this.options.questionNodesEnabled) this.addToolbarButton("question", "circle-help", "新建题目子节点", () => this.addQuestionChild(), true);
     this.addToolbarButton("screenshot", "scan-line", `截图并插入当前节点（${this.options.screenshotShortcut || "Ctrl+Shift+S"}）`, () => void this.captureScreenshot());
@@ -4199,37 +4199,14 @@ export class MindMapEditor {
   }
 
   /**
-   * 删除table，并保持模型、界面和持久化状态的一致性。
-   */
-  private removeTable(): void {
-    if (!this.ensureEditable()) return;
-    const selected = this.selectedNode();
-    if (!selected?.table) return;
-    this.mutate(() => {
-      this.removeStructuredBlocks(selected, "table");
-      if (selected.children.length) selected.collapsed = false;
-    });
-  }
-
-  /**
    * 编辑code，并保持模型、界面和持久化状态的一致性。
    */
   private editCode(): void {
     if (!this.ensureEditable()) return;
     const selected = this.selectedNode() ?? this.document.root;
-    new CodeEditModal(this.app, selected.code, (code) => {
-      this.mutate(() => this.upsertStructuredBlock(selected, "code", code));
+    new CodeEditModal(this.app, undefined, (code) => {
+      this.mutate(() => this.appendCodeBlock(selected, code));
     }).open();
-  }
-
-  /**
-   * 删除code，并保持模型、界面和持久化状态的一致性。
-   */
-  private removeCode(): void {
-    if (!this.ensureEditable()) return;
-    const selected = this.selectedNode();
-    if (!selected?.code) return;
-    this.mutate(() => this.removeStructuredBlocks(selected, "code"));
   }
 
   /**
@@ -4267,9 +4244,14 @@ export class MindMapEditor {
     syncNodeContentFields(node);
   }
 
-  /** Removes all matching structured blocks and mirrors the legacy node fields for compatibility. */
-  private removeStructuredBlocks(node: MindMapNode, type: "table" | "code"): void {
-    replaceNodeContentBlocks(node, nodeContentBlocks(node).filter((block) => block.type !== type));
+  /** Appends a new code block without replacing code blocks already present on the node. */
+  private appendCodeBlock(node: MindMapNode, code: MindMapCodeBlock): void {
+    replaceNodeContentBlocks(node, [...nodeContentBlocks(node), { id: newId(), type: "code", code }]);
+  }
+
+  /** Removes one structured block identified by its content-block ID. */
+  private removeStructuredBlock(node: MindMapNode, blockId: string): void {
+    replaceNodeContentBlocks(node, nodeContentBlocks(node).filter((block) => block.id !== blockId));
   }
 
   /**
@@ -4531,7 +4513,12 @@ export class MindMapEditor {
       event.stopPropagation();
       this.openTableBlockEditor(node, tableData, blockId);
     });
-    wrap.addEventListener("dblclick", (event) => event.stopPropagation());
+      wrap.addEventListener("dblclick", (event) => event.stopPropagation());
+      wrap.addEventListener("contextmenu", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        this.openTableBlockContextMenu(event, node, tableData, blockId);
+      });
   }
 
   /**
@@ -4567,7 +4554,34 @@ export class MindMapEditor {
       event.stopPropagation();
       this.openCodeBlockEditor(node, codeData, blockId);
     });
-    block.addEventListener("dblclick", (event) => event.stopPropagation());
+      block.addEventListener("dblclick", (event) => event.stopPropagation());
+      block.addEventListener("contextmenu", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        this.openCodeBlockContextMenu(event, node, codeData, blockId);
+      });
+    }
+
+  /** Opens edit and block-specific removal actions for a rendered table. */
+  private openTableBlockContextMenu(event: MouseEvent, node: MindMapNode, table: MindMapTable, blockId?: string): void {
+    const menu = new Menu();
+    menu.addItem((item) => item.setTitle("编辑表格").setIcon("table-2").onClick(() => this.openTableBlockEditor(node, table, blockId)));
+    if (blockId) menu.addItem((item) => item.setTitle("移除当前表格").setIcon("eraser").onClick(() => {
+      if (!this.ensureEditable()) return;
+      this.mutate(() => this.removeStructuredBlock(node, blockId));
+    }));
+    menu.showAtMouseEvent(event);
+  }
+
+  /** Opens edit and block-specific removal actions for a rendered code block. */
+  private openCodeBlockContextMenu(event: MouseEvent, node: MindMapNode, code: MindMapCodeBlock, blockId?: string): void {
+    const menu = new Menu();
+    menu.addItem((item) => item.setTitle("编辑代码").setIcon("code-2").onClick(() => this.openCodeBlockEditor(node, code, blockId)));
+    if (blockId) menu.addItem((item) => item.setTitle("移除当前代码").setIcon("eraser").onClick(() => {
+      if (!this.ensureEditable()) return;
+      this.mutate(() => this.removeStructuredBlock(node, blockId));
+    }));
+    menu.showAtMouseEvent(event);
   }
 
   /** Opens the selected table block directly instead of routing through the node editor. */
@@ -5056,9 +5070,7 @@ export class MindMapEditor {
     menu.addItem((item) => item.setTitle(selected?.table ? "编辑表格" : "插入表格").setIcon("table-2").onClick(() => this.editTable()));
     menu.addItem((item) => item.setTitle("插入 LaTeX 公式").setIcon("sigma").onClick(() => this.insertFormula()));
     menu.addItem((item) => item.setTitle("将子节点生成表格").setIcon("table-properties").onClick(() => this.convertChildrenToTable()));
-    if (selected?.table) menu.addItem((item) => item.setTitle("移除表格").setIcon("table-2").onClick(() => this.removeTable()));
-    menu.addItem((item) => item.setTitle(selected?.code ? "编辑代码" : "插入代码").setIcon("code-2").onClick(() => this.editCode()));
-    if (selected?.code) menu.addItem((item) => item.setTitle("移除代码").setIcon("eraser").onClick(() => this.removeCode()));
+      menu.addItem((item) => item.setTitle("插入代码").setIcon("code-2").onClick(() => this.editCode()));
     menu.addItem((item) => item.setTitle(selected?.submap ? "进入子导图" : "创建子导图").setIcon("network").onClick(() => void this.createOrOpenSubmap()));
     if (!selected?.submap && selected !== this.document.root) menu.addItem((item) => item.setTitle("提取为子导图").setIcon("layers").onClick(() => void this.extractToSubmap()));
     if (selected?.submap) menu.addItem((item) => item.setTitle("删除子导图 / 移除链接").setIcon("unlink").onClick(() => void this.deleteSelectedSubmap()));
