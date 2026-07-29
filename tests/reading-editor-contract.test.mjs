@@ -46,6 +46,13 @@ test("global mode broadcasts discard delayed writes from non-initiating views", 
   assert.match(applyGlobal, /this\.setDisplayMode\(mode, false, false\)/);
 });
 
+test("global search keeps Ctrl/Cmd+Shift+F while map-family search uses Ctrl/Cmd+Alt+F", () => {
+  const keydown = editorSource.match(/private handleKeydown\(event: KeyboardEvent\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
+  assert.match(keydown, /mod && event\.altKey && findKey && !event\.shiftKey/);
+  assert.doesNotMatch(keydown, /mod && event\.shiftKey && findKey && !event\.altKey/);
+  assert.match(editorSource, /搜索当前导图及全部子导图（Ctrl\/Cmd\+Alt\+F）/);
+});
+
 test("programmatic scroll restoration cannot feed back into reading capture", () => {
   assert.match(editorSource, /private readingCaptureBlocked = false/);
   assert.match(editorSource, /private blockReadingLocationCapture\(\): void/);

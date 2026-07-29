@@ -1779,7 +1779,7 @@ export class MindMapEditor {
     this.addToolbarButton("collapse", "fold-vertical", "展开/收起节点（Space）", () => this.toggleCollapse(), true);
     this.addToolbarButton("collapse-all", "chevrons-up-down", "展开/折叠全部子项", () => this.toggleAllNodesCollapsed());
     this.addToolbarButton("link", "link", "打开节点链接", () => this.openSelectedLink());
-    this.addToolbarButton("search", "search", "搜索当前导图及全部子导图（Ctrl/Cmd+Shift+F）", () => this.openSearch());
+    this.addToolbarButton("search", "search", "搜索当前导图及全部子导图（Ctrl/Cmd+Alt+F）", () => this.openSearch());
     this.addToolbarButton("global-search", "file-search", "全局搜索所有导图", () => this.callbacks.onGlobalSearch());
     this.aiButton = this.addToolbarButton("ai", "sparkles", "询问 AI（当前页面，Ctrl/Cmd+Shift+A）", () => this.askAi());
     this.updateAiScopeButton();
@@ -5639,9 +5639,9 @@ export class MindMapEditor {
     const key = event.key.toLowerCase();
     const findKey = key === "f" || event.code === "KeyF";
 
-    // Ctrl/Cmd+F 保留给 Obsidian；导图族搜索使用 Ctrl/Cmd+Shift+F。
+    // Ctrl/Cmd+F 保留给 Obsidian，Ctrl/Cmd+Shift+F 由插件全局搜索命令处理；导图族搜索使用 Ctrl/Cmd+Alt+F。
     // 搜索快捷键必须先于可编辑元素过滤处理，否则在正文、标题或节点编辑时会被忽略。
-    if (mod && event.shiftKey && findKey && !event.altKey) {
+    if (mod && event.altKey && findKey && !event.shiftKey) {
       event.preventDefault();
       event.stopPropagation();
       if (event.repeat) return;
