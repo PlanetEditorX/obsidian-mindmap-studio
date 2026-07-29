@@ -57,6 +57,7 @@ import {
 } from "../core/model";
 import { buildBranchColorMap, computeLayout, documentToSvg, edgePath, edgeWidthForDepth, roundedElbowEdgePath, type LayoutResult } from "../render/layout";
 import { resolveLayoutCollisions } from "../render/collision-layout";
+import { buildCodeLineNumberText, countCodeLines } from "../render/code-block";
 import { CodeEditModal, TableEditModal } from "./content-modals";
 import { parseQuestionEnrichment, parseRecognizedQuestion, QuestionEditModal } from "./question-modal";
 import { createQuestionPracticeState, renderQuestionPracticeMode } from "./question-practice-mode";
@@ -2430,14 +2431,23 @@ export class MindMapEditor {
   /** Activates direct code editing for a code block rendered in article mode. */
   private makeInlineCodeEditable(element: HTMLElement, node: MindMapNode, code: MindMapCodeBlock, blockId: string): void {
     if (this.readOnly || element.hasClass("is-inline-editing")) return;
+    const showLineNumbers = Boolean(element.querySelector(".mms-code-line-numbers"));
     this.selectNode(node.id);
     element.empty();
     element.addClass("is-inline-editing");
-    const editor = element.createEl("textarea", {
+    const shell = element.createDiv({ cls: `mms-article-code-editor-shell${showLineNumbers ? " has-line-numbers" : ""}` });
+    const gutter = shell.createSpan({ cls: "mms-article-code-editor-gutter", attr: { "aria-hidden": "true" } });
+    const editor = shell.createEl("textarea", {
       cls: "mms-article-code-editor",
       attr: { spellcheck: "false", "aria-label": "编辑代码" }
     });
     editor.value = code.code;
+    const updateEditorLayout = (): void => {
+      const lineCount = countCodeLines(editor.value);
+      editor.rows = Math.max(4, Math.min(40, lineCount));
+      gutter.setText(showLineNumbers ? buildCodeLineNumberText(lineCount) : "");
+    };
+    updateEditorLayout();
     let finished = false;
     const finish = (save: boolean): void => {
       if (finished) return;
@@ -2458,6 +2468,7 @@ export class MindMapEditor {
       }
     });
     editor.addEventListener("blur", () => finish(true));
+    editor.addEventListener("input", updateEditorLayout);
     window.requestAnimationFrame(() => {
       editor.focus();
       editor.setSelectionRange(editor.value.length, editor.value.length);

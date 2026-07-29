@@ -142,6 +142,8 @@ export class ImagePreviewModal extends Modal {
    */
   onOpen(): void {
     this.modalEl.addClass("mmc-image-preview-modal");
+    this.modalEl.style.setProperty("width", "min(98vw, 1800px)", "important");
+    this.modalEl.style.setProperty("height", "min(94vh, 1080px)", "important");
     this.titleEl.setText(this.alt || "图片预览");
     const toolbar = this.contentEl.createDiv({ cls: "mmc-image-preview-toolbar" });
     const sourceBar = this.contentEl.createDiv({ cls: "mmc-image-preview-sources" });

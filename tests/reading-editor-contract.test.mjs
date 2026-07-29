@@ -93,6 +93,9 @@ test("article code blocks enter direct editing on double click", () => {
   assert.match(codeRendering, /code\.addEventListener\("dblclick"[\s\S]*makeInlineCodeEditable\(code, node, block\.code, block\.id\)/);
   assert.doesNotMatch(codeRendering, /if \(!options\.readOnly\)/, "the listener must survive switching from reading to edit mode without a redraw");
   assert.match(editorSource, /private makeInlineCodeEditable\(element: HTMLElement, node: MindMapNode, code: MindMapCodeBlock, blockId: string\): void/);
+  assert.match(editorSource, /const showLineNumbers = Boolean\(element\.querySelector\("\.mms-code-line-numbers"\)\)/);
+  assert.match(editorSource, /editor\.rows = Math\.max\(4, Math\.min\(40, lineCount\)\)/);
+  assert.match(editorSource, /gutter\.setText\(showLineNumbers \? buildCodeLineNumberText\(lineCount\) : ""\)/);
   assert.match(editorSource, /editor\.addEventListener\("blur", \(\) => finish\(true\)\)/);
   assert.match(editorSource, /event\.key === "Escape"[\s\S]*finish\(false\)/);
 });
