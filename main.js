@@ -382,6 +382,7 @@ function normalizeContentBlock(input) {
     const alt = typeof image.alt === "string" && image.alt.trim() ? image.alt.trim().slice(0, 500) : void 0;
     const width = typeof image.width === "number" && Number.isFinite(image.width) ? Math.max(20, Math.min(2e3, Math.round(image.width))) : void 0;
     const height = typeof image.height === "number" && Number.isFinite(image.height) ? Math.max(20, Math.min(2e3, Math.round(image.height))) : void 0;
+    const align = image.align === "left" || image.align === "center" || image.align === "right" ? image.align : void 0;
     const localSource = typeof image.localSource === "string" && image.localSource.trim() ? image.localSource.trim().slice(0, 2e3) : void 0;
     const remoteSources = Array.isArray(image.remoteSources) ? image.remoteSources.slice(0, 12).flatMap((raw) => {
       if (!raw || typeof raw !== "object") return [];
@@ -399,7 +400,7 @@ function normalizeContentBlock(input) {
         failureCount: typeof item.failureCount === "number" && Number.isFinite(item.failureCount) ? Math.max(0, Math.min(1e6, Math.floor(item.failureCount))) : void 0
       }];
     }) : void 0;
-    return { id, type: "image", source, alt, width, height, localSource, remoteSources: (remoteSources == null ? void 0 : remoteSources.length) ? remoteSources : void 0 };
+    return { id, type: "image", source, alt, align, width, height, localSource, remoteSources: (remoteSources == null ? void 0 : remoteSources.length) ? remoteSources : void 0 };
   }
   if (candidate.type === "text") {
     const fallbackText = typeof candidate.text === "string" ? candidate.text.replace(/\r\n?/g, "\n").slice(0, 2e4) : "";
@@ -7024,7 +7025,7 @@ function renderOutlineMode(container, options) {
   root.children.forEach((child) => visit(child, 1));
 }
 function renderOutlineContent(container, node, depth, options) {
-  var _a2;
+  var _a2, _b2;
   const blocks = nodeContentBlocks(node);
   const additionalText = blocks.filter((block) => block.type === "text").slice(1);
   const images = blocks.filter((block) => block.type === "image");
@@ -7047,10 +7048,10 @@ function renderOutlineContent(container, node, depth, options) {
   }
   for (const block of images) {
     const resolved = options.resolveImage(block.source);
-    const figure = content.createEl("figure", { cls: "mms-outline-image" });
+    const figure = content.createEl("figure", { cls: `mms-outline-image image-align-${(_a2 = block.align) != null ? _a2 : "center"}` });
     figure.dataset.blockId = block.id;
     if (resolved) {
-      const image = figure.createEl("img", { attr: { src: resolved, alt: (_a2 = block.alt) != null ? _a2 : "\u56FE\u7247", loading: "lazy" } });
+      const image = figure.createEl("img", { attr: { src: resolved, alt: (_b2 = block.alt) != null ? _b2 : "\u56FE\u7247", loading: "lazy" } });
       if (block.width) image.style.width = `${block.width}px`;
       if (block.height) image.style.height = `${block.height}px`;
       image.addEventListener("click", () => {
@@ -7208,7 +7209,7 @@ function renderHeading(heading, node, title, options) {
   }
 }
 function renderArticleNodeContent(container, node, treatTextAsBody, options) {
-  var _a2;
+  var _a2, _b2;
   let firstTextHandled = false;
   for (const block of nodeContentBlocks(node)) {
     if (block.type === "text") {
@@ -7223,7 +7224,7 @@ function renderArticleNodeContent(container, node, treatTextAsBody, options) {
       if (treatTextAsBody) options.makeInlineEditable(paragraph, node, "\u6B63\u6587");
     } else if (block.type === "image") {
       const resolved = options.callbacks.resolveImage(block.source);
-      const image = container.createEl("img", { cls: "mms-article-image", attr: { src: resolved != null ? resolved : block.source, alt: (_a2 = block.alt) != null ? _a2 : "\u56FE\u7247" } });
+      const image = container.createEl("img", { cls: `mms-article-image image-align-${(_a2 = block.align) != null ? _a2 : "center"}`, attr: { src: resolved != null ? resolved : block.source, alt: (_b2 = block.alt) != null ? _b2 : "\u56FE\u7247" } });
       image.dataset.blockId = block.id;
       if (block.width) image.style.width = `${block.width}px`;
       if (block.height) image.style.height = `${block.height}px`;
@@ -8065,7 +8066,7 @@ var NodeEditModal = class extends import_obsidian10.Modal {
     const renderBlocks2 = () => {
       blocksEl.empty();
       workingBlocks.forEach((block, index) => {
-        var _a3;
+        var _a3, _b3;
         const card = blocksEl.createDiv({ cls: `mmc-content-block is-${block.type}` });
         card.dataset.blockId = block.id;
         card.toggleClass("is-targeted", block.id === this.initialBlockId);
@@ -8140,6 +8141,18 @@ var NodeEditModal = class extends import_obsidian10.Modal {
           };
           addSizeInput("\u663E\u793A\u5BBD\u5EA6\uFF08px\uFF09", "width");
           addSizeInput("\u663E\u793A\u9AD8\u5EA6\uFF08px\uFF09", "height");
+          const alignLabel2 = body.createEl("label", { text: "\u56FE\u7247\u5BF9\u9F50" });
+          const align = alignLabel2.createEl("select");
+          [
+            ["left", "\u5DE6\u5BF9\u9F50"],
+            ["center", "\u5C45\u4E2D"],
+            ["right", "\u53F3\u5BF9\u9F50"]
+          ].forEach(([value, label]) => align.createEl("option", { value, text: label }));
+          align.value = (_a3 = block.align) != null ? _a3 : "center";
+          align.addEventListener("change", () => {
+            block.align = align.value === "left" || align.value === "right" ? align.value : void 0;
+            scheduleAutoSave();
+          });
           source.addEventListener("input", () => {
             const next = source.value.trim();
             if (next !== block.source) {
@@ -8176,7 +8189,7 @@ var NodeEditModal = class extends import_obsidian10.Modal {
               applyImageAction(uploadCurrentNodeImage(this.app, block, this.callbacks));
             });
           }
-          if ((_a3 = block.remoteSources) == null ? void 0 : _a3.length) {
+          if ((_b3 = block.remoteSources) == null ? void 0 : _b3.length) {
             const mirrors = body.createDiv({ cls: "mms-image-mirrors" });
             mirrors.createSpan({ cls: "mms-image-mirrors-label", text: "\u8FDC\u7A0B\u955C\u50CF\uFF1A" });
             block.remoteSources.forEach((item, mirrorIndex) => {
@@ -10459,7 +10472,7 @@ var MindMapEditor = class {
   * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
     */
   renderMindMap() {
-    var _a2, _b2, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _A, _B, _C, _D, _E, _F, _G;
+    var _a2, _b2, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _A, _B, _C, _D, _E, _F, _G, _H;
     const previousNodeRects = this.captureMindMapNodeRects();
     const appearance = this.getAppearance();
     this.layout = computeLayout(this.document.root, this.document.layout, (_a2 = appearance.fontSize) != null ? _a2 : 14, (_b2 = appearance.nodeVisualStyle) != null ? _b2 : "card", appearance);
@@ -10522,8 +10535,9 @@ var MindMapEditor = class {
       for (const block of blocks) {
         if (block.type === "image") {
           const wrap = content.createDiv({ cls: "mmc-node-image-block" });
+          wrap.addClass(`image-align-${(_y = block.align) != null ? _y : "center"}`);
           wrap.dataset.blockId = block.id;
-          const image = wrap.createEl("img", { cls: "mmc-node-image is-loading", attr: { alt: (_y = block.alt) != null ? _y : nodePlainText(node) || "\u56FE\u7247" } });
+          const image = wrap.createEl("img", { cls: "mmc-node-image is-loading", attr: { alt: (_z = block.alt) != null ? _z : nodePlainText(node) || "\u56FE\u7247" } });
           if (block.width) image.style.width = `${block.width}px`;
           if (block.height) image.style.height = `${block.height}px`;
           const candidates = this.options.imageFailoverEnabled ? imageSourceCandidates(block, this.options.imageFailoverUseLocalFallback, this.options.imageHostPriorityIds) : imageSourceCandidates(block, false, this.options.imageHostPriorityIds).slice(0, 1);
@@ -10644,7 +10658,7 @@ var MindMapEditor = class {
         const textEl = main.createDiv({ cls: `mmc-node-text${isSubmapTitle ? " is-submap-link" : ""}` });
         textEl.dataset.blockId = block.id;
         renderRichTextRuns(textEl, block.richText, block.text);
-        textEl.style.fontSize = `${(_B = (_A = (_z = node.style) == null ? void 0 : _z.fontSize) != null ? _A : appearance.fontSize) != null ? _B : 14}px`;
+        textEl.style.fontSize = `${(_C = (_B = (_A = node.style) == null ? void 0 : _A.fontSize) != null ? _B : appearance.fontSize) != null ? _C : 14}px`;
         if (isSubmapTitle) {
           const indicator = textEl.createSpan({ cls: "mmc-submap-inline-indicator", attr: { "aria-hidden": "true" } });
           (0, import_obsidian10.setIcon)(indicator, "arrow-up-right");
@@ -10654,8 +10668,8 @@ var MindMapEditor = class {
         const submapIcon = nodeEl.createEl("button", {
           cls: "mmc-submap-corner-link",
           attr: {
-            "aria-label": `\u6253\u5F00\u5B50\u5BFC\u56FE\uFF1A${(_C = node.submap.title) != null ? _C : node.submap.path}`,
-            title: `\u6253\u5F00\u5B50\u5BFC\u56FE\uFF1A${(_D = node.submap.title) != null ? _D : node.submap.path}`
+            "aria-label": `\u6253\u5F00\u5B50\u5BFC\u56FE\uFF1A${(_D = node.submap.title) != null ? _D : node.submap.path}`,
+            title: `\u6253\u5F00\u5B50\u5BFC\u56FE\uFF1A${(_E = node.submap.title) != null ? _E : node.submap.path}`
           }
         });
         (0, import_obsidian10.setIcon)(submapIcon, "arrow-up-right");
@@ -10668,12 +10682,12 @@ var MindMapEditor = class {
       if (node.submap) {
         nodeEl.setAttr("role", "link");
         nodeEl.setAttr("tabindex", "0");
-        nodeEl.setAttr("aria-label", `\u6253\u5F00\u5B50\u5BFC\u56FE\uFF1A${(_E = node.submap.title) != null ? _E : node.submap.path}`);
+        nodeEl.setAttr("aria-label", `\u6253\u5F00\u5B50\u5BFC\u56FE\uFF1A${(_F = node.submap.title) != null ? _F : node.submap.path}`);
       }
       if (node.table && !blocks.some((block) => block.type === "table")) this.renderNodeTable(content, node, node.table);
       if (node.code && !blocks.some((block) => block.type === "code")) this.renderNodeCode(content, node, node.code);
       if (node.question) this.renderQuestionSummary(content, node);
-      if ((_F = node.tags) == null ? void 0 : _F.length) {
+      if ((_G = node.tags) == null ? void 0 : _G.length) {
         const tags = content.createDiv({ cls: "mmc-node-tags" });
         node.tags.slice(0, 4).forEach((tag) => tags.createSpan({ cls: "mmc-node-tag", text: `#${tag}` }));
       }
@@ -10858,7 +10872,7 @@ var MindMapEditor = class {
         this.clearDropPreview();
         this.nodesLayerEl.querySelectorAll(".is-dragging").forEach((element) => element.removeClass("is-dragging"));
       });
-      (_G = this.resizeObserver) == null ? void 0 : _G.observe(nodeEl);
+      (_H = this.resizeObserver) == null ? void 0 : _H.observe(nodeEl);
     }
     if (previousNodeRects.size) {
       this.applyMeasuredMindMapLayout();
@@ -12342,15 +12356,98 @@ var MindMapEditor = class {
       new import_obsidian10.Notice(`\u9898\u76EE\u667A\u80FD\u5904\u7406\u5931\u8D25\uFF1A${error instanceof Error ? error.message : String(error)}`);
     }
   }
-  /** 显示图片专用右键菜单，并按当前设置启动 AI 识图或本地 OCR。 */
+  /** 显示图片专用右键菜单，提供识图、布局、图床和编辑等快速操作。 */
   openImageContextMenu(event, nodeId, blockId) {
+    const node = findNode(this.document.root, nodeId);
+    const block = node ? nodeContentBlocks(node).find((item) => item.type === "image" && item.id === blockId) : void 0;
+    if (!node || !block) return;
     const modeLabel = this.options.imageRecognitionMode === "local-ocr" ? "\u672C\u5730 OCR" : "AI \u8BC6\u56FE";
     const menu = new import_obsidian10.Menu();
+    menu.addItem((item) => item.setTitle("\u653E\u5927\u9884\u89C8").setIcon("maximize-2").onClick(() => this.previewImageBlock(block)));
     menu.addItem((item) => item.setTitle(`${modeLabel}\u5E76\u8F6C\u4E3A\u6587\u5B57`).setIcon("scan-text").onClick(() => void this.recognizeImageBlock(nodeId, blockId)));
     if (this.options.questionNodesEnabled) {
       menu.addItem((item) => item.setTitle("\u8F6C\u4E3A\u9898\u76EE\u8282\u70B9\u5E76\u667A\u80FD\u5904\u7406").setIcon("circle-help").onClick(() => void this.convertImageToQuestion(nodeId, blockId)));
     }
+    menu.addSeparator();
+    menu.addItem((item) => item.setTitle("\u5DE6\u5BF9\u9F50").setIcon("align-left").onClick(() => this.setImageBlockAlignment(nodeId, blockId, "left")));
+    menu.addItem((item) => item.setTitle("\u5C45\u4E2D").setIcon("align-center").onClick(() => this.setImageBlockAlignment(nodeId, blockId, "center")));
+    menu.addItem((item) => item.setTitle("\u53F3\u5BF9\u9F50").setIcon("align-right").onClick(() => this.setImageBlockAlignment(nodeId, blockId, "right")));
+    menu.addSeparator();
+    menu.addItem((item) => item.setTitle("\u5C0F\u5C3A\u5BF8\uFF08180px\uFF09").setIcon("image-down").onClick(() => this.setImageBlockWidth(nodeId, blockId, 180)));
+    menu.addItem((item) => item.setTitle("\u4E2D\u5C3A\u5BF8\uFF08360px\uFF09").setIcon("image").onClick(() => this.setImageBlockWidth(nodeId, blockId, 360)));
+    menu.addItem((item) => item.setTitle("\u5927\u5C3A\u5BF8\uFF08640px\uFF09").setIcon("image-up").onClick(() => this.setImageBlockWidth(nodeId, blockId, 640)));
+    menu.addItem((item) => item.setTitle("\u9002\u5E94\u8282\u70B9").setIcon("maximize").onClick(() => this.setImageBlockWidth(nodeId, blockId)));
+    menu.addItem((item) => item.setTitle("\u81EA\u5B9A\u4E49\u5C3A\u5BF8\u6216\u66FF\u6362\u56FE\u7247\u2026").setIcon("settings-2").onClick(() => this.editImageBlock(blockId)));
+    if (!this.readOnly && (block.localSource || !/^https?:\/\//i.test(block.source))) {
+      menu.addSeparator();
+      menu.addItem((item) => item.setTitle("\u4E0A\u4F20\u5230\u56FE\u5E8A").setIcon("cloud-upload").onClick(() => void this.uploadImageBlock(nodeId, blockId)));
+    }
+    menu.addSeparator();
+    menu.addItem((item) => item.setTitle("\u590D\u5236\u56FE\u7247\u5730\u5740").setIcon("copy").onClick(() => void this.copyImageSource(block.source)));
+    if (!this.readOnly) {
+      menu.addItem((item) => item.setTitle("\u5220\u9664\u56FE\u7247").setIcon("trash-2").onClick(() => this.removeImageBlock(nodeId, blockId)));
+    }
     menu.showAtMouseEvent(event);
+  }
+  /** 打开图片预览，并按当前图床优先级提供候选地址。 */
+  previewImageBlock(block) {
+    var _a2, _b2;
+    const source = (_a2 = this.callbacks.resolveImage(block.source)) != null ? _a2 : block.source;
+    new ImagePreviewModal(this.app, source, (_b2 = block.alt) != null ? _b2 : "\u56FE\u7247\u9884\u89C8", imageSourceCandidates(block, true, this.options.imageHostPriorityIds), this.callbacks.resolveImage).open();
+  }
+  /** 将图片块设置为指定的水平对齐方式。 */
+  setImageBlockAlignment(nodeId, blockId, align) {
+    const node = findNode(this.document.root, nodeId);
+    const block = node ? nodeContentBlocks(node).find((item) => item.type === "image" && item.id === blockId) : void 0;
+    if (!node || !block || !this.ensureEditable()) return;
+    this.mutate(() => {
+      block.align = align === "center" ? void 0 : align;
+    });
+  }
+  /** 设定图片显示宽度；缺省宽度表示恢复为适应当前节点。 */
+  setImageBlockWidth(nodeId, blockId, width) {
+    const node = findNode(this.document.root, nodeId);
+    const block = node ? nodeContentBlocks(node).find((item) => item.type === "image" && item.id === blockId) : void 0;
+    if (!node || !block || !this.ensureEditable()) return;
+    this.mutate(() => {
+      block.width = width;
+      block.height = void 0;
+    });
+  }
+  /** 打开当前图片块的编辑面板，用于精确尺寸和替换来源。 */
+  editImageBlock(blockId) {
+    const initialBlockId = blockId;
+    this.editSelected(initialBlockId);
+  }
+  /** 将当前图片上传到用户选择的图床，并保留本地来源与已有镜像。 */
+  async uploadImageBlock(nodeId, blockId) {
+    const node = findNode(this.document.root, nodeId);
+    const block = node ? nodeContentBlocks(node).find((item) => item.type === "image" && item.id === blockId) : void 0;
+    if (!node || !block || !this.ensureEditable()) return;
+    const previous = cloneDocument(this.document);
+    if (!await uploadCurrentNodeImage(this.app, block, this.callbacks)) return;
+    this.history.capture(previous);
+    syncNodeContentFields(node);
+    this.callbacks.onChange(this.getDocument());
+    this.markSaving();
+    this.render();
+  }
+  /** 复制当前图片的主地址，供外部编辑器或浏览器直接使用。 */
+  async copyImageSource(source) {
+    try {
+      await navigator.clipboard.writeText(source);
+      new import_obsidian10.Notice("\u56FE\u7247\u5730\u5740\u5DF2\u590D\u5236");
+    } catch (e) {
+      new import_obsidian10.Notice("\u65E0\u6CD5\u8BBF\u95EE\u7CFB\u7EDF\u526A\u8D34\u677F");
+    }
+  }
+  /** 从节点的有序内容块中移除指定图片。 */
+  removeImageBlock(nodeId, blockId) {
+    const node = findNode(this.document.root, nodeId);
+    if (!node || !this.ensureEditable()) return;
+    const blocks = nodeContentBlocks(node);
+    if (!blocks.some((block) => block.type === "image" && block.id === blockId)) return;
+    this.mutate(() => replaceNodeContentBlocks(node, blocks.filter((block) => block.id !== blockId)));
   }
   /**
    * 打开context menu，并保持模型、界面和持久化状态的一致性。

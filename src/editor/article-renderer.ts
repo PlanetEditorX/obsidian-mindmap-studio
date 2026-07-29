@@ -177,7 +177,7 @@ export function renderArticleNodeContent(container: HTMLElement, node: MindMapNo
       if (treatTextAsBody) options.makeInlineEditable(paragraph, node, "正文");
     } else if (block.type === "image") {
       const resolved = options.callbacks.resolveImage(block.source);
-      const image = container.createEl("img", { cls: "mms-article-image", attr: { src: resolved ?? block.source, alt: block.alt ?? "图片" } });
+      const image = container.createEl("img", { cls: `mms-article-image image-align-${block.align ?? "center"}`, attr: { src: resolved ?? block.source, alt: block.alt ?? "图片" } });
       image.dataset.blockId = block.id;
       if (block.width) image.style.width = `${block.width}px`;
       if (block.height) image.style.height = `${block.height}px`;
