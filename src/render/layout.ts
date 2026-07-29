@@ -436,6 +436,7 @@ function richTextTspans(runs: MindMapTextRun[] | undefined, fallbackText: string
     if (style?.color) attributes.push(`fill="${validColor(style.color, foreground)}"`);
     if (style?.bold !== undefined) attributes.push(`font-weight="${style.bold ? 700 : 400}"`);
     if (style?.italic !== undefined) attributes.push(`font-style="${style.italic ? "italic" : "normal"}"`);
+    if (style?.code) attributes.push('font-family="monospace"');
     const decorations: string[] = [];
     if (style?.underline) decorations.push("underline");
     if (style?.strike) decorations.push("line-through");

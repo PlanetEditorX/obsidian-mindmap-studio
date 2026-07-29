@@ -257,6 +257,7 @@ function normalizeTextStyle(input) {
     italic: normalizeBooleanOverride(input.italic),
     underline: normalizeBooleanOverride(input.underline),
     strike: normalizeBooleanOverride(input.strike),
+    code: normalizeBooleanOverride(input.code),
     color: normalizeColor(input.color)
   };
   return Object.values(style).some((value) => value !== void 0) ? style : void 0;
@@ -753,16 +754,17 @@ function escapeInlineMarkdown(value) {
   return value.replace(/([\\`*_{}\[\]<>])/g, "\\$1");
 }
 function markdownInlineToRichText(value) {
-  var _a2;
   const runs = [];
-  const boldPattern = /\*\*(.+?)\*\*/g;
+  const inlinePattern = /\*\*(.+?)\*\*|`([^`]+)`/g;
   let cursor = 0;
   let match;
-  while (match = boldPattern.exec(value)) {
+  while (match = inlinePattern.exec(value)) {
     const before = value.slice(cursor, match.index);
-    const boldText = (_a2 = match[1]) != null ? _a2 : "";
+    const boldText = match[1];
+    const codeText = match[2];
     if (before) runs.push({ text: before });
     if (boldText) runs.push({ text: boldText, style: { bold: true } });
+    else if (codeText) runs.push({ text: codeText, style: { code: true } });
     cursor = match.index + match[0].length;
   }
   if (!runs.length) return { text: value };
@@ -781,6 +783,7 @@ function richTextToMarkdown(runs, fallbackText) {
     if (style.italic) value = `*${value}*`;
     if (style.strike) value = `~~${value}~~`;
     if (style.underline) value = `<u>${value}</u>`;
+    if (style.code) value = `\`${value}\``;
     if (style.color) value = `<span style="color:${style.color}">${value}</span>`;
     return value;
   }).join("");
@@ -3283,6 +3286,7 @@ function richTextTspans(runs, fallbackText, prefix, foreground, maxChars = 160) 
     if (style == null ? void 0 : style.color) attributes.push(`fill="${validColor(style.color, foreground)}"`);
     if ((style == null ? void 0 : style.bold) !== void 0) attributes.push(`font-weight="${style.bold ? 700 : 400}"`);
     if ((style == null ? void 0 : style.italic) !== void 0) attributes.push(`font-style="${style.italic ? "italic" : "normal"}"`);
+    if (style == null ? void 0 : style.code) attributes.push('font-family="monospace"');
     const decorations = [];
     if (style == null ? void 0 : style.underline) decorations.push("underline");
     if (style == null ? void 0 : style.strike) decorations.push("line-through");
@@ -4403,6 +4407,7 @@ function renderRichTextRuns(container, runs, fallbackText, latex = true) {
   let renderedMath = false;
   const append = (text, style) => {
     const span = container.createSpan({ cls: "mmc-rich-run", text });
+    span.toggleClass("is-inline-code", (style == null ? void 0 : style.code) === true);
     if ((style == null ? void 0 : style.bold) !== void 0) span.style.fontWeight = style.bold ? "700" : "400";
     if ((style == null ? void 0 : style.italic) !== void 0) span.style.fontStyle = style.italic ? "italic" : "normal";
     const decorations = [];
@@ -4451,6 +4456,7 @@ function styleFromElement(element, inherited) {
   if (tag === "i" || tag === "em") style.italic = true;
   if (tag === "u") style.underline = true;
   if (tag === "s" || tag === "strike" || tag === "del") style.strike = true;
+  if (tag === "code" || element.hasClass("is-inline-code")) style.code = true;
   const inline = element.style;
   if (inline.fontWeight && (inline.fontWeight === "bold" || Number(inline.fontWeight) >= 600)) style.bold = true;
   if (inline.fontStyle === "italic") style.italic = true;
@@ -5815,6 +5821,19 @@ function deleteNodes(root, ids) {
     if (removeNode(root, id)) removed += 1;
   }
   return removed;
+}
+function deletionSelectionFallback(root, ids) {
+  var _a2, _b2;
+  const targets = topLevelSelectedNodeIds(root, ids);
+  const target = targets[0];
+  if (!target) return root.id;
+  const parent = findParent(root, target);
+  if (!parent) return root.id;
+  const removed = new Set(targets);
+  const index = parent.children.findIndex((node) => node.id === target);
+  const next = parent.children.slice(index + 1).find((node) => !removed.has(node.id));
+  const previous = parent.children.slice(0, index).reverse().find((node) => !removed.has(node.id));
+  return (_b2 = (_a2 = next == null ? void 0 : next.id) != null ? _a2 : previous == null ? void 0 : previous.id) != null ? _b2 : parent.id;
 }
 function setAllBranchesCollapsed(root, collapsed, includeRoot = false) {
   for (const node of flattenNodes(root)) {
@@ -9287,8 +9306,8 @@ var MindMapEditor = class {
     this.articleStyleButton = this.addToolbarButton("article-style", "paintbrush", "\u6587\u7AE0\u6837\u5F0F", () => this.editArticleStyle(), true);
     this.addToolbarSeparator();
     this.addToolbarButton("markdown", "file-text", "\u67E5\u770B Markdown \u5927\u7EB2", () => this.showOutline());
-    this.addToolbarButton("json", "braces", "\u5BFC\u5165 / \u5BFC\u51FA", () => this.showJsonTransfer(), true);
-    this.addToolbarButton("export-document", "file-output", "\u5BFC\u51FA HTML / Word / PDF / Markdown", () => this.showDocumentExport());
+    this.addToolbarButton("json", "arrow-left-right", "\u5BFC\u5165 / \u5BFC\u51FA", () => this.showJsonTransfer(), true);
+    this.addToolbarButton("export-document", "file-down", "\u5BFC\u51FA HTML / Word / PDF / Markdown", () => this.showDocumentExport());
     this.addToolbarButton("export-svg", "image", "\u5BFC\u51FA SVG", () => void this.callbacks.onExportSvg(documentToSvg(this.document.root, this.document.layout, this.document.title, this.getAppearance())));
     this.applyToolbarOrder();
     const spacer = this.toolbarEl.createSpan({ cls: "mmc-toolbar-spacer" });
@@ -11312,16 +11331,15 @@ var MindMapEditor = class {
    * 删除selected，并保持模型、界面和持久化状态的一致性。
    */
   deleteSelected() {
-    var _a2, _b2;
     if (!this.ensureEditable()) return;
     const batch = topLevelSelectedNodeIds(this.document.root, this.selectedIds);
     if (this.selectedIds.size > 1 && batch.length) {
-      const fallback = (_b2 = (_a2 = findParent(this.document.root, batch[0])) == null ? void 0 : _a2.id) != null ? _b2 : this.document.root.id;
+      const fallback2 = deletionSelectionFallback(this.document.root, batch);
       this.mutate(() => {
         deleteNodes(this.document.root, batch);
         this.selectedIds.clear();
-        this.selectedId = fallback;
-        this.selectedIds.add(fallback);
+        this.selectedId = fallback2;
+        this.selectedIds.add(fallback2);
       });
       new import_obsidian10.Notice(`\u5DF2\u5220\u9664 ${batch.length} \u4E2A\u6240\u9009\u8282\u70B9`);
       return;
@@ -11331,11 +11349,10 @@ var MindMapEditor = class {
       new import_obsidian10.Notice("\u6839\u8282\u70B9\u4E0D\u80FD\u5220\u9664");
       return;
     }
-    const parent = findParent(this.document.root, selected.id);
+    const fallback = deletionSelectionFallback(this.document.root, [selected.id]);
     this.mutate(() => {
-      var _a3;
       deleteNodes(this.document.root, [selected.id]);
-      this.selectedId = (_a3 = parent == null ? void 0 : parent.id) != null ? _a3 : this.document.root.id;
+      this.selectedId = fallback;
       this.selectedIds.clear();
       this.selectedIds.add(this.selectedId);
     });

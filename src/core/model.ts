@@ -113,6 +113,7 @@ export interface MindMapTextStyle {
   italic?: boolean;
   underline?: boolean;
   strike?: boolean;
+  code?: boolean;
   color?: string;
 }
 
@@ -617,6 +618,7 @@ function normalizeTextStyle(input: Partial<MindMapTextStyle> | undefined): MindM
     italic: normalizeBooleanOverride(input.italic),
     underline: normalizeBooleanOverride(input.underline),
     strike: normalizeBooleanOverride(input.strike),
+    code: normalizeBooleanOverride(input.code),
     color: normalizeColor(input.color)
   };
   return Object.values(style).some((value) => value !== undefined) ? style : undefined;
@@ -1465,14 +1467,16 @@ function escapeInlineMarkdown(value: string): string {
 /** Converts supported inline Markdown markers into the editor's rich-text model. */
 export function markdownInlineToRichText(value: string): { text: string; richText?: MindMapTextRun[] } {
   const runs: MindMapTextRun[] = [];
-  const boldPattern = /\*\*(.+?)\*\*/g;
+  const inlinePattern = /\*\*(.+?)\*\*|`([^`]+)`/g;
   let cursor = 0;
   let match: RegExpExecArray | null;
-  while ((match = boldPattern.exec(value))) {
+  while ((match = inlinePattern.exec(value))) {
     const before = value.slice(cursor, match.index);
-    const boldText = match[1] ?? "";
+    const boldText = match[1];
+    const codeText = match[2];
     if (before) runs.push({ text: before });
     if (boldText) runs.push({ text: boldText, style: { bold: true } });
+    else if (codeText) runs.push({ text: codeText, style: { code: true } });
     cursor = match.index + match[0].length;
   }
   if (!runs.length) return { text: value };
@@ -1500,6 +1504,7 @@ export function richTextToMarkdown(runs: MindMapTextRun[] | undefined, fallbackT
     if (style.italic) value = `*${value}*`;
     if (style.strike) value = `~~${value}~~`;
     if (style.underline) value = `<u>${value}</u>`;
+    if (style.code) value = `\`${value}\``;
     if (style.color) value = `<span style="color:${style.color}">${value}</span>`;
     return value;
   }).join("");

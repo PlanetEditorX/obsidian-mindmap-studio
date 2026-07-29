@@ -370,6 +370,12 @@ export const setIcon = () => {};
   assert.equal(actionRoot.collapsed, false);
   assert.equal(nodeActions.deleteNodes(actionRoot, ["action-a"]), 1);
   assert.deepEqual(actionRoot.children.map((node) => node.id), ["action-b"]);
+  const deletionRoot = model.normalizeDocument({ root: { id: "root", text: "Root", children: [
+    { id: "a", text: "A", children: [] }, { id: "b", text: "B", children: [] }, { id: "c", text: "C", children: [] }
+  ] } }, "删除回退").root;
+  assert.equal(nodeActions.deletionSelectionFallback(deletionRoot, ["b"]), "c", "deleting a middle child must keep selection on its next sibling");
+  assert.equal(nodeActions.deletionSelectionFallback(deletionRoot, ["c"]), "b", "deleting the last child must keep selection on its previous sibling");
+  assert.equal(nodeActions.deletionSelectionFallback(deletionRoot, ["a", "b", "c"]), "root", "only deleting every sibling may fall back to the parent");
 
   const pastedBranches = clipboardImport.parseClipboardNodes(JSON.stringify({
     type: "mindmap-studio-nodes",
@@ -924,6 +930,10 @@ udpsvd -vE 0 69 tftpd -c /
   assert.equal(boldTableCell.richText?.[1]?.text, "加粗");
   assert.equal(boldTableCell.richText?.[1]?.style?.bold, true);
   assert.equal(boldTableCell.richText?.[2]?.text, " 文字");
+  const inlineCode = model.markdownInlineToRichText("执行 `代码片段` 即可");
+  assert.equal(inlineCode.text, "执行 代码片段 即可");
+  assert.equal(inlineCode.richText?.[1]?.style?.code, true);
+  assert.equal(model.richTextToMarkdown(inlineCode.richText, inlineCode.text), "执行 `代码片段` 即可");
 
   const parsedCode = model.parseFencedCode("代码如下：\n```typescript\nconst answer: number = 42;\n```\n结束");
   assert.equal(parsedCode?.language, "typescript");
@@ -1195,6 +1205,9 @@ udpsvd -vE 0 69 tftpd -c /
   assert.match(editorSource, /renderInlineMarkdown\(cell, header \|\| `列 \$\{index \+ 1\}`\)/, "mind-map tables must render inline Markdown");
   assert.match(editorSource, /openTableBlockEditor\(node, tableData, blockId\)/, "clicking a table must open its editor directly");
   assert.match(editorSource, /openCodeBlockEditor\(node, codeData, blockId\)/, "clicking code must open its editor directly");
+  assert.match(editorSource, /deletionSelectionFallback\(this\.document\.root, \[selected\.id\]\)/, "deleting a node must prefer a surviving sibling as the selection fallback");
+  assert.match(editorSource, /addToolbarButton\("json", "arrow-left-right"/, "the import/export action must use a bidirectional transfer icon");
+  assert.match(editorSource, /addToolbarButton\("export-document", "file-down"/, "document export must use a download icon");
   assert.doesNotMatch(editorSource, /wrap\.addEventListener\("dblclick"[\s\S]*editSelected\(blockId\)/, "table double-clicks must not route through the node editor");
   assert.match(outlineRendererSource, /options\.renderCode/);
   assert.match(outlineRendererSource, /ImagePreviewModal/);
