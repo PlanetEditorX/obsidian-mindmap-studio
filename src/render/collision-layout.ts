@@ -30,6 +30,10 @@ export function resolveLayoutCollisions<T extends CollisionNode>(nodes: T[], ver
     siblings.push(node);
     children.set(node.parentId, siblings);
   }
+  const siblingIndexes = new Map<string, number>();
+  for (const siblings of children.values()) {
+    siblings.forEach((node, index) => siblingIndexes.set(node.node.id, index));
+  }
 
   const descendants = (root: T): T[] => {
     const result: T[] = [];
@@ -72,6 +76,23 @@ export function resolveLayoutCollisions<T extends CollisionNode>(nodes: T[], ver
         const secondTop = second.y - second.height / 2;
         const requiredOffset = firstBottom + verticalGap - secondTop;
         if (requiredOffset <= 0) continue;
+
+        // Measured content can be much taller than its initial estimate.
+        // Preserve sibling order instead of moving an earlier sibling below a
+        // later one during collision resolution.
+        if (first.parentId && first.parentId === second.parentId) {
+          const firstIndex = siblingIndexes.get(first.node.id) ?? 0;
+          const secondIndex = siblingIndexes.get(second.node.id) ?? 0;
+          const earlier = firstIndex <= secondIndex ? first : second;
+          const later = earlier === first ? second : first;
+          const offset = earlier.y + earlier.height / 2 + verticalGap - (later.y - later.height / 2);
+          if (offset > 0) {
+            moveSubtree(later, offset);
+            moves += 1;
+            changed = true;
+            break;
+          }
+        }
 
         // 根节点固定在画布中心；与根节点相交时移动相邻分支。
         const moving = second.parentId === null || contains(second, first) ? first : second;
