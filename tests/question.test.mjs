@@ -176,6 +176,12 @@ source: "https://example.com/post"
   assert.deepEqual(model.nodeContentBlocks(modem.children[0]).filter((block) => block.type === "image").map((block) => block.source), ["https://example.com/config.png"]);
 });
 
+test("Markdown import does not invent a placeholder topic when no child node is parsed", () => {
+  const document = model.markdownToDocument("Only plain text", "Imported note");
+  assert.equal(document.root.children.length, 0);
+  assert.doesNotMatch(JSON.stringify(document), /主题 1/);
+});
+
 test("question-bank grading distinguishes single choice, multiple choice and normalized essay answers", () => {
   const choice = model.normalizeDocument({
     root: {

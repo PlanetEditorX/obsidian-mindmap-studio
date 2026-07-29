@@ -4560,12 +4560,14 @@ export class MindMapEditor {
     });
     block.addEventListener("pointerdown", (event) => event.stopPropagation());
     block.addEventListener("dragstart", (event) => event.preventDefault());
-    block.addEventListener("click", (event) => {
-      if ((event.target as HTMLElement).closest("button, details")) return;
-      event.stopPropagation();
-      this.openCodeBlockEditor(node, codeData, blockId);
-    });
-      block.addEventListener("dblclick", (event) => event.stopPropagation());
+      block.addEventListener("click", (event) => {
+        if ((event.target as HTMLElement).closest("button, details")) return;
+        event.stopPropagation();
+      });
+      block.addEventListener("dblclick", (event) => {
+        event.stopPropagation();
+        this.openCodeBlockEditor(node, codeData, blockId);
+      });
       block.addEventListener("contextmenu", (event) => {
         event.preventDefault();
         event.stopPropagation();

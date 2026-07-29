@@ -1962,7 +1962,6 @@ export function markdownToDocument(markdown: string, fallbackTitle = "思维导�
       replaceNodeContentBlocks(target, [...nodeContentBlocks(target), { id: newId(), type: "table", table: parsed }]);
     }
   }
-  if (!doc.root.children.length) doc.root.children.push(createNode("主题 1"));
   return doc;
 }
 

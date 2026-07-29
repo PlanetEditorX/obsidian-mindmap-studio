@@ -1170,7 +1170,6 @@ function markdownToDocument(markdown, fallbackTitle = "\u601D\u7EF4\u5BFC\u56FE"
       replaceNodeContentBlocks(target, [...nodeContentBlocks(target), { id: newId(), type: "table", table: parsed }]);
     }
   }
-  if (!doc.root.children.length) doc.root.children.push(createNode("\u4E3B\u9898 1"));
   return doc;
 }
 function indentedTextToMarkdown(text) {
@@ -12366,9 +12365,11 @@ var MindMapEditor = class {
     block.addEventListener("click", (event) => {
       if (event.target.closest("button, details")) return;
       event.stopPropagation();
+    });
+    block.addEventListener("dblclick", (event) => {
+      event.stopPropagation();
       this.openCodeBlockEditor(node, codeData, blockId);
     });
-    block.addEventListener("dblclick", (event) => event.stopPropagation());
     block.addEventListener("contextmenu", (event) => {
       event.preventDefault();
       event.stopPropagation();

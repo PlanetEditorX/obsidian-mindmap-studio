@@ -30,6 +30,12 @@ test("code insertion appends blocks and block menus remove only the targeted cod
   assert.doesNotMatch(editorSource, /private removeStructuredBlocks\(/);
 });
 
+test("mind-map code blocks use double click for editing", () => {
+  const renderNodeCode = editorSource.match(/private renderNodeCode\([\s\S]*?\n  \}/)?.[0] ?? "";
+  assert.match(renderNodeCode, /block\.addEventListener\("dblclick", \(event\) => \{[\s\S]*openCodeBlockEditor\(node, codeData, blockId\)/);
+  assert.doesNotMatch(renderNodeCode, /block\.addEventListener\("click",[\s\S]{0,180}openCodeBlockEditor/);
+});
+
 after(() => cleanup?.());
 
 class FakeClassList {
