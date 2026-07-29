@@ -8839,6 +8839,7 @@ var MindMapEditor = class {
     this.resizeObserver = null;
     this.measuredLayoutFrame = null;
     this.pendingMindMapLayoutAnimation = false;
+    this.allNodesCollapseToggleTimer = null;
     this.branchClipboard = null;
     this.searchQuery = "";
     this.lastRichTextColor = "#ef4444";
@@ -8897,6 +8898,8 @@ var MindMapEditor = class {
     this.resizeObserver = null;
     if (this.measuredLayoutFrame !== null) window.cancelAnimationFrame(this.measuredLayoutFrame);
     this.measuredLayoutFrame = null;
+    if (this.allNodesCollapseToggleTimer !== null) window.clearTimeout(this.allNodesCollapseToggleTimer);
+    this.allNodesCollapseToggleTimer = null;
     this.host.empty();
   }
   /**
@@ -11701,6 +11704,8 @@ var MindMapEditor = class {
    * @param collapsed Whether branches should be collapsed.
    */
   setAllNodesCollapsed(collapsed) {
+    const branches = flattenNodes(this.document.root).filter((node) => node !== this.document.root && node.children.length > 0);
+    if (!branches.some((node) => node.collapsed !== collapsed)) return;
     const apply = () => {
       setAllBranchesCollapsed(this.document.root, collapsed);
     };
@@ -11714,8 +11719,13 @@ var MindMapEditor = class {
   }
   /** Toggles every non-root branch between fully expanded and fully collapsed. */
   toggleAllNodesCollapsed() {
+    if (this.allNodesCollapseToggleTimer !== null) return;
     const branches = flattenNodes(this.document.root).filter((node) => node !== this.document.root && node.children.length > 0);
+    if (!branches.length) return;
     this.setAllNodesCollapsed(branches.some((node) => !node.collapsed));
+    this.allNodesCollapseToggleTimer = window.setTimeout(() => {
+      this.allNodesCollapseToggleTimer = null;
+    }, 260);
   }
   /**
    * 切换task，并保持模型、界面和持久化状态的一致性。

@@ -97,3 +97,11 @@ test("structural mind-map changes use a reduced-motion-aware FLIP layout transit
   assert.match(editorSource, /this\.requestMindMapLayoutAnimation\(\);[\s\S]{0,160}this\.render\(\);/);
   assert.match(editorSource, /this\.applyMeasuredMindMapLayout\(\);[\s\S]{0,120}this\.playMindMapLayoutAnimation\(previousNodeRects\)/);
 });
+
+test("collapse-all ignores rapid duplicate toggles and skips no-op redraws", () => {
+  const toggleAll = editorSource.match(/private toggleAllNodesCollapsed\(\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
+  const setAll = editorSource.match(/private setAllNodesCollapsed\(collapsed: boolean\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
+  assert.match(toggleAll, /if \(this\.allNodesCollapseToggleTimer !== null\) return/);
+  assert.match(toggleAll, /window\.setTimeout\([\s\S]*260\)/);
+  assert.match(setAll, /if \(!branches\.some\(\(node\) => node\.collapsed !== collapsed\)\) return/);
+});
