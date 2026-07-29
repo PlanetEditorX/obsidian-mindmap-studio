@@ -136,17 +136,13 @@ export function attachSelectionFormatToolbar(options: SelectionFormatToolbarOpti
   button("B", `加粗（${options.shortcuts.bold}）`, "bold");
   button("I", `斜体（${options.shortcuts.italic}）`, "italic");
   button("U", `下划线（${options.shortcuts.underline}）`, "underline");
-  const clearFormat = toolbar.createEl("button", { text: "Tx", attr: { type: "button", title: "清除格式", "aria-label": "清除格式" } });
-  clearFormat.addClass("is-clear-format");
-  clearFormat.addEventListener("pointerdown", (event) => event.preventDefault());
-  clearFormat.addEventListener("click", () => applyStyle(null));
   // Color button with popover: common swatches + last color + custom picker
   const colorBtn = toolbar.createEl("button", {
     cls: "mms-color-btn",
     attr: { type: "button", title: "文字颜色" }
   });
   colorBtn.createSpan({ text: "A" });
-  colorBtn.style.textDecorationColor = lastColor;
+  colorBtn.style.color = lastColor;
 
   const popover = toolbar.createDiv({ cls: "mms-color-popover is-hidden" });
   // Common color swatches
@@ -155,7 +151,9 @@ export function attachSelectionFormatToolbar(options: SelectionFormatToolbarOpti
     dot.style.backgroundColor = swatch;
     dot.addEventListener("click", () => {
       lastColor = swatch;
-      colorBtn.style.textDecorationColor = swatch;
+      colorBtn.style.color = swatch;
+      lastDot.style.backgroundColor = swatch;
+      nativeInput.value = swatch;
       applyStyle({ color: swatch });
       popover.addClass("is-hidden");
     });
@@ -177,7 +175,7 @@ export function attachSelectionFormatToolbar(options: SelectionFormatToolbarOpti
   nativeInput.value = lastColor;
   nativeInput.addEventListener("input", () => {
     lastColor = nativeInput.value;
-    colorBtn.style.textDecorationColor = nativeInput.value;
+    colorBtn.style.color = nativeInput.value;
     lastDot.style.backgroundColor = nativeInput.value;
     applyStyle({ color: nativeInput.value });
     popover.addClass("is-hidden");
@@ -187,6 +185,10 @@ export function attachSelectionFormatToolbar(options: SelectionFormatToolbarOpti
     rememberSelection();
     popover.toggleClass("is-hidden", !popover.hasClass("is-hidden"));
   });
+  const clearFormat = toolbar.createEl("button", { text: "Tx", attr: { type: "button", title: "清除格式", "aria-label": "清除格式" } });
+  clearFormat.addClass("is-clear-format");
+  clearFormat.addEventListener("pointerdown", (event) => event.preventDefault());
+  clearFormat.addEventListener("click", () => applyStyle(null));
   document.addEventListener("pointerdown", (closeEvent) => {
     if (!toolbar.contains(closeEvent.target as Node) && !popover.contains(closeEvent.target as Node)) {
       popover.addClass("is-hidden");

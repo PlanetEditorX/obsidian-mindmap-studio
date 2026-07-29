@@ -5,11 +5,13 @@ import { before, test } from "node:test";
 let editorSource;
 let viewSource;
 let mainSource;
+let articleRendererSource;
 
 before(async () => {
   editorSource = await readFile("src/editor/editor.ts", "utf8");
   viewSource = await readFile("src/view.ts", "utf8");
   mainSource = await readFile("src/main.ts", "utf8");
+  articleRendererSource = await readFile("src/editor/article-renderer.ts", "utf8");
 });
 
 test("continuous reading exposes semantic anchors for directory-only parent nodes", () => {
@@ -77,6 +79,13 @@ test("article and outline text do not expose edit labels as hover tooltips", () 
   assert.match(editorSource, /element\.setAttr\("aria-label", element\.dataset\.mmsEditLabel \?\? "编辑文字"\)/);
   assert.match(editorSource, /private clearInlineEditingAccessibility\(element: HTMLElement\): void[\s\S]*element\.removeAttribute\("aria-label"\)/);
   assert.match(activateInlineEditable, /this\.applyInlineEditingAccessibility\(element\)/);
+});
+
+test("article code blocks enter direct editing on double click", () => {
+  assert.match(articleRendererSource, /code\.addEventListener\("dblclick"[\s\S]*makeInlineCodeEditable\(code, node, block\.code, block\.id\)/);
+  assert.match(editorSource, /private makeInlineCodeEditable\(element: HTMLElement, node: MindMapNode, code: MindMapCodeBlock, blockId: string\): void/);
+  assert.match(editorSource, /editor\.addEventListener\("blur", \(\) => finish\(true\)\)/);
+  assert.match(editorSource, /event\.key === "Escape"[\s\S]*finish\(false\)/);
 });
 
 test("structural mind-map changes use a reduced-motion-aware FLIP layout transition", () => {
