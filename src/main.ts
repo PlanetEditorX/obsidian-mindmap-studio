@@ -98,10 +98,10 @@ import {
   parseUploadHeaders,
   parseUploadResponsePayload
 } from "./utils/image-host";
-import { comparePluginVersions, extractPluginReleaseFiles, findPluginInstallUrl } from "./utils/plugin-update";
+import { comparePluginVersions, extractPluginReleaseFiles, parsePluginUpdateManifest, verifyPluginArchiveHash } from "./utils/plugin-update";
 
 export const MINDMAP_EXTENSION = "mindmap";
-const PLUGIN_RELEASE_PAGE_URL = "https://github.com/PlanetEditorX/obsidian-mindmap-studio/releases/latest";
+const PLUGIN_UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/PlanetEditorX/obsidian-mindmap-studio/main/update.json";
 
 /**
  * MindMapStudioPlugin 的主要实现类。负责封装相关状态、生命周期和对外操作，避免调用方直接操作内部数据结构。
@@ -659,23 +659,26 @@ export default class MindMapStudioPlugin extends Plugin {
     this.scheduleFileExplorerFilter();
   }
 
-  /** Checks GitHub Releases, installs a newer verified bundle, and offers an immediate reload. */
+  /** Checks the release-workflow update manifest, verifies its archive, and offers an immediate reload. */
   async checkForPluginUpdate(): Promise<"up-to-date" | "updated"> {
     new Notice("正在检查 MindMap Studio 更新…");
     const response = await requestUrl({
-      url: PLUGIN_RELEASE_PAGE_URL,
+      url: PLUGIN_UPDATE_MANIFEST_URL,
       method: "GET",
+      headers: { "Cache-Control": "no-cache" },
       throw: true
     });
-    const downloadUrl = findPluginInstallUrl(response.text, PLUGIN_RELEASE_PAGE_URL);
-    if (!downloadUrl) throw new Error("最新 Release 页面中未找到可安装的插件包");
-    const archiveResponse = await requestUrl({ url: downloadUrl, method: "GET", throw: true });
-    const update = extractPluginReleaseFiles(await archiveResponse.arrayBuffer);
-    if (update.manifest.id !== this.manifest.id) throw new Error("更新包的插件标识不匹配，已取消安装");
-    if (comparePluginVersions(update.manifest.version, this.manifest.version) <= 0) {
+    const release = parsePluginUpdateManifest(response.text);
+    if (comparePluginVersions(release.version, this.manifest.version) <= 0) {
       new Notice(`已是最新版本（${this.manifest.version}）`);
       return "up-to-date";
     }
+    const archiveResponse = await requestUrl({ url: release.downloadUrl, method: "GET", throw: true });
+    const archive = await archiveResponse.arrayBuffer;
+    if (!await verifyPluginArchiveHash(archive, release.sha256)) throw new Error("更新包 SHA-256 校验失败，已取消安装");
+    const update = extractPluginReleaseFiles(archive);
+    if (update.manifest.id !== this.manifest.id) throw new Error("更新包的插件标识不匹配，已取消安装");
+    if (update.manifest.version !== release.version) throw new Error("更新包版本与更新信息不一致，已取消安装");
 
     const pluginDir = this.manifest.dir ?? normalizePath(`${this.app.vault.configDir}/plugins/${this.manifest.id}`);
     const adapter = this.app.vault.adapter;

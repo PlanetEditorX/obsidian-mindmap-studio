@@ -2832,7 +2832,7 @@ var MindMapStudioSettingTab = class extends import_obsidian.PluginSettingTab {
     containerEl.createEl("h3", { text: "\u7BA1\u7406\u914D\u7F6E" });
     new import_obsidian.Setting(containerEl).setName("\u5BFC\u51FA\u914D\u7F6E").setDesc("\u5C06\u5F53\u524D\u5168\u5C40\u63D2\u4EF6\u8BBE\u7F6E\u5BFC\u51FA\u4E3A JSON \u6587\u4EF6\u3002").addButton((button) => button.setButtonText("\u5BFC\u51FA\u914D\u7F6E").onClick(() => void this.exportSettings()));
     new import_obsidian.Setting(containerEl).setName("\u5BFC\u5165\u914D\u7F6E").setDesc("\u5BFC\u5165 JSON \u914D\u7F6E\u4F1A\u8986\u76D6\u5F53\u524D\u5168\u5C40\u8BBE\u7F6E\uFF0C\u4E0D\u4F1A\u4FEE\u6539\u4EFB\u4F55\u5BFC\u56FE\u6587\u4EF6\u3002").addButton((button) => button.setButtonText("\u5BFC\u5165\u914D\u7F6E").onClick(() => this.openSettingsImportPicker()));
-    new import_obsidian.Setting(containerEl).setName("\u68C0\u67E5\u63D2\u4EF6\u66F4\u65B0").setDesc(`\u5F53\u524D\u7248\u672C ${this.plugin.manifest.version}\u3002\u4ECE GitHub Release \u9875\u9762\u4E0B\u8F7D\u5E76\u6821\u9A8C\u5B89\u88C5\u5305\uFF1B\u5B8C\u6210\u540E\u53EF\u7ACB\u5373\u91CD\u65B0\u52A0\u8F7D Obsidian\u3002`).addButton((button) => button.setButtonText("\u68C0\u67E5\u66F4\u65B0").onClick(async () => {
+    new import_obsidian.Setting(containerEl).setName("\u68C0\u67E5\u63D2\u4EF6\u66F4\u65B0").setDesc(`\u5F53\u524D\u7248\u672C ${this.plugin.manifest.version}\u3002\u4ECE\u516C\u5F00\u66F4\u65B0\u4FE1\u606F\u4E0B\u8F7D\u5E76\u6821\u9A8C\u5B89\u88C5\u5305\uFF1B\u5B8C\u6210\u540E\u53EF\u7ACB\u5373\u91CD\u65B0\u52A0\u8F7D Obsidian\u3002`).addButton((button) => button.setButtonText("\u68C0\u67E5\u66F4\u65B0").onClick(async () => {
       button.setDisabled(true);
       button.setButtonText("\u68C0\u67E5\u4E2D\u2026");
       try {
@@ -15536,19 +15536,30 @@ function comparePluginVersions(left, right) {
   }
   return 0;
 }
-function findPluginInstallUrl(releasePageHtml, releasePageUrl) {
-  var _a2;
-  const hrefs = releasePageHtml.matchAll(/href=["']([^"']+)["']/gi);
-  for (const match of hrefs) {
-    try {
-      const url = new URL(match[1].replace(/&amp;/g, "&"), releasePageUrl);
-      const filename = (_a2 = url.pathname.split("/").at(-1)) != null ? _a2 : "";
-      if (url.protocol === "https:" && url.hostname === "github.com" && url.pathname.startsWith("/PlanetEditorX/obsidian-mindmap-studio/releases/download/") && /^mindmap-studio-[\w.-]+-install\.zip$/i.test(filename)) return url.href;
-    } catch (e) {
-      continue;
-    }
+function parsePluginUpdateManifest(source) {
+  var _a2, _b2;
+  let manifest;
+  try {
+    manifest = JSON.parse(source);
+  } catch (e) {
+    throw new Error("\u66F4\u65B0\u4FE1\u606F\u6587\u4EF6\u4E0D\u662F\u6709\u6548 JSON");
   }
-  return null;
+  if (!manifest.version || !manifest.downloadUrl || !/^[a-f0-9]{64}$/i.test((_a2 = manifest.sha256) != null ? _a2 : "")) {
+    throw new Error("\u66F4\u65B0\u4FE1\u606F\u6587\u4EF6\u7F3A\u5C11\u7248\u672C\u3001\u4E0B\u8F7D\u5730\u5740\u6216 SHA-256");
+  }
+  try {
+    const url = new URL(manifest.downloadUrl);
+    const filename = (_b2 = url.pathname.split("/").at(-1)) != null ? _b2 : "";
+    if (url.protocol !== "https:" || url.hostname !== "github.com" || !url.pathname.startsWith("/PlanetEditorX/obsidian-mindmap-studio/releases/download/") || !/^mindmap-studio-[\w.-]+-install\.zip$/i.test(filename)) throw new Error();
+  } catch (e) {
+    throw new Error("\u66F4\u65B0\u4FE1\u606F\u6587\u4EF6\u4E2D\u7684\u4E0B\u8F7D\u5730\u5740\u65E0\u6548");
+  }
+  return manifest;
+}
+async function verifyPluginArchiveHash(archive, expectedSha256) {
+  const digest = await crypto.subtle.digest("SHA-256", archive);
+  const actual = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+  return actual === expectedSha256.toLowerCase();
 }
 function extractPluginReleaseFiles(archive) {
   const entries = unzipSync(new Uint8Array(archive));
@@ -15575,7 +15586,7 @@ function extractPluginReleaseFiles(archive) {
 
 // src/main.ts
 var MINDMAP_EXTENSION = "mindmap";
-var PLUGIN_RELEASE_PAGE_URL = "https://github.com/PlanetEditorX/obsidian-mindmap-studio/releases/latest";
+var PLUGIN_UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/PlanetEditorX/obsidian-mindmap-studio/main/update.json";
 var MindMapStudioPlugin = class extends import_obsidian15.Plugin {
   constructor() {
     super(...arguments);
@@ -16046,24 +16057,27 @@ var MindMapStudioPlugin = class extends import_obsidian15.Plugin {
     await this.saveData(this.settings);
     this.scheduleFileExplorerFilter();
   }
-  /** Checks GitHub Releases, installs a newer verified bundle, and offers an immediate reload. */
+  /** Checks the release-workflow update manifest, verifies its archive, and offers an immediate reload. */
   async checkForPluginUpdate() {
     var _a2;
     new import_obsidian15.Notice("\u6B63\u5728\u68C0\u67E5 MindMap Studio \u66F4\u65B0\u2026");
     const response = await (0, import_obsidian15.requestUrl)({
-      url: PLUGIN_RELEASE_PAGE_URL,
+      url: PLUGIN_UPDATE_MANIFEST_URL,
       method: "GET",
+      headers: { "Cache-Control": "no-cache" },
       throw: true
     });
-    const downloadUrl = findPluginInstallUrl(response.text, PLUGIN_RELEASE_PAGE_URL);
-    if (!downloadUrl) throw new Error("\u6700\u65B0 Release \u9875\u9762\u4E2D\u672A\u627E\u5230\u53EF\u5B89\u88C5\u7684\u63D2\u4EF6\u5305");
-    const archiveResponse = await (0, import_obsidian15.requestUrl)({ url: downloadUrl, method: "GET", throw: true });
-    const update = extractPluginReleaseFiles(await archiveResponse.arrayBuffer);
-    if (update.manifest.id !== this.manifest.id) throw new Error("\u66F4\u65B0\u5305\u7684\u63D2\u4EF6\u6807\u8BC6\u4E0D\u5339\u914D\uFF0C\u5DF2\u53D6\u6D88\u5B89\u88C5");
-    if (comparePluginVersions(update.manifest.version, this.manifest.version) <= 0) {
+    const release = parsePluginUpdateManifest(response.text);
+    if (comparePluginVersions(release.version, this.manifest.version) <= 0) {
       new import_obsidian15.Notice(`\u5DF2\u662F\u6700\u65B0\u7248\u672C\uFF08${this.manifest.version}\uFF09`);
       return "up-to-date";
     }
+    const archiveResponse = await (0, import_obsidian15.requestUrl)({ url: release.downloadUrl, method: "GET", throw: true });
+    const archive = await archiveResponse.arrayBuffer;
+    if (!await verifyPluginArchiveHash(archive, release.sha256)) throw new Error("\u66F4\u65B0\u5305 SHA-256 \u6821\u9A8C\u5931\u8D25\uFF0C\u5DF2\u53D6\u6D88\u5B89\u88C5");
+    const update = extractPluginReleaseFiles(archive);
+    if (update.manifest.id !== this.manifest.id) throw new Error("\u66F4\u65B0\u5305\u7684\u63D2\u4EF6\u6807\u8BC6\u4E0D\u5339\u914D\uFF0C\u5DF2\u53D6\u6D88\u5B89\u88C5");
+    if (update.manifest.version !== release.version) throw new Error("\u66F4\u65B0\u5305\u7248\u672C\u4E0E\u66F4\u65B0\u4FE1\u606F\u4E0D\u4E00\u81F4\uFF0C\u5DF2\u53D6\u6D88\u5B89\u88C5");
     const pluginDir = (_a2 = this.manifest.dir) != null ? _a2 : (0, import_obsidian15.normalizePath)(`${this.app.vault.configDir}/plugins/${this.manifest.id}`);
     const adapter = this.app.vault.adapter;
     const files = [

@@ -1126,7 +1126,8 @@ udpsvd -vE 0 69 tftpd -c /
   assert.match(mainSource, /testImageHost/);
   assert.match(mainSource, /requestUrl/);
   assert.match(mainSource, /checkForPluginUpdate\(\): Promise<"up-to-date" \| "updated">/, "plugin must expose a one-click update workflow");
-  assert.match(mainSource, /PLUGIN_RELEASE_PAGE_URL/, "plugin updates must use the configured GitHub Release page");
+  assert.match(mainSource, /PLUGIN_UPDATE_MANIFEST_URL/, "plugin updates must use the checked-in update manifest");
+  assert.match(mainSource, /verifyPluginArchiveHash/, "plugin updates must verify the downloaded archive checksum");
   assert.doesNotMatch(mainSource, /api\.github\.com\/repos\/PlanetEditorX\/obsidian-mindmap-studio\/releases\/latest/, "plugin updates must not consume the rate-limited GitHub Releases API");
   assert.match(mainSource, /window\.location\.reload\(\)/, "a completed plugin update must offer an immediate reload");
   assert.match(settingsSource, /检查插件更新/, "settings must expose a plugin update control");

@@ -1941,7 +1941,7 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
         .onClick(() => this.openSettingsImportPicker()));
     new Setting(containerEl)
       .setName("检查插件更新")
-      .setDesc(`当前版本 ${this.plugin.manifest.version}。从 GitHub Release 页面下载并校验安装包；完成后可立即重新加载 Obsidian。`)
+      .setDesc(`当前版本 ${this.plugin.manifest.version}。从公开更新信息下载并校验安装包；完成后可立即重新加载 Obsidian。`)
       .addButton((button) => button
         .setButtonText("检查更新")
         .onClick(async () => {
