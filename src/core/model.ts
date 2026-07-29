@@ -1462,6 +1462,27 @@ function escapeInlineMarkdown(value: string): string {
   return value.replace(/([\\`*_{}\[\]<>])/g, "\\$1");
 }
 
+/** Converts supported inline Markdown markers into the editor's rich-text model. */
+export function markdownInlineToRichText(value: string): { text: string; richText?: MindMapTextRun[] } {
+  const runs: MindMapTextRun[] = [];
+  const boldPattern = /\*\*(.+?)\*\*/g;
+  let cursor = 0;
+  let match: RegExpExecArray | null;
+  while ((match = boldPattern.exec(value))) {
+    const before = value.slice(cursor, match.index);
+    const boldText = match[1] ?? "";
+    if (before) runs.push({ text: before });
+    if (boldText) runs.push({ text: boldText, style: { bold: true } });
+    cursor = match.index + match[0].length;
+  }
+  if (!runs.length) return { text: value };
+
+  const after = value.slice(cursor);
+  if (after) runs.push({ text: after });
+  const text = runs.map((run) => run.text).join("");
+  return { text, richText: normalizeRichText(runs, text) };
+}
+
 /**
  * 执行“rich text to markdown”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
  *
@@ -1677,29 +1698,9 @@ export function markdownToDocument(markdown: string, fallbackTitle = "思维导�
       return;
     }
 
-    const runs: MindMapTextRun[] = [];
-    const boldPattern = /\*\*(.+?)\*\*/g;
-    let cursor = 0;
-    let match: RegExpExecArray | null;
-    while ((match = boldPattern.exec(source))) {
-      const before = source.slice(cursor, match.index);
-      const boldText = match[1] ?? "";
-      if (before) runs.push({ text: before });
-      if (boldText) runs.push({ text: boldText, style: { bold: true } });
-      cursor = match.index + match[0].length;
-    }
-
-    if (!runs.length) {
-      node.text = source;
-      node.richText = undefined;
-      return;
-    }
-
-    const after = source.slice(cursor);
-    if (after) runs.push({ text: after });
-    const text = runs.map((run) => run.text).join("");
-    node.text = text || fallback;
-    node.richText = normalizeRichText(runs, node.text);
+    const parsed = markdownInlineToRichText(source);
+    node.text = parsed.text || fallback;
+    node.richText = parsed.richText;
   };
 
   const createMarkdownNode = (value: string, fallback = "节点", forceBold = false): MindMapNode => {

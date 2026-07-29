@@ -5,6 +5,7 @@
 
 import { finishRenderMath, loadMathJax, renderMath } from "obsidian";
 import {
+  markdownInlineToRichText,
   normalizeRichText,
   richTextPlainText,
   type MindMapTextRun,
@@ -98,6 +99,12 @@ export function renderRichTextRuns(
     if (offset < run.text.length) append(run.text.slice(offset), run.style);
   }
   if (renderedMath) void finishRenderMath();
+}
+
+/** Renders the supported inline Markdown formatting used in table cells. */
+export function renderInlineMarkdown(container: HTMLElement, markdown: string): void {
+  const parsed = markdownInlineToRichText(markdown);
+  renderRichTextRuns(container, parsed.richText, parsed.text, false);
 }
 
 /**

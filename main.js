@@ -752,6 +752,25 @@ function taskPrefix(task) {
 function escapeInlineMarkdown(value) {
   return value.replace(/([\\`*_{}\[\]<>])/g, "\\$1");
 }
+function markdownInlineToRichText(value) {
+  var _a2;
+  const runs = [];
+  const boldPattern = /\*\*(.+?)\*\*/g;
+  let cursor = 0;
+  let match;
+  while (match = boldPattern.exec(value)) {
+    const before = value.slice(cursor, match.index);
+    const boldText = (_a2 = match[1]) != null ? _a2 : "";
+    if (before) runs.push({ text: before });
+    if (boldText) runs.push({ text: boldText, style: { bold: true } });
+    cursor = match.index + match[0].length;
+  }
+  if (!runs.length) return { text: value };
+  const after = value.slice(cursor);
+  if (after) runs.push({ text: after });
+  const text = runs.map((run) => run.text).join("");
+  return { text, richText: normalizeRichText(runs, text) };
+}
 function richTextToMarkdown(runs, fallbackText) {
   if (!(runs == null ? void 0 : runs.length)) return escapeInlineMarkdown(fallbackText);
   return runs.map((run) => {
@@ -922,34 +941,15 @@ function markdownToDocument(markdown, fallbackTitle = "\u601D\u7EF4\u5BFC\u56FE"
   let codeFence = null;
   const hasMultipleH1 = (markdown.match(/^#[ 	]+\S/gm) || []).length > 1;
   const applyMarkdownText = (node, value, fallback = "\u8282\u70B9", forceBold = false) => {
-    var _a3;
     const source = value.trim() || fallback;
     if (forceBold) {
       node.text = source;
       node.richText = normalizeRichText([{ text: source, style: { bold: true } }], source);
       return;
     }
-    const runs = [];
-    const boldPattern = /\*\*(.+?)\*\*/g;
-    let cursor = 0;
-    let match;
-    while (match = boldPattern.exec(source)) {
-      const before = source.slice(cursor, match.index);
-      const boldText = (_a3 = match[1]) != null ? _a3 : "";
-      if (before) runs.push({ text: before });
-      if (boldText) runs.push({ text: boldText, style: { bold: true } });
-      cursor = match.index + match[0].length;
-    }
-    if (!runs.length) {
-      node.text = source;
-      node.richText = void 0;
-      return;
-    }
-    const after = source.slice(cursor);
-    if (after) runs.push({ text: after });
-    const text = runs.map((run) => run.text).join("");
-    node.text = text || fallback;
-    node.richText = normalizeRichText(runs, node.text);
+    const parsed = markdownInlineToRichText(source);
+    node.text = parsed.text || fallback;
+    node.richText = parsed.richText;
   };
   const createMarkdownNode = (value, fallback = "\u8282\u70B9", forceBold = false) => {
     const node = createNode();
@@ -4439,6 +4439,10 @@ function renderRichTextRuns(container, runs, fallbackText, latex = true) {
   }
   if (renderedMath) void (0, import_obsidian4.finishRenderMath)();
 }
+function renderInlineMarkdown(container, markdown) {
+  const parsed = markdownInlineToRichText(markdown);
+  renderRichTextRuns(container, parsed.richText, parsed.text, false);
+}
 function styleFromElement(element, inherited) {
   var _a2;
   const style = { ...inherited };
@@ -6903,13 +6907,13 @@ function renderOutlineContent(container, node, depth, options) {
     const tableWrap = content.createDiv({ cls: "mms-outline-table-wrap" });
     const table = tableWrap.createEl("table", { cls: "mms-outline-table" });
     const heading = table.createEl("thead").createEl("tr");
-    node.table.headers.forEach((header) => heading.createEl("th", { text: header }));
+    node.table.headers.forEach((header) => renderInlineMarkdown(heading.createEl("th"), header));
     const body = table.createEl("tbody");
     node.table.rows.forEach((row) => {
       const rowElement = body.createEl("tr");
       node.table.headers.forEach((_, index) => {
         var _a3;
-        return rowElement.createEl("td", { text: (_a3 = row[index]) != null ? _a3 : "" });
+        return renderInlineMarkdown(rowElement.createEl("td"), (_a3 = row[index]) != null ? _a3 : "");
       });
     });
   }
@@ -7075,13 +7079,13 @@ function renderArticleTable(container, tableData) {
   if (!tableData) return;
   const table = container.createDiv({ cls: "mms-article-table-wrap" }).createEl("table", { cls: "mms-article-table" });
   const tr = table.createEl("thead").createEl("tr");
-  tableData.headers.forEach((header) => tr.createEl("th", { text: header }));
+  tableData.headers.forEach((header) => renderInlineMarkdown(tr.createEl("th"), header));
   const body = table.createEl("tbody");
   tableData.rows.forEach((row) => {
     const rowEl = body.createEl("tr");
     tableData.headers.forEach((_, index) => {
       var _a2;
-      return rowEl.createEl("td", { text: (_a2 = row[index]) != null ? _a2 : "" });
+      return renderInlineMarkdown(rowEl.createEl("td"), (_a2 = row[index]) != null ? _a2 : "");
     });
   });
 }
@@ -11526,9 +11530,9 @@ var MindMapEditor = class {
    * @param type 内容块类型。
    * @param value 表格或代码数据。
    */
-  upsertStructuredBlock(node, type, value) {
+  upsertStructuredBlock(node, type, value, blockId) {
     const blocks = nodeContentBlocks(node);
-    const index = blocks.findIndex((block2) => block2.type === type);
+    const index = blocks.findIndex((block2) => block2.type === type && (!blockId || block2.id === blockId));
     const block = type === "table" ? { id: index >= 0 ? blocks[index].id : newId(), type, table: value } : { id: index >= 0 ? blocks[index].id : newId(), type, code: value };
     if (index >= 0) blocks[index] = block;
     else blocks.push(block);
@@ -11765,7 +11769,8 @@ var MindMapEditor = class {
     const head = table.createEl("thead").createEl("tr");
     tableData.headers.forEach((header, index) => {
       var _a2, _b2;
-      const cell = head.createEl("th", { text: header || `\u5217 ${index + 1}` });
+      const cell = head.createEl("th");
+      renderInlineMarkdown(cell, header || `\u5217 ${index + 1}`);
       cell.style.textAlign = (_b2 = (_a2 = tableData.alignments) == null ? void 0 : _a2[index]) != null ? _b2 : "left";
     });
     const body = table.createEl("tbody");
@@ -11773,17 +11778,18 @@ var MindMapEditor = class {
       const tr = body.createEl("tr");
       tableData.headers.forEach((_, index) => {
         var _a2, _b2, _c;
-        const cell = tr.createEl("td", { text: (_a2 = row[index]) != null ? _a2 : "" });
+        const cell = tr.createEl("td");
+        renderInlineMarkdown(cell, (_a2 = row[index]) != null ? _a2 : "");
         cell.style.textAlign = (_c = (_b2 = tableData.alignments) == null ? void 0 : _b2[index]) != null ? _c : "left";
       });
     });
     wrap.addEventListener("pointerdown", (event) => event.stopPropagation());
     wrap.addEventListener("dragstart", (event) => event.preventDefault());
-    wrap.addEventListener("dblclick", (event) => {
+    wrap.addEventListener("click", (event) => {
       event.stopPropagation();
-      this.selectNode(node.id);
-      this.editSelected(blockId);
+      this.openTableBlockEditor(node, tableData, blockId);
     });
+    wrap.addEventListener("dblclick", (event) => event.stopPropagation());
   }
   /**
    * 渲染node code，并保持模型、界面和持久化状态的一致性。
@@ -11811,11 +11817,28 @@ var MindMapEditor = class {
     });
     block.addEventListener("pointerdown", (event) => event.stopPropagation());
     block.addEventListener("dragstart", (event) => event.preventDefault());
-    block.addEventListener("dblclick", (event) => {
+    block.addEventListener("click", (event) => {
+      if (event.target.closest("button, details")) return;
       event.stopPropagation();
-      this.selectNode(node.id);
-      this.editSelected(blockId);
+      this.openCodeBlockEditor(node, codeData, blockId);
     });
+    block.addEventListener("dblclick", (event) => event.stopPropagation());
+  }
+  /** Opens the selected table block directly instead of routing through the node editor. */
+  openTableBlockEditor(node, table, blockId) {
+    if (!this.ensureEditable()) return;
+    this.selectNode(node.id);
+    new TableEditModal(this.app, table, (next) => {
+      this.mutate(() => this.upsertStructuredBlock(node, "table", next, blockId));
+    }).open();
+  }
+  /** Opens the selected code block directly instead of routing through the node editor. */
+  openCodeBlockEditor(node, code, blockId) {
+    if (!this.ensureEditable()) return;
+    this.selectNode(node.id);
+    new CodeEditModal(this.app, code, (next) => {
+      this.mutate(() => this.upsertStructuredBlock(node, "code", next, blockId));
+    }).open();
   }
   /**
    * 处理编辑器内粘贴：优先识别图片并保存为本地资源，其次识别表格、代码块或节点分支。普通文本也会作为当前节点的子节点插入。
