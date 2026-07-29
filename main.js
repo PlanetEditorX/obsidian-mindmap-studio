@@ -3126,7 +3126,7 @@ var MindMapStudioSettingTab = class extends import_obsidian.PluginSettingTab {
 
 // src/render/collision-layout.ts
 function resolveLayoutCollisions(nodes, verticalGap) {
-  var _a2;
+  var _a2, _b2, _c;
   if (nodes.length < 2) return 0;
   const children = /* @__PURE__ */ new Map();
   const byId = new Map(nodes.map((node) => [node.node.id, node]));
@@ -3135,6 +3135,10 @@ function resolveLayoutCollisions(nodes, verticalGap) {
     const siblings = (_a2 = children.get(node.parentId)) != null ? _a2 : [];
     siblings.push(node);
     children.set(node.parentId, siblings);
+  }
+  const siblingIndexes = /* @__PURE__ */ new Map();
+  for (const siblings of children.values()) {
+    siblings.forEach((node, index) => siblingIndexes.set(node.node.id, index));
   }
   const descendants = (root) => {
     const result = [];
@@ -3174,6 +3178,19 @@ function resolveLayoutCollisions(nodes, verticalGap) {
         const secondTop = second.y - second.height / 2;
         const requiredOffset = firstBottom + verticalGap - secondTop;
         if (requiredOffset <= 0) continue;
+        if (first.parentId && first.parentId === second.parentId) {
+          const firstIndex2 = (_b2 = siblingIndexes.get(first.node.id)) != null ? _b2 : 0;
+          const secondIndex2 = (_c = siblingIndexes.get(second.node.id)) != null ? _c : 0;
+          const earlier = firstIndex2 <= secondIndex2 ? first : second;
+          const later = earlier === first ? second : first;
+          const offset2 = earlier.y + earlier.height / 2 + verticalGap - (later.y - later.height / 2);
+          if (offset2 > 0) {
+            moveSubtree(later, offset2);
+            moves += 1;
+            changed = true;
+            break;
+          }
+        }
         const moving = second.parentId === null || contains(second, first) ? first : second;
         const stationary = moving === second ? first : second;
         const offset = moving === second ? stationary.y + stationary.height / 2 + verticalGap - (moving.y - moving.height / 2) : stationary.y - stationary.height / 2 - verticalGap - (moving.y + moving.height / 2);

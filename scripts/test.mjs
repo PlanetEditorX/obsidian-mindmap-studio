@@ -403,6 +403,13 @@ export const setIcon = () => {};
     "a colliding branch must move away from the fixed root with the requested gap"
   );
   assert.equal(collisionNodes[2].y - collisionNodes[1].y, 0, "moving a branch must translate its descendants together");
+  const orderedCollisionNodes = [
+    { node: { id: "ordered-root" }, parentId: null, x: 0, y: 0, width: 220, height: 120 },
+    { node: { id: "ordered-a" }, parentId: "ordered-root", x: 200, y: -100, width: 220, height: 60 },
+    { node: { id: "ordered-b" }, parentId: "ordered-root", x: 200, y: 40, width: 460, height: 420 }
+  ];
+  assert.ok(collisionLayout.resolveLayoutCollisions(orderedCollisionNodes, 24) > 0);
+  assert.ok(orderedCollisionNodes[1].y < orderedCollisionNodes[2].y, "measured tall later siblings must stay below earlier siblings");
 
   const viewDocument = model.normalizeDocument({
     title: "三种模式",
