@@ -37,6 +37,7 @@ import {
   MindMapStudioSettingTab,
   TOOLBAR_ITEMS,
   createImageHostConfig,
+  normalizeSettingsSectionOrder,
   normalizeReturnToTopVisibility,
   settingsToAppearance,
   type ImageHostChoice,
@@ -542,6 +543,7 @@ export default class MindMapStudioPlugin extends Plugin {
       questionBankFolder: typeof raw.questionBankFolder === "string"
         ? normalizePath(raw.questionBankFolder.trim().replace(/^\/+|\/+$/g, "")).slice(0, 1000)
         : DEFAULT_SETTINGS.questionBankFolder,
+      settingsSectionOrder: normalizeSettingsSectionOrder(raw.settingsSectionOrder),
       syncTitleToFilename: raw.syncTitleToFilename !== false,
       deleteLocalAfterUpload: raw.deleteLocalAfterUpload !== false,
       imageFailoverEnabled: raw.imageFailoverEnabled !== false,
