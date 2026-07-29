@@ -1685,7 +1685,7 @@ function parseTaskText(value: string): { text: string; task?: TaskStatus } {
 export function markdownToDocument(markdown: string, fallbackTitle = "思维导图"): MindMapDocument {
   const doc = createDefaultDocument(fallbackTitle);
   doc.root.children = [];
-  const stack: Array<{ level: number; node: MindMapNode; kind: "root" | "heading" | "list" | "bold" }> = [{ level: 0, node: doc.root, kind: "root" }];
+  const stack: Array<{ level: number; node: MindMapNode; kind: "root" | "heading" | "list" | "bold"; listKind?: "bullet" | "numbered" }> = [{ level: 0, node: doc.root, kind: "root" }];
   let rootAssigned = false;
   let currentBoldTheme: MindMapNode | null = null;
   let currentBoldNode: MindMapNode | null = null;
@@ -1765,7 +1765,7 @@ export function markdownToDocument(markdown: string, fallbackTitle = "思维导�
 
     const heading = line.match(/^\s*(#{1,6})\s+(.+?)\s*$/);
     const bullet = line.match(/^(\s*)[-*+]\s+(.+?)\s*$/);
-    const numbered = line.match(/^(\s*)\d+[.)]\s+(.+?)\s*$/);
+    const numbered = line.match(/^(\s*)\d+[.)]\s*(.+?)\s*$/);
     const boldOutline = line.match(/^\s*\*\*(.+?)\*\*\s*$/);
     const quote = line.match(/^\s*>\s*(.+?)\s*$/);
 
@@ -1836,14 +1836,22 @@ export function markdownToDocument(markdown: string, fallbackTitle = "思维导�
     if (listMatch) {
       const spaces = (listMatch[1] ?? "").replaceAll("\t", "  ").length;
       const parentLevel = [...stack].reverse().find((entry) => entry.kind === "heading" || entry.kind === "bold")?.level ?? 1;
-      const level = parentLevel + Math.floor(spaces / 2) + 1;
+      const previous = stack.at(-1);
+      const numberedParent = previous?.kind === "list" && previous.listKind === "numbered" && previous.level === parentLevel + 1
+        ? previous
+        : previous?.kind === "list" && previous.listKind === "bullet" && previous.level === parentLevel + 2 && stack.at(-2)?.listKind === "numbered"
+          ? stack.at(-2)
+          : undefined;
+      const level = bullet && spaces === 0 && numberedParent
+        ? numberedParent.level + 1
+        : parentLevel + Math.floor(spaces / 2) + 1;
       const parsed = parseTaskText((listMatch[2] ?? "节点").trim());
       const node = createMarkdownNode(parsed.text);
       node.task = parsed.task;
       while (stack.length > 1 && (stack.at(-1)?.level ?? 0) >= level) stack.pop();
       const parent = stack.at(-1)?.node ?? doc.root;
       parent.children.push(node);
-      stack.push({ level, node, kind: "list" });
+      stack.push({ level, node, kind: "list", listKind: bullet ? "bullet" : "numbered" });
       currentBoldNode = node;
       continue;
     }
