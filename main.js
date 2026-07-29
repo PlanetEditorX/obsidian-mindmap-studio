@@ -14968,11 +14968,13 @@ var GlobalMindMapSearchModal = class extends import_obsidian13.Modal {
       const badges = header.createDiv({ cls: "mms-global-search-result-badges" });
       badges.createSpan({ cls: "mms-global-search-badge", text: result.matchedKind });
       if (result.isSubmapDocument) badges.createSpan({ cls: "mms-global-search-badge is-submap", text: "\u5B50\u5BFC\u56FE" });
-      const replaceOneBtn = header.createEl("button", {
+      const actions = item.createDiv({ cls: "mms-global-search-result-actions" });
+      const replaceOneBtn = actions.createEl("button", {
         cls: "mms-global-search-replace-one",
         attr: { type: "button", title: "\u66FF\u6362\u6B64\u8282\u70B9" }
       });
       (0, import_obsidian13.setIcon)(replaceOneBtn, "rotate-ccw");
+      replaceOneBtn.createSpan({ text: "\u66FF\u6362\u6B64\u8282\u70B9" });
       replaceOneBtn.addEventListener("click", async (event) => {
         event.stopPropagation();
         const replacement = this.replaceInputEl.value.trim();
