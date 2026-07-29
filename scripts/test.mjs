@@ -386,6 +386,9 @@ export const setIcon = () => {};
   }));
   assert.deepEqual(pastedBranches?.map((node) => node.text), ["分支 A", "分支 B"], "multi-node clipboard payloads must preserve branch order");
   assert.equal(pastedBranches?.[0]?.children[0]?.text, "分支 A1", "multi-node clipboard payloads must retain each branch subtree");
+  const mixedClipboardBlocks = clipboardImport.parseClipboardContentBlocks("前置说明\n```typescript\nconst value = 1;\n```\n后置说明");
+  assert.deepEqual(mixedClipboardBlocks?.map((block) => block.type), ["text", "code", "text"], "mixed clipboard content must retain text around fenced code");
+  assert.equal(mixedClipboardBlocks?.[1]?.type === "code" ? mixedClipboardBlocks[1].code.language : "", "typescript");
 
   const collisionNodes = [
     { node: { id: "collision-root" }, parentId: null, x: 0, y: 0, width: 220, height: 120 },

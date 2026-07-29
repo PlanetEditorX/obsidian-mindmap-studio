@@ -6581,6 +6581,25 @@ var DocumentExportModal = class extends import_obsidian5.Modal {
 };
 
 // src/editor/clipboard-import.ts
+function parseClipboardContentBlocks(text) {
+  const fence = /```([^\n`]*)\n([\s\S]*?)\n```/g;
+  const blocks = [];
+  let cursor = 0;
+  let match;
+  const appendText = (value) => {
+    const normalized2 = value.replace(/^\s*\n|\n\s*$/g, "");
+    if (normalized2.trim()) blocks.push({ id: newId(), type: "text", text: normalized2 });
+  };
+  while ((match = fence.exec(text)) !== null) {
+    appendText(text.slice(cursor, match.index));
+    const code = parseFencedCode(match[0]);
+    if (code) blocks.push({ id: newId(), type: "code", code });
+    cursor = match.index + match[0].length;
+  }
+  if (!blocks.some((block) => block.type === "code")) return null;
+  appendText(text.slice(cursor));
+  return blocks;
+}
 function parseClipboardNodes(text) {
   try {
     const parsed = JSON.parse(text);
@@ -7417,8 +7436,8 @@ function attachSelectionFormatToolbar(options) {
     const selected = (_a2 = rememberSelection()) != null ? _a2 : savedSelection;
     if (!selected || selected.start === selected.end) return;
     const value = readRichTextEditor(editor);
-    const key = Object.keys(patch)[0];
-    if (key !== "color") {
+    const key = patch ? Object.keys(patch)[0] : null;
+    if (patch && key && key !== "color") {
       const styles = richTextCharacterStyles(value.richText, value.text);
       const enabled = styles.slice(selected.start, selected.end).every((style) => style[key] === true);
       patch = { [key]: !enabled };
@@ -7438,6 +7457,10 @@ function attachSelectionFormatToolbar(options) {
   button("B", `\u52A0\u7C97\uFF08${options.shortcuts.bold}\uFF09`, "bold");
   button("I", `\u659C\u4F53\uFF08${options.shortcuts.italic}\uFF09`, "italic");
   button("U", `\u4E0B\u5212\u7EBF\uFF08${options.shortcuts.underline}\uFF09`, "underline");
+  const clearFormat = toolbar.createEl("button", { text: "Tx", attr: { type: "button", title: "\u6E05\u9664\u683C\u5F0F", "aria-label": "\u6E05\u9664\u683C\u5F0F" } });
+  clearFormat.addClass("is-clear-format");
+  clearFormat.addEventListener("pointerdown", (event) => event.preventDefault());
+  clearFormat.addEventListener("click", () => applyStyle(null));
   const colorBtn = toolbar.createEl("button", {
     cls: "mms-color-btn",
     attr: { type: "button", title: "\u6587\u5B57\u989C\u8272" }
@@ -12142,11 +12165,18 @@ var MindMapEditor = class {
       new import_obsidian10.Notice("\u5DF2\u8BC6\u522B\u5E76\u63D2\u5165 Markdown \u8868\u683C");
       return;
     }
-    const code = parseFencedCode(text);
-    if (code) {
+    const clipboardBlocks = parseClipboardContentBlocks(text);
+    if (clipboardBlocks) {
       event.preventDefault();
-      this.mutate(() => this.upsertStructuredBlock(selected, "code", code));
-      new import_obsidian10.Notice(`\u5DF2\u8BC6\u522B\u5E76\u63D2\u5165${code.language ? ` ${code.language}` : ""}\u4EE3\u7801`);
+      this.mutate(() => {
+        var _a3;
+        const existing = nodeContentBlocks(selected);
+        const onlyCodeBlock = clipboardBlocks.length === 1 && ((_a3 = clipboardBlocks[0]) == null ? void 0 : _a3.type) === "code" ? clipboardBlocks[0] : null;
+        if (onlyCodeBlock) this.upsertStructuredBlock(selected, "code", onlyCodeBlock.code);
+        else replaceNodeContentBlocks(selected, [...existing, ...clipboardBlocks]);
+      });
+      const codeCount = clipboardBlocks.filter((block) => block.type === "code").length;
+      new import_obsidian10.Notice(`\u5DF2\u8BC6\u522B\u5E76\u63D2\u5165 ${codeCount} \u4E2A\u4EE3\u7801\u5757\uFF0C\u4FDD\u7559\u5176\u4F59\u6587\u5B57\u5185\u5BB9`);
       return;
     }
     const sourceNodes = htmlBranch ? [htmlBranch] : parseClipboardNodes(text);

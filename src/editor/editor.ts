@@ -30,7 +30,6 @@ import {
   replaceNodeContentBlocks,
   syncNodeContentFields,
   syncMindMapQuestionFields,
-  parseFencedCode,
   parseMarkdownTable,
   richTextCharacterStyles,
   applyRichTextStyleRange,
@@ -83,7 +82,7 @@ import {
   JsonTransferModal,
   OutlineModal
 } from "./editor-modals";
-import { parseClipboardHtml, parseClipboardNodes } from "./clipboard-import";
+import { parseClipboardContentBlocks, parseClipboardHtml, parseClipboardNodes } from "./clipboard-import";
 import { selectNodeImage, uploadCurrentNodeImage } from "./node-image-actions";
 import { renderNodeRichTextEditor } from "./node-rich-text-editor";
 import { canMoveNodes, isRightChildZone, resolveDropPosition } from "./drag-drop";
@@ -4577,11 +4576,19 @@ export class MindMapEditor {
       new Notice("已识别并插入 Markdown 表格");
       return;
     }
-    const code = parseFencedCode(text);
-    if (code) {
+    const clipboardBlocks = parseClipboardContentBlocks(text);
+    if (clipboardBlocks) {
       event.preventDefault();
-      this.mutate(() => this.upsertStructuredBlock(selected, "code", code));
-      new Notice(`已识别并插入${code.language ? ` ${code.language}` : ""}代码`);
+      this.mutate(() => {
+        const existing = nodeContentBlocks(selected);
+        const onlyCodeBlock = clipboardBlocks.length === 1 && clipboardBlocks[0]?.type === "code"
+          ? clipboardBlocks[0]
+          : null;
+        if (onlyCodeBlock) this.upsertStructuredBlock(selected, "code", onlyCodeBlock.code);
+        else replaceNodeContentBlocks(selected, [...existing, ...clipboardBlocks]);
+      });
+      const codeCount = clipboardBlocks.filter((block) => block.type === "code").length;
+      new Notice(`已识别并插入 ${codeCount} 个代码块，保留其余文字内容`);
       return;
     }
     const sourceNodes = htmlBranch ? [htmlBranch] : parseClipboardNodes(text);

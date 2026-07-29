@@ -7,9 +7,38 @@ import {
   createNode,
   indentedTextToMarkdown,
   markdownToDocument,
+  newId,
+  parseFencedCode,
   normalizeDocument,
+  type MindMapContentBlock,
   type MindMapNode
 } from "../core/model";
+
+/**
+ * 将包含 fenced code 的剪贴板文本拆分为保持原顺序的文字块和代码块。
+ *
+ * @param text 剪贴板纯文本。
+ * @returns 检测到代码围栏时返回内容块；未检测到时返回 null。
+ */
+export function parseClipboardContentBlocks(text: string): MindMapContentBlock[] | null {
+  const fence = /```([^\n`]*)\n([\s\S]*?)\n```/g;
+  const blocks: MindMapContentBlock[] = [];
+  let cursor = 0;
+  let match: RegExpExecArray | null;
+  const appendText = (value: string): void => {
+    const normalized = value.replace(/^\s*\n|\n\s*$/g, "");
+    if (normalized.trim()) blocks.push({ id: newId(), type: "text", text: normalized });
+  };
+  while ((match = fence.exec(text)) !== null) {
+    appendText(text.slice(cursor, match.index));
+    const code = parseFencedCode(match[0]);
+    if (code) blocks.push({ id: newId(), type: "code", code });
+    cursor = match.index + match[0].length;
+  }
+  if (!blocks.some((block) => block.type === "code")) return null;
+  appendText(text.slice(cursor));
+  return blocks;
+}
 
 /**
  * 解析剪贴板载荷中的一个或多个 MindMap Studio 节点，并保留多选分支的复制顺序。

@@ -110,12 +110,12 @@ export function attachSelectionFormatToolbar(options: SelectionFormatToolbarOpti
     toolbar.style.top = `${top}px`;
   };
 
-  const applyStyle = (patch: Partial<MindMapTextStyle>): void => {
+  const applyStyle = (patch: Partial<MindMapTextStyle> | null): void => {
     const selected = rememberSelection() ?? savedSelection;
     if (!selected || selected.start === selected.end) return;
     const value = readRichTextEditor(editor);
-    const key = Object.keys(patch)[0] as keyof MindMapTextStyle;
-    if (key !== "color") {
+    const key = patch ? Object.keys(patch)[0] as keyof MindMapTextStyle : null;
+    if (patch && key && key !== "color") {
       const styles = richTextCharacterStyles(value.richText, value.text);
       const enabled = styles.slice(selected.start, selected.end).every((style) => style[key] === true);
       patch = { [key]: !enabled };
@@ -136,6 +136,10 @@ export function attachSelectionFormatToolbar(options: SelectionFormatToolbarOpti
   button("B", `加粗（${options.shortcuts.bold}）`, "bold");
   button("I", `斜体（${options.shortcuts.italic}）`, "italic");
   button("U", `下划线（${options.shortcuts.underline}）`, "underline");
+  const clearFormat = toolbar.createEl("button", { text: "Tx", attr: { type: "button", title: "清除格式", "aria-label": "清除格式" } });
+  clearFormat.addClass("is-clear-format");
+  clearFormat.addEventListener("pointerdown", (event) => event.preventDefault());
+  clearFormat.addEventListener("click", () => applyStyle(null));
   // Color button with popover: common swatches + last color + custom picker
   const colorBtn = toolbar.createEl("button", {
     cls: "mms-color-btn",
