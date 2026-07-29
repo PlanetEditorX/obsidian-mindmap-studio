@@ -78,3 +78,13 @@ test("article and outline text do not expose edit labels as hover tooltips", () 
   assert.match(editorSource, /private clearInlineEditingAccessibility\(element: HTMLElement\): void[\s\S]*element\.removeAttribute\("aria-label"\)/);
   assert.match(activateInlineEditable, /this\.applyInlineEditingAccessibility\(element\)/);
 });
+
+test("structural mind-map changes use a reduced-motion-aware FLIP layout transition", () => {
+  assert.match(editorSource, /private requestMindMapLayoutAnimation\(\): void/);
+  assert.match(editorSource, /private captureMindMapNodeRects\(\): Map<string, DOMRect>/);
+  assert.match(editorSource, /private playMindMapLayoutAnimation\(previousNodeRects: ReadonlyMap<string, DOMRect>\): void/);
+  assert.match(editorSource, /window\.matchMedia\("\(prefers-reduced-motion: reduce\)"\)\.matches/);
+  assert.match(editorSource, /this\.requestMindMapLayoutAnimation\(\);[\s\S]{0,220}selected\.collapsed = !selected\.collapsed/);
+  assert.match(editorSource, /this\.requestMindMapLayoutAnimation\(\);[\s\S]{0,160}this\.render\(\);/);
+  assert.match(editorSource, /this\.applyMeasuredMindMapLayout\(\);[\s\S]{0,120}this\.playMindMapLayoutAnimation\(previousNodeRects\)/);
+});

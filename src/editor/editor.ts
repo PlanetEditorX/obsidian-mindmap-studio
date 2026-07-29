@@ -1016,6 +1016,7 @@ export class MindMapEditor {
   private cleanupCallbacks: Array<() => void> = [];
   private resizeObserver: ResizeObserver | null = null;
   private measuredLayoutFrame: number | null = null;
+  private pendingMindMapLayoutAnimation = false;
   private branchClipboard: MindMapNode[] | null = null;
   private searchQuery = "";
   private lastRichTextColor = "#ef4444";
@@ -2819,6 +2820,7 @@ export class MindMapEditor {
  * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
    */
   private renderMindMap(): void {
+    const previousNodeRects = this.captureMindMapNodeRects();
     const appearance = this.getAppearance();
     this.layout = computeLayout(this.document.root, this.document.layout, appearance.fontSize ?? 14, appearance.nodeVisualStyle ?? "card", appearance);
     const branchColorMap = appearance.colorfulBranches ? buildBranchColorMap(this.document.root, appearance.branchColors) : new Map<string, string>();
@@ -3225,7 +3227,12 @@ export class MindMapEditor {
       });
       this.resizeObserver?.observe(nodeEl);
     }
-    this.scheduleMeasuredMindMapLayout();
+    if (previousNodeRects.size) {
+      this.applyMeasuredMindMapLayout();
+      this.playMindMapLayoutAnimation(previousNodeRects);
+    } else {
+      this.scheduleMeasuredMindMapLayout();
+    }
     this.applyTransform();
   }
 
@@ -3251,6 +3258,57 @@ export class MindMapEditor {
       path.style.setProperty("stroke-width", `${edgeWidth}px`, "important");
       this.edgesSvg.appendChild(path);
     }
+  }
+
+  /** 标记下一次导图重绘为结构变化过渡，避免节点直接跳到新的布局位置。 */
+  private requestMindMapLayoutAnimation(): void {
+    if (this.currentMode === "mindmap") this.pendingMindMapLayoutAnimation = true;
+  }
+
+  /**
+   * 在销毁旧节点前记录其屏幕矩形，供下一次重绘使用 FLIP 过渡。
+   *
+   * @returns 按节点标识索引的旧渲染矩形；没有待执行动画时为空。
+   */
+  private captureMindMapNodeRects(): Map<string, DOMRect> {
+    if (!this.pendingMindMapLayoutAnimation) return new Map();
+    this.pendingMindMapLayoutAnimation = false;
+    const rects = new Map<string, DOMRect>();
+    this.nodesLayerEl.querySelectorAll<HTMLElement>(".mmc-node[data-node-id]").forEach((element) => {
+      const id = element.dataset.nodeId;
+      if (id) rects.set(id, element.getBoundingClientRect());
+    });
+    return rects;
+  }
+
+  /**
+   * 让重建后仍存在的节点从旧位置平滑移动到新位置，并短暂淡入重新绘制的连线。
+   *
+   * @param previousNodeRects 重绘前采集的节点屏幕矩形。
+   */
+  private playMindMapLayoutAnimation(previousNodeRects: ReadonlyMap<string, DOMRect>): void {
+    if (!previousNodeRects.size || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    this.nodesLayerEl.querySelectorAll<HTMLElement>(".mmc-node[data-node-id]").forEach((element) => {
+      const previous = element.dataset.nodeId ? previousNodeRects.get(element.dataset.nodeId) : undefined;
+      if (!previous) return;
+      const next = element.getBoundingClientRect();
+      const deltaX = previous.left - next.left;
+      const deltaY = previous.top - next.top;
+      if (Math.abs(deltaX) < 1 && Math.abs(deltaY) < 1) return;
+      const transform = getComputedStyle(element).transform;
+      const baseTransform = transform === "none" ? "" : transform;
+      element.animate([
+        { transform: `translate(${deltaX}px, ${deltaY}px) ${baseTransform}`, opacity: "0.84" },
+        { transform: baseTransform, opacity: "1" }
+      ], {
+        duration: 220,
+        easing: "cubic-bezier(0.22, 1, 0.36, 1)"
+      });
+    });
+    this.edgesSvg.animate([{ opacity: "0.3" }, { opacity: "1" }], {
+      duration: 180,
+      easing: "ease-out"
+    });
   }
 
   /** 合并同一帧内的节点尺寸变化，避免表格和图片加载触发重复布局。 */
@@ -3927,6 +3985,7 @@ export class MindMapEditor {
   private toggleCollapse(): void {
     const selected = this.selectedNode();
     if (!selected || !selected.children.length) return;
+    this.requestMindMapLayoutAnimation();
     if (this.readOnly) {
       selected.collapsed = !selected.collapsed;
       this.render();
@@ -3944,6 +4003,7 @@ export class MindMapEditor {
     const apply = (): void => {
       setAllBranchesCollapsed(this.document.root, collapsed);
     };
+    this.requestMindMapLayoutAnimation();
     if (this.readOnly) {
       apply();
       this.render();
@@ -5079,6 +5139,7 @@ export class MindMapEditor {
     for (const id of requestedIds) this.selectedIds.add(id);
     this.callbacks.onChange(this.getDocument());
     this.markSaving();
+    this.requestMindMapLayoutAnimation();
     this.render();
   }
 
