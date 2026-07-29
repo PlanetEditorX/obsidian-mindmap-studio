@@ -1532,6 +1532,7 @@
 .mms-code-collapsed-content { overflow: auto; }
 
 .mms-code-with-line-numbers {
+  --mms-code-line-baseline-offset: 0.08em;
   position: relative;
   padding-left: 4.2em !important;
 }
@@ -1544,6 +1545,7 @@
   bottom: var(--mms-code-line-gutter-bottom, 10px);
   left: 0;
   width: 3.1em;
+  padding-top: var(--mms-code-line-baseline-offset);
   padding-right: 0.65em;
   border-right: 1px solid color-mix(in srgb, currentColor 18%, transparent);
   color: var(--text-faint);

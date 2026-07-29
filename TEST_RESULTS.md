@@ -1,14 +1,11 @@
-# 1.24.4 仓库一致性修复验证报告
+# 1.24.4 代码行号对齐修复验证报告
 
 ## 修复内容
 
-- 将示例导图的 `#Uxxxx` 编码文件名恢复为可读 UTF-8 路径：
-  - `examples/中国文学示例.mindmap`
-  - `examples/古诗.mindmap`
-  - `examples/MindMap Assets/古诗/唐诗.mindmap`
-- 将 README 当前源码版本由 `1.20.1` 修正为 `1.24.4`。
-- 新增 README 版本与 `package.json` 一致性测试和仓库检查。
-- 重新生成并检查函数参考文档。
+- 为代码块行号增加 `0.08em`（11px 字号下约 `0.88px`）的基线补偿。
+- 补偿仅作用于行号文字的顶部内边距，不移动行号栏右侧分隔线。
+- 新增样式契约测试，防止后续改为整体位移而再次造成分隔线错位。
+- 更新未发布变更记录，并重新运行函数参考文档生成器。
 
 ## 已通过验证
 
@@ -20,28 +17,33 @@ npm run test:docs
 npm run test:repo
 npm run docs:generate
 node --check main.js
-node --check scripts/check-repository.mjs
-node --check tests/repository-cleanup.test.mjs
 git diff --check
 ```
 
 结果：
 
-- 单元测试 `80 / 80` 通过。
+- 单元测试 `81 / 81` 通过，其中包含新增的行号基线回归测试。
 - 文档覆盖检查通过：`45` 个 TypeScript 模块、`774` 个具名声明均有 JSDoc。
-- 仓库结构、版本文件、示例路径和必需文档检查通过。
-- `main.js` 及本轮修改的 JavaScript 测试/脚本语法检查通过。
-- 本轮未修改 TypeScript 运行时代码，`src/` 与 `main.js` 相对导入快照保持不变。
+- 仓库结构和版本一致性检查通过。
+- `main.js` JavaScript 语法检查通过。
+- 函数参考文档已重新生成；本轮未修改 TypeScript/JSDoc，生成结果无内容差异。
+- 使用 Chromium 对修复前后样式进行本地渲染检查，补偿值计算为 `0.88px`，行号文字下移且分隔线位置保持不变。
 
-## 受环境阻断的验证
+## 完整命令执行情况
 
-已执行 `npm test`。单元测试通过后，回归阶段因当前环境无法安装 `esbuild` 与 `fflate`，在载入 `scripts/test.mjs` 时以 `ERR_MODULE_NOT_FOUND` 退出，因此该命令未能完整结束。
+已执行 `npm test`：
 
-已执行 `npm run build`。TypeScript 启动后因依赖目录不完整，报告缺少 `codemirror`、`estree`、`node` 与 `tern` 类型定义，未进入 esbuild 生产打包阶段。
+- `test:unit` 阶段 `81 / 81` 通过。
+- `test:regression` 阶段因当前环境缺少 `esbuild`，以 `ERR_MODULE_NOT_FOUND` 中止。
 
-干净依赖安装已尝试，但当前执行环境无法解析 `registry.npmjs.org`，npm 返回 `EAI_AGAIN`。临时链接的环境内 TypeScript 仅用于运行不依赖第三方包的单元测试，没有提交到 Git。
+已执行 `npm run build`：
 
-正式发布环境应执行：
+- TypeScript 启动后因依赖目录不完整，报告缺少 `codemirror`、`estree`、`node` 与 `tern` 类型定义，未进入 esbuild 生产打包阶段。
+- 已尝试 `npm ci --no-audit --no-fund`，当前内部 npm 镜像对 `w3c-keyname-2.2.8.tgz` 返回 `404`，因此无法恢复完整依赖。
+
+本轮只修改 `styles.css`、测试和文档，不涉及 TypeScript 运行时代码；因此 `main.js` 内容无需变化，仍与上一个提交一致。
+
+完整依赖可用的正式环境应再次执行：
 
 ```bash
 rm -rf node_modules
@@ -50,5 +52,3 @@ npm test
 npm run build
 node --check main.js
 ```
-
-由于本轮变更只涉及示例资源、测试与文档，现有 `main.js` 不需要内容更新；待依赖可用时重新执行生产构建，应生成与导入快照等价的运行时代码。

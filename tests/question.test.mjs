@@ -132,6 +132,15 @@ test("code line-number thresholds override inherited defaults while node setting
   assert.match(viewSource, /--mms-code-line-gutter-top/);
 });
 
+test("code line numbers share the code baseline without moving the gutter divider", async () => {
+  const styles = await readFile(new URL("../styles.css", import.meta.url), "utf8");
+  const gutterRule = styles.match(/\.mms-code-with-line-numbers::before\s*\{([\s\S]*?)\n\}/)?.[1] ?? "";
+  assert.match(styles, /--mms-code-line-baseline-offset:\s*0\.08em/);
+  assert.match(gutterRule, /padding-top:\s*var\(--mms-code-line-baseline-offset\)/);
+  assert.match(gutterRule, /border-right:/);
+  assert.doesNotMatch(gutterRule, /transform:/);
+});
+
 test("question-bank grading distinguishes single choice, multiple choice and normalized essay answers", () => {
   const choice = model.normalizeDocument({
     root: {
