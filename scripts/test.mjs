@@ -851,6 +851,47 @@ udpsvd -vE 0 69 tftpd -c /
     { language: "bash", code: "sidbg 1 DB decry /userconfig/cfg/db\\_user\\_cfg.xml" },
     { language: "bash", code: "udpsvd -vE 0 69 tftpd -c /" }
   ], "fenced code must attach to its heading instead of becoming child nodes");
+  const sanitizedNumberedMarkdown = `### 工具操作
+1.安装工具
+\`\`\`bash
+tool install
+\`\`\`
+2.准备文件
+\`\`\`bash
+tool unpack package.bin
+\`\`\`
+3.格式化
+- 打开编辑器
+- 选择格式化器
+4.归档
+\`\`\`bash
+tool pack output.bin
+\`\`\`
+
+### 功能调整
+1.定位
+- 搜索：目标文本
+2.搜索
+- 搜索：标识符
+- 位置：module/example.js
+\`\`\`js
+const command = "example";
+\`\`\``;
+  const sanitizedNumberedDocument = model.markdownToDocument(sanitizedNumberedMarkdown, "示例");
+  assert.deepEqual(sanitizedNumberedDocument.root.children.map((node) => node.text), ["工具操作", "功能调整"], "Markdown headings must remain chapter-level branches");
+  const toolChapter = sanitizedNumberedDocument.root.children[0];
+  assert.ok(toolChapter, "sanitized sample must create its first chapter");
+  assert.deepEqual(toolChapter.children.map((node) => node.text), ["安装工具", "准备文件", "格式化", "归档"], "numbered steps without a space must remain sibling steps");
+  assert.deepEqual(toolChapter.children[2]?.children.map((node) => node.text), ["打开编辑器", "选择格式化器"], "unindented bullets following a numbered step must stay beneath that step");
+  const installCode = model.nodeContentBlocks(toolChapter.children[0]).find((block) => block.type === "code");
+  assert.deepEqual(installCode?.type === "code" ? installCode.code : undefined, { language: "bash", code: "tool install" }, "code must attach to the preceding numbered step");
+  const featureChapter = sanitizedNumberedDocument.root.children[1];
+  assert.ok(featureChapter, "sanitized sample must create its second chapter");
+  assert.deepEqual(featureChapter.children.map((node) => node.text), ["定位", "搜索"], "a new chapter must reset numbered-step nesting");
+  assert.deepEqual(featureChapter.children[1]?.children.map((node) => node.text), ["搜索：标识符", "位置：module/example.js"], "later bullets must remain under their own numbered step");
+  const locationNode = featureChapter.children[1]?.children[1];
+  assert.ok(locationNode, "sanitized sample must retain the location bullet");
+  assert.equal(model.nodeContentBlocks(locationNode).find((block) => block.type === "code")?.type, "code", "code must attach to the latest descriptive bullet");
   const boldOutlineMarkdown = `**相丽君—红宝书**
 
 **主题一 · 写时代，不负韶华**

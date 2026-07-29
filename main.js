@@ -931,7 +931,7 @@ function parseTaskText(value) {
   return { text: ((_a2 = match[2]) == null ? void 0 : _a2.trim()) || "\u4EFB\u52A1", task };
 }
 function markdownToDocument(markdown, fallbackTitle = "\u601D\u7EF4\u5BFC\u56FE") {
-  var _a2, _b2, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _A;
+  var _a2, _b2, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _A, _B;
   const doc = createDefaultDocument(fallbackTitle);
   doc.root.children = [];
   const stack = [{ level: 0, node: doc.root, kind: "root" }];
@@ -1005,7 +1005,7 @@ function markdownToDocument(markdown, fallbackTitle = "\u601D\u7EF4\u5BFC\u56FE"
     if (!line.trim() || line.trimStart().startsWith("---")) continue;
     const heading = line.match(/^\s*(#{1,6})\s+(.+?)\s*$/);
     const bullet = line.match(/^(\s*)[-*+]\s+(.+?)\s*$/);
-    const numbered = line.match(/^(\s*)\d+[.)]\s+(.+?)\s*$/);
+    const numbered = line.match(/^(\s*)\d+[.)]\s*(.+?)\s*$/);
     const boldOutline = line.match(/^\s*\*\*(.+?)\*\*\s*$/);
     const quote = line.match(/^\s*>\s*(.+?)\s*$/);
     if (heading) {
@@ -1071,14 +1071,16 @@ function markdownToDocument(markdown, fallbackTitle = "\u601D\u7EF4\u5BFC\u56FE"
     if (listMatch) {
       const spaces = ((_q = listMatch[1]) != null ? _q : "").replaceAll("	", "  ").length;
       const parentLevel = (_s = (_r = [...stack].reverse().find((entry) => entry.kind === "heading" || entry.kind === "bold")) == null ? void 0 : _r.level) != null ? _s : 1;
-      const level = parentLevel + Math.floor(spaces / 2) + 1;
-      const parsed = parseTaskText(((_t = listMatch[2]) != null ? _t : "\u8282\u70B9").trim());
+      const previous = stack.at(-1);
+      const numberedParent = (previous == null ? void 0 : previous.kind) === "list" && previous.listKind === "numbered" && previous.level === parentLevel + 1 ? previous : (previous == null ? void 0 : previous.kind) === "list" && previous.listKind === "bullet" && previous.level === parentLevel + 2 && ((_t = stack.at(-2)) == null ? void 0 : _t.listKind) === "numbered" ? stack.at(-2) : void 0;
+      const level = bullet && spaces === 0 && numberedParent ? numberedParent.level + 1 : parentLevel + Math.floor(spaces / 2) + 1;
+      const parsed = parseTaskText(((_u = listMatch[2]) != null ? _u : "\u8282\u70B9").trim());
       const node = createMarkdownNode(parsed.text);
       node.task = parsed.task;
-      while (stack.length > 1 && ((_v = (_u = stack.at(-1)) == null ? void 0 : _u.level) != null ? _v : 0) >= level) stack.pop();
-      const parent2 = (_x = (_w = stack.at(-1)) == null ? void 0 : _w.node) != null ? _x : doc.root;
+      while (stack.length > 1 && ((_w = (_v = stack.at(-1)) == null ? void 0 : _v.level) != null ? _w : 0) >= level) stack.pop();
+      const parent2 = (_y = (_x = stack.at(-1)) == null ? void 0 : _x.node) != null ? _y : doc.root;
       parent2.children.push(node);
-      stack.push({ level, node, kind: "list" });
+      stack.push({ level, node, kind: "list", listKind: bullet ? "bullet" : "numbered" });
       currentBoldNode = node;
       continue;
     }
@@ -1086,7 +1088,7 @@ function markdownToDocument(markdown, fallbackTitle = "\u601D\u7EF4\u5BFC\u56FE"
       currentBoldNode.children.push(createMarkdownNode(line.trim()));
       continue;
     }
-    const parent = (_y = stack.at(-1)) == null ? void 0 : _y.node;
+    const parent = (_z = stack.at(-1)) == null ? void 0 : _z.node;
     if (parent && parent !== doc.root) parent.children.push(createMarkdownNode(line.trim()));
     else hasLeadingContent = true;
   }
@@ -1095,7 +1097,7 @@ function markdownToDocument(markdown, fallbackTitle = "\u601D\u7EF4\u5BFC\u56FE"
     const tableStr = tableLines.join("\n");
     const parsed = parseMarkdownTable(tableStr);
     if (parsed) {
-      const target = (_A = currentBoldNode != null ? currentBoldNode : (_z = stack.at(-1)) == null ? void 0 : _z.node) != null ? _A : doc.root;
+      const target = (_B = currentBoldNode != null ? currentBoldNode : (_A = stack.at(-1)) == null ? void 0 : _A.node) != null ? _B : doc.root;
       target.table = parsed;
     }
   }
