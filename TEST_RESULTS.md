@@ -1,33 +1,35 @@
-# README 版本硬编码移除验证报告
+# 代码行号二次对齐验证报告
 
-## CI 根因
+## 原因
 
-上传的 GitHub Actions 日志显示：
+上一版使用 `0.08em` 的 `padding-top` 给行号数字做基线补偿，但数字与右侧沟槽分隔线仍由同一个 `::before` 伪元素绘制。该实现存在两个问题：
 
-- 测试运行的包版本已升级为 `1.24.6`。
-- 代码行号基线回归测试通过。
-- 81 个单元测试中前 80 个通过，唯一失败项是 `README source version matches package metadata`。
-- 失败断言要求 README 精确包含 `当前源码版本：` 与 `package.json.version`，因此每次发布版本提升而 README 未同步时都会重复失败。
+- `0.08em` 在当前 11px 代码字号下只有约 `0.88px`，部分字体、显示缩放和抗锯齿组合下仍显得略高。
+- 数字和分隔线耦合在同一盒模型中，只能通过内边距间接移动数字，难以独立校正视觉基线。
 
-这不是 `1.24.6` 功能代码或代码行号样式问题，而是 README 重复保存发布版本造成的多事实源漂移。
+## 修复
 
-## 修复策略
+- 行号数字继续使用 `::before`，直接通过 `top: calc(...)` 应用 `0.16em` 光学基线补偿。
+- 沟槽分隔线移到独立的 `::after`，继续使用原始顶部和底部内边距定位。
+- 行号继承代码块的字体和行高，补偿随代码字号缩放。
+- 新增两项样式契约测试，分别约束数字偏移和分隔线固定定位。
 
-采用“方案 2”：
+## 浏览器渲染复核
 
-- 删除 README 中的“当前源码版本”文本，仅保留最低 Obsidian 版本。
-- 当前版本只由 `package.json`、`package-lock.json`、`manifest.json` 和 `versions.json` 约束。
-- 将单元测试和仓库检查从“README 必须匹配当前版本”改为“README 不允许重新硬编码当前版本”。
-- 后续升级到 `1.24.6` 或更高版本时，README 无需跟随修改。
+使用系统 Chromium 以 11px 等宽字体、`line-height: 1.55` 和 2 倍设备像素比渲染对比：
 
-## 已通过验证
+- 旧实现：数字伪元素顶部 `10px`，内部补偿 `0.88px`。
+- 新实现：数字顶部解析为 `11.76px`。
+- 新分隔线顶部仍为 `10px`，位置未随数字下移。
 
-为当前未安装依赖的源码树临时复用环境内 TypeScript 编译器后，以下命令通过：
+预览文件：`code-line-number-alignment-preview.png`（交付目录外的验证产物）。
+
+## 已通过
 
 ```bash
 npm run test:unit
-npm run test:repo
 npm run test:docs
+npm run test:repo
 npm run docs:generate
 node --check main.js
 git diff --check
@@ -35,23 +37,22 @@ git diff --check
 
 结果：
 
-- 单元测试 `81 / 81` 通过。
-- 新策略测试 `README does not hard-code the current source version` 通过。
-- 代码行号基线回归测试继续通过。
-- 仓库检查通过；四份发布元数据仍保持一致。
+- 单元测试 `82 / 82` 通过。
+- 新增的数字光学基线测试与固定分隔线测试通过。
+- README 版本单一事实源策略测试继续通过。
 - 文档覆盖检查通过：`45` 个 TypeScript 模块、`774` 个具名声明均有 JSDoc。
 - 函数参考文档已重新生成；本轮未修改 TypeScript/JSDoc，生成结果无内容差异。
-- `main.js` JavaScript 语法检查与 Git 空白检查通过。
+- 仓库检查、`main.js` JavaScript 语法检查和 Git 空白检查通过。
 
 ## 完整命令执行情况
 
 已执行 `npm test`：
 
-- `test:unit` 阶段 `81 / 81` 通过。
+- `test:unit` 阶段 `82 / 82` 通过。
 - `test:regression` 阶段因当前容器未安装 `esbuild`，以 `ERR_MODULE_NOT_FOUND` 中止。
 
 已执行 `npm run build`：
 
-- TypeScript 启动后因当前容器未安装 `obsidian` 及其扩展 DOM 类型而失败，未进入 esbuild 生产打包阶段。
-- 本轮只修改 README、仓库策略测试和说明文档，不修改 TypeScript、CSS 或运行时代码，因此 `main.js` 内容不应变化。
-- 在完整依赖环境执行 `npm ci && npm test && npm run build` 可完成最终生产验证。
+- TypeScript 启动后因当前容器未安装 `obsidian` 及相关类型依赖而失败，未进入 esbuild 生产打包阶段。
+- 本轮只修改 CSS、测试和文档，不涉及 TypeScript 运行时代码，因此 `main.js` 内容保持不变，并已通过语法检查。
+- 在完整依赖环境中执行 `npm ci && npm test && npm run build` 可完成最终生产验证。

@@ -1,20 +1,11 @@
-# README 版本硬编码移除修改清单
-
-## 本次修复
+# 代码行号光学对齐修改清单
 
 | 文件 | 变更 |
 |---|---|
-| `README.md` | 删除“当前源码版本”硬编码，仅保留最低 Obsidian 版本；发布章节明确版本以发布元数据为准 |
-| `tests/repository-cleanup.test.mjs` | 将 README 与 `package.json` 的精确版本匹配测试替换为“不允许硬编码当前源码版本”的策略测试 |
-| `scripts/check-repository.mjs` | 删除 README 版本同步断言，继续校验四份发布元数据一致，并禁止重新引入 README 当前版本文本 |
-| `docs/TESTING.md` | 更新仓库检查范围说明 |
-| `CHANGELOG.md` | 记录版本单一事实源策略 |
-| `TEST_RESULTS.md` | 记录 CI 根因、修复策略和验证结果 |
+| `styles.css` | 将行号数字和沟槽分隔线拆分到 `::before` / `::after`；数字基线补偿从 `0.08em` 调整为 `0.16em`，分隔线不随数字移动 |
+| `tests/question.test.mjs` | 将原单一样式断言拆分为数字光学基线和固定分隔线两项回归测试 |
+| `docs/SPECIAL_FEATURES.md` | 补充行号继承代码字体/行高、数字与分隔线独立定位的说明 |
+| `CHANGELOG.md` | 记录二次修复及根因 |
+| `TEST_RESULTS.md` | 记录验证命令和结果 |
 | `docs/FUNCTION_REFERENCE.md` | 重新运行生成器复核；本轮未改 TypeScript/JSDoc，预计无内容差异 |
-| `main.js` | 本轮未改 TypeScript 运行时代码，不应产生内容变化 |
-
-## 策略结果
-
-- README 不再随每次版本发布修改。
-- 当前版本由 `package.json`、`package-lock.json`、`manifest.json` 和 `versions.json` 共同约束。
-- 版本从 `1.24.5`、`1.24.6` 或后续版本升级时，不再因 README 文本漏同步导致 CI 失败。
+| `main.js` | 本轮只修改 CSS、测试和文档，不涉及 TypeScript 运行时代码，内容不应变化 |
