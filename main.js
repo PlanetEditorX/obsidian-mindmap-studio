@@ -1991,6 +1991,7 @@ var DEFAULT_SETTINGS = {
   screenshotAutoRecognize: false,
   questionNodesEnabled: false,
   questionBankFolder: "",
+  questionPracticeOrder: "random",
   lastImportFolder: "",
   settingsSectionOrder: [...SETTINGS_SECTION_TITLES]
 };
@@ -2577,8 +2578,12 @@ var MindMapStudioSettingTab = class extends import_obsidian.PluginSettingTab {
       this.plugin.settings.defaultFolder = value.trim().replace(/^\/+|\/+$/g, "");
       await this.plugin.saveSettings();
     }));
-    new import_obsidian.Setting(containerEl).setName("\u9898\u5E93\u6587\u4EF6\u5939").setDesc("\u586B\u5199\u4ED3\u5E93\u5185\u6587\u4EF6\u5939\u8DEF\u5F84\uFF0C\u4F8B\u5982 \u9898\u5E93\u3002\u8BE5\u6587\u4EF6\u5939\u53CA\u5176\u5B50\u76EE\u5F55\u5185\u7684\u601D\u7EF4\u5BFC\u56FE\u4F1A\u51FA\u73B0\u201C\u9898\u5E93\u201D\u6574\u9875\u6A21\u5F0F\uFF0C\u53EF\u8FDE\u7EED\u81EA\u52A8\u5224\u9898\uFF1B\u7559\u7A7A\u5219\u4E0D\u542F\u7528\u3002").addText((text) => text.setPlaceholder("\u9898\u5E93").setValue(this.plugin.settings.questionBankFolder).onChange(async (value) => {
+    new import_obsidian.Setting(containerEl).setName("\u9898\u5E93\u6587\u4EF6\u5939").setDesc("\u586B\u5199\u4ED3\u5E93\u5185\u6587\u4EF6\u5939\u8DEF\u5F84\uFF0C\u4F8B\u5982 \u9898\u5E93\u3002\u8BE5\u6587\u4EF6\u5939\u53CA\u5176\u5B50\u76EE\u5F55\u5185\u7684\u601D\u7EF4\u5BFC\u56FE\u4F1A\u51FA\u73B0\u201C\u7B54\u9898\u201D\u6574\u9875\u6A21\u5F0F\uFF0C\u53EF\u8FDE\u7EED\u81EA\u52A8\u5224\u9898\uFF1B\u7559\u7A7A\u5219\u4E0D\u542F\u7528\u3002").addText((text) => text.setPlaceholder("\u9898\u5E93").setValue(this.plugin.settings.questionBankFolder).onChange(async (value) => {
       this.plugin.settings.questionBankFolder = value.trim().replace(/\\/g, "/").replace(/^\/+|\/+$/g, "");
+      await this.saveAndRefresh();
+    }));
+    new import_obsidian.Setting(containerEl).setName("\u7B54\u9898\u987A\u5E8F").setDesc("\u968F\u673A\u4E3A\u9ED8\u8BA4\u65B9\u5F0F\uFF0C\u6BCF\u8F6E\u7B54\u9898\u4F1A\u968F\u673A\u6392\u5217\u9898\u76EE\uFF1B\u987A\u5E8F\u6A21\u5F0F\u6309\u5BFC\u56FE\u4E2D\u7684\u8282\u70B9\u987A\u5E8F\u4F5C\u7B54\u3002").addDropdown((dropdown) => dropdown.addOption("random", "\u968F\u673A\uFF08\u9ED8\u8BA4\uFF09").addOption("sequential", "\u6309\u5BFC\u56FE\u987A\u5E8F").setValue(this.plugin.settings.questionPracticeOrder).onChange(async (value) => {
+      this.plugin.settings.questionPracticeOrder = value === "sequential" ? "sequential" : "random";
       await this.saveAndRefresh();
     }));
     new import_obsidian.Setting(containerEl).setName("\u8D44\u6E90\u6587\u4EF6\u5939").setDesc("\u4EC5\u7528\u4E8E\u56FE\u7247\u3001\u622A\u56FE\u548C\u5B50\u5BFC\u56FE\u8D44\u6E90\uFF0C\u8DEF\u5F84\u76F8\u5BF9\u4E8E\u5F53\u524D\u5BFC\u56FE\u6240\u5728\u76EE\u5F55\uFF1B\u4E0D\u51B3\u5B9A\u5BFC\u56FE\u6587\u4EF6\u7684\u4FDD\u5B58\u4F4D\u7F6E\u3002\u9ED8\u8BA4\u4F7F\u7528 MindMap Assets\u3002").addText((text) => text.setPlaceholder("MindMap Assets").setValue(this.plugin.settings.assetFolder).onChange(async (value) => {
@@ -4042,7 +4047,28 @@ var CodeEditModal = class extends import_obsidian2.Modal {
 
 // src/editor/question-modal.ts
 var import_obsidian3 = require("obsidian");
-var QUESTION_TAGS = ["\u516C\u52A1\u5458", "\u4E8B\u4E1A\u5355\u4F4D", "\u7533\u8BBA", "\u804C\u6D4B", "\u8A00\u8BED", "\u5224\u65AD", "\u6570\u91CF", "\u8D44\u6599\u5206\u6790"];
+var QUESTION_TAGS = [
+  "\u516C\u52A1\u5458",
+  "\u4E8B\u4E1A\u5355\u4F4D",
+  "\u9009\u8C03\u751F",
+  "\u4E09\u652F\u4E00\u6276",
+  "\u7533\u8BBA",
+  "\u804C\u6D4B",
+  "\u884C\u6D4B",
+  "\u516C\u5171\u57FA\u7840\u77E5\u8BC6",
+  "\u5E38\u8BC6\u5224\u65AD",
+  "\u65F6\u653F",
+  "\u653F\u6CBB",
+  "\u7ECF\u6D4E",
+  "\u6CD5\u5F8B",
+  "\u4EBA\u6587\u5386\u53F2",
+  "\u5730\u7406\u79D1\u6280",
+  "\u8A00\u8BED\u7406\u89E3",
+  "\u5224\u65AD\u63A8\u7406",
+  "\u6570\u91CF\u5173\u7CFB",
+  "\u8D44\u6599\u5206\u6790",
+  "\u9762\u8BD5"
+];
 var QUESTION_STATUS_LABELS = { unanswered: "\u672A\u505A", completed: "\u5DF2\u505A", favorite: "\u6536\u85CF", wrong: "\u9519\u9898", mastered: "\u638C\u63E1" };
 function parseRecognizedQuestion(value, fallback) {
   var _a2, _b2, _c;
@@ -4276,15 +4302,16 @@ var QuestionEditModal = class extends import_obsidian3.Modal {
 
 // src/editor/question-practice-mode.ts
 function createQuestionPracticeState() {
-  return { filter: "all", currentNodeId: null, selectedOptionIds: [], essayAnswer: "", answerVisible: false, lastCorrect: null, finished: false };
+  return { filter: "all", currentNodeId: null, selectedOptionIds: [], essayAnswer: "", answerVisible: false, lastCorrect: null, finished: false, orderedNodeIds: [], orderMode: null };
 }
 function renderQuestionPracticeMode(container, options) {
   var _a2;
   container.empty();
-  const questions = flattenNodes(options.document.root).filter((node2) => node2.question && (options.state.filter === "all" || node2.question.status === "wrong" || options.state.answerVisible && node2.id === options.state.currentNodeId));
+  const candidates = flattenNodes(options.document.root).filter((node2) => node2.question && (options.state.filter === "all" || node2.question.status === "wrong" || options.state.answerVisible && node2.id === options.state.currentNodeId));
+  const questions = orderPracticeQuestions(candidates, options.state, options.order);
   const shell = container.createDiv({ cls: "mms-question-practice-page" });
   const header = shell.createDiv({ cls: "mms-question-practice-header" });
-  header.createEl("h2", { text: options.document.title || "\u9898\u5E93\u7EC3\u4E60" });
+  header.createEl("h2", { text: options.document.title || "\u7B54\u9898" });
   const filters = header.createDiv({ cls: "mms-question-practice-filters" });
   for (const [filter, label] of [["all", "\u5168\u90E8\u9898\u76EE"], ["wrong", "\u9519\u9898\u672C"]]) {
     const button = filters.createEl("button", { text: label, attr: { type: "button" } });
@@ -4297,6 +4324,8 @@ function renderQuestionPracticeMode(container, options) {
       options.state.answerVisible = false;
       options.state.lastCorrect = null;
       options.state.finished = false;
+      options.state.orderedNodeIds = [];
+      options.state.orderMode = null;
       renderQuestionPracticeMode(container, options);
     };
   }
@@ -4314,6 +4343,8 @@ function renderQuestionPracticeMode(container, options) {
       options.state.answerVisible = false;
       options.state.lastCorrect = null;
       options.state.finished = false;
+      options.state.orderedNodeIds = [];
+      options.state.orderMode = null;
       renderQuestionPracticeMode(container, options);
     };
     return;
@@ -4327,7 +4358,7 @@ function renderQuestionPracticeMode(container, options) {
   const questionKind = question.mode === "essay" ? "\u5927\u9898" : question.mode === "judgment" ? "\u5224\u65AD\u9898" : multiple ? "\u591A\u9009\u9898" : "\u5355\u9009\u9898";
   shell.createDiv({ cls: "mms-question-practice-progress", text: `${currentIndex + 1} / ${questions.length} \xB7 ${questionKind}` });
   shell.createEl("h3", { cls: "mms-question-practice-stem", text: nodePlainText(node) || "\u672A\u547D\u540D\u9898\u76EE" });
-  renderBlocks(shell, question.stem, options.resolveImage);
+  renderBlocks(shell, question.stem.filter((block) => block.type !== "text"), options.resolveImage);
   if (question.mode !== "essay") {
     const choices = shell.createDiv({ cls: "mms-question-practice-choices" });
     question.options.forEach((option) => {
@@ -4380,7 +4411,7 @@ function renderQuestionPracticeMode(container, options) {
   renderBlocks(shell, question.answer, options.resolveImage);
   if (question.explanation.length) {
     shell.createEl("h4", { text: "\u89E3\u6790" });
-    renderBlocks(shell, question.explanation, options.resolveImage);
+    renderExplanationBlocks(shell, question.explanation, options.resolveImage);
   }
   const finalQuestion = currentIndex === questions.length - 1;
   const next = shell.createEl("button", { cls: "mod-cta mms-question-practice-submit", text: finalQuestion ? "\u7ED3\u675F\u7B54\u9898" : "\u4E0B\u4E00\u9898", attr: { type: "button" } });
@@ -4403,6 +4434,27 @@ function renderQuestionPracticeMode(container, options) {
     options.state.lastCorrect = null;
     renderQuestionPracticeMode(container, options);
   };
+}
+function orderPracticeQuestions(nodes, state, order) {
+  if (state.orderMode !== order) {
+    state.orderMode = order;
+    state.orderedNodeIds = [];
+  }
+  const available = new Map(nodes.map((node) => [node.id, node]));
+  const retained = state.orderedNodeIds.filter((id) => available.has(id));
+  const appended = nodes.map((node) => node.id).filter((id) => !retained.includes(id));
+  if (order === "random") shuffle(appended);
+  state.orderedNodeIds = [...retained, ...appended];
+  return state.orderedNodeIds.flatMap((id) => {
+    var _a2;
+    return (_a2 = available.get(id)) != null ? _a2 : [];
+  });
+}
+function shuffle(items) {
+  for (let index = items.length - 1; index > 0; index -= 1) {
+    const target = Math.floor(Math.random() * (index + 1));
+    [items[index], items[target]] = [items[target], items[index]];
+  }
 }
 function selectedAnswerLabels(node) {
   const question = node.question;
@@ -4428,6 +4480,19 @@ function renderBlocks(container, blocks, resolveImage) {
     }
   });
 }
+function renderExplanationBlocks(container, blocks, resolveImage) {
+  for (const block of blocks) {
+    if (block.type === "text") {
+      splitExplanationLines(block.text).forEach((text) => container.createDiv({ cls: "mms-question-practice-explanation-item", text }));
+    } else {
+      renderBlocks(container, [block], resolveImage);
+    }
+  }
+}
+function splitExplanationLines(value) {
+  const lines = value.split(/(?=[A-DＡ-Ｄ][项、.．:：])/u).map((line) => line.trim()).filter(Boolean);
+  return lines.length ? lines : value.trim() ? [value.trim()] : [];
+}
 function blockText(blocks) {
   return blocks.filter((block) => block.type === "text").map((block) => block.text).join("\n");
 }
@@ -4450,7 +4515,7 @@ var DISPLAY_MODE_LABELS = {
   outline: "\u5927\u7EB2",
   article: "\u6587\u7AE0",
   reading: "\u901A\u8BFB",
-  "question-bank": "\u9898\u5E93"
+  "question-bank": "\u7B54\u9898"
 };
 var DISPLAY_MODE_ICONS = {
   mindmap: "brain-circuit",
@@ -7600,7 +7665,10 @@ function renderArticleQuestionDetails(container, node) {
   if (!question) return;
   const plainText = (blocks) => blocks.map((block) => block.type === "text" ? block.text.trim() : "[\u56FE\u7247]").filter(Boolean).join(" ");
   const panel = container.createDiv({ cls: "mms-question-panel" });
-  panel.createDiv({ cls: "mms-question-kind", text: question.mode === "essay" ? "\u5927\u9898" : question.mode === "judgment" ? "\u5224\u65AD\u9898" : "\u9009\u62E9\u9898" });
+  const meta = panel.createDiv({ cls: "mms-question-meta" });
+  meta.createDiv({ cls: "mms-question-kind", text: question.mode === "essay" ? "\u5927\u9898" : question.mode === "judgment" ? "\u5224\u65AD\u9898" : "\u9009\u62E9\u9898" });
+  const statusLabels = { unanswered: "\u672A\u505A", completed: "\u5DF2\u505A", favorite: "\u6536\u85CF", wrong: "\u9519\u9898", mastered: "\u638C\u63E1" };
+  meta.createDiv({ cls: `mms-question-status is-${question.status}`, text: statusLabels[question.status] });
   const appendField = (container2, label, value, cls = "") => {
     if (!value) return;
     const row = container2.createDiv({ cls: `mms-question-row ${cls}`.trim() });
@@ -10833,6 +10901,7 @@ var MindMapEditor = class {
       document: this.document,
       state: this.questionPracticeState,
       resolveImage: this.callbacks.resolveImage,
+      order: this.options.questionPracticeOrder,
       onRecord: (nodeId, correct) => this.recordQuestionPractice(nodeId, correct),
       onNotice: (message) => new import_obsidian10.Notice(message)
     });
@@ -12391,7 +12460,10 @@ var MindMapEditor = class {
     if (!question) return;
     const plainText = (blocks) => blocks.map((block) => block.type === "text" ? block.text.trim() : "[\u56FE\u7247]").filter(Boolean).join(" ");
     const summary = content.createDiv({ cls: "mmc-question-summary" });
-    summary.createDiv({ cls: "mmc-question-kind", text: question.mode === "essay" ? "\u5927\u9898" : question.mode === "judgment" ? "\u5224\u65AD\u9898" : "\u9009\u62E9\u9898" });
+    const meta = summary.createDiv({ cls: "mmc-question-meta" });
+    meta.createDiv({ cls: "mmc-question-kind", text: question.mode === "essay" ? "\u5927\u9898" : question.mode === "judgment" ? "\u5224\u65AD\u9898" : "\u9009\u62E9\u9898" });
+    const statusLabels = { unanswered: "\u672A\u505A", completed: "\u5DF2\u505A", favorite: "\u6536\u85CF", wrong: "\u9519\u9898", mastered: "\u638C\u63E1" };
+    meta.createDiv({ cls: `mmc-question-status is-${question.status}`, text: statusLabels[question.status] });
     const appendField = (container, label, value, cls = "") => {
       if (!value) return;
       const line = container.createDiv({ cls: `mmc-question-field ${cls}`.trim() });
@@ -14495,6 +14567,7 @@ var MindMapStudioView = class _MindMapStudioView extends import_obsidian12.TextF
       screenshotAutoRecognize: this.plugin.settings.screenshotAutoRecognize,
       questionNodesEnabled: this.plugin.settings.questionNodesEnabled,
       questionBankModeEnabled: this.plugin.isQuestionBankFile(this.file),
+      questionPracticeOrder: this.plugin.settings.questionPracticeOrder,
       articleBaseDepth: this.articleBaseDepth,
       articleTocEntries: [...this.articleTocEntries],
       articleTocMaxDepth: this.plugin.settings.articleTocMaxDepth,
@@ -16656,6 +16729,7 @@ var MindMapStudioPlugin = class extends import_obsidian15.Plugin {
       screenshotAutoRecognize: raw.screenshotAutoRecognize === true,
       questionNodesEnabled: raw.questionNodesEnabled === true,
       questionBankFolder: typeof raw.questionBankFolder === "string" ? (0, import_obsidian15.normalizePath)(raw.questionBankFolder.trim().replace(/^\/+|\/+$/g, "")).slice(0, 1e3) : DEFAULT_SETTINGS.questionBankFolder,
+      questionPracticeOrder: raw.questionPracticeOrder === "sequential" ? "sequential" : "random",
       lastImportFolder: typeof raw.lastImportFolder === "string" ? raw.lastImportFolder.trim().slice(0, 4e3) : DEFAULT_SETTINGS.lastImportFolder,
       settingsSectionOrder: normalizeSettingsSectionOrder(raw.settingsSectionOrder),
       syncTitleToFilename: raw.syncTitleToFilename !== false,

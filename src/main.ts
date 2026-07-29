@@ -568,6 +568,7 @@ export default class MindMapStudioPlugin extends Plugin {
       questionBankFolder: typeof raw.questionBankFolder === "string"
         ? normalizePath(raw.questionBankFolder.trim().replace(/^\/+|\/+$/g, "")).slice(0, 1000)
         : DEFAULT_SETTINGS.questionBankFolder,
+      questionPracticeOrder: raw.questionPracticeOrder === "sequential" ? "sequential" : "random",
       lastImportFolder: typeof raw.lastImportFolder === "string"
         ? raw.lastImportFolder.trim().slice(0, 4000)
         : DEFAULT_SETTINGS.lastImportFolder,

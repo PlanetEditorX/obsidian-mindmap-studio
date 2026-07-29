@@ -220,6 +220,7 @@ test("question-bank grading distinguishes single choice, multiple choice, judgme
   assert.equal(practice.isQuestionJudgmentCorrect(judgment, ["yes"]), false);
   assert.equal(practice.isExactQuestionAnswer(" 资料 分析！", "资料分析"), true);
   assert.equal(practice.isExactQuestionAnswer("资料理解", "资料分析"), false);
+  assert.deepEqual(practice.splitExplanationLines("A项正确。B项错误。C项待定。"), ["A项正确。", "B项错误。", "C项待定。"]);
 });
 
 test("question-bank practice persists attempts, routes mistakes to review, and advances after showing feedback", async () => {
@@ -240,16 +241,21 @@ test("question-bank practice persists attempts, routes mistakes to review, and a
   assert.match(practiceSource, /text: finalQuestion \? "结束答题" : "下一题"/);
   assert.match(practiceSource, /if \(finalQuestion\) \{[\s\S]*options\.state\.finished = true/);
   assert.match(practiceSource, /text: "本轮答题已完成"/);
+  assert.match(practiceSource, /question\.stem\.filter\(\(block\) => block\.type !== "text"\)/);
+  assert.match(practiceSource, /orderPracticeQuestions\(candidates, options\.state, options\.order\)/);
+  assert.match(practiceSource, /if \(order === "random"\) shuffle\(appended\)/);
+  assert.match(practiceSource, /text: options\.document\.title \|\| "答题"/);
 });
 
 test("question assistant keeps an intelligent image-to-question pipeline and visible answer fields", async () => {
-  const [editorSource, articleSource, modalSource, practiceSource, mainSource, settingsSource] = await Promise.all([
+  const [editorSource, articleSource, modalSource, practiceSource, mainSource, settingsSource, viewSource] = await Promise.all([
     readFile("src/editor/editor.ts", "utf8"),
     readFile("src/editor/article-renderer.ts", "utf8"),
     readFile("src/editor/question-modal.ts", "utf8"),
     readFile("src/editor/question-practice-mode.ts", "utf8"),
     readFile("src/main.ts", "utf8"),
-    readFile("src/settings.ts", "utf8")
+    readFile("src/settings.ts", "utf8"),
+    readFile("src/view.ts", "utf8")
   ]);
   assert.match(editorSource, /转为题目节点并智能处理/);
   assert.match(editorSource, /renderQuestionSummary/);
@@ -260,6 +266,7 @@ test("question assistant keeps an intelligent image-to-question pipeline and vis
   assert.match(articleSource, /mms-question-reveal/);
   assert.match(modalSource, /AI 智能处理题目/);
   assert.match(modalSource, /value: "judgment", text: "判断题"/);
+  assert.match(modalSource, /"常识判断", "时政", "政治", "经济", "法律"/);
   assert.match(practiceSource, /isQuestionJudgmentCorrect/);
   assert.match(editorSource, /addToolbarButton\("question", "file-plus-2"/);
   assert.match(editorSource, /renderQuestionPracticeMode/);
@@ -280,6 +287,9 @@ test("question assistant keeps an intelligent image-to-question pipeline and vis
   assert.match(practiceSource, /isExactQuestionAnswer/);
   assert.match(mainSource, /isQuestionBankFile/);
   assert.match(settingsSource, /题库文件夹/);
+  assert.match(settingsSource, /questionPracticeOrder: "random"/);
+  assert.match(settingsSource, /setName\("答题顺序"\)/);
+  assert.match(viewSource, /questionPracticeOrder: this\.plugin\.settings\.questionPracticeOrder/);
   assert.match(modalSource, /已由 AI 分析补齐缺失答案与解答/);
   assert.match(mainSource, /仍需基于题目独立分析/);
 });

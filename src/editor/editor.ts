@@ -2859,6 +2859,7 @@ export class MindMapEditor {
       document: this.document,
       state: this.questionPracticeState,
       resolveImage: this.callbacks.resolveImage,
+      order: this.options.questionPracticeOrder,
       onRecord: (nodeId, correct) => this.recordQuestionPractice(nodeId, correct),
       onNotice: (message) => new Notice(message)
     });
@@ -4490,7 +4491,10 @@ export class MindMapEditor {
       .map((block) => block.type === "text" ? block.text.trim() : "[图片]")
       .filter(Boolean).join(" ");
     const summary = content.createDiv({ cls: "mmc-question-summary" });
-    summary.createDiv({ cls: "mmc-question-kind", text: question.mode === "essay" ? "大题" : question.mode === "judgment" ? "判断题" : "选择题" });
+    const meta = summary.createDiv({ cls: "mmc-question-meta" });
+    meta.createDiv({ cls: "mmc-question-kind", text: question.mode === "essay" ? "大题" : question.mode === "judgment" ? "判断题" : "选择题" });
+    const statusLabels = { unanswered: "未做", completed: "已做", favorite: "收藏", wrong: "错题", mastered: "掌握" } as const;
+    meta.createDiv({ cls: `mmc-question-status is-${question.status}`, text: statusLabels[question.status] });
     const appendField = (container: HTMLElement, label: string, value: string, cls = ""): void => {
       if (!value) return;
       const line = container.createDiv({ cls: `mmc-question-field ${cls}`.trim() });

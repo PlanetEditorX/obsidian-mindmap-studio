@@ -457,6 +457,7 @@ export class MindMapStudioView extends TextFileView {
       screenshotAutoRecognize: this.plugin.settings.screenshotAutoRecognize,
       questionNodesEnabled: this.plugin.settings.questionNodesEnabled,
       questionBankModeEnabled: this.plugin.isQuestionBankFile(this.file),
+      questionPracticeOrder: this.plugin.settings.questionPracticeOrder,
       articleBaseDepth: this.articleBaseDepth,
       articleTocEntries: [...this.articleTocEntries],
       articleTocMaxDepth: this.plugin.settings.articleTocMaxDepth,

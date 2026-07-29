@@ -16,7 +16,11 @@ import {
 } from "../core/model";
 import type { MindMapEditorCallbacks } from "./editor-types";
 
-const QUESTION_TAGS = ["公务员", "事业单位", "申论", "职测", "言语", "判断", "数量", "资料分析"];
+const QUESTION_TAGS = [
+  "公务员", "事业单位", "选调生", "三支一扶", "申论", "职测", "行测", "公共基础知识",
+  "常识判断", "时政", "政治", "经济", "法律", "人文历史", "地理科技",
+  "言语理解", "判断推理", "数量关系", "资料分析", "面试"
+];
 const QUESTION_STATUS_LABELS: Record<MindMapQuestionStatus, string> = { unanswered: "未做", completed: "已做", favorite: "收藏", wrong: "错题", mastered: "掌握" };
 
 /** Parses a JSON-only vision result into the question fields supported by the editor. */
