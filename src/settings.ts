@@ -48,9 +48,9 @@ export const TOOLBAR_ITEMS = [
 
 /** All first-level settings categories in their default display order. */
 export const SETTINGS_SECTION_TITLES = [
-  "显示模式", "主题模板", "全局代码设置", "画布背景", "字体与文字", "节点样式", "连线样式",
-  "编辑", "节点快速输入快捷键", "工具栏内容", "文件与布局", "文件夹", "图片与图床",
-  "AI 助手", "全局搜索索引", "管理配置"
+  "视图与阅读", "编辑体验", "快捷键配置", "工具栏", "主题与外观", "画布与背景", "文字与排版",
+  "节点外观", "连线与分支", "代码块", "新建与布局", "文件与资源", "图片与图床",
+  "全局搜索", "AI 助手", "管理配置"
 ] as const;
 
 /** A valid first-level settings category title. */
@@ -367,8 +367,27 @@ export const DEFAULT_SETTINGS: MindMapStudioSettings = {
 /** Normalizes stored category order while keeping configuration management at the end. */
 export function normalizeSettingsSectionOrder(value: unknown): SettingsSectionTitle[] {
   const known = new Set<string>(SETTINGS_SECTION_TITLES);
+  const legacyTitles: Record<string, SettingsSectionTitle> = {
+    "显示模式": "视图与阅读",
+    "编辑": "编辑体验",
+    "节点快速输入快捷键": "快捷键配置",
+    "工具栏内容": "工具栏",
+    "主题模板": "主题与外观",
+    "画布背景": "画布与背景",
+    "字体与文字": "文字与排版",
+    "节点样式": "节点外观",
+    "连线样式": "连线与分支",
+    "全局代码设置": "代码块",
+    "文件与布局": "新建与布局",
+    "文件夹": "文件与资源",
+    "全局搜索索引": "全局搜索"
+  };
   const stored = Array.isArray(value)
-    ? value.filter((title): title is SettingsSectionTitle => typeof title === "string" && known.has(title) && title !== "管理配置")
+    ? value.flatMap((title): SettingsSectionTitle[] => {
+      if (typeof title !== "string") return [];
+      const normalized = legacyTitles[title] ?? title;
+      return known.has(normalized) && normalized !== "管理配置" ? [normalized as SettingsSectionTitle] : [];
+    })
     : [];
   const ordered = [...new Set(stored)];
   for (const title of SETTINGS_SECTION_TITLES) {
@@ -472,7 +491,7 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
   private readonly plugin: MindMapStudioPlugin;
   private readonly expandedImageHostIds = new Set<string>();
   private readonly expandedAiProfileIds = new Set<string>();
-  private readonly expandedSettingsSectionTitles = new Set<string>(["主题模板"]);
+  private readonly expandedSettingsSectionTitles = new Set<string>(["主题与外观"]);
   private settingsSearchQuery = "";
 
   /**
@@ -508,7 +527,7 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
       text: "这里设置全局默认外观。打开脑图后，也可以点击工具栏中的调色板，为当前脑图单独保存一套样式。"
     });
 
-    containerEl.createEl("h3", { text: "主题模板" });
+    containerEl.createEl("h3", { text: "主题与外观" });
 
     new Setting(containerEl)
       .setName("默认主题")
@@ -539,7 +558,7 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
       });
     }
 
-    containerEl.createEl("h3", { text: "全局代码设置" });
+    containerEl.createEl("h3", { text: "代码块" });
     new Setting(containerEl)
       .setName("代码默认折叠")
       .setDesc("优先级最低；页面或节点代码设置可覆盖。")
@@ -589,7 +608,7 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
           await this.saveAndRefresh();
         }));
 
-    containerEl.createEl("h3", { text: "显示模式" });
+    containerEl.createEl("h3", { text: "视图与阅读" });
 
     containerEl.createEl("p", {
       cls: "setting-item-description",
@@ -772,7 +791,7 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
           .onChange(saveReturnToTopVisibility);
       });
 
-    containerEl.createEl("h3", { text: "工具栏内容" });
+    containerEl.createEl("h3", { text: "工具栏" });
     containerEl.createEl("p", {
       cls: "setting-item-description",
       text: "选择需要显示在脑图顶部工具栏中的操作。显示模式切换、缩放比例和保存状态始终保留。"
@@ -1163,7 +1182,7 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
     // Keep recognition controls beside the AI profiles they depend on.
     containerEl.appendChild(imageRecognitionSettings);
 
-    containerEl.createEl("h3", { text: "文件与布局" });
+    containerEl.createEl("h3", { text: "新建与布局" });
 
     new Setting(containerEl)
       .setName("节点编辑器显示位置")
@@ -1177,7 +1196,7 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
           await this.saveAndRefresh();
         }));
 
-    containerEl.createEl("h3", { text: "节点快速输入快捷键" });
+    containerEl.createEl("h3", { text: "快捷键配置" });
     containerEl.createEl("p", {
       cls: "setting-item-description",
       text: "Tab/Enter 创建节点后可直接输入。以下快捷键作用于节点内已选择的文字；格式示例：Ctrl+B、Ctrl+Shift+C、Alt+U。"
@@ -1209,7 +1228,7 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
           await this.plugin.saveSettings();
         }));
 
-    containerEl.createEl("h3", { text: "文件夹" });
+    containerEl.createEl("h3", { text: "文件与资源" });
 
     new Setting(containerEl)
       .setName("题库文件夹")
@@ -1535,7 +1554,7 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
           await this.plugin.saveSettings();
         }));
 
-    containerEl.createEl("h3", { text: "画布背景" });
+    containerEl.createEl("h3", { text: "画布与背景" });
 
     this.addOptionalColorSetting(
       containerEl,
@@ -1569,7 +1588,7 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
       false
     );
 
-    containerEl.createEl("h3", { text: "字体与文字" });
+    containerEl.createEl("h3", { text: "文字与排版" });
 
     new Setting(containerEl)
       .setName("默认字体")
@@ -1660,7 +1679,7 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
           await this.saveAndRefresh();
         }));
 
-    containerEl.createEl("h3", { text: "节点样式" });
+    containerEl.createEl("h3", { text: "节点外观" });
 
     this.addOptionalColorSetting(
       containerEl,
@@ -1760,7 +1779,7 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
           await this.saveAndRefresh();
         }));
 
-    containerEl.createEl("h3", { text: "连线样式" });
+    containerEl.createEl("h3", { text: "连线与分支" });
 
     new Setting(containerEl)
       .setName("彩色分支")
@@ -1844,7 +1863,7 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
           }));
     }
 
-    containerEl.createEl("h3", { text: "编辑" });
+    containerEl.createEl("h3", { text: "编辑体验" });
 
     new Setting(containerEl)
       .setName("显示任务进度")
@@ -1890,7 +1909,7 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
         }));
 
 
-    containerEl.createEl("h3", { text: "全局搜索索引" });
+    containerEl.createEl("h3", { text: "全局搜索" });
     const searchStatus = this.plugin.getGlobalSearchIndexStatus();
     containerEl.createEl("p", {
       cls: "setting-item-description",
@@ -1957,9 +1976,15 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
             button.setButtonText("检查更新");
           }
         }));
-    new Setting(containerEl)
-      .setName("设置分类排序")
-      .setDesc("使用上下箭头调整各设置分类的位置；管理配置固定显示在最后。")
+    const categoryOrder = containerEl.createEl("details", { cls: "mms-settings-category-order" });
+    categoryOrder.createEl("summary", { text: "设置分类排序" });
+    categoryOrder.createEl("p", {
+      cls: "setting-item-description",
+      text: "使用上下箭头调整各设置分类的位置；管理配置固定显示在最后。"
+    });
+    new Setting(categoryOrder)
+      .setName("恢复默认顺序")
+      .setDesc("恢复推荐的设置分类顺序。")
       .addButton((button) => button
         .setButtonText("恢复默认顺序")
         .onClick(async () => {
@@ -1967,7 +1992,7 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
           await this.plugin.saveSettings();
           this.display();
         }));
-    this.addSettingsSectionOrderControls(containerEl);
+    this.addSettingsSectionOrderControls(categoryOrder);
     new Setting(containerEl)
       .setName("恢复初始配置")
       .setDesc("恢复显示模式、主题、资源目录、图床、搜索和编辑选项。不会删除或修改任何 .mindmap 文件。")

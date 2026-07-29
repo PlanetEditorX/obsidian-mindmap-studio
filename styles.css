@@ -4039,6 +4039,23 @@
   display: none;
 }
 
+.mms-settings-category-order {
+  margin: 12px 0;
+  border-top: 1px solid var(--background-modifier-border);
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.mms-settings-category-order > summary {
+  padding: 10px 0;
+  color: var(--text-normal);
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.mms-settings-category-order > .setting-item-description {
+  margin: 0 0 6px;
+}
+
 .mms-ai-profile-title {
   padding: 12px 14px;
   cursor: pointer;
