@@ -1985,29 +1985,6 @@ var MindMapStudioSettingTab = class extends import_obsidian.PluginSettingTab {
       cls: "setting-item-description",
       text: "\u8FD9\u91CC\u8BBE\u7F6E\u5168\u5C40\u9ED8\u8BA4\u5916\u89C2\u3002\u6253\u5F00\u8111\u56FE\u540E\uFF0C\u4E5F\u53EF\u4EE5\u70B9\u51FB\u5DE5\u5177\u680F\u4E2D\u7684\u8C03\u8272\u677F\uFF0C\u4E3A\u5F53\u524D\u8111\u56FE\u5355\u72EC\u4FDD\u5B58\u4E00\u5957\u6837\u5F0F\u3002"
     });
-    containerEl.createEl("h3", { text: "\u7BA1\u7406\u914D\u7F6E" });
-    new import_obsidian.Setting(containerEl).setName("\u5BFC\u51FA\u914D\u7F6E").setDesc("\u5C06\u5F53\u524D\u5168\u5C40\u63D2\u4EF6\u8BBE\u7F6E\u5BFC\u51FA\u4E3A JSON \u6587\u4EF6\u3002").addButton((button) => button.setButtonText("\u5BFC\u51FA\u914D\u7F6E").onClick(() => void this.exportSettings()));
-    new import_obsidian.Setting(containerEl).setName("\u5BFC\u5165\u914D\u7F6E").setDesc("\u5BFC\u5165 JSON \u914D\u7F6E\u4F1A\u8986\u76D6\u5F53\u524D\u5168\u5C40\u8BBE\u7F6E\uFF0C\u4E0D\u4F1A\u4FEE\u6539\u4EFB\u4F55\u5BFC\u56FE\u6587\u4EF6\u3002").addButton((button) => button.setButtonText("\u5BFC\u5165\u914D\u7F6E").onClick(() => this.openSettingsImportPicker()));
-    new import_obsidian.Setting(containerEl).setName("\u68C0\u67E5\u63D2\u4EF6\u66F4\u65B0").setDesc(`\u5F53\u524D\u7248\u672C ${this.plugin.manifest.version}\u3002\u4ECE GitHub Release \u4E0B\u8F7D\u5E76\u6821\u9A8C\u5B89\u88C5\u5305\uFF1B\u5B8C\u6210\u540E\u53EF\u7ACB\u5373\u91CD\u65B0\u52A0\u8F7D Obsidian\u3002`).addButton((button) => button.setButtonText("\u68C0\u67E5\u66F4\u65B0").onClick(async () => {
-      button.setDisabled(true);
-      button.setButtonText("\u68C0\u67E5\u4E2D\u2026");
-      try {
-        await this.plugin.checkForPluginUpdate();
-      } catch (error) {
-        console.error("MindMap Studio update failed", error);
-        new import_obsidian.Notice(error instanceof Error ? `\u66F4\u65B0\u5931\u8D25\uFF1A${error.message}` : "\u66F4\u65B0\u5931\u8D25");
-      } finally {
-        button.setDisabled(false);
-        button.setButtonText("\u68C0\u67E5\u66F4\u65B0");
-      }
-    }));
-    new import_obsidian.Setting(containerEl).setName("\u6062\u590D\u521D\u59CB\u914D\u7F6E").setDesc("\u6062\u590D\u663E\u793A\u6A21\u5F0F\u3001\u4E3B\u9898\u3001\u8D44\u6E90\u76EE\u5F55\u3001\u56FE\u5E8A\u3001\u641C\u7D22\u548C\u7F16\u8F91\u9009\u9879\u3002\u4E0D\u4F1A\u5220\u9664\u6216\u4FEE\u6539\u4EFB\u4F55 .mindmap \u6587\u4EF6\u3002").addButton((button) => button.setWarning().setButtonText("\u6062\u590D\u521D\u59CB\u914D\u7F6E").onClick(async () => {
-      const confirmed = window.confirm("\u786E\u5B9A\u6062\u590D MindMap Studio \u7684\u5168\u90E8\u63D2\u4EF6\u8BBE\u7F6E\u5417\uFF1F\u8111\u56FE\u6587\u4EF6\u4E0D\u4F1A\u88AB\u5220\u9664\u3002");
-      if (!confirmed) return;
-      await this.plugin.resetAllSettings();
-      new import_obsidian.Notice("\u5DF2\u6062\u590D\u521D\u59CB\u8BBE\u7F6E");
-      this.display();
-    }));
     containerEl.createEl("h3", { text: "\u4E3B\u9898\u6A21\u677F" });
     new import_obsidian.Setting(containerEl).setName("\u9ED8\u8BA4\u4E3B\u9898").setDesc("\u9009\u62E9\u540E\u4F1A\u4E00\u6B21\u5E94\u7528\u80CC\u666F\u3001\u8282\u70B9\u3001\u5206\u652F\u914D\u8272\u3001\u5B57\u4F53\u548C\u8FDE\u7EBF\u6837\u5F0F\uFF1B\u4E4B\u540E\u4ECD\u53EF\u7EE7\u7EED\u4FEE\u6539\u5355\u9879\u8BBE\u7F6E\u3002").addDropdown((dropdown) => {
       for (const preset of MINDMAP_THEME_PRESETS) dropdown.addOption(preset.id, preset.name);
@@ -2823,6 +2800,29 @@ var MindMapStudioSettingTab = class extends import_obsidian.PluginSettingTab {
       } finally {
         button.setDisabled(false);
       }
+    }));
+    containerEl.createEl("h3", { text: "\u7BA1\u7406\u914D\u7F6E" });
+    new import_obsidian.Setting(containerEl).setName("\u5BFC\u51FA\u914D\u7F6E").setDesc("\u5C06\u5F53\u524D\u5168\u5C40\u63D2\u4EF6\u8BBE\u7F6E\u5BFC\u51FA\u4E3A JSON \u6587\u4EF6\u3002").addButton((button) => button.setButtonText("\u5BFC\u51FA\u914D\u7F6E").onClick(() => void this.exportSettings()));
+    new import_obsidian.Setting(containerEl).setName("\u5BFC\u5165\u914D\u7F6E").setDesc("\u5BFC\u5165 JSON \u914D\u7F6E\u4F1A\u8986\u76D6\u5F53\u524D\u5168\u5C40\u8BBE\u7F6E\uFF0C\u4E0D\u4F1A\u4FEE\u6539\u4EFB\u4F55\u5BFC\u56FE\u6587\u4EF6\u3002").addButton((button) => button.setButtonText("\u5BFC\u5165\u914D\u7F6E").onClick(() => this.openSettingsImportPicker()));
+    new import_obsidian.Setting(containerEl).setName("\u68C0\u67E5\u63D2\u4EF6\u66F4\u65B0").setDesc(`\u5F53\u524D\u7248\u672C ${this.plugin.manifest.version}\u3002\u4ECE GitHub Release \u9875\u9762\u4E0B\u8F7D\u5E76\u6821\u9A8C\u5B89\u88C5\u5305\uFF1B\u5B8C\u6210\u540E\u53EF\u7ACB\u5373\u91CD\u65B0\u52A0\u8F7D Obsidian\u3002`).addButton((button) => button.setButtonText("\u68C0\u67E5\u66F4\u65B0").onClick(async () => {
+      button.setDisabled(true);
+      button.setButtonText("\u68C0\u67E5\u4E2D\u2026");
+      try {
+        await this.plugin.checkForPluginUpdate();
+      } catch (error) {
+        console.error("MindMap Studio update failed", error);
+        new import_obsidian.Notice(error instanceof Error ? `\u66F4\u65B0\u5931\u8D25\uFF1A${error.message}` : "\u66F4\u65B0\u5931\u8D25");
+      } finally {
+        button.setDisabled(false);
+        button.setButtonText("\u68C0\u67E5\u66F4\u65B0");
+      }
+    }));
+    new import_obsidian.Setting(containerEl).setName("\u6062\u590D\u521D\u59CB\u914D\u7F6E").setDesc("\u6062\u590D\u663E\u793A\u6A21\u5F0F\u3001\u4E3B\u9898\u3001\u8D44\u6E90\u76EE\u5F55\u3001\u56FE\u5E8A\u3001\u641C\u7D22\u548C\u7F16\u8F91\u9009\u9879\u3002\u4E0D\u4F1A\u5220\u9664\u6216\u4FEE\u6539\u4EFB\u4F55 .mindmap \u6587\u4EF6\u3002").addButton((button) => button.setWarning().setButtonText("\u6062\u590D\u521D\u59CB\u914D\u7F6E").onClick(async () => {
+      const confirmed = window.confirm("\u786E\u5B9A\u6062\u590D MindMap Studio \u7684\u5168\u90E8\u63D2\u4EF6\u8BBE\u7F6E\u5417\uFF1F\u8111\u56FE\u6587\u4EF6\u4E0D\u4F1A\u88AB\u5220\u9664\u3002");
+      if (!confirmed) return;
+      await this.plugin.resetAllSettings();
+      new import_obsidian.Notice("\u5DF2\u6062\u590D\u521D\u59CB\u8BBE\u7F6E");
+      this.display();
     }));
     this.organizeSettingsSections();
   }
@@ -15500,16 +15500,19 @@ function comparePluginVersions(left, right) {
   }
   return 0;
 }
-function findPluginInstallAsset(release) {
-  var _a2, _b2;
-  return (_b2 = (_a2 = release.assets) == null ? void 0 : _a2.find((asset) => {
+function findPluginInstallUrl(releasePageHtml, releasePageUrl) {
+  var _a2;
+  const hrefs = releasePageHtml.matchAll(/href=["']([^"']+)["']/gi);
+  for (const match of hrefs) {
     try {
-      const url = new URL(asset.browser_download_url);
-      return /^mindmap-studio-[\w.-]+-install\.zip$/i.test(asset.name) && url.protocol === "https:" && url.hostname === "github.com";
+      const url = new URL(match[1].replace(/&amp;/g, "&"), releasePageUrl);
+      const filename = (_a2 = url.pathname.split("/").at(-1)) != null ? _a2 : "";
+      if (url.protocol === "https:" && url.hostname === "github.com" && url.pathname.startsWith("/PlanetEditorX/obsidian-mindmap-studio/releases/download/") && /^mindmap-studio-[\w.-]+-install\.zip$/i.test(filename)) return url.href;
     } catch (e) {
-      return false;
+      continue;
     }
-  })) != null ? _b2 : null;
+  }
+  return null;
 }
 function extractPluginReleaseFiles(archive) {
   const entries = unzipSync(new Uint8Array(archive));
@@ -15536,7 +15539,7 @@ function extractPluginReleaseFiles(archive) {
 
 // src/main.ts
 var MINDMAP_EXTENSION = "mindmap";
-var PLUGIN_RELEASE_URL = "https://api.github.com/repos/PlanetEditorX/obsidian-mindmap-studio/releases/latest";
+var PLUGIN_RELEASE_PAGE_URL = "https://github.com/PlanetEditorX/obsidian-mindmap-studio/releases/latest";
 var MindMapStudioPlugin = class extends import_obsidian15.Plugin {
   constructor() {
     super(...arguments);
@@ -16011,15 +16014,13 @@ var MindMapStudioPlugin = class extends import_obsidian15.Plugin {
     var _a2;
     new import_obsidian15.Notice("\u6B63\u5728\u68C0\u67E5 MindMap Studio \u66F4\u65B0\u2026");
     const response = await (0, import_obsidian15.requestUrl)({
-      url: PLUGIN_RELEASE_URL,
+      url: PLUGIN_RELEASE_PAGE_URL,
       method: "GET",
-      headers: { Accept: "application/vnd.github+json" },
       throw: true
     });
-    const release = JSON.parse(response.text);
-    const asset = findPluginInstallAsset(release);
-    if (!asset) throw new Error("\u6700\u65B0 Release \u4E2D\u672A\u627E\u5230\u53EF\u5B89\u88C5\u7684\u63D2\u4EF6\u5305");
-    const archiveResponse = await (0, import_obsidian15.requestUrl)({ url: asset.browser_download_url, method: "GET", throw: true });
+    const downloadUrl = findPluginInstallUrl(response.text, PLUGIN_RELEASE_PAGE_URL);
+    if (!downloadUrl) throw new Error("\u6700\u65B0 Release \u9875\u9762\u4E2D\u672A\u627E\u5230\u53EF\u5B89\u88C5\u7684\u63D2\u4EF6\u5305");
+    const archiveResponse = await (0, import_obsidian15.requestUrl)({ url: downloadUrl, method: "GET", throw: true });
     const update = extractPluginReleaseFiles(await archiveResponse.arrayBuffer);
     if (update.manifest.id !== this.manifest.id) throw new Error("\u66F4\u65B0\u5305\u7684\u63D2\u4EF6\u6807\u8BC6\u4E0D\u5339\u914D\uFF0C\u5DF2\u53D6\u6D88\u5B89\u88C5");
     if (comparePluginVersions(update.manifest.version, this.manifest.version) <= 0) {

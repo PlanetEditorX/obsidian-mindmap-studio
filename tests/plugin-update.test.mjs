@@ -19,13 +19,13 @@ before(async () => {
 
 after(() => rm(tempDir, { recursive: true, force: true }));
 
-test("plugin updater selects only the verified GitHub install asset", () => {
+test("plugin updater selects only the verified GitHub install link from the Release page", () => {
   assert.equal(updater.comparePluginVersions("1.25.4", "1.25.3") > 0, true);
   assert.equal(updater.comparePluginVersions("v1.25.4", "1.25.4"), 0);
-  assert.equal(updater.findPluginInstallAsset({ assets: [
-    { name: "mindmap-studio-1.25.4-install.zip", browser_download_url: "https://github.com/PlanetEditorX/obsidian-mindmap-studio/releases/download/v1.25.4/mindmap-studio-1.25.4-install.zip" },
-    { name: "mindmap-studio-1.25.4-install.zip", browser_download_url: "https://example.com/update.zip" }
-  ] })?.browser_download_url.includes("github.com"), true);
+  const pageUrl = "https://github.com/PlanetEditorX/obsidian-mindmap-studio/releases/latest";
+  const html = '<a href="/PlanetEditorX/obsidian-mindmap-studio/releases/download/v1.25.4/mindmap-studio-1.25.4-install.zip">download</a>';
+  assert.equal(updater.findPluginInstallUrl(html, pageUrl), "https://github.com/PlanetEditorX/obsidian-mindmap-studio/releases/download/v1.25.4/mindmap-studio-1.25.4-install.zip");
+  assert.equal(updater.findPluginInstallUrl('<a href="https://example.com/mindmap-studio-1.25.4-install.zip">download</a>', pageUrl), null);
 });
 
 test("plugin updater extracts only a complete validated plugin bundle", () => {

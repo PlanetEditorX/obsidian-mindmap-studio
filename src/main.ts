@@ -97,10 +97,10 @@ import {
   parseUploadHeaders,
   parseUploadResponsePayload
 } from "./utils/image-host";
-import { comparePluginVersions, extractPluginReleaseFiles, findPluginInstallAsset, type PluginReleaseInfo } from "./utils/plugin-update";
+import { comparePluginVersions, extractPluginReleaseFiles, findPluginInstallUrl } from "./utils/plugin-update";
 
 export const MINDMAP_EXTENSION = "mindmap";
-const PLUGIN_RELEASE_URL = "https://api.github.com/repos/PlanetEditorX/obsidian-mindmap-studio/releases/latest";
+const PLUGIN_RELEASE_PAGE_URL = "https://github.com/PlanetEditorX/obsidian-mindmap-studio/releases/latest";
 
 /**
  * MindMapStudioPlugin 的主要实现类。负责封装相关状态、生命周期和对外操作，避免调用方直接操作内部数据结构。
@@ -661,15 +661,13 @@ export default class MindMapStudioPlugin extends Plugin {
   async checkForPluginUpdate(): Promise<"up-to-date" | "updated"> {
     new Notice("正在检查 MindMap Studio 更新…");
     const response = await requestUrl({
-      url: PLUGIN_RELEASE_URL,
+      url: PLUGIN_RELEASE_PAGE_URL,
       method: "GET",
-      headers: { Accept: "application/vnd.github+json" },
       throw: true
     });
-    const release = JSON.parse(response.text) as PluginReleaseInfo;
-    const asset = findPluginInstallAsset(release);
-    if (!asset) throw new Error("最新 Release 中未找到可安装的插件包");
-    const archiveResponse = await requestUrl({ url: asset.browser_download_url, method: "GET", throw: true });
+    const downloadUrl = findPluginInstallUrl(response.text, PLUGIN_RELEASE_PAGE_URL);
+    if (!downloadUrl) throw new Error("最新 Release 页面中未找到可安装的插件包");
+    const archiveResponse = await requestUrl({ url: downloadUrl, method: "GET", throw: true });
     const update = extractPluginReleaseFiles(await archiveResponse.arrayBuffer);
     if (update.manifest.id !== this.manifest.id) throw new Error("更新包的插件标识不匹配，已取消安装");
     if (comparePluginVersions(update.manifest.version, this.manifest.version) <= 0) {

@@ -5,18 +5,6 @@
 
 import { strFromU8, unzipSync } from "fflate";
 
-/** Minimal GitHub Release asset shape needed to locate the install ZIP. */
-export interface PluginReleaseAsset {
-  name: string;
-  browser_download_url: string;
-}
-
-/** Minimal GitHub latest-release response consumed by the updater. */
-export interface PluginReleaseInfo {
-  tag_name?: string;
-  assets?: PluginReleaseAsset[];
-}
-
 /** Manifest fields validated before a release can replace the installed plugin. */
 export interface PluginReleaseManifest {
   id: string;
@@ -44,16 +32,24 @@ export function comparePluginVersions(left: string, right: string): number {
   return 0;
 }
 
-/** Finds the install ZIP exposed by a GitHub Release. */
-export function findPluginInstallAsset(release: PluginReleaseInfo): PluginReleaseAsset | null {
-  return release.assets?.find((asset) => {
+/** Finds the verified install ZIP link embedded in the latest GitHub Release page. */
+export function findPluginInstallUrl(releasePageHtml: string, releasePageUrl: string): string | null {
+  const hrefs = releasePageHtml.matchAll(/href=["']([^"']+)["']/gi);
+  for (const match of hrefs) {
     try {
-      const url = new URL(asset.browser_download_url);
-      return /^mindmap-studio-[\w.-]+-install\.zip$/i.test(asset.name) && url.protocol === "https:" && url.hostname === "github.com";
+      const url = new URL(match[1]!.replace(/&amp;/g, "&"), releasePageUrl);
+      const filename = url.pathname.split("/").at(-1) ?? "";
+      if (
+        url.protocol === "https:"
+        && url.hostname === "github.com"
+        && url.pathname.startsWith("/PlanetEditorX/obsidian-mindmap-studio/releases/download/")
+        && /^mindmap-studio-[\w.-]+-install\.zip$/i.test(filename)
+      ) return url.href;
     } catch {
-      return false;
+      continue;
     }
-  }) ?? null;
+  }
+  return null;
 }
 
 /** Extracts the three files that an Obsidian plugin may safely self-update. */
