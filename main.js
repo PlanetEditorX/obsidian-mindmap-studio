@@ -10246,7 +10246,7 @@ var MindMapEditor = class {
   * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
     */
   renderMindMap() {
-    var _a2, _b2, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _A, _B, _C, _D, _E, _F;
+    var _a2, _b2, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _A, _B, _C, _D, _E, _F, _G;
     const appearance = this.getAppearance();
     this.layout = computeLayout(this.document.root, this.document.layout, (_a2 = appearance.fontSize) != null ? _a2 : 14, (_b2 = appearance.nodeVisualStyle) != null ? _b2 : "card", appearance);
     const branchColorMap = appearance.colorfulBranches ? buildBranchColorMap(this.document.root, appearance.branchColors) : /* @__PURE__ */ new Map();
@@ -10264,7 +10264,7 @@ var MindMapEditor = class {
       nodeEl.style.left = `${position.x}px`;
       nodeEl.style.top = `${position.y}px`;
       nodeEl.style.width = `${position.width}px`;
-      if (node.style && node.style.minHeight !== void 0) nodeEl.style.minHeight = `${node.style.minHeight}px`;
+      if (((_h = node.style) == null ? void 0 : _h.minHeight) !== void 0) nodeEl.style.minHeight = `${node.style.minHeight}px`;
       nodeEl.style.setProperty("--mmc-node-text-align", textAlign);
       nodeEl.draggable = position.depth > 0 && !this.readOnly;
       if (this.selectedId === node.id || this.selectedIds.has(node.id)) nodeEl.addClass("is-selected");
@@ -10272,27 +10272,27 @@ var MindMapEditor = class {
       if (this.searchQuery && nodeSearchText(node).includes(this.searchQuery)) nodeEl.addClass("is-search-match");
       if (node.task) nodeEl.addClass(`task-${node.task}`);
       const isRoot = position.depth === 0;
-      const bold = (_j = (_i = (_h = node.style) == null ? void 0 : _h.bold) != null ? _i : appearance.bold) != null ? _j : false;
-      const italic = (_m = (_l = (_k = node.style) == null ? void 0 : _k.italic) != null ? _l : appearance.italic) != null ? _m : false;
-      const underline = (_p = (_o = (_n = node.style) == null ? void 0 : _n.underline) != null ? _o : appearance.underline) != null ? _p : false;
+      const bold = (_k = (_j = (_i = node.style) == null ? void 0 : _i.bold) != null ? _j : appearance.bold) != null ? _k : false;
+      const italic = (_n = (_m = (_l = node.style) == null ? void 0 : _l.italic) != null ? _m : appearance.italic) != null ? _n : false;
+      const underline = (_q = (_p = (_o = node.style) == null ? void 0 : _o.underline) != null ? _p : appearance.underline) != null ? _q : false;
       if (bold) nodeEl.addClass("is-bold");
       if (italic) nodeEl.addClass("is-italic");
       if (underline) nodeEl.addClass("is-underlined");
       const branchColor = branchColorMap.get(node.id);
-      if ((_q = node.style) == null ? void 0 : _q.color) nodeEl.style.backgroundColor = node.style.color;
+      if ((_r = node.style) == null ? void 0 : _r.color) nodeEl.style.backgroundColor = node.style.color;
       else if (isRoot && appearance.rootColor) nodeEl.style.backgroundColor = appearance.rootColor;
       else if (!isRoot && branchColor && appearance.nodeVisualStyle === "branch") {
-        nodeEl.style.backgroundColor = `color-mix(in srgb, ${branchColor} 16%, ${(_r = appearance.nodeColor) != null ? _r : "#ffffff"})`;
+        nodeEl.style.backgroundColor = `color-mix(in srgb, ${branchColor} 16%, ${(_s = appearance.nodeColor) != null ? _s : "#ffffff"})`;
       } else if (!isRoot && appearance.nodeColor) nodeEl.style.backgroundColor = appearance.nodeColor;
-      if ((_s = node.style) == null ? void 0 : _s.textColor) nodeEl.style.color = node.style.textColor;
+      if ((_t = node.style) == null ? void 0 : _t.textColor) nodeEl.style.color = node.style.textColor;
       else if (isRoot && appearance.rootTextColor) nodeEl.style.color = appearance.rootTextColor;
       else if (!isRoot && appearance.textColor) nodeEl.style.color = appearance.textColor;
-      if ((_t = node.style) == null ? void 0 : _t.borderColor) nodeEl.style.borderColor = node.style.borderColor;
+      if ((_u = node.style) == null ? void 0 : _u.borderColor) nodeEl.style.borderColor = node.style.borderColor;
       else if (!isRoot && branchColor && appearance.nodeVisualStyle === "branch") {
         nodeEl.style.borderColor = `color-mix(in srgb, ${branchColor} 38%, transparent)`;
       } else if (!isRoot && branchColor) nodeEl.style.borderColor = branchColor;
       else if (!isRoot && appearance.nodeBorderColor) nodeEl.style.borderColor = appearance.nodeBorderColor;
-      nodeEl.style.borderWidth = `${(_w = (_v = (_u = node.style) == null ? void 0 : _u.borderWidth) != null ? _v : appearance.nodeBorderWidth) != null ? _w : isRoot ? 2 : 1}px`;
+      nodeEl.style.borderWidth = `${(_x = (_w = (_v = node.style) == null ? void 0 : _v.borderWidth) != null ? _w : appearance.nodeBorderWidth) != null ? _x : isRoot ? 2 : 1}px`;
       const content = nodeEl.createDiv({ cls: "mmc-node-content" });
       const blocks = nodeContentBlocks(node);
       const hasTextBlock = blocks.some((block) => block.type === "text" && block.text.trim());
@@ -10309,7 +10309,7 @@ var MindMapEditor = class {
         if (block.type === "image") {
           const wrap = content.createDiv({ cls: "mmc-node-image-block" });
           wrap.dataset.blockId = block.id;
-          const image = wrap.createEl("img", { cls: "mmc-node-image is-loading", attr: { alt: (_x = block.alt) != null ? _x : nodePlainText(node) || "\u56FE\u7247" } });
+          const image = wrap.createEl("img", { cls: "mmc-node-image is-loading", attr: { alt: (_y = block.alt) != null ? _y : nodePlainText(node) || "\u56FE\u7247" } });
           if (block.width) image.style.width = `${block.width}px`;
           if (block.height) image.style.height = `${block.height}px`;
           const candidates = this.options.imageFailoverEnabled ? imageSourceCandidates(block, this.options.imageFailoverUseLocalFallback, this.options.imageHostPriorityIds) : imageSourceCandidates(block, false, this.options.imageHostPriorityIds).slice(0, 1);
@@ -10430,7 +10430,7 @@ var MindMapEditor = class {
         const textEl = main.createDiv({ cls: `mmc-node-text${isSubmapTitle ? " is-submap-link" : ""}` });
         textEl.dataset.blockId = block.id;
         renderRichTextRuns(textEl, block.richText, block.text);
-        textEl.style.fontSize = `${(_A = (_z = (_y = node.style) == null ? void 0 : _y.fontSize) != null ? _z : appearance.fontSize) != null ? _A : 14}px`;
+        textEl.style.fontSize = `${(_B = (_A = (_z = node.style) == null ? void 0 : _z.fontSize) != null ? _A : appearance.fontSize) != null ? _B : 14}px`;
         if (isSubmapTitle) {
           const indicator = textEl.createSpan({ cls: "mmc-submap-inline-indicator", attr: { "aria-hidden": "true" } });
           (0, import_obsidian10.setIcon)(indicator, "arrow-up-right");
@@ -10440,8 +10440,8 @@ var MindMapEditor = class {
         const submapIcon = nodeEl.createEl("button", {
           cls: "mmc-submap-corner-link",
           attr: {
-            "aria-label": `\u6253\u5F00\u5B50\u5BFC\u56FE\uFF1A${(_B = node.submap.title) != null ? _B : node.submap.path}`,
-            title: `\u6253\u5F00\u5B50\u5BFC\u56FE\uFF1A${(_C = node.submap.title) != null ? _C : node.submap.path}`
+            "aria-label": `\u6253\u5F00\u5B50\u5BFC\u56FE\uFF1A${(_C = node.submap.title) != null ? _C : node.submap.path}`,
+            title: `\u6253\u5F00\u5B50\u5BFC\u56FE\uFF1A${(_D = node.submap.title) != null ? _D : node.submap.path}`
           }
         });
         (0, import_obsidian10.setIcon)(submapIcon, "arrow-up-right");
@@ -10454,12 +10454,12 @@ var MindMapEditor = class {
       if (node.submap) {
         nodeEl.setAttr("role", "link");
         nodeEl.setAttr("tabindex", "0");
-        nodeEl.setAttr("aria-label", `\u6253\u5F00\u5B50\u5BFC\u56FE\uFF1A${(_D = node.submap.title) != null ? _D : node.submap.path}`);
+        nodeEl.setAttr("aria-label", `\u6253\u5F00\u5B50\u5BFC\u56FE\uFF1A${(_E = node.submap.title) != null ? _E : node.submap.path}`);
       }
       if (node.table && !blocks.some((block) => block.type === "table")) this.renderNodeTable(content, node, node.table);
       if (node.code && !blocks.some((block) => block.type === "code")) this.renderNodeCode(content, node, node.code);
       if (node.question) this.renderQuestionSummary(content, node);
-      if ((_E = node.tags) == null ? void 0 : _E.length) {
+      if ((_F = node.tags) == null ? void 0 : _F.length) {
         const tags = content.createDiv({ cls: "mmc-node-tags" });
         node.tags.slice(0, 4).forEach((tag) => tags.createSpan({ cls: "mmc-node-tag", text: `#${tag}` }));
       }
@@ -10644,7 +10644,7 @@ var MindMapEditor = class {
         this.clearDropPreview();
         this.nodesLayerEl.querySelectorAll(".is-dragging").forEach((element) => element.removeClass("is-dragging"));
       });
-      (_F = this.resizeObserver) == null ? void 0 : _F.observe(nodeEl);
+      (_G = this.resizeObserver) == null ? void 0 : _G.observe(nodeEl);
     }
     this.scheduleMeasuredMindMapLayout();
     this.applyTransform();
@@ -11773,12 +11773,10 @@ var MindMapEditor = class {
     });
     const rendered = block.createDiv({ cls: "mmc-code-rendered markdown-rendered" });
     void Promise.resolve(this.callbacks.onRenderCode(codeData, rendered)).then(() => {
-      const details = rendered.querySelector("details.mms-code-collapsed");
-      if (details) {
-        details.addEventListener("toggle", () => {
-          this.scheduleMeasuredMindMapLayout();
-        });
-      }
+      var _a2;
+      (_a2 = rendered.querySelector("details.mms-code-collapsed")) == null ? void 0 : _a2.addEventListener("toggle", () => {
+        this.scheduleMeasuredMindMapLayout();
+      });
       this.scheduleMeasuredMindMapLayout();
     });
     block.addEventListener("pointerdown", (event) => event.stopPropagation());
@@ -13169,149 +13167,103 @@ var AiAskModal = class extends import_obsidian11.Modal {
   }
 };
 
+// src/render/code-block.ts
+var CODE_THEME_CLASS_NAMES = {
+  github: "mms-code-theme-github",
+  monokai: "mms-code-theme-monokai",
+  dracula: "mms-code-theme-dracula"
+};
+function normalizeCodeLineThreshold(value) {
+  return Math.max(0, Math.min(1e3, Math.floor(value || 0)));
+}
+function countCodeLines(code) {
+  return code.split(/\r\n|\r|\n/).length;
+}
+function buildCodeLineNumberText(lineCount) {
+  const safeLineCount = Math.max(1, Math.floor(lineCount || 0));
+  return Array.from({ length: safeLineCount }, (_, index) => String(index + 1)).join("\n");
+}
+function buildFencedCodeMarkdown(block) {
+  var _a2;
+  const longestFence = Math.max(2, ...Array.from(block.code.matchAll(/`+/g), (match) => match[0].length));
+  const fence = "`".repeat(longestFence + 1);
+  return `${fence}${(_a2 = block.language) != null ? _a2 : ""}
+${block.code}
+${fence}`;
+}
+function resolveCodeBlockPresentation(block, pageAppearance, defaults) {
+  var _a2, _b2, _c, _d, _e, _f, _g;
+  const lineCount = countCodeLines(block.code);
+  const expandThreshold = normalizeCodeLineThreshold(defaults.autoExpandMaxLines);
+  const lineNumberThreshold = normalizeCodeLineThreshold(defaults.autoLineNumbersMinLines);
+  const autoExpand = expandThreshold > 0 && lineCount <= expandThreshold;
+  const autoLineNumbers = lineNumberThreshold > 0 ? lineCount > lineNumberThreshold : void 0;
+  return {
+    collapsed: (_b2 = block.collapsed) != null ? _b2 : autoExpand ? false : (_a2 = pageAppearance == null ? void 0 : pageAppearance.codeCollapsed) != null ? _a2 : defaults.collapsed,
+    showLineNumbers: (_e = (_d = (_c = block.showLineNumbers) != null ? _c : autoLineNumbers) != null ? _d : pageAppearance == null ? void 0 : pageAppearance.codeShowLineNumbers) != null ? _e : defaults.showLineNumbers,
+    theme: (_g = (_f = block.theme) != null ? _f : pageAppearance == null ? void 0 : pageAppearance.codeTheme) != null ? _g : defaults.theme,
+    lineCount
+  };
+}
+function captureCodeLayoutMetrics(pre, code) {
+  const view = pre.ownerDocument.defaultView;
+  if (!view) return;
+  const preStyle = view.getComputedStyle(pre);
+  const codeStyle = view.getComputedStyle(code);
+  pre.style.setProperty("--mms-code-padding-top", preStyle.paddingTop);
+  pre.style.setProperty("--mms-code-padding-right", preStyle.paddingRight);
+  pre.style.setProperty("--mms-code-padding-bottom", preStyle.paddingBottom);
+  pre.style.setProperty("--mms-code-padding-left", preStyle.paddingLeft);
+  pre.style.setProperty("--mms-code-font-family", codeStyle.fontFamily);
+  pre.style.setProperty("--mms-code-font-size", codeStyle.fontSize);
+  pre.style.setProperty("--mms-code-font-weight", codeStyle.fontWeight);
+  pre.style.setProperty("--mms-code-line-height", codeStyle.lineHeight);
+  pre.style.setProperty("--mms-code-letter-spacing", codeStyle.letterSpacing);
+}
+function installCodeLineNumberLayout(pre, code, lineCount) {
+  var _a2;
+  (_a2 = pre.querySelector(":scope > .mms-code-line-numbers")) == null ? void 0 : _a2.remove();
+  captureCodeLayoutMetrics(pre, code);
+  pre.classList.add("mms-code-with-line-numbers");
+  code.classList.add("mms-code-content");
+  const gutter = pre.ownerDocument.createElement("span");
+  gutter.className = "mms-code-line-numbers";
+  gutter.textContent = buildCodeLineNumberText(lineCount);
+  gutter.setAttribute("aria-hidden", "true");
+  gutter.setAttribute("role", "presentation");
+  pre.insertBefore(gutter, code);
+}
+async function renderCodeBlock(options) {
+  var _a2;
+  const presentation = resolveCodeBlockPresentation(options.block, options.pageAppearance, options.defaults);
+  options.container.replaceChildren();
+  options.container.classList.add("mms-code-render-root");
+  options.container.classList.remove(...Object.values(CODE_THEME_CLASS_NAMES));
+  const themeClass = presentation.theme === "obsidian" ? void 0 : CODE_THEME_CLASS_NAMES[presentation.theme];
+  if (themeClass) options.container.classList.add(themeClass);
+  let target = options.container;
+  if (presentation.collapsed) {
+    const details = options.container.ownerDocument.createElement("details");
+    details.className = "mms-code-collapsed";
+    const summary = options.container.ownerDocument.createElement("summary");
+    summary.textContent = `\u5C55\u5F00 ${options.block.language || "code"} \u4EE3\u7801`;
+    details.appendChild(summary);
+    target = options.container.ownerDocument.createElement("div");
+    target.className = "mms-code-collapsed-content";
+    details.appendChild(target);
+    options.container.appendChild(details);
+  }
+  await options.renderMarkdown(buildFencedCodeMarkdown(options.block), target);
+  const pre = target.querySelector("pre");
+  const code = (_a2 = pre == null ? void 0 : pre.querySelector(":scope > code")) != null ? _a2 : null;
+  if (!pre || !code) return;
+  pre.classList.add("mms-code-frame");
+  pre.dataset.lineCount = String(presentation.lineCount);
+  if (presentation.showLineNumbers) installCodeLineNumberLayout(pre, code, presentation.lineCount);
+}
+
 // src/view.ts
 var VIEW_TYPE_MINDMAP_STUDIO = "mindmap-studio-view";
-/**
- * @file code-block.ts
- * @description 四种显示模式共享的代码块展示策略、Markdown 包装与行号 DOM 布局。
- */
-var CODE_THEME_CLASS_NAMES = {
-    github: "mms-code-theme-github",
-    monokai: "mms-code-theme-monokai",
-    dracula: "mms-code-theme-dracula"
-};
-/** 将设置中的代码行数阈值限制为受支持的整数范围。 */
-function normalizeCodeLineThreshold(value) {
-    return Math.max(0, Math.min(1000, Math.floor(value || 0)));
-}
-/**
- * 返回源码的逻辑行数，同时兼容 LF、CRLF 和旧式 CR 换行。
- *
- * @param code 原始代码文本。
- * @returns 至少为 1 的逻辑行数；末尾换行会保留一个空白逻辑行。
- */
-function countCodeLines(code) {
-    return code.split(/\r\n|\r|\n/).length;
-}
-/**
- * 构建行号栏使用的纯文本，确保每个号码恰好占用一个代码行高。
- *
- * @param lineCount 需要显示的代码行数。
- * @returns 由换行连接的连续行号文本。
- */
-function buildCodeLineNumberText(lineCount) {
-    const safeLineCount = Math.max(1, Math.floor(lineCount || 0));
-    return Array.from({ length: safeLineCount }, (_, index) => String(index + 1)).join("\n");
-}
-/**
- * 用不会与正文反引号冲突的围栏包装代码，供 Obsidian Markdown 渲染器高亮。
- *
- * @param block 当前代码块。
- * @returns 可直接交给 MarkdownRenderer 的 fenced code Markdown。
- */
-function buildFencedCodeMarkdown(block) {
-    var _a;
-    const longestFence = Math.max(2, ...Array.from(block.code.matchAll(/`+/g), (match) => match[0].length));
-    const fence = "`".repeat(longestFence + 1);
-    return `${fence}${(_a = block.language) !== null && _a !== void 0 ? _a : ""}\n${block.code}\n${fence}`;
-}
-/**
- * 按节点显式值、自动阈值、页面设置和插件全局设置解析代码块展示状态。
- *
- * @param block 当前代码块。
- * @param pageAppearance 当前导图的页面级代码外观设置。
- * @param defaults 插件全局默认值与自动阈值。
- * @returns 最终折叠状态、行号状态、主题和逻辑行数。
- */
-function resolveCodeBlockPresentation(block, pageAppearance, defaults) {
-    var _a, _b, _c, _d, _e, _f, _g;
-    const lineCount = countCodeLines(block.code);
-    const expandThreshold = normalizeCodeLineThreshold(defaults.autoExpandMaxLines);
-    const lineNumberThreshold = normalizeCodeLineThreshold(defaults.autoLineNumbersMinLines);
-    const autoExpand = expandThreshold > 0 && lineCount <= expandThreshold;
-    const autoLineNumbers = lineNumberThreshold > 0 ? lineCount > lineNumberThreshold : undefined;
-    return {
-        collapsed: (_a = block.collapsed) !== null && _a !== void 0 ? _a : (autoExpand ? false : (_b = pageAppearance === null || pageAppearance === void 0 ? void 0 : pageAppearance.codeCollapsed) !== null && _b !== void 0 ? _b : defaults.collapsed),
-        showLineNumbers: (_e = (_d = (_c = block.showLineNumbers) !== null && _c !== void 0 ? _c : autoLineNumbers) !== null && _d !== void 0 ? _d : pageAppearance === null || pageAppearance === void 0 ? void 0 : pageAppearance.codeShowLineNumbers) !== null && _e !== void 0 ? _e : defaults.showLineNumbers,
-        theme: (_g = (_f = block.theme) !== null && _f !== void 0 ? _f : pageAppearance === null || pageAppearance === void 0 ? void 0 : pageAppearance.codeTheme) !== null && _g !== void 0 ? _g : defaults.theme,
-        lineCount
-    };
-}
-/** 将渲染前的代码字体、行高和内边距保存为共享 CSS 变量。 */
-function captureCodeLayoutMetrics(pre, code) {
-    const view = pre.ownerDocument.defaultView;
-    if (!view)
-        return;
-    const preStyle = view.getComputedStyle(pre);
-    const codeStyle = view.getComputedStyle(code);
-    pre.style.setProperty("--mms-code-padding-top", preStyle.paddingTop);
-    pre.style.setProperty("--mms-code-padding-right", preStyle.paddingRight);
-    pre.style.setProperty("--mms-code-padding-bottom", preStyle.paddingBottom);
-    pre.style.setProperty("--mms-code-padding-left", preStyle.paddingLeft);
-    pre.style.setProperty("--mms-code-font-family", codeStyle.fontFamily);
-    pre.style.setProperty("--mms-code-font-size", codeStyle.fontSize);
-    pre.style.setProperty("--mms-code-font-weight", codeStyle.fontWeight);
-    pre.style.setProperty("--mms-code-line-height", codeStyle.lineHeight);
-    pre.style.setProperty("--mms-code-letter-spacing", codeStyle.letterSpacing);
-}
-/**
- * 将独立行号栏插入高亮代码旁边；两栏使用同一组字体、行高和上下内边距。
- *
- * @param pre Obsidian MarkdownRenderer 生成的 pre 元素。
- * @param code pre 中保留完整语法高亮标记的 code 元素。
- * @param lineCount 原始代码的逻辑行数。
- * @remarks 行号不再依赖伪元素或光学基线补偿，因此缩放、主题和不同显示模式不会分别漂移。
- */
-function installCodeLineNumberLayout(pre, code, lineCount) {
-    var _a;
-    (_a = pre.querySelector(":scope > .mms-code-line-numbers")) === null || _a === void 0 ? void 0 : _a.remove();
-    captureCodeLayoutMetrics(pre, code);
-    pre.classList.add("mms-code-with-line-numbers");
-    code.classList.add("mms-code-content");
-    const gutter = pre.ownerDocument.createElement("span");
-    gutter.className = "mms-code-line-numbers";
-    gutter.textContent = buildCodeLineNumberText(lineCount);
-    gutter.setAttribute("aria-hidden", "true");
-    gutter.setAttribute("role", "presentation");
-    pre.insertBefore(gutter, code);
-}
-/**
- * 使用统一渲染链路创建代码块，并在 Markdown 高亮完成后安装稳定的行号布局。
- *
- * @param options 代码数据、宿主容器、继承设置和 Markdown 渲染回调。
- * @returns MarkdownRenderer 完成及 DOM 增强完成后的 Promise。
- */
-async function renderCodeBlock(options) {
-    var _a;
-    const presentation = resolveCodeBlockPresentation(options.block, options.pageAppearance, options.defaults);
-    options.container.replaceChildren();
-    options.container.classList.add("mms-code-render-root");
-    options.container.classList.remove(...Object.values(CODE_THEME_CLASS_NAMES));
-    const themeClass = presentation.theme === "obsidian" ? undefined : CODE_THEME_CLASS_NAMES[presentation.theme];
-    if (themeClass)
-        options.container.classList.add(themeClass);
-    let target = options.container;
-    if (presentation.collapsed) {
-        const details = options.container.ownerDocument.createElement("details");
-        details.className = "mms-code-collapsed";
-        const summary = options.container.ownerDocument.createElement("summary");
-        summary.textContent = `展开 ${options.block.language || "code"} 代码`;
-        details.appendChild(summary);
-        target = options.container.ownerDocument.createElement("div");
-        target.className = "mms-code-collapsed-content";
-        details.appendChild(target);
-        options.container.appendChild(details);
-    }
-    await options.renderMarkdown(buildFencedCodeMarkdown(options.block), target);
-    const pre = target.querySelector("pre");
-    const code = (_a = pre === null || pre === void 0 ? void 0 : pre.querySelector(":scope > code")) !== null && _a !== void 0 ? _a : null;
-    if (!pre || !code)
-        return;
-    pre.classList.add("mms-code-frame");
-    pre.dataset.lineCount = String(presentation.lineCount);
-    if (presentation.showLineNumbers)
-        installCodeLineNumberLayout(pre, code, presentation.lineCount);
-}
 var MindMapStudioView = class _MindMapStudioView extends import_obsidian12.TextFileView {
   /**
    * 创建 MindMapStudioView 实例，保存依赖和初始状态；实际 DOM 构建通常在 onOpen() 或后续渲染流程中完成。
@@ -13463,19 +13415,25 @@ var MindMapStudioView = class _MindMapStudioView extends import_obsidian12.TextF
           this.plugin.settings.readingLocations[path] = location;
           await this.plugin.saveSettings();
         },
-        onRenderCode: (block, container) => renderCodeBlock({
-          block,
-          container,
-          pageAppearance: this.document == null ? void 0 : this.document.appearance,
-          defaults: {
-            collapsed: this.plugin.settings.defaultCodeCollapsed,
-            showLineNumbers: this.plugin.settings.defaultCodeShowLineNumbers,
-            theme: this.plugin.settings.defaultCodeTheme,
-            autoExpandMaxLines: this.plugin.settings.codeAutoExpandMaxLines,
-            autoLineNumbersMinLines: this.plugin.settings.codeAutoLineNumbersMinLines
-          },
-          renderMarkdown: (markdown, target) => import_obsidian12.MarkdownRenderer.render(this.app, markdown, target, this.file == null ? "" : this.file.path, this)
-        })
+        onRenderCode: (block, container) => {
+          var _a3;
+          return renderCodeBlock({
+            block,
+            container,
+            pageAppearance: (_a3 = this.document) == null ? void 0 : _a3.appearance,
+            defaults: {
+              collapsed: this.plugin.settings.defaultCodeCollapsed,
+              showLineNumbers: this.plugin.settings.defaultCodeShowLineNumbers,
+              theme: this.plugin.settings.defaultCodeTheme,
+              autoExpandMaxLines: this.plugin.settings.codeAutoExpandMaxLines,
+              autoLineNumbersMinLines: this.plugin.settings.codeAutoLineNumbersMinLines
+            },
+            renderMarkdown: (markdown, target) => {
+              var _a4, _b3;
+              return import_obsidian12.MarkdownRenderer.render(this.app, markdown, target, (_b3 = (_a4 = this.file) == null ? void 0 : _a4.path) != null ? _b3 : "", this);
+            }
+          });
+        }
       }, this.getEditorOptions());
     } else {
       this.editor.setDocument(this.document, false);
