@@ -22,14 +22,9 @@ import {
   type ImageRecognitionItemResult,
   type RecognizableImage
 } from "./vision/recognition";
+import { renderCodeBlock } from "./render/code-block";
 
 export const VIEW_TYPE_MINDMAP_STUDIO = "mindmap-studio-view";
-
-const CODE_THEME_CLASS_NAMES = {
-  github: "mms-code-theme-github",
-  monokai: "mms-code-theme-monokai",
-  dracula: "mms-code-theme-dracula"
-} as const;
 
 /**
  * MindMapStudioView 的主要实现类。负责封装相关状态、生命周期和对外操作，避免调用方直接操作内部数据结构。
@@ -182,38 +177,19 @@ export class MindMapStudioView extends TextFileView {
           this.plugin.settings.readingLocations[path] = location;
           await this.plugin.saveSettings();
         },
-        onRenderCode: async (block, container) => {
-          const longestFence = Math.max(2, ...Array.from(block.code.matchAll(/`+/g), (match) => match[0].length));
-          const fence = "`".repeat(longestFence + 1);
-          const markdown = `${fence}${block.language ?? ""}\n${block.code}\n${fence}`;
-          const pageCode = this.document?.appearance;
-          const lineCount = block.code.split("\n").length;
-          const expandThreshold = Math.max(0, Math.min(1000, Math.floor(this.plugin.settings.codeAutoExpandMaxLines || 0)));
-          const lineNumberThreshold = Math.max(0, Math.min(1000, Math.floor(this.plugin.settings.codeAutoLineNumbersMinLines || 0)));
-          const autoExpand = expandThreshold > 0 && lineCount <= expandThreshold;
-          const autoLineNumbers = lineNumberThreshold > 0 ? lineCount > lineNumberThreshold : undefined;
-          const collapsed = block.collapsed ?? (autoExpand ? false : pageCode?.codeCollapsed ?? this.plugin.settings.defaultCodeCollapsed);
-          const showLineNumbers = block.showLineNumbers ?? autoLineNumbers ?? pageCode?.codeShowLineNumbers ?? this.plugin.settings.defaultCodeShowLineNumbers;
-          const theme = block.theme ?? pageCode?.codeTheme ?? this.plugin.settings.defaultCodeTheme;
-          const themeClass = theme !== "obsidian" ? CODE_THEME_CLASS_NAMES[theme] : undefined;
-          if (themeClass) container.addClass(themeClass);
-          const rendered = collapsed
-            ? container.createEl("details", { cls: "mms-code-collapsed" })
-            : container;
-          if (collapsed) rendered.createEl("summary", { text: `展开 ${block.language || "code"} 代码` });
-          const target = collapsed ? rendered.createDiv({ cls: "mms-code-collapsed-content" }) : rendered;
-          await MarkdownRenderer.render(this.app, markdown, target, this.file?.path ?? "", this);
-          const pre = target.querySelector("pre");
-          if (showLineNumbers && pre) {
-            pre.addClass("mms-code-with-line-numbers");
-            pre.style.setProperty("--mms-code-line-gutter-top", getComputedStyle(pre).paddingTop);
-            pre.style.setProperty("--mms-code-line-gutter-bottom", getComputedStyle(pre).paddingBottom);
-            const codeEl = pre.querySelector("code");
-            if (codeEl) {
-              codeEl.setAttr("data-line-numbers", Array.from({ length: block.code.split("\n").length }, (_, index) => String(index + 1)).join("\n"));
-            }
-          }
-        }
+        onRenderCode: (block, container) => renderCodeBlock({
+          block,
+          container,
+          pageAppearance: this.document?.appearance,
+          defaults: {
+            collapsed: this.plugin.settings.defaultCodeCollapsed,
+            showLineNumbers: this.plugin.settings.defaultCodeShowLineNumbers,
+            theme: this.plugin.settings.defaultCodeTheme,
+            autoExpandMaxLines: this.plugin.settings.codeAutoExpandMaxLines,
+            autoLineNumbersMinLines: this.plugin.settings.codeAutoLineNumbersMinLines
+          },
+          renderMarkdown: (markdown, target) => MarkdownRenderer.render(this.app, markdown, target, this.file?.path ?? "", this)
+        })
       }, this.getEditorOptions());
     } else {
       this.editor.setDocument(this.document, false);

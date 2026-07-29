@@ -1531,39 +1531,69 @@
 
 .mms-code-collapsed-content { overflow: auto; }
 
-.mms-code-with-line-numbers {
-  --mms-code-line-baseline-offset: 0.16em;
-  --mms-code-line-gutter-width: 3.1em;
-  position: relative;
-  padding-left: 4.2em !important;
+.mms-code-render-root {
+  min-width: 0;
 }
 
-.mms-code-with-line-numbers > code::before {
-  content: attr(data-line-numbers);
-  position: absolute;
-  top: calc(var(--mms-code-line-gutter-top, 10px) + var(--mms-code-line-baseline-offset));
-  left: 0;
+.mms-code-frame {
+  tab-size: 2;
+}
+
+.mms-code-with-line-numbers {
+  --mms-code-padding-top: 10px;
+  --mms-code-padding-right: 12px;
+  --mms-code-padding-bottom: 10px;
+  --mms-code-padding-left: 12px;
+  --mms-code-font-family: var(--font-monospace);
+  --mms-code-font-size: 1em;
+  --mms-code-font-weight: 400;
+  --mms-code-line-height: 1.5;
+  --mms-code-letter-spacing: normal;
+  display: flex !important;
+  align-items: stretch;
+  padding: 0 !important;
+  overflow: auto;
+}
+
+/* 覆盖导图节点中更高优先级的 .mmc-code-block pre { overflow: visible; }。 */
+.mms-code-render-root pre.mms-code-with-line-numbers {
+  overflow: auto;
+}
+
+.mms-code-with-line-numbers > .mms-code-line-numbers,
+.mms-code-with-line-numbers > code.mms-code-content {
   box-sizing: border-box;
-  width: var(--mms-code-line-gutter-width);
-  padding-right: 0.65em;
+  margin: 0;
+  font-family: var(--mms-code-font-family);
+  font-size: var(--mms-code-font-size);
+  font-weight: var(--mms-code-font-weight);
+  line-height: var(--mms-code-line-height);
+  letter-spacing: var(--mms-code-letter-spacing);
+  white-space: pre;
+}
+
+.mms-code-with-line-numbers > .mms-code-line-numbers {
+  flex: 0 0 auto;
+  min-width: 3.1em;
+  padding: var(--mms-code-padding-top) 0.72em var(--mms-code-padding-bottom) 0.55em;
   color: var(--text-faint);
   text-align: right;
-  font: inherit;
-  line-height: inherit;
-  white-space: pre;
+  border-right: 1px solid color-mix(in srgb, currentColor 18%, transparent);
   pointer-events: none;
   user-select: none;
 }
 
-.mms-code-with-line-numbers::after {
-  content: "";
-  position: absolute;
-  top: var(--mms-code-line-gutter-top, 10px);
-  bottom: var(--mms-code-line-gutter-bottom, 10px);
-  left: var(--mms-code-line-gutter-width);
-  width: 1px;
-  background: color-mix(in srgb, currentColor 18%, transparent);
-  pointer-events: none;
+.mms-code-with-line-numbers > code.mms-code-content {
+  display: block;
+  flex: 1 0 auto;
+  min-width: max-content;
+  padding: var(--mms-code-padding-top) var(--mms-code-padding-right) var(--mms-code-padding-bottom) var(--mms-code-padding-left) !important;
+  background: transparent !important;
+  color: inherit;
+}
+
+.mms-code-with-line-numbers > code.mms-code-content * {
+  line-height: inherit;
 }
 
 .mms-code-theme-github pre { background: #f6f8fa; color: #24292f; }
