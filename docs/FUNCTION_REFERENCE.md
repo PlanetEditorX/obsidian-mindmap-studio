@@ -6942,7 +6942,7 @@ export function normalizeSettingsSectionOrder(value: unknown): SettingsSectionTi
 
 ### 函数 `normalizeReturnToTopVisibility`
 
-源码：`src/settings.ts:402`
+源码：`src/settings.ts:403`
 
 Normalizes the article return-to-top threshold from a number or percentage string.
 
@@ -6952,7 +6952,7 @@ export function normalizeReturnToTopVisibility(value: unknown): number
 
 ### 函数 `settingsToAppearance`
 
-源码：`src/settings.ts:418`
+源码：`src/settings.ts:419`
 
 更新并应用tings to appearance，并保持模型、界面和持久化状态的一致性。
 
@@ -6962,7 +6962,7 @@ export function settingsToAppearance(settings: MindMapStudioSettings): MindMapAp
 
 ### 函数 `applyThemePresetToSettings`
 
-源码：`src/settings.ts:459`
+源码：`src/settings.ts:460`
 
 应用theme preset to settings，并保持模型、界面和持久化状态的一致性。
 
@@ -6972,7 +6972,7 @@ export function applyThemePresetToSettings(settings: MindMapStudioSettings, pres
 
 ### 类 `MindMapStudioSettingTab`
 
-源码：`src/settings.ts:490`
+源码：`src/settings.ts:491`
 
 MindMapStudioSettingTab 的主要实现类。负责封装相关状态、生命周期和对外操作，避免调用方直接操作内部数据结构。
 
@@ -6982,7 +6982,7 @@ export class MindMapStudioSettingTab extends PluginSettingTab
 
 ### 构造函数 `MindMapStudioSettingTab.constructor`
 
-源码：`src/settings.ts:503`
+源码：`src/settings.ts:504`
 
 创建 MindMapStudioSettingTab 实例，保存依赖和初始状态；实际 DOM 构建通常在 onOpen() 或后续渲染流程中完成。
 
@@ -6992,7 +6992,7 @@ constructor(app: App, plugin: MindMapStudioPlugin)
 
 ### 方法 `MindMapStudioSettingTab.display`
 
-源码：`src/settings.ts:512`
+源码：`src/settings.ts:513`
 
 构建完整插件设置页，包括主题、显示模式、节点默认值、搜索、图片、图床容灾和恢复初始设置。所有控件写入后立即保存并刷新打开视图。
 
@@ -7002,7 +7002,7 @@ display(): void
 
 ### 方法 `MindMapStudioSettingTab.organizeSettingsSections`
 
-源码：`src/settings.ts:2014`
+源码：`src/settings.ts:2015`
 
 将一级设置分区折叠显示，并按顶部搜索词过滤匹配分区。
 
@@ -7012,7 +7012,7 @@ private organizeSettingsSections(): void
 
 ### 方法 `MindMapStudioSettingTab.addSettingsSectionOrderControls`
 
-源码：`src/settings.ts:2053`
+源码：`src/settings.ts:2054`
 
 Renders persistent up/down controls for every movable settings category.
 
@@ -7022,7 +7022,7 @@ private addSettingsSectionOrderControls(container: HTMLElement): void
 
 ### 方法 `MindMapStudioSettingTab.moveSettingsSection`
 
-源码：`src/settings.ts:2072`
+源码：`src/settings.ts:2073`
 
 Moves one settings category, persists the order, and redraws the settings page.
 
@@ -7032,7 +7032,7 @@ private async moveSettingsSection(title: MovableSettingsSectionTitle, direction:
 
 ### 方法 `MindMapStudioSettingTab.addOptionalColorSetting`
 
-源码：`src/settings.ts:2094`
+源码：`src/settings.ts:2095`
 
 添加optional color setting，并保持模型、界面和持久化状态的一致性。
 
@@ -7042,7 +7042,7 @@ private addOptionalColorSetting( container: HTMLElement, name: string, descripti
 
 ### 方法 `MindMapStudioSettingTab.saveAndRefresh`
 
-源码：`src/settings.ts:2126`
+源码：`src/settings.ts:2127`
 
 保存and refresh，并保持模型、界面和持久化状态的一致性。
 
@@ -7052,7 +7052,7 @@ private async saveAndRefresh(): Promise<void>
 
 ### 方法 `MindMapStudioSettingTab.captureScreenshotShortcut`
 
-源码：`src/settings.ts:2132`
+源码：`src/settings.ts:2133`
 
 记录截图快捷键；修饰键必须与一个非修饰主键同时按下。
 
@@ -7062,7 +7062,7 @@ private async captureScreenshotShortcut(event: KeyboardEvent, text: TextComponen
 
 ### 方法 `MindMapStudioSettingTab.shortcutFromKeyboardEvent`
 
-源码：`src/settings.ts:2150`
+源码：`src/settings.ts:2151`
 
 将实际键盘事件转换为编辑器可识别的 1 至 3 键快捷键文本。
 
@@ -7072,7 +7072,7 @@ private shortcutFromKeyboardEvent(event: KeyboardEvent): string | null
 
 ### 方法 `MindMapStudioSettingTab.exportSettings`
 
-源码：`src/settings.ts:2166`
+源码：`src/settings.ts:2167`
 
 导出当前插件设置；桌面端优先显示系统保存位置选择器。
 
@@ -7082,7 +7082,7 @@ private async exportSettings(): Promise<void>
 
 ### 方法 `MindMapStudioSettingTab.openSettingsImportPicker`
 
-源码：`src/settings.ts:2186`
+源码：`src/settings.ts:2187`
 
 打开 JSON 配置文件选择器，并在成功导入后重新绘制设置页。
 
@@ -7092,7 +7092,7 @@ private openSettingsImportPicker(): void
 
 ### 方法 `MindMapStudioSettingTab.importSettingsFile`
 
-源码：`src/settings.ts:2195`
+源码：`src/settings.ts:2196`
 
 读取并导入用户选中的配置 JSON 文件。
 
