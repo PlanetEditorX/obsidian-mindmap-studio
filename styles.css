@@ -2165,8 +2165,8 @@
 }
 
 .mmc-image-preview-modal {
-  --modal-width: min(94vw, 1200px);
-  --modal-height: min(92vh, 900px);
+  --modal-width: min(97vw, 1500px);
+  --modal-height: min(94vh, 1000px);
 }
 
 .mmc-image-preview-toolbar {
@@ -2210,7 +2210,7 @@
   align-items: center;
   justify-content: center;
   width: 100%;
-  height: min(75vh, 760px);
+  height: min(79vh, 860px);
   overflow: auto;
   border: 1px solid var(--background-modifier-border);
   border-radius: var(--radius-m);

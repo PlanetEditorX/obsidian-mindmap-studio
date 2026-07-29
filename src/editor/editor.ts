@@ -4849,20 +4849,35 @@ export class MindMapEditor {
 
   /** 将图片块设置为指定的水平对齐方式。 */
   private setImageBlockAlignment(nodeId: string, blockId: string, align: "left" | "center" | "right"): void {
-    const node = findNode(this.document.root, nodeId);
-    const block = node ? nodeContentBlocks(node).find((item): item is MindMapImageContentBlock => item.type === "image" && item.id === blockId) : undefined;
-    if (!node || !block || !this.ensureEditable()) return;
-    this.mutate(() => { block.align = align === "center" ? undefined : align; });
+    this.updateImageBlock(nodeId, blockId, (block) => {
+      block.align = align === "center" ? undefined : align;
+    });
   }
 
   /** 设定图片显示宽度；缺省宽度表示恢复为适应当前节点。 */
   private setImageBlockWidth(nodeId: string, blockId: string, width?: number): void {
-    const node = findNode(this.document.root, nodeId);
-    const block = node ? nodeContentBlocks(node).find((item): item is MindMapImageContentBlock => item.type === "image" && item.id === blockId) : undefined;
-    if (!node || !block || !this.ensureEditable()) return;
-    this.mutate(() => {
+    this.updateImageBlock(nodeId, blockId, (block) => {
       block.width = width;
       block.height = undefined;
+    });
+  }
+
+  /**
+   * 更新一张图片的规范化内容块，并将整组内容写回节点以确保修改能够持久化。
+   *
+   * @param nodeId 图片所属节点标识。
+   * @param blockId 图片内容块标识。
+   * @param update 图片块更新逻辑。
+   */
+  private updateImageBlock(nodeId: string, blockId: string, update: (block: MindMapImageContentBlock) => void): void {
+    const node = findNode(this.document.root, nodeId);
+    if (!node || !this.ensureEditable()) return;
+    const blocks = nodeContentBlocks(node);
+    const block = blocks.find((item): item is MindMapImageContentBlock => item.type === "image" && item.id === blockId);
+    if (!block) return;
+    this.mutate(() => {
+      update(block);
+      replaceNodeContentBlocks(node, blocks);
     });
   }
 
@@ -4875,12 +4890,14 @@ export class MindMapEditor {
   /** 将当前图片上传到用户选择的图床，并保留本地来源与已有镜像。 */
   private async uploadImageBlock(nodeId: string, blockId: string): Promise<void> {
     const node = findNode(this.document.root, nodeId);
-    const block = node ? nodeContentBlocks(node).find((item): item is MindMapImageContentBlock => item.type === "image" && item.id === blockId) : undefined;
-    if (!node || !block || !this.ensureEditable()) return;
+    if (!node || !this.ensureEditable()) return;
+    const blocks = nodeContentBlocks(node);
+    const block = blocks.find((item): item is MindMapImageContentBlock => item.type === "image" && item.id === blockId);
+    if (!block) return;
     const previous = cloneDocument(this.document);
     if (!await uploadCurrentNodeImage(this.app, block, this.callbacks)) return;
     this.history.capture(previous);
-    syncNodeContentFields(node);
+    replaceNodeContentBlocks(node, blocks);
     this.callbacks.onChange(this.getDocument());
     this.markSaving();
     this.render();

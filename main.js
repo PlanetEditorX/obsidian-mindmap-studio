@@ -12397,21 +12397,33 @@ var MindMapEditor = class {
   }
   /** 将图片块设置为指定的水平对齐方式。 */
   setImageBlockAlignment(nodeId, blockId, align) {
-    const node = findNode(this.document.root, nodeId);
-    const block = node ? nodeContentBlocks(node).find((item) => item.type === "image" && item.id === blockId) : void 0;
-    if (!node || !block || !this.ensureEditable()) return;
-    this.mutate(() => {
+    this.updateImageBlock(nodeId, blockId, (block) => {
       block.align = align === "center" ? void 0 : align;
     });
   }
   /** 设定图片显示宽度；缺省宽度表示恢复为适应当前节点。 */
   setImageBlockWidth(nodeId, blockId, width) {
-    const node = findNode(this.document.root, nodeId);
-    const block = node ? nodeContentBlocks(node).find((item) => item.type === "image" && item.id === blockId) : void 0;
-    if (!node || !block || !this.ensureEditable()) return;
-    this.mutate(() => {
+    this.updateImageBlock(nodeId, blockId, (block) => {
       block.width = width;
       block.height = void 0;
+    });
+  }
+  /**
+   * 更新一张图片的规范化内容块，并将整组内容写回节点以确保修改能够持久化。
+   *
+   * @param nodeId 图片所属节点标识。
+   * @param blockId 图片内容块标识。
+   * @param update 图片块更新逻辑。
+   */
+  updateImageBlock(nodeId, blockId, update) {
+    const node = findNode(this.document.root, nodeId);
+    if (!node || !this.ensureEditable()) return;
+    const blocks = nodeContentBlocks(node);
+    const block = blocks.find((item) => item.type === "image" && item.id === blockId);
+    if (!block) return;
+    this.mutate(() => {
+      update(block);
+      replaceNodeContentBlocks(node, blocks);
     });
   }
   /** 打开当前图片块的编辑面板，用于精确尺寸和替换来源。 */
@@ -12422,12 +12434,14 @@ var MindMapEditor = class {
   /** 将当前图片上传到用户选择的图床，并保留本地来源与已有镜像。 */
   async uploadImageBlock(nodeId, blockId) {
     const node = findNode(this.document.root, nodeId);
-    const block = node ? nodeContentBlocks(node).find((item) => item.type === "image" && item.id === blockId) : void 0;
-    if (!node || !block || !this.ensureEditable()) return;
+    if (!node || !this.ensureEditable()) return;
+    const blocks = nodeContentBlocks(node);
+    const block = blocks.find((item) => item.type === "image" && item.id === blockId);
+    if (!block) return;
     const previous = cloneDocument(this.document);
     if (!await uploadCurrentNodeImage(this.app, block, this.callbacks)) return;
     this.history.capture(previous);
-    syncNodeContentFields(node);
+    replaceNodeContentBlocks(node, blocks);
     this.callbacks.onChange(this.getDocument());
     this.markSaving();
     this.render();
