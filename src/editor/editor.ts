@@ -89,7 +89,7 @@ import { canMoveNodes, isRightChildZone, resolveDropPosition } from "./drag-drop
 import { DocumentHistory } from "./history-manager";
 import { renderOutlineMode } from "./outline-renderer";
 import { renderArticleMode, renderArticleNodeContent, type ArticleRendererOptions } from "./article-renderer";
-import { appendChild, deleteNodes, insertSiblingAfter, nextTaskStatus, setAllBranchesCollapsed, topLevelSelectedNodeIds } from "./node-actions";
+import { appendChild, deletionSelectionFallback, deleteNodes, insertSiblingAfter, nextTaskStatus, setAllBranchesCollapsed, topLevelSelectedNodeIds } from "./node-actions";
 import { attachSelectionFormatToolbar, type SelectionFormatToolbarHandle } from "./selection-format-toolbar";
 import {
   applyAiMarkdownEdit,
@@ -1784,8 +1784,8 @@ export class MindMapEditor {
     this.articleStyleButton = this.addToolbarButton("article-style", "paintbrush", "文章样式", () => this.editArticleStyle(), true);
     this.addToolbarSeparator();
     this.addToolbarButton("markdown", "file-text", "查看 Markdown 大纲", () => this.showOutline());
-    this.addToolbarButton("json", "braces", "导入 / 导出", () => this.showJsonTransfer(), true);
-    this.addToolbarButton("export-document", "file-output", "导出 HTML / Word / PDF / Markdown", () => this.showDocumentExport());
+    this.addToolbarButton("json", "arrow-left-right", "导入 / 导出", () => this.showJsonTransfer(), true);
+    this.addToolbarButton("export-document", "file-down", "导出 HTML / Word / PDF / Markdown", () => this.showDocumentExport());
     this.addToolbarButton("export-svg", "image", "导出 SVG", () => void this.callbacks.onExportSvg(documentToSvg(this.document.root, this.document.layout, this.document.title, this.getAppearance())));
 
     this.applyToolbarOrder();
@@ -3894,7 +3894,7 @@ export class MindMapEditor {
     if (!this.ensureEditable()) return;
     const batch = topLevelSelectedNodeIds(this.document.root, this.selectedIds);
     if (this.selectedIds.size > 1 && batch.length) {
-      const fallback = findParent(this.document.root, batch[0])?.id ?? this.document.root.id;
+      const fallback = deletionSelectionFallback(this.document.root, batch);
       this.mutate(() => {
         deleteNodes(this.document.root, batch);
         this.selectedIds.clear();
@@ -3909,10 +3909,10 @@ export class MindMapEditor {
       new Notice("根节点不能删除");
       return;
     }
-    const parent = findParent(this.document.root, selected.id);
+    const fallback = deletionSelectionFallback(this.document.root, [selected.id]);
     this.mutate(() => {
       deleteNodes(this.document.root, [selected.id]);
-      this.selectedId = parent?.id ?? this.document.root.id;
+      this.selectedId = fallback;
       this.selectedIds.clear();
       this.selectedIds.add(this.selectedId);
     });

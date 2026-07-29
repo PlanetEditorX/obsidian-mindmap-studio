@@ -755,6 +755,15 @@
   word-break: break-word;
 }
 
+.mmc-rich-run.is-inline-code {
+  padding: 0.08em 0.28em;
+  border-radius: 3px;
+  background: var(--code-background, var(--background-secondary));
+  color: var(--code-normal, inherit);
+  font-family: var(--font-monospace);
+  font-size: 0.9em;
+}
+
 .mmc-rich-text-toolbar {
   display: flex;
   align-items: center;

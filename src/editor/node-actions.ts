@@ -51,6 +51,20 @@ export function deleteNodes(root: MindMapNode, ids: Iterable<string>): number {
   return removed;
 }
 
+/** Chooses a surviving sibling after deletion, falling back to the parent only when needed. */
+export function deletionSelectionFallback(root: MindMapNode, ids: Iterable<string>): string {
+  const targets = topLevelSelectedNodeIds(root, ids);
+  const target = targets[0];
+  if (!target) return root.id;
+  const parent = findParent(root, target);
+  if (!parent) return root.id;
+  const removed = new Set(targets);
+  const index = parent.children.findIndex((node) => node.id === target);
+  const next = parent.children.slice(index + 1).find((node) => !removed.has(node.id));
+  const previous = parent.children.slice(0, index).reverse().find((node) => !removed.has(node.id));
+  return next?.id ?? previous?.id ?? parent.id;
+}
+
 /**
  * 展开或折叠节点分支，并可选地将传入节点本身也设为折叠状态。
  *
