@@ -17,6 +17,7 @@ import { ARTICLE_STYLE_PRESETS, resolveArticleStyle } from "../article/article-s
 import type { ImageHostChoice } from "../settings";
 import { xmindToDocument } from "../import/import-export";
 import { setAllBranchesCollapsed } from "./node-actions";
+import { selectDesktopImportFile } from "../utils/desktop-import";
 
 /**
  * 选择一个或多个图片上传目标。
@@ -460,7 +461,9 @@ export class JsonTransferModal extends Modal {
     app: App,
     private readonly document: MindMapDocument,
     private readonly onImport: (document: MindMapDocument, mode: "child" | "replace") => void,
-    private readonly onExport: (json: string) => void
+    private readonly onExport: (json: string) => void,
+    private readonly getLastImportFolder: () => string,
+    private readonly onRememberImportFolder: (folder: string) => void | Promise<void>
   ) {
     super(app);
   }
@@ -503,6 +506,37 @@ export class JsonTransferModal extends Modal {
       new Notice("已复制 JSON");
     });
     importFileButton.addEventListener("click", () => {
+      void (async () => {
+        const selected = await selectDesktopImportFile(this.getLastImportFolder());
+        if (selected.supported) {
+          if (!selected.file) return;
+          await this.onRememberImportFolder(selected.file.directory);
+          try {
+            const extension = selected.file.name.split(".").at(-1)?.toLowerCase();
+            await updateImportProgress(10, `正在读取 ${selected.file.name}`);
+            const source = extension === "xmind"
+              ? selected.file.content.buffer.slice(selected.file.content.byteOffset, selected.file.content.byteOffset + selected.file.content.byteLength)
+              : new TextDecoder().decode(selected.file.content);
+            await updateImportProgress(55, extension === "xmind" ? "正在解析 XMind 画布和主题" : extension === "json" ? "正在校验 JSON 文件" : "正在解析 Markdown 标题和列表");
+            const imported = extension === "xmind"
+              ? xmindToDocument(source as ArrayBuffer, selected.file.name.replace(/\.xmind$/i, ""))
+              : extension === "json"
+                ? normalizeDocument(JSON.parse(source as string) as Partial<MindMapDocument>, this.document.title)
+                : markdownToDocument(source as string, selected.file.name.replace(/\.(?:md|markdown)$/i, ""));
+            await updateImportProgress(85, "正在生成思维导图");
+            setAllBranchesCollapsed(imported.root, true);
+            if (!applyImport(imported)) return;
+            await updateImportProgress(100, "导入完成");
+            new Notice(`已导入：${selected.file.name}`);
+            window.setTimeout(() => this.close(), 180);
+          } catch (error) {
+            console.error("MindMap Studio file import failed", error);
+            const message = error instanceof Error ? error.message : "文件导入失败";
+            progressStatus.setText(`导入失败：${message}`);
+            new Notice(message);
+          }
+          return;
+        }
       const input = document.createElement("input");
       input.type = "file";
       input.accept = ".xmind,.md,.markdown,.json";
@@ -535,6 +569,7 @@ export class JsonTransferModal extends Modal {
         })();
       }, { once: true });
       input.click();
+      })();
     });
     exportButton.addEventListener("click", () => this.onExport(textarea.value));
     importButton.addEventListener("click", () => {

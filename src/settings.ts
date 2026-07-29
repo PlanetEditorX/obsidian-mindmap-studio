@@ -265,6 +265,8 @@ export interface MindMapStudioSettings {
   questionNodesEnabled: boolean;
   /** Vault-relative folder whose mind-map files expose the full-page question-bank mode. */
   questionBankFolder: string;
+  /** Absolute folder opened by the native Desktop import picker most recently. */
+  lastImportFolder: string;
   /** User-defined order of the first-level settings categories; management stays last. */
   settingsSectionOrder: SettingsSectionTitle[];
 }
@@ -361,6 +363,7 @@ export const DEFAULT_SETTINGS: MindMapStudioSettings = {
   screenshotAutoRecognize: false,
   questionNodesEnabled: false,
   questionBankFolder: "",
+  lastImportFolder: "",
   settingsSectionOrder: [...SETTINGS_SECTION_TITLES]
 };
 

@@ -4,12 +4,27 @@ import { before, test } from "node:test";
 
 let editorSource;
 let modalSource;
+let desktopImportSource;
+let settingsSource;
 
 before(async () => {
-  [editorSource, modalSource] = await Promise.all([
+  [editorSource, modalSource, desktopImportSource, settingsSource] = await Promise.all([
     readFile("src/editor/editor.ts", "utf8"),
     readFile("src/editor/editor-modals.ts", "utf8"),
+    readFile("src/utils/desktop-import.ts", "utf8"),
+    readFile("src/settings.ts", "utf8"),
   ]);
+});
+
+test("desktop import remembers the selected folder and does not reopen a fallback picker on cancel", () => {
+  assert.match(desktopImportSource, /export async function selectDesktopImportFile\(lastDirectory: string\)/);
+  assert.match(desktopImportSource, /defaultPath: lastDirectory \|\| undefined/);
+  assert.match(desktopImportSource, /properties: \["openFile"\]/);
+  assert.match(desktopImportSource, /extensions: \["xmind", "md", "markdown", "json"\]/);
+  assert.match(modalSource, /selectDesktopImportFile\(this\.getLastImportFolder\(\)\)/);
+  assert.match(modalSource, /if \(selected\.supported\) \{\s*if \(!selected\.file\) return;/);
+  assert.match(modalSource, /onRememberImportFolder\(selected\.file\.directory\)/);
+  assert.match(settingsSource, /lastImportFolder: ""/);
 });
 
 test("file import defaults to a child branch and keeps replacement explicit", () => {
