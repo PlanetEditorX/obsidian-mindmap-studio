@@ -3840,7 +3840,9 @@ export class MindMapEditor {
     };
     window.addEventListener("keydown", windowShortcut, true);
     const windowShortcutFallback = (event: KeyboardEvent): void => {
-      if (document.activeElement !== editor) return;
+      // A newly created sibling can receive focus before the initiating Enter
+      // key's keyup fires. Do not let that stale keyup immediately blur it.
+      if (initialFocusProtected || document.activeElement !== editor) return;
       const handledAt = Number(lastHandledShortcut.split(":").at(-1) ?? 0);
       if (handledAt && event.timeStamp - handledAt < 1000) return;
       handleFormatShortcut(event);
