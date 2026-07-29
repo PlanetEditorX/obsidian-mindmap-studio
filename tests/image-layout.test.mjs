@@ -6,14 +6,22 @@ let modelSource;
 let editorSource;
 let outlineSource;
 let articleSource;
+let stylesSource;
 
 before(async () => {
-  [modelSource, editorSource, outlineSource, articleSource] = await Promise.all([
+  [modelSource, editorSource, outlineSource, articleSource, stylesSource] = await Promise.all([
     readFile("src/core/model.ts", "utf8"),
     readFile("src/editor/editor.ts", "utf8"),
     readFile("src/editor/outline-renderer.ts", "utf8"),
-    readFile("src/editor/article-renderer.ts", "utf8")
+    readFile("src/editor/article-renderer.ts", "utf8"),
+    readFile("styles.css", "utf8")
   ]);
+});
+
+test("image preview uses a screen-shaped stage without scrollbars", () => {
+  assert.match(stylesSource, /\.mmc-image-preview-modal \{[\s\S]*--modal-width: min\(96vw, 1600px\)/);
+  assert.match(stylesSource, /\.mmc-image-preview-modal \.modal-content \{[\s\S]*overflow: hidden/);
+  assert.match(stylesSource, /\.mmc-image-preview-stage \{[\s\S]*aspect-ratio: 16 \/ 9;[\s\S]*overflow: hidden/);
 });
 
 test("image alignment persists only for supported values", () => {
