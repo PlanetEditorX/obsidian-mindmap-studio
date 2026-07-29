@@ -182,6 +182,13 @@ test("Markdown import does not invent a placeholder topic when no child node is 
   assert.doesNotMatch(JSON.stringify(document), /主题 1/);
 });
 
+test("Markdown import converts Obsidian image embeds into image blocks", () => {
+  const document = model.markdownToDocument("# 导入笔记\n\n![[Pasted image 20260622014655.png]]", "导入文件");
+  const images = model.nodeContentBlocks(document.root).filter((block) => block.type === "image");
+  assert.deepEqual(images.map((block) => block.source), ["Pasted image 20260622014655.png"]);
+  assert.doesNotMatch(JSON.stringify(document.root.content), /!\[\[/);
+});
+
 test("question-bank grading distinguishes single choice, multiple choice and normalized essay answers", () => {
   const choice = model.normalizeDocument({
     root: {
