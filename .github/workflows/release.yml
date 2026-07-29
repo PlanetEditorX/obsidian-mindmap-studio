@@ -125,14 +125,6 @@ jobs:
           test "$(node -p "require('./package.json').version")" = "${{ steps.version.outputs.next }}"
           test "$(node -p "require('./manifest.json').version")" = "${{ steps.version.outputs.next }}"
 
-      - name: Commit version update
-        shell: bash
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add package.json package-lock.json manifest.json versions.json main.js
-          git commit -m "chore(release): v${{ steps.version.outputs.next }}"
-
       - name: Create release archives
         shell: bash
         run: |
@@ -162,6 +154,20 @@ jobs:
           ACTUAL_FILES=$(unzip -Z1 "$INSTALL_NAME" | grep -v '/$' | sort)
 
           test "$ACTUAL_FILES" = "$EXPECTED_FILES"
+
+      - name: Generate update manifest
+        shell: bash
+        run: |
+          SHA256=$(sha256sum "mindmap-studio-${{ steps.version.outputs.next }}-install.zip" | awk '{print $1}')
+          node scripts/generate-update-manifest.mjs "${{ steps.version.outputs.next }}" "$SHA256"
+
+      - name: Commit release metadata
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package.json package-lock.json manifest.json versions.json main.js update.json
+          git commit -m "chore(release): v${{ steps.version.outputs.next }}"
 
       - name: Tag and push release
         shell: bash
