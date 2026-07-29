@@ -1,44 +1,54 @@
-# 图片识图、OCR 与截图功能验证报告
+# 1.24.4 仓库一致性修复验证报告
 
-## 自动验证
+## 修复内容
 
-以下命令已在当前源码树执行并通过：
+- 将示例导图的 `#Uxxxx` 编码文件名恢复为可读 UTF-8 路径：
+  - `examples/中国文学示例.mindmap`
+  - `examples/古诗.mindmap`
+  - `examples/MindMap Assets/古诗/唐诗.mindmap`
+- 将 README 当前源码版本由 `1.20.1` 修正为 `1.24.4`。
+- 新增 README 版本与 `package.json` 一致性测试和仓库检查。
+- 重新生成并检查函数参考文档。
+
+## 已通过验证
+
+以下命令在当前源码树执行通过：
 
 ```bash
-npm test
-npm run build
+npm run test:unit
+npm run test:docs
+npm run test:repo
+npm run docs:generate
 node --check main.js
+node --check scripts/check-repository.mjs
+node --check tests/repository-cleanup.test.mjs
 git diff --check
 ```
 
 结果：
 
-- 单元测试 `67 / 67` 通过。
-- 综合回归脚本全部通过。
-- 文档覆盖检查通过：`42` 个 TypeScript 模块、`685` 个具名声明均有 JSDoc。
-- 仓库结构、版本文件和必需文档检查通过。
-- TypeScript 严格检查通过，生产 `main.js` 已重新构建。
-- 生成的 `main.js` 可作为 CommonJS 加载，导出默认插件类；JavaScript 语法检查通过。
+- 单元测试 `80 / 80` 通过。
+- 文档覆盖检查通过：`45` 个 TypeScript 模块、`774` 个具名声明均有 JSDoc。
+- 仓库结构、版本文件、示例路径和必需文档检查通过。
+- `main.js` 及本轮修改的 JavaScript 测试/脚本语法检查通过。
+- 本轮未修改 TypeScript 运行时代码，`src/` 与 `main.js` 相对导入快照保持不变。
 
-## 新增覆盖
+## 受环境阻断的验证
 
-- 当前页面与节点子树图片按稳定深度优先顺序收集。
-- OpenAI 兼容多模态识图请求体及图片提示注入边界。
-- 图片转文字预览保持原内容块位置，预览过期时拒绝覆盖。
-- Tesseract 附加参数不经过 shell，支持引号分组并拒绝未闭合引号。
-- macOS、Windows、Linux 截图命令候选及剪贴板 PNG 指纹。
-- 桌面 OCR/截图 API 按需动态加载，源码无静态 `node:*` 或 `electron` 导入，保证移动端可加载插件。
-- AI 助手识图操作、工具栏截图入口、`Ctrl/Cmd+Shift+S` 命令和图片右键菜单源码契约。
+已执行 `npm test`。单元测试通过后，回归阶段因当前环境无法安装 `esbuild` 与 `fflate`，在载入 `scripts/test.mjs` 时以 `ERR_MODULE_NOT_FOUND` 退出，因此该命令未能完整结束。
 
-## 环境说明
+已执行 `npm run build`。TypeScript 启动后因依赖目录不完整，报告缺少 `codemirror`、`estree`、`node` 与 `tern` 类型定义，未进入 esbuild 生产打包阶段。
 
-当前执行环境的 npm 内部镜像持续返回 HTTP 503，无法重新执行干净的 `npm ci`。为完成本轮验证，TypeScript 使用环境中预装的对应编译器；测试和构建所需的临时依赖只放在被忽略的 `node_modules/` 中，没有提交到 Git。`main.js`、源码、测试和文档均已提交；正式发布环境仍应从空依赖目录执行 `npm ci && npm run verify` 复核官方依赖安装链路。
+干净依赖安装已尝试，但当前执行环境无法解析 `registry.npmjs.org`，npm 返回 `EAI_AGAIN`。临时链接的环境内 TypeScript 仅用于运行不依赖第三方包的单元测试，没有提交到 Git。
 
-## 手动冒烟建议
+正式发布环境应执行：
 
-1. 在 AI 助手中分别用整页与节点子树运行图片识图，确认逐张顺序和失败汇总。
-2. 在导图、大纲和文章视图右键图片，验证取消不修改、确认替换和撤销恢复。
-3. 在 Windows、macOS、Linux 分别验证系统区域截图、隐藏/恢复 Obsidian 和剪贴板结果。
-4. 分别从文章段落、普通节点、命令面板触发截图，验证插入位置或仅剪贴板行为。
-5. 安装 Tesseract 与 `chi_sim`/`eng` 语言包，验证本地 OCR 和自定义可执行文件路径。
-6. 使用支持图片输入的视觉模型验证 AI 识图；不支持视觉的模型应显示接口错误而不修改导图。
+```bash
+rm -rf node_modules
+npm ci
+npm test
+npm run build
+node --check main.js
+```
+
+由于本轮变更只涉及示例资源、测试与文档，现有 `main.js` 不需要内容更新；待依赖可用时重新执行生产构建，应生成与导入快照等价的运行时代码。

@@ -40,4 +40,17 @@ test("example assets use canonical readable paths", async () => {
   const files = await filesBelow("examples");
   const encoded = files.filter((file) => /(?:%[0-9A-F]{2}|#U[0-9A-F]{4})/i.test(file));
   assert.deepEqual(encoded, []);
+  for (const expected of [
+    path.join("examples", "中国文学示例.mindmap"),
+    path.join("examples", "古诗.mindmap"),
+    path.join("examples", "MindMap Assets", "古诗", "唐诗.mindmap")
+  ]) {
+    assert.ok(files.includes(expected), `missing canonical example path: ${expected}`);
+  }
+});
+
+test("README source version matches package metadata", async () => {
+  const packageJson = JSON.parse(await readFile("package.json", "utf8"));
+  const readme = await readFile("README.md", "utf8");
+  assert.ok(readme.includes(`当前源码版本：\`${packageJson.version}\`。`));
 });
