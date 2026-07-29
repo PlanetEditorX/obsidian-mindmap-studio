@@ -1965,6 +1965,7 @@ var DEFAULT_SETTINGS = {
   screenshotAutoRecognize: false,
   questionNodesEnabled: false,
   questionBankFolder: "",
+  lastImportFolder: "",
   settingsSectionOrder: [...SETTINGS_SECTION_TITLES]
 };
 function normalizeSettingsSectionOrder(value) {
@@ -6014,6 +6015,55 @@ function nextTaskStatus(current) {
   return states[current != null ? current : ""];
 }
 
+// src/utils/desktop-import.ts
+function getElectronOpenRuntime() {
+  const requireFunction = typeof window !== "undefined" ? window.require : void 0;
+  if (!requireFunction) return null;
+  try {
+    return requireFunction("electron");
+  } catch (e) {
+    return null;
+  }
+}
+function getNodeImportRuntime() {
+  var _a2;
+  const requireFunction = (_a2 = globalThis.require) != null ? _a2 : typeof window !== "undefined" ? window.require : void 0;
+  if (!requireFunction) return null;
+  try {
+    return {
+      fs: requireFunction("node:fs/promises"),
+      path: requireFunction("node:path")
+    };
+  } catch (e) {
+    return null;
+  }
+}
+async function selectDesktopImportFile(lastDirectory) {
+  var _a2, _b2;
+  const nodeRuntime = getNodeImportRuntime();
+  const electronRuntime = getElectronOpenRuntime();
+  const dialog = (_b2 = electronRuntime == null ? void 0 : electronRuntime.dialog) != null ? _b2 : (_a2 = electronRuntime == null ? void 0 : electronRuntime.remote) == null ? void 0 : _a2.dialog;
+  if (!nodeRuntime || !dialog) return { supported: false, file: null };
+  const selected = await dialog.showOpenDialog({
+    defaultPath: lastDirectory || void 0,
+    filters: [
+      { name: "Mind map files", extensions: ["xmind", "md", "markdown", "json"] },
+      { name: "All files", extensions: ["*"] }
+    ],
+    properties: ["openFile"]
+  });
+  const filePath = selected.canceled ? void 0 : selected.filePaths[0];
+  if (!filePath) return { supported: true, file: null };
+  return {
+    supported: true,
+    file: {
+      name: nodeRuntime.path.basename(filePath),
+      directory: nodeRuntime.path.dirname(filePath),
+      content: await nodeRuntime.fs.readFile(filePath)
+    }
+  };
+}
+
 // src/editor/editor-modals.ts
 var ImageHostPickerModal = class extends import_obsidian5.Modal {
   /**
@@ -6440,11 +6490,13 @@ var JsonTransferModal = class extends import_obsidian5.Modal {
    * @param onImport 导入完成回调及目标方式。
    * @param onExport 导出回调。
    */
-  constructor(app, document2, onImport, onExport) {
+  constructor(app, document2, onImport, onExport, getLastImportFolder, onRememberImportFolder) {
     super(app);
     this.document = document2;
     this.onImport = onImport;
     this.onExport = onExport;
+    this.getLastImportFolder = getLastImportFolder;
+    this.onRememberImportFolder = onRememberImportFolder;
   }
   /**
    * 创建 JSON 文本区和文件导入操作。
@@ -6484,26 +6536,23 @@ var JsonTransferModal = class extends import_obsidian5.Modal {
       new import_obsidian5.Notice("\u5DF2\u590D\u5236 JSON");
     });
     importFileButton.addEventListener("click", () => {
-      const input = document.createElement("input");
-      input.type = "file";
-      input.accept = ".xmind,.md,.markdown,.json";
-      input.addEventListener("change", () => {
+      void (async () => {
         var _a2;
-        const file = (_a2 = input.files) == null ? void 0 : _a2[0];
-        if (!file) return;
-        void (async () => {
-          var _a3;
+        const selected = await selectDesktopImportFile(this.getLastImportFolder());
+        if (selected.supported) {
+          if (!selected.file) return;
+          await this.onRememberImportFolder(selected.file.directory);
           try {
-            const extension = (_a3 = file.name.split(".").at(-1)) == null ? void 0 : _a3.toLowerCase();
-            await updateImportProgress(10, `\u6B63\u5728\u8BFB\u53D6 ${file.name}`);
-            const source = extension === "xmind" ? await file.arrayBuffer() : await file.text();
-            await updateImportProgress(55, extension === "xmind" ? "\u6B63\u5728\u89E3\u6790 XMind \u753B\u5E03\u548C\u4E3B\u9898" : extension === "json" ? "\u6B63\u5728\u6821\u9A8C JSON \u6587\u6863" : "\u6B63\u5728\u89E3\u6790 Markdown \u6807\u9898\u548C\u5217\u8868");
-            const imported = extension === "xmind" ? xmindToDocument(source, file.name.replace(/\.xmind$/i, "")) : extension === "json" ? normalizeDocument(JSON.parse(source), this.document.title) : markdownToDocument(source, file.name.replace(/\.(?:md|markdown)$/i, ""));
+            const extension = (_a2 = selected.file.name.split(".").at(-1)) == null ? void 0 : _a2.toLowerCase();
+            await updateImportProgress(10, `\u6B63\u5728\u8BFB\u53D6 ${selected.file.name}`);
+            const source = extension === "xmind" ? selected.file.content.buffer.slice(selected.file.content.byteOffset, selected.file.content.byteOffset + selected.file.content.byteLength) : new TextDecoder().decode(selected.file.content);
+            await updateImportProgress(55, extension === "xmind" ? "\u6B63\u5728\u89E3\u6790 XMind \u753B\u5E03\u548C\u4E3B\u9898" : extension === "json" ? "\u6B63\u5728\u6821\u9A8C JSON \u6587\u4EF6" : "\u6B63\u5728\u89E3\u6790 Markdown \u6807\u9898\u548C\u5217\u8868");
+            const imported = extension === "xmind" ? xmindToDocument(source, selected.file.name.replace(/\.xmind$/i, "")) : extension === "json" ? normalizeDocument(JSON.parse(source), this.document.title) : markdownToDocument(source, selected.file.name.replace(/\.(?:md|markdown)$/i, ""));
             await updateImportProgress(85, "\u6B63\u5728\u751F\u6210\u601D\u7EF4\u5BFC\u56FE");
             setAllBranchesCollapsed(imported.root, true);
             if (!applyImport(imported)) return;
             await updateImportProgress(100, "\u5BFC\u5165\u5B8C\u6210");
-            new import_obsidian5.Notice(`\u5DF2\u5BFC\u5165\uFF1A${file.name}`);
+            new import_obsidian5.Notice(`\u5DF2\u5BFC\u5165\uFF1A${selected.file.name}`);
             window.setTimeout(() => this.close(), 180);
           } catch (error) {
             console.error("MindMap Studio file import failed", error);
@@ -6511,9 +6560,39 @@ var JsonTransferModal = class extends import_obsidian5.Modal {
             progressStatus.setText(`\u5BFC\u5165\u5931\u8D25\uFF1A${message}`);
             new import_obsidian5.Notice(message);
           }
-        })();
-      }, { once: true });
-      input.click();
+          return;
+        }
+        const input = document.createElement("input");
+        input.type = "file";
+        input.accept = ".xmind,.md,.markdown,.json";
+        input.addEventListener("change", () => {
+          var _a3;
+          const file = (_a3 = input.files) == null ? void 0 : _a3[0];
+          if (!file) return;
+          void (async () => {
+            var _a4;
+            try {
+              const extension = (_a4 = file.name.split(".").at(-1)) == null ? void 0 : _a4.toLowerCase();
+              await updateImportProgress(10, `\u6B63\u5728\u8BFB\u53D6 ${file.name}`);
+              const source = extension === "xmind" ? await file.arrayBuffer() : await file.text();
+              await updateImportProgress(55, extension === "xmind" ? "\u6B63\u5728\u89E3\u6790 XMind \u753B\u5E03\u548C\u4E3B\u9898" : extension === "json" ? "\u6B63\u5728\u6821\u9A8C JSON \u6587\u6863" : "\u6B63\u5728\u89E3\u6790 Markdown \u6807\u9898\u548C\u5217\u8868");
+              const imported = extension === "xmind" ? xmindToDocument(source, file.name.replace(/\.xmind$/i, "")) : extension === "json" ? normalizeDocument(JSON.parse(source), this.document.title) : markdownToDocument(source, file.name.replace(/\.(?:md|markdown)$/i, ""));
+              await updateImportProgress(85, "\u6B63\u5728\u751F\u6210\u601D\u7EF4\u5BFC\u56FE");
+              setAllBranchesCollapsed(imported.root, true);
+              if (!applyImport(imported)) return;
+              await updateImportProgress(100, "\u5BFC\u5165\u5B8C\u6210");
+              new import_obsidian5.Notice(`\u5DF2\u5BFC\u5165\uFF1A${file.name}`);
+              window.setTimeout(() => this.close(), 180);
+            } catch (error) {
+              console.error("MindMap Studio file import failed", error);
+              const message = error instanceof Error ? error.message : "\u6587\u4EF6\u5BFC\u5165\u5931\u8D25";
+              progressStatus.setText(`\u5BFC\u5165\u5931\u8D25\uFF1A${message}`);
+              new import_obsidian5.Notice(message);
+            }
+          })();
+        }, { once: true });
+        input.click();
+      })();
     });
     exportButton.addEventListener("click", () => this.onExport(textarea.value));
     importButton.addEventListener("click", () => {
@@ -12349,7 +12428,9 @@ var MindMapEditor = class {
       this.app,
       this.getDocument(),
       (document2, mode) => this.importDocument(document2, mode),
-      (json) => void this.callbacks.onExportJson(json)
+      (json) => void this.callbacks.onExportJson(json),
+      () => this.callbacks.getLastImportFolder(),
+      (folder) => this.callbacks.onRememberImportFolder(folder)
     ).open();
   }
   /** Imports a document as a child branch or replaces the current document. */
@@ -13902,6 +13983,11 @@ var MindMapStudioView = class _MindMapStudioView extends import_obsidian12.TextF
         onExportSvg: async (svg) => this.exportTextFile("svg", svg),
         onExportMarkdown: async (markdown) => this.exportTextFile("md", markdown),
         onExportJson: async (json) => this.exportTextFile("json", json),
+        getLastImportFolder: () => this.plugin.settings.lastImportFolder,
+        onRememberImportFolder: async (folder) => {
+          this.plugin.settings.lastImportFolder = folder;
+          await this.plugin.saveSettings();
+        },
         onExportDocument: async (format) => this.exportArticleFamily(format),
         resolveImage: (source) => this.resolveImage(source),
         onSavePastedImage: async (blob, suggestedName) => this.plugin.savePastedImage(blob, suggestedName, this.file),
@@ -16405,6 +16491,7 @@ var MindMapStudioPlugin = class extends import_obsidian15.Plugin {
       screenshotAutoRecognize: raw.screenshotAutoRecognize === true,
       questionNodesEnabled: raw.questionNodesEnabled === true,
       questionBankFolder: typeof raw.questionBankFolder === "string" ? (0, import_obsidian15.normalizePath)(raw.questionBankFolder.trim().replace(/^\/+|\/+$/g, "")).slice(0, 1e3) : DEFAULT_SETTINGS.questionBankFolder,
+      lastImportFolder: typeof raw.lastImportFolder === "string" ? raw.lastImportFolder.trim().slice(0, 4e3) : DEFAULT_SETTINGS.lastImportFolder,
       settingsSectionOrder: normalizeSettingsSectionOrder(raw.settingsSectionOrder),
       syncTitleToFilename: raw.syncTitleToFilename !== false,
       deleteLocalAfterUpload: raw.deleteLocalAfterUpload !== false,

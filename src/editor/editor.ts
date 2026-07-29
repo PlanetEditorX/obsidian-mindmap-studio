@@ -4727,7 +4727,9 @@ export class MindMapEditor {
       this.app,
       this.getDocument(),
       (document, mode) => this.importDocument(document, mode),
-      (json) => void this.callbacks.onExportJson(json)
+      (json) => void this.callbacks.onExportJson(json),
+      () => this.callbacks.getLastImportFolder(),
+      (folder) => this.callbacks.onRememberImportFolder(folder)
     ).open();
   }
 

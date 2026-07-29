@@ -122,6 +122,11 @@ export class MindMapStudioView extends TextFileView {
         onExportSvg: async (svg) => this.exportTextFile("svg", svg),
         onExportMarkdown: async (markdown) => this.exportTextFile("md", markdown),
         onExportJson: async (json) => this.exportTextFile("json", json),
+        getLastImportFolder: () => this.plugin.settings.lastImportFolder,
+        onRememberImportFolder: async (folder) => {
+          this.plugin.settings.lastImportFolder = folder;
+          await this.plugin.saveSettings();
+        },
         onExportDocument: async (format) => this.exportArticleFamily(format),
         resolveImage: (source) => this.resolveImage(source),
         onSavePastedImage: async (blob, suggestedName) => this.plugin.savePastedImage(blob, suggestedName, this.file),
