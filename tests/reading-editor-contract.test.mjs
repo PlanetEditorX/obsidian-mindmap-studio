@@ -84,6 +84,12 @@ test("inline editing activates and releases through the shared path", () => {
   assert.match(editorSource, /if \(this\.inlineEditingId && !modesChanged && !toolbarChanged && !globalModeChanged\) return;/, "article-context refreshes must not replace an active inline editor");
 });
 
+test("new-node inline editing ignores the initiating Enter keyup", () => {
+  const inlineEdit = editorSource.match(/private beginInlineEdit\([\s\S]*?\n  \}/)?.[0] ?? "";
+  assert.match(inlineEdit, /if \(initialFocusProtected \|\| document\.activeElement !== editor\) return/);
+  assert.match(inlineEdit, /window\.requestAnimationFrame\(focusAtEnd\)[\s\S]*initialFocusProtected = false/);
+});
+
 test("article and outline text do not expose edit labels as hover tooltips", () => {
   const makeInlineEditable = editorSource.match(/private makeInlineEditable\([\s\S]*?\n  \}/)?.[0] ?? "";
   const activateInlineEditable = editorSource.match(/private activateInlineEditable\([\s\S]*?\n  \}/)?.[0] ?? "";

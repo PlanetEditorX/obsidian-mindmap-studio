@@ -11691,7 +11691,7 @@ var MindMapEditor = class {
     window.addEventListener("keydown", windowShortcut, true);
     const windowShortcutFallback = (event) => {
       var _a3;
-      if (document.activeElement !== editor) return;
+      if (initialFocusProtected || document.activeElement !== editor) return;
       const handledAt = Number((_a3 = lastHandledShortcut.split(":").at(-1)) != null ? _a3 : 0);
       if (handledAt && event.timeStamp - handledAt < 1e3) return;
       handleFormatShortcut(event);
