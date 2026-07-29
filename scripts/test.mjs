@@ -654,6 +654,20 @@ export const setIcon = () => {};
   assert.ok(branchLayout.nodes[1].width < cardLayout.nodes[1].width, "rounded branch style should fit node width to its text");
   assert.ok(branchLayout.nodes[1].x < cardLayout.nodes[1].x, "rounded branch style should keep branches close to their parent");
   assert.match(layout.roundedElbowEdgePath(branchLayout.nodes[0], branchLayout.nodes[1]), /\bQ\b/, "rounded branch style should use rounded elbow connectors");
+  const orderedBalancedFixture = model.normalizeDocument({
+    title: "Balanced order",
+    root: {
+      id: "ordered-root",
+      text: "Root",
+      children: [
+        { id: "ordered-a", text: "A", children: [] },
+        { id: "ordered-b", text: "B", children: [{ id: "ordered-b-child", text: "B child", children: [] }] }
+      ]
+    }
+  }, "fallback");
+  const orderedBalancedLayout = layout.computeLayout(orderedBalancedFixture.root, "balanced", 14);
+  assert.equal(orderedBalancedLayout.byId.get("ordered-a")?.side, -1, "balanced layout must retain the first sibling before a taller imported branch");
+  assert.equal(orderedBalancedLayout.byId.get("ordered-b")?.side, 1, "balanced layout must not sort siblings by subtree height");
   branchFixture.appearance = { nodeVisualStyle: "compact" };
   assert.equal(model.normalizeDocument(branchFixture).appearance?.nodeVisualStyle, undefined, "removed appearance aliases must not be accepted");
   const widthFixture = model.createDefaultDocument("Width");

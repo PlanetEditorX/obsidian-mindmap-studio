@@ -213,7 +213,9 @@ export function computeLayout(root: MindMapNode, mode: LayoutMode, defaultFontSi
     const right: MindMapNode[] = [];
     let leftHeight = 0;
     let rightHeight = 0;
-    for (const child of [...children].sort((a, b) => subtreeHeight(b, 1, defaultFontSize, visualStyle, appearance) - subtreeHeight(a, 1, defaultFontSize, visualStyle, appearance))) {
+    // The model's child order is the user's explicit ordering contract. Balance
+    // sides by height, but never reorder siblings to make the diagram denser.
+    for (const child of children) {
       const height = subtreeHeight(child, 1, defaultFontSize, visualStyle, appearance) + verticalGap;
       if (leftHeight <= rightHeight) {
         left.push(child);
