@@ -1548,8 +1548,9 @@
   padding-right: 0.65em;
   color: var(--text-faint);
   text-align: right;
-  font: inherit;
-  line-height: inherit;
+  font-family: var(--mms-code-font-family, inherit);
+  font-size: var(--mms-code-font-size, inherit);
+  line-height: var(--mms-code-line-height, inherit);
   white-space: pre;
   pointer-events: none;
   user-select: none;
