@@ -1773,21 +1773,21 @@ var TOOLBAR_ITEMS = [
   ["question", "\u9898\u76EE\u8282\u70B9"]
 ];
 var SETTINGS_SECTION_TITLES = [
-  "\u663E\u793A\u6A21\u5F0F",
-  "\u4E3B\u9898\u6A21\u677F",
-  "\u5168\u5C40\u4EE3\u7801\u8BBE\u7F6E",
-  "\u753B\u5E03\u80CC\u666F",
-  "\u5B57\u4F53\u4E0E\u6587\u5B57",
-  "\u8282\u70B9\u6837\u5F0F",
-  "\u8FDE\u7EBF\u6837\u5F0F",
-  "\u7F16\u8F91",
-  "\u8282\u70B9\u5FEB\u901F\u8F93\u5165\u5FEB\u6377\u952E",
-  "\u5DE5\u5177\u680F\u5185\u5BB9",
-  "\u6587\u4EF6\u4E0E\u5E03\u5C40",
-  "\u6587\u4EF6\u5939",
+  "\u89C6\u56FE\u4E0E\u9605\u8BFB",
+  "\u7F16\u8F91\u4F53\u9A8C",
+  "\u5FEB\u6377\u952E\u914D\u7F6E",
+  "\u5DE5\u5177\u680F",
+  "\u4E3B\u9898\u4E0E\u5916\u89C2",
+  "\u753B\u5E03\u4E0E\u80CC\u666F",
+  "\u6587\u5B57\u4E0E\u6392\u7248",
+  "\u8282\u70B9\u5916\u89C2",
+  "\u8FDE\u7EBF\u4E0E\u5206\u652F",
+  "\u4EE3\u7801\u5757",
+  "\u65B0\u5EFA\u4E0E\u5E03\u5C40",
+  "\u6587\u4EF6\u4E0E\u8D44\u6E90",
   "\u56FE\u7247\u4E0E\u56FE\u5E8A",
+  "\u5168\u5C40\u641C\u7D22",
   "AI \u52A9\u624B",
-  "\u5168\u5C40\u641C\u7D22\u7D22\u5F15",
   "\u7BA1\u7406\u914D\u7F6E"
 ];
 function createImageHostConfig(index = 1) {
@@ -1900,7 +1900,27 @@ var DEFAULT_SETTINGS = {
 };
 function normalizeSettingsSectionOrder(value) {
   const known = new Set(SETTINGS_SECTION_TITLES);
-  const stored = Array.isArray(value) ? value.filter((title) => typeof title === "string" && known.has(title) && title !== "\u7BA1\u7406\u914D\u7F6E") : [];
+  const legacyTitles = {
+    "\u663E\u793A\u6A21\u5F0F": "\u89C6\u56FE\u4E0E\u9605\u8BFB",
+    "\u7F16\u8F91": "\u7F16\u8F91\u4F53\u9A8C",
+    "\u8282\u70B9\u5FEB\u901F\u8F93\u5165\u5FEB\u6377\u952E": "\u5FEB\u6377\u952E\u914D\u7F6E",
+    "\u5DE5\u5177\u680F\u5185\u5BB9": "\u5DE5\u5177\u680F",
+    "\u4E3B\u9898\u6A21\u677F": "\u4E3B\u9898\u4E0E\u5916\u89C2",
+    "\u753B\u5E03\u80CC\u666F": "\u753B\u5E03\u4E0E\u80CC\u666F",
+    "\u5B57\u4F53\u4E0E\u6587\u5B57": "\u6587\u5B57\u4E0E\u6392\u7248",
+    "\u8282\u70B9\u6837\u5F0F": "\u8282\u70B9\u5916\u89C2",
+    "\u8FDE\u7EBF\u6837\u5F0F": "\u8FDE\u7EBF\u4E0E\u5206\u652F",
+    "\u5168\u5C40\u4EE3\u7801\u8BBE\u7F6E": "\u4EE3\u7801\u5757",
+    "\u6587\u4EF6\u4E0E\u5E03\u5C40": "\u65B0\u5EFA\u4E0E\u5E03\u5C40",
+    "\u6587\u4EF6\u5939": "\u6587\u4EF6\u4E0E\u8D44\u6E90",
+    "\u5168\u5C40\u641C\u7D22\u7D22\u5F15": "\u5168\u5C40\u641C\u7D22"
+  };
+  const stored = Array.isArray(value) ? value.flatMap((title) => {
+    var _a2;
+    if (typeof title !== "string") return [];
+    const normalized2 = (_a2 = legacyTitles[title]) != null ? _a2 : title;
+    return known.has(normalized2) && normalized2 !== "\u7BA1\u7406\u914D\u7F6E" ? [normalized2] : [];
+  }) : [];
   const ordered = [...new Set(stored)];
   for (const title of SETTINGS_SECTION_TITLES) {
     if (title !== "\u7BA1\u7406\u914D\u7F6E" && !ordered.includes(title)) ordered.push(title);
@@ -1989,7 +2009,7 @@ var MindMapStudioSettingTab = class extends import_obsidian.PluginSettingTab {
     super(app, plugin);
     this.expandedImageHostIds = /* @__PURE__ */ new Set();
     this.expandedAiProfileIds = /* @__PURE__ */ new Set();
-    this.expandedSettingsSectionTitles = /* @__PURE__ */ new Set(["\u4E3B\u9898\u6A21\u677F"]);
+    this.expandedSettingsSectionTitles = /* @__PURE__ */ new Set(["\u4E3B\u9898\u4E0E\u5916\u89C2"]);
     this.settingsSearchQuery = "";
     this.plugin = plugin;
   }
@@ -2015,7 +2035,7 @@ var MindMapStudioSettingTab = class extends import_obsidian.PluginSettingTab {
       cls: "setting-item-description",
       text: "\u8FD9\u91CC\u8BBE\u7F6E\u5168\u5C40\u9ED8\u8BA4\u5916\u89C2\u3002\u6253\u5F00\u8111\u56FE\u540E\uFF0C\u4E5F\u53EF\u4EE5\u70B9\u51FB\u5DE5\u5177\u680F\u4E2D\u7684\u8C03\u8272\u677F\uFF0C\u4E3A\u5F53\u524D\u8111\u56FE\u5355\u72EC\u4FDD\u5B58\u4E00\u5957\u6837\u5F0F\u3002"
     });
-    containerEl.createEl("h3", { text: "\u4E3B\u9898\u6A21\u677F" });
+    containerEl.createEl("h3", { text: "\u4E3B\u9898\u4E0E\u5916\u89C2" });
     new import_obsidian.Setting(containerEl).setName("\u9ED8\u8BA4\u4E3B\u9898").setDesc("\u9009\u62E9\u540E\u4F1A\u4E00\u6B21\u5E94\u7528\u80CC\u666F\u3001\u8282\u70B9\u3001\u5206\u652F\u914D\u8272\u3001\u5B57\u4F53\u548C\u8FDE\u7EBF\u6837\u5F0F\uFF1B\u4E4B\u540E\u4ECD\u53EF\u7EE7\u7EED\u4FEE\u6539\u5355\u9879\u8BBE\u7F6E\u3002").addDropdown((dropdown) => {
       for (const preset of MINDMAP_THEME_PRESETS) dropdown.addOption(preset.id, preset.name);
       dropdown.setValue(this.plugin.settings.defaultThemePreset);
@@ -2043,7 +2063,7 @@ var MindMapStudioSettingTab = class extends import_obsidian.PluginSettingTab {
         void this.saveAndRefresh().then(() => this.display());
       });
     }
-    containerEl.createEl("h3", { text: "\u5168\u5C40\u4EE3\u7801\u8BBE\u7F6E" });
+    containerEl.createEl("h3", { text: "\u4EE3\u7801\u5757" });
     new import_obsidian.Setting(containerEl).setName("\u4EE3\u7801\u9ED8\u8BA4\u6298\u53E0").setDesc("\u4F18\u5148\u7EA7\u6700\u4F4E\uFF1B\u9875\u9762\u6216\u8282\u70B9\u4EE3\u7801\u8BBE\u7F6E\u53EF\u8986\u76D6\u3002").addToggle((toggle) => toggle.setValue(this.plugin.settings.defaultCodeCollapsed).onChange(async (value) => {
       this.plugin.settings.defaultCodeCollapsed = value;
       await this.saveAndRefresh();
@@ -2065,7 +2085,7 @@ var MindMapStudioSettingTab = class extends import_obsidian.PluginSettingTab {
       this.plugin.settings.defaultCodeTheme = value === "github" || value === "monokai" || value === "dracula" ? value : "obsidian";
       await this.saveAndRefresh();
     }));
-    containerEl.createEl("h3", { text: "\u663E\u793A\u6A21\u5F0F" });
+    containerEl.createEl("h3", { text: "\u89C6\u56FE\u4E0E\u9605\u8BFB" });
     containerEl.createEl("p", {
       cls: "setting-item-description",
       text: "\u5BFC\u56FE\u3001\u5927\u7EB2\u3001\u6587\u7AE0\u548C\u901A\u8BFB\u6A21\u5F0F\u5171\u4EAB\u540C\u4E00\u4EFD\u8282\u70B9\u6570\u636E\uFF1B\u53EF\u7F16\u8F91\u6A21\u5F0F\u4E2D\u7684\u4FEE\u6539\u4F1A\u540C\u6B65\u5230\u5176\u4ED6\u6A21\u5F0F\u3002"
@@ -2170,7 +2190,7 @@ var MindMapStudioSettingTab = class extends import_obsidian.PluginSettingTab {
       returnToTopInput = text;
       return text.setPlaceholder("0\u2013100").setValue(String(this.plugin.settings.returnToTopVisibility)).onChange(saveReturnToTopVisibility);
     });
-    containerEl.createEl("h3", { text: "\u5DE5\u5177\u680F\u5185\u5BB9" });
+    containerEl.createEl("h3", { text: "\u5DE5\u5177\u680F" });
     containerEl.createEl("p", {
       cls: "setting-item-description",
       text: "\u9009\u62E9\u9700\u8981\u663E\u793A\u5728\u8111\u56FE\u9876\u90E8\u5DE5\u5177\u680F\u4E2D\u7684\u64CD\u4F5C\u3002\u663E\u793A\u6A21\u5F0F\u5207\u6362\u3001\u7F29\u653E\u6BD4\u4F8B\u548C\u4FDD\u5B58\u72B6\u6001\u59CB\u7EC8\u4FDD\u7559\u3002"
@@ -2431,12 +2451,12 @@ var MindMapStudioSettingTab = class extends import_obsidian.PluginSettingTab {
       });
     });
     containerEl.appendChild(imageRecognitionSettings);
-    containerEl.createEl("h3", { text: "\u6587\u4EF6\u4E0E\u5E03\u5C40" });
+    containerEl.createEl("h3", { text: "\u65B0\u5EFA\u4E0E\u5E03\u5C40" });
     new import_obsidian.Setting(containerEl).setName("\u8282\u70B9\u7F16\u8F91\u5668\u663E\u793A\u4F4D\u7F6E").setDesc("\u5C45\u4E2D\u65F6\u4F7F\u7528\u5F39\u7A97\uFF1B\u9760\u53F3\u65F6\u4F5C\u4E3A\u53F3\u4FA7\u7F16\u8F91\u9762\u677F\u663E\u793A\uFF0C\u4FDD\u5B58\u6216\u70B9\u51FB\u9762\u677F\u5916\u4F1A\u81EA\u52A8\u6536\u8D77\u3002").addDropdown((dropdown) => dropdown.addOption("center", "\u5C45\u4E2D\u5F39\u7A97").addOption("right", "\u53F3\u4FA7\u9762\u677F").setValue(this.plugin.settings.nodeEditorPosition).onChange(async (value) => {
       this.plugin.settings.nodeEditorPosition = value === "right" ? "right" : "center";
       await this.saveAndRefresh();
     }));
-    containerEl.createEl("h3", { text: "\u8282\u70B9\u5FEB\u901F\u8F93\u5165\u5FEB\u6377\u952E" });
+    containerEl.createEl("h3", { text: "\u5FEB\u6377\u952E\u914D\u7F6E" });
     containerEl.createEl("p", {
       cls: "setting-item-description",
       text: "Tab/Enter \u521B\u5EFA\u8282\u70B9\u540E\u53EF\u76F4\u63A5\u8F93\u5165\u3002\u4EE5\u4E0B\u5FEB\u6377\u952E\u4F5C\u7528\u4E8E\u8282\u70B9\u5185\u5DF2\u9009\u62E9\u7684\u6587\u5B57\uFF1B\u683C\u5F0F\u793A\u4F8B\uFF1ACtrl+B\u3001Ctrl+Shift+C\u3001Alt+U\u3002"
@@ -2455,7 +2475,7 @@ var MindMapStudioSettingTab = class extends import_obsidian.PluginSettingTab {
       this.plugin.settings.defaultFolder = value.trim().replace(/^\/+|\/+$/g, "");
       await this.plugin.saveSettings();
     }));
-    containerEl.createEl("h3", { text: "\u6587\u4EF6\u5939" });
+    containerEl.createEl("h3", { text: "\u6587\u4EF6\u4E0E\u8D44\u6E90" });
     new import_obsidian.Setting(containerEl).setName("\u9898\u5E93\u6587\u4EF6\u5939").setDesc("\u586B\u5199\u4ED3\u5E93\u5185\u6587\u4EF6\u5939\u8DEF\u5F84\uFF0C\u4F8B\u5982 \u9898\u5E93\u3002\u8BE5\u6587\u4EF6\u5939\u53CA\u5176\u5B50\u76EE\u5F55\u5185\u7684\u601D\u7EF4\u5BFC\u56FE\u4F1A\u51FA\u73B0\u201C\u9898\u5E93\u201D\u6574\u9875\u6A21\u5F0F\uFF0C\u53EF\u8FDE\u7EED\u81EA\u52A8\u5224\u9898\uFF1B\u7559\u7A7A\u5219\u4E0D\u542F\u7528\u3002").addText((text) => text.setPlaceholder("\u9898\u5E93").setValue(this.plugin.settings.questionBankFolder).onChange(async (value) => {
       this.plugin.settings.questionBankFolder = value.trim().replace(/\\/g, "/").replace(/^\/+|\/+$/g, "");
       await this.saveAndRefresh();
@@ -2622,7 +2642,7 @@ var MindMapStudioSettingTab = class extends import_obsidian.PluginSettingTab {
       this.plugin.settings.defaultTheme = value;
       await this.plugin.saveSettings();
     }));
-    containerEl.createEl("h3", { text: "\u753B\u5E03\u80CC\u666F" });
+    containerEl.createEl("h3", { text: "\u753B\u5E03\u4E0E\u80CC\u666F" });
     this.addOptionalColorSetting(
       containerEl,
       "\u80CC\u666F\u989C\u8272",
@@ -2648,7 +2668,7 @@ var MindMapStudioSettingTab = class extends import_obsidian.PluginSettingTab {
       "#94a3b8",
       false
     );
-    containerEl.createEl("h3", { text: "\u5B57\u4F53\u4E0E\u6587\u5B57" });
+    containerEl.createEl("h3", { text: "\u6587\u5B57\u4E0E\u6392\u7248" });
     new import_obsidian.Setting(containerEl).setName("\u9ED8\u8BA4\u5B57\u4F53").addDropdown((dropdown) => dropdown.addOption("obsidian", "\u8DDF\u968F Obsidian").addOption("sans", "\u65E0\u886C\u7EBF\u5B57\u4F53").addOption("serif", "\u886C\u7EBF\u5B57\u4F53").addOption("mono", "\u7B49\u5BBD\u5B57\u4F53").addOption("custom", "\u81EA\u5B9A\u4E49\u5B57\u4F53").setValue(this.plugin.settings.fontFamily).onChange(async (value) => {
       this.plugin.settings.fontFamily = value;
       await this.saveAndRefresh();
@@ -2690,7 +2710,7 @@ var MindMapStudioSettingTab = class extends import_obsidian.PluginSettingTab {
       this.plugin.settings.defaultTextUnderline = value;
       await this.saveAndRefresh();
     }));
-    containerEl.createEl("h3", { text: "\u8282\u70B9\u6837\u5F0F" });
+    containerEl.createEl("h3", { text: "\u8282\u70B9\u5916\u89C2" });
     this.addOptionalColorSetting(
       containerEl,
       "\u4E2D\u5FC3\u4E3B\u9898\u989C\u8272",
@@ -2756,7 +2776,7 @@ var MindMapStudioSettingTab = class extends import_obsidian.PluginSettingTab {
       this.plugin.settings.nodeBorderWidth = value;
       await this.saveAndRefresh();
     }));
-    containerEl.createEl("h3", { text: "\u8FDE\u7EBF\u6837\u5F0F" });
+    containerEl.createEl("h3", { text: "\u8FDE\u7EBF\u4E0E\u5206\u652F" });
     new import_obsidian.Setting(containerEl).setName("\u5F69\u8272\u5206\u652F").setDesc("\u6309\u7167\u4E2D\u5FC3\u4E3B\u9898\u7684\u4E00\u7EA7\u5206\u652F\u5206\u914D\u989C\u8272\uFF0C\u540C\u4E00\u5206\u652F\u7684\u8282\u70B9\u8FB9\u6846\u548C\u8FDE\u7EBF\u4FDD\u6301\u4E00\u81F4\u3002").addToggle((toggle) => toggle.setValue(this.plugin.settings.colorfulBranches).onChange(async (value) => {
       this.plugin.settings.colorfulBranches = value;
       await this.saveAndRefresh();
@@ -2795,7 +2815,7 @@ var MindMapStudioSettingTab = class extends import_obsidian.PluginSettingTab {
         await this.saveAndRefresh();
       }));
     }
-    containerEl.createEl("h3", { text: "\u7F16\u8F91" });
+    containerEl.createEl("h3", { text: "\u7F16\u8F91\u4F53\u9A8C" });
     new import_obsidian.Setting(containerEl).setName("\u663E\u793A\u4EFB\u52A1\u8FDB\u5EA6").setDesc("\u5728\u5305\u542B\u4EFB\u52A1\u7684\u5206\u652F\u8282\u70B9\u5E95\u90E8\u663E\u793A\u5B8C\u6210\u767E\u5206\u6BD4\u3002").addToggle((toggle) => toggle.setValue(this.plugin.settings.showTaskProgress).onChange(async (value) => {
       this.plugin.settings.showTaskProgress = value;
       await this.saveAndRefresh();
@@ -2812,7 +2832,7 @@ var MindMapStudioSettingTab = class extends import_obsidian.PluginSettingTab {
       this.plugin.settings.embedMaxHeight = value;
       await this.plugin.saveSettings();
     }));
-    containerEl.createEl("h3", { text: "\u5168\u5C40\u641C\u7D22\u7D22\u5F15" });
+    containerEl.createEl("h3", { text: "\u5168\u5C40\u641C\u7D22" });
     const searchStatus = this.plugin.getGlobalSearchIndexStatus();
     containerEl.createEl("p", {
       cls: "setting-item-description",
@@ -2847,12 +2867,18 @@ var MindMapStudioSettingTab = class extends import_obsidian.PluginSettingTab {
         button.setButtonText("\u68C0\u67E5\u66F4\u65B0");
       }
     }));
-    new import_obsidian.Setting(containerEl).setName("\u8BBE\u7F6E\u5206\u7C7B\u6392\u5E8F").setDesc("\u4F7F\u7528\u4E0A\u4E0B\u7BAD\u5934\u8C03\u6574\u5404\u8BBE\u7F6E\u5206\u7C7B\u7684\u4F4D\u7F6E\uFF1B\u7BA1\u7406\u914D\u7F6E\u56FA\u5B9A\u663E\u793A\u5728\u6700\u540E\u3002").addButton((button) => button.setButtonText("\u6062\u590D\u9ED8\u8BA4\u987A\u5E8F").onClick(async () => {
+    const categoryOrder = containerEl.createEl("details", { cls: "mms-settings-category-order" });
+    categoryOrder.createEl("summary", { text: "\u8BBE\u7F6E\u5206\u7C7B\u6392\u5E8F" });
+    categoryOrder.createEl("p", {
+      cls: "setting-item-description",
+      text: "\u4F7F\u7528\u4E0A\u4E0B\u7BAD\u5934\u8C03\u6574\u5404\u8BBE\u7F6E\u5206\u7C7B\u7684\u4F4D\u7F6E\uFF1B\u7BA1\u7406\u914D\u7F6E\u56FA\u5B9A\u663E\u793A\u5728\u6700\u540E\u3002"
+    });
+    new import_obsidian.Setting(categoryOrder).setName("\u6062\u590D\u9ED8\u8BA4\u987A\u5E8F").setDesc("\u6062\u590D\u63A8\u8350\u7684\u8BBE\u7F6E\u5206\u7C7B\u987A\u5E8F\u3002").addButton((button) => button.setButtonText("\u6062\u590D\u9ED8\u8BA4\u987A\u5E8F").onClick(async () => {
       this.plugin.settings.settingsSectionOrder = [...SETTINGS_SECTION_TITLES];
       await this.plugin.saveSettings();
       this.display();
     }));
-    this.addSettingsSectionOrderControls(containerEl);
+    this.addSettingsSectionOrderControls(categoryOrder);
     new import_obsidian.Setting(containerEl).setName("\u6062\u590D\u521D\u59CB\u914D\u7F6E").setDesc("\u6062\u590D\u663E\u793A\u6A21\u5F0F\u3001\u4E3B\u9898\u3001\u8D44\u6E90\u76EE\u5F55\u3001\u56FE\u5E8A\u3001\u641C\u7D22\u548C\u7F16\u8F91\u9009\u9879\u3002\u4E0D\u4F1A\u5220\u9664\u6216\u4FEE\u6539\u4EFB\u4F55 .mindmap \u6587\u4EF6\u3002").addButton((button) => button.setWarning().setButtonText("\u6062\u590D\u521D\u59CB\u914D\u7F6E").onClick(async () => {
       const confirmed = window.confirm("\u786E\u5B9A\u6062\u590D MindMap Studio \u7684\u5168\u90E8\u63D2\u4EF6\u8BBE\u7F6E\u5417\uFF1F\u8111\u56FE\u6587\u4EF6\u4E0D\u4F1A\u88AB\u5220\u9664\u3002");
       if (!confirmed) return;
