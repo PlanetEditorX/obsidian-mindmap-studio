@@ -3926,6 +3926,16 @@ export class MindMapEditor {
     window.requestAnimationFrame(() => this.beginInlineEdit(node.id, undefined, true));
   }
 
+  /** Adds a text block at the end of the selected node and starts quick editing it. */
+  private insertTextBlock(): void {
+    if (!this.ensureEditable()) return;
+    const selected = this.selectedNode();
+    if (!selected) return;
+    let blockId = "";
+    this.mutate(() => { blockId = this.appendTextBlock(selected); });
+    window.requestAnimationFrame(() => this.beginInlineEdit(selected.id, blockId, true));
+  }
+
   /**
    * 编辑selected，并保持模型、界面和持久化状态的一致性。
    */
@@ -4258,6 +4268,13 @@ export class MindMapEditor {
   /** Appends a new code block without replacing code blocks already present on the node. */
   private appendCodeBlock(node: MindMapNode, code: MindMapCodeBlock): void {
     replaceNodeContentBlocks(node, [...nodeContentBlocks(node), { id: newId(), type: "code", code }]);
+  }
+
+  /** Appends an empty text block and returns its ID for immediate inline editing. */
+  private appendTextBlock(node: MindMapNode): string {
+    const blockId = newId();
+    replaceNodeContentBlocks(node, [...nodeContentBlocks(node), { id: blockId, type: "text", text: "" }]);
+    return blockId;
   }
 
   /** Removes one structured block identified by its content-block ID. */
@@ -5080,6 +5097,7 @@ export class MindMapEditor {
     }
     menu.addItem((item) => item.setTitle("克隆分支").setIcon("copy-plus").onClick(() => this.duplicateSelected()));
     menu.addSeparator();
+    menu.addItem((item) => item.setTitle("插入文字").setIcon("text-cursor-input").onClick(() => this.insertTextBlock()));
     menu.addItem((item) => item.setTitle(selected?.table ? "编辑表格" : "插入表格").setIcon("table-2").onClick(() => this.editTable()));
     menu.addItem((item) => item.setTitle("插入 LaTeX 公式").setIcon("sigma").onClick(() => this.insertFormula()));
     menu.addItem((item) => item.setTitle("将子节点生成表格").setIcon("table-properties").onClick(() => this.convertChildrenToTable()));

@@ -30,6 +30,12 @@ test("code insertion appends blocks and block menus remove only the targeted cod
   assert.doesNotMatch(editorSource, /private removeStructuredBlocks\(/);
 });
 
+test("node context menu appends a text block and starts editing that exact block", () => {
+  assert.match(editorSource, /private appendTextBlock\(node: MindMapNode\): string[\s\S]*type: "text", text: ""/);
+  assert.match(editorSource, /private insertTextBlock\(\): void[\s\S]*appendTextBlock\(selected\)[\s\S]*beginInlineEdit\(selected\.id, blockId, true\)/);
+  assert.match(editorSource, /setTitle\("插入文字"\)\.setIcon\("text-cursor-input"\)\.onClick\(\(\) => this\.insertTextBlock\(\)\)/);
+});
+
 test("mind-map code blocks use double click for editing", () => {
   const renderNodeCode = editorSource.match(/private renderNodeCode\([\s\S]*?\n  \}/)?.[0] ?? "";
   assert.match(renderNodeCode, /block\.addEventListener\("dblclick", \(event\) => \{[\s\S]*openCodeBlockEditor\(node, codeData, blockId\)/);

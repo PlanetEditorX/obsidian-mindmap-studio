@@ -11756,6 +11756,17 @@ var MindMapEditor = class {
     });
     window.requestAnimationFrame(() => this.beginInlineEdit(node.id, void 0, true));
   }
+  /** Adds a text block at the end of the selected node and starts quick editing it. */
+  insertTextBlock() {
+    if (!this.ensureEditable()) return;
+    const selected = this.selectedNode();
+    if (!selected) return;
+    let blockId = "";
+    this.mutate(() => {
+      blockId = this.appendTextBlock(selected);
+    });
+    window.requestAnimationFrame(() => this.beginInlineEdit(selected.id, blockId, true));
+  }
   /**
    * 编辑selected，并保持模型、界面和持久化状态的一致性。
    */
@@ -12073,6 +12084,12 @@ var MindMapEditor = class {
   /** Appends a new code block without replacing code blocks already present on the node. */
   appendCodeBlock(node, code) {
     replaceNodeContentBlocks(node, [...nodeContentBlocks(node), { id: newId(), type: "code", code }]);
+  }
+  /** Appends an empty text block and returns its ID for immediate inline editing. */
+  appendTextBlock(node) {
+    const blockId = newId();
+    replaceNodeContentBlocks(node, [...nodeContentBlocks(node), { id: blockId, type: "text", text: "" }]);
+    return blockId;
   }
   /** Removes one structured block identified by its content-block ID. */
   removeStructuredBlock(node, blockId) {
@@ -12848,6 +12865,7 @@ var MindMapEditor = class {
     }
     menu.addItem((item) => item.setTitle("\u514B\u9686\u5206\u652F").setIcon("copy-plus").onClick(() => this.duplicateSelected()));
     menu.addSeparator();
+    menu.addItem((item) => item.setTitle("\u63D2\u5165\u6587\u5B57").setIcon("text-cursor-input").onClick(() => this.insertTextBlock()));
     menu.addItem((item) => item.setTitle((selected == null ? void 0 : selected.table) ? "\u7F16\u8F91\u8868\u683C" : "\u63D2\u5165\u8868\u683C").setIcon("table-2").onClick(() => this.editTable()));
     menu.addItem((item) => item.setTitle("\u63D2\u5165 LaTeX \u516C\u5F0F").setIcon("sigma").onClick(() => this.insertFormula()));
     menu.addItem((item) => item.setTitle("\u5C06\u5B50\u8282\u70B9\u751F\u6210\u8868\u683C").setIcon("table-properties").onClick(() => this.convertChildrenToTable()));
@@ -15335,10 +15353,10 @@ var GlobalMindMapSearchModal = class extends import_obsidian13.Modal {
       const header = item.createDiv({ cls: "mms-global-search-result-header" });
       const title = header.createDiv({ cls: "mms-global-search-result-title" });
       appendHighlightedText(title, result.nodeText, query, this.useRegex);
-      const badges = header.createDiv({ cls: "mms-global-search-result-badges" });
+      const actions = header.createDiv({ cls: "mms-global-search-result-actions" });
+      const badges = actions.createDiv({ cls: "mms-global-search-result-badges" });
       badges.createSpan({ cls: "mms-global-search-badge", text: result.matchedKind });
       if (result.isSubmapDocument) badges.createSpan({ cls: "mms-global-search-badge is-submap", text: "\u5B50\u5BFC\u56FE" });
-      const actions = item.createDiv({ cls: "mms-global-search-result-actions" });
       const replaceOneBtn = actions.createEl("button", {
         cls: "mms-global-search-replace-one",
         attr: { type: "button", title: "\u66FF\u6362\u6B64\u8282\u70B9" }
