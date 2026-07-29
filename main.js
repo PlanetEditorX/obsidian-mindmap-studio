@@ -3633,6 +3633,7 @@ var CODE_LANGUAGE_OPTIONS = [
   ["css", "CSS"],
   ["json", "JSON"],
   ["yaml", "YAML"],
+  ["dockerfile", "Dockerfile"],
   ["markdown", "Markdown"],
   ["text", "Plain Text"]
 ];
@@ -9602,7 +9603,7 @@ var MindMapEditor = class {
     this.updateAiScopeButton();
     this.addToolbarSeparator();
     this.addToolbarButton("table", "table-2", "\u63D2\u5165\u6216\u7F16\u8F91\u8868\u683C", () => this.editTable(), true);
-    this.addToolbarButton("code", "code-2", "\u63D2\u5165\u6216\u7F16\u8F91\u4EE3\u7801", () => this.editCode(), true);
+    this.addToolbarButton("code", "code-2", "\u63D2\u5165\u4EE3\u7801", () => this.editCode(), true);
     this.addToolbarButton("image", "image-plus", "\u7C98\u8D34\u56FE\u7247\u5230\u5F53\u524D\u8282\u70B9\uFF08Ctrl/Cmd+V\uFF09", () => new import_obsidian10.Notice("\u5148\u590D\u5236\u56FE\u7247\uFF0C\u518D\u9009\u4E2D\u8282\u70B9\u5E76\u6309 Ctrl/Cmd+V"), true);
     if (this.options.questionNodesEnabled) this.addToolbarButton("question", "circle-help", "\u65B0\u5EFA\u9898\u76EE\u5B50\u8282\u70B9", () => this.addQuestionChild(), true);
     this.addToolbarButton("screenshot", "scan-line", `\u622A\u56FE\u5E76\u63D2\u5165\u5F53\u524D\u8282\u70B9\uFF08${this.options.screenshotShortcut || "Ctrl+Shift+S"}\uFF09`, () => void this.captureScreenshot());
@@ -11937,36 +11938,15 @@ var MindMapEditor = class {
     new import_obsidian10.Notice("\u5DF2\u751F\u6210\u5B50\u8282\u70B9\u8868\u683C\uFF1B\u539F\u5B50\u8282\u70B9\u5DF2\u4FDD\u7559\u5E76\u6536\u8D77");
   }
   /**
-   * 删除table，并保持模型、界面和持久化状态的一致性。
-   */
-  removeTable() {
-    if (!this.ensureEditable()) return;
-    const selected = this.selectedNode();
-    if (!(selected == null ? void 0 : selected.table)) return;
-    this.mutate(() => {
-      this.removeStructuredBlocks(selected, "table");
-      if (selected.children.length) selected.collapsed = false;
-    });
-  }
-  /**
    * 编辑code，并保持模型、界面和持久化状态的一致性。
    */
   editCode() {
     var _a2;
     if (!this.ensureEditable()) return;
     const selected = (_a2 = this.selectedNode()) != null ? _a2 : this.document.root;
-    new CodeEditModal(this.app, selected.code, (code) => {
-      this.mutate(() => this.upsertStructuredBlock(selected, "code", code));
+    new CodeEditModal(this.app, void 0, (code) => {
+      this.mutate(() => this.appendCodeBlock(selected, code));
     }).open();
-  }
-  /**
-   * 删除code，并保持模型、界面和持久化状态的一致性。
-   */
-  removeCode() {
-    if (!this.ensureEditable()) return;
-    const selected = this.selectedNode();
-    if (!(selected == null ? void 0 : selected.code)) return;
-    this.mutate(() => this.removeStructuredBlocks(selected, "code"));
   }
   /**
    * 插入或更新首个结构化内容块，并同步兼容旧版节点字段。
@@ -11984,9 +11964,13 @@ var MindMapEditor = class {
     node.content = blocks;
     syncNodeContentFields(node);
   }
-  /** Removes all matching structured blocks and mirrors the legacy node fields for compatibility. */
-  removeStructuredBlocks(node, type) {
-    replaceNodeContentBlocks(node, nodeContentBlocks(node).filter((block) => block.type !== type));
+  /** Appends a new code block without replacing code blocks already present on the node. */
+  appendCodeBlock(node, code) {
+    replaceNodeContentBlocks(node, [...nodeContentBlocks(node), { id: newId(), type: "code", code }]);
+  }
+  /** Removes one structured block identified by its content-block ID. */
+  removeStructuredBlock(node, blockId) {
+    replaceNodeContentBlocks(node, nodeContentBlocks(node).filter((block) => block.id !== blockId));
   }
   /**
    * 如果节点已有子导图则打开；否则创建独立 .mindmap 文件并在父节点与子文件导航元数据中建立双向关系。
@@ -12240,6 +12224,11 @@ var MindMapEditor = class {
       this.openTableBlockEditor(node, tableData, blockId);
     });
     wrap.addEventListener("dblclick", (event) => event.stopPropagation());
+    wrap.addEventListener("contextmenu", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      this.openTableBlockContextMenu(event, node, tableData, blockId);
+    });
   }
   /**
    * 渲染node code，并保持模型、界面和持久化状态的一致性。
@@ -12273,6 +12262,31 @@ var MindMapEditor = class {
       this.openCodeBlockEditor(node, codeData, blockId);
     });
     block.addEventListener("dblclick", (event) => event.stopPropagation());
+    block.addEventListener("contextmenu", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      this.openCodeBlockContextMenu(event, node, codeData, blockId);
+    });
+  }
+  /** Opens edit and block-specific removal actions for a rendered table. */
+  openTableBlockContextMenu(event, node, table, blockId) {
+    const menu = new import_obsidian10.Menu();
+    menu.addItem((item) => item.setTitle("\u7F16\u8F91\u8868\u683C").setIcon("table-2").onClick(() => this.openTableBlockEditor(node, table, blockId)));
+    if (blockId) menu.addItem((item) => item.setTitle("\u79FB\u9664\u5F53\u524D\u8868\u683C").setIcon("eraser").onClick(() => {
+      if (!this.ensureEditable()) return;
+      this.mutate(() => this.removeStructuredBlock(node, blockId));
+    }));
+    menu.showAtMouseEvent(event);
+  }
+  /** Opens edit and block-specific removal actions for a rendered code block. */
+  openCodeBlockContextMenu(event, node, code, blockId) {
+    const menu = new import_obsidian10.Menu();
+    menu.addItem((item) => item.setTitle("\u7F16\u8F91\u4EE3\u7801").setIcon("code-2").onClick(() => this.openCodeBlockEditor(node, code, blockId)));
+    if (blockId) menu.addItem((item) => item.setTitle("\u79FB\u9664\u5F53\u524D\u4EE3\u7801").setIcon("eraser").onClick(() => {
+      if (!this.ensureEditable()) return;
+      this.mutate(() => this.removeStructuredBlock(node, blockId));
+    }));
+    menu.showAtMouseEvent(event);
   }
   /** Opens the selected table block directly instead of routing through the node editor. */
   openTableBlockEditor(node, table, blockId) {
@@ -12729,9 +12743,7 @@ var MindMapEditor = class {
     menu.addItem((item) => item.setTitle((selected == null ? void 0 : selected.table) ? "\u7F16\u8F91\u8868\u683C" : "\u63D2\u5165\u8868\u683C").setIcon("table-2").onClick(() => this.editTable()));
     menu.addItem((item) => item.setTitle("\u63D2\u5165 LaTeX \u516C\u5F0F").setIcon("sigma").onClick(() => this.insertFormula()));
     menu.addItem((item) => item.setTitle("\u5C06\u5B50\u8282\u70B9\u751F\u6210\u8868\u683C").setIcon("table-properties").onClick(() => this.convertChildrenToTable()));
-    if (selected == null ? void 0 : selected.table) menu.addItem((item) => item.setTitle("\u79FB\u9664\u8868\u683C").setIcon("table-2").onClick(() => this.removeTable()));
-    menu.addItem((item) => item.setTitle((selected == null ? void 0 : selected.code) ? "\u7F16\u8F91\u4EE3\u7801" : "\u63D2\u5165\u4EE3\u7801").setIcon("code-2").onClick(() => this.editCode()));
-    if (selected == null ? void 0 : selected.code) menu.addItem((item) => item.setTitle("\u79FB\u9664\u4EE3\u7801").setIcon("eraser").onClick(() => this.removeCode()));
+    menu.addItem((item) => item.setTitle("\u63D2\u5165\u4EE3\u7801").setIcon("code-2").onClick(() => this.editCode()));
     menu.addItem((item) => item.setTitle((selected == null ? void 0 : selected.submap) ? "\u8FDB\u5165\u5B50\u5BFC\u56FE" : "\u521B\u5EFA\u5B50\u5BFC\u56FE").setIcon("network").onClick(() => void this.createOrOpenSubmap()));
     if (!(selected == null ? void 0 : selected.submap) && selected !== this.document.root) menu.addItem((item) => item.setTitle("\u63D0\u53D6\u4E3A\u5B50\u5BFC\u56FE").setIcon("layers").onClick(() => void this.extractToSubmap()));
     if (selected == null ? void 0 : selected.submap) menu.addItem((item) => item.setTitle("\u5220\u9664\u5B50\u5BFC\u56FE / \u79FB\u9664\u94FE\u63A5").setIcon("unlink").onClick(() => void this.deleteSelectedSubmap()));

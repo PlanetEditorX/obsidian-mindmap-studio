@@ -5,11 +5,29 @@ import { loadTypeScriptModule } from "./compile-typescript.mjs";
 
 let codeBlock;
 let cleanup;
+let editorSource;
+let contentModalSource;
 
 before(async () => {
-  const loaded = await loadTypeScriptModule("src/render/code-block.ts");
+  const [loaded, editor, contentModal] = await Promise.all([
+    loadTypeScriptModule("src/render/code-block.ts"),
+    readFile("src/editor/editor.ts", "utf8"),
+    readFile("src/editor/content-modals.ts", "utf8")
+  ]);
   codeBlock = loaded.module;
   cleanup = loaded.cleanup;
+  editorSource = editor;
+  contentModalSource = contentModal;
+});
+
+test("code insertion appends blocks and block menus remove only the targeted code or table", () => {
+  assert.match(contentModalSource, /\["dockerfile", "Dockerfile"\]/);
+  assert.match(editorSource, /private appendCodeBlock\(node: MindMapNode, code: MindMapCodeBlock\): void[\s\S]*nodeContentBlocks\(node\), \{ id: newId\(\), type: "code", code \}/);
+  assert.match(editorSource, /new CodeEditModal\(this\.app, undefined, \(code\) =>[\s\S]*appendCodeBlock\(selected, code\)/);
+  assert.match(editorSource, /private removeStructuredBlock\(node: MindMapNode, blockId: string\): void[\s\S]*block\.id !== blockId/);
+  assert.match(editorSource, /openTableBlockContextMenu\(event, node, tableData, blockId\)/);
+  assert.match(editorSource, /openCodeBlockContextMenu\(event, node, codeData, blockId\)/);
+  assert.doesNotMatch(editorSource, /private removeStructuredBlocks\(/);
 });
 
 after(() => cleanup?.());
