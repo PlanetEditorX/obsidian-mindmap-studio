@@ -90,6 +90,11 @@ test("new-node inline editing ignores the initiating Enter keyup", () => {
   assert.match(inlineEdit, /window\.requestAnimationFrame\(focusAtEnd\)[\s\S]*initialFocusProtected = false/);
 });
 
+test("Space starts inline editing for the selected editable mind-map node", () => {
+  const keydown = editorSource.match(/private handleKeydown\(event: KeyboardEvent\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
+  assert.match(keydown, /case " ":[\s\S]*if \(this\.selectedNode\(\)\) this\.beginInlineEdit\(this\.selectedId\)/);
+});
+
 test("article and outline text do not expose edit labels as hover tooltips", () => {
   const makeInlineEditable = editorSource.match(/private makeInlineEditable\([\s\S]*?\n  \}/)?.[0] ?? "";
   const activateInlineEditable = editorSource.match(/private activateInlineEditable\([\s\S]*?\n  \}/)?.[0] ?? "";

@@ -1776,7 +1776,7 @@ export class MindMapEditor {
     this.addToolbarButton("delete", "trash-2", "删除节点（Delete）", () => this.deleteSelected(), true);
     this.addToolbarSeparator();
     this.addToolbarButton("task", "circle-check-big", "切换任务状态（Ctrl/Cmd+Enter）", () => this.cycleTask(), true);
-    this.addToolbarButton("collapse", "fold-vertical", "展开/收起节点（Space）", () => this.toggleCollapse(), true);
+    this.addToolbarButton("collapse", "fold-vertical", "展开/收起节点", () => this.toggleCollapse(), true);
     this.addToolbarButton("collapse-all", "chevrons-up-down", "展开/折叠全部子项", () => this.toggleAllNodesCollapsed());
     this.addToolbarButton("link", "link", "打开节点链接", () => this.openSelectedLink());
     this.addToolbarButton("search", "search", "搜索当前导图及全部子导图（Ctrl/Cmd+Alt+F）", () => this.openSearch());
@@ -5772,7 +5772,7 @@ export class MindMapEditor {
         break;
       case " ":
         event.preventDefault();
-        this.toggleCollapse();
+        if (this.selectedNode()) this.beginInlineEdit(this.selectedId);
         break;
       case "ArrowLeft":
         event.preventDefault();
