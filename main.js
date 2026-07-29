@@ -958,7 +958,7 @@ function parseTaskText(value) {
   return { text: ((_a2 = match[2]) == null ? void 0 : _a2.trim()) || "\u4EFB\u52A1", task };
 }
 function markdownToDocument(markdown, fallbackTitle = "\u601D\u7EF4\u5BFC\u56FE") {
-  var _a2, _b2, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _A, _B, _C, _D, _E, _F, _G, _H, _I;
+  var _a2, _b2, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _A, _B, _C, _D, _E, _F, _G, _H, _I, _J;
   const doc = createDefaultDocument(fallbackTitle);
   doc.root.children = [];
   const stack = [{ level: 0, node: doc.root, kind: "root" }];
@@ -1065,6 +1065,7 @@ function markdownToDocument(markdown, fallbackTitle = "\u601D\u7EF4\u5BFC\u56FE"
     const quote = line.match(/^\s*>\s*(.+?)\s*$/);
     const linkedImage = line.trim().match(/^\[!\[([^\]]*)\]\((\S+?)(?:\s+["'][^)]*["'])?\)\]\(\S+(?:\s+["'][^)]*["'])?\)\s*$/);
     const image = line.trim().match(/^!\[([^\]]*)\]\((\S+?)(?:\s+["'][^)]*["'])?\)\s*$/);
+    const obsidianImage = line.trim().match(/^!\[\[([^\]|#]+)(?:#[^\]|]+)?(?:\|([^\]]+))?\]\]$/);
     if (heading) {
       currentBoldTheme = null;
       currentBoldNode = null;
@@ -1110,14 +1111,18 @@ function markdownToDocument(markdown, fallbackTitle = "\u601D\u7EF4\u5BFC\u56FE"
       appendImageBlock((_r = image[1]) != null ? _r : "\u56FE\u7247", (_s = image[2]) != null ? _s : "");
       continue;
     }
+    if (obsidianImage) {
+      appendImageBlock(obsidianImage[2] && !/^\d+(?:px)?$/i.test(obsidianImage[2].trim()) ? obsidianImage[2] : "\u56FE\u7247", (_t = obsidianImage[1]) != null ? _t : "");
+      continue;
+    }
     if (quote) {
-      const parent2 = (_u = (_t = stack.at(-1)) == null ? void 0 : _t.node) != null ? _u : doc.root;
-      parent2.children.push(createMarkdownNode(((_v = quote[1]) == null ? void 0 : _v.trim()) || "\u5F15\u7528"));
+      const parent2 = (_v = (_u = stack.at(-1)) == null ? void 0 : _u.node) != null ? _v : doc.root;
+      parent2.children.push(createMarkdownNode(((_w = quote[1]) == null ? void 0 : _w.trim()) || "\u5F15\u7528"));
       hasLeadingContent || (hasLeadingContent = !rootAssigned);
       continue;
     }
     if (boldOutline) {
-      const text = ((_w = boldOutline[1]) == null ? void 0 : _w.trim()) || "\u8282\u70B9";
+      const text = ((_x = boldOutline[1]) == null ? void 0 : _x.trim()) || "\u8282\u70B9";
       if (!rootAssigned && !doc.root.children.length && stack.length === 1) {
         applyMarkdownText(doc.root, text, "\u8282\u70B9", true);
         doc.title = doc.root.text;
@@ -1138,16 +1143,16 @@ function markdownToDocument(markdown, fallbackTitle = "\u601D\u7EF4\u5BFC\u56FE"
     }
     const listMatch = bullet != null ? bullet : numbered;
     if (listMatch) {
-      const spaces = ((_x = listMatch[1]) != null ? _x : "").replaceAll("	", "  ").length;
-      const parentLevel = (_z = (_y = [...stack].reverse().find((entry) => entry.kind === "heading" || entry.kind === "bold")) == null ? void 0 : _y.level) != null ? _z : 1;
+      const spaces = ((_y = listMatch[1]) != null ? _y : "").replaceAll("	", "  ").length;
+      const parentLevel = (_A = (_z = [...stack].reverse().find((entry) => entry.kind === "heading" || entry.kind === "bold")) == null ? void 0 : _z.level) != null ? _A : 1;
       const previous = stack.at(-1);
-      const numberedParent = (previous == null ? void 0 : previous.kind) === "list" && previous.listKind === "numbered" && previous.level === parentLevel + 1 ? previous : (previous == null ? void 0 : previous.kind) === "list" && previous.listKind === "bullet" && previous.level === parentLevel + 2 && ((_A = stack.at(-2)) == null ? void 0 : _A.listKind) === "numbered" ? stack.at(-2) : void 0;
+      const numberedParent = (previous == null ? void 0 : previous.kind) === "list" && previous.listKind === "numbered" && previous.level === parentLevel + 1 ? previous : (previous == null ? void 0 : previous.kind) === "list" && previous.listKind === "bullet" && previous.level === parentLevel + 2 && ((_B = stack.at(-2)) == null ? void 0 : _B.listKind) === "numbered" ? stack.at(-2) : void 0;
       const level = bullet && spaces === 0 && numberedParent ? numberedParent.level + 1 : parentLevel + Math.floor(spaces / 2) + 1;
-      const parsed = parseTaskText(((_B = listMatch[2]) != null ? _B : "\u8282\u70B9").trim());
+      const parsed = parseTaskText(((_C = listMatch[2]) != null ? _C : "\u8282\u70B9").trim());
       const node = createMarkdownNode(parsed.text);
       node.task = parsed.task;
-      while (stack.length > 1 && ((_D = (_C = stack.at(-1)) == null ? void 0 : _C.level) != null ? _D : 0) >= level) stack.pop();
-      const parent2 = (_F = (_E = stack.at(-1)) == null ? void 0 : _E.node) != null ? _F : doc.root;
+      while (stack.length > 1 && ((_E = (_D = stack.at(-1)) == null ? void 0 : _D.level) != null ? _E : 0) >= level) stack.pop();
+      const parent2 = (_G = (_F = stack.at(-1)) == null ? void 0 : _F.node) != null ? _G : doc.root;
       parent2.children.push(node);
       stack.push({ level, node, kind: "list", listKind: bullet ? "bullet" : "numbered" });
       currentBoldNode = node;
@@ -1157,7 +1162,7 @@ function markdownToDocument(markdown, fallbackTitle = "\u601D\u7EF4\u5BFC\u56FE"
       currentBoldNode.children.push(createMarkdownNode(line.trim()));
       continue;
     }
-    const parent = (_G = stack.at(-1)) == null ? void 0 : _G.node;
+    const parent = (_H = stack.at(-1)) == null ? void 0 : _H.node;
     if (parent && parent !== doc.root) parent.children.push(createMarkdownNode(line.trim()));
     else hasLeadingContent = true;
   }
@@ -1166,7 +1171,7 @@ function markdownToDocument(markdown, fallbackTitle = "\u601D\u7EF4\u5BFC\u56FE"
     const tableStr = tableLines.join("\n");
     const parsed = parseMarkdownTable(tableStr);
     if (parsed) {
-      const target = (_I = currentBoldNode != null ? currentBoldNode : (_H = stack.at(-1)) == null ? void 0 : _H.node) != null ? _I : doc.root;
+      const target = (_J = currentBoldNode != null ? currentBoldNode : (_I = stack.at(-1)) == null ? void 0 : _I.node) != null ? _J : doc.root;
       replaceNodeContentBlocks(target, [...nodeContentBlocks(target), { id: newId(), type: "table", table: parsed }]);
     }
   }

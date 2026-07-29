@@ -1839,6 +1839,7 @@ export function markdownToDocument(markdown: string, fallbackTitle = "思维导�
     const quote = line.match(/^\s*>\s*(.+?)\s*$/);
     const linkedImage = line.trim().match(/^\[!\[([^\]]*)\]\((\S+?)(?:\s+["'][^)]*["'])?\)\]\(\S+(?:\s+["'][^)]*["'])?\)\s*$/);
     const image = line.trim().match(/^!\[([^\]]*)\]\((\S+?)(?:\s+["'][^)]*["'])?\)\s*$/);
+    const obsidianImage = line.trim().match(/^!\[\[([^\]|#]+)(?:#[^\]|]+)?(?:\|([^\]]+))?\]\]$/);
 
     if (heading) {
       currentBoldTheme = null;
@@ -1886,6 +1887,11 @@ export function markdownToDocument(markdown: string, fallbackTitle = "思维导�
 
     if (image) {
       appendImageBlock(image[1] ?? "图片", image[2] ?? "");
+      continue;
+    }
+
+    if (obsidianImage) {
+      appendImageBlock(obsidianImage[2] && !/^\d+(?:px)?$/i.test(obsidianImage[2].trim()) ? obsidianImage[2] : "图片", obsidianImage[1] ?? "");
       continue;
     }
 
