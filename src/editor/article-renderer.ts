@@ -202,13 +202,11 @@ export function renderArticleNodeContent(container: HTMLElement, node: MindMapNo
       const code = container.createDiv({ cls: "mms-article-code markdown-rendered" });
       code.dataset.blockId = block.id;
       void options.callbacks.onRenderCode(block.code, code);
-      if (!options.readOnly) {
-        code.addEventListener("dblclick", (event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          options.makeInlineCodeEditable(code, node, block.code, block.id);
-        });
-      }
+      code.addEventListener("dblclick", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        options.makeInlineCodeEditable(code, node, block.code, block.id);
+      });
     }
   }
   if (node.note) container.createEl("p", { cls: "mms-article-note", text: node.note });
