@@ -2726,8 +2726,10 @@
 
 .mms-global-search-result-actions {
   display: flex;
-  justify-content: center;
-  margin-top: 8px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 .mms-global-search-replace-one {
