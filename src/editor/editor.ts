@@ -1028,6 +1028,7 @@ export class MindMapEditor {
   private resizeObserver: ResizeObserver | null = null;
   private measuredLayoutFrame: number | null = null;
   private pendingMindMapLayoutAnimation = false;
+  private allNodesCollapseToggleTimer: number | null = null;
   private branchClipboard: MindMapNode[] | null = null;
   private searchQuery = "";
   private lastRichTextColor = "#ef4444";
@@ -1100,6 +1101,8 @@ export class MindMapEditor {
     this.resizeObserver = null;
     if (this.measuredLayoutFrame !== null) window.cancelAnimationFrame(this.measuredLayoutFrame);
     this.measuredLayoutFrame = null;
+    if (this.allNodesCollapseToggleTimer !== null) window.clearTimeout(this.allNodesCollapseToggleTimer);
+    this.allNodesCollapseToggleTimer = null;
     this.host.empty();
   }
 
@@ -4063,6 +4066,8 @@ export class MindMapEditor {
    * @param collapsed Whether branches should be collapsed.
    */
   private setAllNodesCollapsed(collapsed: boolean): void {
+    const branches = flattenNodes(this.document.root).filter((node) => node !== this.document.root && node.children.length > 0);
+    if (!branches.some((node) => node.collapsed !== collapsed)) return;
     const apply = (): void => {
       setAllBranchesCollapsed(this.document.root, collapsed);
     };
@@ -4077,8 +4082,13 @@ export class MindMapEditor {
 
   /** Toggles every non-root branch between fully expanded and fully collapsed. */
   private toggleAllNodesCollapsed(): void {
+    if (this.allNodesCollapseToggleTimer !== null) return;
     const branches = flattenNodes(this.document.root).filter((node) => node !== this.document.root && node.children.length > 0);
+    if (!branches.length) return;
     this.setAllNodesCollapsed(branches.some((node) => !node.collapsed));
+    this.allNodesCollapseToggleTimer = window.setTimeout(() => {
+      this.allNodesCollapseToggleTimer = null;
+    }, 260);
   }
 
   /**

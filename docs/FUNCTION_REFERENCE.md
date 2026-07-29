@@ -2780,7 +2780,7 @@ export class MindMapEditor
 
 ### 构造函数 `MindMapEditor.constructor`
 
-源码：`src/editor/editor.ts:1062`
+源码：`src/editor/editor.ts:1063`
 
 创建 MindMapEditor 实例，保存依赖和初始状态；实际 DOM 构建通常在 onOpen() 或后续渲染流程中完成。
 
@@ -2790,7 +2790,7 @@ constructor(app: App, host: HTMLElement, document: MindMapDocument, callbacks: M
 
 ### 方法 `MindMapEditor.destroy`
 
-源码：`src/editor/editor.ts:1088`
+源码：`src/editor/editor.ts:1089`
 
 执行“destroy”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
 
@@ -2800,7 +2800,7 @@ destroy(): void
 
 ### 方法 `MindMapEditor.setDocument`
 
-源码：`src/editor/editor.ts:1112`
+源码：`src/editor/editor.ts:1115`
 
 更新并应用document，并保持模型、界面和持久化状态的一致性。
 
@@ -2810,7 +2810,7 @@ setDocument(document: MindMapDocument, resetHistory = true): void
 
 ### 方法 `MindMapEditor.setOptions`
 
-源码：`src/editor/editor.ts:1130`
+源码：`src/editor/editor.ts:1133`
 
 更新编辑器运行参数。文章族上下文或持久化阅读位置在异步加载完成后变化时， 会重新解析节点并恢复到同一语义位置，而不是恢复旧的像素滚动值。
 
@@ -2820,7 +2820,7 @@ setOptions(options: MindMapEditorOptions): void
 
 ### 方法 `MindMapEditor.setDisplayMode`
 
-源码：`src/editor/editor.ts:1232`
+源码：`src/editor/editor.ts:1235`
 
 切换显示模式，并将当前语义位置同步到目标模式。通读中的目标属于子导图时， 回调会在全局模式切换后打开对应物理文件并定位节点。
 
@@ -2830,7 +2830,7 @@ setDisplayMode(mode: DisplayMode, notifyGlobal = true, persistCapturedLocation =
 
 ### 方法 `MindMapEditor.applyGlobalDisplayMode`
 
-源码：`src/editor/editor.ts:1266`
+源码：`src/editor/editor.ts:1269`
 
 应用其他已打开视图发出的全局模式切换，同时保留本视图自己的阅读位置。
 
@@ -2840,7 +2840,7 @@ applyGlobalDisplayMode(mode: DisplayMode): void
 
 ### 方法 `MindMapEditor.readingLocationSections`
 
-源码：`src/editor/editor.ts:1282`
+源码：`src/editor/editor.ts:1285`
 
 返回包含当前未保存文档的最新文章族快照。
 
@@ -2850,7 +2850,7 @@ private readingLocationSections(options: MindMapEditorOptions = this.options): R
 
 ### 方法 `MindMapEditor.resolveStoredLocation`
 
-源码：`src/editor/editor.ts:1293`
+源码：`src/editor/editor.ts:1296`
 
 解析上次保存的位置，并在节点失效时逐级回退。
 
@@ -2860,7 +2860,7 @@ private resolveStoredLocation(): ResolvedReadingLocation | null
 
 ### 方法 `MindMapEditor.captureCurrentLocation`
 
-源码：`src/editor/editor.ts:1302`
+源码：`src/editor/editor.ts:1305`
 
 从当前模式的选择或滚动视口中提取统一语义位置。
 
@@ -2870,7 +2870,7 @@ private captureCurrentLocation(mode: DisplayMode): ReadingLocation | null
 
 ### 方法 `MindMapEditor.rememberLocation`
 
-源码：`src/editor/editor.ts:1344`
+源码：`src/editor/editor.ts:1347`
 
 将统一位置写回插件设置；滚动过程会去重并延迟写盘。
 
@@ -2880,7 +2880,7 @@ private rememberLocation(location: ReadingLocation, immediate = false): void
 
 ### 方法 `MindMapEditor.rememberCurrentLocation`
 
-源码：`src/editor/editor.ts:1360`
+源码：`src/editor/editor.ts:1363`
 
 捕获当前模式位置并按需立即保存。
 
@@ -2890,7 +2890,7 @@ private rememberCurrentLocation(mode: DisplayMode, immediate = false): ReadingLo
 
 ### 方法 `MindMapEditor.scheduleReadingLocationCapture`
 
-源码：`src/editor/editor.ts:1367`
+源码：`src/editor/editor.ts:1370`
 
 对滚动事件进行轻量防抖，避免每个像素变化都扫描章节 DOM。
 
@@ -2900,7 +2900,7 @@ private scheduleReadingLocationCapture(mode: DisplayMode): void
 
 ### 方法 `MindMapEditor.blockReadingLocationCapture`
 
-源码：`src/editor/editor.ts:1383`
+源码：`src/editor/editor.ts:1386`
 
 在程序主动恢复滚动位置期间暂停滚动采集。 修改 `scrollTop` 同样会触发 scroll 事件；若把它当成用户滚动重新保存， 会形成“恢复 → 采集 → 保存 → 再恢复”的位置反馈环。
 
@@ -2910,7 +2910,7 @@ private blockReadingLocationCapture(): void
 
 ### 方法 `MindMapEditor.restoreReadingLocation`
 
-源码：`src/editor/editor.ts:1400`
+源码：`src/editor/editor.ts:1403`
 
 在目标模式中恢复节点和节点内部比例。目标位于其他物理文件时只返回解析结果， 由视图层在模式同步完成后打开该文件。
 
@@ -2920,7 +2920,7 @@ private restoreReadingLocation(mode: DisplayMode, location: ReadingLocation | nu
 
 ### 方法 `MindMapEditor.toggleReadOnly`
 
-源码：`src/editor/editor.ts:1446`
+源码：`src/editor/editor.ts:1449`
 
 切换read only，并保持模型、界面和持久化状态的一致性。
 
@@ -2930,7 +2930,7 @@ toggleReadOnly(): void
 
 ### 方法 `MindMapEditor.askAi`
 
-源码：`src/editor/editor.ts:1490`
+源码：`src/editor/editor.ts:1493`
 
 使用最近一次右键范围询问 AI；未右键节点时默认询问当前页面。
 
@@ -2940,7 +2940,7 @@ askAi(): void
 
 ### 方法 `MindMapEditor.getDocument`
 
-源码：`src/editor/editor.ts:1499`
+源码：`src/editor/editor.ts:1502`
 
 读取并返回document，并保持模型、界面和持久化状态的一致性。
 
@@ -2950,7 +2950,7 @@ getDocument(): MindMapDocument
 
 ### 方法 `MindMapEditor.previewAiEdit`
 
-源码：`src/editor/editor.ts:1505`
+源码：`src/editor/editor.ts:1508`
 
 根据当前页面或节点范围生成 AI Markdown 修改预览，不直接修改文档。
 
@@ -2960,7 +2960,7 @@ previewAiEdit(responseText: string, scopeNodeId?: string): AiEditPreview
 
 ### 方法 `MindMapEditor.applyAiEdit`
 
-源码：`src/editor/editor.ts:1510`
+源码：`src/editor/editor.ts:1513`
 
 应用用户确认的 AI 修改预览，并写入撤销历史。
 
@@ -2970,7 +2970,7 @@ applyAiEdit(preview: AiEditPreview): boolean
 
 ### 方法 `MindMapEditor.previewLocalReplace`
 
-源码：`src/editor/editor.ts:1524`
+源码：`src/editor/editor.ts:1527`
 
 预览当前页面或节点子树中的本地文字替换，不调用任何 AI 接口。
 
@@ -2980,7 +2980,7 @@ previewLocalReplace(query: string, replacement: string, caseSensitive = false, s
 
 ### 方法 `MindMapEditor.applyLocalReplace`
 
-源码：`src/editor/editor.ts:1529`
+源码：`src/editor/editor.ts:1532`
 
 应用用户确认的本地文字替换，并写入撤销历史。
 
@@ -2990,7 +2990,7 @@ applyLocalReplace(preview: LocalReplacePreview): boolean
 
 ### 方法 `MindMapEditor.captureScreenshot`
 
-源码：`src/editor/editor.ts:1543`
+源码：`src/editor/editor.ts:1546`
 
 启动系统截图；有编辑焦点时插入原节点，否则保留系统剪贴板中的截图。
 
@@ -3000,7 +3000,7 @@ async captureScreenshot(): Promise<void>
 
 ### 方法 `MindMapEditor.screenshotInsertionTarget`
 
-源码：`src/editor/editor.ts:1591`
+源码：`src/editor/editor.ts:1594`
 
 返回截图操作开始前实际聚焦的节点或文章段落；命令面板等外部焦点返回 null。
 
@@ -3010,7 +3010,7 @@ private screenshotInsertionTarget(): ScreenshotInsertionTarget | null
 
 ### 方法 `MindMapEditor.recognizeImageBlock`
 
-源码：`src/editor/editor.ts:1617`
+源码：`src/editor/editor.ts:1620`
 
 识别指定图片；直接确认时后台替换，否则打开原图/文字对比预览。
 
@@ -3020,7 +3020,7 @@ private async recognizeImageBlock(nodeId: string, blockId: string): Promise<void
 
 ### 方法 `MindMapEditor.previewImageTextReplacements`
 
-源码：`src/editor/editor.ts:1646`
+源码：`src/editor/editor.ts:1649`
 
 为 AI 助手的每张识图结果创建独立且可校验的原位替换预览。
 
@@ -3030,7 +3030,7 @@ previewImageTextReplacements(items: ImageRecognitionItemResult[]): ImageTextRepl
 
 ### 方法 `MindMapEditor.applyImageTextReplacements`
 
-源码：`src/editor/editor.ts:1651`
+源码：`src/editor/editor.ts:1654`
 
 应用用户确认的图片转文字预览，并统一接入撤销、保存和聚焦。
 
@@ -3040,7 +3040,7 @@ async applyImageTextReplacements(previews: ImageTextReplacementPreview[]): Promi
 
 ### 方法 `MindMapEditor.applyImageRecognitionPreview`
 
-源码：`src/editor/editor.ts:1670`
+源码：`src/editor/editor.ts:1673`
 
 应用单张图片识别预览。
 
@@ -3050,7 +3050,7 @@ private applyImageRecognitionPreview(preview: ImageTextReplacementPreview): Prom
 
 ### 方法 `MindMapEditor.autoUploadScheduleMessage`
 
-源码：`src/editor/editor.ts:1675`
+源码：`src/editor/editor.ts:1678`
 
 格式化粘贴和截图后的自动上传提示。
 
@@ -3060,7 +3060,7 @@ private autoUploadScheduleMessage(): string
 
 ### 方法 `MindMapEditor.markSaved`
 
-源码：`src/editor/editor.ts:1683`
+源码：`src/editor/editor.ts:1686`
 
 执行“mark saved”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
 
@@ -3070,7 +3070,7 @@ markSaved(): void
 
 ### 方法 `MindMapEditor.markSaving`
 
-源码：`src/editor/editor.ts:1691`
+源码：`src/editor/editor.ts:1694`
 
 执行“mark saving”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
 
@@ -3080,7 +3080,7 @@ markSaving(): void
 
 ### 方法 `MindMapEditor.focus`
 
-源码：`src/editor/editor.ts:1699`
+源码：`src/editor/editor.ts:1702`
 
 定位相关数据，并保持模型、界面和持久化状态的一致性。
 
@@ -3090,7 +3090,7 @@ focus(): void
 
 ### 方法 `MindMapEditor.focusNodeById`
 
-源码：`src/editor/editor.ts:1708`
+源码：`src/editor/editor.ts:1711`
 
 定位node by id，并保持模型、界面和持久化状态的一致性。
 
@@ -3100,7 +3100,7 @@ focusNodeById(id: string, persistLocation = true): void
 
 ### 方法 `MindMapEditor.showArticleDirectory`
 
-源码：`src/editor/editor.ts:1716`
+源码：`src/editor/editor.ts:1719`
 
 Switches the current top-level document to its generated article directory.
 
@@ -3110,7 +3110,7 @@ showArticleDirectory(): void
 
 ### 方法 `MindMapEditor.buildUi`
 
-源码：`src/editor/editor.ts:1726`
+源码：`src/editor/editor.ts:1729`
 
 构建ui，并保持模型、界面和持久化状态的一致性。
 
@@ -3120,7 +3120,7 @@ private buildUi(): void
 
 ### 方法 `MindMapEditor.resolveMode`
 
-源码：`src/editor/editor.ts:2041`
+源码：`src/editor/editor.ts:2044`
 
 解析并确定mode，并保持模型、界面和持久化状态的一致性。
 
@@ -3130,7 +3130,7 @@ private resolveMode(preferred: DisplayMode): DisplayMode
 
 ### 方法 `MindMapEditor.persistReadOnlyState`
 
-源码：`src/editor/editor.ts:2049`
+源码：`src/editor/editor.ts:2052`
 
 执行“persist read only state”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
 
@@ -3140,7 +3140,7 @@ private persistReadOnlyState(): void
 
 ### 方法 `MindMapEditor.applyReadOnlyStateToRenderedContent`
 
-源码：`src/editor/editor.ts:2063`
+源码：`src/editor/editor.ts:2066`
 
 Updates edit affordances in the existing DOM without rebuilding the map or article.
 
@@ -3150,7 +3150,7 @@ private applyReadOnlyStateToRenderedContent(): void
 
 ### 方法 `MindMapEditor.updateModeUi`
 
-源码：`src/editor/editor.ts:2083`
+源码：`src/editor/editor.ts:2086`
 
 执行“update mode ui”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
 
@@ -3160,7 +3160,7 @@ private updateModeUi(): void
 
 ### 方法 `MindMapEditor.ensureEditable`
 
-源码：`src/editor/editor.ts:2122`
+源码：`src/editor/editor.ts:2125`
 
 执行“ensure editable”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
 
@@ -3170,7 +3170,7 @@ private ensureEditable(): boolean
 
 ### 方法 `MindMapEditor.clearImageLoadTimers`
 
-源码：`src/editor/editor.ts:2131`
+源码：`src/editor/editor.ts:2134`
 
 执行“clear image load timers”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
 
@@ -3180,7 +3180,7 @@ private clearImageLoadTimers(): void
 
 ### 方法 `MindMapEditor.updateAiScopeButton`
 
-源码：`src/editor/editor.ts:2137`
+源码：`src/editor/editor.ts:2140`
 
 更新 AI 工具栏提示，使用户知道下一次提问会使用页面还是右键节点。
 
@@ -3190,7 +3190,7 @@ private updateAiScopeButton(): void
 
 ### 方法 `MindMapEditor.addToolbarButton`
 
-源码：`src/editor/editor.ts:2158`
+源码：`src/editor/editor.ts:2161`
 
 添加toolbar button，并保持模型、界面和持久化状态的一致性。
 
@@ -3200,7 +3200,7 @@ private addToolbarButton(id: string, icon: string, label: string, action: () => 
 
 ### 方法 `MindMapEditor.applyToolbarOrder`
 
-源码：`src/editor/editor.ts:2178`
+源码：`src/editor/editor.ts:2181`
 
 Applies the user-defined order to toolbar buttons.
 
@@ -3210,7 +3210,7 @@ private applyToolbarOrder(): void
 
 ### 方法 `MindMapEditor.addToolbarSeparator`
 
-源码：`src/editor/editor.ts:2195`
+源码：`src/editor/editor.ts:2198`
 
 添加toolbar separator，并保持模型、界面和持久化状态的一致性。
 
@@ -3220,7 +3220,7 @@ private addToolbarSeparator(): void
 
 ### 方法 `MindMapEditor.getAppearance`
 
-源码：`src/editor/editor.ts:2203`
+源码：`src/editor/editor.ts:2206`
 
 读取并返回appearance，并保持模型、界面和持久化状态的一致性。
 
@@ -3230,7 +3230,7 @@ private getAppearance(): MindMapAppearance
 
 ### 方法 `MindMapEditor.fontFamilyCss`
 
-源码：`src/editor/editor.ts:2213`
+源码：`src/editor/editor.ts:2216`
 
 执行“font family css”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
 
@@ -3240,7 +3240,7 @@ private fontFamilyCss(appearance: MindMapAppearance): string
 
 ### 方法 `MindMapEditor.applyAppearance`
 
-源码：`src/editor/editor.ts:2226`
+源码：`src/editor/editor.ts:2229`
 
 应用appearance，并保持模型、界面和持久化状态的一致性。
 
@@ -3250,7 +3250,7 @@ private applyAppearance(appearance: MindMapAppearance): void
 
 ### 方法 `MindMapEditor.renderNavigation`
 
-源码：`src/editor/editor.ts:2252`
+源码：`src/editor/editor.ts:2255`
 
 在画布左上角或文档顶部渲染父子导图导航。导图模式使用固定悬浮面包屑，文章和大纲模式使用文档流导航，均保持当前全局显示模式。
 
@@ -3260,7 +3260,7 @@ private renderNavigation(): void
 
 ### 方法 `MindMapEditor.updateNodePrimaryText`
 
-源码：`src/editor/editor.ts:2322`
+源码：`src/editor/editor.ts:2325`
 
 执行“update node primary text”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
 
@@ -3270,7 +3270,7 @@ private updateNodePrimaryText(node: MindMapNode, value:
 
 ### 方法 `MindMapEditor.makeInlineEditable`
 
-源码：`src/editor/editor.ts:2345`
+源码：`src/editor/editor.ts:2348`
 
 创建并配置inline editable，并保持模型、界面和持久化状态的一致性。
 
@@ -3280,7 +3280,7 @@ private makeInlineEditable(element: HTMLElement, node: MindMapNode, placeholder:
 
 ### 方法 `MindMapEditor.applyInlineEditingAccessibility`
 
-源码：`src/editor/editor.ts:2408`
+源码：`src/editor/editor.ts:2411`
 
 Adds textbox semantics only while an inline line is actively editable.
 
@@ -3290,7 +3290,7 @@ private applyInlineEditingAccessibility(element: HTMLElement): void
 
 ### 方法 `MindMapEditor.clearInlineEditingAccessibility`
 
-源码：`src/editor/editor.ts:2414`
+源码：`src/editor/editor.ts:2417`
 
 Removes edit-only semantics so Obsidian does not show hover tooltips on reading text.
 
@@ -3300,7 +3300,7 @@ private clearInlineEditingAccessibility(element: HTMLElement): void
 
 ### 方法 `MindMapEditor.activateInlineEditable`
 
-源码：`src/editor/editor.ts:2420`
+源码：`src/editor/editor.ts:2423`
 
 Activates one article or outline line without changing the surrounding layout.
 
@@ -3310,7 +3310,7 @@ private activateInlineEditable(element: HTMLElement, focus = true): void
 
 ### 方法 `MindMapEditor.makeInlineCodeEditable`
 
-源码：`src/editor/editor.ts:2428`
+源码：`src/editor/editor.ts:2431`
 
 Activates direct code editing for a code block rendered in article mode.
 
@@ -3320,7 +3320,7 @@ private makeInlineCodeEditable(element: HTMLElement, node: MindMapNode, code: Mi
 
 ### 方法 `MindMapEditor.addInlineNodeActions`
 
-源码：`src/editor/editor.ts:2470`
+源码：`src/editor/editor.ts:2473`
 
 添加inline node actions，并保持模型、界面和持久化状态的一致性。
 
@@ -3330,7 +3330,7 @@ private addInlineNodeActions(container: HTMLElement, node: MindMapNode): void
 
 ### 方法 `MindMapEditor.renderOutline`
 
-源码：`src/editor/editor.ts:2486`
+源码：`src/editor/editor.ts:2489`
 
 按照节点层级渲染可编辑大纲。节点标题、备注和子导图链接仍映射到同一份数据，任何修改都会通过统一变更链同步到导图和文章模式。
 
@@ -3340,7 +3340,7 @@ private renderOutline(): void
 
 ### 方法 `MindMapEditor.renderArticle`
 
-源码：`src/editor/editor.ts:2511`
+源码：`src/editor/editor.ts:2514`
 
 渲染文章目录页、章节编号、正文和跨子导图链接。顶层父导图可展示递归目录；子导图根据文章上下文继续父级编号。
 
@@ -3350,7 +3350,7 @@ private renderArticle(): void
 
 ### 方法 `MindMapEditor.renderArticleMiniMap`
 
-源码：`src/editor/editor.ts:2520`
+源码：`src/editor/editor.ts:2523`
 
 Renders a compact structural navigator for article and continuous reading views.
 
@@ -3360,7 +3360,7 @@ private renderArticleMiniMap(): void
 
 ### 方法 `MindMapEditor.articleMiniMapDepth`
 
-源码：`src/editor/editor.ts:2555`
+源码：`src/editor/editor.ts:2558`
 
 Returns the structural article depth represented by a minimap target.
 
@@ -3370,7 +3370,7 @@ private articleMiniMapDepth(target: HTMLElement): number
 
 ### 方法 `MindMapEditor.articleMiniMapTargetLabel`
 
-源码：`src/editor/editor.ts:2560`
+源码：`src/editor/editor.ts:2563`
 
 Returns the complete chapter label for the minimap marker tooltip.
 
@@ -3380,7 +3380,7 @@ private articleMiniMapTargetLabel(target: HTMLElement): string
 
 ### 方法 `MindMapEditor.showArticleMiniMapTooltip`
 
-源码：`src/editor/editor.ts:2567`
+源码：`src/editor/editor.ts:2570`
 
 Shows a complete chapter label above its marker without clipping it to the navigator width.
 
@@ -3390,7 +3390,7 @@ private showArticleMiniMapTooltip(marker: HTMLElement, label: string): void
 
 ### 方法 `MindMapEditor.hideArticleMiniMapTooltip`
 
-源码：`src/editor/editor.ts:2579`
+源码：`src/editor/editor.ts:2582`
 
 Hides the standalone chapter label when its marker is no longer focused.
 
@@ -3400,7 +3400,7 @@ private hideArticleMiniMapTooltip(): void
 
 ### 方法 `MindMapEditor.scrollToArticleMiniMapTarget`
 
-源码：`src/editor/editor.ts:2584`
+源码：`src/editor/editor.ts:2587`
 
 Scrolls the article container to the exact top position of a minimap target.
 
@@ -3410,7 +3410,7 @@ private scrollToArticleMiniMapTarget(target: HTMLElement): void
 
 ### 方法 `MindMapEditor.articleMiniMapTargets`
 
-源码：`src/editor/editor.ts:2592`
+源码：`src/editor/editor.ts:2595`
 
 Returns the current page's highest and next-highest structural categories for the minimap.
 
@@ -3420,7 +3420,7 @@ private articleMiniMapTargets(): HTMLElement[]
 
 ### 方法 `MindMapEditor.updateArticleMiniMapActiveMarker`
 
-源码：`src/editor/editor.ts:2603`
+源码：`src/editor/editor.ts:2606`
 
 Updates the dark marker to match the article section currently being read.
 
@@ -3430,7 +3430,7 @@ private updateArticleMiniMapActiveMarker(): void
 
 ### 方法 `MindMapEditor.updateArticleMiniMapMarkerHover`
 
-源码：`src/editor/editor.ts:2619`
+源码：`src/editor/editor.ts:2622`
 
 Expands the nearest marker and progressively shortens its vertical neighbours.
 
@@ -3440,7 +3440,7 @@ private updateArticleMiniMapMarkerHover(focusedIndex: number | null): void
 
 ### 方法 `MindMapEditor.bindArticleMiniMapInteractions`
 
-源码：`src/editor/editor.ts:2627`
+源码：`src/editor/editor.ts:2630`
 
 Keeps the navigator discoverable while preventing it from permanently occupying the page edge.
 
@@ -3450,7 +3450,7 @@ private bindArticleMiniMapInteractions(track: HTMLElement): void
 
 ### 方法 `MindMapEditor.clearArticleMiniMap`
 
-源码：`src/editor/editor.ts:2681`
+源码：`src/editor/editor.ts:2684`
 
 Removes minimap listeners and pending timers before the next article render.
 
@@ -3460,7 +3460,7 @@ private clearArticleMiniMap(): void
 
 ### 方法 `MindMapEditor.updateArticleMiniMapVisibility`
 
-源码：`src/editor/editor.ts:2692`
+源码：`src/editor/editor.ts:2695`
 
 Hides the minimap when the article page leaves insufficient right-side gutter.
 
@@ -3470,7 +3470,7 @@ private updateArticleMiniMapVisibility(): void
 
 ### 方法 `MindMapEditor.articleRendererOptions`
 
-源码：`src/editor/editor.ts:2703`
+源码：`src/editor/editor.ts:2706`
 
 构造文章渲染器所需的最小状态边界。
 
@@ -3480,7 +3480,7 @@ private articleRendererOptions(): ArticleRendererOptions
 
 ### 方法 `MindMapEditor.effectiveArticleTocMaxDepth`
 
-源码：`src/editor/editor.ts:2733`
+源码：`src/editor/editor.ts:2736`
 
 返回当前脑图实际使用的目录最大层级。文档级覆盖优先，未设置时跟随插件全局选项。
 
@@ -3490,7 +3490,7 @@ private effectiveArticleTocMaxDepth(): number
 
 ### 方法 `MindMapEditor.renderArticleContent`
 
-源码：`src/editor/editor.ts:2738`
+源码：`src/editor/editor.ts:2741`
 
 将文章内容块渲染委托给文章模式模块。
 
@@ -3500,7 +3500,7 @@ private renderArticleContent(container: HTMLElement, node: MindMapNode, treatTex
 
 ### 方法 `MindMapEditor.installArticleSectionCollapse`
 
-源码：`src/editor/editor.ts:2743`
+源码：`src/editor/editor.ts:2746`
 
 Adds Markdown-style collapse controls to headings and hides their descendant article sections.
 
@@ -3510,7 +3510,7 @@ private installArticleSectionCollapse(): void
 
 ### 方法 `MindMapEditor.installReadingChapterCollapse`
 
-源码：`src/editor/editor.ts:2787`
+源码：`src/editor/editor.ts:2790`
 
 Adds the same collapse control to top-level chapters in continuous reading mode.
 
@@ -3520,7 +3520,7 @@ private installReadingChapterCollapse(): void
 
 ### 方法 `MindMapEditor.render`
 
-源码：`src/editor/editor.ts:2816`
+源码：`src/editor/editor.ts:2819`
 
 渲染相关数据，并保持模型、界面和持久化状态的一致性。
 
@@ -3530,7 +3530,7 @@ private render(): void
 
 ### 方法 `MindMapEditor.renderQuestionPractice`
 
-源码：`src/editor/editor.ts:2843`
+源码：`src/editor/editor.ts:2846`
 
 Renders the configured-folder practice surface and persists each automatic grading result.
 
@@ -3540,7 +3540,7 @@ private renderQuestionPractice(): void
 
 ### 方法 `MindMapEditor.renderMindMap`
 
-源码：`src/editor/editor.ts:2871`
+源码：`src/editor/editor.ts:2874`
 
 渲染可交互导图画布：计算布局、绘制连接线和节点、恢复选择状态、绑定拖拽与尺寸手柄、安装子导图整节点入口，并启动图片镜像加载探测。
 
@@ -3550,7 +3550,7 @@ private renderMindMap(): void
 
 ### 方法 `MindMapEditor.renderMindMapEdges`
 
-源码：`src/editor/editor.ts:3290`
+源码：`src/editor/editor.ts:3293`
 
 使用当前布局坐标重新绘制全部连接线。
 
@@ -3560,7 +3560,7 @@ private renderMindMapEdges(appearance: MindMapAppearance, branchColorMap: Map<st
 
 ### 方法 `MindMapEditor.requestMindMapLayoutAnimation`
 
-源码：`src/editor/editor.ts:3314`
+源码：`src/editor/editor.ts:3317`
 
 标记下一次导图重绘为结构变化过渡，避免节点直接跳到新的布局位置。
 
@@ -3570,7 +3570,7 @@ private requestMindMapLayoutAnimation(): void
 
 ### 方法 `MindMapEditor.captureMindMapNodeRects`
 
-源码：`src/editor/editor.ts:3323`
+源码：`src/editor/editor.ts:3326`
 
 在销毁旧节点前记录其屏幕矩形，供下一次重绘使用 FLIP 过渡。
 
@@ -3580,7 +3580,7 @@ private captureMindMapNodeRects(): Map<string, DOMRect>
 
 ### 方法 `MindMapEditor.playMindMapLayoutAnimation`
 
-源码：`src/editor/editor.ts:3339`
+源码：`src/editor/editor.ts:3342`
 
 让重建后仍存在的节点从旧位置平滑移动到新位置，并短暂淡入重新绘制的连线。
 
@@ -3590,7 +3590,7 @@ private playMindMapLayoutAnimation(previousNodeRects: ReadonlyMap<string, DOMRec
 
 ### 方法 `MindMapEditor.scheduleMeasuredMindMapLayout`
 
-源码：`src/editor/editor.ts:3365`
+源码：`src/editor/editor.ts:3368`
 
 合并同一帧内的节点尺寸变化，避免表格和图片加载触发重复布局。
 
@@ -3600,7 +3600,7 @@ private scheduleMeasuredMindMapLayout(): void
 
 ### 方法 `MindMapEditor.applyMeasuredMindMapLayout`
 
-源码：`src/editor/editor.ts:3379`
+源码：`src/editor/editor.ts:3382`
 
 使用浏览器实际渲染尺寸重新执行碰撞避让。 表格、代码和图片节点的真实高度可能大于模型估算值，因此必须在 DOM 完成排版后更新包围盒、节点坐标、连接线和画布边界。
 
@@ -3610,7 +3610,7 @@ private applyMeasuredMindMapLayout(): void
 
 ### 方法 `MindMapEditor.applyTransform`
 
-源码：`src/editor/editor.ts:3421`
+源码：`src/editor/editor.ts:3424`
 
 应用transform，并保持模型、界面和持久化状态的一致性。
 
@@ -3620,7 +3620,7 @@ private applyTransform(): void
 
 ### 方法 `MindMapEditor.selectAllNodesExceptRoot`
 
-源码：`src/editor/editor.ts:3431`
+源码：`src/editor/editor.ts:3434`
 
 Selects every non-root node so bulk operations never affect the protected main node.
 
@@ -3630,7 +3630,7 @@ private selectAllNodesExceptRoot(): void
 
 ### 方法 `MindMapEditor.selectNode`
 
-源码：`src/editor/editor.ts:3446`
+源码：`src/editor/editor.ts:3449`
 
 Selects one node and clears any prior multi-selection.
 
@@ -3640,7 +3640,7 @@ private selectNode(id: string | null): void
 
 ### 方法 `MindMapEditor.toggleNodeSelection`
 
-源码：`src/editor/editor.ts:3461`
+源码：`src/editor/editor.ts:3464`
 
 Adds or removes one node from the current multi-selection.
 
@@ -3650,7 +3650,7 @@ private toggleNodeSelection(id: string): void
 
 ### 方法 `MindMapEditor.createSelectionLocation`
 
-源码：`src/editor/editor.ts:3476`
+源码：`src/editor/editor.ts:3479`
 
 为一次节点点击构建位置。文章、大纲和通读模式保留节点当前的屏幕比例， 防止后续设置刷新把刚点击的节点强制拉到固定 35% 高度。
 
@@ -3660,7 +3660,7 @@ private createSelectionLocation(id: string): ReadingLocation
 
 ### 方法 `MindMapEditor.applySelectionClasses`
 
-源码：`src/editor/editor.ts:3507`
+源码：`src/editor/editor.ts:3510`
 
 Synchronizes selection classes across all editor views.
 
@@ -3670,7 +3670,7 @@ private applySelectionClasses(): void
 
 ### 方法 `MindMapEditor.selectedNode`
 
-源码：`src/editor/editor.ts:3524`
+源码：`src/editor/editor.ts:3527`
 
 执行“selected node”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
 
@@ -3680,7 +3680,7 @@ private selectedNode(): MindMapNode | null
 
 ### 方法 `MindMapEditor.createConfiguredNode`
 
-源码：`src/editor/editor.ts:3534`
+源码：`src/editor/editor.ts:3537`
 
 创建configured node，并保持模型、界面和持久化状态的一致性。
 
@@ -3690,7 +3690,7 @@ private createConfiguredNode(text = "新节点"): MindMapNode
 
 ### 方法 `MindMapEditor.shortcutMatches`
 
-源码：`src/editor/editor.ts:3547`
+源码：`src/editor/editor.ts:3550`
 
 判断键盘事件是否匹配用户配置的组合键。
 
@@ -3700,7 +3700,7 @@ private shortcutMatches(event: KeyboardEvent, shortcut: string): boolean
 
 ### 方法 `MindMapEditor.isNearNodeEdge`
 
-源码：`src/editor/editor.ts:3565`
+源码：`src/editor/editor.ts:3568`
 
 Returns whether a double-click landed in the edge band reserved for the full node editor instead of the central quick-edit area.
 
@@ -3710,7 +3710,7 @@ private isNearNodeEdge(event: MouseEvent, nodeEl: HTMLElement): boolean
 
 ### 方法 `MindMapEditor.beginInlineEdit`
 
-源码：`src/editor/editor.ts:3577`
+源码：`src/editor/editor.ts:3580`
 
 在节点本体中启动轻量富文本输入。
 
@@ -3720,7 +3720,7 @@ private beginInlineEdit(nodeId: string, blockId?: string, protectInitialFocus = 
 
 ### 方法 `MindMapEditor.addChild`
 
-源码：`src/editor/editor.ts:3884`
+源码：`src/editor/editor.ts:3887`
 
 添加child，并保持模型、界面和持久化状态的一致性。
 
@@ -3730,7 +3730,7 @@ private addChild(): void
 
 ### 方法 `MindMapEditor.addSibling`
 
-源码：`src/editor/editor.ts:3898`
+源码：`src/editor/editor.ts:3901`
 
 添加sibling，并保持模型、界面和持久化状态的一致性。
 
@@ -3740,7 +3740,7 @@ private addSibling(): void
 
 ### 方法 `MindMapEditor.editSelected`
 
-源码：`src/editor/editor.ts:3918`
+源码：`src/editor/editor.ts:3921`
 
 编辑selected，并保持模型、界面和持久化状态的一致性。
 
@@ -3750,7 +3750,7 @@ private editSelected(initialBlockId?: string): void
 
 ### 方法 `MindMapEditor.addQuestionChild`
 
-源码：`src/editor/editor.ts:3983`
+源码：`src/editor/editor.ts:3986`
 
 Creates a structured question as a child of the selected node.
 
@@ -3760,7 +3760,7 @@ private addQuestionChild(): void
 
 ### 方法 `MindMapEditor.editQuestion`
 
-源码：`src/editor/editor.ts:3998`
+源码：`src/editor/editor.ts:4001`
 
 Opens the structured question editor and mirrors its stem into normal node content.
 
@@ -3770,7 +3770,7 @@ private editQuestion(node = this.selectedNode()): void
 
 ### 方法 `MindMapEditor.deleteSelected`
 
-源码：`src/editor/editor.ts:4017`
+源码：`src/editor/editor.ts:4020`
 
 删除selected，并保持模型、界面和持久化状态的一致性。
 
@@ -3780,7 +3780,7 @@ private deleteSelected(): void
 
 ### 方法 `MindMapEditor.toggleCollapse`
 
-源码：`src/editor/editor.ts:4048`
+源码：`src/editor/editor.ts:4051`
 
 切换collapse，并保持模型、界面和持久化状态的一致性。
 
@@ -3790,7 +3790,7 @@ private toggleCollapse(): void
 
 ### 方法 `MindMapEditor.setAllNodesCollapsed`
 
-源码：`src/editor/editor.ts:4065`
+源码：`src/editor/editor.ts:4068`
 
 Expands or collapses every branch while keeping the root visible.
 
@@ -3800,7 +3800,7 @@ private setAllNodesCollapsed(collapsed: boolean): void
 
 ### 方法 `MindMapEditor.toggleAllNodesCollapsed`
 
-源码：`src/editor/editor.ts:4079`
+源码：`src/editor/editor.ts:4084`
 
 Toggles every non-root branch between fully expanded and fully collapsed.
 
@@ -3810,7 +3810,7 @@ private toggleAllNodesCollapsed(): void
 
 ### 方法 `MindMapEditor.cycleTask`
 
-源码：`src/editor/editor.ts:4087`
+源码：`src/editor/editor.ts:4097`
 
 切换task，并保持模型、界面和持久化状态的一致性。
 
@@ -3820,7 +3820,7 @@ private cycleTask(): void
 
 ### 方法 `MindMapEditor.toggleLayout`
 
-源码：`src/editor/editor.ts:4097`
+源码：`src/editor/editor.ts:4107`
 
 切换layout，并保持模型、界面和持久化状态的一致性。
 
@@ -3830,7 +3830,7 @@ private toggleLayout(): void
 
 ### 方法 `MindMapEditor.toggleArticleLanding`
 
-源码：`src/editor/editor.ts:4106`
+源码：`src/editor/editor.ts:4116`
 
 Switches the top-level article between its generated directory and original article content.
 
@@ -3840,7 +3840,7 @@ private toggleArticleLanding(): void
 
 ### 方法 `MindMapEditor.editArticleStyle`
 
-源码：`src/editor/editor.ts:4117`
+源码：`src/editor/editor.ts:4127`
 
 Opens article preset and typography controls for the current document.
 
@@ -3850,7 +3850,7 @@ private editArticleStyle(): void
 
 ### 方法 `MindMapEditor.editAppearance`
 
-源码：`src/editor/editor.ts:4127`
+源码：`src/editor/editor.ts:4137`
 
 编辑appearance，并保持模型、界面和持久化状态的一致性。
 
@@ -3860,7 +3860,7 @@ private editAppearance(): void
 
 ### 方法 `MindMapEditor.editTable`
 
-源码：`src/editor/editor.ts:4168`
+源码：`src/editor/editor.ts:4178`
 
 编辑table，并保持模型、界面和持久化状态的一致性。
 
@@ -3870,7 +3870,7 @@ private editTable(): void
 
 ### 方法 `MindMapEditor.convertChildrenToTable`
 
-源码：`src/editor/editor.ts:4179`
+源码：`src/editor/editor.ts:4189`
 
 转换children to table，并保持模型、界面和持久化状态的一致性。
 
@@ -3880,7 +3880,7 @@ private convertChildrenToTable(): void
 
 ### 方法 `MindMapEditor.removeTable`
 
-源码：`src/editor/editor.ts:4194`
+源码：`src/editor/editor.ts:4204`
 
 删除table，并保持模型、界面和持久化状态的一致性。
 
@@ -3890,7 +3890,7 @@ private removeTable(): void
 
 ### 方法 `MindMapEditor.editCode`
 
-源码：`src/editor/editor.ts:4207`
+源码：`src/editor/editor.ts:4217`
 
 编辑code，并保持模型、界面和持久化状态的一致性。
 
@@ -3900,7 +3900,7 @@ private editCode(): void
 
 ### 方法 `MindMapEditor.removeCode`
 
-源码：`src/editor/editor.ts:4218`
+源码：`src/editor/editor.ts:4228`
 
 删除code，并保持模型、界面和持久化状态的一致性。
 
@@ -3910,7 +3910,7 @@ private removeCode(): void
 
 ### 方法 `MindMapEditor.upsertStructuredBlock`
 
-源码：`src/editor/editor.ts:4232`
+源码：`src/editor/editor.ts:4242`
 
 插入或更新第一个表格内容块，并保留该块当前的排序位置。
 
@@ -3920,7 +3920,7 @@ private upsertStructuredBlock(node: MindMapNode, type: "table", value: MindMapTa
 
 ### 方法 `MindMapEditor.upsertStructuredBlock`
 
-源码：`src/editor/editor.ts:4240`
+源码：`src/editor/editor.ts:4250`
 
 插入或更新第一个代码内容块，并保留该块当前的排序位置。
 
@@ -3930,7 +3930,7 @@ private upsertStructuredBlock(node: MindMapNode, type: "code", value: MindMapCod
 
 ### 方法 `MindMapEditor.upsertStructuredBlock`
 
-源码：`src/editor/editor.ts:4248`
+源码：`src/editor/editor.ts:4258`
 
 插入或更新首个结构化内容块，并同步兼容旧版节点字段。
 
@@ -3940,7 +3940,7 @@ private upsertStructuredBlock(node: MindMapNode, type: "table" | "code", value: 
 
 ### 方法 `MindMapEditor.removeStructuredBlocks`
 
-源码：`src/editor/editor.ts:4261`
+源码：`src/editor/editor.ts:4271`
 
 Removes all matching structured blocks and mirrors the legacy node fields for compatibility.
 
@@ -3950,7 +3950,7 @@ private removeStructuredBlocks(node: MindMapNode, type: "table" | "code"): void
 
 ### 方法 `MindMapEditor.createOrOpenSubmap`
 
-源码：`src/editor/editor.ts:4269`
+源码：`src/editor/editor.ts:4279`
 
 如果节点已有子导图则打开；否则创建独立 .mindmap 文件并在父节点与子文件导航元数据中建立双向关系。
 
@@ -3960,7 +3960,7 @@ private async createOrOpenSubmap(): Promise<void>
 
 ### 方法 `MindMapEditor.renderReading`
 
-源码：`src/editor/editor.ts:4290`
+源码：`src/editor/editor.ts:4300`
 
 Renders every map in the current parent/child family as one continuous, read-only book with an integrated directory and persisted progress.
 
@@ -3970,7 +3970,7 @@ private renderReading(): void
 
 ### 方法 `MindMapEditor.addArticleScrollToTopButton`
 
-源码：`src/editor/editor.ts:4409`
+源码：`src/editor/editor.ts:4419`
 
 Adds the shared floating control used to return article and continuous-reading views to their top.
 
@@ -3980,7 +3980,7 @@ private addArticleScrollToTopButton(): void
 
 ### 方法 `MindMapEditor.deleteSelectedSubmap`
 
-源码：`src/editor/editor.ts:4435`
+源码：`src/editor/editor.ts:4445`
 
 Deletes the selected node's submap file when present and clears stale links when the file was already removed outside the plugin.
 
@@ -3990,7 +3990,7 @@ private async deleteSelectedSubmap(): Promise<void>
 
 ### 方法 `MindMapEditor.renderQuestionSummary`
 
-源码：`src/editor/editor.ts:4459`
+源码：`src/editor/editor.ts:4469`
 
 渲染node table，并保持模型、界面和持久化状态的一致性。
 
@@ -4000,7 +4000,7 @@ private renderQuestionSummary(content: HTMLElement, node: MindMapNode): void
 
 ### 方法 `MindMapEditor.renderNodeTable`
 
-源码：`src/editor/editor.ts:4500`
+源码：`src/editor/editor.ts:4510`
 
 Renders the optional table payload beneath normal node and question content.
 
@@ -4010,7 +4010,7 @@ private renderNodeTable(content: HTMLElement, node: MindMapNode, tableData: Mind
 
 ### 方法 `MindMapEditor.renderNodeCode`
 
-源码：`src/editor/editor.ts:4533`
+源码：`src/editor/editor.ts:4543`
 
 渲染node code，并保持模型、界面和持久化状态的一致性。
 
@@ -4020,7 +4020,7 @@ private renderNodeCode(content: HTMLElement, node: MindMapNode, codeData: MindMa
 
 ### 方法 `MindMapEditor.openTableBlockEditor`
 
-源码：`src/editor/editor.ts:4564`
+源码：`src/editor/editor.ts:4574`
 
 Opens the selected table block directly instead of routing through the node editor.
 
@@ -4030,7 +4030,7 @@ private openTableBlockEditor(node: MindMapNode, table: MindMapTable, blockId?: s
 
 ### 方法 `MindMapEditor.openCodeBlockEditor`
 
-源码：`src/editor/editor.ts:4573`
+源码：`src/editor/editor.ts:4583`
 
 Opens the selected code block directly instead of routing through the node editor.
 
@@ -4040,7 +4040,7 @@ private openCodeBlockEditor(node: MindMapNode, code: MindMapCodeBlock, blockId?:
 
 ### 方法 `MindMapEditor.handlePaste`
 
-源码：`src/editor/editor.ts:4587`
+源码：`src/editor/editor.ts:4597`
 
 处理编辑器内粘贴：优先识别图片并保存为本地资源，其次识别表格、代码块或节点分支。普通文本也会作为当前节点的子节点插入。
 
@@ -4050,7 +4050,7 @@ private async handlePaste(event: ClipboardEvent): Promise<void>
 
 ### 方法 `MindMapEditor.openSelectedLink`
 
-源码：`src/editor/editor.ts:4663`
+源码：`src/editor/editor.ts:4673`
 
 打开selected link，并保持模型、界面和持久化状态的一致性。
 
@@ -4060,7 +4060,7 @@ private openSelectedLink(): void
 
 ### 方法 `MindMapEditor.isParentNavigationBacklink`
 
-源码：`src/editor/editor.ts:4680`
+源码：`src/editor/editor.ts:4690`
 
 判断parent navigation backlink，并保持模型、界面和持久化状态的一致性。
 
@@ -4070,7 +4070,7 @@ private isParentNavigationBacklink(node: MindMapNode): boolean
 
 ### 方法 `MindMapEditor.getNodeLink`
 
-源码：`src/editor/editor.ts:4697`
+源码：`src/editor/editor.ts:4707`
 
 读取并返回node link，并保持模型、界面和持久化状态的一致性。
 
@@ -4080,7 +4080,7 @@ private getNodeLink(node: MindMapNode): string | null
 
 ### 方法 `MindMapEditor.showOutline`
 
-源码：`src/editor/editor.ts:4706`
+源码：`src/editor/editor.ts:4716`
 
 执行“show outline”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
 
@@ -4090,7 +4090,7 @@ private showOutline(): void
 
 ### 方法 `MindMapEditor.showJsonTransfer`
 
-源码：`src/editor/editor.ts:4714`
+源码：`src/editor/editor.ts:4724`
 
 执行“show json transfer”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
 
@@ -4100,7 +4100,7 @@ private showJsonTransfer(): void
 
 ### 方法 `MindMapEditor.importDocument`
 
-源码：`src/editor/editor.ts:4725`
+源码：`src/editor/editor.ts:4735`
 
 Imports a document as a child branch or replaces the current document.
 
@@ -4110,7 +4110,7 @@ private importDocument(document: MindMapDocument, mode: "child" | "replace"): vo
 
 ### 方法 `MindMapEditor.showDocumentExport`
 
-源码：`src/editor/editor.ts:4747`
+源码：`src/editor/editor.ts:4757`
 
 Opens the HTML, Word, PDF, and Markdown export chooser.
 
@@ -4120,7 +4120,7 @@ private showDocumentExport(): void
 
 ### 方法 `MindMapEditor.openSearch`
 
-源码：`src/editor/editor.ts:4756`
+源码：`src/editor/editor.ts:4766`
 
 打开search，并保持模型、界面和持久化状态的一致性。
 
@@ -4130,7 +4130,7 @@ private openSearch(): void
 
 ### 方法 `MindMapEditor.focusNode`
 
-源码：`src/editor/editor.ts:4766`
+源码：`src/editor/editor.ts:4776`
 
 定位指定节点。必要时先展开全部祖先、切换到可显示该节点的视图并重渲染，然后选中节点并将其平滑移动到可视区域中央。
 
@@ -4140,7 +4140,7 @@ private focusNode(id: string, persistLocation = true): void
 
 ### 方法 `MindMapEditor.centerNode`
 
-源码：`src/editor/editor.ts:4802`
+源码：`src/editor/editor.ts:4812`
 
 定位node，并保持模型、界面和持久化状态的一致性。
 
@@ -4150,7 +4150,7 @@ private centerNode(id: string): void
 
 ### 方法 `MindMapEditor.openAiScopeContextMenu`
 
-源码：`src/editor/editor.ts:4813`
+源码：`src/editor/editor.ts:4823`
 
 设置右键 AI 范围并显示只包含 AI 操作的上下文菜单。
 
@@ -4160,7 +4160,7 @@ private openAiScopeContextMenu(event: MouseEvent, nodeId: string | null): void
 
 ### 方法 `MindMapEditor.convertImageToQuestion`
 
-源码：`src/editor/editor.ts:4826`
+源码：`src/editor/editor.ts:4836`
 
 Converts one image block into a question node, then runs recognition, source lookup, and analysis.
 
@@ -4170,7 +4170,7 @@ private async convertImageToQuestion(nodeId: string, blockId: string): Promise<v
 
 ### 方法 `MindMapEditor.openImageContextMenu`
 
-源码：`src/editor/editor.ts:4877`
+源码：`src/editor/editor.ts:4887`
 
 显示图片专用右键菜单，提供识图、布局、图床和编辑等快速操作。
 
@@ -4180,7 +4180,7 @@ private openImageContextMenu(event: MouseEvent, nodeId: string, blockId: string)
 
 ### 方法 `MindMapEditor.previewImageBlock`
 
-源码：`src/editor/editor.ts:4923`
+源码：`src/editor/editor.ts:4933`
 
 打开图片预览，并按当前图床优先级提供候选地址。
 
@@ -4190,7 +4190,7 @@ private previewImageBlock(block: MindMapImageContentBlock): void
 
 ### 方法 `MindMapEditor.setImageBlockAlignment`
 
-源码：`src/editor/editor.ts:4929`
+源码：`src/editor/editor.ts:4939`
 
 将图片块设置为指定的水平对齐方式。
 
@@ -4200,7 +4200,7 @@ private setImageBlockAlignment(nodeId: string, blockId: string, align: "left" | 
 
 ### 方法 `MindMapEditor.setImageBlockWidth`
 
-源码：`src/editor/editor.ts:4936`
+源码：`src/editor/editor.ts:4946`
 
 设定图片显示宽度；缺省宽度表示恢复为适应当前节点。
 
@@ -4210,7 +4210,7 @@ private setImageBlockWidth(nodeId: string, blockId: string, width?: number): voi
 
 ### 方法 `MindMapEditor.updateImageBlock`
 
-源码：`src/editor/editor.ts:4950`
+源码：`src/editor/editor.ts:4960`
 
 更新一张图片的规范化内容块，并将整组内容写回节点以确保修改能够持久化。
 
@@ -4220,7 +4220,7 @@ private updateImageBlock(nodeId: string, blockId: string, update: (block: MindMa
 
 ### 方法 `MindMapEditor.editImageBlock`
 
-源码：`src/editor/editor.ts:4963`
+源码：`src/editor/editor.ts:4973`
 
 打开当前图片块的编辑面板，用于精确尺寸和替换来源。
 
@@ -4230,7 +4230,7 @@ private editImageBlock(blockId: string): void
 
 ### 方法 `MindMapEditor.uploadImageBlock`
 
-源码：`src/editor/editor.ts:4969`
+源码：`src/editor/editor.ts:4979`
 
 将当前图片上传到用户选择的图床，并保留本地来源与已有镜像。
 
@@ -4240,7 +4240,7 @@ private async uploadImageBlock(nodeId: string, blockId: string): Promise<void>
 
 ### 方法 `MindMapEditor.copyImageSource`
 
-源码：`src/editor/editor.ts:4985`
+源码：`src/editor/editor.ts:4995`
 
 复制当前图片的主地址，供外部编辑器或浏览器直接使用。
 
@@ -4250,7 +4250,7 @@ private async copyImageSource(source: string): Promise<void>
 
 ### 方法 `MindMapEditor.removeImageBlock`
 
-源码：`src/editor/editor.ts:4995`
+源码：`src/editor/editor.ts:5005`
 
 从节点的有序内容块中移除指定图片。
 
@@ -4260,7 +4260,7 @@ private removeImageBlock(nodeId: string, blockId: string): void
 
 ### 方法 `MindMapEditor.openContextMenu`
 
-源码：`src/editor/editor.ts:5008`
+源码：`src/editor/editor.ts:5018`
 
 打开context menu，并保持模型、界面和持久化状态的一致性。
 
@@ -4270,7 +4270,7 @@ private openContextMenu(event: MouseEvent): void
 
 ### 方法 `MindMapEditor.extractToSubmap`
 
-源码：`src/editor/editor.ts:5080`
+源码：`src/editor/editor.ts:5090`
 
 将选中节点及其后代提取为子导图文件，然后从当前文档移除该节点。
 
@@ -4280,7 +4280,7 @@ private async extractToSubmap(): Promise<void>
 
 ### 方法 `MindMapEditor.mergeFromSubmap`
 
-源码：`src/editor/editor.ts:5100`
+源码：`src/editor/editor.ts:5110`
 
 将当前子导图合并回父导图并删除该子导图文件。
 
@@ -4290,7 +4290,7 @@ private async mergeFromSubmap(): Promise<void>
 
 ### 方法 `MindMapEditor.openAllNodesContextMenu`
 
-源码：`src/editor/editor.ts:5115`
+源码：`src/editor/editor.ts:5125`
 
 Opens the canvas and toolbar context menu for global branch visibility.
 
@@ -4300,7 +4300,7 @@ private openAllNodesContextMenu(event: MouseEvent): void
 
 ### 方法 `MindMapEditor.insertFormula`
 
-源码：`src/editor/editor.ts:5136`
+源码：`src/editor/editor.ts:5146`
 
 打开图形化公式编辑器并把生成的公式追加到当前节点。
 
@@ -4310,7 +4310,7 @@ private insertFormula(): void
 
 ### 方法 `MindMapEditor.copySelectedBranch`
 
-源码：`src/editor/editor.ts:5161`
+源码：`src/editor/editor.ts:5171`
 
 将当前分支或多选集合中的顶层分支复制到系统和插件内部剪贴板。
 
@@ -4320,7 +4320,7 @@ private async copySelectedBranch(): Promise<boolean>
 
 ### 方法 `MindMapEditor.pasteAsChild`
 
-源码：`src/editor/editor.ts:5189`
+源码：`src/editor/editor.ts:5199`
 
 将剪贴板中的一个或多个分支按顺序粘贴为当前节点的子节点。
 
@@ -4330,7 +4330,7 @@ private async pasteAsChild(): Promise<void>
 
 ### 方法 `MindMapEditor.duplicateSelected`
 
-源码：`src/editor/editor.ts:5217`
+源码：`src/editor/editor.ts:5227`
 
 复制生成selected，并保持模型、界面和持久化状态的一致性。
 
@@ -4340,7 +4340,7 @@ private duplicateSelected(): void
 
 ### 方法 `MindMapEditor.canMoveNode`
 
-源码：`src/editor/editor.ts:5241`
+源码：`src/editor/editor.ts:5251`
 
 判断reparent，并保持模型、界面和持久化状态的一致性。
 
@@ -4350,7 +4350,7 @@ private canMoveNode(draggedId: string | null, targetId: string): boolean
 
 ### 方法 `MindMapEditor.dropPositionForEvent`
 
-源码：`src/editor/editor.ts:5253`
+源码：`src/editor/editor.ts:5263`
 
 根据指针在目标节点的位置判断拖放意图。右侧和中间均成为子级；根节点仅接受子节点放置。
 
@@ -4360,7 +4360,7 @@ private dropPositionForEvent(event: DragEvent, targetEl: HTMLElement, targetId: 
 
 ### 方法 `MindMapEditor.clearDropIndicators`
 
-源码：`src/editor/editor.ts:5259`
+源码：`src/editor/editor.ts:5269`
 
 清理全部拖放目标样式，防止跨节点移动时残留指示线。
 
@@ -4370,7 +4370,7 @@ private clearDropIndicators(): void
 
 ### 方法 `MindMapEditor.showDropPreview`
 
-源码：`src/editor/editor.ts:5271`
+源码：`src/editor/editor.ts:5281`
 
 Renders a magnetic placeholder at the exact location represented by the current before, child, or after drop zone.
 
@@ -4380,7 +4380,7 @@ private showDropPreview(targetId: string, position: NodeDropPosition): void
 
 ### 方法 `MindMapEditor.clearDropPreview`
 
-源码：`src/editor/editor.ts:5308`
+源码：`src/editor/editor.ts:5318`
 
 Removes the temporary magnetic drop placeholder.
 
@@ -4390,7 +4390,7 @@ private clearDropPreview(): void
 
 ### 方法 `MindMapEditor.moveNode`
 
-源码：`src/editor/editor.ts:5320`
+源码：`src/editor/editor.ts:5330`
 
 在统一编辑事务中移动节点，支持同级前后排序和改变父子关系。
 
@@ -4400,7 +4400,7 @@ private moveNode(draggedId: string, targetId: string, position: NodeDropPosition
 
 ### 方法 `MindMapEditor.replaceDocument`
 
-源码：`src/editor/editor.ts:5352`
+源码：`src/editor/editor.ts:5362`
 
 替换document，并保持模型、界面和持久化状态的一致性。
 
@@ -4410,7 +4410,7 @@ private replaceDocument(document: MindMapDocument): void
 
 ### 方法 `MindMapEditor.ensureExternalEditAllowed`
 
-源码：`src/editor/editor.ts:5364`
+源码：`src/editor/editor.ts:5374`
 
 允许文章和通读模式应用已确认的外部编辑，但尊重用户显式保存的文档只读锁。
 
@@ -4420,7 +4420,7 @@ private ensureExternalEditAllowed(): boolean
 
 ### 方法 `MindMapEditor.replaceDocumentFromExternalEdit`
 
-源码：`src/editor/editor.ts:5371`
+源码：`src/editor/editor.ts:5381`
 
 用外部确认的完整文档替换当前状态，并统一接入撤销、保存、渲染和聚焦。
 
@@ -4430,7 +4430,7 @@ private replaceDocumentFromExternalEdit(document: MindMapDocument, focusNodeId: 
 
 ### 方法 `MindMapEditor.mutate`
 
-源码：`src/editor/editor.ts:5389`
+源码：`src/editor/editor.ts:5399`
 
 所有用户可撤销写操作的统一入口。调用前克隆当前文档写入撤销栈，执行修改，规范化和重渲染，再通知视图自动保存；只读状态会在更上层阻止进入该流程。
 
@@ -4440,7 +4440,7 @@ private mutate(action: () => void): void
 
 ### 方法 `MindMapEditor.undo`
 
-源码：`src/editor/editor.ts:5401`
+源码：`src/editor/editor.ts:5411`
 
 撤销相关数据，并保持模型、界面和持久化状态的一致性。
 
@@ -4450,7 +4450,7 @@ private undo(): void
 
 ### 方法 `MindMapEditor.redo`
 
-源码：`src/editor/editor.ts:5415`
+源码：`src/editor/editor.ts:5425`
 
 重做相关数据，并保持模型、界面和持久化状态的一致性。
 
@@ -4460,7 +4460,7 @@ private redo(): void
 
 ### 方法 `MindMapEditor.fitToView`
 
-源码：`src/editor/editor.ts:5429`
+源码：`src/editor/editor.ts:5439`
 
 执行“fit to view”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
 
@@ -4470,7 +4470,7 @@ private fitToView(): void
 
 ### 方法 `MindMapEditor.initializeMindMapViewport`
 
-源码：`src/editor/editor.ts:5448`
+源码：`src/editor/editor.ts:5458`
 
 从文档视图状态恢复导图缩放与平移。没有已保存状态时，只在导图当前可见且启用自动适应时执行一次自适应； 若首次打开就是文章或通读模式，则把自适应延迟到第一次进入导图模式，避免在隐藏画布上计算出错误缩放。
 
@@ -4480,7 +4480,7 @@ private initializeMindMapViewport(delay: number): void
 
 ### 方法 `MindMapEditor.persistMindMapViewportState`
 
-源码：`src/editor/editor.ts:5474`
+源码：`src/editor/editor.ts:5484`
 
 把当前导图缩放和平移写回文档视图状态。该方法在离开导图模式和序列化文档前调用， 因此文章、大纲和通读模式重渲染不会把用户视口恢复为默认自适应大小。
 
@@ -4490,7 +4490,7 @@ private persistMindMapViewportState(): void
 
 ### 方法 `MindMapEditor.setZoom`
 
-源码：`src/editor/editor.ts:5489`
+源码：`src/editor/editor.ts:5499`
 
 更新并应用zoom，并保持模型、界面和持久化状态的一致性。
 
@@ -4500,7 +4500,7 @@ private setZoom(value: number): void
 
 ### 方法 `MindMapEditor.applyZoomInput`
 
-源码：`src/editor/editor.ts:5498`
+源码：`src/editor/editor.ts:5508`
 
 解析工具栏中的缩放百分比输入，并将有效值应用到画布。
 
@@ -4510,7 +4510,7 @@ private applyZoomInput(): void
 
 ### 方法 `MindMapEditor.beginTwoFingerGesture`
 
-源码：`src/editor/editor.ts:5510`
+源码：`src/editor/editor.ts:5520`
 
 记录当前双指手势的初始中心点、间距和画布位置。
 
@@ -4520,7 +4520,7 @@ private beginTwoFingerGesture(): void
 
 ### 方法 `MindMapEditor.updateTwoFingerGesture`
 
-源码：`src/editor/editor.ts:5526`
+源码：`src/editor/editor.ts:5536`
 
 按设置将双指手势解释为缩放或画布平移。
 
@@ -4530,7 +4530,7 @@ private updateTwoFingerGesture(): void
 
 ### 方法 `MindMapEditor.clampZoom`
 
-源码：`src/editor/editor.ts:5563`
+源码：`src/editor/editor.ts:5573`
 
 执行“clamp zoom”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
 
@@ -4540,7 +4540,7 @@ private clampZoom(value: number): number
 
 ### 方法 `MindMapEditor.navigateSelection`
 
-源码：`src/editor/editor.ts:5572`
+源码：`src/editor/editor.ts:5582`
 
 执行“navigate selection”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
 
@@ -4550,7 +4550,7 @@ private navigateSelection(direction: "parent" | "child" | "previous" | "next"): 
 
 ### 方法 `MindMapEditor.handleKeydown`
 
-源码：`src/editor/editor.ts:5596`
+源码：`src/editor/editor.ts:5606`
 
 处理keydown，并保持模型、界面和持久化状态的一致性。
 
