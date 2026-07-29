@@ -4583,14 +4583,45 @@
   margin: 22px 0;
 }
 
-.mms-question-practice-choices button {
+.mms-question-practice-choice {
   display: grid;
   grid-template-columns: 30px 1fr;
   gap: 10px;
   min-height: 52px;
   padding: 12px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-s);
+  background: var(--background-primary);
   text-align: left;
   white-space: normal;
+  cursor: pointer;
+}
+
+.mms-question-practice-choice:hover {
+  border-color: var(--interactive-accent);
+}
+
+.mms-question-practice-choice.is-selected {
+  border-color: var(--interactive-accent);
+  background: color-mix(in srgb, var(--interactive-accent) 14%, var(--background-primary));
+  box-shadow: inset 3px 0 0 var(--interactive-accent);
+}
+
+.mms-question-practice-choice input {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  opacity: 0;
+}
+
+.mms-question-practice-choice:has(input:focus-visible) {
+  outline: 2px solid var(--interactive-accent);
+  outline-offset: 2px;
+}
+
+.mms-question-practice-choice:has(input:disabled) {
+  cursor: default;
+  opacity: 0.72;
 }
 
 .mms-question-practice-option-label {
@@ -4643,6 +4674,14 @@
 .mms-question-practice-empty {
   padding: 64px 16px;
   color: var(--text-muted);
+  text-align: center;
+}
+
+.mms-question-practice-finished {
+  margin: 52px 0 22px;
+  color: var(--color-green);
+  font-size: 1.2em;
+  font-weight: 700;
   text-align: center;
 }
 
