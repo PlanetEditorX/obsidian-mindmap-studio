@@ -1787,7 +1787,7 @@ export class MindMapEditor {
     this.addToolbarButton("table", "table-2", "插入或编辑表格", () => this.editTable(), true);
     this.addToolbarButton("code", "code-2", "插入代码", () => this.editCode(), true);
     this.addToolbarButton("image", "image-plus", "粘贴图片到当前节点（Ctrl/Cmd+V）", () => new Notice("先复制图片，再选中节点并按 Ctrl/Cmd+V"), true);
-    if (this.options.questionNodesEnabled) this.addToolbarButton("question", "circle-help", "新建题目子节点", () => this.addQuestionChild(), true);
+    if (this.options.questionNodesEnabled) this.addToolbarButton("question", "file-plus-2", "新建题目子节点", () => this.addQuestionChild(), true);
     this.addToolbarButton("screenshot", "scan-line", `截图并插入当前节点（${this.options.screenshotShortcut || "Ctrl+Shift+S"}）`, () => void this.captureScreenshot());
     this.addToolbarButton("submap", "network", "创建或进入子导图", () => void this.createOrOpenSubmap());
     this.addToolbarSeparator();
@@ -2859,23 +2859,27 @@ export class MindMapEditor {
       document: this.document,
       state: this.questionPracticeState,
       resolveImage: this.callbacks.resolveImage,
-      onRecord: (nodeId, correct) => {
-        const node = findNode(this.document.root, nodeId);
-        if (!node?.question) return;
-        this.mutate(() => {
-          const question = node.question!;
-          question.attemptCount += 1;
-          if (correct) {
-            question.correctCount += 1;
-            if (question.status === "unanswered" || question.status === "wrong") question.status = "completed";
-          } else {
-            question.status = "wrong";
-          }
-          question.lastPracticedAt = new Date().toISOString();
-        });
-      },
+      onRecord: (nodeId, correct) => this.recordQuestionPractice(nodeId, correct),
       onNotice: (message) => new Notice(message)
     });
+  }
+
+  /** Persists learning progress from the read-only practice surface without enabling document editing. */
+  private recordQuestionPractice(nodeId: string, correct: boolean): void {
+    const node = findNode(this.document.root, nodeId);
+    if (!node?.question) return;
+    this.history.capture(this.document);
+    const question = node.question;
+    question.attemptCount += 1;
+    if (correct) {
+      question.correctCount += 1;
+      if (question.status === "unanswered" || question.status === "wrong") question.status = "completed";
+    } else {
+      question.status = "wrong";
+    }
+    question.lastPracticedAt = new Date().toISOString();
+    this.callbacks.onChange(this.getDocument());
+    this.markSaving();
   }
 
   /**
@@ -4486,14 +4490,14 @@ export class MindMapEditor {
       .map((block) => block.type === "text" ? block.text.trim() : "[图片]")
       .filter(Boolean).join(" ");
     const summary = content.createDiv({ cls: "mmc-question-summary" });
-    summary.createDiv({ cls: "mmc-question-kind", text: question.mode === "choice" ? "选择题" : "大题" });
+    summary.createDiv({ cls: "mmc-question-kind", text: question.mode === "essay" ? "大题" : question.mode === "judgment" ? "判断题" : "选择题" });
     const appendField = (container: HTMLElement, label: string, value: string, cls = ""): void => {
       if (!value) return;
       const line = container.createDiv({ cls: `mmc-question-field ${cls}`.trim() });
       line.createSpan({ cls: "mmc-question-label", text: `${label}：` });
       line.createSpan({ cls: "mmc-question-value", text: value });
     };
-    if (question.mode === "choice") {
+    if (question.mode !== "essay") {
       for (const option of question.options) appendField(summary, option.label, plainText(option.content), "is-option");
     }
     const answer = plainText(question.answer);

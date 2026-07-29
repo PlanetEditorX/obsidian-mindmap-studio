@@ -122,12 +122,16 @@ function newId() {
 function createNode(text = "\u65B0\u8282\u70B9") {
   return { id: newId(), text, children: [] };
 }
+function createQuestionOptions(mode) {
+  const labels = mode === "judgment" ? ["\u6B63\u786E", "\u9519\u8BEF"] : mode === "choice" ? ["A", "B", "C", "D"] : [];
+  return labels.map((label) => ({ id: newId(), label, content: [{ id: newId(), type: "text", text: label }] }));
+}
 function createMindMapQuestion(mode = "choice") {
   return {
     mode,
     stem: [{ id: newId(), type: "text", text: "" }],
-    options: mode === "choice" ? ["A", "B", "C", "D"].map((label) => ({ id: newId(), label, content: [{ id: newId(), type: "text", text: "" }] })) : [],
-    answer: [{ id: newId(), type: "text", text: "" }],
+    options: createQuestionOptions(mode),
+    answer: [{ id: newId(), type: "text", text: mode === "judgment" ? "\u6B63\u786E" : "" }],
     explanation: [{ id: newId(), type: "text", text: "" }],
     tags: [],
     source: void 0,
@@ -563,8 +567,8 @@ function normalizeMindMapQuestion(value) {
   if (!value || typeof value !== "object") return void 0;
   const input = value;
   const normalizeBlocks = (blocks) => Array.isArray(blocks) ? blocks.map(normalizeContentBlock).filter((block) => Boolean(block)) : [];
-  const mode = input.mode === "essay" ? "essay" : "choice";
-  const options = mode === "choice" && Array.isArray(input.options) ? input.options.slice(0, 12).flatMap((option, index) => {
+  const mode = input.mode === "essay" ? "essay" : input.mode === "judgment" ? "judgment" : "choice";
+  const options = mode !== "essay" && Array.isArray(input.options) ? input.options.slice(0, 12).flatMap((option, index) => {
     if (!option || typeof option !== "object") return [];
     const item = option;
     const content = normalizeBlocks(item.content);
@@ -573,7 +577,7 @@ function normalizeMindMapQuestion(value) {
       label: typeof item.label === "string" && item.label.trim() ? item.label.trim().slice(0, 16) : String.fromCharCode(65 + index),
       content
     }];
-  }) : [];
+  }) : createQuestionOptions(mode);
   const status = input.status === "completed" || input.status === "favorite" || input.status === "wrong" || input.status === "mastered" ? input.status : "unanswered";
   const attemptCount = typeof input.attemptCount === "number" && Number.isFinite(input.attemptCount) ? Math.max(0, Math.min(1e6, Math.floor(input.attemptCount))) : 0;
   const correctCount = typeof input.correctCount === "number" && Number.isFinite(input.correctCount) ? Math.max(0, Math.min(attemptCount, Math.floor(input.correctCount))) : 0;
@@ -4052,7 +4056,7 @@ function parseRecognizedQuestion(value, fallback) {
       const text = Array.isArray(input) ? input.join("\n") : typeof input === "string" ? input : "";
       return text.trim() ? [{ id: newId(), type: "text", text: text.trim() }] : [];
     };
-    const mode = parsed.mode === "essay" ? "essay" : "choice";
+    const mode = parsed.mode === "essay" ? "essay" : parsed.mode === "judgment" ? "judgment" : "choice";
     const rawOptions = Array.isArray(parsed.options) ? parsed.options : [];
     const options = mode === "choice" ? rawOptions.slice(0, 12).flatMap((item, index) => {
       var _a3;
@@ -4060,7 +4064,7 @@ function parseRecognizedQuestion(value, fallback) {
       if (!item || typeof item !== "object") return [];
       const option = item;
       return [{ id: newId(), label: typeof option.label === "string" ? option.label : String.fromCharCode(65 + index), content: textBlocks((_a3 = option.content) != null ? _a3 : option.text) }];
-    }) : [];
+    }) : mode === "judgment" ? createMindMapQuestion("judgment").options : [];
     const preservedImages = fallback.stem.filter((block) => block.type === "image");
     return {
       mode,
@@ -4124,10 +4128,16 @@ var QuestionEditModal = class extends import_obsidian3.Modal {
     this.contentEl.createEl("h2", { text: "\u9898\u76EE\u8282\u70B9" });
     const mode = this.contentEl.createEl("select");
     mode.createEl("option", { value: "choice", text: "\u9009\u62E9\u9898" });
+    mode.createEl("option", { value: "judgment", text: "\u5224\u65AD\u9898" });
     mode.createEl("option", { value: "essay", text: "\u5927\u9898" });
     mode.value = this.draft.mode;
     mode.onchange = () => {
-      this.draft = { ...this.draft, mode: mode.value === "essay" ? "essay" : "choice", options: mode.value === "essay" ? [] : this.draft.options.length ? this.draft.options : createMindMapQuestion("choice").options };
+      const nextMode = mode.value === "essay" ? "essay" : mode.value === "judgment" ? "judgment" : "choice";
+      this.draft = {
+        ...this.draft,
+        mode: nextMode,
+        options: nextMode === "essay" ? [] : nextMode === "judgment" ? createMindMapQuestion("judgment").options : this.draft.mode === "choice" && this.draft.options.length ? this.draft.options : createMindMapQuestion("choice").options
+      };
       this.render();
     };
     const status = this.contentEl.createEl("select", { cls: "mms-question-status" });
@@ -4139,15 +4149,17 @@ var QuestionEditModal = class extends import_obsidian3.Modal {
     this.renderBlocks("\u9898\u5E72", this.draft.stem, (blocks) => {
       this.draft.stem = blocks;
     });
-    if (this.draft.mode === "choice") {
+    if (this.draft.mode !== "essay") {
       for (const option of this.draft.options) this.renderBlocks(`\u9009\u9879 ${option.label}`, option.content, (blocks) => {
         option.content = blocks;
       });
-      const add = this.contentEl.createEl("button", { text: "\u6DFB\u52A0\u9009\u9879", attr: { type: "button" } });
-      add.onclick = () => {
-        this.draft.options.push({ id: newId(), label: String.fromCharCode(65 + this.draft.options.length), content: [{ id: newId(), type: "text", text: "" }] });
-        this.render();
-      };
+      if (this.draft.mode === "choice") {
+        const add = this.contentEl.createEl("button", { text: "\u6DFB\u52A0\u9009\u9879", attr: { type: "button" } });
+        add.onclick = () => {
+          this.draft.options.push({ id: newId(), label: String.fromCharCode(65 + this.draft.options.length), content: [{ id: newId(), type: "text", text: "" }] });
+          this.render();
+        };
+      }
     }
     this.renderBlocks("\u7B54\u6848", this.draft.answer, (blocks) => {
       this.draft.answer = blocks;
@@ -4218,7 +4230,7 @@ var QuestionEditModal = class extends import_obsidian3.Modal {
       new import_obsidian3.Notice("\u65E0\u6CD5\u8BFB\u53D6\u9898\u56FE");
       return false;
     }
-    const instruction = '\u8BC6\u522B\u8FD9\u9053\u539F\u9898\uFF0C\u53EA\u8FD4\u56DE JSON\uFF1A{"mode":"choice \u6216 essay","stem":"\u9898\u5E72","options":[{"label":"A","content":"\u9009\u9879"}],"answer":"\u7B54\u6848","explanation":"\u89E3\u7B54","tags":["\u6807\u7B7E"]}\u3002\u65E0\u6CD5\u8BC6\u522B\u7684\u5B57\u6BB5\u7559\u7A7A\u3002';
+    const instruction = '\u8BC6\u522B\u8FD9\u9053\u539F\u9898\uFF0C\u53EA\u8FD4\u56DE JSON\uFF1A{"mode":"choice\u3001judgment \u6216 essay","stem":"\u9898\u5E72","options":[{"label":"A","content":"\u9009\u9879"}],"answer":"\u7B54\u6848","explanation":"\u89E3\u7B54","tags":["\u6807\u7B7E"]}\u3002\u5224\u65AD\u9898 mode \u4E3A judgment\uFF0C\u7B54\u6848\u4F7F\u7528 \u6B63\u786E \u6216 \u9519\u8BEF\u3002\u65E0\u6CD5\u8BC6\u522B\u7684\u5B57\u6BB5\u7559\u7A7A\u3002';
     try {
       const result = await this.callbacks.onRecognizeImage({ nodeId: this.nodeId, blockId: image.id, nodeLabel: "\u9898\u76EE\u8282\u70B9", source: image.source, alt: (_a2 = image.alt) != null ? _a2 : "\u9898\u56FE", index: 1, total: 1 }, source.blob, void 0, instruction);
       const parsed = parseRecognizedQuestion(result.text, this.draft);
@@ -4297,10 +4309,11 @@ function renderQuestionPracticeMode(container, options) {
   const question = node.question;
   const answerLabels = selectedAnswerLabels(node);
   const multiple = question.mode === "choice" && answerLabels.length > 1;
-  shell.createDiv({ cls: "mms-question-practice-progress", text: `${currentIndex + 1} / ${questions.length} \xB7 ${question.mode === "essay" ? "\u5927\u9898" : multiple ? "\u591A\u9009\u9898" : "\u5355\u9009\u9898"}` });
+  const questionKind = question.mode === "essay" ? "\u5927\u9898" : question.mode === "judgment" ? "\u5224\u65AD\u9898" : multiple ? "\u591A\u9009\u9898" : "\u5355\u9009\u9898";
+  shell.createDiv({ cls: "mms-question-practice-progress", text: `${currentIndex + 1} / ${questions.length} \xB7 ${questionKind}` });
   shell.createEl("h3", { cls: "mms-question-practice-stem", text: nodePlainText(node) || "\u672A\u547D\u540D\u9898\u76EE" });
   renderBlocks(shell, question.stem, options.resolveImage);
-  if (question.mode === "choice") {
+  if (question.mode !== "essay") {
     const choices = shell.createDiv({ cls: "mms-question-practice-choices" });
     question.options.forEach((option) => {
       const choice = choices.createEl("button", { attr: { type: "button" } });
@@ -4326,8 +4339,8 @@ function renderQuestionPracticeMode(container, options) {
   if (!options.state.answerVisible) {
     const reveal = shell.createEl("button", { cls: "mod-cta mms-question-practice-submit", text: "\u67E5\u770B\u7B54\u6848\u4E0E\u89E3\u6790", attr: { type: "button" } });
     reveal.onclick = () => {
-      const correct = question.mode === "choice" ? isQuestionChoiceCorrect(node, options.state.selectedOptionIds) : isExactQuestionAnswer(options.state.essayAnswer, blockText(question.answer));
-      if (question.mode === "choice" && !options.state.selectedOptionIds.length || question.mode === "essay" && !normalizeAnswer(options.state.essayAnswer)) {
+      const correct = question.mode === "essay" ? isExactQuestionAnswer(options.state.essayAnswer, blockText(question.answer)) : question.mode === "judgment" ? isQuestionJudgmentCorrect(node, options.state.selectedOptionIds) : isQuestionChoiceCorrect(node, options.state.selectedOptionIds);
+      if (question.mode !== "essay" && !options.state.selectedOptionIds.length || question.mode === "essay" && !normalizeAnswer(options.state.essayAnswer)) {
         options.onNotice("\u8BF7\u5148\u4F5C\u7B54");
         return;
       }
@@ -4369,6 +4382,11 @@ function isQuestionChoiceCorrect(node, selectedIds) {
   const selected = node.question.options.filter((option) => selectedIds.includes(option.id)).map((option) => option.label);
   return expected.size > 0 && expected.size === selected.length && selected.every((label) => expected.has(label));
 }
+function isQuestionJudgmentCorrect(node, selectedIds) {
+  const selected = node.question.options.find((option) => selectedIds.includes(option.id));
+  if (!selected) return false;
+  return normalizeJudgmentAnswer(blockText(selected.content) || selected.label) === normalizeJudgmentAnswer(blockText(node.question.answer));
+}
 function renderBlocks(container, blocks, resolveImage) {
   blocks.forEach((block) => {
     if (block.type === "text" && block.text.trim()) container.createDiv({ cls: "mms-question-practice-text", text: block.text });
@@ -4386,6 +4404,12 @@ function isExactQuestionAnswer(value, reference) {
 }
 function normalizeAnswer(value) {
   return value.toLocaleLowerCase().replace(/[\s\p{P}\p{S}]/gu, "");
+}
+function normalizeJudgmentAnswer(value) {
+  const answer = normalizeAnswer(value);
+  if (["\u6B63\u786E", "\u5BF9", "\u662F", "true", "yes", "a"].includes(answer)) return true;
+  if (["\u9519\u8BEF", "\u9519", "\u5426", "false", "no", "b"].includes(answer)) return false;
+  return null;
 }
 
 // src/article/modes.ts
@@ -7544,14 +7568,14 @@ function renderArticleQuestionDetails(container, node) {
   if (!question) return;
   const plainText = (blocks) => blocks.map((block) => block.type === "text" ? block.text.trim() : "[\u56FE\u7247]").filter(Boolean).join(" ");
   const panel = container.createDiv({ cls: "mms-question-panel" });
-  panel.createDiv({ cls: "mms-question-kind", text: question.mode === "choice" ? "\u9009\u62E9\u9898" : "\u5927\u9898" });
+  panel.createDiv({ cls: "mms-question-kind", text: question.mode === "essay" ? "\u5927\u9898" : question.mode === "judgment" ? "\u5224\u65AD\u9898" : "\u9009\u62E9\u9898" });
   const appendField = (container2, label, value, cls = "") => {
     if (!value) return;
     const row = container2.createDiv({ cls: `mms-question-row ${cls}`.trim() });
     row.createEl("strong", { text: `${label}\uFF1A` });
     row.createSpan({ text: value });
   };
-  if (question.mode === "choice") {
+  if (question.mode !== "essay") {
     for (const option of question.options) appendField(panel, option.label, plainText(option.content), "is-option");
   }
   const answer = plainText(question.answer);
@@ -9745,7 +9769,7 @@ var MindMapEditor = class {
     this.addToolbarButton("table", "table-2", "\u63D2\u5165\u6216\u7F16\u8F91\u8868\u683C", () => this.editTable(), true);
     this.addToolbarButton("code", "code-2", "\u63D2\u5165\u4EE3\u7801", () => this.editCode(), true);
     this.addToolbarButton("image", "image-plus", "\u7C98\u8D34\u56FE\u7247\u5230\u5F53\u524D\u8282\u70B9\uFF08Ctrl/Cmd+V\uFF09", () => new import_obsidian10.Notice("\u5148\u590D\u5236\u56FE\u7247\uFF0C\u518D\u9009\u4E2D\u8282\u70B9\u5E76\u6309 Ctrl/Cmd+V"), true);
-    if (this.options.questionNodesEnabled) this.addToolbarButton("question", "circle-help", "\u65B0\u5EFA\u9898\u76EE\u5B50\u8282\u70B9", () => this.addQuestionChild(), true);
+    if (this.options.questionNodesEnabled) this.addToolbarButton("question", "file-plus-2", "\u65B0\u5EFA\u9898\u76EE\u5B50\u8282\u70B9", () => this.addQuestionChild(), true);
     this.addToolbarButton("screenshot", "scan-line", `\u622A\u56FE\u5E76\u63D2\u5165\u5F53\u524D\u8282\u70B9\uFF08${this.options.screenshotShortcut || "Ctrl+Shift+S"}\uFF09`, () => void this.captureScreenshot());
     this.addToolbarButton("submap", "network", "\u521B\u5EFA\u6216\u8FDB\u5165\u5B50\u5BFC\u56FE", () => void this.createOrOpenSubmap());
     this.addToolbarSeparator();
@@ -10777,23 +10801,26 @@ var MindMapEditor = class {
       document: this.document,
       state: this.questionPracticeState,
       resolveImage: this.callbacks.resolveImage,
-      onRecord: (nodeId, correct) => {
-        const node = findNode(this.document.root, nodeId);
-        if (!(node == null ? void 0 : node.question)) return;
-        this.mutate(() => {
-          const question = node.question;
-          question.attemptCount += 1;
-          if (correct) {
-            question.correctCount += 1;
-            if (question.status === "unanswered" || question.status === "wrong") question.status = "completed";
-          } else {
-            question.status = "wrong";
-          }
-          question.lastPracticedAt = (/* @__PURE__ */ new Date()).toISOString();
-        });
-      },
+      onRecord: (nodeId, correct) => this.recordQuestionPractice(nodeId, correct),
       onNotice: (message) => new import_obsidian10.Notice(message)
     });
+  }
+  /** Persists learning progress from the read-only practice surface without enabling document editing. */
+  recordQuestionPractice(nodeId, correct) {
+    const node = findNode(this.document.root, nodeId);
+    if (!(node == null ? void 0 : node.question)) return;
+    this.history.capture(this.document);
+    const question = node.question;
+    question.attemptCount += 1;
+    if (correct) {
+      question.correctCount += 1;
+      if (question.status === "unanswered" || question.status === "wrong") question.status = "completed";
+    } else {
+      question.status = "wrong";
+    }
+    question.lastPracticedAt = (/* @__PURE__ */ new Date()).toISOString();
+    this.callbacks.onChange(this.getDocument());
+    this.markSaving();
   }
   /**
     * 渲染可交互导图画布：计算布局、绘制连接线和节点、恢复选择状态、绑定拖拽与尺寸手柄、安装子导图整节点入口，并启动图片镜像加载探测。
@@ -12332,14 +12359,14 @@ var MindMapEditor = class {
     if (!question) return;
     const plainText = (blocks) => blocks.map((block) => block.type === "text" ? block.text.trim() : "[\u56FE\u7247]").filter(Boolean).join(" ");
     const summary = content.createDiv({ cls: "mmc-question-summary" });
-    summary.createDiv({ cls: "mmc-question-kind", text: question.mode === "choice" ? "\u9009\u62E9\u9898" : "\u5927\u9898" });
+    summary.createDiv({ cls: "mmc-question-kind", text: question.mode === "essay" ? "\u5927\u9898" : question.mode === "judgment" ? "\u5224\u65AD\u9898" : "\u9009\u62E9\u9898" });
     const appendField = (container, label, value, cls = "") => {
       if (!value) return;
       const line = container.createDiv({ cls: `mmc-question-field ${cls}`.trim() });
       line.createSpan({ cls: "mmc-question-label", text: `${label}\uFF1A` });
       line.createSpan({ cls: "mmc-question-value", text: value });
     };
-    if (question.mode === "choice") {
+    if (question.mode !== "essay") {
       for (const option of question.options) appendField(summary, option.label, plainText(option.content), "is-option");
     }
     const answer = plainText(question.answer);

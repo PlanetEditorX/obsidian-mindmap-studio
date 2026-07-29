@@ -234,14 +234,14 @@ function renderArticleQuestionDetails(container: HTMLElement, node: MindMapNode)
     .map((block) => block.type === "text" ? block.text.trim() : "[图片]")
     .filter(Boolean).join(" ");
   const panel = container.createDiv({ cls: "mms-question-panel" });
-  panel.createDiv({ cls: "mms-question-kind", text: question.mode === "choice" ? "选择题" : "大题" });
+  panel.createDiv({ cls: "mms-question-kind", text: question.mode === "essay" ? "大题" : question.mode === "judgment" ? "判断题" : "选择题" });
   const appendField = (container: HTMLElement, label: string, value: string, cls = ""): void => {
     if (!value) return;
     const row = container.createDiv({ cls: `mms-question-row ${cls}`.trim() });
     row.createEl("strong", { text: `${label}：` });
     row.createSpan({ text: value });
   };
-  if (question.mode === "choice") {
+  if (question.mode !== "essay") {
     for (const option of question.options) appendField(panel, option.label, plainText(option.content), "is-option");
   }
   const answer = plainText(question.answer);

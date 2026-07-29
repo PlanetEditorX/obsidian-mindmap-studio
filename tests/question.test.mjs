@@ -22,12 +22,16 @@ before(async () => {
 
 after(async () => cleanup?.());
 
-test("structured question creation has editable fields for choice and essay modes", () => {
+test("structured question creation has editable fields for choice, judgment, and essay modes", () => {
   const choice = model.createMindMapQuestion();
+  const judgment = model.createMindMapQuestion("judgment");
   const essay = model.createMindMapQuestion("essay");
   assert.equal(choice.mode, "choice");
   assert.equal(choice.options.length, 4);
   assert.equal(choice.stem[0].type, "text");
+  assert.equal(judgment.mode, "judgment");
+  assert.deepEqual(judgment.options.map((option) => option.label), ["正确", "错误"]);
+  assert.equal(judgment.answer[0].text, "正确");
   assert.equal(essay.mode, "essay");
   assert.deepEqual(essay.options, []);
 });
@@ -189,7 +193,7 @@ test("Markdown import converts Obsidian image embeds into image blocks", () => {
   assert.doesNotMatch(JSON.stringify(document.root.content), /!\[\[/);
 });
 
-test("question-bank grading distinguishes single choice, multiple choice and normalized essay answers", () => {
+test("question-bank grading distinguishes single choice, multiple choice, judgment, and normalized essay answers", () => {
   const choice = model.normalizeDocument({
     root: {
       text: "Choice", children: [], question: {
@@ -201,6 +205,19 @@ test("question-bank grading distinguishes single choice, multiple choice and nor
   assert.equal(practice.isQuestionChoiceCorrect(choice, ["A", "C"]), true);
   assert.equal(practice.isQuestionChoiceCorrect(choice, ["A"]), false);
   assert.equal(practice.isQuestionChoiceCorrect(choice, ["A", "B", "C"]), false);
+  const judgment = model.normalizeDocument({
+    root: {
+      text: "Judgment", children: [], question: {
+        mode: "judgment", stem: [], tags: [], answer: [{ id: "answer", type: "text", text: "错误" }], explanation: [],
+        options: [
+          { id: "yes", label: "正确", content: [{ id: "yes-text", type: "text", text: "正确" }] },
+          { id: "no", label: "错误", content: [{ id: "no-text", type: "text", text: "错误" }] }
+        ]
+      }
+    }
+  }).root;
+  assert.equal(practice.isQuestionJudgmentCorrect(judgment, ["no"]), true);
+  assert.equal(practice.isQuestionJudgmentCorrect(judgment, ["yes"]), false);
   assert.equal(practice.isExactQuestionAnswer(" 资料 分析！", "资料分析"), true);
   assert.equal(practice.isExactQuestionAnswer("资料理解", "资料分析"), false);
 });
@@ -214,6 +231,8 @@ test("question-bank practice persists attempts, routes mistakes to review, and a
   assert.match(editorSource, /if \(correct\)[\s\S]*question\.correctCount \+= 1[\s\S]*question\.status = "completed"/);
   assert.match(editorSource, /else \{\s*question\.status = "wrong"/);
   assert.match(editorSource, /question\.lastPracticedAt = new Date\(\)\.toISOString\(\)/);
+  assert.match(editorSource, /onRecord: \(nodeId, correct\) => this\.recordQuestionPractice\(nodeId, correct\)/);
+  assert.doesNotMatch(editorSource, /onRecord: \(nodeId, correct\) => \{[\s\S]{0,320}this\.mutate\(/);
   assert.match(practiceSource, /node\.question\.status === "wrong"[\s\S]*options\.state\.filter === "wrong"/);
   assert.match(practiceSource, /text: "下一题"[\s\S]*options\.state\.currentNodeId = nextNode\?\.id/);
 });
@@ -235,6 +254,9 @@ test("question assistant keeps an intelligent image-to-question pipeline and vis
   assert.match(articleSource, /mms-question-panel/);
   assert.match(articleSource, /mms-question-reveal/);
   assert.match(modalSource, /AI 智能处理题目/);
+  assert.match(modalSource, /value: "judgment", text: "判断题"/);
+  assert.match(practiceSource, /isQuestionJudgmentCorrect/);
+  assert.match(editorSource, /addToolbarButton\("question", "file-plus-2"/);
   assert.match(editorSource, /renderQuestionPracticeMode/);
   assert.match(editorSource, /const activeBlockId = blockId \?\? textBlock\?\.id \?\? newId\(\)/);
   assert.doesNotMatch(editorSource, /selected\.text = plainText/);
