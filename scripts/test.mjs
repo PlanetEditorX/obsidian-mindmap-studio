@@ -1416,7 +1416,9 @@ udpsvd -vE 0 69 tftpd -c /
   assert.match(settingsSource, /private async exportSettings\(\): Promise<void>/, "settings export must serialize the current plugin configuration");
   assert.match(settingsSource, /private async importSettingsFile\(file: File \| undefined\): Promise<void>/, "settings import must read a selected JSON file");
   assert.match(mainSource, /async importSettings\(settings: unknown\): Promise<void>/, "imported settings must be normalized before being saved");
-  assert.match(settingsSource, /"AI 助手", "全局搜索索引", "管理配置"/, "configuration management must be the final settings category");
+  assert.match(settingsSource, /SETTINGS_SECTION_TITLES/, "settings categories must have a single canonical ordering source");
+  assert.match(settingsSource, /setName\("设置分类排序"\)/, "configuration management must expose category sorting controls");
+  assert.match(settingsSource, /moveSettingsSection\(title: MovableSettingsSectionTitle, direction: -1 \| 1\)/, "category sorting must persist directional moves");
   assert.match(settingsSource, /private async captureScreenshotShortcut\(event: KeyboardEvent, text: TextComponent\): Promise<void>/, "screenshot shortcut settings must capture real key presses");
   assert.match(settingsSource, /text\.inputEl\.readOnly = true/, "screenshot shortcut field must use a key recorder instead of manual text entry");
   assert.match(settingsSource, /shortcutFromKeyboardEvent\(event\)/, "screenshot shortcut recording must normalize modifier combinations");

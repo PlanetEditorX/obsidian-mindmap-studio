@@ -1770,6 +1770,24 @@ var TOOLBAR_ITEMS = [
   ["export-svg", "\u5BFC\u51FA SVG"],
   ["question", "\u9898\u76EE\u8282\u70B9"]
 ];
+var SETTINGS_SECTION_TITLES = [
+  "\u663E\u793A\u6A21\u5F0F",
+  "\u4E3B\u9898\u6A21\u677F",
+  "\u5168\u5C40\u4EE3\u7801\u8BBE\u7F6E",
+  "\u753B\u5E03\u80CC\u666F",
+  "\u5B57\u4F53\u4E0E\u6587\u5B57",
+  "\u8282\u70B9\u6837\u5F0F",
+  "\u8FDE\u7EBF\u6837\u5F0F",
+  "\u7F16\u8F91",
+  "\u8282\u70B9\u5FEB\u901F\u8F93\u5165\u5FEB\u6377\u952E",
+  "\u5DE5\u5177\u680F\u5185\u5BB9",
+  "\u6587\u4EF6\u4E0E\u5E03\u5C40",
+  "\u6587\u4EF6\u5939",
+  "\u56FE\u7247\u4E0E\u56FE\u5E8A",
+  "AI \u52A9\u624B",
+  "\u5168\u5C40\u641C\u7D22\u7D22\u5F15",
+  "\u7BA1\u7406\u914D\u7F6E"
+];
 function createImageHostConfig(index = 1) {
   return {
     id: `host_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`,
@@ -1875,8 +1893,18 @@ var DEFAULT_SETTINGS = {
   screenshotShortcut: "Ctrl+Shift+S",
   screenshotAutoRecognize: false,
   questionNodesEnabled: false,
-  questionBankFolder: ""
+  questionBankFolder: "",
+  settingsSectionOrder: [...SETTINGS_SECTION_TITLES]
 };
+function normalizeSettingsSectionOrder(value) {
+  const known = new Set(SETTINGS_SECTION_TITLES);
+  const stored = Array.isArray(value) ? value.filter((title) => typeof title === "string" && known.has(title) && title !== "\u7BA1\u7406\u914D\u7F6E") : [];
+  const ordered = [...new Set(stored)];
+  for (const title of SETTINGS_SECTION_TITLES) {
+    if (title !== "\u7BA1\u7406\u914D\u7F6E" && !ordered.includes(title)) ordered.push(title);
+  }
+  return [...ordered, "\u7BA1\u7406\u914D\u7F6E"];
+}
 function normalizeReturnToTopVisibility(value) {
   if (typeof value === "number" && Number.isFinite(value)) return Math.max(0, Math.min(100, value));
   if (typeof value !== "string") return DEFAULT_SETTINGS.returnToTopVisibility;
@@ -2817,6 +2845,12 @@ var MindMapStudioSettingTab = class extends import_obsidian.PluginSettingTab {
         button.setButtonText("\u68C0\u67E5\u66F4\u65B0");
       }
     }));
+    new import_obsidian.Setting(containerEl).setName("\u8BBE\u7F6E\u5206\u7C7B\u6392\u5E8F").setDesc("\u4F7F\u7528\u4E0A\u4E0B\u7BAD\u5934\u8C03\u6574\u5404\u8BBE\u7F6E\u5206\u7C7B\u7684\u4F4D\u7F6E\uFF1B\u7BA1\u7406\u914D\u7F6E\u56FA\u5B9A\u663E\u793A\u5728\u6700\u540E\u3002").addButton((button) => button.setButtonText("\u6062\u590D\u9ED8\u8BA4\u987A\u5E8F").onClick(async () => {
+      this.plugin.settings.settingsSectionOrder = [...SETTINGS_SECTION_TITLES];
+      await this.plugin.saveSettings();
+      this.display();
+    }));
+    this.addSettingsSectionOrderControls(containerEl);
     new import_obsidian.Setting(containerEl).setName("\u6062\u590D\u521D\u59CB\u914D\u7F6E").setDesc("\u6062\u590D\u663E\u793A\u6A21\u5F0F\u3001\u4E3B\u9898\u3001\u8D44\u6E90\u76EE\u5F55\u3001\u56FE\u5E8A\u3001\u641C\u7D22\u548C\u7F16\u8F91\u9009\u9879\u3002\u4E0D\u4F1A\u5220\u9664\u6216\u4FEE\u6539\u4EFB\u4F55 .mindmap \u6587\u4EF6\u3002").addButton((button) => button.setWarning().setButtonText("\u6062\u590D\u521D\u59CB\u914D\u7F6E").onClick(async () => {
       const confirmed = window.confirm("\u786E\u5B9A\u6062\u590D MindMap Studio \u7684\u5168\u90E8\u63D2\u4EF6\u8BBE\u7F6E\u5417\uFF1F\u8111\u56FE\u6587\u4EF6\u4E0D\u4F1A\u88AB\u5220\u9664\u3002");
       if (!confirmed) return;
@@ -2852,23 +2886,7 @@ var MindMapStudioSettingTab = class extends import_obsidian.PluginSettingTab {
       }
       sections = Array.from(this.containerEl.querySelectorAll(":scope > .mms-settings-section"));
     }
-    const sectionOrder = [
-      "\u663E\u793A\u6A21\u5F0F",
-      "\u4E3B\u9898\u6A21\u677F",
-      "\u753B\u5E03\u80CC\u666F",
-      "\u5B57\u4F53\u4E0E\u6587\u5B57",
-      "\u8282\u70B9\u6837\u5F0F",
-      "\u8FDE\u7EBF\u6837\u5F0F",
-      "\u7F16\u8F91",
-      "\u8282\u70B9\u5FEB\u901F\u8F93\u5165\u5FEB\u6377\u952E",
-      "\u5DE5\u5177\u680F\u5185\u5BB9",
-      "\u6587\u4EF6\u4E0E\u5E03\u5C40",
-      "\u56FE\u7247\u4E0E\u56FE\u5E8A",
-      "AI \u52A9\u624B",
-      "\u5168\u5C40\u641C\u7D22\u7D22\u5F15",
-      "\u7BA1\u7406\u914D\u7F6E"
-    ];
-    const sectionRank = new Map(sectionOrder.map((title, index) => [title, index]));
+    const sectionRank = new Map(this.plugin.settings.settingsSectionOrder.map((title, index) => [title, index]));
     sections.sort((left, right) => {
       var _a3, _b3, _c2, _d, _e, _f, _g, _h;
       const leftTitle = (_c2 = (_b3 = (_a3 = left.querySelector("summary")) == null ? void 0 : _a3.textContent) == null ? void 0 : _b3.trim()) != null ? _c2 : "";
@@ -2881,6 +2899,24 @@ var MindMapStudioSettingTab = class extends import_obsidian.PluginSettingTab {
       section.toggleClass("is-search-hidden", !matches);
       if (query && matches) section.open = true;
     }
+  }
+  /** Renders persistent up/down controls for every movable settings category. */
+  addSettingsSectionOrderControls(container) {
+    const movable = this.plugin.settings.settingsSectionOrder.filter((title) => title !== "\u7BA1\u7406\u914D\u7F6E");
+    movable.forEach((title, index) => {
+      new import_obsidian.Setting(container).setName(`${index + 1}. ${title}`).addExtraButton((button) => button.setIcon("arrow-up").setTooltip("\u4E0A\u79FB").setDisabled(index === 0).onClick(() => void this.moveSettingsSection(title, -1))).addExtraButton((button) => button.setIcon("arrow-down").setTooltip("\u4E0B\u79FB").setDisabled(index === movable.length - 1).onClick(() => void this.moveSettingsSection(title, 1)));
+    });
+  }
+  /** Moves one settings category, persists the order, and redraws the settings page. */
+  async moveSettingsSection(title, direction) {
+    const movable = this.plugin.settings.settingsSectionOrder.filter((item) => item !== "\u7BA1\u7406\u914D\u7F6E");
+    const index = movable.indexOf(title);
+    const targetIndex = index + direction;
+    if (index < 0 || targetIndex < 0 || targetIndex >= movable.length) return;
+    [movable[index], movable[targetIndex]] = [movable[targetIndex], movable[index]];
+    this.plugin.settings.settingsSectionOrder = [...movable, "\u7BA1\u7406\u914D\u7F6E"];
+    await this.plugin.saveSettings();
+    this.display();
   }
   /**
    * 添加optional color setting，并保持模型、界面和持久化状态的一致性。
@@ -15924,6 +15960,7 @@ var MindMapStudioPlugin = class extends import_obsidian15.Plugin {
       screenshotAutoRecognize: raw.screenshotAutoRecognize === true,
       questionNodesEnabled: raw.questionNodesEnabled === true,
       questionBankFolder: typeof raw.questionBankFolder === "string" ? (0, import_obsidian15.normalizePath)(raw.questionBankFolder.trim().replace(/^\/+|\/+$/g, "")).slice(0, 1e3) : DEFAULT_SETTINGS.questionBankFolder,
+      settingsSectionOrder: normalizeSettingsSectionOrder(raw.settingsSectionOrder),
       syncTitleToFilename: raw.syncTitleToFilename !== false,
       deleteLocalAfterUpload: raw.deleteLocalAfterUpload !== false,
       imageFailoverEnabled: raw.imageFailoverEnabled !== false,

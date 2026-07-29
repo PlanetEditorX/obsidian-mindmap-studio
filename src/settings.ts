@@ -46,6 +46,18 @@ export const TOOLBAR_ITEMS = [
   ["question", "题目节点"],
 ] as const;
 
+/** All first-level settings categories in their default display order. */
+export const SETTINGS_SECTION_TITLES = [
+  "显示模式", "主题模板", "全局代码设置", "画布背景", "字体与文字", "节点样式", "连线样式",
+  "编辑", "节点快速输入快捷键", "工具栏内容", "文件与布局", "文件夹", "图片与图床",
+  "AI 助手", "全局搜索索引", "管理配置"
+] as const;
+
+/** A valid first-level settings category title. */
+export type SettingsSectionTitle = typeof SETTINGS_SECTION_TITLES[number];
+/** A category that can move; configuration management remains permanently last. */
+type MovableSettingsSectionTitle = Exclude<SettingsSectionTitle, "管理配置">;
+
 /**
  * ImageHostBodyMode 类型定义，用于限制可接受值并让序列化数据保持稳定。
  */
@@ -253,6 +265,8 @@ export interface MindMapStudioSettings {
   questionNodesEnabled: boolean;
   /** Vault-relative folder whose mind-map files expose the full-page question-bank mode. */
   questionBankFolder: string;
+  /** User-defined order of the first-level settings categories; management stays last. */
+  settingsSectionOrder: SettingsSectionTitle[];
 }
 
 export const DEFAULT_SETTINGS: MindMapStudioSettings = {
@@ -346,8 +360,22 @@ export const DEFAULT_SETTINGS: MindMapStudioSettings = {
   screenshotShortcut: "Ctrl+Shift+S",
   screenshotAutoRecognize: false,
   questionNodesEnabled: false,
-  questionBankFolder: ""
+  questionBankFolder: "",
+  settingsSectionOrder: [...SETTINGS_SECTION_TITLES]
 };
+
+/** Normalizes stored category order while keeping configuration management at the end. */
+export function normalizeSettingsSectionOrder(value: unknown): SettingsSectionTitle[] {
+  const known = new Set<string>(SETTINGS_SECTION_TITLES);
+  const stored = Array.isArray(value)
+    ? value.filter((title): title is SettingsSectionTitle => typeof title === "string" && known.has(title) && title !== "管理配置")
+    : [];
+  const ordered = [...new Set(stored)];
+  for (const title of SETTINGS_SECTION_TITLES) {
+    if (title !== "管理配置" && !ordered.includes(title)) ordered.push(title);
+  }
+  return [...ordered, "管理配置"];
+}
 
 /**
  * Normalizes the article return-to-top threshold from a number or percentage string.
@@ -1930,6 +1958,17 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
           }
         }));
     new Setting(containerEl)
+      .setName("设置分类排序")
+      .setDesc("使用上下箭头调整各设置分类的位置；管理配置固定显示在最后。")
+      .addButton((button) => button
+        .setButtonText("恢复默认顺序")
+        .onClick(async () => {
+          this.plugin.settings.settingsSectionOrder = [...SETTINGS_SECTION_TITLES];
+          await this.plugin.saveSettings();
+          this.display();
+        }));
+    this.addSettingsSectionOrderControls(containerEl);
+    new Setting(containerEl)
       .setName("恢复初始配置")
       .setDesc("恢复显示模式、主题、资源目录、图床、搜索和编辑选项。不会删除或修改任何 .mindmap 文件。")
       .addButton((button) => button
@@ -1971,12 +2010,7 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
       }
       sections = Array.from(this.containerEl.querySelectorAll<HTMLDetailsElement>(":scope > .mms-settings-section"));
     }
-    const sectionOrder = [
-      "显示模式", "主题模板", "画布背景", "字体与文字", "节点样式", "连线样式",
-      "编辑", "节点快速输入快捷键", "工具栏内容", "文件与布局", "图片与图床",
-      "AI 助手", "全局搜索索引", "管理配置"
-    ];
-    const sectionRank = new Map(sectionOrder.map((title, index) => [title, index]));
+    const sectionRank = new Map<string, number>(this.plugin.settings.settingsSectionOrder.map((title, index) => [title, index]));
     sections.sort((left, right) => {
       const leftTitle = left.querySelector("summary")?.textContent?.trim() ?? "";
       const rightTitle = right.querySelector("summary")?.textContent?.trim() ?? "";
@@ -1988,6 +2022,37 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
       section.toggleClass("is-search-hidden", !matches);
       if (query && matches) section.open = true;
     }
+  }
+
+  /** Renders persistent up/down controls for every movable settings category. */
+  private addSettingsSectionOrderControls(container: HTMLElement): void {
+    const movable = this.plugin.settings.settingsSectionOrder.filter((title): title is MovableSettingsSectionTitle => title !== "管理配置");
+    movable.forEach((title, index) => {
+      new Setting(container)
+        .setName(`${index + 1}. ${title}`)
+        .addExtraButton((button) => button
+          .setIcon("arrow-up")
+          .setTooltip("上移")
+          .setDisabled(index === 0)
+          .onClick(() => void this.moveSettingsSection(title, -1)))
+        .addExtraButton((button) => button
+          .setIcon("arrow-down")
+          .setTooltip("下移")
+          .setDisabled(index === movable.length - 1)
+          .onClick(() => void this.moveSettingsSection(title, 1)));
+    });
+  }
+
+  /** Moves one settings category, persists the order, and redraws the settings page. */
+  private async moveSettingsSection(title: MovableSettingsSectionTitle, direction: -1 | 1): Promise<void> {
+    const movable = this.plugin.settings.settingsSectionOrder.filter((item): item is MovableSettingsSectionTitle => item !== "管理配置");
+    const index = movable.indexOf(title);
+    const targetIndex = index + direction;
+    if (index < 0 || targetIndex < 0 || targetIndex >= movable.length) return;
+    [movable[index], movable[targetIndex]] = [movable[targetIndex]!, movable[index]!];
+    this.plugin.settings.settingsSectionOrder = [...movable, "管理配置"];
+    await this.plugin.saveSettings();
+    this.display();
   }
 
   /**
