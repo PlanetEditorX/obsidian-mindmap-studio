@@ -445,7 +445,7 @@ export class ArticleStyleModal extends Modal {
 }
 
 /**
- * 导入、导出或替换完整的思维导图 JSON。
+ * 导入、导出或合并思维导图 JSON。
  */
 export class JsonTransferModal extends Modal {
   /**
@@ -453,13 +453,13 @@ export class JsonTransferModal extends Modal {
    *
    * @param app Obsidian 应用实例。
    * @param document 当前思维导图文档。
-   * @param onImport 导入完成回调。
+   * @param onImport 导入完成回调及目标方式。
    * @param onExport 导出回调。
    */
   constructor(
     app: App,
     private readonly document: MindMapDocument,
-    private readonly onImport: (document: MindMapDocument) => void,
+    private readonly onImport: (document: MindMapDocument, mode: "child" | "replace") => void,
     private readonly onExport: (json: string) => void
   ) {
     super(app);
@@ -471,7 +471,7 @@ export class JsonTransferModal extends Modal {
   onOpen(): void {
     this.titleEl.setText("导入 / 导出");
     const description = this.contentEl.createEl("p", {
-      text: "可以复制当前 JSON，也可以导入 MindMap Studio JSON、XMind 或 Markdown 文件。"
+      text: "可导入 MindMap Studio JSON、XMind 或 Markdown 文件。默认作为当前选中节点的子分支导入。"
     });
     description.addClass("setting-item-description");
     const importProgress = this.contentEl.createDiv({ cls: "mmc-import-progress" });
@@ -484,11 +484,20 @@ export class JsonTransferModal extends Modal {
     };
     const textarea = this.contentEl.createEl("textarea", { cls: "mmc-json-textarea" });
     textarea.value = JSON.stringify(this.document, null, 2);
+    const importMode = this.contentEl.createEl("select", { cls: "mmc-import-mode", attr: { "aria-label": "导入方式" } });
+    importMode.createEl("option", { text: "导入为子节点（默认）", value: "child" });
+    importMode.createEl("option", { text: "导入并替换当前文件", value: "replace" });
+    const applyImport = (document: MindMapDocument): boolean => {
+      const mode = importMode.value === "replace" ? "replace" : "child";
+      if (mode === "replace" && !window.confirm("将使用导入内容替换当前整张导图，此操作可通过撤销恢复。是否继续？")) return false;
+      this.onImport(document, mode);
+      return true;
+    };
     const actions = this.contentEl.createDiv({ cls: "mmc-modal-actions mmc-json-actions" });
     const copy = actions.createEl("button", { text: "复制 JSON" });
-    const importFileButton = actions.createEl("button", { text: "导入 XMind / Markdown", attr: { type: "button" } });
+    const importFileButton = actions.createEl("button", { text: "导入文件", attr: { type: "button" } });
     const exportButton = actions.createEl("button", { text: "导出 .json" });
-    const importButton = actions.createEl("button", { text: "导入并替换", cls: "mod-warning" });
+    const importButton = actions.createEl("button", { text: "导入 JSON" });
     copy.addEventListener("click", () => {
       void navigator.clipboard.writeText(textarea.value);
       new Notice("已复制 JSON");
@@ -513,7 +522,7 @@ export class JsonTransferModal extends Modal {
                 : markdownToDocument(source as string, file.name.replace(/\.(?:md|markdown)$/i, ""));
             await updateImportProgress(85, "正在生成思维导图");
             setAllBranchesCollapsed(imported.root, true);
-            this.onImport(imported);
+            if (!applyImport(imported)) return;
             await updateImportProgress(100, "导入完成");
             new Notice(`已导入：${file.name}`);
             window.setTimeout(() => this.close(), 180);
@@ -533,7 +542,7 @@ export class JsonTransferModal extends Modal {
         const parsed = JSON.parse(textarea.value) as Partial<MindMapDocument>;
         const normalized = normalizeDocument(parsed, this.document.title);
         setAllBranchesCollapsed(normalized.root, true);
-        this.onImport(normalized);
+        if (!applyImport(normalized)) return;
         new Notice("JSON 已导入");
         this.close();
       } catch (error) {
