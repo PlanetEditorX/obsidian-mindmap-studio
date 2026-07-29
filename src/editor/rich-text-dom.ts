@@ -53,15 +53,6 @@ export function renderRichTextRuns(
 ): void {
   container.empty();
   const sourceRuns = runs?.length ? runs : [{ text: fallbackText }];
-  const hasMath = latex && sourceRuns.some((run) => /(\$\$[\s\S]+?\$\$|\$[^$\n]+?\$)/.test(run.text));
-  if (hasMath && !mathJaxReady) {
-    sourceRuns.forEach((run) => container.createSpan({ cls: "mmc-rich-run", text: run.text }));
-    void ensureMathJax().then(() => {
-      if (container.isConnected) renderRichTextRuns(container, runs, fallbackText, latex);
-    }).catch(() => undefined);
-    return;
-  }
-  let renderedMath = false;
   const append = (text: string, style: MindMapTextStyle | undefined): void => {
     const span = container.createSpan({ cls: "mmc-rich-run", text });
     span.toggleClass("is-inline-code", style?.code === true);
@@ -73,6 +64,15 @@ export function renderRichTextRuns(
     if (decorations.length) span.style.textDecorationLine = decorations.join(" ");
     if (style?.color) span.style.color = style.color;
   };
+  const hasMath = latex && sourceRuns.some((run) => /(\$\$[\s\S]+?\$\$|\$[^$\n]+?\$)/.test(run.text));
+  if (hasMath && !mathJaxReady) {
+    sourceRuns.forEach((run) => append(run.text, run.style));
+    void ensureMathJax().then(() => {
+      if (container.isConnected) renderRichTextRuns(container, runs, fallbackText, latex);
+    }).catch(() => undefined);
+    return;
+  }
+  let renderedMath = false;
   for (const run of sourceRuns) {
     if (!latex) {
       append(run.text, run.style);

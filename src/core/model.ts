@@ -1467,13 +1467,13 @@ function escapeInlineMarkdown(value: string): string {
 /** Converts supported inline Markdown markers into the editor's rich-text model. */
 export function markdownInlineToRichText(value: string): { text: string; richText?: MindMapTextRun[] } {
   const runs: MindMapTextRun[] = [];
-  const inlinePattern = /\*\*(.+?)\*\*|`([^`]+)`/g;
+  const inlinePattern = /\*\*(.+?)\*\*|(`+)([\s\S]*?)\2/g;
   let cursor = 0;
   let match: RegExpExecArray | null;
   while ((match = inlinePattern.exec(value))) {
     const before = value.slice(cursor, match.index);
     const boldText = match[1];
-    const codeText = match[2];
+    const codeText = match[3];
     if (before) runs.push({ text: before });
     if (boldText) runs.push({ text: boldText, style: { bold: true } });
     else if (codeText) runs.push({ text: codeText, style: { code: true } });

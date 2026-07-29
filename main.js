@@ -755,13 +755,13 @@ function escapeInlineMarkdown(value) {
 }
 function markdownInlineToRichText(value) {
   const runs = [];
-  const inlinePattern = /\*\*(.+?)\*\*|`([^`]+)`/g;
+  const inlinePattern = /\*\*(.+?)\*\*|(`+)([\s\S]*?)\2/g;
   let cursor = 0;
   let match;
   while (match = inlinePattern.exec(value)) {
     const before = value.slice(cursor, match.index);
     const boldText = match[1];
-    const codeText = match[2];
+    const codeText = match[3];
     if (before) runs.push({ text: before });
     if (boldText) runs.push({ text: boldText, style: { bold: true } });
     else if (codeText) runs.push({ text: codeText, style: { code: true } });
@@ -1774,7 +1774,7 @@ var TOOLBAR_ITEMS = [
 ];
 var SETTINGS_SECTION_TITLES = [
   "\u89C6\u56FE\u4E0E\u9605\u8BFB",
-  "\u7F16\u8F91\u4F53\u9A8C",
+  "\u7F16\u8F91\u9009\u9879",
   "\u5FEB\u6377\u952E\u914D\u7F6E",
   "\u5DE5\u5177\u680F",
   "\u4E3B\u9898\u4E0E\u5916\u89C2",
@@ -1902,7 +1902,8 @@ function normalizeSettingsSectionOrder(value) {
   const known = new Set(SETTINGS_SECTION_TITLES);
   const legacyTitles = {
     "\u663E\u793A\u6A21\u5F0F": "\u89C6\u56FE\u4E0E\u9605\u8BFB",
-    "\u7F16\u8F91": "\u7F16\u8F91\u4F53\u9A8C",
+    "\u7F16\u8F91": "\u7F16\u8F91\u9009\u9879",
+    "\u7F16\u8F91\u4F53\u9A8C": "\u7F16\u8F91\u9009\u9879",
     "\u8282\u70B9\u5FEB\u901F\u8F93\u5165\u5FEB\u6377\u952E": "\u5FEB\u6377\u952E\u914D\u7F6E",
     "\u5DE5\u5177\u680F\u5185\u5BB9": "\u5DE5\u5177\u680F",
     "\u4E3B\u9898\u6A21\u677F": "\u4E3B\u9898\u4E0E\u5916\u89C2",
@@ -2815,7 +2816,7 @@ var MindMapStudioSettingTab = class extends import_obsidian.PluginSettingTab {
         await this.saveAndRefresh();
       }));
     }
-    containerEl.createEl("h3", { text: "\u7F16\u8F91\u4F53\u9A8C" });
+    containerEl.createEl("h3", { text: "\u7F16\u8F91\u9009\u9879" });
     new import_obsidian.Setting(containerEl).setName("\u663E\u793A\u4EFB\u52A1\u8FDB\u5EA6").setDesc("\u5728\u5305\u542B\u4EFB\u52A1\u7684\u5206\u652F\u8282\u70B9\u5E95\u90E8\u663E\u793A\u5B8C\u6210\u767E\u5206\u6BD4\u3002").addToggle((toggle) => toggle.setValue(this.plugin.settings.showTaskProgress).onChange(async (value) => {
       this.plugin.settings.showTaskProgress = value;
       await this.saveAndRefresh();
@@ -4473,15 +4474,6 @@ function renderRichTextRuns(container, runs, fallbackText, latex = true) {
   var _a2;
   container.empty();
   const sourceRuns = (runs == null ? void 0 : runs.length) ? runs : [{ text: fallbackText }];
-  const hasMath = latex && sourceRuns.some((run) => /(\$\$[\s\S]+?\$\$|\$[^$\n]+?\$)/.test(run.text));
-  if (hasMath && !mathJaxReady) {
-    sourceRuns.forEach((run) => container.createSpan({ cls: "mmc-rich-run", text: run.text }));
-    void ensureMathJax().then(() => {
-      if (container.isConnected) renderRichTextRuns(container, runs, fallbackText, latex);
-    }).catch(() => void 0);
-    return;
-  }
-  let renderedMath = false;
   const append = (text, style) => {
     const span = container.createSpan({ cls: "mmc-rich-run", text });
     span.toggleClass("is-inline-code", (style == null ? void 0 : style.code) === true);
@@ -4493,6 +4485,15 @@ function renderRichTextRuns(container, runs, fallbackText, latex = true) {
     if (decorations.length) span.style.textDecorationLine = decorations.join(" ");
     if (style == null ? void 0 : style.color) span.style.color = style.color;
   };
+  const hasMath = latex && sourceRuns.some((run) => /(\$\$[\s\S]+?\$\$|\$[^$\n]+?\$)/.test(run.text));
+  if (hasMath && !mathJaxReady) {
+    sourceRuns.forEach((run) => append(run.text, run.style));
+    void ensureMathJax().then(() => {
+      if (container.isConnected) renderRichTextRuns(container, runs, fallbackText, latex);
+    }).catch(() => void 0);
+    return;
+  }
+  let renderedMath = false;
   for (const run of sourceRuns) {
     if (!latex) {
       append(run.text, run.style);

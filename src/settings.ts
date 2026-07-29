@@ -48,7 +48,7 @@ export const TOOLBAR_ITEMS = [
 
 /** All first-level settings categories in their default display order. */
 export const SETTINGS_SECTION_TITLES = [
-  "视图与阅读", "编辑体验", "快捷键配置", "工具栏", "主题与外观", "画布与背景", "文字与排版",
+  "视图与阅读", "编辑选项", "快捷键配置", "工具栏", "主题与外观", "画布与背景", "文字与排版",
   "节点外观", "连线与分支", "代码块", "新建与布局", "文件与资源", "图片与图床",
   "全局搜索", "AI 助手", "管理配置"
 ] as const;
@@ -369,7 +369,8 @@ export function normalizeSettingsSectionOrder(value: unknown): SettingsSectionTi
   const known = new Set<string>(SETTINGS_SECTION_TITLES);
   const legacyTitles: Record<string, SettingsSectionTitle> = {
     "显示模式": "视图与阅读",
-    "编辑": "编辑体验",
+    "编辑": "编辑选项",
+    "编辑体验": "编辑选项",
     "节点快速输入快捷键": "快捷键配置",
     "工具栏内容": "工具栏",
     "主题模板": "主题与外观",
@@ -1863,7 +1864,7 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
           }));
     }
 
-    containerEl.createEl("h3", { text: "编辑体验" });
+    containerEl.createEl("h3", { text: "编辑选项" });
 
     new Setting(containerEl)
       .setName("显示任务进度")
