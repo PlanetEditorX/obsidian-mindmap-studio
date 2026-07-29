@@ -7266,7 +7266,16 @@ function renderArticleNodeContent(container, node, treatTextAsBody, options) {
     } else if (block.type === "table") {
       renderArticleTable(container, block.table);
     } else {
-      void options.callbacks.onRenderCode(block.code, container.createDiv({ cls: "mms-article-code markdown-rendered" }));
+      const code = container.createDiv({ cls: "mms-article-code markdown-rendered" });
+      code.dataset.blockId = block.id;
+      void options.callbacks.onRenderCode(block.code, code);
+      if (!options.readOnly) {
+        code.addEventListener("dblclick", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          options.makeInlineCodeEditable(code, node, block.code, block.id);
+        });
+      }
     }
   }
   if (node.note) container.createEl("p", { cls: "mms-article-note", text: node.note });
@@ -7457,23 +7466,21 @@ function attachSelectionFormatToolbar(options) {
   button("B", `\u52A0\u7C97\uFF08${options.shortcuts.bold}\uFF09`, "bold");
   button("I", `\u659C\u4F53\uFF08${options.shortcuts.italic}\uFF09`, "italic");
   button("U", `\u4E0B\u5212\u7EBF\uFF08${options.shortcuts.underline}\uFF09`, "underline");
-  const clearFormat = toolbar.createEl("button", { text: "Tx", attr: { type: "button", title: "\u6E05\u9664\u683C\u5F0F", "aria-label": "\u6E05\u9664\u683C\u5F0F" } });
-  clearFormat.addClass("is-clear-format");
-  clearFormat.addEventListener("pointerdown", (event) => event.preventDefault());
-  clearFormat.addEventListener("click", () => applyStyle(null));
   const colorBtn = toolbar.createEl("button", {
     cls: "mms-color-btn",
     attr: { type: "button", title: "\u6587\u5B57\u989C\u8272" }
   });
   colorBtn.createSpan({ text: "A" });
-  colorBtn.style.textDecorationColor = lastColor;
+  colorBtn.style.color = lastColor;
   const popover = toolbar.createDiv({ cls: "mms-color-popover is-hidden" });
   for (const swatch of COMMON_COLORS) {
     const dot = popover.createEl("button", { attr: { type: "button", "data-color": swatch } });
     dot.style.backgroundColor = swatch;
     dot.addEventListener("click", () => {
       lastColor = swatch;
-      colorBtn.style.textDecorationColor = swatch;
+      colorBtn.style.color = swatch;
+      lastDot.style.backgroundColor = swatch;
+      nativeInput.value = swatch;
       applyStyle({ color: swatch });
       popover.addClass("is-hidden");
     });
@@ -7494,7 +7501,7 @@ function attachSelectionFormatToolbar(options) {
   nativeInput.value = lastColor;
   nativeInput.addEventListener("input", () => {
     lastColor = nativeInput.value;
-    colorBtn.style.textDecorationColor = nativeInput.value;
+    colorBtn.style.color = nativeInput.value;
     lastDot.style.backgroundColor = nativeInput.value;
     applyStyle({ color: nativeInput.value });
     popover.addClass("is-hidden");
@@ -7503,6 +7510,10 @@ function attachSelectionFormatToolbar(options) {
     rememberSelection();
     popover.toggleClass("is-hidden", !popover.hasClass("is-hidden"));
   });
+  const clearFormat = toolbar.createEl("button", { text: "Tx", attr: { type: "button", title: "\u6E05\u9664\u683C\u5F0F", "aria-label": "\u6E05\u9664\u683C\u5F0F" } });
+  clearFormat.addClass("is-clear-format");
+  clearFormat.addEventListener("pointerdown", (event) => event.preventDefault());
+  clearFormat.addEventListener("click", () => applyStyle(null));
   document.addEventListener("pointerdown", (closeEvent) => {
     if (!toolbar.contains(closeEvent.target) && !popover.contains(closeEvent.target)) {
       popover.addClass("is-hidden");
@@ -10100,6 +10111,42 @@ var MindMapEditor = class {
     this.applyInlineEditingAccessibility(element);
     if (focus) element.focus();
   }
+  /** Activates direct code editing for a code block rendered in article mode. */
+  makeInlineCodeEditable(element, node, code, blockId) {
+    if (this.readOnly || element.hasClass("is-inline-editing")) return;
+    this.selectNode(node.id);
+    element.empty();
+    element.addClass("is-inline-editing");
+    const editor = element.createEl("textarea", {
+      cls: "mms-article-code-editor",
+      attr: { spellcheck: "false", "aria-label": "\u7F16\u8F91\u4EE3\u7801" }
+    });
+    editor.value = code.code;
+    let finished = false;
+    const finish = (save) => {
+      if (finished) return;
+      finished = true;
+      if (save && editor.value !== code.code) {
+        this.mutate(() => this.upsertStructuredBlock(node, "code", { ...code, code: editor.value }, blockId));
+      } else {
+        this.render();
+      }
+    };
+    editor.addEventListener("keydown", (event) => {
+      if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+        event.preventDefault();
+        finish(true);
+      } else if (event.key === "Escape") {
+        event.preventDefault();
+        finish(false);
+      }
+    });
+    editor.addEventListener("blur", () => finish(true));
+    window.requestAnimationFrame(() => {
+      editor.focus();
+      editor.setSelectionRange(editor.value.length, editor.value.length);
+    });
+  }
   /**
    * 添加inline node actions，并保持模型、界面和持久化状态的一致性。
    *
@@ -10349,6 +10396,7 @@ var MindMapEditor = class {
       openAiContextMenu: (event, nodeId) => this.openAiScopeContextMenu(event, nodeId),
       openImageContextMenu: (event, nodeId, blockId) => this.openImageContextMenu(event, nodeId, blockId),
       makeInlineEditable: (element, node, placeholder) => this.makeInlineEditable(element, node, placeholder),
+      makeInlineCodeEditable: (element, node, code, blockId) => this.makeInlineCodeEditable(element, node, code, blockId),
       addInlineNodeActions: (container, node) => this.addInlineNodeActions(container, node)
     };
   }
@@ -11276,8 +11324,8 @@ var MindMapEditor = class {
       const blocks2 = nodeContentBlocks(node);
       const block = blocks2.find((item) => item.type === "text" && item.id === activeBlockId);
       if (!block) return;
-      const key = Object.keys(patch)[0];
-      if (key !== "color") {
+      const key = patch ? Object.keys(patch)[0] : null;
+      if (patch && key && key !== "color") {
         const styles = richTextCharacterStyles(block.richText, block.text);
         const enabled = styles.slice(selected.start, selected.end).every((style) => style[key] === true);
         patch = { [key]: !enabled };
@@ -11307,7 +11355,7 @@ var MindMapEditor = class {
     formatButton("U", `\u4E0B\u5212\u7EBF\uFF08${this.options.richTextShortcuts.underline}\uFF09`, "underline");
     const colorBtn = formatBar.createEl("button", { cls: "mmc-color-btn", attr: { type: "button", title: "\u6587\u5B57\u989C\u8272" } });
     colorBtn.createSpan({ text: "A" });
-    colorBtn.style.textDecorationColor = this.lastRichTextColor;
+    colorBtn.style.color = this.lastRichTextColor;
     const popover = formatBar.createDiv({ cls: "mms-color-popover is-hidden" });
     const COMMON_COLORS2 = ["#ef4444", "#f97316", "#eab308", "#22c55e", "#06b6d4", "#3b82f6", "#8b5cf6", "#ec4899", "#6b7280", "#1f2937"];
     for (const swatch of COMMON_COLORS2) {
@@ -11315,7 +11363,9 @@ var MindMapEditor = class {
       dot.style.backgroundColor = swatch;
       dot.addEventListener("click", () => {
         this.lastRichTextColor = swatch;
-        colorBtn.style.textDecorationColor = swatch;
+        colorBtn.style.color = swatch;
+        lastDot.style.backgroundColor = swatch;
+        nativeInput.value = swatch;
         applyStyle({ color: swatch });
         popover.addClass("is-hidden");
         editor.focus();
@@ -11333,7 +11383,7 @@ var MindMapEditor = class {
     nativeInput.value = this.lastRichTextColor;
     nativeInput.addEventListener("input", () => {
       this.lastRichTextColor = nativeInput.value;
-      colorBtn.style.textDecorationColor = nativeInput.value;
+      colorBtn.style.color = nativeInput.value;
       lastDot.style.backgroundColor = nativeInput.value;
       applyStyle({ color: nativeInput.value });
       popover.addClass("is-hidden");
@@ -11343,6 +11393,17 @@ var MindMapEditor = class {
       event.stopPropagation();
       rememberSelection();
       popover.toggleClass("is-hidden", !popover.hasClass("is-hidden"));
+    });
+    const clearFormat = formatBar.createEl("button", { text: "Tx", attr: { type: "button", title: "\u6E05\u9664\u683C\u5F0F", "aria-label": "\u6E05\u9664\u683C\u5F0F" } });
+    clearFormat.addClass("is-clear-format");
+    clearFormat.addEventListener("pointerdown", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+    });
+    clearFormat.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      applyStyle(null);
     });
     document.addEventListener("pointerdown", (closeEvent) => {
       if (!formatBar.contains(closeEvent.target) && !popover.contains(closeEvent.target)) {

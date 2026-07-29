@@ -2424,6 +2424,43 @@ export class MindMapEditor {
     if (focus) element.focus();
   }
 
+  /** Activates direct code editing for a code block rendered in article mode. */
+  private makeInlineCodeEditable(element: HTMLElement, node: MindMapNode, code: MindMapCodeBlock, blockId: string): void {
+    if (this.readOnly || element.hasClass("is-inline-editing")) return;
+    this.selectNode(node.id);
+    element.empty();
+    element.addClass("is-inline-editing");
+    const editor = element.createEl("textarea", {
+      cls: "mms-article-code-editor",
+      attr: { spellcheck: "false", "aria-label": "编辑代码" }
+    });
+    editor.value = code.code;
+    let finished = false;
+    const finish = (save: boolean): void => {
+      if (finished) return;
+      finished = true;
+      if (save && editor.value !== code.code) {
+        this.mutate(() => this.upsertStructuredBlock(node, "code", { ...code, code: editor.value }, blockId));
+      } else {
+        this.render();
+      }
+    };
+    editor.addEventListener("keydown", (event) => {
+      if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+        event.preventDefault();
+        finish(true);
+      } else if (event.key === "Escape") {
+        event.preventDefault();
+        finish(false);
+      }
+    });
+    editor.addEventListener("blur", () => finish(true));
+    window.requestAnimationFrame(() => {
+      editor.focus();
+      editor.setSelectionRange(editor.value.length, editor.value.length);
+    });
+  }
+
   /**
    * 添加inline node actions，并保持模型、界面和持久化状态的一致性。
    *
@@ -2683,6 +2720,7 @@ export class MindMapEditor {
       openAiContextMenu: (event, nodeId) => this.openAiScopeContextMenu(event, nodeId),
       openImageContextMenu: (event, nodeId, blockId) => this.openImageContextMenu(event, nodeId, blockId),
       makeInlineEditable: (element, node, placeholder) => this.makeInlineEditable(element, node, placeholder),
+      makeInlineCodeEditable: (element, node, code, blockId) => this.makeInlineCodeEditable(element, node, code, blockId),
       addInlineNodeActions: (container, node) => this.addInlineNodeActions(container, node)
     };
   }
@@ -3639,7 +3677,7 @@ export class MindMapEditor {
       selection?.removeAllRanges();
       selection?.addRange(range);
     };
-    const applyStyle = (patch: Partial<MindMapTextStyle>): void => {
+    const applyStyle = (patch: Partial<MindMapTextStyle> | null): void => {
       const selected = rememberSelection() ?? savedSelection;
       if (!selected || selected.start === selected.end) {
         new Notice("请先选择需要设置格式的文字");
@@ -3649,8 +3687,8 @@ export class MindMapEditor {
       const blocks = nodeContentBlocks(node);
       const block = blocks.find((item): item is MindMapTextContentBlock => item.type === "text" && item.id === activeBlockId);
       if (!block) return;
-      const key = Object.keys(patch)[0] as keyof MindMapTextStyle;
-      if (key !== "color") {
+      const key = patch ? Object.keys(patch)[0] as keyof MindMapTextStyle : null;
+      if (patch && key && key !== "color") {
         const styles = richTextCharacterStyles(block.richText, block.text);
         const enabled = styles.slice(selected.start, selected.end).every((style) => style[key] === true);
         patch = { [key]: !enabled };
@@ -3680,7 +3718,7 @@ export class MindMapEditor {
     formatButton("U", `下划线（${this.options.richTextShortcuts.underline}）`, "underline");
     const colorBtn = formatBar.createEl("button", { cls: "mmc-color-btn", attr: { type: "button", title: "文字颜色" } });
     colorBtn.createSpan({ text: "A" });
-    colorBtn.style.textDecorationColor = this.lastRichTextColor;
+    colorBtn.style.color = this.lastRichTextColor;
 
     const popover = formatBar.createDiv({ cls: "mms-color-popover is-hidden" });
     const COMMON_COLORS = ["#ef4444","#f97316","#eab308","#22c55e","#06b6d4","#3b82f6","#8b5cf6","#ec4899","#6b7280","#1f2937"];
@@ -3689,7 +3727,9 @@ export class MindMapEditor {
       dot.style.backgroundColor = swatch;
       dot.addEventListener("click", () => {
         this.lastRichTextColor = swatch;
-        colorBtn.style.textDecorationColor = swatch;
+        colorBtn.style.color = swatch;
+        lastDot.style.backgroundColor = swatch;
+        nativeInput.value = swatch;
         applyStyle({ color: swatch });
         popover.addClass("is-hidden");
         editor!.focus();
@@ -3707,7 +3747,7 @@ export class MindMapEditor {
     nativeInput.value = this.lastRichTextColor;
     nativeInput.addEventListener("input", () => {
       this.lastRichTextColor = nativeInput.value;
-      colorBtn.style.textDecorationColor = nativeInput.value;
+      colorBtn.style.color = nativeInput.value;
       lastDot.style.backgroundColor = nativeInput.value;
       applyStyle({ color: nativeInput.value });
       popover.addClass("is-hidden");
@@ -3717,6 +3757,17 @@ export class MindMapEditor {
       event.stopPropagation();
       rememberSelection();
       popover.toggleClass("is-hidden", !popover.hasClass("is-hidden"));
+    });
+    const clearFormat = formatBar.createEl("button", { text: "Tx", attr: { type: "button", title: "清除格式", "aria-label": "清除格式" } });
+    clearFormat.addClass("is-clear-format");
+    clearFormat.addEventListener("pointerdown", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+    });
+    clearFormat.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      applyStyle(null);
     });
     document.addEventListener("pointerdown", (closeEvent) => {
       if (!formatBar.contains(closeEvent.target as Node) && !popover.contains(closeEvent.target as Node)) {

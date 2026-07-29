@@ -8,6 +8,7 @@ import {
   imageSourceCandidates,
   nodeContentBlocks,
   nodePrimaryText,
+  type MindMapCodeBlock,
   type MindMapDocument,
   type MindMapNode,
   type MindMapTextContentBlock
@@ -45,6 +46,7 @@ export interface ArticleRendererOptions {
   openAiContextMenu: (event: MouseEvent, nodeId: string) => void;
   openImageContextMenu: (event: MouseEvent, nodeId: string, blockId: string) => void;
   makeInlineEditable: (element: HTMLElement, node: MindMapNode, placeholder: string) => void;
+  makeInlineCodeEditable: (element: HTMLElement, node: MindMapNode, code: MindMapCodeBlock, blockId: string) => void;
   addInlineNodeActions: (container: HTMLElement, node: MindMapNode) => void;
 }
 
@@ -197,7 +199,16 @@ export function renderArticleNodeContent(container: HTMLElement, node: MindMapNo
     } else if (block.type === "table") {
       renderArticleTable(container, block.table);
     } else {
-      void options.callbacks.onRenderCode(block.code, container.createDiv({ cls: "mms-article-code markdown-rendered" }));
+      const code = container.createDiv({ cls: "mms-article-code markdown-rendered" });
+      code.dataset.blockId = block.id;
+      void options.callbacks.onRenderCode(block.code, code);
+      if (!options.readOnly) {
+        code.addEventListener("dblclick", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          options.makeInlineCodeEditable(code, node, block.code, block.id);
+        });
+      }
     }
   }
   if (node.note) container.createEl("p", { cls: "mms-article-note", text: node.note });
