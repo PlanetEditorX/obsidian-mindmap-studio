@@ -2170,8 +2170,15 @@
 }
 
 .mmc-image-preview-modal {
-  --modal-width: min(97vw, 1500px);
-  --modal-height: min(94vh, 1000px);
+  --modal-width: min(96vw, 1600px);
+  --modal-height: min(90vh, 900px);
+}
+
+.mmc-image-preview-modal .modal-content {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .mmc-image-preview-toolbar {
@@ -2212,11 +2219,13 @@
 
 .mmc-image-preview-stage {
   display: flex;
+  flex: 1 1 auto;
   align-items: center;
   justify-content: center;
   width: 100%;
-  height: min(79vh, 860px);
-  overflow: auto;
+  min-height: 0;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
   border: 1px solid var(--background-modifier-border);
   border-radius: var(--radius-m);
   background: var(--background-secondary);
