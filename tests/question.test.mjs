@@ -146,6 +146,36 @@ test("code block display settings persist while unsupported themes fall back saf
   assert.equal(typeof model.normalizeDocument({ root: { text: "One line", code: { code: "x" }, children: [] } }).root.code.collapsed, "undefined");
 });
 
+test("Markdown clipping import preserves frontmatter title, hierarchy, text and linked images", () => {
+  const document = model.markdownToDocument(`---
+title: "全屋组网"
+source: "https://example.com/post"
+---
+
+## 全屋组网
+
+## 网络环境
+
+光猫和客厅之间只有一根网线。
+
+![网络拓扑](https://example.com/topology.png)
+
+### 光猫配置
+
+- 保存备份
+[![配置截图](https://example.com/config.png)](https://example.com/original)
+`, "导入文件");
+  assert.equal(document.root.text, "全屋组网");
+  assert.deepEqual(document.root.children.map((node) => node.text), ["网络环境"]);
+  const network = document.root.children[0];
+  assert.equal(network.children[0]?.text, "光猫和客厅之间只有一根网线。");
+  assert.deepEqual(model.nodeContentBlocks(network).filter((block) => block.type === "image").map((block) => block.source), ["https://example.com/topology.png"]);
+  const modem = network.children[1];
+  assert.equal(modem.text, "光猫配置");
+  assert.equal(modem.children[0]?.text, "保存备份");
+  assert.deepEqual(model.nodeContentBlocks(modem.children[0]).filter((block) => block.type === "image").map((block) => block.source), ["https://example.com/config.png"]);
+});
+
 test("question-bank grading distinguishes single choice, multiple choice and normalized essay answers", () => {
   const choice = model.normalizeDocument({
     root: {

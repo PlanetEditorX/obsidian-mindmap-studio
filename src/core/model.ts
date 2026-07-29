@@ -1721,7 +1721,21 @@ export function markdownToDocument(markdown: string, fallbackTitle = "思维导�
   const doc = createDefaultDocument(fallbackTitle);
   doc.root.children = [];
   const stack: Array<{ level: number; node: MindMapNode; kind: "root" | "heading" | "list" | "bold"; listKind?: "bullet" | "numbered" }> = [{ level: 0, node: doc.root, kind: "root" }];
-  let rootAssigned = false;
+  const sourceLines = markdown.split(/\r?\n/);
+  let frontmatterTitle: string | undefined;
+  if (sourceLines[0]?.trim() === "---") {
+    const end = sourceLines.slice(1).findIndex((line) => line.trim() === "---");
+    if (end >= 0) {
+      const frontmatter = sourceLines.slice(1, end + 1);
+      const titleLine = frontmatter.find((line) => /^title\s*:/i.test(line));
+      const title = titleLine?.match(/^title\s*:\s*["']?(.*?)["']?\s*$/i)?.[1]?.trim();
+      if (title) {
+        frontmatterTitle = title;
+      }
+      sourceLines.splice(0, end + 2);
+    }
+  }
+  let rootAssigned = Boolean(frontmatterTitle);
   let currentBoldTheme: MindMapNode | null = null;
   let currentBoldNode: MindMapNode | null = null;
   let hasLeadingContent = false;
@@ -1743,6 +1757,11 @@ export function markdownToDocument(markdown: string, fallbackTitle = "思维导�
     node.richText = parsed.richText;
   };
 
+  if (frontmatterTitle) {
+    applyMarkdownText(doc.root, frontmatterTitle, fallbackTitle);
+    doc.title = doc.root.text;
+  }
+
   const createMarkdownNode = (value: string, fallback = "节点", forceBold = false): MindMapNode => {
     const node = createNode();
     applyMarkdownText(node, value, fallback, forceBold);
@@ -1759,7 +1778,17 @@ export function markdownToDocument(markdown: string, fallbackTitle = "思维导�
     ]);
   };
 
-  for (const rawLine of markdown.split(/\r?\n/)) {
+  const appendImageBlock = (alt: string, source: string): void => {
+    const target = currentBoldNode ?? stack.at(-1)?.node ?? doc.root;
+    const imageSource = source.trim();
+    if (!imageSource) return;
+    replaceNodeContentBlocks(target, [
+      ...nodeContentBlocks(target),
+      { id: newId(), type: "image", source: imageSource, alt: alt.trim() || undefined }
+    ]);
+  };
+
+  for (const rawLine of sourceLines) {
     const line = rawLine.trimEnd();
     if (codeFence) {
       if (line.trim() === codeFence.marker) {
@@ -1781,7 +1810,7 @@ export function markdownToDocument(markdown: string, fallbackTitle = "思维导�
       const parsed = parseMarkdownTable(tableStr);
       if (parsed) {
         const target = currentBoldNode ?? stack.at(-1)?.node ?? doc.root;
-        target.table = parsed;
+        replaceNodeContentBlocks(target, [...nodeContentBlocks(target), { id: newId(), type: "table", table: parsed }]);
       }
     }
     tableLines = [];
@@ -1803,12 +1832,18 @@ export function markdownToDocument(markdown: string, fallbackTitle = "思维导�
     const numbered = line.match(/^(\s*)\d+[.)]\s*(.+?)\s*$/);
     const boldOutline = line.match(/^\s*\*\*(.+?)\*\*\s*$/);
     const quote = line.match(/^\s*>\s*(.+?)\s*$/);
+    const linkedImage = line.trim().match(/^\[!\[([^\]]*)\]\((\S+?)(?:\s+["'][^)]*["'])?\)\]\(\S+(?:\s+["'][^)]*["'])?\)\s*$/);
+    const image = line.trim().match(/^!\[([^\]]*)\]\((\S+?)(?:\s+["'][^)]*["'])?\)\s*$/);
 
     if (heading) {
       currentBoldTheme = null;
       currentBoldNode = null;
       const level = heading[1]?.length ?? 1;
       const text = heading[2]?.trim() ?? "节点";
+      if (frontmatterTitle && !doc.root.children.length && level >= 2 && text === doc.root.text) {
+        stack.length = 1;
+        continue;
+      }
       if (!rootAssigned && !doc.root.children.length && /^目录(?:\s|$)/.test(text)) {
         hasLeadingContent = true;
         skippingTableOfContents = true;
@@ -1838,6 +1873,16 @@ export function markdownToDocument(markdown: string, fallbackTitle = "思维导�
     }
 
     if (skippingTableOfContents) continue;
+
+    if (linkedImage) {
+      appendImageBlock(linkedImage[1] ?? "图片", linkedImage[2] ?? "");
+      continue;
+    }
+
+    if (image) {
+      appendImageBlock(image[1] ?? "图片", image[2] ?? "");
+      continue;
+    }
 
     if (quote) {
       const parent = stack.at(-1)?.node ?? doc.root;
@@ -1909,7 +1954,7 @@ export function markdownToDocument(markdown: string, fallbackTitle = "思维导�
     const parsed = parseMarkdownTable(tableStr);
     if (parsed) {
       const target = currentBoldNode ?? stack.at(-1)?.node ?? doc.root;
-      target.table = parsed;
+      replaceNodeContentBlocks(target, [...nodeContentBlocks(target), { id: newId(), type: "table", table: parsed }]);
     }
   }
   if (!doc.root.children.length) doc.root.children.push(createNode("主题 1"));
