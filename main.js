@@ -3235,22 +3235,24 @@ function estimatedTextLines(text, width, fontSize) {
   const charsPerLine = Math.max(4, Math.floor(available / averageGlyphWidth));
   return Math.max(1, text.split(/\r?\n/).reduce((sum, line) => sum + Math.max(1, Math.ceil(Math.max(1, line.length) / charsPerLine)), 0));
 }
-function nodeDimensions(node, depth, defaultFontSize = 14, visualStyle = "card", appearance = {}) {
-  var _a2, _b2, _c, _d, _e, _f, _g, _h, _i, _j, _k;
-  const fontSize = (_b2 = (_a2 = node.style) == null ? void 0 : _a2.fontSize) != null ? _b2 : defaultFontSize;
-  const manualWidth = (_c = node.style) == null ? void 0 : _c.width;
+function nodeDimensions(node, depth, defaultFontSize = 14, visualStyle = "card", appearance = {}, measuredDimensions) {
+  var _a2, _b2, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m;
+  const measured = measuredDimensions == null ? void 0 : measuredDimensions.get(node.id);
+  if (measured) return { width: measured.width, height: Math.max(measured.height, (_b2 = (_a2 = node.style) == null ? void 0 : _a2.minHeight) != null ? _b2 : 0) };
+  const fontSize = (_d = (_c = node.style) == null ? void 0 : _c.fontSize) != null ? _d : defaultFontSize;
+  const manualWidth = (_e = node.style) == null ? void 0 : _e.width;
   const extraWidth = Math.max(0, fontSize - 14) * 4;
   const blocks = nodeContentBlocks(node);
   const fitted = visualStyle === "branch";
-  const fixedWidth = Math.max(100, Math.min(900, (_d = appearance.defaultNodeWidth) != null ? _d : NODE_WIDTH));
+  const fixedWidth = Math.max(100, Math.min(900, (_f = appearance.defaultNodeWidth) != null ? _f : NODE_WIDTH));
   const automatic = appearance.nodeWidthMode !== "fixed";
-  const automaticMaximum = Math.max(120, Math.min(900, (_e = appearance.autoNodeMaxWidth) != null ? _e : 460));
+  const automaticMaximum = Math.max(120, Math.min(900, (_g = appearance.autoNodeMaxWidth) != null ? _g : 460));
   let width = manualWidth != null ? manualWidth : !automatic ? fixedWidth : fitted ? (depth === 0 ? 146 : 92) + extraWidth : (depth === 0 ? ROOT_WIDTH : NODE_WIDTH) + extraWidth;
   if (!manualWidth && automatic) {
     for (const block of blocks) {
-      if (block.type === "image") width = Math.max(width, Math.min(900, ((_f = block.width) != null ? _f : 240) + 28));
+      if (block.type === "image") width = Math.max(width, Math.min(900, ((_h = block.width) != null ? _h : 240) + 28));
       else if (block.type === "text") {
-        const visualUnits = Array.from((_g = block.text.split(/\r?\n/).sort((a, b) => b.length - a.length)[0]) != null ? _g : "").reduce((sum, character) => sum + (/[\u2e80-\u9fff\uff00-\uffef]/u.test(character) ? 1 : 0.62), 0);
+        const visualUnits = Array.from((_i = block.text.split(/\r?\n/).sort((a, b) => b.length - a.length)[0]) != null ? _i : "").reduce((sum, character) => sum + (/[\u2e80-\u9fff\uff00-\uffef]/u.test(character) ? 1 : 0.62), 0);
         const horizontalPadding = fitted ? depth === 0 ? 48 : 58 : 80;
         width = Math.max(width, Math.min(automaticMaximum, horizontalPadding + Math.min(visualUnits, 90) * fontSize));
       }
@@ -3270,10 +3272,10 @@ function nodeDimensions(node, depth, defaultFontSize = 14, visualStyle = "card",
   let height = 28 + Math.max(0, fontSize - 14) * 1.4;
   if (!blocks.length) height += depth === 0 ? 34 : 26;
   for (const block of blocks) {
-    if (block.type === "image") height += ((_h = block.height) != null ? _h : 110) + 22;
+    if (block.type === "image") height += ((_j = block.height) != null ? _j : 110) + 22;
     else if (block.type === "text") height += Math.max(30, estimatedTextLines(block.text, width, fontSize) * (fontSize + 8));
   }
-  if ((_i = node.tags) == null ? void 0 : _i.length) height += 20;
+  if ((_k = node.tags) == null ? void 0 : _k.length) height += 20;
   if (node.table) {
     const visibleRows = Math.min(10, node.table.rows.length);
     height += 42 + visibleRows * 31 + (node.table.rows.length > visibleRows ? 24 : 0);
@@ -3282,38 +3284,38 @@ function nodeDimensions(node, depth, defaultFontSize = 14, visualStyle = "card",
     const lines = node.code.code.split(/\r?\n/);
     height += Math.min(390, Math.max(100, Math.min(lines.length, 18) * 20 + 48));
   }
-  height = Math.max(height, (_k = (_j = node.style) == null ? void 0 : _j.minHeight) != null ? _k : 0);
+  height = Math.max(height, (_m = (_l = node.style) == null ? void 0 : _l.minHeight) != null ? _m : 0);
   return { width, height: Math.min(1200, height) };
 }
-function subtreeHeight(node, depth, defaultFontSize = 14, visualStyle = "card", appearance = {}) {
-  const ownHeight = nodeDimensions(node, depth, defaultFontSize, visualStyle, appearance).height;
+function subtreeHeight(node, depth, defaultFontSize = 14, visualStyle = "card", appearance = {}, measuredDimensions) {
+  const ownHeight = nodeDimensions(node, depth, defaultFontSize, visualStyle, appearance, measuredDimensions).height;
   const children = visibleChildren(node);
   if (!children.length) return ownHeight;
   const verticalGap = visualStyle === "branch" ? 18 : V_GAP;
-  const childrenHeight = children.reduce((sum, child) => sum + subtreeHeight(child, depth + 1, defaultFontSize, visualStyle, appearance), 0) + verticalGap * (children.length - 1);
+  const childrenHeight = children.reduce((sum, child) => sum + subtreeHeight(child, depth + 1, defaultFontSize, visualStyle, appearance, measuredDimensions), 0) + verticalGap * (children.length - 1);
   return Math.max(ownHeight, childrenHeight);
 }
-function layoutBranch(node, parentId, parentX, parentWidth, side, depth, centerY, output, defaultFontSize = 14, visualStyle = "card", appearance = {}) {
-  const dimensions = nodeDimensions(node, depth, defaultFontSize, visualStyle, appearance);
+function layoutBranch(node, parentId, parentX, parentWidth, side, depth, centerY, output, defaultFontSize = 14, visualStyle = "card", appearance = {}, measuredDimensions) {
+  const dimensions = nodeDimensions(node, depth, defaultFontSize, visualStyle, appearance, measuredDimensions);
   const horizontalGap = visualStyle === "branch" ? 54 : H_GAP;
   const verticalGap = visualStyle === "branch" ? 18 : V_GAP;
   const x = parentX + side * (parentWidth / 2 + horizontalGap + dimensions.width / 2);
   output.push({ node, parentId, x, y: centerY, depth, side, ...dimensions });
   const children = visibleChildren(node);
   if (!children.length) return;
-  const heights = children.map((child) => subtreeHeight(child, depth + 1, defaultFontSize, visualStyle, appearance));
+  const heights = children.map((child) => subtreeHeight(child, depth + 1, defaultFontSize, visualStyle, appearance, measuredDimensions));
   const totalHeight = heights.reduce((sum, childHeight) => sum + childHeight, 0) + verticalGap * (children.length - 1);
   let cursor = centerY - totalHeight / 2;
   children.forEach((child, index) => {
     var _a2;
-    const childHeight = (_a2 = heights[index]) != null ? _a2 : nodeDimensions(child, depth + 1, defaultFontSize, visualStyle, appearance).height;
+    const childHeight = (_a2 = heights[index]) != null ? _a2 : nodeDimensions(child, depth + 1, defaultFontSize, visualStyle, appearance, measuredDimensions).height;
     const childCenter = cursor + childHeight / 2;
-    layoutBranch(child, node.id, x, dimensions.width, side, depth + 1, childCenter, output, defaultFontSize, visualStyle, appearance);
+    layoutBranch(child, node.id, x, dimensions.width, side, depth + 1, childCenter, output, defaultFontSize, visualStyle, appearance, measuredDimensions);
     cursor += childHeight + verticalGap;
   });
 }
-function computeLayout(root, mode, defaultFontSize = 14, visualStyle = "card", appearance = {}) {
-  const rootDimensions = nodeDimensions(root, 0, defaultFontSize, visualStyle, appearance);
+function computeLayout(root, mode, defaultFontSize = 14, visualStyle = "card", appearance = {}, measuredDimensions) {
+  const rootDimensions = nodeDimensions(root, 0, defaultFontSize, visualStyle, appearance, measuredDimensions);
   const verticalGap = visualStyle === "branch" ? 18 : V_GAP;
   const nodes = [
     { node: root, parentId: null, x: 0, y: 0, depth: 0, side: 0, ...rootDimensions }
@@ -3325,7 +3327,7 @@ function computeLayout(root, mode, defaultFontSize = 14, visualStyle = "card", a
     let leftHeight = 0;
     let rightHeight = 0;
     for (const child of children) {
-      const height = subtreeHeight(child, 1, defaultFontSize, visualStyle, appearance) + verticalGap;
+      const height = subtreeHeight(child, 1, defaultFontSize, visualStyle, appearance, measuredDimensions) + verticalGap;
       if (leftHeight <= rightHeight) {
         left.push(child);
         leftHeight += height;
@@ -3335,26 +3337,26 @@ function computeLayout(root, mode, defaultFontSize = 14, visualStyle = "card", a
       }
     }
     const placeSide = (items, side) => {
-      const heights = items.map((child) => subtreeHeight(child, 1, defaultFontSize, visualStyle, appearance));
+      const heights = items.map((child) => subtreeHeight(child, 1, defaultFontSize, visualStyle, appearance, measuredDimensions));
       const total = heights.reduce((sum, value) => sum + value, 0) + verticalGap * Math.max(0, items.length - 1);
       let cursor = -total / 2;
       items.forEach((child, index) => {
         var _a2;
-        const height = (_a2 = heights[index]) != null ? _a2 : nodeDimensions(child, 1, defaultFontSize, visualStyle, appearance).height;
-        layoutBranch(child, root.id, 0, rootDimensions.width, side, 1, cursor + height / 2, nodes, defaultFontSize, visualStyle, appearance);
+        const height = (_a2 = heights[index]) != null ? _a2 : nodeDimensions(child, 1, defaultFontSize, visualStyle, appearance, measuredDimensions).height;
+        layoutBranch(child, root.id, 0, rootDimensions.width, side, 1, cursor + height / 2, nodes, defaultFontSize, visualStyle, appearance, measuredDimensions);
         cursor += height + verticalGap;
       });
     };
     placeSide(left, -1);
     placeSide(right, 1);
   } else {
-    const heights = children.map((child) => subtreeHeight(child, 1, defaultFontSize, visualStyle, appearance));
+    const heights = children.map((child) => subtreeHeight(child, 1, defaultFontSize, visualStyle, appearance, measuredDimensions));
     const total = heights.reduce((sum, value) => sum + value, 0) + verticalGap * Math.max(0, children.length - 1);
     let cursor = -total / 2;
     children.forEach((child, index) => {
       var _a2;
-      const height = (_a2 = heights[index]) != null ? _a2 : nodeDimensions(child, 1, defaultFontSize, visualStyle, appearance).height;
-      layoutBranch(child, root.id, 0, rootDimensions.width, 1, 1, cursor + height / 2, nodes, defaultFontSize, visualStyle, appearance);
+      const height = (_a2 = heights[index]) != null ? _a2 : nodeDimensions(child, 1, defaultFontSize, visualStyle, appearance, measuredDimensions).height;
+      layoutBranch(child, root.id, 0, rootDimensions.width, 1, 1, cursor + height / 2, nodes, defaultFontSize, visualStyle, appearance, measuredDimensions);
       cursor += height + verticalGap;
     });
   }
@@ -11268,6 +11270,7 @@ var MindMapEditor = class {
   applyMeasuredMindMapLayout() {
     var _a2, _b2;
     if (this.currentMode !== "mindmap" || !this.nodesLayerEl.isConnected) return;
+    const previousNodeRects = this.captureMindMapNodeRects();
     const appearance = this.getAppearance();
     const measured = /* @__PURE__ */ new Map();
     this.nodesLayerEl.querySelectorAll(".mmc-node[data-node-id]").forEach((element) => {
@@ -11279,13 +11282,7 @@ var MindMapEditor = class {
       });
     });
     if (!measured.size) return;
-    const next = computeLayout(this.document.root, this.document.layout, (_a2 = appearance.fontSize) != null ? _a2 : 14, (_b2 = appearance.nodeVisualStyle) != null ? _b2 : "card", appearance);
-    for (const position of next.nodes) {
-      const dimensions = measured.get(position.node.id);
-      if (!dimensions) continue;
-      position.width = dimensions.width;
-      position.height = dimensions.height;
-    }
+    const next = computeLayout(this.document.root, this.document.layout, (_a2 = appearance.fontSize) != null ? _a2 : 14, (_b2 = appearance.nodeVisualStyle) != null ? _b2 : "card", appearance, measured);
     resolveLayoutCollisions(next.nodes, appearance.nodeVisualStyle === "branch" ? 18 : 24);
     next.byId = new Map(next.nodes.map((position) => [position.node.id, position]));
     next.minX = Math.min(...next.nodes.map((position) => position.x - position.width / 2));
@@ -11301,6 +11298,7 @@ var MindMapEditor = class {
     }
     const branchColorMap = appearance.colorfulBranches ? buildBranchColorMap(this.document.root, appearance.branchColors) : /* @__PURE__ */ new Map();
     this.renderMindMapEdges(appearance, branchColorMap);
+    this.playMindMapLayoutAnimation(previousNodeRects);
   }
   /**
    * 应用transform，并保持模型、界面和持久化状态的一致性。
@@ -12393,6 +12391,7 @@ var MindMapEditor = class {
     void Promise.resolve(this.callbacks.onRenderCode(codeData, rendered)).then(() => {
       var _a2;
       (_a2 = rendered.querySelector("details.mms-code-collapsed")) == null ? void 0 : _a2.addEventListener("toggle", () => {
+        this.requestMindMapLayoutAnimation();
         this.scheduleMeasuredMindMapLayout();
       });
       this.scheduleMeasuredMindMapLayout();

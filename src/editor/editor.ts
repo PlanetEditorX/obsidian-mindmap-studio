@@ -3392,6 +3392,7 @@ export class MindMapEditor {
    */
   private applyMeasuredMindMapLayout(): void {
     if (this.currentMode !== "mindmap" || !this.nodesLayerEl.isConnected) return;
+    const previousNodeRects = this.captureMindMapNodeRects();
     const appearance = this.getAppearance();
     const measured = new Map<string, { width: number; height: number }>();
     this.nodesLayerEl.querySelectorAll<HTMLElement>(".mmc-node[data-node-id]").forEach((element) => {
@@ -3404,13 +3405,7 @@ export class MindMapEditor {
     });
     if (!measured.size) return;
 
-    const next = computeLayout(this.document.root, this.document.layout, appearance.fontSize ?? 14, appearance.nodeVisualStyle ?? "card", appearance);
-    for (const position of next.nodes) {
-      const dimensions = measured.get(position.node.id);
-      if (!dimensions) continue;
-      position.width = dimensions.width;
-      position.height = dimensions.height;
-    }
+    const next = computeLayout(this.document.root, this.document.layout, appearance.fontSize ?? 14, appearance.nodeVisualStyle ?? "card", appearance, measured);
     resolveLayoutCollisions(next.nodes, appearance.nodeVisualStyle === "branch" ? 18 : 24);
     next.byId = new Map(next.nodes.map((position) => [position.node.id, position]));
     next.minX = Math.min(...next.nodes.map((position) => position.x - position.width / 2));
@@ -3427,6 +3422,7 @@ export class MindMapEditor {
     }
     const branchColorMap = appearance.colorfulBranches ? buildBranchColorMap(this.document.root, appearance.branchColors) : new Map<string, string>();
     this.renderMindMapEdges(appearance, branchColorMap);
+    this.playMindMapLayoutAnimation(previousNodeRects);
   }
 
   /**
@@ -4576,6 +4572,7 @@ export class MindMapEditor {
       // document model. Request a measured relayout immediately; ResizeObserver
       // remains the fallback for theme, font and asynchronous highlighter changes.
       rendered.querySelector<HTMLDetailsElement>("details.mms-code-collapsed")?.addEventListener("toggle", () => {
+        this.requestMindMapLayoutAnimation();
         this.scheduleMeasuredMindMapLayout();
       });
       this.scheduleMeasuredMindMapLayout();
