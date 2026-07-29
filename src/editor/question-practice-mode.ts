@@ -11,6 +11,7 @@ type QuestionFilter = "all" | "wrong";
 /** Stateful selection kept by the editor while the question-bank mode is visible. */
 export interface QuestionPracticeState {
   filter: QuestionFilter;
+  tag: string | null;
   currentNodeId: string | null;
   selectedOptionIds: string[];
   essayAnswer: string;
@@ -30,23 +31,26 @@ export interface QuestionPracticeOptions {
   state: QuestionPracticeState;
   resolveImage: (source: string) => string | null;
   order: QuestionPracticeOrder;
+  memoryCurveEnabled: boolean;
+  wrongBookMasteryCount: number;
   onRecord: (nodeId: string, correct: boolean) => void;
   onNotice: (message: string) => void;
 }
 
 /** Creates an empty practice state for an editor instance. */
 export function createQuestionPracticeState(): QuestionPracticeState {
-  return { filter: "all", currentNodeId: null, selectedOptionIds: [], essayAnswer: "", answerVisible: false, lastCorrect: null, finished: false, orderedNodeIds: [], orderMode: null };
+  return { filter: "all", tag: null, currentNodeId: null, selectedOptionIds: [], essayAnswer: "", answerVisible: false, lastCorrect: null, finished: false, orderedNodeIds: [], orderMode: null };
 }
 
 /** Renders a full-page, sequential question practice surface. */
 export function renderQuestionPracticeMode(container: HTMLElement, options: QuestionPracticeOptions): void {
   container.empty();
-  const candidates = flattenNodes(options.document.root).filter((node) => node.question && (
+  const allQuestionNodes = flattenNodes(options.document.root).filter((node) => node.question);
+  const candidates = allQuestionNodes.filter((node) => node.question && (
     options.state.filter === "all"
     || node.question.status === "wrong"
     || (options.state.answerVisible && node.id === options.state.currentNodeId)
-  ));
+  ) && (!options.state.tag || node.question.tags.includes(options.state.tag)));
   const questions = orderPracticeQuestions(candidates, options.state, options.order);
   const shell = container.createDiv({ cls: "mms-question-practice-page" });
   const header = shell.createDiv({ cls: "mms-question-practice-header" });
@@ -65,6 +69,18 @@ export function renderQuestionPracticeMode(container: HTMLElement, options: Ques
       options.state.finished = false;
       options.state.orderedNodeIds = [];
       options.state.orderMode = null;
+      renderQuestionPracticeMode(container, options);
+    };
+  }
+  const tags = Array.from(new Set(allQuestionNodes.flatMap((node) => node.question!.tags))).sort((left, right) => left.localeCompare(right, "zh-CN"));
+  if (tags.length) {
+    const tagSelect = filters.createEl("select", { cls: "mms-question-practice-tag-filter", attr: { "aria-label": "题目标签" } });
+    tagSelect.createEl("option", { value: "", text: "全部标签" });
+    tags.forEach((tag) => tagSelect.createEl("option", { value: tag, text: tag }));
+    tagSelect.value = options.state.tag ?? "";
+    tagSelect.onchange = () => {
+      options.state.tag = tagSelect.value || null;
+      resetPracticeProgress(options.state);
       renderQuestionPracticeMode(container, options);
     };
   }
@@ -186,6 +202,20 @@ function orderPracticeQuestions(nodes: MindMapNode[], state: QuestionPracticeSta
     state.orderMode = order;
     state.orderedNodeIds = [];
   }
+  /* Tag filtering UI is rendered with the header filters above. */
+  /*
+  if (tags.length) {
+    const tagSelect = filters.createEl("select", { cls: "mms-question-practice-tag-filter", attr: { "aria-label": "题目标签" } });
+    tagSelect.createEl("option", { value: "", text: "全部标签" });
+    tags.forEach((tag) => tagSelect.createEl("option", { value: tag, text: tag }));
+    tagSelect.value = options.state.tag ?? "";
+    tagSelect.onchange = () => {
+      options.state.tag = tagSelect.value || null;
+      resetPracticeProgress(options.state);
+      renderQuestionPracticeMode(container, options);
+    };
+  }
+  */
   const available = new Map(nodes.map((node) => [node.id, node]));
   const retained = state.orderedNodeIds.filter((id) => available.has(id));
   const appended = nodes.map((node) => node.id).filter((id) => !retained.includes(id));
@@ -247,8 +277,20 @@ function renderExplanationBlocks(container: HTMLElement, blocks: readonly MindMa
 
 /** Splits common A/B/C/D analysis markers into individual display paragraphs. */
 export function splitExplanationLines(value: string): string[] {
-  const lines = value.split(/(?=[A-DＡ-Ｄ]项)/u).map((line) => line.trim()).filter(Boolean);
+  const lines = value.split(/(?=[A-DＡ-Ｄ]项|综上所述[，,]?(?:正确选项|答案)(?:为|是)?|(?:正确选项|答案)(?:为|是)?)/u).map((line) => line.trim()).filter(Boolean);
   return lines.length ? lines : value.trim() ? [value.trim()] : [];
+}
+
+/** Clears transient practice state when the active question set changes. */
+function resetPracticeProgress(state: QuestionPracticeState): void {
+  state.currentNodeId = null;
+  state.selectedOptionIds = [];
+  state.essayAnswer = "";
+  state.answerVisible = false;
+  state.lastCorrect = null;
+  state.finished = false;
+  state.orderedNodeIds = [];
+  state.orderMode = null;
 }
 
 /** Joins text blocks into the stored reference answer. */

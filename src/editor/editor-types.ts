@@ -115,4 +115,6 @@ export interface MindMapEditorOptions {
   questionBankModeEnabled: boolean;
   /** Ordering used when starting or restarting an answer-mode session. */
   questionPracticeOrder: "random" | "sequential";
+  questionMemoryCurveEnabled: boolean;
+  wrongBookMasteryCount: number;
 }

@@ -507,7 +507,7 @@ export function documentToSvg(root: MindMapNode, mode: LayoutMode, title: string
   const height = Math.max(220, layout.maxY - layout.minY + padding * 2);
   const offsetX = padding - layout.minX;
   const offsetY = padding - layout.minY;
-  const edgeStyle = appearance.edgeStyle ?? "curved";
+  const edgeStyle = appearance.edgeStyle ?? (String(appearance.nodeVisualStyle) === "branch" ? "elbow" : "curved");
   const defaultEdge = validColor(appearance.edgeColor, "#7c8aa5");
   const branchColorMap = appearance.colorfulBranches ? buildBranchColorMap(root, appearance.branchColors) : new Map<string, string>();
   const maxDepth = Math.max(1, ...layout.nodes.map((position) => position.depth));
