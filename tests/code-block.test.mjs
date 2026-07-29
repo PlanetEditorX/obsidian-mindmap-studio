@@ -49,6 +49,12 @@ test("mind-map code blocks use double click for editing", () => {
   assert.doesNotMatch(renderNodeCode, /block\.addEventListener\("click",[\s\S]{0,180}openCodeBlockEditor/);
 });
 
+test("collapsed code blocks recompute branch positions from measured node heights", () => {
+  assert.match(editorSource, /details\.mms-code-collapsed[\s\S]*addEventListener\("toggle", \(\) => \{[\s\S]*requestMindMapLayoutAnimation\(\)[\s\S]*scheduleMeasuredMindMapLayout\(\)/);
+  assert.match(editorSource, /computeLayout\(this\.document\.root, this\.document\.layout[\s\S]*appearance, measured\)/);
+  assert.match(editorSource, /const previousNodeRects = this\.captureMindMapNodeRects\(\);[\s\S]*playMindMapLayoutAnimation\(previousNodeRects\)/);
+});
+
 after(() => cleanup?.());
 
 class FakeClassList {

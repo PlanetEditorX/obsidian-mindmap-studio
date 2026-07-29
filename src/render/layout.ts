@@ -34,6 +34,12 @@ export interface LayoutResult {
   maxY: number;
 }
 
+/** Browser-measured dimensions used when rich node content changes size. */
+export interface MeasuredNodeDimensions {
+  width: number;
+  height: number;
+}
+
 const ROOT_WIDTH = 196;
 const NODE_WIDTH = 176;
 const H_GAP = 112;
@@ -72,7 +78,9 @@ function estimatedTextLines(text: string, width: number, fontSize: number): numb
  * @param defaultFontSize 未单独设置字号时使用的默认字号。
  * @returns 计算得到的数值结果。
  */
-function nodeDimensions(node: MindMapNode, depth: number, defaultFontSize = 14, visualStyle: NodeVisualStyle = "card", appearance: MindMapAppearance = {}): { width: number; height: number } {
+function nodeDimensions(node: MindMapNode, depth: number, defaultFontSize = 14, visualStyle: NodeVisualStyle = "card", appearance: MindMapAppearance = {}, measuredDimensions?: ReadonlyMap<string, MeasuredNodeDimensions>): MeasuredNodeDimensions {
+  const measured = measuredDimensions?.get(node.id);
+  if (measured) return { width: measured.width, height: Math.max(measured.height, node.style?.minHeight ?? 0) };
   const fontSize = node.style?.fontSize ?? defaultFontSize;
   const manualWidth = node.style?.width;
   const extraWidth = Math.max(0, fontSize - 14) * 4;
@@ -137,12 +145,12 @@ function nodeDimensions(node: MindMapNode, depth: number, defaultFontSize = 14, 
  * @param defaultFontSize 未单独设置字号时使用的默认字号。
  * @returns 计算得到的数值结果。
  */
-function subtreeHeight(node: MindMapNode, depth: number, defaultFontSize = 14, visualStyle: NodeVisualStyle = "card", appearance: MindMapAppearance = {}): number {
-  const ownHeight = nodeDimensions(node, depth, defaultFontSize, visualStyle, appearance).height;
+function subtreeHeight(node: MindMapNode, depth: number, defaultFontSize = 14, visualStyle: NodeVisualStyle = "card", appearance: MindMapAppearance = {}, measuredDimensions?: ReadonlyMap<string, MeasuredNodeDimensions>): number {
+  const ownHeight = nodeDimensions(node, depth, defaultFontSize, visualStyle, appearance, measuredDimensions).height;
   const children = visibleChildren(node);
   if (!children.length) return ownHeight;
   const verticalGap = visualStyle === "branch" ? 18 : V_GAP;
-  const childrenHeight = children.reduce((sum, child) => sum + subtreeHeight(child, depth + 1, defaultFontSize, visualStyle, appearance), 0) + verticalGap * (children.length - 1);
+  const childrenHeight = children.reduce((sum, child) => sum + subtreeHeight(child, depth + 1, defaultFontSize, visualStyle, appearance, measuredDimensions), 0) + verticalGap * (children.length - 1);
   return Math.max(ownHeight, childrenHeight);
 }
 
@@ -170,9 +178,10 @@ function layoutBranch(
   output: NodePosition[],
   defaultFontSize = 14,
   visualStyle: NodeVisualStyle = "card",
-  appearance: MindMapAppearance = {}
+  appearance: MindMapAppearance = {},
+  measuredDimensions?: ReadonlyMap<string, MeasuredNodeDimensions>
 ): void {
-  const dimensions = nodeDimensions(node, depth, defaultFontSize, visualStyle, appearance);
+  const dimensions = nodeDimensions(node, depth, defaultFontSize, visualStyle, appearance, measuredDimensions);
   const horizontalGap = visualStyle === "branch" ? 54 : H_GAP;
   const verticalGap = visualStyle === "branch" ? 18 : V_GAP;
   const x = parentX + side * (parentWidth / 2 + horizontalGap + dimensions.width / 2);
@@ -180,13 +189,13 @@ function layoutBranch(
   const children = visibleChildren(node);
   if (!children.length) return;
 
-  const heights = children.map((child) => subtreeHeight(child, depth + 1, defaultFontSize, visualStyle, appearance));
+  const heights = children.map((child) => subtreeHeight(child, depth + 1, defaultFontSize, visualStyle, appearance, measuredDimensions));
   const totalHeight = heights.reduce((sum, childHeight) => sum + childHeight, 0) + verticalGap * (children.length - 1);
   let cursor = centerY - totalHeight / 2;
   children.forEach((child, index) => {
-    const childHeight = heights[index] ?? nodeDimensions(child, depth + 1, defaultFontSize, visualStyle, appearance).height;
+    const childHeight = heights[index] ?? nodeDimensions(child, depth + 1, defaultFontSize, visualStyle, appearance, measuredDimensions).height;
     const childCenter = cursor + childHeight / 2;
-    layoutBranch(child, node.id, x, dimensions.width, side, depth + 1, childCenter, output, defaultFontSize, visualStyle, appearance);
+    layoutBranch(child, node.id, x, dimensions.width, side, depth + 1, childCenter, output, defaultFontSize, visualStyle, appearance, measuredDimensions);
     cursor += childHeight + verticalGap;
   });
 }
@@ -200,8 +209,8 @@ function layoutBranch(
  * @returns 当前操作生成、查找或规范化后的结果。
  * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
  */
-export function computeLayout(root: MindMapNode, mode: LayoutMode, defaultFontSize = 14, visualStyle: NodeVisualStyle = "card", appearance: MindMapAppearance = {}): LayoutResult {
-  const rootDimensions = nodeDimensions(root, 0, defaultFontSize, visualStyle, appearance);
+export function computeLayout(root: MindMapNode, mode: LayoutMode, defaultFontSize = 14, visualStyle: NodeVisualStyle = "card", appearance: MindMapAppearance = {}, measuredDimensions?: ReadonlyMap<string, MeasuredNodeDimensions>): LayoutResult {
+  const rootDimensions = nodeDimensions(root, 0, defaultFontSize, visualStyle, appearance, measuredDimensions);
   const verticalGap = visualStyle === "branch" ? 18 : V_GAP;
   const nodes: NodePosition[] = [
     { node: root, parentId: null, x: 0, y: 0, depth: 0, side: 0, ...rootDimensions }
@@ -216,7 +225,7 @@ export function computeLayout(root: MindMapNode, mode: LayoutMode, defaultFontSi
     // The model's child order is the user's explicit ordering contract. Balance
     // sides by height, but never reorder siblings to make the diagram denser.
     for (const child of children) {
-      const height = subtreeHeight(child, 1, defaultFontSize, visualStyle, appearance) + verticalGap;
+      const height = subtreeHeight(child, 1, defaultFontSize, visualStyle, appearance, measuredDimensions) + verticalGap;
       if (leftHeight <= rightHeight) {
         left.push(child);
         leftHeight += height;
@@ -227,24 +236,24 @@ export function computeLayout(root: MindMapNode, mode: LayoutMode, defaultFontSi
     }
 
     const placeSide = (items: MindMapNode[], side: -1 | 1): void => {
-      const heights = items.map((child) => subtreeHeight(child, 1, defaultFontSize, visualStyle, appearance));
+      const heights = items.map((child) => subtreeHeight(child, 1, defaultFontSize, visualStyle, appearance, measuredDimensions));
       const total = heights.reduce((sum, value) => sum + value, 0) + verticalGap * Math.max(0, items.length - 1);
       let cursor = -total / 2;
       items.forEach((child, index) => {
-        const height = heights[index] ?? nodeDimensions(child, 1, defaultFontSize, visualStyle, appearance).height;
-        layoutBranch(child, root.id, 0, rootDimensions.width, side, 1, cursor + height / 2, nodes, defaultFontSize, visualStyle, appearance);
+        const height = heights[index] ?? nodeDimensions(child, 1, defaultFontSize, visualStyle, appearance, measuredDimensions).height;
+        layoutBranch(child, root.id, 0, rootDimensions.width, side, 1, cursor + height / 2, nodes, defaultFontSize, visualStyle, appearance, measuredDimensions);
         cursor += height + verticalGap;
       });
     };
     placeSide(left, -1);
     placeSide(right, 1);
   } else {
-    const heights = children.map((child) => subtreeHeight(child, 1, defaultFontSize, visualStyle, appearance));
+    const heights = children.map((child) => subtreeHeight(child, 1, defaultFontSize, visualStyle, appearance, measuredDimensions));
     const total = heights.reduce((sum, value) => sum + value, 0) + verticalGap * Math.max(0, children.length - 1);
     let cursor = -total / 2;
     children.forEach((child, index) => {
-      const height = heights[index] ?? nodeDimensions(child, 1, defaultFontSize, visualStyle, appearance).height;
-      layoutBranch(child, root.id, 0, rootDimensions.width, 1, 1, cursor + height / 2, nodes, defaultFontSize, visualStyle, appearance);
+      const height = heights[index] ?? nodeDimensions(child, 1, defaultFontSize, visualStyle, appearance, measuredDimensions).height;
+      layoutBranch(child, root.id, 0, rootDimensions.width, 1, 1, cursor + height / 2, nodes, defaultFontSize, visualStyle, appearance, measuredDimensions);
       cursor += height + verticalGap;
     });
   }
