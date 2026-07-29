@@ -62,7 +62,9 @@ export function renderArticleMode(container: HTMLElement, options: ArticleRender
     const separator = /[、.）]$/.test(pageEntry.label) ? "" : " ";
     title.createSpan({ cls: "mms-article-number", text: `${pageEntry.label}${separator}` });
   }
-  const titleText = title.createSpan({ cls: "mms-article-document-title-text", text: rootTitle });
+  const titleText = title.createSpan({ cls: "mms-article-document-title-text" });
+  const rootTextBlock = nodeContentBlocks(options.document.root).find((block): block is MindMapTextContentBlock => block.type === "text");
+  renderRichTextRuns(titleText, rootTextBlock?.richText, rootTextBlock?.text ?? rootTitle);
   options.makeInlineEditable(titleText, options.document.root, "文章标题");
   options.addInlineNodeActions(page, options.document.root);
 
@@ -145,7 +147,9 @@ function renderDirectory(page: HTMLElement, options: ArticleRendererOptions): vo
 /** 渲染章节标题或子导图链接。 */
 function renderHeading(heading: HTMLElement, node: MindMapNode, title: string, options: ArticleRendererOptions): void {
   if (node.submap) {
-    const headingLink = heading.createEl("a", { cls: "mms-article-heading-text mms-submap-text-link", text: title, href: node.submap.path, attr: { title: `打开子导图：${node.submap.title ?? node.submap.path}` } });
+    const headingLink = heading.createEl("a", { cls: "mms-article-heading-text mms-submap-text-link", href: node.submap.path, attr: { title: `打开子导图：${node.submap.title ?? node.submap.path}` } });
+    const textBlock = nodeContentBlocks(node).find((block): block is MindMapTextContentBlock => block.type === "text");
+    renderRichTextRuns(headingLink, textBlock?.richText, textBlock?.text ?? title);
     headingLink.addEventListener("click", (event) => {
       event.preventDefault();
       event.stopPropagation();
@@ -153,7 +157,9 @@ function renderHeading(heading: HTMLElement, node: MindMapNode, title: string, o
       void options.callbacks.onOpenMindMap(node.submap!.path);
     });
   } else {
-    const headingText = heading.createSpan({ cls: "mms-article-heading-text", text: title });
+    const headingText = heading.createSpan({ cls: "mms-article-heading-text" });
+    const textBlock = nodeContentBlocks(node).find((block): block is MindMapTextContentBlock => block.type === "text");
+    renderRichTextRuns(headingText, textBlock?.richText, textBlock?.text ?? title);
     options.makeInlineEditable(headingText, node, "章节标题");
   }
 }

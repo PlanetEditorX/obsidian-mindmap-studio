@@ -26,6 +26,7 @@ import {
   nodeContentBlocks,
   nodePlainText,
   nodePrimaryText,
+  normalizeMarkdownRichText,
   replaceNodeContentBlocks,
   syncNodeContentFields,
   syncMindMapQuestionFields,
@@ -2308,13 +2309,14 @@ export class MindMapEditor {
    */
   private updateNodePrimaryText(node: MindMapNode, value: { text: string; richText?: MindMapTextContentBlock["richText"] }): void {
     const next = value.text.replace(/\s+/g, " ").trim();
+    const normalized = normalizeMarkdownRichText(value.richText, next);
     const blocks = nodeContentBlocks(node);
     const firstText = blocks.find((block): block is MindMapTextContentBlock => block.type === "text");
     if (firstText) {
-      firstText.text = next;
-      firstText.richText = value.richText;
-    } else if (next) {
-      blocks.unshift({ id: newId(), type: "text", text: next });
+      firstText.text = normalized.text;
+      firstText.richText = normalized.richText;
+    } else if (normalized.text) {
+      blocks.unshift({ id: newId(), type: "text", text: normalized.text, richText: normalized.richText });
     }
     node.content = blocks.filter((block) => block.type !== "text" || block.text.trim());
     syncNodeContentFields(node);
@@ -3501,6 +3503,7 @@ export class MindMapEditor {
     let historyCaptured = false;
     const save = (): void => {
       const values = readRichTextEditor(editor!);
+      const normalized = normalizeMarkdownRichText(values.richText, values.text);
       if (!historyCaptured) {
         this.history.capture(this.document);
         historyCaptured = true;
@@ -3515,8 +3518,8 @@ export class MindMapEditor {
         if (legacyTextIndex >= 0) blocks.splice(legacyTextIndex, 1, block);
         else blocks.unshift(block);
       }
-      block.text = values.text;
-      block.richText = values.richText;
+      block.text = normalized.text;
+      block.richText = normalized.richText;
       node.content = blocks;
       syncNodeContentFields(node);
       if (node.id === this.document.root.id && values.text) this.document.title = values.text;
@@ -4176,7 +4179,9 @@ export class MindMapEditor {
     const page = this.articleEl.createDiv({ cls: `mms-article-page mms-reading-page article-${style.preset}` });
     page.dataset.filePath = sections[0]!.filePath;
     page.dataset.nodeId = sections[0]!.document.root.id;
-    page.createEl("h1", { cls: "mms-article-document-title", text: nodePrimaryText(sections[0]!.document.root) || sections[0]!.document.title });
+    const bookTitle = page.createEl("h1", { cls: "mms-article-document-title" });
+    const bookTitleBlock = nodeContentBlocks(sections[0]!.document.root).find((block): block is MindMapTextContentBlock => block.type === "text");
+    renderRichTextRuns(bookTitle, bookTitleBlock?.richText, bookTitleBlock?.text ?? sections[0]!.document.title);
 
     // 存在子导图时，顶级导图只承担书名与目录组织，不再作为正文重复显示。
     const contentSections = sections.length > 1 ? sections.slice(1) : sections;
@@ -4228,10 +4233,10 @@ export class MindMapEditor {
         mountAnchor.id = `reading-${readingAnchorPart(section.parentFilePath)}-${readingAnchorPart(section.parentNodeId)}`;
       }
       const sectionEntry = tocEntries.find((entry) => entry.filePath === section.filePath && !entry.nodeId);
-      chapter.createEl("h2", {
-        cls: "mms-reading-map-title",
-        text: sectionEntry?.displayTitle || nodePrimaryText(section.document.root) || section.document.title
-      });
+      const chapterTitle = chapter.createEl("h2", { cls: "mms-reading-map-title" });
+      if (sectionEntry?.label) chapterTitle.createSpan({ cls: "mms-article-number", text: sectionEntry.label });
+      const chapterTitleBlock = nodeContentBlocks(section.document.root).find((block): block is MindMapTextContentBlock => block.type === "text");
+      renderRichTextRuns(chapterTitle, chapterTitleBlock?.richText, chapterTitleBlock?.text ?? (sectionEntry?.displayTitle || section.document.title));
       this.renderArticleContent(chapter, section.document.root, false);
       for (const info of buildArticleNodeInfo(section.document.root, section.baseDepth)) {
         const nodeSection = chapter.createEl("section", { cls: `mms-article-node depth-${Math.min(info.depth, 8)}` });
@@ -4240,7 +4245,10 @@ export class MindMapEditor {
         nodeSection.id = `reading-${fileKey}-${readingAnchorPart(info.node.id)}`;
         if (info.isHeading) {
           const level = Math.min(6, info.depth + 1);
-          nodeSection.createEl(`h${level}` as keyof HTMLElementTagNameMap, { cls: "mms-article-section-heading", text: info.displayTitle || info.title });
+          const heading = nodeSection.createEl(`h${level}` as keyof HTMLElementTagNameMap, { cls: "mms-article-section-heading" });
+          if (info.label) heading.createSpan({ cls: "mms-article-number", text: info.label });
+          const headingBlock = nodeContentBlocks(info.node).find((block): block is MindMapTextContentBlock => block.type === "text");
+          renderRichTextRuns(heading, headingBlock?.richText, headingBlock?.text ?? (info.displayTitle || info.title));
           this.renderArticleContent(nodeSection, info.node, false);
         } else {
           const firstTextBlock = nodeContentBlocks(info.node).find((block): block is MindMapTextContentBlock => block.type === "text");

@@ -8,7 +8,6 @@ import {
   imageSourceCandidates,
   nodeContentBlocks,
   nodePlainText,
-  nodePrimaryText,
   type MindMapDocument,
   type MindMapNode,
   type MindMapTextContentBlock
@@ -47,7 +46,9 @@ export function renderOutlineMode(container: HTMLElement, options: OutlineRender
   page.dataset.nodeId = root.id;
   const titleRow = page.createDiv({ cls: `mms-outline-row is-root${options.selectedId === root.id ? " is-selected" : ""}` });
   titleRow.dataset.nodeId = root.id;
-  const title = titleRow.createDiv({ cls: "mms-outline-title is-root-title", text: nodePrimaryText(root) || options.document.title });
+  const title = titleRow.createDiv({ cls: "mms-outline-title is-root-title" });
+  const rootTextBlock = nodeContentBlocks(root).find((block): block is MindMapTextContentBlock => block.type === "text");
+  renderRichTextRuns(title, rootTextBlock?.richText, rootTextBlock?.text ?? options.document.title);
   options.makeInlineEditable(title, root, "导图标题");
   options.addInlineNodeActions(titleRow, root);
   titleRow.addEventListener("click", () => options.selectNode(root.id));
@@ -80,10 +81,10 @@ export function renderOutlineMode(container: HTMLElement, options: OutlineRender
     if (node.submap) {
       const link = row.createEl("a", {
         cls: "mms-outline-title mms-submap-text-link",
-        text: label,
         href: node.submap.path,
         attr: { title: `打开子导图：${node.submap.title ?? node.submap.path}` }
       });
+      renderRichTextRuns(link, firstTextBlock?.richText, firstTextBlock?.text ?? label);
       link.addEventListener("click", (event) => {
         event.preventDefault();
         event.stopPropagation();
@@ -91,7 +92,8 @@ export function renderOutlineMode(container: HTMLElement, options: OutlineRender
         void options.openMindMap(node.submap!.path);
       });
     } else {
-      const text = row.createDiv({ cls: "mms-outline-title", text: label });
+      const text = row.createDiv({ cls: "mms-outline-title" });
+      renderRichTextRuns(text, firstTextBlock?.richText, firstTextBlock?.text ?? label);
       options.makeInlineEditable(text, node, "节点文字");
     }
     if (node.articleNumberingMode === "manual") {

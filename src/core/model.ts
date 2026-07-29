@@ -857,8 +857,7 @@ function normalizeContentBlock(input: unknown): MindMapContentBlock | null {
   }
   if (candidate.type === "text") {
     const fallbackText = typeof candidate.text === "string" ? candidate.text.replace(/\r\n?/g, "\n").slice(0, 20000) : "";
-    const richText = normalizeRichText(candidate.richText, fallbackText);
-    const text = richTextPlainText(richText, fallbackText);
+    const { text, richText } = normalizeMarkdownRichText(candidate.richText, fallbackText);
     return { id, type: "text", text, richText };
   }
   return null;
@@ -925,8 +924,8 @@ export function nodeContentBlocks(node: Pick<MindMapNode, "content" | "text" | "
   const blocks: MindMapContentBlock[] = [];
   if (node.image?.trim()) blocks.push({ id: newId(), type: "image", source: node.image.trim(), alt: node.text || undefined });
   if (node.text || node.richText?.length) {
-    const richText = normalizeRichText(node.richText, node.text);
-    blocks.push({ id: newId(), type: "text", text: richTextPlainText(richText, node.text), richText });
+    const { text, richText } = normalizeMarkdownRichText(node.richText, node.text);
+    blocks.push({ id: newId(), type: "text", text, richText });
   }
   if (node.table) blocks.push({ id: newId(), type: "table", table: normalizeTable(node.table) ?? node.table });
   if (node.code) blocks.push({ id: newId(), type: "code", code: normalizeCode(node.code) ?? node.code });
@@ -1187,8 +1186,7 @@ function normalizeNode(input: Partial<MindMapNode> | undefined, fallbackText: st
     if (typeof input?.image === "string" && input.image.trim()) {
       normalizedContent.push({ id: newId(), type: "image", source: input.image.trim(), alt: fallbackNodeText || undefined });
     }
-    const richText = normalizeRichText(input?.richText, fallbackNodeText);
-    const text = richTextPlainText(richText, fallbackNodeText);
+    const { text, richText } = normalizeMarkdownRichText(input?.richText, fallbackNodeText);
     if (text) normalizedContent.push({ id: newId(), type: "text", text, richText });
   }
   const textBlocks = normalizedContent.filter((block): block is MindMapTextContentBlock => block.type === "text");
@@ -1467,16 +1465,22 @@ function escapeInlineMarkdown(value: string): string {
 /** Converts supported inline Markdown markers into the editor's rich-text model. */
 export function markdownInlineToRichText(value: string): { text: string; richText?: MindMapTextRun[] } {
   const runs: MindMapTextRun[] = [];
-  const inlinePattern = /\*\*(.+?)\*\*|(`+)([\s\S]*?)\2/g;
+  const inlinePattern = /(`+)([\s\S]*?)\1|\*\*(.+?)\*\*|~~(.+?)~~|<u>([\s\S]*?)<\/u>|\*(?!\s)(.+?)(?<!\s)\*/g;
   let cursor = 0;
   let match: RegExpExecArray | null;
   while ((match = inlinePattern.exec(value))) {
     const before = value.slice(cursor, match.index);
-    const boldText = match[1];
-    const codeText = match[3];
+    const codeText = match[2];
+    const boldText = match[3];
+    const strikeText = match[4];
+    const underlineText = match[5];
+    const italicText = match[6];
     if (before) runs.push({ text: before });
-    if (boldText) runs.push({ text: boldText, style: { bold: true } });
-    else if (codeText) runs.push({ text: codeText, style: { code: true } });
+    if (codeText !== undefined) runs.push({ text: codeText, style: { code: true } });
+    else if (boldText !== undefined) runs.push({ text: boldText, style: { bold: true } });
+    else if (strikeText !== undefined) runs.push({ text: strikeText, style: { strike: true } });
+    else if (underlineText !== undefined) runs.push({ text: underlineText, style: { underline: true } });
+    else if (italicText !== undefined) runs.push({ text: italicText, style: { italic: true } });
     cursor = match.index + match[0].length;
   }
   if (!runs.length) return { text: value };
@@ -1485,6 +1489,37 @@ export function markdownInlineToRichText(value: string): { text: string; richTex
   if (after) runs.push({ text: after });
   const text = runs.map((run) => run.text).join("");
   return { text, richText: normalizeRichText(runs, text) };
+}
+
+/**
+ * Converts inline Markdown in unformatted runs while preserving styles applied by the editor.
+ * This keeps imported and manually entered node text on the same rich-text path.
+ */
+export function normalizeMarkdownRichText(
+  runs: MindMapTextRun[] | undefined,
+  fallbackText: string
+): { text: string; richText?: MindMapTextRun[] } {
+  const normalized = normalizeRichText(runs, fallbackText);
+  const sourceRuns = normalized?.length ? normalized : fallbackText ? [{ text: fallbackText }] : [];
+  const converted: MindMapTextRun[] = [];
+  for (const run of sourceRuns) {
+    if (run.style && Object.values(run.style).some(Boolean)) {
+      converted.push(run);
+      continue;
+    }
+    // `normalizeRichText` trims a complete value. Keep whitespace that belongs
+    // between adjacent runs before parsing this individual unformatted run.
+    const leading = run.text.match(/^\s+/)?.[0] ?? "";
+    const trailing = run.text.match(/\s+$/)?.[0] ?? "";
+    const core = run.text.slice(leading.length, run.text.length - trailing.length);
+    if (leading) converted.push({ text: leading });
+    const parsed = markdownInlineToRichText(core);
+    if (parsed.richText?.length) converted.push(...parsed.richText);
+    else if (parsed.text) converted.push({ text: parsed.text });
+    if (trailing) converted.push({ text: trailing });
+  }
+  const text = converted.map((run) => run.text).join("");
+  return { text, richText: normalizeRichText(converted, text) };
 }
 
 /**

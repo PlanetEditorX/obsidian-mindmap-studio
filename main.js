@@ -403,8 +403,7 @@ function normalizeContentBlock(input) {
   }
   if (candidate.type === "text") {
     const fallbackText = typeof candidate.text === "string" ? candidate.text.replace(/\r\n?/g, "\n").slice(0, 2e4) : "";
-    const richText = normalizeRichText(candidate.richText, fallbackText);
-    const text = richTextPlainText(richText, fallbackText);
+    const { text, richText } = normalizeMarkdownRichText(candidate.richText, fallbackText);
     return { id, type: "text", text, richText };
   }
   return null;
@@ -455,8 +454,8 @@ function nodeContentBlocks(node) {
   const blocks = [];
   if ((_c = node.image) == null ? void 0 : _c.trim()) blocks.push({ id: newId(), type: "image", source: node.image.trim(), alt: node.text || void 0 });
   if (node.text || ((_d = node.richText) == null ? void 0 : _d.length)) {
-    const richText = normalizeRichText(node.richText, node.text);
-    blocks.push({ id: newId(), type: "text", text: richTextPlainText(richText, node.text), richText });
+    const { text, richText } = normalizeMarkdownRichText(node.richText, node.text);
+    blocks.push({ id: newId(), type: "text", text, richText });
   }
   if (node.table) blocks.push({ id: newId(), type: "table", table: (_e = normalizeTable(node.table)) != null ? _e : node.table });
   if (node.code) blocks.push({ id: newId(), type: "code", code: (_f = normalizeCode(node.code)) != null ? _f : node.code });
@@ -598,8 +597,7 @@ function normalizeNode(input, fallbackText) {
     if (typeof (input == null ? void 0 : input.image) === "string" && input.image.trim()) {
       normalizedContent.push({ id: newId(), type: "image", source: input.image.trim(), alt: fallbackNodeText || void 0 });
     }
-    const richText = normalizeRichText(input == null ? void 0 : input.richText, fallbackNodeText);
-    const text2 = richTextPlainText(richText, fallbackNodeText);
+    const { text: text2, richText } = normalizeMarkdownRichText(input == null ? void 0 : input.richText, fallbackNodeText);
     if (text2) normalizedContent.push({ id: newId(), type: "text", text: text2, richText });
   }
   const textBlocks = normalizedContent.filter((block) => block.type === "text");
@@ -755,16 +753,22 @@ function escapeInlineMarkdown(value) {
 }
 function markdownInlineToRichText(value) {
   const runs = [];
-  const inlinePattern = /\*\*(.+?)\*\*|(`+)([\s\S]*?)\2/g;
+  const inlinePattern = /(`+)([\s\S]*?)\1|\*\*(.+?)\*\*|~~(.+?)~~|<u>([\s\S]*?)<\/u>|\*(?!\s)(.+?)(?<!\s)\*/g;
   let cursor = 0;
   let match;
   while (match = inlinePattern.exec(value)) {
     const before = value.slice(cursor, match.index);
-    const boldText = match[1];
-    const codeText = match[3];
+    const codeText = match[2];
+    const boldText = match[3];
+    const strikeText = match[4];
+    const underlineText = match[5];
+    const italicText = match[6];
     if (before) runs.push({ text: before });
-    if (boldText) runs.push({ text: boldText, style: { bold: true } });
-    else if (codeText) runs.push({ text: codeText, style: { code: true } });
+    if (codeText !== void 0) runs.push({ text: codeText, style: { code: true } });
+    else if (boldText !== void 0) runs.push({ text: boldText, style: { bold: true } });
+    else if (strikeText !== void 0) runs.push({ text: strikeText, style: { strike: true } });
+    else if (underlineText !== void 0) runs.push({ text: underlineText, style: { underline: true } });
+    else if (italicText !== void 0) runs.push({ text: italicText, style: { italic: true } });
     cursor = match.index + match[0].length;
   }
   if (!runs.length) return { text: value };
@@ -772,6 +776,28 @@ function markdownInlineToRichText(value) {
   if (after) runs.push({ text: after });
   const text = runs.map((run) => run.text).join("");
   return { text, richText: normalizeRichText(runs, text) };
+}
+function normalizeMarkdownRichText(runs, fallbackText) {
+  var _a2, _b2, _c, _d, _e;
+  const normalized2 = normalizeRichText(runs, fallbackText);
+  const sourceRuns = (normalized2 == null ? void 0 : normalized2.length) ? normalized2 : fallbackText ? [{ text: fallbackText }] : [];
+  const converted = [];
+  for (const run of sourceRuns) {
+    if (run.style && Object.values(run.style).some(Boolean)) {
+      converted.push(run);
+      continue;
+    }
+    const leading = (_b2 = (_a2 = run.text.match(/^\s+/)) == null ? void 0 : _a2[0]) != null ? _b2 : "";
+    const trailing = (_d = (_c = run.text.match(/\s+$/)) == null ? void 0 : _c[0]) != null ? _d : "";
+    const core = run.text.slice(leading.length, run.text.length - trailing.length);
+    if (leading) converted.push({ text: leading });
+    const parsed = markdownInlineToRichText(core);
+    if ((_e = parsed.richText) == null ? void 0 : _e.length) converted.push(...parsed.richText);
+    else if (parsed.text) converted.push({ text: parsed.text });
+    if (trailing) converted.push({ text: trailing });
+  }
+  const text = converted.map((run) => run.text).join("");
+  return { text, richText: normalizeRichText(converted, text) };
 }
 function richTextToMarkdown(runs, fallbackText) {
   if (!(runs == null ? void 0 : runs.length)) return escapeInlineMarkdown(fallbackText);
@@ -6768,9 +6794,11 @@ function renderNodeRichTextEditor(container, block, onChange) {
   source.addEventListener("mouseup", remember);
   source.addEventListener("input", () => {
     const next = source.value.replace(/\r?\n/g, " ");
-    block.richText = reconcileRichTextAfterEdit(block.text, block.richText, next);
-    block.text = next;
-    source.value = next;
+    const reconciled = reconcileRichTextAfterEdit(block.text, block.richText, next);
+    const normalized2 = normalizeMarkdownRichText(reconciled, next);
+    block.text = normalized2.text;
+    block.richText = normalized2.richText;
+    source.value = normalized2.text;
     remember();
     updatePreview();
     onChange();
@@ -6867,13 +6895,16 @@ var DocumentHistory = class {
 
 // src/editor/outline-renderer.ts
 function renderOutlineMode(container, options) {
+  var _a2;
   container.empty();
   const page = container.createDiv({ cls: "mms-outline-page" });
   const root = options.document.root;
   page.dataset.nodeId = root.id;
   const titleRow = page.createDiv({ cls: `mms-outline-row is-root${options.selectedId === root.id ? " is-selected" : ""}` });
   titleRow.dataset.nodeId = root.id;
-  const title = titleRow.createDiv({ cls: "mms-outline-title is-root-title", text: nodePrimaryText(root) || options.document.title });
+  const title = titleRow.createDiv({ cls: "mms-outline-title is-root-title" });
+  const rootTextBlock = nodeContentBlocks(root).find((block) => block.type === "text");
+  renderRichTextRuns(title, rootTextBlock == null ? void 0 : rootTextBlock.richText, (_a2 = rootTextBlock == null ? void 0 : rootTextBlock.text) != null ? _a2 : options.document.title);
   options.makeInlineEditable(title, root, "\u5BFC\u56FE\u6807\u9898");
   options.addInlineNodeActions(titleRow, root);
   titleRow.addEventListener("click", () => options.selectNode(root.id));
@@ -6886,7 +6917,7 @@ function renderOutlineMode(container, options) {
   renderOutlineContent(page, root, 0, options);
   const list = page.createDiv({ cls: "mms-outline-list" });
   const visit = (node, depth) => {
-    var _a2, _b2, _c, _d, _e;
+    var _a3, _b2, _c, _d, _e, _f, _g;
     const item = list.createDiv({ cls: `mms-outline-item depth-${Math.min(depth, 8)}` });
     item.dataset.nodeId = node.id;
     item.style.setProperty("--mms-outline-depth", String(depth));
@@ -6908,14 +6939,14 @@ function renderOutlineMode(container, options) {
         });
       });
     }
-    const label = nodePlainText(node) || ((_b2 = (_a2 = node.submap) == null ? void 0 : _a2.title) != null ? _b2 : "\u56FE\u7247\u8282\u70B9");
+    const label = nodePlainText(node) || ((_b2 = (_a3 = node.submap) == null ? void 0 : _a3.title) != null ? _b2 : "\u56FE\u7247\u8282\u70B9");
     if (node.submap) {
       const link = row.createEl("a", {
         cls: "mms-outline-title mms-submap-text-link",
-        text: label,
         href: node.submap.path,
         attr: { title: `\u6253\u5F00\u5B50\u5BFC\u56FE\uFF1A${(_c = node.submap.title) != null ? _c : node.submap.path}` }
       });
+      renderRichTextRuns(link, firstTextBlock == null ? void 0 : firstTextBlock.richText, (_d = firstTextBlock == null ? void 0 : firstTextBlock.text) != null ? _d : label);
       link.addEventListener("click", (event) => {
         event.preventDefault();
         event.stopPropagation();
@@ -6923,11 +6954,12 @@ function renderOutlineMode(container, options) {
         void options.openMindMap(node.submap.path);
       });
     } else {
-      const text = row.createDiv({ cls: "mms-outline-title", text: label });
+      const text = row.createDiv({ cls: "mms-outline-title" });
+      renderRichTextRuns(text, firstTextBlock == null ? void 0 : firstTextBlock.richText, (_e = firstTextBlock == null ? void 0 : firstTextBlock.text) != null ? _e : label);
       options.makeInlineEditable(text, node, "\u8282\u70B9\u6587\u5B57");
     }
     if (node.articleNumberingMode === "manual") {
-      row.createSpan({ cls: "mms-outline-badge", text: `\u6587\u7AE0\u5C42\u7EA7 ${(_d = node.articleNumberingLevel) != null ? _d : 1} \xB7 ${articleNumberLabel((_e = node.articleNumberingLevel) != null ? _e : 1, 1)}` });
+      row.createSpan({ cls: "mms-outline-badge", text: `\u6587\u7AE0\u5C42\u7EA7 ${(_f = node.articleNumberingLevel) != null ? _f : 1} \xB7 ${articleNumberLabel((_g = node.articleNumberingLevel) != null ? _g : 1, 1)}` });
     } else if (node.articleNumberingMode === "none") {
       row.createSpan({ cls: "mms-outline-badge", text: "\u6587\u7AE0\u4E0D\u7F16\u53F7" });
     }
@@ -7024,7 +7056,7 @@ function renderOutlineContent(container, node, depth, options) {
 // src/editor/article-renderer.ts
 var import_obsidian8 = require("obsidian");
 function renderArticleMode(container, options) {
-  var _a2, _b2;
+  var _a2, _b2, _c;
   container.empty();
   const articleStyle = resolveArticleStyle(options.document.articleStyle);
   const page = container.createDiv({ cls: `mms-article-page article-${articleStyle.preset} toc-${(_a2 = articleStyle.tocStyle) != null ? _a2 : "card"}` });
@@ -7037,10 +7069,12 @@ function renderArticleMode(container, options) {
     const separator = /[、.）]$/.test(pageEntry.label) ? "" : " ";
     title.createSpan({ cls: "mms-article-number", text: `${pageEntry.label}${separator}` });
   }
-  const titleText = title.createSpan({ cls: "mms-article-document-title-text", text: rootTitle });
+  const titleText = title.createSpan({ cls: "mms-article-document-title-text" });
+  const rootTextBlock = nodeContentBlocks(options.document.root).find((block) => block.type === "text");
+  renderRichTextRuns(titleText, rootTextBlock == null ? void 0 : rootTextBlock.richText, (_b2 = rootTextBlock == null ? void 0 : rootTextBlock.text) != null ? _b2 : rootTitle);
   options.makeInlineEditable(titleText, options.document.root, "\u6587\u7AE0\u6807\u9898");
   options.addInlineNodeActions(page, options.document.root);
-  const directoryOnly = options.showArticleToc && options.articleTocEntries.length > 0 && ((_b2 = options.document.view) == null ? void 0 : _b2.articleLandingMode) !== "article";
+  const directoryOnly = options.showArticleToc && options.articleTocEntries.length > 0 && ((_c = options.document.view) == null ? void 0 : _c.articleLandingMode) !== "article";
   if (directoryOnly) {
     renderDirectory(page, options);
     return;
@@ -7113,9 +7147,11 @@ function renderDirectory(page, options) {
   }
 }
 function renderHeading(heading, node, title, options) {
-  var _a2;
+  var _a2, _b2, _c;
   if (node.submap) {
-    const headingLink = heading.createEl("a", { cls: "mms-article-heading-text mms-submap-text-link", text: title, href: node.submap.path, attr: { title: `\u6253\u5F00\u5B50\u5BFC\u56FE\uFF1A${(_a2 = node.submap.title) != null ? _a2 : node.submap.path}` } });
+    const headingLink = heading.createEl("a", { cls: "mms-article-heading-text mms-submap-text-link", href: node.submap.path, attr: { title: `\u6253\u5F00\u5B50\u5BFC\u56FE\uFF1A${(_a2 = node.submap.title) != null ? _a2 : node.submap.path}` } });
+    const textBlock = nodeContentBlocks(node).find((block) => block.type === "text");
+    renderRichTextRuns(headingLink, textBlock == null ? void 0 : textBlock.richText, (_b2 = textBlock == null ? void 0 : textBlock.text) != null ? _b2 : title);
     headingLink.addEventListener("click", (event) => {
       event.preventDefault();
       event.stopPropagation();
@@ -7123,7 +7159,9 @@ function renderHeading(heading, node, title, options) {
       void options.callbacks.onOpenMindMap(node.submap.path);
     });
   } else {
-    const headingText = heading.createSpan({ cls: "mms-article-heading-text", text: title });
+    const headingText = heading.createSpan({ cls: "mms-article-heading-text" });
+    const textBlock = nodeContentBlocks(node).find((block) => block.type === "text");
+    renderRichTextRuns(headingText, textBlock == null ? void 0 : textBlock.richText, (_c = textBlock == null ? void 0 : textBlock.text) != null ? _c : title);
     options.makeInlineEditable(headingText, node, "\u7AE0\u8282\u6807\u9898");
   }
 }
@@ -9883,13 +9921,14 @@ var MindMapEditor = class {
    */
   updateNodePrimaryText(node, value) {
     const next = value.text.replace(/\s+/g, " ").trim();
+    const normalized2 = normalizeMarkdownRichText(value.richText, next);
     const blocks = nodeContentBlocks(node);
     const firstText = blocks.find((block) => block.type === "text");
     if (firstText) {
-      firstText.text = next;
-      firstText.richText = value.richText;
-    } else if (next) {
-      blocks.unshift({ id: newId(), type: "text", text: next });
+      firstText.text = normalized2.text;
+      firstText.richText = normalized2.richText;
+    } else if (normalized2.text) {
+      blocks.unshift({ id: newId(), type: "text", text: normalized2.text, richText: normalized2.richText });
     }
     node.content = blocks.filter((block) => block.type !== "text" || block.text.trim());
     syncNodeContentFields(node);
@@ -11027,6 +11066,7 @@ var MindMapEditor = class {
     let historyCaptured = false;
     const save = () => {
       const values = readRichTextEditor(editor);
+      const normalized2 = normalizeMarkdownRichText(values.richText, values.text);
       if (!historyCaptured) {
         this.history.capture(this.document);
         historyCaptured = true;
@@ -11039,8 +11079,8 @@ var MindMapEditor = class {
         if (legacyTextIndex >= 0) blocks2.splice(legacyTextIndex, 1, block);
         else blocks2.unshift(block);
       }
-      block.text = values.text;
-      block.richText = values.richText;
+      block.text = normalized2.text;
+      block.richText = normalized2.richText;
       node.content = blocks2;
       syncNodeContentFields(node);
       if (node.id === this.document.root.id && values.text) this.document.title = values.text;
@@ -11666,7 +11706,7 @@ var MindMapEditor = class {
    * read-only book with an integrated directory and persisted progress.
    */
   renderReading() {
-    var _a2, _b2;
+    var _a2, _b2, _c, _d, _e;
     this.articleEl.empty();
     const sections = this.options.readingSections.length ? this.options.readingSections : [{ filePath: (_b2 = (_a2 = this.options.articleNavigation) == null ? void 0 : _a2.homePath) != null ? _b2 : "", document: this.document, baseDepth: 0 }];
     const style = resolveArticleStyle(this.document.articleStyle);
@@ -11679,7 +11719,9 @@ var MindMapEditor = class {
     const page = this.articleEl.createDiv({ cls: `mms-article-page mms-reading-page article-${style.preset}` });
     page.dataset.filePath = sections[0].filePath;
     page.dataset.nodeId = sections[0].document.root.id;
-    page.createEl("h1", { cls: "mms-article-document-title", text: nodePrimaryText(sections[0].document.root) || sections[0].document.title });
+    const bookTitle = page.createEl("h1", { cls: "mms-article-document-title" });
+    const bookTitleBlock = nodeContentBlocks(sections[0].document.root).find((block) => block.type === "text");
+    renderRichTextRuns(bookTitle, bookTitleBlock == null ? void 0 : bookTitleBlock.richText, (_c = bookTitleBlock == null ? void 0 : bookTitleBlock.text) != null ? _c : sections[0].document.title);
     const contentSections = sections.length > 1 ? sections.slice(1) : sections;
     const contentPaths = new Set(contentSections.map((section) => section.filePath));
     const articleTocMaxDepth = this.effectiveArticleTocMaxDepth();
@@ -11722,10 +11764,10 @@ var MindMapEditor = class {
         mountAnchor.id = `reading-${readingAnchorPart(section.parentFilePath)}-${readingAnchorPart(section.parentNodeId)}`;
       }
       const sectionEntry = tocEntries.find((entry) => entry.filePath === section.filePath && !entry.nodeId);
-      chapter.createEl("h2", {
-        cls: "mms-reading-map-title",
-        text: (sectionEntry == null ? void 0 : sectionEntry.displayTitle) || nodePrimaryText(section.document.root) || section.document.title
-      });
+      const chapterTitle = chapter.createEl("h2", { cls: "mms-reading-map-title" });
+      if (sectionEntry == null ? void 0 : sectionEntry.label) chapterTitle.createSpan({ cls: "mms-article-number", text: sectionEntry.label });
+      const chapterTitleBlock = nodeContentBlocks(section.document.root).find((block) => block.type === "text");
+      renderRichTextRuns(chapterTitle, chapterTitleBlock == null ? void 0 : chapterTitleBlock.richText, (_d = chapterTitleBlock == null ? void 0 : chapterTitleBlock.text) != null ? _d : (sectionEntry == null ? void 0 : sectionEntry.displayTitle) || section.document.title);
       this.renderArticleContent(chapter, section.document.root, false);
       for (const info of buildArticleNodeInfo(section.document.root, section.baseDepth)) {
         const nodeSection = chapter.createEl("section", { cls: `mms-article-node depth-${Math.min(info.depth, 8)}` });
@@ -11734,7 +11776,10 @@ var MindMapEditor = class {
         nodeSection.id = `reading-${fileKey}-${readingAnchorPart(info.node.id)}`;
         if (info.isHeading) {
           const level = Math.min(6, info.depth + 1);
-          nodeSection.createEl(`h${level}`, { cls: "mms-article-section-heading", text: info.displayTitle || info.title });
+          const heading = nodeSection.createEl(`h${level}`, { cls: "mms-article-section-heading" });
+          if (info.label) heading.createSpan({ cls: "mms-article-number", text: info.label });
+          const headingBlock = nodeContentBlocks(info.node).find((block) => block.type === "text");
+          renderRichTextRuns(heading, headingBlock == null ? void 0 : headingBlock.richText, (_e = headingBlock == null ? void 0 : headingBlock.text) != null ? _e : info.displayTitle || info.title);
           this.renderArticleContent(nodeSection, info.node, false);
         } else {
           const firstTextBlock = nodeContentBlocks(info.node).find((block) => block.type === "text");
