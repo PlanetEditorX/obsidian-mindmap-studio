@@ -99,6 +99,9 @@ interface MindMapImageContentBlock {
   type: "image";
   source: string;
   alt?: string;
+  align?: "left" | "center" | "right";
+  width?: number;
+  height?: number;
   localSource?: string;
   remoteSources?: MindMapImageRemoteSource[];
 }

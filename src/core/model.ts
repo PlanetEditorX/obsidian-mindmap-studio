@@ -188,6 +188,8 @@ export interface MindMapImageContentBlock {
   type: "image";
   source: string;
   alt?: string;
+  /** Horizontal alignment shared by mind-map, outline, article, and reading renderers. */
+  align?: "left" | "center" | "right";
   /** Optional rendered image width in pixels. Omitted values use the view default. */
   width?: number;
   /** Optional rendered image height in pixels. Omitted values preserve the image ratio. */
@@ -830,6 +832,9 @@ function normalizeContentBlock(input: unknown): MindMapContentBlock | null {
     const height = typeof image.height === "number" && Number.isFinite(image.height)
       ? Math.max(20, Math.min(2000, Math.round(image.height)))
       : undefined;
+    const align = image.align === "left" || image.align === "center" || image.align === "right"
+      ? image.align
+      : undefined;
     const localSource = typeof image.localSource === "string" && image.localSource.trim()
       ? image.localSource.trim().slice(0, 2000)
       : undefined;
@@ -853,7 +858,7 @@ function normalizeContentBlock(input: unknown): MindMapContentBlock | null {
         }];
       })
       : undefined;
-    return { id, type: "image", source, alt, width, height, localSource, remoteSources: remoteSources?.length ? remoteSources : undefined };
+    return { id, type: "image", source, alt, align, width, height, localSource, remoteSources: remoteSources?.length ? remoteSources : undefined };
   }
   if (candidate.type === "text") {
     const fallbackText = typeof candidate.text === "string" ? candidate.text.replace(/\r\n?/g, "\n").slice(0, 20000) : "";

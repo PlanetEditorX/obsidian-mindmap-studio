@@ -360,6 +360,18 @@ class NodeEditModal extends Modal {
           };
           addSizeInput("显示宽度（px）", "width");
           addSizeInput("显示高度（px）", "height");
+          const alignLabel = body.createEl("label", { text: "图片对齐" });
+          const align = alignLabel.createEl("select");
+          ([
+            ["left", "左对齐"],
+            ["center", "居中"],
+            ["right", "右对齐"]
+          ] as const).forEach(([value, label]) => align.createEl("option", { value, text: label }));
+          align.value = block.align ?? "center";
+          align.addEventListener("change", () => {
+            block.align = align.value === "left" || align.value === "right" ? align.value : undefined;
+            scheduleAutoSave();
+          });
           source.addEventListener("input", () => {
             const next = source.value.trim();
             if (next !== block.source) {
@@ -2890,6 +2902,7 @@ export class MindMapEditor {
       for (const block of blocks) {
         if (block.type === "image") {
           const wrap = content.createDiv({ cls: "mmc-node-image-block" });
+          wrap.addClass(`image-align-${block.align ?? "center"}`);
           wrap.dataset.blockId = block.id;
           const image = wrap.createEl("img", { cls: "mmc-node-image is-loading", attr: { alt: block.alt ?? (nodePlainText(node) || "图片") } });
           if (block.width) image.style.width = `${block.width}px`;
@@ -4782,10 +4795,17 @@ export class MindMapEditor {
     }
   }
 
-  /** 显示图片专用右键菜单，并按当前设置启动 AI 识图或本地 OCR。 */
+  /** 显示图片专用右键菜单，提供识图、布局、图床和编辑等快速操作。 */
   private openImageContextMenu(event: MouseEvent, nodeId: string, blockId: string): void {
+    const node = findNode(this.document.root, nodeId);
+    const block = node ? nodeContentBlocks(node).find((item): item is MindMapImageContentBlock => item.type === "image" && item.id === blockId) : undefined;
+    if (!node || !block) return;
     const modeLabel = this.options.imageRecognitionMode === "local-ocr" ? "本地 OCR" : "AI 识图";
     const menu = new Menu();
+    menu.addItem((item) => item
+      .setTitle("放大预览")
+      .setIcon("maximize-2")
+      .onClick(() => this.previewImageBlock(block)));
     menu.addItem((item) => item
       .setTitle(`${modeLabel}并转为文字`)
       .setIcon("scan-text")
@@ -4796,7 +4816,93 @@ export class MindMapEditor {
         .setIcon("circle-help")
         .onClick(() => void this.convertImageToQuestion(nodeId, blockId)));
     }
+    menu.addSeparator();
+    menu.addItem((item) => item.setTitle("左对齐").setIcon("align-left").onClick(() => this.setImageBlockAlignment(nodeId, blockId, "left")));
+    menu.addItem((item) => item.setTitle("居中").setIcon("align-center").onClick(() => this.setImageBlockAlignment(nodeId, blockId, "center")));
+    menu.addItem((item) => item.setTitle("右对齐").setIcon("align-right").onClick(() => this.setImageBlockAlignment(nodeId, blockId, "right")));
+    menu.addSeparator();
+    menu.addItem((item) => item.setTitle("小尺寸（180px）").setIcon("image-down").onClick(() => this.setImageBlockWidth(nodeId, blockId, 180)));
+    menu.addItem((item) => item.setTitle("中尺寸（360px）").setIcon("image").onClick(() => this.setImageBlockWidth(nodeId, blockId, 360)));
+    menu.addItem((item) => item.setTitle("大尺寸（640px）").setIcon("image-up").onClick(() => this.setImageBlockWidth(nodeId, blockId, 640)));
+    menu.addItem((item) => item.setTitle("适应节点").setIcon("maximize").onClick(() => this.setImageBlockWidth(nodeId, blockId)));
+    menu.addItem((item) => item.setTitle("自定义尺寸或替换图片…").setIcon("settings-2").onClick(() => this.editImageBlock(blockId)));
+    if (!this.readOnly && (block.localSource || !/^https?:\/\//i.test(block.source))) {
+      menu.addSeparator();
+      menu.addItem((item) => item
+        .setTitle("上传到图床")
+        .setIcon("cloud-upload")
+        .onClick(() => void this.uploadImageBlock(nodeId, blockId)));
+    }
+    menu.addSeparator();
+    menu.addItem((item) => item.setTitle("复制图片地址").setIcon("copy").onClick(() => void this.copyImageSource(block.source)));
+    if (!this.readOnly) {
+      menu.addItem((item) => item.setTitle("删除图片").setIcon("trash-2").onClick(() => this.removeImageBlock(nodeId, blockId)));
+    }
     menu.showAtMouseEvent(event);
+  }
+
+  /** 打开图片预览，并按当前图床优先级提供候选地址。 */
+  private previewImageBlock(block: MindMapImageContentBlock): void {
+    const source = this.callbacks.resolveImage(block.source) ?? block.source;
+    new ImagePreviewModal(this.app, source, block.alt ?? "图片预览", imageSourceCandidates(block, true, this.options.imageHostPriorityIds), this.callbacks.resolveImage).open();
+  }
+
+  /** 将图片块设置为指定的水平对齐方式。 */
+  private setImageBlockAlignment(nodeId: string, blockId: string, align: "left" | "center" | "right"): void {
+    const node = findNode(this.document.root, nodeId);
+    const block = node ? nodeContentBlocks(node).find((item): item is MindMapImageContentBlock => item.type === "image" && item.id === blockId) : undefined;
+    if (!node || !block || !this.ensureEditable()) return;
+    this.mutate(() => { block.align = align === "center" ? undefined : align; });
+  }
+
+  /** 设定图片显示宽度；缺省宽度表示恢复为适应当前节点。 */
+  private setImageBlockWidth(nodeId: string, blockId: string, width?: number): void {
+    const node = findNode(this.document.root, nodeId);
+    const block = node ? nodeContentBlocks(node).find((item): item is MindMapImageContentBlock => item.type === "image" && item.id === blockId) : undefined;
+    if (!node || !block || !this.ensureEditable()) return;
+    this.mutate(() => {
+      block.width = width;
+      block.height = undefined;
+    });
+  }
+
+  /** 打开当前图片块的编辑面板，用于精确尺寸和替换来源。 */
+  private editImageBlock(blockId: string): void {
+    const initialBlockId = blockId;
+    this.editSelected(initialBlockId);
+  }
+
+  /** 将当前图片上传到用户选择的图床，并保留本地来源与已有镜像。 */
+  private async uploadImageBlock(nodeId: string, blockId: string): Promise<void> {
+    const node = findNode(this.document.root, nodeId);
+    const block = node ? nodeContentBlocks(node).find((item): item is MindMapImageContentBlock => item.type === "image" && item.id === blockId) : undefined;
+    if (!node || !block || !this.ensureEditable()) return;
+    const previous = cloneDocument(this.document);
+    if (!await uploadCurrentNodeImage(this.app, block, this.callbacks)) return;
+    this.history.capture(previous);
+    syncNodeContentFields(node);
+    this.callbacks.onChange(this.getDocument());
+    this.markSaving();
+    this.render();
+  }
+
+  /** 复制当前图片的主地址，供外部编辑器或浏览器直接使用。 */
+  private async copyImageSource(source: string): Promise<void> {
+    try {
+      await navigator.clipboard.writeText(source);
+      new Notice("图片地址已复制");
+    } catch {
+      new Notice("无法访问系统剪贴板");
+    }
+  }
+
+  /** 从节点的有序内容块中移除指定图片。 */
+  private removeImageBlock(nodeId: string, blockId: string): void {
+    const node = findNode(this.document.root, nodeId);
+    if (!node || !this.ensureEditable()) return;
+    const blocks = nodeContentBlocks(node);
+    if (!blocks.some((block) => block.type === "image" && block.id === blockId)) return;
+    this.mutate(() => replaceNodeContentBlocks(node, blocks.filter((block) => block.id !== blockId)));
   }
 
   /**
