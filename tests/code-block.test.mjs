@@ -248,6 +248,9 @@ test("all four display modes use the same host callback and no pseudo-element li
   ]);
   assert.match(viewSource, /onRenderCode:\s*\(block, container\) => renderCodeBlock/);
   assert.match(editorSource, /this\.callbacks\.onRenderCode\(codeData, rendered\)/);
+  assert.match(editorSource, /details\.mms-code-collapsed[\s\S]*addEventListener\("toggle"[\s\S]*scheduleMeasuredMindMapLayout/);
+  assert.match(editorSource, /if \(node\.style\?\.minHeight !== undefined\) nodeEl\.style\.minHeight/);
+  assert.doesNotMatch(editorSource, /nodeEl\.style\.minHeight = `\$\{position\.height\}px`/);
   assert.match(outlineSource, /options\.renderCode\(node\.code, code\)/);
   assert.match(articleSource, /options\.callbacks\.onRenderCode\(block\.code/);
   assert.match(styles, /> \.mms-code-line-numbers/);

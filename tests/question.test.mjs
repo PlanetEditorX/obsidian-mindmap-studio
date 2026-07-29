@@ -97,6 +97,27 @@ test("legacy tables and code migrate into movable node content blocks", () => {
   assert.equal(document.root.code.language, "bash");
 });
 
+test("authoritative content replacement permanently removes legacy table and code mirrors", () => {
+  const document = model.normalizeDocument({
+    root: {
+      text: "Mixed content",
+      content: [{ id: "text", type: "text", text: "Keep me" }],
+      table: { headers: ["A"], rows: [["1"]] },
+      code: { language: "bash", code: "echo old" },
+      children: []
+    }
+  });
+
+  const textOnly = document.root.content.filter((block) => block.type === "text");
+  model.replaceNodeContentBlocks(document.root, textOnly);
+
+  assert.deepEqual(document.root.content.map((block) => block.type), ["text"]);
+  assert.equal(document.root.text, "Keep me");
+  assert.equal(document.root.table, undefined);
+  assert.equal(document.root.code, undefined);
+  assert.deepEqual(model.nodeContentBlocks(document.root).map((block) => block.type), ["text"]);
+});
+
 test("code block display settings persist while unsupported themes fall back safely", () => {
   const document = model.normalizeDocument({
     root: {
@@ -168,6 +189,7 @@ test("question assistant keeps an intelligent image-to-question pipeline and vis
   assert.match(contentModalSource, /\|\| "bash"/);
   assert.match(editorSource, /\+ 表格/);
   assert.match(editorSource, /\+ 代码/);
+  assert.match(editorSource, /replaceNodeContentBlocks\(selected, values\.content\)/);
   assert.match(practiceSource, /查看答案与解析/);
   assert.match(practiceSource, /下一题/);
   assert.match(practiceSource, /错题本/);

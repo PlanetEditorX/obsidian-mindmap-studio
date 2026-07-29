@@ -59,7 +59,8 @@ interface MindMapNode {
 - `id` 在同一文档中必须唯一。
 - `children` 始终是数组。
 - `content` 是当前推荐的有序内容模型。
-- `text`、`richText`、`image` 是当前节点的派生摘要字段，由 `syncNodeContentFields()` 与有序内容块同步，供搜索、快速渲染和导出使用。
+- `text`、`richText`、`image`、`table`、`code` 是当前节点的派生或旧版兼容字段，由内容块同步逻辑维护，供旧文件兼容、搜索、快速渲染和导出使用。
+- 增量修改现有内容时可调用 `syncNodeContentFields()`；编辑器完整替换内容块集合时必须调用 `replaceNodeContentBlocks()`，该函数先清理旧镜像再从新 `content` 重建，确保删除表格或代码不会被迁移兼容逻辑恢复。
 - `collapsed` 只影响导图可见布局，不删除后代。
 - `submap` 表示该节点关联独立子导图文件。
 - `articleNumberingMode` 缺失时表示自动；`none` 表示关闭编号；`manual` 表示使用手动文章层级。
@@ -188,7 +189,7 @@ interface MindMapCodeBlock {
 }
 ```
 
-表格与代码可作为有稳定 ID 的内容块，与文字、图片一起排序；旧文件中的节点级 `table`、`code` 字段在读取时会自动迁移到内容块列表。表格行会按表头列数补齐或截断。代码块可在节点、页面外观和插件全局三个层级配置默认折叠、行号与 Obsidian、GitHub、Monokai、Dracula 样式；节点优先级最高，未设置时向下跟随。全局可为自动展开和自动行号分别设置行数阈值，节点显式设置仍优先。渲染时先交给 Obsidian Markdown 渲染器生成语法高亮，再由四模式共享的 `render/code-block.ts` 在同一 `pre` 中插入真实行号栏。行号栏不写入文档数据，也不改变高亮 token，只复用代码元素的计算字体、行高和内边距。
+表格与代码可作为有稳定 ID 的内容块，与文字、图片一起排序；旧文件中的节点级 `table`、`code` 字段在读取时会自动迁移到内容块列表。完整编辑后的 `content` 是权威集合，`replaceNodeContentBlocks()` 会在重建旧版镜像前先清空它们，因此删除操作不会触发反向迁移。表格行会按表头列数补齐或截断。代码块可在节点、页面外观和插件全局三个层级配置默认折叠、行号与 Obsidian、GitHub、Monokai、Dracula 样式；节点优先级最高，未设置时向下跟随。全局可为自动展开和自动行号分别设置行数阈值，节点显式设置仍优先。渲染时先交给 Obsidian Markdown 渲染器生成语法高亮，再由四模式共享的 `render/code-block.ts` 在同一 `pre` 中插入真实行号栏。行号栏不写入文档数据，也不改变高亮 token，只复用代码元素的计算字体、行高和内边距。导图中的节点高度由实际 DOM 测量值回写布局；代码折叠状态变化时会重新测量，布局估算高度不会作为隐式最小高度保存。
 
 ## 9. 子导图导航
 
