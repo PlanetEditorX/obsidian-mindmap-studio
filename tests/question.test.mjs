@@ -205,6 +205,19 @@ test("question-bank grading distinguishes single choice, multiple choice and nor
   assert.equal(practice.isExactQuestionAnswer("资料理解", "资料分析"), false);
 });
 
+test("question-bank practice persists attempts, routes mistakes to review, and advances after showing feedback", async () => {
+  const [editorSource, practiceSource] = await Promise.all([
+    readFile("src/editor/editor.ts", "utf8"),
+    readFile("src/editor/question-practice-mode.ts", "utf8")
+  ]);
+  assert.match(editorSource, /question\.attemptCount \+= 1/);
+  assert.match(editorSource, /if \(correct\)[\s\S]*question\.correctCount \+= 1[\s\S]*question\.status = "completed"/);
+  assert.match(editorSource, /else \{\s*question\.status = "wrong"/);
+  assert.match(editorSource, /question\.lastPracticedAt = new Date\(\)\.toISOString\(\)/);
+  assert.match(practiceSource, /node\.question\.status === "wrong"[\s\S]*options\.state\.filter === "wrong"/);
+  assert.match(practiceSource, /text: "下一题"[\s\S]*options\.state\.currentNodeId = nextNode\?\.id/);
+});
+
 test("question assistant keeps an intelligent image-to-question pipeline and visible answer fields", async () => {
   const [editorSource, articleSource, modalSource, practiceSource, mainSource, settingsSource] = await Promise.all([
     readFile("src/editor/editor.ts", "utf8"),
