@@ -3293,7 +3293,7 @@ function computeLayout(root, mode, defaultFontSize = 14, visualStyle = "card", a
     const right = [];
     let leftHeight = 0;
     let rightHeight = 0;
-    for (const child of [...children].sort((a, b) => subtreeHeight(b, 1, defaultFontSize, visualStyle, appearance) - subtreeHeight(a, 1, defaultFontSize, visualStyle, appearance))) {
+    for (const child of children) {
       const height = subtreeHeight(child, 1, defaultFontSize, visualStyle, appearance) + verticalGap;
       if (leftHeight <= rightHeight) {
         left.push(child);
