@@ -234,7 +234,12 @@ test("question-bank practice persists attempts, routes mistakes to review, and a
   assert.match(editorSource, /onRecord: \(nodeId, correct\) => this\.recordQuestionPractice\(nodeId, correct\)/);
   assert.doesNotMatch(editorSource, /onRecord: \(nodeId, correct\) => \{[\s\S]{0,320}this\.mutate\(/);
   assert.match(practiceSource, /node\.question\.status === "wrong"[\s\S]*options\.state\.filter === "wrong"/);
-  assert.match(practiceSource, /text: "下一题"[\s\S]*options\.state\.currentNodeId = nextNode\?\.id/);
+  assert.match(practiceSource, /type: multiple \? "checkbox" : "radio"/);
+  assert.match(practiceSource, /choice\.toggleClass\("is-selected", options\.state\.selectedOptionIds\.includes\(option\.id\)\)/);
+  assert.match(practiceSource, /input\.addEventListener\("change"/);
+  assert.match(practiceSource, /text: finalQuestion \? "结束答题" : "下一题"/);
+  assert.match(practiceSource, /if \(finalQuestion\) \{[\s\S]*options\.state\.finished = true/);
+  assert.match(practiceSource, /text: "本轮答题已完成"/);
 });
 
 test("question assistant keeps an intelligent image-to-question pipeline and visible answer fields", async () => {

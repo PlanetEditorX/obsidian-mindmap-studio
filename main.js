@@ -4276,7 +4276,7 @@ var QuestionEditModal = class extends import_obsidian3.Modal {
 
 // src/editor/question-practice-mode.ts
 function createQuestionPracticeState() {
-  return { filter: "all", currentNodeId: null, selectedOptionIds: [], essayAnswer: "", answerVisible: false, lastCorrect: null };
+  return { filter: "all", currentNodeId: null, selectedOptionIds: [], essayAnswer: "", answerVisible: false, lastCorrect: null, finished: false };
 }
 function renderQuestionPracticeMode(container, options) {
   var _a2;
@@ -4296,11 +4296,26 @@ function renderQuestionPracticeMode(container, options) {
       options.state.essayAnswer = "";
       options.state.answerVisible = false;
       options.state.lastCorrect = null;
+      options.state.finished = false;
       renderQuestionPracticeMode(container, options);
     };
   }
   if (!questions.length) {
     shell.createDiv({ cls: "mms-question-practice-empty", text: options.state.filter === "wrong" ? "\u9519\u9898\u672C\u6682\u65E0\u9898\u76EE" : "\u5F53\u524D\u5BFC\u56FE\u8FD8\u6CA1\u6709\u9898\u76EE\u8282\u70B9" });
+    return;
+  }
+  if (options.state.finished) {
+    shell.createDiv({ cls: "mms-question-practice-finished", text: "\u672C\u8F6E\u7B54\u9898\u5DF2\u5B8C\u6210" });
+    const restart = shell.createEl("button", { cls: "mod-cta mms-question-practice-submit", text: "\u91CD\u65B0\u5F00\u59CB", attr: { type: "button" } });
+    restart.onclick = () => {
+      options.state.currentNodeId = null;
+      options.state.selectedOptionIds = [];
+      options.state.essayAnswer = "";
+      options.state.answerVisible = false;
+      options.state.lastCorrect = null;
+      options.state.finished = false;
+      renderQuestionPracticeMode(container, options);
+    };
     return;
   }
   const currentIndex = Math.max(0, questions.findIndex((node2) => node2.id === options.state.currentNodeId));
@@ -4316,14 +4331,21 @@ function renderQuestionPracticeMode(container, options) {
   if (question.mode !== "essay") {
     const choices = shell.createDiv({ cls: "mms-question-practice-choices" });
     question.options.forEach((option) => {
-      const choice = choices.createEl("button", { attr: { type: "button" } });
+      const choice = choices.createEl("label", { cls: "mms-question-practice-choice" });
       choice.toggleClass("is-selected", options.state.selectedOptionIds.includes(option.id));
-      choice.disabled = options.state.answerVisible;
+      const input = choice.createEl("input", {
+        attr: {
+          type: multiple ? "checkbox" : "radio",
+          name: `mms-question-${node.id}`,
+          value: option.id,
+          "aria-label": `\u9009\u62E9${option.label}`
+        }
+      });
+      input.checked = options.state.selectedOptionIds.includes(option.id);
+      input.disabled = options.state.answerVisible;
       choice.createSpan({ cls: "mms-question-practice-option-label", text: option.label });
       renderBlocks(choice, option.content, options.resolveImage);
-      choice.addEventListener("click", (event) => {
-        event.preventDefault();
-        event.stopPropagation();
+      input.addEventListener("change", () => {
         options.state.selectedOptionIds = multiple ? options.state.selectedOptionIds.includes(option.id) ? options.state.selectedOptionIds.filter((id) => id !== option.id) : [...options.state.selectedOptionIds, option.id] : [option.id];
         renderQuestionPracticeMode(container, options);
       });
@@ -4360,9 +4382,19 @@ function renderQuestionPracticeMode(container, options) {
     shell.createEl("h4", { text: "\u89E3\u6790" });
     renderBlocks(shell, question.explanation, options.resolveImage);
   }
-  const next = shell.createEl("button", { cls: "mod-cta mms-question-practice-submit", text: "\u4E0B\u4E00\u9898", attr: { type: "button" } });
+  const finalQuestion = currentIndex === questions.length - 1;
+  const next = shell.createEl("button", { cls: "mod-cta mms-question-practice-submit", text: finalQuestion ? "\u7ED3\u675F\u7B54\u9898" : "\u4E0B\u4E00\u9898", attr: { type: "button" } });
   next.onclick = () => {
     var _a3;
+    if (finalQuestion) {
+      options.state.finished = true;
+      options.state.selectedOptionIds = [];
+      options.state.essayAnswer = "";
+      options.state.answerVisible = false;
+      options.state.lastCorrect = null;
+      renderQuestionPracticeMode(container, options);
+      return;
+    }
     const nextNode = questions[(currentIndex + 1) % questions.length];
     options.state.currentNodeId = (_a3 = nextNode == null ? void 0 : nextNode.id) != null ? _a3 : null;
     options.state.selectedOptionIds = [];

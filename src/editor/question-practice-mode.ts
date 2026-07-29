@@ -16,6 +16,7 @@ export interface QuestionPracticeState {
   essayAnswer: string;
   answerVisible: boolean;
   lastCorrect: boolean | null;
+  finished: boolean;
 }
 
 /** Dependencies required to render and persist one question-bank practice session. */
@@ -29,7 +30,7 @@ export interface QuestionPracticeOptions {
 
 /** Creates an empty practice state for an editor instance. */
 export function createQuestionPracticeState(): QuestionPracticeState {
-  return { filter: "all", currentNodeId: null, selectedOptionIds: [], essayAnswer: "", answerVisible: false, lastCorrect: null };
+  return { filter: "all", currentNodeId: null, selectedOptionIds: [], essayAnswer: "", answerVisible: false, lastCorrect: null, finished: false };
 }
 
 /** Renders a full-page, sequential question practice surface. */
@@ -54,11 +55,26 @@ export function renderQuestionPracticeMode(container: HTMLElement, options: Ques
       options.state.essayAnswer = "";
       options.state.answerVisible = false;
       options.state.lastCorrect = null;
+      options.state.finished = false;
       renderQuestionPracticeMode(container, options);
     };
   }
   if (!questions.length) {
     shell.createDiv({ cls: "mms-question-practice-empty", text: options.state.filter === "wrong" ? "错题本暂无题目" : "当前导图还没有题目节点" });
+    return;
+  }
+  if (options.state.finished) {
+    shell.createDiv({ cls: "mms-question-practice-finished", text: "本轮答题已完成" });
+    const restart = shell.createEl("button", { cls: "mod-cta mms-question-practice-submit", text: "重新开始", attr: { type: "button" } });
+    restart.onclick = () => {
+      options.state.currentNodeId = null;
+      options.state.selectedOptionIds = [];
+      options.state.essayAnswer = "";
+      options.state.answerVisible = false;
+      options.state.lastCorrect = null;
+      options.state.finished = false;
+      renderQuestionPracticeMode(container, options);
+    };
     return;
   }
   const currentIndex = Math.max(0, questions.findIndex((node) => node.id === options.state.currentNodeId));
@@ -74,14 +90,21 @@ export function renderQuestionPracticeMode(container: HTMLElement, options: Ques
   if (question.mode !== "essay") {
     const choices = shell.createDiv({ cls: "mms-question-practice-choices" });
     question.options.forEach((option) => {
-      const choice = choices.createEl("button", { attr: { type: "button" } });
+      const choice = choices.createEl("label", { cls: "mms-question-practice-choice" });
       choice.toggleClass("is-selected", options.state.selectedOptionIds.includes(option.id));
-      choice.disabled = options.state.answerVisible;
+      const input = choice.createEl("input", {
+        attr: {
+          type: multiple ? "checkbox" : "radio",
+          name: `mms-question-${node.id}`,
+          value: option.id,
+          "aria-label": `选择${option.label}`
+        }
+      });
+      input.checked = options.state.selectedOptionIds.includes(option.id);
+      input.disabled = options.state.answerVisible;
       choice.createSpan({ cls: "mms-question-practice-option-label", text: option.label });
       renderBlocks(choice, option.content, options.resolveImage);
-      choice.addEventListener("click", (event) => {
-        event.preventDefault();
-        event.stopPropagation();
+      input.addEventListener("change", () => {
         options.state.selectedOptionIds = multiple
           ? options.state.selectedOptionIds.includes(option.id)
             ? options.state.selectedOptionIds.filter((id) => id !== option.id)
@@ -124,8 +147,18 @@ export function renderQuestionPracticeMode(container: HTMLElement, options: Ques
     shell.createEl("h4", { text: "解析" });
     renderBlocks(shell, question.explanation, options.resolveImage);
   }
-  const next = shell.createEl("button", { cls: "mod-cta mms-question-practice-submit", text: "下一题", attr: { type: "button" } });
+  const finalQuestion = currentIndex === questions.length - 1;
+  const next = shell.createEl("button", { cls: "mod-cta mms-question-practice-submit", text: finalQuestion ? "结束答题" : "下一题", attr: { type: "button" } });
   next.onclick = () => {
+    if (finalQuestion) {
+      options.state.finished = true;
+      options.state.selectedOptionIds = [];
+      options.state.essayAnswer = "";
+      options.state.answerVisible = false;
+      options.state.lastCorrect = null;
+      renderQuestionPracticeMode(container, options);
+      return;
+    }
     const nextNode = questions[(currentIndex + 1) % questions.length];
     options.state.currentNodeId = nextNode?.id ?? null;
     options.state.selectedOptionIds = [];

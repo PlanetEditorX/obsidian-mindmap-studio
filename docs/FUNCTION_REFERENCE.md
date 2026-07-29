@@ -4998,7 +4998,7 @@ export interface QuestionPracticeState
 
 ### 接口 `QuestionPracticeOptions`
 
-源码：`src/editor/question-practice-mode.ts:22`
+源码：`src/editor/question-practice-mode.ts:23`
 
 Dependencies required to render and persist one question-bank practice session.
 
@@ -5008,7 +5008,7 @@ export interface QuestionPracticeOptions
 
 ### 函数 `createQuestionPracticeState`
 
-源码：`src/editor/question-practice-mode.ts:31`
+源码：`src/editor/question-practice-mode.ts:32`
 
 Creates an empty practice state for an editor instance.
 
@@ -5018,7 +5018,7 @@ export function createQuestionPracticeState(): QuestionPracticeState
 
 ### 函数 `renderQuestionPracticeMode`
 
-源码：`src/editor/question-practice-mode.ts:36`
+源码：`src/editor/question-practice-mode.ts:37`
 
 Renders a full-page, sequential question practice surface.
 
@@ -5028,7 +5028,7 @@ export function renderQuestionPracticeMode(container: HTMLElement, options: Ques
 
 ### 函数 `selectedAnswerLabels`
 
-源码：`src/editor/question-practice-mode.ts:140`
+源码：`src/editor/question-practice-mode.ts:173`
 
 Extracts option labels from the stored answer to determine whether a question is multiple-choice.
 
@@ -5038,7 +5038,7 @@ function selectedAnswerLabels(node: MindMapNode): string[]
 
 ### 函数 `isQuestionChoiceCorrect`
 
-源码：`src/editor/question-practice-mode.ts:147`
+源码：`src/editor/question-practice-mode.ts:180`
 
 Checks selected option IDs against the labels encoded in the structured answer.
 
@@ -5048,7 +5048,7 @@ export function isQuestionChoiceCorrect(node: MindMapNode, selectedIds: readonly
 
 ### 函数 `isQuestionJudgmentCorrect`
 
-源码：`src/editor/question-practice-mode.ts:154`
+源码：`src/editor/question-practice-mode.ts:187`
 
 Checks true-or-false answers expressed as A/B, correct/incorrect, or equivalent labels.
 
@@ -5058,7 +5058,7 @@ export function isQuestionJudgmentCorrect(node: MindMapNode, selectedIds: readon
 
 ### 函数 `renderBlocks`
 
-源码：`src/editor/question-practice-mode.ts:161`
+源码：`src/editor/question-practice-mode.ts:194`
 
 Renders text and image blocks in their original order.
 
@@ -5068,7 +5068,7 @@ function renderBlocks(container: HTMLElement, blocks: readonly MindMapContentBlo
 
 ### 函数 `blockText`
 
-源码：`src/editor/question-practice-mode.ts:172`
+源码：`src/editor/question-practice-mode.ts:205`
 
 Joins text blocks into the stored reference answer.
 
@@ -5078,7 +5078,7 @@ function blockText(blocks: readonly MindMapContentBlock[]): string
 
 ### 函数 `isExactQuestionAnswer`
 
-源码：`src/editor/question-practice-mode.ts:177`
+源码：`src/editor/question-practice-mode.ts:210`
 
 Normalizes free-text answers for deterministic long-question comparison.
 
@@ -5088,7 +5088,7 @@ export function isExactQuestionAnswer(value: string, reference: string): boolean
 
 ### 函数 `normalizeAnswer`
 
-源码：`src/editor/question-practice-mode.ts:182`
+源码：`src/editor/question-practice-mode.ts:215`
 
 Normalizes free-text answers before deterministic long-question comparison.
 
@@ -5098,7 +5098,7 @@ function normalizeAnswer(value: string): string
 
 ### 函数 `normalizeJudgmentAnswer`
 
-源码：`src/editor/question-practice-mode.ts:187`
+源码：`src/editor/question-practice-mode.ts:220`
 
 Converts supported judgment-answer spellings into a comparable boolean.
 
