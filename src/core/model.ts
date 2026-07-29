@@ -1666,6 +1666,7 @@ export function markdownToDocument(markdown: string, fallbackTitle = "思维导�
   let hasLeadingContent = false;
   let skippingTableOfContents = false;
   let tableLines: string[] = [];
+  let codeFence: { marker: string; language?: string; lines: string[] } | null = null;
   const hasMultipleH1 = (markdown.match(/^#[ 	]+\S/gm) || []).length > 1;
 
   const applyMarkdownText = (node: MindMapNode, value: string, fallback = "节点", forceBold = false): void => {
@@ -1707,8 +1708,27 @@ export function markdownToDocument(markdown: string, fallbackTitle = "思维导�
     return node;
   };
 
+  const appendCodeBlock = (fence: NonNullable<typeof codeFence>): void => {
+    const target = currentBoldNode ?? stack.at(-1)?.node ?? doc.root;
+    const code = fence.lines.join("\n");
+    if (!code.trim()) return;
+    replaceNodeContentBlocks(target, [
+      ...nodeContentBlocks(target),
+      { id: newId(), type: "code", code: { language: fence.language, code } }
+    ]);
+  };
+
   for (const rawLine of markdown.split(/\r?\n/)) {
     const line = rawLine.trimEnd();
+    if (codeFence) {
+      if (line.trim() === codeFence.marker) {
+        appendCodeBlock(codeFence);
+        codeFence = null;
+      } else {
+        codeFence.lines.push(rawLine);
+      }
+      continue;
+    }
     // Buffer consecutive table lines
     if (/^\s*\|.*\|\s*$/.test(line)) {
       if (!skippingTableOfContents) tableLines.push(line);
@@ -1725,7 +1745,17 @@ export function markdownToDocument(markdown: string, fallbackTitle = "思维导�
     }
     tableLines = [];
 
-    if (!line.trim() || line.trimStart().startsWith("---") || line.trimStart().startsWith("```")) continue;
+    const openingCodeFence = line.match(/^\s*(`{3,})([^`]*)$/);
+    if (openingCodeFence) {
+      codeFence = {
+        marker: openingCodeFence[1] ?? "```",
+        language: openingCodeFence[2]?.trim() || undefined,
+        lines: []
+      };
+      continue;
+    }
+
+    if (!line.trim() || line.trimStart().startsWith("---")) continue;
 
     const heading = line.match(/^\s*(#{1,6})\s+(.+?)\s*$/);
     const bullet = line.match(/^(\s*)[-*+]\s+(.+?)\s*$/);
@@ -1821,6 +1851,8 @@ export function markdownToDocument(markdown: string, fallbackTitle = "思维导�
     if (parent && parent !== doc.root) parent.children.push(createMarkdownNode(line.trim()));
     else hasLeadingContent = true;
   }
+
+  if (codeFence) appendCodeBlock(codeFence);
 
   // Flush trailing table buffer
   if (tableLines.length >= 2) {

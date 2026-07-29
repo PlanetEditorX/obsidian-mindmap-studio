@@ -819,6 +819,32 @@ export const setIcon = () => {};
   const mixedMarkdownDocument = model.markdownToDocument(mixedMarkdown, "fallback");
   assert.deepEqual(mixedMarkdownDocument.root.children.map((node) => node.text), ["研发", "运营"], "Markdown headings must remain top-level branches");
   assert.equal(mixedMarkdownDocument.root.children[0]?.children[0]?.children[0]?.text, "子任务 A1", "lists below a Markdown heading must remain nested below that heading");
+  const markdownWithCodeBlocks = `### telnet 登录后
+
+\`\`\`bash
+su root
+aDm8H%MdA
+\`\`\`
+
+### 解密配置文件
+
+\`\`\`bash
+sidbg 1 DB decry /userconfig/cfg/db\\_user\\_cfg.xml
+\`\`\`
+
+### 开启tftp服务
+
+\`\`\`bash
+udpsvd -vE 0 69 tftpd -c /
+\`\`\``;
+  const codeBlockDocument = model.markdownToDocument(markdownWithCodeBlocks, "fallback");
+  assert.deepEqual(codeBlockDocument.root.children.map((node) => node.text), ["telnet 登录后", "解密配置文件", "开启tftp服务"]);
+  const importedCodeBlocks = codeBlockDocument.root.children.map((node) => model.nodeContentBlocks(node).find((block) => block.type === "code"));
+  assert.deepEqual(importedCodeBlocks.map((block) => block?.type === "code" ? block.code : undefined), [
+    { language: "bash", code: "su root\naDm8H%MdA" },
+    { language: "bash", code: "sidbg 1 DB decry /userconfig/cfg/db\\_user\\_cfg.xml" },
+    { language: "bash", code: "udpsvd -vE 0 69 tftpd -c /" }
+  ], "fenced code must attach to its heading instead of becoming child nodes");
   const boldOutlineMarkdown = `**相丽君—红宝书**
 
 **主题一 · 写时代，不负韶华**
