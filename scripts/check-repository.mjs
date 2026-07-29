@@ -40,6 +40,7 @@ const readme = await readFile("README.md", "utf8");
 assert.match(readme, /^# MindMap Studio for Obsidian/m);
 assert.match(readme, /## 功能概览/);
 assert.match(readme, /## 开发与验证/);
+assert.ok(readme.includes(`当前源码版本：\`${packageJson.version}\`。`), "README source version must match package.json");
 assert.doesNotMatch(readme, /^## \d+\.\d+\.\d+/m, "README must describe the current product instead of stacking release notes");
 
 const gitignore = await readFile(".gitignore", "utf8");
