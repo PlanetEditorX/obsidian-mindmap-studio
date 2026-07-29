@@ -5400,11 +5400,14 @@ export class MindMapEditor {
    */
   private mutate(action: () => void): void {
     if (!this.ensureEditable()) return;
+    const location = this.currentMode === "mindmap" ? null : this.captureCurrentLocation(this.currentMode);
+    if (location) this.rememberLocation(location, true);
     this.history.capture(this.document);
     action();
     this.callbacks.onChange(this.getDocument());
     this.markSaving();
     this.render();
+    if (location) this.restoreReadingLocation(this.currentMode, location);
   }
 
   /**

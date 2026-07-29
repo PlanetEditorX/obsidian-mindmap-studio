@@ -32,6 +32,13 @@ test("pending local progress is not replaced by stale option refreshes", () => {
   assert.match(editorSource, /this\.readingLocationTimer === null[\s\S]*!sameReadingLocation\(this\.lastReadingLocation, options\.readingLocation\)/);
 });
 
+test("document mutations preserve the current article or reading anchor across a redraw", () => {
+  const mutate = editorSource.match(/private mutate\(action: \(\) => void\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
+  assert.match(mutate, /const location = this\.currentMode === "mindmap" \? null : this\.captureCurrentLocation\(this\.currentMode\)/);
+  assert.match(mutate, /if \(location\) this\.rememberLocation\(location, true\)/);
+  assert.match(mutate, /this\.render\(\);[\s\S]*if \(location\) this\.restoreReadingLocation\(this\.currentMode, location\)/);
+});
+
 test("global mode broadcasts discard delayed writes from non-initiating views", () => {
   const applyGlobal = editorSource.match(/applyGlobalDisplayMode\(mode: DisplayMode\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
   assert.match(applyGlobal, /clearTimeout\(this\.readingCaptureTimer\)/);
