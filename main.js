@@ -4490,7 +4490,7 @@ function renderExplanationBlocks(container, blocks, resolveImage) {
   }
 }
 function splitExplanationLines(value) {
-  const lines = value.split(/(?=[A-DＡ-Ｄ][项、.．:：])/u).map((line) => line.trim()).filter(Boolean);
+  const lines = value.split(/(?=[A-DＡ-Ｄ]项)/u).map((line) => line.trim()).filter(Boolean);
   return lines.length ? lines : value.trim() ? [value.trim()] : [];
 }
 function blockText(blocks) {
@@ -7974,11 +7974,13 @@ ${question.trim()}`,
 
 // src/ai/edit.ts
 var DEFAULT_AI_EDIT_INSTRUCTION = "\u6309\u4E3B\u9898\u91CD\u65B0\u6574\u7406\u5C42\u7EA7\uFF0C\u5408\u5E76\u91CD\u590D\u8282\u70B9\uFF0C\u5E76\u91CD\u65B0\u751F\u6210\u6E05\u6670\u7684\u5BFC\u56FE\u7ED3\u6784\u3002";
+var DEFAULT_AI_QUESTION_NODE_INSTRUCTION = '\u5C06\u5F53\u524D\u8303\u56F4\u4E2D\u7684\u9898\u76EE\u6587\u5B57\u6574\u7406\u4E3A\u9898\u76EE\u8282\u70B9\u3002\u53EA\u8FD4\u56DE JSON\uFF1A{"mode":"choice|judgment|essay","stem":"\u9898\u5E72","options":[{"label":"A","content":"\u9009\u9879"}],"answer":"\u7B54\u6848","explanation":"\u89E3\u7B54","tags":["\u6807\u7B7E"]}\u3002\u65E0\u6CD5\u786E\u5B9A\u7684\u5B57\u6BB5\u7559\u7A7A\uFF1B\u4E0D\u8981\u8F93\u51FA Markdown \u6216\u8BF4\u660E\u3002';
 function createAiPromptDraftState(defaultQuestion, defaultVisionPrompt = "\u8BC6\u522B\u56FE\u7247\u4E2D\u7684\u5168\u90E8\u53EF\u89C1\u6587\u5B57\uFF0C\u5E76\u6309\u9605\u8BFB\u987A\u5E8F\u8F6C\u5199\uFF1B\u6CA1\u6709\u6587\u5B57\u65F6\u7B80\u6D01\u63CF\u8FF0\u56FE\u7247\u5185\u5BB9\u3002") {
   return {
     activeMode: "ask",
     ask: defaultQuestion,
     edit: DEFAULT_AI_EDIT_INSTRUCTION,
+    question: DEFAULT_AI_QUESTION_NODE_INSTRUCTION,
     vision: defaultVisionPrompt
   };
 }
@@ -7986,11 +7988,12 @@ function switchAiPromptDraft(state, currentValue, nextMode) {
   const nextState = { ...state };
   if (state.activeMode === "ask") nextState.ask = currentValue;
   else if (state.activeMode === "edit") nextState.edit = currentValue;
+  else if (state.activeMode === "question") nextState.question = currentValue;
   else if (state.activeMode === "vision") nextState.vision = currentValue;
   nextState.activeMode = nextMode;
   return {
     state: nextState,
-    value: nextMode === "ask" ? nextState.ask : nextMode === "edit" ? nextState.edit : nextMode === "vision" ? nextState.vision : currentValue
+    value: nextMode === "ask" ? nextState.ask : nextMode === "edit" ? nextState.edit : nextMode === "question" ? nextState.question : nextMode === "vision" ? nextState.vision : currentValue
   };
 }
 function aiEditScopeSnapshot(document2, scopeNodeId) {
@@ -12020,6 +12023,35 @@ var MindMapEditor = class {
     });
     this.editQuestion(node);
   }
+  /** Applies an AI JSON response to the scoped node or adds it as a question child for page-wide AI. */
+  applyAiQuestion(responseText, nodeId) {
+    var _a2, _b2;
+    if (!this.ensureEditable()) return false;
+    const scopedNode = nodeId ? findNode(this.document.root, nodeId) : null;
+    if (nodeId && !scopedNode) throw new Error("\u8981\u6574\u7406\u7684\u8282\u70B9\u5DF2\u7ECF\u4E0D\u5B58\u5728\uFF0C\u8BF7\u91CD\u65B0\u6253\u5F00 AI \u52A9\u624B");
+    const parent = (_a2 = scopedNode != null ? scopedNode : this.selectedNode()) != null ? _a2 : this.document.root;
+    const fallback = (_b2 = scopedNode == null ? void 0 : scopedNode.question) != null ? _b2 : {
+      ...createMindMapQuestion(),
+      stem: scopedNode ? nodeContentBlocks(scopedNode) : []
+    };
+    const question = parseRecognizedQuestion(responseText, fallback);
+    if (!question) throw new Error("AI \u672A\u8FD4\u56DE\u53EF\u89E3\u6790\u7684\u9898\u76EE JSON");
+    this.mutate(() => {
+      if (scopedNode) {
+        scopedNode.question = question;
+        syncMindMapQuestionFields(scopedNode);
+        this.selectedId = scopedNode.id;
+        return;
+      }
+      const node = this.createConfiguredNode("");
+      node.question = question;
+      syncMindMapQuestionFields(node);
+      parent.collapsed = false;
+      parent.children.push(node);
+      this.selectedId = node.id;
+    });
+    return true;
+  }
   /** Opens the structured question editor and mirrors its stem into normal node content. */
   editQuestion(node = this.selectedNode()) {
     var _a2;
@@ -13754,6 +13786,7 @@ var AiAskModal = class extends import_obsidian11.Modal {
     const mode = modeLabel.createEl("select");
     mode.createEl("option", { value: "ask", text: "\u8BE2\u95EE AI\uFF08\u4E0D\u4FEE\u6539\u5BFC\u56FE\uFF09" });
     mode.createEl("option", { value: "edit", text: "AI \u6574\u7406\u5E76\u91CD\u65B0\u751F\u6210\uFF08\u786E\u8BA4\u540E\u5E94\u7528\uFF09" });
+    mode.createEl("option", { value: "question", text: "\u6574\u7406\u4E3A\u9898\u76EE\u8282\u70B9" });
     mode.createEl("option", {
       value: "vision",
       text: this.options.imageRecognitionMode === "ai" ? "\u56FE\u7247 AI \u8BC6\u56FE\uFF08\u6309\u987A\u5E8F\u5904\u7406\u5F53\u524D\u8303\u56F4\uFF09" : "\u56FE\u7247\u672C\u5730 OCR\uFF08\u6309\u987A\u5E8F\u5904\u7406\u5F53\u524D\u8303\u56F4\uFF09"
@@ -13814,7 +13847,7 @@ var AiAskModal = class extends import_obsidian11.Modal {
     let imagePreviewInputs = [];
     const currentMode = () => mode.value;
     const recognitionUsesAi = () => currentMode() === "vision" && this.options.imageRecognitionMode === "ai";
-    const requiresAiProfile = () => currentMode() === "ask" || currentMode() === "edit" || recognitionUsesAi();
+    const requiresAiProfile = () => currentMode() === "ask" || currentMode() === "edit" || currentMode() === "question" || recognitionUsesAi();
     const isActionDisabled = () => {
       if (currentMode() === "replace") return false;
       if (currentMode() === "vision") return this.options.imageCount === 0 || recognitionUsesAi() && !profiles.length;
@@ -13866,7 +13899,7 @@ var AiAskModal = class extends import_obsidian11.Modal {
       const localRecognition = selected === "vision" && this.options.imageRecognitionMode === "local-ocr";
       if (selected === "vision" && this.options.imageRecognitionMode === "ai") {
         provider.value = defaultProfileValue(this.options.defaultImageRecognitionProfileId);
-      } else if (selected === "ask" || selected === "edit") {
+      } else if (selected === "ask" || selected === "edit" || selected === "question") {
         provider.value = defaultProfileValue(this.options.defaultProfileId);
       }
       providerLabel.hidden = localReplace || localRecognition;
@@ -13884,6 +13917,11 @@ var AiAskModal = class extends import_obsidian11.Modal {
         question.placeholder = "\u4F8B\u5982\uFF1A\u6309\u4E3B\u9898\u91CD\u65B0\u6574\u7406\u5C42\u7EA7\uFF0C\u5408\u5E76\u91CD\u590D\u8282\u70B9\uFF0C\u5E76\u91CD\u65B0\u751F\u6210\u6E05\u6670\u7684\u8282\u70B9\u7ED3\u6784\u3002";
         submitText.setText("\u751F\u6210\u4FEE\u6539\u9884\u89C8");
         status.setText("AI \u53EA\u751F\u6210 Markdown \u63D0\u6848\uFF1B\u786E\u8BA4\u524D\u4E0D\u4F1A\u4FEE\u6539\u5BFC\u56FE\u3002");
+      } else if (selected === "question") {
+        questionTitle.setText("\u6574\u7406\u8981\u6C42");
+        question.placeholder = "\u5C06\u9898\u5E72\u3001\u9009\u9879\u3001\u7B54\u6848\u548C\u89E3\u7B54\u6574\u7406\u4E3A\u9898\u76EE\u8282\u70B9\u3002";
+        submitText.setText("\u751F\u6210\u9898\u76EE\u8282\u70B9");
+        status.setText(payload.scope === "subtree" ? "\u5C06\u5F53\u524D\u8282\u70B9\u6574\u7406\u4E3A\u9898\u76EE\u8282\u70B9\u3002" : "\u5C06\u5F53\u524D\u9875\u9762\u5185\u5BB9\u6574\u7406\u4E3A\u4E00\u4E2A\u65B0\u7684\u9898\u76EE\u5B50\u8282\u70B9\u3002");
       } else if (selected === "vision") {
         questionTitle.setText("\u8BC6\u56FE\u8981\u6C42");
         question.placeholder = "\u4F8B\u5982\uFF1A\u8F6C\u5F55\u5168\u90E8\u6587\u5B57\u5E76\u4FDD\u7559\u6BB5\u843D\uFF1B\u65E0\u6587\u5B57\u65F6\u63CF\u8FF0\u56FE\u7247\u5185\u5BB9\u3002";
@@ -14020,7 +14058,7 @@ var AiAskModal = class extends import_obsidian11.Modal {
       }
       const prompt = question.value.trim();
       if (!prompt) {
-        new import_obsidian11.Notice(currentMode() === "edit" ? "\u8BF7\u8F93\u5165\u4FEE\u6539\u8981\u6C42" : currentMode() === "vision" ? "\u8BF7\u8F93\u5165\u8BC6\u56FE\u8981\u6C42" : "\u8BF7\u8F93\u5165\u8981\u8BE2\u95EE\u7684\u95EE\u9898");
+        new import_obsidian11.Notice(currentMode() === "edit" || currentMode() === "question" ? "\u8BF7\u8F93\u5165\u6574\u7406\u8981\u6C42" : currentMode() === "vision" ? "\u8BF7\u8F93\u5165\u8BC6\u56FE\u8981\u6C42" : "\u8BF7\u8F93\u5165\u8981\u8BE2\u95EE\u7684\u95EE\u9898");
         question.focus();
         return;
       }
@@ -14075,6 +14113,13 @@ var AiAskModal = class extends import_obsidian11.Modal {
         if (currentMode() === "edit") {
           pendingAiPreview = this.options.onPreviewAiEdit(response.text);
           showEditPreview(pendingAiPreview);
+        } else if (currentMode() === "question") {
+          const applied = await this.options.onConvertToQuestion(response.text);
+          if (!applied) throw new Error("\u9898\u76EE\u8282\u70B9\u672A\u751F\u6210\uFF0C\u8BF7\u68C0\u67E5\u5F53\u524D\u5BFC\u56FE\u662F\u5426\u53EA\u8BFB");
+          status.setText("\u9898\u76EE\u8282\u70B9\u5DF2\u751F\u6210");
+          setStep(3, "done");
+          this.close();
+          return;
         } else {
           status.setText("\u5DF2\u63A5\u6536\u56DE\u7B54\uFF0C\u6B63\u5728\u6E32\u67D3\u2026");
           if (!this.markdownRenderComponent) return;
@@ -14469,6 +14514,10 @@ var MindMapStudioView = class _MindMapStudioView extends import_obsidian12.TextF
       sourcePath: (_f = (_e = this.file) == null ? void 0 : _e.path) != null ? _f : "",
       onAsk: async (profileId, question) => this.plugin.askAi(profileId, payload, question),
       onProposeEdit: async (profileId, instruction) => this.plugin.proposeAiEdit(profileId, payload, instruction),
+      onConvertToQuestion: (responseText) => {
+        var _a3, _b3;
+        return (_b3 = (_a3 = this.editor) == null ? void 0 : _a3.applyAiQuestion(responseText, nodeId)) != null ? _b3 : false;
+      },
       onRecognizeImages: async (profileId, instruction) => this.recognizeImages(nodeId, profileId, instruction),
       onPreviewImageTextReplacements: (items) => {
         if (!this.editor) throw new Error("\u5F53\u524D\u5BFC\u56FE\u7F16\u8F91\u5668\u5C1A\u672A\u52A0\u8F7D");

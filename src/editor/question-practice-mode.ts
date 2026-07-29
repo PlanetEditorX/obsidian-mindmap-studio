@@ -247,7 +247,7 @@ function renderExplanationBlocks(container: HTMLElement, blocks: readonly MindMa
 
 /** Splits common A/B/C/D analysis markers into individual display paragraphs. */
 export function splitExplanationLines(value: string): string[] {
-  const lines = value.split(/(?=[A-DＡ-Ｄ][项、.．:：])/u).map((line) => line.trim()).filter(Boolean);
+  const lines = value.split(/(?=[A-DＡ-Ｄ]项)/u).map((line) => line.trim()).filter(Boolean);
   return lines.length ? lines : value.trim() ? [value.trim()] : [];
 }
 

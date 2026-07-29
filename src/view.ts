@@ -369,6 +369,7 @@ export class MindMapStudioView extends TextFileView {
       sourcePath: this.file?.path ?? "",
       onAsk: async (profileId, question) => this.plugin.askAi(profileId, payload, question),
       onProposeEdit: async (profileId, instruction) => this.plugin.proposeAiEdit(profileId, payload, instruction),
+      onConvertToQuestion: (responseText) => this.editor?.applyAiQuestion(responseText, nodeId) ?? false,
       onRecognizeImages: async (profileId, instruction) => this.recognizeImages(nodeId, profileId, instruction),
       onPreviewImageTextReplacements: (items) => {
         if (!this.editor) throw new Error("当前导图编辑器尚未加载");

@@ -19,17 +19,21 @@ import {
 } from "../core/model";
 import { formatByteSize, utf8ByteLength, type AiMarkdownPayload } from "./markdown";
 
-/** AI 窗口支持的问答、编辑、批量识图和本地替换模式。 */
-export type AiInteractionMode = "ask" | "edit" | "vision" | "replace";
+/** AI 窗口支持的问答、编辑、题目整理、批量识图和本地替换模式。 */
+export type AiInteractionMode = "ask" | "edit" | "question" | "vision" | "replace";
 
 /** AI 结构化编辑模式首次打开时使用的默认修改要求。 */
 export const DEFAULT_AI_EDIT_INSTRUCTION = "按主题重新整理层级，合并重复节点，并重新生成清晰的导图结构。";
+
+/** AI 题目整理模式首次打开时使用的结构化输出要求。 */
+export const DEFAULT_AI_QUESTION_NODE_INSTRUCTION = "将当前范围中的题目文字整理为题目节点。只返回 JSON：{\"mode\":\"choice|judgment|essay\",\"stem\":\"题干\",\"options\":[{\"label\":\"A\",\"content\":\"选项\"}],\"answer\":\"答案\",\"explanation\":\"解答\",\"tags\":[\"标签\"]}。无法确定的字段留空；不要输出 Markdown 或说明。";
 
 /** 分别保存询问和结构化编辑模式的输入草稿。 */
 export interface AiPromptDraftState {
   activeMode: AiInteractionMode;
   ask: string;
   edit: string;
+  question: string;
   vision: string;
 }
 
@@ -42,6 +46,7 @@ export function createAiPromptDraftState(
     activeMode: "ask",
     ask: defaultQuestion,
     edit: DEFAULT_AI_EDIT_INSTRUCTION,
+    question: DEFAULT_AI_QUESTION_NODE_INSTRUCTION,
     vision: defaultVisionPrompt
   };
 }
@@ -55,6 +60,7 @@ export function switchAiPromptDraft(
   const nextState = { ...state };
   if (state.activeMode === "ask") nextState.ask = currentValue;
   else if (state.activeMode === "edit") nextState.edit = currentValue;
+  else if (state.activeMode === "question") nextState.question = currentValue;
   else if (state.activeMode === "vision") nextState.vision = currentValue;
   nextState.activeMode = nextMode;
   return {
@@ -63,6 +69,8 @@ export function switchAiPromptDraft(
       ? nextState.ask
       : nextMode === "edit"
         ? nextState.edit
+        : nextMode === "question"
+          ? nextState.question
         : nextMode === "vision"
           ? nextState.vision
           : currentValue
