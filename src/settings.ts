@@ -259,6 +259,8 @@ export interface MindMapStudioSettings {
   screenshotHideObsidian: boolean;
   /** Editor-level screenshot shortcut used when the mind-map editor has focus. */
   screenshotShortcut: string;
+  /** Global shortcut used to open the searchable mind-map index. */
+  globalSearchShortcut: string;
   /** 截图插入节点后是否自动启动识图预览。 */
   screenshotAutoRecognize: boolean;
   /** Whether structured question-node entry points are visible in the editor. */
@@ -360,6 +362,7 @@ export const DEFAULT_SETTINGS: MindMapStudioSettings = {
   localOcrExtraArgs: "--psm 6",
   screenshotHideObsidian: false,
   screenshotShortcut: "Ctrl+Shift+S",
+  globalSearchShortcut: "Ctrl+Shift+F",
   screenshotAutoRecognize: false,
   questionNodesEnabled: false,
   questionBankFolder: "",
@@ -1203,27 +1206,31 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
     containerEl.createEl("h3", { text: "快捷键配置" });
     containerEl.createEl("p", {
       cls: "setting-item-description",
-      text: "Tab/Enter 创建节点后可直接输入。以下快捷键作用于节点内已选择的文字；格式示例：Ctrl+B、Ctrl+Shift+C、Alt+U。"
+      text: "点击输入框后直接按下 1 至 3 个键即可录制。全局搜索在任意页面生效，其余格式快捷键作用于节点内已选择的文字。"
     });
     const shortcutSetting = (name: string, key: keyof Pick<MindMapStudioSettings,
-      "richTextBoldShortcut" | "richTextItalicShortcut" | "richTextUnderlineShortcut" | "richTextColorShortcut">): void => {
+      "globalSearchShortcut" | "richTextBoldShortcut" | "richTextItalicShortcut" | "richTextUnderlineShortcut" | "richTextColorShortcut">): void => {
       new Setting(containerEl)
         .setName(name)
-        .addText((text) => text
-          .setValue(this.plugin.settings[key])
-          .onChange(async (value) => {
-            this.plugin.settings[key] = value.trim();
-            await this.plugin.saveSettings();
-          }));
+        .addText((text) => {
+          text.setValue(this.plugin.settings[key]);
+          text.inputEl.readOnly = true;
+          text.inputEl.addClass("mms-shortcut-recorder");
+          text.inputEl.setAttr("aria-label", `点击后按下新的${name}快捷键`);
+          text.inputEl.addEventListener("keydown", (event) => void this.captureShortcut(event, text, key, name));
+        });
     };
+    shortcutSetting("全局搜索", "globalSearchShortcut");
     shortcutSetting("加粗", "richTextBoldShortcut");
     shortcutSetting("斜体", "richTextItalicShortcut");
     shortcutSetting("下划线", "richTextUnderlineShortcut");
     shortcutSetting("字体颜色", "richTextColorShortcut");
 
+    containerEl.createEl("h3", { text: "文件与资源" });
+
     new Setting(containerEl)
       .setName("默认保存文件夹")
-      .setDesc("留空时保存在当前笔记所在文件夹；也可填写例如 Mind Maps。")
+      .setDesc("新建和导入的导图文件保存到此仓库内路径；留空时保存在当前笔记所在文件夹。此项不影响图片、截图和子导图资源。")
       .addText((text) => text
         .setPlaceholder("Mind Maps")
         .setValue(this.plugin.settings.defaultFolder)
@@ -1231,8 +1238,6 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
           this.plugin.settings.defaultFolder = value.trim().replace(/^\/+|\/+$/g, "");
           await this.plugin.saveSettings();
         }));
-
-    containerEl.createEl("h3", { text: "文件与资源" });
 
     new Setting(containerEl)
       .setName("题库文件夹")
@@ -1247,7 +1252,7 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName("资源文件夹")
-      .setDesc("该路径相对于当前脑图所在目录。粘贴图片会保存到“当前脑图目录/该资源文件夹/”；子导图会保存在“当前脑图目录/该资源文件夹/父导图名称/”中。默认使用 MindMap Assets。")
+      .setDesc("仅用于图片、截图和子导图资源，路径相对于当前导图所在目录；不决定导图文件的保存位置。默认使用 MindMap Assets。")
       .addText((text) => text
         .setPlaceholder("MindMap Assets")
         .setValue(this.plugin.settings.assetFolder)
@@ -2134,6 +2139,16 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
 
   /** 记录截图快捷键；修饰键必须与一个非修饰主键同时按下。 */
   private async captureScreenshotShortcut(event: KeyboardEvent, text: TextComponent): Promise<void> {
+    await this.captureShortcut(event, text, "screenshotShortcut", "截图");
+  }
+
+  /** Records one shortcut setting from a physical keyboard event. */
+  private async captureShortcut(
+    event: KeyboardEvent,
+    text: TextComponent,
+    key: keyof Pick<MindMapStudioSettings, "screenshotShortcut" | "globalSearchShortcut" | "richTextBoldShortcut" | "richTextItalicShortcut" | "richTextUnderlineShortcut" | "richTextColorShortcut">,
+    label: string
+  ): Promise<void> {
     event.preventDefault();
     event.stopPropagation();
     if (event.repeat) return;
@@ -2143,10 +2158,10 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
     }
     const shortcut = this.shortcutFromKeyboardEvent(event);
     if (!shortcut) return;
-    this.plugin.settings.screenshotShortcut = shortcut;
+    this.plugin.settings[key] = shortcut;
     text.setValue(shortcut);
     await this.saveAndRefresh();
-    new Notice(`截图快捷键已设为 ${shortcut}`);
+    new Notice(`${label}快捷键已设为 ${shortcut}`);
     text.inputEl.blur();
   }
 

@@ -3633,6 +3633,7 @@ export class MindMapEditor {
       const blocks = nodeContentBlocks(node);
       let block = blocks.find((item): item is MindMapTextContentBlock => item.type === "text" && item.id === activeBlockId);
       if (!block) {
+        if (!normalized.text.trim() && blocks.length) return;
         block = { id: activeBlockId, type: "text", text: "" };
         const legacyTextIndex = Array.isArray(node.content) && node.content.length
           ? -1
@@ -3640,8 +3641,12 @@ export class MindMapEditor {
         if (legacyTextIndex >= 0) blocks.splice(legacyTextIndex, 1, block);
         else blocks.unshift(block);
       }
-      block.text = normalized.text;
-      block.richText = normalized.richText;
+      const blockIndex = blocks.indexOf(block);
+      if (!normalized.text.trim() && blocks.length > 1) blocks.splice(blockIndex, 1);
+      else {
+        block.text = normalized.text;
+        block.richText = normalized.richText;
+      }
       node.content = blocks;
       syncNodeContentFields(node);
       if (node.id === this.document.root.id && values.text) this.document.title = values.text;

@@ -37,6 +37,12 @@ test("node context menu appends a text block and starts editing that exact block
   assert.match(editorSource, /setTitle\("插入文字"\)\.setIcon\("text-cursor-input"\)\.onClick\(\(\) => this\.insertTextBlock\(\)\)/);
 });
 
+test("clearing a text block removes it unless it is the node's only content block", () => {
+  const inlineEdit = editorSource.match(/private beginInlineEdit\([\s\S]*?\n  \}/)?.[0] ?? "";
+  assert.match(inlineEdit, /if \(!normalized\.text\.trim\(\) && blocks\.length\) return/);
+  assert.match(inlineEdit, /if \(!normalized\.text\.trim\(\) && blocks\.length > 1\) blocks\.splice\(blockIndex, 1\)/);
+});
+
 test("mind-map code blocks use double click for editing", () => {
   const renderNodeCode = editorSource.match(/private renderNodeCode\([\s\S]*?\n  \}/)?.[0] ?? "";
   assert.match(renderNodeCode, /block\.addEventListener\("dblclick", \(event\) => \{[\s\S]*openCodeBlockEditor\(node, codeData, blockId\)/);
