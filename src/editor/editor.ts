@@ -26,6 +26,7 @@ import {
   nodeContentBlocks,
   nodePlainText,
   nodePrimaryText,
+  replaceNodeContentBlocks,
   syncNodeContentFields,
   syncMindMapQuestionFields,
   parseFencedCode,
@@ -2835,7 +2836,12 @@ export class MindMapEditor {
       nodeEl.style.left = `${position.x}px`;
       nodeEl.style.top = `${position.y}px`;
       nodeEl.style.width = `${position.width}px`;
-      nodeEl.style.minHeight = `${position.height}px`;
+      // Layout estimates are only provisional coordinates. Writing the estimate
+      // as min-height prevents rich content (notably a collapsed code block)
+      // from shrinking after its real DOM height changes. Preserve only a
+      // user-defined minimum; ResizeObserver will feed the natural height back
+      // into collision layout.
+      if (node.style?.minHeight !== undefined) nodeEl.style.minHeight = `${node.style.minHeight}px`;
       nodeEl.style.setProperty("--mmc-node-text-align", textAlign);
       nodeEl.draggable = position.depth > 0 && !this.readOnly;
       if (this.selectedId === node.id || this.selectedIds.has(node.id)) nodeEl.addClass("is-selected");
@@ -3804,8 +3810,7 @@ export class MindMapEditor {
         this.history.capture(this.document);
         historyCaptured = true;
       }
-      selected.content = values.content;
-      syncNodeContentFields(selected);
+      replaceNodeContentBlocks(selected, values.content);
       selected.note = values.note || undefined;
       selected.link = values.link || undefined;
       selected.icon = values.icon || undefined;
@@ -4128,8 +4133,7 @@ export class MindMapEditor {
 
   /** Removes all matching structured blocks and mirrors the legacy node fields for compatibility. */
   private removeStructuredBlocks(node: MindMapNode, type: "table" | "code"): void {
-    node.content = nodeContentBlocks(node).filter((block) => block.type !== type);
-    syncNodeContentFields(node);
+    replaceNodeContentBlocks(node, nodeContentBlocks(node).filter((block) => block.type !== type));
   }
 
   /**
@@ -4400,7 +4404,15 @@ export class MindMapEditor {
       void navigator.clipboard.writeText(codeData.code).then(() => new Notice("代码已复制"));
     });
     const rendered = block.createDiv({ cls: "mmc-code-rendered markdown-rendered" });
-    void this.callbacks.onRenderCode(codeData, rendered);
+    void Promise.resolve(this.callbacks.onRenderCode(codeData, rendered)).then(() => {
+      // A details toggle changes the node's natural height without changing the
+      // document model. Request a measured relayout immediately; ResizeObserver
+      // remains the fallback for theme, font and asynchronous highlighter changes.
+      rendered.querySelector<HTMLDetailsElement>("details.mms-code-collapsed")?.addEventListener("toggle", () => {
+        this.scheduleMeasuredMindMapLayout();
+      });
+      this.scheduleMeasuredMindMapLayout();
+    });
     block.addEventListener("pointerdown", (event) => event.stopPropagation());
     block.addEventListener("dragstart", (event) => event.preventDefault());
     block.addEventListener("dblclick", (event) => { event.stopPropagation(); this.selectNode(node.id); this.editSelected(blockId); });

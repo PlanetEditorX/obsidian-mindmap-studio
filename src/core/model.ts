@@ -973,6 +973,26 @@ export function syncNodeContentFields(node: MindMapNode): void {
   node.code = codeBlocks[0]?.code;
 }
 
+/**
+ * 使用调用方提供的有序内容块完整替换节点内容，并重新生成旧版兼容字段。
+ *
+ * @param node 需要更新的节点。
+ * @param blocks 已经完成编辑、过滤和排序的权威内容块集合。
+ * @remarks
+ * `nodeContentBlocks()` 会在迁移旧文档时把 `node.table` 与 `node.code`
+ * 补入缺少对应块的 `content`。因此编辑器执行“删除表格/代码块”时，必须先
+ * 清除这些旧版镜像字段，否则后续同步会把刚删除的块重新补回。
+ */
+export function replaceNodeContentBlocks(node: MindMapNode, blocks: MindMapContentBlock[]): void {
+  node.content = blocks.length ? blocks : undefined;
+  node.text = "";
+  node.richText = undefined;
+  node.image = undefined;
+  node.table = undefined;
+  node.code = undefined;
+  syncNodeContentFields(node);
+}
+
 
 /**
  * 校验并规范化cell，并保持模型、界面和持久化状态的一致性。
