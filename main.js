@@ -3727,6 +3727,7 @@ var CODE_LANGUAGE_OPTIONS = [
   ["css", "CSS"],
   ["json", "JSON"],
   ["yaml", "YAML"],
+  ["ini", "INI"],
   ["dockerfile", "Dockerfile"],
   ["markdown", "Markdown"],
   ["text", "Plain Text"]

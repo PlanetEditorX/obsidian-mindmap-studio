@@ -19,7 +19,7 @@ const CODE_LANGUAGE_OPTIONS = [
   ["bash", "Bash / Shell"], ["javascript", "JavaScript"], ["typescript", "TypeScript"],
   ["python", "Python"], ["java", "Java"], ["c", "C"], ["cpp", "C++"], ["csharp", "C#"],
   ["go", "Go"], ["rust", "Rust"], ["php", "PHP"], ["ruby", "Ruby"], ["sql", "SQL"],
-    ["html", "HTML"], ["css", "CSS"], ["json", "JSON"], ["yaml", "YAML"], ["dockerfile", "Dockerfile"], ["markdown", "Markdown"], ["text", "Plain Text"]
+    ["html", "HTML"], ["css", "CSS"], ["json", "JSON"], ["yaml", "YAML"], ["ini", "INI"], ["dockerfile", "Dockerfile"], ["markdown", "Markdown"], ["text", "Plain Text"]
 ] as const;
 
 /**
