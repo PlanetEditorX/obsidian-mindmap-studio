@@ -2,7 +2,7 @@
 
 MindMap Studio 是一个本地优先的 Obsidian 思维导图插件。它使用独立的 `.mindmap` 文件保存数据，并让导图、大纲、文章和通读四种视图共享同一棵节点树。插件支持富文本、图片、表格、代码、子导图、全局搜索、主题、导入导出和只读模式。
 
-当前源码版本：`1.24.5`。最低 Obsidian 版本：`1.5.0`。
+最低 Obsidian 版本：`1.5.0`。
 
 ## 功能概览
 
@@ -179,7 +179,7 @@ src/
 tests/                         独立纯函数单元测试
 scripts/test.mjs               既有综合回归测试
 scripts/check-docs.mjs         JSDoc 与文档完整性检查
-scripts/check-repository.mjs   仓库结构与版本一致性检查
+scripts/check-repository.mjs   仓库结构与发布元数据一致性检查
 ```
 
 更完整的模块职责与数据流见 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)。
@@ -194,7 +194,7 @@ npm run dev             # 监听构建
 npm run test:unit       # 显示模式、阅读位置、文件名、图床与 AI 纯工具测试
 npm run test:regression # 综合模型、布局、导入、搜索和样式回归
 npm run test:docs       # 模块头与声明 JSDoc 检查
-npm run test:repo       # 仓库清洁度和版本一致性
+npm run test:repo       # 仓库清洁度和发布元数据一致性
 npm run build           # 类型检查与生产构建
 npm run verify          # 完整验证入口
 ```
@@ -218,7 +218,7 @@ mindmap-studio/
 └── styles.css
 ```
 
-版本号必须在 `package.json`、`package-lock.json`、`manifest.json` 和 `versions.json` 中保持一致。分支、提交、标签和回滚流程见 [docs/GIT_WORKFLOW.zh-CN.md](docs/GIT_WORKFLOW.zh-CN.md)。
+版本号以发布元数据为准，必须在 `package.json`、`package-lock.json`、`manifest.json` 和 `versions.json` 中保持一致；README 不再硬编码当前源码版本。分支、提交、标签和回滚流程见 [docs/GIT_WORKFLOW.zh-CN.md](docs/GIT_WORKFLOW.zh-CN.md)。
 
 ## 文档
 

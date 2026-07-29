@@ -17,7 +17,7 @@
 | `npm run test:unit` | 显示模式、语义位置、编辑器契约、文件名、图床和仓库清洁度 |
 | `npm run test:regression` | 模型、节点树、布局、文章、导入导出、搜索、CSS 和版本约束 |
 | `npm run test:docs` | 模块 `@file`、声明 JSDoc、关键文档 |
-| `npm run test:repo` | 版本一致性、必需文件、`.gitignore`、临时目录 |
+| `npm run test:repo` | 发布元数据一致性、README 非硬编码策略、必需文件、`.gitignore`、临时目录 |
 | `npm run build` | TypeScript 与 esbuild 生产包 |
 | `npm run verify` | 以上全部 |
 
