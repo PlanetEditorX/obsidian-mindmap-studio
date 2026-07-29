@@ -918,6 +918,12 @@ udpsvd -vE 0 69 tftpd -c /
   assert.deepEqual(parsedTable?.alignments, ["left", "right", "center"]);
   assert.equal(parsedTable?.rows[1]?.[0], "梨");
   assert.match(model.tableToMarkdown(parsedTable), /\| 苹果 \| 3 \| 完成 \|/);
+  const boldTableCell = model.markdownInlineToRichText("普通 **加粗** 文字");
+  assert.equal(boldTableCell.text, "普通 加粗 文字");
+  assert.equal(boldTableCell.richText?.[0]?.text, "普通 ");
+  assert.equal(boldTableCell.richText?.[1]?.text, "加粗");
+  assert.equal(boldTableCell.richText?.[1]?.style?.bold, true);
+  assert.equal(boldTableCell.richText?.[2]?.text, " 文字");
 
   const parsedCode = model.parseFencedCode("代码如下：\n```typescript\nconst answer: number = 42;\n```\n结束");
   assert.equal(parsedCode?.language, "typescript");
@@ -1184,6 +1190,12 @@ udpsvd -vE 0 69 tftpd -c /
   assert.match(outlineRendererSource, /renderOutlineMode/);
   assert.match(outlineRendererSource, /mms-outline-table/);
   assert.match(outlineRendererSource, /node\.table\.rows\.forEach/);
+  assert.match(outlineRendererSource, /renderInlineMarkdown/, "outline tables must render inline Markdown");
+  assert.match(articleRendererSource, /renderInlineMarkdown/, "article tables must render inline Markdown");
+  assert.match(editorSource, /renderInlineMarkdown\(cell, header \|\| `列 \$\{index \+ 1\}`\)/, "mind-map tables must render inline Markdown");
+  assert.match(editorSource, /openTableBlockEditor\(node, tableData, blockId\)/, "clicking a table must open its editor directly");
+  assert.match(editorSource, /openCodeBlockEditor\(node, codeData, blockId\)/, "clicking code must open its editor directly");
+  assert.doesNotMatch(editorSource, /wrap\.addEventListener\("dblclick"[\s\S]*editSelected\(blockId\)/, "table double-clicks must not route through the node editor");
   assert.match(outlineRendererSource, /options\.renderCode/);
   assert.match(outlineRendererSource, /ImagePreviewModal/);
   assert.match(outlineRendererSource, /additionalText/);

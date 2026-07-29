@@ -22,7 +22,7 @@ import {
 import { resolveArticleStyle } from "../article/article-style";
 import type { MindMapEditorCallbacks } from "./editor-types";
 import { ImagePreviewModal } from "./editor-modals";
-import { renderRichTextRuns } from "./rich-text-dom";
+import { renderInlineMarkdown, renderRichTextRuns } from "./rich-text-dom";
 import type { ArticleLeafBulletStyle } from "../settings";
 
 /** 文章渲染所需的编辑器状态和回调。 */
@@ -203,11 +203,11 @@ function renderArticleTable(container: HTMLElement, tableData: MindMapNode["tabl
   if (!tableData) return;
   const table = container.createDiv({ cls: "mms-article-table-wrap" }).createEl("table", { cls: "mms-article-table" });
   const tr = table.createEl("thead").createEl("tr");
-  tableData.headers.forEach((header) => tr.createEl("th", { text: header }));
+  tableData.headers.forEach((header) => renderInlineMarkdown(tr.createEl("th"), header));
   const body = table.createEl("tbody");
   tableData.rows.forEach((row) => {
     const rowEl = body.createEl("tr");
-    tableData.headers.forEach((_, index) => rowEl.createEl("td", { text: row[index] ?? "" }));
+    tableData.headers.forEach((_, index) => renderInlineMarkdown(rowEl.createEl("td"), row[index] ?? ""));
   });
 }
 

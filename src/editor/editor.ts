@@ -73,7 +73,7 @@ import {
   type ResolvedReadingLocation
 } from "../article/reading-location";
 import type { MindMapEditorCallbacks, MindMapEditorOptions } from "./editor-types";
-import { readRichTextEditor, renderRichTextRuns } from "./rich-text-dom";
+import { readRichTextEditor, renderInlineMarkdown, renderRichTextRuns } from "./rich-text-dom";
 import {
   ArticleStyleModal,
   DocumentExportModal,
@@ -4103,7 +4103,7 @@ export class MindMapEditor {
    * @param type 内容块类型。
    * @param value 表格数据。
    */
-  private upsertStructuredBlock(node: MindMapNode, type: "table", value: MindMapTable): void;
+  private upsertStructuredBlock(node: MindMapNode, type: "table", value: MindMapTable, blockId?: string): void;
   /**
    * 插入或更新第一个代码内容块，并保留该块当前的排序位置。
    *
@@ -4111,7 +4111,7 @@ export class MindMapEditor {
    * @param type 内容块类型。
    * @param value 代码数据。
    */
-  private upsertStructuredBlock(node: MindMapNode, type: "code", value: MindMapCodeBlock): void;
+  private upsertStructuredBlock(node: MindMapNode, type: "code", value: MindMapCodeBlock, blockId?: string): void;
   /**
    * 插入或更新首个结构化内容块，并同步兼容旧版节点字段。
    *
@@ -4119,9 +4119,9 @@ export class MindMapEditor {
    * @param type 内容块类型。
    * @param value 表格或代码数据。
    */
-  private upsertStructuredBlock(node: MindMapNode, type: "table" | "code", value: MindMapTable | MindMapCodeBlock): void {
+  private upsertStructuredBlock(node: MindMapNode, type: "table" | "code", value: MindMapTable | MindMapCodeBlock, blockId?: string): void {
     const blocks = nodeContentBlocks(node);
-    const index = blocks.findIndex((block) => block.type === type);
+    const index = blocks.findIndex((block) => block.type === type && (!blockId || block.id === blockId));
     const block = type === "table"
       ? { id: index >= 0 ? blocks[index]!.id : newId(), type, table: value as MindMapTable } as const
       : { id: index >= 0 ? blocks[index]!.id : newId(), type, code: value as MindMapCodeBlock } as const;
@@ -4371,20 +4371,26 @@ export class MindMapEditor {
     const table = wrap.createEl("table", { cls: "mmc-node-table" });
     const head = table.createEl("thead").createEl("tr");
     tableData.headers.forEach((header, index) => {
-      const cell = head.createEl("th", { text: header || `列 ${index + 1}` });
+      const cell = head.createEl("th");
+      renderInlineMarkdown(cell, header || `列 ${index + 1}`);
       cell.style.textAlign = tableData.alignments?.[index] ?? "left";
     });
     const body = table.createEl("tbody");
     tableData.rows.forEach((row) => {
       const tr = body.createEl("tr");
       tableData.headers.forEach((_, index) => {
-        const cell = tr.createEl("td", { text: row[index] ?? "" });
+        const cell = tr.createEl("td");
+        renderInlineMarkdown(cell, row[index] ?? "");
         cell.style.textAlign = tableData.alignments?.[index] ?? "left";
       });
     });
     wrap.addEventListener("pointerdown", (event) => event.stopPropagation());
     wrap.addEventListener("dragstart", (event) => event.preventDefault());
-    wrap.addEventListener("dblclick", (event) => { event.stopPropagation(); this.selectNode(node.id); this.editSelected(blockId); });
+    wrap.addEventListener("click", (event) => {
+      event.stopPropagation();
+      this.openTableBlockEditor(node, tableData, blockId);
+    });
+    wrap.addEventListener("dblclick", (event) => event.stopPropagation());
   }
 
   /**
@@ -4415,7 +4421,30 @@ export class MindMapEditor {
     });
     block.addEventListener("pointerdown", (event) => event.stopPropagation());
     block.addEventListener("dragstart", (event) => event.preventDefault());
-    block.addEventListener("dblclick", (event) => { event.stopPropagation(); this.selectNode(node.id); this.editSelected(blockId); });
+    block.addEventListener("click", (event) => {
+      if ((event.target as HTMLElement).closest("button, details")) return;
+      event.stopPropagation();
+      this.openCodeBlockEditor(node, codeData, blockId);
+    });
+    block.addEventListener("dblclick", (event) => event.stopPropagation());
+  }
+
+  /** Opens the selected table block directly instead of routing through the node editor. */
+  private openTableBlockEditor(node: MindMapNode, table: MindMapTable, blockId?: string): void {
+    if (!this.ensureEditable()) return;
+    this.selectNode(node.id);
+    new TableEditModal(this.app, table, (next) => {
+      this.mutate(() => this.upsertStructuredBlock(node, "table", next, blockId));
+    }).open();
+  }
+
+  /** Opens the selected code block directly instead of routing through the node editor. */
+  private openCodeBlockEditor(node: MindMapNode, code: MindMapCodeBlock, blockId?: string): void {
+    if (!this.ensureEditable()) return;
+    this.selectNode(node.id);
+    new CodeEditModal(this.app, code, (next) => {
+      this.mutate(() => this.upsertStructuredBlock(node, "code", next, blockId));
+    }).open();
   }
 
   /**

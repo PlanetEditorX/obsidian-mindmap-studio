@@ -16,7 +16,7 @@ import {
 import { articleNumberLabel } from "../article/modes";
 import type { MindMapEditorCallbacks } from "./editor-types";
 import { ImagePreviewModal } from "./editor-modals";
-import { renderRichTextRuns } from "./rich-text-dom";
+import { renderInlineMarkdown, renderRichTextRuns } from "./rich-text-dom";
 
 /** 大纲渲染所需的编辑器回调边界。 */
 export interface OutlineRendererOptions {
@@ -166,11 +166,11 @@ function renderOutlineContent(container: HTMLElement, node: MindMapNode, depth: 
     const tableWrap = content.createDiv({ cls: "mms-outline-table-wrap" });
     const table = tableWrap.createEl("table", { cls: "mms-outline-table" });
     const heading = table.createEl("thead").createEl("tr");
-    node.table.headers.forEach((header) => heading.createEl("th", { text: header }));
+    node.table.headers.forEach((header) => renderInlineMarkdown(heading.createEl("th"), header));
     const body = table.createEl("tbody");
     node.table.rows.forEach((row) => {
       const rowElement = body.createEl("tr");
-      node.table!.headers.forEach((_, index) => rowElement.createEl("td", { text: row[index] ?? "" }));
+      node.table!.headers.forEach((_, index) => renderInlineMarkdown(rowElement.createEl("td"), row[index] ?? ""));
     });
   }
   if (node.code) {
