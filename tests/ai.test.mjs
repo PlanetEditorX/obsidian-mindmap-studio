@@ -351,6 +351,10 @@ test("AI integration exposes toolbar, shortcut, page scope and node scope contra
   assert.match(settingsSource, /imageRecognitionAutoConfirmDelaySeconds: null/);
   assert.match(settingsSource, /setLimits\(0, 120, 1\)/);
   assert.match(settingsSource, /screenshotShortcut: "Ctrl\+Shift\+S"/);
+  assert.match(settingsSource, /globalSearchShortcut: "Ctrl\+Shift\+F"/);
+  assert.match(settingsSource, /shortcutSetting\("全局搜索", "globalSearchShortcut"\)/);
+  assert.match(settingsSource, /captureShortcut\(event, text, key, name\)/);
+  assert.match(mainSource, /matchesRecordedShortcut\(event, this\.settings\.globalSearchShortcut\)/);
   assert.match(mainSource, /id: "ask-ai-about-mind-map"/);
   assert.match(mainSource, /async testAiProfile\(profileId: string\): Promise<void>/);
   assert.match(mainSource, /modifiers: \["Mod", "Shift"\], key: "A"/);

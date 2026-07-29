@@ -1961,6 +1961,7 @@ var DEFAULT_SETTINGS = {
   localOcrExtraArgs: "--psm 6",
   screenshotHideObsidian: false,
   screenshotShortcut: "Ctrl+Shift+S",
+  globalSearchShortcut: "Ctrl+Shift+F",
   screenshotAutoRecognize: false,
   questionNodesEnabled: false,
   questionBankFolder: "",
@@ -2529,28 +2530,32 @@ var MindMapStudioSettingTab = class extends import_obsidian.PluginSettingTab {
     containerEl.createEl("h3", { text: "\u5FEB\u6377\u952E\u914D\u7F6E" });
     containerEl.createEl("p", {
       cls: "setting-item-description",
-      text: "Tab/Enter \u521B\u5EFA\u8282\u70B9\u540E\u53EF\u76F4\u63A5\u8F93\u5165\u3002\u4EE5\u4E0B\u5FEB\u6377\u952E\u4F5C\u7528\u4E8E\u8282\u70B9\u5185\u5DF2\u9009\u62E9\u7684\u6587\u5B57\uFF1B\u683C\u5F0F\u793A\u4F8B\uFF1ACtrl+B\u3001Ctrl+Shift+C\u3001Alt+U\u3002"
+      text: "\u70B9\u51FB\u8F93\u5165\u6846\u540E\u76F4\u63A5\u6309\u4E0B 1 \u81F3 3 \u4E2A\u952E\u5373\u53EF\u5F55\u5236\u3002\u5168\u5C40\u641C\u7D22\u5728\u4EFB\u610F\u9875\u9762\u751F\u6548\uFF0C\u5176\u4F59\u683C\u5F0F\u5FEB\u6377\u952E\u4F5C\u7528\u4E8E\u8282\u70B9\u5185\u5DF2\u9009\u62E9\u7684\u6587\u5B57\u3002"
     });
     const shortcutSetting = (name, key) => {
-      new import_obsidian.Setting(containerEl).setName(name).addText((text) => text.setValue(this.plugin.settings[key]).onChange(async (value) => {
-        this.plugin.settings[key] = value.trim();
-        await this.plugin.saveSettings();
-      }));
+      new import_obsidian.Setting(containerEl).setName(name).addText((text) => {
+        text.setValue(this.plugin.settings[key]);
+        text.inputEl.readOnly = true;
+        text.inputEl.addClass("mms-shortcut-recorder");
+        text.inputEl.setAttr("aria-label", `\u70B9\u51FB\u540E\u6309\u4E0B\u65B0\u7684${name}\u5FEB\u6377\u952E`);
+        text.inputEl.addEventListener("keydown", (event) => void this.captureShortcut(event, text, key, name));
+      });
     };
+    shortcutSetting("\u5168\u5C40\u641C\u7D22", "globalSearchShortcut");
     shortcutSetting("\u52A0\u7C97", "richTextBoldShortcut");
     shortcutSetting("\u659C\u4F53", "richTextItalicShortcut");
     shortcutSetting("\u4E0B\u5212\u7EBF", "richTextUnderlineShortcut");
     shortcutSetting("\u5B57\u4F53\u989C\u8272", "richTextColorShortcut");
-    new import_obsidian.Setting(containerEl).setName("\u9ED8\u8BA4\u4FDD\u5B58\u6587\u4EF6\u5939").setDesc("\u7559\u7A7A\u65F6\u4FDD\u5B58\u5728\u5F53\u524D\u7B14\u8BB0\u6240\u5728\u6587\u4EF6\u5939\uFF1B\u4E5F\u53EF\u586B\u5199\u4F8B\u5982 Mind Maps\u3002").addText((text) => text.setPlaceholder("Mind Maps").setValue(this.plugin.settings.defaultFolder).onChange(async (value) => {
+    containerEl.createEl("h3", { text: "\u6587\u4EF6\u4E0E\u8D44\u6E90" });
+    new import_obsidian.Setting(containerEl).setName("\u9ED8\u8BA4\u4FDD\u5B58\u6587\u4EF6\u5939").setDesc("\u65B0\u5EFA\u548C\u5BFC\u5165\u7684\u5BFC\u56FE\u6587\u4EF6\u4FDD\u5B58\u5230\u6B64\u4ED3\u5E93\u5185\u8DEF\u5F84\uFF1B\u7559\u7A7A\u65F6\u4FDD\u5B58\u5728\u5F53\u524D\u7B14\u8BB0\u6240\u5728\u6587\u4EF6\u5939\u3002\u6B64\u9879\u4E0D\u5F71\u54CD\u56FE\u7247\u3001\u622A\u56FE\u548C\u5B50\u5BFC\u56FE\u8D44\u6E90\u3002").addText((text) => text.setPlaceholder("Mind Maps").setValue(this.plugin.settings.defaultFolder).onChange(async (value) => {
       this.plugin.settings.defaultFolder = value.trim().replace(/^\/+|\/+$/g, "");
       await this.plugin.saveSettings();
     }));
-    containerEl.createEl("h3", { text: "\u6587\u4EF6\u4E0E\u8D44\u6E90" });
     new import_obsidian.Setting(containerEl).setName("\u9898\u5E93\u6587\u4EF6\u5939").setDesc("\u586B\u5199\u4ED3\u5E93\u5185\u6587\u4EF6\u5939\u8DEF\u5F84\uFF0C\u4F8B\u5982 \u9898\u5E93\u3002\u8BE5\u6587\u4EF6\u5939\u53CA\u5176\u5B50\u76EE\u5F55\u5185\u7684\u601D\u7EF4\u5BFC\u56FE\u4F1A\u51FA\u73B0\u201C\u9898\u5E93\u201D\u6574\u9875\u6A21\u5F0F\uFF0C\u53EF\u8FDE\u7EED\u81EA\u52A8\u5224\u9898\uFF1B\u7559\u7A7A\u5219\u4E0D\u542F\u7528\u3002").addText((text) => text.setPlaceholder("\u9898\u5E93").setValue(this.plugin.settings.questionBankFolder).onChange(async (value) => {
       this.plugin.settings.questionBankFolder = value.trim().replace(/\\/g, "/").replace(/^\/+|\/+$/g, "");
       await this.saveAndRefresh();
     }));
-    new import_obsidian.Setting(containerEl).setName("\u8D44\u6E90\u6587\u4EF6\u5939").setDesc("\u8BE5\u8DEF\u5F84\u76F8\u5BF9\u4E8E\u5F53\u524D\u8111\u56FE\u6240\u5728\u76EE\u5F55\u3002\u7C98\u8D34\u56FE\u7247\u4F1A\u4FDD\u5B58\u5230\u201C\u5F53\u524D\u8111\u56FE\u76EE\u5F55/\u8BE5\u8D44\u6E90\u6587\u4EF6\u5939/\u201D\uFF1B\u5B50\u5BFC\u56FE\u4F1A\u4FDD\u5B58\u5728\u201C\u5F53\u524D\u8111\u56FE\u76EE\u5F55/\u8BE5\u8D44\u6E90\u6587\u4EF6\u5939/\u7236\u5BFC\u56FE\u540D\u79F0/\u201D\u4E2D\u3002\u9ED8\u8BA4\u4F7F\u7528 MindMap Assets\u3002").addText((text) => text.setPlaceholder("MindMap Assets").setValue(this.plugin.settings.assetFolder).onChange(async (value) => {
+    new import_obsidian.Setting(containerEl).setName("\u8D44\u6E90\u6587\u4EF6\u5939").setDesc("\u4EC5\u7528\u4E8E\u56FE\u7247\u3001\u622A\u56FE\u548C\u5B50\u5BFC\u56FE\u8D44\u6E90\uFF0C\u8DEF\u5F84\u76F8\u5BF9\u4E8E\u5F53\u524D\u5BFC\u56FE\u6240\u5728\u76EE\u5F55\uFF1B\u4E0D\u51B3\u5B9A\u5BFC\u56FE\u6587\u4EF6\u7684\u4FDD\u5B58\u4F4D\u7F6E\u3002\u9ED8\u8BA4\u4F7F\u7528 MindMap Assets\u3002").addText((text) => text.setPlaceholder("MindMap Assets").setValue(this.plugin.settings.assetFolder).onChange(async (value) => {
       this.plugin.settings.assetFolder = value.trim().replace(/^\/+|\/+$/g, "") || "MindMap Assets";
       await this.plugin.saveSettings();
     }));
@@ -3049,6 +3054,10 @@ var MindMapStudioSettingTab = class extends import_obsidian.PluginSettingTab {
   }
   /** 记录截图快捷键；修饰键必须与一个非修饰主键同时按下。 */
   async captureScreenshotShortcut(event, text) {
+    await this.captureShortcut(event, text, "screenshotShortcut", "\u622A\u56FE");
+  }
+  /** Records one shortcut setting from a physical keyboard event. */
+  async captureShortcut(event, text, key, label) {
     event.preventDefault();
     event.stopPropagation();
     if (event.repeat) return;
@@ -3058,10 +3067,10 @@ var MindMapStudioSettingTab = class extends import_obsidian.PluginSettingTab {
     }
     const shortcut = this.shortcutFromKeyboardEvent(event);
     if (!shortcut) return;
-    this.plugin.settings.screenshotShortcut = shortcut;
+    this.plugin.settings[key] = shortcut;
     text.setValue(shortcut);
     await this.saveAndRefresh();
-    new import_obsidian.Notice(`\u622A\u56FE\u5FEB\u6377\u952E\u5DF2\u8BBE\u4E3A ${shortcut}`);
+    new import_obsidian.Notice(`${label}\u5FEB\u6377\u952E\u5DF2\u8BBE\u4E3A ${shortcut}`);
     text.inputEl.blur();
   }
   /** 将实际键盘事件转换为编辑器可识别的 1 至 3 键快捷键文本。 */
@@ -11470,13 +11479,18 @@ var MindMapEditor = class {
       const blocks2 = nodeContentBlocks(node);
       let block = blocks2.find((item) => item.type === "text" && item.id === activeBlockId);
       if (!block) {
+        if (!normalized2.text.trim() && blocks2.length) return;
         block = { id: activeBlockId, type: "text", text: "" };
         const legacyTextIndex = Array.isArray(node.content) && node.content.length ? -1 : blocks2.findIndex((item) => item.type === "text");
         if (legacyTextIndex >= 0) blocks2.splice(legacyTextIndex, 1, block);
         else blocks2.unshift(block);
       }
-      block.text = normalized2.text;
-      block.richText = normalized2.richText;
+      const blockIndex = blocks2.indexOf(block);
+      if (!normalized2.text.trim() && blocks2.length > 1) blocks2.splice(blockIndex, 1);
+      else {
+        block.text = normalized2.text;
+        block.richText = normalized2.richText;
+      }
       node.content = blocks2;
       syncNodeContentFields(node);
       if (node.id === this.document.root.id && values.text) this.document.title = values.text;
@@ -16152,6 +16166,16 @@ function extractPluginReleaseFiles(archive) {
 // src/main.ts
 var MINDMAP_EXTENSION = "mindmap";
 var PLUGIN_UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/PlanetEditorX/obsidian-mindmap-studio/main/update.json";
+function matchesRecordedShortcut(event, shortcut) {
+  const parts = shortcut.toLowerCase().split("+").map((part) => part.trim()).filter(Boolean);
+  const key = parts.at(-1);
+  if (!key) return false;
+  const expectsCtrl = parts.includes("ctrl") || parts.includes("cmd") || parts.includes("mod");
+  const expectsShift = parts.includes("shift");
+  const expectsAlt = parts.includes("alt");
+  const keyMatches = event.key.toLowerCase() === key || event.code.toLowerCase() === `key${key}` || key === "space" && event.code === "Space";
+  return keyMatches && (event.ctrlKey || event.metaKey) === expectsCtrl && event.shiftKey === expectsShift && event.altKey === expectsAlt;
+}
 var MindMapStudioPlugin = class extends import_obsidian15.Plugin {
   constructor() {
     super(...arguments);
@@ -16181,9 +16205,14 @@ var MindMapStudioPlugin = class extends import_obsidian15.Plugin {
     this.addCommand({
       id: "global-search-mind-maps",
       name: "\u5168\u5C40\u641C\u7D22\u6240\u6709\u601D\u7EF4\u5BFC\u56FE",
-      hotkeys: [{ modifiers: ["Mod", "Shift"], key: "F" }],
       callback: () => this.openGlobalSearch()
     });
+    this.registerDomEvent(window, "keydown", (event) => {
+      if (!matchesRecordedShortcut(event, this.settings.globalSearchShortcut)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      if (!event.repeat) this.openGlobalSearch();
+    }, true);
     this.addCommand({
       id: "update-mindmap-studio",
       name: "\u68C0\u67E5\u5E76\u66F4\u65B0 MindMap Studio",
@@ -16533,6 +16562,7 @@ var MindMapStudioPlugin = class extends import_obsidian15.Plugin {
       localOcrExtraArgs: typeof raw.localOcrExtraArgs === "string" ? raw.localOcrExtraArgs.slice(0, 1e3) : DEFAULT_SETTINGS.localOcrExtraArgs,
       screenshotHideObsidian: raw.screenshotHideObsidian === true,
       screenshotShortcut: typeof raw.screenshotShortcut === "string" && raw.screenshotShortcut.trim() ? raw.screenshotShortcut.trim().slice(0, 120) : DEFAULT_SETTINGS.screenshotShortcut,
+      globalSearchShortcut: typeof raw.globalSearchShortcut === "string" && raw.globalSearchShortcut.trim() ? raw.globalSearchShortcut.trim().slice(0, 120) : DEFAULT_SETTINGS.globalSearchShortcut,
       screenshotAutoRecognize: raw.screenshotAutoRecognize === true,
       questionNodesEnabled: raw.questionNodesEnabled === true,
       questionBankFolder: typeof raw.questionBankFolder === "string" ? (0, import_obsidian15.normalizePath)(raw.questionBankFolder.trim().replace(/^\/+|\/+$/g, "")).slice(0, 1e3) : DEFAULT_SETTINGS.questionBankFolder,

@@ -103,6 +103,23 @@ import { comparePluginVersions, extractPluginReleaseFiles, parsePluginUpdateMani
 export const MINDMAP_EXTENSION = "mindmap";
 const PLUGIN_UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/PlanetEditorX/obsidian-mindmap-studio/main/update.json";
 
+/** Returns whether a keyboard event exactly matches one recorded plugin shortcut. */
+function matchesRecordedShortcut(event: KeyboardEvent, shortcut: string): boolean {
+  const parts = shortcut.toLowerCase().split("+").map((part) => part.trim()).filter(Boolean);
+  const key = parts.at(-1);
+  if (!key) return false;
+  const expectsCtrl = parts.includes("ctrl") || parts.includes("cmd") || parts.includes("mod");
+  const expectsShift = parts.includes("shift");
+  const expectsAlt = parts.includes("alt");
+  const keyMatches = event.key.toLowerCase() === key
+    || event.code.toLowerCase() === `key${key}`
+    || (key === "space" && event.code === "Space");
+  return keyMatches
+    && (event.ctrlKey || event.metaKey) === expectsCtrl
+    && event.shiftKey === expectsShift
+    && event.altKey === expectsAlt;
+}
+
 /**
  * MindMapStudioPlugin 的主要实现类。负责封装相关状态、生命周期和对外操作，避免调用方直接操作内部数据结构。
  */
@@ -138,9 +155,14 @@ export default class MindMapStudioPlugin extends Plugin {
     this.addCommand({
       id: "global-search-mind-maps",
       name: "全局搜索所有思维导图",
-      hotkeys: [{ modifiers: ["Mod", "Shift"], key: "F" }],
       callback: () => this.openGlobalSearch()
     });
+    this.registerDomEvent(window, "keydown", (event) => {
+      if (!matchesRecordedShortcut(event, this.settings.globalSearchShortcut)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      if (!event.repeat) this.openGlobalSearch();
+    }, true);
     this.addCommand({
       id: "update-mindmap-studio",
       name: "检查并更新 MindMap Studio",
@@ -538,6 +560,9 @@ export default class MindMapStudioPlugin extends Plugin {
       screenshotShortcut: typeof raw.screenshotShortcut === "string" && raw.screenshotShortcut.trim()
         ? raw.screenshotShortcut.trim().slice(0, 120)
         : DEFAULT_SETTINGS.screenshotShortcut,
+      globalSearchShortcut: typeof raw.globalSearchShortcut === "string" && raw.globalSearchShortcut.trim()
+        ? raw.globalSearchShortcut.trim().slice(0, 120)
+        : DEFAULT_SETTINGS.globalSearchShortcut,
       screenshotAutoRecognize: raw.screenshotAutoRecognize === true,
       questionNodesEnabled: raw.questionNodesEnabled === true,
       questionBankFolder: typeof raw.questionBankFolder === "string"
