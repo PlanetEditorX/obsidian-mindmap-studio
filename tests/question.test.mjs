@@ -221,6 +221,7 @@ test("question-bank grading distinguishes single choice, multiple choice, judgme
   assert.equal(practice.isExactQuestionAnswer(" 资料 分析！", "资料分析"), true);
   assert.equal(practice.isExactQuestionAnswer("资料理解", "资料分析"), false);
   assert.deepEqual(practice.splitExplanationLines("A项正确。B项错误。C项待定。"), ["A项正确。", "B项错误。", "C项待定。"]);
+  assert.deepEqual(practice.splitExplanationLines("综上所述，正确选项为 A、C、D。"), ["综上所述，正确选项为 A、C、D。"]);
 });
 
 test("question-bank practice persists attempts, routes mistakes to review, and advances after showing feedback", async () => {
@@ -290,6 +291,9 @@ test("question assistant keeps an intelligent image-to-question pipeline and vis
   assert.match(settingsSource, /questionPracticeOrder: "random"/);
   assert.match(settingsSource, /setName\("答题顺序"\)/);
   assert.match(viewSource, /questionPracticeOrder: this\.plugin\.settings\.questionPracticeOrder/);
+  assert.match(editorSource, /applyAiQuestion\(responseText: string, nodeId\?: string\): boolean/);
+  assert.match(editorSource, /parseRecognizedQuestion\(responseText, fallback\)/);
+  assert.match(viewSource, /onConvertToQuestion: \(responseText\) => this\.editor\?\.applyAiQuestion\(responseText, nodeId\) \?\? false/);
   assert.match(modalSource, /已由 AI 分析补齐缺失答案与解答/);
   assert.match(mainSource, /仍需基于题目独立分析/);
 });

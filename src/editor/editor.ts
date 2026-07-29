@@ -4026,6 +4026,35 @@ export class MindMapEditor {
     this.editQuestion(node);
   }
 
+  /** Applies an AI JSON response to the scoped node or adds it as a question child for page-wide AI. */
+  applyAiQuestion(responseText: string, nodeId?: string): boolean {
+    if (!this.ensureEditable()) return false;
+    const scopedNode = nodeId ? findNode(this.document.root, nodeId) : null;
+    if (nodeId && !scopedNode) throw new Error("要整理的节点已经不存在，请重新打开 AI 助手");
+    const parent = scopedNode ?? this.selectedNode() ?? this.document.root;
+    const fallback = scopedNode?.question ?? {
+      ...createMindMapQuestion(),
+      stem: scopedNode ? nodeContentBlocks(scopedNode) : []
+    };
+    const question = parseRecognizedQuestion(responseText, fallback);
+    if (!question) throw new Error("AI 未返回可解析的题目 JSON");
+    this.mutate(() => {
+      if (scopedNode) {
+        scopedNode.question = question;
+        syncMindMapQuestionFields(scopedNode);
+        this.selectedId = scopedNode.id;
+        return;
+      }
+      const node = this.createConfiguredNode("");
+      node.question = question;
+      syncMindMapQuestionFields(node);
+      parent.collapsed = false;
+      parent.children.push(node);
+      this.selectedId = node.id;
+    });
+    return true;
+  }
+
   /** Opens the structured question editor and mirrors its stem into normal node content. */
   private editQuestion(node = this.selectedNode()): void {
     if (!this.ensureEditable() || !node) return;

@@ -396,6 +396,9 @@ test("AI integration exposes toolbar, shortcut, page scope and node scope contra
   assert.match(editSource, /sourceSnapshot/);
   assert.match(modalSource, /payload\.overLimit/);
   assert.match(modalSource, /AI 整理并重新生成（确认后应用）/);
+  assert.match(modalSource, /整理为题目节点/);
+  assert.match(modalSource, /onConvertToQuestion/);
+  assert.match(editSource, /DEFAULT_AI_QUESTION_NODE_INSTRUCTION/);
   assert.match(modalSource, /图片 AI 识图（按顺序处理当前范围）/);
   assert.match(modalSource, /onRecognizeImages/);
   assert.match(modalSource, /onPreviewImageTextReplacements/);

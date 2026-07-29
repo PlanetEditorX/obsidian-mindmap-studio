@@ -35,6 +35,7 @@ export interface AiAskModalOptions {
   sourcePath: string;
   onAsk: (profileId: string, question: string) => Promise<AiCompletionResult>;
   onProposeEdit: (profileId: string, instruction: string) => Promise<AiCompletionResult>;
+  onConvertToQuestion: (responseText: string) => boolean | Promise<boolean>;
   onRecognizeImages: (profileId: string, instruction: string) => Promise<ImageRecognitionBatchResult>;
   onPreviewImageTextReplacements: (items: ImageRecognitionItemResult[]) => ImageTextReplacementPreview[];
   onApplyImageTextReplacements: (previews: ImageTextReplacementPreview[]) => boolean | Promise<boolean>;
@@ -98,6 +99,7 @@ export class AiAskModal extends Modal {
     const mode = modeLabel.createEl("select");
     mode.createEl("option", { value: "ask", text: "询问 AI（不修改导图）" });
     mode.createEl("option", { value: "edit", text: "AI 整理并重新生成（确认后应用）" });
+    mode.createEl("option", { value: "question", text: "整理为题目节点" });
     mode.createEl("option", {
       value: "vision",
       text: this.options.imageRecognitionMode === "ai"
@@ -165,7 +167,7 @@ export class AiAskModal extends Modal {
     let imagePreviewInputs: HTMLTextAreaElement[] = [];
     const currentMode = (): AiInteractionMode => mode.value as AiInteractionMode;
     const recognitionUsesAi = (): boolean => currentMode() === "vision" && this.options.imageRecognitionMode === "ai";
-    const requiresAiProfile = (): boolean => currentMode() === "ask" || currentMode() === "edit" || recognitionUsesAi();
+    const requiresAiProfile = (): boolean => currentMode() === "ask" || currentMode() === "edit" || currentMode() === "question" || recognitionUsesAi();
     const isActionDisabled = (): boolean => {
       if (currentMode() === "replace") return false;
       if (currentMode() === "vision") return this.options.imageCount === 0 || (recognitionUsesAi() && !profiles.length);
@@ -211,7 +213,7 @@ export class AiAskModal extends Modal {
       const localRecognition = selected === "vision" && this.options.imageRecognitionMode === "local-ocr";
       if (selected === "vision" && this.options.imageRecognitionMode === "ai") {
         provider.value = defaultProfileValue(this.options.defaultImageRecognitionProfileId);
-      } else if (selected === "ask" || selected === "edit") {
+      } else if (selected === "ask" || selected === "edit" || selected === "question") {
         provider.value = defaultProfileValue(this.options.defaultProfileId);
       }
       providerLabel.hidden = localReplace || localRecognition;
@@ -229,6 +231,11 @@ export class AiAskModal extends Modal {
         question.placeholder = "例如：按主题重新整理层级，合并重复节点，并重新生成清晰的节点结构。";
         submitText.setText("生成修改预览");
         status.setText("AI 只生成 Markdown 提案；确认前不会修改导图。");
+      } else if (selected === "question") {
+        questionTitle.setText("整理要求");
+        question.placeholder = "将题干、选项、答案和解答整理为题目节点。";
+        submitText.setText("生成题目节点");
+        status.setText(payload.scope === "subtree" ? "将当前节点整理为题目节点。" : "将当前页面内容整理为一个新的题目子节点。");
       } else if (selected === "vision") {
         questionTitle.setText("识图要求");
         question.placeholder = "例如：转录全部文字并保留段落；无文字时描述图片内容。";
@@ -381,7 +388,7 @@ export class AiAskModal extends Modal {
 
       const prompt = question.value.trim();
       if (!prompt) {
-        new Notice(currentMode() === "edit" ? "请输入修改要求" : currentMode() === "vision" ? "请输入识图要求" : "请输入要询问的问题");
+        new Notice(currentMode() === "edit" || currentMode() === "question" ? "请输入整理要求" : currentMode() === "vision" ? "请输入识图要求" : "请输入要询问的问题");
         question.focus();
         return;
       }
@@ -436,6 +443,13 @@ export class AiAskModal extends Modal {
           if (currentMode() === "edit") {
             pendingAiPreview = this.options.onPreviewAiEdit(response.text);
             showEditPreview(pendingAiPreview);
+          } else if (currentMode() === "question") {
+            const applied = await this.options.onConvertToQuestion(response.text);
+            if (!applied) throw new Error("题目节点未生成，请检查当前导图是否只读");
+            status.setText("题目节点已生成");
+            setStep(3, "done");
+            this.close();
+            return;
           } else {
             status.setText("已接收回答，正在渲染…");
             if (!this.markdownRenderComponent) return;
