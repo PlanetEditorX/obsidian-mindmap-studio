@@ -49,7 +49,7 @@ export const TOOLBAR_ITEMS = [
 /** All first-level settings categories in their default display order. */
 export const SETTINGS_SECTION_TITLES = [
   "视图与阅读", "编辑选项", "快捷键配置", "工具栏", "主题与外观", "画布与背景", "文字与排版",
-  "节点外观", "连线与分支", "代码块", "新建与布局", "文件与资源", "图片与图床",
+  "节点外观", "连线与分支", "代码块", "新建与布局", "文件与资源", "答题与题库", "图片与图床",
   "全局搜索", "AI 助手", "管理配置"
 ] as const;
 
@@ -270,8 +270,11 @@ export interface MindMapStudioSettings {
   questionNodesEnabled: boolean;
   /** Vault-relative folder whose mind-map files expose the full-page question-bank mode. */
   questionBankFolder: string;
+  questionBankFolders: string[];
   /** Default ordering for answer-mode sessions in the configured question-bank folder. */
   questionPracticeOrder: QuestionPracticeOrder;
+  questionMemoryCurveEnabled: boolean;
+  wrongBookMasteryCount: number;
   /** Absolute folder opened by the native Desktop import picker most recently. */
   lastImportFolder: string;
   /** User-defined order of the first-level settings categories; management stays last. */
@@ -371,7 +374,10 @@ export const DEFAULT_SETTINGS: MindMapStudioSettings = {
   screenshotAutoRecognize: false,
   questionNodesEnabled: false,
   questionBankFolder: "",
+  questionBankFolders: [],
   questionPracticeOrder: "random",
+  questionMemoryCurveEnabled: false,
+  wrongBookMasteryCount: 3,
   lastImportFolder: "",
   settingsSectionOrder: [...SETTINGS_SECTION_TITLES]
 };
@@ -1245,14 +1251,17 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
           await this.plugin.saveSettings();
         }));
 
+    containerEl.createEl("h3", { text: "答题与题库" });
     new Setting(containerEl)
       .setName("题库文件夹")
-      .setDesc("填写仓库内文件夹路径，例如 题库。该文件夹及其子目录内的思维导图会出现“答题”整页模式，可连续自动判题；留空则不启用。")
-      .addText((text) => text
-        .setPlaceholder("题库")
-        .setValue(this.plugin.settings.questionBankFolder)
+      .setDesc("每行一个仓库内文件夹路径；这些文件夹及其子目录内的导图会出现“答题”整页模式。")
+      .addTextArea((text) => text
+        .setPlaceholder("题库\n公务员题库")
+        .setValue(this.plugin.settings.questionBankFolders.join("\n"))
         .onChange(async (value) => {
-          this.plugin.settings.questionBankFolder = value.trim().replace(/\\/g, "/").replace(/^\/+|\/+$/g, "");
+          this.plugin.settings.questionBankFolders = Array.from(new Set(value.split(/\r?\n/)
+            .map((folder) => folder.trim().replace(/\\/g, "/").replace(/^\/+|\/+$/g, "")).filter(Boolean)));
+          this.plugin.settings.questionBankFolder = this.plugin.settings.questionBankFolders[0] ?? "";
           await this.saveAndRefresh();
         }));
 
@@ -1267,6 +1276,22 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
           this.plugin.settings.questionPracticeOrder = value === "sequential" ? "sequential" : "random";
           await this.saveAndRefresh();
         }));
+
+    new Setting(containerEl)
+      .setName("错题本记忆曲线")
+      .setDesc("开启后，错题答对不会立刻移出错题本，达到下方正确次数后才会移除。")
+      .addToggle((toggle) => toggle.setValue(this.plugin.settings.questionMemoryCurveEnabled).onChange(async (value) => {
+        this.plugin.settings.questionMemoryCurveEnabled = value;
+        await this.saveAndRefresh();
+      }));
+    new Setting(containerEl)
+      .setName("错题移除前答对次数")
+      .setDesc("记忆曲线开启时生效，范围为 1–20 次。")
+      .addText((text) => text.setValue(String(this.plugin.settings.wrongBookMasteryCount)).onChange(async (value) => {
+        const count = Math.max(1, Math.min(20, Math.round(Number(value) || DEFAULT_SETTINGS.wrongBookMasteryCount)));
+        this.plugin.settings.wrongBookMasteryCount = count;
+        await this.saveAndRefresh();
+      }));
 
     new Setting(containerEl)
       .setName("资源文件夹")

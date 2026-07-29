@@ -768,10 +768,10 @@ class AppearanceModal extends Modal {
     const fontSizeLabel = grid.createEl("label", { text: "字号（10–30）" });
     const fontSizeInput = fontSizeLabel.createEl("input", { type: "number", attr: { min: "10", max: "30", step: "1" } });
     fontSizeInput.value = String(this.appearance.fontSize ?? 14);
-    const nodeVisualStyleLabel = grid.createEl("label", { text: "节点视觉样式" });
+    const nodeVisualStyleLabel = grid.createEl("label", { text: "分支外观" });
     const nodeVisualStyleSelect = nodeVisualStyleLabel.createEl("select");
-    nodeVisualStyleSelect.createEl("option", { text: "卡片节点", attr: { value: "card" } });
-    nodeVisualStyleSelect.createEl("option", { text: "圆角分支", attr: { value: "branch" } });
+    nodeVisualStyleSelect.createEl("option", { text: "圆润卡片分支（曲线）", attr: { value: "card" } });
+    nodeVisualStyleSelect.createEl("option", { text: "圆角分支（折线）", attr: { value: "branch" } });
     nodeVisualStyleSelect.value = this.appearance.nodeVisualStyle ?? "card";
     const nodeTextAlignLabel = grid.createEl("label", { text: "节点文字对齐" });
     const nodeTextAlignSelect = nodeTextAlignLabel.createEl("select");
@@ -2508,7 +2508,7 @@ export class MindMapEditor {
       addInlineNodeActions: (container, node) => this.addInlineNodeActions(container, node),
       mutate: (action) => this.mutate(action),
       editSelected: () => this.editSelected(),
-      openAiContextMenu: (event, nodeId) => this.openAiScopeContextMenu(event, nodeId),
+      openAiContextMenu: (event, nodeId) => { this.selectNode(nodeId); this.openContextMenu(event); },
       openImageContextMenu: (event, nodeId, blockId) => this.openImageContextMenu(event, nodeId, blockId),
       openMindMap: (path) => this.callbacks.onOpenMindMap(path),
       resolveImage: this.callbacks.resolveImage,
@@ -2731,7 +2731,7 @@ export class MindMapEditor {
       articleNavigation: this.options.articleNavigation,
       callbacks: this.callbacks,
       selectNode: (id) => this.selectNode(id),
-      openAiContextMenu: (event, nodeId) => this.openAiScopeContextMenu(event, nodeId),
+      openAiContextMenu: (event, nodeId) => { this.selectNode(nodeId); this.openContextMenu(event); },
       openImageContextMenu: (event, nodeId, blockId) => this.openImageContextMenu(event, nodeId, blockId),
       makeInlineEditable: (element, node, placeholder) => this.makeInlineEditable(element, node, placeholder),
       makeInlineCodeEditable: (element, node, code, blockId) => this.makeInlineCodeEditable(element, node, code, blockId),
@@ -2860,6 +2860,8 @@ export class MindMapEditor {
       state: this.questionPracticeState,
       resolveImage: this.callbacks.resolveImage,
       order: this.options.questionPracticeOrder,
+      memoryCurveEnabled: this.options.questionMemoryCurveEnabled,
+      wrongBookMasteryCount: this.options.wrongBookMasteryCount,
       onRecord: (nodeId, correct) => this.recordQuestionPractice(nodeId, correct),
       onNotice: (message) => new Notice(message)
     });
@@ -2874,9 +2876,12 @@ export class MindMapEditor {
     question.attemptCount += 1;
     if (correct) {
       question.correctCount += 1;
-      if (question.status === "unanswered" || question.status === "wrong") question.status = "completed";
+      if (question.status === "unanswered") question.status = "completed";
+      else if (question.status === "wrong" && (!this.options.questionMemoryCurveEnabled
+        || question.correctCount >= this.options.wrongBookMasteryCount)) question.status = "completed";
     } else {
       question.status = "wrong";
+      if (this.options.questionMemoryCurveEnabled) question.correctCount = 0;
     }
     question.lastPracticedAt = new Date().toISOString();
     this.callbacks.onChange(this.getDocument());
@@ -3316,7 +3321,7 @@ export class MindMapEditor {
       const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
       path.setAttribute("d", appearance.nodeVisualStyle === "branch"
         ? roundedElbowEdgePath(parent, position)
-        : edgePath(parent, position, appearance.edgeStyle ?? "curved"));
+        : edgePath(parent, position, appearance.edgeStyle ?? (String(appearance.nodeVisualStyle) === "branch" ? "elbow" : "curved")));
       path.setAttribute("class", `mmc-edge depth-${Math.min(position.depth, 6)}`);
       const branchColor = branchColorMap.get(position.node.id);
       if (position.node.style?.color) path.style.stroke = position.node.style.color;
@@ -4051,6 +4056,24 @@ export class MindMapEditor {
       parent.collapsed = false;
       parent.children.push(node);
       this.selectedId = node.id;
+    });
+    return true;
+  }
+
+  /** Converts AI JSON into a question node, then fills missing answers and analysis through the configured question assistant. */
+  async applyAndEnrichAiQuestion(responseText: string, nodeId?: string): Promise<boolean> {
+    if (!this.applyAiQuestion(responseText, nodeId)) return false;
+    const node = nodeId ? findNode(this.document.root, nodeId) : this.selectedNode();
+    if (!node?.question) return true;
+    const questionText = [node.question.stem, ...node.question.options.map((option) => option.content)]
+      .flat().filter((block): block is MindMapTextContentBlock => block.type === "text")
+      .map((block) => block.text.trim()).filter(Boolean).join("\n");
+    if (!questionText) return true;
+    const enriched = parseQuestionEnrichment(await this.callbacks.onEnrichQuestion(questionText), node.question);
+    if (!enriched) throw new Error("AI 未返回可解析的题目补全结果");
+    this.mutate(() => {
+      node.question = enriched.question;
+      syncMindMapQuestionFields(node);
     });
     return true;
   }

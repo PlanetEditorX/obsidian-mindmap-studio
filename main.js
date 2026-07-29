@@ -1879,6 +1879,7 @@ var SETTINGS_SECTION_TITLES = [
   "\u4EE3\u7801\u5757",
   "\u65B0\u5EFA\u4E0E\u5E03\u5C40",
   "\u6587\u4EF6\u4E0E\u8D44\u6E90",
+  "\u7B54\u9898\u4E0E\u9898\u5E93",
   "\u56FE\u7247\u4E0E\u56FE\u5E8A",
   "\u5168\u5C40\u641C\u7D22",
   "AI \u52A9\u624B",
@@ -1991,7 +1992,10 @@ var DEFAULT_SETTINGS = {
   screenshotAutoRecognize: false,
   questionNodesEnabled: false,
   questionBankFolder: "",
+  questionBankFolders: [],
   questionPracticeOrder: "random",
+  questionMemoryCurveEnabled: false,
+  wrongBookMasteryCount: 3,
   lastImportFolder: "",
   settingsSectionOrder: [...SETTINGS_SECTION_TITLES]
 };
@@ -2578,12 +2582,24 @@ var MindMapStudioSettingTab = class extends import_obsidian.PluginSettingTab {
       this.plugin.settings.defaultFolder = value.trim().replace(/^\/+|\/+$/g, "");
       await this.plugin.saveSettings();
     }));
-    new import_obsidian.Setting(containerEl).setName("\u9898\u5E93\u6587\u4EF6\u5939").setDesc("\u586B\u5199\u4ED3\u5E93\u5185\u6587\u4EF6\u5939\u8DEF\u5F84\uFF0C\u4F8B\u5982 \u9898\u5E93\u3002\u8BE5\u6587\u4EF6\u5939\u53CA\u5176\u5B50\u76EE\u5F55\u5185\u7684\u601D\u7EF4\u5BFC\u56FE\u4F1A\u51FA\u73B0\u201C\u7B54\u9898\u201D\u6574\u9875\u6A21\u5F0F\uFF0C\u53EF\u8FDE\u7EED\u81EA\u52A8\u5224\u9898\uFF1B\u7559\u7A7A\u5219\u4E0D\u542F\u7528\u3002").addText((text) => text.setPlaceholder("\u9898\u5E93").setValue(this.plugin.settings.questionBankFolder).onChange(async (value) => {
-      this.plugin.settings.questionBankFolder = value.trim().replace(/\\/g, "/").replace(/^\/+|\/+$/g, "");
+    containerEl.createEl("h3", { text: "\u7B54\u9898\u4E0E\u9898\u5E93" });
+    new import_obsidian.Setting(containerEl).setName("\u9898\u5E93\u6587\u4EF6\u5939").setDesc("\u6BCF\u884C\u4E00\u4E2A\u4ED3\u5E93\u5185\u6587\u4EF6\u5939\u8DEF\u5F84\uFF1B\u8FD9\u4E9B\u6587\u4EF6\u5939\u53CA\u5176\u5B50\u76EE\u5F55\u5185\u7684\u5BFC\u56FE\u4F1A\u51FA\u73B0\u201C\u7B54\u9898\u201D\u6574\u9875\u6A21\u5F0F\u3002").addTextArea((text) => text.setPlaceholder("\u9898\u5E93\n\u516C\u52A1\u5458\u9898\u5E93").setValue(this.plugin.settings.questionBankFolders.join("\n")).onChange(async (value) => {
+      var _a3;
+      this.plugin.settings.questionBankFolders = Array.from(new Set(value.split(/\r?\n/).map((folder) => folder.trim().replace(/\\/g, "/").replace(/^\/+|\/+$/g, "")).filter(Boolean)));
+      this.plugin.settings.questionBankFolder = (_a3 = this.plugin.settings.questionBankFolders[0]) != null ? _a3 : "";
       await this.saveAndRefresh();
     }));
     new import_obsidian.Setting(containerEl).setName("\u7B54\u9898\u987A\u5E8F").setDesc("\u968F\u673A\u4E3A\u9ED8\u8BA4\u65B9\u5F0F\uFF0C\u6BCF\u8F6E\u7B54\u9898\u4F1A\u968F\u673A\u6392\u5217\u9898\u76EE\uFF1B\u987A\u5E8F\u6A21\u5F0F\u6309\u5BFC\u56FE\u4E2D\u7684\u8282\u70B9\u987A\u5E8F\u4F5C\u7B54\u3002").addDropdown((dropdown) => dropdown.addOption("random", "\u968F\u673A\uFF08\u9ED8\u8BA4\uFF09").addOption("sequential", "\u6309\u5BFC\u56FE\u987A\u5E8F").setValue(this.plugin.settings.questionPracticeOrder).onChange(async (value) => {
       this.plugin.settings.questionPracticeOrder = value === "sequential" ? "sequential" : "random";
+      await this.saveAndRefresh();
+    }));
+    new import_obsidian.Setting(containerEl).setName("\u9519\u9898\u672C\u8BB0\u5FC6\u66F2\u7EBF").setDesc("\u5F00\u542F\u540E\uFF0C\u9519\u9898\u7B54\u5BF9\u4E0D\u4F1A\u7ACB\u523B\u79FB\u51FA\u9519\u9898\u672C\uFF0C\u8FBE\u5230\u4E0B\u65B9\u6B63\u786E\u6B21\u6570\u540E\u624D\u4F1A\u79FB\u9664\u3002").addToggle((toggle) => toggle.setValue(this.plugin.settings.questionMemoryCurveEnabled).onChange(async (value) => {
+      this.plugin.settings.questionMemoryCurveEnabled = value;
+      await this.saveAndRefresh();
+    }));
+    new import_obsidian.Setting(containerEl).setName("\u9519\u9898\u79FB\u9664\u524D\u7B54\u5BF9\u6B21\u6570").setDesc("\u8BB0\u5FC6\u66F2\u7EBF\u5F00\u542F\u65F6\u751F\u6548\uFF0C\u8303\u56F4\u4E3A 1\u201320 \u6B21\u3002").addText((text) => text.setValue(String(this.plugin.settings.wrongBookMasteryCount)).onChange(async (value) => {
+      const count = Math.max(1, Math.min(20, Math.round(Number(value) || DEFAULT_SETTINGS.wrongBookMasteryCount)));
+      this.plugin.settings.wrongBookMasteryCount = count;
       await this.saveAndRefresh();
     }));
     new import_obsidian.Setting(containerEl).setName("\u8D44\u6E90\u6587\u4EF6\u5939").setDesc("\u4EC5\u7528\u4E8E\u56FE\u7247\u3001\u622A\u56FE\u548C\u5B50\u5BFC\u56FE\u8D44\u6E90\uFF0C\u8DEF\u5F84\u76F8\u5BF9\u4E8E\u5F53\u524D\u5BFC\u56FE\u6240\u5728\u76EE\u5F55\uFF1B\u4E0D\u51B3\u5B9A\u5BFC\u56FE\u6587\u4EF6\u7684\u4FDD\u5B58\u4F4D\u7F6E\u3002\u9ED8\u8BA4\u4F7F\u7528 MindMap Assets\u3002").addText((text) => text.setPlaceholder("MindMap Assets").setValue(this.plugin.settings.assetFolder).onChange(async (value) => {
@@ -3528,7 +3544,7 @@ function documentToSvg(root, mode, title, appearance = {}) {
   const height = Math.max(220, layout.maxY - layout.minY + padding * 2);
   const offsetX = padding - layout.minX;
   const offsetY = padding - layout.minY;
-  const edgeStyle = (_c = appearance.edgeStyle) != null ? _c : "curved";
+  const edgeStyle = (_c = appearance.edgeStyle) != null ? _c : String(appearance.nodeVisualStyle) === "branch" ? "elbow" : "curved";
   const defaultEdge = validColor(appearance.edgeColor, "#7c8aa5");
   const branchColorMap = appearance.colorfulBranches ? buildBranchColorMap(root, appearance.branchColors) : /* @__PURE__ */ new Map();
   const maxDepth = Math.max(1, ...layout.nodes.map((position) => position.depth));
@@ -4302,12 +4318,13 @@ var QuestionEditModal = class extends import_obsidian3.Modal {
 
 // src/editor/question-practice-mode.ts
 function createQuestionPracticeState() {
-  return { filter: "all", currentNodeId: null, selectedOptionIds: [], essayAnswer: "", answerVisible: false, lastCorrect: null, finished: false, orderedNodeIds: [], orderMode: null };
+  return { filter: "all", tag: null, currentNodeId: null, selectedOptionIds: [], essayAnswer: "", answerVisible: false, lastCorrect: null, finished: false, orderedNodeIds: [], orderMode: null };
 }
 function renderQuestionPracticeMode(container, options) {
-  var _a2;
+  var _a2, _b2;
   container.empty();
-  const candidates = flattenNodes(options.document.root).filter((node2) => node2.question && (options.state.filter === "all" || node2.question.status === "wrong" || options.state.answerVisible && node2.id === options.state.currentNodeId));
+  const allQuestionNodes = flattenNodes(options.document.root).filter((node2) => node2.question);
+  const candidates = allQuestionNodes.filter((node2) => node2.question && (options.state.filter === "all" || node2.question.status === "wrong" || options.state.answerVisible && node2.id === options.state.currentNodeId) && (!options.state.tag || node2.question.tags.includes(options.state.tag)));
   const questions = orderPracticeQuestions(candidates, options.state, options.order);
   const shell = container.createDiv({ cls: "mms-question-practice-page" });
   const header = shell.createDiv({ cls: "mms-question-practice-header" });
@@ -4326,6 +4343,18 @@ function renderQuestionPracticeMode(container, options) {
       options.state.finished = false;
       options.state.orderedNodeIds = [];
       options.state.orderMode = null;
+      renderQuestionPracticeMode(container, options);
+    };
+  }
+  const tags = Array.from(new Set(allQuestionNodes.flatMap((node2) => node2.question.tags))).sort((left, right) => left.localeCompare(right, "zh-CN"));
+  if (tags.length) {
+    const tagSelect = filters.createEl("select", { cls: "mms-question-practice-tag-filter", attr: { "aria-label": "\u9898\u76EE\u6807\u7B7E" } });
+    tagSelect.createEl("option", { value: "", text: "\u5168\u90E8\u6807\u7B7E" });
+    tags.forEach((tag) => tagSelect.createEl("option", { value: tag, text: tag }));
+    tagSelect.value = (_a2 = options.state.tag) != null ? _a2 : "";
+    tagSelect.onchange = () => {
+      options.state.tag = tagSelect.value || null;
+      resetPracticeProgress(options.state);
       renderQuestionPracticeMode(container, options);
     };
   }
@@ -4350,7 +4379,7 @@ function renderQuestionPracticeMode(container, options) {
     return;
   }
   const currentIndex = Math.max(0, questions.findIndex((node2) => node2.id === options.state.currentNodeId));
-  const node = (_a2 = questions[currentIndex]) != null ? _a2 : questions[0];
+  const node = (_b2 = questions[currentIndex]) != null ? _b2 : questions[0];
   options.state.currentNodeId = node.id;
   const question = node.question;
   const answerLabels = selectedAnswerLabels(node);
@@ -4490,8 +4519,18 @@ function renderExplanationBlocks(container, blocks, resolveImage) {
   }
 }
 function splitExplanationLines(value) {
-  const lines = value.split(/(?=[A-DＡ-Ｄ]项)/u).map((line) => line.trim()).filter(Boolean);
+  const lines = value.split(/(?=[A-DＡ-Ｄ]项|综上所述[，,]?(?:正确选项|答案)(?:为|是)?|(?:正确选项|答案)(?:为|是)?)/u).map((line) => line.trim()).filter(Boolean);
   return lines.length ? lines : value.trim() ? [value.trim()] : [];
+}
+function resetPracticeProgress(state) {
+  state.currentNodeId = null;
+  state.selectedOptionIds = [];
+  state.essayAnswer = "";
+  state.answerVisible = false;
+  state.lastCorrect = null;
+  state.finished = false;
+  state.orderedNodeIds = [];
+  state.orderMode = null;
 }
 function blockText(blocks) {
   return blocks.filter((block) => block.type === "text").map((block) => block.text).join("\n");
@@ -8970,10 +9009,10 @@ var AppearanceModal = class extends import_obsidian10.Modal {
     const fontSizeLabel = grid.createEl("label", { text: "\u5B57\u53F7\uFF0810\u201330\uFF09" });
     const fontSizeInput = fontSizeLabel.createEl("input", { type: "number", attr: { min: "10", max: "30", step: "1" } });
     fontSizeInput.value = String((_f = this.appearance.fontSize) != null ? _f : 14);
-    const nodeVisualStyleLabel = grid.createEl("label", { text: "\u8282\u70B9\u89C6\u89C9\u6837\u5F0F" });
+    const nodeVisualStyleLabel = grid.createEl("label", { text: "\u5206\u652F\u5916\u89C2" });
     const nodeVisualStyleSelect = nodeVisualStyleLabel.createEl("select");
-    nodeVisualStyleSelect.createEl("option", { text: "\u5361\u7247\u8282\u70B9", attr: { value: "card" } });
-    nodeVisualStyleSelect.createEl("option", { text: "\u5706\u89D2\u5206\u652F", attr: { value: "branch" } });
+    nodeVisualStyleSelect.createEl("option", { text: "\u5706\u6DA6\u5361\u7247\u5206\u652F\uFF08\u66F2\u7EBF\uFF09", attr: { value: "card" } });
+    nodeVisualStyleSelect.createEl("option", { text: "\u5706\u89D2\u5206\u652F\uFF08\u6298\u7EBF\uFF09", attr: { value: "branch" } });
     nodeVisualStyleSelect.value = (_g = this.appearance.nodeVisualStyle) != null ? _g : "card";
     const nodeTextAlignLabel = grid.createEl("label", { text: "\u8282\u70B9\u6587\u5B57\u5BF9\u9F50" });
     const nodeTextAlignSelect = nodeTextAlignLabel.createEl("select");
@@ -10567,7 +10606,10 @@ var MindMapEditor = class {
       addInlineNodeActions: (container, node) => this.addInlineNodeActions(container, node),
       mutate: (action) => this.mutate(action),
       editSelected: () => this.editSelected(),
-      openAiContextMenu: (event, nodeId) => this.openAiScopeContextMenu(event, nodeId),
+      openAiContextMenu: (event, nodeId) => {
+        this.selectNode(nodeId);
+        this.openContextMenu(event);
+      },
       openImageContextMenu: (event, nodeId, blockId) => this.openImageContextMenu(event, nodeId, blockId),
       openMindMap: (path) => this.callbacks.onOpenMindMap(path),
       resolveImage: this.callbacks.resolveImage,
@@ -10777,7 +10819,10 @@ var MindMapEditor = class {
       articleNavigation: this.options.articleNavigation,
       callbacks: this.callbacks,
       selectNode: (id) => this.selectNode(id),
-      openAiContextMenu: (event, nodeId) => this.openAiScopeContextMenu(event, nodeId),
+      openAiContextMenu: (event, nodeId) => {
+        this.selectNode(nodeId);
+        this.openContextMenu(event);
+      },
       openImageContextMenu: (event, nodeId, blockId) => this.openImageContextMenu(event, nodeId, blockId),
       makeInlineEditable: (element, node, placeholder) => this.makeInlineEditable(element, node, placeholder),
       makeInlineCodeEditable: (element, node, code, blockId) => this.makeInlineCodeEditable(element, node, code, blockId),
@@ -10905,6 +10950,8 @@ var MindMapEditor = class {
       state: this.questionPracticeState,
       resolveImage: this.callbacks.resolveImage,
       order: this.options.questionPracticeOrder,
+      memoryCurveEnabled: this.options.questionMemoryCurveEnabled,
+      wrongBookMasteryCount: this.options.wrongBookMasteryCount,
       onRecord: (nodeId, correct) => this.recordQuestionPractice(nodeId, correct),
       onNotice: (message) => new import_obsidian10.Notice(message)
     });
@@ -10918,9 +10965,11 @@ var MindMapEditor = class {
     question.attemptCount += 1;
     if (correct) {
       question.correctCount += 1;
-      if (question.status === "unanswered" || question.status === "wrong") question.status = "completed";
+      if (question.status === "unanswered") question.status = "completed";
+      else if (question.status === "wrong" && (!this.options.questionMemoryCurveEnabled || question.correctCount >= this.options.wrongBookMasteryCount)) question.status = "completed";
     } else {
       question.status = "wrong";
+      if (this.options.questionMemoryCurveEnabled) question.correctCount = 0;
     }
     question.lastPracticedAt = (/* @__PURE__ */ new Date()).toISOString();
     this.callbacks.onChange(this.getDocument());
@@ -11351,7 +11400,7 @@ var MindMapEditor = class {
       const parent = this.layout.byId.get(position.parentId);
       if (!parent) continue;
       const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-      path.setAttribute("d", appearance.nodeVisualStyle === "branch" ? roundedElbowEdgePath(parent, position) : edgePath(parent, position, (_a2 = appearance.edgeStyle) != null ? _a2 : "curved"));
+      path.setAttribute("d", appearance.nodeVisualStyle === "branch" ? roundedElbowEdgePath(parent, position) : edgePath(parent, position, (_a2 = appearance.edgeStyle) != null ? _a2 : String(appearance.nodeVisualStyle) === "branch" ? "elbow" : "curved"));
       path.setAttribute("class", `mmc-edge depth-${Math.min(position.depth, 6)}`);
       const branchColor = branchColorMap.get(position.node.id);
       if ((_b2 = position.node.style) == null ? void 0 : _b2.color) path.style.stroke = position.node.style.color;
@@ -12049,6 +12098,21 @@ var MindMapEditor = class {
       parent.collapsed = false;
       parent.children.push(node);
       this.selectedId = node.id;
+    });
+    return true;
+  }
+  /** Converts AI JSON into a question node, then fills missing answers and analysis through the configured question assistant. */
+  async applyAndEnrichAiQuestion(responseText, nodeId) {
+    if (!this.applyAiQuestion(responseText, nodeId)) return false;
+    const node = nodeId ? findNode(this.document.root, nodeId) : this.selectedNode();
+    if (!(node == null ? void 0 : node.question)) return true;
+    const questionText = [node.question.stem, ...node.question.options.map((option) => option.content)].flat().filter((block) => block.type === "text").map((block) => block.text.trim()).filter(Boolean).join("\n");
+    if (!questionText) return true;
+    const enriched = parseQuestionEnrichment(await this.callbacks.onEnrichQuestion(questionText), node.question);
+    if (!enriched) throw new Error("AI \u672A\u8FD4\u56DE\u53EF\u89E3\u6790\u7684\u9898\u76EE\u8865\u5168\u7ED3\u679C");
+    this.mutate(() => {
+      node.question = enriched.question;
+      syncMindMapQuestionFields(node);
     });
     return true;
   }
@@ -14516,7 +14580,7 @@ var MindMapStudioView = class _MindMapStudioView extends import_obsidian12.TextF
       onProposeEdit: async (profileId, instruction) => this.plugin.proposeAiEdit(profileId, payload, instruction),
       onConvertToQuestion: (responseText) => {
         var _a3, _b3;
-        return (_b3 = (_a3 = this.editor) == null ? void 0 : _a3.applyAiQuestion(responseText, nodeId)) != null ? _b3 : false;
+        return (_b3 = (_a3 = this.editor) == null ? void 0 : _a3.applyAndEnrichAiQuestion(responseText, nodeId)) != null ? _b3 : false;
       },
       onRecognizeImages: async (profileId, instruction) => this.recognizeImages(nodeId, profileId, instruction),
       onPreviewImageTextReplacements: (items) => {
@@ -14617,6 +14681,8 @@ var MindMapStudioView = class _MindMapStudioView extends import_obsidian12.TextF
       questionNodesEnabled: this.plugin.settings.questionNodesEnabled,
       questionBankModeEnabled: this.plugin.isQuestionBankFile(this.file),
       questionPracticeOrder: this.plugin.settings.questionPracticeOrder,
+      questionMemoryCurveEnabled: this.plugin.settings.questionMemoryCurveEnabled,
+      wrongBookMasteryCount: this.plugin.settings.wrongBookMasteryCount,
       articleBaseDepth: this.articleBaseDepth,
       articleTocEntries: [...this.articleTocEntries],
       articleTocMaxDepth: this.plugin.settings.articleTocMaxDepth,
@@ -16778,7 +16844,10 @@ var MindMapStudioPlugin = class extends import_obsidian15.Plugin {
       screenshotAutoRecognize: raw.screenshotAutoRecognize === true,
       questionNodesEnabled: raw.questionNodesEnabled === true,
       questionBankFolder: typeof raw.questionBankFolder === "string" ? (0, import_obsidian15.normalizePath)(raw.questionBankFolder.trim().replace(/^\/+|\/+$/g, "")).slice(0, 1e3) : DEFAULT_SETTINGS.questionBankFolder,
+      questionBankFolders: Array.isArray(raw.questionBankFolders) ? Array.from(new Set(raw.questionBankFolders.filter((folder) => typeof folder === "string").map((folder) => (0, import_obsidian15.normalizePath)(folder.trim().replace(/^\/+|\/+$/g, "")).slice(0, 1e3)).filter(Boolean))) : typeof raw.questionBankFolder === "string" && raw.questionBankFolder.trim() ? [(0, import_obsidian15.normalizePath)(raw.questionBankFolder.trim().replace(/^\/+|\/+$/g, "")).slice(0, 1e3)] : [],
       questionPracticeOrder: raw.questionPracticeOrder === "sequential" ? "sequential" : "random",
+      questionMemoryCurveEnabled: raw.questionMemoryCurveEnabled === true,
+      wrongBookMasteryCount: typeof raw.wrongBookMasteryCount === "number" ? Math.max(1, Math.min(20, Math.round(raw.wrongBookMasteryCount))) : DEFAULT_SETTINGS.wrongBookMasteryCount,
       lastImportFolder: typeof raw.lastImportFolder === "string" ? raw.lastImportFolder.trim().slice(0, 4e3) : DEFAULT_SETTINGS.lastImportFolder,
       settingsSectionOrder: normalizeSettingsSectionOrder(raw.settingsSectionOrder),
       syncTitleToFilename: raw.syncTitleToFilename !== false,
@@ -17038,9 +17107,11 @@ var MindMapStudioPlugin = class extends import_obsidian15.Plugin {
   }
   /** Returns whether a map path belongs to the configured question-bank folder or one of its descendants. */
   isQuestionBankFile(file) {
-    var _a2;
-    const folder = (0, import_obsidian15.normalizePath)(this.settings.questionBankFolder);
-    return Boolean(folder && file && (((_a2 = file.parent) == null ? void 0 : _a2.path) === folder || file.path.startsWith(`${folder}/`)));
+    const folders = Array.from(/* @__PURE__ */ new Set([...this.settings.questionBankFolders, this.settings.questionBankFolder])).map((folder) => (0, import_obsidian15.normalizePath)(folder)).filter(Boolean);
+    return Boolean(file && folders.some((folder) => {
+      var _a2;
+      return ((_a2 = file.parent) == null ? void 0 : _a2.path) === folder || file.path.startsWith(`${folder}/`);
+    }));
   }
   /**
    * 同步所有已打开视图的显示模式。导图、文章和通读会持久化为下次启动模式；

@@ -369,7 +369,7 @@ export class MindMapStudioView extends TextFileView {
       sourcePath: this.file?.path ?? "",
       onAsk: async (profileId, question) => this.plugin.askAi(profileId, payload, question),
       onProposeEdit: async (profileId, instruction) => this.plugin.proposeAiEdit(profileId, payload, instruction),
-      onConvertToQuestion: (responseText) => this.editor?.applyAiQuestion(responseText, nodeId) ?? false,
+      onConvertToQuestion: (responseText) => this.editor?.applyAndEnrichAiQuestion(responseText, nodeId) ?? false,
       onRecognizeImages: async (profileId, instruction) => this.recognizeImages(nodeId, profileId, instruction),
       onPreviewImageTextReplacements: (items) => {
         if (!this.editor) throw new Error("当前导图编辑器尚未加载");
@@ -459,6 +459,8 @@ export class MindMapStudioView extends TextFileView {
       questionNodesEnabled: this.plugin.settings.questionNodesEnabled,
       questionBankModeEnabled: this.plugin.isQuestionBankFile(this.file),
       questionPracticeOrder: this.plugin.settings.questionPracticeOrder,
+      questionMemoryCurveEnabled: this.plugin.settings.questionMemoryCurveEnabled,
+      wrongBookMasteryCount: this.plugin.settings.wrongBookMasteryCount,
       articleBaseDepth: this.articleBaseDepth,
       articleTocEntries: [...this.articleTocEntries],
       articleTocMaxDepth: this.plugin.settings.articleTocMaxDepth,

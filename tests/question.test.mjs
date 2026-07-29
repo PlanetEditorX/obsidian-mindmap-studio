@@ -221,7 +221,7 @@ test("question-bank grading distinguishes single choice, multiple choice, judgme
   assert.equal(practice.isExactQuestionAnswer(" 资料 分析！", "资料分析"), true);
   assert.equal(practice.isExactQuestionAnswer("资料理解", "资料分析"), false);
   assert.deepEqual(practice.splitExplanationLines("A项正确。B项错误。C项待定。"), ["A项正确。", "B项错误。", "C项待定。"]);
-  assert.deepEqual(practice.splitExplanationLines("综上所述，正确选项为 A、C、D。"), ["综上所述，正确选项为 A、C、D。"]);
+  assert.deepEqual(practice.splitExplanationLines("D项错误。综上所述，正确选项为 A、C、D。"), ["D项错误。", "综上所述，", "正确选项为 A、C、D。"]);
 });
 
 test("question-bank practice persists attempts, routes mistakes to review, and advances after showing feedback", async () => {
@@ -289,11 +289,18 @@ test("question assistant keeps an intelligent image-to-question pipeline and vis
   assert.match(mainSource, /isQuestionBankFile/);
   assert.match(settingsSource, /题库文件夹/);
   assert.match(settingsSource, /questionPracticeOrder: "random"/);
+  assert.match(settingsSource, /questionBankFolders: \[\]/);
+  assert.match(settingsSource, /错题本记忆曲线/);
+  assert.match(settingsSource, /错题移除前答对次数/);
+  assert.match(practiceSource, /mms-question-practice-tag-filter/);
+  assert.match(practiceSource, /options\.state\.tag/);
+  assert.match(editorSource, /questionMemoryCurveEnabled/);
+  assert.match(editorSource, /wrongBookMasteryCount/);
   assert.match(settingsSource, /setName\("答题顺序"\)/);
   assert.match(viewSource, /questionPracticeOrder: this\.plugin\.settings\.questionPracticeOrder/);
-  assert.match(editorSource, /applyAiQuestion\(responseText: string, nodeId\?: string\): boolean/);
+  assert.match(editorSource, /applyAndEnrichAiQuestion\(responseText: string, nodeId\?: string\): Promise<boolean>/);
   assert.match(editorSource, /parseRecognizedQuestion\(responseText, fallback\)/);
-  assert.match(viewSource, /onConvertToQuestion: \(responseText\) => this\.editor\?\.applyAiQuestion\(responseText, nodeId\) \?\? false/);
+  assert.match(viewSource, /onConvertToQuestion: \(responseText\) => this\.editor\?\.applyAndEnrichAiQuestion\(responseText, nodeId\) \?\? false/);
   assert.match(modalSource, /已由 AI 分析补齐缺失答案与解答/);
   assert.match(mainSource, /仍需基于题目独立分析/);
 });

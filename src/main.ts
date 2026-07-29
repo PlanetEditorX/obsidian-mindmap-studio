@@ -568,7 +568,17 @@ export default class MindMapStudioPlugin extends Plugin {
       questionBankFolder: typeof raw.questionBankFolder === "string"
         ? normalizePath(raw.questionBankFolder.trim().replace(/^\/+|\/+$/g, "")).slice(0, 1000)
         : DEFAULT_SETTINGS.questionBankFolder,
+      questionBankFolders: Array.isArray(raw.questionBankFolders)
+        ? Array.from(new Set(raw.questionBankFolders.filter((folder): folder is string => typeof folder === "string")
+          .map((folder) => normalizePath(folder.trim().replace(/^\/+|\/+$/g, "")).slice(0, 1000)).filter(Boolean)))
+        : typeof raw.questionBankFolder === "string" && raw.questionBankFolder.trim()
+          ? [normalizePath(raw.questionBankFolder.trim().replace(/^\/+|\/+$/g, "")).slice(0, 1000)]
+          : [],
       questionPracticeOrder: raw.questionPracticeOrder === "sequential" ? "sequential" : "random",
+      questionMemoryCurveEnabled: raw.questionMemoryCurveEnabled === true,
+      wrongBookMasteryCount: typeof raw.wrongBookMasteryCount === "number"
+        ? Math.max(1, Math.min(20, Math.round(raw.wrongBookMasteryCount)))
+        : DEFAULT_SETTINGS.wrongBookMasteryCount,
       lastImportFolder: typeof raw.lastImportFolder === "string"
         ? raw.lastImportFolder.trim().slice(0, 4000)
         : DEFAULT_SETTINGS.lastImportFolder,
@@ -874,8 +884,9 @@ export default class MindMapStudioPlugin extends Plugin {
 
   /** Returns whether a map path belongs to the configured question-bank folder or one of its descendants. */
   isQuestionBankFile(file: TFile | null): boolean {
-    const folder = normalizePath(this.settings.questionBankFolder);
-    return Boolean(folder && file && (file.parent?.path === folder || file.path.startsWith(`${folder}/`)));
+    const folders = Array.from(new Set([...this.settings.questionBankFolders, this.settings.questionBankFolder]))
+      .map((folder) => normalizePath(folder)).filter(Boolean);
+    return Boolean(file && folders.some((folder) => file.parent?.path === folder || file.path.startsWith(`${folder}/`)));
   }
 
   /**
