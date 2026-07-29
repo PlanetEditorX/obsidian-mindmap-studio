@@ -6,6 +6,7 @@
 import { Notice } from "obsidian";
 import {
   applyRichTextStyleRange,
+  normalizeMarkdownRichText,
   reconcileRichTextAfterEdit,
   richTextCharacterStyles,
   type MindMapTextContentBlock
@@ -139,9 +140,11 @@ export function renderNodeRichTextEditor(
   source.addEventListener("mouseup", remember);
   source.addEventListener("input", () => {
     const next = source.value.replace(/\r?\n/g, " ");
-    block.richText = reconcileRichTextAfterEdit(block.text, block.richText, next);
-    block.text = next;
-    source.value = next;
+    const reconciled = reconcileRichTextAfterEdit(block.text, block.richText, next);
+    const normalized = normalizeMarkdownRichText(reconciled, next);
+    block.text = normalized.text;
+    block.richText = normalized.richText;
+    source.value = normalized.text;
     remember();
     updatePreview();
     onChange();

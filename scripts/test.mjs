@@ -982,6 +982,22 @@ const command = "example";
   assert.equal(pathNode?.richText?.[1]?.style?.code, true, "Markdown import must preserve inline-code styling for paths");
   assert.equal(multiMarkerNode?.text, "多标记：含有 ` 符号", "multiple Markdown backticks must delimit an inline code span");
   assert.equal(multiMarkerNode?.richText?.[1]?.style?.code, true, "multiple Markdown backticks must preserve code styling");
+  const universalRichText = model.nodeContentBlocks({
+    text: "**粗体**、*斜体*、~~删除线~~、<u>下划线</u> 和 `代码`"
+  }).find((block) => block.type === "text");
+  assert.equal(universalRichText?.text, "粗体、斜体、删除线、下划线 和 代码", "plain node text must normalize supported Markdown markers");
+  assert.equal(universalRichText?.richText?.[0]?.style?.bold, true, "node content normalization must retain bold style");
+  assert.equal(universalRichText?.richText?.[2]?.style?.italic, true, "node content normalization must retain italic style");
+  assert.equal(universalRichText?.richText?.[4]?.style?.strike, true, "node content normalization must retain strike style");
+  assert.equal(universalRichText?.richText?.[6]?.style?.underline, true, "node content normalization must retain underline style");
+  assert.equal(universalRichText?.richText?.[8]?.style?.code, true, "node content normalization must retain inline-code style");
+  const preservedEditorStyle = model.normalizeMarkdownRichText([
+    { text: "已格式化", style: { bold: true } },
+    { text: " 与 `代码`" }
+  ], "已格式化 与 `代码`");
+  assert.equal(preservedEditorStyle.text, "已格式化 与 代码");
+  assert.equal(preservedEditorStyle.richText?.[0]?.style?.bold, true, "editor-applied style must survive Markdown normalization");
+  assert.equal(preservedEditorStyle.richText?.[2]?.style?.code, true, "new Markdown markers must convert alongside existing styles");
 
   const parsedCode = model.parseFencedCode("代码如下：\n```typescript\nconst answer: number = 42;\n```\n结束");
   assert.equal(parsedCode?.language, "typescript");
@@ -1267,7 +1283,8 @@ const command = "example";
   assert.match(outlineRendererSource, /ImagePreviewModal/);
   assert.match(outlineRendererSource, /additionalText/);
   assert.match(editorSource, /attachSelectionFormatToolbar/);
-  assert.match(editorSource, /firstText\.richText = value\.richText/, "article and outline edits must preserve rich-text runs");
+  assert.match(editorSource, /normalizeMarkdownRichText\(value\.richText, next\)/, "article and outline edits must normalize Markdown while preserving rich-text runs");
+  assert.match(editorSource, /firstText\.richText = normalized\.richText/, "article and outline edits must retain normalized rich-text runs");
   assert.doesNotMatch(editorSource, /firstText\.richText = undefined/, "inline edits must not discard existing formatting");
   assert.match(selectionToolbarSource, /applyRichTextStyleRange/);
   assert.match(selectionToolbarSource, /getBoundingClientRect/);
@@ -1412,7 +1429,7 @@ const command = "example";
   assert.match(editorSource, /const contentSections = sections\.length > 1 \? sections\.slice\(1\) : sections/, "continuous reading must not repeat the top-level directory map as body content");
   assert.match(editorSource, /contentPaths\.has\(entry\.filePath\)/, "continuous-reading TOC must omit entries whose top-level body is hidden");
   assert.match(editorSource, /item\.style\.setProperty\("--mms-article-depth", String\(tocDepth\)\)/, "continuous-reading TOC must visually distinguish relative structural depth");
-  assert.match(editorSource, /sectionEntry\?\.displayTitle \|\| nodePrimaryText/, "child-map headings must retain their chapter numbering");
+  assert.match(editorSource, /sectionEntry\?\.label\) chapterTitle\.createSpan/, "child-map headings must retain their chapter numbering");
   assert.match(editorSource, /renderArticleContent\(chapter, section\.document\.root, false\)/, "continuous reading should include root-node body content");
   assert.match(editorSource, /firstTextBlock[\s\S]*mms-article-leaf-text[\s\S]*renderRichTextRuns/, "continuous reading should include leaf-node primary text");
   assert.match(editorSource, /selection && !selection\.isCollapsed && selection\.toString\(\)/, "read-only copy should preserve native selected-text copying");
