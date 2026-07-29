@@ -258,9 +258,21 @@ function normalizeTextStyle(input) {
     underline: normalizeBooleanOverride(input.underline),
     strike: normalizeBooleanOverride(input.strike),
     code: normalizeBooleanOverride(input.code),
-    color: normalizeColor(input.color)
+    color: normalizeColor(input.color),
+    link: normalizeLinkTarget(input.link)
   };
   return Object.values(style).some((value) => value !== void 0) ? style : void 0;
+}
+function normalizeLinkTarget(input) {
+  if (typeof input !== "string") return void 0;
+  const value = input.trim();
+  if (!value || value.length > 2048 || value.startsWith("#")) return void 0;
+  try {
+    const protocol = new URL(value).protocol.toLowerCase();
+    return ["http:", "https:", "mailto:", "obsidian:"].includes(protocol) ? value : void 0;
+  } catch (e) {
+    return void 0;
+  }
 }
 function textStyleKey(style) {
   return JSON.stringify(style != null ? style : {});
@@ -754,7 +766,7 @@ function escapeInlineMarkdown(value) {
 }
 function markdownInlineToRichText(value) {
   const runs = [];
-  const inlinePattern = /(`+)([\s\S]*?)\1|\*\*(.+?)\*\*|~~(.+?)~~|<u>([\s\S]*?)<\/u>|\*(?!\s)(.+?)(?<!\s)\*/g;
+  const inlinePattern = /(`+)([\s\S]*?)\1|\*\*(.+?)\*\*|~~(.+?)~~|<u>([\s\S]*?)<\/u>|\*(?!\s)(.+?)(?<!\s)\*|\[([^\]\n]+)\]\(([^\s()]+)\)/g;
   let cursor = 0;
   let match;
   while (match = inlinePattern.exec(value)) {
@@ -764,12 +776,16 @@ function markdownInlineToRichText(value) {
     const strikeText = match[4];
     const underlineText = match[5];
     const italicText = match[6];
+    const linkLabel = match[7];
+    const linkTarget = normalizeLinkTarget(match[8]);
     if (before) runs.push({ text: before });
     if (codeText !== void 0) runs.push({ text: codeText, style: { code: true } });
     else if (boldText !== void 0) runs.push({ text: boldText, style: { bold: true } });
     else if (strikeText !== void 0) runs.push({ text: strikeText, style: { strike: true } });
     else if (underlineText !== void 0) runs.push({ text: underlineText, style: { underline: true } });
     else if (italicText !== void 0) runs.push({ text: italicText, style: { italic: true } });
+    else if (linkLabel !== void 0 && linkTarget) runs.push({ text: linkLabel, style: { link: linkTarget } });
+    else runs.push({ text: match[0] });
     cursor = match.index + match[0].length;
   }
   if (!runs.length) return { text: value };
@@ -812,6 +828,7 @@ function richTextToMarkdown(runs, fallbackText) {
     if (style.underline) value = `<u>${value}</u>`;
     if (style.code) value = `\`${value}\``;
     if (style.color) value = `<span style="color:${style.color}">${value}</span>`;
+    if (style.link) value = `[${value}](${style.link})`;
     return value;
   }).join("");
 }
@@ -4674,7 +4691,16 @@ function renderRichTextRuns(container, runs, fallbackText, latex = true) {
   container.empty();
   const sourceRuns = (runs == null ? void 0 : runs.length) ? runs : [{ text: fallbackText }];
   const append = (text, style) => {
-    const span = container.createSpan({ cls: "mmc-rich-run", text });
+    const span = (style == null ? void 0 : style.link) ? container.createEl("a", {
+      cls: "mmc-rich-run mmc-rich-link",
+      text,
+      attr: { href: style.link, target: "_blank", rel: "noopener noreferrer" }
+    }) : container.createSpan({ cls: "mmc-rich-run", text });
+    if (style == null ? void 0 : style.link) {
+      span.addEventListener("click", (event) => {
+        if (container.contentEditable === "true" || container.closest('[contenteditable="true"]')) event.preventDefault();
+      });
+    }
     span.toggleClass("is-inline-code", (style == null ? void 0 : style.code) === true);
     if ((style == null ? void 0 : style.bold) !== void 0) span.style.fontWeight = style.bold ? "700" : "400";
     if ((style == null ? void 0 : style.italic) !== void 0) span.style.fontStyle = style.italic ? "italic" : "normal";
@@ -4726,7 +4752,7 @@ function renderInlineMarkdown(container, markdown) {
   renderRichTextRuns(container, parsed.richText, parsed.text, false);
 }
 function styleFromElement(element, inherited) {
-  var _a2;
+  var _a2, _b2;
   const style = { ...inherited };
   const tag = element.tagName.toLowerCase();
   if (tag === "b" || tag === "strong") style.bold = true;
@@ -4734,6 +4760,7 @@ function styleFromElement(element, inherited) {
   if (tag === "u") style.underline = true;
   if (tag === "s" || tag === "strike" || tag === "del") style.strike = true;
   if (tag === "code" || element.hasClass("is-inline-code")) style.code = true;
+  if (tag === "a") style.link = (_a2 = element.getAttribute("href")) != null ? _a2 : void 0;
   const inline = element.style;
   if (inline.fontWeight && (inline.fontWeight === "bold" || Number(inline.fontWeight) >= 600)) style.bold = true;
   if (inline.fontStyle === "italic") style.italic = true;
@@ -4746,7 +4773,7 @@ function styleFromElement(element, inherited) {
     const probe = document.createElement("span");
     probe.style.color = color;
     document.body.appendChild(probe);
-    const normalized2 = (_a2 = getComputedStyle(probe).color.match(/\d+/g)) == null ? void 0 : _a2.slice(0, 3).map(Number);
+    const normalized2 = (_b2 = getComputedStyle(probe).color.match(/\d+/g)) == null ? void 0 : _b2.slice(0, 3).map(Number);
     probe.remove();
     if ((normalized2 == null ? void 0 : normalized2.length) === 3) {
       style.color = `#${normalized2.map((value) => value.toString(16).padStart(2, "0")).join("")}`;

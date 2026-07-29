@@ -764,6 +764,16 @@
   font-size: 0.9em;
 }
 
+.mmc-rich-link {
+  color: var(--link-color, #3b82f6);
+  text-decoration: underline;
+  text-underline-offset: 0.12em;
+}
+
+[contenteditable="true"] .mmc-rich-link {
+  cursor: text;
+}
+
 .mmc-rich-text-toolbar {
   display: flex;
   align-items: center;

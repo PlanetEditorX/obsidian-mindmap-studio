@@ -95,6 +95,13 @@ test("Space starts inline editing for the selected editable mind-map node", () =
   assert.match(keydown, /case " ":[\s\S]*if \(this\.selectedNode\(\)\) this\.beginInlineEdit\(this\.selectedId\)/);
 });
 
+test("rich-text links render as anchors and do not navigate while editing", async () => {
+  const richTextDomSource = await readFile("src/editor/rich-text-dom.ts", "utf8");
+  assert.match(richTextDomSource, /container\.createEl\("a", \{[\s\S]*href: style\.link/);
+  assert.match(richTextDomSource, /container\.contentEditable === "true"[\s\S]*event\.preventDefault\(\)/);
+  assert.match(richTextDomSource, /if \(tag === "a"\) style\.link = element\.getAttribute\("href"\)/);
+});
+
 test("article and outline text do not expose edit labels as hover tooltips", () => {
   const makeInlineEditable = editorSource.match(/private makeInlineEditable\([\s\S]*?\n  \}/)?.[0] ?? "";
   const activateInlineEditable = editorSource.match(/private activateInlineEditable\([\s\S]*?\n  \}/)?.[0] ?? "";

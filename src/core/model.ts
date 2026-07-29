@@ -115,6 +115,8 @@ export interface MindMapTextStyle {
   strike?: boolean;
   code?: boolean;
   color?: string;
+  /** Markdown 或编辑器识别出的安全超链接地址。 */
+  link?: string;
 }
 
 /**
@@ -621,9 +623,23 @@ function normalizeTextStyle(input: Partial<MindMapTextStyle> | undefined): MindM
     underline: normalizeBooleanOverride(input.underline),
     strike: normalizeBooleanOverride(input.strike),
     code: normalizeBooleanOverride(input.code),
-    color: normalizeColor(input.color)
+    color: normalizeColor(input.color),
+    link: normalizeLinkTarget(input.link)
   };
   return Object.values(style).some((value) => value !== undefined) ? style : undefined;
+}
+
+/** Keeps only link schemes that can be safely rendered as a clickable anchor. */
+function normalizeLinkTarget(input: unknown): string | undefined {
+  if (typeof input !== "string") return undefined;
+  const value = input.trim();
+  if (!value || value.length > 2048 || value.startsWith("#")) return undefined;
+  try {
+    const protocol = new URL(value).protocol.toLowerCase();
+    return ["http:", "https:", "mailto:", "obsidian:"].includes(protocol) ? value : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 /**
@@ -1470,7 +1486,7 @@ function escapeInlineMarkdown(value: string): string {
 /** Converts supported inline Markdown markers into the editor's rich-text model. */
 export function markdownInlineToRichText(value: string): { text: string; richText?: MindMapTextRun[] } {
   const runs: MindMapTextRun[] = [];
-  const inlinePattern = /(`+)([\s\S]*?)\1|\*\*(.+?)\*\*|~~(.+?)~~|<u>([\s\S]*?)<\/u>|\*(?!\s)(.+?)(?<!\s)\*/g;
+  const inlinePattern = /(`+)([\s\S]*?)\1|\*\*(.+?)\*\*|~~(.+?)~~|<u>([\s\S]*?)<\/u>|\*(?!\s)(.+?)(?<!\s)\*|\[([^\]\n]+)\]\(([^\s()]+)\)/g;
   let cursor = 0;
   let match: RegExpExecArray | null;
   while ((match = inlinePattern.exec(value))) {
@@ -1480,12 +1496,16 @@ export function markdownInlineToRichText(value: string): { text: string; richTex
     const strikeText = match[4];
     const underlineText = match[5];
     const italicText = match[6];
+    const linkLabel = match[7];
+    const linkTarget = normalizeLinkTarget(match[8]);
     if (before) runs.push({ text: before });
     if (codeText !== undefined) runs.push({ text: codeText, style: { code: true } });
     else if (boldText !== undefined) runs.push({ text: boldText, style: { bold: true } });
     else if (strikeText !== undefined) runs.push({ text: strikeText, style: { strike: true } });
     else if (underlineText !== undefined) runs.push({ text: underlineText, style: { underline: true } });
     else if (italicText !== undefined) runs.push({ text: italicText, style: { italic: true } });
+    else if (linkLabel !== undefined && linkTarget) runs.push({ text: linkLabel, style: { link: linkTarget } });
+    else runs.push({ text: match[0] });
     cursor = match.index + match[0].length;
   }
   if (!runs.length) return { text: value };
@@ -1546,6 +1566,7 @@ export function richTextToMarkdown(runs: MindMapTextRun[] | undefined, fallbackT
     if (style.underline) value = `<u>${value}</u>`;
     if (style.code) value = `\`${value}\``;
     if (style.color) value = `<span style="color:${style.color}">${value}</span>`;
+    if (style.link) value = `[${value}](${style.link})`;
     return value;
   }).join("");
 }
