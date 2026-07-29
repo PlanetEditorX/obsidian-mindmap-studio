@@ -113,4 +113,6 @@ export interface MindMapEditorOptions {
   questionNodesEnabled: boolean;
   /** Enables the full-page practice mode only for maps inside the configured question-bank folder. */
   questionBankModeEnabled: boolean;
+  /** Ordering used when starting or restarting an answer-mode session. */
+  questionPracticeOrder: "random" | "sequential";
 }

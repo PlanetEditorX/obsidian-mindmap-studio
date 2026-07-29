@@ -17,33 +17,40 @@ export interface QuestionPracticeState {
   answerVisible: boolean;
   lastCorrect: boolean | null;
   finished: boolean;
+  orderedNodeIds: string[];
+  orderMode: QuestionPracticeOrder | null;
 }
+
+/** Supported ordering modes for a single answer session. */
+export type QuestionPracticeOrder = "random" | "sequential";
 
 /** Dependencies required to render and persist one question-bank practice session. */
 export interface QuestionPracticeOptions {
   document: MindMapDocument;
   state: QuestionPracticeState;
   resolveImage: (source: string) => string | null;
+  order: QuestionPracticeOrder;
   onRecord: (nodeId: string, correct: boolean) => void;
   onNotice: (message: string) => void;
 }
 
 /** Creates an empty practice state for an editor instance. */
 export function createQuestionPracticeState(): QuestionPracticeState {
-  return { filter: "all", currentNodeId: null, selectedOptionIds: [], essayAnswer: "", answerVisible: false, lastCorrect: null, finished: false };
+  return { filter: "all", currentNodeId: null, selectedOptionIds: [], essayAnswer: "", answerVisible: false, lastCorrect: null, finished: false, orderedNodeIds: [], orderMode: null };
 }
 
 /** Renders a full-page, sequential question practice surface. */
 export function renderQuestionPracticeMode(container: HTMLElement, options: QuestionPracticeOptions): void {
   container.empty();
-  const questions = flattenNodes(options.document.root).filter((node) => node.question && (
+  const candidates = flattenNodes(options.document.root).filter((node) => node.question && (
     options.state.filter === "all"
     || node.question.status === "wrong"
     || (options.state.answerVisible && node.id === options.state.currentNodeId)
   ));
+  const questions = orderPracticeQuestions(candidates, options.state, options.order);
   const shell = container.createDiv({ cls: "mms-question-practice-page" });
   const header = shell.createDiv({ cls: "mms-question-practice-header" });
-  header.createEl("h2", { text: options.document.title || "题库练习" });
+  header.createEl("h2", { text: options.document.title || "答题" });
   const filters = header.createDiv({ cls: "mms-question-practice-filters" });
   for (const [filter, label] of [["all", "全部题目"], ["wrong", "错题本"]] as const) {
     const button = filters.createEl("button", { text: label, attr: { type: "button" } });
@@ -56,6 +63,8 @@ export function renderQuestionPracticeMode(container: HTMLElement, options: Ques
       options.state.answerVisible = false;
       options.state.lastCorrect = null;
       options.state.finished = false;
+      options.state.orderedNodeIds = [];
+      options.state.orderMode = null;
       renderQuestionPracticeMode(container, options);
     };
   }
@@ -73,6 +82,8 @@ export function renderQuestionPracticeMode(container: HTMLElement, options: Ques
       options.state.answerVisible = false;
       options.state.lastCorrect = null;
       options.state.finished = false;
+      options.state.orderedNodeIds = [];
+      options.state.orderMode = null;
       renderQuestionPracticeMode(container, options);
     };
     return;
@@ -86,7 +97,7 @@ export function renderQuestionPracticeMode(container: HTMLElement, options: Ques
   const questionKind = question.mode === "essay" ? "大题" : question.mode === "judgment" ? "判断题" : multiple ? "多选题" : "单选题";
   shell.createDiv({ cls: "mms-question-practice-progress", text: `${currentIndex + 1} / ${questions.length} · ${questionKind}` });
   shell.createEl("h3", { cls: "mms-question-practice-stem", text: nodePlainText(node) || "未命名题目" });
-  renderBlocks(shell, question.stem, options.resolveImage);
+  renderBlocks(shell, question.stem.filter((block) => block.type !== "text"), options.resolveImage);
   if (question.mode !== "essay") {
     const choices = shell.createDiv({ cls: "mms-question-practice-choices" });
     question.options.forEach((option) => {
@@ -145,7 +156,7 @@ export function renderQuestionPracticeMode(container: HTMLElement, options: Ques
   renderBlocks(shell, question.answer, options.resolveImage);
   if (question.explanation.length) {
     shell.createEl("h4", { text: "解析" });
-    renderBlocks(shell, question.explanation, options.resolveImage);
+    renderExplanationBlocks(shell, question.explanation, options.resolveImage);
   }
   const finalQuestion = currentIndex === questions.length - 1;
   const next = shell.createEl("button", { cls: "mod-cta mms-question-practice-submit", text: finalQuestion ? "结束答题" : "下一题", attr: { type: "button" } });
@@ -167,6 +178,28 @@ export function renderQuestionPracticeMode(container: HTMLElement, options: Ques
     options.state.lastCorrect = null;
     renderQuestionPracticeMode(container, options);
   };
+}
+
+/** Keeps one session stable while adding new questions in the requested random or sequential order. */
+function orderPracticeQuestions(nodes: MindMapNode[], state: QuestionPracticeState, order: QuestionPracticeOrder): MindMapNode[] {
+  if (state.orderMode !== order) {
+    state.orderMode = order;
+    state.orderedNodeIds = [];
+  }
+  const available = new Map(nodes.map((node) => [node.id, node]));
+  const retained = state.orderedNodeIds.filter((id) => available.has(id));
+  const appended = nodes.map((node) => node.id).filter((id) => !retained.includes(id));
+  if (order === "random") shuffle(appended);
+  state.orderedNodeIds = [...retained, ...appended];
+  return state.orderedNodeIds.flatMap((id) => available.get(id) ?? []);
+}
+
+/** Performs an in-place Fisher-Yates shuffle for one answer session. */
+function shuffle<T>(items: T[]): void {
+  for (let index = items.length - 1; index > 0; index -= 1) {
+    const target = Math.floor(Math.random() * (index + 1));
+    [items[index], items[target]] = [items[target]!, items[index]!];
+  }
 }
 
 /** Extracts option labels from the stored answer to determine whether a question is multiple-choice. */
@@ -199,6 +232,23 @@ function renderBlocks(container: HTMLElement, blocks: readonly MindMapContentBlo
       if (source) container.createEl("img", { cls: "mms-question-practice-image", attr: { src: source, alt: block.alt || "题目图片" } });
     }
   });
+}
+
+/** Renders A/B/C/D explanation paragraphs as separate readable lines. */
+function renderExplanationBlocks(container: HTMLElement, blocks: readonly MindMapContentBlock[], resolveImage: (source: string) => string | null): void {
+  for (const block of blocks) {
+    if (block.type === "text") {
+      splitExplanationLines(block.text).forEach((text) => container.createDiv({ cls: "mms-question-practice-explanation-item", text }));
+    } else {
+      renderBlocks(container, [block], resolveImage);
+    }
+  }
+}
+
+/** Splits common A/B/C/D analysis markers into individual display paragraphs. */
+export function splitExplanationLines(value: string): string[] {
+  const lines = value.split(/(?=[A-DＡ-Ｄ][项、.．:：])/u).map((line) => line.trim()).filter(Boolean);
+  return lines.length ? lines : value.trim() ? [value.trim()] : [];
 }
 
 /** Joins text blocks into the stored reference answer. */

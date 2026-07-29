@@ -13,7 +13,7 @@ export const DISPLAY_MODE_LABELS: Record<DisplayMode, string> = {
   outline: "大纲",
   article: "文章",
   reading: "通读",
-  "question-bank": "题库"
+  "question-bank": "答题"
 };
 
 export const DISPLAY_MODE_ICONS: Record<DisplayMode, string> = {

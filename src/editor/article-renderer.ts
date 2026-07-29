@@ -234,7 +234,10 @@ function renderArticleQuestionDetails(container: HTMLElement, node: MindMapNode)
     .map((block) => block.type === "text" ? block.text.trim() : "[图片]")
     .filter(Boolean).join(" ");
   const panel = container.createDiv({ cls: "mms-question-panel" });
-  panel.createDiv({ cls: "mms-question-kind", text: question.mode === "essay" ? "大题" : question.mode === "judgment" ? "判断题" : "选择题" });
+  const meta = panel.createDiv({ cls: "mms-question-meta" });
+  meta.createDiv({ cls: "mms-question-kind", text: question.mode === "essay" ? "大题" : question.mode === "judgment" ? "判断题" : "选择题" });
+  const statusLabels = { unanswered: "未做", completed: "已做", favorite: "收藏", wrong: "错题", mastered: "掌握" } as const;
+  meta.createDiv({ cls: `mms-question-status is-${question.status}`, text: statusLabels[question.status] });
   const appendField = (container: HTMLElement, label: string, value: string, cls = ""): void => {
     if (!value) return;
     const row = container.createDiv({ cls: `mms-question-row ${cls}`.trim() });

@@ -147,6 +147,9 @@ export function createImageHostConfig(index = 1): ImageHostConfig {
  */
 export type ImageRecognitionAutoConfirmDelaySeconds = 0 | 5 | 10 | 15 | null;
 
+/** Determines whether answer-mode sessions shuffle questions or follow map order. */
+export type QuestionPracticeOrder = "random" | "sequential";
+
 /** MindMap Studio 的持久化设置集合。 */
 export interface MindMapStudioSettings {
   defaultFolder: string;
@@ -267,6 +270,8 @@ export interface MindMapStudioSettings {
   questionNodesEnabled: boolean;
   /** Vault-relative folder whose mind-map files expose the full-page question-bank mode. */
   questionBankFolder: string;
+  /** Default ordering for answer-mode sessions in the configured question-bank folder. */
+  questionPracticeOrder: QuestionPracticeOrder;
   /** Absolute folder opened by the native Desktop import picker most recently. */
   lastImportFolder: string;
   /** User-defined order of the first-level settings categories; management stays last. */
@@ -366,6 +371,7 @@ export const DEFAULT_SETTINGS: MindMapStudioSettings = {
   screenshotAutoRecognize: false,
   questionNodesEnabled: false,
   questionBankFolder: "",
+  questionPracticeOrder: "random",
   lastImportFolder: "",
   settingsSectionOrder: [...SETTINGS_SECTION_TITLES]
 };
@@ -1241,12 +1247,24 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName("题库文件夹")
-      .setDesc("填写仓库内文件夹路径，例如 题库。该文件夹及其子目录内的思维导图会出现“题库”整页模式，可连续自动判题；留空则不启用。")
+      .setDesc("填写仓库内文件夹路径，例如 题库。该文件夹及其子目录内的思维导图会出现“答题”整页模式，可连续自动判题；留空则不启用。")
       .addText((text) => text
         .setPlaceholder("题库")
         .setValue(this.plugin.settings.questionBankFolder)
         .onChange(async (value) => {
           this.plugin.settings.questionBankFolder = value.trim().replace(/\\/g, "/").replace(/^\/+|\/+$/g, "");
+          await this.saveAndRefresh();
+        }));
+
+    new Setting(containerEl)
+      .setName("答题顺序")
+      .setDesc("随机为默认方式，每轮答题会随机排列题目；顺序模式按导图中的节点顺序作答。")
+      .addDropdown((dropdown) => dropdown
+        .addOption("random", "随机（默认）")
+        .addOption("sequential", "按导图顺序")
+        .setValue(this.plugin.settings.questionPracticeOrder)
+        .onChange(async (value) => {
+          this.plugin.settings.questionPracticeOrder = value === "sequential" ? "sequential" : "random";
           await this.saveAndRefresh();
         }));
 
