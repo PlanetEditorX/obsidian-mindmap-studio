@@ -1538,7 +1538,7 @@
   padding-left: 4.2em !important;
 }
 
-.mms-code-with-line-numbers::before {
+.mms-code-with-line-numbers > code::before {
   content: attr(data-line-numbers);
   position: absolute;
   top: calc(var(--mms-code-line-gutter-top, 10px) + var(--mms-code-line-baseline-offset));
@@ -1548,9 +1548,8 @@
   padding-right: 0.65em;
   color: var(--text-faint);
   text-align: right;
-  font-family: var(--mms-code-font-family, inherit);
-  font-size: var(--mms-code-font-size, inherit);
-  line-height: var(--mms-code-line-height, inherit);
+  font: inherit;
+  line-height: inherit;
   white-space: pre;
   pointer-events: none;
   user-select: none;

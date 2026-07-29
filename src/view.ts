@@ -206,15 +206,11 @@ export class MindMapStudioView extends TextFileView {
           const pre = target.querySelector("pre");
           if (showLineNumbers && pre) {
             pre.addClass("mms-code-with-line-numbers");
-            pre.setAttr("data-line-numbers", Array.from({ length: block.code.split("\n").length }, (_, index) => String(index + 1)).join("\n"));
             pre.style.setProperty("--mms-code-line-gutter-top", getComputedStyle(pre).paddingTop);
             pre.style.setProperty("--mms-code-line-gutter-bottom", getComputedStyle(pre).paddingBottom);
             const codeEl = pre.querySelector("code");
             if (codeEl) {
-              const codeStyle = getComputedStyle(codeEl);
-              pre.style.setProperty("--mms-code-font-family", codeStyle.fontFamily);
-              pre.style.setProperty("--mms-code-font-size", codeStyle.fontSize);
-              pre.style.setProperty("--mms-code-line-height", codeStyle.lineHeight);
+              codeEl.setAttr("data-line-numbers", Array.from({ length: block.code.split("\n").length }, (_, index) => String(index + 1)).join("\n"));
             }
           }
         }
