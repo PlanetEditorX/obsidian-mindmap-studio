@@ -137,8 +137,9 @@ test("code line numbers use an optical baseline offset independent of the code f
   const numberRule = styles.match(/\.mms-code-with-line-numbers::before\s*\{([\s\S]*?)\n\}/)?.[1] ?? "";
   assert.match(styles, /--mms-code-line-baseline-offset:\s*0\.16em/);
   assert.match(numberRule, /top:\s*calc\(var\(--mms-code-line-gutter-top, 10px\) \+ var\(--mms-code-line-baseline-offset\)\)/);
-  assert.match(numberRule, /font:\s*inherit/);
-  assert.match(numberRule, /line-height:\s*inherit/);
+  assert.match(numberRule, /font-family:\s*var\(--mms-code-font-family,\s*inherit\)/);
+  assert.match(numberRule, /font-size:\s*var\(--mms-code-font-size,\s*inherit\)/);
+  assert.match(numberRule, /line-height:\s*var\(--mms-code-line-height,\s*inherit\)/);
   assert.doesNotMatch(numberRule, /padding-top:|border-right:|transform:/);
 });
 
