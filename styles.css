@@ -1211,6 +1211,11 @@
   width: 100%;
 }
 
+.mmc-import-mode {
+  width: 100%;
+  margin: 10px 0;
+}
+
 .mmc-form-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

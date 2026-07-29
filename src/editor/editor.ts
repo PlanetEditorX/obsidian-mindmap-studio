@@ -4716,9 +4716,29 @@ export class MindMapEditor {
     new JsonTransferModal(
       this.app,
       this.getDocument(),
-      (document) => this.replaceDocument(document),
+      (document, mode) => this.importDocument(document, mode),
       (json) => void this.callbacks.onExportJson(json)
     ).open();
+  }
+
+  /** Imports a document as a child branch or replaces the current document. */
+  private importDocument(document: MindMapDocument, mode: "child" | "replace"): void {
+    if (mode === "replace") {
+      this.replaceDocument(document);
+      return;
+    }
+    if (!this.ensureEditable()) return;
+    const parent = this.selectedNode() ?? this.document.root;
+    const importedRoot = cloneNodeWithFreshIds(document.root);
+    setAllBranchesCollapsed(importedRoot, true);
+    importedRoot.collapsed = false;
+    this.mutate(() => {
+      parent.collapsed = false;
+      appendChild(parent, importedRoot);
+      this.selectedId = importedRoot.id;
+      this.selectedIds.clear();
+      this.selectedIds.add(importedRoot.id);
+    });
   }
 
   /**

@@ -6420,7 +6420,7 @@ var JsonTransferModal = class extends import_obsidian5.Modal {
    *
    * @param app Obsidian 应用实例。
    * @param document 当前思维导图文档。
-   * @param onImport 导入完成回调。
+   * @param onImport 导入完成回调及目标方式。
    * @param onExport 导出回调。
    */
   constructor(app, document2, onImport, onExport) {
@@ -6435,7 +6435,7 @@ var JsonTransferModal = class extends import_obsidian5.Modal {
   onOpen() {
     this.titleEl.setText("\u5BFC\u5165 / \u5BFC\u51FA");
     const description = this.contentEl.createEl("p", {
-      text: "\u53EF\u4EE5\u590D\u5236\u5F53\u524D JSON\uFF0C\u4E5F\u53EF\u4EE5\u5BFC\u5165 MindMap Studio JSON\u3001XMind \u6216 Markdown \u6587\u4EF6\u3002"
+      text: "\u53EF\u5BFC\u5165 MindMap Studio JSON\u3001XMind \u6216 Markdown \u6587\u4EF6\u3002\u9ED8\u8BA4\u4F5C\u4E3A\u5F53\u524D\u9009\u4E2D\u8282\u70B9\u7684\u5B50\u5206\u652F\u5BFC\u5165\u3002"
     });
     description.addClass("setting-item-description");
     const importProgress = this.contentEl.createDiv({ cls: "mmc-import-progress" });
@@ -6448,11 +6448,20 @@ var JsonTransferModal = class extends import_obsidian5.Modal {
     };
     const textarea = this.contentEl.createEl("textarea", { cls: "mmc-json-textarea" });
     textarea.value = JSON.stringify(this.document, null, 2);
+    const importMode = this.contentEl.createEl("select", { cls: "mmc-import-mode", attr: { "aria-label": "\u5BFC\u5165\u65B9\u5F0F" } });
+    importMode.createEl("option", { text: "\u5BFC\u5165\u4E3A\u5B50\u8282\u70B9\uFF08\u9ED8\u8BA4\uFF09", value: "child" });
+    importMode.createEl("option", { text: "\u5BFC\u5165\u5E76\u66FF\u6362\u5F53\u524D\u6587\u4EF6", value: "replace" });
+    const applyImport = (document2) => {
+      const mode = importMode.value === "replace" ? "replace" : "child";
+      if (mode === "replace" && !window.confirm("\u5C06\u4F7F\u7528\u5BFC\u5165\u5185\u5BB9\u66FF\u6362\u5F53\u524D\u6574\u5F20\u5BFC\u56FE\uFF0C\u6B64\u64CD\u4F5C\u53EF\u901A\u8FC7\u64A4\u9500\u6062\u590D\u3002\u662F\u5426\u7EE7\u7EED\uFF1F")) return false;
+      this.onImport(document2, mode);
+      return true;
+    };
     const actions = this.contentEl.createDiv({ cls: "mmc-modal-actions mmc-json-actions" });
     const copy = actions.createEl("button", { text: "\u590D\u5236 JSON" });
-    const importFileButton = actions.createEl("button", { text: "\u5BFC\u5165 XMind / Markdown", attr: { type: "button" } });
+    const importFileButton = actions.createEl("button", { text: "\u5BFC\u5165\u6587\u4EF6", attr: { type: "button" } });
     const exportButton = actions.createEl("button", { text: "\u5BFC\u51FA .json" });
-    const importButton = actions.createEl("button", { text: "\u5BFC\u5165\u5E76\u66FF\u6362", cls: "mod-warning" });
+    const importButton = actions.createEl("button", { text: "\u5BFC\u5165 JSON" });
     copy.addEventListener("click", () => {
       void navigator.clipboard.writeText(textarea.value);
       new import_obsidian5.Notice("\u5DF2\u590D\u5236 JSON");
@@ -6475,7 +6484,7 @@ var JsonTransferModal = class extends import_obsidian5.Modal {
             const imported = extension === "xmind" ? xmindToDocument(source, file.name.replace(/\.xmind$/i, "")) : extension === "json" ? normalizeDocument(JSON.parse(source), this.document.title) : markdownToDocument(source, file.name.replace(/\.(?:md|markdown)$/i, ""));
             await updateImportProgress(85, "\u6B63\u5728\u751F\u6210\u601D\u7EF4\u5BFC\u56FE");
             setAllBranchesCollapsed(imported.root, true);
-            this.onImport(imported);
+            if (!applyImport(imported)) return;
             await updateImportProgress(100, "\u5BFC\u5165\u5B8C\u6210");
             new import_obsidian5.Notice(`\u5DF2\u5BFC\u5165\uFF1A${file.name}`);
             window.setTimeout(() => this.close(), 180);
@@ -6495,7 +6504,7 @@ var JsonTransferModal = class extends import_obsidian5.Modal {
         const parsed = JSON.parse(textarea.value);
         const normalized2 = normalizeDocument(parsed, this.document.title);
         setAllBranchesCollapsed(normalized2.root, true);
-        this.onImport(normalized2);
+        if (!applyImport(normalized2)) return;
         new import_obsidian5.Notice("JSON \u5DF2\u5BFC\u5165");
         this.close();
       } catch (error) {
@@ -12312,9 +12321,29 @@ var MindMapEditor = class {
     new JsonTransferModal(
       this.app,
       this.getDocument(),
-      (document2) => this.replaceDocument(document2),
+      (document2, mode) => this.importDocument(document2, mode),
       (json) => void this.callbacks.onExportJson(json)
     ).open();
+  }
+  /** Imports a document as a child branch or replaces the current document. */
+  importDocument(document2, mode) {
+    var _a2;
+    if (mode === "replace") {
+      this.replaceDocument(document2);
+      return;
+    }
+    if (!this.ensureEditable()) return;
+    const parent = (_a2 = this.selectedNode()) != null ? _a2 : this.document.root;
+    const importedRoot = cloneNodeWithFreshIds(document2.root);
+    setAllBranchesCollapsed(importedRoot, true);
+    importedRoot.collapsed = false;
+    this.mutate(() => {
+      parent.collapsed = false;
+      appendChild(parent, importedRoot);
+      this.selectedId = importedRoot.id;
+      this.selectedIds.clear();
+      this.selectedIds.add(importedRoot.id);
+    });
   }
   /**
    * Opens the HTML, Word, PDF, and Markdown export chooser.
