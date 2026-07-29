@@ -1,32 +1,20 @@
-# 1.24.5 README 与发布元数据一致性修复修改清单
+# README 版本硬编码移除修改清单
 
-## 本次增量修复
-
-| 文件 | 变更 |
-|---|---|
-| `README.md` | 将当前源码版本同步为 `1.24.5`，修复 CI 中的版本一致性断言失败 |
-| `package.json` | 将项目版本同步为 `1.24.5` |
-| `package-lock.json` | 将根包与锁文件版本同步为 `1.24.5` |
-| `manifest.json` | 将 Obsidian 插件版本同步为 `1.24.5` |
-| `versions.json` | 增加 `1.24.5` 对应的最低 Obsidian 版本映射 |
-| `CHANGELOG.md` | 记录 CI 版本说明修复 |
-| `TEST_RESULTS.md` | 记录上传 CI 日志中的失败原因与本轮验证结果 |
-| `docs/FUNCTION_REFERENCE.md` | 已重新运行生成器复核；本轮未改 TypeScript/JSDoc，生成结果无内容差异 |
-| `main.js` | 本轮未改 TypeScript 运行时代码，内容无需变化；仅执行语法检查 |
-
-## 前一轮代码行号对齐修复
+## 本次修复
 
 | 文件 | 变更 |
 |---|---|
-| `styles.css` | 为代码块行号文字增加 `0.08em` 基线补偿，只移动数字文字，不移动分隔线 |
-| `tests/question.test.mjs` | 新增行号基线和分隔线布局契约测试 |
-| `CHANGELOG.md` | 记录代码行号与正文基线对齐修复 |
-| `TEST_RESULTS.md` | 记录单元测试、文档检查、渲染检查，以及完整测试和构建的依赖阻断 |
-| `docs/FUNCTION_REFERENCE.md` | 已运行生成器复核；本轮未改 TypeScript/JSDoc，生成结果无内容差异 |
-| `main.js` | 本轮未改 TypeScript 运行时代码，内容无需变化；语法检查通过 |
+| `README.md` | 删除“当前源码版本”硬编码，仅保留最低 Obsidian 版本；发布章节明确版本以发布元数据为准 |
+| `tests/repository-cleanup.test.mjs` | 将 README 与 `package.json` 的精确版本匹配测试替换为“不允许硬编码当前源码版本”的策略测试 |
+| `scripts/check-repository.mjs` | 删除 README 版本同步断言，继续校验四份发布元数据一致，并禁止重新引入 README 当前版本文本 |
+| `docs/TESTING.md` | 更新仓库检查范围说明 |
+| `CHANGELOG.md` | 记录版本单一事实源策略 |
+| `TEST_RESULTS.md` | 记录 CI 根因、修复策略和验证结果 |
+| `docs/FUNCTION_REFERENCE.md` | 重新运行生成器复核；本轮未改 TypeScript/JSDoc，预计无内容差异 |
+| `main.js` | 本轮未改 TypeScript 运行时代码，不应产生内容变化 |
 
-## 更早的仓库一致性修复
+## 策略结果
 
-- 示例导图已恢复为可读 UTF-8 路径。
-- README 当前源码版本已与 `package.json` 统一为 `1.24.4`。
-- 仓库检查已覆盖规范示例路径和 README 版本一致性。
+- README 不再随每次版本发布修改。
+- 当前版本由 `package.json`、`package-lock.json`、`manifest.json` 和 `versions.json` 共同约束。
+- 版本从 `1.24.5`、`1.24.6` 或后续版本升级时，不再因 README 文本漏同步导致 CI 失败。

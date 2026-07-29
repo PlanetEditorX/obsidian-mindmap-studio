@@ -49,8 +49,7 @@ test("example assets use canonical readable paths", async () => {
   }
 });
 
-test("README source version matches package metadata", async () => {
-  const packageJson = JSON.parse(await readFile("package.json", "utf8"));
+test("README does not hard-code the current source version", async () => {
   const readme = await readFile("README.md", "utf8");
-  assert.ok(readme.includes(`当前源码版本：\`${packageJson.version}\`。`));
+  assert.doesNotMatch(readme, /当前源码版本：/);
 });
