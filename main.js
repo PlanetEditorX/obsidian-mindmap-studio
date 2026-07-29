@@ -13044,11 +13044,14 @@ var MindMapEditor = class {
    */
   mutate(action) {
     if (!this.ensureEditable()) return;
+    const location = this.currentMode === "mindmap" ? null : this.captureCurrentLocation(this.currentMode);
+    if (location) this.rememberLocation(location, true);
     this.history.capture(this.document);
     action();
     this.callbacks.onChange(this.getDocument());
     this.markSaving();
     this.render();
+    if (location) this.restoreReadingLocation(this.currentMode, location);
   }
   /**
    * 撤销相关数据，并保持模型、界面和持久化状态的一致性。
