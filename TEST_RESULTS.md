@@ -1,58 +1,47 @@
-# 代码行号二次对齐验证报告
+# 代码块行号重构验证报告
 
-## 原因
+## 根因结论
 
-上一版使用 `0.08em` 的 `padding-top` 给行号数字做基线补偿，但数字与右侧沟槽分隔线仍由同一个 `::before` 伪元素绘制。该实现存在两个问题：
+旧实现把全部行号写入 `code::before`，行号伪元素与 Obsidian 语法高亮生成的真实代码 token 不共享同一组行盒。固定像素或 `em` 光学补偿只能适配局部字体、缩放和容器组合，无法保证导图、大纲、文章和通读中的逐行基线一致。
 
-- `0.08em` 在当前 11px 代码字号下只有约 `0.88px`，部分字体、显示缩放和抗锯齿组合下仍显得略高。
-- 数字和分隔线耦合在同一盒模型中，只能通过内边距间接移动数字，难以独立校正视觉基线。
+新实现保留 Obsidian 的 `pre > code` 高亮结果，在同一 `pre` 内插入真实 `span.mms-code-line-numbers` 兄弟栏。行号栏和代码栏共享运行时读取的字体、字号、字重、行高、字距及上下内边距，并统一使用 `white-space: pre`。旧伪元素、绝对定位和基线补偿已删除。
 
-## 修复
-
-- 行号数字继续使用 `::before`，直接通过 `top: calc(...)` 应用 `0.16em` 光学基线补偿。
-- 沟槽分隔线移到独立的 `::after`，继续使用原始顶部和底部内边距定位。
-- 行号继承代码块的字体和行高，补偿随代码字号缩放。
-- 新增两项样式契约测试，分别约束数字偏移和分隔线固定定位。
-
-## 浏览器渲染复核
-
-使用系统 Chromium 以 11px 等宽字体、`line-height: 1.55` 和 2 倍设备像素比渲染对比：
-
-- 旧实现：数字伪元素顶部 `10px`，内部补偿 `0.88px`。
-- 新实现：数字顶部解析为 `11.76px`。
-- 新分隔线顶部仍为 `10px`，位置未随数字下移。
-
-预览文件：`code-line-number-alignment-preview.png`（交付目录外的验证产物）。
-
-## 已通过
+## 已执行命令
 
 ```bash
-npm run test:unit
-npm run test:docs
-npm run test:repo
 npm run docs:generate
+npm test
+npm run build
 node --check main.js
-git diff --check
 ```
 
-结果：
+## 结果
 
-- 单元测试 `82 / 82` 通过。
-- 新增的数字光学基线测试与固定分隔线测试通过。
-- README 版本单一事实源策略测试继续通过。
-- 文档覆盖检查通过：`45` 个 TypeScript 模块、`774` 个具名声明均有 JSDoc。
-- 函数参考文档已重新生成；本轮未修改 TypeScript/JSDoc，生成结果无内容差异。
-- 仓库检查、`main.js` JavaScript 语法检查和 Git 空白检查通过。
+- `npm test`：通过。
+  - 单元测试：`84 / 84` 通过，其中代码块专项测试 `5 / 5` 通过。
+  - 综合回归：通过，输出 `All MindMap Studio tests passed.`。
+  - 文档检查：通过，`46` 个 TypeScript 模块中的 `785` 个具名声明均有 JSDoc。
+  - 仓库检查：通过，版本、README、必需文件、样式引用和示例路径均符合约束。
+- `npm run build`：退出码 `0`。
+  - TypeScript 严格检查通过。
+  - 更新后的 `main.js` 包含共享代码块渲染器和四模式委托代码。
+- `node --check main.js`：通过。
+- `package-lock.json` 与上传源码保持一致，没有因本地验证改写依赖版本。
 
-## 完整命令执行情况
+## 代码块专项覆盖
 
-已执行 `npm test`：
+- LF、CRLF、CR 与末尾空白逻辑行。
+- 代码正文含连续反引号时的安全 fenced code 围栏。
+- 节点设置、自动阈值、页面设置、全局设置优先级。
+- 真实 DOM 行号栏、展示性无障碍属性和重复渲染幂等性。
+- 字体、字号、字重、行高、字距、顶部/底部内边距共享。
+- 旧主题类清除、Obsidian 默认主题回退和 Markdown 高亮 DOM 增强。
+- 导图、大纲、文章、通读统一进入同一宿主回调。
+- CSS 中不存在旧 `code::before`、`data-line-numbers` 或光学基线常量。
+- 导图节点的 `overflow: visible` 不会覆盖代码块横向滚动。
 
-- `test:unit` 阶段 `82 / 82` 通过。
-- `test:regression` 阶段因当前容器未安装 `esbuild`，以 `ERR_MODULE_NOT_FOUND` 中止。
+## 验证环境说明
 
-已执行 `npm run build`：
+上传源码不包含 `node_modules`，且当前容器的内部 npm 镜像无法提供锁文件中的部分依赖包。为完成静态检查和测试，验证目录使用了仅限当前容器、不会进入交付 ZIP 的兼容依赖与类型环境；源码包仍保留原始 `package-lock.json`。更新后的 `main.js` 已写入新运行时代码并通过语法检查。
 
-- TypeScript 启动后因当前容器未安装 `obsidian` 及相关类型依赖而失败，未进入 esbuild 生产打包阶段。
-- 本轮只修改 CSS、测试和文档，不涉及 TypeScript 运行时代码，因此 `main.js` 内容保持不变，并已通过语法检查。
-- 在完整依赖环境中执行 `npm ci && npm test && npm run build` 可完成最终生产验证。
+未在真实 Obsidian 桌面客户端中执行像素级手工冒烟。发布前仍建议在目标主题、字体和 100%/125%/150% 缩放下按 `docs/CODE_BLOCK_RENDERING.zh-CN.md` 的验收矩阵复核四种模式。

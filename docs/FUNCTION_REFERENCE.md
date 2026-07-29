@@ -5876,6 +5876,120 @@ async extractToSubmap(parentFile: TFile, node: MindMapNode): Promise<MindMapSubm
 async mergeFromSubmap(submapFile: TFile): Promise<void>
 ```
 
+## `src/render/code-block.ts`
+
+四种显示模式共享的代码块展示策略、Markdown 包装与行号 DOM 布局。
+
+### 接口 `CodeBlockGlobalDefaults`
+
+源码：`src/render/code-block.ts:9`
+
+代码块渲染时使用的全局默认值与自动阈值。
+
+```ts
+export interface CodeBlockGlobalDefaults
+```
+
+### 接口 `ResolvedCodeBlockPresentation`
+
+源码：`src/render/code-block.ts:18`
+
+按节点、页面和全局设置解析后的代码块展示结果。
+
+```ts
+export interface ResolvedCodeBlockPresentation
+```
+
+### 接口 `CodeBlockRenderOptions`
+
+源码：`src/render/code-block.ts:26`
+
+共享代码块渲染器所需的宿主参数。
+
+```ts
+export interface CodeBlockRenderOptions
+```
+
+### 函数 `normalizeCodeLineThreshold`
+
+源码：`src/render/code-block.ts:41`
+
+将设置中的代码行数阈值限制为受支持的整数范围。
+
+```ts
+function normalizeCodeLineThreshold(value: number): number
+```
+
+### 函数 `countCodeLines`
+
+源码：`src/render/code-block.ts:51`
+
+返回源码的逻辑行数，同时兼容 LF、CRLF 和旧式 CR 换行。
+
+```ts
+export function countCodeLines(code: string): number
+```
+
+### 函数 `buildCodeLineNumberText`
+
+源码：`src/render/code-block.ts:61`
+
+构建行号栏使用的纯文本，确保每个号码恰好占用一个代码行高。
+
+```ts
+export function buildCodeLineNumberText(lineCount: number): string
+```
+
+### 函数 `buildFencedCodeMarkdown`
+
+源码：`src/render/code-block.ts:72`
+
+用不会与正文反引号冲突的围栏包装代码，供 Obsidian Markdown 渲染器高亮。
+
+```ts
+export function buildFencedCodeMarkdown(block: MindMapCodeBlock): string
+```
+
+### 函数 `resolveCodeBlockPresentation`
+
+源码：`src/render/code-block.ts:86`
+
+按节点显式值、自动阈值、页面设置和插件全局设置解析代码块展示状态。
+
+```ts
+export function resolveCodeBlockPresentation( block: MindMapCodeBlock, pageAppearance: CodeBlockRenderOptions["pageAppearance"], defaults: CodeBlockGlobalDefaults ): ResolvedCodeBlockPresentation
+```
+
+### 函数 `captureCodeLayoutMetrics`
+
+源码：`src/render/code-block.ts:105`
+
+将渲染前的代码字体、行高和内边距保存为共享 CSS 变量。
+
+```ts
+function captureCodeLayoutMetrics(pre: HTMLElement, code: HTMLElement): void
+```
+
+### 函数 `installCodeLineNumberLayout`
+
+源码：`src/render/code-block.ts:129`
+
+将独立行号栏插入高亮代码旁边；两栏使用同一组字体、行高和上下内边距。
+
+```ts
+export function installCodeLineNumberLayout(pre: HTMLElement, code: HTMLElement, lineCount: number): void
+```
+
+### 函数 `renderCodeBlock`
+
+源码：`src/render/code-block.ts:148`
+
+使用统一渲染链路创建代码块，并在 Markdown 高亮完成后安装稳定的行号布局。
+
+```ts
+export async function renderCodeBlock(options: CodeBlockRenderOptions): Promise<void>
+```
+
 ## `src/render/collision-layout.ts`
 
 导图节点包围盒碰撞检测与子树纵向避让。
@@ -7352,7 +7466,7 @@ Obsidian TextFileView 适配层。
 
 ### 类 `MindMapStudioView`
 
-源码：`src/view.ts:37`
+源码：`src/view.ts:32`
 
 MindMapStudioView 的主要实现类。负责封装相关状态、生命周期和对外操作，避免调用方直接操作内部数据结构。
 
@@ -7362,7 +7476,7 @@ export class MindMapStudioView extends TextFileView
 
 ### 构造函数 `MindMapStudioView.constructor`
 
-源码：`src/view.ts:59`
+源码：`src/view.ts:54`
 
 创建 MindMapStudioView 实例，保存依赖和初始状态；实际 DOM 构建通常在 onOpen() 或后续渲染流程中完成。
 
@@ -7372,7 +7486,7 @@ constructor(leaf: WorkspaceLeaf, plugin: MindMapStudioPlugin)
 
 ### 方法 `MindMapStudioView.getViewType`
 
-源码：`src/view.ts:68`
+源码：`src/view.ts:63`
 
 读取并返回view type，并保持模型、界面和持久化状态的一致性。
 
@@ -7382,7 +7496,7 @@ getViewType(): string
 
 ### 方法 `MindMapStudioView.getDisplayText`
 
-源码：`src/view.ts:76`
+源码：`src/view.ts:71`
 
 读取并返回display text，并保持模型、界面和持久化状态的一致性。
 
@@ -7392,7 +7506,7 @@ getDisplayText(): string
 
 ### 方法 `MindMapStudioView.getIcon`
 
-源码：`src/view.ts:84`
+源码：`src/view.ts:79`
 
 读取并返回icon，并保持模型、界面和持久化状态的一致性。
 
@@ -7402,7 +7516,7 @@ getIcon(): string
 
 ### 方法 `MindMapStudioView.getViewData`
 
-源码：`src/view.ts:93`
+源码：`src/view.ts:88`
 
 返回当前编辑器文档的序列化文本，供 Obsidian 自动保存。保存使用模型层统一序列化，确保字段规范和版本号正确。
 
@@ -7412,7 +7526,7 @@ getViewData(): string
 
 ### 方法 `MindMapStudioView.setViewData`
 
-源码：`src/view.ts:105`
+源码：`src/view.ts:100`
 
 接收 Obsidian 读取的文件文本，解析成领域文档并交给编辑器。重新加载时会保留全局显示模式，并异步刷新文章父子上下文。
 
@@ -7422,7 +7536,7 @@ setViewData(data: string, clear: boolean): void
 
 ### 方法 `MindMapStudioView.clear`
 
-源码：`src/view.ts:232`
+源码：`src/view.ts:211`
 
 执行“clear”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
 
@@ -7432,7 +7546,7 @@ clear(): void
 
 ### 方法 `MindMapStudioView.showArticleDirectory`
 
-源码：`src/view.ts:242`
+源码：`src/view.ts:221`
 
 Displays and persists the generated directory for the top-level article.
 
@@ -7442,7 +7556,7 @@ showArticleDirectory(): void
 
 ### 方法 `MindMapStudioView.save`
 
-源码：`src/view.ts:251`
+源码：`src/view.ts:230`
 
 保存相关数据，并保持模型、界面和持久化状态的一致性。
 
@@ -7452,7 +7566,7 @@ async save(clear?: boolean): Promise<void>
 
 ### 方法 `MindMapStudioView.onClose`
 
-源码：`src/view.ts:262`
+源码：`src/view.ts:241`
 
 在弹窗或视图关闭时释放临时 DOM、计时器和事件状态。
 
@@ -7462,7 +7576,7 @@ async onClose(): Promise<void>
 
 ### 方法 `MindMapStudioView.openMapFamilySearch`
 
-源码：`src/view.ts:274`
+源码：`src/view.ts:253`
 
 打开map family search，并保持模型、界面和持久化状态的一致性。
 
@@ -7472,7 +7586,7 @@ private async openMapFamilySearch(): Promise<void>
 
 ### 方法 `MindMapStudioView.refreshAppearance`
 
-源码：`src/view.ts:287`
+源码：`src/view.ts:266`
 
 刷新appearance，并保持模型、界面和持久化状态的一致性。
 
@@ -7482,7 +7596,7 @@ refreshAppearance(): void
 
 ### 方法 `MindMapStudioView.focusNode`
 
-源码：`src/view.ts:297`
+源码：`src/view.ts:276`
 
 定位node，并保持模型、界面和持久化状态的一致性。
 
@@ -7492,7 +7606,7 @@ focusNode(nodeId: string): void
 
 ### 方法 `MindMapStudioView.markExplicitNavigation`
 
-源码：`src/view.ts:312`
+源码：`src/view.ts:291`
 
 标记当前文件由用户或跨模式导航显式打开。 下一次文章族上下文加载完成时以当前文件为准，避免旧的跨文件阅读记录 立即把视图跳回刚离开的父导图或子导图。
 
@@ -7502,7 +7616,7 @@ markExplicitNavigation(focusNodeId?: string): void
 
 ### 方法 `MindMapStudioView.setDisplayMode`
 
-源码：`src/view.ts:329`
+源码：`src/view.ts:308`
 
 更新并应用display mode，并保持模型、界面和持久化状态的一致性。
 
@@ -7512,7 +7626,7 @@ setDisplayMode(mode: DisplayMode): void
 
 ### 方法 `MindMapStudioView.applyGlobalDisplayMode`
 
-源码：`src/view.ts:338`
+源码：`src/view.ts:317`
 
 应用global display mode，并保持模型、界面和持久化状态的一致性。
 
@@ -7522,7 +7636,7 @@ applyGlobalDisplayMode(mode: DisplayMode): void
 
 ### 方法 `MindMapStudioView.toggleReadOnly`
 
-源码：`src/view.ts:345`
+源码：`src/view.ts:324`
 
 切换read only，并保持模型、界面和持久化状态的一致性。
 
@@ -7532,7 +7646,7 @@ toggleReadOnly(): void
 
 ### 方法 `MindMapStudioView.askAi`
 
-源码：`src/view.ts:350`
+源码：`src/view.ts:329`
 
 打开 AI 询问窗口；默认使用当前页面，节点右键后使用该节点子树。
 
@@ -7542,7 +7656,7 @@ askAi(): void
 
 ### 方法 `MindMapStudioView.captureScreenshot`
 
-源码：`src/view.ts:356`
+源码：`src/view.ts:335`
 
 启动截图并让编辑器根据截图前焦点决定插入节点或保留剪贴板。
 
@@ -7552,7 +7666,7 @@ async captureScreenshot(): Promise<void>
 
 ### 方法 `MindMapStudioView.openAiModal`
 
-源码：`src/view.ts:365`
+源码：`src/view.ts:344`
 
 构建 Markdown 上下文并打开 AI 窗口。
 
@@ -7562,7 +7676,7 @@ private openAiModal(nodeId?: string): void
 
 ### 方法 `MindMapStudioView.recognizeImages`
 
-源码：`src/view.ts:408`
+源码：`src/view.ts:387`
 
 按节点树顺序逐张读取并识别当前页面或节点子树中的全部图片。
 
@@ -7572,7 +7686,7 @@ private async recognizeImages(nodeId: string | undefined, profileId: string, ins
 
 ### 方法 `MindMapStudioView.getEditorOptions`
 
-源码：`src/view.ts:436`
+源码：`src/view.ts:415`
 
 读取并返回editor options，并保持模型、界面和持久化状态的一致性。
 
@@ -7582,7 +7696,7 @@ private getEditorOptions(preferCurrentFileLocation = false)
 
 ### 方法 `MindMapStudioView.scheduleArticleContextRefresh`
 
-源码：`src/view.ts:497`
+源码：`src/view.ts:476`
 
 安排延迟执行article context refresh，并保持模型、界面和持久化状态的一致性。
 
@@ -7592,7 +7706,7 @@ private scheduleArticleContextRefresh(delay: number): void
 
 ### 方法 `MindMapStudioView.refreshArticleContext`
 
-源码：`src/view.ts:508`
+源码：`src/view.ts:487`
 
 刷新article context，并保持模型、界面和持久化状态的一致性。
 
@@ -7602,7 +7716,7 @@ private async refreshArticleContext(): Promise<void>
 
 ### 方法 `MindMapStudioView.applyViewClasses`
 
-源码：`src/view.ts:532`
+源码：`src/view.ts:511`
 
 应用view classes，并保持模型、界面和持久化状态的一致性。
 
@@ -7612,7 +7726,7 @@ private applyViewClasses(): void
 
 ### 方法 `MindMapStudioView.scheduleSavedIndicator`
 
-源码：`src/view.ts:541`
+源码：`src/view.ts:520`
 
 安排延迟执行saved indicator，并保持模型、界面和持久化状态的一致性。
 
@@ -7622,7 +7736,7 @@ private scheduleSavedIndicator(): void
 
 ### 方法 `MindMapStudioView.openLink`
 
-源码：`src/view.ts:551`
+源码：`src/view.ts:530`
 
 打开link，并保持模型、界面和持久化状态的一致性。
 
@@ -7632,7 +7746,7 @@ private async openLink(rawLink: string): Promise<void>
 
 ### 方法 `MindMapStudioView.resolveImage`
 
-源码：`src/view.ts:568`
+源码：`src/view.ts:547`
 
 解析并确定image，并保持模型、界面和持久化状态的一致性。
 
@@ -7642,7 +7756,7 @@ private resolveImage(rawSource: string): string | null
 
 ### 方法 `MindMapStudioView.exportTextFile`
 
-源码：`src/view.ts:585`
+源码：`src/view.ts:564`
 
 执行“export text file”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
 
@@ -7652,7 +7766,7 @@ private async exportTextFile(extension: "svg" | "md" | "json" | "html" | "doc", 
 
 ### 方法 `MindMapStudioView.exportBinaryFile`
 
-源码：`src/view.ts:602`
+源码：`src/view.ts:581`
 
 将二进制文档写入所选位置或当前库。
 
@@ -7662,7 +7776,7 @@ private async exportBinaryFile(extension: "docx", content: Uint8Array): Promise<
 
 ### 方法 `MindMapStudioView.exportArticleFamily`
 
-源码：`src/view.ts:625`
+源码：`src/view.ts:604`
 
 Exports the current map family as one continuous document. A top-level directory uses its already collected reading sections; a child page starts at the current map and recursively includes descendants only.
 

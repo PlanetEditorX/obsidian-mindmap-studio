@@ -42,7 +42,8 @@ src/
 ├── render/
 │   ├── layout.ts               坐标、连线与 SVG
 │   ├── collision-layout.ts     节点碰撞检测与子树避让
-│   └── static-render.ts        阅读模式静态预览
+│   ├── code-block.ts           四模式共享代码块展示与行号 DOM 布局
+│   └── static-render.ts        Markdown 阅读模式静态预览
 ├── search/
 │   └── global-search.ts        本地增量索引与搜索
 ├── import/
@@ -67,6 +68,7 @@ src/
 - `src/editor/node-rich-text-editor.ts`：节点文字块的选区样式、颜色、格式清理和实时预览。
 - `src/editor/selection-format-toolbar.ts`：文章和大纲模式内联编辑时随文字选区显示的加粗、斜体、下划线及颜色工具栏。
 - `src/editor/content-modals.ts`：表格、代码编辑弹窗。
+- `src/render/code-block.ts`：解析节点/页面/全局代码设置，调用 Obsidian Markdown 高亮，并为四种显示模式安装统一的真实 DOM 行号栏。
 - `src/render/static-render.ts`：Markdown 阅读模式中的只读 SVG 预览。
 - `src/utils/filename.ts`：跨平台文件名、扩展名、时间戳与图片 MIME 的纯函数。
 - `src/utils/image-host.ts`：不依赖 Obsidian 的图床输入校验、multipart 构造和响应 URL 提取。
@@ -108,6 +110,20 @@ Obsidian 读取文本
 ```
 
 `serializeDocument()` 在输出前再次规范化数据，确保磁盘中不会残留临时 DOM 状态、无效颜色、非法尺寸或不完整节点。
+
+### 3.3 代码块渲染流程
+
+```text
+导图 editor.ts / 大纲 outline-renderer.ts / 文章与通读 article-renderer.ts
+→ MindMapEditorCallbacks.onRenderCode
+→ MindMapStudioView
+→ render/code-block.ts::renderCodeBlock()
+→ 解析节点、页面、全局设置与自动阈值
+→ Obsidian MarkdownRenderer 生成 pre > code 与语法高亮 token
+→ installCodeLineNumberLayout() 插入真实行号栏并共享计算样式
+```
+
+四种模式只负责提供代码块容器，不分别计算行号。`renderCodeBlock()` 保留 Obsidian 生成的完整 `code` 及 token 子元素；启用行号时，在同一 `pre` 内把 `span.mms-code-line-numbers` 插入到 `code.mms-code-content` 前。两栏共享运行时捕获的字体度量与上下内边距，横向溢出由代码块自身滚动，避免父容器样式覆盖。该结构不依赖伪元素、绝对定位或基线常量，具体不变量见 [代码块渲染说明](CODE_BLOCK_RENDERING.zh-CN.md)。
 
 ## 4. 编辑事务与历史记录
 

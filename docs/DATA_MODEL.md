@@ -182,10 +182,13 @@ interface MindMapTable {
 interface MindMapCodeBlock {
   language?: string;
   code: string;
+  collapsed?: boolean;
+  showLineNumbers?: boolean;
+  theme?: "obsidian" | "github" | "monokai" | "dracula";
 }
 ```
 
-表格与代码可作为有稳定 ID 的内容块，与文字、图片一起排序；旧文件中的节点级 `table`、`code` 字段在读取时会自动迁移到内容块列表。表格行会按表头列数补齐或截断。代码块可在节点、页面外观和插件全局三个层级配置默认折叠、行号与 Obsidian、GitHub、Monokai、Dracula 样式；节点优先级最高，未设置时向下跟随。全局可为自动展开和自动行号分别设置行数阈值，节点显式设置仍优先。渲染时交给 Obsidian Markdown 渲染器进行语法高亮。
+表格与代码可作为有稳定 ID 的内容块，与文字、图片一起排序；旧文件中的节点级 `table`、`code` 字段在读取时会自动迁移到内容块列表。表格行会按表头列数补齐或截断。代码块可在节点、页面外观和插件全局三个层级配置默认折叠、行号与 Obsidian、GitHub、Monokai、Dracula 样式；节点优先级最高，未设置时向下跟随。全局可为自动展开和自动行号分别设置行数阈值，节点显式设置仍优先。渲染时先交给 Obsidian Markdown 渲染器生成语法高亮，再由四模式共享的 `render/code-block.ts` 在同一 `pre` 中插入真实行号栏。行号栏不写入文档数据，也不改变高亮 token，只复用代码元素的计算字体、行高和内边距。
 
 ## 9. 子导图导航
 

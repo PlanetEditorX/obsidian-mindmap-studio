@@ -13156,11 +13156,147 @@ var AiAskModal = class extends import_obsidian11.Modal {
 
 // src/view.ts
 var VIEW_TYPE_MINDMAP_STUDIO = "mindmap-studio-view";
+/**
+ * @file code-block.ts
+ * @description 四种显示模式共享的代码块展示策略、Markdown 包装与行号 DOM 布局。
+ */
 var CODE_THEME_CLASS_NAMES = {
-  github: "mms-code-theme-github",
-  monokai: "mms-code-theme-monokai",
-  dracula: "mms-code-theme-dracula"
+    github: "mms-code-theme-github",
+    monokai: "mms-code-theme-monokai",
+    dracula: "mms-code-theme-dracula"
 };
+/** 将设置中的代码行数阈值限制为受支持的整数范围。 */
+function normalizeCodeLineThreshold(value) {
+    return Math.max(0, Math.min(1000, Math.floor(value || 0)));
+}
+/**
+ * 返回源码的逻辑行数，同时兼容 LF、CRLF 和旧式 CR 换行。
+ *
+ * @param code 原始代码文本。
+ * @returns 至少为 1 的逻辑行数；末尾换行会保留一个空白逻辑行。
+ */
+function countCodeLines(code) {
+    return code.split(/\r\n|\r|\n/).length;
+}
+/**
+ * 构建行号栏使用的纯文本，确保每个号码恰好占用一个代码行高。
+ *
+ * @param lineCount 需要显示的代码行数。
+ * @returns 由换行连接的连续行号文本。
+ */
+function buildCodeLineNumberText(lineCount) {
+    const safeLineCount = Math.max(1, Math.floor(lineCount || 0));
+    return Array.from({ length: safeLineCount }, (_, index) => String(index + 1)).join("\n");
+}
+/**
+ * 用不会与正文反引号冲突的围栏包装代码，供 Obsidian Markdown 渲染器高亮。
+ *
+ * @param block 当前代码块。
+ * @returns 可直接交给 MarkdownRenderer 的 fenced code Markdown。
+ */
+function buildFencedCodeMarkdown(block) {
+    var _a;
+    const longestFence = Math.max(2, ...Array.from(block.code.matchAll(/`+/g), (match) => match[0].length));
+    const fence = "`".repeat(longestFence + 1);
+    return `${fence}${(_a = block.language) !== null && _a !== void 0 ? _a : ""}\n${block.code}\n${fence}`;
+}
+/**
+ * 按节点显式值、自动阈值、页面设置和插件全局设置解析代码块展示状态。
+ *
+ * @param block 当前代码块。
+ * @param pageAppearance 当前导图的页面级代码外观设置。
+ * @param defaults 插件全局默认值与自动阈值。
+ * @returns 最终折叠状态、行号状态、主题和逻辑行数。
+ */
+function resolveCodeBlockPresentation(block, pageAppearance, defaults) {
+    var _a, _b, _c, _d, _e, _f, _g;
+    const lineCount = countCodeLines(block.code);
+    const expandThreshold = normalizeCodeLineThreshold(defaults.autoExpandMaxLines);
+    const lineNumberThreshold = normalizeCodeLineThreshold(defaults.autoLineNumbersMinLines);
+    const autoExpand = expandThreshold > 0 && lineCount <= expandThreshold;
+    const autoLineNumbers = lineNumberThreshold > 0 ? lineCount > lineNumberThreshold : undefined;
+    return {
+        collapsed: (_a = block.collapsed) !== null && _a !== void 0 ? _a : (autoExpand ? false : (_b = pageAppearance === null || pageAppearance === void 0 ? void 0 : pageAppearance.codeCollapsed) !== null && _b !== void 0 ? _b : defaults.collapsed),
+        showLineNumbers: (_e = (_d = (_c = block.showLineNumbers) !== null && _c !== void 0 ? _c : autoLineNumbers) !== null && _d !== void 0 ? _d : pageAppearance === null || pageAppearance === void 0 ? void 0 : pageAppearance.codeShowLineNumbers) !== null && _e !== void 0 ? _e : defaults.showLineNumbers,
+        theme: (_g = (_f = block.theme) !== null && _f !== void 0 ? _f : pageAppearance === null || pageAppearance === void 0 ? void 0 : pageAppearance.codeTheme) !== null && _g !== void 0 ? _g : defaults.theme,
+        lineCount
+    };
+}
+/** 将渲染前的代码字体、行高和内边距保存为共享 CSS 变量。 */
+function captureCodeLayoutMetrics(pre, code) {
+    const view = pre.ownerDocument.defaultView;
+    if (!view)
+        return;
+    const preStyle = view.getComputedStyle(pre);
+    const codeStyle = view.getComputedStyle(code);
+    pre.style.setProperty("--mms-code-padding-top", preStyle.paddingTop);
+    pre.style.setProperty("--mms-code-padding-right", preStyle.paddingRight);
+    pre.style.setProperty("--mms-code-padding-bottom", preStyle.paddingBottom);
+    pre.style.setProperty("--mms-code-padding-left", preStyle.paddingLeft);
+    pre.style.setProperty("--mms-code-font-family", codeStyle.fontFamily);
+    pre.style.setProperty("--mms-code-font-size", codeStyle.fontSize);
+    pre.style.setProperty("--mms-code-font-weight", codeStyle.fontWeight);
+    pre.style.setProperty("--mms-code-line-height", codeStyle.lineHeight);
+    pre.style.setProperty("--mms-code-letter-spacing", codeStyle.letterSpacing);
+}
+/**
+ * 将独立行号栏插入高亮代码旁边；两栏使用同一组字体、行高和上下内边距。
+ *
+ * @param pre Obsidian MarkdownRenderer 生成的 pre 元素。
+ * @param code pre 中保留完整语法高亮标记的 code 元素。
+ * @param lineCount 原始代码的逻辑行数。
+ * @remarks 行号不再依赖伪元素或光学基线补偿，因此缩放、主题和不同显示模式不会分别漂移。
+ */
+function installCodeLineNumberLayout(pre, code, lineCount) {
+    var _a;
+    (_a = pre.querySelector(":scope > .mms-code-line-numbers")) === null || _a === void 0 ? void 0 : _a.remove();
+    captureCodeLayoutMetrics(pre, code);
+    pre.classList.add("mms-code-with-line-numbers");
+    code.classList.add("mms-code-content");
+    const gutter = pre.ownerDocument.createElement("span");
+    gutter.className = "mms-code-line-numbers";
+    gutter.textContent = buildCodeLineNumberText(lineCount);
+    gutter.setAttribute("aria-hidden", "true");
+    gutter.setAttribute("role", "presentation");
+    pre.insertBefore(gutter, code);
+}
+/**
+ * 使用统一渲染链路创建代码块，并在 Markdown 高亮完成后安装稳定的行号布局。
+ *
+ * @param options 代码数据、宿主容器、继承设置和 Markdown 渲染回调。
+ * @returns MarkdownRenderer 完成及 DOM 增强完成后的 Promise。
+ */
+async function renderCodeBlock(options) {
+    var _a;
+    const presentation = resolveCodeBlockPresentation(options.block, options.pageAppearance, options.defaults);
+    options.container.replaceChildren();
+    options.container.classList.add("mms-code-render-root");
+    options.container.classList.remove(...Object.values(CODE_THEME_CLASS_NAMES));
+    const themeClass = presentation.theme === "obsidian" ? undefined : CODE_THEME_CLASS_NAMES[presentation.theme];
+    if (themeClass)
+        options.container.classList.add(themeClass);
+    let target = options.container;
+    if (presentation.collapsed) {
+        const details = options.container.ownerDocument.createElement("details");
+        details.className = "mms-code-collapsed";
+        const summary = options.container.ownerDocument.createElement("summary");
+        summary.textContent = `展开 ${options.block.language || "code"} 代码`;
+        details.appendChild(summary);
+        target = options.container.ownerDocument.createElement("div");
+        target.className = "mms-code-collapsed-content";
+        details.appendChild(target);
+        options.container.appendChild(details);
+    }
+    await options.renderMarkdown(buildFencedCodeMarkdown(options.block), target);
+    const pre = target.querySelector("pre");
+    const code = (_a = pre === null || pre === void 0 ? void 0 : pre.querySelector(":scope > code")) !== null && _a !== void 0 ? _a : null;
+    if (!pre || !code)
+        return;
+    pre.classList.add("mms-code-frame");
+    pre.dataset.lineCount = String(presentation.lineCount);
+    if (presentation.showLineNumbers)
+        installCodeLineNumberLayout(pre, code, presentation.lineCount);
+}
 var MindMapStudioView = class _MindMapStudioView extends import_obsidian12.TextFileView {
   /**
    * 创建 MindMapStudioView 实例，保存依赖和初始状态；实际 DOM 构建通常在 onOpen() 或后续渲染流程中完成。
@@ -13312,39 +13448,19 @@ var MindMapStudioView = class _MindMapStudioView extends import_obsidian12.TextF
           this.plugin.settings.readingLocations[path] = location;
           await this.plugin.saveSettings();
         },
-        onRenderCode: async (block, container) => {
-          var _a3, _b3, _c2, _d, _e, _f, _g, _h, _i, _j, _k;
-          const longestFence = Math.max(2, ...Array.from(block.code.matchAll(/`+/g), (match) => match[0].length));
-          const fence = "`".repeat(longestFence + 1);
-          const markdown = `${fence}${(_a3 = block.language) != null ? _a3 : ""}
-${block.code}
-${fence}`;
-          const pageCode = (_b3 = this.document) == null ? void 0 : _b3.appearance;
-          const lineCount = block.code.split("\n").length;
-          const expandThreshold = Math.max(0, Math.min(1e3, Math.floor(this.plugin.settings.codeAutoExpandMaxLines || 0)));
-          const lineNumberThreshold = Math.max(0, Math.min(1e3, Math.floor(this.plugin.settings.codeAutoLineNumbersMinLines || 0)));
-          const autoExpand = expandThreshold > 0 && lineCount <= expandThreshold;
-          const autoLineNumbers = lineNumberThreshold > 0 ? lineCount > lineNumberThreshold : void 0;
-          const collapsed = (_d = block.collapsed) != null ? _d : autoExpand ? false : (_c2 = pageCode == null ? void 0 : pageCode.codeCollapsed) != null ? _c2 : this.plugin.settings.defaultCodeCollapsed;
-          const showLineNumbers = (_g = (_f = (_e = block.showLineNumbers) != null ? _e : autoLineNumbers) != null ? _f : pageCode == null ? void 0 : pageCode.codeShowLineNumbers) != null ? _g : this.plugin.settings.defaultCodeShowLineNumbers;
-          const theme = (_i = (_h = block.theme) != null ? _h : pageCode == null ? void 0 : pageCode.codeTheme) != null ? _i : this.plugin.settings.defaultCodeTheme;
-          const themeClass = theme !== "obsidian" ? CODE_THEME_CLASS_NAMES[theme] : void 0;
-          if (themeClass) container.addClass(themeClass);
-          const rendered = collapsed ? container.createEl("details", { cls: "mms-code-collapsed" }) : container;
-          if (collapsed) rendered.createEl("summary", { text: `\u5C55\u5F00 ${block.language || "code"} \u4EE3\u7801` });
-          const target = collapsed ? rendered.createDiv({ cls: "mms-code-collapsed-content" }) : rendered;
-          await import_obsidian12.MarkdownRenderer.render(this.app, markdown, target, (_k = (_j = this.file) == null ? void 0 : _j.path) != null ? _k : "", this);
-          const pre = target.querySelector("pre");
-          if (showLineNumbers && pre) {
-            pre.addClass("mms-code-with-line-numbers");
-            pre.style.setProperty("--mms-code-line-gutter-top", getComputedStyle(pre).paddingTop);
-            pre.style.setProperty("--mms-code-line-gutter-bottom", getComputedStyle(pre).paddingBottom);
-            const codeEl = pre.querySelector("code");
-            if (codeEl) {
-              codeEl.setAttr("data-line-numbers", Array.from({ length: block.code.split("\n").length }, (_, index) => String(index + 1)).join("\n"));
-            }
-          }
-        }
+        onRenderCode: (block, container) => renderCodeBlock({
+          block,
+          container,
+          pageAppearance: this.document == null ? void 0 : this.document.appearance,
+          defaults: {
+            collapsed: this.plugin.settings.defaultCodeCollapsed,
+            showLineNumbers: this.plugin.settings.defaultCodeShowLineNumbers,
+            theme: this.plugin.settings.defaultCodeTheme,
+            autoExpandMaxLines: this.plugin.settings.codeAutoExpandMaxLines,
+            autoLineNumbersMinLines: this.plugin.settings.codeAutoLineNumbersMinLines
+          },
+          renderMarkdown: (markdown, target) => import_obsidian12.MarkdownRenderer.render(this.app, markdown, target, this.file == null ? "" : this.file.path, this)
+        })
       }, this.getEditorOptions());
     } else {
       this.editor.setDocument(this.document, false);

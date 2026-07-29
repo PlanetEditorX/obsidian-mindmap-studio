@@ -19,7 +19,7 @@ MindMap Studio 是一个本地优先的 Obsidian 思维导图插件。它使用�
 
 - 有序混合内容块：文字与图片可以任意排列。
 - 富文本：加粗、斜体、下划线、删除线和文字颜色。
-- 任务、标签、备注、链接、图标、表格和代码块。
+- 任务、标签、备注、链接、图标、表格和代码块；代码块在导图、大纲、文章和通读中共用同一渲染链路，行号与语法高亮代码保持逐行对齐。
 - 单节点和多节点复制、粘贴、删除及拖放。
 - 撤销、重做、只读锁和自动保存。
 - AI 助手：支持问答、经预览确认的 AI 节点重整、按范围顺序识别全部图片，以及完全离线的本地文字替换；范围可选当前页面或右键节点子树。
@@ -236,6 +236,7 @@ mindmap-studio/
 - [AI 助手 Git 交付](docs/GIT_DELIVERY_AI_ASSISTANT.zh-CN.md)
 - [本次 Git 交付说明](docs/GIT_DELIVERY.zh-CN.md)
 - [函数参考](docs/FUNCTION_REFERENCE.md)
+- [代码块渲染重构与排查说明](docs/CODE_BLOCK_RENDERING.zh-CN.md)
 - [代码清理与当前支持边界](docs/CODE_CLEANUP.zh-CN.md)
 - [更新记录](CHANGELOG.md)
 

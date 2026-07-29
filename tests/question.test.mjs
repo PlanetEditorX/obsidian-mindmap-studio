@@ -125,33 +125,6 @@ test("code block display settings persist while unsupported themes fall back saf
   assert.equal(typeof model.normalizeDocument({ root: { text: "One line", code: { code: "x" }, children: [] } }).root.code.collapsed, "undefined");
 });
 
-test("code line-number thresholds override inherited defaults while node settings stay first", async () => {
-  const viewSource = await readFile(new URL("../src/view.ts", import.meta.url), "utf8");
-  assert.match(viewSource, /lineNumberThreshold > 0 \? lineCount > lineNumberThreshold : undefined/);
-  assert.match(viewSource, /block\.showLineNumbers \?\? autoLineNumbers \?\? pageCode\?\.codeShowLineNumbers/);
-  assert.match(viewSource, /--mms-code-line-gutter-top/);
-});
-
-test("code line numbers use an optical baseline offset independent of the code font size", async () => {
-  const styles = await readFile(new URL("../styles.css", import.meta.url), "utf8");
-  const numberRule = styles.match(/\.mms-code-with-line-numbers\s*>\s*code::before\s*\{([\s\S]*?)\n\}/)?.[1] ?? "";
-  assert.match(styles, /--mms-code-line-baseline-offset:\s*0\.16em/);
-  assert.match(numberRule, /top:\s*calc\(var\(--mms-code-line-gutter-top, 10px\) \+ var\(--mms-code-line-baseline-offset\)\)/);
-  assert.match(numberRule, /font:\s*inherit/);
-  assert.match(numberRule, /line-height:\s*inherit/);
-  assert.doesNotMatch(numberRule, /padding-top:|border-right:|transform:/);
-});
-
-test("code line-number gutter divider stays fixed while the digits move down", async () => {
-  const styles = await readFile(new URL("../styles.css", import.meta.url), "utf8");
-  const dividerRule = styles.match(/\.mms-code-with-line-numbers::after\s*\{([\s\S]*?)\n\}/)?.[1] ?? "";
-  assert.match(styles, /--mms-code-line-gutter-width:\s*3\.1em/);
-  assert.match(dividerRule, /top:\s*var\(--mms-code-line-gutter-top, 10px\)/);
-  assert.match(dividerRule, /bottom:\s*var\(--mms-code-line-gutter-bottom, 10px\)/);
-  assert.match(dividerRule, /left:\s*var\(--mms-code-line-gutter-width\)/);
-  assert.match(dividerRule, /width:\s*1px/);
-});
-
 test("question-bank grading distinguishes single choice, multiple choice and normalized essay answers", () => {
   const choice = model.normalizeDocument({
     root: {
