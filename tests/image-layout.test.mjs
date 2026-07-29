@@ -20,6 +20,7 @@ before(async () => {
 
 test("image preview uses a screen-shaped stage without scrollbars", () => {
   assert.match(stylesSource, /\.mmc-image-preview-modal \{[\s\S]*--modal-width: min\(98vw, 1800px\)[\s\S]*--modal-height: min\(94vh, 1080px\)/);
+  assert.match(stylesSource, /\.mmc-image-preview-modal \{[\s\S]*width: min\(98vw, 1800px\) !important[\s\S]*height: min\(94vh, 1080px\) !important/);
   assert.match(stylesSource, /\.mmc-image-preview-modal \.modal-content \{[\s\S]*overflow: hidden/);
   assert.match(stylesSource, /\.mmc-image-preview-stage \{[\s\S]*aspect-ratio: 16 \/ 9;[\s\S]*overflow: hidden/);
 });

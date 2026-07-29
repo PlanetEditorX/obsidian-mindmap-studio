@@ -3613,6 +3613,101 @@ var import_obsidian12 = require("obsidian");
 // src/editor/editor.ts
 var import_obsidian10 = require("obsidian");
 
+// src/render/code-block.ts
+var CODE_THEME_CLASS_NAMES = {
+  github: "mms-code-theme-github",
+  monokai: "mms-code-theme-monokai",
+  dracula: "mms-code-theme-dracula"
+};
+function normalizeCodeLineThreshold(value) {
+  return Math.max(0, Math.min(1e3, Math.floor(value || 0)));
+}
+function countCodeLines(code) {
+  return code.split(/\r\n|\r|\n/).length;
+}
+function buildCodeLineNumberText(lineCount) {
+  const safeLineCount = Math.max(1, Math.floor(lineCount || 0));
+  return Array.from({ length: safeLineCount }, (_, index) => String(index + 1)).join("\n");
+}
+function buildFencedCodeMarkdown(block) {
+  var _a2;
+  const longestFence = Math.max(2, ...Array.from(block.code.matchAll(/`+/g), (match) => match[0].length));
+  const fence = "`".repeat(longestFence + 1);
+  return `${fence}${(_a2 = block.language) != null ? _a2 : ""}
+${block.code}
+${fence}`;
+}
+function resolveCodeBlockPresentation(block, pageAppearance, defaults) {
+  var _a2, _b2, _c, _d, _e, _f, _g;
+  const lineCount = countCodeLines(block.code);
+  const expandThreshold = normalizeCodeLineThreshold(defaults.autoExpandMaxLines);
+  const lineNumberThreshold = normalizeCodeLineThreshold(defaults.autoLineNumbersMinLines);
+  const autoExpand = expandThreshold > 0 && lineCount <= expandThreshold;
+  const autoLineNumbers = lineNumberThreshold > 0 ? lineCount > lineNumberThreshold : void 0;
+  return {
+    collapsed: (_b2 = block.collapsed) != null ? _b2 : autoExpand ? false : (_a2 = pageAppearance == null ? void 0 : pageAppearance.codeCollapsed) != null ? _a2 : defaults.collapsed,
+    showLineNumbers: (_e = (_d = (_c = block.showLineNumbers) != null ? _c : autoLineNumbers) != null ? _d : pageAppearance == null ? void 0 : pageAppearance.codeShowLineNumbers) != null ? _e : defaults.showLineNumbers,
+    theme: (_g = (_f = block.theme) != null ? _f : pageAppearance == null ? void 0 : pageAppearance.codeTheme) != null ? _g : defaults.theme,
+    lineCount
+  };
+}
+function captureCodeLayoutMetrics(pre, code) {
+  const view = pre.ownerDocument.defaultView;
+  if (!view) return;
+  const preStyle = view.getComputedStyle(pre);
+  const codeStyle = view.getComputedStyle(code);
+  pre.style.setProperty("--mms-code-padding-top", preStyle.paddingTop);
+  pre.style.setProperty("--mms-code-padding-right", preStyle.paddingRight);
+  pre.style.setProperty("--mms-code-padding-bottom", preStyle.paddingBottom);
+  pre.style.setProperty("--mms-code-padding-left", preStyle.paddingLeft);
+  pre.style.setProperty("--mms-code-font-family", codeStyle.fontFamily);
+  pre.style.setProperty("--mms-code-font-size", codeStyle.fontSize);
+  pre.style.setProperty("--mms-code-font-weight", codeStyle.fontWeight);
+  pre.style.setProperty("--mms-code-line-height", codeStyle.lineHeight);
+  pre.style.setProperty("--mms-code-letter-spacing", codeStyle.letterSpacing);
+}
+function installCodeLineNumberLayout(pre, code, lineCount) {
+  var _a2;
+  (_a2 = pre.querySelector(":scope > .mms-code-line-numbers")) == null ? void 0 : _a2.remove();
+  captureCodeLayoutMetrics(pre, code);
+  pre.classList.add("mms-code-with-line-numbers");
+  code.classList.add("mms-code-content");
+  const gutter = pre.ownerDocument.createElement("span");
+  gutter.className = "mms-code-line-numbers";
+  gutter.textContent = buildCodeLineNumberText(lineCount);
+  gutter.setAttribute("aria-hidden", "true");
+  gutter.setAttribute("role", "presentation");
+  pre.insertBefore(gutter, code);
+}
+async function renderCodeBlock(options) {
+  var _a2;
+  const presentation = resolveCodeBlockPresentation(options.block, options.pageAppearance, options.defaults);
+  options.container.replaceChildren();
+  options.container.classList.add("mms-code-render-root");
+  options.container.classList.remove(...Object.values(CODE_THEME_CLASS_NAMES));
+  const themeClass = presentation.theme === "obsidian" ? void 0 : CODE_THEME_CLASS_NAMES[presentation.theme];
+  if (themeClass) options.container.classList.add(themeClass);
+  let target = options.container;
+  if (presentation.collapsed) {
+    const details = options.container.ownerDocument.createElement("details");
+    details.className = "mms-code-collapsed";
+    const summary = options.container.ownerDocument.createElement("summary");
+    summary.textContent = `\u5C55\u5F00 ${options.block.language || "code"} \u4EE3\u7801`;
+    details.appendChild(summary);
+    target = options.container.ownerDocument.createElement("div");
+    target.className = "mms-code-collapsed-content";
+    details.appendChild(target);
+    options.container.appendChild(details);
+  }
+  await options.renderMarkdown(buildFencedCodeMarkdown(options.block), target);
+  const pre = target.querySelector("pre");
+  const code = (_a2 = pre == null ? void 0 : pre.querySelector(":scope > code")) != null ? _a2 : null;
+  if (!pre || !code) return;
+  pre.classList.add("mms-code-frame");
+  pre.dataset.lineCount = String(presentation.lineCount);
+  if (presentation.showLineNumbers) installCodeLineNumberLayout(pre, code, presentation.lineCount);
+}
+
 // src/editor/content-modals.ts
 var import_obsidian2 = require("obsidian");
 var CODE_LANGUAGE_OPTIONS = [
@@ -6158,6 +6253,8 @@ var ImagePreviewModal = class extends import_obsidian5.Modal {
    */
   onOpen() {
     this.modalEl.addClass("mmc-image-preview-modal");
+    this.modalEl.style.setProperty("width", "min(98vw, 1800px)", "important");
+    this.modalEl.style.setProperty("height", "min(94vh, 1080px)", "important");
     this.titleEl.setText(this.alt || "\u56FE\u7247\u9884\u89C8");
     const toolbar = this.contentEl.createDiv({ cls: "mmc-image-preview-toolbar" });
     const sourceBar = this.contentEl.createDiv({ cls: "mmc-image-preview-sources" });
@@ -10221,14 +10318,23 @@ var MindMapEditor = class {
   /** Activates direct code editing for a code block rendered in article mode. */
   makeInlineCodeEditable(element, node, code, blockId) {
     if (this.readOnly || element.hasClass("is-inline-editing")) return;
+    const showLineNumbers = Boolean(element.querySelector(".mms-code-line-numbers"));
     this.selectNode(node.id);
     element.empty();
     element.addClass("is-inline-editing");
-    const editor = element.createEl("textarea", {
+    const shell = element.createDiv({ cls: `mms-article-code-editor-shell${showLineNumbers ? " has-line-numbers" : ""}` });
+    const gutter = shell.createSpan({ cls: "mms-article-code-editor-gutter", attr: { "aria-hidden": "true" } });
+    const editor = shell.createEl("textarea", {
       cls: "mms-article-code-editor",
       attr: { spellcheck: "false", "aria-label": "\u7F16\u8F91\u4EE3\u7801" }
     });
     editor.value = code.code;
+    const updateEditorLayout = () => {
+      const lineCount = countCodeLines(editor.value);
+      editor.rows = Math.max(4, Math.min(40, lineCount));
+      gutter.setText(showLineNumbers ? buildCodeLineNumberText(lineCount) : "");
+    };
+    updateEditorLayout();
     let finished = false;
     const finish = (save) => {
       if (finished) return;
@@ -10249,6 +10355,7 @@ var MindMapEditor = class {
       }
     });
     editor.addEventListener("blur", () => finish(true));
+    editor.addEventListener("input", updateEditorLayout);
     window.requestAnimationFrame(() => {
       editor.focus();
       editor.setSelectionRange(editor.value.length, editor.value.length);
@@ -13811,101 +13918,6 @@ var AiAskModal = class extends import_obsidian11.Modal {
     this.contentEl.empty();
   }
 };
-
-// src/render/code-block.ts
-var CODE_THEME_CLASS_NAMES = {
-  github: "mms-code-theme-github",
-  monokai: "mms-code-theme-monokai",
-  dracula: "mms-code-theme-dracula"
-};
-function normalizeCodeLineThreshold(value) {
-  return Math.max(0, Math.min(1e3, Math.floor(value || 0)));
-}
-function countCodeLines(code) {
-  return code.split(/\r\n|\r|\n/).length;
-}
-function buildCodeLineNumberText(lineCount) {
-  const safeLineCount = Math.max(1, Math.floor(lineCount || 0));
-  return Array.from({ length: safeLineCount }, (_, index) => String(index + 1)).join("\n");
-}
-function buildFencedCodeMarkdown(block) {
-  var _a2;
-  const longestFence = Math.max(2, ...Array.from(block.code.matchAll(/`+/g), (match) => match[0].length));
-  const fence = "`".repeat(longestFence + 1);
-  return `${fence}${(_a2 = block.language) != null ? _a2 : ""}
-${block.code}
-${fence}`;
-}
-function resolveCodeBlockPresentation(block, pageAppearance, defaults) {
-  var _a2, _b2, _c, _d, _e, _f, _g;
-  const lineCount = countCodeLines(block.code);
-  const expandThreshold = normalizeCodeLineThreshold(defaults.autoExpandMaxLines);
-  const lineNumberThreshold = normalizeCodeLineThreshold(defaults.autoLineNumbersMinLines);
-  const autoExpand = expandThreshold > 0 && lineCount <= expandThreshold;
-  const autoLineNumbers = lineNumberThreshold > 0 ? lineCount > lineNumberThreshold : void 0;
-  return {
-    collapsed: (_b2 = block.collapsed) != null ? _b2 : autoExpand ? false : (_a2 = pageAppearance == null ? void 0 : pageAppearance.codeCollapsed) != null ? _a2 : defaults.collapsed,
-    showLineNumbers: (_e = (_d = (_c = block.showLineNumbers) != null ? _c : autoLineNumbers) != null ? _d : pageAppearance == null ? void 0 : pageAppearance.codeShowLineNumbers) != null ? _e : defaults.showLineNumbers,
-    theme: (_g = (_f = block.theme) != null ? _f : pageAppearance == null ? void 0 : pageAppearance.codeTheme) != null ? _g : defaults.theme,
-    lineCount
-  };
-}
-function captureCodeLayoutMetrics(pre, code) {
-  const view = pre.ownerDocument.defaultView;
-  if (!view) return;
-  const preStyle = view.getComputedStyle(pre);
-  const codeStyle = view.getComputedStyle(code);
-  pre.style.setProperty("--mms-code-padding-top", preStyle.paddingTop);
-  pre.style.setProperty("--mms-code-padding-right", preStyle.paddingRight);
-  pre.style.setProperty("--mms-code-padding-bottom", preStyle.paddingBottom);
-  pre.style.setProperty("--mms-code-padding-left", preStyle.paddingLeft);
-  pre.style.setProperty("--mms-code-font-family", codeStyle.fontFamily);
-  pre.style.setProperty("--mms-code-font-size", codeStyle.fontSize);
-  pre.style.setProperty("--mms-code-font-weight", codeStyle.fontWeight);
-  pre.style.setProperty("--mms-code-line-height", codeStyle.lineHeight);
-  pre.style.setProperty("--mms-code-letter-spacing", codeStyle.letterSpacing);
-}
-function installCodeLineNumberLayout(pre, code, lineCount) {
-  var _a2;
-  (_a2 = pre.querySelector(":scope > .mms-code-line-numbers")) == null ? void 0 : _a2.remove();
-  captureCodeLayoutMetrics(pre, code);
-  pre.classList.add("mms-code-with-line-numbers");
-  code.classList.add("mms-code-content");
-  const gutter = pre.ownerDocument.createElement("span");
-  gutter.className = "mms-code-line-numbers";
-  gutter.textContent = buildCodeLineNumberText(lineCount);
-  gutter.setAttribute("aria-hidden", "true");
-  gutter.setAttribute("role", "presentation");
-  pre.insertBefore(gutter, code);
-}
-async function renderCodeBlock(options) {
-  var _a2;
-  const presentation = resolveCodeBlockPresentation(options.block, options.pageAppearance, options.defaults);
-  options.container.replaceChildren();
-  options.container.classList.add("mms-code-render-root");
-  options.container.classList.remove(...Object.values(CODE_THEME_CLASS_NAMES));
-  const themeClass = presentation.theme === "obsidian" ? void 0 : CODE_THEME_CLASS_NAMES[presentation.theme];
-  if (themeClass) options.container.classList.add(themeClass);
-  let target = options.container;
-  if (presentation.collapsed) {
-    const details = options.container.ownerDocument.createElement("details");
-    details.className = "mms-code-collapsed";
-    const summary = options.container.ownerDocument.createElement("summary");
-    summary.textContent = `\u5C55\u5F00 ${options.block.language || "code"} \u4EE3\u7801`;
-    details.appendChild(summary);
-    target = options.container.ownerDocument.createElement("div");
-    target.className = "mms-code-collapsed-content";
-    details.appendChild(target);
-    options.container.appendChild(details);
-  }
-  await options.renderMarkdown(buildFencedCodeMarkdown(options.block), target);
-  const pre = target.querySelector("pre");
-  const code = (_a2 = pre == null ? void 0 : pre.querySelector(":scope > code")) != null ? _a2 : null;
-  if (!pre || !code) return;
-  pre.classList.add("mms-code-frame");
-  pre.dataset.lineCount = String(presentation.lineCount);
-  if (presentation.showLineNumbers) installCodeLineNumberLayout(pre, code, presentation.lineCount);
-}
 
 // src/view.ts
 var VIEW_TYPE_MINDMAP_STUDIO = "mindmap-studio-view";
