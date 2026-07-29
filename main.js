@@ -9693,7 +9693,7 @@ var MindMapEditor = class {
     this.addToolbarButton("collapse", "fold-vertical", "\u5C55\u5F00/\u6536\u8D77\u8282\u70B9\uFF08Space\uFF09", () => this.toggleCollapse(), true);
     this.addToolbarButton("collapse-all", "chevrons-up-down", "\u5C55\u5F00/\u6298\u53E0\u5168\u90E8\u5B50\u9879", () => this.toggleAllNodesCollapsed());
     this.addToolbarButton("link", "link", "\u6253\u5F00\u8282\u70B9\u94FE\u63A5", () => this.openSelectedLink());
-    this.addToolbarButton("search", "search", "\u641C\u7D22\u5F53\u524D\u5BFC\u56FE\u53CA\u5168\u90E8\u5B50\u5BFC\u56FE\uFF08Ctrl/Cmd+Shift+F\uFF09", () => this.openSearch());
+    this.addToolbarButton("search", "search", "\u641C\u7D22\u5F53\u524D\u5BFC\u56FE\u53CA\u5168\u90E8\u5B50\u5BFC\u56FE\uFF08Ctrl/Cmd+Alt+F\uFF09", () => this.openSearch());
     this.addToolbarButton("global-search", "file-search", "\u5168\u5C40\u641C\u7D22\u6240\u6709\u5BFC\u56FE", () => this.callbacks.onGlobalSearch());
     this.aiButton = this.addToolbarButton("ai", "sparkles", "\u8BE2\u95EE AI\uFF08\u5F53\u524D\u9875\u9762\uFF0CCtrl/Cmd+Shift+A\uFF09", () => this.askAi());
     this.updateAiScopeButton();
@@ -13363,7 +13363,7 @@ var MindMapEditor = class {
     const mod = event.ctrlKey || event.metaKey;
     const key = event.key.toLowerCase();
     const findKey = key === "f" || event.code === "KeyF";
-    if (mod && event.shiftKey && findKey && !event.altKey) {
+    if (mod && event.altKey && findKey && !event.shiftKey) {
       event.preventDefault();
       event.stopPropagation();
       if (event.repeat) return;
