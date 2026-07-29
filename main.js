@@ -9707,7 +9707,7 @@ var MindMapEditor = class {
     this.addToolbarButton("delete", "trash-2", "\u5220\u9664\u8282\u70B9\uFF08Delete\uFF09", () => this.deleteSelected(), true);
     this.addToolbarSeparator();
     this.addToolbarButton("task", "circle-check-big", "\u5207\u6362\u4EFB\u52A1\u72B6\u6001\uFF08Ctrl/Cmd+Enter\uFF09", () => this.cycleTask(), true);
-    this.addToolbarButton("collapse", "fold-vertical", "\u5C55\u5F00/\u6536\u8D77\u8282\u70B9\uFF08Space\uFF09", () => this.toggleCollapse(), true);
+    this.addToolbarButton("collapse", "fold-vertical", "\u5C55\u5F00/\u6536\u8D77\u8282\u70B9", () => this.toggleCollapse(), true);
     this.addToolbarButton("collapse-all", "chevrons-up-down", "\u5C55\u5F00/\u6298\u53E0\u5168\u90E8\u5B50\u9879", () => this.toggleAllNodesCollapsed());
     this.addToolbarButton("link", "link", "\u6253\u5F00\u8282\u70B9\u94FE\u63A5", () => this.openSelectedLink());
     this.addToolbarButton("search", "search", "\u641C\u7D22\u5F53\u524D\u5BFC\u56FE\u53CA\u5168\u90E8\u5B50\u5BFC\u56FE\uFF08Ctrl/Cmd+Alt+F\uFF09", () => this.openSearch());
@@ -13510,7 +13510,7 @@ var MindMapEditor = class {
         break;
       case " ":
         event.preventDefault();
-        this.toggleCollapse();
+        if (this.selectedNode()) this.beginInlineEdit(this.selectedId);
         break;
       case "ArrowLeft":
         event.preventDefault();
