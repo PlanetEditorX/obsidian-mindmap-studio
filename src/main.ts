@@ -643,6 +643,9 @@ export default class MindMapStudioPlugin extends Plugin {
       defaultNodeTextAlign: raw.defaultNodeTextAlign === "left" || raw.defaultNodeTextAlign === "right" || raw.defaultNodeTextAlign === "center"
         ? raw.defaultNodeTextAlign
         : DEFAULT_SETTINGS.defaultNodeTextAlign,
+      nodeVisualStyle: raw.nodeVisualStyle === "branch" || raw.nodeVisualStyle === "card"
+        ? raw.nodeVisualStyle
+        : DEFAULT_SETTINGS.nodeVisualStyle,
       nodeWidthMode: raw.nodeWidthMode === "fixed" || raw.nodeWidthMode === "auto"
         ? raw.nodeWidthMode
         : DEFAULT_SETTINGS.nodeWidthMode,

@@ -673,12 +673,143 @@ class AppearanceModal extends Modal {
    */
   onOpen(): void {
     this.titleEl.setText("主题与外观");
+    this.modalEl.addClass("mmc-appearance-dialog");
     this.contentEl.addClass("mmc-appearance-modal");
     const form = this.contentEl.createEl("form");
-    form.createEl("p", { cls: "setting-item-description", text: "先选择一套主题，再按需要修改背景、节点、字体、连线、文章编号和目录层级。设置只保存到当前 .mindmap 文件。" });
+    form.createEl("p", {
+      cls: "setting-item-description",
+      text: "先选择主题模板，再按画布、节点、连线、阅读和代码分组调整。设置只保存到当前 .mindmap 文件，并优先于插件全局默认值。"
+    });
 
-    const numberingSection = form.createDiv({ cls: "mmc-appearance-article-numbering" });
+    let selectedPreset: MindMapThemePresetId = this.appearance.themePreset ?? "classic-indigo";
+    const themeSection = form.createDiv({ cls: "mmc-theme-picker mmc-appearance-section" });
+    themeSection.createDiv({ cls: "mmc-theme-picker-title", text: "主题模板" });
+    themeSection.createDiv({
+      cls: "setting-item-description mmc-appearance-section-description",
+      text: "主题模板会一次更新颜色、字体和连线；下方单项仍可继续覆盖。"
+    });
+    const themeGrid = themeSection.createDiv({ cls: "mmc-theme-card-grid" });
+    const themeCards = new Map<MindMapThemePresetId, HTMLButtonElement>();
+
+    const appearanceColumns = form.createDiv({ cls: "mmc-appearance-columns" });
+    const appearanceLeftColumn = appearanceColumns.createDiv({ cls: "mmc-appearance-column" });
+    const appearanceRightColumn = appearanceColumns.createDiv({ cls: "mmc-appearance-column" });
+    const createAppearanceSection = (container: HTMLElement, title: string, description: string): { section: HTMLDivElement; grid: HTMLDivElement } => {
+      const section = container.createDiv({ cls: "mmc-appearance-section" });
+      section.createDiv({ cls: "mmc-theme-picker-title", text: title });
+      section.createDiv({ cls: "setting-item-description mmc-appearance-section-description", text: description });
+      const grid = section.createDiv({ cls: "mmc-form-grid mmc-appearance-grid" });
+      return { section, grid };
+    };
+    const addColor = (container: HTMLElement, labelText: string, value: string | undefined, fallback: string): { toggle: HTMLInputElement; input: HTMLInputElement } => {
+      const label = container.createEl("label", { text: labelText });
+      const row = label.createDiv({ cls: "mmc-color-row" });
+      const toggle = row.createEl("input", { type: "checkbox" });
+      const input = row.createEl("input", { type: "color" });
+      toggle.checked = Boolean(value);
+      input.value = value ?? fallback;
+      input.disabled = !toggle.checked;
+      toggle.addEventListener("change", () => { input.disabled = !toggle.checked; });
+      return { toggle, input };
+    };
+
+    const canvasSection = createAppearanceSection(appearanceLeftColumn, "画布与字体", "集中设置背景、图案和当前脑图的基础字体。");
+    const background = addColor(canvasSection.grid, "背景颜色", this.appearance.backgroundColor, "#f8fafc");
+    const patternLabel = canvasSection.grid.createEl("label", { text: "背景图案" });
+    const patternSelect = patternLabel.createEl("select");
+    for (const [value, label] of [["none", "无"], ["grid", "网格"], ["dots", "点阵"]] as const) patternSelect.createEl("option", { text: label, attr: { value } });
+    patternSelect.value = this.appearance.backgroundPattern ?? "grid";
+    const patternColor = addColor(canvasSection.grid, "图案颜色", this.appearance.patternColor, "#94a3b8");
+    const fontLabel = canvasSection.grid.createEl("label", { text: "字体" });
+    const fontSelect = fontLabel.createEl("select");
+    for (const [value, label] of [["obsidian", "跟随 Obsidian"], ["sans", "无衬线"], ["serif", "衬线"], ["mono", "等宽"], ["custom", "自定义"]] as const) fontSelect.createEl("option", { text: label, attr: { value } });
+    fontSelect.value = this.appearance.fontFamily ?? "obsidian";
+    const customFontLabel = canvasSection.grid.createEl("label", { text: "自定义字体名称" });
+    const customFontInput = customFontLabel.createEl("input", { type: "text", attr: { placeholder: "Microsoft YaHei" } });
+    customFontInput.value = this.appearance.customFont ?? "";
+    const updateCustomFont = (): void => {
+      customFontInput.disabled = fontSelect.value !== "custom";
+      customFontLabel.toggleClass("is-disabled", customFontInput.disabled);
+    };
+    fontSelect.addEventListener("change", updateCustomFont);
+    updateCustomFont();
+    const fontSizeLabel = canvasSection.grid.createEl("label", { text: "字号（10–30）" });
+    const fontSizeInput = fontSizeLabel.createEl("input", { type: "number", attr: { min: "10", max: "30", step: "1" } });
+    fontSizeInput.value = String(this.appearance.fontSize ?? 14);
+
+    const nodeSection = createAppearanceSection(appearanceRightColumn, "节点与文字", "设置分支形态、节点配色、边框和默认文字表现。");
+    const nodeVisualStyleLabel = nodeSection.grid.createEl("label", { text: "分支外观" });
+    const nodeVisualStyleSelect = nodeVisualStyleLabel.createEl("select");
+    nodeVisualStyleSelect.createEl("option", { text: "圆润卡片分支（曲线）", attr: { value: "card" } });
+    nodeVisualStyleSelect.createEl("option", { text: "圆角分支（折线）", attr: { value: "branch" } });
+    nodeVisualStyleSelect.value = this.appearance.nodeVisualStyle ?? "card";
+    nodeVisualStyleLabel.createDiv({ cls: "setting-item-description", text: "当前脑图设置，优先于插件全局分支外观。" });
+    const nodeTextAlignLabel = nodeSection.grid.createEl("label", { text: "节点文字对齐" });
+    const nodeTextAlignSelect = nodeTextAlignLabel.createEl("select");
+    nodeTextAlignSelect.createEl("option", { text: "左对齐", attr: { value: "left" } });
+    nodeTextAlignSelect.createEl("option", { text: "居中", attr: { value: "center" } });
+    nodeTextAlignSelect.createEl("option", { text: "右对齐", attr: { value: "right" } });
+    nodeTextAlignSelect.value = this.appearance.nodeTextAlign ?? "center";
+    const rootColor = addColor(nodeSection.grid, "中心主题颜色", this.appearance.rootColor, "#4f46e5");
+    const rootTextColor = addColor(nodeSection.grid, "中心主题文字", this.appearance.rootTextColor, "#ffffff");
+    const nodeColor = addColor(nodeSection.grid, "节点背景色", this.appearance.nodeColor, "#ffffff");
+    const textColor = addColor(nodeSection.grid, "文字颜色", this.appearance.textColor, "#0f172a");
+    const borderColor = addColor(nodeSection.grid, "节点边框颜色", this.appearance.nodeBorderColor, "#94a3b8");
+    const borderWidthLabel = nodeSection.grid.createEl("label", { text: "边框粗细（0–6）" });
+    const borderWidthInput = borderWidthLabel.createEl("input", { type: "number", attr: { min: "0", max: "6", step: "0.5" } });
+    borderWidthInput.value = String(this.appearance.nodeBorderWidth ?? 1);
+    const textStyleSection = nodeSection.section.createDiv({ cls: "mmc-appearance-text-style" });
+    textStyleSection.createDiv({ cls: "mmc-appearance-text-style-title", text: "文字样式" });
+    const textStyle = textStyleSection.createDiv({ cls: "mmc-appearance-style-options" });
+    const addCheck = (text: string, checked: boolean): HTMLInputElement => {
+      const label = textStyle.createEl("label", { cls: "mmc-appearance-style-option" });
+      const input = label.createEl("input", { type: "checkbox" });
+      input.checked = checked;
+      label.createSpan({ text });
+      return input;
+    };
+    const bold = addCheck("文字加粗", this.appearance.bold === true);
+    const italic = addCheck("文字斜体", this.appearance.italic === true);
+    const underline = addCheck("文字下划线", this.appearance.underline === true);
+
+    const edgeSection = createAppearanceSection(appearanceLeftColumn, "连线与分支", "统一管理连线形态、粗细变化和彩色一级分支。");
+    const edgeColor = addColor(edgeSection.grid, "连线颜色", this.appearance.edgeColor, "#7c8aa5");
+    const edgeStyleLabel = edgeSection.grid.createEl("label", { text: "连线类型" });
+    const edgeStyleSelect = edgeStyleLabel.createEl("select");
+    for (const [value, label] of [["curved", "曲线"], ["straight", "直线"], ["elbow", "折线"]] as const) edgeStyleSelect.createEl("option", { text: label, attr: { value } });
+    edgeStyleSelect.value = this.appearance.edgeStyle ?? "curved";
+    const edgeWidthModeLabel = edgeSection.grid.createEl("label", { text: "连线粗细模式" });
+    const edgeWidthModeSelect = edgeWidthModeLabel.createEl("select");
+    edgeWidthModeSelect.createEl("option", { text: "统一粗细", attr: { value: "uniform" } });
+    edgeWidthModeSelect.createEl("option", { text: "从粗到细", attr: { value: "tapered" } });
+    edgeWidthModeSelect.value = this.appearance.edgeWidthMode ?? "tapered";
+    const edgeWidthLabel = edgeSection.grid.createEl("label", { text: "起始粗细（0.5–8）" });
+    const edgeWidthInput = edgeWidthLabel.createEl("input", { type: "number", attr: { min: "0.5", max: "8", step: "0.05" } });
+    edgeWidthInput.value = String(this.appearance.edgeWidth ?? 4.2);
+    const edgeMinWidthLabel = edgeSection.grid.createEl("label", { text: "末端最细（0.25–4）" });
+    const edgeMinWidthInput = edgeMinWidthLabel.createEl("input", { type: "number", attr: { min: "0.25", max: "4", step: "0.05" } });
+    edgeMinWidthInput.value = String(this.appearance.edgeMinWidth ?? 1.2);
+    const updateEdgeMin = (): void => {
+      const tapered = edgeWidthModeSelect.value === "tapered";
+      edgeMinWidthInput.disabled = !tapered;
+      edgeMinWidthLabel.toggleClass("is-disabled", !tapered);
+      edgeWidthLabel.childNodes[0]!.textContent = tapered ? "起始粗细（0.5–8）" : "连线粗细（0.5–8）";
+    };
+    edgeWidthModeSelect.addEventListener("change", updateEdgeMin);
+    updateEdgeMin();
+    const branchLabel = edgeSection.grid.createEl("label", { text: "彩色分支" });
+    const branchToggleRow = branchLabel.createDiv({ cls: "mmc-toggle-row" });
+    const colorfulBranches = branchToggleRow.createEl("input", { type: "checkbox" });
+    colorfulBranches.checked = this.appearance.colorfulBranches === true;
+    branchToggleRow.createSpan({ text: "按一级分支循环配色" });
+    const branchColorsLabel = edgeSection.grid.createEl("label", { text: "分支颜色（逗号分隔）" });
+    branchColorsLabel.addClass("mmc-appearance-grid-span-2");
+    const branchColorsInput = branchColorsLabel.createEl("textarea", { attr: { rows: "2", placeholder: "#4f46e5, #0284c7, #0f766e" } });
+    branchColorsInput.value = (this.appearance.branchColors ?? []).join(", ");
+
+    const numberingSection = appearanceRightColumn.createDiv({ cls: "mmc-appearance-section mmc-appearance-article-numbering" });
     numberingSection.createDiv({ cls: "mmc-theme-picker-title", text: "文章编号与目录" });
+    numberingSection.createDiv({ cls: "setting-item-description mmc-appearance-section-description", text: "控制当前脑图的文章编号、目录层级和阅读缩略导航。" });
     const numberingGrid = numberingSection.createDiv({ cls: "mmc-form-grid mmc-appearance-grid" });
     const numberingControls = createArticleNumberingControls(
       numberingGrid,
@@ -706,9 +837,9 @@ class AppearanceModal extends Modal {
     miniMapSelect.createEl("option", { text: "隐藏", attr: { value: "hide" } });
     miniMapSelect.value = this.articleMiniMap === undefined ? "" : this.articleMiniMap ? "show" : "hide";
 
-    const codeSection = form.createDiv({ cls: "mmc-appearance-code-settings" });
+    const codeSection = appearanceLeftColumn.createDiv({ cls: "mmc-appearance-section mmc-appearance-code-settings" });
     codeSection.createDiv({ cls: "mmc-theme-picker-title", text: "页面代码设置" });
-    codeSection.createDiv({ cls: "setting-item-description", text: "优先级 2：覆盖插件全局代码设置；节点代码设置仍可单独覆盖。" });
+    codeSection.createDiv({ cls: "setting-item-description mmc-appearance-section-description", text: "优先级 2：覆盖插件全局代码设置；节点代码设置仍可单独覆盖。" });
     const codeGrid = codeSection.createDiv({ cls: "mmc-form-grid mmc-appearance-grid" });
     const pageCodeCollapsedLabel = codeGrid.createEl("label", { text: "默认状态" });
     const pageCodeCollapsed = pageCodeCollapsedLabel.createEl("select");
@@ -727,117 +858,6 @@ class AppearanceModal extends Modal {
     pageCodeTheme.createEl("option", { value: "", text: "跟随全局设置" });
     (["obsidian", "github", "monokai", "dracula"] as const).forEach((value) => pageCodeTheme.createEl("option", { value, text: value === "obsidian" ? "Obsidian" : value === "github" ? "GitHub" : value === "monokai" ? "Monokai" : "Dracula" }));
     pageCodeTheme.value = this.pageCodeAppearance.codeTheme ?? "";
-
-    let selectedPreset: MindMapThemePresetId = this.appearance.themePreset ?? "classic-indigo";
-    const themeSection = form.createDiv({ cls: "mmc-theme-picker" });
-    themeSection.createDiv({ cls: "mmc-theme-picker-title", text: "主题模板" });
-    const themeGrid = themeSection.createDiv({ cls: "mmc-theme-card-grid" });
-    const themeCards = new Map<MindMapThemePresetId, HTMLButtonElement>();
-
-    const grid = form.createDiv({ cls: "mmc-form-grid mmc-appearance-grid" });
-    const addColor = (labelText: string, value: string | undefined, fallback: string): { toggle: HTMLInputElement; input: HTMLInputElement } => {
-      const label = grid.createEl("label", { text: labelText });
-      const row = label.createDiv({ cls: "mmc-color-row" });
-      const toggle = row.createEl("input", { type: "checkbox" });
-      const input = row.createEl("input", { type: "color" });
-      toggle.checked = Boolean(value);
-      input.value = value ?? fallback;
-      input.disabled = !toggle.checked;
-      toggle.addEventListener("change", () => { input.disabled = !toggle.checked; });
-      return { toggle, input };
-    };
-
-    const background = addColor("背景颜色", this.appearance.backgroundColor, "#f8fafc");
-    const patternLabel = grid.createEl("label", { text: "背景图案" });
-    const patternSelect = patternLabel.createEl("select");
-    for (const [value, label] of [["none", "无"], ["grid", "网格"], ["dots", "点阵"]] as const) patternSelect.createEl("option", { text: label, attr: { value } });
-    patternSelect.value = this.appearance.backgroundPattern ?? "grid";
-    const patternColor = addColor("图案颜色", this.appearance.patternColor, "#94a3b8");
-
-    const fontLabel = grid.createEl("label", { text: "字体" });
-    const fontSelect = fontLabel.createEl("select");
-    for (const [value, label] of [["obsidian", "跟随 Obsidian"], ["sans", "无衬线"], ["serif", "衬线"], ["mono", "等宽"], ["custom", "自定义"]] as const) fontSelect.createEl("option", { text: label, attr: { value } });
-    fontSelect.value = this.appearance.fontFamily ?? "obsidian";
-    const customFontLabel = grid.createEl("label", { text: "自定义字体名称" });
-    const customFontInput = customFontLabel.createEl("input", { type: "text", attr: { placeholder: "Microsoft YaHei" } });
-    customFontInput.value = this.appearance.customFont ?? "";
-    const updateCustomFont = (): void => { customFontInput.disabled = fontSelect.value !== "custom"; };
-    fontSelect.addEventListener("change", updateCustomFont);
-    updateCustomFont();
-
-    const fontSizeLabel = grid.createEl("label", { text: "字号（10–30）" });
-    const fontSizeInput = fontSizeLabel.createEl("input", { type: "number", attr: { min: "10", max: "30", step: "1" } });
-    fontSizeInput.value = String(this.appearance.fontSize ?? 14);
-    const nodeVisualStyleLabel = grid.createEl("label", { text: "分支外观" });
-    const nodeVisualStyleSelect = nodeVisualStyleLabel.createEl("select");
-    nodeVisualStyleSelect.createEl("option", { text: "圆润卡片分支（曲线）", attr: { value: "card" } });
-    nodeVisualStyleSelect.createEl("option", { text: "圆角分支（折线）", attr: { value: "branch" } });
-    nodeVisualStyleSelect.value = this.appearance.nodeVisualStyle ?? "card";
-    const nodeTextAlignLabel = grid.createEl("label", { text: "节点文字对齐" });
-    const nodeTextAlignSelect = nodeTextAlignLabel.createEl("select");
-    nodeTextAlignSelect.createEl("option", { text: "左对齐", attr: { value: "left" } });
-    nodeTextAlignSelect.createEl("option", { text: "居中", attr: { value: "center" } });
-    nodeTextAlignSelect.createEl("option", { text: "右对齐", attr: { value: "right" } });
-    nodeTextAlignSelect.value = this.appearance.nodeTextAlign ?? "center";
-
-    const rootColor = addColor("中心主题颜色", this.appearance.rootColor, "#4f46e5");
-    const rootTextColor = addColor("中心主题文字", this.appearance.rootTextColor, "#ffffff");
-    const nodeColor = addColor("节点背景色", this.appearance.nodeColor, "#ffffff");
-    const textColor = addColor("文字颜色", this.appearance.textColor, "#0f172a");
-    const borderColor = addColor("节点边框颜色", this.appearance.nodeBorderColor, "#94a3b8");
-    const borderWidthLabel = grid.createEl("label", { text: "边框粗细（0–6）" });
-    const borderWidthInput = borderWidthLabel.createEl("input", { type: "number", attr: { min: "0", max: "6", step: "0.5" } });
-    borderWidthInput.value = String(this.appearance.nodeBorderWidth ?? 1);
-
-    const edgeColor = addColor("连线颜色", this.appearance.edgeColor, "#7c8aa5");
-    const edgeStyleLabel = grid.createEl("label", { text: "连线类型" });
-    const edgeStyleSelect = edgeStyleLabel.createEl("select");
-    for (const [value, label] of [["curved", "曲线"], ["straight", "直线"], ["elbow", "折线"]] as const) edgeStyleSelect.createEl("option", { text: label, attr: { value } });
-    edgeStyleSelect.value = this.appearance.edgeStyle ?? "curved";
-
-    const edgeWidthModeLabel = grid.createEl("label", { text: "连线粗细模式" });
-    const edgeWidthModeSelect = edgeWidthModeLabel.createEl("select");
-    edgeWidthModeSelect.createEl("option", { text: "统一粗细", attr: { value: "uniform" } });
-    edgeWidthModeSelect.createEl("option", { text: "从粗到细", attr: { value: "tapered" } });
-    edgeWidthModeSelect.value = this.appearance.edgeWidthMode ?? "tapered";
-
-    const edgeWidthLabel = grid.createEl("label", { text: "起始粗细（0.5–8）" });
-    const edgeWidthInput = edgeWidthLabel.createEl("input", { type: "number", attr: { min: "0.5", max: "8", step: "0.05" } });
-    edgeWidthInput.value = String(this.appearance.edgeWidth ?? 4.2);
-    const edgeMinWidthLabel = grid.createEl("label", { text: "末端最细（0.25–4）" });
-    const edgeMinWidthInput = edgeMinWidthLabel.createEl("input", { type: "number", attr: { min: "0.25", max: "4", step: "0.05" } });
-    edgeMinWidthInput.value = String(this.appearance.edgeMinWidth ?? 1.2);
-    const updateEdgeMin = (): void => {
-      const tapered = edgeWidthModeSelect.value === "tapered";
-      edgeMinWidthInput.disabled = !tapered;
-      edgeMinWidthLabel.toggleClass("is-disabled", !tapered);
-      edgeWidthLabel.childNodes[0]!.textContent = tapered ? "起始粗细（0.5–8）" : "连线粗细（0.5–8）";
-    };
-    edgeWidthModeSelect.addEventListener("change", updateEdgeMin);
-    updateEdgeMin();
-
-    const branchLabel = grid.createEl("label", { text: "彩色分支" });
-    const branchToggleRow = branchLabel.createDiv({ cls: "mmc-toggle-row" });
-    const colorfulBranches = branchToggleRow.createEl("input", { type: "checkbox" });
-    colorfulBranches.checked = this.appearance.colorfulBranches === true;
-    branchToggleRow.createSpan({ text: "按一级分支循环配色" });
-    const branchColorsLabel = grid.createEl("label", { text: "分支颜色（逗号分隔）" });
-    const branchColorsInput = branchColorsLabel.createEl("textarea", { attr: { rows: "2", placeholder: "#4f46e5, #0284c7, #0f766e" } });
-    branchColorsInput.value = (this.appearance.branchColors ?? []).join(", ");
-
-    const textStyleSection = form.createDiv({ cls: "mmc-appearance-text-style" });
-    textStyleSection.createDiv({ cls: "mmc-appearance-text-style-title", text: "文字样式" });
-    const textStyle = textStyleSection.createDiv({ cls: "mmc-appearance-style-options" });
-    const addCheck = (text: string, checked: boolean): HTMLInputElement => {
-      const label = textStyle.createEl("label", { cls: "mmc-appearance-style-option" });
-      const input = label.createEl("input", { type: "checkbox" });
-      input.checked = checked;
-      label.createSpan({ text });
-      return input;
-    };
-    const bold = addCheck("文字加粗", this.appearance.bold === true);
-    const italic = addCheck("文字斜体", this.appearance.italic === true);
-    const underline = addCheck("文字下划线", this.appearance.underline === true);
 
     const setColor = (control: { toggle: HTMLInputElement; input: HTMLInputElement }, value: string | undefined, fallback: string): void => {
       control.toggle.checked = Boolean(value);
