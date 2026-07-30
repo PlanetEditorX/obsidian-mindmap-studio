@@ -6,14 +6,27 @@ let editorSource;
 let articleRendererSource;
 let styles;
 let mainBundle;
+let nodeActionsSource;
 
 before(async () => {
-  [editorSource, articleRendererSource, styles, mainBundle] = await Promise.all([
+  [editorSource, articleRendererSource, styles, mainBundle, nodeActionsSource] = await Promise.all([
     readFile("src/editor/editor.ts", "utf8"),
     readFile("src/editor/article-renderer.ts", "utf8"),
     readFile("styles.css", "utf8"),
-    readFile("main.js", "utf8")
+    readFile("main.js", "utf8"),
+    readFile("src/editor/node-actions.ts", "utf8")
   ]);
+});
+
+test("deleting nodes prefers the prior sibling and preserves its mind-map viewport position", () => {
+  const fallback = nodeActionsSource.match(/export function deletionSelectionFallback\([\s\S]*?\n\}/)?.[0] ?? "";
+  const directDelete = editorSource.match(/private deleteNodeById\(nodeId: string\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
+
+  assert.match(fallback, /const previous = [\s\S]*const next = [\s\S]*if \(previous\) return previous\.id;[\s\S]*if \(next\) return next\.id/);
+  assert.match(fallback, /if \(!removed\.has\(parent\.id\)\) return parent\.id;[\s\S]*current = parent/);
+  assert.match(directDelete, /const mindMapAnchor = this\.captureMindMapViewportAnchor\(fallback\)/);
+  assert.match(directDelete, /this\.restoreMindMapViewportAnchor\(mindMapAnchor\)/);
+  assert.match(editorSource, /private restoreMindMapViewportAnchor\([\s\S]*this\.panX \+= \(anchor\.x - position\.x\) \* this\.zoom[\s\S]*this\.panY \+= \(anchor\.y - position\.y\) \* this\.zoom/);
 });
 
 test("article edit actions use inline editing while other modes keep the full node editor", () => {

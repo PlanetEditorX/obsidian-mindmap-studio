@@ -6401,17 +6401,23 @@ function deleteNodes(root, ids) {
   return removed;
 }
 function deletionSelectionFallback(root, ids) {
-  var _a2, _b2;
   const targets = topLevelSelectedNodeIds(root, ids);
   const target = targets[0];
   if (!target) return root.id;
-  const parent = findParent(root, target);
-  if (!parent) return root.id;
   const removed = new Set(targets);
-  const index = parent.children.findIndex((node) => node.id === target);
-  const next = parent.children.slice(index + 1).find((node) => !removed.has(node.id));
-  const previous = parent.children.slice(0, index).reverse().find((node) => !removed.has(node.id));
-  return (_b2 = (_a2 = next == null ? void 0 : next.id) != null ? _a2 : previous == null ? void 0 : previous.id) != null ? _b2 : parent.id;
+  let current = findNode(root, target);
+  while (current && current.id !== root.id) {
+    const parent = findParent(root, current.id);
+    if (!parent) return root.id;
+    const index = parent.children.findIndex((node) => node.id === current.id);
+    const previous = parent.children.slice(0, index).reverse().find((node) => !removed.has(node.id));
+    const next = parent.children.slice(index + 1).find((node) => !removed.has(node.id));
+    if (previous) return previous.id;
+    if (next) return next.id;
+    if (!removed.has(parent.id)) return parent.id;
+    current = parent;
+  }
+  return root.id;
 }
 function setAllBranchesCollapsed(root, collapsed, includeRoot = false) {
   for (const node of flattenNodes(root)) {
@@ -12070,6 +12076,22 @@ var MindMapEditor = class {
   requestMindMapLayoutAnimation() {
     if (this.currentMode === "mindmap") this.pendingMindMapLayoutAnimation = true;
   }
+  /** Captures a surviving node's world position before a deletion changes the layout. */
+  captureMindMapViewportAnchor(nodeId) {
+    if (this.currentMode !== "mindmap") return null;
+    const position = this.layout.byId.get(nodeId);
+    return position ? { nodeId, x: position.x, y: position.y } : null;
+  }
+  /** Keeps the deletion fallback node under the same screen position after relayout. */
+  restoreMindMapViewportAnchor(anchor) {
+    if (!anchor || this.currentMode !== "mindmap") return;
+    const position = this.layout.byId.get(anchor.nodeId);
+    if (!position) return;
+    this.panX += (anchor.x - position.x) * this.zoom;
+    this.panY += (anchor.y - position.y) * this.zoom;
+    this.mindMapViewportInitialized = true;
+    this.applyTransform();
+  }
   /**
    * 在销毁旧节点前记录其屏幕矩形，供下一次重绘使用 FLIP 过渡。
    *
@@ -12852,6 +12874,7 @@ var MindMapEditor = class {
     }
     const fallback = deletionSelectionFallback(this.document.root, [nodeId]);
     const restoreLocation = this.currentMode === "mindmap" ? null : this.createSelectionLocation(fallback);
+    const mindMapAnchor = this.captureMindMapViewportAnchor(fallback);
     if (this.inlineEditingId === nodeId) this.inlineEditingId = null;
     this.mutate(() => {
       deleteNodes(this.document.root, [nodeId]);
@@ -12859,6 +12882,7 @@ var MindMapEditor = class {
       this.selectedIds.clear();
       this.selectedIds.add(fallback);
     }, restoreLocation);
+    this.restoreMindMapViewportAnchor(mindMapAnchor);
   }
   /**
    * 删除selected，并保持模型、界面和持久化状态的一致性。
@@ -12869,12 +12893,14 @@ var MindMapEditor = class {
     if (this.selectedIds.size > 1 && batch.length) {
       const fallback2 = deletionSelectionFallback(this.document.root, batch);
       const restoreLocation2 = this.currentMode === "mindmap" ? null : this.createSelectionLocation(fallback2);
+      const mindMapAnchor2 = this.captureMindMapViewportAnchor(fallback2);
       this.mutate(() => {
         deleteNodes(this.document.root, batch);
         this.selectedIds.clear();
         this.selectedId = fallback2;
         this.selectedIds.add(fallback2);
       }, restoreLocation2);
+      this.restoreMindMapViewportAnchor(mindMapAnchor2);
       new import_obsidian10.Notice(`\u5DF2\u5220\u9664 ${batch.length} \u4E2A\u6240\u9009\u8282\u70B9`);
       return;
     }
@@ -12885,12 +12911,14 @@ var MindMapEditor = class {
     }
     const fallback = deletionSelectionFallback(this.document.root, [selected.id]);
     const restoreLocation = this.currentMode === "mindmap" ? null : this.createSelectionLocation(fallback);
+    const mindMapAnchor = this.captureMindMapViewportAnchor(fallback);
     this.mutate(() => {
       deleteNodes(this.document.root, [selected.id]);
       this.selectedId = fallback;
       this.selectedIds.clear();
       this.selectedIds.add(this.selectedId);
     }, restoreLocation);
+    this.restoreMindMapViewportAnchor(mindMapAnchor);
   }
   /**
    * 切换collapse，并保持模型、界面和持久化状态的一致性。
@@ -12919,13 +12947,15 @@ var MindMapEditor = class {
     const apply = () => {
       setAllBranchesCollapsed(this.document.root, collapsed);
     };
-    this.requestMindMapLayoutAnimation();
+    this.pendingMindMapLayoutAnimation = false;
     if (this.readOnly) {
       apply();
       this.render();
+      if (collapsed) this.positionCollapsedMindMapRoot();
       return;
     }
     this.mutate(apply);
+    if (collapsed) this.positionCollapsedMindMapRoot();
   }
   /** Toggles every non-root branch between fully expanded and fully collapsed. */
   toggleAllNodesCollapsed() {
@@ -14415,6 +14445,29 @@ var MindMapEditor = class {
     const centerY = (this.layout.minY + this.layout.maxY) / 2;
     this.panX = -centerX * this.zoom;
     this.panY = -centerY * this.zoom;
+    this.mindMapViewportInitialized = true;
+    this.applyTransform();
+  }
+  /** Fits the collapsed outline while placing its root at the visual left-center. */
+  positionCollapsedMindMapRoot() {
+    if (this.currentMode !== "mindmap") return;
+    const root = this.layout.byId.get(this.document.root.id);
+    const rect = this.viewportEl.getBoundingClientRect();
+    if (!root || rect.width < 1 || rect.height < 1) return;
+    const rootScreenX = rect.width * 0.28;
+    const horizontalPadding = 32;
+    const verticalPadding = 32;
+    const leftWidth = Math.max(1, root.x - this.layout.minX + horizontalPadding);
+    const rightWidth = Math.max(1, this.layout.maxX - root.x + horizontalPadding);
+    const totalHeight = Math.max(1, this.layout.maxY - this.layout.minY + verticalPadding * 2);
+    this.zoom = this.clampZoom(Math.min(
+      1.25,
+      Math.max(1, rootScreenX - horizontalPadding) / leftWidth,
+      Math.max(1, rect.width - rootScreenX - horizontalPadding) / rightWidth,
+      Math.max(1, rect.height - verticalPadding * 2) / totalHeight
+    ));
+    this.panX = rootScreenX - rect.width / 2 - root.x * this.zoom;
+    this.panY = -root.y * this.zoom;
     this.mindMapViewportInitialized = true;
     this.applyTransform();
   }
