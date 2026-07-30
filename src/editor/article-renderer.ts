@@ -53,6 +53,8 @@ export interface ArticleRendererOptions {
   updateTableColumnWidths: (node: MindMapNode, blockId: string, widths: number[]) => void;
   makeInlineEditable: (element: HTMLElement, node: MindMapNode, placeholder: string, blockId?: string) => void;
   makeInlineCodeEditable: (element: HTMLElement, node: MindMapNode, code: MindMapCodeBlock, blockId: string) => void;
+  bindArticleNodeDragHandle: (element: HTMLElement, nodeId: string) => void;
+  bindArticleNodeDropTarget: (element: HTMLElement, nodeId: string) => void;
   bindContentBlockDragHandle: (element: HTMLElement, nodeId: string, blockId: string) => void;
   bindContentBlockAppendDropTarget: (element: HTMLElement, nodeId: string) => void;
   addInlineNodeActions: (container: HTMLElement, node: MindMapNode) => void;
@@ -91,6 +93,8 @@ export function renderArticleMode(container: HTMLElement, options: ArticleRender
     const section = page.createEl("section", { cls: `mms-article-node depth-${Math.min(info.depth, 8)}${!options.readOnly && options.selectedId === info.node.id ? " is-selected" : ""}` });
     section.dataset.nodeId = info.node.id;
     section.id = info.anchor;
+    options.bindArticleNodeDragHandle(section, info.node.id);
+    options.bindArticleNodeDropTarget(section, info.node.id);
     section.addEventListener("click", () => {
       if (!options.isReadOnly()) options.selectNode(info.node.id);
     });
