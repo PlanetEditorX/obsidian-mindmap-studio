@@ -66,6 +66,16 @@ test("content blocks reorder inside one node and preserve stable IDs", () => {
   assert.equal(model.moveNodeContentBlock(root, "source", "code-a", "source", "text-a", "before"), false);
 });
 
+test("a block can be inserted between two existing blocks", () => {
+  const root = fixture();
+  const source = root.children[0];
+  const target = root.children[1];
+  assert.equal(model.moveNodeContentBlock(root, "source", "code-a", "target", "target-text", "after"), true);
+  assert.equal(model.moveNodeContentBlock(root, "source", "text-b", "target", "code-a", "before"), true);
+  assert.deepEqual(target.content.map((block) => block.id), ["target-text", "text-b", "code-a"]);
+  assert.deepEqual(source.content.map((block) => block.id), ["text-a"]);
+});
+
 test("content blocks move across nodes and rebuild both legacy mirrors", () => {
   const root = fixture();
   assert.equal(model.moveNodeContentBlock(root, "source", "code-a", "target", "target-text", "after"), true);

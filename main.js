@@ -10230,13 +10230,36 @@ var MindMapEditor = class {
         this.cancelArticleClickMove();
         return;
       }
+      const targetBlock = target == null ? void 0 : target.closest("[data-block-id]");
+      const targetBlockId = targetBlock == null ? void 0 : targetBlock.dataset.blockId;
+      if (pending.kind === "block" && targetBlock && targetBlockId) {
+        const position = event.clientY < targetBlock.getBoundingClientRect().top + targetBlock.getBoundingClientRect().height / 2 ? "before" : "after";
+        this.completeArticleClickMove(targetNodeId, targetBlockId, position);
+        return;
+      }
       this.completeArticleClickMove(targetNodeId);
     };
+    const articleBlockMovePointer = (event) => {
+      var _a2;
+      const pending = this.pendingArticleClickMove;
+      if ((pending == null ? void 0 : pending.kind) !== "block") return;
+      const target = event.target instanceof HTMLElement ? event.target : null;
+      const targetBlock = target == null ? void 0 : target.closest("[data-block-id]");
+      const targetNodeId = (_a2 = targetBlock == null ? void 0 : targetBlock.closest(
+        ".mms-article-node[data-node-id], .mms-article-document-title[data-node-id]"
+      )) == null ? void 0 : _a2.dataset.nodeId;
+      this.clearArticleBlockMoveIndicators();
+      if (!targetBlock || !targetNodeId || !this.articleBlockMoveTargetAllowed(pending, targetNodeId, targetBlock.dataset.blockId)) return;
+      const rect = targetBlock.getBoundingClientRect();
+      targetBlock.addClass(event.clientY < rect.top + rect.height / 2 ? "is-article-block-drop-before" : "is-article-block-drop-after");
+    };
     this.articleEl.addEventListener("click", articleClickMoveTarget, true);
+    this.articleEl.addEventListener("mousemove", articleBlockMovePointer, true);
     this.cleanupCallbacks.push(() => {
       this.outlineEl.removeEventListener("contextmenu", pageContextMenu);
       this.articleEl.removeEventListener("contextmenu", pageContextMenu);
       this.articleEl.removeEventListener("click", articleClickMoveTarget, true);
+      this.articleEl.removeEventListener("mousemove", articleBlockMovePointer, true);
     });
     const modeGroup = this.toolbarEl.createDiv({ cls: "mms-mode-switcher" });
     for (const mode of this.options.visibleModes) {
@@ -11081,17 +11104,23 @@ var MindMapEditor = class {
     this.moveNode(nodeId, parent.id, "after");
   }
   /** 完成工具栏发起的点击移动；非法目标保持待选状态，便于重新选择。 */
-  completeArticleClickMove(targetNodeId) {
+  completeArticleClickMove(targetNodeId, targetBlockId, position) {
     const pending = this.pendingArticleClickMove;
     if (!pending) return;
-    if (!this.articleClickMoveTargetAllowed(pending, targetNodeId)) {
+    if (!this.articleClickMoveTargetAllowed(pending, targetNodeId) || pending.kind === "block" && targetBlockId !== void 0 && !this.articleBlockMoveTargetAllowed(pending, targetNodeId, targetBlockId)) {
       new import_obsidian10.Notice(pending.kind === "block" ? "\u8BF7\u9009\u62E9\u5F53\u524D\u5757\u6240\u5C5E\u8282\u70B9\u4E4B\u5916\u7684\u76EE\u6807\u8282\u70B9" : "\u4E0D\u80FD\u79FB\u52A8\u5230\u6839\u8282\u70B9\u3001\u81EA\u8EAB\u6216\u81EA\u5DF1\u7684\u540E\u4EE3");
       return;
     }
     this.pendingArticleClickMove = null;
     this.clearArticleClickMoveUi();
     if (pending.kind === "block") {
-      this.moveContentBlock(pending.sourceNodeId, pending.blockId, targetNodeId, void 0, "append");
+      this.moveContentBlock(
+        pending.sourceNodeId,
+        pending.blockId,
+        targetNodeId,
+        targetBlockId,
+        targetBlockId && position ? position : "append"
+      );
       return;
     }
     this.selectNode(pending.sourceNodeId);
@@ -11101,12 +11130,18 @@ var MindMapEditor = class {
   articleClickMoveTargetAllowed(pending, targetNodeId) {
     const source = findNode(this.document.root, pending.sourceNodeId);
     const target = findNode(this.document.root, targetNodeId);
-    if (!source || !target || pending.sourceNodeId === targetNodeId) return false;
+    if (!source || !target || pending.kind === "node" && pending.sourceNodeId === targetNodeId) return false;
     if (pending.kind === "block") {
       return nodeContentBlocks(source).some((block) => block.id === pending.blockId);
     }
     if (targetNodeId === this.document.root.id) return false;
     return !findAncestors(this.document.root, targetNodeId).some((ancestor) => ancestor.id === pending.sourceNodeId);
+  }
+  /** 判断一个内容块能否作为文章块移动的精确前后插入目标。 */
+  articleBlockMoveTargetAllowed(pending, targetNodeId, targetBlockId) {
+    if (!targetBlockId || pending.sourceNodeId === targetNodeId && pending.blockId === targetBlockId) return false;
+    const target = findNode(this.document.root, targetNodeId);
+    return Boolean(target && nodeContentBlocks(target).some((block) => block.id === targetBlockId));
   }
   /** 绘制点击移动提示与目标可用状态；文档重绘后可安全重复调用。 */
   applyArticleClickMoveUi() {
@@ -11117,7 +11152,7 @@ var MindMapEditor = class {
     this.rootEl.dataset.articleClickMoveKind = pending.kind;
     const hint = this.articleEl.createDiv({
       cls: "mms-article-click-move-hint",
-      text: pending.kind === "block" ? "\u9009\u62E9\u76EE\u6807\u8282\u70B9\uFF1A\u5F53\u524D\u5757\u5C06\u8FFD\u52A0\u5230\u5176\u5185\u5BB9\u672B\u5C3E" : "\u9009\u62E9\u76EE\u6807\u8282\u70B9\uFF1A\u5F53\u524D\u8282\u70B9\u5C06\u63D2\u5165\u5230\u5176\u540E"
+      text: pending.kind === "block" ? "\u9009\u62E9\u76EE\u6807\u5757\u7684\u4E0A\u534A\u90E8\u6216\u4E0B\u534A\u90E8\u7CBE\u786E\u63D2\u5165\uFF1B\u70B9\u51FB\u8282\u70B9\u7A7A\u767D\u5904\u8FFD\u52A0\u5230\u672B\u5C3E" : "\u9009\u62E9\u76EE\u6807\u8282\u70B9\uFF1A\u5F53\u524D\u8282\u70B9\u5C06\u63D2\u5165\u5230\u5176\u540E"
     });
     const cancel = hint.createEl("button", {
       cls: "clickable-icon",
@@ -11155,10 +11190,16 @@ var MindMapEditor = class {
       "is-article-click-move-invalid"
     ]));
     (_c = (_b2 = this.articleEl) == null ? void 0 : _b2.querySelector(".mms-article-click-move-hint")) == null ? void 0 : _c.remove();
+    this.clearArticleBlockMoveIndicators();
     if (clearRoot) {
       (_d = this.rootEl) == null ? void 0 : _d.removeClass("is-article-click-moving");
       if ((_e = this.rootEl) == null ? void 0 : _e.dataset) delete this.rootEl.dataset.articleClickMoveKind;
     }
+  }
+  /** 清除文章块移动时随鼠标显示的前后插入线。 */
+  clearArticleBlockMoveIndicators() {
+    var _a2;
+    (_a2 = this.articleEl) == null ? void 0 : _a2.querySelectorAll(".is-article-block-drop-before, .is-article-block-drop-after").forEach((element) => element.removeClasses(["is-article-block-drop-before", "is-article-block-drop-after"]));
   }
   /**
    * 按照节点层级渲染可编辑大纲。节点标题、备注和子导图链接仍映射到同一份数据，任何修改都会通过统一变更链同步到导图和文章模式。
