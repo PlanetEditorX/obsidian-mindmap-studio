@@ -38,13 +38,15 @@ test("article mode renders and focuses a newly added empty child", () => {
   const addChild = editorSource.match(/private addChild\(\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
   const beginInlineEdit = editorSource.match(/private beginInlineEdit\([\s\S]*?\n  \}/)?.[0] ?? "";
 
-  assert.match(leafBranch, /!options\.readOnly && blocks\.length === 0/);
-  assert.match(leafBranch, /renderRichTextRuns\(paragraph, firstTextBlock\?\.richText, firstTextBlock\?\.text \?\? ""\)/);
+  assert.match(leafBranch, /if \(firstTextBlock\?\.text\.trim\(\)\)/, "non-empty text keeps the normal article paragraph path");
+  assert.match(leafBranch, /else if \(!options\.readOnly && blocks\.length === 0\)/, "only a truly content-free editable node gets a transient placeholder");
+  assert.match(leafBranch, /renderRichTextRuns\(paragraph, undefined, ""\)/);
   assert.match(leafBranch, /options\.makeInlineEditable\(paragraph, info\.node, "正文段落"\)/);
+  assert.doesNotMatch(leafBranch, /firstTextBlock\?\.text\.trim\(\) \|\|/, "table/image/code nodes must not share the empty-node placeholder condition");
   assert.match(addChild, /window\.requestAnimationFrame\(\(\) => this\.beginInlineEdit\(node\.id, undefined, true\)\)/);
   assert.match(beginInlineEdit, /\[data-node-id="\$\{CSS\.escape\(nodeId\)\}"\] \[data-mms-inline-editable="true"\]/);
   assert.match(beginInlineEdit, /if \(inlineElement\) this\.activateInlineEditable\(inlineElement\)/);
-  assert.match(mainBundle, /!options\.readOnly && blocks\.length === 0/);
+  assert.match(mainBundle, /else if \(!options\.readOnly && blocks\.length === 0\)/);
 });
 
 test("mind-map nodes keep a non-zero global minimum height", () => {

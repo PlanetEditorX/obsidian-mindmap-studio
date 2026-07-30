@@ -46,7 +46,7 @@
 | 文件 | 变更 |
 |---|---|
 | `src/main.ts` | 新建子导图不再清空默认子节点，保留“主题 1”和“主题 2” |
-| `src/editor/article-renderer.ts` | 编辑模式为无内容的末端节点渲染可聚焦占位行 |
+| `src/editor/article-renderer.ts` | 编辑模式仅为完全无内容块的末端节点渲染可聚焦占位行；表格、图片、代码节点不生成空正文 |
 | `src/editor/editor.ts` | 导图节点运行时统一应用 36px 最低高度 |
 | `src/render/layout.ts` | 初始估算和浏览器实测尺寸均应用相同最低高度，避免碰撞布局再次压扁空节点 |
 | `styles.css` | `.mmc-node` 增加 36px 最低高度 |

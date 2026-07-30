@@ -7619,11 +7619,16 @@ function renderArticleMode(container, options) {
     } else {
       const blocks = nodeContentBlocks(info.node);
       const firstTextBlock = blocks.find((block) => block.type === "text");
-      if ((firstTextBlock == null ? void 0 : firstTextBlock.text.trim()) || !options.readOnly && blocks.length === 0) {
+      if (firstTextBlock == null ? void 0 : firstTextBlock.text.trim()) {
         const paragraph = section.createEl("p", { cls: `mms-article-leaf-text${options.articleLeafBulletsEnabled ? " is-bulleted" : ""}` });
-        if (firstTextBlock) paragraph.dataset.blockId = firstTextBlock.id;
+        paragraph.dataset.blockId = firstTextBlock.id;
         applyArticleLeafBulletStyle(paragraph, options);
-        renderRichTextRuns(paragraph, firstTextBlock == null ? void 0 : firstTextBlock.richText, (firstTextBlock == null ? void 0 : firstTextBlock.text) ?? "");
+        renderRichTextRuns(paragraph, firstTextBlock.richText, firstTextBlock.text);
+        options.makeInlineEditable(paragraph, info.node, "\u6B63\u6587\u6BB5\u843D");
+      } else if (!options.readOnly && blocks.length === 0) {
+        const paragraph = section.createEl("p", { cls: `mms-article-leaf-text${options.articleLeafBulletsEnabled ? " is-bulleted" : ""}` });
+        applyArticleLeafBulletStyle(paragraph, options);
+        renderRichTextRuns(paragraph, void 0, "");
         options.makeInlineEditable(paragraph, info.node, "\u6B63\u6587\u6BB5\u843D");
       }
       options.addInlineNodeActions(section, info.node);
