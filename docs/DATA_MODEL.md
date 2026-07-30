@@ -82,12 +82,19 @@ interface MindMapNode {
 
 ### 文字块
 
+文字块可选保存 `paragraphIndent`：
+
+- 字段缺失或为 `first-line`：文章模式和通读模式使用默认首行缩进两字符；
+- `none`：该文字块顶格显示；
+- 此字段只控制段落级排版，不改变字符级 `richText`，旧文件缺失字段时保持原有显示。
+
 ```ts
 interface MindMapTextContentBlock {
   id: string;
   type: "text";
   text: string;
   richText?: MindMapTextRun[];
+  paragraphIndent?: "first-line" | "none";
 }
 ```
 

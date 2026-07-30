@@ -2338,21 +2338,30 @@ export class MindMapEditor {
   }
 
   /**
-   * 执行“update node primary text”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+   * 更新指定文字块；未提供块标识时兼容更新节点的首个文字块。
    *
    * @param node 当前处理的节点。
-   * @param value 待校验、转换或比较的输入值。
+   * @param value 编辑器读取出的纯文本和富文本数据。
+   * @param blockId 需要更新的文字块标识。
    */
-  private updateNodePrimaryText(node: MindMapNode, value: { text: string; richText?: MindMapTextContentBlock["richText"] }): void {
+  private updateNodeTextBlock(
+    node: MindMapNode,
+    value: { text: string; richText?: MindMapTextContentBlock["richText"] },
+    blockId?: string
+  ): void {
     const next = value.text.replace(/\s+/g, " ").trim();
     const normalized = normalizeMarkdownRichText(value.richText, next);
     const blocks = nodeContentBlocks(node);
-    const firstText = blocks.find((block): block is MindMapTextContentBlock => block.type === "text");
-    if (firstText) {
-      firstText.text = normalized.text;
-      firstText.richText = normalized.richText;
+    const textBlock = blockId
+      ? blocks.find((block): block is MindMapTextContentBlock => block.type === "text" && block.id === blockId)
+      : blocks.find((block): block is MindMapTextContentBlock => block.type === "text");
+    if (textBlock) {
+      textBlock.text = normalized.text;
+      textBlock.richText = normalized.richText;
     } else if (normalized.text) {
-      blocks.unshift({ id: newId(), type: "text", text: normalized.text, richText: normalized.richText });
+      const created: MindMapTextContentBlock = { id: blockId ?? newId(), type: "text", text: normalized.text, richText: normalized.richText };
+      if (blockId) blocks.push(created);
+      else blocks.unshift(created);
     }
     node.content = blocks.filter((block) => block.type !== "text" || block.text.trim());
     syncNodeContentFields(node);
@@ -2366,12 +2375,14 @@ export class MindMapEditor {
    * @param node 当前处理的节点。
    * @param placeholder 该参数用于 make inline editable 流程中的输入或控制。
    */
-  private makeInlineEditable(element: HTMLElement, node: MindMapNode, placeholder: string): void {
+  private makeInlineEditable(element: HTMLElement, node: MindMapNode, placeholder: string, blockId?: string): void {
     element.contentEditable = "false";
     element.dataset.mmsInlineEditable = "true";
     element.dataset.mmsEditLabel = placeholder;
     if (!element.textContent?.trim()) element.dataset.placeholder = placeholder;
-    const initialBlock = nodeContentBlocks(node).find((block): block is MindMapTextContentBlock => block.type === "text");
+    const initialBlock = blockId
+      ? nodeContentBlocks(node).find((block): block is MindMapTextContentBlock => block.type === "text" && block.id === blockId)
+      : nodeContentBlocks(node).find((block): block is MindMapTextContentBlock => block.type === "text");
     if (!this.readOnly) renderRichTextRuns(element, initialBlock?.richText, initialBlock?.text ?? nodePrimaryText(node), false);
     let original = readRichTextEditor(element);
     let toolbar: SelectionFormatToolbarHandle | null = null;
@@ -2428,7 +2439,7 @@ export class MindMapEditor {
         renderRichTextRuns(element, original.richText, original.text, false);
         return;
       }
-      this.mutate(() => this.updateNodePrimaryText(node, next));
+      this.mutate(() => this.updateNodeTextBlock(node, next, blockId));
     });
   }
 
@@ -2774,9 +2785,9 @@ export class MindMapEditor {
       articleNavigation: this.options.articleNavigation,
       callbacks: this.callbacks,
       selectNode: (id) => this.selectNode(id),
-      openAiContextMenu: (event, nodeId) => { this.selectNode(nodeId); this.openContextMenu(event); },
+      openAiContextMenu: (event, nodeId, blockId) => { this.selectNode(nodeId); this.openContextMenu(event, blockId); },
       openImageContextMenu: (event, nodeId, blockId) => this.openImageContextMenu(event, nodeId, blockId),
-      makeInlineEditable: (element, node, placeholder) => this.makeInlineEditable(element, node, placeholder),
+      makeInlineEditable: (element, node, placeholder, blockId) => this.makeInlineEditable(element, node, placeholder, blockId),
       makeInlineCodeEditable: (element, node, code, blockId) => this.makeInlineCodeEditable(element, node, code, blockId),
       addInlineNodeActions: (container, node) => this.addInlineNodeActions(container, node)
     };
@@ -3647,7 +3658,10 @@ export class MindMapEditor {
     }
     if (this.currentMode !== "mindmap") {
       const scope = this.currentMode === "outline" ? this.outlineEl : this.articleEl;
-      const inlineElement = scope.querySelector<HTMLElement>(`[data-node-id="${CSS.escape(nodeId)}"] [data-mms-inline-editable="true"]`);
+      const nodeScope = scope.querySelector<HTMLElement>(`[data-node-id="${CSS.escape(nodeId)}"]`);
+      const inlineElement = blockId
+        ? nodeScope?.querySelector<HTMLElement>(`[data-block-id="${CSS.escape(blockId)}"][data-mms-inline-editable="true"]`)
+        : nodeScope?.querySelector<HTMLElement>(`[data-mms-inline-editable="true"]`);
       if (inlineElement) this.activateInlineEditable(inlineElement);
       return;
     }
@@ -3983,13 +3997,13 @@ export class MindMapEditor {
     window.requestAnimationFrame(() => this.beginInlineEdit(node.id, undefined, true));
   }
 
-  /** Adds a text block at the end of the selected node and starts quick editing it. */
-  private insertTextBlock(): void {
+  /** Inserts a text block after the context block, or appends it when no block was targeted. */
+  private insertTextBlock(afterBlockId?: string): void {
     if (!this.ensureEditable()) return;
     const selected = this.selectedNode();
     if (!selected) return;
     let blockId = "";
-    this.mutate(() => { blockId = this.appendTextBlock(selected); });
+    this.mutate(() => { blockId = this.insertTextBlockAfter(selected, afterBlockId); });
     window.requestAnimationFrame(() => this.beginInlineEdit(selected.id, blockId, true));
   }
 
@@ -4447,10 +4461,14 @@ export class MindMapEditor {
     replaceNodeContentBlocks(node, [...nodeContentBlocks(node), { id: newId(), type: "code", code }]);
   }
 
-  /** Appends an empty text block and returns its ID for immediate inline editing. */
-  private appendTextBlock(node: MindMapNode): string {
+  /** Inserts an empty text block immediately after a targeted block and returns its ID. */
+  private insertTextBlockAfter(node: MindMapNode, afterBlockId?: string): string {
     const blockId = newId();
-    replaceNodeContentBlocks(node, [...nodeContentBlocks(node), { id: blockId, type: "text", text: "" }]);
+    const blocks = nodeContentBlocks(node);
+    const afterIndex = afterBlockId ? blocks.findIndex((block) => block.id === afterBlockId) : -1;
+    const insertIndex = afterIndex >= 0 ? afterIndex + 1 : blocks.length;
+    blocks.splice(insertIndex, 0, { id: blockId, type: "text", text: "" });
+    replaceNodeContentBlocks(node, blocks);
     return blockId;
   }
 
@@ -4573,7 +4591,8 @@ export class MindMapEditor {
         } else {
           const firstTextBlock = nodeContentBlocks(info.node).find((block): block is MindMapTextContentBlock => block.type === "text");
           if (firstTextBlock) {
-            const paragraph = nodeSection.createEl("p", { cls: `mms-article-leaf-text${this.options.articleLeafBulletsEnabled ? " is-bulleted" : ""}` });
+            const paragraph = nodeSection.createEl("p", { cls: `mms-article-leaf-text${this.options.articleLeafBulletsEnabled ? " is-bulleted" : ""}${firstTextBlock.paragraphIndent === "none" ? " is-flush" : ""}` });
+            paragraph.dataset.blockId = firstTextBlock.id;
             if (this.options.articleLeafBulletsEnabled) {
               paragraph.dataset.bulletStyle = this.options.articleLeafBulletStyle;
               if (this.options.articleLeafBulletColor) paragraph.style.setProperty("--mms-article-bullet-color", this.options.articleLeafBulletColor);
@@ -5196,6 +5215,19 @@ export class MindMapEditor {
     });
   }
 
+  /** Toggles one article text block between the default first-line indent and flush-left. */
+  private toggleTextBlockParagraphIndent(nodeId: string, blockId: string): void {
+    const node = findNode(this.document.root, nodeId);
+    if (!node || !this.ensureEditable()) return;
+    const blocks = nodeContentBlocks(node);
+    const block = blocks.find((item): item is MindMapTextContentBlock => item.type === "text" && item.id === blockId);
+    if (!block) return;
+    this.mutate(() => {
+      block.paragraphIndent = block.paragraphIndent === "none" ? undefined : "none";
+      replaceNodeContentBlocks(node, blocks);
+    });
+  }
+
   /** 打开当前图片块的编辑面板，用于精确尺寸和替换来源。 */
   private editImageBlock(blockId: string): void {
     this.openSelectedNodeEditor(blockId);
@@ -5241,8 +5273,13 @@ export class MindMapEditor {
    *
    * @param event 触发当前交互的浏览器或 Obsidian 事件。
    */
-  private openContextMenu(event: MouseEvent): void {
+  private openContextMenu(event: MouseEvent, contextBlockId?: string): void {
     const selected = this.selectedNode();
+    const contextBlock = selected && contextBlockId
+      ? nodeContentBlocks(selected).find((block) => block.id === contextBlockId)
+      : undefined;
+    const contextIsArticleParagraph = this.currentMode === "article"
+      && Boolean((event.target as HTMLElement | null)?.closest?.(".mms-article-leaf-text, .mms-article-paragraph"));
     const menu = new Menu();
     menu.addItem((item) => item
       .setTitle("询问 AI（此节点及全部子节点）")
@@ -5270,6 +5307,12 @@ export class MindMapEditor {
         .setIcon("settings-2")
         .onClick(() => this.openSelectedNodeEditor()));
     }
+    if (selected && contextBlock?.type === "text" && contextIsArticleParagraph) {
+      menu.addItem((item) => item
+        .setTitle(contextBlock.paragraphIndent === "none" ? "段落缩进：恢复首行两格" : "段落缩进：设为顶格")
+        .setIcon(contextBlock.paragraphIndent === "none" ? "indent-increase" : "indent-decrease")
+        .onClick(() => this.toggleTextBlockParagraphIndent(selected.id, contextBlock.id)));
+    }
     if (this.options.questionNodesEnabled) {
       menu.addItem((item) => item
         .setTitle(selected?.question ? "编辑题目节点" : "转换为题目节点")
@@ -5288,7 +5331,10 @@ export class MindMapEditor {
     }
     menu.addItem((item) => item.setTitle("克隆分支").setIcon("copy-plus").onClick(() => this.duplicateSelected()));
     menu.addSeparator();
-    menu.addItem((item) => item.setTitle("插入文字").setIcon("text-cursor-input").onClick(() => this.insertTextBlock()));
+    menu.addItem((item) => item
+      .setTitle(contextBlockId ? "在此块后插入文字" : "插入文字")
+      .setIcon("text-cursor-input")
+      .onClick(() => this.insertTextBlock(contextBlockId)));
     menu.addItem((item) => item.setTitle(selected?.table ? "编辑表格" : "插入表格").setIcon("table-2").onClick(() => this.editTable()));
     menu.addItem((item) => item.setTitle("插入 LaTeX 公式").setIcon("sigma").onClick(() => this.insertFormula()));
     menu.addItem((item) => item.setTitle("将子节点生成表格").setIcon("table-properties").onClick(() => this.convertChildrenToTable()));

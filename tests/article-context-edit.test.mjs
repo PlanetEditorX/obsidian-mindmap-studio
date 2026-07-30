@@ -25,7 +25,7 @@ test("article edit actions use inline editing while other modes keep the full no
 });
 
 test("article context menu shows edit-current-content or add-body and reading mode hides it", () => {
-  const contextMenu = editorSource.match(/private openContextMenu\(event: MouseEvent\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
+  const contextMenu = editorSource.match(/private openContextMenu\(event: MouseEvent, contextBlockId\?: string\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
   const label = editorSource.match(/private articleEditActionLabel\([\s\S]*?\n  \}/)?.[0] ?? "";
 
   assert.match(contextMenu, /if \(this\.readOnly\) \{[\s\S]*menu\.showAtMouseEvent\(event\);[\s\S]*return;/);
@@ -49,7 +49,7 @@ test("article edit focuses the rendered line and creates a removable body editor
 
 test("submap headings keep normal navigation but can be edited from the explicit article action", () => {
   assert.match(articleRendererSource, /headingLink\.dataset\.mmsExplicitEditOnly = "true"/);
-  assert.match(articleRendererSource, /options\.makeInlineEditable\(headingLink, node, "章节标题"\)/);
+  assert.match(articleRendererSource, /options\.makeInlineEditable\(headingLink, node, "章节标题", textBlock\?\.id\)/);
   assert.match(articleRendererSource, /if \(headingLink\.contentEditable === "true"\) return/);
   assert.match(editorSource, /element\.dataset\.mmsExplicitEditOnly === "true"/);
 });
@@ -69,7 +69,7 @@ test("article inline actions expose high-frequency commands and route more to th
 });
 
 test("article node settings remain available from the full context menu", () => {
-  const contextMenu = editorSource.match(/private openContextMenu\(event: MouseEvent\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
+  const contextMenu = editorSource.match(/private openContextMenu\(event: MouseEvent, contextBlockId\?: string\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
 
   assert.match(contextMenu, /if \(this\.currentMode === "article"\)[\s\S]*setTitle\("节点设置"\)[\s\S]*this\.openSelectedNodeEditor\(\)/);
   assert.match(contextMenu, /if \(selected\?\.id !== this\.document\.root\.id\)[\s\S]*setTitle\("添加同级节点"\)/, "the full menu must hide sibling insertion on the root");
@@ -78,7 +78,7 @@ test("article node settings remain available from the full context menu", () => 
 
 test("inline deletion targets the bound node and ignores a deleted editor's late blur", () => {
   const directDelete = editorSource.match(/private deleteNodeById\(nodeId: string\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
-  const inlineEditor = editorSource.match(/private makeInlineEditable\(element: HTMLElement, node: MindMapNode, placeholder: string\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
+  const inlineEditor = editorSource.match(/private makeInlineEditable\(element: HTMLElement, node: MindMapNode, placeholder: string, blockId\?: string\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
 
   assert.match(directDelete, /findNode\(this\.document\.root, nodeId\)/);
   assert.match(directDelete, /deletionSelectionFallback\(this\.document\.root, \[nodeId\]\)/);

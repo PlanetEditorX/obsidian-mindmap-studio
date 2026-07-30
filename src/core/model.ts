@@ -104,6 +104,8 @@ export type TableAlignment = "left" | "center" | "right";
  * NodeTextAlign 类型定义，用于限制可接受值并让序列化数据保持稳定。
  */
 export type NodeTextAlign = "left" | "center" | "right";
+/** Per-text-block paragraph indentation used by article and reading modes. */
+export type ArticleParagraphIndent = "first-line" | "none";
 
 /**
  * MindMapTextStyle 的结构化数据约定。字段会在模块边界传递，用于保持类型安全和版本兼容。
@@ -156,6 +158,8 @@ export interface MindMapTextContentBlock {
   type: "text";
   text: string;
   richText?: MindMapTextRun[];
+  /** Undefined follows the article default (two-character first-line indent). */
+  paragraphIndent?: ArticleParagraphIndent;
 }
 
 /**
@@ -881,9 +885,13 @@ function normalizeContentBlock(input: unknown): MindMapContentBlock | null {
     return { id, type: "image", source, alt, align, width, height, localSource, remoteSources: remoteSources?.length ? remoteSources : undefined };
   }
   if (candidate.type === "text") {
-    const fallbackText = typeof candidate.text === "string" ? candidate.text.replace(/\r\n?/g, "\n").slice(0, 20000) : "";
-    const { text, richText } = normalizeMarkdownRichText(candidate.richText, fallbackText);
-    return { id, type: "text", text, richText };
+    const textCandidate = candidate as Partial<MindMapTextContentBlock>;
+    const fallbackText = typeof textCandidate.text === "string" ? textCandidate.text.replace(/\r\n?/g, "\n").slice(0, 20000) : "";
+    const { text, richText } = normalizeMarkdownRichText(textCandidate.richText, fallbackText);
+    const paragraphIndent = textCandidate.paragraphIndent === "none" || textCandidate.paragraphIndent === "first-line"
+      ? textCandidate.paragraphIndent
+      : undefined;
+    return { id, type: "text", text, richText, paragraphIndent };
   }
   return null;
 }

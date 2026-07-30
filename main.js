@@ -419,9 +419,11 @@ function normalizeContentBlock(input) {
     return { id, type: "image", source, alt, align, width, height, localSource, remoteSources: (remoteSources == null ? void 0 : remoteSources.length) ? remoteSources : void 0 };
   }
   if (candidate.type === "text") {
-    const fallbackText = typeof candidate.text === "string" ? candidate.text.replace(/\r\n?/g, "\n").slice(0, 2e4) : "";
-    const { text, richText } = normalizeMarkdownRichText(candidate.richText, fallbackText);
-    return { id, type: "text", text, richText };
+    const textCandidate = candidate;
+    const fallbackText = typeof textCandidate.text === "string" ? textCandidate.text.replace(/\r\n?/g, "\n").slice(0, 2e4) : "";
+    const { text, richText } = normalizeMarkdownRichText(textCandidate.richText, fallbackText);
+    const paragraphIndent = textCandidate.paragraphIndent === "none" || textCandidate.paragraphIndent === "first-line" ? textCandidate.paragraphIndent : void 0;
+    return { id, type: "text", text, richText, paragraphIndent };
   }
   return null;
 }
@@ -7589,7 +7591,7 @@ function renderArticleMode(container, options) {
   const titleText = title.createSpan({ cls: "mms-article-document-title-text" });
   const rootTextBlock = nodeContentBlocks(options.document.root).find((block) => block.type === "text");
   renderRichTextRuns(titleText, rootTextBlock == null ? void 0 : rootTextBlock.richText, (_b2 = rootTextBlock == null ? void 0 : rootTextBlock.text) != null ? _b2 : rootTitle);
-  options.makeInlineEditable(titleText, options.document.root, "\u6587\u7AE0\u6807\u9898");
+  options.makeInlineEditable(titleText, options.document.root, "\u6587\u7AE0\u6807\u9898", rootTextBlock == null ? void 0 : rootTextBlock.id);
   options.addInlineNodeActions(page, options.document.root);
   const directoryOnly = options.showArticleToc && options.articleTocEntries.length > 0 && ((_c = options.document.view) == null ? void 0 : _c.articleLandingMode) !== "article";
   if (directoryOnly) {
@@ -7602,10 +7604,13 @@ function renderArticleMode(container, options) {
     section.id = info.anchor;
     if (!options.readOnly) section.addEventListener("click", () => options.selectNode(info.node.id));
     section.addEventListener("contextmenu", (event) => {
+      var _a3;
       event.preventDefault();
       event.stopPropagation();
+      const target = event.target instanceof HTMLElement ? event.target : null;
+      const blockId = (_a3 = target == null ? void 0 : target.closest("[data-block-id]")) == null ? void 0 : _a3.dataset.blockId;
       options.selectNode(info.node.id);
-      options.openAiContextMenu(event, info.node.id);
+      options.openAiContextMenu(event, info.node.id, blockId);
     });
     if (info.isHeading) {
       const level = Math.min(6, info.depth + 1);
@@ -7621,13 +7626,13 @@ function renderArticleMode(container, options) {
       const blocks = nodeContentBlocks(info.node);
       const firstTextBlock = blocks.find((block) => block.type === "text");
       if (firstTextBlock == null ? void 0 : firstTextBlock.text.trim()) {
-        const paragraph = section.createEl("p", { cls: `mms-article-leaf-text${options.articleLeafBulletsEnabled ? " is-bulleted" : ""}` });
+        const paragraph = section.createEl("p", { cls: articleParagraphClass("mms-article-leaf-text", firstTextBlock, options.articleLeafBulletsEnabled) });
         paragraph.dataset.blockId = firstTextBlock.id;
         applyArticleLeafBulletStyle(paragraph, options);
         renderRichTextRuns(paragraph, firstTextBlock.richText, firstTextBlock.text);
-        options.makeInlineEditable(paragraph, info.node, "\u6B63\u6587\u6BB5\u843D");
+        options.makeInlineEditable(paragraph, info.node, "\u6B63\u6587\u6BB5\u843D", firstTextBlock.id);
       } else if (!options.readOnly && blocks.length === 0) {
-        const paragraph = section.createEl("p", { cls: `mms-article-leaf-text${options.articleLeafBulletsEnabled ? " is-bulleted" : ""}` });
+        const paragraph = section.createEl("p", { cls: articleParagraphClass("mms-article-leaf-text", void 0, options.articleLeafBulletsEnabled) });
         applyArticleLeafBulletStyle(paragraph, options);
         renderRichTextRuns(paragraph, void 0, "");
         options.makeInlineEditable(paragraph, info.node, "\u6B63\u6587\u6BB5\u843D");
@@ -7637,6 +7642,9 @@ function renderArticleMode(container, options) {
     }
   }
   renderArticlePager(page, options);
+}
+function articleParagraphClass(baseClass, block, bulleted = false) {
+  return `${baseClass}${bulleted ? " is-bulleted" : ""}${(block == null ? void 0 : block.paragraphIndent) === "none" ? " is-flush" : ""}`;
 }
 function applyArticleLeafBulletStyle(paragraph, options) {
   if (!options.articleLeafBulletsEnabled) return;
@@ -7677,7 +7685,7 @@ function renderHeading(heading, node, title, options) {
     renderRichTextRuns(headingLink, textBlock == null ? void 0 : textBlock.richText, (_b2 = textBlock == null ? void 0 : textBlock.text) != null ? _b2 : title);
     if (!options.readOnly) {
       headingLink.dataset.mmsExplicitEditOnly = "true";
-      options.makeInlineEditable(headingLink, node, "\u7AE0\u8282\u6807\u9898");
+      options.makeInlineEditable(headingLink, node, "\u7AE0\u8282\u6807\u9898", textBlock == null ? void 0 : textBlock.id);
     }
     headingLink.addEventListener("click", (event) => {
       event.preventDefault();
@@ -7690,7 +7698,7 @@ function renderHeading(heading, node, title, options) {
     const headingText = heading.createSpan({ cls: "mms-article-heading-text" });
     const textBlock = nodeContentBlocks(node).find((block) => block.type === "text");
     renderRichTextRuns(headingText, textBlock == null ? void 0 : textBlock.richText, (_c = textBlock == null ? void 0 : textBlock.text) != null ? _c : title);
-    options.makeInlineEditable(headingText, node, "\u7AE0\u8282\u6807\u9898");
+    options.makeInlineEditable(headingText, node, "\u7AE0\u8282\u6807\u9898", textBlock == null ? void 0 : textBlock.id);
   }
 }
 function renderArticleNodeContent(container, node, treatTextAsBody, options) {
@@ -7703,10 +7711,10 @@ function renderArticleNodeContent(container, node, treatTextAsBody, options) {
         continue;
       }
       firstTextHandled = true;
-      const paragraph = container.createEl("p", { cls: "mms-article-paragraph" });
+      const paragraph = container.createEl("p", { cls: articleParagraphClass("mms-article-paragraph", block) });
       paragraph.dataset.blockId = block.id;
       renderRichTextRuns(paragraph, block.richText, block.text);
-      if (treatTextAsBody) options.makeInlineEditable(paragraph, node, "\u6B63\u6587");
+      if (!options.readOnly) options.makeInlineEditable(paragraph, node, "\u6B63\u6587", block.id);
     } else if (block.type === "image") {
       const resolved = options.callbacks.resolveImage(block.source);
       const image = container.createEl("img", { cls: `mms-article-image image-align-${(_a2 = block.align) != null ? _a2 : "center"}`, attr: { src: resolved != null ? resolved : block.source, alt: (_b2 = block.alt) != null ? _b2 : "\u56FE\u7247" } });
@@ -7730,7 +7738,7 @@ function renderArticleNodeContent(container, node, treatTextAsBody, options) {
         options.openImageContextMenu(event, node.id, block.id);
       });
     } else if (block.type === "table") {
-      renderArticleTable(container, block.table);
+      renderArticleTable(container, block.table, block.id);
     } else {
       const code = container.createDiv({ cls: "mms-article-code markdown-rendered" });
       code.dataset.blockId = block.id;
@@ -7745,9 +7753,11 @@ function renderArticleNodeContent(container, node, treatTextAsBody, options) {
   if (node.note) container.createEl("p", { cls: "mms-article-note", text: node.note });
   if (node.question) renderArticleQuestionDetails(container, node);
 }
-function renderArticleTable(container, tableData) {
+function renderArticleTable(container, tableData, blockId) {
   if (!tableData) return;
-  const table = container.createDiv({ cls: "mms-article-table-wrap" }).createEl("table", { cls: "mms-article-table" });
+  const wrap = container.createDiv({ cls: "mms-article-table-wrap" });
+  if (blockId) wrap.dataset.blockId = blockId;
+  const table = wrap.createEl("table", { cls: "mms-article-table" });
   const tr = table.createEl("thead").createEl("tr");
   tableData.headers.forEach((header) => renderInlineMarkdown(tr.createEl("th"), header));
   const body = table.createEl("tbody");
@@ -10506,16 +10516,18 @@ var MindMapEditor = class {
    * @param node 当前处理的节点。
    * @param value 待校验、转换或比较的输入值。
    */
-  updateNodePrimaryText(node, value) {
+  updateNodeTextBlock(node, value, blockId) {
     const next = value.text.replace(/\s+/g, " ").trim();
     const normalized2 = normalizeMarkdownRichText(value.richText, next);
     const blocks = nodeContentBlocks(node);
-    const firstText = blocks.find((block) => block.type === "text");
-    if (firstText) {
-      firstText.text = normalized2.text;
-      firstText.richText = normalized2.richText;
+    const textBlock = blockId ? blocks.find((block) => block.type === "text" && block.id === blockId) : blocks.find((block) => block.type === "text");
+    if (textBlock) {
+      textBlock.text = normalized2.text;
+      textBlock.richText = normalized2.richText;
     } else if (normalized2.text) {
-      blocks.unshift({ id: newId(), type: "text", text: normalized2.text, richText: normalized2.richText });
+      const created = { id: blockId != null ? blockId : newId(), type: "text", text: normalized2.text, richText: normalized2.richText };
+      if (blockId) blocks.push(created);
+      else blocks.unshift(created);
     }
     node.content = blocks.filter((block) => block.type !== "text" || block.text.trim());
     syncNodeContentFields(node);
@@ -10528,13 +10540,13 @@ var MindMapEditor = class {
    * @param node 当前处理的节点。
    * @param placeholder 该参数用于 make inline editable 流程中的输入或控制。
    */
-  makeInlineEditable(element, node, placeholder) {
+  makeInlineEditable(element, node, placeholder, blockId) {
     var _a2, _b2;
     element.contentEditable = "false";
     element.dataset.mmsInlineEditable = "true";
     element.dataset.mmsEditLabel = placeholder;
     if (!((_a2 = element.textContent) == null ? void 0 : _a2.trim())) element.dataset.placeholder = placeholder;
-    const initialBlock = nodeContentBlocks(node).find((block) => block.type === "text");
+    const initialBlock = blockId ? nodeContentBlocks(node).find((block) => block.type === "text" && block.id === blockId) : nodeContentBlocks(node).find((block) => block.type === "text");
     if (!this.readOnly) renderRichTextRuns(element, initialBlock == null ? void 0 : initialBlock.richText, (_b2 = initialBlock == null ? void 0 : initialBlock.text) != null ? _b2 : nodePrimaryText(node), false);
     let original = readRichTextEditor(element);
     let toolbar = null;
@@ -10588,7 +10600,7 @@ var MindMapEditor = class {
         renderRichTextRuns(element, original.richText, original.text, false);
         return;
       }
-      this.mutate(() => this.updateNodePrimaryText(node, next));
+      this.mutate(() => this.updateNodeTextBlock(node, next, blockId));
     });
   }
   /** Adds textbox semantics only while an inline line is actively editable. */
@@ -10916,12 +10928,12 @@ var MindMapEditor = class {
       articleNavigation: this.options.articleNavigation,
       callbacks: this.callbacks,
       selectNode: (id) => this.selectNode(id),
-      openAiContextMenu: (event, nodeId) => {
+      openAiContextMenu: (event, nodeId, blockId) => {
         this.selectNode(nodeId);
-        this.openContextMenu(event);
+        this.openContextMenu(event, blockId);
       },
       openImageContextMenu: (event, nodeId, blockId) => this.openImageContextMenu(event, nodeId, blockId),
-      makeInlineEditable: (element, node, placeholder) => this.makeInlineEditable(element, node, placeholder),
+      makeInlineEditable: (element, node, placeholder, blockId) => this.makeInlineEditable(element, node, placeholder, blockId),
       makeInlineCodeEditable: (element, node, code, blockId) => this.makeInlineCodeEditable(element, node, code, blockId),
       addInlineNodeActions: (container, node) => this.addInlineNodeActions(container, node)
     };
@@ -11758,7 +11770,8 @@ var MindMapEditor = class {
     }
     if (this.currentMode !== "mindmap") {
       const scope = this.currentMode === "outline" ? this.outlineEl : this.articleEl;
-      const inlineElement = scope.querySelector(`[data-node-id="${CSS.escape(nodeId)}"] [data-mms-inline-editable="true"]`);
+      const nodeScope = scope.querySelector(`[data-node-id="${CSS.escape(nodeId)}"]`);
+      const inlineElement = blockId ? nodeScope == null ? void 0 : nodeScope.querySelector(`[data-block-id="${CSS.escape(blockId)}"][data-mms-inline-editable="true"]`) : nodeScope == null ? void 0 : nodeScope.querySelector(`[data-mms-inline-editable="true"]`);
       if (inlineElement) this.activateInlineEditable(inlineElement);
       return;
     }
@@ -12080,14 +12093,14 @@ var MindMapEditor = class {
     });
     window.requestAnimationFrame(() => this.beginInlineEdit(node.id, void 0, true));
   }
-  /** Adds a text block at the end of the selected node and starts quick editing it. */
-  insertTextBlock() {
+  /** Inserts a text block after the context block, or appends it when no block was targeted. */
+  insertTextBlock(afterBlockId) {
     if (!this.ensureEditable()) return;
     const selected = this.selectedNode();
     if (!selected) return;
     let blockId = "";
     this.mutate(() => {
-      blockId = this.appendTextBlock(selected);
+      blockId = this.insertTextBlockAfter(selected, afterBlockId);
     });
     window.requestAnimationFrame(() => this.beginInlineEdit(selected.id, blockId, true));
   }
@@ -12522,10 +12535,14 @@ var MindMapEditor = class {
   appendCodeBlock(node, code) {
     replaceNodeContentBlocks(node, [...nodeContentBlocks(node), { id: newId(), type: "code", code }]);
   }
-  /** Appends an empty text block and returns its ID for immediate inline editing. */
-  appendTextBlock(node) {
+  /** Inserts an empty text block immediately after a targeted block and returns its ID. */
+  insertTextBlockAfter(node, afterBlockId) {
     const blockId = newId();
-    replaceNodeContentBlocks(node, [...nodeContentBlocks(node), { id: blockId, type: "text", text: "" }]);
+    const blocks = nodeContentBlocks(node);
+    const afterIndex = afterBlockId ? blocks.findIndex((block) => block.id === afterBlockId) : -1;
+    const insertIndex = afterIndex >= 0 ? afterIndex + 1 : blocks.length;
+    blocks.splice(insertIndex, 0, { id: blockId, type: "text", text: "" });
+    replaceNodeContentBlocks(node, blocks);
     return blockId;
   }
   /** Removes one structured block identified by its content-block ID. */
@@ -12638,7 +12655,8 @@ var MindMapEditor = class {
         } else {
           const firstTextBlock = nodeContentBlocks(info.node).find((block) => block.type === "text");
           if (firstTextBlock) {
-            const paragraph = nodeSection.createEl("p", { cls: `mms-article-leaf-text${this.options.articleLeafBulletsEnabled ? " is-bulleted" : ""}` });
+            const paragraph = nodeSection.createEl("p", { cls: `mms-article-leaf-text${this.options.articleLeafBulletsEnabled ? " is-bulleted" : ""}${firstTextBlock.paragraphIndent === "none" ? " is-flush" : ""}` });
+            paragraph.dataset.blockId = firstTextBlock.id;
             if (this.options.articleLeafBulletsEnabled) {
               paragraph.dataset.bulletStyle = this.options.articleLeafBulletStyle;
               if (this.options.articleLeafBulletColor) paragraph.style.setProperty("--mms-article-bullet-color", this.options.articleLeafBulletColor);
@@ -13232,6 +13250,18 @@ var MindMapEditor = class {
       replaceNodeContentBlocks(node, blocks);
     });
   }
+  /** Toggles one article text block between the default first-line indent and flush-left. */
+  toggleTextBlockParagraphIndent(nodeId, blockId) {
+    const node = findNode(this.document.root, nodeId);
+    if (!node || !this.ensureEditable()) return;
+    const blocks = nodeContentBlocks(node);
+    const block = blocks.find((item) => item.type === "text" && item.id === blockId);
+    if (!block) return;
+    this.mutate(() => {
+      block.paragraphIndent = block.paragraphIndent === "none" ? void 0 : "none";
+      replaceNodeContentBlocks(node, blocks);
+    });
+  }
   /** 打开当前图片块的编辑面板，用于精确尺寸和替换来源。 */
   editImageBlock(blockId) {
     this.openSelectedNodeEditor(blockId);
@@ -13273,9 +13303,11 @@ var MindMapEditor = class {
    *
    * @param event 触发当前交互的浏览器或 Obsidian 事件。
    */
-  openContextMenu(event) {
+  openContextMenu(event, contextBlockId) {
     var _a2, _b2, _c;
     const selected = this.selectedNode();
+    const contextBlock = selected && contextBlockId ? nodeContentBlocks(selected).find((block) => block.id === contextBlockId) : void 0;
+    const contextIsArticleParagraph = this.currentMode === "article" && Boolean(event.target instanceof HTMLElement ? event.target.closest(".mms-article-leaf-text, .mms-article-paragraph") : null);
     const menu = new import_obsidian10.Menu();
     menu.addItem((item) => item.setTitle("\u8BE2\u95EE AI\uFF08\u6B64\u8282\u70B9\u53CA\u5168\u90E8\u5B50\u8282\u70B9\uFF09").setIcon("sparkles").onClick(() => void this.callbacks.onAskAi(selected == null ? void 0 : selected.id)));
     menu.addSeparator();
@@ -13294,6 +13326,9 @@ var MindMapEditor = class {
     if (this.currentMode === "article") {
       menu.addItem((item) => item.setTitle("\u8282\u70B9\u8BBE\u7F6E").setIcon("settings-2").onClick(() => this.openSelectedNodeEditor()));
     }
+    if (selected && (contextBlock == null ? void 0 : contextBlock.type) === "text" && contextIsArticleParagraph) {
+      menu.addItem((item) => item.setTitle(contextBlock.paragraphIndent === "none" ? "\u6BB5\u843D\u7F29\u8FDB\uFF1A\u6062\u590D\u9996\u884C\u4E24\u683C" : "\u6BB5\u843D\u7F29\u8FDB\uFF1A\u8BBE\u4E3A\u9876\u683C").setIcon(contextBlock.paragraphIndent === "none" ? "indent-increase" : "indent-decrease").onClick(() => this.toggleTextBlockParagraphIndent(selected.id, contextBlock.id)));
+    }
     if (this.options.questionNodesEnabled) {
       menu.addItem((item) => item.setTitle((selected == null ? void 0 : selected.question) ? "\u7F16\u8F91\u9898\u76EE\u8282\u70B9" : "\u8F6C\u6362\u4E3A\u9898\u76EE\u8282\u70B9").setIcon("circle-help").onClick(() => this.editQuestion()));
       menu.addItem((item) => item.setTitle("\u65B0\u5EFA\u9898\u76EE\u5B50\u8282\u70B9").setIcon("circle-plus").onClick(() => this.addQuestionChild()));
@@ -13310,7 +13345,7 @@ var MindMapEditor = class {
     }
     menu.addItem((item) => item.setTitle("\u514B\u9686\u5206\u652F").setIcon("copy-plus").onClick(() => this.duplicateSelected()));
     menu.addSeparator();
-    menu.addItem((item) => item.setTitle("\u63D2\u5165\u6587\u5B57").setIcon("text-cursor-input").onClick(() => this.insertTextBlock()));
+    menu.addItem((item) => item.setTitle(contextBlockId ? "\u5728\u6B64\u5757\u540E\u63D2\u5165\u6587\u5B57" : "\u63D2\u5165\u6587\u5B57").setIcon("text-cursor-input").onClick(() => this.insertTextBlock(contextBlockId)));
     menu.addItem((item) => item.setTitle((selected == null ? void 0 : selected.table) ? "\u7F16\u8F91\u8868\u683C" : "\u63D2\u5165\u8868\u683C").setIcon("table-2").onClick(() => this.editTable()));
     menu.addItem((item) => item.setTitle("\u63D2\u5165 LaTeX \u516C\u5F0F").setIcon("sigma").onClick(() => this.insertFormula()));
     menu.addItem((item) => item.setTitle("\u5C06\u5B50\u8282\u70B9\u751F\u6210\u8868\u683C").setIcon("table-properties").onClick(() => this.convertChildrenToTable()));

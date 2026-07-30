@@ -43,9 +43,9 @@ export interface ArticleRendererOptions {
   articleNavigation?: ArticlePageNavigation;
   callbacks: Pick<MindMapEditorCallbacks, "resolveImage" | "onRenderCode" | "onOpenMindMap" | "onOpenArticleDirectory">;
   selectNode: (id: string) => void;
-  openAiContextMenu: (event: MouseEvent, nodeId: string) => void;
+  openAiContextMenu: (event: MouseEvent, nodeId: string, blockId?: string) => void;
   openImageContextMenu: (event: MouseEvent, nodeId: string, blockId: string) => void;
-  makeInlineEditable: (element: HTMLElement, node: MindMapNode, placeholder: string) => void;
+  makeInlineEditable: (element: HTMLElement, node: MindMapNode, placeholder: string, blockId?: string) => void;
   makeInlineCodeEditable: (element: HTMLElement, node: MindMapNode, code: MindMapCodeBlock, blockId: string) => void;
   addInlineNodeActions: (container: HTMLElement, node: MindMapNode) => void;
 }
@@ -67,7 +67,7 @@ export function renderArticleMode(container: HTMLElement, options: ArticleRender
   const titleText = title.createSpan({ cls: "mms-article-document-title-text" });
   const rootTextBlock = nodeContentBlocks(options.document.root).find((block): block is MindMapTextContentBlock => block.type === "text");
   renderRichTextRuns(titleText, rootTextBlock?.richText, rootTextBlock?.text ?? rootTitle);
-  options.makeInlineEditable(titleText, options.document.root, "文章标题");
+  options.makeInlineEditable(titleText, options.document.root, "文章标题", rootTextBlock?.id);
   options.addInlineNodeActions(page, options.document.root);
 
   const directoryOnly = options.showArticleToc
@@ -83,7 +83,14 @@ export function renderArticleMode(container: HTMLElement, options: ArticleRender
     section.dataset.nodeId = info.node.id;
     section.id = info.anchor;
     if (!options.readOnly) section.addEventListener("click", () => options.selectNode(info.node.id));
-    section.addEventListener("contextmenu", (event) => { event.preventDefault(); event.stopPropagation(); options.selectNode(info.node.id); options.openAiContextMenu(event, info.node.id); });
+    section.addEventListener("contextmenu", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const target = event.target instanceof HTMLElement ? event.target : null;
+      const blockId = target?.closest<HTMLElement>("[data-block-id]")?.dataset.blockId;
+      options.selectNode(info.node.id);
+      options.openAiContextMenu(event, info.node.id, blockId);
+    });
     if (info.isHeading) {
       const level = Math.min(6, info.depth + 1);
       const heading = section.createEl(`h${level}` as keyof HTMLElementTagNameMap, {
@@ -98,16 +105,16 @@ export function renderArticleMode(container: HTMLElement, options: ArticleRender
       const blocks = nodeContentBlocks(info.node);
       const firstTextBlock = blocks.find((block): block is MindMapTextContentBlock => block.type === "text");
       if (firstTextBlock?.text.trim()) {
-        const paragraph = section.createEl("p", { cls: `mms-article-leaf-text${options.articleLeafBulletsEnabled ? " is-bulleted" : ""}` });
+        const paragraph = section.createEl("p", { cls: articleParagraphClass("mms-article-leaf-text", firstTextBlock, options.articleLeafBulletsEnabled) });
         paragraph.dataset.blockId = firstTextBlock.id;
         applyArticleLeafBulletStyle(paragraph, options);
         renderRichTextRuns(paragraph, firstTextBlock.richText, firstTextBlock.text);
-        options.makeInlineEditable(paragraph, info.node, "正文段落");
+        options.makeInlineEditable(paragraph, info.node, "正文段落", firstTextBlock.id);
       } else if (!options.readOnly && blocks.length === 0) {
         // 新建空白末端节点尚无内容块，需要临时渲染一个可编辑行，供
         // addChild()/addSibling() 聚焦；已有表格、图片或代码等内容的节点
         // 不应额外生成无关的空正文段落。
-        const paragraph = section.createEl("p", { cls: `mms-article-leaf-text${options.articleLeafBulletsEnabled ? " is-bulleted" : ""}` });
+        const paragraph = section.createEl("p", { cls: articleParagraphClass("mms-article-leaf-text", undefined, options.articleLeafBulletsEnabled) });
         applyArticleLeafBulletStyle(paragraph, options);
         renderRichTextRuns(paragraph, undefined, "");
         options.makeInlineEditable(paragraph, info.node, "正文段落");
@@ -117,6 +124,11 @@ export function renderArticleMode(container: HTMLElement, options: ArticleRender
     }
   }
   renderArticlePager(page, options);
+}
+
+/** Builds paragraph classes without changing the legacy first-line-indent default. */
+function articleParagraphClass(baseClass: string, block: MindMapTextContentBlock | undefined, bulleted = false): string {
+  return `${baseClass}${bulleted ? " is-bulleted" : ""}${block?.paragraphIndent === "none" ? " is-flush" : ""}`;
 }
 
 /** Applies the configured terminal bullet color and visual style to one article paragraph. */
@@ -163,7 +175,7 @@ function renderHeading(heading: HTMLElement, node: MindMapNode, title: string, o
     renderRichTextRuns(headingLink, textBlock?.richText, textBlock?.text ?? title);
     if (!options.readOnly) {
       headingLink.dataset.mmsExplicitEditOnly = "true";
-      options.makeInlineEditable(headingLink, node, "章节标题");
+      options.makeInlineEditable(headingLink, node, "章节标题", textBlock?.id);
     }
     headingLink.addEventListener("click", (event) => {
       event.preventDefault();
@@ -176,7 +188,7 @@ function renderHeading(heading: HTMLElement, node: MindMapNode, title: string, o
     const headingText = heading.createSpan({ cls: "mms-article-heading-text" });
     const textBlock = nodeContentBlocks(node).find((block): block is MindMapTextContentBlock => block.type === "text");
     renderRichTextRuns(headingText, textBlock?.richText, textBlock?.text ?? title);
-    options.makeInlineEditable(headingText, node, "章节标题");
+    options.makeInlineEditable(headingText, node, "章节标题", textBlock?.id);
   }
 }
 
@@ -187,10 +199,10 @@ export function renderArticleNodeContent(container: HTMLElement, node: MindMapNo
     if (block.type === "text") {
       if (!treatTextAsBody && !firstTextHandled) { firstTextHandled = true; continue; }
       firstTextHandled = true;
-      const paragraph = container.createEl("p", { cls: "mms-article-paragraph" });
+      const paragraph = container.createEl("p", { cls: articleParagraphClass("mms-article-paragraph", block) });
       paragraph.dataset.blockId = block.id;
       renderRichTextRuns(paragraph, block.richText, block.text);
-      if (treatTextAsBody) options.makeInlineEditable(paragraph, node, "正文");
+      if (!options.readOnly) options.makeInlineEditable(paragraph, node, "正文", block.id);
     } else if (block.type === "image") {
       const resolved = options.callbacks.resolveImage(block.source);
       const image = container.createEl("img", { cls: `mms-article-image image-align-${block.align ?? "center"}`, attr: { src: resolved ?? block.source, alt: block.alt ?? "图片" } });
@@ -211,7 +223,7 @@ export function renderArticleNodeContent(container: HTMLElement, node: MindMapNo
         options.openImageContextMenu(event, node.id, block.id);
       });
     } else if (block.type === "table") {
-      renderArticleTable(container, block.table);
+      renderArticleTable(container, block.table, block.id);
     } else {
       const code = container.createDiv({ cls: "mms-article-code markdown-rendered" });
       code.dataset.blockId = block.id;
@@ -228,9 +240,11 @@ export function renderArticleNodeContent(container: HTMLElement, node: MindMapNo
 }
 
 /** Renders a movable table block in article and continuous-reading views. */
-function renderArticleTable(container: HTMLElement, tableData: MindMapNode["table"]): void {
+function renderArticleTable(container: HTMLElement, tableData: MindMapNode["table"], blockId?: string): void {
   if (!tableData) return;
-  const table = container.createDiv({ cls: "mms-article-table-wrap" }).createEl("table", { cls: "mms-article-table" });
+  const wrap = container.createDiv({ cls: "mms-article-table-wrap" });
+  if (blockId) wrap.dataset.blockId = blockId;
+  const table = wrap.createEl("table", { cls: "mms-article-table" });
   const tr = table.createEl("thead").createEl("tr");
   tableData.headers.forEach((header) => renderInlineMarkdown(tr.createEl("th"), header));
   const body = table.createEl("tbody");
