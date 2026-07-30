@@ -51,18 +51,32 @@ export function deleteNodes(root: MindMapNode, ids: Iterable<string>): number {
   return removed;
 }
 
-/** Chooses a surviving sibling after deletion, falling back to the parent only when needed. */
+/**
+ * Chooses the closest surviving location after deletion.
+ *
+ * The previous sibling keeps the user's visual reading position most naturally;
+ * the next sibling is used only when there is no previous one. When a selected
+ * ancestor is also being removed, the same rule is applied recursively until a
+ * surviving parent or the protected root is reached.
+ */
 export function deletionSelectionFallback(root: MindMapNode, ids: Iterable<string>): string {
   const targets = topLevelSelectedNodeIds(root, ids);
   const target = targets[0];
   if (!target) return root.id;
-  const parent = findParent(root, target);
-  if (!parent) return root.id;
   const removed = new Set(targets);
-  const index = parent.children.findIndex((node) => node.id === target);
-  const next = parent.children.slice(index + 1).find((node) => !removed.has(node.id));
-  const previous = parent.children.slice(0, index).reverse().find((node) => !removed.has(node.id));
-  return next?.id ?? previous?.id ?? parent.id;
+  let current = findNode(root, target);
+  while (current && current.id !== root.id) {
+    const parent = findParent(root, current.id);
+    if (!parent) return root.id;
+    const index = parent.children.findIndex((node) => node.id === current!.id);
+    const previous = parent.children.slice(0, index).reverse().find((node) => !removed.has(node.id));
+    const next = parent.children.slice(index + 1).find((node) => !removed.has(node.id));
+    if (previous) return previous.id;
+    if (next) return next.id;
+    if (!removed.has(parent.id)) return parent.id;
+    current = parent;
+  }
+  return root.id;
 }
 
 /**

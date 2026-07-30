@@ -373,7 +373,8 @@ export const setIcon = () => {};
   const deletionRoot = model.normalizeDocument({ root: { id: "root", text: "Root", children: [
     { id: "a", text: "A", children: [] }, { id: "b", text: "B", children: [] }, { id: "c", text: "C", children: [] }
   ] } }, "删除回退").root;
-  assert.equal(nodeActions.deletionSelectionFallback(deletionRoot, ["b"]), "c", "deleting a middle child must keep selection on its next sibling");
+  assert.equal(nodeActions.deletionSelectionFallback(deletionRoot, ["b"]), "a", "deleting a middle child must keep selection on its previous sibling");
+  assert.equal(nodeActions.deletionSelectionFallback(deletionRoot, ["a"]), "b", "deleting the first child must use its next sibling");
   assert.equal(nodeActions.deletionSelectionFallback(deletionRoot, ["c"]), "b", "deleting the last child must keep selection on its previous sibling");
   assert.equal(nodeActions.deletionSelectionFallback(deletionRoot, ["a", "b", "c"]), "root", "only deleting every sibling may fall back to the parent");
 
