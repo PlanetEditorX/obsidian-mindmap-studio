@@ -1,3 +1,16 @@
+# Windows CRLF 下文章空节点测试兼容性验证
+
+## 本次修改
+
+- `tests/node-creation.test.mjs` 在执行源码正则契约检查前统一将 CRLF/CR 换行规范化为 LF。
+- 文章模式空节点渲染、自动聚焦和非空正文路径的运行逻辑未变。
+
+## 验证结果
+
+- LF 工作区：`node --test tests/node-creation.test.mjs`，`3 / 3` 通过。
+- CRLF 模拟工作区：同一测试 `3 / 3` 通过。
+- 原失败断言 `if (firstTextBlock?.text.trim())` 可在 Windows 与 CI 环境稳定识别。
+
 # 文章模式节点快捷操作与空节点删除验证
 
 ## 本次修改
