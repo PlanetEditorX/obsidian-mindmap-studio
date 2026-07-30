@@ -36,7 +36,7 @@ test("image context menu exposes layout, sizing, upload and edit actions", () =>
   assert.match(editorSource, /setTitle\("中尺寸（360px）"\)[\s\S]*setImageBlockWidth/);
   assert.match(editorSource, /setTitle\("上传到图床"\)[\s\S]*uploadImageBlock/);
   assert.match(editorSource, /setTitle\("自定义尺寸或替换图片…"\)[\s\S]*editImageBlock\(blockId\)/);
-  assert.match(editorSource, /setTitle\("删除图片"\)[\s\S]*removeImageBlock/);
+  assert.match(editorSource, /setTitle\("删除当前块"\)[\s\S]*removeImageBlock/);
   assert.match(editorSource, /private updateImageBlock\([\s\S]*replaceNodeContentBlocks\(node, blocks\)/);
   assert.match(editorSource, /private async uploadImageBlock[\s\S]*replaceNodeContentBlocks\(node, blocks\)/);
   assert.match(editorSource, /wrap\.addClass\(`image-align-\$\{block\.align \?\? "center"\}`\)/);

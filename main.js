@@ -512,6 +512,36 @@ function replaceNodeContentBlocks(node, blocks) {
   node.code = void 0;
   syncNodeContentFields(node);
 }
+function moveNodeContentBlock(root, sourceNodeId, blockId, targetNodeId, targetBlockId, position) {
+  const sourceNode = findNode(root, sourceNodeId);
+  const targetNode = findNode(root, targetNodeId);
+  if (!sourceNode || !targetNode) return false;
+  if (sourceNodeId === targetNodeId && targetBlockId === blockId) return false;
+  const sourceBlocks = nodeContentBlocks(sourceNode);
+  const sourceIndex = sourceBlocks.findIndex((block) => block.id === blockId);
+  if (sourceIndex < 0) return false;
+  const moving = sourceBlocks[sourceIndex];
+  if (sourceNode === targetNode) {
+    const previousOrder = sourceBlocks.map((block) => block.id).join("\0");
+    sourceBlocks.splice(sourceIndex, 1);
+    const targetIndex2 = targetBlockId ? sourceBlocks.findIndex((block) => block.id === targetBlockId) : -1;
+    if (targetBlockId && targetIndex2 < 0) return false;
+    const insertIndex2 = position === "append" || targetIndex2 < 0 ? sourceBlocks.length : targetIndex2 + (position === "after" ? 1 : 0);
+    sourceBlocks.splice(insertIndex2, 0, moving);
+    if (sourceBlocks.map((block) => block.id).join("\0") === previousOrder) return false;
+    replaceNodeContentBlocks(sourceNode, sourceBlocks);
+    return true;
+  }
+  const targetBlocks = nodeContentBlocks(targetNode);
+  const targetIndex = targetBlockId ? targetBlocks.findIndex((block) => block.id === targetBlockId) : -1;
+  if (targetBlockId && targetIndex < 0) return false;
+  sourceBlocks.splice(sourceIndex, 1);
+  const insertIndex = position === "append" || targetIndex < 0 ? targetBlocks.length : targetIndex + (position === "after" ? 1 : 0);
+  targetBlocks.splice(insertIndex, 0, moving);
+  replaceNodeContentBlocks(sourceNode, sourceBlocks);
+  replaceNodeContentBlocks(targetNode, targetBlocks);
+  return true;
+}
 function normalizeCell(value) {
   return typeof value === "string" ? value.trim().slice(0, 2e3) : String(value != null ? value : "").trim().slice(0, 2e3);
 }
@@ -7319,7 +7349,7 @@ function renderNodeRichTextEditor(container, block, onChange) {
   source.addEventListener("keyup", remember);
   source.addEventListener("mouseup", remember);
   source.addEventListener("input", () => {
-    const next = source.value.replace(/\r?\n/g, " ");
+    const next = source.value.replace(/\r\n?/g, "\n");
     const reconciled = reconcileRichTextAfterEdit(block.text, block.richText, next);
     const normalized2 = normalizeMarkdownRichText(reconciled, next);
     block.text = normalized2.text;
@@ -8684,6 +8714,7 @@ var NodeEditModal = class extends import_obsidian10.Modal {
     let scheduleAutoSave = () => void 0;
     const actionRow = form.createDiv({ cls: "mmc-content-block-actions" });
     const blocksEl = form.createDiv({ cls: "mmc-content-block-list" });
+    let draggedBlockId = null;
     const cloneBlocks = () => JSON.parse(JSON.stringify(workingBlocks));
     const validBlocks = () => cloneBlocks().filter((block) => {
       if (block.type === "image") return Boolean(block.source.trim());
@@ -8711,6 +8742,63 @@ var NodeEditModal = class extends import_obsidian10.Modal {
             action();
           });
         };
+        const dragHandle = controls.createEl("button", {
+          cls: "clickable-icon mmc-content-block-editor-drag-handle",
+          attr: { type: "button", title: "\u62D6\u52A8\u5185\u5BB9\u5757", "aria-label": "\u62D6\u52A8\u5185\u5BB9\u5757", draggable: "true" }
+        });
+        (0, import_obsidian10.setIcon)(dragHandle, "grip-vertical");
+        dragHandle.addEventListener("pointerdown", (event) => event.stopPropagation());
+        dragHandle.addEventListener("click", (event) => event.preventDefault());
+        dragHandle.addEventListener("dragstart", (event) => {
+          var _a4;
+          event.stopPropagation();
+          draggedBlockId = block.id;
+          (_a4 = event.dataTransfer) == null ? void 0 : _a4.setData("application/x-mms-content-block", block.id);
+          if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
+          card.addClass("is-block-dragging");
+        });
+        dragHandle.addEventListener("dragend", () => {
+          draggedBlockId = null;
+          blocksEl.querySelectorAll(".is-block-dragging, .is-block-drop-before, .is-block-drop-after").forEach((element) => element.removeClasses(["is-block-dragging", "is-block-drop-before", "is-block-drop-after"]));
+        });
+        card.addEventListener("dragover", (event) => {
+          if (!draggedBlockId || draggedBlockId === block.id) return;
+          event.preventDefault();
+          event.stopPropagation();
+          blocksEl.querySelectorAll(".is-block-drop-before, .is-block-drop-after").forEach((element) => element.removeClasses(["is-block-drop-before", "is-block-drop-after"]));
+          const position = event.clientY < card.getBoundingClientRect().top + card.getBoundingClientRect().height / 2 ? "before" : "after";
+          card.addClass(`is-block-drop-${position}`);
+          if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+        });
+        card.addEventListener("drop", (event) => {
+          if (!draggedBlockId || draggedBlockId === block.id) return;
+          event.preventDefault();
+          event.stopPropagation();
+          const sourceIndex = workingBlocks.findIndex((item) => item.id === draggedBlockId);
+          const targetIndex = workingBlocks.findIndex((item) => item.id === block.id);
+          if (sourceIndex < 0 || targetIndex < 0) return;
+          const position = event.clientY < card.getBoundingClientRect().top + card.getBoundingClientRect().height / 2 ? "before" : "after";
+          const [moving] = workingBlocks.splice(sourceIndex, 1);
+          if (!moving) return;
+          const updatedTargetIndex = workingBlocks.findIndex((item) => item.id === block.id);
+          workingBlocks.splice(updatedTargetIndex + (position === "after" ? 1 : 0), 0, moving);
+          draggedBlockId = null;
+          renderBlocks2();
+          scheduleAutoSave();
+        });
+        card.addEventListener("contextmenu", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          const menu = new import_obsidian10.Menu();
+          menu.addItem((item) => item.setTitle("\u5220\u9664\u5F53\u524D\u5757").setIcon("trash-2").onClick(() => {
+            const currentIndex = workingBlocks.findIndex((item2) => item2.id === block.id);
+            if (currentIndex < 0) return;
+            workingBlocks.splice(currentIndex, 1);
+            renderBlocks2();
+            scheduleAutoSave();
+          }));
+          menu.showAtMouseEvent(event);
+        });
         control("arrow-up", "\u4E0A\u79FB", () => {
           [workingBlocks[index - 1], workingBlocks[index]] = [workingBlocks[index], workingBlocks[index - 1]];
           renderBlocks2();
@@ -9022,6 +9110,16 @@ var NodeEditModal = class extends import_obsidian10.Modal {
     this.saveOnClose = () => {
       saveNow("commit");
     };
+    form.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" || event.shiftKey || event.isComposing) return;
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
+      if (saveNow("commit", true)) {
+        this.closeWithoutFlush = true;
+        this.close();
+      }
+    }, true);
     [iconInput, taskSelect, shapeSelect, tagsInput, borderWidthInput, fontSizeInput, widthInput, minHeightInput, alignSelect, boldInput, italicInput, underlineInput, noteInput, linkInput].forEach((input) => {
       input.addEventListener("input", scheduleAutoSave);
       input.addEventListener("change", scheduleAutoSave);
@@ -9438,6 +9536,7 @@ var MindMapEditor = class {
     this.panY = 0;
     this.mindMapViewportInitialized = false;
     this.draggingId = null;
+    this.draggingContentBlock = null;
     this.dragDropPosition = null;
     this.dropPreviewEl = null;
     this.panning = false;
@@ -11402,14 +11501,17 @@ var MindMapEditor = class {
             this.openImageContextMenu(event, node.id, block.id);
           });
           tryCandidate(0);
+          this.bindContentBlockDragHandle(wrap, node.id, block.id);
           continue;
         }
         if (block.type === "table") {
-          this.renderNodeTable(content, node, block.table, block.id);
+          const tableBlock = this.renderNodeTable(content, node, block.table, block.id);
+          this.bindContentBlockDragHandle(tableBlock, node.id, block.id);
           continue;
         }
         if (block.type === "code") {
-          this.renderNodeCode(content, node, block.code, block.id);
+          const codeBlock = this.renderNodeCode(content, node, block.code, block.id);
+          this.bindContentBlockDragHandle(codeBlock, node.id, block.id);
           continue;
         }
         if (!block.text.trim()) continue;
@@ -11430,6 +11532,7 @@ var MindMapEditor = class {
           const indicator = textEl.createSpan({ cls: "mmc-submap-inline-indicator", attr: { "aria-hidden": "true" } });
           (0, import_obsidian10.setIcon)(indicator, "arrow-up-right");
         }
+        this.bindContentBlockDragHandle(main, node.id, block.id);
       }
       if (node.submap && !hasTextBlock) {
         const submapIcon = nodeEl.createEl("button", {
@@ -11453,6 +11556,7 @@ var MindMapEditor = class {
       }
       if (node.table && !blocks.some((block) => block.type === "table")) this.renderNodeTable(content, node, node.table);
       if (node.code && !blocks.some((block) => block.type === "code")) this.renderNodeCode(content, node, node.code);
+      this.bindContentBlockAppendDropTarget(content, node.id);
       if (node.question) this.renderQuestionSummary(content, node);
       if ((_H = node.tags) == null ? void 0 : _H.length) {
         const tags = content.createDiv({ cls: "mmc-node-tags" });
@@ -11586,12 +11690,15 @@ var MindMapEditor = class {
         }
       });
       nodeEl.addEventListener("contextmenu", (event) => {
+        var _a3;
         event.preventDefault();
         event.stopPropagation();
         this.aiScopeNodeId = node.id;
         this.updateAiScopeButton();
         this.selectNode(node.id);
-        this.openContextMenu(event);
+        const target = event.target;
+        const blockId = (_a3 = target.closest("[data-block-id]")) == null ? void 0 : _a3.dataset.blockId;
+        this.openContextMenu(event, blockId);
       });
       nodeEl.addEventListener("dragstart", (event) => {
         var _a3, _b3;
@@ -12699,6 +12806,118 @@ var MindMapEditor = class {
   removeStructuredBlock(node, blockId) {
     replaceNodeContentBlocks(node, nodeContentBlocks(node).filter((block) => block.id !== blockId));
   }
+  /** Adds the explicit grip used to move one rendered content block without dragging its whole node. */
+  bindContentBlockDragHandle(blockElement, nodeId, blockId) {
+    if (this.readOnly) return;
+    blockElement.addClass("mmc-draggable-content-block");
+    blockElement.dataset.blockId = blockId;
+    const handle = blockElement.createEl("button", {
+      cls: "mmc-content-block-drag-handle",
+      attr: {
+        type: "button",
+        title: "\u62D6\u52A8\u5185\u5BB9\u5757",
+        "aria-label": "\u62D6\u52A8\u5185\u5BB9\u5757",
+        draggable: "true"
+      }
+    });
+    (0, import_obsidian10.setIcon)(handle, "grip-vertical");
+    handle.addEventListener("pointerdown", (event) => {
+      event.stopPropagation();
+    });
+    handle.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+    });
+    handle.addEventListener("dragstart", (event) => {
+      var _a2;
+      event.stopPropagation();
+      this.draggingContentBlock = { nodeId, blockId };
+      (_a2 = event.dataTransfer) == null ? void 0 : _a2.setData("application/x-mms-content-block", `${nodeId}\0${blockId}`);
+      if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
+      blockElement.addClass("is-block-dragging");
+      this.rootEl.addClass("is-content-block-dragging");
+    });
+    handle.addEventListener("dragend", (event) => {
+      event.stopPropagation();
+      this.draggingContentBlock = null;
+      this.clearContentBlockDropIndicators();
+    });
+    blockElement.addEventListener("dragover", (event) => {
+      const dragging = this.draggingContentBlock;
+      if (!dragging || dragging.nodeId === nodeId && dragging.blockId === blockId) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const rect = blockElement.getBoundingClientRect();
+      const position = event.clientY < rect.top + rect.height / 2 ? "before" : "after";
+      this.clearContentBlockDropIndicators(false);
+      blockElement.addClass(`is-block-drop-${position}`);
+      if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+    });
+    blockElement.addEventListener("drop", (event) => {
+      const dragging = this.draggingContentBlock;
+      if (!dragging || dragging.nodeId === nodeId && dragging.blockId === blockId) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const rect = blockElement.getBoundingClientRect();
+      const position = event.clientY < rect.top + rect.height / 2 ? "before" : "after";
+      this.moveContentBlock(dragging.nodeId, dragging.blockId, nodeId, blockId, position);
+    });
+  }
+  /** Lets a dragged content block be appended after all blocks in a target node. */
+  bindContentBlockAppendDropTarget(content, nodeId) {
+    if (this.readOnly) return;
+    content.addEventListener("dragover", (event) => {
+      if (!this.draggingContentBlock) return;
+      const target = event.target;
+      if (target.closest("[data-block-id]")) return;
+      event.preventDefault();
+      event.stopPropagation();
+      this.clearContentBlockDropIndicators(false);
+      content.addClass("is-block-drop-append");
+      if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+    });
+    content.addEventListener("drop", (event) => {
+      const dragging = this.draggingContentBlock;
+      if (!dragging) return;
+      const target = event.target;
+      if (target.closest("[data-block-id]")) return;
+      event.preventDefault();
+      event.stopPropagation();
+      this.moveContentBlock(dragging.nodeId, dragging.blockId, nodeId, void 0, "append");
+    });
+  }
+  /** Applies a node-internal reorder or cross-node content-block move through the normal history path. */
+  moveContentBlock(sourceNodeId, blockId, targetNodeId, targetBlockId, position) {
+    if (!this.ensureEditable()) return;
+    let moved = false;
+    this.mutate(() => {
+      moved = moveNodeContentBlock(this.document.root, sourceNodeId, blockId, targetNodeId, targetBlockId, position);
+      if (moved) {
+        this.selectedId = targetNodeId;
+        this.selectedIds.clear();
+        this.selectedIds.add(targetNodeId);
+      }
+    });
+    this.draggingContentBlock = null;
+    this.clearContentBlockDropIndicators();
+    if (moved) new import_obsidian10.Notice(sourceNodeId === targetNodeId ? "\u5DF2\u8C03\u6574\u5185\u5BB9\u5757\u987A\u5E8F" : "\u5DF2\u79FB\u52A8\u5185\u5BB9\u5757\u5230\u76EE\u6807\u8282\u70B9");
+  }
+  /** Clears temporary block drag styling while optionally preserving the active drag state. */
+  clearContentBlockDropIndicators(clearDragging = true) {
+    this.rootEl.querySelectorAll(".is-block-drop-before, .is-block-drop-after, .is-block-drop-append").forEach((element) => element.removeClasses(["is-block-drop-before", "is-block-drop-after", "is-block-drop-append"]));
+    if (clearDragging) {
+      this.rootEl.querySelectorAll(".is-block-dragging").forEach((element) => element.removeClass("is-block-dragging"));
+      this.rootEl.removeClass("is-content-block-dragging");
+    }
+  }
+  /** Deletes exactly one content block selected by its owning node and stable block ID. */
+  removeContentBlock(nodeId, blockId) {
+    const node = findNode(this.document.root, nodeId);
+    if (!node || !this.ensureEditable()) return;
+    const blocks = nodeContentBlocks(node);
+    if (!blocks.some((block) => block.id === blockId)) return;
+    this.mutate(() => replaceNodeContentBlocks(node, blocks.filter((block) => block.id !== blockId)));
+  }
   /**
    * 如果节点已有子导图则打开；否则创建独立 .mindmap 文件并在父节点与子文件导航元数据中建立双向关系。
    * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
@@ -12971,6 +13190,7 @@ var MindMapEditor = class {
       event.stopPropagation();
       this.openTableBlockContextMenu(event, node, tableData, blockId);
     });
+    return wrap;
   }
   /**
    * 渲染node code，并保持模型、界面和持久化状态的一致性。
@@ -13012,12 +13232,13 @@ var MindMapEditor = class {
       event.stopPropagation();
       this.openCodeBlockContextMenu(event, node, codeData, blockId);
     });
+    return block;
   }
   /** Opens edit and block-specific removal actions for a rendered table. */
   openTableBlockContextMenu(event, node, table, blockId) {
     const menu = new import_obsidian10.Menu();
     menu.addItem((item) => item.setTitle("\u7F16\u8F91\u8868\u683C").setIcon("table-2").onClick(() => this.openTableBlockEditor(node, table, blockId)));
-    if (blockId) menu.addItem((item) => item.setTitle("\u79FB\u9664\u5F53\u524D\u8868\u683C").setIcon("eraser").onClick(() => {
+    if (blockId) menu.addItem((item) => item.setTitle("\u5220\u9664\u5F53\u524D\u5757").setIcon("trash-2").onClick(() => {
       if (!this.ensureEditable()) return;
       this.mutate(() => this.removeStructuredBlock(node, blockId));
     }));
@@ -13027,7 +13248,7 @@ var MindMapEditor = class {
   openCodeBlockContextMenu(event, node, code, blockId) {
     const menu = new import_obsidian10.Menu();
     menu.addItem((item) => item.setTitle("\u7F16\u8F91\u4EE3\u7801").setIcon("code-2").onClick(() => this.openCodeBlockEditor(node, code, blockId)));
-    if (blockId) menu.addItem((item) => item.setTitle("\u79FB\u9664\u5F53\u524D\u4EE3\u7801").setIcon("eraser").onClick(() => {
+    if (blockId) menu.addItem((item) => item.setTitle("\u5220\u9664\u5F53\u524D\u5757").setIcon("trash-2").onClick(() => {
       if (!this.ensureEditable()) return;
       this.mutate(() => this.removeStructuredBlock(node, blockId));
     }));
@@ -13381,7 +13602,7 @@ var MindMapEditor = class {
     menu.addSeparator();
     menu.addItem((item) => item.setTitle("\u590D\u5236\u56FE\u7247\u5730\u5740").setIcon("copy").onClick(() => void this.copyImageSource(block.source)));
     if (!this.readOnly) {
-      menu.addItem((item) => item.setTitle("\u5220\u9664\u56FE\u7247").setIcon("trash-2").onClick(() => this.removeImageBlock(nodeId, blockId)));
+      menu.addItem((item) => item.setTitle("\u5220\u9664\u5F53\u524D\u5757").setIcon("trash-2").onClick(() => this.removeImageBlock(nodeId, blockId)));
     }
     menu.showAtMouseEvent(event);
   }
@@ -13517,6 +13738,9 @@ var MindMapEditor = class {
     }
     menu.addItem((item) => item.setTitle("\u514B\u9686\u5206\u652F").setIcon("copy-plus").onClick(() => this.duplicateSelected()));
     menu.addSeparator();
+    if (selected && contextBlock) {
+      menu.addItem((item) => item.setTitle("\u5220\u9664\u5F53\u524D\u5757").setIcon("trash-2").onClick(() => this.removeContentBlock(selected.id, contextBlock.id)));
+    }
     menu.addItem((item) => item.setTitle(contextBlockId ? "\u5728\u6B64\u5757\u540E\u63D2\u5165\u6587\u5B57" : "\u63D2\u5165\u6587\u5B57").setIcon("text-cursor-input").onClick(() => this.insertTextBlock(contextBlockId)));
     menu.addItem((item) => item.setTitle((selected == null ? void 0 : selected.table) ? "\u7F16\u8F91\u8868\u683C" : "\u63D2\u5165\u8868\u683C").setIcon("table-2").onClick(() => this.editTable()));
     menu.addItem((item) => item.setTitle("\u63D2\u5165 LaTeX \u516C\u5F0F").setIcon("sigma").onClick(() => this.insertFormula()));

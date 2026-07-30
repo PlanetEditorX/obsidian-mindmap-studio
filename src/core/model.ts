@@ -5,7 +5,7 @@
  * 定义 .mindmap 稳定数据结构，并负责字段规范化、富文本、内容块、节点树、Markdown 导入导出及图片镜像候选源排序。
  */
 
-import { walkNodes } from "./node-tree";
+import { findNode, walkNodes } from "./node-tree";
 export {
   containsNode,
   findAncestors,
@@ -1027,6 +1027,69 @@ export function replaceNodeContentBlocks(node: MindMapNode, blocks: MindMapConte
   node.table = undefined;
   node.code = undefined;
   syncNodeContentFields(node);
+}
+
+/** 内容块相对目标块的放置位置；append 表示放到目标节点末尾。 */
+export type ContentBlockDropPosition = "before" | "after" | "append";
+
+/**
+ * 在同一节点内重排内容块，或把一个内容块移动到另一节点。
+ *
+ * @param root 当前文档根节点。
+ * @param sourceNodeId 原节点标识。
+ * @param blockId 要移动的内容块标识。
+ * @param targetNodeId 目标节点标识。
+ * @param targetBlockId 目标内容块标识；追加到末尾时可省略。
+ * @param position 放到目标块之前、之后或目标节点末尾。
+ * @returns 实际顺序或归属发生变化时返回 true。
+ */
+export function moveNodeContentBlock(
+  root: MindMapNode,
+  sourceNodeId: string,
+  blockId: string,
+  targetNodeId: string,
+  targetBlockId: string | undefined,
+  position: ContentBlockDropPosition
+): boolean {
+  const sourceNode = findNode(root, sourceNodeId);
+  const targetNode = findNode(root, targetNodeId);
+  if (!sourceNode || !targetNode) return false;
+  if (sourceNodeId === targetNodeId && targetBlockId === blockId) return false;
+
+  const sourceBlocks = nodeContentBlocks(sourceNode);
+  const sourceIndex = sourceBlocks.findIndex((block) => block.id === blockId);
+  if (sourceIndex < 0) return false;
+  const moving = sourceBlocks[sourceIndex]!;
+
+  if (sourceNode === targetNode) {
+    const previousOrder = sourceBlocks.map((block) => block.id).join("\u0000");
+    sourceBlocks.splice(sourceIndex, 1);
+    const targetIndex = targetBlockId
+      ? sourceBlocks.findIndex((block) => block.id === targetBlockId)
+      : -1;
+    if (targetBlockId && targetIndex < 0) return false;
+    const insertIndex = position === "append" || targetIndex < 0
+      ? sourceBlocks.length
+      : targetIndex + (position === "after" ? 1 : 0);
+    sourceBlocks.splice(insertIndex, 0, moving);
+    if (sourceBlocks.map((block) => block.id).join("\u0000") === previousOrder) return false;
+    replaceNodeContentBlocks(sourceNode, sourceBlocks);
+    return true;
+  }
+
+  const targetBlocks = nodeContentBlocks(targetNode);
+  const targetIndex = targetBlockId
+    ? targetBlocks.findIndex((block) => block.id === targetBlockId)
+    : -1;
+  if (targetBlockId && targetIndex < 0) return false;
+  sourceBlocks.splice(sourceIndex, 1);
+  const insertIndex = position === "append" || targetIndex < 0
+    ? targetBlocks.length
+    : targetIndex + (position === "after" ? 1 : 0);
+  targetBlocks.splice(insertIndex, 0, moving);
+  replaceNodeContentBlocks(sourceNode, sourceBlocks);
+  replaceNodeContentBlocks(targetNode, targetBlocks);
+  return true;
 }
 
 

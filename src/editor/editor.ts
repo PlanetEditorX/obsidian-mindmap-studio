@@ -27,6 +27,7 @@ import {
   nodePlainText,
   nodePrimaryText,
   normalizeMarkdownRichText,
+  moveNodeContentBlock,
   replaceNodeContentBlocks,
   syncNodeContentFields,
   syncMindMapQuestionFields,
@@ -291,6 +292,7 @@ class NodeEditModal extends Modal {
 
     const actionRow = form.createDiv({ cls: "mmc-content-block-actions" });
     const blocksEl = form.createDiv({ cls: "mmc-content-block-list" });
+    let draggedBlockId: string | null = null;
 
     const cloneBlocks = (): MindMapContentBlock[] => JSON.parse(JSON.stringify(workingBlocks)) as MindMapContentBlock[];
     const validBlocks = (): MindMapContentBlock[] => cloneBlocks().filter((block) => {
@@ -315,6 +317,64 @@ class NodeEditModal extends Modal {
           setIcon(btn, icon); btn.disabled = disabled;
           btn.addEventListener("click", (event) => { event.preventDefault(); action(); });
         };
+        const dragHandle = controls.createEl("button", {
+          cls: "clickable-icon mmc-content-block-editor-drag-handle",
+          attr: { type: "button", title: "拖动内容块", "aria-label": "拖动内容块", draggable: "true" }
+        });
+        setIcon(dragHandle, "grip-vertical");
+        dragHandle.addEventListener("pointerdown", (event) => event.stopPropagation());
+        dragHandle.addEventListener("click", (event) => event.preventDefault());
+        dragHandle.addEventListener("dragstart", (event) => {
+          event.stopPropagation();
+          draggedBlockId = block.id;
+          event.dataTransfer?.setData("application/x-mms-content-block", block.id);
+          if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
+          card.addClass("is-block-dragging");
+        });
+        dragHandle.addEventListener("dragend", () => {
+          draggedBlockId = null;
+          blocksEl.querySelectorAll(".is-block-dragging, .is-block-drop-before, .is-block-drop-after")
+            .forEach((element) => element.removeClasses(["is-block-dragging", "is-block-drop-before", "is-block-drop-after"]));
+        });
+        card.addEventListener("dragover", (event) => {
+          if (!draggedBlockId || draggedBlockId === block.id) return;
+          event.preventDefault();
+          event.stopPropagation();
+          blocksEl.querySelectorAll(".is-block-drop-before, .is-block-drop-after")
+            .forEach((element) => element.removeClasses(["is-block-drop-before", "is-block-drop-after"]));
+          const position = event.clientY < card.getBoundingClientRect().top + card.getBoundingClientRect().height / 2 ? "before" : "after";
+          card.addClass(`is-block-drop-${position}`);
+          if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+        });
+        card.addEventListener("drop", (event) => {
+          if (!draggedBlockId || draggedBlockId === block.id) return;
+          event.preventDefault();
+          event.stopPropagation();
+          const sourceIndex = workingBlocks.findIndex((item) => item.id === draggedBlockId);
+          const targetIndex = workingBlocks.findIndex((item) => item.id === block.id);
+          if (sourceIndex < 0 || targetIndex < 0) return;
+          const position = event.clientY < card.getBoundingClientRect().top + card.getBoundingClientRect().height / 2 ? "before" : "after";
+          const [moving] = workingBlocks.splice(sourceIndex, 1);
+          if (!moving) return;
+          const updatedTargetIndex = workingBlocks.findIndex((item) => item.id === block.id);
+          workingBlocks.splice(updatedTargetIndex + (position === "after" ? 1 : 0), 0, moving);
+          draggedBlockId = null;
+          renderBlocks();
+          scheduleAutoSave();
+        });
+        card.addEventListener("contextmenu", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          const menu = new Menu();
+          menu.addItem((item) => item.setTitle("删除当前块").setIcon("trash-2").onClick(() => {
+            const currentIndex = workingBlocks.findIndex((item) => item.id === block.id);
+            if (currentIndex < 0) return;
+            workingBlocks.splice(currentIndex, 1);
+            renderBlocks();
+            scheduleAutoSave();
+          }));
+          menu.showAtMouseEvent(event);
+        });
         control("arrow-up", "上移", () => { [workingBlocks[index - 1], workingBlocks[index]] = [workingBlocks[index]!, workingBlocks[index - 1]!]; renderBlocks(); scheduleAutoSave(); }, index === 0);
         control("arrow-down", "下移", () => { [workingBlocks[index + 1], workingBlocks[index]] = [workingBlocks[index]!, workingBlocks[index + 1]!]; renderBlocks(); scheduleAutoSave(); }, index === workingBlocks.length - 1);
         control("trash-2", "删除内容块", () => { workingBlocks.splice(index, 1); renderBlocks(); scheduleAutoSave(); });
@@ -571,6 +631,16 @@ class NodeEditModal extends Modal {
     };
     scheduleAutoSave = (): void => { if (timer !== null) window.clearTimeout(timer); timer = window.setTimeout(() => saveNow("autosave"), 280); };
     this.saveOnClose = () => { saveNow("commit"); };
+    form.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" || event.shiftKey || event.isComposing) return;
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
+      if (saveNow("commit", true)) {
+        this.closeWithoutFlush = true;
+        this.close();
+      }
+    }, true);
 
     [iconInput, taskSelect, shapeSelect, tagsInput, borderWidthInput, fontSizeInput, widthInput, minHeightInput, alignSelect, boldInput, italicInput, underlineInput, noteInput, linkInput]
       .forEach((input) => { input.addEventListener("input", scheduleAutoSave); input.addEventListener("change", scheduleAutoSave); });
@@ -1039,6 +1109,7 @@ export class MindMapEditor {
   private mindMapViewportInitialized = false;
   private readonly history: DocumentHistory;
   private draggingId: string | null = null;
+  private draggingContentBlock: { nodeId: string; blockId: string } | null = null;
   private dragDropPosition: NodeDropPosition | null = null;
   private dropPreviewEl: HTMLElement | null = null;
   private panning = false;
@@ -3150,14 +3221,17 @@ export class MindMapEditor {
             this.openImageContextMenu(event, node.id, block.id);
           });
           tryCandidate(0);
+          this.bindContentBlockDragHandle(wrap, node.id, block.id);
           continue;
         }
         if (block.type === "table") {
-          this.renderNodeTable(content, node, block.table, block.id);
+          const tableBlock = this.renderNodeTable(content, node, block.table, block.id);
+          this.bindContentBlockDragHandle(tableBlock, node.id, block.id);
           continue;
         }
         if (block.type === "code") {
-          this.renderNodeCode(content, node, block.code, block.id);
+          const codeBlock = this.renderNodeCode(content, node, block.code, block.id);
+          this.bindContentBlockDragHandle(codeBlock, node.id, block.id);
           continue;
         }
         if (!block.text.trim()) continue;
@@ -3178,6 +3252,7 @@ export class MindMapEditor {
           const indicator = textEl.createSpan({ cls: "mmc-submap-inline-indicator", attr: { "aria-hidden": "true" } });
           setIcon(indicator, "arrow-up-right");
         }
+        this.bindContentBlockDragHandle(main, node.id, block.id);
       }
 
       if (node.submap && !hasTextBlock) {
@@ -3204,6 +3279,7 @@ export class MindMapEditor {
 
       if (node.table && !blocks.some((block) => block.type === "table")) this.renderNodeTable(content, node, node.table);
       if (node.code && !blocks.some((block) => block.type === "code")) this.renderNodeCode(content, node, node.code);
+      this.bindContentBlockAppendDropTarget(content, node.id);
       if (node.question) this.renderQuestionSummary(content, node);
 
       if (node.tags?.length) {
@@ -3342,7 +3418,9 @@ export class MindMapEditor {
         this.aiScopeNodeId = node.id;
         this.updateAiScopeButton();
         this.selectNode(node.id);
-        this.openContextMenu(event);
+        const target = event.target as HTMLElement;
+        const blockId = target.closest<HTMLElement>("[data-block-id]")?.dataset.blockId;
+        this.openContextMenu(event, blockId);
       });
       nodeEl.addEventListener("dragstart", (event) => {
         if (this.readOnly) { event.preventDefault(); return; }
@@ -4512,6 +4590,129 @@ export class MindMapEditor {
     replaceNodeContentBlocks(node, nodeContentBlocks(node).filter((block) => block.id !== blockId));
   }
 
+  /** Adds the explicit grip used to move one rendered content block without dragging its whole node. */
+  private bindContentBlockDragHandle(blockElement: HTMLElement, nodeId: string, blockId: string): void {
+    if (this.readOnly) return;
+    blockElement.addClass("mmc-draggable-content-block");
+    blockElement.dataset.blockId = blockId;
+    const handle = blockElement.createEl("button", {
+      cls: "mmc-content-block-drag-handle",
+      attr: {
+        type: "button",
+        title: "拖动内容块",
+        "aria-label": "拖动内容块",
+        draggable: "true"
+      }
+    });
+    setIcon(handle, "grip-vertical");
+    handle.addEventListener("pointerdown", (event) => {
+      event.stopPropagation();
+    });
+    handle.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+    });
+    handle.addEventListener("dragstart", (event) => {
+      event.stopPropagation();
+      this.draggingContentBlock = { nodeId, blockId };
+      event.dataTransfer?.setData("application/x-mms-content-block", `${nodeId}\u0000${blockId}`);
+      if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
+      blockElement.addClass("is-block-dragging");
+      this.rootEl.addClass("is-content-block-dragging");
+    });
+    handle.addEventListener("dragend", (event) => {
+      event.stopPropagation();
+      this.draggingContentBlock = null;
+      this.clearContentBlockDropIndicators();
+    });
+    blockElement.addEventListener("dragover", (event) => {
+      const dragging = this.draggingContentBlock;
+      if (!dragging || (dragging.nodeId === nodeId && dragging.blockId === blockId)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const rect = blockElement.getBoundingClientRect();
+      const position = event.clientY < rect.top + rect.height / 2 ? "before" : "after";
+      this.clearContentBlockDropIndicators(false);
+      blockElement.addClass(`is-block-drop-${position}`);
+      if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+    });
+    blockElement.addEventListener("drop", (event) => {
+      const dragging = this.draggingContentBlock;
+      if (!dragging || (dragging.nodeId === nodeId && dragging.blockId === blockId)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const rect = blockElement.getBoundingClientRect();
+      const position = event.clientY < rect.top + rect.height / 2 ? "before" : "after";
+      this.moveContentBlock(dragging.nodeId, dragging.blockId, nodeId, blockId, position);
+    });
+  }
+
+  /** Lets a dragged content block be appended after all blocks in a target node. */
+  private bindContentBlockAppendDropTarget(content: HTMLElement, nodeId: string): void {
+    if (this.readOnly) return;
+    content.addEventListener("dragover", (event) => {
+      if (!this.draggingContentBlock) return;
+      const target = event.target as HTMLElement;
+      if (target.closest("[data-block-id]")) return;
+      event.preventDefault();
+      event.stopPropagation();
+      this.clearContentBlockDropIndicators(false);
+      content.addClass("is-block-drop-append");
+      if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+    });
+    content.addEventListener("drop", (event) => {
+      const dragging = this.draggingContentBlock;
+      if (!dragging) return;
+      const target = event.target as HTMLElement;
+      if (target.closest("[data-block-id]")) return;
+      event.preventDefault();
+      event.stopPropagation();
+      this.moveContentBlock(dragging.nodeId, dragging.blockId, nodeId, undefined, "append");
+    });
+  }
+
+  /** Applies a node-internal reorder or cross-node content-block move through the normal history path. */
+  private moveContentBlock(
+    sourceNodeId: string,
+    blockId: string,
+    targetNodeId: string,
+    targetBlockId: string | undefined,
+    position: "before" | "after" | "append"
+  ): void {
+    if (!this.ensureEditable()) return;
+    let moved = false;
+    this.mutate(() => {
+      moved = moveNodeContentBlock(this.document.root, sourceNodeId, blockId, targetNodeId, targetBlockId, position);
+      if (moved) {
+        this.selectedId = targetNodeId;
+        this.selectedIds.clear();
+        this.selectedIds.add(targetNodeId);
+      }
+    });
+    this.draggingContentBlock = null;
+    this.clearContentBlockDropIndicators();
+    if (moved) new Notice(sourceNodeId === targetNodeId ? "已调整内容块顺序" : "已移动内容块到目标节点");
+  }
+
+  /** Clears temporary block drag styling while optionally preserving the active drag state. */
+  private clearContentBlockDropIndicators(clearDragging = true): void {
+    this.rootEl.querySelectorAll(".is-block-drop-before, .is-block-drop-after, .is-block-drop-append")
+      .forEach((element) => element.removeClasses(["is-block-drop-before", "is-block-drop-after", "is-block-drop-append"]));
+    if (clearDragging) {
+      this.rootEl.querySelectorAll(".is-block-dragging").forEach((element) => element.removeClass("is-block-dragging"));
+      this.rootEl.removeClass("is-content-block-dragging");
+    }
+  }
+
+  /** Deletes exactly one content block selected by its owning node and stable block ID. */
+  private removeContentBlock(nodeId: string, blockId: string): void {
+    const node = findNode(this.document.root, nodeId);
+    if (!node || !this.ensureEditable()) return;
+    const blocks = nodeContentBlocks(node);
+    if (!blocks.some((block) => block.id === blockId)) return;
+    this.mutate(() => replaceNodeContentBlocks(node, blocks.filter((block) => block.id !== blockId)));
+  }
+
   /**
    * 如果节点已有子导图则打开；否则创建独立 .mindmap 文件并在父节点与子文件导航元数据中建立双向关系。
    * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
@@ -4751,7 +4952,7 @@ export class MindMapEditor {
   }
 
   /** Renders the optional table payload beneath normal node and question content. */
-  private renderNodeTable(content: HTMLElement, node: MindMapNode, tableData: MindMapTable, blockId?: string): void {
+  private renderNodeTable(content: HTMLElement, node: MindMapNode, tableData: MindMapTable, blockId?: string): HTMLElement {
     const wrap = content.createDiv({ cls: "mmc-node-table-wrap" });
     const table = wrap.createEl("table", { cls: "mmc-node-table" });
     if (tableData.columnWidths?.length) {
@@ -4790,6 +4991,7 @@ export class MindMapEditor {
         event.stopPropagation();
         this.openTableBlockContextMenu(event, node, tableData, blockId);
       });
+    return wrap;
   }
 
   /**
@@ -4798,7 +5000,7 @@ export class MindMapEditor {
    * @param content 该参数用于 render node code 流程中的输入或控制。
    * @param node 当前处理的节点。
    */
-  private renderNodeCode(content: HTMLElement, node: MindMapNode, codeData: MindMapCodeBlock, blockId?: string): void {
+  private renderNodeCode(content: HTMLElement, node: MindMapNode, codeData: MindMapCodeBlock, blockId?: string): HTMLElement {
     const block = content.createDiv({ cls: "mmc-code-block" });
     const header = block.createDiv({ cls: "mmc-code-header" });
     header.createSpan({ text: codeData.language || "code" });
@@ -4834,13 +5036,14 @@ export class MindMapEditor {
         event.stopPropagation();
         this.openCodeBlockContextMenu(event, node, codeData, blockId);
       });
-    }
+    return block;
+  }
 
   /** Opens edit and block-specific removal actions for a rendered table. */
   private openTableBlockContextMenu(event: MouseEvent, node: MindMapNode, table: MindMapTable, blockId?: string): void {
     const menu = new Menu();
     menu.addItem((item) => item.setTitle("编辑表格").setIcon("table-2").onClick(() => this.openTableBlockEditor(node, table, blockId)));
-    if (blockId) menu.addItem((item) => item.setTitle("移除当前表格").setIcon("eraser").onClick(() => {
+    if (blockId) menu.addItem((item) => item.setTitle("删除当前块").setIcon("trash-2").onClick(() => {
       if (!this.ensureEditable()) return;
       this.mutate(() => this.removeStructuredBlock(node, blockId));
     }));
@@ -4851,7 +5054,7 @@ export class MindMapEditor {
   private openCodeBlockContextMenu(event: MouseEvent, node: MindMapNode, code: MindMapCodeBlock, blockId?: string): void {
     const menu = new Menu();
     menu.addItem((item) => item.setTitle("编辑代码").setIcon("code-2").onClick(() => this.openCodeBlockEditor(node, code, blockId)));
-    if (blockId) menu.addItem((item) => item.setTitle("移除当前代码").setIcon("eraser").onClick(() => {
+    if (blockId) menu.addItem((item) => item.setTitle("删除当前块").setIcon("trash-2").onClick(() => {
       if (!this.ensureEditable()) return;
       this.mutate(() => this.removeStructuredBlock(node, blockId));
     }));
@@ -5223,7 +5426,7 @@ export class MindMapEditor {
     menu.addSeparator();
     menu.addItem((item) => item.setTitle("复制图片地址").setIcon("copy").onClick(() => void this.copyImageSource(block.source)));
     if (!this.readOnly) {
-      menu.addItem((item) => item.setTitle("删除图片").setIcon("trash-2").onClick(() => this.removeImageBlock(nodeId, blockId)));
+      menu.addItem((item) => item.setTitle("删除当前块").setIcon("trash-2").onClick(() => this.removeImageBlock(nodeId, blockId)));
     }
     menu.showAtMouseEvent(event);
   }
@@ -5384,6 +5587,12 @@ export class MindMapEditor {
     }
     menu.addItem((item) => item.setTitle("克隆分支").setIcon("copy-plus").onClick(() => this.duplicateSelected()));
     menu.addSeparator();
+    if (selected && contextBlock) {
+      menu.addItem((item) => item
+        .setTitle("删除当前块")
+        .setIcon("trash-2")
+        .onClick(() => this.removeContentBlock(selected.id, contextBlock.id)));
+    }
     menu.addItem((item) => item
       .setTitle(contextBlockId ? "在此块后插入文字" : "插入文字")
       .setIcon("text-cursor-input")

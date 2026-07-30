@@ -139,7 +139,7 @@ export function renderNodeRichTextEditor(
   source.addEventListener("keyup", remember);
   source.addEventListener("mouseup", remember);
   source.addEventListener("input", () => {
-    const next = source.value.replace(/\r?\n/g, " ");
+    const next = source.value.replace(/\r\n?/g, "\n");
     const reconciled = reconcileRichTextAfterEdit(block.text, block.richText, next);
     const normalized = normalizeMarkdownRichText(reconciled, next);
     block.text = normalized.text;
