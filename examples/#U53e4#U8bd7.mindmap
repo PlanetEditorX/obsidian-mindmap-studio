@@ -1,0 +1,30 @@
+{
+  "version": 10,
+  "title": "古诗",
+  "layout": "right",
+  "theme": "auto",
+  "root": {
+    "id": "poetry-root",
+    "text": "古诗",
+    "children": [
+      {
+        "id": "tang-node",
+        "text": "唐诗",
+        "submap": {
+          "path": "MindMap Assets/古诗/唐诗.mindmap",
+          "title": "唐诗"
+        },
+        "children": []
+      },
+      {
+        "id": "song-node",
+        "text": "宋词",
+        "children": []
+      }
+    ]
+  },
+  "view": {
+    "mode": "mindmap",
+    "readOnly": false
+  }
+}
