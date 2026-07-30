@@ -275,10 +275,61 @@ function renderExplanationBlocks(container: HTMLElement, blocks: readonly MindMa
   }
 }
 
-/** Splits A/B/C/D analysis markers while keeping the concluding sentence with the final item. */
+/** Splits the introduction, A/B/C/D analyses, and the trailing conclusion into readable paragraphs. */
 export function splitExplanationLines(value: string): string[] {
-  const lines = value.split(/(?=[A-DＡ-Ｄ]项)/u).map((line) => line.trim()).filter(Boolean);
-  return lines.length ? lines : value.trim() ? [value.trim()] : [];
+  const text = value.trim();
+  if (!text) return [];
+
+  const optionMarkers = Array.from(text.matchAll(/[A-DＡ-Ｄ]项/gu));
+  if (!optionMarkers.length) return [text];
+
+  const lines: string[] = [];
+  const prefix = text.slice(0, optionMarkers[0]!.index).trim();
+  if (prefix) lines.push(prefix);
+
+  optionMarkers.forEach((marker, index) => {
+    const start = marker.index!;
+    const end = optionMarkers[index + 1]?.index ?? text.length;
+    const segment = text.slice(start, end).trim();
+    if (!segment) return;
+
+    if (index === optionMarkers.length - 1) {
+      lines.push(...splitFinalOptionConclusion(segment));
+    } else {
+      lines.push(segment);
+    }
+  });
+
+  return lines;
+}
+
+/** Separates a final-answer summary from the last option analysis without fragmenting its wording. */
+function splitFinalOptionConclusion(segment: string): string[] {
+  const optionMarker = segment.match(/^[A-DＡ-Ｄ]项/u)?.[0] ?? "";
+  const body = segment.slice(optionMarker.length);
+  const conclusionPattern = String.raw`(?:综上(?:所述|可知)?|(?:因此|所以|故而|故)?[，,:：]?\s*(?:本题)?(?:正确选项(?:是|为)?|正确答案(?:是|为)?|答案(?:是|为))|故选)`;
+
+  const afterPunctuation = body.match(new RegExp(`([。！？；])(?:[ \\t]*|\\r?\\n[ \\t]*)(?=${conclusionPattern})`, "u"));
+  if (afterPunctuation?.index !== undefined) {
+    const punctuationEnd = optionMarker.length + afterPunctuation.index + afterPunctuation[1]!.length;
+    const conclusionStart = optionMarker.length + afterPunctuation.index + afterPunctuation[0].length;
+    return [segment.slice(0, punctuationEnd).trim(), segment.slice(conclusionStart).trim()].filter(Boolean);
+  }
+
+  const afterLineBreak = body.match(new RegExp(`\\r?\\n[ \\t]*(?=${conclusionPattern})`, "u"));
+  if (afterLineBreak?.index !== undefined) {
+    const optionEnd = optionMarker.length + afterLineBreak.index;
+    const conclusionStart = optionMarker.length + afterLineBreak.index + afterLineBreak[0].length;
+    return [segment.slice(0, optionEnd).trim(), segment.slice(conclusionStart).trim()].filter(Boolean);
+  }
+
+  const directSummary = body.match(new RegExp(conclusionPattern, "u"));
+  if (directSummary?.index !== undefined && directSummary.index > 0) {
+    const conclusionStart = optionMarker.length + directSummary.index;
+    return [segment.slice(0, conclusionStart).trim(), segment.slice(conclusionStart).trim()].filter(Boolean);
+  }
+
+  return [segment];
 }
 
 /** Clears transient practice state when the active question set changes. */
