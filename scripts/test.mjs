@@ -977,7 +977,7 @@ const command = "example";
   assert.equal(tableOfContentsDocument.root.text, "相丽君-红宝书", "a table of contents before the first H1 must keep the filename-derived root node");
   assert.deepEqual(tableOfContentsDocument.root.children.map((node) => node.text), ["主题一 · 写时代，不负韶华", "主题二 · 写政务，初心为民"], "top-level themes after a table of contents must remain siblings");
   assert.deepEqual(tableOfContentsDocument.root.children[0]?.children.map((node) => node.text), ["与时偕行 · 顺势而为", "好标题", "好段落"], "quotes and headings must remain inside their current theme");
-  assert.equal(tableOfContentsDocument.root.children[0]?.children[2]?.children[0]?.children[0]?.text, "这是一段需要保留的正文。", "body paragraphs must remain below their nearest heading");
+  assert.equal(model.nodeContentBlocks(tableOfContentsDocument.root.children[0]?.children[2]?.children[0])[1]?.text, "这是一段需要保留的正文。", "body paragraphs must remain below their nearest heading in content order");
 
 
   const markdownTable = `| 名称 | 数量 | 状态 |
