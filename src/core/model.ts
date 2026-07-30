@@ -136,6 +136,8 @@ export interface MindMapTable {
   headers: string[];
   rows: string[][];
   alignments?: TableAlignment[];
+  /** Persisted pixel widths for columns, in header order. */
+  columnWidths?: number[];
   source?: "manual" | "markdown" | "children";
 }
 
@@ -1058,8 +1060,18 @@ function normalizeTable(input: Partial<MindMapTable> | undefined): MindMapTable 
   const alignments = Array.isArray(input.alignments)
     ? input.alignments.slice(0, headers.length).map((value) => value === "center" || value === "right" ? value : "left")
     : undefined;
+  const hasColumnWidths = Array.isArray(input.columnWidths)
+    && input.columnWidths.slice(0, headers.length).some((value) => typeof value === "number" && Number.isFinite(value));
+  const columnWidths = hasColumnWidths
+    ? headers.map((_, index) => {
+      const value = input.columnWidths?.[index];
+      return typeof value === "number" && Number.isFinite(value)
+        ? Math.max(64, Math.min(1200, Math.round(value)))
+        : 160;
+    })
+    : undefined;
   const source = input.source === "markdown" || input.source === "children" ? input.source : "manual";
-  return { headers, rows, alignments, source };
+  return { headers, rows, alignments, columnWidths, source };
 }
 
 /**

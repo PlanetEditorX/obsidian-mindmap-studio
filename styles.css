@@ -3144,6 +3144,7 @@
 }
 
 .mms-outline-title:empty::before,
+.mms-article-document-title-text:empty::before,
 .mms-article-heading-text:empty::before,
 .mms-article-leaf-text:empty::before,
 .mms-article-paragraph:empty::before {
@@ -3153,6 +3154,7 @@
 }
 
 .mms-outline-title[contenteditable="true"]:focus,
+.mms-article-document-title-text[contenteditable="true"]:focus,
 .mms-article-heading-text[contenteditable="true"]:focus,
 .mms-article-leaf-text[contenteditable="true"]:focus,
 .mms-article-paragraph[contenteditable="true"]:focus {
@@ -3171,6 +3173,7 @@
   border-radius: var(--radius-s);
 }
 
+.mms-article-document-title-text.is-inline-editing,
 .mms-article-heading-text.is-inline-editing,
 .mms-article-leaf-text.is-inline-editing,
 .mms-article-paragraph.is-inline-editing {
@@ -3386,6 +3389,9 @@
 }
 
 .mms-article-document-title-text {
+  display: inline-block;
+  min-width: 4em;
+  min-height: 1.2em;
   outline: none;
 }
 
@@ -3755,6 +3761,10 @@
   border-collapse: collapse;
 }
 
+.mms-article-table.has-custom-column-widths {
+  table-layout: fixed;
+}
+
 .mms-article-table th,
 .mms-article-table td {
   padding: 8px 10px;
@@ -3762,7 +3772,53 @@
 }
 
 .mms-article-table th {
+  position: relative;
   background: var(--background-secondary);
+}
+
+.mms-table-column-resizer {
+  position: absolute;
+  top: 0;
+  right: -4px;
+  z-index: 2;
+  width: 8px;
+  height: 100%;
+  cursor: col-resize;
+  touch-action: none;
+  user-select: none;
+}
+
+.mms-table-column-resizer::after {
+  position: absolute;
+  top: 15%;
+  right: 3px;
+  width: 2px;
+  height: 70%;
+  content: "";
+  background: var(--interactive-accent);
+  opacity: 0;
+}
+
+.mms-article-table th:hover > .mms-table-column-resizer::after,
+.mms-article-table-wrap.is-resizing-columns .mms-table-column-resizer::after {
+  opacity: .65;
+}
+
+.mms-article-table-wrap.is-resizing-columns {
+  cursor: col-resize;
+  user-select: none;
+}
+
+.mms-outline-table.has-custom-column-widths {
+  min-width: 0;
+  table-layout: fixed;
+}
+
+.mms-outline-table.has-custom-column-widths th,
+.mms-outline-table.has-custom-column-widths td,
+.mmc-node-table.has-custom-column-widths th,
+.mmc-node-table.has-custom-column-widths td {
+  min-width: 0;
 }
 
 .mms-article-code {

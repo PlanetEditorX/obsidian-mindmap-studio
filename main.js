@@ -525,8 +525,14 @@ function normalizeTable(input) {
     return values;
   }) : [];
   const alignments = Array.isArray(input.alignments) ? input.alignments.slice(0, headers.length).map((value) => value === "center" || value === "right" ? value : "left") : void 0;
+  const hasColumnWidths = Array.isArray(input.columnWidths) && input.columnWidths.slice(0, headers.length).some((value) => typeof value === "number" && Number.isFinite(value));
+  const columnWidths = hasColumnWidths ? headers.map((_, index) => {
+    var _a2;
+    const value = (_a2 = input.columnWidths) == null ? void 0 : _a2[index];
+    return typeof value === "number" && Number.isFinite(value) ? Math.max(64, Math.min(1200, Math.round(value))) : 160;
+  }) : void 0;
   const source = input.source === "markdown" || input.source === "children" ? input.source : "manual";
-  return { headers, rows, alignments, source };
+  return { headers, rows, alignments, columnWidths, source };
 }
 function normalizeCode(input) {
   if (!input || typeof input.code !== "string" || !input.code.trim()) return void 0;
@@ -1879,7 +1885,6 @@ var SETTINGS_SECTION_TITLES = [
   "\u8282\u70B9\u5916\u89C2",
   "\u8FDE\u7EBF\u4E0E\u5206\u652F",
   "\u4EE3\u7801\u5757",
-  "\u65B0\u5EFA\u4E0E\u5E03\u5C40",
   "\u6587\u4EF6\u4E0E\u8D44\u6E90",
   "\u7B54\u9898\u4E0E\u9898\u5E93",
   "\u56FE\u7247\u4E0E\u56FE\u5E8A",
@@ -2016,7 +2021,7 @@ function normalizeSettingsSectionOrder(value) {
     "\u8282\u70B9\u6837\u5F0F": "\u8282\u70B9\u5916\u89C2",
     "\u8FDE\u7EBF\u6837\u5F0F": "\u8FDE\u7EBF\u4E0E\u5206\u652F",
     "\u5168\u5C40\u4EE3\u7801\u8BBE\u7F6E": "\u4EE3\u7801\u5757",
-    "\u6587\u4EF6\u4E0E\u5E03\u5C40": "\u65B0\u5EFA\u4E0E\u5E03\u5C40",
+    "\u6587\u4EF6\u4E0E\u5E03\u5C40": "\u6587\u4EF6\u4E0E\u8D44\u6E90",
     "\u6587\u4EF6\u5939": "\u6587\u4EF6\u4E0E\u8D44\u6E90",
     "\u5168\u5C40\u641C\u7D22\u7D22\u5F15": "\u5168\u5C40\u641C\u7D22"
   };
@@ -2238,6 +2243,10 @@ var MindMapStudioSettingTab = class extends import_obsidian.PluginSettingTab {
         await this.plugin.setGlobalDisplayMode(value);
       });
     });
+    new import_obsidian.Setting(containerEl).setName("\u8282\u70B9\u7F16\u8F91\u5668\u663E\u793A\u4F4D\u7F6E").setDesc("\u5C45\u4E2D\u65F6\u4F7F\u7528\u5F39\u7A97\uFF1B\u9760\u53F3\u65F6\u4F5C\u4E3A\u53F3\u4FA7\u7F16\u8F91\u9762\u677F\u663E\u793A\uFF0C\u4FDD\u5B58\u6216\u70B9\u51FB\u9762\u677F\u5916\u4F1A\u81EA\u52A8\u6536\u8D77\u3002").addDropdown((dropdown) => dropdown.addOption("center", "\u5C45\u4E2D\u5F39\u7A97").addOption("right", "\u53F3\u4FA7\u9762\u677F").setValue(this.plugin.settings.nodeEditorPosition).onChange(async (value) => {
+      this.plugin.settings.nodeEditorPosition = value === "right" ? "right" : "center";
+      await this.saveAndRefresh();
+    }));
     new import_obsidian.Setting(containerEl).setName("\u53CC\u6307\u624B\u52BF").setDesc("\u5728\u5BFC\u56FE\u753B\u5E03\u4E0A\u4F7F\u7528\u4E24\u6839\u624B\u6307\u65F6\uFF0C\u53EF\u9009\u62E9\u4EE5\u6307\u95F4\u8DDD\u79BB\u7F29\u653E\uFF0C\u6216\u4EE5\u53CC\u6307\u4E2D\u5FC3\u70B9\u79FB\u52A8\u753B\u5E03\u3002").addDropdown((dropdown) => dropdown.addOption("zoom", "\u653E\u5927\u7F29\u5C0F").addOption("pan", "\u79FB\u52A8\u753B\u5E03").setValue(this.plugin.settings.twoFingerGestureAction).onChange(async (value) => {
       this.plugin.settings.twoFingerGestureAction = value === "pan" ? "pan" : "zoom";
       await this.saveAndRefresh();
@@ -2557,11 +2566,6 @@ var MindMapStudioSettingTab = class extends import_obsidian.PluginSettingTab {
       });
     });
     containerEl.appendChild(imageRecognitionSettings);
-    containerEl.createEl("h3", { text: "\u65B0\u5EFA\u4E0E\u5E03\u5C40" });
-    new import_obsidian.Setting(containerEl).setName("\u8282\u70B9\u7F16\u8F91\u5668\u663E\u793A\u4F4D\u7F6E").setDesc("\u5C45\u4E2D\u65F6\u4F7F\u7528\u5F39\u7A97\uFF1B\u9760\u53F3\u65F6\u4F5C\u4E3A\u53F3\u4FA7\u7F16\u8F91\u9762\u677F\u663E\u793A\uFF0C\u4FDD\u5B58\u6216\u70B9\u51FB\u9762\u677F\u5916\u4F1A\u81EA\u52A8\u6536\u8D77\u3002").addDropdown((dropdown) => dropdown.addOption("center", "\u5C45\u4E2D\u5F39\u7A97").addOption("right", "\u53F3\u4FA7\u9762\u677F").setValue(this.plugin.settings.nodeEditorPosition).onChange(async (value) => {
-      this.plugin.settings.nodeEditorPosition = value === "right" ? "right" : "center";
-      await this.saveAndRefresh();
-    }));
     containerEl.createEl("h3", { text: "\u5FEB\u6377\u952E\u914D\u7F6E" });
     containerEl.createEl("p", {
       cls: "setting-item-description",
@@ -3795,6 +3799,7 @@ var CODE_LANGUAGE_OPTIONS = [
   ["json", "JSON"],
   ["yaml", "YAML"],
   ["ini", "INI"],
+  ["nginx", "Nginx"],
   ["dockerfile", "Dockerfile"],
   ["markdown", "Markdown"],
   ["text", "Plain Text"]
@@ -3870,15 +3875,17 @@ var TableEditModal = class extends import_obsidian2.Modal {
       this.table.headers.push(`\u5217 ${this.table.headers.length + 1}`);
       (_b2 = (_a2 = this.table).alignments) != null ? _b2 : _a2.alignments = [];
       this.table.alignments.push("left");
+      if (this.table.columnWidths) this.table.columnWidths.push(160);
       this.table.rows.forEach((row) => row.push(""));
       this.renderGrid();
     });
     removeColumn.addEventListener("click", () => {
-      var _a2;
+      var _a2, _b2;
       this.collectGrid();
       if (this.table.headers.length <= 1) return;
       this.table.headers.pop();
       (_a2 = this.table.alignments) == null ? void 0 : _a2.pop();
+      (_b2 = this.table.columnWidths) == null ? void 0 : _b2.pop();
       this.table.rows.forEach((row) => row.pop());
       this.renderGrid();
     });
@@ -7501,7 +7508,7 @@ function renderOutlineMode(container, options) {
   root.children.forEach((child) => visit(child, 1));
 }
 function renderOutlineContent(container, node, depth, options) {
-  var _a2, _b2;
+  var _a2, _b2, _c;
   const blocks = nodeContentBlocks(node);
   const additionalText = blocks.filter((block) => block.type === "text").slice(1);
   const images = blocks.filter((block) => block.type === "image");
@@ -7554,14 +7561,31 @@ function renderOutlineContent(container, node, depth, options) {
   if (node.table) {
     const tableWrap = content.createDiv({ cls: "mms-outline-table-wrap" });
     const table = tableWrap.createEl("table", { cls: "mms-outline-table" });
+    if ((_c = node.table.columnWidths) == null ? void 0 : _c.length) {
+      table.addClass("has-custom-column-widths");
+      const colgroup = table.createEl("colgroup");
+      node.table.headers.forEach((_, index) => {
+        var _a3, _b3, _c2;
+        const column = colgroup.createEl("col");
+        column.style.width = `${(_c2 = (_b3 = (_a3 = node.table) == null ? void 0 : _a3.columnWidths) == null ? void 0 : _b3[index]) != null ? _c2 : 160}px`;
+      });
+      table.style.width = `${node.table.columnWidths.reduce((sum, width) => sum + width, 0)}px`;
+    }
     const heading = table.createEl("thead").createEl("tr");
-    node.table.headers.forEach((header) => renderInlineMarkdown(heading.createEl("th"), header));
+    node.table.headers.forEach((header, index) => {
+      var _a3, _b3, _c2;
+      const cell = heading.createEl("th");
+      renderInlineMarkdown(cell, header);
+      cell.style.textAlign = (_c2 = (_b3 = (_a3 = node.table) == null ? void 0 : _a3.alignments) == null ? void 0 : _b3[index]) != null ? _c2 : "left";
+    });
     const body = table.createEl("tbody");
     node.table.rows.forEach((row) => {
       const rowElement = body.createEl("tr");
       node.table.headers.forEach((_, index) => {
-        var _a3;
-        return renderInlineMarkdown(rowElement.createEl("td"), (_a3 = row[index]) != null ? _a3 : "");
+        var _a3, _b3, _c2, _d;
+        const cell = rowElement.createEl("td");
+        renderInlineMarkdown(cell, (_a3 = row[index]) != null ? _a3 : "");
+        cell.style.textAlign = (_d = (_c2 = (_b3 = node.table) == null ? void 0 : _b3.alignments) == null ? void 0 : _c2[index]) != null ? _d : "left";
       });
     });
   }
@@ -7738,7 +7762,7 @@ function renderArticleNodeContent(container, node, treatTextAsBody, options) {
         options.openImageContextMenu(event, node.id, block.id);
       });
     } else if (block.type === "table") {
-      renderArticleTable(container, block.table, block.id);
+      renderArticleTable(container, node, block.table, block.id, options);
     } else {
       const code = container.createDiv({ cls: "mms-article-code markdown-rendered" });
       code.dataset.blockId = block.id;
@@ -7753,19 +7777,79 @@ function renderArticleNodeContent(container, node, treatTextAsBody, options) {
   if (node.note) container.createEl("p", { cls: "mms-article-note", text: node.note });
   if (node.question) renderArticleQuestionDetails(container, node);
 }
-function renderArticleTable(container, tableData, blockId) {
-  if (!tableData) return;
+function renderArticleTable(container, node, tableData, blockId, options) {
+  var _a2;
   const wrap = container.createDiv({ cls: "mms-article-table-wrap" });
-  if (blockId) wrap.dataset.blockId = blockId;
+  wrap.dataset.blockId = blockId;
   const table = wrap.createEl("table", { cls: "mms-article-table" });
+  const colgroup = table.createEl("colgroup");
+  const columns = tableData.headers.map(() => colgroup.createEl("col"));
+  const applyWidths = (widths) => {
+    table.addClass("has-custom-column-widths");
+    columns.forEach((column, index) => {
+      var _a3;
+      column.style.width = `${(_a3 = widths[index]) != null ? _a3 : 160}px`;
+    });
+    table.style.width = `${widths.reduce((sum, width) => sum + width, 0)}px`;
+  };
+  if ((_a2 = tableData.columnWidths) == null ? void 0 : _a2.length) applyWidths(tableData.columnWidths);
   const tr = table.createEl("thead").createEl("tr");
-  tableData.headers.forEach((header) => renderInlineMarkdown(tr.createEl("th"), header));
+  const headers = tableData.headers.map((header, index) => {
+    var _a3, _b2;
+    const cell = tr.createEl("th");
+    renderInlineMarkdown(cell, header);
+    cell.style.textAlign = (_b2 = (_a3 = tableData.alignments) == null ? void 0 : _a3[index]) != null ? _b2 : "left";
+    return cell;
+  });
   const body = table.createEl("tbody");
   tableData.rows.forEach((row) => {
     const rowEl = body.createEl("tr");
     tableData.headers.forEach((_, index) => {
-      var _a2;
-      return renderInlineMarkdown(rowEl.createEl("td"), (_a2 = row[index]) != null ? _a2 : "");
+      var _a3, _b2, _c;
+      const cell = rowEl.createEl("td");
+      renderInlineMarkdown(cell, (_a3 = row[index]) != null ? _a3 : "");
+      cell.style.textAlign = (_c = (_b2 = tableData.alignments) == null ? void 0 : _b2[index]) != null ? _c : "left";
+    });
+  });
+  wrap.addEventListener("dblclick", (event) => {
+    if (options.readOnly || event.target.closest(".mms-table-column-resizer")) return;
+    event.preventDefault();
+    event.stopPropagation();
+    options.editTableBlock(node, tableData, blockId);
+  });
+  if (options.readOnly) return;
+  headers.forEach((header, index) => {
+    const handle = header.createSpan({
+      cls: "mms-table-column-resizer",
+      attr: { role: "separator", "aria-label": `\u8C03\u6574\u7B2C ${index + 1} \u5217\u5BBD\u5EA6` }
+    });
+    handle.addEventListener("dblclick", (event) => event.stopPropagation());
+    handle.addEventListener("pointerdown", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const startX = event.clientX;
+      const widths = headers.map((cell, columnIndex) => {
+        var _a3;
+        const stored = (_a3 = tableData.columnWidths) == null ? void 0 : _a3[columnIndex];
+        return stored != null ? stored : Math.max(64, Math.round(cell.getBoundingClientRect().width));
+      });
+      const startWidth = widths[index];
+      applyWidths(widths);
+      wrap.addClass("is-resizing-columns");
+      const move = (moveEvent) => {
+        widths[index] = Math.max(64, Math.min(1200, Math.round(startWidth + moveEvent.clientX - startX)));
+        applyWidths(widths);
+      };
+      const finish = () => {
+        window.removeEventListener("pointermove", move);
+        window.removeEventListener("pointerup", finish);
+        window.removeEventListener("pointercancel", finish);
+        wrap.removeClass("is-resizing-columns");
+        options.updateTableColumnWidths(node, blockId, widths);
+      };
+      window.addEventListener("pointermove", move);
+      window.addEventListener("pointerup", finish);
+      window.addEventListener("pointercancel", finish);
     });
   });
 }
@@ -10962,6 +11046,8 @@ var MindMapEditor = class {
         this.openContextMenu(event, blockId);
       },
       openImageContextMenu: (event, nodeId, blockId) => this.openImageContextMenu(event, nodeId, blockId),
+      editTableBlock: (node, table, blockId) => this.openTableBlockEditor(node, table, blockId),
+      updateTableColumnWidths: (node, blockId, widths) => this.updateTableColumnWidths(node, blockId, widths),
       makeInlineEditable: (element, node, placeholder, blockId) => this.makeInlineEditable(element, node, placeholder, blockId),
       makeInlineCodeEditable: (element, node, code, blockId) => this.makeInlineCodeEditable(element, node, code, blockId),
       addInlineNodeActions: (container, node) => this.addInlineNodeActions(container, node)
@@ -12808,22 +12894,33 @@ var MindMapEditor = class {
   }
   /** Renders the optional table payload beneath normal node and question content. */
   renderNodeTable(content, node, tableData, blockId) {
+    var _a2;
     const wrap = content.createDiv({ cls: "mmc-node-table-wrap" });
     const table = wrap.createEl("table", { cls: "mmc-node-table" });
+    if ((_a2 = tableData.columnWidths) == null ? void 0 : _a2.length) {
+      table.addClass("has-custom-column-widths");
+      const colgroup = table.createEl("colgroup");
+      tableData.headers.forEach((_, index) => {
+        var _a3, _b2;
+        const column = colgroup.createEl("col");
+        column.style.width = `${(_b2 = (_a3 = tableData.columnWidths) == null ? void 0 : _a3[index]) != null ? _b2 : 160}px`;
+      });
+      table.style.width = `${tableData.columnWidths.reduce((sum, width) => sum + width, 0)}px`;
+    }
     const head = table.createEl("thead").createEl("tr");
     tableData.headers.forEach((header, index) => {
-      var _a2, _b2;
+      var _a3, _b2;
       const cell = head.createEl("th");
       renderInlineMarkdown(cell, header || `\u5217 ${index + 1}`);
-      cell.style.textAlign = (_b2 = (_a2 = tableData.alignments) == null ? void 0 : _a2[index]) != null ? _b2 : "left";
+      cell.style.textAlign = (_b2 = (_a3 = tableData.alignments) == null ? void 0 : _a3[index]) != null ? _b2 : "left";
     });
     const body = table.createEl("tbody");
     tableData.rows.forEach((row) => {
       const tr = body.createEl("tr");
       tableData.headers.forEach((_, index) => {
-        var _a2, _b2, _c;
+        var _a3, _b2, _c;
         const cell = tr.createEl("td");
-        renderInlineMarkdown(cell, (_a2 = row[index]) != null ? _a2 : "");
+        renderInlineMarkdown(cell, (_a3 = row[index]) != null ? _a3 : "");
         cell.style.textAlign = (_c = (_b2 = tableData.alignments) == null ? void 0 : _b2[index]) != null ? _c : "left";
       });
     });
@@ -12908,6 +13005,17 @@ var MindMapEditor = class {
     new TableEditModal(this.app, table, (next) => {
       this.mutate(() => this.upsertStructuredBlock(node, "table", next, blockId));
     }).open();
+  }
+  /** Persists article table column widths after a pointer resize gesture. */
+  updateTableColumnWidths(node, blockId, widths) {
+    if (!this.ensureEditable()) return;
+    const block = nodeContentBlocks(node).find((item) => item.type === "table" && item.id === blockId);
+    if (!block || block.type !== "table") return;
+    const columnWidths = block.table.headers.map((_, index) => {
+      var _a2;
+      return Math.max(64, Math.min(1200, Math.round((_a2 = widths[index]) != null ? _a2 : 160)));
+    });
+    this.mutate(() => this.upsertStructuredBlock(node, "table", { ...block.table, columnWidths }, blockId));
   }
   /** Opens the selected code block directly instead of routing through the node editor. */
   openCodeBlockEditor(node, code, blockId) {

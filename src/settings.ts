@@ -50,7 +50,7 @@ export const TOOLBAR_ITEMS = [
 /** All first-level settings categories in their default display order. */
 export const SETTINGS_SECTION_TITLES = [
   "视图与阅读", "编辑选项", "快捷键配置", "工具栏", "主题与外观", "画布与背景", "文字与排版",
-  "节点外观", "连线与分支", "代码块", "新建与布局", "文件与资源", "答题与题库", "图片与图床",
+  "节点外观", "连线与分支", "代码块", "文件与资源", "答题与题库", "图片与图床",
   "全局搜索", "AI 助手", "管理配置"
 ] as const;
 
@@ -400,7 +400,7 @@ export function normalizeSettingsSectionOrder(value: unknown): SettingsSectionTi
     "节点样式": "节点外观",
     "连线样式": "连线与分支",
     "全局代码设置": "代码块",
-    "文件与布局": "新建与布局",
+    "文件与布局": "文件与资源",
     "文件夹": "文件与资源",
     "全局搜索索引": "全局搜索"
   };
@@ -684,6 +684,18 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
           await this.plugin.setGlobalDisplayMode(value as DisplayMode);
         });
       });
+
+    new Setting(containerEl)
+      .setName("节点编辑器显示位置")
+      .setDesc("居中时使用弹窗；靠右时作为右侧编辑面板显示，保存或点击面板外会自动收起。")
+      .addDropdown((dropdown) => dropdown
+        .addOption("center", "居中弹窗")
+        .addOption("right", "右侧面板")
+        .setValue(this.plugin.settings.nodeEditorPosition)
+        .onChange(async (value) => {
+          this.plugin.settings.nodeEditorPosition = value === "right" ? "right" : "center";
+          await this.saveAndRefresh();
+        }));
 
     new Setting(containerEl)
       .setName("双指手势")
@@ -1204,20 +1216,6 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
 
     // Keep recognition controls beside the AI profiles they depend on.
     containerEl.appendChild(imageRecognitionSettings);
-
-    containerEl.createEl("h3", { text: "新建与布局" });
-
-    new Setting(containerEl)
-      .setName("节点编辑器显示位置")
-      .setDesc("居中时使用弹窗；靠右时作为右侧编辑面板显示，保存或点击面板外会自动收起。")
-      .addDropdown((dropdown) => dropdown
-        .addOption("center", "居中弹窗")
-        .addOption("right", "右侧面板")
-        .setValue(this.plugin.settings.nodeEditorPosition)
-        .onChange(async (value) => {
-          this.plugin.settings.nodeEditorPosition = value === "right" ? "right" : "center";
-          await this.saveAndRefresh();
-        }));
 
     containerEl.createEl("h3", { text: "快捷键配置" });
     containerEl.createEl("p", {

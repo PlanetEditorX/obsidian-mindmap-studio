@@ -19,7 +19,8 @@ const CODE_LANGUAGE_OPTIONS = [
   ["bash", "Bash / Shell"], ["javascript", "JavaScript"], ["typescript", "TypeScript"],
   ["python", "Python"], ["java", "Java"], ["c", "C"], ["cpp", "C++"], ["csharp", "C#"],
   ["go", "Go"], ["rust", "Rust"], ["php", "PHP"], ["ruby", "Ruby"], ["sql", "SQL"],
-    ["html", "HTML"], ["css", "CSS"], ["json", "JSON"], ["yaml", "YAML"], ["ini", "INI"], ["dockerfile", "Dockerfile"], ["markdown", "Markdown"], ["text", "Plain Text"]
+  ["html", "HTML"], ["css", "CSS"], ["json", "JSON"], ["yaml", "YAML"], ["ini", "INI"],
+  ["nginx", "Nginx"], ["dockerfile", "Dockerfile"], ["markdown", "Markdown"], ["text", "Plain Text"]
 ] as const;
 
 /**
@@ -110,6 +111,7 @@ export class TableEditModal extends Modal {
       this.table.headers.push(`列 ${this.table.headers.length + 1}`);
       this.table.alignments ??= [];
       this.table.alignments.push("left");
+      if (this.table.columnWidths) this.table.columnWidths.push(160);
       this.table.rows.forEach((row) => row.push(""));
       this.renderGrid();
     });
@@ -118,6 +120,7 @@ export class TableEditModal extends Modal {
       if (this.table.headers.length <= 1) return;
       this.table.headers.pop();
       this.table.alignments?.pop();
+      this.table.columnWidths?.pop();
       this.table.rows.forEach((row) => row.pop());
       this.renderGrid();
     });

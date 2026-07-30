@@ -11,6 +11,7 @@ import {
   type MindMapCodeBlock,
   type MindMapDocument,
   type MindMapNode,
+  type MindMapTable,
   type MindMapTextContentBlock
 } from "../core/model";
 import {
@@ -45,6 +46,8 @@ export interface ArticleRendererOptions {
   selectNode: (id: string) => void;
   openAiContextMenu: (event: MouseEvent, nodeId: string, blockId?: string) => void;
   openImageContextMenu: (event: MouseEvent, nodeId: string, blockId: string) => void;
+  editTableBlock: (node: MindMapNode, table: MindMapTable, blockId: string) => void;
+  updateTableColumnWidths: (node: MindMapNode, blockId: string, widths: number[]) => void;
   makeInlineEditable: (element: HTMLElement, node: MindMapNode, placeholder: string, blockId?: string) => void;
   makeInlineCodeEditable: (element: HTMLElement, node: MindMapNode, code: MindMapCodeBlock, blockId: string) => void;
   addInlineNodeActions: (container: HTMLElement, node: MindMapNode) => void;
@@ -223,7 +226,7 @@ export function renderArticleNodeContent(container: HTMLElement, node: MindMapNo
         options.openImageContextMenu(event, node.id, block.id);
       });
     } else if (block.type === "table") {
-      renderArticleTable(container, block.table, block.id);
+      renderArticleTable(container, node, block.table, block.id, options);
     } else {
       const code = container.createDiv({ cls: "mms-article-code markdown-rendered" });
       code.dataset.blockId = block.id;
@@ -239,18 +242,82 @@ export function renderArticleNodeContent(container: HTMLElement, node: MindMapNo
   if (node.question) renderArticleQuestionDetails(container, node);
 }
 
-/** Renders a movable table block in article and continuous-reading views. */
-function renderArticleTable(container: HTMLElement, tableData: MindMapNode["table"], blockId?: string): void {
-  if (!tableData) return;
+/** Renders a persisted, resizable table block in article and continuous-reading views. */
+function renderArticleTable(
+  container: HTMLElement,
+  node: MindMapNode,
+  tableData: MindMapTable,
+  blockId: string,
+  options: ArticleRendererOptions
+): void {
   const wrap = container.createDiv({ cls: "mms-article-table-wrap" });
-  if (blockId) wrap.dataset.blockId = blockId;
+  wrap.dataset.blockId = blockId;
   const table = wrap.createEl("table", { cls: "mms-article-table" });
+  const colgroup = table.createEl("colgroup");
+  const columns = tableData.headers.map(() => colgroup.createEl("col"));
+  const applyWidths = (widths: readonly number[]): void => {
+    table.addClass("has-custom-column-widths");
+    columns.forEach((column, index) => {
+      column.style.width = `${widths[index] ?? 160}px`;
+    });
+    table.style.width = `${widths.reduce((sum, width) => sum + width, 0)}px`;
+  };
+  if (tableData.columnWidths?.length) applyWidths(tableData.columnWidths);
   const tr = table.createEl("thead").createEl("tr");
-  tableData.headers.forEach((header) => renderInlineMarkdown(tr.createEl("th"), header));
+  const headers = tableData.headers.map((header, index) => {
+    const cell = tr.createEl("th");
+    renderInlineMarkdown(cell, header);
+    cell.style.textAlign = tableData.alignments?.[index] ?? "left";
+    return cell;
+  });
   const body = table.createEl("tbody");
   tableData.rows.forEach((row) => {
     const rowEl = body.createEl("tr");
-    tableData.headers.forEach((_, index) => renderInlineMarkdown(rowEl.createEl("td"), row[index] ?? ""));
+    tableData.headers.forEach((_, index) => {
+      const cell = rowEl.createEl("td");
+      renderInlineMarkdown(cell, row[index] ?? "");
+      cell.style.textAlign = tableData.alignments?.[index] ?? "left";
+    });
+  });
+  wrap.addEventListener("dblclick", (event) => {
+    if (options.readOnly || (event.target as HTMLElement).closest(".mms-table-column-resizer")) return;
+    event.preventDefault();
+    event.stopPropagation();
+    options.editTableBlock(node, tableData, blockId);
+  });
+  if (options.readOnly) return;
+  headers.forEach((header, index) => {
+    const handle = header.createSpan({
+      cls: "mms-table-column-resizer",
+      attr: { role: "separator", "aria-label": `调整第 ${index + 1} 列宽度` }
+    });
+    handle.addEventListener("dblclick", (event) => event.stopPropagation());
+    handle.addEventListener("pointerdown", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const startX = event.clientX;
+      const widths = headers.map((cell, columnIndex) => {
+        const stored = tableData.columnWidths?.[columnIndex];
+        return stored ?? Math.max(64, Math.round(cell.getBoundingClientRect().width));
+      });
+      const startWidth = widths[index]!;
+      applyWidths(widths);
+      wrap.addClass("is-resizing-columns");
+      const move = (moveEvent: PointerEvent): void => {
+        widths[index] = Math.max(64, Math.min(1200, Math.round(startWidth + moveEvent.clientX - startX)));
+        applyWidths(widths);
+      };
+      const finish = (): void => {
+        window.removeEventListener("pointermove", move);
+        window.removeEventListener("pointerup", finish);
+        window.removeEventListener("pointercancel", finish);
+        wrap.removeClass("is-resizing-columns");
+        options.updateTableColumnWidths(node, blockId, widths);
+      };
+      window.addEventListener("pointermove", move);
+      window.addEventListener("pointerup", finish);
+      window.addEventListener("pointercancel", finish);
+    });
   });
 }
 

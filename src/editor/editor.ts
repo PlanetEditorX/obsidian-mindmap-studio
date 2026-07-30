@@ -2815,6 +2815,8 @@ export class MindMapEditor {
       selectNode: (id) => this.selectNode(id),
       openAiContextMenu: (event, nodeId, blockId) => { this.selectNode(nodeId); this.openContextMenu(event, blockId); },
       openImageContextMenu: (event, nodeId, blockId) => this.openImageContextMenu(event, nodeId, blockId),
+      editTableBlock: (node, table, blockId) => this.openTableBlockEditor(node, table, blockId),
+      updateTableColumnWidths: (node, blockId, widths) => this.updateTableColumnWidths(node, blockId, widths),
       makeInlineEditable: (element, node, placeholder, blockId) => this.makeInlineEditable(element, node, placeholder, blockId),
       makeInlineCodeEditable: (element, node, code, blockId) => this.makeInlineCodeEditable(element, node, code, blockId),
       addInlineNodeActions: (container, node) => this.addInlineNodeActions(container, node)
@@ -4747,6 +4749,15 @@ export class MindMapEditor {
   private renderNodeTable(content: HTMLElement, node: MindMapNode, tableData: MindMapTable, blockId?: string): void {
     const wrap = content.createDiv({ cls: "mmc-node-table-wrap" });
     const table = wrap.createEl("table", { cls: "mmc-node-table" });
+    if (tableData.columnWidths?.length) {
+      table.addClass("has-custom-column-widths");
+      const colgroup = table.createEl("colgroup");
+      tableData.headers.forEach((_, index) => {
+        const column = colgroup.createEl("col");
+        column.style.width = `${tableData.columnWidths?.[index] ?? 160}px`;
+      });
+      table.style.width = `${tableData.columnWidths.reduce((sum, width) => sum + width, 0)}px`;
+    }
     const head = table.createEl("thead").createEl("tr");
     tableData.headers.forEach((header, index) => {
       const cell = head.createEl("th");
@@ -4849,6 +4860,15 @@ export class MindMapEditor {
     new TableEditModal(this.app, table, (next) => {
       this.mutate(() => this.upsertStructuredBlock(node, "table", next, blockId));
     }).open();
+  }
+
+  /** Persists article table column widths after a pointer resize gesture. */
+  private updateTableColumnWidths(node: MindMapNode, blockId: string, widths: number[]): void {
+    if (!this.ensureEditable()) return;
+    const block = nodeContentBlocks(node).find((item) => item.type === "table" && item.id === blockId);
+    if (!block || block.type !== "table") return;
+    const columnWidths = block.table.headers.map((_, index) => Math.max(64, Math.min(1200, Math.round(widths[index] ?? 160))));
+    this.mutate(() => this.upsertStructuredBlock(node, "table", { ...block.table, columnWidths }, blockId));
   }
 
   /** Opens the selected code block directly instead of routing through the node editor. */

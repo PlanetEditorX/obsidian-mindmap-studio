@@ -50,6 +50,36 @@ test("article inline editing updates the exact text block instead of the first b
   assert.match(makeInlineEditable, /if \(this\.inlineEditingId === node\.id\) this\.inlineEditingId = null/);
 });
 
+test("empty article document title keeps a clickable inline-edit target after blur", () => {
+  assert.match(rendererSource, /options\.makeInlineEditable\(titleText, options\.document\.root, "文章标题", rootTextBlock\?\.id\)/);
+  assert.match(editorSource, /element\.addEventListener\("pointerdown"[\s\S]*this\.activateInlineEditable\(element, false\)/);
+  assert.match(styles, /\.mms-article-document-title-text:empty::before/);
+  assert.match(styles, /\.mms-article-document-title-text\s*\{[\s\S]*display:\s*inline-block[\s\S]*min-width:\s*4em[\s\S]*min-height:\s*1\.2em/);
+});
+
+test("article tables open on double click and persist bounded column widths", () => {
+  const node = {
+    id: "root",
+    text: "表格",
+    content: [{
+      id: "table-1",
+      type: "table",
+      table: {
+        headers: ["A", "B", "C"],
+        rows: [["1", "2", "3"]],
+        columnWidths: [20, 2000, Number.NaN]
+      }
+    }],
+    children: []
+  };
+  assert.deepEqual(model.nodeContentBlocks(node)[0].table.columnWidths, [64, 1200, 160]);
+  assert.match(rendererSource, /wrap\.addEventListener\("dblclick"[\s\S]*options\.editTableBlock\(node, tableData, blockId\)/);
+  assert.match(rendererSource, /cls: "mms-table-column-resizer"/);
+  assert.match(rendererSource, /Math\.max\(64, Math\.min\(1200,[\s\S]*options\.updateTableColumnWidths\(node, blockId, widths\)/);
+  assert.match(editorSource, /private updateTableColumnWidths\([\s\S]*columnWidths[\s\S]*this\.upsertStructuredBlock\(node, "table", \{ \.\.\.block\.table, columnWidths \}, blockId\)/);
+  assert.match(styles, /\.mms-table-column-resizer[\s\S]*cursor:\s*col-resize/);
+});
+
 test("paragraph indentation is normalized, rendered, and toggled per text block", () => {
   const node = {
     id: "root",
@@ -75,4 +105,6 @@ test("compiled plugin contains exact block insertion and paragraph indentation r
   assert.match(mainBundle, /articleParagraphClass[\s\S]*paragraphIndent/);
   assert.match(mainBundle, /\\u5728\\u6B64\\u5757\\u540E\\u63D2\\u5165\\u6587\\u5B57/);
   assert.match(mainBundle, /\\u6BB5\\u843D\\u7F29\\u8FDB/);
+  assert.match(mainBundle, /mms-table-column-resizer/);
+  assert.match(mainBundle, /updateTableColumnWidths/);
 });

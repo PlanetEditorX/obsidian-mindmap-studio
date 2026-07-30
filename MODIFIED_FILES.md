@@ -1,5 +1,27 @@
 # 代码块行号、导图高度与内容块删除修复清单
 
+## 文章空标题、表格编辑与列宽持久化
+
+| 文件 | 变更 |
+|---|---|
+| `src/editor/article-renderer.ts` | 文章表格双击打开编辑器；编辑状态下显示列宽拖拽手柄并回写持久化宽度 |
+| `src/editor/editor.ts` | 接入文章表格编辑和列宽更新回调；导图表格读取持久化列宽 |
+| `src/editor/outline-renderer.ts` | 大纲表格读取持久化列宽和列对齐 |
+| `src/editor/content-modals.ts` | 表格增删列时同步列宽数组；代码语言新增 Nginx |
+| `src/core/model.ts` | `MindMapTable` 新增可选 `columnWidths`，读取时按列数规范化并限制为 64–1200 px |
+| `src/settings.ts` | 将“节点编辑器显示位置”迁入“视图与阅读” |
+| `styles.css` | 空文档标题保留可点击占位尺寸；增加表格列宽拖拽和固定布局样式 |
+| `tests/article-content-block.test.mjs`、`tests/code-block.test.mjs`、`tests/settings-layout.test.mjs` | 覆盖空标题、表格双击/列宽、Nginx 和设置分类 |
+| `main.js` | 重新生产构建，包含本次运行时修改 |
+| `docs/DATA_MODEL.md`、`docs/SPECIAL_FEATURES.md`、`CHANGELOG.md`、`TEST_RESULTS.md` | 更新数据格式、用户行为和验证记录 |
+
+### 兼容边界
+
+- `columnWidths` 是可选字段；旧文件没有该字段时继续使用原有自适应表格布局。
+- 列宽按表头顺序保存为像素值，读取时限制到 64–1200 px；缺失列使用 160 px。
+- Markdown 表格导入导出不嵌入列宽元数据；导入后可在文章编辑模式重新拖动设置。
+- 阅读模式不显示拖拽手柄，也不开放双击编辑。
+
 ## 文章后续文字块编辑状态与插入焦点修复
 
 | 文件 | 变更 |

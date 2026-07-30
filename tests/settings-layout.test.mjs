@@ -49,6 +49,18 @@ test("resource folder and File Explorer filters stay inside Files and Resources"
   assert.ok(bundleFileSection >= 0 && bundleAssetFolder > bundleFileSection && bundleAssetFolder < bundleAnswerSection);
 });
 
+test("node editor position is located in View and Reading settings", () => {
+  const viewSection = settingsSource.indexOf('containerEl.createEl("h3", { text: "视图与阅读" })');
+  const nodeEditorPosition = settingsSource.indexOf('.setName("节点编辑器显示位置")');
+  const shortcutSection = settingsSource.indexOf('containerEl.createEl("h3", { text: "快捷键配置" })');
+  assert.ok(viewSection >= 0);
+  assert.ok(viewSection < nodeEditorPosition);
+  assert.ok(nodeEditorPosition < shortcutSection);
+  assert.doesNotMatch(settingsSource, /"新建与布局"/);
+  assert.match(settingsSource, /"文件与布局": "文件与资源"/);
+  assert.match(bundleReadableSource, /视图与阅读[\s\S]*节点编辑器显示位置[\s\S]*快捷键配置/);
+});
+
 test("branch appearance is a normalized global setting and appearance fallback", () => {
   assert.match(settingsSource, /nodeVisualStyle: NodeVisualStyle/);
   assert.match(settingsSource, /nodeVisualStyle: "card"/);
