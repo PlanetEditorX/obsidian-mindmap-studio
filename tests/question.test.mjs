@@ -170,14 +170,37 @@ source: "https://example.com/post"
 [![配置截图](https://example.com/config.png)](https://example.com/original)
 `, "导入文件");
   assert.equal(document.root.text, "全屋组网");
-  assert.deepEqual(document.root.children.map((node) => node.text), ["网络环境"]);
+  assert.deepEqual(document.root.children.map((node) => model.nodeContentBlocks(node)[0]?.text), ["网络环境"]);
   const network = document.root.children[0];
-  assert.equal(network.children[0]?.text, "光猫和客厅之间只有一根网线。");
+  assert.deepEqual(model.nodeContentBlocks(network).map((block) => block.type), ["text", "text", "image"]);
+  assert.equal(model.nodeContentBlocks(network)[1]?.text, "光猫和客厅之间只有一根网线。");
   assert.deepEqual(model.nodeContentBlocks(network).filter((block) => block.type === "image").map((block) => block.source), ["https://example.com/topology.png"]);
-  const modem = network.children[1];
+  const modem = network.children[0];
   assert.equal(modem.text, "光猫配置");
   assert.equal(modem.children[0]?.text, "保存备份");
   assert.deepEqual(model.nodeContentBlocks(modem.children[0]).filter((block) => block.type === "image").map((block) => block.source), ["https://example.com/config.png"]);
+});
+
+test("Markdown import preserves text, code, images, and tables in their original block order", () => {
+  const document = model.markdownToDocument(`#### （1）更新 feeds 并安装依赖
+进入 OpenWRT 源码根目录，执行以下命令确保依赖生效：
+
+\`\`\`bash
+cd openwrt-source
+\`\`\`
+
+继续执行：
+
+\`\`\`bash
+./scripts/feeds update -a
+\`\`\`
+`, "导入文件");
+  const node = document.root.children[0];
+  assert.deepEqual(model.nodeContentBlocks(node).map((block) => block.type), ["text", "text", "code", "text", "code"]);
+  assert.equal(model.nodeContentBlocks(node)[1]?.text, "进入 OpenWRT 源码根目录，执行以下命令确保依赖生效：");
+  assert.equal(model.nodeContentBlocks(node)[2]?.type, "code");
+  assert.equal(model.nodeContentBlocks(node)[3]?.text, "继续执行：");
+  assert.equal(model.nodeContentBlocks(node)[4]?.type, "code");
 });
 
 test("Markdown import does not invent a placeholder topic when no child node is parsed", () => {

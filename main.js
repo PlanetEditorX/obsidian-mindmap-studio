@@ -1085,6 +1085,15 @@ function markdownToDocument(markdown, fallbackTitle = "\u601D\u7EF4\u5BFC\u56FE"
       { id: newId(), type: "code", code: { language: fence.language, code } }
     ]);
   };
+  const appendMarkdownTextBlock = (target, value) => {
+    const source = value.trim();
+    if (!source) return;
+    const parsed = markdownInlineToRichText(source);
+    replaceNodeContentBlocks(target, [
+      ...nodeContentBlocks(target),
+      { id: newId(), type: "text", text: parsed.text || source, richText: parsed.richText }
+    ]);
+  };
   const appendImageBlock = (alt, source) => {
     var _a3, _b3;
     const target = (_b3 = currentBoldNode != null ? currentBoldNode : (_a3 = stack.at(-1)) == null ? void 0 : _a3.node) != null ? _b3 : doc.root;
@@ -1234,7 +1243,7 @@ function markdownToDocument(markdown, fallbackTitle = "\u601D\u7EF4\u5BFC\u56FE"
       continue;
     }
     const parent = (_H = stack.at(-1)) == null ? void 0 : _H.node;
-    if (parent && parent !== doc.root) parent.children.push(createMarkdownNode(line.trim()));
+    if (parent && parent !== doc.root) appendMarkdownTextBlock(parent, line);
     else hasLeadingContent = true;
   }
   if (codeFence) appendCodeBlock(codeFence);

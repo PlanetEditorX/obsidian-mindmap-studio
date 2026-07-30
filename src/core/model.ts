@@ -1910,6 +1910,17 @@ export function markdownToDocument(markdown: string, fallbackTitle = "思维导�
     ]);
   };
 
+  /** 将 Markdown 正文按遇到顺序追加为内容块，避免与代码、图片和表格脱节。 */
+  const appendMarkdownTextBlock = (target: MindMapNode, value: string): void => {
+    const source = value.trim();
+    if (!source) return;
+    const parsed = markdownInlineToRichText(source);
+    replaceNodeContentBlocks(target, [
+      ...nodeContentBlocks(target),
+      { id: newId(), type: "text", text: parsed.text || source, richText: parsed.richText }
+    ]);
+  };
+
   const appendImageBlock = (alt: string, source: string): void => {
     const target = currentBoldNode ?? stack.at(-1)?.node ?? doc.root;
     const imageSource = source.trim();
@@ -2080,7 +2091,7 @@ export function markdownToDocument(markdown: string, fallbackTitle = "思维导�
     }
 
     const parent = stack.at(-1)?.node;
-    if (parent && parent !== doc.root) parent.children.push(createMarkdownNode(line.trim()));
+    if (parent && parent !== doc.root) appendMarkdownTextBlock(parent, line);
     else hasLeadingContent = true;
   }
 
