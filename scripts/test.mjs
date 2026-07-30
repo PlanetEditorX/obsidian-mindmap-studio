@@ -1075,46 +1075,38 @@ const command = "example";
   const searchEntries = globalSearch.buildSearchEntries(indexedDocument, "Projects/项目总览.mindmap");
   assert.equal(searchEntries.length, 3, "global index must include collapsed and deep child nodes");
   assert.equal(searchEntries[2].isSubmapDocument, true);
-  assert.match(searchEntries[2].searchableText, /供应商\.mindmap/);
-  assert.equal(globalSearch.searchEntries(searchEntries, "供应链风险")[0]?.nodeId, "hidden-child");
-  assert.equal(globalSearch.searchEntries(searchEntries, "眼镜盒 待处理")[0]?.nodeId, "deep-child");
-  assert.equal(globalSearch.searchEntries(searchEntries, "globalsearch")[0]?.nodeId, "deep-child");
-  assert.equal(globalSearch.searchEntries(searchEntries, "供应链风险", 100, false)[0]?.nodeId, "hidden-child", "plain search still works with useRegex=false");
-  assert.equal(globalSearch.searchEntries(searchEntries, "待处.*", 100, true)[0]?.nodeId, "deep-child", "regex search matches with .* pattern");
-  assert.equal(globalSearch.searchEntries(searchEntries, "GLOBAL", 100, true)[0]?.nodeId, "deep-child", "regex search with /gi flag is case-insensitive");
+  assert.equal(searchEntries[2].searchableText, "深层子节点");
+  assert.equal(globalSearch.searchEntries(searchEntries, "供应链风险").length, 0);
+  assert.equal(globalSearch.searchEntries(searchEntries, "眼镜盒 待处理").length, 0);
+  assert.equal(globalSearch.searchEntries(searchEntries, "globalsearch").length, 0);
+  assert.equal(globalSearch.searchEntries(searchEntries, "供应链风险", 100, false).length, 0);
+  assert.equal(globalSearch.searchEntries(searchEntries, "待处.*", 100, true).length, 0);
+  assert.equal(globalSearch.searchEntries(searchEntries, "GLOBAL", 100, true).length, 0);
   assert.equal(globalSearch.searchEntries(searchEntries, "[", 100, true).length, 0, "invalid regex returns empty results gracefully");
 
-  // Search results via note/tag/code should appear even when nodeText does not contain the term
-  // (regression guard for the removed .filter() in renderResults)
+  // Global search intentionally ignores all non-node-text fields.
   const noteMatch = globalSearch.searchEntries(searchEntries, "供应链");
-  assert.equal(noteMatch[0].nodeText.indexOf("供应链"), -1, "search matched via note, not via nodeText — the old .filter() would have incorrectly hidden this result");
-  assert.equal(noteMatch[0].nodeId, "hidden-child");
-  assert.notEqual(noteMatch[0].nodeText.toLocaleLowerCase().indexOf("供应链"), -1 ? 0 : -1, "node text may not contain the search term");
+  assert.equal(noteMatch.length, 0);
 
   // Regex search via note field
   const regexNote = globalSearch.searchEntries(searchEntries, "供应链.*", 100, true);
-  assert.equal(regexNote.length, 1, "regex search via note must return the node");
-  assert.equal(regexNote[0].nodeId, "hidden-child");
+  assert.equal(regexNote.length, 0);
 
   // Search matches via tag
   const tagMatch = globalSearch.searchEntries(searchEntries, "美国站");
-  assert.equal(tagMatch.length, 1, "search via tag must return the node");
-  assert.equal(tagMatch[0].nodeId, "deep-child");
+  assert.equal(tagMatch.length, 0);
 
   // Search matches via code block
   const codeMatch = globalSearch.searchEntries(searchEntries, "globalsearch");
-  assert.equal(codeMatch.length, 1, "search via code must return the node");
-  assert.equal(codeMatch[0].nodeId, "deep-child");
+  assert.equal(codeMatch.length, 0);
 
   // Search matches via table cell
   const tableMatch = globalSearch.searchEntries(searchEntries, "眼镜盒");
-  assert.equal(tableMatch.length, 1, "search via table must return the node");
-  assert.equal(tableMatch[0].nodeId, "deep-child");
+  assert.equal(tableMatch.length, 0);
 
   // Search matches via submap path
   const submapMatch = globalSearch.searchEntries(searchEntries, "供应商");
-  assert.equal(submapMatch.length, 1, "search via submap path must return the node");
-  assert.equal(submapMatch[0].nodeId, "deep-child");
+  assert.equal(submapMatch.length, 0);
 
   const directNodeSearchDocument = model.normalizeDocument({
     title: "仅用于上下文的标题",
