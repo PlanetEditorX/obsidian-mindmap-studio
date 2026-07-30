@@ -6,17 +6,19 @@ import { loadTypeScriptModules } from "./compile-typescript.mjs";
 let model;
 let cleanup;
 let editorSource;
+let articleRendererSource;
 let richTextSource;
 let styles;
 let mainBundle;
 
 before(async () => {
-  const [loaded, editor, richText, css, bundle] = await Promise.all([
+  const [loaded, editor, articleRenderer, richText, css, bundle] = await Promise.all([
     loadTypeScriptModules(
       ["src/core/node-tree.ts", "src/core/model.ts"],
       "src/core/model.ts"
     ),
     readFile("src/editor/editor.ts", "utf8"),
+    readFile("src/editor/article-renderer.ts", "utf8"),
     readFile("src/editor/node-rich-text-editor.ts", "utf8"),
     readFile("styles.css", "utf8"),
     readFile("main.js", "utf8")
@@ -24,6 +26,7 @@ before(async () => {
   model = loaded.module;
   cleanup = loaded.cleanup;
   editorSource = editor;
+  articleRendererSource = articleRenderer;
   richTextSource = richText;
   styles = css;
   mainBundle = bundle;
@@ -72,6 +75,24 @@ test("content blocks move across nodes and rebuild both legacy mirrors", () => {
   assert.equal(root.children[1].code.code, "server {}");
 });
 
+test("moving the last block deletes only a truly empty source leaf node", () => {
+  const root = fixture();
+  root.children[0].content = [{ id: "text-a", type: "text", text: "第一段" }];
+  root.children[0].text = "第一段";
+  root.children[0].code = undefined;
+  assert.equal(model.moveNodeContentBlock(root, "source", "text-a", "target", "target-text", "after"), true);
+  assert.deepEqual(root.children.map((node) => node.id), ["target"]);
+  assert.deepEqual(root.children[0].content.map((block) => block.id), ["target-text", "text-a"]);
+
+  const guarded = fixture();
+  guarded.children[0].content = [{ id: "text-a", type: "text", text: "第一段" }];
+  guarded.children[0].text = "第一段";
+  guarded.children[0].code = undefined;
+  guarded.children[0].note = "保留节点";
+  assert.equal(model.moveNodeContentBlock(guarded, "source", "text-a", "target", "target-text", "after"), true);
+  assert.deepEqual(guarded.children.map((node) => node.id), ["source", "target"]);
+});
+
 test("node editor Enter commits while Shift+Enter remains a stored line break", () => {
   assert.match(editorSource, /form\.addEventListener\("keydown", \(event\) => \{[\s\S]*event\.key !== "Enter" \|\| event\.shiftKey \|\| event\.isComposing[\s\S]*saveNow\("commit", true\)[\s\S]*this\.close\(\)/);
   assert.match(richTextSource, /source\.value\.replace\(\/\\r\\n\?\/g, "\\n"\)/);
@@ -82,9 +103,15 @@ test("content blocks expose explicit drag handles, cross-node targets, and exact
   assert.match(editorSource, /mmc-content-block-editor-drag-handle[\s\S]*draggable: "true"/);
   assert.match(editorSource, /bindContentBlockDragHandle\(blockElement: HTMLElement, nodeId: string, blockId: string\)/);
   assert.match(editorSource, /moveNodeContentBlock\(this\.document\.root, sourceNodeId, blockId, targetNodeId, targetBlockId, position\)/);
+  assert.match(articleRendererSource, /bindContentBlockDragHandle: \(element: HTMLElement, nodeId: string, blockId: string\) => void/);
+  assert.match(articleRendererSource, /createArticleContentBlock\([\s\S]*options\.bindContentBlockDragHandle\(shell, node\.id, blockId\)/);
+  assert.match(articleRendererSource, /options\.bindContentBlockDragHandle\(heading, info\.node\.id, headingBlock\.id\)/);
+  assert.match(articleRendererSource, /options\.bindContentBlockAppendDropTarget\(section, info\.node\.id\)/);
   assert.match(editorSource, /target\.closest<HTMLElement>\("\[data-block-id\]"\)\?\.dataset\.blockId[\s\S]*openContextMenu\(event, blockId\)/);
   assert.match(editorSource, /setTitle\("删除当前块"\)[\s\S]*removeContentBlock\(selected\.id, contextBlock\.id\)/);
   assert.match(styles, /\.mmc-content-block-drag-handle[\s\S]*cursor: grab/);
+  assert.match(styles, /\.mmc-content-block-drag-handle[\s\S]*left: -28px[\s\S]*transform: translateY\(-50%\)/);
+  assert.match(styles, /\.mms-article-content-block[\s\S]*position: relative/);
   assert.match(styles, /\.is-block-drop-before::before/);
   assert.match(mainBundle, /application\/x-mms-content-block/);
   assert.match(mainBundle, /\\u62D6\\u52A8\\u5185\\u5BB9\\u5757/i);

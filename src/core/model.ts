@@ -5,7 +5,7 @@
  * 定义 .mindmap 稳定数据结构，并负责字段规范化、富文本、内容块、节点树、Markdown 导入导出及图片镜像候选源排序。
  */
 
-import { findNode, walkNodes } from "./node-tree";
+import { findNode, removeNode, walkNodes } from "./node-tree";
 export {
   containsNode,
   findAncestors,
@@ -1089,6 +1089,16 @@ export function moveNodeContentBlock(
   targetBlocks.splice(insertIndex, 0, moving);
   replaceNodeContentBlocks(sourceNode, sourceBlocks);
   replaceNodeContentBlocks(targetNode, targetBlocks);
+  const sourceIsEmpty = sourceBlocks.length === 0
+    && sourceNode.children.length === 0
+    && !sourceNode.note?.trim()
+    && !sourceNode.link?.trim()
+    && !sourceNode.submap
+    && !sourceNode.icon?.trim()
+    && !sourceNode.tags?.some((tag) => tag.trim())
+    && !sourceNode.question
+    && !sourceNode.task;
+  if (sourceNodeId !== root.id && sourceIsEmpty) removeNode(root, sourceNodeId);
   return true;
 }
 

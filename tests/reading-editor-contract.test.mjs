@@ -114,7 +114,7 @@ test("article and outline text do not expose edit labels as hover tooltips", () 
 });
 
 test("article code blocks enter direct editing on double click", () => {
-  const codeRendering = articleRendererSource.match(/const code = container\.createDiv\(\{ cls: "mms-article-code markdown-rendered" \}\);[\s\S]*?\n    \}/)?.[0] ?? "";
+  const codeRendering = articleRendererSource.match(/const shell = createArticleContentBlock\(container, node, block\.id, options\);\s*const code = shell\.createDiv\(\{ cls: "mms-article-code markdown-rendered" \}\);[\s\S]*?\n    \}/)?.[0] ?? "";
   assert.match(codeRendering, /code\.addEventListener\("dblclick"[\s\S]*makeInlineCodeEditable\(code, node, block\.code, block\.id\)/);
   assert.doesNotMatch(codeRendering, /if \(!options\.readOnly\)/, "the listener must survive switching from reading to edit mode without a redraw");
   assert.match(editorSource, /private makeInlineCodeEditable\(element: HTMLElement, node: MindMapNode, code: MindMapCodeBlock, blockId: string\): void/);
