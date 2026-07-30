@@ -7012,7 +7012,7 @@ export function renderStaticSource(container: HTMLElement, source: string, fallb
 
 ### 接口 `MindMapSearchEntry`
 
-源码：`src/search/global-search.ts:21`
+源码：`src/search/global-search.ts:20`
 
 MindMapSearchEntry 的结构化数据约定。字段会在模块边界传递，用于保持类型安全和版本兼容。
 
@@ -7022,7 +7022,7 @@ export interface MindMapSearchEntry
 
 ### 接口 `MindMapSearchResult`
 
-源码：`src/search/global-search.ts:45`
+源码：`src/search/global-search.ts:44`
 
 MindMapSearchResult 的结构化数据约定。字段会在模块边界传递，用于保持类型安全和版本兼容。
 
@@ -7032,7 +7032,7 @@ export interface MindMapSearchResult extends MindMapSearchEntry
 
 ### 接口 `IndexedMindMapFile`
 
-源码：`src/search/global-search.ts:54`
+源码：`src/search/global-search.ts:53`
 
 IndexedMindMapFile 的结构化数据约定。字段会在模块边界传递，用于保持类型安全和版本兼容。
 
@@ -7042,7 +7042,7 @@ interface IndexedMindMapFile
 
 ### 接口 `PersistedMindMapSearchIndex`
 
-源码：`src/search/global-search.ts:65`
+源码：`src/search/global-search.ts:64`
 
 PersistedMindMapSearchIndex 的结构化数据约定。字段会在模块边界传递，用于保持类型安全和版本兼容。
 
@@ -7052,7 +7052,7 @@ interface PersistedMindMapSearchIndex
 
 ### 接口 `MindMapSearchIndexStatus`
 
-源码：`src/search/global-search.ts:74`
+源码：`src/search/global-search.ts:73`
 
 MindMapSearchIndexStatus 的结构化数据约定。字段会在模块边界传递，用于保持类型安全和版本兼容。
 
@@ -7062,7 +7062,7 @@ export interface MindMapSearchIndexStatus
 
 ### 函数 `normalized`
 
-源码：`src/search/global-search.ts:88`
+源码：`src/search/global-search.ts:87`
 
 校验并规范化d，并保持模型、界面和持久化状态的一致性。
 
@@ -7072,7 +7072,7 @@ function normalized(value: string): string
 
 ### 函数 `compact`
 
-源码：`src/search/global-search.ts:99`
+源码：`src/search/global-search.ts:98`
 
 执行“compact”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
 
@@ -7082,7 +7082,7 @@ function compact(value: string | undefined, max = 180): string | undefined
 
 ### 函数 `nodeDisplayText`
 
-源码：`src/search/global-search.ts:111`
+源码：`src/search/global-search.ts:110`
 
 执行“node display text”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
 
@@ -7090,21 +7090,11 @@ function compact(value: string | undefined, max = 180): string | undefined
 function nodeDisplayText(node: MindMapNode): string
 ```
 
-### 函数 `fieldValues`
-
-源码：`src/search/global-search.ts:126`
-
-执行“field values”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
-
-```ts
-function fieldValues(node: MindMapNode): Array<
-```
-
 ### 函数 `buildSearchEntries`
 
-源码：`src/search/global-search.ts:153`
+源码：`src/search/global-search.ts:132`
 
-构建search entries，并保持模型、界面和持久化状态的一致性。
+执行“field values”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
 
 ```ts
 export function buildSearchEntries(document: MindMapDocument, filePath: string): MindMapSearchEntry[]
@@ -7112,7 +7102,7 @@ export function buildSearchEntries(document: MindMapDocument, filePath: string):
 
 ### 函数 `mergeHierarchy`
 
-源码：`src/search/global-search.ts:196`
+源码：`src/search/global-search.ts:168`
 
 合并hierarchy，并保持模型、界面和持久化状态的一致性。
 
@@ -7122,7 +7112,7 @@ function mergeHierarchy(prefix: string[], suffix: string[]): string[]
 
 ### 函数 `resolveHierarchicalEntries`
 
-源码：`src/search/global-search.ts:210`
+源码：`src/search/global-search.ts:182`
 
 Resolve parent/child map relations into paths such as 古诗 › 唐诗 › 李白.
 
@@ -7132,7 +7122,7 @@ export function resolveHierarchicalEntries(files: Record<string, IndexedMindMapF
 
 ### 函数 `resultSnippet`
 
-源码：`src/search/global-search.ts:278`
+源码：`src/search/global-search.ts:250`
 
 执行“result snippet”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
 
@@ -7142,7 +7132,7 @@ function resultSnippet(entry: MindMapSearchEntry, query: string, useRegex = fals
 
 ### 函数 `searchEntries`
 
-源码：`src/search/global-search.ts:309`
+源码：`src/search/global-search.ts:276`
 
 执行“search entries”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
 
@@ -7152,7 +7142,7 @@ export function searchEntries(entries: MindMapSearchEntry[], query: string, limi
 
 ### 函数 `collectIndexedFamilyPaths`
 
-源码：`src/search/global-search.ts:355`
+源码：`src/search/global-search.ts:320`
 
 从当前文件向上寻找最顶层父导图，再向下递归收集全部后代子导图，形成 Ctrl/Cmd+Shift+F 使用的“当前导图族”搜索范围。
 
@@ -7162,7 +7152,7 @@ export function collectIndexedFamilyPaths( files: Record<string,
 
 ### 类 `MindMapSearchIndex`
 
-源码：`src/search/global-search.ts:382`
+源码：`src/search/global-search.ts:347`
 
 MindMapSearchIndex 的主要实现类。负责封装相关状态、生命周期和对外操作，避免调用方直接操作内部数据结构。
 
@@ -7172,7 +7162,7 @@ export class MindMapSearchIndex
 
 ### 构造函数 `MindMapSearchIndex.constructor`
 
-源码：`src/search/global-search.ts:397`
+源码：`src/search/global-search.ts:362`
 
 创建 MindMapSearchIndex 实例，保存依赖和初始状态；实际 DOM 构建通常在 onOpen() 或后续渲染流程中完成。
 
@@ -7182,7 +7172,7 @@ constructor( private readonly app: App, private readonly indexPath: string, priv
 
 ### 方法 `MindMapSearchIndex.initialize`
 
-源码：`src/search/global-search.ts:406`
+源码：`src/search/global-search.ts:371`
 
 执行“initialize”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
 
@@ -7192,7 +7182,7 @@ async initialize(): Promise<void>
 
 ### 方法 `MindMapSearchIndex.destroy`
 
-源码：`src/search/global-search.ts:414`
+源码：`src/search/global-search.ts:379`
 
 执行“destroy”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
 
@@ -7202,7 +7192,7 @@ destroy(): void
 
 ### 方法 `MindMapSearchIndex.getStatus`
 
-源码：`src/search/global-search.ts:425`
+源码：`src/search/global-search.ts:390`
 
 读取并返回status，并保持模型、界面和持久化状态的一致性。
 
@@ -7212,7 +7202,7 @@ getStatus(): MindMapSearchIndexStatus
 
 ### 方法 `MindMapSearchIndex.allEntries`
 
-源码：`src/search/global-search.ts:437`
+源码：`src/search/global-search.ts:402`
 
 执行“all entries”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
 
@@ -7222,7 +7212,7 @@ allEntries(filePaths?: ReadonlySet<string>): MindMapSearchEntry[]
 
 ### 方法 `MindMapSearchIndex.getScopedStatus`
 
-源码：`src/search/global-search.ts:450`
+源码：`src/search/global-search.ts:415`
 
 读取并返回scoped status，并保持模型、界面和持久化状态的一致性。
 
@@ -7232,7 +7222,7 @@ getScopedStatus(filePaths: ReadonlySet<string>):
 
 ### 方法 `MindMapSearchIndex.search`
 
-源码：`src/search/global-search.ts:471`
+源码：`src/search/global-search.ts:436`
 
 执行“search”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
 
@@ -7242,7 +7232,7 @@ search(query: string, limit = 100, filePaths?: ReadonlySet<string>, useRegex = f
 
 ### 方法 `MindMapSearchIndex.refreshFamily`
 
-源码：`src/search/global-search.ts:481`
+源码：`src/search/global-search.ts:446`
 
 Refresh a parent map and every recursively linked child map, then return the exact set of files that belongs to that map family. This is deliberately on-demand so an existing child map is searchable without recreating it or manually rebuilding the whole-vault index.
 
@@ -7252,7 +7242,7 @@ async refreshFamily(rootPath: string, currentDocument?: MindMapDocument): Promis
 
 ### 方法 `MindMapSearchIndex.queueFile`
 
-源码：`src/search/global-search.ts:563`
+源码：`src/search/global-search.ts:528`
 
 执行“queue file”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
 
@@ -7262,7 +7252,7 @@ queueFile(file: TFile, delay = 500): void
 
 ### 方法 `MindMapSearchIndex.removeFile`
 
-源码：`src/search/global-search.ts:579`
+源码：`src/search/global-search.ts:544`
 
 删除file，并保持模型、界面和持久化状态的一致性。
 
@@ -7272,7 +7262,7 @@ removeFile(path: string): void
 
 ### 方法 `MindMapSearchIndex.renameFile`
 
-源码：`src/search/global-search.ts:593`
+源码：`src/search/global-search.ts:558`
 
 执行“rename file”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
 
@@ -7282,7 +7272,7 @@ renameFile(file: TFile, oldPath: string): void
 
 ### 方法 `MindMapSearchIndex.rebuildAll`
 
-源码：`src/search/global-search.ts:601`
+源码：`src/search/global-search.ts:566`
 
 重建all，并保持模型、界面和持久化状态的一致性。
 
@@ -7292,7 +7282,7 @@ async rebuildAll(): Promise<void>
 
 ### 方法 `MindMapSearchIndex.rebuildChangedFiles`
 
-源码：`src/search/global-search.ts:610`
+源码：`src/search/global-search.ts:575`
 
 重建changed files，并保持模型、界面和持久化状态的一致性。
 
@@ -7302,7 +7292,7 @@ private async rebuildChangedFiles(): Promise<void>
 
 ### 方法 `MindMapSearchIndex.performRebuild`
 
-源码：`src/search/global-search.ts:622`
+源码：`src/search/global-search.ts:587`
 
 执行全量或增量索引重建。它比较文件修改时间，仅解析变化的 .mindmap 文件，删除失效记录，随后重新解析跨文件层级并安排持久化。
 
@@ -7312,7 +7302,7 @@ private async performRebuild(force: boolean): Promise<void>
 
 ### 方法 `MindMapSearchIndex.indexFile`
 
-源码：`src/search/global-search.ts:649`
+源码：`src/search/global-search.ts:614`
 
 读取并解析单个 .mindmap 文件，生成节点级搜索条目和子导图引用。读取或解析失败时移除该文件的旧索引，防止返回过期结果。
 
@@ -7322,7 +7312,7 @@ private async indexFile(file: TFile): Promise<void>
 
 ### 方法 `MindMapSearchIndex.walkNodes`
 
-源码：`src/search/global-search.ts:674`
+源码：`src/search/global-search.ts:639`
 
 递归遍历nodes，并保持模型、界面和持久化状态的一致性。
 
@@ -7332,7 +7322,7 @@ private *walkNodes(root: MindMapNode): Generator<MindMapNode>
 
 ### 方法 `MindMapSearchIndex.resolveSubmapFile`
 
-源码：`src/search/global-search.ts:691`
+源码：`src/search/global-search.ts:656`
 
 解析并确定submap file，并保持模型、界面和持久化状态的一致性。
 
@@ -7342,7 +7332,7 @@ private resolveSubmapFile(rawPath: string | undefined, sourcePath: string): TFil
 
 ### 方法 `MindMapSearchIndex.load`
 
-源码：`src/search/global-search.ts:705`
+源码：`src/search/global-search.ts:670`
 
 加载相关数据，并保持模型、界面和持久化状态的一致性。
 
@@ -7352,7 +7342,7 @@ private async load(): Promise<void>
 
 ### 方法 `MindMapSearchIndex.scheduleSave`
 
-源码：`src/search/global-search.ts:733`
+源码：`src/search/global-search.ts:698`
 
 安排延迟执行save，并保持模型、界面和持久化状态的一致性。
 
@@ -7362,7 +7352,7 @@ private scheduleSave(): void
 
 ### 方法 `MindMapSearchIndex.saveNow`
 
-源码：`src/search/global-search.ts:744`
+源码：`src/search/global-search.ts:709`
 
 保存now，并保持模型、界面和持久化状态的一致性。
 
@@ -7372,7 +7362,7 @@ private async saveNow(): Promise<void>
 
 ### 函数 `appendHighlightedText`
 
-源码：`src/search/global-search.ts:760`
+源码：`src/search/global-search.ts:725`
 
 执行“append highlighted text”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
 
@@ -7382,7 +7372,7 @@ function appendHighlightedText(container: HTMLElement, text: string, query: stri
 
 ### 类 `GlobalMindMapSearchModal`
 
-源码：`src/search/global-search.ts:797`
+源码：`src/search/global-search.ts:762`
 
 GlobalMindMapSearchModal 的主要实现类。负责封装相关状态、生命周期和对外操作，避免调用方直接操作内部数据结构。
 
@@ -7392,7 +7382,7 @@ export class GlobalMindMapSearchModal extends Modal
 
 ### 构造函数 `GlobalMindMapSearchModal.constructor`
 
-源码：`src/search/global-search.ts:819`
+源码：`src/search/global-search.ts:784`
 
 创建 GlobalMindMapSearchModal 实例，保存依赖和初始状态；实际 DOM 构建通常在 onOpen() 或后续渲染流程中完成。
 
@@ -7402,7 +7392,7 @@ constructor( app: App, private readonly index: MindMapSearchIndex, private reado
 
 ### 方法 `GlobalMindMapSearchModal.onOpen`
 
-源码：`src/search/global-search.ts:836`
+源码：`src/search/global-search.ts:801`
 
 在弹窗或视图打开时创建界面、绑定事件并把当前数据填入控件。
 
@@ -7412,7 +7402,7 @@ onOpen(): void
 
 ### 方法 `GlobalMindMapSearchModal.onClose`
 
-源码：`src/search/global-search.ts:934`
+源码：`src/search/global-search.ts:899`
 
 在弹窗或视图关闭时释放临时 DOM、计时器和事件状态。
 
@@ -7422,7 +7412,7 @@ onClose(): void
 
 ### 方法 `GlobalMindMapSearchModal.renderResults`
 
-源码：`src/search/global-search.ts:943`
+源码：`src/search/global-search.ts:908`
 
 渲染results，并保持模型、界面和持久化状态的一致性。
 
@@ -7432,7 +7422,7 @@ private renderResults(query: string): void
 
 ### 方法 `GlobalMindMapSearchModal.renderResultList`
 
-源码：`src/search/global-search.ts:973`
+源码：`src/search/global-search.ts:938`
 
 从当前 renderedResults 列表重新渲染结果，不重新查询索引。
 
@@ -7442,7 +7432,7 @@ private renderResultList(): void
 
 ### 方法 `GlobalMindMapSearchModal.renderResultItems`
 
-源码：`src/search/global-search.ts:988`
+源码：`src/search/global-search.ts:953`
 
 渲染结果列表项。
 
@@ -7452,7 +7442,7 @@ private renderResultItems(query: string): void
 
 ### 方法 `GlobalMindMapSearchModal.moveActive`
 
-源码：`src/search/global-search.ts:1052`
+源码：`src/search/global-search.ts:1010`
 
 执行“move active”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
 
@@ -7462,7 +7452,7 @@ private moveActive(delta: number): void
 
 ### 方法 `GlobalMindMapSearchModal.setActive`
 
-源码：`src/search/global-search.ts:1063`
+源码：`src/search/global-search.ts:1021`
 
 更新并应用active，并保持模型、界面和持久化状态的一致性。
 
@@ -7472,7 +7462,7 @@ private setActive(index: number): void
 
 ### 方法 `GlobalMindMapSearchModal.openResult`
 
-源码：`src/search/global-search.ts:1075`
+源码：`src/search/global-search.ts:1033`
 
 打开result，并保持模型、界面和持久化状态的一致性。
 

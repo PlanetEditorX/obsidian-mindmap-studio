@@ -15859,38 +15859,13 @@ function nodeDisplayText(node) {
   if (nodeContentBlocks(node).some((block) => block.type === "image")) return "\u56FE\u7247\u8282\u70B9";
   return "\u672A\u547D\u540D\u8282\u70B9";
 }
-function fieldValues(node) {
-  var _a2, _b2, _c, _d, _e, _f, _g;
-  const values = [];
-  const text = nodePlainText(node).trim();
-  if (text) values.push({ kind: "\u8282\u70B9\u6587\u5B57", value: text });
-  if ((_a2 = node.note) == null ? void 0 : _a2.trim()) values.push({ kind: "\u5907\u6CE8", value: node.note });
-  if ((_b2 = node.tags) == null ? void 0 : _b2.length) values.push({ kind: "\u6807\u7B7E", value: node.tags.join(" ") });
-  if ((_c = node.link) == null ? void 0 : _c.trim()) values.push({ kind: "\u94FE\u63A5", value: node.link });
-  if ((_d = node.icon) == null ? void 0 : _d.trim()) values.push({ kind: "\u56FE\u6807", value: node.icon });
-  if (node.task) values.push({ kind: "\u4EFB\u52A1", value: node.task });
-  if ((_e = node.submap) == null ? void 0 : _e.path) values.push({ kind: "\u5B50\u5BFC\u56FE", value: `${(_f = node.submap.title) != null ? _f : ""} ${node.submap.path}` });
-  if (node.code) values.push({ kind: "\u4EE3\u7801", value: `${(_g = node.code.language) != null ? _g : ""}
-${node.code.code}` });
-  if (node.table) values.push({ kind: "\u8868\u683C", value: [...node.table.headers, ...node.table.rows.flat()].join(" ") });
-  const imageValues = nodeContentBlocks(node).filter((block) => block.type === "image").map((block) => {
-    var _a3, _b3;
-    return `${(_a3 = block.alt) != null ? _a3 : ""} ${block.source} ${(_b3 = block.localSource) != null ? _b3 : ""}`;
-  }).join(" ");
-  if (imageValues.trim()) values.push({ kind: "\u56FE\u7247", value: imageValues });
-  return values;
-}
 function buildSearchEntries(document2, filePath) {
   const entries = [];
   const visit = (node, ancestors, depth) => {
-    var _a2, _b2, _c, _d, _e;
+    var _a2, _b2, _c, _d;
     const display = nodeDisplayText(node);
-    const fields = fieldValues(node);
     const breadcrumb = [...ancestors, display];
-    const searchText = normalized([
-      nodeSearchText(node),
-      ...fields.map((field) => field.value)
-    ].join(" "));
+    const searchText = normalized(nodePlainText(node));
     entries.push({
       key: `${filePath}::${node.id}`,
       filePath,
@@ -15900,12 +15875,10 @@ function buildSearchEntries(document2, filePath) {
       breadcrumb,
       depth,
       searchableText: searchText,
-      note: compact(node.note),
-      tags: (_b2 = node.tags) == null ? void 0 : _b2.slice(0, 20),
-      matchedKinds: fields.map((field) => field.kind),
-      submapPath: (_c = node.submap) == null ? void 0 : _c.path,
-      isSubmapDocument: Boolean((_d = document2.navigation) == null ? void 0 : _d.parentPath),
-      parentMapPath: (_e = document2.navigation) == null ? void 0 : _e.parentPath
+      matchedKinds: ["\u8282\u70B9\u6587\u5B57"],
+      submapPath: (_b2 = node.submap) == null ? void 0 : _b2.path,
+      isSubmapDocument: Boolean((_c = document2.navigation) == null ? void 0 : _c.parentPath),
+      parentMapPath: (_d = document2.navigation) == null ? void 0 : _d.parentPath
     });
     node.children.forEach((child) => visit(child, breadcrumb, depth + 1));
   };
@@ -15980,31 +15953,25 @@ function resolveHierarchicalEntries(files) {
   return resolvedEntries;
 }
 function resultSnippet(entry, query, useRegex = false) {
-  var _a2, _b2, _c, _d;
+  var _a2;
   const queryNormalized = useRegex ? query : normalized(query);
-  const candidates = [
-    { kind: "\u8282\u70B9\u6587\u5B57", value: entry.nodeText },
-    { kind: "\u5907\u6CE8", value: entry.note },
-    { kind: "\u6807\u7B7E", value: (_a2 = entry.tags) == null ? void 0 : _a2.join("\u3001") },
-    { kind: "\u5185\u5BB9", value: entry.searchableText }
-  ];
-  let matched;
+  const value = entry.nodeText;
+  let matched = false;
   if (useRegex) {
     try {
       const regex = new RegExp(query, "gi");
-      matched = candidates.find((candidate) => candidate.value && regex.test(candidate.value));
+      matched = regex.test(value);
     } catch (e) {
     }
   } else {
-    matched = candidates.find((candidate) => candidate.value && normalized(candidate.value).includes(queryNormalized));
+    matched = normalized(value).includes(queryNormalized);
   }
   return {
-    kind: (_b2 = matched == null ? void 0 : matched.kind) != null ? _b2 : "\u5185\u5BB9",
-    snippet: (_d = compact((_c = matched == null ? void 0 : matched.value) != null ? _c : entry.nodeText, 220)) != null ? _d : entry.nodeText
+    kind: "\u8282\u70B9\u6587\u5B57",
+    snippet: (_a2 = compact(matched ? value : entry.nodeText, 220)) != null ? _a2 : entry.nodeText
   };
 }
 function searchEntries(entries, query, limit = 100, useRegex = false) {
-  var _a2, _b2, _c;
   if (useRegex) {
     let regex;
     try {
@@ -16039,8 +16006,6 @@ function searchEntries(entries, query, limit = 100, useRegex = false) {
     if (nodeText === phrase) score += 500;
     else if (nodeText.startsWith(phrase)) score += 320;
     else if (nodeText.includes(phrase)) score += 230;
-    if (normalized((_b2 = (_a2 = entry.tags) == null ? void 0 : _a2.join(" ")) != null ? _b2 : "").includes(phrase)) score += 100;
-    if (normalized((_c = entry.note) != null ? _c : "").includes(phrase)) score += 60;
     if (entry.isSubmapDocument) score += 5;
     score += Math.max(0, 25 - entry.depth * 2);
     const { kind, snippet } = resultSnippet(entry, query);
@@ -16463,7 +16428,7 @@ var GlobalMindMapSearchModal = class extends import_obsidian13.Modal {
    * @param scopeTitle 该参数用于 constructor 流程中的输入或控制。
    * @param scopeDescription 该参数用于 constructor 流程中的输入或控制。
    */
-  constructor(app, index, maxResults, onOpenResult, onRebuild, onReplaceAll, scopePaths, scopeTitle = "\u5168\u5C40\u641C\u7D22\u601D\u7EF4\u5BFC\u56FE", scopeDescription = "\u6240\u6709\u5BFC\u56FE\u3001\u5B50\u8282\u70B9\u548C\u5B50\u5BFC\u56FE") {
+  constructor(app, index, maxResults, onOpenResult, onRebuild, onReplaceAll, scopePaths, scopeTitle = "\u5168\u5C40\u641C\u7D22\u601D\u7EF4\u5BFC\u56FE", scopeDescription = "\u6240\u6709\u5BFC\u56FE\u4E2D\u7684\u8282\u70B9\u6587\u5B57") {
     super(app);
     this.index = index;
     this.maxResults = maxResults;
@@ -16591,7 +16556,7 @@ var GlobalMindMapSearchModal = class extends import_obsidian13.Modal {
       this.summaryEl.setText(status.building && !this.scopePaths ? `\u6B63\u5728\u5EFA\u7ACB\u7D22\u5F15\uFF0C\u5DF2\u6536\u5F55 ${scopedStatus.files} \u4E2A\u5BFC\u56FE\u3001${scopedStatus.nodes} \u4E2A\u8282\u70B9\u2026` : `\u641C\u7D22\u8303\u56F4\u5305\u542B ${scopedStatus.files} \u4E2A\u5BFC\u56FE\u3001${scopedStatus.nodes} \u4E2A\u8282\u70B9\u3002\u8F93\u5165\u5173\u952E\u8BCD\u5F00\u59CB\u641C\u7D22\u3002`);
       const hint = this.resultsEl.createDiv({ cls: "mms-global-search-empty" });
       hint.createDiv({ text: "\u641C\u7D22\u8303\u56F4" });
-      hint.createEl("p", { text: `${this.scopeDescription}\u4E2D\u7684\u8282\u70B9\u6587\u5B57\u3001\u5BCC\u6587\u672C\u3001\u5907\u6CE8\u3001\u6807\u7B7E\u3001\u8868\u683C\u3001\u4EE3\u7801\u3001\u94FE\u63A5\u53CA\u6298\u53E0\u5206\u652F\u3002` });
+      hint.createEl("p", { text: "\u641C\u7D22\u8303\u56F4\u4EC5\u5305\u542B\u8282\u70B9\u6587\u5B57\uFF1B\u5B50\u5BFC\u56FE\u8DEF\u5F84\u3001\u5907\u6CE8\u3001\u6807\u7B7E\u3001\u94FE\u63A5\u3001\u8868\u683C\u3001\u4EE3\u7801\u548C\u56FE\u7247\u4E0D\u4F1A\u53C2\u4E0E\u5339\u914D\u3002" });
       return;
     }
     this.renderedResults = this.index.search(trimmed, this.maxResults, this.scopePaths, this.useRegex);
@@ -16629,9 +16594,6 @@ var GlobalMindMapSearchModal = class extends import_obsidian13.Modal {
       const title = header.createDiv({ cls: "mms-global-search-result-title" });
       appendHighlightedText(title, result.nodeText, query, this.useRegex);
       const actions = header.createDiv({ cls: "mms-global-search-result-actions" });
-      const badges = actions.createDiv({ cls: "mms-global-search-result-badges" });
-      badges.createSpan({ cls: "mms-global-search-badge", text: result.matchedKind });
-      if (result.isSubmapDocument) badges.createSpan({ cls: "mms-global-search-badge is-submap", text: "\u5B50\u5BFC\u56FE" });
       const replaceOneBtn = actions.createEl("button", {
         cls: "mms-global-search-replace-one",
         attr: { type: "button", title: "\u66FF\u6362\u6B64\u8282\u70B9" }
@@ -16662,9 +16624,6 @@ var GlobalMindMapSearchModal = class extends import_obsidian13.Modal {
           replaceOneBtn.disabled = false;
         }
       });
-      const file = item.createDiv({ cls: "mms-global-search-result-file" });
-      file.createSpan({ text: result.fileTitle });
-      file.createSpan({ cls: "mms-global-search-result-path", text: result.filePath });
       item.addEventListener("mouseenter", () => this.setActive(index));
       item.addEventListener("click", () => void this.openResult(result));
       item.addEventListener("keydown", (event) => {

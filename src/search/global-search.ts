@@ -9,7 +9,6 @@ import { App, Modal, Notice, TFile, normalizePath, setIcon } from "obsidian";
 import {
   nodeContentBlocks,
   nodePlainText,
-  nodeSearchText,
   parseDocument,
   type MindMapDocument,
   type MindMapNode
@@ -123,26 +122,6 @@ function nodeDisplayText(node: MindMapNode): string {
  * @param node 当前处理的节点。
  * @returns 计算、解析或序列化后的字符串结果。
  */
-function fieldValues(node: MindMapNode): Array<{ kind: string; value: string }> {
-  const values: Array<{ kind: string; value: string }> = [];
-  const text = nodePlainText(node).trim();
-  if (text) values.push({ kind: "节点文字", value: text });
-  if (node.note?.trim()) values.push({ kind: "备注", value: node.note });
-  if (node.tags?.length) values.push({ kind: "标签", value: node.tags.join(" ") });
-  if (node.link?.trim()) values.push({ kind: "链接", value: node.link });
-  if (node.icon?.trim()) values.push({ kind: "图标", value: node.icon });
-  if (node.task) values.push({ kind: "任务", value: node.task });
-  if (node.submap?.path) values.push({ kind: "子导图", value: `${node.submap.title ?? ""} ${node.submap.path}` });
-  if (node.code) values.push({ kind: "代码", value: `${node.code.language ?? ""}\n${node.code.code}` });
-  if (node.table) values.push({ kind: "表格", value: [...node.table.headers, ...node.table.rows.flat()].join(" ") });
-  const imageValues = nodeContentBlocks(node)
-    .filter((block) => block.type === "image")
-    .map((block) => `${block.alt ?? ""} ${block.source} ${block.localSource ?? ""}`)
-    .join(" ");
-  if (imageValues.trim()) values.push({ kind: "图片", value: imageValues });
-  return values;
-}
-
 /**
  * 构建search entries，并保持模型、界面和持久化状态的一致性。
  *
@@ -154,16 +133,11 @@ export function buildSearchEntries(document: MindMapDocument, filePath: string):
   const entries: MindMapSearchEntry[] = [];
   const visit = (node: MindMapNode, ancestors: string[], depth: number): void => {
     const display = nodeDisplayText(node);
-    const fields = fieldValues(node);
     const breadcrumb = [...ancestors, display];
-    // The index intentionally contains only values that belong to this node.
-    // Breadcrumbs and file metadata are display context, rather than searchable
-    // content: including them makes a child appear as a false-positive match
-    // whenever one of its ancestors contains the query.
-    const searchText = normalized([
-      nodeSearchText(node),
-      ...fields.map((field) => field.value)
-    ].join(" "));
+    // Global search is deliberately limited to node text. Paths, links,
+    // submap metadata, notes, tags and structured blocks stay out of both the
+    // matching corpus and result presentation.
+    const searchText = normalized(nodePlainText(node));
     entries.push({
       key: `${filePath}::${node.id}`,
       filePath,
@@ -173,9 +147,7 @@ export function buildSearchEntries(document: MindMapDocument, filePath: string):
       breadcrumb,
       depth,
       searchableText: searchText,
-      note: compact(node.note),
-      tags: node.tags?.slice(0, 20),
-      matchedKinds: fields.map((field) => field.kind),
+      matchedKinds: ["节点文字"],
       submapPath: node.submap?.path,
       isSubmapDocument: Boolean(document.navigation?.parentPath),
       parentMapPath: document.navigation?.parentPath
@@ -277,24 +249,19 @@ export function resolveHierarchicalEntries(files: Record<string, IndexedMindMapF
  */
 function resultSnippet(entry: MindMapSearchEntry, query: string, useRegex = false): { kind: string; snippet: string } {
   const queryNormalized = useRegex ? query : normalized(query);
-  const candidates: Array<{ kind: string; value?: string }> = [
-    { kind: "节点文字", value: entry.nodeText },
-    { kind: "备注", value: entry.note },
-    { kind: "标签", value: entry.tags?.join("、") },
-    { kind: "内容", value: entry.searchableText }
-  ];
-  let matched;
+  const value = entry.nodeText;
+  let matched = false;
   if (useRegex) {
     try {
       const regex = new RegExp(query, "gi");
-      matched = candidates.find((candidate) => candidate.value && regex.test(candidate.value));
+      matched = regex.test(value);
     } catch { /* invalid regex */ }
   } else {
-    matched = candidates.find((candidate) => candidate.value && normalized(candidate.value).includes(queryNormalized));
+    matched = normalized(value).includes(queryNormalized);
   }
   return {
-    kind: matched?.kind ?? "内容",
-    snippet: compact(matched?.value ?? entry.nodeText, 220) ?? entry.nodeText
+    kind: "节点文字",
+    snippet: compact(matched ? value : entry.nodeText, 220) ?? entry.nodeText
   };
 }
 
@@ -334,8 +301,6 @@ export function searchEntries(entries: MindMapSearchEntry[], query: string, limi
     if (nodeText === phrase) score += 500;
     else if (nodeText.startsWith(phrase)) score += 320;
     else if (nodeText.includes(phrase)) score += 230;
-    if (normalized(entry.tags?.join(" ") ?? "").includes(phrase)) score += 100;
-    if (normalized(entry.note ?? "").includes(phrase)) score += 60;
     if (entry.isSubmapDocument) score += 5;
     score += Math.max(0, 25 - entry.depth * 2);
     const { kind, snippet } = resultSnippet(entry, query);
@@ -825,7 +790,7 @@ export class GlobalMindMapSearchModal extends Modal {
     private readonly onReplaceAll?: (results: MindMapSearchResult[], query: string, replacement: string, useRegex: boolean) => Promise<number>,
     private readonly scopePaths?: ReadonlySet<string>,
     private readonly scopeTitle = "全局搜索思维导图",
-    private readonly scopeDescription = "所有导图、子节点和子导图"
+    private readonly scopeDescription = "所有导图中的节点文字"
   ) {
     super(app);
   }
@@ -953,7 +918,7 @@ export class GlobalMindMapSearchModal extends Modal {
         : `搜索范围包含 ${scopedStatus.files} 个导图、${scopedStatus.nodes} 个节点。输入关键词开始搜索。`);
       const hint = this.resultsEl.createDiv({ cls: "mms-global-search-empty" });
       hint.createDiv({ text: "搜索范围" });
-      hint.createEl("p", { text: `${this.scopeDescription}中的节点文字、富文本、备注、标签、表格、代码、链接及折叠分支。` });
+      hint.createEl("p", { text: "搜索范围仅包含节点文字；子导图路径、备注、标签、链接、表格、代码和图片不会参与匹配。" });
       return;
     }
 
@@ -998,9 +963,6 @@ export class GlobalMindMapSearchModal extends Modal {
       const title = header.createDiv({ cls: "mms-global-search-result-title" });
       appendHighlightedText(title, result.nodeText, query, this.useRegex);
       const actions = header.createDiv({ cls: "mms-global-search-result-actions" });
-      const badges = actions.createDiv({ cls: "mms-global-search-result-badges" });
-      badges.createSpan({ cls: "mms-global-search-badge", text: result.matchedKind });
-      if (result.isSubmapDocument) badges.createSpan({ cls: "mms-global-search-badge is-submap", text: "子导图" });
       const replaceOneBtn = actions.createEl("button", {
         cls: "mms-global-search-replace-one",
         attr: { type: "button", title: "替换此节点" }
@@ -1029,10 +991,6 @@ export class GlobalMindMapSearchModal extends Modal {
           replaceOneBtn.disabled = false;
         }
       });
-      const file = item.createDiv({ cls: "mms-global-search-result-file" });
-      file.createSpan({ text: result.fileTitle });
-      file.createSpan({ cls: "mms-global-search-result-path", text: result.filePath });
-
       item.addEventListener("mouseenter", () => this.setActive(index));
       item.addEventListener("click", () => void this.openResult(result));
       item.addEventListener("keydown", (event) => {
