@@ -1,0 +1,38 @@
+# 仓库工作规则
+
+## 开始工作
+
+1. 阅读 `README.md`、`CONTRIBUTING.md`、`docs/ARCHITECTURE.md`、`docs/DATA_MODEL.md` 和 `docs/DEVELOPMENT.md`。
+2. 阅读 `Codex/README.md`、`Codex/偏好与交付规则.md` 与对应项目文件，以上一轮的当前状态、待验证和下一步为续接起点。
+3. 修改前定位相关源码、调用方和测试；不要做无关重构。
+
+## 实现与兼容性
+
+- 保持 TypeScript、JSDoc 和现有代码风格一致；外部 JSON 使用 `unknown` 并显式校验。
+- 数据兼容与规范化放在 `src/core/`；可撤销编辑必须进入统一历史和保存链路。
+- `node.content` 是内容块的权威集合；旧字段仅作为兼容镜像。完整替换使用 `replaceNodeContentBlocks()`，移动使用 `moveNodeContentBlock()`，并同步来源和目标节点的兼容字段。
+- 功能变更必须补充专项测试；行为、数据、架构、测试或开发流程变化必须同步文档。接口或函数注释变更后运行 `npm run docs:generate`。
+- Obsidian 插件源码变化后必须重新构建 `main.js`。
+
+## 验证
+
+代码完成前运行：
+
+```bash
+npm run verify
+```
+
+这会覆盖完整单元测试、综合回归、文档检查、仓库检查和生产构建。用户可见交互还需要在真实 Obsidian 桌面端手工冒烟；交付时明确说明尚待手工验证的项目。
+
+## 交付
+
+- 代码修复说明实际行为、兼容性、测试结果和仍需手工验证的事项；回答直接、精简。
+- 每轮代码修改后返回完整源码 ZIP，文件名带六位随机数字，根目录固定为 `obsidian-mindmap-studio`。
+- 源码 ZIP 必须包含源码、测试、文档、`manifest.json`、`package.json`、`styles.css` 和重新构建的 `main.js`；排除 `Codex/`、`node_modules/`、`.git/`、临时目录、嵌套 ZIP 和未修改的 `examples/`。
+- 每次代码交付后更新 `Codex/项目/obsidian-mindmap-studio.md` 的当前状态、验证基线、待验证事项和最近交付包；不要新增重复的日志或日期总结。
+
+## Git
+
+- 所有 Git 提示使用中文。
+- 使用 Conventional Commits：首行 `type(scope): 中文主题`，后续直接以 `- ` 列出真实代码行为、兼容处理、测试、文档、Codex 更新和 `main.js` 重建。
+- 当前工作副本没有 `.git` 时，只提供可执行的 `git add` 与 `git commit` 建议，不得声称已提交。

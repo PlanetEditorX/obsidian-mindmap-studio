@@ -64,8 +64,10 @@ test("article inline actions expose high-frequency commands and route more to th
   assert.match(inlineActions, /if \(this\.currentMode === "article"\)/);
   assert.match(inlineActions, /"添加同级节点"[\s\S]*this\.addSibling\(\)/);
   assert.match(inlineActions, /"添加子节点"[\s\S]*this\.addChild\(\)/);
-  assert.match(inlineActions, /"作为块移动"[\s\S]*this\.startArticleBlockClickMove\(node\.id\)/);
-  assert.match(inlineActions, /"作为节点移动"[\s\S]*this\.startArticleNodeClickMove\(node\.id\)/);
+  assert.match(inlineActions, /action\("grip-vertical", "作为块移动"[\s\S]*this\.startArticleBlockClickMove\(node\.id\)/);
+  assert.match(inlineActions, /action\("git-branch", "作为节点移动"[\s\S]*this\.startArticleNodeClickMove\(node\.id\)/);
+  assert.match(inlineActions, /action\("indent-increase", "降为上一个节点的子节点"[\s\S]*this\.demoteArticleNode\(node\.id\)/);
+  assert.match(inlineActions, /action\("indent-decrease", "升为上一个节点的兄弟节点"[\s\S]*this\.promoteArticleNode\(node\.id\)/);
   assert.match(inlineActions, /"删除节点"[\s\S]*this\.deleteNodeById\(node\.id\)/);
   assert.match(inlineActions, /"更多"[\s\S]*this\.openContextMenu\(event\)/);
   assert.match(inlineActions, /if \(node\.id !== this\.document\.root\.id\)[\s\S]*"添加同级节点"/, "the root must not offer an invalid sibling action");
@@ -78,6 +80,21 @@ test("article node settings remain available from the full context menu", () => 
   assert.match(contextMenu, /if \(this\.currentMode === "article"\)[\s\S]*setTitle\("节点设置"\)[\s\S]*this\.openSelectedNodeEditor\(\)/);
   assert.match(contextMenu, /if \(selected\?\.id !== this\.document\.root\.id\)[\s\S]*setTitle\("添加同级节点"\)/, "the full menu must hide sibling insertion on the root");
   assert.match(contextMenu, /if \(selected\?\.id !== this\.document\.root\.id\)[\s\S]*setTitle\("删除节点"\)/, "the full menu must hide deletion on the root");
+});
+
+test("article context menu exposes the four explicit movement rules", () => {
+  const contextMenu = editorSource.match(/private openContextMenu\(event: MouseEvent, contextBlockId\?: string\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
+  const blockMove = editorSource.match(/private startArticleBlockClickMove\([\s\S]*?\n  \}/)?.[0] ?? "";
+  const demote = editorSource.match(/private demoteArticleNode\([\s\S]*?\n  \}/)?.[0] ?? "";
+  const promote = editorSource.match(/private promoteArticleNode\([\s\S]*?\n  \}/)?.[0] ?? "";
+
+  assert.match(contextMenu, /this\.currentMode === "article" && selected && selected\.id !== this\.document\.root\.id[\s\S]*setTitle\("作为块移动"\)[\s\S]*setIcon\("grip-vertical"\)[\s\S]*contextBlock\?\.id/);
+  assert.match(contextMenu, /setTitle\("作为节点移动"\)[\s\S]*setIcon\("git-branch"\)/);
+  assert.match(contextMenu, /setTitle\("降为上一个节点的子节点"\)[\s\S]*this\.demoteArticleNode\(selected\.id\)/);
+  assert.match(contextMenu, /setTitle\("升为上一个节点的兄弟节点"\)[\s\S]*this\.promoteArticleNode\(selected\.id\)/);
+  assert.match(blockMove, /preferredBlockId \?\? \(active\?\.nodeId === nodeId \? active\.blockId : undefined\)/);
+  assert.match(demote, /parent\?\.children\[index - 1\][\s\S]*this\.moveNode\(nodeId, previous\.id, "child"\)/);
+  assert.match(promote, /findParent\(this\.document\.root, parent\.id\)[\s\S]*this\.moveNode\(nodeId, parent\.id, "after"\)/);
 });
 
 test("inline deletion targets the bound node and ignores a deleted editor's late blur", () => {
