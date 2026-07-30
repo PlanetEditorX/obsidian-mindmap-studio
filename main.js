@@ -7692,6 +7692,7 @@ function renderArticleMode(container, options) {
   const pageEntry = currentArticlePageEntry(options.articleNavigation);
   const rootTitle = nodePrimaryText(options.document.root) || options.document.title;
   const title = page.createEl("h1", { cls: "mms-article-document-title" });
+  title.dataset.nodeId = options.document.root.id;
   if (pageEntry == null ? void 0 : pageEntry.label) {
     const separator = /[、.）]$/.test(pageEntry.label) ? "" : " ";
     title.createSpan({ cls: "mms-article-number", text: `${pageEntry.label}${separator}` });
@@ -9581,6 +9582,8 @@ var MindMapEditor = class {
     this.lastRichTextColor = "#ef4444";
     this.imageLoadTimers = /* @__PURE__ */ new Set();
     this.inlineEditingId = null;
+    this.activeArticleBlock = null;
+    this.pendingArticleClickMove = null;
     this.readingLocationTimer = null;
     this.readingCaptureTimer = null;
     this.readingCaptureReleaseTimer = null;
@@ -10215,9 +10218,29 @@ var MindMapEditor = class {
     };
     this.outlineEl.addEventListener("contextmenu", pageContextMenu);
     this.articleEl.addEventListener("contextmenu", pageContextMenu);
+    const articleClickMoveTarget = (event) => {
+      const pending = this.pendingArticleClickMove;
+      if (!pending) return;
+      const target = event.target instanceof HTMLElement ? event.target : null;
+      if (target == null ? void 0 : target.closest(".mms-inline-node-actions, .mms-article-click-move-hint")) return;
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
+      const nodeElement = target == null ? void 0 : target.closest(
+        ".mms-article-node[data-node-id], .mms-article-document-title[data-node-id]"
+      );
+      const targetNodeId = nodeElement == null ? void 0 : nodeElement.dataset.nodeId;
+      if (!targetNodeId) {
+        this.cancelArticleClickMove();
+        return;
+      }
+      this.completeArticleClickMove(targetNodeId);
+    };
+    this.articleEl.addEventListener("click", articleClickMoveTarget, true);
     this.cleanupCallbacks.push(() => {
       this.outlineEl.removeEventListener("contextmenu", pageContextMenu);
       this.articleEl.removeEventListener("contextmenu", pageContextMenu);
+      this.articleEl.removeEventListener("click", articleClickMoveTarget, true);
     });
     const modeGroup = this.toolbarEl.createDiv({ cls: "mms-mode-switcher" });
     for (const mode of this.options.visibleModes) {
@@ -10801,12 +10824,14 @@ var MindMapEditor = class {
     element.addEventListener("pointerdown", () => {
       if (this.readOnly || element.contentEditable === "true" || element.dataset.mmsExplicitEditOnly === "true") return;
       this.inlineEditingId = node.id;
+      this.activeArticleBlock = this.currentMode === "article" && blockId ? { nodeId: node.id, blockId } : null;
       this.selectNode(node.id);
       this.activateInlineEditable(element, false);
     });
     element.addEventListener("focus", () => {
       if (this.readOnly) return;
       this.inlineEditingId = node.id;
+      this.activeArticleBlock = this.currentMode === "article" && blockId ? { nodeId: node.id, blockId } : null;
       this.applyInlineEditingAccessibility(element);
       original = readRichTextEditor(element);
       element.addClass("is-inline-editing");
@@ -10841,6 +10866,7 @@ var MindMapEditor = class {
       document.execCommand("insertText", false, copiedNodes.map((copied) => nodePlainText(copied)).join("\n"));
     });
     element.addEventListener("blur", (event) => {
+      var _a3;
       if (this.readOnly) return;
       if (toolbar == null ? void 0 : toolbar.contains(event.relatedTarget)) return;
       if (element.dataset.mmsProtectInitialFocus === "true") {
@@ -10854,6 +10880,9 @@ var MindMapEditor = class {
       toolbar == null ? void 0 : toolbar.cleanup();
       toolbar = null;
       if (this.inlineEditingId === node.id) this.inlineEditingId = null;
+      if (((_a3 = this.activeArticleBlock) == null ? void 0 : _a3.nodeId) === node.id && this.activeArticleBlock.blockId === blockId) {
+        this.activeArticleBlock = null;
+      }
       if (!findNode(this.document.root, node.id)) return;
       if (!next.text && node.id === this.document.root.id || JSON.stringify(next) === JSON.stringify(original)) {
         renderRichTextRuns(element, original.richText, original.text, false);
@@ -10906,6 +10935,7 @@ var MindMapEditor = class {
     if (this.readOnly || element.hasClass("is-inline-editing")) return;
     const showLineNumbers = Boolean(element.querySelector(".mms-code-line-numbers"));
     this.selectNode(node.id);
+    this.activeArticleBlock = { nodeId: node.id, blockId };
     element.empty();
     element.addClass("is-inline-editing");
     const shell = element.createDiv({ cls: `mms-article-code-editor-shell${showLineNumbers ? " has-line-numbers" : ""}` });
@@ -10923,8 +10953,12 @@ var MindMapEditor = class {
     updateEditorLayout();
     let finished = false;
     const finish = (save) => {
+      var _a2;
       if (finished) return;
       finished = true;
+      if (((_a2 = this.activeArticleBlock) == null ? void 0 : _a2.nodeId) === node.id && this.activeArticleBlock.blockId === blockId) {
+        this.activeArticleBlock = null;
+      }
       if (save && editor.value !== code.code) {
         this.mutate(() => this.upsertStructuredBlock(node, "code", { ...code, code: editor.value }, blockId));
       } else {
@@ -10972,6 +11006,10 @@ var MindMapEditor = class {
     if (this.currentMode === "article") {
       if (node.id !== this.document.root.id) action("list-plus", "\u6DFB\u52A0\u540C\u7EA7\u8282\u70B9", () => this.addSibling());
       action("plus", "\u6DFB\u52A0\u5B50\u8282\u70B9", () => this.addChild());
+      if (node.id !== this.document.root.id) {
+        action("move-down", "\u4F5C\u4E3A\u5757\u79FB\u52A8", () => this.startArticleBlockClickMove(node.id));
+        action("move-right", "\u4F5C\u4E3A\u8282\u70B9\u79FB\u52A8", () => this.startArticleNodeClickMove(node.id));
+      }
       if (node.id !== this.document.root.id) action("trash-2", "\u5220\u9664\u8282\u70B9", () => this.deleteNodeById(node.id));
       action("ellipsis", "\u66F4\u591A", (event) => this.openContextMenu(event));
       return;
@@ -10979,6 +11017,123 @@ var MindMapEditor = class {
     action("pencil", "\u5B8C\u6574\u7F16\u8F91", () => this.editSelected());
     action("plus", "\u6DFB\u52A0\u5B50\u8282\u70B9", () => this.addChild());
     if (node.id !== this.document.root.id) action("trash-2", "\u5220\u9664\u8282\u70B9", () => this.deleteSelected());
+  }
+  /** 从当前文章文字或代码编辑器进入“选择目标节点后追加当前块”的模式。 */
+  startArticleBlockClickMove(nodeId) {
+    var _a2;
+    if (!this.ensureEditable() || this.currentMode !== "article" || nodeId === this.document.root.id) return;
+    const active = this.activeArticleBlock;
+    const node = findNode(this.document.root, nodeId);
+    if (!node || (active == null ? void 0 : active.nodeId) !== nodeId || !nodeContentBlocks(node).some((block) => block.id === active.blockId)) {
+      new import_obsidian10.Notice("\u8BF7\u5148\u7F16\u8F91\u8981\u79FB\u52A8\u7684\u5177\u4F53\u5185\u5BB9\u5757");
+      return;
+    }
+    if (((_a2 = this.pendingArticleClickMove) == null ? void 0 : _a2.kind) === "block" && this.pendingArticleClickMove.sourceNodeId === nodeId && this.pendingArticleClickMove.blockId === active.blockId) {
+      this.cancelArticleClickMove();
+      return;
+    }
+    this.pendingArticleClickMove = { kind: "block", sourceNodeId: nodeId, blockId: active.blockId };
+    this.selectNode(nodeId);
+    const focused = document.activeElement;
+    if (focused instanceof HTMLElement && this.articleEl.contains(focused)) focused.blur();
+    this.applyArticleClickMoveUi();
+    new import_obsidian10.Notice("\u8BF7\u9009\u62E9\u76EE\u6807\u8282\u70B9\uFF0C\u5F53\u524D\u5757\u5C06\u8FFD\u52A0\u5230\u8BE5\u8282\u70B9\u672B\u5C3E\uFF1B\u6309 Esc \u53D6\u6D88");
+  }
+  /** 从文章编辑工具栏进入“选择目标节点后插入其后”的单节点移动模式。 */
+  startArticleNodeClickMove(nodeId) {
+    var _a2;
+    if (!this.ensureEditable() || this.currentMode !== "article" || nodeId === this.document.root.id) return;
+    if (!findNode(this.document.root, nodeId)) return;
+    if (((_a2 = this.pendingArticleClickMove) == null ? void 0 : _a2.kind) === "node" && this.pendingArticleClickMove.sourceNodeId === nodeId) {
+      this.cancelArticleClickMove();
+      return;
+    }
+    this.pendingArticleClickMove = { kind: "node", sourceNodeId: nodeId };
+    this.selectNode(nodeId);
+    const focused = document.activeElement;
+    if (focused instanceof HTMLElement && this.articleEl.contains(focused)) focused.blur();
+    this.applyArticleClickMoveUi();
+    new import_obsidian10.Notice("\u8BF7\u9009\u62E9\u76EE\u6807\u8282\u70B9\uFF0C\u5F53\u524D\u8282\u70B9\u5C06\u63D2\u5165\u5230\u5176\u540E\uFF1B\u6309 Esc \u53D6\u6D88");
+  }
+  /** 完成工具栏发起的点击移动；非法目标保持待选状态，便于重新选择。 */
+  completeArticleClickMove(targetNodeId) {
+    const pending = this.pendingArticleClickMove;
+    if (!pending) return;
+    if (!this.articleClickMoveTargetAllowed(pending, targetNodeId)) {
+      new import_obsidian10.Notice(pending.kind === "block" ? "\u8BF7\u9009\u62E9\u5F53\u524D\u5757\u6240\u5C5E\u8282\u70B9\u4E4B\u5916\u7684\u76EE\u6807\u8282\u70B9" : "\u4E0D\u80FD\u79FB\u52A8\u5230\u6839\u8282\u70B9\u3001\u81EA\u8EAB\u6216\u81EA\u5DF1\u7684\u540E\u4EE3");
+      return;
+    }
+    this.pendingArticleClickMove = null;
+    this.clearArticleClickMoveUi();
+    if (pending.kind === "block") {
+      this.moveContentBlock(pending.sourceNodeId, pending.blockId, targetNodeId, void 0, "append");
+      return;
+    }
+    this.selectNode(pending.sourceNodeId);
+    this.moveNode(pending.sourceNodeId, targetNodeId, "after");
+  }
+  /** 判断一个文章节点能否作为当前点击移动的目标。 */
+  articleClickMoveTargetAllowed(pending, targetNodeId) {
+    const source = findNode(this.document.root, pending.sourceNodeId);
+    const target = findNode(this.document.root, targetNodeId);
+    if (!source || !target || pending.sourceNodeId === targetNodeId) return false;
+    if (pending.kind === "block") {
+      return nodeContentBlocks(source).some((block) => block.id === pending.blockId);
+    }
+    if (targetNodeId === this.document.root.id) return false;
+    return !findAncestors(this.document.root, targetNodeId).some((ancestor) => ancestor.id === pending.sourceNodeId);
+  }
+  /** 绘制点击移动提示与目标可用状态；文档重绘后可安全重复调用。 */
+  applyArticleClickMoveUi() {
+    this.clearArticleClickMoveUi();
+    const pending = this.pendingArticleClickMove;
+    if (!pending || this.currentMode !== "article" || this.readOnly) return;
+    this.rootEl.addClass("is-article-click-moving");
+    this.rootEl.dataset.articleClickMoveKind = pending.kind;
+    const hint = this.articleEl.createDiv({
+      cls: "mms-article-click-move-hint",
+      text: pending.kind === "block" ? "\u9009\u62E9\u76EE\u6807\u8282\u70B9\uFF1A\u5F53\u524D\u5757\u5C06\u8FFD\u52A0\u5230\u5176\u5185\u5BB9\u672B\u5C3E" : "\u9009\u62E9\u76EE\u6807\u8282\u70B9\uFF1A\u5F53\u524D\u8282\u70B9\u5C06\u63D2\u5165\u5230\u5176\u540E"
+    });
+    const cancel = hint.createEl("button", {
+      cls: "clickable-icon",
+      attr: { type: "button", title: "\u53D6\u6D88\u79FB\u52A8", "aria-label": "\u53D6\u6D88\u79FB\u52A8" }
+    });
+    (0, import_obsidian10.setIcon)(cancel, "x");
+    cancel.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      this.cancelArticleClickMove();
+    });
+    this.articleEl.querySelectorAll(
+      ".mms-article-node[data-node-id], .mms-article-document-title[data-node-id]"
+    ).forEach((element) => {
+      const nodeId = element.dataset.nodeId;
+      if (!nodeId) return;
+      if (nodeId === pending.sourceNodeId) element.addClass("is-article-click-move-source");
+      element.addClass(this.articleClickMoveTargetAllowed(pending, nodeId) ? "is-article-click-move-target" : "is-article-click-move-invalid");
+    });
+  }
+  /** 取消文章点击移动并清除提示，不修改文档。 */
+  cancelArticleClickMove() {
+    if (!this.pendingArticleClickMove) return;
+    this.pendingArticleClickMove = null;
+    this.clearArticleClickMoveUi();
+  }
+  /** 清理点击移动的临时 DOM；可选择是否同时移除根状态。 */
+  clearArticleClickMoveUi(clearRoot = true) {
+    var _a2, _b2, _c, _d, _e;
+    (_a2 = this.articleEl) == null ? void 0 : _a2.querySelectorAll(
+      ".is-article-click-move-source, .is-article-click-move-target, .is-article-click-move-invalid"
+    ).forEach((element) => element.removeClasses([
+      "is-article-click-move-source",
+      "is-article-click-move-target",
+      "is-article-click-move-invalid"
+    ]));
+    (_c = (_b2 = this.articleEl) == null ? void 0 : _b2.querySelector(".mms-article-click-move-hint")) == null ? void 0 : _c.remove();
+    if (clearRoot) {
+      (_d = this.rootEl) == null ? void 0 : _d.removeClass("is-article-click-moving");
+      if ((_e = this.rootEl) == null ? void 0 : _e.dataset) delete this.rootEl.dataset.articleClickMoveKind;
+    }
   }
   /**
    * 按照节点层级渲染可编辑大纲。节点标题、备注和子导图链接仍映射到同一份数据，任何修改都会通过统一变更链同步到导图和文章模式。
@@ -11338,6 +11493,7 @@ var MindMapEditor = class {
     else if (this.currentMode === "reading") this.renderReading();
     else if (this.currentMode === "question-bank") this.renderQuestionPractice();
     else this.renderMindMap();
+    this.applyArticleClickMoveUi();
   }
   /** Renders the configured-folder practice surface and persists each automatic grading result. */
   renderQuestionPractice() {
@@ -14397,6 +14553,12 @@ var MindMapEditor = class {
       event.stopPropagation();
       if (event.repeat) return;
       this.openSearch();
+      return;
+    }
+    if (this.pendingArticleClickMove && event.key === "Escape") {
+      event.preventDefault();
+      event.stopPropagation();
+      this.cancelArticleClickMove();
       return;
     }
     if (this.inlineEditingId !== null) return;
