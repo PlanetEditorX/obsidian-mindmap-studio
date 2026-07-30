@@ -2910,7 +2910,6 @@
 .mms-global-search-result-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 6px;
   min-width: 0;
 }
@@ -2933,10 +2932,10 @@
 
 .mms-global-search-result-actions {
   display: flex;
-  flex: 0 0 auto;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: center;
   gap: 8px;
+  margin-top: 7px;
 }
 
 .mms-global-search-replace-one {

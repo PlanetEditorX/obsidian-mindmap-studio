@@ -16646,7 +16646,10 @@ var GlobalMindMapSearchModal = class extends import_obsidian13.Modal {
       const header = item.createDiv({ cls: "mms-global-search-result-header" });
       const title = header.createDiv({ cls: "mms-global-search-result-title" });
       appendHighlightedText(title, result.nodeText, query, this.useRegex);
-      const actions = header.createDiv({ cls: "mms-global-search-result-actions" });
+      const location = item.createDiv({ cls: "mms-global-search-result-file" });
+      location.createSpan({ cls: "mms-global-search-result-file-title", text: result.fileTitle });
+      location.createSpan({ cls: "mms-global-search-result-path", text: result.filePath });
+      const actions = item.createDiv({ cls: "mms-global-search-result-actions" });
       const replaceOneBtn = actions.createEl("button", {
         cls: "mms-global-search-replace-one",
         attr: { type: "button", title: "\u66FF\u6362\u6B64\u8282\u70B9" }
@@ -16677,9 +16680,6 @@ var GlobalMindMapSearchModal = class extends import_obsidian13.Modal {
           replaceOneBtn.disabled = false;
         }
       });
-      const location = item.createDiv({ cls: "mms-global-search-result-file" });
-      location.createSpan({ cls: "mms-global-search-result-file-title", text: result.fileTitle });
-      location.createSpan({ cls: "mms-global-search-result-path", text: result.filePath });
       item.addEventListener("mouseenter", () => this.setActive(index));
       item.addEventListener("click", () => void this.openResult(result));
       item.addEventListener("keydown", (event) => {
