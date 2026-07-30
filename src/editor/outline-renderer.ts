@@ -167,12 +167,29 @@ function renderOutlineContent(container: HTMLElement, node: MindMapNode, depth: 
   if (node.table) {
     const tableWrap = content.createDiv({ cls: "mms-outline-table-wrap" });
     const table = tableWrap.createEl("table", { cls: "mms-outline-table" });
+    if (node.table.columnWidths?.length) {
+      table.addClass("has-custom-column-widths");
+      const colgroup = table.createEl("colgroup");
+      node.table.headers.forEach((_, index) => {
+        const column = colgroup.createEl("col");
+        column.style.width = `${node.table?.columnWidths?.[index] ?? 160}px`;
+      });
+      table.style.width = `${node.table.columnWidths.reduce((sum, width) => sum + width, 0)}px`;
+    }
     const heading = table.createEl("thead").createEl("tr");
-    node.table.headers.forEach((header) => renderInlineMarkdown(heading.createEl("th"), header));
+    node.table.headers.forEach((header, index) => {
+      const cell = heading.createEl("th");
+      renderInlineMarkdown(cell, header);
+      cell.style.textAlign = node.table?.alignments?.[index] ?? "left";
+    });
     const body = table.createEl("tbody");
     node.table.rows.forEach((row) => {
       const rowElement = body.createEl("tr");
-      node.table!.headers.forEach((_, index) => renderInlineMarkdown(rowElement.createEl("td"), row[index] ?? ""));
+      node.table!.headers.forEach((_, index) => {
+        const cell = rowElement.createEl("td");
+        renderInlineMarkdown(cell, row[index] ?? "");
+        cell.style.textAlign = node.table?.alignments?.[index] ?? "left";
+      });
     });
   }
   if (node.code) {

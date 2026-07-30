@@ -185,6 +185,7 @@ interface MindMapTable {
   headers: string[];
   rows: string[][];
   alignments?: ("left" | "center" | "right")[];
+  columnWidths?: number[];
   source?: "manual" | "markdown" | "children";
 }
 ```
@@ -199,7 +200,7 @@ interface MindMapCodeBlock {
 }
 ```
 
-表格与代码可作为有稳定 ID 的内容块，与文字、图片一起排序；旧文件中的节点级 `table`、`code` 字段在读取时会自动迁移到内容块列表。完整编辑后的 `content` 是权威集合，`replaceNodeContentBlocks()` 会在重建旧版镜像前先清空它们，因此删除操作不会触发反向迁移。表格行会按表头列数补齐或截断。代码块可在节点、页面外观和插件全局三个层级配置默认折叠、行号与 Obsidian、GitHub、Monokai、Dracula 样式；节点优先级最高，未设置时向下跟随。全局可为自动展开和自动行号分别设置行数阈值，节点显式设置仍优先。渲染时先交给 Obsidian Markdown 渲染器生成语法高亮，再由四模式共享的 `render/code-block.ts` 在同一 `pre` 中插入真实行号栏。行号栏不写入文档数据，也不改变高亮 token，只复用代码元素的计算字体、行高和内边距。导图中的节点高度由实际 DOM 测量值回写布局；代码折叠状态变化时会重新测量，布局估算高度不会作为隐式最小高度保存。
+表格与代码可作为有稳定 ID 的内容块，与文字、图片一起排序；旧文件中的节点级 `table`、`code` 字段在读取时会自动迁移到内容块列表。完整编辑后的 `content` 是权威集合，`replaceNodeContentBlocks()` 会在重建旧版镜像前先清空它们，因此删除操作不会触发反向迁移。表格行会按表头列数补齐或截断。`columnWidths` 按表头顺序保存各列像素宽度；字段缺失时沿用自适应布局，存在时按列数补齐并限制为 64–1200 px。代码块可在节点、页面外观和插件全局三个层级配置默认折叠、行号与 Obsidian、GitHub、Monokai、Dracula 样式；节点优先级最高，未设置时向下跟随。全局可为自动展开和自动行号分别设置行数阈值，节点显式设置仍优先。渲染时先交给 Obsidian Markdown 渲染器生成语法高亮，再由四模式共享的 `render/code-block.ts` 在同一 `pre` 中插入真实行号栏。行号栏不写入文档数据，也不改变高亮 token，只复用代码元素的计算字体、行高和内边距。导图中的节点高度由实际 DOM 测量值回写布局；代码折叠状态变化时会重新测量，布局估算高度不会作为隐式最小高度保存。
 
 ## 9. 子导图导航
 

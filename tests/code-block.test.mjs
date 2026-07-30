@@ -23,6 +23,7 @@ before(async () => {
 test("code insertion appends blocks and block menus remove only the targeted code or table", () => {
   assert.match(contentModalSource, /\["dockerfile", "Dockerfile"\]/);
   assert.match(contentModalSource, /\["ini", "INI"\]/);
+  assert.match(contentModalSource, /\["nginx", "Nginx"\]/);
   assert.match(editorSource, /private appendCodeBlock\(node: MindMapNode, code: MindMapCodeBlock\): void[\s\S]*nodeContentBlocks\(node\), \{ id: newId\(\), type: "code", code \}/);
   assert.match(editorSource, /new CodeEditModal\(this\.app, undefined, \(code\) =>[\s\S]*appendCodeBlock\(selected, code\)/);
   assert.match(editorSource, /private removeStructuredBlock\(node: MindMapNode, blockId: string\): void[\s\S]*block\.id !== blockId/);
