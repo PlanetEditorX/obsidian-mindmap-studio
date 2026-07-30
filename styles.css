@@ -2965,6 +2965,33 @@
   height: 16px;
 }
 
+.mms-global-search-result-file {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  margin-top: 6px;
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+}
+
+.mms-global-search-result-file-title {
+  flex: 0 0 auto;
+  max-width: 42%;
+  overflow: hidden;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mms-global-search-result-path {
+  min-width: 0;
+  overflow: hidden;
+  opacity: .72;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* ?? Empty state ?? */
 .mms-global-search-empty {
   display: flex;
