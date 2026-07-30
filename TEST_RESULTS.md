@@ -1,5 +1,30 @@
 # Windows CRLF 下文章空节点测试兼容性验证
 
+# 文章后续文字块编辑与插入焦点验证
+
+## 本次修改
+
+- 后续文字块通过自身 `data-block-id` 进入编辑，不再因文章上下文刷新立即被重绘。
+- 右键“在此块后插入文字”使用短时初始焦点保护，菜单关闭造成失焦时自动恢复目标块和末尾光标。
+- 编辑真正结束时清除活动编辑标记，避免阻止后续正常刷新。
+
+## 回归覆盖
+
+- `tests/article-content-block.test.mjs`：后续文字块状态、精确块 ID、插入块焦点保护。
+- `tests/node-creation.test.mjs`：文章模式自动聚焦调用契约。
+- `tests/reading-editor-contract.test.mjs`：文章/大纲共享内联编辑入口。
+- `scripts/test.mjs`：综合源码契约。
+
+## 验证结果
+
+- 针对性测试：`4 / 4` 通过。
+- 完整单元测试：`130 / 130` 通过。
+- 综合回归测试：通过，输出 `All MindMap Studio tests passed.`。
+- 文档检查：`48` 个 TypeScript 模块中的 `855` 个具名声明均有 JSDoc。
+- 仓库检查：通过。
+- `npm run build`：通过，已同步生成 `main.js`。
+- `node --check main.js`：通过。
+
 ## 本次修改
 
 - `tests/node-creation.test.mjs` 在执行源码正则契约检查前统一将 CRLF/CR 换行规范化为 LF。

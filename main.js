@@ -10553,11 +10553,13 @@ var MindMapEditor = class {
     let toolbar = null;
     element.addEventListener("pointerdown", () => {
       if (this.readOnly || element.contentEditable === "true" || element.dataset.mmsExplicitEditOnly === "true") return;
+      this.inlineEditingId = node.id;
       this.selectNode(node.id);
       this.activateInlineEditable(element, false);
     });
     element.addEventListener("focus", () => {
       if (this.readOnly) return;
+      this.inlineEditingId = node.id;
       this.applyInlineEditingAccessibility(element);
       original = readRichTextEditor(element);
       element.addClass("is-inline-editing");
@@ -10590,12 +10592,17 @@ var MindMapEditor = class {
     element.addEventListener("blur", (event) => {
       if (this.readOnly) return;
       if (toolbar == null ? void 0 : toolbar.contains(event.relatedTarget)) return;
+      if (element.dataset.mmsProtectInitialFocus === "true") {
+        window.requestAnimationFrame(() => this.activateInlineEditable(element));
+        return;
+      }
       element.removeClass("is-inline-editing");
       const next = readRichTextEditor(element);
       element.contentEditable = "false";
       this.clearInlineEditingAccessibility(element);
       toolbar == null ? void 0 : toolbar.cleanup();
       toolbar = null;
+      if (this.inlineEditingId === node.id) this.inlineEditingId = null;
       if (!findNode(this.document.root, node.id)) return;
       if (!next.text && node.id === this.document.root.id || JSON.stringify(next) === JSON.stringify(original)) {
         renderRichTextRuns(element, original.richText, original.text, false);
@@ -10615,12 +10622,33 @@ var MindMapEditor = class {
     element.removeAttribute("role");
     element.removeAttribute("aria-label");
   }
-  /** Activates one article or outline line without changing the surrounding layout. */
-  activateInlineEditable(element, focus = true) {
+  /**
+   * Activates one article or outline line without changing the surrounding
+   * layout, optionally reclaiming focus after a context menu closes.
+   */
+  activateInlineEditable(element, focus = true, protectInitialFocus = false) {
     if (this.readOnly) return;
     element.contentEditable = "true";
     this.applyInlineEditingAccessibility(element);
-    if (focus) element.focus();
+    if (!focus) return;
+    const focusAtEnd = () => {
+      if (!element.isConnected) return;
+      element.focus();
+      const selection = window.getSelection();
+      const range = document.createRange();
+      range.selectNodeContents(element);
+      range.collapse(false);
+      selection == null ? void 0 : selection.removeAllRanges();
+      selection == null ? void 0 : selection.addRange(range);
+    };
+    if (protectInitialFocus) element.dataset.mmsProtectInitialFocus = "true";
+    focusAtEnd();
+    if (!protectInitialFocus) return;
+    window.requestAnimationFrame(focusAtEnd);
+    window.setTimeout(() => {
+      delete element.dataset.mmsProtectInitialFocus;
+      focusAtEnd();
+    }, 50);
   }
   /** Activates direct code editing for a code block rendered in article mode. */
   makeInlineCodeEditable(element, node, code, blockId) {
@@ -11773,7 +11801,7 @@ var MindMapEditor = class {
       const scope = this.currentMode === "outline" ? this.outlineEl : this.articleEl;
       const nodeScope = scope.querySelector(`[data-node-id="${CSS.escape(nodeId)}"]`);
       const inlineElement = blockId ? nodeScope == null ? void 0 : nodeScope.querySelector(`[data-block-id="${CSS.escape(blockId)}"][data-mms-inline-editable="true"]`) : nodeScope == null ? void 0 : nodeScope.querySelector(`[data-mms-inline-editable="true"]`);
-      if (inlineElement) this.activateInlineEditable(inlineElement);
+      if (inlineElement) this.activateInlineEditable(inlineElement, true, protectInitialFocus);
       return;
     }
     const nodeEl = this.nodesLayerEl.querySelector(`.mmc-node[data-node-id="${CSS.escape(nodeId)}"]`);

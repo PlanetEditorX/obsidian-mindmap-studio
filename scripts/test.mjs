@@ -1387,7 +1387,7 @@ const command = "example";
   assert.match(editorSource, /private applyReadOnlyStateToRenderedContent\(\): void[\s\S]*data-mms-inline-editable[\s\S]*nodeEl\.draggable/, "the fast path must update inline editors and node dragging in place");
   assert.match(editorSource, /dataset\.mmsInlineEditable = "true"[\s\S]*if \(this\.readOnly\) return;[\s\S]*attachSelectionFormatToolbar/, "inline editor listeners must remain available when read-only content becomes editable");
   const makeInlineEditableSource = editorSource.match(/private makeInlineEditable\(element: HTMLElement, node: MindMapNode, placeholder: string, blockId\?: string\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
-  const activateInlineEditableSource = editorSource.match(/private activateInlineEditable\(element: HTMLElement, focus = true\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
+  const activateInlineEditableSource = editorSource.match(/private activateInlineEditable\(element: HTMLElement, focus = true, protectInitialFocus = false\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
   assert.match(
     makeInlineEditableSource,
     /element\.addEventListener\("pointerdown"[\s\S]*this\.activateInlineEditable\(element, false\)/,
@@ -1405,7 +1405,7 @@ const command = "example";
   );
   assert.match(
     editorSource,
-    /private activateInlineEditable\(element: HTMLElement, focus = true\): void/,
+    /private activateInlineEditable\(element: HTMLElement, focus = true, protectInitialFocus = false\): void/,
     "keyboard quick-edit must activate the same click-to-edit line path"
   );
   assert.match(editorSource, /currentMode === "reading" && !this\.readOnly[\s\S]*this\.currentMode = "article"[\s\S]*通读模式已切换为文章编辑模式/, "editing from a continuous reading book must enter a writable article view");
