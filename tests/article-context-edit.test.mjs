@@ -111,9 +111,10 @@ test("inline deletion targets the bound node and ignores a deleted editor's late
 test("article click move keeps block and node semantics separate", () => {
   assert.match(editorSource, /type ArticleClickMove =[\s\S]*kind: "block"[\s\S]*blockId: string[\s\S]*kind: "node"/);
   assert.match(editorSource, /private startArticleBlockClickMove\([\s\S]*activeArticleBlock[\s\S]*pendingArticleClickMove = \{ kind: "block"/);
-  assert.match(editorSource, /private completeArticleClickMove\([\s\S]*moveContentBlock\(pending\.sourceNodeId, pending\.blockId, targetNodeId, undefined, "append"\)/);
+  assert.match(editorSource, /private completeArticleClickMove\([\s\S]*targetBlockId\?: string[\s\S]*position\?: "before" \| "after"[\s\S]*moveContentBlock\([\s\S]*targetBlockId[\s\S]*targetBlockId && position \? position : "append"/);
   assert.match(editorSource, /private completeArticleClickMove\([\s\S]*this\.selectNode\(pending\.sourceNodeId\)[\s\S]*this\.moveNode\(pending\.sourceNodeId, targetNodeId, "after"\)/);
-  assert.match(editorSource, /private articleClickMoveTargetAllowed\([\s\S]*targetNodeId === this\.document\.root\.id[\s\S]*findAncestors\(this\.document\.root, targetNodeId\)/);
+  assert.match(editorSource, /private articleClickMoveTargetAllowed\([\s\S]*pending\.kind === "node" && pending\.sourceNodeId === targetNodeId[\s\S]*targetNodeId === this\.document\.root\.id[\s\S]*findAncestors\(this\.document\.root, targetNodeId\)/);
+  assert.match(editorSource, /private articleBlockMoveTargetAllowed\([\s\S]*pending\.sourceNodeId === targetNodeId && pending\.blockId === targetBlockId/);
   assert.match(editorSource, /this\.articleEl\.addEventListener\("click", articleClickMoveTarget, true\)/);
   assert.match(editorSource, /this\.pendingArticleClickMove && event\.key === "Escape"[\s\S]*this\.cancelArticleClickMove\(\)/);
 });
@@ -123,6 +124,9 @@ test("article click move exposes clear target feedback", () => {
   assert.match(styles, /\.mms-article-click-move-hint[\s\S]*position: sticky/);
   assert.match(styles, /\.is-article-click-moving \.mms-article-node\.is-article-click-move-target:hover/);
   assert.match(styles, /\.is-article-click-moving \.is-article-click-move-invalid[\s\S]*cursor: not-allowed/);
+  assert.match(editorSource, /articleBlockMovePointer[\s\S]*targetBlock\.getBoundingClientRect\(\)[\s\S]*is-article-block-drop-before[\s\S]*is-article-block-drop-after/);
+  assert.match(styles, /\[data-block-id\]\.is-article-block-drop-before::before/);
+  assert.match(styles, /\[data-block-id\]\.is-article-block-drop-after::after/);
 });
 
 test("compiled plugin contains the article-specific edit routing", () => {
