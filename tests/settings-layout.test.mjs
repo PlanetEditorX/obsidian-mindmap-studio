@@ -7,6 +7,13 @@ let mainSource;
 let editorSource;
 let stylesSource;
 let bundleSource;
+let bundleReadableSource;
+
+function decodeBundleUnicodeEscapes(source) {
+  return source.replace(/\\u([0-9a-fA-F]{4})/g, (_match, hex) =>
+    String.fromCharCode(Number.parseInt(hex, 16))
+  );
+}
 
 before(async () => {
   [settingsSource, mainSource, editorSource, stylesSource, bundleSource] = await Promise.all([
@@ -16,6 +23,9 @@ before(async () => {
     readFile("styles.css", "utf8"),
     readFile("main.js", "utf8")
   ]);
+  // esbuild may serialize non-ASCII labels as \uXXXX sequences. Normalize only
+  // the assertion view while keeping the committed bundle byte-for-byte intact.
+  bundleReadableSource = decodeBundleUnicodeEscapes(bundleSource);
 });
 
 test("resource folder and File Explorer filters stay inside Files and Resources", () => {
@@ -70,7 +80,7 @@ test("current-map appearance controls use a wide gap-free responsive layout", ()
   assert.match(stylesSource, /@media \(max-width: 900px\)[\s\S]*\.mmc-appearance-columns[\s\S]*grid-template-columns: 1fr/);
   assert.doesNotMatch(editorSource, /mmc-appearance-secondary-sections|mmc-appearance-sections/);
   assert.match(bundleSource, /this\.modalEl\.addClass\("mmc-appearance-dialog"\)/);
-  assert.match(bundleSource, /createAppearanceSection\(appearanceLeftColumn, "画布与字体"/);
+  assert.match(bundleReadableSource, /createAppearanceSection\(appearanceLeftColumn, "画布与字体"/);
   assert.match(bundleSource, /appearanceRightColumn\.createDiv\(\{ cls: "mmc-appearance-section mmc-appearance-article-numbering" \}\)/);
-  assert.match(bundleSource, /当前脑图设置，优先于插件全局分支外观/);
+  assert.match(bundleReadableSource, /当前脑图设置，优先于插件全局分支外观/);
 });

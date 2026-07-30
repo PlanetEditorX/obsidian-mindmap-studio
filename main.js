@@ -12164,7 +12164,6 @@ var MindMapEditor = class {
   }
   /** Focuses the current article line, or creates a temporary body line for content-only nodes. */
   editSelectedArticleContent() {
-    var _a2;
     if (!this.ensureEditable()) return;
     const selected = this.selectedNode();
     if (!selected) return;
@@ -12190,6 +12189,7 @@ var MindMapEditor = class {
     this.makeInlineEditable(paragraph, selected, "\u6B63\u6587\u6BB5\u843D");
     paragraph.addEventListener("blur", () => {
       window.requestAnimationFrame(() => {
+        var _a2;
         if (paragraph.isConnected && !((_a2 = paragraph.textContent) == null ? void 0 : _a2.trim())) paragraph.remove();
       });
     }, { once: true });
@@ -13258,10 +13258,7 @@ var MindMapEditor = class {
     }
     menu.addItem((item) => item.setTitle("\u6DFB\u52A0\u5B50\u8282\u70B9").setIcon("plus-circle").onClick(() => this.addChild()));
     menu.addItem((item) => item.setTitle("\u6DFB\u52A0\u540C\u7EA7\u8282\u70B9").setIcon("list-plus").onClick(() => this.addSibling()));
-    menu.addItem((item) => item
-      .setTitle(this.articleEditActionLabel(selected))
-      .setIcon("pencil")
-      .onClick(() => this.editSelected()));
+    menu.addItem((item) => item.setTitle(this.articleEditActionLabel(selected)).setIcon("pencil").onClick(() => this.editSelected()));
     if (this.options.questionNodesEnabled) {
       menu.addItem((item) => item.setTitle((selected == null ? void 0 : selected.question) ? "\u7F16\u8F91\u9898\u76EE\u8282\u70B9" : "\u8F6C\u6362\u4E3A\u9898\u76EE\u8282\u70B9").setIcon("circle-help").onClick(() => this.editQuestion()));
       menu.addItem((item) => item.setTitle("\u65B0\u5EFA\u9898\u76EE\u5B50\u8282\u70B9").setIcon("circle-plus").onClick(() => this.addQuestionChild()));
