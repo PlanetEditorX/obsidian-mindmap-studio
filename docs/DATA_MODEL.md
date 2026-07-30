@@ -80,6 +80,8 @@ interface MindMapNode {
 
 ## 4. 有序内容块
 
+内容块的 `id` 在节点内排序和跨节点移动时保持不变。`moveNodeContentBlock()` 会从来源节点移除目标块，按目标块之前、之后或目标节点末尾插入，并对来源和目标分别调用权威内容替换逻辑，从而同步清理和重建 `text`、`richText`、`image`、`table`、`code` 兼容字段。移动只改变内容块归属与顺序，不复制内容，也不改变节点树结构。
+
 ### 文字块
 
 文字块可选保存 `paragraphIndent`：

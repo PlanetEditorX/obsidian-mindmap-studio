@@ -1,5 +1,42 @@
 # 代码块行号、导图高度与内容块删除修复清单
 
+## 节点编辑键盘、内容块拖动与精确删除
+
+| 文件 | 变更 |
+|---|---|
+| `src/core/model.ts` | 新增 `moveNodeContentBlock()`，支持稳定块 ID 的节点内重排和跨节点移动，并重建来源/目标兼容字段 |
+| `src/editor/node-rich-text-editor.ts` | 文字块保留 Shift+Enter 输入的换行 |
+| `src/editor/editor.ts` | 节点编辑器 Enter 保存关闭；编辑器块卡片与导图块增加独立拖动手柄；右键按目标块 ID 删除 |
+| `styles.css` | 增加拖动手柄、拖动中状态、前后/末尾放置提示，并让节点文字保留换行 |
+| `tests/content-block-drag.test.mjs` | 执行同节点和跨节点移动测试，并锁定键盘、手柄和右键删除契约 |
+| `tests/image-layout.test.mjs`、`package.json` | 更新统一删除文案并将新专项测试纳入全量单元测试 |
+| `main.js` | 重新生产构建，包含本次运行时修改 |
+| `README.md`、`docs/DATA_MODEL.md`、`docs/SPECIAL_FEATURES.md`、`docs/TESTING.md`、`docs/FUNCTION_REFERENCE.md`、`CHANGELOG.md`、`TEST_RESULTS.md` | 同步行为、数据边界、函数参考、测试范围与验证结果 |
+
+### 行为边界
+
+- 内容块拖动只在编辑模式显示，不影响只读模式。
+- 仅从块手柄开始拖动，避免与整节点拖动、文字选择、图片预览、表格和代码交互冲突。
+- 跨节点移动保留原块 ID，不复制块；来源节点允许变为空节点。
+- Enter 在输入法组合状态下不提交；Shift+Enter 只在支持多行的控件中产生换行。
+
+## Codex 记忆库同步
+
+| 文件 | 变更 |
+|---|---|
+| `Codex/02_偏好与原则/README.md` | 记录每轮代码交付必须提供 Git 提交标题、变更内容、测试结果和可执行命令 |
+| `Codex/03_工作流决策/README.md` | 固化完整源码 ZIP 和 Codex 同步规则 |
+| `Codex/04_项目/obsidian-mindmap-studio.md` | 同步文章编辑、表格列宽、设置分类、Nginx 与 AI 进度的完成状态和验证结果 |
+| `Codex/05_每日复盘/2026-07-30.md` | 补充本轮事实、决策、测试、待办与风险 |
+| `Codex/06_待办与风险/待办总览.md` | 增加真实 Obsidian 手工冒烟与非流式 AI 进度边界 |
+| `Codex/07_可复用工作流/README.md` | 增加完整源码包交付流程和非流式 AI 进度实现规则 |
+| `Codex/10_索引/项目索引.md` | 更新项目当前状态 |
+
+### 交付边界
+
+- 完整保留用户上传的 Codex Vault 结构和既有内容，仅做增量同步。
+- 源码 ZIP 包含完整 `Codex/`，不包含 `node_modules/`、临时测试目录、`.git/` 或嵌套 ZIP。
+
 ## AI 整理阶段进度与等待耗时
 
 | 文件 | 变更 |
