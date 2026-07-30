@@ -513,6 +513,7 @@ function replaceNodeContentBlocks(node, blocks) {
   syncNodeContentFields(node);
 }
 function moveNodeContentBlock(root, sourceNodeId, blockId, targetNodeId, targetBlockId, position) {
+  var _a2, _b2, _c, _d;
   const sourceNode = findNode(root, sourceNodeId);
   const targetNode = findNode(root, targetNodeId);
   if (!sourceNode || !targetNode) return false;
@@ -540,6 +541,8 @@ function moveNodeContentBlock(root, sourceNodeId, blockId, targetNodeId, targetB
   targetBlocks.splice(insertIndex, 0, moving);
   replaceNodeContentBlocks(sourceNode, sourceBlocks);
   replaceNodeContentBlocks(targetNode, targetBlocks);
+  const sourceIsEmpty = sourceBlocks.length === 0 && sourceNode.children.length === 0 && !((_a2 = sourceNode.note) == null ? void 0 : _a2.trim()) && !((_b2 = sourceNode.link) == null ? void 0 : _b2.trim()) && !sourceNode.submap && !((_c = sourceNode.icon) == null ? void 0 : _c.trim()) && !((_d = sourceNode.tags) == null ? void 0 : _d.some((tag) => tag.trim())) && !sourceNode.question && !sourceNode.task;
+  if (sourceNodeId !== root.id && sourceIsEmpty) removeNode(root, sourceNodeId);
   return true;
 }
 function normalizeCell(value) {
@@ -7725,6 +7728,8 @@ function renderArticleMode(container, options) {
       });
       if (info.label) heading.createSpan({ cls: "mms-article-number", text: info.label });
       renderHeading(heading, info.node, info.title, options);
+      const headingBlock = nodeContentBlocks(info.node).find((block) => block.type === "text");
+      if (headingBlock) options.bindContentBlockDragHandle(heading, info.node.id, headingBlock.id);
       if (info.skipped) heading.createSpan({ cls: "mms-article-skip-badge", text: "\u4E0D\u7F16\u53F7" });
       options.addInlineNodeActions(heading, info.node);
       renderArticleNodeContent(section, info.node, false, options);
@@ -7732,7 +7737,8 @@ function renderArticleMode(container, options) {
       const blocks = nodeContentBlocks(info.node);
       const firstTextBlock = blocks.find((block) => block.type === "text");
       if (firstTextBlock == null ? void 0 : firstTextBlock.text.trim()) {
-        const paragraph = section.createEl("p", { cls: articleParagraphClass("mms-article-leaf-text", firstTextBlock, options.articleLeafBulletsEnabled) });
+        const blockShell = createArticleContentBlock(section, info.node, firstTextBlock.id, options);
+        const paragraph = blockShell.createEl("p", { cls: articleParagraphClass("mms-article-leaf-text", firstTextBlock, options.articleLeafBulletsEnabled) });
         paragraph.dataset.blockId = firstTextBlock.id;
         applyArticleLeafBulletStyle(paragraph, options);
         renderRichTextRuns(paragraph, firstTextBlock.richText, firstTextBlock.text);
@@ -7746,8 +7752,14 @@ function renderArticleMode(container, options) {
       options.addInlineNodeActions(section, info.node);
       renderArticleNodeContent(section, info.node, false, options);
     }
+    options.bindContentBlockAppendDropTarget(section, info.node.id);
   }
   renderArticlePager(page, options);
+}
+function createArticleContentBlock(container, node, blockId, options) {
+  const shell = container.createDiv({ cls: "mms-article-content-block" });
+  options.bindContentBlockDragHandle(shell, node.id, blockId);
+  return shell;
 }
 function articleParagraphClass(baseClass, block, bulleted = false) {
   return `${baseClass}${bulleted ? " is-bulleted" : ""}${(block == null ? void 0 : block.paragraphIndent) === "none" ? " is-flush" : ""}`;
@@ -7815,13 +7827,15 @@ function renderArticleNodeContent(container, node, treatTextAsBody, options) {
         continue;
       }
       firstTextHandled = true;
-      const paragraph = container.createEl("p", { cls: articleParagraphClass("mms-article-paragraph", block) });
+      const shell = createArticleContentBlock(container, node, block.id, options);
+      const paragraph = shell.createEl("p", { cls: articleParagraphClass("mms-article-paragraph", block) });
       paragraph.dataset.blockId = block.id;
       renderRichTextRuns(paragraph, block.richText, block.text);
       options.makeInlineEditable(paragraph, node, "\u6B63\u6587", block.id);
     } else if (block.type === "image") {
+      const shell = createArticleContentBlock(container, node, block.id, options);
       const resolved = options.callbacks.resolveImage(block.source);
-      const image = container.createEl("img", { cls: `mms-article-image image-align-${(_a2 = block.align) != null ? _a2 : "center"}`, attr: { src: resolved != null ? resolved : block.source, alt: (_b2 = block.alt) != null ? _b2 : "\u56FE\u7247" } });
+      const image = shell.createEl("img", { cls: `mms-article-image image-align-${(_a2 = block.align) != null ? _a2 : "center"}`, attr: { src: resolved != null ? resolved : block.source, alt: (_b2 = block.alt) != null ? _b2 : "\u56FE\u7247" } });
       image.dataset.blockId = block.id;
       if (block.width) image.style.width = `${block.width}px`;
       if (block.height) image.style.height = `${block.height}px`;
@@ -7842,9 +7856,11 @@ function renderArticleNodeContent(container, node, treatTextAsBody, options) {
         options.openImageContextMenu(event, node.id, block.id);
       });
     } else if (block.type === "table") {
-      renderArticleTable(container, node, block.table, block.id, options);
+      const shell = createArticleContentBlock(container, node, block.id, options);
+      renderArticleTable(shell, node, block.table, block.id, options);
     } else {
-      const code = container.createDiv({ cls: "mms-article-code markdown-rendered" });
+      const shell = createArticleContentBlock(container, node, block.id, options);
+      const code = shell.createDiv({ cls: "mms-article-code markdown-rendered" });
       code.dataset.blockId = block.id;
       void options.callbacks.onRenderCode(block.code, code);
       code.addEventListener("dblclick", (event) => {
@@ -11194,6 +11210,8 @@ var MindMapEditor = class {
       updateTableColumnWidths: (node, blockId, widths) => this.updateTableColumnWidths(node, blockId, widths),
       makeInlineEditable: (element, node, placeholder, blockId) => this.makeInlineEditable(element, node, placeholder, blockId),
       makeInlineCodeEditable: (element, node, code, blockId) => this.makeInlineCodeEditable(element, node, code, blockId),
+      bindContentBlockDragHandle: (element, nodeId, blockId) => this.bindContentBlockDragHandle(element, nodeId, blockId),
+      bindContentBlockAppendDropTarget: (element, nodeId) => this.bindContentBlockAppendDropTarget(element, nodeId),
       addInlineNodeActions: (container, node) => this.addInlineNodeActions(container, node)
     };
   }

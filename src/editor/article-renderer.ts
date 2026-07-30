@@ -53,6 +53,8 @@ export interface ArticleRendererOptions {
   updateTableColumnWidths: (node: MindMapNode, blockId: string, widths: number[]) => void;
   makeInlineEditable: (element: HTMLElement, node: MindMapNode, placeholder: string, blockId?: string) => void;
   makeInlineCodeEditable: (element: HTMLElement, node: MindMapNode, code: MindMapCodeBlock, blockId: string) => void;
+  bindContentBlockDragHandle: (element: HTMLElement, nodeId: string, blockId: string) => void;
+  bindContentBlockAppendDropTarget: (element: HTMLElement, nodeId: string) => void;
   addInlineNodeActions: (container: HTMLElement, node: MindMapNode) => void;
 }
 
@@ -106,6 +108,8 @@ export function renderArticleMode(container: HTMLElement, options: ArticleRender
       });
       if (info.label) heading.createSpan({ cls: "mms-article-number", text: info.label });
       renderHeading(heading, info.node, info.title, options);
+      const headingBlock = nodeContentBlocks(info.node).find((block): block is MindMapTextContentBlock => block.type === "text");
+      if (headingBlock) options.bindContentBlockDragHandle(heading, info.node.id, headingBlock.id);
       if (info.skipped) heading.createSpan({ cls: "mms-article-skip-badge", text: "不编号" });
       options.addInlineNodeActions(heading, info.node);
       renderArticleNodeContent(section, info.node, false, options);
@@ -113,7 +117,8 @@ export function renderArticleMode(container: HTMLElement, options: ArticleRender
       const blocks = nodeContentBlocks(info.node);
       const firstTextBlock = blocks.find((block): block is MindMapTextContentBlock => block.type === "text");
       if (firstTextBlock?.text.trim()) {
-        const paragraph = section.createEl("p", { cls: articleParagraphClass("mms-article-leaf-text", firstTextBlock, options.articleLeafBulletsEnabled) });
+        const blockShell = createArticleContentBlock(section, info.node, firstTextBlock.id, options);
+        const paragraph = blockShell.createEl("p", { cls: articleParagraphClass("mms-article-leaf-text", firstTextBlock, options.articleLeafBulletsEnabled) });
         paragraph.dataset.blockId = firstTextBlock.id;
         applyArticleLeafBulletStyle(paragraph, options);
         renderRichTextRuns(paragraph, firstTextBlock.richText, firstTextBlock.text);
@@ -130,8 +135,21 @@ export function renderArticleMode(container: HTMLElement, options: ArticleRender
       options.addInlineNodeActions(section, info.node);
       renderArticleNodeContent(section, info.node, false, options);
     }
+    options.bindContentBlockAppendDropTarget(section, info.node.id);
   }
   renderArticlePager(page, options);
+}
+
+/** Creates an article block shell that owns drag UI without polluting editable text DOM. */
+function createArticleContentBlock(
+  container: HTMLElement,
+  node: MindMapNode,
+  blockId: string,
+  options: ArticleRendererOptions
+): HTMLElement {
+  const shell = container.createDiv({ cls: "mms-article-content-block" });
+  options.bindContentBlockDragHandle(shell, node.id, blockId);
+  return shell;
 }
 
 /** Builds paragraph classes without changing the legacy first-line-indent default. */
@@ -205,13 +223,15 @@ export function renderArticleNodeContent(container: HTMLElement, node: MindMapNo
     if (block.type === "text") {
       if (!treatTextAsBody && !firstTextHandled) { firstTextHandled = true; continue; }
       firstTextHandled = true;
-      const paragraph = container.createEl("p", { cls: articleParagraphClass("mms-article-paragraph", block) });
+      const shell = createArticleContentBlock(container, node, block.id, options);
+      const paragraph = shell.createEl("p", { cls: articleParagraphClass("mms-article-paragraph", block) });
       paragraph.dataset.blockId = block.id;
       renderRichTextRuns(paragraph, block.richText, block.text);
       options.makeInlineEditable(paragraph, node, "正文", block.id);
     } else if (block.type === "image") {
+      const shell = createArticleContentBlock(container, node, block.id, options);
       const resolved = options.callbacks.resolveImage(block.source);
-      const image = container.createEl("img", { cls: `mms-article-image image-align-${block.align ?? "center"}`, attr: { src: resolved ?? block.source, alt: block.alt ?? "图片" } });
+      const image = shell.createEl("img", { cls: `mms-article-image image-align-${block.align ?? "center"}`, attr: { src: resolved ?? block.source, alt: block.alt ?? "图片" } });
       image.dataset.blockId = block.id;
       if (block.width) image.style.width = `${block.width}px`;
       if (block.height) image.style.height = `${block.height}px`;
@@ -229,9 +249,11 @@ export function renderArticleNodeContent(container: HTMLElement, node: MindMapNo
         options.openImageContextMenu(event, node.id, block.id);
       });
     } else if (block.type === "table") {
-      renderArticleTable(container, node, block.table, block.id, options);
+      const shell = createArticleContentBlock(container, node, block.id, options);
+      renderArticleTable(shell, node, block.table, block.id, options);
     } else {
-      const code = container.createDiv({ cls: "mms-article-code markdown-rendered" });
+      const shell = createArticleContentBlock(container, node, block.id, options);
+      const code = shell.createDiv({ cls: "mms-article-code markdown-rendered" });
       code.dataset.blockId = block.id;
       void options.callbacks.onRenderCode(block.code, code);
       code.addEventListener("dblclick", (event) => {

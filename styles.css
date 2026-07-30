@@ -2106,8 +2106,8 @@
 .mmc-content-block-drag-handle {
   position: absolute;
   z-index: 8;
-  top: 3px;
-  left: 3px;
+  top: 50%;
+  left: -28px;
   display: inline-flex;
   width: 22px;
   height: 22px;
@@ -2120,6 +2120,7 @@
   background: color-mix(in srgb, var(--background-primary) 90%, transparent);
   color: var(--text-muted);
   cursor: grab;
+  transform: translateY(-50%);
   transition: opacity 100ms ease, background-color 100ms ease;
 }
 
@@ -2172,6 +2173,27 @@
 }
 
 .mmc-node-content.is-block-drop-append {
+  border-bottom: 3px solid var(--interactive-accent);
+}
+
+.mms-article-content-block {
+  position: relative;
+}
+
+.mms-article-content-block > .mmc-content-block-drag-handle,
+.mms-article-heading > .mmc-content-block-drag-handle {
+  left: -32px;
+}
+
+.mms-article-content-block.is-block-drop-before::before,
+.mms-article-content-block.is-block-drop-after::after,
+.mms-article-heading.is-block-drop-before::before,
+.mms-article-heading.is-block-drop-after::after {
+  right: 0;
+  left: 0;
+}
+
+.mms-article-node.is-block-drop-append {
   border-bottom: 3px solid var(--interactive-accent);
 }
 

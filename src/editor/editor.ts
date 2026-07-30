@@ -2905,6 +2905,8 @@ export class MindMapEditor {
       updateTableColumnWidths: (node, blockId, widths) => this.updateTableColumnWidths(node, blockId, widths),
       makeInlineEditable: (element, node, placeholder, blockId) => this.makeInlineEditable(element, node, placeholder, blockId),
       makeInlineCodeEditable: (element, node, code, blockId) => this.makeInlineCodeEditable(element, node, code, blockId),
+      bindContentBlockDragHandle: (element, nodeId, blockId) => this.bindContentBlockDragHandle(element, nodeId, blockId),
+      bindContentBlockAppendDropTarget: (element, nodeId) => this.bindContentBlockAppendDropTarget(element, nodeId),
       addInlineNodeActions: (container, node) => this.addInlineNodeActions(container, node)
     };
   }
