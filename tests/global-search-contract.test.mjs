@@ -26,8 +26,9 @@ test("global search indexes only node text while displaying the result file cont
   assert.match(source, /text: result\.fileTitle/);
   assert.match(source, /text: result\.filePath/);
   assert.doesNotMatch(source, /mms-global-search-result-badges/);
-  assert.match(styles, /\.mms-global-search-result-title \{[\s\S]*flex: 1 1 100%;[\s\S]*overflow-wrap: break-word;[\s\S]*word-break: normal/);
-  assert.match(styles, /\.mms-global-search-result-actions \{[\s\S]*flex: 1 1 100%;[\s\S]*justify-content: flex-end/);
+  assert.match(styles, /\.mms-global-search-result-header \{[\s\S]*justify-content: space-between/);
+  assert.match(styles, /\.mms-global-search-result-title \{[\s\S]*flex: 1 1 auto;[\s\S]*overflow-wrap: anywhere/);
+  assert.match(styles, /\.mms-global-search-result-actions \{[\s\S]*flex: 0 0 auto;[\s\S]*justify-content: flex-end/);
   assert.match(styles, /\.mms-global-search-result-file \{[\s\S]*margin-top: 6px/);
   assert.match(styles, /\.mms-global-search-result-path \{[\s\S]*text-overflow: ellipsis/);
   assert.doesNotMatch(styles, /mms-global-search-badge/);
