@@ -10,8 +10,13 @@ let layoutSource;
 let styles;
 let mainBundle;
 
+/** Normalize checkout line endings so source-contract regexes behave the same on Windows and CI. */
+function normalizeNewlines(source) {
+  return source.replace(/\r\n?/g, "\n");
+}
+
 before(async () => {
-  [mainSource, modelSource, editorSource, articleRendererSource, layoutSource, styles, mainBundle] = await Promise.all([
+  const sources = await Promise.all([
     readFile("src/main.ts", "utf8"),
     readFile("src/core/model.ts", "utf8"),
     readFile("src/editor/editor.ts", "utf8"),
@@ -20,6 +25,7 @@ before(async () => {
     readFile("styles.css", "utf8"),
     readFile("main.js", "utf8")
   ]);
+  [mainSource, modelSource, editorSource, articleRendererSource, layoutSource, styles, mainBundle] = sources.map(normalizeNewlines);
 });
 
 test("new child maps retain the standard two starter topics", () => {
