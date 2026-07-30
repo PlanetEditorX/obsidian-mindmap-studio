@@ -16677,6 +16677,9 @@ var GlobalMindMapSearchModal = class extends import_obsidian13.Modal {
           replaceOneBtn.disabled = false;
         }
       });
+      const location = item.createDiv({ cls: "mms-global-search-result-file" });
+      location.createSpan({ cls: "mms-global-search-result-file-title", text: result.fileTitle });
+      location.createSpan({ cls: "mms-global-search-result-path", text: result.filePath });
       item.addEventListener("mouseenter", () => this.setActive(index));
       item.addEventListener("click", () => void this.openResult(result));
       item.addEventListener("keydown", (event) => {

@@ -134,9 +134,10 @@ export function buildSearchEntries(document: MindMapDocument, filePath: string):
   const visit = (node: MindMapNode, ancestors: string[], depth: number): void => {
     const display = nodeDisplayText(node);
     const breadcrumb = [...ancestors, display];
-    // Global search is deliberately limited to node text. Paths, links,
-    // submap metadata, notes, tags and structured blocks stay out of both the
-    // matching corpus and result presentation.
+    // Global search is deliberately limited to node text. File information is
+    // retained only as navigation context in the result UI; paths, links,
+    // submap metadata, notes, tags and structured blocks never enter the
+    // matching corpus.
     const searchText = normalized(nodePlainText(node));
     entries.push({
       key: `${filePath}::${node.id}`,
@@ -991,6 +992,9 @@ export class GlobalMindMapSearchModal extends Modal {
           replaceOneBtn.disabled = false;
         }
       });
+      const location = item.createDiv({ cls: "mms-global-search-result-file" });
+      location.createSpan({ cls: "mms-global-search-result-file-title", text: result.fileTitle });
+      location.createSpan({ cls: "mms-global-search-result-path", text: result.filePath });
       item.addEventListener("mouseenter", () => this.setActive(index));
       item.addEventListener("click", () => void this.openResult(result));
       item.addEventListener("keydown", (event) => {
