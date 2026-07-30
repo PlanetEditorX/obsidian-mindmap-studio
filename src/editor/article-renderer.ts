@@ -97,14 +97,19 @@ export function renderArticleMode(container: HTMLElement, options: ArticleRender
     } else {
       const blocks = nodeContentBlocks(info.node);
       const firstTextBlock = blocks.find((block): block is MindMapTextContentBlock => block.type === "text");
-      // Edit mode must render an actual editable line for a brand-new empty
-      // leaf. Otherwise the section contains only its action buttons, collapses
-      // to nearly zero height, and beginInlineEdit() has no focus target.
-      if (firstTextBlock?.text.trim() || (!options.readOnly && blocks.length === 0)) {
+      if (firstTextBlock?.text.trim()) {
         const paragraph = section.createEl("p", { cls: `mms-article-leaf-text${options.articleLeafBulletsEnabled ? " is-bulleted" : ""}` });
-        if (firstTextBlock) paragraph.dataset.blockId = firstTextBlock.id;
+        paragraph.dataset.blockId = firstTextBlock.id;
         applyArticleLeafBulletStyle(paragraph, options);
-        renderRichTextRuns(paragraph, firstTextBlock?.richText, firstTextBlock?.text ?? "");
+        renderRichTextRuns(paragraph, firstTextBlock.richText, firstTextBlock.text);
+        options.makeInlineEditable(paragraph, info.node, "正文段落");
+      } else if (!options.readOnly && blocks.length === 0) {
+        // 新建空白末端节点尚无内容块，需要临时渲染一个可编辑行，供
+        // addChild()/addSibling() 聚焦；已有表格、图片或代码等内容的节点
+        // 不应额外生成无关的空正文段落。
+        const paragraph = section.createEl("p", { cls: `mms-article-leaf-text${options.articleLeafBulletsEnabled ? " is-bulleted" : ""}` });
+        applyArticleLeafBulletStyle(paragraph, options);
+        renderRichTextRuns(paragraph, undefined, "");
         options.makeInlineEditable(paragraph, info.node, "正文段落");
       }
       options.addInlineNodeActions(section, info.node);

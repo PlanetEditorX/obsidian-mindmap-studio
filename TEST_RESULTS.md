@@ -68,3 +68,18 @@ node --check main.js
 
 当前 npm 镜像缺少锁文件中的 `w3c-keyname@2.2.8`，无法安装完整依赖并执行真实 `esbuild` 生产构建。`main.js` 已与源码同步修改，并通过 JavaScript 语法检查及源码/产物关键契约核对。
 
+
+## CI 回归补充修复
+
+- 将普通正文渲染与新建空节点占位拆成两个独立分支：`if (firstTextBlock?.text.trim())` 负责已有正文，`else if (!options.readOnly && blocks.length === 0)` 只负责完全无内容块的新节点。
+- 因而仅含表格、图片、代码等内容块的文章节点不会生成空正文占位，同时保留右键新增空白子节点后的直接聚焦输入能力。
+- 已同步 `src/editor/article-renderer.ts`、`main.js` 与 `tests/node-creation.test.mjs`。
+
+### 补充验证
+
+- `node --test tests/node-creation.test.mjs`：`3 / 3` 通过。
+- 除依赖 `esbuild` 的插件更新测试外，广泛单元测试：`116 / 116` 通过。
+- 文档检查：通过，`48` 个 TypeScript 模块中的 `847` 个具名声明均有 JSDoc。
+- 仓库检查：通过。
+- `main.js` JavaScript 语法检查：通过。
+- 当前容器缺少 `esbuild`，无法本地完整执行 `scripts/test.mjs`；CI 日志中唯一失败的 `if (firstTextBlock?.text.trim())` 契约已恢复，并由专项测试同时锁定空节点占位分支。
