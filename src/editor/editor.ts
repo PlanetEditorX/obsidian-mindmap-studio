@@ -2806,6 +2806,7 @@ export class MindMapEditor {
       document: this.document,
       selectedId: this.selectedId,
       readOnly: this.readOnly,
+      isReadOnly: () => this.readOnly,
       articleBaseDepth: this.options.articleBaseDepth,
       showArticleToc: this.options.showArticleToc,
       articleTocEntries: this.options.articleTocEntries,

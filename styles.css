@@ -3778,11 +3778,11 @@
 
 .mms-table-column-resizer {
   position: absolute;
-  top: 0;
-  right: -4px;
-  z-index: 2;
-  width: 8px;
-  height: 100%;
+  top: -1px;
+  right: -7px;
+  bottom: -1px;
+  z-index: 4;
+  width: 14px;
   cursor: col-resize;
   touch-action: none;
   user-select: none;
@@ -3796,7 +3796,7 @@
   height: 70%;
   content: "";
   background: var(--interactive-accent);
-  opacity: 0;
+  opacity: .2;
 }
 
 .mms-article-table th:hover > .mms-table-column-resizer::after,
@@ -3807,6 +3807,11 @@
 .mms-article-table-wrap.is-resizing-columns {
   cursor: col-resize;
   user-select: none;
+}
+
+.mmc-editor.is-read-only .mms-table-column-resizer {
+  display: none;
+  pointer-events: none;
 }
 
 .mms-outline-table.has-custom-column-widths {
