@@ -18,6 +18,7 @@ import type {
   MindMapThemePresetId,
   NodeShape,
   NodeTextAlign,
+  NodeVisualStyle,
   ThemeMode
 } from "./core/model";
 import { appearanceFromThemePreset, MINDMAP_THEME_PRESETS } from "./themes";
@@ -158,6 +159,7 @@ export interface MindMapStudioSettings {
   defaultLayout: LayoutMode;
   defaultTheme: ThemeMode;
   defaultNodeShape: NodeShape;
+  nodeVisualStyle: NodeVisualStyle;
   nodeWidthMode: "fixed" | "auto";
   defaultNodeWidth: number;
   autoNodeMaxWidth: number;
@@ -288,6 +290,7 @@ export const DEFAULT_SETTINGS: MindMapStudioSettings = {
   defaultLayout: "right",
   defaultTheme: "auto",
   defaultNodeShape: "rounded",
+  nodeVisualStyle: "card",
   nodeWidthMode: "auto",
   defaultNodeWidth: 176,
   autoNodeMaxWidth: 460,
@@ -436,6 +439,7 @@ export function normalizeReturnToTopVisibility(value: unknown): number {
  */
 export function settingsToAppearance(settings: MindMapStudioSettings): MindMapAppearance {
   return {
+    nodeVisualStyle: settings.nodeVisualStyle,
     nodeWidthMode: settings.nodeWidthMode,
     defaultNodeWidth: settings.defaultNodeWidth,
     autoNodeMaxWidth: settings.autoNodeMaxWidth,
@@ -1251,48 +1255,6 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
           await this.plugin.saveSettings();
         }));
 
-    containerEl.createEl("h3", { text: "答题与题库" });
-    new Setting(containerEl)
-      .setName("题库文件夹")
-      .setDesc("每行一个仓库内文件夹路径；这些文件夹及其子目录内的导图会出现“答题”整页模式。")
-      .addTextArea((text) => text
-        .setPlaceholder("题库\n公务员题库")
-        .setValue(this.plugin.settings.questionBankFolders.join("\n"))
-        .onChange(async (value) => {
-          this.plugin.settings.questionBankFolders = Array.from(new Set(value.split(/\r?\n/)
-            .map((folder) => folder.trim().replace(/\\/g, "/").replace(/^\/+|\/+$/g, "")).filter(Boolean)));
-          this.plugin.settings.questionBankFolder = this.plugin.settings.questionBankFolders[0] ?? "";
-          await this.saveAndRefresh();
-        }));
-
-    new Setting(containerEl)
-      .setName("答题顺序")
-      .setDesc("随机为默认方式，每轮答题会随机排列题目；顺序模式按导图中的节点顺序作答。")
-      .addDropdown((dropdown) => dropdown
-        .addOption("random", "随机（默认）")
-        .addOption("sequential", "按导图顺序")
-        .setValue(this.plugin.settings.questionPracticeOrder)
-        .onChange(async (value) => {
-          this.plugin.settings.questionPracticeOrder = value === "sequential" ? "sequential" : "random";
-          await this.saveAndRefresh();
-        }));
-
-    new Setting(containerEl)
-      .setName("错题本记忆曲线")
-      .setDesc("开启后，错题答对不会立刻移出错题本，达到下方正确次数后才会移除。")
-      .addToggle((toggle) => toggle.setValue(this.plugin.settings.questionMemoryCurveEnabled).onChange(async (value) => {
-        this.plugin.settings.questionMemoryCurveEnabled = value;
-        await this.saveAndRefresh();
-      }));
-    new Setting(containerEl)
-      .setName("错题移除前答对次数")
-      .setDesc("记忆曲线开启时生效，范围为 1–20 次。")
-      .addText((text) => text.setValue(String(this.plugin.settings.wrongBookMasteryCount)).onChange(async (value) => {
-        const count = Math.max(1, Math.min(20, Math.round(Number(value) || DEFAULT_SETTINGS.wrongBookMasteryCount)));
-        this.plugin.settings.wrongBookMasteryCount = count;
-        await this.saveAndRefresh();
-      }));
-
     new Setting(containerEl)
       .setName("资源文件夹")
       .setDesc("仅用于图片、截图和子导图资源，路径相对于当前导图所在目录；不决定导图文件的保存位置。默认使用 MindMap Assets。")
@@ -1347,6 +1309,48 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
             await this.saveAndRefresh();
           }));
     }
+
+    containerEl.createEl("h3", { text: "答题与题库" });
+    new Setting(containerEl)
+      .setName("题库文件夹")
+      .setDesc("每行一个仓库内文件夹路径；这些文件夹及其子目录内的导图会出现“答题”整页模式。")
+      .addTextArea((text) => text
+        .setPlaceholder("题库\n公务员题库")
+        .setValue(this.plugin.settings.questionBankFolders.join("\n"))
+        .onChange(async (value) => {
+          this.plugin.settings.questionBankFolders = Array.from(new Set(value.split(/\r?\n/)
+            .map((folder) => folder.trim().replace(/\\/g, "/").replace(/^\/+|\/+$/g, "")).filter(Boolean)));
+          this.plugin.settings.questionBankFolder = this.plugin.settings.questionBankFolders[0] ?? "";
+          await this.saveAndRefresh();
+        }));
+
+    new Setting(containerEl)
+      .setName("答题顺序")
+      .setDesc("随机为默认方式，每轮答题会随机排列题目；顺序模式按导图中的节点顺序作答。")
+      .addDropdown((dropdown) => dropdown
+        .addOption("random", "随机（默认）")
+        .addOption("sequential", "按导图顺序")
+        .setValue(this.plugin.settings.questionPracticeOrder)
+        .onChange(async (value) => {
+          this.plugin.settings.questionPracticeOrder = value === "sequential" ? "sequential" : "random";
+          await this.saveAndRefresh();
+        }));
+
+    new Setting(containerEl)
+      .setName("错题本记忆曲线")
+      .setDesc("开启后，错题答对不会立刻移出错题本，达到下方正确次数后才会移除。")
+      .addToggle((toggle) => toggle.setValue(this.plugin.settings.questionMemoryCurveEnabled).onChange(async (value) => {
+        this.plugin.settings.questionMemoryCurveEnabled = value;
+        await this.saveAndRefresh();
+      }));
+    new Setting(containerEl)
+      .setName("错题移除前答对次数")
+      .setDesc("记忆曲线开启时生效，范围为 1–20 次。")
+      .addText((text) => text.setValue(String(this.plugin.settings.wrongBookMasteryCount)).onChange(async (value) => {
+        const count = Math.max(1, Math.min(20, Math.round(Number(value) || DEFAULT_SETTINGS.wrongBookMasteryCount)));
+        this.plugin.settings.wrongBookMasteryCount = count;
+        await this.saveAndRefresh();
+      }));
 
     containerEl.createEl("h3", { text: "图片与图床" });
 
@@ -1832,6 +1836,18 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
         }));
 
     containerEl.createEl("h3", { text: "连线与分支" });
+
+    new Setting(containerEl)
+      .setName("分支外观")
+      .setDesc("作为未单独设置页面外观时的全局默认值；当前脑图仍可在“主题与外观”中覆盖。")
+      .addDropdown((dropdown) => dropdown
+        .addOption("card", "圆润卡片分支（曲线）")
+        .addOption("branch", "圆角分支（折线）")
+        .setValue(this.plugin.settings.nodeVisualStyle)
+        .onChange(async (value) => {
+          this.plugin.settings.nodeVisualStyle = value === "branch" ? "branch" : "card";
+          await this.saveAndRefresh();
+        }));
 
     new Setting(containerEl)
       .setName("彩色分支")
