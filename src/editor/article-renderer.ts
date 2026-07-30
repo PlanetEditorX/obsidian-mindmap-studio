@@ -25,6 +25,7 @@ import { resolveArticleStyle } from "../article/article-style";
 import type { MindMapEditorCallbacks } from "./editor-types";
 import { ImagePreviewModal } from "./editor-modals";
 import { renderInlineMarkdown, renderRichTextRuns } from "./rich-text-dom";
+import { bindTableColumnResize, bindTableDoubleClick } from "./table-interaction";
 import type { ArticleLeafBulletStyle } from "../settings";
 
 /** 文章渲染所需的编辑器状态和回调。 */
@@ -33,6 +34,8 @@ export interface ArticleRendererOptions {
   document: MindMapDocument;
   selectedId: string;
   readOnly: boolean;
+  /** Returns the live lock state after render-free reading/editing toggles. */
+  isReadOnly: () => boolean;
   articleBaseDepth: number;
   showArticleToc: boolean;
   articleTocEntries: ArticleTocEntry[];
@@ -85,7 +88,9 @@ export function renderArticleMode(container: HTMLElement, options: ArticleRender
     const section = page.createEl("section", { cls: `mms-article-node depth-${Math.min(info.depth, 8)}${!options.readOnly && options.selectedId === info.node.id ? " is-selected" : ""}` });
     section.dataset.nodeId = info.node.id;
     section.id = info.anchor;
-    if (!options.readOnly) section.addEventListener("click", () => options.selectNode(info.node.id));
+    section.addEventListener("click", () => {
+      if (!options.isReadOnly()) options.selectNode(info.node.id);
+    });
     section.addEventListener("contextmenu", (event) => {
       event.preventDefault();
       event.stopPropagation();
@@ -176,10 +181,8 @@ function renderHeading(heading: HTMLElement, node: MindMapNode, title: string, o
     const headingLink = heading.createEl("a", { cls: "mms-article-heading-text mms-submap-text-link", href: node.submap.path, attr: { title: `打开子导图：${node.submap.title ?? node.submap.path}` } });
     const textBlock = nodeContentBlocks(node).find((block): block is MindMapTextContentBlock => block.type === "text");
     renderRichTextRuns(headingLink, textBlock?.richText, textBlock?.text ?? title);
-    if (!options.readOnly) {
-      headingLink.dataset.mmsExplicitEditOnly = "true";
-      options.makeInlineEditable(headingLink, node, "章节标题", textBlock?.id);
-    }
+    headingLink.dataset.mmsExplicitEditOnly = "true";
+    options.makeInlineEditable(headingLink, node, "章节标题", textBlock?.id);
     headingLink.addEventListener("click", (event) => {
       event.preventDefault();
       event.stopPropagation();
@@ -205,7 +208,7 @@ export function renderArticleNodeContent(container: HTMLElement, node: MindMapNo
       const paragraph = container.createEl("p", { cls: articleParagraphClass("mms-article-paragraph", block) });
       paragraph.dataset.blockId = block.id;
       renderRichTextRuns(paragraph, block.richText, block.text);
-      if (!options.readOnly) options.makeInlineEditable(paragraph, node, "正文", block.id);
+      options.makeInlineEditable(paragraph, node, "正文", block.id);
     } else if (block.type === "image") {
       const resolved = options.callbacks.resolveImage(block.source);
       const image = container.createEl("img", { cls: `mms-article-image image-align-${block.align ?? "center"}`, attr: { src: resolved ?? block.source, alt: block.alt ?? "图片" } });
@@ -279,44 +282,32 @@ function renderArticleTable(
       cell.style.textAlign = tableData.alignments?.[index] ?? "left";
     });
   });
-  wrap.addEventListener("dblclick", (event) => {
-    if (options.readOnly || (event.target as HTMLElement).closest(".mms-table-column-resizer")) return;
-    event.preventDefault();
-    event.stopPropagation();
-    options.editTableBlock(node, tableData, blockId);
+  bindTableDoubleClick(table, {
+    isReadOnly: options.isReadOnly,
+    isResizeTarget: (target) => target instanceof HTMLElement && Boolean(target.closest(".mms-table-column-resizer")),
+    edit: () => options.editTableBlock(node, tableData, blockId)
   });
-  if (options.readOnly) return;
   headers.forEach((header, index) => {
     const handle = header.createSpan({
       cls: "mms-table-column-resizer",
-      attr: { role: "separator", "aria-label": `调整第 ${index + 1} 列宽度` }
+      attr: {
+        role: "separator",
+        title: `拖动调整第 ${index + 1} 列宽度`,
+        "aria-label": `调整第 ${index + 1} 列宽度`
+      }
     });
     handle.addEventListener("dblclick", (event) => event.stopPropagation());
-    handle.addEventListener("pointerdown", (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      const startX = event.clientX;
-      const widths = headers.map((cell, columnIndex) => {
+    bindTableColumnResize(handle, {
+      eventTarget: window,
+      isReadOnly: options.isReadOnly,
+      columnIndex: index,
+      initialWidths: () => headers.map((cell, columnIndex) => {
         const stored = tableData.columnWidths?.[columnIndex];
         return stored ?? Math.max(64, Math.round(cell.getBoundingClientRect().width));
-      });
-      const startWidth = widths[index]!;
-      applyWidths(widths);
-      wrap.addClass("is-resizing-columns");
-      const move = (moveEvent: PointerEvent): void => {
-        widths[index] = Math.max(64, Math.min(1200, Math.round(startWidth + moveEvent.clientX - startX)));
-        applyWidths(widths);
-      };
-      const finish = (): void => {
-        window.removeEventListener("pointermove", move);
-        window.removeEventListener("pointerup", finish);
-        window.removeEventListener("pointercancel", finish);
-        wrap.removeClass("is-resizing-columns");
-        options.updateTableColumnWidths(node, blockId, widths);
-      };
-      window.addEventListener("pointermove", move);
-      window.addEventListener("pointerup", finish);
-      window.addEventListener("pointercancel", finish);
+      }),
+      applyWidths,
+      setResizing: (resizing) => wrap.toggleClass("is-resizing-columns", resizing),
+      commitWidths: (widths) => options.updateTableColumnWidths(node, blockId, widths)
     });
   });
 }

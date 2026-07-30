@@ -7598,6 +7598,48 @@ function renderOutlineContent(container, node, depth, options) {
 
 // src/editor/article-renderer.ts
 var import_obsidian8 = require("obsidian");
+
+// src/editor/table-interaction.ts
+function bindTableDoubleClick(target, options) {
+  target.addEventListener("dblclick", (event) => {
+    if (options.isReadOnly() || options.isResizeTarget(event.target)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    options.edit();
+  }, true);
+}
+function bindTableColumnResize(handle, options) {
+  handle.addEventListener("pointerdown", ((rawEvent) => {
+    var _a2, _b2;
+    const event = rawEvent;
+    if (options.isReadOnly() || event.button !== 0) return;
+    event.preventDefault();
+    event.stopPropagation();
+    (_a2 = handle.setPointerCapture) == null ? void 0 : _a2.call(handle, event.pointerId);
+    const startX = event.clientX;
+    const widths = options.initialWidths();
+    const startWidth = (_b2 = widths[options.columnIndex]) != null ? _b2 : 160;
+    options.applyWidths(widths);
+    options.setResizing(true);
+    const move = (rawMoveEvent) => {
+      const moveEvent = rawMoveEvent;
+      widths[options.columnIndex] = Math.max(64, Math.min(1200, Math.round(startWidth + moveEvent.clientX - startX)));
+      options.applyWidths(widths);
+    };
+    const finish = () => {
+      options.eventTarget.removeEventListener("pointermove", move, true);
+      options.eventTarget.removeEventListener("pointerup", finish, true);
+      options.eventTarget.removeEventListener("pointercancel", finish, true);
+      options.setResizing(false);
+      options.commitWidths(widths);
+    };
+    options.eventTarget.addEventListener("pointermove", move, true);
+    options.eventTarget.addEventListener("pointerup", finish, true);
+    options.eventTarget.addEventListener("pointercancel", finish, true);
+  }), true);
+}
+
+// src/editor/article-renderer.ts
 function renderArticleMode(container, options) {
   var _a2, _b2, _c;
   container.empty();
@@ -7626,7 +7668,9 @@ function renderArticleMode(container, options) {
     const section = page.createEl("section", { cls: `mms-article-node depth-${Math.min(info.depth, 8)}${!options.readOnly && options.selectedId === info.node.id ? " is-selected" : ""}` });
     section.dataset.nodeId = info.node.id;
     section.id = info.anchor;
-    if (!options.readOnly) section.addEventListener("click", () => options.selectNode(info.node.id));
+    section.addEventListener("click", () => {
+      if (!options.isReadOnly()) options.selectNode(info.node.id);
+    });
     section.addEventListener("contextmenu", (event) => {
       var _a3;
       event.preventDefault();
@@ -7707,10 +7751,8 @@ function renderHeading(heading, node, title, options) {
     const headingLink = heading.createEl("a", { cls: "mms-article-heading-text mms-submap-text-link", href: node.submap.path, attr: { title: `\u6253\u5F00\u5B50\u5BFC\u56FE\uFF1A${(_a2 = node.submap.title) != null ? _a2 : node.submap.path}` } });
     const textBlock = nodeContentBlocks(node).find((block) => block.type === "text");
     renderRichTextRuns(headingLink, textBlock == null ? void 0 : textBlock.richText, (_b2 = textBlock == null ? void 0 : textBlock.text) != null ? _b2 : title);
-    if (!options.readOnly) {
-      headingLink.dataset.mmsExplicitEditOnly = "true";
-      options.makeInlineEditable(headingLink, node, "\u7AE0\u8282\u6807\u9898", textBlock == null ? void 0 : textBlock.id);
-    }
+    headingLink.dataset.mmsExplicitEditOnly = "true";
+    options.makeInlineEditable(headingLink, node, "\u7AE0\u8282\u6807\u9898", textBlock == null ? void 0 : textBlock.id);
     headingLink.addEventListener("click", (event) => {
       event.preventDefault();
       event.stopPropagation();
@@ -7738,7 +7780,7 @@ function renderArticleNodeContent(container, node, treatTextAsBody, options) {
       const paragraph = container.createEl("p", { cls: articleParagraphClass("mms-article-paragraph", block) });
       paragraph.dataset.blockId = block.id;
       renderRichTextRuns(paragraph, block.richText, block.text);
-      if (!options.readOnly) options.makeInlineEditable(paragraph, node, "\u6B63\u6587", block.id);
+      options.makeInlineEditable(paragraph, node, "\u6B63\u6587", block.id);
     } else if (block.type === "image") {
       const resolved = options.callbacks.resolveImage(block.source);
       const image = container.createEl("img", { cls: `mms-article-image image-align-${(_a2 = block.align) != null ? _a2 : "center"}`, attr: { src: resolved != null ? resolved : block.source, alt: (_b2 = block.alt) != null ? _b2 : "\u56FE\u7247" } });
@@ -7811,45 +7853,33 @@ function renderArticleTable(container, node, tableData, blockId, options) {
       cell.style.textAlign = (_c = (_b2 = tableData.alignments) == null ? void 0 : _b2[index]) != null ? _c : "left";
     });
   });
-  wrap.addEventListener("dblclick", (event) => {
-    if (options.readOnly || event.target.closest(".mms-table-column-resizer")) return;
-    event.preventDefault();
-    event.stopPropagation();
-    options.editTableBlock(node, tableData, blockId);
+  bindTableDoubleClick(table, {
+    isReadOnly: options.isReadOnly,
+    isResizeTarget: (target) => target instanceof HTMLElement && Boolean(target.closest(".mms-table-column-resizer")),
+    edit: () => options.editTableBlock(node, tableData, blockId)
   });
-  if (options.readOnly) return;
   headers.forEach((header, index) => {
     const handle = header.createSpan({
       cls: "mms-table-column-resizer",
-      attr: { role: "separator", "aria-label": `\u8C03\u6574\u7B2C ${index + 1} \u5217\u5BBD\u5EA6` }
+      attr: {
+        role: "separator",
+        title: `\u62D6\u52A8\u8C03\u6574\u7B2C ${index + 1} \u5217\u5BBD\u5EA6`,
+        "aria-label": `\u8C03\u6574\u7B2C ${index + 1} \u5217\u5BBD\u5EA6`
+      }
     });
     handle.addEventListener("dblclick", (event) => event.stopPropagation());
-    handle.addEventListener("pointerdown", (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      const startX = event.clientX;
-      const widths = headers.map((cell, columnIndex) => {
+    bindTableColumnResize(handle, {
+      eventTarget: window,
+      isReadOnly: options.isReadOnly,
+      columnIndex: index,
+      initialWidths: () => headers.map((cell, columnIndex) => {
         var _a3;
         const stored = (_a3 = tableData.columnWidths) == null ? void 0 : _a3[columnIndex];
         return stored != null ? stored : Math.max(64, Math.round(cell.getBoundingClientRect().width));
-      });
-      const startWidth = widths[index];
-      applyWidths(widths);
-      wrap.addClass("is-resizing-columns");
-      const move = (moveEvent) => {
-        widths[index] = Math.max(64, Math.min(1200, Math.round(startWidth + moveEvent.clientX - startX)));
-        applyWidths(widths);
-      };
-      const finish = () => {
-        window.removeEventListener("pointermove", move);
-        window.removeEventListener("pointerup", finish);
-        window.removeEventListener("pointercancel", finish);
-        wrap.removeClass("is-resizing-columns");
-        options.updateTableColumnWidths(node, blockId, widths);
-      };
-      window.addEventListener("pointermove", move);
-      window.addEventListener("pointerup", finish);
-      window.addEventListener("pointercancel", finish);
+      }),
+      applyWidths,
+      setResizing: (resizing) => wrap.toggleClass("is-resizing-columns", resizing),
+      commitWidths: (widths) => options.updateTableColumnWidths(node, blockId, widths)
     });
   });
 }
@@ -11034,6 +11064,7 @@ var MindMapEditor = class {
       document: this.document,
       selectedId: this.selectedId,
       readOnly: this.readOnly,
+      isReadOnly: () => this.readOnly,
       articleBaseDepth: this.options.articleBaseDepth,
       showArticleToc: this.options.showArticleToc,
       articleTocEntries: this.options.articleTocEntries,

@@ -1445,7 +1445,7 @@ const command = "example";
   assert.match(editorSource, /window\.requestAnimationFrame\(restore\)/, "switching edit state must restore the current scroll position after rerender");
   assert.match(editorSource, /renderOutline/);
   assert.match(editorSource, /renderArticle/);
-  assert.match(articleRendererSource, /!options\.readOnly && options\.selectedId === info\.node\.id[\s\S]*if \(!options\.readOnly\) section\.addEventListener\("click"/, "article reading mode must not attach node-selection frames to every clicked row");
+  assert.match(articleRendererSource, /!options\.readOnly && options\.selectedId === info\.node\.id[\s\S]*section\.addEventListener\("click", \(\) => \{[\s\S]*if \(!options\.isReadOnly\(\)\) options\.selectNode/, "article node selection must follow the live lock state without adding reading-mode frames");
   assert.match(editorSource, /currentMode === "article" \|\| this\.currentMode === "reading" \|\| this\.currentMode === "question-bank" \|\| this\.document\.view\?\.readOnly === true/, "article, reading and question-bank modes should initialize as read-only");
   assert.match(editorSource, /\(mode === "article" \|\| mode === "reading" \|\| mode === "question-bank"\) && mode !== previousMode[\s\S]*this\.readOnly = true/, "entering article, reading or question-bank mode should reset to reading state");
   assert.match(editorSource, /currentMode !== "article" && this\.currentMode !== "reading"\) this\.persistReadOnlyState/, "temporary reading modes must not overwrite the document read-only preference");

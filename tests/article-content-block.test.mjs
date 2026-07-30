@@ -1,22 +1,29 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { after, before, test } from "node:test";
-import { loadTypeScriptModules } from "./compile-typescript.mjs";
+import { loadTypeScriptModule, loadTypeScriptModules } from "./compile-typescript.mjs";
 
 let model;
 let cleanup;
+let interactionCleanup;
+let tableInteraction;
 let editorSource;
 let rendererSource;
 let styles;
 let mainBundle;
 
 before(async () => {
-  const loaded = await loadTypeScriptModules([
-    "src/core/node-tree.ts",
-    "src/core/model.ts"
-  ], "src/core/model.ts");
+  const [loaded, interaction] = await Promise.all([
+    loadTypeScriptModules([
+      "src/core/node-tree.ts",
+      "src/core/model.ts"
+    ], "src/core/model.ts"),
+    loadTypeScriptModule("src/editor/table-interaction.ts")
+  ]);
   model = loaded.module;
   cleanup = loaded.cleanup;
+  tableInteraction = interaction.module;
+  interactionCleanup = interaction.cleanup;
   [editorSource, rendererSource, styles, mainBundle] = await Promise.all([
     readFile("src/editor/editor.ts", "utf8"),
     readFile("src/editor/article-renderer.ts", "utf8"),
@@ -25,7 +32,10 @@ before(async () => {
   ]);
 });
 
-after(async () => cleanup?.());
+after(async () => {
+  await cleanup?.();
+  await interactionCleanup?.();
+});
 
 test("article block context inserts text immediately after the clicked code block", () => {
   const beginInlineEdit = editorSource.match(/private beginInlineEdit\([\s\S]*?\n  \}/)?.[0] ?? "";
@@ -80,11 +90,58 @@ test("article tables open on double click and persist bounded column widths", ()
     children: []
   };
   assert.deepEqual(model.nodeContentBlocks(node)[0].table.columnWidths, [64, 1200, 160]);
-  assert.match(rendererSource, /wrap\.addEventListener\("dblclick"[\s\S]*options\.editTableBlock\(node, tableData, blockId\)/);
+  assert.match(rendererSource, /bindTableDoubleClick\(table,[\s\S]*isReadOnly: options\.isReadOnly[\s\S]*options\.editTableBlock\(node, tableData, blockId\)/);
+  assert.match(rendererSource, /bindTableColumnResize\(handle,[\s\S]*isReadOnly: options\.isReadOnly[\s\S]*options\.updateTableColumnWidths\(node, blockId, widths\)/);
   assert.match(rendererSource, /cls: "mms-table-column-resizer"/);
-  assert.match(rendererSource, /Math\.max\(64, Math\.min\(1200,[\s\S]*options\.updateTableColumnWidths\(node, blockId, widths\)/);
   assert.match(editorSource, /private updateTableColumnWidths\([\s\S]*columnWidths[\s\S]*this\.upsertStructuredBlock\(node, "table", \{ \.\.\.block\.table, columnWidths \}, blockId\)/);
   assert.match(styles, /\.mms-table-column-resizer[\s\S]*cursor:\s*col-resize/);
+});
+
+test("table interactions follow the live lock state and commit pointer resizing", () => {
+  const tableTarget = new EventTarget();
+  let readOnly = true;
+  let editCount = 0;
+  tableInteraction.bindTableDoubleClick(tableTarget, {
+    isReadOnly: () => readOnly,
+    isResizeTarget: () => false,
+    edit: () => { editCount += 1; }
+  });
+  tableTarget.dispatchEvent(new Event("dblclick", { bubbles: true, cancelable: true }));
+  assert.equal(editCount, 0);
+  readOnly = false;
+  const editEvent = new Event("dblclick", { bubbles: true, cancelable: true });
+  tableTarget.dispatchEvent(editEvent);
+  assert.equal(editCount, 1);
+  assert.equal(editEvent.defaultPrevented, true);
+
+  const handle = new EventTarget();
+  handle.setPointerCapture = () => undefined;
+  const pointerTarget = new EventTarget();
+  const applied = [];
+  let committed;
+  const pointerEvent = (type, clientX) => {
+    const event = new Event(type, { bubbles: true, cancelable: true });
+    Object.defineProperties(event, {
+      button: { value: 0 },
+      clientX: { value: clientX },
+      pointerId: { value: 1 }
+    });
+    return event;
+  };
+  tableInteraction.bindTableColumnResize(handle, {
+    eventTarget: pointerTarget,
+    isReadOnly: () => readOnly,
+    columnIndex: 0,
+    initialWidths: () => [100, 200],
+    applyWidths: (widths) => applied.push([...widths]),
+    setResizing: () => undefined,
+    commitWidths: (widths) => { committed = [...widths]; }
+  });
+  handle.dispatchEvent(pointerEvent("pointerdown", 100));
+  pointerTarget.dispatchEvent(pointerEvent("pointermove", 145));
+  pointerTarget.dispatchEvent(pointerEvent("pointerup", 145));
+  assert.deepEqual(applied.at(-1), [145, 200]);
+  assert.deepEqual(committed, [145, 200]);
 });
 
 test("paragraph indentation is normalized, rendered, and toggled per text block", () => {
