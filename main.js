@@ -537,11 +537,12 @@ function moveNodeContentBlock(root, sourceNodeId, blockId, targetNodeId, targetB
   const targetIndex = targetBlockId ? targetBlocks.findIndex((block) => block.id === targetBlockId) : -1;
   if (targetBlockId && targetIndex < 0) return false;
   sourceBlocks.splice(sourceIndex, 1);
+  const remainingSourceBlocks = sourceBlocks.filter((block) => block.type !== "text" || block.text.trim());
   const insertIndex = position === "append" || targetIndex < 0 ? targetBlocks.length : targetIndex + (position === "after" ? 1 : 0);
   targetBlocks.splice(insertIndex, 0, moving);
-  replaceNodeContentBlocks(sourceNode, sourceBlocks);
+  replaceNodeContentBlocks(sourceNode, remainingSourceBlocks);
   replaceNodeContentBlocks(targetNode, targetBlocks);
-  const sourceIsEmpty = sourceBlocks.length === 0 && sourceNode.children.length === 0 && !((_a2 = sourceNode.note) == null ? void 0 : _a2.trim()) && !((_b2 = sourceNode.link) == null ? void 0 : _b2.trim()) && !sourceNode.submap && !((_c = sourceNode.icon) == null ? void 0 : _c.trim()) && !((_d = sourceNode.tags) == null ? void 0 : _d.some((tag) => tag.trim())) && !sourceNode.question && !sourceNode.task;
+  const sourceIsEmpty = remainingSourceBlocks.length === 0 && sourceNode.children.length === 0 && !((_a2 = sourceNode.note) == null ? void 0 : _a2.trim()) && !((_b2 = sourceNode.link) == null ? void 0 : _b2.trim()) && !sourceNode.submap && !((_c = sourceNode.icon) == null ? void 0 : _c.trim()) && !((_d = sourceNode.tags) == null ? void 0 : _d.some((tag) => tag.trim())) && !sourceNode.question && !sourceNode.task;
   if (sourceNodeId !== root.id && sourceIsEmpty) removeNode(root, sourceNodeId);
   return true;
 }
@@ -7710,6 +7711,8 @@ function renderArticleMode(container, options) {
     const section = page.createEl("section", { cls: `mms-article-node depth-${Math.min(info.depth, 8)}${!options.readOnly && options.selectedId === info.node.id ? " is-selected" : ""}` });
     section.dataset.nodeId = info.node.id;
     section.id = info.anchor;
+    options.bindArticleNodeDragHandle(section, info.node.id);
+    options.bindArticleNodeDropTarget(section, info.node.id);
     section.addEventListener("click", () => {
       if (!options.isReadOnly()) options.selectNode(info.node.id);
     });
@@ -11215,6 +11218,8 @@ var MindMapEditor = class {
       updateTableColumnWidths: (node, blockId, widths) => this.updateTableColumnWidths(node, blockId, widths),
       makeInlineEditable: (element, node, placeholder, blockId) => this.makeInlineEditable(element, node, placeholder, blockId),
       makeInlineCodeEditable: (element, node, code, blockId) => this.makeInlineCodeEditable(element, node, code, blockId),
+      bindArticleNodeDragHandle: (element, nodeId) => this.bindArticleNodeDragHandle(element, nodeId),
+      bindArticleNodeDropTarget: (element, nodeId) => this.bindArticleNodeDropTarget(element, nodeId),
       bindContentBlockDragHandle: (element, nodeId, blockId) => this.bindContentBlockDragHandle(element, nodeId, blockId),
       bindContentBlockAppendDropTarget: (element, nodeId) => this.bindContentBlockAppendDropTarget(element, nodeId),
       addInlineNodeActions: (container, node) => this.addInlineNodeActions(container, node)
@@ -12840,6 +12845,93 @@ var MindMapEditor = class {
   /** Removes one structured block identified by its content-block ID. */
   removeStructuredBlock(node, blockId) {
     replaceNodeContentBlocks(node, nodeContentBlocks(node).filter((block) => block.id !== blockId));
+  }
+  /** Adds a dedicated article handle for moving a whole node without moving its title block. */
+  bindArticleNodeDragHandle(nodeElement, nodeId) {
+    nodeElement.addClass("mms-article-node-drag-source");
+    const handle = nodeElement.createEl("button", {
+      cls: "mms-article-node-drag-handle",
+      attr: {
+        type: "button",
+        title: "\u62D6\u52A8\u6574\u4E2A\u8282\u70B9",
+        "aria-label": "\u62D6\u52A8\u6574\u4E2A\u8282\u70B9",
+        draggable: "true"
+      }
+    });
+    (0, import_obsidian10.setIcon)(handle, "move");
+    handle.addEventListener("pointerdown", (event) => event.stopPropagation());
+    handle.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+    });
+    handle.addEventListener("dragstart", (event) => {
+      var _a2;
+      if (this.readOnly || nodeId === this.document.root.id) {
+        event.preventDefault();
+        return;
+      }
+      event.stopPropagation();
+      this.selectNode(nodeId);
+      this.draggingId = nodeId;
+      (_a2 = event.dataTransfer) == null ? void 0 : _a2.setData("application/x-mms-node", nodeId);
+      if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
+      nodeElement.addClass("is-node-dragging");
+      this.rootEl.addClass("is-article-node-dragging");
+    });
+    handle.addEventListener("dragend", (event) => {
+      event.stopPropagation();
+      this.draggingId = null;
+      this.clearArticleNodeDropIndicators();
+    });
+  }
+  /** Accepts whole-node drops in article mode with explicit before, child, and after zones. */
+  bindArticleNodeDropTarget(dropTarget, nodeId) {
+    dropTarget.addEventListener("dragover", (event) => {
+      if (this.readOnly || !this.canMoveNode(this.draggingId, nodeId)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const position = this.articleNodeDropPosition(event, dropTarget);
+      this.clearArticleNodeDropIndicators(false);
+      dropTarget.addClass(`is-node-drop-${position}`);
+      dropTarget.dataset.nodeDropPosition = position;
+      if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+    });
+    dropTarget.addEventListener("dragleave", (event) => {
+      if (dropTarget.contains(event.relatedTarget)) return;
+      dropTarget.removeClasses(["is-node-drop-before", "is-node-drop-child", "is-node-drop-after"]);
+      delete dropTarget.dataset.nodeDropPosition;
+    });
+    dropTarget.addEventListener("drop", (event) => {
+      const draggedId = this.draggingId;
+      if (this.readOnly || !this.canMoveNode(draggedId, nodeId) || !draggedId) return;
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
+      const stored = dropTarget.dataset.nodeDropPosition;
+      const position = stored === "before" || stored === "child" || stored === "after" ? stored : this.articleNodeDropPosition(event, dropTarget);
+      this.draggingId = null;
+      this.clearArticleNodeDropIndicators();
+      this.moveNode(draggedId, nodeId, position);
+    });
+  }
+  /** Resolves article drops vertically: upper edge, inner body, or lower edge. */
+  articleNodeDropPosition(event, target) {
+    const rect = target.getBoundingClientRect();
+    const ratio = rect.height > 0 ? (event.clientY - rect.top) / rect.height : 0.5;
+    if (ratio < 0.28) return "before";
+    if (ratio > 0.72) return "after";
+    return "child";
+  }
+  /** Clears article node-drag feedback while optionally preserving the active source. */
+  clearArticleNodeDropIndicators(clearDragging = true) {
+    this.articleEl.querySelectorAll(".is-node-drop-before, .is-node-drop-child, .is-node-drop-after").forEach((element) => {
+      element.removeClasses(["is-node-drop-before", "is-node-drop-child", "is-node-drop-after"]);
+      if (element instanceof HTMLElement) delete element.dataset.nodeDropPosition;
+    });
+    if (clearDragging) {
+      this.articleEl.querySelectorAll(".is-node-dragging").forEach((element) => element.removeClass("is-node-dragging"));
+      this.rootEl.removeClass("is-article-node-dragging");
+    }
   }
   /** Adds the explicit grip used to move one rendered content block without dragging its whole node. */
   bindContentBlockDragHandle(blockElement, nodeId, blockId) {

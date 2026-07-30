@@ -103,6 +103,19 @@ test("moving the last block deletes only a truly empty source leaf node", () => 
   assert.deepEqual(guarded.children.map((node) => node.id), ["source", "target"]);
 });
 
+test("moving the last meaningful block also removes blank text placeholders and the empty source leaf", () => {
+  const root = fixture();
+  root.children[0].content = [
+    { id: "text-a", type: "text", text: "第一段" },
+    { id: "blank-a", type: "text", text: "   " }
+  ];
+  root.children[0].text = "第一段";
+  root.children[0].code = undefined;
+  assert.equal(model.moveNodeContentBlock(root, "source", "text-a", "target", "target-text", "after"), true);
+  assert.deepEqual(root.children.map((node) => node.id), ["target"]);
+  assert.deepEqual(root.children[0].content.map((block) => block.id), ["target-text", "text-a"]);
+});
+
 test("node editor Enter commits while Shift+Enter remains a stored line break", () => {
   assert.match(editorSource, /form\.addEventListener\("keydown", \(event\) => \{[\s\S]*event\.key !== "Enter" \|\| event\.shiftKey \|\| event\.isComposing[\s\S]*saveNow\("commit", true\)[\s\S]*this\.close\(\)/);
   assert.match(richTextSource, /source\.value\.replace\(\/\\r\\n\?\/g, "\\n"\)/);
@@ -138,6 +151,20 @@ test("mind-map and article blocks share mouse drag movement", () => {
   assert.match(mainBundle, /application\/x-mms-content-block/);
   assert.doesNotMatch(mainBundle, /mms-article-block-move-button/);
   assert.match(mainBundle, /\\u5220\\u9664\\u5F53\\u524D\\u5757/i);
+});
+
+test("article mode separates whole-node dragging from content-block dragging", () => {
+  assert.match(articleRendererSource, /bindArticleNodeDragHandle: \(element: HTMLElement, nodeId: string\) => void/);
+  assert.match(articleRendererSource, /bindArticleNodeDropTarget: \(element: HTMLElement, nodeId: string\) => void/);
+  assert.match(articleRendererSource, /options\.bindArticleNodeDragHandle\(section, info\.node\.id\)/);
+  assert.match(articleRendererSource, /options\.bindArticleNodeDropTarget\(section, info\.node\.id\)/);
+  assert.match(editorSource, /private bindArticleNodeDragHandle\([\s\S]*this\.draggingId = nodeId[\s\S]*application\/x-mms-node/);
+  assert.match(editorSource, /private bindArticleNodeDropTarget\([\s\S]*is-node-drop-\$\{position\}[\s\S]*this\.moveNode\(draggedId, nodeId, position\)/);
+  assert.match(editorSource, /private articleNodeDropPosition\([\s\S]*ratio < \.28[\s\S]*return "before"[\s\S]*ratio > \.72[\s\S]*return "after"[\s\S]*return "child"/);
+  assert.match(styles, /\.mms-article-node-drag-handle[\s\S]*left: -58px[\s\S]*cursor: grab/);
+  assert.match(styles, /\.mms-article-node\.is-node-drop-before::before/);
+  assert.match(styles, /\.mms-article-node\.is-node-drop-child/);
+  assert.match(styles, /\.mms-article-node\.is-node-drop-after::after/);
 });
 
 after(() => cleanup?.());

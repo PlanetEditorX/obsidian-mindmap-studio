@@ -1083,13 +1083,14 @@ export function moveNodeContentBlock(
     : -1;
   if (targetBlockId && targetIndex < 0) return false;
   sourceBlocks.splice(sourceIndex, 1);
+  const remainingSourceBlocks = sourceBlocks.filter((block) => block.type !== "text" || block.text.trim());
   const insertIndex = position === "append" || targetIndex < 0
     ? targetBlocks.length
     : targetIndex + (position === "after" ? 1 : 0);
   targetBlocks.splice(insertIndex, 0, moving);
-  replaceNodeContentBlocks(sourceNode, sourceBlocks);
+  replaceNodeContentBlocks(sourceNode, remainingSourceBlocks);
   replaceNodeContentBlocks(targetNode, targetBlocks);
-  const sourceIsEmpty = sourceBlocks.length === 0
+  const sourceIsEmpty = remainingSourceBlocks.length === 0
     && sourceNode.children.length === 0
     && !sourceNode.note?.trim()
     && !sourceNode.link?.trim()

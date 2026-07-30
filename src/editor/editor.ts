@@ -2909,6 +2909,8 @@ export class MindMapEditor {
       updateTableColumnWidths: (node, blockId, widths) => this.updateTableColumnWidths(node, blockId, widths),
       makeInlineEditable: (element, node, placeholder, blockId) => this.makeInlineEditable(element, node, placeholder, blockId),
       makeInlineCodeEditable: (element, node, code, blockId) => this.makeInlineCodeEditable(element, node, code, blockId),
+      bindArticleNodeDragHandle: (element, nodeId) => this.bindArticleNodeDragHandle(element, nodeId),
+      bindArticleNodeDropTarget: (element, nodeId) => this.bindArticleNodeDropTarget(element, nodeId),
       bindContentBlockDragHandle: (element, nodeId, blockId) => this.bindContentBlockDragHandle(element, nodeId, blockId),
       bindContentBlockAppendDropTarget: (element, nodeId) => this.bindContentBlockAppendDropTarget(element, nodeId),
       addInlineNodeActions: (container, node) => this.addInlineNodeActions(container, node)
@@ -4606,6 +4608,99 @@ export class MindMapEditor {
   /** Removes one structured block identified by its content-block ID. */
   private removeStructuredBlock(node: MindMapNode, blockId: string): void {
     replaceNodeContentBlocks(node, nodeContentBlocks(node).filter((block) => block.id !== blockId));
+  }
+
+  /** Adds a dedicated article handle for moving a whole node without moving its title block. */
+  private bindArticleNodeDragHandle(nodeElement: HTMLElement, nodeId: string): void {
+    nodeElement.addClass("mms-article-node-drag-source");
+    const handle = nodeElement.createEl("button", {
+      cls: "mms-article-node-drag-handle",
+      attr: {
+        type: "button",
+        title: "拖动整个节点",
+        "aria-label": "拖动整个节点",
+        draggable: "true"
+      }
+    });
+    setIcon(handle, "move");
+    handle.addEventListener("pointerdown", (event) => event.stopPropagation());
+    handle.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+    });
+    handle.addEventListener("dragstart", (event) => {
+      if (this.readOnly || nodeId === this.document.root.id) {
+        event.preventDefault();
+        return;
+      }
+      event.stopPropagation();
+      this.selectNode(nodeId);
+      this.draggingId = nodeId;
+      event.dataTransfer?.setData("application/x-mms-node", nodeId);
+      if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
+      nodeElement.addClass("is-node-dragging");
+      this.rootEl.addClass("is-article-node-dragging");
+    });
+    handle.addEventListener("dragend", (event) => {
+      event.stopPropagation();
+      this.draggingId = null;
+      this.clearArticleNodeDropIndicators();
+    });
+  }
+
+  /** Accepts whole-node drops in article mode with explicit before, child, and after zones. */
+  private bindArticleNodeDropTarget(dropTarget: HTMLElement, nodeId: string): void {
+    dropTarget.addEventListener("dragover", (event) => {
+      if (this.readOnly || !this.canMoveNode(this.draggingId, nodeId)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const position = this.articleNodeDropPosition(event, dropTarget);
+      this.clearArticleNodeDropIndicators(false);
+      dropTarget.addClass(`is-node-drop-${position}`);
+      dropTarget.dataset.nodeDropPosition = position;
+      if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+    });
+    dropTarget.addEventListener("dragleave", (event) => {
+      if (dropTarget.contains(event.relatedTarget as Node | null)) return;
+      dropTarget.removeClasses(["is-node-drop-before", "is-node-drop-child", "is-node-drop-after"]);
+      delete dropTarget.dataset.nodeDropPosition;
+    });
+    dropTarget.addEventListener("drop", (event) => {
+      const draggedId = this.draggingId;
+      if (this.readOnly || !this.canMoveNode(draggedId, nodeId) || !draggedId) return;
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
+      const stored = dropTarget.dataset.nodeDropPosition;
+      const position = stored === "before" || stored === "child" || stored === "after"
+        ? stored
+        : this.articleNodeDropPosition(event, dropTarget);
+      this.draggingId = null;
+      this.clearArticleNodeDropIndicators();
+      this.moveNode(draggedId, nodeId, position);
+    });
+  }
+
+  /** Resolves article drops vertically: upper edge, inner body, or lower edge. */
+  private articleNodeDropPosition(event: DragEvent, target: HTMLElement): NodeDropPosition {
+    const rect = target.getBoundingClientRect();
+    const ratio = rect.height > 0 ? (event.clientY - rect.top) / rect.height : .5;
+    if (ratio < .28) return "before";
+    if (ratio > .72) return "after";
+    return "child";
+  }
+
+  /** Clears article node-drag feedback while optionally preserving the active source. */
+  private clearArticleNodeDropIndicators(clearDragging = true): void {
+    this.articleEl.querySelectorAll(".is-node-drop-before, .is-node-drop-child, .is-node-drop-after")
+      .forEach((element) => {
+        element.removeClasses(["is-node-drop-before", "is-node-drop-child", "is-node-drop-after"]);
+        if (element instanceof HTMLElement) delete element.dataset.nodeDropPosition;
+      });
+    if (clearDragging) {
+      this.articleEl.querySelectorAll(".is-node-dragging").forEach((element) => element.removeClass("is-node-dragging"));
+      this.rootEl.removeClass("is-article-node-dragging");
+    }
   }
 
   /** Adds the explicit grip used to move one rendered content block without dragging its whole node. */

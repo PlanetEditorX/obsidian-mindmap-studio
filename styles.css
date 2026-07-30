@@ -2180,6 +2180,75 @@
   position: relative;
 }
 
+.mms-article-node-drag-source {
+  position: relative;
+}
+
+.mms-article-node-drag-handle {
+  position: absolute;
+  z-index: 10;
+  top: 14px;
+  left: -58px;
+  display: inline-flex;
+  width: 24px;
+  height: 24px;
+  align-items: center;
+  justify-content: center;
+  padding: 3px;
+  border: 1px solid color-mix(in srgb, currentColor 22%, transparent);
+  border-radius: 7px;
+  opacity: 0;
+  background: color-mix(in srgb, var(--background-primary) 92%, transparent);
+  color: var(--text-muted);
+  cursor: grab;
+  transition: opacity 100ms ease, background-color 100ms ease;
+}
+
+.mms-article-node-drag-handle:active {
+  cursor: grabbing;
+}
+
+.mms-article-node-drag-source:hover > .mms-article-node-drag-handle,
+.mms-article-node-drag-handle:focus-visible,
+.is-article-node-dragging .mms-article-node-drag-handle {
+  opacity: 1;
+}
+
+.mms-article-node.is-node-dragging {
+  opacity: 0.45;
+}
+
+.mms-article-node.is-node-drop-before::before,
+.mms-article-node.is-node-drop-after::after {
+  position: absolute;
+  z-index: 11;
+  right: 0;
+  left: 0;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--interactive-accent);
+  content: "";
+  pointer-events: none;
+}
+
+.mms-article-node.is-node-drop-before::before {
+  top: -7px;
+}
+
+.mms-article-node.is-node-drop-after::after {
+  bottom: -7px;
+}
+
+.mms-article-node.is-node-drop-child {
+  border-radius: var(--radius-s);
+  box-shadow: 0 0 0 2px var(--interactive-accent);
+}
+
+.mmc-editor.is-read-only .mms-article-node-drag-handle {
+  display: none;
+  pointer-events: none;
+}
+
 .mmc-content-block-append-target.is-block-drop-append::after {
   position: absolute;
   z-index: 9;
