@@ -5,13 +5,13 @@
 | 文件 | 变更 |
 |---|---|
 | `src/editor/article-renderer.ts` | 文章表格双击打开编辑器；编辑状态下显示列宽拖拽手柄并回写持久化宽度 |
-| `src/editor/editor.ts` | 接入文章表格编辑和列宽更新回调；导图表格读取持久化列宽 |
+| `src/editor/editor.ts` | 接入文章表格编辑和列宽更新回调；导图表格读取持久化列宽；行内标题的 Enter/Escape 不再进入节点结构快捷键链路 |
 | `src/editor/outline-renderer.ts` | 大纲表格读取持久化列宽和列对齐 |
 | `src/editor/content-modals.ts` | 表格增删列时同步列宽数组；代码语言新增 Nginx |
 | `src/core/model.ts` | `MindMapTable` 新增可选 `columnWidths`，读取时按列数规范化并限制为 64–1200 px |
 | `src/settings.ts` | 将“节点编辑器显示位置”迁入“视图与阅读” |
 | `styles.css` | 空文档标题保留可点击占位尺寸；增加表格列宽拖拽和固定布局样式 |
-| `tests/article-content-block.test.mjs`、`tests/code-block.test.mjs`、`tests/settings-layout.test.mjs` | 覆盖空标题、表格双击/列宽、Nginx 和设置分类 |
+| `tests/article-content-block.test.mjs`、`tests/code-block.test.mjs`、`tests/settings-layout.test.mjs` | 覆盖空标题、标题 Enter 隔离、表格双击/列宽、Nginx 和设置分类 |
 | `main.js` | 重新生产构建，包含本次运行时修改 |
 | `docs/DATA_MODEL.md`、`docs/SPECIAL_FEATURES.md`、`CHANGELOG.md`、`TEST_RESULTS.md` | 更新数据格式、用户行为和验证记录 |
 

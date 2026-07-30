@@ -2408,10 +2408,14 @@ export class MindMapEditor {
       if (this.readOnly) return;
       if (event.key === "Enter") {
         event.preventDefault();
+        event.stopPropagation();
+        event.stopImmediatePropagation();
         element.blur();
       }
       if (event.key === "Escape") {
         event.preventDefault();
+        event.stopPropagation();
+        event.stopImmediatePropagation();
         renderRichTextRuns(element, original.richText, original.text, false);
         element.blur();
       }
@@ -5954,6 +5958,10 @@ export class MindMapEditor {
       return;
     }
 
+    // Inline title/body editors own Enter, Escape and formatting keys. Keep
+    // structural shortcuts disabled for the whole editing lifecycle even if a
+    // blur changes contenteditable before the original event finishes bubbling.
+    if (this.inlineEditingId !== null) return;
     if (target.closest("input, textarea, select, [contenteditable='true']")) return;
 
     if (this.shortcutMatches(event, this.options.screenshotShortcut)) {

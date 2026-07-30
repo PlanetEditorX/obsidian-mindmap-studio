@@ -10657,10 +10657,14 @@ var MindMapEditor = class {
       if (this.readOnly) return;
       if (event.key === "Enter") {
         event.preventDefault();
+        event.stopPropagation();
+        event.stopImmediatePropagation();
         element.blur();
       }
       if (event.key === "Escape") {
         event.preventDefault();
+        event.stopPropagation();
+        event.stopImmediatePropagation();
         renderRichTextRuns(element, original.richText, original.text, false);
         element.blur();
       }
@@ -14007,6 +14011,7 @@ var MindMapEditor = class {
       this.openSearch();
       return;
     }
+    if (this.inlineEditingId !== null) return;
     if (target.closest("input, textarea, select, [contenteditable='true']")) return;
     if (this.shortcutMatches(event, this.options.screenshotShortcut)) {
       event.preventDefault();
