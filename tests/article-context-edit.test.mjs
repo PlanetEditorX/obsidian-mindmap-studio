@@ -4,12 +4,14 @@ import { before, test } from "node:test";
 
 let editorSource;
 let articleRendererSource;
+let styles;
 let mainBundle;
 
 before(async () => {
-  [editorSource, articleRendererSource, mainBundle] = await Promise.all([
+  [editorSource, articleRendererSource, styles, mainBundle] = await Promise.all([
     readFile("src/editor/editor.ts", "utf8"),
     readFile("src/editor/article-renderer.ts", "utf8"),
+    readFile("styles.css", "utf8"),
     readFile("main.js", "utf8")
   ]);
 });
@@ -62,6 +64,8 @@ test("article inline actions expose high-frequency commands and route more to th
   assert.match(inlineActions, /if \(this\.currentMode === "article"\)/);
   assert.match(inlineActions, /"添加同级节点"[\s\S]*this\.addSibling\(\)/);
   assert.match(inlineActions, /"添加子节点"[\s\S]*this\.addChild\(\)/);
+  assert.match(inlineActions, /"作为块移动"[\s\S]*this\.startArticleBlockClickMove\(node\.id\)/);
+  assert.match(inlineActions, /"作为节点移动"[\s\S]*this\.startArticleNodeClickMove\(node\.id\)/);
   assert.match(inlineActions, /"删除节点"[\s\S]*this\.deleteNodeById\(node\.id\)/);
   assert.match(inlineActions, /"更多"[\s\S]*this\.openContextMenu\(event\)/);
   assert.match(inlineActions, /if \(node\.id !== this\.document\.root\.id\)[\s\S]*"添加同级节点"/, "the root must not offer an invalid sibling action");
@@ -87,6 +91,23 @@ test("inline deletion targets the bound node and ignores a deleted editor's late
   assert.match(inlineEditor, /if \(!findNode\(this\.document\.root, node\.id\)\) return/);
 });
 
+test("article click move keeps block and node semantics separate", () => {
+  assert.match(editorSource, /type ArticleClickMove =[\s\S]*kind: "block"[\s\S]*blockId: string[\s\S]*kind: "node"/);
+  assert.match(editorSource, /private startArticleBlockClickMove\([\s\S]*activeArticleBlock[\s\S]*pendingArticleClickMove = \{ kind: "block"/);
+  assert.match(editorSource, /private completeArticleClickMove\([\s\S]*moveContentBlock\(pending\.sourceNodeId, pending\.blockId, targetNodeId, undefined, "append"\)/);
+  assert.match(editorSource, /private completeArticleClickMove\([\s\S]*this\.selectNode\(pending\.sourceNodeId\)[\s\S]*this\.moveNode\(pending\.sourceNodeId, targetNodeId, "after"\)/);
+  assert.match(editorSource, /private articleClickMoveTargetAllowed\([\s\S]*targetNodeId === this\.document\.root\.id[\s\S]*findAncestors\(this\.document\.root, targetNodeId\)/);
+  assert.match(editorSource, /this\.articleEl\.addEventListener\("click", articleClickMoveTarget, true\)/);
+  assert.match(editorSource, /this\.pendingArticleClickMove && event\.key === "Escape"[\s\S]*this\.cancelArticleClickMove\(\)/);
+});
+
+test("article click move exposes clear target feedback", () => {
+  assert.match(articleRendererSource, /title\.dataset\.nodeId = options\.document\.root\.id/);
+  assert.match(styles, /\.mms-article-click-move-hint[\s\S]*position: sticky/);
+  assert.match(styles, /\.is-article-click-moving \.mms-article-node\.is-article-click-move-target:hover/);
+  assert.match(styles, /\.is-article-click-moving \.is-article-click-move-invalid[\s\S]*cursor: not-allowed/);
+});
+
 test("compiled plugin contains the article-specific edit routing", () => {
   assert.match(mainBundle, /\\u7F16\\u8F91\\u5F53\\u524D\\u5185\\u5BB9/);
   assert.match(mainBundle, /\\u6DFB\\u52A0\\u6B63\\u6587/);
@@ -94,5 +115,7 @@ test("compiled plugin contains the article-specific edit routing", () => {
   assert.match(mainBundle, /\\u6DFB\\u52A0\\u540C\\u7EA7\\u8282\\u70B9/);
   assert.match(mainBundle, /\\u66F4\\u591A/);
   assert.match(mainBundle, /\\u8282\\u70B9\\u8BBE\\u7F6E/);
+  assert.match(mainBundle, /\\u4F5C\\u4E3A\\u5757\\u79FB\\u52A8/i);
+  assert.match(mainBundle, /\\u4F5C\\u4E3A\\u8282\\u70B9\\u79FB\\u52A8/i);
   assert.match(mainBundle, /deleteNodeById/);
 });

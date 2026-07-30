@@ -70,6 +70,7 @@ export function renderArticleMode(container: HTMLElement, options: ArticleRender
   const pageEntry = currentArticlePageEntry(options.articleNavigation);
   const rootTitle = nodePrimaryText(options.document.root) || options.document.title;
   const title = page.createEl("h1", { cls: "mms-article-document-title" });
+  title.dataset.nodeId = options.document.root.id;
   if (pageEntry?.label) {
     const separator = /[、.）]$/.test(pageEntry.label) ? "" : " ";
     title.createSpan({ cls: "mms-article-number", text: `${pageEntry.label}${separator}` });

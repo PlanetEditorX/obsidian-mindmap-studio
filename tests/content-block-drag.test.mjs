@@ -116,6 +116,16 @@ test("moving the last meaningful block also removes blank text placeholders and 
   assert.deepEqual(root.children[0].content.map((block) => block.id), ["target-text", "text-a"]);
 });
 
+test("explicit article node move inserts C immediately after A", () => {
+  const root = {
+    id: "root",
+    text: "根",
+    children: ["A", "B", "C"].map((id) => ({ id, text: id, children: [] }))
+  };
+  assert.equal(model.moveNodeRelative(root, "C", "A", "after"), true);
+  assert.deepEqual(root.children.map((node) => node.id), ["A", "C", "B"]);
+});
+
 test("node editor Enter commits while Shift+Enter remains a stored line break", () => {
   assert.match(editorSource, /form\.addEventListener\("keydown", \(event\) => \{[\s\S]*event\.key !== "Enter" \|\| event\.shiftKey \|\| event\.isComposing[\s\S]*saveNow\("commit", true\)[\s\S]*this\.close\(\)/);
   assert.match(richTextSource, /source\.value\.replace\(\/\\r\\n\?\/g, "\\n"\)/);

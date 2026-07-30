@@ -154,6 +154,11 @@ interface ArticleNumberingControls {
   read: () => ArticleNumberingValues;
 }
 
+/** 文章编辑工具栏发起的点击选点移动；块移动与整节点移动必须保持独立状态。 */
+type ArticleClickMove =
+  | { kind: "block"; sourceNodeId: string; blockId: string }
+  | { kind: "node"; sourceNodeId: string };
+
 /**
  * 创建节点编辑与“主题与外观”共用的文章编号控件，确保两处设置语义和文案一致。
  * 手动层级表示当前节点所在子树的最高文章层级；中心节点本身不编号，一级子节点直接使用所选层级。
@@ -1128,6 +1133,8 @@ export class MindMapEditor {
   private readOnly: boolean;
   private readonly imageLoadTimers = new Set<number>();
   private inlineEditingId: string | null = null;
+  private activeArticleBlock: { nodeId: string; blockId: string } | null = null;
+  private pendingArticleClickMove: ArticleClickMove | null = null;
   private readingLocationTimer: number | null = null;
   private readingCaptureTimer: number | null = null;
   private readingCaptureReleaseTimer: number | null = null;
@@ -1846,9 +1853,29 @@ export class MindMapEditor {
     };
     this.outlineEl.addEventListener("contextmenu", pageContextMenu);
     this.articleEl.addEventListener("contextmenu", pageContextMenu);
+    const articleClickMoveTarget = (event: MouseEvent): void => {
+      const pending = this.pendingArticleClickMove;
+      if (!pending) return;
+      const target = event.target instanceof HTMLElement ? event.target : null;
+      if (target?.closest(".mms-inline-node-actions, .mms-article-click-move-hint")) return;
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
+      const nodeElement = target?.closest<HTMLElement>(
+        ".mms-article-node[data-node-id], .mms-article-document-title[data-node-id]"
+      );
+      const targetNodeId = nodeElement?.dataset.nodeId;
+      if (!targetNodeId) {
+        this.cancelArticleClickMove();
+        return;
+      }
+      this.completeArticleClickMove(targetNodeId);
+    };
+    this.articleEl.addEventListener("click", articleClickMoveTarget, true);
     this.cleanupCallbacks.push(() => {
       this.outlineEl.removeEventListener("contextmenu", pageContextMenu);
       this.articleEl.removeEventListener("contextmenu", pageContextMenu);
+      this.articleEl.removeEventListener("click", articleClickMoveTarget, true);
     });
 
     const modeGroup = this.toolbarEl.createDiv({ cls: "mms-mode-switcher" });
@@ -2474,12 +2501,14 @@ export class MindMapEditor {
     element.addEventListener("pointerdown", () => {
       if (this.readOnly || element.contentEditable === "true" || element.dataset.mmsExplicitEditOnly === "true") return;
       this.inlineEditingId = node.id;
+      this.activeArticleBlock = this.currentMode === "article" && blockId ? { nodeId: node.id, blockId } : null;
       this.selectNode(node.id);
       this.activateInlineEditable(element, false);
     });
     element.addEventListener("focus", () => {
       if (this.readOnly) return;
       this.inlineEditingId = node.id;
+      this.activeArticleBlock = this.currentMode === "article" && blockId ? { nodeId: node.id, blockId } : null;
       this.applyInlineEditingAccessibility(element);
       original = readRichTextEditor(element);
       element.addClass("is-inline-editing");
@@ -2526,6 +2555,9 @@ export class MindMapEditor {
       toolbar?.cleanup();
       toolbar = null;
       if (this.inlineEditingId === node.id) this.inlineEditingId = null;
+      if (this.activeArticleBlock?.nodeId === node.id && this.activeArticleBlock.blockId === blockId) {
+        this.activeArticleBlock = null;
+      }
       // A node action can remove this node while its inline editor still owns
       // focus. Ignore the detached editor's late blur instead of writing the
       // deleted node back into the document or triggering a second redraw.
@@ -2585,6 +2617,7 @@ export class MindMapEditor {
     if (this.readOnly || element.hasClass("is-inline-editing")) return;
     const showLineNumbers = Boolean(element.querySelector(".mms-code-line-numbers"));
     this.selectNode(node.id);
+    this.activeArticleBlock = { nodeId: node.id, blockId };
     element.empty();
     element.addClass("is-inline-editing");
     const shell = element.createDiv({ cls: `mms-article-code-editor-shell${showLineNumbers ? " has-line-numbers" : ""}` });
@@ -2604,6 +2637,9 @@ export class MindMapEditor {
     const finish = (save: boolean): void => {
       if (finished) return;
       finished = true;
+      if (this.activeArticleBlock?.nodeId === node.id && this.activeArticleBlock.blockId === blockId) {
+        this.activeArticleBlock = null;
+      }
       if (save && editor.value !== code.code) {
         this.mutate(() => this.upsertStructuredBlock(node, "code", { ...code, code: editor.value }, blockId));
       } else {
@@ -2655,6 +2691,10 @@ export class MindMapEditor {
     if (this.currentMode === "article") {
       if (node.id !== this.document.root.id) action("list-plus", "添加同级节点", () => this.addSibling());
       action("plus", "添加子节点", () => this.addChild());
+      if (node.id !== this.document.root.id) {
+        action("move-down", "作为块移动", () => this.startArticleBlockClickMove(node.id));
+        action("move-right", "作为节点移动", () => this.startArticleNodeClickMove(node.id));
+      }
       if (node.id !== this.document.root.id) action("trash-2", "删除节点", () => this.deleteNodeById(node.id));
       action("ellipsis", "更多", (event) => this.openContextMenu(event));
       return;
@@ -2662,6 +2702,136 @@ export class MindMapEditor {
     action("pencil", "完整编辑", () => this.editSelected());
     action("plus", "添加子节点", () => this.addChild());
     if (node.id !== this.document.root.id) action("trash-2", "删除节点", () => this.deleteSelected());
+  }
+
+  /** 从当前文章文字或代码编辑器进入“选择目标节点后追加当前块”的模式。 */
+  private startArticleBlockClickMove(nodeId: string): void {
+    if (!this.ensureEditable() || this.currentMode !== "article" || nodeId === this.document.root.id) return;
+    const active = this.activeArticleBlock;
+    const node = findNode(this.document.root, nodeId);
+    if (!node || active?.nodeId !== nodeId || !nodeContentBlocks(node).some((block) => block.id === active.blockId)) {
+      new Notice("请先编辑要移动的具体内容块");
+      return;
+    }
+    if (this.pendingArticleClickMove?.kind === "block"
+      && this.pendingArticleClickMove.sourceNodeId === nodeId
+      && this.pendingArticleClickMove.blockId === active.blockId) {
+      this.cancelArticleClickMove();
+      return;
+    }
+    this.pendingArticleClickMove = { kind: "block", sourceNodeId: nodeId, blockId: active.blockId };
+    this.selectNode(nodeId);
+    const focused = document.activeElement;
+    if (focused instanceof HTMLElement && this.articleEl.contains(focused)) focused.blur();
+    this.applyArticleClickMoveUi();
+    new Notice("请选择目标节点，当前块将追加到该节点末尾；按 Esc 取消");
+  }
+
+  /** 从文章编辑工具栏进入“选择目标节点后插入其后”的单节点移动模式。 */
+  private startArticleNodeClickMove(nodeId: string): void {
+    if (!this.ensureEditable() || this.currentMode !== "article" || nodeId === this.document.root.id) return;
+    if (!findNode(this.document.root, nodeId)) return;
+    if (this.pendingArticleClickMove?.kind === "node" && this.pendingArticleClickMove.sourceNodeId === nodeId) {
+      this.cancelArticleClickMove();
+      return;
+    }
+    this.pendingArticleClickMove = { kind: "node", sourceNodeId: nodeId };
+    this.selectNode(nodeId);
+    const focused = document.activeElement;
+    if (focused instanceof HTMLElement && this.articleEl.contains(focused)) focused.blur();
+    this.applyArticleClickMoveUi();
+    new Notice("请选择目标节点，当前节点将插入到其后；按 Esc 取消");
+  }
+
+  /** 完成工具栏发起的点击移动；非法目标保持待选状态，便于重新选择。 */
+  private completeArticleClickMove(targetNodeId: string): void {
+    const pending = this.pendingArticleClickMove;
+    if (!pending) return;
+    if (!this.articleClickMoveTargetAllowed(pending, targetNodeId)) {
+      new Notice(pending.kind === "block"
+        ? "请选择当前块所属节点之外的目标节点"
+        : "不能移动到根节点、自身或自己的后代");
+      return;
+    }
+    this.pendingArticleClickMove = null;
+    this.clearArticleClickMoveUi();
+    if (pending.kind === "block") {
+      this.moveContentBlock(pending.sourceNodeId, pending.blockId, targetNodeId, undefined, "append");
+      return;
+    }
+    // 工具栏操作只移动当前节点，不继承画布或文章中可能存在的批量选择。
+    this.selectNode(pending.sourceNodeId);
+    this.moveNode(pending.sourceNodeId, targetNodeId, "after");
+  }
+
+  /** 判断一个文章节点能否作为当前点击移动的目标。 */
+  private articleClickMoveTargetAllowed(pending: ArticleClickMove, targetNodeId: string): boolean {
+    const source = findNode(this.document.root, pending.sourceNodeId);
+    const target = findNode(this.document.root, targetNodeId);
+    if (!source || !target || pending.sourceNodeId === targetNodeId) return false;
+    if (pending.kind === "block") {
+      return nodeContentBlocks(source).some((block) => block.id === pending.blockId);
+    }
+    if (targetNodeId === this.document.root.id) return false;
+    return !findAncestors(this.document.root, targetNodeId).some((ancestor) => ancestor.id === pending.sourceNodeId);
+  }
+
+  /** 绘制点击移动提示与目标可用状态；文档重绘后可安全重复调用。 */
+  private applyArticleClickMoveUi(): void {
+    this.clearArticleClickMoveUi();
+    const pending = this.pendingArticleClickMove;
+    if (!pending || this.currentMode !== "article" || this.readOnly) return;
+    this.rootEl.addClass("is-article-click-moving");
+    this.rootEl.dataset.articleClickMoveKind = pending.kind;
+    const hint = this.articleEl.createDiv({
+      cls: "mms-article-click-move-hint",
+      text: pending.kind === "block"
+        ? "选择目标节点：当前块将追加到其内容末尾"
+        : "选择目标节点：当前节点将插入到其后"
+    });
+    const cancel = hint.createEl("button", {
+      cls: "clickable-icon",
+      attr: { type: "button", title: "取消移动", "aria-label": "取消移动" }
+    });
+    setIcon(cancel, "x");
+    cancel.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      this.cancelArticleClickMove();
+    });
+    this.articleEl.querySelectorAll<HTMLElement>(
+      ".mms-article-node[data-node-id], .mms-article-document-title[data-node-id]"
+    ).forEach((element) => {
+      const nodeId = element.dataset.nodeId;
+      if (!nodeId) return;
+      if (nodeId === pending.sourceNodeId) element.addClass("is-article-click-move-source");
+      element.addClass(this.articleClickMoveTargetAllowed(pending, nodeId)
+        ? "is-article-click-move-target"
+        : "is-article-click-move-invalid");
+    });
+  }
+
+  /** 取消文章点击移动并清除提示，不修改文档。 */
+  private cancelArticleClickMove(): void {
+    if (!this.pendingArticleClickMove) return;
+    this.pendingArticleClickMove = null;
+    this.clearArticleClickMoveUi();
+  }
+
+  /** 清理点击移动的临时 DOM；可选择是否同时移除根状态。 */
+  private clearArticleClickMoveUi(clearRoot = true): void {
+    this.articleEl?.querySelectorAll(
+      ".is-article-click-move-source, .is-article-click-move-target, .is-article-click-move-invalid"
+    ).forEach((element) => element.removeClasses([
+      "is-article-click-move-source",
+      "is-article-click-move-target",
+      "is-article-click-move-invalid"
+    ]));
+    this.articleEl?.querySelector(".mms-article-click-move-hint")?.remove();
+    if (clearRoot) {
+      this.rootEl?.removeClass("is-article-click-moving");
+      if (this.rootEl?.dataset) delete this.rootEl.dataset.articleClickMoveKind;
+    }
   }
 
   /**
@@ -3029,6 +3199,7 @@ export class MindMapEditor {
     else if (this.currentMode === "reading") this.renderReading();
     else if (this.currentMode === "question-bank") this.renderQuestionPractice();
     else this.renderMindMap();
+    this.applyArticleClickMoveUi();
   }
 
   /** Renders the configured-folder practice surface and persists each automatic grading result. */
@@ -6284,6 +6455,13 @@ export class MindMapEditor {
       event.stopPropagation();
       if (event.repeat) return;
       this.openSearch();
+      return;
+    }
+
+    if (this.pendingArticleClickMove && event.key === "Escape") {
+      event.preventDefault();
+      event.stopPropagation();
+      this.cancelArticleClickMove();
       return;
     }
 
