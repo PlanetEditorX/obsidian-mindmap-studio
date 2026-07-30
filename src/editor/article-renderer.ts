@@ -53,10 +53,6 @@ export interface ArticleRendererOptions {
   updateTableColumnWidths: (node: MindMapNode, blockId: string, widths: number[]) => void;
   makeInlineEditable: (element: HTMLElement, node: MindMapNode, placeholder: string, blockId?: string) => void;
   makeInlineCodeEditable: (element: HTMLElement, node: MindMapNode, code: MindMapCodeBlock, blockId: string) => void;
-  bindArticleNodeDragHandle: (element: HTMLElement, nodeId: string) => void;
-  bindArticleNodeDropTarget: (element: HTMLElement, nodeId: string) => void;
-  bindContentBlockDragHandle: (element: HTMLElement, nodeId: string, blockId: string) => void;
-  bindContentBlockAppendDropTarget: (element: HTMLElement, nodeId: string) => void;
   addInlineNodeActions: (container: HTMLElement, node: MindMapNode) => void;
 }
 
@@ -79,7 +75,6 @@ export function renderArticleMode(container: HTMLElement, options: ArticleRender
   const rootTextBlock = nodeContentBlocks(options.document.root).find((block): block is MindMapTextContentBlock => block.type === "text");
   renderRichTextRuns(titleText, rootTextBlock?.richText, rootTextBlock?.text ?? rootTitle);
   options.makeInlineEditable(titleText, options.document.root, "文章标题", rootTextBlock?.id);
-  if (rootTextBlock) options.bindContentBlockDragHandle(title, options.document.root.id, rootTextBlock.id);
   options.addInlineNodeActions(page, options.document.root);
 
   const directoryOnly = options.showArticleToc
@@ -94,8 +89,6 @@ export function renderArticleMode(container: HTMLElement, options: ArticleRender
     const section = page.createEl("section", { cls: `mms-article-node depth-${Math.min(info.depth, 8)}${!options.readOnly && options.selectedId === info.node.id ? " is-selected" : ""}` });
     section.dataset.nodeId = info.node.id;
     section.id = info.anchor;
-    options.bindArticleNodeDragHandle(section, info.node.id);
-    options.bindArticleNodeDropTarget(section, info.node.id);
     section.addEventListener("click", () => {
       if (!options.isReadOnly()) options.selectNode(info.node.id);
     });
@@ -115,7 +108,7 @@ export function renderArticleMode(container: HTMLElement, options: ArticleRender
       if (info.label) heading.createSpan({ cls: "mms-article-number", text: info.label });
       renderHeading(heading, info.node, info.title, options);
       const headingBlock = nodeContentBlocks(info.node).find((block): block is MindMapTextContentBlock => block.type === "text");
-      if (headingBlock) options.bindContentBlockDragHandle(heading, info.node.id, headingBlock.id);
+      if (headingBlock) heading.dataset.blockId = headingBlock.id;
       if (info.skipped) heading.createSpan({ cls: "mms-article-skip-badge", text: "不编号" });
       options.addInlineNodeActions(heading, info.node);
       renderArticleNodeContent(section, info.node, false, options);
@@ -123,7 +116,7 @@ export function renderArticleMode(container: HTMLElement, options: ArticleRender
       const blocks = nodeContentBlocks(info.node);
       const firstTextBlock = blocks.find((block): block is MindMapTextContentBlock => block.type === "text");
       if (firstTextBlock?.text.trim()) {
-        const blockShell = createArticleContentBlock(section, info.node, firstTextBlock.id, options);
+        const blockShell = createArticleContentBlock(section, firstTextBlock.id);
         const paragraph = blockShell.createEl("p", { cls: articleParagraphClass("mms-article-leaf-text", firstTextBlock, options.articleLeafBulletsEnabled) });
         paragraph.dataset.blockId = firstTextBlock.id;
         applyArticleLeafBulletStyle(paragraph, options);
@@ -141,20 +134,17 @@ export function renderArticleMode(container: HTMLElement, options: ArticleRender
       options.addInlineNodeActions(section, info.node);
       renderArticleNodeContent(section, info.node, false, options);
     }
-    options.bindContentBlockAppendDropTarget(section, info.node.id);
   }
   renderArticlePager(page, options);
 }
 
-/** Creates an article block shell that owns the shared drag handle without polluting editable content DOM. */
+/** Creates an article block shell for right-click targeting without adding a floating drag handle. */
 function createArticleContentBlock(
   container: HTMLElement,
-  node: MindMapNode,
-  blockId: string,
-  options: ArticleRendererOptions
+  blockId: string
 ): HTMLElement {
   const shell = container.createDiv({ cls: "mms-article-content-block" });
-  options.bindContentBlockDragHandle(shell, node.id, blockId);
+  shell.dataset.blockId = blockId;
   return shell;
 }
 
@@ -229,13 +219,13 @@ export function renderArticleNodeContent(container: HTMLElement, node: MindMapNo
     if (block.type === "text") {
       if (!treatTextAsBody && !firstTextHandled) { firstTextHandled = true; continue; }
       firstTextHandled = true;
-      const shell = createArticleContentBlock(container, node, block.id, options);
+      const shell = createArticleContentBlock(container, block.id);
       const paragraph = shell.createEl("p", { cls: articleParagraphClass("mms-article-paragraph", block) });
       paragraph.dataset.blockId = block.id;
       renderRichTextRuns(paragraph, block.richText, block.text);
       options.makeInlineEditable(paragraph, node, "正文", block.id);
     } else if (block.type === "image") {
-      const shell = createArticleContentBlock(container, node, block.id, options);
+      const shell = createArticleContentBlock(container, block.id);
       const resolved = options.callbacks.resolveImage(block.source);
       const image = shell.createEl("img", { cls: `mms-article-image image-align-${block.align ?? "center"}`, attr: { src: resolved ?? block.source, alt: block.alt ?? "图片" } });
       image.dataset.blockId = block.id;
@@ -255,10 +245,10 @@ export function renderArticleNodeContent(container: HTMLElement, node: MindMapNo
         options.openImageContextMenu(event, node.id, block.id);
       });
     } else if (block.type === "table") {
-      const shell = createArticleContentBlock(container, node, block.id, options);
+      const shell = createArticleContentBlock(container, block.id);
       renderArticleTable(shell, node, block.table, block.id, options);
     } else {
-      const shell = createArticleContentBlock(container, node, block.id, options);
+      const shell = createArticleContentBlock(container, block.id);
       const code = shell.createDiv({ cls: "mms-article-code markdown-rendered" });
       code.dataset.blockId = block.id;
       void options.callbacks.onRenderCode(block.code, code);

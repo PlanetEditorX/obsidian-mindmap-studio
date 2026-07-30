@@ -132,22 +132,16 @@ test("node editor Enter commits while Shift+Enter remains a stored line break", 
   assert.doesNotMatch(richTextSource, /replace\(\/\\r\?\\n\/g, " "\)/);
 });
 
-test("mind-map and article blocks share mouse drag movement", () => {
+test("mind-map keeps mouse block dragging while article mode uses explicit movement actions", () => {
   assert.match(editorSource, /mmc-content-block-editor-drag-handle[\s\S]*draggable: "true"/);
   assert.match(editorSource, /bindContentBlockDragHandle\(blockElement: HTMLElement, nodeId: string, blockId: string\)/);
   assert.match(editorSource, /moveNodeContentBlock\(this\.document\.root, sourceNodeId, blockId, targetNodeId, targetBlockId, position\)/);
   assert.match(editorSource, /cls: "mmc-node-structured-block-shell"[\s\S]*renderNodeTable\(shell,[\s\S]*bindContentBlockDragHandle\(shell/);
   assert.match(editorSource, /cls: "mmc-node-structured-block-shell"[\s\S]*renderNodeCode\(shell,[\s\S]*bindContentBlockDragHandle\(shell/);
-  assert.match(articleRendererSource, /bindContentBlockDragHandle: \(element: HTMLElement, nodeId: string, blockId: string\) => void/);
-  assert.match(articleRendererSource, /bindContentBlockAppendDropTarget: \(element: HTMLElement, nodeId: string\) => void/);
-  assert.match(articleRendererSource, /createArticleContentBlock\([\s\S]*options\.bindContentBlockDragHandle\(shell, node\.id, blockId\)/);
-  assert.match(articleRendererSource, /options\.bindContentBlockDragHandle\(title, options\.document\.root\.id, rootTextBlock\.id\)/);
-  assert.match(articleRendererSource, /options\.bindContentBlockDragHandle\(heading, info\.node\.id, headingBlock\.id\)/);
-  assert.match(articleRendererSource, /options\.bindContentBlockAppendDropTarget\(section, info\.node\.id\)/);
   assert.match(editorSource, /bindContentBlockAppendDropTarget\(nodeEl, node\.id\)/);
   assert.match(editorSource, /private bindContentBlockAppendDropTarget\(dropTarget: HTMLElement, nodeId: string\)[\s\S]*stopImmediatePropagation\(\)[\s\S]*moveContentBlock\(dragging\.nodeId, dragging\.blockId, nodeId, undefined, "append"\)/);
-  assert.doesNotMatch(editorSource.match(/private bindContentBlockDragHandle\([\s\S]*?\n  \}/)?.[0] ?? "", /if \(this\.readOnly\) return;/);
-  assert.doesNotMatch(editorSource.match(/private bindContentBlockAppendDropTarget\([\s\S]*?\n  \}/)?.[0] ?? "", /if \(this\.readOnly\) return;/);
+  assert.doesNotMatch(articleRendererSource, /bindContentBlockDragHandle|bindContentBlockAppendDropTarget/);
+  assert.match(articleRendererSource, /shell\.dataset\.blockId = blockId/);
   assert.doesNotMatch(editorSource, /articleKeyboardMovingBlock|bindArticleContentBlockMoveControl|moveArticleContentBlockByKeyboard|mms-article-block-move-button/);
   assert.match(editorSource, /target\.closest<HTMLElement>\("\[data-block-id\]"\)\?\.dataset\.blockId[\s\S]*openContextMenu\(event, blockId\)/);
   assert.match(editorSource, /setTitle\("删除当前块"\)[\s\S]*removeContentBlock\(selected\.id, contextBlock\.id\)/);
@@ -163,18 +157,29 @@ test("mind-map and article blocks share mouse drag movement", () => {
   assert.match(mainBundle, /\\u5220\\u9664\\u5F53\\u524D\\u5757/i);
 });
 
-test("article mode separates whole-node dragging from content-block dragging", () => {
-  assert.match(articleRendererSource, /bindArticleNodeDragHandle: \(element: HTMLElement, nodeId: string\) => void/);
-  assert.match(articleRendererSource, /bindArticleNodeDropTarget: \(element: HTMLElement, nodeId: string\) => void/);
-  assert.match(articleRendererSource, /options\.bindArticleNodeDragHandle\(section, info\.node\.id\)/);
-  assert.match(articleRendererSource, /options\.bindArticleNodeDropTarget\(section, info\.node\.id\)/);
-  assert.match(editorSource, /private bindArticleNodeDragHandle\([\s\S]*this\.draggingId = nodeId[\s\S]*application\/x-mms-node/);
-  assert.match(editorSource, /private bindArticleNodeDropTarget\([\s\S]*is-node-drop-\$\{position\}[\s\S]*this\.moveNode\(draggedId, nodeId, position\)/);
-  assert.match(editorSource, /private articleNodeDropPosition\([\s\S]*ratio < \.28[\s\S]*return "before"[\s\S]*ratio > \.72[\s\S]*return "after"[\s\S]*return "child"/);
-  assert.match(styles, /\.mms-article-node-drag-handle[\s\S]*left: -58px[\s\S]*cursor: grab/);
-  assert.match(styles, /\.mms-article-node\.is-node-drop-before::before/);
-  assert.match(styles, /\.mms-article-node\.is-node-drop-child/);
-  assert.match(styles, /\.mms-article-node\.is-node-drop-after::after/);
+test("article mode removes both floating movement controls", () => {
+  assert.doesNotMatch(articleRendererSource, /bindArticleNodeDragHandle|bindArticleNodeDropTarget/);
+  assert.doesNotMatch(editorSource, /bindArticleNodeDragHandle|bindArticleNodeDropTarget|articleNodeDropPosition/);
+  assert.doesNotMatch(styles, /mms-article-node-drag-handle|mms-article-node-drag-source|is-node-drop-before|is-node-drop-child|is-node-drop-after/);
+  assert.doesNotMatch(articleRendererSource, /bindContentBlockDragHandle|bindContentBlockAppendDropTarget/);
+  assert.match(articleRendererSource, /heading\.dataset\.blockId = headingBlock\.id/);
+});
+
+test("article hierarchy commands demote to the previous sibling and promote after the parent", () => {
+  const root = {
+    id: "root",
+    text: "根",
+    children: [
+      { id: "A", text: "A", children: [] },
+      { id: "B", text: "B", children: [] },
+      { id: "C", text: "C", children: [] }
+    ]
+  };
+  assert.equal(model.moveNodeRelative(root, "B", "A", "child"), true);
+  assert.deepEqual(root.children.map((node) => node.id), ["A", "C"]);
+  assert.deepEqual(root.children[0].children.map((node) => node.id), ["B"]);
+  assert.equal(model.moveNodeRelative(root, "B", "A", "after"), true);
+  assert.deepEqual(root.children.map((node) => node.id), ["A", "B", "C"]);
 });
 
 after(() => cleanup?.());

@@ -7701,7 +7701,6 @@ function renderArticleMode(container, options) {
   const rootTextBlock = nodeContentBlocks(options.document.root).find((block) => block.type === "text");
   renderRichTextRuns(titleText, rootTextBlock == null ? void 0 : rootTextBlock.richText, (_b2 = rootTextBlock == null ? void 0 : rootTextBlock.text) != null ? _b2 : rootTitle);
   options.makeInlineEditable(titleText, options.document.root, "\u6587\u7AE0\u6807\u9898", rootTextBlock == null ? void 0 : rootTextBlock.id);
-  if (rootTextBlock) options.bindContentBlockDragHandle(title, options.document.root.id, rootTextBlock.id);
   options.addInlineNodeActions(page, options.document.root);
   const directoryOnly = options.showArticleToc && options.articleTocEntries.length > 0 && ((_c = options.document.view) == null ? void 0 : _c.articleLandingMode) !== "article";
   if (directoryOnly) {
@@ -7712,8 +7711,6 @@ function renderArticleMode(container, options) {
     const section = page.createEl("section", { cls: `mms-article-node depth-${Math.min(info.depth, 8)}${!options.readOnly && options.selectedId === info.node.id ? " is-selected" : ""}` });
     section.dataset.nodeId = info.node.id;
     section.id = info.anchor;
-    options.bindArticleNodeDragHandle(section, info.node.id);
-    options.bindArticleNodeDropTarget(section, info.node.id);
     section.addEventListener("click", () => {
       if (!options.isReadOnly()) options.selectNode(info.node.id);
     });
@@ -7734,7 +7731,7 @@ function renderArticleMode(container, options) {
       if (info.label) heading.createSpan({ cls: "mms-article-number", text: info.label });
       renderHeading(heading, info.node, info.title, options);
       const headingBlock = nodeContentBlocks(info.node).find((block) => block.type === "text");
-      if (headingBlock) options.bindContentBlockDragHandle(heading, info.node.id, headingBlock.id);
+      if (headingBlock) heading.dataset.blockId = headingBlock.id;
       if (info.skipped) heading.createSpan({ cls: "mms-article-skip-badge", text: "\u4E0D\u7F16\u53F7" });
       options.addInlineNodeActions(heading, info.node);
       renderArticleNodeContent(section, info.node, false, options);
@@ -7742,7 +7739,7 @@ function renderArticleMode(container, options) {
       const blocks = nodeContentBlocks(info.node);
       const firstTextBlock = blocks.find((block) => block.type === "text");
       if (firstTextBlock == null ? void 0 : firstTextBlock.text.trim()) {
-        const blockShell = createArticleContentBlock(section, info.node, firstTextBlock.id, options);
+        const blockShell = createArticleContentBlock(section, firstTextBlock.id);
         const paragraph = blockShell.createEl("p", { cls: articleParagraphClass("mms-article-leaf-text", firstTextBlock, options.articleLeafBulletsEnabled) });
         paragraph.dataset.blockId = firstTextBlock.id;
         applyArticleLeafBulletStyle(paragraph, options);
@@ -7757,13 +7754,12 @@ function renderArticleMode(container, options) {
       options.addInlineNodeActions(section, info.node);
       renderArticleNodeContent(section, info.node, false, options);
     }
-    options.bindContentBlockAppendDropTarget(section, info.node.id);
   }
   renderArticlePager(page, options);
 }
-function createArticleContentBlock(container, node, blockId, options) {
+function createArticleContentBlock(container, blockId) {
   const shell = container.createDiv({ cls: "mms-article-content-block" });
-  options.bindContentBlockDragHandle(shell, node.id, blockId);
+  shell.dataset.blockId = blockId;
   return shell;
 }
 function articleParagraphClass(baseClass, block, bulleted = false) {
@@ -7832,13 +7828,13 @@ function renderArticleNodeContent(container, node, treatTextAsBody, options) {
         continue;
       }
       firstTextHandled = true;
-      const shell = createArticleContentBlock(container, node, block.id, options);
+      const shell = createArticleContentBlock(container, block.id);
       const paragraph = shell.createEl("p", { cls: articleParagraphClass("mms-article-paragraph", block) });
       paragraph.dataset.blockId = block.id;
       renderRichTextRuns(paragraph, block.richText, block.text);
       options.makeInlineEditable(paragraph, node, "\u6B63\u6587", block.id);
     } else if (block.type === "image") {
-      const shell = createArticleContentBlock(container, node, block.id, options);
+      const shell = createArticleContentBlock(container, block.id);
       const resolved = options.callbacks.resolveImage(block.source);
       const image = shell.createEl("img", { cls: `mms-article-image image-align-${(_a2 = block.align) != null ? _a2 : "center"}`, attr: { src: resolved != null ? resolved : block.source, alt: (_b2 = block.alt) != null ? _b2 : "\u56FE\u7247" } });
       image.dataset.blockId = block.id;
@@ -7861,10 +7857,10 @@ function renderArticleNodeContent(container, node, treatTextAsBody, options) {
         options.openImageContextMenu(event, node.id, block.id);
       });
     } else if (block.type === "table") {
-      const shell = createArticleContentBlock(container, node, block.id, options);
+      const shell = createArticleContentBlock(container, block.id);
       renderArticleTable(shell, node, block.table, block.id, options);
     } else {
-      const shell = createArticleContentBlock(container, node, block.id, options);
+      const shell = createArticleContentBlock(container, block.id);
       const code = shell.createDiv({ cls: "mms-article-code markdown-rendered" });
       code.dataset.blockId = block.id;
       void options.callbacks.onRenderCode(block.code, code);
@@ -11007,8 +11003,10 @@ var MindMapEditor = class {
       if (node.id !== this.document.root.id) action("list-plus", "\u6DFB\u52A0\u540C\u7EA7\u8282\u70B9", () => this.addSibling());
       action("plus", "\u6DFB\u52A0\u5B50\u8282\u70B9", () => this.addChild());
       if (node.id !== this.document.root.id) {
-        action("move-down", "\u4F5C\u4E3A\u5757\u79FB\u52A8", () => this.startArticleBlockClickMove(node.id));
-        action("move-right", "\u4F5C\u4E3A\u8282\u70B9\u79FB\u52A8", () => this.startArticleNodeClickMove(node.id));
+        action("grip-vertical", "\u4F5C\u4E3A\u5757\u79FB\u52A8", () => this.startArticleBlockClickMove(node.id));
+        action("git-branch", "\u4F5C\u4E3A\u8282\u70B9\u79FB\u52A8", () => this.startArticleNodeClickMove(node.id));
+        action("indent-increase", "\u964D\u4E3A\u4E0A\u4E00\u4E2A\u8282\u70B9\u7684\u5B50\u8282\u70B9", () => this.demoteArticleNode(node.id));
+        action("indent-decrease", "\u5347\u4E3A\u4E0A\u4E00\u4E2A\u8282\u70B9\u7684\u5144\u5F1F\u8282\u70B9", () => this.promoteArticleNode(node.id));
       }
       if (node.id !== this.document.root.id) action("trash-2", "\u5220\u9664\u8282\u70B9", () => this.deleteNodeById(node.id));
       action("ellipsis", "\u66F4\u591A", (event) => this.openContextMenu(event));
@@ -11019,20 +11017,21 @@ var MindMapEditor = class {
     if (node.id !== this.document.root.id) action("trash-2", "\u5220\u9664\u8282\u70B9", () => this.deleteSelected());
   }
   /** 从当前文章文字或代码编辑器进入“选择目标节点后追加当前块”的模式。 */
-  startArticleBlockClickMove(nodeId) {
+  startArticleBlockClickMove(nodeId, preferredBlockId) {
     var _a2;
     if (!this.ensureEditable() || this.currentMode !== "article" || nodeId === this.document.root.id) return;
     const active = this.activeArticleBlock;
     const node = findNode(this.document.root, nodeId);
-    if (!node || (active == null ? void 0 : active.nodeId) !== nodeId || !nodeContentBlocks(node).some((block) => block.id === active.blockId)) {
+    const blockId = preferredBlockId != null ? preferredBlockId : (active == null ? void 0 : active.nodeId) === nodeId ? active.blockId : void 0;
+    if (!node || !blockId || !nodeContentBlocks(node).some((block) => block.id === blockId)) {
       new import_obsidian10.Notice("\u8BF7\u5148\u7F16\u8F91\u8981\u79FB\u52A8\u7684\u5177\u4F53\u5185\u5BB9\u5757");
       return;
     }
-    if (((_a2 = this.pendingArticleClickMove) == null ? void 0 : _a2.kind) === "block" && this.pendingArticleClickMove.sourceNodeId === nodeId && this.pendingArticleClickMove.blockId === active.blockId) {
+    if (((_a2 = this.pendingArticleClickMove) == null ? void 0 : _a2.kind) === "block" && this.pendingArticleClickMove.sourceNodeId === nodeId && this.pendingArticleClickMove.blockId === blockId) {
       this.cancelArticleClickMove();
       return;
     }
-    this.pendingArticleClickMove = { kind: "block", sourceNodeId: nodeId, blockId: active.blockId };
+    this.pendingArticleClickMove = { kind: "block", sourceNodeId: nodeId, blockId };
     this.selectNode(nodeId);
     const focused = document.activeElement;
     if (focused instanceof HTMLElement && this.articleEl.contains(focused)) focused.blur();
@@ -11054,6 +11053,32 @@ var MindMapEditor = class {
     if (focused instanceof HTMLElement && this.articleEl.contains(focused)) focused.blur();
     this.applyArticleClickMoveUi();
     new import_obsidian10.Notice("\u8BF7\u9009\u62E9\u76EE\u6807\u8282\u70B9\uFF0C\u5F53\u524D\u8282\u70B9\u5C06\u63D2\u5165\u5230\u5176\u540E\uFF1B\u6309 Esc \u53D6\u6D88");
+  }
+  /** 将当前文章节点降为同级上一个节点的子节点，保留全部内容、子树和元数据。 */
+  demoteArticleNode(nodeId) {
+    var _a2;
+    if (!this.ensureEditable() || this.currentMode !== "article" || nodeId === this.document.root.id) return;
+    const parent = findParent(this.document.root, nodeId);
+    const index = (_a2 = parent == null ? void 0 : parent.children.findIndex((child) => child.id === nodeId)) != null ? _a2 : -1;
+    const previous = index > 0 ? parent == null ? void 0 : parent.children[index - 1] : void 0;
+    if (!parent || !previous) {
+      new import_obsidian10.Notice("\u5F53\u524D\u8282\u70B9\u524D\u6CA1\u6709\u53EF\u4F5C\u4E3A\u7236\u8282\u70B9\u7684\u540C\u7EA7\u8282\u70B9");
+      return;
+    }
+    this.selectNode(nodeId);
+    this.moveNode(nodeId, previous.id, "child");
+  }
+  /** 将当前文章节点升为其父节点的同级节点，并紧跟在父节点之后。 */
+  promoteArticleNode(nodeId) {
+    if (!this.ensureEditable() || this.currentMode !== "article" || nodeId === this.document.root.id) return;
+    const parent = findParent(this.document.root, nodeId);
+    const grandparent = parent ? findParent(this.document.root, parent.id) : null;
+    if (!parent || !grandparent) {
+      new import_obsidian10.Notice("\u5F53\u524D\u8282\u70B9\u5DF2\u7ECF\u662F\u6700\u9AD8\u53EF\u63D0\u5347\u5C42\u7EA7");
+      return;
+    }
+    this.selectNode(nodeId);
+    this.moveNode(nodeId, parent.id, "after");
   }
   /** 完成工具栏发起的点击移动；非法目标保持待选状态，便于重新选择。 */
   completeArticleClickMove(targetNodeId) {
@@ -11373,10 +11398,6 @@ var MindMapEditor = class {
       updateTableColumnWidths: (node, blockId, widths) => this.updateTableColumnWidths(node, blockId, widths),
       makeInlineEditable: (element, node, placeholder, blockId) => this.makeInlineEditable(element, node, placeholder, blockId),
       makeInlineCodeEditable: (element, node, code, blockId) => this.makeInlineCodeEditable(element, node, code, blockId),
-      bindArticleNodeDragHandle: (element, nodeId) => this.bindArticleNodeDragHandle(element, nodeId),
-      bindArticleNodeDropTarget: (element, nodeId) => this.bindArticleNodeDropTarget(element, nodeId),
-      bindContentBlockDragHandle: (element, nodeId, blockId) => this.bindContentBlockDragHandle(element, nodeId, blockId),
-      bindContentBlockAppendDropTarget: (element, nodeId) => this.bindContentBlockAppendDropTarget(element, nodeId),
       addInlineNodeActions: (container, node) => this.addInlineNodeActions(container, node)
     };
   }
@@ -13002,93 +13023,6 @@ var MindMapEditor = class {
   removeStructuredBlock(node, blockId) {
     replaceNodeContentBlocks(node, nodeContentBlocks(node).filter((block) => block.id !== blockId));
   }
-  /** Adds a dedicated article handle for moving a whole node without moving its title block. */
-  bindArticleNodeDragHandle(nodeElement, nodeId) {
-    nodeElement.addClass("mms-article-node-drag-source");
-    const handle = nodeElement.createEl("button", {
-      cls: "mms-article-node-drag-handle",
-      attr: {
-        type: "button",
-        title: "\u62D6\u52A8\u6574\u4E2A\u8282\u70B9",
-        "aria-label": "\u62D6\u52A8\u6574\u4E2A\u8282\u70B9",
-        draggable: "true"
-      }
-    });
-    (0, import_obsidian10.setIcon)(handle, "move");
-    handle.addEventListener("pointerdown", (event) => event.stopPropagation());
-    handle.addEventListener("click", (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-    });
-    handle.addEventListener("dragstart", (event) => {
-      var _a2;
-      if (this.readOnly || nodeId === this.document.root.id) {
-        event.preventDefault();
-        return;
-      }
-      event.stopPropagation();
-      this.selectNode(nodeId);
-      this.draggingId = nodeId;
-      (_a2 = event.dataTransfer) == null ? void 0 : _a2.setData("application/x-mms-node", nodeId);
-      if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
-      nodeElement.addClass("is-node-dragging");
-      this.rootEl.addClass("is-article-node-dragging");
-    });
-    handle.addEventListener("dragend", (event) => {
-      event.stopPropagation();
-      this.draggingId = null;
-      this.clearArticleNodeDropIndicators();
-    });
-  }
-  /** Accepts whole-node drops in article mode with explicit before, child, and after zones. */
-  bindArticleNodeDropTarget(dropTarget, nodeId) {
-    dropTarget.addEventListener("dragover", (event) => {
-      if (this.readOnly || !this.canMoveNode(this.draggingId, nodeId)) return;
-      event.preventDefault();
-      event.stopPropagation();
-      const position = this.articleNodeDropPosition(event, dropTarget);
-      this.clearArticleNodeDropIndicators(false);
-      dropTarget.addClass(`is-node-drop-${position}`);
-      dropTarget.dataset.nodeDropPosition = position;
-      if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
-    });
-    dropTarget.addEventListener("dragleave", (event) => {
-      if (dropTarget.contains(event.relatedTarget)) return;
-      dropTarget.removeClasses(["is-node-drop-before", "is-node-drop-child", "is-node-drop-after"]);
-      delete dropTarget.dataset.nodeDropPosition;
-    });
-    dropTarget.addEventListener("drop", (event) => {
-      const draggedId = this.draggingId;
-      if (this.readOnly || !this.canMoveNode(draggedId, nodeId) || !draggedId) return;
-      event.preventDefault();
-      event.stopPropagation();
-      event.stopImmediatePropagation();
-      const stored = dropTarget.dataset.nodeDropPosition;
-      const position = stored === "before" || stored === "child" || stored === "after" ? stored : this.articleNodeDropPosition(event, dropTarget);
-      this.draggingId = null;
-      this.clearArticleNodeDropIndicators();
-      this.moveNode(draggedId, nodeId, position);
-    });
-  }
-  /** Resolves article drops vertically: upper edge, inner body, or lower edge. */
-  articleNodeDropPosition(event, target) {
-    const rect = target.getBoundingClientRect();
-    const ratio = rect.height > 0 ? (event.clientY - rect.top) / rect.height : 0.5;
-    if (ratio < 0.28) return "before";
-    if (ratio > 0.72) return "after";
-    return "child";
-  }
-  /** Clears article node-drag feedback while optionally preserving the active source. */
-  clearArticleNodeDropIndicators(clearDragging = true) {
-    this.articleEl.querySelectorAll(".is-node-drop-before, .is-node-drop-child, .is-node-drop-after").forEach((element) => {
-      element.removeClasses(["is-node-drop-before", "is-node-drop-child", "is-node-drop-after"]);
-      if (element instanceof HTMLElement) delete element.dataset.nodeDropPosition;
-    });
-    if (clearDragging) {
-      this.articleEl.querySelectorAll(".is-node-dragging").forEach((element) => element.removeClass("is-node-dragging"));
-      this.rootEl.removeClass("is-article-node-dragging");
-    }
-  }
   /** Adds the explicit grip used to move one rendered content block without dragging its whole node. */
   bindContentBlockDragHandle(blockElement, nodeId, blockId) {
     blockElement.addClass("mmc-draggable-content-block");
@@ -14003,6 +13937,13 @@ var MindMapEditor = class {
     menu.addItem((item) => item.setTitle("\u6DFB\u52A0\u5B50\u8282\u70B9").setIcon("plus-circle").onClick(() => this.addChild()));
     if ((selected == null ? void 0 : selected.id) !== this.document.root.id) {
       menu.addItem((item) => item.setTitle("\u6DFB\u52A0\u540C\u7EA7\u8282\u70B9").setIcon("list-plus").onClick(() => this.addSibling()));
+    }
+    if (this.currentMode === "article" && selected && selected.id !== this.document.root.id) {
+      menu.addSeparator();
+      menu.addItem((item) => item.setTitle("\u4F5C\u4E3A\u5757\u79FB\u52A8").setIcon("grip-vertical").onClick(() => this.startArticleBlockClickMove(selected.id, contextBlock == null ? void 0 : contextBlock.id)));
+      menu.addItem((item) => item.setTitle("\u4F5C\u4E3A\u8282\u70B9\u79FB\u52A8").setIcon("git-branch").onClick(() => this.startArticleNodeClickMove(selected.id)));
+      menu.addItem((item) => item.setTitle("\u964D\u4E3A\u4E0A\u4E00\u4E2A\u8282\u70B9\u7684\u5B50\u8282\u70B9").setIcon("indent-increase").onClick(() => this.demoteArticleNode(selected.id)));
+      menu.addItem((item) => item.setTitle("\u5347\u4E3A\u4E0A\u4E00\u4E2A\u8282\u70B9\u7684\u5144\u5F1F\u8282\u70B9").setIcon("indent-decrease").onClick(() => this.promoteArticleNode(selected.id)));
     }
     menu.addItem((item) => item.setTitle(this.articleEditActionLabel(selected)).setIcon("pencil").onClick(() => this.editSelected()));
     if (this.currentMode === "article") {

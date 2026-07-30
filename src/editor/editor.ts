@@ -2692,8 +2692,10 @@ export class MindMapEditor {
       if (node.id !== this.document.root.id) action("list-plus", "添加同级节点", () => this.addSibling());
       action("plus", "添加子节点", () => this.addChild());
       if (node.id !== this.document.root.id) {
-        action("move-down", "作为块移动", () => this.startArticleBlockClickMove(node.id));
-        action("move-right", "作为节点移动", () => this.startArticleNodeClickMove(node.id));
+        action("grip-vertical", "作为块移动", () => this.startArticleBlockClickMove(node.id));
+        action("git-branch", "作为节点移动", () => this.startArticleNodeClickMove(node.id));
+        action("indent-increase", "降为上一个节点的子节点", () => this.demoteArticleNode(node.id));
+        action("indent-decrease", "升为上一个节点的兄弟节点", () => this.promoteArticleNode(node.id));
       }
       if (node.id !== this.document.root.id) action("trash-2", "删除节点", () => this.deleteNodeById(node.id));
       action("ellipsis", "更多", (event) => this.openContextMenu(event));
@@ -2705,21 +2707,22 @@ export class MindMapEditor {
   }
 
   /** 从当前文章文字或代码编辑器进入“选择目标节点后追加当前块”的模式。 */
-  private startArticleBlockClickMove(nodeId: string): void {
+  private startArticleBlockClickMove(nodeId: string, preferredBlockId?: string): void {
     if (!this.ensureEditable() || this.currentMode !== "article" || nodeId === this.document.root.id) return;
     const active = this.activeArticleBlock;
     const node = findNode(this.document.root, nodeId);
-    if (!node || active?.nodeId !== nodeId || !nodeContentBlocks(node).some((block) => block.id === active.blockId)) {
+    const blockId = preferredBlockId ?? (active?.nodeId === nodeId ? active.blockId : undefined);
+    if (!node || !blockId || !nodeContentBlocks(node).some((block) => block.id === blockId)) {
       new Notice("请先编辑要移动的具体内容块");
       return;
     }
     if (this.pendingArticleClickMove?.kind === "block"
       && this.pendingArticleClickMove.sourceNodeId === nodeId
-      && this.pendingArticleClickMove.blockId === active.blockId) {
+      && this.pendingArticleClickMove.blockId === blockId) {
       this.cancelArticleClickMove();
       return;
     }
-    this.pendingArticleClickMove = { kind: "block", sourceNodeId: nodeId, blockId: active.blockId };
+    this.pendingArticleClickMove = { kind: "block", sourceNodeId: nodeId, blockId };
     this.selectNode(nodeId);
     const focused = document.activeElement;
     if (focused instanceof HTMLElement && this.articleEl.contains(focused)) focused.blur();
@@ -2741,6 +2744,33 @@ export class MindMapEditor {
     if (focused instanceof HTMLElement && this.articleEl.contains(focused)) focused.blur();
     this.applyArticleClickMoveUi();
     new Notice("请选择目标节点，当前节点将插入到其后；按 Esc 取消");
+  }
+
+  /** 将当前文章节点降为同级上一个节点的子节点，保留全部内容、子树和元数据。 */
+  private demoteArticleNode(nodeId: string): void {
+    if (!this.ensureEditable() || this.currentMode !== "article" || nodeId === this.document.root.id) return;
+    const parent = findParent(this.document.root, nodeId);
+    const index = parent?.children.findIndex((child) => child.id === nodeId) ?? -1;
+    const previous = index > 0 ? parent?.children[index - 1] : undefined;
+    if (!parent || !previous) {
+      new Notice("当前节点前没有可作为父节点的同级节点");
+      return;
+    }
+    this.selectNode(nodeId);
+    this.moveNode(nodeId, previous.id, "child");
+  }
+
+  /** 将当前文章节点升为其父节点的同级节点，并紧跟在父节点之后。 */
+  private promoteArticleNode(nodeId: string): void {
+    if (!this.ensureEditable() || this.currentMode !== "article" || nodeId === this.document.root.id) return;
+    const parent = findParent(this.document.root, nodeId);
+    const grandparent = parent ? findParent(this.document.root, parent.id) : null;
+    if (!parent || !grandparent) {
+      new Notice("当前节点已经是最高可提升层级");
+      return;
+    }
+    this.selectNode(nodeId);
+    this.moveNode(nodeId, parent.id, "after");
   }
 
   /** 完成工具栏发起的点击移动；非法目标保持待选状态，便于重新选择。 */
@@ -3079,10 +3109,6 @@ export class MindMapEditor {
       updateTableColumnWidths: (node, blockId, widths) => this.updateTableColumnWidths(node, blockId, widths),
       makeInlineEditable: (element, node, placeholder, blockId) => this.makeInlineEditable(element, node, placeholder, blockId),
       makeInlineCodeEditable: (element, node, code, blockId) => this.makeInlineCodeEditable(element, node, code, blockId),
-      bindArticleNodeDragHandle: (element, nodeId) => this.bindArticleNodeDragHandle(element, nodeId),
-      bindArticleNodeDropTarget: (element, nodeId) => this.bindArticleNodeDropTarget(element, nodeId),
-      bindContentBlockDragHandle: (element, nodeId, blockId) => this.bindContentBlockDragHandle(element, nodeId, blockId),
-      bindContentBlockAppendDropTarget: (element, nodeId) => this.bindContentBlockAppendDropTarget(element, nodeId),
       addInlineNodeActions: (container, node) => this.addInlineNodeActions(container, node)
     };
   }
@@ -4781,99 +4807,6 @@ export class MindMapEditor {
     replaceNodeContentBlocks(node, nodeContentBlocks(node).filter((block) => block.id !== blockId));
   }
 
-  /** Adds a dedicated article handle for moving a whole node without moving its title block. */
-  private bindArticleNodeDragHandle(nodeElement: HTMLElement, nodeId: string): void {
-    nodeElement.addClass("mms-article-node-drag-source");
-    const handle = nodeElement.createEl("button", {
-      cls: "mms-article-node-drag-handle",
-      attr: {
-        type: "button",
-        title: "拖动整个节点",
-        "aria-label": "拖动整个节点",
-        draggable: "true"
-      }
-    });
-    setIcon(handle, "move");
-    handle.addEventListener("pointerdown", (event) => event.stopPropagation());
-    handle.addEventListener("click", (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-    });
-    handle.addEventListener("dragstart", (event) => {
-      if (this.readOnly || nodeId === this.document.root.id) {
-        event.preventDefault();
-        return;
-      }
-      event.stopPropagation();
-      this.selectNode(nodeId);
-      this.draggingId = nodeId;
-      event.dataTransfer?.setData("application/x-mms-node", nodeId);
-      if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
-      nodeElement.addClass("is-node-dragging");
-      this.rootEl.addClass("is-article-node-dragging");
-    });
-    handle.addEventListener("dragend", (event) => {
-      event.stopPropagation();
-      this.draggingId = null;
-      this.clearArticleNodeDropIndicators();
-    });
-  }
-
-  /** Accepts whole-node drops in article mode with explicit before, child, and after zones. */
-  private bindArticleNodeDropTarget(dropTarget: HTMLElement, nodeId: string): void {
-    dropTarget.addEventListener("dragover", (event) => {
-      if (this.readOnly || !this.canMoveNode(this.draggingId, nodeId)) return;
-      event.preventDefault();
-      event.stopPropagation();
-      const position = this.articleNodeDropPosition(event, dropTarget);
-      this.clearArticleNodeDropIndicators(false);
-      dropTarget.addClass(`is-node-drop-${position}`);
-      dropTarget.dataset.nodeDropPosition = position;
-      if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
-    });
-    dropTarget.addEventListener("dragleave", (event) => {
-      if (dropTarget.contains(event.relatedTarget as Node | null)) return;
-      dropTarget.removeClasses(["is-node-drop-before", "is-node-drop-child", "is-node-drop-after"]);
-      delete dropTarget.dataset.nodeDropPosition;
-    });
-    dropTarget.addEventListener("drop", (event) => {
-      const draggedId = this.draggingId;
-      if (this.readOnly || !this.canMoveNode(draggedId, nodeId) || !draggedId) return;
-      event.preventDefault();
-      event.stopPropagation();
-      event.stopImmediatePropagation();
-      const stored = dropTarget.dataset.nodeDropPosition;
-      const position = stored === "before" || stored === "child" || stored === "after"
-        ? stored
-        : this.articleNodeDropPosition(event, dropTarget);
-      this.draggingId = null;
-      this.clearArticleNodeDropIndicators();
-      this.moveNode(draggedId, nodeId, position);
-    });
-  }
-
-  /** Resolves article drops vertically: upper edge, inner body, or lower edge. */
-  private articleNodeDropPosition(event: DragEvent, target: HTMLElement): NodeDropPosition {
-    const rect = target.getBoundingClientRect();
-    const ratio = rect.height > 0 ? (event.clientY - rect.top) / rect.height : .5;
-    if (ratio < .28) return "before";
-    if (ratio > .72) return "after";
-    return "child";
-  }
-
-  /** Clears article node-drag feedback while optionally preserving the active source. */
-  private clearArticleNodeDropIndicators(clearDragging = true): void {
-    this.articleEl.querySelectorAll(".is-node-drop-before, .is-node-drop-child, .is-node-drop-after")
-      .forEach((element) => {
-        element.removeClasses(["is-node-drop-before", "is-node-drop-child", "is-node-drop-after"]);
-        if (element instanceof HTMLElement) delete element.dataset.nodeDropPosition;
-      });
-    if (clearDragging) {
-      this.articleEl.querySelectorAll(".is-node-dragging").forEach((element) => element.removeClass("is-node-dragging"));
-      this.rootEl.removeClass("is-article-node-dragging");
-    }
-  }
-
   /** Adds the explicit grip used to move one rendered content block without dragging its whole node. */
   private bindContentBlockDragHandle(blockElement: HTMLElement, nodeId: string, blockId: string): void {
     blockElement.addClass("mmc-draggable-content-block");
@@ -5842,6 +5775,25 @@ export class MindMapEditor {
     menu.addItem((item) => item.setTitle("添加子节点").setIcon("plus-circle").onClick(() => this.addChild()));
     if (selected?.id !== this.document.root.id) {
       menu.addItem((item) => item.setTitle("添加同级节点").setIcon("list-plus").onClick(() => this.addSibling()));
+    }
+    if (this.currentMode === "article" && selected && selected.id !== this.document.root.id) {
+      menu.addSeparator();
+      menu.addItem((item) => item
+        .setTitle("作为块移动")
+        .setIcon("grip-vertical")
+        .onClick(() => this.startArticleBlockClickMove(selected.id, contextBlock?.id)));
+      menu.addItem((item) => item
+        .setTitle("作为节点移动")
+        .setIcon("git-branch")
+        .onClick(() => this.startArticleNodeClickMove(selected.id)));
+      menu.addItem((item) => item
+        .setTitle("降为上一个节点的子节点")
+        .setIcon("indent-increase")
+        .onClick(() => this.demoteArticleNode(selected.id)));
+      menu.addItem((item) => item
+        .setTitle("升为上一个节点的兄弟节点")
+        .setIcon("indent-decrease")
+        .onClick(() => this.promoteArticleNode(selected.id)));
     }
     menu.addItem((item) => item
       .setTitle(this.articleEditActionLabel(selected))
