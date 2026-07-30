@@ -61,6 +61,30 @@ test("node editor position is located in View and Reading settings", () => {
   assert.match(bundleReadableSource, /视图与阅读[\s\S]*节点编辑器显示位置[\s\S]*快捷键配置/);
 });
 
+test("article entry lock policy defaults to locked and can inherit the previous state", () => {
+  const viewSection = settingsSource.indexOf('containerEl.createEl("h3", { text: "视图与阅读" })');
+  const articleEntryLock = settingsSource.indexOf('.setName("进入文章模式")', viewSection);
+  const nodeEditorPosition = settingsSource.indexOf('.setName("节点编辑器显示位置")', viewSection);
+
+  assert.match(settingsSource, /articleEntryLockMode: "locked" \| "inherit"/);
+  assert.match(settingsSource, /articleEntryLockMode: "locked"/);
+  assert.ok(viewSection >= 0 && articleEntryLock > viewSection && articleEntryLock < nodeEditorPosition);
+  assert.match(settingsSource.slice(articleEntryLock), /\.addOption\("locked", "默认锁定"\)[\s\S]*\.addOption\("inherit", "沿用进入前状态"\)/);
+  assert.match(mainSource, /articleEntryLockMode: raw\.articleEntryLockMode === "inherit" \? "inherit" : "locked"/);
+  assert.match(editorSource, /this\.options\.articleEntryLockMode === "locked" \? true : this\.readOnly/);
+  assert.match(bundleReadableSource, /进入文章模式[\s\S]*默认锁定[\s\S]*沿用进入前状态/);
+});
+
+test("node resize modifier is synchronized from live events and cannot swallow normal clicks", () => {
+  assert.match(editorSource, /const syncResizeModifier = \(trackEvent: KeyboardEvent \| PointerEvent\): void => \{[\s\S]*trackEvent\.ctrlKey \|\| trackEvent\.metaKey/);
+  assert.match(editorSource, /this\.rootEl\.addEventListener\("pointermove", syncResizeModifier, true\)/);
+  assert.match(editorSource, /window\.addEventListener\("blur", clearResizeModifier\)/);
+  assert.match(editorSource, /document\.addEventListener\("visibilitychange", clearResizeModifier\)/);
+  const resizeHandle = editorSource.match(/const resizeHandle = nodeEl\.createDiv\([\s\S]*?resizeHandle\.addEventListener\("pointerdown"/)?.[0] ?? "";
+  assert.match(resizeHandle, /resizeHandle\.addEventListener\("click", \(event\) => \{\s*if \(!event\.ctrlKey && !event\.metaKey\) return;/);
+  assert.match(resizeHandle, /resizeHandle\.addEventListener\("dblclick", \(event\) => \{\s*if \(this\.readOnly\) return;\s*if \(!event\.ctrlKey && !event\.metaKey\) return;/);
+});
+
 test("branch appearance is a normalized global setting and appearance fallback", () => {
   assert.match(settingsSource, /nodeVisualStyle: NodeVisualStyle/);
   assert.match(settingsSource, /nodeVisualStyle: "card"/);

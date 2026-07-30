@@ -213,6 +213,8 @@ export interface MindMapStudioSettings {
   globalSearchMaxResults: number;
   visibleModes: DisplayMode[];
   defaultViewMode: DisplayMode;
+  /** 进入文章模式时是默认锁定，还是沿用切换前的锁定状态。 */
+  articleEntryLockMode: "locked" | "inherit";
   /** 按文章族顶层文件保存的跨模式语义阅读位置。 */
   readingLocations: Record<string, ReadingLocation>;
   articleTocMaxDepth: number;
@@ -341,6 +343,7 @@ export const DEFAULT_SETTINGS: MindMapStudioSettings = {
   globalSearchMaxResults: 100,
   visibleModes: ["mindmap", "outline", "article", "reading"],
   defaultViewMode: "mindmap",
+  articleEntryLockMode: "locked",
   readingLocations: {},
   articleTocMaxDepth: 3,
   showArticleMiniMap: true,
@@ -684,6 +687,18 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
           await this.plugin.setGlobalDisplayMode(value as DisplayMode);
         });
       });
+
+    new Setting(containerEl)
+      .setName("进入文章模式")
+      .setDesc("默认锁定会以阅读状态打开文章；沿用进入前状态会保留从导图或大纲切换前的锁定/编辑状态。")
+      .addDropdown((dropdown) => dropdown
+        .addOption("locked", "默认锁定")
+        .addOption("inherit", "沿用进入前状态")
+        .setValue(this.plugin.settings.articleEntryLockMode)
+        .onChange(async (value) => {
+          this.plugin.settings.articleEntryLockMode = value === "inherit" ? "inherit" : "locked";
+          await this.saveAndRefresh();
+        }));
 
     new Setting(containerEl)
       .setName("节点编辑器显示位置")

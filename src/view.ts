@@ -435,6 +435,7 @@ export class MindMapStudioView extends TextFileView {
         ...(this.plugin.isQuestionBankFile(this.file) ? ["question-bank" as const] : [])
       ],
       defaultViewMode: this.plugin.getActiveDisplayMode(),
+      articleEntryLockMode: this.plugin.settings.articleEntryLockMode,
       currentFilePath: this.file?.path ?? "",
       readingHomePath: this.readingSections[0]?.filePath ?? this.file?.path ?? "",
       readingLocation: (() => {

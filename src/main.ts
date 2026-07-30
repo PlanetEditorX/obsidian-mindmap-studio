@@ -613,6 +613,7 @@ export default class MindMapStudioPlugin extends Plugin {
       defaultViewMode: typeof raw.defaultViewMode === "string"
         ? raw.defaultViewMode as DisplayMode
         : DEFAULT_SETTINGS.defaultViewMode,
+      articleEntryLockMode: raw.articleEntryLockMode === "inherit" ? "inherit" : "locked",
       readingLocations: typeof raw.readingLocations === "object" && raw.readingLocations
         ? Object.fromEntries(Object.entries(raw.readingLocations).flatMap(([path, value]) => {
           const location = normalizeReadingLocation(value);
