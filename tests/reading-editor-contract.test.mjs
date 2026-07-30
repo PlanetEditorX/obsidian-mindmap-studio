@@ -33,8 +33,8 @@ test("pending local progress is not replaced by stale option refreshes", () => {
 });
 
 test("document mutations preserve the current article or reading anchor across a redraw", () => {
-  const mutate = editorSource.match(/private mutate\(action: \(\) => void\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
-  assert.match(mutate, /const location = this\.currentMode === "mindmap" \? null : this\.captureCurrentLocation\(this\.currentMode\)/);
+  const mutate = editorSource.match(/private mutate\(action: \(\) => void, restoreLocation\?: ReadingLocation \| null\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
+  assert.match(mutate, /const location = restoreLocation \?\? \(this\.currentMode === "mindmap" \? null : this\.captureCurrentLocation\(this\.currentMode\)\)/);
   assert.match(mutate, /if \(location\) this\.rememberLocation\(location, true\)/);
   assert.match(mutate, /this\.render\(\);[\s\S]*if \(location\) this\.restoreReadingLocation\(this\.currentMode, location\)/);
 });
@@ -119,10 +119,29 @@ test("article code blocks enter direct editing on double click", () => {
   assert.doesNotMatch(codeRendering, /if \(!options\.readOnly\)/, "the listener must survive switching from reading to edit mode without a redraw");
   assert.match(editorSource, /private makeInlineCodeEditable\(element: HTMLElement, node: MindMapNode, code: MindMapCodeBlock, blockId: string\): void/);
   assert.match(editorSource, /const showLineNumbers = Boolean\(element\.querySelector\("\.mms-code-line-numbers"\)\)/);
-  assert.match(editorSource, /editor\.rows = Math\.max\(4, Math\.min\(40, lineCount\)\)/);
+  assert.match(editorSource, /attr: \{ spellcheck: "false", wrap: "off", "aria-label": "编辑代码" \}/);
+  assert.match(editorSource, /editor\.rows = Math\.max\(4, lineCount\)/);
   assert.match(editorSource, /gutter\.setText\(showLineNumbers \? buildCodeLineNumberText\(lineCount\) : ""\)/);
+  assert.match(editorSource, /const syncGutterScroll = \(\): void => \{ gutter\.scrollTop = editor\.scrollTop; \}/);
+  assert.match(editorSource, /editor\.addEventListener\("scroll", syncGutterScroll\)/);
   assert.match(editorSource, /editor\.addEventListener\("blur", \(\) => finish\(true\)\)/);
   assert.match(editorSource, /event\.key === "Escape"[\s\S]*finish\(false\)/);
+});
+
+test("article image paste commits the active paragraph and inserts after its content block", () => {
+  const paste = editorSource.match(/private async handlePaste\(event: ClipboardEvent\): Promise<void> \{[\s\S]*?\n  \}/)?.[0] ?? "";
+  assert.match(paste, /const targetBlock = target\.closest<HTMLElement>\("\[data-block-id\]"\)/);
+  assert.match(paste, /if \(target\.closest\("\[contenteditable='true'\]"\)\) target\.blur\(\)/);
+  assert.match(paste, /const afterIndex = afterBlockId \? blocks\.findIndex\(\(block\) => block\.id === afterBlockId\) : -1;/);
+  assert.match(paste, /blocks\.splice\(afterIndex >= 0 \? afterIndex \+ 1 : blocks\.length, 0, imageBlock\)/);
+});
+
+test("deleting an article node restores the closest surviving sibling instead of the page top", () => {
+  const directDelete = editorSource.match(/private deleteNodeById\(nodeId: string\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
+  assert.match(directDelete, /const restoreLocation = this\.currentMode === "mindmap" \? null : this\.createSelectionLocation\(fallback\)/);
+  assert.match(directDelete, /\}, restoreLocation\);/);
+  const mutate = editorSource.match(/private mutate\(action: \(\) => void, restoreLocation\?: ReadingLocation \| null\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
+  assert.match(mutate, /const location = restoreLocation \?\? \(this\.currentMode === "mindmap" \? null : this\.captureCurrentLocation\(this\.currentMode\)\)/);
 });
 
 test("structural mind-map changes use a reduced-motion-aware FLIP layout transition", () => {
