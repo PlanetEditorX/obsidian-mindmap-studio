@@ -221,7 +221,8 @@ test("question-bank grading distinguishes single choice, multiple choice, judgme
   assert.equal(practice.isExactQuestionAnswer(" 资料 分析！", "资料分析"), true);
   assert.equal(practice.isExactQuestionAnswer("资料理解", "资料分析"), false);
   assert.deepEqual(practice.splitExplanationLines("A项正确。B项错误。C项待定。"), ["A项正确。", "B项错误。", "C项待定。"]);
-  assert.deepEqual(practice.splitExplanationLines("D项错误。综上所述，正确选项为 A、C、D。"), ["D项错误。", "综上所述，", "正确选项为 A、C、D。"]);
+  assert.deepEqual(practice.splitExplanationLines("D项错误。综上所述，正确选项为 A、C、D。"), ["D项错误。综上所述，正确选项为 A、C、D。"]);
+  assert.deepEqual(practice.splitExplanationLines("A项正确。B项错误。综上所述，答案为 A。"), ["A项正确。", "B项错误。综上所述，答案为 A。"]);
 });
 
 test("question-bank practice persists attempts, routes mistakes to review, and advances after showing feedback", async () => {

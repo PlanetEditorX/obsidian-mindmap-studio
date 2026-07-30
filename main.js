@@ -4519,7 +4519,7 @@ function renderExplanationBlocks(container, blocks, resolveImage) {
   }
 }
 function splitExplanationLines(value) {
-  const lines = value.split(/(?=[A-DＡ-Ｄ]项|综上所述[，,]?(?:正确选项|答案)(?:为|是)?|(?:正确选项|答案)(?:为|是)?)/u).map((line) => line.trim()).filter(Boolean);
+  const lines = value.split(/(?=[A-DＡ-Ｄ]项)/u).map((line) => line.trim()).filter(Boolean);
   return lines.length ? lines : value.trim() ? [value.trim()] : [];
 }
 function resetPracticeProgress(state) {

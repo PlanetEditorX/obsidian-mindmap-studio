@@ -275,9 +275,9 @@ function renderExplanationBlocks(container: HTMLElement, blocks: readonly MindMa
   }
 }
 
-/** Splits common A/B/C/D analysis markers into individual display paragraphs. */
+/** Splits A/B/C/D analysis markers while keeping the concluding sentence with the final item. */
 export function splitExplanationLines(value: string): string[] {
-  const lines = value.split(/(?=[A-DＡ-Ｄ]项|综上所述[，,]?(?:正确选项|答案)(?:为|是)?|(?:正确选项|答案)(?:为|是)?)/u).map((line) => line.trim()).filter(Boolean);
+  const lines = value.split(/(?=[A-DＡ-Ｄ]项)/u).map((line) => line.trim()).filter(Boolean);
   return lines.length ? lines : value.trim() ? [value.trim()] : [];
 }
 
