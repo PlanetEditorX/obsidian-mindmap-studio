@@ -3727,6 +3727,11 @@
   text-indent: 2em;
 }
 
+.mms-article-leaf-text.is-flush,
+.mms-article-paragraph.is-flush {
+  text-indent: 0;
+}
+
 .mms-article-image {
   display: block;
   max-width: min(100%, 760px);

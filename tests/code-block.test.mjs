@@ -31,10 +31,10 @@ test("code insertion appends blocks and block menus remove only the targeted cod
   assert.doesNotMatch(editorSource, /private removeStructuredBlocks\(/);
 });
 
-test("node context menu appends a text block and starts editing that exact block", () => {
-  assert.match(editorSource, /private appendTextBlock\(node: MindMapNode\): string[\s\S]*type: "text", text: ""/);
-  assert.match(editorSource, /private insertTextBlock\(\): void[\s\S]*appendTextBlock\(selected\)[\s\S]*beginInlineEdit\(selected\.id, blockId, true\)/);
-  assert.match(editorSource, /setTitle\("插入文字"\)\.setIcon\("text-cursor-input"\)\.onClick\(\(\) => this\.insertTextBlock\(\)\)/);
+test("node context menu inserts a text block after its clicked block and starts editing that exact block", () => {
+  assert.match(editorSource, /private insertTextBlockAfter\(node: MindMapNode, afterBlockId\?: string\): string[\s\S]*blocks\.splice\(insertIndex, 0, \{ id: blockId, type: "text", text: "" \}\)/);
+  assert.match(editorSource, /private insertTextBlock\(afterBlockId\?: string\): void[\s\S]*insertTextBlockAfter\(selected, afterBlockId\)[\s\S]*beginInlineEdit\(selected\.id, blockId, true\)/);
+  assert.match(editorSource, /setTitle\(contextBlockId \? "在此块后插入文字" : "插入文字"\)[\s\S]*this\.insertTextBlock\(contextBlockId\)/);
 });
 
 test("clearing a text block removes it unless it is the node's only content block", () => {

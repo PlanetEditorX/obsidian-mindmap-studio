@@ -1382,7 +1382,7 @@ const command = "example";
   assert.match(toggleReadOnlySource, /currentMode === "reading" && !this\.readOnly[\s\S]*this\.render\(\)[\s\S]*return;[\s\S]*this\.applyReadOnlyStateToRenderedContent\(\)/, "only the deliberate continuous-book to article-editor transition may render; ordinary toggles must use the fast path");
   assert.match(editorSource, /private applyReadOnlyStateToRenderedContent\(\): void[\s\S]*data-mms-inline-editable[\s\S]*nodeEl\.draggable/, "the fast path must update inline editors and node dragging in place");
   assert.match(editorSource, /dataset\.mmsInlineEditable = "true"[\s\S]*if \(this\.readOnly\) return;[\s\S]*attachSelectionFormatToolbar/, "inline editor listeners must remain available when read-only content becomes editable");
-  const makeInlineEditableSource = editorSource.match(/private makeInlineEditable\(element: HTMLElement, node: MindMapNode, placeholder: string\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
+  const makeInlineEditableSource = editorSource.match(/private makeInlineEditable\(element: HTMLElement, node: MindMapNode, placeholder: string, blockId\?: string\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
   const activateInlineEditableSource = editorSource.match(/private activateInlineEditable\(element: HTMLElement, focus = true\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
   assert.match(
     makeInlineEditableSource,
@@ -1634,7 +1634,8 @@ const command = "example";
   assert.match(cssSource, /\.mmc-parent-navigation-button\s*\{[\s\S]*?cursor:\s*pointer\s*!important/, "document-flow parent navigation must keep the hand cursor across Obsidian themes");
   assert.match(cssSource, /\.mmc-canvas-breadcrumb-back\s*\{[\s\S]*?cursor:\s*pointer\s*!important/, "canvas back navigation must keep the hand cursor across Obsidian themes");
   assert.match(cssSource, /\.mmc-canvas-breadcrumb-parent\s*\{[\s\S]*?cursor:\s*pointer\s*!important/, "canvas parent breadcrumb must keep the hand cursor across Obsidian themes");
-  assert.match(cssSource, /\.mms-article-leaf-text,[\s\S]*\.mms-article-paragraph[\s\S]*text-indent:\s*2em/, "all body paragraphs must use a stable two-em first-line indent");
+  assert.match(cssSource, /\.mms-article-leaf-text,[\s\S]*\.mms-article-paragraph[\s\S]*text-indent:\s*2em/, "all body paragraphs must keep the default two-em first-line indent");
+  assert.match(cssSource, /\.mms-article-leaf-text\.is-flush,[\s\S]*\.mms-article-paragraph\.is-flush[\s\S]*text-indent:\s*0/, "individual article text blocks must support a persisted flush-left override");
   assert.match(importExport.readingSectionsToHtml([{ filePath: "root.mindmap", document: importedXmind, baseDepth: 0 }]), /\.body-paragraph\{[^}]*text-indent:2em/, "exported articles must preserve uniform paragraph indentation");
   assert.match(cssSource, /\.mms-outline-table-wrap[\s\S]*max-height:\s*320px/);
   assert.match(cssSource, /\.mms-outline-content[\s\S]*margin:\s*2px 8px 10px 31px/, "outline content must not apply the node depth twice");
