@@ -7675,9 +7675,14 @@ function renderHeading(heading, node, title, options) {
     const headingLink = heading.createEl("a", { cls: "mms-article-heading-text mms-submap-text-link", href: node.submap.path, attr: { title: `\u6253\u5F00\u5B50\u5BFC\u56FE\uFF1A${(_a2 = node.submap.title) != null ? _a2 : node.submap.path}` } });
     const textBlock = nodeContentBlocks(node).find((block) => block.type === "text");
     renderRichTextRuns(headingLink, textBlock == null ? void 0 : textBlock.richText, (_b2 = textBlock == null ? void 0 : textBlock.text) != null ? _b2 : title);
+    if (!options.readOnly) {
+      headingLink.dataset.mmsExplicitEditOnly = "true";
+      options.makeInlineEditable(headingLink, node, "\u7AE0\u8282\u6807\u9898");
+    }
     headingLink.addEventListener("click", (event) => {
       event.preventDefault();
       event.stopPropagation();
+      if (headingLink.contentEditable === "true") return;
       options.selectNode(node.id);
       void options.callbacks.onOpenMindMap(node.submap.path);
     });
@@ -10534,7 +10539,7 @@ var MindMapEditor = class {
     let original = readRichTextEditor(element);
     let toolbar = null;
     element.addEventListener("pointerdown", () => {
-      if (this.readOnly || element.contentEditable === "true") return;
+      if (this.readOnly || element.contentEditable === "true" || element.dataset.mmsExplicitEditOnly === "true") return;
       this.selectNode(node.id);
       this.activateInlineEditable(element, false);
     });
@@ -10666,7 +10671,7 @@ var MindMapEditor = class {
         handler();
       });
     };
-    action("pencil", "\u5B8C\u6574\u7F16\u8F91", () => this.editSelected());
+    action("pencil", this.currentMode === "article" ? this.articleEditActionLabel(node) : "\u5B8C\u6574\u7F16\u8F91", () => this.editSelected());
     action("plus", "\u6DFB\u52A0\u5B50\u8282\u70B9", () => this.addChild());
     if (node.id !== this.document.root.id) action("trash-2", "\u5220\u9664\u8282\u70B9", () => this.deleteSelected());
   }
@@ -11735,7 +11740,9 @@ var MindMapEditor = class {
     if (!node) return;
     this.selectNode(nodeId);
     this.inlineEditingId = nodeId;
-    if (this.options.nodeEditorPosition === "right") this.editSelected();
+    if (this.currentMode === "mindmap" && this.options.nodeEditorPosition === "right") {
+      this.openSelectedNodeEditor();
+    }
     if (this.currentMode !== "mindmap") {
       const scope = this.currentMode === "outline" ? this.outlineEl : this.articleEl;
       const inlineElement = scope.querySelector(`[data-node-id="${CSS.escape(nodeId)}"] [data-mms-inline-editable="true"]`);
@@ -12075,6 +12082,14 @@ var MindMapEditor = class {
    * 编辑selected，并保持模型、界面和持久化状态的一致性。
    */
   editSelected(initialBlockId) {
+    if (this.currentMode === "article") {
+      this.editSelectedArticleContent();
+      return;
+    }
+    this.openSelectedNodeEditor(initialBlockId);
+  }
+  /** Opens the complete node editor used by the mind-map and outline modes. */
+  openSelectedNodeEditor(initialBlockId) {
     if (!this.ensureEditable()) return;
     const selected = this.selectedNode();
     if (!selected) return;
@@ -12135,6 +12150,50 @@ var MindMapEditor = class {
     if (this.options.nodeEditorPosition === "right" && this.inlineEditingId === selected.id) {
       modal.releaseKeyboardScope();
     }
+  }
+  /** Returns the first inline-editable article element for one rendered node. */
+  articleInlineEditable(nodeId) {
+    return this.articleEl.querySelector(
+      `[data-node-id="${CSS.escape(nodeId)}"] [data-mms-inline-editable="true"]`
+    );
+  }
+  /** Returns the article-specific edit action shown in context and inline menus. */
+  articleEditActionLabel(node) {
+    if (this.currentMode !== "article" || !node) return "\u7F16\u8F91\u8282\u70B9";
+    return this.articleInlineEditable(node.id) ? "\u7F16\u8F91\u5F53\u524D\u5185\u5BB9" : "\u6DFB\u52A0\u6B63\u6587";
+  }
+  /** Focuses the current article line, or creates a temporary body line for content-only nodes. */
+  editSelectedArticleContent() {
+    var _a2;
+    if (!this.ensureEditable()) return;
+    const selected = this.selectedNode();
+    if (!selected) return;
+    const inlineElement = this.articleInlineEditable(selected.id);
+    if (inlineElement) {
+      this.activateInlineEditable(inlineElement);
+      return;
+    }
+    const section = this.articleEl.querySelector(`[data-node-id="${CSS.escape(selected.id)}"]`);
+    if (!section) return;
+    const paragraph = section.createEl("p", {
+      cls: `mms-article-leaf-text${this.options.articleLeafBulletsEnabled ? " is-bulleted" : ""}`
+    });
+    paragraph.dataset.mmsTransientArticleBody = "true";
+    if (this.options.articleLeafBulletsEnabled) {
+      paragraph.dataset.bulletStyle = this.options.articleLeafBulletStyle;
+      if (this.options.articleLeafBulletColor) {
+        paragraph.style.setProperty("--mms-article-bullet-color", this.options.articleLeafBulletColor);
+      }
+    }
+    const actions = section.querySelector(":scope > .mms-inline-node-actions");
+    if (actions) section.insertBefore(paragraph, actions);
+    this.makeInlineEditable(paragraph, selected, "\u6B63\u6587\u6BB5\u843D");
+    paragraph.addEventListener("blur", () => {
+      window.requestAnimationFrame(() => {
+        if (paragraph.isConnected && !((_a2 = paragraph.textContent) == null ? void 0 : _a2.trim())) paragraph.remove();
+      });
+    }, { once: true });
+    this.activateInlineEditable(paragraph);
   }
   /** Creates a structured question as a child of the selected node. */
   addQuestionChild() {
@@ -13145,8 +13204,7 @@ var MindMapEditor = class {
   }
   /** 打开当前图片块的编辑面板，用于精确尺寸和替换来源。 */
   editImageBlock(blockId) {
-    const initialBlockId = blockId;
-    this.editSelected(initialBlockId);
+    this.openSelectedNodeEditor(blockId);
   }
   /** 将当前图片上传到用户选择的图床，并保留本地来源与已有镜像。 */
   async uploadImageBlock(nodeId, blockId) {
@@ -13200,7 +13258,10 @@ var MindMapEditor = class {
     }
     menu.addItem((item) => item.setTitle("\u6DFB\u52A0\u5B50\u8282\u70B9").setIcon("plus-circle").onClick(() => this.addChild()));
     menu.addItem((item) => item.setTitle("\u6DFB\u52A0\u540C\u7EA7\u8282\u70B9").setIcon("list-plus").onClick(() => this.addSibling()));
-    menu.addItem((item) => item.setTitle("\u7F16\u8F91\u8282\u70B9").setIcon("pencil").onClick(() => this.editSelected()));
+    menu.addItem((item) => item
+      .setTitle(this.articleEditActionLabel(selected))
+      .setIcon("pencil")
+      .onClick(() => this.editSelected()));
     if (this.options.questionNodesEnabled) {
       menu.addItem((item) => item.setTitle((selected == null ? void 0 : selected.question) ? "\u7F16\u8F91\u9898\u76EE\u8282\u70B9" : "\u8F6C\u6362\u4E3A\u9898\u76EE\u8282\u70B9").setIcon("circle-help").onClick(() => this.editQuestion()));
       menu.addItem((item) => item.setTitle("\u65B0\u5EFA\u9898\u76EE\u5B50\u8282\u70B9").setIcon("circle-plus").onClick(() => this.addQuestionChild()));
