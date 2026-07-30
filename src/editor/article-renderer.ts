@@ -95,12 +95,16 @@ export function renderArticleMode(container: HTMLElement, options: ArticleRender
       options.addInlineNodeActions(heading, info.node);
       renderArticleNodeContent(section, info.node, false, options);
     } else {
-      const firstTextBlock = nodeContentBlocks(info.node).find((block): block is MindMapTextContentBlock => block.type === "text");
-      if (firstTextBlock?.text.trim()) {
+      const blocks = nodeContentBlocks(info.node);
+      const firstTextBlock = blocks.find((block): block is MindMapTextContentBlock => block.type === "text");
+      // Edit mode must render an actual editable line for a brand-new empty
+      // leaf. Otherwise the section contains only its action buttons, collapses
+      // to nearly zero height, and beginInlineEdit() has no focus target.
+      if (firstTextBlock?.text.trim() || (!options.readOnly && blocks.length === 0)) {
         const paragraph = section.createEl("p", { cls: `mms-article-leaf-text${options.articleLeafBulletsEnabled ? " is-bulleted" : ""}` });
-        paragraph.dataset.blockId = firstTextBlock.id;
+        if (firstTextBlock) paragraph.dataset.blockId = firstTextBlock.id;
         applyArticleLeafBulletStyle(paragraph, options);
-        renderRichTextRuns(paragraph, firstTextBlock.richText, firstTextBlock.text);
+        renderRichTextRuns(paragraph, firstTextBlock?.richText, firstTextBlock?.text ?? "");
         options.makeInlineEditable(paragraph, info.node, "正文段落");
       }
       options.addInlineNodeActions(section, info.node);

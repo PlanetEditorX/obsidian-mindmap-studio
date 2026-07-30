@@ -44,6 +44,8 @@ const ROOT_WIDTH = 196;
 const NODE_WIDTH = 176;
 const H_GAP = 112;
 const V_GAP = 24;
+/** Prevent empty nodes from collapsing into an unusable horizontal strip. */
+const MIN_NODE_HEIGHT = 36;
 
 /**
  * 执行“visible children”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
@@ -80,7 +82,7 @@ function estimatedTextLines(text: string, width: number, fontSize: number): numb
  */
 function nodeDimensions(node: MindMapNode, depth: number, defaultFontSize = 14, visualStyle: NodeVisualStyle = "card", appearance: MindMapAppearance = {}, measuredDimensions?: ReadonlyMap<string, MeasuredNodeDimensions>): MeasuredNodeDimensions {
   const measured = measuredDimensions?.get(node.id);
-  if (measured) return { width: measured.width, height: Math.max(measured.height, node.style?.minHeight ?? 0) };
+  if (measured) return { width: measured.width, height: Math.max(measured.height, node.style?.minHeight ?? 0, MIN_NODE_HEIGHT) };
   const fontSize = node.style?.fontSize ?? defaultFontSize;
   const manualWidth = node.style?.width;
   const extraWidth = Math.max(0, fontSize - 14) * 4;
@@ -133,7 +135,7 @@ function nodeDimensions(node: MindMapNode, depth: number, defaultFontSize = 14, 
     const lines = node.code.code.split(/\r?\n/);
     height += Math.min(390, Math.max(100, Math.min(lines.length, 18) * 20 + 48));
   }
-  height = Math.max(height, node.style?.minHeight ?? 0);
+  height = Math.max(height, node.style?.minHeight ?? 0, MIN_NODE_HEIGHT);
   return { width, height: Math.min(1200, height) };
 }
 

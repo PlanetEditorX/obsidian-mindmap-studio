@@ -5,7 +5,7 @@
 | `src/render/code-block.ts` | 四模式共享代码块渲染器；集中处理行数、围栏、设置优先级、主题、折叠、Markdown 高亮与真实 DOM 行号栏 |
 | `src/view.ts` | 统一委托 `renderCodeBlock()`，导图、大纲、文章和通读共用同一宿主回调 |
 | `styles.css` | 使用真实行号栏/代码栏双栏布局，共享计算字体与内边距，并确保横向滚动不被导图节点样式覆盖 |
-| `src/editor/editor.ts` | 不再把布局估算高度固化为节点 `min-height`；仅尊重用户显式最小高度；代码渲染完成及折叠切换后重新测量导图布局；节点编辑保存与结构化块删除改用权威内容替换入口 |
+| `src/editor/editor.ts` | 不再把布局估算高度固化为节点 `min-height`；仅保留 36px 全局下限并尊重用户显式的更高最小高度；代码渲染完成及折叠切换后重新测量导图布局；节点编辑保存与结构化块删除改用权威内容替换入口 |
 | `src/core/model.ts` | 新增 `replaceNodeContentBlocks()`，完整替换 `content` 前清理旧版 `text/richText/image/table/code` 镜像，再从新内容重建兼容字段 |
 | `main.js` | 重新生产构建，包含行号重构、动态节点高度和内容块删除修复 |
 | `tests/code-block.test.mjs` | 覆盖行号结构、四模式调用、动态高度契约、折叠切换重新测量及旧伪元素禁止回归 |
@@ -23,7 +23,7 @@
 
 - 不改变 `.mindmap` 格式版本。
 - 不改变代码块节点/页面/全局设置优先级。
-- 不改变用户手动节点宽度和最小高度语义。
+- 不改变用户手动节点宽度和最小高度的覆盖语义；新增的 36px 全局下限只阻止空节点塌缩。
 - 不改变旧文件读取时将节点级 `table` / `code` 迁移为内容块的能力。
 - 不修改文章编号、阅读位置、父子导图、搜索、AI、图片、图床及导入导出业务逻辑。
 
@@ -40,3 +40,19 @@
 | `package.json` | 将新增设置布局测试纳入单元测试脚本 |
 | `docs/SPECIAL_FEATURES.md`、`CHANGELOG.md` | 更新功能说明和未发布记录 |
 | `TEST_RESULTS.md` | 记录本次专项测试、语法检查及构建环境限制 |
+
+## 子导图默认节点、文章空节点焦点与导图最低高度
+
+| 文件 | 变更 |
+|---|---|
+| `src/main.ts` | 新建子导图不再清空默认子节点，保留“主题 1”和“主题 2” |
+| `src/editor/article-renderer.ts` | 编辑模式为无内容的末端节点渲染可聚焦占位行 |
+| `src/editor/editor.ts` | 导图节点运行时统一应用 36px 最低高度 |
+| `src/render/layout.ts` | 初始估算和浏览器实测尺寸均应用相同最低高度，避免碰撞布局再次压扁空节点 |
+| `styles.css` | `.mmc-node` 增加 36px 最低高度 |
+| `main.js` | 同步上述运行时代码 |
+| `tests/node-creation.test.mjs` | 覆盖子导图默认结构、文章空节点焦点目标和导图最低高度 |
+| `package.json` | 将新增专项测试纳入单元测试 |
+| `docs/SPECIAL_FEATURES.md`、`CHANGELOG.md` | 更新功能说明和修复记录 |
+| `TEST_RESULTS.md` | 记录本次验证结果和构建环境限制 |
+

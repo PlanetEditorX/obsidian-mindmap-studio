@@ -2901,6 +2901,7 @@ var MindMapStudioSettingTab = class extends import_obsidian.PluginSettingTab {
       await this.saveAndRefresh();
     }));
     containerEl.createEl("h3", { text: "\u8FDE\u7EBF\u4E0E\u5206\u652F" });
+
     new import_obsidian.Setting(containerEl).setName("\u5206\u652F\u5916\u89C2").setDesc("\u4F5C\u4E3A\u672A\u5355\u72EC\u8BBE\u7F6E\u9875\u9762\u5916\u89C2\u65F6\u7684\u5168\u5C40\u9ED8\u8BA4\u503C\uFF1B\u5F53\u524D\u8111\u56FE\u4ECD\u53EF\u5728\u201C\u4E3B\u9898\u4E0E\u5916\u89C2\u201D\u4E2D\u8986\u76D6\u3002").addDropdown((dropdown) => dropdown.addOption("card", "\u5706\u6DA6\u5361\u7247\u5206\u652F\uFF08\u66F2\u7EBF\uFF09").addOption("branch", "\u5706\u89D2\u5206\u652F\uFF08\u6298\u7EBF\uFF09").setValue(this.plugin.settings.nodeVisualStyle).onChange(async (value) => {
       this.plugin.settings.nodeVisualStyle = value === "branch" ? "branch" : "card";
       await this.saveAndRefresh();
@@ -3274,6 +3275,7 @@ var ROOT_WIDTH = 196;
 var NODE_WIDTH = 176;
 var H_GAP = 112;
 var V_GAP = 24;
+var MIN_NODE_HEIGHT = 36;
 function visibleChildren(node) {
   return node.collapsed ? [] : node.children;
 }
@@ -3286,7 +3288,7 @@ function estimatedTextLines(text, width, fontSize) {
 function nodeDimensions(node, depth, defaultFontSize = 14, visualStyle = "card", appearance = {}, measuredDimensions) {
   var _a2, _b2, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m;
   const measured = measuredDimensions == null ? void 0 : measuredDimensions.get(node.id);
-  if (measured) return { width: measured.width, height: Math.max(measured.height, (_b2 = (_a2 = node.style) == null ? void 0 : _a2.minHeight) != null ? _b2 : 0) };
+  if (measured) return { width: measured.width, height: Math.max(measured.height, (_b2 = (_a2 = node.style) == null ? void 0 : _a2.minHeight) != null ? _b2 : 0, MIN_NODE_HEIGHT) };
   const fontSize = (_d = (_c = node.style) == null ? void 0 : _c.fontSize) != null ? _d : defaultFontSize;
   const manualWidth = (_e = node.style) == null ? void 0 : _e.width;
   const extraWidth = Math.max(0, fontSize - 14) * 4;
@@ -3332,7 +3334,7 @@ function nodeDimensions(node, depth, defaultFontSize = 14, visualStyle = "card",
     const lines = node.code.code.split(/\r?\n/);
     height += Math.min(390, Math.max(100, Math.min(lines.length, 18) * 20 + 48));
   }
-  height = Math.max(height, (_m = (_l = node.style) == null ? void 0 : _l.minHeight) != null ? _m : 0);
+  height = Math.max(height, (_m = (_l = node.style) == null ? void 0 : _l.minHeight) != null ? _m : 0, MIN_NODE_HEIGHT);
   return { width, height: Math.min(1200, height) };
 }
 function subtreeHeight(node, depth, defaultFontSize = 14, visualStyle = "card", appearance = {}, measuredDimensions) {
@@ -4533,9 +4535,8 @@ function splitExplanationLines(value) {
   const prefix = text.slice(0, optionMarkers[0].index).trim();
   if (prefix) lines.push(prefix);
   optionMarkers.forEach((marker, index) => {
-    var _a2, _b2;
     const start = marker.index;
-    const end = (_b2 = (_a2 = optionMarkers[index + 1]) == null ? void 0 : _a2.index) != null ? _b2 : text.length;
+    const end = optionMarkers[index + 1]?.index ?? text.length;
     const segment = text.slice(start, end).trim();
     if (!segment) return;
     if (index === optionMarkers.length - 1) {
@@ -4547,24 +4548,23 @@ function splitExplanationLines(value) {
   return lines;
 }
 function splitFinalOptionConclusion(segment) {
-  var _a2, _b2;
-  const optionMarker = (_b2 = (_a2 = segment.match(/^[A-DＡ-Ｄ]项/u)) == null ? void 0 : _a2[0]) != null ? _b2 : "";
+  const optionMarker = segment.match(/^[A-DＡ-Ｄ]项/u)?.[0] ?? "";
   const body = segment.slice(optionMarker.length);
   const conclusionPattern = String.raw`(?:综上(?:所述|可知)?|(?:因此|所以|故而|故)?[，,:：]?\s*(?:本题)?(?:正确选项(?:是|为)?|正确答案(?:是|为)?|答案(?:是|为))|故选)`;
-  const afterPunctuation = body.match(new RegExp(`([\u3002\uFF01\uFF1F\uFF1B])(?:[ \\t]*|\\r?\\n[ \\t]*)(?=${conclusionPattern})`, "u"));
-  if ((afterPunctuation == null ? void 0 : afterPunctuation.index) !== void 0) {
+  const afterPunctuation = body.match(new RegExp(`([。！？；])(?:[ \t]*|\r?\n[ \t]*)(?=${conclusionPattern})`, "u"));
+  if (afterPunctuation?.index !== void 0) {
     const punctuationEnd = optionMarker.length + afterPunctuation.index + afterPunctuation[1].length;
     const conclusionStart = optionMarker.length + afterPunctuation.index + afterPunctuation[0].length;
     return [segment.slice(0, punctuationEnd).trim(), segment.slice(conclusionStart).trim()].filter(Boolean);
   }
-  const afterLineBreak = body.match(new RegExp(`\\r?\\n[ \\t]*(?=${conclusionPattern})`, "u"));
-  if ((afterLineBreak == null ? void 0 : afterLineBreak.index) !== void 0) {
+  const afterLineBreak = body.match(new RegExp(`\r?\n[ \t]*(?=${conclusionPattern})`, "u"));
+  if (afterLineBreak?.index !== void 0) {
     const optionEnd = optionMarker.length + afterLineBreak.index;
     const conclusionStart = optionMarker.length + afterLineBreak.index + afterLineBreak[0].length;
     return [segment.slice(0, optionEnd).trim(), segment.slice(conclusionStart).trim()].filter(Boolean);
   }
   const directSummary = body.match(new RegExp(conclusionPattern, "u"));
-  if ((directSummary == null ? void 0 : directSummary.index) !== void 0 && directSummary.index > 0) {
+  if (directSummary?.index !== void 0 && directSummary.index > 0) {
     const conclusionStart = optionMarker.length + directSummary.index;
     return [segment.slice(0, conclusionStart).trim(), segment.slice(conclusionStart).trim()].filter(Boolean);
   }
@@ -7617,12 +7617,13 @@ function renderArticleMode(container, options) {
       options.addInlineNodeActions(heading, info.node);
       renderArticleNodeContent(section, info.node, false, options);
     } else {
-      const firstTextBlock = nodeContentBlocks(info.node).find((block) => block.type === "text");
-      if (firstTextBlock == null ? void 0 : firstTextBlock.text.trim()) {
+      const blocks = nodeContentBlocks(info.node);
+      const firstTextBlock = blocks.find((block) => block.type === "text");
+      if ((firstTextBlock == null ? void 0 : firstTextBlock.text.trim()) || !options.readOnly && blocks.length === 0) {
         const paragraph = section.createEl("p", { cls: `mms-article-leaf-text${options.articleLeafBulletsEnabled ? " is-bulleted" : ""}` });
-        paragraph.dataset.blockId = firstTextBlock.id;
+        if (firstTextBlock) paragraph.dataset.blockId = firstTextBlock.id;
         applyArticleLeafBulletStyle(paragraph, options);
-        renderRichTextRuns(paragraph, firstTextBlock.richText, firstTextBlock.text);
+        renderRichTextRuns(paragraph, firstTextBlock == null ? void 0 : firstTextBlock.richText, (firstTextBlock == null ? void 0 : firstTextBlock.text) ?? "");
         options.makeInlineEditable(paragraph, info.node, "\u6B63\u6587\u6BB5\u843D");
       }
       options.addInlineNodeActions(section, info.node);
@@ -8968,183 +8969,181 @@ var AppearanceModal = class extends import_obsidian10.Modal {
     this.modalEl.addClass("mmc-appearance-dialog");
     this.contentEl.addClass("mmc-appearance-modal");
     const form = this.contentEl.createEl("form");
+    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p;
     form.createEl("p", {
-      cls: "setting-item-description",
-      text: "\u5148\u9009\u62E9\u4E3B\u9898\u6A21\u677F\uFF0C\u518D\u6309\u753B\u5E03\u3001\u8282\u70B9\u3001\u8FDE\u7EBF\u3001\u9605\u8BFB\u548C\u4EE3\u7801\u5206\u7EC4\u8C03\u6574\u3002\u8BBE\u7F6E\u53EA\u4FDD\u5B58\u5230\u5F53\u524D .mindmap \u6587\u4EF6\uFF0C\u5E76\u4F18\u5148\u4E8E\u63D2\u4EF6\u5168\u5C40\u9ED8\u8BA4\u503C\u3002"
+        cls: "setting-item-description",
+        text: "先选择主题模板，再按画布、节点、连线、阅读和代码分组调整。设置只保存到当前 .mindmap 文件，并优先于插件全局默认值。"
     });
-    let selectedPreset = (_a2 = this.appearance.themePreset) != null ? _a2 : "classic-indigo";
+    let selectedPreset = (_a = this.appearance.themePreset) !== null && _a !== void 0 ? _a : "classic-indigo";
     const themeSection = form.createDiv({ cls: "mmc-theme-picker mmc-appearance-section" });
-    themeSection.createDiv({ cls: "mmc-theme-picker-title", text: "\u4E3B\u9898\u6A21\u677F" });
+    themeSection.createDiv({ cls: "mmc-theme-picker-title", text: "主题模板" });
     themeSection.createDiv({
-      cls: "setting-item-description mmc-appearance-section-description",
-      text: "\u4E3B\u9898\u6A21\u677F\u4F1A\u4E00\u6B21\u66F4\u65B0\u989C\u8272\u3001\u5B57\u4F53\u548C\u8FDE\u7EBF\uFF1B\u4E0B\u65B9\u5355\u9879\u4ECD\u53EF\u7EE7\u7EED\u8986\u76D6\u3002"
+        cls: "setting-item-description mmc-appearance-section-description",
+        text: "主题模板会一次更新颜色、字体和连线；下方单项仍可继续覆盖。"
     });
     const themeGrid = themeSection.createDiv({ cls: "mmc-theme-card-grid" });
-    const themeCards = /* @__PURE__ */ new Map();
+    const themeCards = new Map();
     const appearanceColumns = form.createDiv({ cls: "mmc-appearance-columns" });
     const appearanceLeftColumn = appearanceColumns.createDiv({ cls: "mmc-appearance-column" });
     const appearanceRightColumn = appearanceColumns.createDiv({ cls: "mmc-appearance-column" });
     const createAppearanceSection = (container, title, description) => {
-      const section = container.createDiv({ cls: "mmc-appearance-section" });
-      section.createDiv({ cls: "mmc-theme-picker-title", text: title });
-      section.createDiv({ cls: "setting-item-description mmc-appearance-section-description", text: description });
-      const grid = section.createDiv({ cls: "mmc-form-grid mmc-appearance-grid" });
-      return { section, grid };
+        const section = container.createDiv({ cls: "mmc-appearance-section" });
+        section.createDiv({ cls: "mmc-theme-picker-title", text: title });
+        section.createDiv({ cls: "setting-item-description mmc-appearance-section-description", text: description });
+        const grid = section.createDiv({ cls: "mmc-form-grid mmc-appearance-grid" });
+        return { section, grid };
     };
     const addColor = (container, labelText, value, fallback) => {
-      const label = container.createEl("label", { text: labelText });
-      const row = label.createDiv({ cls: "mmc-color-row" });
-      const toggle = row.createEl("input", { type: "checkbox" });
-      const input = row.createEl("input", { type: "color" });
-      toggle.checked = Boolean(value);
-      input.value = value != null ? value : fallback;
-      input.disabled = !toggle.checked;
-      toggle.addEventListener("change", () => {
+        const label = container.createEl("label", { text: labelText });
+        const row = label.createDiv({ cls: "mmc-color-row" });
+        const toggle = row.createEl("input", { type: "checkbox" });
+        const input = row.createEl("input", { type: "color" });
+        toggle.checked = Boolean(value);
+        input.value = value !== null && value !== void 0 ? value : fallback;
         input.disabled = !toggle.checked;
-      });
-      return { toggle, input };
+        toggle.addEventListener("change", () => { input.disabled = !toggle.checked; });
+        return { toggle, input };
     };
-    const canvasSection = createAppearanceSection(appearanceLeftColumn, "\u753B\u5E03\u4E0E\u5B57\u4F53", "\u96C6\u4E2D\u8BBE\u7F6E\u80CC\u666F\u3001\u56FE\u6848\u548C\u5F53\u524D\u8111\u56FE\u7684\u57FA\u7840\u5B57\u4F53\u3002");
-    const background = addColor(canvasSection.grid, "\u80CC\u666F\u989C\u8272", this.appearance.backgroundColor, "#f8fafc");
-    const patternLabel = canvasSection.grid.createEl("label", { text: "\u80CC\u666F\u56FE\u6848" });
+    const canvasSection = createAppearanceSection(appearanceLeftColumn, "画布与字体", "集中设置背景、图案和当前脑图的基础字体。");
+    const background = addColor(canvasSection.grid, "背景颜色", this.appearance.backgroundColor, "#f8fafc");
+    const patternLabel = canvasSection.grid.createEl("label", { text: "背景图案" });
     const patternSelect = patternLabel.createEl("select");
-    for (const [value, label] of [["none", "\u65E0"], ["grid", "\u7F51\u683C"], ["dots", "\u70B9\u9635"]]) patternSelect.createEl("option", { text: label, attr: { value } });
-    patternSelect.value = (_b2 = this.appearance.backgroundPattern) != null ? _b2 : "grid";
-    const patternColor = addColor(canvasSection.grid, "\u56FE\u6848\u989C\u8272", this.appearance.patternColor, "#94a3b8");
-    const fontLabel = canvasSection.grid.createEl("label", { text: "\u5B57\u4F53" });
+    for (const [value, label] of [["none", "无"], ["grid", "网格"], ["dots", "点阵"]])
+        patternSelect.createEl("option", { text: label, attr: { value } });
+    patternSelect.value = (_b = this.appearance.backgroundPattern) !== null && _b !== void 0 ? _b : "grid";
+    const patternColor = addColor(canvasSection.grid, "图案颜色", this.appearance.patternColor, "#94a3b8");
+    const fontLabel = canvasSection.grid.createEl("label", { text: "字体" });
     const fontSelect = fontLabel.createEl("select");
-    for (const [value, label] of [["obsidian", "\u8DDF\u968F Obsidian"], ["sans", "\u65E0\u886C\u7EBF"], ["serif", "\u886C\u7EBF"], ["mono", "\u7B49\u5BBD"], ["custom", "\u81EA\u5B9A\u4E49"]]) fontSelect.createEl("option", { text: label, attr: { value } });
-    fontSelect.value = (_c = this.appearance.fontFamily) != null ? _c : "obsidian";
-    const customFontLabel = canvasSection.grid.createEl("label", { text: "\u81EA\u5B9A\u4E49\u5B57\u4F53\u540D\u79F0" });
+    for (const [value, label] of [["obsidian", "跟随 Obsidian"], ["sans", "无衬线"], ["serif", "衬线"], ["mono", "等宽"], ["custom", "自定义"]])
+        fontSelect.createEl("option", { text: label, attr: { value } });
+    fontSelect.value = (_c = this.appearance.fontFamily) !== null && _c !== void 0 ? _c : "obsidian";
+    const customFontLabel = canvasSection.grid.createEl("label", { text: "自定义字体名称" });
     const customFontInput = customFontLabel.createEl("input", { type: "text", attr: { placeholder: "Microsoft YaHei" } });
-    customFontInput.value = (_d = this.appearance.customFont) != null ? _d : "";
+    customFontInput.value = (_d = this.appearance.customFont) !== null && _d !== void 0 ? _d : "";
     const updateCustomFont = () => {
-      customFontInput.disabled = fontSelect.value !== "custom";
-      customFontLabel.toggleClass("is-disabled", customFontInput.disabled);
+        customFontInput.disabled = fontSelect.value !== "custom";
+        customFontLabel.toggleClass("is-disabled", customFontInput.disabled);
     };
     fontSelect.addEventListener("change", updateCustomFont);
     updateCustomFont();
-    const fontSizeLabel = canvasSection.grid.createEl("label", { text: "\u5B57\u53F7\uFF0810\u201330\uFF09" });
+    const fontSizeLabel = canvasSection.grid.createEl("label", { text: "字号（10–30）" });
     const fontSizeInput = fontSizeLabel.createEl("input", { type: "number", attr: { min: "10", max: "30", step: "1" } });
-    fontSizeInput.value = String((_e = this.appearance.fontSize) != null ? _e : 14);
-    const nodeSection = createAppearanceSection(appearanceRightColumn, "\u8282\u70B9\u4E0E\u6587\u5B57", "\u8BBE\u7F6E\u5206\u652F\u5F62\u6001\u3001\u8282\u70B9\u914D\u8272\u3001\u8FB9\u6846\u548C\u9ED8\u8BA4\u6587\u5B57\u8868\u73B0\u3002");
-    const nodeVisualStyleLabel = nodeSection.grid.createEl("label", { text: "\u5206\u652F\u5916\u89C2" });
+    fontSizeInput.value = String((_e = this.appearance.fontSize) !== null && _e !== void 0 ? _e : 14);
+    const nodeSection = createAppearanceSection(appearanceRightColumn, "节点与文字", "设置分支形态、节点配色、边框和默认文字表现。");
+    const nodeVisualStyleLabel = nodeSection.grid.createEl("label", { text: "分支外观" });
     const nodeVisualStyleSelect = nodeVisualStyleLabel.createEl("select");
-    nodeVisualStyleSelect.createEl("option", { text: "\u5706\u6DA6\u5361\u7247\u5206\u652F\uFF08\u66F2\u7EBF\uFF09", attr: { value: "card" } });
-    nodeVisualStyleSelect.createEl("option", { text: "\u5706\u89D2\u5206\u652F\uFF08\u6298\u7EBF\uFF09", attr: { value: "branch" } });
-    nodeVisualStyleSelect.value = (_f = this.appearance.nodeVisualStyle) != null ? _f : "card";
-    nodeVisualStyleLabel.createDiv({ cls: "setting-item-description", text: "\u5F53\u524D\u8111\u56FE\u8BBE\u7F6E\uFF0C\u4F18\u5148\u4E8E\u63D2\u4EF6\u5168\u5C40\u5206\u652F\u5916\u89C2\u3002" });
-    const nodeTextAlignLabel = nodeSection.grid.createEl("label", { text: "\u8282\u70B9\u6587\u5B57\u5BF9\u9F50" });
+    nodeVisualStyleSelect.createEl("option", { text: "圆润卡片分支（曲线）", attr: { value: "card" } });
+    nodeVisualStyleSelect.createEl("option", { text: "圆角分支（折线）", attr: { value: "branch" } });
+    nodeVisualStyleSelect.value = (_f = this.appearance.nodeVisualStyle) !== null && _f !== void 0 ? _f : "card";
+    nodeVisualStyleLabel.createDiv({ cls: "setting-item-description", text: "当前脑图设置，优先于插件全局分支外观。" });
+    const nodeTextAlignLabel = nodeSection.grid.createEl("label", { text: "节点文字对齐" });
     const nodeTextAlignSelect = nodeTextAlignLabel.createEl("select");
-    nodeTextAlignSelect.createEl("option", { text: "\u5DE6\u5BF9\u9F50", attr: { value: "left" } });
-    nodeTextAlignSelect.createEl("option", { text: "\u5C45\u4E2D", attr: { value: "center" } });
-    nodeTextAlignSelect.createEl("option", { text: "\u53F3\u5BF9\u9F50", attr: { value: "right" } });
-    nodeTextAlignSelect.value = (_g = this.appearance.nodeTextAlign) != null ? _g : "center";
-    const rootColor = addColor(nodeSection.grid, "\u4E2D\u5FC3\u4E3B\u9898\u989C\u8272", this.appearance.rootColor, "#4f46e5");
-    const rootTextColor = addColor(nodeSection.grid, "\u4E2D\u5FC3\u4E3B\u9898\u6587\u5B57", this.appearance.rootTextColor, "#ffffff");
-    const nodeColor = addColor(nodeSection.grid, "\u8282\u70B9\u80CC\u666F\u8272", this.appearance.nodeColor, "#ffffff");
-    const textColor = addColor(nodeSection.grid, "\u6587\u5B57\u989C\u8272", this.appearance.textColor, "#0f172a");
-    const borderColor = addColor(nodeSection.grid, "\u8282\u70B9\u8FB9\u6846\u989C\u8272", this.appearance.nodeBorderColor, "#94a3b8");
-    const borderWidthLabel = nodeSection.grid.createEl("label", { text: "\u8FB9\u6846\u7C97\u7EC6\uFF080\u20136\uFF09" });
+    nodeTextAlignSelect.createEl("option", { text: "左对齐", attr: { value: "left" } });
+    nodeTextAlignSelect.createEl("option", { text: "居中", attr: { value: "center" } });
+    nodeTextAlignSelect.createEl("option", { text: "右对齐", attr: { value: "right" } });
+    nodeTextAlignSelect.value = (_g = this.appearance.nodeTextAlign) !== null && _g !== void 0 ? _g : "center";
+    const rootColor = addColor(nodeSection.grid, "中心主题颜色", this.appearance.rootColor, "#4f46e5");
+    const rootTextColor = addColor(nodeSection.grid, "中心主题文字", this.appearance.rootTextColor, "#ffffff");
+    const nodeColor = addColor(nodeSection.grid, "节点背景色", this.appearance.nodeColor, "#ffffff");
+    const textColor = addColor(nodeSection.grid, "文字颜色", this.appearance.textColor, "#0f172a");
+    const borderColor = addColor(nodeSection.grid, "节点边框颜色", this.appearance.nodeBorderColor, "#94a3b8");
+    const borderWidthLabel = nodeSection.grid.createEl("label", { text: "边框粗细（0–6）" });
     const borderWidthInput = borderWidthLabel.createEl("input", { type: "number", attr: { min: "0", max: "6", step: "0.5" } });
-    borderWidthInput.value = String((_h = this.appearance.nodeBorderWidth) != null ? _h : 1);
+    borderWidthInput.value = String((_h = this.appearance.nodeBorderWidth) !== null && _h !== void 0 ? _h : 1);
     const textStyleSection = nodeSection.section.createDiv({ cls: "mmc-appearance-text-style" });
-    textStyleSection.createDiv({ cls: "mmc-appearance-text-style-title", text: "\u6587\u5B57\u6837\u5F0F" });
+    textStyleSection.createDiv({ cls: "mmc-appearance-text-style-title", text: "文字样式" });
     const textStyle = textStyleSection.createDiv({ cls: "mmc-appearance-style-options" });
     const addCheck = (text, checked) => {
-      const label = textStyle.createEl("label", { cls: "mmc-appearance-style-option" });
-      const input = label.createEl("input", { type: "checkbox" });
-      input.checked = checked;
-      label.createSpan({ text });
-      return input;
+        const label = textStyle.createEl("label", { cls: "mmc-appearance-style-option" });
+        const input = label.createEl("input", { type: "checkbox" });
+        input.checked = checked;
+        label.createSpan({ text });
+        return input;
     };
-    const bold = addCheck("\u6587\u5B57\u52A0\u7C97", this.appearance.bold === true);
-    const italic = addCheck("\u6587\u5B57\u659C\u4F53", this.appearance.italic === true);
-    const underline = addCheck("\u6587\u5B57\u4E0B\u5212\u7EBF", this.appearance.underline === true);
-    const edgeSection = createAppearanceSection(appearanceLeftColumn, "\u8FDE\u7EBF\u4E0E\u5206\u652F", "\u7EDF\u4E00\u7BA1\u7406\u8FDE\u7EBF\u5F62\u6001\u3001\u7C97\u7EC6\u53D8\u5316\u548C\u5F69\u8272\u4E00\u7EA7\u5206\u652F\u3002");
-    const edgeColor = addColor(edgeSection.grid, "\u8FDE\u7EBF\u989C\u8272", this.appearance.edgeColor, "#7c8aa5");
-    const edgeStyleLabel = edgeSection.grid.createEl("label", { text: "\u8FDE\u7EBF\u7C7B\u578B" });
+    const bold = addCheck("文字加粗", this.appearance.bold === true);
+    const italic = addCheck("文字斜体", this.appearance.italic === true);
+    const underline = addCheck("文字下划线", this.appearance.underline === true);
+    const edgeSection = createAppearanceSection(appearanceLeftColumn, "连线与分支", "统一管理连线形态、粗细变化和彩色一级分支。");
+    const edgeColor = addColor(edgeSection.grid, "连线颜色", this.appearance.edgeColor, "#7c8aa5");
+    const edgeStyleLabel = edgeSection.grid.createEl("label", { text: "连线类型" });
     const edgeStyleSelect = edgeStyleLabel.createEl("select");
-    for (const [value, label] of [["curved", "\u66F2\u7EBF"], ["straight", "\u76F4\u7EBF"], ["elbow", "\u6298\u7EBF"]]) edgeStyleSelect.createEl("option", { text: label, attr: { value } });
-    edgeStyleSelect.value = (_i = this.appearance.edgeStyle) != null ? _i : "curved";
-    const edgeWidthModeLabel = edgeSection.grid.createEl("label", { text: "\u8FDE\u7EBF\u7C97\u7EC6\u6A21\u5F0F" });
+    for (const [value, label] of [["curved", "曲线"], ["straight", "直线"], ["elbow", "折线"]])
+        edgeStyleSelect.createEl("option", { text: label, attr: { value } });
+    edgeStyleSelect.value = (_j = this.appearance.edgeStyle) !== null && _j !== void 0 ? _j : "curved";
+    const edgeWidthModeLabel = edgeSection.grid.createEl("label", { text: "连线粗细模式" });
     const edgeWidthModeSelect = edgeWidthModeLabel.createEl("select");
-    edgeWidthModeSelect.createEl("option", { text: "\u7EDF\u4E00\u7C97\u7EC6", attr: { value: "uniform" } });
-    edgeWidthModeSelect.createEl("option", { text: "\u4ECE\u7C97\u5230\u7EC6", attr: { value: "tapered" } });
-    edgeWidthModeSelect.value = (_j = this.appearance.edgeWidthMode) != null ? _j : "tapered";
-    const edgeWidthLabel = edgeSection.grid.createEl("label", { text: "\u8D77\u59CB\u7C97\u7EC6\uFF080.5\u20138\uFF09" });
+    edgeWidthModeSelect.createEl("option", { text: "统一粗细", attr: { value: "uniform" } });
+    edgeWidthModeSelect.createEl("option", { text: "从粗到细", attr: { value: "tapered" } });
+    edgeWidthModeSelect.value = (_k = this.appearance.edgeWidthMode) !== null && _k !== void 0 ? _k : "tapered";
+    const edgeWidthLabel = edgeSection.grid.createEl("label", { text: "起始粗细（0.5–8）" });
     const edgeWidthInput = edgeWidthLabel.createEl("input", { type: "number", attr: { min: "0.5", max: "8", step: "0.05" } });
-    edgeWidthInput.value = String((_k = this.appearance.edgeWidth) != null ? _k : 4.2);
-    const edgeMinWidthLabel = edgeSection.grid.createEl("label", { text: "\u672B\u7AEF\u6700\u7EC6\uFF080.25\u20134\uFF09" });
+    edgeWidthInput.value = String((_l = this.appearance.edgeWidth) !== null && _l !== void 0 ? _l : 4.2);
+    const edgeMinWidthLabel = edgeSection.grid.createEl("label", { text: "末端最细（0.25–4）" });
     const edgeMinWidthInput = edgeMinWidthLabel.createEl("input", { type: "number", attr: { min: "0.25", max: "4", step: "0.05" } });
-    edgeMinWidthInput.value = String((_l = this.appearance.edgeMinWidth) != null ? _l : 1.2);
+    edgeMinWidthInput.value = String((_m = this.appearance.edgeMinWidth) !== null && _m !== void 0 ? _m : 1.2);
     const updateEdgeMin = () => {
-      const tapered = edgeWidthModeSelect.value === "tapered";
-      edgeMinWidthInput.disabled = !tapered;
-      edgeMinWidthLabel.toggleClass("is-disabled", !tapered);
-      edgeWidthLabel.childNodes[0].textContent = tapered ? "\u8D77\u59CB\u7C97\u7EC6\uFF080.5\u20138\uFF09" : "\u8FDE\u7EBF\u7C97\u7EC6\uFF080.5\u20138\uFF09";
+        const tapered = edgeWidthModeSelect.value === "tapered";
+        edgeMinWidthInput.disabled = !tapered;
+        edgeMinWidthLabel.toggleClass("is-disabled", !tapered);
+        edgeWidthLabel.childNodes[0].textContent = tapered ? "起始粗细（0.5–8）" : "连线粗细（0.5–8）";
     };
     edgeWidthModeSelect.addEventListener("change", updateEdgeMin);
     updateEdgeMin();
-    const branchLabel = edgeSection.grid.createEl("label", { text: "\u5F69\u8272\u5206\u652F" });
+    const branchLabel = edgeSection.grid.createEl("label", { text: "彩色分支" });
     const branchToggleRow = branchLabel.createDiv({ cls: "mmc-toggle-row" });
     const colorfulBranches = branchToggleRow.createEl("input", { type: "checkbox" });
     colorfulBranches.checked = this.appearance.colorfulBranches === true;
-    branchToggleRow.createSpan({ text: "\u6309\u4E00\u7EA7\u5206\u652F\u5FAA\u73AF\u914D\u8272" });
-    const branchColorsLabel = edgeSection.grid.createEl("label", { text: "\u5206\u652F\u989C\u8272\uFF08\u9017\u53F7\u5206\u9694\uFF09" });
+    branchToggleRow.createSpan({ text: "按一级分支循环配色" });
+    const branchColorsLabel = edgeSection.grid.createEl("label", { text: "分支颜色（逗号分隔）" });
     branchColorsLabel.addClass("mmc-appearance-grid-span-2");
     const branchColorsInput = branchColorsLabel.createEl("textarea", { attr: { rows: "2", placeholder: "#4f46e5, #0284c7, #0f766e" } });
-    branchColorsInput.value = ((_m = this.appearance.branchColors) != null ? _m : []).join(", ");
+    branchColorsInput.value = ((_o = this.appearance.branchColors) !== null && _o !== void 0 ? _o : []).join(", ");
     const numberingSection = appearanceRightColumn.createDiv({ cls: "mmc-appearance-section mmc-appearance-article-numbering" });
-    numberingSection.createDiv({ cls: "mmc-theme-picker-title", text: "\u6587\u7AE0\u7F16\u53F7\u4E0E\u76EE\u5F55" });
-    numberingSection.createDiv({ cls: "setting-item-description mmc-appearance-section-description", text: "\u63A7\u5236\u5F53\u524D\u8111\u56FE\u7684\u6587\u7AE0\u7F16\u53F7\u3001\u76EE\u5F55\u5C42\u7EA7\u548C\u9605\u8BFB\u7F29\u7565\u5BFC\u822A\u3002" });
+    numberingSection.createDiv({ cls: "mmc-theme-picker-title", text: "文章编号与目录" });
+    numberingSection.createDiv({ cls: "setting-item-description mmc-appearance-section-description", text: "控制当前脑图的文章编号、目录层级和阅读缩略导航。" });
     const numberingGrid = numberingSection.createDiv({ cls: "mmc-form-grid mmc-appearance-grid" });
-    const numberingControls = createArticleNumberingControls(
-      numberingGrid,
-      this.numbering.articleNumberingMode,
-      this.numbering.articleNumberingLevel
-    );
-    const tocDepthLabel = numberingGrid.createEl("label", { text: "\u76EE\u5F55\u6700\u5927\u5C42\u7EA7" });
+    const numberingControls = createArticleNumberingControls(numberingGrid, this.numbering.articleNumberingMode, this.numbering.articleNumberingLevel);
+    const tocDepthLabel = numberingGrid.createEl("label", { text: "目录最大层级" });
     const tocDepthSelect = tocDepthLabel.createEl("select");
     tocDepthSelect.createEl("option", {
-      text: `\u8DDF\u968F\u63D2\u4EF6\u8BBE\u7F6E\uFF08\u5F53\u524D ${this.globalArticleTocMaxDepth} \u5C42\uFF09`,
-      attr: { value: "" }
+        text: `跟随插件设置（当前 ${this.globalArticleTocMaxDepth} 层）`,
+        attr: { value: "" }
     });
     for (let depth = 1; depth <= 8; depth += 1) {
-      tocDepthSelect.createEl("option", { text: `${depth} \u5C42`, attr: { value: String(depth) } });
+        tocDepthSelect.createEl("option", { text: `${depth} 层`, attr: { value: String(depth) } });
     }
     tocDepthSelect.value = Number.isFinite(this.articleTocMaxDepth) ? String(resolveArticleTocMaxDepth(this.articleTocMaxDepth, this.globalArticleTocMaxDepth)) : "";
     tocDepthLabel.createDiv({
-      cls: "setting-item-description",
-      text: "\u540C\u65F6\u7528\u4E8E\u6587\u7AE0\u6A21\u5F0F\u76EE\u5F55\u548C\u901A\u8BFB\u6A21\u5F0F\u5168\u4E66\u76EE\u5F55\u3002\u624B\u52A8\u9009\u62E9\u540E\u4F18\u5148\u4E8E\u63D2\u4EF6\u5168\u5C40\u8BBE\u7F6E\u3002"
+        cls: "setting-item-description",
+        text: "同时用于文章模式目录和通读模式全书目录。手动选择后优先于插件全局设置。"
     });
-    const miniMapLabel = numberingGrid.createEl("label", { text: "\u9605\u8BFB\u7F29\u7565\u5BFC\u822A\u56FE" });
+    const miniMapLabel = numberingGrid.createEl("label", { text: "阅读缩略导航图" });
     const miniMapSelect = miniMapLabel.createEl("select");
-    miniMapSelect.createEl("option", { text: `\u8DDF\u968F\u63D2\u4EF6\u8BBE\u7F6E\uFF08\u5F53\u524D${this.globalArticleMiniMap ? "\u663E\u793A" : "\u9690\u85CF"}\uFF09`, attr: { value: "" } });
-    miniMapSelect.createEl("option", { text: "\u663E\u793A", attr: { value: "show" } });
-    miniMapSelect.createEl("option", { text: "\u9690\u85CF", attr: { value: "hide" } });
-    miniMapSelect.value = this.articleMiniMap === void 0 ? "" : this.articleMiniMap ? "show" : "hide";
+    miniMapSelect.createEl("option", { text: `跟随插件设置（当前${this.globalArticleMiniMap ? "显示" : "隐藏"}）`, attr: { value: "" } });
+    miniMapSelect.createEl("option", { text: "显示", attr: { value: "show" } });
+    miniMapSelect.createEl("option", { text: "隐藏", attr: { value: "hide" } });
+    miniMapSelect.value = this.articleMiniMap === undefined ? "" : this.articleMiniMap ? "show" : "hide";
     const codeSection = appearanceLeftColumn.createDiv({ cls: "mmc-appearance-section mmc-appearance-code-settings" });
-    codeSection.createDiv({ cls: "mmc-theme-picker-title", text: "\u9875\u9762\u4EE3\u7801\u8BBE\u7F6E" });
-    codeSection.createDiv({ cls: "setting-item-description mmc-appearance-section-description", text: "\u4F18\u5148\u7EA7 2\uFF1A\u8986\u76D6\u63D2\u4EF6\u5168\u5C40\u4EE3\u7801\u8BBE\u7F6E\uFF1B\u8282\u70B9\u4EE3\u7801\u8BBE\u7F6E\u4ECD\u53EF\u5355\u72EC\u8986\u76D6\u3002" });
+    codeSection.createDiv({ cls: "mmc-theme-picker-title", text: "页面代码设置" });
+    codeSection.createDiv({ cls: "setting-item-description mmc-appearance-section-description", text: "优先级 2：覆盖插件全局代码设置；节点代码设置仍可单独覆盖。" });
     const codeGrid = codeSection.createDiv({ cls: "mmc-form-grid mmc-appearance-grid" });
-    const pageCodeCollapsedLabel = codeGrid.createEl("label", { text: "\u9ED8\u8BA4\u72B6\u6001" });
+    const pageCodeCollapsedLabel = codeGrid.createEl("label", { text: "默认状态" });
     const pageCodeCollapsed = pageCodeCollapsedLabel.createEl("select");
-    pageCodeCollapsed.createEl("option", { value: "", text: "\u8DDF\u968F\u5168\u5C40\u8BBE\u7F6E" });
-    pageCodeCollapsed.createEl("option", { value: "true", text: "\u6298\u53E0" });
-    pageCodeCollapsed.createEl("option", { value: "false", text: "\u5C55\u5F00" });
+    pageCodeCollapsed.createEl("option", { value: "", text: "跟随全局设置" });
+    pageCodeCollapsed.createEl("option", { value: "true", text: "折叠" });
+    pageCodeCollapsed.createEl("option", { value: "false", text: "展开" });
     pageCodeCollapsed.value = typeof this.pageCodeAppearance.codeCollapsed === "boolean" ? String(this.pageCodeAppearance.codeCollapsed) : "";
-    const pageCodeLinesLabel = codeGrid.createEl("label", { text: "\u884C\u53F7" });
+    const pageCodeLinesLabel = codeGrid.createEl("label", { text: "行号" });
     const pageCodeLines = pageCodeLinesLabel.createEl("select");
-    pageCodeLines.createEl("option", { value: "", text: "\u8DDF\u968F\u5168\u5C40\u8BBE\u7F6E" });
-    pageCodeLines.createEl("option", { value: "true", text: "\u663E\u793A" });
-    pageCodeLines.createEl("option", { value: "false", text: "\u9690\u85CF" });
+    pageCodeLines.createEl("option", { value: "", text: "跟随全局设置" });
+    pageCodeLines.createEl("option", { value: "true", text: "显示" });
+    pageCodeLines.createEl("option", { value: "false", text: "隐藏" });
     pageCodeLines.value = typeof this.pageCodeAppearance.codeShowLineNumbers === "boolean" ? String(this.pageCodeAppearance.codeShowLineNumbers) : "";
-    const pageCodeThemeLabel = codeGrid.createEl("label", { text: "\u4EE3\u7801\u6837\u5F0F" });
+    const pageCodeThemeLabel = codeGrid.createEl("label", { text: "代码样式" });
     const pageCodeTheme = pageCodeThemeLabel.createEl("select");
-    pageCodeTheme.createEl("option", { value: "", text: "\u8DDF\u968F\u5168\u5C40\u8BBE\u7F6E" });
+    pageCodeTheme.createEl("option", { value: "", text: "跟随全局设置" });
     ["obsidian", "github", "monokai", "dracula"].forEach((value) => pageCodeTheme.createEl("option", { value, text: value === "obsidian" ? "Obsidian" : value === "github" ? "GitHub" : value === "monokai" ? "Monokai" : "Dracula" }));
-    pageCodeTheme.value = (_n = this.pageCodeAppearance.codeTheme) != null ? _n : "";
+    pageCodeTheme.value = (_p = this.pageCodeAppearance.codeTheme) !== null && _p !== void 0 ? _p : "";
     const setColor = (control, value, fallback) => {
       control.toggle.checked = Boolean(value);
       control.input.value = value != null ? value : fallback;
@@ -11071,7 +11070,7 @@ var MindMapEditor = class {
       nodeEl.style.left = `${position.x}px`;
       nodeEl.style.top = `${position.y}px`;
       nodeEl.style.width = `${position.width}px`;
-      if (((_h = node.style) == null ? void 0 : _h.minHeight) !== void 0) nodeEl.style.minHeight = `${node.style.minHeight}px`;
+      nodeEl.style.minHeight = `${Math.max(36, ((_h = node.style) == null ? void 0 : _h.minHeight) ?? 0)}px`;
       nodeEl.style.setProperty("--mmc-node-text-align", textAlign);
       nodeEl.draggable = position.depth > 0 && !this.readOnly;
       if (this.selectedId === node.id || this.selectedIds.has(node.id)) nodeEl.addClass("is-selected");
@@ -18059,7 +18058,6 @@ ${url}`, 8e3);
       if (node.code) document2.root.code = JSON.parse(JSON.stringify(node.code));
       if (node.table) document2.root.table = JSON.parse(JSON.stringify(node.table));
     } else {
-      document2.root.children = [];
       document2.root.content = [{ id: `${document2.root.id}_title`, type: "text", text: title }];
     }
     document2.root.link = void 0;
