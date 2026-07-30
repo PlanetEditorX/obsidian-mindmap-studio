@@ -189,3 +189,12 @@ test("compiled plugin contains exact block insertion and paragraph indentation r
   assert.match(mainBundle, /mms-table-column-resizer/);
   assert.match(mainBundle, /updateTableColumnWidths/);
 });
+
+test("article non-text blocks align with the first glyph of indented paragraphs", () => {
+  assert.match(rendererSource, /function createArticleContentBlock\([\s\S]*indentToParagraph = false/);
+  assert.match(rendererSource, /mms-article-content-block\$\{indentToParagraph \? " is-paragraph-aligned" : ""\}/);
+  assert.match(rendererSource, /block\.type === "image"[\s\S]*createArticleContentBlock\(container, block\.id, true\)/);
+  assert.match(rendererSource, /block\.type === "table"[\s\S]*createArticleContentBlock\(container, block\.id, true\)/);
+  assert.match(rendererSource, /else \{\s*const shell = createArticleContentBlock\(container, block\.id, true\)/);
+  assert.match(styles, /\.mms-article-content-block\.is-paragraph-aligned\s*\{[\s\S]*width:\s*calc\(100% - 2em\);[\s\S]*margin-left:\s*2em/);
+});

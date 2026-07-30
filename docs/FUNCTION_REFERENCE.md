@@ -2151,12 +2151,12 @@ export function renderArticleMode(container: HTMLElement, options: ArticleRender
 Creates an article block shell for right-click targeting without adding a floating drag handle.
 
 ```ts
-function createArticleContentBlock( container: HTMLElement, blockId: string ): HTMLElement
+function createArticleContentBlock( container: HTMLElement, blockId: string, indentToParagraph = false ): HTMLElement
 ```
 
 ### 函数 `articleParagraphClass`
 
-源码：`src/editor/article-renderer.ts:152`
+源码：`src/editor/article-renderer.ts:155`
 
 Builds paragraph classes without changing the legacy first-line-indent default.
 
@@ -2166,7 +2166,7 @@ function articleParagraphClass(baseClass: string, block: MindMapTextContentBlock
 
 ### 函数 `applyArticleLeafBulletStyle`
 
-源码：`src/editor/article-renderer.ts:157`
+源码：`src/editor/article-renderer.ts:160`
 
 Applies the configured terminal bullet color and visual style to one article paragraph.
 
@@ -2176,7 +2176,7 @@ function applyArticleLeafBulletStyle(paragraph: HTMLElement, options: ArticleRen
 
 ### 函数 `applyArticleStyle`
 
-源码：`src/editor/article-renderer.ts:164`
+源码：`src/editor/article-renderer.ts:167`
 
 将解析后的文章样式写入文章页 CSS 变量。
 
@@ -2186,7 +2186,7 @@ function applyArticleStyle(page: HTMLElement, style: ReturnType<typeof resolveAr
 
 ### 函数 `renderDirectory`
 
-源码：`src/editor/article-renderer.ts:175`
+源码：`src/editor/article-renderer.ts:178`
 
 渲染文章目录页。
 
@@ -2196,7 +2196,7 @@ function renderDirectory(page: HTMLElement, options: ArticleRendererOptions): vo
 
 ### 函数 `renderHeading`
 
-源码：`src/editor/article-renderer.ts:193`
+源码：`src/editor/article-renderer.ts:196`
 
 渲染章节标题或子导图链接。
 
@@ -2206,7 +2206,7 @@ function renderHeading(heading: HTMLElement, node: MindMapNode, title: string, o
 
 ### 函数 `renderArticleNodeContent`
 
-源码：`src/editor/article-renderer.ts:216`
+源码：`src/editor/article-renderer.ts:219`
 
 渲染文章节点的正文块、图片、备注、表格和代码。
 
@@ -2216,7 +2216,7 @@ export function renderArticleNodeContent(container: HTMLElement, node: MindMapNo
 
 ### 函数 `renderArticleTable`
 
-源码：`src/editor/article-renderer.ts:267`
+源码：`src/editor/article-renderer.ts:270`
 
 Renders a persisted, resizable table block in article and continuous-reading views.
 
@@ -2226,7 +2226,7 @@ function renderArticleTable( container: HTMLElement, node: MindMapNode, tableDat
 
 ### 函数 `renderArticleQuestionDetails`
 
-源码：`src/editor/article-renderer.ts:334`
+源码：`src/editor/article-renderer.ts:337`
 
 Renders structured question options, answers, explanations, and original source in article and reading modes.
 
@@ -2236,7 +2236,7 @@ function renderArticleQuestionDetails(container: HTMLElement, node: MindMapNode)
 
 ### 函数 `renderArticlePager`
 
-源码：`src/editor/article-renderer.ts:376`
+源码：`src/editor/article-renderer.ts:379`
 
 渲染同层兄弟文章页的上一篇、父级、下一篇与阅读完成导航。
 

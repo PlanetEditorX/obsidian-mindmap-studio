@@ -2176,6 +2176,13 @@
   position: relative;
 }
 
+/* Non-text blocks align their left edge with the first glyph of an indented
+   paragraph while their own content (especially code) remains unindented. */
+.mms-article-content-block.is-paragraph-aligned {
+  width: calc(100% - 2em);
+  margin-left: 2em;
+}
+
 .mms-article-heading {
   position: relative;
 }
