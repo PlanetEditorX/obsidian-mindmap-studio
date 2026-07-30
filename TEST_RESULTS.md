@@ -1,3 +1,38 @@
+# 文章模式节点快捷操作与空节点删除验证
+
+## 本次修改
+
+- 文章编辑模式的节点下方快捷操作改为高频集合：普通节点显示“添加同级、添加子节点、删除、更多”，根节点仅显示“添加子节点、更多”。
+- 原“完整编辑”不再作为文章节点常驻按钮；“更多”复用右键完整菜单，并新增“节点设置”进入完整节点编辑器。
+- 快捷按钮在 `pointerdown` 阶段阻止编辑器先失焦，删除操作直接使用按钮绑定的节点 ID，不再依赖可能变化的当前选择。
+- 行内编辑器在 blur 时检查节点是否仍存在，避免已删除节点的迟到失焦回调再次保存或重绘。
+- 右键 / 更多菜单在根节点上隐藏无效的“添加同级节点”和“删除节点”。
+
+## 验证命令
+
+```bash
+node --test tests/article-context-edit.test.mjs
+node --test tests/code-block.test.mjs tests/display-mode.test.mjs tests/settings-layout.test.mjs tests/node-creation.test.mjs tests/filename.test.mjs tests/global-search-contract.test.mjs tests/image-host.test.mjs tests/image-layout.test.mjs tests/image-source-candidates.test.mjs tests/reading-location.test.mjs tests/reading-editor-contract.test.mjs tests/article-context-edit.test.mjs tests/repository-cleanup.test.mjs tests/selection-format-toolbar.test.mjs tests/import-mode.test.mjs tests/ai.test.mjs tests/image-recognition.test.mjs tests/question.test.mjs
+node scripts/check-docs.mjs
+node scripts/check-repository.mjs
+node --check main.js
+```
+
+另使用容器全局 TypeScript 对 `src/editor/editor.ts` 执行 `transpileModule` 语法诊断。
+
+## 结果
+
+- 文章节点操作专项测试：`8 / 8` 通过。
+- 除依赖 `esbuild` 的插件更新测试外，广泛单元测试：`124 / 124` 通过。
+- 文档检查：`48` 个 TypeScript 模块中的 `852` 个具名声明均有 JSDoc。
+- 仓库检查：通过。
+- `main.js` JavaScript 语法检查：通过。
+- `src/editor/editor.ts` TypeScript 语法转译检查：通过。
+
+## 环境限制
+
+当前 npm 镜像缺少锁文件要求的 `w3c-keyname@2.2.8`，并且无法提供 `esbuild` 包，因此未执行完整 `npm run verify` 和真实生产构建。运行版 `main.js` 已与 TypeScript 源码同步修改，并由专项源码—产物契约测试和 JavaScript 语法检查验证。测试期间创建的全局 TypeScript 临时链接不会进入交付压缩包。
+
 # 设置分类与主题外观优化验证报告
 
 ## 本次修改

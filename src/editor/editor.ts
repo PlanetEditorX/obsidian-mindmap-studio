@@ -2419,6 +2419,10 @@ export class MindMapEditor {
       this.clearInlineEditingAccessibility(element);
       toolbar?.cleanup();
       toolbar = null;
+      // A node action can remove this node while its inline editor still owns
+      // focus. Ignore the detached editor's late blur instead of writing the
+      // deleted node back into the document or triggering a second redraw.
+      if (!findNode(this.document.root, node.id)) return;
       if ((!next.text && node.id === this.document.root.id)
         || JSON.stringify(next) === JSON.stringify(original)) {
         renderRichTextRuns(element, original.richText, original.text, false);
@@ -2503,12 +2507,31 @@ export class MindMapEditor {
    */
   private addInlineNodeActions(container: HTMLElement, node: MindMapNode): void {
     const actions = container.createDiv({ cls: "mms-inline-node-actions" });
-    const action = (icon: string, label: string, handler: () => void): void => {
+    const action = (icon: string, label: string, handler: (event: MouseEvent) => void): void => {
       const button = actions.createEl("button", { cls: "clickable-icon", attr: { type: "button", title: label, "aria-label": label } });
       setIcon(button, icon);
-      button.addEventListener("click", (event) => { event.stopPropagation(); this.selectNode(node.id); handler(); });
+      // Keep the active article editor focused until the action itself runs.
+      // Without this guard, an empty line blurs and redraws before the click,
+      // leaving the old action button detached and swallowing the command.
+      button.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+      });
+      button.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        this.selectNode(node.id);
+        handler(event);
+      });
     };
-    action("pencil", this.currentMode === "article" ? this.articleEditActionLabel(node) : "完整编辑", () => this.editSelected());
+    if (this.currentMode === "article") {
+      if (node.id !== this.document.root.id) action("list-plus", "添加同级节点", () => this.addSibling());
+      action("plus", "添加子节点", () => this.addChild());
+      if (node.id !== this.document.root.id) action("trash-2", "删除节点", () => this.deleteNodeById(node.id));
+      action("ellipsis", "更多", (event) => this.openContextMenu(event));
+      return;
+    }
+    action("pencil", "完整编辑", () => this.editSelected());
     action("plus", "添加子节点", () => this.addChild());
     if (node.id !== this.document.root.id) action("trash-2", "删除节点", () => this.deleteSelected());
   }
@@ -4171,6 +4194,24 @@ export class MindMapEditor {
     }).open();
   }
 
+  /** Deletes the node bound to an inline action without relying on mutable selection state. */
+  private deleteNodeById(nodeId: string): void {
+    if (!this.ensureEditable()) return;
+    const node = findNode(this.document.root, nodeId);
+    if (!node || node.id === this.document.root.id) {
+      new Notice("根节点不能删除");
+      return;
+    }
+    const fallback = deletionSelectionFallback(this.document.root, [nodeId]);
+    if (this.inlineEditingId === nodeId) this.inlineEditingId = null;
+    this.mutate(() => {
+      deleteNodes(this.document.root, [nodeId]);
+      this.selectedId = fallback;
+      this.selectedIds.clear();
+      this.selectedIds.add(fallback);
+    });
+  }
+
   /**
    * 删除selected，并保持模型、界面和持久化状态的一致性。
    */
@@ -5216,11 +5257,19 @@ export class MindMapEditor {
       return;
     }
     menu.addItem((item) => item.setTitle("添加子节点").setIcon("plus-circle").onClick(() => this.addChild()));
-    menu.addItem((item) => item.setTitle("添加同级节点").setIcon("list-plus").onClick(() => this.addSibling()));
+    if (selected?.id !== this.document.root.id) {
+      menu.addItem((item) => item.setTitle("添加同级节点").setIcon("list-plus").onClick(() => this.addSibling()));
+    }
     menu.addItem((item) => item
       .setTitle(this.articleEditActionLabel(selected))
       .setIcon("pencil")
       .onClick(() => this.editSelected()));
+    if (this.currentMode === "article") {
+      menu.addItem((item) => item
+        .setTitle("节点设置")
+        .setIcon("settings-2")
+        .onClick(() => this.openSelectedNodeEditor()));
+    }
     if (this.options.questionNodesEnabled) {
       menu.addItem((item) => item
         .setTitle(selected?.question ? "编辑题目节点" : "转换为题目节点")
@@ -5266,8 +5315,10 @@ export class MindMapEditor {
       }));
     menu.addItem((item) => item.setTitle("展开/收起").setIcon("fold-vertical").onClick(() => this.toggleCollapse()));
     menu.addItem((item) => item.setTitle("打开链接").setIcon("link").onClick(() => this.openSelectedLink()));
-    menu.addSeparator();
-    menu.addItem((item) => item.setTitle("删除节点").setIcon("trash-2").onClick(() => this.deleteSelected()));
+    if (selected?.id !== this.document.root.id) {
+      menu.addSeparator();
+      menu.addItem((item) => item.setTitle("删除节点").setIcon("trash-2").onClick(() => this.deleteSelected()));
+    }
     menu.showAtMouseEvent(event);
   }
 
