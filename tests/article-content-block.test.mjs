@@ -107,6 +107,13 @@ test("article tables open on double click and persist bounded column widths", ()
   assert.match(styles, /\.mms-table-column-resizer[\s\S]*cursor:\s*col-resize/);
 });
 
+test("mind-map tables open their editor only on double click", () => {
+  const renderNodeTable = editorSource.match(/private renderNodeTable\([\s\S]*?\n  \}/)?.[0] ?? "";
+  assert.match(renderNodeTable, /wrap\.addEventListener\("click", \(event\) => event\.stopPropagation\(\)\)/);
+  assert.match(renderNodeTable, /wrap\.addEventListener\("dblclick", \(event\) => \{[\s\S]*event\.preventDefault\(\)[\s\S]*this\.openTableBlockEditor\(node, tableData, blockId\)/);
+  assert.match(mainBundle, /mmc-node-table-wrap/);
+});
+
 test("table interactions follow the live lock state and commit pointer resizing", () => {
   const tableTarget = new EventTarget();
   let readOnly = true;

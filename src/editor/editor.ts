@@ -1110,6 +1110,7 @@ export class MindMapEditor {
   private readonly history: DocumentHistory;
   private draggingId: string | null = null;
   private draggingContentBlock: { nodeId: string; blockId: string } | null = null;
+  private articleKeyboardMovingBlock: { nodeId: string; blockId: string } | null = null;
   private dragDropPosition: NodeDropPosition | null = null;
   private dropPreviewEl: HTMLElement | null = null;
   private panning = false;
@@ -1552,6 +1553,14 @@ export class MindMapEditor {
       document.activeElement.blur();
     }
     this.readOnly = !this.readOnly;
+    if (this.readOnly) {
+      this.articleKeyboardMovingBlock = null;
+      this.articleEl.querySelectorAll(".is-keyboard-moving").forEach((element) => element.removeClass("is-keyboard-moving"));
+      this.articleEl.querySelectorAll<HTMLElement>(".mms-article-block-move-button").forEach((button) => {
+        button.removeClass("is-active");
+        button.setAttr("aria-pressed", "false");
+      });
+    }
     if (this.currentMode === "reading" && !this.readOnly) {
       // 通读可能跨越多个物理文件。先记录当前章节，再进入该章节所属文件的文章编辑模式。
       const location = this.captureCurrentLocation("reading") ?? this.lastReadingLocation;
@@ -2905,8 +2914,7 @@ export class MindMapEditor {
       updateTableColumnWidths: (node, blockId, widths) => this.updateTableColumnWidths(node, blockId, widths),
       makeInlineEditable: (element, node, placeholder, blockId) => this.makeInlineEditable(element, node, placeholder, blockId),
       makeInlineCodeEditable: (element, node, code, blockId) => this.makeInlineCodeEditable(element, node, code, blockId),
-      bindContentBlockDragHandle: (element, nodeId, blockId) => this.bindContentBlockDragHandle(element, nodeId, blockId),
-      bindContentBlockAppendDropTarget: (element, nodeId) => this.bindContentBlockAppendDropTarget(element, nodeId),
+      bindContentBlockKeyboardMoveControl: (element, nodeId, blockId) => this.bindArticleContentBlockMoveControl(element, nodeId, blockId),
       addInlineNodeActions: (container, node) => this.addInlineNodeActions(container, node)
     };
   }
@@ -3237,13 +3245,15 @@ export class MindMapEditor {
           continue;
         }
         if (block.type === "table") {
-          const tableBlock = this.renderNodeTable(content, node, block.table, block.id);
-          this.bindContentBlockDragHandle(tableBlock, node.id, block.id);
+          const shell = content.createDiv({ cls: "mmc-node-structured-block-shell" });
+          this.renderNodeTable(shell, node, block.table, block.id);
+          this.bindContentBlockDragHandle(shell, node.id, block.id);
           continue;
         }
         if (block.type === "code") {
-          const codeBlock = this.renderNodeCode(content, node, block.code, block.id);
-          this.bindContentBlockDragHandle(codeBlock, node.id, block.id);
+          const shell = content.createDiv({ cls: "mmc-node-structured-block-shell" });
+          this.renderNodeCode(shell, node, block.code, block.id);
+          this.bindContentBlockDragHandle(shell, node.id, block.id);
           continue;
         }
         if (!block.text.trim()) continue;
@@ -4683,6 +4693,111 @@ export class MindMapEditor {
     });
   }
 
+  /** Adds the article-only button that enters persistent arrow-key content-block movement mode. */
+  private bindArticleContentBlockMoveControl(blockElement: HTMLElement, nodeId: string, blockId: string): void {
+    blockElement.dataset.blockId = blockId;
+    const handle = blockElement.createEl("button", {
+      cls: "mms-article-block-move-button",
+      attr: {
+        type: "button",
+        title: "点击进入移动模式；方向键移动，Esc 退出",
+        "aria-label": "进入内容块移动模式",
+        "aria-pressed": "false"
+      }
+    });
+    setIcon(handle, "move");
+    const matchesActiveState = (): boolean => this.articleKeyboardMovingBlock?.nodeId === nodeId
+      && this.articleKeyboardMovingBlock.blockId === blockId;
+    const applyActiveState = (): void => {
+      const active = matchesActiveState();
+      handle.toggleClass("is-active", active);
+      blockElement.toggleClass("is-keyboard-moving", active);
+      handle.setAttr("aria-pressed", String(active));
+      handle.setAttr("aria-label", active ? "内容块移动模式；方向键移动，Esc 退出" : "进入内容块移动模式");
+    };
+    handle.addEventListener("pointerdown", (event) => event.stopPropagation());
+    handle.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (this.readOnly) return;
+      this.articleKeyboardMovingBlock = matchesActiveState() ? null : { nodeId, blockId };
+      applyActiveState();
+      if (this.articleKeyboardMovingBlock) handle.focus();
+    });
+    handle.addEventListener("keydown", (event) => {
+      if (this.readOnly) return;
+      if (!matchesActiveState()) return;
+      if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopPropagation();
+        this.articleKeyboardMovingBlock = null;
+        applyActiveState();
+        handle.blur();
+        return;
+      }
+      if (!["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(event.key)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
+      this.moveArticleContentBlockByKeyboard(nodeId, blockId, event.key as "ArrowUp" | "ArrowDown" | "ArrowLeft" | "ArrowRight");
+    });
+    applyActiveState();
+    if (matchesActiveState()) window.requestAnimationFrame(() => handle.focus());
+  }
+
+  /** Moves one article block by order or hierarchy while preserving keyboard mode across rerenders. */
+  private moveArticleContentBlockByKeyboard(
+    sourceNodeId: string,
+    blockId: string,
+    key: "ArrowUp" | "ArrowDown" | "ArrowLeft" | "ArrowRight"
+  ): void {
+    if (!this.ensureEditable()) return;
+    const sourceNode = findNode(this.document.root, sourceNodeId);
+    if (!sourceNode) {
+      this.articleKeyboardMovingBlock = null;
+      return;
+    }
+    const blocks = nodeContentBlocks(sourceNode);
+    const sourceIndex = blocks.findIndex((block) => block.id === blockId);
+    if (sourceIndex < 0) {
+      this.articleKeyboardMovingBlock = null;
+      return;
+    }
+    let targetNode: MindMapNode | null = sourceNode;
+    let targetBlockId: string | undefined;
+    let position: "before" | "after" | "append" = "append";
+    if (key === "ArrowUp") {
+      targetBlockId = blocks[sourceIndex - 1]?.id;
+      position = "before";
+    } else if (key === "ArrowDown") {
+      targetBlockId = blocks[sourceIndex + 1]?.id;
+      position = "after";
+    } else if (key === "ArrowLeft") {
+      targetNode = findParent(this.document.root, sourceNodeId);
+    } else {
+      targetNode = sourceNode.children[0] ?? null;
+    }
+    if (!targetNode || ((key === "ArrowUp" || key === "ArrowDown") && !targetBlockId)) {
+      const message = key === "ArrowUp" ? "当前内容块已经在最上方"
+        : key === "ArrowDown" ? "当前内容块已经在最下方"
+          : key === "ArrowLeft" ? "当前节点没有父节点"
+            : "当前节点没有子节点";
+      new Notice(message);
+      return;
+    }
+    let moved = false;
+    const targetNodeId = targetNode.id;
+    this.mutate(() => {
+      moved = moveNodeContentBlock(this.document.root, sourceNodeId, blockId, targetNodeId, targetBlockId, position);
+      if (!moved) return;
+      this.articleKeyboardMovingBlock = { nodeId: targetNodeId, blockId };
+      this.selectedId = targetNodeId;
+      this.selectedIds.clear();
+      this.selectedIds.add(targetNodeId);
+    });
+    if (moved) new Notice(sourceNodeId === targetNodeId ? "已调整内容块顺序" : "已移动内容块到目标节点");
+  }
+
   /** Applies a node-internal reorder or cross-node content-block move through the normal history path. */
   private moveContentBlock(
     sourceNodeId: string,
@@ -4993,11 +5108,12 @@ export class MindMapEditor {
     });
     wrap.addEventListener("pointerdown", (event) => event.stopPropagation());
     wrap.addEventListener("dragstart", (event) => event.preventDefault());
-    wrap.addEventListener("click", (event) => {
-      event.stopPropagation();
-      this.openTableBlockEditor(node, tableData, blockId);
-    });
-      wrap.addEventListener("dblclick", (event) => event.stopPropagation());
+    wrap.addEventListener("click", (event) => event.stopPropagation());
+      wrap.addEventListener("dblclick", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        this.openTableBlockEditor(node, tableData, blockId);
+      });
       wrap.addEventListener("contextmenu", (event) => {
         event.preventDefault();
         event.stopPropagation();
