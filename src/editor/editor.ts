@@ -1110,7 +1110,6 @@ export class MindMapEditor {
   private readonly history: DocumentHistory;
   private draggingId: string | null = null;
   private draggingContentBlock: { nodeId: string; blockId: string } | null = null;
-  private articleKeyboardMovingBlock: { nodeId: string; blockId: string } | null = null;
   private dragDropPosition: NodeDropPosition | null = null;
   private dropPreviewEl: HTMLElement | null = null;
   private panning = false;
@@ -1554,12 +1553,8 @@ export class MindMapEditor {
     }
     this.readOnly = !this.readOnly;
     if (this.readOnly) {
-      this.articleKeyboardMovingBlock = null;
-      this.articleEl.querySelectorAll(".is-keyboard-moving").forEach((element) => element.removeClass("is-keyboard-moving"));
-      this.articleEl.querySelectorAll<HTMLElement>(".mms-article-block-move-button").forEach((button) => {
-        button.removeClass("is-active");
-        button.setAttr("aria-pressed", "false");
-      });
+      this.draggingContentBlock = null;
+      this.clearContentBlockDropIndicators();
     }
     if (this.currentMode === "reading" && !this.readOnly) {
       // 通读可能跨越多个物理文件。先记录当前章节，再进入该章节所属文件的文章编辑模式。
@@ -2914,7 +2909,8 @@ export class MindMapEditor {
       updateTableColumnWidths: (node, blockId, widths) => this.updateTableColumnWidths(node, blockId, widths),
       makeInlineEditable: (element, node, placeholder, blockId) => this.makeInlineEditable(element, node, placeholder, blockId),
       makeInlineCodeEditable: (element, node, code, blockId) => this.makeInlineCodeEditable(element, node, code, blockId),
-      bindContentBlockKeyboardMoveControl: (element, nodeId, blockId) => this.bindArticleContentBlockMoveControl(element, nodeId, blockId),
+      bindContentBlockDragHandle: (element, nodeId, blockId) => this.bindContentBlockDragHandle(element, nodeId, blockId),
+      bindContentBlockAppendDropTarget: (element, nodeId) => this.bindContentBlockAppendDropTarget(element, nodeId),
       addInlineNodeActions: (container, node) => this.addInlineNodeActions(container, node)
     };
   }
@@ -3301,7 +3297,7 @@ export class MindMapEditor {
 
       if (node.table && !blocks.some((block) => block.type === "table")) this.renderNodeTable(content, node, node.table);
       if (node.code && !blocks.some((block) => block.type === "code")) this.renderNodeCode(content, node, node.code);
-      this.bindContentBlockAppendDropTarget(content, node.id);
+      this.bindContentBlockAppendDropTarget(nodeEl, node.id);
       if (node.question) this.renderQuestionSummary(content, node);
 
       if (node.tags?.length) {
@@ -4614,7 +4610,6 @@ export class MindMapEditor {
 
   /** Adds the explicit grip used to move one rendered content block without dragging its whole node. */
   private bindContentBlockDragHandle(blockElement: HTMLElement, nodeId: string, blockId: string): void {
-    if (this.readOnly) return;
     blockElement.addClass("mmc-draggable-content-block");
     blockElement.dataset.blockId = blockId;
     const handle = blockElement.createEl("button", {
@@ -4635,6 +4630,10 @@ export class MindMapEditor {
       event.stopPropagation();
     });
     handle.addEventListener("dragstart", (event) => {
+      if (this.readOnly) {
+        event.preventDefault();
+        return;
+      }
       event.stopPropagation();
       this.draggingContentBlock = { nodeId, blockId };
       event.dataTransfer?.setData("application/x-mms-content-block", `${nodeId}\u0000${blockId}`);
@@ -4670,132 +4669,29 @@ export class MindMapEditor {
   }
 
   /** Lets a dragged content block be appended after all blocks in a target node. */
-  private bindContentBlockAppendDropTarget(content: HTMLElement, nodeId: string): void {
-    if (this.readOnly) return;
-    content.addEventListener("dragover", (event) => {
-      if (!this.draggingContentBlock) return;
-      const target = event.target as HTMLElement;
-      if (target.closest("[data-block-id]")) return;
-      event.preventDefault();
-      event.stopPropagation();
-      this.clearContentBlockDropIndicators(false);
-      content.addClass("is-block-drop-append");
-      if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
-    });
-    content.addEventListener("drop", (event) => {
-      const dragging = this.draggingContentBlock;
-      if (!dragging) return;
-      const target = event.target as HTMLElement;
-      if (target.closest("[data-block-id]")) return;
-      event.preventDefault();
-      event.stopPropagation();
-      this.moveContentBlock(dragging.nodeId, dragging.blockId, nodeId, undefined, "append");
-    });
-  }
-
-  /** Adds the article-only button that enters persistent arrow-key content-block movement mode. */
-  private bindArticleContentBlockMoveControl(blockElement: HTMLElement, nodeId: string, blockId: string): void {
-    blockElement.dataset.blockId = blockId;
-    const handle = blockElement.createEl("button", {
-      cls: "mms-article-block-move-button",
-      attr: {
-        type: "button",
-        title: "点击进入移动模式；方向键移动，Esc 退出",
-        "aria-label": "进入内容块移动模式",
-        "aria-pressed": "false"
-      }
-    });
-    setIcon(handle, "move");
-    const matchesActiveState = (): boolean => this.articleKeyboardMovingBlock?.nodeId === nodeId
-      && this.articleKeyboardMovingBlock.blockId === blockId;
-    const applyActiveState = (): void => {
-      const active = matchesActiveState();
-      handle.toggleClass("is-active", active);
-      blockElement.toggleClass("is-keyboard-moving", active);
-      handle.setAttr("aria-pressed", String(active));
-      handle.setAttr("aria-label", active ? "内容块移动模式；方向键移动，Esc 退出" : "进入内容块移动模式");
-    };
-    handle.addEventListener("pointerdown", (event) => event.stopPropagation());
-    handle.addEventListener("click", (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      if (this.readOnly) return;
-      this.articleKeyboardMovingBlock = matchesActiveState() ? null : { nodeId, blockId };
-      applyActiveState();
-      if (this.articleKeyboardMovingBlock) handle.focus();
-    });
-    handle.addEventListener("keydown", (event) => {
-      if (this.readOnly) return;
-      if (!matchesActiveState()) return;
-      if (event.key === "Escape") {
-        event.preventDefault();
-        event.stopPropagation();
-        this.articleKeyboardMovingBlock = null;
-        applyActiveState();
-        handle.blur();
-        return;
-      }
-      if (!["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(event.key)) return;
+  private bindContentBlockAppendDropTarget(dropTarget: HTMLElement, nodeId: string): void {
+    dropTarget.addClass("mmc-content-block-append-target");
+    dropTarget.addEventListener("dragover", (event) => {
+      if (this.readOnly || !this.draggingContentBlock) return;
+      const target = event.target instanceof Element ? event.target : null;
+      if (target?.closest("[data-block-id]")) return;
       event.preventDefault();
       event.stopPropagation();
       event.stopImmediatePropagation();
-      this.moveArticleContentBlockByKeyboard(nodeId, blockId, event.key as "ArrowUp" | "ArrowDown" | "ArrowLeft" | "ArrowRight");
+      this.clearContentBlockDropIndicators(false);
+      dropTarget.addClass("is-block-drop-append");
+      if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
     });
-    applyActiveState();
-    if (matchesActiveState()) window.requestAnimationFrame(() => handle.focus());
-  }
-
-  /** Moves one article block by order or hierarchy while preserving keyboard mode across rerenders. */
-  private moveArticleContentBlockByKeyboard(
-    sourceNodeId: string,
-    blockId: string,
-    key: "ArrowUp" | "ArrowDown" | "ArrowLeft" | "ArrowRight"
-  ): void {
-    if (!this.ensureEditable()) return;
-    const sourceNode = findNode(this.document.root, sourceNodeId);
-    if (!sourceNode) {
-      this.articleKeyboardMovingBlock = null;
-      return;
-    }
-    const blocks = nodeContentBlocks(sourceNode);
-    const sourceIndex = blocks.findIndex((block) => block.id === blockId);
-    if (sourceIndex < 0) {
-      this.articleKeyboardMovingBlock = null;
-      return;
-    }
-    let targetNode: MindMapNode | null = sourceNode;
-    let targetBlockId: string | undefined;
-    let position: "before" | "after" | "append" = "append";
-    if (key === "ArrowUp") {
-      targetBlockId = blocks[sourceIndex - 1]?.id;
-      position = "before";
-    } else if (key === "ArrowDown") {
-      targetBlockId = blocks[sourceIndex + 1]?.id;
-      position = "after";
-    } else if (key === "ArrowLeft") {
-      targetNode = findParent(this.document.root, sourceNodeId);
-    } else {
-      targetNode = sourceNode.children[0] ?? null;
-    }
-    if (!targetNode || ((key === "ArrowUp" || key === "ArrowDown") && !targetBlockId)) {
-      const message = key === "ArrowUp" ? "当前内容块已经在最上方"
-        : key === "ArrowDown" ? "当前内容块已经在最下方"
-          : key === "ArrowLeft" ? "当前节点没有父节点"
-            : "当前节点没有子节点";
-      new Notice(message);
-      return;
-    }
-    let moved = false;
-    const targetNodeId = targetNode.id;
-    this.mutate(() => {
-      moved = moveNodeContentBlock(this.document.root, sourceNodeId, blockId, targetNodeId, targetBlockId, position);
-      if (!moved) return;
-      this.articleKeyboardMovingBlock = { nodeId: targetNodeId, blockId };
-      this.selectedId = targetNodeId;
-      this.selectedIds.clear();
-      this.selectedIds.add(targetNodeId);
+    dropTarget.addEventListener("drop", (event) => {
+      const dragging = this.draggingContentBlock;
+      if (this.readOnly || !dragging) return;
+      const target = event.target instanceof Element ? event.target : null;
+      if (target?.closest("[data-block-id]")) return;
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
+      this.moveContentBlock(dragging.nodeId, dragging.blockId, nodeId, undefined, "append");
     });
-    if (moved) new Notice(sourceNodeId === targetNodeId ? "已调整内容块顺序" : "已移动内容块到目标节点");
   }
 
   /** Applies a node-internal reorder or cross-node content-block move through the normal history path. */

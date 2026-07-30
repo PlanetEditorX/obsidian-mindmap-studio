@@ -53,7 +53,8 @@ export interface ArticleRendererOptions {
   updateTableColumnWidths: (node: MindMapNode, blockId: string, widths: number[]) => void;
   makeInlineEditable: (element: HTMLElement, node: MindMapNode, placeholder: string, blockId?: string) => void;
   makeInlineCodeEditable: (element: HTMLElement, node: MindMapNode, code: MindMapCodeBlock, blockId: string) => void;
-  bindContentBlockKeyboardMoveControl: (element: HTMLElement, nodeId: string, blockId: string) => void;
+  bindContentBlockDragHandle: (element: HTMLElement, nodeId: string, blockId: string) => void;
+  bindContentBlockAppendDropTarget: (element: HTMLElement, nodeId: string) => void;
   addInlineNodeActions: (container: HTMLElement, node: MindMapNode) => void;
 }
 
@@ -75,6 +76,7 @@ export function renderArticleMode(container: HTMLElement, options: ArticleRender
   const rootTextBlock = nodeContentBlocks(options.document.root).find((block): block is MindMapTextContentBlock => block.type === "text");
   renderRichTextRuns(titleText, rootTextBlock?.richText, rootTextBlock?.text ?? rootTitle);
   options.makeInlineEditable(titleText, options.document.root, "文章标题", rootTextBlock?.id);
+  if (rootTextBlock) options.bindContentBlockDragHandle(title, options.document.root.id, rootTextBlock.id);
   options.addInlineNodeActions(page, options.document.root);
 
   const directoryOnly = options.showArticleToc
@@ -108,7 +110,7 @@ export function renderArticleMode(container: HTMLElement, options: ArticleRender
       if (info.label) heading.createSpan({ cls: "mms-article-number", text: info.label });
       renderHeading(heading, info.node, info.title, options);
       const headingBlock = nodeContentBlocks(info.node).find((block): block is MindMapTextContentBlock => block.type === "text");
-      if (headingBlock) options.bindContentBlockKeyboardMoveControl(heading, info.node.id, headingBlock.id);
+      if (headingBlock) options.bindContentBlockDragHandle(heading, info.node.id, headingBlock.id);
       if (info.skipped) heading.createSpan({ cls: "mms-article-skip-badge", text: "不编号" });
       options.addInlineNodeActions(heading, info.node);
       renderArticleNodeContent(section, info.node, false, options);
@@ -134,11 +136,12 @@ export function renderArticleMode(container: HTMLElement, options: ArticleRender
       options.addInlineNodeActions(section, info.node);
       renderArticleNodeContent(section, info.node, false, options);
     }
+    options.bindContentBlockAppendDropTarget(section, info.node.id);
   }
   renderArticlePager(page, options);
 }
 
-/** Creates an article block shell that owns keyboard movement UI without polluting editable text DOM. */
+/** Creates an article block shell that owns the shared drag handle without polluting editable content DOM. */
 function createArticleContentBlock(
   container: HTMLElement,
   node: MindMapNode,
@@ -146,7 +149,7 @@ function createArticleContentBlock(
   options: ArticleRendererOptions
 ): HTMLElement {
   const shell = container.createDiv({ cls: "mms-article-content-block" });
-  options.bindContentBlockKeyboardMoveControl(shell, node.id, blockId);
+  options.bindContentBlockDragHandle(shell, node.id, blockId);
   return shell;
 }
 
