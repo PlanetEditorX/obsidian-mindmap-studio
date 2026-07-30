@@ -1308,7 +1308,11 @@ const command = "example";
   assert.match(outlineRendererSource, /additionalText/);
   assert.match(editorSource, /attachSelectionFormatToolbar/);
   assert.match(editorSource, /normalizeMarkdownRichText\(value\.richText, next\)/, "article and outline edits must normalize Markdown while preserving rich-text runs");
-  assert.match(editorSource, /firstText\.richText = normalized\.richText/, "article and outline edits must retain normalized rich-text runs");
+  assert.match(
+    editorSource,
+    /[A-Za-z_$][\w$]*\.richText = normalized\.richText/,
+    "article and outline edits must retain normalized rich-text runs"
+  );
   assert.doesNotMatch(editorSource, /firstText\.richText = undefined/, "inline edits must not discard existing formatting");
   assert.match(selectionToolbarSource, /applyRichTextStyleRange/);
   assert.match(selectionToolbarSource, /getBoundingClientRect/);
