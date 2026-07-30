@@ -4481,6 +4481,52 @@
   border-color: var(--text-error);
 }
 
+.mms-ai-request-progress {
+  display: grid;
+  gap: 7px;
+}
+
+.mms-ai-request-progress[hidden] {
+  display: none;
+}
+
+.mms-ai-request-progress-bar {
+  position: relative;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--background-modifier-border);
+}
+
+.mms-ai-request-progress-fill {
+  position: absolute;
+  inset-block: 0;
+  left: -38%;
+  width: 38%;
+  border-radius: inherit;
+  background: var(--interactive-accent);
+}
+
+.mms-ai-request-progress[data-state="active"] .mms-ai-request-progress-fill {
+  animation: mms-ai-request-progress 1.35s ease-in-out infinite;
+}
+
+.mms-ai-request-progress[data-state="done"] .mms-ai-request-progress-fill,
+.mms-ai-request-progress[data-state="error"] .mms-ai-request-progress-fill {
+  left: 0;
+  width: 100%;
+  animation: none;
+}
+
+.mms-ai-request-progress[data-state="error"] .mms-ai-request-progress-fill {
+  background: var(--text-error);
+}
+
+.mms-ai-request-progress-text {
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+}
+
 .mms-ai-status {
   min-height: 24px;
   color: var(--text-muted);
@@ -4507,6 +4553,12 @@
 @keyframes mms-ai-track-flow {
   0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--interactive-accent) 35%, transparent); }
   50% { box-shadow: 0 0 0 8px transparent; }
+}
+
+@keyframes mms-ai-request-progress {
+  0% { transform: translateX(0); }
+  55% { transform: translateX(240%); }
+  100% { transform: translateX(360%); }
 }
 
 .mms-ai-field input,

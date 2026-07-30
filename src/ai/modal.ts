@@ -55,6 +55,8 @@ export class AiAskModal extends Modal {
   /** 标识当前打开会话，防止关闭后的异步响应继续写入旧 DOM。 */
   private modalSession = 0;
   private imageAutoConfirmTimer: number | null = null;
+  /** Updates elapsed waiting time while a non-streaming AI request is active. */
+  private requestProgressTimer: number | null = null;
 
   /** 保存窗口上下文并初始化 Obsidian Modal。 */
   constructor(app: App, private readonly options: AiAskModalOptions) {
@@ -147,6 +149,16 @@ export class AiAskModal extends Modal {
     });
     steps[0]!.dataset.state = "done";
 
+    const requestProgress = form.createDiv({ cls: "mms-ai-request-progress" });
+    requestProgress.hidden = true;
+    requestProgress.dataset.state = "idle";
+    const requestProgressBar = requestProgress.createDiv({
+      cls: "mms-ai-request-progress-bar",
+      attr: { role: "progressbar", "aria-label": "AI 请求进度" }
+    });
+    requestProgressBar.createDiv({ cls: "mms-ai-request-progress-fill" });
+    const requestProgressText = requestProgress.createDiv({ cls: "mms-ai-request-progress-text" });
+
     const status = form.createDiv({ cls: "mms-ai-status", text: "Markdown 已生成，等待操作。" });
     const result = form.createDiv({ cls: "mms-ai-result markdown-rendered is-hidden" });
     const resultMeta = form.createDiv({ cls: "mms-ai-result-meta is-hidden" });
@@ -165,6 +177,8 @@ export class AiAskModal extends Modal {
     let pendingReplacePreview: LocalReplacePreview | null = null;
     let pendingImagePreviews: ImageTextReplacementPreview[] = [];
     let imagePreviewInputs: HTMLTextAreaElement[] = [];
+    let requestStartedAt = 0;
+    let requestProgressLabel = "";
     const currentMode = (): AiInteractionMode => mode.value as AiInteractionMode;
     const recognitionUsesAi = (): boolean => currentMode() === "vision" && this.options.imageRecognitionMode === "ai";
     const requiresAiProfile = (): boolean => currentMode() === "ask" || currentMode() === "edit" || currentMode() === "question" || recognitionUsesAi();
@@ -174,9 +188,43 @@ export class AiAskModal extends Modal {
       return payload.overLimit || !profiles.length;
     };
     const setStep = (index: number, state: TraceState): void => { if (steps[index]) steps[index]!.dataset.state = state; };
+    const clearRequestProgressTimer = (): void => {
+      if (this.requestProgressTimer !== null) window.clearInterval(this.requestProgressTimer);
+      this.requestProgressTimer = null;
+    };
+    const renderRequestProgress = (): void => {
+      const elapsed = Math.max(0, Math.floor((Date.now() - requestStartedAt) / 1000));
+      const waitingHint = elapsed >= 30 ? "，长内容或繁忙模型可能需要更久" : "";
+      requestProgressText.setText(`${requestProgressLabel} · 已等待 ${elapsed} 秒${waitingHint}`);
+    };
+    const startRequestProgress = (label: string): void => {
+      clearRequestProgressTimer();
+      requestStartedAt = Date.now();
+      requestProgressLabel = label;
+      requestProgress.hidden = false;
+      requestProgress.dataset.state = "active";
+      requestProgressBar.removeAttribute("aria-valuenow");
+      renderRequestProgress();
+      this.requestProgressTimer = window.setInterval(renderRequestProgress, 1000);
+    };
+    const updateRequestProgress = (label: string): void => {
+      requestProgressLabel = label;
+      renderRequestProgress();
+    };
+    const finishRequestProgress = (state: "done" | "error", label: string): void => {
+      clearRequestProgressTimer();
+      requestProgressLabel = label;
+      requestProgress.dataset.state = state;
+      if (state === "done") requestProgressBar.setAttr("aria-valuenow", "100");
+      else requestProgressBar.removeAttribute("aria-valuenow");
+      renderRequestProgress();
+    };
     const resetOutput = (): void => {
       if (this.imageAutoConfirmTimer !== null) window.clearTimeout(this.imageAutoConfirmTimer);
       this.imageAutoConfirmTimer = null;
+      clearRequestProgressTimer();
+      requestProgress.hidden = true;
+      requestProgress.dataset.state = "idle";
       answerText = "";
       pendingAiPreview = null;
       pendingReplacePreview = null;
@@ -399,6 +447,7 @@ export class AiAskModal extends Modal {
         steps.forEach((step) => { step.dataset.state = "pending"; });
         setStep(0, "active");
         status.setText(`正在读取并依次识别 ${this.options.imageCount} 张图片…`);
+        startRequestProgress(`正在处理 ${this.options.imageCount} 张图片`);
         void this.options.onRecognizeImages(provider.value, prompt)
           .then((batch) => {
             if (session !== this.modalSession) return;
@@ -409,12 +458,14 @@ export class AiAskModal extends Modal {
             answerText = batch.text;
             showImageRecognitionPreview(batch);
             setStep(3, batch.failed.length && !batch.items.length ? "error" : "done");
+            finishRequestProgress(batch.failed.length && !batch.items.length ? "error" : "done", "图片处理完成");
           })
           .catch((error) => {
             if (session !== this.modalSession) return;
             const activeIndex = steps.findIndex((step) => step.dataset.state === "active");
             setStep(Math.max(0, activeIndex), "error");
             status.setText(error instanceof Error ? error.message : "图片识别失败");
+            finishRequestProgress("error", "图片处理失败");
             console.error("MindMap Studio image recognition failed", error);
           })
           .finally(() => { if (session === this.modalSession) setBusy(false); });
@@ -424,11 +475,13 @@ export class AiAskModal extends Modal {
       setBusy(true);
       setStep(1, "active");
       status.setText(`正在发送 ${formatByteSize(payload.byteSize)} Markdown 上下文…`);
+      startRequestProgress("正在上传上下文");
       const modelStageTimer = window.setTimeout(() => {
         if (session !== this.modalSession) return;
         setStep(1, "done");
         setStep(2, "active");
         status.setText("上下文已发送，模型处理中…");
+        updateRequestProgress("模型处理中");
       }, 180);
       const request = currentMode() === "edit"
         ? this.options.onProposeEdit(provider.value, prompt)
@@ -440,14 +493,17 @@ export class AiAskModal extends Modal {
           setStep(2, "done");
           setStep(3, "active");
           if (session !== this.modalSession) return;
+          updateRequestProgress("正在解析模型结果");
           if (currentMode() === "edit") {
             pendingAiPreview = this.options.onPreviewAiEdit(response.text);
             showEditPreview(pendingAiPreview);
+            finishRequestProgress("done", "修改预览已生成");
           } else if (currentMode() === "question") {
             const applied = await this.options.onConvertToQuestion(response.text);
             if (!applied) throw new Error("题目节点未生成，请检查当前导图是否只读");
             status.setText("题目节点已生成");
             setStep(3, "done");
+            finishRequestProgress("done", "题目节点已生成");
             this.close();
             return;
           } else {
@@ -462,6 +518,7 @@ export class AiAskModal extends Modal {
             resultMeta.removeClass("is-hidden");
             copy.removeClass("is-hidden");
             status.setText("完成");
+            finishRequestProgress("done", "回答已完成");
           }
           setStep(3, "done");
         })
@@ -471,6 +528,7 @@ export class AiAskModal extends Modal {
           const failedStage = steps[2]?.dataset.state === "active" ? 2 : 1;
           setStep(failedStage, "error");
           status.setText(error instanceof Error ? error.message : "AI 请求失败");
+          finishRequestProgress("error", "AI 请求失败");
           console.error("MindMap Studio AI request failed", error);
         })
         .finally(() => { if (session === this.modalSession) setBusy(false); });
@@ -484,6 +542,8 @@ export class AiAskModal extends Modal {
     this.modalSession += 1;
     if (this.imageAutoConfirmTimer !== null) window.clearTimeout(this.imageAutoConfirmTimer);
     this.imageAutoConfirmTimer = null;
+    if (this.requestProgressTimer !== null) window.clearInterval(this.requestProgressTimer);
+    this.requestProgressTimer = null;
     this.markdownRenderComponent?.unload();
     this.markdownRenderComponent = null;
     this.contentEl.empty();

@@ -14197,6 +14197,8 @@ var AiAskModal = class extends import_obsidian11.Modal {
     /** 标识当前打开会话，防止关闭后的异步响应继续写入旧 DOM。 */
     this.modalSession = 0;
     this.imageAutoConfirmTimer = null;
+    /** Updates elapsed waiting time while a non-streaming AI request is active. */
+    this.requestProgressTimer = null;
   }
   /** 构建模式选择、大小提示、处理轨迹、修改预览和确认应用区域。 */
   onOpen() {
@@ -14274,6 +14276,15 @@ var AiAskModal = class extends import_obsidian11.Modal {
       return step;
     });
     steps[0].dataset.state = "done";
+    const requestProgress = form.createDiv({ cls: "mms-ai-request-progress" });
+    requestProgress.hidden = true;
+    requestProgress.dataset.state = "idle";
+    const requestProgressBar = requestProgress.createDiv({
+      cls: "mms-ai-request-progress-bar",
+      attr: { role: "progressbar", "aria-label": "AI \u8BF7\u6C42\u8FDB\u5EA6" }
+    });
+    requestProgressBar.createDiv({ cls: "mms-ai-request-progress-fill" });
+    const requestProgressText = requestProgress.createDiv({ cls: "mms-ai-request-progress-text" });
     const status = form.createDiv({ cls: "mms-ai-status", text: "Markdown \u5DF2\u751F\u6210\uFF0C\u7B49\u5F85\u64CD\u4F5C\u3002" });
     const result = form.createDiv({ cls: "mms-ai-result markdown-rendered is-hidden" });
     const resultMeta = form.createDiv({ cls: "mms-ai-result-meta is-hidden" });
@@ -14291,6 +14302,8 @@ var AiAskModal = class extends import_obsidian11.Modal {
     let pendingReplacePreview = null;
     let pendingImagePreviews = [];
     let imagePreviewInputs = [];
+    let requestStartedAt = 0;
+    let requestProgressLabel = "";
     const currentMode = () => mode.value;
     const recognitionUsesAi = () => currentMode() === "vision" && this.options.imageRecognitionMode === "ai";
     const requiresAiProfile = () => currentMode() === "ask" || currentMode() === "edit" || currentMode() === "question" || recognitionUsesAi();
@@ -14302,9 +14315,43 @@ var AiAskModal = class extends import_obsidian11.Modal {
     const setStep = (index, state) => {
       if (steps[index]) steps[index].dataset.state = state;
     };
+    const clearRequestProgressTimer = () => {
+      if (this.requestProgressTimer !== null) window.clearInterval(this.requestProgressTimer);
+      this.requestProgressTimer = null;
+    };
+    const renderRequestProgress = () => {
+      const elapsed = Math.max(0, Math.floor((Date.now() - requestStartedAt) / 1e3));
+      const waitingHint = elapsed >= 30 ? "\uFF0C\u957F\u5185\u5BB9\u6216\u7E41\u5FD9\u6A21\u578B\u53EF\u80FD\u9700\u8981\u66F4\u4E45" : "";
+      requestProgressText.setText(`${requestProgressLabel} \xB7 \u5DF2\u7B49\u5F85 ${elapsed} \u79D2${waitingHint}`);
+    };
+    const startRequestProgress = (label) => {
+      clearRequestProgressTimer();
+      requestStartedAt = Date.now();
+      requestProgressLabel = label;
+      requestProgress.hidden = false;
+      requestProgress.dataset.state = "active";
+      requestProgressBar.removeAttribute("aria-valuenow");
+      renderRequestProgress();
+      this.requestProgressTimer = window.setInterval(renderRequestProgress, 1e3);
+    };
+    const updateRequestProgress = (label) => {
+      requestProgressLabel = label;
+      renderRequestProgress();
+    };
+    const finishRequestProgress = (state, label) => {
+      clearRequestProgressTimer();
+      requestProgressLabel = label;
+      requestProgress.dataset.state = state;
+      if (state === "done") requestProgressBar.setAttr("aria-valuenow", "100");
+      else requestProgressBar.removeAttribute("aria-valuenow");
+      renderRequestProgress();
+    };
     const resetOutput = () => {
       if (this.imageAutoConfirmTimer !== null) window.clearTimeout(this.imageAutoConfirmTimer);
       this.imageAutoConfirmTimer = null;
+      clearRequestProgressTimer();
+      requestProgress.hidden = true;
+      requestProgress.dataset.state = "idle";
       answerText = "";
       pendingAiPreview = null;
       pendingReplacePreview = null;
@@ -14519,6 +14566,7 @@ var AiAskModal = class extends import_obsidian11.Modal {
         });
         setStep(0, "active");
         status.setText(`\u6B63\u5728\u8BFB\u53D6\u5E76\u4F9D\u6B21\u8BC6\u522B ${this.options.imageCount} \u5F20\u56FE\u7247\u2026`);
+        startRequestProgress(`\u6B63\u5728\u5904\u7406 ${this.options.imageCount} \u5F20\u56FE\u7247`);
         void this.options.onRecognizeImages(provider.value, prompt).then((batch) => {
           if (session !== this.modalSession) return;
           setStep(0, "done");
@@ -14528,11 +14576,13 @@ var AiAskModal = class extends import_obsidian11.Modal {
           answerText = batch.text;
           showImageRecognitionPreview(batch);
           setStep(3, batch.failed.length && !batch.items.length ? "error" : "done");
+          finishRequestProgress(batch.failed.length && !batch.items.length ? "error" : "done", "\u56FE\u7247\u5904\u7406\u5B8C\u6210");
         }).catch((error) => {
           if (session !== this.modalSession) return;
           const activeIndex = steps.findIndex((step) => step.dataset.state === "active");
           setStep(Math.max(0, activeIndex), "error");
           status.setText(error instanceof Error ? error.message : "\u56FE\u7247\u8BC6\u522B\u5931\u8D25");
+          finishRequestProgress("error", "\u56FE\u7247\u5904\u7406\u5931\u8D25");
           console.error("MindMap Studio image recognition failed", error);
         }).finally(() => {
           if (session === this.modalSession) setBusy(false);
@@ -14542,11 +14592,13 @@ var AiAskModal = class extends import_obsidian11.Modal {
       setBusy(true);
       setStep(1, "active");
       status.setText(`\u6B63\u5728\u53D1\u9001 ${formatByteSize(payload.byteSize)} Markdown \u4E0A\u4E0B\u6587\u2026`);
+      startRequestProgress("\u6B63\u5728\u4E0A\u4F20\u4E0A\u4E0B\u6587");
       const modelStageTimer = window.setTimeout(() => {
         if (session !== this.modalSession) return;
         setStep(1, "done");
         setStep(2, "active");
         status.setText("\u4E0A\u4E0B\u6587\u5DF2\u53D1\u9001\uFF0C\u6A21\u578B\u5904\u7406\u4E2D\u2026");
+        updateRequestProgress("\u6A21\u578B\u5904\u7406\u4E2D");
       }, 180);
       const request = currentMode() === "edit" ? this.options.onProposeEdit(provider.value, prompt) : this.options.onAsk(provider.value, prompt);
       void request.then(async (response) => {
@@ -14556,14 +14608,17 @@ var AiAskModal = class extends import_obsidian11.Modal {
         setStep(2, "done");
         setStep(3, "active");
         if (session !== this.modalSession) return;
+        updateRequestProgress("\u6B63\u5728\u89E3\u6790\u6A21\u578B\u7ED3\u679C");
         if (currentMode() === "edit") {
           pendingAiPreview = this.options.onPreviewAiEdit(response.text);
           showEditPreview(pendingAiPreview);
+          finishRequestProgress("done", "\u4FEE\u6539\u9884\u89C8\u5DF2\u751F\u6210");
         } else if (currentMode() === "question") {
           const applied = await this.options.onConvertToQuestion(response.text);
           if (!applied) throw new Error("\u9898\u76EE\u8282\u70B9\u672A\u751F\u6210\uFF0C\u8BF7\u68C0\u67E5\u5F53\u524D\u5BFC\u56FE\u662F\u5426\u53EA\u8BFB");
           status.setText("\u9898\u76EE\u8282\u70B9\u5DF2\u751F\u6210");
           setStep(3, "done");
+          finishRequestProgress("done", "\u9898\u76EE\u8282\u70B9\u5DF2\u751F\u6210");
           this.close();
           return;
         } else {
@@ -14578,6 +14633,7 @@ var AiAskModal = class extends import_obsidian11.Modal {
           resultMeta.removeClass("is-hidden");
           copy.removeClass("is-hidden");
           status.setText("\u5B8C\u6210");
+          finishRequestProgress("done", "\u56DE\u7B54\u5DF2\u5B8C\u6210");
         }
         setStep(3, "done");
       }).catch((error) => {
@@ -14587,6 +14643,7 @@ var AiAskModal = class extends import_obsidian11.Modal {
         const failedStage = ((_a3 = steps[2]) == null ? void 0 : _a3.dataset.state) === "active" ? 2 : 1;
         setStep(failedStage, "error");
         status.setText(error instanceof Error ? error.message : "AI \u8BF7\u6C42\u5931\u8D25");
+        finishRequestProgress("error", "AI \u8BF7\u6C42\u5931\u8D25");
         console.error("MindMap Studio AI request failed", error);
       }).finally(() => {
         if (session === this.modalSession) setBusy(false);
@@ -14600,6 +14657,8 @@ var AiAskModal = class extends import_obsidian11.Modal {
     this.modalSession += 1;
     if (this.imageAutoConfirmTimer !== null) window.clearTimeout(this.imageAutoConfirmTimer);
     this.imageAutoConfirmTimer = null;
+    if (this.requestProgressTimer !== null) window.clearInterval(this.requestProgressTimer);
+    this.requestProgressTimer = null;
     (_a2 = this.markdownRenderComponent) == null ? void 0 : _a2.unload();
     this.markdownRenderComponent = null;
     this.contentEl.empty();
