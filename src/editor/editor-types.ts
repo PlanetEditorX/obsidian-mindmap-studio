@@ -75,6 +75,7 @@ export interface MindMapEditorOptions {
   imageHostPriorityIds: string[];
   visibleModes: DisplayMode[];
   defaultViewMode: DisplayMode;
+  articleEntryLockMode: "locked" | "inherit";
   currentFilePath: string;
   readingHomePath: string;
   readingLocation: ReadingLocation | null;

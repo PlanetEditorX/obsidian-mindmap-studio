@@ -1167,7 +1167,9 @@ export class MindMapEditor {
     this.history = new DocumentHistory(() => this.options.historyLimit);
     this.document = cloneDocument(document);
     this.currentMode = this.resolveMode(options.defaultViewMode);
-    this.readOnly = this.currentMode === "article" || this.currentMode === "reading" || this.currentMode === "question-bank" || this.document.view?.readOnly === true;
+    this.readOnly = this.currentMode === "reading" || this.currentMode === "question-bank"
+      || this.document.view?.readOnly === true
+      || (this.currentMode === "article" && this.options.articleEntryLockMode === "locked");
     this.lastReadingLocation = options.readingLocation;
     const restoredLocation = this.resolveStoredLocation();
     this.selectedId = restoredLocation?.filePath === options.currentFilePath
@@ -1214,7 +1216,9 @@ export class MindMapEditor {
   setDocument(document: MindMapDocument, resetHistory = true): void {
     this.document = cloneDocument(document);
     this.currentMode = this.resolveMode(this.options.defaultViewMode);
-    this.readOnly = this.currentMode === "article" || this.currentMode === "reading" || this.currentMode === "question-bank" || this.document.view?.readOnly === true;
+    this.readOnly = this.currentMode === "reading" || this.currentMode === "question-bank"
+      || this.document.view?.readOnly === true
+      || (this.currentMode === "article" && this.options.articleEntryLockMode === "locked");
     const restored = this.resolveStoredLocation();
     this.selectedId = restored?.filePath === this.options.currentFilePath ? restored.nodeId : this.document.root.id;
     if (resetHistory) {
@@ -1282,10 +1286,14 @@ export class MindMapEditor {
     if (modeChanged) {
       this.rememberCurrentLocation(previousMode, true);
       if (previousMode === "mindmap") this.persistMindMapViewportState();
-      this.currentMode = resolved;
+      // A writable article explicitly opened from continuous reading must stay
+      // writable when another view broadcasts the same global article mode.
       const preserveReadingEdit = previousMode === "reading" && resolved === "article" && !this.readOnly;
-      this.readOnly = resolved === "article" || resolved === "reading" || resolved === "question-bank"
-        ? !preserveReadingEdit
+      this.currentMode = resolved;
+      this.readOnly = resolved === "article"
+        ? preserveReadingEdit || this.options.articleEntryLockMode === "inherit" ? this.readOnly : true
+        : resolved === "reading" || resolved === "question-bank"
+          ? true
         : previousMode === "article" || previousMode === "reading" || previousMode === "question-bank"
           ? this.document.view?.readOnly === true
           : this.readOnly;
@@ -1347,7 +1355,9 @@ export class MindMapEditor {
       this.callbacks.onChange(this.getDocument());
     }
     this.currentMode = mode;
-    if ((mode === "article" || mode === "reading" || mode === "question-bank") && mode !== previousMode) {
+    if (mode === "article" && mode !== previousMode) {
+      this.readOnly = this.options.articleEntryLockMode === "locked" ? true : this.readOnly;
+    } else if ((mode === "reading" || mode === "question-bank") && mode !== previousMode) {
       this.readOnly = true;
     } else if ((previousMode === "article" || previousMode === "reading" || previousMode === "question-bank") && mode !== "article" && mode !== "reading" && mode !== "question-bank") {
       this.readOnly = this.document.view?.readOnly === true;
@@ -1982,19 +1992,26 @@ export class MindMapEditor {
 
     const keydown = (event: KeyboardEvent): void => this.handleKeydown(event);
     this.rootEl.addEventListener("keydown", keydown, true);
-    // Ctrl-hold tracking for resize modifier
-    const ctrlTracker = (trackEvent: KeyboardEvent): void => {
-      if (trackEvent.type === "keydown" && (trackEvent.key === "Control" || trackEvent.key === "Meta")) {
-        this.rootEl.addClass("is-ctrl-held");
-      } else if (trackEvent.type === "keyup" && (trackEvent.key === "Control" || trackEvent.key === "Meta")) {
-        this.rootEl.removeClass("is-ctrl-held");
-      }
+    // Keep the resize affordance in sync with the live modifier state. Keyup
+    // can be lost when the app window blurs, so pointer events and blur also
+    // clear stale Ctrl/Cmd state.
+    const syncResizeModifier = (trackEvent: KeyboardEvent | PointerEvent): void => {
+      this.rootEl.toggleClass("is-ctrl-held", trackEvent.ctrlKey || trackEvent.metaKey);
     };
-    document.addEventListener("keydown", ctrlTracker);
-    document.addEventListener("keyup", ctrlTracker);
+    const clearResizeModifier = (): void => this.rootEl.removeClass("is-ctrl-held");
+    document.addEventListener("keydown", syncResizeModifier);
+    document.addEventListener("keyup", syncResizeModifier);
+    this.rootEl.addEventListener("pointermove", syncResizeModifier, true);
+    this.rootEl.addEventListener("pointerover", syncResizeModifier, true);
+    window.addEventListener("blur", clearResizeModifier);
+    document.addEventListener("visibilitychange", clearResizeModifier);
     this.cleanupCallbacks.push(() => {
-      document.removeEventListener("keydown", ctrlTracker);
-      document.removeEventListener("keyup", ctrlTracker);
+      document.removeEventListener("keydown", syncResizeModifier);
+      document.removeEventListener("keyup", syncResizeModifier);
+      this.rootEl.removeEventListener("pointermove", syncResizeModifier, true);
+      this.rootEl.removeEventListener("pointerover", syncResizeModifier, true);
+      window.removeEventListener("blur", clearResizeModifier);
+      document.removeEventListener("visibilitychange", clearResizeModifier);
     });
 
         this.cleanupCallbacks.push(() => this.rootEl.removeEventListener("keydown", keydown, true));
@@ -3591,9 +3608,14 @@ export class MindMapEditor {
           attr: { role: "separator", tabindex: "0", "aria-label": "拖动调整节点宽度和最小高度", title: "拖动调整节点大小；双击恢复自动大小" }
         });
         resizeHandle.setAttr("draggable", "false");
-        resizeHandle.addEventListener("click", (event) => { event.preventDefault(); event.stopPropagation(); });
+        resizeHandle.addEventListener("click", (event) => {
+          if (!event.ctrlKey && !event.metaKey) return;
+          event.preventDefault();
+          event.stopPropagation();
+        });
         resizeHandle.addEventListener("dblclick", (event) => {
           if (this.readOnly) return;
+          if (!event.ctrlKey && !event.metaKey) return;
           event.preventDefault();
           event.stopPropagation();
           this.mutate(() => {

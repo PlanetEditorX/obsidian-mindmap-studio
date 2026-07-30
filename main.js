@@ -2015,6 +2015,7 @@ var DEFAULT_SETTINGS = {
   globalSearchMaxResults: 100,
   visibleModes: ["mindmap", "outline", "article", "reading"],
   defaultViewMode: "mindmap",
+  articleEntryLockMode: "locked",
   readingLocations: {},
   articleTocMaxDepth: 3,
   showArticleMiniMap: true,
@@ -2294,6 +2295,10 @@ var MindMapStudioSettingTab = class extends import_obsidian.PluginSettingTab {
         await this.plugin.setGlobalDisplayMode(value);
       });
     });
+    new import_obsidian.Setting(containerEl).setName("\u8FDB\u5165\u6587\u7AE0\u6A21\u5F0F").setDesc("\u9ED8\u8BA4\u9501\u5B9A\u4F1A\u4EE5\u9605\u8BFB\u72B6\u6001\u6253\u5F00\u6587\u7AE0\uFF1B\u6CBF\u7528\u8FDB\u5165\u524D\u72B6\u6001\u4F1A\u4FDD\u7559\u4ECE\u5BFC\u56FE\u6216\u5927\u7EB2\u5207\u6362\u524D\u7684\u9501\u5B9A/\u7F16\u8F91\u72B6\u6001\u3002").addDropdown((dropdown) => dropdown.addOption("locked", "\u9ED8\u8BA4\u9501\u5B9A").addOption("inherit", "\u6CBF\u7528\u8FDB\u5165\u524D\u72B6\u6001").setValue(this.plugin.settings.articleEntryLockMode).onChange(async (value) => {
+      this.plugin.settings.articleEntryLockMode = value === "inherit" ? "inherit" : "locked";
+      await this.saveAndRefresh();
+    }));
     new import_obsidian.Setting(containerEl).setName("\u8282\u70B9\u7F16\u8F91\u5668\u663E\u793A\u4F4D\u7F6E").setDesc("\u5C45\u4E2D\u65F6\u4F7F\u7528\u5F39\u7A97\uFF1B\u9760\u53F3\u65F6\u4F5C\u4E3A\u53F3\u4FA7\u7F16\u8F91\u9762\u677F\u663E\u793A\uFF0C\u4FDD\u5B58\u6216\u70B9\u51FB\u9762\u677F\u5916\u4F1A\u81EA\u52A8\u6536\u8D77\u3002").addDropdown((dropdown) => dropdown.addOption("center", "\u5C45\u4E2D\u5F39\u7A97").addOption("right", "\u53F3\u4FA7\u9762\u677F").setValue(this.plugin.settings.nodeEditorPosition).onChange(async (value) => {
       this.plugin.settings.nodeEditorPosition = value === "right" ? "right" : "center";
       await this.saveAndRefresh();
@@ -9611,7 +9616,7 @@ var MindMapEditor = class {
     this.history = new DocumentHistory(() => this.options.historyLimit);
     this.document = cloneDocument(document2);
     this.currentMode = this.resolveMode(options.defaultViewMode);
-    this.readOnly = this.currentMode === "article" || this.currentMode === "reading" || this.currentMode === "question-bank" || ((_a2 = this.document.view) == null ? void 0 : _a2.readOnly) === true;
+    this.readOnly = this.currentMode === "reading" || this.currentMode === "question-bank" || ((_a2 = this.document.view) == null ? void 0 : _a2.readOnly) === true || this.currentMode === "article" && this.options.articleEntryLockMode === "locked";
     this.lastReadingLocation = options.readingLocation;
     const restoredLocation = this.resolveStoredLocation();
     this.selectedId = (restoredLocation == null ? void 0 : restoredLocation.filePath) === options.currentFilePath ? restoredLocation.nodeId : this.document.root.id;
@@ -9656,7 +9661,7 @@ var MindMapEditor = class {
     var _a2;
     this.document = cloneDocument(document2);
     this.currentMode = this.resolveMode(this.options.defaultViewMode);
-    this.readOnly = this.currentMode === "article" || this.currentMode === "reading" || this.currentMode === "question-bank" || ((_a2 = this.document.view) == null ? void 0 : _a2.readOnly) === true;
+    this.readOnly = this.currentMode === "reading" || this.currentMode === "question-bank" || ((_a2 = this.document.view) == null ? void 0 : _a2.readOnly) === true || this.currentMode === "article" && this.options.articleEntryLockMode === "locked";
     const restored = this.resolveStoredLocation();
     this.selectedId = (restored == null ? void 0 : restored.filePath) === this.options.currentFilePath ? restored.nodeId : this.document.root.id;
     if (resetHistory) {
@@ -9712,9 +9717,9 @@ var MindMapEditor = class {
     if (modeChanged) {
       this.rememberCurrentLocation(previousMode, true);
       if (previousMode === "mindmap") this.persistMindMapViewportState();
-      this.currentMode = resolved;
       const preserveReadingEdit = previousMode === "reading" && resolved === "article" && !this.readOnly;
-      this.readOnly = resolved === "article" || resolved === "reading" || resolved === "question-bank" ? !preserveReadingEdit : previousMode === "article" || previousMode === "reading" || previousMode === "question-bank" ? ((_c = this.document.view) == null ? void 0 : _c.readOnly) === true : this.readOnly;
+      this.currentMode = resolved;
+      this.readOnly = resolved === "article" ? preserveReadingEdit || this.options.articleEntryLockMode === "inherit" ? this.readOnly : true : resolved === "reading" || resolved === "question-bank" ? true : previousMode === "article" || previousMode === "reading" || previousMode === "question-bank" ? ((_c = this.document.view) == null ? void 0 : _c.readOnly) === true : this.readOnly;
     }
     if (modesChanged || toolbarChanged) {
       this.cleanupCallbacks.forEach((callback) => callback());
@@ -9765,7 +9770,9 @@ var MindMapEditor = class {
       this.callbacks.onChange(this.getDocument());
     }
     this.currentMode = mode;
-    if ((mode === "article" || mode === "reading" || mode === "question-bank") && mode !== previousMode) {
+    if (mode === "article" && mode !== previousMode) {
+      this.readOnly = this.options.articleEntryLockMode === "locked" ? true : this.readOnly;
+    } else if ((mode === "reading" || mode === "question-bank") && mode !== previousMode) {
       this.readOnly = true;
     } else if ((previousMode === "article" || previousMode === "reading" || previousMode === "question-bank") && mode !== "article" && mode !== "reading" && mode !== "question-bank") {
       this.readOnly = ((_d = this.document.view) == null ? void 0 : _d.readOnly) === true;
@@ -10352,18 +10359,23 @@ var MindMapEditor = class {
     this.statusEl = this.toolbarEl.createSpan({ cls: "mmc-save-status", text: "\u5DF2\u4FDD\u5B58" });
     const keydown = (event) => this.handleKeydown(event);
     this.rootEl.addEventListener("keydown", keydown, true);
-    const ctrlTracker = (trackEvent) => {
-      if (trackEvent.type === "keydown" && (trackEvent.key === "Control" || trackEvent.key === "Meta")) {
-        this.rootEl.addClass("is-ctrl-held");
-      } else if (trackEvent.type === "keyup" && (trackEvent.key === "Control" || trackEvent.key === "Meta")) {
-        this.rootEl.removeClass("is-ctrl-held");
-      }
+    const syncResizeModifier = (trackEvent) => {
+      this.rootEl.toggleClass("is-ctrl-held", trackEvent.ctrlKey || trackEvent.metaKey);
     };
-    document.addEventListener("keydown", ctrlTracker);
-    document.addEventListener("keyup", ctrlTracker);
+    const clearResizeModifier = () => this.rootEl.removeClass("is-ctrl-held");
+    document.addEventListener("keydown", syncResizeModifier);
+    document.addEventListener("keyup", syncResizeModifier);
+    this.rootEl.addEventListener("pointermove", syncResizeModifier, true);
+    this.rootEl.addEventListener("pointerover", syncResizeModifier, true);
+    window.addEventListener("blur", clearResizeModifier);
+    document.addEventListener("visibilitychange", clearResizeModifier);
     this.cleanupCallbacks.push(() => {
-      document.removeEventListener("keydown", ctrlTracker);
-      document.removeEventListener("keyup", ctrlTracker);
+      document.removeEventListener("keydown", syncResizeModifier);
+      document.removeEventListener("keyup", syncResizeModifier);
+      this.rootEl.removeEventListener("pointermove", syncResizeModifier, true);
+      this.rootEl.removeEventListener("pointerover", syncResizeModifier, true);
+      window.removeEventListener("blur", clearResizeModifier);
+      document.removeEventListener("visibilitychange", clearResizeModifier);
     });
     this.cleanupCallbacks.push(() => this.rootEl.removeEventListener("keydown", keydown, true));
     const paste = (event) => {
@@ -11863,11 +11875,13 @@ var MindMapEditor = class {
         });
         resizeHandle.setAttr("draggable", "false");
         resizeHandle.addEventListener("click", (event) => {
+          if (!event.ctrlKey && !event.metaKey) return;
           event.preventDefault();
           event.stopPropagation();
         });
         resizeHandle.addEventListener("dblclick", (event) => {
           if (this.readOnly) return;
+          if (!event.ctrlKey && !event.metaKey) return;
           event.preventDefault();
           event.stopPropagation();
           this.mutate(() => {
@@ -15607,6 +15621,7 @@ var MindMapStudioView = class _MindMapStudioView extends import_obsidian12.TextF
         ...this.plugin.isQuestionBankFile(this.file) ? ["question-bank"] : []
       ],
       defaultViewMode: this.plugin.getActiveDisplayMode(),
+      articleEntryLockMode: this.plugin.settings.articleEntryLockMode,
       currentFilePath: (_b2 = (_a2 = this.file) == null ? void 0 : _a2.path) != null ? _b2 : "",
       readingHomePath: (_f = (_e = (_c = this.readingSections[0]) == null ? void 0 : _c.filePath) != null ? _e : (_d = this.file) == null ? void 0 : _d.path) != null ? _f : "",
       readingLocation: (() => {
@@ -17821,6 +17836,7 @@ var MindMapStudioPlugin = class extends import_obsidian15.Plugin {
         return [.../* @__PURE__ */ new Set([...stored, ...DEFAULT_SETTINGS.toolbarItemOrder])];
       })(),
       defaultViewMode: typeof raw.defaultViewMode === "string" ? raw.defaultViewMode : DEFAULT_SETTINGS.defaultViewMode,
+      articleEntryLockMode: raw.articleEntryLockMode === "inherit" ? "inherit" : "locked",
       readingLocations: typeof raw.readingLocations === "object" && raw.readingLocations ? Object.fromEntries(Object.entries(raw.readingLocations).flatMap(([path, value]) => {
         const location = normalizeReadingLocation(value);
         return location ? [[path, location]] : [];
