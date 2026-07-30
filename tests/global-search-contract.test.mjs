@@ -10,7 +10,7 @@ before(async () => {
   styles = await readFile("styles.css", "utf8");
 });
 
-test("single-result replacement is a centered, labeled action", () => {
+test("single-result replacement is right-aligned and vertically centered", () => {
   assert.match(source, /const actions = item\.createDiv\(\{ cls: "mms-global-search-result-actions" \}\)/);
   assert.match(source, /const replaceOneBtn = actions\.createEl\("button"/);
   assert.match(source, /replaceOneBtn\.createSpan\(\{ text: "替换此节点" \}\)/);
@@ -27,7 +27,8 @@ test("global search indexes only node text while displaying the result file cont
   assert.match(source, /text: result\.filePath/);
   assert.doesNotMatch(source, /mms-global-search-result-badges/);
   assert.match(styles, /\.mms-global-search-result-title \{[\s\S]*flex: 1 1 auto;[\s\S]*overflow-wrap: anywhere/);
-  assert.match(styles, /\.mms-global-search-result-actions \{[\s\S]*justify-content: center;[\s\S]*margin-top: 7px/);
+  assert.match(styles, /\.mms-global-search-result \{[\s\S]*position: relative;[\s\S]*padding: 10px 166px 10px 14px/);
+  assert.match(styles, /\.mms-global-search-result-actions \{[\s\S]*position: absolute;[\s\S]*top: 50%;[\s\S]*right: 14px;[\s\S]*transform: translateY\(-50%\)/);
   assert.match(styles, /\.mms-global-search-result-file \{[\s\S]*margin-top: 6px/);
   assert.match(styles, /\.mms-global-search-result-path \{[\s\S]*text-overflow: ellipsis/);
   assert.doesNotMatch(styles, /mms-global-search-badge/);
