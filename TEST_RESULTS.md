@@ -34,3 +34,37 @@ node --check main.js
 当前容器的 npm 镜像无法提供锁文件要求的完整 `esbuild`、`obsidian`、`fflate` 等依赖，因此未执行真实的完整生产构建。测试阶段使用了仅存在于工作目录、不会进入交付 ZIP 的兼容依赖链接与测试构建适配层；单元测试、综合回归、文档检查和仓库检查均已通过。`main.js` 已依据 TypeScript 源码进行确定性同步，并通过语法检查和源码/产物关键契约核对。
 
 未在真实 Obsidian 桌面客户端中执行像素级手工冒烟。发布前建议重点检查：设置页分类顺序、全局分支外观对未覆盖页面的生效情况、当前脑图页面覆盖优先级，以及不同窗口宽度下“主题与外观”弹窗的双栏/单栏切换。
+
+# 子导图默认节点、文章空节点编辑与节点最低高度验证
+
+## 本次修改
+
+- 新建子导图保留标准的“主题 1”“主题 2”两个初始子节点。
+- 文章编辑模式为无内容末端节点生成真实的可编辑占位行，添加子节点后的 `beginInlineEdit()` 可直接定位并聚焦。
+- 导图节点、布局初始估算和浏览器实测尺寸统一采用 36px 最低高度。
+
+## 验证命令
+
+```bash
+node --test tests/node-creation.test.mjs
+node --test tests/node-creation.test.mjs tests/reading-editor-contract.test.mjs tests/repository-cleanup.test.mjs
+node --test tests/code-block.test.mjs tests/display-mode.test.mjs tests/settings-layout.test.mjs tests/node-creation.test.mjs tests/filename.test.mjs tests/global-search-contract.test.mjs tests/image-host.test.mjs tests/image-layout.test.mjs tests/image-source-candidates.test.mjs tests/reading-location.test.mjs tests/reading-editor-contract.test.mjs tests/repository-cleanup.test.mjs tests/selection-format-toolbar.test.mjs tests/import-mode.test.mjs tests/ai.test.mjs tests/image-recognition.test.mjs tests/question.test.mjs
+node scripts/check-docs.mjs
+node scripts/check-repository.mjs
+node --check main.js
+```
+
+## 结果
+
+- 新增专项测试：`3 / 3` 通过。
+- 新增专项测试与阅读编辑、仓库清理联合回归：`24 / 24` 通过。
+- 在当前可用依赖范围内执行的广泛单元测试：`116 / 116` 通过；仅未运行依赖缺失的插件更新测试。
+- 文档检查：`48` 个 TypeScript 模块中的 `847` 个具名声明均有 JSDoc。
+- 仓库检查：通过。
+- `main.js` JavaScript 语法检查：通过。
+- `src/main.ts`、`src/editor/article-renderer.ts`、`src/editor/editor.ts`、`src/render/layout.ts` 的 TypeScript 语法转译检查：通过。
+
+## 环境限制
+
+当前 npm 镜像缺少锁文件中的 `w3c-keyname@2.2.8`，无法安装完整依赖并执行真实 `esbuild` 生产构建。`main.js` 已与源码同步修改，并通过 JavaScript 语法检查及源码/产物关键契约核对。
+

@@ -2933,12 +2933,11 @@ export class MindMapEditor {
       nodeEl.style.left = `${position.x}px`;
       nodeEl.style.top = `${position.y}px`;
       nodeEl.style.width = `${position.width}px`;
-      // Layout estimates are only provisional coordinates. Writing the estimate
-      // as min-height prevents rich content (notably a collapsed code block)
-      // from shrinking after its real DOM height changes. Preserve only a
-      // user-defined minimum; ResizeObserver will feed the natural height back
-      // into collision layout.
-      if (node.style?.minHeight !== undefined) nodeEl.style.minHeight = `${node.style.minHeight}px`;
+      // Layout estimates are only provisional coordinates. Keep a small global
+      // floor so a brand-new empty node remains visible and editable, while
+      // still allowing rich content and collapsed code blocks to shrink to
+      // their real DOM height. User-defined minimum height continues to win.
+      nodeEl.style.minHeight = `${Math.max(36, node.style?.minHeight ?? 0)}px`;
       nodeEl.style.setProperty("--mmc-node-text-align", textAlign);
       nodeEl.draggable = position.depth > 0 && !this.readOnly;
       if (this.selectedId === node.id || this.selectedIds.has(node.id)) nodeEl.addClass("is-selected");

@@ -1,0 +1,58 @@
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import { before, test } from "node:test";
+
+let mainSource;
+let modelSource;
+let editorSource;
+let articleRendererSource;
+let layoutSource;
+let styles;
+let mainBundle;
+
+before(async () => {
+  [mainSource, modelSource, editorSource, articleRendererSource, layoutSource, styles, mainBundle] = await Promise.all([
+    readFile("src/main.ts", "utf8"),
+    readFile("src/core/model.ts", "utf8"),
+    readFile("src/editor/editor.ts", "utf8"),
+    readFile("src/editor/article-renderer.ts", "utf8"),
+    readFile("src/render/layout.ts", "utf8"),
+    readFile("styles.css", "utf8"),
+    readFile("main.js", "utf8")
+  ]);
+});
+
+test("new child maps retain the standard two starter topics", () => {
+  const createDefault = modelSource.match(/export function createDefaultDocument\([\s\S]*?\n\}/)?.[0] ?? "";
+  const buildSubmap = mainSource.match(/private buildSubmapDocument\([\s\S]*?\n  \}/)?.[0] ?? "";
+
+  assert.match(createDefault, /text: "主题 1"[\s\S]*text: "主题 2"/);
+  assert.match(buildSubmap, /const document = this\.createConfiguredDocument\(title\)/);
+  assert.doesNotMatch(buildSubmap, /document\.root\.children = \[\]/);
+  assert.match(buildSubmap, /document\.root\.content = \[\{ id: `\$\{document\.root\.id\}_title`, type: "text", text: title \}\]/);
+  assert.doesNotMatch(mainBundle, /document2\.root\.children = \[\];[\s\S]{0,180}document2\.root\.content/);
+});
+
+test("article mode renders and focuses a newly added empty child", () => {
+  const leafBranch = articleRendererSource.match(/\} else \{\n      const blocks = nodeContentBlocks\(info\.node\);[\s\S]*?renderArticleNodeContent\(section, info\.node, false, options\);\n    \}/)?.[0] ?? "";
+  const addChild = editorSource.match(/private addChild\(\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
+  const beginInlineEdit = editorSource.match(/private beginInlineEdit\([\s\S]*?\n  \}/)?.[0] ?? "";
+
+  assert.match(leafBranch, /!options\.readOnly && blocks\.length === 0/);
+  assert.match(leafBranch, /renderRichTextRuns\(paragraph, firstTextBlock\?\.richText, firstTextBlock\?\.text \?\? ""\)/);
+  assert.match(leafBranch, /options\.makeInlineEditable\(paragraph, info\.node, "正文段落"\)/);
+  assert.match(addChild, /window\.requestAnimationFrame\(\(\) => this\.beginInlineEdit\(node\.id, undefined, true\)\)/);
+  assert.match(beginInlineEdit, /\[data-node-id="\$\{CSS\.escape\(nodeId\)\}"\] \[data-mms-inline-editable="true"\]/);
+  assert.match(beginInlineEdit, /if \(inlineElement\) this\.activateInlineEditable\(inlineElement\)/);
+  assert.match(mainBundle, /!options\.readOnly && blocks\.length === 0/);
+});
+
+test("mind-map nodes keep a non-zero global minimum height", () => {
+  assert.match(layoutSource, /const MIN_NODE_HEIGHT = 36/);
+  assert.match(layoutSource, /Math\.max\(measured\.height, node\.style\?\.minHeight \?\? 0, MIN_NODE_HEIGHT\)/);
+  assert.match(layoutSource, /Math\.max\(height, node\.style\?\.minHeight \?\? 0, MIN_NODE_HEIGHT\)/);
+  assert.match(editorSource, /nodeEl\.style\.minHeight = `\$\{Math\.max\(36, node\.style\?\.minHeight \?\? 0\)\}px`/);
+  assert.match(styles, /\.mmc-node \{[\s\S]*?min-height: 36px;/);
+  assert.match(mainBundle, /var MIN_NODE_HEIGHT = 36/);
+  assert.match(mainBundle, /nodeEl\.style\.minHeight = `\$\{Math\.max\(36,/);
+});

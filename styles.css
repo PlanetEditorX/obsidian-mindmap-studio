@@ -196,6 +196,7 @@
   align-items: center;
   justify-content: center;
   box-sizing: border-box;
+  min-height: 36px;
   padding: 9px 13px 11px;
   transform: translate(-50%, -50%);
   border: var(--mmc-node-border-width) solid var(--mmc-node-border);

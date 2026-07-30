@@ -1767,7 +1767,9 @@ export default class MindMapStudioPlugin extends Plugin {
       if (node.code) document.root.code = JSON.parse(JSON.stringify(node.code));
       if (node.table) document.root.table = JSON.parse(JSON.stringify(node.table));
     } else {
-      document.root.children = [];
+      // A newly created child map should behave like a normal new document:
+      // keep the two default starter branches ("主题 1" and "主题 2") while
+      // replacing only the root title with the parent node text.
       document.root.content = [{ id: `${document.root.id}_title`, type: "text", text: title }];
     }
     document.root.link = undefined;
