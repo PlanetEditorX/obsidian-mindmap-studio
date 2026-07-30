@@ -1,3 +1,19 @@
+# Markdown 导入标题首次编辑重复追加修复
+
+| 文件 | 变更 |
+|---|---|
+| `src/core/model.ts` | Markdown 解析文字时直接写入带稳定 ID 的 `content` 文字块 |
+| `src/editor/editor.ts` | 旧版无 `content` 节点保存时原位更新兼容文字块，避免追加第二段 |
+| `tests/article-content-block.test.mjs` | 覆盖 Markdown 导入稳定块 ID 和旧数据保存兜底契约 |
+| `main.js` | 重新生产构建，包含本次运行时修复 |
+| `docs/DATA_MODEL.md`、`docs/SPECIAL_FEATURES.md`、`CHANGELOG.md`、`TEST_RESULTS.md` | 同步数据边界、用户行为、修复记录和验证结果 |
+
+### 行为边界
+
+- 不改变 Markdown 标题、列表、表格、图片和代码的既有层级解析规则。
+- 不改变 `.mindmap` 数据格式版本；`content` 继续作为权威内容集合，`text/richText` 继续作为兼容镜像。
+- 已有多文字块节点仍严格按块 ID 编辑；兼容回退仅在节点没有持久化 `content` 时生效。
+
 # 代码块行号、导图高度与内容块删除修复清单
 
 ## 节点编辑键盘、内容块拖动与精确删除
@@ -35,7 +51,7 @@
 ### 交付边界
 
 - 完整保留用户上传的 Codex Vault 结构和既有内容，仅做增量同步。
-- 源码 ZIP 包含完整 `Codex/`，不包含 `node_modules/`、临时测试目录、`.git/` 或嵌套 ZIP。
+- 该轮历史源码 ZIP 包含完整 `Codex/`；后续交付已按用户新规则改为排除 `Codex/`，并继续排除 `node_modules/`、临时测试目录、`.git/` 和嵌套 ZIP。
 
 ## AI 整理阶段进度与等待耗时
 

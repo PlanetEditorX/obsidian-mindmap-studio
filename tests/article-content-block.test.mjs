@@ -50,14 +50,24 @@ test("article block context inserts text immediately after the clicked code bloc
 
 test("article inline editing updates the exact text block instead of the first block", () => {
   const makeInlineEditable = editorSource.match(/private makeInlineEditable\(element: HTMLElement, node: MindMapNode, placeholder: string, blockId\?: string\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
+  const updateNodeTextBlock = editorSource.match(/private updateNodeTextBlock\([\s\S]*?\n  \}/)?.[0] ?? "";
   assert.match(editorSource, /private makeInlineEditable\(element: HTMLElement, node: MindMapNode, placeholder: string, blockId\?: string\)/);
   assert.match(editorSource, /block\.type === "text" && block\.id === blockId/);
   assert.match(editorSource, /this\.updateNodeTextBlock\(node, next, blockId\)/);
+  assert.match(updateNodeTextBlock, /exactTextBlock \?\? \([\s\S]*blockId && !node\.content\?\.length[\s\S]*blocks\.find/);
   assert.match(rendererSource, /paragraph\.dataset\.blockId = block\.id/);
   assert.match(makeInlineEditable, /element\.addEventListener\("pointerdown"[\s\S]*this\.inlineEditingId = node\.id[\s\S]*this\.activateInlineEditable\(element, false\)/);
   assert.match(makeInlineEditable, /element\.addEventListener\("focus"[\s\S]*this\.inlineEditingId = node\.id/);
   assert.match(makeInlineEditable, /element\.dataset\.mmsProtectInitialFocus === "true"[\s\S]*window\.requestAnimationFrame\(\(\) => this\.activateInlineEditable\(element\)\)/);
   assert.match(makeInlineEditable, /if \(this\.inlineEditingId === node\.id\) this\.inlineEditingId = null/);
+});
+
+test("Markdown import persists stable text-block IDs before article editing", () => {
+  const document = model.markdownToDocument("# 第一章 教程");
+  const persisted = document.root.content?.[0];
+  assert.equal(persisted?.type, "text");
+  assert.equal(persisted?.text, "第一章 教程");
+  assert.equal(model.nodeContentBlocks(document.root)[0]?.id, persisted?.id);
 });
 
 test("empty article document title keeps a clickable inline-edit target after blur", () => {

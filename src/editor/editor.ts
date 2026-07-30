@@ -2423,9 +2423,19 @@ export class MindMapEditor {
     const next = value.text.replace(/\s+/g, " ").trim();
     const normalized = normalizeMarkdownRichText(value.richText, next);
     const blocks = nodeContentBlocks(node);
-    const textBlock = blockId
+    const exactTextBlock = blockId
       ? blocks.find((block): block is MindMapTextContentBlock => block.type === "text" && block.id === blockId)
       : blocks.find((block): block is MindMapTextContentBlock => block.type === "text");
+    // Legacy/imported nodes can still reach the renderer without a persisted
+    // content array. nodeContentBlocks() then synthesizes a compatibility
+    // block whose generated ID is different on the later blur event. Treat
+    // that single legacy text block as the edited block instead of appending
+    // the new value as a second paragraph.
+    const textBlock = exactTextBlock ?? (
+      blockId && !node.content?.length
+        ? blocks.find((block): block is MindMapTextContentBlock => block.type === "text")
+        : undefined
+    );
     if (textBlock) {
       textBlock.text = normalized.text;
       textBlock.richText = normalized.richText;

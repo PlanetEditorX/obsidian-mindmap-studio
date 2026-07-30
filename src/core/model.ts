@@ -1860,14 +1860,22 @@ export function markdownToDocument(markdown: string, fallbackTitle = "思维导�
   const applyMarkdownText = (node: MindMapNode, value: string, fallback = "节点", forceBold = false): void => {
     const source = value.trim() || fallback;
     if (forceBold) {
-      node.text = source;
-      node.richText = normalizeRichText([{ text: source, style: { bold: true } }], source);
+      replaceNodeContentBlocks(node, [{
+        id: newId(),
+        type: "text",
+        text: source,
+        richText: normalizeRichText([{ text: source, style: { bold: true } }], source)
+      }]);
       return;
     }
 
     const parsed = markdownInlineToRichText(source);
-    node.text = parsed.text || fallback;
-    node.richText = parsed.richText;
+    replaceNodeContentBlocks(node, [{
+      id: newId(),
+      type: "text",
+      text: parsed.text || fallback,
+      richText: parsed.richText
+    }]);
   };
 
   if (frontmatterTitle) {

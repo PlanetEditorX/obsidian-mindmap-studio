@@ -1046,13 +1046,21 @@ function markdownToDocument(markdown, fallbackTitle = "\u601D\u7EF4\u5BFC\u56FE"
   const applyMarkdownText = (node, value, fallback = "\u8282\u70B9", forceBold = false) => {
     const source = value.trim() || fallback;
     if (forceBold) {
-      node.text = source;
-      node.richText = normalizeRichText([{ text: source, style: { bold: true } }], source);
+      replaceNodeContentBlocks(node, [{
+        id: newId(),
+        type: "text",
+        text: source,
+        richText: normalizeRichText([{ text: source, style: { bold: true } }], source)
+      }]);
       return;
     }
     const parsed = markdownInlineToRichText(source);
-    node.text = parsed.text || fallback;
-    node.richText = parsed.richText;
+    replaceNodeContentBlocks(node, [{
+      id: newId(),
+      type: "text",
+      text: parsed.text || fallback,
+      richText: parsed.richText
+    }]);
   };
   if (frontmatterTitle) {
     applyMarkdownText(doc.root, frontmatterTitle, fallbackTitle);
@@ -10731,10 +10739,12 @@ var MindMapEditor = class {
    * @param blockId 需要更新的文字块标识。
    */
   updateNodeTextBlock(node, value, blockId) {
+    var _a2;
     const next = value.text.replace(/\s+/g, " ").trim();
     const normalized2 = normalizeMarkdownRichText(value.richText, next);
     const blocks = nodeContentBlocks(node);
-    const textBlock = blockId ? blocks.find((block) => block.type === "text" && block.id === blockId) : blocks.find((block) => block.type === "text");
+    const exactTextBlock = blockId ? blocks.find((block) => block.type === "text" && block.id === blockId) : blocks.find((block) => block.type === "text");
+    const textBlock = exactTextBlock != null ? exactTextBlock : blockId && !((_a2 = node.content) == null ? void 0 : _a2.length) ? blocks.find((block) => block.type === "text") : void 0;
     if (textBlock) {
       textBlock.text = normalized2.text;
       textBlock.richText = normalized2.richText;
