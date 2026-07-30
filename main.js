@@ -7771,8 +7771,10 @@ function renderArticleMode(container, options) {
   }
   renderArticlePager(page, options);
 }
-function createArticleContentBlock(container, blockId) {
-  const shell = container.createDiv({ cls: "mms-article-content-block" });
+function createArticleContentBlock(container, blockId, indentToParagraph = false) {
+  const shell = container.createDiv({
+    cls: `mms-article-content-block${indentToParagraph ? " is-paragraph-aligned" : ""}`
+  });
   shell.dataset.blockId = blockId;
   return shell;
 }
@@ -7848,7 +7850,7 @@ function renderArticleNodeContent(container, node, treatTextAsBody, options) {
       renderRichTextRuns(paragraph, block.richText, block.text);
       options.makeInlineEditable(paragraph, node, "\u6B63\u6587", block.id);
     } else if (block.type === "image") {
-      const shell = createArticleContentBlock(container, block.id);
+      const shell = createArticleContentBlock(container, block.id, true);
       const resolved = options.callbacks.resolveImage(block.source);
       const image = shell.createEl("img", { cls: `mms-article-image image-align-${(_a2 = block.align) != null ? _a2 : "center"}`, attr: { src: resolved != null ? resolved : block.source, alt: (_b2 = block.alt) != null ? _b2 : "\u56FE\u7247" } });
       image.dataset.blockId = block.id;
@@ -7871,10 +7873,10 @@ function renderArticleNodeContent(container, node, treatTextAsBody, options) {
         options.openImageContextMenu(event, node.id, block.id);
       });
     } else if (block.type === "table") {
-      const shell = createArticleContentBlock(container, block.id);
+      const shell = createArticleContentBlock(container, block.id, true);
       renderArticleTable(shell, node, block.table, block.id, options);
     } else {
-      const shell = createArticleContentBlock(container, block.id);
+      const shell = createArticleContentBlock(container, block.id, true);
       const code = shell.createDiv({ cls: "mms-article-code markdown-rendered" });
       code.dataset.blockId = block.id;
       void options.callbacks.onRenderCode(block.code, code);

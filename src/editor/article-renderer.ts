@@ -141,9 +141,12 @@ export function renderArticleMode(container: HTMLElement, options: ArticleRender
 /** Creates an article block shell for right-click targeting without adding a floating drag handle. */
 function createArticleContentBlock(
   container: HTMLElement,
-  blockId: string
+  blockId: string,
+  indentToParagraph = false
 ): HTMLElement {
-  const shell = container.createDiv({ cls: "mms-article-content-block" });
+  const shell = container.createDiv({
+    cls: `mms-article-content-block${indentToParagraph ? " is-paragraph-aligned" : ""}`
+  });
   shell.dataset.blockId = blockId;
   return shell;
 }
@@ -225,7 +228,7 @@ export function renderArticleNodeContent(container: HTMLElement, node: MindMapNo
       renderRichTextRuns(paragraph, block.richText, block.text);
       options.makeInlineEditable(paragraph, node, "正文", block.id);
     } else if (block.type === "image") {
-      const shell = createArticleContentBlock(container, block.id);
+      const shell = createArticleContentBlock(container, block.id, true);
       const resolved = options.callbacks.resolveImage(block.source);
       const image = shell.createEl("img", { cls: `mms-article-image image-align-${block.align ?? "center"}`, attr: { src: resolved ?? block.source, alt: block.alt ?? "图片" } });
       image.dataset.blockId = block.id;
@@ -245,10 +248,10 @@ export function renderArticleNodeContent(container: HTMLElement, node: MindMapNo
         options.openImageContextMenu(event, node.id, block.id);
       });
     } else if (block.type === "table") {
-      const shell = createArticleContentBlock(container, block.id);
+      const shell = createArticleContentBlock(container, block.id, true);
       renderArticleTable(shell, node, block.table, block.id, options);
     } else {
-      const shell = createArticleContentBlock(container, block.id);
+      const shell = createArticleContentBlock(container, block.id, true);
       const code = shell.createDiv({ cls: "mms-article-code markdown-rendered" });
       code.dataset.blockId = block.id;
       void options.callbacks.onRenderCode(block.code, code);
