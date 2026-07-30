@@ -7729,7 +7729,7 @@ function renderArticleMode(container, options) {
       if (info.label) heading.createSpan({ cls: "mms-article-number", text: info.label });
       renderHeading(heading, info.node, info.title, options);
       const headingBlock = nodeContentBlocks(info.node).find((block) => block.type === "text");
-      if (headingBlock) options.bindContentBlockDragHandle(heading, info.node.id, headingBlock.id);
+      if (headingBlock) options.bindContentBlockKeyboardMoveControl(heading, info.node.id, headingBlock.id);
       if (info.skipped) heading.createSpan({ cls: "mms-article-skip-badge", text: "\u4E0D\u7F16\u53F7" });
       options.addInlineNodeActions(heading, info.node);
       renderArticleNodeContent(section, info.node, false, options);
@@ -7752,13 +7752,12 @@ function renderArticleMode(container, options) {
       options.addInlineNodeActions(section, info.node);
       renderArticleNodeContent(section, info.node, false, options);
     }
-    options.bindContentBlockAppendDropTarget(section, info.node.id);
   }
   renderArticlePager(page, options);
 }
 function createArticleContentBlock(container, node, blockId, options) {
   const shell = container.createDiv({ cls: "mms-article-content-block" });
-  options.bindContentBlockDragHandle(shell, node.id, blockId);
+  options.bindContentBlockKeyboardMoveControl(shell, node.id, blockId);
   return shell;
 }
 function articleParagraphClass(baseClass, block, bulleted = false) {
@@ -9561,6 +9560,7 @@ var MindMapEditor = class {
     this.mindMapViewportInitialized = false;
     this.draggingId = null;
     this.draggingContentBlock = null;
+    this.articleKeyboardMovingBlock = null;
     this.dragDropPosition = null;
     this.dropPreviewEl = null;
     this.panning = false;
@@ -9939,6 +9939,14 @@ var MindMapEditor = class {
       document.activeElement.blur();
     }
     this.readOnly = !this.readOnly;
+    if (this.readOnly) {
+      this.articleKeyboardMovingBlock = null;
+      this.articleEl.querySelectorAll(".is-keyboard-moving").forEach((element) => element.removeClass("is-keyboard-moving"));
+      this.articleEl.querySelectorAll(".mms-article-block-move-button").forEach((button) => {
+        button.removeClass("is-active");
+        button.setAttr("aria-pressed", "false");
+      });
+    }
     if (this.currentMode === "reading" && !this.readOnly) {
       const location = (_a2 = this.captureCurrentLocation("reading")) != null ? _a2 : this.lastReadingLocation;
       if (location) this.rememberLocation(location, true);
@@ -11210,8 +11218,7 @@ var MindMapEditor = class {
       updateTableColumnWidths: (node, blockId, widths) => this.updateTableColumnWidths(node, blockId, widths),
       makeInlineEditable: (element, node, placeholder, blockId) => this.makeInlineEditable(element, node, placeholder, blockId),
       makeInlineCodeEditable: (element, node, code, blockId) => this.makeInlineCodeEditable(element, node, code, blockId),
-      bindContentBlockDragHandle: (element, nodeId, blockId) => this.bindContentBlockDragHandle(element, nodeId, blockId),
-      bindContentBlockAppendDropTarget: (element, nodeId) => this.bindContentBlockAppendDropTarget(element, nodeId),
+      bindContentBlockKeyboardMoveControl: (element, nodeId, blockId) => this.bindArticleContentBlockMoveControl(element, nodeId, blockId),
       addInlineNodeActions: (container, node) => this.addInlineNodeActions(container, node)
     };
   }
@@ -11533,13 +11540,15 @@ var MindMapEditor = class {
           continue;
         }
         if (block.type === "table") {
-          const tableBlock = this.renderNodeTable(content, node, block.table, block.id);
-          this.bindContentBlockDragHandle(tableBlock, node.id, block.id);
+          const shell = content.createDiv({ cls: "mmc-node-structured-block-shell" });
+          this.renderNodeTable(shell, node, block.table, block.id);
+          this.bindContentBlockDragHandle(shell, node.id, block.id);
           continue;
         }
         if (block.type === "code") {
-          const codeBlock = this.renderNodeCode(content, node, block.code, block.id);
-          this.bindContentBlockDragHandle(codeBlock, node.id, block.id);
+          const shell = content.createDiv({ cls: "mmc-node-structured-block-shell" });
+          this.renderNodeCode(shell, node, block.code, block.id);
+          this.bindContentBlockDragHandle(shell, node.id, block.id);
           continue;
         }
         if (!block.text.trim()) continue;
@@ -12914,6 +12923,105 @@ var MindMapEditor = class {
       this.moveContentBlock(dragging.nodeId, dragging.blockId, nodeId, void 0, "append");
     });
   }
+  /** Adds the article-only button that enters persistent arrow-key content-block movement mode. */
+  bindArticleContentBlockMoveControl(blockElement, nodeId, blockId) {
+    blockElement.dataset.blockId = blockId;
+    const handle = blockElement.createEl("button", {
+      cls: "mms-article-block-move-button",
+      attr: {
+        type: "button",
+        title: "\u70B9\u51FB\u8FDB\u5165\u79FB\u52A8\u6A21\u5F0F\uFF1B\u65B9\u5411\u952E\u79FB\u52A8\uFF0CEsc \u9000\u51FA",
+        "aria-label": "\u8FDB\u5165\u5185\u5BB9\u5757\u79FB\u52A8\u6A21\u5F0F",
+        "aria-pressed": "false"
+      }
+    });
+    (0, import_obsidian10.setIcon)(handle, "move");
+    const matchesActiveState = () => {
+      var _a2;
+      return ((_a2 = this.articleKeyboardMovingBlock) == null ? void 0 : _a2.nodeId) === nodeId && this.articleKeyboardMovingBlock.blockId === blockId;
+    };
+    const applyActiveState = () => {
+      const active = matchesActiveState();
+      handle.toggleClass("is-active", active);
+      blockElement.toggleClass("is-keyboard-moving", active);
+      handle.setAttr("aria-pressed", String(active));
+      handle.setAttr("aria-label", active ? "\u5185\u5BB9\u5757\u79FB\u52A8\u6A21\u5F0F\uFF1B\u65B9\u5411\u952E\u79FB\u52A8\uFF0CEsc \u9000\u51FA" : "\u8FDB\u5165\u5185\u5BB9\u5757\u79FB\u52A8\u6A21\u5F0F");
+    };
+    handle.addEventListener("pointerdown", (event) => event.stopPropagation());
+    handle.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (this.readOnly) return;
+      this.articleKeyboardMovingBlock = matchesActiveState() ? null : { nodeId, blockId };
+      applyActiveState();
+      if (this.articleKeyboardMovingBlock) handle.focus();
+    });
+    handle.addEventListener("keydown", (event) => {
+      if (this.readOnly) return;
+      if (!matchesActiveState()) return;
+      if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopPropagation();
+        this.articleKeyboardMovingBlock = null;
+        applyActiveState();
+        handle.blur();
+        return;
+      }
+      if (!["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(event.key)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
+      this.moveArticleContentBlockByKeyboard(nodeId, blockId, event.key);
+    });
+    applyActiveState();
+    if (matchesActiveState()) window.requestAnimationFrame(() => handle.focus());
+  }
+  /** Moves one article block by order or hierarchy while preserving keyboard mode across rerenders. */
+  moveArticleContentBlockByKeyboard(sourceNodeId, blockId, key) {
+    var _a2, _b2, _c;
+    if (!this.ensureEditable()) return;
+    const sourceNode = findNode(this.document.root, sourceNodeId);
+    if (!sourceNode) {
+      this.articleKeyboardMovingBlock = null;
+      return;
+    }
+    const blocks = nodeContentBlocks(sourceNode);
+    const sourceIndex = blocks.findIndex((block) => block.id === blockId);
+    if (sourceIndex < 0) {
+      this.articleKeyboardMovingBlock = null;
+      return;
+    }
+    let targetNode = sourceNode;
+    let targetBlockId;
+    let position = "append";
+    if (key === "ArrowUp") {
+      targetBlockId = (_a2 = blocks[sourceIndex - 1]) == null ? void 0 : _a2.id;
+      position = "before";
+    } else if (key === "ArrowDown") {
+      targetBlockId = (_b2 = blocks[sourceIndex + 1]) == null ? void 0 : _b2.id;
+      position = "after";
+    } else if (key === "ArrowLeft") {
+      targetNode = findParent(this.document.root, sourceNodeId);
+    } else {
+      targetNode = (_c = sourceNode.children[0]) != null ? _c : null;
+    }
+    if (!targetNode || (key === "ArrowUp" || key === "ArrowDown") && !targetBlockId) {
+      const message = key === "ArrowUp" ? "\u5F53\u524D\u5185\u5BB9\u5757\u5DF2\u7ECF\u5728\u6700\u4E0A\u65B9" : key === "ArrowDown" ? "\u5F53\u524D\u5185\u5BB9\u5757\u5DF2\u7ECF\u5728\u6700\u4E0B\u65B9" : key === "ArrowLeft" ? "\u5F53\u524D\u8282\u70B9\u6CA1\u6709\u7236\u8282\u70B9" : "\u5F53\u524D\u8282\u70B9\u6CA1\u6709\u5B50\u8282\u70B9";
+      new import_obsidian10.Notice(message);
+      return;
+    }
+    let moved = false;
+    const targetNodeId = targetNode.id;
+    this.mutate(() => {
+      moved = moveNodeContentBlock(this.document.root, sourceNodeId, blockId, targetNodeId, targetBlockId, position);
+      if (!moved) return;
+      this.articleKeyboardMovingBlock = { nodeId: targetNodeId, blockId };
+      this.selectedId = targetNodeId;
+      this.selectedIds.clear();
+      this.selectedIds.add(targetNodeId);
+    });
+    if (moved) new import_obsidian10.Notice(sourceNodeId === targetNodeId ? "\u5DF2\u8C03\u6574\u5185\u5BB9\u5757\u987A\u5E8F" : "\u5DF2\u79FB\u52A8\u5185\u5BB9\u5757\u5230\u76EE\u6807\u8282\u70B9");
+  }
   /** Applies a node-internal reorder or cross-node content-block move through the normal history path. */
   moveContentBlock(sourceNodeId, blockId, targetNodeId, targetBlockId, position) {
     if (!this.ensureEditable()) return;
@@ -13208,11 +13316,12 @@ var MindMapEditor = class {
     });
     wrap.addEventListener("pointerdown", (event) => event.stopPropagation());
     wrap.addEventListener("dragstart", (event) => event.preventDefault());
-    wrap.addEventListener("click", (event) => {
+    wrap.addEventListener("click", (event) => event.stopPropagation());
+    wrap.addEventListener("dblclick", (event) => {
+      event.preventDefault();
       event.stopPropagation();
       this.openTableBlockEditor(node, tableData, blockId);
     });
-    wrap.addEventListener("dblclick", (event) => event.stopPropagation());
     wrap.addEventListener("contextmenu", (event) => {
       event.preventDefault();
       event.stopPropagation();

@@ -99,22 +99,31 @@ test("node editor Enter commits while Shift+Enter remains a stored line break", 
   assert.doesNotMatch(richTextSource, /replace\(\/\\r\?\\n\/g, " "\)/);
 });
 
-test("content blocks expose explicit drag handles, cross-node targets, and exact deletion", () => {
+test("mind-map blocks keep mouse drag while article blocks use persistent keyboard movement", () => {
   assert.match(editorSource, /mmc-content-block-editor-drag-handle[\s\S]*draggable: "true"/);
   assert.match(editorSource, /bindContentBlockDragHandle\(blockElement: HTMLElement, nodeId: string, blockId: string\)/);
   assert.match(editorSource, /moveNodeContentBlock\(this\.document\.root, sourceNodeId, blockId, targetNodeId, targetBlockId, position\)/);
-  assert.match(articleRendererSource, /bindContentBlockDragHandle: \(element: HTMLElement, nodeId: string, blockId: string\) => void/);
-  assert.match(articleRendererSource, /createArticleContentBlock\([\s\S]*options\.bindContentBlockDragHandle\(shell, node\.id, blockId\)/);
-  assert.match(articleRendererSource, /options\.bindContentBlockDragHandle\(heading, info\.node\.id, headingBlock\.id\)/);
-  assert.match(articleRendererSource, /options\.bindContentBlockAppendDropTarget\(section, info\.node\.id\)/);
+  assert.match(editorSource, /cls: "mmc-node-structured-block-shell"[\s\S]*renderNodeTable\(shell,[\s\S]*bindContentBlockDragHandle\(shell/);
+  assert.match(editorSource, /cls: "mmc-node-structured-block-shell"[\s\S]*renderNodeCode\(shell,[\s\S]*bindContentBlockDragHandle\(shell/);
+  assert.match(articleRendererSource, /bindContentBlockKeyboardMoveControl: \(element: HTMLElement, nodeId: string, blockId: string\) => void/);
+  assert.match(articleRendererSource, /createArticleContentBlock\([\s\S]*options\.bindContentBlockKeyboardMoveControl\(shell, node\.id, blockId\)/);
+  assert.match(articleRendererSource, /options\.bindContentBlockKeyboardMoveControl\(heading, info\.node\.id, headingBlock\.id\)/);
+  assert.doesNotMatch(articleRendererSource, /bindContentBlockDragHandle|bindContentBlockAppendDropTarget|draggable/);
+  assert.match(editorSource, /private articleKeyboardMovingBlock: \{ nodeId: string; blockId: string \} \| null = null/);
+  assert.match(editorSource, /private bindArticleContentBlockMoveControl\([\s\S]*mms-article-block-move-button[\s\S]*"ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"[\s\S]*requestAnimationFrame\(\(\) => handle\.focus\(\)\)/);
+  assert.doesNotMatch(editorSource.match(/private bindArticleContentBlockMoveControl\([\s\S]*?\n  \}/)?.[0] ?? "", /if \(this\.readOnly\) return;[\s\S]*blockElement\.dataset/);
+  assert.match(editorSource, /private moveArticleContentBlockByKeyboard\([\s\S]*findParent\(this\.document\.root, sourceNodeId\)[\s\S]*sourceNode\.children\[0\][\s\S]*articleKeyboardMovingBlock = \{ nodeId: targetNodeId, blockId \}/);
   assert.match(editorSource, /target\.closest<HTMLElement>\("\[data-block-id\]"\)\?\.dataset\.blockId[\s\S]*openContextMenu\(event, blockId\)/);
   assert.match(editorSource, /setTitle\("删除当前块"\)[\s\S]*removeContentBlock\(selected\.id, contextBlock\.id\)/);
   assert.match(styles, /\.mmc-content-block-drag-handle[\s\S]*cursor: grab/);
   assert.match(styles, /\.mmc-content-block-drag-handle[\s\S]*left: -28px[\s\S]*transform: translateY\(-50%\)/);
-  assert.match(styles, /\.mms-article-content-block[\s\S]*position: relative/);
+  assert.match(styles, /\.mmc-node-structured-block-shell[\s\S]*position: relative/);
+  assert.match(styles, /\.mms-article-block-move-button[\s\S]*left: -32px[\s\S]*cursor: pointer/);
+  assert.match(styles, /\.mms-article-content-block\.is-keyboard-moving/);
+  assert.match(styles, /\.mmc-editor\.is-read-only \.mms-article-block-move-button[\s\S]*display: none/);
   assert.match(styles, /\.is-block-drop-before::before/);
   assert.match(mainBundle, /application\/x-mms-content-block/);
-  assert.match(mainBundle, /\\u62D6\\u52A8\\u5185\\u5BB9\\u5757/i);
+  assert.match(mainBundle, /mms-article-block-move-button/);
   assert.match(mainBundle, /\\u5220\\u9664\\u5F53\\u524D\\u5757/i);
 });
 

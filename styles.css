@@ -2180,31 +2180,70 @@
   position: relative;
 }
 
-.mms-article-content-block > .mmc-content-block-drag-handle,
-.mms-article-heading > .mmc-content-block-drag-handle {
+.mms-article-heading {
+  position: relative;
+}
+
+.mms-article-block-move-button {
+  position: absolute;
+  z-index: 8;
+  top: 50%;
   left: -32px;
+  display: inline-flex;
+  width: 24px;
+  height: 24px;
+  align-items: center;
+  justify-content: center;
+  padding: 3px;
+  border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+  border-radius: 6px;
+  opacity: 0;
+  background: color-mix(in srgb, var(--background-primary) 92%, transparent);
+  color: var(--text-muted);
+  cursor: pointer;
+  transform: translateY(-50%);
+  transition: opacity 100ms ease, color 100ms ease, background-color 100ms ease;
 }
 
-.mms-article-content-block.is-block-drop-before::before,
-.mms-article-content-block.is-block-drop-after::after,
-.mms-article-heading.is-block-drop-before::before,
-.mms-article-heading.is-block-drop-after::after {
-  right: 0;
-  left: 0;
+.mms-article-content-block:hover > .mms-article-block-move-button,
+.mms-article-heading:hover > .mms-article-block-move-button,
+.mms-article-block-move-button:focus-visible,
+.mms-article-block-move-button.is-active {
+  opacity: 1;
 }
 
-.mms-article-node.is-block-drop-append {
-  border-bottom: 3px solid var(--interactive-accent);
+.mms-article-block-move-button.is-active {
+  border-color: var(--interactive-accent);
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+}
+
+.mms-article-content-block.is-keyboard-moving,
+.mms-article-heading.is-keyboard-moving {
+  outline: 2px solid color-mix(in srgb, var(--interactive-accent) 55%, transparent);
+  outline-offset: 4px;
+}
+
+.mmc-editor.is-read-only .mms-article-block-move-button {
+  display: none;
+  pointer-events: none;
 }
 
 @media (hover: none), (pointer: coarse) {
-  .mmc-content-block-drag-handle {
+  .mmc-content-block-drag-handle,
+  .mms-article-block-move-button {
     opacity: 0.88;
   }
 }
 
 .mmc-node-image-block {
   display: flex;
+  width: 100%;
+  min-width: 0;
+}
+
+.mmc-node-structured-block-shell {
+  position: relative;
   width: 100%;
   min-width: 0;
 }
