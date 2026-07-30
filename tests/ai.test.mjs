@@ -331,14 +331,15 @@ test("AI modal shows only the inputs required by the selected operation", async 
 });
 
 test("AI integration exposes toolbar, shortcut, page scope and node scope contracts", async () => {
-  const [settingsSource, mainSource, editorSource, viewSource, modalSource, editSource, editorModalsSource] = await Promise.all([
+  const [settingsSource, mainSource, editorSource, viewSource, modalSource, editSource, editorModalsSource, stylesSource] = await Promise.all([
     readFile("src/settings.ts", "utf8"),
     readFile("src/main.ts", "utf8"),
     readFile("src/editor/editor.ts", "utf8"),
     readFile("src/view.ts", "utf8"),
     readFile("src/ai/modal.ts", "utf8"),
     readFile("src/ai/edit.ts", "utf8"),
-    readFile("src/editor/editor-modals.ts", "utf8")
+    readFile("src/editor/editor-modals.ts", "utf8"),
+    readFile("styles.css", "utf8")
   ]);
   assert.match(settingsSource, /\["ai", "询问 AI"\]/);
   assert.match(settingsSource, /新增硅基流动/);
@@ -409,6 +410,13 @@ test("AI integration exposes toolbar, shortcut, page scope and node scope contra
   assert.match(modalSource, /本地文字替换（不调用 AI）/);
   assert.match(modalSource, /确认应用变更/);
   assert.match(modalSource, /mms-ai-track/);
+  assert.match(modalSource, /mms-ai-request-progress/);
+  assert.match(modalSource, /requestProgressTimer = window\.setInterval\(renderRequestProgress, 1000\)/);
+  assert.match(modalSource, /模型处理中[\s\S]*updateRequestProgress\("模型处理中"\)/);
+  assert.match(modalSource, /已等待 \$\{elapsed\} 秒/);
+  assert.match(modalSource, /finishRequestProgress\("done", "修改预览已生成"\)/);
+  assert.match(modalSource, /onClose\(\): void[\s\S]*window\.clearInterval\(this\.requestProgressTimer\)/);
+  assert.match(stylesSource, /\.mms-ai-request-progress\[data-state="active"\][\s\S]*mms-ai-request-progress 1\.35s/);
   assert.match(modalSource, /new Component\(\)/);
   assert.match(modalSource, /this\.markdownRenderComponent\.load\(\)/);
   assert.match(
