@@ -10982,13 +10982,17 @@ var MindMapEditor = class {
     const gutter = shell.createSpan({ cls: "mms-article-code-editor-gutter", attr: { "aria-hidden": "true" } });
     const editor = shell.createEl("textarea", {
       cls: "mms-article-code-editor",
-      attr: { spellcheck: "false", "aria-label": "\u7F16\u8F91\u4EE3\u7801" }
+      attr: { spellcheck: "false", wrap: "off", "aria-label": "\u7F16\u8F91\u4EE3\u7801" }
     });
     editor.value = code.code;
+    const syncGutterScroll = () => {
+      gutter.scrollTop = editor.scrollTop;
+    };
     const updateEditorLayout = () => {
       const lineCount = countCodeLines(editor.value);
-      editor.rows = Math.max(4, Math.min(40, lineCount));
+      editor.rows = Math.max(4, lineCount);
       gutter.setText(showLineNumbers ? buildCodeLineNumberText(lineCount) : "");
+      syncGutterScroll();
     };
     updateEditorLayout();
     let finished = false;
@@ -11016,6 +11020,7 @@ var MindMapEditor = class {
     });
     editor.addEventListener("blur", () => finish(true));
     editor.addEventListener("input", updateEditorLayout);
+    editor.addEventListener("scroll", syncGutterScroll);
     window.requestAnimationFrame(() => {
       editor.focus();
       editor.setSelectionRange(editor.value.length, editor.value.length);
@@ -12844,13 +12849,14 @@ var MindMapEditor = class {
       return;
     }
     const fallback = deletionSelectionFallback(this.document.root, [nodeId]);
+    const restoreLocation = this.currentMode === "mindmap" ? null : this.createSelectionLocation(fallback);
     if (this.inlineEditingId === nodeId) this.inlineEditingId = null;
     this.mutate(() => {
       deleteNodes(this.document.root, [nodeId]);
       this.selectedId = fallback;
       this.selectedIds.clear();
       this.selectedIds.add(fallback);
-    });
+    }, restoreLocation);
   }
   /**
    * 删除selected，并保持模型、界面和持久化状态的一致性。
@@ -12860,12 +12866,13 @@ var MindMapEditor = class {
     const batch = topLevelSelectedNodeIds(this.document.root, this.selectedIds);
     if (this.selectedIds.size > 1 && batch.length) {
       const fallback2 = deletionSelectionFallback(this.document.root, batch);
+      const restoreLocation2 = this.currentMode === "mindmap" ? null : this.createSelectionLocation(fallback2);
       this.mutate(() => {
         deleteNodes(this.document.root, batch);
         this.selectedIds.clear();
         this.selectedId = fallback2;
         this.selectedIds.add(fallback2);
-      });
+      }, restoreLocation2);
       new import_obsidian10.Notice(`\u5DF2\u5220\u9664 ${batch.length} \u4E2A\u6240\u9009\u8282\u70B9`);
       return;
     }
@@ -12875,12 +12882,13 @@ var MindMapEditor = class {
       return;
     }
     const fallback = deletionSelectionFallback(this.document.root, [selected.id]);
+    const restoreLocation = this.currentMode === "mindmap" ? null : this.createSelectionLocation(fallback);
     this.mutate(() => {
       deleteNodes(this.document.root, [selected.id]);
       this.selectedId = fallback;
       this.selectedIds.clear();
       this.selectedIds.add(this.selectedId);
-    });
+    }, restoreLocation);
   }
   /**
    * 切换collapse，并保持模型、界面和持久化状态的一致性。
@@ -13575,10 +13583,9 @@ var MindMapEditor = class {
    * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
    */
   async handlePaste(event) {
-    var _a2, _b2, _c;
+    var _a2, _b2, _c, _d, _e, _f, _g, _h, _i;
     if (this.readOnly) return;
     const target = event.target;
-    if (target.closest("input, textarea, select, [contenteditable='true']")) return;
     const data = event.clipboardData;
     if (!data) return;
     const imageItem = Array.from(data.items).find((item) => item.kind === "file" && item.type.startsWith("image/"));
@@ -13586,15 +13593,21 @@ var MindMapEditor = class {
       const blob = imageItem.getAsFile();
       if (!blob) return;
       event.preventDefault();
-      const selected2 = (_a2 = this.selectedNode()) != null ? _a2 : this.document.root;
+      const targetBlock = target.closest("[data-block-id]");
+      const targetNode = target.closest("[data-node-id]");
+      const nodeId = (_c = (_b2 = targetNode == null ? void 0 : targetNode.dataset.nodeId) != null ? _b2 : (_a2 = this.activeArticleBlock) == null ? void 0 : _a2.nodeId) != null ? _c : this.selectedId;
+      const afterBlockId = (_e = targetBlock == null ? void 0 : targetBlock.dataset.blockId) != null ? _e : ((_d = this.activeArticleBlock) == null ? void 0 : _d.nodeId) === nodeId ? this.activeArticleBlock.blockId : void 0;
+      if (target.closest("[contenteditable='true']")) target.blur();
+      const selected2 = (_g = (_f = findNode(this.document.root, nodeId)) != null ? _f : this.selectedNode()) != null ? _g : this.document.root;
       try {
-        const extension = ((_b2 = blob.type.split("/")[1]) == null ? void 0 : _b2.replace("jpeg", "jpg")) || "png";
+        const extension = ((_h = blob.type.split("/")[1]) == null ? void 0 : _h.replace("jpeg", "jpg")) || "png";
         const filename = `mindmap-image.${extension}`;
         const path = await this.callbacks.onSavePastedImage(blob, filename);
         const imageBlock = { id: newId(), type: "image", source: path, localSource: path };
         this.mutate(() => {
           const blocks = nodeContentBlocks(selected2);
-          blocks.push(imageBlock);
+          const afterIndex = afterBlockId ? blocks.findIndex((block) => block.id === afterBlockId) : -1;
+          blocks.splice(afterIndex >= 0 ? afterIndex + 1 : blocks.length, 0, imageBlock);
           selected2.content = blocks;
           syncNodeContentFields(selected2);
         });
@@ -13606,10 +13619,11 @@ var MindMapEditor = class {
       }
       return;
     }
+    if (target.closest("input, textarea, select, [contenteditable='true']")) return;
     const htmlBranch = parseClipboardHtml(data.getData("text/html"));
     const text = data.getData("text/plain");
     if (!text.trim() && !htmlBranch) return;
-    const selected = (_c = this.selectedNode()) != null ? _c : this.document.root;
+    const selected = (_i = this.selectedNode()) != null ? _i : this.document.root;
     const table = parseMarkdownTable(text);
     if (table) {
       event.preventDefault();
@@ -14350,9 +14364,9 @@ var MindMapEditor = class {
    * @param action 需要在当前文档上执行的同步修改。
    * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
    */
-  mutate(action) {
+  mutate(action, restoreLocation) {
     if (!this.ensureEditable()) return;
-    const location = this.currentMode === "mindmap" ? null : this.captureCurrentLocation(this.currentMode);
+    const location = restoreLocation != null ? restoreLocation : this.currentMode === "mindmap" ? null : this.captureCurrentLocation(this.currentMode);
     if (location) this.rememberLocation(location, true);
     this.history.capture(this.document);
     action();

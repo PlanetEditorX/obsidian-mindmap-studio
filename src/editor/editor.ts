@@ -2667,13 +2667,17 @@ export class MindMapEditor {
     const gutter = shell.createSpan({ cls: "mms-article-code-editor-gutter", attr: { "aria-hidden": "true" } });
     const editor = shell.createEl("textarea", {
       cls: "mms-article-code-editor",
-      attr: { spellcheck: "false", "aria-label": "编辑代码" }
+      attr: { spellcheck: "false", wrap: "off", "aria-label": "编辑代码" }
     });
     editor.value = code.code;
+    const syncGutterScroll = (): void => { gutter.scrollTop = editor.scrollTop; };
     const updateEditorLayout = (): void => {
       const lineCount = countCodeLines(editor.value);
-      editor.rows = Math.max(4, Math.min(40, lineCount));
+      // Keep the textarea scroll range and the line-number content based on
+      // the same complete line count. CSS limits only the visible height.
+      editor.rows = Math.max(4, lineCount);
       gutter.setText(showLineNumbers ? buildCodeLineNumberText(lineCount) : "");
+      syncGutterScroll();
     };
     updateEditorLayout();
     let finished = false;
@@ -2700,6 +2704,7 @@ export class MindMapEditor {
     });
     editor.addEventListener("blur", () => finish(true));
     editor.addEventListener("input", updateEditorLayout);
+    editor.addEventListener("scroll", syncGutterScroll);
     window.requestAnimationFrame(() => {
       editor.focus();
       editor.setSelectionRange(editor.value.length, editor.value.length);
@@ -4620,13 +4625,14 @@ export class MindMapEditor {
       return;
     }
     const fallback = deletionSelectionFallback(this.document.root, [nodeId]);
+    const restoreLocation = this.currentMode === "mindmap" ? null : this.createSelectionLocation(fallback);
     if (this.inlineEditingId === nodeId) this.inlineEditingId = null;
     this.mutate(() => {
       deleteNodes(this.document.root, [nodeId]);
       this.selectedId = fallback;
       this.selectedIds.clear();
       this.selectedIds.add(fallback);
-    });
+    }, restoreLocation);
   }
 
   /**
@@ -4637,12 +4643,13 @@ export class MindMapEditor {
     const batch = topLevelSelectedNodeIds(this.document.root, this.selectedIds);
     if (this.selectedIds.size > 1 && batch.length) {
       const fallback = deletionSelectionFallback(this.document.root, batch);
+      const restoreLocation = this.currentMode === "mindmap" ? null : this.createSelectionLocation(fallback);
       this.mutate(() => {
         deleteNodes(this.document.root, batch);
         this.selectedIds.clear();
         this.selectedId = fallback;
         this.selectedIds.add(fallback);
-      });
+      }, restoreLocation);
       new Notice(`已删除 ${batch.length} 个所选节点`);
       return;
     }
@@ -4652,12 +4659,13 @@ export class MindMapEditor {
       return;
     }
     const fallback = deletionSelectionFallback(this.document.root, [selected.id]);
+    const restoreLocation = this.currentMode === "mindmap" ? null : this.createSelectionLocation(fallback);
     this.mutate(() => {
       deleteNodes(this.document.root, [selected.id]);
       this.selectedId = fallback;
       this.selectedIds.clear();
       this.selectedIds.add(this.selectedId);
-    });
+    }, restoreLocation);
   }
 
   /**
@@ -5393,7 +5401,6 @@ export class MindMapEditor {
   private async handlePaste(event: ClipboardEvent): Promise<void> {
     if (this.readOnly) return;
     const target = event.target as HTMLElement;
-    if (target.closest("input, textarea, select, [contenteditable='true']")) return;
     const data = event.clipboardData;
     if (!data) return;
     const imageItem = Array.from(data.items).find((item) => item.kind === "file" && item.type.startsWith("image/"));
@@ -5401,7 +5408,16 @@ export class MindMapEditor {
       const blob = imageItem.getAsFile();
       if (!blob) return;
       event.preventDefault();
-      const selected = this.selectedNode() ?? this.document.root;
+      const targetBlock = target.closest<HTMLElement>("[data-block-id]");
+      const targetNode = target.closest<HTMLElement>("[data-node-id]");
+      const nodeId = targetNode?.dataset.nodeId ?? this.activeArticleBlock?.nodeId ?? this.selectedId;
+      const afterBlockId = targetBlock?.dataset.blockId
+        ?? (this.activeArticleBlock?.nodeId === nodeId ? this.activeArticleBlock.blockId : undefined);
+      // Native paste can insert a transient <img> into an active article
+      // paragraph. Commit that paragraph first, then store the image as the
+      // next content block instead of letting the later redraw discard it.
+      if (target.closest("[contenteditable='true']")) target.blur();
+      const selected = findNode(this.document.root, nodeId) ?? this.selectedNode() ?? this.document.root;
       try {
         const extension = blob.type.split("/")[1]?.replace("jpeg", "jpg") || "png";
         const filename = `mindmap-image.${extension}`;
@@ -5409,7 +5425,8 @@ export class MindMapEditor {
         const imageBlock: MindMapImageContentBlock = { id: newId(), type: "image", source: path, localSource: path };
         this.mutate(() => {
           const blocks = nodeContentBlocks(selected);
-          blocks.push(imageBlock);
+          const afterIndex = afterBlockId ? blocks.findIndex((block) => block.id === afterBlockId) : -1;
+          blocks.splice(afterIndex >= 0 ? afterIndex + 1 : blocks.length, 0, imageBlock);
           selected.content = blocks;
           syncNodeContentFields(selected);
         });
@@ -5421,6 +5438,8 @@ export class MindMapEditor {
       }
       return;
     }
+
+    if (target.closest("input, textarea, select, [contenteditable='true']")) return;
 
     const htmlBranch = parseClipboardHtml(data.getData("text/html"));
     const text = data.getData("text/plain");
@@ -6257,9 +6276,9 @@ export class MindMapEditor {
    * @param action 需要在当前文档上执行的同步修改。
    * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
    */
-  private mutate(action: () => void): void {
+  private mutate(action: () => void, restoreLocation?: ReadingLocation | null): void {
     if (!this.ensureEditable()) return;
-    const location = this.currentMode === "mindmap" ? null : this.captureCurrentLocation(this.currentMode);
+    const location = restoreLocation ?? (this.currentMode === "mindmap" ? null : this.captureCurrentLocation(this.currentMode));
     if (location) this.rememberLocation(location, true);
     this.history.capture(this.document);
     action();
