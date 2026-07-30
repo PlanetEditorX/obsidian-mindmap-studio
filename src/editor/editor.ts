@@ -2376,7 +2376,7 @@ export class MindMapEditor {
     let original = readRichTextEditor(element);
     let toolbar: SelectionFormatToolbarHandle | null = null;
     element.addEventListener("pointerdown", () => {
-      if (this.readOnly || element.contentEditable === "true") return;
+      if (this.readOnly || element.contentEditable === "true" || element.dataset.mmsExplicitEditOnly === "true") return;
       this.selectNode(node.id);
       this.activateInlineEditable(element, false);
     });
@@ -2508,7 +2508,7 @@ export class MindMapEditor {
       setIcon(button, icon);
       button.addEventListener("click", (event) => { event.stopPropagation(); this.selectNode(node.id); handler(); });
     };
-    action("pencil", "完整编辑", () => this.editSelected());
+    action("pencil", this.currentMode === "article" ? this.articleEditActionLabel(node) : "完整编辑", () => this.editSelected());
     action("plus", "添加子节点", () => this.addChild());
     if (node.id !== this.document.root.id) action("trash-2", "删除节点", () => this.deleteSelected());
   }
@@ -3619,7 +3619,9 @@ export class MindMapEditor {
     if (!node) return;
     this.selectNode(nodeId);
     this.inlineEditingId = nodeId;
-    if (this.options.nodeEditorPosition === "right") this.editSelected();
+    if (this.currentMode === "mindmap" && this.options.nodeEditorPosition === "right") {
+      this.openSelectedNodeEditor();
+    }
     if (this.currentMode !== "mindmap") {
       const scope = this.currentMode === "outline" ? this.outlineEl : this.articleEl;
       const inlineElement = scope.querySelector<HTMLElement>(`[data-node-id="${CSS.escape(nodeId)}"] [data-mms-inline-editable="true"]`);
@@ -3972,6 +3974,15 @@ export class MindMapEditor {
    * 编辑selected，并保持模型、界面和持久化状态的一致性。
    */
   private editSelected(initialBlockId?: string): void {
+    if (this.currentMode === "article") {
+      this.editSelectedArticleContent();
+      return;
+    }
+    this.openSelectedNodeEditor(initialBlockId);
+  }
+
+  /** Opens the complete node editor used by the mind-map and outline modes. */
+  private openSelectedNodeEditor(initialBlockId?: string): void {
     if (!this.ensureEditable()) return;
     const selected = this.selectedNode();
     if (!selected) return;
@@ -4033,6 +4044,52 @@ export class MindMapEditor {
     if (this.options.nodeEditorPosition === "right" && this.inlineEditingId === selected.id) {
       modal.releaseKeyboardScope();
     }
+  }
+
+  /** Returns the first inline-editable article element for one rendered node. */
+  private articleInlineEditable(nodeId: string): HTMLElement | null {
+    return this.articleEl.querySelector<HTMLElement>(
+      `[data-node-id="${CSS.escape(nodeId)}"] [data-mms-inline-editable="true"]`
+    );
+  }
+
+  /** Returns the article-specific edit action shown in context and inline menus. */
+  private articleEditActionLabel(node: MindMapNode | null): string {
+    if (this.currentMode !== "article" || !node) return "编辑节点";
+    return this.articleInlineEditable(node.id) ? "编辑当前内容" : "添加正文";
+  }
+
+  /** Focuses the current article line, or creates a temporary body line for content-only nodes. */
+  private editSelectedArticleContent(): void {
+    if (!this.ensureEditable()) return;
+    const selected = this.selectedNode();
+    if (!selected) return;
+    const inlineElement = this.articleInlineEditable(selected.id);
+    if (inlineElement) {
+      this.activateInlineEditable(inlineElement);
+      return;
+    }
+    const section = this.articleEl.querySelector<HTMLElement>(`[data-node-id="${CSS.escape(selected.id)}"]`);
+    if (!section) return;
+    const paragraph = section.createEl("p", {
+      cls: `mms-article-leaf-text${this.options.articleLeafBulletsEnabled ? " is-bulleted" : ""}`
+    });
+    paragraph.dataset.mmsTransientArticleBody = "true";
+    if (this.options.articleLeafBulletsEnabled) {
+      paragraph.dataset.bulletStyle = this.options.articleLeafBulletStyle;
+      if (this.options.articleLeafBulletColor) {
+        paragraph.style.setProperty("--mms-article-bullet-color", this.options.articleLeafBulletColor);
+      }
+    }
+    const actions = section.querySelector<HTMLElement>(":scope > .mms-inline-node-actions");
+    if (actions) section.insertBefore(paragraph, actions);
+    this.makeInlineEditable(paragraph, selected, "正文段落");
+    paragraph.addEventListener("blur", () => {
+      window.requestAnimationFrame(() => {
+        if (paragraph.isConnected && !paragraph.textContent?.trim()) paragraph.remove();
+      });
+    }, { once: true });
+    this.activateInlineEditable(paragraph);
   }
 
   /** Creates a structured question as a child of the selected node. */
@@ -5100,8 +5157,7 @@ export class MindMapEditor {
 
   /** 打开当前图片块的编辑面板，用于精确尺寸和替换来源。 */
   private editImageBlock(blockId: string): void {
-    const initialBlockId = blockId;
-    this.editSelected(initialBlockId);
+    this.openSelectedNodeEditor(blockId);
   }
 
   /** 将当前图片上传到用户选择的图床，并保留本地来源与已有镜像。 */
@@ -5161,7 +5217,10 @@ export class MindMapEditor {
     }
     menu.addItem((item) => item.setTitle("添加子节点").setIcon("plus-circle").onClick(() => this.addChild()));
     menu.addItem((item) => item.setTitle("添加同级节点").setIcon("list-plus").onClick(() => this.addSibling()));
-    menu.addItem((item) => item.setTitle("编辑节点").setIcon("pencil").onClick(() => this.editSelected()));
+    menu.addItem((item) => item
+      .setTitle(this.articleEditActionLabel(selected))
+      .setIcon("pencil")
+      .onClick(() => this.editSelected()));
     if (this.options.questionNodesEnabled) {
       menu.addItem((item) => item
         .setTitle(selected?.question ? "编辑题目节点" : "转换为题目节点")

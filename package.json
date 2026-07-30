@@ -8,7 +8,7 @@
     "build": "tsc --noEmit --skipLibCheck && node esbuild.config.mjs production",
     "release": "npm run verify && node scripts/release.mjs",
     "test": "npm run test:unit && npm run test:regression && npm run test:docs && npm run test:repo",
-    "test:unit": "node --test tests/code-block.test.mjs tests/display-mode.test.mjs tests/settings-layout.test.mjs tests/node-creation.test.mjs tests/filename.test.mjs tests/global-search-contract.test.mjs tests/image-host.test.mjs tests/image-layout.test.mjs tests/image-source-candidates.test.mjs tests/reading-location.test.mjs tests/reading-editor-contract.test.mjs tests/repository-cleanup.test.mjs tests/selection-format-toolbar.test.mjs tests/import-mode.test.mjs tests/ai.test.mjs tests/image-recognition.test.mjs tests/plugin-update.test.mjs tests/question.test.mjs",
+    "test:unit": "node --test tests/code-block.test.mjs tests/display-mode.test.mjs tests/settings-layout.test.mjs tests/node-creation.test.mjs tests/filename.test.mjs tests/global-search-contract.test.mjs tests/image-host.test.mjs tests/image-layout.test.mjs tests/image-source-candidates.test.mjs tests/reading-location.test.mjs tests/reading-editor-contract.test.mjs tests/article-context-edit.test.mjs tests/repository-cleanup.test.mjs tests/selection-format-toolbar.test.mjs tests/import-mode.test.mjs tests/ai.test.mjs tests/image-recognition.test.mjs tests/plugin-update.test.mjs tests/question.test.mjs",
     "test:regression": "node scripts/test.mjs",
     "test:docs": "node scripts/check-docs.mjs",
     "test:repo": "node scripts/check-repository.mjs",

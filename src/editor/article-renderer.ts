@@ -161,9 +161,14 @@ function renderHeading(heading: HTMLElement, node: MindMapNode, title: string, o
     const headingLink = heading.createEl("a", { cls: "mms-article-heading-text mms-submap-text-link", href: node.submap.path, attr: { title: `打开子导图：${node.submap.title ?? node.submap.path}` } });
     const textBlock = nodeContentBlocks(node).find((block): block is MindMapTextContentBlock => block.type === "text");
     renderRichTextRuns(headingLink, textBlock?.richText, textBlock?.text ?? title);
+    if (!options.readOnly) {
+      headingLink.dataset.mmsExplicitEditOnly = "true";
+      options.makeInlineEditable(headingLink, node, "章节标题");
+    }
     headingLink.addEventListener("click", (event) => {
       event.preventDefault();
       event.stopPropagation();
+      if (headingLink.contentEditable === "true") return;
       options.selectNode(node.id);
       void options.callbacks.onOpenMindMap(node.submap!.path);
     });
