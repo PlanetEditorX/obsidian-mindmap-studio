@@ -28,19 +28,26 @@ before(async () => {
 after(async () => cleanup?.());
 
 test("article block context inserts text immediately after the clicked code block", () => {
+  const beginInlineEdit = editorSource.match(/private beginInlineEdit\([\s\S]*?\n  \}/)?.[0] ?? "";
   assert.match(rendererSource, /closest<HTMLElement>\("\[data-block-id\]"\)\?\.dataset\.blockId/);
   assert.match(rendererSource, /options\.openAiContextMenu\(event, info\.node\.id, blockId\)/);
   assert.match(editorSource, /private insertTextBlockAfter\(node: MindMapNode, afterBlockId\?: string\): string[\s\S]*findIndex\(\(block\) => block\.id === afterBlockId\)[\s\S]*blocks\.splice\(insertIndex, 0, \{ id: blockId, type: "text", text: "" \}\)/);
   assert.match(editorSource, /setTitle\(contextBlockId \? "在此块后插入文字" : "插入文字"\)[\s\S]*this\.insertTextBlock\(contextBlockId\)/);
   assert.match(editorSource, /\[data-block-id="\$\{CSS\.escape\(blockId\)\}"\]\[data-mms-inline-editable="true"\]/);
+  assert.match(beginInlineEdit, /this\.activateInlineEditable\(inlineElement, true, protectInitialFocus\)/);
   assert.match(rendererSource, /options\.makeInlineEditable\(paragraph, node, "正文", block\.id\)/);
 });
 
 test("article inline editing updates the exact text block instead of the first block", () => {
+  const makeInlineEditable = editorSource.match(/private makeInlineEditable\(element: HTMLElement, node: MindMapNode, placeholder: string, blockId\?: string\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
   assert.match(editorSource, /private makeInlineEditable\(element: HTMLElement, node: MindMapNode, placeholder: string, blockId\?: string\)/);
   assert.match(editorSource, /block\.type === "text" && block\.id === blockId/);
   assert.match(editorSource, /this\.updateNodeTextBlock\(node, next, blockId\)/);
   assert.match(rendererSource, /paragraph\.dataset\.blockId = block\.id/);
+  assert.match(makeInlineEditable, /element\.addEventListener\("pointerdown"[\s\S]*this\.inlineEditingId = node\.id[\s\S]*this\.activateInlineEditable\(element, false\)/);
+  assert.match(makeInlineEditable, /element\.addEventListener\("focus"[\s\S]*this\.inlineEditingId = node\.id/);
+  assert.match(makeInlineEditable, /element\.dataset\.mmsProtectInitialFocus === "true"[\s\S]*window\.requestAnimationFrame\(\(\) => this\.activateInlineEditable\(element\)\)/);
+  assert.match(makeInlineEditable, /if \(this\.inlineEditingId === node\.id\) this\.inlineEditingId = null/);
 });
 
 test("paragraph indentation is normalized, rendered, and toggled per text block", () => {

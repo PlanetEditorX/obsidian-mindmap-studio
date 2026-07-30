@@ -52,7 +52,7 @@ test("article mode renders and focuses a newly added empty child", () => {
   assert.match(addChild, /window\.requestAnimationFrame\(\(\) => this\.beginInlineEdit\(node\.id, undefined, true\)\)/);
   assert.match(beginInlineEdit, /const nodeScope = scope\.querySelector<HTMLElement>\(`\[data-node-id="\$\{CSS\.escape\(nodeId\)\}"\]`\)/);
   assert.match(beginInlineEdit, /blockId[\s\S]*\[data-block-id="\$\{CSS\.escape\(blockId\)\}"\]\[data-mms-inline-editable="true"\]/);
-  assert.match(beginInlineEdit, /if \(inlineElement\) this\.activateInlineEditable\(inlineElement\)/);
+  assert.match(beginInlineEdit, /if \(inlineElement\) this\.activateInlineEditable\(inlineElement, true, protectInitialFocus\)/);
   assert.match(mainBundle, /else if \(!options\.readOnly && blocks\.length === 0\)/);
 });
 

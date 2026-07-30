@@ -1,5 +1,23 @@
 # 代码块行号、导图高度与内容块删除修复清单
 
+## 文章后续文字块编辑状态与插入焦点修复
+
+| 文件 | 变更 |
+|---|---|
+| `src/editor/editor.ts` | 文章/大纲文字块激活时登记并在失焦后释放活动编辑节点；插入新文字块时保护初始焦点，右键菜单关闭后将光标恢复到目标块末尾 |
+| `tests/article-content-block.test.mjs` | 覆盖后续块按 ID 编辑、活动状态生命周期和插入块焦点保护 |
+| `tests/node-creation.test.mjs`、`tests/reading-editor-contract.test.mjs`、`scripts/test.mjs` | 同步共享内联编辑入口的新焦点保护契约 |
+| `main.js` | 重新生产构建，包含文章文字块编辑状态与焦点修复 |
+| `docs/FUNCTION_REFERENCE.md` | 根据内联编辑入口签名与注释重新生成 |
+| `CHANGELOG.md`、`TEST_RESULTS.md` | 记录问题、修复和验证结果 |
+
+### 行为边界
+
+- 不改变 `.mindmap` 内容块格式；每个文字块继续使用原有独立 ID。
+- 不合并“用户名：”与“OpenResty-X”等相邻文字块。
+- 普通点击、双击和右键插入均进入对应文字块，不回退到首个文字块。
+- 编辑结束后释放活动状态，后续设置与文章上下文仍可正常刷新。
+
 | 文件 | 变更 |
 |---|---|
 | `src/render/code-block.ts` | 四模式共享代码块渲染器；集中处理行数、围栏、设置优先级、主题、折叠、Markdown 高亮与真实 DOM 行号栏 |

@@ -2388,11 +2388,13 @@ export class MindMapEditor {
     let toolbar: SelectionFormatToolbarHandle | null = null;
     element.addEventListener("pointerdown", () => {
       if (this.readOnly || element.contentEditable === "true" || element.dataset.mmsExplicitEditOnly === "true") return;
+      this.inlineEditingId = node.id;
       this.selectNode(node.id);
       this.activateInlineEditable(element, false);
     });
     element.addEventListener("focus", () => {
       if (this.readOnly) return;
+      this.inlineEditingId = node.id;
       this.applyInlineEditingAccessibility(element);
       original = readRichTextEditor(element);
       element.addClass("is-inline-editing");
@@ -2424,12 +2426,17 @@ export class MindMapEditor {
     element.addEventListener("blur", (event) => {
       if (this.readOnly) return;
       if (toolbar?.contains(event.relatedTarget)) return;
+      if (element.dataset.mmsProtectInitialFocus === "true") {
+        window.requestAnimationFrame(() => this.activateInlineEditable(element));
+        return;
+      }
       element.removeClass("is-inline-editing");
       const next = readRichTextEditor(element);
       element.contentEditable = "false";
       this.clearInlineEditingAccessibility(element);
       toolbar?.cleanup();
       toolbar = null;
+      if (this.inlineEditingId === node.id) this.inlineEditingId = null;
       // A node action can remove this node while its inline editor still owns
       // focus. Ignore the detached editor's late blur instead of writing the
       // deleted node back into the document or triggering a second redraw.
@@ -2455,12 +2462,33 @@ export class MindMapEditor {
     element.removeAttribute("aria-label");
   }
 
-  /** Activates one article or outline line without changing the surrounding layout. */
-  private activateInlineEditable(element: HTMLElement, focus = true): void {
+  /**
+   * Activates one article or outline line without changing the surrounding
+   * layout, optionally reclaiming focus after a context menu closes.
+   */
+  private activateInlineEditable(element: HTMLElement, focus = true, protectInitialFocus = false): void {
     if (this.readOnly) return;
     element.contentEditable = "true";
     this.applyInlineEditingAccessibility(element);
-    if (focus) element.focus();
+    if (!focus) return;
+    const focusAtEnd = (): void => {
+      if (!element.isConnected) return;
+      element.focus();
+      const selection = window.getSelection();
+      const range = document.createRange();
+      range.selectNodeContents(element);
+      range.collapse(false);
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+    };
+    if (protectInitialFocus) element.dataset.mmsProtectInitialFocus = "true";
+    focusAtEnd();
+    if (!protectInitialFocus) return;
+    window.requestAnimationFrame(focusAtEnd);
+    window.setTimeout(() => {
+      delete element.dataset.mmsProtectInitialFocus;
+      focusAtEnd();
+    }, 50);
   }
 
   /** Activates direct code editing for a code block rendered in article mode. */
@@ -3662,7 +3690,7 @@ export class MindMapEditor {
       const inlineElement = blockId
         ? nodeScope?.querySelector<HTMLElement>(`[data-block-id="${CSS.escape(blockId)}"][data-mms-inline-editable="true"]`)
         : nodeScope?.querySelector<HTMLElement>(`[data-mms-inline-editable="true"]`);
-      if (inlineElement) this.activateInlineEditable(inlineElement);
+      if (inlineElement) this.activateInlineEditable(inlineElement, true, protectInitialFocus);
       return;
     }
     const nodeEl = this.nodesLayerEl.querySelector<HTMLElement>(`.mmc-node[data-node-id="${CSS.escape(nodeId)}"]`);
