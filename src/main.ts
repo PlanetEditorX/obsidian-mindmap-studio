@@ -1926,10 +1926,7 @@ export default class MindMapStudioPlugin extends Plugin {
         if (!rawSource || /^(?:https?:|data:|blob:|file:)/i.test(rawSource)) continue;
         const linkPath = rawSource.replace(/^!?\[\[|\]\]$/g, "").split("|")[0]?.split("#")[0]?.trim() ?? "";
         if (!linkPath) continue;
-        const direct = this.app.vault.getAbstractFileByPath(normalizePath(linkPath));
-        const sourceImage = direct instanceof TFile
-          ? direct
-          : this.app.metadataCache.getFirstLinkpathDest(linkPath, markdownFile.path);
+        const sourceImage = this.resolveImportedMarkdownImage(linkPath, markdownFile);
         if (!(sourceImage instanceof TFile) || sourceImage.path === mindMapFile.path) continue;
 
         let targetPath = copiedPaths.get(sourceImage.path);
@@ -1947,6 +1944,36 @@ export default class MindMapStudioPlugin extends Plugin {
       syncNodeContentFields(node);
     }
     return copied;
+  }
+
+
+  /**
+   * 按固定回退顺序查找 Markdown 中的本地图片。
+   *
+   * 例如 Markdown 引用 `assets/公文/a.png` 时，依次尝试：
+   * 1. `<Markdown目录>/assets/公文/a.png`
+   * 2. `<Markdown目录>/公文/a.png`
+   * 3. `<Markdown目录>/a.png`
+   *
+   * 三个明确候选都不存在时，再交给 Obsidian 链接解析器兼容其他附件配置。
+   */
+  private resolveImportedMarkdownImage(linkPath: string, markdownFile: TFile): TFile | null {
+    const normalizedLink = normalizePath(linkPath.replace(/^\/+/, ""));
+    const markdownFolder = markdownFile.parent?.path ?? "";
+    const segments = normalizedLink.split("/").filter(Boolean);
+    const withoutAssets = segments[0]?.toLowerCase() === "assets" ? segments.slice(1).join("/") : normalizedLink;
+    const filename = segments.at(-1) ?? normalizedLink;
+    const candidates = [normalizedLink, withoutAssets, filename]
+      .filter(Boolean)
+      .map((relativePath) => normalizePath([markdownFolder, relativePath].filter(Boolean).join("/")));
+
+    for (const candidate of [...new Set(candidates)]) {
+      const file = this.app.vault.getAbstractFileByPath(candidate);
+      if (file instanceof TFile) return file;
+    }
+
+    const resolved = this.app.metadataCache.getFirstLinkpathDest(normalizedLink, markdownFile.path);
+    return resolved instanceof TFile ? resolved : null;
   }
 
   /**
