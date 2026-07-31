@@ -5709,6 +5709,7 @@ export class MindMapEditor {
   private importDocument(document: MindMapDocument, mode: "child" | "replace"): void {
     if (mode === "replace") {
       this.replaceDocument(document);
+      this.scheduleImportedImageUploads(this.document.root);
       return;
     }
     if (!this.ensureEditable()) return;
@@ -5723,6 +5724,22 @@ export class MindMapEditor {
       this.selectedIds.clear();
       this.selectedIds.add(importedRoot.id);
     });
+    this.scheduleImportedImageUploads(importedRoot);
+  }
+
+  /** 为已经复制进当前导图资源目录的导入图片安排自动上传。 */
+  private scheduleImportedImageUploads(root: MindMapNode): number {
+    if (!this.callbacks.getDefaultUploadHostIds().length) return 0;
+    let scheduled = 0;
+    for (const node of flattenNodes(root)) {
+      for (const block of nodeContentBlocks(node)) {
+        if (block.type !== "image" || !block.localSource?.trim()) continue;
+        const localPath = block.localSource.trim();
+        const suggestedName = localPath.split(/[\\/]/).at(-1)?.split(/[?#]/)[0] || "imported-image.png";
+        if (this.callbacks.onScheduleAutoUpload(node.id, block.id, localPath, suggestedName)) scheduled += 1;
+      }
+    }
+    return scheduled;
   }
 
   /**

@@ -3,6 +3,13 @@
  * @description Desktop-native file selection and reading helpers for mind-map imports.
  */
 
+import {
+  flattenNodes,
+  nodeContentBlocks,
+  replaceNodeContentBlocks,
+  type MindMapDocument
+} from "../core/model";
+
 /** A file chosen through Obsidian Desktop's native open dialog. */
 export interface DesktopImportFile {
   name: string;
@@ -160,3 +167,51 @@ export async function readDesktopMarkdownImage(sourceDirectory: string, source: 
   }
   return null;
 }
+/** 桌面 Markdown 图片复制与节点引用改写结果。 */
+export interface DesktopMarkdownImageCopyResult {
+  copied: number;
+  rewritten: number;
+}
+
+/**
+ * 读取桌面 Markdown 引用的本地图片，保存到调用方指定位置，并原位改写权威内容块。
+ *
+ * `nodeContentBlocks()` 返回规范化副本，因此必须在改写后使用
+ * `replaceNodeContentBlocks()` 写回节点；仅修改遍历得到的块会在后续同步时丢失。
+ */
+export async function copyDesktopMarkdownImagesToDocument(
+  document: MindMapDocument,
+  sourceDirectory: string,
+  saveImage: (image: DesktopMarkdownImageFile) => Promise<string>
+): Promise<DesktopMarkdownImageCopyResult> {
+  if (!sourceDirectory.trim()) return { copied: 0, rewritten: 0 };
+  const copiedPaths = new Map<string, string>();
+  let copied = 0;
+  let rewritten = 0;
+
+  for (const node of flattenNodes(document.root)) {
+    const blocks = nodeContentBlocks(node);
+    let changed = false;
+    for (const block of blocks) {
+      if (block.type !== "image") continue;
+      const rawSource = (block.localSource || block.source || "").trim();
+      if (!rawSource || /^(?:https?:|data:|blob:|file:)/i.test(rawSource)) continue;
+      const image = await readDesktopMarkdownImage(sourceDirectory, rawSource);
+      if (!image) continue;
+      let targetPath = copiedPaths.get(image.path);
+      if (!targetPath) {
+        targetPath = await saveImage(image);
+        copiedPaths.set(image.path, targetPath);
+        copied += 1;
+      }
+      block.source = targetPath;
+      block.localSource = targetPath;
+      changed = true;
+      rewritten += 1;
+    }
+    if (changed) replaceNodeContentBlocks(node, blocks);
+  }
+
+  return { copied, rewritten };
+}
+

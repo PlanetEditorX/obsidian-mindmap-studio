@@ -6656,6 +6656,35 @@ async function readDesktopMarkdownImage(sourceDirectory, source) {
   }
   return null;
 }
+async function copyDesktopMarkdownImagesToDocument(document2, sourceDirectory, saveImage) {
+  if (!sourceDirectory.trim()) return { copied: 0, rewritten: 0 };
+  const copiedPaths = /* @__PURE__ */ new Map();
+  let copied = 0;
+  let rewritten = 0;
+  for (const node of flattenNodes(document2.root)) {
+    const blocks = nodeContentBlocks(node);
+    let changed = false;
+    for (const block of blocks) {
+      if (block.type !== "image") continue;
+      const rawSource = (block.localSource || block.source || "").trim();
+      if (!rawSource || /^(?:https?:|data:|blob:|file:)/i.test(rawSource)) continue;
+      const image = await readDesktopMarkdownImage(sourceDirectory, rawSource);
+      if (!image) continue;
+      let targetPath = copiedPaths.get(image.path);
+      if (!targetPath) {
+        targetPath = await saveImage(image);
+        copiedPaths.set(image.path, targetPath);
+        copied += 1;
+      }
+      block.source = targetPath;
+      block.localSource = targetPath;
+      changed = true;
+      rewritten += 1;
+    }
+    if (changed) replaceNodeContentBlocks(node, blocks);
+  }
+  return { copied, rewritten };
+}
 
 // src/editor/editor-modals.ts
 var ImageHostPickerModal = class extends import_obsidian5.Modal {
@@ -14095,6 +14124,7 @@ var MindMapEditor = class {
     var _a2;
     if (mode === "replace") {
       this.replaceDocument(document2);
+      this.scheduleImportedImageUploads(this.document.root);
       return;
     }
     if (!this.ensureEditable()) return;
@@ -14109,6 +14139,22 @@ var MindMapEditor = class {
       this.selectedIds.clear();
       this.selectedIds.add(importedRoot.id);
     });
+    this.scheduleImportedImageUploads(importedRoot);
+  }
+  /** 为已经复制进当前导图资源目录的导入图片安排自动上传。 */
+  scheduleImportedImageUploads(root) {
+    var _a2, _b2;
+    if (!this.callbacks.getDefaultUploadHostIds().length) return 0;
+    let scheduled = 0;
+    for (const node of flattenNodes(root)) {
+      for (const block of nodeContentBlocks(node)) {
+        if (block.type !== "image" || !((_a2 = block.localSource) == null ? void 0 : _a2.trim())) continue;
+        const localPath = block.localSource.trim();
+        const suggestedName = ((_b2 = localPath.split(/[\\/]/).at(-1)) == null ? void 0 : _b2.split(/[?#]/)[0]) || "imported-image.png";
+        if (this.callbacks.onScheduleAutoUpload(node.id, block.id, localPath, suggestedName)) scheduled += 1;
+      }
+    }
+    return scheduled;
   }
   /**
    * Opens the HTML, Word, PDF, and Markdown export chooser.
@@ -16214,7 +16260,8 @@ var MindMapStudioView = class _MindMapStudioView extends import_obsidian12.TextF
     if (/^(https?:|data:|blob:)/i.test(source)) return source;
     const wikiMatch = source.match(/^!?\[\[([\s\S]+?)\]\]$/);
     const target = (_d = (_c = (_b2 = ((_a2 = wikiMatch == null ? void 0 : wikiMatch[1]) != null ? _a2 : source).split("|")[0]) == null ? void 0 : _b2.split("#")[0]) == null ? void 0 : _c.trim()) != null ? _d : source;
-    const file = this.app.metadataCache.getFirstLinkpathDest(target, (_f = (_e = this.file) == null ? void 0 : _e.path) != null ? _f : "");
+    const direct = this.app.vault.getAbstractFileByPath((0, import_obsidian12.normalizePath)(target.replace(/^\/+/, "")));
+    const file = direct instanceof import_obsidian12.TFile ? direct : this.app.metadataCache.getFirstLinkpathDest(target, (_f = (_e = this.file) == null ? void 0 : _e.path) != null ? _f : "");
     if (!(file instanceof import_obsidian12.TFile)) return null;
     return this.app.vault.getResourcePath(file);
   }
@@ -19078,35 +19125,22 @@ var MindMapStudioPlugin = class extends import_obsidian15.Plugin {
    */
   async importDesktopMarkdownImages(document2, sourceDirectory, mindMapFile) {
     if (!mindMapFile || !sourceDirectory.trim()) return 0;
-    const copiedPaths = /* @__PURE__ */ new Map();
-    let copied = 0;
-    for (const node of flattenNodes(document2.root)) {
-      for (const block of nodeContentBlocks(node)) {
-        if (block.type !== "image") continue;
-        const rawSource = (block.localSource || block.source || "").trim();
-        if (!rawSource || /^(?:https?:|data:|blob:|file:)/i.test(rawSource)) continue;
-        const image = await readDesktopMarkdownImage(sourceDirectory, rawSource);
-        if (!image) continue;
-        let targetPath = copiedPaths.get(image.path);
-        if (!targetPath) {
-          const bytes = image.content.buffer.slice(
-            image.content.byteOffset,
-            image.content.byteOffset + image.content.byteLength
-          );
-          targetPath = await this.savePastedImage(
-            new Blob([bytes], { type: mimeTypeFromFilename(image.name) }),
-            image.name,
-            mindMapFile
-          );
-          copiedPaths.set(image.path, targetPath);
-          copied += 1;
-        }
-        block.source = targetPath;
-        block.localSource = targetPath;
+    const result = await copyDesktopMarkdownImagesToDocument(
+      document2,
+      sourceDirectory,
+      async (image) => {
+        const bytes = image.content.buffer.slice(
+          image.content.byteOffset,
+          image.content.byteOffset + image.content.byteLength
+        );
+        return this.savePastedImage(
+          new Blob([bytes], { type: mimeTypeFromFilename(image.name) }),
+          image.name,
+          mindMapFile
+        );
       }
-      syncNodeContentFields(node);
-    }
-    return copied;
+    );
+    return result.copied;
   }
   /**
    * 执行“read image source”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
@@ -19662,7 +19696,10 @@ ${url}`, 8e3);
     document2.appearance = settingsToAppearance(this.settings);
     const mindMapFile = await this.createMindMap({ document: document2, title: `${title} \u8111\u56FE`, folder: (_b2 = (_a2 = file.parent) == null ? void 0 : _a2.path) != null ? _b2 : "" });
     const copied = await this.copyImportedMarkdownImages(document2, file, mindMapFile);
-    if (copied > 0) await this.app.vault.modify(mindMapFile, serializeDocument(document2));
+    if (copied > 0) {
+      await this.app.vault.modify(mindMapFile, serializeDocument(document2));
+      await this.resumePendingAutoUploads(mindMapFile, document2);
+    }
   }
   /**
    * 将 Markdown 中引用的本地图片复制到新导图自己的资源目录，并改写图片块引用。
@@ -19680,7 +19717,9 @@ ${url}`, 8e3);
     let copied = 0;
     const copiedPaths = /* @__PURE__ */ new Map();
     for (const node of flattenNodes(document2.root)) {
-      for (const block of nodeContentBlocks(node)) {
+      const blocks = nodeContentBlocks(node);
+      let changed = false;
+      for (const block of blocks) {
         if (block.type !== "image") continue;
         const rawSource = (block.localSource || block.source || "").trim();
         if (!rawSource || /^(?:https?:|data:|blob:|file:)/i.test(rawSource)) continue;
@@ -19699,8 +19738,9 @@ ${url}`, 8e3);
         }
         block.source = targetPath;
         block.localSource = targetPath;
+        changed = true;
       }
-      syncNodeContentFields(node);
+      if (changed) replaceNodeContentBlocks(node, blocks);
     }
     return copied;
   }

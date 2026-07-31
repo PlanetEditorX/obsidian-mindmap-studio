@@ -41,7 +41,20 @@ test("desktop Markdown import copies referenced images into the current mind-map
   assert.match(viewSource, /this\.plugin\.importDesktopMarkdownImages\(document, sourceDirectory, this\.file\)/);
   assert.match(modalSource, /await this\.onImportMarkdownImages\(imported, selected\.file\.directory\)/);
   assert.match(mainSource, /async importDesktopMarkdownImages\(document: MindMapDocument, sourceDirectory: string, mindMapFile: TFile \| null\)/);
-  assert.match(mainSource, /block\.source = targetPath;\s*block\.localSource = targetPath;/);
+  assert.match(mainSource, /copyDesktopMarkdownImagesToDocument\(/);
+  assert.match(desktopImportSource, /block\.source = targetPath;\s*block\.localSource = targetPath;[\s\S]*replaceNodeContentBlocks\(node, blocks\)/);
+  const directImageLookup = viewSource.indexOf('getAbstractFileByPath(normalizePath(target.replace(/^\\\/+/, "")))');
+  const cachedImageLookup = viewSource.indexOf("getFirstLinkpathDest(target", directImageLookup);
+  assert.ok(directImageLookup >= 0 && cachedImageLookup > directImageLookup);
+});
+
+test("imported local images schedule automatic image-host upload after final node IDs are assigned", () => {
+  assert.match(editorSource, /private scheduleImportedImageUploads\(root: MindMapNode\): number/);
+  assert.match(editorSource, /block\.localSource\?\.trim\(\)/);
+  assert.match(editorSource, /onScheduleAutoUpload\(node\.id, block\.id, localPath, suggestedName\)/);
+  assert.match(editorSource, /this\.mutate\([\s\S]*appendChild\(parent, importedRoot\)[\s\S]*this\.scheduleImportedImageUploads\(importedRoot\)/);
+  assert.match(editorSource, /this\.replaceDocument\(document\);\s*this\.scheduleImportedImageUploads\(this\.document\.root\)/);
+  assert.match(mainSource, /await this\.resumePendingAutoUploads\(mindMapFile, document\)/);
 });
 
 test("file import defaults to a child branch and keeps replacement explicit", () => {

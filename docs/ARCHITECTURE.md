@@ -250,7 +250,7 @@ Obsidian 读取文本
 
 加载顺序由 `imageSourceCandidates()` 生成。图片加载错误或超时后，编辑器尝试下一个镜像；成功后更新当前地址并保存。HTTP 200 返回错误占位图无法仅凭浏览器加载事件判断。
 
-自动上传流程由插件层负责，因为它需要读取仓库二进制文件、调用网络请求并决定是否删除本地资源。可确定的数据转换下沉到 `src/utils/image-host.ts`：端点只接受 HTTP(S)，Header 必须是无换行的扁平 JSON 对象，multipart 字段和值会清除请求头注入字符，响应地址也必须通过 HTTP(S) URL 校验。
+自动上传流程由插件层负责，因为它需要读取仓库二进制文件、调用网络请求并决定是否删除本地资源。桌面 Markdown 图片的磁盘读取、去重复制和权威内容块改写下沉到 `src/utils/desktop-import.ts`；编辑器在导入节点获得最终 ID 后调用宿主排程，Markdown 转脑图则在文件保存后恢复待上传任务。可确定的图床协议转换下沉到 `src/utils/image-host.ts`：端点只接受 HTTP(S)，Header 必须是无换行的扁平 JSON 对象，multipart 字段和值会清除请求头注入字符，响应地址也必须通过 HTTP(S) URL 校验。
 
 ```text
 ImageHostConfig

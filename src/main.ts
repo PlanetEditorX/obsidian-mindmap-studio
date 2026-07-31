@@ -24,6 +24,7 @@ import {
   nodeContentBlocks,
   nodePlainText,
   reconcileRichTextAfterEdit,
+  replaceNodeContentBlocks,
   syncNodeContentFields,
   parseDocument,
   serializeDocument,
@@ -101,7 +102,7 @@ import {
   parseUploadResponsePayload
 } from "./utils/image-host";
 import { comparePluginVersions, extractPluginReleaseFiles, parsePluginUpdateManifest, verifyPluginArchiveHash } from "./utils/plugin-update";
-import { readDesktopMarkdownImage } from "./utils/desktop-import";
+import { copyDesktopMarkdownImagesToDocument } from "./utils/desktop-import";
 
 export const MINDMAP_EXTENSION = "mindmap";
 const PLUGIN_UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/PlanetEditorX/obsidian-mindmap-studio/main/update.json";
@@ -1378,35 +1379,22 @@ export default class MindMapStudioPlugin extends Plugin {
    */
   async importDesktopMarkdownImages(document: MindMapDocument, sourceDirectory: string, mindMapFile: TFile | null): Promise<number> {
     if (!mindMapFile || !sourceDirectory.trim()) return 0;
-    const copiedPaths = new Map<string, string>();
-    let copied = 0;
-    for (const node of flattenNodes(document.root)) {
-      for (const block of nodeContentBlocks(node)) {
-        if (block.type !== "image") continue;
-        const rawSource = (block.localSource || block.source || "").trim();
-        if (!rawSource || /^(?:https?:|data:|blob:|file:)/i.test(rawSource)) continue;
-        const image = await readDesktopMarkdownImage(sourceDirectory, rawSource);
-        if (!image) continue;
-        let targetPath = copiedPaths.get(image.path);
-        if (!targetPath) {
-          const bytes = image.content.buffer.slice(
-            image.content.byteOffset,
-            image.content.byteOffset + image.content.byteLength
-          ) as ArrayBuffer;
-          targetPath = await this.savePastedImage(
-            new Blob([bytes], { type: mimeTypeFromFilename(image.name) }),
-            image.name,
-            mindMapFile
-          );
-          copiedPaths.set(image.path, targetPath);
-          copied += 1;
-        }
-        block.source = targetPath;
-        block.localSource = targetPath;
+    const result = await copyDesktopMarkdownImagesToDocument(
+      document,
+      sourceDirectory,
+      async (image) => {
+        const bytes = image.content.buffer.slice(
+          image.content.byteOffset,
+          image.content.byteOffset + image.content.byteLength
+        ) as ArrayBuffer;
+        return this.savePastedImage(
+          new Blob([bytes], { type: mimeTypeFromFilename(image.name) }),
+          image.name,
+          mindMapFile
+        );
       }
-      syncNodeContentFields(node);
-    }
-    return copied;
+    );
+    return result.copied;
   }
 
   /**
@@ -1943,7 +1931,10 @@ export default class MindMapStudioPlugin extends Plugin {
     document.appearance = settingsToAppearance(this.settings);
     const mindMapFile = await this.createMindMap({ document, title: `${title} 脑图`, folder: file.parent?.path ?? "" });
     const copied = await this.copyImportedMarkdownImages(document, file, mindMapFile);
-    if (copied > 0) await this.app.vault.modify(mindMapFile, serializeDocument(document));
+    if (copied > 0) {
+      await this.app.vault.modify(mindMapFile, serializeDocument(document));
+      await this.resumePendingAutoUploads(mindMapFile, document);
+    }
   }
 
   /**
@@ -1962,7 +1953,9 @@ export default class MindMapStudioPlugin extends Plugin {
     const copiedPaths = new Map<string, string>();
 
     for (const node of flattenNodes(document.root)) {
-      for (const block of nodeContentBlocks(node)) {
+      const blocks = nodeContentBlocks(node);
+      let changed = false;
+      for (const block of blocks) {
         if (block.type !== "image") continue;
         const rawSource = (block.localSource || block.source || "").trim();
         if (!rawSource || /^(?:https?:|data:|blob:|file:)/i.test(rawSource)) continue;
@@ -1982,8 +1975,9 @@ export default class MindMapStudioPlugin extends Plugin {
         }
         block.source = targetPath;
         block.localSource = targetPath;
+        changed = true;
       }
-      syncNodeContentFields(node);
+      if (changed) replaceNodeContentBlocks(node, blocks);
     }
     return copied;
   }
