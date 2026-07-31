@@ -91,7 +91,7 @@ import { renderNodeRichTextEditor } from "./node-rich-text-editor";
 import { canMoveNodes, isRightChildZone, resolveDropPosition } from "./drag-drop";
 import { DocumentHistory } from "./history-manager";
 import { renderOutlineMode } from "./outline-renderer";
-import { renderArticleMode, renderArticleNodeContent, type ArticleRendererOptions } from "./article-renderer";
+import { renderArticleMode, renderArticleNodeContent } from "./article-renderer";
 import { appendChild, deletionSelectionFallback, deleteNodes, insertSiblingAfter, nextTaskStatus, setAllBranchesCollapsed, topLevelSelectedNodeIds } from "./node-actions";
 import { attachSelectionFormatToolbar, type SelectionFormatToolbarHandle } from "./selection-format-toolbar";
 import {
@@ -3167,7 +3167,7 @@ export class MindMapEditor {
   }
 
   /** 构造文章渲染器所需的最小状态边界。 */
-  private articleRendererOptions(): ArticleRendererOptions {
+  private articleRendererOptions() {
     return {
       app: this.app,
       document: this.document,
@@ -3184,14 +3184,14 @@ export class MindMapEditor {
       imageHostPriorityIds: this.options.imageHostPriorityIds,
       articleNavigation: this.options.articleNavigation,
       callbacks: this.callbacks,
-      selectNode: (id) => this.selectNode(id),
-      openAiContextMenu: (event, nodeId, blockId) => { this.selectNode(nodeId); this.openContextMenu(event, blockId); },
-      openImageContextMenu: (event, nodeId, blockId) => this.openImageContextMenu(event, nodeId, blockId),
-      editTableBlock: (node, table, blockId) => this.openTableBlockEditor(node, table, blockId),
-      updateTableColumnWidths: (node, blockId, widths) => this.updateTableColumnWidths(node, blockId, widths),
-      makeInlineEditable: (element, node, placeholder, blockId) => this.makeInlineEditable(element, node, placeholder, blockId),
-      makeInlineCodeEditable: (element, node, code, blockId) => this.makeInlineCodeEditable(element, node, code, blockId),
-      addInlineNodeActions: (container, node) => this.addInlineNodeActions(container, node)
+      selectNode: (id: string) => this.selectNode(id),
+      openAiContextMenu: (event: MouseEvent, nodeId: string, blockId?: string) => { this.selectNode(nodeId); this.openContextMenu(event, blockId); },
+      openImageContextMenu: (event: MouseEvent, nodeId: string, blockId: string) => this.openImageContextMenu(event, nodeId, blockId),
+      editTableBlock: (node: MindMapNode, table: MindMapTable, blockId: string) => this.openTableBlockEditor(node, table, blockId),
+      updateTableColumnWidths: (node: MindMapNode, blockId: string, widths: number[]) => this.updateTableColumnWidths(node, blockId, widths),
+      makeInlineEditable: (element: HTMLElement, node: MindMapNode, placeholder: string, blockId?: string) => this.makeInlineEditable(element, node, placeholder, blockId),
+      makeInlineCodeEditable: (element: HTMLElement, node: MindMapNode, code: MindMapCodeBlock, blockId: string) => this.makeInlineCodeEditable(element, node, code, blockId),
+      addInlineNodeActions: (container: HTMLElement, node: MindMapNode) => this.addInlineNodeActions(container, node)
     };
   }
 
