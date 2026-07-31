@@ -74,3 +74,29 @@ test("editor contracts keep text commits local and defer large article rendering
   assert.match(articleSource, /mms-article-node is-render-pending/);
   assert.match(articleSource, /window\.requestAnimationFrame\(\(\) => renderBatch\(index\)\)/);
 });
+
+test("progressive article rerenders preserve viewport height and correct the semantic anchor after every batch", async () => {
+  const [editorSource, articleSource] = await Promise.all([
+    readFile(path.join(rootDir, "src/editor/editor.ts"), "utf8"),
+    readFile(path.join(rootDir, "src/editor/article-renderer.ts"), "utf8")
+  ]);
+  assert.match(editorSource, /articleRenderViewportSnapshot: \{ top: number; left: number; height: number \} \| null/);
+  assert.match(editorSource, /loading\.style\.minHeight = `\$\{viewportSnapshot\.height\}px`/);
+  assert.match(editorSource, /onProgress: \(\) => this\.maintainArticleRenderViewport\(token\)/);
+  assert.match(editorSource, /target\.hasClass\("is-render-pending"\)/);
+  assert.match(editorSource, /const restoredSemanticLocation = this\.maintainPendingArticleLocation\(\)/);
+  assert.match(editorSource, /if \(!restoredSemanticLocation && snapshot\) this\.articleEl\.scrollTop = snapshot\.top/);
+  assert.match(articleSource, /onProgress: \(\) => void/);
+  assert.match(articleSource, /options\.incremental\?\.onProgress\(\)/);
+});
+
+test("article-context refreshes skip redundant current-page rebuilds", async () => {
+  const [editorSource, viewSource] = await Promise.all([
+    readFile(path.join(rootDir, "src/editor/editor.ts"), "utf8"),
+    readFile(path.join(rootDir, "src/view.ts"), "utf8")
+  ]);
+  assert.match(editorSource, /setOptions\(options: MindMapEditorOptions, articleContextOnly = false\)/);
+  assert.match(editorSource, /const articleContextPresentationChanged =/);
+  assert.match(editorSource, /if \(articleContextOnly[\s\S]*?this\.currentMode !== "reading"[\s\S]*?articleContextPresentationChanged\)\) return/);
+  assert.match(viewSource, /this\.editor\?\.setOptions\(this\.getEditorOptions\(preferCurrentFile\), true\)/);
+});

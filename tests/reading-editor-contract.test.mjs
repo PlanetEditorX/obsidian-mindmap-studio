@@ -40,14 +40,14 @@ test("document mutations preserve the current article or reading anchor across a
 });
 
 test("article option refresh restores the rendered anchor after rebuilding the page", () => {
-  const setOptions = editorSource.match(/setOptions\(options: MindMapEditorOptions\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
+  const setOptions = editorSource.match(/setOptions\(options: MindMapEditorOptions, articleContextOnly = false\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
   assert.match(setOptions, /const renderedLocation = this\.currentMode === "mindmap"[\s\S]*this\.captureCurrentLocation\(this\.currentMode\) \?\? this\.lastReadingLocation/);
   assert.match(setOptions, /const locationToRestore = this\.currentMode === "mindmap" && !modeChanged[\s\S]*renderedLocation \?\? this\.lastReadingLocation/);
   assert.match(setOptions, /locationToRestore[\s\S]*this\.restoreReadingLocation\(this\.currentMode, locationToRestore\)/);
 });
 
 test("mind-map option refresh does not reopen ancestors after collapse-all", () => {
-  const setOptions = editorSource.match(/setOptions\(options: MindMapEditorOptions\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
+  const setOptions = editorSource.match(/setOptions\(options: MindMapEditorOptions, articleContextOnly = false\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
   assert.match(setOptions, /this\.currentMode === "mindmap" && !modeChanged\s*\? null/);
   assert.doesNotMatch(setOptions, /this\.restoreReadingLocation\(this\.currentMode, renderedLocation \?\? this\.lastReadingLocation\)/);
 });
@@ -75,7 +75,7 @@ test("programmatic scroll restoration cannot feed back into reading capture", ()
   assert.match(editorSource, /private readingCaptureBlocked = false/);
   assert.match(editorSource, /private blockReadingLocationCapture\(\): void/);
   assert.match(editorSource, /if \(this\.readingCaptureBlocked\) return;[\s\S]*scheduleReadingLocationCapture/);
-  assert.match(editorSource, /if \(mode !== "mindmap"\) this\.blockReadingLocationCapture\(\)/);
+  assert.match(editorSource, /private applyResolvedReadingLocation\([\s\S]*?this\.blockReadingLocationCapture\(\)/);
 });
 
 test("node clicks preserve their current viewport anchor instead of forcing 35 percent", () => {
@@ -87,7 +87,7 @@ test("node clicks preserve their current viewport anchor instead of forcing 35 p
 test("explicit child-map navigation wins over stale cross-file progress", () => {
   assert.match(viewSource, /markExplicitNavigation\(focusNodeId\?: string\): void/);
   assert.match(viewSource, /preferCurrentFileOnNextContextRefresh/);
-  assert.match(viewSource, /this\.editor\?\.setOptions\(this\.getEditorOptions\(preferCurrentFile\)\)/);
+  assert.match(viewSource, /this\.editor\?\.setOptions\(this\.getEditorOptions\(preferCurrentFile\), true\)/);
   assert.match(mainSource, /leaf\.view\.markExplicitNavigation\(focusNodeId\)/);
   assert.match(editorSource, /options\.preferCurrentFileLocation[\s\S]*preferredCurrentLocation/);
 });

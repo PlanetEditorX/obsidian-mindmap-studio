@@ -32,6 +32,8 @@ import type { ArticleLeafBulletStyle } from "../settings";
 /** 大型文章分帧挂载时使用的取消与完成回调。 */
 export interface ArticleIncrementalRenderOptions {
   isCancelled: () => boolean;
+  /** 每批章节挂载后通知编辑器校正滚动锚点。 */
+  onProgress: () => void;
   onComplete: () => void;
 }
 
@@ -139,6 +141,7 @@ export function renderArticleMode(container: HTMLElement, options: ArticleRender
       if (info && section) renderArticleNodeSection(section, info, options);
       index += 1;
     }
+    options.incremental?.onProgress();
     if (index < orderedIds.length) {
       window.requestAnimationFrame(() => renderBatch(index));
       return;
