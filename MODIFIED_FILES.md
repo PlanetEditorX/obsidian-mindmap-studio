@@ -300,3 +300,17 @@
 - `src/main.ts`：从仓库内 Markdown 转换时传入源文件路径。
 - `tests/question.test.mjs`：增加 Obsidian 图片、块 ID 与公文序号回归测试。
 
+
+## 2026-07-31 Codex 交付规则固化
+
+- `AGENTS.md`：固定每次源码 ZIP 交付必须同时返回中文 Git 说明，并禁止输出实际 Git 命令或虚称提交。
+- `Codex/偏好与交付规则.md`：将 Git 说明、Codex 状态同步和最新完整 ZIP 设为永久默认交付规则。
+- `Codex/项目/obsidian-mindmap-studio.md`：同步 Markdown 导入修复和后续交付要求。
+
+
+## 2026-07-31 Markdown 图片导入改为资源复制
+
+- `src/main.ts`：从仓库 Markdown 转换为脑图后，读取原图片二进制并复制到新脑图同目录的 `MindMap Assets`。
+- 图片块的 `source` 与 `localSource` 改写为复制后的资源路径，不再依赖原 Markdown 的 `assets/公文/...` 引用。
+- 同一原图在文档内出现多次时仅复制一次，所有图片块共享新资源路径。
+- 远程 URL、Data URL、Blob URL 与无法解析的图片保持原引用，不进行错误复制。
