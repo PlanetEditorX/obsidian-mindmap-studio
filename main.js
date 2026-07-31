@@ -12273,13 +12273,18 @@ var MindMapEditor = class {
    * Synchronizes selection classes across all editor views.
    */
   applySelectionClasses() {
-    this.rootEl.querySelectorAll(".is-selected, .is-multi-selected").forEach((element) => element.removeClasses(["is-selected", "is-multi-selected"]));
-    for (const id of this.selectedIds) {
-      const multi = this.selectedIds.size > 1;
-      for (const scope of [this.nodesLayerEl, this.outlineEl, this.articleEl]) {
-        const element = scope.querySelector(`[data-node-id="${CSS.escape(id)}"]`);
-        element == null ? void 0 : element.addClass("is-selected");
-        if (multi) element == null ? void 0 : element.addClass("is-multi-selected");
+    const multi = this.selectedIds.size > 1;
+    for (const scope of [this.nodesLayerEl, this.outlineEl, this.articleEl]) {
+      if (!scope) continue;
+      const elements = scope.querySelectorAll("[data-node-id]");
+      if (elements.length === 0) continue;
+      for (let i = 0; i < elements.length; i++) {
+        const element = elements[i];
+        const id = element.dataset.nodeId;
+        if (!id) continue;
+        const selected = this.selectedIds.has(id);
+        element.toggleClass("is-selected", selected);
+        element.toggleClass("is-multi-selected", selected && multi);
       }
     }
   }
