@@ -468,9 +468,10 @@ export class MindMapStudioView extends TextFileView {
       articleTocMaxDepth: this.plugin.settings.articleTocMaxDepth,
       showArticleMiniMap: this.plugin.settings.showArticleMiniMap,
       articleSectionCollapseEnabled: this.plugin.settings.articleSectionCollapseEnabled,
-      articleLeafBulletsEnabled: this.plugin.settings.articleLeafBulletsEnabled,
-      articleLeafBulletColor: this.plugin.settings.articleLeafBulletColor,
-      articleLeafBulletStyle: this.plugin.settings.articleLeafBulletStyle,
+      articleLeafBulletsEnabled: this.document?.articleStyle?.leafMarkerEnabled ?? this.plugin.settings.articleLeafBulletsEnabled,
+      articleLeafBulletColor: this.document?.articleStyle?.leafMarkerColor ?? this.plugin.settings.articleLeafBulletColor,
+      articleLeafBulletStyle: this.document?.articleStyle?.leafMarkerStyle ?? this.plugin.settings.articleLeafBulletStyle,
+      articleLeafTextAlignment: this.document?.articleStyle?.leafTextAlignment ?? this.plugin.settings.articleLeafTextAlignment,
       showArticleToc: this.showArticleToc,
       articleNavigation: this.articleNavigation
       ,readingSections: this.readingSections

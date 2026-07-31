@@ -95,6 +95,21 @@ test("article document title opens AI with the current-page scope", () => {
   assert.match(openAiScopeContextMenu, /询问 AI（当前页面）/);
 });
 
+test("terminal body marker and alignment stay independently configurable", async () => {
+  const [settingsSource, viewSource, modalSource] = await Promise.all([
+    readFile("src/settings.ts", "utf8"),
+    readFile("src/view.ts", "utf8"),
+    readFile("src/editor/editor-modals.ts", "utf8")
+  ]);
+  assert.match(settingsSource, /setName\("末端正文标识"\)/);
+  assert.match(settingsSource, /setName\("末端正文对齐方式"\)[\s\S]*addOption\("flush", "顶格"\)[\s\S]*addOption\("auto", "自动（与上级标题对齐）"\)/);
+  assert.match(viewSource, /document\?\.articleStyle\?\.leafMarkerEnabled \?\? this\.plugin\.settings\.articleLeafBulletsEnabled/);
+  assert.match(viewSource, /document\?\.articleStyle\?\.leafTextAlignment \?\? this\.plugin\.settings\.articleLeafTextAlignment/);
+  assert.match(modalSource, /text: "末端正文标识"[\s\S]*text: "末端正文对齐方式"/);
+  assert.match(rendererSource, /is-auto-aligned/);
+  assert.match(styles, /\.mms-article-leaf-text\.is-auto-aligned\s*\{[\s\S]*margin-inline-start:\s*2em/);
+});
+
 test("Enter commits an article title while Shift+Enter keeps an inline line break", () => {
   const makeInlineEditable = editorSource.match(/private makeInlineEditable\(element: HTMLElement, node: MindMapNode, placeholder: string, blockId\?: string\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
   const handleKeydown = editorSource.match(/private handleKeydown\(event: KeyboardEvent\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";

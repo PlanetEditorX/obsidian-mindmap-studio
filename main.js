@@ -722,7 +722,11 @@ function normalizeArticleStyle(input) {
     backgroundColor: color(input.backgroundColor),
     tocStyle,
     fontSize,
-    lineHeight
+    lineHeight,
+    leafMarkerEnabled: typeof input.leafMarkerEnabled === "boolean" ? input.leafMarkerEnabled : void 0,
+    leafMarkerStyle: input.leafMarkerStyle === "hollow" || input.leafMarkerStyle === "square" || input.leafMarkerStyle === "dash" ? input.leafMarkerStyle : input.leafMarkerStyle === "solid" ? "solid" : void 0,
+    leafMarkerColor: color(input.leafMarkerColor),
+    leafTextAlignment: input.leafTextAlignment === "flush" || input.leafTextAlignment === "auto" ? input.leafTextAlignment : void 0
   };
 }
 function normalizeDocument(input, fallbackTitle = "\u601D\u7EF4\u5BFC\u56FE") {
@@ -2047,6 +2051,7 @@ var DEFAULT_SETTINGS = {
   articleLeafBulletsEnabled: false,
   articleLeafBulletColor: "",
   articleLeafBulletStyle: "solid",
+  articleLeafTextAlignment: "auto",
   hideAssetFolderInFileExplorer: false,
   hideConfiguredFilesInFileExplorer: false,
   hiddenFileExtensions: "",
@@ -2346,17 +2351,17 @@ var MindMapStudioSettingTab = class extends import_obsidian.PluginSettingTab {
       this.plugin.settings.articleSectionCollapseEnabled = value;
       await this.saveAndRefresh();
     }));
-    new import_obsidian.Setting(containerEl).setName("\u672B\u7AEF\u6B63\u6587\u5706\u70B9").setDesc("\u4E3A\u6CA1\u6709\u6587\u7AE0\u7F16\u53F7\u7684\u672B\u7AEF\u8282\u70B9\u6B63\u6587\u6DFB\u52A0\u9879\u76EE\u7B26\u53F7\uFF0C\u4FBF\u4E8E\u5FEB\u901F\u533A\u5206\u8981\u70B9\u3002").addToggle((toggle) => toggle.setValue(this.plugin.settings.articleLeafBulletsEnabled).onChange(async (value) => {
+    new import_obsidian.Setting(containerEl).setName("\u672B\u7AEF\u6B63\u6587\u6807\u8BC6").setDesc("\u4E3A\u6CA1\u6709\u6587\u7AE0\u7F16\u53F7\u7684\u672B\u7AEF\u8282\u70B9\u6B63\u6587\u6DFB\u52A0\u6807\u8BC6\uFF0C\u4FBF\u4E8E\u5FEB\u901F\u533A\u5206\u8981\u70B9\u3002").addToggle((toggle) => toggle.setValue(this.plugin.settings.articleLeafBulletsEnabled).onChange(async (value) => {
       this.plugin.settings.articleLeafBulletsEnabled = value;
       await this.saveAndRefresh();
       this.display();
     }));
     if (this.plugin.settings.articleLeafBulletsEnabled) {
-      new import_obsidian.Setting(containerEl).setName("\u672B\u7AEF\u6B63\u6587\u9879\u76EE\u7B26\u53F7\u6837\u5F0F").setDesc("\u53EF\u9009\u62E9\u5B9E\u5FC3\u5706\u3001\u7A7A\u5FC3\u5706\u3001\u5B9E\u5FC3\u65B9\u5757\u6216\u77ED\u6A2A\u7EBF\u3002").addDropdown((dropdown) => dropdown.addOption("solid", "\u5B9E\u5FC3\u5706").addOption("hollow", "\u7A7A\u5FC3\u5706").addOption("square", "\u5B9E\u5FC3\u65B9\u5757").addOption("dash", "\u77ED\u6A2A\u7EBF").setValue(this.plugin.settings.articleLeafBulletStyle).onChange(async (value) => {
+      new import_obsidian.Setting(containerEl).setName("\u672B\u7AEF\u6B63\u6587\u6807\u8BC6\u6837\u5F0F").setDesc("\u53EF\u9009\u62E9\u5B9E\u5FC3\u5706\u3001\u7A7A\u5FC3\u5706\u3001\u5B9E\u5FC3\u65B9\u5757\u6216\u77ED\u6A2A\u7EBF\u3002").addDropdown((dropdown) => dropdown.addOption("solid", "\u5B9E\u5FC3\u5706").addOption("hollow", "\u7A7A\u5FC3\u5706").addOption("square", "\u5B9E\u5FC3\u65B9\u5757").addOption("dash", "\u77ED\u6A2A\u7EBF").setValue(this.plugin.settings.articleLeafBulletStyle).onChange(async (value) => {
         this.plugin.settings.articleLeafBulletStyle = value === "hollow" || value === "square" || value === "dash" ? value : "solid";
         await this.saveAndRefresh();
       }));
-      new import_obsidian.Setting(containerEl).setName("\u672B\u7AEF\u6B63\u6587\u9879\u76EE\u7B26\u53F7\u989C\u8272").setDesc("\u7559\u7A7A\u65F6\u8DDF\u968F\u5F53\u524D\u6587\u7AE0\u4E3B\u9898\u5F3A\u8C03\u8272\uFF1B\u53EF\u6307\u5B9A\u4EFB\u610F\u989C\u8272\u3002").addColorPicker((picker) => picker.setValue(this.plugin.settings.articleLeafBulletColor || "#ef4444").onChange(async (value) => {
+      new import_obsidian.Setting(containerEl).setName("\u672B\u7AEF\u6B63\u6587\u6807\u8BC6\u989C\u8272").setDesc("\u7559\u7A7A\u65F6\u8DDF\u968F\u5F53\u524D\u6587\u7AE0\u4E3B\u9898\u5F3A\u8C03\u8272\uFF1B\u53EF\u6307\u5B9A\u4EFB\u610F\u989C\u8272\u3002").addColorPicker((picker) => picker.setValue(this.plugin.settings.articleLeafBulletColor || "#ef4444").onChange(async (value) => {
         this.plugin.settings.articleLeafBulletColor = value;
         await this.saveAndRefresh();
       })).addButton((button) => button.setButtonText("\u8DDF\u968F\u4E3B\u9898").onClick(async () => {
@@ -2365,6 +2370,10 @@ var MindMapStudioSettingTab = class extends import_obsidian.PluginSettingTab {
         this.display();
       }));
     }
+    new import_obsidian.Setting(containerEl).setName("\u672B\u7AEF\u6B63\u6587\u5BF9\u9F50\u65B9\u5F0F").setDesc("\u4E0E\u672B\u7AEF\u6B63\u6587\u6807\u8BC6\u5F00\u5173\u65E0\u5173\uFF1B\u81EA\u52A8\u4F1A\u5728\u4E0A\u7EA7\u6807\u9898\u4E0B\u4FDD\u7559\u5408\u9002\u7684\u6B63\u6587\u7F29\u8FDB\u3002").addDropdown((dropdown) => dropdown.addOption("flush", "\u9876\u683C").addOption("auto", "\u81EA\u52A8\uFF08\u4E0E\u4E0A\u7EA7\u6807\u9898\u5BF9\u9F50\uFF09").setValue(this.plugin.settings.articleLeafTextAlignment).onChange(async (value) => {
+      this.plugin.settings.articleLeafTextAlignment = value === "flush" ? "flush" : "auto";
+      await this.saveAndRefresh();
+    }));
     new import_obsidian.Setting(containerEl).setName("\u901A\u8BFB\u8FDB\u5EA6\u6761\u4F4D\u7F6E").setDesc("\u63A7\u5236\u9605\u8BFB\u8FDB\u5EA6\u663E\u793A\u5728\u9875\u9762\u4E0A\u65B9\u3001\u4E0B\u65B9\u3001\u5DE6\u4FA7\u6216\u53F3\u4FA7\u3002").addDropdown((dropdown) => dropdown.addOption("top", "\u4E0A\u65B9").addOption("bottom", "\u4E0B\u65B9").addOption("left", "\u5DE6\u4FA7").addOption("right", "\u53F3\u4FA7").setValue(this.plugin.settings.readingProgressPosition).onChange(async (value) => {
       this.plugin.settings.readingProgressPosition = value === "bottom" || value === "left" || value === "right" ? value : "top";
       await this.saveAndRefresh();
@@ -6883,8 +6892,9 @@ var ArticleStyleModal = class extends import_obsidian5.Modal {
    * @param style 当前文档样式。
    * @param submitStyle 样式提交回调。
    */
-  constructor(app, style, submitStyle) {
+  constructor(app, style, globalLeafPresentation, submitStyle) {
     super(app);
+    this.globalLeafPresentation = globalLeafPresentation;
     this.submitStyle = submitStyle;
     this.style = resolveArticleStyle(style);
   }
@@ -6923,8 +6933,26 @@ var ArticleStyleModal = class extends import_obsidian5.Modal {
     const fontSize = sizeLabel.createEl("input", { type: "number", attr: { min: "12", max: "24", step: "1" } });
     const lineLabel = grid.createEl("label", { text: "\u6B63\u6587\u884C\u9AD8" });
     const lineHeight = lineLabel.createEl("input", { type: "number", attr: { min: "1.2", max: "2.4", step: "0.05" } });
+    const markerEnabledLabel = grid.createEl("label", { text: "\u672B\u7AEF\u6B63\u6587\u6807\u8BC6" });
+    const markerEnabled = markerEnabledLabel.createEl("select");
+    markerEnabled.createEl("option", { text: `\u8DDF\u968F\u63D2\u4EF6\u8BBE\u7F6E\uFF08\u5F53\u524D${this.globalLeafPresentation.enabled ? "\u663E\u793A" : "\u9690\u85CF"}\uFF09`, attr: { value: "" } });
+    markerEnabled.createEl("option", { text: "\u663E\u793A", attr: { value: "true" } });
+    markerEnabled.createEl("option", { text: "\u9690\u85CF", attr: { value: "false" } });
+    const markerStyleLabel = grid.createEl("label", { text: "\u672B\u7AEF\u6B63\u6587\u6807\u8BC6\u6837\u5F0F" });
+    const markerStyle = markerStyleLabel.createEl("select");
+    markerStyle.createEl("option", { text: "\u8DDF\u968F\u63D2\u4EF6\u8BBE\u7F6E", attr: { value: "" } });
+    for (const [id, name] of [["solid", "\u5B9E\u5FC3\u5706"], ["hollow", "\u7A7A\u5FC3\u5706"], ["square", "\u5B9E\u5FC3\u65B9\u5757"], ["dash", "\u77ED\u6A2A\u7EBF"]]) markerStyle.createEl("option", { text: name, attr: { value: id } });
+    const markerColor = addColor("\u672B\u7AEF\u6B63\u6587\u6807\u8BC6\u989C\u8272");
+    const markerColorGlobal = grid.createEl("label", { text: "\u6807\u8BC6\u989C\u8272" });
+    const markerColorFollowGlobal = markerColorGlobal.createEl("input", { type: "checkbox" });
+    markerColorGlobal.createSpan({ text: " \u8DDF\u968F\u63D2\u4EF6\u8BBE\u7F6E" });
+    const alignmentLabel = grid.createEl("label", { text: "\u672B\u7AEF\u6B63\u6587\u5BF9\u9F50\u65B9\u5F0F" });
+    const alignment = alignmentLabel.createEl("select");
+    alignment.createEl("option", { text: `\u8DDF\u968F\u63D2\u4EF6\u8BBE\u7F6E\uFF08\u5F53\u524D${this.globalLeafPresentation.alignment === "auto" ? "\u81EA\u52A8" : "\u9876\u683C"}\uFF09`, attr: { value: "" } });
+    alignment.createEl("option", { text: "\u9876\u683C", attr: { value: "flush" } });
+    alignment.createEl("option", { text: "\u81EA\u52A8\uFF08\u4E0E\u4E0A\u7EA7\u6807\u9898\u5BF9\u9F50\uFF09", attr: { value: "auto" } });
     const fill = (style) => {
-      var _a2, _b2, _c, _d, _e, _f, _g, _h;
+      var _a2, _b2, _c, _d, _e, _f, _g, _h, _i, _j, _k;
       const resolved = resolveArticleStyle(style);
       preset.value = resolved.preset;
       fontFamily.value = (_a2 = resolved.fontFamily) != null ? _a2 : "";
@@ -6935,9 +6963,18 @@ var ArticleStyleModal = class extends import_obsidian5.Modal {
       tocStyle.value = (_f = resolved.tocStyle) != null ? _f : "card";
       fontSize.value = String((_g = resolved.fontSize) != null ? _g : 16);
       lineHeight.value = String((_h = resolved.lineHeight) != null ? _h : 1.85);
+      markerEnabled.value = style.leafMarkerEnabled === void 0 ? "" : String(style.leafMarkerEnabled);
+      markerStyle.value = (_i = style.leafMarkerStyle) != null ? _i : "";
+      markerColor.value = (_j = style.leafMarkerColor) != null ? _j : this.globalLeafPresentation.color || "#ef4444";
+      markerColorFollowGlobal.checked = style.leafMarkerColor === void 0;
+      markerColor.disabled = markerColorFollowGlobal.checked;
+      alignment.value = (_k = style.leafTextAlignment) != null ? _k : "";
     };
     fill(this.style);
     preset.addEventListener("change", () => fill(ARTICLE_STYLE_PRESETS[preset.value]));
+    markerColorFollowGlobal.addEventListener("change", () => {
+      markerColor.disabled = markerColorFollowGlobal.checked;
+    });
     const actions = form.createDiv({ cls: "mmc-modal-actions" });
     const cancel = actions.createEl("button", { text: "\u53D6\u6D88", type: "button" });
     actions.createEl("button", { text: "\u5E94\u7528", type: "submit", cls: "mod-cta" });
@@ -6953,7 +6990,11 @@ var ArticleStyleModal = class extends import_obsidian5.Modal {
         backgroundColor: backgroundColor.value,
         tocStyle: tocStyle.value,
         fontSize: Math.max(12, Math.min(24, Number(fontSize.value) || 16)),
-        lineHeight: Math.max(1.2, Math.min(2.4, Number(lineHeight.value) || 1.85))
+        lineHeight: Math.max(1.2, Math.min(2.4, Number(lineHeight.value) || 1.85)),
+        leafMarkerEnabled: markerEnabled.value === "" ? void 0 : markerEnabled.value === "true",
+        leafMarkerStyle: markerStyle.value === "hollow" || markerStyle.value === "square" || markerStyle.value === "dash" ? markerStyle.value : markerStyle.value === "solid" ? "solid" : void 0,
+        leafMarkerColor: markerColorFollowGlobal.checked ? void 0 : markerColor.value,
+        leafTextAlignment: alignment.value === "flush" || alignment.value === "auto" ? alignment.value : void 0
       });
       this.close();
     });
@@ -7822,13 +7863,13 @@ function renderArticleMode(container, options) {
       const firstTextBlock = blocks.find((block) => block.type === "text");
       if (firstTextBlock == null ? void 0 : firstTextBlock.text.trim()) {
         const blockShell = createArticleContentBlock(section, firstTextBlock.id);
-        const paragraph = blockShell.createEl("p", { cls: articleParagraphClass("mms-article-leaf-text", firstTextBlock, options.articleLeafBulletsEnabled) });
+        const paragraph = blockShell.createEl("p", { cls: articleParagraphClass("mms-article-leaf-text", firstTextBlock, options.articleLeafBulletsEnabled, options.articleLeafTextAlignment) });
         paragraph.dataset.blockId = firstTextBlock.id;
         applyArticleLeafBulletStyle(paragraph, options);
         renderRichTextRuns(paragraph, firstTextBlock.richText, firstTextBlock.text);
         options.makeInlineEditable(paragraph, info.node, "\u6B63\u6587\u6BB5\u843D", firstTextBlock.id);
       } else if (!options.readOnly && blocks.length === 0) {
-        const paragraph = section.createEl("p", { cls: articleParagraphClass("mms-article-leaf-text", void 0, options.articleLeafBulletsEnabled) });
+        const paragraph = section.createEl("p", { cls: articleParagraphClass("mms-article-leaf-text", void 0, options.articleLeafBulletsEnabled, options.articleLeafTextAlignment) });
         applyArticleLeafBulletStyle(paragraph, options);
         renderRichTextRuns(paragraph, void 0, "");
         options.makeInlineEditable(paragraph, info.node, "\u6B63\u6587\u6BB5\u843D");
@@ -7846,8 +7887,8 @@ function createArticleContentBlock(container, blockId, indentToParagraph = false
   shell.dataset.blockId = blockId;
   return shell;
 }
-function articleParagraphClass(baseClass, block, bulleted = false) {
-  return `${baseClass}${bulleted ? " is-bulleted" : ""}${(block == null ? void 0 : block.paragraphIndent) === "none" ? " is-flush" : ""}`;
+function articleParagraphClass(baseClass, block, bulleted = false, alignment = "auto") {
+  return `${baseClass}${bulleted ? " is-bulleted" : ""}${alignment === "auto" ? " is-auto-aligned" : ""}${(block == null ? void 0 : block.paragraphIndent) === "none" ? " is-flush" : ""}`;
 }
 function applyArticleLeafBulletStyle(paragraph, options) {
   if (!options.articleLeafBulletsEnabled) return;
@@ -11528,6 +11569,7 @@ var MindMapEditor = class {
       articleLeafBulletsEnabled: this.options.articleLeafBulletsEnabled,
       articleLeafBulletColor: this.options.articleLeafBulletColor,
       articleLeafBulletStyle: this.options.articleLeafBulletStyle,
+      articleLeafTextAlignment: this.options.articleLeafTextAlignment,
       imageHostPriorityIds: this.options.imageHostPriorityIds,
       articleNavigation: this.options.articleNavigation,
       callbacks: this.callbacks,
@@ -12852,7 +12894,7 @@ var MindMapEditor = class {
     const section = this.articleEl.querySelector(`[data-node-id="${CSS.escape(selected.id)}"]`);
     if (!section) return;
     const paragraph = section.createEl("p", {
-      cls: `mms-article-leaf-text${this.options.articleLeafBulletsEnabled ? " is-bulleted" : ""}`
+      cls: `mms-article-leaf-text${this.options.articleLeafBulletsEnabled ? " is-bulleted" : ""}${this.options.articleLeafTextAlignment === "auto" ? " is-auto-aligned" : ""}`
     });
     paragraph.dataset.mmsTransientArticleBody = "true";
     if (this.options.articleLeafBulletsEnabled) {
@@ -13089,7 +13131,12 @@ var MindMapEditor = class {
    */
   editArticleStyle() {
     if (!this.ensureEditable()) return;
-    new ArticleStyleModal(this.app, this.document.articleStyle, (style) => {
+    new ArticleStyleModal(this.app, this.document.articleStyle, {
+      enabled: this.options.articleLeafBulletsEnabled,
+      style: this.options.articleLeafBulletStyle,
+      color: this.options.articleLeafBulletColor,
+      alignment: this.options.articleLeafTextAlignment
+    }, (style) => {
       this.mutate(() => {
         this.document.articleStyle = style;
       });
@@ -13458,7 +13505,7 @@ var MindMapEditor = class {
         } else {
           const firstTextBlock = nodeContentBlocks(info.node).find((block) => block.type === "text");
           if (firstTextBlock) {
-            const paragraph = nodeSection.createEl("p", { cls: `mms-article-leaf-text${this.options.articleLeafBulletsEnabled ? " is-bulleted" : ""}${firstTextBlock.paragraphIndent === "none" ? " is-flush" : ""}` });
+            const paragraph = nodeSection.createEl("p", { cls: `mms-article-leaf-text${this.options.articleLeafBulletsEnabled ? " is-bulleted" : ""}${this.options.articleLeafTextAlignment === "auto" ? " is-auto-aligned" : ""}${firstTextBlock.paragraphIndent === "none" ? " is-flush" : ""}` });
             paragraph.dataset.blockId = firstTextBlock.id;
             if (this.options.articleLeafBulletsEnabled) {
               paragraph.dataset.bulletStyle = this.options.articleLeafBulletStyle;
@@ -15862,7 +15909,7 @@ var MindMapStudioView = class _MindMapStudioView extends import_obsidian12.TextF
    * 读取并返回editor options，并保持模型、界面和持久化状态的一致性。
    */
   getEditorOptions(preferCurrentFileLocation = false) {
-    var _a2, _b2, _c, _d, _e, _f;
+    var _a2, _b2, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r;
     return {
       defaultNodeShape: this.plugin.settings.defaultNodeShape,
       defaultAppearance: settingsToAppearance(this.plugin.settings),
@@ -15912,9 +15959,10 @@ var MindMapStudioView = class _MindMapStudioView extends import_obsidian12.TextF
       articleTocMaxDepth: this.plugin.settings.articleTocMaxDepth,
       showArticleMiniMap: this.plugin.settings.showArticleMiniMap,
       articleSectionCollapseEnabled: this.plugin.settings.articleSectionCollapseEnabled,
-      articleLeafBulletsEnabled: this.plugin.settings.articleLeafBulletsEnabled,
-      articleLeafBulletColor: this.plugin.settings.articleLeafBulletColor,
-      articleLeafBulletStyle: this.plugin.settings.articleLeafBulletStyle,
+      articleLeafBulletsEnabled: (_i = (_h = (_g = this.document) == null ? void 0 : _g.articleStyle) == null ? void 0 : _h.leafMarkerEnabled) != null ? _i : this.plugin.settings.articleLeafBulletsEnabled,
+      articleLeafBulletColor: (_l = (_k = (_j = this.document) == null ? void 0 : _j.articleStyle) == null ? void 0 : _k.leafMarkerColor) != null ? _l : this.plugin.settings.articleLeafBulletColor,
+      articleLeafBulletStyle: (_o = (_n = (_m = this.document) == null ? void 0 : _m.articleStyle) == null ? void 0 : _n.leafMarkerStyle) != null ? _o : this.plugin.settings.articleLeafBulletStyle,
+      articleLeafTextAlignment: (_r = (_q = (_p = this.document) == null ? void 0 : _p.articleStyle) == null ? void 0 : _q.leafTextAlignment) != null ? _r : this.plugin.settings.articleLeafTextAlignment,
       showArticleToc: this.showArticleToc,
       articleNavigation: this.articleNavigation,
       readingSections: this.readingSections,
@@ -18187,6 +18235,7 @@ var MindMapStudioPlugin = class extends import_obsidian15.Plugin {
       articleLeafBulletsEnabled: raw.articleLeafBulletsEnabled === true,
       articleLeafBulletColor: typeof raw.articleLeafBulletColor === "string" && /^#[0-9a-f]{6}$/i.test(raw.articleLeafBulletColor) ? raw.articleLeafBulletColor : "",
       articleLeafBulletStyle: raw.articleLeafBulletStyle === "hollow" || raw.articleLeafBulletStyle === "square" || raw.articleLeafBulletStyle === "dash" ? raw.articleLeafBulletStyle : "solid",
+      articleLeafTextAlignment: raw.articleLeafTextAlignment === "flush" ? "flush" : "auto",
       hideAssetFolderInFileExplorer: raw.hideAssetFolderInFileExplorer === true,
       hideConfiguredFilesInFileExplorer: raw.hideConfiguredFilesInFileExplorer === true,
       hiddenFileExtensions: typeof raw.hiddenFileExtensions === "string" ? raw.hiddenFileExtensions.slice(0, 2e3) : "",

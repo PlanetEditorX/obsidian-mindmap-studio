@@ -43,6 +43,14 @@ export interface ArticleStyle {
   tocStyle?: "card" | "plain" | "lines";
   fontSize?: number;
   lineHeight?: number;
+  /** Per-page override for whether terminal body markers are displayed. */
+  leafMarkerEnabled?: boolean;
+  /** Per-page terminal body marker shape. */
+  leafMarkerStyle?: "solid" | "hollow" | "square" | "dash";
+  /** Per-page terminal body marker color; empty follows the accent color. */
+  leafMarkerColor?: string;
+  /** Per-page terminal body alignment; undefined follows the plugin default. */
+  leafTextAlignment?: "flush" | "auto";
 }
 /**
  * ThemeMode 类型定义，用于限制可接受值并让序列化数据保持稳定。
@@ -1408,7 +1416,11 @@ function normalizeArticleStyle(input: Partial<ArticleStyle> | undefined): Articl
     backgroundColor: color(input.backgroundColor),
     tocStyle,
     fontSize,
-    lineHeight
+    lineHeight,
+    leafMarkerEnabled: typeof input.leafMarkerEnabled === "boolean" ? input.leafMarkerEnabled : undefined,
+    leafMarkerStyle: input.leafMarkerStyle === "hollow" || input.leafMarkerStyle === "square" || input.leafMarkerStyle === "dash" ? input.leafMarkerStyle : input.leafMarkerStyle === "solid" ? "solid" : undefined,
+    leafMarkerColor: color(input.leafMarkerColor),
+    leafTextAlignment: input.leafTextAlignment === "flush" || input.leafTextAlignment === "auto" ? input.leafTextAlignment : undefined
   };
 }
 

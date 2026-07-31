@@ -70,6 +70,8 @@ export type ImageHostMethod = "POST" | "PUT";
 
 /** Visual shape used for unnumbered terminal article bullets. */
 export type ArticleLeafBulletStyle = "solid" | "hollow" | "square" | "dash";
+/** Alignment used by terminal article paragraphs independently from their marker. */
+export type ArticleLeafTextAlignment = "flush" | "auto";
 
 /**
  * ImageHostConfig 的结构化数据约定。字段会在模块边界传递，用于保持类型安全和版本兼容。
@@ -227,6 +229,8 @@ export interface MindMapStudioSettings {
   articleLeafBulletColor: string;
   /** Shape and fill treatment used by terminal article bullets. */
   articleLeafBulletStyle: ArticleLeafBulletStyle;
+  /** Controls terminal body indentation independently from its marker. */
+  articleLeafTextAlignment: ArticleLeafTextAlignment;
   /** Hides the configured per-map asset folder in Obsidian's File Explorer. */
   hideAssetFolderInFileExplorer: boolean;
   /** Enables custom File Explorer filters without changing vault files. */
@@ -351,6 +355,7 @@ export const DEFAULT_SETTINGS: MindMapStudioSettings = {
   articleLeafBulletsEnabled: false,
   articleLeafBulletColor: "",
   articleLeafBulletStyle: "solid",
+  articleLeafTextAlignment: "auto",
   hideAssetFolderInFileExplorer: false,
   hideConfiguredFilesInFileExplorer: false,
   hiddenFileExtensions: "",
@@ -758,8 +763,8 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
         }));
 
     new Setting(containerEl)
-      .setName("末端正文圆点")
-      .setDesc("为没有文章编号的末端节点正文添加项目符号，便于快速区分要点。")
+      .setName("末端正文标识")
+      .setDesc("为没有文章编号的末端节点正文添加标识，便于快速区分要点。")
       .addToggle((toggle) => toggle
         .setValue(this.plugin.settings.articleLeafBulletsEnabled)
         .onChange(async (value) => {
@@ -770,7 +775,7 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
 
     if (this.plugin.settings.articleLeafBulletsEnabled) {
       new Setting(containerEl)
-        .setName("末端正文项目符号样式")
+        .setName("末端正文标识样式")
         .setDesc("可选择实心圆、空心圆、实心方块或短横线。")
         .addDropdown((dropdown) => dropdown
           .addOption("solid", "实心圆")
@@ -783,7 +788,7 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
             await this.saveAndRefresh();
           }));
       new Setting(containerEl)
-        .setName("末端正文项目符号颜色")
+        .setName("末端正文标识颜色")
         .setDesc("留空时跟随当前文章主题强调色；可指定任意颜色。")
         .addColorPicker((picker) => picker
           .setValue(this.plugin.settings.articleLeafBulletColor || "#ef4444")
@@ -799,6 +804,18 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
             this.display();
           }));
     }
+
+    new Setting(containerEl)
+      .setName("末端正文对齐方式")
+      .setDesc("与末端正文标识开关无关；自动会在上级标题下保留合适的正文缩进。")
+      .addDropdown((dropdown) => dropdown
+        .addOption("flush", "顶格")
+        .addOption("auto", "自动（与上级标题对齐）")
+        .setValue(this.plugin.settings.articleLeafTextAlignment)
+        .onChange(async (value) => {
+          this.plugin.settings.articleLeafTextAlignment = value === "flush" ? "flush" : "auto";
+          await this.saveAndRefresh();
+        }));
 
     new Setting(containerEl)
       .setName("通读进度条位置")

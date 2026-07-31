@@ -43,6 +43,7 @@ export interface ArticleRendererOptions {
   articleLeafBulletsEnabled: boolean;
   articleLeafBulletColor: string;
   articleLeafBulletStyle: ArticleLeafBulletStyle;
+  articleLeafTextAlignment: "flush" | "auto";
   imageHostPriorityIds: string[];
   articleNavigation?: ArticlePageNavigation;
   callbacks: Pick<MindMapEditorCallbacks, "resolveImage" | "onRenderCode" | "onOpenMindMap" | "onOpenArticleDirectory">;
@@ -122,7 +123,7 @@ export function renderArticleMode(container: HTMLElement, options: ArticleRender
       const firstTextBlock = blocks.find((block): block is MindMapTextContentBlock => block.type === "text");
       if (firstTextBlock?.text.trim()) {
         const blockShell = createArticleContentBlock(section, firstTextBlock.id);
-        const paragraph = blockShell.createEl("p", { cls: articleParagraphClass("mms-article-leaf-text", firstTextBlock, options.articleLeafBulletsEnabled) });
+        const paragraph = blockShell.createEl("p", { cls: articleParagraphClass("mms-article-leaf-text", firstTextBlock, options.articleLeafBulletsEnabled, options.articleLeafTextAlignment) });
         paragraph.dataset.blockId = firstTextBlock.id;
         applyArticleLeafBulletStyle(paragraph, options);
         renderRichTextRuns(paragraph, firstTextBlock.richText, firstTextBlock.text);
@@ -131,7 +132,7 @@ export function renderArticleMode(container: HTMLElement, options: ArticleRender
         // 新建空白末端节点尚无内容块，需要临时渲染一个可编辑行，供
         // addChild()/addSibling() 聚焦；已有表格、图片或代码等内容的节点
         // 不应额外生成无关的空正文段落。
-        const paragraph = section.createEl("p", { cls: articleParagraphClass("mms-article-leaf-text", undefined, options.articleLeafBulletsEnabled) });
+        const paragraph = section.createEl("p", { cls: articleParagraphClass("mms-article-leaf-text", undefined, options.articleLeafBulletsEnabled, options.articleLeafTextAlignment) });
         applyArticleLeafBulletStyle(paragraph, options);
         renderRichTextRuns(paragraph, undefined, "");
         options.makeInlineEditable(paragraph, info.node, "正文段落");
@@ -157,8 +158,8 @@ function createArticleContentBlock(
 }
 
 /** Builds paragraph classes without changing the legacy first-line-indent default. */
-function articleParagraphClass(baseClass: string, block: MindMapTextContentBlock | undefined, bulleted = false): string {
-  return `${baseClass}${bulleted ? " is-bulleted" : ""}${block?.paragraphIndent === "none" ? " is-flush" : ""}`;
+function articleParagraphClass(baseClass: string, block: MindMapTextContentBlock | undefined, bulleted = false, alignment: "flush" | "auto" = "auto"): string {
+  return `${baseClass}${bulleted ? " is-bulleted" : ""}${alignment === "auto" ? " is-auto-aligned" : ""}${block?.paragraphIndent === "none" ? " is-flush" : ""}`;
 }
 
 /** Applies the configured terminal bullet color and visual style to one article paragraph. */

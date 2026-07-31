@@ -634,6 +634,7 @@ export default class MindMapStudioPlugin extends Plugin {
       articleLeafBulletStyle: raw.articleLeafBulletStyle === "hollow" || raw.articleLeafBulletStyle === "square" || raw.articleLeafBulletStyle === "dash"
         ? raw.articleLeafBulletStyle
         : "solid",
+      articleLeafTextAlignment: raw.articleLeafTextAlignment === "flush" ? "flush" : "auto",
       hideAssetFolderInFileExplorer: raw.hideAssetFolderInFileExplorer === true,
       hideConfiguredFilesInFileExplorer: raw.hideConfiguredFilesInFileExplorer === true,
       hiddenFileExtensions: typeof raw.hiddenFileExtensions === "string" ? raw.hiddenFileExtensions.slice(0, 2000) : "",

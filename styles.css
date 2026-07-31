@@ -3809,6 +3809,12 @@
   text-indent: 0;
 }
 
+.mms-article-leaf-text.is-auto-aligned {
+  width: calc(100% - 2em);
+  margin-inline-start: 2em;
+  text-indent: 0;
+}
+
 .mms-article-leaf-text.is-bulleted::before {
   position: absolute;
   top: .78em;
