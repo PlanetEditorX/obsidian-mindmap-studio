@@ -76,8 +76,13 @@ test("AI provider normalization preserves SiliconFlow and FreeLLMAPI presets", (
   assert.equal(config.normalizeAiProfileConfig({ provider: "freellmapi" }).provider, "freellmapi");
   assert.equal(config.createAiProfileConfig("freellmapi", 1).model, "auto");
   assert.equal(config.createAiProfileConfig("openai", 1).thinkingMode, "auto");
+  assert.deepEqual(config.createAiProfileConfig("openai", 1).availableModels, []);
   assert.equal(config.normalizeAiProfileConfig({ provider: "openai", thinkingMode: "on" }).thinkingMode, "on");
   assert.equal(config.normalizeAiProfileConfig({ provider: "openai", thinkingMode: "invalid" }).thinkingMode, "auto");
+  assert.deepEqual(
+    config.normalizeAiProfileConfig({ provider: "openai", availableModels: [" model-b ", "model-a", "model-a", 42] }).availableModels,
+    ["model-b", "model-a"]
+  );
 });
 
 test("normalizeAiProfileConfig clamps unsafe numeric values and trims text", () => {

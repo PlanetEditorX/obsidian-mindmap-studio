@@ -18,6 +18,8 @@ export interface AiProfileConfig {
   endpoint: string;
   apiKey: string;
   model: string;
+  /** 最近一次成功从该接口读取的模型目录；为空时显示内置建议。 */
+  availableModels: string[];
   thinkingMode: AiThinkingMode;
   systemPrompt: string;
   temperature: number;
@@ -94,6 +96,7 @@ export const DEFAULT_AI_PROFILES: AiProfileConfig[] = [
     enabled: false,
     apiKey: "",
     thinkingMode: "auto",
+    availableModels: [],
     temperature: 0.2,
     maxOutputTokens: 2048,
     headers: ""
@@ -104,6 +107,7 @@ export const DEFAULT_AI_PROFILES: AiProfileConfig[] = [
     enabled: false,
     apiKey: "",
     thinkingMode: "auto",
+    availableModels: [],
     temperature: 0.2,
     maxOutputTokens: 2048,
     headers: ""
@@ -114,6 +118,7 @@ export const DEFAULT_AI_PROFILES: AiProfileConfig[] = [
     enabled: false,
     apiKey: "",
     thinkingMode: "auto",
+    availableModels: [],
     temperature: 0.2,
     maxOutputTokens: 2048,
     headers: ""
@@ -124,6 +129,7 @@ export const DEFAULT_AI_PROFILES: AiProfileConfig[] = [
     enabled: false,
     apiKey: "",
     thinkingMode: "auto",
+    availableModels: [],
     temperature: 0.2,
     maxOutputTokens: 2048,
     headers: ""
@@ -151,6 +157,7 @@ export function createAiProfileConfig(provider: AiProviderKind, index = 1): AiPr
     endpoint: preset.endpoint,
     apiKey: "",
     model: preset.model,
+    availableModels: [],
     thinkingMode: "auto",
     systemPrompt: preset.systemPrompt,
     temperature: 0.2,
@@ -174,6 +181,9 @@ export function normalizeAiProfileConfig(value: unknown, index = 1): AiProfileCo
     endpoint: typeof input.endpoint === "string" ? input.endpoint.trim().slice(0, 2000) : preset.endpoint,
     apiKey: typeof input.apiKey === "string" ? input.apiKey.trim().slice(0, 8000) : "",
     model: typeof input.model === "string" ? input.model.trim().slice(0, 240) : preset.model,
+    availableModels: Array.isArray(input.availableModels)
+      ? [...new Set(input.availableModels.filter((item): item is string => typeof item === "string").map((item) => item.trim().slice(0, 240)).filter(Boolean))].slice(0, 500)
+      : [],
     thinkingMode: input.thinkingMode === "on" || input.thinkingMode === "off" ? input.thinkingMode : "auto",
     systemPrompt: typeof input.systemPrompt === "string" ? input.systemPrompt.slice(0, 16000) : preset.systemPrompt,
     temperature: clamp(input.temperature, 0, 2, 0.2),

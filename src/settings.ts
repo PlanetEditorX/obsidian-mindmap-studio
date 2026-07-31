@@ -1137,6 +1137,7 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
             profile.provider = provider;
             profile.endpoint = preset.endpoint;
             profile.model = preset.model;
+            profile.availableModels = [];
             if (!profile.systemPrompt.trim()) profile.systemPrompt = preset.systemPrompt;
             await this.plugin.saveSettings();
             this.display();
@@ -1151,7 +1152,12 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
         .addText((text) => text
         .setPlaceholder(endpointPlaceholder)
         .setValue(profile.endpoint)
-        .onChange(async (value) => { profile.endpoint = value.trim(); await this.plugin.saveSettings(); }));
+        .onChange(async (value) => {
+          const endpoint = value.trim();
+          if (profile.endpoint !== endpoint) profile.availableModels = [];
+          profile.endpoint = endpoint;
+          await this.plugin.saveSettings();
+        }));
       let apiKeyInput: HTMLInputElement | null = null;
       new Setting(body).setName("API 密钥").setDesc("留空仅适用于不需要鉴权的本地或代理接口。")
         .addText((text) => {
@@ -1180,11 +1186,13 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
         dataList.empty();
         [...new Set(models)].forEach((model) => dataList.createEl("option", { attr: { value: model } }));
       };
-      setModelOptions(modelPresets);
+      setModelOptions(profile.availableModels.length ? profile.availableModels : modelPresets);
       const modelSetting = new Setting(body)
         .setName("模型名称")
         .setDesc("可选择预设、点击“获取模型”读取服务端目录，或直接输入兼容模型 ID。");
+      let modelInput: TextComponent | null = null;
       modelSetting.addText((text) => {
+        modelInput = text;
         text.setValue(profile.model)
           .setPlaceholder(profile.provider === "freellmapi" ? "auto" : "模型 ID")
           .onChange(async (value) => { profile.model = value.trim(); await this.plugin.saveSettings(); });
@@ -1226,8 +1234,17 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
         fetchModelsButton.setText("获取中…");
         void this.plugin.getAiProfileModels(profile.id)
           .then((models) => {
-            setModelOptions(models);
-            new Notice(`已获取 ${models.length} 个模型；可在“模型名称”输入框中选择。`, 6000);
+            const defaultModel = AI_PROFILE_PRESETS[profile.provider].model;
+            const shouldSelectFirst = !profile.model || profile.model === defaultModel || !models.includes(profile.model);
+            profile.availableModels = models;
+            if (shouldSelectFirst) profile.model = models[0];
+            return this.plugin.saveSettings().then(() => {
+              setModelOptions(profile.availableModels);
+              if (shouldSelectFirst) modelInput?.setValue(profile.model);
+              new Notice(shouldSelectFirst
+                ? `已获取 ${models.length} 个模型，当前已切换为：${profile.model}`
+                : `已获取并缓存 ${models.length} 个模型，保留当前模型：${profile.model}`, 7000);
+            });
           })
           .catch((error) => {
             console.error("MindMap Studio AI model list failed", error);
