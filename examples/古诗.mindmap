@@ -4,11 +4,11 @@
   "layout": "right",
   "theme": "auto",
   "root": {
-    "id": "poetry-root",
+    "id": "example_poetry_root",
     "text": "古诗",
     "children": [
       {
-        "id": "tang-node",
+        "id": "example_tang_poetry_node",
         "text": "唐诗",
         "submap": {
           "path": "MindMap Assets/古诗/唐诗.mindmap",
@@ -17,14 +17,10 @@
         "children": []
       },
       {
-        "id": "song-node",
-        "text": "宋词",
+        "id": "example_song_poetry_node",
+        "text": "宋诗",
         "children": []
       }
     ]
-  },
-  "view": {
-    "mode": "mindmap",
-    "readOnly": false
   }
 }

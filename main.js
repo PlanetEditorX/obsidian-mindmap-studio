@@ -18340,33 +18340,10 @@ function shouldHideFileExplorerPath(path, settings) {
 }
 
 // src/utils/desktop-capture.ts
-function screenshotCommandCandidates(platform) {
-  if (platform === "darwin") return [{ command: "screencapture", args: ["-i", "-c"] }];
-  if (platform === "win32") return [
-    { command: "SnippingTool.exe", args: ["/clip"], detached: true },
-    { command: "explorer.exe", args: ["ms-screenclip:"], detached: true }
-  ];
-  return [
-    { command: "gnome-screenshot", args: ["-a", "-c"] },
-    { command: "spectacle", args: ["-r", "-b", "-n", "--clipboard"] },
-    { command: "flameshot", args: ["gui", "--clipboard"] }
-  ];
-}
 function copyBytesToArrayBuffer(bytes) {
   const buffer = new ArrayBuffer(bytes.byteLength);
   new Uint8Array(buffer).set(bytes);
   return buffer;
-}
-function pngFingerprint(bytes) {
-  var _a2;
-  if (!bytes.length) return "";
-  let hash = 2166136261;
-  const step = Math.max(1, Math.floor(bytes.length / 4096));
-  for (let index = 0; index < bytes.length; index += step) {
-    hash ^= (_a2 = bytes[index]) != null ? _a2 : 0;
-    hash = Math.imul(hash, 16777619);
-  }
-  return `${bytes.length}:${(hash >>> 0).toString(16)}`;
 }
 function getElectronRuntime() {
   const requireFunction = typeof window !== "undefined" ? window.require : void 0;
@@ -18405,20 +18382,10 @@ function getNodeCaptureRuntime() {
     const fs = requireFunction("node:fs/promises");
     const os = requireFunction("node:os");
     const path = requireFunction("node:path");
-    return { platform: processModule.platform, execFile: childProcess.execFile, spawn: childProcess.spawn, fs, os, path };
+    return { platform: processModule.platform, execFile: childProcess.execFile, fs, os, path };
   } catch (e) {
     return null;
   }
-}
-async function waitForClipboardImage(runtime, previousFingerprint, timeoutMs = 12e4) {
-  const started = Date.now();
-  while (Date.now() - started < timeoutMs) {
-    const image = runtime.clipboard.readImage();
-    const bytes = image.isEmpty() ? new Uint8Array() : image.toPNG();
-    if (bytes.length && pngFingerprint(bytes) !== previousFingerprint) return bytes;
-    await new Promise((resolve) => setTimeout(resolve, 250));
-  }
-  throw new Error("\u6CA1\u6709\u68C0\u6D4B\u5230\u65B0\u7684\u622A\u56FE\uFF1B\u53EF\u80FD\u5DF2\u53D6\u6D88\u622A\u56FE\u64CD\u4F5C");
 }
 function executeCaptureCommand(runtime, command, args) {
   return new Promise((resolve, reject) => {
@@ -18428,23 +18395,6 @@ function executeCaptureCommand(runtime, command, args) {
     });
   });
 }
-async function runScreenshotCommand(runtime, candidates) {
-  let lastError = "\u672A\u627E\u5230\u53EF\u7528\u622A\u56FE\u5DE5\u5177";
-  for (const candidate of candidates) {
-    try {
-      if (candidate.detached) {
-        const child = runtime.spawn(candidate.command, candidate.args, { detached: true, stdio: "ignore", windowsHide: true });
-        child.unref();
-      } else {
-        await executeCaptureCommand(runtime, candidate.command, candidate.args);
-      }
-      return;
-    } catch (error) {
-      lastError = error instanceof Error ? error.message : String(error);
-    }
-  }
-  throw new Error(`\u65E0\u6CD5\u542F\u52A8\u7CFB\u7EDF\u622A\u56FE\u5DE5\u5177\uFF1A${lastError}`);
-}
 function pngDataUrlToBytes(dataUrl) {
   var _a2;
   const encoded = dataUrl.replace(/^data:image\/png;base64,/, "");
@@ -18453,17 +18403,50 @@ function pngDataUrlToBytes(dataUrl) {
   const buffer = requireFunction("node:buffer");
   return new Uint8Array(buffer.Buffer.from(encoded, "base64"));
 }
-function captureEditorHtml(display, mode) {
+function normalizeBrowserDisplay(metrics) {
+  const width = Math.max(1, Math.round(Number.isFinite(metrics.width) ? Number(metrics.width) : 1));
+  const height = Math.max(1, Math.round(Number.isFinite(metrics.height) ? Number(metrics.height) : 1));
+  return {
+    id: 0,
+    bounds: {
+      x: Math.round(Number.isFinite(metrics.left) ? Number(metrics.left) : 0),
+      y: Math.round(Number.isFinite(metrics.top) ? Number(metrics.top) : 0),
+      width,
+      height
+    },
+    scaleFactor: Math.max(1, Number.isFinite(metrics.scaleFactor) ? Number(metrics.scaleFactor) : 1)
+  };
+}
+function getBrowserDisplay() {
+  const browserScreen = window.screen;
+  return normalizeBrowserDisplay({
+    left: browserScreen.availLeft,
+    top: browserScreen.availTop,
+    width: browserScreen.width,
+    height: browserScreen.height,
+    scaleFactor: window.devicePixelRatio
+  });
+}
+function pngBytesToDataUrl(bytes) {
+  var _a2;
+  const requireFunction = (_a2 = globalThis.require) != null ? _a2 : typeof window !== "undefined" ? window.require : void 0;
+  if (!requireFunction) throw new Error("\u5F53\u524D\u684C\u9762\u8FD0\u884C\u65F6\u65E0\u6CD5\u7F16\u7801\u622A\u56FE");
+  const buffer = requireFunction("node:buffer");
+  return `data:image/png;base64,${buffer.Buffer.from(bytes).toString("base64")}`;
+}
+function captureEditorHtml(display, mode, imageDataUrl = "screen.png", messageToken = "test-token") {
   const bounds = JSON.stringify(display.bounds);
   const captureMode = JSON.stringify(mode);
+  const source = JSON.stringify(imageDataUrl);
+  const token = JSON.stringify(messageToken);
   return `<!doctype html>
-<html lang="zh-CN"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'self' file: data:; img-src 'self' file: data:; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+<html lang="zh-CN"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data: file:; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
 <title>MindMap Studio \u622A\u56FE</title><style>
 *{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#111;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;user-select:none}
 #base,#annotations,#preview{position:fixed;inset:0;width:100%;height:100%}#base{z-index:0}#annotations{z-index:1;pointer-events:none}#preview{z-index:2;pointer-events:none}
-.shade{position:fixed;background:rgba(0,0,0,.52);z-index:3;pointer-events:none}.selection{position:fixed;border:2px solid #50a7ff;box-shadow:0 0 0 1px rgba(255,255,255,.65) inset;z-index:4;pointer-events:none}
+.shade{position:fixed;background:rgba(0,0,0,.52);z-index:3;pointer-events:none}.selection{position:fixed;border:3px solid #00a8ff;box-shadow:0 0 0 1px #fff,0 0 0 4px rgba(0,0,0,.48),0 0 18px rgba(0,168,255,.72);z-index:4;pointer-events:none}
 .drag-strip{position:absolute;left:0;right:0;top:-2px;height:12px;cursor:move;pointer-events:auto}.metrics{position:absolute;left:-2px;bottom:100%;margin-bottom:8px;background:rgba(15,23,42,.92);color:#fff;border:1px solid rgba(255,255,255,.22);border-radius:6px;padding:5px 8px;font-size:12px;white-space:nowrap;pointer-events:auto;cursor:move}
-.handle{position:absolute;width:12px;height:12px;background:#fff;border:2px solid #3798f2;border-radius:3px;pointer-events:auto}.nw{left:-7px;top:-7px;cursor:nwse-resize}.n{left:50%;top:-7px;transform:translateX(-50%);cursor:ns-resize}.ne{right:-7px;top:-7px;cursor:nesw-resize}.e{right:-7px;top:50%;transform:translateY(-50%);cursor:ew-resize}.se{right:-7px;bottom:-7px;cursor:nwse-resize}.s{left:50%;bottom:-7px;transform:translateX(-50%);cursor:ns-resize}.sw{left:-7px;bottom:-7px;cursor:nesw-resize}.w{left:-7px;top:50%;transform:translateY(-50%);cursor:ew-resize}
+.handle{position:absolute;width:14px;height:14px;background:#fff;border:3px solid #008ee6;border-radius:3px;box-shadow:0 1px 4px rgba(0,0,0,.65);pointer-events:auto}.nw{left:-7px;top:-7px;cursor:nwse-resize}.n{left:50%;top:-7px;transform:translateX(-50%);cursor:ns-resize}.ne{right:-7px;top:-7px;cursor:nesw-resize}.e{right:-7px;top:50%;transform:translateY(-50%);cursor:ew-resize}.se{right:-7px;bottom:-7px;cursor:nwse-resize}.s{left:50%;bottom:-7px;transform:translateX(-50%);cursor:ns-resize}.sw{left:-7px;bottom:-7px;cursor:nesw-resize}.w{left:-7px;top:50%;transform:translateY(-50%);cursor:ew-resize}
 #drawLayer{position:fixed;z-index:5;cursor:crosshair}.toolbar{position:fixed;z-index:8;display:flex;align-items:center;gap:4px;padding:6px;background:rgba(15,23,42,.96);border:1px solid rgba(255,255,255,.18);border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.42);white-space:nowrap}
 .toolbar button{height:34px;border:0;border-radius:7px;padding:0 10px;background:transparent;color:#e5edf8;font-size:12px;cursor:pointer}.toolbar button:hover{background:rgba(255,255,255,.12)}.toolbar button.active{background:#2563eb;color:#fff}.toolbar .sep{width:1px;height:22px;background:rgba(255,255,255,.18);margin:0 2px}.toolbar .primary{background:#2563eb}.toolbar .danger:hover{background:#b91c1c}
 #tip{position:fixed;right:14px;top:14px;z-index:9;color:#fff;background:rgba(15,23,42,.78);padding:7px 10px;border-radius:7px;font-size:12px;pointer-events:none}
@@ -18478,24 +18461,24 @@ function captureEditorHtml(display, mode) {
 <div id="tip"></div>
 <script>
 (() => {
-  const displayBounds=${bounds}; const captureMode=${captureMode}; const recognizeMode=captureMode==='capture-recognize'; const base=document.getElementById('base'); const ann=document.getElementById('annotations'); const preview=document.getElementById('preview');
+  const displayBounds=${bounds}; const captureMode=${captureMode}; const messageToken=${token}; const recognizeMode=captureMode==='capture-recognize'; const base=document.getElementById('base'); const ann=document.getElementById('annotations'); const preview=document.getElementById('preview');
   const bctx=base.getContext('2d'); const actx=ann.getContext('2d'); const pctx=preview.getContext('2d'); const selection=document.getElementById('selection'); const metrics=document.getElementById('metrics'); const toolbar=document.getElementById('toolbar'); const drawLayer=document.getElementById('drawLayer'); const tip=document.getElementById('tip');
-  const shades=['shadeTop','shadeLeft','shadeRight','shadeBottom'].map(id=>document.getElementById(id)); const dpr=Math.max(1,window.devicePixelRatio||1); const autoConfirmDelayMs=3000; let tool=''; let drawing=false; let start=null; let number=1; let drag=null; let selectionDraw=null; let autoConfirmTimer=null; let autoConfirmArmed=false;
+  const shades=['shadeTop','shadeLeft','shadeRight','shadeBottom'].map(id=>document.getElementById(id)); const dpr=Math.max(1,window.devicePixelRatio||1); const autoConfirmDelayMs=3000; let tool=''; let drawing=false; let start=null; let number=1; let drag=null; let selectionDraw=null; let autoConfirmTimer=null; let autoConfirmArmed=false; let pointerInsideSelection=false;
   let rect={x:Math.round(innerWidth*.18),y:Math.round(innerHeight*.16),w:Math.round(innerWidth*.64),h:Math.round(innerHeight*.62)}; const minSize=36; tip.textContent=recognizeMode?'\u62D6\u52A8\u9009\u62E9\u622A\u56FE\u8303\u56F4\uFF1B\u91CA\u653E\u540E 3 \u79D2\u81EA\u52A8\u5B8C\u6210\uFF0C\u5728\u9009\u533A\u5185\u79FB\u52A8\u9F20\u6807\u6216\u8C03\u6574\u8FB9\u6846\u53EF\u91CD\u7F6E\u8BA1\u65F6':'\u62D6\u52A8\u6216\u8C03\u6574\u84DD\u8272\u8FB9\u6846\uFF1B\u53CC\u51FB\u9009\u533A\u590D\u5236\u5E76\u63D2\u5165\u8282\u70B9\uFF0CEsc \u53D6\u6D88';
-  const image=new Image(); image.src='screen.png';
+  const image=new Image(); image.src=${source};
   function resizeCanvases(){for(const c of [base,ann,preview]){c.width=Math.round(innerWidth*dpr);c.height=Math.round(innerHeight*dpr);c.style.width=innerWidth+'px';c.style.height=innerHeight+'px'}; for(const c of [bctx,actx,pctx])c.setTransform(dpr,0,0,dpr,0,0); drawBase(); updateRect()}
   function drawBase(){if(!image.complete)return;bctx.clearRect(0,0,innerWidth,innerHeight);bctx.drawImage(image,0,0,innerWidth,innerHeight)}
   image.onload=()=>resizeCanvases(); window.addEventListener('resize',resizeCanvases);
   function clamp(){rect.w=Math.max(minSize,Math.min(innerWidth,rect.w));rect.h=Math.max(minSize,Math.min(innerHeight,rect.h));rect.x=Math.max(0,Math.min(innerWidth-rect.w,rect.x));rect.y=Math.max(0,Math.min(innerHeight-rect.h,rect.y))}
   function updateRect(){clamp();selection.style.left=rect.x+'px';selection.style.top=rect.y+'px';selection.style.width=rect.w+'px';selection.style.height=rect.h+'px';drawLayer.style.left=rect.x+'px';drawLayer.style.top=rect.y+'px';drawLayer.style.width=rect.w+'px';drawLayer.style.height=rect.h+'px';
     shades[0].style.cssText='left:0;top:0;width:100%;height:'+rect.y+'px';shades[1].style.cssText='left:0;top:'+rect.y+'px;width:'+rect.x+'px;height:'+rect.h+'px';shades[2].style.cssText='left:'+(rect.x+rect.w)+'px;top:'+rect.y+'px;width:'+(innerWidth-rect.x-rect.w)+'px;height:'+rect.h+'px';shades[3].style.cssText='left:0;top:'+(rect.y+rect.h)+'px;width:100%;height:'+(innerHeight-rect.y-rect.h)+'px';
-    metrics.textContent='X '+Math.round(displayBounds.x+rect.x)+'  Y '+Math.round(displayBounds.y+rect.y)+'  '+Math.round(rect.w)+' \xD7 '+Math.round(rect.h); placeToolbar()}
+    const coordinateScaleX=displayBounds.width/Math.max(1,innerWidth),coordinateScaleY=displayBounds.height/Math.max(1,innerHeight);metrics.textContent='X '+Math.round(displayBounds.x+rect.x*coordinateScaleX)+'  Y '+Math.round(displayBounds.y+rect.y*coordinateScaleY)+'  '+Math.round(rect.w*coordinateScaleX)+' \xD7 '+Math.round(rect.h*coordinateScaleY); placeToolbar()}
   function placeToolbar(){const tw=toolbar.offsetWidth||820,th=toolbar.offsetHeight||48;let left=Math.max(8,Math.min(innerWidth-tw-8,rect.x+rect.w/2-tw/2));let top=rect.y+rect.h+10;if(top+th>innerHeight-8)top=Math.max(8,rect.y-th-10);toolbar.style.left=left+'px';toolbar.style.top=top+'px'}
   function point(ev){return{x:ev.clientX,y:ev.clientY}}
   function localPoint(ev){return{x:ev.clientX-rect.x,y:ev.clientY-rect.y}}
   function insideRect(x,y){return x>=rect.x&&x<=rect.x+rect.w&&y>=rect.y&&y<=rect.y+rect.h}
   function clearAutoConfirm(){if(autoConfirmTimer!==null){clearTimeout(autoConfirmTimer);autoConfirmTimer=null}}
-  function scheduleAutoConfirm(){if(!recognizeMode||!autoConfirmArmed)return;clearAutoConfirm();autoConfirmTimer=setTimeout(()=>action('copy'),autoConfirmDelayMs)}
+  function scheduleAutoConfirm(){if(!recognizeMode||!autoConfirmArmed)return;clearAutoConfirm();autoConfirmTimer=setTimeout(()=>{if(pointerInsideSelection||drag||selectionDraw||drawing){scheduleAutoConfirm();return}action('copy')},autoConfirmDelayMs)}
   function armAutoConfirm(){if(!recognizeMode)return;autoConfirmArmed=true;scheduleAutoConfirm()}
   function resetAutoConfirm(){if(recognizeMode&&autoConfirmArmed)scheduleAutoConfirm()}
   function beginResize(ev,handle){ev.preventDefault();ev.stopPropagation();clearAutoConfirm();drag={kind:handle,start:point(ev),rect:{...rect}};window.addEventListener('pointermove',moveResize);window.addEventListener('pointerup',endResize,{once:true})}
@@ -18515,20 +18498,15 @@ function captureEditorHtml(display, mode) {
   drawLayer.addEventListener('pointerdown',ev=>{if(!tool)return;const p=localPoint(ev);if(tool==='text'){const text=prompt('\u8F93\u5165\u6587\u5B57');if(text){style(actx);actx.font='bold 24px sans-serif';actx.fillText(text,rect.x+p.x,rect.y+p.y)}return}if(tool==='number'){style(actx);actx.beginPath();actx.arc(rect.x+p.x,rect.y+p.y,14,0,Math.PI*2);actx.fill();actx.fillStyle='#fff';actx.font='bold 15px sans-serif';actx.textAlign='center';actx.textBaseline='middle';actx.fillText(String(number++),rect.x+p.x,rect.y+p.y);return}drawing=true;start=p;drawLayer.setPointerCapture(ev.pointerId);if(tool==='pen'||tool==='eraser'||tool==='mosaic')moveDraw(ev)});
   function moveDraw(ev){if(!drawing||!start)return;const p=localPoint(ev),a={x:rect.x+start.x,y:rect.y+start.y},b={x:rect.x+p.x,y:rect.y+p.y};if(tool==='pen'){style(actx);actx.beginPath();actx.moveTo(a.x,a.y);actx.lineTo(b.x,b.y);actx.stroke();start=p}else if(tool==='eraser'){actx.save();actx.globalCompositeOperation='destination-out';actx.lineWidth=24;actx.lineCap='round';actx.beginPath();actx.moveTo(a.x,a.y);actx.lineTo(b.x,b.y);actx.stroke();actx.restore();start=p}else if(tool==='mosaic'){mosaicAt(p);start=p}else{pctx.clearRect(0,0,innerWidth,innerHeight);style(pctx);if(tool==='shape')pctx.strokeRect(a.x,a.y,b.x-a.x,b.y-a.y);else if(tool==='arrow')drawArrow(pctx,a,b)}}
   drawLayer.addEventListener('pointermove',moveDraw);drawLayer.addEventListener('pointerup',()=>{if(!drawing)return;if(tool==='shape'||tool==='arrow')commitPreview();drawing=false;start=null});
-  window.__mmsExport=()=>{const scaleX=image.naturalWidth/innerWidth,scaleY=image.naturalHeight/innerHeight;const out=document.createElement('canvas');out.width=Math.max(1,Math.round(rect.w*scaleX));out.height=Math.max(1,Math.round(rect.h*scaleY));const ctx=out.getContext('2d');ctx.drawImage(image,rect.x*scaleX,rect.y*scaleY,rect.w*scaleX,rect.h*scaleY,0,0,out.width,out.height);ctx.drawImage(ann,rect.x*dpr,rect.y*dpr,rect.w*dpr,rect.h*dpr,0,0,out.width,out.height);return{dataUrl:out.toDataURL('image/png'),bounds:{x:Math.round(displayBounds.x+rect.x),y:Math.round(displayBounds.y+rect.y),width:Math.round(rect.w),height:Math.round(rect.h)}}};
-  function action(name){clearAutoConfirm();console.log('MMS_CAPTURE_ACTION:'+name)}toolbar.querySelectorAll('[data-action]').forEach(btn=>btn.addEventListener('click',()=>action(btn.dataset.action)));
-  document.addEventListener('pointermove',ev=>{if(recognizeMode&&autoConfirmArmed&&insideRect(ev.clientX,ev.clientY)&&!selectionDraw)resetAutoConfirm()});
+  window.__mmsExport=()=>{const scaleX=image.naturalWidth/innerWidth,scaleY=image.naturalHeight/innerHeight;const out=document.createElement('canvas');out.width=Math.max(1,Math.round(rect.w*scaleX));out.height=Math.max(1,Math.round(rect.h*scaleY));const ctx=out.getContext('2d');ctx.drawImage(image,rect.x*scaleX,rect.y*scaleY,rect.w*scaleX,rect.h*scaleY,0,0,out.width,out.height);ctx.drawImage(ann,rect.x*dpr,rect.y*dpr,rect.w*dpr,rect.h*dpr,0,0,out.width,out.height);return{dataUrl:out.toDataURL('image/png'),bounds:{x:Math.round(displayBounds.x+rect.x*displayBounds.width/Math.max(1,innerWidth)),y:Math.round(displayBounds.y+rect.y*displayBounds.height/Math.max(1,innerHeight)),width:Math.round(rect.w*displayBounds.width/Math.max(1,innerWidth)),height:Math.round(rect.h*displayBounds.height/Math.max(1,innerHeight))}}};
+  function action(name){clearAutoConfirm();const exported=name==='cancel'?undefined:window.__mmsExport();const message={type:'MMS_CAPTURE_ACTION',token:messageToken,action:name,exported};const target=window.opener&&!window.opener.closed?window.opener:(window.parent!==window?window.parent:null);if(target)target.postMessage(message,'*')}toolbar.querySelectorAll('[data-action]').forEach(btn=>btn.addEventListener('click',()=>action(btn.dataset.action)));
+  document.addEventListener('pointermove',ev=>{const inside=insideRect(ev.clientX,ev.clientY);if(inside!==pointerInsideSelection){pointerInsideSelection=inside;if(recognizeMode&&autoConfirmArmed)resetAutoConfirm()}else if(inside&&recognizeMode&&autoConfirmArmed&&!selectionDraw)resetAutoConfirm()});
   toolbar.addEventListener('pointermove',resetAutoConfirm);toolbar.addEventListener('pointerdown',resetAutoConfirm);
   document.addEventListener('dblclick',ev=>{if(captureMode==='capture'&&!tool&&insideRect(ev.clientX,ev.clientY)&&!ev.target.closest('.toolbar'))action('copy')});
   document.addEventListener('keydown',ev=>{if(ev.key==='Escape')action('cancel');if(ev.key==='Enter'&&!ev.shiftKey)action('copy')});
   updateRect();setTimeout(placeToolbar,50);
 })();
 <\/script></body></html>`;
-}
-function writePngToClipboard(runtime, bytes) {
-  var _a2, _b2, _c;
-  const image = (_a2 = runtime.nativeImage) == null ? void 0 : _a2.createFromBuffer(bytes);
-  if (image && !image.isEmpty()) (_c = (_b2 = runtime.clipboard).writeImage) == null ? void 0 : _c.call(_b2, image);
 }
 async function saveCaptureDownload(runtime, nodeRuntime, bytes) {
   var _a2, _b2;
@@ -18539,149 +18517,167 @@ async function saveCaptureDownload(runtime, nodeRuntime, bytes) {
   await nodeRuntime.fs.writeFile((selected == null ? void 0 : selected.filePath) || defaultPath, bytes);
   return true;
 }
-async function openPinnedCapture(runtime, nodeRuntime, bytes, bounds) {
-  var _a2, _b2;
-  const BrowserWindow = (_b2 = (_a2 = runtime.remote) == null ? void 0 : _a2.BrowserWindow) != null ? _b2 : runtime.BrowserWindow;
-  if (!BrowserWindow) throw new Error("\u5F53\u524D Obsidian \u684C\u9762\u8FD0\u884C\u65F6\u4E0D\u652F\u6301\u56FA\u5B9A\u622A\u56FE\u7A97\u53E3");
-  const directory = await nodeRuntime.fs.mkdtemp(nodeRuntime.path.join(nodeRuntime.os.tmpdir(), "mms-pin-"));
-  const imagePath = nodeRuntime.path.join(directory, "pin.png");
-  const htmlPath = nodeRuntime.path.join(directory, "pin.html");
-  const width = Math.max(180, Math.min(1200, bounds.width));
-  const height = Math.max(120, Math.min(900, bounds.height));
-  await nodeRuntime.fs.writeFile(imagePath, bytes);
-  await nodeRuntime.fs.writeFile(htmlPath, `<!doctype html><meta charset="utf-8"><style>*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#111}body{-webkit-app-region:drag}img{width:100%;height:100%;object-fit:contain;display:block}.close{position:fixed;right:6px;top:6px;width:26px;height:26px;border:0;border-radius:13px;background:rgba(0,0,0,.65);color:#fff;opacity:0;cursor:pointer;-webkit-app-region:no-drag}body:hover .close{opacity:1}</style><img src="pin.png"><button class="close" onclick="window.close()">\xD7</button>`);
-  const pinWindow = new BrowserWindow({
-    x: bounds.x,
-    y: bounds.y,
-    width,
-    height,
-    show: false,
-    frame: false,
-    transparent: false,
-    resizable: true,
-    movable: true,
-    fullscreenable: false,
-    skipTaskbar: true,
-    alwaysOnTop: true,
-    backgroundColor: "#111111",
-    webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true }
-  });
-  pinWindow.once("closed", () => {
-    void nodeRuntime.fs.rm(directory, { recursive: true, force: true });
-  });
-  await pinWindow.loadFile(htmlPath);
-  pinWindow.show();
-  pinWindow.focus();
+function nativeCaptureCommandCandidates(platform, display, imagePath) {
+  const { x, y, width, height } = display.bounds;
+  if (platform === "darwin") {
+    return [{ command: "screencapture", args: ["-x", `-R${x},${y},${width},${height}`, imagePath] }];
+  }
+  if (platform === "linux") {
+    const geometry = `${width}x${height}${x >= 0 ? "+" : ""}${x}${y >= 0 ? "+" : ""}${y}`;
+    return [
+      { command: "grim", args: ["-g", `${x},${y} ${width}x${height}`, imagePath] },
+      { command: "import", args: ["-window", "root", "-crop", geometry, imagePath] },
+      { command: "gnome-screenshot", args: ["-f", imagePath] },
+      { command: "spectacle", args: ["-b", "-n", "-o", imagePath] }
+    ];
+  }
+  return [];
 }
-async function captureWithEditor(runtime, nodeRuntime, hideObsidian, mode) {
-  var _a2, _b2, _c, _d, _e, _f, _g;
-  const BrowserWindow = (_b2 = (_a2 = runtime.remote) == null ? void 0 : _a2.BrowserWindow) != null ? _b2 : runtime.BrowserWindow;
-  const screen = (_d = (_c = runtime.remote) == null ? void 0 : _c.screen) != null ? _d : runtime.screen;
-  if (!BrowserWindow || !screen || !runtime.desktopCapturer) return null;
-  const windowHandle = getCurrentObsidianWindow(runtime);
-  const cursor = screen.getCursorScreenPoint();
-  const display = screen.getDisplayNearestPoint(cursor);
-  const scaleFactor = Math.max(1, (_e = display.scaleFactor) != null ? _e : 1);
+async function runNativeCaptureCandidates(runtime, candidates, imagePath) {
+  let lastError = "\u672A\u627E\u5230\u53EF\u7528\u7684\u684C\u9762\u6293\u5C4F\u547D\u4EE4";
+  for (const candidate of candidates) {
+    try {
+      await executeCaptureCommand(runtime, candidate.command, candidate.args);
+      const bytes = await runtime.fs.readFile(imagePath);
+      if (bytes.length) return bytes;
+      lastError = `${candidate.command} \u6CA1\u6709\u751F\u6210\u622A\u56FE`;
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : String(error);
+    }
+  }
+  throw new Error(lastError);
+}
+async function captureWindowsDisplay(runtime, directory, imagePath, fallbackDisplay, hideForegroundWindow) {
+  const scriptPath = runtime.path.join(directory, "capture-screen.ps1");
+  const metadataPath = runtime.path.join(directory, "display.json");
+  const script = `param([string]$ImagePath,[string]$MetadataPath,[int]$HideForegroundWindow)
+$ErrorActionPreference = 'Stop'
+Add-Type -AssemblyName System.Windows.Forms
+Add-Type -AssemblyName System.Drawing
+Add-Type @"
+using System;
+using System.Runtime.InteropServices;
+public static class MindMapStudioCaptureWindow {
+  [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+  [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+}
+"@
+$foreground = [IntPtr]::Zero
+if ($HideForegroundWindow) {
+  $foreground = [MindMapStudioCaptureWindow]::GetForegroundWindow()
+  if ($foreground -ne [IntPtr]::Zero) {
+    [void][MindMapStudioCaptureWindow]::ShowWindow($foreground, 6)
+    Start-Sleep -Milliseconds 180
+  }
+}
+try {
+  $cursor = [System.Windows.Forms.Cursor]::Position
+  $screen = [System.Windows.Forms.Screen]::FromPoint($cursor)
+  $bounds = $screen.Bounds
+  $bitmap = New-Object System.Drawing.Bitmap -ArgumentList $bounds.Width, $bounds.Height
+  $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
+  try {
+    $graphics.CopyFromScreen($bounds.X, $bounds.Y, 0, 0, $bounds.Size)
+    $bitmap.Save($ImagePath, [System.Drawing.Imaging.ImageFormat]::Png)
+  } finally {
+    $graphics.Dispose()
+    $bitmap.Dispose()
+  }
+  $metadata = @{ x = $bounds.X; y = $bounds.Y; width = $bounds.Width; height = $bounds.Height; scaleFactor = 1 } | ConvertTo-Json -Compress
+  [System.IO.File]::WriteAllText($MetadataPath, $metadata, (New-Object System.Text.UTF8Encoding($false)))
+} finally {
+  if ($HideForegroundWindow -and $foreground -ne [IntPtr]::Zero) {
+    [void][MindMapStudioCaptureWindow]::ShowWindow($foreground, 9)
+    Start-Sleep -Milliseconds 80
+  }
+}
+`;
+  await runtime.fs.writeFile(scriptPath, script);
+  let lastError = "PowerShell \u684C\u9762\u6293\u5C4F\u5931\u8D25";
+  for (const command of ["powershell.exe", "pwsh.exe"]) {
+    try {
+      await executeCaptureCommand(runtime, command, [
+        "-NoLogo",
+        "-NoProfile",
+        "-NonInteractive",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        scriptPath,
+        "-ImagePath",
+        imagePath,
+        "-MetadataPath",
+        metadataPath,
+        "-HideForegroundWindow",
+        hideForegroundWindow ? "1" : "0"
+      ]);
+      const [bytes, metadataBytes] = await Promise.all([
+        runtime.fs.readFile(imagePath),
+        runtime.fs.readFile(metadataPath)
+      ]);
+      const metadata = JSON.parse(new TextDecoder().decode(metadataBytes).replace(/^\uFEFF/, ""));
+      if (!bytes.length) throw new Error("PowerShell \u6CA1\u6709\u751F\u6210\u622A\u56FE");
+      return { bytes, display: normalizeBrowserDisplay(metadata) };
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : String(error);
+    }
+  }
+  throw new Error(`${lastError}\uFF1B\u6D4F\u89C8\u5668\u663E\u793A\u5668\u8303\u56F4\u4E3A ${fallbackDisplay.bounds.width}\xD7${fallbackDisplay.bounds.height}`);
+}
+async function captureDisplayWithNativeCommand(runtime, display, hideForegroundWindow) {
+  const directory = await runtime.fs.mkdtemp(runtime.path.join(runtime.os.tmpdir(), "mms-capture-source-"));
+  const imagePath = runtime.path.join(directory, "screen.png");
+  try {
+    if (runtime.platform === "win32") {
+      return await captureWindowsDisplay(runtime, directory, imagePath, display, hideForegroundWindow);
+    }
+    const bytes = await runNativeCaptureCandidates(
+      runtime,
+      nativeCaptureCommandCandidates(runtime.platform, display, imagePath),
+      imagePath
+    );
+    return { bytes, display };
+  } finally {
+    await runtime.fs.rm(directory, { recursive: true, force: true });
+  }
+}
+async function captureDisplayWithRendererElectron(runtime, display) {
+  var _a2, _b2, _c;
+  if (!runtime.desktopCapturer) return null;
+  const scaleFactor = Math.max(1, (_a2 = display.scaleFactor) != null ? _a2 : 1);
+  const sources = await runtime.desktopCapturer.getSources({
+    types: ["screen"],
+    thumbnailSize: {
+      width: Math.max(1, Math.round(display.bounds.width * scaleFactor)),
+      height: Math.max(1, Math.round(display.bounds.height * scaleFactor))
+    },
+    fetchWindowIcons: false
+  });
+  const source = (_b2 = sources.find((item) => {
+    var _a3;
+    return String((_a3 = item.display_id) != null ? _a3 : "") === String(display.id);
+  })) != null ? _b2 : sources.find((item) => !item.thumbnail.isEmpty());
+  const bytes = (_c = source == null ? void 0 : source.thumbnail.toPNG()) != null ? _c : new Uint8Array();
+  return bytes.length ? { bytes, display } : null;
+}
+async function captureDisplaySource(electronRuntime, nodeRuntime, hideObsidian) {
+  const display = getBrowserDisplay();
+  const windowHandle = getCurrentObsidianWindow(electronRuntime);
   try {
     if (hideObsidian && windowHandle && !windowHandle.isDestroyed()) {
       windowHandle.minimize();
       await waitForWindowMinimized(windowHandle);
       await new Promise((resolve) => setTimeout(resolve, 120));
     }
-    const sources = await runtime.desktopCapturer.getSources({
-      types: ["screen"],
-      thumbnailSize: {
-        width: Math.max(1, Math.round(display.bounds.width * scaleFactor)),
-        height: Math.max(1, Math.round(display.bounds.height * scaleFactor))
-      },
-      fetchWindowIcons: false
-    });
-    const source = (_f = sources.find((item) => {
-      var _a3;
-      return String((_a3 = item.display_id) != null ? _a3 : "") === String(display.id);
-    })) != null ? _f : sources[0];
-    const screenshotBytes = (_g = source == null ? void 0 : source.thumbnail.toPNG()) != null ? _g : new Uint8Array();
-    if (!screenshotBytes.length) return null;
-    const directory = await nodeRuntime.fs.mkdtemp(nodeRuntime.path.join(nodeRuntime.os.tmpdir(), "mms-capture-"));
-    const imagePath = nodeRuntime.path.join(directory, "screen.png");
-    const htmlPath = nodeRuntime.path.join(directory, "capture.html");
-    await nodeRuntime.fs.writeFile(imagePath, screenshotBytes);
-    await nodeRuntime.fs.writeFile(htmlPath, captureEditorHtml(display, mode));
-    const captureWindow = new BrowserWindow({
-      x: display.bounds.x,
-      y: display.bounds.y,
-      width: display.bounds.width,
-      height: display.bounds.height,
-      show: false,
-      frame: false,
-      transparent: false,
-      resizable: false,
-      movable: false,
-      fullscreenable: false,
-      skipTaskbar: true,
-      alwaysOnTop: true,
-      backgroundColor: "#111111",
-      webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true }
-    });
-    return await new Promise((resolve, reject) => {
-      let settled = false;
-      let finishing = false;
-      const finish = async (action) => {
-        if (settled || finishing) return;
-        finishing = true;
-        try {
-          const exported = await captureWindow.webContents.executeJavaScript("window.__mmsExport()");
-          const bytes = pngDataUrlToBytes(exported.dataUrl);
-          if (action === "download") {
-            const saved = await saveCaptureDownload(runtime, nodeRuntime, bytes);
-            if (!saved) {
-              finishing = false;
-              return;
-            }
-          } else if (action === "pin") {
-            await openPinnedCapture(runtime, nodeRuntime, bytes, exported.bounds);
-          } else if (action === "copy" || action === "recognize-copy") {
-            writePngToClipboard(runtime, bytes);
-          }
-          settled = true;
-          if (!captureWindow.isDestroyed()) captureWindow.close();
-          resolve({
-            blob: new Blob([copyBytesToArrayBuffer(bytes)], { type: "image/png" }),
-            suggestedName: "mindmap-screenshot.png",
-            action
-          });
-        } catch (error) {
-          settled = true;
-          if (!captureWindow.isDestroyed()) captureWindow.destroy();
-          reject(error);
-        }
-      };
-      captureWindow.webContents.on("console-message", (_event, _level, message) => {
-        if (!message.startsWith("MMS_CAPTURE_ACTION:")) return;
-        const action = message.slice("MMS_CAPTURE_ACTION:".length);
-        if (action === "cancel") {
-          settled = true;
-          if (!captureWindow.isDestroyed()) captureWindow.close();
-          reject(new Error("\u53D6\u6D88\u622A\u56FE\u64CD\u4F5C"));
-          return;
-        }
-        if (action === "copy" || action === "recognize-copy" || action === "download" || action === "pin") {
-          void finish(action);
-        }
-      });
-      captureWindow.once("closed", () => {
-        void nodeRuntime.fs.rm(directory, { recursive: true, force: true });
-        if (!settled) reject(new Error("\u53D6\u6D88\u622A\u56FE\u64CD\u4F5C"));
-      });
-      void captureWindow.loadFile(htmlPath).then(() => {
-        captureWindow.show();
-        captureWindow.focus();
-      }).catch((error) => {
-        settled = true;
-        if (!captureWindow.isDestroyed()) captureWindow.destroy();
-        reject(error);
-      });
-    });
+    try {
+      const hideWithNativeCommand = hideObsidian && (!windowHandle || windowHandle.isDestroyed());
+      return await captureDisplayWithNativeCommand(nodeRuntime, display, hideWithNativeCommand);
+    } catch (nativeError) {
+      const rendererCapture = await captureDisplayWithRendererElectron(electronRuntime, display);
+      if (rendererCapture) return rendererCapture;
+      const reason = nativeError instanceof Error ? nativeError.message : String(nativeError);
+      throw new Error(`\u65E0\u6CD5\u542F\u52A8 MindMap Studio \u622A\u56FE\u7F16\u8F91\u5668\uFF1A\u6574\u5C4F\u6293\u53D6\u5931\u8D25\uFF08${reason}\uFF09`);
+    }
   } finally {
     if (hideObsidian && windowHandle && !windowHandle.isDestroyed()) {
       windowHandle.restore();
@@ -18690,38 +18686,180 @@ async function captureWithEditor(runtime, nodeRuntime, hideObsidian, mode) {
     }
   }
 }
-async function captureWithSystemTool(runtime, nodeRuntime, hideObsidian) {
-  const beforeImage = runtime.clipboard.readImage();
-  const beforeBytes = beforeImage.isEmpty() ? new Uint8Array() : beforeImage.toPNG();
-  const beforeFingerprint = pngFingerprint(beforeBytes);
-  const windowHandle = getCurrentObsidianWindow(runtime);
+function openCaptureEditorHost(html, display) {
+  const windowName = `mindmap-studio-capture-${Date.now()}`;
+  const features = [
+    "popup=yes",
+    "noopener=no",
+    "frame=no",
+    "resizable=no",
+    "scrollbars=no",
+    "alwaysOnTop=yes",
+    "skipTaskbar=yes",
+    `left=${display.bounds.x}`,
+    `top=${display.bounds.y}`,
+    `width=${display.bounds.width}`,
+    `height=${display.bounds.height}`
+  ].join(",");
+  let popup = null;
   try {
-    if (hideObsidian && windowHandle && !windowHandle.isDestroyed()) {
-      windowHandle.minimize();
-      await waitForWindowMinimized(windowHandle);
+    popup = window.open("about:blank", windowName, features);
+    if (popup) {
+      popup.document.open();
+      popup.document.write(html);
+      popup.document.close();
+      popup.moveTo(display.bounds.x, display.bounds.y);
+      popup.resizeTo(display.bounds.width, display.bounds.height);
+      popup.focus();
+      return {
+        messageSource: popup,
+        isClosed: () => (popup == null ? void 0 : popup.closed) !== false,
+        close: () => {
+          if (popup && !popup.closed) popup.close();
+        }
+      };
     }
-    await new Promise((resolve) => setTimeout(resolve, hideObsidian ? 350 : 50));
-    await runScreenshotCommand(nodeRuntime, screenshotCommandCandidates(nodeRuntime.platform));
-    const bytes = await waitForClipboardImage(runtime, beforeFingerprint);
-    return {
-      blob: new Blob([copyBytesToArrayBuffer(bytes)], { type: "image/png" }),
-      suggestedName: "mindmap-screenshot.png",
-      action: "copy"
-    };
-  } finally {
-    if (hideObsidian && windowHandle && !windowHandle.isDestroyed()) {
-      windowHandle.restore();
-      windowHandle.show();
-      windowHandle.focus();
-    }
+  } catch (e) {
+    if (popup && !popup.closed) popup.close();
   }
+  const iframe = document.createElement("iframe");
+  iframe.className = "mindmap-studio-capture-host";
+  iframe.setAttribute("title", "MindMap Studio \u622A\u56FE\u7F16\u8F91\u5668");
+  iframe.setAttribute("allow", "clipboard-write");
+  Object.assign(iframe.style, {
+    position: "fixed",
+    inset: "0",
+    width: "100vw",
+    height: "100vh",
+    border: "0",
+    zIndex: "2147483647",
+    background: "#111"
+  });
+  iframe.srcdoc = html;
+  document.body.appendChild(iframe);
+  const messageSource = iframe.contentWindow;
+  if (!messageSource) {
+    iframe.remove();
+    throw new Error("\u65E0\u6CD5\u521B\u5EFA\u622A\u56FE\u8986\u76D6\u5C42\u7A97\u53E3");
+  }
+  return {
+    messageSource,
+    isClosed: () => !iframe.isConnected,
+    close: () => iframe.remove()
+  };
+}
+async function writePngToClipboard(runtime, bytes) {
+  var _a2, _b2;
+  const image = (_a2 = runtime.nativeImage) == null ? void 0 : _a2.createFromBuffer(bytes);
+  if (image && !image.isEmpty() && runtime.clipboard.writeImage) {
+    runtime.clipboard.writeImage(image);
+    return;
+  }
+  if (typeof ClipboardItem !== "undefined" && ((_b2 = navigator.clipboard) == null ? void 0 : _b2.write)) {
+    await navigator.clipboard.write([new ClipboardItem({ "image/png": new Blob([copyBytesToArrayBuffer(bytes)], { type: "image/png" }) })]);
+    return;
+  }
+  throw new Error("\u5F53\u524D\u684C\u9762\u8FD0\u884C\u65F6\u65E0\u6CD5\u628A\u622A\u56FE\u5199\u5165\u7CFB\u7EDF\u526A\u8D34\u677F");
+}
+function openPinnedCapture(bytes, bounds) {
+  const width = Math.max(180, Math.min(1200, bounds.width));
+  const height = Math.max(120, Math.min(900, bounds.height));
+  const pinWindow = window.open("about:blank", `mindmap-studio-pin-${Date.now()}`, [
+    "popup=yes",
+    "noopener=no",
+    "frame=no",
+    "resizable=yes",
+    "alwaysOnTop=yes",
+    "skipTaskbar=yes",
+    `left=${bounds.x}`,
+    `top=${bounds.y}`,
+    `width=${width}`,
+    `height=${height}`
+  ].join(","));
+  if (!pinWindow) throw new Error("\u5F53\u524D\u684C\u9762\u8FD0\u884C\u65F6\u963B\u6B62\u4E86\u56FA\u5B9A\u622A\u56FE\u7A97\u53E3");
+  const source = pngBytesToDataUrl(bytes);
+  pinWindow.document.open();
+  pinWindow.document.write(`<!doctype html><meta charset="utf-8"><title>\u56FA\u5B9A\u622A\u56FE</title><style>*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#111}body{-webkit-app-region:drag}img{width:100%;height:100%;object-fit:contain;display:block}.close{position:fixed;right:6px;top:6px;width:28px;height:28px;border:0;border-radius:14px;background:rgba(0,0,0,.72);color:#fff;opacity:0;cursor:pointer;-webkit-app-region:no-drag}body:hover .close{opacity:1}</style><img src="${source}"><button class="close" onclick="window.close()">\xD7</button>`);
+  pinWindow.document.close();
+  pinWindow.moveTo(bounds.x, bounds.y);
+  pinWindow.resizeTo(width, height);
+  pinWindow.focus();
+}
+async function editCapturedDisplay(runtime, nodeRuntime, captured, mode) {
+  const token = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const html = captureEditorHtml(captured.display, mode, pngBytesToDataUrl(captured.bytes), token);
+  const host = openCaptureEditorHost(html, captured.display);
+  return await new Promise((resolve, reject) => {
+    let settled = false;
+    let finishing = false;
+    let closeWatcher = 0;
+    const cleanup = () => {
+      window.removeEventListener("message", onMessage);
+      if (closeWatcher) window.clearInterval(closeWatcher);
+    };
+    const cancel = () => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      host.close();
+      reject(new Error("\u53D6\u6D88\u622A\u56FE\u64CD\u4F5C"));
+    };
+    const finish = async (message) => {
+      if (settled || finishing || !message.exported || message.action === "cancel") return;
+      const action = message.action;
+      finishing = true;
+      try {
+        const bytes = pngDataUrlToBytes(message.exported.dataUrl);
+        if (action === "download") {
+          const saved = await saveCaptureDownload(runtime, nodeRuntime, bytes);
+          if (!saved) {
+            finishing = false;
+            return;
+          }
+        } else if (action === "pin") {
+          openPinnedCapture(bytes, message.exported.bounds);
+        } else if (action === "copy" || action === "recognize-copy") {
+          await writePngToClipboard(runtime, bytes);
+        }
+        settled = true;
+        cleanup();
+        host.close();
+        resolve({
+          blob: new Blob([copyBytesToArrayBuffer(bytes)], { type: "image/png" }),
+          suggestedName: "mindmap-screenshot.png",
+          action
+        });
+      } catch (error) {
+        settled = true;
+        cleanup();
+        host.close();
+        reject(error);
+      }
+    };
+    const onMessage = (event) => {
+      if (event.source !== host.messageSource || !event.data || typeof event.data !== "object") return;
+      const message = event.data;
+      if (message.type !== "MMS_CAPTURE_ACTION" || message.token !== token || typeof message.action !== "string") return;
+      if (message.action === "cancel") {
+        cancel();
+        return;
+      }
+      if (message.action === "copy" || message.action === "recognize-copy" || message.action === "download" || message.action === "pin") {
+        void finish(message);
+      }
+    };
+    window.addEventListener("message", onMessage);
+    closeWatcher = window.setInterval(() => {
+      if (!settled && host.isClosed()) cancel();
+    }, 250);
+  });
 }
 async function captureDesktopScreenshot(hideObsidian, mode = "capture") {
   const electronRuntime = getElectronRuntime();
   const nodeRuntime = getNodeCaptureRuntime();
   if (!electronRuntime || !nodeRuntime) throw new Error("\u622A\u56FE\u4EC5\u652F\u6301 Obsidian \u684C\u9762\u7AEF");
-  const edited = await captureWithEditor(electronRuntime, nodeRuntime, hideObsidian, mode);
-  return edited != null ? edited : captureWithSystemTool(electronRuntime, nodeRuntime, hideObsidian);
+  const captured = await captureDisplaySource(electronRuntime, nodeRuntime, hideObsidian);
+  return editCapturedDisplay(electronRuntime, nodeRuntime, captured, mode);
 }
 
 // src/vision/local-ocr.ts

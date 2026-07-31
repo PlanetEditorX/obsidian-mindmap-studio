@@ -8344,7 +8344,7 @@ export function appearanceFromThemePreset(id: MindMapThemePresetId): MindMapAppe
 
 ## `src/utils/desktop-capture.ts`
 
-桌面截图覆盖层、选区标注、固定窗口与系统截图兼容回退。
+桌面截图覆盖层、选区标注、固定窗口与本机静默抓屏回退。
 
 ### 类型 `DesktopCaptureMode`
 
@@ -8448,7 +8448,7 @@ interface ElectronCaptureRuntime
 
 ### 接口 `ElectronWindowRuntime`
 
-源码：`src/utils/desktop-capture.ts:113`
+源码：`src/utils/desktop-capture.ts:112`
 
 Electron 主窗口控制与主进程 API 所需的最小运行时接口。
 
@@ -8458,7 +8458,7 @@ interface ElectronWindowRuntime
 
 ### 接口 `ElectronWindowHandle`
 
-源码：`src/utils/desktop-capture.ts:121`
+源码：`src/utils/desktop-capture.ts:120`
 
 截图前临时最小化、截图后恢复所需的主窗口接口。
 
@@ -8468,7 +8468,7 @@ interface ElectronWindowHandle
 
 ### 接口 `NodeCaptureRuntime`
 
-源码：`src/utils/desktop-capture.ts:131`
+源码：`src/utils/desktop-capture.ts:130`
 
 桌面截图命令使用的最小 Node.js 运行时接口。
 
@@ -8476,19 +8476,9 @@ interface ElectronWindowHandle
 interface NodeCaptureRuntime
 ```
 
-### 函数 `screenshotCommandCandidates`
-
-源码：`src/utils/desktop-capture.ts:159`
-
-返回当前桌面平台对应的截图命令候选，按优先级依次尝试。
-
-```ts
-export function screenshotCommandCandidates(platform: string): Array<
-```
-
 ### 函数 `copyBytesToArrayBuffer`
 
-源码：`src/utils/desktop-capture.ts:173`
+源码：`src/utils/desktop-capture.ts:154`
 
 将任意 Uint8Array 复制为 Blob 接受的普通 ArrayBuffer，兼容 SharedArrayBuffer 类型声明。
 
@@ -8496,19 +8486,9 @@ export function screenshotCommandCandidates(platform: string): Array<
 export function copyBytesToArrayBuffer(bytes: Uint8Array): ArrayBuffer
 ```
 
-### 函数 `pngFingerprint`
-
-源码：`src/utils/desktop-capture.ts:180`
-
-将剪贴板 PNG 二进制转换为稳定摘要，用于检测截图是否产生了新图片。
-
-```ts
-export function pngFingerprint(bytes: Uint8Array): string
-```
-
 ### 函数 `getElectronRuntime`
 
-源码：`src/utils/desktop-capture.ts:192`
+源码：`src/utils/desktop-capture.ts:161`
 
 从 Obsidian 桌面端获取 Electron API；移动端或受限环境返回 null。
 
@@ -8518,7 +8498,7 @@ function getElectronRuntime(): ElectronCaptureRuntime | null
 
 ### 函数 `getCurrentObsidianWindow`
 
-源码：`src/utils/desktop-capture.ts:213`
+源码：`src/utils/desktop-capture.ts:182`
 
 从 Electron 的新旧渲染器接口中取得当前 Obsidian 主窗口。
 
@@ -8528,7 +8508,7 @@ function getCurrentObsidianWindow(runtime: ElectronCaptureRuntime): ElectronWind
 
 ### 函数 `waitForWindowMinimized`
 
-源码：`src/utils/desktop-capture.ts:221`
+源码：`src/utils/desktop-capture.ts:190`
 
 等待窗口完成最小化，避免截图源中仍包含 Obsidian 窗口。
 
@@ -8538,7 +8518,7 @@ async function waitForWindowMinimized(windowHandle: ElectronWindowHandle): Promi
 
 ### 函数 `getNodeCaptureRuntime`
 
-源码：`src/utils/desktop-capture.ts:229`
+源码：`src/utils/desktop-capture.ts:198`
 
 从 Obsidian 桌面端按需获取 Node.js API，避免移动端加载插件时静态引用 Node 模块。
 
@@ -8546,19 +8526,9 @@ async function waitForWindowMinimized(windowHandle: ElectronWindowHandle): Promi
 function getNodeCaptureRuntime(): NodeCaptureRuntime | null
 ```
 
-### 函数 `waitForClipboardImage`
-
-源码：`src/utils/desktop-capture.ts:246`
-
-等待系统截图工具把一张新图片写入剪贴板。
-
-```ts
-async function waitForClipboardImage(runtime: ElectronCaptureRuntime, previousFingerprint: string, timeoutMs = 120_000): Promise<Uint8Array>
-```
-
 ### 函数 `executeCaptureCommand`
 
-源码：`src/utils/desktop-capture.ts:258`
+源码：`src/utils/desktop-capture.ts:215`
 
 使用 execFile 执行一个截图候选命令。
 
@@ -8566,19 +8536,9 @@ async function waitForClipboardImage(runtime: ElectronCaptureRuntime, previousFi
 function executeCaptureCommand(runtime: NodeCaptureRuntime, command: string, args: string[]): Promise<void>
 ```
 
-### 函数 `runScreenshotCommand`
-
-源码：`src/utils/desktop-capture.ts:268`
-
-执行系统截图命令；交互式命令失败时继续尝试下一个候选。
-
-```ts
-async function runScreenshotCommand( runtime: NodeCaptureRuntime, candidates: Array<
-```
-
 ### 函数 `pngDataUrlToBytes`
 
-源码：`src/utils/desktop-capture.ts:290`
+源码：`src/utils/desktop-capture.ts:225`
 
 将 data URL 中的 PNG 转成二进制。
 
@@ -8586,29 +8546,79 @@ async function runScreenshotCommand( runtime: NodeCaptureRuntime, candidates: Ar
 function pngDataUrlToBytes(dataUrl: string): Uint8Array
 ```
 
+### 接口 `CaptureEditorMessage`
+
+源码：`src/utils/desktop-capture.ts:235`
+
+截图编辑器向宿主窗口发送的消息。
+
+```ts
+interface CaptureEditorMessage
+```
+
+### 接口 `BrowserDisplayMetrics`
+
+源码：`src/utils/desktop-capture.ts:246`
+
+浏览器渲染器可直接提供的显示器信息。
+
+```ts
+interface BrowserDisplayMetrics
+```
+
+### 接口 `CaptureEditorHost`
+
+源码：`src/utils/desktop-capture.ts:255`
+
+截图覆盖层宿主，可由独立窗口或 Obsidian 内嵌 iframe 提供。
+
+```ts
+interface CaptureEditorHost
+```
+
+### 函数 `normalizeBrowserDisplay`
+
+源码：`src/utils/desktop-capture.ts:262`
+
+将浏览器显示器数据规范化为可用于截图和全局坐标显示的边界。
+
+```ts
+export function normalizeBrowserDisplay(metrics: BrowserDisplayMetrics): ElectronDisplay
+```
+
+### 函数 `getBrowserDisplay`
+
+源码：`src/utils/desktop-capture.ts:278`
+
+读取鼠标所在 Obsidian 窗口对应的浏览器显示器信息，不依赖 Electron 主进程 screen API。
+
+```ts
+function getBrowserDisplay(): ElectronDisplay
+```
+
+### 函数 `pngBytesToDataUrl`
+
+源码：`src/utils/desktop-capture.ts:290`
+
+将 PNG 二进制编码为可安全传给独立覆盖层的 data URL。
+
+```ts
+function pngBytesToDataUrl(bytes: Uint8Array): string
+```
+
 ### 函数 `captureEditorHtml`
 
-源码：`src/utils/desktop-capture.ts:300`
+源码：`src/utils/desktop-capture.ts:299`
 
 生成截图覆盖层页面；普通截图双击确认，截图并识别按三秒空闲计时确认。
 
 ```ts
-function captureEditorHtml(display: ElectronDisplay, mode: DesktopCaptureMode): string
-```
-
-### 函数 `writePngToClipboard`
-
-源码：`src/utils/desktop-capture.ts:374`
-
-将裁剪结果写入系统剪贴板。
-
-```ts
-function writePngToClipboard(runtime: ElectronCaptureRuntime, bytes: Uint8Array): void
+export function captureEditorHtml(display: ElectronDisplay, mode: DesktopCaptureMode, imageDataUrl = "screen.png", messageToken = "test-token"): string
 ```
 
 ### 函数 `saveCaptureDownload`
 
-源码：`src/utils/desktop-capture.ts:380`
+源码：`src/utils/desktop-capture.ts:375`
 
 保存截图到用户选择的位置；取消保存时仍返回 false。
 
@@ -8616,41 +8626,111 @@ function writePngToClipboard(runtime: ElectronCaptureRuntime, bytes: Uint8Array)
 async function saveCaptureDownload(runtime: ElectronCaptureRuntime, nodeRuntime: NodeCaptureRuntime, bytes: Uint8Array): Promise<boolean>
 ```
 
+### 函数 `nativeCaptureCommandCandidates`
+
+源码：`src/utils/desktop-capture.ts:387`
+
+返回当前平台用于静默抓取显示器图像的命令候选，不启动系统交互式选区。
+
+```ts
+export function nativeCaptureCommandCandidates( platform: string, display: ElectronDisplay, imagePath: string ): Array<
+```
+
+### 函数 `runNativeCaptureCandidates`
+
+源码：`src/utils/desktop-capture.ts:409`
+
+执行候选命令，直到真正生成非空 PNG 文件。
+
+```ts
+async function runNativeCaptureCandidates( runtime: NodeCaptureRuntime, candidates: Array<
+```
+
+### 函数 `captureWindowsDisplay`
+
+源码：`src/utils/desktop-capture.ts:429`
+
+Windows 使用 PowerShell 和系统绘图 API 静默抓取鼠标所在显示器，并返回真实显示器边界。
+
+```ts
+async function captureWindowsDisplay( runtime: NodeCaptureRuntime, directory: string, imagePath: string, fallbackDisplay: ElectronDisplay, hideForegroundWindow: boolean ): Promise<
+```
+
+### 函数 `captureDisplayWithNativeCommand`
+
+源码：`src/utils/desktop-capture.ts:514`
+
+使用本机非交互式命令抓取当前显示器，完全绕开 Electron 主进程 BrowserWindow/screen API。
+
+```ts
+async function captureDisplayWithNativeCommand( runtime: NodeCaptureRuntime, display: ElectronDisplay, hideForegroundWindow: boolean ): Promise<
+```
+
+### 函数 `captureDisplayWithRendererElectron`
+
+源码：`src/utils/desktop-capture.ts:537`
+
+本机命令失败时，仅用渲染器可用的 desktopCapturer 抓取整屏；不会退回系统交互式截图。
+
+```ts
+async function captureDisplayWithRendererElectron( runtime: ElectronCaptureRuntime, display: ElectronDisplay ): Promise<
+```
+
+### 函数 `captureDisplaySource`
+
+源码：`src/utils/desktop-capture.ts:558`
+
+抓取截图源；可隐藏 Obsidian 时先最小化，抓取完成后立即恢复再显示编辑器。
+
+```ts
+async function captureDisplaySource( electronRuntime: ElectronCaptureRuntime, nodeRuntime: NodeCaptureRuntime, hideObsidian: boolean ): Promise<
+```
+
+### 函数 `openCaptureEditorHost`
+
+源码：`src/utils/desktop-capture.ts:590`
+
+创建独立覆盖窗口；窗口创建受限时退回 Obsidian 内嵌全屏 iframe，而不是系统截图工具。
+
+```ts
+function openCaptureEditorHost(html: string, display: ElectronDisplay): CaptureEditorHost
+```
+
+### 函数 `writePngToClipboard`
+
+源码：`src/utils/desktop-capture.ts:653`
+
+将裁剪结果写入系统剪贴板；Electron 剪贴板不可用时使用标准 Clipboard API。
+
+```ts
+async function writePngToClipboard(runtime: ElectronCaptureRuntime, bytes: Uint8Array): Promise<void>
+```
+
 ### 函数 `openPinnedCapture`
 
-源码：`src/utils/desktop-capture.ts:392`
+源码：`src/utils/desktop-capture.ts:667`
 
-打开始终置顶的无边框截图窗口。
+通过渲染器弹窗固定截图，不依赖不可达的 Electron BrowserWindow 主进程 API。
 
 ```ts
-async function openPinnedCapture( runtime: ElectronCaptureRuntime, nodeRuntime: NodeCaptureRuntime, bytes: Uint8Array, bounds:
+function openPinnedCapture(bytes: Uint8Array, bounds:
 ```
 
-### 函数 `captureWithEditor`
+### 函数 `editCapturedDisplay`
 
-源码：`src/utils/desktop-capture.ts:430`
+源码：`src/utils/desktop-capture.ts:693`
 
-使用 Electron 屏幕源按普通截图或截图并识别模式打开 PixPin 风格覆盖层。
-
-```ts
-async function captureWithEditor( runtime: ElectronCaptureRuntime, nodeRuntime: NodeCaptureRuntime, hideObsidian: boolean, mode: DesktopCaptureMode ): Promise<DesktopCaptureResult | null>
-```
-
-### 函数 `captureWithSystemTool`
-
-源码：`src/utils/desktop-capture.ts:550`
-
-使用系统区域截图作为高级覆盖层不可用时的兼容回退。
+在真实可达的渲染器窗口中运行截图编辑器并处理复制、下载、固定和取消动作。
 
 ```ts
-async function captureWithSystemTool(runtime: ElectronCaptureRuntime, nodeRuntime: NodeCaptureRuntime, hideObsidian: boolean): Promise<DesktopCaptureResult>
+async function editCapturedDisplay( runtime: ElectronCaptureRuntime, nodeRuntime: NodeCaptureRuntime, captured:
 ```
 
 ### 函数 `captureDesktopScreenshot`
 
-源码：`src/utils/desktop-capture.ts:578`
+源码：`src/utils/desktop-capture.ts:769`
 
-启动指定交互模式的桌面截图覆盖层；不支持时回退到系统区域截图。
+启动指定交互模式的桌面截图覆盖层；高级编辑器失败时给出明确错误，禁止静默回退系统截图。
 
 ```ts
 export async function captureDesktopScreenshot(hideObsidian: boolean, mode: DesktopCaptureMode = "capture"): Promise<DesktopCaptureResult>

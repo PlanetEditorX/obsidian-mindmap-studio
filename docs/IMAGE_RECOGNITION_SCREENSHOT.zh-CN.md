@@ -23,7 +23,7 @@
 
 ## PixPin 风格截图编辑器
 
-桌面端优先使用 Electron 屏幕源抓取鼠标所在显示器，并在独立全屏覆盖层中编辑。截图选区提供：
+桌面端先使用本机非交互式整屏抓取命令取得鼠标所在显示器图像：Windows 使用 PowerShell 与系统绘图 API，macOS 使用非交互式 `screencapture`，Linux 依次尝试 `grim`、ImageMagick `import`、GNOME Screenshot 和 Spectacle。本机命令不可用时，仅在渲染器确实开放 `desktopCapturer` 时使用 Electron 屏幕源。图像取得后由插件自己的独立覆盖窗口编辑；弹窗创建受限时退回 Obsidian 内嵌全屏覆盖层。截图选区提供：
 
 - 可拖动边框。
 - 八方向缩放手柄。
@@ -47,7 +47,7 @@
 11. 取消：关闭截图编辑器且不修改导图。
 12. 复制：复制 PNG，并按当前命令决定是否插入和识别。
 
-高级覆盖层不可用时，插件会回退到操作系统区域截图工具；回退模式只保证截图和剪贴板，不提供插件内标注工具。
+插件不会再静默启动操作系统交互式区域截图工具。整屏抓取或插件覆盖层创建失败时会返回明确错误，避免鼠标释放后直接关闭并绕过边框、工具栏、双击确认和 3 秒计时。
 
 ## AI 视觉识图与本地 OCR
 
@@ -79,8 +79,10 @@
 
 ## 平台与隐私
 
-- Windows、macOS 和 Linux：优先使用 Electron 屏幕源和插件截图编辑器。
-- 高级覆盖层不可用时，Windows 回退到 Snipping Tool，macOS 回退到 `screencapture`，Linux 依次尝试 GNOME Screenshot、Spectacle 和 Flameshot。
+- Windows：使用 PowerShell 与 `System.Drawing` 静默抓取鼠标所在显示器；设置“截图时隐藏 Obsidian”且无法取得 Electron 窗口句柄时，由原生命令临时最小化并恢复前台窗口。
+- macOS：使用非交互式 `screencapture` 抓取浏览器报告的当前显示器范围。
+- Linux：依次尝试 `grim`、ImageMagick `import`、GNOME Screenshot 和 Spectacle 生成整屏 PNG。
+- 本机命令失败时仅尝试渲染器可用的 Electron `desktopCapturer`；两条抓取路径都失败时显示明确错误，不启动系统交互式截图。
 - 移动端：AI 图片识别可用；桌面截图覆盖层、系统截图调用和本地 Tesseract OCR 不可用。
 - Electron 和 Node.js API 只在功能触发时动态获取，不影响移动端加载插件。
 - AI 模式会把当前图片发送到用户选择的视觉接口；本地 OCR 不联网。

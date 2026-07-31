@@ -5,36 +5,31 @@
   "theme": "auto",
   "navigation": {
     "parentPath": "古诗.mindmap",
-    "parentNodeId": "tang-node",
+    "parentNodeId": "example_tang_poetry_node",
     "parentTitle": "古诗",
     "parentNodeText": "唐诗"
   },
   "root": {
-    "id": "tang-root",
+    "id": "example_tang_poetry_root",
     "text": "唐诗",
-    "link": "[[古诗.mindmap]]",
     "children": [
       {
-        "id": "libai-node",
+        "id": "example_li_bai",
         "text": "李白",
-        "note": "静夜思、望庐山瀑布",
         "children": [
           {
-            "id": "jingyesi-node",
+            "id": "example_quiet_night_thought",
             "text": "静夜思",
+            "note": "床前明月光，疑是地上霜。举头望明月，低头思故乡。",
             "children": []
           }
         ]
       },
       {
-        "id": "dufu-node",
+        "id": "example_du_fu",
         "text": "杜甫",
         "children": []
       }
     ]
-  },
-  "view": {
-    "mode": "mindmap",
-    "readOnly": false
   }
 }
