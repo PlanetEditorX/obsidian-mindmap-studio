@@ -44,6 +44,8 @@ export interface ArticleRendererOptions {
   articleLeafBulletColor: string;
   articleLeafBulletStyle: ArticleLeafBulletStyle;
   articleLeafTextAlignment: "flush" | "auto";
+  articleLeafNumberingEnabled: boolean;
+  articleLeafNumberingThreshold: number;
   imageHostPriorityIds: string[];
   articleNavigation?: ArticlePageNavigation;
   callbacks: Pick<MindMapEditorCallbacks, "resolveImage" | "onRenderCode" | "onOpenMindMap" | "onOpenArticleDirectory">;
@@ -91,7 +93,7 @@ export function renderArticleMode(container: HTMLElement, options: ArticleRender
     return;
   }
 
-  for (const info of buildArticleNodeInfo(options.document.root, options.articleBaseDepth)) {
+  for (const info of buildArticleNodeInfo(options.document.root, options.articleBaseDepth, { enabled: options.articleLeafNumberingEnabled, threshold: options.articleLeafNumberingThreshold })) {
     const section = page.createEl("section", { cls: `mms-article-node depth-${Math.min(info.depth, 8)}${!options.readOnly && options.selectedId === info.node.id ? " is-selected" : ""}` });
     section.dataset.nodeId = info.node.id;
     section.id = info.anchor;
@@ -123,9 +125,10 @@ export function renderArticleMode(container: HTMLElement, options: ArticleRender
       const firstTextBlock = blocks.find((block): block is MindMapTextContentBlock => block.type === "text");
       if (firstTextBlock?.text.trim()) {
         const blockShell = createArticleContentBlock(section, firstTextBlock.id);
-        const paragraph = blockShell.createEl("p", { cls: articleParagraphClass("mms-article-leaf-text", firstTextBlock, options.articleLeafBulletsEnabled, options.articleLeafTextAlignment) });
+        const paragraph = blockShell.createEl("p", { cls: `${articleParagraphClass("mms-article-leaf-text", firstTextBlock, options.articleLeafBulletsEnabled && !info.numberedLeaf, options.articleLeafTextAlignment)}${info.numberedLeaf ? " mms-article-leaf-numbered" : ""}` });
         paragraph.dataset.blockId = firstTextBlock.id;
-        applyArticleLeafBulletStyle(paragraph, options);
+        if (info.numberedLeaf && info.label) paragraph.createSpan({ cls: "mms-article-number mms-article-leaf-number", text: `${info.label} ` });
+        applyArticleLeafBulletStyle(paragraph, options, info.numberedLeaf);
         renderRichTextRuns(paragraph, firstTextBlock.richText, firstTextBlock.text);
         options.makeInlineEditable(paragraph, info.node, "正文段落", firstTextBlock.id);
       } else if (!options.readOnly && blocks.length === 0) {
@@ -163,8 +166,8 @@ function articleParagraphClass(baseClass: string, block: MindMapTextContentBlock
 }
 
 /** Applies the configured terminal bullet color and visual style to one article paragraph. */
-function applyArticleLeafBulletStyle(paragraph: HTMLElement, options: ArticleRendererOptions): void {
-  if (!options.articleLeafBulletsEnabled) return;
+function applyArticleLeafBulletStyle(paragraph: HTMLElement, options: ArticleRendererOptions, numberedLeaf = false): void {
+  if (!options.articleLeafBulletsEnabled || numberedLeaf) return;
   paragraph.dataset.bulletStyle = options.articleLeafBulletStyle;
   if (options.articleLeafBulletColor) paragraph.style.setProperty("--mms-article-bullet-color", options.articleLeafBulletColor);
 }

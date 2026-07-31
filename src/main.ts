@@ -635,6 +635,10 @@ export default class MindMapStudioPlugin extends Plugin {
         ? raw.articleLeafBulletStyle
         : "solid",
       articleLeafTextAlignment: raw.articleLeafTextAlignment === "flush" ? "flush" : "auto",
+      articleLeafNumberingEnabled: raw.articleLeafNumberingEnabled === true,
+      articleLeafNumberingThreshold: typeof raw.articleLeafNumberingThreshold === "number"
+        ? Math.max(1, Math.min(20, Math.round(raw.articleLeafNumberingThreshold)))
+        : DEFAULT_SETTINGS.articleLeafNumberingThreshold,
       hideAssetFolderInFileExplorer: raw.hideAssetFolderInFileExplorer === true,
       hideConfiguredFilesInFileExplorer: raw.hideConfiguredFilesInFileExplorer === true,
       hiddenFileExtensions: typeof raw.hiddenFileExtensions === "string" ? raw.hiddenFileExtensions.slice(0, 2000) : "",
