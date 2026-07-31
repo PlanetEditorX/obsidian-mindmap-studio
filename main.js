@@ -13106,15 +13106,13 @@ var MindMapEditor = class {
     const apply = () => {
       setAllBranchesCollapsed(this.document.root, collapsed);
     };
-    this.pendingMindMapLayoutAnimation = false;
+    this.requestMindMapLayoutAnimation();
     if (this.readOnly) {
       apply();
       this.render();
-      if (collapsed) this.positionCollapsedMindMapRoot();
       return;
     }
     this.mutate(apply);
-    if (collapsed) this.positionCollapsedMindMapRoot();
   }
   /** Toggles every non-root branch between fully expanded and fully collapsed. */
   toggleAllNodesCollapsed() {
@@ -14643,29 +14641,6 @@ var MindMapEditor = class {
     const centerY = (this.layout.minY + this.layout.maxY) / 2;
     this.panX = -centerX * this.zoom;
     this.panY = -centerY * this.zoom;
-    this.mindMapViewportInitialized = true;
-    this.applyTransform();
-  }
-  /** Fits the collapsed outline while placing its root at the visual left-center. */
-  positionCollapsedMindMapRoot() {
-    if (this.currentMode !== "mindmap") return;
-    const root = this.layout.byId.get(this.document.root.id);
-    const rect = this.viewportEl.getBoundingClientRect();
-    if (!root || rect.width < 1 || rect.height < 1) return;
-    const rootScreenX = rect.width * 0.28;
-    const horizontalPadding = 32;
-    const verticalPadding = 32;
-    const leftWidth = Math.max(1, root.x - this.layout.minX + horizontalPadding);
-    const rightWidth = Math.max(1, this.layout.maxX - root.x + horizontalPadding);
-    const totalHeight = Math.max(1, this.layout.maxY - this.layout.minY + verticalPadding * 2);
-    this.zoom = this.clampZoom(Math.min(
-      1.25,
-      Math.max(1, rootScreenX - horizontalPadding) / leftWidth,
-      Math.max(1, rect.width - rootScreenX - horizontalPadding) / rightWidth,
-      Math.max(1, rect.height - verticalPadding * 2) / totalHeight
-    ));
-    this.panX = rootScreenX - rect.width / 2 - root.x * this.zoom;
-    this.panY = -root.y * this.zoom;
     this.mindMapViewportInitialized = true;
     this.applyTransform();
   }

@@ -165,14 +165,13 @@ test("structural mind-map changes use a reduced-motion-aware FLIP layout transit
   assert.match(editorSource, /this\.applyMeasuredMindMapLayout\(\);[\s\S]{0,120}this\.playMindMapLayoutAnimation\(previousNodeRects\)/);
 });
 
-test("collapse-all ignores rapid duplicate toggles, skips animation flashes, and positions the compact map", () => {
+test("collapse-all ignores rapid duplicate toggles and smoothly preserves the current viewport", () => {
   const toggleAll = editorSource.match(/private toggleAllNodesCollapsed\(\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
   const setAll = editorSource.match(/private setAllNodesCollapsed\(collapsed: boolean\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
   assert.match(toggleAll, /if \(this\.allNodesCollapseToggleTimer !== null\) return/);
   assert.match(toggleAll, /window\.setTimeout\([\s\S]*260\)/);
   assert.match(setAll, /if \(!branches\.some\(\(node\) => node\.collapsed !== collapsed\)\) return/);
-  assert.doesNotMatch(setAll, /requestMindMapLayoutAnimation\(\)/);
-  assert.match(setAll, /this\.pendingMindMapLayoutAnimation = false/);
-  assert.match(setAll, /if \(collapsed\) this\.positionCollapsedMindMapRoot\(\)/);
-  assert.match(editorSource, /private positionCollapsedMindMapRoot\(\): void[\s\S]*rootScreenX = rect\.width \* 0\.28/);
+  assert.match(setAll, /this\.requestMindMapLayoutAnimation\(\)/);
+  assert.doesNotMatch(setAll, /positionCollapsedMindMapRoot\(\)/);
+  assert.match(editorSource, /private playMindMapLayoutAnimation\(previousNodeRects: ReadonlyMap<string, DOMRect>\)/);
 });

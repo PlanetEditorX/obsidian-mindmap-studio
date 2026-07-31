@@ -283,6 +283,7 @@
 
 ## Unreleased
 
+- 优化“收起所有节点”后的布局过渡：保留当前视口并平滑移动保留节点，不再跳转到固定位置。
 - 修复插件更新后使用浏览器级重载导致编辑器事件状态残留的问题；更新完成后改为提示完整重启 Obsidian。
 - 修复末端正文转序号后，富文本异步重渲染会移除序号而又同时隐藏原标识的问题。
 - Fix terminal body conversion to retain its generated next-level sequence prefix and remove the obsolete marker alignment gutter in article and continuous-reading modes.
