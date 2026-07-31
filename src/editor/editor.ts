@@ -1800,6 +1800,31 @@ export class MindMapEditor {
   }
 
   /**
+   * Recovers the save notification and redraw after a pasted image has already
+   * been committed to the in-memory document. A transient synchronous failure
+   * must not be reported as an image-paste failure or roll back the image.
+   */
+  private recoverPastedImagePostCommit(): void {
+    const recoverUi = (): void => {
+      try {
+        this.markSaving();
+        this.render();
+      } catch (error) {
+        console.error("MindMap Studio paste image post-commit redraw failed", error);
+      }
+    };
+    recoverUi();
+    window.setTimeout(() => {
+      try {
+        this.callbacks.onChange(this.getDocument());
+      } catch (error) {
+        console.error("MindMap Studio paste image save synchronization retry failed", error);
+      }
+      recoverUi();
+    }, 0);
+  }
+
+  /**
    * 执行“mark saved”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
    */
   markSaved(): void {
@@ -5542,22 +5567,16 @@ export class MindMapEditor {
           inserted = true;
         });
       } catch (error) {
-        console.error("MindMap Studio paste image insertion failed", error);
         if (!inserted) {
+          console.error("MindMap Studio paste image insertion failed", error);
           new Notice(`图片文件已保存，但插入节点失败：${path}`, 7000);
           return;
         }
-        // The model mutation has completed, but a later save notification may
-        // have thrown. Keep the successful insertion visible and avoid the
-        // misleading generic “paste failed” notice.
-        try {
-          this.markSaving();
-          this.render();
-        } catch (renderError) {
-          console.error("MindMap Studio paste image recovery render failed", renderError);
-        }
-        new Notice(`图片已插入：${path}；保存同步出现异常，请确认文件已保存`, 7000);
-        return;
+        // The content block is already part of the document. A later
+        // synchronous save notification or redraw failure is recoverable and
+        // must not interrupt auto-upload scheduling or show a false warning.
+        console.warn("MindMap Studio paste image post-commit synchronization deferred", error);
+        this.recoverPastedImagePostCommit();
       }
 
       try {
