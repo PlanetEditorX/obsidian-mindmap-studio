@@ -565,7 +565,10 @@ export class MindMapStudioView extends TextFileView {
     if (/^(https?:|data:|blob:)/i.test(source)) return source;
     const wikiMatch = source.match(/^!?\[\[([\s\S]+?)\]\]$/);
     const target = (wikiMatch?.[1] ?? source).split("|")[0]?.split("#")[0]?.trim() ?? source;
-    const file = this.app.metadataCache.getFirstLinkpathDest(target, this.file?.path ?? "");
+    const direct = this.app.vault.getAbstractFileByPath(normalizePath(target.replace(/^\/+/, "")));
+    const file = direct instanceof TFile
+      ? direct
+      : this.app.metadataCache.getFirstLinkpathDest(target, this.file?.path ?? "");
     if (!(file instanceof TFile)) return null;
     return this.app.vault.getResourcePath(file);
   }
