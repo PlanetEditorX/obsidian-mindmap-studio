@@ -368,6 +368,7 @@ export class MindMapStudioView extends TextFileView {
       imageCount: collectRecognizableImages(document, nodeId).length,
       sourcePath: this.file?.path ?? "",
       onAsk: async (profileId, question) => this.plugin.askAi(profileId, payload, question),
+      onSetThinkingMode: (profileId, enabled) => this.plugin.setAiProfileThinkingMode(profileId, enabled),
       onProposeEdit: async (profileId, instruction) => this.plugin.proposeAiEdit(profileId, payload, instruction),
       onConvertToQuestion: (responseText) => this.editor?.applyAndEnrichAiQuestion(responseText, nodeId) ?? false,
       onRecognizeImages: async (profileId, instruction) => this.recognizeImages(nodeId, profileId, instruction),

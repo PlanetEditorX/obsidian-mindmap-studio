@@ -14945,6 +14945,22 @@ var AiAskModal = class extends import_obsidian11.Modal {
       return profiles.some((profile) => profile.id === profileId) ? profileId : (_b2 = (_a3 = profiles[0]) == null ? void 0 : _a3.id) != null ? _b2 : "";
     };
     provider.value = defaultProfileValue(this.options.defaultProfileId);
+    const thinkingLabel = form.createEl("div", { cls: "mms-ai-field mms-ai-thinking-field" });
+    thinkingLabel.createSpan({ text: "\u6DF1\u5EA6\u601D\u8003" });
+    const thinkingToggle = thinkingLabel.createEl("button", {
+      cls: "mms-ai-thinking-toggle",
+      attr: { type: "button", "aria-pressed": "false" }
+    });
+    const selectedProfile = () => profiles.find((profile) => profile.id === provider.value);
+    const syncThinkingToggle = () => {
+      var _a3, _b2;
+      const thinkingMode = (_b2 = (_a3 = selectedProfile()) == null ? void 0 : _a3.thinkingMode) != null ? _b2 : "auto";
+      const enabled = thinkingMode === "on";
+      thinkingToggle.setText(thinkingMode === "auto" ? "\u81EA\u52A8\uFF08\u670D\u52A1\u7AEF\u9ED8\u8BA4\uFF09" : enabled ? "\u5DF2\u5F00\u542F" : "\u5DF2\u5173\u95ED");
+      thinkingToggle.setAttribute("aria-pressed", String(enabled));
+      thinkingToggle.toggleClass("is-enabled", enabled);
+    };
+    syncThinkingToggle();
     const questionLabel = form.createEl("label", { cls: "mms-ai-field" });
     const questionTitle = questionLabel.createSpan({ text: "\u95EE\u9898" });
     const question = questionLabel.createEl("textarea", {
@@ -15068,6 +15084,7 @@ var AiAskModal = class extends import_obsidian11.Modal {
     const setBusy = (busy) => {
       submit.disabled = busy || isActionDisabled();
       provider.disabled = busy;
+      thinkingToggle.disabled = busy;
       mode.disabled = busy;
       question.disabled = busy;
       findInput.disabled = busy;
@@ -15092,6 +15109,7 @@ var AiAskModal = class extends import_obsidian11.Modal {
         provider.value = defaultProfileValue(this.options.defaultProfileId);
       }
       providerLabel.hidden = localReplace || localRecognition;
+      thinkingLabel.hidden = localReplace || localRecognition;
       questionLabel.hidden = localReplace;
       replacePanel.hidden = !localReplace;
       track.hidden = localReplace;
@@ -15124,6 +15142,7 @@ var AiAskModal = class extends import_obsidian11.Modal {
       if (requiresAiProfile() && !profiles.length) {
         status.setText("\u6CA1\u6709\u5DF2\u542F\u7528\u4E14\u914D\u7F6E\u5B8C\u6574\u7684 AI \u63A5\u53E3\uFF1B\u4ECD\u53EF\u5207\u6362\u5230\u672C\u5730 OCR \u6216\u672C\u5730\u6587\u5B57\u66FF\u6362\u3002");
       }
+      syncThinkingToggle();
       window.setTimeout(() => (localReplace ? findInput : question).focus(), 20);
     };
     const showEditPreview = (editPreview) => {
@@ -15203,6 +15222,26 @@ var AiAskModal = class extends import_obsidian11.Modal {
       }
     };
     mode.addEventListener("change", updateMode);
+    provider.addEventListener("change", () => {
+      resetOutput();
+      syncThinkingToggle();
+      submit.disabled = isActionDisabled();
+    });
+    thinkingToggle.addEventListener("click", () => {
+      const profile = selectedProfile();
+      if (!profile) return;
+      const enabled = profile.thinkingMode !== "on";
+      thinkingToggle.disabled = true;
+      void this.options.onSetThinkingMode(profile.id, enabled).then(() => {
+        profile.thinkingMode = enabled ? "on" : "off";
+        syncThinkingToggle();
+        new import_obsidian11.Notice(`\u6DF1\u5EA6\u601D\u8003\u5DF2${enabled ? "\u5F00\u542F" : "\u5173\u95ED"}`);
+      }).catch((error) => {
+        new import_obsidian11.Notice(`\u4FDD\u5B58\u6DF1\u5EA6\u601D\u8003\u8BBE\u7F6E\u5931\u8D25\uFF1A${error instanceof Error ? error.message : String(error)}`);
+      }).finally(() => {
+        thinkingToggle.disabled = false;
+      });
+    });
     close.addEventListener("click", () => this.close());
     copy.addEventListener("click", () => {
       if (!answerText) return;
@@ -15714,6 +15753,7 @@ var MindMapStudioView = class _MindMapStudioView extends import_obsidian12.TextF
       imageCount: collectRecognizableImages(document2, nodeId).length,
       sourcePath: (_f = (_e = this.file) == null ? void 0 : _e.path) != null ? _f : "",
       onAsk: async (profileId, question) => this.plugin.askAi(profileId, payload, question),
+      onSetThinkingMode: (profileId, enabled) => this.plugin.setAiProfileThinkingMode(profileId, enabled),
       onProposeEdit: async (profileId, instruction) => this.plugin.proposeAiEdit(profileId, payload, instruction),
       onConvertToQuestion: (responseText) => {
         var _a3, _b3;
@@ -18241,6 +18281,13 @@ var MindMapStudioPlugin = class extends import_obsidian15.Plugin {
     if (!profile) throw new Error("\u627E\u4E0D\u5230\u8BE5 AI \u63A5\u53E3\u914D\u7F6E");
     if (!profile.endpoint.trim()) throw new Error(`\u8BF7\u5148\u586B\u5199 ${profile.name} \u7684\u63A5\u53E3\u5730\u5740`);
     return fetchAiProfileModels(profile);
+  }
+  /** 保存由 AI 助手窗口切换的深度思考状态，并与设置页共用同一配置。 */
+  async setAiProfileThinkingMode(profileId, enabled) {
+    const profile = this.settings.aiProfiles.find((item) => item.id === profileId && item.enabled);
+    if (!profile) throw new Error("AI \u63A5\u53E3\u4E0D\u5B58\u5728\u6216\u672A\u542F\u7528");
+    profile.thinkingMode = enabled ? "on" : "off";
+    await this.saveSettings();
   }
   /** Installs a lightweight File Explorer observer; it changes visibility only, never vault data. */
   installFileExplorerFilter() {

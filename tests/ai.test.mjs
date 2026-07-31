@@ -346,6 +346,9 @@ test("AI modal shows only the inputs required by the selected operation", async 
   ]);
   assert.match(modalSource, /replacePanel\.hidden = true/);
   assert.match(modalSource, /providerLabel\.hidden = localReplace \|\| localRecognition/);
+  assert.match(modalSource, /thinkingLabel\.hidden = localReplace \|\| localRecognition/);
+  assert.match(modalSource, /深度思考/);
+  assert.match(modalSource, /onSetThinkingMode\(profile\.id, enabled\)/);
   assert.match(modalSource, /questionLabel\.hidden = localReplace/);
   assert.match(modalSource, /replacePanel\.hidden = !localReplace/);
   assert.match(modalSource, /track\.hidden = localReplace/);
@@ -358,6 +361,7 @@ test("AI modal shows only the inputs required by the selected operation", async 
   assert.doesNotMatch(modalSource, /区分大小写/);
   assert.doesNotMatch(modalSource, /mms-ai-checkbox/);
   assert.match(stylesSource, /\.mms-ai-field\[hidden\],[\s\S]*display: none !important/);
+  assert.match(stylesSource, /\.mms-ai-thinking-toggle\.is-enabled/);
   assert.doesNotMatch(stylesSource, /\.mms-ai-checkbox/);
 });
 
@@ -376,6 +380,7 @@ test("AI integration exposes toolbar, shortcut, page scope and node scope contra
   assert.match(settingsSource, /新增硅基流动/);
   assert.match(settingsSource, /新增 FreeLLMAPI/);
   assert.match(settingsSource, /text: "检测接口"/);
+  assert.match(settingsSource, /思考模式/);
   assert.match(settingsSource, /imageRecognitionAiProfileId: ""/);
   assert.match(settingsSource, /AI 识图接口/);
   assert.match(settingsSource, /containerEl\.appendChild\(imageRecognitionSettings\)/);
@@ -389,6 +394,7 @@ test("AI integration exposes toolbar, shortcut, page scope and node scope contra
   assert.match(mainSource, /matchesRecordedShortcut\(event, this\.settings\.globalSearchShortcut\)/);
   assert.match(mainSource, /id: "ask-ai-about-mind-map"/);
   assert.match(mainSource, /async testAiProfile\(profileId: string\): Promise<void>/);
+  assert.match(mainSource, /async setAiProfileThinkingMode\(profileId: string, enabled: boolean\): Promise<void>/);
   assert.match(mainSource, /modifiers: \["Mod", "Shift"\], key: "A"/);
   assert.match(mainSource, /id: "capture-mind-map-screenshot"/);
   assert.match(mainSource, /modifiers: \["Mod", "Shift"\], key: "S"/);
@@ -430,6 +436,7 @@ test("AI integration exposes toolbar, shortcut, page scope and node scope contra
   assert.match(modalSource, /AI 整理并重新生成（确认后应用）/);
   assert.match(modalSource, /整理为题目节点/);
   assert.match(modalSource, /onConvertToQuestion/);
+  assert.match(viewSource, /onSetThinkingMode: \(profileId, enabled\) => this\.plugin\.setAiProfileThinkingMode\(profileId, enabled\)/);
   assert.match(editSource, /DEFAULT_AI_QUESTION_NODE_INSTRUCTION/);
   assert.match(modalSource, /图片 AI 识图（按顺序处理当前范围）/);
   assert.match(modalSource, /onRecognizeImages/);
