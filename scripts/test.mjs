@@ -1504,7 +1504,7 @@ const command = "example";
   assert.match(settingsSource, /private async exportSettings\(\): Promise<void>/, "settings export must serialize the current plugin configuration");
   assert.match(settingsSource, /private async importSettingsFile\(file: File \| undefined\): Promise<void>/, "settings import must read a selected JSON file");
   assert.match(mainSource, /async importSettings\(settings: unknown\): Promise<void>/, "imported settings must be normalized before being saved");
-  assert.match(settingsSource, /"视图与阅读", "编辑选项", "快捷键配置"/, "settings categories must use the curated default order");
+  assert.match(settingsSource, /"主题与外观", "视图与阅读", "编辑与交互", "节点布局与尺寸", "代码行为", "工具栏", "快捷键配置"/, "settings categories must use the curated default order");
   assert.match(settingsSource, /createEl\("details", \{ cls: "mms-settings-category-order" \}\)/, "category sorting controls must be collapsed by default");
   assert.match(settingsSource, /moveSettingsSection\(title: MovableSettingsSectionTitle, direction: -1 \| 1\)/, "category sorting must persist directional moves");
   assert.match(settingsSource, /private async captureScreenshotShortcut\(event: KeyboardEvent, text: TextComponent\): Promise<void>/, "screenshot shortcut settings must capture real key presses");

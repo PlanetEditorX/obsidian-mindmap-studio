@@ -2009,19 +2009,16 @@ var TOOLBAR_ITEMS = [
   ["question", "\u9898\u76EE\u8282\u70B9"]
 ];
 var SETTINGS_SECTION_TITLES = [
-  "\u89C6\u56FE\u4E0E\u9605\u8BFB",
-  "\u7F16\u8F91\u9009\u9879",
-  "\u5FEB\u6377\u952E\u914D\u7F6E",
-  "\u5DE5\u5177\u680F",
   "\u4E3B\u9898\u4E0E\u5916\u89C2",
-  "\u753B\u5E03\u4E0E\u80CC\u666F",
-  "\u6587\u5B57\u4E0E\u6392\u7248",
-  "\u8282\u70B9\u5916\u89C2",
-  "\u8FDE\u7EBF\u4E0E\u5206\u652F",
-  "\u4EE3\u7801\u5757",
+  "\u89C6\u56FE\u4E0E\u9605\u8BFB",
+  "\u7F16\u8F91\u4E0E\u4EA4\u4E92",
+  "\u8282\u70B9\u5E03\u5C40\u4E0E\u5C3A\u5BF8",
+  "\u4EE3\u7801\u884C\u4E3A",
+  "\u5DE5\u5177\u680F",
+  "\u5FEB\u6377\u952E\u914D\u7F6E",
   "\u6587\u4EF6\u4E0E\u8D44\u6E90",
-  "\u7B54\u9898\u4E0E\u9898\u5E93",
   "\u56FE\u7247\u4E0E\u56FE\u5E8A",
+  "\u7B54\u9898\u4E0E\u9898\u5E93",
   "\u5168\u5C40\u641C\u7D22",
   "AI \u52A9\u624B",
   "\u7BA1\u7406\u914D\u7F6E"
@@ -2149,16 +2146,24 @@ function normalizeSettingsSectionOrder(value) {
   const known = new Set(SETTINGS_SECTION_TITLES);
   const legacyTitles = {
     "\u663E\u793A\u6A21\u5F0F": "\u89C6\u56FE\u4E0E\u9605\u8BFB",
-    "\u7F16\u8F91": "\u7F16\u8F91\u9009\u9879",
-    "\u7F16\u8F91\u4F53\u9A8C": "\u7F16\u8F91\u9009\u9879",
+    "\u7F16\u8F91": "\u7F16\u8F91\u4E0E\u4EA4\u4E92",
+    "\u7F16\u8F91\u4F53\u9A8C": "\u7F16\u8F91\u4E0E\u4EA4\u4E92",
     "\u8282\u70B9\u5FEB\u901F\u8F93\u5165\u5FEB\u6377\u952E": "\u5FEB\u6377\u952E\u914D\u7F6E",
     "\u5DE5\u5177\u680F\u5185\u5BB9": "\u5DE5\u5177\u680F",
     "\u4E3B\u9898\u6A21\u677F": "\u4E3B\u9898\u4E0E\u5916\u89C2",
-    "\u753B\u5E03\u80CC\u666F": "\u753B\u5E03\u4E0E\u80CC\u666F",
-    "\u5B57\u4F53\u4E0E\u6587\u5B57": "\u6587\u5B57\u4E0E\u6392\u7248",
-    "\u8282\u70B9\u6837\u5F0F": "\u8282\u70B9\u5916\u89C2",
-    "\u8FDE\u7EBF\u6837\u5F0F": "\u8FDE\u7EBF\u4E0E\u5206\u652F",
-    "\u5168\u5C40\u4EE3\u7801\u8BBE\u7F6E": "\u4EE3\u7801\u5757",
+    "\u4E3B\u9898\u4E0E\u5916\u89C2\uFF08\u5168\u5C40\u9ED8\u8BA4\uFF09": "\u4E3B\u9898\u4E0E\u5916\u89C2",
+    "\u4E3B\u9898\u4E0E\u5916\u89C2": "\u4E3B\u9898\u4E0E\u5916\u89C2",
+    "\u753B\u5E03\u4E0E\u80CC\u666F": "\u4E3B\u9898\u4E0E\u5916\u89C2",
+    "\u6587\u5B57\u4E0E\u6392\u7248": "\u4E3B\u9898\u4E0E\u5916\u89C2",
+    "\u8282\u70B9\u5916\u89C2": "\u8282\u70B9\u5E03\u5C40\u4E0E\u5C3A\u5BF8",
+    "\u8FDE\u7EBF\u4E0E\u5206\u652F": "\u4E3B\u9898\u4E0E\u5916\u89C2",
+    "\u4EE3\u7801\u5757": "\u4EE3\u7801\u884C\u4E3A",
+    "\u7F16\u8F91\u9009\u9879": "\u7F16\u8F91\u4E0E\u4EA4\u4E92",
+    "\u753B\u5E03\u80CC\u666F": "\u4E3B\u9898\u4E0E\u5916\u89C2",
+    "\u5B57\u4F53\u4E0E\u6587\u5B57": "\u4E3B\u9898\u4E0E\u5916\u89C2",
+    "\u8282\u70B9\u6837\u5F0F": "\u8282\u70B9\u5E03\u5C40\u4E0E\u5C3A\u5BF8",
+    "\u8FDE\u7EBF\u6837\u5F0F": "\u4E3B\u9898\u4E0E\u5916\u89C2",
+    "\u5168\u5C40\u4EE3\u7801\u8BBE\u7F6E": "\u4EE3\u7801\u884C\u4E3A",
     "\u6587\u4EF6\u4E0E\u5E03\u5C40": "\u6587\u4EF6\u4E0E\u8D44\u6E90",
     "\u6587\u4EF6\u5939": "\u6587\u4EF6\u4E0E\u8D44\u6E90",
     "\u5168\u5C40\u641C\u7D22\u7D22\u5F15": "\u5168\u5C40\u641C\u7D22"
@@ -2282,10 +2287,10 @@ var MindMapStudioSettingTab = class extends import_obsidian.PluginSettingTab {
     });
     containerEl.createEl("p", {
       cls: "setting-item-description",
-      text: "\u8FD9\u91CC\u8BBE\u7F6E\u5168\u5C40\u9ED8\u8BA4\u5916\u89C2\u3002\u6253\u5F00\u8111\u56FE\u540E\uFF0C\u4E5F\u53EF\u4EE5\u70B9\u51FB\u5DE5\u5177\u680F\u4E2D\u7684\u8C03\u8272\u677F\uFF0C\u4E3A\u5F53\u524D\u8111\u56FE\u5355\u72EC\u4FDD\u5B58\u4E00\u5957\u6837\u5F0F\u3002"
+      text: "\u8FD9\u91CC\u8BBE\u7F6E\u63D2\u4EF6\u7EA7\u9ED8\u8BA4\u503C\u3002\u5168\u5C40\u201C\u4E3B\u9898\u4E0E\u5916\u89C2\u201D\u6309\u7167\u9875\u9762\u5DE5\u5177\u680F\u4E2D\u7684\u540C\u540D\u9762\u677F\u5206\u7EC4\uFF1B\u5F53\u524D\u9875\u9762\u8BBE\u7F6E\u53EA\u4F5C\u7528\u4E8E\u5F53\u524D .mindmap \u6587\u4EF6\uFF0C\u5E76\u4F18\u5148\u8986\u76D6\u5168\u5C40\u9ED8\u8BA4\u503C\u3002"
     });
     containerEl.createEl("h3", { text: "\u4E3B\u9898\u4E0E\u5916\u89C2" });
-    new import_obsidian.Setting(containerEl).setName("\u9ED8\u8BA4\u4E3B\u9898").setDesc("\u9009\u62E9\u540E\u4F1A\u4E00\u6B21\u5E94\u7528\u80CC\u666F\u3001\u8282\u70B9\u3001\u5206\u652F\u914D\u8272\u3001\u5B57\u4F53\u548C\u8FDE\u7EBF\u6837\u5F0F\uFF1B\u4E4B\u540E\u4ECD\u53EF\u7EE7\u7EED\u4FEE\u6539\u5355\u9879\u8BBE\u7F6E\u3002").addDropdown((dropdown) => {
+    new import_obsidian.Setting(containerEl).setName("\u4E3B\u9898\u6A21\u677F").setDesc("\u4E0E\u5F53\u524D\u9875\u9762\u201C\u4E3B\u9898\u4E0E\u5916\u89C2\u201D\u4E2D\u7684\u201C\u4E3B\u9898\u6A21\u677F\u201D\u542B\u4E49\u4E00\u81F4\uFF1B\u8FD9\u91CC\u8BBE\u7F6E\u6240\u6709\u8111\u56FE\u7684\u9ED8\u8BA4\u503C\uFF0C\u9875\u9762\u5355\u72EC\u8BBE\u7F6E\u65F6\u4F18\u5148\u8986\u76D6\u3002").addDropdown((dropdown) => {
       for (const preset of MINDMAP_THEME_PRESETS) dropdown.addOption(preset.id, preset.name);
       dropdown.setValue(this.plugin.settings.defaultThemePreset);
       dropdown.onChange(async (value) => {
@@ -2312,7 +2317,7 @@ var MindMapStudioSettingTab = class extends import_obsidian.PluginSettingTab {
         void this.saveAndRefresh().then(() => this.display());
       });
     }
-    containerEl.createEl("h3", { text: "\u4EE3\u7801\u5757" });
+    containerEl.createEl("h3", { text: "\u4EE3\u7801\u884C\u4E3A" });
     new import_obsidian.Setting(containerEl).setName("\u4EE3\u7801\u9ED8\u8BA4\u6298\u53E0").setDesc("\u4F18\u5148\u7EA7\u6700\u4F4E\uFF1B\u9875\u9762\u6216\u8282\u70B9\u4EE3\u7801\u8BBE\u7F6E\u53EF\u8986\u76D6\u3002").addToggle((toggle) => toggle.setValue(this.plugin.settings.defaultCodeCollapsed).onChange(async (value) => {
       this.plugin.settings.defaultCodeCollapsed = value;
       await this.saveAndRefresh();
@@ -3028,7 +3033,7 @@ var MindMapStudioSettingTab = class extends import_obsidian.PluginSettingTab {
       this.plugin.settings.defaultTextUnderline = value;
       await this.saveAndRefresh();
     }));
-    containerEl.createEl("h3", { text: "\u8282\u70B9\u5916\u89C2" });
+    containerEl.createEl("h3", { text: "\u8282\u70B9\u5E03\u5C40\u4E0E\u5C3A\u5BF8" });
     this.addOptionalColorSetting(
       containerEl,
       "\u4E2D\u5FC3\u4E3B\u9898\u989C\u8272",
@@ -3137,7 +3142,7 @@ var MindMapStudioSettingTab = class extends import_obsidian.PluginSettingTab {
         await this.saveAndRefresh();
       }));
     }
-    containerEl.createEl("h3", { text: "\u7F16\u8F91\u9009\u9879" });
+    containerEl.createEl("h3", { text: "\u7F16\u8F91\u4E0E\u4EA4\u4E92" });
     new import_obsidian.Setting(containerEl).setName("\u663E\u793A\u4EFB\u52A1\u8FDB\u5EA6").setDesc("\u5728\u5305\u542B\u4EFB\u52A1\u7684\u5206\u652F\u8282\u70B9\u5E95\u90E8\u663E\u793A\u5B8C\u6210\u767E\u5206\u6BD4\u3002").addToggle((toggle) => toggle.setValue(this.plugin.settings.showTaskProgress).onChange(async (value) => {
       this.plugin.settings.showTaskProgress = value;
       await this.saveAndRefresh();
@@ -3208,9 +3213,72 @@ var MindMapStudioSettingTab = class extends import_obsidian.PluginSettingTab {
       new import_obsidian.Notice("\u5DF2\u6062\u590D\u521D\u59CB\u8BBE\u7F6E");
       this.display();
     }));
+    this.organizeGlobalAppearanceSettings();
     this.organizeSettingsSections();
   }
   /** 将一级设置分区折叠显示，并按顶部搜索词过滤匹配分区。 */
+  /** Rebuilds global appearance defaults with the same information architecture as the page toolbar dialog. */
+  organizeGlobalAppearanceSettings() {
+    var _a2;
+    const headings = Array.from(this.containerEl.querySelectorAll(":scope > h3"));
+    const themeHeading = headings.find((heading) => {
+      var _a3;
+      return ((_a3 = heading.textContent) == null ? void 0 : _a3.trim()) === "\u4E3B\u9898\u4E0E\u5916\u89C2";
+    });
+    if (!themeHeading) return;
+    const findSetting = (name) => {
+      var _a3;
+      return (_a3 = Array.from(this.containerEl.querySelectorAll(":scope > .setting-item")).find((item) => {
+        var _a4, _b2;
+        return ((_b2 = (_a4 = item.querySelector(".setting-item-name")) == null ? void 0 : _a4.textContent) == null ? void 0 : _b2.trim()) === name;
+      })) != null ? _a3 : null;
+    };
+    const createGroup = (title, description, names) => {
+      const group = document.createElement("div");
+      group.addClass("mms-global-appearance-group");
+      group.createEl("h4", { text: title });
+      group.createEl("p", { cls: "setting-item-description", text: description });
+      for (const name of names) {
+        const item = findSetting(name);
+        if (item) group.append(item);
+      }
+      return group;
+    };
+    const appearanceRoot = document.createElement("div");
+    appearanceRoot.addClass("mms-global-appearance-groups");
+    themeHeading.insertAdjacentElement("afterend", appearanceRoot);
+    const themeSetting = findSetting("\u4E3B\u9898\u6A21\u677F");
+    const preview = this.containerEl.querySelector(":scope > .mms-theme-preview-row");
+    const themeGroup = document.createElement("div");
+    themeGroup.addClass("mms-global-appearance-group");
+    themeGroup.createEl("h4", { text: "\u4E3B\u9898\u6A21\u677F" });
+    themeGroup.createEl("p", { cls: "setting-item-description", text: "\u4E0E\u9875\u9762\u5DE5\u5177\u680F\u4E2D\u7684\u201C\u4E3B\u9898\u6A21\u677F\u201D\u4E00\u81F4\uFF0C\u7528\u4E8E\u5B9A\u4E49\u65B0\u9875\u9762\u548C\u672A\u5355\u72EC\u8986\u76D6\u9875\u9762\u7684\u9ED8\u8BA4\u89C6\u89C9\u65B9\u6848\u3002" });
+    if (themeSetting) themeGroup.append(themeSetting);
+    if (preview) themeGroup.append(preview);
+    appearanceRoot.append(themeGroup);
+    appearanceRoot.append(
+      createGroup("\u753B\u5E03\u4E0E\u5B57\u4F53", "\u5BF9\u5E94\u9875\u9762\u201C\u4E3B\u9898\u4E0E\u5916\u89C2\u201D\u7684\u753B\u5E03\u4E0E\u5B57\u4F53\u5206\u7EC4\u3002", ["\u80CC\u666F\u989C\u8272", "\u80CC\u666F\u56FE\u6848", "\u80CC\u666F\u56FE\u6848\u989C\u8272", "\u9ED8\u8BA4\u5B57\u4F53", "\u81EA\u5B9A\u4E49\u5B57\u4F53\u540D\u79F0", "\u9ED8\u8BA4\u5B57\u53F7"]),
+      createGroup("\u8282\u70B9\u4E0E\u6587\u5B57", "\u5BF9\u5E94\u9875\u9762\u201C\u4E3B\u9898\u4E0E\u5916\u89C2\u201D\u7684\u8282\u70B9\u4E0E\u6587\u5B57\u5206\u7EC4\uFF1B\u8282\u70B9\u5355\u72EC\u8BBE\u7F6E\u4ECD\u5177\u6709\u66F4\u9AD8\u4F18\u5148\u7EA7\u3002", ["\u5206\u652F\u5916\u89C2", "\u9ED8\u8BA4\u8282\u70B9\u6587\u5B57\u5BF9\u9F50", "\u4E2D\u5FC3\u4E3B\u9898\u989C\u8272", "\u4E2D\u5FC3\u4E3B\u9898\u6587\u5B57\u989C\u8272", "\u9ED8\u8BA4\u8282\u70B9\u80CC\u666F\u8272", "\u9ED8\u8BA4\u6587\u5B57\u989C\u8272", "\u9ED8\u8BA4\u8282\u70B9\u8FB9\u6846\u989C\u8272", "\u9ED8\u8BA4\u8282\u70B9\u8FB9\u6846\u7C97\u7EC6", "\u9ED8\u8BA4\u6587\u5B57\u52A0\u7C97", "\u9ED8\u8BA4\u6587\u5B57\u659C\u4F53", "\u9ED8\u8BA4\u6587\u5B57\u4E0B\u5212\u7EBF"]),
+      createGroup("\u8FDE\u7EBF\u4E0E\u5206\u652F", "\u5BF9\u5E94\u9875\u9762\u201C\u4E3B\u9898\u4E0E\u5916\u89C2\u201D\u7684\u8FDE\u7EBF\u4E0E\u5206\u652F\u5206\u7EC4\u3002", ["\u8FDE\u7EBF\u989C\u8272", "\u8FDE\u7EBF\u7C7B\u578B", "\u8FDE\u7EBF\u7C97\u7EC6\u6A21\u5F0F", "\u8D77\u59CB\u7C97\u7EC6", "\u8FDE\u7EBF\u7C97\u7EC6", "\u672B\u7AEF\u6700\u7EC6\u5BBD\u5EA6", "\u5F69\u8272\u5206\u652F", "\u5206\u652F\u989C\u8272"]),
+      createGroup("\u9605\u8BFB\u5916\u89C2", "\u5BF9\u5E94\u9875\u9762\u201C\u4E3B\u9898\u4E0E\u5916\u89C2\u201D\u7684\u9605\u8BFB\u5206\u7EC4\u3002", ["\u6587\u7AE0\u76EE\u5F55\u6700\u5927\u5C42\u7EA7", "\u6587\u7AE0/\u901A\u8BFB\u7F29\u7565\u5BFC\u822A\u56FE"]),
+      createGroup("\u4EE3\u7801\u5916\u89C2", "\u5BF9\u5E94\u9875\u9762\u201C\u4E3B\u9898\u4E0E\u5916\u89C2\u201D\u7684\u4EE3\u7801\u5206\u7EC4\uFF1B\u66F4\u7EC6\u7684\u81EA\u52A8\u5C55\u5F00\u89C4\u5219\u4FDD\u7559\u5728\u201C\u4EE3\u7801\u884C\u4E3A\u201D\u3002", ["\u4EE3\u7801\u9ED8\u8BA4\u6298\u53E0", "\u4EE3\u7801\u9ED8\u8BA4\u663E\u793A\u884C\u53F7", "\u4EE3\u7801\u9ED8\u8BA4\u6837\u5F0F"])
+    );
+    for (const heading of headings) {
+      const title = (_a2 = heading.textContent) == null ? void 0 : _a2.trim();
+      if (!["\u753B\u5E03\u4E0E\u80CC\u666F", "\u6587\u5B57\u4E0E\u6392\u7248", "\u8FDE\u7EBF\u4E0E\u5206\u652F"].includes(title != null ? title : "")) continue;
+      let cursor = heading.nextElementSibling;
+      let hasContent = false;
+      while (cursor && cursor.tagName !== "H3") {
+        if (cursor.matches(".setting-item")) {
+          hasContent = true;
+          break;
+        }
+        cursor = cursor.nextElementSibling;
+      }
+      if (!hasContent) heading.remove();
+    }
+  }
+  /** Converts top-level headings into searchable, reorderable collapsible settings sections. */
   organizeSettingsSections() {
     var _a2, _b2, _c;
     const query = this.settingsSearchQuery;
@@ -9996,6 +10064,8 @@ var MindMapEditor = class {
     this.pendingArticleRestoreLocation = null;
     this.pendingMindMapLayoutAnimation = false;
     this.allNodesCollapseToggleTimer = null;
+    /** Active viewport interpolation used by fit-to-view and semantic centering. */
+    this.viewportAnimationFrame = null;
     this.branchClipboard = null;
     this.searchQuery = "";
     this.lastRichTextColor = "#ef4444";
@@ -10060,6 +10130,8 @@ var MindMapEditor = class {
     this.cancelArticleRender();
     if (this.allNodesCollapseToggleTimer !== null) window.clearTimeout(this.allNodesCollapseToggleTimer);
     this.allNodesCollapseToggleTimer = null;
+    if (this.viewportAnimationFrame !== null) window.cancelAnimationFrame(this.viewportAnimationFrame);
+    this.viewportAnimationFrame = null;
     this.host.empty();
   }
   /**
@@ -13662,9 +13734,12 @@ var MindMapEditor = class {
     if (this.readOnly) {
       apply();
       this.render();
-      return;
+    } else {
+      this.mutate(apply);
     }
-    this.mutate(apply);
+    if (collapsed && this.currentMode === "mindmap") {
+      window.setTimeout(() => this.fitToView(true), 40);
+    }
   }
   /** Toggles every non-root branch between fully expanded and fully collapsed. */
   toggleAllNodesCollapsed() {
@@ -15352,17 +15427,52 @@ var MindMapEditor = class {
   /**
    * 执行“fit to view”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
    */
-  fitToView() {
+  fitToView(animated = true) {
     const rect = this.viewportEl.getBoundingClientRect();
     const width = Math.max(1, this.layout.maxX - this.layout.minX + 100);
     const height = Math.max(1, this.layout.maxY - this.layout.minY + 100);
-    this.zoom = this.clampZoom(Math.min((rect.width - 40) / width, (rect.height - 40) / height, 1.25));
+    const targetZoom = this.clampZoom(Math.min((rect.width - 40) / width, (rect.height - 40) / height, 1.25));
     const centerX = (this.layout.minX + this.layout.maxX) / 2;
     const centerY = (this.layout.minY + this.layout.maxY) / 2;
-    this.panX = -centerX * this.zoom;
-    this.panY = -centerY * this.zoom;
+    const targetPanX = -centerX * targetZoom;
+    const targetPanY = -centerY * targetZoom;
     this.mindMapViewportInitialized = true;
-    this.applyTransform();
+    this.animateViewportTo(targetZoom, targetPanX, targetPanY, animated);
+  }
+  /** Smoothly interpolates the canvas transform instead of jumping to its destination. */
+  animateViewportTo(targetZoom, targetPanX, targetPanY, animated = true) {
+    if (this.viewportAnimationFrame !== null) window.cancelAnimationFrame(this.viewportAnimationFrame);
+    this.viewportAnimationFrame = null;
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const startZoom = this.zoom;
+    const startPanX = this.panX;
+    const startPanY = this.panY;
+    const distance = Math.hypot(targetPanX - startPanX, targetPanY - startPanY);
+    const zoomDistance = Math.abs(targetZoom - startZoom);
+    if (!animated || reducedMotion || distance < 1 && zoomDistance < 2e-3) {
+      this.zoom = targetZoom;
+      this.panX = targetPanX;
+      this.panY = targetPanY;
+      this.applyTransform();
+      return;
+    }
+    const startedAt = performance.now();
+    const duration = Math.min(520, Math.max(260, 260 + distance * 0.08 + zoomDistance * 120));
+    const ease = (value) => 1 - Math.pow(1 - value, 3);
+    const step = (now) => {
+      const progress = Math.min(1, (now - startedAt) / duration);
+      const eased = ease(progress);
+      this.zoom = startZoom + (targetZoom - startZoom) * eased;
+      this.panX = startPanX + (targetPanX - startPanX) * eased;
+      this.panY = startPanY + (targetPanY - startPanY) * eased;
+      this.applyTransform();
+      if (progress < 1) {
+        this.viewportAnimationFrame = window.requestAnimationFrame(step);
+      } else {
+        this.viewportAnimationFrame = null;
+      }
+    };
+    this.viewportAnimationFrame = window.requestAnimationFrame(step);
   }
   /**
    * 从文档视图状态恢复导图缩放与平移。没有已保存状态时，只在导图当前可见且启用自动适应时执行一次自适应；
