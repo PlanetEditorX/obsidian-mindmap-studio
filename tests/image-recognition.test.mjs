@@ -144,6 +144,10 @@ test("local OCR arguments are parsed without a shell", () => {
     "preserve_interword_spaces=1"
   ]);
   assert.deepEqual(localOcr.parseCommandArguments("--user-words 'my words.txt'"), ["--user-words", "my words.txt"]);
+  assert.deepEqual(localOcr.parseCommandArguments('"" ""'), ["", ""]);
+  assert.deepEqual(localOcr.parseCommandArguments("'' ''"), ["", ""]);
+  assert.deepEqual(localOcr.parseCommandArguments('a""b'), ["ab"]);
+  assert.deepEqual(localOcr.parseCommandArguments('a\\ b'), ["a b"]);
   assert.throws(() => localOcr.parseCommandArguments("--psm '6"), /未闭合引号/);
   assert.match(
     localOcr.formatLocalOcrError(Object.assign(new Error("spawn tesseract ENOENT"), { code: "ENOENT" }), "tesseract"),
