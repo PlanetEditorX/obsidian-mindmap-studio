@@ -264,13 +264,19 @@ test("article numbering inherits the surrounding text metrics", () => {
 
 test("pasted images report storage, insertion, and auto-upload failures independently", () => {
   const handlePaste = editorSource.match(/private async handlePaste\(event: ClipboardEvent\): Promise<void> \{[\s\S]*?\n  \}/)?.[0] ?? "";
+  const recoverPostCommit = editorSource.match(/private recoverPastedImagePostCommit\(\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
   assert.match(handlePaste, /path = await this\.callbacks\.onSavePastedImage\(blob, filename\)[\s\S]*paste image storage failed/);
   assert.match(handlePaste, /const selected = findNode\(this\.document\.root, nodeId\)[\s\S]*this\.mutate\(\(\) => \{/);
-  assert.match(handlePaste, /paste image insertion failed[\s\S]*if \(!inserted\)[\s\S]*图片文件已保存，但插入节点失败/);
+  assert.match(handlePaste, /if \(!inserted\)[\s\S]*paste image insertion failed[\s\S]*图片文件已保存，但插入节点失败/);
+  assert.match(handlePaste, /post-commit synchronization deferred[\s\S]*recoverPastedImagePostCommit\(\)[\s\S]*onScheduleAutoUpload/);
   assert.match(handlePaste, /onScheduleAutoUpload\(selected\.id, imageBlock\.id, path, filename\)[\s\S]*paste image auto-upload scheduling failed[\s\S]*图片已保存：\$\{path\}；自动上传排程失败/);
+  assert.match(recoverPostCommit, /markSaving\(\)[\s\S]*render\(\)[\s\S]*window\.setTimeout\([\s\S]*callbacks\.onChange\(this\.getDocument\(\)\)/);
   assert.doesNotMatch(handlePaste, /new Notice\("粘贴图片失败"\)/);
-  assert.match(mainBundle, /paste image storage failed[\s\S]*paste image insertion failed[\s\S]*paste image auto-upload scheduling failed/);
+  assert.doesNotMatch(handlePaste, /保存同步出现异常/);
+  assert.match(mainBundle, /paste image storage failed[\s\S]*paste image insertion failed[\s\S]*post-commit synchronization deferred[\s\S]*paste image auto-upload scheduling failed/);
+  assert.match(mainBundle, /paste image save synchronization retry failed/);
   assert.doesNotMatch(mainBundle, /Notice\("\\u7C98\\u8D34\\u56FE\\u7247\\u5931\\u8D25"\)/);
+  assert.doesNotMatch(mainBundle, /\\u4FDD\\u5B58\\u540C\\u6B65\\u51FA\\u73B0\\u5F02\\u5E38/);
 });
 
 test("table edits preserve the visible anchor before synchronous and measured relayout", () => {

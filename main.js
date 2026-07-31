@@ -10308,6 +10308,30 @@ var MindMapEditor = class {
     return minutes === 0 ? "\u5C06\u7ACB\u5373\u81EA\u52A8\u4E0A\u4F20" : `${minutes} \u5206\u949F\u540E\u81EA\u52A8\u4E0A\u4F20`;
   }
   /**
+   * Recovers the save notification and redraw after a pasted image has already
+   * been committed to the in-memory document. A transient synchronous failure
+   * must not be reported as an image-paste failure or roll back the image.
+   */
+  recoverPastedImagePostCommit() {
+    const recoverUi = () => {
+      try {
+        this.markSaving();
+        this.render();
+      } catch (error) {
+        console.error("MindMap Studio paste image post-commit redraw failed", error);
+      }
+    };
+    recoverUi();
+    window.setTimeout(() => {
+      try {
+        this.callbacks.onChange(this.getDocument());
+      } catch (error) {
+        console.error("MindMap Studio paste image save synchronization retry failed", error);
+      }
+      recoverUi();
+    }, 0);
+  }
+  /**
    * 执行“mark saved”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
    */
   markSaved() {
@@ -13826,7 +13850,7 @@ var MindMapEditor = class {
       const nodeId = (_c = (_b2 = targetNode == null ? void 0 : targetNode.dataset.nodeId) != null ? _b2 : (_a2 = this.activeArticleBlock) == null ? void 0 : _a2.nodeId) != null ? _c : this.selectedId;
       const afterBlockId = (_e = targetBlock == null ? void 0 : targetBlock.dataset.blockId) != null ? _e : ((_d = this.activeArticleBlock) == null ? void 0 : _d.nodeId) === nodeId ? this.activeArticleBlock.blockId : void 0;
       if (target.closest("[contenteditable='true']")) target.blur();
-      const extension = ((_f = blob.type.split("/")[1]) == null ? void 0 : _f.replace("jpeg", "jpg").replace("svg+xml", "svg")) || "png";
+      const extension = ((blob.type.split("/")[1] || "").replace("jpeg", "jpg").replace("svg+xml", "svg")) || "png";
       const filename = `mindmap-image.${extension}`;
       let path;
       try {
@@ -13837,7 +13861,7 @@ var MindMapEditor = class {
         return;
       }
       const imageBlock = { id: newId(), type: "image", source: path, localSource: path };
-      const selected2 = (_h = (_g = findNode(this.document.root, nodeId)) != null ? _g : this.selectedNode()) != null ? _h : this.document.root;
+      const selected2 = (_g = (_f = findNode(this.document.root, nodeId)) != null ? _f : this.selectedNode()) != null ? _g : this.document.root;
       let inserted = false;
       try {
         this.mutate(() => {
@@ -13849,19 +13873,13 @@ var MindMapEditor = class {
           inserted = true;
         });
       } catch (error) {
-        console.error("MindMap Studio paste image insertion failed", error);
         if (!inserted) {
+          console.error("MindMap Studio paste image insertion failed", error);
           new import_obsidian10.Notice(`\u56FE\u7247\u6587\u4EF6\u5DF2\u4FDD\u5B58\uFF0C\u4F46\u63D2\u5165\u8282\u70B9\u5931\u8D25\uFF1A${path}`, 7e3);
           return;
         }
-        try {
-          this.markSaving();
-          this.render();
-        } catch (renderError) {
-          console.error("MindMap Studio paste image recovery render failed", renderError);
-        }
-        new import_obsidian10.Notice(`\u56FE\u7247\u5DF2\u63D2\u5165\uFF1A${path}\uFF1B\u4FDD\u5B58\u540C\u6B65\u51FA\u73B0\u5F02\u5E38\uFF0C\u8BF7\u786E\u8BA4\u6587\u4EF6\u5DF2\u4FDD\u5B58`, 7e3);
-        return;
+        console.warn("MindMap Studio paste image post-commit synchronization deferred", error);
+        this.recoverPastedImagePostCommit();
       }
       try {
         const scheduled = this.callbacks.onScheduleAutoUpload(selected2.id, imageBlock.id, path, filename);
