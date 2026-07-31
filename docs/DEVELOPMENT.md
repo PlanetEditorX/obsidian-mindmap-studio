@@ -109,3 +109,8 @@ npm run test:docs
 5. `main.js`、`manifest.json`、`styles.css` 非空。
 6. 在测试仓库中完成新建、编辑、保存、重开、导入、导出和子导图导航冒烟测试。
 7. 确认源码包不含 `.ua/`、`.local-test-build/`、`node_modules/` 或真实凭据。
+
+## AI 交付物同步规则
+
+每轮代码修改完成后，必须使用同一个六位随机后缀同步生成并返回：完整源码 ZIP、Obsidian 本地测试安装 ZIP 和最新 Codex 交接 ZIP。生成 Codex 包前，应先更新项目衔接页中的当前状态、验证基线、待验证事项、下一步及最近交付包；不得复用上一轮 Codex 包。
+

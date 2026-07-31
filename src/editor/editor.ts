@@ -1140,6 +1140,14 @@ export class MindMapEditor {
   private articleRenderToken = 0;
   private articleRenderPending = false;
   private articleRenderViewportSnapshot: { top: number; left: number; height: number } | null = null;
+  /** Hidden render target used to keep the previous article page visible until the replacement is complete. */
+  private articleRenderStageEl: HTMLElement | null = null;
+  /** Visible loading status shown above the retained article page or first-load skeleton. */
+  private articleRenderOverlayEl: HTMLElement | null = null;
+  /** Current article page retained during an off-screen rebuild. */
+  private articleRenderPreviousPageEl: HTMLElement | null = null;
+  /** Delayed cleanup for the short enter/overlay fade after an article swap. */
+  private articleRenderTransitionTimer: number | null = null;
   private pendingArticleRestoreLocation: ReadingLocation | null = null;
   private pendingMindMapLayoutAnimation = false;
   private allNodesCollapseToggleTimer: number | null = null;
@@ -3085,11 +3093,29 @@ export class MindMapEditor {
     };
     const token = this.beginArticleRender();
     this.articleRenderViewportSnapshot = viewportSnapshot;
-    this.articleEl.empty();
+    const previousPage = Array.from(this.articleEl.children)
+      .find((child): child is HTMLElement => child instanceof HTMLElement && child.matches(".mms-article-page")) ?? null;
+    this.articleRenderPreviousPageEl = previousPage;
+    if (previousPage) {
+      previousPage.addClass("is-render-retained");
+      previousPage.setAttr("aria-hidden", "true");
+    } else {
+      const shell = this.articleEl.createDiv({ cls: "mms-article-loading-shell", attr: { "aria-hidden": "true" } });
+      shell.createDiv({ cls: "mms-article-loading-shell-title" });
+      for (const width of ["92%", "78%", "86%", "68%", "81%", "56%"] as const) {
+        const line = shell.createDiv({ cls: "mms-article-loading-shell-line" });
+        line.style.setProperty("--mms-loading-line-width", width);
+      }
+    }
     this.articleEl.addClass("is-progressive-rendering");
     this.articleEl.setAttr("aria-busy", "true");
-    const loading = this.articleEl.createDiv({ cls: "mms-article-loading", text: "正在加载文章…" });
-    loading.style.minHeight = `${viewportSnapshot.height}px`;
+    const overlay = this.articleEl.createDiv({ cls: "mms-article-transition-overlay" });
+    const loading = overlay.createDiv({ cls: "mms-article-loading", attr: { role: "status", "aria-live": "polite" } });
+    loading.createSpan({ cls: "mms-article-loading-spinner", attr: { "aria-hidden": "true" } });
+    loading.createSpan({ text: previousPage ? "正在更新文章…" : "正在加载文章…" });
+    this.articleRenderOverlayEl = overlay;
+    const stage = this.articleEl.createDiv({ cls: "mms-article-render-stage", attr: { "aria-hidden": "true" } });
+    this.articleRenderStageEl = stage;
     this.articleEl.scrollTop = viewportSnapshot.top;
     this.articleEl.scrollLeft = viewportSnapshot.left;
     this.modeButtons.get("article")?.addClass("is-loading");
@@ -3101,7 +3127,7 @@ export class MindMapEditor {
         onProgress: () => this.maintainArticleRenderViewport(token),
         onComplete: () => this.completeArticleRender(token)
       };
-      renderArticleMode(this.articleEl, this.articleRendererOptions(incremental));
+      renderArticleMode(stage, this.articleRendererOptions(incremental));
     });
   }
 
@@ -3109,20 +3135,37 @@ export class MindMapEditor {
   private maintainArticleRenderViewport(token: number): void {
     if (token !== this.articleRenderToken || this.currentMode !== "article") return;
     const snapshot = this.articleRenderViewportSnapshot;
-    const page = this.articleEl.querySelector<HTMLElement>(".mms-article-page");
+    const page = this.articleRenderPreviousPageEl;
     if (snapshot && page) page.style.minHeight = `${snapshot.height}px`;
-    if (snapshot) this.articleEl.scrollLeft = snapshot.left;
-    const restoredSemanticLocation = this.maintainPendingArticleLocation();
-    if (!restoredSemanticLocation && snapshot) this.articleEl.scrollTop = snapshot.top;
+    if (snapshot) {
+      this.articleEl.scrollLeft = snapshot.left;
+      const restoredSemanticLocation = page ? this.maintainPendingArticleLocation() : false;
+      if (!restoredSemanticLocation) this.articleEl.scrollTop = snapshot.top;
+    }
   }
 
   /** 完成文章分帧挂载，安装依赖完整章节 DOM 的交互并恢复语义阅读位置。 */
   private completeArticleRender(token: number): void {
     if (token !== this.articleRenderToken || this.currentMode !== "article") return;
+    const stage = this.articleRenderStageEl;
+    const page = stage?.querySelector<HTMLElement>(":scope > .mms-article-page") ?? null;
+    if (!stage || !page) {
+      this.cancelArticleRender();
+      return;
+    }
+    const previousPage = this.articleRenderPreviousPageEl;
+    const snapshot = this.articleRenderViewportSnapshot;
+    page.addClass("is-render-entering");
+    if (snapshot) page.style.minHeight = `${snapshot.height}px`;
+    if (previousPage?.isConnected) previousPage.replaceWith(page);
+    else this.articleEl.insertBefore(page, this.articleRenderOverlayEl ?? stage);
+    stage.remove();
+    previousPage?.removeClass("is-render-retained");
+    previousPage?.removeAttribute("aria-hidden");
+    this.articleEl.querySelector<HTMLElement>(":scope > .mms-article-loading-shell")?.remove();
+    this.articleRenderStageEl = null;
+    this.articleRenderPreviousPageEl = null;
     this.articleRenderPending = false;
-    this.articleEl.removeClass("is-progressive-rendering");
-    this.articleEl.removeAttribute("aria-busy");
-    this.modeButtons.get("article")?.removeClass("is-loading");
     this.installArticleSectionCollapse();
     this.addArticleScrollToTopButton();
     this.renderArticleMiniMap();
@@ -3130,11 +3173,28 @@ export class MindMapEditor {
     const location = this.pendingArticleRestoreLocation ?? this.lastReadingLocation;
     this.pendingArticleRestoreLocation = null;
     if (location) this.restoreReadingLocation("article", location);
-    const page = this.articleEl.querySelector<HTMLElement>(".mms-article-page");
     this.articleRenderViewportSnapshot = null;
     window.requestAnimationFrame(() => {
       page?.style.removeProperty("min-height");
       if (location) this.restoreReadingLocation("article", location);
+      else if (snapshot) {
+        this.articleEl.scrollLeft = snapshot.left;
+        this.articleEl.scrollTop = snapshot.top;
+      }
+      window.requestAnimationFrame(() => {
+        page.removeClass("is-render-entering");
+        this.articleEl.removeClass("is-progressive-rendering");
+        this.articleEl.removeAttribute("aria-busy");
+        this.modeButtons.get("article")?.removeClass("is-loading");
+        const overlay = this.articleRenderOverlayEl;
+        overlay?.addClass("is-leaving");
+        if (this.articleRenderTransitionTimer !== null) window.clearTimeout(this.articleRenderTransitionTimer);
+        this.articleRenderTransitionTimer = window.setTimeout(() => {
+          this.articleRenderTransitionTimer = null;
+          overlay?.remove();
+          if (this.articleRenderOverlayEl === overlay) this.articleRenderOverlayEl = null;
+        }, 180);
+      });
     });
   }
 
@@ -3529,7 +3589,19 @@ export class MindMapEditor {
     this.pendingArticleRestoreLocation = null;
     if (this.articleRenderFrame !== null) window.cancelAnimationFrame(this.articleRenderFrame);
     this.articleRenderFrame = null;
-    this.articleEl?.querySelector<HTMLElement>(".mms-article-page")?.style.removeProperty("min-height");
+    if (this.articleRenderTransitionTimer !== null) window.clearTimeout(this.articleRenderTransitionTimer);
+    this.articleRenderTransitionTimer = null;
+    this.articleRenderStageEl?.remove();
+    this.articleRenderStageEl = null;
+    this.articleRenderOverlayEl?.remove();
+    this.articleRenderOverlayEl = null;
+    this.articleRenderPreviousPageEl?.removeClass("is-render-retained");
+    this.articleRenderPreviousPageEl?.removeAttribute("aria-hidden");
+    this.articleRenderPreviousPageEl?.style.removeProperty("min-height");
+    this.articleRenderPreviousPageEl = null;
+    this.articleEl?.querySelector<HTMLElement>(":scope > .mms-article-loading-shell")?.remove();
+    this.articleEl?.querySelector<HTMLElement>(":scope > .mms-article-page")?.removeClass("is-render-entering");
+    this.articleEl?.querySelector<HTMLElement>(":scope > .mms-article-page")?.style.removeProperty("min-height");
     this.articleEl?.removeClass("is-progressive-rendering");
     this.articleEl?.removeAttribute("aria-busy");
     this.modeButtons.get("article")?.removeClass("is-loading");
