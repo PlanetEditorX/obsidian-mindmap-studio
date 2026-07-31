@@ -1736,7 +1736,7 @@ export class MindMapEditor {
   async captureScreenshot(recognizeAfter = false, targetOverride?: ScreenshotInsertionTarget): Promise<void> {
     const insertionTarget = targetOverride ?? this.screenshotInsertionTarget();
     try {
-      const capture = await this.callbacks.onCaptureScreenshot();
+      const capture = await this.callbacks.onCaptureScreenshot(recognizeAfter);
       if (capture.action === "download") {
         new Notice("截图已下载");
         return;

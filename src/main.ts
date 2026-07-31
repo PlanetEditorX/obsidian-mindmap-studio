@@ -841,9 +841,12 @@ export default class MindMapStudioPlugin extends Plugin {
     };
   }
 
-  /** 调用桌面系统截图工具，并根据设置决定是否临时最小化 Obsidian。 */
-  async captureScreenshot(): Promise<DesktopCaptureResult> {
-    return captureDesktopScreenshot(this.settings.screenshotHideObsidian);
+  /** 按普通截图或截图并识别模式启动桌面覆盖层，并根据设置决定是否隐藏 Obsidian。 */
+  async captureScreenshot(recognizeAfter = false): Promise<DesktopCaptureResult> {
+    return captureDesktopScreenshot(
+      this.settings.screenshotHideObsidian,
+      recognizeAfter ? "capture-recognize" : "capture"
+    );
   }
 
   /** 使用最小请求检测 AI 接口、鉴权和模型是否可用。 */

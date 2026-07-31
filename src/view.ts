@@ -139,7 +139,7 @@ export class MindMapStudioView extends TextFileView {
         onDeleteRecognizedImageLocalAsset: async (localPath, blockId) => this.plugin.deleteRecognizedImageLocalAsset(this.file?.path ?? "", localPath, blockId),
         onRecognizeImage: async (image, blob, remoteUrl, instruction) => this.plugin.recognizeImage(image, blob, undefined, instruction, remoteUrl),
         onEnrichQuestion: async (questionText) => this.plugin.enrichQuestion(questionText),
-        onCaptureScreenshot: async () => this.plugin.captureScreenshot(),
+        onCaptureScreenshot: async (recognizeAfter) => this.plugin.captureScreenshot(recognizeAfter),
         onCreateSubmap: async (node) => {
           if (!this.file) throw new Error("当前脑图尚未关联文件");
           return this.plugin.createSubmapFile(this.file, node);

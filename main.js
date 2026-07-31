@@ -5388,7 +5388,7 @@ function readRichTextEditor(editor) {
 // src/editor/editor-modals.ts
 var import_obsidian5 = require("obsidian");
 
-// node_modules/fflate/esm/browser.js
+// ../../current_source_1353/node_modules/fflate/esm/browser.js
 var u8 = Uint8Array;
 var u16 = Uint16Array;
 var i32 = Int32Array;
@@ -10566,7 +10566,7 @@ var MindMapEditor = class {
   async captureScreenshot(recognizeAfter = false, targetOverride) {
     const insertionTarget = targetOverride != null ? targetOverride : this.screenshotInsertionTarget();
     try {
-      const capture = await this.callbacks.onCaptureScreenshot();
+      const capture = await this.callbacks.onCaptureScreenshot(recognizeAfter);
       if (capture.action === "download") {
         new import_obsidian10.Notice("\u622A\u56FE\u5DF2\u4E0B\u8F7D");
         return;
@@ -16499,7 +16499,7 @@ var MindMapStudioView = class _MindMapStudioView extends import_obsidian12.TextF
         },
         onRecognizeImage: async (image, blob, remoteUrl, instruction) => this.plugin.recognizeImage(image, blob, void 0, instruction, remoteUrl),
         onEnrichQuestion: async (questionText) => this.plugin.enrichQuestion(questionText),
-        onCaptureScreenshot: async () => this.plugin.captureScreenshot(),
+        onCaptureScreenshot: async (recognizeAfter) => this.plugin.captureScreenshot(recognizeAfter),
         onCreateSubmap: async (node) => {
           if (!this.file) throw new Error("\u5F53\u524D\u8111\u56FE\u5C1A\u672A\u5173\u8054\u6587\u4EF6");
           return this.plugin.createSubmapFile(this.file, node);
@@ -18453,8 +18453,9 @@ function pngDataUrlToBytes(dataUrl) {
   const buffer = requireFunction("node:buffer");
   return new Uint8Array(buffer.Buffer.from(encoded, "base64"));
 }
-function captureEditorHtml(display) {
+function captureEditorHtml(display, mode) {
   const bounds = JSON.stringify(display.bounds);
+  const captureMode = JSON.stringify(mode);
   return `<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'self' file: data:; img-src 'self' file: data:; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
 <title>MindMap Studio \u622A\u56FE</title><style>
@@ -18474,13 +18475,13 @@ function captureEditorHtml(display) {
 <div id="drawLayer"></div><div id="toolbar" class="toolbar">
 <button data-tool="shape">\u51E0\u4F55\u56FE\u5F62</button><button data-tool="pen">\u753B\u7B14</button><button data-tool="arrow">\u7BAD\u5934</button><button data-tool="text">\u6587\u5B57</button><button data-tool="number">\u5E8F\u53F7</button><button data-tool="mosaic">\u9A6C\u8D5B\u514B</button><button data-tool="eraser">\u6A61\u76AE\u64E6</button><span class="sep"></span>
 <button data-action="recognize-copy">\u8BC6\u522B\u5E76\u590D\u5236</button><button data-action="pin">\u56FA\u5B9A</button><button data-action="download">\u4E0B\u8F7D</button><button class="danger" data-action="cancel">\u53D6\u6D88</button><button class="primary" data-action="copy">\u590D\u5236</button></div>
-<div id="tip">\u62D6\u52A8\u84DD\u8272\u8FB9\u6846\u8C03\u6574\u622A\u56FE\u8303\u56F4\uFF1BEsc \u53D6\u6D88\uFF0CEnter \u590D\u5236</div>
+<div id="tip"></div>
 <script>
 (() => {
-  const displayBounds=${bounds}; const base=document.getElementById('base'); const ann=document.getElementById('annotations'); const preview=document.getElementById('preview');
-  const bctx=base.getContext('2d'); const actx=ann.getContext('2d'); const pctx=preview.getContext('2d'); const selection=document.getElementById('selection'); const metrics=document.getElementById('metrics'); const toolbar=document.getElementById('toolbar'); const drawLayer=document.getElementById('drawLayer');
-  const shades=['shadeTop','shadeLeft','shadeRight','shadeBottom'].map(id=>document.getElementById(id)); const dpr=Math.max(1,window.devicePixelRatio||1); let tool=''; let drawing=false; let start=null; let number=1; let drag=null;
-  let rect={x:Math.round(innerWidth*.18),y:Math.round(innerHeight*.16),w:Math.round(innerWidth*.64),h:Math.round(innerHeight*.62)}; const minSize=36;
+  const displayBounds=${bounds}; const captureMode=${captureMode}; const recognizeMode=captureMode==='capture-recognize'; const base=document.getElementById('base'); const ann=document.getElementById('annotations'); const preview=document.getElementById('preview');
+  const bctx=base.getContext('2d'); const actx=ann.getContext('2d'); const pctx=preview.getContext('2d'); const selection=document.getElementById('selection'); const metrics=document.getElementById('metrics'); const toolbar=document.getElementById('toolbar'); const drawLayer=document.getElementById('drawLayer'); const tip=document.getElementById('tip');
+  const shades=['shadeTop','shadeLeft','shadeRight','shadeBottom'].map(id=>document.getElementById(id)); const dpr=Math.max(1,window.devicePixelRatio||1); const autoConfirmDelayMs=3000; let tool=''; let drawing=false; let start=null; let number=1; let drag=null; let selectionDraw=null; let autoConfirmTimer=null; let autoConfirmArmed=false;
+  let rect={x:Math.round(innerWidth*.18),y:Math.round(innerHeight*.16),w:Math.round(innerWidth*.64),h:Math.round(innerHeight*.62)}; const minSize=36; tip.textContent=recognizeMode?'\u62D6\u52A8\u9009\u62E9\u622A\u56FE\u8303\u56F4\uFF1B\u91CA\u653E\u540E 3 \u79D2\u81EA\u52A8\u5B8C\u6210\uFF0C\u5728\u9009\u533A\u5185\u79FB\u52A8\u9F20\u6807\u6216\u8C03\u6574\u8FB9\u6846\u53EF\u91CD\u7F6E\u8BA1\u65F6':'\u62D6\u52A8\u6216\u8C03\u6574\u84DD\u8272\u8FB9\u6846\uFF1B\u53CC\u51FB\u9009\u533A\u590D\u5236\u5E76\u63D2\u5165\u8282\u70B9\uFF0CEsc \u53D6\u6D88';
   const image=new Image(); image.src='screen.png';
   function resizeCanvases(){for(const c of [base,ann,preview]){c.width=Math.round(innerWidth*dpr);c.height=Math.round(innerHeight*dpr);c.style.width=innerWidth+'px';c.style.height=innerHeight+'px'}; for(const c of [bctx,actx,pctx])c.setTransform(dpr,0,0,dpr,0,0); drawBase(); updateRect()}
   function drawBase(){if(!image.complete)return;bctx.clearRect(0,0,innerWidth,innerHeight);bctx.drawImage(image,0,0,innerWidth,innerHeight)}
@@ -18492,10 +18493,19 @@ function captureEditorHtml(display) {
   function placeToolbar(){const tw=toolbar.offsetWidth||820,th=toolbar.offsetHeight||48;let left=Math.max(8,Math.min(innerWidth-tw-8,rect.x+rect.w/2-tw/2));let top=rect.y+rect.h+10;if(top+th>innerHeight-8)top=Math.max(8,rect.y-th-10);toolbar.style.left=left+'px';toolbar.style.top=top+'px'}
   function point(ev){return{x:ev.clientX,y:ev.clientY}}
   function localPoint(ev){return{x:ev.clientX-rect.x,y:ev.clientY-rect.y}}
-  function beginResize(ev,handle){ev.preventDefault();ev.stopPropagation();drag={kind:handle,start:point(ev),rect:{...rect}};window.addEventListener('pointermove',moveResize);window.addEventListener('pointerup',endResize,{once:true})}
-  function moveResize(ev){if(!drag)return;const dx=ev.clientX-drag.start.x,dy=ev.clientY-drag.start.y,r=drag.rect;let x=r.x,y=r.y,w=r.w,h=r.h;if(drag.kind==='move'){x=r.x+dx;y=r.y+dy}else{if(drag.kind.includes('e'))w=r.w+dx;if(drag.kind.includes('s'))h=r.h+dy;if(drag.kind.includes('w')){x=r.x+dx;w=r.w-dx}if(drag.kind.includes('n')){y=r.y+dy;h=r.h-dy}if(w<minSize){if(drag.kind.includes('w'))x-=minSize-w;w=minSize}if(h<minSize){if(drag.kind.includes('n'))y-=minSize-h;h=minSize}}rect={x,y,w,h};updateRect()}
-  function endResize(){drag=null;window.removeEventListener('pointermove',moveResize)}
+  function insideRect(x,y){return x>=rect.x&&x<=rect.x+rect.w&&y>=rect.y&&y<=rect.y+rect.h}
+  function clearAutoConfirm(){if(autoConfirmTimer!==null){clearTimeout(autoConfirmTimer);autoConfirmTimer=null}}
+  function scheduleAutoConfirm(){if(!recognizeMode||!autoConfirmArmed)return;clearAutoConfirm();autoConfirmTimer=setTimeout(()=>action('copy'),autoConfirmDelayMs)}
+  function armAutoConfirm(){if(!recognizeMode)return;autoConfirmArmed=true;scheduleAutoConfirm()}
+  function resetAutoConfirm(){if(recognizeMode&&autoConfirmArmed)scheduleAutoConfirm()}
+  function beginResize(ev,handle){ev.preventDefault();ev.stopPropagation();clearAutoConfirm();drag={kind:handle,start:point(ev),rect:{...rect}};window.addEventListener('pointermove',moveResize);window.addEventListener('pointerup',endResize,{once:true})}
+  function moveResize(ev){if(!drag)return;resetAutoConfirm();const dx=ev.clientX-drag.start.x,dy=ev.clientY-drag.start.y,r=drag.rect;let x=r.x,y=r.y,w=r.w,h=r.h;if(drag.kind==='move'){x=r.x+dx;y=r.y+dy}else{if(drag.kind.includes('e'))w=r.w+dx;if(drag.kind.includes('s'))h=r.h+dy;if(drag.kind.includes('w')){x=r.x+dx;w=r.w-dx}if(drag.kind.includes('n')){y=r.y+dy;h=r.h-dy}if(w<minSize){if(drag.kind.includes('w'))x-=minSize-w;w=minSize}if(h<minSize){if(drag.kind.includes('n'))y-=minSize-h;h=minSize}}rect={x,y,w,h};updateRect()}
+  function endResize(){drag=null;window.removeEventListener('pointermove',moveResize);armAutoConfirm()}
   selection.querySelectorAll('[data-handle]').forEach(el=>el.addEventListener('pointerdown',ev=>beginResize(ev,el.dataset.handle)));selection.querySelectorAll('[data-drag]').forEach(el=>el.addEventListener('pointerdown',ev=>beginResize(ev,'move')));
+  function beginSelection(ev){if(ev.button!==0||tool||ev.target.closest('.toolbar')||ev.target.closest('[data-handle]')||ev.target.closest('[data-drag]'))return;selectionDraw={start:point(ev),active:false};window.addEventListener('pointermove',moveSelection);window.addEventListener('pointerup',endSelection,{once:true})}
+  function moveSelection(ev){if(!selectionDraw)return;const dx=ev.clientX-selectionDraw.start.x,dy=ev.clientY-selectionDraw.start.y;if(!selectionDraw.active&&Math.hypot(dx,dy)<4)return;selectionDraw.active=true;clearAutoConfirm();rect={x:Math.min(selectionDraw.start.x,ev.clientX),y:Math.min(selectionDraw.start.y,ev.clientY),w:Math.max(minSize,Math.abs(dx)),h:Math.max(minSize,Math.abs(dy))};updateRect()}
+  function endSelection(){const completed=selectionDraw?.active===true;selectionDraw=null;window.removeEventListener('pointermove',moveSelection);if(completed)armAutoConfirm()}
+  document.addEventListener('pointerdown',beginSelection);
   function setTool(next){tool=tool===next?'':next;toolbar.querySelectorAll('[data-tool]').forEach(btn=>btn.classList.toggle('active',btn.dataset.tool===tool));drawLayer.style.pointerEvents=tool?'auto':'none'}
   toolbar.querySelectorAll('[data-tool]').forEach(btn=>btn.addEventListener('click',()=>setTool(btn.dataset.tool)));
   function style(ctx){ctx.lineCap='round';ctx.lineJoin='round';ctx.strokeStyle='#ff3b30';ctx.fillStyle='#ff3b30';ctx.lineWidth=3}
@@ -18506,7 +18516,11 @@ function captureEditorHtml(display) {
   function moveDraw(ev){if(!drawing||!start)return;const p=localPoint(ev),a={x:rect.x+start.x,y:rect.y+start.y},b={x:rect.x+p.x,y:rect.y+p.y};if(tool==='pen'){style(actx);actx.beginPath();actx.moveTo(a.x,a.y);actx.lineTo(b.x,b.y);actx.stroke();start=p}else if(tool==='eraser'){actx.save();actx.globalCompositeOperation='destination-out';actx.lineWidth=24;actx.lineCap='round';actx.beginPath();actx.moveTo(a.x,a.y);actx.lineTo(b.x,b.y);actx.stroke();actx.restore();start=p}else if(tool==='mosaic'){mosaicAt(p);start=p}else{pctx.clearRect(0,0,innerWidth,innerHeight);style(pctx);if(tool==='shape')pctx.strokeRect(a.x,a.y,b.x-a.x,b.y-a.y);else if(tool==='arrow')drawArrow(pctx,a,b)}}
   drawLayer.addEventListener('pointermove',moveDraw);drawLayer.addEventListener('pointerup',()=>{if(!drawing)return;if(tool==='shape'||tool==='arrow')commitPreview();drawing=false;start=null});
   window.__mmsExport=()=>{const scaleX=image.naturalWidth/innerWidth,scaleY=image.naturalHeight/innerHeight;const out=document.createElement('canvas');out.width=Math.max(1,Math.round(rect.w*scaleX));out.height=Math.max(1,Math.round(rect.h*scaleY));const ctx=out.getContext('2d');ctx.drawImage(image,rect.x*scaleX,rect.y*scaleY,rect.w*scaleX,rect.h*scaleY,0,0,out.width,out.height);ctx.drawImage(ann,rect.x*dpr,rect.y*dpr,rect.w*dpr,rect.h*dpr,0,0,out.width,out.height);return{dataUrl:out.toDataURL('image/png'),bounds:{x:Math.round(displayBounds.x+rect.x),y:Math.round(displayBounds.y+rect.y),width:Math.round(rect.w),height:Math.round(rect.h)}}};
-  function action(name){console.log('MMS_CAPTURE_ACTION:'+name)}toolbar.querySelectorAll('[data-action]').forEach(btn=>btn.addEventListener('click',()=>action(btn.dataset.action)));document.addEventListener('keydown',ev=>{if(ev.key==='Escape')action('cancel');if(ev.key==='Enter'&&!ev.shiftKey)action('copy')});
+  function action(name){clearAutoConfirm();console.log('MMS_CAPTURE_ACTION:'+name)}toolbar.querySelectorAll('[data-action]').forEach(btn=>btn.addEventListener('click',()=>action(btn.dataset.action)));
+  document.addEventListener('pointermove',ev=>{if(recognizeMode&&autoConfirmArmed&&insideRect(ev.clientX,ev.clientY)&&!selectionDraw)resetAutoConfirm()});
+  toolbar.addEventListener('pointermove',resetAutoConfirm);toolbar.addEventListener('pointerdown',resetAutoConfirm);
+  document.addEventListener('dblclick',ev=>{if(captureMode==='capture'&&!tool&&insideRect(ev.clientX,ev.clientY)&&!ev.target.closest('.toolbar'))action('copy')});
+  document.addEventListener('keydown',ev=>{if(ev.key==='Escape')action('cancel');if(ev.key==='Enter'&&!ev.shiftKey)action('copy')});
   updateRect();setTimeout(placeToolbar,50);
 })();
 <\/script></body></html>`;
@@ -18559,7 +18573,7 @@ async function openPinnedCapture(runtime, nodeRuntime, bytes, bounds) {
   pinWindow.show();
   pinWindow.focus();
 }
-async function captureWithEditor(runtime, nodeRuntime, hideObsidian) {
+async function captureWithEditor(runtime, nodeRuntime, hideObsidian, mode) {
   var _a2, _b2, _c, _d, _e, _f, _g;
   const BrowserWindow = (_b2 = (_a2 = runtime.remote) == null ? void 0 : _a2.BrowserWindow) != null ? _b2 : runtime.BrowserWindow;
   const screen = (_d = (_c = runtime.remote) == null ? void 0 : _c.screen) != null ? _d : runtime.screen;
@@ -18592,7 +18606,7 @@ async function captureWithEditor(runtime, nodeRuntime, hideObsidian) {
     const imagePath = nodeRuntime.path.join(directory, "screen.png");
     const htmlPath = nodeRuntime.path.join(directory, "capture.html");
     await nodeRuntime.fs.writeFile(imagePath, screenshotBytes);
-    await nodeRuntime.fs.writeFile(htmlPath, captureEditorHtml(display));
+    await nodeRuntime.fs.writeFile(htmlPath, captureEditorHtml(display, mode));
     const captureWindow = new BrowserWindow({
       x: display.bounds.x,
       y: display.bounds.y,
@@ -18702,11 +18716,11 @@ async function captureWithSystemTool(runtime, nodeRuntime, hideObsidian) {
     }
   }
 }
-async function captureDesktopScreenshot(hideObsidian) {
+async function captureDesktopScreenshot(hideObsidian, mode = "capture") {
   const electronRuntime = getElectronRuntime();
   const nodeRuntime = getNodeCaptureRuntime();
   if (!electronRuntime || !nodeRuntime) throw new Error("\u622A\u56FE\u4EC5\u652F\u6301 Obsidian \u684C\u9762\u7AEF");
-  const edited = await captureWithEditor(electronRuntime, nodeRuntime, hideObsidian);
+  const edited = await captureWithEditor(electronRuntime, nodeRuntime, hideObsidian, mode);
   return edited != null ? edited : captureWithSystemTool(electronRuntime, nodeRuntime, hideObsidian);
 }
 
@@ -19552,9 +19566,12 @@ var MindMapStudioPlugin = class extends import_obsidian15.Plugin {
       model: result.model
     };
   }
-  /** 调用桌面系统截图工具，并根据设置决定是否临时最小化 Obsidian。 */
-  async captureScreenshot() {
-    return captureDesktopScreenshot(this.settings.screenshotHideObsidian);
+  /** 按普通截图或截图并识别模式启动桌面覆盖层，并根据设置决定是否隐藏 Obsidian。 */
+  async captureScreenshot(recognizeAfter = false) {
+    return captureDesktopScreenshot(
+      this.settings.screenshotHideObsidian,
+      recognizeAfter ? "capture-recognize" : "capture"
+    );
   }
   /** 使用最小请求检测 AI 接口、鉴权和模型是否可用。 */
   async testAiProfile(profileId) {

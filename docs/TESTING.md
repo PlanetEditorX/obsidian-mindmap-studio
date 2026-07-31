@@ -173,4 +173,4 @@ GitHub Actions 和 GitLab CI 均从干净检出开始执行 `npm ci` 与 `npm ru
 
 ## 图片识图与截图测试
 
-`tests/image-recognition.test.mjs` 覆盖整页/节点子树图片的稳定顺序、识图提示词与文本规范化、原位置图片转文字、过期预览拒绝、Tesseract 参数的无 shell 解析、各平台截图回退命令、剪贴板 PNG 指纹，以及截图覆盖层的 Electron 屏幕源、八方向选区、坐标尺寸、十二项工具栏、独立截图/识别动作和移动端懒加载契约。真实视觉模型、本机 Tesseract以及 Windows/macOS/Linux 覆盖层像素交互仍属于手动冒烟测试；自动测试不上传图片，也不启动真实桌面窗口。
+`tests/image-recognition.test.mjs` 覆盖整页/节点子树图片的稳定顺序、识图提示词与文本规范化、原位置图片转文字、过期预览拒绝、Tesseract 参数的无 shell 解析、各平台截图回退命令、剪贴板 PNG 指纹，以及截图覆盖层的 Electron 屏幕源、八方向选区、坐标尺寸、十二项工具栏、独立截图/识别动作、普通截图双击确认、截图并识别 3 秒空闲自动确认与交互重置计时，以及移动端懒加载契约。真实视觉模型、本机 Tesseract以及 Windows/macOS/Linux 覆盖层像素交互仍属于手动冒烟测试；自动测试不上传图片，也不启动真实桌面窗口。
