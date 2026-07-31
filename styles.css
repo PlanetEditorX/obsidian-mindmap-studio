@@ -3819,6 +3819,10 @@
   text-indent: 0;
 }
 
+.mms-article-leaf-text.mms-article-leaf-numbered {
+  text-indent: 0;
+}
+
 .mms-article-leaf-text.is-bulleted::before {
   position: absolute;
   top: .78em;

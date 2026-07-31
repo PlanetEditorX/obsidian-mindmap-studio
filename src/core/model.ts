@@ -51,6 +51,10 @@ export interface ArticleStyle {
   leafMarkerColor?: string;
   /** Per-page terminal body alignment; undefined follows the plugin default. */
   leafTextAlignment?: "flush" | "auto";
+  /** Per-page override for terminal body numbering conversion. */
+  leafNumberingEnabled?: boolean;
+  /** Per-page threshold for terminal body numbering conversion. */
+  leafNumberingThreshold?: number;
 }
 /**
  * ThemeMode 类型定义，用于限制可接受值并让序列化数据保持稳定。
@@ -1421,6 +1425,8 @@ function normalizeArticleStyle(input: Partial<ArticleStyle> | undefined): Articl
     leafMarkerStyle: input.leafMarkerStyle === "hollow" || input.leafMarkerStyle === "square" || input.leafMarkerStyle === "dash" ? input.leafMarkerStyle : input.leafMarkerStyle === "solid" ? "solid" : undefined,
     leafMarkerColor: color(input.leafMarkerColor),
     leafTextAlignment: input.leafTextAlignment === "flush" || input.leafTextAlignment === "auto" ? input.leafTextAlignment : undefined
+    ,leafNumberingEnabled: typeof input.leafNumberingEnabled === "boolean" ? input.leafNumberingEnabled : undefined
+    ,leafNumberingThreshold: typeof input.leafNumberingThreshold === "number" ? Math.max(1, Math.min(20, Math.round(input.leafNumberingThreshold))) : undefined
   };
 }
 

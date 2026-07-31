@@ -370,7 +370,7 @@ export class ArticleStyleModal extends Modal {
   constructor(
     app: App,
     style: ArticleStyle | undefined,
-    private readonly globalLeafPresentation: { enabled: boolean; style: ArticleLeafBulletStyle; color: string; alignment: ArticleLeafTextAlignment },
+    private readonly globalLeafPresentation: { enabled: boolean; style: ArticleLeafBulletStyle; color: string; alignment: ArticleLeafTextAlignment; numberingEnabled: boolean; numberingThreshold: number },
     private readonly submitStyle: (style: ArticleStyle) => void
   ) {
     super(app);
@@ -430,6 +430,13 @@ export class ArticleStyleModal extends Modal {
     alignment.createEl("option", { text: `跟随插件设置（当前${this.globalLeafPresentation.alignment === "auto" ? "自动" : "顶格"}）`, attr: { value: "" } });
     alignment.createEl("option", { text: "顶格", attr: { value: "flush" } });
     alignment.createEl("option", { text: "自动（与上级标题对齐）", attr: { value: "auto" } });
+    const numberingEnabledLabel = grid.createEl("label", { text: "末端正文标识转序号" });
+    const numberingEnabled = numberingEnabledLabel.createEl("select");
+    numberingEnabled.createEl("option", { text: `跟随插件设置（当前${this.globalLeafPresentation.numberingEnabled ? "开启" : "关闭"}）`, attr: { value: "" } });
+    numberingEnabled.createEl("option", { text: "开启", attr: { value: "true" } });
+    numberingEnabled.createEl("option", { text: "关闭", attr: { value: "false" } });
+    const numberingThresholdLabel = grid.createEl("label", { text: "末端正文转序号阈值" });
+    const numberingThreshold = numberingThresholdLabel.createEl("input", { type: "number", attr: { min: "1", max: "20", step: "1" } });
     const fill = (style: ArticleStyle): void => {
       const resolved = resolveArticleStyle(style);
       preset.value = resolved.preset;
@@ -447,6 +454,8 @@ export class ArticleStyleModal extends Modal {
       markerColorFollowGlobal.checked = style.leafMarkerColor === undefined;
       markerColor.disabled = markerColorFollowGlobal.checked;
       alignment.value = style.leafTextAlignment ?? "";
+      numberingEnabled.value = style.leafNumberingEnabled === undefined ? "" : String(style.leafNumberingEnabled);
+      numberingThreshold.value = String(style.leafNumberingThreshold ?? this.globalLeafPresentation.numberingThreshold);
     };
     fill(this.style);
     preset.addEventListener("change", () => fill(ARTICLE_STYLE_PRESETS[preset.value as ArticleStylePresetId]));
@@ -471,6 +480,8 @@ export class ArticleStyleModal extends Modal {
         leafMarkerStyle: markerStyle.value === "hollow" || markerStyle.value === "square" || markerStyle.value === "dash" ? markerStyle.value : markerStyle.value === "solid" ? "solid" : undefined,
         leafMarkerColor: markerColorFollowGlobal.checked ? undefined : markerColor.value,
         leafTextAlignment: alignment.value === "flush" || alignment.value === "auto" ? alignment.value : undefined
+        ,leafNumberingEnabled: numberingEnabled.value === "" ? undefined : numberingEnabled.value === "true"
+        ,leafNumberingThreshold: numberingEnabled.value === "" && !this.style.leafNumberingThreshold ? undefined : Math.max(1, Math.min(20, Math.round(Number(numberingThreshold.value) || this.globalLeafPresentation.numberingThreshold)))
       });
       this.close();
     });

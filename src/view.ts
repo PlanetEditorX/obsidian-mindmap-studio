@@ -472,6 +472,8 @@ export class MindMapStudioView extends TextFileView {
       articleLeafBulletColor: this.document?.articleStyle?.leafMarkerColor ?? this.plugin.settings.articleLeafBulletColor,
       articleLeafBulletStyle: this.document?.articleStyle?.leafMarkerStyle ?? this.plugin.settings.articleLeafBulletStyle,
       articleLeafTextAlignment: this.document?.articleStyle?.leafTextAlignment ?? this.plugin.settings.articleLeafTextAlignment,
+      articleLeafNumberingEnabled: this.document?.articleStyle?.leafNumberingEnabled ?? this.plugin.settings.articleLeafNumberingEnabled,
+      articleLeafNumberingThreshold: this.document?.articleStyle?.leafNumberingThreshold ?? this.plugin.settings.articleLeafNumberingThreshold,
       showArticleToc: this.showArticleToc,
       articleNavigation: this.articleNavigation
       ,readingSections: this.readingSections

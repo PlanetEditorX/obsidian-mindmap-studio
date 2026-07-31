@@ -231,6 +231,10 @@ export interface MindMapStudioSettings {
   articleLeafBulletStyle: ArticleLeafBulletStyle;
   /** Controls terminal body indentation independently from its marker. */
   articleLeafTextAlignment: ArticleLeafTextAlignment;
+  /** Converts terminal body siblings to the next article numbering level. */
+  articleLeafNumberingEnabled: boolean;
+  /** Minimum number of terminal body siblings required for conversion. */
+  articleLeafNumberingThreshold: number;
   /** Hides the configured per-map asset folder in Obsidian's File Explorer. */
   hideAssetFolderInFileExplorer: boolean;
   /** Enables custom File Explorer filters without changing vault files. */
@@ -356,6 +360,8 @@ export const DEFAULT_SETTINGS: MindMapStudioSettings = {
   articleLeafBulletColor: "",
   articleLeafBulletStyle: "solid",
   articleLeafTextAlignment: "auto",
+  articleLeafNumberingEnabled: false,
+  articleLeafNumberingThreshold: 3,
   hideAssetFolderInFileExplorer: false,
   hideConfiguredFilesInFileExplorer: false,
   hiddenFileExtensions: "",
@@ -814,6 +820,30 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
         .setValue(this.plugin.settings.articleLeafTextAlignment)
         .onChange(async (value) => {
           this.plugin.settings.articleLeafTextAlignment = value === "flush" ? "flush" : "auto";
+          await this.saveAndRefresh();
+        }));
+
+    new Setting(containerEl)
+      .setName("末端正文标识转序号")
+      .setDesc("同一上级标题下的末端正文达到阈值时，改用上级标题的下一级文章序号；没有可用的更深层级时仍保留标识。")
+      .addToggle((toggle) => toggle
+        .setValue(this.plugin.settings.articleLeafNumberingEnabled)
+        .onChange(async (value) => {
+          this.plugin.settings.articleLeafNumberingEnabled = value;
+          await this.saveAndRefresh();
+        }));
+
+    new Setting(containerEl)
+      .setName("末端正文转序号阈值")
+      .setDesc("达到多少个末端正文兄弟节点后自动转为序号，默认 3。")
+      .addText((text) => text
+        .setValue(String(this.plugin.settings.articleLeafNumberingThreshold))
+        .setPlaceholder("3")
+        .onChange(async (value) => {
+          const parsed = Number(value);
+          this.plugin.settings.articleLeafNumberingThreshold = Number.isFinite(parsed)
+            ? Math.max(1, Math.min(20, Math.round(parsed)))
+            : DEFAULT_SETTINGS.articleLeafNumberingThreshold;
           await this.saveAndRefresh();
         }));
 

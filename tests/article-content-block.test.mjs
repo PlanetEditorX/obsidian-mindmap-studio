@@ -111,6 +111,24 @@ test("terminal body marker and alignment stay independently configurable", async
   assert.match(styles, /\.mms-article-leaf-text\.is-auto-aligned\.is-bulleted\s*\{[\s\S]*text-indent:\s*0/);
 });
 
+test("terminal body siblings can switch to the next article numbering level", async () => {
+  const [settingsSource, viewSource, modesSource, rendererSource, editorSource] = await Promise.all([
+    readFile("src/settings.ts", "utf8"),
+    readFile("src/view.ts", "utf8"),
+    readFile("src/article/modes.ts", "utf8"),
+    readFile("src/editor/article-renderer.ts", "utf8"),
+    readFile("src/editor/editor.ts", "utf8")
+  ]);
+  assert.match(settingsSource, /articleLeafNumberingEnabled: boolean/);
+  assert.match(settingsSource, /articleLeafNumberingThreshold: number/);
+  assert.match(settingsSource, /setName\("末端正文标识转序号"\)[\s\S]*setName\("末端正文转序号阈值"\)/);
+  assert.match(viewSource, /document\?\.articleStyle\?\.leafNumberingEnabled \?\? this\.plugin\.settings\.articleLeafNumberingEnabled/);
+  assert.match(modesSource, /terminalCount = parent\.children\.filter/);
+  assert.match(modesSource, /numberedLeaf/);
+  assert.match(rendererSource, /mms-article-leaf-number/);
+  assert.match(editorSource, /buildArticleNodeInfo\(section\.document\.root, section\.baseDepth, \{ enabled: this\.options\.articleLeafNumberingEnabled/);
+});
+
 test("Enter commits an article title while Shift+Enter keeps an inline line break", () => {
   const makeInlineEditable = editorSource.match(/private makeInlineEditable\(element: HTMLElement, node: MindMapNode, placeholder: string, blockId\?: string\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
   const handleKeydown = editorSource.match(/private handleKeydown\(event: KeyboardEvent\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";

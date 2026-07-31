@@ -93,6 +93,8 @@ export interface MindMapEditorOptions {
   articleLeafBulletColor: string;
   articleLeafBulletStyle: ArticleLeafBulletStyle;
   articleLeafTextAlignment: ArticleLeafTextAlignment;
+  articleLeafNumberingEnabled: boolean;
+  articleLeafNumberingThreshold: number;
   showArticleToc: boolean;
   articleNavigation?: ArticlePageNavigation;
   readingSections: ReadingSection[];

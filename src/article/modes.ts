@@ -162,6 +162,8 @@ export interface ArticleNodeInfo {
   title: string;
   displayTitle: string;
   isHeading: boolean;
+  /** Terminal body rendered with a generated next-level article number. */
+  numberedLeaf: boolean;
   skipped: boolean;
   anchor: string;
 }
@@ -278,14 +280,26 @@ export function currentArticlePageEntry(navigation: ArticlePageNavigation | unde
  * @param baseDepth 根节点在整篇文章中的绝对基础层级。
  * @returns 按显示顺序展开的文章节点信息。
  */
-export function buildArticleNodeInfo(root: MindMapNode, baseDepth = 0): ArticleNodeInfo[] {
+export interface ArticleLeafNumberingOptions {
+  enabled: boolean;
+  threshold: number;
+}
+
+/**
+ * 展开文章节点，并按同一上级下的末端正文数量决定是否使用下一层序号。
+ */
+export function buildArticleNodeInfo(root: MindMapNode, baseDepth = 0, leafNumbering: ArticleLeafNumberingOptions = { enabled: false, threshold: 3 }): ArticleNodeInfo[] {
   const result: ArticleNodeInfo[] = [];
   const visitChildren = (parent: MindMapNode, defaultLevel: number): void => {
     const siblingHasHeading = parent.children.some((child) => isArticleHeading(child));
+    const threshold = Math.max(1, Math.min(20, Math.floor(leafNumbering.threshold) || 3));
+    const terminalCount = parent.children.filter((child) => !isArticleHeading(child) && child.articleNumberingMode !== "none").length;
+    const convertLeaves = leafNumbering.enabled && terminalCount >= threshold && defaultLevel <= 7;
     const numberedIndexes = new Map<number, number>();
     for (const child of parent.children) {
       const numbering = resolveArticleNumbering(child, defaultLevel, siblingHasHeading);
-      const numberedIndex = numbering.shouldNumber && !numbering.skipped
+      const numberedLeaf = convertLeaves && !numbering.isHeading && !numbering.skipped;
+      const numberedIndex = (numbering.shouldNumber || numberedLeaf) && !numbering.skipped
         ? (numberedIndexes.get(numbering.level) ?? 0) + 1
         : 0;
       if (numberedIndex) numberedIndexes.set(numbering.level, numberedIndex);
@@ -298,6 +312,7 @@ export function buildArticleNodeInfo(root: MindMapNode, baseDepth = 0): ArticleN
         title,
         displayTitle: articleDisplayTitle(label, title),
         isHeading: numbering.isHeading,
+        numberedLeaf,
         skipped: numbering.skipped,
         anchor: `mindmap-article-${child.id.replace(/[^a-zA-Z0-9_-]/g, "-")}`
       });
