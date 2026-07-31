@@ -9887,7 +9887,8 @@ var MindMapEditor = class {
     }
     if (this.inlineEditingId && !modesChanged && !toolbarChanged && !globalModeChanged) return;
     this.render();
-    const restored = this.restoreReadingLocation(this.currentMode, renderedLocation != null ? renderedLocation : this.lastReadingLocation);
+    const locationToRestore = this.currentMode === "mindmap" && !modeChanged ? null : renderedLocation != null ? renderedLocation : this.lastReadingLocation;
+    const restored = locationToRestore ? this.restoreReadingLocation(this.currentMode, locationToRestore) : null;
     if ((restored == null ? void 0 : restored.filePath) === this.options.currentFilePath) this.pendingLocationNavigationKey = null;
     if (restored && this.currentMode !== "reading" && restored.filePath !== this.options.currentFilePath) {
       const navigationKey = `${this.currentMode}\0${restored.filePath}\0${restored.nodeId}`;
