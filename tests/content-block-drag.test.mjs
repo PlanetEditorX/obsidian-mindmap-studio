@@ -126,6 +126,14 @@ test("moving the last meaningful block also removes blank text placeholders and 
   assert.deepEqual(root.children[0].content.map((block) => block.id), ["target-text", "text-a"]);
 });
 
+test("only semantic empty leaves are removable after their final content is deleted", () => {
+  const emptyLeaf = { id: "empty", text: "", content: [], children: [] };
+  assert.equal(model.isRemovableEmptyNode(emptyLeaf), true);
+  assert.equal(model.isRemovableEmptyNode({ ...emptyLeaf, children: [{ id: "child", text: "子节点", children: [] }] }), false);
+  assert.equal(model.isRemovableEmptyNode({ ...emptyLeaf, note: "保留备注" }), false);
+  assert.equal(model.isRemovableEmptyNode({ ...emptyLeaf, task: "todo" }), false);
+});
+
 test("explicit article node move inserts C immediately after A", () => {
   const root = {
     id: "root",
@@ -155,6 +163,8 @@ test("mind-map keeps mouse block dragging while article mode uses explicit movem
   assert.doesNotMatch(editorSource, /articleKeyboardMovingBlock|bindArticleContentBlockMoveControl|moveArticleContentBlockByKeyboard|mms-article-block-move-button/);
   assert.match(editorSource, /target\.closest<HTMLElement>\("\[data-block-id\]"\)\?\.dataset\.blockId[\s\S]*openContextMenu\(event, blockId\)/);
   assert.match(editorSource, /setTitle\("删除当前块"\)[\s\S]*removeContentBlock\(selected\.id, contextBlock\.id\)/);
+  assert.match(editorSource, /private removeNodeAfterContentDeletion\(node: MindMapNode, hadMeaningfulContent: boolean\): boolean/);
+  assert.match(editorSource, /!hadMeaningfulContent \|\| node\.id === this\.document\.root\.id \|\| !isRemovableEmptyNode\(node\)/);
   assert.match(styles, /\.mmc-content-block-drag-handle[\s\S]*cursor: grab/);
   assert.match(styles, /\.mmc-content-block-drag-handle[\s\S]*left: -28px[\s\S]*transform: translateY\(-50%\)/);
   assert.match(styles, /\.mmc-node-structured-block-shell[\s\S]*position: relative/);
