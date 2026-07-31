@@ -1881,7 +1881,15 @@ async function saveDesktopPdfFile(baseName, html) {
   if (!BrowserWindow) return null;
   let printWindow = null;
   try {
-    printWindow = new BrowserWindow({ show: false });
+    printWindow = new BrowserWindow({
+      show: false,
+      webPreferences: {
+        nodeIntegration: false,
+        contextIsolation: true,
+        sandbox: true,
+        javascript: false
+      }
+    });
     await printWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
     const pdf = await printWindow.webContents.printToPDF({ pageSize: "A4", printBackground: true });
     return await saveDesktopExportFile("pdf", baseName, pdf);
