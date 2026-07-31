@@ -3544,7 +3544,7 @@ export class MindMapEditor {
               if (!switched) return;
               const previous = block.remoteSources?.find((item) => item.url === block.source);
               block.source = candidate.source;
-              syncNodeContentFields(node);
+              replaceNodeContentBlocks(node, blocks);
               this.callbacks.onChange(this.getDocument());
               this.markSaving();
               const previousLabel = previous?.hostName || "当前图床";

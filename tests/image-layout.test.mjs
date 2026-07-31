@@ -53,6 +53,14 @@ test("canvas context menu uploads all current-page images with one host selectio
   assert.match(editorSource, /replaceNodeContentBlocks\(node, blocks\)/);
 });
 
+test("image failover persists the promoted source through the authoritative content blocks", () => {
+  const failover = editorSource.match(/const tryCandidate = \(index: number\): void => \{[\s\S]*?tryCandidate\(0\);/)?.[0] ?? "";
+
+  assert.match(failover, /block\.source = candidate\.source;\s*replaceNodeContentBlocks\(node, blocks\);/);
+  assert.doesNotMatch(failover, /block\.source = candidate\.source;\s*syncNodeContentFields\(node\);/);
+  assert.match(failover, /new Notice\(`图片地址失效，已从 \$\{previousLabel\} 自动切换到 \$\{candidate\.label\}`/);
+});
+
 test("selection-only resize notifications do not repeatedly relayout the whole mind map", () => {
   assert.match(editorSource, /observedMindMapNodeSizes = new Map<string, \{ width: number; height: number \}>/);
   assert.match(editorSource, /let nodeSizeChanged = false;[\s\S]*Math\.abs\(previous\.width - next\.width\) > 0\.5[\s\S]*Math\.abs\(previous\.height - next\.height\) > 0\.5/);
