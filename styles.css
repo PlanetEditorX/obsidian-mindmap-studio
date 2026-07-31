@@ -3073,6 +3073,10 @@
   box-shadow: 0 1px 3px rgba(0, 0, 0, .12);
 }
 
+.mms-mode-button.is-loading svg {
+  animation: mms-mode-loading-pulse 760ms ease-in-out infinite alternate;
+}
+
 .mmc-toolbar-button.is-active {
   color: var(--text-on-accent);
   background: var(--interactive-accent);
@@ -3104,6 +3108,40 @@
   min-height: 0;
   overflow: auto;
   background: var(--mmc-canvas);
+}
+
+.mms-article-view.is-progressive-rendering {
+  position: relative;
+  cursor: progress;
+}
+
+.mms-article-loading {
+  display: flex;
+  min-height: 160px;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+}
+
+.mms-article-view.is-progressive-rendering::after {
+  position: sticky;
+  z-index: 10;
+  bottom: 16px;
+  left: 50%;
+  display: block;
+  width: max-content;
+  max-width: calc(100% - 32px);
+  margin: 0 auto 16px;
+  padding: 7px 12px;
+  content: "正在渐进加载文章…";
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+  background: color-mix(in srgb, var(--background-primary) 92%, transparent);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  box-shadow: var(--shadow-s);
+  pointer-events: none;
 }
 
 .mms-article-minimap {
@@ -3742,6 +3780,41 @@
 .mms-article-node {
   position: relative;
   scroll-margin-top: 64px;
+}
+
+.mms-article-node.is-render-pending {
+  min-height: 72px;
+  border-radius: var(--radius-s);
+  background: linear-gradient(
+    100deg,
+    transparent 20%,
+    color-mix(in srgb, var(--background-modifier-hover) 68%, transparent) 42%,
+    transparent 64%
+  );
+  background-size: 240% 100%;
+  animation: mms-article-placeholder 1.15s ease-in-out infinite;
+}
+
+.mms-article-node.is-render-pending.depth-1,
+.mms-article-node.is-render-pending.depth-2 {
+  min-height: 94px;
+}
+
+@keyframes mms-mode-loading-pulse {
+  from { opacity: .42; transform: scale(.9); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes mms-article-placeholder {
+  from { background-position: 100% 0; }
+  to { background-position: -100% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mms-mode-button.is-loading svg,
+  .mms-article-node.is-render-pending {
+    animation: none;
+  }
 }
 
 .mms-article-node.is-selected {

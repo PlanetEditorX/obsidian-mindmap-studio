@@ -3871,6 +3871,85 @@ var import_obsidian12 = require("obsidian");
 // src/editor/editor.ts
 var import_obsidian10 = require("obsidian");
 
+// src/render/incremental-render.ts
+function buildHierarchyFocusOrder(root, selectedId) {
+  var _a2, _b2;
+  const parentById = /* @__PURE__ */ new Map();
+  const nodeById = /* @__PURE__ */ new Map();
+  const visit = (node, parent) => {
+    parentById.set(node.id, parent);
+    nodeById.set(node.id, node);
+    node.children.forEach((child) => visit(child, node));
+  };
+  visit(root, null);
+  const selected = (_a2 = nodeById.get(selectedId)) != null ? _a2 : root;
+  const ordered = [];
+  const seen = /* @__PURE__ */ new Set();
+  const add = (node) => {
+    if (!node || seen.has(node.id)) return;
+    seen.add(node.id);
+    ordered.push(node.id);
+  };
+  let current = selected;
+  while (current) {
+    add(current);
+    const parent = (_b2 = parentById.get(current.id)) != null ? _b2 : null;
+    if (parent) parent.children.forEach((sibling) => add(sibling));
+    current = parent;
+  }
+  add(root);
+  return ordered;
+}
+function prioritizeSpatialRenderItems(items, focusOrder, viewport) {
+  const focusRank = new Map(focusOrder.map((id, index) => [id, index]));
+  const viewportWidth = viewport ? Math.max(1, viewport.right - viewport.left) : 1;
+  const viewportHeight = viewport ? Math.max(1, viewport.bottom - viewport.top) : 1;
+  const centerX = viewport ? (viewport.left + viewport.right) / 2 : 0;
+  const centerY = viewport ? (viewport.top + viewport.bottom) / 2 : 0;
+  const intersects = (item, expansion) => {
+    if (!viewport) return false;
+    const halfWidth = item.width / 2;
+    const halfHeight = item.height / 2;
+    return item.x + halfWidth >= viewport.left - viewportWidth * expansion && item.x - halfWidth <= viewport.right + viewportWidth * expansion && item.y + halfHeight >= viewport.top - viewportHeight * expansion && item.y - halfHeight <= viewport.bottom + viewportHeight * expansion;
+  };
+  const band = (item) => {
+    if (focusRank.has(item.id)) return -1;
+    if (intersects(item, 0)) return 0;
+    if (intersects(item, 1)) return 1;
+    return 2;
+  };
+  const distance = (item) => {
+    const dx = item.x - centerX;
+    const dy = item.y - centerY;
+    return dx * dx + dy * dy;
+  };
+  return [...items].sort((left, right) => {
+    var _a2, _b2;
+    const leftBand = band(left);
+    const rightBand = band(right);
+    if (leftBand !== rightBand) return leftBand - rightBand;
+    if (leftBand === -1) return ((_a2 = focusRank.get(left.id)) != null ? _a2 : Number.MAX_SAFE_INTEGER) - ((_b2 = focusRank.get(right.id)) != null ? _b2 : Number.MAX_SAFE_INTEGER);
+    if (viewport && leftBand <= 2) {
+      const spatial = distance(left) - distance(right);
+      if (spatial) return spatial;
+    }
+    return left.order - right.order;
+  });
+}
+function prioritizeArticleNodeIds(nodeIds, focusOrder) {
+  const available = new Set(nodeIds);
+  const seen = /* @__PURE__ */ new Set();
+  const result = [];
+  const add = (id) => {
+    if (!available.has(id) || seen.has(id)) return;
+    seen.add(id);
+    result.push(id);
+  };
+  focusOrder.forEach(add);
+  nodeIds.forEach(add);
+  return result;
+}
+
 // src/render/code-block.ts
 var CODE_THEME_CLASS_NAMES = {
   github: "mms-code-theme-github",
@@ -7954,7 +8033,7 @@ function bindTableColumnResize(handle, options) {
 
 // src/editor/article-renderer.ts
 function renderArticleMode(container, options) {
-  var _a2, _b2, _c;
+  var _a2, _b2, _c, _d;
   container.empty();
   const articleStyle = resolveArticleStyle(options.document.articleStyle);
   const page = container.createDiv({ cls: `mms-article-page article-${articleStyle.preset} toc-${(_a2 = articleStyle.tocStyle) != null ? _a2 : "card"}` });
@@ -7981,58 +8060,104 @@ function renderArticleMode(container, options) {
   const directoryOnly = options.showArticleToc && options.articleTocEntries.length > 0 && ((_c = options.document.view) == null ? void 0 : _c.articleLandingMode) !== "article";
   if (directoryOnly) {
     renderDirectory(page, options);
+    (_d = options.incremental) == null ? void 0 : _d.onComplete();
     return;
   }
-  for (const info of buildArticleNodeInfo(options.document.root, options.articleBaseDepth, { enabled: options.articleLeafNumberingEnabled, threshold: options.articleLeafNumberingThreshold })) {
-    const section = page.createEl("section", { cls: `mms-article-node depth-${Math.min(info.depth, 8)}${!options.readOnly && options.selectedId === info.node.id ? " is-selected" : ""}` });
+  const infos = buildArticleNodeInfo(options.document.root, options.articleBaseDepth, {
+    enabled: options.articleLeafNumberingEnabled,
+    threshold: options.articleLeafNumberingThreshold
+  });
+  if (!options.incremental) {
+    for (const info of infos) {
+      const section = page.createEl("section");
+      renderArticleNodeSection(section, info, options);
+    }
+    renderArticlePager(page, options);
+    return;
+  }
+  const sections = /* @__PURE__ */ new Map();
+  for (const info of infos) {
+    const section = page.createEl("section", { cls: `mms-article-node is-render-pending depth-${Math.min(info.depth, 8)}` });
     section.dataset.nodeId = info.node.id;
     section.id = info.anchor;
-    section.addEventListener("click", () => {
-      if (!options.isReadOnly()) options.selectNode(info.node.id);
-    });
-    section.addEventListener("contextmenu", (event) => {
-      var _a3;
-      event.preventDefault();
-      event.stopPropagation();
-      const target = event.target instanceof HTMLElement ? event.target : null;
-      const blockId = (_a3 = target == null ? void 0 : target.closest("[data-block-id]")) == null ? void 0 : _a3.dataset.blockId;
-      options.selectNode(info.node.id);
-      options.openAiContextMenu(event, info.node.id, blockId);
-    });
-    if (info.isHeading) {
-      const level = Math.min(6, info.depth + 1);
-      const heading = section.createEl(`h${level}`, {
-        cls: `mms-article-heading mms-article-section-heading${/[、.）]$/.test(info.label) ? " is-compact-number" : ""}`
-      });
-      if (info.label) heading.createSpan({ cls: "mms-article-number", text: info.label });
-      renderHeading(heading, info.node, info.title, options);
-      const headingBlock = nodeContentBlocks(info.node).find((block) => block.type === "text");
-      if (headingBlock) heading.dataset.blockId = headingBlock.id;
-      if (info.skipped) heading.createSpan({ cls: "mms-article-skip-badge", text: "\u4E0D\u7F16\u53F7" });
-      options.addInlineNodeActions(heading, info.node);
-      renderArticleNodeContent(section, info.node, false, options);
-    } else {
-      const blocks = nodeContentBlocks(info.node);
-      const firstTextBlock = blocks.find((block) => block.type === "text");
-      if (firstTextBlock == null ? void 0 : firstTextBlock.text.trim()) {
-        const blockShell = createArticleContentBlock(section, firstTextBlock.id);
-        const paragraph = blockShell.createEl("p", { cls: `${articleParagraphClass("mms-article-leaf-text", firstTextBlock, options.articleLeafBulletsEnabled && !info.numberedLeaf, options.articleLeafTextAlignment)}${info.numberedLeaf ? " mms-article-leaf-numbered" : ""}` });
-        paragraph.dataset.blockId = firstTextBlock.id;
-        if (info.numberedLeaf) paragraph.dataset.articleNumber = info.label;
-        applyArticleLeafBulletStyle(paragraph, options, info.numberedLeaf);
-        renderRichTextRuns(paragraph, firstTextBlock.richText, firstTextBlock.text);
-        options.makeInlineEditable(paragraph, info.node, "\u6B63\u6587\u6BB5\u843D", firstTextBlock.id);
-      } else if (!options.readOnly && blocks.length === 0) {
-        const paragraph = section.createEl("p", { cls: articleParagraphClass("mms-article-leaf-text", void 0, options.articleLeafBulletsEnabled, options.articleLeafTextAlignment) });
-        applyArticleLeafBulletStyle(paragraph, options);
-        renderRichTextRuns(paragraph, void 0, "");
-        options.makeInlineEditable(paragraph, info.node, "\u6B63\u6587\u6BB5\u843D");
-      }
-      options.addInlineNodeActions(section, info.node);
-      renderArticleNodeContent(section, info.node, false, options);
-    }
+    sections.set(info.node.id, section);
   }
-  renderArticlePager(page, options);
+  const infoById = new Map(infos.map((info) => [info.node.id, info]));
+  const orderedIds = prioritizeArticleNodeIds(
+    infos.map((info) => info.node.id),
+    buildHierarchyFocusOrder(options.document.root, options.selectedId)
+  );
+  const renderBatch = (startIndex) => {
+    var _a3, _b3;
+    if ((_a3 = options.incremental) == null ? void 0 : _a3.isCancelled()) return;
+    const startedAt = performance.now();
+    let index = startIndex;
+    const minimumBatch = startIndex === 0 ? 4 : 2;
+    while (index < orderedIds.length && (index - startIndex < minimumBatch || performance.now() - startedAt < 7)) {
+      const nodeId = orderedIds[index];
+      const info = infoById.get(nodeId);
+      const section = sections.get(nodeId);
+      if (info && section) renderArticleNodeSection(section, info, options);
+      index += 1;
+    }
+    if (index < orderedIds.length) {
+      window.requestAnimationFrame(() => renderBatch(index));
+      return;
+    }
+    renderArticlePager(page, options);
+    (_b3 = options.incremental) == null ? void 0 : _b3.onComplete();
+  };
+  renderBatch(0);
+}
+function renderArticleNodeSection(section, info, options) {
+  section.empty();
+  section.className = `mms-article-node depth-${Math.min(info.depth, 8)}${!options.readOnly && options.selectedId === info.node.id ? " is-selected" : ""}`;
+  section.dataset.nodeId = info.node.id;
+  section.id = info.anchor;
+  section.addEventListener("click", () => {
+    if (!options.isReadOnly()) options.selectNode(info.node.id);
+  });
+  section.addEventListener("contextmenu", (event) => {
+    var _a2;
+    event.preventDefault();
+    event.stopPropagation();
+    const target = event.target instanceof HTMLElement ? event.target : null;
+    const blockId = (_a2 = target == null ? void 0 : target.closest("[data-block-id]")) == null ? void 0 : _a2.dataset.blockId;
+    options.selectNode(info.node.id);
+    options.openAiContextMenu(event, info.node.id, blockId);
+  });
+  if (info.isHeading) {
+    const level = Math.min(6, info.depth + 1);
+    const heading = section.createEl(`h${level}`, {
+      cls: `mms-article-heading mms-article-section-heading${/[、.）]$/.test(info.label) ? " is-compact-number" : ""}`
+    });
+    if (info.label) heading.createSpan({ cls: "mms-article-number", text: info.label });
+    renderHeading(heading, info.node, info.title, options);
+    const headingBlock = nodeContentBlocks(info.node).find((block) => block.type === "text");
+    if (headingBlock) heading.dataset.blockId = headingBlock.id;
+    if (info.skipped) heading.createSpan({ cls: "mms-article-skip-badge", text: "\u4E0D\u7F16\u53F7" });
+    options.addInlineNodeActions(heading, info.node);
+    renderArticleNodeContent(section, info.node, false, options);
+    return;
+  }
+  const blocks = nodeContentBlocks(info.node);
+  const firstTextBlock = blocks.find((block) => block.type === "text");
+  if (firstTextBlock == null ? void 0 : firstTextBlock.text.trim()) {
+    const blockShell = createArticleContentBlock(section, firstTextBlock.id);
+    const paragraph = blockShell.createEl("p", { cls: `${articleParagraphClass("mms-article-leaf-text", firstTextBlock, options.articleLeafBulletsEnabled && !info.numberedLeaf, options.articleLeafTextAlignment)}${info.numberedLeaf ? " mms-article-leaf-numbered" : ""}` });
+    paragraph.dataset.blockId = firstTextBlock.id;
+    if (info.numberedLeaf) paragraph.dataset.articleNumber = info.label;
+    applyArticleLeafBulletStyle(paragraph, options, info.numberedLeaf);
+    renderRichTextRuns(paragraph, firstTextBlock.richText, firstTextBlock.text);
+    options.makeInlineEditable(paragraph, info.node, "\u6B63\u6587\u6BB5\u843D", firstTextBlock.id);
+  } else if (!options.readOnly && blocks.length === 0) {
+    const paragraph = section.createEl("p", { cls: articleParagraphClass("mms-article-leaf-text", void 0, options.articleLeafBulletsEnabled, options.articleLeafTextAlignment) });
+    applyArticleLeafBulletStyle(paragraph, options);
+    renderRichTextRuns(paragraph, void 0, "");
+    options.makeInlineEditable(paragraph, info.node, "\u6B63\u6587\u6BB5\u843D");
+  }
+  options.addInlineNodeActions(section, info.node);
+  renderArticleNodeContent(section, info.node, false, options);
 }
 function createArticleContentBlock(container, blockId, indentToParagraph = false) {
   const shell = container.createDiv({
@@ -9852,6 +9977,13 @@ var MindMapEditor = class {
     /** Last observed outer dimensions for each rendered mind-map node. */
     this.observedMindMapNodeSizes = /* @__PURE__ */ new Map();
     this.measuredLayoutFrame = null;
+    this.incrementalRenderFrame = null;
+    this.incrementalRenderToken = 0;
+    this.mindMapRenderPending = false;
+    this.articleRenderFrame = null;
+    this.articleRenderToken = 0;
+    this.articleRenderPending = false;
+    this.pendingArticleRestoreLocation = null;
     this.pendingMindMapLayoutAnimation = false;
     this.allNodesCollapseToggleTimer = null;
     this.branchClipboard = null;
@@ -9914,6 +10046,8 @@ var MindMapEditor = class {
     this.resizeObserver = null;
     if (this.measuredLayoutFrame !== null) window.cancelAnimationFrame(this.measuredLayoutFrame);
     this.measuredLayoutFrame = null;
+    this.cancelIncrementalRender();
+    this.cancelArticleRender();
     if (this.allNodesCollapseToggleTimer !== null) window.clearTimeout(this.allNodesCollapseToggleTimer);
     this.allNodesCollapseToggleTimer = null;
     this.host.empty();
@@ -10189,6 +10323,16 @@ var MindMapEditor = class {
       this.selectedId = resolved.nodeId;
       this.selectedIds.clear();
       this.selectedIds.add(resolved.nodeId);
+    }
+    if (mode === "article" && this.articleRenderPending) {
+      this.pendingArticleRestoreLocation = createReadingLocation(
+        this.readingLocationSections(),
+        resolved.filePath,
+        resolved.nodeId,
+        resolved.nodeRatio,
+        resolved.viewportRatio
+      );
+      return resolved;
     }
     if (mode !== "mindmap") this.blockReadingLocationCapture();
     const restore = () => {
@@ -11235,7 +11379,7 @@ var MindMapEditor = class {
         return;
       }
       const hadMeaningfulContent = this.nodeHasMeaningfulContent(node);
-      this.mutate(() => {
+      this.mutateInlineText(node.id, () => {
         this.updateNodeTextBlock(node, next, blockId);
         this.removeNodeAfterContentDeletion(node, hadMeaningfulContent);
       });
@@ -11569,11 +11713,39 @@ var MindMapEditor = class {
    * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
    */
   renderArticle() {
+    var _a2;
     this.articleEl.onscroll = () => this.scheduleReadingLocationCapture("article");
-    renderArticleMode(this.articleEl, this.articleRendererOptions());
+    const token = this.beginArticleRender();
+    this.articleEl.empty();
+    this.articleEl.addClass("is-progressive-rendering");
+    this.articleEl.setAttr("aria-busy", "true");
+    this.articleEl.createDiv({ cls: "mms-article-loading", text: "\u6B63\u5728\u52A0\u8F7D\u6587\u7AE0\u2026" });
+    (_a2 = this.modeButtons.get("article")) == null ? void 0 : _a2.addClass("is-loading");
+    this.articleRenderFrame = window.requestAnimationFrame(() => {
+      this.articleRenderFrame = null;
+      if (token !== this.articleRenderToken || this.currentMode !== "article") return;
+      const incremental = {
+        isCancelled: () => token !== this.articleRenderToken || this.currentMode !== "article",
+        onComplete: () => this.completeArticleRender(token)
+      };
+      renderArticleMode(this.articleEl, this.articleRendererOptions(incremental));
+    });
+  }
+  /** 完成文章分帧挂载，安装依赖完整章节 DOM 的交互并恢复语义阅读位置。 */
+  completeArticleRender(token) {
+    var _a2, _b2;
+    if (token !== this.articleRenderToken || this.currentMode !== "article") return;
+    this.articleRenderPending = false;
+    this.articleEl.removeClass("is-progressive-rendering");
+    this.articleEl.removeAttribute("aria-busy");
+    (_a2 = this.modeButtons.get("article")) == null ? void 0 : _a2.removeClass("is-loading");
     this.installArticleSectionCollapse();
     this.addArticleScrollToTopButton();
     this.renderArticleMiniMap();
+    this.applyArticleClickMoveUi();
+    const location = (_b2 = this.pendingArticleRestoreLocation) != null ? _b2 : this.lastReadingLocation;
+    this.pendingArticleRestoreLocation = null;
+    if (location) this.restoreReadingLocation("article", location);
   }
   /** Renders a compact structural navigator for article and continuous reading views. */
   renderArticleMiniMap() {
@@ -11748,7 +11920,7 @@ var MindMapEditor = class {
     miniMap.toggleClass("is-hidden", rootRect.right - pageRect.right < requiredGutter);
   }
   /** 构造文章渲染器所需的最小状态边界。 */
-  articleRendererOptions() {
+  articleRendererOptions(incremental) {
     return {
       app: this.app,
       document: this.document,
@@ -11778,7 +11950,8 @@ var MindMapEditor = class {
       updateTableColumnWidths: (node, blockId, widths) => this.updateTableColumnWidths(node, blockId, widths),
       makeInlineEditable: (element, node, placeholder, blockId) => this.makeInlineEditable(element, node, placeholder, blockId),
       makeInlineCodeEditable: (element, node, code, blockId) => this.makeInlineCodeEditable(element, node, code, blockId),
-      addInlineNodeActions: (container, node) => this.addInlineNodeActions(container, node)
+      addInlineNodeActions: (container, node) => this.addInlineNodeActions(container, node),
+      incremental
     };
   }
   /**
@@ -11871,6 +12044,8 @@ var MindMapEditor = class {
    * 渲染相关数据，并保持模型、界面和持久化状态的一致性。
    */
   render() {
+    this.cancelIncrementalRender();
+    this.cancelArticleRender();
     this.clearArticleMiniMap();
     for (const id of Array.from(this.selectedIds)) {
       if (!findNode(this.document.root, id)) this.selectedIds.delete(id);
@@ -11894,7 +12069,7 @@ var MindMapEditor = class {
     else if (this.currentMode === "reading") this.renderReading();
     else if (this.currentMode === "question-bank") this.renderQuestionPractice();
     else this.renderMindMap();
-    this.applyArticleClickMoveUi();
+    if (!this.articleRenderPending) this.applyArticleClickMoveUi();
   }
   /** Renders the configured-folder practice surface and persists each automatic grading result. */
   renderQuestionPractice() {
@@ -11928,12 +12103,59 @@ var MindMapEditor = class {
     this.callbacks.onChange(this.getDocument());
     this.markSaving();
   }
+  /** 取消尚未完成的分帧导图挂载，并使旧回调自动失效。 */
+  cancelIncrementalRender() {
+    this.incrementalRenderToken += 1;
+    this.mindMapRenderPending = false;
+    if (this.incrementalRenderFrame !== null) window.cancelAnimationFrame(this.incrementalRenderFrame);
+    this.incrementalRenderFrame = null;
+  }
+  /** 开始一次新的分帧导图挂载并返回本轮令牌。 */
+  beginIncrementalRender() {
+    this.cancelIncrementalRender();
+    this.incrementalRenderToken += 1;
+    return this.incrementalRenderToken;
+  }
+  /** 取消尚未完成的文章挂载并移除工具栏和视图中的加载态。 */
+  cancelArticleRender() {
+    var _a2, _b2, _c;
+    this.articleRenderToken += 1;
+    this.articleRenderPending = false;
+    this.pendingArticleRestoreLocation = null;
+    if (this.articleRenderFrame !== null) window.cancelAnimationFrame(this.articleRenderFrame);
+    this.articleRenderFrame = null;
+    (_a2 = this.articleEl) == null ? void 0 : _a2.removeClass("is-progressive-rendering");
+    (_b2 = this.articleEl) == null ? void 0 : _b2.removeAttribute("aria-busy");
+    (_c = this.modeButtons.get("article")) == null ? void 0 : _c.removeClass("is-loading");
+  }
+  /** 开始一次新的文章分帧挂载并返回本轮令牌。 */
+  beginArticleRender() {
+    this.cancelArticleRender();
+    this.articleRenderPending = true;
+    this.articleRenderToken += 1;
+    return this.articleRenderToken;
+  }
+  /** 把当前缩放和平移转换为布局世界坐标，供当前和相邻视口优先排序。 */
+  currentMindMapWorldViewport() {
+    const rect = this.viewportEl.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0 || this.zoom <= 0) return void 0;
+    const halfWidth = rect.width / (2 * this.zoom);
+    const halfHeight = rect.height / (2 * this.zoom);
+    const centerX = -this.panX / this.zoom;
+    const centerY = -this.panY / this.zoom;
+    return {
+      left: centerX - halfWidth,
+      top: centerY - halfHeight,
+      right: centerX + halfWidth,
+      bottom: centerY + halfHeight
+    };
+  }
   /**
     * 渲染可交互导图画布：计算布局、绘制连接线和节点、恢复选择状态、绑定拖拽与尺寸手柄、安装子导图整节点入口，并启动图片镜像加载探测。
   * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
     */
   renderMindMap() {
-    var _a2, _b2, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _A, _B, _C, _D, _E, _F, _G, _H, _I;
+    var _a2, _b2;
     const previousNodeRects = this.captureMindMapNodeRects();
     const appearance = this.getAppearance();
     this.layout = computeLayout(this.document.root, this.document.layout, (_a2 = appearance.fontSize) != null ? _a2 : 14, (_b2 = appearance.nodeVisualStyle) != null ? _b2 : "card", appearance);
@@ -11943,418 +12165,456 @@ var MindMapEditor = class {
     this.nodesLayerEl.empty();
     while (this.edgesSvg.firstChild) this.edgesSvg.removeChild(this.edgesSvg.firstChild);
     this.renderMindMapEdges(appearance, branchColorMap);
-    for (const position of this.layout.nodes) {
-      const node = position.node;
-      const shape = (_d = (_c = node.style) == null ? void 0 : _c.shape) != null ? _d : this.options.defaultNodeShape;
-      const textAlign = (_g = (_f = (_e = node.style) == null ? void 0 : _e.textAlign) != null ? _f : appearance.nodeTextAlign) != null ? _g : "center";
-      const classes = ["mmc-node", position.depth === 0 ? "is-root" : "", node.submap ? "is-submap-node" : "", `shape-${shape}`, `text-align-${textAlign}`].filter(Boolean).join(" ");
-      const nodeEl = this.nodesLayerEl.createDiv({ cls: classes });
-      nodeEl.dataset.nodeId = node.id;
-      nodeEl.style.left = `${position.x}px`;
-      nodeEl.style.top = `${position.y}px`;
-      nodeEl.style.width = `${position.width}px`;
-      nodeEl.style.minHeight = `${Math.max(36, (_i = (_h = node.style) == null ? void 0 : _h.minHeight) != null ? _i : 0)}px`;
-      nodeEl.style.setProperty("--mmc-node-text-align", textAlign);
-      nodeEl.draggable = position.depth > 0 && !this.readOnly;
-      if (this.selectedId === node.id || this.selectedIds.has(node.id)) nodeEl.addClass("is-selected");
-      if (this.selectedIds.size > 1 && this.selectedIds.has(node.id)) nodeEl.addClass("is-multi-selected");
-      if (this.searchQuery && nodeSearchText(node).includes(this.searchQuery)) nodeEl.addClass("is-search-match");
-      if (node.task) nodeEl.addClass(`task-${node.task}`);
-      const isRoot = position.depth === 0;
-      const bold = (_l = (_k = (_j = node.style) == null ? void 0 : _j.bold) != null ? _k : appearance.bold) != null ? _l : false;
-      const italic = (_o = (_n = (_m = node.style) == null ? void 0 : _m.italic) != null ? _n : appearance.italic) != null ? _o : false;
-      const underline = (_r = (_q = (_p = node.style) == null ? void 0 : _p.underline) != null ? _q : appearance.underline) != null ? _r : false;
-      if (bold) nodeEl.addClass("is-bold");
-      if (italic) nodeEl.addClass("is-italic");
-      if (underline) nodeEl.addClass("is-underlined");
-      const branchColor = branchColorMap.get(node.id);
-      if ((_s = node.style) == null ? void 0 : _s.color) nodeEl.style.backgroundColor = node.style.color;
-      else if (isRoot && appearance.rootColor) nodeEl.style.backgroundColor = appearance.rootColor;
-      else if (!isRoot && branchColor && appearance.nodeVisualStyle === "branch") {
-        nodeEl.style.backgroundColor = `color-mix(in srgb, ${branchColor} 16%, ${(_t = appearance.nodeColor) != null ? _t : "#ffffff"})`;
-      } else if (!isRoot && appearance.nodeColor) nodeEl.style.backgroundColor = appearance.nodeColor;
-      if ((_u = node.style) == null ? void 0 : _u.textColor) nodeEl.style.color = node.style.textColor;
-      else if (isRoot && appearance.rootTextColor) nodeEl.style.color = appearance.rootTextColor;
-      else if (!isRoot && appearance.textColor) nodeEl.style.color = appearance.textColor;
-      if ((_v = node.style) == null ? void 0 : _v.borderColor) nodeEl.style.borderColor = node.style.borderColor;
-      else if (!isRoot && branchColor && appearance.nodeVisualStyle === "branch") {
-        nodeEl.style.borderColor = `color-mix(in srgb, ${branchColor} 38%, transparent)`;
-      } else if (!isRoot && branchColor) nodeEl.style.borderColor = branchColor;
-      else if (!isRoot && appearance.nodeBorderColor) nodeEl.style.borderColor = appearance.nodeBorderColor;
-      nodeEl.style.borderWidth = `${(_y = (_x = (_w = node.style) == null ? void 0 : _w.borderWidth) != null ? _x : appearance.nodeBorderWidth) != null ? _y : isRoot ? 2 : 1}px`;
-      const content = nodeEl.createDiv({ cls: "mmc-node-content" });
-      const blocks = nodeContentBlocks(node);
-      const hasTextBlock = blocks.some((block) => block.type === "text" && block.text.trim());
-      if ((node.task || node.icon) && !hasTextBlock) {
-        const meta = content.createDiv({ cls: "mmc-node-main mmc-node-meta-only" });
-        if (node.task) {
-          const task = meta.createSpan({ cls: `mmc-task-icon task-${node.task}`, text: node.task === "done" ? "\u2713" : node.task === "doing" ? "\u25D0" : "\u25CB" });
-          task.setAttr("aria-label", node.task === "done" ? "\u5DF2\u5B8C\u6210" : node.task === "doing" ? "\u8FDB\u884C\u4E2D" : "\u5F85\u529E");
-        }
-        if (node.icon) meta.createSpan({ cls: "mmc-node-icon", text: node.icon });
+    const viewport = this.currentMindMapWorldViewport();
+    const focusOrder = buildHierarchyFocusOrder(this.document.root, this.selectedId);
+    const positions = prioritizeSpatialRenderItems(
+      this.layout.nodes.map((position, order) => ({
+        position,
+        id: position.node.id,
+        x: position.x,
+        y: position.y,
+        width: position.width,
+        height: position.height,
+        order
+      })),
+      focusOrder,
+      viewport
+    ).map((item) => item.position);
+    const token = this.beginIncrementalRender();
+    this.mindMapRenderPending = true;
+    const renderBatch = (startIndex) => {
+      if (token !== this.incrementalRenderToken || this.currentMode !== "mindmap") return;
+      const startedAt = performance.now();
+      let index = startIndex;
+      const minimumBatch = startIndex === 0 ? 10 : 4;
+      while (index < positions.length && (index - startIndex < minimumBatch || performance.now() - startedAt < 7)) {
+        const position = positions[index];
+        const existing = this.nodesLayerEl.querySelector(`.mmc-node[data-node-id="${CSS.escape(position.node.id)}"]`);
+        if (!existing) this.renderMindMapNode(position, appearance, branchColorMap);
+        index += 1;
       }
-      let prefixRendered = false;
-      for (const block of blocks) {
-        if (block.type === "image") {
-          const wrap = content.createDiv({ cls: "mmc-node-image-block" });
-          wrap.addClass(`image-align-${(_z = block.align) != null ? _z : "center"}`);
-          wrap.dataset.blockId = block.id;
-          const image = wrap.createEl("img", { cls: "mmc-node-image is-loading", attr: { alt: (_A = block.alt) != null ? _A : nodePlainText(node) || "\u56FE\u7247" } });
-          if (block.width) image.style.width = `${block.width}px`;
-          if (block.height) image.style.height = `${block.height}px`;
-          const candidates = this.options.imageFailoverEnabled ? imageSourceCandidates(block, this.options.imageFailoverUseLocalFallback, this.options.imageHostPriorityIds) : imageSourceCandidates(block, false, this.options.imageHostPriorityIds).slice(0, 1);
-          let activeResolved = null;
-          let attemptToken = 0;
-          let attemptTimer = null;
-          const clearAttemptTimer = () => {
-            if (attemptTimer === null) return;
-            window.clearTimeout(attemptTimer);
-            this.imageLoadTimers.delete(attemptTimer);
-            attemptTimer = null;
-          };
-          const markRemoteFailure = (source) => {
-            var _a3, _b3;
-            const remote = (_a3 = block.remoteSources) == null ? void 0 : _a3.find((item) => item.url === source);
-            if (!remote) return;
-            remote.lastFailureAt = (/* @__PURE__ */ new Date()).toISOString();
-            remote.failureCount = Math.min(1e6, ((_b3 = remote.failureCount) != null ? _b3 : 0) + 1);
-          };
-          const tryCandidate = (index) => {
+      if (index < positions.length) {
+        this.incrementalRenderFrame = window.requestAnimationFrame(() => renderBatch(index));
+        return;
+      }
+      this.incrementalRenderFrame = null;
+      this.mindMapRenderPending = false;
+      if (previousNodeRects.size) {
+        this.applyMeasuredMindMapLayout();
+        this.playMindMapLayoutAnimation(previousNodeRects);
+      } else {
+        this.scheduleMeasuredMindMapLayout();
+      }
+    };
+    renderBatch(0);
+    this.applyTransform();
+  }
+  /** 将一个已完成布局的导图节点挂载到画布，并绑定其内容、选择、拖放和尺寸交互。 */
+  renderMindMapNode(position, appearance, branchColorMap) {
+    var _a2, _b2, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _A, _B, _C, _D, _E, _F, _G;
+    const node = position.node;
+    const shape = (_b2 = (_a2 = node.style) == null ? void 0 : _a2.shape) != null ? _b2 : this.options.defaultNodeShape;
+    const textAlign = (_e = (_d = (_c = node.style) == null ? void 0 : _c.textAlign) != null ? _d : appearance.nodeTextAlign) != null ? _e : "center";
+    const classes = ["mmc-node", position.depth === 0 ? "is-root" : "", node.submap ? "is-submap-node" : "", `shape-${shape}`, `text-align-${textAlign}`].filter(Boolean).join(" ");
+    const nodeEl = this.nodesLayerEl.createDiv({ cls: classes });
+    nodeEl.dataset.nodeId = node.id;
+    nodeEl.style.left = `${position.x}px`;
+    nodeEl.style.top = `${position.y}px`;
+    nodeEl.style.width = `${position.width}px`;
+    nodeEl.style.minHeight = `${Math.max(36, (_g = (_f = node.style) == null ? void 0 : _f.minHeight) != null ? _g : 0)}px`;
+    nodeEl.style.setProperty("--mmc-node-text-align", textAlign);
+    nodeEl.draggable = position.depth > 0 && !this.readOnly;
+    if (this.selectedId === node.id || this.selectedIds.has(node.id)) nodeEl.addClass("is-selected");
+    if (this.selectedIds.size > 1 && this.selectedIds.has(node.id)) nodeEl.addClass("is-multi-selected");
+    if (this.searchQuery && nodeSearchText(node).includes(this.searchQuery)) nodeEl.addClass("is-search-match");
+    if (node.task) nodeEl.addClass(`task-${node.task}`);
+    const isRoot = position.depth === 0;
+    const bold = (_j = (_i = (_h = node.style) == null ? void 0 : _h.bold) != null ? _i : appearance.bold) != null ? _j : false;
+    const italic = (_m = (_l = (_k = node.style) == null ? void 0 : _k.italic) != null ? _l : appearance.italic) != null ? _m : false;
+    const underline = (_p = (_o = (_n = node.style) == null ? void 0 : _n.underline) != null ? _o : appearance.underline) != null ? _p : false;
+    if (bold) nodeEl.addClass("is-bold");
+    if (italic) nodeEl.addClass("is-italic");
+    if (underline) nodeEl.addClass("is-underlined");
+    const branchColor = branchColorMap.get(node.id);
+    if ((_q = node.style) == null ? void 0 : _q.color) nodeEl.style.backgroundColor = node.style.color;
+    else if (isRoot && appearance.rootColor) nodeEl.style.backgroundColor = appearance.rootColor;
+    else if (!isRoot && branchColor && appearance.nodeVisualStyle === "branch") {
+      nodeEl.style.backgroundColor = `color-mix(in srgb, ${branchColor} 16%, ${(_r = appearance.nodeColor) != null ? _r : "#ffffff"})`;
+    } else if (!isRoot && appearance.nodeColor) nodeEl.style.backgroundColor = appearance.nodeColor;
+    if ((_s = node.style) == null ? void 0 : _s.textColor) nodeEl.style.color = node.style.textColor;
+    else if (isRoot && appearance.rootTextColor) nodeEl.style.color = appearance.rootTextColor;
+    else if (!isRoot && appearance.textColor) nodeEl.style.color = appearance.textColor;
+    if ((_t = node.style) == null ? void 0 : _t.borderColor) nodeEl.style.borderColor = node.style.borderColor;
+    else if (!isRoot && branchColor && appearance.nodeVisualStyle === "branch") {
+      nodeEl.style.borderColor = `color-mix(in srgb, ${branchColor} 38%, transparent)`;
+    } else if (!isRoot && branchColor) nodeEl.style.borderColor = branchColor;
+    else if (!isRoot && appearance.nodeBorderColor) nodeEl.style.borderColor = appearance.nodeBorderColor;
+    nodeEl.style.borderWidth = `${(_w = (_v = (_u = node.style) == null ? void 0 : _u.borderWidth) != null ? _v : appearance.nodeBorderWidth) != null ? _w : isRoot ? 2 : 1}px`;
+    const content = nodeEl.createDiv({ cls: "mmc-node-content" });
+    const blocks = nodeContentBlocks(node);
+    const hasTextBlock = blocks.some((block) => block.type === "text" && block.text.trim());
+    if ((node.task || node.icon) && !hasTextBlock) {
+      const meta = content.createDiv({ cls: "mmc-node-main mmc-node-meta-only" });
+      if (node.task) {
+        const task = meta.createSpan({ cls: `mmc-task-icon task-${node.task}`, text: node.task === "done" ? "\u2713" : node.task === "doing" ? "\u25D0" : "\u25CB" });
+        task.setAttr("aria-label", node.task === "done" ? "\u5DF2\u5B8C\u6210" : node.task === "doing" ? "\u8FDB\u884C\u4E2D" : "\u5F85\u529E");
+      }
+      if (node.icon) meta.createSpan({ cls: "mmc-node-icon", text: node.icon });
+    }
+    let prefixRendered = false;
+    for (const block of blocks) {
+      if (block.type === "image") {
+        const wrap = content.createDiv({ cls: "mmc-node-image-block" });
+        wrap.addClass(`image-align-${(_x = block.align) != null ? _x : "center"}`);
+        wrap.dataset.blockId = block.id;
+        const image = wrap.createEl("img", { cls: "mmc-node-image is-loading", attr: { alt: (_y = block.alt) != null ? _y : nodePlainText(node) || "\u56FE\u7247" } });
+        if (block.width) image.style.width = `${block.width}px`;
+        if (block.height) image.style.height = `${block.height}px`;
+        const candidates = this.options.imageFailoverEnabled ? imageSourceCandidates(block, this.options.imageFailoverUseLocalFallback, this.options.imageHostPriorityIds) : imageSourceCandidates(block, false, this.options.imageHostPriorityIds).slice(0, 1);
+        let activeResolved = null;
+        let attemptToken = 0;
+        let attemptTimer = null;
+        const clearAttemptTimer = () => {
+          if (attemptTimer === null) return;
+          window.clearTimeout(attemptTimer);
+          this.imageLoadTimers.delete(attemptTimer);
+          attemptTimer = null;
+        };
+        const markRemoteFailure = (source) => {
+          var _a3, _b3;
+          const remote = (_a3 = block.remoteSources) == null ? void 0 : _a3.find((item) => item.url === source);
+          if (!remote) return;
+          remote.lastFailureAt = (/* @__PURE__ */ new Date()).toISOString();
+          remote.failureCount = Math.min(1e6, ((_b3 = remote.failureCount) != null ? _b3 : 0) + 1);
+        };
+        const tryCandidate = (index) => {
+          clearAttemptTimer();
+          const candidate = candidates[index];
+          attemptToken += 1;
+          const token = attemptToken;
+          if (!candidate) {
+            activeResolved = null;
+            image.removeAttribute("src");
+            image.removeClass("is-loading");
+            image.addClass("is-unresolved");
+            image.setAttr("title", "\u6240\u6709\u56FE\u7247\u955C\u50CF\u5747\u4E0D\u53EF\u7528");
+            this.callbacks.onChange(this.getDocument());
+            this.markSaving();
+            return;
+          }
+          const resolved = this.callbacks.resolveImage(candidate.source);
+          if (!resolved) {
+            markRemoteFailure(candidate.source);
+            tryCandidate(index + 1);
+            return;
+          }
+          const probe = new Image();
+          const fail = () => {
+            if (token !== attemptToken) return;
             clearAttemptTimer();
-            const candidate = candidates[index];
-            attemptToken += 1;
-            const token = attemptToken;
-            if (!candidate) {
-              activeResolved = null;
-              image.removeAttribute("src");
+            markRemoteFailure(candidate.source);
+            if (this.options.imageFailoverEnabled) tryCandidate(index + 1);
+            else {
               image.removeClass("is-loading");
               image.addClass("is-unresolved");
-              image.setAttr("title", "\u6240\u6709\u56FE\u7247\u955C\u50CF\u5747\u4E0D\u53EF\u7528");
-              this.callbacks.onChange(this.getDocument());
-              this.markSaving();
-              return;
+              image.setAttr("title", `\u56FE\u7247\u52A0\u8F7D\u5931\u8D25\uFF1A${candidate.source}`);
             }
-            const resolved = this.callbacks.resolveImage(candidate.source);
-            if (!resolved) {
-              markRemoteFailure(candidate.source);
-              tryCandidate(index + 1);
-              return;
-            }
-            const probe = new Image();
-            const fail = () => {
-              if (token !== attemptToken) return;
-              clearAttemptTimer();
-              markRemoteFailure(candidate.source);
-              if (this.options.imageFailoverEnabled) tryCandidate(index + 1);
-              else {
-                image.removeClass("is-loading");
-                image.addClass("is-unresolved");
-                image.setAttr("title", `\u56FE\u7247\u52A0\u8F7D\u5931\u8D25\uFF1A${candidate.source}`);
-              }
-            };
-            probe.onload = () => {
-              var _a3, _b3;
-              if (token !== attemptToken || probe.naturalWidth <= 0) return;
-              clearAttemptTimer();
-              activeResolved = resolved;
-              image.src = resolved;
-              image.removeClass("is-loading");
-              image.removeClass("is-unresolved");
-              image.setAttr("title", index === 0 ? "\u70B9\u51FB\u653E\u5927\u56FE\u7247" : `\u5DF2\u81EA\u52A8\u5207\u6362\u5230\uFF1A${candidate.label}`);
-              const switched = candidate.source !== block.source;
-              const remote = (_a3 = block.remoteSources) == null ? void 0 : _a3.find((item) => item.url === candidate.source);
-              if (remote) remote.lastSuccessAt = (/* @__PURE__ */ new Date()).toISOString();
-              if (!switched) return;
-              const previous = (_b3 = block.remoteSources) == null ? void 0 : _b3.find((item) => item.url === block.source);
-              block.source = candidate.source;
-              replaceNodeContentBlocks(node, blocks);
-              this.callbacks.onChange(this.getDocument());
-              this.markSaving();
-              const previousLabel = (previous == null ? void 0 : previous.hostName) || "\u5F53\u524D\u56FE\u5E8A";
-              new import_obsidian10.Notice(`\u56FE\u7247\u5730\u5740\u5931\u6548\uFF0C\u5DF2\u4ECE ${previousLabel} \u81EA\u52A8\u5207\u6362\u5230 ${candidate.label}`, 6e3);
-            };
-            probe.onerror = fail;
-            const timeoutMs = Math.max(2, Math.min(30, this.options.imageFailoverTimeoutSeconds)) * 1e3;
-            attemptTimer = window.setTimeout(fail, timeoutMs);
-            this.imageLoadTimers.add(attemptTimer);
-            probe.src = resolved;
           };
-          image.addEventListener("click", (event) => {
-            var _a3;
-            event.stopPropagation();
-            if (activeResolved) new ImagePreviewModal(
-              this.app,
-              activeResolved,
-              (_a3 = block.alt) != null ? _a3 : "\u56FE\u7247\u9884\u89C8",
-              imageSourceCandidates(block, true, this.options.imageHostPriorityIds),
-              (source) => this.callbacks.resolveImage(source)
-            ).open();
-          });
-          image.addEventListener("contextmenu", (event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            this.selectNode(node.id);
-            this.openImageContextMenu(event, node.id, block.id);
-          });
-          tryCandidate(0);
-          this.bindContentBlockDragHandle(wrap, node.id, block.id);
-          continue;
-        }
-        if (block.type === "table") {
-          const shell = content.createDiv({ cls: "mmc-node-structured-block-shell" });
-          this.renderNodeTable(shell, node, block.table, block.id);
-          this.bindContentBlockDragHandle(shell, node.id, block.id);
-          continue;
-        }
-        if (block.type === "code") {
-          const shell = content.createDiv({ cls: "mmc-node-structured-block-shell" });
-          this.renderNodeCode(shell, node, block.code, block.id);
-          this.bindContentBlockDragHandle(shell, node.id, block.id);
-          continue;
-        }
-        if (!block.text.trim()) continue;
-        const main = content.createDiv({ cls: "mmc-node-main mmc-node-text-block" });
-        main.dataset.blockId = block.id;
-        if (!prefixRendered && node.task) {
-          const task = main.createSpan({ cls: `mmc-task-icon task-${node.task}`, text: node.task === "done" ? "\u2713" : node.task === "doing" ? "\u25D0" : "\u25CB" });
-          task.setAttr("aria-label", node.task === "done" ? "\u5DF2\u5B8C\u6210" : node.task === "doing" ? "\u8FDB\u884C\u4E2D" : "\u5F85\u529E");
-        }
-        if (!prefixRendered && node.icon) main.createSpan({ cls: "mmc-node-icon", text: node.icon });
-        const isSubmapTitle = Boolean(node.submap) && !prefixRendered;
-        prefixRendered = true;
-        const textEl = main.createDiv({ cls: `mmc-node-text${isSubmapTitle ? " is-submap-link" : ""}` });
-        textEl.dataset.blockId = block.id;
-        renderRichTextRuns(textEl, block.richText, block.text);
-        textEl.style.fontSize = `${(_D = (_C = (_B = node.style) == null ? void 0 : _B.fontSize) != null ? _C : appearance.fontSize) != null ? _D : 14}px`;
-        if (isSubmapTitle) {
-          const indicator = textEl.createSpan({ cls: "mmc-submap-inline-indicator", attr: { "aria-hidden": "true" } });
-          (0, import_obsidian10.setIcon)(indicator, "arrow-up-right");
-        }
-        this.bindContentBlockDragHandle(main, node.id, block.id);
-      }
-      if (node.submap && !hasTextBlock) {
-        const submapIcon = nodeEl.createEl("button", {
-          cls: "mmc-submap-corner-link",
-          attr: {
-            "aria-label": `\u6253\u5F00\u5B50\u5BFC\u56FE\uFF1A${(_E = node.submap.title) != null ? _E : node.submap.path}`,
-            title: `\u6253\u5F00\u5B50\u5BFC\u56FE\uFF1A${(_F = node.submap.title) != null ? _F : node.submap.path}`
-          }
-        });
-        (0, import_obsidian10.setIcon)(submapIcon, "arrow-up-right");
-        submapIcon.addEventListener("click", (event) => {
-          event.preventDefault();
+          probe.onload = () => {
+            var _a3, _b3;
+            if (token !== attemptToken || probe.naturalWidth <= 0) return;
+            clearAttemptTimer();
+            activeResolved = resolved;
+            image.src = resolved;
+            image.removeClass("is-loading");
+            image.removeClass("is-unresolved");
+            image.setAttr("title", index === 0 ? "\u70B9\u51FB\u653E\u5927\u56FE\u7247" : `\u5DF2\u81EA\u52A8\u5207\u6362\u5230\uFF1A${candidate.label}`);
+            const switched = candidate.source !== block.source;
+            const remote = (_a3 = block.remoteSources) == null ? void 0 : _a3.find((item) => item.url === candidate.source);
+            if (remote) remote.lastSuccessAt = (/* @__PURE__ */ new Date()).toISOString();
+            if (!switched) return;
+            const previous = (_b3 = block.remoteSources) == null ? void 0 : _b3.find((item) => item.url === block.source);
+            block.source = candidate.source;
+            replaceNodeContentBlocks(node, blocks);
+            this.callbacks.onChange(this.getDocument());
+            this.markSaving();
+            const previousLabel = (previous == null ? void 0 : previous.hostName) || "\u5F53\u524D\u56FE\u5E8A";
+            new import_obsidian10.Notice(`\u56FE\u7247\u5730\u5740\u5931\u6548\uFF0C\u5DF2\u4ECE ${previousLabel} \u81EA\u52A8\u5207\u6362\u5230 ${candidate.label}`, 6e3);
+          };
+          probe.onerror = fail;
+          const timeoutMs = Math.max(2, Math.min(30, this.options.imageFailoverTimeoutSeconds)) * 1e3;
+          attemptTimer = window.setTimeout(fail, timeoutMs);
+          this.imageLoadTimers.add(attemptTimer);
+          probe.src = resolved;
+        };
+        image.addEventListener("click", (event) => {
+          var _a3;
           event.stopPropagation();
-          void this.callbacks.onOpenMindMap(node.submap.path);
+          if (activeResolved) new ImagePreviewModal(
+            this.app,
+            activeResolved,
+            (_a3 = block.alt) != null ? _a3 : "\u56FE\u7247\u9884\u89C8",
+            imageSourceCandidates(block, true, this.options.imageHostPriorityIds),
+            (source) => this.callbacks.resolveImage(source)
+          ).open();
         });
-      }
-      if (node.submap) {
-        nodeEl.setAttr("role", "link");
-        nodeEl.setAttr("tabindex", "0");
-        nodeEl.setAttr("aria-label", `\u6253\u5F00\u5B50\u5BFC\u56FE\uFF1A${(_G = node.submap.title) != null ? _G : node.submap.path}`);
-      }
-      if (node.table && !blocks.some((block) => block.type === "table")) this.renderNodeTable(content, node, node.table);
-      if (node.code && !blocks.some((block) => block.type === "code")) this.renderNodeCode(content, node, node.code);
-      this.bindContentBlockAppendDropTarget(nodeEl, node.id);
-      if (node.question) this.renderQuestionSummary(content, node);
-      if ((_H = node.tags) == null ? void 0 : _H.length) {
-        const tags = content.createDiv({ cls: "mmc-node-tags" });
-        node.tags.slice(0, 4).forEach((tag) => tags.createSpan({ cls: "mmc-node-tag", text: `#${tag}` }));
-      }
-      if (this.options.showTaskProgress && node.children.length) {
-        const progress = getTaskProgress(node);
-        if (progress.total) {
-          const percent = Math.round(progress.done / progress.total * 100);
-          const progressEl = nodeEl.createDiv({ cls: "mmc-task-progress", attr: { title: `${progress.done}/${progress.total} \u4E2A\u4EFB\u52A1\u5DF2\u5B8C\u6210` } });
-          progressEl.createDiv({ cls: "mmc-task-progress-bar", attr: { style: `width:${percent}%` } });
-          progressEl.createSpan({ text: `${percent}%` });
-        }
-      }
-      if (node.children.length) {
-        const fold = nodeEl.createEl("button", { cls: "mmc-fold-button", attr: { "aria-label": node.collapsed ? "\u5C55\u5F00" : "\u6536\u8D77" } });
-        fold.setText(node.collapsed ? `+${node.children.length}` : "\u2212");
-        fold.addEventListener("click", (event) => {
+        image.addEventListener("contextmenu", (event) => {
+          event.preventDefault();
           event.stopPropagation();
           this.selectNode(node.id);
-          this.toggleCollapse();
+          this.openImageContextMenu(event, node.id, block.id);
         });
+        tryCandidate(0);
+        this.bindContentBlockDragHandle(wrap, node.id, block.id);
+        continue;
       }
-      const link = this.getNodeLink(node);
-      if (link) {
-        const linkButton = nodeEl.createEl("button", { cls: "mmc-node-link", attr: { "aria-label": `\u6253\u5F00 ${link}` } });
-        (0, import_obsidian10.setIcon)(linkButton, "external-link");
-        linkButton.addEventListener("click", (event) => {
-          event.stopPropagation();
-          void this.callbacks.onOpenLink(link);
-        });
+      if (block.type === "table") {
+        const shell = content.createDiv({ cls: "mmc-node-structured-block-shell" });
+        this.renderNodeTable(shell, node, block.table, block.id);
+        this.bindContentBlockDragHandle(shell, node.id, block.id);
+        continue;
       }
-      {
-        const resizeHandle = nodeEl.createDiv({
-          cls: "mmc-node-resize-handle",
-          attr: { role: "separator", tabindex: "0", "aria-label": "\u62D6\u52A8\u8C03\u6574\u8282\u70B9\u5BBD\u5EA6\u548C\u6700\u5C0F\u9AD8\u5EA6", title: "\u62D6\u52A8\u8C03\u6574\u8282\u70B9\u5927\u5C0F\uFF1B\u53CC\u51FB\u6062\u590D\u81EA\u52A8\u5927\u5C0F" }
+      if (block.type === "code") {
+        const shell = content.createDiv({ cls: "mmc-node-structured-block-shell" });
+        this.renderNodeCode(shell, node, block.code, block.id);
+        this.bindContentBlockDragHandle(shell, node.id, block.id);
+        continue;
+      }
+      if (!block.text.trim()) continue;
+      const main = content.createDiv({ cls: "mmc-node-main mmc-node-text-block" });
+      main.dataset.blockId = block.id;
+      if (!prefixRendered && node.task) {
+        const task = main.createSpan({ cls: `mmc-task-icon task-${node.task}`, text: node.task === "done" ? "\u2713" : node.task === "doing" ? "\u25D0" : "\u25CB" });
+        task.setAttr("aria-label", node.task === "done" ? "\u5DF2\u5B8C\u6210" : node.task === "doing" ? "\u8FDB\u884C\u4E2D" : "\u5F85\u529E");
+      }
+      if (!prefixRendered && node.icon) main.createSpan({ cls: "mmc-node-icon", text: node.icon });
+      const isSubmapTitle = Boolean(node.submap) && !prefixRendered;
+      prefixRendered = true;
+      const textEl = main.createDiv({ cls: `mmc-node-text${isSubmapTitle ? " is-submap-link" : ""}` });
+      textEl.dataset.blockId = block.id;
+      renderRichTextRuns(textEl, block.richText, block.text);
+      textEl.style.fontSize = `${(_B = (_A = (_z = node.style) == null ? void 0 : _z.fontSize) != null ? _A : appearance.fontSize) != null ? _B : 14}px`;
+      if (isSubmapTitle) {
+        const indicator = textEl.createSpan({ cls: "mmc-submap-inline-indicator", attr: { "aria-hidden": "true" } });
+        (0, import_obsidian10.setIcon)(indicator, "arrow-up-right");
+      }
+      this.bindContentBlockDragHandle(main, node.id, block.id);
+    }
+    if (node.submap && !hasTextBlock) {
+      const submapIcon = nodeEl.createEl("button", {
+        cls: "mmc-submap-corner-link",
+        attr: {
+          "aria-label": `\u6253\u5F00\u5B50\u5BFC\u56FE\uFF1A${(_C = node.submap.title) != null ? _C : node.submap.path}`,
+          title: `\u6253\u5F00\u5B50\u5BFC\u56FE\uFF1A${(_D = node.submap.title) != null ? _D : node.submap.path}`
+        }
+      });
+      (0, import_obsidian10.setIcon)(submapIcon, "arrow-up-right");
+      submapIcon.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        void this.callbacks.onOpenMindMap(node.submap.path);
+      });
+    }
+    if (node.submap) {
+      nodeEl.setAttr("role", "link");
+      nodeEl.setAttr("tabindex", "0");
+      nodeEl.setAttr("aria-label", `\u6253\u5F00\u5B50\u5BFC\u56FE\uFF1A${(_E = node.submap.title) != null ? _E : node.submap.path}`);
+    }
+    if (node.table && !blocks.some((block) => block.type === "table")) this.renderNodeTable(content, node, node.table);
+    if (node.code && !blocks.some((block) => block.type === "code")) this.renderNodeCode(content, node, node.code);
+    this.bindContentBlockAppendDropTarget(nodeEl, node.id);
+    if (node.question) this.renderQuestionSummary(content, node);
+    if ((_F = node.tags) == null ? void 0 : _F.length) {
+      const tags = content.createDiv({ cls: "mmc-node-tags" });
+      node.tags.slice(0, 4).forEach((tag) => tags.createSpan({ cls: "mmc-node-tag", text: `#${tag}` }));
+    }
+    if (this.options.showTaskProgress && node.children.length) {
+      const progress = getTaskProgress(node);
+      if (progress.total) {
+        const percent = Math.round(progress.done / progress.total * 100);
+        const progressEl = nodeEl.createDiv({ cls: "mmc-task-progress", attr: { title: `${progress.done}/${progress.total} \u4E2A\u4EFB\u52A1\u5DF2\u5B8C\u6210` } });
+        progressEl.createDiv({ cls: "mmc-task-progress-bar", attr: { style: `width:${percent}%` } });
+        progressEl.createSpan({ text: `${percent}%` });
+      }
+    }
+    if (node.children.length) {
+      const fold = nodeEl.createEl("button", { cls: "mmc-fold-button", attr: { "aria-label": node.collapsed ? "\u5C55\u5F00" : "\u6536\u8D77" } });
+      fold.setText(node.collapsed ? `+${node.children.length}` : "\u2212");
+      fold.addEventListener("click", (event) => {
+        event.stopPropagation();
+        this.selectNode(node.id);
+        this.toggleCollapse();
+      });
+    }
+    const link = this.getNodeLink(node);
+    if (link) {
+      const linkButton = nodeEl.createEl("button", { cls: "mmc-node-link", attr: { "aria-label": `\u6253\u5F00 ${link}` } });
+      (0, import_obsidian10.setIcon)(linkButton, "external-link");
+      linkButton.addEventListener("click", (event) => {
+        event.stopPropagation();
+        void this.callbacks.onOpenLink(link);
+      });
+    }
+    {
+      const resizeHandle = nodeEl.createDiv({
+        cls: "mmc-node-resize-handle",
+        attr: { role: "separator", tabindex: "0", "aria-label": "\u62D6\u52A8\u8C03\u6574\u8282\u70B9\u5BBD\u5EA6\u548C\u6700\u5C0F\u9AD8\u5EA6", title: "\u62D6\u52A8\u8C03\u6574\u8282\u70B9\u5927\u5C0F\uFF1B\u53CC\u51FB\u6062\u590D\u81EA\u52A8\u5927\u5C0F" }
+      });
+      resizeHandle.setAttr("draggable", "false");
+      resizeHandle.addEventListener("click", (event) => {
+        if (!event.ctrlKey && !event.metaKey) return;
+        event.preventDefault();
+        event.stopPropagation();
+      });
+      resizeHandle.addEventListener("dblclick", (event) => {
+        if (this.readOnly) return;
+        if (!event.ctrlKey && !event.metaKey) return;
+        event.preventDefault();
+        event.stopPropagation();
+        this.mutate(() => {
+          var _a3;
+          const next = { ...(_a3 = node.style) != null ? _a3 : {}, width: void 0, minHeight: void 0 };
+          node.style = Object.values(next).some((value) => value !== void 0) ? next : void 0;
         });
-        resizeHandle.setAttr("draggable", "false");
-        resizeHandle.addEventListener("click", (event) => {
-          if (!event.ctrlKey && !event.metaKey) return;
-          event.preventDefault();
-          event.stopPropagation();
-        });
-        resizeHandle.addEventListener("dblclick", (event) => {
-          if (this.readOnly) return;
-          if (!event.ctrlKey && !event.metaKey) return;
-          event.preventDefault();
-          event.stopPropagation();
+      });
+      resizeHandle.addEventListener("pointerdown", (event) => {
+        if (this.readOnly) return;
+        if (event.button !== 0) return;
+        if (!event.ctrlKey && !event.metaKey) return;
+        event.preventDefault();
+        event.stopPropagation();
+        const startX = event.clientX;
+        const startY = event.clientY;
+        const startWidth = position.width;
+        const startHeight = position.height;
+        let previewWidth = startWidth;
+        let previewHeight = startHeight;
+        resizeHandle.setPointerCapture(event.pointerId);
+        nodeEl.addClass("is-resizing");
+        const move = (moveEvent) => {
+          const scale = Math.max(0.1, this.zoom);
+          previewWidth = Math.min(900, Math.max(100, startWidth + (moveEvent.clientX - startX) / scale));
+          previewHeight = Math.min(600, Math.max(36, startHeight + (moveEvent.clientY - startY) / scale));
+          nodeEl.style.width = `${Math.round(previewWidth)}px`;
+          nodeEl.style.minHeight = `${Math.round(previewHeight)}px`;
+        };
+        const finish = (upEvent) => {
+          resizeHandle.removeEventListener("pointermove", move);
+          resizeHandle.removeEventListener("pointerup", finish);
+          resizeHandle.removeEventListener("pointercancel", finish);
+          if (resizeHandle.hasPointerCapture(upEvent.pointerId)) resizeHandle.releasePointerCapture(upEvent.pointerId);
+          nodeEl.removeClass("is-resizing");
           this.mutate(() => {
             var _a3;
-            const next = { ...(_a3 = node.style) != null ? _a3 : {}, width: void 0, minHeight: void 0 };
-            node.style = Object.values(next).some((value) => value !== void 0) ? next : void 0;
+            node.style = {
+              ...(_a3 = node.style) != null ? _a3 : {},
+              width: Math.round(previewWidth),
+              minHeight: Math.round(previewHeight)
+            };
           });
-        });
-        resizeHandle.addEventListener("pointerdown", (event) => {
-          if (this.readOnly) return;
-          if (event.button !== 0) return;
-          if (!event.ctrlKey && !event.metaKey) return;
-          event.preventDefault();
-          event.stopPropagation();
-          const startX = event.clientX;
-          const startY = event.clientY;
-          const startWidth = position.width;
-          const startHeight = position.height;
-          let previewWidth = startWidth;
-          let previewHeight = startHeight;
-          resizeHandle.setPointerCapture(event.pointerId);
-          nodeEl.addClass("is-resizing");
-          const move = (moveEvent) => {
-            const scale = Math.max(0.1, this.zoom);
-            previewWidth = Math.min(900, Math.max(100, startWidth + (moveEvent.clientX - startX) / scale));
-            previewHeight = Math.min(600, Math.max(36, startHeight + (moveEvent.clientY - startY) / scale));
-            nodeEl.style.width = `${Math.round(previewWidth)}px`;
-            nodeEl.style.minHeight = `${Math.round(previewHeight)}px`;
-          };
-          const finish = (upEvent) => {
-            resizeHandle.removeEventListener("pointermove", move);
-            resizeHandle.removeEventListener("pointerup", finish);
-            resizeHandle.removeEventListener("pointercancel", finish);
-            if (resizeHandle.hasPointerCapture(upEvent.pointerId)) resizeHandle.releasePointerCapture(upEvent.pointerId);
-            nodeEl.removeClass("is-resizing");
-            this.mutate(() => {
-              var _a3;
-              node.style = {
-                ...(_a3 = node.style) != null ? _a3 : {},
-                width: Math.round(previewWidth),
-                minHeight: Math.round(previewHeight)
-              };
-            });
-          };
-          resizeHandle.addEventListener("pointermove", move);
-          resizeHandle.addEventListener("pointerup", finish);
-          resizeHandle.addEventListener("pointercancel", finish);
-        });
-      }
-      nodeEl.addEventListener("click", (event) => {
-        event.stopPropagation();
-        if (event.shiftKey) {
-          this.toggleNodeSelection(node.id);
-          return;
-        }
-        this.selectNode(node.id);
-        if (node.submap) void this.callbacks.onOpenMindMap(node.submap.path);
+        };
+        resizeHandle.addEventListener("pointermove", move);
+        resizeHandle.addEventListener("pointerup", finish);
+        resizeHandle.addEventListener("pointercancel", finish);
       });
+    }
+    nodeEl.addEventListener("click", (event) => {
+      event.stopPropagation();
+      if (event.shiftKey) {
+        this.toggleNodeSelection(node.id);
+        return;
+      }
+      this.selectNode(node.id);
+      if (node.submap) void this.callbacks.onOpenMindMap(node.submap.path);
+    });
+    if (node.submap) {
+      nodeEl.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        event.preventDefault();
+        event.stopPropagation();
+        this.selectNode(node.id);
+        void this.callbacks.onOpenMindMap(node.submap.path);
+      });
+    }
+    nodeEl.addEventListener("dblclick", (event) => {
+      var _a3;
+      event.stopPropagation();
+      this.selectNode(node.id);
+      if (node.question && this.options.questionNodesEnabled) {
+        this.editQuestion(node);
+        return;
+      }
       if (node.submap) {
-        nodeEl.addEventListener("keydown", (event) => {
-          if (event.key !== "Enter" && event.key !== " ") return;
-          event.preventDefault();
-          event.stopPropagation();
-          this.selectNode(node.id);
-          void this.callbacks.onOpenMindMap(node.submap.path);
-        });
+        void this.callbacks.onOpenMindMap(node.submap.path);
+      } else if (!this.readOnly) {
+        if (this.isNearNodeEdge(event, nodeEl)) this.editSelected();
+        else {
+          const target = event.target;
+          const blockId = (_a3 = target.closest("[data-block-id]")) == null ? void 0 : _a3.dataset.blockId;
+          const block = blocks.find((item) => item.id === blockId);
+          if ((block == null ? void 0 : block.type) === "text") this.beginInlineEdit(node.id, block.id);
+          else this.editSelected(blockId);
+        }
       }
-      nodeEl.addEventListener("dblclick", (event) => {
-        var _a3;
-        event.stopPropagation();
-        this.selectNode(node.id);
-        if (node.question && this.options.questionNodesEnabled) {
-          this.editQuestion(node);
-          return;
-        }
-        if (node.submap) {
-          void this.callbacks.onOpenMindMap(node.submap.path);
-        } else if (!this.readOnly) {
-          if (this.isNearNodeEdge(event, nodeEl)) this.editSelected();
-          else {
-            const target = event.target;
-            const blockId = (_a3 = target.closest("[data-block-id]")) == null ? void 0 : _a3.dataset.blockId;
-            const block = blocks.find((item) => item.id === blockId);
-            if ((block == null ? void 0 : block.type) === "text") this.beginInlineEdit(node.id, block.id);
-            else this.editSelected(blockId);
-          }
-        }
-      });
-      nodeEl.addEventListener("contextmenu", (event) => {
-        var _a3;
+    });
+    nodeEl.addEventListener("contextmenu", (event) => {
+      var _a3;
+      event.preventDefault();
+      event.stopPropagation();
+      this.aiScopeNodeId = node.id;
+      this.updateAiScopeButton();
+      this.selectNode(node.id);
+      const target = event.target;
+      const blockId = (_a3 = target.closest("[data-block-id]")) == null ? void 0 : _a3.dataset.blockId;
+      this.openContextMenu(event, blockId);
+    });
+    nodeEl.addEventListener("dragstart", (event) => {
+      var _a3, _b3;
+      if (this.readOnly) {
         event.preventDefault();
-        event.stopPropagation();
-        this.aiScopeNodeId = node.id;
-        this.updateAiScopeButton();
-        this.selectNode(node.id);
-        const target = event.target;
-        const blockId = (_a3 = target.closest("[data-block-id]")) == null ? void 0 : _a3.dataset.blockId;
-        this.openContextMenu(event, blockId);
-      });
-      nodeEl.addEventListener("dragstart", (event) => {
-        var _a3, _b3;
-        if (this.readOnly) {
-          event.preventDefault();
-          return;
-        }
-        this.draggingId = node.id;
-        (_a3 = event.dataTransfer) == null ? void 0 : _a3.setData("text/plain", node.id);
-        if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
-        const draggingIds = this.selectedIds.has(node.id) ? this.selectedIds : /* @__PURE__ */ new Set([node.id]);
-        for (const draggingId of draggingIds) {
-          (_b3 = this.nodesLayerEl.querySelector(`[data-node-id="${CSS.escape(draggingId)}"]`)) == null ? void 0 : _b3.addClass("is-dragging");
-        }
-      });
-      nodeEl.addEventListener("dragover", (event) => {
-        if (!this.canMoveNode(this.draggingId, node.id)) return;
-        event.preventDefault();
-        if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
-        const position2 = this.dropPositionForEvent(event, nodeEl, node.id);
-        this.dragDropPosition = position2;
-        this.clearDropIndicators();
-        const indicator = position2 === "child" && isRightChildZone(event, nodeEl.getBoundingClientRect()) ? "is-drop-child-right" : `is-drop-${position2}`;
-        nodeEl.addClasses(["is-drop-target", indicator]);
-        this.showDropPreview(node.id, position2);
-      });
-      nodeEl.addEventListener("dragleave", (event) => {
-        if (event.relatedTarget instanceof Node && nodeEl.contains(event.relatedTarget)) return;
-        nodeEl.removeClasses(["is-drop-target", "is-drop-before", "is-drop-child", "is-drop-child-right", "is-drop-after"]);
-        this.clearDropPreview();
-      });
-      nodeEl.addEventListener("drop", (event) => {
-        var _a3, _b3, _c2, _d2;
-        event.preventDefault();
-        const position2 = (_a3 = this.dragDropPosition) != null ? _a3 : this.dropPositionForEvent(event, nodeEl, node.id);
-        this.clearDropIndicators();
-        this.clearDropPreview();
-        const draggedId = (_d2 = (_c2 = this.draggingId) != null ? _c2 : (_b3 = event.dataTransfer) == null ? void 0 : _b3.getData("text/plain")) != null ? _d2 : null;
-        if (draggedId) this.moveNode(draggedId, node.id, position2);
-      });
-      nodeEl.addEventListener("dragend", () => {
-        this.draggingId = null;
-        this.dragDropPosition = null;
-        this.clearDropIndicators();
-        this.clearDropPreview();
-        this.nodesLayerEl.querySelectorAll(".is-dragging").forEach((element) => element.removeClass("is-dragging"));
-      });
-      (_I = this.resizeObserver) == null ? void 0 : _I.observe(nodeEl);
-    }
-    if (previousNodeRects.size) {
-      this.applyMeasuredMindMapLayout();
-      this.playMindMapLayoutAnimation(previousNodeRects);
-    } else {
-      this.scheduleMeasuredMindMapLayout();
-    }
-    this.applyTransform();
+        return;
+      }
+      this.draggingId = node.id;
+      (_a3 = event.dataTransfer) == null ? void 0 : _a3.setData("text/plain", node.id);
+      if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
+      const draggingIds = this.selectedIds.has(node.id) ? this.selectedIds : /* @__PURE__ */ new Set([node.id]);
+      for (const draggingId of draggingIds) {
+        (_b3 = this.nodesLayerEl.querySelector(`[data-node-id="${CSS.escape(draggingId)}"]`)) == null ? void 0 : _b3.addClass("is-dragging");
+      }
+    });
+    nodeEl.addEventListener("dragover", (event) => {
+      if (!this.canMoveNode(this.draggingId, node.id)) return;
+      event.preventDefault();
+      if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+      const position2 = this.dropPositionForEvent(event, nodeEl, node.id);
+      this.dragDropPosition = position2;
+      this.clearDropIndicators();
+      const indicator = position2 === "child" && isRightChildZone(event, nodeEl.getBoundingClientRect()) ? "is-drop-child-right" : `is-drop-${position2}`;
+      nodeEl.addClasses(["is-drop-target", indicator]);
+      this.showDropPreview(node.id, position2);
+    });
+    nodeEl.addEventListener("dragleave", (event) => {
+      if (event.relatedTarget instanceof Node && nodeEl.contains(event.relatedTarget)) return;
+      nodeEl.removeClasses(["is-drop-target", "is-drop-before", "is-drop-child", "is-drop-child-right", "is-drop-after"]);
+      this.clearDropPreview();
+    });
+    nodeEl.addEventListener("drop", (event) => {
+      var _a3, _b3, _c2, _d2;
+      event.preventDefault();
+      const position2 = (_a3 = this.dragDropPosition) != null ? _a3 : this.dropPositionForEvent(event, nodeEl, node.id);
+      this.clearDropIndicators();
+      this.clearDropPreview();
+      const draggedId = (_d2 = (_c2 = this.draggingId) != null ? _c2 : (_b3 = event.dataTransfer) == null ? void 0 : _b3.getData("text/plain")) != null ? _d2 : null;
+      if (draggedId) this.moveNode(draggedId, node.id, position2);
+    });
+    nodeEl.addEventListener("dragend", () => {
+      this.draggingId = null;
+      this.dragDropPosition = null;
+      this.clearDropIndicators();
+      this.clearDropPreview();
+      this.nodesLayerEl.querySelectorAll(".is-dragging").forEach((element) => element.removeClass("is-dragging"));
+    });
+    (_G = this.resizeObserver) == null ? void 0 : _G.observe(nodeEl);
   }
   /** 使用当前布局坐标重新绘制全部连接线。 */
   renderMindMapEdges(appearance, branchColorMap) {
@@ -12444,7 +12704,7 @@ var MindMapEditor = class {
   }
   /** 合并同一帧内的节点尺寸变化，避免表格和图片加载触发重复布局。 */
   scheduleMeasuredMindMapLayout() {
-    if (this.measuredLayoutFrame !== null || this.currentMode !== "mindmap") return;
+    if (this.measuredLayoutFrame !== null || this.currentMode !== "mindmap" || this.mindMapRenderPending) return;
     this.measuredLayoutFrame = window.requestAnimationFrame(() => {
       this.measuredLayoutFrame = null;
       this.applyMeasuredMindMapLayout();
@@ -12927,7 +13187,12 @@ var MindMapEditor = class {
       document.removeEventListener("selectionchange", selectionChange);
       save();
       formatBar.remove();
-      this.render();
+      if (!findNode(this.document.root, node.id)) return;
+      editor.contentEditable = "false";
+      editor.removeClass("is-inline-editing");
+      editor.removeAttribute("role");
+      editor.removeAttribute("aria-label");
+      this.refreshAfterInlineTextCommit(node.id);
     });
     const focusAtEnd = () => {
       if (!document.body.contains(editor)) return;
@@ -13015,7 +13280,7 @@ var MindMapEditor = class {
       getDefaultUploadHostIds: this.callbacks.getDefaultUploadHostIds,
       onUploadImage: this.callbacks.onUploadImage,
       onReadImageSource: this.callbacks.onReadImageSource
-    }, (values) => {
+    }, (values, mode) => {
       var _a2;
       if (!historyCaptured) {
         this.history.capture(this.document);
@@ -13060,7 +13325,9 @@ var MindMapEditor = class {
         );
         const textBlock = nodeContentBlocks(selected).find((block) => block.type === "text");
         if (inline && document.activeElement !== inline) renderRichTextRuns(inline, textBlock == null ? void 0 : textBlock.richText, (_a2 = textBlock == null ? void 0 : textBlock.text) != null ? _a2 : "", false);
-      } else {
+      } else if (this.currentMode === "mindmap") {
+        this.refreshMindMapNode(selected.id);
+      } else if (mode === "commit") {
         this.render();
       }
     }, this.options.nodeEditorPosition, this.viewportEl, initialBlockId);
@@ -14861,6 +15128,64 @@ var MindMapEditor = class {
     this.markSaving();
     this.render();
     window.setTimeout(() => this.focusNodeById(this.selectedId), 20);
+  }
+  /**
+   * 提交行内文字时保留现有 DOM，仅在节点被删除时回退到完整重绘。
+   *
+   * @param nodeId 正在编辑的节点标识。
+   * @param action 写回文字内容块的同步修改。
+   */
+  mutateInlineText(nodeId, action) {
+    if (!this.ensureEditable()) return;
+    this.history.capture(this.document);
+    action();
+    this.callbacks.onChange(this.getDocument());
+    this.markSaving();
+    if (!findNode(this.document.root, nodeId)) {
+      this.render();
+      return;
+    }
+    this.refreshAfterInlineTextCommit(nodeId);
+  }
+  /**
+   * 在不销毁当前编辑节点的情况下刷新文字提交后的轻量状态和布局。
+   *
+   * @param nodeId 已提交文字的节点标识。
+   */
+  refreshAfterInlineTextCommit(nodeId) {
+    if (this.currentMode === "mindmap") {
+      const node = findNode(this.document.root, nodeId);
+      const nodeEl = this.nodesLayerEl.querySelector(`.mmc-node[data-node-id="${CSS.escape(nodeId)}"]`);
+      if (node && nodeEl) nodeEl.toggleClass("is-search-match", Boolean(this.searchQuery && nodeSearchText(node).includes(this.searchQuery)));
+      this.scheduleMeasuredMindMapLayout();
+      return;
+    }
+    this.applySelectionClasses();
+    if (nodeId === this.document.root.id) this.renderNavigation();
+    if (this.currentMode === "article") this.updateArticleMiniMapActiveMarker();
+  }
+  /**
+   * 只替换导图中的一个节点 DOM，并把真实尺寸变化交给统一测量布局处理。
+   *
+   * @param nodeId 需要刷新的节点标识。
+   */
+  refreshMindMapNode(nodeId) {
+    var _a2;
+    if (this.currentMode !== "mindmap") return;
+    const position = this.layout.byId.get(nodeId);
+    if (!position) {
+      this.render();
+      return;
+    }
+    const existing = this.nodesLayerEl.querySelector(`.mmc-node[data-node-id="${CSS.escape(nodeId)}"]`);
+    if (existing) {
+      (_a2 = this.resizeObserver) == null ? void 0 : _a2.unobserve(existing);
+      existing.remove();
+    }
+    const appearance = this.getAppearance();
+    const branchColorMap = appearance.colorfulBranches ? buildBranchColorMap(this.document.root, appearance.branchColors) : /* @__PURE__ */ new Map();
+    this.renderMindMapNode(position, appearance, branchColorMap);
+    this.scheduleMeasuredMindMapLayout();
   }
   /**
    * 所有用户可撤销写操作的统一入口。调用前克隆当前文档写入撤销栈，执行修改，规范化和重渲染，再通知视图自动保存；只读状态会在更上层阻止进入该流程。

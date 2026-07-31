@@ -40,7 +40,7 @@ test("new child maps retain the standard two starter topics", () => {
 });
 
 test("article mode renders and focuses a newly added empty child", () => {
-  const leafBranch = articleRendererSource.match(/\} else \{\n      const blocks = nodeContentBlocks\(info\.node\);[\s\S]*?renderArticleNodeContent\(section, info\.node, false, options\);\n    \}/)?.[0] ?? "";
+  const leafBranch = articleRendererSource.match(/function renderArticleNodeSection\([\s\S]*?\n\}/)?.[0] ?? "";
   const addChild = editorSource.match(/private addChild\(\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
   const beginInlineEdit = editorSource.match(/private beginInlineEdit\([\s\S]*?\n  \}/)?.[0] ?? "";
 

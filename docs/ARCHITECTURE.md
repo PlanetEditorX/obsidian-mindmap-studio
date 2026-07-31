@@ -102,8 +102,8 @@ Obsidian 读取文本
 → MindMapEditor.mutate()
 → 写入撤销栈
 → 修改同一份 MindMapDocument
-→ render()
 → callbacks.onChange()
+→ 结构变化执行 render()；纯文字提交执行局部 DOM 刷新与必要测量
 → TextFileView 自动保存
 → getViewData()
 → serializeDocument()
@@ -133,7 +133,7 @@ Obsidian 读取文本
 2. 清空 `future`，避免分叉历史错误复用。
 3. 执行调用方提供的修改函数。
 4. 同步有序内容块与节点派生摘要字段。
-5. 重新渲染当前模式。
+5. 结构变化重新渲染当前模式；纯文字提交通过 `mutateInlineText()` 保留现有 DOM，只更新当前节点并安排必要的尺寸测量。
 6. 通知视图保存。
 
 不应在 UI 事件中直接修改 `this.document` 后绕过 `mutate()`，否则会产生以下问题：
@@ -152,6 +152,8 @@ Obsidian 读取文本
 - 使用 `computeLayout()` 计算节点坐标。
 - 连接线与节点位于同一可缩放画布。
 - 支持拖拽重组、平移、缩放、尺寸手柄和整节点子导图入口。
+- `computeLayout()` 仍同步生成全树权威坐标和连接线；`incremental-render.ts` 只改变节点 DOM 的挂载顺序，不改变布局结果。
+- 节点优先级为当前节点、当前兄弟、父节点、父节点兄弟及更高祖先；之后按当前视口、前后相邻一个视口、其余区域排序。每批在短帧预算内执行，并通过 `requestAnimationFrame()` 让出主线程。
 
 ### 大纲模式
 
@@ -165,6 +167,8 @@ Obsidian 读取文本
 ### 文章模式
 
 - 使用 `resolveArticleNumbering()` 统一解析自动、关闭和手动层级，再由 `buildArticleNodeInfo()` 生成正文节点信息。
+- 进入文章模式时，编辑器先让模式按钮和 `aria-busy` 加载态完成一次浏览器绘制，再调用文章渲染器；大型文章先按原文顺序创建轻量章节占位，随后按当前节点关系链优先分帧填充正文。
+- 占位结构保持最终 DOM 顺序不变；分帧完成后才安装依赖完整章节树的折叠、回到顶部、缩略导航和点击移动 UI，并重新恢复 `ReadingLocation`，避免加载后跳回顶部。
 - 自动模式把有子节点或关联子导图的节点视为自然标题；同级存在自然标题时，末端节点也按同级标题处理。手动模式只覆盖最高层级，不强制孤立末端节点标题化。
 - `articleChildStartLevel()` 让中心节点的手动最高层级直接成为一级子节点层级，并处理跨子导图续接。
 - `ArticleTocEntry.depth` 保存编号层级，`tocDepth` 保存目录相对结构层级；目录最大深度、缩进和通读目录过滤只读取 `tocDepth`，避免自定义编号起点导致目录为空。

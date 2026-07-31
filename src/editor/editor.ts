@@ -58,6 +58,7 @@ import {
   moveNodeRelative
 } from "../core/model";
 import { buildBranchColorMap, computeLayout, documentToSvg, edgePath, edgeWidthForDepth, roundedElbowEdgePath, type LayoutResult } from "../render/layout";
+import { buildHierarchyFocusOrder, prioritizeSpatialRenderItems } from "../render/incremental-render";
 import { resolveLayoutCollisions } from "../render/collision-layout";
 import { buildCodeLineNumberText, countCodeLines } from "../render/code-block";
 import { CodeEditModal, TableEditModal } from "./content-modals";
@@ -92,7 +93,11 @@ import { renderNodeRichTextEditor } from "./node-rich-text-editor";
 import { canMoveNodes, isRightChildZone, resolveDropPosition } from "./drag-drop";
 import { DocumentHistory } from "./history-manager";
 import { renderOutlineMode } from "./outline-renderer";
-import { renderArticleMode, renderArticleNodeContent } from "./article-renderer";
+import {
+  renderArticleMode,
+  renderArticleNodeContent,
+  type ArticleIncrementalRenderOptions
+} from "./article-renderer";
 import { appendChild, deletionSelectionFallback, deleteNodes, insertSiblingAfter, nextTaskStatus, setAllBranchesCollapsed, topLevelSelectedNodeIds } from "./node-actions";
 import { attachSelectionFormatToolbar, type SelectionFormatToolbarHandle } from "./selection-format-toolbar";
 import {
@@ -1128,6 +1133,13 @@ export class MindMapEditor {
   /** Last observed outer dimensions for each rendered mind-map node. */
   private readonly observedMindMapNodeSizes = new Map<string, { width: number; height: number }>();
   private measuredLayoutFrame: number | null = null;
+  private incrementalRenderFrame: number | null = null;
+  private incrementalRenderToken = 0;
+  private mindMapRenderPending = false;
+  private articleRenderFrame: number | null = null;
+  private articleRenderToken = 0;
+  private articleRenderPending = false;
+  private pendingArticleRestoreLocation: ReadingLocation | null = null;
   private pendingMindMapLayoutAnimation = false;
   private allNodesCollapseToggleTimer: number | null = null;
   private branchClipboard: MindMapNode[] | null = null;
@@ -1206,6 +1218,8 @@ export class MindMapEditor {
     this.resizeObserver = null;
     if (this.measuredLayoutFrame !== null) window.cancelAnimationFrame(this.measuredLayoutFrame);
     this.measuredLayoutFrame = null;
+    this.cancelIncrementalRender();
+    this.cancelArticleRender();
     if (this.allNodesCollapseToggleTimer !== null) window.clearTimeout(this.allNodesCollapseToggleTimer);
     this.allNodesCollapseToggleTimer = null;
     this.host.empty();
@@ -1537,6 +1551,16 @@ export class MindMapEditor {
       this.selectedId = resolved.nodeId;
       this.selectedIds.clear();
       this.selectedIds.add(resolved.nodeId);
+    }
+    if (mode === "article" && this.articleRenderPending) {
+      this.pendingArticleRestoreLocation = createReadingLocation(
+        this.readingLocationSections(),
+        resolved.filePath,
+        resolved.nodeId,
+        resolved.nodeRatio,
+        resolved.viewportRatio
+      );
+      return resolved;
     }
     if (mode !== "mindmap") this.blockReadingLocationCapture();
     const restore = (): void => {
@@ -2667,7 +2691,7 @@ export class MindMapEditor {
         return;
       }
       const hadMeaningfulContent = this.nodeHasMeaningfulContent(node);
-      this.mutate(() => {
+      this.mutateInlineText(node.id, () => {
         this.updateNodeTextBlock(node, next, blockId);
         this.removeNodeAfterContentDeletion(node, hadMeaningfulContent);
       });
@@ -3028,10 +3052,37 @@ export class MindMapEditor {
    */
   private renderArticle(): void {
     this.articleEl.onscroll = () => this.scheduleReadingLocationCapture("article");
-    renderArticleMode(this.articleEl, this.articleRendererOptions());
+    const token = this.beginArticleRender();
+    this.articleEl.empty();
+    this.articleEl.addClass("is-progressive-rendering");
+    this.articleEl.setAttr("aria-busy", "true");
+    this.articleEl.createDiv({ cls: "mms-article-loading", text: "正在加载文章…" });
+    this.modeButtons.get("article")?.addClass("is-loading");
+    this.articleRenderFrame = window.requestAnimationFrame(() => {
+      this.articleRenderFrame = null;
+      if (token !== this.articleRenderToken || this.currentMode !== "article") return;
+      const incremental: ArticleIncrementalRenderOptions = {
+        isCancelled: () => token !== this.articleRenderToken || this.currentMode !== "article",
+        onComplete: () => this.completeArticleRender(token)
+      };
+      renderArticleMode(this.articleEl, this.articleRendererOptions(incremental));
+    });
+  }
+
+  /** 完成文章分帧挂载，安装依赖完整章节 DOM 的交互并恢复语义阅读位置。 */
+  private completeArticleRender(token: number): void {
+    if (token !== this.articleRenderToken || this.currentMode !== "article") return;
+    this.articleRenderPending = false;
+    this.articleEl.removeClass("is-progressive-rendering");
+    this.articleEl.removeAttribute("aria-busy");
+    this.modeButtons.get("article")?.removeClass("is-loading");
     this.installArticleSectionCollapse();
     this.addArticleScrollToTopButton();
     this.renderArticleMiniMap();
+    this.applyArticleClickMoveUi();
+    const location = this.pendingArticleRestoreLocation ?? this.lastReadingLocation;
+    this.pendingArticleRestoreLocation = null;
+    if (location) this.restoreReadingLocation("article", location);
   }
 
   /** Renders a compact structural navigator for article and continuous reading views. */
@@ -3218,7 +3269,7 @@ export class MindMapEditor {
   }
 
   /** 构造文章渲染器所需的最小状态边界。 */
-  private articleRendererOptions() {
+  private articleRendererOptions(incremental?: ArticleIncrementalRenderOptions) {
     return {
       app: this.app,
       document: this.document,
@@ -3245,7 +3296,8 @@ export class MindMapEditor {
       updateTableColumnWidths: (node: MindMapNode, blockId: string, widths: number[]) => this.updateTableColumnWidths(node, blockId, widths),
       makeInlineEditable: (element: HTMLElement, node: MindMapNode, placeholder: string, blockId?: string) => this.makeInlineEditable(element, node, placeholder, blockId),
       makeInlineCodeEditable: (element: HTMLElement, node: MindMapNode, code: MindMapCodeBlock, blockId: string) => this.makeInlineCodeEditable(element, node, code, blockId),
-      addInlineNodeActions: (container: HTMLElement, node: MindMapNode) => this.addInlineNodeActions(container, node)
+      addInlineNodeActions: (container: HTMLElement, node: MindMapNode) => this.addInlineNodeActions(container, node),
+      incremental
     };
   }
 
@@ -3338,6 +3390,8 @@ export class MindMapEditor {
    * 渲染相关数据，并保持模型、界面和持久化状态的一致性。
    */
   private render(): void {
+    this.cancelIncrementalRender();
+    this.cancelArticleRender();
     this.clearArticleMiniMap();
     for (const id of Array.from(this.selectedIds)) {
       if (!findNode(this.document.root, id)) this.selectedIds.delete(id);
@@ -3361,7 +3415,7 @@ export class MindMapEditor {
     else if (this.currentMode === "reading") this.renderReading();
     else if (this.currentMode === "question-bank") this.renderQuestionPractice();
     else this.renderMindMap();
-    this.applyArticleClickMoveUi();
+    if (!this.articleRenderPending) this.applyArticleClickMoveUi();
   }
 
   /** Renders the configured-folder practice surface and persists each automatic grading result. */
@@ -3399,6 +3453,57 @@ export class MindMapEditor {
     this.markSaving();
   }
 
+  /** 取消尚未完成的分帧导图挂载，并使旧回调自动失效。 */
+  private cancelIncrementalRender(): void {
+    this.incrementalRenderToken += 1;
+    this.mindMapRenderPending = false;
+    if (this.incrementalRenderFrame !== null) window.cancelAnimationFrame(this.incrementalRenderFrame);
+    this.incrementalRenderFrame = null;
+  }
+
+  /** 开始一次新的分帧导图挂载并返回本轮令牌。 */
+  private beginIncrementalRender(): number {
+    this.cancelIncrementalRender();
+    this.incrementalRenderToken += 1;
+    return this.incrementalRenderToken;
+  }
+
+  /** 取消尚未完成的文章挂载并移除工具栏和视图中的加载态。 */
+  private cancelArticleRender(): void {
+    this.articleRenderToken += 1;
+    this.articleRenderPending = false;
+    this.pendingArticleRestoreLocation = null;
+    if (this.articleRenderFrame !== null) window.cancelAnimationFrame(this.articleRenderFrame);
+    this.articleRenderFrame = null;
+    this.articleEl?.removeClass("is-progressive-rendering");
+    this.articleEl?.removeAttribute("aria-busy");
+    this.modeButtons.get("article")?.removeClass("is-loading");
+  }
+
+  /** 开始一次新的文章分帧挂载并返回本轮令牌。 */
+  private beginArticleRender(): number {
+    this.cancelArticleRender();
+    this.articleRenderPending = true;
+    this.articleRenderToken += 1;
+    return this.articleRenderToken;
+  }
+
+  /** 把当前缩放和平移转换为布局世界坐标，供当前和相邻视口优先排序。 */
+  private currentMindMapWorldViewport(): { left: number; top: number; right: number; bottom: number } | undefined {
+    const rect = this.viewportEl.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0 || this.zoom <= 0) return undefined;
+    const halfWidth = rect.width / (2 * this.zoom);
+    const halfHeight = rect.height / (2 * this.zoom);
+    const centerX = -this.panX / this.zoom;
+    const centerY = -this.panY / this.zoom;
+    return {
+      left: centerX - halfWidth,
+      top: centerY - halfHeight,
+      right: centerX + halfWidth,
+      bottom: centerY + halfHeight
+    };
+  }
+
   /**
    * 渲染可交互导图画布：计算布局、绘制连接线和节点、恢复选择状态、绑定拖拽与尺寸手柄、安装子导图整节点入口，并启动图片镜像加载探测。
  * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
@@ -3415,424 +3520,466 @@ export class MindMapEditor {
 
     this.renderMindMapEdges(appearance, branchColorMap);
 
-    for (const position of this.layout.nodes) {
-      const node = position.node;
-      const shape = node.style?.shape ?? this.options.defaultNodeShape;
-      const textAlign = node.style?.textAlign ?? appearance.nodeTextAlign ?? "center";
-      const classes = ["mmc-node", position.depth === 0 ? "is-root" : "", node.submap ? "is-submap-node" : "", `shape-${shape}`, `text-align-${textAlign}`].filter(Boolean).join(" ");
-      const nodeEl = this.nodesLayerEl.createDiv({ cls: classes });
-      nodeEl.dataset.nodeId = node.id;
-      nodeEl.style.left = `${position.x}px`;
-      nodeEl.style.top = `${position.y}px`;
-      nodeEl.style.width = `${position.width}px`;
-      // Layout estimates are only provisional coordinates. Keep a small global
-      // floor so a brand-new empty node remains visible and editable, while
-      // still allowing rich content and collapsed code blocks to shrink to
-      // their real DOM height. User-defined minimum height continues to win.
-      nodeEl.style.minHeight = `${Math.max(36, node.style?.minHeight ?? 0)}px`;
-      nodeEl.style.setProperty("--mmc-node-text-align", textAlign);
-      nodeEl.draggable = position.depth > 0 && !this.readOnly;
-      if (this.selectedId === node.id || this.selectedIds.has(node.id)) nodeEl.addClass("is-selected");
-      if (this.selectedIds.size > 1 && this.selectedIds.has(node.id)) nodeEl.addClass("is-multi-selected");
-      if (this.searchQuery && nodeSearchText(node).includes(this.searchQuery)) nodeEl.addClass("is-search-match");
-      if (node.task) nodeEl.addClass(`task-${node.task}`);
-      const isRoot = position.depth === 0;
-      const bold = node.style?.bold ?? appearance.bold ?? false;
-      const italic = node.style?.italic ?? appearance.italic ?? false;
-      const underline = node.style?.underline ?? appearance.underline ?? false;
-      if (bold) nodeEl.addClass("is-bold");
-      if (italic) nodeEl.addClass("is-italic");
-      if (underline) nodeEl.addClass("is-underlined");
-      const branchColor = branchColorMap.get(node.id);
-      if (node.style?.color) nodeEl.style.backgroundColor = node.style.color;
-      else if (isRoot && appearance.rootColor) nodeEl.style.backgroundColor = appearance.rootColor;
-      else if (!isRoot && branchColor && appearance.nodeVisualStyle === "branch") {
-        nodeEl.style.backgroundColor = `color-mix(in srgb, ${branchColor} 16%, ${appearance.nodeColor ?? "#ffffff"})`;
-      } else if (!isRoot && appearance.nodeColor) nodeEl.style.backgroundColor = appearance.nodeColor;
-      if (node.style?.textColor) nodeEl.style.color = node.style.textColor;
-      else if (isRoot && appearance.rootTextColor) nodeEl.style.color = appearance.rootTextColor;
-      else if (!isRoot && appearance.textColor) nodeEl.style.color = appearance.textColor;
-      if (node.style?.borderColor) nodeEl.style.borderColor = node.style.borderColor;
-      else if (!isRoot && branchColor && appearance.nodeVisualStyle === "branch") {
-        nodeEl.style.borderColor = `color-mix(in srgb, ${branchColor} 38%, transparent)`;
-      } else if (!isRoot && branchColor) nodeEl.style.borderColor = branchColor;
-      else if (!isRoot && appearance.nodeBorderColor) nodeEl.style.borderColor = appearance.nodeBorderColor;
-      nodeEl.style.borderWidth = `${node.style?.borderWidth ?? appearance.nodeBorderWidth ?? (isRoot ? 2 : 1)}px`;
-
-      const content = nodeEl.createDiv({ cls: "mmc-node-content" });
-      const blocks = nodeContentBlocks(node);
-      const hasTextBlock = blocks.some((block) => block.type === "text" && block.text.trim());
-      if ((node.task || node.icon) && !hasTextBlock) {
-        const meta = content.createDiv({ cls: "mmc-node-main mmc-node-meta-only" });
-        if (node.task) {
-          const task = meta.createSpan({ cls: `mmc-task-icon task-${node.task}`, text: node.task === "done" ? "✓" : node.task === "doing" ? "◐" : "○" });
-          task.setAttr("aria-label", node.task === "done" ? "已完成" : node.task === "doing" ? "进行中" : "待办");
-        }
-        if (node.icon) meta.createSpan({ cls: "mmc-node-icon", text: node.icon });
+    const viewport = this.currentMindMapWorldViewport();
+    const focusOrder = buildHierarchyFocusOrder(this.document.root, this.selectedId);
+    const positions = prioritizeSpatialRenderItems(
+      this.layout.nodes.map((position, order) => ({
+        position,
+        id: position.node.id,
+        x: position.x,
+        y: position.y,
+        width: position.width,
+        height: position.height,
+        order
+      })),
+      focusOrder,
+      viewport
+    ).map((item) => item.position);
+    const token = this.beginIncrementalRender();
+    this.mindMapRenderPending = true;
+    const renderBatch = (startIndex: number): void => {
+      if (token !== this.incrementalRenderToken || this.currentMode !== "mindmap") return;
+      const startedAt = performance.now();
+      let index = startIndex;
+      const minimumBatch = startIndex === 0 ? 10 : 4;
+      while (index < positions.length && (index - startIndex < minimumBatch || performance.now() - startedAt < 7)) {
+        const position = positions[index]!;
+        const existing = this.nodesLayerEl.querySelector<HTMLElement>(`.mmc-node[data-node-id="${CSS.escape(position.node.id)}"]`);
+        if (!existing) this.renderMindMapNode(position, appearance, branchColorMap);
+        index += 1;
       }
-      let prefixRendered = false;
-      for (const block of blocks) {
-        if (block.type === "image") {
-          const wrap = content.createDiv({ cls: "mmc-node-image-block" });
-          wrap.addClass(`image-align-${block.align ?? "center"}`);
-          wrap.dataset.blockId = block.id;
-          const image = wrap.createEl("img", { cls: "mmc-node-image is-loading", attr: { alt: block.alt ?? (nodePlainText(node) || "图片") } });
-          if (block.width) image.style.width = `${block.width}px`;
-          if (block.height) image.style.height = `${block.height}px`;
-          const candidates = this.options.imageFailoverEnabled
-            ? imageSourceCandidates(block, this.options.imageFailoverUseLocalFallback, this.options.imageHostPriorityIds)
-            : imageSourceCandidates(block, false, this.options.imageHostPriorityIds).slice(0, 1);
-          let activeResolved: string | null = null;
-          let attemptToken = 0;
-          let attemptTimer: number | null = null;
-          const clearAttemptTimer = (): void => {
-            if (attemptTimer === null) return;
-            window.clearTimeout(attemptTimer);
-            this.imageLoadTimers.delete(attemptTimer);
-            attemptTimer = null;
-          };
-          const markRemoteFailure = (source: string): void => {
-            const remote = block.remoteSources?.find((item) => item.url === source);
-            if (!remote) return;
-            remote.lastFailureAt = new Date().toISOString();
-            remote.failureCount = Math.min(1000000, (remote.failureCount ?? 0) + 1);
-          };
-          const tryCandidate = (index: number): void => {
+      if (index < positions.length) {
+        this.incrementalRenderFrame = window.requestAnimationFrame(() => renderBatch(index));
+        return;
+      }
+      this.incrementalRenderFrame = null;
+      this.mindMapRenderPending = false;
+      if (previousNodeRects.size) {
+        this.applyMeasuredMindMapLayout();
+        this.playMindMapLayoutAnimation(previousNodeRects);
+      } else {
+        this.scheduleMeasuredMindMapLayout();
+      }
+    };
+    renderBatch(0);
+    this.applyTransform();
+  }
+
+  /** 将一个已完成布局的导图节点挂载到画布，并绑定其内容、选择、拖放和尺寸交互。 */
+  private renderMindMapNode(
+    position: LayoutResult["nodes"][number],
+    appearance: MindMapAppearance,
+    branchColorMap: ReadonlyMap<string, string>
+  ): void {
+    const node = position.node;
+    const shape = node.style?.shape ?? this.options.defaultNodeShape;
+    const textAlign = node.style?.textAlign ?? appearance.nodeTextAlign ?? "center";
+    const classes = ["mmc-node", position.depth === 0 ? "is-root" : "", node.submap ? "is-submap-node" : "", `shape-${shape}`, `text-align-${textAlign}`].filter(Boolean).join(" ");
+    const nodeEl = this.nodesLayerEl.createDiv({ cls: classes });
+    nodeEl.dataset.nodeId = node.id;
+    nodeEl.style.left = `${position.x}px`;
+    nodeEl.style.top = `${position.y}px`;
+    nodeEl.style.width = `${position.width}px`;
+    // Layout estimates are only provisional coordinates. Keep a small global
+    // floor so a brand-new empty node remains visible and editable, while
+    // still allowing rich content and collapsed code blocks to shrink to
+    // their real DOM height. User-defined minimum height continues to win.
+    nodeEl.style.minHeight = `${Math.max(36, node.style?.minHeight ?? 0)}px`;
+    nodeEl.style.setProperty("--mmc-node-text-align", textAlign);
+    nodeEl.draggable = position.depth > 0 && !this.readOnly;
+    if (this.selectedId === node.id || this.selectedIds.has(node.id)) nodeEl.addClass("is-selected");
+    if (this.selectedIds.size > 1 && this.selectedIds.has(node.id)) nodeEl.addClass("is-multi-selected");
+    if (this.searchQuery && nodeSearchText(node).includes(this.searchQuery)) nodeEl.addClass("is-search-match");
+    if (node.task) nodeEl.addClass(`task-${node.task}`);
+    const isRoot = position.depth === 0;
+    const bold = node.style?.bold ?? appearance.bold ?? false;
+    const italic = node.style?.italic ?? appearance.italic ?? false;
+    const underline = node.style?.underline ?? appearance.underline ?? false;
+    if (bold) nodeEl.addClass("is-bold");
+    if (italic) nodeEl.addClass("is-italic");
+    if (underline) nodeEl.addClass("is-underlined");
+    const branchColor = branchColorMap.get(node.id);
+    if (node.style?.color) nodeEl.style.backgroundColor = node.style.color;
+    else if (isRoot && appearance.rootColor) nodeEl.style.backgroundColor = appearance.rootColor;
+    else if (!isRoot && branchColor && appearance.nodeVisualStyle === "branch") {
+      nodeEl.style.backgroundColor = `color-mix(in srgb, ${branchColor} 16%, ${appearance.nodeColor ?? "#ffffff"})`;
+    } else if (!isRoot && appearance.nodeColor) nodeEl.style.backgroundColor = appearance.nodeColor;
+    if (node.style?.textColor) nodeEl.style.color = node.style.textColor;
+    else if (isRoot && appearance.rootTextColor) nodeEl.style.color = appearance.rootTextColor;
+    else if (!isRoot && appearance.textColor) nodeEl.style.color = appearance.textColor;
+    if (node.style?.borderColor) nodeEl.style.borderColor = node.style.borderColor;
+    else if (!isRoot && branchColor && appearance.nodeVisualStyle === "branch") {
+      nodeEl.style.borderColor = `color-mix(in srgb, ${branchColor} 38%, transparent)`;
+    } else if (!isRoot && branchColor) nodeEl.style.borderColor = branchColor;
+    else if (!isRoot && appearance.nodeBorderColor) nodeEl.style.borderColor = appearance.nodeBorderColor;
+    nodeEl.style.borderWidth = `${node.style?.borderWidth ?? appearance.nodeBorderWidth ?? (isRoot ? 2 : 1)}px`;
+
+    const content = nodeEl.createDiv({ cls: "mmc-node-content" });
+    const blocks = nodeContentBlocks(node);
+    const hasTextBlock = blocks.some((block) => block.type === "text" && block.text.trim());
+    if ((node.task || node.icon) && !hasTextBlock) {
+      const meta = content.createDiv({ cls: "mmc-node-main mmc-node-meta-only" });
+      if (node.task) {
+        const task = meta.createSpan({ cls: `mmc-task-icon task-${node.task}`, text: node.task === "done" ? "✓" : node.task === "doing" ? "◐" : "○" });
+        task.setAttr("aria-label", node.task === "done" ? "已完成" : node.task === "doing" ? "进行中" : "待办");
+      }
+      if (node.icon) meta.createSpan({ cls: "mmc-node-icon", text: node.icon });
+    }
+    let prefixRendered = false;
+    for (const block of blocks) {
+      if (block.type === "image") {
+        const wrap = content.createDiv({ cls: "mmc-node-image-block" });
+        wrap.addClass(`image-align-${block.align ?? "center"}`);
+        wrap.dataset.blockId = block.id;
+        const image = wrap.createEl("img", { cls: "mmc-node-image is-loading", attr: { alt: block.alt ?? (nodePlainText(node) || "图片") } });
+        if (block.width) image.style.width = `${block.width}px`;
+        if (block.height) image.style.height = `${block.height}px`;
+        const candidates = this.options.imageFailoverEnabled
+          ? imageSourceCandidates(block, this.options.imageFailoverUseLocalFallback, this.options.imageHostPriorityIds)
+          : imageSourceCandidates(block, false, this.options.imageHostPriorityIds).slice(0, 1);
+        let activeResolved: string | null = null;
+        let attemptToken = 0;
+        let attemptTimer: number | null = null;
+        const clearAttemptTimer = (): void => {
+          if (attemptTimer === null) return;
+          window.clearTimeout(attemptTimer);
+          this.imageLoadTimers.delete(attemptTimer);
+          attemptTimer = null;
+        };
+        const markRemoteFailure = (source: string): void => {
+          const remote = block.remoteSources?.find((item) => item.url === source);
+          if (!remote) return;
+          remote.lastFailureAt = new Date().toISOString();
+          remote.failureCount = Math.min(1000000, (remote.failureCount ?? 0) + 1);
+        };
+        const tryCandidate = (index: number): void => {
+          clearAttemptTimer();
+          const candidate = candidates[index];
+          attemptToken += 1;
+          const token = attemptToken;
+          if (!candidate) {
+            activeResolved = null;
+            image.removeAttribute("src");
+            image.removeClass("is-loading");
+            image.addClass("is-unresolved");
+            image.setAttr("title", "所有图片镜像均不可用");
+            this.callbacks.onChange(this.getDocument());
+            this.markSaving();
+            return;
+          }
+          const resolved = this.callbacks.resolveImage(candidate.source);
+          if (!resolved) {
+            markRemoteFailure(candidate.source);
+            tryCandidate(index + 1);
+            return;
+          }
+          const probe = new Image();
+          const fail = (): void => {
+            if (token !== attemptToken) return;
             clearAttemptTimer();
-            const candidate = candidates[index];
-            attemptToken += 1;
-            const token = attemptToken;
-            if (!candidate) {
-              activeResolved = null;
-              image.removeAttribute("src");
+            markRemoteFailure(candidate.source);
+            if (this.options.imageFailoverEnabled) tryCandidate(index + 1);
+            else {
               image.removeClass("is-loading");
               image.addClass("is-unresolved");
-              image.setAttr("title", "所有图片镜像均不可用");
-              this.callbacks.onChange(this.getDocument());
-              this.markSaving();
-              return;
+              image.setAttr("title", `图片加载失败：${candidate.source}`);
             }
-            const resolved = this.callbacks.resolveImage(candidate.source);
-            if (!resolved) {
-              markRemoteFailure(candidate.source);
-              tryCandidate(index + 1);
-              return;
-            }
-            const probe = new Image();
-            const fail = (): void => {
-              if (token !== attemptToken) return;
-              clearAttemptTimer();
-              markRemoteFailure(candidate.source);
-              if (this.options.imageFailoverEnabled) tryCandidate(index + 1);
-              else {
-                image.removeClass("is-loading");
-                image.addClass("is-unresolved");
-                image.setAttr("title", `图片加载失败：${candidate.source}`);
-              }
-            };
-            probe.onload = () => {
-              if (token !== attemptToken || probe.naturalWidth <= 0) return;
-              clearAttemptTimer();
-              activeResolved = resolved;
-              image.src = resolved;
-              image.removeClass("is-loading");
-              image.removeClass("is-unresolved");
-              image.setAttr("title", index === 0 ? "点击放大图片" : `已自动切换到：${candidate.label}`);
-              const switched = candidate.source !== block.source;
-              const remote = block.remoteSources?.find((item) => item.url === candidate.source);
-              if (remote) remote.lastSuccessAt = new Date().toISOString();
-              if (!switched) return;
-              const previous = block.remoteSources?.find((item) => item.url === block.source);
-              block.source = candidate.source;
-              replaceNodeContentBlocks(node, blocks);
-              this.callbacks.onChange(this.getDocument());
-              this.markSaving();
-              const previousLabel = previous?.hostName || "当前图床";
-              new Notice(`图片地址失效，已从 ${previousLabel} 自动切换到 ${candidate.label}`, 6000);
-            };
-            probe.onerror = fail;
-            const timeoutMs = Math.max(2, Math.min(30, this.options.imageFailoverTimeoutSeconds)) * 1000;
-            attemptTimer = window.setTimeout(fail, timeoutMs);
-            this.imageLoadTimers.add(attemptTimer);
-            probe.src = resolved;
           };
-          image.addEventListener("click", (event) => {
-            event.stopPropagation();
-            if (activeResolved) new ImagePreviewModal(
-              this.app,
-              activeResolved,
-              block.alt ?? "图片预览",
-              imageSourceCandidates(block, true, this.options.imageHostPriorityIds),
-              (source) => this.callbacks.resolveImage(source)
-            ).open();
-          });
-          image.addEventListener("contextmenu", (event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            this.selectNode(node.id);
-            this.openImageContextMenu(event, node.id, block.id);
-          });
-          tryCandidate(0);
-          this.bindContentBlockDragHandle(wrap, node.id, block.id);
-          continue;
-        }
-        if (block.type === "table") {
-          const shell = content.createDiv({ cls: "mmc-node-structured-block-shell" });
-          this.renderNodeTable(shell, node, block.table, block.id);
-          this.bindContentBlockDragHandle(shell, node.id, block.id);
-          continue;
-        }
-        if (block.type === "code") {
-          const shell = content.createDiv({ cls: "mmc-node-structured-block-shell" });
-          this.renderNodeCode(shell, node, block.code, block.id);
-          this.bindContentBlockDragHandle(shell, node.id, block.id);
-          continue;
-        }
-        if (!block.text.trim()) continue;
-        const main = content.createDiv({ cls: "mmc-node-main mmc-node-text-block" });
-        main.dataset.blockId = block.id;
-        if (!prefixRendered && node.task) {
-          const task = main.createSpan({ cls: `mmc-task-icon task-${node.task}`, text: node.task === "done" ? "✓" : node.task === "doing" ? "◐" : "○" });
-          task.setAttr("aria-label", node.task === "done" ? "已完成" : node.task === "doing" ? "进行中" : "待办");
-        }
-        if (!prefixRendered && node.icon) main.createSpan({ cls: "mmc-node-icon", text: node.icon });
-        const isSubmapTitle = Boolean(node.submap) && !prefixRendered;
-        prefixRendered = true;
-        const textEl = main.createDiv({ cls: `mmc-node-text${isSubmapTitle ? " is-submap-link" : ""}` });
-        textEl.dataset.blockId = block.id;
-        renderRichTextRuns(textEl, block.richText, block.text);
-        textEl.style.fontSize = `${node.style?.fontSize ?? appearance.fontSize ?? 14}px`;
-        if (isSubmapTitle) {
-          const indicator = textEl.createSpan({ cls: "mmc-submap-inline-indicator", attr: { "aria-hidden": "true" } });
-          setIcon(indicator, "arrow-up-right");
-        }
-        this.bindContentBlockDragHandle(main, node.id, block.id);
-      }
-
-      if (node.submap && !hasTextBlock) {
-        const submapIcon = nodeEl.createEl("button", {
-          cls: "mmc-submap-corner-link",
-          attr: {
-            "aria-label": `打开子导图：${node.submap.title ?? node.submap.path}`,
-            title: `打开子导图：${node.submap.title ?? node.submap.path}`
-          }
-        });
-        setIcon(submapIcon, "arrow-up-right");
-        submapIcon.addEventListener("click", (event) => {
-          event.preventDefault();
+          probe.onload = () => {
+            if (token !== attemptToken || probe.naturalWidth <= 0) return;
+            clearAttemptTimer();
+            activeResolved = resolved;
+            image.src = resolved;
+            image.removeClass("is-loading");
+            image.removeClass("is-unresolved");
+            image.setAttr("title", index === 0 ? "点击放大图片" : `已自动切换到：${candidate.label}`);
+            const switched = candidate.source !== block.source;
+            const remote = block.remoteSources?.find((item) => item.url === candidate.source);
+            if (remote) remote.lastSuccessAt = new Date().toISOString();
+            if (!switched) return;
+            const previous = block.remoteSources?.find((item) => item.url === block.source);
+            block.source = candidate.source;
+            replaceNodeContentBlocks(node, blocks);
+            this.callbacks.onChange(this.getDocument());
+            this.markSaving();
+            const previousLabel = previous?.hostName || "当前图床";
+            new Notice(`图片地址失效，已从 ${previousLabel} 自动切换到 ${candidate.label}`, 6000);
+          };
+          probe.onerror = fail;
+          const timeoutMs = Math.max(2, Math.min(30, this.options.imageFailoverTimeoutSeconds)) * 1000;
+          attemptTimer = window.setTimeout(fail, timeoutMs);
+          this.imageLoadTimers.add(attemptTimer);
+          probe.src = resolved;
+        };
+        image.addEventListener("click", (event) => {
           event.stopPropagation();
-          void this.callbacks.onOpenMindMap(node.submap!.path);
+          if (activeResolved) new ImagePreviewModal(
+            this.app,
+            activeResolved,
+            block.alt ?? "图片预览",
+            imageSourceCandidates(block, true, this.options.imageHostPriorityIds),
+            (source) => this.callbacks.resolveImage(source)
+          ).open();
         });
-      }
-
-      if (node.submap) {
-        nodeEl.setAttr("role", "link");
-        nodeEl.setAttr("tabindex", "0");
-        nodeEl.setAttr("aria-label", `打开子导图：${node.submap.title ?? node.submap.path}`);
-      }
-
-      if (node.table && !blocks.some((block) => block.type === "table")) this.renderNodeTable(content, node, node.table);
-      if (node.code && !blocks.some((block) => block.type === "code")) this.renderNodeCode(content, node, node.code);
-      this.bindContentBlockAppendDropTarget(nodeEl, node.id);
-      if (node.question) this.renderQuestionSummary(content, node);
-
-      if (node.tags?.length) {
-        const tags = content.createDiv({ cls: "mmc-node-tags" });
-        node.tags.slice(0, 4).forEach((tag) => tags.createSpan({ cls: "mmc-node-tag", text: `#${tag}` }));
-      }
-
-      if (this.options.showTaskProgress && node.children.length) {
-        const progress = getTaskProgress(node);
-        if (progress.total) {
-          const percent = Math.round((progress.done / progress.total) * 100);
-          const progressEl = nodeEl.createDiv({ cls: "mmc-task-progress", attr: { title: `${progress.done}/${progress.total} 个任务已完成` } });
-          progressEl.createDiv({ cls: "mmc-task-progress-bar", attr: { style: `width:${percent}%` } });
-          progressEl.createSpan({ text: `${percent}%` });
-        }
-      }
-
-      if (node.children.length) {
-        const fold = nodeEl.createEl("button", { cls: "mmc-fold-button", attr: { "aria-label": node.collapsed ? "展开" : "收起" } });
-        fold.setText(node.collapsed ? `+${node.children.length}` : "−");
-        fold.addEventListener("click", (event) => {
+        image.addEventListener("contextmenu", (event) => {
+          event.preventDefault();
           event.stopPropagation();
           this.selectNode(node.id);
-          this.toggleCollapse();
+          this.openImageContextMenu(event, node.id, block.id);
         });
+        tryCandidate(0);
+        this.bindContentBlockDragHandle(wrap, node.id, block.id);
+        continue;
       }
-
-      const link = this.getNodeLink(node);
-      if (link) {
-        const linkButton = nodeEl.createEl("button", { cls: "mmc-node-link", attr: { "aria-label": `打开 ${link}` } });
-        setIcon(linkButton, "external-link");
-        linkButton.addEventListener("click", (event) => {
-          event.stopPropagation();
-          void this.callbacks.onOpenLink(link);
-        });
+      if (block.type === "table") {
+        const shell = content.createDiv({ cls: "mmc-node-structured-block-shell" });
+        this.renderNodeTable(shell, node, block.table, block.id);
+        this.bindContentBlockDragHandle(shell, node.id, block.id);
+        continue;
       }
+      if (block.type === "code") {
+        const shell = content.createDiv({ cls: "mmc-node-structured-block-shell" });
+        this.renderNodeCode(shell, node, block.code, block.id);
+        this.bindContentBlockDragHandle(shell, node.id, block.id);
+        continue;
+      }
+      if (!block.text.trim()) continue;
+      const main = content.createDiv({ cls: "mmc-node-main mmc-node-text-block" });
+      main.dataset.blockId = block.id;
+      if (!prefixRendered && node.task) {
+        const task = main.createSpan({ cls: `mmc-task-icon task-${node.task}`, text: node.task === "done" ? "✓" : node.task === "doing" ? "◐" : "○" });
+        task.setAttr("aria-label", node.task === "done" ? "已完成" : node.task === "doing" ? "进行中" : "待办");
+      }
+      if (!prefixRendered && node.icon) main.createSpan({ cls: "mmc-node-icon", text: node.icon });
+      const isSubmapTitle = Boolean(node.submap) && !prefixRendered;
+      prefixRendered = true;
+      const textEl = main.createDiv({ cls: `mmc-node-text${isSubmapTitle ? " is-submap-link" : ""}` });
+      textEl.dataset.blockId = block.id;
+      renderRichTextRuns(textEl, block.richText, block.text);
+      textEl.style.fontSize = `${node.style?.fontSize ?? appearance.fontSize ?? 14}px`;
+      if (isSubmapTitle) {
+        const indicator = textEl.createSpan({ cls: "mmc-submap-inline-indicator", attr: { "aria-hidden": "true" } });
+        setIcon(indicator, "arrow-up-right");
+      }
+      this.bindContentBlockDragHandle(main, node.id, block.id);
+    }
 
-      {
-        const resizeHandle = nodeEl.createDiv({
-          cls: "mmc-node-resize-handle",
-          attr: { role: "separator", tabindex: "0", "aria-label": "拖动调整节点宽度和最小高度", title: "拖动调整节点大小；双击恢复自动大小" }
+    if (node.submap && !hasTextBlock) {
+      const submapIcon = nodeEl.createEl("button", {
+        cls: "mmc-submap-corner-link",
+        attr: {
+          "aria-label": `打开子导图：${node.submap.title ?? node.submap.path}`,
+          title: `打开子导图：${node.submap.title ?? node.submap.path}`
+        }
+      });
+      setIcon(submapIcon, "arrow-up-right");
+      submapIcon.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        void this.callbacks.onOpenMindMap(node.submap!.path);
+      });
+    }
+
+    if (node.submap) {
+      nodeEl.setAttr("role", "link");
+      nodeEl.setAttr("tabindex", "0");
+      nodeEl.setAttr("aria-label", `打开子导图：${node.submap.title ?? node.submap.path}`);
+    }
+
+    if (node.table && !blocks.some((block) => block.type === "table")) this.renderNodeTable(content, node, node.table);
+    if (node.code && !blocks.some((block) => block.type === "code")) this.renderNodeCode(content, node, node.code);
+    this.bindContentBlockAppendDropTarget(nodeEl, node.id);
+    if (node.question) this.renderQuestionSummary(content, node);
+
+    if (node.tags?.length) {
+      const tags = content.createDiv({ cls: "mmc-node-tags" });
+      node.tags.slice(0, 4).forEach((tag) => tags.createSpan({ cls: "mmc-node-tag", text: `#${tag}` }));
+    }
+
+    if (this.options.showTaskProgress && node.children.length) {
+      const progress = getTaskProgress(node);
+      if (progress.total) {
+        const percent = Math.round((progress.done / progress.total) * 100);
+        const progressEl = nodeEl.createDiv({ cls: "mmc-task-progress", attr: { title: `${progress.done}/${progress.total} 个任务已完成` } });
+        progressEl.createDiv({ cls: "mmc-task-progress-bar", attr: { style: `width:${percent}%` } });
+        progressEl.createSpan({ text: `${percent}%` });
+      }
+    }
+
+    if (node.children.length) {
+      const fold = nodeEl.createEl("button", { cls: "mmc-fold-button", attr: { "aria-label": node.collapsed ? "展开" : "收起" } });
+      fold.setText(node.collapsed ? `+${node.children.length}` : "−");
+      fold.addEventListener("click", (event) => {
+        event.stopPropagation();
+        this.selectNode(node.id);
+        this.toggleCollapse();
+      });
+    }
+
+    const link = this.getNodeLink(node);
+    if (link) {
+      const linkButton = nodeEl.createEl("button", { cls: "mmc-node-link", attr: { "aria-label": `打开 ${link}` } });
+      setIcon(linkButton, "external-link");
+      linkButton.addEventListener("click", (event) => {
+        event.stopPropagation();
+        void this.callbacks.onOpenLink(link);
+      });
+    }
+
+    {
+      const resizeHandle = nodeEl.createDiv({
+        cls: "mmc-node-resize-handle",
+        attr: { role: "separator", tabindex: "0", "aria-label": "拖动调整节点宽度和最小高度", title: "拖动调整节点大小；双击恢复自动大小" }
+      });
+      resizeHandle.setAttr("draggable", "false");
+      resizeHandle.addEventListener("click", (event) => {
+        if (!event.ctrlKey && !event.metaKey) return;
+        event.preventDefault();
+        event.stopPropagation();
+      });
+      resizeHandle.addEventListener("dblclick", (event) => {
+        if (this.readOnly) return;
+        if (!event.ctrlKey && !event.metaKey) return;
+        event.preventDefault();
+        event.stopPropagation();
+        this.mutate(() => {
+          const next = { ...(node.style ?? {}), width: undefined, minHeight: undefined };
+          node.style = Object.values(next).some((value) => value !== undefined) ? next : undefined;
         });
-        resizeHandle.setAttr("draggable", "false");
-        resizeHandle.addEventListener("click", (event) => {
-          if (!event.ctrlKey && !event.metaKey) return;
-          event.preventDefault();
-          event.stopPropagation();
-        });
-        resizeHandle.addEventListener("dblclick", (event) => {
-          if (this.readOnly) return;
-          if (!event.ctrlKey && !event.metaKey) return;
-          event.preventDefault();
-          event.stopPropagation();
+      });
+      resizeHandle.addEventListener("pointerdown", (event) => {
+        if (this.readOnly) return;
+        if (event.button !== 0) return;
+        if (!event.ctrlKey && !event.metaKey) return;
+        event.preventDefault();
+        event.stopPropagation();
+        const startX = event.clientX;
+        const startY = event.clientY;
+        const startWidth = position.width;
+        const startHeight = position.height;
+        let previewWidth = startWidth;
+        let previewHeight = startHeight;
+        resizeHandle.setPointerCapture(event.pointerId);
+        nodeEl.addClass("is-resizing");
+        const move = (moveEvent: PointerEvent): void => {
+          const scale = Math.max(.1, this.zoom);
+          previewWidth = Math.min(900, Math.max(100, startWidth + (moveEvent.clientX - startX) / scale));
+          previewHeight = Math.min(600, Math.max(36, startHeight + (moveEvent.clientY - startY) / scale));
+          nodeEl.style.width = `${Math.round(previewWidth)}px`;
+          nodeEl.style.minHeight = `${Math.round(previewHeight)}px`;
+        };
+        const finish = (upEvent: PointerEvent): void => {
+          resizeHandle.removeEventListener("pointermove", move);
+          resizeHandle.removeEventListener("pointerup", finish);
+          resizeHandle.removeEventListener("pointercancel", finish);
+          if (resizeHandle.hasPointerCapture(upEvent.pointerId)) resizeHandle.releasePointerCapture(upEvent.pointerId);
+          nodeEl.removeClass("is-resizing");
           this.mutate(() => {
-            const next = { ...(node.style ?? {}), width: undefined, minHeight: undefined };
-            node.style = Object.values(next).some((value) => value !== undefined) ? next : undefined;
+            node.style = {
+              ...(node.style ?? {}),
+              width: Math.round(previewWidth),
+              minHeight: Math.round(previewHeight)
+            };
           });
-        });
-        resizeHandle.addEventListener("pointerdown", (event) => {
-          if (this.readOnly) return;
-          if (event.button !== 0) return;
-          if (!event.ctrlKey && !event.metaKey) return;
-          event.preventDefault();
-          event.stopPropagation();
-          const startX = event.clientX;
-          const startY = event.clientY;
-          const startWidth = position.width;
-          const startHeight = position.height;
-          let previewWidth = startWidth;
-          let previewHeight = startHeight;
-          resizeHandle.setPointerCapture(event.pointerId);
-          nodeEl.addClass("is-resizing");
-          const move = (moveEvent: PointerEvent): void => {
-            const scale = Math.max(.1, this.zoom);
-            previewWidth = Math.min(900, Math.max(100, startWidth + (moveEvent.clientX - startX) / scale));
-            previewHeight = Math.min(600, Math.max(36, startHeight + (moveEvent.clientY - startY) / scale));
-            nodeEl.style.width = `${Math.round(previewWidth)}px`;
-            nodeEl.style.minHeight = `${Math.round(previewHeight)}px`;
-          };
-          const finish = (upEvent: PointerEvent): void => {
-            resizeHandle.removeEventListener("pointermove", move);
-            resizeHandle.removeEventListener("pointerup", finish);
-            resizeHandle.removeEventListener("pointercancel", finish);
-            if (resizeHandle.hasPointerCapture(upEvent.pointerId)) resizeHandle.releasePointerCapture(upEvent.pointerId);
-            nodeEl.removeClass("is-resizing");
-            this.mutate(() => {
-              node.style = {
-                ...(node.style ?? {}),
-                width: Math.round(previewWidth),
-                minHeight: Math.round(previewHeight)
-              };
-            });
-          };
-          resizeHandle.addEventListener("pointermove", move);
-          resizeHandle.addEventListener("pointerup", finish);
-          resizeHandle.addEventListener("pointercancel", finish);
-        });
-      }
+        };
+        resizeHandle.addEventListener("pointermove", move);
+        resizeHandle.addEventListener("pointerup", finish);
+        resizeHandle.addEventListener("pointercancel", finish);
+      });
+    }
 
-      nodeEl.addEventListener("click", (event) => {
-        event.stopPropagation();
-        if (event.shiftKey) {
-          this.toggleNodeSelection(node.id);
-          return;
-        }
-        this.selectNode(node.id);
-        if (node.submap) void this.callbacks.onOpenMindMap(node.submap.path);
-      });
-      if (node.submap) {
-        nodeEl.addEventListener("keydown", (event) => {
-          if (event.key !== "Enter" && event.key !== " ") return;
-          event.preventDefault();
-          event.stopPropagation();
-          this.selectNode(node.id);
-          void this.callbacks.onOpenMindMap(node.submap!.path);
-        });
+    nodeEl.addEventListener("click", (event) => {
+      event.stopPropagation();
+      if (event.shiftKey) {
+        this.toggleNodeSelection(node.id);
+        return;
       }
-      nodeEl.addEventListener("dblclick", (event) => {
-        event.stopPropagation();
-        this.selectNode(node.id);
-        if (node.question && this.options.questionNodesEnabled) {
-          this.editQuestion(node);
-          return;
-        }
-        if (node.submap) {
-          void this.callbacks.onOpenMindMap(node.submap.path);
-        } else if (!this.readOnly) {
-          if (this.isNearNodeEdge(event, nodeEl)) this.editSelected();
-          else {
-            const target = event.target as HTMLElement;
-            const blockId = target.closest<HTMLElement>("[data-block-id]")?.dataset.blockId;
-            const block = blocks.find((item) => item.id === blockId);
-            if (block?.type === "text") this.beginInlineEdit(node.id, block.id);
-            else this.editSelected(blockId);
-          }
-        }
-      });
-      nodeEl.addEventListener("contextmenu", (event) => {
+      this.selectNode(node.id);
+      if (node.submap) void this.callbacks.onOpenMindMap(node.submap.path);
+    });
+    if (node.submap) {
+      nodeEl.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter" && event.key !== " ") return;
         event.preventDefault();
         event.stopPropagation();
-        this.aiScopeNodeId = node.id;
-        this.updateAiScopeButton();
         this.selectNode(node.id);
-        const target = event.target as HTMLElement;
-        const blockId = target.closest<HTMLElement>("[data-block-id]")?.dataset.blockId;
-        this.openContextMenu(event, blockId);
+        void this.callbacks.onOpenMindMap(node.submap!.path);
       });
-      nodeEl.addEventListener("dragstart", (event) => {
-        if (this.readOnly) { event.preventDefault(); return; }
-        this.draggingId = node.id;
-        event.dataTransfer?.setData("text/plain", node.id);
-        if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
-        const draggingIds = this.selectedIds.has(node.id) ? this.selectedIds : new Set([node.id]);
-        for (const draggingId of draggingIds) {
-          this.nodesLayerEl.querySelector<HTMLElement>(`[data-node-id="${CSS.escape(draggingId)}"]`)?.addClass("is-dragging");
+    }
+    nodeEl.addEventListener("dblclick", (event) => {
+      event.stopPropagation();
+      this.selectNode(node.id);
+      if (node.question && this.options.questionNodesEnabled) {
+        this.editQuestion(node);
+        return;
+      }
+      if (node.submap) {
+        void this.callbacks.onOpenMindMap(node.submap.path);
+      } else if (!this.readOnly) {
+        if (this.isNearNodeEdge(event, nodeEl)) this.editSelected();
+        else {
+          const target = event.target as HTMLElement;
+          const blockId = target.closest<HTMLElement>("[data-block-id]")?.dataset.blockId;
+          const block = blocks.find((item) => item.id === blockId);
+          if (block?.type === "text") this.beginInlineEdit(node.id, block.id);
+          else this.editSelected(blockId);
         }
-      });
-      nodeEl.addEventListener("dragover", (event) => {
-        if (!this.canMoveNode(this.draggingId, node.id)) return;
-        event.preventDefault();
-        if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
-        const position = this.dropPositionForEvent(event, nodeEl, node.id);
-        this.dragDropPosition = position;
-        this.clearDropIndicators();
-        const indicator = position === "child" && isRightChildZone(event, nodeEl.getBoundingClientRect())
-          ? "is-drop-child-right"
-          : `is-drop-${position}`;
-        nodeEl.addClasses(["is-drop-target", indicator]);
-        this.showDropPreview(node.id, position);
-      });
-      nodeEl.addEventListener("dragleave", (event) => {
-        if (event.relatedTarget instanceof Node && nodeEl.contains(event.relatedTarget)) return;
-        nodeEl.removeClasses(["is-drop-target", "is-drop-before", "is-drop-child", "is-drop-child-right", "is-drop-after"]);
-        this.clearDropPreview();
-      });
-      nodeEl.addEventListener("drop", (event) => {
-        event.preventDefault();
-        const position = this.dragDropPosition ?? this.dropPositionForEvent(event, nodeEl, node.id);
-        this.clearDropIndicators();
-        this.clearDropPreview();
-        const draggedId = this.draggingId ?? event.dataTransfer?.getData("text/plain") ?? null;
-        if (draggedId) this.moveNode(draggedId, node.id, position);
-      });
-      nodeEl.addEventListener("dragend", () => {
-        this.draggingId = null;
-        this.dragDropPosition = null;
-        this.clearDropIndicators();
-        this.clearDropPreview();
-        this.nodesLayerEl.querySelectorAll(".is-dragging").forEach((element) => element.removeClass("is-dragging"));
-      });
-      this.resizeObserver?.observe(nodeEl);
-    }
-    if (previousNodeRects.size) {
-      this.applyMeasuredMindMapLayout();
-      this.playMindMapLayoutAnimation(previousNodeRects);
-    } else {
-      this.scheduleMeasuredMindMapLayout();
-    }
-    this.applyTransform();
+      }
+    });
+    nodeEl.addEventListener("contextmenu", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      this.aiScopeNodeId = node.id;
+      this.updateAiScopeButton();
+      this.selectNode(node.id);
+      const target = event.target as HTMLElement;
+      const blockId = target.closest<HTMLElement>("[data-block-id]")?.dataset.blockId;
+      this.openContextMenu(event, blockId);
+    });
+    nodeEl.addEventListener("dragstart", (event) => {
+      if (this.readOnly) { event.preventDefault(); return; }
+      this.draggingId = node.id;
+      event.dataTransfer?.setData("text/plain", node.id);
+      if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
+      const draggingIds = this.selectedIds.has(node.id) ? this.selectedIds : new Set([node.id]);
+      for (const draggingId of draggingIds) {
+        this.nodesLayerEl.querySelector<HTMLElement>(`[data-node-id="${CSS.escape(draggingId)}"]`)?.addClass("is-dragging");
+      }
+    });
+    nodeEl.addEventListener("dragover", (event) => {
+      if (!this.canMoveNode(this.draggingId, node.id)) return;
+      event.preventDefault();
+      if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+      const position = this.dropPositionForEvent(event, nodeEl, node.id);
+      this.dragDropPosition = position;
+      this.clearDropIndicators();
+      const indicator = position === "child" && isRightChildZone(event, nodeEl.getBoundingClientRect())
+        ? "is-drop-child-right"
+        : `is-drop-${position}`;
+      nodeEl.addClasses(["is-drop-target", indicator]);
+      this.showDropPreview(node.id, position);
+    });
+    nodeEl.addEventListener("dragleave", (event) => {
+      if (event.relatedTarget instanceof Node && nodeEl.contains(event.relatedTarget)) return;
+      nodeEl.removeClasses(["is-drop-target", "is-drop-before", "is-drop-child", "is-drop-child-right", "is-drop-after"]);
+      this.clearDropPreview();
+    });
+    nodeEl.addEventListener("drop", (event) => {
+      event.preventDefault();
+      const position = this.dragDropPosition ?? this.dropPositionForEvent(event, nodeEl, node.id);
+      this.clearDropIndicators();
+      this.clearDropPreview();
+      const draggedId = this.draggingId ?? event.dataTransfer?.getData("text/plain") ?? null;
+      if (draggedId) this.moveNode(draggedId, node.id, position);
+    });
+    nodeEl.addEventListener("dragend", () => {
+      this.draggingId = null;
+      this.dragDropPosition = null;
+      this.clearDropIndicators();
+      this.clearDropPreview();
+      this.nodesLayerEl.querySelectorAll(".is-dragging").forEach((element) => element.removeClass("is-dragging"));
+    });
+    this.resizeObserver?.observe(nodeEl);
   }
 
   /** 使用当前布局坐标重新绘制全部连接线。 */
@@ -3930,7 +4077,7 @@ export class MindMapEditor {
 
   /** 合并同一帧内的节点尺寸变化，避免表格和图片加载触发重复布局。 */
   private scheduleMeasuredMindMapLayout(): void {
-    if (this.measuredLayoutFrame !== null || this.currentMode !== "mindmap") return;
+    if (this.measuredLayoutFrame !== null || this.currentMode !== "mindmap" || this.mindMapRenderPending) return;
     this.measuredLayoutFrame = window.requestAnimationFrame(() => {
       this.measuredLayoutFrame = null;
       this.applyMeasuredMindMapLayout();
@@ -4448,7 +4595,12 @@ export class MindMapEditor {
       document.removeEventListener("selectionchange", selectionChange);
       save();
       formatBar.remove();
-      this.render();
+      if (!findNode(this.document.root, node.id)) return;
+      editor!.contentEditable = "false";
+      editor!.removeClass("is-inline-editing");
+      editor!.removeAttribute("role");
+      editor!.removeAttribute("aria-label");
+      this.refreshAfterInlineTextCommit(node.id);
     });
     const focusAtEnd = (): void => {
       if (!document.body.contains(editor!)) return;
@@ -4538,7 +4690,7 @@ export class MindMapEditor {
       getDefaultUploadHostIds: this.callbacks.getDefaultUploadHostIds,
       onUploadImage: this.callbacks.onUploadImage,
       onReadImageSource: this.callbacks.onReadImageSource
-    }, (values) => {
+    }, (values, mode) => {
       // A continuously open editor may autosave many times. Capture one undo
       // snapshot for the whole editing session instead of one snapshot per keypress.
       if (!historyCaptured) {
@@ -4584,7 +4736,9 @@ export class MindMapEditor {
         );
         const textBlock = nodeContentBlocks(selected).find((block): block is MindMapTextContentBlock => block.type === "text");
         if (inline && document.activeElement !== inline) renderRichTextRuns(inline, textBlock?.richText, textBlock?.text ?? "", false);
-      } else {
+      } else if (this.currentMode === "mindmap") {
+        this.refreshMindMapNode(selected.id);
+      } else if (mode === "commit") {
         this.render();
       }
     }, this.options.nodeEditorPosition, this.viewportEl, initialBlockId);
@@ -6542,6 +6696,68 @@ export class MindMapEditor {
     this.markSaving();
     this.render();
     window.setTimeout(() => this.focusNodeById(this.selectedId), 20);
+  }
+
+  /**
+   * 提交行内文字时保留现有 DOM，仅在节点被删除时回退到完整重绘。
+   *
+   * @param nodeId 正在编辑的节点标识。
+   * @param action 写回文字内容块的同步修改。
+   */
+  private mutateInlineText(nodeId: string, action: () => void): void {
+    if (!this.ensureEditable()) return;
+    this.history.capture(this.document);
+    action();
+    this.callbacks.onChange(this.getDocument());
+    this.markSaving();
+    if (!findNode(this.document.root, nodeId)) {
+      this.render();
+      return;
+    }
+    this.refreshAfterInlineTextCommit(nodeId);
+  }
+
+  /**
+   * 在不销毁当前编辑节点的情况下刷新文字提交后的轻量状态和布局。
+   *
+   * @param nodeId 已提交文字的节点标识。
+   */
+  private refreshAfterInlineTextCommit(nodeId: string): void {
+    if (this.currentMode === "mindmap") {
+      const node = findNode(this.document.root, nodeId);
+      const nodeEl = this.nodesLayerEl.querySelector<HTMLElement>(`.mmc-node[data-node-id="${CSS.escape(nodeId)}"]`);
+      if (node && nodeEl) nodeEl.toggleClass("is-search-match", Boolean(this.searchQuery && nodeSearchText(node).includes(this.searchQuery)));
+      this.scheduleMeasuredMindMapLayout();
+      return;
+    }
+    this.applySelectionClasses();
+    if (nodeId === this.document.root.id) this.renderNavigation();
+    if (this.currentMode === "article") this.updateArticleMiniMapActiveMarker();
+  }
+
+  /**
+   * 只替换导图中的一个节点 DOM，并把真实尺寸变化交给统一测量布局处理。
+   *
+   * @param nodeId 需要刷新的节点标识。
+   */
+  private refreshMindMapNode(nodeId: string): void {
+    if (this.currentMode !== "mindmap") return;
+    const position = this.layout.byId.get(nodeId);
+    if (!position) {
+      this.render();
+      return;
+    }
+    const existing = this.nodesLayerEl.querySelector<HTMLElement>(`.mmc-node[data-node-id="${CSS.escape(nodeId)}"]`);
+    if (existing) {
+      this.resizeObserver?.unobserve(existing);
+      existing.remove();
+    }
+    const appearance = this.getAppearance();
+    const branchColorMap = appearance.colorfulBranches
+      ? buildBranchColorMap(this.document.root, appearance.branchColors)
+      : new Map<string, string>();
+    this.renderMindMapNode(position, appearance, branchColorMap);
+    this.scheduleMeasuredMindMapLayout();
   }
 
   /**
