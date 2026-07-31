@@ -345,7 +345,7 @@ mindmap-search-index.json
 
 `src/vision/recognition.ts` 只负责确定性范围收集、提示词、结果规范化、不可变预览和过期快照校验；`src/vision/modal.ts` 负责原图/文字对比与确认；`src/vision/local-ocr.ts` 只在桌面功能实际触发时动态获取 Node.js API，通过 `execFile` 调用 Tesseract，避免移动端在插件加载阶段静态引用 Node 模块。AI 多模态请求仍由 `src/ai/protocol.ts` 和 `src/ai/client.ts` 构造与发送。
 
-`src/utils/desktop-capture.ts` 优先通过 Electron `desktopCapturer` 获取鼠标所在显示器，创建独立无边框覆盖层，并在本地 Canvas 中完成选区、八方向缩放、坐标尺寸、标注、马赛克、复制、下载和固定窗口。截图覆盖层只加载临时本地文件，不访问网络；Electron/Node API 仍按需动态获取。高级覆盖层不可用时才回退到平台系统截图工具。截图开始前由编辑器冻结焦点节点和 `data-block-id`，右键入口可显式覆盖目标；截图期间焦点变化不会改变插入位置。普通截图、截图并识别和识别并复制是独立动作。覆盖层通过显式模式参数区分交互：普通截图不启动自动关闭计时，双击选区才确认；截图并识别在完成选区拖拽或边框调整后启动 3 秒空闲计时，选区内鼠标活动或继续调整边框会重置计时。
+`src/utils/desktop-capture.ts` 先通过按需加载的 Node.js API执行本机非交互式整屏抓取：Windows 使用 PowerShell 与 `System.Drawing`，macOS 使用固定范围 `screencapture`，Linux 依次尝试 `grim`、ImageMagick `import`、GNOME Screenshot 和 Spectacle；本机命令失败时才尝试渲染器可用的 Electron `desktopCapturer`。抓取完成后使用 `window.open` 创建独立覆盖窗口，受限时改用 Obsidian 内嵌全屏 `iframe`，并在本地 Canvas 中完成选区、八方向缩放、坐标尺寸、标注、马赛克、复制、下载和固定窗口。所有桌面 API 仍按需动态获取，移动端不会静态加载 Node/Electron 模块。系统交互式截图工具不再作为静默回退；抓取或覆盖层创建失败时直接返回明确错误，保证边框、工具栏和计时状态机不会被绕过。截图开始前由编辑器冻结焦点节点和 `data-block-id`，右键入口可显式覆盖目标；截图期间焦点变化不会改变插入位置。普通截图、截图并识别和识别并复制是独立动作。覆盖层通过显式模式参数区分交互：普通截图不启动自动关闭计时，双击选区才确认；截图并识别在完成选区拖拽或边框调整后启动 3 秒空闲计时，选区内鼠标活动或继续调整边框会重置计时。
 
 图片转文字与截图插入都必须通过 `MindMapEditor.replaceDocumentFromExternalEdit()` 接入撤销、保存、重渲染和聚焦。网络层、本地 OCR 层和截图层不得直接修改 `MindMapDocument`。
 

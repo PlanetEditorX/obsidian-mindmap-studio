@@ -161,36 +161,45 @@ test("local OCR arguments are parsed without a shell", () => {
   );
 });
 
-test("desktop screenshot helpers expose platform commands and stable clipboard fingerprints", () => {
+test("desktop screenshot helpers preserve PNG bytes and normalize display bounds", () => {
   const sourceBytes = new Uint8Array([1, 2, 3, 4]);
   const copiedBuffer = desktopCapture.copyBytesToArrayBuffer(sourceBytes);
   assert.ok(copiedBuffer instanceof ArrayBuffer);
   assert.deepEqual([...new Uint8Array(copiedBuffer)], [1, 2, 3, 4]);
   sourceBytes[0] = 9;
   assert.equal(new Uint8Array(copiedBuffer)[0], 1);
-  assert.deepEqual(desktopCapture.screenshotCommandCandidates("darwin"), [{ command: "screencapture", args: ["-i", "-c"] }]);
-  assert.equal(desktopCapture.screenshotCommandCandidates("win32")[0].command, "SnippingTool.exe");
-  assert.equal(desktopCapture.screenshotCommandCandidates("linux")[0].command, "gnome-screenshot");
-  const one = desktopCapture.pngFingerprint(new Uint8Array([1, 2, 3, 4]));
-  assert.equal(one, desktopCapture.pngFingerprint(new Uint8Array([1, 2, 3, 4])));
-  assert.notEqual(one, desktopCapture.pngFingerprint(new Uint8Array([1, 2, 3, 5])));
-  assert.equal(desktopCapture.pngFingerprint(new Uint8Array()), "");
+  assert.deepEqual(
+    desktopCapture.normalizeBrowserDisplay({ left: -1280.4, top: 10.6, width: 1279.7, height: 719.8, scaleFactor: 1.5 }),
+    { id: 0, bounds: { x: -1280, y: 11, width: 1280, height: 720 }, scaleFactor: 1.5 }
+  );
 });
 
 
 
-test("screenshot editor provides adjustable bounds, annotation tools and independent recognition actions", async () => {
+test("screenshot editor provides a visible adjustable overlay and complete toolbar", async () => {
   const [captureSource, settingsSource, editorSource] = await Promise.all([
     readFile("src/utils/desktop-capture.ts", "utf8"),
     readFile("src/settings.ts", "utf8"),
     readFile("src/editor/editor.ts", "utf8")
   ]);
-  assert.match(captureSource, /desktopCapturer\.getSources/);
-  assert.match(captureSource, /data-handle="nw"[\s\S]*data-handle="se"/);
-  assert.match(captureSource, /X '\+Math\.round\(displayBounds\.x\+rect\.x\)/);
+  const display = desktopCapture.normalizeBrowserDisplay({ left: -1920, top: 0, width: 1920, height: 1080, scaleFactor: 1.25 });
+  assert.deepEqual(display, {
+    id: 0,
+    bounds: { x: -1920, y: 0, width: 1920, height: 1080 },
+    scaleFactor: 1.25
+  });
+  const html = desktopCapture.captureEditorHtml(display, "capture", "data:image/png;base64,AA==", "token-1");
+  assert.match(html, /border:3px solid #00a8ff/);
+  assert.match(html, /box-shadow:0 0 0 1px #fff/);
+  assert.match(html, /data-handle="nw"[\s\S]*data-handle="se"/);
+  assert.match(html, /coordinateScaleX=displayBounds\.width\/Math\.max\(1,innerWidth\)/);
+  assert.match(html, /displayBounds\.x\+rect\.x\*coordinateScaleX/);
   for (const label of ["几何图形", "画笔", "箭头", "文字", "序号", "马赛克", "橡皮擦", "识别并复制", "固定", "下载", "取消", "复制"]) {
-    assert.match(captureSource, new RegExp(label));
+    assert.match(html, new RegExp(label));
   }
+  assert.match(html, /MMS_CAPTURE_ACTION/);
+  assert.match(html, /window\.opener/);
+  assert.match(html, /window\.parent/);
   assert.match(captureSource, /DesktopCaptureAction = "copy" \| "recognize-copy" \| "download" \| "pin"/);
   assert.match(settingsSource, /截图并识别快捷键/);
   assert.doesNotMatch(settingsSource, /截图后自动识图/);
@@ -199,7 +208,7 @@ test("screenshot editor provides adjustable bounds, annotation tools and indepen
   assert.match(editorSource, /recognizeCapturedScreenshotToClipboard/);
 });
 
-test("screenshot modes keep manual capture open and auto-confirm recognition after three idle seconds", async () => {
+test("manual screenshot never confirms on mouse release and recognition waits for three idle seconds", async () => {
   const [captureSource, editorSource, viewSource, mainSource, typesSource] = await Promise.all([
     readFile("src/utils/desktop-capture.ts", "utf8"),
     readFile("src/editor/editor.ts", "utf8"),
@@ -207,17 +216,55 @@ test("screenshot modes keep manual capture open and auto-confirm recognition aft
     readFile("src/main.ts", "utf8"),
     readFile("src/editor/editor-types.ts", "utf8")
   ]);
-  assert.match(captureSource, /DesktopCaptureMode = "capture" \| "capture-recognize"/);
-  assert.match(captureSource, /const autoConfirmDelayMs=3000/);
-  assert.match(captureSource, /setTimeout\(\(\)=>action\('copy'\),autoConfirmDelayMs\)/);
-  assert.match(captureSource, /function endSelection\(\)[\s\S]*armAutoConfirm\(\)/);
-  assert.match(captureSource, /pointermove'[\s\S]*insideRect\(ev\.clientX,ev\.clientY\)[\s\S]*resetAutoConfirm\(\)/);
-  assert.match(captureSource, /document\.addEventListener\('dblclick'[\s\S]*captureMode==='capture'[\s\S]*action\('copy'\)/);
-  assert.match(captureSource, /function endResize\(\)[\s\S]*armAutoConfirm\(\)/);
+  const captureHtml = desktopCapture.captureEditorHtml(
+    { id: 1, bounds: { x: 0, y: 0, width: 1280, height: 720 }, scaleFactor: 1 },
+    "capture"
+  );
+  const recognizeHtml = desktopCapture.captureEditorHtml(
+    { id: 1, bounds: { x: 0, y: 0, width: 1280, height: 720 }, scaleFactor: 1 },
+    "capture-recognize"
+  );
+  assert.match(captureHtml, /const recognizeMode=captureMode==='capture-recognize'/);
+  assert.match(captureHtml, /function endSelection\(\)\{[^}]*if\(completed\)armAutoConfirm\(\)\}/);
+  assert.doesNotMatch(captureHtml, /function endSelection\(\)[^\n]*action\('copy'\)/);
+  assert.match(captureHtml, /document\.addEventListener\('dblclick'[\s\S]*captureMode==='capture'[\s\S]*action\('copy'\)/);
+  assert.match(recognizeHtml, /const autoConfirmDelayMs=3000/);
+  assert.match(recognizeHtml, /pointerInsideSelection\|\|drag\|\|selectionDraw\|\|drawing/);
+  assert.match(recognizeHtml, /setTimeout\(\(\)=>\{[\s\S]*action\('copy'\)\},autoConfirmDelayMs\)/);
+  assert.match(recognizeHtml, /function endResize\(\)[\s\S]*armAutoConfirm\(\)/);
+  assert.match(recognizeHtml, /inside!==pointerInsideSelection[\s\S]*resetAutoConfirm\(\)/);
   assert.match(editorSource, /onCaptureScreenshot\(recognizeAfter\)/);
   assert.match(viewSource, /onCaptureScreenshot: async \(recognizeAfter\) => this\.plugin\.captureScreenshot\(recognizeAfter\)/);
   assert.match(typesSource, /onCaptureScreenshot: \(recognizeAfter\?: boolean\) => Promise<DesktopCaptureResult>/);
   assert.match(mainSource, /recognizeAfter \? "capture-recognize" : "capture"/);
+});
+
+test("desktop capture opens the plugin overlay and never silently falls back to the interactive system snipper", async () => {
+  const captureSource = await readFile("src/utils/desktop-capture.ts", "utf8");
+  assert.match(captureSource, /window\.open\("about:blank", windowName, features\)/);
+  assert.match(captureSource, /iframe\.srcdoc = html/);
+  assert.match(captureSource, /captureDisplayWithNativeCommand/);
+  assert.match(captureSource, /captureDisplayWithRendererElectron/);
+  assert.match(captureSource, /禁止静默回退系统截图/);
+  assert.match(captureSource, /MindMapStudioCaptureWindow/);
+  assert.match(captureSource, /hideForegroundWindow \? "1" : "0"/);
+  const entry = captureSource.slice(captureSource.indexOf("export async function captureDesktopScreenshot"));
+  assert.doesNotMatch(entry, /captureWithSystemTool/);
+  assert.doesNotMatch(entry, /screenshotCommandCandidates/);
+  assert.doesNotMatch(entry, /SnippingTool\.exe/);
+  const mac = desktopCapture.nativeCaptureCommandCandidates(
+    "darwin",
+    { id: 1, bounds: { x: -100, y: 20, width: 800, height: 600 }, scaleFactor: 2 },
+    "/tmp/screen.png"
+  );
+  assert.deepEqual(mac, [{ command: "screencapture", args: ["-x", "-R-100,20,800,600", "/tmp/screen.png"] }]);
+  const linux = desktopCapture.nativeCaptureCommandCandidates(
+    "linux",
+    { id: 1, bounds: { x: -1920, y: 0, width: 1920, height: 1080 }, scaleFactor: 1 },
+    "/tmp/screen.png"
+  );
+  assert.equal(linux[0].command, "grim");
+  assert.match(linux[1].args.join(" "), /1920x1080-1920\+0/);
 });
 
 test("desktop-only OCR and capture APIs are loaded lazily for mobile compatibility", async () => {
@@ -234,7 +281,7 @@ test("desktop-only OCR and capture APIs are loaded lazily for mobile compatibili
   }
   assert.match(ocrSource, /requireFunction\("node:child_process"\)/);
   assert.match(captureSource, /requireFunction\("electron"\)/);
-  assert.match(captureSource, /getCurrentObsidianWindow\(runtime\)/);
+  assert.match(captureSource, /getCurrentObsidianWindow\(electronRuntime\)/);
   assert.match(captureSource, /requireFunction\("@electron\/remote"\)/);
   assert.match(captureSource, /await waitForWindowMinimized\(windowHandle\)/);
   assert.match(exportSource, /requireFunction\("node:fs\/promises"\)/);
