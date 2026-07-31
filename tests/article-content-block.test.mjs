@@ -88,10 +88,10 @@ test("empty article document title keeps a clickable inline-edit target after bl
   assert.match(styles, /\.mms-article-document-title-text\s*\{[\s\S]*display:\s*inline-block[\s\S]*min-width:\s*4em[\s\S]*min-height:\s*1\.2em/);
 });
 
-test("Enter commits an article title without creating a duplicate child block", () => {
+test("Enter commits an article title while Shift+Enter keeps an inline line break", () => {
   const makeInlineEditable = editorSource.match(/private makeInlineEditable\(element: HTMLElement, node: MindMapNode, placeholder: string, blockId\?: string\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
   const handleKeydown = editorSource.match(/private handleKeydown\(event: KeyboardEvent\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
-  assert.match(makeInlineEditable, /if \(event\.key === "Enter"\) \{[\s\S]*event\.preventDefault\(\)[\s\S]*event\.stopPropagation\(\)[\s\S]*event\.stopImmediatePropagation\(\)[\s\S]*element\.blur\(\)/);
+  assert.match(makeInlineEditable, /if \(event\.key === "Enter" && !event\.shiftKey && !event\.isComposing\) \{[\s\S]*event\.preventDefault\(\)[\s\S]*event\.stopPropagation\(\)[\s\S]*event\.stopImmediatePropagation\(\)[\s\S]*element\.blur\(\)/);
   assert.match(handleKeydown, /if \(this\.inlineEditingId !== null\) return;[\s\S]*if \(target\.closest\("input, textarea, select, \[contenteditable='true'\]"\)\) return/);
 });
 
@@ -208,4 +208,9 @@ test("article non-text blocks align with the first glyph of indented paragraphs"
   assert.match(rendererSource, /block\.type === "table"[\s\S]*createArticleContentBlock\(container, block\.id, true\)/);
   assert.match(rendererSource, /else \{\s*const shell = createArticleContentBlock\(container, block\.id, true\)/);
   assert.match(styles, /\.mms-article-content-block\.is-paragraph-aligned\s*\{[\s\S]*width:\s*calc\(100% - 2em\);[\s\S]*margin-left:\s*2em/);
+});
+
+test("article numbering inherits the surrounding text metrics", () => {
+  assert.match(styles, /\.mms-article-number\s*\{[^}]*font-family:\s*inherit;[^}]*font-size:\s*1em;[^}]*font-weight:\s*inherit;[^}]*line-height:\s*inherit/);
+  assert.doesNotMatch(styles, /\.mms-article-number\s*\{[^}]*font-weight:\s*700/);
 });
