@@ -1549,6 +1549,10 @@ export class MindMapEditor {
       scroller.scrollTop += targetY - desiredY;
       this.updateArticleMiniMapActiveMarker();
     };
+    // Restore once synchronously so replacing the article/outline DOM cannot
+    // paint a frame at scrollTop=0. Delayed retries remain for images, fonts,
+    // and other late layout changes that can move the semantic anchor.
+    restore();
     window.setTimeout(restore, 20);
     window.requestAnimationFrame(() => window.requestAnimationFrame(restore));
     return resolved;
@@ -3893,6 +3897,7 @@ export class MindMapEditor {
    */
   private applyMeasuredMindMapLayout(): void {
     if (this.currentMode !== "mindmap" || !this.nodesLayerEl.isConnected) return;
+    const viewportAnchor = this.captureMindMapViewportAnchor(this.selectedId);
     const previousNodeRects = this.captureMindMapNodeRects();
     const appearance = this.getAppearance();
     const measured = new Map<string, { width: number; height: number }>();
@@ -3923,6 +3928,7 @@ export class MindMapEditor {
     }
     const branchColorMap = appearance.colorfulBranches ? buildBranchColorMap(this.document.root, appearance.branchColors) : new Map<string, string>();
     this.renderMindMapEdges(appearance, branchColorMap);
+    this.restoreMindMapViewportAnchor(viewportAnchor);
     this.playMindMapLayoutAnimation(previousNodeRects);
   }
 
@@ -5461,7 +5467,9 @@ export class MindMapEditor {
     if (!this.ensureEditable()) return;
     this.selectNode(node.id);
     new TableEditModal(this.app, table, (next) => {
+      const viewportAnchor = this.captureMindMapViewportAnchor(node.id);
       this.mutate(() => this.upsertStructuredBlock(node, "table", next, blockId));
+      this.restoreMindMapViewportAnchor(viewportAnchor);
     }).open();
   }
 
@@ -5471,7 +5479,9 @@ export class MindMapEditor {
     const block = nodeContentBlocks(node).find((item) => item.type === "table" && item.id === blockId);
     if (!block || block.type !== "table") return;
     const columnWidths = block.table.headers.map((_, index) => Math.max(64, Math.min(1200, Math.round(widths[index] ?? 160))));
+    const viewportAnchor = this.captureMindMapViewportAnchor(node.id);
     this.mutate(() => this.upsertStructuredBlock(node, "table", { ...block.table, columnWidths }, blockId));
+    this.restoreMindMapViewportAnchor(viewportAnchor);
   }
 
   /** Opens the selected code block directly instead of routing through the node editor. */
@@ -5508,24 +5518,54 @@ export class MindMapEditor {
       // paragraph. Commit that paragraph first, then store the image as the
       // next content block instead of letting the later redraw discard it.
       if (target.closest("[contenteditable='true']")) target.blur();
-      const selected = findNode(this.document.root, nodeId) ?? this.selectedNode() ?? this.document.root;
+      const extension = blob.type.split("/")[1]?.replace("jpeg", "jpg").replace("svg+xml", "svg") || "png";
+      const filename = `mindmap-image.${extension}`;
+      let path: string;
       try {
-        const extension = blob.type.split("/")[1]?.replace("jpeg", "jpg") || "png";
-        const filename = `mindmap-image.${extension}`;
-        const path = await this.callbacks.onSavePastedImage(blob, filename);
-        const imageBlock: MindMapImageContentBlock = { id: newId(), type: "image", source: path, localSource: path };
+        path = await this.callbacks.onSavePastedImage(blob, filename);
+      } catch (error) {
+        console.error("MindMap Studio paste image storage failed", error);
+        new Notice(`粘贴图片失败：${error instanceof Error ? error.message : String(error)}`, 7000);
+        return;
+      }
+
+      const imageBlock: MindMapImageContentBlock = { id: newId(), type: "image", source: path, localSource: path };
+      const selected = findNode(this.document.root, nodeId) ?? this.selectedNode() ?? this.document.root;
+      let inserted = false;
+      try {
         this.mutate(() => {
           const blocks = nodeContentBlocks(selected);
           const afterIndex = afterBlockId ? blocks.findIndex((block) => block.id === afterBlockId) : -1;
           blocks.splice(afterIndex >= 0 ? afterIndex + 1 : blocks.length, 0, imageBlock);
           selected.content = blocks;
           syncNodeContentFields(selected);
+          inserted = true;
         });
+      } catch (error) {
+        console.error("MindMap Studio paste image insertion failed", error);
+        if (!inserted) {
+          new Notice(`图片文件已保存，但插入节点失败：${path}`, 7000);
+          return;
+        }
+        // The model mutation has completed, but a later save notification may
+        // have thrown. Keep the successful insertion visible and avoid the
+        // misleading generic “paste failed” notice.
+        try {
+          this.markSaving();
+          this.render();
+        } catch (renderError) {
+          console.error("MindMap Studio paste image recovery render failed", renderError);
+        }
+        new Notice(`图片已插入：${path}；保存同步出现异常，请确认文件已保存`, 7000);
+        return;
+      }
+
+      try {
         const scheduled = this.callbacks.onScheduleAutoUpload(selected.id, imageBlock.id, path, filename);
         new Notice(scheduled ? `图片已保存，${this.autoUploadScheduleMessage()}` : `图片已保存：${path}`);
       } catch (error) {
-        console.error("MindMap Studio paste image failed", error);
-        new Notice("粘贴图片失败");
+        console.error("MindMap Studio paste image auto-upload scheduling failed", error);
+        new Notice(`图片已保存：${path}；自动上传排程失败，可稍后手动上传`, 7000);
       }
       return;
     }

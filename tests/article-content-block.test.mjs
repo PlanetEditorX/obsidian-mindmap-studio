@@ -260,3 +260,29 @@ test("article numbering inherits the surrounding text metrics", () => {
   assert.match(styles, /\.mms-article-number\s*\{[^}]*font-family:\s*inherit;[^}]*font-size:\s*1em;[^}]*font-weight:\s*inherit;[^}]*line-height:\s*inherit/);
   assert.doesNotMatch(styles, /\.mms-article-number\s*\{[^}]*font-weight:\s*700/);
 });
+
+
+test("pasted images report storage, insertion, and auto-upload failures independently", () => {
+  const handlePaste = editorSource.match(/private async handlePaste\(event: ClipboardEvent\): Promise<void> \{[\s\S]*?\n  \}/)?.[0] ?? "";
+  assert.match(handlePaste, /path = await this\.callbacks\.onSavePastedImage\(blob, filename\)[\s\S]*paste image storage failed/);
+  assert.match(handlePaste, /const selected = findNode\(this\.document\.root, nodeId\)[\s\S]*this\.mutate\(\(\) => \{/);
+  assert.match(handlePaste, /paste image insertion failed[\s\S]*if \(!inserted\)[\s\S]*图片文件已保存，但插入节点失败/);
+  assert.match(handlePaste, /onScheduleAutoUpload\(selected\.id, imageBlock\.id, path, filename\)[\s\S]*paste image auto-upload scheduling failed[\s\S]*图片已保存：\$\{path\}；自动上传排程失败/);
+  assert.doesNotMatch(handlePaste, /new Notice\("粘贴图片失败"\)/);
+  assert.match(mainBundle, /paste image storage failed[\s\S]*paste image insertion failed[\s\S]*paste image auto-upload scheduling failed/);
+  assert.doesNotMatch(mainBundle, /Notice\("\\u7C98\\u8D34\\u56FE\\u7247\\u5931\\u8D25"\)/);
+});
+
+test("table edits preserve the visible anchor before synchronous and measured relayout", () => {
+  const openTableBlockEditor = editorSource.match(/private openTableBlockEditor\([\s\S]*?\n  \}/)?.[0] ?? "";
+  const updateTableColumnWidths = editorSource.match(/private updateTableColumnWidths\([\s\S]*?\n  \}/)?.[0] ?? "";
+  const applyMeasuredMindMapLayout = editorSource.match(/private applyMeasuredMindMapLayout\(\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
+  const restoreReadingLocation = editorSource.match(/private restoreReadingLocation\([\s\S]*?\n  \}/)?.[0] ?? "";
+  assert.match(openTableBlockEditor, /captureMindMapViewportAnchor\(node\.id\)[\s\S]*this\.mutate\([\s\S]*restoreMindMapViewportAnchor\(viewportAnchor\)/);
+  assert.match(updateTableColumnWidths, /captureMindMapViewportAnchor\(node\.id\)[\s\S]*this\.mutate\([\s\S]*restoreMindMapViewportAnchor\(viewportAnchor\)/);
+  assert.match(applyMeasuredMindMapLayout, /captureMindMapViewportAnchor\(this\.selectedId\)[\s\S]*renderMindMapEdges[\s\S]*restoreMindMapViewportAnchor\(viewportAnchor\)/);
+  assert.match(restoreReadingLocation, /const restore = \(\): void => \{[\s\S]*\n    restore\(\);\n    window\.setTimeout\(restore, 20\)/);
+  assert.match(mainBundle, /captureMindMapViewportAnchor\(this\.selectedId\)[\s\S]*renderMindMapEdges[\s\S]*restoreMindMapViewportAnchor\(viewportAnchor\)/);
+  assert.match(mainBundle, /new TableEditModal[\s\S]*captureMindMapViewportAnchor\(node\.id\)[\s\S]*restoreMindMapViewportAnchor\(viewportAnchor\)/);
+  assert.match(mainBundle, /restore\(\);\n    window\.setTimeout\(restore, 20\)/);
+});
