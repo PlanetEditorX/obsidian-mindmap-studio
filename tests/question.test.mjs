@@ -216,6 +216,30 @@ test("Markdown import converts Obsidian image embeds into image blocks", () => {
   assert.doesNotMatch(JSON.stringify(document.root.content), /!\[\[/);
 });
 
+test("Markdown import resolves Obsidian image embeds relative to the source note and ignores layout aliases", () => {
+  const document = model.markdownToDocument(
+    "# 公文\n\n![[assets/公文/image.png|L]]",
+    "导入文件",
+    { sourcePath: "资料/公文.md" }
+  );
+  const images = model.nodeContentBlocks(document.root).filter((block) => block.type === "image");
+  assert.deepEqual(images.map((block) => block.source), ["资料/assets/公文/image.png"]);
+  assert.deepEqual(images.map((block) => block.alt), ["L"]);
+});
+
+test("Markdown import removes Obsidian block IDs and common Chinese outline numbering", () => {
+  const document = model.markdownToDocument(`# 公文
+
+## 一、总体要求 ^e7fc80f5-dac3-437f-bdb0-0b9b6e2d4801
+
+### （一）工作目标
+
+^f9f40155-1f60-4f30-aee4-cd44680e1f35`);
+  assert.equal(document.root.children[0]?.text, "总体要求");
+  assert.equal(document.root.children[0]?.children[0]?.text, "工作目标");
+  assert.doesNotMatch(JSON.stringify(document), /e7fc80f5|f9f40155|一、|（一）/);
+});
+
 test("question-bank grading distinguishes single choice, multiple choice, judgment, and normalized essay answers", () => {
   const choice = model.normalizeDocument({
     root: {

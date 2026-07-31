@@ -1870,7 +1870,7 @@ function parseTaskText(value: string): { text: string; task?: TaskStatus } {
  * @param fallbackTitle 无法从内容中取得标题时使用的回退标题。
  * @returns 当前操作生成、查找或规范化后的结果。
  */
-export function markdownToDocument(markdown: string, fallbackTitle = "思维导图"): MindMapDocument {
+export function markdownToDocument(markdown: string, fallbackTitle = "思维导图", options: { sourcePath?: string } = {}): MindMapDocument {
   const doc = createDefaultDocument(fallbackTitle);
   doc.root.children = [];
   const stack: Array<{ level: number; node: MindMapNode; kind: "root" | "heading" | "list" | "bold"; listKind?: "bullet" | "numbered" }> = [{ level: 0, node: doc.root, kind: "root" }];
@@ -1896,9 +1896,25 @@ export function markdownToDocument(markdown: string, fallbackTitle = "思维导�
   let tableLines: string[] = [];
   let codeFence: { marker: string; language?: string; lines: string[] } | null = null;
   const hasMultipleH1 = (markdown.match(/^#[ 	]+\S/gm) || []).length > 1;
+  const sourceDirectory = options.sourcePath?.replace(/\\/g, "/").split("/").slice(0, -1).join("/") ?? "";
+  const cleanImportedText = (value: string): string => value
+    .replace(/(?:^|\s+)\^[A-Za-z0-9-]+\s*$/u, "")
+    .replace(/^\s*(?:(?:[一二三四五六七八九十百千万零〇]+)[、.．]|[（(][一二三四五六七八九十百千万零〇0-9]+[）)]|\d+[、.．]|\d+[）)])\s*/u, "")
+    .trim();
+  const resolveImportedImageSource = (value: string): string => {
+    const source = value.trim().replace(/\\/g, "/");
+    if (!source || /^(?:https?:|data:|blob:|file:|\/)/i.test(source) || !sourceDirectory) return source;
+    const parts: string[] = [];
+    for (const part of `${sourceDirectory}/${source}`.split("/")) {
+      if (!part || part === ".") continue;
+      if (part === "..") parts.pop();
+      else parts.push(part);
+    }
+    return parts.join("/");
+  };
 
   const applyMarkdownText = (node: MindMapNode, value: string, fallback = "节点", forceBold = false): void => {
-    const source = value.trim() || fallback;
+    const source = cleanImportedText(value) || fallback;
     if (forceBold) {
       replaceNodeContentBlocks(node, [{
         id: newId(),
@@ -1941,7 +1957,7 @@ export function markdownToDocument(markdown: string, fallbackTitle = "思维导�
 
   /** 将 Markdown 正文按遇到顺序追加为内容块，避免与代码、图片和表格脱节。 */
   const appendMarkdownTextBlock = (target: MindMapNode, value: string): void => {
-    const source = value.trim();
+    const source = cleanImportedText(value);
     if (!source) return;
     const parsed = markdownInlineToRichText(source);
     replaceNodeContentBlocks(target, [
@@ -1952,7 +1968,7 @@ export function markdownToDocument(markdown: string, fallbackTitle = "思维导�
 
   const appendImageBlock = (alt: string, source: string): void => {
     const target = currentBoldNode ?? stack.at(-1)?.node ?? doc.root;
-    const imageSource = source.trim();
+    const imageSource = resolveImportedImageSource(source);
     if (!imageSource) return;
     replaceNodeContentBlocks(target, [
       ...nodeContentBlocks(target),
@@ -1997,7 +2013,7 @@ export function markdownToDocument(markdown: string, fallbackTitle = "思维导�
       continue;
     }
 
-    if (!line.trim() || line.trimStart().startsWith("---")) continue;
+    if (!line.trim() || line.trimStart().startsWith("---") || /^\s*\^[A-Za-z0-9-]+\s*$/u.test(line)) continue;
 
     const heading = line.match(/^\s*(#{1,6})\s+(.+?)\s*$/);
     const bullet = line.match(/^(\s*)[-*+]\s+(.+?)\s*$/);

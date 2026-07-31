@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file main.ts
  * @description 插件入口与跨文件服务层。
  *
@@ -1895,7 +1895,7 @@ export default class MindMapStudioPlugin extends Plugin {
   private async convertMarkdownFile(file: TFile): Promise<void> {
     const source = await this.app.vault.read(file);
     const title = file.basename;
-    const document = markdownToDocument(source, title);
+    const document = markdownToDocument(source, title, { sourcePath: file.path });
     document.layout = this.settings.defaultLayout;
     document.theme = this.settings.defaultTheme;
     document.appearance = settingsToAppearance(this.settings);
