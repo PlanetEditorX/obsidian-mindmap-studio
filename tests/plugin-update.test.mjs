@@ -6,6 +6,7 @@ import path from "node:path";
 import test, { after, before } from "node:test";
 import { build } from "esbuild";
 import { zipSync, strToU8 } from "fflate";
+import { readFile } from "node:fs/promises";
 
 let updater;
 let tempDir;
@@ -42,4 +43,13 @@ test("plugin updater extracts only a complete validated plugin bundle", () => {
   assert.equal(extracted.manifest.version, "1.25.5");
   assert.equal(new TextDecoder().decode(extracted.main), "module.exports = {};");
   assert.throws(() => updater.extractPluginReleaseFiles(zipSync({ "main.js": strToU8("x") }).buffer), /styles\.css/);
+});
+
+test("plugin update requires a full Obsidian restart instead of a browser-only reload", async () => {
+  const mainSource = await readFile("src/main.ts", "utf8");
+  const start = mainSource.indexOf("async checkForPluginUpdate()");
+  const end = mainSource.indexOf("\n  /**", start + 1);
+  const updater = mainSource.slice(start, end);
+  assert.match(updater, /请完整重启 Obsidian 以启用新版本/);
+  assert.doesNotMatch(updater, /window\.location\.reload/);
 });
