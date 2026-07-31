@@ -283,6 +283,7 @@
 
 ## Unreleased
 
+- Fix terminal body conversion to retain its generated next-level sequence prefix and remove the obsolete marker alignment gutter in article and continuous-reading modes.
 - 可编辑导图中选中节点后按 `Space` 现在会进入快速内联编辑；节点展开/收起仍可使用工具栏和右键菜单。
 - 修复按 `Enter` 新建同级节点后，快速输入框会因创建按键的残留 `keyup` 事件立即失去焦点的问题。
 - 修复折叠或展开代码后导图仍按展开高度保留大片空白的问题；富内容节点现在按实际尺寸重新计算分支位置并平滑过渡。

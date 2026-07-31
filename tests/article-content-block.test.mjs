@@ -125,8 +125,12 @@ test("terminal body siblings can switch to the next article numbering level", as
   assert.match(viewSource, /document\?\.articleStyle\?\.leafNumberingEnabled \?\? this\.plugin\.settings\.articleLeafNumberingEnabled/);
   assert.match(modesSource, /terminalCount = parent\.children\.filter/);
   assert.match(modesSource, /numberedLeaf/);
+  assert.match(modesSource, /const displayLevel = numberedLeaf \? defaultLevel : numbering\.level/);
+  assert.match(modesSource, /articleNumberLabel\(displayLevel, numberedIndex\)/);
   assert.match(rendererSource, /mms-article-leaf-number/);
   assert.match(editorSource, /buildArticleNodeInfo\(section\.document\.root, section\.baseDepth, \{ enabled: this\.options\.articleLeafNumberingEnabled/);
+  assert.match(styles, /\.mms-article-leaf-text\.mms-article-leaf-numbered\s*\{[\s\S]*margin-inline-start:\s*0/);
+  assert.match(styles, /\.mms-article-leaf-number\s*\{\s*display:\s*inline/);
 });
 
 test("Enter commits an article title while Shift+Enter keeps an inline line break", () => {

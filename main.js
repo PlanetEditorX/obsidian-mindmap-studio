@@ -4849,13 +4849,14 @@ function buildArticleNodeInfo(root, baseDepth = 0, leafNumbering = { enabled: fa
     for (const child of parent.children) {
       const numbering = resolveArticleNumbering(child, defaultLevel, siblingHasHeading);
       const numberedLeaf = convertLeaves && !numbering.isHeading && !numbering.skipped;
-      const numberedIndex = (numbering.shouldNumber || numberedLeaf) && !numbering.skipped ? ((_a2 = numberedIndexes.get(numbering.level)) != null ? _a2 : 0) + 1 : 0;
-      if (numberedIndex) numberedIndexes.set(numbering.level, numberedIndex);
-      const label = numberedIndex ? articleNumberLabel(numbering.level, numberedIndex) : "";
+      const displayLevel = numberedLeaf ? defaultLevel : numbering.level;
+      const numberedIndex = (numbering.shouldNumber || numberedLeaf) && !numbering.skipped ? ((_a2 = numberedIndexes.get(displayLevel)) != null ? _a2 : 0) + 1 : 0;
+      if (numberedIndex) numberedIndexes.set(displayLevel, numberedIndex);
+      const label = numberedIndex ? articleNumberLabel(displayLevel, numberedIndex) : "";
       const title = nodePrimaryText(child) || (numbering.isHeading ? "\u672A\u547D\u540D\u6807\u9898" : "");
       result.push({
         node: child,
-        depth: numbering.level,
+        depth: displayLevel,
         label,
         title,
         displayTitle: articleDisplayTitle(label, title),

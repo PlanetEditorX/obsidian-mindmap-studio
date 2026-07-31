@@ -299,15 +299,19 @@ export function buildArticleNodeInfo(root: MindMapNode, baseDepth = 0, leafNumbe
     for (const child of parent.children) {
       const numbering = resolveArticleNumbering(child, defaultLevel, siblingHasHeading);
       const numberedLeaf = convertLeaves && !numbering.isHeading && !numbering.skipped;
+      // A converted terminal body always belongs to the level directly below
+      // its parent heading. Its own manual article-level metadata must not move
+      // the generated prefix away from that structural level.
+      const displayLevel = numberedLeaf ? defaultLevel : numbering.level;
       const numberedIndex = (numbering.shouldNumber || numberedLeaf) && !numbering.skipped
-        ? (numberedIndexes.get(numbering.level) ?? 0) + 1
+        ? (numberedIndexes.get(displayLevel) ?? 0) + 1
         : 0;
-      if (numberedIndex) numberedIndexes.set(numbering.level, numberedIndex);
-      const label = numberedIndex ? articleNumberLabel(numbering.level, numberedIndex) : "";
+      if (numberedIndex) numberedIndexes.set(displayLevel, numberedIndex);
+      const label = numberedIndex ? articleNumberLabel(displayLevel, numberedIndex) : "";
       const title = nodePrimaryText(child) || (numbering.isHeading ? "未命名标题" : "");
       result.push({
         node: child,
-        depth: numbering.level,
+        depth: displayLevel,
         label,
         title,
         displayTitle: articleDisplayTitle(label, title),
