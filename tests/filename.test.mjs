@@ -39,9 +39,26 @@ test("sanitizeFileExtension accepts names and dot-prefixed extensions", () => {
   assert.equal(filename.sanitizeFileExtension("folder/archive.tar.GZ"), "gz");
 });
 
+test("sanitizeFileExtension handles various dot configurations", () => {
+  assert.equal(filename.sanitizeFileExtension("no_extension"), "noextension");
+  assert.equal(filename.sanitizeFileExtension("file.name.with.many.dots.txt"), "txt");
+  assert.equal(filename.sanitizeFileExtension("file."), "png");
+  assert.equal(filename.sanitizeFileExtension("."), "png");
+});
+
 test("sanitizeFileExtension falls back for an invalid extension", () => {
   assert.equal(filename.sanitizeFileExtension("image.???", "WEBP"), "webp");
   assert.equal(filename.sanitizeFileExtension("", ""), "png");
+});
+
+test("sanitizeFileExtension handles malformed fallback", () => {
+  assert.equal(filename.sanitizeFileExtension("file.???", "???"), "png");
+  assert.equal(filename.sanitizeFileExtension("file.???", "fallback!@#"), "fallback");
+});
+
+test("sanitizeFileExtension truncates long extensions and fallbacks", () => {
+  assert.equal(filename.sanitizeFileExtension("file.averylongextensionthatgoesbeyond16chars"), "averylongextensi");
+  assert.equal(filename.sanitizeFileExtension("file.???", "averylongfallbackthatgoesbeyond16chars"), "averylongfallbac");
 });
 
 test("buildCompactTimestamp is deterministic", () => {
