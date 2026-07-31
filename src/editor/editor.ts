@@ -26,6 +26,7 @@ import {
   nodeContentBlocks,
   nodePlainText,
   nodePrimaryText,
+  isRemovableEmptyNode,
   normalizeMarkdownRichText,
   moveNodeContentBlock,
   replaceNodeContentBlocks,
@@ -2610,7 +2611,11 @@ export class MindMapEditor {
         renderRichTextRuns(element, original.richText, original.text, false);
         return;
       }
-      this.mutate(() => this.updateNodeTextBlock(node, next, blockId));
+      const hadMeaningfulContent = this.nodeHasMeaningfulContent(node);
+      this.mutate(() => {
+        this.updateNodeTextBlock(node, next, blockId);
+        this.removeNodeAfterContentDeletion(node, hadMeaningfulContent);
+      });
     });
   }
 
@@ -4126,6 +4131,7 @@ export class MindMapEditor {
         this.history.capture(this.document);
         historyCaptured = true;
       }
+      const hadMeaningfulContent = this.nodeHasMeaningfulContent(node);
       const blocks = nodeContentBlocks(node);
       let block = blocks.find((item): item is MindMapTextContentBlock => item.type === "text" && item.id === activeBlockId);
       if (!block) {
@@ -4145,9 +4151,14 @@ export class MindMapEditor {
       }
       node.content = blocks;
       syncNodeContentFields(node);
+      const removed = this.removeNodeAfterContentDeletion(node, hadMeaningfulContent);
       if (node.id === this.document.root.id && values.text) this.document.title = values.text;
       this.callbacks.onChange(this.getDocument());
       this.markSaving();
+      if (removed) {
+        this.render();
+        return;
+      }
       this.viewportEl.dispatchEvent(new CustomEvent("mms-inline-node-change", { detail: { nodeId } }));
     };
     let savedSelection: { start: number; end: number } | null = null;
@@ -4470,6 +4481,7 @@ export class MindMapEditor {
         this.history.capture(this.document);
         historyCaptured = true;
       }
+      const hadMeaningfulContent = this.nodeHasMeaningfulContent(selected);
       replaceNodeContentBlocks(selected, values.content);
       selected.note = values.note || undefined;
       selected.link = values.link || undefined;
@@ -4493,13 +4505,16 @@ export class MindMapEditor {
         minHeight: values.minHeight
       };
       selected.style = Object.values(style).some((value) => value !== undefined) ? style : undefined;
+      const removed = this.removeNodeAfterContentDeletion(selected, hadMeaningfulContent);
       if (selected.id === this.document.root.id) {
         const title = nodePlainText(selected);
         if (title) this.document.title = title;
       }
       this.callbacks.onChange(this.getDocument());
       this.markSaving();
-      if (this.inlineEditingId === selected.id) {
+      if (removed) {
+        this.render();
+      } else if (this.inlineEditingId === selected.id) {
         const inline = this.nodesLayerEl.querySelector<HTMLElement>(
           `.mmc-node[data-node-id="${CSS.escape(selected.id)}"] .mmc-node-text.is-inline-editing`
         );
@@ -4919,7 +4934,9 @@ export class MindMapEditor {
 
   /** Removes one structured block identified by its content-block ID. */
   private removeStructuredBlock(node: MindMapNode, blockId: string): void {
+    const hadMeaningfulContent = this.nodeHasMeaningfulContent(node);
     replaceNodeContentBlocks(node, nodeContentBlocks(node).filter((block) => block.id !== blockId));
+    this.removeNodeAfterContentDeletion(node, hadMeaningfulContent);
   }
 
   /** Adds the explicit grip used to move one rendered content block without dragging its whole node. */
@@ -5047,7 +5064,31 @@ export class MindMapEditor {
     if (!node || !this.ensureEditable()) return;
     const blocks = nodeContentBlocks(node);
     if (!blocks.some((block) => block.id === blockId)) return;
-    this.mutate(() => replaceNodeContentBlocks(node, blocks.filter((block) => block.id !== blockId)));
+    const hadMeaningfulContent = this.nodeHasMeaningfulContent(node);
+    this.mutate(() => {
+      replaceNodeContentBlocks(node, blocks.filter((block) => block.id !== blockId));
+      this.removeNodeAfterContentDeletion(node, hadMeaningfulContent);
+    });
+  }
+
+  /** Returns whether a node currently has a non-blank text or structured content block. */
+  private nodeHasMeaningfulContent(node: MindMapNode): boolean {
+    return nodeContentBlocks(node).some((block) => block.type !== "text" || block.text.trim());
+  }
+
+  /**
+   * Removes a node after its final real content was deleted, while keeping a just-created
+   * empty node available for its first input and preserving nodes with independent semantics.
+   */
+  private removeNodeAfterContentDeletion(node: MindMapNode, hadMeaningfulContent: boolean): boolean {
+    if (!hadMeaningfulContent || node.id === this.document.root.id || !isRemovableEmptyNode(node)) return false;
+    const fallback = deletionSelectionFallback(this.document.root, [node.id]);
+    if (!deleteNodes(this.document.root, [node.id])) return false;
+    this.selectedId = fallback;
+    this.selectedIds.clear();
+    this.selectedIds.add(fallback);
+    if (this.inlineEditingId === node.id) this.inlineEditingId = null;
+    return true;
   }
 
   /**
@@ -5870,7 +5911,11 @@ export class MindMapEditor {
     if (!node || !this.ensureEditable()) return;
     const blocks = nodeContentBlocks(node);
     if (!blocks.some((block) => block.type === "image" && block.id === blockId)) return;
-    this.mutate(() => replaceNodeContentBlocks(node, blocks.filter((block) => block.id !== blockId)));
+    const hadMeaningfulContent = this.nodeHasMeaningfulContent(node);
+    this.mutate(() => {
+      replaceNodeContentBlocks(node, blocks.filter((block) => block.id !== blockId));
+      this.removeNodeAfterContentDeletion(node, hadMeaningfulContent);
+    });
   }
 
   /**
