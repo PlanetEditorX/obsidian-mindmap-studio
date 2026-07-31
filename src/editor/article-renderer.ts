@@ -22,11 +22,18 @@ import {
   type ArticleTocEntry
 } from "../article/modes";
 import { resolveArticleStyle } from "../article/article-style";
+import { buildHierarchyFocusOrder, prioritizeArticleNodeIds } from "../render/incremental-render";
 import type { MindMapEditorCallbacks } from "./editor-types";
 import { ImagePreviewModal } from "./editor-modals";
 import { renderInlineMarkdown, renderRichTextRuns } from "./rich-text-dom";
 import { bindTableColumnResize, bindTableDoubleClick } from "./table-interaction";
 import type { ArticleLeafBulletStyle } from "../settings";
+
+/** 大型文章分帧挂载时使用的取消与完成回调。 */
+export interface ArticleIncrementalRenderOptions {
+  isCancelled: () => boolean;
+  onComplete: () => void;
+}
 
 /** 文章渲染所需的编辑器状态和回调。 */
 export interface ArticleRendererOptions {
@@ -57,6 +64,7 @@ export interface ArticleRendererOptions {
   makeInlineEditable: (element: HTMLElement, node: MindMapNode, placeholder: string, blockId?: string) => void;
   makeInlineCodeEditable: (element: HTMLElement, node: MindMapNode, code: MindMapCodeBlock, blockId: string) => void;
   addInlineNodeActions: (container: HTMLElement, node: MindMapNode) => void;
+  incremental?: ArticleIncrementalRenderOptions;
 }
 
 /** 根据文档文章样式和文章上下文渲染完整文章页。 */
@@ -90,61 +98,111 @@ export function renderArticleMode(container: HTMLElement, options: ArticleRender
     && options.document.view?.articleLandingMode !== "article";
   if (directoryOnly) {
     renderDirectory(page, options);
+    options.incremental?.onComplete();
     return;
   }
 
-  for (const info of buildArticleNodeInfo(options.document.root, options.articleBaseDepth, { enabled: options.articleLeafNumberingEnabled, threshold: options.articleLeafNumberingThreshold })) {
-    const section = page.createEl("section", { cls: `mms-article-node depth-${Math.min(info.depth, 8)}${!options.readOnly && options.selectedId === info.node.id ? " is-selected" : ""}` });
+  const infos = buildArticleNodeInfo(options.document.root, options.articleBaseDepth, {
+    enabled: options.articleLeafNumberingEnabled,
+    threshold: options.articleLeafNumberingThreshold
+  });
+  if (!options.incremental) {
+    for (const info of infos) {
+      const section = page.createEl("section");
+      renderArticleNodeSection(section, info, options);
+    }
+    renderArticlePager(page, options);
+    return;
+  }
+
+  const sections = new Map<string, HTMLElement>();
+  for (const info of infos) {
+    const section = page.createEl("section", { cls: `mms-article-node is-render-pending depth-${Math.min(info.depth, 8)}` });
     section.dataset.nodeId = info.node.id;
     section.id = info.anchor;
-    section.addEventListener("click", () => {
-      if (!options.isReadOnly()) options.selectNode(info.node.id);
-    });
-    section.addEventListener("contextmenu", (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      const target = event.target instanceof HTMLElement ? event.target : null;
-      const blockId = target?.closest<HTMLElement>("[data-block-id]")?.dataset.blockId;
-      options.selectNode(info.node.id);
-      options.openAiContextMenu(event, info.node.id, blockId);
-    });
-    if (info.isHeading) {
-      const level = Math.min(6, info.depth + 1);
-      const heading = section.createEl(`h${level}` as keyof HTMLElementTagNameMap, {
-        cls: `mms-article-heading mms-article-section-heading${/[、.）]$/.test(info.label) ? " is-compact-number" : ""}`
-      });
-      if (info.label) heading.createSpan({ cls: "mms-article-number", text: info.label });
-      renderHeading(heading, info.node, info.title, options);
-      const headingBlock = nodeContentBlocks(info.node).find((block): block is MindMapTextContentBlock => block.type === "text");
-      if (headingBlock) heading.dataset.blockId = headingBlock.id;
-      if (info.skipped) heading.createSpan({ cls: "mms-article-skip-badge", text: "不编号" });
-      options.addInlineNodeActions(heading, info.node);
-      renderArticleNodeContent(section, info.node, false, options);
-    } else {
-      const blocks = nodeContentBlocks(info.node);
-      const firstTextBlock = blocks.find((block): block is MindMapTextContentBlock => block.type === "text");
-      if (firstTextBlock?.text.trim()) {
-        const blockShell = createArticleContentBlock(section, firstTextBlock.id);
-        const paragraph = blockShell.createEl("p", { cls: `${articleParagraphClass("mms-article-leaf-text", firstTextBlock, options.articleLeafBulletsEnabled && !info.numberedLeaf, options.articleLeafTextAlignment)}${info.numberedLeaf ? " mms-article-leaf-numbered" : ""}` });
-        paragraph.dataset.blockId = firstTextBlock.id;
-        if (info.numberedLeaf) paragraph.dataset.articleNumber = info.label;
-        applyArticleLeafBulletStyle(paragraph, options, info.numberedLeaf);
-        renderRichTextRuns(paragraph, firstTextBlock.richText, firstTextBlock.text);
-        options.makeInlineEditable(paragraph, info.node, "正文段落", firstTextBlock.id);
-      } else if (!options.readOnly && blocks.length === 0) {
-        // 新建空白末端节点尚无内容块，需要临时渲染一个可编辑行，供
-        // addChild()/addSibling() 聚焦；已有表格、图片或代码等内容的节点
-        // 不应额外生成无关的空正文段落。
-        const paragraph = section.createEl("p", { cls: articleParagraphClass("mms-article-leaf-text", undefined, options.articleLeafBulletsEnabled, options.articleLeafTextAlignment) });
-        applyArticleLeafBulletStyle(paragraph, options);
-        renderRichTextRuns(paragraph, undefined, "");
-        options.makeInlineEditable(paragraph, info.node, "正文段落");
-      }
-      options.addInlineNodeActions(section, info.node);
-      renderArticleNodeContent(section, info.node, false, options);
-    }
+    sections.set(info.node.id, section);
   }
-  renderArticlePager(page, options);
+  const infoById = new Map(infos.map((info) => [info.node.id, info]));
+  const orderedIds = prioritizeArticleNodeIds(
+    infos.map((info) => info.node.id),
+    buildHierarchyFocusOrder(options.document.root, options.selectedId)
+  );
+  const renderBatch = (startIndex: number): void => {
+    if (options.incremental?.isCancelled()) return;
+    const startedAt = performance.now();
+    let index = startIndex;
+    const minimumBatch = startIndex === 0 ? 4 : 2;
+    while (index < orderedIds.length && (index - startIndex < minimumBatch || performance.now() - startedAt < 7)) {
+      const nodeId = orderedIds[index]!;
+      const info = infoById.get(nodeId);
+      const section = sections.get(nodeId);
+      if (info && section) renderArticleNodeSection(section, info, options);
+      index += 1;
+    }
+    if (index < orderedIds.length) {
+      window.requestAnimationFrame(() => renderBatch(index));
+      return;
+    }
+    renderArticlePager(page, options);
+    options.incremental?.onComplete();
+  };
+  renderBatch(0);
+}
+
+/** 挂载一个文章节点占位区的完整内容和交互。 */
+function renderArticleNodeSection(
+  section: HTMLElement,
+  info: ReturnType<typeof buildArticleNodeInfo>[number],
+  options: ArticleRendererOptions
+): void {
+  section.empty();
+  section.className = `mms-article-node depth-${Math.min(info.depth, 8)}${!options.readOnly && options.selectedId === info.node.id ? " is-selected" : ""}`;
+  section.dataset.nodeId = info.node.id;
+  section.id = info.anchor;
+  section.addEventListener("click", () => {
+    if (!options.isReadOnly()) options.selectNode(info.node.id);
+  });
+  section.addEventListener("contextmenu", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const target = event.target instanceof HTMLElement ? event.target : null;
+    const blockId = target?.closest<HTMLElement>("[data-block-id]")?.dataset.blockId;
+    options.selectNode(info.node.id);
+    options.openAiContextMenu(event, info.node.id, blockId);
+  });
+  if (info.isHeading) {
+    const level = Math.min(6, info.depth + 1);
+    const heading = section.createEl(`h${level}` as keyof HTMLElementTagNameMap, {
+      cls: `mms-article-heading mms-article-section-heading${/[、.）]$/.test(info.label) ? " is-compact-number" : ""}`
+    });
+    if (info.label) heading.createSpan({ cls: "mms-article-number", text: info.label });
+    renderHeading(heading, info.node, info.title, options);
+    const headingBlock = nodeContentBlocks(info.node).find((block): block is MindMapTextContentBlock => block.type === "text");
+    if (headingBlock) heading.dataset.blockId = headingBlock.id;
+    if (info.skipped) heading.createSpan({ cls: "mms-article-skip-badge", text: "不编号" });
+    options.addInlineNodeActions(heading, info.node);
+    renderArticleNodeContent(section, info.node, false, options);
+    return;
+  }
+
+  const blocks = nodeContentBlocks(info.node);
+  const firstTextBlock = blocks.find((block): block is MindMapTextContentBlock => block.type === "text");
+  if (firstTextBlock?.text.trim()) {
+    const blockShell = createArticleContentBlock(section, firstTextBlock.id);
+    const paragraph = blockShell.createEl("p", { cls: `${articleParagraphClass("mms-article-leaf-text", firstTextBlock, options.articleLeafBulletsEnabled && !info.numberedLeaf, options.articleLeafTextAlignment)}${info.numberedLeaf ? " mms-article-leaf-numbered" : ""}` });
+    paragraph.dataset.blockId = firstTextBlock.id;
+    if (info.numberedLeaf) paragraph.dataset.articleNumber = info.label;
+    applyArticleLeafBulletStyle(paragraph, options, info.numberedLeaf);
+    renderRichTextRuns(paragraph, firstTextBlock.richText, firstTextBlock.text);
+    options.makeInlineEditable(paragraph, info.node, "正文段落", firstTextBlock.id);
+  } else if (!options.readOnly && blocks.length === 0) {
+    const paragraph = section.createEl("p", { cls: articleParagraphClass("mms-article-leaf-text", undefined, options.articleLeafBulletsEnabled, options.articleLeafTextAlignment) });
+    applyArticleLeafBulletStyle(paragraph, options);
+    renderRichTextRuns(paragraph, undefined, "");
+    options.makeInlineEditable(paragraph, info.node, "正文段落");
+  }
+  options.addInlineNodeActions(section, info.node);
+  renderArticleNodeContent(section, info.node, false, options);
 }
 
 /** Creates an article block shell for right-click targeting without adding a floating drag handle. */
