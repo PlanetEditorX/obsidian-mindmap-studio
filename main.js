@@ -1030,8 +1030,8 @@ function parseTaskText(value) {
   const task = marker === "x" || marker === "X" ? "done" : marker === "-" ? "doing" : "todo";
   return { text: ((_a2 = match[2]) == null ? void 0 : _a2.trim()) || "\u4EFB\u52A1", task };
 }
-function markdownToDocument(markdown, fallbackTitle = "\u601D\u7EF4\u5BFC\u56FE") {
-  var _a2, _b2, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _A, _B, _C, _D, _E, _F, _G, _H, _I, _J;
+function markdownToDocument(markdown, fallbackTitle = "\u601D\u7EF4\u5BFC\u56FE", options = {}) {
+  var _a2, _b2, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _A, _B, _C, _D, _E, _F, _G, _H, _I, _J, _K, _L;
   const doc = createDefaultDocument(fallbackTitle);
   doc.root.children = [];
   const stack = [{ level: 0, node: doc.root, kind: "root" }];
@@ -1057,8 +1057,21 @@ function markdownToDocument(markdown, fallbackTitle = "\u601D\u7EF4\u5BFC\u56FE"
   let tableLines = [];
   let codeFence = null;
   const hasMultipleH1 = (markdown.match(/^#[ 	]+\S/gm) || []).length > 1;
+  const sourceDirectory = (_e = (_d = options.sourcePath) == null ? void 0 : _d.replace(/\\/g, "/").split("/").slice(0, -1).join("/")) != null ? _e : "";
+  const cleanImportedText = (value) => value.replace(/(?:^|\s+)\^[A-Za-z0-9-]+\s*$/u, "").replace(/^\s*(?:(?:[一二三四五六七八九十百千万零〇]+)[、.．]|[（(][一二三四五六七八九十百千万零〇0-9]+[）)]|\d+[、.．]|\d+[）)])\s*/u, "").trim();
+  const resolveImportedImageSource = (value) => {
+    const source = value.trim().replace(/\\/g, "/");
+    if (!source || /^(?:https?:|data:|blob:|file:|\/)/i.test(source) || !sourceDirectory) return source;
+    const parts = [];
+    for (const part of `${sourceDirectory}/${source}`.split("/")) {
+      if (!part || part === ".") continue;
+      if (part === "..") parts.pop();
+      else parts.push(part);
+    }
+    return parts.join("/");
+  };
   const applyMarkdownText = (node, value, fallback = "\u8282\u70B9", forceBold = false) => {
-    const source = value.trim() || fallback;
+    const source = cleanImportedText(value) || fallback;
     if (forceBold) {
       replaceNodeContentBlocks(node, [{
         id: newId(),
@@ -1096,7 +1109,7 @@ function markdownToDocument(markdown, fallbackTitle = "\u601D\u7EF4\u5BFC\u56FE"
     ]);
   };
   const appendMarkdownTextBlock = (target, value) => {
-    const source = value.trim();
+    const source = cleanImportedText(value);
     if (!source) return;
     const parsed = markdownInlineToRichText(source);
     replaceNodeContentBlocks(target, [
@@ -1107,7 +1120,7 @@ function markdownToDocument(markdown, fallbackTitle = "\u601D\u7EF4\u5BFC\u56FE"
   const appendImageBlock = (alt, source) => {
     var _a3, _b3;
     const target = (_b3 = currentBoldNode != null ? currentBoldNode : (_a3 = stack.at(-1)) == null ? void 0 : _a3.node) != null ? _b3 : doc.root;
-    const imageSource = source.trim();
+    const imageSource = resolveImportedImageSource(source);
     if (!imageSource) return;
     replaceNodeContentBlocks(target, [
       ...nodeContentBlocks(target),
@@ -1133,7 +1146,7 @@ function markdownToDocument(markdown, fallbackTitle = "\u601D\u7EF4\u5BFC\u56FE"
       const tableStr = tableLines.join("\n");
       const parsed = parseMarkdownTable(tableStr);
       if (parsed) {
-        const target = (_e = currentBoldNode != null ? currentBoldNode : (_d = stack.at(-1)) == null ? void 0 : _d.node) != null ? _e : doc.root;
+        const target = (_g = currentBoldNode != null ? currentBoldNode : (_f = stack.at(-1)) == null ? void 0 : _f.node) != null ? _g : doc.root;
         replaceNodeContentBlocks(target, [...nodeContentBlocks(target), { id: newId(), type: "table", table: parsed }]);
       }
     }
@@ -1141,13 +1154,13 @@ function markdownToDocument(markdown, fallbackTitle = "\u601D\u7EF4\u5BFC\u56FE"
     const openingCodeFence = line.match(/^\s*(`{3,})([^`]*)$/);
     if (openingCodeFence) {
       codeFence = {
-        marker: (_f = openingCodeFence[1]) != null ? _f : "```",
-        language: ((_g = openingCodeFence[2]) == null ? void 0 : _g.trim()) || void 0,
+        marker: (_h = openingCodeFence[1]) != null ? _h : "```",
+        language: ((_i = openingCodeFence[2]) == null ? void 0 : _i.trim()) || void 0,
         lines: []
       };
       continue;
     }
-    if (!line.trim() || line.trimStart().startsWith("---")) continue;
+    if (!line.trim() || line.trimStart().startsWith("---") || /^\s*\^[A-Za-z0-9-]+\s*$/u.test(line)) continue;
     const heading = line.match(/^\s*(#{1,6})\s+(.+?)\s*$/);
     const bullet = line.match(/^(\s*)[-*+]\s+(.+?)\s*$/);
     const numbered = line.match(/^(\s*)\d+[.)]\s*(.+?)\s*$/);
@@ -1159,8 +1172,8 @@ function markdownToDocument(markdown, fallbackTitle = "\u601D\u7EF4\u5BFC\u56FE"
     if (heading) {
       currentBoldTheme = null;
       currentBoldNode = null;
-      const level = (_i = (_h = heading[1]) == null ? void 0 : _h.length) != null ? _i : 1;
-      const text = (_k = (_j = heading[2]) == null ? void 0 : _j.trim()) != null ? _k : "\u8282\u70B9";
+      const level = (_k = (_j = heading[1]) == null ? void 0 : _j.length) != null ? _k : 1;
+      const text = (_m = (_l = heading[2]) == null ? void 0 : _l.trim()) != null ? _m : "\u8282\u70B9";
       if (frontmatterTitle && !doc.root.children.length && level >= 2 && text === doc.root.text) {
         stack.length = 1;
         continue;
@@ -1185,8 +1198,8 @@ function markdownToDocument(markdown, fallbackTitle = "\u601D\u7EF4\u5BFC\u56FE"
         rootAssigned = true;
       } else {
         const node = createMarkdownNode(text);
-        while (stack.length > 1 && ((_m = (_l = stack.at(-1)) == null ? void 0 : _l.level) != null ? _m : 0) >= level) stack.pop();
-        const parent2 = (_o = (_n = stack.at(-1)) == null ? void 0 : _n.node) != null ? _o : doc.root;
+        while (stack.length > 1 && ((_o = (_n = stack.at(-1)) == null ? void 0 : _n.level) != null ? _o : 0) >= level) stack.pop();
+        const parent2 = (_q = (_p = stack.at(-1)) == null ? void 0 : _p.node) != null ? _q : doc.root;
         parent2.children.push(node);
         stack.push({ level, node, kind: "heading" });
       }
@@ -1194,25 +1207,25 @@ function markdownToDocument(markdown, fallbackTitle = "\u601D\u7EF4\u5BFC\u56FE"
     }
     if (skippingTableOfContents) continue;
     if (linkedImage) {
-      appendImageBlock((_p = linkedImage[1]) != null ? _p : "\u56FE\u7247", (_q = linkedImage[2]) != null ? _q : "");
+      appendImageBlock((_r = linkedImage[1]) != null ? _r : "\u56FE\u7247", (_s = linkedImage[2]) != null ? _s : "");
       continue;
     }
     if (image) {
-      appendImageBlock((_r = image[1]) != null ? _r : "\u56FE\u7247", (_s = image[2]) != null ? _s : "");
+      appendImageBlock((_t = image[1]) != null ? _t : "\u56FE\u7247", (_u = image[2]) != null ? _u : "");
       continue;
     }
     if (obsidianImage) {
-      appendImageBlock(obsidianImage[2] && !/^\d+(?:px)?$/i.test(obsidianImage[2].trim()) ? obsidianImage[2] : "\u56FE\u7247", (_t = obsidianImage[1]) != null ? _t : "");
+      appendImageBlock(obsidianImage[2] && !/^\d+(?:px)?$/i.test(obsidianImage[2].trim()) ? obsidianImage[2] : "\u56FE\u7247", (_v = obsidianImage[1]) != null ? _v : "");
       continue;
     }
     if (quote) {
-      const parent2 = (_v = (_u = stack.at(-1)) == null ? void 0 : _u.node) != null ? _v : doc.root;
-      parent2.children.push(createMarkdownNode(((_w = quote[1]) == null ? void 0 : _w.trim()) || "\u5F15\u7528"));
+      const parent2 = (_x = (_w = stack.at(-1)) == null ? void 0 : _w.node) != null ? _x : doc.root;
+      parent2.children.push(createMarkdownNode(((_y = quote[1]) == null ? void 0 : _y.trim()) || "\u5F15\u7528"));
       hasLeadingContent || (hasLeadingContent = !rootAssigned);
       continue;
     }
     if (boldOutline) {
-      const text = ((_x = boldOutline[1]) == null ? void 0 : _x.trim()) || "\u8282\u70B9";
+      const text = ((_z = boldOutline[1]) == null ? void 0 : _z.trim()) || "\u8282\u70B9";
       if (!rootAssigned && !doc.root.children.length && stack.length === 1) {
         applyMarkdownText(doc.root, text, "\u8282\u70B9", true);
         doc.title = doc.root.text;
@@ -1233,16 +1246,16 @@ function markdownToDocument(markdown, fallbackTitle = "\u601D\u7EF4\u5BFC\u56FE"
     }
     const listMatch = bullet != null ? bullet : numbered;
     if (listMatch) {
-      const spaces = ((_y = listMatch[1]) != null ? _y : "").replaceAll("	", "  ").length;
-      const parentLevel = (_A = (_z = [...stack].reverse().find((entry) => entry.kind === "heading" || entry.kind === "bold")) == null ? void 0 : _z.level) != null ? _A : 1;
+      const spaces = ((_A = listMatch[1]) != null ? _A : "").replaceAll("	", "  ").length;
+      const parentLevel = (_C = (_B = [...stack].reverse().find((entry) => entry.kind === "heading" || entry.kind === "bold")) == null ? void 0 : _B.level) != null ? _C : 1;
       const previous = stack.at(-1);
-      const numberedParent = (previous == null ? void 0 : previous.kind) === "list" && previous.listKind === "numbered" && previous.level === parentLevel + 1 ? previous : (previous == null ? void 0 : previous.kind) === "list" && previous.listKind === "bullet" && previous.level === parentLevel + 2 && ((_B = stack.at(-2)) == null ? void 0 : _B.listKind) === "numbered" ? stack.at(-2) : void 0;
+      const numberedParent = (previous == null ? void 0 : previous.kind) === "list" && previous.listKind === "numbered" && previous.level === parentLevel + 1 ? previous : (previous == null ? void 0 : previous.kind) === "list" && previous.listKind === "bullet" && previous.level === parentLevel + 2 && ((_D = stack.at(-2)) == null ? void 0 : _D.listKind) === "numbered" ? stack.at(-2) : void 0;
       const level = bullet && spaces === 0 && numberedParent ? numberedParent.level + 1 : parentLevel + Math.floor(spaces / 2) + 1;
-      const parsed = parseTaskText(((_C = listMatch[2]) != null ? _C : "\u8282\u70B9").trim());
+      const parsed = parseTaskText(((_E = listMatch[2]) != null ? _E : "\u8282\u70B9").trim());
       const node = createMarkdownNode(parsed.text);
       node.task = parsed.task;
-      while (stack.length > 1 && ((_E = (_D = stack.at(-1)) == null ? void 0 : _D.level) != null ? _E : 0) >= level) stack.pop();
-      const parent2 = (_G = (_F = stack.at(-1)) == null ? void 0 : _F.node) != null ? _G : doc.root;
+      while (stack.length > 1 && ((_G = (_F = stack.at(-1)) == null ? void 0 : _F.level) != null ? _G : 0) >= level) stack.pop();
+      const parent2 = (_I = (_H = stack.at(-1)) == null ? void 0 : _H.node) != null ? _I : doc.root;
       parent2.children.push(node);
       stack.push({ level, node, kind: "list", listKind: bullet ? "bullet" : "numbered" });
       currentBoldNode = node;
@@ -1252,7 +1265,7 @@ function markdownToDocument(markdown, fallbackTitle = "\u601D\u7EF4\u5BFC\u56FE"
       currentBoldNode.children.push(createMarkdownNode(line.trim()));
       continue;
     }
-    const parent = (_H = stack.at(-1)) == null ? void 0 : _H.node;
+    const parent = (_J = stack.at(-1)) == null ? void 0 : _J.node;
     if (parent && parent !== doc.root) appendMarkdownTextBlock(parent, line);
     else hasLeadingContent = true;
   }
@@ -1261,7 +1274,7 @@ function markdownToDocument(markdown, fallbackTitle = "\u601D\u7EF4\u5BFC\u56FE"
     const tableStr = tableLines.join("\n");
     const parsed = parseMarkdownTable(tableStr);
     if (parsed) {
-      const target = (_J = currentBoldNode != null ? currentBoldNode : (_I = stack.at(-1)) == null ? void 0 : _I.node) != null ? _J : doc.root;
+      const target = (_L = currentBoldNode != null ? currentBoldNode : (_K = stack.at(-1)) == null ? void 0 : _K.node) != null ? _L : doc.root;
       replaceNodeContentBlocks(target, [...nodeContentBlocks(target), { id: newId(), type: "table", table: parsed }]);
     }
   }
@@ -19519,7 +19532,7 @@ ${url}`, 8e3);
     var _a2, _b2;
     const source = await this.app.vault.read(file);
     const title = file.basename;
-    const document2 = markdownToDocument(source, title);
+    const document2 = markdownToDocument(source, title, { sourcePath: file.path });
     document2.layout = this.settings.defaultLayout;
     document2.theme = this.settings.defaultTheme;
     document2.appearance = settingsToAppearance(this.settings);
