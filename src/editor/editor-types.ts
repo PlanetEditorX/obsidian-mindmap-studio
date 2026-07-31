@@ -114,7 +114,7 @@ export interface MindMapEditorOptions {
   imageRecognitionAutoConfirmDelaySeconds: 0 | 5 | 10 | 15 | null;
   autoUploadDelaySeconds: number;
   screenshotShortcut: string;
-  screenshotAutoRecognize: boolean;
+  screenshotRecognizeShortcut: string;
   questionNodesEnabled: boolean;
   /** Enables the full-page practice mode only for maps inside the configured question-bank folder. */
   questionBankModeEnabled: boolean;

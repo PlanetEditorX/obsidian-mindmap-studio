@@ -1732,17 +1732,31 @@ export class MindMapEditor {
     }
   }
 
-  /** 启动系统截图；有编辑焦点时插入原节点，否则保留系统剪贴板中的截图。 */
-  async captureScreenshot(): Promise<void> {
-    const insertionTarget = this.screenshotInsertionTarget();
+  /** 启动截图编辑器；普通截图与截图并识别使用完全独立的调用链。 */
+  async captureScreenshot(recognizeAfter = false, targetOverride?: ScreenshotInsertionTarget): Promise<void> {
+    const insertionTarget = targetOverride ?? this.screenshotInsertionTarget();
     try {
       const capture = await this.callbacks.onCaptureScreenshot();
+      if (capture.action === "download") {
+        new Notice("截图已下载");
+        return;
+      }
+      if (capture.action === "pin") {
+        new Notice("截图已固定到桌面");
+        return;
+      }
+      if (capture.action === "recognize-copy") {
+        await this.recognizeCapturedScreenshotToClipboard(capture.blob);
+        return;
+      }
       if (!insertionTarget) {
-        new Notice("截图已复制到剪贴板；截图前没有聚焦导图节点或文章段落");
+        if (recognizeAfter) await this.recognizeCapturedScreenshotToClipboard(capture.blob);
+        else new Notice("截图已复制到剪贴板；截图前没有聚焦导图节点或文章段落");
         return;
       }
       if (!this.ensureExternalEditAllowed()) {
-        new Notice("截图已复制到剪贴板；当前导图只读，未插入图片");
+        if (recognizeAfter) await this.recognizeCapturedScreenshotToClipboard(capture.blob);
+        else new Notice("截图已复制到剪贴板；当前导图只读，未插入图片");
         return;
       }
       const path = await this.callbacks.onSavePastedImage(capture.blob, capture.suggestedName);
@@ -1769,7 +1783,7 @@ export class MindMapEditor {
       this.replaceDocumentFromExternalEdit(next, target.id);
       const scheduled = this.callbacks.onScheduleAutoUpload(target.id, imageBlock.id, path, capture.suggestedName);
       new Notice(scheduled ? `截图已插入，${this.autoUploadScheduleMessage()}` : `截图已插入：${path}`);
-      if (this.options.screenshotAutoRecognize) await this.recognizeImageBlock(target.id, imageBlock.id);
+      if (recognizeAfter) await this.recognizeImageBlock(target.id, imageBlock.id);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       if (/取消截图操作/.test(message)) new Notice("已取消截图");
@@ -1778,6 +1792,22 @@ export class MindMapEditor {
         new Notice(`截图失败：${message}`);
       }
     }
+  }
+
+  /** 识别截图编辑器中的当前选区，并把纯文字结果复制到系统剪贴板。 */
+  private async recognizeCapturedScreenshotToClipboard(blob: Blob): Promise<void> {
+    const result = await this.callbacks.onRecognizeImage({
+      nodeId: "screenshot",
+      blockId: "screenshot",
+      nodeLabel: "截图",
+      source: "",
+      alt: "截图",
+      index: 1,
+      total: 1
+    }, blob);
+    if (!result.text.trim()) throw new Error("截图中没有识别到可复制的文字");
+    await navigator.clipboard.writeText(result.text);
+    new Notice("识别文字已复制到剪贴板");
   }
 
   /** 返回截图操作开始前实际聚焦的节点或文章段落；命令面板等外部焦点返回 null。 */
@@ -2048,7 +2078,8 @@ export class MindMapEditor {
     this.addToolbarButton("code", "code-2", "插入代码", () => this.editCode(), true);
     this.addToolbarButton("image", "image-plus", "粘贴图片到当前节点（Ctrl/Cmd+V）", () => new Notice("先复制图片，再选中节点并按 Ctrl/Cmd+V"), true);
     if (this.options.questionNodesEnabled) this.addToolbarButton("question", "file-plus-2", "新建题目子节点", () => this.addQuestionChild(), true);
-    this.addToolbarButton("screenshot", "scan-line", `截图并插入当前节点（${this.options.screenshotShortcut || "Ctrl+Shift+S"}）`, () => void this.captureScreenshot());
+    this.addToolbarButton("screenshot", "scan-line", `截图（${this.options.screenshotShortcut || "Ctrl+Shift+S"}）`, () => void this.captureScreenshot(false));
+    this.addToolbarButton("screenshot-recognize", "scan-text", `截图并识别（${this.options.screenshotRecognizeShortcut || "Ctrl+Shift+R"}）`, () => void this.captureScreenshot(true));
     this.addToolbarButton("submap", "network", "创建或进入子导图", () => void this.createOrOpenSubmap());
     this.addToolbarSeparator();
     this.addToolbarButton("undo", "undo-2", "撤销（Ctrl/Cmd+Z）", () => this.undo(), true);
@@ -6489,6 +6520,17 @@ export class MindMapEditor {
       .setTitle(contextBlockId ? "在此块后插入文字" : "插入文字")
       .setIcon("text-cursor-input")
       .onClick(() => this.insertTextBlock(contextBlockId)));
+    if (selected) {
+      const screenshotTarget: ScreenshotInsertionTarget = { nodeId: selected.id, afterBlockId: contextBlockId };
+      menu.addItem((item) => item
+        .setTitle("插入截图")
+        .setIcon("scan-line")
+        .onClick(() => void this.captureScreenshot(false, screenshotTarget)));
+      menu.addItem((item) => item
+        .setTitle("插入截图并识别")
+        .setIcon("scan-text")
+        .onClick(() => void this.captureScreenshot(true, screenshotTarget)));
+    }
     menu.addItem((item) => item.setTitle(selected?.table ? "编辑表格" : "插入表格").setIcon("table-2").onClick(() => this.editTable()));
     menu.addItem((item) => item.setTitle("插入 LaTeX 公式").setIcon("sigma").onClick(() => this.insertFormula()));
     menu.addItem((item) => item.setTitle("将子节点生成表格").setIcon("table-properties").onClick(() => this.convertChildrenToTable()));
@@ -7171,10 +7213,17 @@ export class MindMapEditor {
       return;
     }
 
+    if (this.shortcutMatches(event, this.options.screenshotRecognizeShortcut)) {
+      event.preventDefault();
+      event.stopPropagation();
+      if (!event.repeat) void this.captureScreenshot(true);
+      return;
+    }
+
     if (this.shortcutMatches(event, this.options.screenshotShortcut)) {
       event.preventDefault();
       event.stopPropagation();
-      if (!event.repeat) void this.captureScreenshot();
+      if (!event.repeat) void this.captureScreenshot(false);
       return;
     }
 

@@ -1994,6 +1994,7 @@ var TOOLBAR_ITEMS = [
   ["code", "\u4EE3\u7801"],
   ["image", "\u7C98\u8D34\u56FE\u7247"],
   ["screenshot", "\u63D2\u5165\u622A\u56FE"],
+  ["screenshot-recognize", "\u63D2\u5165\u622A\u56FE\u5E76\u8BC6\u522B"],
   ["submap", "\u5B50\u5BFC\u56FE"],
   ["undo", "\u64A4\u9500"],
   ["redo", "\u91CD\u505A"],
@@ -2021,6 +2022,7 @@ var SETTINGS_SECTION_TITLES = [
   "\u7B54\u9898\u4E0E\u9898\u5E93",
   "\u5168\u5C40\u641C\u7D22",
   "AI \u52A9\u624B",
+  "\u622A\u56FE\u4E0E\u8BC6\u522B",
   "\u7BA1\u7406\u914D\u7F6E"
 ];
 function createImageHostConfig(index = 1) {
@@ -2131,8 +2133,8 @@ var DEFAULT_SETTINGS = {
   localOcrExtraArgs: "--psm 6",
   screenshotHideObsidian: false,
   screenshotShortcut: "Ctrl+Shift+S",
+  screenshotRecognizeShortcut: "Ctrl+Shift+R",
   globalSearchShortcut: "Ctrl+Shift+F",
-  screenshotAutoRecognize: false,
   questionNodesEnabled: false,
   questionBankFolder: "",
   questionBankFolders: [],
@@ -2166,7 +2168,9 @@ function normalizeSettingsSectionOrder(value) {
     "\u5168\u5C40\u4EE3\u7801\u8BBE\u7F6E": "\u4EE3\u7801\u884C\u4E3A",
     "\u6587\u4EF6\u4E0E\u5E03\u5C40": "\u6587\u4EF6\u4E0E\u8D44\u6E90",
     "\u6587\u4EF6\u5939": "\u6587\u4EF6\u4E0E\u8D44\u6E90",
-    "\u5168\u5C40\u641C\u7D22\u7D22\u5F15": "\u5168\u5C40\u641C\u7D22"
+    "\u5168\u5C40\u641C\u7D22\u7D22\u5F15": "\u5168\u5C40\u641C\u7D22",
+    "\u56FE\u7247\u8BC6\u56FE\u4E0E\u672C\u5730 OCR": "\u622A\u56FE\u4E0E\u8BC6\u522B",
+    "\u56FE\u7247\u8BC6\u56FE\u4E0E\u672C\u5730OCR": "\u622A\u56FE\u4E0E\u8BC6\u522B"
   };
   const stored = Array.isArray(value) ? value.flatMap((title) => {
     var _a2;
@@ -2540,63 +2544,6 @@ var MindMapStudioSettingTab = class extends import_obsidian.PluginSettingTab {
         await this.plugin.saveSettings();
       });
     });
-    const imageRecognitionSettings = containerEl.createDiv({ cls: "mms-image-recognition-settings" });
-    imageRecognitionSettings.createEl("h4", { text: "\u56FE\u7247\u8BC6\u56FE\u4E0E\u672C\u5730 OCR" });
-    new import_obsidian.Setting(imageRecognitionSettings).setName("\u9ED8\u8BA4\u8BC6\u56FE\u65B9\u5F0F").setDesc("AI \u6A21\u5F0F\u53EF\u8DDF\u968F\u5168\u5C40\u63A5\u53E3\uFF0C\u4E5F\u53EF\u5355\u72EC\u9009\u62E9\u89C6\u89C9\u6A21\u578B\uFF1B\u672C\u5730 OCR \u6A21\u5F0F\u8C03\u7528\u672C\u673A Tesseract\uFF0C\u4E0D\u4E0A\u4F20\u56FE\u7247\u3002").addDropdown((dropdown) => dropdown.addOption("ai", "AI \u89C6\u89C9\u8BC6\u56FE").addOption("local-ocr", "\u672C\u5730 Tesseract OCR").setValue(this.plugin.settings.imageRecognitionMode).onChange(async (value) => {
-      this.plugin.settings.imageRecognitionMode = value === "local-ocr" ? "local-ocr" : "ai";
-      await this.plugin.saveSettings();
-      this.display();
-    }));
-    if (this.plugin.settings.imageRecognitionMode === "ai") {
-      const selectedVisionProfile = enabledProfiles.some((profile) => profile.id === this.plugin.settings.imageRecognitionAiProfileId) ? this.plugin.settings.imageRecognitionAiProfileId : "";
-      new import_obsidian.Setting(imageRecognitionSettings).setName("AI \u8BC6\u56FE\u63A5\u53E3").setDesc("\u9ED8\u8BA4\u8DDF\u968F\u5168\u5C40 AI \u63A5\u53E3\uFF1B\u5982\u679C\u5168\u5C40\u6A21\u578B\u4E0D\u652F\u6301\u56FE\u7247\u8F93\u5165\uFF0C\u53EF\u5728\u8FD9\u91CC\u5355\u72EC\u9009\u62E9\u89C6\u89C9\u6A21\u578B\u3002").addDropdown((dropdown) => {
-        dropdown.addOption("", "\u8DDF\u968F\u5168\u5C40 AI \u63A5\u53E3");
-        enabledProfiles.forEach((profile) => dropdown.addOption(profile.id, `${profile.name} \xB7 ${profile.model}`));
-        dropdown.setValue(selectedVisionProfile);
-        dropdown.onChange(async (value) => {
-          this.plugin.settings.imageRecognitionAiProfileId = value;
-          await this.plugin.saveSettings();
-        });
-      });
-    }
-    new import_obsidian.Setting(imageRecognitionSettings).setName("\u8BC6\u56FE\u4EFB\u52A1\u8BF4\u660E").setDesc("AI \u52A9\u624B\u6279\u91CF\u8BC6\u56FE\u3001\u56FE\u7247\u53F3\u952E\u8BC6\u56FE\u548C\u622A\u56FE\u81EA\u52A8\u8BC6\u56FE\u5171\u7528\u3002").addTextArea((text) => text.setValue(this.plugin.settings.imageRecognitionPrompt).setPlaceholder("\u8BC6\u522B\u56FE\u7247\u4E2D\u7684\u5168\u90E8\u6587\u5B57\u5E76\u6309\u9605\u8BFB\u987A\u5E8F\u8F6C\u5199\u3002").onChange(async (value) => {
-      this.plugin.settings.imageRecognitionPrompt = value.slice(0, 4e3);
-      await this.plugin.saveSettings();
-    }));
-    if (this.plugin.settings.imageRecognitionMode === "local-ocr") {
-      new import_obsidian.Setting(imageRecognitionSettings).setName("Tesseract \u53EF\u6267\u884C\u6587\u4EF6").setDesc("\u53EF\u586B\u5199\u547D\u4EE4\u540D tesseract\uFF0C\u6216\u672C\u673A\u5B8C\u6574\u8DEF\u5F84\u3002").addText((text) => text.setValue(this.plugin.settings.localOcrExecutable).setPlaceholder("tesseract").onChange(async (value) => {
-        this.plugin.settings.localOcrExecutable = value.trim().slice(0, 2e3) || "tesseract";
-        await this.plugin.saveSettings();
-      }));
-      new import_obsidian.Setting(imageRecognitionSettings).setName("OCR \u8BED\u8A00").setDesc("\u9700\u8981\u672C\u673A\u5DF2\u5B89\u88C5\u76F8\u5E94\u8BED\u8A00\u5305\uFF0C\u4F8B\u5982 chi_sim+eng\u3002").addText((text) => text.setValue(this.plugin.settings.localOcrLanguage).setPlaceholder("chi_sim+eng").onChange(async (value) => {
-        this.plugin.settings.localOcrLanguage = value.trim().slice(0, 240) || "chi_sim+eng";
-        await this.plugin.saveSettings();
-      }));
-      new import_obsidian.Setting(imageRecognitionSettings).setName("OCR \u9644\u52A0\u53C2\u6570").setDesc("\u53C2\u6570\u901A\u8FC7 execFile \u4F20\u9012\uFF0C\u4E0D\u4F7F\u7528 shell\uFF1B\u9ED8\u8BA4 --psm 6\u3002").addText((text) => text.setValue(this.plugin.settings.localOcrExtraArgs).setPlaceholder("--psm 6").onChange(async (value) => {
-        this.plugin.settings.localOcrExtraArgs = value.slice(0, 1e3);
-        await this.plugin.saveSettings();
-      }));
-    }
-    new import_obsidian.Setting(imageRecognitionSettings).setName("\u622A\u56FE\u65F6\u9690\u85CF Obsidian").setDesc("\u542F\u52A8\u7CFB\u7EDF\u533A\u57DF\u622A\u56FE\u524D\u81EA\u52A8\u6700\u5C0F\u5316\uFF0C\u622A\u56FE\u5B8C\u6210\u540E\u6062\u590D\u7A97\u53E3\u3002").addToggle((toggle) => toggle.setValue(this.plugin.settings.screenshotHideObsidian).onChange(async (value) => {
-      this.plugin.settings.screenshotHideObsidian = value;
-      await this.plugin.saveSettings();
-    }));
-    new import_obsidian.Setting(imageRecognitionSettings).setName("\u622A\u56FE\u5FEB\u6377\u952E").setDesc("\u70B9\u51FB\u8F93\u5165\u6846\u540E\uFF0C\u6309\u4E0B 1 \u81F3 3 \u4E2A\u952E\u7684\u7EC4\u5408\u5373\u53EF\u4FDD\u5B58\uFF1B\u652F\u6301\u5355\u952E\u3001Ctrl/Shift/Alt \u4E0E\u4E3B\u952E\u7EC4\u5408\u3002\u7F16\u8F91\u5668\u83B7\u5F97\u7126\u70B9\u65F6\u751F\u6548\u3002").addText((text) => {
-      text.setValue(this.plugin.settings.screenshotShortcut);
-      text.setPlaceholder(DEFAULT_SETTINGS.screenshotShortcut);
-      text.inputEl.readOnly = true;
-      text.inputEl.addClass("mms-shortcut-recorder");
-      text.inputEl.setAttr("aria-label", "\u70B9\u51FB\u540E\u6309\u4E0B\u65B0\u7684\u622A\u56FE\u5FEB\u6377\u952E");
-      text.inputEl.addEventListener("keydown", (event) => void this.captureScreenshotShortcut(event, text));
-    });
-    new import_obsidian.Setting(imageRecognitionSettings).setName("\u622A\u56FE\u540E\u81EA\u52A8\u8BC6\u56FE").setDesc("\u622A\u56FE\u63D2\u5165\u8282\u70B9\u540E\u81EA\u52A8\u8FD0\u884C\u5F53\u524D\u8BC6\u56FE\u65B9\u5F0F\u5E76\u6253\u5F00\u56FE\u7247\u4E0E\u6587\u5B57\u5BF9\u6BD4\u9884\u89C8\uFF1B\u4ECD\u9700\u786E\u8BA4\u540E\u624D\u66FF\u6362\u3002").addToggle((toggle) => toggle.setValue(this.plugin.settings.screenshotAutoRecognize).onChange(async (value) => {
-      this.plugin.settings.screenshotAutoRecognize = value;
-      await this.plugin.saveSettings();
-    }));
-    new import_obsidian.Setting(imageRecognitionSettings).setName("\u8BC6\u56FE\u7ED3\u679C\u786E\u8BA4").setDesc("\u9009\u62E9\u662F\u5426\u8DF3\u8FC7\u624B\u52A8\u786E\u8BA4\u3002\u5EF6\u8FDF\u786E\u8BA4\u671F\u95F4\u4ECD\u53EF\u4FEE\u6539\u8BC6\u522B\u6587\u5B57\u6216\u624B\u52A8\u786E\u8BA4\u3002").addDropdown((dropdown) => dropdown.addOption("manual", "\u624B\u52A8\u786E\u8BA4").addOption("0", "\u76F4\u63A5\u786E\u8BA4").addOption("5", "5 \u79D2\u540E\u81EA\u52A8\u786E\u8BA4").addOption("10", "10 \u79D2\u540E\u81EA\u52A8\u786E\u8BA4").addOption("15", "15 \u79D2\u540E\u81EA\u52A8\u786E\u8BA4").setValue(this.plugin.settings.imageRecognitionAutoConfirmDelaySeconds === null ? "manual" : String(this.plugin.settings.imageRecognitionAutoConfirmDelaySeconds)).onChange(async (value) => {
-      this.plugin.settings.imageRecognitionAutoConfirmDelaySeconds = value === "manual" ? null : Number(value);
-      await this.plugin.saveSettings();
-    }));
     const aiHeader = containerEl.createDiv({ cls: "mms-ai-profiles-header" });
     aiHeader.createEl("h4", { text: "\u63A5\u53E3\u9884\u8BBE\u4E0E\u81EA\u5B9A\u4E49" });
     const addAiProfile = (provider) => {
@@ -2758,7 +2705,71 @@ var MindMapStudioSettingTab = class extends import_obsidian.PluginSettingTab {
         void this.plugin.saveSettings().then(() => this.display());
       });
     });
-    containerEl.appendChild(imageRecognitionSettings);
+    containerEl.createEl("h3", { text: "\u622A\u56FE\u4E0E\u8BC6\u522B" });
+    containerEl.createEl("p", {
+      cls: "setting-item-description",
+      text: "\u622A\u56FE\u3001\u622A\u56FE\u5E76\u8BC6\u522B\u3001\u56FE\u7247\u53F3\u952E\u8BC6\u522B\u548C\u672C\u5730 OCR \u7684\u7EDF\u4E00\u914D\u7F6E\u3002\u8BE5\u5206\u7C7B\u72EC\u7ACB\u4E8E AI \u52A9\u624B\uFF0C\u4F46 AI \u89C6\u89C9\u8BC6\u522B\u4ECD\u4F7F\u7528\u5DF2\u914D\u7F6E\u7684\u89C6\u89C9\u63A5\u53E3\u3002"
+    });
+    const imageRecognitionSettings = containerEl.createDiv({ cls: "mms-image-recognition-settings" });
+    new import_obsidian.Setting(imageRecognitionSettings).setName("\u9ED8\u8BA4\u8BC6\u56FE\u65B9\u5F0F").setDesc("AI \u6A21\u5F0F\u53EF\u8DDF\u968F\u5168\u5C40\u63A5\u53E3\uFF0C\u4E5F\u53EF\u5355\u72EC\u9009\u62E9\u89C6\u89C9\u6A21\u578B\uFF1B\u672C\u5730 OCR \u6A21\u5F0F\u8C03\u7528\u672C\u673A Tesseract\uFF0C\u4E0D\u4E0A\u4F20\u56FE\u7247\u3002").addDropdown((dropdown) => dropdown.addOption("ai", "AI \u89C6\u89C9\u8BC6\u56FE").addOption("local-ocr", "\u672C\u5730 Tesseract OCR").setValue(this.plugin.settings.imageRecognitionMode).onChange(async (value) => {
+      this.plugin.settings.imageRecognitionMode = value === "local-ocr" ? "local-ocr" : "ai";
+      await this.plugin.saveSettings();
+      this.display();
+    }));
+    if (this.plugin.settings.imageRecognitionMode === "ai") {
+      const selectedVisionProfile = enabledProfiles.some((profile) => profile.id === this.plugin.settings.imageRecognitionAiProfileId) ? this.plugin.settings.imageRecognitionAiProfileId : "";
+      new import_obsidian.Setting(imageRecognitionSettings).setName("AI \u8BC6\u56FE\u63A5\u53E3").setDesc("\u9ED8\u8BA4\u8DDF\u968F\u5168\u5C40 AI \u63A5\u53E3\uFF1B\u5982\u679C\u5168\u5C40\u6A21\u578B\u4E0D\u652F\u6301\u56FE\u7247\u8F93\u5165\uFF0C\u53EF\u5728\u8FD9\u91CC\u5355\u72EC\u9009\u62E9\u89C6\u89C9\u6A21\u578B\u3002").addDropdown((dropdown) => {
+        dropdown.addOption("", "\u8DDF\u968F\u5168\u5C40 AI \u63A5\u53E3");
+        enabledProfiles.forEach((profile) => dropdown.addOption(profile.id, `${profile.name} \xB7 ${profile.model}`));
+        dropdown.setValue(selectedVisionProfile);
+        dropdown.onChange(async (value) => {
+          this.plugin.settings.imageRecognitionAiProfileId = value;
+          await this.plugin.saveSettings();
+        });
+      });
+    }
+    new import_obsidian.Setting(imageRecognitionSettings).setName("\u8BC6\u56FE\u4EFB\u52A1\u8BF4\u660E").setDesc("AI \u52A9\u624B\u6279\u91CF\u8BC6\u56FE\u3001\u56FE\u7247\u53F3\u952E\u8BC6\u56FE\u3001\u622A\u56FE\u5E76\u8BC6\u522B\u548C\u201C\u8BC6\u522B\u5E76\u590D\u5236\u201D\u5171\u7528\u3002").addTextArea((text) => text.setValue(this.plugin.settings.imageRecognitionPrompt).setPlaceholder("\u8BC6\u522B\u56FE\u7247\u4E2D\u7684\u5168\u90E8\u6587\u5B57\u5E76\u6309\u9605\u8BFB\u987A\u5E8F\u8F6C\u5199\u3002").onChange(async (value) => {
+      this.plugin.settings.imageRecognitionPrompt = value.slice(0, 4e3);
+      await this.plugin.saveSettings();
+    }));
+    if (this.plugin.settings.imageRecognitionMode === "local-ocr") {
+      new import_obsidian.Setting(imageRecognitionSettings).setName("Tesseract \u53EF\u6267\u884C\u6587\u4EF6").setDesc("\u53EF\u586B\u5199\u547D\u4EE4\u540D tesseract\uFF0C\u6216\u672C\u673A\u5B8C\u6574\u8DEF\u5F84\u3002").addText((text) => text.setValue(this.plugin.settings.localOcrExecutable).setPlaceholder("tesseract").onChange(async (value) => {
+        this.plugin.settings.localOcrExecutable = value.trim().slice(0, 2e3) || "tesseract";
+        await this.plugin.saveSettings();
+      }));
+      new import_obsidian.Setting(imageRecognitionSettings).setName("OCR \u8BED\u8A00").setDesc("\u9700\u8981\u672C\u673A\u5DF2\u5B89\u88C5\u76F8\u5E94\u8BED\u8A00\u5305\uFF0C\u4F8B\u5982 chi_sim+eng\u3002").addText((text) => text.setValue(this.plugin.settings.localOcrLanguage).setPlaceholder("chi_sim+eng").onChange(async (value) => {
+        this.plugin.settings.localOcrLanguage = value.trim().slice(0, 240) || "chi_sim+eng";
+        await this.plugin.saveSettings();
+      }));
+      new import_obsidian.Setting(imageRecognitionSettings).setName("OCR \u9644\u52A0\u53C2\u6570").setDesc("\u53C2\u6570\u901A\u8FC7 execFile \u4F20\u9012\uFF0C\u4E0D\u4F7F\u7528 shell\uFF1B\u9ED8\u8BA4 --psm 6\u3002").addText((text) => text.setValue(this.plugin.settings.localOcrExtraArgs).setPlaceholder("--psm 6").onChange(async (value) => {
+        this.plugin.settings.localOcrExtraArgs = value.slice(0, 1e3);
+        await this.plugin.saveSettings();
+      }));
+    }
+    new import_obsidian.Setting(imageRecognitionSettings).setName("\u622A\u56FE\u65F6\u9690\u85CF Obsidian").setDesc("\u6293\u53D6\u684C\u9762\u524D\u81EA\u52A8\u6700\u5C0F\u5316 Obsidian\uFF0C\u622A\u56FE\u7F16\u8F91\u5668\u5173\u95ED\u540E\u6062\u590D\u7A97\u53E3\u3002").addToggle((toggle) => toggle.setValue(this.plugin.settings.screenshotHideObsidian).onChange(async (value) => {
+      this.plugin.settings.screenshotHideObsidian = value;
+      await this.plugin.saveSettings();
+    }));
+    new import_obsidian.Setting(imageRecognitionSettings).setName("\u622A\u56FE\u5FEB\u6377\u952E").setDesc("\u53EA\u622A\u56FE\u5E76\u63D2\u5165\u56FE\u7247\u3002\u70B9\u51FB\u8F93\u5165\u6846\u540E\u6309\u4E0B 1 \u81F3 3 \u4E2A\u952E\u7684\u7EC4\u5408\uFF1B\u7F16\u8F91\u5668\u83B7\u5F97\u7126\u70B9\u65F6\u751F\u6548\u3002").addText((text) => {
+      text.setValue(this.plugin.settings.screenshotShortcut);
+      text.setPlaceholder(DEFAULT_SETTINGS.screenshotShortcut);
+      text.inputEl.readOnly = true;
+      text.inputEl.addClass("mms-shortcut-recorder");
+      text.inputEl.setAttr("aria-label", "\u70B9\u51FB\u540E\u6309\u4E0B\u65B0\u7684\u622A\u56FE\u5FEB\u6377\u952E");
+      text.inputEl.addEventListener("keydown", (event) => void this.captureScreenshotShortcut(event, text));
+    });
+    new import_obsidian.Setting(imageRecognitionSettings).setName("\u622A\u56FE\u5E76\u8BC6\u522B\u5FEB\u6377\u952E").setDesc("\u622A\u56FE\u63D2\u5165\u540E\u7ACB\u5373\u8FD0\u884C\u5F53\u524D\u8BC6\u56FE\u65B9\u5F0F\u3002\u8BE5\u5FEB\u6377\u952E\u4E0E\u666E\u901A\u622A\u56FE\u5B8C\u5168\u72EC\u7ACB\u3002").addText((text) => {
+      text.setValue(this.plugin.settings.screenshotRecognizeShortcut);
+      text.setPlaceholder(DEFAULT_SETTINGS.screenshotRecognizeShortcut);
+      text.inputEl.readOnly = true;
+      text.inputEl.addClass("mms-shortcut-recorder");
+      text.inputEl.setAttr("aria-label", "\u70B9\u51FB\u540E\u6309\u4E0B\u65B0\u7684\u622A\u56FE\u5E76\u8BC6\u522B\u5FEB\u6377\u952E");
+      text.inputEl.addEventListener("keydown", (event) => void this.captureScreenshotRecognizeShortcut(event, text));
+    });
+    new import_obsidian.Setting(imageRecognitionSettings).setName("\u8BC6\u56FE\u7ED3\u679C\u786E\u8BA4").setDesc("\u9009\u62E9\u662F\u5426\u8DF3\u8FC7\u624B\u52A8\u786E\u8BA4\u3002\u5EF6\u8FDF\u786E\u8BA4\u671F\u95F4\u4ECD\u53EF\u4FEE\u6539\u8BC6\u522B\u6587\u5B57\u6216\u624B\u52A8\u786E\u8BA4\u3002").addDropdown((dropdown) => dropdown.addOption("manual", "\u624B\u52A8\u786E\u8BA4").addOption("0", "\u76F4\u63A5\u786E\u8BA4").addOption("5", "5 \u79D2\u540E\u81EA\u52A8\u786E\u8BA4").addOption("10", "10 \u79D2\u540E\u81EA\u52A8\u786E\u8BA4").addOption("15", "15 \u79D2\u540E\u81EA\u52A8\u786E\u8BA4").setValue(this.plugin.settings.imageRecognitionAutoConfirmDelaySeconds === null ? "manual" : String(this.plugin.settings.imageRecognitionAutoConfirmDelaySeconds)).onChange(async (value) => {
+      this.plugin.settings.imageRecognitionAutoConfirmDelaySeconds = value === "manual" ? null : Number(value);
+      await this.plugin.saveSettings();
+    }));
     containerEl.createEl("h3", { text: "\u5FEB\u6377\u952E\u914D\u7F6E" });
     containerEl.createEl("p", {
       cls: "setting-item-description",
@@ -3370,6 +3381,10 @@ var MindMapStudioSettingTab = class extends import_obsidian.PluginSettingTab {
   /** 记录截图快捷键；修饰键必须与一个非修饰主键同时按下。 */
   async captureScreenshotShortcut(event, text) {
     await this.captureShortcut(event, text, "screenshotShortcut", "\u622A\u56FE");
+  }
+  /** 记录截图并识别快捷键，并与普通截图快捷键保持独立。 */
+  async captureScreenshotRecognizeShortcut(event, text) {
+    await this.captureShortcut(event, text, "screenshotRecognizeShortcut", "\u622A\u56FE\u5E76\u8BC6\u522B");
   }
   /** Records one shortcut setting from a physical keyboard event. */
   async captureShortcut(event, text, key, label) {
@@ -10547,17 +10562,31 @@ var MindMapEditor = class {
       return false;
     }
   }
-  /** 启动系统截图；有编辑焦点时插入原节点，否则保留系统剪贴板中的截图。 */
-  async captureScreenshot() {
-    const insertionTarget = this.screenshotInsertionTarget();
+  /** 启动截图编辑器；普通截图与截图并识别使用完全独立的调用链。 */
+  async captureScreenshot(recognizeAfter = false, targetOverride) {
+    const insertionTarget = targetOverride != null ? targetOverride : this.screenshotInsertionTarget();
     try {
       const capture = await this.callbacks.onCaptureScreenshot();
+      if (capture.action === "download") {
+        new import_obsidian10.Notice("\u622A\u56FE\u5DF2\u4E0B\u8F7D");
+        return;
+      }
+      if (capture.action === "pin") {
+        new import_obsidian10.Notice("\u622A\u56FE\u5DF2\u56FA\u5B9A\u5230\u684C\u9762");
+        return;
+      }
+      if (capture.action === "recognize-copy") {
+        await this.recognizeCapturedScreenshotToClipboard(capture.blob);
+        return;
+      }
       if (!insertionTarget) {
-        new import_obsidian10.Notice("\u622A\u56FE\u5DF2\u590D\u5236\u5230\u526A\u8D34\u677F\uFF1B\u622A\u56FE\u524D\u6CA1\u6709\u805A\u7126\u5BFC\u56FE\u8282\u70B9\u6216\u6587\u7AE0\u6BB5\u843D");
+        if (recognizeAfter) await this.recognizeCapturedScreenshotToClipboard(capture.blob);
+        else new import_obsidian10.Notice("\u622A\u56FE\u5DF2\u590D\u5236\u5230\u526A\u8D34\u677F\uFF1B\u622A\u56FE\u524D\u6CA1\u6709\u805A\u7126\u5BFC\u56FE\u8282\u70B9\u6216\u6587\u7AE0\u6BB5\u843D");
         return;
       }
       if (!this.ensureExternalEditAllowed()) {
-        new import_obsidian10.Notice("\u622A\u56FE\u5DF2\u590D\u5236\u5230\u526A\u8D34\u677F\uFF1B\u5F53\u524D\u5BFC\u56FE\u53EA\u8BFB\uFF0C\u672A\u63D2\u5165\u56FE\u7247");
+        if (recognizeAfter) await this.recognizeCapturedScreenshotToClipboard(capture.blob);
+        else new import_obsidian10.Notice("\u622A\u56FE\u5DF2\u590D\u5236\u5230\u526A\u8D34\u677F\uFF1B\u5F53\u524D\u5BFC\u56FE\u53EA\u8BFB\uFF0C\u672A\u63D2\u5165\u56FE\u7247");
         return;
       }
       const path = await this.callbacks.onSavePastedImage(capture.blob, capture.suggestedName);
@@ -10582,7 +10611,7 @@ var MindMapEditor = class {
       this.replaceDocumentFromExternalEdit(next, target.id);
       const scheduled = this.callbacks.onScheduleAutoUpload(target.id, imageBlock.id, path, capture.suggestedName);
       new import_obsidian10.Notice(scheduled ? `\u622A\u56FE\u5DF2\u63D2\u5165\uFF0C${this.autoUploadScheduleMessage()}` : `\u622A\u56FE\u5DF2\u63D2\u5165\uFF1A${path}`);
-      if (this.options.screenshotAutoRecognize) await this.recognizeImageBlock(target.id, imageBlock.id);
+      if (recognizeAfter) await this.recognizeImageBlock(target.id, imageBlock.id);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       if (/取消截图操作/.test(message)) new import_obsidian10.Notice("\u5DF2\u53D6\u6D88\u622A\u56FE");
@@ -10591,6 +10620,21 @@ var MindMapEditor = class {
         new import_obsidian10.Notice(`\u622A\u56FE\u5931\u8D25\uFF1A${message}`);
       }
     }
+  }
+  /** 识别截图编辑器中的当前选区，并把纯文字结果复制到系统剪贴板。 */
+  async recognizeCapturedScreenshotToClipboard(blob) {
+    const result = await this.callbacks.onRecognizeImage({
+      nodeId: "screenshot",
+      blockId: "screenshot",
+      nodeLabel: "\u622A\u56FE",
+      source: "",
+      alt: "\u622A\u56FE",
+      index: 1,
+      total: 1
+    }, blob);
+    if (!result.text.trim()) throw new Error("\u622A\u56FE\u4E2D\u6CA1\u6709\u8BC6\u522B\u5230\u53EF\u590D\u5236\u7684\u6587\u5B57");
+    await navigator.clipboard.writeText(result.text);
+    new import_obsidian10.Notice("\u8BC6\u522B\u6587\u5B57\u5DF2\u590D\u5236\u5230\u526A\u8D34\u677F");
   }
   /** 返回截图操作开始前实际聚焦的节点或文章段落；命令面板等外部焦点返回 null。 */
   screenshotInsertionTarget() {
@@ -10845,7 +10889,8 @@ var MindMapEditor = class {
     this.addToolbarButton("code", "code-2", "\u63D2\u5165\u4EE3\u7801", () => this.editCode(), true);
     this.addToolbarButton("image", "image-plus", "\u7C98\u8D34\u56FE\u7247\u5230\u5F53\u524D\u8282\u70B9\uFF08Ctrl/Cmd+V\uFF09", () => new import_obsidian10.Notice("\u5148\u590D\u5236\u56FE\u7247\uFF0C\u518D\u9009\u4E2D\u8282\u70B9\u5E76\u6309 Ctrl/Cmd+V"), true);
     if (this.options.questionNodesEnabled) this.addToolbarButton("question", "file-plus-2", "\u65B0\u5EFA\u9898\u76EE\u5B50\u8282\u70B9", () => this.addQuestionChild(), true);
-    this.addToolbarButton("screenshot", "scan-line", `\u622A\u56FE\u5E76\u63D2\u5165\u5F53\u524D\u8282\u70B9\uFF08${this.options.screenshotShortcut || "Ctrl+Shift+S"}\uFF09`, () => void this.captureScreenshot());
+    this.addToolbarButton("screenshot", "scan-line", `\u622A\u56FE\uFF08${this.options.screenshotShortcut || "Ctrl+Shift+S"}\uFF09`, () => void this.captureScreenshot(false));
+    this.addToolbarButton("screenshot-recognize", "scan-text", `\u622A\u56FE\u5E76\u8BC6\u522B\uFF08${this.options.screenshotRecognizeShortcut || "Ctrl+Shift+R"}\uFF09`, () => void this.captureScreenshot(true));
     this.addToolbarButton("submap", "network", "\u521B\u5EFA\u6216\u8FDB\u5165\u5B50\u5BFC\u56FE", () => void this.createOrOpenSubmap());
     this.addToolbarSeparator();
     this.addToolbarButton("undo", "undo-2", "\u64A4\u9500\uFF08Ctrl/Cmd+Z\uFF09", () => this.undo(), true);
@@ -15012,6 +15057,11 @@ var MindMapEditor = class {
       menu.addItem((item) => item.setTitle("\u5220\u9664\u5F53\u524D\u5757").setIcon("trash-2").onClick(() => this.removeContentBlock(selected.id, contextBlock.id)));
     }
     menu.addItem((item) => item.setTitle(contextBlockId ? "\u5728\u6B64\u5757\u540E\u63D2\u5165\u6587\u5B57" : "\u63D2\u5165\u6587\u5B57").setIcon("text-cursor-input").onClick(() => this.insertTextBlock(contextBlockId)));
+    if (selected) {
+      const screenshotTarget = { nodeId: selected.id, afterBlockId: contextBlockId };
+      menu.addItem((item) => item.setTitle("\u63D2\u5165\u622A\u56FE").setIcon("scan-line").onClick(() => void this.captureScreenshot(false, screenshotTarget)));
+      menu.addItem((item) => item.setTitle("\u63D2\u5165\u622A\u56FE\u5E76\u8BC6\u522B").setIcon("scan-text").onClick(() => void this.captureScreenshot(true, screenshotTarget)));
+    }
     menu.addItem((item) => item.setTitle((selected == null ? void 0 : selected.table) ? "\u7F16\u8F91\u8868\u683C" : "\u63D2\u5165\u8868\u683C").setIcon("table-2").onClick(() => this.editTable()));
     menu.addItem((item) => item.setTitle("\u63D2\u5165 LaTeX \u516C\u5F0F").setIcon("sigma").onClick(() => this.insertFormula()));
     menu.addItem((item) => item.setTitle("\u5C06\u5B50\u8282\u70B9\u751F\u6210\u8868\u683C").setIcon("table-properties").onClick(() => this.convertChildrenToTable()));
@@ -15638,10 +15688,16 @@ var MindMapEditor = class {
       this.cancelArticleClickMove();
       return;
     }
+    if (this.shortcutMatches(event, this.options.screenshotRecognizeShortcut)) {
+      event.preventDefault();
+      event.stopPropagation();
+      if (!event.repeat) void this.captureScreenshot(true);
+      return;
+    }
     if (this.shortcutMatches(event, this.options.screenshotShortcut)) {
       event.preventDefault();
       event.stopPropagation();
-      if (!event.repeat) void this.captureScreenshot();
+      if (!event.repeat) void this.captureScreenshot(false);
       return;
     }
     if (this.inlineEditingId !== null) return;
@@ -16654,12 +16710,12 @@ var MindMapStudioView = class _MindMapStudioView extends import_obsidian12.TextF
     else void this.openAiModal();
   }
   /** 启动截图并让编辑器根据截图前焦点决定插入节点或保留剪贴板。 */
-  async captureScreenshot() {
+  async captureScreenshot(recognizeAfter = false) {
     if (!this.editor) {
       new import_obsidian12.Notice("\u5F53\u524D\u5BFC\u56FE\u5C1A\u672A\u52A0\u8F7D");
       return;
     }
-    await this.editor.captureScreenshot();
+    await this.editor.captureScreenshot(recognizeAfter);
   }
   /** 构建 Markdown 上下文并打开 AI 窗口。 */
   openAiModal(nodeId) {
@@ -16790,7 +16846,7 @@ var MindMapStudioView = class _MindMapStudioView extends import_obsidian12.TextF
       imageRecognitionAutoConfirmDelaySeconds: this.plugin.settings.imageRecognitionAutoConfirmDelaySeconds,
       autoUploadDelaySeconds: this.plugin.settings.autoUploadDelaySeconds,
       screenshotShortcut: this.plugin.settings.screenshotShortcut,
-      screenshotAutoRecognize: this.plugin.settings.screenshotAutoRecognize,
+      screenshotRecognizeShortcut: this.plugin.settings.screenshotRecognizeShortcut,
       questionNodesEnabled: this.plugin.settings.questionNodesEnabled,
       questionBankModeEnabled: this.plugin.isQuestionBankFile(this.file),
       questionPracticeOrder: this.plugin.settings.questionPracticeOrder,
@@ -18346,7 +18402,10 @@ function getNodeCaptureRuntime() {
   try {
     const childProcess = requireFunction("node:child_process");
     const processModule = requireFunction("node:process");
-    return { platform: processModule.platform, execFile: childProcess.execFile, spawn: childProcess.spawn };
+    const fs = requireFunction("node:fs/promises");
+    const os = requireFunction("node:os");
+    const path = requireFunction("node:path");
+    return { platform: processModule.platform, execFile: childProcess.execFile, spawn: childProcess.spawn, fs, os, path };
   } catch (e) {
     return null;
   }
@@ -18386,14 +18445,242 @@ async function runScreenshotCommand(runtime, candidates) {
   }
   throw new Error(`\u65E0\u6CD5\u542F\u52A8\u7CFB\u7EDF\u622A\u56FE\u5DE5\u5177\uFF1A${lastError}`);
 }
-async function captureDesktopScreenshot(hideObsidian) {
-  const electronRuntime = getElectronRuntime();
-  const nodeRuntime = getNodeCaptureRuntime();
-  if (!electronRuntime || !nodeRuntime) throw new Error("\u622A\u56FE\u4EC5\u652F\u6301 Obsidian \u684C\u9762\u7AEF");
-  const beforeImage = electronRuntime.clipboard.readImage();
+function pngDataUrlToBytes(dataUrl) {
+  var _a2;
+  const encoded = dataUrl.replace(/^data:image\/png;base64,/, "");
+  const requireFunction = (_a2 = globalThis.require) != null ? _a2 : typeof window !== "undefined" ? window.require : void 0;
+  if (!requireFunction) throw new Error("\u5F53\u524D\u684C\u9762\u8FD0\u884C\u65F6\u65E0\u6CD5\u89E3\u7801\u622A\u56FE");
+  const buffer = requireFunction("node:buffer");
+  return new Uint8Array(buffer.Buffer.from(encoded, "base64"));
+}
+function captureEditorHtml(display) {
+  const bounds = JSON.stringify(display.bounds);
+  return `<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'self' file: data:; img-src 'self' file: data:; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+<title>MindMap Studio \u622A\u56FE</title><style>
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#111;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;user-select:none}
+#base,#annotations,#preview{position:fixed;inset:0;width:100%;height:100%}#base{z-index:0}#annotations{z-index:1;pointer-events:none}#preview{z-index:2;pointer-events:none}
+.shade{position:fixed;background:rgba(0,0,0,.52);z-index:3;pointer-events:none}.selection{position:fixed;border:2px solid #50a7ff;box-shadow:0 0 0 1px rgba(255,255,255,.65) inset;z-index:4;pointer-events:none}
+.drag-strip{position:absolute;left:0;right:0;top:-2px;height:12px;cursor:move;pointer-events:auto}.metrics{position:absolute;left:-2px;bottom:100%;margin-bottom:8px;background:rgba(15,23,42,.92);color:#fff;border:1px solid rgba(255,255,255,.22);border-radius:6px;padding:5px 8px;font-size:12px;white-space:nowrap;pointer-events:auto;cursor:move}
+.handle{position:absolute;width:12px;height:12px;background:#fff;border:2px solid #3798f2;border-radius:3px;pointer-events:auto}.nw{left:-7px;top:-7px;cursor:nwse-resize}.n{left:50%;top:-7px;transform:translateX(-50%);cursor:ns-resize}.ne{right:-7px;top:-7px;cursor:nesw-resize}.e{right:-7px;top:50%;transform:translateY(-50%);cursor:ew-resize}.se{right:-7px;bottom:-7px;cursor:nwse-resize}.s{left:50%;bottom:-7px;transform:translateX(-50%);cursor:ns-resize}.sw{left:-7px;bottom:-7px;cursor:nesw-resize}.w{left:-7px;top:50%;transform:translateY(-50%);cursor:ew-resize}
+#drawLayer{position:fixed;z-index:5;cursor:crosshair}.toolbar{position:fixed;z-index:8;display:flex;align-items:center;gap:4px;padding:6px;background:rgba(15,23,42,.96);border:1px solid rgba(255,255,255,.18);border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.42);white-space:nowrap}
+.toolbar button{height:34px;border:0;border-radius:7px;padding:0 10px;background:transparent;color:#e5edf8;font-size:12px;cursor:pointer}.toolbar button:hover{background:rgba(255,255,255,.12)}.toolbar button.active{background:#2563eb;color:#fff}.toolbar .sep{width:1px;height:22px;background:rgba(255,255,255,.18);margin:0 2px}.toolbar .primary{background:#2563eb}.toolbar .danger:hover{background:#b91c1c}
+#tip{position:fixed;right:14px;top:14px;z-index:9;color:#fff;background:rgba(15,23,42,.78);padding:7px 10px;border-radius:7px;font-size:12px;pointer-events:none}
+</style></head><body>
+<canvas id="base"></canvas><canvas id="annotations"></canvas><canvas id="preview"></canvas>
+<div id="shadeTop" class="shade"></div><div id="shadeLeft" class="shade"></div><div id="shadeRight" class="shade"></div><div id="shadeBottom" class="shade"></div>
+<div id="selection" class="selection"><div class="drag-strip" data-drag="move"></div><div id="metrics" class="metrics" data-drag="move"></div>
+<div class="handle nw" data-handle="nw"></div><div class="handle n" data-handle="n"></div><div class="handle ne" data-handle="ne"></div><div class="handle e" data-handle="e"></div><div class="handle se" data-handle="se"></div><div class="handle s" data-handle="s"></div><div class="handle sw" data-handle="sw"></div><div class="handle w" data-handle="w"></div></div>
+<div id="drawLayer"></div><div id="toolbar" class="toolbar">
+<button data-tool="shape">\u51E0\u4F55\u56FE\u5F62</button><button data-tool="pen">\u753B\u7B14</button><button data-tool="arrow">\u7BAD\u5934</button><button data-tool="text">\u6587\u5B57</button><button data-tool="number">\u5E8F\u53F7</button><button data-tool="mosaic">\u9A6C\u8D5B\u514B</button><button data-tool="eraser">\u6A61\u76AE\u64E6</button><span class="sep"></span>
+<button data-action="recognize-copy">\u8BC6\u522B\u5E76\u590D\u5236</button><button data-action="pin">\u56FA\u5B9A</button><button data-action="download">\u4E0B\u8F7D</button><button class="danger" data-action="cancel">\u53D6\u6D88</button><button class="primary" data-action="copy">\u590D\u5236</button></div>
+<div id="tip">\u62D6\u52A8\u84DD\u8272\u8FB9\u6846\u8C03\u6574\u622A\u56FE\u8303\u56F4\uFF1BEsc \u53D6\u6D88\uFF0CEnter \u590D\u5236</div>
+<script>
+(() => {
+  const displayBounds=${bounds}; const base=document.getElementById('base'); const ann=document.getElementById('annotations'); const preview=document.getElementById('preview');
+  const bctx=base.getContext('2d'); const actx=ann.getContext('2d'); const pctx=preview.getContext('2d'); const selection=document.getElementById('selection'); const metrics=document.getElementById('metrics'); const toolbar=document.getElementById('toolbar'); const drawLayer=document.getElementById('drawLayer');
+  const shades=['shadeTop','shadeLeft','shadeRight','shadeBottom'].map(id=>document.getElementById(id)); const dpr=Math.max(1,window.devicePixelRatio||1); let tool=''; let drawing=false; let start=null; let number=1; let drag=null;
+  let rect={x:Math.round(innerWidth*.18),y:Math.round(innerHeight*.16),w:Math.round(innerWidth*.64),h:Math.round(innerHeight*.62)}; const minSize=36;
+  const image=new Image(); image.src='screen.png';
+  function resizeCanvases(){for(const c of [base,ann,preview]){c.width=Math.round(innerWidth*dpr);c.height=Math.round(innerHeight*dpr);c.style.width=innerWidth+'px';c.style.height=innerHeight+'px'}; for(const c of [bctx,actx,pctx])c.setTransform(dpr,0,0,dpr,0,0); drawBase(); updateRect()}
+  function drawBase(){if(!image.complete)return;bctx.clearRect(0,0,innerWidth,innerHeight);bctx.drawImage(image,0,0,innerWidth,innerHeight)}
+  image.onload=()=>resizeCanvases(); window.addEventListener('resize',resizeCanvases);
+  function clamp(){rect.w=Math.max(minSize,Math.min(innerWidth,rect.w));rect.h=Math.max(minSize,Math.min(innerHeight,rect.h));rect.x=Math.max(0,Math.min(innerWidth-rect.w,rect.x));rect.y=Math.max(0,Math.min(innerHeight-rect.h,rect.y))}
+  function updateRect(){clamp();selection.style.left=rect.x+'px';selection.style.top=rect.y+'px';selection.style.width=rect.w+'px';selection.style.height=rect.h+'px';drawLayer.style.left=rect.x+'px';drawLayer.style.top=rect.y+'px';drawLayer.style.width=rect.w+'px';drawLayer.style.height=rect.h+'px';
+    shades[0].style.cssText='left:0;top:0;width:100%;height:'+rect.y+'px';shades[1].style.cssText='left:0;top:'+rect.y+'px;width:'+rect.x+'px;height:'+rect.h+'px';shades[2].style.cssText='left:'+(rect.x+rect.w)+'px;top:'+rect.y+'px;width:'+(innerWidth-rect.x-rect.w)+'px;height:'+rect.h+'px';shades[3].style.cssText='left:0;top:'+(rect.y+rect.h)+'px;width:100%;height:'+(innerHeight-rect.y-rect.h)+'px';
+    metrics.textContent='X '+Math.round(displayBounds.x+rect.x)+'  Y '+Math.round(displayBounds.y+rect.y)+'  '+Math.round(rect.w)+' \xD7 '+Math.round(rect.h); placeToolbar()}
+  function placeToolbar(){const tw=toolbar.offsetWidth||820,th=toolbar.offsetHeight||48;let left=Math.max(8,Math.min(innerWidth-tw-8,rect.x+rect.w/2-tw/2));let top=rect.y+rect.h+10;if(top+th>innerHeight-8)top=Math.max(8,rect.y-th-10);toolbar.style.left=left+'px';toolbar.style.top=top+'px'}
+  function point(ev){return{x:ev.clientX,y:ev.clientY}}
+  function localPoint(ev){return{x:ev.clientX-rect.x,y:ev.clientY-rect.y}}
+  function beginResize(ev,handle){ev.preventDefault();ev.stopPropagation();drag={kind:handle,start:point(ev),rect:{...rect}};window.addEventListener('pointermove',moveResize);window.addEventListener('pointerup',endResize,{once:true})}
+  function moveResize(ev){if(!drag)return;const dx=ev.clientX-drag.start.x,dy=ev.clientY-drag.start.y,r=drag.rect;let x=r.x,y=r.y,w=r.w,h=r.h;if(drag.kind==='move'){x=r.x+dx;y=r.y+dy}else{if(drag.kind.includes('e'))w=r.w+dx;if(drag.kind.includes('s'))h=r.h+dy;if(drag.kind.includes('w')){x=r.x+dx;w=r.w-dx}if(drag.kind.includes('n')){y=r.y+dy;h=r.h-dy}if(w<minSize){if(drag.kind.includes('w'))x-=minSize-w;w=minSize}if(h<minSize){if(drag.kind.includes('n'))y-=minSize-h;h=minSize}}rect={x,y,w,h};updateRect()}
+  function endResize(){drag=null;window.removeEventListener('pointermove',moveResize)}
+  selection.querySelectorAll('[data-handle]').forEach(el=>el.addEventListener('pointerdown',ev=>beginResize(ev,el.dataset.handle)));selection.querySelectorAll('[data-drag]').forEach(el=>el.addEventListener('pointerdown',ev=>beginResize(ev,'move')));
+  function setTool(next){tool=tool===next?'':next;toolbar.querySelectorAll('[data-tool]').forEach(btn=>btn.classList.toggle('active',btn.dataset.tool===tool));drawLayer.style.pointerEvents=tool?'auto':'none'}
+  toolbar.querySelectorAll('[data-tool]').forEach(btn=>btn.addEventListener('click',()=>setTool(btn.dataset.tool)));
+  function style(ctx){ctx.lineCap='round';ctx.lineJoin='round';ctx.strokeStyle='#ff3b30';ctx.fillStyle='#ff3b30';ctx.lineWidth=3}
+  function drawArrow(ctx,a,b){style(ctx);ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();const angle=Math.atan2(b.y-a.y,b.x-a.x),head=14;ctx.beginPath();ctx.moveTo(b.x,b.y);ctx.lineTo(b.x-head*Math.cos(angle-Math.PI/6),b.y-head*Math.sin(angle-Math.PI/6));ctx.lineTo(b.x-head*Math.cos(angle+Math.PI/6),b.y-head*Math.sin(angle+Math.PI/6));ctx.closePath();ctx.fill()}
+  function commitPreview(){actx.drawImage(preview,0,0,innerWidth,innerHeight);pctx.clearRect(0,0,innerWidth,innerHeight)}
+  function mosaicAt(p){const size=28,small=5;const sx=Math.max(0,rect.x+p.x-size/2),sy=Math.max(0,rect.y+p.y-size/2);const tmp=document.createElement('canvas');tmp.width=small;tmp.height=small;const t=tmp.getContext('2d');t.drawImage(base,sx*dpr,sy*dpr,size*dpr,size*dpr,0,0,small,small);actx.save();actx.imageSmoothingEnabled=false;actx.drawImage(tmp,0,0,small,small,sx,sy,size,size);actx.restore()}
+  drawLayer.addEventListener('pointerdown',ev=>{if(!tool)return;const p=localPoint(ev);if(tool==='text'){const text=prompt('\u8F93\u5165\u6587\u5B57');if(text){style(actx);actx.font='bold 24px sans-serif';actx.fillText(text,rect.x+p.x,rect.y+p.y)}return}if(tool==='number'){style(actx);actx.beginPath();actx.arc(rect.x+p.x,rect.y+p.y,14,0,Math.PI*2);actx.fill();actx.fillStyle='#fff';actx.font='bold 15px sans-serif';actx.textAlign='center';actx.textBaseline='middle';actx.fillText(String(number++),rect.x+p.x,rect.y+p.y);return}drawing=true;start=p;drawLayer.setPointerCapture(ev.pointerId);if(tool==='pen'||tool==='eraser'||tool==='mosaic')moveDraw(ev)});
+  function moveDraw(ev){if(!drawing||!start)return;const p=localPoint(ev),a={x:rect.x+start.x,y:rect.y+start.y},b={x:rect.x+p.x,y:rect.y+p.y};if(tool==='pen'){style(actx);actx.beginPath();actx.moveTo(a.x,a.y);actx.lineTo(b.x,b.y);actx.stroke();start=p}else if(tool==='eraser'){actx.save();actx.globalCompositeOperation='destination-out';actx.lineWidth=24;actx.lineCap='round';actx.beginPath();actx.moveTo(a.x,a.y);actx.lineTo(b.x,b.y);actx.stroke();actx.restore();start=p}else if(tool==='mosaic'){mosaicAt(p);start=p}else{pctx.clearRect(0,0,innerWidth,innerHeight);style(pctx);if(tool==='shape')pctx.strokeRect(a.x,a.y,b.x-a.x,b.y-a.y);else if(tool==='arrow')drawArrow(pctx,a,b)}}
+  drawLayer.addEventListener('pointermove',moveDraw);drawLayer.addEventListener('pointerup',()=>{if(!drawing)return;if(tool==='shape'||tool==='arrow')commitPreview();drawing=false;start=null});
+  window.__mmsExport=()=>{const scaleX=image.naturalWidth/innerWidth,scaleY=image.naturalHeight/innerHeight;const out=document.createElement('canvas');out.width=Math.max(1,Math.round(rect.w*scaleX));out.height=Math.max(1,Math.round(rect.h*scaleY));const ctx=out.getContext('2d');ctx.drawImage(image,rect.x*scaleX,rect.y*scaleY,rect.w*scaleX,rect.h*scaleY,0,0,out.width,out.height);ctx.drawImage(ann,rect.x*dpr,rect.y*dpr,rect.w*dpr,rect.h*dpr,0,0,out.width,out.height);return{dataUrl:out.toDataURL('image/png'),bounds:{x:Math.round(displayBounds.x+rect.x),y:Math.round(displayBounds.y+rect.y),width:Math.round(rect.w),height:Math.round(rect.h)}}};
+  function action(name){console.log('MMS_CAPTURE_ACTION:'+name)}toolbar.querySelectorAll('[data-action]').forEach(btn=>btn.addEventListener('click',()=>action(btn.dataset.action)));document.addEventListener('keydown',ev=>{if(ev.key==='Escape')action('cancel');if(ev.key==='Enter'&&!ev.shiftKey)action('copy')});
+  updateRect();setTimeout(placeToolbar,50);
+})();
+<\/script></body></html>`;
+}
+function writePngToClipboard(runtime, bytes) {
+  var _a2, _b2, _c;
+  const image = (_a2 = runtime.nativeImage) == null ? void 0 : _a2.createFromBuffer(bytes);
+  if (image && !image.isEmpty()) (_c = (_b2 = runtime.clipboard).writeImage) == null ? void 0 : _c.call(_b2, image);
+}
+async function saveCaptureDownload(runtime, nodeRuntime, bytes) {
+  var _a2, _b2;
+  const defaultPath = nodeRuntime.path.join(nodeRuntime.os.homedir(), "Desktop", "mindmap-screenshot.png");
+  const dialog = (_b2 = runtime.dialog) != null ? _b2 : (_a2 = runtime.remote) == null ? void 0 : _a2.dialog;
+  const selected = dialog ? await dialog.showSaveDialog({ defaultPath, filters: [{ name: "PNG \u56FE\u7247", extensions: ["png"] }] }) : null;
+  if (selected == null ? void 0 : selected.canceled) return false;
+  await nodeRuntime.fs.writeFile((selected == null ? void 0 : selected.filePath) || defaultPath, bytes);
+  return true;
+}
+async function openPinnedCapture(runtime, nodeRuntime, bytes, bounds) {
+  var _a2, _b2;
+  const BrowserWindow = (_b2 = (_a2 = runtime.remote) == null ? void 0 : _a2.BrowserWindow) != null ? _b2 : runtime.BrowserWindow;
+  if (!BrowserWindow) throw new Error("\u5F53\u524D Obsidian \u684C\u9762\u8FD0\u884C\u65F6\u4E0D\u652F\u6301\u56FA\u5B9A\u622A\u56FE\u7A97\u53E3");
+  const directory = await nodeRuntime.fs.mkdtemp(nodeRuntime.path.join(nodeRuntime.os.tmpdir(), "mms-pin-"));
+  const imagePath = nodeRuntime.path.join(directory, "pin.png");
+  const htmlPath = nodeRuntime.path.join(directory, "pin.html");
+  const width = Math.max(180, Math.min(1200, bounds.width));
+  const height = Math.max(120, Math.min(900, bounds.height));
+  await nodeRuntime.fs.writeFile(imagePath, bytes);
+  await nodeRuntime.fs.writeFile(htmlPath, `<!doctype html><meta charset="utf-8"><style>*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#111}body{-webkit-app-region:drag}img{width:100%;height:100%;object-fit:contain;display:block}.close{position:fixed;right:6px;top:6px;width:26px;height:26px;border:0;border-radius:13px;background:rgba(0,0,0,.65);color:#fff;opacity:0;cursor:pointer;-webkit-app-region:no-drag}body:hover .close{opacity:1}</style><img src="pin.png"><button class="close" onclick="window.close()">\xD7</button>`);
+  const pinWindow = new BrowserWindow({
+    x: bounds.x,
+    y: bounds.y,
+    width,
+    height,
+    show: false,
+    frame: false,
+    transparent: false,
+    resizable: true,
+    movable: true,
+    fullscreenable: false,
+    skipTaskbar: true,
+    alwaysOnTop: true,
+    backgroundColor: "#111111",
+    webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true }
+  });
+  pinWindow.once("closed", () => {
+    void nodeRuntime.fs.rm(directory, { recursive: true, force: true });
+  });
+  await pinWindow.loadFile(htmlPath);
+  pinWindow.show();
+  pinWindow.focus();
+}
+async function captureWithEditor(runtime, nodeRuntime, hideObsidian) {
+  var _a2, _b2, _c, _d, _e, _f, _g;
+  const BrowserWindow = (_b2 = (_a2 = runtime.remote) == null ? void 0 : _a2.BrowserWindow) != null ? _b2 : runtime.BrowserWindow;
+  const screen = (_d = (_c = runtime.remote) == null ? void 0 : _c.screen) != null ? _d : runtime.screen;
+  if (!BrowserWindow || !screen || !runtime.desktopCapturer) return null;
+  const windowHandle = getCurrentObsidianWindow(runtime);
+  const cursor = screen.getCursorScreenPoint();
+  const display = screen.getDisplayNearestPoint(cursor);
+  const scaleFactor = Math.max(1, (_e = display.scaleFactor) != null ? _e : 1);
+  try {
+    if (hideObsidian && windowHandle && !windowHandle.isDestroyed()) {
+      windowHandle.minimize();
+      await waitForWindowMinimized(windowHandle);
+      await new Promise((resolve) => setTimeout(resolve, 120));
+    }
+    const sources = await runtime.desktopCapturer.getSources({
+      types: ["screen"],
+      thumbnailSize: {
+        width: Math.max(1, Math.round(display.bounds.width * scaleFactor)),
+        height: Math.max(1, Math.round(display.bounds.height * scaleFactor))
+      },
+      fetchWindowIcons: false
+    });
+    const source = (_f = sources.find((item) => {
+      var _a3;
+      return String((_a3 = item.display_id) != null ? _a3 : "") === String(display.id);
+    })) != null ? _f : sources[0];
+    const screenshotBytes = (_g = source == null ? void 0 : source.thumbnail.toPNG()) != null ? _g : new Uint8Array();
+    if (!screenshotBytes.length) return null;
+    const directory = await nodeRuntime.fs.mkdtemp(nodeRuntime.path.join(nodeRuntime.os.tmpdir(), "mms-capture-"));
+    const imagePath = nodeRuntime.path.join(directory, "screen.png");
+    const htmlPath = nodeRuntime.path.join(directory, "capture.html");
+    await nodeRuntime.fs.writeFile(imagePath, screenshotBytes);
+    await nodeRuntime.fs.writeFile(htmlPath, captureEditorHtml(display));
+    const captureWindow = new BrowserWindow({
+      x: display.bounds.x,
+      y: display.bounds.y,
+      width: display.bounds.width,
+      height: display.bounds.height,
+      show: false,
+      frame: false,
+      transparent: false,
+      resizable: false,
+      movable: false,
+      fullscreenable: false,
+      skipTaskbar: true,
+      alwaysOnTop: true,
+      backgroundColor: "#111111",
+      webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true }
+    });
+    return await new Promise((resolve, reject) => {
+      let settled = false;
+      let finishing = false;
+      const finish = async (action) => {
+        if (settled || finishing) return;
+        finishing = true;
+        try {
+          const exported = await captureWindow.webContents.executeJavaScript("window.__mmsExport()");
+          const bytes = pngDataUrlToBytes(exported.dataUrl);
+          if (action === "download") {
+            const saved = await saveCaptureDownload(runtime, nodeRuntime, bytes);
+            if (!saved) {
+              finishing = false;
+              return;
+            }
+          } else if (action === "pin") {
+            await openPinnedCapture(runtime, nodeRuntime, bytes, exported.bounds);
+          } else if (action === "copy" || action === "recognize-copy") {
+            writePngToClipboard(runtime, bytes);
+          }
+          settled = true;
+          if (!captureWindow.isDestroyed()) captureWindow.close();
+          resolve({
+            blob: new Blob([copyBytesToArrayBuffer(bytes)], { type: "image/png" }),
+            suggestedName: "mindmap-screenshot.png",
+            action
+          });
+        } catch (error) {
+          settled = true;
+          if (!captureWindow.isDestroyed()) captureWindow.destroy();
+          reject(error);
+        }
+      };
+      captureWindow.webContents.on("console-message", (_event, _level, message) => {
+        if (!message.startsWith("MMS_CAPTURE_ACTION:")) return;
+        const action = message.slice("MMS_CAPTURE_ACTION:".length);
+        if (action === "cancel") {
+          settled = true;
+          if (!captureWindow.isDestroyed()) captureWindow.close();
+          reject(new Error("\u53D6\u6D88\u622A\u56FE\u64CD\u4F5C"));
+          return;
+        }
+        if (action === "copy" || action === "recognize-copy" || action === "download" || action === "pin") {
+          void finish(action);
+        }
+      });
+      captureWindow.once("closed", () => {
+        void nodeRuntime.fs.rm(directory, { recursive: true, force: true });
+        if (!settled) reject(new Error("\u53D6\u6D88\u622A\u56FE\u64CD\u4F5C"));
+      });
+      void captureWindow.loadFile(htmlPath).then(() => {
+        captureWindow.show();
+        captureWindow.focus();
+      }).catch((error) => {
+        settled = true;
+        if (!captureWindow.isDestroyed()) captureWindow.destroy();
+        reject(error);
+      });
+    });
+  } finally {
+    if (hideObsidian && windowHandle && !windowHandle.isDestroyed()) {
+      windowHandle.restore();
+      windowHandle.show();
+      windowHandle.focus();
+    }
+  }
+}
+async function captureWithSystemTool(runtime, nodeRuntime, hideObsidian) {
+  const beforeImage = runtime.clipboard.readImage();
   const beforeBytes = beforeImage.isEmpty() ? new Uint8Array() : beforeImage.toPNG();
   const beforeFingerprint = pngFingerprint(beforeBytes);
-  const windowHandle = getCurrentObsidianWindow(electronRuntime);
+  const windowHandle = getCurrentObsidianWindow(runtime);
   try {
     if (hideObsidian && windowHandle && !windowHandle.isDestroyed()) {
       windowHandle.minimize();
@@ -18401,10 +18688,11 @@ async function captureDesktopScreenshot(hideObsidian) {
     }
     await new Promise((resolve) => setTimeout(resolve, hideObsidian ? 350 : 50));
     await runScreenshotCommand(nodeRuntime, screenshotCommandCandidates(nodeRuntime.platform));
-    const bytes = await waitForClipboardImage(electronRuntime, beforeFingerprint);
+    const bytes = await waitForClipboardImage(runtime, beforeFingerprint);
     return {
       blob: new Blob([copyBytesToArrayBuffer(bytes)], { type: "image/png" }),
-      suggestedName: "mindmap-screenshot.png"
+      suggestedName: "mindmap-screenshot.png",
+      action: "copy"
     };
   } finally {
     if (hideObsidian && windowHandle && !windowHandle.isDestroyed()) {
@@ -18413,6 +18701,13 @@ async function captureDesktopScreenshot(hideObsidian) {
       windowHandle.focus();
     }
   }
+}
+async function captureDesktopScreenshot(hideObsidian) {
+  const electronRuntime = getElectronRuntime();
+  const nodeRuntime = getNodeCaptureRuntime();
+  if (!electronRuntime || !nodeRuntime) throw new Error("\u622A\u56FE\u4EC5\u652F\u6301 Obsidian \u684C\u9762\u7AEF");
+  const edited = await captureWithEditor(electronRuntime, nodeRuntime, hideObsidian);
+  return edited != null ? edited : captureWithSystemTool(electronRuntime, nodeRuntime, hideObsidian);
 }
 
 // src/vision/local-ocr.ts
@@ -18716,13 +19011,25 @@ var MindMapStudioPlugin = class extends import_obsidian15.Plugin {
     });
     this.addCommand({
       id: "capture-mind-map-screenshot",
-      name: "\u622A\u56FE\u5E76\u63D2\u5165\u5F53\u524D\u8282\u70B9\u6216\u590D\u5236\u5230\u526A\u8D34\u677F",
+      name: "\u622A\u56FE",
       hotkeys: [{ modifiers: ["Mod", "Shift"], key: "S" }],
       checkCallback: (checking) => {
         var _a3;
         const view = (_a3 = this.app.workspace.activeLeaf) == null ? void 0 : _a3.view;
         const available = view instanceof MindMapStudioView;
-        if (!checking && available && view instanceof MindMapStudioView) void view.captureScreenshot();
+        if (!checking && available && view instanceof MindMapStudioView) void view.captureScreenshot(false);
+        return available;
+      }
+    });
+    this.addCommand({
+      id: "capture-and-recognize-mind-map-screenshot",
+      name: "\u622A\u56FE\u5E76\u8BC6\u522B",
+      hotkeys: [{ modifiers: ["Mod", "Shift"], key: "R" }],
+      checkCallback: (checking) => {
+        var _a3;
+        const view = (_a3 = this.app.workspace.activeLeaf) == null ? void 0 : _a3.view;
+        const available = view instanceof MindMapStudioView;
+        if (!checking && available && view instanceof MindMapStudioView) void view.captureScreenshot(true);
         return available;
       }
     });
@@ -19041,8 +19348,8 @@ var MindMapStudioPlugin = class extends import_obsidian15.Plugin {
       localOcrExtraArgs: typeof raw.localOcrExtraArgs === "string" ? raw.localOcrExtraArgs.slice(0, 1e3) : DEFAULT_SETTINGS.localOcrExtraArgs,
       screenshotHideObsidian: raw.screenshotHideObsidian === true,
       screenshotShortcut: typeof raw.screenshotShortcut === "string" && raw.screenshotShortcut.trim() ? raw.screenshotShortcut.trim().slice(0, 120) : DEFAULT_SETTINGS.screenshotShortcut,
+      screenshotRecognizeShortcut: typeof raw.screenshotRecognizeShortcut === "string" && raw.screenshotRecognizeShortcut.trim() ? raw.screenshotRecognizeShortcut.trim().slice(0, 120) : DEFAULT_SETTINGS.screenshotRecognizeShortcut,
       globalSearchShortcut: typeof raw.globalSearchShortcut === "string" && raw.globalSearchShortcut.trim() ? raw.globalSearchShortcut.trim().slice(0, 120) : DEFAULT_SETTINGS.globalSearchShortcut,
-      screenshotAutoRecognize: raw.screenshotAutoRecognize === true,
       questionNodesEnabled: raw.questionNodesEnabled === true,
       questionBankFolder: typeof raw.questionBankFolder === "string" ? (0, import_obsidian15.normalizePath)(raw.questionBankFolder.trim().replace(/^\/+|\/+$/g, "")).slice(0, 1e3) : DEFAULT_SETTINGS.questionBankFolder,
       questionBankFolders: Array.isArray(raw.questionBankFolders) ? Array.from(new Set(raw.questionBankFolders.filter((folder) => typeof folder === "string").map((folder) => (0, import_obsidian15.normalizePath)(folder.trim().replace(/^\/+|\/+$/g, "")).slice(0, 1e3)).filter(Boolean))) : typeof raw.questionBankFolder === "string" && raw.questionBankFolder.trim() ? [(0, import_obsidian15.normalizePath)(raw.questionBankFolder.trim().replace(/^\/+|\/+$/g, "")).slice(0, 1e3)] : [],
@@ -19063,6 +19370,7 @@ var MindMapStudioPlugin = class extends import_obsidian15.Plugin {
         const stored = Array.isArray(raw.visibleToolbarItems) ? raw.visibleToolbarItems.filter((id) => typeof id === "string" && knownIds.has(id)) : [...DEFAULT_SETTINGS.visibleToolbarItems];
         if (!hadAiSettings && !stored.includes("ai")) stored.push("ai");
         if (!stored.includes("screenshot")) stored.push("screenshot");
+        if (!stored.includes("screenshot-recognize")) stored.push("screenshot-recognize");
         return [...new Set(stored)];
       })(),
       toolbarItemOrder: (() => {

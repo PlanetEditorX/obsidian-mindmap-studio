@@ -178,6 +178,27 @@ test("desktop screenshot helpers expose platform commands and stable clipboard f
 });
 
 
+
+test("screenshot editor provides adjustable bounds, annotation tools and independent recognition actions", async () => {
+  const [captureSource, settingsSource, editorSource] = await Promise.all([
+    readFile("src/utils/desktop-capture.ts", "utf8"),
+    readFile("src/settings.ts", "utf8"),
+    readFile("src/editor/editor.ts", "utf8")
+  ]);
+  assert.match(captureSource, /desktopCapturer\.getSources/);
+  assert.match(captureSource, /data-handle="nw"[\s\S]*data-handle="se"/);
+  assert.match(captureSource, /X '\+Math\.round\(displayBounds\.x\+rect\.x\)/);
+  for (const label of ["几何图形", "画笔", "箭头", "文字", "序号", "马赛克", "橡皮擦", "识别并复制", "固定", "下载", "取消", "复制"]) {
+    assert.match(captureSource, new RegExp(label));
+  }
+  assert.match(captureSource, /DesktopCaptureAction = "copy" \| "recognize-copy" \| "download" \| "pin"/);
+  assert.match(settingsSource, /截图并识别快捷键/);
+  assert.doesNotMatch(settingsSource, /截图后自动识图/);
+  assert.doesNotMatch(editorSource, /screenshotAutoRecognize/);
+  assert.match(editorSource, /captureScreenshot\(recognizeAfter = false, targetOverride\?: ScreenshotInsertionTarget\)/);
+  assert.match(editorSource, /recognizeCapturedScreenshotToClipboard/);
+});
+
 test("desktop-only OCR and capture APIs are loaded lazily for mobile compatibility", async () => {
   const [ocrSource, captureSource, exportSource, editorSource, modalSource] = await Promise.all([
     readFile("src/vision/local-ocr.ts", "utf8"),
@@ -192,7 +213,7 @@ test("desktop-only OCR and capture APIs are loaded lazily for mobile compatibili
   }
   assert.match(ocrSource, /requireFunction\("node:child_process"\)/);
   assert.match(captureSource, /requireFunction\("electron"\)/);
-  assert.match(captureSource, /getCurrentObsidianWindow\(electronRuntime\)/);
+  assert.match(captureSource, /getCurrentObsidianWindow\(runtime\)/);
   assert.match(captureSource, /requireFunction\("@electron\/remote"\)/);
   assert.match(captureSource, /await waitForWindowMinimized\(windowHandle\)/);
   assert.match(exportSource, /requireFunction\("node:fs\/promises"\)/);
