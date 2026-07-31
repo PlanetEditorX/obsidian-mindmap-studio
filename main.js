@@ -14928,14 +14928,15 @@ var AiAskModal = class extends import_obsidian11.Modal {
     const modeLabel = form.createEl("label", { cls: "mms-ai-field" });
     modeLabel.createSpan({ text: "\u64CD\u4F5C" });
     const mode = modeLabel.createEl("select");
-    mode.createEl("option", { value: "ask", text: "\u8BE2\u95EE AI\uFF08\u4E0D\u4FEE\u6539\u5BFC\u56FE\uFF09" });
     mode.createEl("option", { value: "edit", text: "AI \u6574\u7406\u5E76\u91CD\u65B0\u751F\u6210\uFF08\u786E\u8BA4\u540E\u5E94\u7528\uFF09" });
+    mode.createEl("option", { value: "ask", text: "\u8BE2\u95EE AI\uFF08\u4E0D\u4FEE\u6539\u5BFC\u56FE\uFF09" });
     mode.createEl("option", { value: "question", text: "\u6574\u7406\u4E3A\u9898\u76EE\u8282\u70B9" });
     mode.createEl("option", {
       value: "vision",
       text: this.options.imageRecognitionMode === "ai" ? "\u56FE\u7247 AI \u8BC6\u56FE\uFF08\u6309\u987A\u5E8F\u5904\u7406\u5F53\u524D\u8303\u56F4\uFF09" : "\u56FE\u7247\u672C\u5730 OCR\uFF08\u6309\u987A\u5E8F\u5904\u7406\u5F53\u524D\u8303\u56F4\uFF09"
     });
     mode.createEl("option", { value: "replace", text: "\u672C\u5730\u6587\u5B57\u66FF\u6362\uFF08\u4E0D\u8C03\u7528 AI\uFF09" });
+    mode.value = "edit";
     const providerLabel = form.createEl("label", { cls: "mms-ai-field" });
     providerLabel.createSpan({ text: "\u63A5\u53E3" });
     const provider = providerLabel.createEl("select");
@@ -14997,6 +14998,13 @@ var AiAskModal = class extends import_obsidian11.Modal {
     });
     requestProgressBar.createDiv({ cls: "mms-ai-request-progress-fill" });
     const requestProgressText = requestProgress.createDiv({ cls: "mms-ai-request-progress-text" });
+    const streamOutput = form.createDiv({ cls: "mms-ai-stream-output is-hidden" });
+    const streamThinking = streamOutput.createEl("details", { cls: "mms-ai-stream-thinking" });
+    streamThinking.createEl("summary", { text: "\u6A21\u578B\u601D\u8003" });
+    const streamThinkingText = streamThinking.createEl("pre");
+    const streamContent = streamOutput.createDiv({ cls: "mms-ai-stream-content" });
+    streamContent.createEl("div", { cls: "mms-ai-stream-label", text: "\u6B63\u5728\u751F\u6210" });
+    const streamContentText = streamContent.createEl("pre");
     const status = form.createDiv({ cls: "mms-ai-status", text: "Markdown \u5DF2\u751F\u6210\uFF0C\u7B49\u5F85\u64CD\u4F5C\u3002" });
     const result = form.createDiv({ cls: "mms-ai-result markdown-rendered is-hidden" });
     const resultMeta = form.createDiv({ cls: "mms-ai-result-meta is-hidden" });
@@ -15016,6 +15024,8 @@ var AiAskModal = class extends import_obsidian11.Modal {
     let imagePreviewInputs = [];
     let requestStartedAt = 0;
     let requestProgressLabel = "";
+    let streamedThinking = "";
+    let streamedContent = "";
     const currentMode = () => mode.value;
     const recognitionUsesAi = () => currentMode() === "vision" && this.options.imageRecognitionMode === "ai";
     const requiresAiProfile = () => currentMode() === "ask" || currentMode() === "edit" || currentMode() === "question" || recognitionUsesAi();
@@ -15064,6 +15074,11 @@ var AiAskModal = class extends import_obsidian11.Modal {
       clearRequestProgressTimer();
       requestProgress.hidden = true;
       requestProgress.dataset.state = "idle";
+      streamedThinking = "";
+      streamedContent = "";
+      streamThinkingText.empty();
+      streamContentText.empty();
+      streamOutput.addClass("is-hidden");
       answerText = "";
       pendingAiPreview = null;
       pendingReplacePreview = null;
@@ -15094,6 +15109,25 @@ var AiAskModal = class extends import_obsidian11.Modal {
       });
       apply.disabled = busy;
       form.toggleClass("is-busy", busy);
+    };
+    const showStreamUpdate = (update) => {
+      if (session !== this.modalSession) return;
+      setStep(1, "done");
+      setStep(2, "active");
+      streamOutput.removeClass("is-hidden");
+      if (update.thinking) {
+        streamedThinking += update.thinking;
+        streamThinkingText.setText(streamedThinking);
+        streamThinking.open = true;
+        status.setText("\u6A21\u578B\u6B63\u5728\u6DF1\u5EA6\u601D\u8003\u2026");
+        updateRequestProgress("\u6B63\u5728\u63A5\u6536\u6A21\u578B\u601D\u8003");
+      }
+      if (update.content) {
+        streamedContent += update.content;
+        streamContentText.setText(streamedContent);
+        status.setText("\u6A21\u578B\u6B63\u5728\u751F\u6210\u7ED3\u679C\u2026");
+        updateRequestProgress("\u6B63\u5728\u63A5\u6536\u751F\u6210\u5185\u5BB9");
+      }
     };
     const updateMode = () => {
       resetOutput();
@@ -15335,7 +15369,7 @@ var AiAskModal = class extends import_obsidian11.Modal {
         status.setText("\u4E0A\u4E0B\u6587\u5DF2\u53D1\u9001\uFF0C\u6A21\u578B\u5904\u7406\u4E2D\u2026");
         updateRequestProgress("\u6A21\u578B\u5904\u7406\u4E2D");
       }, 180);
-      const request = currentMode() === "edit" ? this.options.onProposeEdit(provider.value, prompt) : this.options.onAsk(provider.value, prompt);
+      const request = currentMode() === "edit" ? this.options.onProposeEdit(provider.value, prompt, showStreamUpdate) : this.options.onAsk(provider.value, prompt, showStreamUpdate);
       void request.then(async (response) => {
         var _a3;
         window.clearTimeout(modelStageTimer);
@@ -15752,9 +15786,9 @@ var MindMapStudioView = class _MindMapStudioView extends import_obsidian12.TextF
       imageRecognitionAutoConfirmDelaySeconds: this.plugin.settings.imageRecognitionAutoConfirmDelaySeconds,
       imageCount: collectRecognizableImages(document2, nodeId).length,
       sourcePath: (_f = (_e = this.file) == null ? void 0 : _e.path) != null ? _f : "",
-      onAsk: async (profileId, question) => this.plugin.askAi(profileId, payload, question),
+      onAsk: async (profileId, question, onStreamUpdate) => this.plugin.askAi(profileId, payload, question, onStreamUpdate),
       onSetThinkingMode: (profileId, enabled) => this.plugin.setAiProfileThinkingMode(profileId, enabled),
-      onProposeEdit: async (profileId, instruction) => this.plugin.proposeAiEdit(profileId, payload, instruction),
+      onProposeEdit: async (profileId, instruction, onStreamUpdate) => this.plugin.proposeAiEdit(profileId, payload, instruction, onStreamUpdate),
       onConvertToQuestion: (responseText) => {
         var _a3, _b3;
         return (_b3 = (_a3 = this.editor) == null ? void 0 : _a3.applyAndEnrichAiQuestion(responseText, nodeId)) != null ? _b3 : false;
@@ -17050,7 +17084,7 @@ function parseAiHeaders(source) {
   }
   return headers;
 }
-function buildChatCompletionBody(profile, payload, question) {
+function buildChatCompletionBody(profile, payload, question, stream = false) {
   const messages = [];
   if (profile.systemPrompt.trim()) messages.push({ role: "system", content: profile.systemPrompt.trim() });
   messages.push({ role: "user", content: buildAiUserMessage(question, payload) });
@@ -17059,10 +17093,10 @@ function buildChatCompletionBody(profile, payload, question) {
     messages,
     temperature: profile.temperature,
     max_tokens: profile.maxOutputTokens,
-    stream: false
+    stream
   });
 }
-function buildAiEditCompletionBody(profile, payload, instruction) {
+function buildAiEditCompletionBody(profile, payload, instruction, stream = false) {
   const system = [
     profile.systemPrompt.trim(),
     "\u5F53\u524D\u4EFB\u52A1\u662F\u751F\u6210\u53EF\u7531\u7A0B\u5E8F\u89E3\u6790\u7684\u601D\u7EF4\u5BFC\u56FE Markdown \u4FEE\u6539\u63D0\u6848\u3002\u53EA\u8FD4\u56DE Markdown\uFF0C\u4E0D\u8981\u89E3\u91CA\u3002"
@@ -17075,7 +17109,7 @@ function buildAiEditCompletionBody(profile, payload, instruction) {
     ],
     temperature: Math.min(profile.temperature, 0.4),
     max_tokens: profile.maxOutputTokens,
-    stream: false
+    stream
   });
 }
 function buildImageRecognitionCompletionBody(profile, prompt, imageDataUrl) {
@@ -17126,6 +17160,18 @@ function extractAiResponseText(payload) {
   if (typeof value.output_text === "string") return value.output_text.trim();
   return "";
 }
+function extractAiStreamDelta(payload) {
+  if (!payload || typeof payload !== "object") return { thinking: "", content: "" };
+  const choices = payload.choices;
+  const choice = Array.isArray(choices) ? choices[0] : void 0;
+  if (!choice || typeof choice !== "object") return { thinking: "", content: "" };
+  const delta = choice.delta;
+  if (!delta || typeof delta !== "object") return { thinking: "", content: "" };
+  const value = delta;
+  const content = typeof value.content === "string" ? value.content : Array.isArray(value.content) ? value.content.flatMap((part) => part && typeof part === "object" && typeof part.text === "string" ? [part.text] : []).join("") : "";
+  const thinking = [value.reasoning_content, value.reasoning, value.reasoningContent].filter((part) => typeof part === "string").join("");
+  return { thinking, content };
+}
 
 // src/ai/client.ts
 async function fetchAiProfileModels(profile) {
@@ -17156,13 +17202,14 @@ var buildRequestHeaders = (profile) => {
   if (profile.apiKey.trim()) headers.Authorization = `Bearer ${profile.apiKey.trim()}`;
   return headers;
 };
-var requestChatCompletion = async (profile, body) => {
+var requestChatCompletion = async (profile, body, onStreamUpdate) => {
   var _a2;
   const endpoint = normalizeHttpUrl(
     resolveAiChatCompletionsEndpoint(profile.endpoint),
     "AI \u63A5\u53E3"
   );
   if (!profile.model.trim()) throw new Error("\u8BF7\u5148\u914D\u7F6E\u6A21\u578B\u540D\u79F0");
+  if (body.stream) return requestStreamingChatCompletion(endpoint, profile, body, onStreamUpdate);
   const response = await (0, import_obsidian14.requestUrl)({
     url: endpoint,
     method: "POST",
@@ -17180,9 +17227,52 @@ var requestChatCompletion = async (profile, body) => {
   })();
   return json && typeof json === "object" ? json : {};
 };
-async function requestAiCompletion(profile, payload, question) {
+var requestStreamingChatCompletion = async (endpoint, profile, body, onStreamUpdate) => {
+  var _a2;
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: { ...buildRequestHeaders(profile), Accept: "text/event-stream" },
+    body: JSON.stringify(body)
+  });
+  if (!response.ok) throw new Error(`AI \u63A5\u53E3\u8BF7\u6C42\u5931\u8D25\uFF08${response.status}\uFF09\uFF1A${(await response.text()).slice(0, 500)}`);
+  if (!response.body) throw new Error("AI \u63A5\u53E3\u672A\u8FD4\u56DE\u53EF\u8BFB\u53D6\u7684\u6D41\u5F0F\u54CD\u5E94");
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let content = "";
+  let model = profile.model;
+  let usage;
+  const consumeEvent = (event) => {
+    const data = event.split(/\r?\n/).filter((line) => line.startsWith("data:")).map((line) => line.slice(5).trimStart()).join("\n");
+    if (!data || data === "[DONE]") return;
+    let json;
+    try {
+      json = JSON.parse(data);
+    } catch (e) {
+      return;
+    }
+    if (!json || typeof json !== "object") return;
+    const record = json;
+    if (typeof record.model === "string") model = record.model;
+    if (record.usage) usage = record.usage;
+    const delta = extractAiStreamDelta(json);
+    if (delta.content) content += delta.content;
+    if (delta.thinking || delta.content) onStreamUpdate == null ? void 0 : onStreamUpdate(delta);
+  };
+  while (true) {
+    const { done, value } = await reader.read();
+    buffer += decoder.decode(value, { stream: !done });
+    const events = buffer.split(/\r?\n\r?\n/);
+    buffer = (_a2 = events.pop()) != null ? _a2 : "";
+    events.forEach(consumeEvent);
+    if (done) break;
+  }
+  if (buffer.trim()) consumeEvent(buffer);
+  return { model, choices: [{ message: { content } }], ...usage ? { usage } : {} };
+};
+async function requestAiCompletion(profile, payload, question, onStreamUpdate) {
   if (payload.overLimit) throw new Error("Markdown \u8D85\u8FC7\u5F53\u524D\u5141\u8BB8\u4E0A\u4F20\u7684\u5927\u5C0F");
-  const json = await requestChatCompletion(profile, buildChatCompletionBody(profile, payload, question));
+  const json = await requestChatCompletion(profile, buildChatCompletionBody(profile, payload, question, Boolean(onStreamUpdate)), onStreamUpdate);
   const text = extractAiResponseText(json);
   if (!text) throw new Error("AI \u63A5\u53E3\u8FD4\u56DE\u6210\u529F\uFF0C\u4F46\u6CA1\u6709\u53EF\u8BFB\u53D6\u7684\u6587\u672C\u5185\u5BB9");
   const usage = json.usage && typeof json.usage === "object" ? json.usage : void 0;
@@ -17196,9 +17286,9 @@ async function requestAiCompletion(profile, payload, question) {
     } : void 0
   };
 }
-async function requestAiEditProposal(profile, payload, instruction) {
+async function requestAiEditProposal(profile, payload, instruction, onStreamUpdate) {
   if (payload.overLimit) throw new Error("Markdown \u8D85\u8FC7\u5F53\u524D\u5141\u8BB8\u4E0A\u4F20\u7684\u5927\u5C0F");
-  const json = await requestChatCompletion(profile, buildAiEditCompletionBody(profile, payload, instruction));
+  const json = await requestChatCompletion(profile, buildAiEditCompletionBody(profile, payload, instruction, Boolean(onStreamUpdate)), onStreamUpdate);
   const text = extractAiResponseText(json);
   if (!text) throw new Error("AI \u63A5\u53E3\u8FD4\u56DE\u6210\u529F\uFF0C\u4F46\u6CA1\u6709\u53EF\u8BFB\u53D6\u7684 Markdown \u4FEE\u6539\u63D0\u6848");
   const usage = json.usage && typeof json.usage === "object" ? json.usage : void 0;
@@ -18179,10 +18269,10 @@ var MindMapStudioPlugin = class extends import_obsidian15.Plugin {
     return "updated";
   }
   /** 使用指定 AI 配置发送当前 Markdown 上下文。 */
-  async askAi(profileId, payload, question) {
+  async askAi(profileId, payload, question, onStreamUpdate) {
     const profile = this.settings.aiProfiles.find((item) => item.id === profileId && item.enabled);
     if (!profile) throw new Error("AI \u63A5\u53E3\u4E0D\u5B58\u5728\u6216\u672A\u542F\u7528");
-    return requestAiCompletion(profile, payload, question);
+    return requestAiCompletion(profile, payload, question, onStreamUpdate);
   }
   /** Converts a transcribed question into a verified original-question lookup result when the selected model supports web retrieval. */
   async enrichQuestion(questionText) {
@@ -18213,10 +18303,10 @@ var MindMapStudioPlugin = class extends import_obsidian15.Plugin {
     return result.text;
   }
   /** 使用指定 AI 配置生成 Markdown 修改提案，但不直接修改导图。 */
-  async proposeAiEdit(profileId, payload, instruction) {
+  async proposeAiEdit(profileId, payload, instruction, onStreamUpdate) {
     const profile = this.settings.aiProfiles.find((item) => item.id === profileId && item.enabled);
     if (!profile) throw new Error("AI \u63A5\u53E3\u4E0D\u5B58\u5728\u6216\u672A\u542F\u7528");
-    return requestAiEditProposal(profile, payload, instruction);
+    return requestAiEditProposal(profile, payload, instruction, onStreamUpdate);
   }
   /** 使用当前识图模式处理单张图片；AI 模式可指定接口，本地 OCR 模式不会联网。 */
   async recognizeImage(image, blob, profileId, instruction, remoteUrl) {

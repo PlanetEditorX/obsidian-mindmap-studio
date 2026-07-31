@@ -162,6 +162,21 @@ test("AI protocol builds non-streaming Markdown requests and extracts compatible
   assert.equal(protocol.extractAiResponseText({ output_text: "fallback" }), "fallback");
 });
 
+test("AI protocol enables SSE only for interactive requests and reads thinking deltas", () => {
+  const payload = markdown.buildAiMarkdownPayload(document, "chapter", "book.mindmap", 1024 * 1024);
+  const profile = config.createAiProfileConfig("deepseek", 1);
+  assert.equal(protocol.buildChatCompletionBody(profile, payload, "总结", true).stream, true);
+  assert.equal(protocol.buildAiEditCompletionBody(profile, payload, "整理", true).stream, true);
+  assert.deepEqual(
+    protocol.extractAiStreamDelta({ choices: [{ delta: { reasoning_content: "分析", content: "回答" } }] }),
+    { thinking: "分析", content: "回答" }
+  );
+  assert.deepEqual(
+    protocol.extractAiStreamDelta({ choices: [{ delta: { reasoning: "推理", content: [{ text: "正文" }] } }] }),
+    { thinking: "推理", content: "正文" }
+  );
+});
+
 test("AI protocol maps persistent thinking choices to each compatible provider", () => {
   const payload = markdown.buildAiMarkdownPayload(document, null, "book.mindmap", 1024 * 1024);
   const cases = [
@@ -434,6 +449,7 @@ test("AI integration exposes toolbar, shortcut, page scope and node scope contra
   assert.match(editSource, /sourceSnapshot/);
   assert.match(modalSource, /payload\.overLimit/);
   assert.match(modalSource, /AI 整理并重新生成（确认后应用）/);
+  assert.match(modalSource, /mode\.value = "edit"/);
   assert.match(modalSource, /整理为题目节点/);
   assert.match(modalSource, /onConvertToQuestion/);
   assert.match(viewSource, /onSetThinkingMode: \(profileId, enabled\) => this\.plugin\.setAiProfileThinkingMode\(profileId, enabled\)/);
@@ -449,12 +465,17 @@ test("AI integration exposes toolbar, shortcut, page scope and node scope contra
   assert.match(modalSource, /确认应用变更/);
   assert.match(modalSource, /mms-ai-track/);
   assert.match(modalSource, /mms-ai-request-progress/);
+  assert.match(modalSource, /mms-ai-stream-output/);
+  assert.match(modalSource, /showStreamUpdate/);
+  assert.match(modalSource, /onProposeEdit\(provider\.value, prompt, showStreamUpdate\)/);
+  assert.match(modalSource, /onAsk\(provider\.value, prompt, showStreamUpdate\)/);
   assert.match(modalSource, /requestProgressTimer = window\.setInterval\(renderRequestProgress, 1000\)/);
   assert.match(modalSource, /模型处理中[\s\S]*updateRequestProgress\("模型处理中"\)/);
   assert.match(modalSource, /已等待 \$\{elapsed\} 秒/);
   assert.match(modalSource, /finishRequestProgress\("done", "修改预览已生成"\)/);
   assert.match(modalSource, /onClose\(\): void[\s\S]*window\.clearInterval\(this\.requestProgressTimer\)/);
   assert.match(stylesSource, /\.mms-ai-request-progress\[data-state="active"\][\s\S]*mms-ai-request-progress 1\.35s/);
+  assert.match(stylesSource, /\.mms-ai-stream-output/);
   assert.match(modalSource, /new Component\(\)/);
   assert.match(modalSource, /this\.markdownRenderComponent\.load\(\)/);
   assert.match(

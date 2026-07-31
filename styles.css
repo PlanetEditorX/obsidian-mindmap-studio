@@ -4735,6 +4735,33 @@
   font-size: var(--font-ui-smaller);
 }
 
+.mms-ai-stream-output {
+  display: grid;
+  gap: 8px;
+  max-height: min(34vh, 360px);
+  overflow: auto;
+  padding: 12px 14px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 10px;
+  background: var(--background-secondary);
+}
+
+.mms-ai-stream-output.is-hidden {
+  display: none;
+}
+
+.mms-ai-stream-thinking summary,
+.mms-ai-stream-label {
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+}
+
+.mms-ai-stream-output pre {
+  margin: 7px 0 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .mms-ai-status {
   min-height: 24px;
   color: var(--text-muted);

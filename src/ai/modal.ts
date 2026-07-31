@@ -12,7 +12,7 @@ import type {
 } from "../vision/recognition";
 import type { AiProfileConfig } from "./config";
 import { formatByteSize, type AiMarkdownPayload } from "./markdown";
-import type { AiCompletionResult } from "./client";
+import type { AiCompletionResult, AiStreamUpdate } from "./client";
 import {
   createAiPromptDraftState,
   switchAiPromptDraft,
@@ -33,9 +33,9 @@ export interface AiAskModalOptions {
   imageRecognitionAutoConfirmDelaySeconds: 0 | 5 | 10 | 15 | null;
   imageCount: number;
   sourcePath: string;
-  onAsk: (profileId: string, question: string) => Promise<AiCompletionResult>;
+  onAsk: (profileId: string, question: string, onStreamUpdate: (update: AiStreamUpdate) => void) => Promise<AiCompletionResult>;
   onSetThinkingMode: (profileId: string, enabled: boolean) => Promise<void>;
-  onProposeEdit: (profileId: string, instruction: string) => Promise<AiCompletionResult>;
+  onProposeEdit: (profileId: string, instruction: string, onStreamUpdate: (update: AiStreamUpdate) => void) => Promise<AiCompletionResult>;
   onConvertToQuestion: (responseText: string) => boolean | Promise<boolean>;
   onRecognizeImages: (profileId: string, instruction: string) => Promise<ImageRecognitionBatchResult>;
   onPreviewImageTextReplacements: (items: ImageRecognitionItemResult[]) => ImageTextReplacementPreview[];
@@ -100,8 +100,8 @@ export class AiAskModal extends Modal {
     const modeLabel = form.createEl("label", { cls: "mms-ai-field" });
     modeLabel.createSpan({ text: "操作" });
     const mode = modeLabel.createEl("select");
-    mode.createEl("option", { value: "ask", text: "询问 AI（不修改导图）" });
     mode.createEl("option", { value: "edit", text: "AI 整理并重新生成（确认后应用）" });
+    mode.createEl("option", { value: "ask", text: "询问 AI（不修改导图）" });
     mode.createEl("option", { value: "question", text: "整理为题目节点" });
     mode.createEl("option", {
       value: "vision",
@@ -110,6 +110,7 @@ export class AiAskModal extends Modal {
         : "图片本地 OCR（按顺序处理当前范围）"
     });
     mode.createEl("option", { value: "replace", text: "本地文字替换（不调用 AI）" });
+    mode.value = "edit";
 
     const providerLabel = form.createEl("label", { cls: "mms-ai-field" });
     providerLabel.createSpan({ text: "接口" });
@@ -175,6 +176,13 @@ export class AiAskModal extends Modal {
     });
     requestProgressBar.createDiv({ cls: "mms-ai-request-progress-fill" });
     const requestProgressText = requestProgress.createDiv({ cls: "mms-ai-request-progress-text" });
+    const streamOutput = form.createDiv({ cls: "mms-ai-stream-output is-hidden" });
+    const streamThinking = streamOutput.createEl("details", { cls: "mms-ai-stream-thinking" });
+    streamThinking.createEl("summary", { text: "模型思考" });
+    const streamThinkingText = streamThinking.createEl("pre");
+    const streamContent = streamOutput.createDiv({ cls: "mms-ai-stream-content" });
+    streamContent.createEl("div", { cls: "mms-ai-stream-label", text: "正在生成" });
+    const streamContentText = streamContent.createEl("pre");
 
     const status = form.createDiv({ cls: "mms-ai-status", text: "Markdown 已生成，等待操作。" });
     const result = form.createDiv({ cls: "mms-ai-result markdown-rendered is-hidden" });
@@ -196,6 +204,8 @@ export class AiAskModal extends Modal {
     let imagePreviewInputs: HTMLTextAreaElement[] = [];
     let requestStartedAt = 0;
     let requestProgressLabel = "";
+    let streamedThinking = "";
+    let streamedContent = "";
     const currentMode = (): AiInteractionMode => mode.value as AiInteractionMode;
     const recognitionUsesAi = (): boolean => currentMode() === "vision" && this.options.imageRecognitionMode === "ai";
     const requiresAiProfile = (): boolean => currentMode() === "ask" || currentMode() === "edit" || currentMode() === "question" || recognitionUsesAi();
@@ -242,6 +252,11 @@ export class AiAskModal extends Modal {
       clearRequestProgressTimer();
       requestProgress.hidden = true;
       requestProgress.dataset.state = "idle";
+      streamedThinking = "";
+      streamedContent = "";
+      streamThinkingText.empty();
+      streamContentText.empty();
+      streamOutput.addClass("is-hidden");
       answerText = "";
       pendingAiPreview = null;
       pendingReplacePreview = null;
@@ -268,6 +283,25 @@ export class AiAskModal extends Modal {
       imagePreviewInputs.forEach((input) => { input.disabled = busy; });
       apply.disabled = busy;
       form.toggleClass("is-busy", busy);
+    };
+    const showStreamUpdate = (update: AiStreamUpdate): void => {
+      if (session !== this.modalSession) return;
+      setStep(1, "done");
+      setStep(2, "active");
+      streamOutput.removeClass("is-hidden");
+      if (update.thinking) {
+        streamedThinking += update.thinking;
+        streamThinkingText.setText(streamedThinking);
+        streamThinking.open = true;
+        status.setText("模型正在深度思考…");
+        updateRequestProgress("正在接收模型思考");
+      }
+      if (update.content) {
+        streamedContent += update.content;
+        streamContentText.setText(streamedContent);
+        status.setText("模型正在生成结果…");
+        updateRequestProgress("正在接收生成内容");
+      }
     };
     const updateMode = (): void => {
       resetOutput();
@@ -525,8 +559,8 @@ export class AiAskModal extends Modal {
         updateRequestProgress("模型处理中");
       }, 180);
       const request = currentMode() === "edit"
-        ? this.options.onProposeEdit(provider.value, prompt)
-        : this.options.onAsk(provider.value, prompt);
+        ? this.options.onProposeEdit(provider.value, prompt, showStreamUpdate)
+        : this.options.onAsk(provider.value, prompt, showStreamUpdate);
       void request
         .then(async (response) => {
           window.clearTimeout(modelStageTimer);
