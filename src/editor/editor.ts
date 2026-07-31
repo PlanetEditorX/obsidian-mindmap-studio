@@ -3181,6 +3181,7 @@ export class MindMapEditor {
       articleLeafBulletsEnabled: this.options.articleLeafBulletsEnabled,
       articleLeafBulletColor: this.options.articleLeafBulletColor,
       articleLeafBulletStyle: this.options.articleLeafBulletStyle,
+      articleLeafTextAlignment: this.options.articleLeafTextAlignment,
       imageHostPriorityIds: this.options.imageHostPriorityIds,
       articleNavigation: this.options.articleNavigation,
       callbacks: this.callbacks,
@@ -4562,7 +4563,7 @@ export class MindMapEditor {
     const section = this.articleEl.querySelector<HTMLElement>(`[data-node-id="${CSS.escape(selected.id)}"]`);
     if (!section) return;
     const paragraph = section.createEl("p", {
-      cls: `mms-article-leaf-text${this.options.articleLeafBulletsEnabled ? " is-bulleted" : ""}`
+      cls: `mms-article-leaf-text${this.options.articleLeafBulletsEnabled ? " is-bulleted" : ""}${this.options.articleLeafTextAlignment === "auto" ? " is-auto-aligned" : ""}`
     });
     paragraph.dataset.mmsTransientArticleBody = "true";
     if (this.options.articleLeafBulletsEnabled) {
@@ -4804,7 +4805,12 @@ export class MindMapEditor {
    */
   private editArticleStyle(): void {
     if (!this.ensureEditable()) return;
-    new ArticleStyleModal(this.app, this.document.articleStyle, (style) => {
+    new ArticleStyleModal(this.app, this.document.articleStyle, {
+      enabled: this.options.articleLeafBulletsEnabled,
+      style: this.options.articleLeafBulletStyle,
+      color: this.options.articleLeafBulletColor,
+      alignment: this.options.articleLeafTextAlignment
+    }, (style) => {
       this.mutate(() => { this.document.articleStyle = style; });
     }).open();
   }
@@ -5211,7 +5217,7 @@ export class MindMapEditor {
         } else {
           const firstTextBlock = nodeContentBlocks(info.node).find((block): block is MindMapTextContentBlock => block.type === "text");
           if (firstTextBlock) {
-            const paragraph = nodeSection.createEl("p", { cls: `mms-article-leaf-text${this.options.articleLeafBulletsEnabled ? " is-bulleted" : ""}${firstTextBlock.paragraphIndent === "none" ? " is-flush" : ""}` });
+            const paragraph = nodeSection.createEl("p", { cls: `mms-article-leaf-text${this.options.articleLeafBulletsEnabled ? " is-bulleted" : ""}${this.options.articleLeafTextAlignment === "auto" ? " is-auto-aligned" : ""}${firstTextBlock.paragraphIndent === "none" ? " is-flush" : ""}` });
             paragraph.dataset.blockId = firstTextBlock.id;
             if (this.options.articleLeafBulletsEnabled) {
               paragraph.dataset.bulletStyle = this.options.articleLeafBulletStyle;

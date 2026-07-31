@@ -14,7 +14,7 @@ import {
 } from "../core/model";
 import { ensureMathJax } from "./rich-text-dom";
 import { ARTICLE_STYLE_PRESETS, resolveArticleStyle } from "../article/article-style";
-import type { ImageHostChoice } from "../settings";
+import type { ArticleLeafBulletStyle, ArticleLeafTextAlignment, ImageHostChoice } from "../settings";
 import { xmindToDocument } from "../import/import-export";
 import { setAllBranchesCollapsed } from "./node-actions";
 import { selectDesktopImportFile } from "../utils/desktop-import";
@@ -370,6 +370,7 @@ export class ArticleStyleModal extends Modal {
   constructor(
     app: App,
     style: ArticleStyle | undefined,
+    private readonly globalLeafPresentation: { enabled: boolean; style: ArticleLeafBulletStyle; color: string; alignment: ArticleLeafTextAlignment },
     private readonly submitStyle: (style: ArticleStyle) => void
   ) {
     super(app);
@@ -411,6 +412,24 @@ export class ArticleStyleModal extends Modal {
     const fontSize = sizeLabel.createEl("input", { type: "number", attr: { min: "12", max: "24", step: "1" } });
     const lineLabel = grid.createEl("label", { text: "正文行高" });
     const lineHeight = lineLabel.createEl("input", { type: "number", attr: { min: "1.2", max: "2.4", step: "0.05" } });
+    const markerEnabledLabel = grid.createEl("label", { text: "末端正文标识" });
+    const markerEnabled = markerEnabledLabel.createEl("select");
+    markerEnabled.createEl("option", { text: `跟随插件设置（当前${this.globalLeafPresentation.enabled ? "显示" : "隐藏"}）`, attr: { value: "" } });
+    markerEnabled.createEl("option", { text: "显示", attr: { value: "true" } });
+    markerEnabled.createEl("option", { text: "隐藏", attr: { value: "false" } });
+    const markerStyleLabel = grid.createEl("label", { text: "末端正文标识样式" });
+    const markerStyle = markerStyleLabel.createEl("select");
+    markerStyle.createEl("option", { text: "跟随插件设置", attr: { value: "" } });
+    for (const [id, name] of [["solid", "实心圆"], ["hollow", "空心圆"], ["square", "实心方块"], ["dash", "短横线"]] as const) markerStyle.createEl("option", { text: name, attr: { value: id } });
+    const markerColor = addColor("末端正文标识颜色");
+    const markerColorGlobal = grid.createEl("label", { text: "标识颜色" });
+    const markerColorFollowGlobal = markerColorGlobal.createEl("input", { type: "checkbox" });
+    markerColorGlobal.createSpan({ text: " 跟随插件设置" });
+    const alignmentLabel = grid.createEl("label", { text: "末端正文对齐方式" });
+    const alignment = alignmentLabel.createEl("select");
+    alignment.createEl("option", { text: `跟随插件设置（当前${this.globalLeafPresentation.alignment === "auto" ? "自动" : "顶格"}）`, attr: { value: "" } });
+    alignment.createEl("option", { text: "顶格", attr: { value: "flush" } });
+    alignment.createEl("option", { text: "自动（与上级标题对齐）", attr: { value: "auto" } });
     const fill = (style: ArticleStyle): void => {
       const resolved = resolveArticleStyle(style);
       preset.value = resolved.preset;
@@ -422,9 +441,16 @@ export class ArticleStyleModal extends Modal {
       tocStyle.value = resolved.tocStyle ?? "card";
       fontSize.value = String(resolved.fontSize ?? 16);
       lineHeight.value = String(resolved.lineHeight ?? 1.85);
+      markerEnabled.value = style.leafMarkerEnabled === undefined ? "" : String(style.leafMarkerEnabled);
+      markerStyle.value = style.leafMarkerStyle ?? "";
+      markerColor.value = style.leafMarkerColor ?? (this.globalLeafPresentation.color || "#ef4444");
+      markerColorFollowGlobal.checked = style.leafMarkerColor === undefined;
+      markerColor.disabled = markerColorFollowGlobal.checked;
+      alignment.value = style.leafTextAlignment ?? "";
     };
     fill(this.style);
     preset.addEventListener("change", () => fill(ARTICLE_STYLE_PRESETS[preset.value as ArticleStylePresetId]));
+    markerColorFollowGlobal.addEventListener("change", () => { markerColor.disabled = markerColorFollowGlobal.checked; });
     const actions = form.createDiv({ cls: "mmc-modal-actions" });
     const cancel = actions.createEl("button", { text: "取消", type: "button" });
     actions.createEl("button", { text: "应用", type: "submit", cls: "mod-cta" });
@@ -440,7 +466,11 @@ export class ArticleStyleModal extends Modal {
         backgroundColor: backgroundColor.value,
         tocStyle: tocStyle.value as ArticleStyle["tocStyle"],
         fontSize: Math.max(12, Math.min(24, Number(fontSize.value) || 16)),
-        lineHeight: Math.max(1.2, Math.min(2.4, Number(lineHeight.value) || 1.85))
+        lineHeight: Math.max(1.2, Math.min(2.4, Number(lineHeight.value) || 1.85)),
+        leafMarkerEnabled: markerEnabled.value === "" ? undefined : markerEnabled.value === "true",
+        leafMarkerStyle: markerStyle.value === "hollow" || markerStyle.value === "square" || markerStyle.value === "dash" ? markerStyle.value : markerStyle.value === "solid" ? "solid" : undefined,
+        leafMarkerColor: markerColorFollowGlobal.checked ? undefined : markerColor.value,
+        leafTextAlignment: alignment.value === "flush" || alignment.value === "auto" ? alignment.value : undefined
       });
       this.close();
     });

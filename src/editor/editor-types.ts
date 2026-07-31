@@ -14,7 +14,7 @@ import type {
 } from "../core/model";
 import type { ArticlePageNavigation, ArticleTocEntry, ReadingSection } from "../article/modes";
 import type { ReadingLocation } from "../article/reading-location";
-import type { ArticleLeafBulletStyle, ImageHostChoice, ImageHostUploadBatch } from "../settings";
+import type { ArticleLeafBulletStyle, ArticleLeafTextAlignment, ImageHostChoice, ImageHostUploadBatch } from "../settings";
 import type { DesktopCaptureResult } from "../utils/desktop-capture";
 import type { ImageRecognitionItemResult, RecognizableImage } from "../vision/recognition";
 
@@ -92,6 +92,7 @@ export interface MindMapEditorOptions {
   articleLeafBulletsEnabled: boolean;
   articleLeafBulletColor: string;
   articleLeafBulletStyle: ArticleLeafBulletStyle;
+  articleLeafTextAlignment: ArticleLeafTextAlignment;
   showArticleToc: boolean;
   articleNavigation?: ArticlePageNavigation;
   readingSections: ReadingSection[];
