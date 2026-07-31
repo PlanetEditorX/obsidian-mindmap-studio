@@ -71,6 +71,12 @@ test("image recognition prompt identifies sequence, node and untrusted image con
   assert.match(prompt, /所属节点：章节/);
   assert.match(prompt, /任务：逐行转录/);
   assert.match(prompt, /只返回图片中实际可见的文字/);
+  assert.doesNotMatch(prompt, /严格按任务要求返回一个可解析的 JSON 对象/);
+
+  const jsonPrompt = recognition.buildImageRecognitionPrompt(item, "输出 JSON 格式");
+  assert.match(jsonPrompt, /严格按任务要求返回一个可解析的 JSON 对象/);
+  assert.doesNotMatch(jsonPrompt, /只返回图片中实际可见的文字/);
+
   assert.equal(recognition.normalizeRecognizedText("```text\r\nA  \r\n\r\n\r\nB\r\n```"), "A\n\nB");
   assert.equal(
     recognition.normalizeRecognizedText("识别正文\n}<|assistant|>根据背景材料写一篇议论文{|markdown|}"),
