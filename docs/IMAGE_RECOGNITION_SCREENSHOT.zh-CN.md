@@ -23,7 +23,7 @@
 
 ## PixPin 风格截图编辑器
 
-桌面端先使用本机非交互式整屏抓取命令取得鼠标所在显示器图像：Windows 使用 PowerShell 与系统绘图 API，macOS 使用非交互式 `screencapture`，Linux 依次尝试 `grim`、ImageMagick `import`、GNOME Screenshot 和 Spectacle。本机命令不可用时，仅在渲染器确实开放 `desktopCapturer` 时使用 Electron 屏幕源。图像取得后由插件自己的独立覆盖窗口编辑；弹窗创建受限时退回 Obsidian 内嵌全屏覆盖层。截图选区提供：
+桌面端优先尝试渲染器确实开放的 Electron `desktopCapturer`，最多等待 3.5 秒；不可用时调用本机非交互式整屏抓取命令，Windows 使用 PowerShell 与系统绘图 API，macOS 使用非交互式 `screencapture`，Linux 依次尝试 `grim`、ImageMagick `import`、GNOME Screenshot 和 Spectacle，本机抓屏总等待上限为 18 秒。图像取得后不会再异步打开独立弹窗，而是直接在当前 Obsidian 窗口最上层挂载全屏截图覆盖层，避免弹窗被宿主拦截后点击无响应。截图源使用临时 Blob URL，关闭覆盖层时释放。截图选区提供：
 
 - 可拖动边框。
 - 八方向缩放手柄。
@@ -47,7 +47,7 @@
 11. 取消：关闭截图编辑器且不修改导图。
 12. 复制：复制 PNG，并按当前命令决定是否插入和识别。
 
-插件不会再静默启动操作系统交互式区域截图工具。整屏抓取或插件覆盖层创建失败时会返回明确错误，避免鼠标释放后直接关闭并绕过边框、工具栏、双击确认和 3 秒计时。
+插件不会再静默启动操作系统交互式区域截图工具。点击截图命令后会先显示“正在准备截图编辑器”提示；Electron 与本机抓屏均有硬超时，整屏抓取或插件覆盖层创建失败时会返回明确错误，并在开发者控制台记录当前阶段，避免命令永久无响应或绕过边框、工具栏、双击确认和 3 秒计时。
 
 ## AI 视觉识图与本地 OCR
 
