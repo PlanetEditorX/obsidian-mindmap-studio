@@ -17250,37 +17250,47 @@ function parseCommandArguments(source) {
   let current = "";
   let quote = null;
   let escaping = false;
+  let inWord = false;
   for (const character of source.trim()) {
     if (escaping) {
       current += character;
       escaping = false;
+      inWord = true;
       continue;
     }
     if (character === "\\" && quote !== "'") {
       escaping = true;
+      inWord = true;
       continue;
     }
     if (quote) {
       if (character === quote) quote = null;
       else current += character;
+      inWord = true;
       continue;
     }
     if (character === "'" || character === '"') {
       quote = character;
+      inWord = true;
       continue;
     }
     if (/\s/.test(character)) {
-      if (current) {
+      if (inWord) {
         args.push(current);
         current = "";
+        inWord = false;
       }
       continue;
     }
     current += character;
+    inWord = true;
   }
-  if (escaping) current += "\\";
+  if (escaping) {
+    current += "\\";
+    inWord = true;
+  }
   if (quote) throw new Error("\u672C\u5730 OCR \u9644\u52A0\u53C2\u6570\u5305\u542B\u672A\u95ED\u5408\u5F15\u53F7");
-  if (current) args.push(current);
+  if (inWord) args.push(current);
   return args;
 }
 function executeTesseract(runtime, executable, args, timeoutMs) {
