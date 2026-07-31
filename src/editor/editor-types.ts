@@ -32,6 +32,7 @@ export interface MindMapEditorCallbacks {
   onExportJson: (json: string) => void | Promise<void>;
   getLastImportFolder: () => string;
   onRememberImportFolder: (folder: string) => void | Promise<void>;
+  onImportMarkdownImages: (document: MindMapDocument, sourceDirectory: string) => Promise<number>;
   onExportDocument: (format: "html" | "doc" | "pdf" | "md") => void | Promise<void>;
   resolveImage: (source: string) => string | null;
   onSavePastedImage: (blob: Blob, suggestedName: string) => Promise<string>;

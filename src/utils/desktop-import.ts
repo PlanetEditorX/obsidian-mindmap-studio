@@ -38,7 +38,17 @@ interface NodeImportRuntime {
   path: {
     basename: (path: string) => string;
     dirname: (path: string) => string;
+    isAbsolute: (path: string) => boolean;
+    resolve: (...paths: string[]) => string;
+    sep: string;
   };
+}
+
+/** Desktop Markdown 图片读取结果，包含去重所需的绝对路径。 */
+export interface DesktopMarkdownImageFile {
+  path: string;
+  name: string;
+  content: Uint8Array;
 }
 
 /** Reads Electron lazily so mobile and restricted runtimes remain supported. */
@@ -98,4 +108,55 @@ export async function selectDesktopImportFile(lastDirectory: string): Promise<De
       content: await nodeRuntime.fs.readFile(filePath)
     }
   };
+}
+
+/**
+ * 生成 Markdown 图片链接相对于源笔记目录的候选路径。
+ *
+ * Obsidian 笔记可能位于附件目录内部，却仍保存从仓库根目录生成的
+ * `assets/分类/图片.png` 链接，因此除原路径外还依次尝试去掉
+ * `assets/` 前缀和仅使用文件名。
+ */
+export function desktopMarkdownImageRelativeCandidates(source: string): string[] {
+  const raw = source.trim().replace(/^!?\[\[|\]\]$/g, "").split("|")[0]?.split("#")[0]?.trim() ?? "";
+  if (!raw || /^(?:https?:|data:|blob:|file:)/i.test(raw)) return [];
+  let decoded = raw;
+  try {
+    decoded = decodeURIComponent(raw);
+  } catch {
+    decoded = raw;
+  }
+  const normalized = decoded.replace(/\\/g, "/").replace(/^\.\//, "");
+  const segments = normalized.split("/").filter(Boolean);
+  if (!segments.length) return [];
+  const withoutAssets = segments[0]?.toLowerCase() === "assets" ? segments.slice(1).join("/") : "";
+  const filename = segments.at(-1) ?? "";
+  return Array.from(new Set([normalized, withoutAssets, filename].filter(Boolean)));
+}
+
+/**
+ * 按 Obsidian 常见附件路径回退顺序读取桌面 Markdown 引用的本地图片。
+ *
+ * 该函数仅在 Desktop 原生导入已获得用户选择的源目录后调用；移动端和
+ * 受限运行时返回 `null`，由调用方保留原始引用。
+ */
+export async function readDesktopMarkdownImage(sourceDirectory: string, source: string): Promise<DesktopMarkdownImageFile | null> {
+  const nodeRuntime = getNodeImportRuntime();
+  if (!nodeRuntime || !sourceDirectory.trim()) return null;
+  const raw = source.trim().replace(/^!?\[\[|\]\]$/g, "").split("|")[0]?.split("#")[0]?.trim() ?? "";
+  const absoluteCandidate = raw && nodeRuntime.path.isAbsolute(raw) ? [raw] : [];
+  const relativeCandidates = desktopMarkdownImageRelativeCandidates(raw)
+    .map((candidate) => nodeRuntime.path.resolve(sourceDirectory, candidate.split("/").join(nodeRuntime.path.sep)));
+  for (const candidate of Array.from(new Set([...absoluteCandidate, ...relativeCandidates]))) {
+    try {
+      return {
+        path: candidate,
+        name: nodeRuntime.path.basename(candidate),
+        content: await nodeRuntime.fs.readFile(candidate)
+      };
+    } catch {
+      // Continue through the explicit fallback list; a missing candidate is expected.
+    }
+  }
+  return null;
 }

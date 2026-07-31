@@ -506,7 +506,8 @@ export class JsonTransferModal extends Modal {
     private readonly onImport: (document: MindMapDocument, mode: "child" | "replace") => void,
     private readonly onExport: (json: string) => void,
     private readonly getLastImportFolder: () => string,
-    private readonly onRememberImportFolder: (folder: string) => void | Promise<void>
+    private readonly onRememberImportFolder: (folder: string) => void | Promise<void>,
+    private readonly onImportMarkdownImages: (document: MindMapDocument, sourceDirectory: string) => Promise<number>
   ) {
     super(app);
   }
@@ -566,11 +567,19 @@ export class JsonTransferModal extends Modal {
               : extension === "json"
                 ? normalizeDocument(JSON.parse(source as string) as Partial<MindMapDocument>, this.document.title)
                 : markdownToDocument(source as string, selected.file.name.replace(/\.(?:md|markdown)$/i, ""));
+            if (extension === "md" || extension === "markdown") {
+              await updateImportProgress(70, "正在读取并复制 Markdown 图片");
+            }
+            const copiedImages = extension === "md" || extension === "markdown"
+              ? await this.onImportMarkdownImages(imported, selected.file.directory)
+              : 0;
             await updateImportProgress(85, "正在生成思维导图");
             setAllBranchesCollapsed(imported.root, true);
             if (!applyImport(imported)) return;
             await updateImportProgress(100, "导入完成");
-            new Notice(`已导入：${selected.file.name}`);
+            new Notice(copiedImages > 0
+              ? `已导入：${selected.file.name}，并复制 ${copiedImages} 张图片`
+              : `已导入：${selected.file.name}`);
             window.setTimeout(() => this.close(), 180);
           } catch (error) {
             console.error("MindMap Studio file import failed", error);

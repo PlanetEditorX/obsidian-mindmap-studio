@@ -240,6 +240,30 @@ test("Markdown import removes Obsidian block IDs and common Chinese outline numb
   assert.doesNotMatch(JSON.stringify(document), /e7fc80f5|f9f40155|一、|（一）/);
 });
 
+test("Markdown import removes repeated outline numbering after inline formatting is parsed", () => {
+  const document = model.markdownToDocument(`# **一、公文基础**
+
+## **（一）1. 构成要素**
+
+正文`);
+  assert.equal(document.root.text, "公文基础");
+  assert.equal(document.root.richText?.[0]?.style?.bold, true);
+  const headingBlock = model.nodeContentBlocks(document.root.children[0])[0];
+  assert.equal(headingBlock?.text, "构成要素");
+  assert.equal(headingBlock?.richText?.[0]?.style?.bold, true);
+  assert.doesNotMatch(JSON.stringify(document), /一、|（一）|1\./);
+});
+
+test("Markdown import drops directory block-anchor backlinks and strips other block-anchor targets", () => {
+  const document = model.markdownToDocument(`# 公文
+
+- [目录](【1】常识/公文.md#^ab9c7bf4-5b4a-45c6-92bc-42dadcc9dab5)
+- [相关说明](【1】常识/公文.md#^f9f40155-1f60-4f30-aee4-cd44680e1f35)`);
+  assert.deepEqual(document.root.children.map((node) => node.text), ["相关说明"]);
+  assert.equal(document.root.children[0]?.richText, undefined);
+  assert.doesNotMatch(JSON.stringify(document), /ab9c7bf4|f9f40155|常识\/公文\.md/);
+});
+
 test("question-bank grading distinguishes single choice, multiple choice, judgment, and normalized essay answers", () => {
   const choice = model.normalizeDocument({
     root: {
