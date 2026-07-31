@@ -101,6 +101,7 @@ import {
   parseUploadResponsePayload
 } from "./utils/image-host";
 import { comparePluginVersions, extractPluginReleaseFiles, parsePluginUpdateManifest, verifyPluginArchiveHash } from "./utils/plugin-update";
+import { readDesktopMarkdownImage } from "./utils/desktop-import";
 
 export const MINDMAP_EXTENSION = "mindmap";
 const PLUGIN_UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/PlanetEditorX/obsidian-mindmap-studio/main/update.json";
@@ -1368,6 +1369,47 @@ export default class MindMapStudioPlugin extends Plugin {
   }
 
   /**
+   * 读取桌面 Markdown 同目录或附件回退路径中的图片，并复制到当前导图资源目录。
+   *
+   * @param document 已完成 Markdown 结构解析、尚未合并进当前导图的文档。
+   * @param sourceDirectory 用户通过原生文件选择器选中的 Markdown 所在目录。
+   * @param mindMapFile 当前导图文件，用于确定资源保存目录。
+   * @returns 成功复制并改写引用的唯一图片数量。
+   */
+  async importDesktopMarkdownImages(document: MindMapDocument, sourceDirectory: string, mindMapFile: TFile | null): Promise<number> {
+    if (!mindMapFile || !sourceDirectory.trim()) return 0;
+    const copiedPaths = new Map<string, string>();
+    let copied = 0;
+    for (const node of flattenNodes(document.root)) {
+      for (const block of nodeContentBlocks(node)) {
+        if (block.type !== "image") continue;
+        const rawSource = (block.localSource || block.source || "").trim();
+        if (!rawSource || /^(?:https?:|data:|blob:|file:)/i.test(rawSource)) continue;
+        const image = await readDesktopMarkdownImage(sourceDirectory, rawSource);
+        if (!image) continue;
+        let targetPath = copiedPaths.get(image.path);
+        if (!targetPath) {
+          const bytes = image.content.buffer.slice(
+            image.content.byteOffset,
+            image.content.byteOffset + image.content.byteLength
+          ) as ArrayBuffer;
+          targetPath = await this.savePastedImage(
+            new Blob([bytes], { type: mimeTypeFromFilename(image.name) }),
+            image.name,
+            mindMapFile
+          );
+          copiedPaths.set(image.path, targetPath);
+          copied += 1;
+        }
+        block.source = targetPath;
+        block.localSource = targetPath;
+      }
+      syncNodeContentFields(node);
+    }
+    return copied;
+  }
+
+  /**
    * 执行“read image source”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
    *
    * @param source 待解析或渲染的原始文本。
@@ -1963,9 +2005,10 @@ export default class MindMapStudioPlugin extends Plugin {
     const segments = normalizedLink.split("/").filter(Boolean);
     const withoutAssets = segments[0]?.toLowerCase() === "assets" ? segments.slice(1).join("/") : normalizedLink;
     const filename = segments.at(-1) ?? normalizedLink;
-    const candidates = [normalizedLink, withoutAssets, filename]
+    const relativeCandidates = [normalizedLink, withoutAssets, filename]
       .filter(Boolean)
       .map((relativePath) => normalizePath([markdownFolder, relativePath].filter(Boolean).join("/")));
+    const candidates = [normalizedLink, ...relativeCandidates];
 
     for (const candidate of [...new Set(candidates)]) {
       const file = this.app.vault.getAbstractFileByPath(candidate);

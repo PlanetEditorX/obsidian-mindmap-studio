@@ -1030,6 +1030,45 @@ function parseTaskText(value) {
   const task = marker === "x" || marker === "X" ? "done" : marker === "-" ? "doing" : "todo";
   return { text: ((_a2 = match[2]) == null ? void 0 : _a2.trim()) || "\u4EFB\u52A1", task };
 }
+var IMPORTED_OUTLINE_NUMBER_PREFIX = /^(?:\s*(?:(?:[一二三四五六七八九十百千万零〇○]+)[、.．]|[（(][一二三四五六七八九十百千万零〇○0-9]+[）)]|\d+[、.．]|\d+[）)]))+\s*/u;
+var IMPORTED_NAVIGATION_LABEL = /^(?:目录|返回目录|回到目录|返回顶部|回到顶部|顶部)$/u;
+function sanitizeImportedMarkdownSource(value) {
+  return value.replace(/(?:^|\s+)\^[A-Za-z0-9-]+\s*$/u, "").replace(/\[([^\]\n]+)\]\(([^)\n]*#\^[A-Za-z0-9-]+)(?:\s+["'][^)]*["'])?\)/gu, "$1").replace(/\[\[([^\]|#\n]+)#\^[A-Za-z0-9-]+(?:\|([^\]\n]+))?\]\]/gu, (_match, target, alias) => alias || target).trim();
+}
+function isImportedNavigationAnchor(value) {
+  var _a2, _b2;
+  const source = value.trim();
+  const markdownLink = source.match(/^\[([^\]\n]+)\]\(([^)\n]*#\^[A-Za-z0-9-]+)(?:\s+["'][^)]*["'])?\)$/u);
+  if (markdownLink) return IMPORTED_NAVIGATION_LABEL.test((_b2 = (_a2 = markdownLink[1]) == null ? void 0 : _a2.trim()) != null ? _b2 : "");
+  const wikiLink = source.match(/^\[\[([^\]|#\n]+)#\^[A-Za-z0-9-]+(?:\|([^\]\n]+))?\]\]$/u);
+  if (!wikiLink) return false;
+  return IMPORTED_NAVIGATION_LABEL.test((wikiLink[2] || wikiLink[1] || "").trim());
+}
+function trimRichTextStart(runs, count) {
+  if (!(runs == null ? void 0 : runs.length) || count <= 0) return runs;
+  let remaining = count;
+  const result = [];
+  for (const run of runs) {
+    if (remaining >= run.text.length) {
+      remaining -= run.text.length;
+      continue;
+    }
+    const text = run.text.slice(remaining);
+    remaining = 0;
+    if (text) result.push({ text, style: run.style });
+  }
+  return result;
+}
+function importedMarkdownText(value) {
+  var _a2, _b2, _c;
+  const source = sanitizeImportedMarkdownSource(value);
+  const parsed = markdownInlineToRichText(source);
+  const prefix = (_b2 = (_a2 = parsed.text.match(IMPORTED_OUTLINE_NUMBER_PREFIX)) == null ? void 0 : _a2[0]) != null ? _b2 : "";
+  const text = parsed.text.slice(prefix.length).trim();
+  if (!((_c = parsed.richText) == null ? void 0 : _c.length)) return { text };
+  const richText = normalizeRichText(trimRichTextStart(parsed.richText, prefix.length), text);
+  return { text, richText };
+}
 function markdownToDocument(markdown, fallbackTitle = "\u601D\u7EF4\u5BFC\u56FE", options = {}) {
   var _a2, _b2, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _A, _B, _C, _D, _E, _F, _G, _H, _I, _J, _K, _L;
   const doc = createDefaultDocument(fallbackTitle);
@@ -1058,7 +1097,6 @@ function markdownToDocument(markdown, fallbackTitle = "\u601D\u7EF4\u5BFC\u56FE"
   let codeFence = null;
   const hasMultipleH1 = (markdown.match(/^#[ 	]+\S/gm) || []).length > 1;
   const sourceDirectory = (_e = (_d = options.sourcePath) == null ? void 0 : _d.replace(/\\/g, "/").split("/").slice(0, -1).join("/")) != null ? _e : "";
-  const cleanImportedText = (value) => value.replace(/(?:^|\s+)\^[A-Za-z0-9-]+\s*$/u, "").replace(/^\s*(?:(?:[一二三四五六七八九十百千万零〇]+)[、.．]|[（(][一二三四五六七八九十百千万零〇0-9]+[）)]|\d+[、.．]|\d+[）)])\s*/u, "").trim();
   const resolveImportedImageSource = (value) => {
     const source = value.trim().replace(/\\/g, "/");
     if (!source || /^(?:https?:|data:|blob:|file:|\/)/i.test(source) || !sourceDirectory) return source;
@@ -1071,7 +1109,8 @@ function markdownToDocument(markdown, fallbackTitle = "\u601D\u7EF4\u5BFC\u56FE"
     return parts.join("/");
   };
   const applyMarkdownText = (node, value, fallback = "\u8282\u70B9", forceBold = false) => {
-    const source = cleanImportedText(value) || fallback;
+    const parsed = importedMarkdownText(value);
+    const source = parsed.text || fallback;
     if (forceBold) {
       replaceNodeContentBlocks(node, [{
         id: newId(),
@@ -1081,11 +1120,10 @@ function markdownToDocument(markdown, fallbackTitle = "\u601D\u7EF4\u5BFC\u56FE"
       }]);
       return;
     }
-    const parsed = markdownInlineToRichText(source);
     replaceNodeContentBlocks(node, [{
       id: newId(),
       type: "text",
-      text: parsed.text || fallback,
+      text: source,
       richText: parsed.richText
     }]);
   };
@@ -1109,12 +1147,12 @@ function markdownToDocument(markdown, fallbackTitle = "\u601D\u7EF4\u5BFC\u56FE"
     ]);
   };
   const appendMarkdownTextBlock = (target, value) => {
-    const source = cleanImportedText(value);
+    const parsed = importedMarkdownText(value);
+    const source = parsed.text;
     if (!source) return;
-    const parsed = markdownInlineToRichText(source);
     replaceNodeContentBlocks(target, [
       ...nodeContentBlocks(target),
-      { id: newId(), type: "text", text: parsed.text || source, richText: parsed.richText }
+      { id: newId(), type: "text", text: source, richText: parsed.richText }
     ]);
   };
   const appendImageBlock = (alt, source) => {
@@ -1161,6 +1199,8 @@ function markdownToDocument(markdown, fallbackTitle = "\u601D\u7EF4\u5BFC\u56FE"
       continue;
     }
     if (!line.trim() || line.trimStart().startsWith("---") || /^\s*\^[A-Za-z0-9-]+\s*$/u.test(line)) continue;
+    const navigationCandidate = line.trim().replace(/^#{1,6}\s+/, "").replace(/^[-*+]\s+/, "").replace(/^\d+[.)]\s+/, "").replace(/^>\s+/, "").replace(IMPORTED_OUTLINE_NUMBER_PREFIX, "").trim();
+    if (isImportedNavigationAnchor(navigationCandidate)) continue;
     const heading = line.match(/^\s*(#{1,6})\s+(.+?)\s*$/);
     const bullet = line.match(/^(\s*)[-*+]\s+(.+?)\s*$/);
     const numbered = line.match(/^(\s*)\d+[.)]\s*(.+?)\s*$/);
@@ -6580,6 +6620,42 @@ async function selectDesktopImportFile(lastDirectory) {
     }
   };
 }
+function desktopMarkdownImageRelativeCandidates(source) {
+  var _a2, _b2, _c, _d, _e;
+  const raw = (_c = (_b2 = (_a2 = source.trim().replace(/^!?\[\[|\]\]$/g, "").split("|")[0]) == null ? void 0 : _a2.split("#")[0]) == null ? void 0 : _b2.trim()) != null ? _c : "";
+  if (!raw || /^(?:https?:|data:|blob:|file:)/i.test(raw)) return [];
+  let decoded = raw;
+  try {
+    decoded = decodeURIComponent(raw);
+  } catch (e) {
+    decoded = raw;
+  }
+  const normalized2 = decoded.replace(/\\/g, "/").replace(/^\.\//, "");
+  const segments = normalized2.split("/").filter(Boolean);
+  if (!segments.length) return [];
+  const withoutAssets = ((_d = segments[0]) == null ? void 0 : _d.toLowerCase()) === "assets" ? segments.slice(1).join("/") : "";
+  const filename = (_e = segments.at(-1)) != null ? _e : "";
+  return Array.from(new Set([normalized2, withoutAssets, filename].filter(Boolean)));
+}
+async function readDesktopMarkdownImage(sourceDirectory, source) {
+  var _a2, _b2, _c;
+  const nodeRuntime = getNodeImportRuntime();
+  if (!nodeRuntime || !sourceDirectory.trim()) return null;
+  const raw = (_c = (_b2 = (_a2 = source.trim().replace(/^!?\[\[|\]\]$/g, "").split("|")[0]) == null ? void 0 : _a2.split("#")[0]) == null ? void 0 : _b2.trim()) != null ? _c : "";
+  const absoluteCandidate = raw && nodeRuntime.path.isAbsolute(raw) ? [raw] : [];
+  const relativeCandidates = desktopMarkdownImageRelativeCandidates(raw).map((candidate) => nodeRuntime.path.resolve(sourceDirectory, candidate.split("/").join(nodeRuntime.path.sep)));
+  for (const candidate of Array.from(/* @__PURE__ */ new Set([...absoluteCandidate, ...relativeCandidates]))) {
+    try {
+      return {
+        path: candidate,
+        name: nodeRuntime.path.basename(candidate),
+        content: await nodeRuntime.fs.readFile(candidate)
+      };
+    } catch (e) {
+    }
+  }
+  return null;
+}
 
 // src/editor/editor-modals.ts
 var ImageHostPickerModal = class extends import_obsidian5.Modal {
@@ -7052,13 +7128,14 @@ var JsonTransferModal = class extends import_obsidian5.Modal {
    * @param onImport 导入完成回调及目标方式。
    * @param onExport 导出回调。
    */
-  constructor(app, document2, onImport, onExport, getLastImportFolder, onRememberImportFolder) {
+  constructor(app, document2, onImport, onExport, getLastImportFolder, onRememberImportFolder, onImportMarkdownImages) {
     super(app);
     this.document = document2;
     this.onImport = onImport;
     this.onExport = onExport;
     this.getLastImportFolder = getLastImportFolder;
     this.onRememberImportFolder = onRememberImportFolder;
+    this.onImportMarkdownImages = onImportMarkdownImages;
   }
   /**
    * 创建 JSON 文本区和文件导入操作。
@@ -7110,11 +7187,15 @@ var JsonTransferModal = class extends import_obsidian5.Modal {
             const source = extension === "xmind" ? selected.file.content.buffer.slice(selected.file.content.byteOffset, selected.file.content.byteOffset + selected.file.content.byteLength) : new TextDecoder().decode(selected.file.content);
             await updateImportProgress(55, extension === "xmind" ? "\u6B63\u5728\u89E3\u6790 XMind \u753B\u5E03\u548C\u4E3B\u9898" : extension === "json" ? "\u6B63\u5728\u6821\u9A8C JSON \u6587\u4EF6" : "\u6B63\u5728\u89E3\u6790 Markdown \u6807\u9898\u548C\u5217\u8868");
             const imported = extension === "xmind" ? xmindToDocument(source, selected.file.name.replace(/\.xmind$/i, "")) : extension === "json" ? normalizeDocument(JSON.parse(source), this.document.title) : markdownToDocument(source, selected.file.name.replace(/\.(?:md|markdown)$/i, ""));
+            if (extension === "md" || extension === "markdown") {
+              await updateImportProgress(70, "\u6B63\u5728\u8BFB\u53D6\u5E76\u590D\u5236 Markdown \u56FE\u7247");
+            }
+            const copiedImages = extension === "md" || extension === "markdown" ? await this.onImportMarkdownImages(imported, selected.file.directory) : 0;
             await updateImportProgress(85, "\u6B63\u5728\u751F\u6210\u601D\u7EF4\u5BFC\u56FE");
             setAllBranchesCollapsed(imported.root, true);
             if (!applyImport(imported)) return;
             await updateImportProgress(100, "\u5BFC\u5165\u5B8C\u6210");
-            new import_obsidian5.Notice(`\u5DF2\u5BFC\u5165\uFF1A${selected.file.name}`);
+            new import_obsidian5.Notice(copiedImages > 0 ? `\u5DF2\u5BFC\u5165\uFF1A${selected.file.name}\uFF0C\u5E76\u590D\u5236 ${copiedImages} \u5F20\u56FE\u7247` : `\u5DF2\u5BFC\u5165\uFF1A${selected.file.name}`);
             window.setTimeout(() => this.close(), 180);
           } catch (error) {
             console.error("MindMap Studio file import failed", error);
@@ -14005,7 +14086,8 @@ var MindMapEditor = class {
       (document2, mode) => this.importDocument(document2, mode),
       (json) => void this.callbacks.onExportJson(json),
       () => this.callbacks.getLastImportFolder(),
-      (folder) => this.callbacks.onRememberImportFolder(folder)
+      (folder) => this.callbacks.onRememberImportFolder(folder),
+      (document2, sourceDirectory) => this.callbacks.onImportMarkdownImages(document2, sourceDirectory)
     ).open();
   }
   /** Imports a document as a child branch or replaces the current document. */
@@ -15662,6 +15744,7 @@ var MindMapStudioView = class _MindMapStudioView extends import_obsidian12.TextF
           this.plugin.settings.lastImportFolder = folder;
           await this.plugin.saveSettings();
         },
+        onImportMarkdownImages: async (document2, sourceDirectory) => this.plugin.importDesktopMarkdownImages(document2, sourceDirectory, this.file),
         onExportDocument: async (format) => this.exportArticleFamily(format),
         resolveImage: (source) => this.resolveImage(source),
         onSavePastedImage: async (blob, suggestedName) => this.plugin.savePastedImage(blob, suggestedName, this.file),
@@ -18986,6 +19069,46 @@ var MindMapStudioPlugin = class extends import_obsidian15.Plugin {
     return path;
   }
   /**
+   * 读取桌面 Markdown 同目录或附件回退路径中的图片，并复制到当前导图资源目录。
+   *
+   * @param document 已完成 Markdown 结构解析、尚未合并进当前导图的文档。
+   * @param sourceDirectory 用户通过原生文件选择器选中的 Markdown 所在目录。
+   * @param mindMapFile 当前导图文件，用于确定资源保存目录。
+   * @returns 成功复制并改写引用的唯一图片数量。
+   */
+  async importDesktopMarkdownImages(document2, sourceDirectory, mindMapFile) {
+    if (!mindMapFile || !sourceDirectory.trim()) return 0;
+    const copiedPaths = /* @__PURE__ */ new Map();
+    let copied = 0;
+    for (const node of flattenNodes(document2.root)) {
+      for (const block of nodeContentBlocks(node)) {
+        if (block.type !== "image") continue;
+        const rawSource = (block.localSource || block.source || "").trim();
+        if (!rawSource || /^(?:https?:|data:|blob:|file:)/i.test(rawSource)) continue;
+        const image = await readDesktopMarkdownImage(sourceDirectory, rawSource);
+        if (!image) continue;
+        let targetPath = copiedPaths.get(image.path);
+        if (!targetPath) {
+          const bytes = image.content.buffer.slice(
+            image.content.byteOffset,
+            image.content.byteOffset + image.content.byteLength
+          );
+          targetPath = await this.savePastedImage(
+            new Blob([bytes], { type: mimeTypeFromFilename(image.name) }),
+            image.name,
+            mindMapFile
+          );
+          copiedPaths.set(image.path, targetPath);
+          copied += 1;
+        }
+        block.source = targetPath;
+        block.localSource = targetPath;
+      }
+      syncNodeContentFields(node);
+    }
+    return copied;
+  }
+  /**
    * 执行“read image source”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
    *
    * @param source 待解析或渲染的原始文本。
@@ -19598,7 +19721,8 @@ ${url}`, 8e3);
     const segments = normalizedLink.split("/").filter(Boolean);
     const withoutAssets = ((_c = segments[0]) == null ? void 0 : _c.toLowerCase()) === "assets" ? segments.slice(1).join("/") : normalizedLink;
     const filename = (_d = segments.at(-1)) != null ? _d : normalizedLink;
-    const candidates = [normalizedLink, withoutAssets, filename].filter(Boolean).map((relativePath) => (0, import_obsidian15.normalizePath)([markdownFolder, relativePath].filter(Boolean).join("/")));
+    const relativeCandidates = [normalizedLink, withoutAssets, filename].filter(Boolean).map((relativePath) => (0, import_obsidian15.normalizePath)([markdownFolder, relativePath].filter(Boolean).join("/")));
+    const candidates = [normalizedLink, ...relativeCandidates];
     for (const candidate of [...new Set(candidates)]) {
       const file = this.app.vault.getAbstractFileByPath(candidate);
       if (file instanceof import_obsidian15.TFile) return file;

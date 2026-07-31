@@ -1863,6 +1863,59 @@ function parseTaskText(value: string): { text: string; task?: TaskStatus } {
   return { text: match[2]?.trim() || "任务", task };
 }
 
+/** 导入标题中可由文章模式重新生成的常见章节、条目序号。 */
+const IMPORTED_OUTLINE_NUMBER_PREFIX = /^(?:\s*(?:(?:[一二三四五六七八九十百千万零〇○]+)[、.．]|[（(][一二三四五六七八九十百千万零〇○0-9]+[）)]|\d+[、.．]|\d+[）)]))+\s*/u;
+
+/** 导入时视为导航噪声、无需生成节点的目录回链标签。 */
+const IMPORTED_NAVIGATION_LABEL = /^(?:目录|返回目录|回到目录|返回顶部|回到顶部|顶部)$/u;
+
+/** 删除 Markdown 文本末尾的 Obsidian 块 ID，并把块锚点链接退化为普通标签。 */
+function sanitizeImportedMarkdownSource(value: string): string {
+  return value
+    .replace(/(?:^|\s+)\^[A-Za-z0-9-]+\s*$/u, "")
+    .replace(/\[([^\]\n]+)\]\(([^)\n]*#\^[A-Za-z0-9-]+)(?:\s+["'][^)]*["'])?\)/gu, "$1")
+    .replace(/\[\[([^\]|#\n]+)#\^[A-Za-z0-9-]+(?:\|([^\]\n]+))?\]\]/gu, (_match, target: string, alias: string | undefined) => alias || target)
+    .trim();
+}
+
+/** 判断一整行是否只是指向 Obsidian 块 ID 的目录或顶部导航链接。 */
+function isImportedNavigationAnchor(value: string): boolean {
+  const source = value.trim();
+  const markdownLink = source.match(/^\[([^\]\n]+)\]\(([^)\n]*#\^[A-Za-z0-9-]+)(?:\s+["'][^)]*["'])?\)$/u);
+  if (markdownLink) return IMPORTED_NAVIGATION_LABEL.test(markdownLink[1]?.trim() ?? "");
+  const wikiLink = source.match(/^\[\[([^\]|#\n]+)#\^[A-Za-z0-9-]+(?:\|([^\]\n]+))?\]\]$/u);
+  if (!wikiLink) return false;
+  return IMPORTED_NAVIGATION_LABEL.test((wikiLink[2] || wikiLink[1] || "").trim());
+}
+
+/** 从富文本运行段头部移除指定字符数，同时保留剩余字符样式。 */
+function trimRichTextStart(runs: MindMapTextRun[] | undefined, count: number): MindMapTextRun[] | undefined {
+  if (!runs?.length || count <= 0) return runs;
+  let remaining = count;
+  const result: MindMapTextRun[] = [];
+  for (const run of runs) {
+    if (remaining >= run.text.length) {
+      remaining -= run.text.length;
+      continue;
+    }
+    const text = run.text.slice(remaining);
+    remaining = 0;
+    if (text) result.push({ text, style: run.style });
+  }
+  return result;
+}
+
+/** 将导入文本解析为富文本，并移除可重新生成的开头序号。 */
+function importedMarkdownText(value: string): { text: string; richText?: MindMapTextRun[] } {
+  const source = sanitizeImportedMarkdownSource(value);
+  const parsed = markdownInlineToRichText(source);
+  const prefix = parsed.text.match(IMPORTED_OUTLINE_NUMBER_PREFIX)?.[0] ?? "";
+  const text = parsed.text.slice(prefix.length).trim();
+  if (!parsed.richText?.length) return { text };
+  const richText = normalizeRichText(trimRichTextStart(parsed.richText, prefix.length), text);
+  return { text, richText };
+}
+
 /**
  * 执行“markdown to document”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
  *
@@ -1897,10 +1950,6 @@ export function markdownToDocument(markdown: string, fallbackTitle = "思维导�
   let codeFence: { marker: string; language?: string; lines: string[] } | null = null;
   const hasMultipleH1 = (markdown.match(/^#[ 	]+\S/gm) || []).length > 1;
   const sourceDirectory = options.sourcePath?.replace(/\\/g, "/").split("/").slice(0, -1).join("/") ?? "";
-  const cleanImportedText = (value: string): string => value
-    .replace(/(?:^|\s+)\^[A-Za-z0-9-]+\s*$/u, "")
-    .replace(/^\s*(?:(?:[一二三四五六七八九十百千万零〇]+)[、.．]|[（(][一二三四五六七八九十百千万零〇0-9]+[）)]|\d+[、.．]|\d+[）)])\s*/u, "")
-    .trim();
   const resolveImportedImageSource = (value: string): string => {
     const source = value.trim().replace(/\\/g, "/");
     if (!source || /^(?:https?:|data:|blob:|file:|\/)/i.test(source) || !sourceDirectory) return source;
@@ -1914,7 +1963,8 @@ export function markdownToDocument(markdown: string, fallbackTitle = "思维导�
   };
 
   const applyMarkdownText = (node: MindMapNode, value: string, fallback = "节点", forceBold = false): void => {
-    const source = cleanImportedText(value) || fallback;
+    const parsed = importedMarkdownText(value);
+    const source = parsed.text || fallback;
     if (forceBold) {
       replaceNodeContentBlocks(node, [{
         id: newId(),
@@ -1924,12 +1974,10 @@ export function markdownToDocument(markdown: string, fallbackTitle = "思维导�
       }]);
       return;
     }
-
-    const parsed = markdownInlineToRichText(source);
     replaceNodeContentBlocks(node, [{
       id: newId(),
       type: "text",
-      text: parsed.text || fallback,
+      text: source,
       richText: parsed.richText
     }]);
   };
@@ -1957,12 +2005,12 @@ export function markdownToDocument(markdown: string, fallbackTitle = "思维导�
 
   /** 将 Markdown 正文按遇到顺序追加为内容块，避免与代码、图片和表格脱节。 */
   const appendMarkdownTextBlock = (target: MindMapNode, value: string): void => {
-    const source = cleanImportedText(value);
+    const parsed = importedMarkdownText(value);
+    const source = parsed.text;
     if (!source) return;
-    const parsed = markdownInlineToRichText(source);
     replaceNodeContentBlocks(target, [
       ...nodeContentBlocks(target),
-      { id: newId(), type: "text", text: parsed.text || source, richText: parsed.richText }
+      { id: newId(), type: "text", text: source, richText: parsed.richText }
     ]);
   };
 
@@ -2014,6 +2062,15 @@ export function markdownToDocument(markdown: string, fallbackTitle = "思维导�
     }
 
     if (!line.trim() || line.trimStart().startsWith("---") || /^\s*\^[A-Za-z0-9-]+\s*$/u.test(line)) continue;
+
+    const navigationCandidate = line.trim()
+      .replace(/^#{1,6}\s+/, "")
+      .replace(/^[-*+]\s+/, "")
+      .replace(/^\d+[.)]\s+/, "")
+      .replace(/^>\s+/, "")
+      .replace(IMPORTED_OUTLINE_NUMBER_PREFIX, "")
+      .trim();
+    if (isImportedNavigationAnchor(navigationCandidate)) continue;
 
     const heading = line.match(/^\s*(#{1,6})\s+(.+?)\s*$/);
     const bullet = line.match(/^(\s*)[-*+]\s+(.+?)\s*$/);

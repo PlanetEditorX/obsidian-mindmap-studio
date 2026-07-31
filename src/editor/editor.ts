@@ -5700,7 +5700,8 @@ export class MindMapEditor {
       (document, mode) => this.importDocument(document, mode),
       (json) => void this.callbacks.onExportJson(json),
       () => this.callbacks.getLastImportFolder(),
-      (folder) => this.callbacks.onRememberImportFolder(folder)
+      (folder) => this.callbacks.onRememberImportFolder(folder),
+      (document, sourceDirectory) => this.callbacks.onImportMarkdownImages(document, sourceDirectory)
     ).open();
   }
 

@@ -127,6 +127,7 @@ export class MindMapStudioView extends TextFileView {
           this.plugin.settings.lastImportFolder = folder;
           await this.plugin.saveSettings();
         },
+        onImportMarkdownImages: async (document, sourceDirectory) => this.plugin.importDesktopMarkdownImages(document, sourceDirectory, this.file),
         onExportDocument: async (format) => this.exportArticleFamily(format),
         resolveImage: (source) => this.resolveImage(source),
         onSavePastedImage: async (blob, suggestedName) => this.plugin.savePastedImage(blob, suggestedName, this.file),
