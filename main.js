@@ -18332,7 +18332,7 @@ var MindMapStudioPlugin = class extends import_obsidian15.Plugin {
     await this.saveData(this.settings);
     this.scheduleFileExplorerFilter();
   }
-  /** Checks the release-workflow update manifest, verifies its archive, and offers an immediate reload. */
+  /** Checks the release-workflow update manifest, verifies its archive, and requires a full app restart to activate it. */
   async checkForPluginUpdate() {
     var _a2;
     new import_obsidian15.Notice("\u6B63\u5728\u68C0\u67E5 MindMap Studio \u66F4\u65B0\u2026");
@@ -18367,8 +18367,7 @@ var MindMapStudioPlugin = class extends import_obsidian15.Plugin {
       await Promise.all(originals.map((file) => adapter.writeBinary(file.path, file.content).catch(() => void 0)));
       throw error;
     }
-    new import_obsidian15.Notice(`MindMap Studio \u5DF2\u66F4\u65B0\u81F3 ${update.manifest.version}`);
-    if (window.confirm("\u66F4\u65B0\u5DF2\u5B8C\u6210\u3002\u7ACB\u5373\u91CD\u65B0\u52A0\u8F7D Obsidian \u4EE5\u542F\u7528\u65B0\u7248\u672C\u5417\uFF1F")) window.location.reload();
+    new import_obsidian15.Notice(`MindMap Studio \u5DF2\u66F4\u65B0\u81F3 ${update.manifest.version}\u3002\u8BF7\u5B8C\u6574\u91CD\u542F Obsidian \u4EE5\u542F\u7528\u65B0\u7248\u672C\u3002`, 1e4);
     return "updated";
   }
   /** 使用指定 AI 配置发送当前 Markdown 上下文。 */

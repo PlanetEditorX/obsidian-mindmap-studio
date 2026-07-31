@@ -709,7 +709,7 @@ export default class MindMapStudioPlugin extends Plugin {
     this.scheduleFileExplorerFilter();
   }
 
-  /** Checks the release-workflow update manifest, verifies its archive, and offers an immediate reload. */
+  /** Checks the release-workflow update manifest, verifies its archive, and requires a full app restart to activate it. */
   async checkForPluginUpdate(): Promise<"up-to-date" | "updated"> {
     new Notice("正在检查 MindMap Studio 更新…");
     const response = await requestUrl({
@@ -744,8 +744,7 @@ export default class MindMapStudioPlugin extends Plugin {
       await Promise.all(originals.map((file) => adapter.writeBinary(file.path, file.content).catch(() => undefined)));
       throw error;
     }
-    new Notice(`MindMap Studio 已更新至 ${update.manifest.version}`);
-    if (window.confirm("更新已完成。立即重新加载 Obsidian 以启用新版本吗？")) window.location.reload();
+    new Notice(`MindMap Studio 已更新至 ${update.manifest.version}。请完整重启 Obsidian 以启用新版本。`, 10000);
     return "updated";
   }
 
