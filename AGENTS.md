@@ -30,9 +30,10 @@ npm run verify
 - 每轮代码修改后返回完整源码 ZIP，文件名带六位随机数字，根目录固定为 `obsidian-mindmap-studio`。
 - 源码 ZIP 必须包含源码、测试、文档、`manifest.json`、`package.json`、`styles.css` 和重新构建的 `main.js`；排除 `Codex/`、`node_modules/`、`.git/`、临时目录、嵌套 ZIP 和未修改的 `examples/`。
 - 每次代码交付后更新 `Codex/项目/obsidian-mindmap-studio.md` 的当前状态、验证基线、待验证事项和最近交付包；不要新增重复的日志或日期总结。
+- 每次返回最新完整源码 ZIP 时，回复中必须同时给出本轮中文 Git 说明；即使用户没有再次提出，也不得省略。
 
 ## Git
 
 - 所有 Git 提示使用中文。
 - 使用 Conventional Commits：首行 `type(scope): 中文主题`，后续直接以 `- ` 列出真实代码行为、兼容处理、测试、文档、Codex 更新和 `main.js` 重建。
-- 当前工作副本没有 `.git` 时，只提供可执行的 `git add` 与 `git commit` 建议，不得声称已提交。
+- 只提供中文 Conventional Commits 提交说明，不输出 `git add`、`git commit` 等命令，也不得声称已经实际提交。

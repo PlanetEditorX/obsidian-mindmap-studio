@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @file main.ts
  * @description 插件入口与跨文件服务层。
  *
@@ -1899,7 +1899,54 @@ export default class MindMapStudioPlugin extends Plugin {
     document.layout = this.settings.defaultLayout;
     document.theme = this.settings.defaultTheme;
     document.appearance = settingsToAppearance(this.settings);
-    await this.createMindMap({ document, title: `${title} 脑图`, folder: file.parent?.path ?? "" });
+    const mindMapFile = await this.createMindMap({ document, title: `${title} 脑图`, folder: file.parent?.path ?? "" });
+    const copied = await this.copyImportedMarkdownImages(document, file, mindMapFile);
+    if (copied > 0) await this.app.vault.modify(mindMapFile, serializeDocument(document));
+  }
+
+  /**
+   * 将 Markdown 中引用的本地图片复制到新导图自己的资源目录，并改写图片块引用。
+   * 导入完成后，导图不再依赖原 Markdown 附件目录，移动或删除原笔记也不会导致图片失效。
+   *
+   * @param document 已由 Markdown 解析得到的导图文档。
+   * @param markdownFile 原 Markdown 文件，用于解析 Obsidian 相对链接。
+   * @param mindMapFile 新创建的导图文件，用于确定目标资源目录。
+   * @returns 成功复制并改写的图片数量。
+   */
+  private async copyImportedMarkdownImages(document: MindMapDocument, markdownFile: TFile, mindMapFile: TFile): Promise<number> {
+    const configuredFolder = normalizePath((this.settings.assetFolder || "MindMap Assets").replace(/^\/+|\/+$/g, ""));
+    const targetFolder = normalizePath([mindMapFile.parent?.path ?? "", configuredFolder].filter(Boolean).join("/"));
+    let copied = 0;
+    const copiedPaths = new Map<string, string>();
+
+    for (const node of flattenNodes(document.root)) {
+      for (const block of nodeContentBlocks(node)) {
+        if (block.type !== "image") continue;
+        const rawSource = (block.localSource || block.source || "").trim();
+        if (!rawSource || /^(?:https?:|data:|blob:|file:)/i.test(rawSource)) continue;
+        const linkPath = rawSource.replace(/^!?\[\[|\]\]$/g, "").split("|")[0]?.split("#")[0]?.trim() ?? "";
+        if (!linkPath) continue;
+        const direct = this.app.vault.getAbstractFileByPath(normalizePath(linkPath));
+        const sourceImage = direct instanceof TFile
+          ? direct
+          : this.app.metadataCache.getFirstLinkpathDest(linkPath, markdownFile.path);
+        if (!(sourceImage instanceof TFile) || sourceImage.path === mindMapFile.path) continue;
+
+        let targetPath = copiedPaths.get(sourceImage.path);
+        if (!targetPath) {
+          await this.ensureFolderPath(targetFolder);
+          const preferredPath = normalizePath(`${targetFolder}/${this.sanitizeFilename(sourceImage.basename)}.${sanitizeFileExtension(sourceImage.name, "png")}`);
+          targetPath = await this.getAvailablePath(preferredPath);
+          await this.app.vault.createBinary(targetPath, await this.app.vault.readBinary(sourceImage));
+          copiedPaths.set(sourceImage.path, targetPath);
+          copied += 1;
+        }
+        block.source = targetPath;
+        block.localSource = targetPath;
+      }
+      syncNodeContentFields(node);
+    }
+    return copied;
   }
 
   /**
