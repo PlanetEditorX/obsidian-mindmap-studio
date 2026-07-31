@@ -2109,14 +2109,18 @@ export class MindMapEditor {
           const bottom = Math.max(event.clientY, moveEvent.clientY);
           this.selectedIds.clear();
           for (const id of baseSelection) this.selectedIds.add(id);
-          for (const nodeEl of Array.from(this.nodesLayerEl.querySelectorAll<HTMLElement>(".mmc-node[data-node-id]"))) {
+          const nodeEls = this.nodesLayerEl.querySelectorAll<HTMLElement>(".mmc-node[data-node-id]");
+          for (let i = 0, len = nodeEls.length; i < len; i++) {
+            const nodeEl = nodeEls[i];
             const rect = nodeEl.getBoundingClientRect();
             if (rect.right >= left && rect.left <= right && rect.bottom >= top && rect.top <= bottom) {
               const id = nodeEl.dataset.nodeId;
               if (id && id !== this.document.root.id) this.selectedIds.add(id);
             }
           }
-          this.selectedId = Array.from(this.selectedIds).at(-1) ?? "";
+          let lastId = "";
+          for (const id of this.selectedIds) lastId = id;
+          this.selectedId = lastId;
           this.applySelectionClasses();
         };
         const finishSelection = (upEvent: PointerEvent): void => {
@@ -3966,7 +3970,9 @@ export class MindMapEditor {
     if (id === this.document.root.id) return;
     if (this.selectedIds.has(id)) this.selectedIds.delete(id);
     else this.selectedIds.add(id);
-    this.selectedId = Array.from(this.selectedIds).at(-1) ?? "";
+    let lastId = "";
+    for (const selectedId of this.selectedIds) lastId = selectedId;
+    this.selectedId = lastId;
     this.applySelectionClasses();
     if (this.selectedId) {
       this.rememberLocation(this.createSelectionLocation(this.selectedId));
