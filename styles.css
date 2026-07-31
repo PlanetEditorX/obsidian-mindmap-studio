@@ -3810,8 +3810,12 @@
 }
 
 .mms-article-leaf-text.is-auto-aligned {
-  width: calc(100% - 2em);
-  margin-inline-start: 2em;
+  width: calc(100% - 1.25em);
+  margin-inline-start: 1.25em;
+  text-indent: 1.25em;
+}
+
+.mms-article-leaf-text.is-auto-aligned.is-bulleted {
   text-indent: 0;
 }
 
