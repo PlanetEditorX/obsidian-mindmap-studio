@@ -13850,7 +13850,7 @@ var MindMapEditor = class {
       const nodeId = (_c = (_b2 = targetNode == null ? void 0 : targetNode.dataset.nodeId) != null ? _b2 : (_a2 = this.activeArticleBlock) == null ? void 0 : _a2.nodeId) != null ? _c : this.selectedId;
       const afterBlockId = (_e = targetBlock == null ? void 0 : targetBlock.dataset.blockId) != null ? _e : ((_d = this.activeArticleBlock) == null ? void 0 : _d.nodeId) === nodeId ? this.activeArticleBlock.blockId : void 0;
       if (target.closest("[contenteditable='true']")) target.blur();
-      const extension = ((blob.type.split("/")[1] || "").replace("jpeg", "jpg").replace("svg+xml", "svg")) || "png";
+      const extension = ((_f = blob.type.split("/")[1]) == null ? void 0 : _f.replace("jpeg", "jpg").replace("svg+xml", "svg")) || "png";
       const filename = `mindmap-image.${extension}`;
       let path;
       try {
@@ -13861,7 +13861,7 @@ var MindMapEditor = class {
         return;
       }
       const imageBlock = { id: newId(), type: "image", source: path, localSource: path };
-      const selected2 = (_g = (_f = findNode(this.document.root, nodeId)) != null ? _f : this.selectedNode()) != null ? _g : this.document.root;
+      const selected2 = (_h = (_g = findNode(this.document.root, nodeId)) != null ? _g : this.selectedNode()) != null ? _h : this.document.root;
       let inserted = false;
       try {
         this.mutate(() => {
