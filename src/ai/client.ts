@@ -13,8 +13,10 @@ import {
   buildChatCompletionBody,
   buildImageRecognitionCompletionBody,
   extractAiResponseText,
+  extractAiModelIds,
   parseAiHeaders,
   resolveAiChatCompletionsEndpoint,
+  resolveAiModelsEndpoint,
   type AiChatCompletionBody
 } from "./protocol";
 
@@ -33,6 +35,23 @@ export interface AiCompletionResult {
 export interface AiConnectionTestResult {
   text: string;
   model: string;
+}
+
+/** 向兼容服务的 /models 目录请求可用模型 ID。 */
+export async function fetchAiProfileModels(profile: AiProfileConfig): Promise<string[]> {
+  const endpoint = normalizeHttpUrl(resolveAiModelsEndpoint(profile.endpoint), "AI 模型目录接口");
+  const response = await requestUrl({
+    url: endpoint,
+    method: "GET",
+    headers: buildRequestHeaders(profile),
+    throw: true
+  });
+  const json = response.json ?? (() => {
+    try { return JSON.parse(response.text) as unknown; } catch { return null; }
+  })();
+  const models = extractAiModelIds(json);
+  if (!models.length) throw new Error("接口未返回可识别的模型列表（需要 data 或 models 数组）");
+  return models;
 }
 
 /** 组装鉴权和用户自定义请求头。 */

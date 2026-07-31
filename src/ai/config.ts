@@ -6,6 +6,9 @@
 /** 可选择的 AI 接口预设类别。 */
 export type AiProviderKind = "openai" | "deepseek" | "siliconflow" | "freellmapi" | "custom";
 
+/** 是否由插件显式请求模型启用推理；auto 保持服务端和模型默认行为。 */
+export type AiThinkingMode = "auto" | "on" | "off";
+
 /** 单个可持久化 AI 接口配置。 */
 export interface AiProfileConfig {
   id: string;
@@ -15,6 +18,7 @@ export interface AiProfileConfig {
   endpoint: string;
   apiKey: string;
   model: string;
+  thinkingMode: AiThinkingMode;
   systemPrompt: string;
   temperature: number;
   maxOutputTokens: number;
@@ -89,6 +93,7 @@ export const DEFAULT_AI_PROFILES: AiProfileConfig[] = [
     ...AI_PROFILE_PRESETS.openai,
     enabled: false,
     apiKey: "",
+    thinkingMode: "auto",
     temperature: 0.2,
     maxOutputTokens: 2048,
     headers: ""
@@ -98,6 +103,7 @@ export const DEFAULT_AI_PROFILES: AiProfileConfig[] = [
     ...AI_PROFILE_PRESETS.deepseek,
     enabled: false,
     apiKey: "",
+    thinkingMode: "auto",
     temperature: 0.2,
     maxOutputTokens: 2048,
     headers: ""
@@ -107,6 +113,7 @@ export const DEFAULT_AI_PROFILES: AiProfileConfig[] = [
     ...AI_PROFILE_PRESETS.siliconflow,
     enabled: false,
     apiKey: "",
+    thinkingMode: "auto",
     temperature: 0.2,
     maxOutputTokens: 2048,
     headers: ""
@@ -116,6 +123,7 @@ export const DEFAULT_AI_PROFILES: AiProfileConfig[] = [
     ...AI_PROFILE_PRESETS.freellmapi,
     enabled: false,
     apiKey: "",
+    thinkingMode: "auto",
     temperature: 0.2,
     maxOutputTokens: 2048,
     headers: ""
@@ -143,6 +151,7 @@ export function createAiProfileConfig(provider: AiProviderKind, index = 1): AiPr
     endpoint: preset.endpoint,
     apiKey: "",
     model: preset.model,
+    thinkingMode: "auto",
     systemPrompt: preset.systemPrompt,
     temperature: 0.2,
     maxOutputTokens: 2048,
@@ -165,6 +174,7 @@ export function normalizeAiProfileConfig(value: unknown, index = 1): AiProfileCo
     endpoint: typeof input.endpoint === "string" ? input.endpoint.trim().slice(0, 2000) : preset.endpoint,
     apiKey: typeof input.apiKey === "string" ? input.apiKey.trim().slice(0, 8000) : "",
     model: typeof input.model === "string" ? input.model.trim().slice(0, 240) : preset.model,
+    thinkingMode: input.thinkingMode === "on" || input.thinkingMode === "off" ? input.thinkingMode : "auto",
     systemPrompt: typeof input.systemPrompt === "string" ? input.systemPrompt.slice(0, 16000) : preset.systemPrompt,
     temperature: clamp(input.temperature, 0, 2, 0.2),
     maxOutputTokens: Math.round(clamp(input.maxOutputTokens, 64, 65536, 2048)),

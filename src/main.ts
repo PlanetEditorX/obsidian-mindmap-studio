@@ -70,6 +70,7 @@ import {
   requestAiCompletion,
   requestAiEditProposal,
   requestAiImageRecognition,
+  fetchAiProfileModels,
   testAiProfileConnection,
   type AiCompletionResult
 } from "./ai/client";
@@ -847,6 +848,14 @@ export default class MindMapStudioPlugin extends Plugin {
       console.error("MindMap Studio AI connectivity test failed", error);
       new Notice(`${profile.name} 检测失败：${error instanceof Error ? error.message : String(error)}`, 8000);
     }
+  }
+
+  /** 获取配置服务公开的模型目录，不改变当前选择的模型。 */
+  async getAiProfileModels(profileId: string): Promise<string[]> {
+    const profile = this.settings.aiProfiles.find((item) => item.id === profileId);
+    if (!profile) throw new Error("找不到该 AI 接口配置");
+    if (!profile.endpoint.trim()) throw new Error(`请先填写 ${profile.name} 的接口地址`);
+    return fetchAiProfileModels(profile);
   }
 
   /** Installs a lightweight File Explorer observer; it changes visibility only, never vault data. */

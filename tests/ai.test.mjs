@@ -75,6 +75,9 @@ test("AI provider normalization preserves SiliconFlow and FreeLLMAPI presets", (
   assert.equal(config.normalizeAiProfileConfig({ provider: "siliconflow" }).provider, "siliconflow");
   assert.equal(config.normalizeAiProfileConfig({ provider: "freellmapi" }).provider, "freellmapi");
   assert.equal(config.createAiProfileConfig("freellmapi", 1).model, "auto");
+  assert.equal(config.createAiProfileConfig("openai", 1).thinkingMode, "auto");
+  assert.equal(config.normalizeAiProfileConfig({ provider: "openai", thinkingMode: "on" }).thinkingMode, "on");
+  assert.equal(config.normalizeAiProfileConfig({ provider: "openai", thinkingMode: "invalid" }).thinkingMode, "auto");
 });
 
 test("normalizeAiProfileConfig clamps unsafe numeric values and trims text", () => {
@@ -154,6 +157,26 @@ test("AI protocol builds non-streaming Markdown requests and extracts compatible
   assert.equal(protocol.extractAiResponseText({ output_text: "fallback" }), "fallback");
 });
 
+test("AI protocol maps persistent thinking choices to each compatible provider", () => {
+  const payload = markdown.buildAiMarkdownPayload(document, null, "book.mindmap", 1024 * 1024);
+  const cases = [
+    ["openai", "reasoning_effort", "medium"],
+    ["freellmapi", "reasoning_effort", "medium"],
+    ["deepseek", "thinking", { type: "enabled" }],
+    ["siliconflow", "enable_thinking", true]
+  ];
+  for (const [provider, key, expected] of cases) {
+    const profile = config.createAiProfileConfig(provider, 1);
+    profile.thinkingMode = "on";
+    const body = protocol.buildChatCompletionBody(profile, payload, "总结");
+    assert.deepEqual(body[key], expected);
+  }
+  const custom = config.createAiProfileConfig("custom", 1);
+  custom.model = "model-x";
+  custom.thinkingMode = "off";
+  assert.equal(protocol.buildChatCompletionBody(custom, payload, "总结").reasoning_effort, undefined);
+});
+
 
 
 test("AI protocol builds multimodal image recognition requests", () => {
@@ -187,6 +210,9 @@ test("AI protocol accepts base URLs and builds a context-free connection check",
   assert.equal(body.max_tokens, 8);
   assert.equal(body.messages.length, 1);
   assert.doesNotMatch(body.messages[0].content, /mindmap_markdown/);
+  assert.equal(protocol.resolveAiModelsEndpoint("https://api.siliconflow.cn/v1"), "https://api.siliconflow.cn/v1/models");
+  assert.equal(protocol.resolveAiModelsEndpoint("https://api.example.com/v1/chat/completions/"), "https://api.example.com/v1/models");
+  assert.deepEqual(protocol.extractAiModelIds({ data: [{ id: "b" }, { id: "a" }, { id: "a" }] }), ["a", "b"]);
 });
 
 

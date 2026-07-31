@@ -1175,20 +1175,32 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
           }));
       const modelPresets = AI_PROVIDER_MODEL_PRESETS[profile.provider];
       const modelListId = `mms-ai-models-${profile.id.replace(/[^A-Za-z0-9_-]/g, "-")}`;
+      const dataList = body.createEl("datalist", { attr: { id: modelListId } });
+      const setModelOptions = (models: readonly string[]): void => {
+        dataList.empty();
+        [...new Set(models)].forEach((model) => dataList.createEl("option", { attr: { value: model } }));
+      };
+      setModelOptions(modelPresets);
       const modelSetting = new Setting(body)
         .setName("模型名称")
-        .setDesc(modelPresets.length > 1 ? "可从预设模型中选择，也可直接输入其他兼容模型 ID。" : "填写服务端支持的模型 ID。");
+        .setDesc("可选择预设、点击“获取模型”读取服务端目录，或直接输入兼容模型 ID。");
       modelSetting.addText((text) => {
         text.setValue(profile.model)
           .setPlaceholder(profile.provider === "freellmapi" ? "auto" : "模型 ID")
           .onChange(async (value) => { profile.model = value.trim(); await this.plugin.saveSettings(); });
-        if (modelPresets.length) text.inputEl.setAttr("list", modelListId);
+        text.inputEl.setAttr("list", modelListId);
         return text;
       });
-      if (modelPresets.length) {
-        const dataList = body.createEl("datalist", { attr: { id: modelListId } });
-        modelPresets.forEach((model) => dataList.createEl("option", { attr: { value: model } }));
-      }
+      new Setting(body).setName("思考模式").setDesc("“自动”不发送额外字段并沿用服务端默认；选择开启/关闭会按预设服务商协议发送控制参数，并保存为下次请求的选择。")
+        .addDropdown((dropdown) => dropdown
+          .addOption("auto", "自动（服务端默认）")
+          .addOption("on", "开启思考")
+          .addOption("off", "关闭思考")
+          .setValue(profile.thinkingMode)
+          .onChange(async (value) => {
+            profile.thinkingMode = value === "on" || value === "off" ? value : "auto";
+            await this.plugin.saveSettings();
+          }));
       new Setting(body).setName("温度").addSlider((slider) => slider
         .setLimits(0, 2, 0.1).setDynamicTooltip().setValue(profile.temperature)
         .onChange(async (value) => { profile.temperature = value; await this.plugin.saveSettings(); }));
@@ -1208,6 +1220,24 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
           .onChange(async (value) => { profile.headers = value.slice(0, 16000); await this.plugin.saveSettings(); }));
 
       const actions = body.createDiv({ cls: "mms-ai-profile-actions" });
+      const fetchModelsButton = actions.createEl("button", { text: "获取模型", attr: { type: "button" } });
+      fetchModelsButton.addEventListener("click", () => {
+        fetchModelsButton.disabled = true;
+        fetchModelsButton.setText("获取中…");
+        void this.plugin.getAiProfileModels(profile.id)
+          .then((models) => {
+            setModelOptions(models);
+            new Notice(`已获取 ${models.length} 个模型；可在“模型名称”输入框中选择。`, 6000);
+          })
+          .catch((error) => {
+            console.error("MindMap Studio AI model list failed", error);
+            new Notice(`获取模型失败：${error instanceof Error ? error.message : String(error)}`, 8000);
+          })
+          .finally(() => {
+            fetchModelsButton.disabled = false;
+            fetchModelsButton.setText("获取模型");
+          });
+      });
       const testButton = actions.createEl("button", { text: "检测接口", attr: { type: "button" } });
       testButton.addEventListener("click", () => {
         testButton.disabled = true;
