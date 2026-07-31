@@ -1313,9 +1313,15 @@ export class MindMapEditor {
     // Keep the live contenteditable DOM intact unless the visible mode or toolbar actually changes.
     if (this.inlineEditingId && !modesChanged && !toolbarChanged && !globalModeChanged) return;
     this.render();
-    // 无论本次 options 刷新是否改变文章族上下文，都恢复刚才的可见锚点。
-    // 否则普通设置刷新会在 renderArticleMode() 清空容器后停留在顶部。
-    const restored = this.restoreReadingLocation(this.currentMode, renderedLocation ?? this.lastReadingLocation);
+    // 文章和大纲会在重建 DOM 后恢复可见锚点；切换模式时也需要把语义位置带入目标模式。
+    // 导图内的普通 options 刷新不是导航行为，不能按旧阅读位置展开祖先，否则用户刚执行的
+    // “收起所有节点”会被延迟的文章上下文刷新部分撤销。
+    const locationToRestore = this.currentMode === "mindmap" && !modeChanged
+      ? null
+      : renderedLocation ?? this.lastReadingLocation;
+    const restored = locationToRestore
+      ? this.restoreReadingLocation(this.currentMode, locationToRestore)
+      : null;
     if (restored?.filePath === this.options.currentFilePath) this.pendingLocationNavigationKey = null;
     if (restored && this.currentMode !== "reading" && restored.filePath !== this.options.currentFilePath) {
       const navigationKey = `${this.currentMode}\u0000${restored.filePath}\u0000${restored.nodeId}`;
