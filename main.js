@@ -7895,14 +7895,9 @@ function renderArticleMode(container, options) {
         const blockShell = createArticleContentBlock(section, firstTextBlock.id);
         const paragraph = blockShell.createEl("p", { cls: `${articleParagraphClass("mms-article-leaf-text", firstTextBlock, options.articleLeafBulletsEnabled && !info.numberedLeaf, options.articleLeafTextAlignment)}${info.numberedLeaf ? " mms-article-leaf-numbered" : ""}` });
         paragraph.dataset.blockId = firstTextBlock.id;
+        if (info.numberedLeaf) paragraph.dataset.articleNumber = info.label;
         applyArticleLeafBulletStyle(paragraph, options, info.numberedLeaf);
         renderRichTextRuns(paragraph, firstTextBlock.richText, firstTextBlock.text);
-        if (info.numberedLeaf && info.label) {
-          const number = paragraph.ownerDocument.createElement("span");
-          number.className = "mms-article-number mms-article-leaf-number";
-          number.textContent = `${info.label} `;
-          paragraph.insertBefore(number, paragraph.firstChild);
-        }
         options.makeInlineEditable(paragraph, info.node, "\u6B63\u6587\u6BB5\u843D", firstTextBlock.id);
       } else if (!options.readOnly && blocks.length === 0) {
         const paragraph = section.createEl("p", { cls: articleParagraphClass("mms-article-leaf-text", void 0, options.articleLeafBulletsEnabled, options.articleLeafTextAlignment) });
@@ -13547,17 +13542,12 @@ var MindMapEditor = class {
           if (firstTextBlock) {
             const paragraph = nodeSection.createEl("p", { cls: `mms-article-leaf-text${this.options.articleLeafBulletsEnabled && !info.numberedLeaf ? " is-bulleted" : ""}${this.options.articleLeafTextAlignment === "auto" ? " is-auto-aligned" : ""}${firstTextBlock.paragraphIndent === "none" ? " is-flush" : ""}${info.numberedLeaf ? " mms-article-leaf-numbered" : ""}` });
             paragraph.dataset.blockId = firstTextBlock.id;
+            if (info.numberedLeaf) paragraph.dataset.articleNumber = info.label;
             if (this.options.articleLeafBulletsEnabled && !info.numberedLeaf) {
               paragraph.dataset.bulletStyle = this.options.articleLeafBulletStyle;
               if (this.options.articleLeafBulletColor) paragraph.style.setProperty("--mms-article-bullet-color", this.options.articleLeafBulletColor);
             }
             renderRichTextRuns(paragraph, firstTextBlock.richText, firstTextBlock.text);
-            if (info.numberedLeaf && info.label) {
-              const number = paragraph.ownerDocument.createElement("span");
-              number.className = "mms-article-number mms-article-leaf-number";
-              number.textContent = `${info.label} `;
-              paragraph.insertBefore(number, paragraph.firstChild);
-            }
           }
           this.renderArticleContent(nodeSection, info.node, false);
         }

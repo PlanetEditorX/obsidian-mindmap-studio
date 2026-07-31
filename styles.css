@@ -3825,6 +3825,14 @@
   text-indent: 0;
 }
 
+.mms-article-leaf-text.mms-article-leaf-numbered::before {
+  content: attr(data-article-number) "\00a0";
+  color: var(--mms-article-accent, var(--text-accent));
+  font: inherit;
+  font-weight: inherit;
+  white-space: nowrap;
+}
+
 .mms-article-leaf-text.is-bulleted::before {
   position: absolute;
   top: .78em;
@@ -4357,13 +4365,6 @@
 .mms-article-number {
   min-width: max-content;
   white-space: nowrap;
-}
-
-/* Keep converted terminal-body prefixes in the normal inline flow. The
- * numbered state has no marker pseudo-element, so it must not inherit the
- * empty marker/alignment gutter from ordinary terminal paragraphs. */
-.mms-article-leaf-number {
-  display: inline;
 }
 
 /* Color popover swatch panel (selection toolbar + inline format bar) */

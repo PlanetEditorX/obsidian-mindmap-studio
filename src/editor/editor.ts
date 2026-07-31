@@ -5223,17 +5223,12 @@ export class MindMapEditor {
           if (firstTextBlock) {
             const paragraph = nodeSection.createEl("p", { cls: `mms-article-leaf-text${this.options.articleLeafBulletsEnabled && !info.numberedLeaf ? " is-bulleted" : ""}${this.options.articleLeafTextAlignment === "auto" ? " is-auto-aligned" : ""}${firstTextBlock.paragraphIndent === "none" ? " is-flush" : ""}${info.numberedLeaf ? " mms-article-leaf-numbered" : ""}` });
             paragraph.dataset.blockId = firstTextBlock.id;
+            if (info.numberedLeaf) paragraph.dataset.articleNumber = info.label;
             if (this.options.articleLeafBulletsEnabled && !info.numberedLeaf) {
               paragraph.dataset.bulletStyle = this.options.articleLeafBulletStyle;
               if (this.options.articleLeafBulletColor) paragraph.style.setProperty("--mms-article-bullet-color", this.options.articleLeafBulletColor);
             }
             renderRichTextRuns(paragraph, firstTextBlock.richText, firstTextBlock.text);
-            if (info.numberedLeaf && info.label) {
-              const number = paragraph.ownerDocument.createElement("span");
-              number.className = "mms-article-number mms-article-leaf-number";
-              number.textContent = `${info.label} `;
-              paragraph.insertBefore(number, paragraph.firstChild);
-            }
           }
           this.renderArticleContent(nodeSection, info.node, false);
         }

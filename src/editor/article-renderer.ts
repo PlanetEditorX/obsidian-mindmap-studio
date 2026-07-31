@@ -127,14 +127,9 @@ export function renderArticleMode(container: HTMLElement, options: ArticleRender
         const blockShell = createArticleContentBlock(section, firstTextBlock.id);
         const paragraph = blockShell.createEl("p", { cls: `${articleParagraphClass("mms-article-leaf-text", firstTextBlock, options.articleLeafBulletsEnabled && !info.numberedLeaf, options.articleLeafTextAlignment)}${info.numberedLeaf ? " mms-article-leaf-numbered" : ""}` });
         paragraph.dataset.blockId = firstTextBlock.id;
+        if (info.numberedLeaf) paragraph.dataset.articleNumber = info.label;
         applyArticleLeafBulletStyle(paragraph, options, info.numberedLeaf);
         renderRichTextRuns(paragraph, firstTextBlock.richText, firstTextBlock.text);
-        if (info.numberedLeaf && info.label) {
-          const number = paragraph.ownerDocument.createElement("span");
-          number.className = "mms-article-number mms-article-leaf-number";
-          number.textContent = `${info.label} `;
-          paragraph.insertBefore(number, paragraph.firstChild);
-        }
         options.makeInlineEditable(paragraph, info.node, "正文段落", firstTextBlock.id);
       } else if (!options.readOnly && blocks.length === 0) {
         // 新建空白末端节点尚无内容块，需要临时渲染一个可编辑行，供
