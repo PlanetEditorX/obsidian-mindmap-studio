@@ -57,37 +57,47 @@ export function parseCommandArguments(source: string): string[] {
   let current = "";
   let quote: "'" | '"' | null = null;
   let escaping = false;
+  let inWord = false;
   for (const character of source.trim()) {
     if (escaping) {
       current += character;
       escaping = false;
+      inWord = true;
       continue;
     }
     if (character === "\\" && quote !== "'") {
       escaping = true;
+      inWord = true;
       continue;
     }
     if (quote) {
       if (character === quote) quote = null;
       else current += character;
+      inWord = true;
       continue;
     }
     if (character === "'" || character === '"') {
       quote = character;
+      inWord = true;
       continue;
     }
     if (/\s/.test(character)) {
-      if (current) {
+      if (inWord) {
         args.push(current);
         current = "";
+        inWord = false;
       }
       continue;
     }
     current += character;
+    inWord = true;
   }
-  if (escaping) current += "\\";
+  if (escaping) {
+    current += "\\";
+    inWord = true;
+  }
   if (quote) throw new Error("本地 OCR 附加参数包含未闭合引号");
-  if (current) args.push(current);
+  if (inWord) args.push(current);
   return args;
 }
 
