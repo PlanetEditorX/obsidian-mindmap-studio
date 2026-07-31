@@ -1757,6 +1757,7 @@ var DEFAULT_AI_PROFILES = [
     enabled: false,
     apiKey: "",
     thinkingMode: "auto",
+    availableModels: [],
     temperature: 0.2,
     maxOutputTokens: 2048,
     headers: ""
@@ -1767,6 +1768,7 @@ var DEFAULT_AI_PROFILES = [
     enabled: false,
     apiKey: "",
     thinkingMode: "auto",
+    availableModels: [],
     temperature: 0.2,
     maxOutputTokens: 2048,
     headers: ""
@@ -1777,6 +1779,7 @@ var DEFAULT_AI_PROFILES = [
     enabled: false,
     apiKey: "",
     thinkingMode: "auto",
+    availableModels: [],
     temperature: 0.2,
     maxOutputTokens: 2048,
     headers: ""
@@ -1787,6 +1790,7 @@ var DEFAULT_AI_PROFILES = [
     enabled: false,
     apiKey: "",
     thinkingMode: "auto",
+    availableModels: [],
     temperature: 0.2,
     maxOutputTokens: 2048,
     headers: ""
@@ -1810,6 +1814,7 @@ function createAiProfileConfig(provider, index = 1) {
     endpoint: preset.endpoint,
     apiKey: "",
     model: preset.model,
+    availableModels: [],
     thinkingMode: "auto",
     systemPrompt: preset.systemPrompt,
     temperature: 0.2,
@@ -1831,6 +1836,7 @@ function normalizeAiProfileConfig(value, index = 1) {
     endpoint: typeof input.endpoint === "string" ? input.endpoint.trim().slice(0, 2e3) : preset.endpoint,
     apiKey: typeof input.apiKey === "string" ? input.apiKey.trim().slice(0, 8e3) : "",
     model: typeof input.model === "string" ? input.model.trim().slice(0, 240) : preset.model,
+    availableModels: Array.isArray(input.availableModels) ? [...new Set(input.availableModels.filter((item) => typeof item === "string").map((item) => item.trim().slice(0, 240)).filter(Boolean))].slice(0, 500) : [],
     thinkingMode: input.thinkingMode === "on" || input.thinkingMode === "off" ? input.thinkingMode : "auto",
     systemPrompt: typeof input.systemPrompt === "string" ? input.systemPrompt.slice(0, 16e3) : preset.systemPrompt,
     temperature: clamp(input.temperature, 0, 2, 0.2),
@@ -2562,13 +2568,16 @@ var MindMapStudioSettingTab = class extends import_obsidian.PluginSettingTab {
         profile.provider = provider;
         profile.endpoint = preset.endpoint;
         profile.model = preset.model;
+        profile.availableModels = [];
         if (!profile.systemPrompt.trim()) profile.systemPrompt = preset.systemPrompt;
         await this.plugin.saveSettings();
         this.display();
       }));
       const endpointPlaceholder = profile.provider === "siliconflow" ? "https://api.siliconflow.cn/v1" : profile.provider === "freellmapi" ? "http://localhost:3001/v1" : "https://example.com/v1/chat/completions";
       new import_obsidian.Setting(body).setName("\u63A5\u53E3\u5730\u5740").setDesc("\u53EF\u586B\u5199 /v1 \u57FA\u7840\u5730\u5740\u6216\u5B8C\u6574 /chat/completions \u5730\u5740\u3002").addText((text) => text.setPlaceholder(endpointPlaceholder).setValue(profile.endpoint).onChange(async (value) => {
-        profile.endpoint = value.trim();
+        const endpoint = value.trim();
+        if (profile.endpoint !== endpoint) profile.availableModels = [];
+        profile.endpoint = endpoint;
         await this.plugin.saveSettings();
       }));
       let apiKeyInput = null;
@@ -2594,9 +2603,11 @@ var MindMapStudioSettingTab = class extends import_obsidian.PluginSettingTab {
         dataList.empty();
         [...new Set(models)].forEach((model) => dataList.createEl("option", { attr: { value: model } }));
       };
-      setModelOptions(modelPresets);
+      setModelOptions(profile.availableModels.length ? profile.availableModels : modelPresets);
       const modelSetting = new import_obsidian.Setting(body).setName("\u6A21\u578B\u540D\u79F0").setDesc("\u53EF\u9009\u62E9\u9884\u8BBE\u3001\u70B9\u51FB\u201C\u83B7\u53D6\u6A21\u578B\u201D\u8BFB\u53D6\u670D\u52A1\u7AEF\u76EE\u5F55\uFF0C\u6216\u76F4\u63A5\u8F93\u5165\u517C\u5BB9\u6A21\u578B ID\u3002");
+      let modelInput = null;
       modelSetting.addText((text) => {
+        modelInput = text;
         text.setValue(profile.model).setPlaceholder(profile.provider === "freellmapi" ? "auto" : "\u6A21\u578B ID").onChange(async (value) => {
           profile.model = value.trim();
           await this.plugin.saveSettings();
@@ -2631,8 +2642,15 @@ var MindMapStudioSettingTab = class extends import_obsidian.PluginSettingTab {
         fetchModelsButton.disabled = true;
         fetchModelsButton.setText("\u83B7\u53D6\u4E2D\u2026");
         void this.plugin.getAiProfileModels(profile.id).then((models) => {
-          setModelOptions(models);
-          new import_obsidian.Notice(`\u5DF2\u83B7\u53D6 ${models.length} \u4E2A\u6A21\u578B\uFF1B\u53EF\u5728\u201C\u6A21\u578B\u540D\u79F0\u201D\u8F93\u5165\u6846\u4E2D\u9009\u62E9\u3002`, 6e3);
+          const defaultModel = AI_PROFILE_PRESETS[profile.provider].model;
+          const shouldSelectFirst = !profile.model || profile.model === defaultModel || !models.includes(profile.model);
+          profile.availableModels = models;
+          if (shouldSelectFirst) profile.model = models[0];
+          return this.plugin.saveSettings().then(() => {
+            setModelOptions(profile.availableModels);
+            if (shouldSelectFirst) modelInput == null ? void 0 : modelInput.setValue(profile.model);
+            new import_obsidian.Notice(shouldSelectFirst ? `\u5DF2\u83B7\u53D6 ${models.length} \u4E2A\u6A21\u578B\uFF0C\u5F53\u524D\u5DF2\u5207\u6362\u4E3A\uFF1A${profile.model}` : `\u5DF2\u83B7\u53D6\u5E76\u7F13\u5B58 ${models.length} \u4E2A\u6A21\u578B\uFF0C\u4FDD\u7559\u5F53\u524D\u6A21\u578B\uFF1A${profile.model}`, 7e3);
+          });
         }).catch((error) => {
           console.error("MindMap Studio AI model list failed", error);
           new import_obsidian.Notice(`\u83B7\u53D6\u6A21\u578B\u5931\u8D25\uFF1A${error instanceof Error ? error.message : String(error)}`, 8e3);
