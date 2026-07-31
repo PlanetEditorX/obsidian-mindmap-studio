@@ -1235,6 +1235,11 @@ export class MindMapEditor {
    */
   setOptions(options: MindMapEditorOptions): void {
     const previousOptions = this.options;
+    // setOptions() 会重建文章 DOM。先从旧 DOM 捕获位置，避免异步文章上下文
+    // 刷新（例如保存表格后）把滚动容器因 empty() 而回退到页面顶部。
+    const renderedLocation = this.currentMode === "mindmap"
+      ? null
+      : this.captureCurrentLocation(this.currentMode) ?? this.lastReadingLocation;
     const preferredCurrentLocation = options.preferCurrentFileLocation
       ? createReadingLocation(
         this.readingLocationSections(options),
@@ -1249,10 +1254,6 @@ export class MindMapEditor {
       || JSON.stringify(previousOptions.toolbarItemOrder) !== JSON.stringify(options.toolbarItemOrder)
       || previousOptions.questionNodesEnabled !== options.questionNodesEnabled;
     const globalModeChanged = previousOptions.defaultViewMode !== options.defaultViewMode;
-    const locationContextChanged = previousOptions.currentFilePath !== options.currentFilePath
-      || previousOptions.readingHomePath !== options.readingHomePath
-      || JSON.stringify(previousOptions.readingSections.map((section) => section.filePath)) !== JSON.stringify(options.readingSections.map((section) => section.filePath))
-      || !sameReadingLocation(previousOptions.readingLocation, options.readingLocation);
     const readingFamilyChanged = previousOptions.readingHomePath !== options.readingHomePath;
     if (readingFamilyChanged) {
       // A delayed write captures the home path from this.options at execution time. Flush it
@@ -1311,9 +1312,9 @@ export class MindMapEditor {
     // Keep the live contenteditable DOM intact unless the visible mode or toolbar actually changes.
     if (this.inlineEditingId && !modesChanged && !toolbarChanged && !globalModeChanged) return;
     this.render();
-    const restored = modeChanged || locationContextChanged
-      ? this.restoreReadingLocation(this.currentMode, this.lastReadingLocation)
-      : null;
+    // 无论本次 options 刷新是否改变文章族上下文，都恢复刚才的可见锚点。
+    // 否则普通设置刷新会在 renderArticleMode() 清空容器后停留在顶部。
+    const restored = this.restoreReadingLocation(this.currentMode, renderedLocation ?? this.lastReadingLocation);
     if (restored?.filePath === this.options.currentFilePath) this.pendingLocationNavigationKey = null;
     if (restored && this.currentMode !== "reading" && restored.filePath !== this.options.currentFilePath) {
       const navigationKey = `${this.currentMode}\u0000${restored.filePath}\u0000${restored.nodeId}`;
@@ -2518,8 +2519,7 @@ export class MindMapEditor {
       if (blockId) blocks.push(created);
       else blocks.unshift(created);
     }
-    node.content = blocks.filter((block) => block.type !== "text" || block.text.trim());
-    syncNodeContentFields(node);
+    replaceNodeContentBlocks(node, blocks.filter((block) => block.type !== "text" || block.text.trim()));
     if (node.id === this.document.root.id && next) this.document.title = next;
   }
 
@@ -6567,18 +6567,20 @@ export class MindMapEditor {
       return;
     }
 
-    // Inline title/body editors own Enter, Escape and formatting keys. Keep
-    // structural shortcuts disabled for the whole editing lifecycle even if a
-    // blur changes contenteditable before the original event finishes bubbling.
-    if (this.inlineEditingId !== null) return;
-    if (target.closest("input, textarea, select, [contenteditable='true']")) return;
-
     if (this.shortcutMatches(event, this.options.screenshotShortcut)) {
       event.preventDefault();
       event.stopPropagation();
       if (!event.repeat) void this.captureScreenshot();
       return;
     }
+
+    // Inline title/body editors own Enter, Escape and formatting keys. Keep
+    // structural shortcuts disabled for the whole editing lifecycle even if a
+    // blur changes contenteditable before the original event finishes bubbling.
+    // The screenshot shortcut is intentionally handled above so editing text
+    // does not make the configured capture command unavailable.
+    if (this.inlineEditingId !== null) return;
+    if (target.closest("input, textarea, select, [contenteditable='true']")) return;
 
     if (mod && key === "a") {
       event.preventDefault();

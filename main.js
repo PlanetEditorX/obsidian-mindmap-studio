@@ -9692,19 +9692,19 @@ var MindMapEditor = class {
    * 会重新解析节点并恢复到同一语义位置，而不是恢复旧的像素滚动值。
    */
   setOptions(options) {
-    var _a2, _b2, _c, _d;
+    var _a2, _b2, _c, _d, _e;
     const previousOptions = this.options;
+    const renderedLocation = this.currentMode === "mindmap" ? null : (_a2 = this.captureCurrentLocation(this.currentMode)) != null ? _a2 : this.lastReadingLocation;
     const preferredCurrentLocation = options.preferCurrentFileLocation ? createReadingLocation(
       this.readingLocationSections(options),
       options.currentFilePath,
-      (_b2 = (_a2 = findNode(this.document.root, this.selectedId)) == null ? void 0 : _a2.id) != null ? _b2 : this.document.root.id,
+      (_c = (_b2 = findNode(this.document.root, this.selectedId)) == null ? void 0 : _b2.id) != null ? _c : this.document.root.id,
       0,
       this.currentMode === "mindmap" ? 0.5 : 0.35
     ) : null;
     const modesChanged = JSON.stringify(previousOptions.visibleModes) !== JSON.stringify(options.visibleModes);
     const toolbarChanged = JSON.stringify(previousOptions.visibleToolbarItems) !== JSON.stringify(options.visibleToolbarItems) || JSON.stringify(previousOptions.toolbarItemOrder) !== JSON.stringify(options.toolbarItemOrder) || previousOptions.questionNodesEnabled !== options.questionNodesEnabled;
     const globalModeChanged = previousOptions.defaultViewMode !== options.defaultViewMode;
-    const locationContextChanged = previousOptions.currentFilePath !== options.currentFilePath || previousOptions.readingHomePath !== options.readingHomePath || JSON.stringify(previousOptions.readingSections.map((section) => section.filePath)) !== JSON.stringify(options.readingSections.map((section) => section.filePath)) || !sameReadingLocation(previousOptions.readingLocation, options.readingLocation);
     const readingFamilyChanged = previousOptions.readingHomePath !== options.readingHomePath;
     if (readingFamilyChanged) {
       if (this.readingCaptureTimer !== null) {
@@ -9735,12 +9735,12 @@ var MindMapEditor = class {
       if (previousMode === "mindmap") this.persistMindMapViewportState();
       const preserveReadingEdit = previousMode === "reading" && resolved === "article" && !this.readOnly;
       this.currentMode = resolved;
-      this.readOnly = resolved === "article" ? preserveReadingEdit || this.options.articleEntryLockMode === "inherit" ? this.readOnly : true : resolved === "reading" || resolved === "question-bank" ? true : previousMode === "article" || previousMode === "reading" || previousMode === "question-bank" ? ((_c = this.document.view) == null ? void 0 : _c.readOnly) === true : this.readOnly;
+      this.readOnly = resolved === "article" ? preserveReadingEdit || this.options.articleEntryLockMode === "inherit" ? this.readOnly : true : resolved === "reading" || resolved === "question-bank" ? true : previousMode === "article" || previousMode === "reading" || previousMode === "question-bank" ? ((_d = this.document.view) == null ? void 0 : _d.readOnly) === true : this.readOnly;
     }
     if (modesChanged || toolbarChanged) {
       this.cleanupCallbacks.forEach((callback) => callback());
       this.cleanupCallbacks = [];
-      (_d = this.resizeObserver) == null ? void 0 : _d.disconnect();
+      (_e = this.resizeObserver) == null ? void 0 : _e.disconnect();
       this.resizeObserver = null;
       this.modeButtons.clear();
       this.editControls.splice(0);
@@ -9748,7 +9748,7 @@ var MindMapEditor = class {
     }
     if (this.inlineEditingId && !modesChanged && !toolbarChanged && !globalModeChanged) return;
     this.render();
-    const restored = modeChanged || locationContextChanged ? this.restoreReadingLocation(this.currentMode, this.lastReadingLocation) : null;
+    const restored = this.restoreReadingLocation(this.currentMode, renderedLocation != null ? renderedLocation : this.lastReadingLocation);
     if ((restored == null ? void 0 : restored.filePath) === this.options.currentFilePath) this.pendingLocationNavigationKey = null;
     if (restored && this.currentMode !== "reading" && restored.filePath !== this.options.currentFilePath) {
       const navigationKey = `${this.currentMode}\0${restored.filePath}\0${restored.nodeId}`;
@@ -10856,8 +10856,7 @@ var MindMapEditor = class {
       if (blockId) blocks.push(created);
       else blocks.unshift(created);
     }
-    node.content = blocks.filter((block) => block.type !== "text" || block.text.trim());
-    syncNodeContentFields(node);
+    replaceNodeContentBlocks(node, blocks.filter((block) => block.type !== "text" || block.text.trim()));
     if (node.id === this.document.root.id && next) this.document.title = next;
   }
   /**
@@ -14648,14 +14647,14 @@ var MindMapEditor = class {
       this.cancelArticleClickMove();
       return;
     }
-    if (this.inlineEditingId !== null) return;
-    if (target.closest("input, textarea, select, [contenteditable='true']")) return;
     if (this.shortcutMatches(event, this.options.screenshotShortcut)) {
       event.preventDefault();
       event.stopPropagation();
       if (!event.repeat) void this.captureScreenshot();
       return;
     }
+    if (this.inlineEditingId !== null) return;
+    if (target.closest("input, textarea, select, [contenteditable='true']")) return;
     if (mod && key === "a") {
       event.preventDefault();
       event.stopPropagation();
