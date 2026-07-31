@@ -192,12 +192,23 @@ export default class MindMapStudioPlugin extends Plugin {
     });
     this.addCommand({
       id: "capture-mind-map-screenshot",
-      name: "截图并插入当前节点或复制到剪贴板",
+      name: "截图",
       hotkeys: [{ modifiers: ["Mod", "Shift"], key: "S" }],
       checkCallback: (checking) => {
         const view = this.app.workspace.activeLeaf?.view;
         const available = view instanceof MindMapStudioView;
-        if (!checking && available && view instanceof MindMapStudioView) void view.captureScreenshot();
+        if (!checking && available && view instanceof MindMapStudioView) void view.captureScreenshot(false);
+        return available;
+      }
+    });
+    this.addCommand({
+      id: "capture-and-recognize-mind-map-screenshot",
+      name: "截图并识别",
+      hotkeys: [{ modifiers: ["Mod", "Shift"], key: "R" }],
+      checkCallback: (checking) => {
+        const view = this.app.workspace.activeLeaf?.view;
+        const available = view instanceof MindMapStudioView;
+        if (!checking && available && view instanceof MindMapStudioView) void view.captureScreenshot(true);
         return available;
       }
     });
@@ -566,10 +577,12 @@ export default class MindMapStudioPlugin extends Plugin {
       screenshotShortcut: typeof raw.screenshotShortcut === "string" && raw.screenshotShortcut.trim()
         ? raw.screenshotShortcut.trim().slice(0, 120)
         : DEFAULT_SETTINGS.screenshotShortcut,
+      screenshotRecognizeShortcut: typeof raw.screenshotRecognizeShortcut === "string" && raw.screenshotRecognizeShortcut.trim()
+        ? raw.screenshotRecognizeShortcut.trim().slice(0, 120)
+        : DEFAULT_SETTINGS.screenshotRecognizeShortcut,
       globalSearchShortcut: typeof raw.globalSearchShortcut === "string" && raw.globalSearchShortcut.trim()
         ? raw.globalSearchShortcut.trim().slice(0, 120)
         : DEFAULT_SETTINGS.globalSearchShortcut,
-      screenshotAutoRecognize: raw.screenshotAutoRecognize === true,
       questionNodesEnabled: raw.questionNodesEnabled === true,
       questionBankFolder: typeof raw.questionBankFolder === "string"
         ? normalizePath(raw.questionBankFolder.trim().replace(/^\/+|\/+$/g, "")).slice(0, 1000)
@@ -607,6 +620,7 @@ export default class MindMapStudioPlugin extends Plugin {
           : [...DEFAULT_SETTINGS.visibleToolbarItems];
         if (!hadAiSettings && !stored.includes("ai")) stored.push("ai");
         if (!stored.includes("screenshot")) stored.push("screenshot");
+        if (!stored.includes("screenshot-recognize")) stored.push("screenshot-recognize");
         return [...new Set(stored)];
       })(),
       toolbarItemOrder: (() => {

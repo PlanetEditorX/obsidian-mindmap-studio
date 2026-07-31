@@ -338,12 +338,12 @@ export class MindMapStudioView extends TextFileView {
   }
 
   /** 启动截图并让编辑器根据截图前焦点决定插入节点或保留剪贴板。 */
-  async captureScreenshot(): Promise<void> {
+  async captureScreenshot(recognizeAfter = false): Promise<void> {
     if (!this.editor) {
       new Notice("当前导图尚未加载");
       return;
     }
-    await this.editor.captureScreenshot();
+    await this.editor.captureScreenshot(recognizeAfter);
   }
 
   /** 构建 Markdown 上下文并打开 AI 窗口。 */
@@ -458,7 +458,7 @@ export class MindMapStudioView extends TextFileView {
       imageRecognitionAutoConfirmDelaySeconds: this.plugin.settings.imageRecognitionAutoConfirmDelaySeconds,
       autoUploadDelaySeconds: this.plugin.settings.autoUploadDelaySeconds,
       screenshotShortcut: this.plugin.settings.screenshotShortcut,
-      screenshotAutoRecognize: this.plugin.settings.screenshotAutoRecognize,
+      screenshotRecognizeShortcut: this.plugin.settings.screenshotRecognizeShortcut,
       questionNodesEnabled: this.plugin.settings.questionNodesEnabled,
       questionBankModeEnabled: this.plugin.isQuestionBankFile(this.file),
       questionPracticeOrder: this.plugin.settings.questionPracticeOrder,

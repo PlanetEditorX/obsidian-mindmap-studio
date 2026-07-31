@@ -345,7 +345,7 @@ mindmap-search-index.json
 
 `src/vision/recognition.ts` 只负责确定性范围收集、提示词、结果规范化、不可变预览和过期快照校验；`src/vision/modal.ts` 负责原图/文字对比与确认；`src/vision/local-ocr.ts` 只在桌面功能实际触发时动态获取 Node.js API，通过 `execFile` 调用 Tesseract，避免移动端在插件加载阶段静态引用 Node 模块。AI 多模态请求仍由 `src/ai/protocol.ts` 和 `src/ai/client.ts` 构造与发送。
 
-`src/utils/desktop-capture.ts` 按平台启动系统截图工具，并从 Electron 剪贴板读取 PNG。它同样动态获取 Electron/Node API，因此插件仍可在移动端加载；移动端仅在调用桌面截图或本地 OCR 时返回明确错误。截图开始前由编辑器记录焦点节点和 `data-block-id`，系统截图期间焦点变化不会改变插入目标。截图结果先保留在系统剪贴板：存在有效目标且可编辑时才保存到资源目录并插入；否则不修改文档。
+`src/utils/desktop-capture.ts` 优先通过 Electron `desktopCapturer` 获取鼠标所在显示器，创建独立无边框覆盖层，并在本地 Canvas 中完成选区、八方向缩放、坐标尺寸、标注、马赛克、复制、下载和固定窗口。截图覆盖层只加载临时本地文件，不访问网络；Electron/Node API 仍按需动态获取。高级覆盖层不可用时才回退到平台系统截图工具。截图开始前由编辑器冻结焦点节点和 `data-block-id`，右键入口可显式覆盖目标；截图期间焦点变化不会改变插入位置。普通截图、截图并识别和识别并复制是独立动作。
 
 图片转文字与截图插入都必须通过 `MindMapEditor.replaceDocumentFromExternalEdit()` 接入撤销、保存、重渲染和聚焦。网络层、本地 OCR 层和截图层不得直接修改 `MindMapDocument`。
 

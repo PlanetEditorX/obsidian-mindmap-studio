@@ -39,7 +39,7 @@ export const TOOLBAR_ITEMS = [
   ["edit", "完整编辑节点"], ["duplicate", "克隆分支"], ["delete", "删除节点"],
   ["task", "任务状态"], ["collapse", "展开/收起"], ["collapse-all", "展开/折叠全部"], ["link", "打开链接"],
   ["search", "搜索导图"], ["global-search", "全局搜索"], ["ai", "询问 AI"], ["table", "表格"],
-  ["code", "代码"], ["image", "粘贴图片"], ["screenshot", "插入截图"], ["submap", "子导图"],
+  ["code", "代码"], ["image", "粘贴图片"], ["screenshot", "插入截图"], ["screenshot-recognize", "插入截图并识别"], ["submap", "子导图"],
   ["undo", "撤销"], ["redo", "重做"],
   ["fit", "适应画布"], ["layout", "切换布局"], ["appearance", "主题与外观"],
   ["article-landing", "目录/原始文章"], ["article-style", "文章样式"],
@@ -50,7 +50,7 @@ export const TOOLBAR_ITEMS = [
 /** All first-level settings categories in their default display order. */
 export const SETTINGS_SECTION_TITLES = [
   "主题与外观", "视图与阅读", "编辑与交互", "节点布局与尺寸", "代码行为", "工具栏", "快捷键配置",
-  "文件与资源", "图片与图床", "答题与题库", "全局搜索", "AI 助手", "管理配置"
+  "文件与资源", "图片与图床", "答题与题库", "全局搜索", "AI 助手", "截图与识别", "管理配置"
 ] as const;
 
 /** A valid first-level settings category title. */
@@ -273,10 +273,10 @@ export interface MindMapStudioSettings {
   screenshotHideObsidian: boolean;
   /** Editor-level screenshot shortcut used when the mind-map editor has focus. */
   screenshotShortcut: string;
+  /** Editor-level shortcut for capturing and then recognizing a screenshot. */
+  screenshotRecognizeShortcut: string;
   /** Global shortcut used to open the searchable mind-map index. */
   globalSearchShortcut: string;
-  /** 截图插入节点后是否自动启动识图预览。 */
-  screenshotAutoRecognize: boolean;
   /** Whether structured question-node entry points are visible in the editor. */
   questionNodesEnabled: boolean;
   /** Vault-relative folder whose mind-map files expose the full-page question-bank mode. */
@@ -386,8 +386,8 @@ export const DEFAULT_SETTINGS: MindMapStudioSettings = {
   localOcrExtraArgs: "--psm 6",
   screenshotHideObsidian: false,
   screenshotShortcut: "Ctrl+Shift+S",
+  screenshotRecognizeShortcut: "Ctrl+Shift+R",
   globalSearchShortcut: "Ctrl+Shift+F",
-  screenshotAutoRecognize: false,
   questionNodesEnabled: false,
   questionBankFolder: "",
   questionBankFolders: [],
@@ -423,7 +423,9 @@ export function normalizeSettingsSectionOrder(value: unknown): SettingsSectionTi
     "全局代码设置": "代码行为",
     "文件与布局": "文件与资源",
     "文件夹": "文件与资源",
-    "全局搜索索引": "全局搜索"
+    "全局搜索索引": "全局搜索",
+    "图片识图与本地 OCR": "截图与识别",
+    "图片识图与本地OCR": "截图与识别"
   };
   const stored = Array.isArray(value)
     ? value.flatMap((title): SettingsSectionTitle[] => {
@@ -1003,127 +1005,6 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
         });
       });
 
-    const imageRecognitionSettings = containerEl.createDiv({ cls: "mms-image-recognition-settings" });
-    imageRecognitionSettings.createEl("h4", { text: "图片识图与本地 OCR" });
-    new Setting(imageRecognitionSettings)
-      .setName("默认识图方式")
-      .setDesc("AI 模式可跟随全局接口，也可单独选择视觉模型；本地 OCR 模式调用本机 Tesseract，不上传图片。")
-      .addDropdown((dropdown) => dropdown
-        .addOption("ai", "AI 视觉识图")
-        .addOption("local-ocr", "本地 Tesseract OCR")
-        .setValue(this.plugin.settings.imageRecognitionMode)
-        .onChange(async (value) => {
-          this.plugin.settings.imageRecognitionMode = value === "local-ocr" ? "local-ocr" : "ai";
-          await this.plugin.saveSettings();
-          this.display();
-        }));
-    if (this.plugin.settings.imageRecognitionMode === "ai") {
-      const selectedVisionProfile = enabledProfiles.some((profile) => profile.id === this.plugin.settings.imageRecognitionAiProfileId)
-        ? this.plugin.settings.imageRecognitionAiProfileId
-        : "";
-      new Setting(imageRecognitionSettings)
-        .setName("AI 识图接口")
-        .setDesc("默认跟随全局 AI 接口；如果全局模型不支持图片输入，可在这里单独选择视觉模型。")
-        .addDropdown((dropdown) => {
-          dropdown.addOption("", "跟随全局 AI 接口");
-          enabledProfiles.forEach((profile) => dropdown.addOption(profile.id, `${profile.name} · ${profile.model}`));
-          dropdown.setValue(selectedVisionProfile);
-          dropdown.onChange(async (value) => {
-            this.plugin.settings.imageRecognitionAiProfileId = value;
-            await this.plugin.saveSettings();
-          });
-        });
-    }
-    new Setting(imageRecognitionSettings)
-      .setName("识图任务说明")
-      .setDesc("AI 助手批量识图、图片右键识图和截图自动识图共用。")
-      .addTextArea((text) => text
-        .setValue(this.plugin.settings.imageRecognitionPrompt)
-        .setPlaceholder("识别图片中的全部文字并按阅读顺序转写。")
-        .onChange(async (value) => {
-          this.plugin.settings.imageRecognitionPrompt = value.slice(0, 4000);
-          await this.plugin.saveSettings();
-        }));
-    if (this.plugin.settings.imageRecognitionMode === "local-ocr") {
-      new Setting(imageRecognitionSettings)
-        .setName("Tesseract 可执行文件")
-        .setDesc("可填写命令名 tesseract，或本机完整路径。")
-        .addText((text) => text
-          .setValue(this.plugin.settings.localOcrExecutable)
-          .setPlaceholder("tesseract")
-          .onChange(async (value) => {
-            this.plugin.settings.localOcrExecutable = value.trim().slice(0, 2000) || "tesseract";
-            await this.plugin.saveSettings();
-          }));
-      new Setting(imageRecognitionSettings)
-        .setName("OCR 语言")
-        .setDesc("需要本机已安装相应语言包，例如 chi_sim+eng。")
-        .addText((text) => text
-          .setValue(this.plugin.settings.localOcrLanguage)
-          .setPlaceholder("chi_sim+eng")
-          .onChange(async (value) => {
-            this.plugin.settings.localOcrLanguage = value.trim().slice(0, 240) || "chi_sim+eng";
-            await this.plugin.saveSettings();
-          }));
-      new Setting(imageRecognitionSettings)
-        .setName("OCR 附加参数")
-        .setDesc("参数通过 execFile 传递，不使用 shell；默认 --psm 6。")
-        .addText((text) => text
-          .setValue(this.plugin.settings.localOcrExtraArgs)
-          .setPlaceholder("--psm 6")
-          .onChange(async (value) => {
-            this.plugin.settings.localOcrExtraArgs = value.slice(0, 1000);
-            await this.plugin.saveSettings();
-          }));
-    }
-    new Setting(imageRecognitionSettings)
-      .setName("截图时隐藏 Obsidian")
-      .setDesc("启动系统区域截图前自动最小化，截图完成后恢复窗口。")
-      .addToggle((toggle) => toggle
-        .setValue(this.plugin.settings.screenshotHideObsidian)
-        .onChange(async (value) => {
-          this.plugin.settings.screenshotHideObsidian = value;
-          await this.plugin.saveSettings();
-        }));
-    new Setting(imageRecognitionSettings)
-      .setName("截图快捷键")
-      .setDesc("点击输入框后，按下 1 至 3 个键的组合即可保存；支持单键、Ctrl/Shift/Alt 与主键组合。编辑器获得焦点时生效。")
-      .addText((text) => {
-        text.setValue(this.plugin.settings.screenshotShortcut);
-        text.setPlaceholder(DEFAULT_SETTINGS.screenshotShortcut);
-        text.inputEl.readOnly = true;
-        text.inputEl.addClass("mms-shortcut-recorder");
-        text.inputEl.setAttr("aria-label", "点击后按下新的截图快捷键");
-        text.inputEl.addEventListener("keydown", (event) => void this.captureScreenshotShortcut(event, text));
-      });
-    new Setting(imageRecognitionSettings)
-      .setName("截图后自动识图")
-      .setDesc("截图插入节点后自动运行当前识图方式并打开图片与文字对比预览；仍需确认后才替换。")
-      .addToggle((toggle) => toggle
-        .setValue(this.plugin.settings.screenshotAutoRecognize)
-        .onChange(async (value) => {
-          this.plugin.settings.screenshotAutoRecognize = value;
-          await this.plugin.saveSettings();
-        }));
-    new Setting(imageRecognitionSettings)
-      .setName("识图结果确认")
-      .setDesc("选择是否跳过手动确认。延迟确认期间仍可修改识别文字或手动确认。")
-      .addDropdown((dropdown) => dropdown
-        .addOption("manual", "手动确认")
-        .addOption("0", "直接确认")
-        .addOption("5", "5 秒后自动确认")
-        .addOption("10", "10 秒后自动确认")
-        .addOption("15", "15 秒后自动确认")
-        .setValue(this.plugin.settings.imageRecognitionAutoConfirmDelaySeconds === null
-          ? "manual"
-          : String(this.plugin.settings.imageRecognitionAutoConfirmDelaySeconds))
-        .onChange(async (value) => {
-          this.plugin.settings.imageRecognitionAutoConfirmDelaySeconds = value === "manual"
-            ? null
-            : Number(value) as 0 | 5 | 10 | 15;
-          await this.plugin.saveSettings();
-        }));
-
     const aiHeader = containerEl.createDiv({ cls: "mms-ai-profiles-header" });
     aiHeader.createEl("h4", { text: "接口预设与自定义" });
     const addAiProfile = (provider: AiProviderKind): void => {
@@ -1330,8 +1211,133 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
       });
     });
 
-    // Keep recognition controls beside the AI profiles they depend on.
-    containerEl.appendChild(imageRecognitionSettings);
+    containerEl.createEl("h3", { text: "截图与识别" });
+    containerEl.createEl("p", {
+      cls: "setting-item-description",
+      text: "截图、截图并识别、图片右键识别和本地 OCR 的统一配置。该分类独立于 AI 助手，但 AI 视觉识别仍使用已配置的视觉接口。"
+    });
+    const imageRecognitionSettings = containerEl.createDiv({ cls: "mms-image-recognition-settings" });
+    new Setting(imageRecognitionSettings)
+      .setName("默认识图方式")
+      .setDesc("AI 模式可跟随全局接口，也可单独选择视觉模型；本地 OCR 模式调用本机 Tesseract，不上传图片。")
+      .addDropdown((dropdown) => dropdown
+        .addOption("ai", "AI 视觉识图")
+        .addOption("local-ocr", "本地 Tesseract OCR")
+        .setValue(this.plugin.settings.imageRecognitionMode)
+        .onChange(async (value) => {
+          this.plugin.settings.imageRecognitionMode = value === "local-ocr" ? "local-ocr" : "ai";
+          await this.plugin.saveSettings();
+          this.display();
+        }));
+    if (this.plugin.settings.imageRecognitionMode === "ai") {
+      const selectedVisionProfile = enabledProfiles.some((profile) => profile.id === this.plugin.settings.imageRecognitionAiProfileId)
+        ? this.plugin.settings.imageRecognitionAiProfileId
+        : "";
+      new Setting(imageRecognitionSettings)
+        .setName("AI 识图接口")
+        .setDesc("默认跟随全局 AI 接口；如果全局模型不支持图片输入，可在这里单独选择视觉模型。")
+        .addDropdown((dropdown) => {
+          dropdown.addOption("", "跟随全局 AI 接口");
+          enabledProfiles.forEach((profile) => dropdown.addOption(profile.id, `${profile.name} · ${profile.model}`));
+          dropdown.setValue(selectedVisionProfile);
+          dropdown.onChange(async (value) => {
+            this.plugin.settings.imageRecognitionAiProfileId = value;
+            await this.plugin.saveSettings();
+          });
+        });
+    }
+    new Setting(imageRecognitionSettings)
+      .setName("识图任务说明")
+      .setDesc("AI 助手批量识图、图片右键识图、截图并识别和“识别并复制”共用。")
+      .addTextArea((text) => text
+        .setValue(this.plugin.settings.imageRecognitionPrompt)
+        .setPlaceholder("识别图片中的全部文字并按阅读顺序转写。")
+        .onChange(async (value) => {
+          this.plugin.settings.imageRecognitionPrompt = value.slice(0, 4000);
+          await this.plugin.saveSettings();
+        }));
+    if (this.plugin.settings.imageRecognitionMode === "local-ocr") {
+      new Setting(imageRecognitionSettings)
+        .setName("Tesseract 可执行文件")
+        .setDesc("可填写命令名 tesseract，或本机完整路径。")
+        .addText((text) => text
+          .setValue(this.plugin.settings.localOcrExecutable)
+          .setPlaceholder("tesseract")
+          .onChange(async (value) => {
+            this.plugin.settings.localOcrExecutable = value.trim().slice(0, 2000) || "tesseract";
+            await this.plugin.saveSettings();
+          }));
+      new Setting(imageRecognitionSettings)
+        .setName("OCR 语言")
+        .setDesc("需要本机已安装相应语言包，例如 chi_sim+eng。")
+        .addText((text) => text
+          .setValue(this.plugin.settings.localOcrLanguage)
+          .setPlaceholder("chi_sim+eng")
+          .onChange(async (value) => {
+            this.plugin.settings.localOcrLanguage = value.trim().slice(0, 240) || "chi_sim+eng";
+            await this.plugin.saveSettings();
+          }));
+      new Setting(imageRecognitionSettings)
+        .setName("OCR 附加参数")
+        .setDesc("参数通过 execFile 传递，不使用 shell；默认 --psm 6。")
+        .addText((text) => text
+          .setValue(this.plugin.settings.localOcrExtraArgs)
+          .setPlaceholder("--psm 6")
+          .onChange(async (value) => {
+            this.plugin.settings.localOcrExtraArgs = value.slice(0, 1000);
+            await this.plugin.saveSettings();
+          }));
+    }
+    new Setting(imageRecognitionSettings)
+      .setName("截图时隐藏 Obsidian")
+      .setDesc("抓取桌面前自动最小化 Obsidian，截图编辑器关闭后恢复窗口。")
+      .addToggle((toggle) => toggle
+        .setValue(this.plugin.settings.screenshotHideObsidian)
+        .onChange(async (value) => {
+          this.plugin.settings.screenshotHideObsidian = value;
+          await this.plugin.saveSettings();
+        }));
+    new Setting(imageRecognitionSettings)
+      .setName("截图快捷键")
+      .setDesc("只截图并插入图片。点击输入框后按下 1 至 3 个键的组合；编辑器获得焦点时生效。")
+      .addText((text) => {
+        text.setValue(this.plugin.settings.screenshotShortcut);
+        text.setPlaceholder(DEFAULT_SETTINGS.screenshotShortcut);
+        text.inputEl.readOnly = true;
+        text.inputEl.addClass("mms-shortcut-recorder");
+        text.inputEl.setAttr("aria-label", "点击后按下新的截图快捷键");
+        text.inputEl.addEventListener("keydown", (event) => void this.captureScreenshotShortcut(event, text));
+      });
+    new Setting(imageRecognitionSettings)
+      .setName("截图并识别快捷键")
+      .setDesc("截图插入后立即运行当前识图方式。该快捷键与普通截图完全独立。")
+      .addText((text) => {
+        text.setValue(this.plugin.settings.screenshotRecognizeShortcut);
+        text.setPlaceholder(DEFAULT_SETTINGS.screenshotRecognizeShortcut);
+        text.inputEl.readOnly = true;
+        text.inputEl.addClass("mms-shortcut-recorder");
+        text.inputEl.setAttr("aria-label", "点击后按下新的截图并识别快捷键");
+        text.inputEl.addEventListener("keydown", (event) => void this.captureScreenshotRecognizeShortcut(event, text));
+      });
+    new Setting(imageRecognitionSettings)
+      .setName("识图结果确认")
+      .setDesc("选择是否跳过手动确认。延迟确认期间仍可修改识别文字或手动确认。")
+      .addDropdown((dropdown) => dropdown
+        .addOption("manual", "手动确认")
+        .addOption("0", "直接确认")
+        .addOption("5", "5 秒后自动确认")
+        .addOption("10", "10 秒后自动确认")
+        .addOption("15", "15 秒后自动确认")
+        .setValue(this.plugin.settings.imageRecognitionAutoConfirmDelaySeconds === null
+          ? "manual"
+          : String(this.plugin.settings.imageRecognitionAutoConfirmDelaySeconds))
+        .onChange(async (value) => {
+          this.plugin.settings.imageRecognitionAutoConfirmDelaySeconds = value === "manual"
+            ? null
+            : Number(value) as 0 | 5 | 10 | 15;
+          await this.plugin.saveSettings();
+        }));
+
 
     containerEl.createEl("h3", { text: "快捷键配置" });
     containerEl.createEl("p", {
@@ -2372,11 +2378,16 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
     await this.captureShortcut(event, text, "screenshotShortcut", "截图");
   }
 
+  /** 记录截图并识别快捷键，并与普通截图快捷键保持独立。 */
+  private async captureScreenshotRecognizeShortcut(event: KeyboardEvent, text: TextComponent): Promise<void> {
+    await this.captureShortcut(event, text, "screenshotRecognizeShortcut", "截图并识别");
+  }
+
   /** Records one shortcut setting from a physical keyboard event. */
   private async captureShortcut(
     event: KeyboardEvent,
     text: TextComponent,
-    key: keyof Pick<MindMapStudioSettings, "screenshotShortcut" | "globalSearchShortcut" | "richTextBoldShortcut" | "richTextItalicShortcut" | "richTextUnderlineShortcut" | "richTextColorShortcut">,
+    key: keyof Pick<MindMapStudioSettings, "screenshotShortcut" | "screenshotRecognizeShortcut" | "globalSearchShortcut" | "richTextBoldShortcut" | "richTextItalicShortcut" | "richTextUnderlineShortcut" | "richTextColorShortcut">,
     label: string
   ): Promise<void> {
     event.preventDefault();
