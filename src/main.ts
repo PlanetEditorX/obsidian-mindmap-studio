@@ -132,6 +132,8 @@ export default class MindMapStudioPlugin extends Plugin {
   /** 当前会话使用的显示模式；大纲模式不会写成下次启动默认值。 */
   private activeDisplayMode: DisplayMode = DEFAULT_SETTINGS.defaultViewMode;
   private readonly autoUploadTimers = new Map<string, number>();
+  private readonly autoUploadFileKeys = new WeakMap<TFile, string>();
+  private autoUploadFileKeySequence = 0;
   private searchIndex!: MindMapSearchIndex;
   private searchIndexReady: Promise<void> = Promise.resolve();
   private fileExplorerFilterTimer: number | null = null;
@@ -1546,7 +1548,7 @@ export default class MindMapStudioPlugin extends Plugin {
       new Notice("图片已保存到本地；自动上传未选择可用图床", 5000);
       return false;
     }
-    this.queueAutoUpload(file.path, nodeId, blockId, localPath, suggestedName, hostIds, this.settings.autoUploadDelaySeconds * 1000);
+    this.queueAutoUpload(file, nodeId, blockId, localPath, suggestedName, hostIds, this.settings.autoUploadDelaySeconds * 1000);
     return true;
   }
 
@@ -1570,14 +1572,14 @@ export default class MindMapStudioPlugin extends Plugin {
         const uploaded = hostIds.every((hostId) => block.remoteSources?.some((source) => source.hostId === hostId));
         if (!(localFile instanceof TFile) || uploaded) continue;
         const remainingMs = Math.max(0, delayMs - Math.max(0, Date.now() - localFile.stat.mtime));
-        this.queueAutoUpload(file.path, node.id, block.id, localPath, localFile.name, hostIds, remainingMs);
+        this.queueAutoUpload(file, node.id, block.id, localPath, localFile.name, hostIds, remainingMs);
       }
     }
   }
 
   /** 安排一次可去重的本地图片自动上传。 */
   private queueAutoUpload(
-    mindMapPath: string,
+    mindMapFile: TFile,
     nodeId: string,
     blockId: string,
     localPath: string,
@@ -1585,12 +1587,17 @@ export default class MindMapStudioPlugin extends Plugin {
     hostIds: string[],
     delayMs: number
   ): void {
-    const key = `${mindMapPath}::${nodeId}::${blockId}`;
+    let fileKey = this.autoUploadFileKeys.get(mindMapFile);
+    if (!fileKey) {
+      fileKey = `mindmap-${++this.autoUploadFileKeySequence}`;
+      this.autoUploadFileKeys.set(mindMapFile, fileKey);
+    }
+    const key = `${fileKey}::${nodeId}::${blockId}`;
     const existing = this.autoUploadTimers.get(key);
     if (existing !== undefined) window.clearTimeout(existing);
     const timer = window.setTimeout(() => {
       this.autoUploadTimers.delete(key);
-      void this.runAutoUploadTask(mindMapPath, nodeId, blockId, localPath, suggestedName, hostIds);
+      void this.runAutoUploadTask(mindMapFile, nodeId, blockId, localPath, suggestedName, hostIds);
     }, Math.max(0, Math.min(300_000, delayMs)));
     this.autoUploadTimers.set(key, timer);
   }
@@ -1598,7 +1605,7 @@ export default class MindMapStudioPlugin extends Plugin {
   /**
    * 执行延迟自动上传任务。它确认节点和图片块仍存在、读取本地资源、上传到默认图床、更新远程镜像列表并保存；任一图床失败时保留本地文件。
    *
-   * @param mindMapPath 该参数用于 run auto upload task 流程中的输入或控制。
+   * @param mindMapFile 目标导图文件对象；保存时即使重命名，也沿用更新后的文件路径继续上传。
    * @param nodeId 目标节点的稳定标识。
    * @param blockId 该参数用于 run auto upload task 流程中的输入或控制。
    * @param localPath 该参数用于 run auto upload task 流程中的输入或控制。
@@ -1607,7 +1614,7 @@ export default class MindMapStudioPlugin extends Plugin {
    * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
    */
   private async runAutoUploadTask(
-    mindMapPath: string,
+    mindMapFile: TFile,
     nodeId: string,
     blockId: string,
     localPath: string,
@@ -1615,8 +1622,9 @@ export default class MindMapStudioPlugin extends Plugin {
     hostIds: string[]
   ): Promise<void> {
     try {
-      await this.flushOpenView(mindMapPath);
-      const mapFile = this.app.vault.getAbstractFileByPath(mindMapPath);
+      const scheduledPath = mindMapFile.path;
+      await this.flushOpenView(scheduledPath);
+      const mapFile = this.app.vault.getAbstractFileByPath(mindMapFile.path);
       const localFile = this.app.vault.getAbstractFileByPath(normalizePath(localPath));
       if (!(mapFile instanceof TFile) || !(localFile instanceof TFile)) return;
       const document = parseDocument(await this.app.vault.read(mapFile), mapFile.basename);
@@ -1643,7 +1651,7 @@ export default class MindMapStudioPlugin extends Plugin {
 
       let deleted = false;
       if (allSucceeded && this.settings.deleteLocalAfterUpload) {
-        deleted = await this.deleteLocalAssetIfSafe(localPath, mindMapPath, blockId);
+        deleted = await this.deleteLocalAssetIfSafe(localPath, mapFile.path, blockId);
         if (deleted) {
           block.localSource = undefined;
           await this.app.vault.modify(mapFile, serializeDocument(document));

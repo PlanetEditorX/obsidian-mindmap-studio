@@ -79,6 +79,7 @@ import type { MindMapEditorCallbacks, MindMapEditorOptions } from "./editor-type
 import { readRichTextEditor, renderInlineMarkdown, renderRichTextRuns } from "./rich-text-dom";
 import {
   ArticleStyleModal,
+  chooseImageHosts,
   DocumentExportModal,
   FormulaEditModal,
   ImagePreviewModal,
@@ -1124,6 +1125,8 @@ export class MindMapEditor {
   private touchGesture: { centerX: number; centerY: number; distance: number; zoom: number; panX: number; panY: number } | null = null;
   private cleanupCallbacks: Array<() => void> = [];
   private resizeObserver: ResizeObserver | null = null;
+  /** Last observed outer dimensions for each rendered mind-map node. */
+  private readonly observedMindMapNodeSizes = new Map<string, { width: number; height: number }>();
   private measuredLayoutFrame: number | null = null;
   private pendingMindMapLayoutAnimation = false;
   private allNodesCollapseToggleTimer: number | null = null;
@@ -2234,7 +2237,20 @@ export class MindMapEditor {
     this.resizeObserver = new ResizeObserver((entries) => {
       if (entries.some((entry) => entry.target === this.viewportEl)) this.applyTransform();
       if (entries.some((entry) => entry.target === this.rootEl)) this.updateArticleMiniMapVisibility();
-      if (entries.some((entry) => entry.target instanceof HTMLElement && entry.target.hasClass("mmc-node"))) {
+      let nodeSizeChanged = false;
+      for (const entry of entries) {
+        const target = entry.target;
+        if (!(target instanceof HTMLElement) || !target.hasClass("mmc-node")) continue;
+        const nodeId = target.dataset.nodeId;
+        if (!nodeId) continue;
+        const next = { width: target.offsetWidth, height: target.offsetHeight };
+        const previous = this.observedMindMapNodeSizes.get(nodeId);
+        this.observedMindMapNodeSizes.set(nodeId, next);
+        if (!previous
+          || Math.abs(previous.width - next.width) > 0.5
+          || Math.abs(previous.height - next.height) > 0.5) nodeSizeChanged = true;
+      }
+      if (nodeSizeChanged) {
         this.scheduleMeasuredMindMapLayout();
       }
     });
@@ -3393,6 +3409,7 @@ export class MindMapEditor {
     this.layout = computeLayout(this.document.root, this.document.layout, appearance.fontSize ?? 14, appearance.nodeVisualStyle ?? "card", appearance);
     const branchColorMap = appearance.colorfulBranches ? buildBranchColorMap(this.document.root, appearance.branchColors) : new Map<string, string>();
     this.clearDropPreview();
+    this.observedMindMapNodeSizes.clear();
     this.nodesLayerEl.empty();
     while (this.edgesSvg.firstChild) this.edgesSvg.removeChild(this.edgesSvg.firstChild);
 
@@ -3939,6 +3956,7 @@ export class MindMapEditor {
         width: Math.max(1, element.offsetWidth),
         height: Math.max(1, element.offsetHeight)
       });
+      this.observedMindMapNodeSizes.set(id, measured.get(id)!);
     });
     if (!measured.size) return;
 
@@ -5997,6 +6015,75 @@ export class MindMapEditor {
     this.render();
   }
 
+  /** Uploads every readable image on the current physical page to one selected host set. */
+  private async uploadAllPageImages(): Promise<void> {
+    if (!this.ensureEditable()) return;
+    const hostIds = await chooseImageHosts(
+      this.app,
+      this.callbacks.getImageHosts(),
+      this.callbacks.getDefaultUploadHostIds()
+    );
+    if (!hostIds) return;
+
+    const previous = cloneDocument(this.document);
+    let uploadedImages = 0;
+    let skippedImages = 0;
+    let failedImages = 0;
+    let changed = false;
+
+    for (const node of flattenNodes(this.document.root)) {
+      const blocks = nodeContentBlocks(node);
+      let nodeChanged = false;
+      for (const block of blocks) {
+        if (block.type !== "image") continue;
+        const existing = new Map((block.remoteSources ?? []).map((source) => [source.hostId, source]));
+        const missingHostIds = hostIds.filter((hostId) => !existing.has(hostId));
+        if (!missingHostIds.length) {
+          skippedImages += 1;
+          continue;
+        }
+        const readableSource = block.localSource || block.source;
+        try {
+          const image = await this.callbacks.onReadImageSource(readableSource);
+          if (!image) {
+            failedImages += 1;
+            continue;
+          }
+          const batch = await this.callbacks.onUploadImage(image.blob, image.suggestedName, missingHostIds);
+          const uploadedAt = new Date().toISOString();
+          for (const success of batch.successes) existing.set(success.hostId, { ...success, uploadedAt });
+          if (!batch.successes.length) {
+            failedImages += 1;
+            continue;
+          }
+          block.remoteSources = Array.from(existing.values());
+          if (!/^https?:\/\//i.test(readableSource)) block.localSource = readableSource;
+          const selectedPrimary = hostIds.map((hostId) => existing.get(hostId)).find(Boolean);
+          if (!batch.failures.length && selectedPrimary) block.source = selectedPrimary.url;
+          uploadedImages += 1;
+          if (batch.failures.length) failedImages += 1;
+          nodeChanged = true;
+          changed = true;
+        } catch (error) {
+          console.error("MindMap Studio page image upload failed", error);
+          failedImages += 1;
+        }
+      }
+      if (nodeChanged) replaceNodeContentBlocks(node, blocks);
+    }
+
+    if (changed) {
+      this.history.capture(previous);
+      this.callbacks.onChange(this.getDocument());
+      this.markSaving();
+      this.render();
+    }
+    const parts = [`成功 ${uploadedImages} 张`];
+    if (skippedImages) parts.push(`已存在 ${skippedImages} 张`);
+    if (failedImages) parts.push(`失败或部分失败 ${failedImages} 张`);
+    new Notice(`当前页面图片上传完成：${parts.join("，")}`, failedImages ? 8000 : 5000);
+  }
+
   /** 复制当前图片的主地址，供外部编辑器或浏览器直接使用。 */
   private async copyImageSource(source: string): Promise<void> {
     try {
@@ -6189,6 +6276,12 @@ export class MindMapEditor {
       .setTitle("询问 AI（当前页面）")
       .setIcon("sparkles")
       .onClick(() => void this.callbacks.onAskAi()));
+    if (!this.readOnly) {
+      menu.addItem((item) => item
+        .setTitle("上传当前页面所有图片")
+        .setIcon("cloud-upload")
+        .onClick(() => void this.uploadAllPageImages()));
+    }
     menu.addSeparator();
     menu.addItem((item) => item
       .setTitle("展开所有节点")

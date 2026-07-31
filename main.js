@@ -9849,6 +9849,8 @@ var MindMapEditor = class {
     this.touchGesture = null;
     this.cleanupCallbacks = [];
     this.resizeObserver = null;
+    /** Last observed outer dimensions for each rendered mind-map node. */
+    this.observedMindMapNodeSizes = /* @__PURE__ */ new Map();
     this.measuredLayoutFrame = null;
     this.pendingMindMapLayoutAnimation = false;
     this.allNodesCollapseToggleTimer = null;
@@ -10848,7 +10850,18 @@ var MindMapEditor = class {
     this.resizeObserver = new ResizeObserver((entries) => {
       if (entries.some((entry) => entry.target === this.viewportEl)) this.applyTransform();
       if (entries.some((entry) => entry.target === this.rootEl)) this.updateArticleMiniMapVisibility();
-      if (entries.some((entry) => entry.target instanceof HTMLElement && entry.target.hasClass("mmc-node"))) {
+      let nodeSizeChanged = false;
+      for (const entry of entries) {
+        const target = entry.target;
+        if (!(target instanceof HTMLElement) || !target.hasClass("mmc-node")) continue;
+        const nodeId = target.dataset.nodeId;
+        if (!nodeId) continue;
+        const next = { width: target.offsetWidth, height: target.offsetHeight };
+        const previous = this.observedMindMapNodeSizes.get(nodeId);
+        this.observedMindMapNodeSizes.set(nodeId, next);
+        if (!previous || Math.abs(previous.width - next.width) > 0.5 || Math.abs(previous.height - next.height) > 0.5) nodeSizeChanged = true;
+      }
+      if (nodeSizeChanged) {
         this.scheduleMeasuredMindMapLayout();
       }
     });
@@ -11926,6 +11939,7 @@ var MindMapEditor = class {
     this.layout = computeLayout(this.document.root, this.document.layout, (_a2 = appearance.fontSize) != null ? _a2 : 14, (_b2 = appearance.nodeVisualStyle) != null ? _b2 : "card", appearance);
     const branchColorMap = appearance.colorfulBranches ? buildBranchColorMap(this.document.root, appearance.branchColors) : /* @__PURE__ */ new Map();
     this.clearDropPreview();
+    this.observedMindMapNodeSizes.clear();
     this.nodesLayerEl.empty();
     while (this.edgesSvg.firstChild) this.edgesSvg.removeChild(this.edgesSvg.firstChild);
     this.renderMindMapEdges(appearance, branchColorMap);
@@ -12456,6 +12470,7 @@ var MindMapEditor = class {
         width: Math.max(1, element.offsetWidth),
         height: Math.max(1, element.offsetHeight)
       });
+      this.observedMindMapNodeSizes.set(id, measured.get(id));
     });
     if (!measured.size) return;
     const next = computeLayout(this.document.root, this.document.layout, (_a2 = appearance.fontSize) != null ? _a2 : 14, (_b2 = appearance.nodeVisualStyle) != null ? _b2 : "card", appearance, measured);
@@ -14391,6 +14406,72 @@ var MindMapEditor = class {
     this.markSaving();
     this.render();
   }
+  /** Uploads every readable image on the current physical page to one selected host set. */
+  async uploadAllPageImages() {
+    var _a2;
+    if (!this.ensureEditable()) return;
+    const hostIds = await chooseImageHosts(
+      this.app,
+      this.callbacks.getImageHosts(),
+      this.callbacks.getDefaultUploadHostIds()
+    );
+    if (!hostIds) return;
+    const previous = cloneDocument(this.document);
+    let uploadedImages = 0;
+    let skippedImages = 0;
+    let failedImages = 0;
+    let changed = false;
+    for (const node of flattenNodes(this.document.root)) {
+      const blocks = nodeContentBlocks(node);
+      let nodeChanged = false;
+      for (const block of blocks) {
+        if (block.type !== "image") continue;
+        const existing = new Map(((_a2 = block.remoteSources) != null ? _a2 : []).map((source) => [source.hostId, source]));
+        const missingHostIds = hostIds.filter((hostId) => !existing.has(hostId));
+        if (!missingHostIds.length) {
+          skippedImages += 1;
+          continue;
+        }
+        const readableSource = block.localSource || block.source;
+        try {
+          const image = await this.callbacks.onReadImageSource(readableSource);
+          if (!image) {
+            failedImages += 1;
+            continue;
+          }
+          const batch = await this.callbacks.onUploadImage(image.blob, image.suggestedName, missingHostIds);
+          const uploadedAt = (/* @__PURE__ */ new Date()).toISOString();
+          for (const success of batch.successes) existing.set(success.hostId, { ...success, uploadedAt });
+          if (!batch.successes.length) {
+            failedImages += 1;
+            continue;
+          }
+          block.remoteSources = Array.from(existing.values());
+          if (!/^https?:\/\//i.test(readableSource)) block.localSource = readableSource;
+          const selectedPrimary = hostIds.map((hostId) => existing.get(hostId)).find(Boolean);
+          if (!batch.failures.length && selectedPrimary) block.source = selectedPrimary.url;
+          uploadedImages += 1;
+          if (batch.failures.length) failedImages += 1;
+          nodeChanged = true;
+          changed = true;
+        } catch (error) {
+          console.error("MindMap Studio page image upload failed", error);
+          failedImages += 1;
+        }
+      }
+      if (nodeChanged) replaceNodeContentBlocks(node, blocks);
+    }
+    if (changed) {
+      this.history.capture(previous);
+      this.callbacks.onChange(this.getDocument());
+      this.markSaving();
+      this.render();
+    }
+    const parts = [`\u6210\u529F ${uploadedImages} \u5F20`];
+    if (skippedImages) parts.push(`\u5DF2\u5B58\u5728 ${skippedImages} \u5F20`);
+    if (failedImages) parts.push(`\u5931\u8D25\u6216\u90E8\u5206\u5931\u8D25 ${failedImages} \u5F20`);
+    new import_obsidian10.Notice(`\u5F53\u524D\u9875\u9762\u56FE\u7247\u4E0A\u4F20\u5B8C\u6210\uFF1A${parts.join("\uFF0C")}`, failedImages ? 8e3 : 5e3);
+  }
   /** 复制当前图片的主地址，供外部编辑器或浏览器直接使用。 */
   async copyImageSource(source) {
     try {
@@ -14538,6 +14619,9 @@ var MindMapEditor = class {
   openAllNodesContextMenu(event) {
     const menu = new import_obsidian10.Menu();
     menu.addItem((item) => item.setTitle("\u8BE2\u95EE AI\uFF08\u5F53\u524D\u9875\u9762\uFF09").setIcon("sparkles").onClick(() => void this.callbacks.onAskAi()));
+    if (!this.readOnly) {
+      menu.addItem((item) => item.setTitle("\u4E0A\u4F20\u5F53\u524D\u9875\u9762\u6240\u6709\u56FE\u7247").setIcon("cloud-upload").onClick(() => void this.uploadAllPageImages()));
+    }
     menu.addSeparator();
     menu.addItem((item) => item.setTitle("\u5C55\u5F00\u6240\u6709\u8282\u70B9").setIcon("unfold-vertical").onClick(() => this.setAllNodesCollapsed(false)));
     menu.addItem((item) => item.setTitle("\u6536\u8D77\u6240\u6709\u8282\u70B9").setIcon("fold-vertical").onClick(() => this.setAllNodesCollapsed(true)));
@@ -18022,6 +18106,8 @@ var MindMapStudioPlugin = class extends import_obsidian15.Plugin {
     /** 当前会话使用的显示模式；大纲模式不会写成下次启动默认值。 */
     this.activeDisplayMode = DEFAULT_SETTINGS.defaultViewMode;
     this.autoUploadTimers = /* @__PURE__ */ new Map();
+    this.autoUploadFileKeys = /* @__PURE__ */ new WeakMap();
+    this.autoUploadFileKeySequence = 0;
     this.searchIndexReady = Promise.resolve();
     this.fileExplorerFilterTimer = null;
     this.fileExplorerObserver = null;
@@ -19346,7 +19432,7 @@ ${url}`, 8e3);
       new import_obsidian15.Notice("\u56FE\u7247\u5DF2\u4FDD\u5B58\u5230\u672C\u5730\uFF1B\u81EA\u52A8\u4E0A\u4F20\u672A\u9009\u62E9\u53EF\u7528\u56FE\u5E8A", 5e3);
       return false;
     }
-    this.queueAutoUpload(file.path, nodeId, blockId, localPath, suggestedName, hostIds, this.settings.autoUploadDelaySeconds * 1e3);
+    this.queueAutoUpload(file, nodeId, blockId, localPath, suggestedName, hostIds, this.settings.autoUploadDelaySeconds * 1e3);
     return true;
   }
   /** 删除已被识图文字替换的本地图片；共享资源会保留。 */
@@ -19372,25 +19458,30 @@ ${url}`, 8e3);
         });
         if (!(localFile instanceof import_obsidian15.TFile) || uploaded) continue;
         const remainingMs = Math.max(0, delayMs - Math.max(0, Date.now() - localFile.stat.mtime));
-        this.queueAutoUpload(file.path, node.id, block.id, localPath, localFile.name, hostIds, remainingMs);
+        this.queueAutoUpload(file, node.id, block.id, localPath, localFile.name, hostIds, remainingMs);
       }
     }
   }
   /** 安排一次可去重的本地图片自动上传。 */
-  queueAutoUpload(mindMapPath, nodeId, blockId, localPath, suggestedName, hostIds, delayMs) {
-    const key = `${mindMapPath}::${nodeId}::${blockId}`;
+  queueAutoUpload(mindMapFile, nodeId, blockId, localPath, suggestedName, hostIds, delayMs) {
+    let fileKey = this.autoUploadFileKeys.get(mindMapFile);
+    if (!fileKey) {
+      fileKey = `mindmap-${++this.autoUploadFileKeySequence}`;
+      this.autoUploadFileKeys.set(mindMapFile, fileKey);
+    }
+    const key = `${fileKey}::${nodeId}::${blockId}`;
     const existing = this.autoUploadTimers.get(key);
     if (existing !== void 0) window.clearTimeout(existing);
     const timer = window.setTimeout(() => {
       this.autoUploadTimers.delete(key);
-      void this.runAutoUploadTask(mindMapPath, nodeId, blockId, localPath, suggestedName, hostIds);
+      void this.runAutoUploadTask(mindMapFile, nodeId, blockId, localPath, suggestedName, hostIds);
     }, Math.max(0, Math.min(3e5, delayMs)));
     this.autoUploadTimers.set(key, timer);
   }
   /**
    * 执行延迟自动上传任务。它确认节点和图片块仍存在、读取本地资源、上传到默认图床、更新远程镜像列表并保存；任一图床失败时保留本地文件。
    *
-   * @param mindMapPath 该参数用于 run auto upload task 流程中的输入或控制。
+   * @param mindMapFile 目标导图文件对象；保存时即使重命名，也沿用更新后的文件路径继续上传。
    * @param nodeId 目标节点的稳定标识。
    * @param blockId 该参数用于 run auto upload task 流程中的输入或控制。
    * @param localPath 该参数用于 run auto upload task 流程中的输入或控制。
@@ -19398,11 +19489,12 @@ ${url}`, 8e3);
    * @param hostIds 需要执行上传的图床标识列表。
    * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
    */
-  async runAutoUploadTask(mindMapPath, nodeId, blockId, localPath, suggestedName, hostIds) {
+  async runAutoUploadTask(mindMapFile, nodeId, blockId, localPath, suggestedName, hostIds) {
     var _a2, _b2;
     try {
-      await this.flushOpenView(mindMapPath);
-      const mapFile = this.app.vault.getAbstractFileByPath(mindMapPath);
+      const scheduledPath = mindMapFile.path;
+      await this.flushOpenView(scheduledPath);
+      const mapFile = this.app.vault.getAbstractFileByPath(mindMapFile.path);
       const localFile = this.app.vault.getAbstractFileByPath((0, import_obsidian15.normalizePath)(localPath));
       if (!(mapFile instanceof import_obsidian15.TFile) || !(localFile instanceof import_obsidian15.TFile)) return;
       const document2 = parseDocument(await this.app.vault.read(mapFile), mapFile.basename);
@@ -19426,7 +19518,7 @@ ${url}`, 8e3);
       await this.refreshOpenMindMap(mapFile, document2);
       let deleted = false;
       if (allSucceeded && this.settings.deleteLocalAfterUpload) {
-        deleted = await this.deleteLocalAssetIfSafe(localPath, mindMapPath, blockId);
+        deleted = await this.deleteLocalAssetIfSafe(localPath, mapFile.path, blockId);
         if (deleted) {
           block.localSource = void 0;
           await this.app.vault.modify(mapFile, serializeDocument(document2));
