@@ -88,9 +88,30 @@ test("extractImageUrlFromResponse finds URLs in plain text and rejects non-HTTP 
   assert.equal(imageHost.extractImageUrlFromResponse({ ok: true }), null);
 });
 
-test("readPath and isHttpUrl expose reusable validation primitives", () => {
+test("readPath expose reusable validation primitives", () => {
   assert.equal(imageHost.readPath({ a: [{ b: 42 }] }, "a.0.b"), 42);
   assert.equal(imageHost.readPath({ a: 1 }, "a.b"), undefined);
+});
+
+test("isHttpUrl correctly validates HTTP(S) URLs and rejects others", () => {
+  // Valid HTTP/HTTPS URLs
+  assert.equal(imageHost.isHttpUrl("http://example.com"), true);
   assert.equal(imageHost.isHttpUrl("https://example.com/image.png"), true);
+  assert.equal(imageHost.isHttpUrl("  https://example.com/with-spaces  "), true);
+
+  // Invalid schemes
+  assert.equal(imageHost.isHttpUrl("ftp://example.com"), false);
+  assert.equal(imageHost.isHttpUrl("file:///tmp/test.png"), false);
+  assert.equal(imageHost.isHttpUrl("wss://example.com"), false);
   assert.equal(imageHost.isHttpUrl("javascript:alert(1)"), false);
+
+  // Missing protocols or just paths
+  assert.equal(imageHost.isHttpUrl("example.com"), false);
+  assert.equal(imageHost.isHttpUrl("/path/to/image.png"), false);
+  assert.equal(imageHost.isHttpUrl(""), false);
+  assert.equal(imageHost.isHttpUrl("   "), false);
+
+  // Malformed strings
+  assert.equal(imageHost.isHttpUrl("not a url"), false);
+  assert.equal(imageHost.isHttpUrl("http://"), false);
 });
