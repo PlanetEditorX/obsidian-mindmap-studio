@@ -593,11 +593,13 @@ export class MindMapSearchIndex {
       for (const path of Object.keys(this.data.files)) {
         if (!currentPaths.has(path)) delete this.data.files[path];
       }
+      const promises: Promise<void>[] = [];
       for (const file of files) {
         const indexed = this.data.files[file.path];
         if (!force && indexed && indexed.mtime === file.stat.mtime && indexed.size === file.stat.size) continue;
-        await this.indexFile(file);
+        promises.push(this.indexFile(file));
       }
+      await Promise.all(promises);
       this.data.generatedAt = new Date().toISOString();
       this.ready = true;
       await this.saveNow();
