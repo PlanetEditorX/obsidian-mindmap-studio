@@ -12067,7 +12067,7 @@ var MindMapEditor = class {
               if (!switched) return;
               const previous = (_b3 = block.remoteSources) == null ? void 0 : _b3.find((item) => item.url === block.source);
               block.source = candidate.source;
-              syncNodeContentFields(node);
+              replaceNodeContentBlocks(node, blocks);
               this.callbacks.onChange(this.getDocument());
               this.markSaving();
               const previousLabel = (previous == null ? void 0 : previous.hostName) || "\u5F53\u524D\u56FE\u5E8A";

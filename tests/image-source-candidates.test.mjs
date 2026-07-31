@@ -56,3 +56,29 @@ test("image source candidates de-duplicate current remote while keeping priority
     ["https://slow.example/a.png", "current"]
   ]);
 });
+
+test("replacing normalized image blocks persists a failover source and compatibility mirror", () => {
+  const node = {
+    id: "node",
+    text: "",
+    children: [],
+    image: "https://broken.example/a.png",
+    content: [{
+      id: "img",
+      type: "image",
+      source: "https://broken.example/a.png",
+      remoteSources: [
+        { hostId: "broken", hostName: "失效图床", url: "https://broken.example/a.png" },
+        { hostId: "zipline", hostName: "飞牛Zipline", url: "https://zipline.example/a.png" }
+      ]
+    }]
+  };
+  const blocks = model.nodeContentBlocks(node);
+  const image = blocks.find((block) => block.type === "image");
+
+  image.source = "https://zipline.example/a.png";
+  model.replaceNodeContentBlocks(node, blocks);
+
+  assert.equal(node.content[0].source, "https://zipline.example/a.png");
+  assert.equal(node.image, "https://zipline.example/a.png");
+});
