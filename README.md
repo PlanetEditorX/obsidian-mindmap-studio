@@ -52,6 +52,7 @@ MindMap Studio 是一个本地优先的 Obsidian 思维导图插件。它使用�
 
 - 内置 OpenAI、DeepSeek、硅基流动、FreeLLMAPI 和自定义 OpenAI 兼容接口配置。
 - 每个接口可持久化选择自动、开启或关闭思考模式；可从兼容服务的 `/models` 目录读取并缓存模型列表，首次仍使用预设模型时会自动切换到获取列表的首项。
+- AI 助手弹窗提供与当前接口配置同步的“深度思考”开关，切换后立即保存并用于后续请求。
 - 硅基流动预设提供 DeepSeek V4 Flash、DeepSeek V4 Pro、DeepSeek OCR、GLM-4.5V 和 GLM-5.2 模型建议；FreeLLMAPI 默认使用 `auto` 路由。
 - 每个接口卡片提供“检测接口”按钮，以最小提示词验证地址、鉴权、模型和响应格式，不发送导图正文。
 - 工具栏按钮与 `Ctrl/Cmd+Shift+A` 默认询问当前页面。

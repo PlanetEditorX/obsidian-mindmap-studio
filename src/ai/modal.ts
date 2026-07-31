@@ -34,6 +34,7 @@ export interface AiAskModalOptions {
   imageCount: number;
   sourcePath: string;
   onAsk: (profileId: string, question: string) => Promise<AiCompletionResult>;
+  onSetThinkingMode: (profileId: string, enabled: boolean) => Promise<void>;
   onProposeEdit: (profileId: string, instruction: string) => Promise<AiCompletionResult>;
   onConvertToQuestion: (responseText: string) => boolean | Promise<boolean>;
   onRecognizeImages: (profileId: string, instruction: string) => Promise<ImageRecognitionBatchResult>;
@@ -118,6 +119,22 @@ export class AiAskModal extends Modal {
       ? profileId
       : profiles[0]?.id ?? "";
     provider.value = defaultProfileValue(this.options.defaultProfileId);
+
+    const thinkingLabel = form.createEl("div", { cls: "mms-ai-field mms-ai-thinking-field" });
+    thinkingLabel.createSpan({ text: "深度思考" });
+    const thinkingToggle = thinkingLabel.createEl("button", {
+      cls: "mms-ai-thinking-toggle",
+      attr: { type: "button", "aria-pressed": "false" }
+    });
+    const selectedProfile = (): AiProfileConfig | undefined => profiles.find((profile) => profile.id === provider.value);
+    const syncThinkingToggle = (): void => {
+      const thinkingMode = selectedProfile()?.thinkingMode ?? "auto";
+      const enabled = thinkingMode === "on";
+      thinkingToggle.setText(thinkingMode === "auto" ? "自动（服务端默认）" : enabled ? "已开启" : "已关闭");
+      thinkingToggle.setAttribute("aria-pressed", String(enabled));
+      thinkingToggle.toggleClass("is-enabled", enabled);
+    };
+    syncThinkingToggle();
 
     const questionLabel = form.createEl("label", { cls: "mms-ai-field" });
     const questionTitle = questionLabel.createSpan({ text: "问题" });
@@ -243,6 +260,7 @@ export class AiAskModal extends Modal {
     const setBusy = (busy: boolean): void => {
       submit.disabled = busy || isActionDisabled();
       provider.disabled = busy;
+      thinkingToggle.disabled = busy;
       mode.disabled = busy;
       question.disabled = busy;
       findInput.disabled = busy;
@@ -265,6 +283,7 @@ export class AiAskModal extends Modal {
         provider.value = defaultProfileValue(this.options.defaultProfileId);
       }
       providerLabel.hidden = localReplace || localRecognition;
+      thinkingLabel.hidden = localReplace || localRecognition;
       questionLabel.hidden = localReplace;
       replacePanel.hidden = !localReplace;
       track.hidden = localReplace;
@@ -299,6 +318,7 @@ export class AiAskModal extends Modal {
       if (requiresAiProfile() && !profiles.length) {
         status.setText("没有已启用且配置完整的 AI 接口；仍可切换到本地 OCR 或本地文字替换。");
       }
+      syncThinkingToggle();
       window.setTimeout(() => (localReplace ? findInput : question).focus(), 20);
     };
 
@@ -386,6 +406,27 @@ export class AiAskModal extends Modal {
     };
 
     mode.addEventListener("change", updateMode);
+    provider.addEventListener("change", () => {
+      resetOutput();
+      syncThinkingToggle();
+      submit.disabled = isActionDisabled();
+    });
+    thinkingToggle.addEventListener("click", () => {
+      const profile = selectedProfile();
+      if (!profile) return;
+      const enabled = profile.thinkingMode !== "on";
+      thinkingToggle.disabled = true;
+      void this.options.onSetThinkingMode(profile.id, enabled)
+        .then(() => {
+          profile.thinkingMode = enabled ? "on" : "off";
+          syncThinkingToggle();
+          new Notice(`深度思考已${enabled ? "开启" : "关闭"}`);
+        })
+        .catch((error) => {
+          new Notice(`保存深度思考设置失败：${error instanceof Error ? error.message : String(error)}`);
+        })
+        .finally(() => { thinkingToggle.disabled = false; });
+    });
     close.addEventListener("click", () => this.close());
     copy.addEventListener("click", () => {
       if (!answerText) return;

@@ -858,6 +858,14 @@ export default class MindMapStudioPlugin extends Plugin {
     return fetchAiProfileModels(profile);
   }
 
+  /** 保存由 AI 助手窗口切换的深度思考状态，并与设置页共用同一配置。 */
+  async setAiProfileThinkingMode(profileId: string, enabled: boolean): Promise<void> {
+    const profile = this.settings.aiProfiles.find((item) => item.id === profileId && item.enabled);
+    if (!profile) throw new Error("AI 接口不存在或未启用");
+    profile.thinkingMode = enabled ? "on" : "off";
+    await this.saveSettings();
+  }
+
   /** Installs a lightweight File Explorer observer; it changes visibility only, never vault data. */
   private installFileExplorerFilter(): void {
     const observe = (): void => {

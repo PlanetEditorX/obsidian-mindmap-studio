@@ -4617,6 +4617,21 @@
   resize: vertical;
 }
 
+.mms-ai-thinking-field {
+  gap: 6px;
+}
+
+.mms-ai-thinking-toggle {
+  align-self: flex-start;
+  min-width: 148px;
+}
+
+.mms-ai-thinking-toggle.is-enabled {
+  color: var(--text-on-accent);
+  border-color: var(--interactive-accent);
+  background: var(--interactive-accent);
+}
+
 .mms-ai-track {
   position: relative;
   display: grid;
@@ -4769,6 +4784,7 @@
 }
 
 .mms-ai-field[hidden],
+.mms-ai-thinking-field[hidden],
 .mms-ai-replace-panel[hidden],
 .mms-ai-track[hidden] {
   display: none !important;
