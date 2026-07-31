@@ -107,7 +107,8 @@ test("terminal body marker and alignment stay independently configurable", async
   assert.match(viewSource, /document\?\.articleStyle\?\.leafTextAlignment \?\? this\.plugin\.settings\.articleLeafTextAlignment/);
   assert.match(modalSource, /text: "末端正文标识"[\s\S]*text: "末端正文对齐方式"/);
   assert.match(rendererSource, /is-auto-aligned/);
-  assert.match(styles, /\.mms-article-leaf-text\.is-auto-aligned\s*\{[\s\S]*margin-inline-start:\s*2em/);
+  assert.match(styles, /\.mms-article-leaf-text\.is-auto-aligned\s*\{[\s\S]*margin-inline-start:\s*1\.25em[\s\S]*text-indent:\s*1\.25em/);
+  assert.match(styles, /\.mms-article-leaf-text\.is-auto-aligned\.is-bulleted\s*\{[\s\S]*text-indent:\s*0/);
 });
 
 test("Enter commits an article title while Shift+Enter keeps an inline line break", () => {
