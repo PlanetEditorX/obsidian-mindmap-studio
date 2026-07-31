@@ -91,9 +91,9 @@ test("branch appearance is a normalized global setting and appearance fallback",
   assert.match(settingsSource, /nodeVisualStyle: settings\.nodeVisualStyle/);
   assert.match(mainSource, /nodeVisualStyle: raw\.nodeVisualStyle === "branch" \|\| raw\.nodeVisualStyle === "card"[\s\S]*DEFAULT_SETTINGS\.nodeVisualStyle/);
 
-  const branchSection = settingsSource.indexOf('containerEl.createEl("h3", { text: "连线与分支" })');
-  const branchAppearance = settingsSource.indexOf('.setName("分支外观")', branchSection);
-  assert.ok(branchSection >= 0 && branchAppearance > branchSection);
+  const branchAppearance = settingsSource.indexOf('.setName("分支外观")');
+  assert.ok(branchAppearance >= 0);
+  assert.match(settingsSource, /createGroup\("节点与文字"[\s\S]*"分支外观"/);
   assert.match(settingsSource.slice(branchAppearance), /圆润卡片分支（曲线）[\s\S]*圆角分支（折线）/);
   assert.match(bundleSource, /nodeVisualStyle: settings\.nodeVisualStyle/);
   assert.match(bundleSource, /nodeVisualStyle: raw\.nodeVisualStyle === "branch"/);
@@ -119,4 +119,26 @@ test("current-map appearance controls use a wide gap-free responsive layout", ()
   assert.match(bundleReadableSource, /createAppearanceSection\(appearanceLeftColumn, "画布与字体"/);
   assert.match(bundleSource, /appearanceRightColumn\.createDiv\(\{ cls: "mmc-appearance-section mmc-appearance-article-numbering" \}\)/);
   assert.match(bundleReadableSource, /当前脑图设置，优先于插件全局分支外观/);
+});
+
+test("global appearance mirrors the page toolbar groups instead of only sharing a title", () => {
+  assert.match(settingsSource, /"主题与外观（全局默认）": "主题与外观"/);
+  assert.match(settingsSource, /private organizeGlobalAppearanceSettings\(\): void/);
+  assert.match(settingsSource, /text: "主题模板"/);
+  for (const group of ["画布与字体", "节点与文字", "连线与分支", "阅读外观", "代码外观"]) {
+    assert.ok(settingsSource.includes(`createGroup("${group}"`), `missing global appearance group: ${group}`);
+  }
+  assert.match(settingsSource, /createGroup\("节点与文字"[\s\S]*"分支外观"[\s\S]*"默认节点文字对齐"[\s\S]*"默认节点边框粗细"/);
+  assert.match(settingsSource, /createGroup\("阅读外观"[\s\S]*"文章目录最大层级"[\s\S]*"文章\/通读缩略导航图"/);
+  assert.match(settingsSource, /createGroup\("代码外观"[\s\S]*"代码默认折叠"[\s\S]*"代码默认样式"/);
+  assert.match(editorSource, /this\.titleEl\.setText\("主题与外观"\)/);
+  assert.match(stylesSource, /\.mms-global-appearance-groups[\s\S]*display: grid/);
+});
+
+test("fit-to-view and bulk collapse use smooth viewport interpolation", () => {
+  assert.match(editorSource, /private fitToView\(animated = true\): void/);
+  assert.match(editorSource, /this\.animateViewportTo\(targetZoom, targetPanX, targetPanY, animated\)/);
+  assert.match(editorSource, /private animateViewportTo\([\s\S]*requestAnimationFrame\(step\)/);
+  assert.match(editorSource, /prefers-reduced-motion: reduce/);
+  assert.match(editorSource, /if \(collapsed && this\.currentMode === "mindmap"\)[\s\S]*this\.fitToView\(true\)/);
 });

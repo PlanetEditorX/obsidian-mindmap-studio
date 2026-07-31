@@ -38,3 +38,12 @@ npm run verify
 - 所有 Git 提示使用中文。
 - 使用 Conventional Commits：首行 `type(scope): 中文主题`，后续直接以 `- ` 列出真实代码行为、兼容处理、测试、文档、Codex 更新和 `main.js` 重建。
 - 只提供中文 Conventional Commits 提交说明，不输出 `git add`、`git commit` 等命令，也不得声称已经实际提交。
+
+## 交付压缩包目录规则
+
+- 完整源码 ZIP 的外部文件名可以包含版本号与六位交付后缀。
+- 源码 ZIP 解压后的第一层目录必须固定为 `obsidian-mindmap-studio/`。
+- 禁止在 ZIP 内部目录名追加版本号、随机后缀或日期，例如禁止 `obsidian-mindmap-studio-1.35.2/`。
+- Obsidian 本地安装包仍按插件安装结构打包，不额外嵌套版本目录。
+- 每次交付前必须使用 `unzip -l` 或等价命令检查压缩包第一层目录。
+- ZIP 中包含中文文件名或目录名时，必须使用支持 UTF-8 文件名标志的打包方式；交付前检查每个中文条目的 UTF-8 标志及解压后的实际名称，禁止使用会将中文路径写成 CP437 乱码的打包命令。

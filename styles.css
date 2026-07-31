@@ -5346,3 +5346,25 @@ select.mms-question-status {
     height: min(56vh, 360px);
   }
 }
+
+/* Global defaults mirror the page-level Theme & Appearance information architecture. */
+.mms-global-appearance-groups {
+  display: grid;
+  gap: 14px;
+}
+
+.mms-global-appearance-group {
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 10px;
+  padding: 12px 14px 4px;
+  background: var(--background-secondary-alt);
+}
+
+.mms-global-appearance-group > h4 {
+  margin: 0 0 4px;
+  font-size: var(--font-ui-medium);
+}
+
+.mms-global-appearance-group > .setting-item-description {
+  margin: 0 0 8px;
+}

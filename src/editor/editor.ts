@@ -1151,6 +1151,8 @@ export class MindMapEditor {
   private pendingArticleRestoreLocation: ReadingLocation | null = null;
   private pendingMindMapLayoutAnimation = false;
   private allNodesCollapseToggleTimer: number | null = null;
+  /** Active viewport interpolation used by fit-to-view and semantic centering. */
+  private viewportAnimationFrame: number | null = null;
   private branchClipboard: MindMapNode[] | null = null;
   private searchQuery = "";
   private lastRichTextColor = "#ef4444";
@@ -1231,6 +1233,8 @@ export class MindMapEditor {
     this.cancelArticleRender();
     if (this.allNodesCollapseToggleTimer !== null) window.clearTimeout(this.allNodesCollapseToggleTimer);
     this.allNodesCollapseToggleTimer = null;
+    if (this.viewportAnimationFrame !== null) window.cancelAnimationFrame(this.viewportAnimationFrame);
+    this.viewportAnimationFrame = null;
     this.host.empty();
   }
 
@@ -5091,9 +5095,14 @@ export class MindMapEditor {
     if (this.readOnly) {
       apply();
       this.render();
-      return;
+    } else {
+      this.mutate(apply);
     }
-    this.mutate(apply);
+    // Bulk collapse changes the complete visible bounds. Wait for the rebuilt and
+    // measured compact tree, then smoothly bring it back into the viewport.
+    if (collapsed && this.currentMode === "mindmap") {
+      window.setTimeout(() => this.fitToView(true), 40);
+    }
   }
 
   /** Toggles every non-root branch between fully expanded and fully collapsed. */
@@ -6936,17 +6945,53 @@ export class MindMapEditor {
   /**
    * 执行“fit to view”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
    */
-  private fitToView(): void {
+  private fitToView(animated = true): void {
     const rect = this.viewportEl.getBoundingClientRect();
     const width = Math.max(1, this.layout.maxX - this.layout.minX + 100);
     const height = Math.max(1, this.layout.maxY - this.layout.minY + 100);
-    this.zoom = this.clampZoom(Math.min((rect.width - 40) / width, (rect.height - 40) / height, 1.25));
+    const targetZoom = this.clampZoom(Math.min((rect.width - 40) / width, (rect.height - 40) / height, 1.25));
     const centerX = (this.layout.minX + this.layout.maxX) / 2;
     const centerY = (this.layout.minY + this.layout.maxY) / 2;
-    this.panX = -centerX * this.zoom;
-    this.panY = -centerY * this.zoom;
+    const targetPanX = -centerX * targetZoom;
+    const targetPanY = -centerY * targetZoom;
     this.mindMapViewportInitialized = true;
-    this.applyTransform();
+    this.animateViewportTo(targetZoom, targetPanX, targetPanY, animated);
+  }
+
+  /** Smoothly interpolates the canvas transform instead of jumping to its destination. */
+  private animateViewportTo(targetZoom: number, targetPanX: number, targetPanY: number, animated = true): void {
+    if (this.viewportAnimationFrame !== null) window.cancelAnimationFrame(this.viewportAnimationFrame);
+    this.viewportAnimationFrame = null;
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const startZoom = this.zoom;
+    const startPanX = this.panX;
+    const startPanY = this.panY;
+    const distance = Math.hypot(targetPanX - startPanX, targetPanY - startPanY);
+    const zoomDistance = Math.abs(targetZoom - startZoom);
+    if (!animated || reducedMotion || (distance < 1 && zoomDistance < 0.002)) {
+      this.zoom = targetZoom;
+      this.panX = targetPanX;
+      this.panY = targetPanY;
+      this.applyTransform();
+      return;
+    }
+    const startedAt = performance.now();
+    const duration = Math.min(520, Math.max(260, 260 + distance * 0.08 + zoomDistance * 120));
+    const ease = (value: number): number => 1 - Math.pow(1 - value, 3);
+    const step = (now: number): void => {
+      const progress = Math.min(1, (now - startedAt) / duration);
+      const eased = ease(progress);
+      this.zoom = startZoom + (targetZoom - startZoom) * eased;
+      this.panX = startPanX + (targetPanX - startPanX) * eased;
+      this.panY = startPanY + (targetPanY - startPanY) * eased;
+      this.applyTransform();
+      if (progress < 1) {
+        this.viewportAnimationFrame = window.requestAnimationFrame(step);
+      } else {
+        this.viewportAnimationFrame = null;
+      }
+    };
+    this.viewportAnimationFrame = window.requestAnimationFrame(step);
   }
 
   /**

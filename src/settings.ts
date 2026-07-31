@@ -49,9 +49,8 @@ export const TOOLBAR_ITEMS = [
 
 /** All first-level settings categories in their default display order. */
 export const SETTINGS_SECTION_TITLES = [
-  "视图与阅读", "编辑选项", "快捷键配置", "工具栏", "主题与外观", "画布与背景", "文字与排版",
-  "节点外观", "连线与分支", "代码块", "文件与资源", "答题与题库", "图片与图床",
-  "全局搜索", "AI 助手", "管理配置"
+  "主题与外观", "视图与阅读", "编辑与交互", "节点布局与尺寸", "代码行为", "工具栏", "快捷键配置",
+  "文件与资源", "图片与图床", "答题与题库", "全局搜索", "AI 助手", "管理配置"
 ] as const;
 
 /** A valid first-level settings category title. */
@@ -404,16 +403,24 @@ export function normalizeSettingsSectionOrder(value: unknown): SettingsSectionTi
   const known = new Set<string>(SETTINGS_SECTION_TITLES);
   const legacyTitles: Record<string, SettingsSectionTitle> = {
     "显示模式": "视图与阅读",
-    "编辑": "编辑选项",
-    "编辑体验": "编辑选项",
+    "编辑": "编辑与交互",
+    "编辑体验": "编辑与交互",
     "节点快速输入快捷键": "快捷键配置",
     "工具栏内容": "工具栏",
     "主题模板": "主题与外观",
-    "画布背景": "画布与背景",
-    "字体与文字": "文字与排版",
-    "节点样式": "节点外观",
-    "连线样式": "连线与分支",
-    "全局代码设置": "代码块",
+    "主题与外观（全局默认）": "主题与外观",
+    "主题与外观": "主题与外观",
+    "画布与背景": "主题与外观",
+    "文字与排版": "主题与外观",
+    "节点外观": "节点布局与尺寸",
+    "连线与分支": "主题与外观",
+    "代码块": "代码行为",
+    "编辑选项": "编辑与交互",
+    "画布背景": "主题与外观",
+    "字体与文字": "主题与外观",
+    "节点样式": "节点布局与尺寸",
+    "连线样式": "主题与外观",
+    "全局代码设置": "代码行为",
     "文件与布局": "文件与资源",
     "文件夹": "文件与资源",
     "全局搜索索引": "全局搜索"
@@ -561,14 +568,14 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
     });
     containerEl.createEl("p", {
       cls: "setting-item-description",
-      text: "这里设置全局默认外观。打开脑图后，也可以点击工具栏中的调色板，为当前脑图单独保存一套样式。"
+      text: "这里设置插件级默认值。全局“主题与外观”按照页面工具栏中的同名面板分组；当前页面设置只作用于当前 .mindmap 文件，并优先覆盖全局默认值。"
     });
 
     containerEl.createEl("h3", { text: "主题与外观" });
 
     new Setting(containerEl)
-      .setName("默认主题")
-      .setDesc("选择后会一次应用背景、节点、分支配色、字体和连线样式；之后仍可继续修改单项设置。")
+      .setName("主题模板")
+      .setDesc("与当前页面“主题与外观”中的“主题模板”含义一致；这里设置所有脑图的默认值，页面单独设置时优先覆盖。")
       .addDropdown((dropdown) => {
         for (const preset of MINDMAP_THEME_PRESETS) dropdown.addOption(preset.id, preset.name);
         dropdown.setValue(this.plugin.settings.defaultThemePreset);
@@ -595,7 +602,7 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
       });
     }
 
-    containerEl.createEl("h3", { text: "代码块" });
+    containerEl.createEl("h3", { text: "代码行为" });
     new Setting(containerEl)
       .setName("代码默认折叠")
       .setDesc("优先级最低；页面或节点代码设置可覆盖。")
@@ -1842,7 +1849,7 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
           await this.saveAndRefresh();
         }));
 
-    containerEl.createEl("h3", { text: "节点外观" });
+    containerEl.createEl("h3", { text: "节点布局与尺寸" });
 
     this.addOptionalColorSetting(
       containerEl,
@@ -2038,7 +2045,7 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
           }));
     }
 
-    containerEl.createEl("h3", { text: "编辑选项" });
+    containerEl.createEl("h3", { text: "编辑与交互" });
 
     new Setting(containerEl)
       .setName("显示任务进度")
@@ -2182,10 +2189,67 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
           this.display();
         }));
 
+    this.organizeGlobalAppearanceSettings();
     this.organizeSettingsSections();
   }
 
   /** 将一级设置分区折叠显示，并按顶部搜索词过滤匹配分区。 */
+  /** Rebuilds global appearance defaults with the same information architecture as the page toolbar dialog. */
+  private organizeGlobalAppearanceSettings(): void {
+    const headings = Array.from(this.containerEl.querySelectorAll<HTMLHeadingElement>(":scope > h3"));
+    const themeHeading = headings.find((heading) => heading.textContent?.trim() === "主题与外观");
+    if (!themeHeading) return;
+
+    const findSetting = (name: string): HTMLElement | null => Array.from(this.containerEl.querySelectorAll<HTMLElement>(":scope > .setting-item"))
+      .find((item) => item.querySelector(".setting-item-name")?.textContent?.trim() === name) ?? null;
+    const createGroup = (title: string, description: string, names: string[]): HTMLDivElement => {
+      const group = document.createElement("div");
+      group.addClass("mms-global-appearance-group");
+      group.createEl("h4", { text: title });
+      group.createEl("p", { cls: "setting-item-description", text: description });
+      for (const name of names) {
+        const item = findSetting(name);
+        if (item) group.append(item);
+      }
+      return group;
+    };
+
+    const appearanceRoot = document.createElement("div");
+    appearanceRoot.addClass("mms-global-appearance-groups");
+    themeHeading.insertAdjacentElement("afterend", appearanceRoot);
+
+    const themeSetting = findSetting("主题模板");
+    const preview = this.containerEl.querySelector<HTMLElement>(":scope > .mms-theme-preview-row");
+    const themeGroup = document.createElement("div");
+    themeGroup.addClass("mms-global-appearance-group");
+    themeGroup.createEl("h4", { text: "主题模板" });
+    themeGroup.createEl("p", { cls: "setting-item-description", text: "与页面工具栏中的“主题模板”一致，用于定义新页面和未单独覆盖页面的默认视觉方案。" });
+    if (themeSetting) themeGroup.append(themeSetting);
+    if (preview) themeGroup.append(preview);
+    appearanceRoot.append(themeGroup);
+
+    appearanceRoot.append(
+      createGroup("画布与字体", "对应页面“主题与外观”的画布与字体分组。", ["背景颜色", "背景图案", "背景图案颜色", "默认字体", "自定义字体名称", "默认字号"]),
+      createGroup("节点与文字", "对应页面“主题与外观”的节点与文字分组；节点单独设置仍具有更高优先级。", ["分支外观", "默认节点文字对齐", "中心主题颜色", "中心主题文字颜色", "默认节点背景色", "默认文字颜色", "默认节点边框颜色", "默认节点边框粗细", "默认文字加粗", "默认文字斜体", "默认文字下划线"]),
+      createGroup("连线与分支", "对应页面“主题与外观”的连线与分支分组。", ["连线颜色", "连线类型", "连线粗细模式", "起始粗细", "连线粗细", "末端最细宽度", "彩色分支", "分支颜色"]),
+      createGroup("阅读外观", "对应页面“主题与外观”的阅读分组。", ["文章目录最大层级", "文章/通读缩略导航图"]),
+      createGroup("代码外观", "对应页面“主题与外观”的代码分组；更细的自动展开规则保留在“代码行为”。", ["代码默认折叠", "代码默认显示行号", "代码默认样式"])
+    );
+
+    for (const heading of headings) {
+      const title = heading.textContent?.trim();
+      if (!["画布与背景", "文字与排版", "连线与分支"].includes(title ?? "")) continue;
+      let cursor = heading.nextElementSibling;
+      let hasContent = false;
+      while (cursor && cursor.tagName !== "H3") {
+        if (cursor.matches(".setting-item")) { hasContent = true; break; }
+        cursor = cursor.nextElementSibling;
+      }
+      if (!hasContent) heading.remove();
+    }
+  }
+
+  /** Converts top-level headings into searchable, reorderable collapsible settings sections. */
   private organizeSettingsSections(): void {
     const query = this.settingsSearchQuery;
     let sections = Array.from(this.containerEl.querySelectorAll<HTMLDetailsElement>(":scope > .mms-settings-section"));
