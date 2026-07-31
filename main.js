@@ -10565,6 +10565,7 @@ var MindMapEditor = class {
   /** 启动截图编辑器；普通截图与截图并识别使用完全独立的调用链。 */
   async captureScreenshot(recognizeAfter = false, targetOverride) {
     const insertionTarget = targetOverride != null ? targetOverride : this.screenshotInsertionTarget();
+    new import_obsidian10.Notice(recognizeAfter ? "\u6B63\u5728\u51C6\u5907\u622A\u56FE\u5E76\u8BC6\u522B\u2026" : "\u6B63\u5728\u51C6\u5907\u622A\u56FE\u7F16\u8F91\u5668\u2026", 2500);
     try {
       const capture = await this.callbacks.onCaptureScreenshot(recognizeAfter);
       if (capture.action === "download") {
@@ -18387,13 +18388,26 @@ function getNodeCaptureRuntime() {
     return null;
   }
 }
-function executeCaptureCommand(runtime, command, args) {
+function executeCaptureCommand(runtime, command, args, timeoutMs = 15e3) {
   return new Promise((resolve, reject) => {
-    runtime.execFile(command, args, { windowsHide: true, timeout: 12e4 }, (error) => {
+    runtime.execFile(command, args, { windowsHide: true, timeout: timeoutMs, killSignal: "SIGKILL" }, (error) => {
       if (error) reject(error);
       else resolve();
     });
   });
+}
+async function withCaptureTimeout(promise, timeoutMs, label) {
+  let timer;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise((_resolve, reject) => {
+        timer = globalThis.setTimeout(() => reject(new Error(`${label}\u8D85\u65F6\uFF08${timeoutMs}ms\uFF09`)), timeoutMs);
+      })
+    ]);
+  } finally {
+    if (timer !== void 0) globalThis.clearTimeout(timer);
+  }
 }
 function pngDataUrlToBytes(dataUrl) {
   var _a2;
@@ -18440,7 +18454,7 @@ function captureEditorHtml(display, mode, imageDataUrl = "screen.png", messageTo
   const source = JSON.stringify(imageDataUrl);
   const token = JSON.stringify(messageToken);
   return `<!doctype html>
-<html lang="zh-CN"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data: file:; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+<html lang="zh-CN"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data: file: blob:; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
 <title>MindMap Studio \u622A\u56FE</title><style>
 *{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#111;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;user-select:none}
 #base,#annotations,#preview{position:fixed;inset:0;width:100%;height:100%}#base{z-index:0}#annotations{z-index:1;pointer-events:none}#preview{z-index:2;pointer-events:none}
@@ -18600,6 +18614,7 @@ try {
         "-NoLogo",
         "-NoProfile",
         "-NonInteractive",
+        "-Sta",
         "-ExecutionPolicy",
         "Bypass",
         "-File",
@@ -18638,7 +18653,11 @@ async function captureDisplayWithNativeCommand(runtime, display, hideForegroundW
     );
     return { bytes, display };
   } finally {
-    await runtime.fs.rm(directory, { recursive: true, force: true });
+    try {
+      await runtime.fs.rm(directory, { recursive: true, force: true });
+    } catch (error) {
+      console.warn("MindMap Studio capture: temporary files could not be removed", error);
+    }
   }
 }
 async function captureDisplayWithRendererElectron(runtime, display) {
@@ -18663,88 +18682,100 @@ async function captureDisplayWithRendererElectron(runtime, display) {
 async function captureDisplaySource(electronRuntime, nodeRuntime, hideObsidian) {
   const display = getBrowserDisplay();
   const windowHandle = getCurrentObsidianWindow(electronRuntime);
+  const canHideWithWindowHandle = hideObsidian && Boolean(windowHandle && !windowHandle.isDestroyed());
   try {
-    if (hideObsidian && windowHandle && !windowHandle.isDestroyed()) {
+    if (canHideWithWindowHandle && windowHandle) {
       windowHandle.minimize();
       await waitForWindowMinimized(windowHandle);
       await new Promise((resolve) => setTimeout(resolve, 120));
     }
+    const canTryRendererFirst = !hideObsidian || canHideWithWindowHandle;
+    if (canTryRendererFirst && electronRuntime.desktopCapturer) {
+      try {
+        console.info("MindMap Studio capture: trying renderer desktopCapturer");
+        const rendererCapture = await withCaptureTimeout(
+          captureDisplayWithRendererElectron(electronRuntime, display),
+          3500,
+          "Electron \u684C\u9762\u6293\u5C4F"
+        );
+        if (rendererCapture) return rendererCapture;
+      } catch (error) {
+        console.warn("MindMap Studio capture: renderer desktopCapturer unavailable", error);
+      }
+    }
     try {
-      const hideWithNativeCommand = hideObsidian && (!windowHandle || windowHandle.isDestroyed());
-      return await captureDisplayWithNativeCommand(nodeRuntime, display, hideWithNativeCommand);
+      console.info("MindMap Studio capture: trying native full-screen capture");
+      const hideWithNativeCommand = hideObsidian && !canHideWithWindowHandle;
+      return await withCaptureTimeout(
+        captureDisplayWithNativeCommand(nodeRuntime, display, hideWithNativeCommand),
+        18e3,
+        "\u672C\u673A\u684C\u9762\u6293\u5C4F"
+      );
     } catch (nativeError) {
-      const rendererCapture = await captureDisplayWithRendererElectron(electronRuntime, display);
-      if (rendererCapture) return rendererCapture;
+      if (!canTryRendererFirst && electronRuntime.desktopCapturer) {
+        try {
+          const rendererCapture = await withCaptureTimeout(
+            captureDisplayWithRendererElectron(electronRuntime, display),
+            3500,
+            "Electron \u684C\u9762\u6293\u5C4F"
+          );
+          if (rendererCapture) return rendererCapture;
+        } catch (rendererError) {
+          console.warn("MindMap Studio capture: final renderer fallback failed", rendererError);
+        }
+      }
       const reason = nativeError instanceof Error ? nativeError.message : String(nativeError);
       throw new Error(`\u65E0\u6CD5\u542F\u52A8 MindMap Studio \u622A\u56FE\u7F16\u8F91\u5668\uFF1A\u6574\u5C4F\u6293\u53D6\u5931\u8D25\uFF08${reason}\uFF09`);
     }
   } finally {
-    if (hideObsidian && windowHandle && !windowHandle.isDestroyed()) {
+    if (canHideWithWindowHandle && windowHandle && !windowHandle.isDestroyed()) {
       windowHandle.restore();
       windowHandle.show();
       windowHandle.focus();
     }
   }
 }
-function openCaptureEditorHost(html, display) {
-  const windowName = `mindmap-studio-capture-${Date.now()}`;
-  const features = [
-    "popup=yes",
-    "noopener=no",
-    "frame=no",
-    "resizable=no",
-    "scrollbars=no",
-    "alwaysOnTop=yes",
-    "skipTaskbar=yes",
-    `left=${display.bounds.x}`,
-    `top=${display.bounds.y}`,
-    `width=${display.bounds.width}`,
-    `height=${display.bounds.height}`
-  ].join(",");
-  let popup = null;
-  try {
-    popup = window.open("about:blank", windowName, features);
-    if (popup) {
-      popup.document.open();
-      popup.document.write(html);
-      popup.document.close();
-      popup.moveTo(display.bounds.x, display.bounds.y);
-      popup.resizeTo(display.bounds.width, display.bounds.height);
-      popup.focus();
-      return {
-        messageSource: popup,
-        isClosed: () => (popup == null ? void 0 : popup.closed) !== false,
-        close: () => {
-          if (popup && !popup.closed) popup.close();
-        }
-      };
-    }
-  } catch (e) {
-    if (popup && !popup.closed) popup.close();
-  }
+function openCaptureEditorHost(html, _display) {
   const iframe = document.createElement("iframe");
   iframe.className = "mindmap-studio-capture-host";
   iframe.setAttribute("title", "MindMap Studio \u622A\u56FE\u7F16\u8F91\u5668");
   iframe.setAttribute("allow", "clipboard-write");
+  iframe.setAttribute("tabindex", "-1");
   Object.assign(iframe.style, {
     position: "fixed",
     inset: "0",
     width: "100vw",
     height: "100vh",
     border: "0",
+    margin: "0",
+    padding: "0",
     zIndex: "2147483647",
-    background: "#111"
+    background: "#111",
+    display: "block",
+    visibility: "visible",
+    opacity: "1",
+    pointerEvents: "auto"
   });
   iframe.srcdoc = html;
-  document.body.appendChild(iframe);
+  document.documentElement.appendChild(iframe);
   const messageSource = iframe.contentWindow;
   if (!messageSource) {
     iframe.remove();
     throw new Error("\u65E0\u6CD5\u521B\u5EFA\u622A\u56FE\u8986\u76D6\u5C42\u7A97\u53E3");
   }
+  const focus = () => {
+    iframe.focus();
+    try {
+      messageSource.focus();
+    } catch (e) {
+    }
+  };
+  iframe.addEventListener("load", focus, { once: true });
+  window.setTimeout(focus, 0);
   return {
     messageSource,
     isClosed: () => !iframe.isConnected,
+    focus,
     close: () => iframe.remove()
   };
 }
@@ -18787,8 +18818,10 @@ function openPinnedCapture(bytes, bounds) {
 }
 async function editCapturedDisplay(runtime, nodeRuntime, captured, mode) {
   const token = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  const html = captureEditorHtml(captured.display, mode, pngBytesToDataUrl(captured.bytes), token);
+  const imageUrl = URL.createObjectURL(new Blob([copyBytesToArrayBuffer(captured.bytes)], { type: "image/png" }));
+  const html = captureEditorHtml(captured.display, mode, imageUrl, token);
   const host = openCaptureEditorHost(html, captured.display);
+  host.focus();
   return await new Promise((resolve, reject) => {
     let settled = false;
     let finishing = false;
@@ -18796,6 +18829,7 @@ async function editCapturedDisplay(runtime, nodeRuntime, captured, mode) {
     const cleanup = () => {
       window.removeEventListener("message", onMessage);
       if (closeWatcher) window.clearInterval(closeWatcher);
+      URL.revokeObjectURL(imageUrl);
     };
     const cancel = () => {
       if (settled) return;
@@ -18858,7 +18892,13 @@ async function captureDesktopScreenshot(hideObsidian, mode = "capture") {
   const electronRuntime = getElectronRuntime();
   const nodeRuntime = getNodeCaptureRuntime();
   if (!electronRuntime || !nodeRuntime) throw new Error("\u622A\u56FE\u4EC5\u652F\u6301 Obsidian \u684C\u9762\u7AEF");
+  console.info("MindMap Studio capture: starting", { mode, hideObsidian });
   const captured = await captureDisplaySource(electronRuntime, nodeRuntime, hideObsidian);
+  console.info("MindMap Studio capture: source ready", {
+    width: captured.display.bounds.width,
+    height: captured.display.bounds.height,
+    bytes: captured.bytes.length
+  });
   return editCapturedDisplay(electronRuntime, nodeRuntime, captured, mode);
 }
 

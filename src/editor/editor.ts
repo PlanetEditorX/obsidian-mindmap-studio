@@ -1735,6 +1735,7 @@ export class MindMapEditor {
   /** 启动截图编辑器；普通截图与截图并识别使用完全独立的调用链。 */
   async captureScreenshot(recognizeAfter = false, targetOverride?: ScreenshotInsertionTarget): Promise<void> {
     const insertionTarget = targetOverride ?? this.screenshotInsertionTarget();
+    new Notice(recognizeAfter ? "正在准备截图并识别…" : "正在准备截图编辑器…", 2500);
     try {
       const capture = await this.callbacks.onCaptureScreenshot(recognizeAfter);
       if (capture.action === "download") {

@@ -239,15 +239,34 @@ test("manual screenshot never confirms on mouse release and recognition waits fo
   assert.match(mainSource, /recognizeAfter \? "capture-recognize" : "capture"/);
 });
 
+test("capture timeout rejects stalled desktop APIs instead of leaving screenshot commands pending", async () => {
+  await assert.rejects(
+    desktopCapture.withCaptureTimeout(new Promise(() => {}), 10, "测试抓屏"),
+    /测试抓屏超时/
+  );
+  assert.equal(await desktopCapture.withCaptureTimeout(Promise.resolve("ok"), 100, "测试抓屏"), "ok");
+});
+
 test("desktop capture opens the plugin overlay and never silently falls back to the interactive system snipper", async () => {
-  const captureSource = await readFile("src/utils/desktop-capture.ts", "utf8");
-  assert.match(captureSource, /window\.open\("about:blank", windowName, features\)/);
+  const [captureSource, editorSource] = await Promise.all([
+    readFile("src/utils/desktop-capture.ts", "utf8"),
+    readFile("src/editor/editor.ts", "utf8")
+  ]);
+  assert.doesNotMatch(captureSource, /window\.open\("about:blank", windowName, features\)/);
+  assert.match(captureSource, /document\.documentElement\.appendChild\(iframe\)/);
   assert.match(captureSource, /iframe\.srcdoc = html/);
+  assert.match(captureSource, /zIndex: "2147483647"/);
+  assert.match(captureSource, /withCaptureTimeout/);
+  assert.match(captureSource, /3_500/);
+  assert.match(captureSource, /18_000/);
   assert.match(captureSource, /captureDisplayWithNativeCommand/);
   assert.match(captureSource, /captureDisplayWithRendererElectron/);
   assert.match(captureSource, /禁止静默回退系统截图/);
   assert.match(captureSource, /MindMapStudioCaptureWindow/);
   assert.match(captureSource, /hideForegroundWindow \? "1" : "0"/);
+  assert.match(captureSource, /URL\.createObjectURL/);
+  assert.match(captureSource, /URL\.revokeObjectURL/);
+  assert.match(editorSource, /正在准备截图编辑器/);
   const entry = captureSource.slice(captureSource.indexOf("export async function captureDesktopScreenshot"));
   assert.doesNotMatch(entry, /captureWithSystemTool/);
   assert.doesNotMatch(entry, /screenshotCommandCandidates/);

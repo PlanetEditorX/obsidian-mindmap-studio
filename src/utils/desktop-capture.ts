@@ -212,13 +212,28 @@ function getNodeCaptureRuntime(): NodeCaptureRuntime | null {
 }
 
 /** 使用 execFile 执行一个截图候选命令。 */
-function executeCaptureCommand(runtime: NodeCaptureRuntime, command: string, args: string[]): Promise<void> {
+function executeCaptureCommand(runtime: NodeCaptureRuntime, command: string, args: string[], timeoutMs = 15_000): Promise<void> {
   return new Promise((resolve, reject) => {
-    runtime.execFile(command, args, { windowsHide: true, timeout: 120_000 }, (error) => {
+    runtime.execFile(command, args, { windowsHide: true, timeout: timeoutMs, killSignal: "SIGKILL" }, (error) => {
       if (error) reject(error);
       else resolve();
     });
   });
+}
+
+/** 为可能被桌面权限或宿主 API 卡住的抓屏调用设置硬超时。 */
+export async function withCaptureTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
+  let timer: ReturnType<typeof globalThis.setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_resolve, reject) => {
+        timer = globalThis.setTimeout(() => reject(new Error(`${label}超时（${timeoutMs}ms）`)), timeoutMs);
+      })
+    ]);
+  } finally {
+    if (timer !== undefined) globalThis.clearTimeout(timer);
+  }
 }
 
 /** 将 data URL 中的 PNG 转成二进制。 */
@@ -255,6 +270,7 @@ interface BrowserDisplayMetrics {
 interface CaptureEditorHost {
   messageSource: Window;
   isClosed: () => boolean;
+  focus: () => void;
   close: () => void;
 }
 
@@ -302,7 +318,7 @@ export function captureEditorHtml(display: ElectronDisplay, mode: DesktopCapture
   const source = JSON.stringify(imageDataUrl);
   const token = JSON.stringify(messageToken);
   return `<!doctype html>
-<html lang="zh-CN"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data: file:; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+<html lang="zh-CN"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data: file: blob:; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
 <title>MindMap Studio 截图</title><style>
 *{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#111;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;user-select:none}
 #base,#annotations,#preview{position:fixed;inset:0;width:100%;height:100%}#base{z-index:0}#annotations{z-index:1;pointer-events:none}#preview{z-index:2;pointer-events:none}
@@ -485,6 +501,7 @@ try {
         "-NoLogo",
         "-NoProfile",
         "-NonInteractive",
+        "-Sta",
         "-ExecutionPolicy",
         "Bypass",
         "-File",
@@ -529,7 +546,11 @@ async function captureDisplayWithNativeCommand(
     );
     return { bytes, display };
   } finally {
-    await runtime.fs.rm(directory, { recursive: true, force: true });
+    try {
+      await runtime.fs.rm(directory, { recursive: true, force: true });
+    } catch (error) {
+      console.warn("MindMap Studio capture: temporary files could not be removed", error);
+    }
   }
 }
 
@@ -554,7 +575,7 @@ async function captureDisplayWithRendererElectron(
   return bytes.length ? { bytes, display } : null;
 }
 
-/** 抓取截图源；可隐藏 Obsidian 时先最小化，抓取完成后立即恢复再显示编辑器。 */
+/** 抓取截图源；优先使用快速渲染器抓屏，失败或不可用时再调用有限时长的本机命令。 */
 async function captureDisplaySource(
   electronRuntime: ElectronCaptureRuntime,
   nodeRuntime: NodeCaptureRuntime,
@@ -562,23 +583,55 @@ async function captureDisplaySource(
 ): Promise<{ bytes: Uint8Array; display: ElectronDisplay }> {
   const display = getBrowserDisplay();
   const windowHandle = getCurrentObsidianWindow(electronRuntime);
+  const canHideWithWindowHandle = hideObsidian && Boolean(windowHandle && !windowHandle.isDestroyed());
   try {
-    if (hideObsidian && windowHandle && !windowHandle.isDestroyed()) {
+    if (canHideWithWindowHandle && windowHandle) {
       windowHandle.minimize();
       await waitForWindowMinimized(windowHandle);
       await new Promise((resolve) => setTimeout(resolve, 120));
     }
+
+    const canTryRendererFirst = !hideObsidian || canHideWithWindowHandle;
+    if (canTryRendererFirst && electronRuntime.desktopCapturer) {
+      try {
+        console.info("MindMap Studio capture: trying renderer desktopCapturer");
+        const rendererCapture = await withCaptureTimeout(
+          captureDisplayWithRendererElectron(electronRuntime, display),
+          3_500,
+          "Electron 桌面抓屏"
+        );
+        if (rendererCapture) return rendererCapture;
+      } catch (error) {
+        console.warn("MindMap Studio capture: renderer desktopCapturer unavailable", error);
+      }
+    }
+
     try {
-      const hideWithNativeCommand = hideObsidian && (!windowHandle || windowHandle.isDestroyed());
-      return await captureDisplayWithNativeCommand(nodeRuntime, display, hideWithNativeCommand);
+      console.info("MindMap Studio capture: trying native full-screen capture");
+      const hideWithNativeCommand = hideObsidian && !canHideWithWindowHandle;
+      return await withCaptureTimeout(
+        captureDisplayWithNativeCommand(nodeRuntime, display, hideWithNativeCommand),
+        18_000,
+        "本机桌面抓屏"
+      );
     } catch (nativeError) {
-      const rendererCapture = await captureDisplayWithRendererElectron(electronRuntime, display);
-      if (rendererCapture) return rendererCapture;
+      if (!canTryRendererFirst && electronRuntime.desktopCapturer) {
+        try {
+          const rendererCapture = await withCaptureTimeout(
+            captureDisplayWithRendererElectron(electronRuntime, display),
+            3_500,
+            "Electron 桌面抓屏"
+          );
+          if (rendererCapture) return rendererCapture;
+        } catch (rendererError) {
+          console.warn("MindMap Studio capture: final renderer fallback failed", rendererError);
+        }
+      }
       const reason = nativeError instanceof Error ? nativeError.message : String(nativeError);
       throw new Error(`无法启动 MindMap Studio 截图编辑器：整屏抓取失败（${reason}）`);
     }
   } finally {
-    if (hideObsidian && windowHandle && !windowHandle.isDestroyed()) {
+    if (canHideWithWindowHandle && windowHandle && !windowHandle.isDestroyed()) {
       windowHandle.restore();
       windowHandle.show();
       windowHandle.focus();
@@ -586,65 +639,49 @@ async function captureDisplaySource(
   }
 }
 
-/** 创建独立覆盖窗口；窗口创建受限时退回 Obsidian 内嵌全屏 iframe，而不是系统截图工具。 */
-function openCaptureEditorHost(html: string, display: ElectronDisplay): CaptureEditorHost {
-  const windowName = `mindmap-studio-capture-${Date.now()}`;
-  const features = [
-    "popup=yes",
-    "noopener=no",
-    "frame=no",
-    "resizable=no",
-    "scrollbars=no",
-    "alwaysOnTop=yes",
-    "skipTaskbar=yes",
-    `left=${display.bounds.x}`,
-    `top=${display.bounds.y}`,
-    `width=${display.bounds.width}`,
-    `height=${display.bounds.height}`
-  ].join(",");
-  let popup: Window | null = null;
-  try {
-    popup = window.open("about:blank", windowName, features);
-    if (popup) {
-      popup.document.open();
-      popup.document.write(html);
-      popup.document.close();
-      popup.moveTo(display.bounds.x, display.bounds.y);
-      popup.resizeTo(display.bounds.width, display.bounds.height);
-      popup.focus();
-      return {
-        messageSource: popup,
-        isClosed: () => popup?.closed !== false,
-        close: () => { if (popup && !popup.closed) popup.close(); }
-      };
-    }
-  } catch {
-    if (popup && !popup.closed) popup.close();
-  }
-
+/** 在当前 Obsidian 窗口内创建全屏截图覆盖层，避免异步 window.open 被宿主拦截后形成不可见悬挂窗口。 */
+function openCaptureEditorHost(html: string, _display: ElectronDisplay): CaptureEditorHost {
   const iframe = document.createElement("iframe");
   iframe.className = "mindmap-studio-capture-host";
   iframe.setAttribute("title", "MindMap Studio 截图编辑器");
   iframe.setAttribute("allow", "clipboard-write");
+  iframe.setAttribute("tabindex", "-1");
   Object.assign(iframe.style, {
     position: "fixed",
     inset: "0",
     width: "100vw",
     height: "100vh",
     border: "0",
+    margin: "0",
+    padding: "0",
     zIndex: "2147483647",
-    background: "#111"
+    background: "#111",
+    display: "block",
+    visibility: "visible",
+    opacity: "1",
+    pointerEvents: "auto"
   });
   iframe.srcdoc = html;
-  document.body.appendChild(iframe);
+  document.documentElement.appendChild(iframe);
   const messageSource = iframe.contentWindow;
   if (!messageSource) {
     iframe.remove();
     throw new Error("无法创建截图覆盖层窗口");
   }
+  const focus = (): void => {
+    iframe.focus();
+    try {
+      messageSource.focus();
+    } catch {
+      // The embedded editor remains usable even when the host denies explicit focus.
+    }
+  };
+  iframe.addEventListener("load", focus, { once: true });
+  window.setTimeout(focus, 0);
   return {
     messageSource,
     isClosed: () => !iframe.isConnected,
+    focus,
     close: () => iframe.remove()
   };
 }
@@ -697,8 +734,10 @@ async function editCapturedDisplay(
   mode: DesktopCaptureMode
 ): Promise<DesktopCaptureResult> {
   const token = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  const html = captureEditorHtml(captured.display, mode, pngBytesToDataUrl(captured.bytes), token);
+  const imageUrl = URL.createObjectURL(new Blob([copyBytesToArrayBuffer(captured.bytes)], { type: "image/png" }));
+  const html = captureEditorHtml(captured.display, mode, imageUrl, token);
   const host = openCaptureEditorHost(html, captured.display);
+  host.focus();
   return await new Promise<DesktopCaptureResult>((resolve, reject) => {
     let settled = false;
     let finishing = false;
@@ -706,6 +745,7 @@ async function editCapturedDisplay(
     const cleanup = (): void => {
       window.removeEventListener("message", onMessage);
       if (closeWatcher) window.clearInterval(closeWatcher);
+      URL.revokeObjectURL(imageUrl);
     };
     const cancel = (): void => {
       if (settled) return;
@@ -770,6 +810,12 @@ export async function captureDesktopScreenshot(hideObsidian: boolean, mode: Desk
   const electronRuntime = getElectronRuntime();
   const nodeRuntime = getNodeCaptureRuntime();
   if (!electronRuntime || !nodeRuntime) throw new Error("截图仅支持 Obsidian 桌面端");
+  console.info("MindMap Studio capture: starting", { mode, hideObsidian });
   const captured = await captureDisplaySource(electronRuntime, nodeRuntime, hideObsidian);
+  console.info("MindMap Studio capture: source ready", {
+    width: captured.display.bounds.width,
+    height: captured.display.bounds.height,
+    bytes: captured.bytes.length
+  });
   return editCapturedDisplay(electronRuntime, nodeRuntime, captured, mode);
 }
