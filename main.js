@@ -10085,6 +10085,7 @@ var MindMapEditor = class {
       scroller.scrollTop += targetY - desiredY;
       this.updateArticleMiniMapActiveMarker();
     };
+    restore();
     window.setTimeout(restore, 20);
     window.requestAnimationFrame(() => window.requestAnimationFrame(restore));
     return resolved;
@@ -12296,6 +12297,7 @@ var MindMapEditor = class {
   applyMeasuredMindMapLayout() {
     var _a2, _b2;
     if (this.currentMode !== "mindmap" || !this.nodesLayerEl.isConnected) return;
+    const viewportAnchor = this.captureMindMapViewportAnchor(this.selectedId);
     const previousNodeRects = this.captureMindMapNodeRects();
     const appearance = this.getAppearance();
     const measured = /* @__PURE__ */ new Map();
@@ -12324,6 +12326,7 @@ var MindMapEditor = class {
     }
     const branchColorMap = appearance.colorfulBranches ? buildBranchColorMap(this.document.root, appearance.branchColors) : /* @__PURE__ */ new Map();
     this.renderMindMapEdges(appearance, branchColorMap);
+    this.restoreMindMapViewportAnchor(viewportAnchor);
     this.playMindMapLayoutAnimation(previousNodeRects);
   }
   /**
@@ -13775,7 +13778,9 @@ var MindMapEditor = class {
     if (!this.ensureEditable()) return;
     this.selectNode(node.id);
     new TableEditModal(this.app, table, (next) => {
+      const viewportAnchor = this.captureMindMapViewportAnchor(node.id);
       this.mutate(() => this.upsertStructuredBlock(node, "table", next, blockId));
+      this.restoreMindMapViewportAnchor(viewportAnchor);
     }).open();
   }
   /** Persists article table column widths after a pointer resize gesture. */
@@ -13787,7 +13792,9 @@ var MindMapEditor = class {
       var _a2;
       return Math.max(64, Math.min(1200, Math.round((_a2 = widths[index]) != null ? _a2 : 160)));
     });
+    const viewportAnchor = this.captureMindMapViewportAnchor(node.id);
     this.mutate(() => this.upsertStructuredBlock(node, "table", { ...block.table, columnWidths }, blockId));
+    this.restoreMindMapViewportAnchor(viewportAnchor);
   }
   /** Opens the selected code block directly instead of routing through the node editor. */
   openCodeBlockEditor(node, code, blockId) {
@@ -13819,24 +13826,49 @@ var MindMapEditor = class {
       const nodeId = (_c = (_b2 = targetNode == null ? void 0 : targetNode.dataset.nodeId) != null ? _b2 : (_a2 = this.activeArticleBlock) == null ? void 0 : _a2.nodeId) != null ? _c : this.selectedId;
       const afterBlockId = (_e = targetBlock == null ? void 0 : targetBlock.dataset.blockId) != null ? _e : ((_d = this.activeArticleBlock) == null ? void 0 : _d.nodeId) === nodeId ? this.activeArticleBlock.blockId : void 0;
       if (target.closest("[contenteditable='true']")) target.blur();
-      const selected2 = (_g = (_f = findNode(this.document.root, nodeId)) != null ? _f : this.selectedNode()) != null ? _g : this.document.root;
+      const extension = ((blob.type.split("/")[1] || "").replace("jpeg", "jpg").replace("svg+xml", "svg")) || "png";
+      const filename = `mindmap-image.${extension}`;
+      let path;
       try {
-        const extension = ((_h = blob.type.split("/")[1]) == null ? void 0 : _h.replace("jpeg", "jpg")) || "png";
-        const filename = `mindmap-image.${extension}`;
-        const path = await this.callbacks.onSavePastedImage(blob, filename);
-        const imageBlock = { id: newId(), type: "image", source: path, localSource: path };
+        path = await this.callbacks.onSavePastedImage(blob, filename);
+      } catch (error) {
+        console.error("MindMap Studio paste image storage failed", error);
+        new import_obsidian10.Notice(`\u7C98\u8D34\u56FE\u7247\u5931\u8D25\uFF1A${error instanceof Error ? error.message : String(error)}`, 7e3);
+        return;
+      }
+      const imageBlock = { id: newId(), type: "image", source: path, localSource: path };
+      const selected2 = (_g = (_f = findNode(this.document.root, nodeId)) != null ? _f : this.selectedNode()) != null ? _g : this.document.root;
+      let inserted = false;
+      try {
         this.mutate(() => {
           const blocks = nodeContentBlocks(selected2);
           const afterIndex = afterBlockId ? blocks.findIndex((block) => block.id === afterBlockId) : -1;
           blocks.splice(afterIndex >= 0 ? afterIndex + 1 : blocks.length, 0, imageBlock);
           selected2.content = blocks;
           syncNodeContentFields(selected2);
+          inserted = true;
         });
+      } catch (error) {
+        console.error("MindMap Studio paste image insertion failed", error);
+        if (!inserted) {
+          new import_obsidian10.Notice(`\u56FE\u7247\u6587\u4EF6\u5DF2\u4FDD\u5B58\uFF0C\u4F46\u63D2\u5165\u8282\u70B9\u5931\u8D25\uFF1A${path}`, 7e3);
+          return;
+        }
+        try {
+          this.markSaving();
+          this.render();
+        } catch (renderError) {
+          console.error("MindMap Studio paste image recovery render failed", renderError);
+        }
+        new import_obsidian10.Notice(`\u56FE\u7247\u5DF2\u63D2\u5165\uFF1A${path}\uFF1B\u4FDD\u5B58\u540C\u6B65\u51FA\u73B0\u5F02\u5E38\uFF0C\u8BF7\u786E\u8BA4\u6587\u4EF6\u5DF2\u4FDD\u5B58`, 7e3);
+        return;
+      }
+      try {
         const scheduled = this.callbacks.onScheduleAutoUpload(selected2.id, imageBlock.id, path, filename);
         new import_obsidian10.Notice(scheduled ? `\u56FE\u7247\u5DF2\u4FDD\u5B58\uFF0C${this.autoUploadScheduleMessage()}` : `\u56FE\u7247\u5DF2\u4FDD\u5B58\uFF1A${path}`);
       } catch (error) {
-        console.error("MindMap Studio paste image failed", error);
-        new import_obsidian10.Notice("\u7C98\u8D34\u56FE\u7247\u5931\u8D25");
+        console.error("MindMap Studio paste image auto-upload scheduling failed", error);
+        new import_obsidian10.Notice(`\u56FE\u7247\u5DF2\u4FDD\u5B58\uFF1A${path}\uFF1B\u81EA\u52A8\u4E0A\u4F20\u6392\u7A0B\u5931\u8D25\uFF0C\u53EF\u7A0D\u540E\u624B\u52A8\u4E0A\u4F20`, 7e3);
       }
       return;
     }
