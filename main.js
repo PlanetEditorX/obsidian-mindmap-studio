@@ -10902,7 +10902,7 @@ var MindMapEditor = class {
     });
     element.addEventListener("keydown", (event) => {
       if (this.readOnly) return;
-      if (event.key === "Enter") {
+      if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {
         event.preventDefault();
         event.stopPropagation();
         event.stopImmediatePropagation();

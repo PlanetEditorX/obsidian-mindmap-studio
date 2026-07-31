@@ -3844,6 +3844,10 @@
 .mms-article-number {
   flex: 0 0 auto;
   color: var(--mms-article-accent, var(--text-accent));
+  font-family: inherit;
+  font-size: 1em;
+  font-weight: inherit;
+  line-height: inherit;
 }
 
 .mms-article-heading-text {
@@ -4336,7 +4340,6 @@
 
 .mms-article-number {
   min-width: max-content;
-  font-weight: 700;
   white-space: nowrap;
 }
 
