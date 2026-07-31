@@ -10521,7 +10521,6 @@ var MindMapEditor = class {
         marquee.style.top = `${startY}px`;
         this.viewportEl.setPointerCapture(event.pointerId);
         const moveSelection = (moveEvent) => {
-          var _a2;
           const currentX = moveEvent.clientX - viewportRect.left;
           const currentY = moveEvent.clientY - viewportRect.top;
           marquee.style.left = `${Math.min(startX, currentX)}px`;
@@ -10534,14 +10533,18 @@ var MindMapEditor = class {
           const bottom = Math.max(event.clientY, moveEvent.clientY);
           this.selectedIds.clear();
           for (const id of baseSelection) this.selectedIds.add(id);
-          for (const nodeEl of Array.from(this.nodesLayerEl.querySelectorAll(".mmc-node[data-node-id]"))) {
+          const nodeEls = this.nodesLayerEl.querySelectorAll(".mmc-node[data-node-id]");
+          for (let i = 0, len = nodeEls.length; i < len; i++) {
+            const nodeEl = nodeEls[i];
             const rect = nodeEl.getBoundingClientRect();
             if (rect.right >= left && rect.left <= right && rect.bottom >= top && rect.top <= bottom) {
               const id = nodeEl.dataset.nodeId;
               if (id && id !== this.document.root.id) this.selectedIds.add(id);
             }
           }
-          this.selectedId = (_a2 = Array.from(this.selectedIds).at(-1)) != null ? _a2 : "";
+          let lastId = "";
+          for (const id of this.selectedIds) lastId = id;
+          this.selectedId = lastId;
           this.applySelectionClasses();
         };
         const finishSelection = (upEvent) => {
@@ -12283,11 +12286,12 @@ var MindMapEditor = class {
    * @param id Node identifier.
    */
   toggleNodeSelection(id) {
-    var _a2;
     if (id === this.document.root.id) return;
     if (this.selectedIds.has(id)) this.selectedIds.delete(id);
     else this.selectedIds.add(id);
-    this.selectedId = (_a2 = Array.from(this.selectedIds).at(-1)) != null ? _a2 : "";
+    let lastId = "";
+    for (const selectedId of this.selectedIds) lastId = selectedId;
+    this.selectedId = lastId;
     this.applySelectionClasses();
     if (this.selectedId) {
       this.rememberLocation(this.createSelectionLocation(this.selectedId));
