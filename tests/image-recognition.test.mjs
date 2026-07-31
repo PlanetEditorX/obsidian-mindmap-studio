@@ -199,6 +199,27 @@ test("screenshot editor provides adjustable bounds, annotation tools and indepen
   assert.match(editorSource, /recognizeCapturedScreenshotToClipboard/);
 });
 
+test("screenshot modes keep manual capture open and auto-confirm recognition after three idle seconds", async () => {
+  const [captureSource, editorSource, viewSource, mainSource, typesSource] = await Promise.all([
+    readFile("src/utils/desktop-capture.ts", "utf8"),
+    readFile("src/editor/editor.ts", "utf8"),
+    readFile("src/view.ts", "utf8"),
+    readFile("src/main.ts", "utf8"),
+    readFile("src/editor/editor-types.ts", "utf8")
+  ]);
+  assert.match(captureSource, /DesktopCaptureMode = "capture" \| "capture-recognize"/);
+  assert.match(captureSource, /const autoConfirmDelayMs=3000/);
+  assert.match(captureSource, /setTimeout\(\(\)=>action\('copy'\),autoConfirmDelayMs\)/);
+  assert.match(captureSource, /function endSelection\(\)[\s\S]*armAutoConfirm\(\)/);
+  assert.match(captureSource, /pointermove'[\s\S]*insideRect\(ev\.clientX,ev\.clientY\)[\s\S]*resetAutoConfirm\(\)/);
+  assert.match(captureSource, /document\.addEventListener\('dblclick'[\s\S]*captureMode==='capture'[\s\S]*action\('copy'\)/);
+  assert.match(captureSource, /function endResize\(\)[\s\S]*armAutoConfirm\(\)/);
+  assert.match(editorSource, /onCaptureScreenshot\(recognizeAfter\)/);
+  assert.match(viewSource, /onCaptureScreenshot: async \(recognizeAfter\) => this\.plugin\.captureScreenshot\(recognizeAfter\)/);
+  assert.match(typesSource, /onCaptureScreenshot: \(recognizeAfter\?: boolean\) => Promise<DesktopCaptureResult>/);
+  assert.match(mainSource, /recognizeAfter \? "capture-recognize" : "capture"/);
+});
+
 test("desktop-only OCR and capture APIs are loaded lazily for mobile compatibility", async () => {
   const [ocrSource, captureSource, exportSource, editorSource, modalSource] = await Promise.all([
     readFile("src/vision/local-ocr.ts", "utf8"),

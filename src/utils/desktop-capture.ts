@@ -3,6 +3,9 @@
  * @description 桌面截图覆盖层、选区标注、固定窗口与系统截图兼容回退。
  */
 
+/** 截图编辑器的交互模式。 */
+export type DesktopCaptureMode = "capture" | "capture-recognize";
+
 /** 截图编辑器完成后的用户动作。 */
 export type DesktopCaptureAction = "copy" | "recognize-copy" | "download" | "pin";
 
@@ -293,9 +296,10 @@ function pngDataUrlToBytes(dataUrl: string): Uint8Array {
   return new Uint8Array(buffer.Buffer.from(encoded, "base64"));
 }
 
-/** 生成截图覆盖层页面；页面只加载本地截图文件，不访问网络。 */
-function captureEditorHtml(display: ElectronDisplay): string {
+/** 生成截图覆盖层页面；普通截图双击确认，截图并识别按三秒空闲计时确认。 */
+function captureEditorHtml(display: ElectronDisplay, mode: DesktopCaptureMode): string {
   const bounds = JSON.stringify(display.bounds);
+  const captureMode = JSON.stringify(mode);
   return `<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'self' file: data:; img-src 'self' file: data:; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
 <title>MindMap Studio 截图</title><style>
@@ -315,13 +319,13 @@ function captureEditorHtml(display: ElectronDisplay): string {
 <div id="drawLayer"></div><div id="toolbar" class="toolbar">
 <button data-tool="shape">几何图形</button><button data-tool="pen">画笔</button><button data-tool="arrow">箭头</button><button data-tool="text">文字</button><button data-tool="number">序号</button><button data-tool="mosaic">马赛克</button><button data-tool="eraser">橡皮擦</button><span class="sep"></span>
 <button data-action="recognize-copy">识别并复制</button><button data-action="pin">固定</button><button data-action="download">下载</button><button class="danger" data-action="cancel">取消</button><button class="primary" data-action="copy">复制</button></div>
-<div id="tip">拖动蓝色边框调整截图范围；Esc 取消，Enter 复制</div>
+<div id="tip"></div>
 <script>
 (() => {
-  const displayBounds=${bounds}; const base=document.getElementById('base'); const ann=document.getElementById('annotations'); const preview=document.getElementById('preview');
-  const bctx=base.getContext('2d'); const actx=ann.getContext('2d'); const pctx=preview.getContext('2d'); const selection=document.getElementById('selection'); const metrics=document.getElementById('metrics'); const toolbar=document.getElementById('toolbar'); const drawLayer=document.getElementById('drawLayer');
-  const shades=['shadeTop','shadeLeft','shadeRight','shadeBottom'].map(id=>document.getElementById(id)); const dpr=Math.max(1,window.devicePixelRatio||1); let tool=''; let drawing=false; let start=null; let number=1; let drag=null;
-  let rect={x:Math.round(innerWidth*.18),y:Math.round(innerHeight*.16),w:Math.round(innerWidth*.64),h:Math.round(innerHeight*.62)}; const minSize=36;
+  const displayBounds=${bounds}; const captureMode=${captureMode}; const recognizeMode=captureMode==='capture-recognize'; const base=document.getElementById('base'); const ann=document.getElementById('annotations'); const preview=document.getElementById('preview');
+  const bctx=base.getContext('2d'); const actx=ann.getContext('2d'); const pctx=preview.getContext('2d'); const selection=document.getElementById('selection'); const metrics=document.getElementById('metrics'); const toolbar=document.getElementById('toolbar'); const drawLayer=document.getElementById('drawLayer'); const tip=document.getElementById('tip');
+  const shades=['shadeTop','shadeLeft','shadeRight','shadeBottom'].map(id=>document.getElementById(id)); const dpr=Math.max(1,window.devicePixelRatio||1); const autoConfirmDelayMs=3000; let tool=''; let drawing=false; let start=null; let number=1; let drag=null; let selectionDraw=null; let autoConfirmTimer=null; let autoConfirmArmed=false;
+  let rect={x:Math.round(innerWidth*.18),y:Math.round(innerHeight*.16),w:Math.round(innerWidth*.64),h:Math.round(innerHeight*.62)}; const minSize=36; tip.textContent=recognizeMode?'拖动选择截图范围；释放后 3 秒自动完成，在选区内移动鼠标或调整边框可重置计时':'拖动或调整蓝色边框；双击选区复制并插入节点，Esc 取消';
   const image=new Image(); image.src='screen.png';
   function resizeCanvases(){for(const c of [base,ann,preview]){c.width=Math.round(innerWidth*dpr);c.height=Math.round(innerHeight*dpr);c.style.width=innerWidth+'px';c.style.height=innerHeight+'px'}; for(const c of [bctx,actx,pctx])c.setTransform(dpr,0,0,dpr,0,0); drawBase(); updateRect()}
   function drawBase(){if(!image.complete)return;bctx.clearRect(0,0,innerWidth,innerHeight);bctx.drawImage(image,0,0,innerWidth,innerHeight)}
@@ -333,10 +337,19 @@ function captureEditorHtml(display: ElectronDisplay): string {
   function placeToolbar(){const tw=toolbar.offsetWidth||820,th=toolbar.offsetHeight||48;let left=Math.max(8,Math.min(innerWidth-tw-8,rect.x+rect.w/2-tw/2));let top=rect.y+rect.h+10;if(top+th>innerHeight-8)top=Math.max(8,rect.y-th-10);toolbar.style.left=left+'px';toolbar.style.top=top+'px'}
   function point(ev){return{x:ev.clientX,y:ev.clientY}}
   function localPoint(ev){return{x:ev.clientX-rect.x,y:ev.clientY-rect.y}}
-  function beginResize(ev,handle){ev.preventDefault();ev.stopPropagation();drag={kind:handle,start:point(ev),rect:{...rect}};window.addEventListener('pointermove',moveResize);window.addEventListener('pointerup',endResize,{once:true})}
-  function moveResize(ev){if(!drag)return;const dx=ev.clientX-drag.start.x,dy=ev.clientY-drag.start.y,r=drag.rect;let x=r.x,y=r.y,w=r.w,h=r.h;if(drag.kind==='move'){x=r.x+dx;y=r.y+dy}else{if(drag.kind.includes('e'))w=r.w+dx;if(drag.kind.includes('s'))h=r.h+dy;if(drag.kind.includes('w')){x=r.x+dx;w=r.w-dx}if(drag.kind.includes('n')){y=r.y+dy;h=r.h-dy}if(w<minSize){if(drag.kind.includes('w'))x-=minSize-w;w=minSize}if(h<minSize){if(drag.kind.includes('n'))y-=minSize-h;h=minSize}}rect={x,y,w,h};updateRect()}
-  function endResize(){drag=null;window.removeEventListener('pointermove',moveResize)}
+  function insideRect(x,y){return x>=rect.x&&x<=rect.x+rect.w&&y>=rect.y&&y<=rect.y+rect.h}
+  function clearAutoConfirm(){if(autoConfirmTimer!==null){clearTimeout(autoConfirmTimer);autoConfirmTimer=null}}
+  function scheduleAutoConfirm(){if(!recognizeMode||!autoConfirmArmed)return;clearAutoConfirm();autoConfirmTimer=setTimeout(()=>action('copy'),autoConfirmDelayMs)}
+  function armAutoConfirm(){if(!recognizeMode)return;autoConfirmArmed=true;scheduleAutoConfirm()}
+  function resetAutoConfirm(){if(recognizeMode&&autoConfirmArmed)scheduleAutoConfirm()}
+  function beginResize(ev,handle){ev.preventDefault();ev.stopPropagation();clearAutoConfirm();drag={kind:handle,start:point(ev),rect:{...rect}};window.addEventListener('pointermove',moveResize);window.addEventListener('pointerup',endResize,{once:true})}
+  function moveResize(ev){if(!drag)return;resetAutoConfirm();const dx=ev.clientX-drag.start.x,dy=ev.clientY-drag.start.y,r=drag.rect;let x=r.x,y=r.y,w=r.w,h=r.h;if(drag.kind==='move'){x=r.x+dx;y=r.y+dy}else{if(drag.kind.includes('e'))w=r.w+dx;if(drag.kind.includes('s'))h=r.h+dy;if(drag.kind.includes('w')){x=r.x+dx;w=r.w-dx}if(drag.kind.includes('n')){y=r.y+dy;h=r.h-dy}if(w<minSize){if(drag.kind.includes('w'))x-=minSize-w;w=minSize}if(h<minSize){if(drag.kind.includes('n'))y-=minSize-h;h=minSize}}rect={x,y,w,h};updateRect()}
+  function endResize(){drag=null;window.removeEventListener('pointermove',moveResize);armAutoConfirm()}
   selection.querySelectorAll('[data-handle]').forEach(el=>el.addEventListener('pointerdown',ev=>beginResize(ev,el.dataset.handle)));selection.querySelectorAll('[data-drag]').forEach(el=>el.addEventListener('pointerdown',ev=>beginResize(ev,'move')));
+  function beginSelection(ev){if(ev.button!==0||tool||ev.target.closest('.toolbar')||ev.target.closest('[data-handle]')||ev.target.closest('[data-drag]'))return;selectionDraw={start:point(ev),active:false};window.addEventListener('pointermove',moveSelection);window.addEventListener('pointerup',endSelection,{once:true})}
+  function moveSelection(ev){if(!selectionDraw)return;const dx=ev.clientX-selectionDraw.start.x,dy=ev.clientY-selectionDraw.start.y;if(!selectionDraw.active&&Math.hypot(dx,dy)<4)return;selectionDraw.active=true;clearAutoConfirm();rect={x:Math.min(selectionDraw.start.x,ev.clientX),y:Math.min(selectionDraw.start.y,ev.clientY),w:Math.max(minSize,Math.abs(dx)),h:Math.max(minSize,Math.abs(dy))};updateRect()}
+  function endSelection(){const completed=selectionDraw?.active===true;selectionDraw=null;window.removeEventListener('pointermove',moveSelection);if(completed)armAutoConfirm()}
+  document.addEventListener('pointerdown',beginSelection);
   function setTool(next){tool=tool===next?'':next;toolbar.querySelectorAll('[data-tool]').forEach(btn=>btn.classList.toggle('active',btn.dataset.tool===tool));drawLayer.style.pointerEvents=tool?'auto':'none'}
   toolbar.querySelectorAll('[data-tool]').forEach(btn=>btn.addEventListener('click',()=>setTool(btn.dataset.tool)));
   function style(ctx){ctx.lineCap='round';ctx.lineJoin='round';ctx.strokeStyle='#ff3b30';ctx.fillStyle='#ff3b30';ctx.lineWidth=3}
@@ -347,7 +360,11 @@ function captureEditorHtml(display: ElectronDisplay): string {
   function moveDraw(ev){if(!drawing||!start)return;const p=localPoint(ev),a={x:rect.x+start.x,y:rect.y+start.y},b={x:rect.x+p.x,y:rect.y+p.y};if(tool==='pen'){style(actx);actx.beginPath();actx.moveTo(a.x,a.y);actx.lineTo(b.x,b.y);actx.stroke();start=p}else if(tool==='eraser'){actx.save();actx.globalCompositeOperation='destination-out';actx.lineWidth=24;actx.lineCap='round';actx.beginPath();actx.moveTo(a.x,a.y);actx.lineTo(b.x,b.y);actx.stroke();actx.restore();start=p}else if(tool==='mosaic'){mosaicAt(p);start=p}else{pctx.clearRect(0,0,innerWidth,innerHeight);style(pctx);if(tool==='shape')pctx.strokeRect(a.x,a.y,b.x-a.x,b.y-a.y);else if(tool==='arrow')drawArrow(pctx,a,b)}}
   drawLayer.addEventListener('pointermove',moveDraw);drawLayer.addEventListener('pointerup',()=>{if(!drawing)return;if(tool==='shape'||tool==='arrow')commitPreview();drawing=false;start=null});
   window.__mmsExport=()=>{const scaleX=image.naturalWidth/innerWidth,scaleY=image.naturalHeight/innerHeight;const out=document.createElement('canvas');out.width=Math.max(1,Math.round(rect.w*scaleX));out.height=Math.max(1,Math.round(rect.h*scaleY));const ctx=out.getContext('2d');ctx.drawImage(image,rect.x*scaleX,rect.y*scaleY,rect.w*scaleX,rect.h*scaleY,0,0,out.width,out.height);ctx.drawImage(ann,rect.x*dpr,rect.y*dpr,rect.w*dpr,rect.h*dpr,0,0,out.width,out.height);return{dataUrl:out.toDataURL('image/png'),bounds:{x:Math.round(displayBounds.x+rect.x),y:Math.round(displayBounds.y+rect.y),width:Math.round(rect.w),height:Math.round(rect.h)}}};
-  function action(name){console.log('MMS_CAPTURE_ACTION:'+name)}toolbar.querySelectorAll('[data-action]').forEach(btn=>btn.addEventListener('click',()=>action(btn.dataset.action)));document.addEventListener('keydown',ev=>{if(ev.key==='Escape')action('cancel');if(ev.key==='Enter'&&!ev.shiftKey)action('copy')});
+  function action(name){clearAutoConfirm();console.log('MMS_CAPTURE_ACTION:'+name)}toolbar.querySelectorAll('[data-action]').forEach(btn=>btn.addEventListener('click',()=>action(btn.dataset.action)));
+  document.addEventListener('pointermove',ev=>{if(recognizeMode&&autoConfirmArmed&&insideRect(ev.clientX,ev.clientY)&&!selectionDraw)resetAutoConfirm()});
+  toolbar.addEventListener('pointermove',resetAutoConfirm);toolbar.addEventListener('pointerdown',resetAutoConfirm);
+  document.addEventListener('dblclick',ev=>{if(captureMode==='capture'&&!tool&&insideRect(ev.clientX,ev.clientY)&&!ev.target.closest('.toolbar'))action('copy')});
+  document.addEventListener('keydown',ev=>{if(ev.key==='Escape')action('cancel');if(ev.key==='Enter'&&!ev.shiftKey)action('copy')});
   updateRect();setTimeout(placeToolbar,50);
 })();
 </script></body></html>`;
@@ -409,11 +426,12 @@ async function openPinnedCapture(
   pinWindow.focus();
 }
 
-/** 使用 Electron 屏幕源打开 PixPin 风格截图覆盖层。 */
+/** 使用 Electron 屏幕源按普通截图或截图并识别模式打开 PixPin 风格覆盖层。 */
 async function captureWithEditor(
   runtime: ElectronCaptureRuntime,
   nodeRuntime: NodeCaptureRuntime,
-  hideObsidian: boolean
+  hideObsidian: boolean,
+  mode: DesktopCaptureMode
 ): Promise<DesktopCaptureResult | null> {
   const BrowserWindow = runtime.remote?.BrowserWindow ?? runtime.BrowserWindow;
   const screen = runtime.remote?.screen ?? runtime.screen;
@@ -443,7 +461,7 @@ async function captureWithEditor(
     const imagePath = nodeRuntime.path.join(directory, "screen.png");
     const htmlPath = nodeRuntime.path.join(directory, "capture.html");
     await nodeRuntime.fs.writeFile(imagePath, screenshotBytes);
-    await nodeRuntime.fs.writeFile(htmlPath, captureEditorHtml(display));
+    await nodeRuntime.fs.writeFile(htmlPath, captureEditorHtml(display, mode));
     const captureWindow = new BrowserWindow({
       x: display.bounds.x,
       y: display.bounds.y,
@@ -556,11 +574,11 @@ async function captureWithSystemTool(runtime: ElectronCaptureRuntime, nodeRuntim
   }
 }
 
-/** 启动可调整、可标注的桌面截图覆盖层；不支持时回退到系统区域截图。 */
-export async function captureDesktopScreenshot(hideObsidian: boolean): Promise<DesktopCaptureResult> {
+/** 启动指定交互模式的桌面截图覆盖层；不支持时回退到系统区域截图。 */
+export async function captureDesktopScreenshot(hideObsidian: boolean, mode: DesktopCaptureMode = "capture"): Promise<DesktopCaptureResult> {
   const electronRuntime = getElectronRuntime();
   const nodeRuntime = getNodeCaptureRuntime();
   if (!electronRuntime || !nodeRuntime) throw new Error("截图仅支持 Obsidian 桌面端");
-  const edited = await captureWithEditor(electronRuntime, nodeRuntime, hideObsidian);
+  const edited = await captureWithEditor(electronRuntime, nodeRuntime, hideObsidian, mode);
   return edited ?? captureWithSystemTool(electronRuntime, nodeRuntime, hideObsidian);
 }

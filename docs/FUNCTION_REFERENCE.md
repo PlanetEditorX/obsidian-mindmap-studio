@@ -6444,15 +6444,15 @@ async recognizeImage( image: RecognizableImage, blob: Blob, profileId?: string, 
 
 源码：`src/main.ts:845`
 
-调用桌面系统截图工具，并根据设置决定是否临时最小化 Obsidian。
+按普通截图或截图并识别模式启动桌面覆盖层，并根据设置决定是否隐藏 Obsidian。
 
 ```ts
-async captureScreenshot(): Promise<DesktopCaptureResult>
+async captureScreenshot(recognizeAfter = false): Promise<DesktopCaptureResult>
 ```
 
 ### 方法 `MindMapStudioPlugin.testAiProfile`
 
-源码：`src/main.ts:850`
+源码：`src/main.ts:853`
 
 使用最小请求检测 AI 接口、鉴权和模型是否可用。
 
@@ -6462,7 +6462,7 @@ async testAiProfile(profileId: string): Promise<void>
 
 ### 方法 `MindMapStudioPlugin.getAiProfileModels`
 
-源码：`src/main.ts:877`
+源码：`src/main.ts:880`
 
 获取配置服务公开的模型目录，不改变当前选择的模型。
 
@@ -6472,7 +6472,7 @@ async getAiProfileModels(profileId: string): Promise<string[]>
 
 ### 方法 `MindMapStudioPlugin.setAiProfileThinkingMode`
 
-源码：`src/main.ts:885`
+源码：`src/main.ts:888`
 
 保存由 AI 助手窗口切换的深度思考状态，并与设置页共用同一配置。
 
@@ -6482,7 +6482,7 @@ async setAiProfileThinkingMode(profileId: string, enabled: boolean): Promise<voi
 
 ### 方法 `MindMapStudioPlugin.installFileExplorerFilter`
 
-源码：`src/main.ts:893`
+源码：`src/main.ts:896`
 
 Installs a lightweight File Explorer observer; it changes visibility only, never vault data.
 
@@ -6492,7 +6492,7 @@ private installFileExplorerFilter(): void
 
 ### 方法 `MindMapStudioPlugin.scheduleFileExplorerFilter`
 
-源码：`src/main.ts:905`
+源码：`src/main.ts:908`
 
 Defers File Explorer filtering so expanding a folder does not cause repeated synchronous DOM scans.
 
@@ -6502,7 +6502,7 @@ private scheduleFileExplorerFilter(): void
 
 ### 方法 `MindMapStudioPlugin.getActiveDisplayMode`
 
-源码：`src/main.ts:921`
+源码：`src/main.ts:924`
 
 返回当前会话正在使用的显示模式。大纲可在会话内同步，但不会成为下次启动默认值。
 
@@ -6512,7 +6512,7 @@ getActiveDisplayMode(): DisplayMode
 
 ### 方法 `MindMapStudioPlugin.isQuestionBankFile`
 
-源码：`src/main.ts:930`
+源码：`src/main.ts:933`
 
 Returns whether a map path belongs to the configured question-bank folder or one of its descendants.
 
@@ -6522,7 +6522,7 @@ isQuestionBankFile(file: TFile | null): boolean
 
 ### 方法 `MindMapStudioPlugin.setGlobalDisplayMode`
 
-源码：`src/main.ts:942`
+源码：`src/main.ts:945`
 
 同步所有已打开视图的显示模式。导图、文章和通读会持久化为下次启动模式； 大纲仅记录在当前会话，避免重新打开插件时默认进入大纲。
 
@@ -6532,7 +6532,7 @@ async setGlobalDisplayMode(mode: DisplayMode): Promise<void>
 
 ### 方法 `MindMapStudioPlugin.renameReadingLocationPathInSettings`
 
-源码：`src/main.ts:957`
+源码：`src/main.ts:960`
 
 将文件重命名同步到所有语义阅读位置链，避免改名后恢复记录失联。
 
@@ -6542,7 +6542,7 @@ private async renameReadingLocationPathInSettings(oldPath: string, newPath: stri
 
 ### 方法 `MindMapStudioPlugin.resetAllSettings`
 
-源码：`src/main.ts:978`
+源码：`src/main.ts:981`
 
 执行“reset all settings”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
 
@@ -6552,7 +6552,7 @@ async resetAllSettings(): Promise<void>
 
 ### 方法 `MindMapStudioPlugin.refreshOpenViews`
 
-源码：`src/main.ts:988`
+源码：`src/main.ts:991`
 
 刷新open views，并保持模型、界面和持久化状态的一致性。
 
@@ -6562,7 +6562,7 @@ refreshOpenViews(): void
 
 ### 方法 `MindMapStudioPlugin.createConfiguredDocument`
 
-源码：`src/main.ts:1000`
+源码：`src/main.ts:1003`
 
 创建configured document，并保持模型、界面和持久化状态的一致性。
 
@@ -6572,7 +6572,7 @@ createConfiguredDocument(title: string): MindMapDocument
 
 ### 方法 `MindMapStudioPlugin.resolveMindMapFile`
 
-源码：`src/main.ts:1016`
+源码：`src/main.ts:1019`
 
 解析并确定mind map file，并保持模型、界面和持久化状态的一致性。
 
@@ -6582,7 +6582,7 @@ private resolveMindMapFile(path: string, sourcePath = ""): TFile | null
 
 ### 方法 `MindMapStudioPlugin.readMindMapDocument`
 
-源码：`src/main.ts:1031`
+源码：`src/main.ts:1034`
 
 执行“read mind map document”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
 
@@ -6592,7 +6592,7 @@ private async readMindMapDocument(file: TFile): Promise<MindMapDocument>
 
 ### 方法 `MindMapStudioPlugin.findArticleNodeDepth`
 
-源码：`src/main.ts:1043`
+源码：`src/main.ts:1046`
 
 按自动或手动文章层级查找目标节点的绝对深度，而不是直接使用物理树深度。
 
@@ -6602,7 +6602,7 @@ private findArticleNodeDepth(root: MindMapNode, nodeId: string, baseDepth = 0): 
 
 ### 方法 `MindMapStudioPlugin.computeArticleBaseDepth`
 
-源码：`src/main.ts:1055`
+源码：`src/main.ts:1058`
 
 执行“compute article base depth”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
 
@@ -6612,7 +6612,7 @@ private async computeArticleBaseDepth(file: TFile, document: MindMapDocument, vi
 
 ### 方法 `MindMapStudioPlugin.buildArticleContext`
 
-源码：`src/main.ts:1083`
+源码：`src/main.ts:1086`
 
 沿子导图 navigation.parentPath 逐级回溯父文件，计算当前子导图在整篇文章中的基础标题深度、完整面包屑和顶层目录数据，并防止循环引用。
 
@@ -6622,7 +6622,7 @@ async buildArticleContext(file: TFile, document: MindMapDocument): Promise<
 
 ### 类型 `Item`
 
-源码：`src/main.ts:1104`
+源码：`src/main.ts:1107`
 
 Item 类型定义，用于限制可接受值并让序列化数据保持稳定。
 
@@ -6632,7 +6632,7 @@ type Item =
 
 ### 方法 `MindMapStudioPlugin.buildDescendantReadingSections`
 
-源码：`src/main.ts:1207`
+源码：`src/main.ts:1210`
 
 Collects the current map and every reachable child map without walking up to its parent. This is the export counterpart of continuous reading.
 
@@ -6642,7 +6642,7 @@ async buildDescendantReadingSections(file: TFile, document: MindMapDocument): Pr
 
 ### 方法 `MindMapStudioPlugin.getAvailablePath`
 
-源码：`src/main.ts:1246`
+源码：`src/main.ts:1249`
 
 读取并返回available path，并保持模型、界面和持久化状态的一致性。
 
@@ -6652,7 +6652,7 @@ async getAvailablePath(preferredPath: string): Promise<string>
 
 ### 方法 `MindMapStudioPlugin.createMindMap`
 
-源码：`src/main.ts:1263`
+源码：`src/main.ts:1266`
 
 创建mind map，并保持模型、界面和持久化状态的一致性。
 
@@ -6662,7 +6662,7 @@ async createMindMap(options:
 
 ### 方法 `MindMapStudioPlugin.syncMindMapTitleToFilename`
 
-源码：`src/main.ts:1294`
+源码：`src/main.ts:1297`
 
 Synchronizes a saved map's filename with its root node title and preserves parent/child navigation references when the map is linked as a submap.
 
@@ -6672,7 +6672,7 @@ async syncMindMapTitleToFilename(file: TFile, document: MindMapDocument): Promis
 
 ### 方法 `MindMapStudioPlugin.updateParentSubmapReference`
 
-源码：`src/main.ts:1315`
+源码：`src/main.ts:1318`
 
 Updates the parent node that links to a renamed child map.
 
@@ -6682,7 +6682,7 @@ private async updateParentSubmapReference(file: TFile, oldPath: string, parentPa
 
 ### 方法 `MindMapStudioPlugin.updateChildSubmapNavigation`
 
-源码：`src/main.ts:1330`
+源码：`src/main.ts:1333`
 
 Updates navigation metadata in child maps after their parent map was renamed.
 
@@ -6692,7 +6692,7 @@ private async updateChildSubmapNavigation(file: TFile, oldPath: string, document
 
 ### 方法 `MindMapStudioPlugin.openAsMindMap`
 
-源码：`src/main.ts:1351`
+源码：`src/main.ts:1354`
 
 打开as mind map，并保持模型、界面和持久化状态的一致性。
 
@@ -6702,7 +6702,7 @@ async openAsMindMap(file: TFile, preferredLeaf?: WorkspaceLeaf, focusNodeId?: st
 
 ### 方法 `MindMapStudioPlugin.savePastedImage`
 
-源码：`src/main.ts:1371`
+源码：`src/main.ts:1374`
 
 保存pasted image，并保持模型、界面和持久化状态的一致性。
 
@@ -6712,7 +6712,7 @@ async savePastedImage(blob: Blob, suggestedName: string, sourceFile: TFile | nul
 
 ### 方法 `MindMapStudioPlugin.importDesktopMarkdownImages`
 
-源码：`src/main.ts:1396`
+源码：`src/main.ts:1399`
 
 读取桌面 Markdown 同目录或附件回退路径中的图片，并复制到当前导图资源目录。
 
@@ -6722,7 +6722,7 @@ async importDesktopMarkdownImages(document: MindMapDocument, sourceDirectory: st
 
 ### 方法 `MindMapStudioPlugin.readImageSource`
 
-源码：`src/main.ts:1423`
+源码：`src/main.ts:1426`
 
 执行“read image source”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
 
@@ -6732,7 +6732,7 @@ async readImageSource(source: string, sourceFile: TFile | null): Promise<
 
 ### 方法 `MindMapStudioPlugin.getImageHostChoices`
 
-源码：`src/main.ts:1454`
+源码：`src/main.ts:1457`
 
 读取并返回image host choices，并保持模型、界面和持久化状态的一致性。
 
@@ -6742,7 +6742,7 @@ getImageHostChoices(): ImageHostChoice[]
 
 ### 方法 `MindMapStudioPlugin.getImageHostPriorityIds`
 
-源码：`src/main.ts:1462`
+源码：`src/main.ts:1465`
 
 Returns enabled image host IDs ordered by render failover priority.
 
@@ -6752,7 +6752,7 @@ getImageHostPriorityIds(): string[]
 
 ### 方法 `MindMapStudioPlugin.getDefaultUploadHostIds`
 
-源码：`src/main.ts:1473`
+源码：`src/main.ts:1476`
 
 读取并返回default upload host ids，并保持模型、界面和持久化状态的一致性。
 
@@ -6762,7 +6762,7 @@ getDefaultUploadHostIds(): string[]
 
 ### 方法 `MindMapStudioPlugin.uploadImageToHosts`
 
-源码：`src/main.ts:1487`
+源码：`src/main.ts:1490`
 
 把同一张图片上传到多个已配置图床，分别收集成功与失败结果。只有所有选中图床成功且文档保存完成后，调用方才允许删除本地文件。
 
@@ -6772,7 +6772,7 @@ async uploadImageToHosts(blob: Blob, suggestedName: string, hostIds: string[]): 
 
 ### 方法 `MindMapStudioPlugin.testImageHost`
 
-源码：`src/main.ts:1519`
+源码：`src/main.ts:1522`
 
 执行“test image host”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
 
@@ -6782,7 +6782,7 @@ async testImageHost(hostId: string): Promise<void>
 
 ### 方法 `MindMapStudioPlugin.scheduleAutoUpload`
 
-源码：`src/main.ts:1558`
+源码：`src/main.ts:1561`
 
 安排延迟执行auto upload，并保持模型、界面和持久化状态的一致性。
 
@@ -6792,7 +6792,7 @@ scheduleAutoUpload(file: TFile | null, nodeId: string, blockId: string, localPat
 
 ### 方法 `MindMapStudioPlugin.deleteRecognizedImageLocalAsset`
 
-源码：`src/main.ts:1570`
+源码：`src/main.ts:1573`
 
 删除已被识图文字替换的本地图片；共享资源会保留。
 
@@ -6802,7 +6802,7 @@ async deleteRecognizedImageLocalAsset(mindMapPath: string, localPath: string, bl
 
 ### 方法 `MindMapStudioPlugin.resumePendingAutoUploads`
 
-源码：`src/main.ts:1576`
+源码：`src/main.ts:1579`
 
 根据本地图片文件时间恢复延迟上传；到期图片在重新打开导图后立即上传。
 
@@ -6812,7 +6812,7 @@ async resumePendingAutoUploads(file: TFile, document: MindMapDocument): Promise<
 
 ### 方法 `MindMapStudioPlugin.queueAutoUpload`
 
-源码：`src/main.ts:1595`
+源码：`src/main.ts:1598`
 
 安排一次可去重的本地图片自动上传。
 
@@ -6822,7 +6822,7 @@ private queueAutoUpload( mindMapFile: TFile, nodeId: string, blockId: string, lo
 
 ### 方法 `MindMapStudioPlugin.runAutoUploadTask`
 
-源码：`src/main.ts:1630`
+源码：`src/main.ts:1633`
 
 执行延迟自动上传任务。它确认节点和图片块仍存在、读取本地资源、上传到默认图床、更新远程镜像列表并保存；任一图床失败时保留本地文件。
 
@@ -6832,7 +6832,7 @@ private async runAutoUploadTask( mindMapFile: TFile, nodeId: string, blockId: st
 
 ### 方法 `MindMapStudioPlugin.uploadImageToHostConfig`
 
-源码：`src/main.ts:1702`
+源码：`src/main.ts:1705`
 
 按单个图床配置上传图片，并从 JSON 或文本响应中解析最终图片地址。 @throws 配置、请求体或响应格式不合法，以及网络请求失败时抛出错误。
 
@@ -6842,7 +6842,7 @@ private async uploadImageToHostConfig(host: ImageHostConfig, blob: Blob, suggest
 
 ### 方法 `MindMapStudioPlugin.flushOpenView`
 
-源码：`src/main.ts:1743`
+源码：`src/main.ts:1746`
 
 执行“flush open view”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
 
@@ -6852,7 +6852,7 @@ private async flushOpenView(path: string): Promise<void>
 
 ### 方法 `MindMapStudioPlugin.refreshOpenMindMap`
 
-源码：`src/main.ts:1755`
+源码：`src/main.ts:1758`
 
 刷新open mind map，并保持模型、界面和持久化状态的一致性。
 
@@ -6862,7 +6862,7 @@ private async refreshOpenMindMap(file: TFile, document: MindMapDocument): Promis
 
 ### 方法 `MindMapStudioPlugin.deleteLocalAssetIfSafe`
 
-源码：`src/main.ts:1771`
+源码：`src/main.ts:1774`
 
 在删除本地图片前进行最终安全检查：远程源必须存在、当前文档必须已保存、资源路径必须是仓库内文件且没有其他节点继续引用。
 
@@ -6872,7 +6872,7 @@ private async deleteLocalAssetIfSafe(localPath: string, currentMindMapPath: stri
 
 ### 方法 `MindMapStudioPlugin.mimeFromFilename`
 
-源码：`src/main.ts:1806`
+源码：`src/main.ts:1809`
 
 根据资源文件名推断图片 MIME，未知扩展名按二进制流处理。
 
@@ -6882,7 +6882,7 @@ private mimeFromFilename(filename: string): string
 
 ### 方法 `MindMapStudioPlugin.createSubmapFile`
 
-源码：`src/main.ts:1818`
+源码：`src/main.ts:1821`
 
 在父导图资源目录下创建子导图文件，写入 parentPath、parentNodeId 和 parentTitle，并把生成路径回写到父节点，实现可靠的双向导航。
 
@@ -6892,7 +6892,7 @@ async createSubmapFile(parentFile: TFile, node: MindMapNode): Promise<MindMapSub
 
 ### 方法 `MindMapStudioPlugin.buildSubmapDocument`
 
-源码：`src/main.ts:1831`
+源码：`src/main.ts:1834`
 
 创建子导图文档并统一写入双向导航元数据。
 
@@ -6902,7 +6902,7 @@ private buildSubmapDocument(parentFile: TFile, node: MindMapNode, includeNodeCon
 
 ### 方法 `MindMapStudioPlugin.persistSubmapDocument`
 
-源码：`src/main.ts:1870`
+源码：`src/main.ts:1873`
 
 把子导图写入父导图专属资源目录，避免多个父导图的同名子图发生路径冲突。
 
@@ -6912,7 +6912,7 @@ private async persistSubmapDocument(parentFile: TFile, node: MindMapNode, docume
 
 ### 方法 `MindMapStudioPlugin.deleteSubmapFile`
 
-源码：`src/main.ts:1889`
+源码：`src/main.ts:1892`
 
 Moves a linked child mind-map file to the system trash.
 
@@ -6922,7 +6922,7 @@ async deleteSubmapFile(parentFile: TFile, submap: MindMapSubmap): Promise<boolea
 
 ### 方法 `MindMapStudioPlugin.openMindMapPath`
 
-源码：`src/main.ts:1904`
+源码：`src/main.ts:1907`
 
 打开mind map path，并保持模型、界面和持久化状态的一致性。
 
@@ -6932,7 +6932,7 @@ async openMindMapPath(path: string, sourcePath = "", preferredLeaf?: WorkspaceLe
 
 ### 方法 `MindMapStudioPlugin.ensureFolderPath`
 
-源码：`src/main.ts:1921`
+源码：`src/main.ts:1924`
 
 执行“ensure folder path”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
 
@@ -6942,7 +6942,7 @@ private async ensureFolderPath(folder: string): Promise<void>
 
 ### 方法 `MindMapStudioPlugin.isMindMapFile`
 
-源码：`src/main.ts:1938`
+源码：`src/main.ts:1941`
 
 判断mind map file，并保持模型、界面和持久化状态的一致性。
 
@@ -6952,7 +6952,7 @@ isMindMapFile(file: TFile): boolean
 
 ### 方法 `MindMapStudioPlugin.convertMarkdownFile`
 
-源码：`src/main.ts:1947`
+源码：`src/main.ts:1950`
 
 转换markdown file，并保持模型、界面和持久化状态的一致性。
 
@@ -6962,7 +6962,7 @@ private async convertMarkdownFile(file: TFile): Promise<void>
 
 ### 方法 `MindMapStudioPlugin.copyImportedMarkdownImages`
 
-源码：`src/main.ts:1971`
+源码：`src/main.ts:1974`
 
 将 Markdown 中引用的本地图片复制到新导图自己的资源目录，并改写图片块引用。 导入完成后，导图不再依赖原 Markdown 附件目录，移动或删除原笔记也不会导致图片失效。
 
@@ -6972,7 +6972,7 @@ private async copyImportedMarkdownImages(document: MindMapDocument, markdownFile
 
 ### 方法 `MindMapStudioPlugin.resolveImportedMarkdownImage`
 
-源码：`src/main.ts:2018`
+源码：`src/main.ts:2021`
 
 按固定回退顺序查找 Markdown 中的本地图片。 例如 Markdown 引用 `assets/公文/a.png` 时，依次尝试： 1. `<Markdown目录>/assets/公文/a.png` 2. `<Markdown目录>/公文/a.png` 3. `<Markdown目录>/a.png` 三个明确候选都不存在时，再交给 Obsidian 链接解析器兼容其他附件配置。
 
@@ -6982,7 +6982,7 @@ private resolveImportedMarkdownImage(linkPath: string, markdownFile: TFile): TFi
 
 ### 方法 `MindMapStudioPlugin.resolveFolder`
 
-源码：`src/main.ts:2045`
+源码：`src/main.ts:2048`
 
 解析并确定folder，并保持模型、界面和持久化状态的一致性。
 
@@ -6992,7 +6992,7 @@ private async resolveFolder(explicitFolder: string | undefined, activeFile: TFil
 
 ### 方法 `MindMapStudioPlugin.buildNewTitle`
 
-源码：`src/main.ts:2059`
+源码：`src/main.ts:2062`
 
 构建new title，并保持模型、界面和持久化状态的一致性。
 
@@ -7002,7 +7002,7 @@ private buildNewTitle(): string
 
 ### 方法 `MindMapStudioPlugin.sanitizeFilename`
 
-源码：`src/main.ts:2069`
+源码：`src/main.ts:2072`
 
 执行“sanitize filename”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
 
@@ -7012,7 +7012,7 @@ sanitizeFilename(value: string): string
 
 ### 方法 `MindMapStudioPlugin.getSourceTitle`
 
-源码：`src/main.ts:2079`
+源码：`src/main.ts:2082`
 
 读取并返回source title，并保持模型、界面和持久化状态的一致性。
 
@@ -7022,7 +7022,7 @@ private getSourceTitle(context: MarkdownPostProcessorContext): string
 
 ### 方法 `MindMapStudioPlugin.processMindMapEmbeds`
 
-源码：`src/main.ts:2091`
+源码：`src/main.ts:2094`
 
 注册 Markdown 代码块静态渲染，并在阅读模式中解析嵌入的思维导图源。静态预览不会修改原文件。
 
@@ -7032,7 +7032,7 @@ private async processMindMapEmbeds(element: HTMLElement, context: MarkdownPostPr
 
 ### 方法 `MindMapStudioPlugin.extractToSubmap`
 
-源码：`src/main.ts:2120`
+源码：`src/main.ts:2123`
 
 将指定节点及其后代提取为独立子导图文件。
 
@@ -7042,7 +7042,7 @@ async extractToSubmap(parentFile: TFile, node: MindMapNode): Promise<MindMapSubm
 
 ### 方法 `MindMapStudioPlugin.mergeFromSubmap`
 
-源码：`src/main.ts:2130`
+源码：`src/main.ts:2133`
 
 将当前子导图合并回其父导图。
 
@@ -8346,11 +8346,21 @@ export function appearanceFromThemePreset(id: MindMapThemePresetId): MindMapAppe
 
 桌面截图覆盖层、选区标注、固定窗口与系统截图兼容回退。
 
-### 类型 `DesktopCaptureAction`
+### 类型 `DesktopCaptureMode`
 
 源码：`src/utils/desktop-capture.ts:7`
 
 参见源码中的实现和调用位置。
+
+```ts
+export type DesktopCaptureMode = "capture" | "capture-recognize";
+```
+
+### 类型 `DesktopCaptureAction`
+
+源码：`src/utils/desktop-capture.ts:10`
+
+截图编辑器完成后的用户动作。
 
 ```ts
 export type DesktopCaptureAction = "copy" | "recognize-copy" | "download" | "pin";
@@ -8358,7 +8368,7 @@ export type DesktopCaptureAction = "copy" | "recognize-copy" | "download" | "pin
 
 ### 接口 `DesktopCaptureResult`
 
-源码：`src/utils/desktop-capture.ts:10`
+源码：`src/utils/desktop-capture.ts:13`
 
 截图完成后返回的图片、动作及建议文件名。
 
@@ -8368,7 +8378,7 @@ export interface DesktopCaptureResult
 
 ### 接口 `ElectronNativeImage`
 
-源码：`src/utils/desktop-capture.ts:17`
+源码：`src/utils/desktop-capture.ts:20`
 
 Electron 原生图片的最小接口。
 
@@ -8378,7 +8388,7 @@ interface ElectronNativeImage
 
 ### 接口 `ElectronDesktopSource`
 
-源码：`src/utils/desktop-capture.ts:23`
+源码：`src/utils/desktop-capture.ts:26`
 
 Electron 截图源。
 
@@ -8388,7 +8398,7 @@ interface ElectronDesktopSource
 
 ### 接口 `ElectronDisplay`
 
-源码：`src/utils/desktop-capture.ts:29`
+源码：`src/utils/desktop-capture.ts:32`
 
 Electron 显示器边界。
 
@@ -8398,7 +8408,7 @@ interface ElectronDisplay
 
 ### 接口 `ElectronCaptureWebContents`
 
-源码：`src/utils/desktop-capture.ts:36`
+源码：`src/utils/desktop-capture.ts:39`
 
 Electron 浏览器窗口网页内容接口。
 
@@ -8408,7 +8418,7 @@ interface ElectronCaptureWebContents
 
 ### 接口 `ElectronCaptureWindow`
 
-源码：`src/utils/desktop-capture.ts:42`
+源码：`src/utils/desktop-capture.ts:45`
 
 Electron 浏览器窗口最小接口。
 
@@ -8418,7 +8428,7 @@ interface ElectronCaptureWindow
 
 ### 接口 `ElectronCaptureWindowConstructor`
 
-源码：`src/utils/desktop-capture.ts:54`
+源码：`src/utils/desktop-capture.ts:57`
 
 Electron 浏览器窗口构造器。
 
@@ -8428,7 +8438,7 @@ interface ElectronCaptureWindowConstructor
 
 ### 接口 `ElectronCaptureRuntime`
 
-源码：`src/utils/desktop-capture.ts:78`
+源码：`src/utils/desktop-capture.ts:81`
 
 Electron 运行时中截图功能使用的最小宿主接口。
 
@@ -8438,7 +8448,7 @@ interface ElectronCaptureRuntime
 
 ### 接口 `ElectronWindowRuntime`
 
-源码：`src/utils/desktop-capture.ts:110`
+源码：`src/utils/desktop-capture.ts:113`
 
 Electron 主窗口控制与主进程 API 所需的最小运行时接口。
 
@@ -8448,7 +8458,7 @@ interface ElectronWindowRuntime
 
 ### 接口 `ElectronWindowHandle`
 
-源码：`src/utils/desktop-capture.ts:118`
+源码：`src/utils/desktop-capture.ts:121`
 
 截图前临时最小化、截图后恢复所需的主窗口接口。
 
@@ -8458,7 +8468,7 @@ interface ElectronWindowHandle
 
 ### 接口 `NodeCaptureRuntime`
 
-源码：`src/utils/desktop-capture.ts:128`
+源码：`src/utils/desktop-capture.ts:131`
 
 桌面截图命令使用的最小 Node.js 运行时接口。
 
@@ -8468,7 +8478,7 @@ interface NodeCaptureRuntime
 
 ### 函数 `screenshotCommandCandidates`
 
-源码：`src/utils/desktop-capture.ts:156`
+源码：`src/utils/desktop-capture.ts:159`
 
 返回当前桌面平台对应的截图命令候选，按优先级依次尝试。
 
@@ -8478,7 +8488,7 @@ export function screenshotCommandCandidates(platform: string): Array<
 
 ### 函数 `copyBytesToArrayBuffer`
 
-源码：`src/utils/desktop-capture.ts:170`
+源码：`src/utils/desktop-capture.ts:173`
 
 将任意 Uint8Array 复制为 Blob 接受的普通 ArrayBuffer，兼容 SharedArrayBuffer 类型声明。
 
@@ -8488,7 +8498,7 @@ export function copyBytesToArrayBuffer(bytes: Uint8Array): ArrayBuffer
 
 ### 函数 `pngFingerprint`
 
-源码：`src/utils/desktop-capture.ts:177`
+源码：`src/utils/desktop-capture.ts:180`
 
 将剪贴板 PNG 二进制转换为稳定摘要，用于检测截图是否产生了新图片。
 
@@ -8498,7 +8508,7 @@ export function pngFingerprint(bytes: Uint8Array): string
 
 ### 函数 `getElectronRuntime`
 
-源码：`src/utils/desktop-capture.ts:189`
+源码：`src/utils/desktop-capture.ts:192`
 
 从 Obsidian 桌面端获取 Electron API；移动端或受限环境返回 null。
 
@@ -8508,7 +8518,7 @@ function getElectronRuntime(): ElectronCaptureRuntime | null
 
 ### 函数 `getCurrentObsidianWindow`
 
-源码：`src/utils/desktop-capture.ts:210`
+源码：`src/utils/desktop-capture.ts:213`
 
 从 Electron 的新旧渲染器接口中取得当前 Obsidian 主窗口。
 
@@ -8518,7 +8528,7 @@ function getCurrentObsidianWindow(runtime: ElectronCaptureRuntime): ElectronWind
 
 ### 函数 `waitForWindowMinimized`
 
-源码：`src/utils/desktop-capture.ts:218`
+源码：`src/utils/desktop-capture.ts:221`
 
 等待窗口完成最小化，避免截图源中仍包含 Obsidian 窗口。
 
@@ -8528,7 +8538,7 @@ async function waitForWindowMinimized(windowHandle: ElectronWindowHandle): Promi
 
 ### 函数 `getNodeCaptureRuntime`
 
-源码：`src/utils/desktop-capture.ts:226`
+源码：`src/utils/desktop-capture.ts:229`
 
 从 Obsidian 桌面端按需获取 Node.js API，避免移动端加载插件时静态引用 Node 模块。
 
@@ -8538,7 +8548,7 @@ function getNodeCaptureRuntime(): NodeCaptureRuntime | null
 
 ### 函数 `waitForClipboardImage`
 
-源码：`src/utils/desktop-capture.ts:243`
+源码：`src/utils/desktop-capture.ts:246`
 
 等待系统截图工具把一张新图片写入剪贴板。
 
@@ -8548,7 +8558,7 @@ async function waitForClipboardImage(runtime: ElectronCaptureRuntime, previousFi
 
 ### 函数 `executeCaptureCommand`
 
-源码：`src/utils/desktop-capture.ts:255`
+源码：`src/utils/desktop-capture.ts:258`
 
 使用 execFile 执行一个截图候选命令。
 
@@ -8558,7 +8568,7 @@ function executeCaptureCommand(runtime: NodeCaptureRuntime, command: string, arg
 
 ### 函数 `runScreenshotCommand`
 
-源码：`src/utils/desktop-capture.ts:265`
+源码：`src/utils/desktop-capture.ts:268`
 
 执行系统截图命令；交互式命令失败时继续尝试下一个候选。
 
@@ -8568,7 +8578,7 @@ async function runScreenshotCommand( runtime: NodeCaptureRuntime, candidates: Ar
 
 ### 函数 `pngDataUrlToBytes`
 
-源码：`src/utils/desktop-capture.ts:287`
+源码：`src/utils/desktop-capture.ts:290`
 
 将 data URL 中的 PNG 转成二进制。
 
@@ -8578,17 +8588,17 @@ function pngDataUrlToBytes(dataUrl: string): Uint8Array
 
 ### 函数 `captureEditorHtml`
 
-源码：`src/utils/desktop-capture.ts:297`
+源码：`src/utils/desktop-capture.ts:300`
 
-生成截图覆盖层页面；页面只加载本地截图文件，不访问网络。
+生成截图覆盖层页面；普通截图双击确认，截图并识别按三秒空闲计时确认。
 
 ```ts
-function captureEditorHtml(display: ElectronDisplay): string
+function captureEditorHtml(display: ElectronDisplay, mode: DesktopCaptureMode): string
 ```
 
 ### 函数 `writePngToClipboard`
 
-源码：`src/utils/desktop-capture.ts:357`
+源码：`src/utils/desktop-capture.ts:374`
 
 将裁剪结果写入系统剪贴板。
 
@@ -8598,7 +8608,7 @@ function writePngToClipboard(runtime: ElectronCaptureRuntime, bytes: Uint8Array)
 
 ### 函数 `saveCaptureDownload`
 
-源码：`src/utils/desktop-capture.ts:363`
+源码：`src/utils/desktop-capture.ts:380`
 
 保存截图到用户选择的位置；取消保存时仍返回 false。
 
@@ -8608,7 +8618,7 @@ async function saveCaptureDownload(runtime: ElectronCaptureRuntime, nodeRuntime:
 
 ### 函数 `openPinnedCapture`
 
-源码：`src/utils/desktop-capture.ts:375`
+源码：`src/utils/desktop-capture.ts:392`
 
 打开始终置顶的无边框截图窗口。
 
@@ -8618,17 +8628,17 @@ async function openPinnedCapture( runtime: ElectronCaptureRuntime, nodeRuntime: 
 
 ### 函数 `captureWithEditor`
 
-源码：`src/utils/desktop-capture.ts:413`
+源码：`src/utils/desktop-capture.ts:430`
 
-使用 Electron 屏幕源打开 PixPin 风格截图覆盖层。
+使用 Electron 屏幕源按普通截图或截图并识别模式打开 PixPin 风格覆盖层。
 
 ```ts
-async function captureWithEditor( runtime: ElectronCaptureRuntime, nodeRuntime: NodeCaptureRuntime, hideObsidian: boolean ): Promise<DesktopCaptureResult | null>
+async function captureWithEditor( runtime: ElectronCaptureRuntime, nodeRuntime: NodeCaptureRuntime, hideObsidian: boolean, mode: DesktopCaptureMode ): Promise<DesktopCaptureResult | null>
 ```
 
 ### 函数 `captureWithSystemTool`
 
-源码：`src/utils/desktop-capture.ts:532`
+源码：`src/utils/desktop-capture.ts:550`
 
 使用系统区域截图作为高级覆盖层不可用时的兼容回退。
 
@@ -8638,12 +8648,12 @@ async function captureWithSystemTool(runtime: ElectronCaptureRuntime, nodeRuntim
 
 ### 函数 `captureDesktopScreenshot`
 
-源码：`src/utils/desktop-capture.ts:560`
+源码：`src/utils/desktop-capture.ts:578`
 
-启动可调整、可标注的桌面截图覆盖层；不支持时回退到系统区域截图。
+启动指定交互模式的桌面截图覆盖层；不支持时回退到系统区域截图。
 
 ```ts
-export async function captureDesktopScreenshot(hideObsidian: boolean): Promise<DesktopCaptureResult>
+export async function captureDesktopScreenshot(hideObsidian: boolean, mode: DesktopCaptureMode = "capture"): Promise<DesktopCaptureResult>
 ```
 
 ## `src/utils/desktop-export.ts`
