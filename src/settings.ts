@@ -361,7 +361,7 @@ export const DEFAULT_SETTINGS: MindMapStudioSettings = {
   articleLeafBulletStyle: "solid",
   articleLeafTextAlignment: "auto",
   articleLeafNumberingEnabled: false,
-  articleLeafNumberingThreshold: 3,
+  articleLeafNumberingThreshold: 4,
   hideAssetFolderInFileExplorer: false,
   hideConfiguredFilesInFileExplorer: false,
   hiddenFileExtensions: "",
@@ -835,7 +835,7 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName("末端正文转序号阈值")
-      .setDesc("达到多少个末端正文兄弟节点后自动转为序号，默认 3。")
+      .setDesc("达到多少个末端正文兄弟节点后自动转为序号，默认 4；因此 3 个节点仍显示末端正文标识。")
       .addText((text) => text
         .setValue(String(this.plugin.settings.articleLeafNumberingThreshold))
         .setPlaceholder("3")

@@ -288,11 +288,11 @@ export interface ArticleLeafNumberingOptions {
 /**
  * 展开文章节点，并按同一上级下的末端正文数量决定是否使用下一层序号。
  */
-export function buildArticleNodeInfo(root: MindMapNode, baseDepth = 0, leafNumbering: ArticleLeafNumberingOptions = { enabled: false, threshold: 3 }): ArticleNodeInfo[] {
+export function buildArticleNodeInfo(root: MindMapNode, baseDepth = 0, leafNumbering: ArticleLeafNumberingOptions = { enabled: false, threshold: 4 }): ArticleNodeInfo[] {
   const result: ArticleNodeInfo[] = [];
   const visitChildren = (parent: MindMapNode, defaultLevel: number): void => {
     const siblingHasHeading = parent.children.some((child) => isArticleHeading(child));
-    const threshold = Math.max(1, Math.min(20, Math.floor(leafNumbering.threshold) || 3));
+    const threshold = Math.max(1, Math.min(20, Math.floor(leafNumbering.threshold) || 4));
     const terminalCount = parent.children.filter((child) => !isArticleHeading(child) && child.articleNumberingMode !== "none").length;
     const convertLeaves = leafNumbering.enabled && terminalCount >= threshold && defaultLevel <= 7;
     const numberedIndexes = new Map<number, number>();
