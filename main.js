@@ -9985,6 +9985,14 @@ var MindMapEditor = class {
     this.articleRenderToken = 0;
     this.articleRenderPending = false;
     this.articleRenderViewportSnapshot = null;
+    /** Hidden render target used to keep the previous article page visible until the replacement is complete. */
+    this.articleRenderStageEl = null;
+    /** Visible loading status shown above the retained article page or first-load skeleton. */
+    this.articleRenderOverlayEl = null;
+    /** Current article page retained during an off-screen rebuild. */
+    this.articleRenderPreviousPageEl = null;
+    /** Delayed cleanup for the short enter/overlay fade after an article swap. */
+    this.articleRenderTransitionTimer = null;
     this.pendingArticleRestoreLocation = null;
     this.pendingMindMapLayoutAnimation = false;
     this.allNodesCollapseToggleTimer = null;
@@ -11732,7 +11740,7 @@ var MindMapEditor = class {
    * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
    */
   renderArticle() {
-    var _a2;
+    var _a2, _b2;
     this.articleEl.onscroll = () => this.scheduleReadingLocationCapture("article");
     const viewportSnapshot = {
       top: this.articleEl.scrollTop,
@@ -11741,14 +11749,31 @@ var MindMapEditor = class {
     };
     const token = this.beginArticleRender();
     this.articleRenderViewportSnapshot = viewportSnapshot;
-    this.articleEl.empty();
+    const previousPage = (_a2 = Array.from(this.articleEl.children).find((child) => child instanceof HTMLElement && child.matches(".mms-article-page"))) != null ? _a2 : null;
+    this.articleRenderPreviousPageEl = previousPage;
+    if (previousPage) {
+      previousPage.addClass("is-render-retained");
+      previousPage.setAttr("aria-hidden", "true");
+    } else {
+      const shell = this.articleEl.createDiv({ cls: "mms-article-loading-shell", attr: { "aria-hidden": "true" } });
+      shell.createDiv({ cls: "mms-article-loading-shell-title" });
+      for (const width of ["92%", "78%", "86%", "68%", "81%", "56%"]) {
+        const line = shell.createDiv({ cls: "mms-article-loading-shell-line" });
+        line.style.setProperty("--mms-loading-line-width", width);
+      }
+    }
     this.articleEl.addClass("is-progressive-rendering");
     this.articleEl.setAttr("aria-busy", "true");
-    const loading = this.articleEl.createDiv({ cls: "mms-article-loading", text: "\u6B63\u5728\u52A0\u8F7D\u6587\u7AE0\u2026" });
-    loading.style.minHeight = `${viewportSnapshot.height}px`;
+    const overlay = this.articleEl.createDiv({ cls: "mms-article-transition-overlay" });
+    const loading = overlay.createDiv({ cls: "mms-article-loading", attr: { role: "status", "aria-live": "polite" } });
+    loading.createSpan({ cls: "mms-article-loading-spinner", attr: { "aria-hidden": "true" } });
+    loading.createSpan({ text: previousPage ? "\u6B63\u5728\u66F4\u65B0\u6587\u7AE0\u2026" : "\u6B63\u5728\u52A0\u8F7D\u6587\u7AE0\u2026" });
+    this.articleRenderOverlayEl = overlay;
+    const stage = this.articleEl.createDiv({ cls: "mms-article-render-stage", attr: { "aria-hidden": "true" } });
+    this.articleRenderStageEl = stage;
     this.articleEl.scrollTop = viewportSnapshot.top;
     this.articleEl.scrollLeft = viewportSnapshot.left;
-    (_a2 = this.modeButtons.get("article")) == null ? void 0 : _a2.addClass("is-loading");
+    (_b2 = this.modeButtons.get("article")) == null ? void 0 : _b2.addClass("is-loading");
     this.articleRenderFrame = window.requestAnimationFrame(() => {
       this.articleRenderFrame = null;
       if (token !== this.articleRenderToken || this.currentMode !== "article") return;
@@ -11757,39 +11782,74 @@ var MindMapEditor = class {
         onProgress: () => this.maintainArticleRenderViewport(token),
         onComplete: () => this.completeArticleRender(token)
       };
-      renderArticleMode(this.articleEl, this.articleRendererOptions(incremental));
+      renderArticleMode(stage, this.articleRendererOptions(incremental));
     });
   }
   /** 保留旧文章高度，并在每批章节填充后优先恢复语义锚点。 */
   maintainArticleRenderViewport(token) {
     if (token !== this.articleRenderToken || this.currentMode !== "article") return;
     const snapshot = this.articleRenderViewportSnapshot;
-    const page = this.articleEl.querySelector(".mms-article-page");
+    const page = this.articleRenderPreviousPageEl;
     if (snapshot && page) page.style.minHeight = `${snapshot.height}px`;
-    if (snapshot) this.articleEl.scrollLeft = snapshot.left;
-    const restoredSemanticLocation = this.maintainPendingArticleLocation();
-    if (!restoredSemanticLocation && snapshot) this.articleEl.scrollTop = snapshot.top;
+    if (snapshot) {
+      this.articleEl.scrollLeft = snapshot.left;
+      const restoredSemanticLocation = page ? this.maintainPendingArticleLocation() : false;
+      if (!restoredSemanticLocation) this.articleEl.scrollTop = snapshot.top;
+    }
   }
   /** 完成文章分帧挂载，安装依赖完整章节 DOM 的交互并恢复语义阅读位置。 */
   completeArticleRender(token) {
-    var _a2, _b2;
+    var _a2, _b2, _c, _d;
     if (token !== this.articleRenderToken || this.currentMode !== "article") return;
+    const stage = this.articleRenderStageEl;
+    const page = (_a2 = stage == null ? void 0 : stage.querySelector(":scope > .mms-article-page")) != null ? _a2 : null;
+    if (!stage || !page) {
+      this.cancelArticleRender();
+      return;
+    }
+    const previousPage = this.articleRenderPreviousPageEl;
+    const snapshot = this.articleRenderViewportSnapshot;
+    page.addClass("is-render-entering");
+    if (snapshot) page.style.minHeight = `${snapshot.height}px`;
+    if (previousPage == null ? void 0 : previousPage.isConnected) previousPage.replaceWith(page);
+    else this.articleEl.insertBefore(page, (_b2 = this.articleRenderOverlayEl) != null ? _b2 : stage);
+    stage.remove();
+    previousPage == null ? void 0 : previousPage.removeClass("is-render-retained");
+    previousPage == null ? void 0 : previousPage.removeAttribute("aria-hidden");
+    (_c = this.articleEl.querySelector(":scope > .mms-article-loading-shell")) == null ? void 0 : _c.remove();
+    this.articleRenderStageEl = null;
+    this.articleRenderPreviousPageEl = null;
     this.articleRenderPending = false;
-    this.articleEl.removeClass("is-progressive-rendering");
-    this.articleEl.removeAttribute("aria-busy");
-    (_a2 = this.modeButtons.get("article")) == null ? void 0 : _a2.removeClass("is-loading");
     this.installArticleSectionCollapse();
     this.addArticleScrollToTopButton();
     this.renderArticleMiniMap();
     this.applyArticleClickMoveUi();
-    const location = (_b2 = this.pendingArticleRestoreLocation) != null ? _b2 : this.lastReadingLocation;
+    const location = (_d = this.pendingArticleRestoreLocation) != null ? _d : this.lastReadingLocation;
     this.pendingArticleRestoreLocation = null;
     if (location) this.restoreReadingLocation("article", location);
-    const page = this.articleEl.querySelector(".mms-article-page");
     this.articleRenderViewportSnapshot = null;
     window.requestAnimationFrame(() => {
       page == null ? void 0 : page.style.removeProperty("min-height");
       if (location) this.restoreReadingLocation("article", location);
+      else if (snapshot) {
+        this.articleEl.scrollLeft = snapshot.left;
+        this.articleEl.scrollTop = snapshot.top;
+      }
+      window.requestAnimationFrame(() => {
+        var _a3;
+        page.removeClass("is-render-entering");
+        this.articleEl.removeClass("is-progressive-rendering");
+        this.articleEl.removeAttribute("aria-busy");
+        (_a3 = this.modeButtons.get("article")) == null ? void 0 : _a3.removeClass("is-loading");
+        const overlay = this.articleRenderOverlayEl;
+        overlay == null ? void 0 : overlay.addClass("is-leaving");
+        if (this.articleRenderTransitionTimer !== null) window.clearTimeout(this.articleRenderTransitionTimer);
+        this.articleRenderTransitionTimer = window.setTimeout(() => {
+          this.articleRenderTransitionTimer = null;
+          overlay == null ? void 0 : overlay.remove();
+          if (this.articleRenderOverlayEl === overlay) this.articleRenderOverlayEl = null;
+        }, 180);
+      });
     });
   }
   /** Renders a compact structural navigator for article and continuous reading views. */
@@ -12163,17 +12223,29 @@ var MindMapEditor = class {
   }
   /** 取消尚未完成的文章挂载并移除工具栏和视图中的加载态。 */
   cancelArticleRender() {
-    var _a2, _b2, _c, _d, _e;
+    var _a2, _b2, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n;
     this.articleRenderToken += 1;
     this.articleRenderPending = false;
     this.articleRenderViewportSnapshot = null;
     this.pendingArticleRestoreLocation = null;
     if (this.articleRenderFrame !== null) window.cancelAnimationFrame(this.articleRenderFrame);
     this.articleRenderFrame = null;
-    (_b2 = (_a2 = this.articleEl) == null ? void 0 : _a2.querySelector(".mms-article-page")) == null ? void 0 : _b2.style.removeProperty("min-height");
-    (_c = this.articleEl) == null ? void 0 : _c.removeClass("is-progressive-rendering");
-    (_d = this.articleEl) == null ? void 0 : _d.removeAttribute("aria-busy");
-    (_e = this.modeButtons.get("article")) == null ? void 0 : _e.removeClass("is-loading");
+    if (this.articleRenderTransitionTimer !== null) window.clearTimeout(this.articleRenderTransitionTimer);
+    this.articleRenderTransitionTimer = null;
+    (_a2 = this.articleRenderStageEl) == null ? void 0 : _a2.remove();
+    this.articleRenderStageEl = null;
+    (_b2 = this.articleRenderOverlayEl) == null ? void 0 : _b2.remove();
+    this.articleRenderOverlayEl = null;
+    (_c = this.articleRenderPreviousPageEl) == null ? void 0 : _c.removeClass("is-render-retained");
+    (_d = this.articleRenderPreviousPageEl) == null ? void 0 : _d.removeAttribute("aria-hidden");
+    (_e = this.articleRenderPreviousPageEl) == null ? void 0 : _e.style.removeProperty("min-height");
+    this.articleRenderPreviousPageEl = null;
+    (_g = (_f = this.articleEl) == null ? void 0 : _f.querySelector(":scope > .mms-article-loading-shell")) == null ? void 0 : _g.remove();
+    (_i = (_h = this.articleEl) == null ? void 0 : _h.querySelector(":scope > .mms-article-page")) == null ? void 0 : _i.removeClass("is-render-entering");
+    (_k = (_j = this.articleEl) == null ? void 0 : _j.querySelector(":scope > .mms-article-page")) == null ? void 0 : _k.style.removeProperty("min-height");
+    (_l = this.articleEl) == null ? void 0 : _l.removeClass("is-progressive-rendering");
+    (_m = this.articleEl) == null ? void 0 : _m.removeAttribute("aria-busy");
+    (_n = this.modeButtons.get("article")) == null ? void 0 : _n.removeClass("is-loading");
   }
   /** 开始一次新的文章分帧挂载并返回本轮令牌。 */
   beginArticleRender() {

@@ -68,26 +68,44 @@ test("editor contracts keep text commits local and defer large article rendering
   assert.match(editorSource, /this\.mutateInlineText\(node\.id, \(\) => \{/);
   assert.match(editorSource, /prioritizeSpatialRenderItems\(/);
   assert.match(editorSource, /this\.articleRenderFrame = window\.requestAnimationFrame\(\(\) => \{/);
-  assert.match(editorSource, /renderArticleMode\(this\.articleEl, this\.articleRendererOptions\(incremental\)\)/);
+  assert.match(editorSource, /renderArticleMode\(stage, this\.articleRendererOptions\(incremental\)\)/);
   assert.match(editorSource, /this\.articleEl\.setAttr\("aria-busy", "true"\)/);
   assert.match(articleSource, /class ArticleIncrementalRenderOptions|interface ArticleIncrementalRenderOptions/);
   assert.match(articleSource, /mms-article-node is-render-pending/);
   assert.match(articleSource, /window\.requestAnimationFrame\(\(\) => renderBatch\(index\)\)/);
 });
 
-test("progressive article rerenders preserve viewport height and correct the semantic anchor after every batch", async () => {
-  const [editorSource, articleSource] = await Promise.all([
+test("progressive article rerenders retain the visible page while a hidden replacement is built", async () => {
+  const [editorSource, articleSource, cssSource] = await Promise.all([
     readFile(path.join(rootDir, "src/editor/editor.ts"), "utf8"),
-    readFile(path.join(rootDir, "src/editor/article-renderer.ts"), "utf8")
+    readFile(path.join(rootDir, "src/editor/article-renderer.ts"), "utf8"),
+    readFile(path.join(rootDir, "styles.css"), "utf8")
   ]);
   assert.match(editorSource, /articleRenderViewportSnapshot: \{ top: number; left: number; height: number \} \| null/);
-  assert.match(editorSource, /loading\.style\.minHeight = `\$\{viewportSnapshot\.height\}px`/);
+  assert.match(editorSource, /articleRenderStageEl: HTMLElement \| null/);
+  assert.match(editorSource, /previousPage\.addClass\("is-render-retained"\)/);
+  assert.match(editorSource, /mms-article-loading-shell/);
+  assert.match(editorSource, /mms-article-transition-overlay/);
+  assert.match(editorSource, /mms-article-render-stage/);
+  assert.match(editorSource, /previousPage\?\.isConnected\) previousPage\.replaceWith\(page\)/);
   assert.match(editorSource, /onProgress: \(\) => this\.maintainArticleRenderViewport\(token\)/);
   assert.match(editorSource, /target\.hasClass\("is-render-pending"\)/);
-  assert.match(editorSource, /const restoredSemanticLocation = this\.maintainPendingArticleLocation\(\)/);
-  assert.match(editorSource, /if \(!restoredSemanticLocation && snapshot\) this\.articleEl\.scrollTop = snapshot\.top/);
+  assert.match(editorSource, /const restoredSemanticLocation = page \? this\.maintainPendingArticleLocation\(\) : false/);
+  assert.match(editorSource, /if \(!restoredSemanticLocation\) this\.articleEl\.scrollTop = snapshot\.top/);
   assert.match(articleSource, /onProgress: \(\) => void/);
   assert.match(articleSource, /options\.incremental\?\.onProgress\(\)/);
+  assert.doesNotMatch(cssSource, /\.mms-article-view\.is-progressive-rendering\s*\{[^}]*cursor:\s*progress/s);
+  assert.match(cssSource, /\.mms-article-page\.is-render-retained/);
+  assert.match(cssSource, /\.mms-article-page\.is-render-entering/);
+  assert.match(cssSource, /\.mms-article-transition-overlay\.is-leaving/);
+});
+
+test("article transition cleanup cannot leave hidden stages or stale loading overlays behind", async () => {
+  const editorSource = await readFile(path.join(rootDir, "src/editor/editor.ts"), "utf8");
+  assert.match(editorSource, /this\.articleRenderStageEl\?\.remove\(\)/);
+  assert.match(editorSource, /this\.articleRenderOverlayEl\?\.remove\(\)/);
+  assert.match(editorSource, /this\.articleRenderPreviousPageEl\?\.removeClass\("is-render-retained"\)/);
+  assert.match(editorSource, /this\.articleEl\?\.querySelector<HTMLElement>\(":scope > \.mms-article-loading-shell"\)\?\.remove\(\)/);
 });
 
 test("article-context refreshes skip redundant current-page rebuilds", async () => {

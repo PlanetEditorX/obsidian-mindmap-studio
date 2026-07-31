@@ -27,10 +27,11 @@ npm run verify
 ## 交付
 
 - 代码修复说明实际行为、兼容性、测试结果和仍需手工验证的事项；回答直接、精简。
-- 每轮代码修改后返回完整源码 ZIP，文件名带六位随机数字，根目录固定为 `obsidian-mindmap-studio`。
-- 源码 ZIP 必须包含源码、测试、文档、`manifest.json`、`package.json`、`styles.css` 和重新构建的 `main.js`；排除 `Codex/`、`node_modules/`、`.git/`、临时目录、嵌套 ZIP 和未修改的 `examples/`。
-- 每次代码交付后更新 `Codex/项目/obsidian-mindmap-studio.md` 的当前状态、验证基线、待验证事项和最近交付包；不要新增重复的日志或日期总结。
-- 每次返回最新完整源码 ZIP 时，回复中必须同时给出本轮中文 Git 说明；即使用户没有再次提出，也不得省略。
+- 每轮代码修改后必须同步返回三份交付物：完整源码 ZIP、Obsidian 本地测试安装 ZIP、最新 Codex 交接 ZIP；三者使用同一个六位随机数字后缀，不得只发送其中一份或沿用上一轮 Codex。
+- 源码 ZIP 根目录固定为 `obsidian-mindmap-studio`，必须包含源码、测试、文档、`manifest.json`、`package.json`、`styles.css` 和重新构建的 `main.js`；排除 `Codex/`、`node_modules/`、`.git/`、临时目录、嵌套 ZIP 和未修改的 `examples/`。
+- 安装 ZIP 根目录固定为 `mindmap-studio`，至少包含本轮重新构建的 `main.js`、`manifest.json` 和 `styles.css`。
+- 打包前更新 `Codex/项目/obsidian-mindmap-studio.md` 的当前状态、验证基线、待验证事项、下一步和最近交付包；Codex ZIP 根目录固定为 `Codex`，仅包含长期衔接文件，不包含源码、依赖、历史归档和临时内容。
+- 每次代码交付的回复必须同时给出三份 ZIP 下载链接和本轮中文 Git 说明；即使用户没有再次提出，也不得省略。
 
 ## Git
 
