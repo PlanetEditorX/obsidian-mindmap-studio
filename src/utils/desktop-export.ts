@@ -18,7 +18,15 @@ interface ElectronPdfWindow {
 
 /** Electron 离屏 PDF 渲染窗口构造器。 */
 interface ElectronPdfWindowConstructor {
-  new(options: { show: boolean }): ElectronPdfWindow;
+  new(options: {
+    show: boolean;
+    webPreferences?: {
+      nodeIntegration?: boolean;
+      contextIsolation?: boolean;
+      sandbox?: boolean;
+      javascript?: boolean;
+    };
+  }): ElectronPdfWindow;
 }
 
 /** Electron 保存对话框运行时的最小接口。 */
@@ -111,7 +119,15 @@ export async function saveDesktopPdfFile(baseName: string, html: string): Promis
   if (!BrowserWindow) return null;
   let printWindow: ElectronPdfWindow | null = null;
   try {
-    printWindow = new BrowserWindow({ show: false });
+    printWindow = new BrowserWindow({
+      show: false,
+      webPreferences: {
+        nodeIntegration: false,
+        contextIsolation: true,
+        sandbox: true,
+        javascript: false
+      }
+    });
     await printWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
     const pdf = await printWindow.webContents.printToPDF({ pageSize: "A4", printBackground: true });
     return await saveDesktopExportFile("pdf", baseName, pdf);
