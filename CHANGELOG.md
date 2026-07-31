@@ -283,6 +283,7 @@
 
 ## Unreleased
 
+- 修复末端正文转序号后，富文本异步重渲染会移除序号而又同时隐藏原标识的问题。
 - Fix terminal body conversion to retain its generated next-level sequence prefix and remove the obsolete marker alignment gutter in article and continuous-reading modes.
 - 可编辑导图中选中节点后按 `Space` 现在会进入快速内联编辑；节点展开/收起仍可使用工具栏和右键菜单。
 - 修复按 `Enter` 新建同级节点后，快速输入框会因创建按键的残留 `keyup` 事件立即失去焦点的问题。
