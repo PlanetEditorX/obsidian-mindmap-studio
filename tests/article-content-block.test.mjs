@@ -88,6 +88,13 @@ test("empty article document title keeps a clickable inline-edit target after bl
   assert.match(styles, /\.mms-article-document-title-text\s*\{[\s\S]*display:\s*inline-block[\s\S]*min-width:\s*4em[\s\S]*min-height:\s*1\.2em/);
 });
 
+test("article document title opens AI with the current-page scope", () => {
+  const openAiScopeContextMenu = editorSource.match(/private openAiScopeContextMenu\([\s\S]*?\n  \}/)?.[0] ?? "";
+  assert.match(rendererSource, /title\.addEventListener\("contextmenu", \(event\) => \{[\s\S]*options\.openAiContextMenu\(event, options\.document\.root\.id\)/);
+  assert.match(openAiScopeContextMenu, /nodeId !== this\.document\.root\.id[\s\S]*\? nodeId : null/);
+  assert.match(openAiScopeContextMenu, /询问 AI（当前页面）/);
+});
+
 test("Enter commits an article title while Shift+Enter keeps an inline line break", () => {
   const makeInlineEditable = editorSource.match(/private makeInlineEditable\(element: HTMLElement, node: MindMapNode, placeholder: string, blockId\?: string\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
   const handleKeydown = editorSource.match(/private handleKeydown\(event: KeyboardEvent\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";

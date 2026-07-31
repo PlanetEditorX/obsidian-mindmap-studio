@@ -76,6 +76,11 @@ export function renderArticleMode(container: HTMLElement, options: ArticleRender
   renderRichTextRuns(titleText, rootTextBlock?.richText, rootTextBlock?.text ?? rootTitle);
   options.makeInlineEditable(titleText, options.document.root, "文章标题", rootTextBlock?.id);
   options.addInlineNodeActions(page, options.document.root);
+  title.addEventListener("contextmenu", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    options.openAiContextMenu(event, options.document.root.id);
+  });
 
   const directoryOnly = options.showArticleToc
     && options.articleTocEntries.length > 0
