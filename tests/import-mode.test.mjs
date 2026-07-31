@@ -57,6 +57,14 @@ test("imported local images schedule automatic image-host upload after final nod
   assert.match(mainSource, /await this\.resumePendingAutoUploads\(mindMapFile, document\)/);
 });
 
+test("automatic image uploads follow a mind-map file renamed during the pre-upload save", () => {
+  assert.match(mainSource, /private queueAutoUpload\(\s*mindMapFile: TFile/);
+  assert.match(mainSource, /void this\.runAutoUploadTask\(mindMapFile, nodeId, blockId, localPath, suggestedName, hostIds\)/);
+  assert.match(mainSource, /private async runAutoUploadTask\(\s*mindMapFile: TFile/);
+  assert.match(mainSource, /const scheduledPath = mindMapFile\.path;\s*await this\.flushOpenView\(scheduledPath\);\s*const mapFile = this\.app\.vault\.getAbstractFileByPath\(mindMapFile\.path\)/);
+  assert.match(mainSource, /deleteLocalAssetIfSafe\(localPath, mapFile\.path, blockId\)/);
+});
+
 test("file import defaults to a child branch and keeps replacement explicit", () => {
   assert.match(modalSource, /text: "导入文件"/);
   assert.match(modalSource, /导入为子节点（默认）/);

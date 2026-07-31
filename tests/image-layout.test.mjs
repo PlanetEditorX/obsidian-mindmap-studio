@@ -43,3 +43,19 @@ test("image context menu exposes layout, sizing, upload and edit actions", () =>
   assert.match(outlineSource, /image-align-\$\{block\.align \?\? "center"\}/);
   assert.match(articleSource, /image-align-\$\{block\.align \?\? "center"\}/);
 });
+
+test("canvas context menu uploads all current-page images with one host selection", () => {
+  assert.match(editorSource, /setTitle\("上传当前页面所有图片"\)[\s\S]*uploadAllPageImages/);
+  assert.match(editorSource, /private async uploadAllPageImages\(\): Promise<void>/);
+  assert.match(editorSource, /const hostIds = await chooseImageHosts\([\s\S]*getDefaultUploadHostIds\(\)/);
+  assert.match(editorSource, /const missingHostIds = hostIds\.filter\(\(hostId\) => !existing\.has\(hostId\)\)/);
+  assert.match(editorSource, /onUploadImage\(image\.blob, image\.suggestedName, missingHostIds\)/);
+  assert.match(editorSource, /replaceNodeContentBlocks\(node, blocks\)/);
+});
+
+test("selection-only resize notifications do not repeatedly relayout the whole mind map", () => {
+  assert.match(editorSource, /observedMindMapNodeSizes = new Map<string, \{ width: number; height: number \}>/);
+  assert.match(editorSource, /let nodeSizeChanged = false;[\s\S]*Math\.abs\(previous\.width - next\.width\) > 0\.5[\s\S]*Math\.abs\(previous\.height - next\.height\) > 0\.5/);
+  assert.match(editorSource, /if \(nodeSizeChanged\) \{\s*this\.scheduleMeasuredMindMapLayout\(\)/);
+  assert.match(editorSource, /this\.observedMindMapNodeSizes\.set\(id, measured\.get\(id\)!\)/);
+});
