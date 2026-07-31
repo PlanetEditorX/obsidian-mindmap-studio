@@ -158,6 +158,7 @@ AI 编辑输出还受以下硬限制保护：
 - Chat Completions 接口地址；
 - API 密钥；
 - 模型名称；
+- 思考模式；
 - 温度；
 - 最大输出 tokens；
 - 系统提示词；
@@ -170,7 +171,9 @@ AI 编辑输出还受以下硬限制保护：
 | 硅基流动 | `https://api.siliconflow.cn/v1` | `deepseek-ai/DeepSeek-V4-Flash`、`deepseek-ai/DeepSeek-V4-Pro`、`deepseek-ai/DeepSeek-OCR`、`zai-org/GLM-4.5V`、`zai-org/GLM-5.2` |
 | FreeLLMAPI | 留空，由用户填写部署地址 | `auto` |
 
-模型输入框提供预设建议，但仍允许直接输入服务端支持的其他模型 ID。
+模型输入框提供预设建议，也可点击“获取模型”向同一服务的 `/models` 目录读取模型 ID；获取结果只更新当前设置页的选择建议，不会自动替换已填写的模型。服务不提供或禁止读取该目录时，仍可直接输入模型 ID。
+
+思考模式会随接口配置保存：下次请求沿用上次选择。“自动（服务端默认）”不会发送额外控制字段，适合不确定模型能力时使用。开启或关闭时，DeepSeek 使用 `thinking.type`，硅基流动使用 `enable_thinking`，OpenAI 与 FreeLLMAPI 使用 `reasoning_effort`；这些字段是否被接受仍取决于实际模型及代理能力。自定义接口为避免发送未知字段，始终保持服务端默认。
 
 图片 AI 识图默认跟随“默认 AI 接口”。如果默认接口使用纯文本模型，图片请求可能被服务端以 `400` 拒绝；可在“图片识图与本地 OCR → AI 识图接口”单独选择支持图片输入的视觉模型。右键单图识别、截图自动识图和 AI 助手批量识图都会使用该视觉接口设置。
 
