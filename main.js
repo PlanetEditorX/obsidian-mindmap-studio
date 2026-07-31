@@ -8088,7 +8088,7 @@ function renderArticleMode(container, options) {
     buildHierarchyFocusOrder(options.document.root, options.selectedId)
   );
   const renderBatch = (startIndex) => {
-    var _a3, _b3;
+    var _a3, _b3, _c2;
     if ((_a3 = options.incremental) == null ? void 0 : _a3.isCancelled()) return;
     const startedAt = performance.now();
     let index = startIndex;
@@ -8100,12 +8100,13 @@ function renderArticleMode(container, options) {
       if (info && section) renderArticleNodeSection(section, info, options);
       index += 1;
     }
+    (_b3 = options.incremental) == null ? void 0 : _b3.onProgress();
     if (index < orderedIds.length) {
       window.requestAnimationFrame(() => renderBatch(index));
       return;
     }
     renderArticlePager(page, options);
-    (_b3 = options.incremental) == null ? void 0 : _b3.onComplete();
+    (_c2 = options.incremental) == null ? void 0 : _c2.onComplete();
   };
   renderBatch(0);
 }
@@ -9983,6 +9984,7 @@ var MindMapEditor = class {
     this.articleRenderFrame = null;
     this.articleRenderToken = 0;
     this.articleRenderPending = false;
+    this.articleRenderViewportSnapshot = null;
     this.pendingArticleRestoreLocation = null;
     this.pendingMindMapLayoutAnimation = false;
     this.allNodesCollapseToggleTimer = null;
@@ -10075,8 +10077,11 @@ var MindMapEditor = class {
   /**
    * 更新编辑器运行参数。文章族上下文或持久化阅读位置在异步加载完成后变化时，
    * 会重新解析节点并恢复到同一语义位置，而不是恢复旧的像素滚动值。
+   *
+   * @param options 待应用的编辑器运行参数。
+   * @param articleContextOnly 是否仅由异步文章族上下文刷新触发。
    */
-  setOptions(options) {
+  setOptions(options, articleContextOnly = false) {
     var _a2, _b2, _c, _d, _e;
     const previousOptions = this.options;
     const renderedLocation = this.currentMode === "mindmap" ? null : (_a2 = this.captureCurrentLocation(this.currentMode)) != null ? _a2 : this.lastReadingLocation;
@@ -10090,6 +10095,7 @@ var MindMapEditor = class {
     const modesChanged = JSON.stringify(previousOptions.visibleModes) !== JSON.stringify(options.visibleModes);
     const toolbarChanged = JSON.stringify(previousOptions.visibleToolbarItems) !== JSON.stringify(options.visibleToolbarItems) || JSON.stringify(previousOptions.toolbarItemOrder) !== JSON.stringify(options.toolbarItemOrder) || previousOptions.questionNodesEnabled !== options.questionNodesEnabled;
     const globalModeChanged = previousOptions.defaultViewMode !== options.defaultViewMode;
+    const articleContextPresentationChanged = previousOptions.articleBaseDepth !== options.articleBaseDepth || previousOptions.showArticleToc !== options.showArticleToc || JSON.stringify(previousOptions.articleTocEntries) !== JSON.stringify(options.articleTocEntries) || JSON.stringify(previousOptions.articleNavigation) !== JSON.stringify(options.articleNavigation);
     const readingFamilyChanged = previousOptions.readingHomePath !== options.readingHomePath;
     if (readingFamilyChanged) {
       if (this.readingCaptureTimer !== null) {
@@ -10131,6 +10137,7 @@ var MindMapEditor = class {
       this.editControls.splice(0);
       this.buildUi();
     }
+    if (articleContextOnly && !modeChanged && !modesChanged && !toolbarChanged && this.currentMode !== "reading" && (this.currentMode !== "article" || !articleContextPresentationChanged)) return;
     if (this.inlineEditingId && !modesChanged && !toolbarChanged && !globalModeChanged) return;
     this.render();
     const locationToRestore = this.currentMode === "mindmap" && !modeChanged ? null : renderedLocation != null ? renderedLocation : this.lastReadingLocation;
@@ -10334,31 +10341,43 @@ var MindMapEditor = class {
       );
       return resolved;
     }
-    if (mode !== "mindmap") this.blockReadingLocationCapture();
     const restore = () => {
-      if (mode === "mindmap") {
-        this.applySelectionClasses();
-        this.centerNode(resolved.nodeId);
-        return;
-      }
-      const scroller = mode === "outline" ? this.outlineEl : this.articleEl;
-      const target = Array.from(scroller.querySelectorAll("[data-node-id]")).find((element) => {
-        var _a2;
-        return element.dataset.nodeId === resolved.nodeId && ((_a2 = element.dataset.filePath) != null ? _a2 : this.options.currentFilePath) === resolved.filePath;
-      });
-      if (!target) return;
-      this.applySelectionClasses();
-      const viewport = scroller.getBoundingClientRect();
-      const rect = target.getBoundingClientRect();
-      const targetY = rect.top + rect.height * resolved.nodeRatio;
-      const desiredY = viewport.top + viewport.height * resolved.viewportRatio;
-      scroller.scrollTop += targetY - desiredY;
-      this.updateArticleMiniMapActiveMarker();
+      this.applyResolvedReadingLocation(mode, resolved);
     };
     restore();
     window.setTimeout(restore, 20);
     window.requestAnimationFrame(() => window.requestAnimationFrame(restore));
     return resolved;
+  }
+  /** 把已解析的语义位置应用到当前 DOM；渐进文章占位尚未填充时返回 false。 */
+  applyResolvedReadingLocation(mode, resolved) {
+    if (mode === "mindmap") {
+      this.applySelectionClasses();
+      this.centerNode(resolved.nodeId);
+      return true;
+    }
+    const scroller = mode === "outline" ? this.outlineEl : this.articleEl;
+    const target = Array.from(scroller.querySelectorAll("[data-node-id]")).find((element) => {
+      var _a2;
+      return element.dataset.nodeId === resolved.nodeId && ((_a2 = element.dataset.filePath) != null ? _a2 : this.options.currentFilePath) === resolved.filePath;
+    });
+    if (!target || mode === "article" && target.hasClass("is-render-pending")) return false;
+    this.blockReadingLocationCapture();
+    this.applySelectionClasses();
+    const viewport = scroller.getBoundingClientRect();
+    const rect = target.getBoundingClientRect();
+    const targetY = rect.top + rect.height * resolved.nodeRatio;
+    const desiredY = viewport.top + viewport.height * resolved.viewportRatio;
+    scroller.scrollTop += targetY - desiredY;
+    this.updateArticleMiniMapActiveMarker();
+    return true;
+  }
+  /** 在大型文章分批填充期间持续把已渲染目标节点保持在原视口比例。 */
+  maintainPendingArticleLocation() {
+    const location = this.pendingArticleRestoreLocation;
+    if (!location || this.currentMode !== "article") return false;
+    const resolved = resolveReadingLocation(location, this.readingLocationSections(), this.options.currentFilePath);
+    return resolved ? this.applyResolvedReadingLocation("article", resolved) : false;
   }
   /**
    * 切换read only，并保持模型、界面和持久化状态的一致性。
@@ -11715,21 +11734,41 @@ var MindMapEditor = class {
   renderArticle() {
     var _a2;
     this.articleEl.onscroll = () => this.scheduleReadingLocationCapture("article");
+    const viewportSnapshot = {
+      top: this.articleEl.scrollTop,
+      left: this.articleEl.scrollLeft,
+      height: Math.max(this.articleEl.clientHeight, this.articleEl.scrollHeight)
+    };
     const token = this.beginArticleRender();
+    this.articleRenderViewportSnapshot = viewportSnapshot;
     this.articleEl.empty();
     this.articleEl.addClass("is-progressive-rendering");
     this.articleEl.setAttr("aria-busy", "true");
-    this.articleEl.createDiv({ cls: "mms-article-loading", text: "\u6B63\u5728\u52A0\u8F7D\u6587\u7AE0\u2026" });
+    const loading = this.articleEl.createDiv({ cls: "mms-article-loading", text: "\u6B63\u5728\u52A0\u8F7D\u6587\u7AE0\u2026" });
+    loading.style.minHeight = `${viewportSnapshot.height}px`;
+    this.articleEl.scrollTop = viewportSnapshot.top;
+    this.articleEl.scrollLeft = viewportSnapshot.left;
     (_a2 = this.modeButtons.get("article")) == null ? void 0 : _a2.addClass("is-loading");
     this.articleRenderFrame = window.requestAnimationFrame(() => {
       this.articleRenderFrame = null;
       if (token !== this.articleRenderToken || this.currentMode !== "article") return;
       const incremental = {
         isCancelled: () => token !== this.articleRenderToken || this.currentMode !== "article",
+        onProgress: () => this.maintainArticleRenderViewport(token),
         onComplete: () => this.completeArticleRender(token)
       };
       renderArticleMode(this.articleEl, this.articleRendererOptions(incremental));
     });
+  }
+  /** 保留旧文章高度，并在每批章节填充后优先恢复语义锚点。 */
+  maintainArticleRenderViewport(token) {
+    if (token !== this.articleRenderToken || this.currentMode !== "article") return;
+    const snapshot = this.articleRenderViewportSnapshot;
+    const page = this.articleEl.querySelector(".mms-article-page");
+    if (snapshot && page) page.style.minHeight = `${snapshot.height}px`;
+    if (snapshot) this.articleEl.scrollLeft = snapshot.left;
+    const restoredSemanticLocation = this.maintainPendingArticleLocation();
+    if (!restoredSemanticLocation && snapshot) this.articleEl.scrollTop = snapshot.top;
   }
   /** 完成文章分帧挂载，安装依赖完整章节 DOM 的交互并恢复语义阅读位置。 */
   completeArticleRender(token) {
@@ -11746,6 +11785,12 @@ var MindMapEditor = class {
     const location = (_b2 = this.pendingArticleRestoreLocation) != null ? _b2 : this.lastReadingLocation;
     this.pendingArticleRestoreLocation = null;
     if (location) this.restoreReadingLocation("article", location);
+    const page = this.articleEl.querySelector(".mms-article-page");
+    this.articleRenderViewportSnapshot = null;
+    window.requestAnimationFrame(() => {
+      page == null ? void 0 : page.style.removeProperty("min-height");
+      if (location) this.restoreReadingLocation("article", location);
+    });
   }
   /** Renders a compact structural navigator for article and continuous reading views. */
   renderArticleMiniMap() {
@@ -12118,15 +12163,17 @@ var MindMapEditor = class {
   }
   /** 取消尚未完成的文章挂载并移除工具栏和视图中的加载态。 */
   cancelArticleRender() {
-    var _a2, _b2, _c;
+    var _a2, _b2, _c, _d, _e;
     this.articleRenderToken += 1;
     this.articleRenderPending = false;
+    this.articleRenderViewportSnapshot = null;
     this.pendingArticleRestoreLocation = null;
     if (this.articleRenderFrame !== null) window.cancelAnimationFrame(this.articleRenderFrame);
     this.articleRenderFrame = null;
-    (_a2 = this.articleEl) == null ? void 0 : _a2.removeClass("is-progressive-rendering");
-    (_b2 = this.articleEl) == null ? void 0 : _b2.removeAttribute("aria-busy");
-    (_c = this.modeButtons.get("article")) == null ? void 0 : _c.removeClass("is-loading");
+    (_b2 = (_a2 = this.articleEl) == null ? void 0 : _a2.querySelector(".mms-article-page")) == null ? void 0 : _b2.style.removeProperty("min-height");
+    (_c = this.articleEl) == null ? void 0 : _c.removeClass("is-progressive-rendering");
+    (_d = this.articleEl) == null ? void 0 : _d.removeAttribute("aria-busy");
+    (_e = this.modeButtons.get("article")) == null ? void 0 : _e.removeClass("is-loading");
   }
   /** 开始一次新的文章分帧挂载并返回本轮令牌。 */
   beginArticleRender() {
@@ -16615,7 +16662,7 @@ var MindMapStudioView = class _MindMapStudioView extends import_obsidian12.TextF
       this.articleNavigation = context.navigation;
       this.readingSections = context.readingSections;
       const preferCurrentFile = this.preferCurrentFileOnNextContextRefresh;
-      (_d = this.editor) == null ? void 0 : _d.setOptions(this.getEditorOptions(preferCurrentFile));
+      (_d = this.editor) == null ? void 0 : _d.setOptions(this.getEditorOptions(preferCurrentFile), true);
       this.preferCurrentFileOnNextContextRefresh = false;
     } catch (error) {
       console.warn("MindMap Studio article context refresh failed", error);

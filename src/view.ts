@@ -513,7 +513,7 @@ export class MindMapStudioView extends TextFileView {
       this.articleNavigation = context.navigation;
       this.readingSections = context.readingSections;
       const preferCurrentFile = this.preferCurrentFileOnNextContextRefresh;
-      this.editor?.setOptions(this.getEditorOptions(preferCurrentFile));
+      this.editor?.setOptions(this.getEditorOptions(preferCurrentFile), true);
       this.preferCurrentFileOnNextContextRefresh = false;
     } catch (error) {
       console.warn("MindMap Studio article context refresh failed", error);

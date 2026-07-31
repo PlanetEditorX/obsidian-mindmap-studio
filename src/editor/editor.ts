@@ -1139,6 +1139,7 @@ export class MindMapEditor {
   private articleRenderFrame: number | null = null;
   private articleRenderToken = 0;
   private articleRenderPending = false;
+  private articleRenderViewportSnapshot: { top: number; left: number; height: number } | null = null;
   private pendingArticleRestoreLocation: ReadingLocation | null = null;
   private pendingMindMapLayoutAnimation = false;
   private allNodesCollapseToggleTimer: number | null = null;
@@ -1250,8 +1251,11 @@ export class MindMapEditor {
   /**
    * 更新编辑器运行参数。文章族上下文或持久化阅读位置在异步加载完成后变化时，
    * 会重新解析节点并恢复到同一语义位置，而不是恢复旧的像素滚动值。
+   *
+   * @param options 待应用的编辑器运行参数。
+   * @param articleContextOnly 是否仅由异步文章族上下文刷新触发。
    */
-  setOptions(options: MindMapEditorOptions): void {
+  setOptions(options: MindMapEditorOptions, articleContextOnly = false): void {
     const previousOptions = this.options;
     // setOptions() 会重建文章 DOM。先从旧 DOM 捕获位置，避免异步文章上下文
     // 刷新（例如保存表格后）把滚动容器因 empty() 而回退到页面顶部。
@@ -1272,6 +1276,10 @@ export class MindMapEditor {
       || JSON.stringify(previousOptions.toolbarItemOrder) !== JSON.stringify(options.toolbarItemOrder)
       || previousOptions.questionNodesEnabled !== options.questionNodesEnabled;
     const globalModeChanged = previousOptions.defaultViewMode !== options.defaultViewMode;
+    const articleContextPresentationChanged = previousOptions.articleBaseDepth !== options.articleBaseDepth
+      || previousOptions.showArticleToc !== options.showArticleToc
+      || JSON.stringify(previousOptions.articleTocEntries) !== JSON.stringify(options.articleTocEntries)
+      || JSON.stringify(previousOptions.articleNavigation) !== JSON.stringify(options.articleNavigation);
     const readingFamilyChanged = previousOptions.readingHomePath !== options.readingHomePath;
     if (readingFamilyChanged) {
       // A delayed write captures the home path from this.options at execution time. Flush it
@@ -1326,6 +1334,12 @@ export class MindMapEditor {
       this.editControls.splice(0);
       this.buildUi();
     }
+    // A delayed context refresh usually changes only the cross-file reading snapshot.
+    // The current document DOM already reflects local edits, so do not rebuild it unless
+    // article numbering/directory/navigation metadata changed or continuous reading is visible.
+    if (articleContextOnly && !modeChanged && !modesChanged && !toolbarChanged
+      && this.currentMode !== "reading"
+      && (this.currentMode !== "article" || !articleContextPresentationChanged)) return;
     // Article-context refreshes can update reading locations while a node is being typed.
     // Keep the live contenteditable DOM intact unless the visible mode or toolbar actually changes.
     if (this.inlineEditingId && !modesChanged && !toolbarChanged && !globalModeChanged) return;
@@ -1562,26 +1576,7 @@ export class MindMapEditor {
       );
       return resolved;
     }
-    if (mode !== "mindmap") this.blockReadingLocationCapture();
-    const restore = (): void => {
-      if (mode === "mindmap") {
-        this.applySelectionClasses();
-        this.centerNode(resolved.nodeId);
-        return;
-      }
-      const scroller = mode === "outline" ? this.outlineEl : this.articleEl;
-      const target = Array.from(scroller.querySelectorAll<HTMLElement>("[data-node-id]"))
-        .find((element) => element.dataset.nodeId === resolved.nodeId
-          && (element.dataset.filePath ?? this.options.currentFilePath) === resolved.filePath);
-      if (!target) return;
-      this.applySelectionClasses();
-      const viewport = scroller.getBoundingClientRect();
-      const rect = target.getBoundingClientRect();
-      const targetY = rect.top + rect.height * resolved.nodeRatio;
-      const desiredY = viewport.top + viewport.height * resolved.viewportRatio;
-      scroller.scrollTop += targetY - desiredY;
-      this.updateArticleMiniMapActiveMarker();
-    };
+    const restore = (): void => { this.applyResolvedReadingLocation(mode, resolved); };
     // Restore once synchronously so replacing the article/outline DOM cannot
     // paint a frame at scrollTop=0. Delayed retries remain for images, fonts,
     // and other late layout changes that can move the semantic anchor.
@@ -1589,6 +1584,37 @@ export class MindMapEditor {
     window.setTimeout(restore, 20);
     window.requestAnimationFrame(() => window.requestAnimationFrame(restore));
     return resolved;
+  }
+
+  /** 把已解析的语义位置应用到当前 DOM；渐进文章占位尚未填充时返回 false。 */
+  private applyResolvedReadingLocation(mode: DisplayMode, resolved: ResolvedReadingLocation): boolean {
+    if (mode === "mindmap") {
+      this.applySelectionClasses();
+      this.centerNode(resolved.nodeId);
+      return true;
+    }
+    const scroller = mode === "outline" ? this.outlineEl : this.articleEl;
+    const target = Array.from(scroller.querySelectorAll<HTMLElement>("[data-node-id]"))
+      .find((element) => element.dataset.nodeId === resolved.nodeId
+        && (element.dataset.filePath ?? this.options.currentFilePath) === resolved.filePath);
+    if (!target || (mode === "article" && target.hasClass("is-render-pending"))) return false;
+    this.blockReadingLocationCapture();
+    this.applySelectionClasses();
+    const viewport = scroller.getBoundingClientRect();
+    const rect = target.getBoundingClientRect();
+    const targetY = rect.top + rect.height * resolved.nodeRatio;
+    const desiredY = viewport.top + viewport.height * resolved.viewportRatio;
+    scroller.scrollTop += targetY - desiredY;
+    this.updateArticleMiniMapActiveMarker();
+    return true;
+  }
+
+  /** 在大型文章分批填充期间持续把已渲染目标节点保持在原视口比例。 */
+  private maintainPendingArticleLocation(): boolean {
+    const location = this.pendingArticleRestoreLocation;
+    if (!location || this.currentMode !== "article") return false;
+    const resolved = resolveReadingLocation(location, this.readingLocationSections(), this.options.currentFilePath);
+    return resolved ? this.applyResolvedReadingLocation("article", resolved) : false;
   }
 
   /**
@@ -3052,21 +3078,42 @@ export class MindMapEditor {
    */
   private renderArticle(): void {
     this.articleEl.onscroll = () => this.scheduleReadingLocationCapture("article");
+    const viewportSnapshot = {
+      top: this.articleEl.scrollTop,
+      left: this.articleEl.scrollLeft,
+      height: Math.max(this.articleEl.clientHeight, this.articleEl.scrollHeight)
+    };
     const token = this.beginArticleRender();
+    this.articleRenderViewportSnapshot = viewportSnapshot;
     this.articleEl.empty();
     this.articleEl.addClass("is-progressive-rendering");
     this.articleEl.setAttr("aria-busy", "true");
-    this.articleEl.createDiv({ cls: "mms-article-loading", text: "正在加载文章…" });
+    const loading = this.articleEl.createDiv({ cls: "mms-article-loading", text: "正在加载文章…" });
+    loading.style.minHeight = `${viewportSnapshot.height}px`;
+    this.articleEl.scrollTop = viewportSnapshot.top;
+    this.articleEl.scrollLeft = viewportSnapshot.left;
     this.modeButtons.get("article")?.addClass("is-loading");
     this.articleRenderFrame = window.requestAnimationFrame(() => {
       this.articleRenderFrame = null;
       if (token !== this.articleRenderToken || this.currentMode !== "article") return;
       const incremental: ArticleIncrementalRenderOptions = {
         isCancelled: () => token !== this.articleRenderToken || this.currentMode !== "article",
+        onProgress: () => this.maintainArticleRenderViewport(token),
         onComplete: () => this.completeArticleRender(token)
       };
       renderArticleMode(this.articleEl, this.articleRendererOptions(incremental));
     });
+  }
+
+  /** 保留旧文章高度，并在每批章节填充后优先恢复语义锚点。 */
+  private maintainArticleRenderViewport(token: number): void {
+    if (token !== this.articleRenderToken || this.currentMode !== "article") return;
+    const snapshot = this.articleRenderViewportSnapshot;
+    const page = this.articleEl.querySelector<HTMLElement>(".mms-article-page");
+    if (snapshot && page) page.style.minHeight = `${snapshot.height}px`;
+    if (snapshot) this.articleEl.scrollLeft = snapshot.left;
+    const restoredSemanticLocation = this.maintainPendingArticleLocation();
+    if (!restoredSemanticLocation && snapshot) this.articleEl.scrollTop = snapshot.top;
   }
 
   /** 完成文章分帧挂载，安装依赖完整章节 DOM 的交互并恢复语义阅读位置。 */
@@ -3083,6 +3130,12 @@ export class MindMapEditor {
     const location = this.pendingArticleRestoreLocation ?? this.lastReadingLocation;
     this.pendingArticleRestoreLocation = null;
     if (location) this.restoreReadingLocation("article", location);
+    const page = this.articleEl.querySelector<HTMLElement>(".mms-article-page");
+    this.articleRenderViewportSnapshot = null;
+    window.requestAnimationFrame(() => {
+      page?.style.removeProperty("min-height");
+      if (location) this.restoreReadingLocation("article", location);
+    });
   }
 
   /** Renders a compact structural navigator for article and continuous reading views. */
@@ -3472,9 +3525,11 @@ export class MindMapEditor {
   private cancelArticleRender(): void {
     this.articleRenderToken += 1;
     this.articleRenderPending = false;
+    this.articleRenderViewportSnapshot = null;
     this.pendingArticleRestoreLocation = null;
     if (this.articleRenderFrame !== null) window.cancelAnimationFrame(this.articleRenderFrame);
     this.articleRenderFrame = null;
+    this.articleEl?.querySelector<HTMLElement>(".mms-article-page")?.style.removeProperty("min-height");
     this.articleEl?.removeClass("is-progressive-rendering");
     this.articleEl?.removeAttribute("aria-busy");
     this.modeButtons.get("article")?.removeClass("is-loading");
