@@ -39,6 +39,17 @@ test("document mutations preserve the current article or reading anchor across a
   assert.match(mutate, /this\.render\(\);[\s\S]*if \(location\) this\.restoreReadingLocation\(this\.currentMode, location\)/);
 });
 
+test("article option refresh restores the rendered anchor after rebuilding the page", () => {
+  const setOptions = editorSource.match(/setOptions\(options: MindMapEditorOptions\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
+  assert.match(setOptions, /const renderedLocation = this\.currentMode === "mindmap"[\s\S]*this\.captureCurrentLocation\(this\.currentMode\) \?\? this\.lastReadingLocation/);
+  assert.match(setOptions, /this\.render\(\);[\s\S]*this\.restoreReadingLocation\(this\.currentMode, renderedLocation \?\? this\.lastReadingLocation\)/);
+});
+
+test("screenshot shortcut remains available while an article line is being edited", () => {
+  const keydown = editorSource.match(/private handleKeydown\(event: KeyboardEvent\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
+  assert.match(keydown, /this\.shortcutMatches\(event, this\.options\.screenshotShortcut\)[\s\S]*if \(this\.inlineEditingId !== null\) return/);
+});
+
 test("global mode broadcasts discard delayed writes from non-initiating views", () => {
   const applyGlobal = editorSource.match(/applyGlobalDisplayMode\(mode: DisplayMode\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
   assert.match(applyGlobal, /clearTimeout\(this\.readingCaptureTimer\)/);

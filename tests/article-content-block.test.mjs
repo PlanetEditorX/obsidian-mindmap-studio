@@ -55,11 +55,22 @@ test("article inline editing updates the exact text block instead of the first b
   assert.match(editorSource, /block\.type === "text" && block\.id === blockId/);
   assert.match(editorSource, /this\.updateNodeTextBlock\(node, next, blockId\)/);
   assert.match(updateNodeTextBlock, /exactTextBlock \?\? \([\s\S]*blockId && !node\.content\?\.length[\s\S]*blocks\.find/);
+  assert.match(updateNodeTextBlock, /replaceNodeContentBlocks\(node, blocks\.filter\(\(block\) => block\.type !== "text" \|\| block\.text\.trim\(\)\)\)/);
   assert.match(rendererSource, /paragraph\.dataset\.blockId = block\.id/);
   assert.match(makeInlineEditable, /element\.addEventListener\("pointerdown"[\s\S]*this\.inlineEditingId = node\.id[\s\S]*this\.activateInlineEditable\(element, false\)/);
   assert.match(makeInlineEditable, /element\.addEventListener\("focus"[\s\S]*this\.inlineEditingId = node\.id/);
   assert.match(makeInlineEditable, /element\.dataset\.mmsProtectInitialFocus === "true"[\s\S]*window\.requestAnimationFrame\(\(\) => this\.activateInlineEditable\(element\)\)/);
   assert.match(makeInlineEditable, /if \(this\.inlineEditingId === node\.id\) this\.inlineEditingId = null/);
+});
+
+test("clearing the final article text block clears legacy mirrors instead of restoring stale text", () => {
+  const node = model.createNode("待删除文字");
+  const blocks = model.nodeContentBlocks(node).map((block) => block.type === "text" ? { ...block, text: "" } : block)
+    .filter((block) => block.type !== "text" || block.text.trim());
+  model.replaceNodeContentBlocks(node, blocks);
+  assert.equal(node.text, "");
+  assert.equal(node.content, undefined);
+  assert.deepEqual(model.nodeContentBlocks(node), []);
 });
 
 test("Markdown import persists stable text-block IDs before article editing", () => {
