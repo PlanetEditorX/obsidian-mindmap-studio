@@ -5717,9 +5717,12 @@ export class MindMapEditor {
     this.applyTransform();
   }
 
-  /** 设置右键 AI 范围并显示只包含 AI 操作的上下文菜单。 */
+  /**
+   * 设置右键 AI 范围并显示只包含 AI 操作的上下文菜单。
+   * 根节点代表当前物理页面，必须使用整页范围而不是把它当作普通子树。
+   */
   private openAiScopeContextMenu(event: MouseEvent, nodeId: string | null): void {
-    this.aiScopeNodeId = nodeId && findNode(this.document.root, nodeId) ? nodeId : null;
+    this.aiScopeNodeId = nodeId && nodeId !== this.document.root.id && findNode(this.document.root, nodeId) ? nodeId : null;
     this.updateAiScopeButton();
     if (this.aiScopeNodeId) this.selectNode(this.aiScopeNodeId);
     const menu = new Menu();

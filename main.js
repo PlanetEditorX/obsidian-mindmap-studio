@@ -7779,6 +7779,11 @@ function renderArticleMode(container, options) {
   renderRichTextRuns(titleText, rootTextBlock == null ? void 0 : rootTextBlock.richText, (_b2 = rootTextBlock == null ? void 0 : rootTextBlock.text) != null ? _b2 : rootTitle);
   options.makeInlineEditable(titleText, options.document.root, "\u6587\u7AE0\u6807\u9898", rootTextBlock == null ? void 0 : rootTextBlock.id);
   options.addInlineNodeActions(page, options.document.root);
+  title.addEventListener("contextmenu", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    options.openAiContextMenu(event, options.document.root.id);
+  });
   const directoryOnly = options.showArticleToc && options.articleTocEntries.length > 0 && ((_c = options.document.view) == null ? void 0 : _c.articleLandingMode) !== "article";
   if (directoryOnly) {
     renderDirectory(page, options);
@@ -13945,9 +13950,12 @@ var MindMapEditor = class {
     this.mindMapViewportInitialized = true;
     this.applyTransform();
   }
-  /** 设置右键 AI 范围并显示只包含 AI 操作的上下文菜单。 */
+  /**
+   * 设置右键 AI 范围并显示只包含 AI 操作的上下文菜单。
+   * 根节点代表当前物理页面，必须使用整页范围而不是把它当作普通子树。
+   */
   openAiScopeContextMenu(event, nodeId) {
-    this.aiScopeNodeId = nodeId && findNode(this.document.root, nodeId) ? nodeId : null;
+    this.aiScopeNodeId = nodeId && nodeId !== this.document.root.id && findNode(this.document.root, nodeId) ? nodeId : null;
     this.updateAiScopeButton();
     if (this.aiScopeNodeId) this.selectNode(this.aiScopeNodeId);
     const menu = new import_obsidian10.Menu();
