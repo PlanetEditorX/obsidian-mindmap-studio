@@ -2055,7 +2055,7 @@ var DEFAULT_SETTINGS = {
   articleLeafBulletStyle: "solid",
   articleLeafTextAlignment: "auto",
   articleLeafNumberingEnabled: false,
-  articleLeafNumberingThreshold: 3,
+  articleLeafNumberingThreshold: 4,
   hideAssetFolderInFileExplorer: false,
   hideConfiguredFilesInFileExplorer: false,
   hiddenFileExtensions: "",
@@ -2382,7 +2382,7 @@ var MindMapStudioSettingTab = class extends import_obsidian.PluginSettingTab {
       this.plugin.settings.articleLeafNumberingEnabled = value;
       await this.saveAndRefresh();
     }));
-    new import_obsidian.Setting(containerEl).setName("\u672B\u7AEF\u6B63\u6587\u8F6C\u5E8F\u53F7\u9608\u503C").setDesc("\u8FBE\u5230\u591A\u5C11\u4E2A\u672B\u7AEF\u6B63\u6587\u5144\u5F1F\u8282\u70B9\u540E\u81EA\u52A8\u8F6C\u4E3A\u5E8F\u53F7\uFF0C\u9ED8\u8BA4 3\u3002").addText((text) => text.setValue(String(this.plugin.settings.articleLeafNumberingThreshold)).setPlaceholder("3").onChange(async (value) => {
+    new import_obsidian.Setting(containerEl).setName("\u672B\u7AEF\u6B63\u6587\u8F6C\u5E8F\u53F7\u9608\u503C").setDesc("\u8FBE\u5230\u591A\u5C11\u4E2A\u672B\u7AEF\u6B63\u6587\u5144\u5F1F\u8282\u70B9\u540E\u81EA\u52A8\u8F6C\u4E3A\u5E8F\u53F7\uFF0C\u9ED8\u8BA4 4\uFF1B\u56E0\u6B64 3 \u4E2A\u8282\u70B9\u4ECD\u663E\u793A\u672B\u7AEF\u6B63\u6587\u6807\u8BC6\u3002").addText((text) => text.setValue(String(this.plugin.settings.articleLeafNumberingThreshold)).setPlaceholder("3").onChange(async (value) => {
       const parsed = Number(value);
       this.plugin.settings.articleLeafNumberingThreshold = Number.isFinite(parsed) ? Math.max(1, Math.min(20, Math.round(parsed))) : DEFAULT_SETTINGS.articleLeafNumberingThreshold;
       await this.saveAndRefresh();
@@ -4837,12 +4837,12 @@ function currentArticlePageEntry(navigation) {
   if (!(navigation == null ? void 0 : navigation.parentPath)) return void 0;
   return navigation.entries[navigation.currentIndex];
 }
-function buildArticleNodeInfo(root, baseDepth = 0, leafNumbering = { enabled: false, threshold: 3 }) {
+function buildArticleNodeInfo(root, baseDepth = 0, leafNumbering = { enabled: false, threshold: 4 }) {
   const result = [];
   const visitChildren = (parent, defaultLevel) => {
     var _a2;
     const siblingHasHeading = parent.children.some((child) => isArticleHeading(child));
-    const threshold = Math.max(1, Math.min(20, Math.floor(leafNumbering.threshold) || 3));
+    const threshold = Math.max(1, Math.min(20, Math.floor(leafNumbering.threshold) || 4));
     const terminalCount = parent.children.filter((child) => !isArticleHeading(child) && child.articleNumberingMode !== "none").length;
     const convertLeaves = leafNumbering.enabled && terminalCount >= threshold && defaultLevel <= 7;
     const numberedIndexes = /* @__PURE__ */ new Map();
@@ -7894,9 +7894,14 @@ function renderArticleMode(container, options) {
         const blockShell = createArticleContentBlock(section, firstTextBlock.id);
         const paragraph = blockShell.createEl("p", { cls: `${articleParagraphClass("mms-article-leaf-text", firstTextBlock, options.articleLeafBulletsEnabled && !info.numberedLeaf, options.articleLeafTextAlignment)}${info.numberedLeaf ? " mms-article-leaf-numbered" : ""}` });
         paragraph.dataset.blockId = firstTextBlock.id;
-        if (info.numberedLeaf && info.label) paragraph.createSpan({ cls: "mms-article-number mms-article-leaf-number", text: `${info.label} ` });
         applyArticleLeafBulletStyle(paragraph, options, info.numberedLeaf);
         renderRichTextRuns(paragraph, firstTextBlock.richText, firstTextBlock.text);
+        if (info.numberedLeaf && info.label) {
+          const number = paragraph.ownerDocument.createElement("span");
+          number.className = "mms-article-number mms-article-leaf-number";
+          number.textContent = `${info.label} `;
+          paragraph.insertBefore(number, paragraph.firstChild);
+        }
         options.makeInlineEditable(paragraph, info.node, "\u6B63\u6587\u6BB5\u843D", firstTextBlock.id);
       } else if (!options.readOnly && blocks.length === 0) {
         const paragraph = section.createEl("p", { cls: articleParagraphClass("mms-article-leaf-text", void 0, options.articleLeafBulletsEnabled, options.articleLeafTextAlignment) });
@@ -13541,12 +13546,17 @@ var MindMapEditor = class {
           if (firstTextBlock) {
             const paragraph = nodeSection.createEl("p", { cls: `mms-article-leaf-text${this.options.articleLeafBulletsEnabled && !info.numberedLeaf ? " is-bulleted" : ""}${this.options.articleLeafTextAlignment === "auto" ? " is-auto-aligned" : ""}${firstTextBlock.paragraphIndent === "none" ? " is-flush" : ""}${info.numberedLeaf ? " mms-article-leaf-numbered" : ""}` });
             paragraph.dataset.blockId = firstTextBlock.id;
-            if (info.numberedLeaf && info.label) paragraph.createSpan({ cls: "mms-article-number mms-article-leaf-number", text: `${info.label} ` });
             if (this.options.articleLeafBulletsEnabled && !info.numberedLeaf) {
               paragraph.dataset.bulletStyle = this.options.articleLeafBulletStyle;
               if (this.options.articleLeafBulletColor) paragraph.style.setProperty("--mms-article-bullet-color", this.options.articleLeafBulletColor);
             }
             renderRichTextRuns(paragraph, firstTextBlock.richText, firstTextBlock.text);
+            if (info.numberedLeaf && info.label) {
+              const number = paragraph.ownerDocument.createElement("span");
+              number.className = "mms-article-number mms-article-leaf-number";
+              number.textContent = `${info.label} `;
+              paragraph.insertBefore(number, paragraph.firstChild);
+            }
           }
           this.renderArticleContent(nodeSection, info.node, false);
         }
