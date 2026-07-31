@@ -367,9 +367,9 @@ export class MindMapStudioView extends TextFileView {
       imageRecognitionAutoConfirmDelaySeconds: this.plugin.settings.imageRecognitionAutoConfirmDelaySeconds,
       imageCount: collectRecognizableImages(document, nodeId).length,
       sourcePath: this.file?.path ?? "",
-      onAsk: async (profileId, question) => this.plugin.askAi(profileId, payload, question),
+      onAsk: async (profileId, question, onStreamUpdate) => this.plugin.askAi(profileId, payload, question, onStreamUpdate),
       onSetThinkingMode: (profileId, enabled) => this.plugin.setAiProfileThinkingMode(profileId, enabled),
-      onProposeEdit: async (profileId, instruction) => this.plugin.proposeAiEdit(profileId, payload, instruction),
+      onProposeEdit: async (profileId, instruction, onStreamUpdate) => this.plugin.proposeAiEdit(profileId, payload, instruction, onStreamUpdate),
       onConvertToQuestion: (responseText) => this.editor?.applyAndEnrichAiQuestion(responseText, nodeId) ?? false,
       onRecognizeImages: async (profileId, instruction) => this.recognizeImages(nodeId, profileId, instruction),
       onPreviewImageTextReplacements: (items) => {

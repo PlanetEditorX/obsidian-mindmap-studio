@@ -28,13 +28,19 @@ export interface AiChatCompletionBody {
   messages: Array<{ role: "system" | "user"; content: AiMessageContent }>;
   temperature: number;
   max_tokens: number;
-  stream: false;
+  stream: boolean;
   /** OpenAI-compatible reasoning control, supported by selected reasoning models only. */
   reasoning_effort?: "none" | "medium";
   /** DeepSeek direct API thinking control. */
   thinking?: { type: "enabled" | "disabled" };
   /** SiliconFlow direct API thinking control. */
   enable_thinking?: boolean;
+}
+
+/** 流式响应中单个可显示的思考或正文片段。 */
+export interface AiStreamDelta {
+  thinking: string;
+  content: string;
 }
 
 /**
@@ -112,7 +118,8 @@ export function parseAiHeaders(source: string): Record<string, string> {
 export function buildChatCompletionBody(
   profile: AiProfileConfig,
   payload: AiMarkdownPayload,
-  question: string
+  question: string,
+  stream = false
 ): AiChatCompletionBody {
   const messages: AiChatCompletionBody["messages"] = [];
   if (profile.systemPrompt.trim()) messages.push({ role: "system", content: profile.systemPrompt.trim() });
@@ -122,7 +129,7 @@ export function buildChatCompletionBody(
     messages,
     temperature: profile.temperature,
     max_tokens: profile.maxOutputTokens,
-    stream: false
+    stream
   });
 }
 
@@ -131,7 +138,8 @@ export function buildChatCompletionBody(
 export function buildAiEditCompletionBody(
   profile: AiProfileConfig,
   payload: AiMarkdownPayload,
-  instruction: string
+  instruction: string,
+  stream = false
 ): AiChatCompletionBody {
   const system = [
     profile.systemPrompt.trim(),
@@ -145,7 +153,7 @@ export function buildAiEditCompletionBody(
     ],
     temperature: Math.min(profile.temperature, 0.4),
     max_tokens: profile.maxOutputTokens,
-    stream: false
+    stream
   });
 }
 
@@ -206,4 +214,26 @@ export function extractAiResponseText(payload: unknown): string {
   }
   if (typeof value.output_text === "string") return value.output_text.trim();
   return "";
+}
+
+/** 从 OpenAI Chat Completions SSE 事件中读取思考与正文增量，兼容常见字段命名。 */
+export function extractAiStreamDelta(payload: unknown): AiStreamDelta {
+  if (!payload || typeof payload !== "object") return { thinking: "", content: "" };
+  const choices = (payload as Record<string, unknown>).choices;
+  const choice = Array.isArray(choices) ? choices[0] : undefined;
+  if (!choice || typeof choice !== "object") return { thinking: "", content: "" };
+  const delta = (choice as Record<string, unknown>).delta;
+  if (!delta || typeof delta !== "object") return { thinking: "", content: "" };
+  const value = delta as Record<string, unknown>;
+  const content = typeof value.content === "string"
+    ? value.content
+    : Array.isArray(value.content)
+      ? value.content.flatMap((part) => part && typeof part === "object" && typeof (part as Record<string, unknown>).text === "string"
+        ? [(part as Record<string, unknown>).text as string]
+        : []).join("")
+      : "";
+  const thinking = [value.reasoning_content, value.reasoning, value.reasoningContent]
+    .filter((part): part is string => typeof part === "string")
+    .join("");
+  return { thinking, content };
 }

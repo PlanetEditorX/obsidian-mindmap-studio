@@ -13,12 +13,16 @@ import {
   buildChatCompletionBody,
   buildImageRecognitionCompletionBody,
   extractAiResponseText,
+  extractAiStreamDelta,
   extractAiModelIds,
   parseAiHeaders,
   resolveAiChatCompletionsEndpoint,
   resolveAiModelsEndpoint,
   type AiChatCompletionBody
 } from "./protocol";
+
+/** 流式响应到达时通知界面，以便即时显示模型思考和正文。 */
+export type AiStreamUpdate = { thinking: string; content: string };
 
 /** AI 请求完成后返回给界面的统一结果。 */
 export interface AiCompletionResult {
@@ -67,13 +71,15 @@ const buildRequestHeaders = (profile: AiProfileConfig): Record<string, string> =
 /** 发送一次 OpenAI Chat Completions 兼容请求并返回解析后的 JSON。 */
 const requestChatCompletion = async (
   profile: AiProfileConfig,
-  body: AiChatCompletionBody
+  body: AiChatCompletionBody,
+  onStreamUpdate?: (update: AiStreamUpdate) => void
 ): Promise<Record<string, unknown>> => {
   const endpoint = normalizeHttpUrl(
     resolveAiChatCompletionsEndpoint(profile.endpoint),
     "AI 接口"
   );
   if (!profile.model.trim()) throw new Error("请先配置模型名称");
+  if (body.stream) return requestStreamingChatCompletion(endpoint, profile, body, onStreamUpdate);
   const response = await requestUrl({
     url: endpoint,
     method: "POST",
@@ -88,14 +94,60 @@ const requestChatCompletion = async (
   return json && typeof json === "object" ? json as Record<string, unknown> : {};
 };
 
+/** 通过原生 Fetch 消费 OpenAI 兼容 SSE；requestUrl 不提供可读取的响应流。 */
+const requestStreamingChatCompletion = async (
+  endpoint: string,
+  profile: AiProfileConfig,
+  body: AiChatCompletionBody,
+  onStreamUpdate?: (update: AiStreamUpdate) => void
+): Promise<Record<string, unknown>> => {
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: { ...buildRequestHeaders(profile), Accept: "text/event-stream" },
+    body: JSON.stringify(body)
+  });
+  if (!response.ok) throw new Error(`AI 接口请求失败（${response.status}）：${(await response.text()).slice(0, 500)}`);
+  if (!response.body) throw new Error("AI 接口未返回可读取的流式响应");
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let content = "";
+  let model = profile.model;
+  let usage: unknown;
+  const consumeEvent = (event: string): void => {
+    const data = event.split(/\r?\n/).filter((line) => line.startsWith("data:")).map((line) => line.slice(5).trimStart()).join("\n");
+    if (!data || data === "[DONE]") return;
+    let json: unknown;
+    try { json = JSON.parse(data) as unknown; } catch { return; }
+    if (!json || typeof json !== "object") return;
+    const record = json as Record<string, unknown>;
+    if (typeof record.model === "string") model = record.model;
+    if (record.usage) usage = record.usage;
+    const delta = extractAiStreamDelta(json);
+    if (delta.content) content += delta.content;
+    if (delta.thinking || delta.content) onStreamUpdate?.(delta);
+  };
+  while (true) {
+    const { done, value } = await reader.read();
+    buffer += decoder.decode(value, { stream: !done });
+    const events = buffer.split(/\r?\n\r?\n/);
+    buffer = events.pop() ?? "";
+    events.forEach(consumeEvent);
+    if (done) break;
+  }
+  if (buffer.trim()) consumeEvent(buffer);
+  return { model, choices: [{ message: { content } }], ...(usage ? { usage } : {}) };
+};
+
 /** 发送 OpenAI Chat Completions 兼容请求。 */
 export async function requestAiCompletion(
   profile: AiProfileConfig,
   payload: AiMarkdownPayload,
-  question: string
+  question: string,
+  onStreamUpdate?: (update: AiStreamUpdate) => void
 ): Promise<AiCompletionResult> {
   if (payload.overLimit) throw new Error("Markdown 超过当前允许上传的大小");
-  const json = await requestChatCompletion(profile, buildChatCompletionBody(profile, payload, question));
+  const json = await requestChatCompletion(profile, buildChatCompletionBody(profile, payload, question, Boolean(onStreamUpdate)), onStreamUpdate);
   const text = extractAiResponseText(json);
   if (!text) throw new Error("AI 接口返回成功，但没有可读取的文本内容");
   const usage = json.usage && typeof json.usage === "object" ? json.usage as Record<string, unknown> : undefined;
@@ -115,10 +167,11 @@ export async function requestAiCompletion(
 export async function requestAiEditProposal(
   profile: AiProfileConfig,
   payload: AiMarkdownPayload,
-  instruction: string
+  instruction: string,
+  onStreamUpdate?: (update: AiStreamUpdate) => void
 ): Promise<AiCompletionResult> {
   if (payload.overLimit) throw new Error("Markdown 超过当前允许上传的大小");
-  const json = await requestChatCompletion(profile, buildAiEditCompletionBody(profile, payload, instruction));
+  const json = await requestChatCompletion(profile, buildAiEditCompletionBody(profile, payload, instruction, Boolean(onStreamUpdate)), onStreamUpdate);
   const text = extractAiResponseText(json);
   if (!text) throw new Error("AI 接口返回成功，但没有可读取的 Markdown 修改提案");
   const usage = json.usage && typeof json.usage === "object" ? json.usage as Record<string, unknown> : undefined;

@@ -72,7 +72,8 @@ import {
   requestAiImageRecognition,
   fetchAiProfileModels,
   testAiProfileConnection,
-  type AiCompletionResult
+  type AiCompletionResult,
+  type AiStreamUpdate
 } from "./ai/client";
 import type { AiMarkdownPayload } from "./ai/markdown";
 import { shouldHideFileExplorerPath } from "./file-explorer-filter";
@@ -744,10 +745,10 @@ export default class MindMapStudioPlugin extends Plugin {
   }
 
   /** 使用指定 AI 配置发送当前 Markdown 上下文。 */
-  async askAi(profileId: string, payload: AiMarkdownPayload, question: string): Promise<AiCompletionResult> {
+  async askAi(profileId: string, payload: AiMarkdownPayload, question: string, onStreamUpdate?: (update: AiStreamUpdate) => void): Promise<AiCompletionResult> {
     const profile: AiProfileConfig | undefined = this.settings.aiProfiles.find((item) => item.id === profileId && item.enabled);
     if (!profile) throw new Error("AI 接口不存在或未启用");
-    return requestAiCompletion(profile, payload, question);
+    return requestAiCompletion(profile, payload, question, onStreamUpdate);
   }
 
   /** Converts a transcribed question into a verified original-question lookup result when the selected model supports web retrieval. */
@@ -780,10 +781,10 @@ export default class MindMapStudioPlugin extends Plugin {
   }
 
   /** 使用指定 AI 配置生成 Markdown 修改提案，但不直接修改导图。 */
-  async proposeAiEdit(profileId: string, payload: AiMarkdownPayload, instruction: string): Promise<AiCompletionResult> {
+  async proposeAiEdit(profileId: string, payload: AiMarkdownPayload, instruction: string, onStreamUpdate?: (update: AiStreamUpdate) => void): Promise<AiCompletionResult> {
     const profile: AiProfileConfig | undefined = this.settings.aiProfiles.find((item) => item.id === profileId && item.enabled);
     if (!profile) throw new Error("AI 接口不存在或未启用");
-    return requestAiEditProposal(profile, payload, instruction);
+    return requestAiEditProposal(profile, payload, instruction, onStreamUpdate);
   }
 
   /** 使用当前识图模式处理单张图片；AI 模式可指定接口，本地 OCR 模式不会联网。 */
