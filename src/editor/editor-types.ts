@@ -15,6 +15,7 @@ import type {
 } from "../core/model";
 import type { ArticlePageNavigation, ArticleTocEntry, ReadingSection } from "../article/modes";
 import type { ReadingLocation } from "../article/reading-location";
+import type { ArticleRenderCacheSnapshot } from "../article/article-render-cache";
 import type { ArticleLeafBulletStyle, ArticleLeafTextAlignment, ImageHostChoice, ImageHostUploadBatch } from "../settings";
 import type { DesktopCaptureResult } from "../utils/desktop-capture";
 import type { ImageRecognitionItemResult, RecognizableImage } from "../vision/recognition";
@@ -60,6 +61,8 @@ export interface MindMapEditorCallbacks {
   onDisplayModeChange: (mode: DisplayMode, location?: ReadingLocation) => void | Promise<void>;
   onReadingLocationChange: (path: string, location: ReadingLocation) => void | Promise<void>;
   onRenderCode: (block: MindMapCodeBlock, container: HTMLElement) => void | Promise<void>;
+  /** Persist a newly completed article node-render snapshot. */
+  onArticleRenderCacheUpdate: (snapshot: ArticleRenderCacheSnapshot) => void;
 }
 
 /**
@@ -101,6 +104,8 @@ export interface MindMapEditorOptions {
   articleLeafNumberingThreshold: number;
   showArticleToc: boolean;
   articleNavigation?: ArticlePageNavigation;
+  /** Synchronously preloaded persistent cache for the current file. */
+  articleRenderCache: ArticleRenderCacheSnapshot | null;
   readingSections: ReadingSection[];
   readingProgressPosition: "top" | "bottom" | "left" | "right";
   returnToTopVisibility: number;

@@ -1,5 +1,16 @@
 # Modified Files
 
+## 1.38.5 文章节点级持久缓存
+
+- `src/article/article-render-cache.ts`：新增稳定指纹、缓存结构校验、内存 LRU、插件私有 JSON 预载与串行防抖写盘；支持文件删除清理和重命名迁移。
+- `src/editor/article-renderer.ts`：按文章展示签名和节点指纹恢复未变化节点静态 HTML，分帧重新绑定文字、图片、表格和题目交互；只重新渲染变化节点，代码块节点保持安全重建。
+- `src/editor/editor-types.ts`、`src/editor/editor.ts`、`src/view.ts`、`src/main.ts`：在插件、视图和编辑器边界传递同步预载快照与完成回调，并在插件启动、卸载和文件生命周期中管理缓存。
+- `tests/article-render-cache.test.mjs`、`tests/incremental-render.test.mjs`、`package.json`：新增指纹、预载、持久化和渲染契约专项测试，单元测试扩展至 263 项。
+- `README.md`、`CHANGELOG.md`、`docs/ARCHITECTURE.md`、`docs/SPECIAL_FEATURES.md`、`docs/TESTING.md`、`docs/FUNCTION_REFERENCE.md`：同步缓存边界、降级策略和人工验证步骤。
+- `package.json`、`package-lock.json`、`manifest.json`、`versions.json`、`update.json`：统一版本元数据为 1.38.5，并在最终打包后写入安装包 SHA-256。
+- `TEST_RESULTS.md`、`MODIFIED_FILES.md`：记录完整验证与真实 Win10 大文件待验证事项。
+- `main.js`：由缓存实现后的 TypeScript 源码重新生产构建。
+
 ## 1.38.4 渐进文章加载期间滚动位置保护
 
 - `src/editor/editor.ts`：增加渐进文章视口所有权状态；滚轮、触摸、指针和翻页键输入后清除旧待恢复位置，后续批次及完成回调不再写回打开瞬间的滚动快照。未发生用户导航时继续保留原有语义阅读位置恢复。

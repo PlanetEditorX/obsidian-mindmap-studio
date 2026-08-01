@@ -73,7 +73,7 @@ test("editor contracts keep text commits local and defer large article rendering
   assert.match(editorSource, /this\.articleEl\.setAttr\("aria-busy", "true"\)/);
   assert.match(articleSource, /class ArticleIncrementalRenderOptions|interface ArticleIncrementalRenderOptions/);
   assert.match(articleSource, /mms-article-node is-render-pending/);
-  assert.match(articleSource, /if \(firstBatch\) options\.incremental\?\.onFirstContent\(\)/);
+  assert.match(articleSource, /if \(!firstContentRevealed && \(firstBatch \|\| index >= orderedIds\.length\)\)/);
   assert.match(articleSource, /window\.requestAnimationFrame\(\(\) => renderBatch\(index\)\)/);
 });
 
