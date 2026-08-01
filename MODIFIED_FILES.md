@@ -1,5 +1,13 @@
 # Modified Files
 
+## 1.35.3 完整节点加粗快捷键与导入提示
+
+- `src/editor/node-rich-text-editor.ts`：为完整节点编辑器的格式快捷键增加 `event.code` 匹配和 `keydown` / `beforeinput` 去重，避免 `Ctrl/Cmd+B` 加粗后被浏览器格式输入事件立即切换回去。
+- `src/editor/editor-modals.ts`：导入入口提示改用“思维导图归档”通用称呼，保留 `.xmind` 解析能力。
+- `tests/image-layout.test.mjs`、`tests/import-mode.test.mjs`：增加加粗双事件去重和导入提示品牌隐藏专项测试。
+- `README.md`、`docs/PROJECT_GUIDE.zh-CN.md`、`docs/SPECIAL_FEATURES.md`、`docs/TESTING.md`、`CHANGELOG.md`、`TEST_RESULTS.md`：同步行为、测试和交付记录。
+
+
 ## 1.35.3 图片布局、图床去重与编辑体验
 
 - `src/core/model.ts`、`src/render/layout.ts`、`src/editor/editor.ts`、`src/editor/outline-renderer.ts`、`src/editor/article-renderer.ts`、`styles.css`：新增图片同行/独占一行字段、编辑入口和多模式布局；文章与大纲为连续同行图片创建 flex 行，修复小图仍各占一行；缩小图片预览窗口；无启用图床时隐藏图片右键“上传到图床”。
