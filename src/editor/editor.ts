@@ -3145,10 +3145,15 @@ export class MindMapEditor {
       previousPage.setAttr("aria-hidden", "true");
     } else {
       const shell = this.articleEl.createDiv({ cls: "mms-article-loading-shell", attr: { "aria-hidden": "true" } });
+      const viewportHeight = Math.max(this.articleEl.clientHeight, Math.round(window.innerHeight * 0.72), 520);
+      shell.style.setProperty("--mms-loading-shell-height", `${viewportHeight}px`);
       shell.createDiv({ cls: "mms-article-loading-shell-title" });
-      for (const width of ["92%", "78%", "86%", "68%", "81%", "56%"] as const) {
+      const widths = ["96%", "88%", "93%", "79%", "90%", "72%", "95%", "84%", "91%", "76%"] as const;
+      const lineCount = Math.max(18, Math.ceil((viewportHeight - 150) / 30));
+      for (let index = 0; index < lineCount; index += 1) {
+        if (index > 0 && index % 7 === 0) shell.createDiv({ cls: "mms-article-loading-shell-subtitle" });
         const line = shell.createDiv({ cls: "mms-article-loading-shell-line" });
-        line.style.setProperty("--mms-loading-line-width", width);
+        line.style.setProperty("--mms-loading-line-width", widths[index % widths.length]);
       }
     }
     this.articleEl.addClass("is-progressive-rendering");

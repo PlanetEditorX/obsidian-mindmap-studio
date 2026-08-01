@@ -95,6 +95,9 @@ test("image uploads use SHA-256 cache and remote deletion requires an explicit h
   assert.match(settingsSource, /deleteRemoteWhenUnreferenced: boolean/);
   assert.match(settingsSource, /setName\("最后引用删除时同步清理图床"\)/);
   assert.match(settingsSource, /setName\("删除 API（可选）"\)/);
+  assert.match(settingsSource, /上传与删除请求共用同一组请求头/);
+  assert.doesNotMatch(settingsSource, /setName\("删除请求头 JSON"\)/);
+  assert.match(settingsSource, /pendingImageHostDeletions: Record<string, PendingImageHostDeletion>/);
   assert.match(settingsSource, /setName\("图床预设"\)/);
   assert.match(settingsSource, /preset: "zipline"/);
   assert.match(settingsSource, /addOption\("zipline", "Zipline（默认）"\)/);
@@ -110,7 +113,13 @@ test("image uploads use SHA-256 cache and remote deletion requires an explicit h
   assert.match(mainSource, /if \(!host\?\.deleteEndpoint\.trim\(\)\)/);
   assert.match(mainSource, /deleteImageFromHostConfig/);
   assert.match(mainSource, /resolveZiplineFileId/);
-  assert.match(mainSource, /host\.preset === "zipline" \? host\.headers/);
+  assert.match(mainSource, /const headers = parseUploadHeaders\(host\.headers\)/);
+  assert.doesNotMatch(mainSource, /deleteHeaders/);
+  assert.match(mainSource, /const REMOTE_IMAGE_DELETE_DELAY_MS = 60_000/);
+  assert.match(mainSource, /scheduleImageHostDeletion/);
+  assert.match(mainSource, /pending\.reason === "removed-image" && await this\.isPendingRemoteImageReferenced\(pending\)/);
+  assert.match(mainSource, /检测到图片已恢复，已取消图床删除/);
+  assert.match(mainSource, /测试图片将在 1 分钟后自动删除/);
   assert.match(mainSource, /\/api\/user\/files\?\$\{query\.toString\(\)\}/);
   assert.doesNotMatch(mainSource, /resolveZiplineV3FileId/);
   assert.doesNotMatch(mainSource, /host\.preset === "zipline-v3"/);

@@ -1,5 +1,13 @@
 # Modified Files
 
+## 1.35.3 图床延迟删除与文章加载骨架
+
+- `src/settings.ts`：移除独立删除请求头配置，增加持久化远程删除队列数据结构；上传与删除共用图床请求头。
+- `src/main.ts`：连通性测试图片和最后引用远程图片统一进入 1 分钟删除队列；到期前重新保存并扫描所有导图，撤销恢复时取消删除；插件重启后恢复待执行任务。
+- `src/editor/editor.ts`、`styles.css`：文章首次加载骨架按当前视图高度动态增加行数，并横向铺满文章窗口。
+- `tests/image-layout.test.mjs`、`tests/incremental-render.test.mjs`：增加共用请求头、延迟删除、撤销保护、测试图清理和视口骨架专项契约。
+- `README.md`、`docs/DATA_MODEL.md`、`docs/SPECIAL_FEATURES.md`、`docs/ARCHITECTURE.md`、`docs/PROJECT_GUIDE.zh-CN.md`、`docs/TESTING.md`、`CHANGELOG.md`、`TEST_RESULTS.md`：同步行为、数据边界和验证记录。
+
 ## 1.35.3 完整节点加粗快捷键与导入提示
 
 - `src/editor/node-rich-text-editor.ts`：为完整节点编辑器的格式快捷键增加 `event.code` 匹配和 `keydown` / `beforeinput` 去重，避免 `Ctrl/Cmd+B` 加粗后被浏览器格式输入事件立即切换回去。
