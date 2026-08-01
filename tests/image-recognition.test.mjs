@@ -250,6 +250,38 @@ test("Windows capture uses the full virtual desktop with DPI-aware monitor metad
   assert.match(html, /viewBounds\.width\/Math\.max\(1,imageArea\.w\)/);
 });
 
+
+
+test("screenshot text input, line style, screen labels and native pin startup are runtime-safe", async () => {
+  const captureSource = await readFile("src/utils/desktop-capture.ts", "utf8");
+  const display = desktopCapture.normalizeBrowserDisplay({
+    x: -1920,
+    y: 0,
+    width: 3840,
+    height: 1080,
+    displays: [
+      { id: 1, x: -1920, y: 0, width: 1920, height: 1080, label: "#U5c4f#U5e55 1" },
+      { id: 2, x: 0, y: 0, width: 1920, height: 1080, label: "garbled" }
+    ]
+  });
+  const html = desktopCapture.captureEditorHtml(display, "capture");
+  assert.match(html, /data-line-style="arrow">箭头<\/button><button class="line-option" data-line-style="line">直线/);
+  assert.match(html, /let lineKind='arrow'/);
+  assert.match(html, /if\(lineKind==='line'\)return/);
+  assert.match(html, /requestAnimationFrame\(\(\)=>\{textEditor\.focus/);
+  assert.match(html, /if\(tool==='text'\)\{ev\.preventDefault\(\);ev\.stopPropagation\(\);openTextEditor/);
+  assert.doesNotMatch(html, /textEditor\.addEventListener\('blur'/);
+  assert.match(html, /availableDisplays\.forEach\(\(item,index\)=>options\.push\(\{label:'屏幕 '\+\(index\+1\)/);
+  assert.match(html, /button\.textContent=option\.label/);
+  assert.match(captureSource, /label = "display-\$index"/);
+  assert.match(captureSource, /label = "all-displays"/);
+  assert.match(captureSource, /writeFile\(scriptPath, "\\uFEFF" \+ script\)/);
+  assert.match(captureSource, /waitForPinnedWindowReady/);
+  assert.match(captureSource, /ReadyPath/);
+  assert.match(captureSource, /Application\]::Run\(\$form\)/);
+  assert.match(captureSource, /ShowInTaskbar = \$true/);
+});
+
 test("manual screenshot never confirms on mouse release and recognition waits for three idle seconds", async () => {
   const [captureSource, editorSource, viewSource, mainSource, typesSource] = await Promise.all([
     readFile("src/utils/desktop-capture.ts", "utf8"),

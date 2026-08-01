@@ -143,7 +143,10 @@ interface NodeCaptureRuntime {
     command: string,
     args: string[],
     options: Record<string, unknown>
-  ) => { unref?: () => void };
+  ) => {
+    unref?: () => void;
+    on?: (event: "error", listener: (error: Error) => void) => void;
+  };
   fs: {
     mkdtemp: (prefix: string) => Promise<string>;
     readFile: (path: string) => Promise<Uint8Array>;
@@ -361,9 +364,9 @@ export function captureEditorHtml(display: ElectronDisplay, mode: DesktopCapture
 .handle{position:absolute;width:11px;height:11px;background:#fff;border:2px solid #169fe8;border-radius:50%;box-shadow:0 1px 5px rgba(0,0,0,.55);pointer-events:auto}.nw{left:-6px;top:-6px;cursor:nwse-resize}.n{left:50%;top:-6px;transform:translateX(-50%);cursor:ns-resize}.ne{right:-6px;top:-6px;cursor:nesw-resize}.e{right:-6px;top:50%;transform:translateY(-50%);cursor:ew-resize}.se{right:-6px;bottom:-6px;cursor:nwse-resize}.s{left:50%;bottom:-6px;transform:translateX(-50%);cursor:ns-resize}.sw{left:-6px;bottom:-6px;cursor:nesw-resize}.w{left:-6px;top:50%;transform:translateY(-50%);cursor:ew-resize}
 #drawLayer{position:fixed;z-index:5;cursor:crosshair}.toolbar,.stylebar,.screen-switcher{position:fixed;z-index:8;display:flex;align-items:center;gap:4px;padding:6px;background:rgba(13,20,31,.94);border:1px solid rgba(255,255,255,.15);border-radius:12px;box-shadow:0 12px 34px rgba(0,0,0,.38);white-space:nowrap;backdrop-filter:blur(14px)}
 .toolbar button,.stylebar button,.screen-switcher button{height:34px;border:0;border-radius:8px;padding:0 10px;background:transparent;color:#e8eef7;font-size:12px;cursor:pointer}.toolbar button:hover,.stylebar button:hover,.screen-switcher button:hover{background:rgba(255,255,255,.1)}.toolbar button.active,.stylebar button.active,.screen-switcher button.active{background:#1976d2;color:#fff}.toolbar .sep,.stylebar .sep{width:1px;height:22px;background:rgba(255,255,255,.16);margin:0 2px}.toolbar .primary{background:#1976d2}.toolbar .danger:hover{background:#b4232f}
-.stylebar{display:none;padding:5px 7px;z-index:9}.stylebar.show{display:flex}.color-dot{width:24px!important;height:24px!important;padding:0!important;border-radius:50%!important;border:2px solid rgba(255,255,255,.72)!important;box-shadow:0 0 0 1px rgba(0,0,0,.35)}.color-dot.active{outline:2px solid #fff;outline-offset:2px}.width-swatch{min-width:34px;padding:0 8px!important}.shape-option{min-width:42px}.screen-switcher{left:14px;top:14px;z-index:10;padding:5px}.screen-switcher.hidden{display:none}
+.stylebar{display:none;padding:5px 7px;z-index:9}.stylebar.show{display:flex}.color-dot{width:24px!important;height:24px!important;padding:0!important;border-radius:50%!important;border:2px solid rgba(255,255,255,.72)!important;box-shadow:0 0 0 1px rgba(0,0,0,.35)}.color-dot.active{outline:2px solid #fff;outline-offset:2px}.width-swatch{min-width:34px;padding:0 8px!important}.shape-option,.line-option{min-width:42px}.screen-switcher{left:14px;top:14px;z-index:10;padding:5px}.screen-switcher.hidden{display:none}
 #tip{position:fixed;right:14px;top:14px;z-index:10;color:#fff;background:rgba(13,20,31,.76);border:1px solid rgba(255,255,255,.12);padding:8px 11px;border-radius:9px;font-size:12px;pointer-events:none;backdrop-filter:blur(10px)}
-#textEditor{position:fixed;z-index:12;display:none;min-width:180px;min-height:48px;max-width:420px;padding:7px 9px;border:2px solid #239fe8;border-radius:8px;outline:none;background:rgba(255,255,255,.96);color:#111;box-shadow:0 8px 28px rgba(0,0,0,.36);resize:both;user-select:text;line-height:1.35}
+#textEditor{position:fixed;z-index:12;display:none;min-width:180px;min-height:48px;max-width:420px;padding:7px 9px;border:2px solid #239fe8;border-radius:8px;outline:none;background:rgba(255,255,255,.98);color:#111;caret-color:#111;box-shadow:0 8px 28px rgba(0,0,0,.36);resize:both;user-select:text;pointer-events:auto;line-height:1.35;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",sans-serif}
 </style></head><body>
 <canvas id="base"></canvas><canvas id="annotations"></canvas><canvas id="preview"></canvas>
 <div id="shadeTop" class="shade"></div><div id="shadeLeft" class="shade"></div><div id="shadeRight" class="shade"></div><div id="shadeBottom" class="shade"></div>
@@ -375,6 +378,7 @@ export function captureEditorHtml(display: ElectronDisplay, mode: DesktopCapture
 <button data-action="recognize-copy">识别并复制</button><button data-action="pin">固定</button><button data-action="download">下载</button><button class="danger" data-action="cancel">取消</button><button class="primary" data-action="copy">复制</button></div>
 <div id="stylebar" class="stylebar">
 <div data-style-group="shape"><button class="shape-option active" data-shape="rect">矩形</button><button class="shape-option" data-shape="round">圆角</button><button class="shape-option" data-shape="ellipse">椭圆</button><span class="sep"></span></div>
+<div data-style-group="arrow"><button class="line-option active" data-line-style="arrow">箭头</button><button class="line-option" data-line-style="line">直线</button><span class="sep"></span></div>
 <button class="color-dot active" data-color="#ff3b30" style="background:#ff3b30" aria-label="红色"></button><button class="color-dot" data-color="#ffcc00" style="background:#ffcc00" aria-label="黄色"></button><button class="color-dot" data-color="#34c759" style="background:#34c759" aria-label="绿色"></button><button class="color-dot" data-color="#0a84ff" style="background:#0a84ff" aria-label="蓝色"></button><button class="color-dot" data-color="#ffffff" style="background:#ffffff" aria-label="白色"></button><button class="color-dot" data-color="#111111" style="background:#111111" aria-label="黑色"></button><span class="sep"></span>
 <button class="width-swatch" data-width="2">细</button><button class="width-swatch active" data-width="4">中</button><button class="width-swatch" data-width="8">粗</button><span class="sep"></span><button data-fill="toggle">填充</button>
 </div>
@@ -386,7 +390,7 @@ export function captureEditorHtml(display: ElectronDisplay, mode: DesktopCapture
   const selection=document.getElementById('selection'); const metrics=document.getElementById('metrics'); const toolbar=document.getElementById('toolbar'); const stylebar=document.getElementById('stylebar'); const screenSwitcher=document.getElementById('screenSwitcher'); const drawLayer=document.getElementById('drawLayer'); const textEditor=document.getElementById('textEditor'); const tip=document.getElementById('tip');
   const shades=['shadeTop','shadeLeft','shadeRight','shadeBottom'].map(id=>document.getElementById(id)); const dpr=Math.max(1,window.devicePixelRatio||1); const autoConfirmDelayMs=3000; const minSize=36;
   let tool=''; let drawing=false; let start=null; let number=1; let drag=null; let selectionDraw=null; let autoConfirmTimer=null; let autoConfirmArmed=false; let pointerInsideSelection=false; let activeTextPoint=null;
-  let strokeColor='#ff3b30'; let strokeWidth=4; let fillShape=false; let shapeKind='rect'; let viewBounds=(availableDisplays.find(item=>item.active)||availableDisplays.find(item=>item.primary)||availableDisplays[0]||{bounds:virtualBounds}).bounds; let imageArea={x:0,y:0,w:innerWidth,h:innerHeight}; let rect={x:0,y:0,w:0,h:0};
+  let strokeColor='#ff3b30'; let strokeWidth=4; let fillShape=false; let shapeKind='rect'; let lineKind='arrow'; let viewBounds=(availableDisplays.find(item=>item.active)||availableDisplays.find(item=>item.primary)||availableDisplays[0]||{bounds:virtualBounds}).bounds; let imageArea={x:0,y:0,w:innerWidth,h:innerHeight}; let rect={x:0,y:0,w:0,h:0};
   tip.textContent=recognizeMode?'拖动选择截图范围；释放后 3 秒自动完成，在选区内移动鼠标或调整边框可重置计时':'拖动或调整蓝色边框；双击选区复制并插入节点，Esc 取消';
   const image=new Image(); image.src=${source};
   function resizeCanvas(c,ctx){c.width=Math.round(innerWidth*dpr);c.height=Math.round(innerHeight*dpr);c.style.width=innerWidth+'px';c.style.height=innerHeight+'px';ctx.setTransform(dpr,0,0,dpr,0,0)}
@@ -401,7 +405,7 @@ export function captureEditorHtml(display: ElectronDisplay, mode: DesktopCapture
     shades[0].style.cssText='left:0;top:0;width:100%;height:'+rect.y+'px';shades[1].style.cssText='left:0;top:'+rect.y+'px;width:'+rect.x+'px;height:'+rect.h+'px';shades[2].style.cssText='left:'+(rect.x+rect.w)+'px;top:'+rect.y+'px;width:'+(innerWidth-rect.x-rect.w)+'px;height:'+rect.h+'px';shades[3].style.cssText='left:0;top:'+(rect.y+rect.h)+'px;width:100%;height:'+(innerHeight-rect.y-rect.h)+'px';
     const topLeft=viewportToGlobal(rect.x,rect.y),bottomRight=viewportToGlobal(rect.x+rect.w,rect.y+rect.h);metrics.textContent='X '+Math.round(topLeft.x)+'  Y '+Math.round(topLeft.y)+'  '+Math.round(bottomRight.x-topLeft.x)+' × '+Math.round(bottomRight.y-topLeft.y);placeToolbar()}
   function placeToolbar(){const tw=toolbar.offsetWidth||820,th=toolbar.offsetHeight||48;let left=Math.max(8,Math.min(innerWidth-tw-8,rect.x+rect.w/2-tw/2));let top=rect.y+rect.h+12;if(top+th>innerHeight-8)top=Math.max(8,rect.y-th-12);toolbar.style.left=left+'px';toolbar.style.top=top+'px';const sw=stylebar.offsetWidth||620,sh=stylebar.offsetHeight||44;stylebar.style.left=Math.max(8,Math.min(innerWidth-sw-8,left))+'px';let styleTop=top+th+7;if(styleTop+sh>innerHeight-8)styleTop=Math.max(8,top-sh-7);stylebar.style.top=styleTop+'px'}
-  function buildScreenSwitcher(){screenSwitcher.innerHTML='';const options=[];if(availableDisplays.length>1)options.push({label:'全部屏幕',bounds:virtualBounds,key:'all'});availableDisplays.forEach((item,index)=>options.push({label:item.label||('屏幕 '+(index+1)),bounds:item.bounds,key:String(item.id)}));if(options.length<=1){screenSwitcher.classList.add('hidden');return}options.forEach(option=>{const button=document.createElement('button');button.textContent=option.label;button.classList.toggle('active',sameBounds(option.bounds,viewBounds));button.addEventListener('click',()=>{if(sameBounds(option.bounds,viewBounds))return;viewBounds=option.bounds;screenSwitcher.querySelectorAll('button').forEach(item=>item.classList.toggle('active',item===button));actx.clearRect(0,0,innerWidth,innerHeight);pctx.clearRect(0,0,innerWidth,innerHeight);drawBase();resetSelection();tip.textContent='已切换到 '+option.label+'；切换屏幕后已清除当前标注'});screenSwitcher.appendChild(button)})}
+  function buildScreenSwitcher(){screenSwitcher.innerHTML='';const options=[];if(availableDisplays.length>1)options.push({label:'全部屏幕',bounds:virtualBounds,key:'all'});availableDisplays.forEach((item,index)=>options.push({label:'屏幕 '+(index+1),bounds:item.bounds,key:String(item.id)}));if(options.length<=1){screenSwitcher.classList.add('hidden');return}options.forEach(option=>{const button=document.createElement('button');button.textContent=option.label;button.classList.toggle('active',sameBounds(option.bounds,viewBounds));button.addEventListener('click',()=>{if(sameBounds(option.bounds,viewBounds))return;viewBounds=option.bounds;screenSwitcher.querySelectorAll('button').forEach(item=>item.classList.toggle('active',item===button));actx.clearRect(0,0,innerWidth,innerHeight);pctx.clearRect(0,0,innerWidth,innerHeight);drawBase();resetSelection();tip.textContent='已切换到 '+option.label+'；切换屏幕后已清除当前标注'});screenSwitcher.appendChild(button)})}
   function sameBounds(a,b){return a.x===b.x&&a.y===b.y&&a.width===b.width&&a.height===b.height}
   function point(ev){return{x:ev.clientX,y:ev.clientY}} function localPoint(ev){return{x:ev.clientX-rect.x,y:ev.clientY-rect.y}} function insideRect(x,y){return x>=rect.x&&x<=rect.x+rect.w&&y>=rect.y&&y<=rect.y+rect.h} function insideImage(x,y){return x>=imageArea.x&&x<=imageArea.x+imageArea.w&&y>=imageArea.y&&y<=imageArea.y+imageArea.h}
   function clearAutoConfirm(){if(autoConfirmTimer!==null){clearTimeout(autoConfirmTimer);autoConfirmTimer=null}} function scheduleAutoConfirm(){if(!recognizeMode||!autoConfirmArmed)return;clearAutoConfirm();autoConfirmTimer=setTimeout(()=>{if(pointerInsideSelection||drag||selectionDraw||drawing||textEditor.style.display==='block'){scheduleAutoConfirm();return}action('copy')},autoConfirmDelayMs)} function armAutoConfirm(){if(!recognizeMode)return;autoConfirmArmed=true;scheduleAutoConfirm()} function resetAutoConfirm(){if(recognizeMode&&autoConfirmArmed)scheduleAutoConfirm()}
@@ -413,22 +417,23 @@ export function captureEditorHtml(display: ElectronDisplay, mode: DesktopCapture
   function moveSelection(ev){if(!selectionDraw)return;const endX=Math.max(imageArea.x,Math.min(imageArea.x+imageArea.w,ev.clientX)),endY=Math.max(imageArea.y,Math.min(imageArea.y+imageArea.h,ev.clientY)),dx=endX-selectionDraw.start.x,dy=endY-selectionDraw.start.y;if(!selectionDraw.active&&Math.hypot(dx,dy)<4)return;selectionDraw.active=true;clearAutoConfirm();rect={x:Math.min(selectionDraw.start.x,endX),y:Math.min(selectionDraw.start.y,endY),w:Math.max(minSize,Math.abs(dx)),h:Math.max(minSize,Math.abs(dy))};updateRect()}
   function endSelection(){const completed=selectionDraw&&selectionDraw.active===true;selectionDraw=null;window.removeEventListener('pointermove',moveSelection);if(completed)armAutoConfirm()}
   document.addEventListener('pointerdown',beginSelection);
-  function setTool(next){commitText();tool=tool===next?'':next;toolbar.querySelectorAll('[data-tool]').forEach(btn=>btn.classList.toggle('active',btn.dataset.tool===tool));drawLayer.style.pointerEvents=tool?'auto':'none';stylebar.classList.toggle('show',Boolean(tool&&['shape','pen','arrow','text','number'].includes(tool)));stylebar.querySelector('[data-style-group="shape"]').style.display=tool==='shape'?'contents':'none';stylebar.querySelector('[data-fill]').style.display=tool==='shape'?'inline-flex':'none';placeToolbar()}
+  function setTool(next){commitText();tool=tool===next?'':next;toolbar.querySelectorAll('[data-tool]').forEach(btn=>btn.classList.toggle('active',btn.dataset.tool===tool));drawLayer.style.pointerEvents=tool?'auto':'none';stylebar.classList.toggle('show',Boolean(tool&&['shape','pen','arrow','text','number'].includes(tool)));stylebar.querySelector('[data-style-group="shape"]').style.display=tool==='shape'?'contents':'none';stylebar.querySelector('[data-style-group="arrow"]').style.display=tool==='arrow'?'contents':'none';stylebar.querySelector('[data-fill]').style.display=tool==='shape'?'inline-flex':'none';placeToolbar()}
   toolbar.querySelectorAll('[data-tool]').forEach(btn=>btn.addEventListener('click',()=>setTool(btn.dataset.tool)));
   stylebar.querySelectorAll('[data-color]').forEach(btn=>btn.addEventListener('click',()=>{strokeColor=btn.dataset.color;stylebar.querySelectorAll('[data-color]').forEach(item=>item.classList.toggle('active',item===btn));resetAutoConfirm()}));
   stylebar.querySelectorAll('[data-width]').forEach(btn=>btn.addEventListener('click',()=>{strokeWidth=Number(btn.dataset.width)||4;stylebar.querySelectorAll('[data-width]').forEach(item=>item.classList.toggle('active',item===btn));resetAutoConfirm()}));
   stylebar.querySelectorAll('[data-shape]').forEach(btn=>btn.addEventListener('click',()=>{shapeKind=btn.dataset.shape;stylebar.querySelectorAll('[data-shape]').forEach(item=>item.classList.toggle('active',item===btn));resetAutoConfirm()}));
+  stylebar.querySelectorAll('[data-line-style]').forEach(btn=>btn.addEventListener('click',()=>{lineKind=btn.dataset.lineStyle;stylebar.querySelectorAll('[data-line-style]').forEach(item=>item.classList.toggle('active',item===btn));resetAutoConfirm()}));
   stylebar.querySelector('[data-fill]').addEventListener('click',ev=>{fillShape=!fillShape;ev.currentTarget.classList.toggle('active',fillShape);resetAutoConfirm()});
   function applyStyle(ctx){ctx.lineCap='round';ctx.lineJoin='round';ctx.strokeStyle=strokeColor;ctx.fillStyle=strokeColor;ctx.lineWidth=strokeWidth;ctx.shadowColor='rgba(0,0,0,.22)';ctx.shadowBlur=1}
   function roundedRectPath(ctx,x,y,w,h,r){const left=Math.min(x,x+w),top=Math.min(y,y+h),right=Math.max(x,x+w),bottom=Math.max(y,y+h),radius=Math.min(r,(right-left)/2,(bottom-top)/2);ctx.beginPath();ctx.moveTo(left+radius,top);ctx.lineTo(right-radius,top);ctx.quadraticCurveTo(right,top,right,top+radius);ctx.lineTo(right,bottom-radius);ctx.quadraticCurveTo(right,bottom,right-radius,bottom);ctx.lineTo(left+radius,bottom);ctx.quadraticCurveTo(left,bottom,left,bottom-radius);ctx.lineTo(left,top+radius);ctx.quadraticCurveTo(left,top,left+radius,top);ctx.closePath()}
   function drawShape(ctx,a,b){applyStyle(ctx);if(shapeKind==='ellipse'){ctx.beginPath();ctx.ellipse((a.x+b.x)/2,(a.y+b.y)/2,Math.abs(b.x-a.x)/2,Math.abs(b.y-a.y)/2,0,0,Math.PI*2)}else if(shapeKind==='round'){roundedRectPath(ctx,a.x,a.y,b.x-a.x,b.y-a.y,14)}else{roundedRectPath(ctx,a.x,a.y,b.x-a.x,b.y-a.y,2)}if(fillShape){ctx.save();ctx.globalAlpha=.2;ctx.fill();ctx.restore()}ctx.stroke()}
-  function drawArrow(ctx,a,b){applyStyle(ctx);ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();const angle=Math.atan2(b.y-a.y,b.x-a.x),head=Math.max(13,strokeWidth*3.2);ctx.beginPath();ctx.moveTo(b.x,b.y);ctx.lineTo(b.x-head*Math.cos(angle-Math.PI/7),b.y-head*Math.sin(angle-Math.PI/7));ctx.lineTo(b.x-head*Math.cos(angle+Math.PI/7),b.y-head*Math.sin(angle+Math.PI/7));ctx.closePath();ctx.fill()}
+  function drawArrow(ctx,a,b){applyStyle(ctx);ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();if(lineKind==='line')return;const angle=Math.atan2(b.y-a.y,b.x-a.x),head=Math.max(13,strokeWidth*3.2);ctx.beginPath();ctx.moveTo(b.x,b.y);ctx.lineTo(b.x-head*Math.cos(angle-Math.PI/7),b.y-head*Math.sin(angle-Math.PI/7));ctx.lineTo(b.x-head*Math.cos(angle+Math.PI/7),b.y-head*Math.sin(angle+Math.PI/7));ctx.closePath();ctx.fill()}
   function commitPreview(){actx.drawImage(preview,0,0,innerWidth,innerHeight);pctx.clearRect(0,0,innerWidth,innerHeight)}
   function mosaicAt(p){const size=32,small=6,sx=Math.max(imageArea.x,Math.min(imageArea.x+imageArea.w-size,rect.x+p.x-size/2)),sy=Math.max(imageArea.y,Math.min(imageArea.y+imageArea.h-size,rect.y+p.y-size/2)),tmp=document.createElement('canvas');tmp.width=small;tmp.height=small;const t=tmp.getContext('2d');t.drawImage(base,sx*dpr,sy*dpr,size*dpr,size*dpr,0,0,small,small);actx.save();actx.imageSmoothingEnabled=false;actx.drawImage(tmp,0,0,small,small,sx,sy,size,size);actx.restore()}
-  function openTextEditor(p){commitText();activeTextPoint={x:rect.x+p.x,y:rect.y+p.y};textEditor.style.left=Math.min(innerWidth-230,activeTextPoint.x)+'px';textEditor.style.top=Math.min(innerHeight-90,activeTextPoint.y)+'px';textEditor.style.display='block';textEditor.style.color=strokeColor;textEditor.style.fontSize=Math.max(18,strokeWidth*5+10)+'px';textEditor.value='';textEditor.focus();resetAutoConfirm()}
+  function openTextEditor(p){commitText();activeTextPoint={x:rect.x+p.x,y:rect.y+p.y};textEditor.style.left=Math.max(8,Math.min(innerWidth-230,activeTextPoint.x))+'px';textEditor.style.top=Math.max(8,Math.min(innerHeight-90,activeTextPoint.y))+'px';textEditor.style.display='block';textEditor.style.color=strokeColor;textEditor.style.fontSize=Math.max(18,strokeWidth*5+10)+'px';textEditor.value='';requestAnimationFrame(()=>{textEditor.focus({preventScroll:true});textEditor.setSelectionRange(0,0)});resetAutoConfirm()}
   function commitText(cancel){if(textEditor.style.display!=='block')return;const value=textEditor.value.trimEnd(),point=activeTextPoint;textEditor.style.display='none';activeTextPoint=null;if(cancel||!value||!point)return;applyStyle(actx);const fontSize=Math.max(20,strokeWidth*5+12);actx.font='600 '+fontSize+'px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif';actx.textAlign='left';actx.textBaseline='top';actx.shadowBlur=1;value.split(/\\n/).forEach((line,index)=>actx.fillText(line,point.x,point.y+index*fontSize*1.3));resetAutoConfirm()}
-  textEditor.addEventListener('pointerdown',ev=>ev.stopPropagation());textEditor.addEventListener('keydown',ev=>{ev.stopPropagation();if(ev.key==='Escape'){ev.preventDefault();commitText(true)}else if(ev.key==='Enter'&&(ev.ctrlKey||ev.metaKey)){ev.preventDefault();commitText(false)}});textEditor.addEventListener('blur',()=>setTimeout(()=>commitText(false),0));
-  drawLayer.addEventListener('pointerdown',ev=>{if(!tool)return;resetAutoConfirm();const p=localPoint(ev);if(tool==='text'){openTextEditor(p);return}if(tool==='number'){applyStyle(actx);actx.beginPath();actx.arc(rect.x+p.x,rect.y+p.y,15,0,Math.PI*2);actx.fill();actx.fillStyle=strokeColor==='#ffffff'?'#111':'#fff';actx.shadowBlur=0;actx.font='700 15px sans-serif';actx.textAlign='center';actx.textBaseline='middle';actx.fillText(String(number++),rect.x+p.x,rect.y+p.y);return}drawing=true;start=p;drawLayer.setPointerCapture(ev.pointerId);if(tool==='pen'||tool==='eraser'||tool==='mosaic')moveDraw(ev)});
+  textEditor.addEventListener('pointerdown',ev=>ev.stopPropagation());textEditor.addEventListener('click',ev=>ev.stopPropagation());textEditor.addEventListener('beforeinput',ev=>ev.stopPropagation());textEditor.addEventListener('input',ev=>{ev.stopPropagation();resetAutoConfirm()});textEditor.addEventListener('keydown',ev=>{ev.stopImmediatePropagation();if(ev.key==='Escape'){ev.preventDefault();commitText(true)}else if(ev.key==='Enter'&&(ev.ctrlKey||ev.metaKey)&&!ev.isComposing){ev.preventDefault();commitText(false)}});textEditor.addEventListener('keyup',ev=>ev.stopImmediatePropagation());
+  drawLayer.addEventListener('pointerdown',ev=>{if(!tool)return;resetAutoConfirm();const p=localPoint(ev);if(tool==='text'){ev.preventDefault();ev.stopPropagation();openTextEditor(p);return}if(tool==='number'){applyStyle(actx);actx.beginPath();actx.arc(rect.x+p.x,rect.y+p.y,15,0,Math.PI*2);actx.fill();actx.fillStyle=strokeColor==='#ffffff'?'#111':'#fff';actx.shadowBlur=0;actx.font='700 15px sans-serif';actx.textAlign='center';actx.textBaseline='middle';actx.fillText(String(number++),rect.x+p.x,rect.y+p.y);return}drawing=true;start=p;drawLayer.setPointerCapture(ev.pointerId);if(tool==='pen'||tool==='eraser'||tool==='mosaic')moveDraw(ev)});
   function moveDraw(ev){if(!drawing||!start)return;resetAutoConfirm();const p=localPoint(ev),a={x:rect.x+start.x,y:rect.y+start.y},b={x:rect.x+p.x,y:rect.y+p.y};if(tool==='pen'){applyStyle(actx);actx.beginPath();actx.moveTo(a.x,a.y);actx.lineTo(b.x,b.y);actx.stroke();start=p}else if(tool==='eraser'){actx.save();actx.globalCompositeOperation='destination-out';actx.lineWidth=Math.max(20,strokeWidth*5);actx.lineCap='round';actx.beginPath();actx.moveTo(a.x,a.y);actx.lineTo(b.x,b.y);actx.stroke();actx.restore();start=p}else if(tool==='mosaic'){mosaicAt(p);start=p}else{pctx.clearRect(0,0,innerWidth,innerHeight);if(tool==='shape')drawShape(pctx,a,b);else if(tool==='arrow')drawArrow(pctx,a,b)}}
   drawLayer.addEventListener('pointermove',moveDraw);drawLayer.addEventListener('pointerup',()=>{if(!drawing)return;if(tool==='shape'||tool==='arrow')commitPreview();drawing=false;start=null;armAutoConfirm()});
   window.__mmsExport=()=>{commitText(false);const sourcePixelsPerViewportX=(viewBounds.width/Math.max(1,imageArea.w))*(image.naturalWidth/Math.max(1,virtualBounds.width)),sourcePixelsPerViewportY=(viewBounds.height/Math.max(1,imageArea.h))*(image.naturalHeight/Math.max(1,virtualBounds.height));const sourceX=((viewBounds.x-virtualBounds.x)+(rect.x-imageArea.x)*viewBounds.width/Math.max(1,imageArea.w))*(image.naturalWidth/Math.max(1,virtualBounds.width)),sourceY=((viewBounds.y-virtualBounds.y)+(rect.y-imageArea.y)*viewBounds.height/Math.max(1,imageArea.h))*(image.naturalHeight/Math.max(1,virtualBounds.height));const out=document.createElement('canvas');out.width=Math.max(1,Math.round(rect.w*sourcePixelsPerViewportX));out.height=Math.max(1,Math.round(rect.h*sourcePixelsPerViewportY));const ctx=out.getContext('2d');ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';ctx.drawImage(image,sourceX,sourceY,out.width,out.height,0,0,out.width,out.height);ctx.drawImage(ann,rect.x*dpr,rect.y*dpr,rect.w*dpr,rect.h*dpr,0,0,out.width,out.height);const topLeft=viewportToGlobal(rect.x,rect.y),bottomRight=viewportToGlobal(rect.x+rect.w,rect.y+rect.h);return{dataUrl:out.toDataURL('image/png'),bounds:{x:Math.round(topLeft.x),y:Math.round(topLeft.y),width:Math.round(bottomRight.x-topLeft.x),height:Math.round(bottomRight.y-topLeft.y)}}};
@@ -557,7 +562,7 @@ try {
       width = $b.Width
       height = $b.Height
       scaleFactor = 1
-      label = "屏幕 $index"
+      label = "display-$index"
       primary = $screen.Primary
       active = ($screen.DeviceName -eq $activeScreen.DeviceName)
     }
@@ -569,7 +574,7 @@ try {
     width = $virtual.Width
     height = $virtual.Height
     scaleFactor = 1
-    label = "全部屏幕"
+    label = "all-displays"
     displays = $monitors
   } | ConvertTo-Json -Depth 5 -Compress
   [System.IO.File]::WriteAllText($MetadataPath, $metadata, (New-Object System.Text.UTF8Encoding($false)))
@@ -580,7 +585,7 @@ try {
   }
 }
 `;
-  await runtime.fs.writeFile(scriptPath, script);
+  await runtime.fs.writeFile(scriptPath, "\uFEFF" + script);
   let lastError = "PowerShell 桌面抓屏失败";
   for (const command of ["powershell.exe", "pwsh.exe"]) {
     try {
@@ -817,6 +822,32 @@ async function writePngToClipboard(runtime: ElectronCaptureRuntime, bytes: Uint8
   throw new Error("当前桌面运行时无法把截图写入系统剪贴板");
 }
 
+/** 等待固定窗口进程写入就绪文件，并在启动失败时返回明确错误。 */
+async function waitForPinnedWindowReady(
+  runtime: NodeCaptureRuntime,
+  readyPath: string,
+  errorPath: string,
+  timeoutMs = 5_000
+): Promise<void> {
+  const started = Date.now();
+  while (Date.now() - started < timeoutMs) {
+    try {
+      const ready = new TextDecoder().decode(await runtime.fs.readFile(readyPath));
+      if (ready.trim() === "ready") return;
+    } catch {
+      // The native window has not finished creating yet.
+    }
+    try {
+      const error = new TextDecoder().decode(await runtime.fs.readFile(errorPath)).trim();
+      if (error) throw new Error(`固定截图窗口启动失败：${error}`);
+    } catch (error) {
+      if (error instanceof Error && error.message.startsWith("固定截图窗口启动失败：")) throw error;
+    }
+    await new Promise((resolve) => globalThis.setTimeout(resolve, 100));
+  }
+  throw new Error("固定截图窗口未在 5 秒内启动，请检查 PowerShell 或安全软件拦截");
+}
+
 /** 在 Windows 上启动真正置顶、可拖动和可缩放的独立固定截图窗口。 */
 async function openWindowsPinnedCapture(
   nodeRuntime: NodeCaptureRuntime,
@@ -826,9 +857,11 @@ async function openWindowsPinnedCapture(
   const directory = await nodeRuntime.fs.mkdtemp(nodeRuntime.path.join(nodeRuntime.os.tmpdir(), "mms-pinned-capture-"));
   const imagePath = nodeRuntime.path.join(directory, "capture.png");
   const scriptPath = nodeRuntime.path.join(directory, "pin.ps1");
+  const readyPath = nodeRuntime.path.join(directory, "ready.txt");
+  const errorPath = nodeRuntime.path.join(directory, "error.txt");
   const width = Math.max(180, Math.min(1600, bounds.width));
   const height = Math.max(120, Math.min(1200, bounds.height));
-  const script = `param([string]$ImagePath,[string]$WorkingDirectory,[int]$Left,[int]$Top,[int]$Width,[int]$Height)
+  const script = `param([string]$ImagePath,[string]$WorkingDirectory,[string]$ReadyPath,[string]$ErrorPath,[int]$Left,[int]$Top,[int]$Width,[int]$Height)
 $ErrorActionPreference = 'Stop'
 Add-Type @"
 using System;
@@ -841,17 +874,18 @@ public static class MindMapStudioPinnedDpi {
 try { [void][MindMapStudioPinnedDpi]::SetProcessDpiAwarenessContext([IntPtr](-4)) } catch { [void][MindMapStudioPinnedDpi]::SetProcessDPIAware() }
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
+[System.Windows.Forms.Application]::EnableVisualStyles()
 $image = $null
 $form = $null
 try {
   $image = [System.Drawing.Image]::FromFile($ImagePath)
   $form = New-Object System.Windows.Forms.Form
-  $form.Text = '固定截图'
+  $form.Text = 'Pinned Capture'
   $form.StartPosition = [System.Windows.Forms.FormStartPosition]::Manual
   $form.Bounds = [System.Drawing.Rectangle]::new($Left, $Top, $Width, $Height)
   $form.MinimumSize = [System.Drawing.Size]::new(180, 120)
   $form.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::SizableToolWindow
-  $form.ShowInTaskbar = $false
+  $form.ShowInTaskbar = $true
   $form.TopMost = $true
   $form.BackColor = [System.Drawing.Color]::FromArgb(18, 18, 18)
   $picture = New-Object System.Windows.Forms.PictureBox
@@ -862,24 +896,32 @@ try {
   $form.Controls.Add($picture)
   $form.Add_KeyDown({ if ($_.KeyCode -eq [System.Windows.Forms.Keys]::Escape) { $form.Close() } })
   $form.KeyPreview = $true
-  $form.Add_Shown({ $form.Activate(); $form.BringToFront() })
-  [void]$form.ShowDialog()
+  $form.Add_Shown({
+    [System.IO.File]::WriteAllText($ReadyPath, 'ready', [System.Text.Encoding]::UTF8)
+    $form.WindowState = [System.Windows.Forms.FormWindowState]::Normal
+    $form.Activate()
+    $form.BringToFront()
+  })
+  [System.Windows.Forms.Application]::Run($form)
+} catch {
+  [System.IO.File]::WriteAllText($ErrorPath, $_.Exception.ToString(), [System.Text.Encoding]::UTF8)
+  Start-Sleep -Seconds 8
+  throw
 } finally {
   if ($form) { $form.Dispose() }
   if ($image) { $image.Dispose() }
-  Start-Sleep -Milliseconds 120
+  Start-Sleep -Milliseconds 250
   Remove-Item -LiteralPath $WorkingDirectory -Recurse -Force -ErrorAction SilentlyContinue
 }
 `;
   await Promise.all([
     nodeRuntime.fs.writeFile(imagePath, bytes),
-    nodeRuntime.fs.writeFile(scriptPath, script)
+    nodeRuntime.fs.writeFile(scriptPath, "\uFEFF" + script)
   ]);
   try {
     const child = nodeRuntime.spawn("powershell.exe", [
       "-NoLogo",
       "-NoProfile",
-      "-NonInteractive",
       "-Sta",
       "-ExecutionPolicy",
       "Bypass",
@@ -891,6 +933,10 @@ try {
       imagePath,
       "-WorkingDirectory",
       directory,
+      "-ReadyPath",
+      readyPath,
+      "-ErrorPath",
+      errorPath,
       "-Left",
       String(bounds.x),
       "-Top",
@@ -900,7 +946,13 @@ try {
       "-Height",
       String(height)
     ], { detached: true, windowsHide: true, stdio: "ignore" });
+    let spawnError: Error | null = null;
+    child.on?.("error", (error) => {
+      spawnError = error;
+    });
     child.unref?.();
+    await waitForPinnedWindowReady(nodeRuntime, readyPath, errorPath);
+    if (spawnError) throw spawnError;
   } catch (error) {
     await nodeRuntime.fs.rm(directory, { recursive: true, force: true });
     throw error;
