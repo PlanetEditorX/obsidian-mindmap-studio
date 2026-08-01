@@ -226,6 +226,22 @@ export interface MindMapImageContentBlock {
   remoteSources?: MindMapImageRemoteSource[];
 }
 
+/**
+ * 后台图床上传完成后写回图片块的最小补丁。
+ *
+ * 只按稳定的节点和内容块 ID 合并图片字段，避免网络请求完成后用旧文档快照
+ * 覆盖用户在上传期间继续进行的节点编辑。
+ */
+export interface MindMapImageUploadPatch {
+  nodeId: string;
+  blockId: string;
+  localPath?: string;
+  contentHash?: string;
+  remoteSources?: MindMapImageRemoteSource[];
+  preferredSource?: string;
+  clearLocalSource?: boolean;
+}
+
 /** A movable table block stored alongside text and images. */
 export interface MindMapTableContentBlock {
   id: string;
@@ -1050,6 +1066,64 @@ export function replaceNodeContentBlocks(node: MindMapNode, blocks: MindMapConte
   node.table = undefined;
   node.code = undefined;
   syncNodeContentFields(node);
+}
+
+/**
+ * 将图床上传结果按节点和内容块 ID 合并到当前最新文档。
+ *
+ * @param document 可能仍在被用户编辑的当前文档。
+ * @param patches 已完成网络上传、等待写回的图片补丁。
+ * @returns 实际更新的图片块数量。
+ * @remarks
+ * 该函数不替换整份文档，也不使用上传开始时的旧快照。调用方应在网络请求
+ * 完成后把补丁应用到当前编辑器文档或重新读取的最新磁盘文档，以避免并发
+ * 自动上传造成最后写入覆盖和节点丢失。
+ */
+export function applyImageUploadPatches(document: MindMapDocument, patches: readonly MindMapImageUploadPatch[]): number {
+  let changed = 0;
+  for (const patch of patches) {
+    const node = findNode(document.root, patch.nodeId);
+    if (!node) continue;
+    const blocks = nodeContentBlocks(node);
+    const block = blocks.find((item): item is MindMapImageContentBlock => item.type === "image" && item.id === patch.blockId);
+    if (!block) continue;
+    if (patch.localPath) {
+      const sameLocalSource = block.localSource === patch.localPath || block.source === patch.localPath;
+      if (!sameLocalSource && !patch.clearLocalSource) continue;
+    }
+
+    let blockChanged = false;
+    if (patch.remoteSources?.length) {
+      const merged = new Map<string, MindMapImageRemoteSource>();
+      for (const source of block.remoteSources ?? []) merged.set(source.hostId || source.url, source);
+      for (const source of patch.remoteSources) merged.set(source.hostId || source.url, source);
+      const next = Array.from(merged.values());
+      if (JSON.stringify(next) !== JSON.stringify(block.remoteSources ?? [])) {
+        block.remoteSources = next;
+        blockChanged = true;
+      }
+    }
+    if (patch.contentHash && patch.contentHash !== block.contentHash) {
+      block.contentHash = patch.contentHash;
+      blockChanged = true;
+    }
+    if (patch.localPath && !patch.clearLocalSource && block.localSource !== patch.localPath) {
+      block.localSource = patch.localPath;
+      blockChanged = true;
+    }
+    if (patch.clearLocalSource && block.localSource !== undefined) {
+      block.localSource = undefined;
+      blockChanged = true;
+    }
+    if (patch.preferredSource && patch.preferredSource !== block.source) {
+      block.source = patch.preferredSource;
+      blockChanged = true;
+    }
+    if (!blockChanged) continue;
+    replaceNodeContentBlocks(node, blocks);
+    changed += 1;
+  }
+  return changed;
 }
 
 /**

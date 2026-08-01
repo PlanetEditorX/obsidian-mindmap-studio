@@ -182,3 +182,12 @@ test("collapse-all ignores rapid duplicate toggles and smoothly preserves the cu
   assert.doesNotMatch(setAll, /positionCollapsedMindMapRoot\(\)/);
   assert.match(editorSource, /private playMindMapLayoutAnimation\(previousNodeRects: ReadonlyMap<string, DOMRect>\)/);
 });
+
+test("article previous and next navigation does not register hover tooltip attributes", () => {
+  const pager = articleRendererSource.match(/function renderArticlePager\([\s\S]*?\n\}/)?.[0] ?? "";
+  assert.doesNotMatch(pager, /aria-label/);
+  assert.doesNotMatch(pager, /title:/);
+  assert.doesNotMatch(pager, /"aria-label": label/);
+  assert.doesNotMatch(pager, /"aria-label": "返回上一级"/);
+  assert.doesNotMatch(pager, /"aria-label": "返回总目录"/);
+});

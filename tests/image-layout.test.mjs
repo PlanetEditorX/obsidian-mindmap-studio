@@ -10,9 +10,11 @@ let richEditorSource;
 let mainSource;
 let settingsSource;
 let stylesSource;
+let imageFailureSource;
+let viewSource;
 
 before(async () => {
-  [modelSource, editorSource, outlineSource, articleSource, richEditorSource, mainSource, settingsSource, stylesSource] = await Promise.all([
+  [modelSource, editorSource, outlineSource, articleSource, richEditorSource, mainSource, settingsSource, stylesSource, imageFailureSource, viewSource] = await Promise.all([
     readFile("src/core/model.ts", "utf8"),
     readFile("src/editor/editor.ts", "utf8"),
     readFile("src/editor/outline-renderer.ts", "utf8"),
@@ -20,7 +22,9 @@ before(async () => {
     readFile("src/editor/node-rich-text-editor.ts", "utf8"),
     readFile("src/main.ts", "utf8"),
     readFile("src/settings.ts", "utf8"),
-    readFile("styles.css", "utf8")
+    readFile("styles.css", "utf8"),
+    readFile("src/editor/image-failure-view.ts", "utf8"),
+    readFile("src/view.ts", "utf8")
   ]);
 });
 
@@ -147,4 +151,28 @@ test("selection-only resize notifications do not repeatedly relayout the whole m
   assert.match(editorSource, /let nodeSizeChanged = false;[\s\S]*Math\.abs\(previous\.width - next\.width\) > 0\.5[\s\S]*Math\.abs\(previous\.height - next\.height\) > 0\.5/);
   assert.match(editorSource, /if \(nodeSizeChanged\) \{\s*this\.scheduleMeasuredMindMapLayout\(\)/);
   assert.match(editorSource, /this\.observedMindMapNodeSizes\.set\(id, measured\.get\(id\)!\)/);
+});
+
+test("failed images expose every source address in map, outline, article, and reading renderers", () => {
+  assert.match(imageFailureSource, /imageFailureSources[\s\S]*imageSourceCandidates\(block, true, imageHostPriorityIds\)/);
+  assert.match(imageFailureSource, /图片加载失败[\s\S]*复制地址/);
+  assert.match(imageFailureSource, /loadImageWithFallback[\s\S]*renderImageFailureDetails[\s\S]*image\.onerror = attempt/);
+  assert.match(editorSource, /renderImageFailureDetails\(wrap, block, this\.options\.imageHostPriorityIds\)/);
+  assert.doesNotMatch(editorSource.match(/if \(!candidate\) \{[\s\S]*?return;\n          \}/)?.[0] ?? "", /callbacks\.onChange|markSaving/);
+  assert.match(outlineSource, /loadImageWithFallback\([\s\S]*figure/);
+  assert.match(articleSource, /loadImageWithFallback\([\s\S]*shell/);
+  assert.match(stylesSource, /\.mms-image-failure-card \{/);
+  assert.match(stylesSource, /\.mms-image-failure-address code \{[\s\S]*overflow-wrap: anywhere/);
+});
+
+test("auto uploads are batched and merged into the live document instead of refreshing stale snapshots", () => {
+  assert.match(mainSource, /readyAutoUploadJobs/);
+  assert.match(mainSource, /autoUploadInFlightKeys/);
+  assert.match(mainSource, /private async runAutoUploadBatch\([\s\S]*const completed: CompletedAutoUploadJob\[\]/);
+  assert.match(mainSource, /const patches = completed\.flatMap[\s\S]*applyAutoUploadPatches\(mapFile, patches\)/);
+  assert.match(mainSource, /已自动上传 \$\{succeeded\} 张图片/);
+  const batch = mainSource.match(/private async runAutoUploadBatch\([\s\S]*?\n  \}\n\n  \/\*\* Applies upload patches/)?.[0] ?? "";
+  assert.doesNotMatch(batch, /refreshOpenMindMap/);
+  assert.match(viewSource, /async applyImageUploadPatches\([\s\S]*this\.editor\.applyImageUploadPatches\(patches\)[\s\S]*await this\.save\(\)/);
+  assert.match(editorSource, /applyImageUploadPatches\(patches:[\s\S]*applyImageUploadPatches\(this\.document, patches\)/);
 });

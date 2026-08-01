@@ -265,9 +265,14 @@ test("article numbering inherits the surrounding text metrics", () => {
 
 test("pasted images report storage, insertion, and auto-upload failures independently", () => {
   const handlePaste = editorSource.match(/private async handlePaste\(event: ClipboardEvent\): Promise<void> \{[\s\S]*?\n  \}/)?.[0] ?? "";
+  const imagePasteBranch = handlePaste.split(/\n    if \(target\.closest\("input, textarea/)[0] ?? handlePaste;
   const recoverPostCommit = editorSource.match(/private recoverPastedImagePostCommit\(\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
   assert.match(handlePaste, /path = await this\.callbacks\.onSavePastedImage\(blob, filename\)[\s\S]*paste image storage failed/);
-  assert.match(handlePaste, /const selected = findNode\(this\.document\.root, nodeId\)[\s\S]*this\.mutate\(\(\) => \{/);
+  assert.match(handlePaste, /const articleTargetAllowed = this\.currentMode === "article" \|\| this\.currentMode === "reading"/);
+  assert.match(handlePaste, /const nodeId = targetNode\?\.dataset\.nodeId[\s\S]*articleTargetAllowed \? this\.activeArticleBlock\?\.nodeId : undefined[\s\S]*this\.selectedId/);
+  assert.match(handlePaste, /const selected = nodeId \? findNode\(this\.document\.root, nodeId\) : null[\s\S]*粘贴开始时选择的节点已不存在/);
+  assert.doesNotMatch(imagePasteBranch, /this\.selectedNode\(\) \?\? this\.document\.root/);
+  assert.match(handlePaste, /this\.mutate\(\(\) => \{/);
   assert.match(handlePaste, /if \(!inserted\)[\s\S]*paste image insertion failed[\s\S]*图片文件已保存，但插入节点失败/);
   assert.match(handlePaste, /post-commit synchronization deferred[\s\S]*recoverPastedImagePostCommit\(\)[\s\S]*onScheduleAutoUpload/);
   assert.match(handlePaste, /onScheduleAutoUpload\(selected\.id, imageBlock\.id, path, filename\)[\s\S]*paste image auto-upload scheduling failed[\s\S]*图片已保存：\$\{path\}；自动上传排程失败/);

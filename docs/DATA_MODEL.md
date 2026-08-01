@@ -281,3 +281,7 @@ interface MindMapImageRemoteSource {
 
 
 图床删除队列保存在插件设置 `pendingImageHostDeletions` 中，每项记录图床、URL、可选哈希/删除令牌、到期时间和来源（图片删除或连通性测试）。队列只保存最多 200 条；到期前恢复图片引用会取消删除。上传与删除不保存两份请求头，均读取图床配置的 `headers`。
+
+## 后台图片上传补丁
+
+`MindMapImageUploadPatch` 不是持久化文档字段，而是后台上传结果的临时合并协议。补丁仅包含 `nodeId`、`blockId`、本地路径校验值、内容哈希、远程源和首选地址。`applyImageUploadPatches()` 必须在最新文档上按稳定 ID 找到图片块；本地来源已经变化的过期任务会被忽略。该流程只更新图片字段并通过 `replaceNodeContentBlocks()` 重建兼容镜像，不替换根节点、兄弟节点或上传期间产生的文字编辑。

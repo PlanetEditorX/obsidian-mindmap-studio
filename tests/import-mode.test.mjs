@@ -59,10 +59,11 @@ test("imported local images schedule automatic image-host upload after final nod
 
 test("automatic image uploads follow a mind-map file renamed during the pre-upload save", () => {
   assert.match(mainSource, /private queueAutoUpload\(\s*mindMapFile: TFile/);
-  assert.match(mainSource, /void this\.runAutoUploadTask\(mindMapFile, nodeId, blockId, localPath, suggestedName, hostIds\)/);
-  assert.match(mainSource, /private async runAutoUploadTask\(\s*mindMapFile: TFile/);
-  assert.match(mainSource, /const scheduledPath = mindMapFile\.path;\s*await this\.flushOpenView\(scheduledPath\);\s*const mapFile = this\.app\.vault\.getAbstractFileByPath\(mindMapFile\.path\)/);
-  assert.match(mainSource, /deleteLocalAssetIfSafe\(localPath, mapFile\.path, blockId\)/);
+  assert.match(mainSource, /enqueueReadyAutoUpload\(\{ key, mindMapFile, nodeId, blockId, localPath, suggestedName, hostIds:/);
+  assert.match(mainSource, /private startAutoUploadBatch\(mindMapFile: TFile/);
+  assert.match(mainSource, /private async runAutoUploadBatch\(mindMapFile: TFile/);
+  assert.match(mainSource, /await this\.flushOpenView\(mindMapFile\.path\);\s*const mapFile = this\.app\.vault\.getAbstractFileByPath\(mindMapFile\.path\)/);
+  assert.match(mainSource, /deleteLocalAssetIfSafe\(item\.job\.localPath, mapFile\.path, item\.job\.blockId\)/);
 });
 
 test("file import defaults to a child branch and keeps replacement explicit", () => {

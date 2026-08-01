@@ -8,7 +8,7 @@
 import { MarkdownRenderer, Notice, TextFileView, TFile, normalizePath, type WorkspaceLeaf } from "obsidian";
 import type MindMapStudioPlugin from "./main";
 import { MindMapEditor } from "./editor/editor";
-import { parseDocument, serializeDocument, type DisplayMode, type MindMapDocument } from "./core/model";
+import { parseDocument, serializeDocument, type DisplayMode, type MindMapDocument, type MindMapImageUploadPatch } from "./core/model";
 import { settingsToAppearance } from "./settings";
 import { resolveArticleTocMaxDepth, type ArticlePageNavigation, type ArticleTocEntry, type ReadingSection } from "./article/modes";
 import { readingSectionsToDocx, readingSectionsToHtml, readingSectionsToMarkdown } from "./import/import-export";
@@ -88,6 +88,21 @@ export class MindMapStudioView extends TextFileView {
   getViewData(): string {
     const document = this.editor?.getDocument() ?? this.document;
     return serializeDocument(document ?? this.plugin.createConfiguredDocument("思维导图"));
+  }
+
+  /**
+   * 将后台上传结果合并到当前编辑器文档并立即保存，避免用上传开始时的旧快照刷新整棵节点树。
+   *
+   * @param patches 已完成网络上传的图片字段补丁。
+   * @returns 实际更新的图片块数量。
+   */
+  async applyImageUploadPatches(patches: readonly MindMapImageUploadPatch[]): Promise<number> {
+    if (!this.editor) return 0;
+    const updated = this.editor.applyImageUploadPatches(patches);
+    if (!updated) return 0;
+    this.document = this.editor.getDocument();
+    await this.save();
+    return updated;
   }
 
   /**
