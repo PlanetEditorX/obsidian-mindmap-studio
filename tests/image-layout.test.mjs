@@ -55,7 +55,14 @@ test("image context menu exposes layout, sizing, upload and edit actions", () =>
   assert.match(outlineSource, /image-layout-\$\{block\.layout \?\? "block"\}/);
   assert.match(articleSource, /image-align-\$\{block\.align \?\? "center"\}/);
   assert.match(articleSource, /image-layout-\$\{block\.layout \?\? "block"\}/);
+  assert.match(articleSource, /mms-article-image-row/);
+  assert.match(articleSource, /createArticleContentBlock\(inline \? inlineImageRow! : container/);
+  assert.match(outlineSource, /mms-outline-image-row/);
+  assert.match(outlineSource, /\(inline \? inlineImageRow! : content\)\.createEl\("figure"/);
   assert.match(stylesSource, /\.mmc-node-image-block\.image-layout-inline/);
+  assert.match(stylesSource, /\.mms-outline-image-row \{[\s\S]*display: flex;[\s\S]*flex-wrap: wrap/);
+  assert.match(stylesSource, /\.mms-outline-image\.image-layout-inline \{ flex: 0 1 auto; margin: 0; \}/);
+  assert.match(stylesSource, /\.mms-article-image-row \{[\s\S]*display: flex;[\s\S]*flex-wrap: wrap/);
   assert.match(stylesSource, /\.mms-article-content-block\.image-layout-inline/);
 });
 
@@ -63,7 +70,11 @@ test("full node editor honors the same rich-text shortcuts as quick editing", ()
   assert.match(editorSource, /renderNodeRichTextEditor\([\s\S]*this\.richTextShortcuts/);
   assert.match(richEditorSource, /source\.addEventListener\("keydown"/);
   assert.match(richEditorSource, /matches\(shortcuts\.bold\)[\s\S]*matches\(shortcuts\.italic\)[\s\S]*matches\(shortcuts\.underline\)/);
+  assert.match(richEditorSource, /matches\(shortcuts\.color\)/);
+  assert.match(richEditorSource, /ownerWindow\?\.addEventListener\("keydown", windowShortcut, true\)/);
+  assert.match(richEditorSource, /event\.inputType !== "formatBold"/);
   assert.match(richEditorSource, /applyBoolean\(style\)/);
+  assert.match(richEditorSource, /else applyColor\(\)/);
 });
 
 test("image uploads use SHA-256 cache and remote deletion requires an explicit host API", () => {
@@ -71,12 +82,19 @@ test("image uploads use SHA-256 cache and remote deletion requires an explicit h
   assert.match(settingsSource, /deleteRemoteWhenUnreferenced: boolean/);
   assert.match(settingsSource, /setName\("最后引用删除时同步清理图床"\)/);
   assert.match(settingsSource, /setName\("删除 API（可选）"\)/);
+  assert.match(settingsSource, /setName\("图床预设"\)/);
+  assert.match(settingsSource, /addOption\("zipline-v4", "Zipline v4（推荐）"\)/);
+  assert.match(settingsSource, /addOption\("imgbb", "ImgBB"\)/);
+  assert.match(settingsSource, /addOption\("freeimage", "Freeimage\.host"\)/);
+  assert.match(settingsSource, /deleteEndpoint = "\{deleteKey\}"/);
   assert.match(mainSource, /const contentHash = await sha256Blob\(blob\)/);
   assert.match(mainSource, /const cacheKey = `\$\{host\.id\}:\$\{contentHash\}`/);
   assert.match(mainSource, /reused: true/);
   assert.match(mainSource, /cleanupRemovedImageRemoteAssets/);
   assert.match(mainSource, /if \(!host\?\.deleteEndpoint\.trim\(\)\)/);
   assert.match(mainSource, /deleteImageFromHostConfig/);
+  assert.match(mainSource, /resolveZiplineV3FileId/);
+  assert.match(mainSource, /host\.preset === "zipline-v3"/);
 });
 
 test("canvas context menu uploads all current-page images with one host selection", () => {

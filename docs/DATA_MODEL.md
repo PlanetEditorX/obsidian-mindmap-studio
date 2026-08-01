@@ -136,7 +136,7 @@ interface MindMapImageContentBlock {
 图片 → 文字 → 图片 → 文字
 ```
 
-节点可以是纯图片节点，不强制存在文字。`layout: "inline"` 会让连续图片按内容块顺序同行并自动换行；`block` 或缺失时独占一行。`contentHash` 用于同一图床内上传去重和最后引用删除判断，不替代图片地址。
+节点可以是纯图片节点，不强制存在文字。`layout: "inline"` 会让连续图片在导图、文章、通读和大纲中进入同一横向容器，按内容块顺序同行并自动换行；`block` 或缺失时独占一行。`contentHash` 用于同一图床内上传去重和最后引用删除判断，不替代图片地址。
 
 ## 5. 富文本
 
@@ -262,7 +262,7 @@ interface MindMapImageRemoteSource {
 }
 ```
 
-运行时会记录最近成功和失败时间。字段都是可选的，缺失时按默认状态处理。`deleteKey` 只有图床上传响应明确提供时才保存；远程删除仍要求用户为该图床配置删除 API。
+运行时会记录最近成功和失败时间。字段都是可选的，缺失时按默认状态处理。`deleteKey` 只有图床上传响应明确提供或 Zipline v3 通过认证文件列表安全回查时才保存；远程删除仍要求预设或用户配置明确提供删除能力。ImgBB 的 `deleteKey` 是秘密删除链接，Zipline 的 `deleteKey` 是文件 ID，Freeimage.host 公开 API 不产生该字段。
 
 ## 11. 规范化规则
 

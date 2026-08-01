@@ -112,6 +112,13 @@ test("delete response values and templates support URL, hash and host tokens", (
   );
 });
 
+test("built-in host response paths cover Zipline, ImgBB and Freeimage shapes", () => {
+  assert.equal(imageHost.extractImageUrlFromResponse({ files: [{ url: "https://zipline.example/u/a.png" }] }, ["files.0.url"]), "https://zipline.example/u/a.png");
+  assert.equal(imageHost.extractImageUrlFromResponse({ files: ["https://zipline-v3.example/u/a.png"] }, ["files.0"]), "https://zipline-v3.example/u/a.png");
+  assert.equal(imageHost.extractResponseString({ data: { delete_url: "https://ibb.co/delete/token" } }, "data.delete_url"), "https://ibb.co/delete/token");
+  assert.equal(imageHost.extractImageUrlFromResponse({ image: { url: "https://iili.io/a.png" } }, ["image.url"]), "https://iili.io/a.png");
+});
+
 test("extractImageUrlFromResponse finds URLs in plain text and rejects non-HTTP values", () => {
   assert.equal(imageHost.extractImageUrlFromResponse("uploaded: https://cdn.example/a.png"), "https://cdn.example/a.png");
   assert.equal(imageHost.extractImageUrlFromResponse({ url: "ftp://cdn.example/a.png" }), null);

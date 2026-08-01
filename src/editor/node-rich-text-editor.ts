@@ -24,7 +24,7 @@ export function renderNodeRichTextEditor(
   container: HTMLElement,
   block: MindMapTextContentBlock,
   onChange: () => void,
-  shortcuts: { bold: string; italic: string; underline: string }
+  shortcuts: { bold: string; italic: string; underline: string; color: string }
 ): void {
   const toolbar = container.createDiv({ cls: "mmc-rich-text-toolbar" });
   const source = container.createEl("textarea", {
@@ -123,6 +123,21 @@ export function renderNodeRichTextEditor(
     updatePreview();
     onChange();
   });
+  const applyColor = (): void => {
+    const selected = range();
+    if (!selected) return;
+    block.richText = applyRichTextStyleRange(
+      block.text,
+      block.richText,
+      selected.start,
+      selected.end,
+      { color: color.value }
+    );
+    updatePreview();
+    onChange();
+    source.setSelectionRange(selected.start, selected.end);
+    remember();
+  };
   styleButton("清除格式", "清除所选文字格式", () => {
     const selected = range();
     if (!selected) return;
@@ -139,8 +154,8 @@ export function renderNodeRichTextEditor(
   source.addEventListener("select", remember);
   source.addEventListener("keyup", remember);
   source.addEventListener("mouseup", remember);
-  source.addEventListener("keydown", (event) => {
-    if (event.isComposing) return;
+  const handleShortcut = (event: KeyboardEvent): boolean => {
+    if (event.isComposing) return false;
     const matches = (shortcut: string): boolean => {
       const parts = shortcut.toLowerCase().split("+").map((part) => part.trim()).filter(Boolean);
       if (!parts.length) return false;
@@ -154,12 +169,31 @@ export function renderNodeRichTextEditor(
     const style = matches(shortcuts.bold) ? "bold"
       : matches(shortcuts.italic) ? "italic"
         : matches(shortcuts.underline) ? "underline" : null;
-    if (!style) return;
+    const colorShortcut = matches(shortcuts.color);
+    if (!style && !colorShortcut) return false;
     event.preventDefault();
     event.stopPropagation();
+    event.stopImmediatePropagation();
     remember();
-    applyBoolean(style);
+    if (style) applyBoolean(style);
+    else applyColor();
+    return true;
+  };
+  source.addEventListener("keydown", (event) => {
+    if (!event.defaultPrevented) handleShortcut(event);
   }, true);
+  const ownerWindow = source.ownerDocument.defaultView;
+  const windowShortcut = (event: KeyboardEvent): void => {
+    if (source.ownerDocument.activeElement === source) handleShortcut(event);
+  };
+  source.addEventListener("focus", () => ownerWindow?.addEventListener("keydown", windowShortcut, true));
+  source.addEventListener("blur", () => ownerWindow?.removeEventListener("keydown", windowShortcut, true));
+  source.addEventListener("beforeinput", (event) => {
+    if (event.inputType !== "formatBold" && event.inputType !== "formatItalic" && event.inputType !== "formatUnderline") return;
+    event.preventDefault();
+    remember();
+    applyBoolean(event.inputType === "formatBold" ? "bold" : event.inputType === "formatItalic" ? "italic" : "underline");
+  });
   source.addEventListener("input", () => {
     const next = source.value.replace(/\r\n?/g, "\n");
     const reconciled = reconcileRichTextAfterEdit(block.text, block.richText, next);

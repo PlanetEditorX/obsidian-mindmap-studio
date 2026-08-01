@@ -67,7 +67,9 @@ export type ImageHostBodyMode = "multipart" | "raw";
  */
 export type ImageHostMethod = "POST" | "PUT";
 /** HTTP methods supported by optional remote image deletion APIs. */
-export type ImageHostDeleteMethod = "DELETE" | "POST";
+export type ImageHostDeleteMethod = "GET" | "DELETE" | "POST";
+/** Built-in image-host configuration templates. */
+export type ImageHostPreset = "custom" | "zipline-v4" | "zipline-v3" | "imgbb" | "freeimage";
 
 /** Visual shape used for unnumbered terminal article bullets. */
 export type ArticleLeafBulletStyle = "solid" | "hollow" | "square" | "dash";
@@ -80,6 +82,8 @@ export type ArticleLeafTextAlignment = "flush" | "auto";
 export interface ImageHostConfig {
   id: string;
   name: string;
+  /** Optional built-in template; custom keeps every field user-managed. */
+  preset: ImageHostPreset;
   enabled: boolean;
   /** Lower values are tried first when rendering remote image mirrors. */
   priority: number;
@@ -158,6 +162,7 @@ export function createImageHostConfig(index = 1): ImageHostConfig {
   return {
     id: `host_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`,
     name: `图床 ${index}`,
+    preset: "custom",
     enabled: true,
     priority: index,
     endpoint: "",
@@ -172,6 +177,78 @@ export function createImageHostConfig(index = 1): ImageHostConfig {
     deleteHeaders: "",
     deleteBody: ""
   };
+}
+
+/** Apply one maintained image-host preset while preserving existing credentials when possible. */
+export function applyImageHostPreset(host: ImageHostConfig, preset: ImageHostPreset): void {
+  host.preset = preset;
+  if (preset === "custom") return;
+
+  const existingHeaders = host.headers.trim();
+  const ziplineEndpoint = /\/api\/upload(?:[/?#]|$)/i.test(host.endpoint)
+    ? host.endpoint
+    : "http://192.168.1.10:3010/api/upload";
+  const ziplineOrigin = (() => {
+    try { return new URL(ziplineEndpoint).origin; } catch { return "http://192.168.1.10:3010"; }
+  })();
+
+  host.enabled = true;
+  host.method = "POST";
+  host.bodyMode = "multipart";
+  host.deleteBody = "";
+
+  if (preset === "zipline-v4") {
+    host.name = "Zipline v4";
+    host.endpoint = ziplineEndpoint;
+    host.fieldName = "file";
+    host.headers = existingHeaders || '{"Authorization":"请填写 Zipline Token"}';
+    host.responsePath = "files.0.url";
+    host.deleteKeyResponsePath = "files.0.id";
+    host.deleteEndpoint = `${ziplineOrigin}/api/user/files/{deleteKey}`;
+    host.deleteMethod = "DELETE";
+    host.deleteHeaders = host.headers;
+    return;
+  }
+
+  if (preset === "zipline-v3") {
+    host.name = "Zipline v3";
+    host.endpoint = ziplineEndpoint;
+    host.fieldName = "file";
+    host.headers = existingHeaders || '{"Authorization":"请填写 Zipline Token"}';
+    host.responsePath = "files.0";
+    host.deleteKeyResponsePath = "";
+    host.deleteEndpoint = `${ziplineOrigin}/api/user/files`;
+    host.deleteMethod = "DELETE";
+    host.deleteHeaders = host.headers;
+    return;
+  }
+
+  if (preset === "imgbb") {
+    host.name = "ImgBB";
+    host.endpoint = /api\.imgbb\.com\/1\/upload/i.test(host.endpoint)
+      ? host.endpoint
+      : "https://api.imgbb.com/1/upload?key=";
+    host.fieldName = "image";
+    host.headers = "";
+    host.responsePath = "data.url";
+    host.deleteKeyResponsePath = "data.delete_url";
+    host.deleteEndpoint = "{deleteKey}";
+    host.deleteMethod = "GET";
+    host.deleteHeaders = "";
+    return;
+  }
+
+  host.name = "Freeimage.host";
+  host.endpoint = /freeimage\.host\/api\/1\/upload/i.test(host.endpoint)
+    ? host.endpoint
+    : "https://freeimage.host/api/1/upload?key=&action=upload&format=json";
+  host.fieldName = "source";
+  host.headers = "";
+  host.responsePath = "image.url";
+  host.deleteKeyResponsePath = "";
+  host.deleteEndpoint = "";
+  host.deleteMethod = "DELETE";
+  host.deleteHeaders = "";
 }
 
 /**
@@ -1620,6 +1697,23 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
       const body = card.createDiv({ cls: "mms-image-host-card-body" });
 
       new Setting(body)
+        .setName("图床预设")
+        .setDesc("预设会填写上传字段、返回字段和可用的删除接口；密钥或 Zipline Token 仍需自行填写。Freeimage.host 的公开 API 仅支持上传。")
+        .addDropdown((dropdown) => dropdown
+          .addOption("custom", "自定义")
+          .addOption("zipline-v4", "Zipline v4（推荐）")
+          .addOption("zipline-v3", "Zipline v3（兼容旧服务）")
+          .addOption("imgbb", "ImgBB")
+          .addOption("freeimage", "Freeimage.host")
+          .setValue(host.preset)
+          .onChange(async (value) => {
+            applyImageHostPreset(host, value as ImageHostPreset);
+            await this.plugin.saveSettings();
+            this.expandedImageHostIds.add(host.id);
+            this.display();
+          }));
+
+      new Setting(body)
         .setName("名称")
         .addText((text) => text
           .setValue(host.name)
@@ -1710,6 +1804,7 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
           .setPlaceholder("https://example.com/api/delete/{deleteKey}")
           .onChange(async (value) => { host.deleteEndpoint = value.trim(); await this.plugin.saveSettings(); }))
         .addDropdown((dropdown) => dropdown
+          .addOption("GET", "GET")
           .addOption("DELETE", "DELETE")
           .addOption("POST", "POST")
           .setValue(host.deleteMethod)

@@ -258,7 +258,7 @@ class NodeEditModal extends Modal {
     defaultShape: NodeShape,
     callbacks: Pick<MindMapEditorCallbacks, "resolveImage" | "onSavePastedImage" | "getImageHosts" | "getDefaultUploadHostIds" | "onUploadImage" | "onReadImageSource">,
     submit: (values: NodeEditValues, mode: "autosave" | "commit") => void,
-    private readonly richTextShortcuts: Pick<MindMapEditorOptions["richTextShortcuts"], "bold" | "italic" | "underline">,
+    private readonly richTextShortcuts: Pick<MindMapEditorOptions["richTextShortcuts"], "bold" | "italic" | "underline" | "color">,
     private readonly position: "center" | "right" = "center",
     private readonly panelHost?: HTMLElement,
     private readonly initialBlockId?: string

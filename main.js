@@ -2032,6 +2032,7 @@ function createImageHostConfig(index = 1) {
   return {
     id: `host_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`,
     name: `\u56FE\u5E8A ${index}`,
+    preset: "custom",
     enabled: true,
     priority: index,
     endpoint: "",
@@ -2046,6 +2047,68 @@ function createImageHostConfig(index = 1) {
     deleteHeaders: "",
     deleteBody: ""
   };
+}
+function applyImageHostPreset(host, preset) {
+  host.preset = preset;
+  if (preset === "custom") return;
+  const existingHeaders = host.headers.trim();
+  const ziplineEndpoint = /\/api\/upload(?:[/?#]|$)/i.test(host.endpoint) ? host.endpoint : "http://192.168.1.10:3010/api/upload";
+  const ziplineOrigin = (() => {
+    try {
+      return new URL(ziplineEndpoint).origin;
+    } catch (e) {
+      return "http://192.168.1.10:3010";
+    }
+  })();
+  host.enabled = true;
+  host.method = "POST";
+  host.bodyMode = "multipart";
+  host.deleteBody = "";
+  if (preset === "zipline-v4") {
+    host.name = "Zipline v4";
+    host.endpoint = ziplineEndpoint;
+    host.fieldName = "file";
+    host.headers = existingHeaders || '{"Authorization":"\u8BF7\u586B\u5199 Zipline Token"}';
+    host.responsePath = "files.0.url";
+    host.deleteKeyResponsePath = "files.0.id";
+    host.deleteEndpoint = `${ziplineOrigin}/api/user/files/{deleteKey}`;
+    host.deleteMethod = "DELETE";
+    host.deleteHeaders = host.headers;
+    return;
+  }
+  if (preset === "zipline-v3") {
+    host.name = "Zipline v3";
+    host.endpoint = ziplineEndpoint;
+    host.fieldName = "file";
+    host.headers = existingHeaders || '{"Authorization":"\u8BF7\u586B\u5199 Zipline Token"}';
+    host.responsePath = "files.0";
+    host.deleteKeyResponsePath = "";
+    host.deleteEndpoint = `${ziplineOrigin}/api/user/files`;
+    host.deleteMethod = "DELETE";
+    host.deleteHeaders = host.headers;
+    return;
+  }
+  if (preset === "imgbb") {
+    host.name = "ImgBB";
+    host.endpoint = /api\.imgbb\.com\/1\/upload/i.test(host.endpoint) ? host.endpoint : "https://api.imgbb.com/1/upload?key=";
+    host.fieldName = "image";
+    host.headers = "";
+    host.responsePath = "data.url";
+    host.deleteKeyResponsePath = "data.delete_url";
+    host.deleteEndpoint = "{deleteKey}";
+    host.deleteMethod = "GET";
+    host.deleteHeaders = "";
+    return;
+  }
+  host.name = "Freeimage.host";
+  host.endpoint = /freeimage\.host\/api\/1\/upload/i.test(host.endpoint) ? host.endpoint : "https://freeimage.host/api/1/upload?key=&action=upload&format=json";
+  host.fieldName = "source";
+  host.headers = "";
+  host.responsePath = "image.url";
+  host.deleteKeyResponsePath = "";
+  host.deleteEndpoint = "";
+  host.deleteMethod = "DELETE";
+  host.deleteHeaders = "";
 }
 var DEFAULT_SETTINGS = {
   defaultFolder: "",
@@ -2909,6 +2972,12 @@ var MindMapStudioSettingTab = class extends import_obsidian.PluginSettingTab {
       const status = title.createSpan({ cls: "mms-image-host-status", text: host.enabled ? "\u5DF2\u542F\u7528" : "\u5DF2\u505C\u7528" });
       status.toggleClass("is-enabled", host.enabled);
       const body = card.createDiv({ cls: "mms-image-host-card-body" });
+      new import_obsidian.Setting(body).setName("\u56FE\u5E8A\u9884\u8BBE").setDesc("\u9884\u8BBE\u4F1A\u586B\u5199\u4E0A\u4F20\u5B57\u6BB5\u3001\u8FD4\u56DE\u5B57\u6BB5\u548C\u53EF\u7528\u7684\u5220\u9664\u63A5\u53E3\uFF1B\u5BC6\u94A5\u6216 Zipline Token \u4ECD\u9700\u81EA\u884C\u586B\u5199\u3002Freeimage.host \u7684\u516C\u5F00 API \u4EC5\u652F\u6301\u4E0A\u4F20\u3002").addDropdown((dropdown) => dropdown.addOption("custom", "\u81EA\u5B9A\u4E49").addOption("zipline-v4", "Zipline v4\uFF08\u63A8\u8350\uFF09").addOption("zipline-v3", "Zipline v3\uFF08\u517C\u5BB9\u65E7\u670D\u52A1\uFF09").addOption("imgbb", "ImgBB").addOption("freeimage", "Freeimage.host").setValue(host.preset).onChange(async (value) => {
+        applyImageHostPreset(host, value);
+        await this.plugin.saveSettings();
+        this.expandedImageHostIds.add(host.id);
+        this.display();
+      }));
       new import_obsidian.Setting(body).setName("\u540D\u79F0").addText((text) => text.setValue(host.name).setPlaceholder(`\u56FE\u5E8A ${index + 1}`).onChange(async (value) => {
         host.name = value.trim() || `\u56FE\u5E8A ${index + 1}`;
         await this.plugin.saveSettings();
@@ -2952,7 +3021,7 @@ var MindMapStudioSettingTab = class extends import_obsidian.PluginSettingTab {
       new import_obsidian.Setting(body).setName("\u5220\u9664 API\uFF08\u53EF\u9009\uFF09").setDesc("\u652F\u6301\u5360\u4F4D\u7B26 {url}\u3001{hash}\u3001{deleteKey}\u3002\u53EA\u6709\u914D\u7F6E\u540E\uFF0C\u5220\u9664\u6700\u540E\u4E00\u4E2A\u56FE\u7247\u5F15\u7528\u65F6\u624D\u4F1A\u8BF7\u6C42\u56FE\u5E8A\u5220\u9664\u8FDC\u7A0B\u6587\u4EF6\u3002").addText((text) => text.setValue(host.deleteEndpoint).setPlaceholder("https://example.com/api/delete/{deleteKey}").onChange(async (value) => {
         host.deleteEndpoint = value.trim();
         await this.plugin.saveSettings();
-      })).addDropdown((dropdown) => dropdown.addOption("DELETE", "DELETE").addOption("POST", "POST").setValue(host.deleteMethod).onChange(async (value) => {
+      })).addDropdown((dropdown) => dropdown.addOption("GET", "GET").addOption("DELETE", "DELETE").addOption("POST", "POST").setValue(host.deleteMethod).onChange(async (value) => {
         host.deleteMethod = value;
         await this.plugin.saveSettings();
       }));
@@ -7853,6 +7922,21 @@ function renderNodeRichTextEditor(container, block, onChange, shortcuts) {
     updatePreview();
     onChange();
   });
+  const applyColor = () => {
+    const selected = range();
+    if (!selected) return;
+    block.richText = applyRichTextStyleRange(
+      block.text,
+      block.richText,
+      selected.start,
+      selected.end,
+      { color: color.value }
+    );
+    updatePreview();
+    onChange();
+    source.setSelectionRange(selected.start, selected.end);
+    remember();
+  };
   styleButton("\u6E05\u9664\u683C\u5F0F", "\u6E05\u9664\u6240\u9009\u6587\u5B57\u683C\u5F0F", () => {
     const selected = range();
     if (!selected) return;
@@ -7869,8 +7953,8 @@ function renderNodeRichTextEditor(container, block, onChange, shortcuts) {
   source.addEventListener("select", remember);
   source.addEventListener("keyup", remember);
   source.addEventListener("mouseup", remember);
-  source.addEventListener("keydown", (event) => {
-    if (event.isComposing) return;
+  const handleShortcut = (event) => {
+    if (event.isComposing) return false;
     const matches = (shortcut) => {
       const parts = shortcut.toLowerCase().split("+").map((part) => part.trim()).filter(Boolean);
       if (!parts.length) return false;
@@ -7879,12 +7963,31 @@ function renderNodeRichTextEditor(container, block, onChange, shortcuts) {
       return eventKey === parts.at(-1) && (event.ctrlKey || event.metaKey) === wantsMod && event.shiftKey === parts.includes("shift") && event.altKey === parts.includes("alt");
     };
     const style = matches(shortcuts.bold) ? "bold" : matches(shortcuts.italic) ? "italic" : matches(shortcuts.underline) ? "underline" : null;
-    if (!style) return;
+    const colorShortcut = matches(shortcuts.color);
+    if (!style && !colorShortcut) return false;
     event.preventDefault();
     event.stopPropagation();
+    event.stopImmediatePropagation();
     remember();
-    applyBoolean(style);
+    if (style) applyBoolean(style);
+    else applyColor();
+    return true;
+  };
+  source.addEventListener("keydown", (event) => {
+    if (!event.defaultPrevented) handleShortcut(event);
   }, true);
+  const ownerWindow = source.ownerDocument.defaultView;
+  const windowShortcut = (event) => {
+    if (source.ownerDocument.activeElement === source) handleShortcut(event);
+  };
+  source.addEventListener("focus", () => ownerWindow == null ? void 0 : ownerWindow.addEventListener("keydown", windowShortcut, true));
+  source.addEventListener("blur", () => ownerWindow == null ? void 0 : ownerWindow.removeEventListener("keydown", windowShortcut, true));
+  source.addEventListener("beforeinput", (event) => {
+    if (event.inputType !== "formatBold" && event.inputType !== "formatItalic" && event.inputType !== "formatUnderline") return;
+    event.preventDefault();
+    remember();
+    applyBoolean(event.inputType === "formatBold" ? "bold" : event.inputType === "formatItalic" ? "italic" : "underline");
+  });
   source.addEventListener("input", () => {
     const next = source.value.replace(/\r\n?/g, "\n");
     const reconciled = reconcileRichTextAfterEdit(block.text, block.richText, next);
@@ -8096,9 +8199,13 @@ function renderOutlineContent(container, node, depth, options) {
     paragraph.dataset.blockId = block.id;
     renderRichTextRuns(paragraph, block.richText, block.text);
   }
+  let inlineImageRow = null;
   for (const block of images) {
+    const inline = block.layout === "inline";
+    if (inline && !inlineImageRow) inlineImageRow = content.createDiv({ cls: "mms-outline-image-row" });
+    if (!inline) inlineImageRow = null;
     const resolved = options.resolveImage(block.source);
-    const figure = content.createEl("figure", { cls: `mms-outline-image image-align-${(_a2 = block.align) != null ? _a2 : "center"} image-layout-${(_b2 = block.layout) != null ? _b2 : "block"}` });
+    const figure = (inline ? inlineImageRow : content).createEl("figure", { cls: `mms-outline-image image-align-${(_a2 = block.align) != null ? _a2 : "center"} image-layout-${(_b2 = block.layout) != null ? _b2 : "block"}` });
     figure.dataset.blockId = block.id;
     if (resolved) {
       const image = figure.createEl("img", { attr: { src: resolved, alt: (_c = block.alt) != null ? _c : "\u56FE\u7247", loading: "lazy" } });
@@ -8401,8 +8508,10 @@ function renderHeading(heading, node, title, options) {
 function renderArticleNodeContent(container, node, treatTextAsBody, options) {
   var _a2, _b2, _c;
   let firstTextHandled = false;
+  let inlineImageRow = null;
   for (const block of nodeContentBlocks(node)) {
     if (block.type === "text") {
+      inlineImageRow = null;
       if (!treatTextAsBody && !firstTextHandled) {
         firstTextHandled = true;
         continue;
@@ -8414,7 +8523,10 @@ function renderArticleNodeContent(container, node, treatTextAsBody, options) {
       renderRichTextRuns(paragraph, block.richText, block.text);
       options.makeInlineEditable(paragraph, node, "\u6B63\u6587", block.id);
     } else if (block.type === "image") {
-      const shell = createArticleContentBlock(container, block.id, true);
+      const inline = block.layout === "inline";
+      if (inline && !inlineImageRow) inlineImageRow = container.createDiv({ cls: "mms-article-image-row" });
+      if (!inline) inlineImageRow = null;
+      const shell = createArticleContentBlock(inline ? inlineImageRow : container, block.id, !inline);
       shell.addClass(`image-layout-${(_a2 = block.layout) != null ? _a2 : "block"}`);
       const resolved = options.callbacks.resolveImage(block.source);
       const image = shell.createEl("img", { cls: `mms-article-image image-align-${(_b2 = block.align) != null ? _b2 : "center"}`, attr: { src: resolved != null ? resolved : block.source, alt: (_c = block.alt) != null ? _c : "\u56FE\u7247" } });
@@ -8438,9 +8550,11 @@ function renderArticleNodeContent(container, node, treatTextAsBody, options) {
         options.openImageContextMenu(event, node.id, block.id);
       });
     } else if (block.type === "table") {
+      inlineImageRow = null;
       const shell = createArticleContentBlock(container, block.id, true);
       renderArticleTable(shell, node, block.table, block.id, options);
     } else {
+      inlineImageRow = null;
       const shell = createArticleContentBlock(container, block.id, true);
       const code = shell.createDiv({ cls: "mms-article-code markdown-rendered" });
       code.dataset.blockId = block.id;
@@ -19734,6 +19848,7 @@ var MindMapStudioPlugin = class extends import_obsidian15.Plugin {
       const host = createImageHostConfig(index + 1);
       host.id = typeof candidate.id === "string" && candidate.id.trim() ? candidate.id.trim().slice(0, 160) : host.id;
       host.name = typeof candidate.name === "string" && candidate.name.trim() ? candidate.name.trim().slice(0, 120) : host.name;
+      host.preset = candidate.preset === "zipline-v4" || candidate.preset === "zipline-v3" || candidate.preset === "imgbb" || candidate.preset === "freeimage" ? candidate.preset : "custom";
       host.enabled = candidate.enabled !== false;
       host.priority = typeof candidate.priority === "number" && Number.isFinite(candidate.priority) ? Math.max(1, Math.min(20, Math.round(candidate.priority))) : index + 1;
       host.endpoint = typeof candidate.endpoint === "string" ? candidate.endpoint.trim().slice(0, 4e3) : "";
@@ -19744,7 +19859,7 @@ var MindMapStudioPlugin = class extends import_obsidian15.Plugin {
       host.responsePath = typeof candidate.responsePath === "string" ? candidate.responsePath.trim().slice(0, 500) : "data.url";
       host.deleteKeyResponsePath = typeof candidate.deleteKeyResponsePath === "string" ? candidate.deleteKeyResponsePath.trim().slice(0, 500) : "";
       host.deleteEndpoint = typeof candidate.deleteEndpoint === "string" ? candidate.deleteEndpoint.trim().slice(0, 4e3) : "";
-      host.deleteMethod = candidate.deleteMethod === "POST" ? "POST" : "DELETE";
+      host.deleteMethod = candidate.deleteMethod === "POST" || candidate.deleteMethod === "GET" ? candidate.deleteMethod : "DELETE";
       host.deleteHeaders = typeof candidate.deleteHeaders === "string" ? candidate.deleteHeaders.trim().slice(0, 2e4) : "";
       host.deleteBody = typeof candidate.deleteBody === "string" ? candidate.deleteBody.slice(0, 2e4) : "";
       return [host];
@@ -20985,12 +21100,60 @@ ${uploaded.url}`, 8e3);
       responseJson = void 0;
     }
     const payload = parseUploadResponsePayload(responseJson, response.text);
-    const imageUrl = extractImageUrlFromResponse(payload, [host.responsePath]);
+    const imageUrl = extractImageUrlFromResponse(payload, [host.responsePath, "files.0.url", "files.0"]);
     if (!imageUrl) throw new Error("\u8FD4\u56DE\u7ED3\u679C\u4E2D\u6CA1\u6709\u627E\u5230\u56FE\u7247\u7F51\u5740");
-    return { url: imageUrl, deleteKey: extractResponseString(payload, host.deleteKeyResponsePath) };
+    let deleteKey = extractResponseString(payload, host.deleteKeyResponsePath);
+    if (!deleteKey && host.preset === "zipline-v3") {
+      try {
+        deleteKey = await this.resolveZiplineV3FileId(host, imageUrl);
+      } catch (error) {
+        console.warn("MindMap Studio could not resolve the Zipline v3 delete ID; upload remains usable", error);
+      }
+    }
+    return { url: imageUrl, deleteKey };
+  }
+  /** Resolve a Zipline v3 upload URL back to its numeric file ID for the legacy delete endpoint. */
+  async resolveZiplineV3FileId(host, imageUrl) {
+    var _a2;
+    const upload = new URL(normalizeHttpUrl(host.endpoint, "\u4E0A\u4F20 API"));
+    const response = await (0, import_obsidian15.requestUrl)({
+      url: `${upload.origin}/api/user/files`,
+      method: "GET",
+      headers: parseUploadHeaders(host.headers),
+      throw: true
+    });
+    const files = Array.isArray(response.json) ? response.json : [];
+    const target = new URL(imageUrl);
+    const targetName = (_a2 = target.pathname.split("/").filter(Boolean).at(-1)) != null ? _a2 : "";
+    const matched = files.find((item) => {
+      if (!item || typeof item !== "object") return false;
+      const candidate = item;
+      if (typeof candidate.url === "string") {
+        try {
+          if (new URL(candidate.url, upload.origin).href === target.href) return true;
+        } catch (e) {
+        }
+      }
+      return typeof candidate.file === "string" && candidate.file === targetName;
+    });
+    if (typeof (matched == null ? void 0 : matched.id) === "number" || typeof (matched == null ? void 0 : matched.id) === "string") return String(matched.id);
+    return void 0;
   }
   /** Calls one explicitly configured image-host deletion API. */
   async deleteImageFromHostConfig(host, url, hash, deleteKey) {
+    if (host.preset === "zipline-v3") {
+      const id = Number(deleteKey);
+      if (!Number.isInteger(id) || id < 1) throw new Error("Zipline v3 \u672A\u627E\u5230\u53EF\u5220\u9664\u7684\u6587\u4EF6 ID");
+      await (0, import_obsidian15.requestUrl)({
+        url: normalizeHttpUrl(host.deleteEndpoint, "\u5220\u9664 API"),
+        method: "DELETE",
+        headers: parseUploadHeaders(host.deleteHeaders || host.headers),
+        contentType: "application/json",
+        body: JSON.stringify({ id }),
+        throw: true
+      });
+      return;
+    }
     const values = { url, hash, deleteKey };
     const endpoint = normalizeHttpUrl(applyImageDeleteTemplate(host.deleteEndpoint, values, "url"), "\u5220\u9664 API");
     const headers = parseUploadHeaders(host.deleteHeaders);
@@ -20999,8 +21162,8 @@ ${uploaded.url}`, 8e3);
       url: endpoint,
       method: host.deleteMethod,
       headers,
-      contentType: body ? "application/json" : void 0,
-      body,
+      contentType: body && host.deleteMethod !== "GET" ? "application/json" : void 0,
+      body: host.deleteMethod === "GET" ? void 0 : body,
       throw: true
     });
   }
