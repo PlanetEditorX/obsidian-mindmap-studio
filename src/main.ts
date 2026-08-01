@@ -73,7 +73,7 @@ import {
 import { resolveStartupDisplayMode, shouldPersistDisplayMode } from "./article/display-mode";
 import type { DisplayMode } from "./core/model";
 import { normalizeReadingLocation, renameReadingLocationPath } from "./article/reading-location";
-import { normalizeAiProfileConfig, type AiProfileConfig } from "./ai/config";
+import { normalizeAiProfileConfig } from "./ai/config";
 import {
   requestAiCompletion,
   requestAiEditProposal,
@@ -875,7 +875,7 @@ export default class MindMapStudioPlugin extends Plugin {
 
   /** 使用指定 AI 配置发送当前 Markdown 上下文。 */
   async askAi(profileId: string, payload: AiMarkdownPayload, question: string, onStreamUpdate?: (update: AiStreamUpdate) => void): Promise<AiCompletionResult> {
-    const profile: AiProfileConfig | undefined = this.settings.aiProfiles.find((item) => item.id === profileId && item.enabled);
+    const profile = this.settings.aiProfiles.find((item) => item.id === profileId && item.enabled);
     if (!profile) throw new Error("AI 接口不存在或未启用");
     return requestAiCompletion(profile, payload, question, onStreamUpdate);
   }
@@ -911,7 +911,7 @@ export default class MindMapStudioPlugin extends Plugin {
 
   /** 使用指定 AI 配置生成 Markdown 修改提案，但不直接修改导图。 */
   async proposeAiEdit(profileId: string, payload: AiMarkdownPayload, instruction: string, onStreamUpdate?: (update: AiStreamUpdate) => void): Promise<AiCompletionResult> {
-    const profile: AiProfileConfig | undefined = this.settings.aiProfiles.find((item) => item.id === profileId && item.enabled);
+    const profile = this.settings.aiProfiles.find((item) => item.id === profileId && item.enabled);
     if (!profile) throw new Error("AI 接口不存在或未启用");
     return requestAiEditProposal(profile, payload, instruction, onStreamUpdate);
   }
