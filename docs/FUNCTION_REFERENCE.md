@@ -8618,7 +8618,7 @@ export function captureEditorHtml(display: ElectronDisplay, mode: DesktopCapture
 
 ### 函数 `saveCaptureDownload`
 
-源码：`src/utils/desktop-capture.ts:433`
+源码：`src/utils/desktop-capture.ts:438`
 
 保存截图到用户选择的位置；取消保存时仍返回 false。
 
@@ -8628,7 +8628,7 @@ async function saveCaptureDownload(runtime: ElectronCaptureRuntime, nodeRuntime:
 
 ### 函数 `nativeCaptureCommandCandidates`
 
-源码：`src/utils/desktop-capture.ts:445`
+源码：`src/utils/desktop-capture.ts:450`
 
 返回当前平台用于静默抓取显示器图像的命令候选，不启动系统交互式选区。
 
@@ -8638,7 +8638,7 @@ export function nativeCaptureCommandCandidates( platform: string, display: Elect
 
 ### 函数 `runNativeCaptureCandidates`
 
-源码：`src/utils/desktop-capture.ts:467`
+源码：`src/utils/desktop-capture.ts:472`
 
 执行候选命令，直到真正生成非空 PNG 文件。
 
@@ -8648,7 +8648,7 @@ async function runNativeCaptureCandidates( runtime: NodeCaptureRuntime, candidat
 
 ### 函数 `captureWindowsDisplay`
 
-源码：`src/utils/desktop-capture.ts:487`
+源码：`src/utils/desktop-capture.ts:492`
 
 Windows 使用 DPI 感知的 PowerShell 与系统绘图 API 抓取完整虚拟桌面，并返回全部显示器边界。
 
@@ -8658,7 +8658,7 @@ async function captureWindowsDisplay( runtime: NodeCaptureRuntime, directory: st
 
 ### 函数 `captureDisplayWithNativeCommand`
 
-源码：`src/utils/desktop-capture.ts:608`
+源码：`src/utils/desktop-capture.ts:613`
 
 使用本机非交互式命令抓取显示器或完整虚拟桌面，完全绕开 Electron 主进程 BrowserWindow/screen API。
 
@@ -8668,7 +8668,7 @@ async function captureDisplayWithNativeCommand( runtime: NodeCaptureRuntime, dis
 
 ### 函数 `captureDisplayWithRendererElectron`
 
-源码：`src/utils/desktop-capture.ts:635`
+源码：`src/utils/desktop-capture.ts:640`
 
 本机命令失败时，仅用渲染器可用的 desktopCapturer 抓取整屏；不会退回系统交互式截图。
 
@@ -8678,7 +8678,7 @@ async function captureDisplayWithRendererElectron( runtime: ElectronCaptureRunti
 
 ### 函数 `captureDisplaySource`
 
-源码：`src/utils/desktop-capture.ts:656`
+源码：`src/utils/desktop-capture.ts:661`
 
 抓取截图源；Windows 优先抓取完整虚拟桌面，其他平台优先使用快速渲染器。
 
@@ -8688,7 +8688,7 @@ async function captureDisplaySource( electronRuntime: ElectronCaptureRuntime, no
 
 ### 函数 `openCaptureEditorHost`
 
-源码：`src/utils/desktop-capture.ts:748`
+源码：`src/utils/desktop-capture.ts:753`
 
 在当前 Obsidian 窗口内创建全屏截图覆盖层，避免异步 window.open 被宿主拦截后形成不可见悬挂窗口。
 
@@ -8698,7 +8698,7 @@ function openCaptureEditorHost(html: string, _display: ElectronDisplay): Capture
 
 ### 函数 `writePngToClipboard`
 
-源码：`src/utils/desktop-capture.ts:795`
+源码：`src/utils/desktop-capture.ts:800`
 
 将裁剪结果写入系统剪贴板；Electron 剪贴板不可用时使用标准 Clipboard API。
 
@@ -8708,7 +8708,7 @@ async function writePngToClipboard(runtime: ElectronCaptureRuntime, bytes: Uint8
 
 ### 函数 `editCapturedDisplay`
 
-源码：`src/utils/desktop-capture.ts:809`
+源码：`src/utils/desktop-capture.ts:814`
 
 在真实可达的渲染器窗口中运行截图编辑器并处理复制、下载和取消动作。
 
@@ -8718,7 +8718,7 @@ async function editCapturedDisplay( runtime: ElectronCaptureRuntime, nodeRuntime
 
 ### 函数 `captureDesktopScreenshot`
 
-源码：`src/utils/desktop-capture.ts:886`
+源码：`src/utils/desktop-capture.ts:904`
 
 启动指定交互模式的桌面截图覆盖层；高级编辑器失败时给出明确错误，禁止静默回退系统截图。
 
