@@ -269,7 +269,8 @@ test("pasted images report storage, insertion, and auto-upload failures independ
   const recoverPostCommit = editorSource.match(/private recoverPastedImagePostCommit\(\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
   assert.match(handlePaste, /path = await this\.callbacks\.onSavePastedImage\(blob, filename\)[\s\S]*paste image storage failed/);
   assert.match(handlePaste, /const articleTargetAllowed = this\.currentMode === "article" \|\| this\.currentMode === "reading"/);
-  assert.match(handlePaste, /const nodeId = targetNode\?\.dataset\.nodeId[\s\S]*articleTargetAllowed \? this\.activeArticleBlock\?\.nodeId : undefined[\s\S]*this\.selectedId/);
+  assert.match(handlePaste, /const nodeId = articleTargetAllowed[\s\S]*targetNode\?\.dataset\.nodeId \?\? this\.activeArticleBlock\?\.nodeId \?\? this\.selectedId[\s\S]*: this\.selectedId/);
+  assert.match(handlePaste, /const afterBlockId = articleTargetAllowed[\s\S]*: undefined/);
   assert.match(handlePaste, /const selected = nodeId \? findNode\(this\.document\.root, nodeId\) : null[\s\S]*粘贴开始时选择的节点已不存在/);
   assert.doesNotMatch(imagePasteBranch, /this\.selectedNode\(\) \?\? this\.document\.root/);
   assert.match(handlePaste, /this\.mutate\(\(\) => \{/);
@@ -283,6 +284,27 @@ test("pasted images report storage, insertion, and auto-upload failures independ
   assert.match(mainBundle, /paste image save synchronization retry failed/);
   assert.doesNotMatch(mainBundle, /Notice\("\\u7C98\\u8D34\\u56FE\\u7247\\u5931\\u8D25"\)/);
   assert.doesNotMatch(mainBundle, /\\u4FDD\\u5B58\\u540C\\u6B65\\u51FA\\u73B0\\u5F02\\u5E38/);
+});
+
+test("node editor accepts clipboard images and schedules them for the exact edited node", () => {
+  const nodeModal = editorSource.slice(editorSource.indexOf("class NodeEditModal"), editorSource.indexOf("class AppearanceModal"));
+  assert.match(nodeModal, /onScheduleAutoUpload/);
+  assert.match(nodeModal, /text: "\+ 粘贴图片"/);
+  assert.match(nodeModal, /text: "粘贴剪贴板图片"/);
+  assert.match(nodeModal, /navigator\.clipboard\.read\(\)/);
+  assert.match(nodeModal, /form\.addEventListener\("paste"[\s\S]*item\.type\.startsWith\("image\/"\)[\s\S]*savePastedImage/);
+  assert.match(nodeModal, /path = await this\.callbacks\.onSavePastedImage\(blob, filename\)/);
+  assert.match(nodeModal, /pendingAutoUploads\.set\(block\.id, \{ path, filename \}\)/);
+  assert.match(nodeModal, /this\.callbacks\.onScheduleAutoUpload\(this\.node\.id, blockId, pending\.path, pending\.filename\)/);
+  assert.match(mainBundle, /node modal paste image storage failed/);
+  assert.match(mainBundle, /node modal paste image auto-upload scheduling failed/);
+});
+
+test("mind-map image paste ignores stale DOM focus and uses the live selection", () => {
+  const handlePaste = editorSource.match(/private async handlePaste\(event: ClipboardEvent\): Promise<void> \{[\s\S]*?\n  \}/)?.[0] ?? "";
+  assert.match(handlePaste, /const nodeId = articleTargetAllowed[\s\S]*: this\.selectedId/);
+  assert.doesNotMatch(handlePaste, /const nodeId = targetNode\?\.dataset\.nodeId\s*\?\?/);
+  assert.match(handlePaste, /const selected = nodeId \? findNode\(this\.document\.root, nodeId\) : null/);
 });
 
 test("table edits preserve the visible anchor before synchronous and measured relayout", () => {

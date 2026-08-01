@@ -234,7 +234,7 @@ function createArticleNumberingControls(
 class NodeEditModal extends Modal {
   private readonly node: MindMapNode;
   private readonly defaultShape: NodeShape;
-  private readonly callbacks: Pick<MindMapEditorCallbacks, "resolveImage" | "onSavePastedImage" | "getImageHosts" | "getDefaultUploadHostIds" | "onUploadImage" | "onReadImageSource">;
+  private readonly callbacks: Pick<MindMapEditorCallbacks, "resolveImage" | "onSavePastedImage" | "getImageHosts" | "getDefaultUploadHostIds" | "onUploadImage" | "onReadImageSource" | "onScheduleAutoUpload">;
   private readonly submit: (values: NodeEditValues, mode: "autosave" | "commit") => void;
   private saveOnClose: (() => void) | null = null;
   private closeWithoutFlush = false;
@@ -259,7 +259,7 @@ class NodeEditModal extends Modal {
     app: App,
     node: MindMapNode,
     defaultShape: NodeShape,
-    callbacks: Pick<MindMapEditorCallbacks, "resolveImage" | "onSavePastedImage" | "getImageHosts" | "getDefaultUploadHostIds" | "onUploadImage" | "onReadImageSource">,
+    callbacks: Pick<MindMapEditorCallbacks, "resolveImage" | "onSavePastedImage" | "getImageHosts" | "getDefaultUploadHostIds" | "onUploadImage" | "onReadImageSource" | "onScheduleAutoUpload">,
     submit: (values: NodeEditValues, mode: "autosave" | "commit") => void,
     private readonly richTextShortcuts: Pick<MindMapEditorOptions["richTextShortcuts"], "bold" | "italic" | "underline" | "color">,
     private readonly position: "center" | "right" = "center",
@@ -305,6 +305,7 @@ class NodeEditModal extends Modal {
     let workingBlocks: MindMapContentBlock[] = JSON.parse(JSON.stringify(nodeContentBlocks(this.node))) as MindMapContentBlock[];
     if (!workingBlocks.length) workingBlocks = [{ id: newId(), type: "text", text: "新节点" }];
     let scheduleAutoSave: () => void = () => undefined;
+    const pendingAutoUploads = new Map<string, { path: string; filename: string }>();
 
     const actionRow = form.createDiv({ cls: "mmc-content-block-actions" });
     const blocksEl = form.createDiv({ cls: "mmc-content-block-list" });
@@ -471,6 +472,8 @@ class NodeEditModal extends Modal {
           });
           alt.addEventListener("input", () => { block.alt = alt.value.trim() || undefined; scheduleAutoSave(); });
           const actions = body.createDiv({ cls: "mmc-image-block-actions" });
+          const pasteCurrent = actions.createEl("button", { text: "粘贴剪贴板图片", attr: { type: "button" } });
+          pasteCurrent.addEventListener("click", () => { void pasteClipboardImage(block); });
           const local = actions.createEl("button", { text: "保存到仓库", attr: { type: "button" } });
           const applyImageAction = (action: Promise<boolean>): void => {
             void action.then((changed) => {
@@ -528,10 +531,77 @@ class NodeEditModal extends Modal {
       if (!workingBlocks.length) blocksEl.createDiv({ cls: "mmc-empty-content-hint", text: "当前没有内容块。请添加文字、图片、表格或代码。" });
     };
 
+    const suggestedClipboardImageName = (blob: Blob): string => {
+      const extension = blob.type.split("/")[1]?.replace("jpeg", "jpg").replace("svg+xml", "svg") || "png";
+      return `mindmap-image.${extension}`;
+    };
+
+    const savePastedImage = async (blob: Blob, existingBlock?: MindMapImageContentBlock, suppliedName?: string): Promise<void> => {
+      const filename = suppliedName || suggestedClipboardImageName(blob);
+      let path: string;
+      try {
+        path = await this.callbacks.onSavePastedImage(blob, filename);
+      } catch (error) {
+        console.error("MindMap Studio node modal paste image storage failed", error);
+        new Notice(`粘贴图片失败：${error instanceof Error ? error.message : String(error)}`, 7000);
+        return;
+      }
+      const block = existingBlock ?? { id: newId(), type: "image", source: "" };
+      block.source = path;
+      block.localSource = path;
+      block.remoteSources = undefined;
+      block.contentHash = undefined;
+      if (!existingBlock) workingBlocks.push(block);
+      pendingAutoUploads.set(block.id, { path, filename });
+      renderBlocks();
+      scheduleAutoSave();
+      new Notice("图片已从剪贴板添加到当前节点");
+    };
+
+    const readClipboardImage = async (): Promise<{ blob: Blob; filename: string } | null> => {
+      if (!navigator.clipboard?.read) {
+        new Notice("当前环境无法直接读取剪贴板，请在编辑节点窗口中按 Ctrl/Cmd+V");
+        return null;
+      }
+      try {
+        const items = await navigator.clipboard.read();
+        for (const item of items) {
+          const type = item.types.find((candidate) => candidate.startsWith("image/"));
+          if (!type) continue;
+          const blob = await item.getType(type);
+          return { blob, filename: suggestedClipboardImageName(blob) };
+        }
+      } catch (error) {
+        console.error("MindMap Studio node modal clipboard read failed", error);
+        new Notice("无法直接读取剪贴板，请在编辑节点窗口中按 Ctrl/Cmd+V");
+        return null;
+      }
+      new Notice("剪贴板中没有可粘贴的图片");
+      return null;
+    };
+
+    const pasteClipboardImage = async (existingBlock?: MindMapImageContentBlock): Promise<void> => {
+      const image = await readClipboardImage();
+      if (!image) return;
+      await savePastedImage(image.blob, existingBlock, image.filename);
+    };
+
+    form.addEventListener("paste", (event) => {
+      const imageItem = Array.from(event.clipboardData?.items ?? [])
+        .find((item) => item.kind === "file" && item.type.startsWith("image/"));
+      const blob = imageItem?.getAsFile();
+      if (!blob) return;
+      event.preventDefault();
+      event.stopPropagation();
+      void savePastedImage(blob, undefined, blob.name || suggestedClipboardImageName(blob));
+    }, true);
+
     const addText = actionRow.createEl("button", { text: "+ 文字", attr: { type: "button" } });
     addText.addEventListener("click", () => { workingBlocks.push({ id: newId(), type: "text", text: "" }); renderBlocks(); scheduleAutoSave(); });
     const addImage = actionRow.createEl("button", { text: "+ 图片", attr: { type: "button" } });
     addImage.addEventListener("click", () => { workingBlocks.push({ id: newId(), type: "image", source: "" }); renderBlocks(); scheduleAutoSave(); });
+    const pasteImage = actionRow.createEl("button", { text: "+ 粘贴图片", attr: { type: "button" } });
+    pasteImage.addEventListener("click", () => { void pasteClipboardImage(); });
     const addTable = actionRow.createEl("button", { text: "+ 表格", attr: { type: "button" } });
     addTable.addEventListener("click", () => { workingBlocks.push({ id: newId(), type: "table", table: { headers: ["列 1", "列 2"], rows: [["", ""]], source: "manual" } }); renderBlocks(); scheduleAutoSave(); });
     const addCode = actionRow.createEl("button", { text: "+ 代码", attr: { type: "button" } });
@@ -653,7 +723,23 @@ class NodeEditModal extends Modal {
       if (timer !== null) { window.clearTimeout(timer); timer = null; }
       const values = collectValues(showNotice); if (!values) return false;
       const signature = JSON.stringify(values);
-      if (signature !== last) { this.submit(values, mode); last = signature; }
+      if (signature !== last) {
+        this.submit(values, mode);
+        last = signature;
+        for (const [blockId, pending] of pendingAutoUploads) {
+          if (!values.content.some((block) => block.type === "image" && block.id === blockId)) {
+            pendingAutoUploads.delete(blockId);
+            continue;
+          }
+          try {
+            this.callbacks.onScheduleAutoUpload(this.node.id, blockId, pending.path, pending.filename);
+          } catch (error) {
+            console.error("MindMap Studio node modal paste image auto-upload scheduling failed", error);
+          } finally {
+            pendingAutoUploads.delete(blockId);
+          }
+        }
+      }
       return true;
     };
     scheduleAutoSave = (): void => { if (timer !== null) window.clearTimeout(timer); timer = window.setTimeout(() => saveNow("autosave"), 280); };
@@ -4885,7 +4971,8 @@ export class MindMapEditor {
       getImageHosts: this.callbacks.getImageHosts,
       getDefaultUploadHostIds: this.callbacks.getDefaultUploadHostIds,
       onUploadImage: this.callbacks.onUploadImage,
-      onReadImageSource: this.callbacks.onReadImageSource
+      onReadImageSource: this.callbacks.onReadImageSource,
+      onScheduleAutoUpload: this.callbacks.onScheduleAutoUpload
     }, (values, mode) => {
       // A continuously open editor may autosave many times. Capture one undo
       // snapshot for the whole editing session instead of one snapshot per keypress.
@@ -5916,11 +6003,16 @@ export class MindMapEditor {
       const targetBlock = target.closest<HTMLElement>("[data-block-id]");
       const targetNode = target.closest<HTMLElement>("[data-node-id]");
       const articleTargetAllowed = this.currentMode === "article" || this.currentMode === "reading";
-      const nodeId = targetNode?.dataset.nodeId
-        ?? (articleTargetAllowed ? this.activeArticleBlock?.nodeId : undefined)
-        ?? this.selectedId;
-      const afterBlockId = targetBlock?.dataset.blockId
-        ?? (articleTargetAllowed && this.activeArticleBlock?.nodeId === nodeId ? this.activeArticleBlock.blockId : undefined);
+      // In mind-map and outline modes the paste event can still target the
+      // previously focused node. Always bind the image to the node selected at
+      // paste time; article modes may use the actual editable block target.
+      const nodeId = articleTargetAllowed
+        ? targetNode?.dataset.nodeId ?? this.activeArticleBlock?.nodeId ?? this.selectedId
+        : this.selectedId;
+      const afterBlockId = articleTargetAllowed
+        ? targetBlock?.dataset.blockId
+          ?? (this.activeArticleBlock?.nodeId === nodeId ? this.activeArticleBlock.blockId : undefined)
+        : undefined;
       // Native paste can insert a transient <img> into an active article
       // paragraph. Commit that paragraph first, then store the image as the
       // next content block instead of letting the later redraw discard it.
