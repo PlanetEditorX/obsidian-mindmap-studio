@@ -10,7 +10,7 @@ import type MindMapStudioPlugin from "./main";
 import { MindMapEditor } from "./editor/editor";
 import { parseDocument, serializeDocument, type DisplayMode, type MindMapDocument, type MindMapImageUploadPatch } from "./core/model";
 import { settingsToAppearance } from "./settings";
-import { resolveArticleTocMaxDepth, type ArticlePageNavigation, type ArticleTocEntry, type ReadingSection } from "./article/modes";
+import { resolveArticleTocMaxDepth, type ArticlePageNavigation, type ArticleTocEntry } from "./article/modes";
 import { readingSectionsToDocx, readingSectionsToHtml, readingSectionsToMarkdown } from "./import/import-export";
 import { AiAskModal } from "./ai/modal";
 import { enabledAiProfiles } from "./ai/config";
@@ -40,7 +40,7 @@ export class MindMapStudioView extends TextFileView {
   private articleTocEntries: ArticleTocEntry[] = [];
   private showArticleToc = false;
   private articleNavigation: ArticlePageNavigation | undefined;
-  private readingSections: ReadingSection[] = [];
+  private readingSections: import("./article/modes").ReadingSection[] = [];
   private articleContextToken = 0;
   private articleContextTimer: number | null = null;
   private preferCurrentFileOnNextContextRefresh = false;
