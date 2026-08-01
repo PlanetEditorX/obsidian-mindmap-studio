@@ -140,7 +140,7 @@ function renderOutlineContent(container: HTMLElement, node: MindMapNode, depth: 
   }
   for (const block of images) {
     const resolved = options.resolveImage(block.source);
-    const figure = content.createEl("figure", { cls: `mms-outline-image image-align-${block.align ?? "center"}` });
+    const figure = content.createEl("figure", { cls: `mms-outline-image image-align-${block.align ?? "center"} image-layout-${block.layout ?? "block"}` });
     figure.dataset.blockId = block.id;
     if (resolved) {
       const image = figure.createEl("img", { attr: { src: resolved, alt: block.alt ?? "图片", loading: "lazy" } });

@@ -98,15 +98,28 @@ function nodeDimensions(node: MindMapNode, depth: number, defaultFontSize = 14, 
       : ((depth === 0 ? ROOT_WIDTH : NODE_WIDTH) + extraWidth));
 
   if (!manualWidth && automatic) {
+    let inlineImageWidth = 0;
+    const flushInlineImageWidth = (): void => {
+      if (!inlineImageWidth) return;
+      width = Math.max(width, Math.min(900, inlineImageWidth + 28));
+      inlineImageWidth = 0;
+    };
     for (const block of blocks) {
-      if (block.type === "image") width = Math.max(width, Math.min(900, (block.width ?? 240) + 28));
-      else if (block.type === "text") {
+      if (block.type === "image") {
+        if (block.layout === "inline") inlineImageWidth += Math.min(360, block.width ?? 180) + (inlineImageWidth ? 8 : 0);
+        else {
+          flushInlineImageWidth();
+          width = Math.max(width, Math.min(900, (block.width ?? 240) + 28));
+        }
+      } else if (block.type === "text") {
+        flushInlineImageWidth();
         const visualUnits = Array.from(block.text.split(/\r?\n/).sort((a, b) => b.length - a.length)[0] ?? "")
           .reduce((sum, character) => sum + (/[\u2e80-\u9fff\uff00-\uffef]/u.test(character) ? 1 : .62), 0);
         const horizontalPadding = fitted ? (depth === 0 ? 48 : 58) : 80;
         width = Math.max(width, Math.min(automaticMaximum, horizontalPadding + Math.min(visualUnits, 90) * fontSize));
       }
     }
+    flushInlineImageWidth();
     if (node.table) {
       const columns = Math.max(1, node.table.headers.length);
       width = Math.min(720, Math.max(300, columns * 124));
@@ -122,10 +135,25 @@ function nodeDimensions(node: MindMapNode, depth: number, defaultFontSize = 14, 
   width = Math.min(900, Math.max(fitted ? 80 : 100, width));
   let height = 28 + Math.max(0, fontSize - 14) * 1.4;
   if (!blocks.length) height += depth === 0 ? 34 : 26;
+  let inlineImageHeight = 0;
+  const flushInlineImageHeight = (): void => {
+    if (!inlineImageHeight) return;
+    height += inlineImageHeight + 22;
+    inlineImageHeight = 0;
+  };
   for (const block of blocks) {
-    if (block.type === "image") height += (block.height ?? 110) + 22;
-    else if (block.type === "text") height += Math.max(30, estimatedTextLines(block.text, width, fontSize) * (fontSize + 8));
+    if (block.type === "image") {
+      if (block.layout === "inline") inlineImageHeight = Math.max(inlineImageHeight, block.height ?? 110);
+      else {
+        flushInlineImageHeight();
+        height += (block.height ?? 110) + 22;
+      }
+    } else if (block.type === "text") {
+      flushInlineImageHeight();
+      height += Math.max(30, estimatedTextLines(block.text, width, fontSize) * (fontSize + 8));
+    }
   }
+  flushInlineImageHeight();
   if (node.tags?.length) height += 20;
   if (node.table) {
     const visibleRows = Math.min(10, node.table.rows.length);

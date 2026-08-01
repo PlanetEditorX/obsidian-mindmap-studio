@@ -71,7 +71,7 @@ src/
 - `src/render/code-block.ts`：解析节点/页面/全局代码设置，调用 Obsidian Markdown 高亮，并为四种显示模式安装统一的真实 DOM 行号栏。
 - `src/render/static-render.ts`：Markdown 阅读模式中的只读 SVG 预览。
 - `src/utils/filename.ts`：跨平台文件名、扩展名、时间戳与图片 MIME 的纯函数。
-- `src/utils/image-host.ts`：不依赖 Obsidian 的图床输入校验、multipart 构造和响应 URL 提取。
+- `src/utils/image-host.ts`：不依赖 Obsidian 的图床输入校验、multipart 构造、响应 URL/删除令牌提取、SHA-256 计算和删除模板替换。
 - `styles.css`：编辑器、四种模式、弹窗、搜索、尺寸手柄和响应式样式。
 
 ## 3. 文件加载与保存流程
@@ -252,11 +252,13 @@ Obsidian 读取文本
 
 - 当前使用地址 `source`。
 - 本地仓库地址 `localSource`。
-- 多个远程镜像 `remoteSources`。
+- 多个远程镜像 `remoteSources`，其中可包含服务端返回的删除令牌。
+- 图片二进制 SHA-256 `contentHash`。
+- 同行或独占一行排版 `layout`。
 
 加载顺序由 `imageSourceCandidates()` 生成。图片加载错误或超时后，编辑器尝试下一个镜像；成功后更新当前地址并保存。HTTP 200 返回错误占位图无法仅凭浏览器加载事件判断。
 
-自动上传流程由插件层负责，因为它需要读取仓库二进制文件、调用网络请求并决定是否删除本地资源。排程持有当前 `TFile` 对象而不是固定字符串路径，因此保存期间若根据中心节点标题重命名导图，任务会沿用更新后的文件路径继续执行。桌面 Markdown 图片的磁盘读取、去重复制和权威内容块改写下沉到 `src/utils/desktop-import.ts`；编辑器在导入节点获得最终 ID 后调用宿主排程，Markdown 转脑图则在文件保存后恢复待上传任务。画布级“上传当前页面所有图片”由编辑器一次选择图床、按图片读取来源并补传缺失镜像，最后通过统一内容块替换和保存链路写回。可确定的图床协议转换下沉到 `src/utils/image-host.ts`：端点只接受 HTTP(S)，Header 必须是无换行的扁平 JSON 对象，multipart 字段和值会清除请求头注入字符，响应地址也必须通过 HTTP(S) URL 校验。
+自动上传流程由插件层负责，因为它需要读取仓库二进制文件、计算 SHA-256、调用网络请求并决定是否删除本地资源或最后引用对应的远程对象。上传缓存以“图床 ID + SHA-256”为键；同一二进制在同一图床复用 URL，不跨图床混用。远程删除是显式可选流程：仅当图片块最后引用被删除、全仓库扫描确认无同哈希/URL 引用、用户开启同步清理且图床配置删除 API 时才请求删除。排程持有当前 `TFile` 对象而不是固定字符串路径，因此保存期间若根据中心节点标题重命名导图，任务会沿用更新后的文件路径继续执行。桌面 Markdown 图片的磁盘读取、去重复制和权威内容块改写下沉到 `src/utils/desktop-import.ts`；编辑器在导入节点获得最终 ID 后调用宿主排程，Markdown 转脑图则在文件保存后恢复待上传任务。画布级“上传当前页面所有图片”由编辑器一次选择图床、按图片读取来源并补传缺失镜像，最后通过统一内容块替换和保存链路写回。可确定的图床协议转换下沉到 `src/utils/image-host.ts`：端点只接受 HTTP(S)，Header 必须是无换行的扁平 JSON 对象，multipart 字段和值会清除请求头注入字符，响应地址也必须通过 HTTP(S) URL 校验。
 
 ```text
 ImageHostConfig
@@ -264,9 +266,11 @@ ImageHostConfig
 → buildMultipartUploadBody() 或原始二进制
 → Obsidian requestUrl()
 → parseUploadResponsePayload()
-→ extractImageUrlFromResponse()
-→ 更新 remoteSources
+→ sha256Blob() 并查询图床级缓存
+→ extractImageUrlFromResponse() / 可选删除令牌
+→ 更新 contentHash 与 remoteSources
 → 满足全部安全条件后可选删除本地资源
+→ 删除最后引用时按显式图床删除模板清理远程对象
 ```
 
 ## 9. 搜索索引架构

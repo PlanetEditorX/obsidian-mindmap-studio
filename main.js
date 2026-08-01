@@ -399,6 +399,8 @@ function normalizeContentBlock(input) {
     const width = typeof image.width === "number" && Number.isFinite(image.width) ? Math.max(20, Math.min(2e3, Math.round(image.width))) : void 0;
     const height = typeof image.height === "number" && Number.isFinite(image.height) ? Math.max(20, Math.min(2e3, Math.round(image.height))) : void 0;
     const align = image.align === "left" || image.align === "center" || image.align === "right" ? image.align : void 0;
+    const layout = image.layout === "inline" ? "inline" : image.layout === "block" ? "block" : void 0;
+    const contentHash = typeof image.contentHash === "string" && /^[0-9a-f]{64}$/i.test(image.contentHash.trim()) ? image.contentHash.trim().toLowerCase() : void 0;
     const localSource = typeof image.localSource === "string" && image.localSource.trim() ? image.localSource.trim().slice(0, 2e3) : void 0;
     const remoteSources = Array.isArray(image.remoteSources) ? image.remoteSources.slice(0, 12).flatMap((raw) => {
       if (!raw || typeof raw !== "object") return [];
@@ -410,13 +412,14 @@ function normalizeContentBlock(input) {
         hostId,
         hostName: typeof item.hostName === "string" && item.hostName.trim() ? item.hostName.trim().slice(0, 200) : void 0,
         url,
+        deleteKey: typeof item.deleteKey === "string" && item.deleteKey.trim() ? item.deleteKey.trim().slice(0, 2e3) : void 0,
         uploadedAt: typeof item.uploadedAt === "string" && item.uploadedAt.trim() ? item.uploadedAt.trim().slice(0, 80) : void 0,
         lastSuccessAt: typeof item.lastSuccessAt === "string" && item.lastSuccessAt.trim() ? item.lastSuccessAt.trim().slice(0, 80) : void 0,
         lastFailureAt: typeof item.lastFailureAt === "string" && item.lastFailureAt.trim() ? item.lastFailureAt.trim().slice(0, 80) : void 0,
         failureCount: typeof item.failureCount === "number" && Number.isFinite(item.failureCount) ? Math.max(0, Math.min(1e6, Math.floor(item.failureCount))) : void 0
       }];
     }) : void 0;
-    return { id, type: "image", source, alt, align, width, height, localSource, remoteSources: (remoteSources == null ? void 0 : remoteSources.length) ? remoteSources : void 0 };
+    return { id, type: "image", source, alt, align, width, height, layout, contentHash, localSource, remoteSources: (remoteSources == null ? void 0 : remoteSources.length) ? remoteSources : void 0 };
   }
   if (candidate.type === "text") {
     const textCandidate = candidate;
@@ -2036,7 +2039,12 @@ function createImageHostConfig(index = 1) {
     bodyMode: "multipart",
     fieldName: "file",
     headers: "",
-    responsePath: "data.url"
+    responsePath: "data.url",
+    deleteKeyResponsePath: "",
+    deleteEndpoint: "",
+    deleteMethod: "DELETE",
+    deleteHeaders: "",
+    deleteBody: ""
   };
 }
 var DEFAULT_SETTINGS = {
@@ -2086,11 +2094,13 @@ var DEFAULT_SETTINGS = {
   codeAutoLineNumbersMinLines: 8,
   defaultCodeTheme: "obsidian",
   imageHosts: [],
+  imageUploadCache: {},
   autoUploadEnabled: false,
   autoUploadDelaySeconds: 60,
   imageRecognitionAutoConfirmDelaySeconds: null,
   autoUploadHostIds: [],
   deleteLocalAfterUpload: true,
+  deleteRemoteWhenUnreferenced: false,
   imageFailoverEnabled: true,
   imageFailoverTimeoutSeconds: 8,
   imageFailoverUseLocalFallback: true,
@@ -2869,6 +2879,10 @@ var MindMapStudioSettingTab = class extends import_obsidian.PluginSettingTab {
         this.plugin.settings.deleteLocalAfterUpload = value;
         await this.plugin.saveSettings();
       }));
+      new import_obsidian.Setting(containerEl).setName("\u6700\u540E\u5F15\u7528\u5220\u9664\u65F6\u540C\u6B65\u6E05\u7406\u56FE\u5E8A").setDesc("\u4EC5\u5728\u6240\u6709\u8111\u56FE\u90FD\u4E0D\u518D\u5F15\u7528\u540C\u4E00 SHA-256 \u56FE\u7247\uFF0C\u5E76\u4E14\u5BF9\u5E94\u56FE\u5E8A\u5DF2\u914D\u7F6E\u5220\u9664 API \u65F6\u6267\u884C\u3002\u672A\u914D\u7F6E\u5220\u9664 API \u7684\u8FDC\u7A0B\u56FE\u7247\u4F1A\u4FDD\u7559\uFF0C\u4E0D\u4F1A\u8BEF\u5220\u3002").addToggle((toggle) => toggle.setValue(this.plugin.settings.deleteRemoteWhenUnreferenced).onChange(async (value) => {
+        this.plugin.settings.deleteRemoteWhenUnreferenced = value;
+        await this.plugin.saveSettings();
+      }));
     }
     const hosts = this.plugin.settings.imageHosts;
     const hostsHeader = containerEl.createDiv({ cls: "mms-image-hosts-header" });
@@ -2929,6 +2943,25 @@ var MindMapStudioSettingTab = class extends import_obsidian.PluginSettingTab {
       }));
       new import_obsidian.Setting(body).setName("\u8FD4\u56DE\u7F51\u5740\u5B57\u6BB5").setDesc("\u4F8B\u5982 data.url\uFF1B\u7559\u7A7A\u4F1A\u5C1D\u8BD5\u5E38\u89C1\u5B57\u6BB5\u3002").addText((text) => text.setValue(host.responsePath).setPlaceholder("data.url").onChange(async (value) => {
         host.responsePath = value.trim();
+        await this.plugin.saveSettings();
+      }));
+      new import_obsidian.Setting(body).setName("\u5220\u9664\u4EE4\u724C\u5B57\u6BB5\uFF08\u53EF\u9009\uFF09").setDesc("\u4E0A\u4F20\u54CD\u5E94\u4E2D\u7528\u4E8E\u540E\u7EED\u5220\u9664\u7684\u4EE4\u724C\u5B57\u6BB5\uFF0C\u4F8B\u5982 data.delete_key\u3002\u7559\u7A7A\u65F6\u53EA\u4F7F\u7528\u56FE\u7247 URL \u548C\u54C8\u5E0C\u3002").addText((text) => text.setValue(host.deleteKeyResponsePath).setPlaceholder("data.delete_key").onChange(async (value) => {
+        host.deleteKeyResponsePath = value.trim();
+        await this.plugin.saveSettings();
+      }));
+      new import_obsidian.Setting(body).setName("\u5220\u9664 API\uFF08\u53EF\u9009\uFF09").setDesc("\u652F\u6301\u5360\u4F4D\u7B26 {url}\u3001{hash}\u3001{deleteKey}\u3002\u53EA\u6709\u914D\u7F6E\u540E\uFF0C\u5220\u9664\u6700\u540E\u4E00\u4E2A\u56FE\u7247\u5F15\u7528\u65F6\u624D\u4F1A\u8BF7\u6C42\u56FE\u5E8A\u5220\u9664\u8FDC\u7A0B\u6587\u4EF6\u3002").addText((text) => text.setValue(host.deleteEndpoint).setPlaceholder("https://example.com/api/delete/{deleteKey}").onChange(async (value) => {
+        host.deleteEndpoint = value.trim();
+        await this.plugin.saveSettings();
+      })).addDropdown((dropdown) => dropdown.addOption("DELETE", "DELETE").addOption("POST", "POST").setValue(host.deleteMethod).onChange(async (value) => {
+        host.deleteMethod = value;
+        await this.plugin.saveSettings();
+      }));
+      new import_obsidian.Setting(body).setName("\u5220\u9664\u8BF7\u6C42\u5934 JSON").addTextArea((text) => text.setValue(host.deleteHeaders).setPlaceholder('{"Authorization":"Bearer ..."}').onChange(async (value) => {
+        host.deleteHeaders = value.trim();
+        await this.plugin.saveSettings();
+      }));
+      new import_obsidian.Setting(body).setName("\u5220\u9664\u8BF7\u6C42\u4F53\uFF08\u53EF\u9009\uFF09").setDesc('POST \u5220\u9664\u63A5\u53E3\u53EF\u586B\u5199 JSON \u6A21\u677F\uFF0C\u4F8B\u5982 {"key":"{deleteKey}"}\u3002DELETE \u63A5\u53E3\u901A\u5E38\u7559\u7A7A\u3002').addTextArea((text) => text.setValue(host.deleteBody).setPlaceholder('{"url":"{url}","hash":"{hash}"}').onChange(async (value) => {
+        host.deleteBody = value;
         await this.plugin.saveSettings();
       }));
       const isAutoTarget = this.plugin.settings.autoUploadHostIds.includes(host.id);
@@ -3562,7 +3595,7 @@ function estimatedTextLines(text, width, fontSize) {
   return Math.max(1, text.split(/\r?\n/).reduce((sum, line) => sum + Math.max(1, Math.ceil(Math.max(1, line.length) / charsPerLine)), 0));
 }
 function nodeDimensions(node, depth, defaultFontSize = 14, visualStyle = "card", appearance = {}, measuredDimensions) {
-  var _a2, _b2, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m;
+  var _a2, _b2, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o;
   const measured = measuredDimensions == null ? void 0 : measuredDimensions.get(node.id);
   if (measured) return { width: measured.width, height: Math.max(measured.height, (_b2 = (_a2 = node.style) == null ? void 0 : _a2.minHeight) != null ? _b2 : 0, MIN_NODE_HEIGHT) };
   const fontSize = (_d = (_c = node.style) == null ? void 0 : _c.fontSize) != null ? _d : defaultFontSize;
@@ -3575,14 +3608,27 @@ function nodeDimensions(node, depth, defaultFontSize = 14, visualStyle = "card",
   const automaticMaximum = Math.max(120, Math.min(900, (_g = appearance.autoNodeMaxWidth) != null ? _g : 460));
   let width = manualWidth != null ? manualWidth : !automatic ? fixedWidth : fitted ? (depth === 0 ? 146 : 92) + extraWidth : (depth === 0 ? ROOT_WIDTH : NODE_WIDTH) + extraWidth;
   if (!manualWidth && automatic) {
+    let inlineImageWidth = 0;
+    const flushInlineImageWidth = () => {
+      if (!inlineImageWidth) return;
+      width = Math.max(width, Math.min(900, inlineImageWidth + 28));
+      inlineImageWidth = 0;
+    };
     for (const block of blocks) {
-      if (block.type === "image") width = Math.max(width, Math.min(900, ((_h = block.width) != null ? _h : 240) + 28));
-      else if (block.type === "text") {
-        const visualUnits = Array.from((_i = block.text.split(/\r?\n/).sort((a, b) => b.length - a.length)[0]) != null ? _i : "").reduce((sum, character) => sum + (/[\u2e80-\u9fff\uff00-\uffef]/u.test(character) ? 1 : 0.62), 0);
+      if (block.type === "image") {
+        if (block.layout === "inline") inlineImageWidth += Math.min(360, (_h = block.width) != null ? _h : 180) + (inlineImageWidth ? 8 : 0);
+        else {
+          flushInlineImageWidth();
+          width = Math.max(width, Math.min(900, ((_i = block.width) != null ? _i : 240) + 28));
+        }
+      } else if (block.type === "text") {
+        flushInlineImageWidth();
+        const visualUnits = Array.from((_j = block.text.split(/\r?\n/).sort((a, b) => b.length - a.length)[0]) != null ? _j : "").reduce((sum, character) => sum + (/[\u2e80-\u9fff\uff00-\uffef]/u.test(character) ? 1 : 0.62), 0);
         const horizontalPadding = fitted ? depth === 0 ? 48 : 58 : 80;
         width = Math.max(width, Math.min(automaticMaximum, horizontalPadding + Math.min(visualUnits, 90) * fontSize));
       }
     }
+    flushInlineImageWidth();
     if (node.table) {
       const columns = Math.max(1, node.table.headers.length);
       width = Math.min(720, Math.max(300, columns * 124));
@@ -3597,11 +3643,26 @@ function nodeDimensions(node, depth, defaultFontSize = 14, visualStyle = "card",
   width = Math.min(900, Math.max(fitted ? 80 : 100, width));
   let height = 28 + Math.max(0, fontSize - 14) * 1.4;
   if (!blocks.length) height += depth === 0 ? 34 : 26;
+  let inlineImageHeight = 0;
+  const flushInlineImageHeight = () => {
+    if (!inlineImageHeight) return;
+    height += inlineImageHeight + 22;
+    inlineImageHeight = 0;
+  };
   for (const block of blocks) {
-    if (block.type === "image") height += ((_j = block.height) != null ? _j : 110) + 22;
-    else if (block.type === "text") height += Math.max(30, estimatedTextLines(block.text, width, fontSize) * (fontSize + 8));
+    if (block.type === "image") {
+      if (block.layout === "inline") inlineImageHeight = Math.max(inlineImageHeight, (_k = block.height) != null ? _k : 110);
+      else {
+        flushInlineImageHeight();
+        height += ((_l = block.height) != null ? _l : 110) + 22;
+      }
+    } else if (block.type === "text") {
+      flushInlineImageHeight();
+      height += Math.max(30, estimatedTextLines(block.text, width, fontSize) * (fontSize + 8));
+    }
   }
-  if ((_k = node.tags) == null ? void 0 : _k.length) height += 20;
+  flushInlineImageHeight();
+  if ((_m = node.tags) == null ? void 0 : _m.length) height += 20;
   if (node.table) {
     const visibleRows = Math.min(10, node.table.rows.length);
     height += 42 + visibleRows * 31 + (node.table.rows.length > visibleRows ? 24 : 0);
@@ -3610,7 +3671,7 @@ function nodeDimensions(node, depth, defaultFontSize = 14, visualStyle = "card",
     const lines = node.code.code.split(/\r?\n/);
     height += Math.min(390, Math.max(100, Math.min(lines.length, 18) * 20 + 48));
   }
-  height = Math.max(height, (_m = (_l = node.style) == null ? void 0 : _l.minHeight) != null ? _m : 0, MIN_NODE_HEIGHT);
+  height = Math.max(height, (_o = (_n = node.style) == null ? void 0 : _n.minHeight) != null ? _o : 0, MIN_NODE_HEIGHT);
   return { width, height: Math.min(1200, height) };
 }
 function subtreeHeight(node, depth, defaultFontSize = 14, visualStyle = "card", appearance = {}, measuredDimensions) {
@@ -6941,8 +7002,8 @@ var ImagePreviewModal = class extends import_obsidian5.Modal {
    */
   onOpen() {
     this.modalEl.addClass("mmc-image-preview-modal");
-    this.modalEl.style.setProperty("width", "min(98vw, 1800px)", "important");
-    this.modalEl.style.setProperty("height", "min(94vh, 1080px)", "important");
+    this.modalEl.style.setProperty("width", "min(86vw, 1400px)", "important");
+    this.modalEl.style.setProperty("height", "min(82vh, 900px)", "important");
     this.titleEl.setText(this.alt || "\u56FE\u7247\u9884\u89C8");
     const toolbar = this.contentEl.createDiv({ cls: "mmc-image-preview-toolbar" });
     const sourceBar = this.contentEl.createDiv({ cls: "mmc-image-preview-sources" });
@@ -7623,6 +7684,7 @@ async function selectNodeImage(app, block, mode, callbacks) {
       block.source = path;
       block.localSource = path;
       block.remoteSources = void 0;
+      block.contentHash = void 0;
     } else {
       const batch = await callbacks.onUploadImage(file, file.name, hostIds);
       if (!batch.successes.length) {
@@ -7632,7 +7694,14 @@ async function selectNodeImage(app, block, mode, callbacks) {
       const uploadedAt = (/* @__PURE__ */ new Date()).toISOString();
       block.source = batch.successes[0].url;
       block.localSource = void 0;
-      block.remoteSources = batch.successes.map((item) => ({ ...item, uploadedAt }));
+      block.contentHash = batch.contentHash;
+      block.remoteSources = batch.successes.map((item) => ({
+        hostId: item.hostId,
+        hostName: item.hostName,
+        url: item.url,
+        deleteKey: item.deleteKey,
+        uploadedAt
+      }));
       if (batch.failures.length) {
         new import_obsidian6.Notice(`\u90E8\u5206\u56FE\u5E8A\u4E0A\u4F20\u5931\u8D25\uFF1A${batch.failures.map((item) => item.hostName).join("\u3001")}`, 7e3);
       } else {
@@ -7664,9 +7733,16 @@ async function uploadCurrentNodeImage(app, block, callbacks) {
     }
     const uploadedAt = (/* @__PURE__ */ new Date()).toISOString();
     const existing = new Map(((_a2 = block.remoteSources) != null ? _a2 : []).map((item) => [item.hostId, item]));
-    batch.successes.forEach((item) => existing.set(item.hostId, { ...item, uploadedAt }));
+    batch.successes.forEach((item) => existing.set(item.hostId, {
+      hostId: item.hostId,
+      hostName: item.hostName,
+      url: item.url,
+      deleteKey: item.deleteKey,
+      uploadedAt
+    }));
     block.remoteSources = Array.from(existing.values());
     block.localSource = readableSource;
+    block.contentHash = batch.contentHash;
     if (!batch.failures.length) block.source = batch.successes[0].url;
     if (batch.failures.length) {
       new import_obsidian6.Notice(`\u90E8\u5206\u56FE\u5E8A\u4E0A\u4F20\u5931\u8D25\uFF0C\u672C\u5730\u56FE\u7247\u5DF2\u4FDD\u7559\uFF1A${batch.failures.map((item) => item.hostName).join("\u3001")}`, 7e3);
@@ -7683,7 +7759,7 @@ async function uploadCurrentNodeImage(app, block, callbacks) {
 
 // src/editor/node-rich-text-editor.ts
 var import_obsidian7 = require("obsidian");
-function renderNodeRichTextEditor(container, block, onChange) {
+function renderNodeRichTextEditor(container, block, onChange, shortcuts) {
   const toolbar = container.createDiv({ cls: "mmc-rich-text-toolbar" });
   const source = container.createEl("textarea", {
     cls: "mmc-rich-text-source",
@@ -7793,6 +7869,22 @@ function renderNodeRichTextEditor(container, block, onChange) {
   source.addEventListener("select", remember);
   source.addEventListener("keyup", remember);
   source.addEventListener("mouseup", remember);
+  source.addEventListener("keydown", (event) => {
+    if (event.isComposing) return;
+    const matches = (shortcut) => {
+      const parts = shortcut.toLowerCase().split("+").map((part) => part.trim()).filter(Boolean);
+      if (!parts.length) return false;
+      const wantsMod = parts.includes("ctrl") || parts.includes("cmd") || parts.includes("mod");
+      const eventKey = event.key === " " ? "space" : event.key.startsWith("Arrow") ? event.key.slice(5).toLowerCase() : event.key.toLowerCase();
+      return eventKey === parts.at(-1) && (event.ctrlKey || event.metaKey) === wantsMod && event.shiftKey === parts.includes("shift") && event.altKey === parts.includes("alt");
+    };
+    const style = matches(shortcuts.bold) ? "bold" : matches(shortcuts.italic) ? "italic" : matches(shortcuts.underline) ? "underline" : null;
+    if (!style) return;
+    event.preventDefault();
+    event.stopPropagation();
+    remember();
+    applyBoolean(style);
+  }, true);
   source.addEventListener("input", () => {
     const next = source.value.replace(/\r\n?/g, "\n");
     const reconciled = reconcileRichTextAfterEdit(block.text, block.richText, next);
@@ -7983,7 +8075,7 @@ function renderOutlineMode(container, options) {
   root.children.forEach((child) => visit(child, 1));
 }
 function renderOutlineContent(container, node, depth, options) {
-  var _a2, _b2, _c;
+  var _a2, _b2, _c, _d;
   const blocks = nodeContentBlocks(node);
   const additionalText = blocks.filter((block) => block.type === "text").slice(1);
   const images = blocks.filter((block) => block.type === "image");
@@ -8006,10 +8098,10 @@ function renderOutlineContent(container, node, depth, options) {
   }
   for (const block of images) {
     const resolved = options.resolveImage(block.source);
-    const figure = content.createEl("figure", { cls: `mms-outline-image image-align-${(_a2 = block.align) != null ? _a2 : "center"}` });
+    const figure = content.createEl("figure", { cls: `mms-outline-image image-align-${(_a2 = block.align) != null ? _a2 : "center"} image-layout-${(_b2 = block.layout) != null ? _b2 : "block"}` });
     figure.dataset.blockId = block.id;
     if (resolved) {
-      const image = figure.createEl("img", { attr: { src: resolved, alt: (_b2 = block.alt) != null ? _b2 : "\u56FE\u7247", loading: "lazy" } });
+      const image = figure.createEl("img", { attr: { src: resolved, alt: (_c = block.alt) != null ? _c : "\u56FE\u7247", loading: "lazy" } });
       if (block.width) image.style.width = `${block.width}px`;
       if (block.height) image.style.height = `${block.height}px`;
       image.addEventListener("click", () => {
@@ -8036,7 +8128,7 @@ function renderOutlineContent(container, node, depth, options) {
   if (node.table) {
     const tableWrap = content.createDiv({ cls: "mms-outline-table-wrap" });
     const table = tableWrap.createEl("table", { cls: "mms-outline-table" });
-    if ((_c = node.table.columnWidths) == null ? void 0 : _c.length) {
+    if ((_d = node.table.columnWidths) == null ? void 0 : _d.length) {
       table.addClass("has-custom-column-widths");
       const colgroup = table.createEl("colgroup");
       node.table.headers.forEach((_, index) => {
@@ -8057,10 +8149,10 @@ function renderOutlineContent(container, node, depth, options) {
     node.table.rows.forEach((row) => {
       const rowElement = body.createEl("tr");
       node.table.headers.forEach((_, index) => {
-        var _a3, _b3, _c2, _d;
+        var _a3, _b3, _c2, _d2;
         const cell = rowElement.createEl("td");
         renderInlineMarkdown(cell, (_a3 = row[index]) != null ? _a3 : "");
-        cell.style.textAlign = (_d = (_c2 = (_b3 = node.table) == null ? void 0 : _b3.alignments) == null ? void 0 : _c2[index]) != null ? _d : "left";
+        cell.style.textAlign = (_d2 = (_c2 = (_b3 = node.table) == null ? void 0 : _b3.alignments) == null ? void 0 : _c2[index]) != null ? _d2 : "left";
       });
     });
   }
@@ -8307,7 +8399,7 @@ function renderHeading(heading, node, title, options) {
   }
 }
 function renderArticleNodeContent(container, node, treatTextAsBody, options) {
-  var _a2, _b2;
+  var _a2, _b2, _c;
   let firstTextHandled = false;
   for (const block of nodeContentBlocks(node)) {
     if (block.type === "text") {
@@ -8323,8 +8415,9 @@ function renderArticleNodeContent(container, node, treatTextAsBody, options) {
       options.makeInlineEditable(paragraph, node, "\u6B63\u6587", block.id);
     } else if (block.type === "image") {
       const shell = createArticleContentBlock(container, block.id, true);
+      shell.addClass(`image-layout-${(_a2 = block.layout) != null ? _a2 : "block"}`);
       const resolved = options.callbacks.resolveImage(block.source);
-      const image = shell.createEl("img", { cls: `mms-article-image image-align-${(_a2 = block.align) != null ? _a2 : "center"}`, attr: { src: resolved != null ? resolved : block.source, alt: (_b2 = block.alt) != null ? _b2 : "\u56FE\u7247" } });
+      const image = shell.createEl("img", { cls: `mms-article-image image-align-${(_b2 = block.align) != null ? _b2 : "center"}`, attr: { src: resolved != null ? resolved : block.source, alt: (_c = block.alt) != null ? _c : "\u56FE\u7247" } });
       image.dataset.blockId = block.id;
       if (block.width) image.style.width = `${block.width}px`;
       if (block.height) image.style.height = `${block.height}px`;
@@ -9178,8 +9271,9 @@ var NodeEditModal = class extends import_obsidian10.Modal {
    * @param position 编辑器显示在居中弹窗还是右侧画布面板。
    * @param panelHost 右侧面板需要限制在其中的画布元素。
    */
-  constructor(app, node, defaultShape, callbacks, submit, position = "center", panelHost, initialBlockId) {
+  constructor(app, node, defaultShape, callbacks, submit, richTextShortcuts, position = "center", panelHost, initialBlockId) {
     super(app);
+    this.richTextShortcuts = richTextShortcuts;
     this.position = position;
     this.panelHost = panelHost;
     this.initialBlockId = initialBlockId;
@@ -9238,7 +9332,7 @@ var NodeEditModal = class extends import_obsidian10.Modal {
     const renderBlocks2 = () => {
       blocksEl.empty();
       workingBlocks.forEach((block, index) => {
-        var _a3, _b3;
+        var _a3, _b3, _c2;
         const card = blocksEl.createDiv({ cls: `mmc-content-block is-${block.type}` });
         card.dataset.blockId = block.id;
         card.toggleClass("is-targeted", block.id === this.initialBlockId);
@@ -9331,7 +9425,8 @@ var NodeEditModal = class extends import_obsidian10.Modal {
           renderNodeRichTextEditor(
             card.createDiv({ cls: "mmc-content-block-body" }),
             block,
-            scheduleAutoSave
+            scheduleAutoSave,
+            this.richTextShortcuts
           );
         } else if (block.type === "image") {
           const body = card.createDiv({ cls: "mmc-content-block-body mmc-image-block-editor" });
@@ -9370,6 +9465,15 @@ var NodeEditModal = class extends import_obsidian10.Modal {
           };
           addSizeInput("\u663E\u793A\u5BBD\u5EA6\uFF08px\uFF09", "width");
           addSizeInput("\u663E\u793A\u9AD8\u5EA6\uFF08px\uFF09", "height");
+          const layoutLabel = body.createEl("label", { text: "\u56FE\u7247\u6392\u7248" });
+          const layout = layoutLabel.createEl("select");
+          layout.createEl("option", { value: "block", text: "\u72EC\u5360\u4E00\u884C" });
+          layout.createEl("option", { value: "inline", text: "\u4E0E\u76F8\u90BB\u56FE\u7247\u540C\u884C" });
+          layout.value = (_a3 = block.layout) != null ? _a3 : "block";
+          layout.addEventListener("change", () => {
+            block.layout = layout.value === "inline" ? "inline" : void 0;
+            scheduleAutoSave();
+          });
           const alignLabel2 = body.createEl("label", { text: "\u56FE\u7247\u5BF9\u9F50" });
           const align = alignLabel2.createEl("select");
           [
@@ -9377,7 +9481,7 @@ var NodeEditModal = class extends import_obsidian10.Modal {
             ["center", "\u5C45\u4E2D"],
             ["right", "\u53F3\u5BF9\u9F50"]
           ].forEach(([value, label]) => align.createEl("option", { value, text: label }));
-          align.value = (_a3 = block.align) != null ? _a3 : "center";
+          align.value = (_b3 = block.align) != null ? _b3 : "center";
           align.addEventListener("change", () => {
             block.align = align.value === "left" || align.value === "right" ? align.value : void 0;
             scheduleAutoSave();
@@ -9388,6 +9492,7 @@ var NodeEditModal = class extends import_obsidian10.Modal {
               block.source = next;
               block.localSource = void 0;
               block.remoteSources = void 0;
+              block.contentHash = void 0;
             }
             refresh();
             scheduleAutoSave();
@@ -9418,7 +9523,7 @@ var NodeEditModal = class extends import_obsidian10.Modal {
               applyImageAction(uploadCurrentNodeImage(this.app, block, this.callbacks));
             });
           }
-          if ((_b3 = block.remoteSources) == null ? void 0 : _b3.length) {
+          if ((_c2 = block.remoteSources) == null ? void 0 : _c2.length) {
             const mirrors = body.createDiv({ cls: "mms-image-mirrors" });
             mirrors.createSpan({ cls: "mms-image-mirrors-label", text: "\u8FDC\u7A0B\u955C\u50CF\uFF1A" });
             block.remoteSources.forEach((item, mirrorIndex) => {
@@ -12444,7 +12549,7 @@ var MindMapEditor = class {
   }
   /** 将一个已完成布局的导图节点挂载到画布，并绑定其内容、选择、拖放和尺寸交互。 */
   renderMindMapNode(position, appearance, branchColorMap) {
-    var _a2, _b2, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _A, _B, _C, _D, _E, _F, _G;
+    var _a2, _b2, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _A, _B, _C, _D, _E, _F, _G, _H;
     const node = position.node;
     const shape = (_b2 = (_a2 = node.style) == null ? void 0 : _a2.shape) != null ? _b2 : this.options.defaultNodeShape;
     const textAlign = (_e = (_d = (_c = node.style) == null ? void 0 : _c.textAlign) != null ? _d : appearance.nodeTextAlign) != null ? _e : "center";
@@ -12497,10 +12602,10 @@ var MindMapEditor = class {
     let prefixRendered = false;
     for (const block of blocks) {
       if (block.type === "image") {
-        const wrap = content.createDiv({ cls: "mmc-node-image-block" });
-        wrap.addClass(`image-align-${(_x = block.align) != null ? _x : "center"}`);
+        const wrap = content.createDiv({ cls: `mmc-node-image-block image-layout-${(_x = block.layout) != null ? _x : "block"}` });
+        wrap.addClass(`image-align-${(_y = block.align) != null ? _y : "center"}`);
         wrap.dataset.blockId = block.id;
-        const image = wrap.createEl("img", { cls: "mmc-node-image is-loading", attr: { alt: (_y = block.alt) != null ? _y : nodePlainText(node) || "\u56FE\u7247" } });
+        const image = wrap.createEl("img", { cls: "mmc-node-image is-loading", attr: { alt: (_z = block.alt) != null ? _z : nodePlainText(node) || "\u56FE\u7247" } });
         if (block.width) image.style.width = `${block.width}px`;
         if (block.height) image.style.height = `${block.height}px`;
         const candidates = this.options.imageFailoverEnabled ? imageSourceCandidates(block, this.options.imageFailoverUseLocalFallback, this.options.imageHostPriorityIds) : imageSourceCandidates(block, false, this.options.imageHostPriorityIds).slice(0, 1);
@@ -12626,7 +12731,7 @@ var MindMapEditor = class {
       const textEl = main.createDiv({ cls: `mmc-node-text${isSubmapTitle ? " is-submap-link" : ""}` });
       textEl.dataset.blockId = block.id;
       renderRichTextRuns(textEl, block.richText, block.text);
-      textEl.style.fontSize = `${(_B = (_A = (_z = node.style) == null ? void 0 : _z.fontSize) != null ? _A : appearance.fontSize) != null ? _B : 14}px`;
+      textEl.style.fontSize = `${(_C = (_B = (_A = node.style) == null ? void 0 : _A.fontSize) != null ? _B : appearance.fontSize) != null ? _C : 14}px`;
       if (isSubmapTitle) {
         const indicator = textEl.createSpan({ cls: "mmc-submap-inline-indicator", attr: { "aria-hidden": "true" } });
         (0, import_obsidian10.setIcon)(indicator, "arrow-up-right");
@@ -12637,8 +12742,8 @@ var MindMapEditor = class {
       const submapIcon = nodeEl.createEl("button", {
         cls: "mmc-submap-corner-link",
         attr: {
-          "aria-label": `\u6253\u5F00\u5B50\u5BFC\u56FE\uFF1A${(_C = node.submap.title) != null ? _C : node.submap.path}`,
-          title: `\u6253\u5F00\u5B50\u5BFC\u56FE\uFF1A${(_D = node.submap.title) != null ? _D : node.submap.path}`
+          "aria-label": `\u6253\u5F00\u5B50\u5BFC\u56FE\uFF1A${(_D = node.submap.title) != null ? _D : node.submap.path}`,
+          title: `\u6253\u5F00\u5B50\u5BFC\u56FE\uFF1A${(_E = node.submap.title) != null ? _E : node.submap.path}`
         }
       });
       (0, import_obsidian10.setIcon)(submapIcon, "arrow-up-right");
@@ -12651,13 +12756,13 @@ var MindMapEditor = class {
     if (node.submap) {
       nodeEl.setAttr("role", "link");
       nodeEl.setAttr("tabindex", "0");
-      nodeEl.setAttr("aria-label", `\u6253\u5F00\u5B50\u5BFC\u56FE\uFF1A${(_E = node.submap.title) != null ? _E : node.submap.path}`);
+      nodeEl.setAttr("aria-label", `\u6253\u5F00\u5B50\u5BFC\u56FE\uFF1A${(_F = node.submap.title) != null ? _F : node.submap.path}`);
     }
     if (node.table && !blocks.some((block) => block.type === "table")) this.renderNodeTable(content, node, node.table);
     if (node.code && !blocks.some((block) => block.type === "code")) this.renderNodeCode(content, node, node.code);
     this.bindContentBlockAppendDropTarget(nodeEl, node.id);
     if (node.question) this.renderQuestionSummary(content, node);
-    if ((_F = node.tags) == null ? void 0 : _F.length) {
+    if ((_G = node.tags) == null ? void 0 : _G.length) {
       const tags = content.createDiv({ cls: "mmc-node-tags" });
       node.tags.slice(0, 4).forEach((tag) => tags.createSpan({ cls: "mmc-node-tag", text: `#${tag}` }));
     }
@@ -12847,7 +12952,7 @@ var MindMapEditor = class {
       this.clearDropPreview();
       this.nodesLayerEl.querySelectorAll(".is-dragging").forEach((element) => element.removeClass("is-dragging"));
     });
-    (_G = this.resizeObserver) == null ? void 0 : _G.observe(nodeEl);
+    (_H = this.resizeObserver) == null ? void 0 : _H.observe(nodeEl);
   }
   /** 使用当前布局坐标重新绘制全部连接线。 */
   renderMindMapEdges(appearance, branchColorMap) {
@@ -13563,7 +13668,7 @@ var MindMapEditor = class {
       } else if (mode === "commit") {
         this.render();
       }
-    }, this.options.nodeEditorPosition, this.viewportEl, initialBlockId);
+    }, this.options.richTextShortcuts, this.options.nodeEditorPosition, this.viewportEl, initialBlockId);
     modal.open();
     if (this.options.nodeEditorPosition === "right" && this.inlineEditingId === selected.id) {
       modal.releaseKeyboardScope();
@@ -14825,6 +14930,9 @@ var MindMapEditor = class {
     menu.addItem((item) => item.setTitle("\u5C45\u4E2D").setIcon("align-center").onClick(() => this.setImageBlockAlignment(nodeId, blockId, "center")));
     menu.addItem((item) => item.setTitle("\u53F3\u5BF9\u9F50").setIcon("align-right").onClick(() => this.setImageBlockAlignment(nodeId, blockId, "right")));
     menu.addSeparator();
+    menu.addItem((item) => item.setTitle("\u4E0E\u76F8\u90BB\u56FE\u7247\u540C\u884C").setIcon("gallery-horizontal").setChecked(block.layout === "inline").onClick(() => this.setImageBlockLayout(nodeId, blockId, "inline")));
+    menu.addItem((item) => item.setTitle("\u72EC\u5360\u4E00\u884C").setIcon("rows-3").setChecked(block.layout !== "inline").onClick(() => this.setImageBlockLayout(nodeId, blockId, "block")));
+    menu.addSeparator();
     menu.addItem((item) => item.setTitle("\u5C0F\u5C3A\u5BF8\uFF08180px\uFF09").setIcon("image-down").onClick(() => this.setImageBlockWidth(nodeId, blockId, 180)));
     menu.addItem((item) => item.setTitle("\u4E2D\u5C3A\u5BF8\uFF08360px\uFF09").setIcon("image").onClick(() => this.setImageBlockWidth(nodeId, blockId, 360)));
     menu.addItem((item) => item.setTitle("\u5927\u5C3A\u5BF8\uFF08640px\uFF09").setIcon("image-up").onClick(() => this.setImageBlockWidth(nodeId, blockId, 640)));
@@ -14837,7 +14945,7 @@ var MindMapEditor = class {
     menu.addSeparator();
     menu.addItem((item) => item.setTitle("\u590D\u5236\u56FE\u7247\u5730\u5740").setIcon("copy").onClick(() => void this.copyImageSource(block.source)));
     if (!this.readOnly) {
-      menu.addItem((item) => item.setTitle("\u5220\u9664\u5F53\u524D\u5757").setIcon("trash-2").onClick(() => this.removeImageBlock(nodeId, blockId)));
+      menu.addItem((item) => item.setTitle("\u5220\u9664\u5F53\u524D\u5757").setIcon("trash-2").onClick(() => void this.removeImageBlock(nodeId, blockId)));
     }
     menu.showAtMouseEvent(event);
   }
@@ -14858,6 +14966,12 @@ var MindMapEditor = class {
     this.updateImageBlock(nodeId, blockId, (block) => {
       block.width = width;
       block.height = void 0;
+    });
+  }
+  /** Switches one image between inline gallery flow and a dedicated row. */
+  setImageBlockLayout(nodeId, blockId, layout) {
+    this.updateImageBlock(nodeId, blockId, (block) => {
+      block.layout = layout === "inline" ? "inline" : void 0;
     });
   }
   /**
@@ -14944,12 +15058,19 @@ var MindMapEditor = class {
           }
           const batch = await this.callbacks.onUploadImage(image.blob, image.suggestedName, missingHostIds);
           const uploadedAt = (/* @__PURE__ */ new Date()).toISOString();
-          for (const success of batch.successes) existing.set(success.hostId, { ...success, uploadedAt });
+          for (const success of batch.successes) existing.set(success.hostId, {
+            hostId: success.hostId,
+            hostName: success.hostName,
+            url: success.url,
+            deleteKey: success.deleteKey,
+            uploadedAt
+          });
           if (!batch.successes.length) {
             failedImages += 1;
             continue;
           }
           block.remoteSources = Array.from(existing.values());
+          block.contentHash = batch.contentHash;
           if (!/^https?:\/\//i.test(readableSource)) block.localSource = readableSource;
           const selectedPrimary = hostIds.map((hostId) => existing.get(hostId)).find(Boolean);
           if (!batch.failures.length && selectedPrimary) block.source = selectedPrimary.url;
@@ -14985,16 +15106,19 @@ var MindMapEditor = class {
     }
   }
   /** 从节点的有序内容块中移除指定图片。 */
-  removeImageBlock(nodeId, blockId) {
+  async removeImageBlock(nodeId, blockId) {
     const node = findNode(this.document.root, nodeId);
     if (!node || !this.ensureEditable()) return;
     const blocks = nodeContentBlocks(node);
-    if (!blocks.some((block) => block.type === "image" && block.id === blockId)) return;
+    const removed = blocks.find((block) => block.type === "image" && block.id === blockId);
+    if (!removed) return;
+    const removedSnapshot = JSON.parse(JSON.stringify(removed));
     const hadMeaningfulContent = this.nodeHasMeaningfulContent(node);
     this.mutate(() => {
       replaceNodeContentBlocks(node, blocks.filter((block) => block.id !== blockId));
       this.removeNodeAfterContentDeletion(node, hadMeaningfulContent);
     });
+    await this.callbacks.onCleanupRemovedImageRemoteAssets(removedSnapshot, this.getDocument());
   }
   /**
    * 打开context menu，并保持模型、界面和持久化状态的一致性。
@@ -16494,6 +16618,10 @@ var MindMapStudioView = class _MindMapStudioView extends import_obsidian12.TextF
           var _a3, _b3;
           return this.plugin.deleteRecognizedImageLocalAsset((_b3 = (_a3 = this.file) == null ? void 0 : _a3.path) != null ? _b3 : "", localPath, blockId);
         },
+        onCleanupRemovedImageRemoteAssets: async (block, documentAfterRemoval) => {
+          var _a3, _b3;
+          return this.plugin.cleanupRemovedImageRemoteAssets((_b3 = (_a3 = this.file) == null ? void 0 : _a3.path) != null ? _b3 : "", block, documentAfterRemoval);
+        },
         onRecognizeImage: async (image, blob, remoteUrl, instruction) => this.plugin.recognizeImage(image, blob, void 0, instruction, remoteUrl),
         onEnrichQuestion: async (questionText) => this.plugin.enrichQuestion(questionText),
         onCaptureScreenshot: async (recognizeAfter) => this.plugin.captureScreenshot(recognizeAfter),
@@ -17955,6 +18083,13 @@ function parseUploadResponsePayload(json, text) {
     return text;
   }
 }
+async function sha256Blob(blob) {
+  var _a2;
+  const subtle = (_a2 = globalThis.crypto) == null ? void 0 : _a2.subtle;
+  if (!subtle) throw new Error("\u5F53\u524D\u8FD0\u884C\u73AF\u5883\u4E0D\u652F\u6301 SHA-256 \u56FE\u7247\u53BB\u91CD");
+  const digest = await subtle.digest("SHA-256", await blob.arrayBuffer());
+  return Array.from(new Uint8Array(digest), (value) => value.toString(16).padStart(2, "0")).join("");
+}
 function extractImageUrlFromResponse(payload, preferredPaths = []) {
   const paths = Array.from(/* @__PURE__ */ new Set([...preferredPaths.map((item) => item.trim()).filter(Boolean), ...DEFAULT_IMAGE_URL_PATHS]));
   for (const path of paths) {
@@ -17966,6 +18101,19 @@ function extractImageUrlFromResponse(payload, preferredPaths = []) {
     if ((match == null ? void 0 : match[0]) && isHttpUrl(match[0])) return match[0];
   }
   return null;
+}
+function extractResponseString(payload, path) {
+  const normalized2 = path.trim();
+  if (!normalized2) return void 0;
+  const value = readPath(payload, normalized2);
+  if (typeof value === "string") return value.trim() || void 0;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  return void 0;
+}
+function applyImageDeleteTemplate(template, values, mode) {
+  var _a2, _b2;
+  const encode = (value) => mode === "url" ? encodeURIComponent(value) : JSON.stringify(value).slice(1, -1);
+  return template.replaceAll("{url}", encode(values.url)).replaceAll("{hash}", encode((_a2 = values.hash) != null ? _a2 : "")).replaceAll("{deleteKey}", encode((_b2 = values.deleteKey) != null ? _b2 : ""));
 }
 function readPath(value, path) {
   return path.split(".").filter(Boolean).reduce((current, key) => {
@@ -19594,8 +19742,30 @@ var MindMapStudioPlugin = class extends import_obsidian15.Plugin {
       host.fieldName = typeof candidate.fieldName === "string" && candidate.fieldName.trim() ? candidate.fieldName.trim().slice(0, 120) : "file";
       host.headers = typeof candidate.headers === "string" ? candidate.headers.trim().slice(0, 2e4) : "";
       host.responsePath = typeof candidate.responsePath === "string" ? candidate.responsePath.trim().slice(0, 500) : "data.url";
+      host.deleteKeyResponsePath = typeof candidate.deleteKeyResponsePath === "string" ? candidate.deleteKeyResponsePath.trim().slice(0, 500) : "";
+      host.deleteEndpoint = typeof candidate.deleteEndpoint === "string" ? candidate.deleteEndpoint.trim().slice(0, 4e3) : "";
+      host.deleteMethod = candidate.deleteMethod === "POST" ? "POST" : "DELETE";
+      host.deleteHeaders = typeof candidate.deleteHeaders === "string" ? candidate.deleteHeaders.trim().slice(0, 2e4) : "";
+      host.deleteBody = typeof candidate.deleteBody === "string" ? candidate.deleteBody.slice(0, 2e4) : "";
       return [host];
     }) : [];
+    const imageUploadCache = raw.imageUploadCache && typeof raw.imageUploadCache === "object" && !Array.isArray(raw.imageUploadCache) ? Object.fromEntries(Object.entries(raw.imageUploadCache).slice(-1e3).flatMap(([key, value]) => {
+      if (!value || typeof value !== "object") return [];
+      const candidate = value;
+      const hostId = typeof candidate.hostId === "string" ? candidate.hostId.trim().slice(0, 160) : "";
+      const hash = typeof candidate.hash === "string" && /^[0-9a-f]{64}$/i.test(candidate.hash.trim()) ? candidate.hash.trim().toLowerCase() : "";
+      const url = typeof candidate.url === "string" && /^https?:\/\//i.test(candidate.url.trim()) ? candidate.url.trim().slice(0, 4e3) : "";
+      if (!hostId || !hash || !url) return [];
+      return [[key, {
+        hostId,
+        hash,
+        url,
+        hostName: typeof candidate.hostName === "string" && candidate.hostName.trim() ? candidate.hostName.trim().slice(0, 200) : void 0,
+        deleteKey: typeof candidate.deleteKey === "string" && candidate.deleteKey.trim() ? candidate.deleteKey.trim().slice(0, 2e3) : void 0,
+        uploadedAt: typeof candidate.uploadedAt === "string" ? candidate.uploadedAt.slice(0, 80) : void 0,
+        lastUsedAt: typeof candidate.lastUsedAt === "string" ? candidate.lastUsedAt.slice(0, 80) : void 0
+      }]];
+    })) : {};
     const enabledIds = new Set(imageHosts.filter((host) => host.enabled).map((host) => host.id));
     const selectedIds = Array.isArray(raw.autoUploadHostIds) ? raw.autoUploadHostIds.filter((id) => typeof id === "string" && enabledIds.has(id)) : [];
     const hadAiSettings = Array.isArray(raw.aiProfiles);
@@ -19608,10 +19778,12 @@ var MindMapStudioPlugin = class extends import_obsidian15.Plugin {
       ...DEFAULT_SETTINGS,
       ...raw,
       imageHosts,
+      imageUploadCache,
       autoUploadEnabled: raw.autoUploadEnabled === true,
       autoUploadDelaySeconds: typeof raw.autoUploadDelaySeconds === "number" ? Math.max(0, Math.min(120 * 60, Math.round(raw.autoUploadDelaySeconds))) : DEFAULT_SETTINGS.autoUploadDelaySeconds,
       imageRecognitionAutoConfirmDelaySeconds: raw.imageRecognitionAutoConfirmDelaySeconds === 0 || raw.imageRecognitionAutoConfirmDelaySeconds === 5 || raw.imageRecognitionAutoConfirmDelaySeconds === 10 || raw.imageRecognitionAutoConfirmDelaySeconds === 15 ? raw.imageRecognitionAutoConfirmDelaySeconds : null,
       autoUploadHostIds: selectedIds,
+      deleteRemoteWhenUnreferenced: raw.deleteRemoteWhenUnreferenced === true,
       aiProfiles,
       defaultAiProfileId: typeof raw.defaultAiProfileId === "string" && aiProfileIds.has(raw.defaultAiProfileId) ? raw.defaultAiProfileId : (_d = (_c = (_a2 = aiProfiles.find((profile) => profile.enabled)) == null ? void 0 : _a2.id) != null ? _c : (_b2 = aiProfiles[0]) == null ? void 0 : _b2.id) != null ? _d : "",
       aiMaxInputBytes: typeof raw.aiMaxInputBytes === "number" ? Math.max(32 * 1024, Math.min(2 * 1024 * 1024, Math.round(raw.aiMaxInputBytes))) : DEFAULT_SETTINGS.aiMaxInputBytes,
@@ -20438,10 +20610,30 @@ var MindMapStudioPlugin = class extends import_obsidian15.Plugin {
     const requested = Array.from(new Set(hostIds));
     const hosts = requested.map((id) => this.settings.imageHosts.find((host) => host.id === id)).filter((host) => Boolean((host == null ? void 0 : host.enabled) && host.endpoint.trim()));
     if (!hosts.length) throw new Error("\u6CA1\u6709\u9009\u62E9\u53EF\u7528\u56FE\u5E8A");
+    const contentHash = await sha256Blob(blob);
+    let cacheChanged = false;
     const settled = await Promise.all(hosts.map(async (host) => {
       try {
-        const url = await this.uploadImageToHostConfig(host, blob, suggestedName);
-        return { ok: true, value: { hostId: host.id, hostName: host.name, url } };
+        const cacheKey = `${host.id}:${contentHash}`;
+        const cached = this.settings.imageUploadCache[cacheKey];
+        if ((cached == null ? void 0 : cached.url) && /^https?:\/\//i.test(cached.url)) {
+          cached.lastUsedAt = (/* @__PURE__ */ new Date()).toISOString();
+          cacheChanged = true;
+          return { ok: true, value: { hostId: host.id, hostName: host.name, url: cached.url, deleteKey: cached.deleteKey, reused: true } };
+        }
+        const uploaded = await this.uploadImageToHostConfig(host, blob, suggestedName);
+        const now = (/* @__PURE__ */ new Date()).toISOString();
+        this.settings.imageUploadCache[cacheKey] = {
+          hostId: host.id,
+          hostName: host.name,
+          hash: contentHash,
+          url: uploaded.url,
+          deleteKey: uploaded.deleteKey,
+          uploadedAt: now,
+          lastUsedAt: now
+        };
+        cacheChanged = true;
+        return { ok: true, value: { hostId: host.id, hostName: host.name, url: uploaded.url, deleteKey: uploaded.deleteKey } };
       } catch (error) {
         return {
           ok: false,
@@ -20453,9 +20645,21 @@ var MindMapStudioPlugin = class extends import_obsidian15.Plugin {
         };
       }
     }));
+    if (cacheChanged) {
+      const entries = Object.entries(this.settings.imageUploadCache);
+      if (entries.length > 1e3) {
+        entries.sort((left, right) => {
+          var _a2, _b2, _c, _d;
+          return String((_b2 = (_a2 = left[1].lastUsedAt) != null ? _a2 : left[1].uploadedAt) != null ? _b2 : "").localeCompare(String((_d = (_c = right[1].lastUsedAt) != null ? _c : right[1].uploadedAt) != null ? _d : ""));
+        });
+        this.settings.imageUploadCache = Object.fromEntries(entries.slice(entries.length - 1e3));
+      }
+      await this.saveSettings();
+    }
     return {
       successes: settled.filter((item) => item.ok).map((item) => item.value),
-      failures: settled.filter((item) => !item.ok).map((item) => item.value)
+      failures: settled.filter((item) => !item.ok).map((item) => item.value),
+      contentHash
     };
   }
   /**
@@ -20547,10 +20751,10 @@ var MindMapStudioPlugin = class extends import_obsidian15.Plugin {
     ]);
     const started = performance.now();
     try {
-      const url = await this.uploadImageToHostConfig(host, new Blob([png], { type: "image/png" }), "mindmap-studio-api-test.png");
+      const uploaded = await this.uploadImageToHostConfig(host, new Blob([png], { type: "image/png" }), "mindmap-studio-api-test.png");
       const elapsed = Math.max(1, Math.round(performance.now() - started));
       new import_obsidian15.Notice(`${host.name} \u8FDE\u63A5\u6210\u529F\uFF08${elapsed} ms\uFF09
-${url}`, 8e3);
+${uploaded.url}`, 8e3);
     } catch (error) {
       console.error("MindMap Studio image host connectivity test failed", error);
       new import_obsidian15.Notice(`${host.name} \u8FDE\u63A5\u5931\u8D25\uFF1A${error instanceof Error ? error.message : String(error)}`, 8e3);
@@ -20580,6 +20784,62 @@ ${url}`, 8e3);
   async deleteRecognizedImageLocalAsset(mindMapPath, localPath, blockId) {
     if (!mindMapPath || !localPath) return false;
     return this.deleteLocalAssetIfSafe(localPath, mindMapPath, blockId);
+  }
+  /**
+   * Deletes remote mirrors after an image block is removed, but only when no other map references the same SHA-256 or URL.
+   * Hosts without an explicit delete API are never guessed and therefore retain their remote files.
+   */
+  async cleanupRemovedImageRemoteAssets(currentMindMapPath, removed, documentAfterRemoval) {
+    var _a2;
+    if (!this.settings.deleteRemoteWhenUnreferenced || !((_a2 = removed.remoteSources) == null ? void 0 : _a2.length)) return;
+    for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE_MINDMAP_STUDIO)) {
+      if (leaf.view instanceof MindMapStudioView) await leaf.view.save();
+    }
+    if (this.documentReferencesImage(documentAfterRemoval, removed)) return;
+    for (const file of this.app.vault.getFiles()) {
+      if (file.path === currentMindMapPath || file.extension.toLowerCase() !== MINDMAP_EXTENSION) continue;
+      try {
+        const document2 = parseDocument(await this.app.vault.cachedRead(file), file.basename);
+        if (this.documentReferencesImage(document2, removed)) return;
+      } catch (e) {
+        return;
+      }
+    }
+    const deleted = [];
+    const retained = [];
+    const failed = [];
+    for (const remote of removed.remoteSources) {
+      const host = this.settings.imageHosts.find((candidate) => candidate.id === remote.hostId);
+      if (!(host == null ? void 0 : host.deleteEndpoint.trim())) {
+        retained.push(remote.hostName || (host == null ? void 0 : host.name) || remote.hostId);
+        continue;
+      }
+      try {
+        await this.deleteImageFromHostConfig(host, remote.url, removed.contentHash, remote.deleteKey);
+        deleted.push(remote.hostName || host.name);
+        if (removed.contentHash) delete this.settings.imageUploadCache[`${remote.hostId}:${removed.contentHash}`];
+      } catch (error) {
+        console.warn("MindMap Studio remote image deletion failed", error);
+        failed.push(`${remote.hostName || host.name}\uFF1A${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+    if (deleted.length) await this.saveSettings();
+    const parts = [];
+    if (deleted.length) parts.push(`\u5DF2\u540C\u6B65\u5220\u9664\uFF1A${deleted.join("\u3001")}`);
+    if (retained.length) parts.push(`\u672A\u914D\u7F6E\u5220\u9664 API\uFF0C\u8FDC\u7A0B\u56FE\u7247\u4FDD\u7559\uFF1A${retained.join("\u3001")}`);
+    if (failed.length) parts.push(`\u5220\u9664\u5931\u8D25\uFF1A${failed.join("\uFF1B")}`);
+    if (parts.length) new import_obsidian15.Notice(parts.join("\n"), failed.length ? 9e3 : 6e3);
+  }
+  /** Returns whether one document still references an image by SHA-256 or any remote URL. */
+  documentReferencesImage(document2, image) {
+    var _a2;
+    const urls = new Set([image.source, ...((_a2 = image.remoteSources) != null ? _a2 : []).map((source) => source.url)].filter((value) => /^https?:\/\//i.test(value)));
+    return flattenNodes(document2.root).some((node) => nodeContentBlocks(node).some((block) => {
+      var _a3;
+      if (block.type !== "image") return false;
+      if (image.contentHash && block.contentHash === image.contentHash) return true;
+      return urls.has(block.source) || ((_a3 = block.remoteSources) != null ? _a3 : []).some((source) => urls.has(source.url));
+    }));
   }
   /** 根据本地图片文件时间恢复延迟上传；到期图片在重新打开导图后立即上传。 */
   async resumePendingAutoUploads(file, document2) {
@@ -20648,10 +20908,17 @@ ${url}`, 8e3);
       const uploadedAt = (/* @__PURE__ */ new Date()).toISOString();
       const remoteByHost = new Map(((_b2 = block.remoteSources) != null ? _b2 : []).map((item) => [item.hostId, item]));
       for (const success of batch.successes) {
-        remoteByHost.set(success.hostId, { ...success, uploadedAt });
+        remoteByHost.set(success.hostId, {
+          hostId: success.hostId,
+          hostName: success.hostName,
+          url: success.url,
+          deleteKey: success.deleteKey,
+          uploadedAt
+        });
       }
       block.remoteSources = Array.from(remoteByHost.values());
       block.localSource = localPath;
+      block.contentHash = batch.contentHash;
       const allSucceeded = batch.failures.length === 0 && batch.successes.length === hostIds.length;
       if (allSucceeded && batch.successes[0]) block.source = batch.successes[0].url;
       syncNodeContentFields(node);
@@ -20720,7 +20987,22 @@ ${url}`, 8e3);
     const payload = parseUploadResponsePayload(responseJson, response.text);
     const imageUrl = extractImageUrlFromResponse(payload, [host.responsePath]);
     if (!imageUrl) throw new Error("\u8FD4\u56DE\u7ED3\u679C\u4E2D\u6CA1\u6709\u627E\u5230\u56FE\u7247\u7F51\u5740");
-    return imageUrl;
+    return { url: imageUrl, deleteKey: extractResponseString(payload, host.deleteKeyResponsePath) };
+  }
+  /** Calls one explicitly configured image-host deletion API. */
+  async deleteImageFromHostConfig(host, url, hash, deleteKey) {
+    const values = { url, hash, deleteKey };
+    const endpoint = normalizeHttpUrl(applyImageDeleteTemplate(host.deleteEndpoint, values, "url"), "\u5220\u9664 API");
+    const headers = parseUploadHeaders(host.deleteHeaders);
+    const body = host.deleteBody.trim() ? applyImageDeleteTemplate(host.deleteBody, values, "json") : void 0;
+    await (0, import_obsidian15.requestUrl)({
+      url: endpoint,
+      method: host.deleteMethod,
+      headers,
+      contentType: body ? "application/json" : void 0,
+      body,
+      throw: true
+    });
   }
   /**
    * 执行“flush open view”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。

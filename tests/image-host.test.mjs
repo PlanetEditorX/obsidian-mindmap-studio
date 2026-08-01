@@ -76,10 +76,40 @@ test("parseUploadResponsePayload prefers JSON and otherwise parses text", () => 
   assert.equal(imageHost.parseUploadResponsePayload(undefined, ""), undefined);
 });
 
+test("sha256Blob produces a stable content digest for upload deduplication", async () => {
+  const first = await imageHost.sha256Blob(new Blob(["same image bytes"]));
+  const second = await imageHost.sha256Blob(new Blob(["same image bytes"]));
+  const different = await imageHost.sha256Blob(new Blob(["different image bytes"]));
+  assert.match(first, /^[0-9a-f]{64}$/);
+  assert.equal(first, second);
+  assert.notEqual(first, different);
+});
+
 test("extractImageUrlFromResponse honors custom paths and built-in fallbacks", () => {
   assert.equal(imageHost.extractImageUrlFromResponse({ payload: { image: "https://cdn.example/a.png" } }, ["payload.image"]), "https://cdn.example/a.png");
   assert.equal(imageHost.extractImageUrlFromResponse({ data: { url: "http://cdn.example/b.jpg" } }), "http://cdn.example/b.jpg");
   assert.equal(imageHost.extractImageUrlFromResponse({ items: [{ url: "https://cdn.example/c.webp" }] }, ["items.0.url"]), "https://cdn.example/c.webp");
+});
+
+test("delete response values and templates support URL, hash and host tokens", () => {
+  const payload = { data: { delete_key: 42 } };
+  assert.equal(imageHost.extractResponseString(payload, "data.delete_key"), "42");
+  assert.equal(imageHost.extractResponseString(payload, "missing"), undefined);
+  assert.equal(
+    imageHost.applyImageDeleteTemplate("https://api.example/delete/{deleteKey}?url={url}&hash={hash}", {
+      url: "https://cdn.example/a b.png",
+      hash: "abc",
+      deleteKey: "token/1"
+    }, "url"),
+    "https://api.example/delete/token%2F1?url=https%3A%2F%2Fcdn.example%2Fa%20b.png&hash=abc"
+  );
+  assert.equal(
+    imageHost.applyImageDeleteTemplate('{"url":"{url}","key":"{deleteKey}"}', {
+      url: 'https://cdn.example/a"b.png',
+      deleteKey: "token"
+    }, "json"),
+    '{"url":"https://cdn.example/a\\"b.png","key":"token"}'
+  );
 });
 
 test("extractImageUrlFromResponse finds URLs in plain text and rejects non-HTTP values", () => {

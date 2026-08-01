@@ -8,6 +8,7 @@ import type {
   MindMapAppearance,
   MindMapCodeBlock,
   MindMapDocument,
+  MindMapImageContentBlock,
   MindMapNode,
   MindMapSubmap,
   NodeShape
@@ -42,6 +43,8 @@ export interface MindMapEditorCallbacks {
   onReadImageSource: (source: string) => Promise<{ blob: Blob; suggestedName: string } | null>;
   onScheduleAutoUpload: (nodeId: string, blockId: string, localPath: string, suggestedName: string) => boolean;
   onDeleteRecognizedImageLocalAsset: (localPath: string, blockId: string) => Promise<boolean>;
+  /** Removes remote mirrors only when no other map still references the same hash or URL. */
+  onCleanupRemovedImageRemoteAssets: (block: MindMapImageContentBlock, documentAfterRemoval: MindMapDocument) => Promise<void>;
   onRecognizeImage: (image: RecognizableImage, blob: Blob, remoteUrl?: string, instruction?: string) => Promise<ImageRecognitionItemResult>;
   onEnrichQuestion: (questionText: string) => Promise<string>;
   onCaptureScreenshot: (recognizeAfter?: boolean) => Promise<DesktopCaptureResult>;

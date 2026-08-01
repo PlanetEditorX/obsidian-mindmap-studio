@@ -258,6 +258,7 @@ class NodeEditModal extends Modal {
     defaultShape: NodeShape,
     callbacks: Pick<MindMapEditorCallbacks, "resolveImage" | "onSavePastedImage" | "getImageHosts" | "getDefaultUploadHostIds" | "onUploadImage" | "onReadImageSource">,
     submit: (values: NodeEditValues, mode: "autosave" | "commit") => void,
+    private readonly richTextShortcuts: Pick<MindMapEditorOptions["richTextShortcuts"], "bold" | "italic" | "underline">,
     private readonly position: "center" | "right" = "center",
     private readonly panelHost?: HTMLElement,
     private readonly initialBlockId?: string
@@ -394,7 +395,8 @@ class NodeEditModal extends Modal {
           renderNodeRichTextEditor(
             card.createDiv({ cls: "mmc-content-block-body" }),
             block,
-            scheduleAutoSave
+            scheduleAutoSave,
+            this.richTextShortcuts
           );
         } else if (block.type === "image") {
           const body = card.createDiv({ cls: "mmc-content-block-body mmc-image-block-editor" });
@@ -432,6 +434,15 @@ class NodeEditModal extends Modal {
           };
           addSizeInput("显示宽度（px）", "width");
           addSizeInput("显示高度（px）", "height");
+          const layoutLabel = body.createEl("label", { text: "图片排版" });
+          const layout = layoutLabel.createEl("select");
+          layout.createEl("option", { value: "block", text: "独占一行" });
+          layout.createEl("option", { value: "inline", text: "与相邻图片同行" });
+          layout.value = block.layout ?? "block";
+          layout.addEventListener("change", () => {
+            block.layout = layout.value === "inline" ? "inline" : undefined;
+            scheduleAutoSave();
+          });
           const alignLabel = body.createEl("label", { text: "图片对齐" });
           const align = alignLabel.createEl("select");
           ([
@@ -450,6 +461,7 @@ class NodeEditModal extends Modal {
               block.source = next;
               block.localSource = undefined;
               block.remoteSources = undefined;
+              block.contentHash = undefined;
             }
             refresh();
             scheduleAutoSave();
@@ -3787,7 +3799,7 @@ export class MindMapEditor {
     let prefixRendered = false;
     for (const block of blocks) {
       if (block.type === "image") {
-        const wrap = content.createDiv({ cls: "mmc-node-image-block" });
+        const wrap = content.createDiv({ cls: `mmc-node-image-block image-layout-${block.layout ?? "block"}` });
         wrap.addClass(`image-align-${block.align ?? "center"}`);
         wrap.dataset.blockId = block.id;
         const image = wrap.createEl("img", { cls: "mmc-node-image is-loading", attr: { alt: block.alt ?? (nodePlainText(node) || "图片") } });
@@ -4900,7 +4912,7 @@ export class MindMapEditor {
       } else if (mode === "commit") {
         this.render();
       }
-    }, this.options.nodeEditorPosition, this.viewportEl, initialBlockId);
+    }, this.options.richTextShortcuts, this.options.nodeEditorPosition, this.viewportEl, initialBlockId);
     modal.open();
     if (this.options.nodeEditorPosition === "right" && this.inlineEditingId === selected.id) {
       modal.releaseKeyboardScope();
@@ -6239,6 +6251,17 @@ export class MindMapEditor {
     menu.addItem((item) => item.setTitle("居中").setIcon("align-center").onClick(() => this.setImageBlockAlignment(nodeId, blockId, "center")));
     menu.addItem((item) => item.setTitle("右对齐").setIcon("align-right").onClick(() => this.setImageBlockAlignment(nodeId, blockId, "right")));
     menu.addSeparator();
+    menu.addItem((item) => item
+      .setTitle("与相邻图片同行")
+      .setIcon("gallery-horizontal")
+      .setChecked(block.layout === "inline")
+      .onClick(() => this.setImageBlockLayout(nodeId, blockId, "inline")));
+    menu.addItem((item) => item
+      .setTitle("独占一行")
+      .setIcon("rows-3")
+      .setChecked(block.layout !== "inline")
+      .onClick(() => this.setImageBlockLayout(nodeId, blockId, "block")));
+    menu.addSeparator();
     menu.addItem((item) => item.setTitle("小尺寸（180px）").setIcon("image-down").onClick(() => this.setImageBlockWidth(nodeId, blockId, 180)));
     menu.addItem((item) => item.setTitle("中尺寸（360px）").setIcon("image").onClick(() => this.setImageBlockWidth(nodeId, blockId, 360)));
     menu.addItem((item) => item.setTitle("大尺寸（640px）").setIcon("image-up").onClick(() => this.setImageBlockWidth(nodeId, blockId, 640)));
@@ -6254,7 +6277,7 @@ export class MindMapEditor {
     menu.addSeparator();
     menu.addItem((item) => item.setTitle("复制图片地址").setIcon("copy").onClick(() => void this.copyImageSource(block.source)));
     if (!this.readOnly) {
-      menu.addItem((item) => item.setTitle("删除当前块").setIcon("trash-2").onClick(() => this.removeImageBlock(nodeId, blockId)));
+      menu.addItem((item) => item.setTitle("删除当前块").setIcon("trash-2").onClick(() => void this.removeImageBlock(nodeId, blockId)));
     }
     menu.showAtMouseEvent(event);
   }
@@ -6277,6 +6300,13 @@ export class MindMapEditor {
     this.updateImageBlock(nodeId, blockId, (block) => {
       block.width = width;
       block.height = undefined;
+    });
+  }
+
+  /** Switches one image between inline gallery flow and a dedicated row. */
+  private setImageBlockLayout(nodeId: string, blockId: string, layout: "inline" | "block"): void {
+    this.updateImageBlock(nodeId, blockId, (block) => {
+      block.layout = layout === "inline" ? "inline" : undefined;
     });
   }
 
@@ -6369,12 +6399,19 @@ export class MindMapEditor {
           }
           const batch = await this.callbacks.onUploadImage(image.blob, image.suggestedName, missingHostIds);
           const uploadedAt = new Date().toISOString();
-          for (const success of batch.successes) existing.set(success.hostId, { ...success, uploadedAt });
+          for (const success of batch.successes) existing.set(success.hostId, {
+            hostId: success.hostId,
+            hostName: success.hostName,
+            url: success.url,
+            deleteKey: success.deleteKey,
+            uploadedAt
+          });
           if (!batch.successes.length) {
             failedImages += 1;
             continue;
           }
           block.remoteSources = Array.from(existing.values());
+          block.contentHash = batch.contentHash;
           if (!/^https?:\/\//i.test(readableSource)) block.localSource = readableSource;
           const selectedPrimary = hostIds.map((hostId) => existing.get(hostId)).find(Boolean);
           if (!batch.failures.length && selectedPrimary) block.source = selectedPrimary.url;
@@ -6413,16 +6450,19 @@ export class MindMapEditor {
   }
 
   /** 从节点的有序内容块中移除指定图片。 */
-  private removeImageBlock(nodeId: string, blockId: string): void {
+  private async removeImageBlock(nodeId: string, blockId: string): Promise<void> {
     const node = findNode(this.document.root, nodeId);
     if (!node || !this.ensureEditable()) return;
     const blocks = nodeContentBlocks(node);
-    if (!blocks.some((block) => block.type === "image" && block.id === blockId)) return;
+    const removed = blocks.find((block): block is MindMapImageContentBlock => block.type === "image" && block.id === blockId);
+    if (!removed) return;
+    const removedSnapshot = JSON.parse(JSON.stringify(removed)) as MindMapImageContentBlock;
     const hadMeaningfulContent = this.nodeHasMeaningfulContent(node);
     this.mutate(() => {
       replaceNodeContentBlocks(node, blocks.filter((block) => block.id !== blockId));
       this.removeNodeAfterContentDeletion(node, hadMeaningfulContent);
     });
+    await this.callbacks.onCleanupRemovedImageRemoteAssets(removedSnapshot, this.getDocument());
   }
 
   /**

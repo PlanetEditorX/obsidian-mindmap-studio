@@ -183,6 +183,8 @@ export interface MindMapImageRemoteSource {
   hostId: string;
   hostName?: string;
   url: string;
+  /** Optional host-specific deletion token returned by the upload API. */
+  deleteKey?: string;
   uploadedAt?: string;
   lastSuccessAt?: string;
   lastFailureAt?: string;
@@ -214,6 +216,10 @@ export interface MindMapImageContentBlock {
   width?: number;
   /** Optional rendered image height in pixels. Omitted values preserve the image ratio. */
   height?: number;
+  /** Inline images share a row with adjacent inline images; block images occupy their own row. */
+  layout?: "inline" | "block";
+  /** SHA-256 of the original image bytes, used for upload deduplication and safe remote cleanup. */
+  contentHash?: string;
   /** Original local vault path retained until every selected image host succeeds. */
   localSource?: string;
   /** Mirror URLs returned by one or more configured image hosts. */
@@ -873,6 +879,10 @@ function normalizeContentBlock(input: unknown): MindMapContentBlock | null {
     const align = image.align === "left" || image.align === "center" || image.align === "right"
       ? image.align
       : undefined;
+    const layout = image.layout === "inline" ? "inline" : image.layout === "block" ? "block" : undefined;
+    const contentHash = typeof image.contentHash === "string" && /^[0-9a-f]{64}$/i.test(image.contentHash.trim())
+      ? image.contentHash.trim().toLowerCase()
+      : undefined;
     const localSource = typeof image.localSource === "string" && image.localSource.trim()
       ? image.localSource.trim().slice(0, 2000)
       : undefined;
@@ -887,6 +897,7 @@ function normalizeContentBlock(input: unknown): MindMapContentBlock | null {
           hostId,
           hostName: typeof item.hostName === "string" && item.hostName.trim() ? item.hostName.trim().slice(0, 200) : undefined,
           url,
+          deleteKey: typeof item.deleteKey === "string" && item.deleteKey.trim() ? item.deleteKey.trim().slice(0, 2000) : undefined,
           uploadedAt: typeof item.uploadedAt === "string" && item.uploadedAt.trim() ? item.uploadedAt.trim().slice(0, 80) : undefined,
           lastSuccessAt: typeof item.lastSuccessAt === "string" && item.lastSuccessAt.trim() ? item.lastSuccessAt.trim().slice(0, 80) : undefined,
           lastFailureAt: typeof item.lastFailureAt === "string" && item.lastFailureAt.trim() ? item.lastFailureAt.trim().slice(0, 80) : undefined,
@@ -896,7 +907,7 @@ function normalizeContentBlock(input: unknown): MindMapContentBlock | null {
         }];
       })
       : undefined;
-    return { id, type: "image", source, alt, align, width, height, localSource, remoteSources: remoteSources?.length ? remoteSources : undefined };
+    return { id, type: "image", source, alt, align, width, height, layout, contentHash, localSource, remoteSources: remoteSources?.length ? remoteSources : undefined };
   }
   if (candidate.type === "text") {
     const textCandidate = candidate as Partial<MindMapTextContentBlock>;

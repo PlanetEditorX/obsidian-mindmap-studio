@@ -66,6 +66,8 @@ export type ImageHostBodyMode = "multipart" | "raw";
  * ImageHostMethod 类型定义，用于限制可接受值并让序列化数据保持稳定。
  */
 export type ImageHostMethod = "POST" | "PUT";
+/** HTTP methods supported by optional remote image deletion APIs. */
+export type ImageHostDeleteMethod = "DELETE" | "POST";
 
 /** Visual shape used for unnumbered terminal article bullets. */
 export type ArticleLeafBulletStyle = "solid" | "hollow" | "square" | "dash";
@@ -87,6 +89,25 @@ export interface ImageHostConfig {
   fieldName: string;
   headers: string;
   responsePath: string;
+  /** Optional response field containing a deletion token or key. */
+  deleteKeyResponsePath: string;
+  /** Optional endpoint template used to remove a remote image. Supports {url}, {hash}, and {deleteKey}. */
+  deleteEndpoint: string;
+  deleteMethod: ImageHostDeleteMethod;
+  deleteHeaders: string;
+  /** Optional request body template. Placeholders are JSON-escaped before substitution. */
+  deleteBody: string;
+}
+
+/** One persistent SHA-256 upload-cache entry. */
+export interface ImageUploadCacheEntry {
+  hostId: string;
+  hostName?: string;
+  hash: string;
+  url: string;
+  deleteKey?: string;
+  uploadedAt?: string;
+  lastUsedAt?: string;
 }
 
 /**
@@ -104,6 +125,9 @@ export interface ImageHostUploadSuccess {
   hostId: string;
   hostName: string;
   url: string;
+  deleteKey?: string;
+  /** True when the network upload was skipped because the SHA-256 cache already contained this image. */
+  reused?: boolean;
 }
 
 /**
@@ -121,6 +145,7 @@ export interface ImageHostUploadFailure {
 export interface ImageHostUploadBatch {
   successes: ImageHostUploadSuccess[];
   failures: ImageHostUploadFailure[];
+  contentHash: string;
 }
 
 /**
@@ -140,7 +165,12 @@ export function createImageHostConfig(index = 1): ImageHostConfig {
     bodyMode: "multipart",
     fieldName: "file",
     headers: "",
-    responsePath: "data.url"
+    responsePath: "data.url",
+    deleteKeyResponsePath: "",
+    deleteEndpoint: "",
+    deleteMethod: "DELETE",
+    deleteHeaders: "",
+    deleteBody: ""
   };
 }
 
@@ -203,11 +233,14 @@ export interface MindMapStudioSettings {
   codeAutoLineNumbersMinLines: number;
   defaultCodeTheme: "obsidian" | "github" | "monokai" | "dracula";
   imageHosts: ImageHostConfig[];
+  imageUploadCache: Record<string, ImageUploadCacheEntry>;
   autoUploadEnabled: boolean;
   autoUploadDelaySeconds: number;
   imageRecognitionAutoConfirmDelaySeconds: ImageRecognitionAutoConfirmDelaySeconds;
   autoUploadHostIds: string[];
   deleteLocalAfterUpload: boolean;
+  /** Delete remote mirrors only after the last map reference disappears and the host has a delete API. */
+  deleteRemoteWhenUnreferenced: boolean;
   imageFailoverEnabled: boolean;
   imageFailoverTimeoutSeconds: number;
   imageFailoverUseLocalFallback: boolean;
@@ -339,11 +372,13 @@ export const DEFAULT_SETTINGS: MindMapStudioSettings = {
   codeAutoLineNumbersMinLines: 8,
   defaultCodeTheme: "obsidian",
   imageHosts: [],
+  imageUploadCache: {},
   autoUploadEnabled: false,
   autoUploadDelaySeconds: 60,
   imageRecognitionAutoConfirmDelaySeconds: null,
   autoUploadHostIds: [],
   deleteLocalAfterUpload: true,
+  deleteRemoteWhenUnreferenced: false,
   imageFailoverEnabled: true,
   imageFailoverTimeoutSeconds: 8,
   imageFailoverUseLocalFallback: true,
@@ -1544,6 +1579,16 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
             this.plugin.settings.deleteLocalAfterUpload = value;
             await this.plugin.saveSettings();
           }));
+
+      new Setting(containerEl)
+        .setName("最后引用删除时同步清理图床")
+        .setDesc("仅在所有脑图都不再引用同一 SHA-256 图片，并且对应图床已配置删除 API 时执行。未配置删除 API 的远程图片会保留，不会误删。")
+        .addToggle((toggle) => toggle
+          .setValue(this.plugin.settings.deleteRemoteWhenUnreferenced)
+          .onChange(async (value) => {
+            this.plugin.settings.deleteRemoteWhenUnreferenced = value;
+            await this.plugin.saveSettings();
+          }));
     }
 
     const hosts = this.plugin.settings.imageHosts;
@@ -1648,6 +1693,42 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
           .setValue(host.responsePath)
           .setPlaceholder("data.url")
           .onChange(async (value) => { host.responsePath = value.trim(); await this.plugin.saveSettings(); }));
+
+      new Setting(body)
+        .setName("删除令牌字段（可选）")
+        .setDesc("上传响应中用于后续删除的令牌字段，例如 data.delete_key。留空时只使用图片 URL 和哈希。")
+        .addText((text) => text
+          .setValue(host.deleteKeyResponsePath)
+          .setPlaceholder("data.delete_key")
+          .onChange(async (value) => { host.deleteKeyResponsePath = value.trim(); await this.plugin.saveSettings(); }));
+
+      new Setting(body)
+        .setName("删除 API（可选）")
+        .setDesc("支持占位符 {url}、{hash}、{deleteKey}。只有配置后，删除最后一个图片引用时才会请求图床删除远程文件。")
+        .addText((text) => text
+          .setValue(host.deleteEndpoint)
+          .setPlaceholder("https://example.com/api/delete/{deleteKey}")
+          .onChange(async (value) => { host.deleteEndpoint = value.trim(); await this.plugin.saveSettings(); }))
+        .addDropdown((dropdown) => dropdown
+          .addOption("DELETE", "DELETE")
+          .addOption("POST", "POST")
+          .setValue(host.deleteMethod)
+          .onChange(async (value) => { host.deleteMethod = value as ImageHostDeleteMethod; await this.plugin.saveSettings(); }));
+
+      new Setting(body)
+        .setName("删除请求头 JSON")
+        .addTextArea((text) => text
+          .setValue(host.deleteHeaders)
+          .setPlaceholder('{"Authorization":"Bearer ..."}')
+          .onChange(async (value) => { host.deleteHeaders = value.trim(); await this.plugin.saveSettings(); }));
+
+      new Setting(body)
+        .setName("删除请求体（可选）")
+        .setDesc("POST 删除接口可填写 JSON 模板，例如 {\"key\":\"{deleteKey}\"}。DELETE 接口通常留空。")
+        .addTextArea((text) => text
+          .setValue(host.deleteBody)
+          .setPlaceholder('{"url":"{url}","hash":"{hash}"}')
+          .onChange(async (value) => { host.deleteBody = value; await this.plugin.saveSettings(); }));
 
       const isAutoTarget = this.plugin.settings.autoUploadHostIds.includes(host.id);
       new Setting(body)

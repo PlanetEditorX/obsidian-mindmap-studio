@@ -44,7 +44,9 @@ import {
   type ImageHostChoice,
   type ImageHostConfig,
   type ImageHostUploadBatch,
+  type ImageHostUploadFailure,
   type ImageHostUploadSuccess,
+  type ImageUploadCacheEntry,
   type MindMapStudioSettings
 } from "./settings";
 import { renderStaticMindMap, renderStaticSource } from "./render/static-render";
@@ -96,10 +98,13 @@ import {
 } from "./utils/filename";
 import {
   buildMultipartUploadBody,
+  applyImageDeleteTemplate,
+  extractResponseString,
   extractImageUrlFromResponse,
   normalizeHttpUrl,
   parseUploadHeaders,
-  parseUploadResponsePayload
+  parseUploadResponsePayload,
+  sha256Blob
 } from "./utils/image-host";
 import { comparePluginVersions, extractPluginReleaseFiles, parsePluginUpdateManifest, verifyPluginArchiveHash } from "./utils/plugin-update";
 import { copyDesktopMarkdownImagesToDocument } from "./utils/desktop-import";
@@ -516,9 +521,34 @@ export default class MindMapStudioPlugin extends Plugin {
         host.fieldName = typeof candidate.fieldName === "string" && candidate.fieldName.trim() ? candidate.fieldName.trim().slice(0, 120) : "file";
         host.headers = typeof candidate.headers === "string" ? candidate.headers.trim().slice(0, 20000) : "";
         host.responsePath = typeof candidate.responsePath === "string" ? candidate.responsePath.trim().slice(0, 500) : "data.url";
+        host.deleteKeyResponsePath = typeof candidate.deleteKeyResponsePath === "string" ? candidate.deleteKeyResponsePath.trim().slice(0, 500) : "";
+        host.deleteEndpoint = typeof candidate.deleteEndpoint === "string" ? candidate.deleteEndpoint.trim().slice(0, 4000) : "";
+        host.deleteMethod = candidate.deleteMethod === "POST" ? "POST" : "DELETE";
+        host.deleteHeaders = typeof candidate.deleteHeaders === "string" ? candidate.deleteHeaders.trim().slice(0, 20000) : "";
+        host.deleteBody = typeof candidate.deleteBody === "string" ? candidate.deleteBody.slice(0, 20000) : "";
         return [host];
       })
       : [];
+
+    const imageUploadCache = raw.imageUploadCache && typeof raw.imageUploadCache === "object" && !Array.isArray(raw.imageUploadCache)
+      ? Object.fromEntries(Object.entries(raw.imageUploadCache as Record<string, unknown>).slice(-1000).flatMap(([key, value]) => {
+        if (!value || typeof value !== "object") return [];
+        const candidate = value as Partial<ImageUploadCacheEntry>;
+        const hostId = typeof candidate.hostId === "string" ? candidate.hostId.trim().slice(0, 160) : "";
+        const hash = typeof candidate.hash === "string" && /^[0-9a-f]{64}$/i.test(candidate.hash.trim()) ? candidate.hash.trim().toLowerCase() : "";
+        const url = typeof candidate.url === "string" && /^https?:\/\//i.test(candidate.url.trim()) ? candidate.url.trim().slice(0, 4000) : "";
+        if (!hostId || !hash || !url) return [];
+        return [[key, {
+          hostId,
+          hash,
+          url,
+          hostName: typeof candidate.hostName === "string" && candidate.hostName.trim() ? candidate.hostName.trim().slice(0, 200) : undefined,
+          deleteKey: typeof candidate.deleteKey === "string" && candidate.deleteKey.trim() ? candidate.deleteKey.trim().slice(0, 2000) : undefined,
+          uploadedAt: typeof candidate.uploadedAt === "string" ? candidate.uploadedAt.slice(0, 80) : undefined,
+          lastUsedAt: typeof candidate.lastUsedAt === "string" ? candidate.lastUsedAt.slice(0, 80) : undefined
+        } satisfies ImageUploadCacheEntry]];
+      }))
+      : {};
 
     const enabledIds = new Set(imageHosts.filter((host) => host.enabled).map((host) => host.id));
     const selectedIds = Array.isArray(raw.autoUploadHostIds)
@@ -536,6 +566,7 @@ export default class MindMapStudioPlugin extends Plugin {
       ...DEFAULT_SETTINGS,
       ...raw,
       imageHosts,
+      imageUploadCache,
       autoUploadEnabled: raw.autoUploadEnabled === true,
       autoUploadDelaySeconds: typeof raw.autoUploadDelaySeconds === "number"
         ? Math.max(0, Math.min(120 * 60, Math.round(raw.autoUploadDelaySeconds)))
@@ -547,6 +578,7 @@ export default class MindMapStudioPlugin extends Plugin {
         ? raw.imageRecognitionAutoConfirmDelaySeconds
         : null,
       autoUploadHostIds: selectedIds,
+      deleteRemoteWhenUnreferenced: raw.deleteRemoteWhenUnreferenced === true,
       aiProfiles,
       defaultAiProfileId: typeof raw.defaultAiProfileId === "string" && aiProfileIds.has(raw.defaultAiProfileId)
         ? raw.defaultAiProfileId
@@ -1493,10 +1525,33 @@ export default class MindMapStudioPlugin extends Plugin {
       .map((id) => this.settings.imageHosts.find((host) => host.id === id))
       .filter((host): host is ImageHostConfig => Boolean(host?.enabled && host.endpoint.trim()));
     if (!hosts.length) throw new Error("没有选择可用图床");
-    const settled = await Promise.all(hosts.map(async (host) => {
+    const contentHash = await sha256Blob(blob);
+    let cacheChanged = false;
+    const settled = await Promise.all(hosts.map(async (host): Promise<
+      { ok: true; value: ImageHostUploadSuccess }
+      | { ok: false; value: ImageHostUploadFailure }
+    > => {
       try {
-        const url = await this.uploadImageToHostConfig(host, blob, suggestedName);
-        return { ok: true as const, value: { hostId: host.id, hostName: host.name, url } };
+        const cacheKey = `${host.id}:${contentHash}`;
+        const cached = this.settings.imageUploadCache[cacheKey];
+        if (cached?.url && /^https?:\/\//i.test(cached.url)) {
+          cached.lastUsedAt = new Date().toISOString();
+          cacheChanged = true;
+          return { ok: true as const, value: { hostId: host.id, hostName: host.name, url: cached.url, deleteKey: cached.deleteKey, reused: true } };
+        }
+        const uploaded = await this.uploadImageToHostConfig(host, blob, suggestedName);
+        const now = new Date().toISOString();
+        this.settings.imageUploadCache[cacheKey] = {
+          hostId: host.id,
+          hostName: host.name,
+          hash: contentHash,
+          url: uploaded.url,
+          deleteKey: uploaded.deleteKey,
+          uploadedAt: now,
+          lastUsedAt: now
+        };
+        cacheChanged = true;
+        return { ok: true as const, value: { hostId: host.id, hostName: host.name, url: uploaded.url, deleteKey: uploaded.deleteKey } };
       } catch (error) {
         return {
           ok: false as const,
@@ -1508,9 +1563,18 @@ export default class MindMapStudioPlugin extends Plugin {
         };
       }
     }));
+    if (cacheChanged) {
+      const entries = Object.entries(this.settings.imageUploadCache);
+      if (entries.length > 1000) {
+        entries.sort((left, right) => String(left[1].lastUsedAt ?? left[1].uploadedAt ?? "").localeCompare(String(right[1].lastUsedAt ?? right[1].uploadedAt ?? "")));
+        this.settings.imageUploadCache = Object.fromEntries(entries.slice(entries.length - 1000));
+      }
+      await this.saveSettings();
+    }
     return {
       successes: settled.filter((item): item is { ok: true; value: ImageHostUploadSuccess } => item.ok).map((item) => item.value),
-      failures: settled.filter((item): item is { ok: false; value: { hostId: string; hostName: string; error: string } } => !item.ok).map((item) => item.value)
+      failures: settled.filter((item): item is { ok: false; value: ImageHostUploadFailure } => !item.ok).map((item) => item.value),
+      contentHash
     };
   }
 
@@ -1539,9 +1603,9 @@ export default class MindMapStudioPlugin extends Plugin {
     ]);
     const started = performance.now();
     try {
-      const url = await this.uploadImageToHostConfig(host, new Blob([png], { type: "image/png" }), "mindmap-studio-api-test.png");
+      const uploaded = await this.uploadImageToHostConfig(host, new Blob([png], { type: "image/png" }), "mindmap-studio-api-test.png");
       const elapsed = Math.max(1, Math.round(performance.now() - started));
-      new Notice(`${host.name} 连接成功（${elapsed} ms）\n${url}`, 8000);
+      new Notice(`${host.name} 连接成功（${elapsed} ms）\n${uploaded.url}`, 8000);
     } catch (error) {
       console.error("MindMap Studio image host connectivity test failed", error);
       new Notice(`${host.name} 连接失败：${error instanceof Error ? error.message : String(error)}`, 8000);
@@ -1573,6 +1637,67 @@ export default class MindMapStudioPlugin extends Plugin {
   async deleteRecognizedImageLocalAsset(mindMapPath: string, localPath: string, blockId: string): Promise<boolean> {
     if (!mindMapPath || !localPath) return false;
     return this.deleteLocalAssetIfSafe(localPath, mindMapPath, blockId);
+  }
+
+  /**
+   * Deletes remote mirrors after an image block is removed, but only when no other map references the same SHA-256 or URL.
+   * Hosts without an explicit delete API are never guessed and therefore retain their remote files.
+   */
+  async cleanupRemovedImageRemoteAssets(
+    currentMindMapPath: string,
+    removed: MindMapImageContentBlock,
+    documentAfterRemoval: MindMapDocument
+  ): Promise<void> {
+    if (!this.settings.deleteRemoteWhenUnreferenced || !removed.remoteSources?.length) return;
+    for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE_MINDMAP_STUDIO)) {
+      if (leaf.view instanceof MindMapStudioView) await leaf.view.save();
+    }
+    if (this.documentReferencesImage(documentAfterRemoval, removed)) return;
+    for (const file of this.app.vault.getFiles()) {
+      if (file.path === currentMindMapPath || file.extension.toLowerCase() !== MINDMAP_EXTENSION) continue;
+      try {
+        const document = parseDocument(await this.app.vault.cachedRead(file), file.basename);
+        if (this.documentReferencesImage(document, removed)) return;
+      } catch {
+        // An unreadable unrelated map must not make remote deletion unsafe.
+        return;
+      }
+    }
+
+    const deleted: string[] = [];
+    const retained: string[] = [];
+    const failed: string[] = [];
+    for (const remote of removed.remoteSources) {
+      const host = this.settings.imageHosts.find((candidate) => candidate.id === remote.hostId);
+      if (!host?.deleteEndpoint.trim()) {
+        retained.push(remote.hostName || host?.name || remote.hostId);
+        continue;
+      }
+      try {
+        await this.deleteImageFromHostConfig(host, remote.url, removed.contentHash, remote.deleteKey);
+        deleted.push(remote.hostName || host.name);
+        if (removed.contentHash) delete this.settings.imageUploadCache[`${remote.hostId}:${removed.contentHash}`];
+      } catch (error) {
+        console.warn("MindMap Studio remote image deletion failed", error);
+        failed.push(`${remote.hostName || host.name}：${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+    if (deleted.length) await this.saveSettings();
+    const parts: string[] = [];
+    if (deleted.length) parts.push(`已同步删除：${deleted.join("、")}`);
+    if (retained.length) parts.push(`未配置删除 API，远程图片保留：${retained.join("、")}`);
+    if (failed.length) parts.push(`删除失败：${failed.join("；")}`);
+    if (parts.length) new Notice(parts.join("\n"), failed.length ? 9000 : 6000);
+  }
+
+  /** Returns whether one document still references an image by SHA-256 or any remote URL. */
+  private documentReferencesImage(document: MindMapDocument, image: MindMapImageContentBlock): boolean {
+    const urls = new Set([image.source, ...(image.remoteSources ?? []).map((source) => source.url)].filter((value) => /^https?:\/\//i.test(value)));
+    return flattenNodes(document.root).some((node) => nodeContentBlocks(node).some((block) => {
+      if (block.type !== "image") return false;
+      if (image.contentHash && block.contentHash === image.contentHash) return true;
+      return urls.has(block.source) || (block.remoteSources ?? []).some((source) => urls.has(source.url));
+    }));
   }
 
   /** 根据本地图片文件时间恢复延迟上传；到期图片在重新打开导图后立即上传。 */
@@ -1655,10 +1780,17 @@ export default class MindMapStudioPlugin extends Plugin {
       const uploadedAt = new Date().toISOString();
       const remoteByHost = new Map((block.remoteSources ?? []).map((item) => [item.hostId, item]));
       for (const success of batch.successes) {
-        remoteByHost.set(success.hostId, { ...success, uploadedAt });
+        remoteByHost.set(success.hostId, {
+          hostId: success.hostId,
+          hostName: success.hostName,
+          url: success.url,
+          deleteKey: success.deleteKey,
+          uploadedAt
+        });
       }
       block.remoteSources = Array.from(remoteByHost.values());
       block.localSource = localPath;
+      block.contentHash = batch.contentHash;
 
       const allSucceeded = batch.failures.length === 0 && batch.successes.length === hostIds.length;
       if (allSucceeded && batch.successes[0]) block.source = batch.successes[0].url;
@@ -1702,7 +1834,7 @@ export default class MindMapStudioPlugin extends Plugin {
    * @returns 服务端返回的第一个合法 HTTP(S) 图片地址。
    * @throws 配置、请求体或响应格式不合法，以及网络请求失败时抛出错误。
    */
-  private async uploadImageToHostConfig(host: ImageHostConfig, blob: Blob, suggestedName: string): Promise<string> {
+  private async uploadImageToHostConfig(host: ImageHostConfig, blob: Blob, suggestedName: string): Promise<{ url: string; deleteKey?: string }> {
     const endpoint = normalizeHttpUrl(host.endpoint, "上传 API");
     const headers = parseUploadHeaders(host.headers);
     const filename = this.sanitizeFilename(suggestedName || "mindmap-image.png");
@@ -1735,7 +1867,25 @@ export default class MindMapStudioPlugin extends Plugin {
     const payload = parseUploadResponsePayload(responseJson, response.text);
     const imageUrl = extractImageUrlFromResponse(payload, [host.responsePath]);
     if (!imageUrl) throw new Error("返回结果中没有找到图片网址");
-    return imageUrl;
+    return { url: imageUrl, deleteKey: extractResponseString(payload, host.deleteKeyResponsePath) };
+  }
+
+  /** Calls one explicitly configured image-host deletion API. */
+  private async deleteImageFromHostConfig(host: ImageHostConfig, url: string, hash?: string, deleteKey?: string): Promise<void> {
+    const values = { url, hash, deleteKey };
+    const endpoint = normalizeHttpUrl(applyImageDeleteTemplate(host.deleteEndpoint, values, "url"), "删除 API");
+    const headers = parseUploadHeaders(host.deleteHeaders);
+    const body = host.deleteBody.trim()
+      ? applyImageDeleteTemplate(host.deleteBody, values, "json")
+      : undefined;
+    await requestUrl({
+      url: endpoint,
+      method: host.deleteMethod,
+      headers,
+      contentType: body ? "application/json" : undefined,
+      body,
+      throw: true
+    });
   }
 
   /**

@@ -566,7 +566,7 @@
 .mmc-node-content {
   position: relative;
   display: flex;
-  flex-direction: column;
+  flex-flow: row wrap;
   align-items: stretch;
   justify-content: center;
   width: 100%;
@@ -576,6 +576,7 @@
 
 .mmc-node-main {
   display: flex;
+  flex: 0 0 100%;
   align-items: center;
   justify-content: center;
   min-width: 0;
@@ -2217,8 +2218,24 @@
   min-width: 0;
 }
 
+.mmc-node-image-block.image-layout-block {
+  flex: 0 0 100%;
+}
+
+.mmc-node-image-block.image-layout-inline {
+  flex: 0 1 auto;
+  width: auto;
+  max-width: 100%;
+}
+
+.mmc-node-image-block.image-layout-inline .mmc-node-image {
+  width: auto;
+  max-width: min(100%, 220px);
+}
+
 .mmc-node-structured-block-shell {
   position: relative;
+  flex: 0 0 100%;
   width: 100%;
   min-width: 0;
 }
@@ -2398,12 +2415,12 @@
 }
 
 .mmc-image-preview-modal {
-  --modal-width: min(98vw, 1800px);
-  --modal-height: min(94vh, 1080px);
-  width: min(98vw, 1800px) !important;
-  max-width: 98vw !important;
-  height: min(94vh, 1080px) !important;
-  max-height: 94vh !important;
+  --modal-width: min(86vw, 1400px);
+  --modal-height: min(82vh, 900px);
+  width: min(86vw, 1400px) !important;
+  max-width: 86vw !important;
+  height: min(82vh, 900px) !important;
+  max-height: 82vh !important;
 }
 
 .mmc-image-preview-modal .modal-content {
@@ -3409,7 +3426,8 @@
 }
 
 .mms-outline-content {
-  display: grid;
+  display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   margin: 2px 8px 10px 31px;
   padding: 8px 10px;
@@ -3432,6 +3450,12 @@
   max-width: min(100%, 520px);
   margin: 0;
 }
+.mms-outline-image.image-layout-block { flex: 0 0 100%; }
+.mms-outline-image.image-layout-inline { flex: 0 1 auto; }
+.mms-outline-text-block,
+.mms-outline-table-wrap,
+.mms-outline-content > .mms-outline-note,
+.mms-outline-content > .mms-outline-code { flex: 0 0 100%; }
 .mms-outline-image.image-align-left { margin-right: auto; }
 .mms-outline-image.image-align-center { margin-right: auto; margin-left: auto; }
 .mms-outline-image.image-align-right { margin-left: auto; }
@@ -4116,6 +4140,14 @@
   border-radius: var(--radius-m);
   cursor: zoom-in;
 }
+.mms-article-content-block.image-layout-block { display: block; }
+.mms-article-content-block.image-layout-inline {
+  display: inline-block;
+  max-width: 100%;
+  margin-right: 10px;
+  vertical-align: top;
+}
+.mms-article-content-block.image-layout-inline .mms-article-image { margin: 10px 0; }
 .mms-article-image.image-align-left { margin-right: auto; margin-left: 0; }
 .mms-article-image.image-align-center { margin-right: auto; margin-left: auto; }
 .mms-article-image.image-align-right { margin-right: 0; margin-left: auto; }
