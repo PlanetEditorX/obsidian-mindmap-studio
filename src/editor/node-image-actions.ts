@@ -64,6 +64,7 @@ export async function selectNodeImage(
       block.source = path;
       block.localSource = path;
       block.remoteSources = undefined;
+      block.contentHash = undefined;
     } else {
       const batch = await callbacks.onUploadImage(file, file.name, hostIds);
       if (!batch.successes.length) {
@@ -73,7 +74,14 @@ export async function selectNodeImage(
       const uploadedAt = new Date().toISOString();
       block.source = batch.successes[0]!.url;
       block.localSource = undefined;
-      block.remoteSources = batch.successes.map((item) => ({ ...item, uploadedAt }));
+      block.contentHash = batch.contentHash;
+      block.remoteSources = batch.successes.map((item) => ({
+        hostId: item.hostId,
+        hostName: item.hostName,
+        url: item.url,
+        deleteKey: item.deleteKey,
+        uploadedAt
+      }));
       if (batch.failures.length) {
         new Notice(`部分图床上传失败：${batch.failures.map((item) => item.hostName).join("、")}`, 7000);
       } else {
@@ -117,9 +125,16 @@ export async function uploadCurrentNodeImage(
     }
     const uploadedAt = new Date().toISOString();
     const existing = new Map((block.remoteSources ?? []).map((item) => [item.hostId, item]));
-    batch.successes.forEach((item) => existing.set(item.hostId, { ...item, uploadedAt }));
+    batch.successes.forEach((item) => existing.set(item.hostId, {
+      hostId: item.hostId,
+      hostName: item.hostName,
+      url: item.url,
+      deleteKey: item.deleteKey,
+      uploadedAt
+    }));
     block.remoteSources = Array.from(existing.values());
     block.localSource = readableSource;
+    block.contentHash = batch.contentHash;
     if (!batch.failures.length) block.source = batch.successes[0]!.url;
     if (batch.failures.length) {
       new Notice(`部分图床上传失败，本地图片已保留：${batch.failures.map((item) => item.hostName).join("、")}`, 7000);

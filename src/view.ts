@@ -137,6 +137,7 @@ export class MindMapStudioView extends TextFileView {
         onReadImageSource: async (source) => this.plugin.readImageSource(source, this.file),
         onScheduleAutoUpload: (nodeId, blockId, localPath, suggestedName) => this.plugin.scheduleAutoUpload(this.file, nodeId, blockId, localPath, suggestedName),
         onDeleteRecognizedImageLocalAsset: async (localPath, blockId) => this.plugin.deleteRecognizedImageLocalAsset(this.file?.path ?? "", localPath, blockId),
+        onCleanupRemovedImageRemoteAssets: async (block, documentAfterRemoval) => this.plugin.cleanupRemovedImageRemoteAssets(this.file?.path ?? "", block, documentAfterRemoval),
         onRecognizeImage: async (image, blob, remoteUrl, instruction) => this.plugin.recognizeImage(image, blob, undefined, instruction, remoteUrl),
         onEnrichQuestion: async (questionText) => this.plugin.enrichQuestion(questionText),
         onCaptureScreenshot: async (recognizeAfter) => this.plugin.captureScreenshot(recognizeAfter),

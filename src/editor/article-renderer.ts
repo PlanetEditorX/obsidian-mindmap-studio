@@ -299,6 +299,7 @@ export function renderArticleNodeContent(container: HTMLElement, node: MindMapNo
       options.makeInlineEditable(paragraph, node, "正文", block.id);
     } else if (block.type === "image") {
       const shell = createArticleContentBlock(container, block.id, true);
+      shell.addClass(`image-layout-${block.layout ?? "block"}`);
       const resolved = options.callbacks.resolveImage(block.source);
       const image = shell.createEl("img", { cls: `mms-article-image image-align-${block.align ?? "center"}`, attr: { src: resolved ?? block.source, alt: block.alt ?? "图片" } });
       image.dataset.blockId = block.id;

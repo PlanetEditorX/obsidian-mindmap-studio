@@ -133,6 +133,14 @@ export function parseUploadResponsePayload(json: unknown, text: string): unknown
   }
 }
 
+/** Compute the stable lowercase SHA-256 digest of an image blob. */
+export async function sha256Blob(blob: Blob): Promise<string> {
+  const subtle = globalThis.crypto?.subtle;
+  if (!subtle) throw new Error("当前运行环境不支持 SHA-256 图片去重");
+  const digest = await subtle.digest("SHA-256", await blob.arrayBuffer());
+  return Array.from(new Uint8Array(digest), (value) => value.toString(16).padStart(2, "0")).join("");
+}
+
 /**
  * 从图床响应中提取第一个合法的 HTTP(S) 图片地址。
  *
@@ -151,6 +159,31 @@ export function extractImageUrlFromResponse(payload: unknown, preferredPaths: re
     if (match?.[0] && isHttpUrl(match[0])) return match[0];
   }
   return null;
+}
+
+/** Read one optional scalar string from an upload response path. */
+export function extractResponseString(payload: unknown, path: string): string | undefined {
+  const normalized = path.trim();
+  if (!normalized) return undefined;
+  const value = readPath(payload, normalized);
+  if (typeof value === "string") return value.trim() || undefined;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  return undefined;
+}
+
+/** Replace remote-delete placeholders with URL-encoded or JSON-escaped values. */
+export function applyImageDeleteTemplate(
+  template: string,
+  values: { url: string; hash?: string; deleteKey?: string },
+  mode: "url" | "json"
+): string {
+  const encode = (value: string): string => mode === "url"
+    ? encodeURIComponent(value)
+    : JSON.stringify(value).slice(1, -1);
+  return template
+    .replaceAll("{url}", encode(values.url))
+    .replaceAll("{hash}", encode(values.hash ?? ""))
+    .replaceAll("{deleteKey}", encode(values.deleteKey ?? ""));
 }
 
 /**

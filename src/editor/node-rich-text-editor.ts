@@ -23,7 +23,8 @@ import { renderRichTextRuns } from "./rich-text-dom";
 export function renderNodeRichTextEditor(
   container: HTMLElement,
   block: MindMapTextContentBlock,
-  onChange: () => void
+  onChange: () => void,
+  shortcuts: { bold: string; italic: string; underline: string }
 ): void {
   const toolbar = container.createDiv({ cls: "mmc-rich-text-toolbar" });
   const source = container.createEl("textarea", {
@@ -138,6 +139,27 @@ export function renderNodeRichTextEditor(
   source.addEventListener("select", remember);
   source.addEventListener("keyup", remember);
   source.addEventListener("mouseup", remember);
+  source.addEventListener("keydown", (event) => {
+    if (event.isComposing) return;
+    const matches = (shortcut: string): boolean => {
+      const parts = shortcut.toLowerCase().split("+").map((part) => part.trim()).filter(Boolean);
+      if (!parts.length) return false;
+      const wantsMod = parts.includes("ctrl") || parts.includes("cmd") || parts.includes("mod");
+      const eventKey = event.key === " " ? "space" : event.key.startsWith("Arrow") ? event.key.slice(5).toLowerCase() : event.key.toLowerCase();
+      return eventKey === parts.at(-1)
+        && (event.ctrlKey || event.metaKey) === wantsMod
+        && event.shiftKey === parts.includes("shift")
+        && event.altKey === parts.includes("alt");
+    };
+    const style = matches(shortcuts.bold) ? "bold"
+      : matches(shortcuts.italic) ? "italic"
+        : matches(shortcuts.underline) ? "underline" : null;
+    if (!style) return;
+    event.preventDefault();
+    event.stopPropagation();
+    remember();
+    applyBoolean(style);
+  }, true);
   source.addEventListener("input", () => {
     const next = source.value.replace(/\r\n?/g, "\n");
     const reconciled = reconcileRichTextAfterEdit(block.text, block.richText, next);
