@@ -43,6 +43,31 @@ test("normalizeHiddenFileExtensions normalizes and filters file extensions", () 
   assert.deepEqual(result, ["md", "jpg", "png", "txt"]);
 });
 
+test("normalizeHiddenFileExtensions formatting cleanup", () => {
+  const result = filterModule.normalizeHiddenFileExtensions(" ,.Jpg; PnG");
+  assert.deepEqual(result, ["jpg", "png"]);
+});
+
+test("normalizeHiddenFileExtensions handles deduplication and mixed case", () => {
+  const result = filterModule.normalizeHiddenFileExtensions(".md, MD, md, .Md");
+  assert.deepEqual(result, ["md"]);
+});
+
+test("normalizeHiddenFileExtensions handles multiple leading dots", () => {
+  const result = filterModule.normalizeHiddenFileExtensions("..tar, ...txt");
+  assert.deepEqual(result, ["tar", "txt"]);
+});
+
+test("normalizeHiddenFileExtensions ignores invalid patterns and empty strings", () => {
+  const result = filterModule.normalizeHiddenFileExtensions("*.png, ?, .a#b, ,  ");
+  assert.deepEqual(result, []);
+});
+
+test("normalizeHiddenFileExtensions rejects extensions that are too long", () => {
+  const result = filterModule.normalizeHiddenFileExtensions("a".repeat(33)); // 33 characters (limit is 32)
+  assert.deepEqual(result, []);
+});
+
 test("shouldHideFileExplorerPath handles hiding the asset folder", () => {
   const settings = {
     assetFolder: "my/assets/folder",
