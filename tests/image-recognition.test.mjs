@@ -202,13 +202,15 @@ test("screenshot editor provides a visible adjustable overlay and complete toolb
   assert.match(html, /data-shape="ellipse"/);
   const script = html.match(/<script>([\s\S]*)<\/script>/)?.[1] ?? "";
   assert.doesNotThrow(() => new Function(script));
-  for (const label of ["几何图形", "画笔", "箭头", "文字", "序号", "马赛克", "橡皮擦", "识别并复制", "固定", "下载", "取消", "复制"]) {
+  for (const label of ["几何图形", "画笔", "箭头", "文字", "序号", "马赛克", "橡皮擦", "识别并复制", "下载", "取消", "复制"]) {
     assert.match(html, new RegExp(label));
   }
   assert.match(html, /MMS_CAPTURE_ACTION/);
   assert.match(html, /window\.opener/);
   assert.match(html, /window\.parent/);
-  assert.match(captureSource, /DesktopCaptureAction = "copy" \| "recognize-copy" \| "download" \| "pin"/);
+  assert.match(captureSource, /DesktopCaptureAction = "copy" \| "recognize-copy" \| "download"/);
+  assert.doesNotMatch(html, /data-action="pin"|>固定<\/button>/);
+  assert.match(html, /function resetSelection\(\)\{rect=\{x:imageArea\.x,y:imageArea\.y,w:imageArea\.w,h:imageArea\.h\};updateRect\(\)\}/);
   assert.match(settingsSource, /截图并识别快捷键/);
   assert.doesNotMatch(settingsSource, /截图后自动识图/);
   assert.doesNotMatch(editorSource, /screenshotAutoRecognize/);
@@ -218,7 +220,7 @@ test("screenshot editor provides a visible adjustable overlay and complete toolb
 
 
 
-test("Windows capture uses the full virtual desktop with DPI-aware monitor metadata and native pinning", async () => {
+test("Windows capture uses the full virtual desktop with DPI-aware monitor metadata", async () => {
   const captureSource = await readFile("src/utils/desktop-capture.ts", "utf8");
   assert.match(captureSource, /SystemInformation\]::VirtualScreen/);
   assert.match(captureSource, /Screen\]::AllScreens/);
@@ -226,9 +228,6 @@ test("Windows capture uses the full virtual desktop with DPI-aware monitor metad
   assert.match(captureSource, /native virtual-desktop capture/);
   assert.match(captureSource, /data-style-group="shape"/);
   assert.match(captureSource, /openTextEditor/);
-  assert.match(captureSource, /System\.Windows\.Forms\.Form/);
-  assert.match(captureSource, /TopMost = \$true/);
-  assert.match(captureSource, /nodeRuntime\.spawn\("powershell\.exe"/);
 
   const display = desktopCapture.normalizeBrowserDisplay({
     x: -1920,
@@ -252,7 +251,7 @@ test("Windows capture uses the full virtual desktop with DPI-aware monitor metad
 
 
 
-test("screenshot text input, line style, screen labels and native pin startup are runtime-safe", async () => {
+test("screenshot text input, line style, screen labels and full-screen default selection are runtime-safe", async () => {
   const captureSource = await readFile("src/utils/desktop-capture.ts", "utf8");
   const display = desktopCapture.normalizeBrowserDisplay({
     x: -1920,
@@ -276,10 +275,8 @@ test("screenshot text input, line style, screen labels and native pin startup ar
   assert.match(captureSource, /label = "display-\$index"/);
   assert.match(captureSource, /label = "all-displays"/);
   assert.match(captureSource, /writeFile\(scriptPath, "\\uFEFF" \+ script\)/);
-  assert.match(captureSource, /waitForPinnedWindowReady/);
-  assert.match(captureSource, /ReadyPath/);
-  assert.match(captureSource, /Application\]::Run\(\$form\)/);
-  assert.match(captureSource, /ShowInTaskbar = \$true/);
+  assert.match(html, /function resetSelection\(\)\{rect=\{x:imageArea\.x,y:imageArea\.y,w:imageArea\.w,h:imageArea\.h\};updateRect\(\)\}/);
+  assert.doesNotMatch(captureSource, /PinnedCapture|TopMost = \$true|waitForPinnedWindowReady|openPinnedCapture/);
 });
 
 test("manual screenshot never confirms on mouse release and recognition waits for three idle seconds", async () => {

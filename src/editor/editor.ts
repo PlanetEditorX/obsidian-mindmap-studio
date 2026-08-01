@@ -1742,10 +1742,6 @@ export class MindMapEditor {
         new Notice("截图已下载");
         return;
       }
-      if (capture.action === "pin") {
-        new Notice("截图已固定到桌面");
-        return;
-      }
       if (capture.action === "recognize-copy") {
         await this.recognizeCapturedScreenshotToClipboard(capture.blob);
         return;
