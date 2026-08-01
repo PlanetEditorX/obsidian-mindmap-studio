@@ -70,6 +70,7 @@ import { TOOLBAR_ITEMS } from "../settings";
 import { appearanceFromThemePreset, MINDMAP_THEME_PRESETS } from "../themes";
 import { articleNumberLabel, articleTocDepth, buildArticleNodeInfo, DISPLAY_MODE_ICONS, DISPLAY_MODE_LABELS, readingAnchorPart, resolveArticleTocMaxDepth } from "../article/modes";
 import { resolveArticleStyle } from "../article/article-style";
+import type { ArticleRenderCacheSnapshot } from "../article/article-render-cache";
 import {
   createReadingLocation,
   resolveReadingLocation,
@@ -3612,6 +3613,12 @@ export class MindMapEditor {
       articleLeafNumberingThreshold: this.options.articleLeafNumberingThreshold,
       imageHostPriorityIds: this.options.imageHostPriorityIds,
       articleNavigation: this.options.articleNavigation,
+      currentFilePath: this.options.currentFilePath,
+      articleCache: this.options.articleRenderCache,
+      onArticleCacheUpdate: (snapshot: ArticleRenderCacheSnapshot) => {
+        this.options.articleRenderCache = snapshot;
+        this.callbacks.onArticleRenderCacheUpdate(snapshot);
+      },
       callbacks: this.callbacks,
       selectNode: (id: string) => this.selectNode(id),
       openAiContextMenu: (event: MouseEvent, nodeId: string, blockId?: string) => { this.selectNode(nodeId); this.openContextMenu(event, blockId); },

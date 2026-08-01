@@ -28,7 +28,14 @@ import { ImagePreviewModal } from "./editor-modals";
 import { renderInlineMarkdown, renderRichTextRuns } from "./rich-text-dom";
 import { bindTableColumnResize, bindTableDoubleClick } from "./table-interaction";
 import type { ArticleLeafBulletStyle } from "../settings";
-import { loadImageWithFallback } from "./image-failure-view";
+import { clearImageFailureDetails, loadImageWithFallback } from "./image-failure-view";
+import {
+  ARTICLE_RENDER_CACHE_SCHEMA_VERSION,
+  ARTICLE_RENDERER_REVISION,
+  articleCacheFingerprint,
+  type ArticleNodeRenderCacheEntry,
+  type ArticleRenderCacheSnapshot
+} from "../article/article-render-cache";
 
 /** 大型文章分帧挂载时使用的取消与完成回调。 */
 export interface ArticleIncrementalRenderOptions {
@@ -70,6 +77,9 @@ export interface ArticleRendererOptions {
   makeInlineCodeEditable: (element: HTMLElement, node: MindMapNode, code: MindMapCodeBlock, blockId: string) => void;
   addInlineNodeActions: (container: HTMLElement, node: MindMapNode) => void;
   incremental?: ArticleIncrementalRenderOptions;
+  currentFilePath: string;
+  articleCache: ArticleRenderCacheSnapshot | null;
+  onArticleCacheUpdate: (snapshot: ArticleRenderCacheSnapshot) => void;
 }
 
 /** 根据文档文章样式和文章上下文渲染完整文章页。 */
@@ -120,18 +130,61 @@ export function renderArticleMode(container: HTMLElement, options: ArticleRender
     return;
   }
 
+  const presentationFingerprint = articlePresentationFingerprint(options);
+  const previousCache = compatibleArticleCache(options.articleCache, options.currentFilePath, presentationFingerprint);
+  const nextCacheNodes: Record<string, ArticleNodeRenderCacheEntry> = {};
   const sections = new Map<string, HTMLElement>();
+  const infoById = new Map(infos.map((info) => [info.node.id, info]));
+  const fingerprints = new Map<string, string>();
+  const cachedIds = new Set<string>();
+
   for (const info of infos) {
     const section = page.createEl("section", { cls: `mms-article-node is-render-pending depth-${Math.min(info.depth, 8)}` });
     section.dataset.nodeId = info.node.id;
     section.id = info.anchor;
     sections.set(info.node.id, section);
+    const fingerprint = articleNodeFingerprint(info, options);
+    fingerprints.set(info.node.id, fingerprint);
+    const cached = previousCache?.nodes[info.node.id];
+    if (!cached || cached.fingerprint !== fingerprint || !isArticleNodeCacheable(info.node)) continue;
+    if (!restoreCachedArticleSection(section, cached.html, info, options)) continue;
+    cachedIds.add(info.node.id);
+    nextCacheNodes[info.node.id] = cached;
   }
-  const infoById = new Map(infos.map((info) => [info.node.id, info]));
+
   const orderedIds = prioritizeArticleNodeIds(
     infos.map((info) => info.node.id),
     buildHierarchyFocusOrder(options.document.root, options.selectedId)
   );
+  let firstContentRevealed = false;
+  let pagerRendered = false;
+  const firstDocumentNodeId = infos[0]?.node.id;
+  if (infos.length === 0 || (firstDocumentNodeId && cachedIds.has(firstDocumentNodeId))) {
+    if (cachedIds.size === infos.length) {
+      renderArticlePager(page, options);
+      pagerRendered = true;
+    }
+    options.incremental.onFirstContent();
+    firstContentRevealed = true;
+  }
+
+  const complete = (): void => {
+    if (!pagerRendered) renderArticlePager(page, options);
+    const now = Date.now();
+    const snapshot: ArticleRenderCacheSnapshot = {
+      schemaVersion: ARTICLE_RENDER_CACHE_SCHEMA_VERSION,
+      rendererRevision: ARTICLE_RENDERER_REVISION,
+      filePath: options.currentFilePath,
+      documentFingerprint: articleCacheFingerprint(options.document),
+      presentationFingerprint,
+      nodes: nextCacheNodes,
+      updatedAt: now,
+      lastAccessedAt: now
+    };
+    options.onArticleCacheUpdate(snapshot);
+    options.incremental?.onComplete();
+  };
+
   const renderBatch = (startIndex: number): void => {
     if (options.incremental?.isCancelled()) return;
     const startedAt = performance.now();
@@ -143,19 +196,306 @@ export function renderArticleMode(container: HTMLElement, options: ArticleRender
       const nodeId = orderedIds[index]!;
       const info = infoById.get(nodeId);
       const section = sections.get(nodeId);
-      if (info && section) renderArticleNodeSection(section, info, options);
+      if (info && section) {
+        if (cachedIds.has(nodeId)) {
+          hydrateArticleNodeSection(section, info, options);
+        } else {
+          renderArticleNodeSection(section, info, options);
+          if (isArticleNodeCacheable(info.node)) {
+            nextCacheNodes[nodeId] = {
+              fingerprint: fingerprints.get(nodeId) ?? articleNodeFingerprint(info, options),
+              html: snapshotArticleSectionHtml(section)
+            };
+          }
+        }
+      }
       index += 1;
     }
-    if (firstBatch) options.incremental?.onFirstContent();
+    if (!firstContentRevealed && (firstBatch || index >= orderedIds.length)) {
+      options.incremental?.onFirstContent();
+      firstContentRevealed = true;
+    }
     options.incremental?.onProgress();
     if (index < orderedIds.length) {
       window.requestAnimationFrame(() => renderBatch(index));
       return;
     }
-    renderArticlePager(page, options);
-    options.incremental?.onComplete();
+    complete();
   };
+
+  if (!orderedIds.length) {
+    complete();
+    return;
+  }
   renderBatch(0);
+}
+
+/** Returns a cache only when it belongs to the current file and presentation contract. */
+function compatibleArticleCache(
+  snapshot: ArticleRenderCacheSnapshot | null,
+  filePath: string,
+  presentationFingerprint: string
+): ArticleRenderCacheSnapshot | null {
+  if (!snapshot) return null;
+  if (snapshot.schemaVersion !== ARTICLE_RENDER_CACHE_SCHEMA_VERSION) return null;
+  if (snapshot.rendererRevision !== ARTICLE_RENDERER_REVISION) return null;
+  if (snapshot.filePath !== filePath || snapshot.presentationFingerprint !== presentationFingerprint) return null;
+  return snapshot;
+}
+
+/** Presentation changes invalidate snapshots even when node content is unchanged. */
+function articlePresentationFingerprint(options: ArticleRendererOptions): string {
+  return articleCacheFingerprint({
+    rendererRevision: ARTICLE_RENDERER_REVISION,
+    articleBaseDepth: options.articleBaseDepth,
+    readOnly: options.readOnly,
+    showArticleToc: options.showArticleToc,
+    articleTocMaxDepth: options.articleTocMaxDepth,
+    articleLeafBulletsEnabled: options.articleLeafBulletsEnabled,
+    articleLeafBulletColor: options.articleLeafBulletColor,
+    articleLeafBulletStyle: options.articleLeafBulletStyle,
+    articleLeafTextAlignment: options.articleLeafTextAlignment,
+    articleLeafNumberingEnabled: options.articleLeafNumberingEnabled,
+    articleLeafNumberingThreshold: options.articleLeafNumberingThreshold,
+    imageHostPriorityIds: options.imageHostPriorityIds,
+    articleNavigation: options.articleNavigation,
+    articleStyle: options.document.articleStyle,
+    articleLandingMode: options.document.view?.articleLandingMode
+  });
+}
+
+/** A moved, renumbered, restyled, or edited node receives a different fingerprint. */
+function articleNodeFingerprint(
+  info: ReturnType<typeof buildArticleNodeInfo>[number],
+  options: ArticleRendererOptions
+): string {
+  return articleCacheFingerprint({
+    rendererRevision: ARTICLE_RENDERER_REVISION,
+    node: info.node,
+    depth: info.depth,
+    anchor: info.anchor,
+    label: info.label,
+    title: info.title,
+    isHeading: info.isHeading,
+    skipped: info.skipped,
+    numberedLeaf: info.numberedLeaf,
+    readOnly: options.readOnly,
+    leafBullets: options.articleLeafBulletsEnabled,
+    leafBulletColor: options.articleLeafBulletColor,
+    leafBulletStyle: options.articleLeafBulletStyle,
+    leafTextAlignment: options.articleLeafTextAlignment
+  });
+}
+
+/** Code blocks own asynchronous Markdown components, so they are rebuilt instead of persisted as inert HTML. */
+function isArticleNodeCacheable(node: MindMapNode): boolean {
+  return !nodeContentBlocks(node).some((block) => block.type === "code");
+}
+
+/** Restores safe static HTML immediately; interactive behavior is hydrated in a later frame. */
+function restoreCachedArticleSection(
+  section: HTMLElement,
+  html: string,
+  info: ReturnType<typeof buildArticleNodeInfo>[number],
+  options: ArticleRendererOptions
+): boolean {
+  if (!html || /<\s*(script|iframe|object|embed)\b/i.test(html)) return false;
+  section.innerHTML = html;
+  section.querySelectorAll("script,iframe,object,embed").forEach((element) => element.remove());
+  section.querySelectorAll<HTMLElement>("*").forEach((element) => {
+    for (const attribute of Array.from(element.attributes)) {
+      if (/^on/i.test(attribute.name)) element.removeAttribute(attribute.name);
+    }
+  });
+  section.className = `mms-article-node depth-${Math.min(info.depth, 8)}${!options.readOnly && options.selectedId === info.node.id ? " is-selected" : ""}`;
+  section.dataset.nodeId = info.node.id;
+  section.id = info.anchor;
+  return true;
+}
+
+/** Stores only stable generated markup; live actions and edit state are recreated during hydration. */
+function snapshotArticleSectionHtml(section: HTMLElement): string {
+  const clone = section.cloneNode(true) as HTMLElement;
+  clone.querySelectorAll(".mms-inline-node-actions").forEach((element) => element.remove());
+  clone.querySelectorAll<HTMLElement>("*").forEach((element) => {
+    element.removeAttribute("contenteditable");
+    element.removeAttribute("spellcheck");
+    element.removeAttribute("tabindex");
+    for (const attribute of Array.from(element.attributes)) {
+      if (/^on/i.test(attribute.name)) element.removeAttribute(attribute.name);
+    }
+  });
+  clone.querySelectorAll("script,iframe,object,embed").forEach((element) => element.remove());
+  return clone.innerHTML;
+}
+
+/** Binds the current editor instance to one restored static node without rebuilding its visible DOM. */
+function hydrateArticleNodeSection(
+  section: HTMLElement,
+  info: ReturnType<typeof buildArticleNodeInfo>[number],
+  options: ArticleRendererOptions
+): void {
+  section.addEventListener("click", () => {
+    if (!options.isReadOnly()) options.selectNode(info.node.id);
+  });
+  section.addEventListener("contextmenu", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const target = event.target instanceof HTMLElement ? event.target : null;
+    const blockId = target?.closest<HTMLElement>("[data-block-id]")?.dataset.blockId;
+    options.selectNode(info.node.id);
+    options.openAiContextMenu(event, info.node.id, blockId);
+  });
+  if (info.isHeading) {
+    const heading = section.querySelector<HTMLElement>(".mms-article-section-heading");
+    const headingText = heading?.querySelector<HTMLElement>(".mms-article-heading-text");
+    const textBlock = nodeContentBlocks(info.node).find((block): block is MindMapTextContentBlock => block.type === "text");
+    if (headingText) {
+      options.makeInlineEditable(headingText, info.node, "章节标题", textBlock?.id);
+      if (info.node.submap && headingText instanceof HTMLAnchorElement) {
+        headingText.dataset.mmsExplicitEditOnly = "true";
+        headingText.addEventListener("click", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          if (headingText.contentEditable === "true") return;
+          options.selectNode(info.node.id);
+          void options.callbacks.onOpenMindMap(info.node.submap!.path);
+        });
+      }
+    }
+    if (heading) options.addInlineNodeActions(heading, info.node);
+    hydrateArticleNodeContent(section, info.node, false, options);
+    return;
+  }
+
+  const blocks = nodeContentBlocks(info.node);
+  const firstTextBlock = blocks.find((block): block is MindMapTextContentBlock => block.type === "text");
+  if (firstTextBlock) {
+    const paragraph = findBlockElement(section, firstTextBlock.id, "p");
+    if (paragraph) options.makeInlineEditable(paragraph, info.node, "正文段落", firstTextBlock.id);
+  } else if (!options.readOnly && blocks.length === 0) {
+    const paragraph = section.querySelector<HTMLElement>(".mms-article-leaf-text");
+    if (paragraph) options.makeInlineEditable(paragraph, info.node, "正文段落");
+  }
+  options.addInlineNodeActions(section, info.node);
+  hydrateArticleNodeContent(section, info.node, false, options);
+}
+
+/** Rebinds text, image, table, and question interactions inside a restored node. */
+function hydrateArticleNodeContent(
+  container: HTMLElement,
+  node: MindMapNode,
+  treatTextAsBody: boolean,
+  options: ArticleRendererOptions
+): void {
+  let firstTextHandled = false;
+  for (const block of nodeContentBlocks(node)) {
+    if (block.type === "text") {
+      if (!treatTextAsBody && !firstTextHandled) { firstTextHandled = true; continue; }
+      firstTextHandled = true;
+      const paragraph = findBlockElement(container, block.id, "p");
+      if (paragraph) options.makeInlineEditable(paragraph, node, "正文", block.id);
+    } else if (block.type === "image") {
+      const shell = findBlockElement(container, block.id, ".mms-article-content-block");
+      const image = shell?.querySelector<HTMLImageElement>("img.mms-article-image");
+      if (!shell || !image) continue;
+      clearImageFailureDetails(shell);
+      let activeResolved: string | null = null;
+      loadImageWithFallback(
+        image,
+        shell,
+        block,
+        options.imageHostPriorityIds,
+        (source) => options.callbacks.resolveImage(source),
+        (_source, resolved) => { activeResolved = resolved; }
+      );
+      image.addEventListener("click", () => {
+        if (!activeResolved) return;
+        new ImagePreviewModal(
+          options.app,
+          activeResolved,
+          block.alt ?? "图片",
+          imageSourceCandidates(block, true, options.imageHostPriorityIds),
+          (source) => options.callbacks.resolveImage(source)
+        ).open();
+      });
+      shell.addEventListener("contextmenu", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        options.selectNode(node.id);
+        options.openImageContextMenu(event, node.id, block.id);
+      });
+    } else if (block.type === "table") {
+      const wrap = findBlockElement(container, block.id, ".mms-article-table-wrap");
+      if (wrap) hydrateArticleTable(wrap, node, block.table, block.id, options);
+    }
+  }
+  hydrateArticleQuestionDetails(container);
+}
+
+/** Finds the innermost generated element for a block without relying on CSS.escape support. */
+function findBlockElement(container: HTMLElement, blockId: string, selector: string): HTMLElement | null {
+  return Array.from(container.querySelectorAll<HTMLElement>(selector)).find((element) => element.dataset.blockId === blockId) ?? null;
+}
+
+/** Reconnects resize and edit behavior to a table restored from cached HTML. */
+function hydrateArticleTable(
+  wrap: HTMLElement,
+  node: MindMapNode,
+  tableData: MindMapTable,
+  blockId: string,
+  options: ArticleRendererOptions
+): void {
+  const table = wrap.querySelector<HTMLTableElement>("table.mms-article-table");
+  if (!table) return;
+  const columns = Array.from(table.querySelectorAll<HTMLTableColElement>("colgroup col"));
+  const headers = Array.from(table.querySelectorAll<HTMLTableCellElement>("thead th"));
+  const applyWidths = (widths: readonly number[]): void => {
+    table.addClass("has-custom-column-widths");
+    columns.forEach((column, index) => { column.style.width = `${widths[index] ?? 160}px`; });
+    table.style.width = `${widths.reduce((sum, width) => sum + width, 0)}px`;
+  };
+  if (tableData.columnWidths?.length) applyWidths(tableData.columnWidths);
+  bindTableDoubleClick(table, {
+    isReadOnly: options.isReadOnly,
+    isResizeTarget: (target) => target instanceof HTMLElement && Boolean(target.closest(".mms-table-column-resizer")),
+    edit: () => options.editTableBlock(node, tableData, blockId)
+  });
+  headers.forEach((header, index) => {
+    let handle = header.querySelector<HTMLElement>(":scope > .mms-table-column-resizer");
+    if (!handle) {
+      handle = header.createSpan({
+        cls: "mms-table-column-resizer",
+        attr: { role: "separator", title: `拖动调整第 ${index + 1} 列宽度`, "aria-label": `调整第 ${index + 1} 列宽度` }
+      });
+    }
+    handle.addEventListener("dblclick", (event) => event.stopPropagation());
+    bindTableColumnResize(handle, {
+      eventTarget: window,
+      isReadOnly: options.isReadOnly,
+      columnIndex: index,
+      initialWidths: () => headers.map((cell, columnIndex) => tableData.columnWidths?.[columnIndex]
+        ?? Math.max(64, Math.round(cell.getBoundingClientRect().width))),
+      applyWidths,
+      setResizing: (resizing) => wrap.toggleClass("is-resizing-columns", resizing),
+      commitWidths: (widths) => options.updateTableColumnWidths(node, blockId, widths)
+    });
+  });
+}
+
+/** Restores the answer/explanation toggle for cached question panels. */
+function hydrateArticleQuestionDetails(container: HTMLElement): void {
+  container.querySelectorAll<HTMLElement>(".mms-question-panel").forEach((panel) => {
+    const toggle = panel.querySelector<HTMLButtonElement>(".mms-question-toggle");
+    const reveal = panel.querySelector<HTMLElement>(".mms-question-reveal");
+    if (!toggle || !reveal) return;
+    toggle.addEventListener("click", () => {
+      const revealed = !reveal.hasClass("is-revealed");
+      reveal.toggleClass("is-revealed", revealed);
+      toggle.setText(revealed ? "隐藏答案与解析" : "显示答案与解析");
+      toggle.setAttr("aria-expanded", String(revealed));
+    });
+  });
 }
 
 /** 挂载一个文章节点占位区的完整内容和交互。 */

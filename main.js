@@ -5555,7 +5555,7 @@ function readRichTextEditor(editor) {
 // src/editor/editor-modals.ts
 var import_obsidian5 = require("obsidian");
 
-// node_modules/fflate/esm/browser.js
+// ../../../work_env_read/node_modules/fflate/esm/browser.js
 var u8 = Uint8Array;
 var u16 = Uint16Array;
 var i32 = Int32Array;
@@ -8432,9 +8432,197 @@ function bindTableColumnResize(handle, options) {
   }), true);
 }
 
+// src/article/article-render-cache.ts
+var ARTICLE_RENDER_CACHE_SCHEMA_VERSION = 1;
+var ARTICLE_RENDERER_REVISION = "article-node-cache-v1";
+function normalizeArticleCachePath(value) {
+  return value.replace(/\\/g, "/").replace(/\/{2,}/g, "/").replace(/^\.\//, "").replace(/\/$/, "");
+}
+var MAX_CACHE_ENTRIES = 24;
+var MAX_CACHE_CHARACTERS = 12e6;
+var MAX_NODE_HTML_CHARACTERS = 1e6;
+function stableStringify(value) {
+  const seen = /* @__PURE__ */ new WeakSet();
+  const visit = (candidate) => {
+    var _a2;
+    if (candidate === null || typeof candidate !== "object") return (_a2 = JSON.stringify(candidate)) != null ? _a2 : "null";
+    if (seen.has(candidate)) throw new TypeError("Article cache fingerprint cannot serialize cyclic data");
+    seen.add(candidate);
+    if (Array.isArray(candidate)) {
+      const serialized2 = `[${candidate.map((item) => visit(item)).join(",")}]`;
+      seen.delete(candidate);
+      return serialized2;
+    }
+    const record = candidate;
+    const serialized = `{${Object.keys(record).sort().map((key) => `${JSON.stringify(key)}:${visit(record[key])}`).join(",")}}`;
+    seen.delete(candidate);
+    return serialized;
+  };
+  return visit(value);
+}
+function articleCacheFingerprint(value) {
+  const source = typeof value === "string" ? value : stableStringify(value);
+  let first = 2166136261;
+  let second = 2654435769;
+  for (let index = 0; index < source.length; index += 1) {
+    const code = source.charCodeAt(index);
+    first ^= code;
+    first = Math.imul(first, 16777619) >>> 0;
+    second ^= code + index;
+    second = Math.imul(second, 2246822507) >>> 0;
+  }
+  return `${first.toString(16).padStart(8, "0")}${second.toString(16).padStart(8, "0")}`;
+}
+function normalizeArticleRenderCacheSnapshot(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const candidate = value;
+  if (candidate.schemaVersion !== ARTICLE_RENDER_CACHE_SCHEMA_VERSION) return null;
+  if (candidate.rendererRevision !== ARTICLE_RENDERER_REVISION) return null;
+  if (typeof candidate.filePath !== "string" || !candidate.filePath.trim()) return null;
+  if (typeof candidate.documentFingerprint !== "string" || typeof candidate.presentationFingerprint !== "string") return null;
+  if (!candidate.nodes || typeof candidate.nodes !== "object" || Array.isArray(candidate.nodes)) return null;
+  const nodes = {};
+  let totalCharacters = 0;
+  for (const [nodeId, rawEntry] of Object.entries(candidate.nodes)) {
+    if (!nodeId || !rawEntry || typeof rawEntry !== "object" || Array.isArray(rawEntry)) continue;
+    const entry = rawEntry;
+    if (typeof entry.fingerprint !== "string" || typeof entry.html !== "string") continue;
+    if (entry.html.length > MAX_NODE_HTML_CHARACTERS) continue;
+    totalCharacters += entry.html.length;
+    if (totalCharacters > MAX_CACHE_CHARACTERS) return null;
+    nodes[nodeId] = { fingerprint: entry.fingerprint, html: entry.html };
+  }
+  const now = Date.now();
+  return {
+    schemaVersion: ARTICLE_RENDER_CACHE_SCHEMA_VERSION,
+    rendererRevision: ARTICLE_RENDERER_REVISION,
+    filePath: normalizeArticleCachePath(candidate.filePath),
+    documentFingerprint: candidate.documentFingerprint,
+    presentationFingerprint: candidate.presentationFingerprint,
+    nodes,
+    updatedAt: typeof candidate.updatedAt === "number" && Number.isFinite(candidate.updatedAt) ? candidate.updatedAt : now,
+    lastAccessedAt: typeof candidate.lastAccessedAt === "number" && Number.isFinite(candidate.lastAccessedAt) ? candidate.lastAccessedAt : now
+  };
+}
+var ArticleRenderCacheStore = class {
+  /** Creates a bounded cache store backed by one plugin-private JSON file. */
+  constructor(adapter, cacheDirectory, cacheFile) {
+    this.adapter = adapter;
+    this.cacheDirectory = cacheDirectory;
+    this.cacheFile = cacheFile;
+    this.entries = /* @__PURE__ */ new Map();
+    this.persistTimer = null;
+    this.persistChain = Promise.resolve();
+  }
+  /** 从磁盘加载最近使用的缓存，插件注册视图前即可完成。 */
+  async initialize() {
+    try {
+      if (!await this.adapter.exists(this.cacheFile)) return;
+      const parsed = JSON.parse(await this.adapter.read(this.cacheFile));
+      if (parsed.schemaVersion !== ARTICLE_RENDER_CACHE_SCHEMA_VERSION || !Array.isArray(parsed.entries)) return;
+      const snapshots = parsed.entries.map((entry) => normalizeArticleRenderCacheSnapshot(entry)).filter((entry) => Boolean(entry)).sort((left, right) => right.lastAccessedAt - left.lastAccessedAt);
+      let characters = 0;
+      for (const snapshot of snapshots) {
+        const size = this.snapshotCharacters(snapshot);
+        if (this.entries.size >= MAX_CACHE_ENTRIES || characters + size > MAX_CACHE_CHARACTERS) break;
+        this.entries.set(snapshot.filePath, snapshot);
+        characters += size;
+      }
+    } catch (error) {
+      console.warn("MindMap Studio article cache load failed", error);
+      this.entries.clear();
+    }
+  }
+  /** 同步读取内存快照，保证 TextFileView 打开路径不等待磁盘。 */
+  get(filePath) {
+    const normalized2 = normalizeArticleCachePath(filePath);
+    const snapshot = this.entries.get(normalized2);
+    if (!snapshot) return null;
+    snapshot.lastAccessedAt = Date.now();
+    this.entries.delete(normalized2);
+    this.entries.set(normalized2, snapshot);
+    return snapshot;
+  }
+  /** 更新内存并延迟写盘；旧文件节点由新快照自然淘汰。 */
+  put(snapshot) {
+    const normalized2 = normalizeArticleRenderCacheSnapshot(snapshot);
+    if (!normalized2) return;
+    normalized2.lastAccessedAt = Date.now();
+    normalized2.updatedAt = Date.now();
+    this.entries.delete(normalized2.filePath);
+    this.entries.set(normalized2.filePath, normalized2);
+    this.prune();
+    this.schedulePersist();
+  }
+  /** 文件删除时清除缓存。 */
+  remove(filePath) {
+    if (!this.entries.delete(normalizeArticleCachePath(filePath))) return;
+    this.schedulePersist();
+  }
+  /** 文件重命名时迁移缓存键，节点快照本身仍可复用。 */
+  rename(oldPath, newPath) {
+    const oldNormalized = normalizeArticleCachePath(oldPath);
+    const snapshot = this.entries.get(oldNormalized);
+    if (!snapshot) return;
+    this.entries.delete(oldNormalized);
+    snapshot.filePath = normalizeArticleCachePath(newPath);
+    snapshot.lastAccessedAt = Date.now();
+    this.entries.set(snapshot.filePath, snapshot);
+    this.schedulePersist();
+  }
+  /** 插件卸载前立即提交尚未写入的缓存。 */
+  flush() {
+    if (this.persistTimer !== null) {
+      window.clearTimeout(this.persistTimer);
+      this.persistTimer = null;
+    }
+    this.queuePersist();
+    return this.persistChain;
+  }
+  /** Debounces repeated node updates into one disk write. */
+  schedulePersist() {
+    if (this.persistTimer !== null) window.clearTimeout(this.persistTimer);
+    this.persistTimer = window.setTimeout(() => {
+      this.persistTimer = null;
+      this.queuePersist();
+    }, 800);
+  }
+  /** Serializes writes so a slower previous write cannot overwrite a newer snapshot. */
+  queuePersist() {
+    const payload = {
+      schemaVersion: ARTICLE_RENDER_CACHE_SCHEMA_VERSION,
+      entries: Array.from(this.entries.values())
+    };
+    this.persistChain = this.persistChain.catch(() => void 0).then(async () => {
+      if (!await this.adapter.exists(this.cacheDirectory)) await this.adapter.mkdir(this.cacheDirectory);
+      await this.adapter.write(this.cacheFile, JSON.stringify(payload));
+    }).catch((error) => console.warn("MindMap Studio article cache persist failed", error));
+  }
+  /** Applies entry-count and total-character LRU limits. */
+  prune() {
+    while (this.entries.size > MAX_CACHE_ENTRIES) {
+      const oldest = this.entries.keys().next().value;
+      if (!oldest) break;
+      this.entries.delete(oldest);
+    }
+    let total = Array.from(this.entries.values()).reduce((sum, snapshot) => sum + this.snapshotCharacters(snapshot), 0);
+    while (total > MAX_CACHE_CHARACTERS && this.entries.size > 1) {
+      const oldest = this.entries.keys().next().value;
+      if (!oldest) break;
+      const removed = this.entries.get(oldest);
+      this.entries.delete(oldest);
+      if (removed) total -= this.snapshotCharacters(removed);
+    }
+  }
+  /** Estimates one snapshot size without repeatedly serializing the complete cache. */
+  snapshotCharacters(snapshot) {
+    return Object.values(snapshot.nodes).reduce((sum, entry) => sum + entry.html.length + entry.fingerprint.length, 0) + snapshot.filePath.length + snapshot.documentFingerprint.length + snapshot.presentationFingerprint.length + 128;
+  }
+};
+
 // src/editor/article-renderer.ts
 function renderArticleMode(container, options) {
-  var _a2, _b2, _c, _d;
+  var _a2, _b2, _c, _d, _e;
   container.empty();
   const articleStyle = resolveArticleStyle(options.document.articleStyle);
   const page = container.createDiv({ cls: `mms-article-page article-${articleStyle.preset} toc-${(_a2 = articleStyle.tocStyle) != null ? _a2 : "card"}` });
@@ -8476,18 +8664,58 @@ function renderArticleMode(container, options) {
     renderArticlePager(page, options);
     return;
   }
+  const presentationFingerprint = articlePresentationFingerprint(options);
+  const previousCache = compatibleArticleCache(options.articleCache, options.currentFilePath, presentationFingerprint);
+  const nextCacheNodes = {};
   const sections = /* @__PURE__ */ new Map();
+  const infoById = new Map(infos.map((info) => [info.node.id, info]));
+  const fingerprints = /* @__PURE__ */ new Map();
+  const cachedIds = /* @__PURE__ */ new Set();
   for (const info of infos) {
     const section = page.createEl("section", { cls: `mms-article-node is-render-pending depth-${Math.min(info.depth, 8)}` });
     section.dataset.nodeId = info.node.id;
     section.id = info.anchor;
     sections.set(info.node.id, section);
+    const fingerprint = articleNodeFingerprint(info, options);
+    fingerprints.set(info.node.id, fingerprint);
+    const cached = previousCache == null ? void 0 : previousCache.nodes[info.node.id];
+    if (!cached || cached.fingerprint !== fingerprint || !isArticleNodeCacheable(info.node)) continue;
+    if (!restoreCachedArticleSection(section, cached.html, info, options)) continue;
+    cachedIds.add(info.node.id);
+    nextCacheNodes[info.node.id] = cached;
   }
-  const infoById = new Map(infos.map((info) => [info.node.id, info]));
   const orderedIds = prioritizeArticleNodeIds(
     infos.map((info) => info.node.id),
     buildHierarchyFocusOrder(options.document.root, options.selectedId)
   );
+  let firstContentRevealed = false;
+  let pagerRendered = false;
+  const firstDocumentNodeId = (_e = infos[0]) == null ? void 0 : _e.node.id;
+  if (infos.length === 0 || firstDocumentNodeId && cachedIds.has(firstDocumentNodeId)) {
+    if (cachedIds.size === infos.length) {
+      renderArticlePager(page, options);
+      pagerRendered = true;
+    }
+    options.incremental.onFirstContent();
+    firstContentRevealed = true;
+  }
+  const complete = () => {
+    var _a3;
+    if (!pagerRendered) renderArticlePager(page, options);
+    const now = Date.now();
+    const snapshot = {
+      schemaVersion: ARTICLE_RENDER_CACHE_SCHEMA_VERSION,
+      rendererRevision: ARTICLE_RENDERER_REVISION,
+      filePath: options.currentFilePath,
+      documentFingerprint: articleCacheFingerprint(options.document),
+      presentationFingerprint,
+      nodes: nextCacheNodes,
+      updatedAt: now,
+      lastAccessedAt: now
+    };
+    options.onArticleCacheUpdate(snapshot);
+    (_a3 = options.incremental) == null ? void 0 : _a3.onComplete();
+  };
   const renderBatch = (startIndex) => {
     var _a3, _b3, _c2, _d2;
     if ((_a3 = options.incremental) == null ? void 0 : _a3.isCancelled()) return;
@@ -8500,19 +8728,270 @@ function renderArticleMode(container, options) {
       const nodeId = orderedIds[index];
       const info = infoById.get(nodeId);
       const section = sections.get(nodeId);
-      if (info && section) renderArticleNodeSection(section, info, options);
+      if (info && section) {
+        if (cachedIds.has(nodeId)) {
+          hydrateArticleNodeSection(section, info, options);
+        } else {
+          renderArticleNodeSection(section, info, options);
+          if (isArticleNodeCacheable(info.node)) {
+            nextCacheNodes[nodeId] = {
+              fingerprint: (_b3 = fingerprints.get(nodeId)) != null ? _b3 : articleNodeFingerprint(info, options),
+              html: snapshotArticleSectionHtml(section)
+            };
+          }
+        }
+      }
       index += 1;
     }
-    if (firstBatch) (_b3 = options.incremental) == null ? void 0 : _b3.onFirstContent();
-    (_c2 = options.incremental) == null ? void 0 : _c2.onProgress();
+    if (!firstContentRevealed && (firstBatch || index >= orderedIds.length)) {
+      (_c2 = options.incremental) == null ? void 0 : _c2.onFirstContent();
+      firstContentRevealed = true;
+    }
+    (_d2 = options.incremental) == null ? void 0 : _d2.onProgress();
     if (index < orderedIds.length) {
       window.requestAnimationFrame(() => renderBatch(index));
       return;
     }
-    renderArticlePager(page, options);
-    (_d2 = options.incremental) == null ? void 0 : _d2.onComplete();
+    complete();
   };
+  if (!orderedIds.length) {
+    complete();
+    return;
+  }
   renderBatch(0);
+}
+function compatibleArticleCache(snapshot, filePath, presentationFingerprint) {
+  if (!snapshot) return null;
+  if (snapshot.schemaVersion !== ARTICLE_RENDER_CACHE_SCHEMA_VERSION) return null;
+  if (snapshot.rendererRevision !== ARTICLE_RENDERER_REVISION) return null;
+  if (snapshot.filePath !== filePath || snapshot.presentationFingerprint !== presentationFingerprint) return null;
+  return snapshot;
+}
+function articlePresentationFingerprint(options) {
+  var _a2;
+  return articleCacheFingerprint({
+    rendererRevision: ARTICLE_RENDERER_REVISION,
+    articleBaseDepth: options.articleBaseDepth,
+    readOnly: options.readOnly,
+    showArticleToc: options.showArticleToc,
+    articleTocMaxDepth: options.articleTocMaxDepth,
+    articleLeafBulletsEnabled: options.articleLeafBulletsEnabled,
+    articleLeafBulletColor: options.articleLeafBulletColor,
+    articleLeafBulletStyle: options.articleLeafBulletStyle,
+    articleLeafTextAlignment: options.articleLeafTextAlignment,
+    articleLeafNumberingEnabled: options.articleLeafNumberingEnabled,
+    articleLeafNumberingThreshold: options.articleLeafNumberingThreshold,
+    imageHostPriorityIds: options.imageHostPriorityIds,
+    articleNavigation: options.articleNavigation,
+    articleStyle: options.document.articleStyle,
+    articleLandingMode: (_a2 = options.document.view) == null ? void 0 : _a2.articleLandingMode
+  });
+}
+function articleNodeFingerprint(info, options) {
+  return articleCacheFingerprint({
+    rendererRevision: ARTICLE_RENDERER_REVISION,
+    node: info.node,
+    depth: info.depth,
+    anchor: info.anchor,
+    label: info.label,
+    title: info.title,
+    isHeading: info.isHeading,
+    skipped: info.skipped,
+    numberedLeaf: info.numberedLeaf,
+    readOnly: options.readOnly,
+    leafBullets: options.articleLeafBulletsEnabled,
+    leafBulletColor: options.articleLeafBulletColor,
+    leafBulletStyle: options.articleLeafBulletStyle,
+    leafTextAlignment: options.articleLeafTextAlignment
+  });
+}
+function isArticleNodeCacheable(node) {
+  return !nodeContentBlocks(node).some((block) => block.type === "code");
+}
+function restoreCachedArticleSection(section, html, info, options) {
+  if (!html || /<\s*(script|iframe|object|embed)\b/i.test(html)) return false;
+  section.innerHTML = html;
+  section.querySelectorAll("script,iframe,object,embed").forEach((element) => element.remove());
+  section.querySelectorAll("*").forEach((element) => {
+    for (const attribute of Array.from(element.attributes)) {
+      if (/^on/i.test(attribute.name)) element.removeAttribute(attribute.name);
+    }
+  });
+  section.className = `mms-article-node depth-${Math.min(info.depth, 8)}${!options.readOnly && options.selectedId === info.node.id ? " is-selected" : ""}`;
+  section.dataset.nodeId = info.node.id;
+  section.id = info.anchor;
+  return true;
+}
+function snapshotArticleSectionHtml(section) {
+  const clone = section.cloneNode(true);
+  clone.querySelectorAll(".mms-inline-node-actions").forEach((element) => element.remove());
+  clone.querySelectorAll("*").forEach((element) => {
+    element.removeAttribute("contenteditable");
+    element.removeAttribute("spellcheck");
+    element.removeAttribute("tabindex");
+    for (const attribute of Array.from(element.attributes)) {
+      if (/^on/i.test(attribute.name)) element.removeAttribute(attribute.name);
+    }
+  });
+  clone.querySelectorAll("script,iframe,object,embed").forEach((element) => element.remove());
+  return clone.innerHTML;
+}
+function hydrateArticleNodeSection(section, info, options) {
+  section.addEventListener("click", () => {
+    if (!options.isReadOnly()) options.selectNode(info.node.id);
+  });
+  section.addEventListener("contextmenu", (event) => {
+    var _a2;
+    event.preventDefault();
+    event.stopPropagation();
+    const target = event.target instanceof HTMLElement ? event.target : null;
+    const blockId = (_a2 = target == null ? void 0 : target.closest("[data-block-id]")) == null ? void 0 : _a2.dataset.blockId;
+    options.selectNode(info.node.id);
+    options.openAiContextMenu(event, info.node.id, blockId);
+  });
+  if (info.isHeading) {
+    const heading = section.querySelector(".mms-article-section-heading");
+    const headingText = heading == null ? void 0 : heading.querySelector(".mms-article-heading-text");
+    const textBlock = nodeContentBlocks(info.node).find((block) => block.type === "text");
+    if (headingText) {
+      options.makeInlineEditable(headingText, info.node, "\u7AE0\u8282\u6807\u9898", textBlock == null ? void 0 : textBlock.id);
+      if (info.node.submap && headingText instanceof HTMLAnchorElement) {
+        headingText.dataset.mmsExplicitEditOnly = "true";
+        headingText.addEventListener("click", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          if (headingText.contentEditable === "true") return;
+          options.selectNode(info.node.id);
+          void options.callbacks.onOpenMindMap(info.node.submap.path);
+        });
+      }
+    }
+    if (heading) options.addInlineNodeActions(heading, info.node);
+    hydrateArticleNodeContent(section, info.node, false, options);
+    return;
+  }
+  const blocks = nodeContentBlocks(info.node);
+  const firstTextBlock = blocks.find((block) => block.type === "text");
+  if (firstTextBlock) {
+    const paragraph = findBlockElement(section, firstTextBlock.id, "p");
+    if (paragraph) options.makeInlineEditable(paragraph, info.node, "\u6B63\u6587\u6BB5\u843D", firstTextBlock.id);
+  } else if (!options.readOnly && blocks.length === 0) {
+    const paragraph = section.querySelector(".mms-article-leaf-text");
+    if (paragraph) options.makeInlineEditable(paragraph, info.node, "\u6B63\u6587\u6BB5\u843D");
+  }
+  options.addInlineNodeActions(section, info.node);
+  hydrateArticleNodeContent(section, info.node, false, options);
+}
+function hydrateArticleNodeContent(container, node, treatTextAsBody, options) {
+  let firstTextHandled = false;
+  for (const block of nodeContentBlocks(node)) {
+    if (block.type === "text") {
+      if (!treatTextAsBody && !firstTextHandled) {
+        firstTextHandled = true;
+        continue;
+      }
+      firstTextHandled = true;
+      const paragraph = findBlockElement(container, block.id, "p");
+      if (paragraph) options.makeInlineEditable(paragraph, node, "\u6B63\u6587", block.id);
+    } else if (block.type === "image") {
+      const shell = findBlockElement(container, block.id, ".mms-article-content-block");
+      const image = shell == null ? void 0 : shell.querySelector("img.mms-article-image");
+      if (!shell || !image) continue;
+      clearImageFailureDetails(shell);
+      let activeResolved = null;
+      loadImageWithFallback(
+        image,
+        shell,
+        block,
+        options.imageHostPriorityIds,
+        (source) => options.callbacks.resolveImage(source),
+        (_source, resolved) => {
+          activeResolved = resolved;
+        }
+      );
+      image.addEventListener("click", () => {
+        var _a2;
+        if (!activeResolved) return;
+        new ImagePreviewModal(
+          options.app,
+          activeResolved,
+          (_a2 = block.alt) != null ? _a2 : "\u56FE\u7247",
+          imageSourceCandidates(block, true, options.imageHostPriorityIds),
+          (source) => options.callbacks.resolveImage(source)
+        ).open();
+      });
+      shell.addEventListener("contextmenu", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        options.selectNode(node.id);
+        options.openImageContextMenu(event, node.id, block.id);
+      });
+    } else if (block.type === "table") {
+      const wrap = findBlockElement(container, block.id, ".mms-article-table-wrap");
+      if (wrap) hydrateArticleTable(wrap, node, block.table, block.id, options);
+    }
+  }
+  hydrateArticleQuestionDetails(container);
+}
+function findBlockElement(container, blockId, selector) {
+  var _a2;
+  return (_a2 = Array.from(container.querySelectorAll(selector)).find((element) => element.dataset.blockId === blockId)) != null ? _a2 : null;
+}
+function hydrateArticleTable(wrap, node, tableData, blockId, options) {
+  var _a2;
+  const table = wrap.querySelector("table.mms-article-table");
+  if (!table) return;
+  const columns = Array.from(table.querySelectorAll("colgroup col"));
+  const headers = Array.from(table.querySelectorAll("thead th"));
+  const applyWidths = (widths) => {
+    table.addClass("has-custom-column-widths");
+    columns.forEach((column, index) => {
+      var _a3;
+      column.style.width = `${(_a3 = widths[index]) != null ? _a3 : 160}px`;
+    });
+    table.style.width = `${widths.reduce((sum, width) => sum + width, 0)}px`;
+  };
+  if ((_a2 = tableData.columnWidths) == null ? void 0 : _a2.length) applyWidths(tableData.columnWidths);
+  bindTableDoubleClick(table, {
+    isReadOnly: options.isReadOnly,
+    isResizeTarget: (target) => target instanceof HTMLElement && Boolean(target.closest(".mms-table-column-resizer")),
+    edit: () => options.editTableBlock(node, tableData, blockId)
+  });
+  headers.forEach((header, index) => {
+    let handle = header.querySelector(":scope > .mms-table-column-resizer");
+    if (!handle) {
+      handle = header.createSpan({
+        cls: "mms-table-column-resizer",
+        attr: { role: "separator", title: `\u62D6\u52A8\u8C03\u6574\u7B2C ${index + 1} \u5217\u5BBD\u5EA6`, "aria-label": `\u8C03\u6574\u7B2C ${index + 1} \u5217\u5BBD\u5EA6` }
+      });
+    }
+    handle.addEventListener("dblclick", (event) => event.stopPropagation());
+    bindTableColumnResize(handle, {
+      eventTarget: window,
+      isReadOnly: options.isReadOnly,
+      columnIndex: index,
+      initialWidths: () => headers.map((cell, columnIndex) => {
+        var _a3, _b2;
+        return (_b2 = (_a3 = tableData.columnWidths) == null ? void 0 : _a3[columnIndex]) != null ? _b2 : Math.max(64, Math.round(cell.getBoundingClientRect().width));
+      }),
+      applyWidths,
+      setResizing: (resizing) => wrap.toggleClass("is-resizing-columns", resizing),
+      commitWidths: (widths) => options.updateTableColumnWidths(node, blockId, widths)
+    });
+  });
+}
+function hydrateArticleQuestionDetails(container) {
+  container.querySelectorAll(".mms-question-panel").forEach((panel) => {
+    const toggle = panel.querySelector(".mms-question-toggle");
+    const reveal = panel.querySelector(".mms-question-reveal");
+    if (!toggle || !reveal) return;
+    toggle.addEventListener("click", () => {
+      const revealed = !reveal.hasClass("is-revealed");
+      reveal.toggleClass("is-revealed", revealed);
+      toggle.setText(revealed ? "\u9690\u85CF\u7B54\u6848\u4E0E\u89E3\u6790" : "\u663E\u793A\u7B54\u6848\u4E0E\u89E3\u6790");
+      toggle.setAttr("aria-expanded", String(revealed));
+    });
+  });
 }
 function renderArticleNodeSection(section, info, options) {
   section.empty();
@@ -12667,6 +13146,12 @@ var MindMapEditor = class {
       articleLeafNumberingThreshold: this.options.articleLeafNumberingThreshold,
       imageHostPriorityIds: this.options.imageHostPriorityIds,
       articleNavigation: this.options.articleNavigation,
+      currentFilePath: this.options.currentFilePath,
+      articleCache: this.options.articleRenderCache,
+      onArticleCacheUpdate: (snapshot) => {
+        this.options.articleRenderCache = snapshot;
+        this.callbacks.onArticleRenderCacheUpdate(snapshot);
+      },
       callbacks: this.callbacks,
       selectNode: (id) => this.selectNode(id),
       openAiContextMenu: (event, nodeId, blockId) => {
@@ -17106,6 +17591,7 @@ var MindMapStudioView = class _MindMapStudioView extends import_obsidian13.TextF
           this.plugin.settings.readingLocations[path] = location;
           await this.plugin.saveSettings();
         },
+        onArticleRenderCacheUpdate: (snapshot) => this.plugin.updateArticleRenderCache(snapshot),
         onRenderCode: (block, container) => {
           var _a3;
           return renderCodeBlock({
@@ -17364,7 +17850,7 @@ var MindMapStudioView = class _MindMapStudioView extends import_obsidian13.TextF
    * 读取并返回editor options，并保持模型、界面和持久化状态的一致性。
    */
   getEditorOptions(preferCurrentFileLocation = false) {
-    var _a2, _b2, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x;
+    var _a2, _b2, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z;
     return {
       defaultNodeShape: this.plugin.settings.defaultNodeShape,
       defaultAppearance: settingsToAppearance(this.plugin.settings),
@@ -17422,6 +17908,7 @@ var MindMapStudioView = class _MindMapStudioView extends import_obsidian13.TextF
       articleLeafNumberingThreshold: (_x = (_w = (_v = this.document) == null ? void 0 : _v.articleStyle) == null ? void 0 : _w.leafNumberingThreshold) != null ? _x : this.plugin.settings.articleLeafNumberingThreshold,
       showArticleToc: this.showArticleToc,
       articleNavigation: this.articleNavigation,
+      articleRenderCache: this.plugin.getArticleRenderCache((_z = (_y = this.file) == null ? void 0 : _y.path) != null ? _z : ""),
       readingSections: this.readingSections,
       readingProgressPosition: this.plugin.settings.readingProgressPosition,
       returnToTopVisibility: this.plugin.settings.returnToTopVisibility
@@ -19859,6 +20346,13 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
     await this.loadSettings();
     this.installFileExplorerFilter();
     const pluginDir = (_a2 = this.manifest.dir) != null ? _a2 : (0, import_obsidian16.normalizePath)(`${this.app.vault.configDir}/plugins/${this.manifest.id}`);
+    const articleCacheDirectory = (0, import_obsidian16.normalizePath)(`${pluginDir}/cache`);
+    this.articleRenderCache = new ArticleRenderCacheStore(
+      this.app.vault.adapter,
+      articleCacheDirectory,
+      (0, import_obsidian16.normalizePath)(`${articleCacheDirectory}/article-render-cache.json`)
+    );
+    await this.articleRenderCache.initialize();
     this.searchIndex = new MindMapSearchIndex(this.app, (0, import_obsidian16.normalizePath)(`${pluginDir}/mindmap-search-index.json`), MINDMAP_EXTENSION);
     this.searchIndexReady = this.searchIndex.initialize();
     this.registerView(VIEW_TYPE_MINDMAP_STUDIO, (leaf) => new MindMapStudioView(leaf, this));
@@ -19999,13 +20493,21 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
     }));
     this.registerEvent(this.app.vault.on("delete", (file) => {
       this.scheduleFileExplorerFilter();
-      if (file instanceof import_obsidian16.TFile && file.extension.toLowerCase() === MINDMAP_EXTENSION) this.searchIndex.removeFile(file.path);
+      if (file instanceof import_obsidian16.TFile && file.extension.toLowerCase() === MINDMAP_EXTENSION) {
+        this.searchIndex.removeFile(file.path);
+        this.articleRenderCache.remove(file.path);
+      }
     }));
     this.registerEvent(this.app.vault.on("rename", (file, oldPath) => {
       this.scheduleFileExplorerFilter();
       if (file instanceof import_obsidian16.TFile && this.isMindMapFile(file)) void this.renameReadingLocationPathInSettings(oldPath, file.path);
-      if (file instanceof import_obsidian16.TFile && this.isMindMapFile(file)) this.searchIndex.renameFile(file, oldPath);
-      else if (oldPath.toLowerCase().endsWith(`.${MINDMAP_EXTENSION}`)) this.searchIndex.removeFile(oldPath);
+      if (file instanceof import_obsidian16.TFile && this.isMindMapFile(file)) {
+        this.searchIndex.renameFile(file, oldPath);
+        this.articleRenderCache.rename(oldPath, file.path);
+      } else if (oldPath.toLowerCase().endsWith(`.${MINDMAP_EXTENSION}`)) {
+        this.searchIndex.removeFile(oldPath);
+        this.articleRenderCache.remove(oldPath);
+      }
     }));
     this.registerMarkdownCodeBlockProcessor("mindmap", (source, el, ctx) => {
       renderStaticSource(el, source, this.getSourceTitle(ctx), settingsToAppearance(this.settings));
@@ -20020,7 +20522,7 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
    * 执行“onunload”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
    */
   onunload() {
-    var _a2, _b2;
+    var _a2, _b2, _c;
     if (this.fileExplorerFilterTimer !== null) window.clearTimeout(this.fileExplorerFilterTimer);
     (_a2 = this.fileExplorerObserver) == null ? void 0 : _a2.disconnect();
     this.fileExplorerObserver = null;
@@ -20033,7 +20535,16 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
     for (const timer of this.remoteImageDeleteTimers.values()) window.clearTimeout(timer);
     this.remoteImageDeleteTimers.clear();
     (_b2 = this.searchIndex) == null ? void 0 : _b2.destroy();
+    void ((_c = this.articleRenderCache) == null ? void 0 : _c.flush());
     this.app.workspace.detachLeavesOfType(VIEW_TYPE_MINDMAP_STUDIO);
+  }
+  /** Returns the synchronously preloaded article render snapshot for one map. */
+  getArticleRenderCache(filePath) {
+    return filePath ? this.articleRenderCache.get(filePath) : null;
+  }
+  /** Accepts a completed node-level article render snapshot and persists it through the plugin cache store. */
+  updateArticleRenderCache(snapshot) {
+    this.articleRenderCache.put(snapshot);
   }
   /**
    * 打开global search，并保持模型、界面和持久化状态的一致性。

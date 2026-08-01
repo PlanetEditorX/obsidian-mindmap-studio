@@ -114,6 +114,7 @@ import {
 } from "./utils/image-host";
 import { comparePluginVersions, extractPluginReleaseFiles, parsePluginUpdateManifest, verifyPluginArchiveHash } from "./utils/plugin-update";
 import { copyDesktopMarkdownImagesToDocument } from "./utils/desktop-import";
+import { ArticleRenderCacheStore, type ArticleRenderCacheSnapshot } from "./article/article-render-cache";
 
 export const MINDMAP_EXTENSION = "mindmap";
 const PLUGIN_UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/PlanetEditorX/obsidian-mindmap-studio/main/update.json";
@@ -172,6 +173,7 @@ export default class MindMapStudioPlugin extends Plugin {
   private readonly autoUploadFileKeys = new WeakMap<TFile, string>();
   private autoUploadFileKeySequence = 0;
   private searchIndex!: MindMapSearchIndex;
+  private articleRenderCache!: ArticleRenderCacheStore;
   private searchIndexReady: Promise<void> = Promise.resolve();
   private fileExplorerFilterTimer: number | null = null;
   private fileExplorerObserver: MutationObserver | null = null;
@@ -183,6 +185,13 @@ export default class MindMapStudioPlugin extends Plugin {
     await this.loadSettings();
     this.installFileExplorerFilter();
     const pluginDir = this.manifest.dir ?? normalizePath(`${this.app.vault.configDir}/plugins/${this.manifest.id}`);
+    const articleCacheDirectory = normalizePath(`${pluginDir}/cache`);
+    this.articleRenderCache = new ArticleRenderCacheStore(
+      this.app.vault.adapter,
+      articleCacheDirectory,
+      normalizePath(`${articleCacheDirectory}/article-render-cache.json`)
+    );
+    await this.articleRenderCache.initialize();
     this.searchIndex = new MindMapSearchIndex(this.app, normalizePath(`${pluginDir}/mindmap-search-index.json`), MINDMAP_EXTENSION);
     this.searchIndexReady = this.searchIndex.initialize();
 
@@ -331,13 +340,22 @@ export default class MindMapStudioPlugin extends Plugin {
     }));
     this.registerEvent(this.app.vault.on("delete", (file) => {
       this.scheduleFileExplorerFilter();
-      if (file instanceof TFile && file.extension.toLowerCase() === MINDMAP_EXTENSION) this.searchIndex.removeFile(file.path);
+      if (file instanceof TFile && file.extension.toLowerCase() === MINDMAP_EXTENSION) {
+        this.searchIndex.removeFile(file.path);
+        this.articleRenderCache.remove(file.path);
+      }
     }));
     this.registerEvent(this.app.vault.on("rename", (file, oldPath) => {
       this.scheduleFileExplorerFilter();
       if (file instanceof TFile && this.isMindMapFile(file)) void this.renameReadingLocationPathInSettings(oldPath, file.path);
-      if (file instanceof TFile && this.isMindMapFile(file)) this.searchIndex.renameFile(file, oldPath);
-      else if (oldPath.toLowerCase().endsWith(`.${MINDMAP_EXTENSION}`)) this.searchIndex.removeFile(oldPath);
+      if (file instanceof TFile && this.isMindMapFile(file)) {
+        this.searchIndex.renameFile(file, oldPath);
+        this.articleRenderCache.rename(oldPath, file.path);
+      }
+      else if (oldPath.toLowerCase().endsWith(`.${MINDMAP_EXTENSION}`)) {
+        this.searchIndex.removeFile(oldPath);
+        this.articleRenderCache.remove(oldPath);
+      }
     }));
 
     this.registerMarkdownCodeBlockProcessor("mindmap", (source, el, ctx) => {
@@ -366,7 +384,18 @@ export default class MindMapStudioPlugin extends Plugin {
     for (const timer of this.remoteImageDeleteTimers.values()) window.clearTimeout(timer);
     this.remoteImageDeleteTimers.clear();
     this.searchIndex?.destroy();
+    void this.articleRenderCache?.flush();
     this.app.workspace.detachLeavesOfType(VIEW_TYPE_MINDMAP_STUDIO);
+  }
+
+  /** Returns the synchronously preloaded article render snapshot for one map. */
+  getArticleRenderCache(filePath: string): ArticleRenderCacheSnapshot | null {
+    return filePath ? this.articleRenderCache.get(filePath) : null;
+  }
+
+  /** Accepts a completed node-level article render snapshot and persists it through the plugin cache store. */
+  updateArticleRenderCache(snapshot: ArticleRenderCacheSnapshot): void {
+    this.articleRenderCache.put(snapshot);
   }
 
   /**
