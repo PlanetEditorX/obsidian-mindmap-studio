@@ -90,6 +90,31 @@ test("image recognition prompt identifies sequence, node and untrusted image con
   assert.match(prompt, /直接把图片和本提示发送给视觉模型/);
 });
 
+test("normalizeRecognizedText strips Markdown fences consistently", () => {
+  const expected = "Line 1\n\nLine 2";
+
+  // No fences
+  assert.equal(recognition.normalizeRecognizedText("Line 1\n\nLine 2"), expected);
+  assert.equal(recognition.normalizeRecognizedText("  Line 1\n\nLine 2  \n"), expected);
+
+  // Backticks only
+  assert.equal(recognition.normalizeRecognizedText("```\nLine 1\n\nLine 2\n```"), expected);
+  assert.equal(recognition.normalizeRecognizedText("  ```\nLine 1\n\nLine 2\n```  "), expected);
+
+  // With language specifiers
+  assert.equal(recognition.normalizeRecognizedText("```text\nLine 1\n\nLine 2\n```"), expected);
+  assert.equal(recognition.normalizeRecognizedText("```markdown\nLine 1\n\nLine 2\n```"), expected);
+  assert.equal(recognition.normalizeRecognizedText("```md\nLine 1\n\nLine 2\n```"), expected);
+
+  // Mixed case and whitespace
+  assert.equal(recognition.normalizeRecognizedText("```TEXT\nLine 1\n\nLine 2\n```"), expected);
+  assert.equal(recognition.normalizeRecognizedText("```Markdown \nLine 1\n\nLine 2\n```"), expected);
+  assert.equal(recognition.normalizeRecognizedText("\n \t ```md\nLine 1\n\nLine 2\n``` \t \n"), expected);
+
+  // Missing trailing newline before closing fence
+  assert.equal(recognition.normalizeRecognizedText("```text\nLine 1\n\nLine 2```"), expected);
+});
+
 test("image-to-text preview preserves block position and rejects stale replacement", () => {
   const source = structuredClone(document);
   const preview = recognition.previewImageTextReplacement(source, "chapter", "chapter-image-1", " 第一行\n第二行 ");
