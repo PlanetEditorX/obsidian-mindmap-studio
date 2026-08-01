@@ -1,13 +1,13 @@
 /**
  * @file desktop-capture.ts
- * @description 桌面截图覆盖层、选区标注、固定窗口与本机静默抓屏回退。
+ * @description 桌面截图覆盖层、选区标注与本机静默抓屏回退。
  */
 
 /** 截图编辑器的交互模式。 */
 export type DesktopCaptureMode = "capture" | "capture-recognize";
 
 /** 截图编辑器完成后的用户动作。 */
-export type DesktopCaptureAction = "copy" | "recognize-copy" | "download" | "pin";
+export type DesktopCaptureAction = "copy" | "recognize-copy" | "download";
 
 /** 截图完成后返回的图片、动作及建议文件名。 */
 export interface DesktopCaptureResult {
@@ -139,14 +139,6 @@ interface NodeCaptureRuntime {
     options: Record<string, unknown>,
     callback: (error: Error | null) => void
   ) => void;
-  spawn: (
-    command: string,
-    args: string[],
-    options: Record<string, unknown>
-  ) => {
-    unref?: () => void;
-    on?: (event: "error", listener: (error: Error) => void) => void;
-  };
   fs: {
     mkdtemp: (prefix: string) => Promise<string>;
     readFile: (path: string) => Promise<Uint8Array>;
@@ -212,12 +204,12 @@ function getNodeCaptureRuntime(): NodeCaptureRuntime | null {
     ?? (typeof window !== "undefined" ? (window as unknown as { require?: (id: string) => unknown }).require : undefined);
   if (!requireFunction) return null;
   try {
-    const childProcess = requireFunction("node:child_process") as Pick<NodeCaptureRuntime, "execFile" | "spawn">;
+    const childProcess = requireFunction("node:child_process") as Pick<NodeCaptureRuntime, "execFile">;
     const processModule = requireFunction("node:process") as { platform: string };
     const fs = requireFunction("node:fs/promises") as NodeCaptureRuntime["fs"];
     const os = requireFunction("node:os") as NodeCaptureRuntime["os"];
     const path = requireFunction("node:path") as NodeCaptureRuntime["path"];
-    return { platform: processModule.platform, execFile: childProcess.execFile, spawn: childProcess.spawn, fs, os, path };
+    return { platform: processModule.platform, execFile: childProcess.execFile, fs, os, path };
   } catch {
     return null;
   }
@@ -330,15 +322,6 @@ function getBrowserDisplay(): ElectronDisplay {
   });
 }
 
-/** 将 PNG 二进制编码为可安全传给独立覆盖层的 data URL。 */
-function pngBytesToDataUrl(bytes: Uint8Array): string {
-  const requireFunction = (globalThis as unknown as { require?: (id: string) => unknown }).require
-    ?? (typeof window !== "undefined" ? (window as unknown as { require?: (id: string) => unknown }).require : undefined);
-  if (!requireFunction) throw new Error("当前桌面运行时无法编码截图");
-  const buffer = requireFunction("node:buffer") as { Buffer: { from: (value: Uint8Array) => { toString: (encoding: "base64") => string } } };
-  return `data:image/png;base64,${buffer.Buffer.from(bytes).toString("base64")}`;
-}
-
 /** 生成截图覆盖层页面；普通截图双击确认，截图并识别按三秒空闲计时确认。 */
 export function captureEditorHtml(display: ElectronDisplay, mode: DesktopCaptureMode, imageDataUrl = "screen.png", messageToken = "test-token"): string {
   const bounds = JSON.stringify(display.bounds);
@@ -375,7 +358,7 @@ export function captureEditorHtml(display: ElectronDisplay, mode: DesktopCapture
 <div id="drawLayer"></div>
 <div id="toolbar" class="toolbar">
 <button data-tool="shape">几何图形</button><button data-tool="pen">画笔</button><button data-tool="arrow">箭头</button><button data-tool="text">文字</button><button data-tool="number">序号</button><button data-tool="mosaic">马赛克</button><button data-tool="eraser">橡皮擦</button><span class="sep"></span>
-<button data-action="recognize-copy">识别并复制</button><button data-action="pin">固定</button><button data-action="download">下载</button><button class="danger" data-action="cancel">取消</button><button class="primary" data-action="copy">复制</button></div>
+<button data-action="recognize-copy">识别并复制</button><button data-action="download">下载</button><button class="danger" data-action="cancel">取消</button><button class="primary" data-action="copy">复制</button></div>
 <div id="stylebar" class="stylebar">
 <div data-style-group="shape"><button class="shape-option active" data-shape="rect">矩形</button><button class="shape-option" data-shape="round">圆角</button><button class="shape-option" data-shape="ellipse">椭圆</button><span class="sep"></span></div>
 <div data-style-group="arrow"><button class="line-option active" data-line-style="arrow">箭头</button><button class="line-option" data-line-style="line">直线</button><span class="sep"></span></div>
@@ -395,7 +378,7 @@ export function captureEditorHtml(display: ElectronDisplay, mode: DesktopCapture
   const image=new Image(); image.src=${source};
   function resizeCanvas(c,ctx){c.width=Math.round(innerWidth*dpr);c.height=Math.round(innerHeight*dpr);c.style.width=innerWidth+'px';c.style.height=innerHeight+'px';ctx.setTransform(dpr,0,0,dpr,0,0)}
   function computeImageArea(){const vw=Math.max(1,viewBounds.width),vh=Math.max(1,viewBounds.height),windowRatio=innerWidth/Math.max(1,innerHeight),viewRatio=vw/vh;if(viewRatio>windowRatio){imageArea.w=innerWidth;imageArea.h=innerWidth/viewRatio;imageArea.x=0;imageArea.y=(innerHeight-imageArea.h)/2}else{imageArea.h=innerHeight;imageArea.w=innerHeight*viewRatio;imageArea.y=0;imageArea.x=(innerWidth-imageArea.w)/2}}
-  function resetSelection(){rect={x:imageArea.x+imageArea.w*.18,y:imageArea.y+imageArea.h*.16,w:imageArea.w*.64,h:imageArea.h*.62};updateRect()}
+  function resetSelection(){rect={x:imageArea.x,y:imageArea.y,w:imageArea.w,h:imageArea.h};updateRect()}
   function drawBase(){if(!image.complete)return;computeImageArea();bctx.clearRect(0,0,innerWidth,innerHeight);bctx.fillStyle='#0b0f14';bctx.fillRect(0,0,innerWidth,innerHeight);const px=image.naturalWidth/Math.max(1,virtualBounds.width),py=image.naturalHeight/Math.max(1,virtualBounds.height);const sx=(viewBounds.x-virtualBounds.x)*px,sy=(viewBounds.y-virtualBounds.y)*py,sw=viewBounds.width*px,sh=viewBounds.height*py;bctx.imageSmoothingEnabled=true;bctx.imageSmoothingQuality='high';bctx.drawImage(image,sx,sy,sw,sh,imageArea.x,imageArea.y,imageArea.w,imageArea.h)}
   function resizeCanvases(){resizeCanvas(base,bctx);resizeCanvas(ann,actx);resizeCanvas(preview,pctx);drawBase();resetSelection()}
   image.onload=()=>{buildScreenSwitcher();resizeCanvases()}; window.addEventListener('resize',resizeCanvases);
@@ -822,177 +805,7 @@ async function writePngToClipboard(runtime: ElectronCaptureRuntime, bytes: Uint8
   throw new Error("当前桌面运行时无法把截图写入系统剪贴板");
 }
 
-/** 等待固定窗口进程写入就绪文件，并在启动失败时返回明确错误。 */
-async function waitForPinnedWindowReady(
-  runtime: NodeCaptureRuntime,
-  readyPath: string,
-  errorPath: string,
-  timeoutMs = 5_000
-): Promise<void> {
-  const started = Date.now();
-  while (Date.now() - started < timeoutMs) {
-    try {
-      const ready = new TextDecoder().decode(await runtime.fs.readFile(readyPath));
-      if (ready.trim() === "ready") return;
-    } catch {
-      // The native window has not finished creating yet.
-    }
-    try {
-      const error = new TextDecoder().decode(await runtime.fs.readFile(errorPath)).trim();
-      if (error) throw new Error(`固定截图窗口启动失败：${error}`);
-    } catch (error) {
-      if (error instanceof Error && error.message.startsWith("固定截图窗口启动失败：")) throw error;
-    }
-    await new Promise((resolve) => globalThis.setTimeout(resolve, 100));
-  }
-  throw new Error("固定截图窗口未在 5 秒内启动，请检查 PowerShell 或安全软件拦截");
-}
-
-/** 在 Windows 上启动真正置顶、可拖动和可缩放的独立固定截图窗口。 */
-async function openWindowsPinnedCapture(
-  nodeRuntime: NodeCaptureRuntime,
-  bytes: Uint8Array,
-  bounds: { x: number; y: number; width: number; height: number }
-): Promise<void> {
-  const directory = await nodeRuntime.fs.mkdtemp(nodeRuntime.path.join(nodeRuntime.os.tmpdir(), "mms-pinned-capture-"));
-  const imagePath = nodeRuntime.path.join(directory, "capture.png");
-  const scriptPath = nodeRuntime.path.join(directory, "pin.ps1");
-  const readyPath = nodeRuntime.path.join(directory, "ready.txt");
-  const errorPath = nodeRuntime.path.join(directory, "error.txt");
-  const width = Math.max(180, Math.min(1600, bounds.width));
-  const height = Math.max(120, Math.min(1200, bounds.height));
-  const script = `param([string]$ImagePath,[string]$WorkingDirectory,[string]$ReadyPath,[string]$ErrorPath,[int]$Left,[int]$Top,[int]$Width,[int]$Height)
-$ErrorActionPreference = 'Stop'
-Add-Type @"
-using System;
-using System.Runtime.InteropServices;
-public static class MindMapStudioPinnedDpi {
-  [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
-  [DllImport("user32.dll")] public static extern bool SetProcessDpiAwarenessContext(IntPtr dpiContext);
-}
-"@
-try { [void][MindMapStudioPinnedDpi]::SetProcessDpiAwarenessContext([IntPtr](-4)) } catch { [void][MindMapStudioPinnedDpi]::SetProcessDPIAware() }
-Add-Type -AssemblyName System.Windows.Forms
-Add-Type -AssemblyName System.Drawing
-[System.Windows.Forms.Application]::EnableVisualStyles()
-$image = $null
-$form = $null
-try {
-  $image = [System.Drawing.Image]::FromFile($ImagePath)
-  $form = New-Object System.Windows.Forms.Form
-  $form.Text = 'Pinned Capture'
-  $form.StartPosition = [System.Windows.Forms.FormStartPosition]::Manual
-  $form.Bounds = [System.Drawing.Rectangle]::new($Left, $Top, $Width, $Height)
-  $form.MinimumSize = [System.Drawing.Size]::new(180, 120)
-  $form.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::SizableToolWindow
-  $form.ShowInTaskbar = $true
-  $form.TopMost = $true
-  $form.BackColor = [System.Drawing.Color]::FromArgb(18, 18, 18)
-  $picture = New-Object System.Windows.Forms.PictureBox
-  $picture.Dock = [System.Windows.Forms.DockStyle]::Fill
-  $picture.SizeMode = [System.Windows.Forms.PictureBoxSizeMode]::Zoom
-  $picture.Image = $image
-  $picture.BackColor = [System.Drawing.Color]::FromArgb(18, 18, 18)
-  $form.Controls.Add($picture)
-  $form.Add_KeyDown({ if ($_.KeyCode -eq [System.Windows.Forms.Keys]::Escape) { $form.Close() } })
-  $form.KeyPreview = $true
-  $form.Add_Shown({
-    [System.IO.File]::WriteAllText($ReadyPath, 'ready', [System.Text.Encoding]::UTF8)
-    $form.WindowState = [System.Windows.Forms.FormWindowState]::Normal
-    $form.Activate()
-    $form.BringToFront()
-  })
-  [System.Windows.Forms.Application]::Run($form)
-} catch {
-  [System.IO.File]::WriteAllText($ErrorPath, $_.Exception.ToString(), [System.Text.Encoding]::UTF8)
-  Start-Sleep -Seconds 8
-  throw
-} finally {
-  if ($form) { $form.Dispose() }
-  if ($image) { $image.Dispose() }
-  Start-Sleep -Milliseconds 250
-  Remove-Item -LiteralPath $WorkingDirectory -Recurse -Force -ErrorAction SilentlyContinue
-}
-`;
-  await Promise.all([
-    nodeRuntime.fs.writeFile(imagePath, bytes),
-    nodeRuntime.fs.writeFile(scriptPath, "\uFEFF" + script)
-  ]);
-  try {
-    const child = nodeRuntime.spawn("powershell.exe", [
-      "-NoLogo",
-      "-NoProfile",
-      "-Sta",
-      "-ExecutionPolicy",
-      "Bypass",
-      "-WindowStyle",
-      "Hidden",
-      "-File",
-      scriptPath,
-      "-ImagePath",
-      imagePath,
-      "-WorkingDirectory",
-      directory,
-      "-ReadyPath",
-      readyPath,
-      "-ErrorPath",
-      errorPath,
-      "-Left",
-      String(bounds.x),
-      "-Top",
-      String(bounds.y),
-      "-Width",
-      String(width),
-      "-Height",
-      String(height)
-    ], { detached: true, windowsHide: true, stdio: "ignore" });
-    let spawnError: Error | null = null;
-    child.on?.("error", (error) => {
-      spawnError = error;
-    });
-    child.unref?.();
-    await waitForPinnedWindowReady(nodeRuntime, readyPath, errorPath);
-    if (spawnError) throw spawnError;
-  } catch (error) {
-    await nodeRuntime.fs.rm(directory, { recursive: true, force: true });
-    throw error;
-  }
-}
-
-/** 固定截图；Windows 使用真正置顶的原生窗口，其他平台使用渲染器弹窗兼容路径。 */
-async function openPinnedCapture(
-  nodeRuntime: NodeCaptureRuntime,
-  bytes: Uint8Array,
-  bounds: { x: number; y: number; width: number; height: number }
-): Promise<void> {
-  if (nodeRuntime.platform === "win32") {
-    await openWindowsPinnedCapture(nodeRuntime, bytes, bounds);
-    return;
-  }
-  const width = Math.max(180, Math.min(1200, bounds.width));
-  const height = Math.max(120, Math.min(900, bounds.height));
-  const pinWindow = window.open("about:blank", `mindmap-studio-pin-${Date.now()}`, [
-    "popup=yes",
-    "noopener=no",
-    "frame=no",
-    "resizable=yes",
-    `left=${bounds.x}`,
-    `top=${bounds.y}`,
-    `width=${width}`,
-    `height=${height}`
-  ].join(","));
-  if (!pinWindow) throw new Error("当前桌面运行时阻止了固定截图窗口");
-  const source = pngBytesToDataUrl(bytes);
-  pinWindow.document.open();
-  pinWindow.document.write(`<!doctype html><meta charset="utf-8"><title>固定截图</title><style>*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#111}body{-webkit-app-region:drag}img{width:100%;height:100%;object-fit:contain;display:block}.close{position:fixed;right:6px;top:6px;width:28px;height:28px;border:0;border-radius:14px;background:rgba(0,0,0,.72);color:#fff;opacity:0;cursor:pointer;-webkit-app-region:no-drag}body:hover .close{opacity:1}</style><img src="${source}"><button class="close" onclick="window.close()">×</button>`);
-  pinWindow.document.close();
-  pinWindow.moveTo(bounds.x, bounds.y);
-  pinWindow.resizeTo(width, height);
-  pinWindow.focus();
-}
-
-
-/** 在真实可达的渲染器窗口中运行截图编辑器并处理复制、下载、固定和取消动作。 */
+/** 在真实可达的渲染器窗口中运行截图编辑器并处理复制、下载和取消动作。 */
 async function editCapturedDisplay(
   runtime: ElectronCaptureRuntime,
   nodeRuntime: NodeCaptureRuntime,
@@ -1032,8 +845,6 @@ async function editCapturedDisplay(
             finishing = false;
             return;
           }
-        } else if (action === "pin") {
-          await openPinnedCapture(nodeRuntime, bytes, message.exported.bounds);
         } else if (action === "copy" || action === "recognize-copy") {
           await writePngToClipboard(runtime, bytes);
         }
@@ -1060,7 +871,7 @@ async function editCapturedDisplay(
         cancel();
         return;
       }
-      if (message.action === "copy" || message.action === "recognize-copy" || message.action === "download" || message.action === "pin") {
+      if (message.action === "copy" || message.action === "recognize-copy" || message.action === "download") {
         void finish(message as CaptureEditorMessage);
       }
     };

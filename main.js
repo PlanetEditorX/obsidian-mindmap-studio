@@ -10572,10 +10572,6 @@ var MindMapEditor = class {
         new import_obsidian10.Notice("\u622A\u56FE\u5DF2\u4E0B\u8F7D");
         return;
       }
-      if (capture.action === "pin") {
-        new import_obsidian10.Notice("\u622A\u56FE\u5DF2\u56FA\u5B9A\u5230\u684C\u9762");
-        return;
-      }
       if (capture.action === "recognize-copy") {
         await this.recognizeCapturedScreenshotToClipboard(capture.blob);
         return;
@@ -18383,7 +18379,7 @@ function getNodeCaptureRuntime() {
     const fs = requireFunction("node:fs/promises");
     const os = requireFunction("node:os");
     const path = requireFunction("node:path");
-    return { platform: processModule.platform, execFile: childProcess.execFile, spawn: childProcess.spawn, fs, os, path };
+    return { platform: processModule.platform, execFile: childProcess.execFile, fs, os, path };
   } catch (e) {
     return null;
   }
@@ -18450,13 +18446,6 @@ function getBrowserDisplay() {
     scaleFactor: window.devicePixelRatio
   });
 }
-function pngBytesToDataUrl(bytes) {
-  var _a2;
-  const requireFunction = (_a2 = globalThis.require) != null ? _a2 : typeof window !== "undefined" ? window.require : void 0;
-  if (!requireFunction) throw new Error("\u5F53\u524D\u684C\u9762\u8FD0\u884C\u65F6\u65E0\u6CD5\u7F16\u7801\u622A\u56FE");
-  const buffer = requireFunction("node:buffer");
-  return `data:image/png;base64,${buffer.Buffer.from(bytes).toString("base64")}`;
-}
 function captureEditorHtml(display, mode, imageDataUrl = "screen.png", messageToken = "test-token") {
   var _a2;
   const bounds = JSON.stringify(display.bounds);
@@ -18496,7 +18485,7 @@ function captureEditorHtml(display, mode, imageDataUrl = "screen.png", messageTo
 <div id="drawLayer"></div>
 <div id="toolbar" class="toolbar">
 <button data-tool="shape">\u51E0\u4F55\u56FE\u5F62</button><button data-tool="pen">\u753B\u7B14</button><button data-tool="arrow">\u7BAD\u5934</button><button data-tool="text">\u6587\u5B57</button><button data-tool="number">\u5E8F\u53F7</button><button data-tool="mosaic">\u9A6C\u8D5B\u514B</button><button data-tool="eraser">\u6A61\u76AE\u64E6</button><span class="sep"></span>
-<button data-action="recognize-copy">\u8BC6\u522B\u5E76\u590D\u5236</button><button data-action="pin">\u56FA\u5B9A</button><button data-action="download">\u4E0B\u8F7D</button><button class="danger" data-action="cancel">\u53D6\u6D88</button><button class="primary" data-action="copy">\u590D\u5236</button></div>
+<button data-action="recognize-copy">\u8BC6\u522B\u5E76\u590D\u5236</button><button data-action="download">\u4E0B\u8F7D</button><button class="danger" data-action="cancel">\u53D6\u6D88</button><button class="primary" data-action="copy">\u590D\u5236</button></div>
 <div id="stylebar" class="stylebar">
 <div data-style-group="shape"><button class="shape-option active" data-shape="rect">\u77E9\u5F62</button><button class="shape-option" data-shape="round">\u5706\u89D2</button><button class="shape-option" data-shape="ellipse">\u692D\u5706</button><span class="sep"></span></div>
 <div data-style-group="arrow"><button class="line-option active" data-line-style="arrow">\u7BAD\u5934</button><button class="line-option" data-line-style="line">\u76F4\u7EBF</button><span class="sep"></span></div>
@@ -18516,7 +18505,7 @@ function captureEditorHtml(display, mode, imageDataUrl = "screen.png", messageTo
   const image=new Image(); image.src=${source};
   function resizeCanvas(c,ctx){c.width=Math.round(innerWidth*dpr);c.height=Math.round(innerHeight*dpr);c.style.width=innerWidth+'px';c.style.height=innerHeight+'px';ctx.setTransform(dpr,0,0,dpr,0,0)}
   function computeImageArea(){const vw=Math.max(1,viewBounds.width),vh=Math.max(1,viewBounds.height),windowRatio=innerWidth/Math.max(1,innerHeight),viewRatio=vw/vh;if(viewRatio>windowRatio){imageArea.w=innerWidth;imageArea.h=innerWidth/viewRatio;imageArea.x=0;imageArea.y=(innerHeight-imageArea.h)/2}else{imageArea.h=innerHeight;imageArea.w=innerHeight*viewRatio;imageArea.y=0;imageArea.x=(innerWidth-imageArea.w)/2}}
-  function resetSelection(){rect={x:imageArea.x+imageArea.w*.18,y:imageArea.y+imageArea.h*.16,w:imageArea.w*.64,h:imageArea.h*.62};updateRect()}
+  function resetSelection(){rect={x:imageArea.x,y:imageArea.y,w:imageArea.w,h:imageArea.h};updateRect()}
   function drawBase(){if(!image.complete)return;computeImageArea();bctx.clearRect(0,0,innerWidth,innerHeight);bctx.fillStyle='#0b0f14';bctx.fillRect(0,0,innerWidth,innerHeight);const px=image.naturalWidth/Math.max(1,virtualBounds.width),py=image.naturalHeight/Math.max(1,virtualBounds.height);const sx=(viewBounds.x-virtualBounds.x)*px,sy=(viewBounds.y-virtualBounds.y)*py,sw=viewBounds.width*px,sh=viewBounds.height*py;bctx.imageSmoothingEnabled=true;bctx.imageSmoothingQuality='high';bctx.drawImage(image,sx,sy,sw,sh,imageArea.x,imageArea.y,imageArea.w,imageArea.h)}
   function resizeCanvases(){resizeCanvas(base,bctx);resizeCanvas(ann,actx);resizeCanvas(preview,pctx);drawBase();resetSelection()}
   image.onload=()=>{buildScreenSwitcher();resizeCanvases()}; window.addEventListener('resize',resizeCanvases);
@@ -18895,156 +18884,6 @@ async function writePngToClipboard(runtime, bytes) {
   }
   throw new Error("\u5F53\u524D\u684C\u9762\u8FD0\u884C\u65F6\u65E0\u6CD5\u628A\u622A\u56FE\u5199\u5165\u7CFB\u7EDF\u526A\u8D34\u677F");
 }
-async function waitForPinnedWindowReady(runtime, readyPath, errorPath, timeoutMs = 5e3) {
-  const started = Date.now();
-  while (Date.now() - started < timeoutMs) {
-    try {
-      const ready = new TextDecoder().decode(await runtime.fs.readFile(readyPath));
-      if (ready.trim() === "ready") return;
-    } catch (e) {
-    }
-    try {
-      const error = new TextDecoder().decode(await runtime.fs.readFile(errorPath)).trim();
-      if (error) throw new Error(`\u56FA\u5B9A\u622A\u56FE\u7A97\u53E3\u542F\u52A8\u5931\u8D25\uFF1A${error}`);
-    } catch (error) {
-      if (error instanceof Error && error.message.startsWith("\u56FA\u5B9A\u622A\u56FE\u7A97\u53E3\u542F\u52A8\u5931\u8D25\uFF1A")) throw error;
-    }
-    await new Promise((resolve) => globalThis.setTimeout(resolve, 100));
-  }
-  throw new Error("\u56FA\u5B9A\u622A\u56FE\u7A97\u53E3\u672A\u5728 5 \u79D2\u5185\u542F\u52A8\uFF0C\u8BF7\u68C0\u67E5 PowerShell \u6216\u5B89\u5168\u8F6F\u4EF6\u62E6\u622A");
-}
-async function openWindowsPinnedCapture(nodeRuntime, bytes, bounds) {
-  var _a2, _b2;
-  const directory = await nodeRuntime.fs.mkdtemp(nodeRuntime.path.join(nodeRuntime.os.tmpdir(), "mms-pinned-capture-"));
-  const imagePath = nodeRuntime.path.join(directory, "capture.png");
-  const scriptPath = nodeRuntime.path.join(directory, "pin.ps1");
-  const readyPath = nodeRuntime.path.join(directory, "ready.txt");
-  const errorPath = nodeRuntime.path.join(directory, "error.txt");
-  const width = Math.max(180, Math.min(1600, bounds.width));
-  const height = Math.max(120, Math.min(1200, bounds.height));
-  const script = `param([string]$ImagePath,[string]$WorkingDirectory,[string]$ReadyPath,[string]$ErrorPath,[int]$Left,[int]$Top,[int]$Width,[int]$Height)
-$ErrorActionPreference = 'Stop'
-Add-Type @"
-using System;
-using System.Runtime.InteropServices;
-public static class MindMapStudioPinnedDpi {
-  [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
-  [DllImport("user32.dll")] public static extern bool SetProcessDpiAwarenessContext(IntPtr dpiContext);
-}
-"@
-try { [void][MindMapStudioPinnedDpi]::SetProcessDpiAwarenessContext([IntPtr](-4)) } catch { [void][MindMapStudioPinnedDpi]::SetProcessDPIAware() }
-Add-Type -AssemblyName System.Windows.Forms
-Add-Type -AssemblyName System.Drawing
-[System.Windows.Forms.Application]::EnableVisualStyles()
-$image = $null
-$form = $null
-try {
-  $image = [System.Drawing.Image]::FromFile($ImagePath)
-  $form = New-Object System.Windows.Forms.Form
-  $form.Text = 'Pinned Capture'
-  $form.StartPosition = [System.Windows.Forms.FormStartPosition]::Manual
-  $form.Bounds = [System.Drawing.Rectangle]::new($Left, $Top, $Width, $Height)
-  $form.MinimumSize = [System.Drawing.Size]::new(180, 120)
-  $form.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::SizableToolWindow
-  $form.ShowInTaskbar = $true
-  $form.TopMost = $true
-  $form.BackColor = [System.Drawing.Color]::FromArgb(18, 18, 18)
-  $picture = New-Object System.Windows.Forms.PictureBox
-  $picture.Dock = [System.Windows.Forms.DockStyle]::Fill
-  $picture.SizeMode = [System.Windows.Forms.PictureBoxSizeMode]::Zoom
-  $picture.Image = $image
-  $picture.BackColor = [System.Drawing.Color]::FromArgb(18, 18, 18)
-  $form.Controls.Add($picture)
-  $form.Add_KeyDown({ if ($_.KeyCode -eq [System.Windows.Forms.Keys]::Escape) { $form.Close() } })
-  $form.KeyPreview = $true
-  $form.Add_Shown({
-    [System.IO.File]::WriteAllText($ReadyPath, 'ready', [System.Text.Encoding]::UTF8)
-    $form.WindowState = [System.Windows.Forms.FormWindowState]::Normal
-    $form.Activate()
-    $form.BringToFront()
-  })
-  [System.Windows.Forms.Application]::Run($form)
-} catch {
-  [System.IO.File]::WriteAllText($ErrorPath, $_.Exception.ToString(), [System.Text.Encoding]::UTF8)
-  Start-Sleep -Seconds 8
-  throw
-} finally {
-  if ($form) { $form.Dispose() }
-  if ($image) { $image.Dispose() }
-  Start-Sleep -Milliseconds 250
-  Remove-Item -LiteralPath $WorkingDirectory -Recurse -Force -ErrorAction SilentlyContinue
-}
-`;
-  await Promise.all([
-    nodeRuntime.fs.writeFile(imagePath, bytes),
-    nodeRuntime.fs.writeFile(scriptPath, "\uFEFF" + script)
-  ]);
-  try {
-    const child = nodeRuntime.spawn("powershell.exe", [
-      "-NoLogo",
-      "-NoProfile",
-      "-Sta",
-      "-ExecutionPolicy",
-      "Bypass",
-      "-WindowStyle",
-      "Hidden",
-      "-File",
-      scriptPath,
-      "-ImagePath",
-      imagePath,
-      "-WorkingDirectory",
-      directory,
-      "-ReadyPath",
-      readyPath,
-      "-ErrorPath",
-      errorPath,
-      "-Left",
-      String(bounds.x),
-      "-Top",
-      String(bounds.y),
-      "-Width",
-      String(width),
-      "-Height",
-      String(height)
-    ], { detached: true, windowsHide: true, stdio: "ignore" });
-    let spawnError = null;
-    (_a2 = child.on) == null ? void 0 : _a2.call(child, "error", (error) => {
-      spawnError = error;
-    });
-    (_b2 = child.unref) == null ? void 0 : _b2.call(child);
-    await waitForPinnedWindowReady(nodeRuntime, readyPath, errorPath);
-    if (spawnError) throw spawnError;
-  } catch (error) {
-    await nodeRuntime.fs.rm(directory, { recursive: true, force: true });
-    throw error;
-  }
-}
-async function openPinnedCapture(nodeRuntime, bytes, bounds) {
-  if (nodeRuntime.platform === "win32") {
-    await openWindowsPinnedCapture(nodeRuntime, bytes, bounds);
-    return;
-  }
-  const width = Math.max(180, Math.min(1200, bounds.width));
-  const height = Math.max(120, Math.min(900, bounds.height));
-  const pinWindow = window.open("about:blank", `mindmap-studio-pin-${Date.now()}`, [
-    "popup=yes",
-    "noopener=no",
-    "frame=no",
-    "resizable=yes",
-    `left=${bounds.x}`,
-    `top=${bounds.y}`,
-    `width=${width}`,
-    `height=${height}`
-  ].join(","));
-  if (!pinWindow) throw new Error("\u5F53\u524D\u684C\u9762\u8FD0\u884C\u65F6\u963B\u6B62\u4E86\u56FA\u5B9A\u622A\u56FE\u7A97\u53E3");
-  const source = pngBytesToDataUrl(bytes);
-  pinWindow.document.open();
-  pinWindow.document.write(`<!doctype html><meta charset="utf-8"><title>\u56FA\u5B9A\u622A\u56FE</title><style>*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#111}body{-webkit-app-region:drag}img{width:100%;height:100%;object-fit:contain;display:block}.close{position:fixed;right:6px;top:6px;width:28px;height:28px;border:0;border-radius:14px;background:rgba(0,0,0,.72);color:#fff;opacity:0;cursor:pointer;-webkit-app-region:no-drag}body:hover .close{opacity:1}</style><img src="${source}"><button class="close" onclick="window.close()">\xD7</button>`);
-  pinWindow.document.close();
-  pinWindow.moveTo(bounds.x, bounds.y);
-  pinWindow.resizeTo(width, height);
-  pinWindow.focus();
-}
 async function editCapturedDisplay(runtime, nodeRuntime, captured, mode) {
   const token = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   const imageUrl = URL.createObjectURL(new Blob([copyBytesToArrayBuffer(captured.bytes)], { type: "image/png" }));
@@ -19079,8 +18918,6 @@ async function editCapturedDisplay(runtime, nodeRuntime, captured, mode) {
             finishing = false;
             return;
           }
-        } else if (action === "pin") {
-          await openPinnedCapture(nodeRuntime, bytes, message.exported.bounds);
         } else if (action === "copy" || action === "recognize-copy") {
           await writePngToClipboard(runtime, bytes);
         }
@@ -19107,7 +18944,7 @@ async function editCapturedDisplay(runtime, nodeRuntime, captured, mode) {
         cancel();
         return;
       }
-      if (message.action === "copy" || message.action === "recognize-copy" || message.action === "download" || message.action === "pin") {
+      if (message.action === "copy" || message.action === "recognize-copy" || message.action === "download") {
         void finish(message);
       }
     };
