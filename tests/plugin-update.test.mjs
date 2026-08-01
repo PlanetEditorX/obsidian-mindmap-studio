@@ -20,9 +20,37 @@ before(async () => {
 
 after(() => rm(tempDir, { recursive: true, force: true }));
 
-test("plugin updater accepts only a complete verified update manifest", () => {
-  assert.equal(updater.comparePluginVersions("1.25.4", "1.25.3") > 0, true);
+test("plugin updater compares semantic versions correctly", () => {
+  // Equal versions
+  assert.equal(updater.comparePluginVersions("1.0.0", "1.0.0"), 0);
   assert.equal(updater.comparePluginVersions("v1.25.4", "1.25.4"), 0);
+  assert.equal(updater.comparePluginVersions("1.25.4", "v1.25.4"), 0);
+  assert.equal(updater.comparePluginVersions("V1.25.4", "1.25.4"), 0);
+
+  // Missing parts
+  assert.equal(updater.comparePluginVersions("1.0", "1.0.0"), 0);
+  assert.equal(updater.comparePluginVersions("1", "1.0.0"), 0);
+
+  // Prerelease labels (ignored in this function)
+  assert.equal(updater.comparePluginVersions("1.0.0-alpha", "1.0.0"), 0);
+  assert.equal(updater.comparePluginVersions("1.0.0-beta.1", "1.0.0"), 0);
+
+  // Greater versions
+  assert.equal(updater.comparePluginVersions("2.0.0", "1.0.0") > 0, true);
+  assert.equal(updater.comparePluginVersions("1.26.0", "1.25.4") > 0, true);
+  assert.equal(updater.comparePluginVersions("1.25.4", "1.25.3") > 0, true);
+  assert.equal(updater.comparePluginVersions("1.25.4.1", "1.25.4") > 0, true);
+  assert.equal(updater.comparePluginVersions("10.0.0", "2.0.0") > 0, true);
+
+  // Lesser versions
+  assert.equal(updater.comparePluginVersions("1.0.0", "2.0.0") < 0, true);
+  assert.equal(updater.comparePluginVersions("1.25.3", "1.25.4") < 0, true);
+  assert.equal(updater.comparePluginVersions("1.25.4", "1.26.0") < 0, true);
+  assert.equal(updater.comparePluginVersions("1.25.4", "1.25.4.1") < 0, true);
+  assert.equal(updater.comparePluginVersions("2.0.0", "10.0.0") < 0, true);
+});
+
+test("plugin updater accepts only a complete verified update manifest", () => {
   const source = JSON.stringify({
     version: "1.25.4",
     downloadUrl: "https://github.com/PlanetEditorX/obsidian-mindmap-studio/releases/download/v1.25.4/mindmap-studio-1.25.4-install.zip",
