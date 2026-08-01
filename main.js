@@ -5547,7 +5547,7 @@ function readRichTextEditor(editor) {
 // src/editor/editor-modals.ts
 var import_obsidian5 = require("obsidian");
 
-// node_modules/fflate/esm/browser.js
+// ../../deps_1371/node_modules/fflate/esm/browser.js
 var u8 = Uint8Array;
 var u16 = Uint16Array;
 var i32 = Int32Array;
@@ -9555,6 +9555,7 @@ var NodeEditModal = class extends import_obsidian11.Modal {
     let workingBlocks = JSON.parse(JSON.stringify(nodeContentBlocks(this.node)));
     if (!workingBlocks.length) workingBlocks = [{ id: newId(), type: "text", text: "\u65B0\u8282\u70B9" }];
     let scheduleAutoSave = () => void 0;
+    const pendingAutoUploads = /* @__PURE__ */ new Map();
     const actionRow = form.createDiv({ cls: "mmc-content-block-actions" });
     const blocksEl = form.createDiv({ cls: "mmc-content-block-list" });
     let draggedBlockId = null;
@@ -9738,6 +9739,10 @@ var NodeEditModal = class extends import_obsidian11.Modal {
             scheduleAutoSave();
           });
           const actions = body.createDiv({ cls: "mmc-image-block-actions" });
+          const pasteCurrent = actions.createEl("button", { text: "\u7C98\u8D34\u526A\u8D34\u677F\u56FE\u7247", attr: { type: "button" } });
+          pasteCurrent.addEventListener("click", () => {
+            void pasteClipboardImage(block);
+          });
           const local = actions.createEl("button", { text: "\u4FDD\u5B58\u5230\u4ED3\u5E93", attr: { type: "button" } });
           const applyImageAction = (action) => {
             void action.then((changed) => {
@@ -9794,6 +9799,68 @@ var NodeEditModal = class extends import_obsidian11.Modal {
       });
       if (!workingBlocks.length) blocksEl.createDiv({ cls: "mmc-empty-content-hint", text: "\u5F53\u524D\u6CA1\u6709\u5185\u5BB9\u5757\u3002\u8BF7\u6DFB\u52A0\u6587\u5B57\u3001\u56FE\u7247\u3001\u8868\u683C\u6216\u4EE3\u7801\u3002" });
     };
+    const suggestedClipboardImageName = (blob) => {
+      var _a3;
+      const extension = ((_a3 = blob.type.split("/")[1]) == null ? void 0 : _a3.replace("jpeg", "jpg").replace("svg+xml", "svg")) || "png";
+      return `mindmap-image.${extension}`;
+    };
+    const savePastedImage = async (blob, existingBlock, suppliedName) => {
+      const filename = suppliedName || suggestedClipboardImageName(blob);
+      let path;
+      try {
+        path = await this.callbacks.onSavePastedImage(blob, filename);
+      } catch (error) {
+        console.error("MindMap Studio node modal paste image storage failed", error);
+        new import_obsidian11.Notice(`\u7C98\u8D34\u56FE\u7247\u5931\u8D25\uFF1A${error instanceof Error ? error.message : String(error)}`, 7e3);
+        return;
+      }
+      const block = existingBlock != null ? existingBlock : { id: newId(), type: "image", source: "" };
+      block.source = path;
+      block.localSource = path;
+      block.remoteSources = void 0;
+      block.contentHash = void 0;
+      if (!existingBlock) workingBlocks.push(block);
+      pendingAutoUploads.set(block.id, { path, filename });
+      renderBlocks2();
+      scheduleAutoSave();
+      new import_obsidian11.Notice("\u56FE\u7247\u5DF2\u4ECE\u526A\u8D34\u677F\u6DFB\u52A0\u5230\u5F53\u524D\u8282\u70B9");
+    };
+    const readClipboardImage = async () => {
+      var _a3;
+      if (!((_a3 = navigator.clipboard) == null ? void 0 : _a3.read)) {
+        new import_obsidian11.Notice("\u5F53\u524D\u73AF\u5883\u65E0\u6CD5\u76F4\u63A5\u8BFB\u53D6\u526A\u8D34\u677F\uFF0C\u8BF7\u5728\u7F16\u8F91\u8282\u70B9\u7A97\u53E3\u4E2D\u6309 Ctrl/Cmd+V");
+        return null;
+      }
+      try {
+        const items = await navigator.clipboard.read();
+        for (const item of items) {
+          const type = item.types.find((candidate) => candidate.startsWith("image/"));
+          if (!type) continue;
+          const blob = await item.getType(type);
+          return { blob, filename: suggestedClipboardImageName(blob) };
+        }
+      } catch (error) {
+        console.error("MindMap Studio node modal clipboard read failed", error);
+        new import_obsidian11.Notice("\u65E0\u6CD5\u76F4\u63A5\u8BFB\u53D6\u526A\u8D34\u677F\uFF0C\u8BF7\u5728\u7F16\u8F91\u8282\u70B9\u7A97\u53E3\u4E2D\u6309 Ctrl/Cmd+V");
+        return null;
+      }
+      new import_obsidian11.Notice("\u526A\u8D34\u677F\u4E2D\u6CA1\u6709\u53EF\u7C98\u8D34\u7684\u56FE\u7247");
+      return null;
+    };
+    const pasteClipboardImage = async (existingBlock) => {
+      const image = await readClipboardImage();
+      if (!image) return;
+      await savePastedImage(image.blob, existingBlock, image.filename);
+    };
+    form.addEventListener("paste", (event) => {
+      var _a3, _b3;
+      const imageItem = Array.from((_b3 = (_a3 = event.clipboardData) == null ? void 0 : _a3.items) != null ? _b3 : []).find((item) => item.kind === "file" && item.type.startsWith("image/"));
+      const blob = imageItem == null ? void 0 : imageItem.getAsFile();
+      if (!blob) return;
+      event.preventDefault();
+      event.stopPropagation();
+      void savePastedImage(blob, void 0, blob.name || suggestedClipboardImageName(blob));
+    }, true);
     const addText = actionRow.createEl("button", { text: "+ \u6587\u5B57", attr: { type: "button" } });
     addText.addEventListener("click", () => {
       workingBlocks.push({ id: newId(), type: "text", text: "" });
@@ -9805,6 +9872,10 @@ var NodeEditModal = class extends import_obsidian11.Modal {
       workingBlocks.push({ id: newId(), type: "image", source: "" });
       renderBlocks2();
       scheduleAutoSave();
+    });
+    const pasteImage = actionRow.createEl("button", { text: "+ \u7C98\u8D34\u56FE\u7247", attr: { type: "button" } });
+    pasteImage.addEventListener("click", () => {
+      void pasteClipboardImage();
     });
     const addTable = actionRow.createEl("button", { text: "+ \u8868\u683C", attr: { type: "button" } });
     addTable.addEventListener("click", () => {
@@ -9954,6 +10025,19 @@ var NodeEditModal = class extends import_obsidian11.Modal {
       if (signature !== last) {
         this.submit(values, mode);
         last = signature;
+        for (const [blockId, pending] of pendingAutoUploads) {
+          if (!values.content.some((block) => block.type === "image" && block.id === blockId)) {
+            pendingAutoUploads.delete(blockId);
+            continue;
+          }
+          try {
+            this.callbacks.onScheduleAutoUpload(this.node.id, blockId, pending.path, pending.filename);
+          } catch (error) {
+            console.error("MindMap Studio node modal paste image auto-upload scheduling failed", error);
+          } finally {
+            pendingAutoUploads.delete(blockId);
+          }
+        }
       }
       return true;
     };
@@ -13874,7 +13958,8 @@ var MindMapEditor = class {
       getImageHosts: this.callbacks.getImageHosts,
       getDefaultUploadHostIds: this.callbacks.getDefaultUploadHostIds,
       onUploadImage: this.callbacks.onUploadImage,
-      onReadImageSource: this.callbacks.onReadImageSource
+      onReadImageSource: this.callbacks.onReadImageSource,
+      onScheduleAutoUpload: this.callbacks.onScheduleAutoUpload
     }, (values, mode) => {
       var _a2;
       if (!historyCaptured) {
@@ -14852,8 +14937,8 @@ var MindMapEditor = class {
       const targetBlock = target.closest("[data-block-id]");
       const targetNode = target.closest("[data-node-id]");
       const articleTargetAllowed = this.currentMode === "article" || this.currentMode === "reading";
-      const nodeId = (_c = (_b2 = targetNode == null ? void 0 : targetNode.dataset.nodeId) != null ? _b2 : articleTargetAllowed ? (_a2 = this.activeArticleBlock) == null ? void 0 : _a2.nodeId : void 0) != null ? _c : this.selectedId;
-      const afterBlockId = (_e = targetBlock == null ? void 0 : targetBlock.dataset.blockId) != null ? _e : articleTargetAllowed && ((_d = this.activeArticleBlock) == null ? void 0 : _d.nodeId) === nodeId ? this.activeArticleBlock.blockId : void 0;
+      const nodeId = articleTargetAllowed ? (_c = (_b2 = targetNode == null ? void 0 : targetNode.dataset.nodeId) != null ? _b2 : (_a2 = this.activeArticleBlock) == null ? void 0 : _a2.nodeId) != null ? _c : this.selectedId : this.selectedId;
+      const afterBlockId = articleTargetAllowed ? (_e = targetBlock == null ? void 0 : targetBlock.dataset.blockId) != null ? _e : ((_d = this.activeArticleBlock) == null ? void 0 : _d.nodeId) === nodeId ? this.activeArticleBlock.blockId : void 0 : void 0;
       if (target.closest("[contenteditable='true']")) target.blur();
       const extension = ((_f = blob.type.split("/")[1]) == null ? void 0 : _f.replace("jpeg", "jpg").replace("svg+xml", "svg")) || "png";
       const filename = `mindmap-image.${extension}`;
