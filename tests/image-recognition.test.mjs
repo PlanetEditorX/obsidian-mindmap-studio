@@ -279,7 +279,7 @@ test("screenshot text input, line style, screen labels and full-screen default s
   assert.doesNotMatch(captureSource, /PinnedCapture|TopMost = \$true|waitForPinnedWindowReady|openPinnedCapture/);
 });
 
-test("manual screenshot never confirms on mouse release and recognition waits for three idle seconds", async () => {
+test("manual screenshot stays open while recognition keeps an invisible toolbar and border-paused integer countdown", async () => {
   const [captureSource, editorSource, viewSource, mainSource, typesSource] = await Promise.all([
     readFile("src/utils/desktop-capture.ts", "utf8"),
     readFile("src/editor/editor.ts", "utf8"),
@@ -296,25 +296,56 @@ test("manual screenshot never confirms on mouse release and recognition waits fo
     "capture-recognize"
   );
   assert.match(captureHtml, /const recognizeMode=captureMode==='capture-recognize'/);
-  assert.match(captureHtml, /function endSelection\(\)\{[^}]*if\(completed\)armAutoConfirm\(\)\}/);
+  assert.match(captureHtml, /function endSelection\(\)\{selectionDraw=null;[\s\S]*if\(recognizeMode\)\{/);
   assert.doesNotMatch(captureHtml, /function endSelection\(\)[^\n]*action\('copy'\)/);
   assert.match(captureHtml, /document\.addEventListener\('dblclick'[\s\S]*captureMode==='capture'[\s\S]*action\('copy'\)/);
   assert.match(recognizeHtml, /const autoConfirmDelayMs=3000/);
-  assert.match(recognizeHtml, /id="toolbar" class="toolbar hidden" aria-hidden="true"/);
-  assert.doesNotMatch(recognizeHtml, /data-tool=|识别并复制|data-action="download"|data-action="copy"/);
+  assert.match(recognizeHtml, /id="toolbar" class="toolbar recognition-invisible" aria-hidden="true"/);
+  assert.match(recognizeHtml, /id="stylebar" class="stylebar recognition-invisible" aria-hidden="true"/);
+  assert.match(recognizeHtml, /\.recognition-invisible\{opacity:0!important;pointer-events:none!important\}/);
+  for (const label of ["几何图形", "画笔", "箭头", "文字", "序号", "马赛克", "橡皮擦", "识别并复制", "下载", "取消", "复制"]) {
+    assert.match(recognizeHtml, new RegExp(label));
+  }
   assert.match(captureHtml, /data-tool="shape"[\s\S]*data-action="copy"/);
   assert.match(recognizeHtml, /id="countdown" role="status" aria-live="polite"/);
-  assert.match(recognizeHtml, /countdown\.textContent=\(remaining\/1000\)\.toFixed\(1\)\+' 秒后自动识别'/);
-  assert.match(recognizeHtml, /setTimeout\(\(\)=>\{[\s\S]*if\(drag\|\|selectionDraw\|\|drawing[\s\S]*action\('copy'\)\},autoConfirmDelayMs\)/);
-  assert.doesNotMatch(recognizeHtml, /pointerInsideSelection/);
-  assert.match(recognizeHtml, /function endResize\(\)[\s\S]*armAutoConfirm\(\)/);
-  assert.match(recognizeHtml, /document\.addEventListener\('pointermove',[\s\S]*insideRect\(ev\.clientX,ev\.clientY\)[\s\S]*resetAutoConfirm\(\)/);
+  assert.match(recognizeHtml, /const seconds=Math\.max\(1,Math\.ceil\(remaining\/1000\)\)/);
+  assert.match(recognizeHtml, /countdown\.textContent=String\(seconds\)/);
+  assert.doesNotMatch(recognizeHtml, /toFixed\(/);
+  assert.match(recognizeHtml, /setTimeout\(\(\)=>\{[\s\S]*if\(pointerOnBorder\|\|drag\|\|selectionDraw\|\|drawing[\s\S]*action\('copy'\)\},autoConfirmDelayMs\)/);
+  assert.match(recognizeHtml, /data-border="north"[\s\S]*data-border="west"/);
+  assert.match(recognizeHtml, /function enterAutoConfirmPause\(\)\{pointerOnBorder=true;pauseAutoConfirm\(\)\}/);
+  assert.match(recognizeHtml, /function leaveAutoConfirmPause\(\)\{pointerOnBorder=false;[\s\S]*scheduleAutoConfirm\(\)\}/);
+  assert.match(recognizeHtml, /querySelectorAll\('\[data-handle\],\[data-drag\],\[data-border\]'\)/);
+  assert.match(recognizeHtml, /function endResize\(\)[\s\S]*if\(pointerOnBorder\)pauseAutoConfirm\(\);else armAutoConfirm\(\)/);
+  assert.match(recognizeHtml, /function endSelection\(\)[\s\S]*pointerOnBorder=false;armAutoConfirm\(\)/);
+  assert.doesNotMatch(recognizeHtml, /document\.addEventListener\('pointermove',[\s\S]*insideRect/);
   assert.match(recognizeHtml, /image\.onload=\(\)=>\{[\s\S]*if\(recognizeMode\)armAutoConfirm\(\)/);
   assert.match(recognizeHtml, /window\.addEventListener\('keydown',[\s\S]*ev\.key==='Escape'[\s\S]*action\('cancel'\)/);
+  const recognizeScript = recognizeHtml.match(/<script>([\s\S]*)<\/script>/)?.[1] ?? "";
+  assert.doesNotThrow(() => new Function(recognizeScript));
+  assert.match(captureSource, /host\.messageSource\.addEventListener\("keydown", onHostKeydown, true\)/);
+  assert.match(captureSource, /host\.messageSource\.removeEventListener\("keydown", onHostKeydown, true\)/);
   assert.match(editorSource, /onCaptureScreenshot\(recognizeAfter\)/);
   assert.match(viewSource, /onCaptureScreenshot: async \(recognizeAfter\) => this\.plugin\.captureScreenshot\(recognizeAfter\)/);
   assert.match(typesSource, /onCaptureScreenshot: \(recognizeAfter\?: boolean\) => Promise<DesktopCaptureResult>/);
   assert.match(mainSource, /recognizeAfter \? "capture-recognize" : "capture"/);
+});
+
+test("recognition overlay keeps the complete invisible control tree so countdown and Escape handlers can boot", () => {
+  const html = desktopCapture.captureEditorHtml(
+    { id: 1, bounds: { x: 0, y: 0, width: 1920, height: 1080 }, scaleFactor: 1 },
+    "capture-recognize",
+    "data:image/png;base64,AA==",
+    "recognition-runtime-token"
+  );
+  assert.match(html, /class="toolbar recognition-invisible"/);
+  assert.match(html, /class="stylebar recognition-invisible"/);
+  assert.match(html, /data-fill="toggle"/);
+  assert.match(html, /toolbar\.querySelectorAll\('\[data-action\]'\)/);
+  assert.match(html, /stylebar\.querySelector\('\[data-fill\]'\)\.addEventListener/);
+  assert.match(html, /action\('cancel'\)/);
+  const script = html.match(/<script>([\s\S]*)<\/script>/)?.[1] ?? "";
+  assert.doesNotThrow(() => new Function(script));
 });
 
 test("capture timeout rejects stalled desktop APIs instead of leaving screenshot commands pending", async () => {
