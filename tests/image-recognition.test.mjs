@@ -303,10 +303,14 @@ test("manual screenshot never confirms on mouse release and recognition waits fo
   assert.match(recognizeHtml, /id="toolbar" class="toolbar hidden" aria-hidden="true"/);
   assert.doesNotMatch(recognizeHtml, /data-tool=|识别并复制|data-action="download"|data-action="copy"/);
   assert.match(captureHtml, /data-tool="shape"[\s\S]*data-action="copy"/);
-  assert.match(recognizeHtml, /pointerInsideSelection\|\|drag\|\|selectionDraw\|\|drawing/);
-  assert.match(recognizeHtml, /setTimeout\(\(\)=>\{[\s\S]*action\('copy'\)\},autoConfirmDelayMs\)/);
+  assert.match(recognizeHtml, /id="countdown" role="status" aria-live="polite"/);
+  assert.match(recognizeHtml, /countdown\.textContent=\(remaining\/1000\)\.toFixed\(1\)\+' 秒后自动识别'/);
+  assert.match(recognizeHtml, /setTimeout\(\(\)=>\{[\s\S]*if\(drag\|\|selectionDraw\|\|drawing[\s\S]*action\('copy'\)\},autoConfirmDelayMs\)/);
+  assert.doesNotMatch(recognizeHtml, /pointerInsideSelection/);
   assert.match(recognizeHtml, /function endResize\(\)[\s\S]*armAutoConfirm\(\)/);
-  assert.match(recognizeHtml, /inside!==pointerInsideSelection[\s\S]*resetAutoConfirm\(\)/);
+  assert.match(recognizeHtml, /document\.addEventListener\('pointermove',[\s\S]*insideRect\(ev\.clientX,ev\.clientY\)[\s\S]*resetAutoConfirm\(\)/);
+  assert.match(recognizeHtml, /image\.onload=\(\)=>\{[\s\S]*if\(recognizeMode\)armAutoConfirm\(\)/);
+  assert.match(recognizeHtml, /window\.addEventListener\('keydown',[\s\S]*ev\.key==='Escape'[\s\S]*action\('cancel'\)/);
   assert.match(editorSource, /onCaptureScreenshot\(recognizeAfter\)/);
   assert.match(viewSource, /onCaptureScreenshot: async \(recognizeAfter\) => this\.plugin\.captureScreenshot\(recognizeAfter\)/);
   assert.match(typesSource, /onCaptureScreenshot: \(recognizeAfter\?: boolean\) => Promise<DesktopCaptureResult>/);
@@ -328,6 +332,8 @@ test("desktop capture opens the plugin overlay and never silently falls back to 
   ]);
   assert.doesNotMatch(captureSource, /window\.open\("about:blank", windowName, features\)/);
   assert.match(captureSource, /document\.documentElement\.appendChild\(iframe\)/);
+  assert.match(captureSource, /window\.addEventListener\(\"keydown\", onHostKeydown, true\)/);
+  assert.match(captureSource, /if \(event\.key !== \"Escape\"\) return/);
   assert.match(captureSource, /iframe\.srcdoc = html/);
   assert.match(captureSource, /zIndex: "2147483647"/);
   assert.match(captureSource, /withCaptureTimeout/);
