@@ -3,7 +3,7 @@
  * @description 节点拖放合法性与指针落点的纯计算规则。
  */
 
-import { containsNode, findNode, type MindMapNode, type NodeDropPosition } from "../core/model";
+import { containsNode, findNode, type MindMapNode } from "../core/model";
 
 /** 拖放指针与目标节点矩形所需的最小坐标信息。 */
 export interface DropPointer {
@@ -37,7 +37,7 @@ export function canMoveNodes(root: MindMapNode, selectedIds: ReadonlySet<string>
 /**
  * 根据指针在节点中的位置返回同级前置、成为子级或同级后置。
  */
-export function resolveDropPosition(pointer: DropPointer, rect: DropTargetRect, targetIsRoot: boolean): NodeDropPosition {
+export function resolveDropPosition(pointer: DropPointer, rect: DropTargetRect, targetIsRoot: boolean) {
   if (targetIsRoot) return "child";
   if (isRightChildZone(pointer, rect)) return "child";
   const verticalRatio = rect.height > 0 ? (pointer.clientY - rect.top) / rect.height : .5;
