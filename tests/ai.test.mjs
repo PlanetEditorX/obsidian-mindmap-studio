@@ -498,3 +498,8 @@ test("AI integration exposes toolbar, shortcut, page scope and node scope contra
   );
   assert.match(modalSource, /onClose\(\): void[\s\S]*markdownRenderComponent\?\.unload\(\)/);
 });
+
+test("utf8ByteLength correctly calculates CJK and ASCII byte lengths", () => {
+  assert.equal(markdown.utf8ByteLength("a"), 1);
+  assert.equal(markdown.utf8ByteLength("中"), 3);
+});
