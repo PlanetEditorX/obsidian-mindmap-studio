@@ -3,7 +3,7 @@
  * @description 图片与识别文字并排对比、取消返回和确认替换弹窗。
  */
 
-import { Modal, Notice, type App } from "obsidian";
+import { Modal, Notice } from "obsidian";
 import type { ImageTextReplacementPreview } from "./recognition";
 
 /** 图片识别预览弹窗所需的显示数据和确认回调。 */
@@ -20,7 +20,7 @@ export class ImageRecognitionPreviewModal extends Modal {
   private autoConfirmTimer: number | null = null;
 
   /** 保存预览参数并初始化 Obsidian Modal。 */
-  constructor(app: App, private readonly options: ImageRecognitionPreviewModalOptions) {
+  constructor(app: Modal["app"], private readonly options: ImageRecognitionPreviewModalOptions) {
     super(app);
   }
 
