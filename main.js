@@ -7447,7 +7447,7 @@ var JsonTransferModal = class extends import_obsidian5.Modal {
   onOpen() {
     this.titleEl.setText("\u5BFC\u5165 / \u5BFC\u51FA");
     const description = this.contentEl.createEl("p", {
-      text: "\u53EF\u5BFC\u5165 MindMap Studio JSON\u3001\u601D\u7EF4\u5BFC\u56FE\u5F52\u6863\u6216 Markdown \u6587\u4EF6\u3002\u9ED8\u8BA4\u4F5C\u4E3A\u5F53\u524D\u9009\u4E2D\u8282\u70B9\u7684\u5B50\u5206\u652F\u5BFC\u5165\u3002"
+      text: "\u53EF\u5BFC\u5165 MindMap Studio JSON\u3001\u601D\u7EF4\u5BFC\u56FE\u6216 Markdown \u6587\u4EF6\u3002\u9ED8\u8BA4\u4F5C\u4E3A\u5F53\u524D\u9009\u4E2D\u8282\u70B9\u7684\u5B50\u5206\u652F\u5BFC\u5165\u3002"
     });
     description.addClass("setting-item-description");
     const importProgress = this.contentEl.createDiv({ cls: "mmc-import-progress" });
