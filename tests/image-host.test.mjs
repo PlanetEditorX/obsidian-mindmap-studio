@@ -38,6 +38,14 @@ test("parseUploadHeaders rejects malformed JSON and header injection", () => {
   assert.throws(() => imageHost.parseUploadHeaders('{"X-Test":"ok\\r\\nInjected: yes"}'), /不能包含换行符/);
 });
 
+test("createMultipartBoundary generates unique boundaries with expected prefix", () => {
+  const boundary = imageHost.createMultipartBoundary();
+  assert.match(boundary, /^----MindMapStudio[0-9a-f]+$/);
+
+  const anotherBoundary = imageHost.createMultipartBoundary();
+  assert.notEqual(boundary, anotherBoundary);
+});
+
 test("buildMultipartUploadBody creates a deterministic single-file body", async () => {
   const result = await imageHost.buildMultipartUploadBody(
     'im"age\r\n',
