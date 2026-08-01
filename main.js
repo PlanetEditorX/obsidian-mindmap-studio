@@ -5555,7 +5555,7 @@ function readRichTextEditor(editor) {
 // src/editor/editor-modals.ts
 var import_obsidian5 = require("obsidian");
 
-// node_modules/fflate/esm/browser.js
+// ../../work_env_read/node_modules/fflate/esm/browser.js
 var u8 = Uint8Array;
 var u16 = Uint16Array;
 var i32 = Int32Array;
@@ -10504,6 +10504,8 @@ var MindMapEditor = class {
     this.articleRenderToken = 0;
     this.articleRenderPending = false;
     this.articleRenderViewportSnapshot = null;
+    /** True after wheel, touch, pointer, or paging-key input claims the progressive article viewport. */
+    this.articleRenderViewportClaimedByUser = false;
     /** Hidden render target used until the first article batch is ready to paint. */
     this.articleRenderStageEl = null;
     /** Partially or fully rendered article page already revealed while remaining nodes continue in later frames. */
@@ -11249,6 +11251,14 @@ var MindMapEditor = class {
     this.nodesLayerEl = this.sceneEl.createDiv({ cls: "mmc-nodes-layer" });
     this.outlineEl = this.rootEl.createDiv({ cls: "mms-outline-view" });
     this.articleEl = this.rootEl.createDiv({ cls: "mms-article-view" });
+    const claimProgressiveArticleViewport = () => this.claimProgressiveArticleViewport();
+    this.articleEl.addEventListener("wheel", claimProgressiveArticleViewport, { passive: true });
+    this.articleEl.addEventListener("touchstart", claimProgressiveArticleViewport, { passive: true });
+    this.articleEl.addEventListener("pointerdown", claimProgressiveArticleViewport, { passive: true });
+    this.rootEl.addEventListener("keydown", (event) => {
+      if (!["ArrowDown", "ArrowUp", "PageDown", "PageUp", "Home", "End", " "].includes(event.key)) return;
+      this.claimProgressiveArticleViewport();
+    });
     this.questionPracticeEl = this.rootEl.createDiv({ cls: "mms-question-practice-view" });
     const pageContextMenu = (event) => {
       const target = event.target;
@@ -12356,6 +12366,12 @@ var MindMapEditor = class {
       renderArticleMode(stage, this.articleRendererOptions(incremental));
     });
   }
+  /** 用户开始滚动后，后台文章批次不得再覆盖当前视口或恢复旧阅读位置。 */
+  claimProgressiveArticleViewport() {
+    if (!this.articleRenderPending || this.currentMode !== "article") return;
+    this.articleRenderViewportClaimedByUser = true;
+    this.pendingArticleRestoreLocation = null;
+  }
   /** 首批正文完成后立即显示文章；剩余节点继续在后续帧中填充。 */
   revealArticleRender(token) {
     var _a2, _b2, _c;
@@ -12393,11 +12409,10 @@ var MindMapEditor = class {
     const snapshot = this.articleRenderViewportSnapshot;
     const page = (_a2 = this.articleRenderPageEl) != null ? _a2 : this.articleRenderPreviousPageEl;
     if (snapshot && page) page.style.minHeight = `${snapshot.height}px`;
-    if (snapshot) {
-      this.articleEl.scrollLeft = snapshot.left;
-      const restoredSemanticLocation = page ? this.maintainPendingArticleLocation() : false;
-      if (!restoredSemanticLocation) this.articleEl.scrollTop = snapshot.top;
-    }
+    if (!snapshot || this.articleRenderViewportClaimedByUser) return;
+    this.articleEl.scrollLeft = snapshot.left;
+    const restoredSemanticLocation = page ? this.maintainPendingArticleLocation() : false;
+    if (!restoredSemanticLocation) this.articleEl.scrollTop = snapshot.top;
   }
   /** 完成文章分帧挂载，安装依赖完整章节 DOM 的交互并恢复语义阅读位置。 */
   completeArticleRender(token) {
@@ -12413,6 +12428,7 @@ var MindMapEditor = class {
     const alreadyRevealed = this.articleRenderPageEl === page;
     const previousPage = this.articleRenderPreviousPageEl;
     const snapshot = this.articleRenderViewportSnapshot;
+    const restoreViewportAfterRender = !this.articleRenderViewportClaimedByUser;
     if (!alreadyRevealed) {
       page.addClass("is-render-entering");
       if (snapshot) page.style.minHeight = `${snapshot.height}px`;
@@ -12431,14 +12447,14 @@ var MindMapEditor = class {
     this.addArticleScrollToTopButton();
     this.renderArticleMiniMap();
     this.applyArticleClickMoveUi();
-    const location = (_e = this.pendingArticleRestoreLocation) != null ? _e : this.lastReadingLocation;
+    const location = restoreViewportAfterRender ? (_e = this.pendingArticleRestoreLocation) != null ? _e : this.lastReadingLocation : null;
     this.pendingArticleRestoreLocation = null;
     if (location) this.restoreReadingLocation("article", location);
     this.articleRenderViewportSnapshot = null;
     window.requestAnimationFrame(() => {
       page.style.removeProperty("min-height");
       if (location) this.restoreReadingLocation("article", location);
-      else if (snapshot) {
+      else if (restoreViewportAfterRender && snapshot) {
         this.articleEl.scrollLeft = snapshot.left;
         this.articleEl.scrollTop = snapshot.top;
       }
@@ -12834,6 +12850,7 @@ var MindMapEditor = class {
     this.articleRenderToken += 1;
     this.articleRenderPending = false;
     this.articleRenderViewportSnapshot = null;
+    this.articleRenderViewportClaimedByUser = false;
     this.pendingArticleRestoreLocation = null;
     if (this.articleRenderFrame !== null) window.cancelAnimationFrame(this.articleRenderFrame);
     this.articleRenderFrame = null;
@@ -12861,6 +12878,7 @@ var MindMapEditor = class {
   beginArticleRender() {
     this.cancelArticleRender();
     this.articleRenderPending = true;
+    this.articleRenderViewportClaimedByUser = false;
     this.articleRenderToken += 1;
     return this.articleRenderToken;
   }

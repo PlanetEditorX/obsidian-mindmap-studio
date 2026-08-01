@@ -111,8 +111,16 @@ test("progressive article rerenders retain the visible page while a hidden repla
   assert.match(editorSource, /this\.articleRenderPageEl = page/);
   assert.match(editorSource, /onProgress: \(\) => this\.maintainArticleRenderViewport\(token\)/);
   assert.match(editorSource, /target\.hasClass\("is-render-pending"\)/);
+  assert.match(editorSource, /articleRenderViewportClaimedByUser = false/);
+  assert.match(editorSource, /addEventListener\("wheel", claimProgressiveArticleViewport/);
+  assert.match(editorSource, /addEventListener\("touchstart", claimProgressiveArticleViewport/);
+  assert.match(editorSource, /addEventListener\("pointerdown", claimProgressiveArticleViewport/);
+  assert.match(editorSource, /private claimProgressiveArticleViewport\(\): void[\s\S]*this\.articleRenderViewportClaimedByUser = true[\s\S]*this\.pendingArticleRestoreLocation = null/);
+  assert.match(editorSource, /if \(!snapshot \|\| this\.articleRenderViewportClaimedByUser\) return/);
   assert.match(editorSource, /const restoredSemanticLocation = page \? this\.maintainPendingArticleLocation\(\) : false/);
   assert.match(editorSource, /if \(!restoredSemanticLocation\) this\.articleEl\.scrollTop = snapshot\.top/);
+  assert.match(editorSource, /const restoreViewportAfterRender = !this\.articleRenderViewportClaimedByUser/);
+  assert.match(editorSource, /else if \(restoreViewportAfterRender && snapshot\)/);
   assert.match(articleSource, /onProgress: \(\) => void/);
   assert.match(articleSource, /options\.incremental\?\.onProgress\(\)/);
   assert.doesNotMatch(cssSource, /\.mms-article-view\.is-progressive-rendering\s*\{[^}]*cursor:\s*progress/s);
@@ -150,4 +158,21 @@ test("first article load skeleton fills the current viewport instead of showing 
   assert.match(editorSource, /const lineCount = Math\.max\(18, Math\.ceil\(\(viewportHeight - 150\) \/ 30\)\)/);
   assert.match(editorSource, /mms-article-loading-shell-subtitle/);
   assert.match(cssSource, /\.mms-article-loading-shell \{[\s\S]*width: calc\(100% - 24px\);[\s\S]*max-width: none;[\s\S]*--mms-loading-shell-height/);
+});
+
+test("user navigation owns the viewport while progressive article batches continue", async () => {
+  const editorSource = await readFile(path.join(rootDir, "src/editor/editor.ts"), "utf8");
+  const claimMethod = editorSource.match(/private claimProgressiveArticleViewport\(\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
+  assert.match(claimMethod, /if \(!this\.articleRenderPending \|\| this\.currentMode !== "article"\) return/);
+  assert.match(claimMethod, /this\.articleRenderViewportClaimedByUser = true/);
+  assert.match(claimMethod, /this\.pendingArticleRestoreLocation = null/);
+
+  const maintainMethod = editorSource.match(/private maintainArticleRenderViewport\(token: number\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
+  assert.match(maintainMethod, /if \(!snapshot \|\| this\.articleRenderViewportClaimedByUser\) return/);
+  assert.match(maintainMethod, /this\.articleEl\.scrollTop = snapshot\.top/);
+
+  const completeMethod = editorSource.match(/private completeArticleRender\(token: number\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
+  assert.match(completeMethod, /const restoreViewportAfterRender = !this\.articleRenderViewportClaimedByUser/);
+  assert.match(completeMethod, /restoreViewportAfterRender\s*\? this\.pendingArticleRestoreLocation \?\? this\.lastReadingLocation\s*: null/);
+  assert.match(completeMethod, /else if \(restoreViewportAfterRender && snapshot\)/);
 });
