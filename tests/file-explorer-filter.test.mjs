@@ -115,3 +115,44 @@ test("shouldHideFileExplorerPath handles configured hidden folders", () => {
   assert.equal(filterModule.shouldHideFileExplorerPath("secret/folder/file.md", settings), true);
   assert.equal(filterModule.shouldHideFileExplorerPath("other/secret/folder/file.md", settings), false); // specific path does not start with or equal
 });
+
+test("shouldHideFileExplorerPath ignores extensions and folders when hideConfiguredFilesInFileExplorer is false", () => {
+  const settings = {
+    assetFolder: "assets",
+    hideAssetFolderInFileExplorer: false,
+    hideConfiguredFilesInFileExplorer: false,
+    hiddenFileExtensions: "md, pdf",
+    hiddenFileFolders: "hidden, secret/folder"
+  };
+
+  assert.equal(filterModule.shouldHideFileExplorerPath("file.md", settings), false);
+  assert.equal(filterModule.shouldHideFileExplorerPath("hidden/file.md", settings), false);
+  assert.equal(filterModule.shouldHideFileExplorerPath("secret/folder", settings), false);
+});
+
+test("shouldHideFileExplorerPath returns false for empty or root paths", () => {
+  const settings = {
+    assetFolder: "assets",
+    hideAssetFolderInFileExplorer: true,
+    hideConfiguredFilesInFileExplorer: true,
+    hiddenFileExtensions: "md",
+    hiddenFileFolders: "hidden"
+  };
+
+  assert.equal(filterModule.shouldHideFileExplorerPath("", settings), false);
+  assert.equal(filterModule.shouldHideFileExplorerPath("/", settings), false);
+  assert.equal(filterModule.shouldHideFileExplorerPath("///", settings), false);
+});
+
+test("shouldHideFileExplorerPath handles asset folders with leading/trailing slashes", () => {
+  const settings = {
+    assetFolder: "///my/assets/folder///",
+    hideAssetFolderInFileExplorer: true,
+    hideConfiguredFilesInFileExplorer: false,
+    hiddenFileExtensions: "",
+    hiddenFileFolders: ""
+  };
+
+  assert.equal(filterModule.shouldHideFileExplorerPath("my/assets/folder/file.md", settings), true);
+  assert.equal(filterModule.shouldHideFileExplorerPath("my/assets/other/file.md", settings), false);
+});
