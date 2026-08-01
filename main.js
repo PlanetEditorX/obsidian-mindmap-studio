@@ -18383,7 +18383,7 @@ function getNodeCaptureRuntime() {
     const fs = requireFunction("node:fs/promises");
     const os = requireFunction("node:os");
     const path = requireFunction("node:path");
-    return { platform: processModule.platform, execFile: childProcess.execFile, fs, os, path };
+    return { platform: processModule.platform, execFile: childProcess.execFile, spawn: childProcess.spawn, fs, os, path };
   } catch (e) {
     return null;
   }
@@ -18420,16 +18420,25 @@ function pngDataUrlToBytes(dataUrl) {
 function normalizeBrowserDisplay(metrics) {
   const width = Math.max(1, Math.round(Number.isFinite(metrics.width) ? Number(metrics.width) : 1));
   const height = Math.max(1, Math.round(Number.isFinite(metrics.height) ? Number(metrics.height) : 1));
-  return {
-    id: 0,
+  const xValue = Number.isFinite(metrics.x) ? Number(metrics.x) : Number(metrics.left);
+  const yValue = Number.isFinite(metrics.y) ? Number(metrics.y) : Number(metrics.top);
+  const display = {
+    id: Number.isFinite(metrics.id) ? Number(metrics.id) : 0,
     bounds: {
-      x: Math.round(Number.isFinite(metrics.left) ? Number(metrics.left) : 0),
-      y: Math.round(Number.isFinite(metrics.top) ? Number(metrics.top) : 0),
+      x: Math.round(Number.isFinite(xValue) ? xValue : 0),
+      y: Math.round(Number.isFinite(yValue) ? yValue : 0),
       width,
       height
     },
     scaleFactor: Math.max(1, Number.isFinite(metrics.scaleFactor) ? Number(metrics.scaleFactor) : 1)
   };
+  if (typeof metrics.label === "string") display.label = metrics.label;
+  if (metrics.primary === true) display.primary = true;
+  if (metrics.active === true) display.active = true;
+  if (Array.isArray(metrics.displays) && metrics.displays.length) {
+    display.displays = metrics.displays.map((item) => normalizeBrowserDisplay(item));
+  }
+  return display;
 }
 function getBrowserDisplay() {
   const browserScreen = window.screen;
@@ -18449,75 +18458,107 @@ function pngBytesToDataUrl(bytes) {
   return `data:image/png;base64,${buffer.Buffer.from(bytes).toString("base64")}`;
 }
 function captureEditorHtml(display, mode, imageDataUrl = "screen.png", messageToken = "test-token") {
+  var _a2;
   const bounds = JSON.stringify(display.bounds);
+  const displays = JSON.stringify((((_a2 = display.displays) == null ? void 0 : _a2.length) ? display.displays : [display]).map((item) => {
+    var _a3;
+    return {
+      id: item.id,
+      bounds: item.bounds,
+      scaleFactor: (_a3 = item.scaleFactor) != null ? _a3 : 1,
+      label: item.label,
+      primary: item.primary === true,
+      active: item.active === true
+    };
+  }));
   const captureMode = JSON.stringify(mode);
   const source = JSON.stringify(imageDataUrl);
   const token = JSON.stringify(messageToken);
   return `<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data: file: blob:; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
 <title>MindMap Studio \u622A\u56FE</title><style>
-*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#111;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;user-select:none}
-#base,#annotations,#preview{position:fixed;inset:0;width:100%;height:100%}#base{z-index:0}#annotations{z-index:1;pointer-events:none}#preview{z-index:2;pointer-events:none}
-.shade{position:fixed;background:rgba(0,0,0,.52);z-index:3;pointer-events:none}.selection{position:fixed;border:3px solid #00a8ff;box-shadow:0 0 0 1px #fff,0 0 0 4px rgba(0,0,0,.48),0 0 18px rgba(0,168,255,.72);z-index:4;pointer-events:none}
-.drag-strip{position:absolute;left:0;right:0;top:-2px;height:12px;cursor:move;pointer-events:auto}.metrics{position:absolute;left:-2px;bottom:100%;margin-bottom:8px;background:rgba(15,23,42,.92);color:#fff;border:1px solid rgba(255,255,255,.22);border-radius:6px;padding:5px 8px;font-size:12px;white-space:nowrap;pointer-events:auto;cursor:move}
-.handle{position:absolute;width:14px;height:14px;background:#fff;border:3px solid #008ee6;border-radius:3px;box-shadow:0 1px 4px rgba(0,0,0,.65);pointer-events:auto}.nw{left:-7px;top:-7px;cursor:nwse-resize}.n{left:50%;top:-7px;transform:translateX(-50%);cursor:ns-resize}.ne{right:-7px;top:-7px;cursor:nesw-resize}.e{right:-7px;top:50%;transform:translateY(-50%);cursor:ew-resize}.se{right:-7px;bottom:-7px;cursor:nwse-resize}.s{left:50%;bottom:-7px;transform:translateX(-50%);cursor:ns-resize}.sw{left:-7px;bottom:-7px;cursor:nesw-resize}.w{left:-7px;top:50%;transform:translateY(-50%);cursor:ew-resize}
-#drawLayer{position:fixed;z-index:5;cursor:crosshair}.toolbar{position:fixed;z-index:8;display:flex;align-items:center;gap:4px;padding:6px;background:rgba(15,23,42,.96);border:1px solid rgba(255,255,255,.18);border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.42);white-space:nowrap}
-.toolbar button{height:34px;border:0;border-radius:7px;padding:0 10px;background:transparent;color:#e5edf8;font-size:12px;cursor:pointer}.toolbar button:hover{background:rgba(255,255,255,.12)}.toolbar button.active{background:#2563eb;color:#fff}.toolbar .sep{width:1px;height:22px;background:rgba(255,255,255,.18);margin:0 2px}.toolbar .primary{background:#2563eb}.toolbar .danger:hover{background:#b91c1c}
-#tip{position:fixed;right:14px;top:14px;z-index:9;color:#fff;background:rgba(15,23,42,.78);padding:7px 10px;border-radius:7px;font-size:12px;pointer-events:none}
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#0b0f14;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;user-select:none;color:#fff}
+#base,#annotations,#preview{position:fixed;inset:0;width:100%;height:100%}#base{z-index:0;background:#0b0f14}#annotations{z-index:1;pointer-events:none}#preview{z-index:2;pointer-events:none}
+.shade{position:fixed;background:rgba(4,8,13,.5);z-index:3;pointer-events:none;backdrop-filter:saturate(.9)}
+.selection{position:fixed;border:2px solid rgba(42,179,255,.98);border-radius:9px;box-shadow:0 0 0 1px rgba(255,255,255,.9),0 0 0 4px rgba(0,0,0,.28),0 6px 26px rgba(0,142,230,.36);z-index:4;pointer-events:none}
+.drag-strip{position:absolute;left:10px;right:10px;top:-4px;height:15px;cursor:move;pointer-events:auto}.metrics{position:absolute;left:-1px;bottom:100%;margin-bottom:9px;background:rgba(13,20,31,.92);color:#fff;border:1px solid rgba(255,255,255,.17);border-radius:8px;padding:6px 9px;font-size:12px;line-height:1;white-space:nowrap;pointer-events:auto;cursor:move;box-shadow:0 7px 18px rgba(0,0,0,.3);backdrop-filter:blur(10px)}
+.handle{position:absolute;width:11px;height:11px;background:#fff;border:2px solid #169fe8;border-radius:50%;box-shadow:0 1px 5px rgba(0,0,0,.55);pointer-events:auto}.nw{left:-6px;top:-6px;cursor:nwse-resize}.n{left:50%;top:-6px;transform:translateX(-50%);cursor:ns-resize}.ne{right:-6px;top:-6px;cursor:nesw-resize}.e{right:-6px;top:50%;transform:translateY(-50%);cursor:ew-resize}.se{right:-6px;bottom:-6px;cursor:nwse-resize}.s{left:50%;bottom:-6px;transform:translateX(-50%);cursor:ns-resize}.sw{left:-6px;bottom:-6px;cursor:nesw-resize}.w{left:-6px;top:50%;transform:translateY(-50%);cursor:ew-resize}
+#drawLayer{position:fixed;z-index:5;cursor:crosshair}.toolbar,.stylebar,.screen-switcher{position:fixed;z-index:8;display:flex;align-items:center;gap:4px;padding:6px;background:rgba(13,20,31,.94);border:1px solid rgba(255,255,255,.15);border-radius:12px;box-shadow:0 12px 34px rgba(0,0,0,.38);white-space:nowrap;backdrop-filter:blur(14px)}
+.toolbar button,.stylebar button,.screen-switcher button{height:34px;border:0;border-radius:8px;padding:0 10px;background:transparent;color:#e8eef7;font-size:12px;cursor:pointer}.toolbar button:hover,.stylebar button:hover,.screen-switcher button:hover{background:rgba(255,255,255,.1)}.toolbar button.active,.stylebar button.active,.screen-switcher button.active{background:#1976d2;color:#fff}.toolbar .sep,.stylebar .sep{width:1px;height:22px;background:rgba(255,255,255,.16);margin:0 2px}.toolbar .primary{background:#1976d2}.toolbar .danger:hover{background:#b4232f}
+.stylebar{display:none;padding:5px 7px;z-index:9}.stylebar.show{display:flex}.color-dot{width:24px!important;height:24px!important;padding:0!important;border-radius:50%!important;border:2px solid rgba(255,255,255,.72)!important;box-shadow:0 0 0 1px rgba(0,0,0,.35)}.color-dot.active{outline:2px solid #fff;outline-offset:2px}.width-swatch{min-width:34px;padding:0 8px!important}.shape-option{min-width:42px}.screen-switcher{left:14px;top:14px;z-index:10;padding:5px}.screen-switcher.hidden{display:none}
+#tip{position:fixed;right:14px;top:14px;z-index:10;color:#fff;background:rgba(13,20,31,.76);border:1px solid rgba(255,255,255,.12);padding:8px 11px;border-radius:9px;font-size:12px;pointer-events:none;backdrop-filter:blur(10px)}
+#textEditor{position:fixed;z-index:12;display:none;min-width:180px;min-height:48px;max-width:420px;padding:7px 9px;border:2px solid #239fe8;border-radius:8px;outline:none;background:rgba(255,255,255,.96);color:#111;box-shadow:0 8px 28px rgba(0,0,0,.36);resize:both;user-select:text;line-height:1.35}
 </style></head><body>
 <canvas id="base"></canvas><canvas id="annotations"></canvas><canvas id="preview"></canvas>
 <div id="shadeTop" class="shade"></div><div id="shadeLeft" class="shade"></div><div id="shadeRight" class="shade"></div><div id="shadeBottom" class="shade"></div>
 <div id="selection" class="selection"><div class="drag-strip" data-drag="move"></div><div id="metrics" class="metrics" data-drag="move"></div>
 <div class="handle nw" data-handle="nw"></div><div class="handle n" data-handle="n"></div><div class="handle ne" data-handle="ne"></div><div class="handle e" data-handle="e"></div><div class="handle se" data-handle="se"></div><div class="handle s" data-handle="s"></div><div class="handle sw" data-handle="sw"></div><div class="handle w" data-handle="w"></div></div>
-<div id="drawLayer"></div><div id="toolbar" class="toolbar">
+<div id="drawLayer"></div>
+<div id="toolbar" class="toolbar">
 <button data-tool="shape">\u51E0\u4F55\u56FE\u5F62</button><button data-tool="pen">\u753B\u7B14</button><button data-tool="arrow">\u7BAD\u5934</button><button data-tool="text">\u6587\u5B57</button><button data-tool="number">\u5E8F\u53F7</button><button data-tool="mosaic">\u9A6C\u8D5B\u514B</button><button data-tool="eraser">\u6A61\u76AE\u64E6</button><span class="sep"></span>
 <button data-action="recognize-copy">\u8BC6\u522B\u5E76\u590D\u5236</button><button data-action="pin">\u56FA\u5B9A</button><button data-action="download">\u4E0B\u8F7D</button><button class="danger" data-action="cancel">\u53D6\u6D88</button><button class="primary" data-action="copy">\u590D\u5236</button></div>
-<div id="tip"></div>
+<div id="stylebar" class="stylebar">
+<div data-style-group="shape"><button class="shape-option active" data-shape="rect">\u77E9\u5F62</button><button class="shape-option" data-shape="round">\u5706\u89D2</button><button class="shape-option" data-shape="ellipse">\u692D\u5706</button><span class="sep"></span></div>
+<button class="color-dot active" data-color="#ff3b30" style="background:#ff3b30" aria-label="\u7EA2\u8272"></button><button class="color-dot" data-color="#ffcc00" style="background:#ffcc00" aria-label="\u9EC4\u8272"></button><button class="color-dot" data-color="#34c759" style="background:#34c759" aria-label="\u7EFF\u8272"></button><button class="color-dot" data-color="#0a84ff" style="background:#0a84ff" aria-label="\u84DD\u8272"></button><button class="color-dot" data-color="#ffffff" style="background:#ffffff" aria-label="\u767D\u8272"></button><button class="color-dot" data-color="#111111" style="background:#111111" aria-label="\u9ED1\u8272"></button><span class="sep"></span>
+<button class="width-swatch" data-width="2">\u7EC6</button><button class="width-swatch active" data-width="4">\u4E2D</button><button class="width-swatch" data-width="8">\u7C97</button><span class="sep"></span><button data-fill="toggle">\u586B\u5145</button>
+</div>
+<div id="screenSwitcher" class="screen-switcher"></div><textarea id="textEditor" spellcheck="false" placeholder="\u8F93\u5165\u6587\u5B57\uFF0CCtrl/Cmd + Enter \u5B8C\u6210"></textarea><div id="tip"></div>
 <script>
 (() => {
-  const displayBounds=${bounds}; const captureMode=${captureMode}; const messageToken=${token}; const recognizeMode=captureMode==='capture-recognize'; const base=document.getElementById('base'); const ann=document.getElementById('annotations'); const preview=document.getElementById('preview');
-  const bctx=base.getContext('2d'); const actx=ann.getContext('2d'); const pctx=preview.getContext('2d'); const selection=document.getElementById('selection'); const metrics=document.getElementById('metrics'); const toolbar=document.getElementById('toolbar'); const drawLayer=document.getElementById('drawLayer'); const tip=document.getElementById('tip');
-  const shades=['shadeTop','shadeLeft','shadeRight','shadeBottom'].map(id=>document.getElementById(id)); const dpr=Math.max(1,window.devicePixelRatio||1); const autoConfirmDelayMs=3000; let tool=''; let drawing=false; let start=null; let number=1; let drag=null; let selectionDraw=null; let autoConfirmTimer=null; let autoConfirmArmed=false; let pointerInsideSelection=false;
-  let rect={x:Math.round(innerWidth*.18),y:Math.round(innerHeight*.16),w:Math.round(innerWidth*.64),h:Math.round(innerHeight*.62)}; const minSize=36; tip.textContent=recognizeMode?'\u62D6\u52A8\u9009\u62E9\u622A\u56FE\u8303\u56F4\uFF1B\u91CA\u653E\u540E 3 \u79D2\u81EA\u52A8\u5B8C\u6210\uFF0C\u5728\u9009\u533A\u5185\u79FB\u52A8\u9F20\u6807\u6216\u8C03\u6574\u8FB9\u6846\u53EF\u91CD\u7F6E\u8BA1\u65F6':'\u62D6\u52A8\u6216\u8C03\u6574\u84DD\u8272\u8FB9\u6846\uFF1B\u53CC\u51FB\u9009\u533A\u590D\u5236\u5E76\u63D2\u5165\u8282\u70B9\uFF0CEsc \u53D6\u6D88';
+  const virtualBounds=${bounds}; const availableDisplays=${displays}; const captureMode=${captureMode}; const messageToken=${token}; const recognizeMode=captureMode==='capture-recognize';
+  const base=document.getElementById('base'); const ann=document.getElementById('annotations'); const preview=document.getElementById('preview'); const bctx=base.getContext('2d'); const actx=ann.getContext('2d'); const pctx=preview.getContext('2d');
+  const selection=document.getElementById('selection'); const metrics=document.getElementById('metrics'); const toolbar=document.getElementById('toolbar'); const stylebar=document.getElementById('stylebar'); const screenSwitcher=document.getElementById('screenSwitcher'); const drawLayer=document.getElementById('drawLayer'); const textEditor=document.getElementById('textEditor'); const tip=document.getElementById('tip');
+  const shades=['shadeTop','shadeLeft','shadeRight','shadeBottom'].map(id=>document.getElementById(id)); const dpr=Math.max(1,window.devicePixelRatio||1); const autoConfirmDelayMs=3000; const minSize=36;
+  let tool=''; let drawing=false; let start=null; let number=1; let drag=null; let selectionDraw=null; let autoConfirmTimer=null; let autoConfirmArmed=false; let pointerInsideSelection=false; let activeTextPoint=null;
+  let strokeColor='#ff3b30'; let strokeWidth=4; let fillShape=false; let shapeKind='rect'; let viewBounds=(availableDisplays.find(item=>item.active)||availableDisplays.find(item=>item.primary)||availableDisplays[0]||{bounds:virtualBounds}).bounds; let imageArea={x:0,y:0,w:innerWidth,h:innerHeight}; let rect={x:0,y:0,w:0,h:0};
+  tip.textContent=recognizeMode?'\u62D6\u52A8\u9009\u62E9\u622A\u56FE\u8303\u56F4\uFF1B\u91CA\u653E\u540E 3 \u79D2\u81EA\u52A8\u5B8C\u6210\uFF0C\u5728\u9009\u533A\u5185\u79FB\u52A8\u9F20\u6807\u6216\u8C03\u6574\u8FB9\u6846\u53EF\u91CD\u7F6E\u8BA1\u65F6':'\u62D6\u52A8\u6216\u8C03\u6574\u84DD\u8272\u8FB9\u6846\uFF1B\u53CC\u51FB\u9009\u533A\u590D\u5236\u5E76\u63D2\u5165\u8282\u70B9\uFF0CEsc \u53D6\u6D88';
   const image=new Image(); image.src=${source};
-  function resizeCanvases(){for(const c of [base,ann,preview]){c.width=Math.round(innerWidth*dpr);c.height=Math.round(innerHeight*dpr);c.style.width=innerWidth+'px';c.style.height=innerHeight+'px'}; for(const c of [bctx,actx,pctx])c.setTransform(dpr,0,0,dpr,0,0); drawBase(); updateRect()}
-  function drawBase(){if(!image.complete)return;bctx.clearRect(0,0,innerWidth,innerHeight);bctx.drawImage(image,0,0,innerWidth,innerHeight)}
-  image.onload=()=>resizeCanvases(); window.addEventListener('resize',resizeCanvases);
-  function clamp(){rect.w=Math.max(minSize,Math.min(innerWidth,rect.w));rect.h=Math.max(minSize,Math.min(innerHeight,rect.h));rect.x=Math.max(0,Math.min(innerWidth-rect.w,rect.x));rect.y=Math.max(0,Math.min(innerHeight-rect.h,rect.y))}
+  function resizeCanvas(c,ctx){c.width=Math.round(innerWidth*dpr);c.height=Math.round(innerHeight*dpr);c.style.width=innerWidth+'px';c.style.height=innerHeight+'px';ctx.setTransform(dpr,0,0,dpr,0,0)}
+  function computeImageArea(){const vw=Math.max(1,viewBounds.width),vh=Math.max(1,viewBounds.height),windowRatio=innerWidth/Math.max(1,innerHeight),viewRatio=vw/vh;if(viewRatio>windowRatio){imageArea.w=innerWidth;imageArea.h=innerWidth/viewRatio;imageArea.x=0;imageArea.y=(innerHeight-imageArea.h)/2}else{imageArea.h=innerHeight;imageArea.w=innerHeight*viewRatio;imageArea.y=0;imageArea.x=(innerWidth-imageArea.w)/2}}
+  function resetSelection(){rect={x:imageArea.x+imageArea.w*.18,y:imageArea.y+imageArea.h*.16,w:imageArea.w*.64,h:imageArea.h*.62};updateRect()}
+  function drawBase(){if(!image.complete)return;computeImageArea();bctx.clearRect(0,0,innerWidth,innerHeight);bctx.fillStyle='#0b0f14';bctx.fillRect(0,0,innerWidth,innerHeight);const px=image.naturalWidth/Math.max(1,virtualBounds.width),py=image.naturalHeight/Math.max(1,virtualBounds.height);const sx=(viewBounds.x-virtualBounds.x)*px,sy=(viewBounds.y-virtualBounds.y)*py,sw=viewBounds.width*px,sh=viewBounds.height*py;bctx.imageSmoothingEnabled=true;bctx.imageSmoothingQuality='high';bctx.drawImage(image,sx,sy,sw,sh,imageArea.x,imageArea.y,imageArea.w,imageArea.h)}
+  function resizeCanvases(){resizeCanvas(base,bctx);resizeCanvas(ann,actx);resizeCanvas(preview,pctx);drawBase();resetSelection()}
+  image.onload=()=>{buildScreenSwitcher();resizeCanvases()}; window.addEventListener('resize',resizeCanvases);
+  function clamp(){rect.w=Math.max(minSize,Math.min(imageArea.w,rect.w));rect.h=Math.max(minSize,Math.min(imageArea.h,rect.h));rect.x=Math.max(imageArea.x,Math.min(imageArea.x+imageArea.w-rect.w,rect.x));rect.y=Math.max(imageArea.y,Math.min(imageArea.y+imageArea.h-rect.h,rect.y))}
+  function viewportToGlobal(x,y){return{x:viewBounds.x+(x-imageArea.x)*viewBounds.width/Math.max(1,imageArea.w),y:viewBounds.y+(y-imageArea.y)*viewBounds.height/Math.max(1,imageArea.h)}}
   function updateRect(){clamp();selection.style.left=rect.x+'px';selection.style.top=rect.y+'px';selection.style.width=rect.w+'px';selection.style.height=rect.h+'px';drawLayer.style.left=rect.x+'px';drawLayer.style.top=rect.y+'px';drawLayer.style.width=rect.w+'px';drawLayer.style.height=rect.h+'px';
     shades[0].style.cssText='left:0;top:0;width:100%;height:'+rect.y+'px';shades[1].style.cssText='left:0;top:'+rect.y+'px;width:'+rect.x+'px;height:'+rect.h+'px';shades[2].style.cssText='left:'+(rect.x+rect.w)+'px;top:'+rect.y+'px;width:'+(innerWidth-rect.x-rect.w)+'px;height:'+rect.h+'px';shades[3].style.cssText='left:0;top:'+(rect.y+rect.h)+'px;width:100%;height:'+(innerHeight-rect.y-rect.h)+'px';
-    const coordinateScaleX=displayBounds.width/Math.max(1,innerWidth),coordinateScaleY=displayBounds.height/Math.max(1,innerHeight);metrics.textContent='X '+Math.round(displayBounds.x+rect.x*coordinateScaleX)+'  Y '+Math.round(displayBounds.y+rect.y*coordinateScaleY)+'  '+Math.round(rect.w*coordinateScaleX)+' \xD7 '+Math.round(rect.h*coordinateScaleY); placeToolbar()}
-  function placeToolbar(){const tw=toolbar.offsetWidth||820,th=toolbar.offsetHeight||48;let left=Math.max(8,Math.min(innerWidth-tw-8,rect.x+rect.w/2-tw/2));let top=rect.y+rect.h+10;if(top+th>innerHeight-8)top=Math.max(8,rect.y-th-10);toolbar.style.left=left+'px';toolbar.style.top=top+'px'}
-  function point(ev){return{x:ev.clientX,y:ev.clientY}}
-  function localPoint(ev){return{x:ev.clientX-rect.x,y:ev.clientY-rect.y}}
-  function insideRect(x,y){return x>=rect.x&&x<=rect.x+rect.w&&y>=rect.y&&y<=rect.y+rect.h}
-  function clearAutoConfirm(){if(autoConfirmTimer!==null){clearTimeout(autoConfirmTimer);autoConfirmTimer=null}}
-  function scheduleAutoConfirm(){if(!recognizeMode||!autoConfirmArmed)return;clearAutoConfirm();autoConfirmTimer=setTimeout(()=>{if(pointerInsideSelection||drag||selectionDraw||drawing){scheduleAutoConfirm();return}action('copy')},autoConfirmDelayMs)}
-  function armAutoConfirm(){if(!recognizeMode)return;autoConfirmArmed=true;scheduleAutoConfirm()}
-  function resetAutoConfirm(){if(recognizeMode&&autoConfirmArmed)scheduleAutoConfirm()}
-  function beginResize(ev,handle){ev.preventDefault();ev.stopPropagation();clearAutoConfirm();drag={kind:handle,start:point(ev),rect:{...rect}};window.addEventListener('pointermove',moveResize);window.addEventListener('pointerup',endResize,{once:true})}
+    const topLeft=viewportToGlobal(rect.x,rect.y),bottomRight=viewportToGlobal(rect.x+rect.w,rect.y+rect.h);metrics.textContent='X '+Math.round(topLeft.x)+'  Y '+Math.round(topLeft.y)+'  '+Math.round(bottomRight.x-topLeft.x)+' \xD7 '+Math.round(bottomRight.y-topLeft.y);placeToolbar()}
+  function placeToolbar(){const tw=toolbar.offsetWidth||820,th=toolbar.offsetHeight||48;let left=Math.max(8,Math.min(innerWidth-tw-8,rect.x+rect.w/2-tw/2));let top=rect.y+rect.h+12;if(top+th>innerHeight-8)top=Math.max(8,rect.y-th-12);toolbar.style.left=left+'px';toolbar.style.top=top+'px';const sw=stylebar.offsetWidth||620,sh=stylebar.offsetHeight||44;stylebar.style.left=Math.max(8,Math.min(innerWidth-sw-8,left))+'px';let styleTop=top+th+7;if(styleTop+sh>innerHeight-8)styleTop=Math.max(8,top-sh-7);stylebar.style.top=styleTop+'px'}
+  function buildScreenSwitcher(){screenSwitcher.innerHTML='';const options=[];if(availableDisplays.length>1)options.push({label:'\u5168\u90E8\u5C4F\u5E55',bounds:virtualBounds,key:'all'});availableDisplays.forEach((item,index)=>options.push({label:item.label||('\u5C4F\u5E55 '+(index+1)),bounds:item.bounds,key:String(item.id)}));if(options.length<=1){screenSwitcher.classList.add('hidden');return}options.forEach(option=>{const button=document.createElement('button');button.textContent=option.label;button.classList.toggle('active',sameBounds(option.bounds,viewBounds));button.addEventListener('click',()=>{if(sameBounds(option.bounds,viewBounds))return;viewBounds=option.bounds;screenSwitcher.querySelectorAll('button').forEach(item=>item.classList.toggle('active',item===button));actx.clearRect(0,0,innerWidth,innerHeight);pctx.clearRect(0,0,innerWidth,innerHeight);drawBase();resetSelection();tip.textContent='\u5DF2\u5207\u6362\u5230 '+option.label+'\uFF1B\u5207\u6362\u5C4F\u5E55\u540E\u5DF2\u6E05\u9664\u5F53\u524D\u6807\u6CE8'});screenSwitcher.appendChild(button)})}
+  function sameBounds(a,b){return a.x===b.x&&a.y===b.y&&a.width===b.width&&a.height===b.height}
+  function point(ev){return{x:ev.clientX,y:ev.clientY}} function localPoint(ev){return{x:ev.clientX-rect.x,y:ev.clientY-rect.y}} function insideRect(x,y){return x>=rect.x&&x<=rect.x+rect.w&&y>=rect.y&&y<=rect.y+rect.h} function insideImage(x,y){return x>=imageArea.x&&x<=imageArea.x+imageArea.w&&y>=imageArea.y&&y<=imageArea.y+imageArea.h}
+  function clearAutoConfirm(){if(autoConfirmTimer!==null){clearTimeout(autoConfirmTimer);autoConfirmTimer=null}} function scheduleAutoConfirm(){if(!recognizeMode||!autoConfirmArmed)return;clearAutoConfirm();autoConfirmTimer=setTimeout(()=>{if(pointerInsideSelection||drag||selectionDraw||drawing||textEditor.style.display==='block'){scheduleAutoConfirm();return}action('copy')},autoConfirmDelayMs)} function armAutoConfirm(){if(!recognizeMode)return;autoConfirmArmed=true;scheduleAutoConfirm()} function resetAutoConfirm(){if(recognizeMode&&autoConfirmArmed)scheduleAutoConfirm()}
+  function beginResize(ev,handle){ev.preventDefault();ev.stopPropagation();commitText();clearAutoConfirm();drag={kind:handle,start:point(ev),rect:{...rect}};window.addEventListener('pointermove',moveResize);window.addEventListener('pointerup',endResize,{once:true})}
   function moveResize(ev){if(!drag)return;resetAutoConfirm();const dx=ev.clientX-drag.start.x,dy=ev.clientY-drag.start.y,r=drag.rect;let x=r.x,y=r.y,w=r.w,h=r.h;if(drag.kind==='move'){x=r.x+dx;y=r.y+dy}else{if(drag.kind.includes('e'))w=r.w+dx;if(drag.kind.includes('s'))h=r.h+dy;if(drag.kind.includes('w')){x=r.x+dx;w=r.w-dx}if(drag.kind.includes('n')){y=r.y+dy;h=r.h-dy}if(w<minSize){if(drag.kind.includes('w'))x-=minSize-w;w=minSize}if(h<minSize){if(drag.kind.includes('n'))y-=minSize-h;h=minSize}}rect={x,y,w,h};updateRect()}
   function endResize(){drag=null;window.removeEventListener('pointermove',moveResize);armAutoConfirm()}
   selection.querySelectorAll('[data-handle]').forEach(el=>el.addEventListener('pointerdown',ev=>beginResize(ev,el.dataset.handle)));selection.querySelectorAll('[data-drag]').forEach(el=>el.addEventListener('pointerdown',ev=>beginResize(ev,'move')));
-  function beginSelection(ev){if(ev.button!==0||tool||ev.target.closest('.toolbar')||ev.target.closest('[data-handle]')||ev.target.closest('[data-drag]'))return;selectionDraw={start:point(ev),active:false};window.addEventListener('pointermove',moveSelection);window.addEventListener('pointerup',endSelection,{once:true})}
-  function moveSelection(ev){if(!selectionDraw)return;const dx=ev.clientX-selectionDraw.start.x,dy=ev.clientY-selectionDraw.start.y;if(!selectionDraw.active&&Math.hypot(dx,dy)<4)return;selectionDraw.active=true;clearAutoConfirm();rect={x:Math.min(selectionDraw.start.x,ev.clientX),y:Math.min(selectionDraw.start.y,ev.clientY),w:Math.max(minSize,Math.abs(dx)),h:Math.max(minSize,Math.abs(dy))};updateRect()}
-  function endSelection(){const completed=selectionDraw?.active===true;selectionDraw=null;window.removeEventListener('pointermove',moveSelection);if(completed)armAutoConfirm()}
+  function beginSelection(ev){if(ev.button!==0||tool||!insideImage(ev.clientX,ev.clientY)||ev.target.closest('.toolbar')||ev.target.closest('.stylebar')||ev.target.closest('.screen-switcher')||ev.target.closest('[data-handle]')||ev.target.closest('[data-drag]')||ev.target===textEditor)return;commitText();selectionDraw={start:point(ev),active:false};window.addEventListener('pointermove',moveSelection);window.addEventListener('pointerup',endSelection,{once:true})}
+  function moveSelection(ev){if(!selectionDraw)return;const endX=Math.max(imageArea.x,Math.min(imageArea.x+imageArea.w,ev.clientX)),endY=Math.max(imageArea.y,Math.min(imageArea.y+imageArea.h,ev.clientY)),dx=endX-selectionDraw.start.x,dy=endY-selectionDraw.start.y;if(!selectionDraw.active&&Math.hypot(dx,dy)<4)return;selectionDraw.active=true;clearAutoConfirm();rect={x:Math.min(selectionDraw.start.x,endX),y:Math.min(selectionDraw.start.y,endY),w:Math.max(minSize,Math.abs(dx)),h:Math.max(minSize,Math.abs(dy))};updateRect()}
+  function endSelection(){const completed=selectionDraw&&selectionDraw.active===true;selectionDraw=null;window.removeEventListener('pointermove',moveSelection);if(completed)armAutoConfirm()}
   document.addEventListener('pointerdown',beginSelection);
-  function setTool(next){tool=tool===next?'':next;toolbar.querySelectorAll('[data-tool]').forEach(btn=>btn.classList.toggle('active',btn.dataset.tool===tool));drawLayer.style.pointerEvents=tool?'auto':'none'}
+  function setTool(next){commitText();tool=tool===next?'':next;toolbar.querySelectorAll('[data-tool]').forEach(btn=>btn.classList.toggle('active',btn.dataset.tool===tool));drawLayer.style.pointerEvents=tool?'auto':'none';stylebar.classList.toggle('show',Boolean(tool&&['shape','pen','arrow','text','number'].includes(tool)));stylebar.querySelector('[data-style-group="shape"]').style.display=tool==='shape'?'contents':'none';stylebar.querySelector('[data-fill]').style.display=tool==='shape'?'inline-flex':'none';placeToolbar()}
   toolbar.querySelectorAll('[data-tool]').forEach(btn=>btn.addEventListener('click',()=>setTool(btn.dataset.tool)));
-  function style(ctx){ctx.lineCap='round';ctx.lineJoin='round';ctx.strokeStyle='#ff3b30';ctx.fillStyle='#ff3b30';ctx.lineWidth=3}
-  function drawArrow(ctx,a,b){style(ctx);ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();const angle=Math.atan2(b.y-a.y,b.x-a.x),head=14;ctx.beginPath();ctx.moveTo(b.x,b.y);ctx.lineTo(b.x-head*Math.cos(angle-Math.PI/6),b.y-head*Math.sin(angle-Math.PI/6));ctx.lineTo(b.x-head*Math.cos(angle+Math.PI/6),b.y-head*Math.sin(angle+Math.PI/6));ctx.closePath();ctx.fill()}
+  stylebar.querySelectorAll('[data-color]').forEach(btn=>btn.addEventListener('click',()=>{strokeColor=btn.dataset.color;stylebar.querySelectorAll('[data-color]').forEach(item=>item.classList.toggle('active',item===btn));resetAutoConfirm()}));
+  stylebar.querySelectorAll('[data-width]').forEach(btn=>btn.addEventListener('click',()=>{strokeWidth=Number(btn.dataset.width)||4;stylebar.querySelectorAll('[data-width]').forEach(item=>item.classList.toggle('active',item===btn));resetAutoConfirm()}));
+  stylebar.querySelectorAll('[data-shape]').forEach(btn=>btn.addEventListener('click',()=>{shapeKind=btn.dataset.shape;stylebar.querySelectorAll('[data-shape]').forEach(item=>item.classList.toggle('active',item===btn));resetAutoConfirm()}));
+  stylebar.querySelector('[data-fill]').addEventListener('click',ev=>{fillShape=!fillShape;ev.currentTarget.classList.toggle('active',fillShape);resetAutoConfirm()});
+  function applyStyle(ctx){ctx.lineCap='round';ctx.lineJoin='round';ctx.strokeStyle=strokeColor;ctx.fillStyle=strokeColor;ctx.lineWidth=strokeWidth;ctx.shadowColor='rgba(0,0,0,.22)';ctx.shadowBlur=1}
+  function roundedRectPath(ctx,x,y,w,h,r){const left=Math.min(x,x+w),top=Math.min(y,y+h),right=Math.max(x,x+w),bottom=Math.max(y,y+h),radius=Math.min(r,(right-left)/2,(bottom-top)/2);ctx.beginPath();ctx.moveTo(left+radius,top);ctx.lineTo(right-radius,top);ctx.quadraticCurveTo(right,top,right,top+radius);ctx.lineTo(right,bottom-radius);ctx.quadraticCurveTo(right,bottom,right-radius,bottom);ctx.lineTo(left+radius,bottom);ctx.quadraticCurveTo(left,bottom,left,bottom-radius);ctx.lineTo(left,top+radius);ctx.quadraticCurveTo(left,top,left+radius,top);ctx.closePath()}
+  function drawShape(ctx,a,b){applyStyle(ctx);if(shapeKind==='ellipse'){ctx.beginPath();ctx.ellipse((a.x+b.x)/2,(a.y+b.y)/2,Math.abs(b.x-a.x)/2,Math.abs(b.y-a.y)/2,0,0,Math.PI*2)}else if(shapeKind==='round'){roundedRectPath(ctx,a.x,a.y,b.x-a.x,b.y-a.y,14)}else{roundedRectPath(ctx,a.x,a.y,b.x-a.x,b.y-a.y,2)}if(fillShape){ctx.save();ctx.globalAlpha=.2;ctx.fill();ctx.restore()}ctx.stroke()}
+  function drawArrow(ctx,a,b){applyStyle(ctx);ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();const angle=Math.atan2(b.y-a.y,b.x-a.x),head=Math.max(13,strokeWidth*3.2);ctx.beginPath();ctx.moveTo(b.x,b.y);ctx.lineTo(b.x-head*Math.cos(angle-Math.PI/7),b.y-head*Math.sin(angle-Math.PI/7));ctx.lineTo(b.x-head*Math.cos(angle+Math.PI/7),b.y-head*Math.sin(angle+Math.PI/7));ctx.closePath();ctx.fill()}
   function commitPreview(){actx.drawImage(preview,0,0,innerWidth,innerHeight);pctx.clearRect(0,0,innerWidth,innerHeight)}
-  function mosaicAt(p){const size=28,small=5;const sx=Math.max(0,rect.x+p.x-size/2),sy=Math.max(0,rect.y+p.y-size/2);const tmp=document.createElement('canvas');tmp.width=small;tmp.height=small;const t=tmp.getContext('2d');t.drawImage(base,sx*dpr,sy*dpr,size*dpr,size*dpr,0,0,small,small);actx.save();actx.imageSmoothingEnabled=false;actx.drawImage(tmp,0,0,small,small,sx,sy,size,size);actx.restore()}
-  drawLayer.addEventListener('pointerdown',ev=>{if(!tool)return;const p=localPoint(ev);if(tool==='text'){const text=prompt('\u8F93\u5165\u6587\u5B57');if(text){style(actx);actx.font='bold 24px sans-serif';actx.fillText(text,rect.x+p.x,rect.y+p.y)}return}if(tool==='number'){style(actx);actx.beginPath();actx.arc(rect.x+p.x,rect.y+p.y,14,0,Math.PI*2);actx.fill();actx.fillStyle='#fff';actx.font='bold 15px sans-serif';actx.textAlign='center';actx.textBaseline='middle';actx.fillText(String(number++),rect.x+p.x,rect.y+p.y);return}drawing=true;start=p;drawLayer.setPointerCapture(ev.pointerId);if(tool==='pen'||tool==='eraser'||tool==='mosaic')moveDraw(ev)});
-  function moveDraw(ev){if(!drawing||!start)return;const p=localPoint(ev),a={x:rect.x+start.x,y:rect.y+start.y},b={x:rect.x+p.x,y:rect.y+p.y};if(tool==='pen'){style(actx);actx.beginPath();actx.moveTo(a.x,a.y);actx.lineTo(b.x,b.y);actx.stroke();start=p}else if(tool==='eraser'){actx.save();actx.globalCompositeOperation='destination-out';actx.lineWidth=24;actx.lineCap='round';actx.beginPath();actx.moveTo(a.x,a.y);actx.lineTo(b.x,b.y);actx.stroke();actx.restore();start=p}else if(tool==='mosaic'){mosaicAt(p);start=p}else{pctx.clearRect(0,0,innerWidth,innerHeight);style(pctx);if(tool==='shape')pctx.strokeRect(a.x,a.y,b.x-a.x,b.y-a.y);else if(tool==='arrow')drawArrow(pctx,a,b)}}
-  drawLayer.addEventListener('pointermove',moveDraw);drawLayer.addEventListener('pointerup',()=>{if(!drawing)return;if(tool==='shape'||tool==='arrow')commitPreview();drawing=false;start=null});
-  window.__mmsExport=()=>{const scaleX=image.naturalWidth/innerWidth,scaleY=image.naturalHeight/innerHeight;const out=document.createElement('canvas');out.width=Math.max(1,Math.round(rect.w*scaleX));out.height=Math.max(1,Math.round(rect.h*scaleY));const ctx=out.getContext('2d');ctx.drawImage(image,rect.x*scaleX,rect.y*scaleY,rect.w*scaleX,rect.h*scaleY,0,0,out.width,out.height);ctx.drawImage(ann,rect.x*dpr,rect.y*dpr,rect.w*dpr,rect.h*dpr,0,0,out.width,out.height);return{dataUrl:out.toDataURL('image/png'),bounds:{x:Math.round(displayBounds.x+rect.x*displayBounds.width/Math.max(1,innerWidth)),y:Math.round(displayBounds.y+rect.y*displayBounds.height/Math.max(1,innerHeight)),width:Math.round(rect.w*displayBounds.width/Math.max(1,innerWidth)),height:Math.round(rect.h*displayBounds.height/Math.max(1,innerHeight))}}};
-  function action(name){clearAutoConfirm();const exported=name==='cancel'?undefined:window.__mmsExport();const message={type:'MMS_CAPTURE_ACTION',token:messageToken,action:name,exported};const target=window.opener&&!window.opener.closed?window.opener:(window.parent!==window?window.parent:null);if(target)target.postMessage(message,'*')}toolbar.querySelectorAll('[data-action]').forEach(btn=>btn.addEventListener('click',()=>action(btn.dataset.action)));
-  document.addEventListener('pointermove',ev=>{const inside=insideRect(ev.clientX,ev.clientY);if(inside!==pointerInsideSelection){pointerInsideSelection=inside;if(recognizeMode&&autoConfirmArmed)resetAutoConfirm()}else if(inside&&recognizeMode&&autoConfirmArmed&&!selectionDraw)resetAutoConfirm()});
-  toolbar.addEventListener('pointermove',resetAutoConfirm);toolbar.addEventListener('pointerdown',resetAutoConfirm);
-  document.addEventListener('dblclick',ev=>{if(captureMode==='capture'&&!tool&&insideRect(ev.clientX,ev.clientY)&&!ev.target.closest('.toolbar'))action('copy')});
-  document.addEventListener('keydown',ev=>{if(ev.key==='Escape')action('cancel');if(ev.key==='Enter'&&!ev.shiftKey)action('copy')});
+  function mosaicAt(p){const size=32,small=6,sx=Math.max(imageArea.x,Math.min(imageArea.x+imageArea.w-size,rect.x+p.x-size/2)),sy=Math.max(imageArea.y,Math.min(imageArea.y+imageArea.h-size,rect.y+p.y-size/2)),tmp=document.createElement('canvas');tmp.width=small;tmp.height=small;const t=tmp.getContext('2d');t.drawImage(base,sx*dpr,sy*dpr,size*dpr,size*dpr,0,0,small,small);actx.save();actx.imageSmoothingEnabled=false;actx.drawImage(tmp,0,0,small,small,sx,sy,size,size);actx.restore()}
+  function openTextEditor(p){commitText();activeTextPoint={x:rect.x+p.x,y:rect.y+p.y};textEditor.style.left=Math.min(innerWidth-230,activeTextPoint.x)+'px';textEditor.style.top=Math.min(innerHeight-90,activeTextPoint.y)+'px';textEditor.style.display='block';textEditor.style.color=strokeColor;textEditor.style.fontSize=Math.max(18,strokeWidth*5+10)+'px';textEditor.value='';textEditor.focus();resetAutoConfirm()}
+  function commitText(cancel){if(textEditor.style.display!=='block')return;const value=textEditor.value.trimEnd(),point=activeTextPoint;textEditor.style.display='none';activeTextPoint=null;if(cancel||!value||!point)return;applyStyle(actx);const fontSize=Math.max(20,strokeWidth*5+12);actx.font='600 '+fontSize+'px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif';actx.textAlign='left';actx.textBaseline='top';actx.shadowBlur=1;value.split(/\\n/).forEach((line,index)=>actx.fillText(line,point.x,point.y+index*fontSize*1.3));resetAutoConfirm()}
+  textEditor.addEventListener('pointerdown',ev=>ev.stopPropagation());textEditor.addEventListener('keydown',ev=>{ev.stopPropagation();if(ev.key==='Escape'){ev.preventDefault();commitText(true)}else if(ev.key==='Enter'&&(ev.ctrlKey||ev.metaKey)){ev.preventDefault();commitText(false)}});textEditor.addEventListener('blur',()=>setTimeout(()=>commitText(false),0));
+  drawLayer.addEventListener('pointerdown',ev=>{if(!tool)return;resetAutoConfirm();const p=localPoint(ev);if(tool==='text'){openTextEditor(p);return}if(tool==='number'){applyStyle(actx);actx.beginPath();actx.arc(rect.x+p.x,rect.y+p.y,15,0,Math.PI*2);actx.fill();actx.fillStyle=strokeColor==='#ffffff'?'#111':'#fff';actx.shadowBlur=0;actx.font='700 15px sans-serif';actx.textAlign='center';actx.textBaseline='middle';actx.fillText(String(number++),rect.x+p.x,rect.y+p.y);return}drawing=true;start=p;drawLayer.setPointerCapture(ev.pointerId);if(tool==='pen'||tool==='eraser'||tool==='mosaic')moveDraw(ev)});
+  function moveDraw(ev){if(!drawing||!start)return;resetAutoConfirm();const p=localPoint(ev),a={x:rect.x+start.x,y:rect.y+start.y},b={x:rect.x+p.x,y:rect.y+p.y};if(tool==='pen'){applyStyle(actx);actx.beginPath();actx.moveTo(a.x,a.y);actx.lineTo(b.x,b.y);actx.stroke();start=p}else if(tool==='eraser'){actx.save();actx.globalCompositeOperation='destination-out';actx.lineWidth=Math.max(20,strokeWidth*5);actx.lineCap='round';actx.beginPath();actx.moveTo(a.x,a.y);actx.lineTo(b.x,b.y);actx.stroke();actx.restore();start=p}else if(tool==='mosaic'){mosaicAt(p);start=p}else{pctx.clearRect(0,0,innerWidth,innerHeight);if(tool==='shape')drawShape(pctx,a,b);else if(tool==='arrow')drawArrow(pctx,a,b)}}
+  drawLayer.addEventListener('pointermove',moveDraw);drawLayer.addEventListener('pointerup',()=>{if(!drawing)return;if(tool==='shape'||tool==='arrow')commitPreview();drawing=false;start=null;armAutoConfirm()});
+  window.__mmsExport=()=>{commitText(false);const sourcePixelsPerViewportX=(viewBounds.width/Math.max(1,imageArea.w))*(image.naturalWidth/Math.max(1,virtualBounds.width)),sourcePixelsPerViewportY=(viewBounds.height/Math.max(1,imageArea.h))*(image.naturalHeight/Math.max(1,virtualBounds.height));const sourceX=((viewBounds.x-virtualBounds.x)+(rect.x-imageArea.x)*viewBounds.width/Math.max(1,imageArea.w))*(image.naturalWidth/Math.max(1,virtualBounds.width)),sourceY=((viewBounds.y-virtualBounds.y)+(rect.y-imageArea.y)*viewBounds.height/Math.max(1,imageArea.h))*(image.naturalHeight/Math.max(1,virtualBounds.height));const out=document.createElement('canvas');out.width=Math.max(1,Math.round(rect.w*sourcePixelsPerViewportX));out.height=Math.max(1,Math.round(rect.h*sourcePixelsPerViewportY));const ctx=out.getContext('2d');ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';ctx.drawImage(image,sourceX,sourceY,out.width,out.height,0,0,out.width,out.height);ctx.drawImage(ann,rect.x*dpr,rect.y*dpr,rect.w*dpr,rect.h*dpr,0,0,out.width,out.height);const topLeft=viewportToGlobal(rect.x,rect.y),bottomRight=viewportToGlobal(rect.x+rect.w,rect.y+rect.h);return{dataUrl:out.toDataURL('image/png'),bounds:{x:Math.round(topLeft.x),y:Math.round(topLeft.y),width:Math.round(bottomRight.x-topLeft.x),height:Math.round(bottomRight.y-topLeft.y)}}};
+  function action(name){clearAutoConfirm();const exported=name==='cancel'?undefined:window.__mmsExport();const message={type:'MMS_CAPTURE_ACTION',token:messageToken,action:name,exported};const target=window.opener&&!window.opener.closed?window.opener:(window.parent!==window?window.parent:null);if(target)target.postMessage(message,'*')}
+  toolbar.querySelectorAll('[data-action]').forEach(btn=>btn.addEventListener('click',()=>action(btn.dataset.action)));document.addEventListener('pointermove',ev=>{const inside=insideRect(ev.clientX,ev.clientY);if(inside!==pointerInsideSelection){pointerInsideSelection=inside;if(recognizeMode&&autoConfirmArmed)resetAutoConfirm()}else if(inside&&recognizeMode&&autoConfirmArmed&&!selectionDraw)resetAutoConfirm()});toolbar.addEventListener('pointermove',resetAutoConfirm);toolbar.addEventListener('pointerdown',resetAutoConfirm);stylebar.addEventListener('pointermove',resetAutoConfirm);stylebar.addEventListener('pointerdown',resetAutoConfirm);
+  document.addEventListener('dblclick',ev=>{if(captureMode==='capture'&&!tool&&insideRect(ev.clientX,ev.clientY)&&!ev.target.closest('.toolbar')&&!ev.target.closest('.stylebar'))action('copy')});document.addEventListener('keydown',ev=>{if(ev.target===textEditor)return;if(ev.key==='Escape')action('cancel');if(ev.key==='Enter'&&!ev.shiftKey)action('copy')});
   updateRect();setTimeout(placeToolbar,50);
 })();
 <\/script></body></html>`;
@@ -18566,16 +18607,23 @@ async function captureWindowsDisplay(runtime, directory, imagePath, fallbackDisp
   const metadataPath = runtime.path.join(directory, "display.json");
   const script = `param([string]$ImagePath,[string]$MetadataPath,[int]$HideForegroundWindow)
 $ErrorActionPreference = 'Stop'
-Add-Type -AssemblyName System.Windows.Forms
-Add-Type -AssemblyName System.Drawing
 Add-Type @"
 using System;
 using System.Runtime.InteropServices;
 public static class MindMapStudioCaptureWindow {
   [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
   [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+  [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
+  [DllImport("user32.dll")] public static extern bool SetProcessDpiAwarenessContext(IntPtr dpiContext);
 }
 "@
+try {
+  [void][MindMapStudioCaptureWindow]::SetProcessDpiAwarenessContext([IntPtr](-4))
+} catch {
+  [void][MindMapStudioCaptureWindow]::SetProcessDPIAware()
+}
+Add-Type -AssemblyName System.Windows.Forms
+Add-Type -AssemblyName System.Drawing
 $foreground = [IntPtr]::Zero
 if ($HideForegroundWindow) {
   $foreground = [MindMapStudioCaptureWindow]::GetForegroundWindow()
@@ -18586,18 +18634,44 @@ if ($HideForegroundWindow) {
 }
 try {
   $cursor = [System.Windows.Forms.Cursor]::Position
-  $screen = [System.Windows.Forms.Screen]::FromPoint($cursor)
-  $bounds = $screen.Bounds
-  $bitmap = New-Object System.Drawing.Bitmap -ArgumentList $bounds.Width, $bounds.Height
+  $activeScreen = [System.Windows.Forms.Screen]::FromPoint($cursor)
+  $virtual = [System.Windows.Forms.SystemInformation]::VirtualScreen
+  $bitmap = New-Object System.Drawing.Bitmap -ArgumentList $virtual.Width, $virtual.Height, ([System.Drawing.Imaging.PixelFormat]::Format32bppPArgb)
   $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
   try {
-    $graphics.CopyFromScreen($bounds.X, $bounds.Y, 0, 0, $bounds.Size)
+    $graphics.CopyFromScreen($virtual.X, $virtual.Y, 0, 0, $virtual.Size, [System.Drawing.CopyPixelOperation]::SourceCopy)
     $bitmap.Save($ImagePath, [System.Drawing.Imaging.ImageFormat]::Png)
   } finally {
     $graphics.Dispose()
     $bitmap.Dispose()
   }
-  $metadata = @{ x = $bounds.X; y = $bounds.Y; width = $bounds.Width; height = $bounds.Height; scaleFactor = 1 } | ConvertTo-Json -Compress
+  $monitors = @()
+  $index = 0
+  foreach ($screen in [System.Windows.Forms.Screen]::AllScreens) {
+    $index += 1
+    $b = $screen.Bounds
+    $monitors += @{
+      id = $index
+      x = $b.X
+      y = $b.Y
+      width = $b.Width
+      height = $b.Height
+      scaleFactor = 1
+      label = "\u5C4F\u5E55 $index"
+      primary = $screen.Primary
+      active = ($screen.DeviceName -eq $activeScreen.DeviceName)
+    }
+  }
+  $metadata = @{
+    id = 0
+    x = $virtual.X
+    y = $virtual.Y
+    width = $virtual.Width
+    height = $virtual.Height
+    scaleFactor = 1
+    label = "\u5168\u90E8\u5C4F\u5E55"
+    displays = $monitors
+  } | ConvertTo-Json -Depth 5 -Compress
   [System.IO.File]::WriteAllText($MetadataPath, $metadata, (New-Object System.Text.UTF8Encoding($false)))
 } finally {
   if ($HideForegroundWindow -and $foreground -ne [IntPtr]::Zero) {
@@ -18632,7 +18706,8 @@ try {
       ]);
       const metadata = JSON.parse(new TextDecoder().decode(metadataBytes).replace(/^\uFEFF/, ""));
       if (!bytes.length) throw new Error("PowerShell \u6CA1\u6709\u751F\u6210\u622A\u56FE");
-      return { bytes, display: normalizeBrowserDisplay(metadata) };
+      const normalized2 = normalizeBrowserDisplay(metadata);
+      return { bytes, display: normalized2 };
     } catch (error) {
       lastError = error instanceof Error ? error.message : String(error);
     }
@@ -18689,6 +18764,33 @@ async function captureDisplaySource(electronRuntime, nodeRuntime, hideObsidian) 
       await waitForWindowMinimized(windowHandle);
       await new Promise((resolve) => setTimeout(resolve, 120));
     }
+    const hideWithNativeCommand = hideObsidian && !canHideWithWindowHandle;
+    if (nodeRuntime.platform === "win32") {
+      try {
+        console.info("MindMap Studio capture: trying native virtual-desktop capture");
+        return await withCaptureTimeout(
+          captureDisplayWithNativeCommand(nodeRuntime, display, hideWithNativeCommand),
+          18e3,
+          "\u672C\u673A\u865A\u62DF\u684C\u9762\u6293\u5C4F"
+        );
+      } catch (nativeError) {
+        console.warn("MindMap Studio capture: native virtual-desktop capture unavailable", nativeError);
+        if (electronRuntime.desktopCapturer) {
+          try {
+            const rendererCapture = await withCaptureTimeout(
+              captureDisplayWithRendererElectron(electronRuntime, display),
+              3500,
+              "Electron \u684C\u9762\u6293\u5C4F"
+            );
+            if (rendererCapture) return rendererCapture;
+          } catch (rendererError) {
+            console.warn("MindMap Studio capture: renderer fallback failed", rendererError);
+          }
+        }
+        const reason = nativeError instanceof Error ? nativeError.message : String(nativeError);
+        throw new Error(`\u65E0\u6CD5\u542F\u52A8 MindMap Studio \u622A\u56FE\u7F16\u8F91\u5668\uFF1A\u865A\u62DF\u684C\u9762\u6293\u53D6\u5931\u8D25\uFF08${reason}\uFF09`);
+      }
+    }
     const canTryRendererFirst = !hideObsidian || canHideWithWindowHandle;
     if (canTryRendererFirst && electronRuntime.desktopCapturer) {
       try {
@@ -18705,7 +18807,6 @@ async function captureDisplaySource(electronRuntime, nodeRuntime, hideObsidian) 
     }
     try {
       console.info("MindMap Studio capture: trying native full-screen capture");
-      const hideWithNativeCommand = hideObsidian && !canHideWithWindowHandle;
       return await withCaptureTimeout(
         captureDisplayWithNativeCommand(nodeRuntime, display, hideWithNativeCommand),
         18e3,
@@ -18792,7 +18893,96 @@ async function writePngToClipboard(runtime, bytes) {
   }
   throw new Error("\u5F53\u524D\u684C\u9762\u8FD0\u884C\u65F6\u65E0\u6CD5\u628A\u622A\u56FE\u5199\u5165\u7CFB\u7EDF\u526A\u8D34\u677F");
 }
-function openPinnedCapture(bytes, bounds) {
+async function openWindowsPinnedCapture(nodeRuntime, bytes, bounds) {
+  var _a2;
+  const directory = await nodeRuntime.fs.mkdtemp(nodeRuntime.path.join(nodeRuntime.os.tmpdir(), "mms-pinned-capture-"));
+  const imagePath = nodeRuntime.path.join(directory, "capture.png");
+  const scriptPath = nodeRuntime.path.join(directory, "pin.ps1");
+  const width = Math.max(180, Math.min(1600, bounds.width));
+  const height = Math.max(120, Math.min(1200, bounds.height));
+  const script = `param([string]$ImagePath,[string]$WorkingDirectory,[int]$Left,[int]$Top,[int]$Width,[int]$Height)
+$ErrorActionPreference = 'Stop'
+Add-Type @"
+using System;
+using System.Runtime.InteropServices;
+public static class MindMapStudioPinnedDpi {
+  [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
+  [DllImport("user32.dll")] public static extern bool SetProcessDpiAwarenessContext(IntPtr dpiContext);
+}
+"@
+try { [void][MindMapStudioPinnedDpi]::SetProcessDpiAwarenessContext([IntPtr](-4)) } catch { [void][MindMapStudioPinnedDpi]::SetProcessDPIAware() }
+Add-Type -AssemblyName System.Windows.Forms
+Add-Type -AssemblyName System.Drawing
+$image = $null
+$form = $null
+try {
+  $image = [System.Drawing.Image]::FromFile($ImagePath)
+  $form = New-Object System.Windows.Forms.Form
+  $form.Text = '\u56FA\u5B9A\u622A\u56FE'
+  $form.StartPosition = [System.Windows.Forms.FormStartPosition]::Manual
+  $form.Bounds = [System.Drawing.Rectangle]::new($Left, $Top, $Width, $Height)
+  $form.MinimumSize = [System.Drawing.Size]::new(180, 120)
+  $form.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::SizableToolWindow
+  $form.ShowInTaskbar = $false
+  $form.TopMost = $true
+  $form.BackColor = [System.Drawing.Color]::FromArgb(18, 18, 18)
+  $picture = New-Object System.Windows.Forms.PictureBox
+  $picture.Dock = [System.Windows.Forms.DockStyle]::Fill
+  $picture.SizeMode = [System.Windows.Forms.PictureBoxSizeMode]::Zoom
+  $picture.Image = $image
+  $picture.BackColor = [System.Drawing.Color]::FromArgb(18, 18, 18)
+  $form.Controls.Add($picture)
+  $form.Add_KeyDown({ if ($_.KeyCode -eq [System.Windows.Forms.Keys]::Escape) { $form.Close() } })
+  $form.KeyPreview = $true
+  $form.Add_Shown({ $form.Activate(); $form.BringToFront() })
+  [void]$form.ShowDialog()
+} finally {
+  if ($form) { $form.Dispose() }
+  if ($image) { $image.Dispose() }
+  Start-Sleep -Milliseconds 120
+  Remove-Item -LiteralPath $WorkingDirectory -Recurse -Force -ErrorAction SilentlyContinue
+}
+`;
+  await Promise.all([
+    nodeRuntime.fs.writeFile(imagePath, bytes),
+    nodeRuntime.fs.writeFile(scriptPath, script)
+  ]);
+  try {
+    const child = nodeRuntime.spawn("powershell.exe", [
+      "-NoLogo",
+      "-NoProfile",
+      "-NonInteractive",
+      "-Sta",
+      "-ExecutionPolicy",
+      "Bypass",
+      "-WindowStyle",
+      "Hidden",
+      "-File",
+      scriptPath,
+      "-ImagePath",
+      imagePath,
+      "-WorkingDirectory",
+      directory,
+      "-Left",
+      String(bounds.x),
+      "-Top",
+      String(bounds.y),
+      "-Width",
+      String(width),
+      "-Height",
+      String(height)
+    ], { detached: true, windowsHide: true, stdio: "ignore" });
+    (_a2 = child.unref) == null ? void 0 : _a2.call(child);
+  } catch (error) {
+    await nodeRuntime.fs.rm(directory, { recursive: true, force: true });
+    throw error;
+  }
+}
+async function openPinnedCapture(nodeRuntime, bytes, bounds) {
+  if (nodeRuntime.platform === "win32") {
+    await openWindowsPinnedCapture(nodeRuntime, bytes, bounds);
+    return;
+  }
   const width = Math.max(180, Math.min(1200, bounds.width));
   const height = Math.max(120, Math.min(900, bounds.height));
   const pinWindow = window.open("about:blank", `mindmap-studio-pin-${Date.now()}`, [
@@ -18800,8 +18990,6 @@ function openPinnedCapture(bytes, bounds) {
     "noopener=no",
     "frame=no",
     "resizable=yes",
-    "alwaysOnTop=yes",
-    "skipTaskbar=yes",
     `left=${bounds.x}`,
     `top=${bounds.y}`,
     `width=${width}`,
@@ -18851,7 +19039,7 @@ async function editCapturedDisplay(runtime, nodeRuntime, captured, mode) {
             return;
           }
         } else if (action === "pin") {
-          openPinnedCapture(bytes, message.exported.bounds);
+          await openPinnedCapture(nodeRuntime, bytes, message.exported.bounds);
         } else if (action === "copy" || action === "recognize-copy") {
           await writePngToClipboard(runtime, bytes);
         }

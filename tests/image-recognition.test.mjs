@@ -189,11 +189,19 @@ test("screenshot editor provides a visible adjustable overlay and complete toolb
     scaleFactor: 1.25
   });
   const html = desktopCapture.captureEditorHtml(display, "capture", "data:image/png;base64,AA==", "token-1");
-  assert.match(html, /border:3px solid #00a8ff/);
-  assert.match(html, /box-shadow:0 0 0 1px #fff/);
+  assert.match(html, /border:2px solid rgba\(42,179,255,\.98\)/);
+  assert.match(html, /border-radius:9px/);
+  assert.match(html, /box-shadow:0 0 0 1px rgba\(255,255,255,\.9\)/);
   assert.match(html, /data-handle="nw"[\s\S]*data-handle="se"/);
-  assert.match(html, /coordinateScaleX=displayBounds\.width\/Math\.max\(1,innerWidth\)/);
-  assert.match(html, /displayBounds\.x\+rect\.x\*coordinateScaleX/);
+  assert.match(html, /function computeImageArea\(\)/);
+  assert.match(html, /image\.naturalWidth\/Math\.max\(1,virtualBounds\.width\)/);
+  assert.doesNotMatch(html, /drawImage\(image,0,0,innerWidth,innerHeight\)/);
+  assert.match(html, /id="screenSwitcher"/);
+  assert.match(html, /全部屏幕/);
+  assert.match(html, /id="textEditor"/);
+  assert.match(html, /data-shape="ellipse"/);
+  const script = html.match(/<script>([\s\S]*)<\/script>/)?.[1] ?? "";
+  assert.doesNotThrow(() => new Function(script));
   for (const label of ["几何图形", "画笔", "箭头", "文字", "序号", "马赛克", "橡皮擦", "识别并复制", "固定", "下载", "取消", "复制"]) {
     assert.match(html, new RegExp(label));
   }
@@ -206,6 +214,40 @@ test("screenshot editor provides a visible adjustable overlay and complete toolb
   assert.doesNotMatch(editorSource, /screenshotAutoRecognize/);
   assert.match(editorSource, /captureScreenshot\(recognizeAfter = false, targetOverride\?: ScreenshotInsertionTarget\)/);
   assert.match(editorSource, /recognizeCapturedScreenshotToClipboard/);
+});
+
+
+
+test("Windows capture uses the full virtual desktop with DPI-aware monitor metadata and native pinning", async () => {
+  const captureSource = await readFile("src/utils/desktop-capture.ts", "utf8");
+  assert.match(captureSource, /SystemInformation\]::VirtualScreen/);
+  assert.match(captureSource, /Screen\]::AllScreens/);
+  assert.match(captureSource, /SetProcessDpiAwarenessContext/);
+  assert.match(captureSource, /native virtual-desktop capture/);
+  assert.match(captureSource, /data-style-group="shape"/);
+  assert.match(captureSource, /openTextEditor/);
+  assert.match(captureSource, /System\.Windows\.Forms\.Form/);
+  assert.match(captureSource, /TopMost = \$true/);
+  assert.match(captureSource, /nodeRuntime\.spawn\("powershell\.exe"/);
+
+  const display = desktopCapture.normalizeBrowserDisplay({
+    x: -1920,
+    y: 0,
+    width: 4480,
+    height: 1440,
+    displays: [
+      { id: 1, x: -1920, y: 0, width: 1920, height: 1080, label: "屏幕 1", active: true },
+      { id: 2, x: 0, y: 0, width: 2560, height: 1440, label: "屏幕 2", primary: true }
+    ]
+  });
+  assert.equal(display.displays?.length, 2);
+  assert.equal(display.displays?.[0].active, true);
+  assert.equal(display.displays?.[1].primary, true);
+  const html = desktopCapture.captureEditorHtml(display, "capture");
+  assert.match(html, /availableDisplays=/);
+  assert.match(html, /屏幕 1/);
+  assert.match(html, /屏幕 2/);
+  assert.match(html, /viewBounds\.width\/Math\.max\(1,imageArea\.w\)/);
 });
 
 test("manual screenshot never confirms on mouse release and recognition waits for three idle seconds", async () => {
