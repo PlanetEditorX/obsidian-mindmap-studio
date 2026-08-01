@@ -64,6 +64,43 @@ test("image recognition collects page and subtree images in stable node order", 
   assert.throws(() => recognition.collectRecognizableImages(document, "missing"), /节点已经不存在/);
 });
 
+test("collectRecognizableImages traversal mapping correctly filters and maps mixed content blocks", () => {
+  const mixedDocument = {
+    version: 10,
+    title: "混合内容测试",
+    root: node("mixed-root", "混合内容", [
+      text("t1", "文字1"),
+      image("i1", "a.png", "图1"),
+      text("t2", "文字2"),
+      image("i2", "b.png"),
+      text("t3", "")
+    ])
+  };
+
+  const images = recognition.collectRecognizableImages(mixedDocument);
+  assert.equal(images.length, 2);
+
+  assert.deepEqual(images[0], {
+    nodeId: "mixed-root",
+    blockId: "i1",
+    nodeLabel: "文字1 文字2",
+    source: "a.png",
+    alt: "图1",
+    index: 1,
+    total: 2
+  });
+
+  assert.deepEqual(images[1], {
+    nodeId: "mixed-root",
+    blockId: "i2",
+    nodeLabel: "文字1 文字2",
+    source: "b.png",
+    alt: "",
+    index: 2,
+    total: 2
+  });
+});
+
 test("image recognition prompt identifies sequence, node and untrusted image context", () => {
   const [item] = recognition.collectRecognizableImages(document, "chapter");
   const prompt = recognition.buildImageRecognitionPrompt(item, "逐行转录");
