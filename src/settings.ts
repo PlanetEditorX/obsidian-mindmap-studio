@@ -98,7 +98,6 @@ export interface ImageHostConfig {
   /** Optional endpoint template used to remove a remote image. Supports {url}, {hash}, and {deleteKey}. */
   deleteEndpoint: string;
   deleteMethod: ImageHostDeleteMethod;
-  deleteHeaders: string;
   /** Optional request body template. Placeholders are JSON-escaped before substitution. */
   deleteBody: string;
 }
@@ -112,6 +111,18 @@ export interface ImageUploadCacheEntry {
   deleteKey?: string;
   uploadedAt?: string;
   lastUsedAt?: string;
+}
+
+/** One persisted remote-image deletion delayed long enough for Undo to restore the reference. */
+export interface PendingImageHostDeletion {
+  id: string;
+  hostId: string;
+  hostName?: string;
+  url: string;
+  hash?: string;
+  deleteKey?: string;
+  dueAt: string;
+  reason: "removed-image" | "connectivity-test";
 }
 
 /**
@@ -174,7 +185,6 @@ export function createImageHostConfig(index = 1): ImageHostConfig {
     deleteKeyResponsePath: "files.0.id",
     deleteEndpoint: "http://192.168.1.10:3010/api/user/files/{deleteKey}",
     deleteMethod: "DELETE",
-    deleteHeaders: "",
     deleteBody: ""
   };
 }
@@ -207,7 +217,6 @@ export function applyImageHostPreset(host: ImageHostConfig, preset: ImageHostPre
     host.deleteEndpoint = `${ziplineOrigin}/api/user/files/{deleteKey}`;
     host.deleteMethod = "DELETE";
     // Zipline upload and delete use the same current token. Keeping this empty avoids a stale copied token.
-    host.deleteHeaders = "";
     return;
   }
 
@@ -222,7 +231,6 @@ export function applyImageHostPreset(host: ImageHostConfig, preset: ImageHostPre
     host.deleteKeyResponsePath = "data.delete_url";
     host.deleteEndpoint = "{deleteKey}";
     host.deleteMethod = "GET";
-    host.deleteHeaders = "";
     return;
   }
 
@@ -236,7 +244,6 @@ export function applyImageHostPreset(host: ImageHostConfig, preset: ImageHostPre
   host.deleteKeyResponsePath = "";
   host.deleteEndpoint = "";
   host.deleteMethod = "DELETE";
-  host.deleteHeaders = "";
 }
 
 /**
@@ -299,6 +306,8 @@ export interface MindMapStudioSettings {
   defaultCodeTheme: "obsidian" | "github" | "monokai" | "dracula";
   imageHosts: ImageHostConfig[];
   imageUploadCache: Record<string, ImageUploadCacheEntry>;
+  /** Remote image deletions waiting for the one-minute Undo safety window. */
+  pendingImageHostDeletions: Record<string, PendingImageHostDeletion>;
   autoUploadEnabled: boolean;
   autoUploadDelaySeconds: number;
   imageRecognitionAutoConfirmDelaySeconds: ImageRecognitionAutoConfirmDelaySeconds;
@@ -438,6 +447,7 @@ export const DEFAULT_SETTINGS: MindMapStudioSettings = {
   defaultCodeTheme: "obsidian",
   imageHosts: [],
   imageUploadCache: {},
+  pendingImageHostDeletions: {},
   autoUploadEnabled: false,
   autoUploadDelaySeconds: 60,
   imageRecognitionAutoConfirmDelaySeconds: null,
@@ -1763,7 +1773,7 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
 
       new Setting(body)
         .setName("请求头 JSON")
-        .setDesc("例如 Authorization、X-API-Key。密钥保存在插件 data.json。")
+        .setDesc("上传与删除请求共用同一组请求头，例如 Authorization、X-API-Key。密钥保存在插件 data.json。")
         .addTextArea((text) => text
           .setValue(host.headers)
           .setPlaceholder('{"Authorization":"Bearer ..."}')
@@ -1798,13 +1808,6 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
           .addOption("POST", "POST")
           .setValue(host.deleteMethod)
           .onChange(async (value) => { host.deleteMethod = value as ImageHostDeleteMethod; await this.plugin.saveSettings(); }));
-
-      new Setting(body)
-        .setName("删除请求头 JSON")
-        .addTextArea((text) => text
-          .setValue(host.deleteHeaders)
-          .setPlaceholder('{"Authorization":"Bearer ..."}')
-          .onChange(async (value) => { host.deleteHeaders = value.trim(); await this.plugin.saveSettings(); }));
 
       new Setting(body)
         .setName("删除请求体（可选）")

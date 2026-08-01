@@ -118,3 +118,15 @@ test("article-context refreshes skip redundant current-page rebuilds", async () 
   assert.match(editorSource, /if \(articleContextOnly[\s\S]*?this\.currentMode !== "reading"[\s\S]*?articleContextPresentationChanged\)\) return/);
   assert.match(viewSource, /this\.editor\?\.setOptions\(this\.getEditorOptions\(preferCurrentFile\), true\)/);
 });
+
+
+test("first article load skeleton fills the current viewport instead of showing only a few lines", async () => {
+  const [editorSource, cssSource] = await Promise.all([
+    readFile(path.join(rootDir, "src/editor/editor.ts"), "utf8"),
+    readFile(path.join(rootDir, "styles.css"), "utf8")
+  ]);
+  assert.match(editorSource, /const viewportHeight = Math\.max\(this\.articleEl\.clientHeight, Math\.round\(window\.innerHeight \* 0\.72\), 520\)/);
+  assert.match(editorSource, /const lineCount = Math\.max\(18, Math\.ceil\(\(viewportHeight - 150\) \/ 30\)\)/);
+  assert.match(editorSource, /mms-article-loading-shell-subtitle/);
+  assert.match(cssSource, /\.mms-article-loading-shell \{[\s\S]*width: calc\(100% - 24px\);[\s\S]*max-width: none;[\s\S]*--mms-loading-shell-height/);
+});

@@ -48,6 +48,7 @@ import {
   type ImageHostUploadFailure,
   type ImageHostUploadSuccess,
   type ImageUploadCacheEntry,
+  type PendingImageHostDeletion,
   type MindMapStudioSettings
 } from "./settings";
 import { renderStaticMindMap, renderStaticSource } from "./render/static-render";
@@ -113,6 +114,7 @@ import { copyDesktopMarkdownImagesToDocument } from "./utils/desktop-import";
 
 export const MINDMAP_EXTENSION = "mindmap";
 const PLUGIN_UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/PlanetEditorX/obsidian-mindmap-studio/main/update.json";
+const REMOTE_IMAGE_DELETE_DELAY_MS = 60_000;
 
 /** Returns whether a keyboard event exactly matches one recorded plugin shortcut. */
 function matchesRecordedShortcut(event: KeyboardEvent, shortcut: string): boolean {
@@ -139,6 +141,7 @@ export default class MindMapStudioPlugin extends Plugin {
   /** 当前会话使用的显示模式；大纲模式不会写成下次启动默认值。 */
   private activeDisplayMode: DisplayMode = DEFAULT_SETTINGS.defaultViewMode;
   private readonly autoUploadTimers = new Map<string, number>();
+  private readonly remoteImageDeleteTimers = new Map<string, number>();
   private readonly autoUploadFileKeys = new WeakMap<TFile, string>();
   private autoUploadFileKeySequence = 0;
   private searchIndex!: MindMapSearchIndex;
@@ -317,6 +320,7 @@ export default class MindMapStudioPlugin extends Plugin {
       renderStaticSource(el, source, this.getSourceTitle(ctx), settingsToAppearance(this.settings));
     });
     this.registerMarkdownPostProcessor((element, context) => void this.processMindMapEmbeds(element, context));
+    this.resumePendingImageHostDeletions();
   }
 
   /**
@@ -328,6 +332,8 @@ export default class MindMapStudioPlugin extends Plugin {
     this.fileExplorerObserver = null;
     for (const timer of this.autoUploadTimers.values()) window.clearTimeout(timer);
     this.autoUploadTimers.clear();
+    for (const timer of this.remoteImageDeleteTimers.values()) window.clearTimeout(timer);
+    this.remoteImageDeleteTimers.clear();
     this.searchIndex?.destroy();
     this.app.workspace.detachLeavesOfType(VIEW_TYPE_MINDMAP_STUDIO);
   }
@@ -534,15 +540,11 @@ export default class MindMapStudioPlugin extends Plugin {
         host.deleteKeyResponsePath = typeof candidate.deleteKeyResponsePath === "string" ? candidate.deleteKeyResponsePath.trim().slice(0, 500) : "";
         host.deleteEndpoint = typeof candidate.deleteEndpoint === "string" ? candidate.deleteEndpoint.trim().slice(0, 4000) : "";
         host.deleteMethod = candidate.deleteMethod === "POST" || candidate.deleteMethod === "GET" ? candidate.deleteMethod : "DELETE";
-        host.deleteHeaders = typeof candidate.deleteHeaders === "string" ? candidate.deleteHeaders.trim().slice(0, 20000) : "";
         host.deleteBody = typeof candidate.deleteBody === "string" ? candidate.deleteBody.slice(0, 20000) : "";
         if (legacyZipline) {
           const migratedName = host.name;
           applyImageHostPreset(host, "zipline");
           if (migratedName && !/^Zipline v[34]$/i.test(migratedName)) host.name = migratedName;
-        } else if (host.preset === "zipline") {
-          // Zipline deletion always reuses the current upload token rather than a copied stale header.
-          host.deleteHeaders = "";
         }
         return [host];
       })
@@ -568,6 +570,29 @@ export default class MindMapStudioPlugin extends Plugin {
       }))
       : {};
 
+    const pendingImageHostDeletions = raw.pendingImageHostDeletions && typeof raw.pendingImageHostDeletions === "object" && !Array.isArray(raw.pendingImageHostDeletions)
+      ? Object.fromEntries(Object.entries(raw.pendingImageHostDeletions as Record<string, unknown>).slice(-200).flatMap(([key, value]) => {
+        if (!value || typeof value !== "object") return [];
+        const candidate = value as Partial<PendingImageHostDeletion>;
+        const id = typeof candidate.id === "string" && candidate.id.trim() ? candidate.id.trim().slice(0, 240) : key.slice(0, 240);
+        const hostId = typeof candidate.hostId === "string" ? candidate.hostId.trim().slice(0, 160) : "";
+        const url = typeof candidate.url === "string" && /^https?:\/\//i.test(candidate.url.trim()) ? candidate.url.trim().slice(0, 4000) : "";
+        const dueAt = typeof candidate.dueAt === "string" && Number.isFinite(Date.parse(candidate.dueAt)) ? candidate.dueAt : "";
+        const reason = candidate.reason === "connectivity-test" ? "connectivity-test" : "removed-image";
+        if (!id || !hostId || !url || !dueAt) return [];
+        return [[id, {
+          id,
+          hostId,
+          url,
+          dueAt,
+          reason,
+          hostName: typeof candidate.hostName === "string" && candidate.hostName.trim() ? candidate.hostName.trim().slice(0, 200) : undefined,
+          hash: typeof candidate.hash === "string" && /^[0-9a-f]{64}$/i.test(candidate.hash.trim()) ? candidate.hash.trim().toLowerCase() : undefined,
+          deleteKey: typeof candidate.deleteKey === "string" && candidate.deleteKey.trim() ? candidate.deleteKey.trim().slice(0, 2000) : undefined
+        } satisfies PendingImageHostDeletion]];
+      }))
+      : {};
+
     const enabledIds = new Set(imageHosts.filter((host) => host.enabled).map((host) => host.id));
     const selectedIds = Array.isArray(raw.autoUploadHostIds)
       ? raw.autoUploadHostIds.filter((id): id is string => typeof id === "string" && enabledIds.has(id))
@@ -585,6 +610,7 @@ export default class MindMapStudioPlugin extends Plugin {
       ...raw,
       imageHosts,
       imageUploadCache,
+      pendingImageHostDeletions,
       autoUploadEnabled: raw.autoUploadEnabled === true,
       autoUploadDelaySeconds: typeof raw.autoUploadDelaySeconds === "number"
         ? Math.max(0, Math.min(120 * 60, Math.round(raw.autoUploadDelaySeconds)))
@@ -1623,7 +1649,14 @@ export default class MindMapStudioPlugin extends Plugin {
     try {
       const uploaded = await this.uploadImageToHostConfig(host, new Blob([png], { type: "image/png" }), "mindmap-studio-api-test.png");
       const elapsed = Math.max(1, Math.round(performance.now() - started));
-      new Notice(`${host.name} 连接成功（${elapsed} ms）\n${uploaded.url}`, 8000);
+      const scheduled = await this.scheduleImageHostDeletion(host, {
+        url: uploaded.url,
+        deleteKey: uploaded.deleteKey
+      }, "connectivity-test");
+      const cleanupMessage = scheduled
+        ? "测试图片将在 1 分钟后自动删除"
+        : "该图床未配置删除 API，测试图片需要手动清理";
+      new Notice(`${host.name} 连接成功（${elapsed} ms）\n${cleanupMessage}\n${uploaded.url}`, 9000);
     } catch (error) {
       console.error("MindMap Studio image host connectivity test failed", error);
       new Notice(`${host.name} 连接失败：${error instanceof Error ? error.message : String(error)}`, 8000);
@@ -1658,8 +1691,8 @@ export default class MindMapStudioPlugin extends Plugin {
   }
 
   /**
-   * Deletes remote mirrors after an image block is removed, but only when no other map references the same SHA-256 or URL.
-   * Hosts without an explicit delete API are never guessed and therefore retain their remote files.
+   * Schedules remote mirrors for deletion after a one-minute Undo safety window.
+   * The final timer callback rescans every map and cancels deletion when the image has been restored.
    */
   async cleanupRemovedImageRemoteAssets(
     currentMindMapPath: string,
@@ -1689,35 +1722,138 @@ export default class MindMapStudioPlugin extends Plugin {
         const document = parseDocument(await this.app.vault.cachedRead(file), file.basename);
         if (this.documentReferencesImage(document, removed)) return;
       } catch {
-        // An unreadable unrelated map must not make remote deletion unsafe.
+        // An unreadable map must keep remote deletion on the safe side.
         return;
       }
     }
 
-    const deleted: string[] = [];
+    const scheduled: string[] = [];
     const retained: string[] = [];
-    const failed: string[] = [];
     for (const remote of remoteSources) {
       const host = this.settings.imageHosts.find((candidate) => candidate.id === remote.hostId);
       if (!host?.deleteEndpoint.trim()) {
         retained.push(remote.hostName || host?.name || remote.hostId);
         continue;
       }
+      const queued = await this.scheduleImageHostDeletion(host, {
+        url: remote.url,
+        deleteKey: remote.deleteKey,
+        hash: removed.contentHash
+      }, "removed-image");
+      if (queued) scheduled.push(remote.hostName || host.name);
+    }
+    const parts: string[] = [];
+    if (scheduled.length) parts.push(`已安排 1 分钟后删除：${scheduled.join("、")}（期间撤销恢复会自动取消）`);
+    if (retained.length) parts.push(`未配置删除 API，远程图片保留：${retained.join("、")}`);
+    if (parts.length) new Notice(parts.join("\n"), 8000);
+  }
+
+  /** Adds or refreshes one persistent one-minute remote deletion task. */
+  private async scheduleImageHostDeletion(
+    host: ImageHostConfig,
+    image: { url: string; hash?: string; deleteKey?: string },
+    reason: PendingImageHostDeletion["reason"]
+  ): Promise<boolean> {
+    if (!host.deleteEndpoint.trim() || !/^https?:\/\//i.test(image.url)) return false;
+    const identity = image.hash?.trim().toLowerCase() || this.shortStableId(image.url);
+    const id = `${reason}:${host.id}:${identity}`.slice(0, 240);
+    const pending: PendingImageHostDeletion = {
+      id,
+      hostId: host.id,
+      hostName: host.name,
+      url: image.url,
+      hash: image.hash?.trim().toLowerCase() || undefined,
+      deleteKey: image.deleteKey?.trim() || undefined,
+      dueAt: new Date(Date.now() + REMOTE_IMAGE_DELETE_DELAY_MS).toISOString(),
+      reason
+    };
+    this.settings.pendingImageHostDeletions[id] = pending;
+    await this.saveSettings();
+    this.armPendingImageHostDeletion(pending);
+    return true;
+  }
+
+  /** Restores delayed deletion timers after Obsidian restarts. */
+  private resumePendingImageHostDeletions(): void {
+    for (const pending of Object.values(this.settings.pendingImageHostDeletions)) this.armPendingImageHostDeletion(pending);
+  }
+
+  /** Arms one task using its persisted due time. */
+  private armPendingImageHostDeletion(pending: PendingImageHostDeletion): void {
+    const existing = this.remoteImageDeleteTimers.get(pending.id);
+    if (existing !== undefined) window.clearTimeout(existing);
+    const delay = Math.max(0, Date.parse(pending.dueAt) - Date.now());
+    const timer = window.setTimeout(() => {
+      this.remoteImageDeleteTimers.delete(pending.id);
+      void this.executePendingImageHostDeletion(pending.id);
+    }, delay);
+    this.remoteImageDeleteTimers.set(pending.id, timer);
+  }
+
+  /** Executes one task only after references are checked again at the end of the safety window. */
+  private async executePendingImageHostDeletion(id: string): Promise<void> {
+    const pending = this.settings.pendingImageHostDeletions[id];
+    if (!pending) return;
+    const host = this.settings.imageHosts.find((candidate) => candidate.id === pending.hostId);
+    if (!host?.deleteEndpoint.trim()) {
+      delete this.settings.pendingImageHostDeletions[id];
+      await this.saveSettings();
+      new Notice(`${pending.hostName || "图床"} 未配置删除 API，远程图片已保留`, 7000);
+      return;
+    }
+    if (pending.reason === "removed-image" && await this.isPendingRemoteImageReferenced(pending)) {
+      delete this.settings.pendingImageHostDeletions[id];
+      await this.saveSettings();
+      new Notice("检测到图片已恢复，已取消图床删除", 5000);
+      return;
+    }
+    try {
+      await this.deleteImageFromHostConfig(host, pending.url, pending.hash, pending.deleteKey);
+      if (pending.hash) delete this.settings.imageUploadCache[`${pending.hostId}:${pending.hash}`];
+      delete this.settings.pendingImageHostDeletions[id];
+      await this.saveSettings();
+      new Notice(pending.reason === "connectivity-test"
+        ? `${pending.hostName || host.name} 的连通性测试图片已删除`
+        : `${pending.hostName || host.name} 的远程图片已删除`, 5000);
+    } catch (error) {
+      console.warn("MindMap Studio delayed remote image deletion failed", error);
+      delete this.settings.pendingImageHostDeletions[id];
+      await this.saveSettings();
+      new Notice(`${pending.hostName || host.name} 删除失败：${error instanceof Error ? error.message : String(error)}`, 9000);
+    }
+  }
+
+  /** Returns true when any currently saved or open mind map references a pending remote image. */
+  private async isPendingRemoteImageReferenced(pending: PendingImageHostDeletion): Promise<boolean> {
+    for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE_MINDMAP_STUDIO)) {
+      if (leaf.view instanceof MindMapStudioView) await leaf.view.save();
+    }
+    for (const file of this.app.vault.getFiles()) {
+      if (file.extension.toLowerCase() !== MINDMAP_EXTENSION) continue;
       try {
-        await this.deleteImageFromHostConfig(host, remote.url, removed.contentHash, remote.deleteKey);
-        deleted.push(remote.hostName || host.name);
-        if (removed.contentHash) delete this.settings.imageUploadCache[`${remote.hostId}:${removed.contentHash}`];
-      } catch (error) {
-        console.warn("MindMap Studio remote image deletion failed", error);
-        failed.push(`${remote.hostName || host.name}：${error instanceof Error ? error.message : String(error)}`);
+        const document = parseDocument(await this.app.vault.cachedRead(file), file.basename);
+        const referenced = flattenNodes(document.root).some((node) => nodeContentBlocks(node).some((block) => {
+          if (block.type !== "image") return false;
+          if (pending.hash && block.contentHash === pending.hash) return true;
+          return block.source === pending.url || (block.remoteSources ?? []).some((source) => source.url === pending.url);
+        }));
+        if (referenced) return true;
+      } catch {
+        // An unreadable map is treated as a reference so remote deletion never becomes unsafe.
+        return true;
       }
     }
-    if (deleted.length) await this.saveSettings();
-    const parts: string[] = [];
-    if (deleted.length) parts.push(`已同步删除：${deleted.join("、")}`);
-    if (retained.length) parts.push(`未配置删除 API，远程图片保留：${retained.join("、")}`);
-    if (failed.length) parts.push(`删除失败：${failed.join("；")}`);
-    if (parts.length) new Notice(parts.join("\n"), failed.length ? 9000 : 6000);
+    return false;
+  }
+
+  /** Creates a compact deterministic identifier without persisting a full URL in a record key. */
+  private shortStableId(value: string): string {
+    let hash = 2166136261;
+    for (let index = 0; index < value.length; index += 1) {
+      hash ^= value.charCodeAt(index);
+      hash = Math.imul(hash, 16777619);
+    }
+    return (hash >>> 0).toString(16).padStart(8, "0");
   }
 
   /** Returns whether one document still references an image by SHA-256 or any remote URL. */
@@ -1932,7 +2068,7 @@ export default class MindMapStudioPlugin extends Plugin {
     }
     const values = { url, hash, deleteKey: resolvedDeleteKey };
     const endpoint = normalizeHttpUrl(applyImageDeleteTemplate(host.deleteEndpoint, values, "url"), "删除 API");
-    const headers = parseUploadHeaders(host.preset === "zipline" ? host.headers : (host.deleteHeaders || host.headers));
+    const headers = parseUploadHeaders(host.headers);
     const body = host.deleteBody.trim()
       ? applyImageDeleteTemplate(host.deleteBody, values, "json")
       : undefined;

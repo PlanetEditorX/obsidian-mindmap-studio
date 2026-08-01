@@ -2044,7 +2044,6 @@ function createImageHostConfig(index = 1) {
     deleteKeyResponsePath: "files.0.id",
     deleteEndpoint: "http://192.168.1.10:3010/api/user/files/{deleteKey}",
     deleteMethod: "DELETE",
-    deleteHeaders: "",
     deleteBody: ""
   };
 }
@@ -2073,7 +2072,6 @@ function applyImageHostPreset(host, preset) {
     host.deleteKeyResponsePath = "files.0.id";
     host.deleteEndpoint = `${ziplineOrigin}/api/user/files/{deleteKey}`;
     host.deleteMethod = "DELETE";
-    host.deleteHeaders = "";
     return;
   }
   if (preset === "imgbb") {
@@ -2085,7 +2083,6 @@ function applyImageHostPreset(host, preset) {
     host.deleteKeyResponsePath = "data.delete_url";
     host.deleteEndpoint = "{deleteKey}";
     host.deleteMethod = "GET";
-    host.deleteHeaders = "";
     return;
   }
   host.name = "Freeimage.host";
@@ -2096,7 +2093,6 @@ function applyImageHostPreset(host, preset) {
   host.deleteKeyResponsePath = "";
   host.deleteEndpoint = "";
   host.deleteMethod = "DELETE";
-  host.deleteHeaders = "";
 }
 var DEFAULT_SETTINGS = {
   defaultFolder: "",
@@ -2146,6 +2142,7 @@ var DEFAULT_SETTINGS = {
   defaultCodeTheme: "obsidian",
   imageHosts: [],
   imageUploadCache: {},
+  pendingImageHostDeletions: {},
   autoUploadEnabled: false,
   autoUploadDelaySeconds: 60,
   imageRecognitionAutoConfirmDelaySeconds: null,
@@ -2996,7 +2993,7 @@ var MindMapStudioSettingTab = class extends import_obsidian.PluginSettingTab {
         host.fieldName = value.trim() || "file";
         await this.plugin.saveSettings();
       }));
-      new import_obsidian.Setting(body).setName("\u8BF7\u6C42\u5934 JSON").setDesc("\u4F8B\u5982 Authorization\u3001X-API-Key\u3002\u5BC6\u94A5\u4FDD\u5B58\u5728\u63D2\u4EF6 data.json\u3002").addTextArea((text) => text.setValue(host.headers).setPlaceholder('{"Authorization":"Bearer ..."}').onChange(async (value) => {
+      new import_obsidian.Setting(body).setName("\u8BF7\u6C42\u5934 JSON").setDesc("\u4E0A\u4F20\u4E0E\u5220\u9664\u8BF7\u6C42\u5171\u7528\u540C\u4E00\u7EC4\u8BF7\u6C42\u5934\uFF0C\u4F8B\u5982 Authorization\u3001X-API-Key\u3002\u5BC6\u94A5\u4FDD\u5B58\u5728\u63D2\u4EF6 data.json\u3002").addTextArea((text) => text.setValue(host.headers).setPlaceholder('{"Authorization":"Bearer ..."}').onChange(async (value) => {
         host.headers = value.trim();
         await this.plugin.saveSettings();
       }));
@@ -3013,10 +3010,6 @@ var MindMapStudioSettingTab = class extends import_obsidian.PluginSettingTab {
         await this.plugin.saveSettings();
       })).addDropdown((dropdown) => dropdown.addOption("GET", "GET").addOption("DELETE", "DELETE").addOption("POST", "POST").setValue(host.deleteMethod).onChange(async (value) => {
         host.deleteMethod = value;
-        await this.plugin.saveSettings();
-      }));
-      new import_obsidian.Setting(body).setName("\u5220\u9664\u8BF7\u6C42\u5934 JSON").addTextArea((text) => text.setValue(host.deleteHeaders).setPlaceholder('{"Authorization":"Bearer ..."}').onChange(async (value) => {
-        host.deleteHeaders = value.trim();
         await this.plugin.saveSettings();
       }));
       new import_obsidian.Setting(body).setName("\u5220\u9664\u8BF7\u6C42\u4F53\uFF08\u53EF\u9009\uFF09").setDesc('POST \u5220\u9664\u63A5\u53E3\u53EF\u586B\u5199 JSON \u6A21\u677F\uFF0C\u4F8B\u5982 {"key":"{deleteKey}"}\u3002DELETE \u63A5\u53E3\u901A\u5E38\u7559\u7A7A\u3002').addTextArea((text) => text.setValue(host.deleteBody).setPlaceholder('{"url":"{url}","hash":"{hash}"}').onChange(async (value) => {
@@ -12088,10 +12081,15 @@ var MindMapEditor = class {
       previousPage.setAttr("aria-hidden", "true");
     } else {
       const shell = this.articleEl.createDiv({ cls: "mms-article-loading-shell", attr: { "aria-hidden": "true" } });
+      const viewportHeight = Math.max(this.articleEl.clientHeight, Math.round(window.innerHeight * 0.72), 520);
+      shell.style.setProperty("--mms-loading-shell-height", `${viewportHeight}px`);
       shell.createDiv({ cls: "mms-article-loading-shell-title" });
-      for (const width of ["92%", "78%", "86%", "68%", "81%", "56%"]) {
+      const widths = ["96%", "88%", "93%", "79%", "90%", "72%", "95%", "84%", "91%", "76%"];
+      const lineCount = Math.max(18, Math.ceil((viewportHeight - 150) / 30));
+      for (let index = 0; index < lineCount; index += 1) {
+        if (index > 0 && index % 7 === 0) shell.createDiv({ cls: "mms-article-loading-shell-subtitle" });
         const line = shell.createDiv({ cls: "mms-article-loading-shell-line" });
-        line.style.setProperty("--mms-loading-line-width", width);
+        line.style.setProperty("--mms-loading-line-width", widths[index % widths.length]);
       }
     }
     this.articleEl.addClass("is-progressive-rendering");
@@ -19504,6 +19502,7 @@ function extractPluginReleaseFiles(archive) {
 // src/main.ts
 var MINDMAP_EXTENSION = "mindmap";
 var PLUGIN_UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/PlanetEditorX/obsidian-mindmap-studio/main/update.json";
+var REMOTE_IMAGE_DELETE_DELAY_MS = 6e4;
 function matchesRecordedShortcut(event, shortcut) {
   const parts = shortcut.toLowerCase().split("+").map((part) => part.trim()).filter(Boolean);
   const key = parts.at(-1);
@@ -19521,6 +19520,7 @@ var MindMapStudioPlugin = class extends import_obsidian15.Plugin {
     /** 当前会话使用的显示模式；大纲模式不会写成下次启动默认值。 */
     this.activeDisplayMode = DEFAULT_SETTINGS.defaultViewMode;
     this.autoUploadTimers = /* @__PURE__ */ new Map();
+    this.remoteImageDeleteTimers = /* @__PURE__ */ new Map();
     this.autoUploadFileKeys = /* @__PURE__ */ new WeakMap();
     this.autoUploadFileKeySequence = 0;
     this.searchIndexReady = Promise.resolve();
@@ -19690,6 +19690,7 @@ var MindMapStudioPlugin = class extends import_obsidian15.Plugin {
       renderStaticSource(el, source, this.getSourceTitle(ctx), settingsToAppearance(this.settings));
     });
     this.registerMarkdownPostProcessor((element, context) => void this.processMindMapEmbeds(element, context));
+    this.resumePendingImageHostDeletions();
   }
   /**
    * 执行“onunload”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
@@ -19701,6 +19702,8 @@ var MindMapStudioPlugin = class extends import_obsidian15.Plugin {
     this.fileExplorerObserver = null;
     for (const timer of this.autoUploadTimers.values()) window.clearTimeout(timer);
     this.autoUploadTimers.clear();
+    for (const timer of this.remoteImageDeleteTimers.values()) window.clearTimeout(timer);
+    this.remoteImageDeleteTimers.clear();
     (_b2 = this.searchIndex) == null ? void 0 : _b2.destroy();
     this.app.workspace.detachLeavesOfType(VIEW_TYPE_MINDMAP_STUDIO);
   }
@@ -19893,14 +19896,11 @@ var MindMapStudioPlugin = class extends import_obsidian15.Plugin {
       host.deleteKeyResponsePath = typeof candidate.deleteKeyResponsePath === "string" ? candidate.deleteKeyResponsePath.trim().slice(0, 500) : "";
       host.deleteEndpoint = typeof candidate.deleteEndpoint === "string" ? candidate.deleteEndpoint.trim().slice(0, 4e3) : "";
       host.deleteMethod = candidate.deleteMethod === "POST" || candidate.deleteMethod === "GET" ? candidate.deleteMethod : "DELETE";
-      host.deleteHeaders = typeof candidate.deleteHeaders === "string" ? candidate.deleteHeaders.trim().slice(0, 2e4) : "";
       host.deleteBody = typeof candidate.deleteBody === "string" ? candidate.deleteBody.slice(0, 2e4) : "";
       if (legacyZipline) {
         const migratedName = host.name;
         applyImageHostPreset(host, "zipline");
         if (migratedName && !/^Zipline v[34]$/i.test(migratedName)) host.name = migratedName;
-      } else if (host.preset === "zipline") {
-        host.deleteHeaders = "";
       }
       return [host];
     }) : [];
@@ -19921,6 +19921,26 @@ var MindMapStudioPlugin = class extends import_obsidian15.Plugin {
         lastUsedAt: typeof candidate.lastUsedAt === "string" ? candidate.lastUsedAt.slice(0, 80) : void 0
       }]];
     })) : {};
+    const pendingImageHostDeletions = raw.pendingImageHostDeletions && typeof raw.pendingImageHostDeletions === "object" && !Array.isArray(raw.pendingImageHostDeletions) ? Object.fromEntries(Object.entries(raw.pendingImageHostDeletions).slice(-200).flatMap(([key, value]) => {
+      if (!value || typeof value !== "object") return [];
+      const candidate = value;
+      const id = typeof candidate.id === "string" && candidate.id.trim() ? candidate.id.trim().slice(0, 240) : key.slice(0, 240);
+      const hostId = typeof candidate.hostId === "string" ? candidate.hostId.trim().slice(0, 160) : "";
+      const url = typeof candidate.url === "string" && /^https?:\/\//i.test(candidate.url.trim()) ? candidate.url.trim().slice(0, 4e3) : "";
+      const dueAt = typeof candidate.dueAt === "string" && Number.isFinite(Date.parse(candidate.dueAt)) ? candidate.dueAt : "";
+      const reason = candidate.reason === "connectivity-test" ? "connectivity-test" : "removed-image";
+      if (!id || !hostId || !url || !dueAt) return [];
+      return [[id, {
+        id,
+        hostId,
+        url,
+        dueAt,
+        reason,
+        hostName: typeof candidate.hostName === "string" && candidate.hostName.trim() ? candidate.hostName.trim().slice(0, 200) : void 0,
+        hash: typeof candidate.hash === "string" && /^[0-9a-f]{64}$/i.test(candidate.hash.trim()) ? candidate.hash.trim().toLowerCase() : void 0,
+        deleteKey: typeof candidate.deleteKey === "string" && candidate.deleteKey.trim() ? candidate.deleteKey.trim().slice(0, 2e3) : void 0
+      }]];
+    })) : {};
     const enabledIds = new Set(imageHosts.filter((host) => host.enabled).map((host) => host.id));
     const selectedIds = Array.isArray(raw.autoUploadHostIds) ? raw.autoUploadHostIds.filter((id) => typeof id === "string" && enabledIds.has(id)) : [];
     const hadAiSettings = Array.isArray(raw.aiProfiles);
@@ -19934,6 +19954,7 @@ var MindMapStudioPlugin = class extends import_obsidian15.Plugin {
       ...raw,
       imageHosts,
       imageUploadCache,
+      pendingImageHostDeletions,
       autoUploadEnabled: raw.autoUploadEnabled === true,
       autoUploadDelaySeconds: typeof raw.autoUploadDelaySeconds === "number" ? Math.max(0, Math.min(120 * 60, Math.round(raw.autoUploadDelaySeconds))) : DEFAULT_SETTINGS.autoUploadDelaySeconds,
       imageRecognitionAutoConfirmDelaySeconds: raw.imageRecognitionAutoConfirmDelaySeconds === 0 || raw.imageRecognitionAutoConfirmDelaySeconds === 5 || raw.imageRecognitionAutoConfirmDelaySeconds === 10 || raw.imageRecognitionAutoConfirmDelaySeconds === 15 ? raw.imageRecognitionAutoConfirmDelaySeconds : null,
@@ -20908,8 +20929,14 @@ var MindMapStudioPlugin = class extends import_obsidian15.Plugin {
     try {
       const uploaded = await this.uploadImageToHostConfig(host, new Blob([png], { type: "image/png" }), "mindmap-studio-api-test.png");
       const elapsed = Math.max(1, Math.round(performance.now() - started));
+      const scheduled = await this.scheduleImageHostDeletion(host, {
+        url: uploaded.url,
+        deleteKey: uploaded.deleteKey
+      }, "connectivity-test");
+      const cleanupMessage = scheduled ? "\u6D4B\u8BD5\u56FE\u7247\u5C06\u5728 1 \u5206\u949F\u540E\u81EA\u52A8\u5220\u9664" : "\u8BE5\u56FE\u5E8A\u672A\u914D\u7F6E\u5220\u9664 API\uFF0C\u6D4B\u8BD5\u56FE\u7247\u9700\u8981\u624B\u52A8\u6E05\u7406";
       new import_obsidian15.Notice(`${host.name} \u8FDE\u63A5\u6210\u529F\uFF08${elapsed} ms\uFF09
-${uploaded.url}`, 8e3);
+${cleanupMessage}
+${uploaded.url}`, 9e3);
     } catch (error) {
       console.error("MindMap Studio image host connectivity test failed", error);
       new import_obsidian15.Notice(`${host.name} \u8FDE\u63A5\u5931\u8D25\uFF1A${error instanceof Error ? error.message : String(error)}`, 8e3);
@@ -20941,8 +20968,8 @@ ${uploaded.url}`, 8e3);
     return this.deleteLocalAssetIfSafe(localPath, mindMapPath, blockId);
   }
   /**
-   * Deletes remote mirrors after an image block is removed, but only when no other map references the same SHA-256 or URL.
-   * Hosts without an explicit delete API are never guessed and therefore retain their remote files.
+   * Schedules remote mirrors for deletion after a one-minute Undo safety window.
+   * The final timer callback rescans every map and cancels deletion when the image has been restored.
    */
   async cleanupRemovedImageRemoteAssets(currentMindMapPath, removed, documentAfterRemoval) {
     var _a2;
@@ -20972,30 +20999,122 @@ ${uploaded.url}`, 8e3);
         return;
       }
     }
-    const deleted = [];
+    const scheduled = [];
     const retained = [];
-    const failed = [];
     for (const remote of remoteSources) {
       const host = this.settings.imageHosts.find((candidate) => candidate.id === remote.hostId);
       if (!(host == null ? void 0 : host.deleteEndpoint.trim())) {
         retained.push(remote.hostName || (host == null ? void 0 : host.name) || remote.hostId);
         continue;
       }
+      const queued = await this.scheduleImageHostDeletion(host, {
+        url: remote.url,
+        deleteKey: remote.deleteKey,
+        hash: removed.contentHash
+      }, "removed-image");
+      if (queued) scheduled.push(remote.hostName || host.name);
+    }
+    const parts = [];
+    if (scheduled.length) parts.push(`\u5DF2\u5B89\u6392 1 \u5206\u949F\u540E\u5220\u9664\uFF1A${scheduled.join("\u3001")}\uFF08\u671F\u95F4\u64A4\u9500\u6062\u590D\u4F1A\u81EA\u52A8\u53D6\u6D88\uFF09`);
+    if (retained.length) parts.push(`\u672A\u914D\u7F6E\u5220\u9664 API\uFF0C\u8FDC\u7A0B\u56FE\u7247\u4FDD\u7559\uFF1A${retained.join("\u3001")}`);
+    if (parts.length) new import_obsidian15.Notice(parts.join("\n"), 8e3);
+  }
+  /** Adds or refreshes one persistent one-minute remote deletion task. */
+  async scheduleImageHostDeletion(host, image, reason) {
+    var _a2, _b2, _c;
+    if (!host.deleteEndpoint.trim() || !/^https?:\/\//i.test(image.url)) return false;
+    const identity = ((_a2 = image.hash) == null ? void 0 : _a2.trim().toLowerCase()) || this.shortStableId(image.url);
+    const id = `${reason}:${host.id}:${identity}`.slice(0, 240);
+    const pending = {
+      id,
+      hostId: host.id,
+      hostName: host.name,
+      url: image.url,
+      hash: ((_b2 = image.hash) == null ? void 0 : _b2.trim().toLowerCase()) || void 0,
+      deleteKey: ((_c = image.deleteKey) == null ? void 0 : _c.trim()) || void 0,
+      dueAt: new Date(Date.now() + REMOTE_IMAGE_DELETE_DELAY_MS).toISOString(),
+      reason
+    };
+    this.settings.pendingImageHostDeletions[id] = pending;
+    await this.saveSettings();
+    this.armPendingImageHostDeletion(pending);
+    return true;
+  }
+  /** Restores delayed deletion timers after Obsidian restarts. */
+  resumePendingImageHostDeletions() {
+    for (const pending of Object.values(this.settings.pendingImageHostDeletions)) this.armPendingImageHostDeletion(pending);
+  }
+  /** Arms one task using its persisted due time. */
+  armPendingImageHostDeletion(pending) {
+    const existing = this.remoteImageDeleteTimers.get(pending.id);
+    if (existing !== void 0) window.clearTimeout(existing);
+    const delay = Math.max(0, Date.parse(pending.dueAt) - Date.now());
+    const timer = window.setTimeout(() => {
+      this.remoteImageDeleteTimers.delete(pending.id);
+      void this.executePendingImageHostDeletion(pending.id);
+    }, delay);
+    this.remoteImageDeleteTimers.set(pending.id, timer);
+  }
+  /** Executes one task only after references are checked again at the end of the safety window. */
+  async executePendingImageHostDeletion(id) {
+    const pending = this.settings.pendingImageHostDeletions[id];
+    if (!pending) return;
+    const host = this.settings.imageHosts.find((candidate) => candidate.id === pending.hostId);
+    if (!(host == null ? void 0 : host.deleteEndpoint.trim())) {
+      delete this.settings.pendingImageHostDeletions[id];
+      await this.saveSettings();
+      new import_obsidian15.Notice(`${pending.hostName || "\u56FE\u5E8A"} \u672A\u914D\u7F6E\u5220\u9664 API\uFF0C\u8FDC\u7A0B\u56FE\u7247\u5DF2\u4FDD\u7559`, 7e3);
+      return;
+    }
+    if (pending.reason === "removed-image" && await this.isPendingRemoteImageReferenced(pending)) {
+      delete this.settings.pendingImageHostDeletions[id];
+      await this.saveSettings();
+      new import_obsidian15.Notice("\u68C0\u6D4B\u5230\u56FE\u7247\u5DF2\u6062\u590D\uFF0C\u5DF2\u53D6\u6D88\u56FE\u5E8A\u5220\u9664", 5e3);
+      return;
+    }
+    try {
+      await this.deleteImageFromHostConfig(host, pending.url, pending.hash, pending.deleteKey);
+      if (pending.hash) delete this.settings.imageUploadCache[`${pending.hostId}:${pending.hash}`];
+      delete this.settings.pendingImageHostDeletions[id];
+      await this.saveSettings();
+      new import_obsidian15.Notice(pending.reason === "connectivity-test" ? `${pending.hostName || host.name} \u7684\u8FDE\u901A\u6027\u6D4B\u8BD5\u56FE\u7247\u5DF2\u5220\u9664` : `${pending.hostName || host.name} \u7684\u8FDC\u7A0B\u56FE\u7247\u5DF2\u5220\u9664`, 5e3);
+    } catch (error) {
+      console.warn("MindMap Studio delayed remote image deletion failed", error);
+      delete this.settings.pendingImageHostDeletions[id];
+      await this.saveSettings();
+      new import_obsidian15.Notice(`${pending.hostName || host.name} \u5220\u9664\u5931\u8D25\uFF1A${error instanceof Error ? error.message : String(error)}`, 9e3);
+    }
+  }
+  /** Returns true when any currently saved or open mind map references a pending remote image. */
+  async isPendingRemoteImageReferenced(pending) {
+    for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE_MINDMAP_STUDIO)) {
+      if (leaf.view instanceof MindMapStudioView) await leaf.view.save();
+    }
+    for (const file of this.app.vault.getFiles()) {
+      if (file.extension.toLowerCase() !== MINDMAP_EXTENSION) continue;
       try {
-        await this.deleteImageFromHostConfig(host, remote.url, removed.contentHash, remote.deleteKey);
-        deleted.push(remote.hostName || host.name);
-        if (removed.contentHash) delete this.settings.imageUploadCache[`${remote.hostId}:${removed.contentHash}`];
-      } catch (error) {
-        console.warn("MindMap Studio remote image deletion failed", error);
-        failed.push(`${remote.hostName || host.name}\uFF1A${error instanceof Error ? error.message : String(error)}`);
+        const document2 = parseDocument(await this.app.vault.cachedRead(file), file.basename);
+        const referenced = flattenNodes(document2.root).some((node) => nodeContentBlocks(node).some((block) => {
+          var _a2;
+          if (block.type !== "image") return false;
+          if (pending.hash && block.contentHash === pending.hash) return true;
+          return block.source === pending.url || ((_a2 = block.remoteSources) != null ? _a2 : []).some((source) => source.url === pending.url);
+        }));
+        if (referenced) return true;
+      } catch (e) {
+        return true;
       }
     }
-    if (deleted.length) await this.saveSettings();
-    const parts = [];
-    if (deleted.length) parts.push(`\u5DF2\u540C\u6B65\u5220\u9664\uFF1A${deleted.join("\u3001")}`);
-    if (retained.length) parts.push(`\u672A\u914D\u7F6E\u5220\u9664 API\uFF0C\u8FDC\u7A0B\u56FE\u7247\u4FDD\u7559\uFF1A${retained.join("\u3001")}`);
-    if (failed.length) parts.push(`\u5220\u9664\u5931\u8D25\uFF1A${failed.join("\uFF1B")}`);
-    if (parts.length) new import_obsidian15.Notice(parts.join("\n"), failed.length ? 9e3 : 6e3);
+    return false;
+  }
+  /** Creates a compact deterministic identifier without persisting a full URL in a record key. */
+  shortStableId(value) {
+    let hash = 2166136261;
+    for (let index = 0; index < value.length; index += 1) {
+      hash ^= value.charCodeAt(index);
+      hash = Math.imul(hash, 16777619);
+    }
+    return (hash >>> 0).toString(16).padStart(8, "0");
   }
   /** Returns whether one document still references an image by SHA-256 or any remote URL. */
   documentReferencesImage(document2, image) {
@@ -21188,7 +21307,7 @@ ${uploaded.url}`, 8e3);
     }
     const values = { url, hash, deleteKey: resolvedDeleteKey };
     const endpoint = normalizeHttpUrl(applyImageDeleteTemplate(host.deleteEndpoint, values, "url"), "\u5220\u9664 API");
-    const headers = parseUploadHeaders(host.preset === "zipline" ? host.headers : host.deleteHeaders || host.headers);
+    const headers = parseUploadHeaders(host.headers);
     const body = host.deleteBody.trim() ? applyImageDeleteTemplate(host.deleteBody, values, "json") : void 0;
     await (0, import_obsidian15.requestUrl)({
       url: endpoint,

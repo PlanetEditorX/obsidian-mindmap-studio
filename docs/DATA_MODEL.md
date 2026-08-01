@@ -278,3 +278,6 @@ interface MindMapImageRemoteSource {
 - 子节点递归规范化。
 
 调用方不应假设 `JSON.parse()` 后的数据已经安全。
+
+
+图床删除队列保存在插件设置 `pendingImageHostDeletions` 中，每项记录图床、URL、可选哈希/删除令牌、到期时间和来源（图片删除或连通性测试）。队列只保存最多 200 条；到期前恢复图片引用会取消删除。上传与删除不保存两份请求头，均读取图床配置的 `headers`。
