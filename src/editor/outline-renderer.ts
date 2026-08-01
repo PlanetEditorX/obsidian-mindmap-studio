@@ -16,6 +16,7 @@ import { articleNumberLabel } from "../article/modes";
 import type { MindMapEditorCallbacks } from "./editor-types";
 import { ImagePreviewModal } from "./editor-modals";
 import { renderInlineMarkdown, renderRichTextRuns } from "./rich-text-dom";
+import { loadImageWithFallback } from "./image-failure-view";
 
 /** 大纲渲染所需的编辑器回调边界。 */
 export interface OutlineRendererOptions {
@@ -143,29 +144,36 @@ function renderOutlineContent(container: HTMLElement, node: MindMapNode, depth: 
     const inline = block.layout === "inline";
     if (inline && !inlineImageRow) inlineImageRow = content.createDiv({ cls: "mms-outline-image-row" });
     if (!inline) inlineImageRow = null;
-    const resolved = options.resolveImage(block.source);
     const figure = (inline ? inlineImageRow! : content).createEl("figure", { cls: `mms-outline-image image-align-${block.align ?? "center"} image-layout-${block.layout ?? "block"}` });
     figure.dataset.blockId = block.id;
-    if (resolved) {
-      const image = figure.createEl("img", { attr: { src: resolved, alt: block.alt ?? "图片", loading: "lazy" } });
-      if (block.width) image.style.width = `${block.width}px`;
-      if (block.height) image.style.height = `${block.height}px`;
-      image.addEventListener("click", () => new ImagePreviewModal(
+    let activeResolved: string | null = null;
+    const image = figure.createEl("img", { attr: { alt: block.alt ?? "图片", loading: "lazy" } });
+    if (block.width) image.style.width = `${block.width}px`;
+    if (block.height) image.style.height = `${block.height}px`;
+    loadImageWithFallback(
+      image,
+      figure,
+      block,
+      options.imageHostPriorityIds,
+      options.resolveImage,
+      (_source, resolved) => { activeResolved = resolved; }
+    );
+    image.addEventListener("click", () => {
+      if (!activeResolved) return;
+      new ImagePreviewModal(
         options.app,
-        resolved,
+        activeResolved,
         block.alt ?? "图片",
         imageSourceCandidates(block, true, options.imageHostPriorityIds),
         options.resolveImage
-      ).open());
-      image.addEventListener("contextmenu", (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        options.selectNode(node.id);
-        options.openImageContextMenu(event, node.id, block.id);
-      });
-    } else {
-      figure.createDiv({ cls: "mms-outline-image-placeholder", text: "图片无法加载" });
-    }
+      ).open();
+    });
+    figure.addEventListener("contextmenu", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      options.selectNode(node.id);
+      options.openImageContextMenu(event, node.id, block.id);
+    });
     if (block.alt) figure.createEl("figcaption", { text: block.alt });
   }
   if (node.table) {

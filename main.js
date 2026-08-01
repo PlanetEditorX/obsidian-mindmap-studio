@@ -24,7 +24,7 @@ __export(main_exports, {
   default: () => MindMapStudioPlugin
 });
 module.exports = __toCommonJS(main_exports);
-var import_obsidian15 = require("obsidian");
+var import_obsidian16 = require("obsidian");
 
 // src/core/node-tree.ts
 function walkNodes(root, visitor) {
@@ -514,6 +514,52 @@ function replaceNodeContentBlocks(node, blocks) {
   node.table = void 0;
   node.code = void 0;
   syncNodeContentFields(node);
+}
+function applyImageUploadPatches(document2, patches) {
+  var _a2, _b2, _c;
+  let changed = 0;
+  for (const patch of patches) {
+    const node = findNode(document2.root, patch.nodeId);
+    if (!node) continue;
+    const blocks = nodeContentBlocks(node);
+    const block = blocks.find((item) => item.type === "image" && item.id === patch.blockId);
+    if (!block) continue;
+    if (patch.localPath) {
+      const sameLocalSource = block.localSource === patch.localPath || block.source === patch.localPath;
+      if (!sameLocalSource && !patch.clearLocalSource) continue;
+    }
+    let blockChanged = false;
+    if ((_a2 = patch.remoteSources) == null ? void 0 : _a2.length) {
+      const merged = /* @__PURE__ */ new Map();
+      for (const source of (_b2 = block.remoteSources) != null ? _b2 : []) merged.set(source.hostId || source.url, source);
+      for (const source of patch.remoteSources) merged.set(source.hostId || source.url, source);
+      const next = Array.from(merged.values());
+      if (JSON.stringify(next) !== JSON.stringify((_c = block.remoteSources) != null ? _c : [])) {
+        block.remoteSources = next;
+        blockChanged = true;
+      }
+    }
+    if (patch.contentHash && patch.contentHash !== block.contentHash) {
+      block.contentHash = patch.contentHash;
+      blockChanged = true;
+    }
+    if (patch.localPath && !patch.clearLocalSource && block.localSource !== patch.localPath) {
+      block.localSource = patch.localPath;
+      blockChanged = true;
+    }
+    if (patch.clearLocalSource && block.localSource !== void 0) {
+      block.localSource = void 0;
+      blockChanged = true;
+    }
+    if (patch.preferredSource && patch.preferredSource !== block.source) {
+      block.source = patch.preferredSource;
+      blockChanged = true;
+    }
+    if (!blockChanged) continue;
+    replaceNodeContentBlocks(node, blocks);
+    changed += 1;
+  }
+  return changed;
 }
 function isRemovableEmptyNode(node) {
   var _a2, _b2, _c, _d;
@@ -4062,10 +4108,10 @@ function renderStaticSource(container, source, fallbackTitle, defaultAppearance)
 }
 
 // src/view.ts
-var import_obsidian12 = require("obsidian");
+var import_obsidian13 = require("obsidian");
 
 // src/editor/editor.ts
-var import_obsidian10 = require("obsidian");
+var import_obsidian11 = require("obsidian");
 
 // src/render/incremental-render.ts
 function buildHierarchyFocusOrder(root, selectedId) {
@@ -5501,7 +5547,7 @@ function readRichTextEditor(editor) {
 // src/editor/editor-modals.ts
 var import_obsidian5 = require("obsidian");
 
-// node_modules/fflate/esm/browser.js
+// ../../deps/node_modules/fflate/esm/browser.js
 var u8 = Uint8Array;
 var u16 = Uint16Array;
 var i32 = Int32Array;
@@ -8081,6 +8127,72 @@ var DocumentHistory = class {
   }
 };
 
+// src/editor/image-failure-view.ts
+var import_obsidian8 = require("obsidian");
+function imageFailureSources(block, imageHostPriorityIds = []) {
+  const values = imageSourceCandidates(block, true, imageHostPriorityIds).map((candidate) => candidate.source.trim());
+  if (block.source.trim()) values.push(block.source.trim());
+  return Array.from(new Set(values.filter(Boolean)));
+}
+function clearImageFailureDetails(container) {
+  var _a2;
+  (_a2 = container.querySelector(":scope > .mms-image-failure-card")) == null ? void 0 : _a2.remove();
+}
+function renderImageFailureDetails(container, block, imageHostPriorityIds = []) {
+  clearImageFailureDetails(container);
+  const sources = imageFailureSources(block, imageHostPriorityIds);
+  const card = container.createDiv({ cls: "mms-image-failure-card" });
+  card.createDiv({ cls: "mms-image-failure-title", text: "\u56FE\u7247\u52A0\u8F7D\u5931\u8D25" });
+  card.createDiv({ cls: "mms-image-failure-description", text: "\u4EE5\u4E0B\u5730\u5740\u5747\u65E0\u6CD5\u52A0\u8F7D\uFF0C\u53EF\u590D\u5236\u540E\u5728\u6D4F\u89C8\u5668\u6216\u56FE\u5E8A\u4E2D\u68C0\u67E5\u3002" });
+  const list = card.createDiv({ cls: "mms-image-failure-addresses" });
+  for (const source of sources.length ? sources : ["\u672A\u4FDD\u5B58\u56FE\u7247\u5730\u5740"]) {
+    const row = list.createDiv({ cls: "mms-image-failure-address" });
+    const value = row.createEl("code", { text: source });
+    value.setAttr("title", source);
+    if (source === "\u672A\u4FDD\u5B58\u56FE\u7247\u5730\u5740") continue;
+    const copy = row.createEl("button", {
+      cls: "clickable-icon mms-image-failure-copy",
+      text: "\u590D\u5236\u5730\u5740",
+      attr: { type: "button", "aria-label": `\u590D\u5236\u56FE\u7247\u5730\u5740\uFF1A${source}` }
+    });
+    copy.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      void navigator.clipboard.writeText(source).then(
+        () => new import_obsidian8.Notice("\u56FE\u7247\u5730\u5740\u5DF2\u590D\u5236"),
+        () => new import_obsidian8.Notice("\u590D\u5236\u56FE\u7247\u5730\u5740\u5931\u8D25")
+      );
+    });
+  }
+  return card;
+}
+function loadImageWithFallback(image, container, block, imageHostPriorityIds, resolveImage, onResolved) {
+  const candidates = imageSourceCandidates(block, true, imageHostPriorityIds);
+  let index = 0;
+  const attempt = () => {
+    const candidate = candidates[index++];
+    if (!candidate) {
+      image.removeAttribute("src");
+      image.addClass("is-hidden");
+      renderImageFailureDetails(container, block, imageHostPriorityIds);
+      return;
+    }
+    const resolved = resolveImage(candidate.source);
+    if (!resolved) {
+      attempt();
+      return;
+    }
+    image.onload = () => {
+      image.removeClass("is-hidden");
+      clearImageFailureDetails(container);
+      onResolved == null ? void 0 : onResolved(candidate.source, resolved);
+    };
+    image.onerror = attempt;
+    image.src = resolved;
+  };
+  attempt();
+}
+
 // src/editor/outline-renderer.ts
 function renderOutlineMode(container, options) {
   var _a2;
@@ -8196,32 +8308,39 @@ function renderOutlineContent(container, node, depth, options) {
     const inline = block.layout === "inline";
     if (inline && !inlineImageRow) inlineImageRow = content.createDiv({ cls: "mms-outline-image-row" });
     if (!inline) inlineImageRow = null;
-    const resolved = options.resolveImage(block.source);
     const figure = (inline ? inlineImageRow : content).createEl("figure", { cls: `mms-outline-image image-align-${(_a2 = block.align) != null ? _a2 : "center"} image-layout-${(_b2 = block.layout) != null ? _b2 : "block"}` });
     figure.dataset.blockId = block.id;
-    if (resolved) {
-      const image = figure.createEl("img", { attr: { src: resolved, alt: (_c = block.alt) != null ? _c : "\u56FE\u7247", loading: "lazy" } });
-      if (block.width) image.style.width = `${block.width}px`;
-      if (block.height) image.style.height = `${block.height}px`;
-      image.addEventListener("click", () => {
-        var _a3;
-        return new ImagePreviewModal(
-          options.app,
-          resolved,
-          (_a3 = block.alt) != null ? _a3 : "\u56FE\u7247",
-          imageSourceCandidates(block, true, options.imageHostPriorityIds),
-          options.resolveImage
-        ).open();
-      });
-      image.addEventListener("contextmenu", (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        options.selectNode(node.id);
-        options.openImageContextMenu(event, node.id, block.id);
-      });
-    } else {
-      figure.createDiv({ cls: "mms-outline-image-placeholder", text: "\u56FE\u7247\u65E0\u6CD5\u52A0\u8F7D" });
-    }
+    let activeResolved = null;
+    const image = figure.createEl("img", { attr: { alt: (_c = block.alt) != null ? _c : "\u56FE\u7247", loading: "lazy" } });
+    if (block.width) image.style.width = `${block.width}px`;
+    if (block.height) image.style.height = `${block.height}px`;
+    loadImageWithFallback(
+      image,
+      figure,
+      block,
+      options.imageHostPriorityIds,
+      options.resolveImage,
+      (_source, resolved) => {
+        activeResolved = resolved;
+      }
+    );
+    image.addEventListener("click", () => {
+      var _a3;
+      if (!activeResolved) return;
+      new ImagePreviewModal(
+        options.app,
+        activeResolved,
+        (_a3 = block.alt) != null ? _a3 : "\u56FE\u7247",
+        imageSourceCandidates(block, true, options.imageHostPriorityIds),
+        options.resolveImage
+      ).open();
+    });
+    figure.addEventListener("contextmenu", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      options.selectNode(node.id);
+      options.openImageContextMenu(event, node.id, block.id);
+    });
     if (block.alt) figure.createEl("figcaption", { text: block.alt });
   }
   if (node.table) {
@@ -8263,7 +8382,7 @@ function renderOutlineContent(container, node, depth, options) {
 }
 
 // src/editor/article-renderer.ts
-var import_obsidian8 = require("obsidian");
+var import_obsidian9 = require("obsidian");
 
 // src/editor/table-interaction.ts
 function bindTableDoubleClick(target, options) {
@@ -8520,22 +8639,33 @@ function renderArticleNodeContent(container, node, treatTextAsBody, options) {
       if (!inline) inlineImageRow = null;
       const shell = createArticleContentBlock(inline ? inlineImageRow : container, block.id, !inline);
       shell.addClass(`image-layout-${(_a2 = block.layout) != null ? _a2 : "block"}`);
-      const resolved = options.callbacks.resolveImage(block.source);
-      const image = shell.createEl("img", { cls: `mms-article-image image-align-${(_b2 = block.align) != null ? _b2 : "center"}`, attr: { src: resolved != null ? resolved : block.source, alt: (_c = block.alt) != null ? _c : "\u56FE\u7247" } });
+      let activeResolved = null;
+      const image = shell.createEl("img", { cls: `mms-article-image image-align-${(_b2 = block.align) != null ? _b2 : "center"}`, attr: { alt: (_c = block.alt) != null ? _c : "\u56FE\u7247" } });
       image.dataset.blockId = block.id;
       if (block.width) image.style.width = `${block.width}px`;
       if (block.height) image.style.height = `${block.height}px`;
+      loadImageWithFallback(
+        image,
+        shell,
+        block,
+        options.imageHostPriorityIds,
+        (source) => options.callbacks.resolveImage(source),
+        (_source, resolved) => {
+          activeResolved = resolved;
+        }
+      );
       image.addEventListener("click", () => {
         var _a3;
-        return new ImagePreviewModal(
+        if (!activeResolved) return;
+        new ImagePreviewModal(
           options.app,
-          resolved != null ? resolved : block.source,
+          activeResolved,
           (_a3 = block.alt) != null ? _a3 : "\u56FE\u7247",
           imageSourceCandidates(block, true, options.imageHostPriorityIds),
           (source) => options.callbacks.resolveImage(source)
         ).open();
       });
-      image.addEventListener("contextmenu", (event) => {
+      shell.addEventListener("contextmenu", (event) => {
         event.preventDefault();
         event.stopPropagation();
         options.selectNode(node.id);
@@ -8669,22 +8799,22 @@ function renderArticlePager(page, options) {
   const index = navigation.currentIndex;
   const previous = index > 0 ? navigation.entries[index - 1] : void 0;
   const next = index < navigation.entries.length - 1 ? navigation.entries[index + 1] : void 0;
-  const pager = page.createEl("nav", { cls: "mms-article-pager", attr: { "aria-label": "\u6587\u7AE0\u524D\u540E\u9875\u5BFC\u822A" } });
+  const pager = page.createEl("nav", { cls: "mms-article-pager" });
   const addTarget = (className, prefix, entry) => {
-    const link = pager.createEl("button", { cls: className, attr: { type: "button", title: entry.breadcrumb.join(" \u203A ") } });
+    const link = pager.createEl("button", { cls: className, attr: { type: "button" } });
     link.createSpan({ cls: "mms-article-pager-direction", text: prefix.trim() });
     link.createSpan({ cls: "mms-article-pager-title", text: entry.displayTitle || entry.title });
     link.addEventListener("click", () => void options.callbacks.onOpenMindMap(entry.filePath, entry.nodeId));
   };
   if (previous) addTarget("mms-article-pager-previous", previous.depth <= 1 ? "\u4E0A\u4E00\u7AE0 " : "\u4E0A\u4E00\u8282 ", previous);
   else pager.createSpan({ cls: "mms-article-pager-placeholder" });
-  const parent = pager.createEl("button", { cls: "mms-article-pager-parent", attr: { type: "button", title: "\u8FD4\u56DE\u4E0A\u4E00\u7EA7" } });
-  (0, import_obsidian8.setIcon)(parent, "corner-left-up");
+  const parent = pager.createEl("button", { cls: "mms-article-pager-parent", attr: { type: "button" } });
+  (0, import_obsidian9.setIcon)(parent, "corner-left-up");
   parent.createSpan({ text: "\u8FD4\u56DE\u4E0A\u4E00\u7EA7" });
   parent.addEventListener("click", () => void options.callbacks.onOpenMindMap(navigation.parentPath));
   if (next) addTarget("mms-article-pager-next", next.depth <= 1 ? "\u4E0B\u4E00\u7AE0 " : "\u4E0B\u4E00\u8282 ", next);
   else {
-    const end = pager.createEl("button", { cls: "mms-article-pager-end", attr: { type: "button", title: "\u8FD4\u56DE\u603B\u76EE\u5F55" } });
+    const end = pager.createEl("button", { cls: "mms-article-pager-end", attr: { type: "button" } });
     end.createSpan({ cls: "mms-article-pager-direction", text: "\u9605\u8BFB\u5B8C\u6210" });
     end.createSpan({ cls: "mms-article-pager-title", text: "END \xB7 \u8FD4\u56DE\u76EE\u5F55" });
     end.addEventListener("click", () => void options.callbacks.onOpenArticleDirectory(navigation.homePath));
@@ -9254,8 +9384,8 @@ function applyImageTextReplacements(document2, previews) {
 }
 
 // src/vision/modal.ts
-var import_obsidian9 = require("obsidian");
-var ImageRecognitionPreviewModal = class extends import_obsidian9.Modal {
+var import_obsidian10 = require("obsidian");
+var ImageRecognitionPreviewModal = class extends import_obsidian10.Modal {
   /** 保存预览参数并初始化 Obsidian Modal。 */
   constructor(app, options) {
     super(app);
@@ -9294,7 +9424,7 @@ var ImageRecognitionPreviewModal = class extends import_obsidian9.Modal {
       }
       const nextText = text.value.trim();
       if (!nextText) {
-        new import_obsidian9.Notice("\u8BC6\u522B\u6587\u5B57\u4E0D\u80FD\u4E3A\u7A7A");
+        new import_obsidian10.Notice("\u8BC6\u522B\u6587\u5B57\u4E0D\u80FD\u4E3A\u7A7A");
         text.focus();
         return;
       }
@@ -9305,7 +9435,7 @@ var ImageRecognitionPreviewModal = class extends import_obsidian9.Modal {
         else confirm.disabled = false;
       }).catch((error) => {
         confirm.disabled = false;
-        new import_obsidian9.Notice(error instanceof Error ? error.message : "\u56FE\u7247\u66FF\u6362\u5931\u8D25");
+        new import_obsidian10.Notice(error instanceof Error ? error.message : "\u56FE\u7247\u66FF\u6362\u5931\u8D25");
       });
     };
     confirm.addEventListener("click", confirmReplacement);
@@ -9363,7 +9493,7 @@ function createArticleNumberingControls(container, currentMode, currentLevel, on
     })
   };
 }
-var NodeEditModal = class extends import_obsidian10.Modal {
+var NodeEditModal = class extends import_obsidian11.Modal {
   /**
    * 创建 NodeEditModal 实例，保存依赖和初始状态；实际 DOM 构建通常在 onOpen() 或后续渲染流程中完成。
    *
@@ -9448,7 +9578,7 @@ var NodeEditModal = class extends import_obsidian10.Modal {
         const controls = header.createDiv({ cls: "mmc-content-block-controls" });
         const control = (icon, title, action, disabled = false) => {
           const btn = controls.createEl("button", { cls: "clickable-icon", attr: { type: "button", title, "aria-label": title } });
-          (0, import_obsidian10.setIcon)(btn, icon);
+          (0, import_obsidian11.setIcon)(btn, icon);
           btn.disabled = disabled;
           btn.addEventListener("click", (event) => {
             event.preventDefault();
@@ -9459,7 +9589,7 @@ var NodeEditModal = class extends import_obsidian10.Modal {
           cls: "clickable-icon mmc-content-block-editor-drag-handle",
           attr: { type: "button", title: "\u62D6\u52A8\u5185\u5BB9\u5757", "aria-label": "\u62D6\u52A8\u5185\u5BB9\u5757", draggable: "true" }
         });
-        (0, import_obsidian10.setIcon)(dragHandle, "grip-vertical");
+        (0, import_obsidian11.setIcon)(dragHandle, "grip-vertical");
         dragHandle.addEventListener("pointerdown", (event) => event.stopPropagation());
         dragHandle.addEventListener("click", (event) => event.preventDefault());
         dragHandle.addEventListener("dragstart", (event) => {
@@ -9502,7 +9632,7 @@ var NodeEditModal = class extends import_obsidian10.Modal {
         card.addEventListener("contextmenu", (event) => {
           event.preventDefault();
           event.stopPropagation();
-          const menu = new import_obsidian10.Menu();
+          const menu = new import_obsidian11.Menu();
           menu.addItem((item) => item.setTitle("\u5220\u9664\u5F53\u524D\u5757").setIcon("trash-2").onClick(() => {
             const currentIndex = workingBlocks.findIndex((item2) => item2.id === block.id);
             if (currentIndex < 0) return;
@@ -9782,7 +9912,7 @@ var NodeEditModal = class extends import_obsidian10.Modal {
     const collectValues = (showNotice) => {
       const content = validBlocks();
       if (!content.length) {
-        if (showNotice) new import_obsidian10.Notice("\u8282\u70B9\u81F3\u5C11\u9700\u8981\u4E00\u4E2A\u5185\u5BB9\u5757");
+        if (showNotice) new import_obsidian11.Notice("\u8282\u70B9\u81F3\u5C11\u9700\u8981\u4E00\u4E2A\u5185\u5BB9\u5757");
         return null;
       }
       const task = taskSelect.value;
@@ -9893,7 +10023,7 @@ var NodeEditModal = class extends import_obsidian10.Modal {
     this.app.keymap.popScope(this.scope);
   }
 };
-var AppearanceModal = class extends import_obsidian10.Modal {
+var AppearanceModal = class extends import_obsidian11.Modal {
   /**
    * 创建 AppearanceModal 实例，保存依赖和初始状态；实际 DOM 构建通常在 onOpen() 或后续渲染流程中完成。
    *
@@ -10709,7 +10839,7 @@ var MindMapEditor = class {
       const resolved = this.restoreReadingLocation("article", location);
       const navigationLocation = resolved ? createReadingLocation(this.readingLocationSections(), resolved.filePath, resolved.nodeId, resolved.nodeRatio, resolved.viewportRatio) : location != null ? location : void 0;
       void this.callbacks.onDisplayModeChange("article", navigationLocation);
-      new import_obsidian10.Notice("\u901A\u8BFB\u6A21\u5F0F\u5DF2\u5207\u6362\u4E3A\u6587\u7AE0\u7F16\u8F91\u6A21\u5F0F");
+      new import_obsidian11.Notice("\u901A\u8BFB\u6A21\u5F0F\u5DF2\u5207\u6362\u4E3A\u6587\u7AE0\u7F16\u8F91\u6A21\u5F0F");
       return;
     }
     if (this.currentMode !== "article" && this.currentMode !== "reading") this.persistReadOnlyState();
@@ -10723,7 +10853,7 @@ var MindMapEditor = class {
       restore();
       window.requestAnimationFrame(restore);
     }
-    new import_obsidian10.Notice(this.readOnly ? "\u5DF2\u8FDB\u5165\u9605\u8BFB\u6A21\u5F0F" : "\u5DF2\u8FDB\u5165\u7F16\u8F91\u6A21\u5F0F");
+    new import_obsidian11.Notice(this.readOnly ? "\u5DF2\u8FDB\u5165\u9605\u8BFB\u6A21\u5F0F" : "\u5DF2\u8FDB\u5165\u7F16\u8F91\u6A21\u5F0F");
   }
   /** 使用最近一次右键范围询问 AI；未右键节点时默认询问当前页面。 */
   askAi() {
@@ -10739,6 +10869,20 @@ var MindMapEditor = class {
     this.persistMindMapViewportState();
     return cloneDocument(this.document);
   }
+  /**
+   * 把后台图床上传结果合并到编辑器当前最新文档，不替换用户在上传期间继续编辑的节点树。
+   *
+   * @param patches 已完成网络上传的图片字段补丁。
+   * @returns 实际更新的图片块数量。
+   */
+  applyImageUploadPatches(patches) {
+    const updated = applyImageUploadPatches(this.document, patches);
+    if (!updated) return 0;
+    this.callbacks.onChange(this.getDocument());
+    this.markSaving();
+    this.render();
+    return updated;
+  }
   /** 根据当前页面或节点范围生成 AI Markdown 修改预览，不直接修改文档。 */
   previewAiEdit(responseText, scopeNodeId) {
     return previewAiMarkdownEdit(this.document, scopeNodeId != null ? scopeNodeId : null, responseText);
@@ -10749,10 +10893,10 @@ var MindMapEditor = class {
     try {
       const applied = applyAiMarkdownEdit(this.document, preview);
       this.replaceDocumentFromExternalEdit(applied.document, applied.focusNodeId);
-      new import_obsidian10.Notice(`AI \u4FEE\u6539\u5DF2\u5E94\u7528\uFF1A${applied.changedNodeCount} \u4E2A\u8282\u70B9`);
+      new import_obsidian11.Notice(`AI \u4FEE\u6539\u5DF2\u5E94\u7528\uFF1A${applied.changedNodeCount} \u4E2A\u8282\u70B9`);
       return true;
     } catch (error) {
-      new import_obsidian10.Notice(error instanceof Error ? error.message : "AI \u4FEE\u6539\u5E94\u7528\u5931\u8D25");
+      new import_obsidian11.Notice(error instanceof Error ? error.message : "AI \u4FEE\u6539\u5E94\u7528\u5931\u8D25");
       return false;
     }
   }
@@ -10766,21 +10910,21 @@ var MindMapEditor = class {
     try {
       const applied = applyLocalTextReplace(this.document, preview);
       this.replaceDocumentFromExternalEdit(applied.document, applied.focusNodeId);
-      new import_obsidian10.Notice(`\u672C\u5730\u66FF\u6362\u5DF2\u5B8C\u6210\uFF1A\u5F71\u54CD ${applied.changedNodeCount} \u4E2A\u8282\u70B9`);
+      new import_obsidian11.Notice(`\u672C\u5730\u66FF\u6362\u5DF2\u5B8C\u6210\uFF1A\u5F71\u54CD ${applied.changedNodeCount} \u4E2A\u8282\u70B9`);
       return true;
     } catch (error) {
-      new import_obsidian10.Notice(error instanceof Error ? error.message : "\u672C\u5730\u66FF\u6362\u5931\u8D25");
+      new import_obsidian11.Notice(error instanceof Error ? error.message : "\u672C\u5730\u66FF\u6362\u5931\u8D25");
       return false;
     }
   }
   /** 启动截图编辑器；普通截图与截图并识别使用完全独立的调用链。 */
   async captureScreenshot(recognizeAfter = false, targetOverride) {
     const insertionTarget = targetOverride != null ? targetOverride : this.screenshotInsertionTarget();
-    new import_obsidian10.Notice(recognizeAfter ? "\u6B63\u5728\u51C6\u5907\u622A\u56FE\u5E76\u8BC6\u522B\u2026" : "\u6B63\u5728\u51C6\u5907\u622A\u56FE\u7F16\u8F91\u5668\u2026", 2500);
+    new import_obsidian11.Notice(recognizeAfter ? "\u6B63\u5728\u51C6\u5907\u622A\u56FE\u5E76\u8BC6\u522B\u2026" : "\u6B63\u5728\u51C6\u5907\u622A\u56FE\u7F16\u8F91\u5668\u2026", 2500);
     try {
       const capture = await this.callbacks.onCaptureScreenshot(recognizeAfter);
       if (capture.action === "download") {
-        new import_obsidian10.Notice("\u622A\u56FE\u5DF2\u4E0B\u8F7D");
+        new import_obsidian11.Notice("\u622A\u56FE\u5DF2\u4E0B\u8F7D");
         return;
       }
       if (capture.action === "recognize-copy") {
@@ -10789,12 +10933,12 @@ var MindMapEditor = class {
       }
       if (!insertionTarget) {
         if (recognizeAfter) await this.recognizeCapturedScreenshotToClipboard(capture.blob);
-        else new import_obsidian10.Notice("\u622A\u56FE\u5DF2\u590D\u5236\u5230\u526A\u8D34\u677F\uFF1B\u622A\u56FE\u524D\u6CA1\u6709\u805A\u7126\u5BFC\u56FE\u8282\u70B9\u6216\u6587\u7AE0\u6BB5\u843D");
+        else new import_obsidian11.Notice("\u622A\u56FE\u5DF2\u590D\u5236\u5230\u526A\u8D34\u677F\uFF1B\u622A\u56FE\u524D\u6CA1\u6709\u805A\u7126\u5BFC\u56FE\u8282\u70B9\u6216\u6587\u7AE0\u6BB5\u843D");
         return;
       }
       if (!this.ensureExternalEditAllowed()) {
         if (recognizeAfter) await this.recognizeCapturedScreenshotToClipboard(capture.blob);
-        else new import_obsidian10.Notice("\u622A\u56FE\u5DF2\u590D\u5236\u5230\u526A\u8D34\u677F\uFF1B\u5F53\u524D\u5BFC\u56FE\u53EA\u8BFB\uFF0C\u672A\u63D2\u5165\u56FE\u7247");
+        else new import_obsidian11.Notice("\u622A\u56FE\u5DF2\u590D\u5236\u5230\u526A\u8D34\u677F\uFF1B\u5F53\u524D\u5BFC\u56FE\u53EA\u8BFB\uFF0C\u672A\u63D2\u5165\u56FE\u7247");
         return;
       }
       const path = await this.callbacks.onSavePastedImage(capture.blob, capture.suggestedName);
@@ -10808,7 +10952,7 @@ var MindMapEditor = class {
       const next = cloneDocument(this.document);
       const target = findNode(next.root, insertionTarget.nodeId);
       if (!target) {
-        new import_obsidian10.Notice("\u622A\u56FE\u5DF2\u590D\u5236\u5230\u526A\u8D34\u677F\uFF1B\u622A\u56FE\u524D\u805A\u7126\u7684\u8282\u70B9\u5DF2\u4E0D\u5B58\u5728");
+        new import_obsidian11.Notice("\u622A\u56FE\u5DF2\u590D\u5236\u5230\u526A\u8D34\u677F\uFF1B\u622A\u56FE\u524D\u805A\u7126\u7684\u8282\u70B9\u5DF2\u4E0D\u5B58\u5728");
         return;
       }
       const blocks = nodeContentBlocks(target);
@@ -10818,14 +10962,14 @@ var MindMapEditor = class {
       syncNodeContentFields(target);
       this.replaceDocumentFromExternalEdit(next, target.id);
       const scheduled = this.callbacks.onScheduleAutoUpload(target.id, imageBlock.id, path, capture.suggestedName);
-      new import_obsidian10.Notice(scheduled ? `\u622A\u56FE\u5DF2\u63D2\u5165\uFF0C${this.autoUploadScheduleMessage()}` : `\u622A\u56FE\u5DF2\u63D2\u5165\uFF1A${path}`);
+      new import_obsidian11.Notice(scheduled ? `\u622A\u56FE\u5DF2\u63D2\u5165\uFF0C${this.autoUploadScheduleMessage()}` : `\u622A\u56FE\u5DF2\u63D2\u5165\uFF1A${path}`);
       if (recognizeAfter) await this.recognizeImageBlock(target.id, imageBlock.id);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      if (/取消截图操作/.test(message)) new import_obsidian10.Notice("\u5DF2\u53D6\u6D88\u622A\u56FE");
+      if (/取消截图操作/.test(message)) new import_obsidian11.Notice("\u5DF2\u53D6\u6D88\u622A\u56FE");
       else {
         console.error("MindMap Studio screenshot failed", error);
-        new import_obsidian10.Notice(`\u622A\u56FE\u5931\u8D25\uFF1A${message}`);
+        new import_obsidian11.Notice(`\u622A\u56FE\u5931\u8D25\uFF1A${message}`);
       }
     }
   }
@@ -10842,7 +10986,7 @@ var MindMapEditor = class {
     }, blob);
     if (!result.text.trim()) throw new Error("\u622A\u56FE\u4E2D\u6CA1\u6709\u8BC6\u522B\u5230\u53EF\u590D\u5236\u7684\u6587\u5B57");
     await navigator.clipboard.writeText(result.text);
-    new import_obsidian10.Notice("\u8BC6\u522B\u6587\u5B57\u5DF2\u590D\u5236\u5230\u526A\u8D34\u677F");
+    new import_obsidian11.Notice("\u8BC6\u522B\u6587\u5B57\u5DF2\u590D\u5236\u5230\u526A\u8D34\u677F");
   }
   /** 返回截图操作开始前实际聚焦的节点或文章段落；命令面板等外部焦点返回 null。 */
   screenshotInsertionTarget() {
@@ -10878,7 +11022,7 @@ var MindMapEditor = class {
       if (!image) throw new Error("\u51C6\u5907\u8BC6\u522B\u7684\u56FE\u7247\u5DF2\u7ECF\u4E0D\u5B58\u5728");
       const source = await this.callbacks.onReadImageSource(image.source);
       if (!source) throw new Error("\u65E0\u6CD5\u8BFB\u53D6\u8BE5\u56FE\u7247\uFF1B\u8BF7\u68C0\u67E5\u672C\u5730\u8DEF\u5F84\u6216\u8FDC\u7A0B\u5730\u5740");
-      new import_obsidian10.Notice(this.options.imageRecognitionMode === "local-ocr" ? "\u6B63\u5728\u6267\u884C\u672C\u5730 OCR\u2026" : "\u6B63\u5728\u8FDB\u884C AI \u8BC6\u56FE\u2026");
+      new import_obsidian11.Notice(this.options.imageRecognitionMode === "local-ocr" ? "\u6B63\u5728\u6267\u884C\u672C\u5730 OCR\u2026" : "\u6B63\u5728\u8FDB\u884C AI \u8BC6\u56FE\u2026");
       const remoteUrl = /^https:\/\//i.test(image.source) ? image.source : void 0;
       const result = await this.callbacks.onRecognizeImage(image, source.blob, remoteUrl);
       const preview = previewImageTextReplacement(this.document, nodeId, blockId, result.text);
@@ -10896,7 +11040,7 @@ var MindMapEditor = class {
       }).open();
     } catch (error) {
       console.error("MindMap Studio image recognition failed", error);
-      new import_obsidian10.Notice(error instanceof Error ? error.message : "\u56FE\u7247\u8BC6\u522B\u5931\u8D25");
+      new import_obsidian11.Notice(error instanceof Error ? error.message : "\u56FE\u7247\u8BC6\u522B\u5931\u8D25");
     }
   }
   /** 为 AI 助手的每张识图结果创建独立且可校验的原位替换预览。 */
@@ -10912,10 +11056,10 @@ var MindMapEditor = class {
       const deleted = await Promise.all(previews.flatMap((preview) => preview.localSource ? [this.callbacks.onDeleteRecognizedImageLocalAsset(preview.localSource, preview.blockId)] : []));
       const deletedCount = deleted.filter(Boolean).length;
       const replacementMessage = previews.length === 1 ? "\u56FE\u7247\u5DF2\u66FF\u6362\u4E3A\u8BC6\u522B\u6587\u5B57" : `\u5DF2\u5728\u539F\u4F4D\u7F6E\u66FF\u6362 ${previews.length} \u5F20\u56FE\u7247`;
-      new import_obsidian10.Notice(deletedCount ? `${replacementMessage}\uFF0C\u672C\u5730\u56FE\u7247\u5DF2\u5220\u9664` : replacementMessage);
+      new import_obsidian11.Notice(deletedCount ? `${replacementMessage}\uFF0C\u672C\u5730\u56FE\u7247\u5DF2\u5220\u9664` : replacementMessage);
       return true;
     } catch (error) {
-      new import_obsidian10.Notice(error instanceof Error ? error.message : "\u56FE\u7247\u66FF\u6362\u5931\u8D25");
+      new import_obsidian11.Notice(error instanceof Error ? error.message : "\u56FE\u7247\u66FF\u6362\u5931\u8D25");
       return false;
     }
   }
@@ -11071,7 +11215,7 @@ var MindMapEditor = class {
         cls: "mms-mode-button",
         attr: { type: "button", title: `${DISPLAY_MODE_LABELS[mode]}\u6A21\u5F0F` }
       });
-      (0, import_obsidian10.setIcon)(button, DISPLAY_MODE_ICONS[mode]);
+      (0, import_obsidian11.setIcon)(button, DISPLAY_MODE_ICONS[mode]);
       button.createSpan({ text: DISPLAY_MODE_LABELS[mode] });
       button.addEventListener("click", () => this.setDisplayMode(mode));
       this.modeButtons.set(mode, button);
@@ -11095,7 +11239,7 @@ var MindMapEditor = class {
     this.addToolbarSeparator();
     this.addToolbarButton("table", "table-2", "\u63D2\u5165\u6216\u7F16\u8F91\u8868\u683C", () => this.editTable(), true);
     this.addToolbarButton("code", "code-2", "\u63D2\u5165\u4EE3\u7801", () => this.editCode(), true);
-    this.addToolbarButton("image", "image-plus", "\u7C98\u8D34\u56FE\u7247\u5230\u5F53\u524D\u8282\u70B9\uFF08Ctrl/Cmd+V\uFF09", () => new import_obsidian10.Notice("\u5148\u590D\u5236\u56FE\u7247\uFF0C\u518D\u9009\u4E2D\u8282\u70B9\u5E76\u6309 Ctrl/Cmd+V"), true);
+    this.addToolbarButton("image", "image-plus", "\u7C98\u8D34\u56FE\u7247\u5230\u5F53\u524D\u8282\u70B9\uFF08Ctrl/Cmd+V\uFF09", () => new import_obsidian11.Notice("\u5148\u590D\u5236\u56FE\u7247\uFF0C\u518D\u9009\u4E2D\u8282\u70B9\u5E76\u6309 Ctrl/Cmd+V"), true);
     if (this.options.questionNodesEnabled) this.addToolbarButton("question", "file-plus-2", "\u65B0\u5EFA\u9898\u76EE\u5B50\u8282\u70B9", () => this.addQuestionChild(), true);
     this.addToolbarButton("screenshot", "scan-line", `\u622A\u56FE\uFF08${this.options.screenshotShortcut || "Ctrl+Shift+S"}\uFF09`, () => void this.captureScreenshot(false));
     this.addToolbarButton("screenshot-recognize", "scan-text", `\u622A\u56FE\u5E76\u8BC6\u522B\uFF08${this.options.screenshotRecognizeShortcut || "Ctrl+Shift+R"}\uFF09`, () => void this.captureScreenshot(true));
@@ -11119,7 +11263,7 @@ var MindMapEditor = class {
     spacer.setAttr("aria-hidden", "true");
     const zoomControl = this.toolbarEl.createDiv({ cls: "mmc-zoom-control" });
     const zoomOut = zoomControl.createEl("button", { cls: "clickable-icon mmc-zoom-step", attr: { type: "button", title: "\u7F29\u5C0F", "aria-label": "\u7F29\u5C0F" } });
-    (0, import_obsidian10.setIcon)(zoomOut, "minus");
+    (0, import_obsidian11.setIcon)(zoomOut, "minus");
     zoomOut.addEventListener("click", () => {
       this.setZoom(this.zoom / 1.15);
       this.focus();
@@ -11140,7 +11284,7 @@ var MindMapEditor = class {
       }
     });
     const zoomIn = zoomControl.createEl("button", { cls: "clickable-icon mmc-zoom-step", attr: { type: "button", title: "\u653E\u5927", "aria-label": "\u653E\u5927" } });
-    (0, import_obsidian10.setIcon)(zoomIn, "plus");
+    (0, import_obsidian11.setIcon)(zoomIn, "plus");
     zoomIn.addEventListener("click", () => {
       this.setZoom(this.zoom * 1.15);
       this.focus();
@@ -11425,11 +11569,11 @@ var MindMapEditor = class {
       this.articleLandingButton.setAttr("aria-label", showingArticle ? "\u663E\u793A\u76EE\u5F55" : "\u663E\u793A\u539F\u59CB\u6587\u7AE0");
       this.articleLandingButton.setAttr("title", showingArticle ? "\u663E\u793A\u76EE\u5F55" : "\u663E\u793A\u539F\u59CB\u6587\u7AE0");
       this.articleLandingButton.empty();
-      (0, import_obsidian10.setIcon)(this.articleLandingButton, showingArticle ? "list-tree" : "file-text");
+      (0, import_obsidian11.setIcon)(this.articleLandingButton, showingArticle ? "list-tree" : "file-text");
       this.articleLandingButton.toggleClass("is-active", showingArticle);
     }
     this.lockButton.empty();
-    (0, import_obsidian10.setIcon)(this.lockButton, this.readOnly ? "lock" : "lock-open");
+    (0, import_obsidian11.setIcon)(this.lockButton, this.readOnly ? "lock" : "lock-open");
     this.lockButton.setAttr("aria-label", this.readOnly ? "\u5F53\u524D\u4E3A\u9605\u8BFB\u6A21\u5F0F\uFF0C\u70B9\u51FB\u5207\u6362\u5230\u7F16\u8F91\u6A21\u5F0F" : "\u5F53\u524D\u53EF\u7F16\u8F91\uFF0C\u70B9\u51FB\u5207\u6362\u5230\u9605\u8BFB\u6A21\u5F0F");
     this.lockButton.setAttr("title", this.readOnly ? "\u9605\u8BFB\u6A21\u5F0F" : "\u7F16\u8F91\u6A21\u5F0F");
     this.lockButton.toggleClass("is-active", this.readOnly);
@@ -11446,7 +11590,7 @@ var MindMapEditor = class {
    */
   ensureEditable() {
     if (!this.readOnly) return true;
-    new import_obsidian10.Notice("\u5F53\u524D\u4E3A\u9605\u8BFB\u6A21\u5F0F\uFF0C\u8BF7\u5148\u70B9\u51FB\u9501\u6309\u94AE\u5207\u6362\u5230\u7F16\u8F91\u6A21\u5F0F");
+    new import_obsidian11.Notice("\u5F53\u524D\u4E3A\u9605\u8BFB\u6A21\u5F0F\uFF0C\u8BF7\u5148\u70B9\u51FB\u9501\u6309\u94AE\u5207\u6362\u5230\u7F16\u8F91\u6A21\u5F0F");
     return false;
   }
   /**
@@ -11478,7 +11622,7 @@ var MindMapEditor = class {
   addToolbarButton(id, icon, label, action, editOnly = false) {
     const button = this.toolbarEl.createEl("button", { cls: "clickable-icon mmc-toolbar-button", attr: { "aria-label": label, title: label, type: "button" } });
     button.dataset.toolbarId = id;
-    (0, import_obsidian10.setIcon)(button, icon);
+    (0, import_obsidian11.setIcon)(button, icon);
     button.toggleClass("is-hidden", !this.options.visibleToolbarItems.includes(id));
     if (editOnly) {
       button.addClass("mms-edit-only-control");
@@ -11588,7 +11732,7 @@ var MindMapEditor = class {
         cls: "mmc-canvas-breadcrumb-back",
         attr: { type: "button", title: returnTitle, "aria-label": returnTitle }
       });
-      (0, import_obsidian10.setIcon)(backButton, "arrow-left");
+      (0, import_obsidian11.setIcon)(backButton, "arrow-left");
       backButton.addEventListener("click", (event) => {
         event.preventDefault();
         event.stopPropagation();
@@ -11614,7 +11758,7 @@ var MindMapEditor = class {
       cls: "mmc-parent-navigation-button",
       attr: { type: "button", title: returnTitle }
     });
-    (0, import_obsidian10.setIcon)(button, "arrow-left");
+    (0, import_obsidian11.setIcon)(button, "arrow-left");
     const labels = button.createDiv({ cls: "mmc-parent-navigation-labels" });
     labels.createDiv({ cls: "mmc-parent-navigation-title", text: `\u8FD4\u56DE\u7236\u5BFC\u56FE\uFF1A${parentTitle}` });
     if (navigation.parentNodeText) labels.createDiv({ cls: "mmc-parent-navigation-node", text: `\u6765\u6E90\u8282\u70B9\uFF1A${navigation.parentNodeText}` });
@@ -11842,7 +11986,7 @@ var MindMapEditor = class {
     const actions = container.createDiv({ cls: "mms-inline-node-actions" });
     const action = (icon, label, handler) => {
       const button = actions.createEl("button", { cls: "clickable-icon", attr: { type: "button", title: label, "aria-label": label } });
-      (0, import_obsidian10.setIcon)(button, icon);
+      (0, import_obsidian11.setIcon)(button, icon);
       button.addEventListener("pointerdown", (event) => {
         event.preventDefault();
         event.stopPropagation();
@@ -11879,7 +12023,7 @@ var MindMapEditor = class {
     const node = findNode(this.document.root, nodeId);
     const blockId = preferredBlockId != null ? preferredBlockId : (active == null ? void 0 : active.nodeId) === nodeId ? active.blockId : void 0;
     if (!node || !blockId || !nodeContentBlocks(node).some((block) => block.id === blockId)) {
-      new import_obsidian10.Notice("\u8BF7\u5148\u7F16\u8F91\u8981\u79FB\u52A8\u7684\u5177\u4F53\u5185\u5BB9\u5757");
+      new import_obsidian11.Notice("\u8BF7\u5148\u7F16\u8F91\u8981\u79FB\u52A8\u7684\u5177\u4F53\u5185\u5BB9\u5757");
       return;
     }
     if (((_a2 = this.pendingArticleClickMove) == null ? void 0 : _a2.kind) === "block" && this.pendingArticleClickMove.sourceNodeId === nodeId && this.pendingArticleClickMove.blockId === blockId) {
@@ -11891,7 +12035,7 @@ var MindMapEditor = class {
     const focused = document.activeElement;
     if (focused instanceof HTMLElement && this.articleEl.contains(focused)) focused.blur();
     this.applyArticleClickMoveUi();
-    new import_obsidian10.Notice("\u8BF7\u9009\u62E9\u76EE\u6807\u8282\u70B9\uFF0C\u5F53\u524D\u5757\u5C06\u8FFD\u52A0\u5230\u8BE5\u8282\u70B9\u672B\u5C3E\uFF1B\u6309 Esc \u53D6\u6D88");
+    new import_obsidian11.Notice("\u8BF7\u9009\u62E9\u76EE\u6807\u8282\u70B9\uFF0C\u5F53\u524D\u5757\u5C06\u8FFD\u52A0\u5230\u8BE5\u8282\u70B9\u672B\u5C3E\uFF1B\u6309 Esc \u53D6\u6D88");
   }
   /** 从文章编辑工具栏进入“选择目标节点后插入其后”的单节点移动模式。 */
   startArticleNodeClickMove(nodeId) {
@@ -11907,7 +12051,7 @@ var MindMapEditor = class {
     const focused = document.activeElement;
     if (focused instanceof HTMLElement && this.articleEl.contains(focused)) focused.blur();
     this.applyArticleClickMoveUi();
-    new import_obsidian10.Notice("\u8BF7\u9009\u62E9\u76EE\u6807\u8282\u70B9\uFF0C\u5F53\u524D\u8282\u70B9\u5C06\u63D2\u5165\u5230\u5176\u540E\uFF1B\u6309 Esc \u53D6\u6D88");
+    new import_obsidian11.Notice("\u8BF7\u9009\u62E9\u76EE\u6807\u8282\u70B9\uFF0C\u5F53\u524D\u8282\u70B9\u5C06\u63D2\u5165\u5230\u5176\u540E\uFF1B\u6309 Esc \u53D6\u6D88");
   }
   /** 将当前文章节点降为同级上一个节点的子节点，保留全部内容、子树和元数据。 */
   demoteArticleNode(nodeId) {
@@ -11917,7 +12061,7 @@ var MindMapEditor = class {
     const index = (_a2 = parent == null ? void 0 : parent.children.findIndex((child) => child.id === nodeId)) != null ? _a2 : -1;
     const previous = index > 0 ? parent == null ? void 0 : parent.children[index - 1] : void 0;
     if (!parent || !previous) {
-      new import_obsidian10.Notice("\u5F53\u524D\u8282\u70B9\u524D\u6CA1\u6709\u53EF\u4F5C\u4E3A\u7236\u8282\u70B9\u7684\u540C\u7EA7\u8282\u70B9");
+      new import_obsidian11.Notice("\u5F53\u524D\u8282\u70B9\u524D\u6CA1\u6709\u53EF\u4F5C\u4E3A\u7236\u8282\u70B9\u7684\u540C\u7EA7\u8282\u70B9");
       return;
     }
     this.selectNode(nodeId);
@@ -11929,7 +12073,7 @@ var MindMapEditor = class {
     const parent = findParent(this.document.root, nodeId);
     const grandparent = parent ? findParent(this.document.root, parent.id) : null;
     if (!parent || !grandparent) {
-      new import_obsidian10.Notice("\u5F53\u524D\u8282\u70B9\u5DF2\u7ECF\u662F\u6700\u9AD8\u53EF\u63D0\u5347\u5C42\u7EA7");
+      new import_obsidian11.Notice("\u5F53\u524D\u8282\u70B9\u5DF2\u7ECF\u662F\u6700\u9AD8\u53EF\u63D0\u5347\u5C42\u7EA7");
       return;
     }
     this.selectNode(nodeId);
@@ -11940,7 +12084,7 @@ var MindMapEditor = class {
     const pending = this.pendingArticleClickMove;
     if (!pending) return;
     if (!this.articleClickMoveTargetAllowed(pending, targetNodeId) || pending.kind === "block" && targetBlockId !== void 0 && !this.articleBlockMoveTargetAllowed(pending, targetNodeId, targetBlockId)) {
-      new import_obsidian10.Notice(pending.kind === "block" ? "\u8BF7\u9009\u62E9\u5F53\u524D\u5757\u6240\u5C5E\u8282\u70B9\u4E4B\u5916\u7684\u76EE\u6807\u8282\u70B9" : "\u4E0D\u80FD\u79FB\u52A8\u5230\u6839\u8282\u70B9\u3001\u81EA\u8EAB\u6216\u81EA\u5DF1\u7684\u540E\u4EE3");
+      new import_obsidian11.Notice(pending.kind === "block" ? "\u8BF7\u9009\u62E9\u5F53\u524D\u5757\u6240\u5C5E\u8282\u70B9\u4E4B\u5916\u7684\u76EE\u6807\u8282\u70B9" : "\u4E0D\u80FD\u79FB\u52A8\u5230\u6839\u8282\u70B9\u3001\u81EA\u8EAB\u6216\u81EA\u5DF1\u7684\u540E\u4EE3");
       return;
     }
     this.pendingArticleClickMove = null;
@@ -11990,7 +12134,7 @@ var MindMapEditor = class {
       cls: "clickable-icon",
       attr: { type: "button", title: "\u53D6\u6D88\u79FB\u52A8", "aria-label": "\u53D6\u6D88\u79FB\u52A8" }
     });
-    (0, import_obsidian10.setIcon)(cancel, "x");
+    (0, import_obsidian11.setIcon)(cancel, "x");
     cancel.addEventListener("click", (event) => {
       event.preventDefault();
       event.stopPropagation();
@@ -12431,7 +12575,7 @@ var MindMapEditor = class {
       }
       collapsible.forEach(({ section, key }) => {
         const toggle = section.querySelector(":scope > .mms-article-section-heading > .mms-article-collapse-toggle, :scope > h2 > .mms-article-collapse-toggle, :scope > h3 > .mms-article-collapse-toggle, :scope > h4 > .mms-article-collapse-toggle, :scope > h5 > .mms-article-collapse-toggle, :scope > h6 > .mms-article-collapse-toggle");
-        if (toggle) (0, import_obsidian10.setIcon)(toggle, this.collapsedArticleSectionIds.has(key) ? "chevron-right" : "chevron-down");
+        if (toggle) (0, import_obsidian11.setIcon)(toggle, this.collapsedArticleSectionIds.has(key) ? "chevron-right" : "chevron-down");
       });
     };
     collapsible.forEach(({ section, key }) => {
@@ -12463,7 +12607,7 @@ var MindMapEditor = class {
       const apply = () => {
         const collapsed = this.collapsedArticleSectionIds.has(key);
         chapter.toggleClass("is-section-collapsed", collapsed);
-        (0, import_obsidian10.setIcon)(toggle, collapsed ? "chevron-right" : "chevron-down");
+        (0, import_obsidian11.setIcon)(toggle, collapsed ? "chevron-right" : "chevron-down");
       };
       toggle.addEventListener("click", (event) => {
         event.preventDefault();
@@ -12516,7 +12660,7 @@ var MindMapEditor = class {
       memoryCurveEnabled: this.options.questionMemoryCurveEnabled,
       wrongBookMasteryCount: this.options.wrongBookMasteryCount,
       onRecord: (nodeId, correct) => this.recordQuestionPractice(nodeId, correct),
-      onNotice: (message) => new import_obsidian10.Notice(message)
+      onNotice: (message) => new import_obsidian11.Notice(message)
     });
   }
   /** Persists learning progress from the read-only practice surface without enabling document editing. */
@@ -12746,9 +12890,8 @@ var MindMapEditor = class {
             image.removeAttribute("src");
             image.removeClass("is-loading");
             image.addClass("is-unresolved");
-            image.setAttr("title", "\u6240\u6709\u56FE\u7247\u955C\u50CF\u5747\u4E0D\u53EF\u7528");
-            this.callbacks.onChange(this.getDocument());
-            this.markSaving();
+            image.addClass("is-hidden");
+            renderImageFailureDetails(wrap, block, this.options.imageHostPriorityIds);
             return;
           }
           const resolved = this.callbacks.resolveImage(candidate.source);
@@ -12766,7 +12909,8 @@ var MindMapEditor = class {
             else {
               image.removeClass("is-loading");
               image.addClass("is-unresolved");
-              image.setAttr("title", `\u56FE\u7247\u52A0\u8F7D\u5931\u8D25\uFF1A${candidate.source}`);
+              image.addClass("is-hidden");
+              renderImageFailureDetails(wrap, block, this.options.imageHostPriorityIds);
             }
           };
           probe.onload = () => {
@@ -12777,6 +12921,8 @@ var MindMapEditor = class {
             image.src = resolved;
             image.removeClass("is-loading");
             image.removeClass("is-unresolved");
+            image.removeClass("is-hidden");
+            clearImageFailureDetails(wrap);
             image.setAttr("title", index === 0 ? "\u70B9\u51FB\u653E\u5927\u56FE\u7247" : `\u5DF2\u81EA\u52A8\u5207\u6362\u5230\uFF1A${candidate.label}`);
             const switched = candidate.source !== block.source;
             const remote = (_a3 = block.remoteSources) == null ? void 0 : _a3.find((item) => item.url === candidate.source);
@@ -12788,7 +12934,7 @@ var MindMapEditor = class {
             this.callbacks.onChange(this.getDocument());
             this.markSaving();
             const previousLabel = (previous == null ? void 0 : previous.hostName) || "\u5F53\u524D\u56FE\u5E8A";
-            new import_obsidian10.Notice(`\u56FE\u7247\u5730\u5740\u5931\u6548\uFF0C\u5DF2\u4ECE ${previousLabel} \u81EA\u52A8\u5207\u6362\u5230 ${candidate.label}`, 6e3);
+            new import_obsidian11.Notice(`\u56FE\u7247\u5730\u5740\u5931\u6548\uFF0C\u5DF2\u4ECE ${previousLabel} \u81EA\u52A8\u5207\u6362\u5230 ${candidate.label}`, 6e3);
           };
           probe.onerror = fail;
           const timeoutMs = Math.max(2, Math.min(30, this.options.imageFailoverTimeoutSeconds)) * 1e3;
@@ -12845,7 +12991,7 @@ var MindMapEditor = class {
       textEl.style.fontSize = `${(_C = (_B = (_A = node.style) == null ? void 0 : _A.fontSize) != null ? _B : appearance.fontSize) != null ? _C : 14}px`;
       if (isSubmapTitle) {
         const indicator = textEl.createSpan({ cls: "mmc-submap-inline-indicator", attr: { "aria-hidden": "true" } });
-        (0, import_obsidian10.setIcon)(indicator, "arrow-up-right");
+        (0, import_obsidian11.setIcon)(indicator, "arrow-up-right");
       }
       this.bindContentBlockDragHandle(main, node.id, block.id);
     }
@@ -12857,7 +13003,7 @@ var MindMapEditor = class {
           title: `\u6253\u5F00\u5B50\u5BFC\u56FE\uFF1A${(_E = node.submap.title) != null ? _E : node.submap.path}`
         }
       });
-      (0, import_obsidian10.setIcon)(submapIcon, "arrow-up-right");
+      (0, import_obsidian11.setIcon)(submapIcon, "arrow-up-right");
       submapIcon.addEventListener("click", (event) => {
         event.preventDefault();
         event.stopPropagation();
@@ -12898,7 +13044,7 @@ var MindMapEditor = class {
     const link = this.getNodeLink(node);
     if (link) {
       const linkButton = nodeEl.createEl("button", { cls: "mmc-node-link", attr: { "aria-label": `\u6253\u5F00 ${link}` } });
-      (0, import_obsidian10.setIcon)(linkButton, "external-link");
+      (0, import_obsidian11.setIcon)(linkButton, "external-link");
       linkButton.addEventListener("click", (event) => {
         event.stopPropagation();
         void this.callbacks.onOpenLink(link);
@@ -13464,7 +13610,7 @@ var MindMapEditor = class {
       var _a3;
       const selected = (_a3 = rememberSelection()) != null ? _a3 : savedSelection;
       if (!selected || selected.start === selected.end) {
-        new import_obsidian10.Notice("\u8BF7\u5148\u9009\u62E9\u9700\u8981\u8BBE\u7F6E\u683C\u5F0F\u7684\u6587\u5B57");
+        new import_obsidian11.Notice("\u8BF7\u5148\u9009\u62E9\u9700\u8981\u8BBE\u7F6E\u683C\u5F0F\u7684\u6587\u5B57");
         return;
       }
       save();
@@ -13910,7 +14056,7 @@ var MindMapEditor = class {
     if (!this.ensureEditable()) return;
     const node = findNode(this.document.root, nodeId);
     if (!node || node.id === this.document.root.id) {
-      new import_obsidian10.Notice("\u6839\u8282\u70B9\u4E0D\u80FD\u5220\u9664");
+      new import_obsidian11.Notice("\u6839\u8282\u70B9\u4E0D\u80FD\u5220\u9664");
       return;
     }
     const fallback = deletionSelectionFallback(this.document.root, [nodeId]);
@@ -13942,12 +14088,12 @@ var MindMapEditor = class {
         this.selectedIds.add(fallback2);
       }, restoreLocation2);
       this.restoreMindMapViewportAnchor(mindMapAnchor2);
-      new import_obsidian10.Notice(`\u5DF2\u5220\u9664 ${batch.length} \u4E2A\u6240\u9009\u8282\u70B9`);
+      new import_obsidian11.Notice(`\u5DF2\u5220\u9664 ${batch.length} \u4E2A\u6240\u9009\u8282\u70B9`);
       return;
     }
     const selected = this.selectedNode();
     if (!selected || selected.id === this.document.root.id) {
-      new import_obsidian10.Notice("\u6839\u8282\u70B9\u4E0D\u80FD\u5220\u9664");
+      new import_obsidian11.Notice("\u6839\u8282\u70B9\u4E0D\u80FD\u5220\u9664");
       return;
     }
     const fallback = deletionSelectionFallback(this.document.root, [selected.id]);
@@ -14122,14 +14268,14 @@ var MindMapEditor = class {
     const selected = (_a2 = this.selectedNode()) != null ? _a2 : this.document.root;
     const table = childrenToTable(selected);
     if (!table) {
-      new import_obsidian10.Notice("\u5F53\u524D\u8282\u70B9\u6CA1\u6709\u53EF\u8F6C\u6362\u7684\u5B50\u8282\u70B9");
+      new import_obsidian11.Notice("\u5F53\u524D\u8282\u70B9\u6CA1\u6709\u53EF\u8F6C\u6362\u7684\u5B50\u8282\u70B9");
       return;
     }
     this.mutate(() => {
       this.upsertStructuredBlock(selected, "table", table);
       selected.collapsed = true;
     });
-    new import_obsidian10.Notice("\u5DF2\u751F\u6210\u5B50\u8282\u70B9\u8868\u683C\uFF1B\u539F\u5B50\u8282\u70B9\u5DF2\u4FDD\u7559\u5E76\u6536\u8D77");
+    new import_obsidian11.Notice("\u5DF2\u751F\u6210\u5B50\u8282\u70B9\u8868\u683C\uFF1B\u539F\u5B50\u8282\u70B9\u5DF2\u4FDD\u7559\u5E76\u6536\u8D77");
   }
   /**
    * 编辑code，并保持模型、界面和持久化状态的一致性。
@@ -14191,7 +14337,7 @@ var MindMapEditor = class {
         draggable: "true"
       }
     });
-    (0, import_obsidian10.setIcon)(handle, "grip-vertical");
+    (0, import_obsidian11.setIcon)(handle, "grip-vertical");
     handle.addEventListener("pointerdown", (event) => {
       event.stopPropagation();
     });
@@ -14277,7 +14423,7 @@ var MindMapEditor = class {
     });
     this.draggingContentBlock = null;
     this.clearContentBlockDropIndicators();
-    if (moved) new import_obsidian10.Notice(sourceNodeId === targetNodeId ? "\u5DF2\u8C03\u6574\u5185\u5BB9\u5757\u987A\u5E8F" : "\u5DF2\u79FB\u52A8\u5185\u5BB9\u5757\u5230\u76EE\u6807\u8282\u70B9");
+    if (moved) new import_obsidian11.Notice(sourceNodeId === targetNodeId ? "\u5DF2\u8C03\u6574\u5185\u5BB9\u5757\u987A\u5E8F" : "\u5DF2\u79FB\u52A8\u5185\u5BB9\u5757\u5230\u76EE\u6807\u8282\u70B9");
   }
   /** Clears temporary block drag styling while optionally preserving the active drag state. */
   clearContentBlockDropIndicators(clearDragging = true) {
@@ -14337,7 +14483,7 @@ var MindMapEditor = class {
       await this.callbacks.onOpenMindMap(submap.path);
     } catch (error) {
       console.error("MindMap Studio create submap failed", error);
-      new import_obsidian10.Notice("\u521B\u5EFA\u5B50\u5BFC\u56FE\u5931\u8D25");
+      new import_obsidian11.Notice("\u521B\u5EFA\u5B50\u5BFC\u56FE\u5931\u8D25");
     }
   }
   /**
@@ -14460,7 +14606,7 @@ var MindMapEditor = class {
       cls: "mms-article-scroll-top",
       attr: { type: "button", title: "\u56DE\u5230\u9876\u90E8", "aria-label": "\u56DE\u5230\u9876\u90E8" }
     });
-    (0, import_obsidian10.setIcon)(button, "arrow-up");
+    (0, import_obsidian11.setIcon)(button, "arrow-up");
     button.addEventListener("click", () => this.articleEl.scrollTo({ top: 0, behavior: "smooth" }));
     const updateVisibility = () => {
       const { scrollTop, clientHeight, scrollHeight } = this.articleEl;
@@ -14493,10 +14639,10 @@ var MindMapEditor = class {
       this.mutate(() => {
         selected.submap = void 0;
       });
-      new import_obsidian10.Notice(deleted ? "\u5DF2\u5220\u9664\u5B50\u5BFC\u56FE\u5E76\u79FB\u9664\u94FE\u63A5" : "\u5B50\u5BFC\u56FE\u6587\u4EF6\u4E0D\u5B58\u5728\uFF0C\u5DF2\u79FB\u9664\u5931\u6548\u94FE\u63A5");
+      new import_obsidian11.Notice(deleted ? "\u5DF2\u5220\u9664\u5B50\u5BFC\u56FE\u5E76\u79FB\u9664\u94FE\u63A5" : "\u5B50\u5BFC\u56FE\u6587\u4EF6\u4E0D\u5B58\u5728\uFF0C\u5DF2\u79FB\u9664\u5931\u6548\u94FE\u63A5");
     } catch (error) {
       console.error("MindMap Studio delete submap failed", error);
-      new import_obsidian10.Notice("\u5220\u9664\u5B50\u5BFC\u56FE\u5931\u8D25");
+      new import_obsidian11.Notice("\u5220\u9664\u5B50\u5BFC\u56FE\u5931\u8D25");
     }
   }
   /**
@@ -14604,10 +14750,10 @@ var MindMapEditor = class {
     const header = block.createDiv({ cls: "mmc-code-header" });
     header.createSpan({ text: codeData.language || "code" });
     const copy = header.createEl("button", { cls: "clickable-icon", attr: { "aria-label": "\u590D\u5236\u4EE3\u7801" } });
-    (0, import_obsidian10.setIcon)(copy, "copy");
+    (0, import_obsidian11.setIcon)(copy, "copy");
     copy.addEventListener("click", (event) => {
       event.stopPropagation();
-      void navigator.clipboard.writeText(codeData.code).then(() => new import_obsidian10.Notice("\u4EE3\u7801\u5DF2\u590D\u5236"));
+      void navigator.clipboard.writeText(codeData.code).then(() => new import_obsidian11.Notice("\u4EE3\u7801\u5DF2\u590D\u5236"));
     });
     const rendered = block.createDiv({ cls: "mmc-code-rendered markdown-rendered" });
     void Promise.resolve(this.callbacks.onRenderCode(codeData, rendered)).then(() => {
@@ -14637,7 +14783,7 @@ var MindMapEditor = class {
   }
   /** Opens edit and block-specific removal actions for a rendered table. */
   openTableBlockContextMenu(event, node, table, blockId) {
-    const menu = new import_obsidian10.Menu();
+    const menu = new import_obsidian11.Menu();
     menu.addItem((item) => item.setTitle("\u7F16\u8F91\u8868\u683C").setIcon("table-2").onClick(() => this.openTableBlockEditor(node, table, blockId)));
     if (blockId) menu.addItem((item) => item.setTitle("\u5220\u9664\u5F53\u524D\u5757").setIcon("trash-2").onClick(() => {
       if (!this.ensureEditable()) return;
@@ -14647,7 +14793,7 @@ var MindMapEditor = class {
   }
   /** Opens edit and block-specific removal actions for a rendered code block. */
   openCodeBlockContextMenu(event, node, code, blockId) {
-    const menu = new import_obsidian10.Menu();
+    const menu = new import_obsidian11.Menu();
     menu.addItem((item) => item.setTitle("\u7F16\u8F91\u4EE3\u7801").setIcon("code-2").onClick(() => this.openCodeBlockEditor(node, code, blockId)));
     if (blockId) menu.addItem((item) => item.setTitle("\u5220\u9664\u5F53\u524D\u5757").setIcon("trash-2").onClick(() => {
       if (!this.ensureEditable()) return;
@@ -14693,7 +14839,7 @@ var MindMapEditor = class {
    * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
    */
   async handlePaste(event) {
-    var _a2, _b2, _c, _d, _e, _f, _g, _h, _i;
+    var _a2, _b2, _c, _d, _e, _f, _g;
     if (this.readOnly) return;
     const target = event.target;
     const data = event.clipboardData;
@@ -14705,8 +14851,9 @@ var MindMapEditor = class {
       event.preventDefault();
       const targetBlock = target.closest("[data-block-id]");
       const targetNode = target.closest("[data-node-id]");
-      const nodeId = (_c = (_b2 = targetNode == null ? void 0 : targetNode.dataset.nodeId) != null ? _b2 : (_a2 = this.activeArticleBlock) == null ? void 0 : _a2.nodeId) != null ? _c : this.selectedId;
-      const afterBlockId = (_e = targetBlock == null ? void 0 : targetBlock.dataset.blockId) != null ? _e : ((_d = this.activeArticleBlock) == null ? void 0 : _d.nodeId) === nodeId ? this.activeArticleBlock.blockId : void 0;
+      const articleTargetAllowed = this.currentMode === "article" || this.currentMode === "reading";
+      const nodeId = (_c = (_b2 = targetNode == null ? void 0 : targetNode.dataset.nodeId) != null ? _b2 : articleTargetAllowed ? (_a2 = this.activeArticleBlock) == null ? void 0 : _a2.nodeId : void 0) != null ? _c : this.selectedId;
+      const afterBlockId = (_e = targetBlock == null ? void 0 : targetBlock.dataset.blockId) != null ? _e : articleTargetAllowed && ((_d = this.activeArticleBlock) == null ? void 0 : _d.nodeId) === nodeId ? this.activeArticleBlock.blockId : void 0;
       if (target.closest("[contenteditable='true']")) target.blur();
       const extension = ((_f = blob.type.split("/")[1]) == null ? void 0 : _f.replace("jpeg", "jpg").replace("svg+xml", "svg")) || "png";
       const filename = `mindmap-image.${extension}`;
@@ -14715,11 +14862,15 @@ var MindMapEditor = class {
         path = await this.callbacks.onSavePastedImage(blob, filename);
       } catch (error) {
         console.error("MindMap Studio paste image storage failed", error);
-        new import_obsidian10.Notice(`\u7C98\u8D34\u56FE\u7247\u5931\u8D25\uFF1A${error instanceof Error ? error.message : String(error)}`, 7e3);
+        new import_obsidian11.Notice(`\u7C98\u8D34\u56FE\u7247\u5931\u8D25\uFF1A${error instanceof Error ? error.message : String(error)}`, 7e3);
         return;
       }
       const imageBlock = { id: newId(), type: "image", source: path, localSource: path };
-      const selected2 = (_h = (_g = findNode(this.document.root, nodeId)) != null ? _g : this.selectedNode()) != null ? _h : this.document.root;
+      const selected2 = nodeId ? findNode(this.document.root, nodeId) : null;
+      if (!selected2) {
+        new import_obsidian11.Notice(`\u56FE\u7247\u5DF2\u4FDD\u5B58\uFF0C\u4F46\u7C98\u8D34\u5F00\u59CB\u65F6\u9009\u62E9\u7684\u8282\u70B9\u5DF2\u4E0D\u5B58\u5728\uFF1A${path}`, 7e3);
+        return;
+      }
       let inserted = false;
       try {
         this.mutate(() => {
@@ -14733,7 +14884,7 @@ var MindMapEditor = class {
       } catch (error) {
         if (!inserted) {
           console.error("MindMap Studio paste image insertion failed", error);
-          new import_obsidian10.Notice(`\u56FE\u7247\u6587\u4EF6\u5DF2\u4FDD\u5B58\uFF0C\u4F46\u63D2\u5165\u8282\u70B9\u5931\u8D25\uFF1A${path}`, 7e3);
+          new import_obsidian11.Notice(`\u56FE\u7247\u6587\u4EF6\u5DF2\u4FDD\u5B58\uFF0C\u4F46\u63D2\u5165\u8282\u70B9\u5931\u8D25\uFF1A${path}`, 7e3);
           return;
         }
         console.warn("MindMap Studio paste image post-commit synchronization deferred", error);
@@ -14741,10 +14892,10 @@ var MindMapEditor = class {
       }
       try {
         const scheduled = this.callbacks.onScheduleAutoUpload(selected2.id, imageBlock.id, path, filename);
-        new import_obsidian10.Notice(scheduled ? `\u56FE\u7247\u5DF2\u4FDD\u5B58\uFF0C${this.autoUploadScheduleMessage()}` : `\u56FE\u7247\u5DF2\u4FDD\u5B58\uFF1A${path}`);
+        new import_obsidian11.Notice(scheduled ? `\u56FE\u7247\u5DF2\u4FDD\u5B58\uFF0C${this.autoUploadScheduleMessage()}` : `\u56FE\u7247\u5DF2\u4FDD\u5B58\uFF1A${path}`);
       } catch (error) {
         console.error("MindMap Studio paste image auto-upload scheduling failed", error);
-        new import_obsidian10.Notice(`\u56FE\u7247\u5DF2\u4FDD\u5B58\uFF1A${path}\uFF1B\u81EA\u52A8\u4E0A\u4F20\u6392\u7A0B\u5931\u8D25\uFF0C\u53EF\u7A0D\u540E\u624B\u52A8\u4E0A\u4F20`, 7e3);
+        new import_obsidian11.Notice(`\u56FE\u7247\u5DF2\u4FDD\u5B58\uFF1A${path}\uFF1B\u81EA\u52A8\u4E0A\u4F20\u6392\u7A0B\u5931\u8D25\uFF0C\u53EF\u7A0D\u540E\u624B\u52A8\u4E0A\u4F20`, 7e3);
       }
       return;
     }
@@ -14752,12 +14903,12 @@ var MindMapEditor = class {
     const htmlBranch = parseClipboardHtml(data.getData("text/html"));
     const text = data.getData("text/plain");
     if (!text.trim() && !htmlBranch) return;
-    const selected = (_i = this.selectedNode()) != null ? _i : this.document.root;
+    const selected = (_g = this.selectedNode()) != null ? _g : this.document.root;
     const table = parseMarkdownTable(text);
     if (table) {
       event.preventDefault();
       this.mutate(() => this.upsertStructuredBlock(selected, "table", table));
-      new import_obsidian10.Notice("\u5DF2\u8BC6\u522B\u5E76\u63D2\u5165 Markdown \u8868\u683C");
+      new import_obsidian11.Notice("\u5DF2\u8BC6\u522B\u5E76\u63D2\u5165 Markdown \u8868\u683C");
       return;
     }
     const clipboardBlocks = parseClipboardContentBlocks(text);
@@ -14771,7 +14922,7 @@ var MindMapEditor = class {
         else replaceNodeContentBlocks(selected, [...existing, ...clipboardBlocks]);
       });
       const codeCount = clipboardBlocks.filter((block) => block.type === "code").length;
-      new import_obsidian10.Notice(`\u5DF2\u8BC6\u522B\u5E76\u63D2\u5165 ${codeCount} \u4E2A\u4EE3\u7801\u5757\uFF0C\u4FDD\u7559\u5176\u4F59\u6587\u5B57\u5185\u5BB9`);
+      new import_obsidian11.Notice(`\u5DF2\u8BC6\u522B\u5E76\u63D2\u5165 ${codeCount} \u4E2A\u4EE3\u7801\u5757\uFF0C\u4FDD\u7559\u5176\u4F59\u6587\u5B57\u5185\u5BB9`);
       return;
     }
     const sourceNodes = htmlBranch ? [htmlBranch] : parseClipboardNodes(text);
@@ -14797,7 +14948,7 @@ var MindMapEditor = class {
     if (!selected) return;
     const link = this.getNodeLink(selected);
     if (!link) {
-      new import_obsidian10.Notice("\u5F53\u524D\u8282\u70B9\u6CA1\u6709\u94FE\u63A5\uFF1B\u53EF\u6309 F2 \u6DFB\u52A0\u94FE\u63A5\u6216\u5728\u6587\u5B57\u4E2D\u5199\u5165 [[\u7B14\u8BB0\u540D]]");
+      new import_obsidian11.Notice("\u5F53\u524D\u8282\u70B9\u6CA1\u6709\u94FE\u63A5\uFF1B\u53EF\u6309 F2 \u6DFB\u52A0\u94FE\u63A5\u6216\u5728\u6587\u5B57\u4E2D\u5199\u5165 [[\u7B14\u8BB0\u540D]]");
       return;
     }
     void this.callbacks.onOpenLink(link);
@@ -14965,7 +15116,7 @@ var MindMapEditor = class {
     this.aiScopeNodeId = nodeId && nodeId !== this.document.root.id && findNode(this.document.root, nodeId) ? nodeId : null;
     this.updateAiScopeButton();
     if (this.aiScopeNodeId) this.selectNode(this.aiScopeNodeId);
-    const menu = new import_obsidian10.Menu();
+    const menu = new import_obsidian11.Menu();
     menu.addItem((item) => item.setTitle(this.aiScopeNodeId ? "\u8BE2\u95EE AI\uFF08\u6B64\u8282\u70B9\u53CA\u5168\u90E8\u5B50\u8282\u70B9\uFF09" : "\u8BE2\u95EE AI\uFF08\u5F53\u524D\u9875\u9762\uFF09").setIcon("sparkles").onClick(() => {
       var _a2;
       return void this.callbacks.onAskAi((_a2 = this.aiScopeNodeId) != null ? _a2 : void 0);
@@ -14979,7 +15130,7 @@ var MindMapEditor = class {
     const node = findNode(this.document.root, nodeId);
     const image = node ? nodeContentBlocks(node).find((block) => block.type === "image" && block.id === blockId) : null;
     if (!node || !image) {
-      new import_obsidian10.Notice("\u56FE\u7247\u8282\u70B9\u5DF2\u4E0D\u5B58\u5728");
+      new import_obsidian11.Notice("\u56FE\u7247\u8282\u70B9\u5DF2\u4E0D\u5B58\u5728");
       return;
     }
     let question = createMindMapQuestion();
@@ -15019,9 +15170,9 @@ var MindMapEditor = class {
         node.question = question;
         syncMindMapQuestionFields(node);
       });
-      new import_obsidian10.Notice(enriched.found ? "\u5DF2\u627E\u5230\u539F\u9898\u5E76\u8865\u9F50\u7B54\u6848\u4E0E\u89E3\u6790" : "\u672A\u627E\u5230\u53EF\u9A8C\u8BC1\u539F\u9898\uFF0C\u5DF2\u7531 AI \u5206\u6790\u8865\u9F50\u7B54\u6848\u4E0E\u89E3\u7B54");
+      new import_obsidian11.Notice(enriched.found ? "\u5DF2\u627E\u5230\u539F\u9898\u5E76\u8865\u9F50\u7B54\u6848\u4E0E\u89E3\u6790" : "\u672A\u627E\u5230\u53EF\u9A8C\u8BC1\u539F\u9898\uFF0C\u5DF2\u7531 AI \u5206\u6790\u8865\u9F50\u7B54\u6848\u4E0E\u89E3\u7B54");
     } catch (error) {
-      new import_obsidian10.Notice(`\u9898\u76EE\u667A\u80FD\u5904\u7406\u5931\u8D25\uFF1A${error instanceof Error ? error.message : String(error)}`);
+      new import_obsidian11.Notice(`\u9898\u76EE\u667A\u80FD\u5904\u7406\u5931\u8D25\uFF1A${error instanceof Error ? error.message : String(error)}`);
     }
   }
   /** 显示图片专用右键菜单，提供识图、布局、图床和编辑等快速操作。 */
@@ -15030,7 +15181,7 @@ var MindMapEditor = class {
     const block = node ? nodeContentBlocks(node).find((item) => item.type === "image" && item.id === blockId) : void 0;
     if (!node || !block) return;
     const modeLabel = this.options.imageRecognitionMode === "local-ocr" ? "\u672C\u5730 OCR" : "AI \u8BC6\u56FE";
-    const menu = new import_obsidian10.Menu();
+    const menu = new import_obsidian11.Menu();
     menu.addItem((item) => item.setTitle("\u653E\u5927\u9884\u89C8").setIcon("maximize-2").onClick(() => this.previewImageBlock(block)));
     menu.addItem((item) => item.setTitle(`${modeLabel}\u5E76\u8F6C\u4E3A\u6587\u5B57`).setIcon("scan-text").onClick(() => void this.recognizeImageBlock(nodeId, blockId)));
     if (this.options.questionNodesEnabled) {
@@ -15206,15 +15357,15 @@ var MindMapEditor = class {
     const parts = [`\u6210\u529F ${uploadedImages} \u5F20`];
     if (skippedImages) parts.push(`\u5DF2\u5B58\u5728 ${skippedImages} \u5F20`);
     if (failedImages) parts.push(`\u5931\u8D25\u6216\u90E8\u5206\u5931\u8D25 ${failedImages} \u5F20`);
-    new import_obsidian10.Notice(`\u5F53\u524D\u9875\u9762\u56FE\u7247\u4E0A\u4F20\u5B8C\u6210\uFF1A${parts.join("\uFF0C")}`, failedImages ? 8e3 : 5e3);
+    new import_obsidian11.Notice(`\u5F53\u524D\u9875\u9762\u56FE\u7247\u4E0A\u4F20\u5B8C\u6210\uFF1A${parts.join("\uFF0C")}`, failedImages ? 8e3 : 5e3);
   }
   /** 复制当前图片的主地址，供外部编辑器或浏览器直接使用。 */
   async copyImageSource(source) {
     try {
       await navigator.clipboard.writeText(source);
-      new import_obsidian10.Notice("\u56FE\u7247\u5730\u5740\u5DF2\u590D\u5236");
+      new import_obsidian11.Notice("\u56FE\u7247\u5730\u5740\u5DF2\u590D\u5236");
     } catch (e) {
-      new import_obsidian10.Notice("\u65E0\u6CD5\u8BBF\u95EE\u7CFB\u7EDF\u526A\u8D34\u677F");
+      new import_obsidian11.Notice("\u65E0\u6CD5\u8BBF\u95EE\u7CFB\u7EDF\u526A\u8D34\u677F");
     }
   }
   /** 从节点的有序内容块中移除指定图片。 */
@@ -15242,7 +15393,7 @@ var MindMapEditor = class {
     const selected = this.selectedNode();
     const contextBlock = selected && contextBlockId ? nodeContentBlocks(selected).find((block) => block.id === contextBlockId) : void 0;
     const contextIsArticleParagraph = this.currentMode === "article" && Boolean((_b2 = (_a2 = event.target) == null ? void 0 : _a2.closest) == null ? void 0 : _b2.call(_a2, ".mms-article-leaf-text, .mms-article-paragraph"));
-    const menu = new import_obsidian10.Menu();
+    const menu = new import_obsidian11.Menu();
     menu.addItem((item) => item.setTitle("\u8BE2\u95EE AI\uFF08\u6B64\u8282\u70B9\u53CA\u5168\u90E8\u5B50\u8282\u70B9\uFF09").setIcon("sparkles").onClick(() => void this.callbacks.onAskAi(selected == null ? void 0 : selected.id)));
     menu.addSeparator();
     if (this.readOnly) {
@@ -15340,7 +15491,7 @@ var MindMapEditor = class {
       await this.callbacks.onOpenMindMap(submap.path);
     } catch (error) {
       console.error("MindMap Studio extract to submap failed", error);
-      new import_obsidian10.Notice("\u63D0\u53D6\u5B50\u5BFC\u56FE\u5931\u8D25");
+      new import_obsidian11.Notice("\u63D0\u53D6\u5B50\u5BFC\u56FE\u5931\u8D25");
     }
   }
   /**
@@ -15352,7 +15503,7 @@ var MindMapEditor = class {
       await this.callbacks.onMergeFromSubmap();
     } catch (error) {
       console.error("MindMap Studio merge from submap failed", error);
-      new import_obsidian10.Notice("\u5408\u5E76\u5B50\u5BFC\u56FE\u5931\u8D25");
+      new import_obsidian11.Notice("\u5408\u5E76\u5B50\u5BFC\u56FE\u5931\u8D25");
     }
   }
   /**
@@ -15361,7 +15512,7 @@ var MindMapEditor = class {
    * @param event Mouse event used to position the menu.
    */
   openAllNodesContextMenu(event) {
-    const menu = new import_obsidian10.Menu();
+    const menu = new import_obsidian11.Menu();
     menu.addItem((item) => item.setTitle("\u8BE2\u95EE AI\uFF08\u5F53\u524D\u9875\u9762\uFF09").setIcon("sparkles").onClick(() => void this.callbacks.onAskAi()));
     if (!this.readOnly) {
       menu.addItem((item) => item.setTitle("\u4E0A\u4F20\u5F53\u524D\u9875\u9762\u6240\u6709\u56FE\u7247").setIcon("cloud-upload").onClick(() => void this.uploadAllPageImages()));
@@ -15414,9 +15565,9 @@ var MindMapEditor = class {
     const payload = JSON.stringify({ type: "mindmap-studio-nodes", nodes: sourceNodes }, null, 2);
     try {
       await navigator.clipboard.writeText(payload);
-      new import_obsidian10.Notice(sourceNodes.length > 1 ? `\u5DF2\u590D\u5236 ${sourceNodes.length} \u4E2A\u8282\u70B9\u5206\u652F` : "\u5DF2\u590D\u5236\u8282\u70B9\u5206\u652F");
+      new import_obsidian11.Notice(sourceNodes.length > 1 ? `\u5DF2\u590D\u5236 ${sourceNodes.length} \u4E2A\u8282\u70B9\u5206\u652F` : "\u5DF2\u590D\u5236\u8282\u70B9\u5206\u652F");
     } catch (e) {
-      new import_obsidian10.Notice(sourceNodes.length > 1 ? `${sourceNodes.length} \u4E2A\u8282\u70B9\u5206\u652F\u5DF2\u590D\u5236\u5230\u63D2\u4EF6\u5185\u90E8\u526A\u8D34\u677F` : "\u8282\u70B9\u5206\u652F\u5DF2\u590D\u5236\u5230\u63D2\u4EF6\u5185\u90E8\u526A\u8D34\u677F");
+      new import_obsidian11.Notice(sourceNodes.length > 1 ? `${sourceNodes.length} \u4E2A\u8282\u70B9\u5206\u652F\u5DF2\u590D\u5236\u5230\u63D2\u4EF6\u5185\u90E8\u526A\u8D34\u677F` : "\u8282\u70B9\u5206\u652F\u5DF2\u590D\u5236\u5230\u63D2\u4EF6\u5185\u90E8\u526A\u8D34\u677F");
     }
     return true;
   }
@@ -15435,7 +15586,7 @@ var MindMapEditor = class {
     }
     sourceNodes != null ? sourceNodes : sourceNodes = this.branchClipboard;
     if (!(sourceNodes == null ? void 0 : sourceNodes.length)) {
-      new import_obsidian10.Notice("\u526A\u8D34\u677F\u4E2D\u6CA1\u6709\u53EF\u7C98\u8D34\u7684 MindMap \u8282\u70B9");
+      new import_obsidian11.Notice("\u526A\u8D34\u677F\u4E2D\u6CA1\u6709\u53EF\u7C98\u8D34\u7684 MindMap \u8282\u70B9");
       return;
     }
     const clones = sourceNodes.map((node) => cloneNodeWithFreshIds(node));
@@ -15456,7 +15607,7 @@ var MindMapEditor = class {
     if (!this.ensureEditable()) return;
     const selected = this.selectedNode();
     if (!selected || selected.id === this.document.root.id) {
-      new import_obsidian10.Notice("\u8BF7\u9009\u62E9\u975E\u6839\u8282\u70B9\u540E\u514B\u9686\u5206\u652F");
+      new import_obsidian11.Notice("\u8BF7\u9009\u62E9\u975E\u6839\u8282\u70B9\u540E\u514B\u9686\u5206\u652F");
       return;
     }
     const parent = findParent(this.document.root, selected.id);
@@ -15590,7 +15741,7 @@ var MindMapEditor = class {
   ensureExternalEditAllowed() {
     var _a2;
     if (((_a2 = this.document.view) == null ? void 0 : _a2.readOnly) !== true) return true;
-    new import_obsidian10.Notice("\u5F53\u524D\u5BFC\u56FE\u5DF2\u9501\u5B9A\u4E3A\u53EA\u8BFB\uFF0C\u8BF7\u5148\u89E3\u9664\u9501\u5B9A\u518D\u5E94\u7528\u53D8\u66F4");
+    new import_obsidian11.Notice("\u5F53\u524D\u5BFC\u56FE\u5DF2\u9501\u5B9A\u4E3A\u53EA\u8BFB\uFF0C\u8BF7\u5148\u89E3\u9664\u9501\u5B9A\u518D\u5E94\u7528\u53D8\u66F4");
     return false;
   }
   /** 用外部确认的完整文档替换当前状态，并统一接入撤销、保存、渲染和聚焦。 */
@@ -16071,8 +16222,8 @@ var MindMapEditor = class {
 };
 
 // src/ai/modal.ts
-var import_obsidian11 = require("obsidian");
-var AiAskModal = class extends import_obsidian11.Modal {
+var import_obsidian12 = require("obsidian");
+var AiAskModal = class extends import_obsidian12.Modal {
   /** 保存窗口上下文并初始化 Obsidian Modal。 */
   constructor(app, options) {
     super(app);
@@ -16090,7 +16241,7 @@ var AiAskModal = class extends import_obsidian11.Modal {
     var _a2;
     const session = ++this.modalSession;
     (_a2 = this.markdownRenderComponent) == null ? void 0 : _a2.unload();
-    this.markdownRenderComponent = new import_obsidian11.Component();
+    this.markdownRenderComponent = new import_obsidian12.Component();
     this.markdownRenderComponent.load();
     this.titleEl.setText("AI \u52A9\u624B");
     this.modalEl.addClass("mms-ai-modal");
@@ -16204,7 +16355,7 @@ var AiAskModal = class extends import_obsidian11.Modal {
     const apply = actions.createEl("button", { cls: "mod-warning is-hidden", attr: { type: "button" }, text: "\u786E\u8BA4\u5E94\u7528\u53D8\u66F4" });
     const close = actions.createEl("button", { attr: { type: "button" }, text: "\u5173\u95ED" });
     const submit = actions.createEl("button", { cls: "mod-cta", attr: { type: "submit" } });
-    (0, import_obsidian11.setIcon)(submit, "sparkles");
+    (0, import_obsidian12.setIcon)(submit, "sparkles");
     const submitText = submit.createSpan({ text: "\u53D1\u9001" });
     let answerText = "";
     let pendingAiPreview = null;
@@ -16458,9 +16609,9 @@ var AiAskModal = class extends import_obsidian11.Modal {
       void this.options.onSetThinkingMode(profile.id, enabled).then(() => {
         profile.thinkingMode = enabled ? "on" : "off";
         syncThinkingToggle();
-        new import_obsidian11.Notice(`\u6DF1\u5EA6\u601D\u8003\u5DF2${enabled ? "\u5F00\u542F" : "\u5173\u95ED"}`);
+        new import_obsidian12.Notice(`\u6DF1\u5EA6\u601D\u8003\u5DF2${enabled ? "\u5F00\u542F" : "\u5173\u95ED"}`);
       }).catch((error) => {
-        new import_obsidian11.Notice(`\u4FDD\u5B58\u6DF1\u5EA6\u601D\u8003\u8BBE\u7F6E\u5931\u8D25\uFF1A${error instanceof Error ? error.message : String(error)}`);
+        new import_obsidian12.Notice(`\u4FDD\u5B58\u6DF1\u5EA6\u601D\u8003\u8BBE\u7F6E\u5931\u8D25\uFF1A${error instanceof Error ? error.message : String(error)}`);
       }).finally(() => {
         thinkingToggle.disabled = false;
       });
@@ -16468,7 +16619,7 @@ var AiAskModal = class extends import_obsidian11.Modal {
     close.addEventListener("click", () => this.close());
     copy.addEventListener("click", () => {
       if (!answerText) return;
-      void navigator.clipboard.writeText(answerText).then(() => new import_obsidian11.Notice(currentMode() === "vision" ? "\u8BC6\u56FE\u7ED3\u679C\u5DF2\u590D\u5236" : "AI \u56DE\u7B54\u5DF2\u590D\u5236"));
+      void navigator.clipboard.writeText(answerText).then(() => new import_obsidian12.Notice(currentMode() === "vision" ? "\u8BC6\u56FE\u7ED3\u679C\u5DF2\u590D\u5236" : "AI \u56DE\u7B54\u5DF2\u590D\u5236"));
     });
     apply.addEventListener("click", () => {
       if (this.imageAutoConfirmTimer !== null) window.clearTimeout(this.imageAutoConfirmTimer);
@@ -16509,12 +16660,12 @@ var AiAskModal = class extends import_obsidian11.Modal {
       }
       const prompt = question.value.trim();
       if (!prompt) {
-        new import_obsidian11.Notice(currentMode() === "edit" || currentMode() === "question" ? "\u8BF7\u8F93\u5165\u6574\u7406\u8981\u6C42" : currentMode() === "vision" ? "\u8BF7\u8F93\u5165\u8BC6\u56FE\u8981\u6C42" : "\u8BF7\u8F93\u5165\u8981\u8BE2\u95EE\u7684\u95EE\u9898");
+        new import_obsidian12.Notice(currentMode() === "edit" || currentMode() === "question" ? "\u8BF7\u8F93\u5165\u6574\u7406\u8981\u6C42" : currentMode() === "vision" ? "\u8BF7\u8F93\u5165\u8BC6\u56FE\u8981\u6C42" : "\u8BF7\u8F93\u5165\u8981\u8BE2\u95EE\u7684\u95EE\u9898");
         question.focus();
         return;
       }
       if (requiresAiProfile() && !provider.value) {
-        new import_obsidian11.Notice("\u8BF7\u5148\u914D\u7F6E\u5E76\u542F\u7528 AI \u63A5\u53E3");
+        new import_obsidian12.Notice("\u8BF7\u5148\u914D\u7F6E\u5E76\u542F\u7528 AI \u63A5\u53E3");
         return;
       }
       if (currentMode() === "vision") {
@@ -16583,7 +16734,7 @@ var AiAskModal = class extends import_obsidian11.Modal {
           status.setText("\u5DF2\u63A5\u6536\u56DE\u7B54\uFF0C\u6B63\u5728\u6E32\u67D3\u2026");
           if (!this.markdownRenderComponent) return;
           answerText = response.text;
-          await import_obsidian11.MarkdownRenderer.render(this.app, answerText, result, this.options.sourcePath, this.markdownRenderComponent);
+          await import_obsidian12.MarkdownRenderer.render(this.app, answerText, result, this.options.sourcePath, this.markdownRenderComponent);
           if (session !== this.modalSession) return;
           result.removeClass("is-hidden");
           const usage = ((_a3 = response.usage) == null ? void 0 : _a3.totalTokens) ? ` \xB7 ${response.usage.totalTokens} tokens` : "";
@@ -16625,7 +16776,7 @@ var AiAskModal = class extends import_obsidian11.Modal {
 
 // src/view.ts
 var VIEW_TYPE_MINDMAP_STUDIO = "mindmap-studio-view";
-var MindMapStudioView = class _MindMapStudioView extends import_obsidian12.TextFileView {
+var MindMapStudioView = class _MindMapStudioView extends import_obsidian13.TextFileView {
   /**
    * 创建 MindMapStudioView 实例，保存依赖和初始状态；实际 DOM 构建通常在 onOpen() 或后续渲染流程中完成。
    *
@@ -16679,6 +16830,20 @@ var MindMapStudioView = class _MindMapStudioView extends import_obsidian12.TextF
     var _a2, _b2;
     const document2 = (_b2 = (_a2 = this.editor) == null ? void 0 : _a2.getDocument()) != null ? _b2 : this.document;
     return serializeDocument(document2 != null ? document2 : this.plugin.createConfiguredDocument("\u601D\u7EF4\u5BFC\u56FE"));
+  }
+  /**
+   * 将后台上传结果合并到当前编辑器文档并立即保存，避免用上传开始时的旧快照刷新整棵节点树。
+   *
+   * @param patches 已完成网络上传的图片字段补丁。
+   * @returns 实际更新的图片块数量。
+   */
+  async applyImageUploadPatches(patches) {
+    if (!this.editor) return 0;
+    const updated = this.editor.applyImageUploadPatches(patches);
+    if (!updated) return 0;
+    this.document = this.editor.getDocument();
+    await this.save();
+    return updated;
   }
   /**
    * 接收 Obsidian 读取的文件文本，解析成领域文档并交给编辑器。重新加载时会保留全局显示模式，并异步刷新文章父子上下文。
@@ -16752,7 +16917,7 @@ var MindMapStudioView = class _MindMapStudioView extends import_obsidian12.TextF
         },
         onMergeFromSubmap: async () => {
           if (!this.file) {
-            new import_obsidian12.Notice("\u5F53\u524D\u8111\u56FE\u5C1A\u672A\u5173\u8054\u6587\u4EF6");
+            new import_obsidian13.Notice("\u5F53\u524D\u8111\u56FE\u5C1A\u672A\u5173\u8054\u6587\u4EF6");
             return;
           }
           await this.save();
@@ -16801,7 +16966,7 @@ var MindMapStudioView = class _MindMapStudioView extends import_obsidian12.TextF
             },
             renderMarkdown: (markdown, target) => {
               var _a4, _b3;
-              return import_obsidian12.MarkdownRenderer.render(this.app, markdown, target, (_b3 = (_a4 = this.file) == null ? void 0 : _a4.path) != null ? _b3 : "", this);
+              return import_obsidian13.MarkdownRenderer.render(this.app, markdown, target, (_b3 = (_a4 = this.file) == null ? void 0 : _a4.path) != null ? _b3 : "", this);
             }
           });
         }
@@ -16871,7 +17036,7 @@ var MindMapStudioView = class _MindMapStudioView extends import_obsidian12.TextF
     var _a2, _b2, _c;
     const file = this.file;
     if (!file) {
-      new import_obsidian12.Notice("\u5F53\u524D\u5BFC\u56FE\u5C1A\u672A\u4FDD\u5B58\uFF0C\u65E0\u6CD5\u641C\u7D22\u5B50\u5BFC\u56FE");
+      new import_obsidian13.Notice("\u5F53\u524D\u5BFC\u56FE\u5C1A\u672A\u4FDD\u5B58\uFF0C\u65E0\u6CD5\u641C\u7D22\u5B50\u5BFC\u56FE");
       return;
     }
     await this.save();
@@ -16949,7 +17114,7 @@ var MindMapStudioView = class _MindMapStudioView extends import_obsidian12.TextF
   /** 启动截图并让编辑器根据截图前焦点决定插入节点或保留剪贴板。 */
   async captureScreenshot(recognizeAfter = false) {
     if (!this.editor) {
-      new import_obsidian12.Notice("\u5F53\u524D\u5BFC\u56FE\u5C1A\u672A\u52A0\u8F7D");
+      new import_obsidian13.Notice("\u5F53\u524D\u5BFC\u56FE\u5C1A\u672A\u52A0\u8F7D");
       return;
     }
     await this.editor.captureScreenshot(recognizeAfter);
@@ -16959,7 +17124,7 @@ var MindMapStudioView = class _MindMapStudioView extends import_obsidian12.TextF
     var _a2, _b2, _c, _d, _e, _f;
     const document2 = (_b2 = (_a2 = this.editor) == null ? void 0 : _a2.getDocument()) != null ? _b2 : this.document;
     if (!document2) {
-      new import_obsidian12.Notice("\u5F53\u524D\u5BFC\u56FE\u5C1A\u672A\u52A0\u8F7D");
+      new import_obsidian13.Notice("\u5F53\u524D\u5BFC\u56FE\u5C1A\u672A\u52A0\u8F7D");
       return;
     }
     const profiles = enabledAiProfiles(this.plugin.settings.aiProfiles);
@@ -17191,9 +17356,9 @@ var MindMapStudioView = class _MindMapStudioView extends import_obsidian12.TextF
     if (/^(https?:|data:|blob:)/i.test(source)) return source;
     const wikiMatch = source.match(/^!?\[\[([\s\S]+?)\]\]$/);
     const target = (_d = (_c = (_b2 = ((_a2 = wikiMatch == null ? void 0 : wikiMatch[1]) != null ? _a2 : source).split("|")[0]) == null ? void 0 : _b2.split("#")[0]) == null ? void 0 : _c.trim()) != null ? _d : source;
-    const direct = this.app.vault.getAbstractFileByPath((0, import_obsidian12.normalizePath)(target.replace(/^\/+/, "")));
-    const file = direct instanceof import_obsidian12.TFile ? direct : this.app.metadataCache.getFirstLinkpathDest(target, (_f = (_e = this.file) == null ? void 0 : _e.path) != null ? _f : "");
-    if (!(file instanceof import_obsidian12.TFile)) return null;
+    const direct = this.app.vault.getAbstractFileByPath((0, import_obsidian13.normalizePath)(target.replace(/^\/+/, "")));
+    const file = direct instanceof import_obsidian13.TFile ? direct : this.app.metadataCache.getFirstLinkpathDest(target, (_f = (_e = this.file) == null ? void 0 : _e.path) != null ? _f : "");
+    if (!(file instanceof import_obsidian13.TFile)) return null;
     return this.app.vault.getResourcePath(file);
   }
   /**
@@ -17209,14 +17374,14 @@ var MindMapStudioView = class _MindMapStudioView extends import_obsidian12.TextF
     if (preferExternal) {
       const desktopResult = await saveDesktopExportFile(extension, baseName, content);
       if (desktopResult) {
-        if (desktopResult.path) new import_obsidian12.Notice(`\u5DF2\u5BFC\u51FA\uFF1A${desktopResult.path}`);
+        if (desktopResult.path) new import_obsidian13.Notice(`\u5DF2\u5BFC\u51FA\uFF1A${desktopResult.path}`);
         return;
       }
     }
     const parentPath = (_e = (_d = file == null ? void 0 : file.parent) == null ? void 0 : _d.path) != null ? _e : "";
-    const path = await this.plugin.getAvailablePath((0, import_obsidian12.normalizePath)(`${parentPath ? `${parentPath}/` : ""}${baseName}.${extension}`));
+    const path = await this.plugin.getAvailablePath((0, import_obsidian13.normalizePath)(`${parentPath ? `${parentPath}/` : ""}${baseName}.${extension}`));
     await this.app.vault.create(path, content);
-    new import_obsidian12.Notice(`\u5DF2\u5BFC\u51FA\uFF1A${path}`);
+    new import_obsidian13.Notice(`\u5DF2\u5BFC\u51FA\uFF1A${path}`);
   }
   /** 将二进制文档写入所选位置或当前库。 */
   async exportBinaryFile(extension, content) {
@@ -17225,15 +17390,15 @@ var MindMapStudioView = class _MindMapStudioView extends import_obsidian12.TextF
     const baseName = (_c = (_b2 = file == null ? void 0 : file.basename) != null ? _b2 : (_a2 = this.document) == null ? void 0 : _a2.title) != null ? _c : "\u601D\u7EF4\u5BFC\u56FE";
     const desktopResult = await saveDesktopExportFile(extension, baseName, content);
     if (desktopResult) {
-      if (desktopResult.path) new import_obsidian12.Notice(`\u5DF2\u5BFC\u51FA\uFF1A${desktopResult.path}`);
+      if (desktopResult.path) new import_obsidian13.Notice(`\u5DF2\u5BFC\u51FA\uFF1A${desktopResult.path}`);
       return;
     }
     const parentPath = (_e = (_d = file == null ? void 0 : file.parent) == null ? void 0 : _d.path) != null ? _e : "";
-    const path = await this.plugin.getAvailablePath((0, import_obsidian12.normalizePath)(`${parentPath ? `${parentPath}/` : ""}${baseName}.${extension}`));
+    const path = await this.plugin.getAvailablePath((0, import_obsidian13.normalizePath)(`${parentPath ? `${parentPath}/` : ""}${baseName}.${extension}`));
     const binary = new ArrayBuffer(content.byteLength);
     new Uint8Array(binary).set(content);
     await this.app.vault.createBinary(path, binary);
-    new import_obsidian12.Notice(`\u5DF2\u5BFC\u51FA\uFF1A${path}`);
+    new import_obsidian13.Notice(`\u5DF2\u5BFC\u51FA\uFF1A${path}`);
   }
   /**
    * Exports the current map family as one continuous document. A top-level
@@ -17262,14 +17427,14 @@ var MindMapStudioView = class _MindMapStudioView extends import_obsidian12.TextF
     const html = readingSectionsToHtml(sections, tocMaxDepth);
     if (format === "pdf") {
       const result = await saveDesktopPdfFile(file.basename, html);
-      if (result == null ? void 0 : result.path) new import_obsidian12.Notice(`\u5DF2\u5BFC\u51FA\uFF1A${result.path}`);
-      else if (!result) new import_obsidian12.Notice("PDF \u5BFC\u51FA\u4EC5\u652F\u6301 Obsidian \u684C\u9762\u7AEF");
+      if (result == null ? void 0 : result.path) new import_obsidian13.Notice(`\u5DF2\u5BFC\u51FA\uFF1A${result.path}`);
+      else if (!result) new import_obsidian13.Notice("PDF \u5BFC\u51FA\u4EC5\u652F\u6301 Obsidian \u684C\u9762\u7AEF");
     } else await this.exportTextFile(format, html, true);
   }
 };
 
 // src/search/global-search.ts
-var import_obsidian13 = require("obsidian");
+var import_obsidian14 = require("obsidian");
 function normalized(value) {
   return value.normalize("NFKC").toLocaleLowerCase().replace(/\s+/g, " ").trim();
 }
@@ -17330,10 +17495,10 @@ function resolveHierarchicalEntries(files) {
   var _a2, _b2, _c;
   const lineageCache = /* @__PURE__ */ new Map();
   const normalizedFiles = /* @__PURE__ */ new Map();
-  Object.entries(files).forEach(([path, file]) => normalizedFiles.set((0, import_obsidian13.normalizePath)(path), file));
+  Object.entries(files).forEach(([path, file]) => normalizedFiles.set((0, import_obsidian14.normalizePath)(path), file));
   const resolveLineage = (filePath, visiting = /* @__PURE__ */ new Set()) => {
     var _a3;
-    const path = (0, import_obsidian13.normalizePath)(filePath);
+    const path = (0, import_obsidian14.normalizePath)(filePath);
     const cached = lineageCache.get(path);
     if (cached) return cached;
     const file = normalizedFiles.get(path);
@@ -17349,7 +17514,7 @@ function resolveHierarchicalEntries(files) {
     }
     const nextVisiting = new Set(visiting);
     nextVisiting.add(path);
-    const parentPath = (0, import_obsidian13.normalizePath)(navigation.parentPath);
+    const parentPath = (0, import_obsidian14.normalizePath)(navigation.parentPath);
     const parentFile = normalizedFiles.get(parentPath);
     if (!parentFile) {
       const fallback = [navigation.parentTitle, navigation.parentNodeText].filter((item) => Boolean(item == null ? void 0 : item.trim()));
@@ -17365,7 +17530,7 @@ function resolveHierarchicalEntries(files) {
   };
   const resolvedEntries = [];
   for (const [rawPath, file] of Object.entries(files)) {
-    const filePath = (0, import_obsidian13.normalizePath)(rawPath);
+    const filePath = (0, import_obsidian14.normalizePath)(rawPath);
     const lineage = resolveLineage(filePath);
     const localRoot = (_c = (_b2 = (_a2 = file.entries[0]) == null ? void 0 : _a2.breadcrumb) == null ? void 0 : _b2[0]) != null ? _c : file.title;
     const mapHierarchy = mergeHierarchy(lineage, [localRoot]);
@@ -17443,21 +17608,21 @@ function searchEntries(entries, query, limit = 100, useRegex = false) {
 }
 function collectIndexedFamilyPaths(files, rootPath) {
   var _a2, _b2, _c;
-  const normalizedFiles = new Map(Object.entries(files).map(([path, value]) => [(0, import_obsidian13.normalizePath)(path), value]));
+  const normalizedFiles = new Map(Object.entries(files).map(([path, value]) => [(0, import_obsidian14.normalizePath)(path), value]));
   const family = /* @__PURE__ */ new Set();
-  const queue = [(0, import_obsidian13.normalizePath)(rootPath)];
+  const queue = [(0, import_obsidian14.normalizePath)(rootPath)];
   while (queue.length) {
-    const path = (0, import_obsidian13.normalizePath)((_a2 = queue.shift()) != null ? _a2 : "");
+    const path = (0, import_obsidian14.normalizePath)((_a2 = queue.shift()) != null ? _a2 : "");
     if (!path || family.has(path) || !normalizedFiles.has(path)) continue;
     family.add(path);
     const indexed = normalizedFiles.get(path);
     for (const entry of (_b2 = indexed == null ? void 0 : indexed.entries) != null ? _b2 : []) {
-      const childPath = entry.submapPath ? (0, import_obsidian13.normalizePath)(entry.submapPath) : "";
+      const childPath = entry.submapPath ? (0, import_obsidian14.normalizePath)(entry.submapPath) : "";
       if (childPath && normalizedFiles.has(childPath) && !family.has(childPath)) queue.push(childPath);
     }
     for (const [candidatePath, candidate] of normalizedFiles) {
       const parentPath = (_c = candidate.entries[0]) == null ? void 0 : _c.parentMapPath;
-      if (parentPath && (0, import_obsidian13.normalizePath)(parentPath) === path && !family.has(candidatePath)) queue.push(candidatePath);
+      if (parentPath && (0, import_obsidian14.normalizePath)(parentPath) === path && !family.has(candidatePath)) queue.push(candidatePath);
     }
   }
   return family;
@@ -17515,8 +17680,8 @@ var MindMapSearchIndex = class {
   allEntries(filePaths) {
     const resolved = resolveHierarchicalEntries(this.data.files);
     if (!filePaths) return resolved;
-    const normalizedPaths = new Set(Array.from(filePaths, (path) => (0, import_obsidian13.normalizePath)(path)));
-    return resolved.filter((entry) => normalizedPaths.has((0, import_obsidian13.normalizePath)(entry.filePath)));
+    const normalizedPaths = new Set(Array.from(filePaths, (path) => (0, import_obsidian14.normalizePath)(path)));
+    return resolved.filter((entry) => normalizedPaths.has((0, import_obsidian14.normalizePath)(entry.filePath)));
   }
   /**
    * 读取并返回scoped status，并保持模型、界面和持久化状态的一致性。
@@ -17525,7 +17690,7 @@ var MindMapSearchIndex = class {
    * @returns 计算得到的数值结果。
    */
   getScopedStatus(filePaths) {
-    const normalizedPaths = new Set(Array.from(filePaths, (path) => (0, import_obsidian13.normalizePath)(path)));
+    const normalizedPaths = new Set(Array.from(filePaths, (path) => (0, import_obsidian14.normalizePath)(path)));
     let files = 0;
     let nodes = 0;
     for (const path of normalizedPaths) {
@@ -17555,7 +17720,7 @@ var MindMapSearchIndex = class {
    */
   async refreshFamily(rootPath, currentDocument) {
     var _a2, _b2, _c, _d, _e, _f;
-    const normalizedRoot = (0, import_obsidian13.normalizePath)(rootPath);
+    const normalizedRoot = (0, import_obsidian14.normalizePath)(rootPath);
     const family = /* @__PURE__ */ new Set();
     const documents = /* @__PURE__ */ new Map();
     if (currentDocument) documents.set(normalizedRoot, currentDocument);
@@ -17577,10 +17742,10 @@ var MindMapSearchIndex = class {
     }
     const queue = [familyRoot];
     while (queue.length) {
-      const path = (0, import_obsidian13.normalizePath)((_b2 = queue.shift()) != null ? _b2 : "");
+      const path = (0, import_obsidian14.normalizePath)((_b2 = queue.shift()) != null ? _b2 : "");
       if (!path || family.has(path)) continue;
       const file = this.app.vault.getAbstractFileByPath(path);
-      if (!(file instanceof import_obsidian13.TFile) || file.extension.toLocaleLowerCase() !== this.extension) continue;
+      if (!(file instanceof import_obsidian14.TFile) || file.extension.toLocaleLowerCase() !== this.extension) continue;
       family.add(path);
       let document2 = documents.get(path);
       if (!document2) {
@@ -17636,7 +17801,7 @@ var MindMapSearchIndex = class {
    * @param path 仓库内目标路径。
    */
   removeFile(path) {
-    const normalizedPath = (0, import_obsidian13.normalizePath)(path);
+    const normalizedPath = (0, import_obsidian14.normalizePath)(path);
     if (!this.data.files[normalizedPath]) return;
     delete this.data.files[normalizedPath];
     this.data.generatedAt = (/* @__PURE__ */ new Date()).toISOString();
@@ -17751,11 +17916,11 @@ var MindMapSearchIndex = class {
     const raw = rawPath == null ? void 0 : rawPath.trim();
     if (!raw) return null;
     const unwrapped = (_c = (_b2 = (_a2 = raw.replace(/^!?\[\[|\]\]$/g, "").split("|")[0]) == null ? void 0 : _a2.split("#")[0]) == null ? void 0 : _b2.trim()) != null ? _c : raw;
-    const normalizedPath = (0, import_obsidian13.normalizePath)(unwrapped);
+    const normalizedPath = (0, import_obsidian14.normalizePath)(unwrapped);
     const direct = this.app.vault.getAbstractFileByPath(normalizedPath);
-    if (direct instanceof import_obsidian13.TFile && direct.extension.toLocaleLowerCase() === this.extension) return direct;
+    if (direct instanceof import_obsidian14.TFile && direct.extension.toLocaleLowerCase() === this.extension) return direct;
     const resolved = this.app.metadataCache.getFirstLinkpathDest(unwrapped, sourcePath);
-    return resolved instanceof import_obsidian13.TFile && resolved.extension.toLocaleLowerCase() === this.extension ? resolved : null;
+    return resolved instanceof import_obsidian14.TFile && resolved.extension.toLocaleLowerCase() === this.extension ? resolved : null;
   }
   /**
    * 加载相关数据，并保持模型、界面和持久化状态的一致性。
@@ -17845,7 +18010,7 @@ function appendHighlightedText(container, text, query, useRegex = false) {
   container.createEl("mark", { text: text.slice(index, index + phrase.length) });
   if (index + phrase.length < text.length) container.appendText(text.slice(index + phrase.length));
 }
-var GlobalMindMapSearchModal = class extends import_obsidian13.Modal {
+var GlobalMindMapSearchModal = class extends import_obsidian14.Modal {
   /**
    * 创建 GlobalMindMapSearchModal 实例，保存依赖和初始状态；实际 DOM 构建通常在 onOpen() 或后续渲染流程中完成。
    *
@@ -17880,7 +18045,7 @@ var GlobalMindMapSearchModal = class extends import_obsidian13.Modal {
     this.titleEl.setText(this.scopeTitle);
     const searchRow = this.contentEl.createDiv({ cls: "mms-global-search-row" });
     const icon = searchRow.createSpan({ cls: "mms-global-search-icon" });
-    (0, import_obsidian13.setIcon)(icon, "search");
+    (0, import_obsidian14.setIcon)(icon, "search");
     this.inputEl = searchRow.createEl("input", {
       type: "search",
       cls: "mms-global-search-input",
@@ -17896,14 +18061,14 @@ var GlobalMindMapSearchModal = class extends import_obsidian13.Modal {
       cls: "mms-global-search-replace-all",
       attr: { type: "button", title: "\u5168\u90E8\u66FF\u6362" }
     });
-    (0, import_obsidian13.setIcon)(replaceAllBtn, "check-check");
+    (0, import_obsidian14.setIcon)(replaceAllBtn, "check-check");
     this.replaceInputEl = this.replaceRowEl.createEl("input", {
       type: "text",
       cls: "mms-global-search-replace-input",
       attr: { placeholder: "\u66FF\u6362\u4E3A\u2026", autocomplete: "off" }
     });
     const rebuild = this.replaceRowEl.createEl("button", { cls: "mms-global-search-rebuild", attr: { type: "button", title: "\u91CD\u5EFA\u7D22\u5F15" } });
-    (0, import_obsidian13.setIcon)(rebuild, "refresh-cw");
+    (0, import_obsidian14.setIcon)(rebuild, "refresh-cw");
     this.summaryEl = this.contentEl.createDiv({ cls: "mms-global-search-summary" });
     this.resultsEl = this.contentEl.createDiv({ cls: "mms-global-search-results" });
     const render = () => this.renderResults(this.inputEl.value);
@@ -17929,7 +18094,7 @@ var GlobalMindMapSearchModal = class extends import_obsidian13.Modal {
     replaceAllBtn.addEventListener("click", async () => {
       if (!this.renderedResults.length) return;
       if (!this.onReplaceAll) {
-        new import_obsidian13.Notice("\u5F53\u524D\u6A21\u5F0F\u4E0D\u652F\u6301\u66FF\u6362\u64CD\u4F5C\u3002");
+        new import_obsidian14.Notice("\u5F53\u524D\u6A21\u5F0F\u4E0D\u652F\u6301\u66FF\u6362\u64CD\u4F5C\u3002");
         return;
       }
       replaceAllBtn.disabled = true;
@@ -17937,17 +18102,17 @@ var GlobalMindMapSearchModal = class extends import_obsidian13.Modal {
       try {
         const count = await this.onReplaceAll(this.renderedResults, this.inputEl.value, this.replaceInputEl.value.trim(), this.useRegex);
         if (!count) {
-          new import_obsidian13.Notice("\u8282\u70B9\u6587\u5B57\u6216\u5907\u6CE8\u4E2D\u672A\u627E\u5230\u5339\u914D\uFF0C\u672A\u4F5C\u66FF\u6362");
+          new import_obsidian14.Notice("\u8282\u70B9\u6587\u5B57\u6216\u5907\u6CE8\u4E2D\u672A\u627E\u5230\u5339\u914D\uFF0C\u672A\u4F5C\u66FF\u6362");
           return;
         }
-        new import_obsidian13.Notice(`\u5DF2\u66FF\u6362 ${count} \u4E2A\u8282\u70B9\uFF0C\u6B63\u5728\u91CD\u5EFA\u7D22\u5F15\u2026`);
+        new import_obsidian14.Notice(`\u5DF2\u66FF\u6362 ${count} \u4E2A\u8282\u70B9\uFF0C\u6B63\u5728\u91CD\u5EFA\u7D22\u5F15\u2026`);
         this.renderedResults = [];
         this.summaryEl.setText("\u5DF2\u66FF\u6362\u6240\u6709\u5339\u914D\u8282\u70B9\u3002\u8BF7\u91CD\u65B0\u641C\u7D22\u4EE5\u5237\u65B0\u7ED3\u679C\u3002");
         this.resultsEl.empty();
         this.resultsEl.createDiv({ cls: "mms-global-search-empty", text: "\u5DF2\u66FF\u6362\u6240\u6709\u5339\u914D\u8282\u70B9\uFF0C\u8BF7\u8F93\u5165\u65B0\u5173\u952E\u8BCD\u641C\u7D22\u3002" });
       } finally {
         replaceAllBtn.disabled = false;
-        (0, import_obsidian13.setIcon)(replaceAllBtn, "check-check");
+        (0, import_obsidian14.setIcon)(replaceAllBtn, "check-check");
       }
     });
     rebuild.addEventListener("click", async () => {
@@ -17955,7 +18120,7 @@ var GlobalMindMapSearchModal = class extends import_obsidian13.Modal {
       this.summaryEl.setText("\u6B63\u5728\u91CD\u5EFA\u7D22\u5F15\u2026");
       try {
         await this.onRebuild();
-        new import_obsidian13.Notice("\u601D\u7EF4\u5BFC\u56FE\u641C\u7D22\u7D22\u5F15\u5DF2\u91CD\u5EFA");
+        new import_obsidian14.Notice("\u601D\u7EF4\u5BFC\u56FE\u641C\u7D22\u7D22\u5F15\u5DF2\u91CD\u5EFA");
         render();
       } finally {
         rebuild.disabled = false;
@@ -18031,27 +18196,27 @@ var GlobalMindMapSearchModal = class extends import_obsidian13.Modal {
         cls: "mms-global-search-replace-one",
         attr: { type: "button", title: "\u66FF\u6362\u6B64\u8282\u70B9" }
       });
-      (0, import_obsidian13.setIcon)(replaceOneBtn, "rotate-ccw");
+      (0, import_obsidian14.setIcon)(replaceOneBtn, "rotate-ccw");
       replaceOneBtn.createSpan({ text: "\u66FF\u6362\u6B64\u8282\u70B9" });
       replaceOneBtn.addEventListener("click", async (event) => {
         event.stopPropagation();
         const replacement = this.replaceInputEl.value.trim();
         if (!this.onReplaceAll) {
-          new import_obsidian13.Notice("\u5F53\u524D\u6A21\u5F0F\u4E0D\u652F\u6301\u66FF\u6362\u64CD\u4F5C\u3002");
+          new import_obsidian14.Notice("\u5F53\u524D\u6A21\u5F0F\u4E0D\u652F\u6301\u66FF\u6362\u64CD\u4F5C\u3002");
           return;
         }
         replaceOneBtn.disabled = true;
         try {
           const count = await this.onReplaceAll([result], this.inputEl.value, replacement, this.useRegex);
           if (count > 0) {
-            new import_obsidian13.Notice("\u5DF2\u66FF\u6362\u6B64\u8282\u70B9");
+            new import_obsidian14.Notice("\u5DF2\u66FF\u6362\u6B64\u8282\u70B9");
             const idx = this.renderedResults.indexOf(result);
             if (idx >= 0) {
               this.renderedResults.splice(idx, 1);
               this.renderResultList();
             }
           } else {
-            new import_obsidian13.Notice("\u8282\u70B9\u6587\u5B57\u4E2D\u672A\u627E\u5230\u5339\u914D\uFF0C\u672A\u4F5C\u66FF\u6362");
+            new import_obsidian14.Notice("\u8282\u70B9\u6587\u5B57\u4E2D\u672A\u627E\u5230\u5339\u914D\uFF0C\u672A\u4F5C\u66FF\u6362");
           }
         } finally {
           replaceOneBtn.disabled = false;
@@ -18121,7 +18286,7 @@ function shouldPersistDisplayMode(mode) {
 }
 
 // src/ai/client.ts
-var import_obsidian14 = require("obsidian");
+var import_obsidian15 = require("obsidian");
 
 // src/utils/image-host.ts
 var DEFAULT_IMAGE_URL_PATHS = ["data.url", "url", "result.url", "result.image", "image.url", "src"];
@@ -18425,7 +18590,7 @@ function extractAiStreamDelta(payload) {
 async function fetchAiProfileModels(profile) {
   var _a2;
   const endpoint = normalizeHttpUrl(resolveAiModelsEndpoint(profile.endpoint), "AI \u6A21\u578B\u76EE\u5F55\u63A5\u53E3");
-  const response = await (0, import_obsidian14.requestUrl)({
+  const response = await (0, import_obsidian15.requestUrl)({
     url: endpoint,
     method: "GET",
     headers: buildRequestHeaders(profile),
@@ -18458,7 +18623,7 @@ var requestChatCompletion = async (profile, body, onStreamUpdate) => {
   );
   if (!profile.model.trim()) throw new Error("\u8BF7\u5148\u914D\u7F6E\u6A21\u578B\u540D\u79F0");
   if (body.stream) return requestStreamingChatCompletion(endpoint, profile, body, onStreamUpdate);
-  const response = await (0, import_obsidian14.requestUrl)({
+  const response = await (0, import_obsidian15.requestUrl)({
     url: endpoint,
     method: "POST",
     headers: buildRequestHeaders(profile),
@@ -19513,13 +19678,17 @@ function matchesRecordedShortcut(event, shortcut) {
   const keyMatches = event.key.toLowerCase() === key || event.code.toLowerCase() === `key${key}` || key === "space" && event.code === "Space";
   return keyMatches && (event.ctrlKey || event.metaKey) === expectsCtrl && event.shiftKey === expectsShift && event.altKey === expectsAlt;
 }
-var MindMapStudioPlugin = class extends import_obsidian15.Plugin {
+var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
   constructor() {
     super(...arguments);
     this.settings = DEFAULT_SETTINGS;
     /** 当前会话使用的显示模式；大纲模式不会写成下次启动默认值。 */
     this.activeDisplayMode = DEFAULT_SETTINGS.defaultViewMode;
     this.autoUploadTimers = /* @__PURE__ */ new Map();
+    this.readyAutoUploadJobs = /* @__PURE__ */ new Map();
+    this.autoUploadBatchTimers = /* @__PURE__ */ new Map();
+    this.autoUploadFileChains = /* @__PURE__ */ new Map();
+    this.autoUploadInFlightKeys = /* @__PURE__ */ new Set();
     this.remoteImageDeleteTimers = /* @__PURE__ */ new Map();
     this.autoUploadFileKeys = /* @__PURE__ */ new WeakMap();
     this.autoUploadFileKeySequence = 0;
@@ -19534,8 +19703,8 @@ var MindMapStudioPlugin = class extends import_obsidian15.Plugin {
     var _a2;
     await this.loadSettings();
     this.installFileExplorerFilter();
-    const pluginDir = (_a2 = this.manifest.dir) != null ? _a2 : (0, import_obsidian15.normalizePath)(`${this.app.vault.configDir}/plugins/${this.manifest.id}`);
-    this.searchIndex = new MindMapSearchIndex(this.app, (0, import_obsidian15.normalizePath)(`${pluginDir}/mindmap-search-index.json`), MINDMAP_EXTENSION);
+    const pluginDir = (_a2 = this.manifest.dir) != null ? _a2 : (0, import_obsidian16.normalizePath)(`${this.app.vault.configDir}/plugins/${this.manifest.id}`);
+    this.searchIndex = new MindMapSearchIndex(this.app, (0, import_obsidian16.normalizePath)(`${pluginDir}/mindmap-search-index.json`), MINDMAP_EXTENSION);
     this.searchIndexReady = this.searchIndex.initialize();
     this.registerView(VIEW_TYPE_MINDMAP_STUDIO, (leaf) => new MindMapStudioView(leaf, this));
     this.registerExtensions([MINDMAP_EXTENSION], VIEW_TYPE_MINDMAP_STUDIO);
@@ -19655,11 +19824,11 @@ var MindMapStudioPlugin = class extends import_obsidian15.Plugin {
       }
     });
     this.registerEvent(this.app.workspace.on("file-menu", (menu, file) => {
-      if (file instanceof import_obsidian15.TFolder) {
+      if (file instanceof import_obsidian16.TFolder) {
         menu.addItem((item) => item.setTitle("\u65B0\u5EFA\u601D\u7EF4\u5BFC\u56FE").setIcon("brain-circuit").onClick(() => void this.createMindMap({ folder: file.path })));
         return;
       }
-      if (!(file instanceof import_obsidian15.TFile)) return;
+      if (!(file instanceof import_obsidian16.TFile)) return;
       if (this.isMindMapFile(file)) {
         menu.addSeparator();
         menu.addItem((item) => item.setTitle("\u4EE5\u53EF\u7F16\u8F91\u601D\u7EF4\u5BFC\u56FE\u6253\u5F00").setIcon("brain-circuit").onClick(() => void this.openAsMindMap(file)));
@@ -19667,20 +19836,20 @@ var MindMapStudioPlugin = class extends import_obsidian15.Plugin {
     }));
     this.registerEvent(this.app.vault.on("create", (file) => {
       this.scheduleFileExplorerFilter();
-      if (file instanceof import_obsidian15.TFile && this.isMindMapFile(file)) this.searchIndex.queueFile(file, 80);
+      if (file instanceof import_obsidian16.TFile && this.isMindMapFile(file)) this.searchIndex.queueFile(file, 80);
     }));
     this.registerEvent(this.app.vault.on("modify", (file) => {
       this.scheduleFileExplorerFilter();
-      if (file instanceof import_obsidian15.TFile && this.isMindMapFile(file)) this.searchIndex.queueFile(file);
+      if (file instanceof import_obsidian16.TFile && this.isMindMapFile(file)) this.searchIndex.queueFile(file);
     }));
     this.registerEvent(this.app.vault.on("delete", (file) => {
       this.scheduleFileExplorerFilter();
-      if (file instanceof import_obsidian15.TFile && file.extension.toLowerCase() === MINDMAP_EXTENSION) this.searchIndex.removeFile(file.path);
+      if (file instanceof import_obsidian16.TFile && file.extension.toLowerCase() === MINDMAP_EXTENSION) this.searchIndex.removeFile(file.path);
     }));
     this.registerEvent(this.app.vault.on("rename", (file, oldPath) => {
       this.scheduleFileExplorerFilter();
-      if (file instanceof import_obsidian15.TFile && this.isMindMapFile(file)) void this.renameReadingLocationPathInSettings(oldPath, file.path);
-      if (file instanceof import_obsidian15.TFile && this.isMindMapFile(file)) this.searchIndex.renameFile(file, oldPath);
+      if (file instanceof import_obsidian16.TFile && this.isMindMapFile(file)) void this.renameReadingLocationPathInSettings(oldPath, file.path);
+      if (file instanceof import_obsidian16.TFile && this.isMindMapFile(file)) this.searchIndex.renameFile(file, oldPath);
       else if (oldPath.toLowerCase().endsWith(`.${MINDMAP_EXTENSION}`)) this.searchIndex.removeFile(oldPath);
     }));
     this.registerMarkdownCodeBlockProcessor("mindmap", (source, el, ctx) => {
@@ -19702,6 +19871,10 @@ var MindMapStudioPlugin = class extends import_obsidian15.Plugin {
     this.fileExplorerObserver = null;
     for (const timer of this.autoUploadTimers.values()) window.clearTimeout(timer);
     this.autoUploadTimers.clear();
+    for (const timer of this.autoUploadBatchTimers.values()) window.clearTimeout(timer);
+    this.autoUploadBatchTimers.clear();
+    this.readyAutoUploadJobs.clear();
+    this.autoUploadInFlightKeys.clear();
     for (const timer of this.remoteImageDeleteTimers.values()) window.clearTimeout(timer);
     this.remoteImageDeleteTimers.clear();
     (_b2 = this.searchIndex) == null ? void 0 : _b2.destroy();
@@ -19756,10 +19929,10 @@ var MindMapStudioPlugin = class extends import_obsidian15.Plugin {
    * 重建global search index，并保持模型、界面和持久化状态的一致性。
    */
   async rebuildGlobalSearchIndex() {
-    new import_obsidian15.Notice("\u6B63\u5728\u91CD\u5EFA\u601D\u7EF4\u5BFC\u56FE\u641C\u7D22\u7D22\u5F15\u2026");
+    new import_obsidian16.Notice("\u6B63\u5728\u91CD\u5EFA\u601D\u7EF4\u5BFC\u56FE\u641C\u7D22\u7D22\u5F15\u2026");
     await this.searchIndex.rebuildAll();
     const status = this.searchIndex.getStatus();
-    new import_obsidian15.Notice(`\u641C\u7D22\u7D22\u5F15\u5DF2\u91CD\u5EFA\uFF1A${status.files} \u4E2A\u5BFC\u56FE\uFF0C${status.nodes} \u4E2A\u8282\u70B9`);
+    new import_obsidian16.Notice(`\u641C\u7D22\u7D22\u5F15\u5DF2\u91CD\u5EFA\uFF1A${status.files} \u4E2A\u5BFC\u56FE\uFF0C${status.nodes} \u4E2A\u8282\u70B9`);
   }
   /**
    * 读取并返回global search index status，并保持模型、界面和持久化状态的一致性。
@@ -19774,9 +19947,9 @@ var MindMapStudioPlugin = class extends import_obsidian15.Plugin {
    */
   async openGlobalSearchResult(result) {
     const file = this.app.vault.getAbstractFileByPath(result.filePath);
-    if (!(file instanceof import_obsidian15.TFile) || !this.isMindMapFile(file)) {
+    if (!(file instanceof import_obsidian16.TFile) || !this.isMindMapFile(file)) {
       this.searchIndex.removeFile(result.filePath);
-      new import_obsidian15.Notice(`\u641C\u7D22\u7ED3\u679C\u5BF9\u5E94\u7684\u5BFC\u56FE\u5DF2\u4E0D\u5B58\u5728\uFF1A${result.filePath}`);
+      new import_obsidian16.Notice(`\u641C\u7D22\u7ED3\u679C\u5BF9\u5E94\u7684\u5BFC\u56FE\u5DF2\u4E0D\u5B58\u5728\uFF1A${result.filePath}`);
       return;
     }
     await this.openAsMindMap(file, void 0, result.nodeId);
@@ -19811,7 +19984,7 @@ var MindMapStudioPlugin = class extends import_obsidian15.Plugin {
     let modifiedCount = 0;
     for (const [filePath, fileResults] of byFile) {
       const file = this.app.vault.getAbstractFileByPath(filePath);
-      if (!(file instanceof import_obsidian15.TFile)) continue;
+      if (!(file instanceof import_obsidian16.TFile)) continue;
       try {
         const content = await this.app.vault.read(file);
         const doc = parseDocument(content, file.basename);
@@ -19975,8 +20148,8 @@ var MindMapStudioPlugin = class extends import_obsidian15.Plugin {
       screenshotRecognizeShortcut: typeof raw.screenshotRecognizeShortcut === "string" && raw.screenshotRecognizeShortcut.trim() ? raw.screenshotRecognizeShortcut.trim().slice(0, 120) : DEFAULT_SETTINGS.screenshotRecognizeShortcut,
       globalSearchShortcut: typeof raw.globalSearchShortcut === "string" && raw.globalSearchShortcut.trim() ? raw.globalSearchShortcut.trim().slice(0, 120) : DEFAULT_SETTINGS.globalSearchShortcut,
       questionNodesEnabled: raw.questionNodesEnabled === true,
-      questionBankFolder: typeof raw.questionBankFolder === "string" ? (0, import_obsidian15.normalizePath)(raw.questionBankFolder.trim().replace(/^\/+|\/+$/g, "")).slice(0, 1e3) : DEFAULT_SETTINGS.questionBankFolder,
-      questionBankFolders: Array.isArray(raw.questionBankFolders) ? Array.from(new Set(raw.questionBankFolders.filter((folder) => typeof folder === "string").map((folder) => (0, import_obsidian15.normalizePath)(folder.trim().replace(/^\/+|\/+$/g, "")).slice(0, 1e3)).filter(Boolean))) : typeof raw.questionBankFolder === "string" && raw.questionBankFolder.trim() ? [(0, import_obsidian15.normalizePath)(raw.questionBankFolder.trim().replace(/^\/+|\/+$/g, "")).slice(0, 1e3)] : [],
+      questionBankFolder: typeof raw.questionBankFolder === "string" ? (0, import_obsidian16.normalizePath)(raw.questionBankFolder.trim().replace(/^\/+|\/+$/g, "")).slice(0, 1e3) : DEFAULT_SETTINGS.questionBankFolder,
+      questionBankFolders: Array.isArray(raw.questionBankFolders) ? Array.from(new Set(raw.questionBankFolders.filter((folder) => typeof folder === "string").map((folder) => (0, import_obsidian16.normalizePath)(folder.trim().replace(/^\/+|\/+$/g, "")).slice(0, 1e3)).filter(Boolean))) : typeof raw.questionBankFolder === "string" && raw.questionBankFolder.trim() ? [(0, import_obsidian16.normalizePath)(raw.questionBankFolder.trim().replace(/^\/+|\/+$/g, "")).slice(0, 1e3)] : [],
       questionPracticeOrder: raw.questionPracticeOrder === "sequential" ? "sequential" : "random",
       questionMemoryCurveEnabled: raw.questionMemoryCurveEnabled === true,
       wrongBookMasteryCount: typeof raw.wrongBookMasteryCount === "number" ? Math.max(1, Math.min(20, Math.round(raw.wrongBookMasteryCount))) : DEFAULT_SETTINGS.wrongBookMasteryCount,
@@ -20076,8 +20249,8 @@ var MindMapStudioPlugin = class extends import_obsidian15.Plugin {
   /** Checks the release-workflow update manifest, verifies its archive, and requires a full app restart to activate it. */
   async checkForPluginUpdate() {
     var _a2;
-    new import_obsidian15.Notice("\u6B63\u5728\u68C0\u67E5 MindMap Studio \u66F4\u65B0\u2026");
-    const response = await (0, import_obsidian15.requestUrl)({
+    new import_obsidian16.Notice("\u6B63\u5728\u68C0\u67E5 MindMap Studio \u66F4\u65B0\u2026");
+    const response = await (0, import_obsidian16.requestUrl)({
       url: PLUGIN_UPDATE_MANIFEST_URL,
       method: "GET",
       headers: { "Cache-Control": "no-cache" },
@@ -20085,21 +20258,21 @@ var MindMapStudioPlugin = class extends import_obsidian15.Plugin {
     });
     const release = parsePluginUpdateManifest(response.text);
     if (comparePluginVersions(release.version, this.manifest.version) <= 0) {
-      new import_obsidian15.Notice(`\u5DF2\u662F\u6700\u65B0\u7248\u672C\uFF08${this.manifest.version}\uFF09`);
+      new import_obsidian16.Notice(`\u5DF2\u662F\u6700\u65B0\u7248\u672C\uFF08${this.manifest.version}\uFF09`);
       return "up-to-date";
     }
-    const archiveResponse = await (0, import_obsidian15.requestUrl)({ url: release.downloadUrl, method: "GET", throw: true });
+    const archiveResponse = await (0, import_obsidian16.requestUrl)({ url: release.downloadUrl, method: "GET", throw: true });
     const archive = await archiveResponse.arrayBuffer;
     if (!await verifyPluginArchiveHash(archive, release.sha256)) throw new Error("\u66F4\u65B0\u5305 SHA-256 \u6821\u9A8C\u5931\u8D25\uFF0C\u5DF2\u53D6\u6D88\u5B89\u88C5");
     const update = extractPluginReleaseFiles(archive);
     if (update.manifest.id !== this.manifest.id) throw new Error("\u66F4\u65B0\u5305\u7684\u63D2\u4EF6\u6807\u8BC6\u4E0D\u5339\u914D\uFF0C\u5DF2\u53D6\u6D88\u5B89\u88C5");
     if (update.manifest.version !== release.version) throw new Error("\u66F4\u65B0\u5305\u7248\u672C\u4E0E\u66F4\u65B0\u4FE1\u606F\u4E0D\u4E00\u81F4\uFF0C\u5DF2\u53D6\u6D88\u5B89\u88C5");
-    const pluginDir = (_a2 = this.manifest.dir) != null ? _a2 : (0, import_obsidian15.normalizePath)(`${this.app.vault.configDir}/plugins/${this.manifest.id}`);
+    const pluginDir = (_a2 = this.manifest.dir) != null ? _a2 : (0, import_obsidian16.normalizePath)(`${this.app.vault.configDir}/plugins/${this.manifest.id}`);
     const adapter = this.app.vault.adapter;
     const files = [
-      { path: (0, import_obsidian15.normalizePath)(`${pluginDir}/main.js`), content: update.main },
-      { path: (0, import_obsidian15.normalizePath)(`${pluginDir}/styles.css`), content: update.styles },
-      { path: (0, import_obsidian15.normalizePath)(`${pluginDir}/manifest.json`), content: new TextEncoder().encode(update.manifestText).buffer }
+      { path: (0, import_obsidian16.normalizePath)(`${pluginDir}/main.js`), content: update.main },
+      { path: (0, import_obsidian16.normalizePath)(`${pluginDir}/styles.css`), content: update.styles },
+      { path: (0, import_obsidian16.normalizePath)(`${pluginDir}/manifest.json`), content: new TextEncoder().encode(update.manifestText).buffer }
     ];
     const originals = await Promise.all(files.map(async (file) => ({ path: file.path, content: await adapter.readBinary(file.path) })));
     try {
@@ -20108,7 +20281,7 @@ var MindMapStudioPlugin = class extends import_obsidian15.Plugin {
       await Promise.all(originals.map((file) => adapter.writeBinary(file.path, file.content).catch(() => void 0)));
       throw error;
     }
-    new import_obsidian15.Notice(`MindMap Studio \u5DF2\u66F4\u65B0\u81F3 ${update.manifest.version}\u3002\u8BF7\u5B8C\u6574\u91CD\u542F Obsidian \u4EE5\u542F\u7528\u65B0\u7248\u672C\u3002`, 1e4);
+    new import_obsidian16.Notice(`MindMap Studio \u5DF2\u66F4\u65B0\u81F3 ${update.manifest.version}\u3002\u8BF7\u5B8C\u6574\u91CD\u542F Obsidian \u4EE5\u542F\u7528\u65B0\u7248\u672C\u3002`, 1e4);
     return "updated";
   }
   /** 使用指定 AI 配置发送当前 Markdown 上下文。 */
@@ -20187,15 +20360,15 @@ var MindMapStudioPlugin = class extends import_obsidian15.Plugin {
   async testAiProfile(profileId) {
     const profile = this.settings.aiProfiles.find((item) => item.id === profileId);
     if (!profile) {
-      new import_obsidian15.Notice("\u627E\u4E0D\u5230\u8BE5 AI \u63A5\u53E3\u914D\u7F6E");
+      new import_obsidian16.Notice("\u627E\u4E0D\u5230\u8BE5 AI \u63A5\u53E3\u914D\u7F6E");
       return;
     }
     if (!profile.endpoint.trim()) {
-      new import_obsidian15.Notice(`\u8BF7\u5148\u586B\u5199 ${profile.name} \u7684\u63A5\u53E3\u5730\u5740`);
+      new import_obsidian16.Notice(`\u8BF7\u5148\u586B\u5199 ${profile.name} \u7684\u63A5\u53E3\u5730\u5740`);
       return;
     }
     if (!profile.model.trim()) {
-      new import_obsidian15.Notice(`\u8BF7\u5148\u586B\u5199 ${profile.name} \u7684\u6A21\u578B\u540D\u79F0`);
+      new import_obsidian16.Notice(`\u8BF7\u5148\u586B\u5199 ${profile.name} \u7684\u6A21\u578B\u540D\u79F0`);
       return;
     }
     const started = performance.now();
@@ -20203,12 +20376,12 @@ var MindMapStudioPlugin = class extends import_obsidian15.Plugin {
       const result = await testAiProfileConnection(profile);
       const elapsed = Math.max(1, Math.round(performance.now() - started));
       const preview = result.text.replace(/\s+/g, " ").trim().slice(0, 160);
-      new import_obsidian15.Notice(`${profile.name} \u68C0\u6D4B\u6210\u529F\uFF08${elapsed} ms\uFF09
+      new import_obsidian16.Notice(`${profile.name} \u68C0\u6D4B\u6210\u529F\uFF08${elapsed} ms\uFF09
 \u6A21\u578B\uFF1A${result.model}
 \u54CD\u5E94\uFF1A${preview}`, 8e3);
     } catch (error) {
       console.error("MindMap Studio AI connectivity test failed", error);
-      new import_obsidian15.Notice(`${profile.name} \u68C0\u6D4B\u5931\u8D25\uFF1A${error instanceof Error ? error.message : String(error)}`, 8e3);
+      new import_obsidian16.Notice(`${profile.name} \u68C0\u6D4B\u5931\u8D25\uFF1A${error instanceof Error ? error.message : String(error)}`, 8e3);
     }
   }
   /** 获取配置服务公开的模型目录，不改变当前选择的模型。 */
@@ -20261,7 +20434,7 @@ var MindMapStudioPlugin = class extends import_obsidian15.Plugin {
   }
   /** Returns whether a map path belongs to the configured question-bank folder or one of its descendants. */
   isQuestionBankFile(file) {
-    const folders = Array.from(/* @__PURE__ */ new Set([...this.settings.questionBankFolders, this.settings.questionBankFolder])).map((folder) => (0, import_obsidian15.normalizePath)(folder)).filter(Boolean);
+    const folders = Array.from(/* @__PURE__ */ new Set([...this.settings.questionBankFolders, this.settings.questionBankFolder])).map((folder) => (0, import_obsidian16.normalizePath)(folder)).filter(Boolean);
     return Boolean(file && folders.some((folder) => {
       var _a2;
       return ((_a2 = file.parent) == null ? void 0 : _a2.path) === folder || file.path.startsWith(`${folder}/`);
@@ -20347,11 +20520,11 @@ var MindMapStudioPlugin = class extends import_obsidian15.Plugin {
   resolveMindMapFile(path, sourcePath = "") {
     var _a2, _b2;
     const cleaned = (_b2 = (_a2 = path.replace(/^\[\[|\]\]$/g, "").split("|")[0]) == null ? void 0 : _a2.trim()) != null ? _b2 : path;
-    const normalized2 = (0, import_obsidian15.normalizePath)(cleaned);
+    const normalized2 = (0, import_obsidian16.normalizePath)(cleaned);
     const direct = this.app.vault.getAbstractFileByPath(normalized2);
-    if (direct instanceof import_obsidian15.TFile && this.isMindMapFile(direct)) return direct;
+    if (direct instanceof import_obsidian16.TFile && this.isMindMapFile(direct)) return direct;
     const linked = this.app.metadataCache.getFirstLinkpathDest(cleaned, sourcePath);
-    return linked instanceof import_obsidian15.TFile && this.isMindMapFile(linked) ? linked : null;
+    return linked instanceof import_obsidian16.TFile && this.isMindMapFile(linked) ? linked : null;
   }
   /**
    * 执行“read mind map document”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
@@ -20392,7 +20565,7 @@ var MindMapStudioPlugin = class extends import_obsidian15.Plugin {
     const parentBase = await this.computeArticleBaseDepth(parentFile, parentDocument, visited);
     let parentNodeId = document2.navigation.parentNodeId;
     if (!parentNodeId) {
-      const currentPath = (0, import_obsidian15.normalizePath)(file.path);
+      const currentPath = (0, import_obsidian16.normalizePath)(file.path);
       parentNodeId = (_b2 = flattenNodes(parentDocument.root).find((node) => {
         var _a3, _b3;
         if (!((_a3 = node.submap) == null ? void 0 : _a3.path)) return false;
@@ -20558,7 +20731,7 @@ var MindMapStudioPlugin = class extends import_obsidian15.Plugin {
    * @returns 计算、解析或序列化后的字符串结果。
    */
   async getAvailablePath(preferredPath) {
-    const normalized2 = (0, import_obsidian15.normalizePath)(preferredPath);
+    const normalized2 = (0, import_obsidian16.normalizePath)(preferredPath);
     if (!this.app.vault.getAbstractFileByPath(normalized2)) return normalized2;
     const dot = normalized2.lastIndexOf(".");
     const base = dot > normalized2.lastIndexOf("/") ? normalized2.slice(0, dot) : normalized2;
@@ -20579,7 +20752,7 @@ var MindMapStudioPlugin = class extends import_obsidian15.Plugin {
     const folder = await this.resolveFolder(options.folder, activeBefore);
     const title = (_a2 = options.title) != null ? _a2 : this.buildNewTitle();
     const filename = this.sanitizeFilename(title);
-    const path = await this.getAvailablePath((0, import_obsidian15.normalizePath)(`${folder ? `${folder}/` : ""}${filename}.${MINDMAP_EXTENSION}`));
+    const path = await this.getAvailablePath((0, import_obsidian16.normalizePath)(`${folder ? `${folder}/` : ""}${filename}.${MINDMAP_EXTENSION}`));
     const document2 = (_b2 = options.document) != null ? _b2 : this.createConfiguredDocument(title);
     const file = await this.app.vault.create(path, serializeDocument(document2));
     if (options.insertIntoCurrent && activeBefore && activeBefore.extension === "md" && activeBefore.path !== file.path) {
@@ -20609,11 +20782,11 @@ var MindMapStudioPlugin = class extends import_obsidian15.Plugin {
     if (!title || filename === file.basename) return file;
     const oldPath = file.path;
     const parentPath = (_b2 = (_a2 = file.parent) == null ? void 0 : _a2.path) != null ? _b2 : "";
-    const targetPath = await this.getAvailablePath((0, import_obsidian15.normalizePath)(`${parentPath ? `${parentPath}/` : ""}${filename}.${MINDMAP_EXTENSION}`));
+    const targetPath = await this.getAvailablePath((0, import_obsidian16.normalizePath)(`${parentPath ? `${parentPath}/` : ""}${filename}.${MINDMAP_EXTENSION}`));
     if (targetPath === oldPath) return file;
     await this.app.vault.rename(file, targetPath);
     const renamed = this.app.vault.getAbstractFileByPath(targetPath);
-    if (!(renamed instanceof import_obsidian15.TFile)) return file;
+    if (!(renamed instanceof import_obsidian16.TFile)) return file;
     await this.updateParentSubmapReference(renamed, oldPath, (_c = document2.navigation) == null ? void 0 : _c.parentPath, (_d = document2.navigation) == null ? void 0 : _d.parentNodeId);
     await this.updateChildSubmapNavigation(renamed, oldPath, document2);
     return renamed;
@@ -20627,7 +20800,7 @@ var MindMapStudioPlugin = class extends import_obsidian15.Plugin {
     const linkedNode = parentNodeId ? findNode(parentDocument.root, parentNodeId) : void 0;
     const node = linkedNode != null ? linkedNode : flattenNodes(parentDocument.root).find((candidate) => {
       var _a2, _b2;
-      return (0, import_obsidian15.normalizePath)((_b2 = (_a2 = candidate.submap) == null ? void 0 : _a2.path) != null ? _b2 : "") === oldPath;
+      return (0, import_obsidian16.normalizePath)((_b2 = (_a2 = candidate.submap) == null ? void 0 : _a2.path) != null ? _b2 : "") === oldPath;
     });
     if (!(node == null ? void 0 : node.submap)) return;
     node.submap.path = file.path;
@@ -20679,13 +20852,13 @@ var MindMapStudioPlugin = class extends import_obsidian15.Plugin {
   async savePastedImage(blob, suggestedName, sourceFile) {
     var _a2, _b2, _c;
     const sourceFolder = (_b2 = (_a2 = sourceFile == null ? void 0 : sourceFile.parent) == null ? void 0 : _a2.path) != null ? _b2 : "";
-    const configuredFolder = (0, import_obsidian15.normalizePath)((this.settings.assetFolder || "MindMap Assets").replace(/^\/+|\/+$/g, ""));
-    const folder = (0, import_obsidian15.normalizePath)([sourceFolder, configuredFolder].filter(Boolean).join("/"));
+    const configuredFolder = (0, import_obsidian16.normalizePath)((this.settings.assetFolder || "MindMap Assets").replace(/^\/+|\/+$/g, ""));
+    const folder = (0, import_obsidian16.normalizePath)([sourceFolder, configuredFolder].filter(Boolean).join("/"));
     await this.ensureFolderPath(folder);
     const stamp = buildCompactTimestamp(/* @__PURE__ */ new Date());
     const extension = sanitizeFileExtension(suggestedName, "png");
     const base = this.sanitizeFilename((_c = sourceFile == null ? void 0 : sourceFile.basename) != null ? _c : "mindmap");
-    const preferred = (0, import_obsidian15.normalizePath)(`${folder}/${base}-${stamp}.${extension}`);
+    const preferred = (0, import_obsidian16.normalizePath)(`${folder}/${base}-${stamp}.${extension}`);
     const path = await this.getAvailablePath(preferred);
     await this.app.vault.createBinary(path, await blob.arrayBuffer());
     return path;
@@ -20729,7 +20902,7 @@ var MindMapStudioPlugin = class extends import_obsidian15.Plugin {
     const raw = source.trim();
     if (!raw) return null;
     if (/^https?:\/\//i.test(raw)) {
-      const response = await (0, import_obsidian15.requestUrl)({ url: raw, method: "GET", throw: true });
+      const response = await (0, import_obsidian16.requestUrl)({ url: raw, method: "GET", throw: true });
       const contentType = ((_b2 = (_a2 = response.headers["content-type"]) == null ? void 0 : _a2.split(";")[0]) == null ? void 0 : _b2.trim()) || this.mimeFromFilename(raw);
       const suggestedName = (() => {
         try {
@@ -20748,9 +20921,9 @@ var MindMapStudioPlugin = class extends import_obsidian15.Plugin {
     }
     const wikiMatch = raw.match(/^!?\[\[([\s\S]+?)\]\]$/);
     const target = (_g = (_f = (_e = ((_d = wikiMatch == null ? void 0 : wikiMatch[1]) != null ? _d : raw).split("|")[0]) == null ? void 0 : _e.split("#")[0]) == null ? void 0 : _f.trim()) != null ? _g : raw;
-    const direct = this.app.vault.getAbstractFileByPath((0, import_obsidian15.normalizePath)(target));
-    const file = direct instanceof import_obsidian15.TFile ? direct : this.app.metadataCache.getFirstLinkpathDest(target, (_h = sourceFile == null ? void 0 : sourceFile.path) != null ? _h : "");
-    if (!(file instanceof import_obsidian15.TFile)) return null;
+    const direct = this.app.vault.getAbstractFileByPath((0, import_obsidian16.normalizePath)(target));
+    const file = direct instanceof import_obsidian16.TFile ? direct : this.app.metadataCache.getFirstLinkpathDest(target, (_h = sourceFile == null ? void 0 : sourceFile.path) != null ? _h : "");
+    if (!(file instanceof import_obsidian16.TFile)) return null;
     const binary = await this.app.vault.readBinary(file);
     return { blob: new Blob([binary], { type: this.mimeFromFilename(file.name) }), suggestedName: file.name };
   }
@@ -20846,11 +21019,11 @@ var MindMapStudioPlugin = class extends import_obsidian15.Plugin {
   async testImageHost(hostId) {
     const host = this.settings.imageHosts.find((item) => item.id === hostId);
     if (!host) {
-      new import_obsidian15.Notice("\u627E\u4E0D\u5230\u8BE5\u56FE\u5E8A\u914D\u7F6E");
+      new import_obsidian16.Notice("\u627E\u4E0D\u5230\u8BE5\u56FE\u5E8A\u914D\u7F6E");
       return;
     }
     if (!host.endpoint.trim()) {
-      new import_obsidian15.Notice(`\u8BF7\u5148\u586B\u5199 ${host.name} \u7684\u4E0A\u4F20 API`);
+      new import_obsidian16.Notice(`\u8BF7\u5148\u586B\u5199 ${host.name} \u7684\u4E0A\u4F20 API`);
       return;
     }
     const png = new Uint8Array([
@@ -20934,12 +21107,12 @@ var MindMapStudioPlugin = class extends import_obsidian15.Plugin {
         deleteKey: uploaded.deleteKey
       }, "connectivity-test");
       const cleanupMessage = scheduled ? "\u6D4B\u8BD5\u56FE\u7247\u5C06\u5728 1 \u5206\u949F\u540E\u81EA\u52A8\u5220\u9664" : "\u8BE5\u56FE\u5E8A\u672A\u914D\u7F6E\u5220\u9664 API\uFF0C\u6D4B\u8BD5\u56FE\u7247\u9700\u8981\u624B\u52A8\u6E05\u7406";
-      new import_obsidian15.Notice(`${host.name} \u8FDE\u63A5\u6210\u529F\uFF08${elapsed} ms\uFF09
+      new import_obsidian16.Notice(`${host.name} \u8FDE\u63A5\u6210\u529F\uFF08${elapsed} ms\uFF09
 ${cleanupMessage}
 ${uploaded.url}`, 9e3);
     } catch (error) {
       console.error("MindMap Studio image host connectivity test failed", error);
-      new import_obsidian15.Notice(`${host.name} \u8FDE\u63A5\u5931\u8D25\uFF1A${error instanceof Error ? error.message : String(error)}`, 8e3);
+      new import_obsidian16.Notice(`${host.name} \u8FDE\u63A5\u5931\u8D25\uFF1A${error instanceof Error ? error.message : String(error)}`, 8e3);
     }
   }
   /**
@@ -20956,7 +21129,7 @@ ${uploaded.url}`, 9e3);
     if (!file || !this.settings.autoUploadEnabled) return false;
     const hostIds = this.getDefaultUploadHostIds();
     if (!hostIds.length) {
-      new import_obsidian15.Notice("\u56FE\u7247\u5DF2\u4FDD\u5B58\u5230\u672C\u5730\uFF1B\u81EA\u52A8\u4E0A\u4F20\u672A\u9009\u62E9\u53EF\u7528\u56FE\u5E8A", 5e3);
+      new import_obsidian16.Notice("\u56FE\u7247\u5DF2\u4FDD\u5B58\u5230\u672C\u5730\uFF1B\u81EA\u52A8\u4E0A\u4F20\u672A\u9009\u62E9\u53EF\u7528\u56FE\u5E8A", 5e3);
       return false;
     }
     this.queueAutoUpload(file, nodeId, blockId, localPath, suggestedName, hostIds, this.settings.autoUploadDelaySeconds * 1e3);
@@ -21017,7 +21190,7 @@ ${uploaded.url}`, 9e3);
     const parts = [];
     if (scheduled.length) parts.push(`\u5DF2\u5B89\u6392 1 \u5206\u949F\u540E\u5220\u9664\uFF1A${scheduled.join("\u3001")}\uFF08\u671F\u95F4\u64A4\u9500\u6062\u590D\u4F1A\u81EA\u52A8\u53D6\u6D88\uFF09`);
     if (retained.length) parts.push(`\u672A\u914D\u7F6E\u5220\u9664 API\uFF0C\u8FDC\u7A0B\u56FE\u7247\u4FDD\u7559\uFF1A${retained.join("\u3001")}`);
-    if (parts.length) new import_obsidian15.Notice(parts.join("\n"), 8e3);
+    if (parts.length) new import_obsidian16.Notice(parts.join("\n"), 8e3);
   }
   /** Adds or refreshes one persistent one-minute remote deletion task. */
   async scheduleImageHostDeletion(host, image, reason) {
@@ -21063,13 +21236,13 @@ ${uploaded.url}`, 9e3);
     if (!(host == null ? void 0 : host.deleteEndpoint.trim())) {
       delete this.settings.pendingImageHostDeletions[id];
       await this.saveSettings();
-      new import_obsidian15.Notice(`${pending.hostName || "\u56FE\u5E8A"} \u672A\u914D\u7F6E\u5220\u9664 API\uFF0C\u8FDC\u7A0B\u56FE\u7247\u5DF2\u4FDD\u7559`, 7e3);
+      new import_obsidian16.Notice(`${pending.hostName || "\u56FE\u5E8A"} \u672A\u914D\u7F6E\u5220\u9664 API\uFF0C\u8FDC\u7A0B\u56FE\u7247\u5DF2\u4FDD\u7559`, 7e3);
       return;
     }
     if (pending.reason === "removed-image" && await this.isPendingRemoteImageReferenced(pending)) {
       delete this.settings.pendingImageHostDeletions[id];
       await this.saveSettings();
-      new import_obsidian15.Notice("\u68C0\u6D4B\u5230\u56FE\u7247\u5DF2\u6062\u590D\uFF0C\u5DF2\u53D6\u6D88\u56FE\u5E8A\u5220\u9664", 5e3);
+      new import_obsidian16.Notice("\u68C0\u6D4B\u5230\u56FE\u7247\u5DF2\u6062\u590D\uFF0C\u5DF2\u53D6\u6D88\u56FE\u5E8A\u5220\u9664", 5e3);
       return;
     }
     try {
@@ -21077,12 +21250,12 @@ ${uploaded.url}`, 9e3);
       if (pending.hash) delete this.settings.imageUploadCache[`${pending.hostId}:${pending.hash}`];
       delete this.settings.pendingImageHostDeletions[id];
       await this.saveSettings();
-      new import_obsidian15.Notice(pending.reason === "connectivity-test" ? `${pending.hostName || host.name} \u7684\u8FDE\u901A\u6027\u6D4B\u8BD5\u56FE\u7247\u5DF2\u5220\u9664` : `${pending.hostName || host.name} \u7684\u8FDC\u7A0B\u56FE\u7247\u5DF2\u5220\u9664`, 5e3);
+      new import_obsidian16.Notice(pending.reason === "connectivity-test" ? `${pending.hostName || host.name} \u7684\u8FDE\u901A\u6027\u6D4B\u8BD5\u56FE\u7247\u5DF2\u5220\u9664` : `${pending.hostName || host.name} \u7684\u8FDC\u7A0B\u56FE\u7247\u5DF2\u5220\u9664`, 5e3);
     } catch (error) {
       console.warn("MindMap Studio delayed remote image deletion failed", error);
       delete this.settings.pendingImageHostDeletions[id];
       await this.saveSettings();
-      new import_obsidian15.Notice(`${pending.hostName || host.name} \u5220\u9664\u5931\u8D25\uFF1A${error instanceof Error ? error.message : String(error)}`, 9e3);
+      new import_obsidian16.Notice(`${pending.hostName || host.name} \u5220\u9664\u5931\u8D25\uFF1A${error instanceof Error ? error.message : String(error)}`, 9e3);
     }
   }
   /** Returns true when any currently saved or open mind map references a pending remote image. */
@@ -21138,12 +21311,12 @@ ${uploaded.url}`, 9e3);
       for (const block of nodeContentBlocks(node)) {
         if (block.type !== "image") continue;
         const localPath = (_a2 = block.localSource) != null ? _a2 : /^https?:\/\//i.test(block.source) ? "" : block.source;
-        const localFile = localPath ? this.app.vault.getAbstractFileByPath((0, import_obsidian15.normalizePath)(localPath)) : null;
+        const localFile = localPath ? this.app.vault.getAbstractFileByPath((0, import_obsidian16.normalizePath)(localPath)) : null;
         const uploaded = hostIds.every((hostId) => {
           var _a3;
           return (_a3 = block.remoteSources) == null ? void 0 : _a3.some((source) => source.hostId === hostId);
         });
-        if (!(localFile instanceof import_obsidian15.TFile) || uploaded) continue;
+        if (!(localFile instanceof import_obsidian16.TFile) || uploaded) continue;
         const remainingMs = Math.max(0, delayMs - Math.max(0, Date.now() - localFile.stat.mtime));
         this.queueAutoUpload(file, node.id, block.id, localPath, localFile.name, hostIds, remainingMs);
       }
@@ -21157,81 +21330,167 @@ ${uploaded.url}`, 9e3);
       this.autoUploadFileKeys.set(mindMapFile, fileKey);
     }
     const key = `${fileKey}::${nodeId}::${blockId}`;
+    if (this.autoUploadInFlightKeys.has(key)) return;
     const existing = this.autoUploadTimers.get(key);
     if (existing !== void 0) window.clearTimeout(existing);
     const timer = window.setTimeout(() => {
       this.autoUploadTimers.delete(key);
-      void this.runAutoUploadTask(mindMapFile, nodeId, blockId, localPath, suggestedName, hostIds);
+      this.enqueueReadyAutoUpload({ key, mindMapFile, nodeId, blockId, localPath, suggestedName, hostIds: [...hostIds] });
     }, Math.max(0, Math.min(3e5, delayMs)));
     this.autoUploadTimers.set(key, timer);
   }
+  /** Collects simultaneously due uploads into one file-level transaction and one user notice. */
+  enqueueReadyAutoUpload(job) {
+    if (this.autoUploadInFlightKeys.has(job.key)) return;
+    this.autoUploadInFlightKeys.add(job.key);
+    let jobs = this.readyAutoUploadJobs.get(job.mindMapFile);
+    if (!jobs) {
+      jobs = /* @__PURE__ */ new Map();
+      this.readyAutoUploadJobs.set(job.mindMapFile, jobs);
+    }
+    jobs.set(job.key, job);
+    if (this.autoUploadBatchTimers.has(job.mindMapFile)) return;
+    const timer = window.setTimeout(() => {
+      var _a2, _b2;
+      this.autoUploadBatchTimers.delete(job.mindMapFile);
+      const ready = Array.from((_b2 = (_a2 = this.readyAutoUploadJobs.get(job.mindMapFile)) == null ? void 0 : _a2.values()) != null ? _b2 : []);
+      this.readyAutoUploadJobs.delete(job.mindMapFile);
+      if (ready.length) this.startAutoUploadBatch(job.mindMapFile, ready);
+    }, 180);
+    this.autoUploadBatchTimers.set(job.mindMapFile, timer);
+  }
+  /** Serializes batches for the same TFile so stale snapshots can never overwrite each other. */
+  startAutoUploadBatch(mindMapFile, jobs) {
+    var _a2;
+    const previous = (_a2 = this.autoUploadFileChains.get(mindMapFile)) != null ? _a2 : Promise.resolve();
+    const next = previous.catch(() => void 0).then(() => this.runAutoUploadBatch(mindMapFile, jobs)).finally(() => {
+      for (const job of jobs) this.autoUploadInFlightKeys.delete(job.key);
+      if (this.autoUploadFileChains.get(mindMapFile) === next) this.autoUploadFileChains.delete(mindMapFile);
+    });
+    this.autoUploadFileChains.set(mindMapFile, next);
+    void next;
+  }
   /**
-   * 执行延迟自动上传任务。它确认节点和图片块仍存在、读取本地资源、上传到默认图床、更新远程镜像列表并保存；任一图床失败时保留本地文件。
+   * Uploads one file's due images as a batch, then merges network results into the latest live document.
    *
-   * @param mindMapFile 目标导图文件对象；保存时即使重命名，也沿用更新后的文件路径继续上传。
-   * @param nodeId 目标节点的稳定标识。
-   * @param blockId 该参数用于 run auto upload task 流程中的输入或控制。
-   * @param localPath 该参数用于 run auto upload task 流程中的输入或控制。
-   * @param suggestedName 该参数用于 run auto upload task 流程中的输入或控制。
-   * @param hostIds 需要执行上传的图床标识列表。
-   * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
+   * @param mindMapFile Target map file. Its TFile object survives an Obsidian rename.
+   * @param jobs Deduplicated image jobs that became due within the same short window.
+   * @remarks
+   * Network requests intentionally finish before any document write. Results are applied as ID-based
+   * image patches to the current editor document, or to a freshly re-read disk document when closed.
+   * This prevents concurrent auto uploads from repeatedly replacing the whole map with stale snapshots.
    */
-  async runAutoUploadTask(mindMapFile, nodeId, blockId, localPath, suggestedName, hostIds) {
-    var _a2, _b2;
+  async runAutoUploadBatch(mindMapFile, jobs) {
+    var _a2;
     try {
-      const scheduledPath = mindMapFile.path;
-      await this.flushOpenView(scheduledPath);
+      await this.flushOpenView(mindMapFile.path);
       const mapFile = this.app.vault.getAbstractFileByPath(mindMapFile.path);
-      const localFile = this.app.vault.getAbstractFileByPath((0, import_obsidian15.normalizePath)(localPath));
-      if (!(mapFile instanceof import_obsidian15.TFile) || !(localFile instanceof import_obsidian15.TFile)) return;
-      const document2 = parseDocument(await this.app.vault.read(mapFile), mapFile.basename);
-      const node = findNode(document2.root, nodeId);
-      const block = (_a2 = node == null ? void 0 : node.content) == null ? void 0 : _a2.find((item) => item.type === "image" && item.id === blockId);
-      if (!node || !block || block.source !== localPath && block.localSource !== localPath) return;
-      const binary = await this.app.vault.readBinary(localFile);
-      const blob = new Blob([binary], { type: this.mimeFromFilename(localFile.name) });
-      const batch = await this.uploadImageToHosts(blob, suggestedName || localFile.name, hostIds);
-      const uploadedAt = (/* @__PURE__ */ new Date()).toISOString();
-      const remoteByHost = new Map(((_b2 = block.remoteSources) != null ? _b2 : []).map((item) => [item.hostId, item]));
-      for (const success of batch.successes) {
-        remoteByHost.set(success.hostId, {
-          hostId: success.hostId,
-          hostName: success.hostName,
-          url: success.url,
-          deleteKey: success.deleteKey,
-          uploadedAt
-        });
-      }
-      block.remoteSources = Array.from(remoteByHost.values());
-      block.localSource = localPath;
-      block.contentHash = batch.contentHash;
-      const allSucceeded = batch.failures.length === 0 && batch.successes.length === hostIds.length;
-      if (allSucceeded && batch.successes[0]) block.source = batch.successes[0].url;
-      syncNodeContentFields(node);
-      await this.app.vault.modify(mapFile, serializeDocument(document2));
-      await this.refreshOpenMindMap(mapFile, document2);
-      let deleted = false;
-      if (allSucceeded && this.settings.deleteLocalAfterUpload) {
-        deleted = await this.deleteLocalAssetIfSafe(localPath, mapFile.path, blockId);
-        if (deleted) {
-          block.localSource = void 0;
-          await this.app.vault.modify(mapFile, serializeDocument(document2));
-          await this.refreshOpenMindMap(mapFile, document2);
+      if (!(mapFile instanceof import_obsidian16.TFile)) return;
+      const snapshot = parseDocument(await this.app.vault.read(mapFile), mapFile.basename);
+      const completed = [];
+      for (const job of jobs) {
+        const node = findNode(snapshot.root, job.nodeId);
+        const block = nodeContentBlocks(node != null ? node : snapshot.root).find((item) => item.type === "image" && item.id === job.blockId);
+        const localFile = this.app.vault.getAbstractFileByPath((0, import_obsidian16.normalizePath)(job.localPath));
+        if (!node || !block || !(localFile instanceof import_obsidian16.TFile)) continue;
+        if (block.source !== job.localPath && block.localSource !== job.localPath) continue;
+        const existingByHost = new Map(((_a2 = block.remoteSources) != null ? _a2 : []).map((source) => [source.hostId, source]));
+        const missingHostIds = job.hostIds.filter((hostId) => !existingByHost.has(hostId));
+        if (!missingHostIds.length) continue;
+        try {
+          const binary = await this.app.vault.readBinary(localFile);
+          const blob = new Blob([binary], { type: this.mimeFromFilename(localFile.name) });
+          const batch = await this.uploadImageToHosts(blob, job.suggestedName || localFile.name, missingHostIds);
+          const uploadedAt = (/* @__PURE__ */ new Date()).toISOString();
+          const remoteSources = batch.successes.map((success) => ({
+            hostId: success.hostId,
+            hostName: success.hostName,
+            url: success.url,
+            deleteKey: success.deleteKey,
+            uploadedAt
+          }));
+          for (const source of remoteSources) existingByHost.set(source.hostId, source);
+          const allSucceeded = batch.failures.length === 0 && job.hostIds.every((hostId) => existingByHost.has(hostId));
+          const preferredSource = allSucceeded ? job.hostIds.map((hostId) => {
+            var _a3;
+            return (_a3 = existingByHost.get(hostId)) == null ? void 0 : _a3.url;
+          }).find(Boolean) : void 0;
+          completed.push({
+            job,
+            patch: {
+              nodeId: job.nodeId,
+              blockId: job.blockId,
+              localPath: job.localPath,
+              contentHash: batch.contentHash,
+              remoteSources,
+              preferredSource
+            },
+            allSucceeded,
+            failures: batch.failures,
+            targetHostNames: batch.successes.map((item) => item.hostName)
+          });
+        } catch (error) {
+          completed.push({
+            job,
+            allSucceeded: false,
+            failures: [{
+              hostId: "batch",
+              hostName: "\u81EA\u52A8\u4E0A\u4F20",
+              error: error instanceof Error ? error.message : String(error)
+            }],
+            targetHostNames: []
+          });
         }
       }
-      if (allSucceeded) {
-        const targets = batch.successes.map((item) => item.hostName).join("\u3001");
-        const suffix = this.settings.deleteLocalAfterUpload ? deleted ? "\uFF0C\u672C\u5730\u56FE\u7247\u5DF2\u5B89\u5168\u5220\u9664" : "\uFF0C\u672C\u5730\u56FE\u7247\u56E0\u4ECD\u88AB\u5F15\u7528\u6216\u5220\u9664\u5931\u8D25\u800C\u4FDD\u7559" : "\uFF0C\u672C\u5730\u56FE\u7247\u5DF2\u4FDD\u7559";
-        new import_obsidian15.Notice(`\u56FE\u7247\u5DF2\u4E0A\u4F20\u5230 ${targets}${suffix}`, 7e3);
-      } else {
-        const ok = batch.successes.map((item) => item.hostName).join("\u3001") || "\u65E0";
-        const failed = batch.failures.map((item) => `${item.hostName}\uFF1A${item.error}`).join("\uFF1B");
-        new import_obsidian15.Notice(`\u56FE\u7247\u4EC5\u90E8\u5206\u4E0A\u4F20\u6210\u529F\u3002\u6210\u529F\uFF1A${ok}\uFF1B\u5931\u8D25\uFF1A${failed}\u3002\u672C\u5730\u56FE\u7247\u5DF2\u4FDD\u7559\u3002`, 9e3);
+      const patches = completed.flatMap((item) => item.patch ? [item.patch] : []);
+      if (patches.length) await this.applyAutoUploadPatches(mapFile, patches);
+      const clearLocalPatches = [];
+      if (this.settings.deleteLocalAfterUpload) {
+        for (const item of completed) {
+          if (!item.allSucceeded || !item.patch) continue;
+          const deleted = await this.deleteLocalAssetIfSafe(item.job.localPath, mapFile.path, item.job.blockId);
+          if (deleted) {
+            clearLocalPatches.push({
+              nodeId: item.job.nodeId,
+              blockId: item.job.blockId,
+              localPath: item.job.localPath,
+              clearLocalSource: true
+            });
+          }
+        }
+      }
+      if (clearLocalPatches.length) await this.applyAutoUploadPatches(mapFile, clearLocalPatches);
+      const succeeded = completed.filter((item) => item.allSucceeded).length;
+      const failed = completed.filter((item) => item.failures.length > 0);
+      if (succeeded) {
+        const hostNames = Array.from(new Set(completed.flatMap((item) => item.targetHostNames))).join("\u3001") || "\u56FE\u5E93";
+        const suffix = this.settings.deleteLocalAfterUpload ? clearLocalPatches.length === succeeded ? "\uFF0C\u672C\u5730\u56FE\u7247\u5DF2\u5B89\u5168\u5220\u9664" : "\uFF0C\u4ECD\u88AB\u5F15\u7528\u6216\u5220\u9664\u5931\u8D25\u7684\u672C\u5730\u56FE\u7247\u5DF2\u4FDD\u7559" : "\uFF0C\u672C\u5730\u56FE\u7247\u5DF2\u4FDD\u7559";
+        new import_obsidian16.Notice(`\u5DF2\u81EA\u52A8\u4E0A\u4F20 ${succeeded} \u5F20\u56FE\u7247\u5230 ${hostNames}${suffix}`, 7e3);
+      }
+      if (failed.length) {
+        const details = failed.flatMap((item) => item.failures.map((failure) => `${failure.hostName}\uFF1A${failure.error}`)).slice(0, 3).join("\uFF1B");
+        new import_obsidian16.Notice(`\u6709 ${failed.length} \u5F20\u56FE\u7247\u81EA\u52A8\u4E0A\u4F20\u5931\u8D25\uFF0C\u672C\u5730\u56FE\u7247\u5DF2\u4FDD\u7559${details ? `\uFF1A${details}` : ""}`, 9e3);
       }
     } catch (error) {
-      console.error("MindMap Studio automatic image upload failed", error);
-      new import_obsidian15.Notice(`\u56FE\u7247\u81EA\u52A8\u4E0A\u4F20\u5931\u8D25\uFF0C\u672C\u5730\u56FE\u7247\u5DF2\u4FDD\u7559\uFF1A${error instanceof Error ? error.message : String(error)}`, 8e3);
+      console.error("MindMap Studio automatic image upload batch failed", error);
+      new import_obsidian16.Notice(`\u56FE\u7247\u81EA\u52A8\u4E0A\u4F20\u5931\u8D25\uFF0C\u672C\u5730\u56FE\u7247\u5DF2\u4FDD\u7559\uFF1A${error instanceof Error ? error.message : String(error)}`, 8e3);
     }
+  }
+  /** Applies upload patches to live views when open, otherwise to a freshly re-read disk document. */
+  async applyAutoUploadPatches(file, patches) {
+    const views = this.app.workspace.getLeavesOfType(VIEW_TYPE_MINDMAP_STUDIO).map((leaf) => leaf.view).filter((view) => {
+      var _a2;
+      return view instanceof MindMapStudioView && ((_a2 = view.file) == null ? void 0 : _a2.path) === file.path;
+    });
+    if (views.length) {
+      let updated2 = 0;
+      for (const view of views) updated2 = Math.max(updated2, await view.applyImageUploadPatches(patches));
+      return updated2;
+    }
+    const document2 = parseDocument(await this.app.vault.read(file), file.basename);
+    const updated = applyImageUploadPatches(document2, patches);
+    if (updated) await this.app.vault.modify(file, serializeDocument(document2));
+    return updated;
   }
   /**
    * 按单个图床配置上传图片，并从 JSON 或文本响应中解析最终图片地址。
@@ -21256,7 +21515,7 @@ ${uploaded.url}`, 9e3);
     } else {
       body = await blob.arrayBuffer();
     }
-    const response = await (0, import_obsidian15.requestUrl)({
+    const response = await (0, import_obsidian16.requestUrl)({
       url: endpoint,
       method: host.method,
       contentType,
@@ -21290,7 +21549,7 @@ ${uploaded.url}`, 9e3);
     const target = new URL(imageUrl);
     const targetName = decodeURIComponent((_a2 = target.pathname.split("/").filter(Boolean).at(-1)) != null ? _a2 : "");
     const query = new URLSearchParams({ page: "1", perpage: "100", filter: "all", searchField: "name", searchQuery: targetName });
-    const response = await (0, import_obsidian15.requestUrl)({
+    const response = await (0, import_obsidian16.requestUrl)({
       url: `${upload.origin}/api/user/files?${query.toString()}`,
       method: "GET",
       headers: parseUploadHeaders(host.headers),
@@ -21309,7 +21568,7 @@ ${uploaded.url}`, 9e3);
     const endpoint = normalizeHttpUrl(applyImageDeleteTemplate(host.deleteEndpoint, values, "url"), "\u5220\u9664 API");
     const headers = parseUploadHeaders(host.headers);
     const body = host.deleteBody.trim() ? applyImageDeleteTemplate(host.deleteBody, values, "json") : void 0;
-    await (0, import_obsidian15.requestUrl)({
+    await (0, import_obsidian16.requestUrl)({
       url: endpoint,
       method: host.deleteMethod,
       headers,
@@ -21352,11 +21611,11 @@ ${uploaded.url}`, 9e3);
    * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
    */
   async deleteLocalAssetIfSafe(localPath, currentMindMapPath, blockId) {
-    const normalized2 = (0, import_obsidian15.normalizePath)(localPath);
+    const normalized2 = (0, import_obsidian16.normalizePath)(localPath);
     const target = this.app.vault.getAbstractFileByPath(normalized2);
-    if (!(target instanceof import_obsidian15.TFile)) return false;
+    if (!(target instanceof import_obsidian16.TFile)) return false;
     const current = this.app.vault.getAbstractFileByPath(currentMindMapPath);
-    if (current instanceof import_obsidian15.TFile) {
+    if (current instanceof import_obsidian16.TFile) {
       const doc = parseDocument(await this.app.vault.read(current), current.basename);
       const stillUsed = flattenNodes(doc.root).some((node) => nodeContentBlocks(node).some((block) => block.type === "image" && block.id !== blockId && (block.source === normalized2 || block.localSource === normalized2)));
       if (stillUsed) return false;
@@ -21445,12 +21704,12 @@ ${uploaded.url}`, 9e3);
   async persistSubmapDocument(parentFile, node, document2) {
     var _a2, _b2;
     const parentFolder = (_b2 = (_a2 = parentFile.parent) == null ? void 0 : _a2.path) != null ? _b2 : "";
-    const configuredAssets = (0, import_obsidian15.normalizePath)(this.settings.assetFolder || "MindMap Assets");
+    const configuredAssets = (0, import_obsidian16.normalizePath)(this.settings.assetFolder || "MindMap Assets");
     const parentMapFolder = this.sanitizeFilename(parentFile.basename);
-    const submapFolder = (0, import_obsidian15.normalizePath)([parentFolder, configuredAssets, parentMapFolder].filter(Boolean).join("/"));
+    const submapFolder = (0, import_obsidian16.normalizePath)([parentFolder, configuredAssets, parentMapFolder].filter(Boolean).join("/"));
     await this.ensureFolderPath(submapFolder);
     const title = (nodePlainText(node) || "\u5B50\u5BFC\u56FE").trim();
-    const path = await this.getAvailablePath((0, import_obsidian15.normalizePath)(`${submapFolder}/${this.sanitizeFilename(title)}.${MINDMAP_EXTENSION}`));
+    const path = await this.getAvailablePath((0, import_obsidian16.normalizePath)(`${submapFolder}/${this.sanitizeFilename(title)}.${MINDMAP_EXTENSION}`));
     const file = await this.app.vault.create(path, serializeDocument(document2));
     return { path: file.path, title: file.basename };
   }
@@ -21476,11 +21735,11 @@ ${uploaded.url}`, 9e3);
    * @param focusNodeId 该参数用于 open mind map path 流程中的输入或控制。
    */
   async openMindMapPath(path, sourcePath = "", preferredLeaf, focusNodeId) {
-    const normalized2 = (0, import_obsidian15.normalizePath)(path.replace(/^\[\[|\]\]$/g, ""));
+    const normalized2 = (0, import_obsidian16.normalizePath)(path.replace(/^\[\[|\]\]$/g, ""));
     const direct = this.app.vault.getAbstractFileByPath(normalized2);
-    const resolved = direct instanceof import_obsidian15.TFile ? direct : this.app.metadataCache.getFirstLinkpathDest(path, sourcePath);
-    if (!(resolved instanceof import_obsidian15.TFile) || !this.isMindMapFile(resolved)) {
-      new import_obsidian15.Notice(`\u627E\u4E0D\u5230\u5B50\u5BFC\u56FE\uFF1A${path}`);
+    const resolved = direct instanceof import_obsidian16.TFile ? direct : this.app.metadataCache.getFirstLinkpathDest(path, sourcePath);
+    if (!(resolved instanceof import_obsidian16.TFile) || !this.isMindMapFile(resolved)) {
+      new import_obsidian16.Notice(`\u627E\u4E0D\u5230\u5B50\u5BFC\u56FE\uFF1A${path}`);
       return;
     }
     const leaf = await this.openAsMindMap(resolved, preferredLeaf);
@@ -21492,8 +21751,8 @@ ${uploaded.url}`, 9e3);
    * @param folder 目标 Obsidian 文件夹对象。
    */
   async ensureFolderPath(folder) {
-    const normalized2 = (0, import_obsidian15.normalizePath)(folder);
-    if (!normalized2 || this.app.vault.getAbstractFileByPath(normalized2) instanceof import_obsidian15.TFolder) return;
+    const normalized2 = (0, import_obsidian16.normalizePath)(folder);
+    if (!normalized2 || this.app.vault.getAbstractFileByPath(normalized2) instanceof import_obsidian16.TFolder) return;
     const parts = normalized2.split("/").filter(Boolean);
     let current = "";
     for (const part of parts) {
@@ -21541,8 +21800,8 @@ ${uploaded.url}`, 9e3);
    */
   async copyImportedMarkdownImages(document2, markdownFile, mindMapFile) {
     var _a2, _b2, _c, _d, _e;
-    const configuredFolder = (0, import_obsidian15.normalizePath)((this.settings.assetFolder || "MindMap Assets").replace(/^\/+|\/+$/g, ""));
-    const targetFolder = (0, import_obsidian15.normalizePath)([(_b2 = (_a2 = mindMapFile.parent) == null ? void 0 : _a2.path) != null ? _b2 : "", configuredFolder].filter(Boolean).join("/"));
+    const configuredFolder = (0, import_obsidian16.normalizePath)((this.settings.assetFolder || "MindMap Assets").replace(/^\/+|\/+$/g, ""));
+    const targetFolder = (0, import_obsidian16.normalizePath)([(_b2 = (_a2 = mindMapFile.parent) == null ? void 0 : _a2.path) != null ? _b2 : "", configuredFolder].filter(Boolean).join("/"));
     let copied = 0;
     const copiedPaths = /* @__PURE__ */ new Map();
     for (const node of flattenNodes(document2.root)) {
@@ -21555,11 +21814,11 @@ ${uploaded.url}`, 9e3);
         const linkPath = (_e = (_d = (_c = rawSource.replace(/^!?\[\[|\]\]$/g, "").split("|")[0]) == null ? void 0 : _c.split("#")[0]) == null ? void 0 : _d.trim()) != null ? _e : "";
         if (!linkPath) continue;
         const sourceImage = this.resolveImportedMarkdownImage(linkPath, markdownFile);
-        if (!(sourceImage instanceof import_obsidian15.TFile) || sourceImage.path === mindMapFile.path) continue;
+        if (!(sourceImage instanceof import_obsidian16.TFile) || sourceImage.path === mindMapFile.path) continue;
         let targetPath = copiedPaths.get(sourceImage.path);
         if (!targetPath) {
           await this.ensureFolderPath(targetFolder);
-          const preferredPath = (0, import_obsidian15.normalizePath)(`${targetFolder}/${this.sanitizeFilename(sourceImage.basename)}.${sanitizeFileExtension(sourceImage.name, "png")}`);
+          const preferredPath = (0, import_obsidian16.normalizePath)(`${targetFolder}/${this.sanitizeFilename(sourceImage.basename)}.${sanitizeFileExtension(sourceImage.name, "png")}`);
           targetPath = await this.getAvailablePath(preferredPath);
           await this.app.vault.createBinary(targetPath, await this.app.vault.readBinary(sourceImage));
           copiedPaths.set(sourceImage.path, targetPath);
@@ -21585,19 +21844,19 @@ ${uploaded.url}`, 9e3);
    */
   resolveImportedMarkdownImage(linkPath, markdownFile) {
     var _a2, _b2, _c, _d;
-    const normalizedLink = (0, import_obsidian15.normalizePath)(linkPath.replace(/^\/+/, ""));
+    const normalizedLink = (0, import_obsidian16.normalizePath)(linkPath.replace(/^\/+/, ""));
     const markdownFolder = (_b2 = (_a2 = markdownFile.parent) == null ? void 0 : _a2.path) != null ? _b2 : "";
     const segments = normalizedLink.split("/").filter(Boolean);
     const withoutAssets = ((_c = segments[0]) == null ? void 0 : _c.toLowerCase()) === "assets" ? segments.slice(1).join("/") : normalizedLink;
     const filename = (_d = segments.at(-1)) != null ? _d : normalizedLink;
-    const relativeCandidates = [normalizedLink, withoutAssets, filename].filter(Boolean).map((relativePath) => (0, import_obsidian15.normalizePath)([markdownFolder, relativePath].filter(Boolean).join("/")));
+    const relativeCandidates = [normalizedLink, withoutAssets, filename].filter(Boolean).map((relativePath) => (0, import_obsidian16.normalizePath)([markdownFolder, relativePath].filter(Boolean).join("/")));
     const candidates = [normalizedLink, ...relativeCandidates];
     for (const candidate of [...new Set(candidates)]) {
       const file = this.app.vault.getAbstractFileByPath(candidate);
-      if (file instanceof import_obsidian15.TFile) return file;
+      if (file instanceof import_obsidian16.TFile) return file;
     }
     const resolved = this.app.metadataCache.getFirstLinkpathDest(normalizedLink, markdownFile.path);
-    return resolved instanceof import_obsidian15.TFile ? resolved : null;
+    return resolved instanceof import_obsidian16.TFile ? resolved : null;
   }
   /**
    * 解析并确定folder，并保持模型、界面和持久化状态的一致性。
@@ -21610,9 +21869,9 @@ ${uploaded.url}`, 9e3);
     var _a2;
     const candidate = explicitFolder != null ? explicitFolder : this.settings.defaultFolder || ((_a2 = activeFile == null ? void 0 : activeFile.parent) == null ? void 0 : _a2.path) || "";
     if (!candidate) return "";
-    const normalized2 = (0, import_obsidian15.normalizePath)(candidate);
+    const normalized2 = (0, import_obsidian16.normalizePath)(candidate);
     const existing = this.app.vault.getAbstractFileByPath(normalized2);
-    if (existing instanceof import_obsidian15.TFolder) return normalized2;
+    if (existing instanceof import_obsidian16.TFolder) return normalized2;
     await this.ensureFolderPath(normalized2);
     return normalized2;
   }
@@ -21640,7 +21899,7 @@ ${uploaded.url}`, 9e3);
    */
   getSourceTitle(context) {
     const sourceFile = this.app.vault.getAbstractFileByPath(context.sourcePath);
-    return sourceFile instanceof import_obsidian15.TFile ? sourceFile.basename : "\u601D\u7EF4\u5BFC\u56FE";
+    return sourceFile instanceof import_obsidian16.TFile ? sourceFile.basename : "\u601D\u7EF4\u5BFC\u56FE";
   }
   /**
    * 注册 Markdown 代码块静态渲染，并在阅读模式中解析嵌入的思维导图源。静态预览不会修改原文件。
@@ -21658,7 +21917,7 @@ ${uploaded.url}`, 9e3);
       const linkPath = (_e = (_d = (_c = rawSource.split("#")[0]) == null ? void 0 : _c.split("|")[0]) == null ? void 0 : _d.trim()) != null ? _e : "";
       if (!linkPath.toLowerCase().endsWith(`.${MINDMAP_EXTENSION}`)) continue;
       const file = this.app.metadataCache.getFirstLinkpathDest(linkPath, context.sourcePath);
-      if (!(file instanceof import_obsidian15.TFile) || !this.isMindMapFile(file)) continue;
+      if (!(file instanceof import_obsidian16.TFile) || !this.isMindMapFile(file)) continue;
       embed.dataset.mmcProcessed = "true";
       try {
         const source = await this.app.vault.cachedRead(file);
@@ -21693,12 +21952,12 @@ ${uploaded.url}`, 9e3);
     const submapDoc = parseDocument(submapContent, submapFile.basename);
     const parentPath = (_a2 = submapDoc.navigation) == null ? void 0 : _a2.parentPath;
     if (!parentPath) {
-      new import_obsidian15.Notice("\u6B64\u5B50\u5BFC\u56FE\u6CA1\u6709\u7236\u5BFC\u56FE\u5F15\u7528\uFF0C\u65E0\u6CD5\u5408\u5E76");
+      new import_obsidian16.Notice("\u6B64\u5B50\u5BFC\u56FE\u6CA1\u6709\u7236\u5BFC\u56FE\u5F15\u7528\uFF0C\u65E0\u6CD5\u5408\u5E76");
       return;
     }
-    const parentFile = this.app.vault.getAbstractFileByPath((0, import_obsidian15.normalizePath)(parentPath));
-    if (!(parentFile instanceof import_obsidian15.TFile)) {
-      new import_obsidian15.Notice("\u7236\u5BFC\u56FE\u6587\u4EF6\u4E0D\u5B58\u5728");
+    const parentFile = this.app.vault.getAbstractFileByPath((0, import_obsidian16.normalizePath)(parentPath));
+    if (!(parentFile instanceof import_obsidian16.TFile)) {
+      new import_obsidian16.Notice("\u7236\u5BFC\u56FE\u6587\u4EF6\u4E0D\u5B58\u5728");
       return;
     }
     const parentContent = await this.app.vault.read(parentFile);
@@ -21718,7 +21977,7 @@ ${uploaded.url}`, 9e3);
     };
     searchParent(parentDoc.root);
     if (!targetNode) {
-      new import_obsidian15.Notice("\u7236\u5BFC\u56FE\u4E2D\u627E\u4E0D\u5230\u94FE\u63A5\u5230\u8BE5\u5B50\u5BFC\u56FE\u7684\u8282\u70B9");
+      new import_obsidian16.Notice("\u7236\u5BFC\u56FE\u4E2D\u627E\u4E0D\u5230\u94FE\u63A5\u5230\u8BE5\u5B50\u5BFC\u56FE\u7684\u8282\u70B9");
       return;
     }
     const merged = JSON.parse(JSON.stringify(submapDoc.root.children));
@@ -21726,7 +21985,7 @@ ${uploaded.url}`, 9e3);
     targetNode.submap = void 0;
     await this.app.vault.modify(parentFile, serializeDocument(parentDoc));
     await this.app.vault.trash(submapFile, true);
-    new import_obsidian15.Notice("\u5DF2\u5408\u5E76\u5230 " + parentFile.basename + " \u5E76\u5220\u9664\u5B50\u5BFC\u56FE");
+    new import_obsidian16.Notice("\u5DF2\u5408\u5E76\u5230 " + parentFile.basename + " \u5E76\u5220\u9664\u5B50\u5BFC\u56FE");
     await this.openMindMapPath(parentFile.path, "", void 0);
   }
 };

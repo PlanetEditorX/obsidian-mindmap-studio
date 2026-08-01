@@ -1,5 +1,14 @@
 # Modified Files
 
+## 1.37.0 图片诊断、粘贴目标与自动上传安全合并
+
+- `src/editor/image-failure-view.ts`：新增统一失败地址卡片、候选源收集和复制地址操作。
+- `src/editor/editor.ts`、`src/editor/article-renderer.ts`、`src/editor/outline-renderer.ts`、`styles.css`：四种模式显示失败地址；粘贴开始前锁定节点/内容块；移除文章前后页按钮悬浮提示属性。
+- `src/core/model.ts`、`src/main.ts`、`src/view.ts`：新增 ID 级图片上传补丁；自动上传按文件批处理与串行，只向最新文档合并图片字段并显示汇总通知。
+- `tests/image-source-candidates.test.mjs`、`tests/image-layout.test.mjs`、`tests/article-content-block.test.mjs`、`tests/reading-editor-contract.test.mjs`：增加补丁保留用户编辑、失败地址、粘贴目标、批处理和无悬浮提示专项测试。
+- `examples/`：将编码占位文件名恢复为规范 UTF-8 中文路径。
+- 文档、版本元数据和生产 `main.js` 同步更新到 1.37.0。
+
 ## 1.35.3 图床延迟删除与文章加载骨架
 
 - `src/settings.ts`：移除独立删除请求头配置，增加持久化远程删除队列数据结构；上传与删除共用图床请求头。

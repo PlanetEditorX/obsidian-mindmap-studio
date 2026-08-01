@@ -18,6 +18,7 @@ import {
 } from "obsidian";
 import {
   createDefaultDocument,
+  applyImageUploadPatches,
   findNode,
   flattenNodes,
   markdownToDocument,
@@ -30,6 +31,8 @@ import {
   serializeDocument,
   type MindMapDocument,
   type MindMapImageContentBlock,
+  type MindMapImageUploadPatch,
+  type MindMapImageRemoteSource,
   type MindMapNode,
   type MindMapSubmap
 } from "./core/model";
@@ -116,6 +119,26 @@ export const MINDMAP_EXTENSION = "mindmap";
 const PLUGIN_UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/PlanetEditorX/obsidian-mindmap-studio/main/update.json";
 const REMOTE_IMAGE_DELETE_DELAY_MS = 60_000;
 
+/** One deduplicated image auto-upload request waiting for its file batch. */
+interface PendingAutoUploadJob {
+  key: string;
+  mindMapFile: TFile;
+  nodeId: string;
+  blockId: string;
+  localPath: string;
+  suggestedName: string;
+  hostIds: string[];
+}
+
+/** Network result retained until it can be merged into the latest live document. */
+interface CompletedAutoUploadJob {
+  job: PendingAutoUploadJob;
+  patch?: MindMapImageUploadPatch;
+  allSucceeded: boolean;
+  failures: ImageHostUploadFailure[];
+  targetHostNames: string[];
+}
+
 /** Returns whether a keyboard event exactly matches one recorded plugin shortcut. */
 function matchesRecordedShortcut(event: KeyboardEvent, shortcut: string): boolean {
   const parts = shortcut.toLowerCase().split("+").map((part) => part.trim()).filter(Boolean);
@@ -141,6 +164,10 @@ export default class MindMapStudioPlugin extends Plugin {
   /** 当前会话使用的显示模式；大纲模式不会写成下次启动默认值。 */
   private activeDisplayMode: DisplayMode = DEFAULT_SETTINGS.defaultViewMode;
   private readonly autoUploadTimers = new Map<string, number>();
+  private readonly readyAutoUploadJobs = new Map<TFile, Map<string, PendingAutoUploadJob>>();
+  private readonly autoUploadBatchTimers = new Map<TFile, number>();
+  private readonly autoUploadFileChains = new Map<TFile, Promise<void>>();
+  private readonly autoUploadInFlightKeys = new Set<string>();
   private readonly remoteImageDeleteTimers = new Map<string, number>();
   private readonly autoUploadFileKeys = new WeakMap<TFile, string>();
   private autoUploadFileKeySequence = 0;
@@ -332,6 +359,10 @@ export default class MindMapStudioPlugin extends Plugin {
     this.fileExplorerObserver = null;
     for (const timer of this.autoUploadTimers.values()) window.clearTimeout(timer);
     this.autoUploadTimers.clear();
+    for (const timer of this.autoUploadBatchTimers.values()) window.clearTimeout(timer);
+    this.autoUploadBatchTimers.clear();
+    this.readyAutoUploadJobs.clear();
+    this.autoUploadInFlightKeys.clear();
     for (const timer of this.remoteImageDeleteTimers.values()) window.clearTimeout(timer);
     this.remoteImageDeleteTimers.clear();
     this.searchIndex?.destroy();
@@ -1901,94 +1932,179 @@ export default class MindMapStudioPlugin extends Plugin {
       this.autoUploadFileKeys.set(mindMapFile, fileKey);
     }
     const key = `${fileKey}::${nodeId}::${blockId}`;
+    if (this.autoUploadInFlightKeys.has(key)) return;
     const existing = this.autoUploadTimers.get(key);
     if (existing !== undefined) window.clearTimeout(existing);
     const timer = window.setTimeout(() => {
       this.autoUploadTimers.delete(key);
-      void this.runAutoUploadTask(mindMapFile, nodeId, blockId, localPath, suggestedName, hostIds);
+      this.enqueueReadyAutoUpload({ key, mindMapFile, nodeId, blockId, localPath, suggestedName, hostIds: [...hostIds] });
     }, Math.max(0, Math.min(300_000, delayMs)));
     this.autoUploadTimers.set(key, timer);
   }
 
+  /** Collects simultaneously due uploads into one file-level transaction and one user notice. */
+  private enqueueReadyAutoUpload(job: PendingAutoUploadJob): void {
+    if (this.autoUploadInFlightKeys.has(job.key)) return;
+    this.autoUploadInFlightKeys.add(job.key);
+    let jobs = this.readyAutoUploadJobs.get(job.mindMapFile);
+    if (!jobs) {
+      jobs = new Map();
+      this.readyAutoUploadJobs.set(job.mindMapFile, jobs);
+    }
+    jobs.set(job.key, job);
+    if (this.autoUploadBatchTimers.has(job.mindMapFile)) return;
+    const timer = window.setTimeout(() => {
+      this.autoUploadBatchTimers.delete(job.mindMapFile);
+      const ready = Array.from(this.readyAutoUploadJobs.get(job.mindMapFile)?.values() ?? []);
+      this.readyAutoUploadJobs.delete(job.mindMapFile);
+      if (ready.length) this.startAutoUploadBatch(job.mindMapFile, ready);
+    }, 180);
+    this.autoUploadBatchTimers.set(job.mindMapFile, timer);
+  }
+
+  /** Serializes batches for the same TFile so stale snapshots can never overwrite each other. */
+  private startAutoUploadBatch(mindMapFile: TFile, jobs: PendingAutoUploadJob[]): void {
+    const previous = this.autoUploadFileChains.get(mindMapFile) ?? Promise.resolve();
+    const next = previous
+      .catch(() => undefined)
+      .then(() => this.runAutoUploadBatch(mindMapFile, jobs))
+      .finally(() => {
+        for (const job of jobs) this.autoUploadInFlightKeys.delete(job.key);
+        if (this.autoUploadFileChains.get(mindMapFile) === next) this.autoUploadFileChains.delete(mindMapFile);
+      });
+    this.autoUploadFileChains.set(mindMapFile, next);
+    void next;
+  }
+
   /**
-   * 执行延迟自动上传任务。它确认节点和图片块仍存在、读取本地资源、上传到默认图床、更新远程镜像列表并保存；任一图床失败时保留本地文件。
+   * Uploads one file's due images as a batch, then merges network results into the latest live document.
    *
-   * @param mindMapFile 目标导图文件对象；保存时即使重命名，也沿用更新后的文件路径继续上传。
-   * @param nodeId 目标节点的稳定标识。
-   * @param blockId 该参数用于 run auto upload task 流程中的输入或控制。
-   * @param localPath 该参数用于 run auto upload task 流程中的输入或控制。
-   * @param suggestedName 该参数用于 run auto upload task 流程中的输入或控制。
-   * @param hostIds 需要执行上传的图床标识列表。
-   * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
+   * @param mindMapFile Target map file. Its TFile object survives an Obsidian rename.
+   * @param jobs Deduplicated image jobs that became due within the same short window.
+   * @remarks
+   * Network requests intentionally finish before any document write. Results are applied as ID-based
+   * image patches to the current editor document, or to a freshly re-read disk document when closed.
+   * This prevents concurrent auto uploads from repeatedly replacing the whole map with stale snapshots.
    */
-  private async runAutoUploadTask(
-    mindMapFile: TFile,
-    nodeId: string,
-    blockId: string,
-    localPath: string,
-    suggestedName: string,
-    hostIds: string[]
-  ): Promise<void> {
+  private async runAutoUploadBatch(mindMapFile: TFile, jobs: PendingAutoUploadJob[]): Promise<void> {
     try {
-      const scheduledPath = mindMapFile.path;
-      await this.flushOpenView(scheduledPath);
+      await this.flushOpenView(mindMapFile.path);
       const mapFile = this.app.vault.getAbstractFileByPath(mindMapFile.path);
-      const localFile = this.app.vault.getAbstractFileByPath(normalizePath(localPath));
-      if (!(mapFile instanceof TFile) || !(localFile instanceof TFile)) return;
-      const document = parseDocument(await this.app.vault.read(mapFile), mapFile.basename);
-      const node = findNode(document.root, nodeId);
-      const block = node?.content?.find((item): item is MindMapImageContentBlock => item.type === "image" && item.id === blockId);
-      if (!node || !block || (block.source !== localPath && block.localSource !== localPath)) return;
+      if (!(mapFile instanceof TFile)) return;
+      const snapshot = parseDocument(await this.app.vault.read(mapFile), mapFile.basename);
+      const completed: CompletedAutoUploadJob[] = [];
 
-      const binary = await this.app.vault.readBinary(localFile);
-      const blob = new Blob([binary], { type: this.mimeFromFilename(localFile.name) });
-      const batch = await this.uploadImageToHosts(blob, suggestedName || localFile.name, hostIds);
-      const uploadedAt = new Date().toISOString();
-      const remoteByHost = new Map((block.remoteSources ?? []).map((item) => [item.hostId, item]));
-      for (const success of batch.successes) {
-        remoteByHost.set(success.hostId, {
-          hostId: success.hostId,
-          hostName: success.hostName,
-          url: success.url,
-          deleteKey: success.deleteKey,
-          uploadedAt
-        });
-      }
-      block.remoteSources = Array.from(remoteByHost.values());
-      block.localSource = localPath;
-      block.contentHash = batch.contentHash;
+      for (const job of jobs) {
+        const node = findNode(snapshot.root, job.nodeId);
+        const block = nodeContentBlocks(node ?? snapshot.root)
+          .find((item): item is MindMapImageContentBlock => item.type === "image" && item.id === job.blockId);
+        const localFile = this.app.vault.getAbstractFileByPath(normalizePath(job.localPath));
+        if (!node || !block || !(localFile instanceof TFile)) continue;
+        if (block.source !== job.localPath && block.localSource !== job.localPath) continue;
 
-      const allSucceeded = batch.failures.length === 0 && batch.successes.length === hostIds.length;
-      if (allSucceeded && batch.successes[0]) block.source = batch.successes[0].url;
-      syncNodeContentFields(node);
-      await this.app.vault.modify(mapFile, serializeDocument(document));
-      await this.refreshOpenMindMap(mapFile, document);
+        const existingByHost = new Map((block.remoteSources ?? []).map((source) => [source.hostId, source]));
+        const missingHostIds = job.hostIds.filter((hostId) => !existingByHost.has(hostId));
+        if (!missingHostIds.length) continue;
 
-      let deleted = false;
-      if (allSucceeded && this.settings.deleteLocalAfterUpload) {
-        deleted = await this.deleteLocalAssetIfSafe(localPath, mapFile.path, blockId);
-        if (deleted) {
-          block.localSource = undefined;
-          await this.app.vault.modify(mapFile, serializeDocument(document));
-          await this.refreshOpenMindMap(mapFile, document);
+        try {
+          const binary = await this.app.vault.readBinary(localFile);
+          const blob = new Blob([binary], { type: this.mimeFromFilename(localFile.name) });
+          const batch = await this.uploadImageToHosts(blob, job.suggestedName || localFile.name, missingHostIds);
+          const uploadedAt = new Date().toISOString();
+          const remoteSources: MindMapImageRemoteSource[] = batch.successes.map((success) => ({
+            hostId: success.hostId,
+            hostName: success.hostName,
+            url: success.url,
+            deleteKey: success.deleteKey,
+            uploadedAt
+          }));
+          for (const source of remoteSources) existingByHost.set(source.hostId, source);
+          const allSucceeded = batch.failures.length === 0
+            && job.hostIds.every((hostId) => existingByHost.has(hostId));
+          const preferredSource = allSucceeded
+            ? job.hostIds.map((hostId) => existingByHost.get(hostId)?.url).find(Boolean)
+            : undefined;
+          completed.push({
+            job,
+            patch: {
+              nodeId: job.nodeId,
+              blockId: job.blockId,
+              localPath: job.localPath,
+              contentHash: batch.contentHash,
+              remoteSources,
+              preferredSource
+            },
+            allSucceeded,
+            failures: batch.failures,
+            targetHostNames: batch.successes.map((item) => item.hostName)
+          });
+        } catch (error) {
+          completed.push({
+            job,
+            allSucceeded: false,
+            failures: [{
+              hostId: "batch",
+              hostName: "自动上传",
+              error: error instanceof Error ? error.message : String(error)
+            }],
+            targetHostNames: []
+          });
         }
       }
 
-      if (allSucceeded) {
-        const targets = batch.successes.map((item) => item.hostName).join("、");
+      const patches = completed.flatMap((item) => item.patch ? [item.patch] : []);
+      if (patches.length) await this.applyAutoUploadPatches(mapFile, patches);
+
+      const clearLocalPatches: MindMapImageUploadPatch[] = [];
+      if (this.settings.deleteLocalAfterUpload) {
+        for (const item of completed) {
+          if (!item.allSucceeded || !item.patch) continue;
+          const deleted = await this.deleteLocalAssetIfSafe(item.job.localPath, mapFile.path, item.job.blockId);
+          if (deleted) {
+            clearLocalPatches.push({
+              nodeId: item.job.nodeId,
+              blockId: item.job.blockId,
+              localPath: item.job.localPath,
+              clearLocalSource: true
+            });
+          }
+        }
+      }
+      if (clearLocalPatches.length) await this.applyAutoUploadPatches(mapFile, clearLocalPatches);
+
+      const succeeded = completed.filter((item) => item.allSucceeded).length;
+      const failed = completed.filter((item) => item.failures.length > 0);
+      if (succeeded) {
+        const hostNames = Array.from(new Set(completed.flatMap((item) => item.targetHostNames))).join("、") || "图库";
         const suffix = this.settings.deleteLocalAfterUpload
-          ? deleted ? "，本地图片已安全删除" : "，本地图片因仍被引用或删除失败而保留"
+          ? clearLocalPatches.length === succeeded ? "，本地图片已安全删除" : "，仍被引用或删除失败的本地图片已保留"
           : "，本地图片已保留";
-        new Notice(`图片已上传到 ${targets}${suffix}`, 7000);
-      } else {
-        const ok = batch.successes.map((item) => item.hostName).join("、") || "无";
-        const failed = batch.failures.map((item) => `${item.hostName}：${item.error}`).join("；");
-        new Notice(`图片仅部分上传成功。成功：${ok}；失败：${failed}。本地图片已保留。`, 9000);
+        new Notice(`已自动上传 ${succeeded} 张图片到 ${hostNames}${suffix}`, 7000);
+      }
+      if (failed.length) {
+        const details = failed.flatMap((item) => item.failures.map((failure) => `${failure.hostName}：${failure.error}`)).slice(0, 3).join("；");
+        new Notice(`有 ${failed.length} 张图片自动上传失败，本地图片已保留${details ? `：${details}` : ""}`, 9000);
       }
     } catch (error) {
-      console.error("MindMap Studio automatic image upload failed", error);
+      console.error("MindMap Studio automatic image upload batch failed", error);
       new Notice(`图片自动上传失败，本地图片已保留：${error instanceof Error ? error.message : String(error)}`, 8000);
     }
+  }
+
+  /** Applies upload patches to live views when open, otherwise to a freshly re-read disk document. */
+  private async applyAutoUploadPatches(file: TFile, patches: readonly MindMapImageUploadPatch[]): Promise<number> {
+    const views = this.app.workspace.getLeavesOfType(VIEW_TYPE_MINDMAP_STUDIO)
+      .map((leaf) => leaf.view)
+      .filter((view): view is MindMapStudioView => view instanceof MindMapStudioView && view.file?.path === file.path);
+    if (views.length) {
+      let updated = 0;
+      for (const view of views) updated = Math.max(updated, await view.applyImageUploadPatches(patches));
+      return updated;
+    }
+    const document = parseDocument(await this.app.vault.read(file), file.basename);
+    const updated = applyImageUploadPatches(document, patches);
+    if (updated) await this.app.vault.modify(file, serializeDocument(document));
+    return updated;
   }
 
   /**

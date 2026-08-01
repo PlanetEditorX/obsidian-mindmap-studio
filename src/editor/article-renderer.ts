@@ -28,6 +28,7 @@ import { ImagePreviewModal } from "./editor-modals";
 import { renderInlineMarkdown, renderRichTextRuns } from "./rich-text-dom";
 import { bindTableColumnResize, bindTableDoubleClick } from "./table-interaction";
 import type { ArticleLeafBulletStyle } from "../settings";
+import { loadImageWithFallback } from "./image-failure-view";
 
 /** 大型文章分帧挂载时使用的取消与完成回调。 */
 export interface ArticleIncrementalRenderOptions {
@@ -305,19 +306,30 @@ export function renderArticleNodeContent(container: HTMLElement, node: MindMapNo
       if (!inline) inlineImageRow = null;
       const shell = createArticleContentBlock(inline ? inlineImageRow! : container, block.id, !inline);
       shell.addClass(`image-layout-${block.layout ?? "block"}`);
-      const resolved = options.callbacks.resolveImage(block.source);
-      const image = shell.createEl("img", { cls: `mms-article-image image-align-${block.align ?? "center"}`, attr: { src: resolved ?? block.source, alt: block.alt ?? "图片" } });
+      let activeResolved: string | null = null;
+      const image = shell.createEl("img", { cls: `mms-article-image image-align-${block.align ?? "center"}`, attr: { alt: block.alt ?? "图片" } });
       image.dataset.blockId = block.id;
       if (block.width) image.style.width = `${block.width}px`;
       if (block.height) image.style.height = `${block.height}px`;
-      image.addEventListener("click", () => new ImagePreviewModal(
-        options.app,
-        resolved ?? block.source,
-        block.alt ?? "图片",
-        imageSourceCandidates(block, true, options.imageHostPriorityIds),
-        (source) => options.callbacks.resolveImage(source)
-      ).open());
-      image.addEventListener("contextmenu", (event) => {
+      loadImageWithFallback(
+        image,
+        shell,
+        block,
+        options.imageHostPriorityIds,
+        (source) => options.callbacks.resolveImage(source),
+        (_source, resolved) => { activeResolved = resolved; }
+      );
+      image.addEventListener("click", () => {
+        if (!activeResolved) return;
+        new ImagePreviewModal(
+          options.app,
+          activeResolved,
+          block.alt ?? "图片",
+          imageSourceCandidates(block, true, options.imageHostPriorityIds),
+          (source) => options.callbacks.resolveImage(source)
+        ).open();
+      });
+      shell.addEventListener("contextmenu", (event) => {
         event.preventDefault();
         event.stopPropagation();
         options.selectNode(node.id);
@@ -460,22 +472,22 @@ function renderArticlePager(page: HTMLElement, options: ArticleRendererOptions):
   const index = navigation.currentIndex;
   const previous = index > 0 ? navigation.entries[index - 1] : undefined;
   const next = index < navigation.entries.length - 1 ? navigation.entries[index + 1] : undefined;
-  const pager = page.createEl("nav", { cls: "mms-article-pager", attr: { "aria-label": "文章前后页导航" } });
+  const pager = page.createEl("nav", { cls: "mms-article-pager" });
   const addTarget = (className: string, prefix: string, entry: ArticleTocEntry): void => {
-    const link = pager.createEl("button", { cls: className, attr: { type: "button", title: entry.breadcrumb.join(" › ") } });
+    const link = pager.createEl("button", { cls: className, attr: { type: "button" } });
     link.createSpan({ cls: "mms-article-pager-direction", text: prefix.trim() });
     link.createSpan({ cls: "mms-article-pager-title", text: entry.displayTitle || entry.title });
     link.addEventListener("click", () => void options.callbacks.onOpenMindMap(entry.filePath, entry.nodeId));
   };
   if (previous) addTarget("mms-article-pager-previous", previous.depth <= 1 ? "上一章 " : "上一节 ", previous);
   else pager.createSpan({ cls: "mms-article-pager-placeholder" });
-  const parent = pager.createEl("button", { cls: "mms-article-pager-parent", attr: { type: "button", title: "返回上一级" } });
+  const parent = pager.createEl("button", { cls: "mms-article-pager-parent", attr: { type: "button" } });
   setIcon(parent, "corner-left-up");
   parent.createSpan({ text: "返回上一级" });
   parent.addEventListener("click", () => void options.callbacks.onOpenMindMap(navigation.parentPath!));
   if (next) addTarget("mms-article-pager-next", next.depth <= 1 ? "下一章 " : "下一节 ", next);
   else {
-    const end = pager.createEl("button", { cls: "mms-article-pager-end", attr: { type: "button", title: "返回总目录" } });
+    const end = pager.createEl("button", { cls: "mms-article-pager-end", attr: { type: "button" } });
     end.createSpan({ cls: "mms-article-pager-direction", text: "阅读完成" });
     end.createSpan({ cls: "mms-article-pager-title", text: "END · 返回目录" });
     end.addEventListener("click", () => void options.callbacks.onOpenArticleDirectory(navigation.homePath));

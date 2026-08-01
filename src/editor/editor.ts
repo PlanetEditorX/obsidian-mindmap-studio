@@ -35,6 +35,7 @@ import {
   parseMarkdownTable,
   richTextCharacterStyles,
   applyRichTextStyleRange,
+  applyImageUploadPatches,
   type BackgroundPattern,
   type ArticleNumberingMode,
   type DisplayMode,
@@ -46,6 +47,7 @@ import {
   type MindMapDocument,
   type MindMapContentBlock,
   type MindMapImageContentBlock,
+  type MindMapImageUploadPatch,
   type MindMapTable,
   type MindMapCodeBlock,
   type MindMapNode,
@@ -100,6 +102,7 @@ import {
 } from "./article-renderer";
 import { appendChild, deletionSelectionFallback, deleteNodes, insertSiblingAfter, nextTaskStatus, setAllBranchesCollapsed, topLevelSelectedNodeIds } from "./node-actions";
 import { attachSelectionFormatToolbar, type SelectionFormatToolbarHandle } from "./selection-format-toolbar";
+import { clearImageFailureDetails, renderImageFailureDetails } from "./image-failure-view";
 import {
   applyAiMarkdownEdit,
   applyLocalTextReplace,
@@ -1704,6 +1707,21 @@ export class MindMapEditor {
   getDocument(): MindMapDocument {
     this.persistMindMapViewportState();
     return cloneDocument(this.document);
+  }
+
+  /**
+   * 把后台图床上传结果合并到编辑器当前最新文档，不替换用户在上传期间继续编辑的节点树。
+   *
+   * @param patches 已完成网络上传的图片字段补丁。
+   * @returns 实际更新的图片块数量。
+   */
+  applyImageUploadPatches(patches: readonly MindMapImageUploadPatch[]): number {
+    const updated = applyImageUploadPatches(this.document, patches);
+    if (!updated) return 0;
+    this.callbacks.onChange(this.getDocument());
+    this.markSaving();
+    this.render();
+    return updated;
   }
 
   /** 根据当前页面或节点范围生成 AI Markdown 修改预览，不直接修改文档。 */
@@ -3838,9 +3856,8 @@ export class MindMapEditor {
             image.removeAttribute("src");
             image.removeClass("is-loading");
             image.addClass("is-unresolved");
-            image.setAttr("title", "所有图片镜像均不可用");
-            this.callbacks.onChange(this.getDocument());
-            this.markSaving();
+            image.addClass("is-hidden");
+            renderImageFailureDetails(wrap, block, this.options.imageHostPriorityIds);
             return;
           }
           const resolved = this.callbacks.resolveImage(candidate.source);
@@ -3858,7 +3875,8 @@ export class MindMapEditor {
             else {
               image.removeClass("is-loading");
               image.addClass("is-unresolved");
-              image.setAttr("title", `图片加载失败：${candidate.source}`);
+              image.addClass("is-hidden");
+              renderImageFailureDetails(wrap, block, this.options.imageHostPriorityIds);
             }
           };
           probe.onload = () => {
@@ -3868,6 +3886,8 @@ export class MindMapEditor {
             image.src = resolved;
             image.removeClass("is-loading");
             image.removeClass("is-unresolved");
+            image.removeClass("is-hidden");
+            clearImageFailureDetails(wrap);
             image.setAttr("title", index === 0 ? "点击放大图片" : `已自动切换到：${candidate.label}`);
             const switched = candidate.source !== block.source;
             const remote = block.remoteSources?.find((item) => item.url === candidate.source);
@@ -5895,9 +5915,12 @@ export class MindMapEditor {
       event.preventDefault();
       const targetBlock = target.closest<HTMLElement>("[data-block-id]");
       const targetNode = target.closest<HTMLElement>("[data-node-id]");
-      const nodeId = targetNode?.dataset.nodeId ?? this.activeArticleBlock?.nodeId ?? this.selectedId;
+      const articleTargetAllowed = this.currentMode === "article" || this.currentMode === "reading";
+      const nodeId = targetNode?.dataset.nodeId
+        ?? (articleTargetAllowed ? this.activeArticleBlock?.nodeId : undefined)
+        ?? this.selectedId;
       const afterBlockId = targetBlock?.dataset.blockId
-        ?? (this.activeArticleBlock?.nodeId === nodeId ? this.activeArticleBlock.blockId : undefined);
+        ?? (articleTargetAllowed && this.activeArticleBlock?.nodeId === nodeId ? this.activeArticleBlock.blockId : undefined);
       // Native paste can insert a transient <img> into an active article
       // paragraph. Commit that paragraph first, then store the image as the
       // next content block instead of letting the later redraw discard it.
@@ -5914,7 +5937,11 @@ export class MindMapEditor {
       }
 
       const imageBlock: MindMapImageContentBlock = { id: newId(), type: "image", source: path, localSource: path };
-      const selected = findNode(this.document.root, nodeId) ?? this.selectedNode() ?? this.document.root;
+      const selected = nodeId ? findNode(this.document.root, nodeId) : null;
+      if (!selected) {
+        new Notice(`图片已保存，但粘贴开始时选择的节点已不存在：${path}`, 7000);
+        return;
+      }
       let inserted = false;
       try {
         this.mutate(() => {
