@@ -68,7 +68,7 @@ import { parseQuestionEnrichment, parseRecognizedQuestion, QuestionEditModal } f
 import { createQuestionPracticeState, renderQuestionPracticeMode } from "./question-practice-mode";
 import { TOOLBAR_ITEMS } from "../settings";
 import { appearanceFromThemePreset, MINDMAP_THEME_PRESETS } from "../themes";
-import { articleNumberLabel, articleTocDepth, buildArticleNodeInfo, DISPLAY_MODE_ICONS, DISPLAY_MODE_LABELS, readingAnchorPart, resolveArticleTocMaxDepth, type ReadingSection } from "../article/modes";
+import { articleNumberLabel, articleTocDepth, buildArticleNodeInfo, DISPLAY_MODE_ICONS, DISPLAY_MODE_LABELS, readingAnchorPart, resolveArticleTocMaxDepth } from "../article/modes";
 import { resolveArticleStyle } from "../article/article-style";
 import {
   createReadingLocation,
@@ -1543,7 +1543,7 @@ export class MindMapEditor {
   }
 
   /** 返回包含当前未保存文档的最新文章族快照。 */
-  private readingLocationSections(options: MindMapEditorOptions = this.options): ReadingSection[] {
+  private readingLocationSections(options: MindMapEditorOptions = this.options) {
     const currentPath = options.currentFilePath;
     const source = options.readingSections.length
       ? options.readingSections
