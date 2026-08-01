@@ -40,6 +40,10 @@ test("parseUploadHeaders rejects malformed JSON and header injection", () => {
   assert.throws(() => imageHost.parseUploadHeaders('{"X-Test":"ok\\r\\nInjected: yes"}'), /不能包含换行符/);
 });
 
+test("parseUploadHeaders safely handles JSON parsing failures", () => {
+  assert.throws(() => imageHost.parseUploadHeaders("plain text non-JSON"), /请求头不是有效的 JSON/);
+});
+
 test("createMultipartBoundary generates unique boundaries with expected prefix", () => {
   const boundary = imageHost.createMultipartBoundary();
   assert.match(boundary, /^----MindMapStudio[0-9a-f]+$/);
