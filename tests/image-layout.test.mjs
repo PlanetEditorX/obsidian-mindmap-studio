@@ -74,9 +74,20 @@ test("full node editor honors the same rich-text shortcuts as quick editing", ()
   assert.match(richEditorSource, /matches\(shortcuts\.bold\)[\s\S]*matches\(shortcuts\.italic\)[\s\S]*matches\(shortcuts\.underline\)/);
   assert.match(richEditorSource, /matches\(shortcuts\.color\)/);
   assert.match(richEditorSource, /ownerWindow\?\.addEventListener\("keydown", windowShortcut, true\)/);
-  assert.match(richEditorSource, /event\.inputType !== "formatBold"/);
+  assert.match(richEditorSource, /event\.code\.toLowerCase\(\) === `key\$\{key\}`/);
+  assert.match(richEditorSource, /lastHandledShortcut = \{ command: style \?\? "color", timeStamp: event\.timeStamp \}/);
+  assert.match(richEditorSource, /event\.inputType === "formatBold" \? "bold"/);
+  assert.match(richEditorSource, /lastHandledShortcut\?\.command === command && event\.timeStamp - lastHandledShortcut\.timeStamp < 1000/);
   assert.match(richEditorSource, /applyBoolean\(style\)/);
   assert.match(richEditorSource, /else applyColor\(\)/);
+});
+
+test("full node editor does not undo Ctrl+B when Chromium emits formatBold beforeinput", () => {
+  assert.match(richEditorSource, /let lastHandledShortcut: \{ command: "bold" \| "italic" \| "underline" \| "color"; timeStamp: number \} \| null = null/);
+  assert.match(richEditorSource, /lastHandledShortcut = \{ command: style \?\? "color", timeStamp: event\.timeStamp \}/);
+  assert.match(richEditorSource, /event\.inputType === "formatBold" \? "bold"/);
+  assert.match(richEditorSource, /event\.stopImmediatePropagation\(\);[\s\S]*lastHandledShortcut\?\.command === command && event\.timeStamp - lastHandledShortcut\.timeStamp < 1000/);
+  assert.match(richEditorSource, /lastHandledShortcut = \{ command, timeStamp: event\.timeStamp \};[\s\S]*applyBoolean\(command\)/);
 });
 
 test("image uploads use SHA-256 cache and remote deletion requires an explicit host API", () => {

@@ -154,14 +154,19 @@ export function renderNodeRichTextEditor(
   source.addEventListener("select", remember);
   source.addEventListener("keyup", remember);
   source.addEventListener("mouseup", remember);
+  let lastHandledShortcut: { command: "bold" | "italic" | "underline" | "color"; timeStamp: number } | null = null;
   const handleShortcut = (event: KeyboardEvent): boolean => {
     if (event.isComposing) return false;
     const matches = (shortcut: string): boolean => {
       const parts = shortcut.toLowerCase().split("+").map((part) => part.trim()).filter(Boolean);
       if (!parts.length) return false;
       const wantsMod = parts.includes("ctrl") || parts.includes("cmd") || parts.includes("mod");
+      const key = parts.at(-1);
       const eventKey = event.key === " " ? "space" : event.key.startsWith("Arrow") ? event.key.slice(5).toLowerCase() : event.key.toLowerCase();
-      return eventKey === parts.at(-1)
+      const keyMatches = eventKey === key
+        || event.code.toLowerCase() === `key${key}`
+        || (key === "space" && event.code === "Space");
+      return keyMatches
         && (event.ctrlKey || event.metaKey) === wantsMod
         && event.shiftKey === parts.includes("shift")
         && event.altKey === parts.includes("alt");
@@ -175,6 +180,7 @@ export function renderNodeRichTextEditor(
     event.stopPropagation();
     event.stopImmediatePropagation();
     remember();
+    lastHandledShortcut = { command: style ?? "color", timeStamp: event.timeStamp };
     if (style) applyBoolean(style);
     else applyColor();
     return true;
@@ -189,10 +195,17 @@ export function renderNodeRichTextEditor(
   source.addEventListener("focus", () => ownerWindow?.addEventListener("keydown", windowShortcut, true));
   source.addEventListener("blur", () => ownerWindow?.removeEventListener("keydown", windowShortcut, true));
   source.addEventListener("beforeinput", (event) => {
-    if (event.inputType !== "formatBold" && event.inputType !== "formatItalic" && event.inputType !== "formatUnderline") return;
+    const command = event.inputType === "formatBold" ? "bold"
+      : event.inputType === "formatItalic" ? "italic"
+        : event.inputType === "formatUnderline" ? "underline" : null;
+    if (!command) return;
     event.preventDefault();
+    event.stopPropagation();
+    event.stopImmediatePropagation();
+    if (lastHandledShortcut?.command === command && event.timeStamp - lastHandledShortcut.timeStamp < 1000) return;
     remember();
-    applyBoolean(event.inputType === "formatBold" ? "bold" : event.inputType === "formatItalic" ? "italic" : "underline");
+    lastHandledShortcut = { command, timeStamp: event.timeStamp };
+    applyBoolean(command);
   });
   source.addEventListener("input", () => {
     const next = source.value.replace(/\r\n?/g, "\n");

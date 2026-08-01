@@ -7454,7 +7454,7 @@ var JsonTransferModal = class extends import_obsidian5.Modal {
   onOpen() {
     this.titleEl.setText("\u5BFC\u5165 / \u5BFC\u51FA");
     const description = this.contentEl.createEl("p", {
-      text: "\u53EF\u5BFC\u5165 MindMap Studio JSON\u3001XMind \u6216 Markdown \u6587\u4EF6\u3002\u9ED8\u8BA4\u4F5C\u4E3A\u5F53\u524D\u9009\u4E2D\u8282\u70B9\u7684\u5B50\u5206\u652F\u5BFC\u5165\u3002"
+      text: "\u53EF\u5BFC\u5165 MindMap Studio JSON\u3001\u601D\u7EF4\u5BFC\u56FE\u5F52\u6863\u6216 Markdown \u6587\u4EF6\u3002\u9ED8\u8BA4\u4F5C\u4E3A\u5F53\u524D\u9009\u4E2D\u8282\u70B9\u7684\u5B50\u5206\u652F\u5BFC\u5165\u3002"
     });
     description.addClass("setting-item-description");
     const importProgress = this.contentEl.createDiv({ cls: "mmc-import-progress" });
@@ -7943,14 +7943,17 @@ function renderNodeRichTextEditor(container, block, onChange, shortcuts) {
   source.addEventListener("select", remember);
   source.addEventListener("keyup", remember);
   source.addEventListener("mouseup", remember);
+  let lastHandledShortcut = null;
   const handleShortcut = (event) => {
     if (event.isComposing) return false;
     const matches = (shortcut) => {
       const parts = shortcut.toLowerCase().split("+").map((part) => part.trim()).filter(Boolean);
       if (!parts.length) return false;
       const wantsMod = parts.includes("ctrl") || parts.includes("cmd") || parts.includes("mod");
+      const key = parts.at(-1);
       const eventKey = event.key === " " ? "space" : event.key.startsWith("Arrow") ? event.key.slice(5).toLowerCase() : event.key.toLowerCase();
-      return eventKey === parts.at(-1) && (event.ctrlKey || event.metaKey) === wantsMod && event.shiftKey === parts.includes("shift") && event.altKey === parts.includes("alt");
+      const keyMatches = eventKey === key || event.code.toLowerCase() === `key${key}` || key === "space" && event.code === "Space";
+      return keyMatches && (event.ctrlKey || event.metaKey) === wantsMod && event.shiftKey === parts.includes("shift") && event.altKey === parts.includes("alt");
     };
     const style = matches(shortcuts.bold) ? "bold" : matches(shortcuts.italic) ? "italic" : matches(shortcuts.underline) ? "underline" : null;
     const colorShortcut = matches(shortcuts.color);
@@ -7959,6 +7962,7 @@ function renderNodeRichTextEditor(container, block, onChange, shortcuts) {
     event.stopPropagation();
     event.stopImmediatePropagation();
     remember();
+    lastHandledShortcut = { command: style != null ? style : "color", timeStamp: event.timeStamp };
     if (style) applyBoolean(style);
     else applyColor();
     return true;
@@ -7973,10 +7977,15 @@ function renderNodeRichTextEditor(container, block, onChange, shortcuts) {
   source.addEventListener("focus", () => ownerWindow == null ? void 0 : ownerWindow.addEventListener("keydown", windowShortcut, true));
   source.addEventListener("blur", () => ownerWindow == null ? void 0 : ownerWindow.removeEventListener("keydown", windowShortcut, true));
   source.addEventListener("beforeinput", (event) => {
-    if (event.inputType !== "formatBold" && event.inputType !== "formatItalic" && event.inputType !== "formatUnderline") return;
+    const command = event.inputType === "formatBold" ? "bold" : event.inputType === "formatItalic" ? "italic" : event.inputType === "formatUnderline" ? "underline" : null;
+    if (!command) return;
     event.preventDefault();
+    event.stopPropagation();
+    event.stopImmediatePropagation();
+    if ((lastHandledShortcut == null ? void 0 : lastHandledShortcut.command) === command && event.timeStamp - lastHandledShortcut.timeStamp < 1e3) return;
     remember();
-    applyBoolean(event.inputType === "formatBold" ? "bold" : event.inputType === "formatItalic" ? "italic" : "underline");
+    lastHandledShortcut = { command, timeStamp: event.timeStamp };
+    applyBoolean(command);
   });
   source.addEventListener("input", () => {
     const next = source.value.replace(/\r\n?/g, "\n");
