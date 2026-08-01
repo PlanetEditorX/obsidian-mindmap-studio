@@ -69,10 +69,29 @@ test("editor contracts keep text commits local and defer large article rendering
   assert.match(editorSource, /prioritizeSpatialRenderItems\(/);
   assert.match(editorSource, /this\.articleRenderFrame = window\.requestAnimationFrame\(\(\) => \{/);
   assert.match(editorSource, /renderArticleMode\(stage, this\.articleRendererOptions\(incremental\)\)/);
+  assert.match(editorSource, /onFirstContent: \(\) => this\.revealArticleRender\(token\)/);
   assert.match(editorSource, /this\.articleEl\.setAttr\("aria-busy", "true"\)/);
   assert.match(articleSource, /class ArticleIncrementalRenderOptions|interface ArticleIncrementalRenderOptions/);
   assert.match(articleSource, /mms-article-node is-render-pending/);
+  assert.match(articleSource, /if \(firstBatch\) options\.incremental\?\.onFirstContent\(\)/);
   assert.match(articleSource, /window\.requestAnimationFrame\(\(\) => renderBatch\(index\)\)/);
+});
+
+
+test("editor construction defers whole-tree mind-map layout until the canvas mode actually renders", async () => {
+  const editorSource = await readFile(path.join(rootDir, "src/editor/editor.ts"), "utf8");
+  const constructorStart = editorSource.indexOf("  constructor(app: App, host: HTMLElement");
+  const constructorEnd = editorSource.indexOf(`
+  /**
+   * 执行“destroy”`, constructorStart);
+  const constructorSource = editorSource.slice(constructorStart, constructorEnd);
+  assert.doesNotMatch(constructorSource, /computeLayout\(/);
+  assert.match(constructorSource, /this\.layout = \{ nodes: \[\], byId: new Map\(\), minX: 0, maxX: 0, minY: 0, maxY: 0 \}/);
+  const mindMapStart = editorSource.indexOf("  private renderMindMap(): void {");
+  const mindMapEnd = editorSource.indexOf(`
+  /**`, mindMapStart + 4);
+  const mindMapRenderer = editorSource.slice(mindMapStart, mindMapEnd);
+  assert.match(mindMapRenderer, /this\.layout = computeLayout\(/);
 });
 
 test("progressive article rerenders retain the visible page while a hidden replacement is built", async () => {
@@ -88,6 +107,8 @@ test("progressive article rerenders retain the visible page while a hidden repla
   assert.match(editorSource, /mms-article-transition-overlay/);
   assert.match(editorSource, /mms-article-render-stage/);
   assert.match(editorSource, /previousPage\?\.isConnected\) previousPage\.replaceWith\(page\)/);
+  assert.match(editorSource, /private revealArticleRender\(token: number\): void/);
+  assert.match(editorSource, /this\.articleRenderPageEl = page/);
   assert.match(editorSource, /onProgress: \(\) => this\.maintainArticleRenderViewport\(token\)/);
   assert.match(editorSource, /target\.hasClass\("is-render-pending"\)/);
   assert.match(editorSource, /const restoredSemanticLocation = page \? this\.maintainPendingArticleLocation\(\) : false/);

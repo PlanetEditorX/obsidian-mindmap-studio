@@ -1,5 +1,16 @@
 # Modified Files
 
+## 1.38.3 大型文章打开与深层导图布局性能优化
+
+- `src/render/layout.ts`：在单次布局内缓存节点子树高度，消除深层链式结构的重复递归计算，同时保持原有位置、碰撞处理与布局语义。
+- `src/editor/editor.ts`：文章、大纲和通读模式初始化时不再预计算完整导图布局；文章首批正文完成后立即显示，后续内容继续分帧填充，并完善部分页面的视口保持与取消清理。
+- `src/editor/article-renderer.ts`：新增首批内容回调，收紧首帧预算并提高后续批次吞吐，使用户无需等待全文 DOM 构建完成即可开始阅读。
+- `tests/incremental-render.test.mjs`、`scripts/test.mjs`：增加按需布局、首批显示及 1200 层深链布局性能回归测试。
+- `README.md`、`CHANGELOG.md`、`docs/ARCHITECTURE.md`、`docs/SPECIAL_FEATURES.md`、`docs/TESTING.md`、`docs/FUNCTION_REFERENCE.md`：同步性能边界、渲染流程、测试方法和函数参考。
+- `package.json`、`package-lock.json`、`manifest.json`、`versions.json`、`update.json`：统一版本元数据为 1.38.3，并写入本轮安装包 SHA-256。
+- `TEST_RESULTS.md`、`MODIFIED_FILES.md`：记录完整验证、开发基准和真实 Obsidian 待验证项。
+- `main.js`：由优化后的 TypeScript 源码重新生产构建。
+
 ## 1.37.1 图片粘贴目标与节点弹窗剪贴板支持
 
 - `src/editor/editor.ts`：导图和大纲图片粘贴严格使用当前选中节点；文章与通读继续按实际内容块目标插入。完整节点编辑器新增剪贴板读取、粘贴事件、图片块替换与自动上传排程。

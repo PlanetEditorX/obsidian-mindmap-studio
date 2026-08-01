@@ -655,6 +655,18 @@ export const setIcon = () => {};
   assert.equal(styled.root.children[0]?.style?.textAlign, "right");
   assert.equal(styled.root.children[0]?.style?.width, 230);
   assert.equal(styled.root.children[0]?.style?.minHeight, 96);
+  const deepLayoutRoot = { id: "deep-root", text: "Root", children: [] };
+  let deepLayoutCursor = deepLayoutRoot;
+  for (let index = 0; index < 1199; index += 1) {
+    const child = { id: `deep-${index}`, text: `Node ${index}`, children: [] };
+    deepLayoutCursor.children = [child];
+    deepLayoutCursor = child;
+  }
+  const deepLayoutStartedAt = performance.now();
+  const deepLayout = layout.computeLayout(deepLayoutRoot, "right", 14);
+  const deepLayoutDuration = performance.now() - deepLayoutStartedAt;
+  assert.equal(deepLayout.nodes.length, 1200, "deep article trees must retain every node in mind-map layout");
+  assert.ok(deepLayoutDuration < 500, `subtree height memoization should keep a 1200-node chain below 500 ms, received ${deepLayoutDuration.toFixed(1)} ms`);
   const sizedLayout = layout.computeLayout(styled.root, "right", 14);
   const branchFixture = model.createDefaultDocument("Rounded branch");
   const cardLayout = layout.computeLayout(branchFixture.root, "right", 14, "card");
