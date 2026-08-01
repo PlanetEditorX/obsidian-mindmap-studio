@@ -1241,8 +1241,10 @@ export class MindMapEditor {
   private articleRenderToken = 0;
   private articleRenderPending = false;
   private articleRenderViewportSnapshot: { top: number; left: number; height: number } | null = null;
-  /** Hidden render target used to keep the previous article page visible until the replacement is complete. */
+  /** Hidden render target used until the first article batch is ready to paint. */
   private articleRenderStageEl: HTMLElement | null = null;
+  /** Partially or fully rendered article page already revealed while remaining nodes continue in later frames. */
+  private articleRenderPageEl: HTMLElement | null = null;
   /** Visible loading status shown above the retained article page or first-load skeleton. */
   private articleRenderOverlayEl: HTMLElement | null = null;
   /** Current article page retained during an off-screen rebuild. */
@@ -1303,8 +1305,9 @@ export class MindMapEditor {
     this.selectedId = restoredLocation?.filePath === options.currentFilePath
       ? restoredLocation.nodeId
       : this.document.root.id;
-    const initialAppearance = this.getAppearance();
-    this.layout = computeLayout(this.document.root, this.document.layout, initialAppearance.fontSize ?? 14, initialAppearance.nodeVisualStyle ?? "card", initialAppearance);
+    // renderMindMap() computes the current layout when the canvas is actually needed.
+    // Avoid a redundant synchronous whole-tree layout before article/outline/reading can paint.
+    this.layout = { nodes: [], byId: new Map(), minX: 0, maxX: 0, minY: 0, maxY: 0 };
     this.buildUi();
     this.rootEl.addClass("mmc-ctrl-resize");
     this.render();
@@ -3277,6 +3280,7 @@ export class MindMapEditor {
       if (token !== this.articleRenderToken || this.currentMode !== "article") return;
       const incremental: ArticleIncrementalRenderOptions = {
         isCancelled: () => token !== this.articleRenderToken || this.currentMode !== "article",
+        onFirstContent: () => this.revealArticleRender(token),
         onProgress: () => this.maintainArticleRenderViewport(token),
         onComplete: () => this.completeArticleRender(token)
       };
@@ -3284,11 +3288,41 @@ export class MindMapEditor {
     });
   }
 
+  /** 首批正文完成后立即显示文章；剩余节点继续在后续帧中填充。 */
+  private revealArticleRender(token: number): void {
+    if (token !== this.articleRenderToken || this.currentMode !== "article" || this.articleRenderPageEl) return;
+    const stage = this.articleRenderStageEl;
+    const page = stage?.querySelector<HTMLElement>(":scope > .mms-article-page") ?? null;
+    if (!stage || !page) return;
+    const previousPage = this.articleRenderPreviousPageEl;
+    const snapshot = this.articleRenderViewportSnapshot;
+    if (snapshot) page.style.minHeight = `${snapshot.height}px`;
+    if (previousPage?.isConnected) previousPage.replaceWith(page);
+    else this.articleEl.insertBefore(page, this.articleRenderOverlayEl ?? stage);
+    stage.remove();
+    previousPage?.removeClass("is-render-retained");
+    previousPage?.removeAttribute("aria-hidden");
+    this.articleEl.querySelector<HTMLElement>(":scope > .mms-article-loading-shell")?.remove();
+    this.articleRenderStageEl = null;
+    this.articleRenderPreviousPageEl = null;
+    this.articleRenderPageEl = page;
+    const overlay = this.articleRenderOverlayEl;
+    overlay?.addClass("is-leaving");
+    if (overlay) {
+      if (this.articleRenderTransitionTimer !== null) window.clearTimeout(this.articleRenderTransitionTimer);
+      this.articleRenderTransitionTimer = window.setTimeout(() => {
+        this.articleRenderTransitionTimer = null;
+        overlay.remove();
+        if (this.articleRenderOverlayEl === overlay) this.articleRenderOverlayEl = null;
+      }, 180);
+    }
+  }
+
   /** 保留旧文章高度，并在每批章节填充后优先恢复语义锚点。 */
   private maintainArticleRenderViewport(token: number): void {
     if (token !== this.articleRenderToken || this.currentMode !== "article") return;
     const snapshot = this.articleRenderViewportSnapshot;
-    const page = this.articleRenderPreviousPageEl;
+    const page = this.articleRenderPageEl ?? this.articleRenderPreviousPageEl;
     if (snapshot && page) page.style.minHeight = `${snapshot.height}px`;
     if (snapshot) {
       this.articleEl.scrollLeft = snapshot.left;
@@ -3301,22 +3335,27 @@ export class MindMapEditor {
   private completeArticleRender(token: number): void {
     if (token !== this.articleRenderToken || this.currentMode !== "article") return;
     const stage = this.articleRenderStageEl;
-    const page = stage?.querySelector<HTMLElement>(":scope > .mms-article-page") ?? null;
-    if (!stage || !page) {
+    const stagedPage = stage?.querySelector<HTMLElement>(":scope > .mms-article-page") ?? null;
+    const page = this.articleRenderPageEl ?? stagedPage;
+    if (!page) {
       this.cancelArticleRender();
       return;
     }
+    const alreadyRevealed = this.articleRenderPageEl === page;
     const previousPage = this.articleRenderPreviousPageEl;
     const snapshot = this.articleRenderViewportSnapshot;
-    page.addClass("is-render-entering");
-    if (snapshot) page.style.minHeight = `${snapshot.height}px`;
-    if (previousPage?.isConnected) previousPage.replaceWith(page);
-    else this.articleEl.insertBefore(page, this.articleRenderOverlayEl ?? stage);
-    stage.remove();
+    if (!alreadyRevealed) {
+      page.addClass("is-render-entering");
+      if (snapshot) page.style.minHeight = `${snapshot.height}px`;
+      if (previousPage?.isConnected) previousPage.replaceWith(page);
+      else this.articleEl.insertBefore(page, this.articleRenderOverlayEl ?? stage);
+    }
+    stage?.remove();
     previousPage?.removeClass("is-render-retained");
     previousPage?.removeAttribute("aria-hidden");
     this.articleEl.querySelector<HTMLElement>(":scope > .mms-article-loading-shell")?.remove();
     this.articleRenderStageEl = null;
+    this.articleRenderPageEl = null;
     this.articleRenderPreviousPageEl = null;
     this.articleRenderPending = false;
     this.installArticleSectionCollapse();
@@ -3328,7 +3367,7 @@ export class MindMapEditor {
     if (location) this.restoreReadingLocation("article", location);
     this.articleRenderViewportSnapshot = null;
     window.requestAnimationFrame(() => {
-      page?.style.removeProperty("min-height");
+      page.style.removeProperty("min-height");
       if (location) this.restoreReadingLocation("article", location);
       else if (snapshot) {
         this.articleEl.scrollLeft = snapshot.left;
@@ -3746,6 +3785,9 @@ export class MindMapEditor {
     this.articleRenderTransitionTimer = null;
     this.articleRenderStageEl?.remove();
     this.articleRenderStageEl = null;
+    this.articleRenderPageEl?.removeClass("is-render-entering");
+    this.articleRenderPageEl?.style.removeProperty("min-height");
+    this.articleRenderPageEl = null;
     this.articleRenderOverlayEl?.remove();
     this.articleRenderOverlayEl = null;
     this.articleRenderPreviousPageEl?.removeClass("is-render-retained");

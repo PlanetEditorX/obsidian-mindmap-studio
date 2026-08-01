@@ -3772,15 +3772,22 @@ function nodeDimensions(node, depth, defaultFontSize = 14, visualStyle = "card",
   height = Math.max(height, (_o = (_n = node.style) == null ? void 0 : _n.minHeight) != null ? _o : 0, MIN_NODE_HEIGHT);
   return { width, height: Math.min(1200, height) };
 }
-function subtreeHeight(node, depth, defaultFontSize = 14, visualStyle = "card", appearance = {}, measuredDimensions) {
+function subtreeHeight(node, depth, defaultFontSize = 14, visualStyle = "card", appearance = {}, measuredDimensions, cache) {
+  const cached = cache == null ? void 0 : cache.get(node);
+  if (cached !== void 0) return cached;
   const ownHeight = nodeDimensions(node, depth, defaultFontSize, visualStyle, appearance, measuredDimensions).height;
   const children = visibleChildren(node);
-  if (!children.length) return ownHeight;
+  if (!children.length) {
+    cache == null ? void 0 : cache.set(node, ownHeight);
+    return ownHeight;
+  }
   const verticalGap = visualStyle === "branch" ? 18 : V_GAP;
-  const childrenHeight = children.reduce((sum, child) => sum + subtreeHeight(child, depth + 1, defaultFontSize, visualStyle, appearance, measuredDimensions), 0) + verticalGap * (children.length - 1);
-  return Math.max(ownHeight, childrenHeight);
+  const childrenHeight = children.reduce((sum, child) => sum + subtreeHeight(child, depth + 1, defaultFontSize, visualStyle, appearance, measuredDimensions, cache), 0) + verticalGap * (children.length - 1);
+  const height = Math.max(ownHeight, childrenHeight);
+  cache == null ? void 0 : cache.set(node, height);
+  return height;
 }
-function layoutBranch(node, parentId, parentX, parentWidth, side, depth, centerY, output, defaultFontSize = 14, visualStyle = "card", appearance = {}, measuredDimensions) {
+function layoutBranch(node, parentId, parentX, parentWidth, side, depth, centerY, output, defaultFontSize = 14, visualStyle = "card", appearance = {}, measuredDimensions, subtreeHeightCache) {
   const dimensions = nodeDimensions(node, depth, defaultFontSize, visualStyle, appearance, measuredDimensions);
   const horizontalGap = visualStyle === "branch" ? 54 : H_GAP;
   const verticalGap = visualStyle === "branch" ? 18 : V_GAP;
@@ -3788,18 +3795,19 @@ function layoutBranch(node, parentId, parentX, parentWidth, side, depth, centerY
   output.push({ node, parentId, x, y: centerY, depth, side, ...dimensions });
   const children = visibleChildren(node);
   if (!children.length) return;
-  const heights = children.map((child) => subtreeHeight(child, depth + 1, defaultFontSize, visualStyle, appearance, measuredDimensions));
+  const heights = children.map((child) => subtreeHeight(child, depth + 1, defaultFontSize, visualStyle, appearance, measuredDimensions, subtreeHeightCache));
   const totalHeight = heights.reduce((sum, childHeight) => sum + childHeight, 0) + verticalGap * (children.length - 1);
   let cursor = centerY - totalHeight / 2;
   children.forEach((child, index) => {
     var _a2;
     const childHeight = (_a2 = heights[index]) != null ? _a2 : nodeDimensions(child, depth + 1, defaultFontSize, visualStyle, appearance, measuredDimensions).height;
     const childCenter = cursor + childHeight / 2;
-    layoutBranch(child, node.id, x, dimensions.width, side, depth + 1, childCenter, output, defaultFontSize, visualStyle, appearance, measuredDimensions);
+    layoutBranch(child, node.id, x, dimensions.width, side, depth + 1, childCenter, output, defaultFontSize, visualStyle, appearance, measuredDimensions, subtreeHeightCache);
     cursor += childHeight + verticalGap;
   });
 }
 function computeLayout(root, mode, defaultFontSize = 14, visualStyle = "card", appearance = {}, measuredDimensions) {
+  const subtreeHeightCache = /* @__PURE__ */ new WeakMap();
   const rootDimensions = nodeDimensions(root, 0, defaultFontSize, visualStyle, appearance, measuredDimensions);
   const verticalGap = visualStyle === "branch" ? 18 : V_GAP;
   const nodes = [
@@ -3812,7 +3820,7 @@ function computeLayout(root, mode, defaultFontSize = 14, visualStyle = "card", a
     let leftHeight = 0;
     let rightHeight = 0;
     for (const child of children) {
-      const height = subtreeHeight(child, 1, defaultFontSize, visualStyle, appearance, measuredDimensions) + verticalGap;
+      const height = subtreeHeight(child, 1, defaultFontSize, visualStyle, appearance, measuredDimensions, subtreeHeightCache) + verticalGap;
       if (leftHeight <= rightHeight) {
         left.push(child);
         leftHeight += height;
@@ -3822,26 +3830,26 @@ function computeLayout(root, mode, defaultFontSize = 14, visualStyle = "card", a
       }
     }
     const placeSide = (items, side) => {
-      const heights = items.map((child) => subtreeHeight(child, 1, defaultFontSize, visualStyle, appearance, measuredDimensions));
+      const heights = items.map((child) => subtreeHeight(child, 1, defaultFontSize, visualStyle, appearance, measuredDimensions, subtreeHeightCache));
       const total = heights.reduce((sum, value) => sum + value, 0) + verticalGap * Math.max(0, items.length - 1);
       let cursor = -total / 2;
       items.forEach((child, index) => {
         var _a2;
         const height = (_a2 = heights[index]) != null ? _a2 : nodeDimensions(child, 1, defaultFontSize, visualStyle, appearance, measuredDimensions).height;
-        layoutBranch(child, root.id, 0, rootDimensions.width, side, 1, cursor + height / 2, nodes, defaultFontSize, visualStyle, appearance, measuredDimensions);
+        layoutBranch(child, root.id, 0, rootDimensions.width, side, 1, cursor + height / 2, nodes, defaultFontSize, visualStyle, appearance, measuredDimensions, subtreeHeightCache);
         cursor += height + verticalGap;
       });
     };
     placeSide(left, -1);
     placeSide(right, 1);
   } else {
-    const heights = children.map((child) => subtreeHeight(child, 1, defaultFontSize, visualStyle, appearance, measuredDimensions));
+    const heights = children.map((child) => subtreeHeight(child, 1, defaultFontSize, visualStyle, appearance, measuredDimensions, subtreeHeightCache));
     const total = heights.reduce((sum, value) => sum + value, 0) + verticalGap * Math.max(0, children.length - 1);
     let cursor = -total / 2;
     children.forEach((child, index) => {
       var _a2;
       const height = (_a2 = heights[index]) != null ? _a2 : nodeDimensions(child, 1, defaultFontSize, visualStyle, appearance, measuredDimensions).height;
-      layoutBranch(child, root.id, 0, rootDimensions.width, 1, 1, cursor + height / 2, nodes, defaultFontSize, visualStyle, appearance, measuredDimensions);
+      layoutBranch(child, root.id, 0, rootDimensions.width, 1, 1, cursor + height / 2, nodes, defaultFontSize, visualStyle, appearance, measuredDimensions, subtreeHeightCache);
       cursor += height + verticalGap;
     });
   }
@@ -5547,7 +5555,7 @@ function readRichTextEditor(editor) {
 // src/editor/editor-modals.ts
 var import_obsidian5 = require("obsidian");
 
-// node_modules/fflate/esm/browser.js
+// ../../work_env_read/node_modules/fflate/esm/browser.js
 var u8 = Uint8Array;
 var u16 = Uint16Array;
 var i32 = Int32Array;
@@ -8481,25 +8489,28 @@ function renderArticleMode(container, options) {
     buildHierarchyFocusOrder(options.document.root, options.selectedId)
   );
   const renderBatch = (startIndex) => {
-    var _a3, _b3, _c2;
+    var _a3, _b3, _c2, _d2;
     if ((_a3 = options.incremental) == null ? void 0 : _a3.isCancelled()) return;
     const startedAt = performance.now();
     let index = startIndex;
-    const minimumBatch = startIndex === 0 ? 4 : 2;
-    while (index < orderedIds.length && (index - startIndex < minimumBatch || performance.now() - startedAt < 7)) {
+    const firstBatch = startIndex === 0;
+    const minimumBatch = firstBatch ? 1 : 3;
+    const frameBudget = firstBatch ? 4 : 10;
+    while (index < orderedIds.length && (index - startIndex < minimumBatch || performance.now() - startedAt < frameBudget)) {
       const nodeId = orderedIds[index];
       const info = infoById.get(nodeId);
       const section = sections.get(nodeId);
       if (info && section) renderArticleNodeSection(section, info, options);
       index += 1;
     }
-    (_b3 = options.incremental) == null ? void 0 : _b3.onProgress();
+    if (firstBatch) (_b3 = options.incremental) == null ? void 0 : _b3.onFirstContent();
+    (_c2 = options.incremental) == null ? void 0 : _c2.onProgress();
     if (index < orderedIds.length) {
       window.requestAnimationFrame(() => renderBatch(index));
       return;
     }
     renderArticlePager(page, options);
-    (_c2 = options.incremental) == null ? void 0 : _c2.onComplete();
+    (_d2 = options.incremental) == null ? void 0 : _d2.onComplete();
   };
   renderBatch(0);
 }
@@ -10493,8 +10504,10 @@ var MindMapEditor = class {
     this.articleRenderToken = 0;
     this.articleRenderPending = false;
     this.articleRenderViewportSnapshot = null;
-    /** Hidden render target used to keep the previous article page visible until the replacement is complete. */
+    /** Hidden render target used until the first article batch is ready to paint. */
     this.articleRenderStageEl = null;
+    /** Partially or fully rendered article page already revealed while remaining nodes continue in later frames. */
+    this.articleRenderPageEl = null;
     /** Visible loading status shown above the retained article page or first-load skeleton. */
     this.articleRenderOverlayEl = null;
     /** Current article page retained during an off-screen rebuild. */
@@ -10527,7 +10540,7 @@ var MindMapEditor = class {
     this.collapsedArticleSectionIds = /* @__PURE__ */ new Set();
     this.articleScrollButtonCleanup = null;
     this.questionPracticeState = createQuestionPracticeState();
-    var _a2, _b2, _c;
+    var _a2;
     this.app = app;
     this.host = host;
     this.callbacks = callbacks;
@@ -10539,8 +10552,7 @@ var MindMapEditor = class {
     this.lastReadingLocation = options.readingLocation;
     const restoredLocation = this.resolveStoredLocation();
     this.selectedId = (restoredLocation == null ? void 0 : restoredLocation.filePath) === options.currentFilePath ? restoredLocation.nodeId : this.document.root.id;
-    const initialAppearance = this.getAppearance();
-    this.layout = computeLayout(this.document.root, this.document.layout, (_b2 = initialAppearance.fontSize) != null ? _b2 : 14, (_c = initialAppearance.nodeVisualStyle) != null ? _c : "card", initialAppearance);
+    this.layout = { nodes: [], byId: /* @__PURE__ */ new Map(), minX: 0, maxX: 0, minY: 0, maxY: 0 };
     this.buildUi();
     this.rootEl.addClass("mmc-ctrl-resize");
     this.render();
@@ -12337,37 +12349,22 @@ var MindMapEditor = class {
       if (token !== this.articleRenderToken || this.currentMode !== "article") return;
       const incremental = {
         isCancelled: () => token !== this.articleRenderToken || this.currentMode !== "article",
+        onFirstContent: () => this.revealArticleRender(token),
         onProgress: () => this.maintainArticleRenderViewport(token),
         onComplete: () => this.completeArticleRender(token)
       };
       renderArticleMode(stage, this.articleRendererOptions(incremental));
     });
   }
-  /** 保留旧文章高度，并在每批章节填充后优先恢复语义锚点。 */
-  maintainArticleRenderViewport(token) {
-    if (token !== this.articleRenderToken || this.currentMode !== "article") return;
-    const snapshot = this.articleRenderViewportSnapshot;
-    const page = this.articleRenderPreviousPageEl;
-    if (snapshot && page) page.style.minHeight = `${snapshot.height}px`;
-    if (snapshot) {
-      this.articleEl.scrollLeft = snapshot.left;
-      const restoredSemanticLocation = page ? this.maintainPendingArticleLocation() : false;
-      if (!restoredSemanticLocation) this.articleEl.scrollTop = snapshot.top;
-    }
-  }
-  /** 完成文章分帧挂载，安装依赖完整章节 DOM 的交互并恢复语义阅读位置。 */
-  completeArticleRender(token) {
-    var _a2, _b2, _c, _d;
-    if (token !== this.articleRenderToken || this.currentMode !== "article") return;
+  /** 首批正文完成后立即显示文章；剩余节点继续在后续帧中填充。 */
+  revealArticleRender(token) {
+    var _a2, _b2, _c;
+    if (token !== this.articleRenderToken || this.currentMode !== "article" || this.articleRenderPageEl) return;
     const stage = this.articleRenderStageEl;
     const page = (_a2 = stage == null ? void 0 : stage.querySelector(":scope > .mms-article-page")) != null ? _a2 : null;
-    if (!stage || !page) {
-      this.cancelArticleRender();
-      return;
-    }
+    if (!stage || !page) return;
     const previousPage = this.articleRenderPreviousPageEl;
     const snapshot = this.articleRenderViewportSnapshot;
-    page.addClass("is-render-entering");
     if (snapshot) page.style.minHeight = `${snapshot.height}px`;
     if (previousPage == null ? void 0 : previousPage.isConnected) previousPage.replaceWith(page);
     else this.articleEl.insertBefore(page, (_b2 = this.articleRenderOverlayEl) != null ? _b2 : stage);
@@ -12377,17 +12374,69 @@ var MindMapEditor = class {
     (_c = this.articleEl.querySelector(":scope > .mms-article-loading-shell")) == null ? void 0 : _c.remove();
     this.articleRenderStageEl = null;
     this.articleRenderPreviousPageEl = null;
+    this.articleRenderPageEl = page;
+    const overlay = this.articleRenderOverlayEl;
+    overlay == null ? void 0 : overlay.addClass("is-leaving");
+    if (overlay) {
+      if (this.articleRenderTransitionTimer !== null) window.clearTimeout(this.articleRenderTransitionTimer);
+      this.articleRenderTransitionTimer = window.setTimeout(() => {
+        this.articleRenderTransitionTimer = null;
+        overlay.remove();
+        if (this.articleRenderOverlayEl === overlay) this.articleRenderOverlayEl = null;
+      }, 180);
+    }
+  }
+  /** 保留旧文章高度，并在每批章节填充后优先恢复语义锚点。 */
+  maintainArticleRenderViewport(token) {
+    var _a2;
+    if (token !== this.articleRenderToken || this.currentMode !== "article") return;
+    const snapshot = this.articleRenderViewportSnapshot;
+    const page = (_a2 = this.articleRenderPageEl) != null ? _a2 : this.articleRenderPreviousPageEl;
+    if (snapshot && page) page.style.minHeight = `${snapshot.height}px`;
+    if (snapshot) {
+      this.articleEl.scrollLeft = snapshot.left;
+      const restoredSemanticLocation = page ? this.maintainPendingArticleLocation() : false;
+      if (!restoredSemanticLocation) this.articleEl.scrollTop = snapshot.top;
+    }
+  }
+  /** 完成文章分帧挂载，安装依赖完整章节 DOM 的交互并恢复语义阅读位置。 */
+  completeArticleRender(token) {
+    var _a2, _b2, _c, _d, _e;
+    if (token !== this.articleRenderToken || this.currentMode !== "article") return;
+    const stage = this.articleRenderStageEl;
+    const stagedPage = (_a2 = stage == null ? void 0 : stage.querySelector(":scope > .mms-article-page")) != null ? _a2 : null;
+    const page = (_b2 = this.articleRenderPageEl) != null ? _b2 : stagedPage;
+    if (!page) {
+      this.cancelArticleRender();
+      return;
+    }
+    const alreadyRevealed = this.articleRenderPageEl === page;
+    const previousPage = this.articleRenderPreviousPageEl;
+    const snapshot = this.articleRenderViewportSnapshot;
+    if (!alreadyRevealed) {
+      page.addClass("is-render-entering");
+      if (snapshot) page.style.minHeight = `${snapshot.height}px`;
+      if (previousPage == null ? void 0 : previousPage.isConnected) previousPage.replaceWith(page);
+      else this.articleEl.insertBefore(page, (_c = this.articleRenderOverlayEl) != null ? _c : stage);
+    }
+    stage == null ? void 0 : stage.remove();
+    previousPage == null ? void 0 : previousPage.removeClass("is-render-retained");
+    previousPage == null ? void 0 : previousPage.removeAttribute("aria-hidden");
+    (_d = this.articleEl.querySelector(":scope > .mms-article-loading-shell")) == null ? void 0 : _d.remove();
+    this.articleRenderStageEl = null;
+    this.articleRenderPageEl = null;
+    this.articleRenderPreviousPageEl = null;
     this.articleRenderPending = false;
     this.installArticleSectionCollapse();
     this.addArticleScrollToTopButton();
     this.renderArticleMiniMap();
     this.applyArticleClickMoveUi();
-    const location = (_d = this.pendingArticleRestoreLocation) != null ? _d : this.lastReadingLocation;
+    const location = (_e = this.pendingArticleRestoreLocation) != null ? _e : this.lastReadingLocation;
     this.pendingArticleRestoreLocation = null;
     if (location) this.restoreReadingLocation("article", location);
     this.articleRenderViewportSnapshot = null;
     window.requestAnimationFrame(() => {
-      page == null ? void 0 : page.style.removeProperty("min-height");
+      page.style.removeProperty("min-height");
       if (location) this.restoreReadingLocation("article", location);
       else if (snapshot) {
         this.articleEl.scrollLeft = snapshot.left;
@@ -12781,7 +12830,7 @@ var MindMapEditor = class {
   }
   /** 取消尚未完成的文章挂载并移除工具栏和视图中的加载态。 */
   cancelArticleRender() {
-    var _a2, _b2, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n;
+    var _a2, _b2, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p;
     this.articleRenderToken += 1;
     this.articleRenderPending = false;
     this.articleRenderViewportSnapshot = null;
@@ -12792,18 +12841,21 @@ var MindMapEditor = class {
     this.articleRenderTransitionTimer = null;
     (_a2 = this.articleRenderStageEl) == null ? void 0 : _a2.remove();
     this.articleRenderStageEl = null;
-    (_b2 = this.articleRenderOverlayEl) == null ? void 0 : _b2.remove();
+    (_b2 = this.articleRenderPageEl) == null ? void 0 : _b2.removeClass("is-render-entering");
+    (_c = this.articleRenderPageEl) == null ? void 0 : _c.style.removeProperty("min-height");
+    this.articleRenderPageEl = null;
+    (_d = this.articleRenderOverlayEl) == null ? void 0 : _d.remove();
     this.articleRenderOverlayEl = null;
-    (_c = this.articleRenderPreviousPageEl) == null ? void 0 : _c.removeClass("is-render-retained");
-    (_d = this.articleRenderPreviousPageEl) == null ? void 0 : _d.removeAttribute("aria-hidden");
-    (_e = this.articleRenderPreviousPageEl) == null ? void 0 : _e.style.removeProperty("min-height");
+    (_e = this.articleRenderPreviousPageEl) == null ? void 0 : _e.removeClass("is-render-retained");
+    (_f = this.articleRenderPreviousPageEl) == null ? void 0 : _f.removeAttribute("aria-hidden");
+    (_g = this.articleRenderPreviousPageEl) == null ? void 0 : _g.style.removeProperty("min-height");
     this.articleRenderPreviousPageEl = null;
-    (_g = (_f = this.articleEl) == null ? void 0 : _f.querySelector(":scope > .mms-article-loading-shell")) == null ? void 0 : _g.remove();
-    (_i = (_h = this.articleEl) == null ? void 0 : _h.querySelector(":scope > .mms-article-page")) == null ? void 0 : _i.removeClass("is-render-entering");
-    (_k = (_j = this.articleEl) == null ? void 0 : _j.querySelector(":scope > .mms-article-page")) == null ? void 0 : _k.style.removeProperty("min-height");
-    (_l = this.articleEl) == null ? void 0 : _l.removeClass("is-progressive-rendering");
-    (_m = this.articleEl) == null ? void 0 : _m.removeAttribute("aria-busy");
-    (_n = this.modeButtons.get("article")) == null ? void 0 : _n.removeClass("is-loading");
+    (_i = (_h = this.articleEl) == null ? void 0 : _h.querySelector(":scope > .mms-article-loading-shell")) == null ? void 0 : _i.remove();
+    (_k = (_j = this.articleEl) == null ? void 0 : _j.querySelector(":scope > .mms-article-page")) == null ? void 0 : _k.removeClass("is-render-entering");
+    (_m = (_l = this.articleEl) == null ? void 0 : _l.querySelector(":scope > .mms-article-page")) == null ? void 0 : _m.style.removeProperty("min-height");
+    (_n = this.articleEl) == null ? void 0 : _n.removeClass("is-progressive-rendering");
+    (_o = this.articleEl) == null ? void 0 : _o.removeAttribute("aria-busy");
+    (_p = this.modeButtons.get("article")) == null ? void 0 : _p.removeClass("is-loading");
   }
   /** 开始一次新的文章分帧挂载并返回本轮令牌。 */
   beginArticleRender() {

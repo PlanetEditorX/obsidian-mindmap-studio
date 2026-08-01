@@ -33,6 +33,8 @@ import { loadImageWithFallback } from "./image-failure-view";
 /** 大型文章分帧挂载时使用的取消与完成回调。 */
 export interface ArticleIncrementalRenderOptions {
   isCancelled: () => boolean;
+  /** 首批正文挂载后立即显示文章，不等待全部离屏节点完成。 */
+  onFirstContent: () => void;
   /** 每批章节挂载后通知编辑器校正滚动锚点。 */
   onProgress: () => void;
   onComplete: () => void;
@@ -134,14 +136,17 @@ export function renderArticleMode(container: HTMLElement, options: ArticleRender
     if (options.incremental?.isCancelled()) return;
     const startedAt = performance.now();
     let index = startIndex;
-    const minimumBatch = startIndex === 0 ? 4 : 2;
-    while (index < orderedIds.length && (index - startIndex < minimumBatch || performance.now() - startedAt < 7)) {
+    const firstBatch = startIndex === 0;
+    const minimumBatch = firstBatch ? 1 : 3;
+    const frameBudget = firstBatch ? 4 : 10;
+    while (index < orderedIds.length && (index - startIndex < minimumBatch || performance.now() - startedAt < frameBudget)) {
       const nodeId = orderedIds[index]!;
       const info = infoById.get(nodeId);
       const section = sections.get(nodeId);
       if (info && section) renderArticleNodeSection(section, info, options);
       index += 1;
     }
+    if (firstBatch) options.incremental?.onFirstContent();
     options.incremental?.onProgress();
     if (index < orderedIds.length) {
       window.requestAnimationFrame(() => renderBatch(index));
