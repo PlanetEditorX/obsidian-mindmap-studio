@@ -336,6 +336,19 @@ export function captureEditorHtml(display: ElectronDisplay, mode: DesktopCapture
   const captureMode = JSON.stringify(mode);
   const source = JSON.stringify(imageDataUrl);
   const token = JSON.stringify(messageToken);
+  const toolbarMarkup = mode === "capture"
+    ? `<div id="toolbar" class="toolbar">
+<button data-tool="shape">几何图形</button><button data-tool="pen">画笔</button><button data-tool="arrow">箭头</button><button data-tool="text">文字</button><button data-tool="number">序号</button><button data-tool="mosaic">马赛克</button><button data-tool="eraser">橡皮擦</button><span class="sep"></span>
+<button data-action="recognize-copy">识别并复制</button><button data-action="download">下载</button><button class="danger" data-action="cancel">取消</button><button class="primary" data-action="copy">复制</button></div>`
+    : `<div id="toolbar" class="toolbar hidden" aria-hidden="true"></div>`;
+  const stylebarMarkup = mode === "capture"
+    ? `<div id="stylebar" class="stylebar">
+<div data-style-group="shape"><button class="shape-option active" data-shape="rect">矩形</button><button class="shape-option" data-shape="round">圆角</button><button class="shape-option" data-shape="ellipse">椭圆</button><span class="sep"></span></div>
+<div data-style-group="arrow"><button class="line-option active" data-line-style="arrow">箭头</button><button class="line-option" data-line-style="line">直线</button><span class="sep"></span></div>
+<button class="color-dot active" data-color="#ff3b30" style="background:#ff3b30" aria-label="红色"></button><button class="color-dot" data-color="#ffcc00" style="background:#ffcc00" aria-label="黄色"></button><button class="color-dot" data-color="#34c759" style="background:#34c759" aria-label="绿色"></button><button class="color-dot" data-color="#0a84ff" style="background:#0a84ff" aria-label="蓝色"></button><button class="color-dot" data-color="#ffffff" style="background:#ffffff" aria-label="白色"></button><button class="color-dot" data-color="#111111" style="background:#111111" aria-label="黑色"></button><span class="sep"></span>
+<button class="width-swatch" data-width="2">细</button><button class="width-swatch active" data-width="4">中</button><button class="width-swatch" data-width="8">粗</button><span class="sep"></span><button data-fill="toggle">填充</button>
+</div>`
+    : `<div id="stylebar" class="stylebar" aria-hidden="true"></div>`;
   return `<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data: file: blob:; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
 <title>MindMap Studio 截图</title><style>
@@ -346,7 +359,7 @@ export function captureEditorHtml(display: ElectronDisplay, mode: DesktopCapture
 .drag-strip{position:absolute;left:10px;right:10px;top:-4px;height:15px;cursor:move;pointer-events:auto}.metrics{position:absolute;left:-1px;bottom:100%;margin-bottom:9px;background:rgba(13,20,31,.92);color:#fff;border:1px solid rgba(255,255,255,.17);border-radius:8px;padding:6px 9px;font-size:12px;line-height:1;white-space:nowrap;pointer-events:auto;cursor:move;box-shadow:0 7px 18px rgba(0,0,0,.3);backdrop-filter:blur(10px)}
 .handle{position:absolute;width:11px;height:11px;background:#fff;border:2px solid #169fe8;border-radius:50%;box-shadow:0 1px 5px rgba(0,0,0,.55);pointer-events:auto}.nw{left:-6px;top:-6px;cursor:nwse-resize}.n{left:50%;top:-6px;transform:translateX(-50%);cursor:ns-resize}.ne{right:-6px;top:-6px;cursor:nesw-resize}.e{right:-6px;top:50%;transform:translateY(-50%);cursor:ew-resize}.se{right:-6px;bottom:-6px;cursor:nwse-resize}.s{left:50%;bottom:-6px;transform:translateX(-50%);cursor:ns-resize}.sw{left:-6px;bottom:-6px;cursor:nesw-resize}.w{left:-6px;top:50%;transform:translateY(-50%);cursor:ew-resize}
 #drawLayer{position:fixed;z-index:5;cursor:crosshair}.toolbar,.stylebar,.screen-switcher{position:fixed;z-index:8;display:flex;align-items:center;gap:4px;padding:6px;background:rgba(13,20,31,.94);border:1px solid rgba(255,255,255,.15);border-radius:12px;box-shadow:0 12px 34px rgba(0,0,0,.38);white-space:nowrap;backdrop-filter:blur(14px)}
-.toolbar button,.stylebar button,.screen-switcher button{height:34px;border:0;border-radius:8px;padding:0 10px;background:transparent;color:#e8eef7;font-size:12px;cursor:pointer}.toolbar button:hover,.stylebar button:hover,.screen-switcher button:hover{background:rgba(255,255,255,.1)}.toolbar button.active,.stylebar button.active,.screen-switcher button.active{background:#1976d2;color:#fff}.toolbar .sep,.stylebar .sep{width:1px;height:22px;background:rgba(255,255,255,.16);margin:0 2px}.toolbar .primary{background:#1976d2}.toolbar .danger:hover{background:#b4232f}
+.toolbar button,.stylebar button,.screen-switcher button{height:34px;border:0;border-radius:8px;padding:0 10px;background:transparent;color:#e8eef7;font-size:12px;cursor:pointer}.toolbar button:hover,.stylebar button:hover,.screen-switcher button:hover{background:rgba(255,255,255,.1)}.toolbar button.active,.stylebar button.active,.screen-switcher button.active{background:#1976d2;color:#fff}.toolbar .sep,.stylebar .sep{width:1px;height:22px;background:rgba(255,255,255,.16);margin:0 2px}.toolbar .primary{background:#1976d2}.toolbar .danger:hover{background:#b4232f}.toolbar.hidden{display:none}
 .stylebar{display:none;padding:5px 7px;z-index:9}.stylebar.show{display:flex}.color-dot{width:24px!important;height:24px!important;padding:0!important;border-radius:50%!important;border:2px solid rgba(255,255,255,.72)!important;box-shadow:0 0 0 1px rgba(0,0,0,.35)}.color-dot.active{outline:2px solid #fff;outline-offset:2px}.width-swatch{min-width:34px;padding:0 8px!important}.shape-option,.line-option{min-width:42px}.screen-switcher{left:14px;top:14px;z-index:10;padding:5px}.screen-switcher.hidden{display:none}
 #tip{position:fixed;right:14px;top:14px;z-index:10;color:#fff;background:rgba(13,20,31,.76);border:1px solid rgba(255,255,255,.12);padding:8px 11px;border-radius:9px;font-size:12px;pointer-events:none;backdrop-filter:blur(10px)}
 #textEditor{position:fixed;z-index:12;display:none;min-width:180px;min-height:48px;max-width:420px;padding:7px 9px;border:2px solid #239fe8;border-radius:8px;outline:none;background:rgba(255,255,255,.98);color:#111;caret-color:#111;box-shadow:0 8px 28px rgba(0,0,0,.36);resize:both;user-select:text;pointer-events:auto;line-height:1.35;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",sans-serif}
@@ -356,15 +369,8 @@ export function captureEditorHtml(display: ElectronDisplay, mode: DesktopCapture
 <div id="selection" class="selection"><div class="drag-strip" data-drag="move"></div><div id="metrics" class="metrics" data-drag="move"></div>
 <div class="handle nw" data-handle="nw"></div><div class="handle n" data-handle="n"></div><div class="handle ne" data-handle="ne"></div><div class="handle e" data-handle="e"></div><div class="handle se" data-handle="se"></div><div class="handle s" data-handle="s"></div><div class="handle sw" data-handle="sw"></div><div class="handle w" data-handle="w"></div></div>
 <div id="drawLayer"></div>
-<div id="toolbar" class="toolbar">
-<button data-tool="shape">几何图形</button><button data-tool="pen">画笔</button><button data-tool="arrow">箭头</button><button data-tool="text">文字</button><button data-tool="number">序号</button><button data-tool="mosaic">马赛克</button><button data-tool="eraser">橡皮擦</button><span class="sep"></span>
-<button data-action="recognize-copy">识别并复制</button><button data-action="download">下载</button><button class="danger" data-action="cancel">取消</button><button class="primary" data-action="copy">复制</button></div>
-<div id="stylebar" class="stylebar">
-<div data-style-group="shape"><button class="shape-option active" data-shape="rect">矩形</button><button class="shape-option" data-shape="round">圆角</button><button class="shape-option" data-shape="ellipse">椭圆</button><span class="sep"></span></div>
-<div data-style-group="arrow"><button class="line-option active" data-line-style="arrow">箭头</button><button class="line-option" data-line-style="line">直线</button><span class="sep"></span></div>
-<button class="color-dot active" data-color="#ff3b30" style="background:#ff3b30" aria-label="红色"></button><button class="color-dot" data-color="#ffcc00" style="background:#ffcc00" aria-label="黄色"></button><button class="color-dot" data-color="#34c759" style="background:#34c759" aria-label="绿色"></button><button class="color-dot" data-color="#0a84ff" style="background:#0a84ff" aria-label="蓝色"></button><button class="color-dot" data-color="#ffffff" style="background:#ffffff" aria-label="白色"></button><button class="color-dot" data-color="#111111" style="background:#111111" aria-label="黑色"></button><span class="sep"></span>
-<button class="width-swatch" data-width="2">细</button><button class="width-swatch active" data-width="4">中</button><button class="width-swatch" data-width="8">粗</button><span class="sep"></span><button data-fill="toggle">填充</button>
-</div>
+${toolbarMarkup}
+${stylebarMarkup}
 <div id="screenSwitcher" class="screen-switcher"></div><textarea id="textEditor" spellcheck="false" placeholder="输入文字，Ctrl/Cmd + Enter 完成"></textarea><div id="tip"></div>
 <script>
 (() => {

@@ -300,6 +300,9 @@ test("manual screenshot never confirms on mouse release and recognition waits fo
   assert.doesNotMatch(captureHtml, /function endSelection\(\)[^\n]*action\('copy'\)/);
   assert.match(captureHtml, /document\.addEventListener\('dblclick'[\s\S]*captureMode==='capture'[\s\S]*action\('copy'\)/);
   assert.match(recognizeHtml, /const autoConfirmDelayMs=3000/);
+  assert.match(recognizeHtml, /id="toolbar" class="toolbar hidden" aria-hidden="true"/);
+  assert.doesNotMatch(recognizeHtml, /data-tool=|识别并复制|data-action="download"|data-action="copy"/);
+  assert.match(captureHtml, /data-tool="shape"[\s\S]*data-action="copy"/);
   assert.match(recognizeHtml, /pointerInsideSelection\|\|drag\|\|selectionDraw\|\|drawing/);
   assert.match(recognizeHtml, /setTimeout\(\(\)=>\{[\s\S]*action\('copy'\)\},autoConfirmDelayMs\)/);
   assert.match(recognizeHtml, /function endResize\(\)[\s\S]*armAutoConfirm\(\)/);
