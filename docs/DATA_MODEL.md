@@ -262,7 +262,7 @@ interface MindMapImageRemoteSource {
 }
 ```
 
-运行时会记录最近成功和失败时间。字段都是可选的，缺失时按默认状态处理。`deleteKey` 只有图床上传响应明确提供或 Zipline v3 通过认证文件列表安全回查时才保存；远程删除仍要求预设或用户配置明确提供删除能力。ImgBB 的 `deleteKey` 是秘密删除链接，Zipline 的 `deleteKey` 是文件 ID，Freeimage.host 公开 API 不产生该字段。
+运行时会记录最近成功和失败时间。字段都是可选的，缺失时按默认状态处理。`deleteKey` 只有图床上传响应明确提供或 Zipline 通过认证文件列表安全回查时才保存；远程删除仍要求预设或用户配置明确提供删除能力。ImgBB 的 `deleteKey` 是秘密删除链接，Zipline 的 `deleteKey` 是文件 ID，Freeimage.host 公开 API 不产生该字段。
 
 ## 11. 规范化规则
 

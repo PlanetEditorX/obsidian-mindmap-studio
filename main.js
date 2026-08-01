@@ -2031,18 +2031,18 @@ var SETTINGS_SECTION_TITLES = [
 function createImageHostConfig(index = 1) {
   return {
     id: `host_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`,
-    name: `\u56FE\u5E8A ${index}`,
-    preset: "custom",
+    name: "Zipline",
+    preset: "zipline",
     enabled: true,
     priority: index,
-    endpoint: "",
+    endpoint: "http://192.168.1.10:3010/api/upload",
     method: "POST",
     bodyMode: "multipart",
     fieldName: "file",
-    headers: "",
-    responsePath: "data.url",
-    deleteKeyResponsePath: "",
-    deleteEndpoint: "",
+    headers: '{"Authorization":"\u8BF7\u586B\u5199 Zipline Token"}',
+    responsePath: "files.0.url",
+    deleteKeyResponsePath: "files.0.id",
+    deleteEndpoint: "http://192.168.1.10:3010/api/user/files/{deleteKey}",
     deleteMethod: "DELETE",
     deleteHeaders: "",
     deleteBody: ""
@@ -2064,8 +2064,8 @@ function applyImageHostPreset(host, preset) {
   host.method = "POST";
   host.bodyMode = "multipart";
   host.deleteBody = "";
-  if (preset === "zipline-v4") {
-    host.name = "Zipline v4";
+  if (preset === "zipline") {
+    host.name = "Zipline";
     host.endpoint = ziplineEndpoint;
     host.fieldName = "file";
     host.headers = existingHeaders || '{"Authorization":"\u8BF7\u586B\u5199 Zipline Token"}';
@@ -2073,19 +2073,7 @@ function applyImageHostPreset(host, preset) {
     host.deleteKeyResponsePath = "files.0.id";
     host.deleteEndpoint = `${ziplineOrigin}/api/user/files/{deleteKey}`;
     host.deleteMethod = "DELETE";
-    host.deleteHeaders = host.headers;
-    return;
-  }
-  if (preset === "zipline-v3") {
-    host.name = "Zipline v3";
-    host.endpoint = ziplineEndpoint;
-    host.fieldName = "file";
-    host.headers = existingHeaders || '{"Authorization":"\u8BF7\u586B\u5199 Zipline Token"}';
-    host.responsePath = "files.0";
-    host.deleteKeyResponsePath = "";
-    host.deleteEndpoint = `${ziplineOrigin}/api/user/files`;
-    host.deleteMethod = "DELETE";
-    host.deleteHeaders = host.headers;
+    host.deleteHeaders = "";
     return;
   }
   if (preset === "imgbb") {
@@ -2163,7 +2151,7 @@ var DEFAULT_SETTINGS = {
   imageRecognitionAutoConfirmDelaySeconds: null,
   autoUploadHostIds: [],
   deleteLocalAfterUpload: true,
-  deleteRemoteWhenUnreferenced: false,
+  deleteRemoteWhenUnreferenced: true,
   imageFailoverEnabled: true,
   imageFailoverTimeoutSeconds: 8,
   imageFailoverUseLocalFallback: true,
@@ -2954,6 +2942,7 @@ var MindMapStudioSettingTab = class extends import_obsidian.PluginSettingTab {
     addHost.addEventListener("click", () => {
       const host = createImageHostConfig(hosts.length + 1);
       this.plugin.settings.imageHosts.push(host);
+      this.plugin.settings.deleteRemoteWhenUnreferenced = true;
       void this.plugin.saveSettings().then(() => this.display());
     });
     if (!hosts.length) {
@@ -2972,8 +2961,9 @@ var MindMapStudioSettingTab = class extends import_obsidian.PluginSettingTab {
       const status = title.createSpan({ cls: "mms-image-host-status", text: host.enabled ? "\u5DF2\u542F\u7528" : "\u5DF2\u505C\u7528" });
       status.toggleClass("is-enabled", host.enabled);
       const body = card.createDiv({ cls: "mms-image-host-card-body" });
-      new import_obsidian.Setting(body).setName("\u56FE\u5E8A\u9884\u8BBE").setDesc("\u9884\u8BBE\u4F1A\u586B\u5199\u4E0A\u4F20\u5B57\u6BB5\u3001\u8FD4\u56DE\u5B57\u6BB5\u548C\u53EF\u7528\u7684\u5220\u9664\u63A5\u53E3\uFF1B\u5BC6\u94A5\u6216 Zipline Token \u4ECD\u9700\u81EA\u884C\u586B\u5199\u3002Freeimage.host \u7684\u516C\u5F00 API \u4EC5\u652F\u6301\u4E0A\u4F20\u3002").addDropdown((dropdown) => dropdown.addOption("custom", "\u81EA\u5B9A\u4E49").addOption("zipline-v4", "Zipline v4\uFF08\u63A8\u8350\uFF09").addOption("zipline-v3", "Zipline v3\uFF08\u517C\u5BB9\u65E7\u670D\u52A1\uFF09").addOption("imgbb", "ImgBB").addOption("freeimage", "Freeimage.host").setValue(host.preset).onChange(async (value) => {
+      new import_obsidian.Setting(body).setName("\u56FE\u5E8A\u9884\u8BBE").setDesc("\u9ED8\u8BA4\u4F7F\u7528 Zipline\uFF0C\u5E76\u586B\u5199\u4E0A\u4F20\u54CD\u5E94\u4E0E\u5220\u9664\u63A5\u53E3\uFF1BZipline Token\u3001ImgBB \u6216 Freeimage.host \u5BC6\u94A5\u4ECD\u9700\u81EA\u884C\u586B\u5199\u3002Freeimage.host \u7684\u516C\u5F00 API \u4EC5\u652F\u6301\u4E0A\u4F20\u3002").addDropdown((dropdown) => dropdown.addOption("custom", "\u81EA\u5B9A\u4E49").addOption("zipline", "Zipline\uFF08\u9ED8\u8BA4\uFF09").addOption("imgbb", "ImgBB").addOption("freeimage", "Freeimage.host").setValue(host.preset).onChange(async (value) => {
         applyImageHostPreset(host, value);
+        if (value === "zipline") this.plugin.settings.deleteRemoteWhenUnreferenced = true;
         await this.plugin.saveSettings();
         this.expandedImageHostIds.add(host.id);
         this.display();
@@ -15052,7 +15042,8 @@ var MindMapEditor = class {
     menu.addItem((item) => item.setTitle("\u5927\u5C3A\u5BF8\uFF08640px\uFF09").setIcon("image-up").onClick(() => this.setImageBlockWidth(nodeId, blockId, 640)));
     menu.addItem((item) => item.setTitle("\u9002\u5E94\u8282\u70B9").setIcon("maximize").onClick(() => this.setImageBlockWidth(nodeId, blockId)));
     menu.addItem((item) => item.setTitle("\u81EA\u5B9A\u4E49\u5C3A\u5BF8\u6216\u66FF\u6362\u56FE\u7247\u2026").setIcon("settings-2").onClick(() => this.editImageBlock(blockId)));
-    if (!this.readOnly && (block.localSource || !/^https?:\/\//i.test(block.source))) {
+    const hasEnabledImageHost = this.callbacks.getImageHosts().length > 0;
+    if (!this.readOnly && hasEnabledImageHost && (block.localSource || !/^https?:\/\//i.test(block.source))) {
       menu.addSeparator();
       menu.addItem((item) => item.setTitle("\u4E0A\u4F20\u5230\u56FE\u5E8A").setIcon("cloud-upload").onClick(() => void this.uploadImageBlock(nodeId, blockId)));
     }
@@ -18224,6 +18215,34 @@ function extractResponseString(payload, path) {
   if (typeof value === "number" || typeof value === "boolean") return String(value);
   return void 0;
 }
+function findZiplineFileId(payload, imageUrl, origin) {
+  var _a2;
+  let target;
+  let base;
+  try {
+    target = new URL(imageUrl);
+    base = new URL(origin);
+  } catch (e) {
+    return void 0;
+  }
+  const targetName = decodeURIComponent((_a2 = target.pathname.split("/").filter(Boolean).at(-1)) != null ? _a2 : "");
+  if (!targetName) return void 0;
+  const record = payload && typeof payload === "object" ? payload : void 0;
+  const files = Array.isArray(record == null ? void 0 : record.page) ? record.page : [];
+  const matched = files.find((item) => {
+    if (!item || typeof item !== "object") return false;
+    const candidate = item;
+    if (typeof candidate.url === "string") {
+      try {
+        if (new URL(candidate.url, base).href === target.href) return true;
+      } catch (e) {
+      }
+    }
+    return typeof candidate.name === "string" && candidate.name === targetName;
+  });
+  if (typeof (matched == null ? void 0 : matched.id) === "number" || typeof (matched == null ? void 0 : matched.id) === "string") return String(matched.id);
+  return void 0;
+}
 function applyImageDeleteTemplate(template, values, mode) {
   var _a2, _b2;
   const encode = (value) => mode === "url" ? encodeURIComponent(value) : JSON.stringify(value).slice(1, -1);
@@ -19842,13 +19861,18 @@ var MindMapStudioPlugin = class extends import_obsidian15.Plugin {
   applyLoadedSettings(loaded) {
     var _a2, _b2, _c, _d;
     const raw = loaded != null ? loaded : {};
+    let migratedLegacyZiplinePreset = false;
     const imageHosts = Array.isArray(raw.imageHosts) ? raw.imageHosts.slice(0, 20).flatMap((item, index) => {
       if (!item || typeof item !== "object") return [];
       const candidate = item;
+      const rawCandidate = item;
+      const rawPreset = typeof rawCandidate.preset === "string" ? rawCandidate.preset : "";
+      const legacyZipline = rawPreset === "zipline-v4" || rawPreset === "zipline-v3";
+      if (legacyZipline) migratedLegacyZiplinePreset = true;
       const host = createImageHostConfig(index + 1);
       host.id = typeof candidate.id === "string" && candidate.id.trim() ? candidate.id.trim().slice(0, 160) : host.id;
       host.name = typeof candidate.name === "string" && candidate.name.trim() ? candidate.name.trim().slice(0, 120) : host.name;
-      host.preset = candidate.preset === "zipline-v4" || candidate.preset === "zipline-v3" || candidate.preset === "imgbb" || candidate.preset === "freeimage" ? candidate.preset : "custom";
+      host.preset = rawPreset === "zipline" || legacyZipline ? "zipline" : rawPreset === "imgbb" || rawPreset === "freeimage" ? rawPreset : "custom";
       host.enabled = candidate.enabled !== false;
       host.priority = typeof candidate.priority === "number" && Number.isFinite(candidate.priority) ? Math.max(1, Math.min(20, Math.round(candidate.priority))) : index + 1;
       host.endpoint = typeof candidate.endpoint === "string" ? candidate.endpoint.trim().slice(0, 4e3) : "";
@@ -19862,6 +19886,13 @@ var MindMapStudioPlugin = class extends import_obsidian15.Plugin {
       host.deleteMethod = candidate.deleteMethod === "POST" || candidate.deleteMethod === "GET" ? candidate.deleteMethod : "DELETE";
       host.deleteHeaders = typeof candidate.deleteHeaders === "string" ? candidate.deleteHeaders.trim().slice(0, 2e4) : "";
       host.deleteBody = typeof candidate.deleteBody === "string" ? candidate.deleteBody.slice(0, 2e4) : "";
+      if (legacyZipline) {
+        const migratedName = host.name;
+        applyImageHostPreset(host, "zipline");
+        if (migratedName && !/^Zipline v[34]$/i.test(migratedName)) host.name = migratedName;
+      } else if (host.preset === "zipline") {
+        host.deleteHeaders = "";
+      }
       return [host];
     }) : [];
     const imageUploadCache = raw.imageUploadCache && typeof raw.imageUploadCache === "object" && !Array.isArray(raw.imageUploadCache) ? Object.fromEntries(Object.entries(raw.imageUploadCache).slice(-1e3).flatMap(([key, value]) => {
@@ -19898,7 +19929,7 @@ var MindMapStudioPlugin = class extends import_obsidian15.Plugin {
       autoUploadDelaySeconds: typeof raw.autoUploadDelaySeconds === "number" ? Math.max(0, Math.min(120 * 60, Math.round(raw.autoUploadDelaySeconds))) : DEFAULT_SETTINGS.autoUploadDelaySeconds,
       imageRecognitionAutoConfirmDelaySeconds: raw.imageRecognitionAutoConfirmDelaySeconds === 0 || raw.imageRecognitionAutoConfirmDelaySeconds === 5 || raw.imageRecognitionAutoConfirmDelaySeconds === 10 || raw.imageRecognitionAutoConfirmDelaySeconds === 15 ? raw.imageRecognitionAutoConfirmDelaySeconds : null,
       autoUploadHostIds: selectedIds,
-      deleteRemoteWhenUnreferenced: raw.deleteRemoteWhenUnreferenced === true,
+      deleteRemoteWhenUnreferenced: migratedLegacyZiplinePreset ? true : raw.deleteRemoteWhenUnreferenced !== false,
       aiProfiles,
       defaultAiProfileId: typeof raw.defaultAiProfileId === "string" && aiProfileIds.has(raw.defaultAiProfileId) ? raw.defaultAiProfileId : (_d = (_c = (_a2 = aiProfiles.find((profile) => profile.enabled)) == null ? void 0 : _a2.id) != null ? _c : (_b2 = aiProfiles[0]) == null ? void 0 : _b2.id) != null ? _d : "",
       aiMaxInputBytes: typeof raw.aiMaxInputBytes === "number" ? Math.max(32 * 1024, Math.min(2 * 1024 * 1024, Math.round(raw.aiMaxInputBytes))) : DEFAULT_SETTINGS.aiMaxInputBytes,
@@ -20906,7 +20937,19 @@ ${uploaded.url}`, 8e3);
    */
   async cleanupRemovedImageRemoteAssets(currentMindMapPath, removed, documentAfterRemoval) {
     var _a2;
-    if (!this.settings.deleteRemoteWhenUnreferenced || !((_a2 = removed.remoteSources) == null ? void 0 : _a2.length)) return;
+    if (!this.settings.deleteRemoteWhenUnreferenced) return;
+    const remoteSources = [...(_a2 = removed.remoteSources) != null ? _a2 : []];
+    if (/^https?:\/\//i.test(removed.source) && !remoteSources.some((remote) => remote.url === removed.source)) {
+      const cached = Object.values(this.settings.imageUploadCache).find((entry) => entry.url === removed.source);
+      if (cached) remoteSources.push({
+        hostId: cached.hostId,
+        hostName: cached.hostName,
+        url: cached.url,
+        deleteKey: cached.deleteKey,
+        uploadedAt: cached.uploadedAt
+      });
+    }
+    if (!remoteSources.length) return;
     for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE_MINDMAP_STUDIO)) {
       if (leaf.view instanceof MindMapStudioView) await leaf.view.save();
     }
@@ -20923,7 +20966,7 @@ ${uploaded.url}`, 8e3);
     const deleted = [];
     const retained = [];
     const failed = [];
-    for (const remote of removed.remoteSources) {
+    for (const remote of remoteSources) {
       const host = this.settings.imageHosts.find((candidate) => candidate.id === remote.hostId);
       if (!(host == null ? void 0 : host.deleteEndpoint.trim())) {
         retained.push(remote.hostName || (host == null ? void 0 : host.name) || remote.hostId);
@@ -21103,60 +21146,40 @@ ${uploaded.url}`, 8e3);
     const imageUrl = extractImageUrlFromResponse(payload, [host.responsePath, "files.0.url", "files.0"]);
     if (!imageUrl) throw new Error("\u8FD4\u56DE\u7ED3\u679C\u4E2D\u6CA1\u6709\u627E\u5230\u56FE\u7247\u7F51\u5740");
     let deleteKey = extractResponseString(payload, host.deleteKeyResponsePath);
-    if (!deleteKey && host.preset === "zipline-v3") {
+    if (!deleteKey && host.preset === "zipline") {
       try {
-        deleteKey = await this.resolveZiplineV3FileId(host, imageUrl);
+        deleteKey = await this.resolveZiplineFileId(host, imageUrl);
       } catch (error) {
-        console.warn("MindMap Studio could not resolve the Zipline v3 delete ID; upload remains usable", error);
+        console.warn("MindMap Studio could not resolve the Zipline delete ID; upload remains usable", error);
       }
     }
     return { url: imageUrl, deleteKey };
   }
-  /** Resolve a Zipline v3 upload URL back to its numeric file ID for the legacy delete endpoint. */
-  async resolveZiplineV3FileId(host, imageUrl) {
+  /** Resolve a Zipline file URL back to its current v4 file ID for legacy cache entries or incomplete upload responses. */
+  async resolveZiplineFileId(host, imageUrl) {
     var _a2;
     const upload = new URL(normalizeHttpUrl(host.endpoint, "\u4E0A\u4F20 API"));
+    const target = new URL(imageUrl);
+    const targetName = decodeURIComponent((_a2 = target.pathname.split("/").filter(Boolean).at(-1)) != null ? _a2 : "");
+    const query = new URLSearchParams({ page: "1", perpage: "100", filter: "all", searchField: "name", searchQuery: targetName });
     const response = await (0, import_obsidian15.requestUrl)({
-      url: `${upload.origin}/api/user/files`,
+      url: `${upload.origin}/api/user/files?${query.toString()}`,
       method: "GET",
       headers: parseUploadHeaders(host.headers),
       throw: true
     });
-    const files = Array.isArray(response.json) ? response.json : [];
-    const target = new URL(imageUrl);
-    const targetName = (_a2 = target.pathname.split("/").filter(Boolean).at(-1)) != null ? _a2 : "";
-    const matched = files.find((item) => {
-      if (!item || typeof item !== "object") return false;
-      const candidate = item;
-      if (typeof candidate.url === "string") {
-        try {
-          if (new URL(candidate.url, upload.origin).href === target.href) return true;
-        } catch (e) {
-        }
-      }
-      return typeof candidate.file === "string" && candidate.file === targetName;
-    });
-    if (typeof (matched == null ? void 0 : matched.id) === "number" || typeof (matched == null ? void 0 : matched.id) === "string") return String(matched.id);
-    return void 0;
+    return findZiplineFileId(response.json, imageUrl, upload.origin);
   }
   /** Calls one explicitly configured image-host deletion API. */
   async deleteImageFromHostConfig(host, url, hash, deleteKey) {
-    if (host.preset === "zipline-v3") {
-      const id = Number(deleteKey);
-      if (!Number.isInteger(id) || id < 1) throw new Error("Zipline v3 \u672A\u627E\u5230\u53EF\u5220\u9664\u7684\u6587\u4EF6 ID");
-      await (0, import_obsidian15.requestUrl)({
-        url: normalizeHttpUrl(host.deleteEndpoint, "\u5220\u9664 API"),
-        method: "DELETE",
-        headers: parseUploadHeaders(host.deleteHeaders || host.headers),
-        contentType: "application/json",
-        body: JSON.stringify({ id }),
-        throw: true
-      });
-      return;
+    let resolvedDeleteKey = deleteKey == null ? void 0 : deleteKey.trim();
+    if (host.preset === "zipline" && !resolvedDeleteKey) {
+      resolvedDeleteKey = await this.resolveZiplineFileId(host, url);
+      if (!resolvedDeleteKey) throw new Error("Zipline \u672A\u627E\u5230\u53EF\u5220\u9664\u7684\u6587\u4EF6 ID");
     }
-    const values = { url, hash, deleteKey };
+    const values = { url, hash, deleteKey: resolvedDeleteKey };
     const endpoint = normalizeHttpUrl(applyImageDeleteTemplate(host.deleteEndpoint, values, "url"), "\u5220\u9664 API");
-    const headers = parseUploadHeaders(host.deleteHeaders);
+    const headers = parseUploadHeaders(host.preset === "zipline" ? host.headers : host.deleteHeaders || host.headers);
     const body = host.deleteBody.trim() ? applyImageDeleteTemplate(host.deleteBody, values, "json") : void 0;
     await (0, import_obsidian15.requestUrl)({
       url: endpoint,

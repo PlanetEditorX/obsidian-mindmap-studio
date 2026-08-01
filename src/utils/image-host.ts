@@ -171,6 +171,35 @@ export function extractResponseString(payload: unknown, path: string): string | 
   return undefined;
 }
 
+
+/** Find one Zipline v4 file ID in a paginated file-list response by exact URL or stored name. */
+export function findZiplineFileId(payload: unknown, imageUrl: string, origin: string): string | undefined {
+  let target: URL;
+  let base: URL;
+  try {
+    target = new URL(imageUrl);
+    base = new URL(origin);
+  } catch {
+    return undefined;
+  }
+  const targetName = decodeURIComponent(target.pathname.split("/").filter(Boolean).at(-1) ?? "");
+  if (!targetName) return undefined;
+  const record = payload && typeof payload === "object" ? payload as { page?: unknown } : undefined;
+  const files = Array.isArray(record?.page) ? record.page : [];
+  const matched = files.find((item) => {
+    if (!item || typeof item !== "object") return false;
+    const candidate = item as { id?: unknown; url?: unknown; name?: unknown };
+    if (typeof candidate.url === "string") {
+      try {
+        if (new URL(candidate.url, base).href === target.href) return true;
+      } catch { /* Ignore malformed rows returned by the host. */ }
+    }
+    return typeof candidate.name === "string" && candidate.name === targetName;
+  }) as { id?: unknown } | undefined;
+  if (typeof matched?.id === "number" || typeof matched?.id === "string") return String(matched.id);
+  return undefined;
+}
+
 /** Replace remote-delete placeholders with URL-encoded or JSON-escaped values. */
 export function applyImageDeleteTemplate(
   template: string,

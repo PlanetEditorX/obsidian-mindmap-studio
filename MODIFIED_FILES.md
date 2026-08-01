@@ -2,8 +2,8 @@
 
 ## 1.35.3 图片布局、图床去重与编辑体验
 
-- `src/core/model.ts`、`src/render/layout.ts`、`src/editor/editor.ts`、`src/editor/outline-renderer.ts`、`src/editor/article-renderer.ts`、`styles.css`：新增图片同行/独占一行字段、编辑入口和多模式布局；文章与大纲为连续同行图片创建 flex 行，修复小图仍各占一行；缩小图片预览窗口。
-- `src/utils/image-host.ts`、`src/main.ts`、`src/settings.ts`、`src/editor/node-image-actions.ts`：增加 SHA-256 上传缓存、删除令牌解析、可配置删除 API，以及 Zipline v4、Zipline v3、ImgBB、Freeimage.host 预设和删除最后引用后的安全远程清理。
+- `src/core/model.ts`、`src/render/layout.ts`、`src/editor/editor.ts`、`src/editor/outline-renderer.ts`、`src/editor/article-renderer.ts`、`styles.css`：新增图片同行/独占一行字段、编辑入口和多模式布局；文章与大纲为连续同行图片创建 flex 行，修复小图仍各占一行；缩小图片预览窗口；无启用图床时隐藏图片右键“上传到图床”。
+- `src/utils/image-host.ts`、`src/main.ts`、`src/settings.ts`、`src/editor/node-image-actions.ts`：增加 SHA-256 上传缓存、删除令牌解析、可配置删除 API；图床预设收敛为默认 Zipline、ImgBB、Freeimage.host 和自定义，旧 Zipline v3/v4 配置自动迁移；Zipline 删除复用当前 Token，并为历史图片回查文件 ID。
 - `src/editor/node-rich-text-editor.ts`、`src/editor/editor.ts`：完整节点编辑器接入加粗、斜体、下划线和文字颜色快捷键，并通过窗口捕获层避免 Obsidian 抢占加粗/颜色组合键。
 - `tests/image-host.test.mjs`、`tests/image-layout.test.mjs`、`tests/article-content-block.test.mjs`：增加哈希、删除模板、图床预设、同行图片 flex 行、快捷键与预览尺寸专项测试。
 - `README.md`、`docs/DATA_MODEL.md`、`docs/SPECIAL_FEATURES.md`、`docs/ARCHITECTURE.md`、`docs/PROJECT_GUIDE.zh-CN.md`、`docs/TESTING.md`：同步数据边界、使用方式和删除安全规则。
