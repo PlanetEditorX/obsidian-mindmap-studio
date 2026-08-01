@@ -250,9 +250,10 @@ test("compiled plugin contains exact block insertion and paragraph indentation r
 test("article non-text blocks align with the first glyph of indented paragraphs", () => {
   assert.match(rendererSource, /function createArticleContentBlock\([\s\S]*indentToParagraph = false/);
   assert.match(rendererSource, /mms-article-content-block\$\{indentToParagraph \? " is-paragraph-aligned" : ""\}/);
-  assert.match(rendererSource, /block\.type === "image"[\s\S]*createArticleContentBlock\(container, block\.id, true\)/);
+  assert.match(rendererSource, /block\.type === "image"[\s\S]*createArticleContentBlock\(inline \? inlineImageRow! : container, block\.id, !inline\)/);
+  assert.match(rendererSource, /mms-article-image-row/);
   assert.match(rendererSource, /block\.type === "table"[\s\S]*createArticleContentBlock\(container, block\.id, true\)/);
-  assert.match(rendererSource, /else \{\s*const shell = createArticleContentBlock\(container, block\.id, true\)/);
+  assert.match(rendererSource, /else \{\s*inlineImageRow = null;\s*const shell = createArticleContentBlock\(container, block\.id, true\)/);
   assert.match(styles, /\.mms-article-content-block\.is-paragraph-aligned\s*\{[\s\S]*width:\s*calc\(100% - 2em\);[\s\S]*margin-left:\s*2em/);
 });
 

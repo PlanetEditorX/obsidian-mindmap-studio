@@ -288,8 +288,10 @@ function renderHeading(heading: HTMLElement, node: MindMapNode, title: string, o
 /** 渲染文章节点的正文块、图片、备注、表格和代码。 */
 export function renderArticleNodeContent(container: HTMLElement, node: MindMapNode, treatTextAsBody: boolean, options: ArticleRendererOptions): void {
   let firstTextHandled = false;
+  let inlineImageRow: HTMLElement | null = null;
   for (const block of nodeContentBlocks(node)) {
     if (block.type === "text") {
+      inlineImageRow = null;
       if (!treatTextAsBody && !firstTextHandled) { firstTextHandled = true; continue; }
       firstTextHandled = true;
       const shell = createArticleContentBlock(container, block.id);
@@ -298,7 +300,10 @@ export function renderArticleNodeContent(container: HTMLElement, node: MindMapNo
       renderRichTextRuns(paragraph, block.richText, block.text);
       options.makeInlineEditable(paragraph, node, "正文", block.id);
     } else if (block.type === "image") {
-      const shell = createArticleContentBlock(container, block.id, true);
+      const inline = block.layout === "inline";
+      if (inline && !inlineImageRow) inlineImageRow = container.createDiv({ cls: "mms-article-image-row" });
+      if (!inline) inlineImageRow = null;
+      const shell = createArticleContentBlock(inline ? inlineImageRow! : container, block.id, !inline);
       shell.addClass(`image-layout-${block.layout ?? "block"}`);
       const resolved = options.callbacks.resolveImage(block.source);
       const image = shell.createEl("img", { cls: `mms-article-image image-align-${block.align ?? "center"}`, attr: { src: resolved ?? block.source, alt: block.alt ?? "图片" } });
@@ -319,9 +324,11 @@ export function renderArticleNodeContent(container: HTMLElement, node: MindMapNo
         options.openImageContextMenu(event, node.id, block.id);
       });
     } else if (block.type === "table") {
+      inlineImageRow = null;
       const shell = createArticleContentBlock(container, block.id, true);
       renderArticleTable(shell, node, block.table, block.id, options);
     } else {
+      inlineImageRow = null;
       const shell = createArticleContentBlock(container, block.id, true);
       const code = shell.createDiv({ cls: "mms-article-code markdown-rendered" });
       code.dataset.blockId = block.id;

@@ -511,6 +511,10 @@ export default class MindMapStudioPlugin extends Plugin {
         const host = createImageHostConfig(index + 1);
         host.id = typeof candidate.id === "string" && candidate.id.trim() ? candidate.id.trim().slice(0, 160) : host.id;
         host.name = typeof candidate.name === "string" && candidate.name.trim() ? candidate.name.trim().slice(0, 120) : host.name;
+        host.preset = candidate.preset === "zipline-v4" || candidate.preset === "zipline-v3"
+          || candidate.preset === "imgbb" || candidate.preset === "freeimage"
+          ? candidate.preset
+          : "custom";
         host.enabled = candidate.enabled !== false;
         host.priority = typeof candidate.priority === "number" && Number.isFinite(candidate.priority)
           ? Math.max(1, Math.min(20, Math.round(candidate.priority)))
@@ -523,7 +527,7 @@ export default class MindMapStudioPlugin extends Plugin {
         host.responsePath = typeof candidate.responsePath === "string" ? candidate.responsePath.trim().slice(0, 500) : "data.url";
         host.deleteKeyResponsePath = typeof candidate.deleteKeyResponsePath === "string" ? candidate.deleteKeyResponsePath.trim().slice(0, 500) : "";
         host.deleteEndpoint = typeof candidate.deleteEndpoint === "string" ? candidate.deleteEndpoint.trim().slice(0, 4000) : "";
-        host.deleteMethod = candidate.deleteMethod === "POST" ? "POST" : "DELETE";
+        host.deleteMethod = candidate.deleteMethod === "POST" || candidate.deleteMethod === "GET" ? candidate.deleteMethod : "DELETE";
         host.deleteHeaders = typeof candidate.deleteHeaders === "string" ? candidate.deleteHeaders.trim().slice(0, 20000) : "";
         host.deleteBody = typeof candidate.deleteBody === "string" ? candidate.deleteBody.slice(0, 20000) : "";
         return [host];
@@ -1865,13 +1869,60 @@ export default class MindMapStudioPlugin extends Plugin {
       responseJson = undefined;
     }
     const payload = parseUploadResponsePayload(responseJson, response.text);
-    const imageUrl = extractImageUrlFromResponse(payload, [host.responsePath]);
+    const imageUrl = extractImageUrlFromResponse(payload, [host.responsePath, "files.0.url", "files.0"]);
     if (!imageUrl) throw new Error("返回结果中没有找到图片网址");
-    return { url: imageUrl, deleteKey: extractResponseString(payload, host.deleteKeyResponsePath) };
+    let deleteKey = extractResponseString(payload, host.deleteKeyResponsePath);
+    if (!deleteKey && host.preset === "zipline-v3") {
+      try {
+        deleteKey = await this.resolveZiplineV3FileId(host, imageUrl);
+      } catch (error) {
+        console.warn("MindMap Studio could not resolve the Zipline v3 delete ID; upload remains usable", error);
+      }
+    }
+    return { url: imageUrl, deleteKey };
+  }
+
+  /** Resolve a Zipline v3 upload URL back to its numeric file ID for the legacy delete endpoint. */
+  private async resolveZiplineV3FileId(host: ImageHostConfig, imageUrl: string): Promise<string | undefined> {
+    const upload = new URL(normalizeHttpUrl(host.endpoint, "上传 API"));
+    const response = await requestUrl({
+      url: `${upload.origin}/api/user/files`,
+      method: "GET",
+      headers: parseUploadHeaders(host.headers),
+      throw: true
+    });
+    const files = Array.isArray(response.json) ? response.json as unknown[] : [];
+    const target = new URL(imageUrl);
+    const targetName = target.pathname.split("/").filter(Boolean).at(-1) ?? "";
+    const matched = files.find((item) => {
+      if (!item || typeof item !== "object") return false;
+      const candidate = item as { id?: unknown; url?: unknown; file?: unknown };
+      if (typeof candidate.url === "string") {
+        try {
+          if (new URL(candidate.url, upload.origin).href === target.href) return true;
+        } catch { /* Ignore malformed legacy rows. */ }
+      }
+      return typeof candidate.file === "string" && candidate.file === targetName;
+    }) as { id?: unknown } | undefined;
+    if (typeof matched?.id === "number" || typeof matched?.id === "string") return String(matched.id);
+    return undefined;
   }
 
   /** Calls one explicitly configured image-host deletion API. */
   private async deleteImageFromHostConfig(host: ImageHostConfig, url: string, hash?: string, deleteKey?: string): Promise<void> {
+    if (host.preset === "zipline-v3") {
+      const id = Number(deleteKey);
+      if (!Number.isInteger(id) || id < 1) throw new Error("Zipline v3 未找到可删除的文件 ID");
+      await requestUrl({
+        url: normalizeHttpUrl(host.deleteEndpoint, "删除 API"),
+        method: "DELETE",
+        headers: parseUploadHeaders(host.deleteHeaders || host.headers),
+        contentType: "application/json",
+        body: JSON.stringify({ id }),
+        throw: true
+      });
+      return;
+    }
     const values = { url, hash, deleteKey };
     const endpoint = normalizeHttpUrl(applyImageDeleteTemplate(host.deleteEndpoint, values, "url"), "删除 API");
     const headers = parseUploadHeaders(host.deleteHeaders);
@@ -1882,8 +1933,8 @@ export default class MindMapStudioPlugin extends Plugin {
       url: endpoint,
       method: host.deleteMethod,
       headers,
-      contentType: body ? "application/json" : undefined,
-      body,
+      contentType: body && host.deleteMethod !== "GET" ? "application/json" : undefined,
+      body: host.deleteMethod === "GET" ? undefined : body,
       throw: true
     });
   }

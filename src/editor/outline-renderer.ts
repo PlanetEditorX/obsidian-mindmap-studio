@@ -138,9 +138,13 @@ function renderOutlineContent(container: HTMLElement, node: MindMapNode, depth: 
     paragraph.dataset.blockId = block.id;
     renderRichTextRuns(paragraph, block.richText, block.text);
   }
+  let inlineImageRow: HTMLElement | null = null;
   for (const block of images) {
+    const inline = block.layout === "inline";
+    if (inline && !inlineImageRow) inlineImageRow = content.createDiv({ cls: "mms-outline-image-row" });
+    if (!inline) inlineImageRow = null;
     const resolved = options.resolveImage(block.source);
-    const figure = content.createEl("figure", { cls: `mms-outline-image image-align-${block.align ?? "center"} image-layout-${block.layout ?? "block"}` });
+    const figure = (inline ? inlineImageRow! : content).createEl("figure", { cls: `mms-outline-image image-align-${block.align ?? "center"} image-layout-${block.layout ?? "block"}` });
     figure.dataset.blockId = block.id;
     if (resolved) {
       const image = figure.createEl("img", { attr: { src: resolved, alt: block.alt ?? "图片", loading: "lazy" } });
