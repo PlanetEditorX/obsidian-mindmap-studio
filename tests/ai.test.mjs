@@ -503,3 +503,14 @@ test("utf8ByteLength correctly calculates CJK and ASCII byte lengths", () => {
   assert.equal(markdown.utf8ByteLength("a"), 1);
   assert.equal(markdown.utf8ByteLength("中"), 3);
 });
+
+test("formatByteSize formats bytes to appropriate units at boundaries", () => {
+  assert.equal(markdown.formatByteSize(0), "0 B");
+  assert.equal(markdown.formatByteSize(1023), "1023 B");
+  assert.equal(markdown.formatByteSize(1024), "1.0 KB");
+  assert.equal(markdown.formatByteSize(10239), "10.0 KB");
+  assert.equal(markdown.formatByteSize(10240), "10 KB");
+  assert.equal(markdown.formatByteSize(1048575), "1024 KB");
+  assert.equal(markdown.formatByteSize(1048576), "1.00 MB");
+  assert.equal(markdown.formatByteSize(1048576 * 2.5), "2.50 MB");
+});
