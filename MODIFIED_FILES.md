@@ -11,7 +11,7 @@
 ## 1.35.3 完整节点加粗快捷键与导入提示
 
 - `src/editor/node-rich-text-editor.ts`：为完整节点编辑器的格式快捷键增加 `event.code` 匹配和 `keydown` / `beforeinput` 去重，避免 `Ctrl/Cmd+B` 加粗后被浏览器格式输入事件立即切换回去。
-- `src/editor/editor-modals.ts`：导入入口提示改用“思维导图归档”通用称呼，保留 `.xmind` 解析能力。
+- `src/editor/editor-modals.ts`：导入入口提示改用“思维导图”通用称呼，保留 `.xmind` 解析能力。
 - `tests/image-layout.test.mjs`、`tests/import-mode.test.mjs`：增加加粗双事件去重和导入提示品牌隐藏专项测试。
 - `README.md`、`docs/PROJECT_GUIDE.zh-CN.md`、`docs/SPECIAL_FEATURES.md`、`docs/TESTING.md`、`CHANGELOG.md`、`TEST_RESULTS.md`：同步行为、测试和交付记录。
 
