@@ -518,7 +518,7 @@ export class JsonTransferModal extends Modal {
   onOpen(): void {
     this.titleEl.setText("导入 / 导出");
     const description = this.contentEl.createEl("p", {
-      text: "可导入 MindMap Studio JSON、思维导图归档或 Markdown 文件。默认作为当前选中节点的子分支导入。"
+      text: "可导入 MindMap Studio JSON、思维导图或 Markdown 文件。默认作为当前选中节点的子分支导入。"
     });
     description.addClass("setting-item-description");
     const importProgress = this.contentEl.createDiv({ cls: "mmc-import-progress" });
