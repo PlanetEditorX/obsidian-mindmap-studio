@@ -85,7 +85,7 @@ import {
 } from "./ai/client";
 import type { AiMarkdownPayload } from "./ai/markdown";
 import { shouldHideFileExplorerPath } from "./file-explorer-filter";
-import { captureDesktopScreenshot, type DesktopCaptureResult } from "./utils/desktop-capture";
+import { captureDesktopScreenshot } from "./utils/desktop-capture";
 import { recognizeImageWithLocalOcr } from "./vision/local-ocr";
 import {
   buildImageRecognitionPrompt,
@@ -949,7 +949,7 @@ export default class MindMapStudioPlugin extends Plugin {
   }
 
   /** 按普通截图或截图并识别模式启动桌面覆盖层，并根据设置决定是否隐藏 Obsidian。 */
-  async captureScreenshot(recognizeAfter = false): Promise<DesktopCaptureResult> {
+  async captureScreenshot(recognizeAfter = false) {
     return captureDesktopScreenshot(
       this.settings.screenshotHideObsidian,
       recognizeAfter ? "capture-recognize" : "capture"
