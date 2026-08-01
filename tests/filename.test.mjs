@@ -18,6 +18,12 @@ test("sanitizeFilename removes path and control characters", () => {
   assert.equal(filename.sanitizeFilename("a\u0000b\nc"), "a-b-c");
 });
 
+test("sanitizeFilename replaces all invalid characters", () => {
+  assert.equal(filename.sanitizeFilename("a<b>c:d\"e/f\\g|h?i*j[k]l#m"), "a-b-c-d-e-f-g-h-i-j-k-l-m");
+  const allInvalid = '\\/:*?"<>|#[]\u0000\u001f';
+  assert.equal(filename.sanitizeFilename(`start${allInvalid}end`), "start-end");
+});
+
 test("sanitizeFilename normalizes whitespace, Unicode and trailing dots", () => {
   assert.equal(filename.sanitizeFilename("Cafe\u0301   方案..."), "Café 方案");
 });
