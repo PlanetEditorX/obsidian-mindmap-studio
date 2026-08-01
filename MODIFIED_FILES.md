@@ -1,5 +1,14 @@
 # Modified Files
 
+## 1.38.4 渐进文章加载期间滚动位置保护
+
+- `src/editor/editor.ts`：增加渐进文章视口所有权状态；滚轮、触摸、指针和翻页键输入后清除旧待恢复位置，后续批次及完成回调不再写回打开瞬间的滚动快照。未发生用户导航时继续保留原有语义阅读位置恢复。
+- `tests/incremental-render.test.mjs`：新增用户接管视口专项回归，并扩展渐进文章契约检查。
+- `README.md`、`CHANGELOG.md`、`docs/ARCHITECTURE.md`、`docs/SPECIAL_FEATURES.md`、`docs/TESTING.md`、`docs/FUNCTION_REFERENCE.md`：同步滚动控制边界、人工验证步骤和函数参考。
+- `package.json`、`package-lock.json`、`manifest.json`、`versions.json`、`update.json`：统一版本元数据为 1.38.4，并写入本轮安装包 SHA-256。
+- `TEST_RESULTS.md`、`MODIFIED_FILES.md`：记录完整验证和真实 Obsidian 待验证事项。
+- `main.js`：由修复后的 TypeScript 源码重新生产构建。
+
 ## 1.38.3 大型文章打开与深层导图布局性能优化
 
 - `src/render/layout.ts`：在单次布局内缓存节点子树高度，消除深层链式结构的重复递归计算，同时保持原有位置、碰撞处理与布局语义。
