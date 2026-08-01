@@ -18,6 +18,8 @@ test("normalizeHttpUrl accepts HTTP(S) and rejects unsafe protocols", () => {
   assert.throws(() => imageHost.normalizeHttpUrl(""), /为空/);
   assert.throws(() => imageHost.normalizeHttpUrl("not a url"), /格式无效/);
   assert.throws(() => imageHost.normalizeHttpUrl("file:///tmp/image"), /HTTP 或 HTTPS/);
+  assert.throws(() => imageHost.normalizeHttpUrl("ftp://foo"), /HTTP 或 HTTPS/);
+  assert.throws(() => imageHost.normalizeHttpUrl("wss://foo"), /HTTP 或 HTTPS/);
 });
 
 test("parseUploadHeaders converts scalar values without accepting nested objects", () => {
