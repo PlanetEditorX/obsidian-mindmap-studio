@@ -308,8 +308,9 @@ test("manual screenshot stays open while recognition keeps an invisible toolbar 
   }
   assert.match(captureHtml, /data-tool="shape"[\s\S]*data-action="copy"/);
   assert.match(recognizeHtml, /id="countdown" role="status" aria-live="polite"/);
+  assert.match(recognizeHtml, /#countdown\{[^}]*min-width:176px[^}]*font-size:14px[^}]*font-weight:650/);
   assert.match(recognizeHtml, /const seconds=Math\.max\(1,Math\.ceil\(remaining\/1000\)\)/);
-  assert.match(recognizeHtml, /countdown\.textContent=String\(seconds\)/);
+  assert.match(recognizeHtml, /countdown\.textContent=seconds\+' 秒后自动识别'/);
   assert.doesNotMatch(recognizeHtml, /toFixed\(/);
   assert.match(recognizeHtml, /setTimeout\(\(\)=>\{[\s\S]*if\(pointerOnBorder\|\|drag\|\|selectionDraw\|\|drawing[\s\S]*action\('copy'\)\},autoConfirmDelayMs\)/);
   assert.match(recognizeHtml, /data-border="north"[\s\S]*data-border="west"/);
