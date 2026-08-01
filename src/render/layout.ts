@@ -5,7 +5,7 @@
  * 根据可见节点、自定义尺寸、布局方向和外观配置计算坐标、边界、连接线路径与层级线宽，并使用同一结果生成 SVG。
  */
 
-import { nodeContentBlocks, nodePlainText, type EdgeStyle, type FontFamilyMode, type LayoutMode, type MindMapAppearance, type MindMapNode, type MindMapTextRun, type NodeShape, type NodeVisualStyle } from "../core/model";
+import { nodeContentBlocks, nodePlainText, type FontFamilyMode, type LayoutMode, type MindMapAppearance, type MindMapNode, type MindMapTextRun, type NodeShape, type NodeVisualStyle } from "../core/model";
 import { resolveLayoutCollisions } from "./collision-layout";
 
 /**
@@ -345,7 +345,7 @@ export function edgeWidthForDepth(appearance: MindMapAppearance, depth: number, 
  * @param style 要应用、比较或规范化的样式。
  * @returns 计算、解析或序列化后的字符串结果。
  */
-export function edgePath(parent: NodePosition, child: NodePosition, style: EdgeStyle = "curved"): string {
+export function edgePath(parent: NodePosition, child: NodePosition, style: "curved" | "straight" | "elbow" = "curved"): string {
   const parentX = parent.x + (child.side >= 0 ? parent.width / 2 : -parent.width / 2);
   const childX = child.x - (child.side >= 0 ? child.width / 2 : -child.width / 2);
   if (style === "straight") return `M ${parentX} ${parent.y} L ${childX} ${child.y}`;
