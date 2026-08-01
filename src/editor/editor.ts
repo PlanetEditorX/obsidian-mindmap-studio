@@ -6267,7 +6267,8 @@ export class MindMapEditor {
     menu.addItem((item) => item.setTitle("大尺寸（640px）").setIcon("image-up").onClick(() => this.setImageBlockWidth(nodeId, blockId, 640)));
     menu.addItem((item) => item.setTitle("适应节点").setIcon("maximize").onClick(() => this.setImageBlockWidth(nodeId, blockId)));
     menu.addItem((item) => item.setTitle("自定义尺寸或替换图片…").setIcon("settings-2").onClick(() => this.editImageBlock(blockId)));
-    if (!this.readOnly && (block.localSource || !/^https?:\/\//i.test(block.source))) {
+    const hasEnabledImageHost = this.callbacks.getImageHosts().length > 0;
+    if (!this.readOnly && hasEnabledImageHost && (block.localSource || !/^https?:\/\//i.test(block.source))) {
       menu.addSeparator();
       menu.addItem((item) => item
         .setTitle("上传到图床")

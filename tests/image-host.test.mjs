@@ -113,10 +113,23 @@ test("delete response values and templates support URL, hash and host tokens", (
 });
 
 test("built-in host response paths cover Zipline, ImgBB and Freeimage shapes", () => {
-  assert.equal(imageHost.extractImageUrlFromResponse({ files: [{ url: "https://zipline.example/u/a.png" }] }, ["files.0.url"]), "https://zipline.example/u/a.png");
-  assert.equal(imageHost.extractImageUrlFromResponse({ files: ["https://zipline-v3.example/u/a.png"] }, ["files.0"]), "https://zipline-v3.example/u/a.png");
+  assert.equal(imageHost.extractImageUrlFromResponse({ files: [{ id: "file-id", url: "https://zipline.example/u/a.png" }] }, ["files.0.url"]), "https://zipline.example/u/a.png");
+  assert.equal(imageHost.extractResponseString({ files: [{ id: "file-id" }] }, "files.0.id"), "file-id");
   assert.equal(imageHost.extractResponseString({ data: { delete_url: "https://ibb.co/delete/token" } }, "data.delete_url"), "https://ibb.co/delete/token");
   assert.equal(imageHost.extractImageUrlFromResponse({ image: { url: "https://iili.io/a.png" } }, ["image.url"]), "https://iili.io/a.png");
+});
+
+
+test("findZiplineFileId matches current v4 file lists by URL or filename", () => {
+  const payload = {
+    page: [
+      { id: "exact-id", url: "https://zipline.example/u/exact.png", name: "other.png" },
+      { id: "name-id", url: "/raw/different.png", name: "encoded name.png" }
+    ]
+  };
+  assert.equal(imageHost.findZiplineFileId(payload, "https://zipline.example/u/exact.png", "https://zipline.example"), "exact-id");
+  assert.equal(imageHost.findZiplineFileId(payload, "https://cdn.example/u/encoded%20name.png", "https://zipline.example"), "name-id");
+  assert.equal(imageHost.findZiplineFileId(payload, "https://cdn.example/u/missing.png", "https://zipline.example"), undefined);
 });
 
 test("extractImageUrlFromResponse finds URLs in plain text and rejects non-HTTP values", () => {

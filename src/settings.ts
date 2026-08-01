@@ -69,7 +69,7 @@ export type ImageHostMethod = "POST" | "PUT";
 /** HTTP methods supported by optional remote image deletion APIs. */
 export type ImageHostDeleteMethod = "GET" | "DELETE" | "POST";
 /** Built-in image-host configuration templates. */
-export type ImageHostPreset = "custom" | "zipline-v4" | "zipline-v3" | "imgbb" | "freeimage";
+export type ImageHostPreset = "custom" | "zipline" | "imgbb" | "freeimage";
 
 /** Visual shape used for unnumbered terminal article bullets. */
 export type ArticleLeafBulletStyle = "solid" | "hollow" | "square" | "dash";
@@ -161,18 +161,18 @@ export interface ImageHostUploadBatch {
 export function createImageHostConfig(index = 1): ImageHostConfig {
   return {
     id: `host_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`,
-    name: `图床 ${index}`,
-    preset: "custom",
+    name: "Zipline",
+    preset: "zipline",
     enabled: true,
     priority: index,
-    endpoint: "",
+    endpoint: "http://192.168.1.10:3010/api/upload",
     method: "POST",
     bodyMode: "multipart",
     fieldName: "file",
-    headers: "",
-    responsePath: "data.url",
-    deleteKeyResponsePath: "",
-    deleteEndpoint: "",
+    headers: '{"Authorization":"请填写 Zipline Token"}',
+    responsePath: "files.0.url",
+    deleteKeyResponsePath: "files.0.id",
+    deleteEndpoint: "http://192.168.1.10:3010/api/user/files/{deleteKey}",
     deleteMethod: "DELETE",
     deleteHeaders: "",
     deleteBody: ""
@@ -197,8 +197,8 @@ export function applyImageHostPreset(host: ImageHostConfig, preset: ImageHostPre
   host.bodyMode = "multipart";
   host.deleteBody = "";
 
-  if (preset === "zipline-v4") {
-    host.name = "Zipline v4";
+  if (preset === "zipline") {
+    host.name = "Zipline";
     host.endpoint = ziplineEndpoint;
     host.fieldName = "file";
     host.headers = existingHeaders || '{"Authorization":"请填写 Zipline Token"}';
@@ -206,20 +206,8 @@ export function applyImageHostPreset(host: ImageHostConfig, preset: ImageHostPre
     host.deleteKeyResponsePath = "files.0.id";
     host.deleteEndpoint = `${ziplineOrigin}/api/user/files/{deleteKey}`;
     host.deleteMethod = "DELETE";
-    host.deleteHeaders = host.headers;
-    return;
-  }
-
-  if (preset === "zipline-v3") {
-    host.name = "Zipline v3";
-    host.endpoint = ziplineEndpoint;
-    host.fieldName = "file";
-    host.headers = existingHeaders || '{"Authorization":"请填写 Zipline Token"}';
-    host.responsePath = "files.0";
-    host.deleteKeyResponsePath = "";
-    host.deleteEndpoint = `${ziplineOrigin}/api/user/files`;
-    host.deleteMethod = "DELETE";
-    host.deleteHeaders = host.headers;
+    // Zipline upload and delete use the same current token. Keeping this empty avoids a stale copied token.
+    host.deleteHeaders = "";
     return;
   }
 
@@ -455,7 +443,7 @@ export const DEFAULT_SETTINGS: MindMapStudioSettings = {
   imageRecognitionAutoConfirmDelaySeconds: null,
   autoUploadHostIds: [],
   deleteLocalAfterUpload: true,
-  deleteRemoteWhenUnreferenced: false,
+  deleteRemoteWhenUnreferenced: true,
   imageFailoverEnabled: true,
   imageFailoverTimeoutSeconds: 8,
   imageFailoverUseLocalFallback: true,
@@ -1675,6 +1663,7 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
     addHost.addEventListener("click", () => {
       const host = createImageHostConfig(hosts.length + 1);
       this.plugin.settings.imageHosts.push(host);
+      this.plugin.settings.deleteRemoteWhenUnreferenced = true;
       void this.plugin.saveSettings().then(() => this.display());
     });
 
@@ -1698,16 +1687,16 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
 
       new Setting(body)
         .setName("图床预设")
-        .setDesc("预设会填写上传字段、返回字段和可用的删除接口；密钥或 Zipline Token 仍需自行填写。Freeimage.host 的公开 API 仅支持上传。")
+        .setDesc("默认使用 Zipline，并填写上传响应与删除接口；Zipline Token、ImgBB 或 Freeimage.host 密钥仍需自行填写。Freeimage.host 的公开 API 仅支持上传。")
         .addDropdown((dropdown) => dropdown
           .addOption("custom", "自定义")
-          .addOption("zipline-v4", "Zipline v4（推荐）")
-          .addOption("zipline-v3", "Zipline v3（兼容旧服务）")
+          .addOption("zipline", "Zipline（默认）")
           .addOption("imgbb", "ImgBB")
           .addOption("freeimage", "Freeimage.host")
           .setValue(host.preset)
           .onChange(async (value) => {
             applyImageHostPreset(host, value as ImageHostPreset);
+            if (value === "zipline") this.plugin.settings.deleteRemoteWhenUnreferenced = true;
             await this.plugin.saveSettings();
             this.expandedImageHostIds.add(host.id);
             this.display();

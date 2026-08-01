@@ -43,6 +43,8 @@ test("image alignment persists only for supported values", () => {
 test("image context menu exposes layout, sizing, upload and edit actions", () => {
   assert.match(editorSource, /setTitle\("左对齐"\)[\s\S]*setImageBlockAlignment/);
   assert.match(editorSource, /setTitle\("中尺寸（360px）"\)[\s\S]*setImageBlockWidth/);
+  assert.match(editorSource, /const hasEnabledImageHost = this\.callbacks\.getImageHosts\(\)\.length > 0/);
+  assert.match(editorSource, /hasEnabledImageHost && \(block\.localSource/);
   assert.match(editorSource, /setTitle\("上传到图床"\)[\s\S]*uploadImageBlock/);
   assert.match(editorSource, /setTitle\("自定义尺寸或替换图片…"\)[\s\S]*editImageBlock\(blockId\)/);
   assert.match(editorSource, /setTitle\("与相邻图片同行"\)[\s\S]*setImageBlockLayout/);
@@ -83,7 +85,9 @@ test("image uploads use SHA-256 cache and remote deletion requires an explicit h
   assert.match(settingsSource, /setName\("最后引用删除时同步清理图床"\)/);
   assert.match(settingsSource, /setName\("删除 API（可选）"\)/);
   assert.match(settingsSource, /setName\("图床预设"\)/);
-  assert.match(settingsSource, /addOption\("zipline-v4", "Zipline v4（推荐）"\)/);
+  assert.match(settingsSource, /preset: "zipline"/);
+  assert.match(settingsSource, /addOption\("zipline", "Zipline（默认）"\)/);
+  assert.doesNotMatch(settingsSource, /addOption\("zipline-v3"/);
   assert.match(settingsSource, /addOption\("imgbb", "ImgBB"\)/);
   assert.match(settingsSource, /addOption\("freeimage", "Freeimage\.host"\)/);
   assert.match(settingsSource, /deleteEndpoint = "\{deleteKey\}"/);
@@ -91,10 +95,14 @@ test("image uploads use SHA-256 cache and remote deletion requires an explicit h
   assert.match(mainSource, /const cacheKey = `\$\{host\.id\}:\$\{contentHash\}`/);
   assert.match(mainSource, /reused: true/);
   assert.match(mainSource, /cleanupRemovedImageRemoteAssets/);
+  assert.match(mainSource, /const remoteSources = \[\.\.\.\(removed\.remoteSources \?\? \[\]\)\]/);
   assert.match(mainSource, /if \(!host\?\.deleteEndpoint\.trim\(\)\)/);
   assert.match(mainSource, /deleteImageFromHostConfig/);
-  assert.match(mainSource, /resolveZiplineV3FileId/);
-  assert.match(mainSource, /host\.preset === "zipline-v3"/);
+  assert.match(mainSource, /resolveZiplineFileId/);
+  assert.match(mainSource, /host\.preset === "zipline" \? host\.headers/);
+  assert.match(mainSource, /\/api\/user\/files\?\$\{query\.toString\(\)\}/);
+  assert.doesNotMatch(mainSource, /resolveZiplineV3FileId/);
+  assert.doesNotMatch(mainSource, /host\.preset === "zipline-v3"/);
 });
 
 test("canvas context menu uploads all current-page images with one host selection", () => {

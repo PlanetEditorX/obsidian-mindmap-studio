@@ -250,8 +250,7 @@ Markdown 导入会识别标准图片语法及 Obsidian 图片嵌入语法，例�
 
 卡片顶部提供维护中的预设：
 
-- Zipline v4：上传字段 `file`，读取 `files.0.url` 与 `files.0.id`，删除时调用 `DELETE /api/user/files/{id}`。
-- Zipline v3：上传读取 `files.0`，随后用认证文件列表回查数值 ID，删除时向 `/api/user/files` 发送包含 `id` 的 DELETE JSON。
+- Zipline（默认）：上传字段 `file`，读取 `files.0.url` 与 `files.0.id`，删除时调用 `DELETE /api/user/files/{id}`；历史图片缺少 ID 时通过当前 Token 查询 `/api/user/files`，按 URL 或文件名补回。旧 Zipline v3/v4 配置自动迁移。
 - ImgBB：上传字段 `image`，读取 `data.url` 和唯一 `data.delete_url`，最后引用删除时访问该秘密删除链接。
 - Freeimage.host：上传字段 `source`，读取 `image.url`；公开 API 不返回匿名删除链接，因此预设不启用自动删除。
 - 自定义：保留全部请求、响应和删除模板字段供其他服务使用。

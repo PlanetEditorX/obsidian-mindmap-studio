@@ -38,6 +38,7 @@ import {
   MindMapStudioSettingTab,
   TOOLBAR_ITEMS,
   createImageHostConfig,
+  applyImageHostPreset,
   normalizeSettingsSectionOrder,
   normalizeReturnToTopVisibility,
   settingsToAppearance,
@@ -101,6 +102,7 @@ import {
   applyImageDeleteTemplate,
   extractResponseString,
   extractImageUrlFromResponse,
+  findZiplineFileId,
   normalizeHttpUrl,
   parseUploadHeaders,
   parseUploadResponsePayload,
@@ -504,17 +506,21 @@ export default class MindMapStudioPlugin extends Plugin {
   /** 规范化已加载或导入的插件配置，并应用到当前会话。 */
   private applyLoadedSettings(loaded: Partial<MindMapStudioSettings> | null): void {
     const raw = (loaded ?? {}) as Partial<MindMapStudioSettings> & Record<string, unknown>;
+    let migratedLegacyZiplinePreset = false;
     const imageHosts: ImageHostConfig[] = Array.isArray(raw.imageHosts)
       ? raw.imageHosts.slice(0, 20).flatMap((item, index) => {
         if (!item || typeof item !== "object") return [];
         const candidate = item as Partial<ImageHostConfig>;
+        const rawCandidate = item as unknown as Record<string, unknown>;
+        const rawPreset = typeof rawCandidate.preset === "string" ? rawCandidate.preset : "";
+        const legacyZipline = rawPreset === "zipline-v4" || rawPreset === "zipline-v3";
+        if (legacyZipline) migratedLegacyZiplinePreset = true;
         const host = createImageHostConfig(index + 1);
         host.id = typeof candidate.id === "string" && candidate.id.trim() ? candidate.id.trim().slice(0, 160) : host.id;
         host.name = typeof candidate.name === "string" && candidate.name.trim() ? candidate.name.trim().slice(0, 120) : host.name;
-        host.preset = candidate.preset === "zipline-v4" || candidate.preset === "zipline-v3"
-          || candidate.preset === "imgbb" || candidate.preset === "freeimage"
-          ? candidate.preset
-          : "custom";
+        host.preset = rawPreset === "zipline" || legacyZipline
+          ? "zipline"
+          : rawPreset === "imgbb" || rawPreset === "freeimage" ? rawPreset : "custom";
         host.enabled = candidate.enabled !== false;
         host.priority = typeof candidate.priority === "number" && Number.isFinite(candidate.priority)
           ? Math.max(1, Math.min(20, Math.round(candidate.priority)))
@@ -530,6 +536,14 @@ export default class MindMapStudioPlugin extends Plugin {
         host.deleteMethod = candidate.deleteMethod === "POST" || candidate.deleteMethod === "GET" ? candidate.deleteMethod : "DELETE";
         host.deleteHeaders = typeof candidate.deleteHeaders === "string" ? candidate.deleteHeaders.trim().slice(0, 20000) : "";
         host.deleteBody = typeof candidate.deleteBody === "string" ? candidate.deleteBody.slice(0, 20000) : "";
+        if (legacyZipline) {
+          const migratedName = host.name;
+          applyImageHostPreset(host, "zipline");
+          if (migratedName && !/^Zipline v[34]$/i.test(migratedName)) host.name = migratedName;
+        } else if (host.preset === "zipline") {
+          // Zipline deletion always reuses the current upload token rather than a copied stale header.
+          host.deleteHeaders = "";
+        }
         return [host];
       })
       : [];
@@ -582,7 +596,7 @@ export default class MindMapStudioPlugin extends Plugin {
         ? raw.imageRecognitionAutoConfirmDelaySeconds
         : null,
       autoUploadHostIds: selectedIds,
-      deleteRemoteWhenUnreferenced: raw.deleteRemoteWhenUnreferenced === true,
+      deleteRemoteWhenUnreferenced: migratedLegacyZiplinePreset ? true : raw.deleteRemoteWhenUnreferenced !== false,
       aiProfiles,
       defaultAiProfileId: typeof raw.defaultAiProfileId === "string" && aiProfileIds.has(raw.defaultAiProfileId)
         ? raw.defaultAiProfileId
@@ -1652,7 +1666,19 @@ export default class MindMapStudioPlugin extends Plugin {
     removed: MindMapImageContentBlock,
     documentAfterRemoval: MindMapDocument
   ): Promise<void> {
-    if (!this.settings.deleteRemoteWhenUnreferenced || !removed.remoteSources?.length) return;
+    if (!this.settings.deleteRemoteWhenUnreferenced) return;
+    const remoteSources = [...(removed.remoteSources ?? [])];
+    if (/^https?:\/\//i.test(removed.source) && !remoteSources.some((remote) => remote.url === removed.source)) {
+      const cached = Object.values(this.settings.imageUploadCache).find((entry) => entry.url === removed.source);
+      if (cached) remoteSources.push({
+        hostId: cached.hostId,
+        hostName: cached.hostName,
+        url: cached.url,
+        deleteKey: cached.deleteKey,
+        uploadedAt: cached.uploadedAt
+      });
+    }
+    if (!remoteSources.length) return;
     for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE_MINDMAP_STUDIO)) {
       if (leaf.view instanceof MindMapStudioView) await leaf.view.save();
     }
@@ -1671,7 +1697,7 @@ export default class MindMapStudioPlugin extends Plugin {
     const deleted: string[] = [];
     const retained: string[] = [];
     const failed: string[] = [];
-    for (const remote of removed.remoteSources) {
+    for (const remote of remoteSources) {
       const host = this.settings.imageHosts.find((candidate) => candidate.id === remote.hostId);
       if (!host?.deleteEndpoint.trim()) {
         retained.push(remote.hostName || host?.name || remote.hostId);
@@ -1872,60 +1898,41 @@ export default class MindMapStudioPlugin extends Plugin {
     const imageUrl = extractImageUrlFromResponse(payload, [host.responsePath, "files.0.url", "files.0"]);
     if (!imageUrl) throw new Error("返回结果中没有找到图片网址");
     let deleteKey = extractResponseString(payload, host.deleteKeyResponsePath);
-    if (!deleteKey && host.preset === "zipline-v3") {
+    if (!deleteKey && host.preset === "zipline") {
       try {
-        deleteKey = await this.resolveZiplineV3FileId(host, imageUrl);
+        deleteKey = await this.resolveZiplineFileId(host, imageUrl);
       } catch (error) {
-        console.warn("MindMap Studio could not resolve the Zipline v3 delete ID; upload remains usable", error);
+        console.warn("MindMap Studio could not resolve the Zipline delete ID; upload remains usable", error);
       }
     }
     return { url: imageUrl, deleteKey };
   }
 
-  /** Resolve a Zipline v3 upload URL back to its numeric file ID for the legacy delete endpoint. */
-  private async resolveZiplineV3FileId(host: ImageHostConfig, imageUrl: string): Promise<string | undefined> {
+  /** Resolve a Zipline file URL back to its current v4 file ID for legacy cache entries or incomplete upload responses. */
+  private async resolveZiplineFileId(host: ImageHostConfig, imageUrl: string): Promise<string | undefined> {
     const upload = new URL(normalizeHttpUrl(host.endpoint, "上传 API"));
+    const target = new URL(imageUrl);
+    const targetName = decodeURIComponent(target.pathname.split("/").filter(Boolean).at(-1) ?? "");
+    const query = new URLSearchParams({ page: "1", perpage: "100", filter: "all", searchField: "name", searchQuery: targetName });
     const response = await requestUrl({
-      url: `${upload.origin}/api/user/files`,
+      url: `${upload.origin}/api/user/files?${query.toString()}`,
       method: "GET",
       headers: parseUploadHeaders(host.headers),
       throw: true
     });
-    const files = Array.isArray(response.json) ? response.json as unknown[] : [];
-    const target = new URL(imageUrl);
-    const targetName = target.pathname.split("/").filter(Boolean).at(-1) ?? "";
-    const matched = files.find((item) => {
-      if (!item || typeof item !== "object") return false;
-      const candidate = item as { id?: unknown; url?: unknown; file?: unknown };
-      if (typeof candidate.url === "string") {
-        try {
-          if (new URL(candidate.url, upload.origin).href === target.href) return true;
-        } catch { /* Ignore malformed legacy rows. */ }
-      }
-      return typeof candidate.file === "string" && candidate.file === targetName;
-    }) as { id?: unknown } | undefined;
-    if (typeof matched?.id === "number" || typeof matched?.id === "string") return String(matched.id);
-    return undefined;
+    return findZiplineFileId(response.json, imageUrl, upload.origin);
   }
 
   /** Calls one explicitly configured image-host deletion API. */
   private async deleteImageFromHostConfig(host: ImageHostConfig, url: string, hash?: string, deleteKey?: string): Promise<void> {
-    if (host.preset === "zipline-v3") {
-      const id = Number(deleteKey);
-      if (!Number.isInteger(id) || id < 1) throw new Error("Zipline v3 未找到可删除的文件 ID");
-      await requestUrl({
-        url: normalizeHttpUrl(host.deleteEndpoint, "删除 API"),
-        method: "DELETE",
-        headers: parseUploadHeaders(host.deleteHeaders || host.headers),
-        contentType: "application/json",
-        body: JSON.stringify({ id }),
-        throw: true
-      });
-      return;
+    let resolvedDeleteKey = deleteKey?.trim();
+    if (host.preset === "zipline" && !resolvedDeleteKey) {
+      resolvedDeleteKey = await this.resolveZiplineFileId(host, url);
+      if (!resolvedDeleteKey) throw new Error("Zipline 未找到可删除的文件 ID");
     }
-    const values = { url, hash, deleteKey };
+    const values = { url, hash, deleteKey: resolvedDeleteKey };
     const endpoint = normalizeHttpUrl(applyImageDeleteTemplate(host.deleteEndpoint, values, "url"), "删除 API");
-    const headers = parseUploadHeaders(host.deleteHeaders);
+    const headers = parseUploadHeaders(host.preset === "zipline" ? host.headers : (host.deleteHeaders || host.headers));
     const body = host.deleteBody.trim()
       ? applyImageDeleteTemplate(host.deleteBody, values, "json")
       : undefined;
