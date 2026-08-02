@@ -1,5 +1,14 @@
 # Modified Files
 
+## 1.39.5 带圈序号正文间距修复
+
+- `styles.css`：缩小带圈编号圆环并调整自动模式槽内偏移，在保持正文首字与普通圆点正文对齐的同时，为圆圈和正文预留稳定间距。
+- `tests/article-content-block.test.mjs`：扩展 CSS 几何契约，校验正文起点一致、圆圈右侧间距不少于 0.18em，并限制编号列偏移范围。
+- `README.md`、`CHANGELOG.md`、`docs/DEVELOPMENT.md`、`docs/SPECIAL_FEATURES.md`、`docs/TESTING.md`：同步用户可见行为、维护边界和专项验证。
+- `package.json`、`package-lock.json`、`manifest.json`、`versions.json`、`update.json`：统一版本元数据为 1.39.5，并在最终安装包生成后写入 SHA-256。
+- `TEST_RESULTS.md`、Codex 项目衔接页：记录浏览器几何验证、完整测试基线和 Win10 待验证事项。
+- `main.js`：按仓库交付规则重新执行生产构建。
+
 ## 1.39.4 带圈序号自动缩进对齐
 
 - `styles.css`：恢复自动对齐带圈编号的上级标题缩进，将编号槽收敛到与普通末端圆点相同的 1.25em，并在槽内微调圆圈中心；顶格模式和普通下一级文章序号保持不变。

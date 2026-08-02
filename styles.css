@@ -4037,16 +4037,16 @@
 .mms-article-leaf-text.mms-article-leaf-numbered[data-article-number-style="circled"]::before {
   box-sizing: border-box;
   position: absolute;
-  top: .26em;
+  top: .39em;
   inset-inline-start: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 1.65em;
-  height: 1.65em;
-  padding: 0 .14em;
+  min-width: 1.34em;
+  height: 1.34em;
+  padding: 0 .08em;
   content: attr(data-article-number);
-  border: .11em solid currentColor;
+  border: .08em solid currentColor;
   border-radius: 999px;
   font-family: inherit;
   font-size: .86em;
@@ -4058,7 +4058,7 @@
 }
 
 .mms-article-leaf-text.mms-article-leaf-numbered[data-article-number-style="circled"].is-auto-aligned::before {
-  inset-inline-start: -.15em;
+  inset-inline-start: -.13em;
 }
 
 .mms-article-leaf-text.is-bulleted::before {
