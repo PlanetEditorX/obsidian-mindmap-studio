@@ -405,6 +405,8 @@ export interface MindMapStudioSettings {
   settingsSectionOrder: SettingsSectionTitle[];
   /** First-level settings categories left expanded when the settings page was last closed. */
   settingsExpandedSections: SettingsSectionTitle[];
+  /** Records structured runtime navigation and interaction diagnostics in memory for the current session. */
+  debugMode: boolean;
 }
 
 export const DEFAULT_SETTINGS: MindMapStudioSettings = {
@@ -516,7 +518,8 @@ export const DEFAULT_SETTINGS: MindMapStudioSettings = {
   wrongBookMasteryCount: 3,
   lastImportFolder: "",
   settingsSectionOrder: [...SETTINGS_SECTION_TITLES],
-  settingsExpandedSections: []
+  settingsExpandedSections: [],
+  debugMode: false
 };
 
 /** Keeps only known first-level sections in the stored expanded-section list. */
@@ -2335,6 +2338,15 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
         }));
 
     containerEl.createEl("h3", { text: "管理配置" });
+    new Setting(containerEl)
+      .setName("调试模式")
+      .setDesc("开启后从插件启动或本次启用开始，在内存中记录操作、导航目标、文章窗口、滚动定位和异常。不会记录文章正文；重启后清空。可在命令面板执行“复制 MindMap Studio 调试记录”。")
+      .addToggle((toggle) => toggle
+        .setValue(this.plugin.settings.debugMode)
+        .onChange(async (value) => {
+          await this.plugin.setDebugMode(value);
+          new Notice(value ? "调试模式已开启，开始记录本次会话" : "调试模式已关闭");
+        }));
     new Setting(containerEl)
       .setName("导出配置")
       .setDesc("将当前全局插件设置导出为 JSON 文件。")

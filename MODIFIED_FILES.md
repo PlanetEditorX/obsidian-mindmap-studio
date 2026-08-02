@@ -1,5 +1,15 @@
 # Modified Files
 
+## 1.39.13 父级返回、章节落地与运行调试记录
+
+- `src/main.ts`：新增显式导航目标校验与父挂载节点反查；目标文件切换前解析最终节点并排队；加入运行调试捕获、剪贴板复制命令和设置同步。
+- `src/editor/editor.ts`、`src/editor/editor-types.ts`、`src/view.ts`：显式章节目标始终高于目录落地配置；跨文件替换文档时原子提交新选项并取消旧滚动事务；记录文章上下文、窗口挂载、语义定位、父级导航和异常状态。
+- `src/debug/runtime-debug.ts`：新增有界、会话级、结构化运行日志；限制字段长度并过滤可编辑正文，支持 JSONL 导出和高频事件节流。
+- `src/settings.ts`：在“管理配置”增加“调试模式”开关，启停时立即重置或停止当前会话日志。
+- `tests/incremental-render.test.mjs`：新增显式目标正文落地、文件切换事务取消、父节点反查与调试复制命令契约；单元测试增至 281 项。
+- `README.md`、`CHANGELOG.md`、`docs/ARCHITECTURE.md`、`docs/SPECIAL_FEATURES.md`、`docs/READING_JUMP_FIX.zh-CN.md`、`docs/TESTING.md`、`docs/FUNCTION_REFERENCE.md`、`TEST_RESULTS.md`：同步导航优先级、调试数据边界和人工复现流程。
+- `package.json`、`package-lock.json`、`manifest.json`、`versions.json`、`update.json`、`main.js`：同步 1.39.13 版本、生产构建和最终安装包校验。
+
 ## 1.39.12 文章目录首帧与双向过渡
 
 - `src/view.ts`、`src/editor/editor-types.ts`：新增文章上下文准备态；打开文件时先消费排队的跨文件目标，上下文未完成前禁止真实文章首帧，失败时回退当前文件并结束准备态。

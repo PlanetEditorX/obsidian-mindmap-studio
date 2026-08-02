@@ -88,6 +88,7 @@ import type { AiMarkdownPayload } from "./ai/markdown";
 import { createFileExplorerPathFilter, fileExplorerFilterSignature } from "./file-explorer-filter";
 import { CoalescedJsonWriter } from "./utils/coalesced-json-writer";
 import { captureDesktopScreenshot } from "./utils/desktop-capture";
+import { RuntimeDebugLog, describeDebugTarget } from "./debug/runtime-debug";
 import { recognizeImageWithLocalOcr } from "./vision/local-ocr";
 import {
   buildImageRecognitionPrompt,
@@ -187,12 +188,15 @@ export default class MindMapStudioPlugin extends Plugin {
   private settingsWriter: CoalescedJsonWriter<MindMapStudioSettings> | null = null;
   private persistedFileExplorerFilterSignature = "";
   private unloading = false;
+  private readonly runtimeDebugLog = new RuntimeDebugLog();
 
   /**
    * 执行“onload”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
    */
   async onload(): Promise<void> {
     await this.loadSettings();
+    this.runtimeDebugLog.setEnabled(this.settings.debugMode, "plugin-startup");
+    this.logDebug("plugin", "onload", { version: this.manifest.version, debugMode: this.settings.debugMode });
     this.persistedFileExplorerFilterSignature = fileExplorerFilterSignature(this.settings);
     this.settingsWriter = this.createSettingsWriter();
     this.installFileExplorerFilter();
@@ -214,12 +218,18 @@ export default class MindMapStudioPlugin extends Plugin {
       name: "全局搜索所有思维导图",
       callback: () => this.openGlobalSearch()
     });
+    this.addCommand({
+      id: "copy-mind-map-debug-log",
+      name: "复制 MindMap Studio 调试记录",
+      callback: () => void this.copyDebugLogToClipboard()
+    });
     this.registerDomEvent(window, "keydown", (event) => {
       if (!matchesRecordedShortcut(event, this.settings.globalSearchShortcut)) return;
       event.preventDefault();
       event.stopPropagation();
       if (!event.repeat) this.openGlobalSearch();
     }, true);
+    this.installRuntimeDebugCapture();
     this.addCommand({
       id: "update-mindmap-studio",
       name: "检查并更新 MindMap Studio",
@@ -554,6 +564,95 @@ export default class MindMapStudioPlugin extends Plugin {
     return modifiedCount;
   }
 
+  /** Writes one structured event into the current in-memory diagnostic session. */
+  logDebug(scope: string, event: string, details?: unknown): void {
+    this.runtimeDebugLog.log(scope, event, details);
+  }
+
+  /** Enables or disables runtime diagnostics and persists the setting. */
+  async setDebugMode(enabled: boolean): Promise<void> {
+    this.settings.debugMode = enabled;
+    this.runtimeDebugLog.setEnabled(enabled, "settings-change");
+    this.logDebug("debug", enabled ? "enabled" : "disabled", { version: this.manifest.version });
+    await this.saveSettings();
+  }
+
+  /** Copies the current bounded diagnostic session as line-delimited JSON. */
+  async copyDebugLogToClipboard(): Promise<void> {
+    if (!this.settings.debugMode || !this.runtimeDebugLog.isEnabled()) {
+      new Notice("请先在 MindMap Studio 设置中开启调试模式");
+      return;
+    }
+    const activeFile = this.app.workspace.getActiveFile();
+    const activeView = this.app.workspace.activeLeaf?.view;
+    this.logDebug("command", "copy-debug-log", { activeFile: activeFile?.path, viewType: activeView?.getViewType?.() });
+    const text = this.runtimeDebugLog.exportText({
+      pluginVersion: this.manifest.version,
+      userAgent: navigator.userAgent,
+      platform: navigator.platform,
+      activeFile: activeFile?.path ?? null,
+      activeViewType: activeView?.getViewType?.() ?? null,
+      globalDisplayMode: this.activeDisplayMode,
+      retainedEntries: this.runtimeDebugLog.size()
+    });
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      const textarea = document.body.createEl("textarea");
+      textarea.value = text;
+      textarea.style.position = "fixed";
+      textarea.style.opacity = "0";
+      textarea.select();
+      const copied = document.execCommand("copy");
+      textarea.remove();
+      if (!copied) throw new Error("浏览器拒绝访问剪贴板");
+    }
+    new Notice(`已复制 ${this.runtimeDebugLog.size()} 条调试记录`);
+  }
+
+  /** Captures user operations and uncaught failures while debug mode is enabled. */
+  private installRuntimeDebugCapture(): void {
+    const logPointer = (event: Event): void => {
+      this.logDebug("interaction", event.type, { target: describeDebugTarget(event.target) });
+    };
+    for (const type of ["click", "dblclick", "contextmenu", "pointerdown"] as const) {
+      this.registerDomEvent(document, type, logPointer, true);
+    }
+    this.registerDomEvent(document, "keydown", (event) => {
+      const target = describeDebugTarget(event.target);
+      const editable = target?.editable === true;
+      const key = editable && event.key.length === 1 ? "[text]" : event.key;
+      this.logDebug("interaction", "keydown", {
+        key, code: event.code, repeat: event.repeat, ctrl: event.ctrlKey, meta: event.metaKey, shift: event.shiftKey, alt: event.altKey, target
+      });
+    }, true);
+    this.registerDomEvent(document, "wheel", (event) => {
+      this.runtimeDebugLog.logThrottled("interaction-wheel", 200, "interaction", "wheel", {
+        deltaX: Math.round(event.deltaX), deltaY: Math.round(event.deltaY), target: describeDebugTarget(event.target)
+      });
+    }, true);
+    this.registerDomEvent(document, "scroll", (event) => {
+      const target = event.target instanceof HTMLElement ? event.target : null;
+      this.runtimeDebugLog.logThrottled(`interaction-scroll:${target?.className ?? "document"}`, 250, "interaction", "scroll", {
+        scrollTop: target?.scrollTop, scrollLeft: target?.scrollLeft, target: describeDebugTarget(event.target)
+      });
+    }, true);
+    const onError = (event: ErrorEvent): void => this.logDebug("error", "window-error", {
+      message: event.message, filename: event.filename, line: event.lineno, column: event.colno, error: event.error
+    });
+    const onRejection = (event: PromiseRejectionEvent): void => this.logDebug("error", "unhandled-rejection", { reason: event.reason });
+    window.addEventListener("error", onError);
+    window.addEventListener("unhandledrejection", onRejection);
+    this.register(() => {
+      window.removeEventListener("error", onError);
+      window.removeEventListener("unhandledrejection", onRejection);
+    });
+    this.registerEvent(this.app.workspace.on("file-open", (file) => this.logDebug("workspace", "file-open", { path: file?.path ?? null })));
+    this.registerEvent(this.app.workspace.on("active-leaf-change", (leaf) => this.logDebug("workspace", "active-leaf-change", {
+      viewType: leaf?.view.getViewType(), filePath: leaf?.view instanceof MindMapStudioView ? leaf.view.file?.path : undefined
+    })));
+  }
+
   /**
    * 加载settings，并保持模型、界面和持久化状态的一致性。
    */
@@ -732,6 +831,7 @@ export default class MindMapStudioPlugin extends Plugin {
         : DEFAULT_SETTINGS.lastImportFolder,
       settingsSectionOrder: normalizeSettingsSectionOrder(raw.settingsSectionOrder),
       settingsExpandedSections: normalizeSettingsExpandedSections(raw.settingsExpandedSections),
+      debugMode: raw.debugMode === true,
       syncTitleToFilename: raw.syncTitleToFilename !== false,
       deleteLocalAfterUpload: raw.deleteLocalAfterUpload !== false,
       imageFailoverEnabled: raw.imageFailoverEnabled !== false,
@@ -847,6 +947,8 @@ export default class MindMapStudioPlugin extends Plugin {
       throw new Error("配置文件必须是一个 JSON 对象。");
     }
     this.applyLoadedSettings(settings as Partial<MindMapStudioSettings>);
+    this.runtimeDebugLog.setEnabled(this.settings.debugMode, "settings-import");
+    this.logDebug("settings", "import-complete", { debugMode: this.settings.debugMode });
     await this.saveSettings();
     this.refreshOpenViews();
   }
@@ -1193,6 +1295,7 @@ export default class MindMapStudioPlugin extends Plugin {
   async resetAllSettings(): Promise<void> {
     this.settings = JSON.parse(JSON.stringify(DEFAULT_SETTINGS)) as MindMapStudioSettings;
     this.activeDisplayMode = this.settings.defaultViewMode;
+    this.runtimeDebugLog.setEnabled(false, "settings-reset");
     await this.saveSettings();
     this.refreshOpenViews();
   }
@@ -1575,6 +1678,7 @@ export default class MindMapStudioPlugin extends Plugin {
     const normalized = normalizePath(filePath);
     const nodeId = this.pendingMindMapFocus.get(normalized) ?? null;
     this.pendingMindMapFocus.delete(normalized);
+    this.logDebug("navigation", "consume-pending-focus", { filePath: normalized, nodeId, remaining: this.pendingMindMapFocus.size });
     return nodeId;
   }
 
@@ -1587,15 +1691,21 @@ export default class MindMapStudioPlugin extends Plugin {
    */
   async openAsMindMap(file: TFile, preferredLeaf?: WorkspaceLeaf, focusNodeId?: string): Promise<WorkspaceLeaf> {
     const leaf = preferredLeaf ?? this.app.workspace.getLeaf(false);
-    if (focusNodeId) this.pendingMindMapFocus.set(file.path, focusNodeId);
+    this.logDebug("navigation", "open-view-start", { filePath: file.path, focusNodeId, preferredLeaf: Boolean(preferredLeaf), currentViewType: leaf.view.getViewType() });
+    if (focusNodeId) {
+      this.pendingMindMapFocus.set(file.path, focusNodeId);
+      this.logDebug("navigation", "queue-focus", { filePath: file.path, focusNodeId, queued: this.pendingMindMapFocus.size });
+    }
     await leaf.setViewState({
       type: VIEW_TYPE_MINDMAP_STUDIO,
       state: { file: file.path },
       active: true
     });
     this.app.workspace.revealLeaf(leaf);
+    this.logDebug("navigation", "open-view-state-complete", { filePath: file.path, focusNodeId, viewType: leaf.view.getViewType(), pendingStillQueued: this.pendingMindMapFocus.get(file.path) === focusNodeId });
     if (focusNodeId && this.pendingMindMapFocus.get(file.path) === focusNodeId) {
       this.pendingMindMapFocus.delete(file.path);
+      this.logDebug("navigation", "focus-not-consumed-by-set-view-data", { filePath: file.path, focusNodeId });
       if (leaf.view instanceof MindMapStudioView) leaf.view.markExplicitNavigation(focusNodeId);
     }
     return leaf;
@@ -2497,13 +2607,58 @@ export default class MindMapStudioPlugin extends Plugin {
    */
   async openMindMapPath(path: string, sourcePath = "", preferredLeaf?: WorkspaceLeaf, focusNodeId?: string): Promise<void> {
     const normalized = normalizePath(path.replace(/^\[\[|\]\]$/g, ""));
+    this.logDebug("navigation", "open-path-request", { path, normalized, sourcePath, focusNodeId });
     const direct = this.app.vault.getAbstractFileByPath(normalized);
     const resolved = direct instanceof TFile ? direct : this.app.metadataCache.getFirstLinkpathDest(path, sourcePath);
     if (!(resolved instanceof TFile) || !this.isMindMapFile(resolved)) {
+      this.logDebug("navigation", "open-path-missing", { path, normalized, sourcePath, focusNodeId });
       new Notice(`找不到子导图：${path}`);
       return;
     }
-    await this.openAsMindMap(resolved, preferredLeaf, focusNodeId);
+    const resolvedFocusNodeId = await this.resolveNavigationFocusNode(resolved, sourcePath, focusNodeId);
+    this.logDebug("navigation", "open-path-resolved", { targetPath: resolved.path, requestedFocusNodeId: focusNodeId, resolvedFocusNodeId });
+    await this.openAsMindMap(resolved, preferredLeaf, resolvedFocusNodeId);
+  }
+
+  /** Validates explicit chapter targets and recovers a stale/missing parent mount node by child-map path. */
+  private async resolveNavigationFocusNode(targetFile: TFile, sourcePath: string, requestedNodeId?: string): Promise<string | undefined> {
+    if (!requestedNodeId && !sourcePath) return undefined;
+    try {
+      const targetDocument = await this.readMindMapDocument(targetFile);
+      if (requestedNodeId && findNode(targetDocument.root, requestedNodeId)) return requestedNodeId;
+
+      const normalizedSourcePath = sourcePath ? normalizePath(sourcePath) : "";
+      const sourceFile = normalizedSourcePath ? this.app.vault.getAbstractFileByPath(normalizedSourcePath) : null;
+      if (sourceFile instanceof TFile && this.isMindMapFile(sourceFile)) {
+        const sourceDocument = await this.readMindMapDocument(sourceFile);
+        const declaredParent = sourceDocument.navigation?.parentPath
+          ? this.resolveMindMapFile(sourceDocument.navigation.parentPath, sourceFile.path)
+          : null;
+        if (declaredParent?.path === targetFile.path) {
+          const declaredNodeId = sourceDocument.navigation?.parentNodeId;
+          if (declaredNodeId && findNode(targetDocument.root, declaredNodeId)) {
+            this.logDebug("navigation", "recover-parent-focus-from-navigation", { targetPath: targetFile.path, sourcePath: sourceFile.path, requestedNodeId, declaredNodeId });
+            return declaredNodeId;
+          }
+        }
+        const mountNode = flattenNodes(targetDocument.root).find((node) => {
+          if (!node.submap?.path) return false;
+          return this.resolveMindMapFile(node.submap.path, targetFile.path)?.path === sourceFile.path;
+        });
+        if (mountNode) {
+          this.logDebug("navigation", "recover-parent-focus-by-submap", { targetPath: targetFile.path, sourcePath: sourceFile.path, requestedNodeId, declaredParentPath: declaredParent?.path, mountNodeId: mountNode.id });
+          return mountNode.id;
+        }
+      }
+      if (requestedNodeId) {
+        this.logDebug("navigation", "focus-node-not-found", { targetPath: targetFile.path, sourcePath, requestedNodeId });
+        new Notice("目标章节已不存在，已打开目标导图");
+      }
+    } catch (error) {
+      this.logDebug("navigation", "focus-validation-failed", { targetPath: targetFile.path, sourcePath, requestedNodeId, error });
+      return requestedNodeId;
+    }
+    return undefined;
   }
 
   /**

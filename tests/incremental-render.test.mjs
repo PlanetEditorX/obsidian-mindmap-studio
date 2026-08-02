@@ -105,7 +105,7 @@ test("article semantic navigation mounts the requested real section before posit
   assert.match(applyLocation, /articleRenderController\?\.ensureNode\(resolved\.nodeId\)/);
   assert.match(applyLocation, /\.mms-article-node\[data-node-id=/);
   assert.match(applyLocation, /\.mms-article-document-title\[data-node-id=/);
-  assert.match(applyLocation, /if \(!target\) return false/);
+  assert.match(applyLocation, /if \(!target\) \{[\s\S]*?restore-target-missing[\s\S]*?return false/);
   assert.doesNotMatch(applyLocation, /scrollIntoView/);
   assert.doesNotMatch(cssSource, /mms-article-node\.is-render-pending|mms-article-loading-shell|mms-article-render-stage|mms-article-transition-overlay/);
 });
@@ -118,11 +118,14 @@ test("clicking a same-file directory chapter switches to article without reopeni
   const focusNode = editorSource.match(/private focusNode\(id: string, persistLocation = true\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
   const renderArticle = editorSource.match(/private renderArticle\(\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
   const renderDirectory = articleSource.match(/function renderDirectory\([\s\S]*?\n\}/)?.[0] ?? "";
-  assert.match(focusNode, /this\.options\.showArticleToc/);
+  assert.match(focusNode, /this\.currentMode === "article"[\s\S]*?id !== this\.document\.root\.id[\s\S]*?articleLandingMode !== "article"/);
+  assert.doesNotMatch(focusNode, /id !== this\.document\.root\.id[\s\S]{0,120}this\.options\.showArticleToc/);
   assert.match(focusNode, /articleLandingMode: "article"/);
   assert.match(focusNode, /pendingArticleFocusLocation = location/);
   assert.match(focusNode, /if \(this\.currentMode !== "article"\) this\.restoreReadingLocation/);
-  assert.match(renderArticle, /const requestedLocation = directoryOnly \? null : this\.pendingArticleFocusLocation/);
+  assert.match(renderArticle, /const explicitTarget = this\.pendingArticleFocusLocation/);
+  assert.match(renderArticle, /const directoryOnly = !explicitTarget/);
+  assert.match(renderArticle, /const requestedLocation = directoryOnly \? null : explicitTarget/);
   assert.match(renderArticle, /const previousLocation = !directoryOnly && !requestedLocation/);
   assert.match(renderArticle, /const latestRequestedLocation = directoryOnly \? null : this\.pendingArticleFocusLocation \?\? requestedLocation/);
   assert.match(renderArticle, /const location = latestRequestedLocation \?\? previousLocation/);
@@ -187,9 +190,28 @@ test("article context gates the first paint and landing transitions are symmetri
   assert.match(viewSource, /this\.articleContextReady = false/);
   assert.match(viewSource, /this\.articleContextReady = true/);
   assert.match(mainSource, /pendingMindMapFocus\.set\(file\.path, focusNodeId\)/);
-  assert.match(mainSource, /openAsMindMap\(resolved, preferredLeaf, focusNodeId\)/);
+  assert.match(mainSource, /resolveNavigationFocusNode\(resolved, sourcePath, focusNodeId\)/);
+  assert.match(mainSource, /openAsMindMap\(resolved, preferredLeaf, resolvedFocusNodeId\)/);
   assert.match(cssSource, /\.mms-article-entry-skeleton\.is-directory/);
   assert.match(cssSource, /\.mms-article-skeleton-line\.is-toc-row/);
+});
+
+test("debug mode records runtime operations and exposes a clipboard command", async () => {
+  const [mainSource, settingsSource, typesSource, debugSource] = await Promise.all([
+    readFile(path.join(rootDir, "src/main.ts"), "utf8"),
+    readFile(path.join(rootDir, "src/settings.ts"), "utf8"),
+    readFile(path.join(rootDir, "src/editor/editor-types.ts"), "utf8"),
+    readFile(path.join(rootDir, "src/debug/runtime-debug.ts"), "utf8")
+  ]);
+  assert.match(settingsSource, /debugMode: boolean/);
+  assert.match(settingsSource, /调试模式/);
+  assert.match(mainSource, /id: "copy-mind-map-debug-log"/);
+  assert.match(mainSource, /copyDebugLogToClipboard/);
+  assert.match(mainSource, /installRuntimeDebugCapture/);
+  assert.match(mainSource, /resolveNavigationFocusNode/);
+  assert.match(typesSource, /onDebugLog:/);
+  assert.match(debugSource, /MAX_ENTRIES = 5000/);
+  assert.match(debugSource, /不会|document content|editable text/i);
 });
 
 test("article semantic navigation is latest-wins and never captures the page shell as the root node", async () => {

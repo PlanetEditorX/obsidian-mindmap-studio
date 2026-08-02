@@ -1359,7 +1359,24 @@ export class MindMapEditor {
    * @param document 要处理的思维导图文档。
    * @param resetHistory 该参数用于 set document 流程中的输入或控制。
    */
-  setDocument(document: MindMapDocument, resetHistory = true): void {
+  setDocument(document: MindMapDocument, resetHistory = true, options?: MindMapEditorOptions): void {
+    const previousFilePath = this.options.currentFilePath;
+    const nextFilePath = options?.currentFilePath ?? previousFilePath;
+    const fileChanged = previousFilePath !== nextFilePath;
+    if (fileChanged) {
+      this.cancelReadingLocationRestore();
+      this.cancelArticleInitialRender();
+      this.cancelArticleWindowExpansion();
+      this.pendingArticleFocusLocation = null;
+      this.pendingLocationNavigationKey = null;
+      if (this.readingLocationTimer !== null) window.clearTimeout(this.readingLocationTimer);
+      if (this.readingCaptureTimer !== null) window.clearTimeout(this.readingCaptureTimer);
+      this.readingLocationTimer = null;
+      this.readingCaptureTimer = null;
+    }
+    if (options) this.options = options;
+    if (fileChanged) this.lastReadingLocation = this.options.readingLocation;
+    this.callbacks.onDebugLog("view", "editor-set-document", { previousFilePath, nextFilePath, fileChanged, resetHistory, readingLocationNodeId: this.lastReadingLocation?.nodeIds[0] });
     this.document = cloneDocument(document);
     this.currentMode = this.resolveMode(this.options.defaultViewMode);
     const documentReadOnly = this.document.view?.readOnly === true;
@@ -1728,6 +1745,7 @@ export class MindMapEditor {
     this.cancelReadingLocationRestore();
     const token = this.readingRestoreToken;
     this.activeReadingRestore = { token, mode, location, resolved };
+    this.callbacks.onDebugLog("navigation", "restore-transaction-start", { token, mode, filePath: resolved.filePath, nodeId: resolved.nodeId, nodeRatio: resolved.nodeRatio, viewportRatio: resolved.viewportRatio });
 
     const apply = (): boolean => {
       if (this.activeReadingRestore?.token !== token || this.currentMode !== mode) return false;
@@ -1828,7 +1846,10 @@ export class MindMapEditor {
           : `.mms-article-node[data-node-id="${CSS.escape(resolved.nodeId)}"]`
         : `[data-node-id="${CSS.escape(resolved.nodeId)}"][data-file-path="${CSS.escape(resolved.filePath)}"]`;
     const target = scroller.querySelector<HTMLElement>(selector);
-    if (!target) return false;
+    if (!target) {
+      this.callbacks.onDebugLog("navigation", "restore-target-missing", { mode, filePath: resolved.filePath, nodeId: resolved.nodeId, selector, selectedId: this.selectedId, hasController: Boolean(this.articleRenderController) });
+      return false;
+    }
     this.blockReadingLocationCapture();
     this.applySelectionClasses();
     const viewport = scroller.getBoundingClientRect();
@@ -1836,7 +1857,13 @@ export class MindMapEditor {
     const targetY = rect.top + rect.height * resolved.nodeRatio;
     const desiredY = viewport.top + viewport.height * resolved.viewportRatio;
     const nextScrollTop = scroller.scrollTop + targetY - desiredY;
+    const previousScrollTop = scroller.scrollTop;
     if (Math.abs(scroller.scrollTop - nextScrollTop) > 0.5) scroller.scrollTop = nextScrollTop;
+    this.callbacks.onDebugLog("navigation", "restore-target-applied", {
+      mode, filePath: resolved.filePath, nodeId: resolved.nodeId, selector, previousScrollTop, nextScrollTop,
+      actualScrollTop: scroller.scrollTop, nodeRatio: resolved.nodeRatio, viewportRatio: resolved.viewportRatio,
+      targetTop: rect.top, targetHeight: rect.height, viewportTop: viewport.top, viewportHeight: viewport.height
+    });
     this.updateArticleMiniMapActiveMarker();
     return true;
   }
@@ -2180,7 +2207,6 @@ export class MindMapEditor {
    * @param id 目标对象或节点的稳定标识。
    */
   focusNodeById(id: string, persistLocation = true): void {
-    if (!findNode(this.document.root, id)) return;
     this.focusNode(id, persistLocation);
   }
 
@@ -2818,6 +2844,9 @@ export class MindMapEditor {
       ? `返回父导图：${parentTitle}（来源节点：${navigation.parentNodeText}）`
       : `返回父导图：${parentTitle}`;
     const openParent = (): void => {
+      this.callbacks.onDebugLog("navigation", "return-parent-click", {
+        currentFilePath: this.options.currentFilePath, parentPath: navigation.parentPath, parentNodeId: navigation.parentNodeId, parentNodeText: navigation.parentNodeText, currentMode: this.currentMode
+      });
       void this.callbacks.onOpenMindMap(navigation.parentPath, navigation.parentNodeId);
     };
 
@@ -3353,6 +3382,7 @@ export class MindMapEditor {
   private renderArticle(): void {
     const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true;
     if (!this.options.articleContextReady) {
+      this.callbacks.onDebugLog("article", "render-waiting-context", { selectedId: this.selectedId, pendingTarget: this.pendingArticleFocusLocation?.nodeIds[0], landingMode: this.document.view?.articleLandingMode });
       this.cancelReadingLocationRestore();
       this.cancelArticleWindowExpansion();
       this.articleRenderController = null;
@@ -3363,11 +3393,22 @@ export class MindMapEditor {
       return;
     }
 
-    const directoryOnly = this.options.showArticleToc
+    const explicitTarget = this.pendingArticleFocusLocation;
+    const directoryOnly = !explicitTarget
+      && this.options.showArticleToc
       && this.options.articleTocEntries.length > 0
       && this.document.view?.articleLandingMode !== "article";
-    const requestedLocation = directoryOnly ? null : this.pendingArticleFocusLocation;
+    const requestedLocation = directoryOnly ? null : explicitTarget;
     this.pendingArticleFocusLocation = null;
+    this.callbacks.onDebugLog("article", "render-decision", {
+      selectedId: this.selectedId,
+      explicitTarget: explicitTarget?.nodeIds[0],
+      directoryOnly,
+      showArticleToc: this.options.showArticleToc,
+      tocEntries: this.options.articleTocEntries.length,
+      landingMode: this.document.view?.articleLandingMode,
+      articleContextReady: this.options.articleContextReady
+    });
     const existingPage = this.articleEl.querySelector<HTMLElement>(":scope > .mms-article-page");
     const existingDirectory = existingPage?.querySelector(".mms-article-toc-page") !== null;
     const activeRestoreLocation = this.activeReadingRestore?.mode === "article"
@@ -3393,6 +3434,10 @@ export class MindMapEditor {
       this.articleEl.empty();
       this.articleEl.removeAttribute("aria-busy");
       this.articleRenderController = renderArticleMode(this.articleEl, this.articleRendererOptions());
+      this.callbacks.onDebugLog("article", "window-mounted", {
+        directoryOnly, selectedId: this.selectedId, latestTarget: latestRequestedLocation?.nodeIds[0],
+        hasController: Boolean(this.articleRenderController), scrollTopBeforeRestore: this.articleEl.scrollTop
+      });
       this.articleEl.querySelector<HTMLElement>(":scope > .mms-article-page")?.addClass("is-window-entering");
       this.refreshArticleWindowChrome();
       this.addArticleScrollToTopButton();
@@ -5456,6 +5501,7 @@ export class MindMapEditor {
 
   /** Persists one article landing choice without restoring the outgoing page's chapter anchor. */
   private setArticleLandingMode(mode: "toc" | "article"): void {
+    this.callbacks.onDebugLog("article", "set-landing-mode", { requestedMode: mode, currentMode: this.currentMode, currentLandingMode: this.document.view?.articleLandingMode, selectedId: this.selectedId });
     if (this.currentMode !== "article" || !this.ensureEditable()) return;
     const current = this.document.view?.articleLandingMode ?? "toc";
     if (current === mode) {
@@ -6416,6 +6462,14 @@ export class MindMapEditor {
    * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
    */
   private focusNode(id: string, persistLocation = true): void {
+    const exists = Boolean(findNode(this.document.root, id));
+    this.callbacks.onDebugLog("navigation", "focus-node-start", {
+      id, exists, persistLocation, currentMode: this.currentMode, currentFilePath: this.options.currentFilePath,
+      articleContextReady: this.options.articleContextReady, showArticleToc: this.options.showArticleToc,
+      landingMode: this.document.view?.articleLandingMode, activeRestoreTarget: this.activeReadingRestore?.resolved.nodeId
+    });
+    if (!exists) return;
+    this.cancelReadingLocationRestore();
     const ancestors = findAncestors(this.document.root, id);
     const collapsed = ancestors.filter((node) => node.collapsed);
     if (collapsed.length) {
@@ -6427,7 +6481,6 @@ export class MindMapEditor {
     this.selectedIds.add(id);
     if (this.currentMode === "article"
       && id !== this.document.root.id
-      && this.options.showArticleToc
       && this.document.view?.articleLandingMode !== "article") {
       this.document.view = { ...(this.document.view ?? {}), articleLandingMode: "article" };
       this.callbacks.onChange(this.getDocument());
@@ -6441,6 +6494,7 @@ export class MindMapEditor {
     );
     if (persistLocation) this.rememberLocation(location, true);
     if (this.currentMode === "article") this.pendingArticleFocusLocation = location;
+    this.callbacks.onDebugLog("navigation", "focus-node-render", { id, currentMode: this.currentMode, landingMode: this.document.view?.articleLandingMode, pendingArticleTarget: this.pendingArticleFocusLocation?.nodeIds[0] });
     this.render();
     if (this.currentMode !== "article") this.restoreReadingLocation(this.currentMode, location);
   }

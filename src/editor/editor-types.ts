@@ -64,6 +64,8 @@ export interface MindMapEditorCallbacks {
   /** Persists article mode's own last lock state independently from other display modes. */
   onArticleReadOnlyChange: (readOnly: boolean) => void | Promise<void>;
   onRenderCode: (block: MindMapCodeBlock, container: HTMLElement) => void | Promise<void>;
+  /** Records a bounded structured runtime diagnostic event when debug mode is enabled. */
+  onDebugLog: (scope: string, event: string, details?: unknown) => void;
 }
 
 /**
