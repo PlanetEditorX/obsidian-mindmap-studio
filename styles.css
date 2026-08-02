@@ -4023,27 +4023,32 @@
   white-space: nowrap;
 }
 
-.mms-article-leaf-text.mms-article-leaf-numbered[data-article-number-style="circled"]::before {
-  font-family: "Segoe UI Symbol", "Noto Sans Symbols 2", "Microsoft YaHei", sans-serif;
+.mms-article-leaf-text.mms-article-leaf-numbered[data-article-number-style="circled"] {
+  position: relative;
+  padding-inline-start: 1.9em;
 }
 
-.mms-article-leaf-text.mms-article-leaf-numbered[data-article-number-style="circled"][data-article-number-fallback="true"]::before {
+.mms-article-leaf-text.mms-article-leaf-numbered[data-article-number-style="circled"]::before {
   box-sizing: border-box;
+  position: absolute;
+  top: .26em;
+  inset-inline-start: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 1.75em;
-  height: 1.75em;
-  margin-inline-end: .38em;
-  padding: 0 .2em;
+  min-width: 1.65em;
+  height: 1.65em;
+  padding: 0 .14em;
   content: attr(data-article-number);
-  border: .1em solid currentColor;
+  border: .11em solid currentColor;
   border-radius: 999px;
   font-family: inherit;
-  font-size: .72em;
+  font-size: .86em;
   font-weight: 600;
+  font-variant-numeric: tabular-nums;
   line-height: 1;
-  vertical-align: .08em;
+  pointer-events: none;
+  user-select: none;
 }
 
 .mms-article-leaf-text.is-bulleted::before {
