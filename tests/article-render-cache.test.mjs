@@ -115,14 +115,37 @@ test("article cache restores oldest-to-newest LRU order before pruning", async (
   }
 });
 
-test("article renderer restores unchanged nodes before hydration and excludes asynchronous code nodes", async () => {
+
+test("article renderer restores cached nodes inside the frame budget and excludes asynchronous code nodes", async () => {
   const source = await readFile(path.join(rootDir, "src/editor/article-renderer.ts"), "utf8");
   assert.match(source, /compatibleArticleCache\(options\.articleCache/);
   assert.match(source, /articleNodeRenderFingerprint\(info\.node/);
   assert.doesNotMatch(source, /documentFingerprint:\s*articleCacheFingerprint\(options\.document\)/);
-  assert.match(source, /restoreCachedArticleSection\(section, cached\.html/);
-  assert.match(source, /cachedIds\.add\(info\.node\.id\)/);
-  assert.match(source, /hydrateArticleNodeSection\(section, info, options\)/);
-  assert.match(source, /return !nodeContentBlocks\(node\)\.some\(\(block\) => block\.type === "code"\)/);
+  assert.match(source, /const cachedEntries = new Map<string, ArticleNodeRenderCacheEntry>\(\)/);
+  const setupStart = source.indexOf("  for (const info of infos) {");
+  const batchStart = source.indexOf("  const renderBatch = (startIndex: number): void => {");
+  const setupSource = source.slice(setupStart, batchStart);
+  const batchSource = source.slice(batchStart, source.indexOf("  if (!orderedIds.length)", batchStart));
+  assert.doesNotMatch(setupSource, /restoreCachedArticleSection\(/, "cache HTML must not be restored before the first frame batch");
+  assert.match(batchSource, /restoreCachedArticleSection\(section, cached\.html, info, options\)/);
+  assert.match(batchSource, /hydrateArticleNodeSection\(section, info, options\)/);
+  assert.match(source, /return !articleNodeContentBlocks\(node, options\)\.some\(\(block\) => block\.type === "code"\)/);
   assert.match(source, /options\.onArticleCacheUpdate\(snapshot\)/);
+});
+
+test("cached article hydration indexes block elements and memoizes normalized blocks per render", async () => {
+  const [source, modesSource] = await Promise.all([
+    readFile(path.join(rootDir, "src/editor/article-renderer.ts"), "utf8"),
+    readFile(path.join(rootDir, "src/article/modes.ts"), "utf8")
+  ]);
+  assert.match(source, /contentBlockCache\?: WeakMap<MindMapNode, MindMapContentBlock\[\]>/);
+  assert.match(source, /contentBlockCache: new WeakMap\(\)/);
+  assert.match(source, /function articleNodeContentBlocks\(/);
+  assert.match(source, /buildArticleNodeInfo\([\s\S]*?\(node\) => articleNodeContentBlocks\(node, options\)/);
+  assert.match(modesSource, /primaryText: \(node: MindMapNode\) => string = nodePrimaryText/);
+  assert.match(modesSource, /const title = primaryText\(child\)/);
+  assert.match(source, /const blockElements = indexArticleBlockElements\(section\)/);
+  assert.match(source, /querySelectorAll<HTMLElement>\("\[data-block-id\]"\)/);
+  assert.match(source, /index\.get\(blockId\)\?\.find\(\(element\) => element\.matches\(selector\)\)/);
+  assert.doesNotMatch(source, /Array\.from\(container\.querySelectorAll<HTMLElement>\(selector\)\)/);
 });

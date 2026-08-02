@@ -1,5 +1,15 @@
 # Modified Files
 
+## 1.38.7 缓存恢复分帧与 hydration 线性化
+
+- `src/editor/article-renderer.ts`：缓存预扫描不再同步恢复所有章节 HTML；恢复、净化、交互绑定和普通节点重建共用帧预算。增加单次渲染内容块 `WeakMap`，并对缓存章节的 `data-block-id` 一次建索引。
+- `src/article/modes.ts`：`buildArticleNodeInfo()` 可注入主文字读取回调，文章渲染复用内容块缓存；同级标题和末端正文统计合并为一次遍历。
+- `tests/article-render-cache.test.mjs`：增加缓存恢复位置、内容块 memo、主文字缓存注入和块元素索引契约测试，单元测试扩展至 265 项。
+- `README.md`、`CHANGELOG.md`、`docs/ARCHITECTURE.md`、`docs/SPECIAL_FEATURES.md`、`docs/TESTING.md`、`docs/FUNCTION_REFERENCE.md`：同步缓存命中首屏、复杂度边界、验证与函数参考。
+- `package.json`、`package-lock.json`、`manifest.json`、`versions.json`、`update.json`：统一版本元数据为 1.38.7，并在最终安装包生成后写入 SHA-256。
+- `TEST_RESULTS.md`、Codex 项目衔接页：记录完整验证和真实 Win10 大文件待验证事项。
+- `main.js`：由优化后的 TypeScript 源码重新生产构建。
+
 ## 1.38.6 文章缓存线性指纹与跨平台 ZIP 适配
 
 - `src/article/article-render-cache.ts`：新增只覆盖节点自身与渲染上下文的文章节点指纹，避免递归序列化后代；缓存修订提升到 v2，修复启动预载 LRU 顺序，并使用无原型节点表。

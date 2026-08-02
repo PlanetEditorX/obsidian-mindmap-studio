@@ -123,7 +123,7 @@ test("terminal body siblings can switch to the next article numbering level", as
   assert.match(settingsSource, /articleLeafNumberingThreshold: number/);
   assert.match(settingsSource, /setName\("末端正文标识转序号"\)[\s\S]*setName\("末端正文转序号阈值"\)/);
   assert.match(viewSource, /document\?\.articleStyle\?\.leafNumberingEnabled \?\? this\.plugin\.settings\.articleLeafNumberingEnabled/);
-  assert.match(modesSource, /terminalCount = parent\.children\.filter/);
+  assert.match(modesSource, /for \(const child of parent\.children\) \{[\s\S]*else if \(child\.articleNumberingMode !== "none"\) terminalCount \+= 1/);
   assert.match(modesSource, /numberedLeaf/);
   assert.match(modesSource, /const displayLevel = numberedLeaf \? defaultLevel : numbering\.level/);
   assert.match(modesSource, /articleNumberLabel\(displayLevel, numberedIndex\)/);

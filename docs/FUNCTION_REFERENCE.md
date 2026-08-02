@@ -1094,7 +1094,7 @@ export function currentArticlePageEntry(navigation: ArticlePageNavigation | unde
 
 ### 接口 `ArticleLeafNumberingOptions`
 
-源码：`src/article/modes.ts:283`
+源码：`src/article/modes.ts:285`
 
 Build the article representation for one physical .mindmap file. `baseDepth` is the absolute article depth represented by this file's root. A manually configured node replaces its inferred highest level and its descendants continue from that level. Heading/body classification remains structural: leaf peers of headings become same-level headings, while an isolated terminal node remains body text.
 
@@ -1104,17 +1104,17 @@ export interface ArticleLeafNumberingOptions
 
 ### 函数 `buildArticleNodeInfo`
 
-源码：`src/article/modes.ts:291`
+源码：`src/article/modes.ts:293`
 
 展开文章节点，并按同一上级下的末端正文数量决定是否使用下一层序号。
 
 ```ts
-export function buildArticleNodeInfo(root: MindMapNode, baseDepth = 0, leafNumbering: ArticleLeafNumberingOptions =
+export function buildArticleNodeInfo( root: MindMapNode, baseDepth = 0, leafNumbering: ArticleLeafNumberingOptions =
 ```
 
 ### 函数 `normalizeVisibleModes`
 
-源码：`src/article/modes.ts:336`
+源码：`src/article/modes.ts:347`
 
 校验并规范化visible modes，并保持模型、界面和持久化状态的一致性。
 
@@ -2508,9 +2508,19 @@ export interface ArticleIncrementalRenderOptions
 export interface ArticleRendererOptions
 ```
 
+### 函数 `articleNodeContentBlocks`
+
+源码：`src/editor/article-renderer.ts:90`
+
+Normalizes one node at most once during a complete article render.
+
+```ts
+function articleNodeContentBlocks(node: MindMapNode, options: ArticleRendererOptions): MindMapContentBlock[]
+```
+
 ### 函数 `renderArticleMode`
 
-源码：`src/editor/article-renderer.ts:88`
+源码：`src/editor/article-renderer.ts:101`
 
 根据文档文章样式和文章上下文渲染完整文章页。
 
@@ -2520,7 +2530,7 @@ export function renderArticleMode(container: HTMLElement, options: ArticleRender
 
 ### 函数 `compatibleArticleCache`
 
-源码：`src/editor/article-renderer.ts:236`
+源码：`src/editor/article-renderer.ts:243`
 
 Returns a cache only when it belongs to the current file and presentation contract.
 
@@ -2530,7 +2540,7 @@ function compatibleArticleCache( snapshot: ArticleRenderCacheSnapshot | null, fi
 
 ### 函数 `articlePresentationFingerprint`
 
-源码：`src/editor/article-renderer.ts:250`
+源码：`src/editor/article-renderer.ts:257`
 
 Presentation changes invalidate snapshots even when node content is unchanged.
 
@@ -2540,7 +2550,7 @@ function articlePresentationFingerprint(options: ArticleRendererOptions): string
 
 ### 函数 `articleNodeFingerprint`
 
-源码：`src/editor/article-renderer.ts:271`
+源码：`src/editor/article-renderer.ts:278`
 
 A moved, renumbered, restyled, or edited node receives a different fingerprint.
 
@@ -2550,17 +2560,17 @@ function articleNodeFingerprint( info: ReturnType<typeof buildArticleNodeInfo>[n
 
 ### 函数 `isArticleNodeCacheable`
 
-源码：`src/editor/article-renderer.ts:293`
+源码：`src/editor/article-renderer.ts:300`
 
 Code blocks own asynchronous Markdown components, so they are rebuilt instead of persisted as inert HTML.
 
 ```ts
-function isArticleNodeCacheable(node: MindMapNode): boolean
+function isArticleNodeCacheable(node: MindMapNode, options: ArticleRendererOptions): boolean
 ```
 
 ### 函数 `restoreCachedArticleSection`
 
-源码：`src/editor/article-renderer.ts:298`
+源码：`src/editor/article-renderer.ts:305`
 
 Restores safe static HTML immediately; interactive behavior is hydrated in a later frame.
 
@@ -2570,7 +2580,7 @@ function restoreCachedArticleSection( section: HTMLElement, html: string, info: 
 
 ### 函数 `snapshotArticleSectionHtml`
 
-源码：`src/editor/article-renderer.ts:319`
+源码：`src/editor/article-renderer.ts:326`
 
 Stores only stable generated markup; live actions and edit state are recreated during hydration.
 
@@ -2580,7 +2590,7 @@ function snapshotArticleSectionHtml(section: HTMLElement): string
 
 ### 函数 `hydrateArticleNodeSection`
 
-源码：`src/editor/article-renderer.ts:335`
+源码：`src/editor/article-renderer.ts:342`
 
 Binds the current editor instance to one restored static node without rebuilding its visible DOM.
 
@@ -2590,27 +2600,47 @@ function hydrateArticleNodeSection( section: HTMLElement, info: ReturnType<typeo
 
 ### 函数 `hydrateArticleNodeContent`
 
-源码：`src/editor/article-renderer.ts:387`
+源码：`src/editor/article-renderer.ts:395`
 
 Rebinds text, image, table, and question interactions inside a restored node.
 
 ```ts
-function hydrateArticleNodeContent( container: HTMLElement, node: MindMapNode, treatTextAsBody: boolean, options: ArticleRendererOptions ): void
+function hydrateArticleNodeContent( container: HTMLElement, node: MindMapNode, treatTextAsBody: boolean, options: ArticleRendererOptions, blockElements: ArticleBlockElementIndex = indexArticleBlockElements(container) ): void
+```
+
+### 类型 `ArticleBlockElementIndex`
+
+源码：`src/editor/article-renderer.ts:448`
+
+Elements carrying the same block ID, indexed once for cached-node hydration.
+
+```ts
+type ArticleBlockElementIndex = Map<string, HTMLElement[]>;
+```
+
+### 函数 `indexArticleBlockElements`
+
+源码：`src/editor/article-renderer.ts:451`
+
+Builds a block lookup in one subtree scan instead of querying the whole section for every block.
+
+```ts
+function indexArticleBlockElements(container: HTMLElement): ArticleBlockElementIndex
 ```
 
 ### 函数 `findBlockElement`
 
-源码：`src/editor/article-renderer.ts:439`
+源码：`src/editor/article-renderer.ts:464`
 
-Finds the innermost generated element for a block without relying on CSS.escape support.
+Finds a generated element among the small same-ID bucket without relying on CSS.escape support.
 
 ```ts
-function findBlockElement(container: HTMLElement, blockId: string, selector: string): HTMLElement | null
+function findBlockElement(index: ArticleBlockElementIndex, blockId: string, selector: string): HTMLElement | null
 ```
 
 ### 函数 `hydrateArticleTable`
 
-源码：`src/editor/article-renderer.ts:444`
+源码：`src/editor/article-renderer.ts:469`
 
 Reconnects resize and edit behavior to a table restored from cached HTML.
 
@@ -2620,7 +2650,7 @@ function hydrateArticleTable( wrap: HTMLElement, node: MindMapNode, tableData: M
 
 ### 函数 `hydrateArticleQuestionDetails`
 
-源码：`src/editor/article-renderer.ts:489`
+源码：`src/editor/article-renderer.ts:514`
 
 Restores the answer/explanation toggle for cached question panels.
 
@@ -2630,7 +2660,7 @@ function hydrateArticleQuestionDetails(container: HTMLElement): void
 
 ### 函数 `renderArticleNodeSection`
 
-源码：`src/editor/article-renderer.ts:504`
+源码：`src/editor/article-renderer.ts:529`
 
 挂载一个文章节点占位区的完整内容和交互。
 
@@ -2640,7 +2670,7 @@ function renderArticleNodeSection( section: HTMLElement, info: ReturnType<typeof
 
 ### 函数 `createArticleContentBlock`
 
-源码：`src/editor/article-renderer.ts:560`
+源码：`src/editor/article-renderer.ts:585`
 
 Creates an article block shell for right-click targeting without adding a floating drag handle.
 
@@ -2650,7 +2680,7 @@ function createArticleContentBlock( container: HTMLElement, blockId: string, ind
 
 ### 函数 `articleParagraphClass`
 
-源码：`src/editor/article-renderer.ts:573`
+源码：`src/editor/article-renderer.ts:598`
 
 Builds paragraph classes without changing the legacy first-line-indent default.
 
@@ -2660,7 +2690,7 @@ function articleParagraphClass(baseClass: string, block: MindMapTextContentBlock
 
 ### 函数 `applyArticleLeafBulletStyle`
 
-源码：`src/editor/article-renderer.ts:578`
+源码：`src/editor/article-renderer.ts:603`
 
 Applies the configured terminal bullet color and visual style to one article paragraph.
 
@@ -2670,7 +2700,7 @@ function applyArticleLeafBulletStyle(paragraph: HTMLElement, options: ArticleRen
 
 ### 函数 `applyArticleStyle`
 
-源码：`src/editor/article-renderer.ts:585`
+源码：`src/editor/article-renderer.ts:610`
 
 将解析后的文章样式写入文章页 CSS 变量。
 
@@ -2680,7 +2710,7 @@ function applyArticleStyle(page: HTMLElement, style: ReturnType<typeof resolveAr
 
 ### 函数 `renderDirectory`
 
-源码：`src/editor/article-renderer.ts:596`
+源码：`src/editor/article-renderer.ts:621`
 
 渲染文章目录页。
 
@@ -2690,7 +2720,7 @@ function renderDirectory(page: HTMLElement, options: ArticleRendererOptions): vo
 
 ### 函数 `renderHeading`
 
-源码：`src/editor/article-renderer.ts:614`
+源码：`src/editor/article-renderer.ts:639`
 
 渲染章节标题或子导图链接。
 
@@ -2700,7 +2730,7 @@ function renderHeading(heading: HTMLElement, node: MindMapNode, title: string, o
 
 ### 函数 `renderArticleNodeContent`
 
-源码：`src/editor/article-renderer.ts:637`
+源码：`src/editor/article-renderer.ts:662`
 
 渲染文章节点的正文块、图片、备注、表格和代码。
 
@@ -2710,7 +2740,7 @@ export function renderArticleNodeContent(container: HTMLElement, node: MindMapNo
 
 ### 函数 `renderArticleTable`
 
-源码：`src/editor/article-renderer.ts:707`
+源码：`src/editor/article-renderer.ts:732`
 
 Renders a persisted, resizable table block in article and continuous-reading views.
 
@@ -2720,7 +2750,7 @@ function renderArticleTable( container: HTMLElement, node: MindMapNode, tableDat
 
 ### 函数 `renderArticleQuestionDetails`
 
-源码：`src/editor/article-renderer.ts:774`
+源码：`src/editor/article-renderer.ts:799`
 
 Renders structured question options, answers, explanations, and original source in article and reading modes.
 
@@ -2730,7 +2760,7 @@ function renderArticleQuestionDetails(container: HTMLElement, node: MindMapNode)
 
 ### 函数 `renderArticlePager`
 
-源码：`src/editor/article-renderer.ts:816`
+源码：`src/editor/article-renderer.ts:841`
 
 渲染同层兄弟文章页的上一篇、父级、下一篇与阅读完成导航。
 

@@ -5219,13 +5219,17 @@ function currentArticlePageEntry(navigation) {
   if (!(navigation == null ? void 0 : navigation.parentPath)) return void 0;
   return navigation.entries[navigation.currentIndex];
 }
-function buildArticleNodeInfo(root, baseDepth = 0, leafNumbering = { enabled: false, threshold: 4 }) {
+function buildArticleNodeInfo(root, baseDepth = 0, leafNumbering = { enabled: false, threshold: 4 }, primaryText = nodePrimaryText) {
   const result = [];
   const visitChildren = (parent, defaultLevel) => {
     var _a2;
-    const siblingHasHeading = parent.children.some((child) => isArticleHeading(child));
+    let siblingHasHeading = false;
+    let terminalCount = 0;
+    for (const child of parent.children) {
+      if (isArticleHeading(child)) siblingHasHeading = true;
+      else if (child.articleNumberingMode !== "none") terminalCount += 1;
+    }
     const threshold = Math.max(1, Math.min(20, Math.floor(leafNumbering.threshold) || 4));
-    const terminalCount = parent.children.filter((child) => !isArticleHeading(child) && child.articleNumberingMode !== "none").length;
     const convertLeaves = leafNumbering.enabled && terminalCount >= threshold && defaultLevel <= 7;
     const numberedIndexes = /* @__PURE__ */ new Map();
     for (const child of parent.children) {
@@ -5235,7 +5239,7 @@ function buildArticleNodeInfo(root, baseDepth = 0, leafNumbering = { enabled: fa
       const numberedIndex = (numbering.shouldNumber || numberedLeaf) && !numbering.skipped ? ((_a2 = numberedIndexes.get(displayLevel)) != null ? _a2 : 0) + 1 : 0;
       if (numberedIndex) numberedIndexes.set(displayLevel, numberedIndex);
       const label = numberedIndex ? articleNumberLabel(displayLevel, numberedIndex) : "";
-      const title = nodePrimaryText(child) || (numbering.isHeading ? "\u672A\u547D\u540D\u6807\u9898" : "");
+      const title = primaryText(child) || (numbering.isHeading ? "\u672A\u547D\u540D\u6807\u9898" : "");
       result.push({
         node: child,
         depth: displayLevel,
@@ -5555,7 +5559,7 @@ function readRichTextEditor(editor) {
 // src/editor/editor-modals.ts
 var import_obsidian5 = require("obsidian");
 
-// node_modules/fflate/esm/browser.js
+// ../../work_plugin_utf8/node_modules/fflate/esm/browser.js
 var u8 = Uint8Array;
 var u16 = Uint16Array;
 var i32 = Int32Array;
@@ -8631,15 +8635,24 @@ var ArticleRenderCacheStore = class {
 };
 
 // src/editor/article-renderer.ts
+function articleNodeContentBlocks(node, options) {
+  const cache = options.contentBlockCache;
+  if (!cache) return nodeContentBlocks(node);
+  const cached = cache.get(node);
+  if (cached) return cached;
+  const blocks = nodeContentBlocks(node);
+  cache.set(node, blocks);
+  return blocks;
+}
 function renderArticleMode(container, options) {
-  var _a2, _b2, _c, _d, _e;
+  var _a2, _b2, _c, _d;
+  options = options.contentBlockCache ? options : { ...options, contentBlockCache: /* @__PURE__ */ new WeakMap() };
   container.empty();
   const articleStyle = resolveArticleStyle(options.document.articleStyle);
   const page = container.createDiv({ cls: `mms-article-page article-${articleStyle.preset} toc-${(_a2 = articleStyle.tocStyle) != null ? _a2 : "card"}` });
   page.dataset.nodeId = options.document.root.id;
   applyArticleStyle(page, articleStyle);
   const pageEntry = currentArticlePageEntry(options.articleNavigation);
-  const rootTitle = nodePrimaryText(options.document.root) || options.document.title;
   const title = page.createEl("h1", { cls: "mms-article-document-title" });
   title.dataset.nodeId = options.document.root.id;
   if (pageEntry == null ? void 0 : pageEntry.label) {
@@ -8647,8 +8660,8 @@ function renderArticleMode(container, options) {
     title.createSpan({ cls: "mms-article-number", text: `${pageEntry.label}${separator}` });
   }
   const titleText = title.createSpan({ cls: "mms-article-document-title-text" });
-  const rootTextBlock = nodeContentBlocks(options.document.root).find((block) => block.type === "text");
-  renderRichTextRuns(titleText, rootTextBlock == null ? void 0 : rootTextBlock.richText, (_b2 = rootTextBlock == null ? void 0 : rootTextBlock.text) != null ? _b2 : rootTitle);
+  const rootTextBlock = articleNodeContentBlocks(options.document.root, options).find((block) => block.type === "text");
+  renderRichTextRuns(titleText, rootTextBlock == null ? void 0 : rootTextBlock.richText, (_b2 = rootTextBlock == null ? void 0 : rootTextBlock.text) != null ? _b2 : options.document.title);
   options.makeInlineEditable(titleText, options.document.root, "\u6587\u7AE0\u6807\u9898", rootTextBlock == null ? void 0 : rootTextBlock.id);
   options.addInlineNodeActions(page, options.document.root);
   title.addEventListener("contextmenu", (event) => {
@@ -8665,6 +8678,9 @@ function renderArticleMode(container, options) {
   const infos = buildArticleNodeInfo(options.document.root, options.articleBaseDepth, {
     enabled: options.articleLeafNumberingEnabled,
     threshold: options.articleLeafNumberingThreshold
+  }, (node) => {
+    var _a3, _b3;
+    return (_b3 = (_a3 = articleNodeContentBlocks(node, options).find((block) => block.type === "text")) == null ? void 0 : _a3.text.trim()) != null ? _b3 : "";
   });
   if (!options.incremental) {
     for (const info of infos) {
@@ -8680,7 +8696,7 @@ function renderArticleMode(container, options) {
   const sections = /* @__PURE__ */ new Map();
   const infoById = new Map(infos.map((info) => [info.node.id, info]));
   const fingerprints = /* @__PURE__ */ new Map();
-  const cachedIds = /* @__PURE__ */ new Set();
+  const cachedEntries = /* @__PURE__ */ new Map();
   for (const info of infos) {
     const section = page.createEl("section", { cls: `mms-article-node is-render-pending depth-${Math.min(info.depth, 8)}` });
     section.dataset.nodeId = info.node.id;
@@ -8689,29 +8705,18 @@ function renderArticleMode(container, options) {
     const fingerprint = articleNodeFingerprint(info, options);
     fingerprints.set(info.node.id, fingerprint);
     const cached = previousCache == null ? void 0 : previousCache.nodes[info.node.id];
-    if (!cached || cached.fingerprint !== fingerprint || !isArticleNodeCacheable(info.node)) continue;
-    if (!restoreCachedArticleSection(section, cached.html, info, options)) continue;
-    cachedIds.add(info.node.id);
-    nextCacheNodes[info.node.id] = cached;
+    if ((cached == null ? void 0 : cached.fingerprint) === fingerprint && isArticleNodeCacheable(info.node, options)) {
+      cachedEntries.set(info.node.id, cached);
+    }
   }
   const orderedIds = prioritizeArticleNodeIds(
     infos.map((info) => info.node.id),
     buildHierarchyFocusOrder(options.document.root, options.selectedId)
   );
   let firstContentRevealed = false;
-  let pagerRendered = false;
-  const firstDocumentNodeId = (_e = infos[0]) == null ? void 0 : _e.node.id;
-  if (infos.length === 0 || firstDocumentNodeId && cachedIds.has(firstDocumentNodeId)) {
-    if (cachedIds.size === infos.length) {
-      renderArticlePager(page, options);
-      pagerRendered = true;
-    }
-    options.incremental.onFirstContent();
-    firstContentRevealed = true;
-  }
   const complete = () => {
     var _a3;
-    if (!pagerRendered) renderArticlePager(page, options);
+    renderArticlePager(page, options);
     const now = Date.now();
     const snapshot = {
       schemaVersion: ARTICLE_RENDER_CACHE_SCHEMA_VERSION,
@@ -8742,11 +8747,14 @@ function renderArticleMode(container, options) {
       const info = infoById.get(nodeId);
       const section = sections.get(nodeId);
       if (info && section) {
-        if (cachedIds.has(nodeId)) {
+        const cached = cachedEntries.get(nodeId);
+        const restored = cached ? restoreCachedArticleSection(section, cached.html, info, options) : false;
+        if (restored && cached) {
+          nextCacheNodes[nodeId] = cached;
           hydrateArticleNodeSection(section, info, options);
         } else {
           renderArticleNodeSection(section, info, options);
-          if (isArticleNodeCacheable(info.node)) {
+          if (isArticleNodeCacheable(info.node, options)) {
             nextCacheNodes[nodeId] = {
               fingerprint: (_b3 = fingerprints.get(nodeId)) != null ? _b3 : articleNodeFingerprint(info, options),
               html: snapshotArticleSectionHtml(section)
@@ -8768,6 +8776,7 @@ function renderArticleMode(container, options) {
     complete();
   };
   if (!orderedIds.length) {
+    options.incremental.onFirstContent();
     complete();
     return;
   }
@@ -8817,8 +8826,8 @@ function articleNodeFingerprint(info, options) {
     leafTextAlignment: options.articleLeafTextAlignment
   });
 }
-function isArticleNodeCacheable(node) {
-  return !nodeContentBlocks(node).some((block) => block.type === "code");
+function isArticleNodeCacheable(node, options) {
+  return !articleNodeContentBlocks(node, options).some((block) => block.type === "code");
 }
 function restoreCachedArticleSection(section, html, info, options) {
   if (!html || /<\s*(script|iframe|object|embed)\b/i.test(html)) return false;
@@ -8849,6 +8858,7 @@ function snapshotArticleSectionHtml(section) {
   return clone.innerHTML;
 }
 function hydrateArticleNodeSection(section, info, options) {
+  const blockElements = indexArticleBlockElements(section);
   section.addEventListener("click", () => {
     if (!options.isReadOnly()) options.selectNode(info.node.id);
   });
@@ -8864,7 +8874,7 @@ function hydrateArticleNodeSection(section, info, options) {
   if (info.isHeading) {
     const heading = section.querySelector(".mms-article-section-heading");
     const headingText = heading == null ? void 0 : heading.querySelector(".mms-article-heading-text");
-    const textBlock = nodeContentBlocks(info.node).find((block) => block.type === "text");
+    const textBlock = articleNodeContentBlocks(info.node, options).find((block) => block.type === "text");
     if (headingText) {
       options.makeInlineEditable(headingText, info.node, "\u7AE0\u8282\u6807\u9898", textBlock == null ? void 0 : textBlock.id);
       if (info.node.submap && headingText instanceof HTMLAnchorElement) {
@@ -8879,34 +8889,34 @@ function hydrateArticleNodeSection(section, info, options) {
       }
     }
     if (heading) options.addInlineNodeActions(heading, info.node);
-    hydrateArticleNodeContent(section, info.node, false, options);
+    hydrateArticleNodeContent(section, info.node, false, options, blockElements);
     return;
   }
-  const blocks = nodeContentBlocks(info.node);
+  const blocks = articleNodeContentBlocks(info.node, options);
   const firstTextBlock = blocks.find((block) => block.type === "text");
   if (firstTextBlock) {
-    const paragraph = findBlockElement(section, firstTextBlock.id, "p");
+    const paragraph = findBlockElement(blockElements, firstTextBlock.id, "p");
     if (paragraph) options.makeInlineEditable(paragraph, info.node, "\u6B63\u6587\u6BB5\u843D", firstTextBlock.id);
   } else if (!options.readOnly && blocks.length === 0) {
     const paragraph = section.querySelector(".mms-article-leaf-text");
     if (paragraph) options.makeInlineEditable(paragraph, info.node, "\u6B63\u6587\u6BB5\u843D");
   }
   options.addInlineNodeActions(section, info.node);
-  hydrateArticleNodeContent(section, info.node, false, options);
+  hydrateArticleNodeContent(section, info.node, false, options, blockElements);
 }
-function hydrateArticleNodeContent(container, node, treatTextAsBody, options) {
+function hydrateArticleNodeContent(container, node, treatTextAsBody, options, blockElements = indexArticleBlockElements(container)) {
   let firstTextHandled = false;
-  for (const block of nodeContentBlocks(node)) {
+  for (const block of articleNodeContentBlocks(node, options)) {
     if (block.type === "text") {
       if (!treatTextAsBody && !firstTextHandled) {
         firstTextHandled = true;
         continue;
       }
       firstTextHandled = true;
-      const paragraph = findBlockElement(container, block.id, "p");
+      const paragraph = findBlockElement(blockElements, block.id, "p");
       if (paragraph) options.makeInlineEditable(paragraph, node, "\u6B63\u6587", block.id);
     } else if (block.type === "image") {
-      const shell = findBlockElement(container, block.id, ".mms-article-content-block");
+      const shell = findBlockElement(blockElements, block.id, ".mms-article-content-block");
       const image = shell == null ? void 0 : shell.querySelector("img.mms-article-image");
       if (!shell || !image) continue;
       clearImageFailureDetails(shell);
@@ -8939,15 +8949,26 @@ function hydrateArticleNodeContent(container, node, treatTextAsBody, options) {
         options.openImageContextMenu(event, node.id, block.id);
       });
     } else if (block.type === "table") {
-      const wrap = findBlockElement(container, block.id, ".mms-article-table-wrap");
+      const wrap = findBlockElement(blockElements, block.id, ".mms-article-table-wrap");
       if (wrap) hydrateArticleTable(wrap, node, block.table, block.id, options);
     }
   }
   hydrateArticleQuestionDetails(container);
 }
-function findBlockElement(container, blockId, selector) {
-  var _a2;
-  return (_a2 = Array.from(container.querySelectorAll(selector)).find((element) => element.dataset.blockId === blockId)) != null ? _a2 : null;
+function indexArticleBlockElements(container) {
+  const index = /* @__PURE__ */ new Map();
+  container.querySelectorAll("[data-block-id]").forEach((element) => {
+    const blockId = element.dataset.blockId;
+    if (!blockId) return;
+    const elements = index.get(blockId);
+    if (elements) elements.push(element);
+    else index.set(blockId, [element]);
+  });
+  return index;
+}
+function findBlockElement(index, blockId, selector) {
+  var _a2, _b2;
+  return (_b2 = (_a2 = index.get(blockId)) == null ? void 0 : _a2.find((element) => element.matches(selector))) != null ? _b2 : null;
 }
 function hydrateArticleTable(wrap, node, tableData, blockId, options) {
   var _a2;
@@ -9029,14 +9050,14 @@ function renderArticleNodeSection(section, info, options) {
     });
     if (info.label) heading.createSpan({ cls: "mms-article-number", text: info.label });
     renderHeading(heading, info.node, info.title, options);
-    const headingBlock = nodeContentBlocks(info.node).find((block) => block.type === "text");
+    const headingBlock = articleNodeContentBlocks(info.node, options).find((block) => block.type === "text");
     if (headingBlock) heading.dataset.blockId = headingBlock.id;
     if (info.skipped) heading.createSpan({ cls: "mms-article-skip-badge", text: "\u4E0D\u7F16\u53F7" });
     options.addInlineNodeActions(heading, info.node);
     renderArticleNodeContent(section, info.node, false, options);
     return;
   }
-  const blocks = nodeContentBlocks(info.node);
+  const blocks = articleNodeContentBlocks(info.node, options);
   const firstTextBlock = blocks.find((block) => block.type === "text");
   if (firstTextBlock == null ? void 0 : firstTextBlock.text.trim()) {
     const blockShell = createArticleContentBlock(section, firstTextBlock.id);
@@ -9100,7 +9121,7 @@ function renderHeading(heading, node, title, options) {
   var _a2, _b2, _c;
   if (node.submap) {
     const headingLink = heading.createEl("a", { cls: "mms-article-heading-text mms-submap-text-link", href: node.submap.path, attr: { title: `\u6253\u5F00\u5B50\u5BFC\u56FE\uFF1A${(_a2 = node.submap.title) != null ? _a2 : node.submap.path}` } });
-    const textBlock = nodeContentBlocks(node).find((block) => block.type === "text");
+    const textBlock = articleNodeContentBlocks(node, options).find((block) => block.type === "text");
     renderRichTextRuns(headingLink, textBlock == null ? void 0 : textBlock.richText, (_b2 = textBlock == null ? void 0 : textBlock.text) != null ? _b2 : title);
     headingLink.dataset.mmsExplicitEditOnly = "true";
     options.makeInlineEditable(headingLink, node, "\u7AE0\u8282\u6807\u9898", textBlock == null ? void 0 : textBlock.id);
@@ -9113,7 +9134,7 @@ function renderHeading(heading, node, title, options) {
     });
   } else {
     const headingText = heading.createSpan({ cls: "mms-article-heading-text" });
-    const textBlock = nodeContentBlocks(node).find((block) => block.type === "text");
+    const textBlock = articleNodeContentBlocks(node, options).find((block) => block.type === "text");
     renderRichTextRuns(headingText, textBlock == null ? void 0 : textBlock.richText, (_c = textBlock == null ? void 0 : textBlock.text) != null ? _c : title);
     options.makeInlineEditable(headingText, node, "\u7AE0\u8282\u6807\u9898", textBlock == null ? void 0 : textBlock.id);
   }
@@ -9122,7 +9143,7 @@ function renderArticleNodeContent(container, node, treatTextAsBody, options) {
   var _a2, _b2, _c;
   let firstTextHandled = false;
   let inlineImageRow = null;
-  for (const block of nodeContentBlocks(node)) {
+  for (const block of articleNodeContentBlocks(node, options)) {
     if (block.type === "text") {
       inlineImageRow = null;
       if (!treatTextAsBody && !firstTextHandled) {
