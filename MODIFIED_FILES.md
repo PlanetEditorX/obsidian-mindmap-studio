@@ -1,5 +1,12 @@
 # Modified Files
 
+## 1.40.10 文章边缘加载按钮跑马灯与文字居中
+
+- `styles.css`：加载按钮改为 Flex 双轴居中；实际加载时增加主题深色圆角边框跑马灯，保留内部流光，并兼容减少动态效果。
+- `tests/incremental-render.test.mjs`：增加按钮居中、`conic-gradient` 边框动画、遮罩与减少动态效果契约。
+- `README.md`、`CHANGELOG.md`、`docs/SPECIAL_FEATURES.md`、`docs/TESTING.md`、`TEST_RESULTS.md`：同步用户可见反馈、测试边界和验证结果。
+- `package.json`、`package-lock.json`、`manifest.json`、`versions.json`、`update.json`、`main.js`：同步 1.40.10 版本、最终安装包校验和生产构建。
+
 ## 1.40.9 目录页阻止历史子文件自动恢复
 
 - `src/article/reading-location.ts`：新增 `chooseArticleLandingRefreshLocation()`，目录激活时明确返回空恢复目标。
