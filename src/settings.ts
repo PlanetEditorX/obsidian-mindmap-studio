@@ -8,6 +8,7 @@
 import { App, Notice, PluginSettingTab, Setting, SliderComponent, TextComponent } from "obsidian";
 import type MindMapStudioPlugin from "./main";
 import type {
+  ArticleLeafNumberingStyle,
   BackgroundPattern,
   DisplayMode,
   EdgeStyle,
@@ -340,8 +341,10 @@ export interface MindMapStudioSettings {
   articleLeafBulletStyle: ArticleLeafBulletStyle;
   /** Controls terminal body indentation independently from its marker. */
   articleLeafTextAlignment: ArticleLeafTextAlignment;
-  /** Converts terminal body siblings to the next article numbering level. */
+  /** Converts terminal body siblings to generated numbering. */
   articleLeafNumberingEnabled: boolean;
+  /** Numbering style used by converted terminal body siblings. */
+  articleLeafNumberingStyle: ArticleLeafNumberingStyle;
   /** Minimum number of terminal body siblings required for conversion. */
   articleLeafNumberingThreshold: number;
   /** Hides the configured per-map asset folder in Obsidian's File Explorer. */
@@ -476,6 +479,7 @@ export const DEFAULT_SETTINGS: MindMapStudioSettings = {
   articleLeafBulletStyle: "solid",
   articleLeafTextAlignment: "auto",
   articleLeafNumberingEnabled: false,
+  articleLeafNumberingStyle: "next-level",
   articleLeafNumberingThreshold: 4,
   hideAssetFolderInFileExplorer: false,
   hideConfiguredFilesInFileExplorer: false,
@@ -961,11 +965,23 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName("末端正文标识转序号")
-      .setDesc("同一上级标题下的末端正文达到阈值时，改用上级标题的下一级文章序号；没有可用的更深层级时仍保留标识。")
+      .setDesc("同一上级标题下的末端正文达到阈值时，改用所选序号样式。")
       .addToggle((toggle) => toggle
         .setValue(this.plugin.settings.articleLeafNumberingEnabled)
         .onChange(async (value) => {
           this.plugin.settings.articleLeafNumberingEnabled = value;
+          await this.saveAndRefresh();
+        }));
+
+    new Setting(containerEl)
+      .setName("末端正文序号样式")
+      .setDesc("下一级文章序号沿用标题层级；带圈数字 1–50 使用 Unicode ①–㊿，51 以上自动绘制圆圈，可继续编号到六七十项及更多。")
+      .addDropdown((dropdown) => dropdown
+        .addOption("next-level", "上级标题的下一级文章序号")
+        .addOption("circled", "带圈数字（①–㊿，51+ 圆圈）")
+        .setValue(this.plugin.settings.articleLeafNumberingStyle)
+        .onChange(async (value) => {
+          this.plugin.settings.articleLeafNumberingStyle = value === "circled" ? "circled" : "next-level";
           await this.saveAndRefresh();
         }));
 

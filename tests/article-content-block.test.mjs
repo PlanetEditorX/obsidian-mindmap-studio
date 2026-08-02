@@ -121,17 +121,22 @@ test("terminal body siblings can switch to the next article numbering level", as
   ]);
   assert.match(settingsSource, /articleLeafNumberingEnabled: boolean/);
   assert.match(settingsSource, /articleLeafNumberingThreshold: number/);
-  assert.match(settingsSource, /setName\("末端正文标识转序号"\)[\s\S]*setName\("末端正文转序号阈值"\)/);
+  assert.match(settingsSource, /setName\("末端正文标识转序号"\)[\s\S]*setName\("末端正文序号样式"\)[\s\S]*带圈数字（①–㊿，51\+ 圆圈）[\s\S]*setName\("末端正文转序号阈值"\)/);
   assert.match(viewSource, /document\?\.articleStyle\?\.leafNumberingEnabled \?\? this\.plugin\.settings\.articleLeafNumberingEnabled/);
+  assert.match(viewSource, /document\?\.articleStyle\?\.leafNumberingStyle \?\? this\.plugin\.settings\.articleLeafNumberingStyle/);
   assert.match(modesSource, /for \(const child of parent\.children\) \{[\s\S]*else if \(child\.articleNumberingMode !== "none"\) terminalCount \+= 1/);
   assert.match(modesSource, /numberedLeaf/);
   assert.match(modesSource, /const displayLevel = numberedLeaf \? defaultLevel : numbering\.level/);
+  assert.match(modesSource, /circledNumberLabel\(numberedIndex\)/);
   assert.match(modesSource, /articleNumberLabel\(displayLevel, numberedIndex\)/);
   assert.match(rendererSource, /paragraph\.dataset\.articleNumber = info\.label/);
-  assert.match(editorSource, /buildArticleNodeInfo\(section\.document\.root, section\.baseDepth, \{ enabled: this\.options\.articleLeafNumberingEnabled/);
+  assert.match(rendererSource, /paragraph\.dataset\.articleNumberStyle = info\.leafNumberingStyle/);
+  assert.match(editorSource, /buildArticleNodeInfo\(section\.document\.root, section\.baseDepth, \{ enabled: this\.options\.articleLeafNumberingEnabled, threshold: this\.options\.articleLeafNumberingThreshold, style: this\.options\.articleLeafNumberingStyle \}\)/);
   assert.match(editorSource, /paragraph\.dataset\.articleNumber = info\.label/);
+  assert.match(editorSource, /paragraph\.dataset\.articleNumberFallback = "true"/);
   assert.match(styles, /\.mms-article-leaf-text\.mms-article-leaf-numbered\s*\{[\s\S]*margin-inline-start:\s*0/);
   assert.match(styles, /\.mms-article-leaf-text\.mms-article-leaf-numbered::before\s*\{[\s\S]*content:\s*attr\(data-article-number\)/);
+  assert.match(styles, /data-article-number-style="circled"[\s\S]*data-article-number-fallback="true"[\s\S]*border-radius:\s*999px/);
 });
 
 test("Enter commits an article title while Shift+Enter keeps an inline line break", () => {

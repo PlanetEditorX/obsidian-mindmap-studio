@@ -4,6 +4,7 @@
  */
 
 import type {
+  ArticleLeafNumberingStyle,
   DisplayMode,
   MindMapAppearance,
   MindMapCodeBlock,
@@ -105,6 +106,7 @@ export interface MindMapEditorOptions {
   articleLeafBulletStyle: ArticleLeafBulletStyle;
   articleLeafTextAlignment: ArticleLeafTextAlignment;
   articleLeafNumberingEnabled: boolean;
+  articleLeafNumberingStyle: ArticleLeafNumberingStyle;
   articleLeafNumberingThreshold: number;
   showArticleToc: boolean;
   articleNavigation?: ArticlePageNavigation;

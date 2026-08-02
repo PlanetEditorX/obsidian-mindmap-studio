@@ -497,6 +497,7 @@ export class MindMapStudioView extends TextFileView {
       articleLeafBulletStyle: this.document?.articleStyle?.leafMarkerStyle ?? this.plugin.settings.articleLeafBulletStyle,
       articleLeafTextAlignment: this.document?.articleStyle?.leafTextAlignment ?? this.plugin.settings.articleLeafTextAlignment,
       articleLeafNumberingEnabled: this.document?.articleStyle?.leafNumberingEnabled ?? this.plugin.settings.articleLeafNumberingEnabled,
+      articleLeafNumberingStyle: this.document?.articleStyle?.leafNumberingStyle ?? this.plugin.settings.articleLeafNumberingStyle,
       articleLeafNumberingThreshold: this.document?.articleStyle?.leafNumberingThreshold ?? this.plugin.settings.articleLeafNumberingThreshold,
       showArticleToc: this.showArticleToc,
       articleNavigation: this.articleNavigation,
@@ -652,16 +653,21 @@ export class MindMapStudioView extends TextFileView {
       ? this.readingSections
       : await this.plugin.buildDescendantReadingSections(file, document);
     const tocMaxDepth = resolveArticleTocMaxDepth(document.view?.articleTocMaxDepth, this.plugin.settings.articleTocMaxDepth);
+    const articleExportOptions = {
+      leafNumberingEnabled: this.plugin.settings.articleLeafNumberingEnabled,
+      leafNumberingStyle: this.plugin.settings.articleLeafNumberingStyle,
+      leafNumberingThreshold: this.plugin.settings.articleLeafNumberingThreshold
+    };
     if (format === "md") {
-      const markdown = readingSectionsToMarkdown(sections, tocMaxDepth);
+      const markdown = readingSectionsToMarkdown(sections, tocMaxDepth, articleExportOptions);
       await this.exportTextFile("md", markdown, true);
       return;
     }
     if (format === "doc") {
-      await this.exportBinaryFile("docx", readingSectionsToDocx(sections, tocMaxDepth));
+      await this.exportBinaryFile("docx", readingSectionsToDocx(sections, tocMaxDepth, articleExportOptions));
       return;
     }
-    const html = readingSectionsToHtml(sections, tocMaxDepth);
+    const html = readingSectionsToHtml(sections, tocMaxDepth, articleExportOptions);
     if (format === "pdf") {
       const result = await saveDesktopPdfFile(file.basename, html);
       if (result?.path) new Notice(`已导出：${result.path}`);

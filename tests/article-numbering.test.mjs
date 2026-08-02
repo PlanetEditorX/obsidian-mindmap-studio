@@ -77,3 +77,68 @@ test("children below a level-eight heading keep structure without receiving a re
   assert.equal(byTitle.get("维度区分")?.label, "");
   assert.equal(byTitle.get("关键词区分")?.displayTitle, "关键词区分");
 });
+
+test("circled terminal numbering uses Unicode through 50 and a numeric CSS fallback afterwards", () => {
+  assert.equal(modes.circledNumberLabel(1), "①");
+  assert.equal(modes.circledNumberLabel(20), "⑳");
+  assert.equal(modes.circledNumberLabel(21), "㉑");
+  assert.equal(modes.circledNumberLabel(35), "㉟");
+  assert.equal(modes.circledNumberLabel(36), "㊱");
+  assert.equal(modes.circledNumberLabel(50), "㊿");
+  assert.equal(modes.circledNumberLabel(51), "51");
+  assert.equal(modes.circledNumberLabel(67), "67");
+});
+
+test("circled terminal numbering continues through large sibling groups", () => {
+  const root = model.createNode("根节点");
+  root.children = Array.from({ length: 67 }, (_, index) => model.createNode(`要点 ${index + 1}`));
+  const infos = modes.buildArticleNodeInfo(root, 0, { enabled: true, threshold: 4, style: "circled" });
+
+  assert.equal(infos.length, 67);
+  assert.equal(infos[0]?.label, "①");
+  assert.equal(infos[19]?.label, "⑳");
+  assert.equal(infos[20]?.label, "㉑");
+  assert.equal(infos[34]?.label, "㉟");
+  assert.equal(infos[35]?.label, "㊱");
+  assert.equal(infos[49]?.label, "㊿");
+  assert.equal(infos[50]?.label, "51");
+  assert.equal(infos[50]?.displayTitle, "◯51 要点 51");
+  assert.equal(infos[66]?.label, "67");
+  assert.equal(infos[66]?.leafNumberingStyle, "circled");
+  assert.equal(infos[66]?.leafNumberingIndex, 67);
+});
+
+test("circled terminal numbering remains available below level-eight headings", () => {
+  const root = model.createNode("根节点");
+  root.articleNumberingMode = "manual";
+  root.articleNumberingLevel = 8;
+  const parent = model.createNode("深层标题");
+  parent.children = Array.from({ length: 4 }, (_, index) => model.createNode(`深层要点 ${index + 1}`));
+  root.children = [parent];
+
+  const circled = modes.buildArticleNodeInfo(root, 0, { enabled: true, threshold: 4, style: "circled" });
+  const nextLevel = modes.buildArticleNodeInfo(root, 0, { enabled: true, threshold: 4, style: "next-level" });
+  assert.equal(circled.find((info) => info.title === "深层要点 1")?.depth, 9);
+  assert.equal(circled.find((info) => info.title === "深层要点 1")?.label, "①");
+  assert.equal(nextLevel.find((info) => info.title === "深层要点 1")?.label, "");
+});
+
+test("per-document article style normalizes circled terminal numbering", () => {
+  const document = model.normalizeDocument({
+    title: "带圈序号",
+    articleStyle: {
+      preset: "classic",
+      leafNumberingEnabled: true,
+      leafNumberingStyle: "circled",
+      leafNumberingThreshold: 80
+    }
+  });
+  assert.equal(document.articleStyle?.leafNumberingStyle, "circled");
+  assert.equal(document.articleStyle?.leafNumberingThreshold, 20);
+
+  const invalid = model.normalizeDocument({
+    title: "无效样式",
+    articleStyle: { preset: "classic", leafNumberingStyle: "unknown" }
+  });
+  assert.equal(invalid.articleStyle?.leafNumberingStyle, undefined);
+});

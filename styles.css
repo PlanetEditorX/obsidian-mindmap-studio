@@ -4023,6 +4023,29 @@
   white-space: nowrap;
 }
 
+.mms-article-leaf-text.mms-article-leaf-numbered[data-article-number-style="circled"]::before {
+  font-family: "Segoe UI Symbol", "Noto Sans Symbols 2", "Microsoft YaHei", sans-serif;
+}
+
+.mms-article-leaf-text.mms-article-leaf-numbered[data-article-number-style="circled"][data-article-number-fallback="true"]::before {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.75em;
+  height: 1.75em;
+  margin-inline-end: .38em;
+  padding: 0 .2em;
+  content: attr(data-article-number);
+  border: .1em solid currentColor;
+  border-radius: 999px;
+  font-family: inherit;
+  font-size: .72em;
+  font-weight: 600;
+  line-height: 1;
+  vertical-align: .08em;
+}
+
 .mms-article-leaf-text.is-bulleted::before {
   position: absolute;
   top: .78em;

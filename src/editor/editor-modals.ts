@@ -7,6 +7,7 @@ import { App, finishRenderMath, Modal, Notice, renderMath } from "obsidian";
 import {
   markdownToDocument,
   normalizeDocument,
+  type ArticleLeafNumberingStyle,
   type ArticleStyle,
   type ArticleStylePresetId,
   type MindMapDocument,
@@ -370,7 +371,7 @@ export class ArticleStyleModal extends Modal {
   constructor(
     app: App,
     style: ArticleStyle | undefined,
-    private readonly globalLeafPresentation: { enabled: boolean; style: ArticleLeafBulletStyle; color: string; alignment: ArticleLeafTextAlignment; numberingEnabled: boolean; numberingThreshold: number },
+    private readonly globalLeafPresentation: { enabled: boolean; style: ArticleLeafBulletStyle; color: string; alignment: ArticleLeafTextAlignment; numberingEnabled: boolean; numberingStyle: ArticleLeafNumberingStyle; numberingThreshold: number },
     private readonly submitStyle: (style: ArticleStyle) => void
   ) {
     super(app);
@@ -435,6 +436,11 @@ export class ArticleStyleModal extends Modal {
     numberingEnabled.createEl("option", { text: `跟随插件设置（当前${this.globalLeafPresentation.numberingEnabled ? "开启" : "关闭"}）`, attr: { value: "" } });
     numberingEnabled.createEl("option", { text: "开启", attr: { value: "true" } });
     numberingEnabled.createEl("option", { text: "关闭", attr: { value: "false" } });
+    const numberingStyleLabel = grid.createEl("label", { text: "末端正文序号样式" });
+    const numberingStyle = numberingStyleLabel.createEl("select");
+    numberingStyle.createEl("option", { text: `跟随插件设置（当前${this.globalLeafPresentation.numberingStyle === "circled" ? "带圈数字" : "下一级文章序号"}）`, attr: { value: "" } });
+    numberingStyle.createEl("option", { text: "上级标题的下一级文章序号", attr: { value: "next-level" } });
+    numberingStyle.createEl("option", { text: "带圈数字（①–㊿，51+ 圆圈）", attr: { value: "circled" } });
     const numberingThresholdLabel = grid.createEl("label", { text: "末端正文转序号阈值" });
     const numberingThreshold = numberingThresholdLabel.createEl("input", { type: "number", attr: { min: "1", max: "20", step: "1" } });
     const fill = (style: ArticleStyle): void => {
@@ -455,6 +461,7 @@ export class ArticleStyleModal extends Modal {
       markerColor.disabled = markerColorFollowGlobal.checked;
       alignment.value = style.leafTextAlignment ?? "";
       numberingEnabled.value = style.leafNumberingEnabled === undefined ? "" : String(style.leafNumberingEnabled);
+      numberingStyle.value = style.leafNumberingStyle ?? "";
       numberingThreshold.value = String(style.leafNumberingThreshold ?? this.globalLeafPresentation.numberingThreshold);
     };
     fill(this.style);
@@ -481,6 +488,7 @@ export class ArticleStyleModal extends Modal {
         leafMarkerColor: markerColorFollowGlobal.checked ? undefined : markerColor.value,
         leafTextAlignment: alignment.value === "flush" || alignment.value === "auto" ? alignment.value : undefined
         ,leafNumberingEnabled: numberingEnabled.value === "" ? undefined : numberingEnabled.value === "true"
+        ,leafNumberingStyle: numberingStyle.value === "circled" || numberingStyle.value === "next-level" ? numberingStyle.value : undefined
         ,leafNumberingThreshold: numberingEnabled.value === "" && !this.style.leafNumberingThreshold ? undefined : Math.max(1, Math.min(20, Math.round(Number(numberingThreshold.value) || this.globalLeafPresentation.numberingThreshold)))
       });
       this.close();

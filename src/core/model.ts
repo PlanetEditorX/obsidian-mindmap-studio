@@ -30,6 +30,8 @@ export type DisplayMode = "mindmap" | "outline" | "article" | "reading" | "quest
 export type ArticleLandingMode = "toc" | "article";
 /** Per-node article numbering override; undefined keeps automatic behavior. */
 export type ArticleNumberingMode = "none" | "manual";
+/** Numbering style used when terminal body siblings are converted into generated markers. */
+export type ArticleLeafNumberingStyle = "next-level" | "circled";
 /** Built-in article presentation presets. */
 export type ArticleStylePresetId = "classic" | "book" | "modern" | "minimal";
 /** Per-document article presentation overrides. */
@@ -53,6 +55,8 @@ export interface ArticleStyle {
   leafTextAlignment?: "flush" | "auto";
   /** Per-page override for terminal body numbering conversion. */
   leafNumberingEnabled?: boolean;
+  /** Per-page numbering style for converted terminal body siblings. */
+  leafNumberingStyle?: ArticleLeafNumberingStyle;
   /** Per-page threshold for terminal body numbering conversion. */
   leafNumberingThreshold?: number;
 }
@@ -1511,6 +1515,7 @@ function normalizeArticleStyle(input: Partial<ArticleStyle> | undefined): Articl
     leafMarkerColor: color(input.leafMarkerColor),
     leafTextAlignment: input.leafTextAlignment === "flush" || input.leafTextAlignment === "auto" ? input.leafTextAlignment : undefined
     ,leafNumberingEnabled: typeof input.leafNumberingEnabled === "boolean" ? input.leafNumberingEnabled : undefined
+    ,leafNumberingStyle: input.leafNumberingStyle === "circled" || input.leafNumberingStyle === "next-level" ? input.leafNumberingStyle : undefined
     ,leafNumberingThreshold: typeof input.leafNumberingThreshold === "number" ? Math.max(1, Math.min(20, Math.round(input.leafNumberingThreshold))) : undefined
   };
 }

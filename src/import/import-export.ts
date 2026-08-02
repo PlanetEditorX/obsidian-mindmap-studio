@@ -4,8 +4,8 @@
  */
 
 import { strFromU8, strToU8, unzipSync, zipSync } from "fflate";
-import { createDefaultDocument, createNode, nodePlainText, type MindMapDocument, type MindMapNode } from "../core/model";
-import { buildArticleNodeInfo, type ReadingSection } from "../article/modes";
+import { createDefaultDocument, createNode, nodePlainText, type ArticleLeafNumberingStyle, type MindMapDocument, type MindMapNode } from "../core/model";
+import { buildArticleNodeInfo, type ArticleLeafNumberingOptions, type ArticleNodeInfo, type ReadingSection } from "../article/modes";
 
 /** 新版 XMind 导入时需要保留的主题字段与画布链接。 */
 type XMindTopic = {
@@ -91,6 +91,31 @@ const escapeHtml = (value: string): string => value
   .replaceAll(">", "&gt;")
   .replaceAll('"', "&quot;");
 
+/** Global defaults used when a physical document does not override terminal numbering. */
+export interface ArticleExportOptions {
+  leafNumberingEnabled?: boolean;
+  leafNumberingStyle?: ArticleLeafNumberingStyle;
+  leafNumberingThreshold?: number;
+}
+
+/** Resolves terminal numbering with per-document style taking precedence over plugin defaults. */
+function exportLeafNumbering(document: MindMapDocument, options: ArticleExportOptions): ArticleLeafNumberingOptions {
+  return {
+    enabled: document.articleStyle?.leafNumberingEnabled ?? options.leafNumberingEnabled ?? false,
+    style: document.articleStyle?.leafNumberingStyle ?? options.leafNumberingStyle ?? "next-level",
+    threshold: document.articleStyle?.leafNumberingThreshold ?? options.leafNumberingThreshold ?? 4
+  };
+}
+
+/** Returns HTML title markup, drawing a CSS circle for generated numbers after Unicode ㊿. */
+function htmlArticleDisplayTitle(info: ArticleNodeInfo): string {
+  const title = escapeHtml(info.title || "未命名");
+  if (info.numberedLeaf && info.leafNumberingStyle === "circled" && (info.leafNumberingIndex ?? 0) > 50) {
+    return `<span class="circled-number">${escapeHtml(info.label)}</span> ${title}`;
+  }
+  return escapeHtml(info.displayTitle || info.title || "未命名");
+}
+
 /** 生成跨文件导出时稳定且唯一的标题锚点。 */
 function exportAnchor(sectionIndex: number, anchor: string): string {
   return `export-${sectionIndex}-${anchor}`;
@@ -151,7 +176,12 @@ function escapeXml(value: string): string {
 }
 
 /** 将导出章节收集为父子导图顺序一致的目录项。 */
-function collectExportTocItems(sections: ReadingSection[], maxTocDepth: number, includeTerminalHeadings = true): Array<{ depth: number; title: string; anchor: string }> {
+function collectExportTocItems(
+  sections: ReadingSection[],
+  maxTocDepth: number,
+  includeTerminalHeadings = true,
+  options: ArticleExportOptions = {}
+): Array<{ depth: number; title: string; anchor: string }> {
   const items: Array<{ depth: number; title: string; anchor: string }> = [];
   const childSections = new Map<string, number>();
   sections.forEach((section, index) => {
@@ -169,7 +199,7 @@ function collectExportTocItems(sections: ReadingSection[], maxTocDepth: number, 
     if (sectionIndex > 0 && !parentNodeKey(section.parentFilePath, section.parentNodeId)) {
       push(Math.max(1, section.baseDepth), nodePlainText(section.document.root) || section.document.title, exportAnchor(sectionIndex, `section-${sectionIndex}`));
     }
-    for (const info of buildArticleNodeInfo(section.document.root, section.baseDepth)) {
+    for (const info of buildArticleNodeInfo(section.document.root, section.baseDepth, exportLeafNumbering(section.document, options))) {
       const title = info.displayTitle || info.title || "未命名";
       const childIndex = childSections.get(`${section.filePath}\u0000${info.node.id}`);
       if (childIndex !== undefined) {
@@ -192,7 +222,7 @@ function collectExportTocItems(sections: ReadingSection[], maxTocDepth: number, 
  * @param tocMaxDepth Maximum exported TOC depth resolved from current/global article settings.
  * @returns Complete standalone HTML source.
  */
-export function readingSectionsToHtml(sections: ReadingSection[], tocMaxDepth = 3): string {
+export function readingSectionsToHtml(sections: ReadingSection[], tocMaxDepth = 3, options: ArticleExportOptions = {}): string {
   const maxTocDepth = normalizedExportTocMaxDepth(tocMaxDepth);
   const tocItems: Array<{ depth: number; title: string; anchor: string }> = [];
   const childSectionAnchors = new Map<string, string>();
@@ -215,8 +245,8 @@ export function readingSectionsToHtml(sections: ReadingSection[], tocMaxDepth = 
     if (sectionIndex > 0 && !parentNodeKey(section.parentFilePath, section.parentNodeId)) {
       pushTocItem(Math.max(1, section.baseDepth), escapeHtml(nodePlainText(section.document.root) || section.document.title), exportAnchor(sectionIndex, `section-${sectionIndex}`));
     }
-    for (const info of buildArticleNodeInfo(section.document.root, section.baseDepth)) {
-      const title = escapeHtml(info.displayTitle || info.title || "未命名");
+    for (const info of buildArticleNodeInfo(section.document.root, section.baseDepth, exportLeafNumbering(section.document, options))) {
+      const title = htmlArticleDisplayTitle(info);
       const key = `${section.filePath}\u0000${info.node.id}`;
       const childSectionIndex = childSectionIndexes.get(key);
       if (childSectionIndex !== undefined) {
@@ -227,9 +257,9 @@ export function readingSectionsToHtml(sections: ReadingSection[], tocMaxDepth = 
       }
     }
   };
-  const renderArticleNode = (filePath: string, document: MindMapDocument, baseDepth: number, sectionIndex: number): string => buildArticleNodeInfo(document.root, baseDepth)
+  const renderArticleNode = (filePath: string, document: MindMapDocument, baseDepth: number, sectionIndex: number): string => buildArticleNodeInfo(document.root, baseDepth, exportLeafNumbering(document, options))
     .map((info) => {
-      const title = escapeHtml(info.displayTitle || info.title || "未命名");
+      const title = htmlArticleDisplayTitle(info);
       const childSectionAnchor = childSectionAnchors.get(`${filePath}\u0000${info.node.id}`);
       if (childSectionAnchor) return "";
       const note = info.node.note ? `<p class="note">${escapeHtml(info.node.note)}</p>` : "";
@@ -249,7 +279,7 @@ export function readingSectionsToHtml(sections: ReadingSection[], tocMaxDepth = 
     return `<section class="map-section">${heading}${renderArticleNode(filePath, document, baseDepth, index)}</section>`;
   }).join("");
   collectTocItems(0);
-  tocItems.splice(0, tocItems.length, ...collectExportTocItems(sections, maxTocDepth).map((item) => ({ ...item, title: escapeHtml(item.title) })));
+  tocItems.splice(0, tocItems.length, ...collectExportTocItems(sections, maxTocDepth, true, options).map((item) => ({ ...item, title: escapeHtml(item.title) })));
   const toc = tocItems.length
     ? `<nav class="export-toc"><h2>目录</h2>${htmlTocList(tocItems)}</nav>`
     : "";
@@ -258,7 +288,7 @@ export function readingSectionsToHtml(sections: ReadingSection[], tocMaxDepth = 
 <title>${title}</title><style>
 body{max-width:860px;margin:40px auto;padding:0 28px;color:#20242c;font:16px/1.85 system-ui,"Microsoft YaHei",sans-serif}
 h1{text-align:center;border-bottom:2px solid #ddd;padding-bottom:18px}h2,h3,h4,h5,h6{margin-top:1.7em;color:#172033}
-section{break-inside:auto}.export-toc{margin:2em 0 3em}.export-toc>ul{padding-left:0;list-style:none}.export-toc ul ul{padding-left:1.5em;list-style:none}.export-toc li{margin:.2em 0}.map-section+.map-section{margin-top:3em;border-top:1px solid #ddd}.body-paragraph{margin:.75em 0;text-align:justify;text-indent:2em}.note{padding:10px 14px;color:#555;background:#f6f7f9;border-left:3px solid #6366f1}
+section{break-inside:auto}.export-toc{margin:2em 0 3em}.export-toc>ul{padding-left:0;list-style:none}.export-toc ul ul{padding-left:1.5em;list-style:none}.export-toc li{margin:.2em 0}.map-section+.map-section{margin-top:3em;border-top:1px solid #ddd}.body-paragraph{margin:.75em 0;text-align:justify;text-indent:2em}.circled-number{box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;min-width:1.75em;height:1.75em;padding:0 .2em;border:.1em solid currentColor;border-radius:999px;font-size:.72em;font-weight:600;line-height:1;vertical-align:.08em}.note{padding:10px 14px;color:#555;background:#f6f7f9;border-left:3px solid #6366f1}
 @media print{body{margin:0;max-width:none}a{color:inherit}}
 </style></head><body><article><h1>${title}</h1>${toc}${body}</article></body></html>`;
 }
@@ -270,7 +300,7 @@ section{break-inside:auto}.export-toc{margin:2em 0 3em}.export-toc>ul{padding-le
  * @param tocMaxDepth Maximum exported TOC depth resolved from current/global article settings.
  * @returns A complete .docx archive.
  */
-export function readingSectionsToDocx(sections: ReadingSection[], tocMaxDepth = 3): Uint8Array {
+export function readingSectionsToDocx(sections: ReadingSection[], tocMaxDepth = 3, options: ArticleExportOptions = {}): Uint8Array {
   const maxTocDepth = normalizedExportTocMaxDepth(tocMaxDepth);
   const first = sections[0]?.document;
   const title = first ? (nodePlainText(first.root) || first.title) : "导出文档";
@@ -298,7 +328,7 @@ export function readingSectionsToDocx(sections: ReadingSection[], tocMaxDepth = 
     const bookmarkEnd = anchor ? '<w:bookmarkEnd w:id="' + bookmarkId++ + '"/>' : "";
     return '<w:p><w:pPr>' + properties + '</w:pPr>' + bookmarkStart + '<w:r><w:t xml:space="preserve">' + escapeXml(text) + '</w:t></w:r>' + bookmarkEnd + '</w:p>';
   };
-  const toc = collectExportTocItems(sections, maxTocDepth, false).map((item) => {
+  const toc = collectExportTocItems(sections, maxTocDepth, false, options).map((item) => {
     const indent = Math.max(0, item.depth - 1) * 720;
     return '<w:p><w:pPr><w:ind w:left="' + indent + '"/></w:pPr><w:hyperlink w:anchor="' + wordAnchor(item.anchor) + '" w:history="1"><w:r><w:rPr><w:color w:val="0563C1"/><w:u w:val="single"/></w:rPr><w:t xml:space="preserve">' + escapeXml(item.title) + '</w:t></w:r></w:hyperlink></w:p>';
   }).join("");
@@ -313,7 +343,7 @@ export function readingSectionsToDocx(sections: ReadingSection[], tocMaxDepth = 
     if (sectionIndex > 0) {
       body.push(paragraph(nodePlainText(document.root) || document.title, "Heading" + Math.min(6, Math.max(1, baseDepth)), 0, wordAnchor(exportAnchor(sectionIndex, "section-" + sectionIndex))));
     }
-    for (const info of buildArticleNodeInfo(document.root, baseDepth)) {
+    for (const info of buildArticleNodeInfo(document.root, baseDepth, exportLeafNumbering(document, options))) {
       if (childSectionAnchors.has(filePath + "\u0000" + info.node.id)) continue;
       const text = info.displayTitle || info.title || "未命名";
       const isWordHeading = info.isHeading && info.node.children.length > 0;
@@ -342,7 +372,7 @@ export function readingSectionsToDocx(sections: ReadingSection[], tocMaxDepth = 
  * @param tocMaxDepth Maximum exported TOC depth resolved from current/global article settings.
  * @returns Standard Markdown source with linked headings.
  */
-export function readingSectionsToMarkdown(sections: ReadingSection[], tocMaxDepth = 3): string {
+export function readingSectionsToMarkdown(sections: ReadingSection[], tocMaxDepth = 3, options: ArticleExportOptions = {}): string {
   const maxTocDepth = normalizedExportTocMaxDepth(tocMaxDepth);
   const first = sections[0]?.document;
   const title = first ? (nodePlainText(first.root) || first.title) : "导出文档";
@@ -365,8 +395,8 @@ export function readingSectionsToMarkdown(sections: ReadingSection[], tocMaxDept
       if (!parentNodeKey(sections[sectionIndex]?.parentFilePath, sections[sectionIndex]?.parentNodeId)) pushTocItem(Math.max(1, baseDepth), heading, anchor);
       body.push("", markdownHeading(Math.min(6, Math.max(1, baseDepth + 1)), heading));
     }
-    for (const info of buildArticleNodeInfo(document.root, baseDepth)) {
-      const heading = markdownTitle(info.label, info.title);
+    for (const info of buildArticleNodeInfo(document.root, baseDepth, exportLeafNumbering(document, options))) {
+      const heading = info.displayTitle || markdownTitle(info.label, info.title);
       const childSectionIndex = childSectionIndexes.get(`${filePath}\u0000${info.node.id}`);
       if (childSectionIndex !== undefined) {
         childSectionTitles.set(childSectionIndex, heading);

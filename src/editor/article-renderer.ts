@@ -7,6 +7,7 @@ import { App, setIcon } from "obsidian";
 import {
   imageSourceCandidates,
   nodeContentBlocks,
+  type ArticleLeafNumberingStyle,
   type MindMapCodeBlock,
   type MindMapContentBlock,
   type MindMapDocument,
@@ -66,6 +67,7 @@ export interface ArticleRendererOptions {
   articleLeafBulletStyle: ArticleLeafBulletStyle;
   articleLeafTextAlignment: "flush" | "auto";
   articleLeafNumberingEnabled: boolean;
+  articleLeafNumberingStyle: ArticleLeafNumberingStyle;
   articleLeafNumberingThreshold: number;
   imageHostPriorityIds: string[];
   articleNavigation?: ArticlePageNavigation;
@@ -134,7 +136,8 @@ export function renderArticleMode(container: HTMLElement, options: ArticleRender
 
   const infos = buildArticleNodeInfo(options.document.root, options.articleBaseDepth, {
     enabled: options.articleLeafNumberingEnabled,
-    threshold: options.articleLeafNumberingThreshold
+    threshold: options.articleLeafNumberingThreshold,
+    style: options.articleLeafNumberingStyle
   }, (node) => articleNodeContentBlocks(node, options)
     .find((block): block is MindMapTextContentBlock => block.type === "text")?.text.trim() ?? "");
   if (!options.incremental) {
@@ -266,6 +269,7 @@ function articlePresentationFingerprint(options: ArticleRendererOptions): string
     articleLeafBulletStyle: options.articleLeafBulletStyle,
     articleLeafTextAlignment: options.articleLeafTextAlignment,
     articleLeafNumberingEnabled: options.articleLeafNumberingEnabled,
+    articleLeafNumberingStyle: options.articleLeafNumberingStyle,
     articleLeafNumberingThreshold: options.articleLeafNumberingThreshold,
     imageHostPriorityIds: options.imageHostPriorityIds,
     articleNavigation: options.articleNavigation,
@@ -288,6 +292,8 @@ function articleNodeFingerprint(
     isHeading: info.isHeading,
     skipped: info.skipped,
     numberedLeaf: info.numberedLeaf,
+    leafNumberingStyle: info.leafNumberingStyle,
+    leafNumberingIndex: info.leafNumberingIndex,
     readOnly: options.readOnly,
     leafBullets: options.articleLeafBulletsEnabled,
     leafBulletColor: options.articleLeafBulletColor,
@@ -567,7 +573,11 @@ function renderArticleNodeSection(
     const blockShell = createArticleContentBlock(section, firstTextBlock.id);
     const paragraph = blockShell.createEl("p", { cls: `${articleParagraphClass("mms-article-leaf-text", firstTextBlock, options.articleLeafBulletsEnabled && !info.numberedLeaf, options.articleLeafTextAlignment)}${info.numberedLeaf ? " mms-article-leaf-numbered" : ""}` });
     paragraph.dataset.blockId = firstTextBlock.id;
-    if (info.numberedLeaf) paragraph.dataset.articleNumber = info.label;
+    if (info.numberedLeaf) {
+      paragraph.dataset.articleNumber = info.label;
+      if (info.leafNumberingStyle) paragraph.dataset.articleNumberStyle = info.leafNumberingStyle;
+      if ((info.leafNumberingIndex ?? 0) > 50) paragraph.dataset.articleNumberFallback = "true";
+    }
     applyArticleLeafBulletStyle(paragraph, options, info.numberedLeaf);
     renderRichTextRuns(paragraph, firstTextBlock.richText, firstTextBlock.text);
     options.makeInlineEditable(paragraph, info.node, "正文段落", firstTextBlock.id);
