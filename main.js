@@ -5618,7 +5618,7 @@ function readRichTextEditor(editor) {
 // src/editor/editor-modals.ts
 var import_obsidian5 = require("obsidian");
 
-// node_modules/fflate/esm/browser.js
+// ../../work_plugin_utf8/node_modules/fflate/esm/browser.js
 var u8 = Uint8Array;
 var u16 = Uint16Array;
 var i32 = Int32Array;
@@ -8581,7 +8581,9 @@ var ArticleRenderCacheStore = class {
     this.cacheFile = cacheFile;
     this.entries = /* @__PURE__ */ new Map();
     this.persistTimer = null;
-    this.persistChain = Promise.resolve();
+    this.requestedPersistRevision = 0;
+    this.persistedRevision = 0;
+    this.persistRunner = null;
   }
   /** 从磁盘加载最近使用的缓存，插件注册视图前即可完成。 */
   async initialize() {
@@ -8611,9 +8613,11 @@ var ArticleRenderCacheStore = class {
     const normalized2 = normalizeArticleCachePath(filePath);
     const snapshot = this.entries.get(normalized2);
     if (!snapshot) return null;
+    const newestPath = Array.from(this.entries.keys()).at(-1);
     snapshot.lastAccessedAt = Date.now();
     this.entries.delete(normalized2);
     this.entries.set(normalized2, snapshot);
+    if (newestPath !== normalized2) this.markDirty();
     return snapshot;
   }
   /** 更新内存并延迟写盘；旧文件节点由新快照自然淘汰。 */
@@ -8625,12 +8629,12 @@ var ArticleRenderCacheStore = class {
     this.entries.delete(normalized2.filePath);
     this.entries.set(normalized2.filePath, normalized2);
     this.prune();
-    this.schedulePersist();
+    this.markDirty();
   }
   /** 文件删除时清除缓存。 */
   remove(filePath) {
     if (!this.entries.delete(normalizeArticleCachePath(filePath))) return;
-    this.schedulePersist();
+    this.markDirty();
   }
   /** 文件重命名时迁移缓存键，节点快照本身仍可复用。 */
   rename(oldPath, newPath) {
@@ -8641,35 +8645,61 @@ var ArticleRenderCacheStore = class {
     snapshot.filePath = normalizeArticleCachePath(newPath);
     snapshot.lastAccessedAt = Date.now();
     this.entries.set(snapshot.filePath, snapshot);
-    this.schedulePersist();
+    this.markDirty();
   }
   /** 插件卸载前立即提交尚未写入的缓存。 */
-  flush() {
+  async flush() {
     if (this.persistTimer !== null) {
       window.clearTimeout(this.persistTimer);
       this.persistTimer = null;
     }
-    this.queuePersist();
-    return this.persistChain;
+    this.startPersistRunner();
+    if (this.persistRunner) await this.persistRunner;
   }
-  /** Debounces repeated node updates into one disk write. */
+  /** Marks the latest in-memory LRU state dirty and absorbs repeated updates into one trailing write. */
+  markDirty() {
+    this.requestedPersistRevision += 1;
+    this.schedulePersist();
+  }
+  /** Debounces repeated node updates into one disk write when no write loop is already active. */
   schedulePersist() {
+    if (this.persistRunner) return;
     if (this.persistTimer !== null) window.clearTimeout(this.persistTimer);
     this.persistTimer = window.setTimeout(() => {
       this.persistTimer = null;
-      this.queuePersist();
+      this.startPersistRunner();
     }, 800);
   }
-  /** Serializes writes so a slower previous write cannot overwrite a newer snapshot. */
-  queuePersist() {
-    const payload = {
-      schemaVersion: ARTICLE_RENDER_CACHE_SCHEMA_VERSION,
-      entries: Array.from(this.entries.values())
-    };
-    this.persistChain = this.persistChain.catch(() => void 0).then(async () => {
-      if (!await this.adapter.exists(this.cacheDirectory)) await this.adapter.mkdir(this.cacheDirectory);
-      await this.adapter.write(this.cacheFile, JSON.stringify(payload));
-    }).catch((error) => console.warn("MindMap Studio article cache persist failed", error));
+  /** Starts the unique persistence loop; updates arriving during a write are folded into its next pass. */
+  startPersistRunner() {
+    if (this.persistRunner || this.persistedRevision >= this.requestedPersistRevision) return;
+    if (this.persistTimer !== null) {
+      window.clearTimeout(this.persistTimer);
+      this.persistTimer = null;
+    }
+    this.persistRunner = this.runPersistLoop().finally(() => {
+      this.persistRunner = null;
+      if (this.persistedRevision < this.requestedPersistRevision) this.startPersistRunner();
+    });
+  }
+  /** Persists stable JSON snapshots serially while coalescing all changes observed during an active write. */
+  async runPersistLoop() {
+    while (this.persistedRevision < this.requestedPersistRevision) {
+      const targetRevision = this.requestedPersistRevision;
+      const content = JSON.stringify({
+        schemaVersion: ARTICLE_RENDER_CACHE_SCHEMA_VERSION,
+        entries: Array.from(this.entries.values())
+      });
+      try {
+        if (!await this.adapter.exists(this.cacheDirectory)) await this.adapter.mkdir(this.cacheDirectory);
+        await this.adapter.write(this.cacheFile, content);
+      } catch (error) {
+        console.warn("MindMap Studio article cache persist failed", error);
+        this.persistedRevision = targetRevision;
+        return;
+      }
+      this.persistedRevision = targetRevision;
+    }
   }
   /** Applies entry-count and total-character LRU limits. */
   prune() {
@@ -20500,6 +20530,8 @@ function extractPluginReleaseFiles(archive) {
 
 // src/main.ts
 var MINDMAP_EXTENSION = "mindmap";
+var FILE_EXPLORER_CONTAINER_SELECTOR = ".nav-files-container, .workspace-leaf-content[data-type='file-explorer']";
+var FILE_EXPLORER_PATH_SELECTOR = "[data-path]";
 var PLUGIN_UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/PlanetEditorX/obsidian-mindmap-studio/main/update.json";
 var REMOTE_IMAGE_DELETE_DELAY_MS = 6e4;
 function matchesRecordedShortcut(event, shortcut) {
@@ -20528,6 +20560,8 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
     this.autoUploadFileKeySequence = 0;
     this.searchIndexReady = Promise.resolve();
     this.fileExplorerFilterTimer = null;
+    this.fileExplorerFilterFullScanPending = false;
+    this.fileExplorerFilterRoots = /* @__PURE__ */ new Set();
     this.fileExplorerObserver = null;
     this.settingsWriter = null;
     this.persistedFileExplorerFilterSignature = "";
@@ -20681,22 +20715,18 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
       }
     }));
     this.registerEvent(this.app.vault.on("create", (file) => {
-      this.scheduleFileExplorerFilter();
       if (file instanceof import_obsidian16.TFile && this.isMindMapFile(file)) this.searchIndex.queueFile(file, 80);
     }));
     this.registerEvent(this.app.vault.on("modify", (file) => {
-      this.scheduleFileExplorerFilter();
       if (file instanceof import_obsidian16.TFile && this.isMindMapFile(file)) this.searchIndex.queueFile(file);
     }));
     this.registerEvent(this.app.vault.on("delete", (file) => {
-      this.scheduleFileExplorerFilter();
       if (file instanceof import_obsidian16.TFile && file.extension.toLowerCase() === MINDMAP_EXTENSION) {
         this.searchIndex.removeFile(file.path);
         this.articleRenderCache.remove(file.path);
       }
     }));
     this.registerEvent(this.app.vault.on("rename", (file, oldPath) => {
-      this.scheduleFileExplorerFilter();
       if (file instanceof import_obsidian16.TFile && this.isMindMapFile(file)) void this.renameReadingLocationPathInSettings(oldPath, file.path);
       if (file instanceof import_obsidian16.TFile && this.isMindMapFile(file)) {
         this.searchIndex.renameFile(file, oldPath);
@@ -20722,6 +20752,9 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
     var _a2, _b2, _c, _d;
     this.unloading = true;
     if (this.fileExplorerFilterTimer !== null) window.clearTimeout(this.fileExplorerFilterTimer);
+    this.fileExplorerFilterTimer = null;
+    this.fileExplorerFilterRoots.clear();
+    this.fileExplorerFilterFullScanPending = false;
     (_a2 = this.fileExplorerObserver) == null ? void 0 : _a2.disconnect();
     this.fileExplorerObserver = null;
     for (const timer of this.autoUploadTimers.values()) window.clearTimeout(timer);
@@ -21286,9 +21319,15 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
       var _a2;
       (_a2 = this.fileExplorerObserver) == null ? void 0 : _a2.disconnect();
       this.fileExplorerObserver = new MutationObserver((records) => {
-        if (this.fileExplorerMutationIsRelevant(records)) this.scheduleFileExplorerFilter();
+        const roots = this.fileExplorerMutationRoots(records);
+        if (roots.length) this.scheduleFileExplorerFilter(roots);
       });
-      this.fileExplorerObserver.observe(document.body, { childList: true, subtree: true });
+      this.fileExplorerObserver.observe(document.body, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ["data-path"]
+      });
       this.scheduleFileExplorerFilter();
     };
     this.app.workspace.onLayoutReady(observe);
@@ -21297,25 +21336,69 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
       return (_a2 = this.fileExplorerObserver) == null ? void 0 : _a2.disconnect();
     });
   }
-  /** Returns whether DOM mutations occurred inside, added, or removed a File Explorer tree. */
-  fileExplorerMutationIsRelevant(records) {
-    const selector = ".nav-files-container, .workspace-leaf-content[data-type='file-explorer']";
-    const touchesFileExplorer = (node) => node instanceof Element && (node.matches(selector) || Boolean(node.closest(selector)) || Boolean(node.querySelector(selector)));
-    return records.some((record) => touchesFileExplorer(record.target) || Array.from(record.addedNodes).some(touchesFileExplorer) || Array.from(record.removedNodes).some(touchesFileExplorer));
+  /** Collects only added or retargeted File Explorer subtrees that can contain unfiltered paths. */
+  fileExplorerMutationRoots(records) {
+    const roots = /* @__PURE__ */ new Set();
+    const addRoot = (candidate) => {
+      for (const existing of roots) {
+        if (existing.contains(candidate)) return;
+        if (candidate.contains(existing)) roots.delete(existing);
+      }
+      roots.add(candidate);
+    };
+    const collect = (node) => {
+      if (!(node instanceof Element)) return;
+      if (node.matches(FILE_EXPLORER_CONTAINER_SELECTOR) || node.closest(FILE_EXPLORER_CONTAINER_SELECTOR)) addRoot(node);
+      node.querySelectorAll(FILE_EXPLORER_CONTAINER_SELECTOR).forEach(addRoot);
+    };
+    for (const record of records) {
+      if (record.type === "attributes") collect(record.target);
+      record.addedNodes.forEach(collect);
+    }
+    return Array.from(roots);
   }
-  /** Defers File Explorer filtering so expanding a folder does not cause repeated synchronous DOM scans. */
-  scheduleFileExplorerFilter() {
+  /** Adds one incremental scan root while removing nested duplicates from the pending batch. */
+  queueFileExplorerFilterRoot(root) {
+    for (const existing of this.fileExplorerFilterRoots) {
+      if (existing.contains(root)) return;
+      if (root.contains(existing)) this.fileExplorerFilterRoots.delete(existing);
+    }
+    this.fileExplorerFilterRoots.add(root);
+  }
+  /** Applies the compiled visibility rule to one File Explorer subtree. */
+  applyFileExplorerFilterRoot(root, shouldHidePath) {
+    const apply = (element) => {
+      var _a2, _b2;
+      const path = element.dataset.path;
+      if (!path) return;
+      const fileItem = (_b2 = (_a2 = element.closest(".tree-item")) != null ? _a2 : element.closest(".nav-file, .nav-folder")) != null ? _b2 : element;
+      fileItem.toggleClass("mms-file-explorer-hidden", shouldHidePath(path));
+    };
+    if (root instanceof HTMLElement && root.matches(FILE_EXPLORER_PATH_SELECTOR)) apply(root);
+    root.querySelectorAll(FILE_EXPLORER_PATH_SELECTOR).forEach(apply);
+  }
+  /** Defers filtering and scans either the whole File Explorer or only newly changed subtrees. */
+  scheduleFileExplorerFilter(roots) {
+    if (roots) {
+      if (!this.fileExplorerFilterFullScanPending) {
+        for (const root of roots) this.queueFileExplorerFilterRoot(root);
+      }
+    } else {
+      this.fileExplorerFilterFullScanPending = true;
+      this.fileExplorerFilterRoots.clear();
+    }
     if (this.fileExplorerFilterTimer !== null) return;
     this.fileExplorerFilterTimer = window.setTimeout(() => {
       this.fileExplorerFilterTimer = null;
+      const fullScan = this.fileExplorerFilterFullScanPending;
+      const pendingRoots = fullScan ? Array.from(document.querySelectorAll(FILE_EXPLORER_CONTAINER_SELECTOR)) : Array.from(this.fileExplorerFilterRoots);
+      this.fileExplorerFilterFullScanPending = false;
+      this.fileExplorerFilterRoots.clear();
       const shouldHidePath = createFileExplorerPathFilter(this.settings);
-      document.querySelectorAll(".nav-files-container [data-path], .workspace-leaf-content[data-type='file-explorer'] [data-path]").forEach((element) => {
-        var _a2, _b2;
-        const path = element.dataset.path;
-        if (!path) return;
-        const fileItem = (_b2 = (_a2 = element.closest(".tree-item")) != null ? _a2 : element.closest(".nav-file, .nav-folder")) != null ? _b2 : element;
-        fileItem.toggleClass("mms-file-explorer-hidden", shouldHidePath(path));
-      });
+      for (const root of pendingRoots) {
+        if (!root.isConnected) continue;
+        this.applyFileExplorerFilterRoot(root, shouldHidePath);
+      }
     }, 80);
   }
   /** 返回当前会话正在使用的显示模式。大纲可在会话内同步，但不会成为下次启动默认值。 */

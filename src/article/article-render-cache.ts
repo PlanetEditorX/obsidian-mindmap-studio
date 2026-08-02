@@ -133,7 +133,9 @@ export function normalizeArticleRenderCacheSnapshot(value: unknown): ArticleRend
 export class ArticleRenderCacheStore {
   private readonly entries = new Map<string, ArticleRenderCacheSnapshot>();
   private persistTimer: number | null = null;
-  private persistChain: Promise<void> = Promise.resolve();
+  private requestedPersistRevision = 0;
+  private persistedRevision = 0;
+  private persistRunner: Promise<void> | null = null;
 
   /** Creates a bounded cache store backed by one plugin-private JSON file. */
   constructor(
@@ -175,9 +177,11 @@ export class ArticleRenderCacheStore {
     const normalized = normalizeArticleCachePath(filePath);
     const snapshot = this.entries.get(normalized);
     if (!snapshot) return null;
+    const newestPath = Array.from(this.entries.keys()).at(-1);
     snapshot.lastAccessedAt = Date.now();
     this.entries.delete(normalized);
     this.entries.set(normalized, snapshot);
+    if (newestPath !== normalized) this.markDirty();
     return snapshot;
   }
 
@@ -190,13 +194,13 @@ export class ArticleRenderCacheStore {
     this.entries.delete(normalized.filePath);
     this.entries.set(normalized.filePath, normalized);
     this.prune();
-    this.schedulePersist();
+    this.markDirty();
   }
 
   /** 文件删除时清除缓存。 */
   remove(filePath: string): void {
     if (!this.entries.delete(normalizeArticleCachePath(filePath))) return;
-    this.schedulePersist();
+    this.markDirty();
   }
 
   /** 文件重命名时迁移缓存键，节点快照本身仍可复用。 */
@@ -208,41 +212,66 @@ export class ArticleRenderCacheStore {
     snapshot.filePath = normalizeArticleCachePath(newPath);
     snapshot.lastAccessedAt = Date.now();
     this.entries.set(snapshot.filePath, snapshot);
-    this.schedulePersist();
+    this.markDirty();
   }
 
   /** 插件卸载前立即提交尚未写入的缓存。 */
-  flush(): Promise<void> {
+  async flush(): Promise<void> {
     if (this.persistTimer !== null) {
       window.clearTimeout(this.persistTimer);
       this.persistTimer = null;
     }
-    this.queuePersist();
-    return this.persistChain;
+    this.startPersistRunner();
+    if (this.persistRunner) await this.persistRunner;
   }
 
-  /** Debounces repeated node updates into one disk write. */
+  /** Marks the latest in-memory LRU state dirty and absorbs repeated updates into one trailing write. */
+  private markDirty(): void {
+    this.requestedPersistRevision += 1;
+    this.schedulePersist();
+  }
+
+  /** Debounces repeated node updates into one disk write when no write loop is already active. */
   private schedulePersist(): void {
+    if (this.persistRunner) return;
     if (this.persistTimer !== null) window.clearTimeout(this.persistTimer);
     this.persistTimer = window.setTimeout(() => {
       this.persistTimer = null;
-      this.queuePersist();
+      this.startPersistRunner();
     }, 800);
   }
 
-  /** Serializes writes so a slower previous write cannot overwrite a newer snapshot. */
-  private queuePersist(): void {
-    const payload: PersistedArticleRenderCache = {
-      schemaVersion: ARTICLE_RENDER_CACHE_SCHEMA_VERSION,
-      entries: Array.from(this.entries.values())
-    };
-    this.persistChain = this.persistChain
-      .catch(() => undefined)
-      .then(async () => {
+  /** Starts the unique persistence loop; updates arriving during a write are folded into its next pass. */
+  private startPersistRunner(): void {
+    if (this.persistRunner || this.persistedRevision >= this.requestedPersistRevision) return;
+    if (this.persistTimer !== null) {
+      window.clearTimeout(this.persistTimer);
+      this.persistTimer = null;
+    }
+    this.persistRunner = this.runPersistLoop().finally(() => {
+      this.persistRunner = null;
+      if (this.persistedRevision < this.requestedPersistRevision) this.startPersistRunner();
+    });
+  }
+
+  /** Persists stable JSON snapshots serially while coalescing all changes observed during an active write. */
+  private async runPersistLoop(): Promise<void> {
+    while (this.persistedRevision < this.requestedPersistRevision) {
+      const targetRevision = this.requestedPersistRevision;
+      const content = JSON.stringify({
+        schemaVersion: ARTICLE_RENDER_CACHE_SCHEMA_VERSION,
+        entries: Array.from(this.entries.values())
+      } satisfies PersistedArticleRenderCache);
+      try {
         if (!await this.adapter.exists(this.cacheDirectory)) await this.adapter.mkdir(this.cacheDirectory);
-        await this.adapter.write(this.cacheFile, JSON.stringify(payload));
-      })
-      .catch((error) => console.warn("MindMap Studio article cache persist failed", error));
+        await this.adapter.write(this.cacheFile, content);
+      } catch (error) {
+        console.warn("MindMap Studio article cache persist failed", error);
+        this.persistedRevision = targetRevision;
+        return;
+      }
+      this.persistedRevision = targetRevision;
+    }
   }
 
   /** Applies entry-count and total-character LRU limits. */
