@@ -1,5 +1,12 @@
 # Modified Files
 
+## 1.39.11 文章章节定位事务化
+
+- `src/editor/editor.ts`：文章当前位置采集改用标题/真实章节专属选择器；新增最后一次导航独占的可取消语义滚动事务，异步上下文刷新沿用活动目标，并用最长 5 秒的布局观察抵消图片、表格、代码和字体晚到；用户滚轮、触摸、指针或键盘翻页立即接管。
+- `tests/incremental-render.test.mjs`、`tests/article-content-block.test.mjs`、`scripts/test.mjs`：新增文章页壳排除、章节边界、旧任务令牌取消、异步布局稳定、亚像素写入和用户输入取消契约；单元测试增至 279 项。
+- `README.md`、`CHANGELOG.md`、`docs/ARCHITECTURE.md`、`docs/SPECIAL_FEATURES.md`、`docs/READING_JUMP_FIX.zh-CN.md`、`docs/TESTING.md`、`docs/FUNCTION_REFERENCE.md`、`TEST_RESULTS.md`：同步根因、事务时序、稳定窗口和人工验证边界。
+- `package.json`、`package-lock.json`、`manifest.json`、`versions.json`、`update.json`、`main.js`：同步 1.39.11 版本、生产构建和最终安装包校验。
+
 ## 1.39.10 文章入口骨架与窗口过渡反馈
 
 - `src/editor/editor.ts`：文章首次进入和目录跳转增加可取消的双帧骨架绘制门；骨架阶段暂存语义位置，真实窗口挂载后恢复；边缘扩展先绘制加载状态再挂载内容，并尊重减少动态效果。

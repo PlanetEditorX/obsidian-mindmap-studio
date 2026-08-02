@@ -1507,7 +1507,7 @@ const command = "example";
     /nodeRatio: clampRatio\((?:nodeRatio|input\.nodeRatio), 0\)/,
     "persisted node ratios must use the shared clamp instead of editor-local arithmetic"
   );
-  assert.match(editorSource, /scroller\.scrollTop \+= targetY - desiredY/, "article and outline modes must restore the same semantic reading position");
+  assert.match(editorSource, /const nextScrollTop = scroller\.scrollTop \+ targetY - desiredY[\s\S]*Math\.abs\(scroller\.scrollTop - nextScrollTop\) > 0\.5[\s\S]*scroller\.scrollTop = nextScrollTop/, "article and outline modes must restore the same semantic reading position without sub-pixel jitter");
   assert.match(editorSource, /scrollPosition = scroller \? \{ top: scroller\.scrollTop, left: scroller\.scrollLeft \}/);
   assert.match(editorSource, /window\.requestAnimationFrame\(restore\)/, "switching edit state must restore the current scroll position after rerender");
   assert.match(editorSource, /renderOutline/);

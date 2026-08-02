@@ -182,7 +182,8 @@ Obsidian 读取文本
 - 需要入口反馈时，编辑器先挂载固定尺寸的 `.mms-article-entry-skeleton`，通过双 `requestAnimationFrame()` 确保骨架实际绘制后再调用 `renderArticleMode()`。骨架只存在于文章滚动容器内，不覆盖页面、不模拟章节高度；快速导航或切换模式会用令牌和帧取消旧任务。系统启用 `prefers-reduced-motion: reduce` 时跳过该绘制门。
 - 向上插入前文时，编辑器记录扩展前后的 `scrollHeight` 差值并补偿 `scrollTop`，保持当前章节在屏幕中的位置。自动或手动扩展先让边缘按钮绘制一帧 `is-loading` 流光，再挂载约 5 KB 真实节点；新节点仅做短时淡入，不遮挡已显示内容。窗口移动和扩展后重新绑定章节折叠、缩略导航、选中状态与文章块移动 UI。
 - 语义恢复在查询 DOM 前调用 `ensureNode(nodeId)`；目标不在窗口时直接围绕该节点重建窗口，再使用文档标题或 `.mms-article-node[data-node-id]` 精确定位。若入口骨架仍在绘制，`restoreReadingLocation()` 会把目标暂存到 `pendingArticleFocusLocation`，待真实窗口挂载后再执行，避免骨架阶段查询失败。顶层目录的同文件章节直接调用 `focusNode()`，不经过文件重开；跨文件导航继续传递 `filePath + nodeId`。
-- 显式章节跳转通过 `pendingArticleFocusLocation` 交给本轮 `renderArticle()` 消费，本轮不再捕获和延迟恢复旧位置，避免旧锚点与新目标竞争。普通内容重绘仍保存并恢复当前语义位置。
+- 文章位置采集使用模式专属选择器，只扫描 `.mms-article-document-title[data-node-id]` 与 `.mms-article-node[data-node-id]`。`.mms-article-page` 即使保存根节点 ID 也不参与当前位置判断，锚点恰好位于章节边界时采用下一个真实章节，避免把页面空白误记为根节点并在刷新后回到页首。
+- 每次 `restoreReadingLocation()` 建立带递增令牌的“最后一次导航独占”事务；新事务会取消旧定时器、动画帧和 `ResizeObserver`，异步 `setOptions()` 重绘优先保留活动事务的精确 `ReadingLocation`。目标到位后，布局观察最多维持 5 秒，页面因图片、表格、代码或字体晚到而改变高度时重新应用同一语义锚点；滚轮、指针、触摸及 PageUp/PageDown/Home/End/方向键输入会立即取消事务。普通内容重绘仍保存并恢复当前语义位置。
 - 章节重量只读取已规范化的原始文字、代码、表格等字段；不会在首屏前为全部节点执行内容块规范化或整节点 `JSON.stringify()`。实际挂载节点的内容块仍在当前渲染窗口内用 `WeakMap` 规范化一次。运行时不保存或恢复节点级 HTML 缓存。
 - 异步文章族上下文刷新通过 `setOptions(..., true)` 标记来源。文章、导图和大纲仅更新阅读上下文；只有文章目录层级、目录项或分页导航发生变化时才重建当前文章，通读模式因渲染跨文件内容仍完整刷新。
 - “返回上一级”、顶部父级导航和键盘 `Esc` 都传递父导图路径与父挂载节点 ID；旧文件未保存 `parentNodeId` 时，`buildArticleContext()` 会按当前子导图路径在父节点树中反查。

@@ -363,11 +363,15 @@ test("table edits preserve the visible anchor before synchronous and measured re
   const updateTableColumnWidths = editorSource.match(/private updateTableColumnWidths\([\s\S]*?\n  \}/)?.[0] ?? "";
   const applyMeasuredMindMapLayout = editorSource.match(/private applyMeasuredMindMapLayout\(\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
   const restoreReadingLocation = editorSource.match(/private restoreReadingLocation\([\s\S]*?\n  \}/)?.[0] ?? "";
+  const beginReadingLocationRestore = editorSource.match(/private beginReadingLocationRestore\([\s\S]*?\n  \}/)?.[0] ?? "";
   assert.match(openTableBlockEditor, /captureMindMapViewportAnchor\(node\.id\)[\s\S]*this\.mutate\([\s\S]*restoreMindMapViewportAnchor\(viewportAnchor\)/);
   assert.match(updateTableColumnWidths, /captureMindMapViewportAnchor\(node\.id\)[\s\S]*this\.mutate\([\s\S]*restoreMindMapViewportAnchor\(viewportAnchor\)/);
   assert.match(applyMeasuredMindMapLayout, /captureMindMapViewportAnchor\(this\.selectedId\)[\s\S]*renderMindMapEdges[\s\S]*restoreMindMapViewportAnchor\(viewportAnchor\)/);
-  assert.match(restoreReadingLocation, /const restore = \(\): void => \{[\s\S]*\n    restore\(\);\n    window\.setTimeout\(restore, 20\)/);
+  assert.match(restoreReadingLocation, /beginReadingLocationRestore\(mode, normalizedLocation, resolved\)/);
+  assert.match(beginReadingLocationRestore, /window\.setTimeout\([\s\S]*20\)/);
+  assert.match(beginReadingLocationRestore, /new ResizeObserver\(\(\) => scheduleFrame\(\)\)/);
+  assert.match(beginReadingLocationRestore, /readingRestoreDeadlineTimer[\s\S]*5000/);
   assert.match(mainBundle, /captureMindMapViewportAnchor\(this\.selectedId\)[\s\S]*renderMindMapEdges[\s\S]*restoreMindMapViewportAnchor\(viewportAnchor\)/);
   assert.match(mainBundle, /new TableEditModal[\s\S]*captureMindMapViewportAnchor\(node\.id\)[\s\S]*restoreMindMapViewportAnchor\(viewportAnchor\)/);
-  assert.match(mainBundle, /restore\(\);\n    window\.setTimeout\(restore, 20\)/);
+  assert.match(mainBundle, /new ResizeObserver/);
 });
