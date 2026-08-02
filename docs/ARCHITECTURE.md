@@ -49,8 +49,10 @@ src/
 ├── import/
 │   └── import-export.ts        XMind 多画布导入与文章导出
 ├── utils/
+│   ├── coalesced-json-writer.ts 连续 JSON 保存请求的合并与串行写入
 │   ├── filename.ts             文件名、扩展名、时间戳与 MIME
 │   └── image-host.ts           图床端点、Header、multipart 与响应解析
+├── file-explorer-filter.ts     文件浏览器筛选规则编译与语义签名
 ├── settings.ts                 设置与默认值
 └── themes.ts                   主题预设
 ```
@@ -70,11 +72,19 @@ src/
 - `src/editor/content-modals.ts`：表格、代码编辑弹窗。
 - `src/render/code-block.ts`：解析节点/页面/全局代码设置，调用 Obsidian Markdown 高亮，并为四种显示模式安装统一的真实 DOM 行号栏。
 - `src/render/static-render.ts`：Markdown 阅读模式中的只读 SVG 预览。
+- `src/utils/coalesced-json-writer.ts`：将短时间内连续保存请求合并为最新快照，严格串行调用持久化回调，并让每个等待方只在其版本落盘后完成。
 - `src/utils/filename.ts`：跨平台文件名、扩展名、时间戳与图片 MIME 的纯函数。
 - `src/utils/image-host.ts`：不依赖 Obsidian 的图床输入校验、multipart 构造、响应 URL/删除令牌提取、SHA-256 计算和删除模板替换。
+- `src/file-explorer-filter.ts`：预编译资源目录、后缀和隐藏目录规则，并生成稳定语义签名，供插件层判断是否需要重新扫描文件浏览器。
 - `styles.css`：编辑器、四种模式、弹窗、搜索、尺寸手柄和响应式样式。
 
 ## 3. 文件加载与保存流程
+
+### 3.0 插件设置保存
+
+所有插件级设置变更统一进入 `CoalescedJsonWriter`。首轮写入采用 35 ms 尾随窗口吸收连续 UI 事件；真正写入时获取最新 JSON 快照，写入期间出现的新版本在当前写入结束后立即追加，禁止多个 `saveData()` 并发执行。设置导入、重置等调用仍可 `await saveSettings()`，并只在包含自身请求版本的快照完成后继续。插件卸载时刷新待写版本。
+
+文件浏览器筛选的 DOM 扫描与普通设置保存解耦：只有筛选配置的规范化语义签名改变、仓库文件生命周期变化，或 MutationObserver 确认变化发生在文件浏览器树内时才安排扫描。单次扫描先编译规则，再对所有 `[data-path]` 元素复用同一谓词。
 
 ### 3.1 打开文件
 

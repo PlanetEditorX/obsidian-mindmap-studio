@@ -6550,9 +6550,39 @@ Converts a comma, semicolon, or line-separated folder list into vault-relative p
 export function normalizeHiddenFolderPaths(value: string): string[]
 ```
 
-### 函数 `shouldHideFileExplorerPath`
+### 函数 `normalizeVaultRelativePath`
 
 源码：`src/file-explorer-filter.ts:30`
+
+Normalizes one vault-relative path without resolving it against the operating system.
+
+```ts
+function normalizeVaultRelativePath(path: string): string
+```
+
+### 函数 `fileExplorerFilterSignature`
+
+源码：`src/file-explorer-filter.ts:35`
+
+Builds a stable semantic key so unrelated settings saves do not rescan File Explorer.
+
+```ts
+export function fileExplorerFilterSignature(settings: FileExplorerFilterSettings): string
+```
+
+### 函数 `createFileExplorerPathFilter`
+
+源码：`src/file-explorer-filter.ts:46`
+
+Compiles normalized extension and folder rules once for an entire File Explorer scan.
+
+```ts
+export function createFileExplorerPathFilter(settings: FileExplorerFilterSettings): (path: string) => boolean
+```
+
+### 函数 `shouldHideFileExplorerPath`
+
+源码：`src/file-explorer-filter.ts:74`
 
 Returns whether a File Explorer path should be hidden without altering vault files.
 
@@ -6730,7 +6760,7 @@ export function readingSectionsToMarkdown(sections: ReadingSection[], tocMaxDept
 
 ### 接口 `PendingAutoUploadJob`
 
-源码：`src/main.ts:125`
+源码：`src/main.ts:126`
 
 One deduplicated image auto-upload request waiting for its file batch.
 
@@ -6740,7 +6770,7 @@ interface PendingAutoUploadJob
 
 ### 接口 `CompletedAutoUploadJob`
 
-源码：`src/main.ts:136`
+源码：`src/main.ts:137`
 
 Network result retained until it can be merged into the latest live document.
 
@@ -6750,7 +6780,7 @@ interface CompletedAutoUploadJob
 
 ### 函数 `matchesRecordedShortcut`
 
-源码：`src/main.ts:145`
+源码：`src/main.ts:146`
 
 Returns whether a keyboard event exactly matches one recorded plugin shortcut.
 
@@ -6760,7 +6790,7 @@ function matchesRecordedShortcut(event: KeyboardEvent, shortcut: string): boolea
 
 ### 类 `MindMapStudioPlugin`
 
-源码：`src/main.ts:164`
+源码：`src/main.ts:165`
 
 MindMapStudioPlugin 的主要实现类。负责封装相关状态、生命周期和对外操作，避免调用方直接操作内部数据结构。
 
@@ -6770,7 +6800,7 @@ export default class MindMapStudioPlugin extends Plugin
 
 ### 方法 `MindMapStudioPlugin.onload`
 
-源码：`src/main.ts:185`
+源码：`src/main.ts:189`
 
 执行“onload”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
 
@@ -6780,7 +6810,7 @@ async onload(): Promise<void>
 
 ### 方法 `MindMapStudioPlugin.onunload`
 
-源码：`src/main.ts:375`
+源码：`src/main.ts:381`
 
 执行“onunload”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
 
@@ -6790,7 +6820,7 @@ onunload(): void
 
 ### 方法 `MindMapStudioPlugin.getArticleRenderCache`
 
-源码：`src/main.ts:393`
+源码：`src/main.ts:401`
 
 Returns the synchronously preloaded article render snapshot for one map.
 
@@ -6800,7 +6830,7 @@ getArticleRenderCache(filePath: string): ArticleRenderCacheSnapshot | null
 
 ### 方法 `MindMapStudioPlugin.updateArticleRenderCache`
 
-源码：`src/main.ts:398`
+源码：`src/main.ts:406`
 
 Accepts a completed node-level article render snapshot and persists it through the plugin cache store.
 
@@ -6810,7 +6840,7 @@ updateArticleRenderCache(snapshot: ArticleRenderCacheSnapshot): void
 
 ### 方法 `MindMapStudioPlugin.openGlobalSearch`
 
-源码：`src/main.ts:405`
+源码：`src/main.ts:413`
 
 打开global search，并保持模型、界面和持久化状态的一致性。
 
@@ -6820,7 +6850,7 @@ openGlobalSearch(): void
 
 ### 方法 `MindMapStudioPlugin.openGlobalSearchAfterIndexReady`
 
-源码：`src/main.ts:412`
+源码：`src/main.ts:420`
 
 打开global search after index ready，并保持模型、界面和持久化状态的一致性。
 
@@ -6830,7 +6860,7 @@ private async openGlobalSearchAfterIndexReady(): Promise<void>
 
 ### 方法 `MindMapStudioPlugin.openMapFamilySearch`
 
-源码：`src/main.ts:430`
+源码：`src/main.ts:438`
 
 打开map family search，并保持模型、界面和持久化状态的一致性。
 
@@ -6840,7 +6870,7 @@ async openMapFamilySearch(file: TFile, currentDocument?: MindMapDocument): Promi
 
 ### 方法 `MindMapStudioPlugin.rebuildGlobalSearchIndex`
 
-源码：`src/main.ts:453`
+源码：`src/main.ts:461`
 
 重建global search index，并保持模型、界面和持久化状态的一致性。
 
@@ -6850,7 +6880,7 @@ async rebuildGlobalSearchIndex(): Promise<void>
 
 ### 方法 `MindMapStudioPlugin.getGlobalSearchIndexStatus`
 
-源码：`src/main.ts:463`
+源码：`src/main.ts:471`
 
 读取并返回global search index status，并保持模型、界面和持久化状态的一致性。
 
@@ -6860,7 +6890,7 @@ getGlobalSearchIndexStatus()
 
 ### 方法 `MindMapStudioPlugin.openGlobalSearchResult`
 
-源码：`src/main.ts:472`
+源码：`src/main.ts:480`
 
 打开global search result，并保持模型、界面和持久化状态的一致性。
 
@@ -6870,7 +6900,7 @@ private async openGlobalSearchResult(result: MindMapSearchResult): Promise<void>
 
 ### 方法 `MindMapStudioPlugin.replaceAllInSearchResults`
 
-源码：`src/main.ts:485`
+源码：`src/main.ts:493`
 
 批量替换搜索结果中的节点文字。
 
@@ -6880,7 +6910,7 @@ private async replaceAllInSearchResults(results: MindMapSearchResult[], query: s
 
 ### 方法 `MindMapStudioPlugin.loadSettings`
 
-源码：`src/main.ts:568`
+源码：`src/main.ts:576`
 
 加载settings，并保持模型、界面和持久化状态的一致性。
 
@@ -6890,7 +6920,7 @@ async loadSettings(): Promise<void>
 
 ### 方法 `MindMapStudioPlugin.applyLoadedSettings`
 
-源码：`src/main.ts:574`
+源码：`src/main.ts:582`
 
 规范化已加载或导入的插件配置，并应用到当前会话。
 
@@ -6900,7 +6930,7 @@ private applyLoadedSettings(loaded: Partial<MindMapStudioSettings> | null): void
 
 ### 方法 `MindMapStudioPlugin.importSettings`
 
-源码：`src/main.ts:852`
+源码：`src/main.ts:860`
 
 导入插件配置，规范化后立即保存并刷新所有已打开视图。
 
@@ -6908,11 +6938,21 @@ private applyLoadedSettings(loaded: Partial<MindMapStudioSettings> | null): void
 async importSettings(settings: unknown): Promise<void>
 ```
 
+### 方法 `MindMapStudioPlugin.createSettingsWriter`
+
+源码：`src/main.ts:870`
+
+Creates the single-flight settings writer used by every settings mutation path.
+
+```ts
+private createSettingsWriter(): CoalescedJsonWriter<MindMapStudioSettings>
+```
+
 ### 方法 `MindMapStudioPlugin.saveSettings`
 
-源码：`src/main.ts:864`
+源码：`src/main.ts:888`
 
-保存settings，并保持模型、界面和持久化状态的一致性。
+合并短时间内连续触发的设置保存，并保证所有磁盘写入严格串行。
 
 ```ts
 async saveSettings(): Promise<void>
@@ -6920,7 +6960,7 @@ async saveSettings(): Promise<void>
 
 ### 方法 `MindMapStudioPlugin.checkForPluginUpdate`
 
-源码：`src/main.ts:870`
+源码：`src/main.ts:894`
 
 Checks the release-workflow update manifest, verifies its archive, and requires a full app restart to activate it.
 
@@ -6930,7 +6970,7 @@ async checkForPluginUpdate(): Promise<"up-to-date" | "updated">
 
 ### 方法 `MindMapStudioPlugin.askAi`
 
-源码：`src/main.ts:909`
+源码：`src/main.ts:933`
 
 使用指定 AI 配置发送当前 Markdown 上下文。
 
@@ -6940,7 +6980,7 @@ async askAi(profileId: string, payload: AiMarkdownPayload, question: string, onS
 
 ### 方法 `MindMapStudioPlugin.enrichQuestion`
 
-源码：`src/main.ts:916`
+源码：`src/main.ts:940`
 
 Converts a transcribed question into a verified original-question lookup result when the selected model supports web retrieval.
 
@@ -6950,7 +6990,7 @@ async enrichQuestion(questionText: string): Promise<string>
 
 ### 方法 `MindMapStudioPlugin.proposeAiEdit`
 
-源码：`src/main.ts:945`
+源码：`src/main.ts:969`
 
 使用指定 AI 配置生成 Markdown 修改提案，但不直接修改导图。
 
@@ -6960,7 +7000,7 @@ async proposeAiEdit(profileId: string, payload: AiMarkdownPayload, instruction: 
 
 ### 方法 `MindMapStudioPlugin.recognizeImage`
 
-源码：`src/main.ts:952`
+源码：`src/main.ts:976`
 
 使用当前识图模式处理单张图片；AI 模式可指定接口，本地 OCR 模式不会联网。
 
@@ -6970,7 +7010,7 @@ async recognizeImage( image: RecognizableImage, blob: Blob, profileId?: string, 
 
 ### 方法 `MindMapStudioPlugin.captureScreenshot`
 
-源码：`src/main.ts:984`
+源码：`src/main.ts:1008`
 
 按普通截图或截图并识别模式启动桌面覆盖层，并根据设置决定是否隐藏 Obsidian。
 
@@ -6980,7 +7020,7 @@ async captureScreenshot(recognizeAfter = false)
 
 ### 方法 `MindMapStudioPlugin.testAiProfile`
 
-源码：`src/main.ts:992`
+源码：`src/main.ts:1016`
 
 使用最小请求检测 AI 接口、鉴权和模型是否可用。
 
@@ -6990,7 +7030,7 @@ async testAiProfile(profileId: string): Promise<void>
 
 ### 方法 `MindMapStudioPlugin.getAiProfileModels`
 
-源码：`src/main.ts:1019`
+源码：`src/main.ts:1043`
 
 获取配置服务公开的模型目录，不改变当前选择的模型。
 
@@ -7000,7 +7040,7 @@ async getAiProfileModels(profileId: string): Promise<string[]>
 
 ### 方法 `MindMapStudioPlugin.setAiProfileThinkingMode`
 
-源码：`src/main.ts:1027`
+源码：`src/main.ts:1051`
 
 保存由 AI 助手窗口切换的深度思考状态，并与设置页共用同一配置。
 
@@ -7010,7 +7050,7 @@ async setAiProfileThinkingMode(profileId: string, enabled: boolean): Promise<voi
 
 ### 方法 `MindMapStudioPlugin.installFileExplorerFilter`
 
-源码：`src/main.ts:1035`
+源码：`src/main.ts:1059`
 
 Installs a lightweight File Explorer observer; it changes visibility only, never vault data.
 
@@ -7018,9 +7058,19 @@ Installs a lightweight File Explorer observer; it changes visibility only, never
 private installFileExplorerFilter(): void
 ```
 
+### 方法 `MindMapStudioPlugin.fileExplorerMutationIsRelevant`
+
+源码：`src/main.ts:1073`
+
+Returns whether DOM mutations occurred inside, added, or removed a File Explorer tree.
+
+```ts
+private fileExplorerMutationIsRelevant(records: MutationRecord[]): boolean
+```
+
 ### 方法 `MindMapStudioPlugin.scheduleFileExplorerFilter`
 
-源码：`src/main.ts:1047`
+源码：`src/main.ts:1083`
 
 Defers File Explorer filtering so expanding a folder does not cause repeated synchronous DOM scans.
 
@@ -7030,7 +7080,7 @@ private scheduleFileExplorerFilter(): void
 
 ### 方法 `MindMapStudioPlugin.getActiveDisplayMode`
 
-源码：`src/main.ts:1063`
+源码：`src/main.ts:1100`
 
 返回当前会话正在使用的显示模式。大纲可在会话内同步，但不会成为下次启动默认值。
 
@@ -7040,7 +7090,7 @@ getActiveDisplayMode(): DisplayMode
 
 ### 方法 `MindMapStudioPlugin.isQuestionBankFile`
 
-源码：`src/main.ts:1072`
+源码：`src/main.ts:1109`
 
 Returns whether a map path belongs to the configured question-bank folder or one of its descendants.
 
@@ -7050,7 +7100,7 @@ isQuestionBankFile(file: TFile | null): boolean
 
 ### 方法 `MindMapStudioPlugin.setGlobalDisplayMode`
 
-源码：`src/main.ts:1084`
+源码：`src/main.ts:1121`
 
 同步所有已打开视图的显示模式。导图、文章和通读会持久化为下次启动模式； 大纲仅记录在当前会话，避免重新打开插件时默认进入大纲。
 
@@ -7060,7 +7110,7 @@ async setGlobalDisplayMode(mode: DisplayMode): Promise<void>
 
 ### 方法 `MindMapStudioPlugin.renameReadingLocationPathInSettings`
 
-源码：`src/main.ts:1099`
+源码：`src/main.ts:1136`
 
 将文件重命名同步到所有语义阅读位置链，避免改名后恢复记录失联。
 
@@ -7070,7 +7120,7 @@ private async renameReadingLocationPathInSettings(oldPath: string, newPath: stri
 
 ### 方法 `MindMapStudioPlugin.resetAllSettings`
 
-源码：`src/main.ts:1120`
+源码：`src/main.ts:1157`
 
 执行“reset all settings”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
 
@@ -7080,7 +7130,7 @@ async resetAllSettings(): Promise<void>
 
 ### 方法 `MindMapStudioPlugin.refreshOpenViews`
 
-源码：`src/main.ts:1130`
+源码：`src/main.ts:1167`
 
 刷新open views，并保持模型、界面和持久化状态的一致性。
 
@@ -7090,7 +7140,7 @@ refreshOpenViews(): void
 
 ### 方法 `MindMapStudioPlugin.createConfiguredDocument`
 
-源码：`src/main.ts:1142`
+源码：`src/main.ts:1179`
 
 创建configured document，并保持模型、界面和持久化状态的一致性。
 
@@ -7100,7 +7150,7 @@ createConfiguredDocument(title: string): MindMapDocument
 
 ### 方法 `MindMapStudioPlugin.resolveMindMapFile`
 
-源码：`src/main.ts:1158`
+源码：`src/main.ts:1195`
 
 解析并确定mind map file，并保持模型、界面和持久化状态的一致性。
 
@@ -7110,7 +7160,7 @@ private resolveMindMapFile(path: string, sourcePath = ""): TFile | null
 
 ### 方法 `MindMapStudioPlugin.readMindMapDocument`
 
-源码：`src/main.ts:1173`
+源码：`src/main.ts:1210`
 
 执行“read mind map document”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
 
@@ -7120,7 +7170,7 @@ private async readMindMapDocument(file: TFile): Promise<MindMapDocument>
 
 ### 方法 `MindMapStudioPlugin.findArticleNodeDepth`
 
-源码：`src/main.ts:1185`
+源码：`src/main.ts:1222`
 
 按自动或手动文章层级查找目标节点的绝对深度，而不是直接使用物理树深度。
 
@@ -7130,7 +7180,7 @@ private findArticleNodeDepth(root: MindMapNode, nodeId: string, baseDepth = 0): 
 
 ### 方法 `MindMapStudioPlugin.computeArticleBaseDepth`
 
-源码：`src/main.ts:1197`
+源码：`src/main.ts:1234`
 
 执行“compute article base depth”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
 
@@ -7140,7 +7190,7 @@ private async computeArticleBaseDepth(file: TFile, document: MindMapDocument, vi
 
 ### 方法 `MindMapStudioPlugin.buildArticleContext`
 
-源码：`src/main.ts:1225`
+源码：`src/main.ts:1262`
 
 沿子导图 navigation.parentPath 逐级回溯父文件，计算当前子导图在整篇文章中的基础标题深度、完整面包屑和顶层目录数据，并防止循环引用。
 
@@ -7150,7 +7200,7 @@ async buildArticleContext(file: TFile, document: MindMapDocument): Promise<
 
 ### 类型 `Item`
 
-源码：`src/main.ts:1246`
+源码：`src/main.ts:1283`
 
 Item 类型定义，用于限制可接受值并让序列化数据保持稳定。
 
@@ -7160,7 +7210,7 @@ type Item =
 
 ### 方法 `MindMapStudioPlugin.buildDescendantReadingSections`
 
-源码：`src/main.ts:1349`
+源码：`src/main.ts:1386`
 
 Collects the current map and every reachable child map without walking up to its parent. This is the export counterpart of continuous reading.
 
@@ -7170,7 +7220,7 @@ async buildDescendantReadingSections(file: TFile, document: MindMapDocument): Pr
 
 ### 方法 `MindMapStudioPlugin.getAvailablePath`
 
-源码：`src/main.ts:1388`
+源码：`src/main.ts:1425`
 
 读取并返回available path，并保持模型、界面和持久化状态的一致性。
 
@@ -7180,7 +7230,7 @@ async getAvailablePath(preferredPath: string): Promise<string>
 
 ### 方法 `MindMapStudioPlugin.createMindMap`
 
-源码：`src/main.ts:1405`
+源码：`src/main.ts:1442`
 
 创建mind map，并保持模型、界面和持久化状态的一致性。
 
@@ -7190,7 +7240,7 @@ async createMindMap(options:
 
 ### 方法 `MindMapStudioPlugin.syncMindMapTitleToFilename`
 
-源码：`src/main.ts:1436`
+源码：`src/main.ts:1473`
 
 Synchronizes a saved map's filename with its root node title and preserves parent/child navigation references when the map is linked as a submap.
 
@@ -7200,7 +7250,7 @@ async syncMindMapTitleToFilename(file: TFile, document: MindMapDocument): Promis
 
 ### 方法 `MindMapStudioPlugin.updateParentSubmapReference`
 
-源码：`src/main.ts:1457`
+源码：`src/main.ts:1494`
 
 Updates the parent node that links to a renamed child map.
 
@@ -7210,7 +7260,7 @@ private async updateParentSubmapReference(file: TFile, oldPath: string, parentPa
 
 ### 方法 `MindMapStudioPlugin.updateChildSubmapNavigation`
 
-源码：`src/main.ts:1472`
+源码：`src/main.ts:1509`
 
 Updates navigation metadata in child maps after their parent map was renamed.
 
@@ -7220,7 +7270,7 @@ private async updateChildSubmapNavigation(file: TFile, oldPath: string, document
 
 ### 方法 `MindMapStudioPlugin.openAsMindMap`
 
-源码：`src/main.ts:1493`
+源码：`src/main.ts:1530`
 
 打开as mind map，并保持模型、界面和持久化状态的一致性。
 
@@ -7230,7 +7280,7 @@ async openAsMindMap(file: TFile, preferredLeaf?: WorkspaceLeaf, focusNodeId?: st
 
 ### 方法 `MindMapStudioPlugin.savePastedImage`
 
-源码：`src/main.ts:1513`
+源码：`src/main.ts:1550`
 
 保存pasted image，并保持模型、界面和持久化状态的一致性。
 
@@ -7240,7 +7290,7 @@ async savePastedImage(blob: Blob, suggestedName: string, sourceFile: TFile | nul
 
 ### 方法 `MindMapStudioPlugin.importDesktopMarkdownImages`
 
-源码：`src/main.ts:1538`
+源码：`src/main.ts:1575`
 
 读取桌面 Markdown 同目录或附件回退路径中的图片，并复制到当前导图资源目录。
 
@@ -7250,7 +7300,7 @@ async importDesktopMarkdownImages(document: MindMapDocument, sourceDirectory: st
 
 ### 方法 `MindMapStudioPlugin.readImageSource`
 
-源码：`src/main.ts:1565`
+源码：`src/main.ts:1602`
 
 执行“read image source”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
 
@@ -7260,7 +7310,7 @@ async readImageSource(source: string, sourceFile: TFile | null): Promise<
 
 ### 方法 `MindMapStudioPlugin.getImageHostChoices`
 
-源码：`src/main.ts:1596`
+源码：`src/main.ts:1633`
 
 读取并返回image host choices，并保持模型、界面和持久化状态的一致性。
 
@@ -7270,7 +7320,7 @@ getImageHostChoices(): ImageHostChoice[]
 
 ### 方法 `MindMapStudioPlugin.getImageHostPriorityIds`
 
-源码：`src/main.ts:1604`
+源码：`src/main.ts:1641`
 
 Returns enabled image host IDs ordered by render failover priority.
 
@@ -7280,7 +7330,7 @@ getImageHostPriorityIds(): string[]
 
 ### 方法 `MindMapStudioPlugin.getDefaultUploadHostIds`
 
-源码：`src/main.ts:1615`
+源码：`src/main.ts:1652`
 
 读取并返回default upload host ids，并保持模型、界面和持久化状态的一致性。
 
@@ -7290,7 +7340,7 @@ getDefaultUploadHostIds(): string[]
 
 ### 方法 `MindMapStudioPlugin.uploadImageToHosts`
 
-源码：`src/main.ts:1629`
+源码：`src/main.ts:1666`
 
 把同一张图片上传到多个已配置图床，分别收集成功与失败结果。只有所有选中图床成功且文档保存完成后，调用方才允许删除本地文件。
 
@@ -7300,7 +7350,7 @@ async uploadImageToHosts(blob: Blob, suggestedName: string, hostIds: string[]): 
 
 ### 方法 `MindMapStudioPlugin.testImageHost`
 
-源码：`src/main.ts:1693`
+源码：`src/main.ts:1730`
 
 执行“test image host”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
 
@@ -7310,7 +7360,7 @@ async testImageHost(hostId: string): Promise<void>
 
 ### 方法 `MindMapStudioPlugin.scheduleAutoUpload`
 
-源码：`src/main.ts:1739`
+源码：`src/main.ts:1776`
 
 安排延迟执行auto upload，并保持模型、界面和持久化状态的一致性。
 
@@ -7320,7 +7370,7 @@ scheduleAutoUpload(file: TFile | null, nodeId: string, blockId: string, localPat
 
 ### 方法 `MindMapStudioPlugin.deleteRecognizedImageLocalAsset`
 
-源码：`src/main.ts:1751`
+源码：`src/main.ts:1788`
 
 删除已被识图文字替换的本地图片；共享资源会保留。
 
@@ -7330,7 +7380,7 @@ async deleteRecognizedImageLocalAsset(mindMapPath: string, localPath: string, bl
 
 ### 方法 `MindMapStudioPlugin.cleanupRemovedImageRemoteAssets`
 
-源码：`src/main.ts:1760`
+源码：`src/main.ts:1797`
 
 Schedules remote mirrors for deletion after a one-minute Undo safety window. The final timer callback rescans every map and cancels deletion when the image has been restored.
 
@@ -7340,7 +7390,7 @@ async cleanupRemovedImageRemoteAssets( currentMindMapPath: string, removed: Mind
 
 ### 方法 `MindMapStudioPlugin.scheduleImageHostDeletion`
 
-源码：`src/main.ts:1815`
+源码：`src/main.ts:1852`
 
 Adds or refreshes one persistent one-minute remote deletion task.
 
@@ -7350,7 +7400,7 @@ private async scheduleImageHostDeletion( host: ImageHostConfig, image:
 
 ### 方法 `MindMapStudioPlugin.resumePendingImageHostDeletions`
 
-源码：`src/main.ts:1840`
+源码：`src/main.ts:1877`
 
 Restores delayed deletion timers after Obsidian restarts.
 
@@ -7360,7 +7410,7 @@ private resumePendingImageHostDeletions(): void
 
 ### 方法 `MindMapStudioPlugin.armPendingImageHostDeletion`
 
-源码：`src/main.ts:1845`
+源码：`src/main.ts:1882`
 
 Arms one task using its persisted due time.
 
@@ -7370,7 +7420,7 @@ private armPendingImageHostDeletion(pending: PendingImageHostDeletion): void
 
 ### 方法 `MindMapStudioPlugin.executePendingImageHostDeletion`
 
-源码：`src/main.ts:1857`
+源码：`src/main.ts:1894`
 
 Executes one task only after references are checked again at the end of the safety window.
 
@@ -7380,7 +7430,7 @@ private async executePendingImageHostDeletion(id: string): Promise<void>
 
 ### 方法 `MindMapStudioPlugin.isPendingRemoteImageReferenced`
 
-源码：`src/main.ts:1890`
+源码：`src/main.ts:1927`
 
 Returns true when any currently saved or open mind map references a pending remote image.
 
@@ -7390,7 +7440,7 @@ private async isPendingRemoteImageReferenced(pending: PendingImageHostDeletion):
 
 ### 方法 `MindMapStudioPlugin.shortStableId`
 
-源码：`src/main.ts:1913`
+源码：`src/main.ts:1950`
 
 Creates a compact deterministic identifier without persisting a full URL in a record key.
 
@@ -7400,7 +7450,7 @@ private shortStableId(value: string): string
 
 ### 方法 `MindMapStudioPlugin.documentReferencesImage`
 
-源码：`src/main.ts:1923`
+源码：`src/main.ts:1960`
 
 Returns whether one document still references an image by SHA-256 or any remote URL.
 
@@ -7410,7 +7460,7 @@ private documentReferencesImage(document: MindMapDocument, image: MindMapImageCo
 
 ### 方法 `MindMapStudioPlugin.resumePendingAutoUploads`
 
-源码：`src/main.ts:1933`
+源码：`src/main.ts:1970`
 
 根据本地图片文件时间恢复延迟上传；到期图片在重新打开导图后立即上传。
 
@@ -7420,7 +7470,7 @@ async resumePendingAutoUploads(file: TFile, document: MindMapDocument): Promise<
 
 ### 方法 `MindMapStudioPlugin.queueAutoUpload`
 
-源码：`src/main.ts:1952`
+源码：`src/main.ts:1989`
 
 安排一次可去重的本地图片自动上传。
 
@@ -7430,7 +7480,7 @@ private queueAutoUpload( mindMapFile: TFile, nodeId: string, blockId: string, lo
 
 ### 方法 `MindMapStudioPlugin.enqueueReadyAutoUpload`
 
-源码：`src/main.ts:1978`
+源码：`src/main.ts:2015`
 
 Collects simultaneously due uploads into one file-level transaction and one user notice.
 
@@ -7440,7 +7490,7 @@ private enqueueReadyAutoUpload(job: PendingAutoUploadJob): void
 
 ### 方法 `MindMapStudioPlugin.startAutoUploadBatch`
 
-源码：`src/main.ts:1998`
+源码：`src/main.ts:2035`
 
 Serializes batches for the same TFile so stale snapshots can never overwrite each other.
 
@@ -7450,7 +7500,7 @@ private startAutoUploadBatch(mindMapFile: TFile, jobs: PendingAutoUploadJob[]): 
 
 ### 方法 `MindMapStudioPlugin.runAutoUploadBatch`
 
-源码：`src/main.ts:2021`
+源码：`src/main.ts:2058`
 
 Uploads one file's due images as a batch, then merges network results into the latest live document. Network requests intentionally finish before any document write. Results are applied as ID-based image patches to the current editor document, or to a freshly re-read disk document when closed. This prevents concurrent auto uploads from repeatedly replacing the whole map with stale snapshots.
 
@@ -7460,7 +7510,7 @@ private async runAutoUploadBatch(mindMapFile: TFile, jobs: PendingAutoUploadJob[
 
 ### 方法 `MindMapStudioPlugin.applyAutoUploadPatches`
 
-源码：`src/main.ts:2127`
+源码：`src/main.ts:2164`
 
 Applies upload patches to live views when open, otherwise to a freshly re-read disk document.
 
@@ -7470,7 +7520,7 @@ private async applyAutoUploadPatches(file: TFile, patches: readonly MindMapImage
 
 ### 方法 `MindMapStudioPlugin.uploadImageToHostConfig`
 
-源码：`src/main.ts:2151`
+源码：`src/main.ts:2188`
 
 按单个图床配置上传图片，并从 JSON 或文本响应中解析最终图片地址。 @throws 配置、请求体或响应格式不合法，以及网络请求失败时抛出错误。
 
@@ -7480,7 +7530,7 @@ private async uploadImageToHostConfig(host: ImageHostConfig, blob: Blob, suggest
 
 ### 方法 `MindMapStudioPlugin.resolveZiplineFileId`
 
-源码：`src/main.ts:2196`
+源码：`src/main.ts:2233`
 
 Resolve a Zipline file URL back to its current v4 file ID for legacy cache entries or incomplete upload responses.
 
@@ -7490,7 +7540,7 @@ private async resolveZiplineFileId(host: ImageHostConfig, imageUrl: string): Pro
 
 ### 方法 `MindMapStudioPlugin.deleteImageFromHostConfig`
 
-源码：`src/main.ts:2211`
+源码：`src/main.ts:2248`
 
 Calls one explicitly configured image-host deletion API.
 
@@ -7500,7 +7550,7 @@ private async deleteImageFromHostConfig(host: ImageHostConfig, url: string, hash
 
 ### 方法 `MindMapStudioPlugin.flushOpenView`
 
-源码：`src/main.ts:2238`
+源码：`src/main.ts:2275`
 
 执行“flush open view”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
 
@@ -7510,7 +7560,7 @@ private async flushOpenView(path: string): Promise<void>
 
 ### 方法 `MindMapStudioPlugin.refreshOpenMindMap`
 
-源码：`src/main.ts:2250`
+源码：`src/main.ts:2287`
 
 刷新open mind map，并保持模型、界面和持久化状态的一致性。
 
@@ -7520,7 +7570,7 @@ private async refreshOpenMindMap(file: TFile, document: MindMapDocument): Promis
 
 ### 方法 `MindMapStudioPlugin.deleteLocalAssetIfSafe`
 
-源码：`src/main.ts:2266`
+源码：`src/main.ts:2303`
 
 在删除本地图片前进行最终安全检查：远程源必须存在、当前文档必须已保存、资源路径必须是仓库内文件且没有其他节点继续引用。
 
@@ -7530,7 +7580,7 @@ private async deleteLocalAssetIfSafe(localPath: string, currentMindMapPath: stri
 
 ### 方法 `MindMapStudioPlugin.mimeFromFilename`
 
-源码：`src/main.ts:2301`
+源码：`src/main.ts:2338`
 
 根据资源文件名推断图片 MIME，未知扩展名按二进制流处理。
 
@@ -7540,7 +7590,7 @@ private mimeFromFilename(filename: string): string
 
 ### 方法 `MindMapStudioPlugin.createSubmapFile`
 
-源码：`src/main.ts:2313`
+源码：`src/main.ts:2350`
 
 在父导图资源目录下创建子导图文件，写入 parentPath、parentNodeId 和 parentTitle，并把生成路径回写到父节点，实现可靠的双向导航。
 
@@ -7550,7 +7600,7 @@ async createSubmapFile(parentFile: TFile, node: MindMapNode): Promise<MindMapSub
 
 ### 方法 `MindMapStudioPlugin.buildSubmapDocument`
 
-源码：`src/main.ts:2326`
+源码：`src/main.ts:2363`
 
 创建子导图文档并统一写入双向导航元数据。
 
@@ -7560,7 +7610,7 @@ private buildSubmapDocument(parentFile: TFile, node: MindMapNode, includeNodeCon
 
 ### 方法 `MindMapStudioPlugin.persistSubmapDocument`
 
-源码：`src/main.ts:2365`
+源码：`src/main.ts:2402`
 
 把子导图写入父导图专属资源目录，避免多个父导图的同名子图发生路径冲突。
 
@@ -7570,7 +7620,7 @@ private async persistSubmapDocument(parentFile: TFile, node: MindMapNode, docume
 
 ### 方法 `MindMapStudioPlugin.deleteSubmapFile`
 
-源码：`src/main.ts:2384`
+源码：`src/main.ts:2421`
 
 Moves a linked child mind-map file to the system trash.
 
@@ -7580,7 +7630,7 @@ async deleteSubmapFile(parentFile: TFile, submap: MindMapSubmap): Promise<boolea
 
 ### 方法 `MindMapStudioPlugin.openMindMapPath`
 
-源码：`src/main.ts:2399`
+源码：`src/main.ts:2436`
 
 打开mind map path，并保持模型、界面和持久化状态的一致性。
 
@@ -7590,7 +7640,7 @@ async openMindMapPath(path: string, sourcePath = "", preferredLeaf?: WorkspaceLe
 
 ### 方法 `MindMapStudioPlugin.ensureFolderPath`
 
-源码：`src/main.ts:2416`
+源码：`src/main.ts:2453`
 
 执行“ensure folder path”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
 
@@ -7600,7 +7650,7 @@ private async ensureFolderPath(folder: string): Promise<void>
 
 ### 方法 `MindMapStudioPlugin.isMindMapFile`
 
-源码：`src/main.ts:2433`
+源码：`src/main.ts:2470`
 
 判断mind map file，并保持模型、界面和持久化状态的一致性。
 
@@ -7610,7 +7660,7 @@ isMindMapFile(file: TFile): boolean
 
 ### 方法 `MindMapStudioPlugin.convertMarkdownFile`
 
-源码：`src/main.ts:2442`
+源码：`src/main.ts:2479`
 
 转换markdown file，并保持模型、界面和持久化状态的一致性。
 
@@ -7620,7 +7670,7 @@ private async convertMarkdownFile(file: TFile): Promise<void>
 
 ### 方法 `MindMapStudioPlugin.copyImportedMarkdownImages`
 
-源码：`src/main.ts:2466`
+源码：`src/main.ts:2503`
 
 将 Markdown 中引用的本地图片复制到新导图自己的资源目录，并改写图片块引用。 导入完成后，导图不再依赖原 Markdown 附件目录，移动或删除原笔记也不会导致图片失效。
 
@@ -7630,7 +7680,7 @@ private async copyImportedMarkdownImages(document: MindMapDocument, markdownFile
 
 ### 方法 `MindMapStudioPlugin.resolveImportedMarkdownImage`
 
-源码：`src/main.ts:2513`
+源码：`src/main.ts:2550`
 
 按固定回退顺序查找 Markdown 中的本地图片。 例如 Markdown 引用 `assets/公文/a.png` 时，依次尝试： 1. `<Markdown目录>/assets/公文/a.png` 2. `<Markdown目录>/公文/a.png` 3. `<Markdown目录>/a.png` 三个明确候选都不存在时，再交给 Obsidian 链接解析器兼容其他附件配置。
 
@@ -7640,7 +7690,7 @@ private resolveImportedMarkdownImage(linkPath: string, markdownFile: TFile): TFi
 
 ### 方法 `MindMapStudioPlugin.resolveFolder`
 
-源码：`src/main.ts:2540`
+源码：`src/main.ts:2577`
 
 解析并确定folder，并保持模型、界面和持久化状态的一致性。
 
@@ -7650,7 +7700,7 @@ private async resolveFolder(explicitFolder: string | undefined, activeFile: TFil
 
 ### 方法 `MindMapStudioPlugin.buildNewTitle`
 
-源码：`src/main.ts:2554`
+源码：`src/main.ts:2591`
 
 构建new title，并保持模型、界面和持久化状态的一致性。
 
@@ -7660,7 +7710,7 @@ private buildNewTitle(): string
 
 ### 方法 `MindMapStudioPlugin.sanitizeFilename`
 
-源码：`src/main.ts:2564`
+源码：`src/main.ts:2601`
 
 执行“sanitize filename”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
 
@@ -7670,7 +7720,7 @@ sanitizeFilename(value: string): string
 
 ### 方法 `MindMapStudioPlugin.getSourceTitle`
 
-源码：`src/main.ts:2574`
+源码：`src/main.ts:2611`
 
 读取并返回source title，并保持模型、界面和持久化状态的一致性。
 
@@ -7680,7 +7730,7 @@ private getSourceTitle(context: MarkdownPostProcessorContext): string
 
 ### 方法 `MindMapStudioPlugin.processMindMapEmbeds`
 
-源码：`src/main.ts:2586`
+源码：`src/main.ts:2623`
 
 注册 Markdown 代码块静态渲染，并在阅读模式中解析嵌入的思维导图源。静态预览不会修改原文件。
 
@@ -7690,7 +7740,7 @@ private async processMindMapEmbeds(element: HTMLElement, context: MarkdownPostPr
 
 ### 方法 `MindMapStudioPlugin.extractToSubmap`
 
-源码：`src/main.ts:2615`
+源码：`src/main.ts:2652`
 
 将指定节点及其后代提取为独立子导图文件。
 
@@ -7700,7 +7750,7 @@ async extractToSubmap(parentFile: TFile, node: MindMapNode): Promise<MindMapSubm
 
 ### 方法 `MindMapStudioPlugin.mergeFromSubmap`
 
-源码：`src/main.ts:2625`
+源码：`src/main.ts:2662`
 
 将当前子导图合并回其父导图。
 
@@ -9078,6 +9128,110 @@ export function getMindMapThemePreset(id: MindMapThemePresetId | undefined): Min
 
 ```ts
 export function appearanceFromThemePreset(id: MindMapThemePresetId): MindMapAppearance
+```
+
+## `src/utils/coalesced-json-writer.ts`
+
+将短时间内重复触发的 JSON 持久化请求合并为串行写入，并保证等待方只在对应版本落盘后完成。
+
+### 接口 `CoalescedJsonWriterOptions`
+
+源码：`src/utils/coalesced-json-writer.ts:7`
+
+参见源码中的实现和调用位置。
+
+```ts
+export interface CoalescedJsonWriterOptions<T>
+```
+
+### 接口 `CoalescedJsonWriterWaiter`
+
+源码：`src/utils/coalesced-json-writer.ts:17`
+
+等待某一请求版本完成或失败的内部记录。
+
+```ts
+interface CoalescedJsonWriterWaiter
+```
+
+### 类 `CoalescedJsonWriter`
+
+源码：`src/utils/coalesced-json-writer.ts:29`
+
+合并连续保存请求，并在写入期间继续吸收新请求。 每轮只持久化开始写入时的最新状态；若写入期间状态再次变化，当前写入结束后 会立即追加一轮最新快照，避免旧写入晚于新写入完成而覆盖较新的配置。
+
+```ts
+export class CoalescedJsonWriter<T>
+```
+
+### 构造函数 `CoalescedJsonWriter.constructor`
+
+源码：`src/utils/coalesced-json-writer.ts:38`
+
+保存回调与合并延迟，但不会在构造时发起写入。
+
+```ts
+constructor(private readonly options: CoalescedJsonWriterOptions<T>)
+```
+
+### 方法 `CoalescedJsonWriter.request`
+
+源码：`src/utils/coalesced-json-writer.ts:43`
+
+请求保存当前最新状态，并在包含本次请求的快照落盘后完成。
+
+```ts
+request(): Promise<void>
+```
+
+### 方法 `CoalescedJsonWriter.flush`
+
+源码：`src/utils/coalesced-json-writer.ts:53`
+
+取消等待延迟并立即完成当前所有待写版本，供卸载或测试收尾使用。
+
+```ts
+async flush(): Promise<void>
+```
+
+### 方法 `CoalescedJsonWriter.schedule`
+
+源码：`src/utils/coalesced-json-writer.ts:63`
+
+在没有运行中任务时安排一次尾随写入。
+
+```ts
+private schedule(): void
+```
+
+### 方法 `CoalescedJsonWriter.startRunner`
+
+源码：`src/utils/coalesced-json-writer.ts:72`
+
+启动唯一写入循环，并在运行期间保持单飞。
+
+```ts
+private startRunner(): void
+```
+
+### 方法 `CoalescedJsonWriter.run`
+
+源码：`src/utils/coalesced-json-writer.ts:81`
+
+串行写入最新快照，并按版本完成等待方。
+
+```ts
+private async run(): Promise<void>
+```
+
+### 方法 `CoalescedJsonWriter.settleWaiters`
+
+源码：`src/utils/coalesced-json-writer.ts:98`
+
+完成不晚于指定版本的等待方；传入错误时改为拒绝。
+
+```ts
+private settleWaiters(revision: number, error?: unknown): void
 ```
 
 ## `src/utils/desktop-capture.ts`

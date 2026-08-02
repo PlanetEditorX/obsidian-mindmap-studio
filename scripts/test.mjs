@@ -1745,7 +1745,7 @@ const command = "example";
   assert.match(editorSource, /articleLeafBulletsEnabled/, "article terminal bullets must follow the global setting");
   assert.match(editorSource, /articleLeafBulletStyle/, "article terminal bullets must pass the selected visual style to reading mode");
   assert.match(mainSource, /buildArticleContext/);
-  assert.match(mainSource, /shouldHideFileExplorerPath/, "File Explorer filters must use the tested pure matcher");
+  assert.match(mainSource, /createFileExplorerPathFilter/, "File Explorer scans must reuse the tested compiled matcher");
   assert.match(editorSource, /setAttribute\("stroke-width"/);
   assert.match(editorSource, /setProperty\("stroke-width"[\s\S]*"important"/);
   assert.match(editorSource, /mmc-canvas-breadcrumb/);

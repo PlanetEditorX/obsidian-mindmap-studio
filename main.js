@@ -5618,7 +5618,7 @@ function readRichTextEditor(editor) {
 // src/editor/editor-modals.ts
 var import_obsidian5 = require("obsidian");
 
-// node_modules/fflate/esm/browser.js
+// ../../work_plugin_utf8/node_modules/fflate/esm/browser.js
 var u8 = Uint8Array;
 var u16 = Uint16Array;
 var i32 = Int32Array;
@@ -19508,23 +19508,120 @@ function normalizeHiddenFileExtensions(value) {
 function normalizeHiddenFolderPaths(value) {
   return [...new Set(value.split(/[;,\n]+/).map((item) => item.trim().replace(/\\/g, "/").replace(/^\/+|\/+$/g, "")).filter(Boolean))];
 }
-function shouldHideFileExplorerPath(path, settings) {
-  const normalizedPath = path.replace(/\\/g, "/").replace(/^\/+|\/+$/g, "");
-  if (!normalizedPath) return false;
-  const pathSegments = normalizedPath.split("/");
-  const assetFolder = settings.assetFolder.replace(/\\/g, "/").replace(/^\/+|\/+$/g, "");
-  if (settings.hideAssetFolderInFileExplorer && assetFolder) {
-    const assetSegments = assetFolder.split("/");
-    const assetName = assetSegments[assetSegments.length - 1];
-    if (pathSegments.includes(assetName)) return true;
-  }
-  if (!settings.hideConfiguredFilesInFileExplorer) return false;
-  if (normalizeHiddenFileExtensions(settings.hiddenFileExtensions).some((extension) => normalizedPath.toLowerCase().endsWith(`.${extension}`))) return true;
-  return normalizeHiddenFolderPaths(settings.hiddenFileFolders).some((folder) => {
-    if (folder.includes("/")) return normalizedPath === folder || normalizedPath.startsWith(`${folder}/`);
-    return pathSegments.includes(folder);
+function normalizeVaultRelativePath(path) {
+  return path.replace(/\\/g, "/").replace(/^\/+|\/+$/g, "");
+}
+function fileExplorerFilterSignature(settings) {
+  return JSON.stringify({
+    assetFolder: normalizeVaultRelativePath(settings.assetFolder),
+    hideAssetFolder: settings.hideAssetFolderInFileExplorer,
+    hideConfiguredFiles: settings.hideConfiguredFilesInFileExplorer,
+    extensions: normalizeHiddenFileExtensions(settings.hiddenFileExtensions).sort(),
+    folders: normalizeHiddenFolderPaths(settings.hiddenFileFolders).sort()
   });
 }
+function createFileExplorerPathFilter(settings) {
+  var _a2;
+  const assetFolder = normalizeVaultRelativePath(settings.assetFolder);
+  const assetName = settings.hideAssetFolderInFileExplorer && assetFolder ? (_a2 = assetFolder.split("/").at(-1)) != null ? _a2 : "" : "";
+  const hiddenExtensions = new Set(normalizeHiddenFileExtensions(settings.hiddenFileExtensions));
+  const hiddenFolderSegments = /* @__PURE__ */ new Set();
+  const hiddenFolderPaths = [];
+  for (const folder of normalizeHiddenFolderPaths(settings.hiddenFileFolders)) {
+    if (folder.includes("/")) hiddenFolderPaths.push(folder);
+    else hiddenFolderSegments.add(folder);
+  }
+  return (path) => {
+    var _a3, _b2;
+    const normalizedPath = normalizeVaultRelativePath(path);
+    if (!normalizedPath) return false;
+    const pathSegments = normalizedPath.split("/");
+    if (assetName && pathSegments.includes(assetName)) return true;
+    if (!settings.hideConfiguredFilesInFileExplorer) return false;
+    const fileName = (_b2 = (_a3 = pathSegments.at(-1)) == null ? void 0 : _a3.toLowerCase()) != null ? _b2 : "";
+    const extensionIndex = fileName.lastIndexOf(".");
+    if (extensionIndex >= 0 && hiddenExtensions.has(fileName.slice(extensionIndex + 1))) return true;
+    if (pathSegments.some((segment) => hiddenFolderSegments.has(segment))) return true;
+    return hiddenFolderPaths.some((folder) => normalizedPath === folder || normalizedPath.startsWith(`${folder}/`));
+  };
+}
+
+// src/utils/coalesced-json-writer.ts
+var CoalescedJsonWriter = class {
+  /** 保存回调与合并延迟，但不会在构造时发起写入。 */
+  constructor(options) {
+    this.options = options;
+    this.requestedRevision = 0;
+    this.persistedRevision = 0;
+    this.timer = null;
+    this.runner = null;
+    this.waiters = [];
+    var _a2;
+    this.delayMs = Math.max(0, Math.round((_a2 = options.delayMs) != null ? _a2 : 35));
+  }
+  /** 请求保存当前最新状态，并在包含本次请求的快照落盘后完成。 */
+  request() {
+    const revision = ++this.requestedRevision;
+    const completion = new Promise((resolve, reject) => {
+      this.waiters.push({ revision, resolve, reject });
+    });
+    this.schedule();
+    return completion;
+  }
+  /** 取消等待延迟并立即完成当前所有待写版本，供卸载或测试收尾使用。 */
+  async flush() {
+    if (this.timer !== null) {
+      globalThis.clearTimeout(this.timer);
+      this.timer = null;
+    }
+    this.startRunner();
+    if (this.runner) await this.runner;
+  }
+  /** 在没有运行中任务时安排一次尾随写入。 */
+  schedule() {
+    if (this.runner || this.timer !== null || this.persistedRevision >= this.requestedRevision) return;
+    this.timer = globalThis.setTimeout(() => {
+      this.timer = null;
+      this.startRunner();
+    }, this.delayMs);
+  }
+  /** 启动唯一写入循环，并在运行期间保持单飞。 */
+  startRunner() {
+    if (this.runner || this.persistedRevision >= this.requestedRevision) return;
+    this.runner = this.run().finally(() => {
+      this.runner = null;
+      this.schedule();
+    });
+  }
+  /** 串行写入最新快照，并按版本完成等待方。 */
+  async run() {
+    while (this.persistedRevision < this.requestedRevision) {
+      const targetRevision = this.requestedRevision;
+      try {
+        await this.options.write(this.options.snapshot());
+      } catch (error) {
+        this.persistedRevision = this.requestedRevision;
+        this.settleWaiters(this.persistedRevision, error);
+        return;
+      }
+      this.persistedRevision = targetRevision;
+      this.settleWaiters(targetRevision);
+    }
+  }
+  /** 完成不晚于指定版本的等待方；传入错误时改为拒绝。 */
+  settleWaiters(revision, error) {
+    let writeIndex = 0;
+    for (const waiter of this.waiters) {
+      if (waiter.revision <= revision) {
+        if (error === void 0) waiter.resolve();
+        else waiter.reject(error);
+      } else {
+        this.waiters[writeIndex++] = waiter;
+      }
+    }
+    this.waiters.length = writeIndex;
+  }
+};
 
 // src/utils/desktop-capture.ts
 function copyBytesToArrayBuffer(bytes) {
@@ -20432,6 +20529,9 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
     this.searchIndexReady = Promise.resolve();
     this.fileExplorerFilterTimer = null;
     this.fileExplorerObserver = null;
+    this.settingsWriter = null;
+    this.persistedFileExplorerFilterSignature = "";
+    this.unloading = false;
   }
   /**
    * 执行“onload”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
@@ -20439,6 +20539,8 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
   async onload() {
     var _a2;
     await this.loadSettings();
+    this.persistedFileExplorerFilterSignature = fileExplorerFilterSignature(this.settings);
+    this.settingsWriter = this.createSettingsWriter();
     this.installFileExplorerFilter();
     const pluginDir = (_a2 = this.manifest.dir) != null ? _a2 : (0, import_obsidian16.normalizePath)(`${this.app.vault.configDir}/plugins/${this.manifest.id}`);
     const articleCacheDirectory = (0, import_obsidian16.normalizePath)(`${pluginDir}/cache`);
@@ -20617,7 +20719,8 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
    * 执行“onunload”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
    */
   onunload() {
-    var _a2, _b2, _c;
+    var _a2, _b2, _c, _d;
+    this.unloading = true;
     if (this.fileExplorerFilterTimer !== null) window.clearTimeout(this.fileExplorerFilterTimer);
     (_a2 = this.fileExplorerObserver) == null ? void 0 : _a2.disconnect();
     this.fileExplorerObserver = null;
@@ -20632,6 +20735,7 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
     (_b2 = this.searchIndex) == null ? void 0 : _b2.destroy();
     void ((_c = this.articleRenderCache) == null ? void 0 : _c.flush());
     this.app.workspace.detachLeavesOfType(VIEW_TYPE_MINDMAP_STUDIO);
+    void ((_d = this.settingsWriter) == null ? void 0 : _d.flush());
   }
   /** Returns the synchronously preloaded article render snapshot for one map. */
   getArticleRenderCache(filePath) {
@@ -21002,12 +21106,27 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
     await this.saveSettings();
     this.refreshOpenViews();
   }
+  /** Creates the single-flight settings writer used by every settings mutation path. */
+  createSettingsWriter() {
+    return new CoalescedJsonWriter({
+      delayMs: 35,
+      snapshot: () => JSON.parse(JSON.stringify(this.settings)),
+      write: async (snapshot) => {
+        await this.saveData(snapshot);
+        const nextFilterSignature = fileExplorerFilterSignature(snapshot);
+        if (nextFilterSignature !== this.persistedFileExplorerFilterSignature) {
+          this.persistedFileExplorerFilterSignature = nextFilterSignature;
+          if (!this.unloading) this.scheduleFileExplorerFilter();
+        }
+      }
+    });
+  }
   /**
-   * 保存settings，并保持模型、界面和持久化状态的一致性。
+   * 合并短时间内连续触发的设置保存，并保证所有磁盘写入严格串行。
    */
   async saveSettings() {
-    await this.saveData(this.settings);
-    this.scheduleFileExplorerFilter();
+    if (!this.settingsWriter) this.settingsWriter = this.createSettingsWriter();
+    await this.settingsWriter.request();
   }
   /** Checks the release-workflow update manifest, verifies its archive, and requires a full app restart to activate it. */
   async checkForPluginUpdate() {
@@ -21166,7 +21285,9 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
     const observe = () => {
       var _a2;
       (_a2 = this.fileExplorerObserver) == null ? void 0 : _a2.disconnect();
-      this.fileExplorerObserver = new MutationObserver(() => this.scheduleFileExplorerFilter());
+      this.fileExplorerObserver = new MutationObserver((records) => {
+        if (this.fileExplorerMutationIsRelevant(records)) this.scheduleFileExplorerFilter();
+      });
       this.fileExplorerObserver.observe(document.body, { childList: true, subtree: true });
       this.scheduleFileExplorerFilter();
     };
@@ -21176,17 +21297,24 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
       return (_a2 = this.fileExplorerObserver) == null ? void 0 : _a2.disconnect();
     });
   }
+  /** Returns whether DOM mutations occurred inside, added, or removed a File Explorer tree. */
+  fileExplorerMutationIsRelevant(records) {
+    const selector = ".nav-files-container, .workspace-leaf-content[data-type='file-explorer']";
+    const touchesFileExplorer = (node) => node instanceof Element && (node.matches(selector) || Boolean(node.closest(selector)) || Boolean(node.querySelector(selector)));
+    return records.some((record) => touchesFileExplorer(record.target) || Array.from(record.addedNodes).some(touchesFileExplorer) || Array.from(record.removedNodes).some(touchesFileExplorer));
+  }
   /** Defers File Explorer filtering so expanding a folder does not cause repeated synchronous DOM scans. */
   scheduleFileExplorerFilter() {
     if (this.fileExplorerFilterTimer !== null) return;
     this.fileExplorerFilterTimer = window.setTimeout(() => {
       this.fileExplorerFilterTimer = null;
+      const shouldHidePath = createFileExplorerPathFilter(this.settings);
       document.querySelectorAll(".nav-files-container [data-path], .workspace-leaf-content[data-type='file-explorer'] [data-path]").forEach((element) => {
         var _a2, _b2;
         const path = element.dataset.path;
         if (!path) return;
         const fileItem = (_b2 = (_a2 = element.closest(".tree-item")) != null ? _a2 : element.closest(".nav-file, .nav-folder")) != null ? _b2 : element;
-        fileItem.toggleClass("mms-file-explorer-hidden", shouldHideFileExplorerPath(path, this.settings));
+        fileItem.toggleClass("mms-file-explorer-hidden", shouldHidePath(path));
       });
     }, 80);
   }
