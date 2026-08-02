@@ -574,9 +574,10 @@ function renderArticleNodeSection(
     const paragraph = blockShell.createEl("p", { cls: `${articleParagraphClass("mms-article-leaf-text", firstTextBlock, options.articleLeafBulletsEnabled && !info.numberedLeaf, options.articleLeafTextAlignment)}${info.numberedLeaf ? " mms-article-leaf-numbered" : ""}` });
     paragraph.dataset.blockId = firstTextBlock.id;
     if (info.numberedLeaf) {
-      paragraph.dataset.articleNumber = info.label;
+      paragraph.dataset.articleNumber = info.leafNumberingStyle === "circled"
+        ? String(info.leafNumberingIndex ?? 1)
+        : info.label;
       if (info.leafNumberingStyle) paragraph.dataset.articleNumberStyle = info.leafNumberingStyle;
-      if ((info.leafNumberingIndex ?? 0) > 50) paragraph.dataset.articleNumberFallback = "true";
     }
     applyArticleLeafBulletStyle(paragraph, options, info.numberedLeaf);
     renderRichTextRuns(paragraph, firstTextBlock.richText, firstTextBlock.text);

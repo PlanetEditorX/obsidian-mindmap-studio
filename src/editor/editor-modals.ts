@@ -440,7 +440,7 @@ export class ArticleStyleModal extends Modal {
     const numberingStyle = numberingStyleLabel.createEl("select");
     numberingStyle.createEl("option", { text: `跟随插件设置（当前${this.globalLeafPresentation.numberingStyle === "circled" ? "带圈数字" : "下一级文章序号"}）`, attr: { value: "" } });
     numberingStyle.createEl("option", { text: "上级标题的下一级文章序号", attr: { value: "next-level" } });
-    numberingStyle.createEl("option", { text: "带圈数字（①–㊿，51+ 圆圈）", attr: { value: "circled" } });
+    numberingStyle.createEl("option", { text: "带圈数字（统一圆圈，支持 51+）", attr: { value: "circled" } });
     const numberingThresholdLabel = grid.createEl("label", { text: "末端正文转序号阈值" });
     const numberingThreshold = numberingThresholdLabel.createEl("input", { type: "number", attr: { min: "1", max: "20", step: "1" } });
     const fill = (style: ArticleStyle): void => {

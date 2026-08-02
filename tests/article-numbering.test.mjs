@@ -78,7 +78,7 @@ test("children below a level-eight heading keep structure without receiving a re
   assert.equal(byTitle.get("关键词区分")?.displayTitle, "关键词区分");
 });
 
-test("circled terminal numbering uses Unicode through 50 and a numeric CSS fallback afterwards", () => {
+test("circled terminal numbering keeps Unicode text labels through 50 and numeric labels afterwards", () => {
   assert.equal(modes.circledNumberLabel(1), "①");
   assert.equal(modes.circledNumberLabel(20), "⑳");
   assert.equal(modes.circledNumberLabel(21), "㉑");

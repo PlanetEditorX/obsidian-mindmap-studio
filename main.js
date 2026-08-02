@@ -2559,7 +2559,7 @@ var MindMapStudioSettingTab = class extends import_obsidian.PluginSettingTab {
       this.plugin.settings.articleLeafNumberingEnabled = value;
       await this.saveAndRefresh();
     }));
-    new import_obsidian.Setting(containerEl).setName("\u672B\u7AEF\u6B63\u6587\u5E8F\u53F7\u6837\u5F0F").setDesc("\u4E0B\u4E00\u7EA7\u6587\u7AE0\u5E8F\u53F7\u6CBF\u7528\u6807\u9898\u5C42\u7EA7\uFF1B\u5E26\u5708\u6570\u5B57 1\u201350 \u4F7F\u7528 Unicode \u2460\u2013\u32BF\uFF0C51 \u4EE5\u4E0A\u81EA\u52A8\u7ED8\u5236\u5706\u5708\uFF0C\u53EF\u7EE7\u7EED\u7F16\u53F7\u5230\u516D\u4E03\u5341\u9879\u53CA\u66F4\u591A\u3002").addDropdown((dropdown) => dropdown.addOption("next-level", "\u4E0A\u7EA7\u6807\u9898\u7684\u4E0B\u4E00\u7EA7\u6587\u7AE0\u5E8F\u53F7").addOption("circled", "\u5E26\u5708\u6570\u5B57\uFF08\u2460\u2013\u32BF\uFF0C51+ \u5706\u5708\uFF09").setValue(this.plugin.settings.articleLeafNumberingStyle).onChange(async (value) => {
+    new import_obsidian.Setting(containerEl).setName("\u672B\u7AEF\u6B63\u6587\u5E8F\u53F7\u6837\u5F0F").setDesc("\u4E0B\u4E00\u7EA7\u6587\u7AE0\u5E8F\u53F7\u6CBF\u7528\u6807\u9898\u5C42\u7EA7\uFF1B\u5E26\u5708\u6570\u5B57\u5728\u6587\u7AE0\u4E2D\u7EDF\u4E00\u4F7F\u7528\u6B63\u6587\u6570\u5B57\u7ED8\u5236\u540C\u5C3A\u5BF8\u5706\u5708\uFF0C\u907F\u514D\u7CFB\u7EDF\u5B57\u4F53\u9020\u6210\u504F\u5C0F\u3001\u504F\u7EC6\u6216\u57FA\u7EBF\u9519\u4F4D\uFF0C\u5E76\u53EF\u7EE7\u7EED\u7F16\u53F7\u5230\u516D\u4E03\u5341\u9879\u53CA\u66F4\u591A\u3002").addDropdown((dropdown) => dropdown.addOption("next-level", "\u4E0A\u7EA7\u6807\u9898\u7684\u4E0B\u4E00\u7EA7\u6587\u7AE0\u5E8F\u53F7").addOption("circled", "\u5E26\u5708\u6570\u5B57\uFF08\u7EDF\u4E00\u5706\u5708\uFF0C\u652F\u6301 51+\uFF09").setValue(this.plugin.settings.articleLeafNumberingStyle).onChange(async (value) => {
       this.plugin.settings.articleLeafNumberingStyle = value === "circled" ? "circled" : "next-level";
       await this.saveAndRefresh();
     }));
@@ -6700,8 +6700,8 @@ function exportLeafNumbering(document2, options) {
 function htmlArticleDisplayTitle(info) {
   var _a2;
   const title = escapeHtml(info.title || "\u672A\u547D\u540D");
-  if (info.numberedLeaf && info.leafNumberingStyle === "circled" && ((_a2 = info.leafNumberingIndex) != null ? _a2 : 0) > 50) {
-    return `<span class="circled-number">${escapeHtml(info.label)}</span> ${title}`;
+  if (info.numberedLeaf && info.leafNumberingStyle === "circled") {
+    return `<span class="circled-number">${String((_a2 = info.leafNumberingIndex) != null ? _a2 : 1)}</span> ${title}`;
   }
   return escapeHtml(info.displayTitle || info.title || "\u672A\u547D\u540D");
 }
@@ -6833,7 +6833,7 @@ function readingSectionsToHtml(sections, tocMaxDepth = 3, options = {}) {
 <title>${title}</title><style>
 body{max-width:860px;margin:40px auto;padding:0 28px;color:#20242c;font:16px/1.85 system-ui,"Microsoft YaHei",sans-serif}
 h1{text-align:center;border-bottom:2px solid #ddd;padding-bottom:18px}h2,h3,h4,h5,h6{margin-top:1.7em;color:#172033}
-section{break-inside:auto}.export-toc{margin:2em 0 3em}.export-toc>ul{padding-left:0;list-style:none}.export-toc ul ul{padding-left:1.5em;list-style:none}.export-toc li{margin:.2em 0}.map-section+.map-section{margin-top:3em;border-top:1px solid #ddd}.body-paragraph{margin:.75em 0;text-align:justify;text-indent:2em}.circled-number{box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;min-width:1.75em;height:1.75em;padding:0 .2em;border:.1em solid currentColor;border-radius:999px;font-size:.72em;font-weight:600;line-height:1;vertical-align:.08em}.note{padding:10px 14px;color:#555;background:#f6f7f9;border-left:3px solid #6366f1}
+section{break-inside:auto}.export-toc{margin:2em 0 3em}.export-toc>ul{padding-left:0;list-style:none}.export-toc ul ul{padding-left:1.5em;list-style:none}.export-toc li{margin:.2em 0}.map-section+.map-section{margin-top:3em;border-top:1px solid #ddd}.body-paragraph{margin:.75em 0;text-align:justify;text-indent:2em}.circled-number{box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;min-width:1.65em;height:1.65em;padding:0 .14em;border:.1em solid currentColor;border-radius:999px;font-family:inherit;font-size:.86em;font-weight:600;font-variant-numeric:tabular-nums;line-height:1;vertical-align:-.2em}.note{padding:10px 14px;color:#555;background:#f6f7f9;border-left:3px solid #6366f1}
 @media print{body{margin:0;max-width:none}a{color:inherit}}
 </style></head><body><article><h1>${title}</h1>${toc}${body}</article></body></html>`;
 }
@@ -7538,7 +7538,7 @@ var ArticleStyleModal = class extends import_obsidian5.Modal {
     const numberingStyle = numberingStyleLabel.createEl("select");
     numberingStyle.createEl("option", { text: `\u8DDF\u968F\u63D2\u4EF6\u8BBE\u7F6E\uFF08\u5F53\u524D${this.globalLeafPresentation.numberingStyle === "circled" ? "\u5E26\u5708\u6570\u5B57" : "\u4E0B\u4E00\u7EA7\u6587\u7AE0\u5E8F\u53F7"}\uFF09`, attr: { value: "" } });
     numberingStyle.createEl("option", { text: "\u4E0A\u7EA7\u6807\u9898\u7684\u4E0B\u4E00\u7EA7\u6587\u7AE0\u5E8F\u53F7", attr: { value: "next-level" } });
-    numberingStyle.createEl("option", { text: "\u5E26\u5708\u6570\u5B57\uFF08\u2460\u2013\u32BF\uFF0C51+ \u5706\u5708\uFF09", attr: { value: "circled" } });
+    numberingStyle.createEl("option", { text: "\u5E26\u5708\u6570\u5B57\uFF08\u7EDF\u4E00\u5706\u5708\uFF0C\u652F\u6301 51+\uFF09", attr: { value: "circled" } });
     const numberingThresholdLabel = grid.createEl("label", { text: "\u672B\u7AEF\u6B63\u6587\u8F6C\u5E8F\u53F7\u9608\u503C" });
     const numberingThreshold = numberingThresholdLabel.createEl("input", { type: "number", attr: { min: "1", max: "20", step: "1" } });
     const fill = (style) => {
@@ -8553,7 +8553,7 @@ function bindTableColumnResize(handle, options) {
 
 // src/article/article-render-cache.ts
 var ARTICLE_RENDER_CACHE_SCHEMA_VERSION = 1;
-var ARTICLE_RENDERER_REVISION = "article-node-cache-v3";
+var ARTICLE_RENDERER_REVISION = "article-node-cache-v4";
 function normalizeArticleCachePath(value) {
   return value.replace(/\\/g, "/").replace(/\/{2,}/g, "/").replace(/^\.\//, "").replace(/\/$/, "");
 }
@@ -9214,9 +9214,8 @@ function renderArticleNodeSection(section, info, options) {
     const paragraph = blockShell.createEl("p", { cls: `${articleParagraphClass("mms-article-leaf-text", firstTextBlock, options.articleLeafBulletsEnabled && !info.numberedLeaf, options.articleLeafTextAlignment)}${info.numberedLeaf ? " mms-article-leaf-numbered" : ""}` });
     paragraph.dataset.blockId = firstTextBlock.id;
     if (info.numberedLeaf) {
-      paragraph.dataset.articleNumber = info.label;
+      paragraph.dataset.articleNumber = info.leafNumberingStyle === "circled" ? String((_a2 = info.leafNumberingIndex) != null ? _a2 : 1) : info.label;
       if (info.leafNumberingStyle) paragraph.dataset.articleNumberStyle = info.leafNumberingStyle;
-      if (((_a2 = info.leafNumberingIndex) != null ? _a2 : 0) > 50) paragraph.dataset.articleNumberFallback = "true";
     }
     applyArticleLeafBulletStyle(paragraph, options, info.numberedLeaf);
     renderRichTextRuns(paragraph, firstTextBlock.richText, firstTextBlock.text);
@@ -15418,9 +15417,8 @@ var MindMapEditor = class {
             const paragraph = nodeSection.createEl("p", { cls: `mms-article-leaf-text${this.options.articleLeafBulletsEnabled && !info.numberedLeaf ? " is-bulleted" : ""}${this.options.articleLeafTextAlignment === "auto" ? " is-auto-aligned" : ""}${firstTextBlock.paragraphIndent === "none" ? " is-flush" : ""}${info.numberedLeaf ? " mms-article-leaf-numbered" : ""}` });
             paragraph.dataset.blockId = firstTextBlock.id;
             if (info.numberedLeaf) {
-              paragraph.dataset.articleNumber = info.label;
+              paragraph.dataset.articleNumber = info.leafNumberingStyle === "circled" ? String((_f = info.leafNumberingIndex) != null ? _f : 1) : info.label;
               if (info.leafNumberingStyle) paragraph.dataset.articleNumberStyle = info.leafNumberingStyle;
-              if (((_f = info.leafNumberingIndex) != null ? _f : 0) > 50) paragraph.dataset.articleNumberFallback = "true";
             }
             if (this.options.articleLeafBulletsEnabled && !info.numberedLeaf) {
               paragraph.dataset.bulletStyle = this.options.articleLeafBulletStyle;

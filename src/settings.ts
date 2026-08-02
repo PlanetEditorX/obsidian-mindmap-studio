@@ -975,10 +975,10 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName("末端正文序号样式")
-      .setDesc("下一级文章序号沿用标题层级；带圈数字 1–50 使用 Unicode ①–㊿，51 以上自动绘制圆圈，可继续编号到六七十项及更多。")
+      .setDesc("下一级文章序号沿用标题层级；带圈数字在文章中统一使用正文数字绘制同尺寸圆圈，避免系统字体造成偏小、偏细或基线错位，并可继续编号到六七十项及更多。")
       .addDropdown((dropdown) => dropdown
         .addOption("next-level", "上级标题的下一级文章序号")
-        .addOption("circled", "带圈数字（①–㊿，51+ 圆圈）")
+        .addOption("circled", "带圈数字（统一圆圈，支持 51+）")
         .setValue(this.plugin.settings.articleLeafNumberingStyle)
         .onChange(async (value) => {
           this.plugin.settings.articleLeafNumberingStyle = value === "circled" ? "circled" : "next-level";

@@ -107,11 +107,11 @@ function exportLeafNumbering(document: MindMapDocument, options: ArticleExportOp
   };
 }
 
-/** Returns HTML title markup, drawing a CSS circle for generated numbers after Unicode ㊿. */
+/** Returns HTML title markup with a font-independent CSS ring for every circled terminal number. */
 function htmlArticleDisplayTitle(info: ArticleNodeInfo): string {
   const title = escapeHtml(info.title || "未命名");
-  if (info.numberedLeaf && info.leafNumberingStyle === "circled" && (info.leafNumberingIndex ?? 0) > 50) {
-    return `<span class="circled-number">${escapeHtml(info.label)}</span> ${title}`;
+  if (info.numberedLeaf && info.leafNumberingStyle === "circled") {
+    return `<span class="circled-number">${String(info.leafNumberingIndex ?? 1)}</span> ${title}`;
   }
   return escapeHtml(info.displayTitle || info.title || "未命名");
 }
@@ -288,7 +288,7 @@ export function readingSectionsToHtml(sections: ReadingSection[], tocMaxDepth = 
 <title>${title}</title><style>
 body{max-width:860px;margin:40px auto;padding:0 28px;color:#20242c;font:16px/1.85 system-ui,"Microsoft YaHei",sans-serif}
 h1{text-align:center;border-bottom:2px solid #ddd;padding-bottom:18px}h2,h3,h4,h5,h6{margin-top:1.7em;color:#172033}
-section{break-inside:auto}.export-toc{margin:2em 0 3em}.export-toc>ul{padding-left:0;list-style:none}.export-toc ul ul{padding-left:1.5em;list-style:none}.export-toc li{margin:.2em 0}.map-section+.map-section{margin-top:3em;border-top:1px solid #ddd}.body-paragraph{margin:.75em 0;text-align:justify;text-indent:2em}.circled-number{box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;min-width:1.75em;height:1.75em;padding:0 .2em;border:.1em solid currentColor;border-radius:999px;font-size:.72em;font-weight:600;line-height:1;vertical-align:.08em}.note{padding:10px 14px;color:#555;background:#f6f7f9;border-left:3px solid #6366f1}
+section{break-inside:auto}.export-toc{margin:2em 0 3em}.export-toc>ul{padding-left:0;list-style:none}.export-toc ul ul{padding-left:1.5em;list-style:none}.export-toc li{margin:.2em 0}.map-section+.map-section{margin-top:3em;border-top:1px solid #ddd}.body-paragraph{margin:.75em 0;text-align:justify;text-indent:2em}.circled-number{box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;min-width:1.65em;height:1.65em;padding:0 .14em;border:.1em solid currentColor;border-radius:999px;font-family:inherit;font-size:.86em;font-weight:600;font-variant-numeric:tabular-nums;line-height:1;vertical-align:-.2em}.note{padding:10px 14px;color:#555;background:#f6f7f9;border-left:3px solid #6366f1}
 @media print{body{margin:0;max-width:none}a{color:inherit}}
 </style></head><body><article><h1>${title}</h1>${toc}${body}</article></body></html>`;
 }

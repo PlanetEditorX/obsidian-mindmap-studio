@@ -1,5 +1,17 @@
 # Modified Files
 
+## 1.39.3 带圈序号字体与基线统一
+
+- `src/editor/article-renderer.ts`、`src/editor/editor.ts`：文章与通读的带圈序号不再把 Unicode 圈号直接放入伪元素，统一传递十进制索引供视觉层绘制。
+- `styles.css`：全部带圈序号使用当前正文的字体和字重，以固定首行编号槽、圆环尺寸和绝对定位统一大小、基线及多行缩进；移除 Windows 符号字体回退。
+- `src/import/import-export.ts`：HTML 第 1 项起统一输出 `.circled-number` 圆环，Markdown 与 Word 的无 CSS 可读表示保持兼容。
+- `src/article/article-render-cache.ts`：文章渲染修订提升到 v4，使 1.39.2 的旧缓存自动失效，避免恢复旧 Unicode 标记。
+- `tests/article-content-block.test.mjs`、`scripts/test.mjs`：增加统一字体、圆环、首行基线、HTML 1/51/67 项和缓存修订契约。
+- `README.md`、`CHANGELOG.md`、`docs/ARCHITECTURE.md`、`docs/DATA_MODEL.md`、`docs/DEVELOPMENT.md`、`docs/SPECIAL_FEATURES.md`、`docs/TESTING.md`、`docs/FUNCTION_REFERENCE.md`：同步显示边界与验证说明。
+- `package.json`、`package-lock.json`、`manifest.json`、`versions.json`、`update.json`：统一版本元数据为 1.39.3，并在最终安装包生成后写入 SHA-256。
+- `TEST_RESULTS.md`、Codex 项目衔接页：记录验证基线与真实 Win10 手工检查项。
+- `main.js`：由修复后的 TypeScript 源码重新生产构建。
+
 ## 1.39.2 末端正文带圈序号
 
 - `src/core/model.ts`、`src/settings.ts`、`src/main.ts`：新增 `next-level` / `circled` 末端序号样式，提供全局默认、配置规范化与当前页面覆盖。

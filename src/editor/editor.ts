@@ -5815,9 +5815,10 @@ export class MindMapEditor {
             const paragraph = nodeSection.createEl("p", { cls: `mms-article-leaf-text${this.options.articleLeafBulletsEnabled && !info.numberedLeaf ? " is-bulleted" : ""}${this.options.articleLeafTextAlignment === "auto" ? " is-auto-aligned" : ""}${firstTextBlock.paragraphIndent === "none" ? " is-flush" : ""}${info.numberedLeaf ? " mms-article-leaf-numbered" : ""}` });
             paragraph.dataset.blockId = firstTextBlock.id;
             if (info.numberedLeaf) {
-              paragraph.dataset.articleNumber = info.label;
+              paragraph.dataset.articleNumber = info.leafNumberingStyle === "circled"
+                ? String(info.leafNumberingIndex ?? 1)
+                : info.label;
               if (info.leafNumberingStyle) paragraph.dataset.articleNumberStyle = info.leafNumberingStyle;
-              if ((info.leafNumberingIndex ?? 0) > 50) paragraph.dataset.articleNumberFallback = "true";
             }
             if (this.options.articleLeafBulletsEnabled && !info.numberedLeaf) {
               paragraph.dataset.bulletStyle = this.options.articleLeafBulletStyle;

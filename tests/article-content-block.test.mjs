@@ -121,7 +121,7 @@ test("terminal body siblings can switch to the next article numbering level", as
   ]);
   assert.match(settingsSource, /articleLeafNumberingEnabled: boolean/);
   assert.match(settingsSource, /articleLeafNumberingThreshold: number/);
-  assert.match(settingsSource, /setName\("末端正文标识转序号"\)[\s\S]*setName\("末端正文序号样式"\)[\s\S]*带圈数字（①–㊿，51\+ 圆圈）[\s\S]*setName\("末端正文转序号阈值"\)/);
+  assert.match(settingsSource, /setName\("末端正文标识转序号"\)[\s\S]*setName\("末端正文序号样式"\)[\s\S]*带圈数字（统一圆圈，支持 51\+）[\s\S]*setName\("末端正文转序号阈值"\)/);
   assert.match(viewSource, /document\?\.articleStyle\?\.leafNumberingEnabled \?\? this\.plugin\.settings\.articleLeafNumberingEnabled/);
   assert.match(viewSource, /document\?\.articleStyle\?\.leafNumberingStyle \?\? this\.plugin\.settings\.articleLeafNumberingStyle/);
   assert.match(modesSource, /for \(const child of parent\.children\) \{[\s\S]*else if \(child\.articleNumberingMode !== "none"\) terminalCount \+= 1/);
@@ -129,14 +129,17 @@ test("terminal body siblings can switch to the next article numbering level", as
   assert.match(modesSource, /const displayLevel = numberedLeaf \? defaultLevel : numbering\.level/);
   assert.match(modesSource, /circledNumberLabel\(numberedIndex\)/);
   assert.match(modesSource, /articleNumberLabel\(displayLevel, numberedIndex\)/);
-  assert.match(rendererSource, /paragraph\.dataset\.articleNumber = info\.label/);
+  assert.match(rendererSource, /info\.leafNumberingStyle === "circled"[\s\S]*String\(info\.leafNumberingIndex \?\? 1\)[\s\S]*: info\.label/);
   assert.match(rendererSource, /paragraph\.dataset\.articleNumberStyle = info\.leafNumberingStyle/);
   assert.match(editorSource, /buildArticleNodeInfo\(section\.document\.root, section\.baseDepth, \{ enabled: this\.options\.articleLeafNumberingEnabled, threshold: this\.options\.articleLeafNumberingThreshold, style: this\.options\.articleLeafNumberingStyle \}\)/);
-  assert.match(editorSource, /paragraph\.dataset\.articleNumber = info\.label/);
-  assert.match(editorSource, /paragraph\.dataset\.articleNumberFallback = "true"/);
+  assert.match(editorSource, /info\.leafNumberingStyle === "circled"[\s\S]*String\(info\.leafNumberingIndex \?\? 1\)[\s\S]*: info\.label/);
+  assert.doesNotMatch(editorSource, /articleNumberFallback/);
   assert.match(styles, /\.mms-article-leaf-text\.mms-article-leaf-numbered\s*\{[\s\S]*margin-inline-start:\s*0/);
   assert.match(styles, /\.mms-article-leaf-text\.mms-article-leaf-numbered::before\s*\{[\s\S]*content:\s*attr\(data-article-number\)/);
-  assert.match(styles, /data-article-number-style="circled"[\s\S]*data-article-number-fallback="true"[\s\S]*border-radius:\s*999px/);
+  assert.match(styles, /data-article-number-style="circled"\]\s*\{[\s\S]*padding-inline-start:\s*1\.9em/);
+  assert.match(styles, /data-article-number-style="circled"\]::before\s*\{[\s\S]*position:\s*absolute[\s\S]*font-family:\s*inherit[\s\S]*font-size:\s*\.86em[\s\S]*font-variant-numeric:\s*tabular-nums/);
+  assert.doesNotMatch(styles, /Segoe UI Symbol|data-article-number-fallback/);
+  assert.match(await readFile("src/article/article-render-cache.ts", "utf8"), /ARTICLE_RENDERER_REVISION = "article-node-cache-v4"/);
 });
 
 test("Enter commits an article title while Shift+Enter keeps an inline line break", () => {
