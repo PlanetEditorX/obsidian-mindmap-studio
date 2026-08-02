@@ -1409,7 +1409,8 @@ export class MindMapEditor {
       || JSON.stringify(previousOptions.toolbarItemOrder) !== JSON.stringify(options.toolbarItemOrder)
       || previousOptions.questionNodesEnabled !== options.questionNodesEnabled;
     const globalModeChanged = previousOptions.defaultViewMode !== options.defaultViewMode;
-    const articleContextPresentationChanged = previousOptions.articleBaseDepth !== options.articleBaseDepth
+    const articleContextPresentationChanged = previousOptions.articleContextReady !== options.articleContextReady
+      || previousOptions.articleBaseDepth !== options.articleBaseDepth
       || previousOptions.showArticleToc !== options.showArticleToc
       || JSON.stringify(previousOptions.articleTocEntries) !== JSON.stringify(options.articleTocEntries)
       || JSON.stringify(previousOptions.articleNavigation) !== JSON.stringify(options.articleNavigation);
@@ -2188,9 +2189,7 @@ export class MindMapEditor {
    */
   showArticleDirectory(): void {
     this.currentMode = "article";
-    this.mutate(() => {
-      this.document.view = { ...(this.document.view ?? {}), articleLandingMode: "toc" };
-    });
+    this.setArticleLandingMode("toc");
   }
 
   /**
@@ -3352,32 +3351,44 @@ export class MindMapEditor {
    * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
    */
   private renderArticle(): void {
-    const requestedLocation = this.pendingArticleFocusLocation;
+    const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true;
+    if (!this.options.articleContextReady) {
+      this.cancelReadingLocationRestore();
+      this.cancelArticleWindowExpansion();
+      this.articleRenderController = null;
+      const target = this.pendingArticleFocusLocation || this.document.view?.articleLandingMode === "article"
+        ? "article"
+        : "toc";
+      this.renderArticleSkeleton(target);
+      return;
+    }
+
+    const directoryOnly = this.options.showArticleToc
+      && this.options.articleTocEntries.length > 0
+      && this.document.view?.articleLandingMode !== "article";
+    const requestedLocation = directoryOnly ? null : this.pendingArticleFocusLocation;
     this.pendingArticleFocusLocation = null;
     const existingPage = this.articleEl.querySelector<HTMLElement>(":scope > .mms-article-page");
+    const existingDirectory = existingPage?.querySelector(".mms-article-toc-page") !== null;
     const activeRestoreLocation = this.activeReadingRestore?.mode === "article"
       ? this.activeReadingRestore.location
       : null;
-    const previousLocation = !requestedLocation && existingPage
+    const previousLocation = !directoryOnly && !requestedLocation && existingPage
       ? activeRestoreLocation ?? this.captureCurrentLocation("article")
       : null;
     const previousScroll = { top: this.articleEl.scrollTop, left: this.articleEl.scrollLeft };
     this.cancelReadingLocationRestore();
-    const directoryOnly = this.options.showArticleToc
-      && this.options.articleTocEntries.length > 0
-      && this.document.view?.articleLandingMode !== "article";
-    const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true;
-    const needsEntryTransition = !directoryOnly && !reducedMotion && (
+    const needsEntryTransition = !reducedMotion && (
       requestedLocation !== null
       || !existingPage
       || existingPage.dataset.nodeId !== this.document.root.id
-      || existingPage.querySelector(".mms-article-toc") !== null
+      || existingDirectory !== directoryOnly
     );
     this.cancelArticleWindowExpansion();
 
     const renderWindow = (): void => {
-      if (this.currentMode !== "article") return;
-      const latestRequestedLocation = this.pendingArticleFocusLocation ?? requestedLocation;
+      if (this.currentMode !== "article" || !this.options.articleContextReady) return;
+      const latestRequestedLocation = directoryOnly ? null : this.pendingArticleFocusLocation ?? requestedLocation;
       this.pendingArticleFocusLocation = null;
       this.articleEl.empty();
       this.articleEl.removeAttribute("aria-busy");
@@ -3393,6 +3404,12 @@ export class MindMapEditor {
       this.articleEl.onpointerdown = () => this.cancelReadingLocationRestore();
       this.articleEl.ontouchstart = () => this.cancelReadingLocationRestore();
 
+      if (directoryOnly) {
+        this.blockReadingLocationCapture();
+        this.articleEl.scrollTop = 0;
+        this.articleEl.scrollLeft = 0;
+        return;
+      }
       const location = latestRequestedLocation ?? previousLocation
         ?? (!existingPage ? this.lastReadingLocation : null);
       if (location) this.restoreReadingLocation("article", location);
@@ -3407,7 +3424,7 @@ export class MindMapEditor {
       return;
     }
 
-    this.renderArticleSkeleton();
+    this.renderArticleSkeleton(directoryOnly ? "toc" : "article");
     const token = ++this.articleInitialRenderToken;
     this.articleInitialRenderFrame = window.requestAnimationFrame(() => {
       this.articleInitialRenderFrame = window.requestAnimationFrame(() => {
@@ -3419,16 +3436,33 @@ export class MindMapEditor {
   }
 
   /** Paints a bounded article skeleton before the first real target window is mounted. */
-  private renderArticleSkeleton(): void {
+  private renderArticleSkeleton(target: "toc" | "article" = "article"): void {
     this.articleEl.empty();
     this.articleRenderController = null;
     this.articleEl.setAttribute("aria-busy", "true");
+    const preparingDirectory = target === "toc";
     const skeleton = this.articleEl.createDiv({
-      cls: "mms-article-entry-skeleton",
-      attr: { role: "status", "aria-live": "polite", "aria-label": "正在准备目标章节" }
+      cls: `mms-article-entry-skeleton${preparingDirectory ? " is-directory" : ""}`,
+      attr: {
+        role: "status",
+        "aria-live": "polite",
+        "aria-label": preparingDirectory ? "正在准备文章目录" : "正在准备目标章节"
+      }
     });
-    skeleton.createSpan({ cls: "mms-article-skeleton-label", text: "正在准备目标章节" });
+    skeleton.createSpan({
+      cls: "mms-article-skeleton-label",
+      text: preparingDirectory ? "正在准备文章目录" : "正在准备目标章节"
+    });
     skeleton.createDiv({ cls: "mms-article-skeleton-line is-title" });
+    if (preparingDirectory) {
+      const directory = skeleton.createDiv({ cls: "mms-article-skeleton-directory" });
+      for (let index = 0; index < 7; index += 1) {
+        directory.createDiv({
+          cls: `mms-article-skeleton-line is-toc-row depth-${index % 3}`
+        });
+      }
+      return;
+    }
     for (let index = 0; index < 3; index += 1) {
       const block = skeleton.createDiv({ cls: "mms-article-skeleton-block" });
       block.createDiv({ cls: "mms-article-skeleton-line is-heading" });
@@ -5417,9 +5451,24 @@ export class MindMapEditor {
   private toggleArticleLanding(): void {
     if (this.currentMode !== "article" || !this.options.showArticleToc) return;
     const current = this.document.view?.articleLandingMode ?? "toc";
-    this.mutate(() => {
-      this.document.view = { ...(this.document.view ?? {}), articleLandingMode: current === "toc" ? "article" : "toc" };
-    });
+    this.setArticleLandingMode(current === "toc" ? "article" : "toc");
+  }
+
+  /** Persists one article landing choice without restoring the outgoing page's chapter anchor. */
+  private setArticleLandingMode(mode: "toc" | "article"): void {
+    if (this.currentMode !== "article" || !this.ensureEditable()) return;
+    const current = this.document.view?.articleLandingMode ?? "toc";
+    if (current === mode) {
+      this.render();
+      return;
+    }
+    this.cancelReadingLocationRestore();
+    this.pendingArticleFocusLocation = null;
+    this.history.capture(this.document);
+    this.document.view = { ...(this.document.view ?? {}), articleLandingMode: mode };
+    this.callbacks.onChange(this.getDocument());
+    this.markSaving();
+    this.render();
   }
 
   /**

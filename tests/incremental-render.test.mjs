@@ -122,9 +122,9 @@ test("clicking a same-file directory chapter switches to article without reopeni
   assert.match(focusNode, /articleLandingMode: "article"/);
   assert.match(focusNode, /pendingArticleFocusLocation = location/);
   assert.match(focusNode, /if \(this\.currentMode !== "article"\) this\.restoreReadingLocation/);
-  assert.match(renderArticle, /const requestedLocation = this\.pendingArticleFocusLocation/);
-  assert.match(renderArticle, /const previousLocation = !requestedLocation/);
-  assert.match(renderArticle, /const latestRequestedLocation = this\.pendingArticleFocusLocation \?\? requestedLocation/);
+  assert.match(renderArticle, /const requestedLocation = directoryOnly \? null : this\.pendingArticleFocusLocation/);
+  assert.match(renderArticle, /const previousLocation = !directoryOnly && !requestedLocation/);
+  assert.match(renderArticle, /const latestRequestedLocation = directoryOnly \? null : this\.pendingArticleFocusLocation \?\? requestedLocation/);
   assert.match(renderArticle, /const location = latestRequestedLocation \?\? previousLocation/);
   assert.match(renderArticle, /if \(location\) this\.restoreReadingLocation\("article", location\)/);
   assert.match(renderDirectory, /entry\.filePath === options\.currentFilePath && entry\.nodeId/);
@@ -143,10 +143,10 @@ test("article entry transition paints a bounded skeleton without delaying semant
   const restoreLocation = editorSource.match(/private restoreReadingLocation\([\s\S]*?\n  \}/)?.[0] ?? "";
   const expandWindow = editorSource.match(/private expandArticleWindow\([\s\S]*?\n  \}/)?.[0] ?? "";
 
-  assert.match(renderArticle, /renderArticleSkeleton\(\)/);
+  assert.match(renderArticle, /renderArticleSkeleton\(directoryOnly \? "toc" : "article"\)/);
   assert.match(renderArticle, /prefers-reduced-motion: reduce/);
   assert.match(renderArticle, /requestAnimationFrame\(\(\) => \{[\s\S]*?requestAnimationFrame/);
-  assert.match(renderArticle, /latestRequestedLocation = this\.pendingArticleFocusLocation \?\? requestedLocation/);
+  assert.match(renderArticle, /latestRequestedLocation = directoryOnly \? null : this\.pendingArticleFocusLocation \?\? requestedLocation/);
   assert.match(restoreLocation, /articleInitialRenderFrame !== null/);
   assert.match(restoreLocation, /pendingArticleFocusLocation = normalizedLocation/);
   assert.match(expandWindow, /mms-article-window-loader\.is-\$\{direction\}/);
@@ -159,6 +159,38 @@ test("article entry transition paints a bounded skeleton without delaying semant
   assert.doesNotMatch(skeletonRule, /position:\s*fixed/);
 });
 
+
+test("article context gates the first paint and landing transitions are symmetric", async () => {
+  const [editorSource, viewSource, mainSource, typesSource, cssSource] = await Promise.all([
+    readFile(path.join(rootDir, "src/editor/editor.ts"), "utf8"),
+    readFile(path.join(rootDir, "src/view.ts"), "utf8"),
+    readFile(path.join(rootDir, "src/main.ts"), "utf8"),
+    readFile(path.join(rootDir, "src/editor/editor-types.ts"), "utf8"),
+    readFile(path.join(rootDir, "styles.css"), "utf8")
+  ]);
+  const renderArticle = editorSource.match(/private renderArticle\(\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
+  const setLanding = editorSource.match(/private setArticleLandingMode\([\s\S]*?\n  \}/)?.[0] ?? "";
+  const setViewData = viewSource.match(/setViewData\([\s\S]*?\n  \}/)?.[0] ?? "";
+
+  assert.match(typesSource, /articleContextReady: boolean/);
+  assert.ok(renderArticle.indexOf("if (!this.options.articleContextReady)") < renderArticle.indexOf("renderArticleMode(this.articleEl"));
+  assert.match(renderArticle, /renderArticleSkeleton\(target\)/);
+  assert.match(renderArticle, /existingDirectory !== directoryOnly/);
+  assert.match(renderArticle, /renderArticleSkeleton\(directoryOnly \? "toc" : "article"\)/);
+  assert.match(renderArticle, /if \(directoryOnly\) \{[\s\S]*?scrollTop = 0[\s\S]*?return/);
+  assert.match(setLanding, /cancelReadingLocationRestore\(\)/);
+  assert.match(setLanding, /pendingArticleFocusLocation = null/);
+  assert.doesNotMatch(setLanding, /restoreReadingLocation|this\.mutate/);
+  assert.match(setViewData, /consumePendingMindMapFocus/);
+  assert.match(setViewData, /this\.editor\.focusNodeById\(nodeId, persistLocation\)/);
+  assert.doesNotMatch(setViewData, /setTimeout\(\(\) => this\.editor\?\.focusNodeById/);
+  assert.match(viewSource, /this\.articleContextReady = false/);
+  assert.match(viewSource, /this\.articleContextReady = true/);
+  assert.match(mainSource, /pendingMindMapFocus\.set\(file\.path, focusNodeId\)/);
+  assert.match(mainSource, /openAsMindMap\(resolved, preferredLeaf, focusNodeId\)/);
+  assert.match(cssSource, /\.mms-article-entry-skeleton\.is-directory/);
+  assert.match(cssSource, /\.mms-article-skeleton-line\.is-toc-row/);
+});
 
 test("article semantic navigation is latest-wins and never captures the page shell as the root node", async () => {
   const editorSource = await readFile(path.join(rootDir, "src/editor/editor.ts"), "utf8");

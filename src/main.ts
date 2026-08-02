@@ -165,6 +165,8 @@ function matchesRecordedShortcut(event: KeyboardEvent, shortcut: string): boolea
  * MindMapStudioPlugin 的主要实现类。负责封装相关状态、生命周期和对外操作，避免调用方直接操作内部数据结构。
  */
 export default class MindMapStudioPlugin extends Plugin {
+  /** Explicit cross-file chapter targets queued before TextFileView receives the new file data. */
+  private readonly pendingMindMapFocus = new Map<string, string>();
   settings: MindMapStudioSettings = DEFAULT_SETTINGS;
   /** 当前会话使用的显示模式；大纲模式不会写成下次启动默认值。 */
   private activeDisplayMode: DisplayMode = DEFAULT_SETTINGS.defaultViewMode;
@@ -1568,6 +1570,14 @@ export default class MindMapStudioPlugin extends Plugin {
     }
   }
 
+  /** Returns and clears a chapter target queued before a mind-map view starts loading its file. */
+  consumePendingMindMapFocus(filePath: string): string | null {
+    const normalized = normalizePath(filePath);
+    const nodeId = this.pendingMindMapFocus.get(normalized) ?? null;
+    this.pendingMindMapFocus.delete(normalized);
+    return nodeId;
+  }
+
   /**
    * 打开as mind map，并保持模型、界面和持久化状态的一致性。
    *
@@ -1577,13 +1587,17 @@ export default class MindMapStudioPlugin extends Plugin {
    */
   async openAsMindMap(file: TFile, preferredLeaf?: WorkspaceLeaf, focusNodeId?: string): Promise<WorkspaceLeaf> {
     const leaf = preferredLeaf ?? this.app.workspace.getLeaf(false);
+    if (focusNodeId) this.pendingMindMapFocus.set(file.path, focusNodeId);
     await leaf.setViewState({
       type: VIEW_TYPE_MINDMAP_STUDIO,
       state: { file: file.path },
       active: true
     });
     this.app.workspace.revealLeaf(leaf);
-    if (focusNodeId && leaf.view instanceof MindMapStudioView) leaf.view.markExplicitNavigation(focusNodeId);
+    if (focusNodeId && this.pendingMindMapFocus.get(file.path) === focusNodeId) {
+      this.pendingMindMapFocus.delete(file.path);
+      if (leaf.view instanceof MindMapStudioView) leaf.view.markExplicitNavigation(focusNodeId);
+    }
     return leaf;
   }
 
@@ -2489,8 +2503,7 @@ export default class MindMapStudioPlugin extends Plugin {
       new Notice(`找不到子导图：${path}`);
       return;
     }
-    const leaf = await this.openAsMindMap(resolved, preferredLeaf);
-    if (leaf.view instanceof MindMapStudioView) leaf.view.markExplicitNavigation(focusNodeId);
+    await this.openAsMindMap(resolved, preferredLeaf, focusNodeId);
   }
 
   /**

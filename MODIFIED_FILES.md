@@ -1,5 +1,15 @@
 # Modified Files
 
+## 1.39.12 文章目录首帧与双向过渡
+
+- `src/view.ts`、`src/editor/editor-types.ts`：新增文章上下文准备态；打开文件时先消费排队的跨文件目标，上下文未完成前禁止真实文章首帧，失败时回退当前文件并结束准备态。
+- `src/main.ts`：跨文件目录导航在切换视图前排队目标节点，新视图同步消费，避免父章节编号与子文件根标题的临时组合。
+- `src/editor/editor.ts`：目录/正文按目标类型显示骨架并使用对称过渡；新增独立落地模式切换链，返回目录清除正文恢复任务并固定从顶部进入。
+- `styles.css`：增加目录目标骨架的层级行样式，沿用减少动态效果兼容。
+- `tests/incremental-render.test.mjs`：新增文章上下文首帧门、目录双向过渡、目录顶部落地、跨文件目标预排队与同步消费契约；单元测试增至 280 项。
+- `README.md`、`CHANGELOG.md`、`docs/ARCHITECTURE.md`、`docs/SPECIAL_FEATURES.md`、`docs/READING_JUMP_FIX.zh-CN.md`、`docs/TESTING.md`、`docs/FUNCTION_REFERENCE.md`、`TEST_RESULTS.md`：同步首帧状态机、过渡和人工验证边界。
+- `package.json`、`package-lock.json`、`manifest.json`、`versions.json`、`update.json`、`main.js`：同步 1.39.12 版本、生产构建和最终安装包校验。
+
 ## 1.39.11 文章章节定位事务化
 
 - `src/editor/editor.ts`：文章当前位置采集改用标题/真实章节专属选择器；新增最后一次导航独占的可取消语义滚动事务，异步上下文刷新沿用活动目标，并用最长 5 秒的布局观察抵消图片、表格、代码和字体晚到；用户滚轮、触摸、指针或键盘翻页立即接管。

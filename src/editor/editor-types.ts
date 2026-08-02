@@ -93,6 +93,8 @@ export interface MindMapEditorOptions {
    * 不能立即根据旧的跨文件阅读记录跳回另一个父/子导图。
    */
   preferCurrentFileLocation: boolean;
+  /** Cross-file article numbering and directory metadata have completed their first load. */
+  articleContextReady: boolean;
   articleBaseDepth: number;
   articleTocEntries: ArticleTocEntry[];
   articleTocMaxDepth: number;
