@@ -46,6 +46,9 @@ export function readingAnchorPart(value: string): string {
 
 const CHINESE_DIGITS = ["零", "一", "二", "三", "四", "五", "六", "七", "八", "九"];
 
+/** 文章编号支持的最高样式层级。更深结构继续保留标题层级，但不循环复用已有编号。 */
+export const MAX_ARTICLE_NUMBERING_LEVEL = 8;
+
 /**
  * 执行“chinese number”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
  *
@@ -64,24 +67,40 @@ export function chineseNumber(value: number): string {
   return String(safe);
 }
 
+/** 将一基序号转换为 Excel 风格的大写字母编号，例如 1 → A、26 → Z、27 → AA。 */
+function alphabeticNumber(index: number): string {
+  let remaining = Math.max(1, Math.floor(index));
+  let result = "";
+  while (remaining > 0) {
+    remaining -= 1;
+    result = String.fromCharCode(65 + (remaining % 26)) + result;
+    remaining = Math.floor(remaining / 26);
+  }
+  return result;
+}
+
 /**
- * 将文章标题层级和同级序号转换为“第一章、第一节、一、（一）、1.、（1）”等常见中文文章编号，更深层级使用可读的循环规则。
+ * 将文章标题层级和同级序号转换为“第一章、第一节、一、（一）、1.、（1）、A.、（A）”等八级中文文章编号。
+ * 第 8 级之后只保留结构层级，不再从 A. 重新循环，避免深层节点与上级编号混淆。
  *
  * @param depth 节点在文章结构中的一基层级。
  * @param index 当前元素在同级或列表中的一基序号。
- * @returns 对应层级的文章编号文本。
+ * @returns 对应层级的文章编号文本；超出八级时返回空字符串。
  * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
  */
 export function articleNumberLabel(depth: number, index: number): string {
-  const cn = chineseNumber(index);
-  if (depth === 1) return `第${cn}章`;
-  if (depth === 2) return `第${cn}节`;
-  if (depth === 3) return `${cn}、`;
-  if (depth === 4) return `（${cn}）`;
-  if (depth === 5) return `${index}.`;
-  if (depth === 6) return `（${index}）`;
-  const alphabet = String.fromCharCode(64 + ((index - 1) % 26) + 1);
-  return depth % 2 === 1 ? `${alphabet}.` : `（${alphabet}）`;
+  const normalizedDepth = Number.isFinite(depth) ? Math.floor(depth) : 0;
+  if (normalizedDepth < 1 || normalizedDepth > MAX_ARTICLE_NUMBERING_LEVEL) return "";
+  const normalizedIndex = Number.isFinite(index) ? Math.max(1, Math.floor(index)) : 1;
+  const cn = chineseNumber(normalizedIndex);
+  if (normalizedDepth === 1) return `第${cn}章`;
+  if (normalizedDepth === 2) return `第${cn}节`;
+  if (normalizedDepth === 3) return `${cn}、`;
+  if (normalizedDepth === 4) return `（${cn}）`;
+  if (normalizedDepth === 5) return `${normalizedIndex}.`;
+  if (normalizedDepth === 6) return `（${normalizedIndex}）`;
+  const alphabet = alphabeticNumber(normalizedIndex);
+  return normalizedDepth === 7 ? `${alphabet}.` : `（${alphabet}）`;
 }
 
 /**
@@ -127,13 +146,13 @@ export function resolveArticleNumbering(node: MindMapNode, defaultLevel: number,
   const mode = node.articleNumberingMode ?? "auto";
   const manual = mode === "manual";
   const requestedLevel = Number.isFinite(node.articleNumberingLevel) ? Math.floor(node.articleNumberingLevel ?? defaultLevel) : defaultLevel;
-  const level = manual ? Math.min(8, Math.max(1, requestedLevel)) : Math.max(1, Math.floor(defaultLevel));
+  const level = manual ? Math.min(MAX_ARTICLE_NUMBERING_LEVEL, Math.max(1, requestedLevel)) : Math.max(1, Math.floor(defaultLevel));
   const isHeading = isArticleHeading(node) || siblingHasHeading;
   return {
     level,
     isHeading,
     skipped: mode === "none",
-    shouldNumber: mode !== "none" && isHeading
+    shouldNumber: mode !== "none" && isHeading && level <= MAX_ARTICLE_NUMBERING_LEVEL
   };
 }
 
@@ -148,7 +167,7 @@ export function resolveArticleNumbering(node: MindMapNode, defaultLevel: number,
 export function articleChildStartLevel(root: MindMapNode, baseDepth = 0): number {
   const normalizedBaseDepth = Math.max(0, Math.floor(baseDepth));
   return root.articleNumberingMode === "manual" && Number.isFinite(root.articleNumberingLevel)
-    ? Math.min(8, Math.max(1, Math.floor(root.articleNumberingLevel ?? normalizedBaseDepth)))
+    ? Math.min(MAX_ARTICLE_NUMBERING_LEVEL, Math.max(1, Math.floor(root.articleNumberingLevel ?? normalizedBaseDepth)))
     : normalizedBaseDepth + 1;
 }
 
@@ -305,7 +324,7 @@ export function buildArticleNodeInfo(
       else if (child.articleNumberingMode !== "none") terminalCount += 1;
     }
     const threshold = Math.max(1, Math.min(20, Math.floor(leafNumbering.threshold) || 4));
-    const convertLeaves = leafNumbering.enabled && terminalCount >= threshold && defaultLevel <= 7;
+    const convertLeaves = leafNumbering.enabled && terminalCount >= threshold && defaultLevel < MAX_ARTICLE_NUMBERING_LEVEL;
     const numberedIndexes = new Map<number, number>();
     for (const child of parent.children) {
       const numbering = resolveArticleNumbering(child, defaultLevel, siblingHasHeading);

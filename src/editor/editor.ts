@@ -204,7 +204,7 @@ function createArticleNumberingControls(
   numberingLevelSelect.value = String(currentLevel ?? 1);
   const numberingHelp = container.createDiv({
     cls: "setting-item-description mmc-article-numbering-help",
-    text: "手动层级用于定义当前节点所在子树的最高文章层级；编辑中心节点时，一级子节点直接使用所选层级。末端节点是否作为标题仍由同级结构自动判断。"
+    text: "手动层级用于定义当前节点所在子树的最高文章层级；编辑中心节点时，一级子节点直接使用所选层级。末端节点是否作为标题仍由同级结构自动判断；超过第 8 级的更深结构保留标题层级，但不再循环生成 A. /（A）编号。"
   });
   const updateNumberingLevelState = (): void => {
     const manual = numberingModeSelect.value === "manual";

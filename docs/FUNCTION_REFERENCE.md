@@ -984,7 +984,7 @@ export function readingAnchorPart(value: string): string
 
 ### 函数 `chineseNumber`
 
-源码：`src/article/modes.ts:55`
+源码：`src/article/modes.ts:58`
 
 执行“chinese number”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
 
@@ -992,11 +992,21 @@ export function readingAnchorPart(value: string): string
 export function chineseNumber(value: number): string
 ```
 
+### 函数 `alphabeticNumber`
+
+源码：`src/article/modes.ts:71`
+
+将一基序号转换为 Excel 风格的大写字母编号，例如 1 → A、26 → Z、27 → AA。
+
+```ts
+function alphabeticNumber(index: number): string
+```
+
 ### 函数 `articleNumberLabel`
 
-源码：`src/article/modes.ts:75`
+源码：`src/article/modes.ts:91`
 
-将文章标题层级和同级序号转换为“第一章、第一节、一、（一）、1.、（1）”等常见中文文章编号，更深层级使用可读的循环规则。
+将文章标题层级和同级序号转换为“第一章、第一节、一、（一）、1.、（1）、A.、（A）”等八级中文文章编号。 第 8 级之后只保留结构层级，不再从 A. 重新循环，避免深层节点与上级编号混淆。
 
 ```ts
 export function articleNumberLabel(depth: number, index: number): string
@@ -1004,7 +1014,7 @@ export function articleNumberLabel(depth: number, index: number): string
 
 ### 函数 `articleDisplayTitle`
 
-源码：`src/article/modes.ts:94`
+源码：`src/article/modes.ts:113`
 
 按编号末尾标点决定标题是否需要空格，使“第一章 标题”与“一、标题”“1.标题”等格式同时保持自然。
 
@@ -1014,7 +1024,7 @@ export function articleDisplayTitle(label: string, title: string): string
 
 ### 函数 `isArticleHeading`
 
-源码：`src/article/modes.ts:104`
+源码：`src/article/modes.ts:123`
 
 A node is an article heading when it owns local descendants or represents a linked child map. A sub-map node is therefore still a chapter/section even when its children live in another .mindmap file.
 
@@ -1024,7 +1034,7 @@ export function isArticleHeading(node: MindMapNode): boolean
 
 ### 接口 `ArticleNumberingResolution`
 
-源码：`src/article/modes.ts:109`
+源码：`src/article/modes.ts:128`
 
 文章节点在自动、关闭或手动最高层级规则下的解析结果。
 
@@ -1034,7 +1044,7 @@ export interface ArticleNumberingResolution
 
 ### 函数 `resolveArticleNumbering`
 
-源码：`src/article/modes.ts:126`
+源码：`src/article/modes.ts:145`
 
 解析单个节点的文章编号状态。手动模式只覆盖当前节点所在子树的最高文章层级， 不再强制末端节点标题化；同级中只要存在自然标题，普通末端节点也会按同级标题编号， 从而避免首个“词义”等节点丢失序号。
 
@@ -1044,7 +1054,7 @@ export function resolveArticleNumbering(node: MindMapNode, defaultLevel: number,
 
 ### 函数 `articleChildStartLevel`
 
-源码：`src/article/modes.ts:148`
+源码：`src/article/modes.ts:167`
 
 计算一个物理导图根节点的首级子节点应使用的文章层级。根节点的手动层级表示 当前脑图正文的最高可见层级，文档标题本身不编号，一级子节点直接使用所选层级。
 
@@ -1054,7 +1064,7 @@ export function articleChildStartLevel(root: MindMapNode, baseDepth = 0): number
 
 ### 接口 `ArticleNodeInfo`
 
-源码：`src/article/modes.ts:158`
+源码：`src/article/modes.ts:177`
 
 ArticleNodeInfo 的结构化数据约定。字段会在模块边界传递，用于保持类型安全和版本兼容。
 
@@ -1064,7 +1074,7 @@ export interface ArticleNodeInfo
 
 ### 接口 `ArticleTocEntry`
 
-源码：`src/article/modes.ts:174`
+源码：`src/article/modes.ts:193`
 
 ArticleTocEntry 的结构化数据约定。字段会在模块边界传递，用于保持类型安全和版本兼容。
 
@@ -1074,7 +1084,7 @@ export interface ArticleTocEntry
 
 ### 函数 `articleTocDepth`
 
-源码：`src/article/modes.ts:193`
+源码：`src/article/modes.ts:212`
 
 返回目录项的相对结构层级。
 
@@ -1084,7 +1094,7 @@ export function articleTocDepth(entry: ArticleTocEntry): number
 
 ### 函数 `resolveArticleTocMaxDepth`
 
-源码：`src/article/modes.ts:205`
+源码：`src/article/modes.ts:224`
 
 解析文章和通读目录使用的最大相对结构层级。当前脑图存在覆盖值时优先使用， 否则跟随插件全局设置；两者都异常时回退到 3 层。
 
@@ -1094,7 +1104,7 @@ export function resolveArticleTocMaxDepth(documentOverride: number | undefined, 
 
 ### 接口 `ArticlePageNavigation`
 
-源码：`src/article/modes.ts:211`
+源码：`src/article/modes.ts:230`
 
 Navigation state shared by every physical article page in one map family.
 
@@ -1104,7 +1114,7 @@ export interface ArticlePageNavigation
 
 ### 接口 `ArticleSiblingPageResolution`
 
-源码：`src/article/modes.ts:221`
+源码：`src/article/modes.ts:240`
 
 当前物理文章页及其同层兄弟页的解析结果。
 
@@ -1114,7 +1124,7 @@ export interface ArticleSiblingPageResolution
 
 ### 函数 `sameBreadcrumb`
 
-源码：`src/article/modes.ts:228`
+源码：`src/article/modes.ts:247`
 
 比较两个目录面包屑片段是否完全一致。
 
@@ -1124,7 +1134,7 @@ function sameBreadcrumb(left: string[], right: string[]): boolean
 
 ### 函数 `resolveArticleSiblingPages`
 
-源码：`src/article/modes.ts:241`
+源码：`src/article/modes.ts:260`
 
 从递归全书目录中提取当前物理文件对应的同层兄弟页面。目录中的普通节点仍用于目录展示， 但不会进入上一篇/下一篇分页；因此打开“第一章”后会直接切换到“第二章”，而不会进入 当前文件内部的“第一节、第二节”。嵌套页面按相同规则在其父级下寻找兄弟页。
 
@@ -1134,7 +1144,7 @@ export function resolveArticleSiblingPages(entries: ArticleTocEntry[], currentFi
 
 ### 函数 `currentArticlePageEntry`
 
-源码：`src/article/modes.ts:266`
+源码：`src/article/modes.ts:285`
 
 返回文章页顶部应显示的目录编号标题。只有子导图物理页面使用该标题；顶层总目录文件 继续使用自身中心节点标题，避免把第一章误显示为整本书标题。
 
@@ -1144,7 +1154,7 @@ export function currentArticlePageEntry(navigation: ArticlePageNavigation | unde
 
 ### 接口 `ArticleLeafNumberingOptions`
 
-源码：`src/article/modes.ts:285`
+源码：`src/article/modes.ts:304`
 
 Build the article representation for one physical .mindmap file. `baseDepth` is the absolute article depth represented by this file's root. A manually configured node replaces its inferred highest level and its descendants continue from that level. Heading/body classification remains structural: leaf peers of headings become same-level headings, while an isolated terminal node remains body text.
 
@@ -1154,7 +1164,7 @@ export interface ArticleLeafNumberingOptions
 
 ### 函数 `buildArticleNodeInfo`
 
-源码：`src/article/modes.ts:293`
+源码：`src/article/modes.ts:312`
 
 展开文章节点，并按同一上级下的末端正文数量决定是否使用下一层序号。
 
@@ -1164,7 +1174,7 @@ export function buildArticleNodeInfo( root: MindMapNode, baseDepth = 0, leafNumb
 
 ### 函数 `normalizeVisibleModes`
 
-源码：`src/article/modes.ts:347`
+源码：`src/article/modes.ts:366`
 
 校验并规范化visible modes，并保持模型、界面和持久化状态的一致性。
 

@@ -1,5 +1,15 @@
 # Modified Files
 
+## 1.39.1 深层文章编号边界修复
+
+- `src/article/modes.ts`：集中定义八级文章编号上限；第 9 级及更深结构不再循环复用 `A.` / `（A）`，第 7、8 级字母序号超过 Z 后使用 AA、AB。
+- `src/editor/editor.ts`：在文章编号设置帮助中明确八级边界与更深结构行为。
+- `tests/article-numbering.test.mjs`、`scripts/test.mjs`、`package.json`：新增深层编号、无循环字母和超过 Z 唯一性专项测试，单元测试扩展至 278 项。
+- `README.md`、`CHANGELOG.md`、`docs/ARCHITECTURE.md`、`docs/DATA_MODEL.md`、`docs/DEVELOPMENT.md`、`docs/SPECIAL_FEATURES.md`、`docs/TESTING.md`、`docs/FUNCTION_REFERENCE.md`：同步编号边界、测试和函数参考。
+- `package.json`、`package-lock.json`、`manifest.json`、`versions.json`、`update.json`：统一版本元数据为 1.39.1，并在最终安装包生成后写入 SHA-256。
+- `TEST_RESULTS.md`、Codex 项目衔接页：记录完整验证和真实 Win10 待验证事项。
+- `main.js`：由修复后的 TypeScript 源码重新生产构建。
+
 ## 1.39.0 文件浏览器增量筛选与文章缓存写盘合并
 
 - `src/main.ts`：文件浏览器观察器收集新增/改路径局部根节点并去重，只在布局或筛选设置变化时完整扫描；移除仓库文件事件触发的全树刷新，并在卸载时清理待扫描状态。
