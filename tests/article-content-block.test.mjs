@@ -144,6 +144,18 @@ test("terminal body siblings can switch to the next article numbering level", as
   assert.match(await readFile("src/article/article-render-cache.ts", "utf8"), /ARTICLE_RENDERER_REVISION = "article-node-cache-v4"/);
 });
 
+test("quick editing moves only the circled marker with the editor block padding", () => {
+  const rule = (selector) => {
+    const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return styles.match(new RegExp(`${escaped}\\s*\\{([\\s\\S]*?)\\}`))?.[1] ?? "";
+  };
+  const marker = rule('.mms-article-leaf-text.mms-article-leaf-numbered[data-article-number-style="circled"].is-inline-editing::before');
+  const blockPadding = Number(styles.match(/\.mms-article-leaf-text\.is-inline-editing,[\s\S]*?padding:\s*(\d+)px\s+\d+px/)?.[1]);
+  const markerShift = Number(marker.match(/top:\s*calc\(\.39em \+ (\d+)px\)/)?.[1]);
+  assert.equal(markerShift, blockPadding, "quick edit should offset only the marker by the existing block padding");
+  assert.doesNotMatch(marker, /padding|margin|inset-inline-start/, "the quick-edit correction must not move or resize the body editor");
+});
+
 test("auto-aligned circled numbers align body text and keep a readable marker gap", () => {
   const rule = (selector) => {
     const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");

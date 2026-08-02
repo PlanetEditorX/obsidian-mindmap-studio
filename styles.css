@@ -4061,6 +4061,13 @@
   inset-inline-start: -.13em;
 }
 
+/* Quick editing adds 7px of block padding around the paragraph. Keep the
+   content box unchanged and move only the generated marker by the same
+   amount so its center stays aligned with the edited text line. */
+.mms-article-leaf-text.mms-article-leaf-numbered[data-article-number-style="circled"].is-inline-editing::before {
+  top: calc(.39em + 7px);
+}
+
 .mms-article-leaf-text.is-bulleted::before {
   position: absolute;
   top: .78em;
