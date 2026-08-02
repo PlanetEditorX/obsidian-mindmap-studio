@@ -1280,6 +1280,8 @@ export class MindMapEditor {
   private articleScrollButtonCleanup: (() => void) | null = null;
   private articleRenderController: ArticleRenderController | null = null;
   private pendingArticleFocusLocation: ReadingLocation | null = null;
+  /** Parent/home return target used only to reveal the matching directory row, never to open article content. */
+  private pendingArticleDirectoryFocusNodeId: string | null = null;
   /** Two-frame paint gate used only when an article needs an entry transition. */
   private articleInitialRenderFrame: number | null = null;
   private articleInitialRenderToken = 0;
@@ -1341,6 +1343,7 @@ export class MindMapEditor {
     this.cancelArticleWindowExpansion();
     this.articleRenderController = null;
     this.pendingArticleFocusLocation = null;
+    this.pendingArticleDirectoryFocusNodeId = null;
     this.cleanupCallbacks.forEach((callback) => callback());
     this.cleanupCallbacks = [];
     this.resizeObserver?.disconnect();
@@ -1370,6 +1373,7 @@ export class MindMapEditor {
       this.cancelArticleInitialRender();
       this.cancelArticleWindowExpansion();
       this.pendingArticleFocusLocation = null;
+      this.pendingArticleDirectoryFocusNodeId = null;
       this.pendingLocationNavigationKey = null;
       if (this.readingLocationTimer !== null) window.clearTimeout(this.readingLocationTimer);
       if (this.readingCaptureTimer !== null) window.clearTimeout(this.readingCaptureTimer);
@@ -2234,8 +2238,23 @@ export class MindMapEditor {
   /**
    * Switches the current top-level document to its generated article directory.
    */
-  showArticleDirectory(): void {
+  showArticleDirectory(focusNodeId?: string): void {
     this.currentMode = "article";
+    this.cancelReadingLocationRestore();
+    this.pendingArticleFocusLocation = null;
+    this.pendingArticleDirectoryFocusNodeId = focusNodeId && findNode(this.document.root, focusNodeId)
+      ? focusNodeId
+      : null;
+    if (this.pendingArticleDirectoryFocusNodeId) {
+      this.selectedId = this.pendingArticleDirectoryFocusNodeId;
+      this.selectedIds.clear();
+      this.selectedIds.add(this.pendingArticleDirectoryFocusNodeId);
+    }
+    this.callbacks.onDebugLog("article", "show-directory", {
+      requestedFocusNodeId: focusNodeId,
+      directoryFocusNodeId: this.pendingArticleDirectoryFocusNodeId,
+      currentLandingMode: this.document.view?.articleLandingMode
+    });
     this.setArticleLandingMode("toc");
   }
 
@@ -2868,7 +2887,7 @@ export class MindMapEditor {
       this.callbacks.onDebugLog("navigation", "return-parent-click", {
         currentFilePath: this.options.currentFilePath, parentPath: navigation.parentPath, parentNodeId: navigation.parentNodeId, parentNodeText: navigation.parentNodeText, currentMode: this.currentMode
       });
-      void this.callbacks.onOpenMindMap(navigation.parentPath, navigation.parentNodeId);
+      void this.callbacks.onOpenArticleDirectory(navigation.parentPath, navigation.parentNodeId);
     };
 
     if (showCanvasBreadcrumb) {
@@ -3479,6 +3498,19 @@ export class MindMapEditor {
         this.blockReadingLocationCapture();
         this.articleEl.scrollTop = 0;
         this.articleEl.scrollLeft = 0;
+        const directoryFocusNodeId = this.pendingArticleDirectoryFocusNodeId;
+        this.pendingArticleDirectoryFocusNodeId = null;
+        if (directoryFocusNodeId) {
+          const selector = `.mms-article-toc-page a[data-node-id="${CSS.escape(directoryFocusNodeId)}"]`;
+          const target = this.articleEl.querySelector<HTMLElement>(selector);
+          if (target) {
+            target.closest("li")?.addClass("is-return-target");
+            target.scrollIntoView({ block: "center", inline: "nearest" });
+            this.callbacks.onDebugLog("article", "directory-focus-applied", { directoryFocusNodeId, selector, scrollTop: this.articleEl.scrollTop });
+          } else {
+            this.callbacks.onDebugLog("article", "directory-focus-missing", { directoryFocusNodeId, selector });
+          }
+        }
         return;
       }
       const location = latestRequestedLocation ?? previousLocation
@@ -5536,6 +5568,7 @@ export class MindMapEditor {
     }
     this.cancelReadingLocationRestore();
     this.pendingArticleFocusLocation = null;
+    if (mode === "article") this.pendingArticleDirectoryFocusNodeId = null;
     this.history.capture(this.document);
     this.document.view = { ...(this.document.view ?? {}), articleLandingMode: mode };
     this.callbacks.onChange(this.getDocument());
@@ -6496,6 +6529,7 @@ export class MindMapEditor {
     });
     if (!exists) return;
     this.cancelReadingLocationRestore();
+    this.pendingArticleDirectoryFocusNodeId = null;
     const ancestors = findAncestors(this.document.root, id);
     const collapsed = ancestors.filter((node) => node.collapsed);
     if (collapsed.length) {
@@ -7675,7 +7709,7 @@ export class MindMapEditor {
     }
     if (this.currentMode === "article" && event.key === "Escape" && this.options.articleNavigation?.parentPath) {
       event.preventDefault();
-      void this.callbacks.onOpenMindMap(this.options.articleNavigation.parentPath, this.options.articleNavigation.parentNodeId);
+      void this.callbacks.onOpenArticleDirectory(this.options.articleNavigation.parentPath, this.options.articleNavigation.parentNodeId);
       return;
     }
     if (this.readOnly) {

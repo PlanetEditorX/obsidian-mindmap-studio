@@ -5651,7 +5651,7 @@ function readRichTextEditor(editor) {
 // src/editor/editor-modals.ts
 var import_obsidian5 = require("obsidian");
 
-// node_modules/fflate/esm/browser.js
+// ../mms-1.39.13-work/obsidian-mindmap-studio/node_modules/fflate/esm/browser.js
 var u8 = Uint8Array;
 var u16 = Uint16Array;
 var i32 = Int32Array;
@@ -8849,6 +8849,8 @@ function renderDirectory(page, options) {
     const item = list.createEl("li", { cls: `depth-${Math.min(tocDepth, 8)}` });
     item.style.setProperty("--mms-article-depth", String(tocDepth));
     const link = item.createEl("a", { text: entry.displayTitle || entry.title || "\u672A\u547D\u540D\u6807\u9898", href: entry.filePath, attr: { title: entry.breadcrumb.join(" \u203A ") } });
+    link.dataset.nodeId = entry.nodeId;
+    link.dataset.filePath = entry.filePath;
     link.addEventListener("click", (event) => {
       event.preventDefault();
       if (entry.filePath === options.currentFilePath && entry.nodeId) {
@@ -9077,7 +9079,7 @@ function renderArticlePager(page, options) {
   const parent = pager.createEl("button", { cls: "mms-article-pager-parent", attr: { type: "button" } });
   (0, import_obsidian9.setIcon)(parent, "corner-left-up");
   parent.createSpan({ text: "\u8FD4\u56DE\u4E0A\u4E00\u7EA7" });
-  parent.addEventListener("click", () => void options.callbacks.onOpenMindMap(navigation.parentPath, navigation.parentNodeId));
+  parent.addEventListener("click", () => void options.callbacks.onOpenArticleDirectory(navigation.parentPath, navigation.parentNodeId));
   if (next) addTarget("mms-article-pager-next", next.depth <= 1 ? "\u4E0B\u4E00\u7AE0 " : "\u4E0B\u4E00\u8282 ", next);
   else {
     const end = pager.createEl("button", { cls: "mms-article-pager-end", attr: { type: "button" } });
@@ -10788,6 +10790,8 @@ var MindMapEditor = class {
     this.articleScrollButtonCleanup = null;
     this.articleRenderController = null;
     this.pendingArticleFocusLocation = null;
+    /** Parent/home return target used only to reveal the matching directory row, never to open article content. */
+    this.pendingArticleDirectoryFocusNodeId = null;
     /** Two-frame paint gate used only when an article needs an entry transition. */
     this.articleInitialRenderFrame = null;
     this.articleInitialRenderToken = 0;
@@ -10831,6 +10835,7 @@ var MindMapEditor = class {
     this.cancelArticleWindowExpansion();
     this.articleRenderController = null;
     this.pendingArticleFocusLocation = null;
+    this.pendingArticleDirectoryFocusNodeId = null;
     this.cleanupCallbacks.forEach((callback) => callback());
     this.cleanupCallbacks = [];
     (_b2 = this.resizeObserver) == null ? void 0 : _b2.disconnect();
@@ -10860,6 +10865,7 @@ var MindMapEditor = class {
       this.cancelArticleInitialRender();
       this.cancelArticleWindowExpansion();
       this.pendingArticleFocusLocation = null;
+      this.pendingArticleDirectoryFocusNodeId = null;
       this.pendingLocationNavigationKey = null;
       if (this.readingLocationTimer !== null) window.clearTimeout(this.readingLocationTimer);
       if (this.readingCaptureTimer !== null) window.clearTimeout(this.readingCaptureTimer);
@@ -11606,8 +11612,22 @@ var MindMapEditor = class {
   /**
    * Switches the current top-level document to its generated article directory.
    */
-  showArticleDirectory() {
+  showArticleDirectory(focusNodeId) {
+    var _a2;
     this.currentMode = "article";
+    this.cancelReadingLocationRestore();
+    this.pendingArticleFocusLocation = null;
+    this.pendingArticleDirectoryFocusNodeId = focusNodeId && findNode(this.document.root, focusNodeId) ? focusNodeId : null;
+    if (this.pendingArticleDirectoryFocusNodeId) {
+      this.selectedId = this.pendingArticleDirectoryFocusNodeId;
+      this.selectedIds.clear();
+      this.selectedIds.add(this.pendingArticleDirectoryFocusNodeId);
+    }
+    this.callbacks.onDebugLog("article", "show-directory", {
+      requestedFocusNodeId: focusNodeId,
+      directoryFocusNodeId: this.pendingArticleDirectoryFocusNodeId,
+      currentLandingMode: (_a2 = this.document.view) == null ? void 0 : _a2.articleLandingMode
+    });
     this.setArticleLandingMode("toc");
   }
   /**
@@ -12212,7 +12232,7 @@ var MindMapEditor = class {
         parentNodeText: navigation.parentNodeText,
         currentMode: this.currentMode
       });
-      void this.callbacks.onOpenMindMap(navigation.parentPath, navigation.parentNodeId);
+      void this.callbacks.onOpenArticleDirectory(navigation.parentPath, navigation.parentNodeId);
     };
     if (showCanvasBreadcrumb) {
       const shell = this.canvasBreadcrumbEl.createDiv({ cls: "mmc-canvas-breadcrumb-shell" });
@@ -12730,7 +12750,7 @@ var MindMapEditor = class {
     const needsEntryTransition = !reducedMotion && (requestedLocation !== null || !existingPage || existingPage.dataset.nodeId !== this.document.root.id || existingDirectory !== directoryOnly);
     this.cancelArticleWindowExpansion();
     const renderWindow = () => {
-      var _a3, _b3;
+      var _a3, _b3, _c2;
       if (this.currentMode !== "article" || !this.options.articleContextReady) return;
       const latestRequestedLocation = directoryOnly ? null : chooseArticleTransitionLocation(requestedLocation, this.pendingArticleFocusLocation);
       this.pendingArticleFocusLocation = null;
@@ -12758,9 +12778,22 @@ var MindMapEditor = class {
         this.blockReadingLocationCapture();
         this.articleEl.scrollTop = 0;
         this.articleEl.scrollLeft = 0;
+        const directoryFocusNodeId = this.pendingArticleDirectoryFocusNodeId;
+        this.pendingArticleDirectoryFocusNodeId = null;
+        if (directoryFocusNodeId) {
+          const selector = `.mms-article-toc-page a[data-node-id="${CSS.escape(directoryFocusNodeId)}"]`;
+          const target = this.articleEl.querySelector(selector);
+          if (target) {
+            (_b3 = target.closest("li")) == null ? void 0 : _b3.addClass("is-return-target");
+            target.scrollIntoView({ block: "center", inline: "nearest" });
+            this.callbacks.onDebugLog("article", "directory-focus-applied", { directoryFocusNodeId, selector, scrollTop: this.articleEl.scrollTop });
+          } else {
+            this.callbacks.onDebugLog("article", "directory-focus-missing", { directoryFocusNodeId, selector });
+          }
+        }
         return;
       }
-      const location = (_b3 = latestRequestedLocation != null ? latestRequestedLocation : previousLocation) != null ? _b3 : !existingPage ? this.lastReadingLocation : null;
+      const location = (_c2 = latestRequestedLocation != null ? latestRequestedLocation : previousLocation) != null ? _c2 : !existingPage ? this.lastReadingLocation : null;
       if (location) this.restoreReadingLocation("article", location);
       else {
         this.articleEl.scrollTop = previousScroll.top;
@@ -14719,6 +14752,7 @@ var MindMapEditor = class {
     }
     this.cancelReadingLocationRestore();
     this.pendingArticleFocusLocation = null;
+    if (mode === "article") this.pendingArticleDirectoryFocusNodeId = null;
     this.history.capture(this.document);
     this.document.view = { ...(_d = this.document.view) != null ? _d : {}, articleLandingMode: mode };
     this.callbacks.onChange(this.getDocument());
@@ -15618,6 +15652,7 @@ var MindMapEditor = class {
     });
     if (!exists) return;
     this.cancelReadingLocationRestore();
+    this.pendingArticleDirectoryFocusNodeId = null;
     const ancestors = findAncestors(this.document.root, id);
     const collapsed = ancestors.filter((node) => node.collapsed);
     if (collapsed.length) {
@@ -16657,7 +16692,7 @@ var MindMapEditor = class {
     }
     if (this.currentMode === "article" && event.key === "Escape" && ((_a2 = this.options.articleNavigation) == null ? void 0 : _a2.parentPath)) {
       event.preventDefault();
-      void this.callbacks.onOpenMindMap(this.options.articleNavigation.parentPath, this.options.articleNavigation.parentNodeId);
+      void this.callbacks.onOpenArticleDirectory(this.options.articleNavigation.parentPath, this.options.articleNavigation.parentNodeId);
       return;
     }
     if (this.readOnly) {
@@ -17333,7 +17368,7 @@ var AiAskModal = class extends import_obsidian12.Modal {
 
 // src/view.ts
 var VIEW_TYPE_MINDMAP_STUDIO = "mindmap-studio-view";
-var MindMapStudioView = class _MindMapStudioView extends import_obsidian13.TextFileView {
+var MindMapStudioView = class extends import_obsidian13.TextFileView {
   /**
    * 创建 MindMapStudioView 实例，保存依赖和初始状态；实际 DOM 构建通常在 onOpen() 或后续渲染流程中完成。
    *
@@ -17412,12 +17447,21 @@ var MindMapStudioView = class _MindMapStudioView extends import_obsidian13.TextF
    * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
    */
   setViewData(data, clear) {
-    var _a2, _b2, _c, _d, _e, _f;
+    var _a2, _b2, _c, _d, _e, _f, _g, _h;
     const title = (_b2 = (_a2 = this.file) == null ? void 0 : _a2.basename) != null ? _b2 : "\u601D\u7EF4\u5BFC\u56FE";
     this.plugin.logDebug("view", "set-view-data-start", { filePath: (_c = this.file) == null ? void 0 : _c.path, clear, hasEditor: Boolean(this.editor), dataBytes: new TextEncoder().encode(data).byteLength });
     this.document = parseDocument(data, title);
-    const queuedFocusNodeId = this.file ? this.plugin.consumePendingMindMapFocus(this.file.path) : null;
-    this.plugin.logDebug("view", "set-view-data-parsed", { filePath: (_d = this.file) == null ? void 0 : _d.path, rootNodeId: this.document.root.id, queuedFocusNodeId });
+    const queuedDirectory = this.file ? this.plugin.consumePendingMindMapDirectory(this.file.path) : null;
+    const queuedFocusNodeId = queuedDirectory ? null : this.file ? this.plugin.consumePendingMindMapFocus(this.file.path) : null;
+    if (queuedDirectory) {
+      this.document.view = { ...(_d = this.document.view) != null ? _d : {}, articleLandingMode: "toc" };
+    }
+    this.plugin.logDebug("view", "set-view-data-parsed", {
+      filePath: (_e = this.file) == null ? void 0 : _e.path,
+      rootNodeId: this.document.root.id,
+      queuedFocusNodeId,
+      queuedDirectoryFocusNodeId: queuedDirectory == null ? void 0 : queuedDirectory.focusNodeId
+    });
     if (queuedFocusNodeId) {
       this.pendingFocusNodeId = queuedFocusNodeId;
       this.pendingFocusShouldPersist = false;
@@ -17433,7 +17477,7 @@ var MindMapStudioView = class _MindMapStudioView extends import_obsidian13.TextF
     this.readingSections = [];
     this.applyViewClasses();
     if (!this.editor || clear) {
-      (_e = this.editor) == null ? void 0 : _e.destroy();
+      (_f = this.editor) == null ? void 0 : _f.destroy();
       this.contentEl.empty();
       this.editor = new MindMapEditor(this.app, this.contentEl, this.document, {
         onChange: (document2) => {
@@ -17498,11 +17542,12 @@ var MindMapStudioView = class _MindMapStudioView extends import_obsidian13.TextF
           await this.save();
           await this.plugin.openMindMapPath(path, (_c2 = (_b3 = this.file) == null ? void 0 : _b3.path) != null ? _c2 : "", this.leaf, focusNodeId);
         },
-        onOpenArticleDirectory: async (path) => {
+        onOpenArticleDirectory: async (path, focusNodeId) => {
           var _a3, _b3;
+          const sourcePath = (_b3 = (_a3 = this.file) == null ? void 0 : _a3.path) != null ? _b3 : "";
+          this.plugin.logDebug("view", "open-article-directory-callback", { sourcePath, path, focusNodeId });
           await this.save();
-          await this.plugin.openMindMapPath(path, (_b3 = (_a3 = this.file) == null ? void 0 : _a3.path) != null ? _b3 : "", this.leaf);
-          if (this.leaf.view instanceof _MindMapStudioView) this.leaf.view.showArticleDirectory();
+          await this.plugin.openArticleDirectoryPath(path, sourcePath, this.leaf, focusNodeId);
         },
         onSearchMapFamily: () => void this.openMapFamilySearch(),
         onGlobalSearch: () => this.plugin.openGlobalSearch(),
@@ -17553,9 +17598,17 @@ var MindMapStudioView = class _MindMapStudioView extends import_obsidian13.TextF
     } else {
       this.editor.setDocument(this.document, false, this.getEditorOptions());
     }
+    if (queuedDirectory && this.editor) {
+      this.plugin.logDebug("view", "apply-pending-directory", {
+        filePath: (_g = this.file) == null ? void 0 : _g.path,
+        focusNodeId: queuedDirectory.focusNodeId,
+        articleContextReady: this.articleContextReady
+      });
+      this.editor.showArticleDirectory(queuedDirectory.focusNodeId);
+    }
     if (this.pendingFocusNodeId && this.editor) {
       const nodeId = this.pendingFocusNodeId;
-      this.plugin.logDebug("view", "apply-pending-focus", { filePath: (_f = this.file) == null ? void 0 : _f.path, nodeId, persistLocation: this.pendingFocusShouldPersist, articleContextReady: this.articleContextReady });
+      this.plugin.logDebug("view", "apply-pending-focus", { filePath: (_h = this.file) == null ? void 0 : _h.path, nodeId, persistLocation: this.pendingFocusShouldPersist, articleContextReady: this.articleContextReady });
       const persistLocation = this.pendingFocusShouldPersist;
       this.pendingFocusNodeId = null;
       this.pendingFocusShouldPersist = true;
@@ -17576,9 +17629,9 @@ var MindMapStudioView = class _MindMapStudioView extends import_obsidian13.TextF
   /**
    * Displays and persists the generated directory for the top-level article.
    */
-  showArticleDirectory() {
-    var _a2;
-    (_a2 = this.editor) == null ? void 0 : _a2.showArticleDirectory();
+  showArticleDirectory(focusNodeId) {
+    if (!this.editor) return;
+    this.editor.showArticleDirectory(focusNodeId);
   }
   /**
    * 保存相关数据，并保持模型、界面和持久化状态的一致性。
@@ -20487,6 +20540,8 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
     super(...arguments);
     /** Explicit cross-file chapter targets queued before TextFileView receives the new file data. */
     this.pendingMindMapFocus = /* @__PURE__ */ new Map();
+    /** Directory landing intents queued before TextFileView receives the parent/home file data. */
+    this.pendingMindMapDirectory = /* @__PURE__ */ new Map();
     this.settings = DEFAULT_SETTINGS;
     /** 当前会话使用的显示模式；大纲模式不会写成下次启动默认值。 */
     this.activeDisplayMode = DEFAULT_SETTINGS.defaultViewMode;
@@ -21865,6 +21920,20 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
     this.logDebug("navigation", "consume-pending-focus", { filePath: normalized2, nodeId, remaining: this.pendingMindMapFocus.size });
     return nodeId;
   }
+  /** Returns and clears a queued directory landing intent for the file being loaded. */
+  consumePendingMindMapDirectory(filePath) {
+    var _a2;
+    const normalized2 = (0, import_obsidian16.normalizePath)(filePath);
+    const request = (_a2 = this.pendingMindMapDirectory.get(normalized2)) != null ? _a2 : null;
+    this.pendingMindMapDirectory.delete(normalized2);
+    this.logDebug("navigation", "consume-pending-directory", {
+      filePath: normalized2,
+      focusNodeId: request == null ? void 0 : request.focusNodeId,
+      requested: Boolean(request),
+      remaining: this.pendingMindMapDirectory.size
+    });
+    return request;
+  }
   /**
    * 打开as mind map，并保持模型、界面和持久化状态的一致性。
    *
@@ -22799,6 +22868,37 @@ ${uploaded.url}`, 9e3);
     const resolvedFocusNodeId = await this.resolveNavigationFocusNode(resolved, sourcePath, focusNodeId);
     this.logDebug("navigation", "open-path-resolved", { targetPath: resolved.path, requestedFocusNodeId: focusNodeId, resolvedFocusNodeId });
     await this.openAsMindMap(resolved, preferredLeaf, resolvedFocusNodeId);
+  }
+  /** Opens a parent/home map as its generated directory without treating the mount node as an article chapter target. */
+  async openArticleDirectoryPath(path, sourcePath = "", preferredLeaf, focusNodeId) {
+    const normalized2 = (0, import_obsidian16.normalizePath)(path.replace(/^\[\[|\]\]$/g, ""));
+    this.logDebug("navigation", "open-directory-request", { path, normalized: normalized2, sourcePath, focusNodeId });
+    const direct = this.app.vault.getAbstractFileByPath(normalized2);
+    const resolved = direct instanceof import_obsidian16.TFile ? direct : this.app.metadataCache.getFirstLinkpathDest(path, sourcePath);
+    if (!(resolved instanceof import_obsidian16.TFile) || !this.isMindMapFile(resolved)) {
+      this.logDebug("navigation", "open-directory-missing", { path, normalized: normalized2, sourcePath, focusNodeId });
+      new import_obsidian16.Notice(`\u627E\u4E0D\u5230\u7236\u5BFC\u56FE\uFF1A${path}`);
+      return;
+    }
+    let resolvedDirectoryNodeId = focusNodeId;
+    if (!resolvedDirectoryNodeId || !await this.readMindMapDocument(resolved).then((document2) => findNode(document2.root, resolvedDirectoryNodeId)).catch(() => void 0)) {
+      resolvedDirectoryNodeId = await this.resolveNavigationFocusNode(resolved, sourcePath, focusNodeId);
+    }
+    const directoryRequest = { focusNodeId: resolvedDirectoryNodeId };
+    this.pendingMindMapDirectory.set(resolved.path, directoryRequest);
+    this.logDebug("navigation", "queue-directory", { targetPath: resolved.path, resolvedDirectoryNodeId, queued: this.pendingMindMapDirectory.size });
+    const leaf = await this.openAsMindMap(resolved, preferredLeaf);
+    const pendingAfterOpen = this.pendingMindMapDirectory.get(resolved.path);
+    if (pendingAfterOpen === directoryRequest) {
+      this.pendingMindMapDirectory.delete(resolved.path);
+      if (leaf.view instanceof MindMapStudioView) leaf.view.showArticleDirectory(resolvedDirectoryNodeId);
+    }
+    this.logDebug("navigation", "open-directory-resolved", {
+      targetPath: resolved.path,
+      requestedFocusNodeId: focusNodeId,
+      resolvedDirectoryNodeId,
+      consumedDuringLoad: pendingAfterOpen !== directoryRequest
+    });
   }
   /** Validates explicit chapter targets and recovers a stale/missing parent mount node by child-map path. */
   async resolveNavigationFocusNode(targetFile, sourcePath, requestedNodeId) {

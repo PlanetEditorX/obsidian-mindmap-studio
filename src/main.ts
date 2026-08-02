@@ -168,6 +168,8 @@ function matchesRecordedShortcut(event: KeyboardEvent, shortcut: string): boolea
 export default class MindMapStudioPlugin extends Plugin {
   /** Explicit cross-file chapter targets queued before TextFileView receives the new file data. */
   private readonly pendingMindMapFocus = new Map<string, string>();
+  /** Directory landing intents queued before TextFileView receives the parent/home file data. */
+  private readonly pendingMindMapDirectory = new Map<string, { focusNodeId?: string }>();
   settings: MindMapStudioSettings = DEFAULT_SETTINGS;
   /** 当前会话使用的显示模式；大纲模式不会写成下次启动默认值。 */
   private activeDisplayMode: DisplayMode = DEFAULT_SETTINGS.defaultViewMode;
@@ -1682,6 +1684,20 @@ export default class MindMapStudioPlugin extends Plugin {
     return nodeId;
   }
 
+  /** Returns and clears a queued directory landing intent for the file being loaded. */
+  consumePendingMindMapDirectory(filePath: string): { focusNodeId?: string } | null {
+    const normalized = normalizePath(filePath);
+    const request = this.pendingMindMapDirectory.get(normalized) ?? null;
+    this.pendingMindMapDirectory.delete(normalized);
+    this.logDebug("navigation", "consume-pending-directory", {
+      filePath: normalized,
+      focusNodeId: request?.focusNodeId,
+      requested: Boolean(request),
+      remaining: this.pendingMindMapDirectory.size
+    });
+    return request;
+  }
+
   /**
    * 打开as mind map，并保持模型、界面和持久化状态的一致性。
    *
@@ -2618,6 +2634,38 @@ export default class MindMapStudioPlugin extends Plugin {
     const resolvedFocusNodeId = await this.resolveNavigationFocusNode(resolved, sourcePath, focusNodeId);
     this.logDebug("navigation", "open-path-resolved", { targetPath: resolved.path, requestedFocusNodeId: focusNodeId, resolvedFocusNodeId });
     await this.openAsMindMap(resolved, preferredLeaf, resolvedFocusNodeId);
+  }
+
+  /** Opens a parent/home map as its generated directory without treating the mount node as an article chapter target. */
+  async openArticleDirectoryPath(path: string, sourcePath = "", preferredLeaf?: WorkspaceLeaf, focusNodeId?: string): Promise<void> {
+    const normalized = normalizePath(path.replace(/^\[\[|\]\]$/g, ""));
+    this.logDebug("navigation", "open-directory-request", { path, normalized, sourcePath, focusNodeId });
+    const direct = this.app.vault.getAbstractFileByPath(normalized);
+    const resolved = direct instanceof TFile ? direct : this.app.metadataCache.getFirstLinkpathDest(path, sourcePath);
+    if (!(resolved instanceof TFile) || !this.isMindMapFile(resolved)) {
+      this.logDebug("navigation", "open-directory-missing", { path, normalized, sourcePath, focusNodeId });
+      new Notice(`找不到父导图：${path}`);
+      return;
+    }
+    let resolvedDirectoryNodeId = focusNodeId;
+    if (!resolvedDirectoryNodeId || !(await this.readMindMapDocument(resolved).then((document) => findNode(document.root, resolvedDirectoryNodeId!)).catch(() => undefined))) {
+      resolvedDirectoryNodeId = await this.resolveNavigationFocusNode(resolved, sourcePath, focusNodeId);
+    }
+    const directoryRequest = { focusNodeId: resolvedDirectoryNodeId };
+    this.pendingMindMapDirectory.set(resolved.path, directoryRequest);
+    this.logDebug("navigation", "queue-directory", { targetPath: resolved.path, resolvedDirectoryNodeId, queued: this.pendingMindMapDirectory.size });
+    const leaf = await this.openAsMindMap(resolved, preferredLeaf);
+    const pendingAfterOpen = this.pendingMindMapDirectory.get(resolved.path);
+    if (pendingAfterOpen === directoryRequest) {
+      this.pendingMindMapDirectory.delete(resolved.path);
+      if (leaf.view instanceof MindMapStudioView) leaf.view.showArticleDirectory(resolvedDirectoryNodeId);
+    }
+    this.logDebug("navigation", "open-directory-resolved", {
+      targetPath: resolved.path,
+      requestedFocusNodeId: focusNodeId,
+      resolvedDirectoryNodeId,
+      consumedDuringLoad: pendingAfterOpen !== directoryRequest
+    });
   }
 
   /** Validates explicit chapter targets and recovers a stale/missing parent mount node by child-map path. */

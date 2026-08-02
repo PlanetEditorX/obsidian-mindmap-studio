@@ -118,8 +118,17 @@ export class MindMapStudioView extends TextFileView {
     const title = this.file?.basename ?? "思维导图";
     this.plugin.logDebug("view", "set-view-data-start", { filePath: this.file?.path, clear, hasEditor: Boolean(this.editor), dataBytes: new TextEncoder().encode(data).byteLength });
     this.document = parseDocument(data, title);
-    const queuedFocusNodeId = this.file ? this.plugin.consumePendingMindMapFocus(this.file.path) : null;
-    this.plugin.logDebug("view", "set-view-data-parsed", { filePath: this.file?.path, rootNodeId: this.document.root.id, queuedFocusNodeId });
+    const queuedDirectory = this.file ? this.plugin.consumePendingMindMapDirectory(this.file.path) : null;
+    const queuedFocusNodeId = queuedDirectory ? null : (this.file ? this.plugin.consumePendingMindMapFocus(this.file.path) : null);
+    if (queuedDirectory) {
+      this.document.view = { ...(this.document.view ?? {}), articleLandingMode: "toc" };
+    }
+    this.plugin.logDebug("view", "set-view-data-parsed", {
+      filePath: this.file?.path,
+      rootNodeId: this.document.root.id,
+      queuedFocusNodeId,
+      queuedDirectoryFocusNodeId: queuedDirectory?.focusNodeId
+    });
     if (queuedFocusNodeId) {
       this.pendingFocusNodeId = queuedFocusNodeId;
       this.pendingFocusShouldPersist = false;
@@ -191,10 +200,11 @@ export class MindMapStudioView extends TextFileView {
           await this.save();
           await this.plugin.openMindMapPath(path, this.file?.path ?? "", this.leaf, focusNodeId);
         },
-        onOpenArticleDirectory: async (path) => {
+        onOpenArticleDirectory: async (path, focusNodeId) => {
+          const sourcePath = this.file?.path ?? "";
+          this.plugin.logDebug("view", "open-article-directory-callback", { sourcePath, path, focusNodeId });
           await this.save();
-          await this.plugin.openMindMapPath(path, this.file?.path ?? "", this.leaf);
-          if (this.leaf.view instanceof MindMapStudioView) this.leaf.view.showArticleDirectory();
+          await this.plugin.openArticleDirectoryPath(path, sourcePath, this.leaf, focusNodeId);
         },
         onSearchMapFamily: () => void this.openMapFamilySearch(),
         onGlobalSearch: () => this.plugin.openGlobalSearch(),
@@ -237,6 +247,14 @@ export class MindMapStudioView extends TextFileView {
       // transactions from the previous file cannot resolve against the replacement DOM.
       this.editor.setDocument(this.document, false, this.getEditorOptions());
     }
+    if (queuedDirectory && this.editor) {
+      this.plugin.logDebug("view", "apply-pending-directory", {
+        filePath: this.file?.path,
+        focusNodeId: queuedDirectory.focusNodeId,
+        articleContextReady: this.articleContextReady
+      });
+      this.editor.showArticleDirectory(queuedDirectory.focusNodeId);
+    }
     if (this.pendingFocusNodeId && this.editor) {
       const nodeId = this.pendingFocusNodeId;
       this.plugin.logDebug("view", "apply-pending-focus", { filePath: this.file?.path, nodeId, persistLocation: this.pendingFocusShouldPersist, articleContextReady: this.articleContextReady });
@@ -261,8 +279,9 @@ export class MindMapStudioView extends TextFileView {
   /**
    * Displays and persists the generated directory for the top-level article.
    */
-  showArticleDirectory(): void {
-    this.editor?.showArticleDirectory();
+  showArticleDirectory(focusNodeId?: string): void {
+    if (!this.editor) return;
+    this.editor.showArticleDirectory(focusNodeId);
   }
 
   /**

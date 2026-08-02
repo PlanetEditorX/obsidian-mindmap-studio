@@ -362,6 +362,8 @@ function renderDirectory(page: HTMLElement, options: ArticleRendererOptions): vo
     const item = list.createEl("li", { cls: `depth-${Math.min(tocDepth, 8)}` });
     item.style.setProperty("--mms-article-depth", String(tocDepth));
     const link = item.createEl("a", { text: entry.displayTitle || entry.title || "未命名标题", href: entry.filePath, attr: { title: entry.breadcrumb.join(" › ") } });
+    link.dataset.nodeId = entry.nodeId;
+    link.dataset.filePath = entry.filePath;
     link.addEventListener("click", (event) => {
       event.preventDefault();
       if (entry.filePath === options.currentFilePath && entry.nodeId) {
@@ -595,7 +597,7 @@ function renderArticlePager(page: HTMLElement, options: ArticleRendererOptions):
   const parent = pager.createEl("button", { cls: "mms-article-pager-parent", attr: { type: "button" } });
   setIcon(parent, "corner-left-up");
   parent.createSpan({ text: "返回上一级" });
-  parent.addEventListener("click", () => void options.callbacks.onOpenMindMap(navigation.parentPath!, navigation.parentNodeId));
+  parent.addEventListener("click", () => void options.callbacks.onOpenArticleDirectory(navigation.parentPath!, navigation.parentNodeId));
   if (next) addTarget("mms-article-pager-next", next.depth <= 1 ? "下一章 " : "下一节 ", next);
   else {
     const end = pager.createEl("button", { cls: "mms-article-pager-end", attr: { type: "button" } });

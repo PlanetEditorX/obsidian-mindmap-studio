@@ -5574,3 +5574,10 @@ select.mms-question-status {
   padding: 4px 8px;
   font-size: 0.78em;
 }
+
+/* Briefly marks the parent mount row after returning from a child article. */
+.mms-article-toc-page li.is-return-target > a {
+  outline: 2px solid var(--interactive-accent);
+  outline-offset: 3px;
+  border-radius: 4px;
+}

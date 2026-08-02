@@ -48,11 +48,25 @@
 
 ### 显式目标覆盖目录配置与文件切换隔离
 
-显式 `filePath + nodeId` 是一次导航事务的最高优先级。只要待聚焦目标存在，文章落地判断就直接选择正文，不依赖异步上下文中的 `showArticleToc`；上下文返回只能补充目录与编号，不能把本次导航改回目录。
+显式章节 `filePath + nodeId` 是正文导航事务的最高优先级。只要待聚焦章节存在，文章落地判断就直接选择正文，不依赖异步上下文中的 `showArticleToc`；上下文返回只能补充目录与编号。父级返回不再复用这一正文事务，而是使用独立目录意图。
 
 切换物理文件时，编辑器先取消旧阅读恢复、入口动画帧、窗口扩展和 `ResizeObserver`，再在一次 `setDocument(document, false, options)` 中提交新文档与新文件路径。旧文件任务因此无法在新页面挂载后再写入页首位置。
 
 返回父导图前，插件验证请求的父节点 ID 是否真实存在。若缺失或过期，则读取来源子导图关系并按规范化子导图路径扫描父节点树，恢复真实挂载节点；反查失败时退化为父导图根节点并显示提示。
+
+
+### 父级返回与章节导航分离
+
+真实 1.40.6 日志显示，工具栏手动返回目录能够正确产生 `directoryOnly=true`；错误来自子导图返回父导图时仍调用通用 `focusNode(parentNodeId)`。该函数为保证目录章节点击进入正文，会主动把 `articleLandingMode` 改成 `article`，因此父文件虽然保存了“显示目录”，仍会落到原始文章。
+
+现在两种意图完全分离：
+
+- 目录条目、上一篇和下一篇：章节正文意图，携带节点 ID 并调用正文定位。
+- 顶部父级导航、底部“返回上一级”和文章模式 Esc：目录意图，不调用 `focusNode()`。
+
+目录意图在插件层以短生命周期队列保存。父文件 `setViewData()` 在构造 `MindMapEditor` 之前消费它，先把内存文档的 `articleLandingMode` 设为 `toc`，因此第一帧就是目录骨架/目录页面。父节点 ID 仅在目录真实 DOM 挂载后用于查找 `a[data-node-id]`、滚动到该条目并短暂标记；它不会创建正文 `ReadingLocation`，也不会参与 5 KB 正文窗口。
+
+调试日志应出现 `open-directory-request → queue-directory → consume-pending-directory → apply-pending-directory → show-directory → render-decision(directoryOnly=true)`；该链路不应出现针对父节点的 `focus-node-start`。
 
 ### 上下文刷新目标优先级
 

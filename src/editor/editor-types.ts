@@ -55,7 +55,7 @@ export interface MindMapEditorCallbacks {
   onExtractToSubmap: (node: MindMapNode) => Promise<MindMapSubmap>;
   onMergeFromSubmap: () => Promise<void>;
   onOpenMindMap: (path: string, focusNodeId?: string) => void | Promise<void>;
-  onOpenArticleDirectory: (path: string) => void | Promise<void>;
+  onOpenArticleDirectory: (path: string, focusNodeId?: string) => void | Promise<void>;
   onSearchMapFamily: () => void;
   onGlobalSearch: () => void;
   onAskAi: (nodeId?: string) => void | Promise<void>;
