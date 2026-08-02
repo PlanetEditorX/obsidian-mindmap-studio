@@ -1,5 +1,16 @@
 # Modified Files
 
+## 1.38.8 设置分区与文章锁状态记忆
+
+- `src/settings.ts`：一级设置分类默认全部收起，新增持久化展开列表；搜索驱动的临时展开不会污染用户记忆。“进入文章模式”增加“记住上次文章状态”。
+- `src/article/display-mode.ts`：新增文章入口策略规范化与锁状态解析纯函数，支持 `locked`、`inherit`、`remember` 三种策略。
+- `src/editor/editor-types.ts`、`src/editor/editor.ts`、`src/view.ts`、`src/main.ts`：在插件、视图和编辑器边界传递并保存文章模式独立锁状态，避免写回文件级 `view.readOnly`。
+- `tests/display-mode.test.mjs`、`tests/settings-layout.test.mjs`、`scripts/test.mjs`：新增文章记忆策略、设置分类默认收起与持久化契约测试，单元测试扩展至 267 项。
+- `README.md`、`CHANGELOG.md`、`docs/ARCHITECTURE.md`、`docs/DATA_MODEL.md`、`docs/SPECIAL_FEATURES.md`、`docs/TESTING.md`、`docs/FUNCTION_REFERENCE.md`：同步用户行为、数据边界、架构和验证说明。
+- `package.json`、`package-lock.json`、`manifest.json`、`versions.json`、`update.json`：统一版本元数据为 1.38.8，并在最终安装包生成后写入 SHA-256。
+- `TEST_RESULTS.md`、Codex 项目衔接页：记录完整验证和真实 Obsidian 待验证事项。
+- `main.js`：由本轮 TypeScript 源码重新生产构建。
+
 ## 1.38.7 缓存恢复分帧与 hydration 线性化
 
 - `src/editor/article-renderer.ts`：缓存预扫描不再同步恢复所有章节 HTML；恢复、净化、交互绑定和普通节点重建共用帧预算。增加单次渲染内容块 `WeakMap`，并对缓存章节的 `data-block-id` 一次建索引。

@@ -7,6 +7,25 @@ import type { DisplayMode } from "../core/model";
 
 const ALL_MODES: readonly DisplayMode[] = ["mindmap", "outline", "article", "reading", "question-bank"];
 
+/** Controls how article mode chooses its lock state when entered. */
+export type ArticleEntryLockMode = "locked" | "inherit" | "remember";
+
+/** Normalizes persisted article-entry policies from older or malformed settings. */
+export function normalizeArticleEntryLockMode(value: unknown): ArticleEntryLockMode {
+  return value === "inherit" || value === "remember" ? value : "locked";
+}
+
+/** Resolves article mode's lock state without allowing unrelated modes to overwrite remembered state. */
+export function resolveArticleEntryReadOnly(
+  mode: ArticleEntryLockMode,
+  inheritedReadOnly: boolean,
+  rememberedReadOnly: boolean
+): boolean {
+  if (mode === "remember") return rememberedReadOnly;
+  if (mode === "inherit") return inheritedReadOnly;
+  return true;
+}
+
 /** 去重并过滤设置中未知的显示模式，空列表恢复为导图模式。 */
 export function normalizeDisplayModes(value: readonly unknown[]): DisplayMode[] {
   const modes = value.filter((mode): mode is DisplayMode => ALL_MODES.includes(mode as DisplayMode));

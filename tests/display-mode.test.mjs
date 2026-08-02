@@ -28,3 +28,17 @@ test("only outline is session-only", () => {
   assert.equal(displayMode.shouldPersistDisplayMode("article"), true);
   assert.equal(displayMode.shouldPersistDisplayMode("reading"), true);
 });
+
+
+test("article entry policy supports a mode-local remembered lock state", () => {
+  assert.equal(displayMode.normalizeArticleEntryLockMode("locked"), "locked");
+  assert.equal(displayMode.normalizeArticleEntryLockMode("inherit"), "inherit");
+  assert.equal(displayMode.normalizeArticleEntryLockMode("remember"), "remember");
+  assert.equal(displayMode.normalizeArticleEntryLockMode("unknown"), "locked");
+
+  assert.equal(displayMode.resolveArticleEntryReadOnly("locked", false, false), true);
+  assert.equal(displayMode.resolveArticleEntryReadOnly("inherit", false, true), false);
+  assert.equal(displayMode.resolveArticleEntryReadOnly("inherit", true, false), true);
+  assert.equal(displayMode.resolveArticleEntryReadOnly("remember", true, false), false);
+  assert.equal(displayMode.resolveArticleEntryReadOnly("remember", false, true), true);
+});

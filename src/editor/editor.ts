@@ -70,6 +70,7 @@ import { TOOLBAR_ITEMS } from "../settings";
 import { appearanceFromThemePreset, MINDMAP_THEME_PRESETS } from "../themes";
 import { articleNumberLabel, articleTocDepth, buildArticleNodeInfo, DISPLAY_MODE_ICONS, DISPLAY_MODE_LABELS, readingAnchorPart, resolveArticleTocMaxDepth } from "../article/modes";
 import { resolveArticleStyle } from "../article/article-style";
+import { resolveArticleEntryReadOnly } from "../article/display-mode";
 import type { ArticleRenderCacheSnapshot } from "../article/article-render-cache";
 import {
   createReadingLocation,
@@ -1300,9 +1301,12 @@ export class MindMapEditor {
     this.history = new DocumentHistory(() => this.options.historyLimit);
     this.document = cloneDocument(document);
     this.currentMode = this.resolveMode(options.defaultViewMode);
-    this.readOnly = this.currentMode === "reading" || this.currentMode === "question-bank"
-      || this.document.view?.readOnly === true
-      || (this.currentMode === "article" && this.options.articleEntryLockMode === "locked");
+    const documentReadOnly = this.document.view?.readOnly === true;
+    this.readOnly = this.currentMode === "article"
+      ? resolveArticleEntryReadOnly(this.options.articleEntryLockMode, documentReadOnly, this.options.articleLastReadOnly)
+      : this.currentMode === "reading" || this.currentMode === "question-bank"
+        ? true
+        : documentReadOnly;
     this.lastReadingLocation = options.readingLocation;
     const restoredLocation = this.resolveStoredLocation();
     this.selectedId = restoredLocation?.filePath === options.currentFilePath
@@ -1354,9 +1358,12 @@ export class MindMapEditor {
   setDocument(document: MindMapDocument, resetHistory = true): void {
     this.document = cloneDocument(document);
     this.currentMode = this.resolveMode(this.options.defaultViewMode);
-    this.readOnly = this.currentMode === "reading" || this.currentMode === "question-bank"
-      || this.document.view?.readOnly === true
-      || (this.currentMode === "article" && this.options.articleEntryLockMode === "locked");
+    const documentReadOnly = this.document.view?.readOnly === true;
+    this.readOnly = this.currentMode === "article"
+      ? resolveArticleEntryReadOnly(this.options.articleEntryLockMode, documentReadOnly, this.options.articleLastReadOnly)
+      : this.currentMode === "reading" || this.currentMode === "question-bank"
+        ? true
+        : documentReadOnly;
     const restored = this.resolveStoredLocation();
     this.selectedId = restored?.filePath === this.options.currentFilePath ? restored.nodeId : this.document.root.id;
     if (resetHistory) {
@@ -1437,7 +1444,11 @@ export class MindMapEditor {
       const preserveReadingEdit = previousMode === "reading" && resolved === "article" && !this.readOnly;
       this.currentMode = resolved;
       this.readOnly = resolved === "article"
-        ? preserveReadingEdit || this.options.articleEntryLockMode === "inherit" ? this.readOnly : true
+        ? resolveArticleEntryReadOnly(
+          this.options.articleEntryLockMode,
+          preserveReadingEdit ? false : this.readOnly,
+          this.options.articleLastReadOnly
+        )
         : resolved === "reading" || resolved === "question-bank"
           ? true
         : previousMode === "article" || previousMode === "reading" || previousMode === "question-bank"
@@ -1514,7 +1525,11 @@ export class MindMapEditor {
     }
     this.currentMode = mode;
     if (mode === "article" && mode !== previousMode) {
-      this.readOnly = this.options.articleEntryLockMode === "locked" ? true : this.readOnly;
+      this.readOnly = resolveArticleEntryReadOnly(
+        this.options.articleEntryLockMode,
+        this.readOnly,
+        this.options.articleLastReadOnly
+      );
     } else if ((mode === "reading" || mode === "question-bank") && mode !== previousMode) {
       this.readOnly = true;
     } else if ((previousMode === "article" || previousMode === "reading" || previousMode === "question-bank") && mode !== "article" && mode !== "reading" && mode !== "question-bank") {
@@ -1762,7 +1777,7 @@ export class MindMapEditor {
       const location = this.captureCurrentLocation("reading") ?? this.lastReadingLocation;
       if (location) this.rememberLocation(location, true);
       this.currentMode = "article";
-      this.persistReadOnlyState();
+      this.rememberArticleReadOnlyState();
       this.render();
       const resolved = this.restoreReadingLocation("article", location);
       const navigationLocation = resolved
@@ -1772,7 +1787,8 @@ export class MindMapEditor {
       new Notice("通读模式已切换为文章编辑模式");
       return;
     }
-    if (this.currentMode !== "article" && this.currentMode !== "reading") this.persistReadOnlyState();
+    if (this.currentMode === "article") this.rememberArticleReadOnlyState();
+    else if (this.currentMode !== "reading") this.persistReadOnlyState();
     this.updateModeUi();
     this.applyReadOnlyStateToRenderedContent();
     if (scroller && scrollPosition) {
@@ -2503,6 +2519,13 @@ export class MindMapEditor {
       this.callbacks.onChange(this.getDocument());
       this.markSaving();
     }, 0);
+  }
+
+  /** Persists article mode's own lock state without writing it into the current mind-map document. */
+  private rememberArticleReadOnlyState(): void {
+    if (this.currentMode !== "article" || this.options.articleLastReadOnly === this.readOnly) return;
+    this.options = { ...this.options, articleLastReadOnly: this.readOnly };
+    void this.callbacks.onArticleReadOnlyChange(this.readOnly);
   }
 
   /** Updates edit affordances in the existing DOM without rebuilding the map or article. */

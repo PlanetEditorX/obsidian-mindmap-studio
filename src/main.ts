@@ -43,6 +43,7 @@ import {
   createImageHostConfig,
   applyImageHostPreset,
   normalizeSettingsSectionOrder,
+  normalizeSettingsExpandedSections,
   normalizeReturnToTopVisibility,
   settingsToAppearance,
   type ImageHostChoice,
@@ -70,7 +71,7 @@ import {
   type ArticleTocEntry,
   type ReadingSection
 } from "./article/modes";
-import { resolveStartupDisplayMode, shouldPersistDisplayMode } from "./article/display-mode";
+import { normalizeArticleEntryLockMode, resolveStartupDisplayMode, shouldPersistDisplayMode } from "./article/display-mode";
 import type { DisplayMode } from "./core/model";
 import { normalizeReadingLocation, renameReadingLocationPath } from "./article/reading-location";
 import { normalizeAiProfileConfig } from "./ai/config";
@@ -738,6 +739,7 @@ export default class MindMapStudioPlugin extends Plugin {
         ? raw.lastImportFolder.trim().slice(0, 4000)
         : DEFAULT_SETTINGS.lastImportFolder,
       settingsSectionOrder: normalizeSettingsSectionOrder(raw.settingsSectionOrder),
+      settingsExpandedSections: normalizeSettingsExpandedSections(raw.settingsExpandedSections),
       syncTitleToFilename: raw.syncTitleToFilename !== false,
       deleteLocalAfterUpload: raw.deleteLocalAfterUpload !== false,
       imageFailoverEnabled: raw.imageFailoverEnabled !== false,
@@ -769,7 +771,8 @@ export default class MindMapStudioPlugin extends Plugin {
       defaultViewMode: typeof raw.defaultViewMode === "string"
         ? raw.defaultViewMode as DisplayMode
         : DEFAULT_SETTINGS.defaultViewMode,
-      articleEntryLockMode: raw.articleEntryLockMode === "inherit" ? "inherit" : "locked",
+      articleEntryLockMode: normalizeArticleEntryLockMode(raw.articleEntryLockMode),
+      articleLastReadOnly: raw.articleLastReadOnly !== false,
       readingLocations: typeof raw.readingLocations === "object" && raw.readingLocations
         ? Object.fromEntries(Object.entries(raw.readingLocations).flatMap(([path, value]) => {
           const location = normalizeReadingLocation(value);
