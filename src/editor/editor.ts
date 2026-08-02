@@ -72,7 +72,7 @@ import { articleNumberLabel, articleTocDepth, buildArticleNodeInfo, DISPLAY_MODE
 import { resolveArticleStyle } from "../article/article-style";
 import { resolveArticleEntryReadOnly } from "../article/display-mode";
 import {
-  chooseArticleRefreshLocation,
+  chooseArticleLandingRefreshLocation,
   chooseArticleTransitionLocation,
   createReadingLocation,
   resolveReadingLocation,
@@ -1517,11 +1517,29 @@ export class MindMapEditor {
     // must outrank the location captured from the pre-context skeleton and the persisted
     // family reading position; otherwise setOptions() can reopen the previous child map or
     // replace the requested chapter with the document root before the two-frame mount.
+    const articleDirectoryActive = this.currentMode === "article"
+      && options.showArticleToc
+      && options.articleTocEntries.length > 0
+      && this.document.view?.articleLandingMode !== "article";
     const locationToRestore = this.currentMode === "mindmap" && !modeChanged
       ? null
-      : chooseArticleRefreshLocation(preferredCurrentLocation, renderedLocation, this.lastReadingLocation);
+      : chooseArticleLandingRefreshLocation(
+        articleDirectoryActive,
+        preferredCurrentLocation,
+        renderedLocation,
+        this.lastReadingLocation
+      );
+    if (articleDirectoryActive) {
+      // A generated directory is a terminal landing page, not a transient article
+      // skeleton. Restoring a persisted child-map location here immediately invokes
+      // onDisplayModeChange(), reopens the child map and makes "return to directory"
+      // appear to fail even though the directory was mounted successfully.
+      this.pendingLocationNavigationKey = null;
+      this.cancelReadingLocationRestore();
+    }
     this.callbacks.onDebugLog("navigation", "set-options-restore-choice", {
       articleContextOnly,
+      articleDirectoryActive,
       preferCurrentFileLocation: options.preferCurrentFileLocation,
       requestedPreferredNodeId: options.preferredCurrentNodeId,
       preferredNodeId: preferredCurrentLocation?.nodeIds[0],

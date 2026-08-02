@@ -5488,6 +5488,9 @@ function chooseArticleRefreshLocation(preferredCurrent, rendered, remembered) {
   var _a2, _b2;
   return (_b2 = (_a2 = preferredCurrent != null ? preferredCurrent : rendered) != null ? _a2 : remembered) != null ? _b2 : null;
 }
+function chooseArticleLandingRefreshLocation(directoryActive, preferredCurrent, rendered, remembered) {
+  return directoryActive ? null : chooseArticleRefreshLocation(preferredCurrent, rendered, remembered);
+}
 function chooseArticleTransitionLocation(requested, pendingRestore) {
   var _a2;
   return (_a2 = requested != null ? requested : pendingRestore) != null ? _a2 : null;
@@ -5651,7 +5654,7 @@ function readRichTextEditor(editor) {
 // src/editor/editor-modals.ts
 var import_obsidian5 = require("obsidian");
 
-// node_modules/fflate/esm/browser.js
+// ../mms-1.39.13-work/obsidian-mindmap-studio/node_modules/fflate/esm/browser.js
 var u8 = Uint8Array;
 var u16 = Uint16Array;
 var i32 = Int32Array;
@@ -10896,7 +10899,7 @@ var MindMapEditor = class {
    * @param articleContextOnly 是否仅由异步文章族上下文刷新触发。
    */
   setOptions(options, articleContextOnly = false) {
-    var _a2, _b2, _c, _d, _e, _f, _g;
+    var _a2, _b2, _c, _d, _e, _f, _g, _h;
     const previousOptions = this.options;
     const activeRestoreLocation = ((_a2 = this.activeReadingRestore) == null ? void 0 : _a2.mode) === this.currentMode ? this.activeReadingRestore.location : null;
     const renderedLocation = this.currentMode === "mindmap" ? null : (_b2 = activeRestoreLocation != null ? activeRestoreLocation : this.captureCurrentLocation(this.currentMode)) != null ? _b2 : this.lastReadingLocation;
@@ -10960,14 +10963,25 @@ var MindMapEditor = class {
     if (articleContextOnly && !modeChanged && !modesChanged && !toolbarChanged && this.currentMode !== "reading" && (this.currentMode !== "article" || !articleContextPresentationChanged)) return;
     if (this.inlineEditingId && !modesChanged && !toolbarChanged && !globalModeChanged) return;
     this.render();
-    const locationToRestore = this.currentMode === "mindmap" && !modeChanged ? null : chooseArticleRefreshLocation(preferredCurrentLocation, renderedLocation, this.lastReadingLocation);
+    const articleDirectoryActive = this.currentMode === "article" && options.showArticleToc && options.articleTocEntries.length > 0 && ((_g = this.document.view) == null ? void 0 : _g.articleLandingMode) !== "article";
+    const locationToRestore = this.currentMode === "mindmap" && !modeChanged ? null : chooseArticleLandingRefreshLocation(
+      articleDirectoryActive,
+      preferredCurrentLocation,
+      renderedLocation,
+      this.lastReadingLocation
+    );
+    if (articleDirectoryActive) {
+      this.pendingLocationNavigationKey = null;
+      this.cancelReadingLocationRestore();
+    }
     this.callbacks.onDebugLog("navigation", "set-options-restore-choice", {
       articleContextOnly,
+      articleDirectoryActive,
       preferCurrentFileLocation: options.preferCurrentFileLocation,
       requestedPreferredNodeId: options.preferredCurrentNodeId,
       preferredNodeId: preferredCurrentLocation == null ? void 0 : preferredCurrentLocation.nodeIds[0],
       renderedNodeId: renderedLocation == null ? void 0 : renderedLocation.nodeIds[0],
-      rememberedNodeId: (_g = this.lastReadingLocation) == null ? void 0 : _g.nodeIds[0],
+      rememberedNodeId: (_h = this.lastReadingLocation) == null ? void 0 : _h.nodeIds[0],
       chosenNodeId: locationToRestore == null ? void 0 : locationToRestore.nodeIds[0],
       chosenFilePath: locationToRestore == null ? void 0 : locationToRestore.filePath
     });

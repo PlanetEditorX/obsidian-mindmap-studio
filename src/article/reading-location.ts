@@ -236,6 +236,23 @@ export function chooseArticleRefreshLocation(
 }
 
 /**
+ * Chooses the semantic location used after an article refresh while respecting
+ * the generated directory as a terminal landing page. A directory must never
+ * restore a remembered child-map location, because that would immediately
+ * reopen the child and make a successful parent-directory return disappear.
+ */
+export function chooseArticleLandingRefreshLocation(
+  directoryActive: boolean,
+  preferredCurrent: ReadingLocation | null | undefined,
+  rendered: ReadingLocation | null | undefined,
+  remembered: ReadingLocation | null | undefined
+): ReadingLocation | null {
+  return directoryActive
+    ? null
+    : chooseArticleRefreshLocation(preferredCurrent, rendered, remembered);
+}
+
+/**
  * Chooses the target owned by one article entry transition. The target captured when
  * the transition began outranks a later generic restore request; a genuinely newer
  * explicit click starts a new render token and therefore a new transition.
