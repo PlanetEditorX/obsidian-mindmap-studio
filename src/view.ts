@@ -115,8 +115,10 @@ export class MindMapStudioView extends TextFileView {
    */
   setViewData(data: string, clear: boolean): void {
     const title = this.file?.basename ?? "思维导图";
+    this.plugin.logDebug("view", "set-view-data-start", { filePath: this.file?.path, clear, hasEditor: Boolean(this.editor), dataBytes: new TextEncoder().encode(data).byteLength });
     this.document = parseDocument(data, title);
     const queuedFocusNodeId = this.file ? this.plugin.consumePendingMindMapFocus(this.file.path) : null;
+    this.plugin.logDebug("view", "set-view-data-parsed", { filePath: this.file?.path, rootNodeId: this.document.root.id, queuedFocusNodeId });
     if (queuedFocusNodeId) {
       this.pendingFocusNodeId = queuedFocusNodeId;
       this.pendingFocusShouldPersist = false;
@@ -183,6 +185,7 @@ export class MindMapStudioView extends TextFileView {
           await this.plugin.mergeFromSubmap(this.file);
         },
         onOpenMindMap: async (path, focusNodeId) => {
+          this.plugin.logDebug("view", "open-mind-map-callback", { sourcePath: this.file?.path, path, focusNodeId });
           await this.save();
           await this.plugin.openMindMapPath(path, this.file?.path ?? "", this.leaf, focusNodeId);
         },
@@ -224,14 +227,17 @@ export class MindMapStudioView extends TextFileView {
             autoLineNumbersMinLines: this.plugin.settings.codeAutoLineNumbersMinLines
           },
           renderMarkdown: (markdown, target) => MarkdownRenderer.render(this.app, markdown, target, this.file?.path ?? "", this)
-        })
+        }),
+        onDebugLog: (scope, event, details) => this.plugin.logDebug(scope, event, { filePath: this.file?.path, ...((details && typeof details === "object" && !Array.isArray(details)) ? details as Record<string, unknown> : { details }) })
       }, this.getEditorOptions());
     } else {
-      this.editor.setDocument(this.document, false);
-      this.editor.setOptions(this.getEditorOptions());
+      // Apply the new file path/options atomically with the new document so stale scroll
+      // transactions from the previous file cannot resolve against the replacement DOM.
+      this.editor.setDocument(this.document, false, this.getEditorOptions());
     }
     if (this.pendingFocusNodeId && this.editor) {
       const nodeId = this.pendingFocusNodeId;
+      this.plugin.logDebug("view", "apply-pending-focus", { filePath: this.file?.path, nodeId, persistLocation: this.pendingFocusShouldPersist, articleContextReady: this.articleContextReady });
       const persistLocation = this.pendingFocusShouldPersist;
       this.pendingFocusNodeId = null;
       this.pendingFocusShouldPersist = true;
@@ -324,6 +330,7 @@ export class MindMapStudioView extends TextFileView {
    * 立即把视图跳回刚离开的父导图或子导图。
    */
   markExplicitNavigation(focusNodeId?: string): void {
+    this.plugin.logDebug("view", "mark-explicit-navigation", { filePath: this.file?.path, focusNodeId, hasEditor: Boolean(this.editor), articleContextReady: this.articleContextReady });
     this.preferCurrentFileOnNextContextRefresh = true;
     const nodeId = focusNodeId ?? this.document?.root.id;
     if (!nodeId) return;
@@ -536,6 +543,7 @@ export class MindMapStudioView extends TextFileView {
     const document = this.editor?.getDocument() ?? this.document;
     if (!file || !document) return;
     const token = ++this.articleContextToken;
+    this.plugin.logDebug("article-context", "refresh-start", { filePath: file.path, token, pendingFocusNodeId: this.pendingFocusNodeId, preferCurrentFile: this.preferCurrentFileOnNextContextRefresh });
     try {
       const context = await this.plugin.buildArticleContext(file, document);
       if (token !== this.articleContextToken || this.file?.path !== file.path) return;
@@ -546,10 +554,12 @@ export class MindMapStudioView extends TextFileView {
       this.readingSections = context.readingSections;
       this.articleContextReady = true;
       const preferCurrentFile = this.preferCurrentFileOnNextContextRefresh;
+      this.plugin.logDebug("article-context", "refresh-success", { filePath: file.path, token, baseDepth: context.baseDepth, tocEntries: context.tocEntries.length, showToc: context.showToc, readingSections: context.readingSections.length, preferCurrentFile });
       this.editor?.setOptions(this.getEditorOptions(preferCurrentFile), true);
       this.preferCurrentFileOnNextContextRefresh = false;
     } catch (error) {
       if (token !== this.articleContextToken || this.file?.path !== file.path) return;
+      this.plugin.logDebug("article-context", "refresh-failed", { filePath: file.path, token, error });
       console.warn("MindMap Studio article context refresh failed", error);
       this.articleBaseDepth = 0;
       this.articleTocEntries = [];
@@ -558,6 +568,7 @@ export class MindMapStudioView extends TextFileView {
       this.readingSections = [{ filePath: file.path, document, baseDepth: 0 }];
       this.articleContextReady = true;
       const preferCurrentFile = this.preferCurrentFileOnNextContextRefresh;
+      this.plugin.logDebug("article-context", "refresh-fallback", { filePath: file.path, token, preferCurrentFile });
       this.editor?.setOptions(this.getEditorOptions(preferCurrentFile), true);
       this.preferCurrentFileOnNextContextRefresh = false;
     }

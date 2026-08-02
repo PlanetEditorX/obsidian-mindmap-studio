@@ -2250,7 +2250,8 @@ var DEFAULT_SETTINGS = {
   wrongBookMasteryCount: 3,
   lastImportFolder: "",
   settingsSectionOrder: [...SETTINGS_SECTION_TITLES],
-  settingsExpandedSections: []
+  settingsExpandedSections: [],
+  debugMode: false
 };
 function normalizeSettingsExpandedSections(value) {
   if (!Array.isArray(value)) return [];
@@ -3336,6 +3337,10 @@ var MindMapStudioSettingTab = class extends import_obsidian.PluginSettingTab {
       }
     }));
     containerEl.createEl("h3", { text: "\u7BA1\u7406\u914D\u7F6E" });
+    new import_obsidian.Setting(containerEl).setName("\u8C03\u8BD5\u6A21\u5F0F").setDesc("\u5F00\u542F\u540E\u4ECE\u63D2\u4EF6\u542F\u52A8\u6216\u672C\u6B21\u542F\u7528\u5F00\u59CB\uFF0C\u5728\u5185\u5B58\u4E2D\u8BB0\u5F55\u64CD\u4F5C\u3001\u5BFC\u822A\u76EE\u6807\u3001\u6587\u7AE0\u7A97\u53E3\u3001\u6EDA\u52A8\u5B9A\u4F4D\u548C\u5F02\u5E38\u3002\u4E0D\u4F1A\u8BB0\u5F55\u6587\u7AE0\u6B63\u6587\uFF1B\u91CD\u542F\u540E\u6E05\u7A7A\u3002\u53EF\u5728\u547D\u4EE4\u9762\u677F\u6267\u884C\u201C\u590D\u5236 MindMap Studio \u8C03\u8BD5\u8BB0\u5F55\u201D\u3002").addToggle((toggle) => toggle.setValue(this.plugin.settings.debugMode).onChange(async (value) => {
+      await this.plugin.setDebugMode(value);
+      new import_obsidian.Notice(value ? "\u8C03\u8BD5\u6A21\u5F0F\u5DF2\u5F00\u542F\uFF0C\u5F00\u59CB\u8BB0\u5F55\u672C\u6B21\u4F1A\u8BDD" : "\u8C03\u8BD5\u6A21\u5F0F\u5DF2\u5173\u95ED");
+    }));
     new import_obsidian.Setting(containerEl).setName("\u5BFC\u51FA\u914D\u7F6E").setDesc("\u5C06\u5F53\u524D\u5168\u5C40\u63D2\u4EF6\u8BBE\u7F6E\u5BFC\u51FA\u4E3A JSON \u6587\u4EF6\u3002").addButton((button) => button.setButtonText("\u5BFC\u51FA\u914D\u7F6E").onClick(() => void this.exportSettings()));
     new import_obsidian.Setting(containerEl).setName("\u5BFC\u5165\u914D\u7F6E").setDesc("\u5BFC\u5165 JSON \u914D\u7F6E\u4F1A\u8986\u76D6\u5F53\u524D\u5168\u5C40\u8BBE\u7F6E\uFF0C\u4E0D\u4F1A\u4FEE\u6539\u4EFB\u4F55\u5BFC\u56FE\u6587\u4EF6\u3002").addButton((button) => button.setButtonText("\u5BFC\u5165\u914D\u7F6E").onClick(() => this.openSettingsImportPicker()));
     new import_obsidian.Setting(containerEl).setName("\u68C0\u67E5\u63D2\u4EF6\u66F4\u65B0").setDesc(`\u5F53\u524D\u7248\u672C ${this.plugin.manifest.version}\u3002\u4ECE\u516C\u5F00\u66F4\u65B0\u4FE1\u606F\u4E0B\u8F7D\u5E76\u6821\u9A8C\u5B89\u88C5\u5305\uFF1B\u5B8C\u6210\u540E\u53EF\u7ACB\u5373\u91CD\u65B0\u52A0\u8F7D Obsidian\u3002`).addButton((button) => button.setButtonText("\u68C0\u67E5\u66F4\u65B0").onClick(async () => {
@@ -10837,11 +10842,28 @@ var MindMapEditor = class {
    * @param document 要处理的思维导图文档。
    * @param resetHistory 该参数用于 set document 流程中的输入或控制。
    */
-  setDocument(document2, resetHistory = true) {
-    var _a2;
+  setDocument(document2, resetHistory = true, options) {
+    var _a2, _b2, _c;
+    const previousFilePath = this.options.currentFilePath;
+    const nextFilePath = (_a2 = options == null ? void 0 : options.currentFilePath) != null ? _a2 : previousFilePath;
+    const fileChanged = previousFilePath !== nextFilePath;
+    if (fileChanged) {
+      this.cancelReadingLocationRestore();
+      this.cancelArticleInitialRender();
+      this.cancelArticleWindowExpansion();
+      this.pendingArticleFocusLocation = null;
+      this.pendingLocationNavigationKey = null;
+      if (this.readingLocationTimer !== null) window.clearTimeout(this.readingLocationTimer);
+      if (this.readingCaptureTimer !== null) window.clearTimeout(this.readingCaptureTimer);
+      this.readingLocationTimer = null;
+      this.readingCaptureTimer = null;
+    }
+    if (options) this.options = options;
+    if (fileChanged) this.lastReadingLocation = this.options.readingLocation;
+    this.callbacks.onDebugLog("view", "editor-set-document", { previousFilePath, nextFilePath, fileChanged, resetHistory, readingLocationNodeId: (_b2 = this.lastReadingLocation) == null ? void 0 : _b2.nodeIds[0] });
     this.document = cloneDocument(document2);
     this.currentMode = this.resolveMode(this.options.defaultViewMode);
-    const documentReadOnly = ((_a2 = this.document.view) == null ? void 0 : _a2.readOnly) === true;
+    const documentReadOnly = ((_c = this.document.view) == null ? void 0 : _c.readOnly) === true;
     this.readOnly = this.currentMode === "article" ? resolveArticleEntryReadOnly(this.options.articleEntryLockMode, documentReadOnly, this.options.articleLastReadOnly) : this.currentMode === "reading" || this.currentMode === "question-bank" ? true : documentReadOnly;
     const restored = this.resolveStoredLocation();
     this.selectedId = (restored == null ? void 0 : restored.filePath) === this.options.currentFilePath ? restored.nodeId : this.document.root.id;
@@ -11131,6 +11153,7 @@ var MindMapEditor = class {
     this.cancelReadingLocationRestore();
     const token = this.readingRestoreToken;
     this.activeReadingRestore = { token, mode, location, resolved };
+    this.callbacks.onDebugLog("navigation", "restore-transaction-start", { token, mode, filePath: resolved.filePath, nodeId: resolved.nodeId, nodeRatio: resolved.nodeRatio, viewportRatio: resolved.viewportRatio });
     const apply = () => {
       var _a2;
       if (((_a2 = this.activeReadingRestore) == null ? void 0 : _a2.token) !== token || this.currentMode !== mode) return false;
@@ -11220,7 +11243,10 @@ var MindMapEditor = class {
     }
     const selector = mode === "outline" ? `.mms-outline-row[data-node-id="${CSS.escape(resolved.nodeId)}"]` : mode === "article" ? resolved.nodeId === this.document.root.id ? `.mms-article-document-title[data-node-id="${CSS.escape(resolved.nodeId)}"]` : `.mms-article-node[data-node-id="${CSS.escape(resolved.nodeId)}"]` : `[data-node-id="${CSS.escape(resolved.nodeId)}"][data-file-path="${CSS.escape(resolved.filePath)}"]`;
     const target = scroller.querySelector(selector);
-    if (!target) return false;
+    if (!target) {
+      this.callbacks.onDebugLog("navigation", "restore-target-missing", { mode, filePath: resolved.filePath, nodeId: resolved.nodeId, selector, selectedId: this.selectedId, hasController: Boolean(this.articleRenderController) });
+      return false;
+    }
     this.blockReadingLocationCapture();
     this.applySelectionClasses();
     const viewport = scroller.getBoundingClientRect();
@@ -11228,7 +11254,23 @@ var MindMapEditor = class {
     const targetY = rect.top + rect.height * resolved.nodeRatio;
     const desiredY = viewport.top + viewport.height * resolved.viewportRatio;
     const nextScrollTop = scroller.scrollTop + targetY - desiredY;
+    const previousScrollTop = scroller.scrollTop;
     if (Math.abs(scroller.scrollTop - nextScrollTop) > 0.5) scroller.scrollTop = nextScrollTop;
+    this.callbacks.onDebugLog("navigation", "restore-target-applied", {
+      mode,
+      filePath: resolved.filePath,
+      nodeId: resolved.nodeId,
+      selector,
+      previousScrollTop,
+      nextScrollTop,
+      actualScrollTop: scroller.scrollTop,
+      nodeRatio: resolved.nodeRatio,
+      viewportRatio: resolved.viewportRatio,
+      targetTop: rect.top,
+      targetHeight: rect.height,
+      viewportTop: viewport.top,
+      viewportHeight: viewport.height
+    });
     this.updateArticleMiniMapActiveMarker();
     return true;
   }
@@ -11540,7 +11582,6 @@ var MindMapEditor = class {
    * @param id 目标对象或节点的稳定标识。
    */
   focusNodeById(id, persistLocation = true) {
-    if (!findNode(this.document.root, id)) return;
     this.focusNode(id, persistLocation);
   }
   /**
@@ -12145,6 +12186,13 @@ var MindMapEditor = class {
     const currentTitle = nodePlainText(this.document.root) || this.document.title || "\u5F53\u524D\u5BFC\u56FE";
     const returnTitle = navigation.parentNodeText ? `\u8FD4\u56DE\u7236\u5BFC\u56FE\uFF1A${parentTitle}\uFF08\u6765\u6E90\u8282\u70B9\uFF1A${navigation.parentNodeText}\uFF09` : `\u8FD4\u56DE\u7236\u5BFC\u56FE\uFF1A${parentTitle}`;
     const openParent = () => {
+      this.callbacks.onDebugLog("navigation", "return-parent-click", {
+        currentFilePath: this.options.currentFilePath,
+        parentPath: navigation.parentPath,
+        parentNodeId: navigation.parentNodeId,
+        parentNodeText: navigation.parentNodeText,
+        currentMode: this.currentMode
+      });
       void this.callbacks.onOpenMindMap(navigation.parentPath, navigation.parentNodeId);
     };
     if (showCanvasBreadcrumb) {
@@ -12630,22 +12678,33 @@ var MindMapEditor = class {
    * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
    */
   renderArticle() {
-    var _a2, _b2, _c, _d;
+    var _a2, _b2, _c, _d, _e, _f, _g;
     const reducedMotion = ((_a2 = window.matchMedia) == null ? void 0 : _a2.call(window, "(prefers-reduced-motion: reduce)").matches) === true;
     if (!this.options.articleContextReady) {
+      this.callbacks.onDebugLog("article", "render-waiting-context", { selectedId: this.selectedId, pendingTarget: (_b2 = this.pendingArticleFocusLocation) == null ? void 0 : _b2.nodeIds[0], landingMode: (_c = this.document.view) == null ? void 0 : _c.articleLandingMode });
       this.cancelReadingLocationRestore();
       this.cancelArticleWindowExpansion();
       this.articleRenderController = null;
-      const target = this.pendingArticleFocusLocation || ((_b2 = this.document.view) == null ? void 0 : _b2.articleLandingMode) === "article" ? "article" : "toc";
+      const target = this.pendingArticleFocusLocation || ((_d = this.document.view) == null ? void 0 : _d.articleLandingMode) === "article" ? "article" : "toc";
       this.renderArticleSkeleton(target);
       return;
     }
-    const directoryOnly = this.options.showArticleToc && this.options.articleTocEntries.length > 0 && ((_c = this.document.view) == null ? void 0 : _c.articleLandingMode) !== "article";
-    const requestedLocation = directoryOnly ? null : this.pendingArticleFocusLocation;
+    const explicitTarget = this.pendingArticleFocusLocation;
+    const directoryOnly = !explicitTarget && this.options.showArticleToc && this.options.articleTocEntries.length > 0 && ((_e = this.document.view) == null ? void 0 : _e.articleLandingMode) !== "article";
+    const requestedLocation = directoryOnly ? null : explicitTarget;
     this.pendingArticleFocusLocation = null;
+    this.callbacks.onDebugLog("article", "render-decision", {
+      selectedId: this.selectedId,
+      explicitTarget: explicitTarget == null ? void 0 : explicitTarget.nodeIds[0],
+      directoryOnly,
+      showArticleToc: this.options.showArticleToc,
+      tocEntries: this.options.articleTocEntries.length,
+      landingMode: (_f = this.document.view) == null ? void 0 : _f.articleLandingMode,
+      articleContextReady: this.options.articleContextReady
+    });
     const existingPage = this.articleEl.querySelector(":scope > .mms-article-page");
     const existingDirectory = (existingPage == null ? void 0 : existingPage.querySelector(".mms-article-toc-page")) !== null;
-    const activeRestoreLocation = ((_d = this.activeReadingRestore) == null ? void 0 : _d.mode) === "article" ? this.activeReadingRestore.location : null;
+    const activeRestoreLocation = ((_g = this.activeReadingRestore) == null ? void 0 : _g.mode) === "article" ? this.activeReadingRestore.location : null;
     const previousLocation = !directoryOnly && !requestedLocation && existingPage ? activeRestoreLocation != null ? activeRestoreLocation : this.captureCurrentLocation("article") : null;
     const previousScroll = { top: this.articleEl.scrollTop, left: this.articleEl.scrollLeft };
     this.cancelReadingLocationRestore();
@@ -12659,6 +12718,13 @@ var MindMapEditor = class {
       this.articleEl.empty();
       this.articleEl.removeAttribute("aria-busy");
       this.articleRenderController = renderArticleMode(this.articleEl, this.articleRendererOptions());
+      this.callbacks.onDebugLog("article", "window-mounted", {
+        directoryOnly,
+        selectedId: this.selectedId,
+        latestTarget: latestRequestedLocation == null ? void 0 : latestRequestedLocation.nodeIds[0],
+        hasController: Boolean(this.articleRenderController),
+        scrollTopBeforeRestore: this.articleEl.scrollTop
+      });
       (_b3 = this.articleEl.querySelector(":scope > .mms-article-page")) == null ? void 0 : _b3.addClass("is-window-entering");
       this.refreshArticleWindowChrome();
       this.addArticleScrollToTopButton();
@@ -14624,9 +14690,10 @@ var MindMapEditor = class {
   }
   /** Persists one article landing choice without restoring the outgoing page's chapter anchor. */
   setArticleLandingMode(mode) {
-    var _a2, _b2, _c;
+    var _a2, _b2, _c, _d;
+    this.callbacks.onDebugLog("article", "set-landing-mode", { requestedMode: mode, currentMode: this.currentMode, currentLandingMode: (_a2 = this.document.view) == null ? void 0 : _a2.articleLandingMode, selectedId: this.selectedId });
     if (this.currentMode !== "article" || !this.ensureEditable()) return;
-    const current = (_b2 = (_a2 = this.document.view) == null ? void 0 : _a2.articleLandingMode) != null ? _b2 : "toc";
+    const current = (_c = (_b2 = this.document.view) == null ? void 0 : _b2.articleLandingMode) != null ? _c : "toc";
     if (current === mode) {
       this.render();
       return;
@@ -14634,7 +14701,7 @@ var MindMapEditor = class {
     this.cancelReadingLocationRestore();
     this.pendingArticleFocusLocation = null;
     this.history.capture(this.document);
-    this.document.view = { ...(_c = this.document.view) != null ? _c : {}, articleLandingMode: mode };
+    this.document.view = { ...(_d = this.document.view) != null ? _d : {}, articleLandingMode: mode };
     this.callbacks.onChange(this.getDocument());
     this.markSaving();
     this.render();
@@ -15517,7 +15584,21 @@ var MindMapEditor = class {
    * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
    */
   focusNode(id, persistLocation = true) {
-    var _a2, _b2;
+    var _a2, _b2, _c, _d, _e, _f;
+    const exists = Boolean(findNode(this.document.root, id));
+    this.callbacks.onDebugLog("navigation", "focus-node-start", {
+      id,
+      exists,
+      persistLocation,
+      currentMode: this.currentMode,
+      currentFilePath: this.options.currentFilePath,
+      articleContextReady: this.options.articleContextReady,
+      showArticleToc: this.options.showArticleToc,
+      landingMode: (_a2 = this.document.view) == null ? void 0 : _a2.articleLandingMode,
+      activeRestoreTarget: (_b2 = this.activeReadingRestore) == null ? void 0 : _b2.resolved.nodeId
+    });
+    if (!exists) return;
+    this.cancelReadingLocationRestore();
     const ancestors = findAncestors(this.document.root, id);
     const collapsed = ancestors.filter((node) => node.collapsed);
     if (collapsed.length) {
@@ -15531,8 +15612,8 @@ var MindMapEditor = class {
     this.selectedId = id;
     this.selectedIds.clear();
     this.selectedIds.add(id);
-    if (this.currentMode === "article" && id !== this.document.root.id && this.options.showArticleToc && ((_a2 = this.document.view) == null ? void 0 : _a2.articleLandingMode) !== "article") {
-      this.document.view = { ...(_b2 = this.document.view) != null ? _b2 : {}, articleLandingMode: "article" };
+    if (this.currentMode === "article" && id !== this.document.root.id && ((_c = this.document.view) == null ? void 0 : _c.articleLandingMode) !== "article") {
+      this.document.view = { ...(_d = this.document.view) != null ? _d : {}, articleLandingMode: "article" };
       this.callbacks.onChange(this.getDocument());
     }
     const location = createReadingLocation(
@@ -15544,6 +15625,7 @@ var MindMapEditor = class {
     );
     if (persistLocation) this.rememberLocation(location, true);
     if (this.currentMode === "article") this.pendingArticleFocusLocation = location;
+    this.callbacks.onDebugLog("navigation", "focus-node-render", { id, currentMode: this.currentMode, landingMode: (_e = this.document.view) == null ? void 0 : _e.articleLandingMode, pendingArticleTarget: (_f = this.pendingArticleFocusLocation) == null ? void 0 : _f.nodeIds[0] });
     this.render();
     if (this.currentMode !== "article") this.restoreReadingLocation(this.currentMode, location);
   }
@@ -17310,10 +17392,12 @@ var MindMapStudioView = class _MindMapStudioView extends import_obsidian13.TextF
    * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
    */
   setViewData(data, clear) {
-    var _a2, _b2, _c;
+    var _a2, _b2, _c, _d, _e, _f;
     const title = (_b2 = (_a2 = this.file) == null ? void 0 : _a2.basename) != null ? _b2 : "\u601D\u7EF4\u5BFC\u56FE";
+    this.plugin.logDebug("view", "set-view-data-start", { filePath: (_c = this.file) == null ? void 0 : _c.path, clear, hasEditor: Boolean(this.editor), dataBytes: new TextEncoder().encode(data).byteLength });
     this.document = parseDocument(data, title);
     const queuedFocusNodeId = this.file ? this.plugin.consumePendingMindMapFocus(this.file.path) : null;
+    this.plugin.logDebug("view", "set-view-data-parsed", { filePath: (_d = this.file) == null ? void 0 : _d.path, rootNodeId: this.document.root.id, queuedFocusNodeId });
     if (queuedFocusNodeId) {
       this.pendingFocusNodeId = queuedFocusNodeId;
       this.pendingFocusShouldPersist = false;
@@ -17328,7 +17412,7 @@ var MindMapStudioView = class _MindMapStudioView extends import_obsidian13.TextF
     this.readingSections = [];
     this.applyViewClasses();
     if (!this.editor || clear) {
-      (_c = this.editor) == null ? void 0 : _c.destroy();
+      (_e = this.editor) == null ? void 0 : _e.destroy();
       this.contentEl.empty();
       this.editor = new MindMapEditor(this.app, this.contentEl, this.document, {
         onChange: (document2) => {
@@ -17388,9 +17472,10 @@ var MindMapStudioView = class _MindMapStudioView extends import_obsidian13.TextF
           await this.plugin.mergeFromSubmap(this.file);
         },
         onOpenMindMap: async (path, focusNodeId) => {
-          var _a3, _b3;
+          var _a3, _b3, _c2;
+          this.plugin.logDebug("view", "open-mind-map-callback", { sourcePath: (_a3 = this.file) == null ? void 0 : _a3.path, path, focusNodeId });
           await this.save();
-          await this.plugin.openMindMapPath(path, (_b3 = (_a3 = this.file) == null ? void 0 : _a3.path) != null ? _b3 : "", this.leaf, focusNodeId);
+          await this.plugin.openMindMapPath(path, (_c2 = (_b3 = this.file) == null ? void 0 : _b3.path) != null ? _c2 : "", this.leaf, focusNodeId);
         },
         onOpenArticleDirectory: async (path) => {
           var _a3, _b3;
@@ -17438,14 +17523,18 @@ var MindMapStudioView = class _MindMapStudioView extends import_obsidian13.TextF
               return import_obsidian13.MarkdownRenderer.render(this.app, markdown, target, (_b3 = (_a4 = this.file) == null ? void 0 : _a4.path) != null ? _b3 : "", this);
             }
           });
+        },
+        onDebugLog: (scope, event, details) => {
+          var _a3;
+          return this.plugin.logDebug(scope, event, { filePath: (_a3 = this.file) == null ? void 0 : _a3.path, ...details && typeof details === "object" && !Array.isArray(details) ? details : { details } });
         }
       }, this.getEditorOptions());
     } else {
-      this.editor.setDocument(this.document, false);
-      this.editor.setOptions(this.getEditorOptions());
+      this.editor.setDocument(this.document, false, this.getEditorOptions());
     }
     if (this.pendingFocusNodeId && this.editor) {
       const nodeId = this.pendingFocusNodeId;
+      this.plugin.logDebug("view", "apply-pending-focus", { filePath: (_f = this.file) == null ? void 0 : _f.path, nodeId, persistLocation: this.pendingFocusShouldPersist, articleContextReady: this.articleContextReady });
       const persistLocation = this.pendingFocusShouldPersist;
       this.pendingFocusNodeId = null;
       this.pendingFocusShouldPersist = true;
@@ -17536,9 +17625,10 @@ var MindMapStudioView = class _MindMapStudioView extends import_obsidian13.TextF
    * 立即把视图跳回刚离开的父导图或子导图。
    */
   markExplicitNavigation(focusNodeId) {
-    var _a2;
+    var _a2, _b2;
+    this.plugin.logDebug("view", "mark-explicit-navigation", { filePath: (_a2 = this.file) == null ? void 0 : _a2.path, focusNodeId, hasEditor: Boolean(this.editor), articleContextReady: this.articleContextReady });
     this.preferCurrentFileOnNextContextRefresh = true;
-    const nodeId = focusNodeId != null ? focusNodeId : (_a2 = this.document) == null ? void 0 : _a2.root.id;
+    const nodeId = focusNodeId != null ? focusNodeId : (_b2 = this.document) == null ? void 0 : _b2.root.id;
     if (!nodeId) return;
     if (!this.editor) {
       this.pendingFocusNodeId = nodeId;
@@ -17762,6 +17852,7 @@ var MindMapStudioView = class _MindMapStudioView extends import_obsidian13.TextF
     const document2 = (_b2 = (_a2 = this.editor) == null ? void 0 : _a2.getDocument()) != null ? _b2 : this.document;
     if (!file || !document2) return;
     const token = ++this.articleContextToken;
+    this.plugin.logDebug("article-context", "refresh-start", { filePath: file.path, token, pendingFocusNodeId: this.pendingFocusNodeId, preferCurrentFile: this.preferCurrentFileOnNextContextRefresh });
     try {
       const context = await this.plugin.buildArticleContext(file, document2);
       if (token !== this.articleContextToken || ((_c = this.file) == null ? void 0 : _c.path) !== file.path) return;
@@ -17772,10 +17863,12 @@ var MindMapStudioView = class _MindMapStudioView extends import_obsidian13.TextF
       this.readingSections = context.readingSections;
       this.articleContextReady = true;
       const preferCurrentFile = this.preferCurrentFileOnNextContextRefresh;
+      this.plugin.logDebug("article-context", "refresh-success", { filePath: file.path, token, baseDepth: context.baseDepth, tocEntries: context.tocEntries.length, showToc: context.showToc, readingSections: context.readingSections.length, preferCurrentFile });
       (_d = this.editor) == null ? void 0 : _d.setOptions(this.getEditorOptions(preferCurrentFile), true);
       this.preferCurrentFileOnNextContextRefresh = false;
     } catch (error) {
       if (token !== this.articleContextToken || ((_e = this.file) == null ? void 0 : _e.path) !== file.path) return;
+      this.plugin.logDebug("article-context", "refresh-failed", { filePath: file.path, token, error });
       console.warn("MindMap Studio article context refresh failed", error);
       this.articleBaseDepth = 0;
       this.articleTocEntries = [];
@@ -17784,6 +17877,7 @@ var MindMapStudioView = class _MindMapStudioView extends import_obsidian13.TextF
       this.readingSections = [{ filePath: file.path, document: document2, baseDepth: 0 }];
       this.articleContextReady = true;
       const preferCurrentFile = this.preferCurrentFileOnNextContextRefresh;
+      this.plugin.logDebug("article-context", "refresh-fallback", { filePath: file.path, token, preferCurrentFile });
       (_f = this.editor) == null ? void 0 : _f.setOptions(this.getEditorOptions(preferCurrentFile), true);
       this.preferCurrentFileOnNextContextRefresh = false;
     }
@@ -20001,6 +20095,125 @@ async function captureDesktopScreenshot(hideObsidian, mode = "capture") {
   return editCapturedDisplay(electronRuntime, nodeRuntime, captured, mode);
 }
 
+// src/debug/runtime-debug.ts
+var MAX_ENTRIES = 5e3;
+var MAX_STRING_LENGTH = 800;
+var MAX_ARRAY_LENGTH = 40;
+var MAX_OBJECT_KEYS = 60;
+var MAX_DEPTH = 5;
+function sanitizeDebugValue(value, depth = 0, seen = /* @__PURE__ */ new WeakSet()) {
+  var _a2;
+  if (value === null || value === void 0 || typeof value === "boolean" || typeof value === "number") return value;
+  if (typeof value === "string") return value.length > MAX_STRING_LENGTH ? `${value.slice(0, MAX_STRING_LENGTH)}\u2026` : value;
+  if (typeof value === "bigint") return String(value);
+  if (typeof value === "function") return `[function ${value.name || "anonymous"}]`;
+  if (typeof value !== "object") return String(value);
+  if (depth >= MAX_DEPTH) return "[max-depth]";
+  if (seen.has(value)) return "[circular]";
+  seen.add(value);
+  if (value instanceof Error) {
+    return {
+      name: value.name,
+      message: value.message.slice(0, MAX_STRING_LENGTH),
+      stack: (_a2 = value.stack) == null ? void 0 : _a2.split("\n").slice(0, 12).join("\n")
+    };
+  }
+  if (Array.isArray(value)) {
+    return value.slice(0, MAX_ARRAY_LENGTH).map((item) => sanitizeDebugValue(item, depth + 1, seen));
+  }
+  const result = {};
+  for (const [key, item] of Object.entries(value).slice(0, MAX_OBJECT_KEYS)) {
+    result[key] = sanitizeDebugValue(item, depth + 1, seen);
+  }
+  return result;
+}
+function describeDebugTarget(target) {
+  var _a2;
+  if (!(target instanceof Element)) return null;
+  const element = target instanceof HTMLElement ? target : target.parentElement;
+  if (!element) return null;
+  const editable = element.closest("input, textarea, [contenteditable='true']");
+  const owner = (_a2 = element.closest("[data-node-id], [data-file-path], button, a, input, textarea, [role]")) != null ? _a2 : element;
+  return {
+    tag: owner.tagName.toLowerCase(),
+    id: owner.id || void 0,
+    classes: Array.from(owner.classList).slice(0, 12),
+    role: owner.getAttribute("role") || void 0,
+    nodeId: owner.dataset.nodeId,
+    filePath: owner.dataset.filePath,
+    blockId: owner.dataset.blockId,
+    editable: Boolean(editable)
+  };
+}
+var RuntimeDebugLog = class {
+  constructor() {
+    this.enabled = false;
+    this.sequence = 0;
+    this.startedAt = Date.now();
+    this.sessionId = "";
+    this.entries = [];
+    this.throttleTimes = /* @__PURE__ */ new Map();
+  }
+  /** Enables or disables collection. Enabling starts a fresh session. */
+  setEnabled(enabled, reason = "settings") {
+    if (this.enabled === enabled) return;
+    this.enabled = enabled;
+    if (enabled) {
+      this.entries.splice(0);
+      this.throttleTimes.clear();
+      this.sequence = 0;
+      this.startedAt = Date.now();
+      this.sessionId = `${new Date(this.startedAt).toISOString()}-${Math.random().toString(36).slice(2, 8)}`;
+      this.log("debug", "session-start", { reason });
+    }
+  }
+  /** Returns whether the current session accepts events. */
+  isEnabled() {
+    return this.enabled;
+  }
+  /** Appends one bounded structured event. */
+  log(scope, event, details) {
+    if (!this.enabled) return;
+    const now = Date.now();
+    const entry = {
+      sequence: ++this.sequence,
+      time: new Date(now).toISOString(),
+      elapsedMs: now - this.startedAt,
+      scope,
+      event,
+      ...details === void 0 ? {} : { details: sanitizeDebugValue(details) }
+    };
+    this.entries.push(entry);
+    if (this.entries.length > MAX_ENTRIES) this.entries.splice(0, this.entries.length - MAX_ENTRIES);
+  }
+  /** Appends an event no more frequently than the requested interval for the same key. */
+  logThrottled(key, intervalMs, scope, event, details) {
+    var _a2;
+    if (!this.enabled) return;
+    const now = Date.now();
+    const previous = (_a2 = this.throttleTimes.get(key)) != null ? _a2 : 0;
+    if (now - previous < intervalMs) return;
+    this.throttleTimes.set(key, now);
+    this.log(scope, event, details);
+  }
+  /** Exports the complete current session with environment and active-view metadata. */
+  exportText(metadata) {
+    const header = {
+      format: "mindmap-studio-debug-log/v1",
+      sessionId: this.sessionId || "not-started",
+      enabled: this.enabled,
+      exportedAt: (/* @__PURE__ */ new Date()).toISOString(),
+      entryCount: this.entries.length,
+      metadata: sanitizeDebugValue(metadata)
+    };
+    return [JSON.stringify(header), ...this.entries.map((entry) => JSON.stringify(entry))].join("\n");
+  }
+  /** Number of retained events in the current session. */
+  size() {
+    return this.entries.length;
+  }
+};
+
 // src/vision/local-ocr.ts
 function getLocalOcrRuntime() {
   var _a2;
@@ -20266,6 +20479,7 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
     this.settingsWriter = null;
     this.persistedFileExplorerFilterSignature = "";
     this.unloading = false;
+    this.runtimeDebugLog = new RuntimeDebugLog();
   }
   /**
    * 执行“onload”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
@@ -20273,6 +20487,8 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
   async onload() {
     var _a2;
     await this.loadSettings();
+    this.runtimeDebugLog.setEnabled(this.settings.debugMode, "plugin-startup");
+    this.logDebug("plugin", "onload", { version: this.manifest.version, debugMode: this.settings.debugMode });
     this.persistedFileExplorerFilterSignature = fileExplorerFilterSignature(this.settings);
     this.settingsWriter = this.createSettingsWriter();
     this.installFileExplorerFilter();
@@ -20289,12 +20505,18 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
       name: "\u5168\u5C40\u641C\u7D22\u6240\u6709\u601D\u7EF4\u5BFC\u56FE",
       callback: () => this.openGlobalSearch()
     });
+    this.addCommand({
+      id: "copy-mind-map-debug-log",
+      name: "\u590D\u5236 MindMap Studio \u8C03\u8BD5\u8BB0\u5F55",
+      callback: () => void this.copyDebugLogToClipboard()
+    });
     this.registerDomEvent(window, "keydown", (event) => {
       if (!matchesRecordedShortcut(event, this.settings.globalSearchShortcut)) return;
       event.preventDefault();
       event.stopPropagation();
       if (!event.repeat) this.openGlobalSearch();
     }, true);
+    this.installRuntimeDebugCapture();
     this.addCommand({
       id: "update-mindmap-studio",
       name: "\u68C0\u67E5\u5E76\u66F4\u65B0 MindMap Studio",
@@ -20614,6 +20836,115 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
     }
     return modifiedCount;
   }
+  /** Writes one structured event into the current in-memory diagnostic session. */
+  logDebug(scope, event, details) {
+    this.runtimeDebugLog.log(scope, event, details);
+  }
+  /** Enables or disables runtime diagnostics and persists the setting. */
+  async setDebugMode(enabled) {
+    this.settings.debugMode = enabled;
+    this.runtimeDebugLog.setEnabled(enabled, "settings-change");
+    this.logDebug("debug", enabled ? "enabled" : "disabled", { version: this.manifest.version });
+    await this.saveSettings();
+  }
+  /** Copies the current bounded diagnostic session as line-delimited JSON. */
+  async copyDebugLogToClipboard() {
+    var _a2, _b2, _c, _d, _e;
+    if (!this.settings.debugMode || !this.runtimeDebugLog.isEnabled()) {
+      new import_obsidian16.Notice("\u8BF7\u5148\u5728 MindMap Studio \u8BBE\u7F6E\u4E2D\u5F00\u542F\u8C03\u8BD5\u6A21\u5F0F");
+      return;
+    }
+    const activeFile = this.app.workspace.getActiveFile();
+    const activeView = (_a2 = this.app.workspace.activeLeaf) == null ? void 0 : _a2.view;
+    this.logDebug("command", "copy-debug-log", { activeFile: activeFile == null ? void 0 : activeFile.path, viewType: (_b2 = activeView == null ? void 0 : activeView.getViewType) == null ? void 0 : _b2.call(activeView) });
+    const text = this.runtimeDebugLog.exportText({
+      pluginVersion: this.manifest.version,
+      userAgent: navigator.userAgent,
+      platform: navigator.platform,
+      activeFile: (_c = activeFile == null ? void 0 : activeFile.path) != null ? _c : null,
+      activeViewType: (_e = (_d = activeView == null ? void 0 : activeView.getViewType) == null ? void 0 : _d.call(activeView)) != null ? _e : null,
+      globalDisplayMode: this.activeDisplayMode,
+      retainedEntries: this.runtimeDebugLog.size()
+    });
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch (e) {
+      const textarea = document.body.createEl("textarea");
+      textarea.value = text;
+      textarea.style.position = "fixed";
+      textarea.style.opacity = "0";
+      textarea.select();
+      const copied = document.execCommand("copy");
+      textarea.remove();
+      if (!copied) throw new Error("\u6D4F\u89C8\u5668\u62D2\u7EDD\u8BBF\u95EE\u526A\u8D34\u677F");
+    }
+    new import_obsidian16.Notice(`\u5DF2\u590D\u5236 ${this.runtimeDebugLog.size()} \u6761\u8C03\u8BD5\u8BB0\u5F55`);
+  }
+  /** Captures user operations and uncaught failures while debug mode is enabled. */
+  installRuntimeDebugCapture() {
+    const logPointer = (event) => {
+      this.logDebug("interaction", event.type, { target: describeDebugTarget(event.target) });
+    };
+    for (const type of ["click", "dblclick", "contextmenu", "pointerdown"]) {
+      this.registerDomEvent(document, type, logPointer, true);
+    }
+    this.registerDomEvent(document, "keydown", (event) => {
+      const target = describeDebugTarget(event.target);
+      const editable = (target == null ? void 0 : target.editable) === true;
+      const key = editable && event.key.length === 1 ? "[text]" : event.key;
+      this.logDebug("interaction", "keydown", {
+        key,
+        code: event.code,
+        repeat: event.repeat,
+        ctrl: event.ctrlKey,
+        meta: event.metaKey,
+        shift: event.shiftKey,
+        alt: event.altKey,
+        target
+      });
+    }, true);
+    this.registerDomEvent(document, "wheel", (event) => {
+      this.runtimeDebugLog.logThrottled("interaction-wheel", 200, "interaction", "wheel", {
+        deltaX: Math.round(event.deltaX),
+        deltaY: Math.round(event.deltaY),
+        target: describeDebugTarget(event.target)
+      });
+    }, true);
+    this.registerDomEvent(document, "scroll", (event) => {
+      var _a2;
+      const target = event.target instanceof HTMLElement ? event.target : null;
+      this.runtimeDebugLog.logThrottled(`interaction-scroll:${(_a2 = target == null ? void 0 : target.className) != null ? _a2 : "document"}`, 250, "interaction", "scroll", {
+        scrollTop: target == null ? void 0 : target.scrollTop,
+        scrollLeft: target == null ? void 0 : target.scrollLeft,
+        target: describeDebugTarget(event.target)
+      });
+    }, true);
+    const onError = (event) => this.logDebug("error", "window-error", {
+      message: event.message,
+      filename: event.filename,
+      line: event.lineno,
+      column: event.colno,
+      error: event.error
+    });
+    const onRejection = (event) => this.logDebug("error", "unhandled-rejection", { reason: event.reason });
+    window.addEventListener("error", onError);
+    window.addEventListener("unhandledrejection", onRejection);
+    this.register(() => {
+      window.removeEventListener("error", onError);
+      window.removeEventListener("unhandledrejection", onRejection);
+    });
+    this.registerEvent(this.app.workspace.on("file-open", (file) => {
+      var _a2;
+      return this.logDebug("workspace", "file-open", { path: (_a2 = file == null ? void 0 : file.path) != null ? _a2 : null });
+    }));
+    this.registerEvent(this.app.workspace.on("active-leaf-change", (leaf) => {
+      var _a2;
+      return this.logDebug("workspace", "active-leaf-change", {
+        viewType: leaf == null ? void 0 : leaf.view.getViewType(),
+        filePath: (leaf == null ? void 0 : leaf.view) instanceof MindMapStudioView ? (_a2 = leaf.view.file) == null ? void 0 : _a2.path : void 0
+      });
+    }));
+  }
   /**
    * 加载settings，并保持模型、界面和持久化状态的一致性。
    */
@@ -20735,6 +21066,7 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
       lastImportFolder: typeof raw.lastImportFolder === "string" ? raw.lastImportFolder.trim().slice(0, 4e3) : DEFAULT_SETTINGS.lastImportFolder,
       settingsSectionOrder: normalizeSettingsSectionOrder(raw.settingsSectionOrder),
       settingsExpandedSections: normalizeSettingsExpandedSections(raw.settingsExpandedSections),
+      debugMode: raw.debugMode === true,
       syncTitleToFilename: raw.syncTitleToFilename !== false,
       deleteLocalAfterUpload: raw.deleteLocalAfterUpload !== false,
       imageFailoverEnabled: raw.imageFailoverEnabled !== false,
@@ -20818,6 +21150,8 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
       throw new Error("\u914D\u7F6E\u6587\u4EF6\u5FC5\u987B\u662F\u4E00\u4E2A JSON \u5BF9\u8C61\u3002");
     }
     this.applyLoadedSettings(settings);
+    this.runtimeDebugLog.setEnabled(this.settings.debugMode, "settings-import");
+    this.logDebug("settings", "import-complete", { debugMode: this.settings.debugMode });
     await this.saveSettings();
     this.refreshOpenViews();
   }
@@ -21141,6 +21475,7 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
   async resetAllSettings() {
     this.settings = JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
     this.activeDisplayMode = this.settings.defaultViewMode;
+    this.runtimeDebugLog.setEnabled(false, "settings-reset");
     await this.saveSettings();
     this.refreshOpenViews();
   }
@@ -21500,6 +21835,7 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
     const normalized2 = (0, import_obsidian16.normalizePath)(filePath);
     const nodeId = (_a2 = this.pendingMindMapFocus.get(normalized2)) != null ? _a2 : null;
     this.pendingMindMapFocus.delete(normalized2);
+    this.logDebug("navigation", "consume-pending-focus", { filePath: normalized2, nodeId, remaining: this.pendingMindMapFocus.size });
     return nodeId;
   }
   /**
@@ -21511,15 +21847,21 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
    */
   async openAsMindMap(file, preferredLeaf, focusNodeId) {
     const leaf = preferredLeaf != null ? preferredLeaf : this.app.workspace.getLeaf(false);
-    if (focusNodeId) this.pendingMindMapFocus.set(file.path, focusNodeId);
+    this.logDebug("navigation", "open-view-start", { filePath: file.path, focusNodeId, preferredLeaf: Boolean(preferredLeaf), currentViewType: leaf.view.getViewType() });
+    if (focusNodeId) {
+      this.pendingMindMapFocus.set(file.path, focusNodeId);
+      this.logDebug("navigation", "queue-focus", { filePath: file.path, focusNodeId, queued: this.pendingMindMapFocus.size });
+    }
     await leaf.setViewState({
       type: VIEW_TYPE_MINDMAP_STUDIO,
       state: { file: file.path },
       active: true
     });
     this.app.workspace.revealLeaf(leaf);
+    this.logDebug("navigation", "open-view-state-complete", { filePath: file.path, focusNodeId, viewType: leaf.view.getViewType(), pendingStillQueued: this.pendingMindMapFocus.get(file.path) === focusNodeId });
     if (focusNodeId && this.pendingMindMapFocus.get(file.path) === focusNodeId) {
       this.pendingMindMapFocus.delete(file.path);
+      this.logDebug("navigation", "focus-not-consumed-by-set-view-data", { filePath: file.path, focusNodeId });
       if (leaf.view instanceof MindMapStudioView) leaf.view.markExplicitNavigation(focusNodeId);
     }
     return leaf;
@@ -22419,13 +22761,56 @@ ${uploaded.url}`, 9e3);
    */
   async openMindMapPath(path, sourcePath = "", preferredLeaf, focusNodeId) {
     const normalized2 = (0, import_obsidian16.normalizePath)(path.replace(/^\[\[|\]\]$/g, ""));
+    this.logDebug("navigation", "open-path-request", { path, normalized: normalized2, sourcePath, focusNodeId });
     const direct = this.app.vault.getAbstractFileByPath(normalized2);
     const resolved = direct instanceof import_obsidian16.TFile ? direct : this.app.metadataCache.getFirstLinkpathDest(path, sourcePath);
     if (!(resolved instanceof import_obsidian16.TFile) || !this.isMindMapFile(resolved)) {
+      this.logDebug("navigation", "open-path-missing", { path, normalized: normalized2, sourcePath, focusNodeId });
       new import_obsidian16.Notice(`\u627E\u4E0D\u5230\u5B50\u5BFC\u56FE\uFF1A${path}`);
       return;
     }
-    await this.openAsMindMap(resolved, preferredLeaf, focusNodeId);
+    const resolvedFocusNodeId = await this.resolveNavigationFocusNode(resolved, sourcePath, focusNodeId);
+    this.logDebug("navigation", "open-path-resolved", { targetPath: resolved.path, requestedFocusNodeId: focusNodeId, resolvedFocusNodeId });
+    await this.openAsMindMap(resolved, preferredLeaf, resolvedFocusNodeId);
+  }
+  /** Validates explicit chapter targets and recovers a stale/missing parent mount node by child-map path. */
+  async resolveNavigationFocusNode(targetFile, sourcePath, requestedNodeId) {
+    var _a2, _b2;
+    if (!requestedNodeId && !sourcePath) return void 0;
+    try {
+      const targetDocument = await this.readMindMapDocument(targetFile);
+      if (requestedNodeId && findNode(targetDocument.root, requestedNodeId)) return requestedNodeId;
+      const normalizedSourcePath = sourcePath ? (0, import_obsidian16.normalizePath)(sourcePath) : "";
+      const sourceFile = normalizedSourcePath ? this.app.vault.getAbstractFileByPath(normalizedSourcePath) : null;
+      if (sourceFile instanceof import_obsidian16.TFile && this.isMindMapFile(sourceFile)) {
+        const sourceDocument = await this.readMindMapDocument(sourceFile);
+        const declaredParent = ((_a2 = sourceDocument.navigation) == null ? void 0 : _a2.parentPath) ? this.resolveMindMapFile(sourceDocument.navigation.parentPath, sourceFile.path) : null;
+        if ((declaredParent == null ? void 0 : declaredParent.path) === targetFile.path) {
+          const declaredNodeId = (_b2 = sourceDocument.navigation) == null ? void 0 : _b2.parentNodeId;
+          if (declaredNodeId && findNode(targetDocument.root, declaredNodeId)) {
+            this.logDebug("navigation", "recover-parent-focus-from-navigation", { targetPath: targetFile.path, sourcePath: sourceFile.path, requestedNodeId, declaredNodeId });
+            return declaredNodeId;
+          }
+        }
+        const mountNode = flattenNodes(targetDocument.root).find((node) => {
+          var _a3, _b3;
+          if (!((_a3 = node.submap) == null ? void 0 : _a3.path)) return false;
+          return ((_b3 = this.resolveMindMapFile(node.submap.path, targetFile.path)) == null ? void 0 : _b3.path) === sourceFile.path;
+        });
+        if (mountNode) {
+          this.logDebug("navigation", "recover-parent-focus-by-submap", { targetPath: targetFile.path, sourcePath: sourceFile.path, requestedNodeId, declaredParentPath: declaredParent == null ? void 0 : declaredParent.path, mountNodeId: mountNode.id });
+          return mountNode.id;
+        }
+      }
+      if (requestedNodeId) {
+        this.logDebug("navigation", "focus-node-not-found", { targetPath: targetFile.path, sourcePath, requestedNodeId });
+        new import_obsidian16.Notice("\u76EE\u6807\u7AE0\u8282\u5DF2\u4E0D\u5B58\u5728\uFF0C\u5DF2\u6253\u5F00\u76EE\u6807\u5BFC\u56FE");
+      }
+    } catch (error) {
+      this.logDebug("navigation", "focus-validation-failed", { targetPath: targetFile.path, sourcePath, requestedNodeId, error });
+      return requestedNodeId;
+    }
+    return void 0;
   }
   /**
    * 执行“ensure folder path”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
