@@ -1,5 +1,16 @@
 # Modified Files
 
+## 1.38.6 文章缓存线性指纹与跨平台 ZIP 适配
+
+- `src/article/article-render-cache.ts`：新增只覆盖节点自身与渲染上下文的文章节点指纹，避免递归序列化后代；缓存修订提升到 v2，修复启动预载 LRU 顺序，并使用无原型节点表。
+- `src/editor/article-renderer.ts`：节点缓存改用局部指纹，文档摘要聚合现有节点指纹，缓存路径比较统一规范化 Windows/Unix 分隔符。
+- `tests/article-render-cache.test.mjs`：新增后代编辑不使祖先失效、当前节点/上下文变化必须失效、重启预载后正确淘汰最旧条目的专项测试。
+- `AGENTS.md`、`docs/DEVELOPMENT.md`：补充 Windows ZIP 的 `#Uxxxx` + `0x7075` 在 Linux 下恢复与标准 UTF-8 bit 11 重打包规则。
+- `README.md`、`CHANGELOG.md`、`docs/ARCHITECTURE.md`、`docs/TESTING.md`、`docs/FUNCTION_REFERENCE.md`：同步缓存复杂度、复用边界、测试与函数参考。
+- `package.json`、`package-lock.json`、`manifest.json`、`versions.json`、`update.json`：统一版本元数据为 1.38.6，并在最终安装包生成后写入 SHA-256。
+- `TEST_RESULTS.md`：记录完整验证、专项基准和真实 Win10 大文件待验证事项。
+- `main.js`：由优化后的 TypeScript 源码重新生产构建。
+
 ## 1.38.5 文章节点级持久缓存
 
 - `src/article/article-render-cache.ts`：新增稳定指纹、缓存结构校验、内存 LRU、插件私有 JSON 预载与串行防抖写盘；支持文件删除清理和重命名迁移。

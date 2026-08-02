@@ -8434,7 +8434,7 @@ function bindTableColumnResize(handle, options) {
 
 // src/article/article-render-cache.ts
 var ARTICLE_RENDER_CACHE_SCHEMA_VERSION = 1;
-var ARTICLE_RENDERER_REVISION = "article-node-cache-v1";
+var ARTICLE_RENDERER_REVISION = "article-node-cache-v2";
 function normalizeArticleCachePath(value) {
   return value.replace(/\\/g, "/").replace(/\/{2,}/g, "/").replace(/^\.\//, "").replace(/\/$/, "");
 }
@@ -8473,6 +8473,12 @@ function articleCacheFingerprint(value) {
   }
   return `${first.toString(16).padStart(8, "0")}${second.toString(16).padStart(8, "0")}`;
 }
+function articleNodeRenderFingerprint(node, context) {
+  return articleCacheFingerprint({
+    node: { ...node, children: [] },
+    context
+  });
+}
 function normalizeArticleRenderCacheSnapshot(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const candidate = value;
@@ -8481,7 +8487,7 @@ function normalizeArticleRenderCacheSnapshot(value) {
   if (typeof candidate.filePath !== "string" || !candidate.filePath.trim()) return null;
   if (typeof candidate.documentFingerprint !== "string" || typeof candidate.presentationFingerprint !== "string") return null;
   if (!candidate.nodes || typeof candidate.nodes !== "object" || Array.isArray(candidate.nodes)) return null;
-  const nodes = {};
+  const nodes = /* @__PURE__ */ Object.create(null);
   let totalCharacters = 0;
   for (const [nodeId, rawEntry] of Object.entries(candidate.nodes)) {
     if (!nodeId || !rawEntry || typeof rawEntry !== "object" || Array.isArray(rawEntry)) continue;
@@ -8517,17 +8523,21 @@ var ArticleRenderCacheStore = class {
   /** 从磁盘加载最近使用的缓存，插件注册视图前即可完成。 */
   async initialize() {
     try {
+      this.entries.clear();
       if (!await this.adapter.exists(this.cacheFile)) return;
       const parsed = JSON.parse(await this.adapter.read(this.cacheFile));
       if (parsed.schemaVersion !== ARTICLE_RENDER_CACHE_SCHEMA_VERSION || !Array.isArray(parsed.entries)) return;
       const snapshots = parsed.entries.map((entry) => normalizeArticleRenderCacheSnapshot(entry)).filter((entry) => Boolean(entry)).sort((left, right) => right.lastAccessedAt - left.lastAccessedAt);
+      const selected = [];
       let characters = 0;
       for (const snapshot of snapshots) {
         const size = this.snapshotCharacters(snapshot);
-        if (this.entries.size >= MAX_CACHE_ENTRIES || characters + size > MAX_CACHE_CHARACTERS) break;
-        this.entries.set(snapshot.filePath, snapshot);
+        if (selected.length >= MAX_CACHE_ENTRIES) break;
+        if (characters + size > MAX_CACHE_CHARACTERS) continue;
+        selected.push(snapshot);
         characters += size;
       }
+      for (const snapshot of selected.reverse()) this.entries.set(snapshot.filePath, snapshot);
     } catch (error) {
       console.warn("MindMap Studio article cache load failed", error);
       this.entries.clear();
@@ -8707,7 +8717,10 @@ function renderArticleMode(container, options) {
       schemaVersion: ARTICLE_RENDER_CACHE_SCHEMA_VERSION,
       rendererRevision: ARTICLE_RENDERER_REVISION,
       filePath: options.currentFilePath,
-      documentFingerprint: articleCacheFingerprint(options.document),
+      documentFingerprint: articleCacheFingerprint(infos.map((info) => {
+        var _a4;
+        return [info.node.id, (_a4 = fingerprints.get(info.node.id)) != null ? _a4 : ""];
+      })),
       presentationFingerprint,
       nodes: nextCacheNodes,
       updatedAt: now,
@@ -8764,7 +8777,7 @@ function compatibleArticleCache(snapshot, filePath, presentationFingerprint) {
   if (!snapshot) return null;
   if (snapshot.schemaVersion !== ARTICLE_RENDER_CACHE_SCHEMA_VERSION) return null;
   if (snapshot.rendererRevision !== ARTICLE_RENDERER_REVISION) return null;
-  if (snapshot.filePath !== filePath || snapshot.presentationFingerprint !== presentationFingerprint) return null;
+  if (normalizeArticleCachePath(snapshot.filePath) !== normalizeArticleCachePath(filePath) || snapshot.presentationFingerprint !== presentationFingerprint) return null;
   return snapshot;
 }
 function articlePresentationFingerprint(options) {
@@ -8788,9 +8801,8 @@ function articlePresentationFingerprint(options) {
   });
 }
 function articleNodeFingerprint(info, options) {
-  return articleCacheFingerprint({
+  return articleNodeRenderFingerprint(info.node, {
     rendererRevision: ARTICLE_RENDERER_REVISION,
-    node: info.node,
     depth: info.depth,
     anchor: info.anchor,
     label: info.label,
