@@ -1,5 +1,14 @@
 # Modified Files
 
+## 1.39.6 快速编辑带圈序号垂直对齐
+
+- `styles.css`：快速编辑时仅将带圈序号伪元素按现有 7px 顶部内边距向下补偿，不修改正文输入框、正文起点或水平缩进。
+- `tests/article-content-block.test.mjs`：新增快速编辑样式契约，校验圆圈位移量与编辑框块级内边距一致，并禁止规则改动正文布局属性。
+- `README.md`、`CHANGELOG.md`、`docs/DEVELOPMENT.md`、`docs/SPECIAL_FEATURES.md`、`docs/TESTING.md`：同步快速编辑对齐行为和维护边界。
+- `package.json`、`package-lock.json`、`manifest.json`、`versions.json`、`update.json`：统一版本元数据为 1.39.6，并在最终安装包生成后写入 SHA-256。
+- `TEST_RESULTS.md`、Codex 项目衔接页：记录完整验证和真实 Win10 快速编辑待验证事项。
+- `main.js`：按仓库交付规则重新执行生产构建。
+
 ## 1.39.5 带圈序号正文间距修复
 
 - `styles.css`：缩小带圈编号圆环并调整自动模式槽内偏移，在保持正文首字与普通圆点正文对齐的同时，为圆圈和正文预留稳定间距。
