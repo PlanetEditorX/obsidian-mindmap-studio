@@ -36,6 +36,7 @@ export class MindMapStudioView extends TextFileView {
   private savedTimer: number | null = null;
   private pendingFocusNodeId: string | null = null;
   private pendingFocusShouldPersist = true;
+  private articleContextReady = false;
   private articleBaseDepth = 0;
   private articleTocEntries: ArticleTocEntry[] = [];
   private showArticleToc = false;
@@ -115,7 +116,14 @@ export class MindMapStudioView extends TextFileView {
   setViewData(data: string, clear: boolean): void {
     const title = this.file?.basename ?? "思维导图";
     this.document = parseDocument(data, title);
+    const queuedFocusNodeId = this.file ? this.plugin.consumePendingMindMapFocus(this.file.path) : null;
+    if (queuedFocusNodeId) {
+      this.pendingFocusNodeId = queuedFocusNodeId;
+      this.pendingFocusShouldPersist = false;
+      this.preferCurrentFileOnNextContextRefresh = true;
+    }
     if (this.file) void this.plugin.resumePendingAutoUploads(this.file, this.document);
+    this.articleContextReady = false;
     this.articleBaseDepth = 0;
     this.articleTocEntries = [];
     this.showArticleToc = false;
@@ -227,7 +235,7 @@ export class MindMapStudioView extends TextFileView {
       const persistLocation = this.pendingFocusShouldPersist;
       this.pendingFocusNodeId = null;
       this.pendingFocusShouldPersist = true;
-      window.setTimeout(() => this.editor?.focusNodeById(nodeId, persistLocation), 20);
+      this.editor.focusNodeById(nodeId, persistLocation);
     }
     this.scheduleArticleContextRefresh(0);
   }
@@ -486,6 +494,7 @@ export class MindMapStudioView extends TextFileView {
       questionPracticeOrder: this.plugin.settings.questionPracticeOrder,
       questionMemoryCurveEnabled: this.plugin.settings.questionMemoryCurveEnabled,
       wrongBookMasteryCount: this.plugin.settings.wrongBookMasteryCount,
+      articleContextReady: this.articleContextReady,
       articleBaseDepth: this.articleBaseDepth,
       articleTocEntries: [...this.articleTocEntries],
       articleTocMaxDepth: this.plugin.settings.articleTocMaxDepth,
@@ -535,11 +544,22 @@ export class MindMapStudioView extends TextFileView {
       this.showArticleToc = context.showToc;
       this.articleNavigation = context.navigation;
       this.readingSections = context.readingSections;
+      this.articleContextReady = true;
       const preferCurrentFile = this.preferCurrentFileOnNextContextRefresh;
       this.editor?.setOptions(this.getEditorOptions(preferCurrentFile), true);
       this.preferCurrentFileOnNextContextRefresh = false;
     } catch (error) {
+      if (token !== this.articleContextToken || this.file?.path !== file.path) return;
       console.warn("MindMap Studio article context refresh failed", error);
+      this.articleBaseDepth = 0;
+      this.articleTocEntries = [];
+      this.showArticleToc = false;
+      this.articleNavigation = undefined;
+      this.readingSections = [{ filePath: file.path, document, baseDepth: 0 }];
+      this.articleContextReady = true;
+      const preferCurrentFile = this.preferCurrentFileOnNextContextRefresh;
+      this.editor?.setOptions(this.getEditorOptions(preferCurrentFile), true);
+      this.preferCurrentFileOnNextContextRefresh = false;
     }
   }
 
