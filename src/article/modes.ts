@@ -278,6 +278,8 @@ export function currentArticlePageEntry(navigation: ArticlePageNavigation | unde
  *
  * @param root 当前物理导图的根节点。
  * @param baseDepth 根节点在整篇文章中的绝对基础层级。
+ * @param leafNumbering 末端正文自动编号规则。
+ * @param primaryText 读取节点主文字的回调；文章渲染器可注入单次规范化缓存。
  * @returns 按显示顺序展开的文章节点信息。
  */
 export interface ArticleLeafNumberingOptions {
@@ -288,12 +290,21 @@ export interface ArticleLeafNumberingOptions {
 /**
  * 展开文章节点，并按同一上级下的末端正文数量决定是否使用下一层序号。
  */
-export function buildArticleNodeInfo(root: MindMapNode, baseDepth = 0, leafNumbering: ArticleLeafNumberingOptions = { enabled: false, threshold: 4 }): ArticleNodeInfo[] {
+export function buildArticleNodeInfo(
+  root: MindMapNode,
+  baseDepth = 0,
+  leafNumbering: ArticleLeafNumberingOptions = { enabled: false, threshold: 4 },
+  primaryText: (node: MindMapNode) => string = nodePrimaryText
+): ArticleNodeInfo[] {
   const result: ArticleNodeInfo[] = [];
   const visitChildren = (parent: MindMapNode, defaultLevel: number): void => {
-    const siblingHasHeading = parent.children.some((child) => isArticleHeading(child));
+    let siblingHasHeading = false;
+    let terminalCount = 0;
+    for (const child of parent.children) {
+      if (isArticleHeading(child)) siblingHasHeading = true;
+      else if (child.articleNumberingMode !== "none") terminalCount += 1;
+    }
     const threshold = Math.max(1, Math.min(20, Math.floor(leafNumbering.threshold) || 4));
-    const terminalCount = parent.children.filter((child) => !isArticleHeading(child) && child.articleNumberingMode !== "none").length;
     const convertLeaves = leafNumbering.enabled && terminalCount >= threshold && defaultLevel <= 7;
     const numberedIndexes = new Map<number, number>();
     for (const child of parent.children) {
@@ -308,7 +319,7 @@ export function buildArticleNodeInfo(root: MindMapNode, baseDepth = 0, leafNumbe
         : 0;
       if (numberedIndex) numberedIndexes.set(displayLevel, numberedIndex);
       const label = numberedIndex ? articleNumberLabel(displayLevel, numberedIndex) : "";
-      const title = nodePrimaryText(child) || (numbering.isHeading ? "未命名标题" : "");
+      const title = primaryText(child) || (numbering.isHeading ? "未命名标题" : "");
       result.push({
         node: child,
         depth: displayLevel,

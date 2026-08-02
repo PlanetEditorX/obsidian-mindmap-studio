@@ -7,8 +7,8 @@ import { App, setIcon } from "obsidian";
 import {
   imageSourceCandidates,
   nodeContentBlocks,
-  nodePrimaryText,
   type MindMapCodeBlock,
+  type MindMapContentBlock,
   type MindMapDocument,
   type MindMapNode,
   type MindMapTable,
@@ -82,17 +82,30 @@ export interface ArticleRendererOptions {
   currentFilePath: string;
   articleCache: ArticleRenderCacheSnapshot | null;
   onArticleCacheUpdate: (snapshot: ArticleRenderCacheSnapshot) => void;
+  /** One-render memo for normalized content blocks; callers normally leave this unset. */
+  contentBlockCache?: WeakMap<MindMapNode, MindMapContentBlock[]>;
+}
+
+/** Normalizes one node at most once during a complete article render. */
+function articleNodeContentBlocks(node: MindMapNode, options: ArticleRendererOptions): MindMapContentBlock[] {
+  const cache = options.contentBlockCache;
+  if (!cache) return nodeContentBlocks(node);
+  const cached = cache.get(node);
+  if (cached) return cached;
+  const blocks = nodeContentBlocks(node);
+  cache.set(node, blocks);
+  return blocks;
 }
 
 /** 根据文档文章样式和文章上下文渲染完整文章页。 */
 export function renderArticleMode(container: HTMLElement, options: ArticleRendererOptions): void {
+  options = options.contentBlockCache ? options : { ...options, contentBlockCache: new WeakMap() };
   container.empty();
   const articleStyle = resolveArticleStyle(options.document.articleStyle);
   const page = container.createDiv({ cls: `mms-article-page article-${articleStyle.preset} toc-${articleStyle.tocStyle ?? "card"}` });
   page.dataset.nodeId = options.document.root.id;
   applyArticleStyle(page, articleStyle);
   const pageEntry = currentArticlePageEntry(options.articleNavigation);
-  const rootTitle = nodePrimaryText(options.document.root) || options.document.title;
   const title = page.createEl("h1", { cls: "mms-article-document-title" });
   title.dataset.nodeId = options.document.root.id;
   if (pageEntry?.label) {
@@ -100,8 +113,8 @@ export function renderArticleMode(container: HTMLElement, options: ArticleRender
     title.createSpan({ cls: "mms-article-number", text: `${pageEntry.label}${separator}` });
   }
   const titleText = title.createSpan({ cls: "mms-article-document-title-text" });
-  const rootTextBlock = nodeContentBlocks(options.document.root).find((block): block is MindMapTextContentBlock => block.type === "text");
-  renderRichTextRuns(titleText, rootTextBlock?.richText, rootTextBlock?.text ?? rootTitle);
+  const rootTextBlock = articleNodeContentBlocks(options.document.root, options).find((block): block is MindMapTextContentBlock => block.type === "text");
+  renderRichTextRuns(titleText, rootTextBlock?.richText, rootTextBlock?.text ?? options.document.title);
   options.makeInlineEditable(titleText, options.document.root, "文章标题", rootTextBlock?.id);
   options.addInlineNodeActions(page, options.document.root);
   title.addEventListener("contextmenu", (event) => {
@@ -122,7 +135,8 @@ export function renderArticleMode(container: HTMLElement, options: ArticleRender
   const infos = buildArticleNodeInfo(options.document.root, options.articleBaseDepth, {
     enabled: options.articleLeafNumberingEnabled,
     threshold: options.articleLeafNumberingThreshold
-  });
+  }, (node) => articleNodeContentBlocks(node, options)
+    .find((block): block is MindMapTextContentBlock => block.type === "text")?.text.trim() ?? "");
   if (!options.incremental) {
     for (const info of infos) {
       const section = page.createEl("section");
@@ -138,7 +152,7 @@ export function renderArticleMode(container: HTMLElement, options: ArticleRender
   const sections = new Map<string, HTMLElement>();
   const infoById = new Map(infos.map((info) => [info.node.id, info]));
   const fingerprints = new Map<string, string>();
-  const cachedIds = new Set<string>();
+  const cachedEntries = new Map<string, ArticleNodeRenderCacheEntry>();
 
   for (const info of infos) {
     const section = page.createEl("section", { cls: `mms-article-node is-render-pending depth-${Math.min(info.depth, 8)}` });
@@ -148,10 +162,9 @@ export function renderArticleMode(container: HTMLElement, options: ArticleRender
     const fingerprint = articleNodeFingerprint(info, options);
     fingerprints.set(info.node.id, fingerprint);
     const cached = previousCache?.nodes[info.node.id];
-    if (!cached || cached.fingerprint !== fingerprint || !isArticleNodeCacheable(info.node)) continue;
-    if (!restoreCachedArticleSection(section, cached.html, info, options)) continue;
-    cachedIds.add(info.node.id);
-    nextCacheNodes[info.node.id] = cached;
+    if (cached?.fingerprint === fingerprint && isArticleNodeCacheable(info.node, options)) {
+      cachedEntries.set(info.node.id, cached);
+    }
   }
 
   const orderedIds = prioritizeArticleNodeIds(
@@ -159,19 +172,9 @@ export function renderArticleMode(container: HTMLElement, options: ArticleRender
     buildHierarchyFocusOrder(options.document.root, options.selectedId)
   );
   let firstContentRevealed = false;
-  let pagerRendered = false;
-  const firstDocumentNodeId = infos[0]?.node.id;
-  if (infos.length === 0 || (firstDocumentNodeId && cachedIds.has(firstDocumentNodeId))) {
-    if (cachedIds.size === infos.length) {
-      renderArticlePager(page, options);
-      pagerRendered = true;
-    }
-    options.incremental.onFirstContent();
-    firstContentRevealed = true;
-  }
 
   const complete = (): void => {
-    if (!pagerRendered) renderArticlePager(page, options);
+    renderArticlePager(page, options);
     const now = Date.now();
     const snapshot: ArticleRenderCacheSnapshot = {
       schemaVersion: ARTICLE_RENDER_CACHE_SCHEMA_VERSION,
@@ -199,11 +202,14 @@ export function renderArticleMode(container: HTMLElement, options: ArticleRender
       const info = infoById.get(nodeId);
       const section = sections.get(nodeId);
       if (info && section) {
-        if (cachedIds.has(nodeId)) {
+        const cached = cachedEntries.get(nodeId);
+        const restored = cached ? restoreCachedArticleSection(section, cached.html, info, options) : false;
+        if (restored && cached) {
+          nextCacheNodes[nodeId] = cached;
           hydrateArticleNodeSection(section, info, options);
         } else {
           renderArticleNodeSection(section, info, options);
-          if (isArticleNodeCacheable(info.node)) {
+          if (isArticleNodeCacheable(info.node, options)) {
             nextCacheNodes[nodeId] = {
               fingerprint: fingerprints.get(nodeId) ?? articleNodeFingerprint(info, options),
               html: snapshotArticleSectionHtml(section)
@@ -226,6 +232,7 @@ export function renderArticleMode(container: HTMLElement, options: ArticleRender
   };
 
   if (!orderedIds.length) {
+    options.incremental.onFirstContent();
     complete();
     return;
   }
@@ -290,8 +297,8 @@ function articleNodeFingerprint(
 }
 
 /** Code blocks own asynchronous Markdown components, so they are rebuilt instead of persisted as inert HTML. */
-function isArticleNodeCacheable(node: MindMapNode): boolean {
-  return !nodeContentBlocks(node).some((block) => block.type === "code");
+function isArticleNodeCacheable(node: MindMapNode, options: ArticleRendererOptions): boolean {
+  return !articleNodeContentBlocks(node, options).some((block) => block.type === "code");
 }
 
 /** Restores safe static HTML immediately; interactive behavior is hydrated in a later frame. */
@@ -337,6 +344,7 @@ function hydrateArticleNodeSection(
   info: ReturnType<typeof buildArticleNodeInfo>[number],
   options: ArticleRendererOptions
 ): void {
+  const blockElements = indexArticleBlockElements(section);
   section.addEventListener("click", () => {
     if (!options.isReadOnly()) options.selectNode(info.node.id);
   });
@@ -351,7 +359,7 @@ function hydrateArticleNodeSection(
   if (info.isHeading) {
     const heading = section.querySelector<HTMLElement>(".mms-article-section-heading");
     const headingText = heading?.querySelector<HTMLElement>(".mms-article-heading-text");
-    const textBlock = nodeContentBlocks(info.node).find((block): block is MindMapTextContentBlock => block.type === "text");
+    const textBlock = articleNodeContentBlocks(info.node, options).find((block): block is MindMapTextContentBlock => block.type === "text");
     if (headingText) {
       options.makeInlineEditable(headingText, info.node, "章节标题", textBlock?.id);
       if (info.node.submap && headingText instanceof HTMLAnchorElement) {
@@ -366,21 +374,21 @@ function hydrateArticleNodeSection(
       }
     }
     if (heading) options.addInlineNodeActions(heading, info.node);
-    hydrateArticleNodeContent(section, info.node, false, options);
+    hydrateArticleNodeContent(section, info.node, false, options, blockElements);
     return;
   }
 
-  const blocks = nodeContentBlocks(info.node);
+  const blocks = articleNodeContentBlocks(info.node, options);
   const firstTextBlock = blocks.find((block): block is MindMapTextContentBlock => block.type === "text");
   if (firstTextBlock) {
-    const paragraph = findBlockElement(section, firstTextBlock.id, "p");
+    const paragraph = findBlockElement(blockElements, firstTextBlock.id, "p");
     if (paragraph) options.makeInlineEditable(paragraph, info.node, "正文段落", firstTextBlock.id);
   } else if (!options.readOnly && blocks.length === 0) {
     const paragraph = section.querySelector<HTMLElement>(".mms-article-leaf-text");
     if (paragraph) options.makeInlineEditable(paragraph, info.node, "正文段落");
   }
   options.addInlineNodeActions(section, info.node);
-  hydrateArticleNodeContent(section, info.node, false, options);
+  hydrateArticleNodeContent(section, info.node, false, options, blockElements);
 }
 
 /** Rebinds text, image, table, and question interactions inside a restored node. */
@@ -388,17 +396,18 @@ function hydrateArticleNodeContent(
   container: HTMLElement,
   node: MindMapNode,
   treatTextAsBody: boolean,
-  options: ArticleRendererOptions
+  options: ArticleRendererOptions,
+  blockElements: ArticleBlockElementIndex = indexArticleBlockElements(container)
 ): void {
   let firstTextHandled = false;
-  for (const block of nodeContentBlocks(node)) {
+  for (const block of articleNodeContentBlocks(node, options)) {
     if (block.type === "text") {
       if (!treatTextAsBody && !firstTextHandled) { firstTextHandled = true; continue; }
       firstTextHandled = true;
-      const paragraph = findBlockElement(container, block.id, "p");
+      const paragraph = findBlockElement(blockElements, block.id, "p");
       if (paragraph) options.makeInlineEditable(paragraph, node, "正文", block.id);
     } else if (block.type === "image") {
-      const shell = findBlockElement(container, block.id, ".mms-article-content-block");
+      const shell = findBlockElement(blockElements, block.id, ".mms-article-content-block");
       const image = shell?.querySelector<HTMLImageElement>("img.mms-article-image");
       if (!shell || !image) continue;
       clearImageFailureDetails(shell);
@@ -428,16 +437,32 @@ function hydrateArticleNodeContent(
         options.openImageContextMenu(event, node.id, block.id);
       });
     } else if (block.type === "table") {
-      const wrap = findBlockElement(container, block.id, ".mms-article-table-wrap");
+      const wrap = findBlockElement(blockElements, block.id, ".mms-article-table-wrap");
       if (wrap) hydrateArticleTable(wrap, node, block.table, block.id, options);
     }
   }
   hydrateArticleQuestionDetails(container);
 }
 
-/** Finds the innermost generated element for a block without relying on CSS.escape support. */
-function findBlockElement(container: HTMLElement, blockId: string, selector: string): HTMLElement | null {
-  return Array.from(container.querySelectorAll<HTMLElement>(selector)).find((element) => element.dataset.blockId === blockId) ?? null;
+/** Elements carrying the same block ID, indexed once for cached-node hydration. */
+type ArticleBlockElementIndex = Map<string, HTMLElement[]>;
+
+/** Builds a block lookup in one subtree scan instead of querying the whole section for every block. */
+function indexArticleBlockElements(container: HTMLElement): ArticleBlockElementIndex {
+  const index: ArticleBlockElementIndex = new Map();
+  container.querySelectorAll<HTMLElement>("[data-block-id]").forEach((element) => {
+    const blockId = element.dataset.blockId;
+    if (!blockId) return;
+    const elements = index.get(blockId);
+    if (elements) elements.push(element);
+    else index.set(blockId, [element]);
+  });
+  return index;
+}
+
+/** Finds a generated element among the small same-ID bucket without relying on CSS.escape support. */
+function findBlockElement(index: ArticleBlockElementIndex, blockId: string, selector: string): HTMLElement | null {
+  return index.get(blockId)?.find((element) => element.matches(selector)) ?? null;
 }
 
 /** Reconnects resize and edit behavior to a table restored from cached HTML. */
@@ -528,7 +553,7 @@ function renderArticleNodeSection(
     });
     if (info.label) heading.createSpan({ cls: "mms-article-number", text: info.label });
     renderHeading(heading, info.node, info.title, options);
-    const headingBlock = nodeContentBlocks(info.node).find((block): block is MindMapTextContentBlock => block.type === "text");
+    const headingBlock = articleNodeContentBlocks(info.node, options).find((block): block is MindMapTextContentBlock => block.type === "text");
     if (headingBlock) heading.dataset.blockId = headingBlock.id;
     if (info.skipped) heading.createSpan({ cls: "mms-article-skip-badge", text: "不编号" });
     options.addInlineNodeActions(heading, info.node);
@@ -536,7 +561,7 @@ function renderArticleNodeSection(
     return;
   }
 
-  const blocks = nodeContentBlocks(info.node);
+  const blocks = articleNodeContentBlocks(info.node, options);
   const firstTextBlock = blocks.find((block): block is MindMapTextContentBlock => block.type === "text");
   if (firstTextBlock?.text.trim()) {
     const blockShell = createArticleContentBlock(section, firstTextBlock.id);
@@ -614,7 +639,7 @@ function renderDirectory(page: HTMLElement, options: ArticleRendererOptions): vo
 function renderHeading(heading: HTMLElement, node: MindMapNode, title: string, options: ArticleRendererOptions): void {
   if (node.submap) {
     const headingLink = heading.createEl("a", { cls: "mms-article-heading-text mms-submap-text-link", href: node.submap.path, attr: { title: `打开子导图：${node.submap.title ?? node.submap.path}` } });
-    const textBlock = nodeContentBlocks(node).find((block): block is MindMapTextContentBlock => block.type === "text");
+    const textBlock = articleNodeContentBlocks(node, options).find((block): block is MindMapTextContentBlock => block.type === "text");
     renderRichTextRuns(headingLink, textBlock?.richText, textBlock?.text ?? title);
     headingLink.dataset.mmsExplicitEditOnly = "true";
     options.makeInlineEditable(headingLink, node, "章节标题", textBlock?.id);
@@ -627,7 +652,7 @@ function renderHeading(heading: HTMLElement, node: MindMapNode, title: string, o
     });
   } else {
     const headingText = heading.createSpan({ cls: "mms-article-heading-text" });
-    const textBlock = nodeContentBlocks(node).find((block): block is MindMapTextContentBlock => block.type === "text");
+    const textBlock = articleNodeContentBlocks(node, options).find((block): block is MindMapTextContentBlock => block.type === "text");
     renderRichTextRuns(headingText, textBlock?.richText, textBlock?.text ?? title);
     options.makeInlineEditable(headingText, node, "章节标题", textBlock?.id);
   }
@@ -637,7 +662,7 @@ function renderHeading(heading: HTMLElement, node: MindMapNode, title: string, o
 export function renderArticleNodeContent(container: HTMLElement, node: MindMapNode, treatTextAsBody: boolean, options: ArticleRendererOptions): void {
   let firstTextHandled = false;
   let inlineImageRow: HTMLElement | null = null;
-  for (const block of nodeContentBlocks(node)) {
+  for (const block of articleNodeContentBlocks(node, options)) {
     if (block.type === "text") {
       inlineImageRow = null;
       if (!treatTextAsBody && !firstTextHandled) { firstTextHandled = true; continue; }
