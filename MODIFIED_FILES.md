@@ -1,5 +1,14 @@
 # Modified Files
 
+## 1.39.4 带圈序号自动缩进对齐
+
+- `styles.css`：恢复自动对齐带圈编号的上级标题缩进，将编号槽收敛到与普通末端圆点相同的 1.25em，并在槽内微调圆圈中心；顶格模式和普通下一级文章序号保持不变。
+- `tests/article-content-block.test.mjs`：新增标识列几何契约，校验圆圈中心与圆点中心误差小于 0.02em、两类正文首字起点完全一致。
+- `README.md`、`CHANGELOG.md`、`docs/DEVELOPMENT.md`、`docs/SPECIAL_FEATURES.md`、`docs/TESTING.md`：同步自动对齐行为、维护边界和专项验证。
+- `package.json`、`package-lock.json`、`manifest.json`、`versions.json`、`update.json`：统一版本元数据为 1.39.4，并写入最终安装包 SHA-256。
+- `TEST_RESULTS.md`、Codex 项目衔接页：记录 Chromium 几何验证、完整测试基线和 Win10 待验证事项。
+- `main.js`：按仓库交付规则重新执行生产构建。
+
 ## 1.39.3 带圈序号字体与基线统一
 
 - `src/editor/article-renderer.ts`、`src/editor/editor.ts`：文章与通读的带圈序号不再把 Unicode 圈号直接放入伪元素，统一传递十进制索引供视觉层绘制。

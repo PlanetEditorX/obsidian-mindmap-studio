@@ -137,9 +137,33 @@ test("terminal body siblings can switch to the next article numbering level", as
   assert.match(styles, /\.mms-article-leaf-text\.mms-article-leaf-numbered\s*\{[\s\S]*margin-inline-start:\s*0/);
   assert.match(styles, /\.mms-article-leaf-text\.mms-article-leaf-numbered::before\s*\{[\s\S]*content:\s*attr\(data-article-number\)/);
   assert.match(styles, /data-article-number-style="circled"\]\s*\{[\s\S]*padding-inline-start:\s*1\.9em/);
+  assert.match(styles, /data-article-number-style="circled"\]\.is-auto-aligned\s*\{[\s\S]*width:\s*calc\(100% - 1\.25em\)[\s\S]*margin-inline-start:\s*1\.25em[\s\S]*padding-inline-start:\s*1\.25em/);
   assert.match(styles, /data-article-number-style="circled"\]::before\s*\{[\s\S]*position:\s*absolute[\s\S]*font-family:\s*inherit[\s\S]*font-size:\s*\.86em[\s\S]*font-variant-numeric:\s*tabular-nums/);
+  assert.match(styles, /data-article-number-style="circled"\]\.is-auto-aligned::before\s*\{[\s\S]*inset-inline-start:\s*-\.15em/);
   assert.doesNotMatch(styles, /Segoe UI Symbol|data-article-number-fallback/);
   assert.match(await readFile("src/article/article-render-cache.ts", "utf8"), /ARTICLE_RENDERER_REVISION = "article-node-cache-v4"/);
+});
+
+test("auto-aligned circled numbers share the terminal bullet marker column", () => {
+  const rule = (selector) => {
+    const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return styles.match(new RegExp(`${escaped}\\s*\\{([\\s\\S]*?)\\}`))?.[1] ?? "";
+  };
+  const em = (body, property) => Number(body.match(new RegExp(`${property}:\\s*(-?\\d*\\.?\\d+)em`))?.[1]);
+  const bullet = rule(".mms-article-leaf-text.is-bulleted");
+  const auto = rule(".mms-article-leaf-text.is-auto-aligned");
+  const bulletBefore = rule(".mms-article-leaf-text.is-bulleted::before");
+  const circledAuto = rule('.mms-article-leaf-text.mms-article-leaf-numbered[data-article-number-style="circled"].is-auto-aligned');
+  const circledBefore = rule('.mms-article-leaf-text.mms-article-leaf-numbered[data-article-number-style="circled"]::before');
+  const circledAutoBefore = rule('.mms-article-leaf-text.mms-article-leaf-numbered[data-article-number-style="circled"].is-auto-aligned::before');
+  const bulletTextStart = em(auto, "margin-inline-start") + em(bullet, "padding-left");
+  const circledTextStart = em(circledAuto, "margin-inline-start") + em(circledAuto, "padding-inline-start");
+  const bulletCenter = em(auto, "margin-inline-start") + em(bulletBefore, "left") + em(bulletBefore, "width") / 2;
+  const circledCenter = em(circledAuto, "margin-inline-start")
+    + em(circledAutoBefore, "inset-inline-start")
+    + em(circledBefore, "min-width") * em(circledBefore, "font-size") / 2;
+  assert.equal(circledTextStart, bulletTextStart);
+  assert.ok(Math.abs(circledCenter - bulletCenter) < 0.02, `marker centers differ by ${Math.abs(circledCenter - bulletCenter)}em`);
 });
 
 test("Enter commits an article title while Shift+Enter keeps an inline line break", () => {
