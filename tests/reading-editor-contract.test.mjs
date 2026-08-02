@@ -204,5 +204,58 @@ test("article parent navigation preserves the parent mount node", async () => {
   ]);
   assert.match(modesSource, /parentNodeId\?: string/);
   assert.match(mainSource, /let parentNodeId = document\.navigation\?\.parentNodeId/);
-  assert.match(rendererSource, /onOpenMindMap\(navigation\.parentPath!, navigation\.parentNodeId\)/);
+  assert.match(rendererSource, /onOpenArticleDirectory\(navigation\.parentPath!, navigation\.parentNodeId\)/);
+});
+
+
+test("parent returns use directory intent instead of article focus", async () => {
+  const [typesSource, editorSource, viewSource, mainSource, rendererSource] = await Promise.all([
+    readFile("src/editor/editor-types.ts", "utf8"),
+    readFile("src/editor/editor.ts", "utf8"),
+    readFile("src/view.ts", "utf8"),
+    readFile("src/main.ts", "utf8"),
+    readFile("src/editor/article-renderer.ts", "utf8")
+  ]);
+  assert.match(typesSource, /onOpenArticleDirectory: \(path: string, focusNodeId\?: string\)/);
+  assert.match(editorSource, /return-parent-click[\s\S]*onOpenArticleDirectory\(navigation\.parentPath, navigation\.parentNodeId\)/);
+  assert.match(editorSource, /event\.key === "Escape"[\s\S]*onOpenArticleDirectory\(this\.options\.articleNavigation\.parentPath/);
+  assert.match(rendererSource, /mms-article-pager-parent[\s\S]*onOpenArticleDirectory\(navigation\.parentPath!, navigation\.parentNodeId\)/);
+  assert.match(viewSource, /openArticleDirectoryPath\(path, sourcePath, this\.leaf, focusNodeId\)/);
+  assert.match(mainSource, /openArticleDirectoryPath[\s\S]*pendingMindMapDirectory\.set\(resolved\.path, directoryRequest\)[\s\S]*openAsMindMap\(resolved, preferredLeaf\)/);
+  const directoryOpen = mainSource.slice(
+    mainSource.indexOf("async openArticleDirectoryPath"),
+    mainSource.indexOf("/** Validates explicit chapter targets", mainSource.indexOf("async openArticleDirectoryPath"))
+  );
+  assert.doesNotMatch(directoryOpen, /openAsMindMap\(resolved, preferredLeaf, resolvedDirectoryNodeId\)/);
+});
+
+test("directory return target is revealed without creating an article focus location", async () => {
+  const [editorSource, rendererSource] = await Promise.all([
+    readFile("src/editor/editor.ts", "utf8"),
+    readFile("src/editor/article-renderer.ts", "utf8")
+  ]);
+  const showDirectory = editorSource.slice(
+    editorSource.indexOf("showArticleDirectory(focusNodeId?: string): void"),
+    editorSource.indexOf("private buildUi", editorSource.indexOf("showArticleDirectory(focusNodeId?: string): void"))
+  );
+  assert.match(showDirectory, /pendingArticleDirectoryFocusNodeId/);
+  assert.doesNotMatch(showDirectory, /focusNode\(/);
+  assert.match(editorSource, /directory-focus-applied/);
+  assert.match(rendererSource, /link\.dataset\.nodeId = entry\.nodeId/);
+});
+
+
+test("directory intent is consumed before the parent file first paint", async () => {
+  const [viewSource, mainSource] = await Promise.all([
+    readFile("src/view.ts", "utf8"),
+    readFile("src/main.ts", "utf8")
+  ]);
+  assert.match(mainSource, /consumePendingMindMapDirectory\(filePath: string\)/);
+  assert.match(viewSource, /consumePendingMindMapDirectory\(this\.file\.path\)/);
+  assert.match(viewSource, /if \(queuedDirectory\) \{[\s\S]*articleLandingMode: "toc"/);
+  assert.match(viewSource, /apply-pending-directory[\s\S]*showArticleDirectory\(queuedDirectory\.focusNodeId\)/);
+  const parsedIndex = viewSource.indexOf("set-view-data-parsed");
+  const editorIndex = viewSource.indexOf("new MindMapEditor", parsedIndex);
+  const directoryModeIndex = viewSource.indexOf('articleLandingMode: "toc"', parsedIndex - 500);
+  assert.ok(directoryModeIndex >= 0 && directoryModeIndex < editorIndex, "directory mode must be set before editor construction");
 });

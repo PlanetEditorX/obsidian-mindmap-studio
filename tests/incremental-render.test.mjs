@@ -251,7 +251,7 @@ test("article return paths preserve the parent mount node", async () => {
     readFile(path.join(rootDir, "src/editor/article-renderer.ts"), "utf8"),
     readFile(path.join(rootDir, "src/main.ts"), "utf8")
   ]);
-  assert.match(rendererSource, /onOpenMindMap\(navigation\.parentPath!, navigation\.parentNodeId\)/);
-  assert.match(editorSource, /onOpenMindMap\(this\.options\.articleNavigation\.parentPath, this\.options\.articleNavigation\.parentNodeId\)/);
+  assert.match(rendererSource, /onOpenArticleDirectory\(navigation\.parentPath!, navigation\.parentNodeId\)/);
+  assert.match(editorSource, /onOpenArticleDirectory\(this\.options\.articleNavigation\.parentPath, this\.options\.articleNavigation\.parentNodeId\)/);
   assert.match(mainSource, /parentNodeId/);
 });

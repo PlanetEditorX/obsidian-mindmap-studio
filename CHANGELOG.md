@@ -1,5 +1,14 @@
 # 更新记录
 
+## 1.40.7
+
+- 根据 1.40.6 真实调试日志修复“返回父导图/返回上一级后显示原始文章而不是目录”。日志确认返回请求携带父节点 ID 后，被通用章节 `focusNode()` 处理并将 `articleLandingMode` 从 `toc` 强制改为 `article`。
+- 将导航意图拆分为“打开章节正文”和“打开文章目录”：目录章节点击继续使用精确节点正文跳转；顶部父级导航、底部返回上一级与文章模式 Esc 改用独立目录入口，不再排队文章章节焦点。
+- 父节点 ID 仅用于在目录中滚动并短暂标记对应条目，不创建 `ReadingLocation`，也不触发正文窗口或历史位置恢复。
+- 新增插件级目录意图队列。父文件在 `MindMapEditor` 构造前先消费目录意图并设置 `articleLandingMode="toc"`，避免先绘制原始文章/正文骨架再切换目录的首帧闪烁。
+- 调试日志新增 `open-directory-request`、`queue-directory`、`consume-pending-directory`、`apply-pending-directory`、`show-directory` 与 `directory-focus-applied/missing`，可直接核对目录意图是否在首帧前消费。
+- 新增父级目录意图、首帧消费和目录条目定位专项契约；单元测试增至 286 项。
+
 ## 1.40.5
 
 - 根据真实 1.40.4 调试日志修复章节目标被根节点覆盖：文章上下文刷新完成前，用户点击目标仍正确保存在 `render-decision.explicitTarget`，但 `setOptions()` 随后优先恢复骨架/历史位置，把 `selectedId` 和待挂载目标改成文档根节点。现在刷新恢复顺序固定为“本次精确节点 → 当前 DOM 锚点 → 历史阅读位置”。
