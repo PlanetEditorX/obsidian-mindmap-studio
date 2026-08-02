@@ -8677,11 +8677,15 @@ function renderArticleMode(container, options) {
     text: "\u52A0\u8F7D\u540E\u6587",
     attr: { type: "button", "aria-label": "\u52A0\u8F7D\u540E\u6587" }
   });
-  const renderRange = (rangeStart, rangeEnd, prepend = false) => {
+  const renderRange = (rangeStart, rangeEnd, prepend = false, entrance = prepend ? "before" : "after") => {
+    const markEntering = (section) => {
+      section.classList.add("is-window-entering", `is-enter-${entrance}`);
+    };
     if (prepend) {
       for (let index = rangeEnd - 1; index >= rangeStart; index -= 1) {
         const section = sections.createEl("section");
         renderArticleNodeSection(section, infos[index], options);
+        markEntering(section);
         sections.insertBefore(section, sections.firstChild);
       }
       return;
@@ -8689,6 +8693,7 @@ function renderArticleMode(container, options) {
     for (let index = rangeStart; index < rangeEnd; index += 1) {
       const section = sections.createEl("section");
       renderArticleNodeSection(section, infos[index], options);
+      markEntering(section);
     }
   };
   const updateLoaders = () => {
@@ -8700,10 +8705,10 @@ function renderArticleMode(container, options) {
     start = next.start;
     end = next.end;
     sections.empty();
-    renderRange(start, end);
+    renderRange(start, end, false, "target");
     updateLoaders();
   };
-  renderRange(start, end);
+  renderRange(start, end, false, "initial");
   updateLoaders();
   before.addEventListener("click", () => {
     var _a3;
@@ -10763,6 +10768,9 @@ var MindMapEditor = class {
     this.articleScrollButtonCleanup = null;
     this.articleRenderController = null;
     this.pendingArticleFocusLocation = null;
+    /** Two-frame paint gate used only when an article needs an entry transition. */
+    this.articleInitialRenderFrame = null;
+    this.articleInitialRenderToken = 0;
     this.articleWindowExpansionFrame = null;
     this.questionPracticeState = createQuestionPracticeState();
     var _a2;
@@ -10798,6 +10806,7 @@ var MindMapEditor = class {
     if (this.readOnlyPersistTimer !== null) window.clearTimeout(this.readOnlyPersistTimer);
     this.clearArticleMiniMap();
     (_a2 = this.articleScrollButtonCleanup) == null ? void 0 : _a2.call(this);
+    this.cancelArticleInitialRender();
     this.cancelArticleWindowExpansion();
     this.articleRenderController = null;
     this.pendingArticleFocusLocation = null;
@@ -11099,6 +11108,16 @@ var MindMapEditor = class {
       this.selectedId = resolved.nodeId;
       this.selectedIds.clear();
       this.selectedIds.add(resolved.nodeId);
+    }
+    if (mode === "article" && this.articleInitialRenderFrame !== null) {
+      this.pendingArticleFocusLocation = createReadingLocation(
+        this.readingLocationSections(),
+        resolved.filePath,
+        resolved.nodeId,
+        resolved.nodeRatio,
+        resolved.viewportRatio
+      );
+      return resolved;
     }
     const restore = () => {
       this.applyResolvedReadingLocation(mode, resolved);
@@ -12535,26 +12554,78 @@ var MindMapEditor = class {
    * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
    */
   renderArticle() {
+    var _a2, _b2;
     const requestedLocation = this.pendingArticleFocusLocation;
     this.pendingArticleFocusLocation = null;
     const existingPage = this.articleEl.querySelector(":scope > .mms-article-page");
     const previousLocation = !requestedLocation && existingPage ? this.captureCurrentLocation("article") : null;
     const previousScroll = { top: this.articleEl.scrollTop, left: this.articleEl.scrollLeft };
+    const directoryOnly = this.options.showArticleToc && this.options.articleTocEntries.length > 0 && ((_a2 = this.document.view) == null ? void 0 : _a2.articleLandingMode) !== "article";
+    const reducedMotion = ((_b2 = window.matchMedia) == null ? void 0 : _b2.call(window, "(prefers-reduced-motion: reduce)").matches) === true;
+    const needsEntryTransition = !directoryOnly && !reducedMotion && (requestedLocation !== null || !existingPage || existingPage.dataset.nodeId !== this.document.root.id || existingPage.querySelector(".mms-article-toc") !== null);
     this.cancelArticleWindowExpansion();
-    this.articleEl.empty();
-    this.articleRenderController = renderArticleMode(this.articleEl, this.articleRendererOptions());
-    this.refreshArticleWindowChrome();
-    this.addArticleScrollToTopButton();
-    this.articleEl.onscroll = () => {
-      this.scheduleReadingLocationCapture("article");
-      this.scheduleArticleWindowExpansion();
+    const renderWindow = () => {
+      var _a3, _b3, _c;
+      if (this.currentMode !== "article") return;
+      const latestRequestedLocation = (_a3 = this.pendingArticleFocusLocation) != null ? _a3 : requestedLocation;
+      this.pendingArticleFocusLocation = null;
+      this.articleEl.empty();
+      this.articleEl.removeAttribute("aria-busy");
+      this.articleRenderController = renderArticleMode(this.articleEl, this.articleRendererOptions());
+      (_b3 = this.articleEl.querySelector(":scope > .mms-article-page")) == null ? void 0 : _b3.addClass("is-window-entering");
+      this.refreshArticleWindowChrome();
+      this.addArticleScrollToTopButton();
+      this.articleEl.onscroll = () => {
+        this.scheduleReadingLocationCapture("article");
+        this.scheduleArticleWindowExpansion();
+      };
+      const location = (_c = latestRequestedLocation != null ? latestRequestedLocation : previousLocation) != null ? _c : !existingPage ? this.lastReadingLocation : null;
+      if (location) this.restoreReadingLocation("article", location);
+      else {
+        this.articleEl.scrollTop = previousScroll.top;
+        this.articleEl.scrollLeft = previousScroll.left;
+      }
     };
-    if (requestedLocation) this.restoreReadingLocation("article", requestedLocation);
-    else if (previousLocation) this.restoreReadingLocation("article", previousLocation);
-    else {
-      this.articleEl.scrollTop = previousScroll.top;
-      this.articleEl.scrollLeft = previousScroll.left;
+    if (!needsEntryTransition) {
+      renderWindow();
+      return;
     }
+    this.renderArticleSkeleton();
+    const token = ++this.articleInitialRenderToken;
+    this.articleInitialRenderFrame = window.requestAnimationFrame(() => {
+      this.articleInitialRenderFrame = window.requestAnimationFrame(() => {
+        this.articleInitialRenderFrame = null;
+        if (token !== this.articleInitialRenderToken || this.currentMode !== "article") return;
+        renderWindow();
+      });
+    });
+  }
+  /** Paints a bounded article skeleton before the first real target window is mounted. */
+  renderArticleSkeleton() {
+    this.articleEl.empty();
+    this.articleRenderController = null;
+    this.articleEl.setAttribute("aria-busy", "true");
+    const skeleton = this.articleEl.createDiv({
+      cls: "mms-article-entry-skeleton",
+      attr: { role: "status", "aria-live": "polite", "aria-label": "\u6B63\u5728\u51C6\u5907\u76EE\u6807\u7AE0\u8282" }
+    });
+    skeleton.createSpan({ cls: "mms-article-skeleton-label", text: "\u6B63\u5728\u51C6\u5907\u76EE\u6807\u7AE0\u8282" });
+    skeleton.createDiv({ cls: "mms-article-skeleton-line is-title" });
+    for (let index = 0; index < 3; index += 1) {
+      const block = skeleton.createDiv({ cls: "mms-article-skeleton-block" });
+      block.createDiv({ cls: "mms-article-skeleton-line is-heading" });
+      block.createDiv({ cls: "mms-article-skeleton-line is-body is-wide" });
+      block.createDiv({ cls: "mms-article-skeleton-line is-body" });
+      if (index < 2) block.createDiv({ cls: "mms-article-skeleton-line is-body is-short" });
+    }
+  }
+  /** Cancels a stale entry skeleton before another mode or document render starts. */
+  cancelArticleInitialRender() {
+    var _a2;
+    this.articleInitialRenderToken += 1;
+    if (this.articleInitialRenderFrame !== null) window.cancelAnimationFrame(this.articleInitialRenderFrame);
+    this.articleInitialRenderFrame = null;
+    (_a2 = this.articleEl) == null ? void 0 : _a2.removeAttribute("aria-busy");
   }
   /** Rebinds article-only controls after a bounded window grows or moves. */
   refreshArticleWindowChrome() {
@@ -12565,22 +12636,37 @@ var MindMapEditor = class {
   }
   /** Cancels a deferred edge expansion before the article DOM is rebuilt. */
   cancelArticleWindowExpansion() {
+    var _a2;
     if (this.articleWindowExpansionFrame !== null) window.cancelAnimationFrame(this.articleWindowExpansionFrame);
     this.articleWindowExpansionFrame = null;
+    (_a2 = this.articleEl) == null ? void 0 : _a2.querySelectorAll(".mms-article-window-loader.is-loading").forEach((loader) => {
+      loader.removeClass("is-loading");
+      loader.removeAttribute("aria-busy");
+    });
   }
-  /** Expands one approximately 5 KB article chunk while preserving the current viewport. */
+  /** Expands one approximately 5 KB article chunk after painting a non-blocking edge indicator. */
   expandArticleWindow(direction) {
     const controller = this.articleRenderController;
-    if (!controller) return;
-    const previousHeight = this.articleEl.scrollHeight;
-    const previousTop = this.articleEl.scrollTop;
-    const changed = direction === "before" ? controller.loadBefore() : controller.loadAfter();
-    if (!changed) return;
-    if (direction === "before") {
-      this.blockReadingLocationCapture();
-      this.articleEl.scrollTop = previousTop + Math.max(0, this.articleEl.scrollHeight - previousHeight);
-    }
-    this.refreshArticleWindowChrome();
+    if (!controller || this.articleWindowExpansionFrame !== null) return;
+    const loader = this.articleEl.querySelector(`.mms-article-window-loader.is-${direction}`);
+    loader == null ? void 0 : loader.addClass("is-loading");
+    loader == null ? void 0 : loader.setAttribute("aria-busy", "true");
+    this.articleWindowExpansionFrame = window.requestAnimationFrame(() => {
+      this.articleWindowExpansionFrame = window.requestAnimationFrame(() => {
+        this.articleWindowExpansionFrame = null;
+        const previousHeight = this.articleEl.scrollHeight;
+        const previousTop = this.articleEl.scrollTop;
+        const changed = direction === "before" ? controller.loadBefore() : controller.loadAfter();
+        loader == null ? void 0 : loader.removeClass("is-loading");
+        loader == null ? void 0 : loader.removeAttribute("aria-busy");
+        if (!changed) return;
+        if (direction === "before") {
+          this.blockReadingLocationCapture();
+          this.articleEl.scrollTop = previousTop + Math.max(0, this.articleEl.scrollHeight - previousHeight);
+        }
+        this.refreshArticleWindowChrome();
+      });
+    });
   }
   /** Loads another window only when the reader reaches a rendered edge. */
   scheduleArticleWindowExpansion() {
@@ -12588,11 +12674,7 @@ var MindMapEditor = class {
     if (!controller || this.currentMode !== "article" || this.articleWindowExpansionFrame !== null) return;
     const threshold = Math.max(480, this.articleEl.clientHeight * 0.7);
     const direction = this.articleEl.scrollTop <= threshold && controller.hasBefore() ? "before" : this.articleEl.scrollTop + this.articleEl.clientHeight >= this.articleEl.scrollHeight - threshold && controller.hasAfter() ? "after" : null;
-    if (!direction) return;
-    this.articleWindowExpansionFrame = window.requestAnimationFrame(() => {
-      this.articleWindowExpansionFrame = null;
-      this.expandArticleWindow(direction);
-    });
+    if (direction) this.expandArticleWindow(direction);
   }
   /** Renders a compact structural navigator for article and continuous reading views. */
   renderArticleMiniMap() {
@@ -12896,6 +12978,7 @@ var MindMapEditor = class {
    */
   render() {
     this.cancelIncrementalRender();
+    this.cancelArticleInitialRender();
     this.cancelArticleWindowExpansion();
     if (this.currentMode !== "article") this.articleRenderController = null;
     this.clearArticleMiniMap();

@@ -1266,6 +1266,9 @@ export class MindMapEditor {
   private articleScrollButtonCleanup: (() => void) | null = null;
   private articleRenderController: ArticleRenderController | null = null;
   private pendingArticleFocusLocation: ReadingLocation | null = null;
+  /** Two-frame paint gate used only when an article needs an entry transition. */
+  private articleInitialRenderFrame: number | null = null;
+  private articleInitialRenderToken = 0;
   private articleWindowExpansionFrame: number | null = null;
   private readonly questionPracticeState = createQuestionPracticeState();
 
@@ -1319,6 +1322,7 @@ export class MindMapEditor {
     if (this.readOnlyPersistTimer !== null) window.clearTimeout(this.readOnlyPersistTimer);
     this.clearArticleMiniMap();
     this.articleScrollButtonCleanup?.();
+    this.cancelArticleInitialRender();
     this.cancelArticleWindowExpansion();
     this.articleRenderController = null;
     this.pendingArticleFocusLocation = null;
@@ -1686,6 +1690,16 @@ export class MindMapEditor {
       this.selectedId = resolved.nodeId;
       this.selectedIds.clear();
       this.selectedIds.add(resolved.nodeId);
+    }
+    if (mode === "article" && this.articleInitialRenderFrame !== null) {
+      this.pendingArticleFocusLocation = createReadingLocation(
+        this.readingLocationSections(),
+        resolved.filePath,
+        resolved.nodeId,
+        resolved.nodeRatio,
+        resolved.viewportRatio
+      );
+      return resolved;
     }
     const restore = (): void => { this.applyResolvedReadingLocation(mode, resolved); };
     // Restore once synchronously so replacing the article/outline DOM cannot
@@ -3246,22 +3260,84 @@ export class MindMapEditor {
     const existingPage = this.articleEl.querySelector<HTMLElement>(":scope > .mms-article-page");
     const previousLocation = !requestedLocation && existingPage ? this.captureCurrentLocation("article") : null;
     const previousScroll = { top: this.articleEl.scrollTop, left: this.articleEl.scrollLeft };
+    const directoryOnly = this.options.showArticleToc
+      && this.options.articleTocEntries.length > 0
+      && this.document.view?.articleLandingMode !== "article";
+    const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true;
+    const needsEntryTransition = !directoryOnly && !reducedMotion && (
+      requestedLocation !== null
+      || !existingPage
+      || existingPage.dataset.nodeId !== this.document.root.id
+      || existingPage.querySelector(".mms-article-toc") !== null
+    );
     this.cancelArticleWindowExpansion();
-    this.articleEl.empty();
-    this.articleRenderController = renderArticleMode(this.articleEl, this.articleRendererOptions());
-    this.refreshArticleWindowChrome();
-    this.addArticleScrollToTopButton();
-    this.articleEl.onscroll = () => {
-      this.scheduleReadingLocationCapture("article");
-      this.scheduleArticleWindowExpansion();
+
+    const renderWindow = (): void => {
+      if (this.currentMode !== "article") return;
+      const latestRequestedLocation = this.pendingArticleFocusLocation ?? requestedLocation;
+      this.pendingArticleFocusLocation = null;
+      this.articleEl.empty();
+      this.articleEl.removeAttribute("aria-busy");
+      this.articleRenderController = renderArticleMode(this.articleEl, this.articleRendererOptions());
+      this.articleEl.querySelector<HTMLElement>(":scope > .mms-article-page")?.addClass("is-window-entering");
+      this.refreshArticleWindowChrome();
+      this.addArticleScrollToTopButton();
+      this.articleEl.onscroll = () => {
+        this.scheduleReadingLocationCapture("article");
+        this.scheduleArticleWindowExpansion();
+      };
+
+      const location = latestRequestedLocation ?? previousLocation
+        ?? (!existingPage ? this.lastReadingLocation : null);
+      if (location) this.restoreReadingLocation("article", location);
+      else {
+        this.articleEl.scrollTop = previousScroll.top;
+        this.articleEl.scrollLeft = previousScroll.left;
+      }
     };
 
-    if (requestedLocation) this.restoreReadingLocation("article", requestedLocation);
-    else if (previousLocation) this.restoreReadingLocation("article", previousLocation);
-    else {
-      this.articleEl.scrollTop = previousScroll.top;
-      this.articleEl.scrollLeft = previousScroll.left;
+    if (!needsEntryTransition) {
+      renderWindow();
+      return;
     }
+
+    this.renderArticleSkeleton();
+    const token = ++this.articleInitialRenderToken;
+    this.articleInitialRenderFrame = window.requestAnimationFrame(() => {
+      this.articleInitialRenderFrame = window.requestAnimationFrame(() => {
+        this.articleInitialRenderFrame = null;
+        if (token !== this.articleInitialRenderToken || this.currentMode !== "article") return;
+        renderWindow();
+      });
+    });
+  }
+
+  /** Paints a bounded article skeleton before the first real target window is mounted. */
+  private renderArticleSkeleton(): void {
+    this.articleEl.empty();
+    this.articleRenderController = null;
+    this.articleEl.setAttribute("aria-busy", "true");
+    const skeleton = this.articleEl.createDiv({
+      cls: "mms-article-entry-skeleton",
+      attr: { role: "status", "aria-live": "polite", "aria-label": "正在准备目标章节" }
+    });
+    skeleton.createSpan({ cls: "mms-article-skeleton-label", text: "正在准备目标章节" });
+    skeleton.createDiv({ cls: "mms-article-skeleton-line is-title" });
+    for (let index = 0; index < 3; index += 1) {
+      const block = skeleton.createDiv({ cls: "mms-article-skeleton-block" });
+      block.createDiv({ cls: "mms-article-skeleton-line is-heading" });
+      block.createDiv({ cls: "mms-article-skeleton-line is-body is-wide" });
+      block.createDiv({ cls: "mms-article-skeleton-line is-body" });
+      if (index < 2) block.createDiv({ cls: "mms-article-skeleton-line is-body is-short" });
+    }
+  }
+
+  /** Cancels a stale entry skeleton before another mode or document render starts. */
+  private cancelArticleInitialRender(): void {
+    this.articleInitialRenderToken += 1;
+    if (this.articleInitialRenderFrame !== null) window.cancelAnimationFrame(this.articleInitialRenderFrame);
+    this.articleInitialRenderFrame = null;
+    this.articleEl?.removeAttribute("aria-busy");
   }
 
   /** Rebinds article-only controls after a bounded window grows or moves. */
@@ -3276,21 +3352,35 @@ export class MindMapEditor {
   private cancelArticleWindowExpansion(): void {
     if (this.articleWindowExpansionFrame !== null) window.cancelAnimationFrame(this.articleWindowExpansionFrame);
     this.articleWindowExpansionFrame = null;
+    this.articleEl?.querySelectorAll<HTMLElement>(".mms-article-window-loader.is-loading").forEach((loader) => {
+      loader.removeClass("is-loading");
+      loader.removeAttribute("aria-busy");
+    });
   }
 
-  /** Expands one approximately 5 KB article chunk while preserving the current viewport. */
+  /** Expands one approximately 5 KB article chunk after painting a non-blocking edge indicator. */
   private expandArticleWindow(direction: "before" | "after"): void {
     const controller = this.articleRenderController;
-    if (!controller) return;
-    const previousHeight = this.articleEl.scrollHeight;
-    const previousTop = this.articleEl.scrollTop;
-    const changed = direction === "before" ? controller.loadBefore() : controller.loadAfter();
-    if (!changed) return;
-    if (direction === "before") {
-      this.blockReadingLocationCapture();
-      this.articleEl.scrollTop = previousTop + Math.max(0, this.articleEl.scrollHeight - previousHeight);
-    }
-    this.refreshArticleWindowChrome();
+    if (!controller || this.articleWindowExpansionFrame !== null) return;
+    const loader = this.articleEl.querySelector<HTMLElement>(`.mms-article-window-loader.is-${direction}`);
+    loader?.addClass("is-loading");
+    loader?.setAttribute("aria-busy", "true");
+    this.articleWindowExpansionFrame = window.requestAnimationFrame(() => {
+      this.articleWindowExpansionFrame = window.requestAnimationFrame(() => {
+        this.articleWindowExpansionFrame = null;
+        const previousHeight = this.articleEl.scrollHeight;
+        const previousTop = this.articleEl.scrollTop;
+        const changed = direction === "before" ? controller.loadBefore() : controller.loadAfter();
+        loader?.removeClass("is-loading");
+        loader?.removeAttribute("aria-busy");
+        if (!changed) return;
+        if (direction === "before") {
+          this.blockReadingLocationCapture();
+          this.articleEl.scrollTop = previousTop + Math.max(0, this.articleEl.scrollHeight - previousHeight);
+        }
+        this.refreshArticleWindowChrome();
+      });
+    });
   }
 
   /** Loads another window only when the reader reaches a rendered edge. */
@@ -3303,11 +3393,7 @@ export class MindMapEditor {
       : this.articleEl.scrollTop + this.articleEl.clientHeight >= this.articleEl.scrollHeight - threshold && controller.hasAfter()
         ? "after"
         : null;
-    if (!direction) return;
-    this.articleWindowExpansionFrame = window.requestAnimationFrame(() => {
-      this.articleWindowExpansionFrame = null;
-      this.expandArticleWindow(direction);
-    });
+    if (direction) this.expandArticleWindow(direction);
   }
 
   /** Renders a compact structural navigator for article and continuous reading views. */
@@ -3620,6 +3706,7 @@ export class MindMapEditor {
    */
   private render(): void {
     this.cancelIncrementalRender();
+    this.cancelArticleInitialRender();
     this.cancelArticleWindowExpansion();
     if (this.currentMode !== "article") this.articleRenderController = null;
     this.clearArticleMiniMap();

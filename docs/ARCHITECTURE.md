@@ -179,8 +179,9 @@ Obsidian 读取文本
 
 - 使用 `resolveArticleNumbering()` 统一解析自动、关闭和手动层级，再由 `buildArticleNodeInfo()` 生成正文节点信息。
 - 文章上下文准备完成后，`renderArticleMode()` 先由 `buildArticleNodeInfo()` 建立轻量章节顺序，再通过 `render-window.ts` 计算目标节点前后各约 5 KB 的左闭右开窗口；只为该范围创建真实章节 DOM。接近顶部或底部时，控制器分别调用 `loadBefore()` / `loadAfter()` 再扩展约 5 KB。
-- 向上插入前文时，编辑器记录扩展前后的 `scrollHeight` 差值并补偿 `scrollTop`，保持当前章节在屏幕中的位置。窗口移动和扩展后重新绑定章节折叠、缩略导航、选中状态与文章块移动 UI。
-- 语义恢复在查询 DOM 前调用 `ensureNode(nodeId)`；目标不在窗口时直接围绕该节点重建窗口，再使用文档标题或 `.mms-article-node[data-node-id]` 精确定位。顶层目录的同文件章节直接调用 `focusNode()`，不经过文件重开；跨文件导航继续传递 `filePath + nodeId`。
+- 需要入口反馈时，编辑器先挂载固定尺寸的 `.mms-article-entry-skeleton`，通过双 `requestAnimationFrame()` 确保骨架实际绘制后再调用 `renderArticleMode()`。骨架只存在于文章滚动容器内，不覆盖页面、不模拟章节高度；快速导航或切换模式会用令牌和帧取消旧任务。系统启用 `prefers-reduced-motion: reduce` 时跳过该绘制门。
+- 向上插入前文时，编辑器记录扩展前后的 `scrollHeight` 差值并补偿 `scrollTop`，保持当前章节在屏幕中的位置。自动或手动扩展先让边缘按钮绘制一帧 `is-loading` 流光，再挂载约 5 KB 真实节点；新节点仅做短时淡入，不遮挡已显示内容。窗口移动和扩展后重新绑定章节折叠、缩略导航、选中状态与文章块移动 UI。
+- 语义恢复在查询 DOM 前调用 `ensureNode(nodeId)`；目标不在窗口时直接围绕该节点重建窗口，再使用文档标题或 `.mms-article-node[data-node-id]` 精确定位。若入口骨架仍在绘制，`restoreReadingLocation()` 会把目标暂存到 `pendingArticleFocusLocation`，待真实窗口挂载后再执行，避免骨架阶段查询失败。顶层目录的同文件章节直接调用 `focusNode()`，不经过文件重开；跨文件导航继续传递 `filePath + nodeId`。
 - 显式章节跳转通过 `pendingArticleFocusLocation` 交给本轮 `renderArticle()` 消费，本轮不再捕获和延迟恢复旧位置，避免旧锚点与新目标竞争。普通内容重绘仍保存并恢复当前语义位置。
 - 章节重量只读取已规范化的原始文字、代码、表格等字段；不会在首屏前为全部节点执行内容块规范化或整节点 `JSON.stringify()`。实际挂载节点的内容块仍在当前渲染窗口内用 `WeakMap` 规范化一次。运行时不保存或恢复节点级 HTML 缓存。
 - 异步文章族上下文刷新通过 `setOptions(..., true)` 标记来源。文章、导图和大纲仅更新阅读上下文；只有文章目录层级、目录项或分页导航发生变化时才重建当前文章，通读模式因渲染跨文件内容仍完整刷新。

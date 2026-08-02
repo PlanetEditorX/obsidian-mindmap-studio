@@ -1,5 +1,14 @@
 # Modified Files
 
+## 1.39.10 文章入口骨架与窗口过渡反馈
+
+- `src/editor/editor.ts`：文章首次进入和目录跳转增加可取消的双帧骨架绘制门；骨架阶段暂存语义位置，真实窗口挂载后恢复；边缘扩展先绘制加载状态再挂载内容，并尊重减少动态效果。
+- `src/editor/article-renderer.ts`：初始窗口、目标窗口和前后扩展新增方向感轻微淡入标记。
+- `styles.css`：新增固定范围骨架、流光、文章页/章节淡入和减少动态效果回退；不使用整页覆盖或章节占位。
+- `tests/incremental-render.test.mjs`：新增骨架双帧、位置暂存、边缘加载、淡入和减少动态效果契约；单元测试增至 278 项。
+- `README.md`、`CHANGELOG.md`、`docs/ARCHITECTURE.md`、`docs/SPECIAL_FEATURES.md`、`docs/READING_JUMP_FIX.zh-CN.md`、`docs/TESTING.md`、`docs/FUNCTION_REFERENCE.md`、`TEST_RESULTS.md`：同步过渡行为、边界和验证结果。
+- `package.json`、`package-lock.json`、`manifest.json`、`versions.json`、`update.json`、`main.js`：同步 1.39.10 版本、生产构建和最终安装包校验。
+
 ## 1.39.9 文章 5 KB 目标窗口与章节定位
 
 - `src/article/render-window.ts`：新增 UTF-8 字节预算、目标前后独立窗口和单方向边缘扩展纯函数。

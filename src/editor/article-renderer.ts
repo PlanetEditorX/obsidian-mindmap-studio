@@ -182,11 +182,20 @@ export function renderArticleMode(container: HTMLElement, options: ArticleRender
     attr: { type: "button", "aria-label": "加载后文" }
   });
 
-  const renderRange = (rangeStart: number, rangeEnd: number, prepend = false): void => {
+  const renderRange = (
+    rangeStart: number,
+    rangeEnd: number,
+    prepend = false,
+    entrance: "initial" | "before" | "after" | "target" = prepend ? "before" : "after"
+  ): void => {
+    const markEntering = (section: HTMLElement): void => {
+      section.classList.add("is-window-entering", `is-enter-${entrance}`);
+    };
     if (prepend) {
       for (let index = rangeEnd - 1; index >= rangeStart; index -= 1) {
         const section = sections.createEl("section");
         renderArticleNodeSection(section, infos[index]!, options);
+        markEntering(section);
         sections.insertBefore(section, sections.firstChild);
       }
       return;
@@ -194,6 +203,7 @@ export function renderArticleMode(container: HTMLElement, options: ArticleRender
     for (let index = rangeStart; index < rangeEnd; index += 1) {
       const section = sections.createEl("section");
       renderArticleNodeSection(section, infos[index]!, options);
+      markEntering(section);
     }
   };
   const updateLoaders = (): void => {
@@ -205,10 +215,10 @@ export function renderArticleMode(container: HTMLElement, options: ArticleRender
     start = next.start;
     end = next.end;
     sections.empty();
-    renderRange(start, end);
+    renderRange(start, end, false, "target");
     updateLoaders();
   };
-  renderRange(start, end);
+  renderRange(start, end, false, "initial");
   updateLoaders();
   before.addEventListener("click", () => options.onArticleWindowExpand?.("before"));
   after.addEventListener("click", () => options.onArticleWindowExpand?.("after"));
