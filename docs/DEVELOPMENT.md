@@ -95,7 +95,7 @@ npm run test:docs
 
 - 先在纯工具或模型层复现，再进入 DOM 和 Obsidian 集成层。
 - 文件保存问题同时检查 `parseDocument()`、`normalizeDocument()`、`serializeDocument()` 和视图 `getViewData()`。
-- 文章编号问题确保目录、正文、通读和导出共用同一解析函数；标题编号只支持 1–8 级，更深结构不得循环复用第 7、8 级字母标签。末端正文的 `circled` 样式是独立展示序列，可跨越该深度边界；文章 DOM 与 HTML 必须对全部序号使用正文数字和统一 CSS 圆环，避免系统字体回退，Markdown/Word 等无 CSS 环境仍保留 1–50 Unicode 与 51+ 可读回退。修改带圈编号 DOM 结构时必须提升 `ARTICLE_RENDERER_REVISION`，防止旧缓存恢复双圈或错误字形。
+- 文章编号问题确保目录、正文、通读和导出共用同一解析函数；标题编号只支持 1–8 级，更深结构不得循环复用第 7、8 级字母标签。末端正文的 `circled` 样式是独立展示序列，可跨越该深度边界；文章 DOM 与 HTML 必须对全部序号使用正文数字和统一 CSS 圆环，避免系统字体回退，Markdown/Word 等无 CSS 环境仍保留 1–50 Unicode 与 51+ 可读回退。自动对齐的带圈序号必须与普通末端圆点复用同一标识列和正文起点，不能被通用编号样式清除 `margin-inline-start`。修改带圈编号 DOM 结构时必须提升 `ARTICLE_RENDERER_REVISION`，防止旧缓存恢复双圈或错误字形。
 - 图床问题分别验证端点、Header、请求体、响应载荷和 URL 提取。
 - 识图问题分别验证图片读取、AI/本地 OCR 模式、不可变预览和并发快照；桌面 API 必须按需动态加载，不能让移动端在插件启动时解析 `node:*` 或 `electron`。
 - 子导图问题同时检查父节点 `submap` 与子文档 `navigation`。

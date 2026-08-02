@@ -4028,6 +4028,12 @@
   padding-inline-start: 1.9em;
 }
 
+.mms-article-leaf-text.mms-article-leaf-numbered[data-article-number-style="circled"].is-auto-aligned {
+  width: calc(100% - 1.25em);
+  margin-inline-start: 1.25em;
+  padding-inline-start: 1.25em;
+}
+
 .mms-article-leaf-text.mms-article-leaf-numbered[data-article-number-style="circled"]::before {
   box-sizing: border-box;
   position: absolute;
@@ -4049,6 +4055,10 @@
   line-height: 1;
   pointer-events: none;
   user-select: none;
+}
+
+.mms-article-leaf-text.mms-article-leaf-numbered[data-article-number-style="circled"].is-auto-aligned::before {
+  inset-inline-start: -.15em;
 }
 
 .mms-article-leaf-text.is-bulleted::before {
