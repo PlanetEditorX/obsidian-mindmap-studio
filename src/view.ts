@@ -204,7 +204,6 @@ export class MindMapStudioView extends TextFileView {
           this.plugin.settings.articleLastReadOnly = readOnly;
           await this.plugin.saveSettings();
         },
-        onArticleRenderCacheUpdate: (snapshot) => this.plugin.updateArticleRenderCache(snapshot),
         onRenderCode: (block, container) => renderCodeBlock({
           block,
           container,
@@ -501,7 +500,6 @@ export class MindMapStudioView extends TextFileView {
       articleLeafNumberingThreshold: this.document?.articleStyle?.leafNumberingThreshold ?? this.plugin.settings.articleLeafNumberingThreshold,
       showArticleToc: this.showArticleToc,
       articleNavigation: this.articleNavigation,
-      articleRenderCache: this.plugin.getArticleRenderCache(this.file?.path ?? ""),
       readingSections: this.readingSections
       ,readingProgressPosition: this.plugin.settings.readingProgressPosition
       ,returnToTopVisibility: this.plugin.settings.returnToTopVisibility

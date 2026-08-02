@@ -141,7 +141,6 @@ test("terminal body siblings can switch to the next article numbering level", as
   assert.match(styles, /data-article-number-style="circled"\]::before\s*\{[\s\S]*position:\s*absolute[\s\S]*top:\s*\.39em[\s\S]*min-width:\s*1\.34em[\s\S]*height:\s*1\.34em[\s\S]*font-family:\s*inherit[\s\S]*font-size:\s*\.86em[\s\S]*font-variant-numeric:\s*tabular-nums/);
   assert.match(styles, /data-article-number-style="circled"\]\.is-auto-aligned::before\s*\{[\s\S]*inset-inline-start:\s*-\.13em/);
   assert.doesNotMatch(styles, /Segoe UI Symbol|data-article-number-fallback/);
-  assert.match(await readFile("src/article/article-render-cache.ts", "utf8"), /ARTICLE_RENDERER_REVISION = "article-node-cache-v4"/);
 });
 
 test("quick editing moves only the circled marker with the editor block padding", () => {

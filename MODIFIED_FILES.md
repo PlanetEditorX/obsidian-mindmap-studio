@@ -1,5 +1,27 @@
 # Modified Files
 
+## 1.39.9 文章 5 KB 目标窗口与章节定位
+
+- `src/article/render-window.ts`：新增 UTF-8 字节预算、目标前后独立窗口和单方向边缘扩展纯函数。
+- `src/editor/article-renderer.ts`：文章首次只挂载目标附近真实章节，提供前后扩展与目标强制挂载控制器；目录同文件条目直接聚焦；全树预扫描改用原始字段重量，避免整节点序列化。
+- `src/editor/editor.ts`：滚动到窗口边缘时按需扩展，向上补载补偿高度；精确章节定位前确保目标已挂载；显式目标独占本轮重绘，避免旧位置竞争。
+- `styles.css`：新增文章窗口和前文/后文加载按钮样式。
+- `tests/incremental-render.test.mjs`：新增 5 KB 窗口、边缘扩展、向上位置补偿、同文件目录直达、显式位置竞争和精确目标挂载契约。
+- `README.md`、`CHANGELOG.md`、`docs/ARCHITECTURE.md`、`docs/SPECIAL_FEATURES.md`、`docs/READING_JUMP_FIX.zh-CN.md`、`docs/TESTING.md`、`docs/FUNCTION_REFERENCE.md`、`TEST_RESULTS.md`：同步窗口架构、跳转时序和验证边界。
+- `package.json`、`package-lock.json`、`manifest.json`、`versions.json`、`update.json`、`main.js`：同步 1.39.9 版本、生产构建和最终安装包校验。
+
+## 1.39.8 文章模式对齐通读渲染
+
+- `src/editor/article-renderer.ts`、`src/editor/editor.ts`：删除文章逐帧占位、隐藏舞台、覆盖层和延迟补齐链路，直接挂载完整真实章节 DOM；保留语义位置恢复、折叠、缩略导航和行内编辑。
+- `src/main.ts`、`src/article/modes.ts`：文章分页导航传递父挂载节点；旧子导图元数据缺失节点 ID 时按父导图中的子导图路径反查。
+- `src/article/article-render-cache.ts`、`tests/article-render-cache.test.mjs`：移除不再使用的文章节点持久缓存及其专项测试。
+- `styles.css`：移除文章骨架、占位、隐藏舞台、加载旋转和页面交换样式。
+- `tests/incremental-render.test.mjs`、`tests/reading-editor-contract.test.mjs`：改为验证文章单次完整渲染、真实章节语义跳转、父级返回节点和上下文刷新边界。
+- `examples/`：将归档中退化为 `#Uxxxx` 的示例路径恢复为标准 UTF-8 中文文件名。
+- `README.md`、`CHANGELOG.md`、`docs/ARCHITECTURE.md`、`docs/SPECIAL_FEATURES.md`、`docs/TESTING.md`、`docs/FUNCTION_REFERENCE.md`、`TEST_RESULTS.md`：同步重构后的架构、测试与交付状态。
+- `package.json`、`package-lock.json`、`manifest.json`、`versions.json`、`update.json`：统一版本元数据为 1.39.8；最终安装包 SHA-256 在打包后写入。
+- `main.js`：由重构后的 TypeScript 源码重新生产构建。
+
 ## 1.39.6 快速编辑带圈序号垂直对齐
 
 - `styles.css`：快速编辑时仅将带圈序号伪元素按现有 7px 顶部内边距向下补偿，不修改正文输入框、正文起点或水平缩进。

@@ -112,24 +112,3 @@ export function prioritizeSpatialRenderItems<T extends SpatialRenderItem>(
     return left.order - right.order;
   });
 }
-
-/**
- * 生成文章节点的渐进渲染顺序：先按层级聚焦顺序，再按文章原始顺序补齐其他节点。
- *
- * @param nodeIds 文章节点的原始顺序。
- * @param focusOrder 层级聚焦顺序。
- * @returns 去重后的完整节点顺序。
- */
-export function prioritizeArticleNodeIds(nodeIds: readonly string[], focusOrder: readonly string[]): string[] {
-  const available = new Set(nodeIds);
-  const seen = new Set<string>();
-  const result: string[] = [];
-  const add = (id: string): void => {
-    if (!available.has(id) || seen.has(id)) return;
-    seen.add(id);
-    result.push(id);
-  };
-  focusOrder.forEach(add);
-  nodeIds.forEach(add);
-  return result;
-}

@@ -191,3 +191,15 @@ test("article previous and next navigation does not register hover tooltip attri
   assert.doesNotMatch(pager, /"aria-label": "返回上一级"/);
   assert.doesNotMatch(pager, /"aria-label": "返回总目录"/);
 });
+
+
+test("article parent navigation preserves the parent mount node", async () => {
+  const [modesSource, mainSource, rendererSource] = await Promise.all([
+    readFile("src/article/modes.ts", "utf8"),
+    readFile("src/main.ts", "utf8"),
+    readFile("src/editor/article-renderer.ts", "utf8")
+  ]);
+  assert.match(modesSource, /parentNodeId\?: string/);
+  assert.match(mainSource, /let parentNodeId = document\.navigation\?\.parentNodeId/);
+  assert.match(rendererSource, /onOpenMindMap\(navigation\.parentPath!, navigation\.parentNodeId\)/);
+});

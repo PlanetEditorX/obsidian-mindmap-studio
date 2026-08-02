@@ -4223,19 +4223,6 @@ function prioritizeSpatialRenderItems(items, focusOrder, viewport) {
     return left.order - right.order;
   });
 }
-function prioritizeArticleNodeIds(nodeIds, focusOrder) {
-  const available = new Set(nodeIds);
-  const seen = /* @__PURE__ */ new Set();
-  const result = [];
-  const add = (id) => {
-    if (!available.has(id) || seen.has(id)) return;
-    seen.add(id);
-    result.push(id);
-  };
-  focusOrder.forEach(add);
-  nodeIds.forEach(add);
-  return result;
-}
 
 // src/render/code-block.ts
 var CODE_THEME_CLASS_NAMES = {
@@ -8511,6 +8498,55 @@ function renderOutlineContent(container, node, depth, options) {
 // src/editor/article-renderer.ts
 var import_obsidian9 = require("obsidian");
 
+// src/article/render-window.ts
+var ARTICLE_RENDER_WINDOW_BYTES = 5 * 1024;
+function utf8ByteLength(value) {
+  var _a2;
+  let bytes = 0;
+  for (const character of value) {
+    const codePoint = (_a2 = character.codePointAt(0)) != null ? _a2 : 0;
+    bytes += codePoint <= 127 ? 1 : codePoint <= 2047 ? 2 : codePoint <= 65535 ? 3 : 4;
+  }
+  return bytes;
+}
+function resolveByteWindow(weights, targetIndex, byteBudget = ARTICLE_RENDER_WINDOW_BYTES) {
+  var _a2, _b2;
+  if (!weights.length) return { start: 0, end: 0 };
+  const budget = Math.max(1, Math.floor(byteBudget));
+  const target = Math.max(0, Math.min(weights.length - 1, Math.floor(targetIndex)));
+  let start = target;
+  let end = target + 1;
+  let beforeBytes = 0;
+  let afterBytes = 0;
+  while (start > 0 && beforeBytes < budget) {
+    start -= 1;
+    beforeBytes += Math.max(0, (_a2 = weights[start]) != null ? _a2 : 0);
+  }
+  while (end < weights.length && afterBytes < budget) {
+    afterBytes += Math.max(0, (_b2 = weights[end]) != null ? _b2 : 0);
+    end += 1;
+  }
+  return { start, end };
+}
+function resolveByteChunk(weights, edge, direction, byteBudget = ARTICLE_RENDER_WINDOW_BYTES) {
+  var _a2, _b2;
+  const budget = Math.max(1, Math.floor(byteBudget));
+  let next = Math.max(0, Math.min(weights.length, Math.floor(edge)));
+  let bytes = 0;
+  if (direction === "before") {
+    while (next > 0 && bytes < budget) {
+      next -= 1;
+      bytes += Math.max(0, (_a2 = weights[next]) != null ? _a2 : 0);
+    }
+  } else {
+    while (next < weights.length && bytes < budget) {
+      bytes += Math.max(0, (_b2 = weights[next]) != null ? _b2 : 0);
+      next += 1;
+    }
+  }
+  return next;
+}
+
 // src/editor/table-interaction.ts
 function bindTableDoubleClick(target, options) {
   target.addEventListener("dblclick", (event) => {
@@ -8551,234 +8587,6 @@ function bindTableColumnResize(handle, options) {
   }), true);
 }
 
-// src/article/article-render-cache.ts
-var ARTICLE_RENDER_CACHE_SCHEMA_VERSION = 1;
-var ARTICLE_RENDERER_REVISION = "article-node-cache-v4";
-function normalizeArticleCachePath(value) {
-  return value.replace(/\\/g, "/").replace(/\/{2,}/g, "/").replace(/^\.\//, "").replace(/\/$/, "");
-}
-var MAX_CACHE_ENTRIES = 24;
-var MAX_CACHE_CHARACTERS = 12e6;
-var MAX_NODE_HTML_CHARACTERS = 1e6;
-function stableStringify(value) {
-  const seen = /* @__PURE__ */ new WeakSet();
-  const visit = (candidate) => {
-    var _a2;
-    if (candidate === null || typeof candidate !== "object") return (_a2 = JSON.stringify(candidate)) != null ? _a2 : "null";
-    if (seen.has(candidate)) throw new TypeError("Article cache fingerprint cannot serialize cyclic data");
-    seen.add(candidate);
-    if (Array.isArray(candidate)) {
-      const serialized2 = `[${candidate.map((item) => visit(item)).join(",")}]`;
-      seen.delete(candidate);
-      return serialized2;
-    }
-    const record = candidate;
-    const serialized = `{${Object.keys(record).sort().map((key) => `${JSON.stringify(key)}:${visit(record[key])}`).join(",")}}`;
-    seen.delete(candidate);
-    return serialized;
-  };
-  return visit(value);
-}
-function articleCacheFingerprint(value) {
-  const source = typeof value === "string" ? value : stableStringify(value);
-  let first = 2166136261;
-  let second = 2654435769;
-  for (let index = 0; index < source.length; index += 1) {
-    const code = source.charCodeAt(index);
-    first ^= code;
-    first = Math.imul(first, 16777619) >>> 0;
-    second ^= code + index;
-    second = Math.imul(second, 2246822507) >>> 0;
-  }
-  return `${first.toString(16).padStart(8, "0")}${second.toString(16).padStart(8, "0")}`;
-}
-function articleNodeRenderFingerprint(node, context) {
-  return articleCacheFingerprint({
-    node: { ...node, children: [] },
-    context
-  });
-}
-function normalizeArticleRenderCacheSnapshot(value) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-  const candidate = value;
-  if (candidate.schemaVersion !== ARTICLE_RENDER_CACHE_SCHEMA_VERSION) return null;
-  if (candidate.rendererRevision !== ARTICLE_RENDERER_REVISION) return null;
-  if (typeof candidate.filePath !== "string" || !candidate.filePath.trim()) return null;
-  if (typeof candidate.documentFingerprint !== "string" || typeof candidate.presentationFingerprint !== "string") return null;
-  if (!candidate.nodes || typeof candidate.nodes !== "object" || Array.isArray(candidate.nodes)) return null;
-  const nodes = /* @__PURE__ */ Object.create(null);
-  let totalCharacters = 0;
-  for (const [nodeId, rawEntry] of Object.entries(candidate.nodes)) {
-    if (!nodeId || !rawEntry || typeof rawEntry !== "object" || Array.isArray(rawEntry)) continue;
-    const entry = rawEntry;
-    if (typeof entry.fingerprint !== "string" || typeof entry.html !== "string") continue;
-    if (entry.html.length > MAX_NODE_HTML_CHARACTERS) continue;
-    totalCharacters += entry.html.length;
-    if (totalCharacters > MAX_CACHE_CHARACTERS) return null;
-    nodes[nodeId] = { fingerprint: entry.fingerprint, html: entry.html };
-  }
-  const now = Date.now();
-  return {
-    schemaVersion: ARTICLE_RENDER_CACHE_SCHEMA_VERSION,
-    rendererRevision: ARTICLE_RENDERER_REVISION,
-    filePath: normalizeArticleCachePath(candidate.filePath),
-    documentFingerprint: candidate.documentFingerprint,
-    presentationFingerprint: candidate.presentationFingerprint,
-    nodes,
-    updatedAt: typeof candidate.updatedAt === "number" && Number.isFinite(candidate.updatedAt) ? candidate.updatedAt : now,
-    lastAccessedAt: typeof candidate.lastAccessedAt === "number" && Number.isFinite(candidate.lastAccessedAt) ? candidate.lastAccessedAt : now
-  };
-}
-var ArticleRenderCacheStore = class {
-  /** Creates a bounded cache store backed by one plugin-private JSON file. */
-  constructor(adapter, cacheDirectory, cacheFile) {
-    this.adapter = adapter;
-    this.cacheDirectory = cacheDirectory;
-    this.cacheFile = cacheFile;
-    this.entries = /* @__PURE__ */ new Map();
-    this.persistTimer = null;
-    this.requestedPersistRevision = 0;
-    this.persistedRevision = 0;
-    this.persistRunner = null;
-  }
-  /** 从磁盘加载最近使用的缓存，插件注册视图前即可完成。 */
-  async initialize() {
-    try {
-      this.entries.clear();
-      if (!await this.adapter.exists(this.cacheFile)) return;
-      const parsed = JSON.parse(await this.adapter.read(this.cacheFile));
-      if (parsed.schemaVersion !== ARTICLE_RENDER_CACHE_SCHEMA_VERSION || !Array.isArray(parsed.entries)) return;
-      const snapshots = parsed.entries.map((entry) => normalizeArticleRenderCacheSnapshot(entry)).filter((entry) => Boolean(entry)).sort((left, right) => right.lastAccessedAt - left.lastAccessedAt);
-      const selected = [];
-      let characters = 0;
-      for (const snapshot of snapshots) {
-        const size = this.snapshotCharacters(snapshot);
-        if (selected.length >= MAX_CACHE_ENTRIES) break;
-        if (characters + size > MAX_CACHE_CHARACTERS) continue;
-        selected.push(snapshot);
-        characters += size;
-      }
-      for (const snapshot of selected.reverse()) this.entries.set(snapshot.filePath, snapshot);
-    } catch (error) {
-      console.warn("MindMap Studio article cache load failed", error);
-      this.entries.clear();
-    }
-  }
-  /** 同步读取内存快照，保证 TextFileView 打开路径不等待磁盘。 */
-  get(filePath) {
-    const normalized2 = normalizeArticleCachePath(filePath);
-    const snapshot = this.entries.get(normalized2);
-    if (!snapshot) return null;
-    const newestPath = Array.from(this.entries.keys()).at(-1);
-    snapshot.lastAccessedAt = Date.now();
-    this.entries.delete(normalized2);
-    this.entries.set(normalized2, snapshot);
-    if (newestPath !== normalized2) this.markDirty();
-    return snapshot;
-  }
-  /** 更新内存并延迟写盘；旧文件节点由新快照自然淘汰。 */
-  put(snapshot) {
-    const normalized2 = normalizeArticleRenderCacheSnapshot(snapshot);
-    if (!normalized2) return;
-    normalized2.lastAccessedAt = Date.now();
-    normalized2.updatedAt = Date.now();
-    this.entries.delete(normalized2.filePath);
-    this.entries.set(normalized2.filePath, normalized2);
-    this.prune();
-    this.markDirty();
-  }
-  /** 文件删除时清除缓存。 */
-  remove(filePath) {
-    if (!this.entries.delete(normalizeArticleCachePath(filePath))) return;
-    this.markDirty();
-  }
-  /** 文件重命名时迁移缓存键，节点快照本身仍可复用。 */
-  rename(oldPath, newPath) {
-    const oldNormalized = normalizeArticleCachePath(oldPath);
-    const snapshot = this.entries.get(oldNormalized);
-    if (!snapshot) return;
-    this.entries.delete(oldNormalized);
-    snapshot.filePath = normalizeArticleCachePath(newPath);
-    snapshot.lastAccessedAt = Date.now();
-    this.entries.set(snapshot.filePath, snapshot);
-    this.markDirty();
-  }
-  /** 插件卸载前立即提交尚未写入的缓存。 */
-  async flush() {
-    if (this.persistTimer !== null) {
-      window.clearTimeout(this.persistTimer);
-      this.persistTimer = null;
-    }
-    this.startPersistRunner();
-    if (this.persistRunner) await this.persistRunner;
-  }
-  /** Marks the latest in-memory LRU state dirty and absorbs repeated updates into one trailing write. */
-  markDirty() {
-    this.requestedPersistRevision += 1;
-    this.schedulePersist();
-  }
-  /** Debounces repeated node updates into one disk write when no write loop is already active. */
-  schedulePersist() {
-    if (this.persistRunner) return;
-    if (this.persistTimer !== null) window.clearTimeout(this.persistTimer);
-    this.persistTimer = window.setTimeout(() => {
-      this.persistTimer = null;
-      this.startPersistRunner();
-    }, 800);
-  }
-  /** Starts the unique persistence loop; updates arriving during a write are folded into its next pass. */
-  startPersistRunner() {
-    if (this.persistRunner || this.persistedRevision >= this.requestedPersistRevision) return;
-    if (this.persistTimer !== null) {
-      window.clearTimeout(this.persistTimer);
-      this.persistTimer = null;
-    }
-    this.persistRunner = this.runPersistLoop().finally(() => {
-      this.persistRunner = null;
-      if (this.persistedRevision < this.requestedPersistRevision) this.startPersistRunner();
-    });
-  }
-  /** Persists stable JSON snapshots serially while coalescing all changes observed during an active write. */
-  async runPersistLoop() {
-    while (this.persistedRevision < this.requestedPersistRevision) {
-      const targetRevision = this.requestedPersistRevision;
-      const content = JSON.stringify({
-        schemaVersion: ARTICLE_RENDER_CACHE_SCHEMA_VERSION,
-        entries: Array.from(this.entries.values())
-      });
-      try {
-        if (!await this.adapter.exists(this.cacheDirectory)) await this.adapter.mkdir(this.cacheDirectory);
-        await this.adapter.write(this.cacheFile, content);
-      } catch (error) {
-        console.warn("MindMap Studio article cache persist failed", error);
-        this.persistedRevision = targetRevision;
-        return;
-      }
-      this.persistedRevision = targetRevision;
-    }
-  }
-  /** Applies entry-count and total-character LRU limits. */
-  prune() {
-    while (this.entries.size > MAX_CACHE_ENTRIES) {
-      const oldest = this.entries.keys().next().value;
-      if (!oldest) break;
-      this.entries.delete(oldest);
-    }
-    let total = Array.from(this.entries.values()).reduce((sum, snapshot) => sum + this.snapshotCharacters(snapshot), 0);
-    while (total > MAX_CACHE_CHARACTERS && this.entries.size > 1) {
-      const oldest = this.entries.keys().next().value;
-      if (!oldest) break;
-      const removed = this.entries.get(oldest);
-      this.entries.delete(oldest);
-      if (removed) total -= this.snapshotCharacters(removed);
-    }
-  }
-  /** Estimates one snapshot size without repeatedly serializing the complete cache. */
-  snapshotCharacters(snapshot) {
-    return Object.values(snapshot.nodes).reduce((sum, entry) => sum + entry.html.length + entry.fingerprint.length, 0) + snapshot.filePath.length + snapshot.documentFingerprint.length + snapshot.presentationFingerprint.length + 128;
-  }
-};
-
 // src/editor/article-renderer.ts
 function articleNodeContentBlocks(node, options) {
   const cache = options.contentBlockCache;
@@ -8789,8 +8597,39 @@ function articleNodeContentBlocks(node, options) {
   cache.set(node, blocks);
   return blocks;
 }
+function articleNodePrimaryText(node) {
+  var _a2, _b2, _c;
+  const first = (_a2 = node.content) == null ? void 0 : _a2.find((block) => block.type === "text");
+  return ((_c = (_b2 = first == null ? void 0 : first.text) != null ? _b2 : node.text) != null ? _c : "").trim();
+}
+function articleNodeRenderBytes(info) {
+  var _a2, _b2, _c, _d, _e, _f, _g, _h;
+  const node = info.node;
+  let bytes = utf8ByteLength(info.title) + utf8ByteLength((_a2 = node.note) != null ? _a2 : "") + utf8ByteLength((_b2 = node.link) != null ? _b2 : "") + ((_c = node.tags) != null ? _c : []).reduce((sum, tag) => sum + utf8ByteLength(tag), 0);
+  const blocks = ((_d = node.content) == null ? void 0 : _d.length) ? node.content : void 0;
+  if (blocks) {
+    for (const block of blocks) {
+      if (block.type === "text") bytes += utf8ByteLength(block.text);
+      else if (block.type === "image") bytes += utf8ByteLength((_e = block.alt) != null ? _e : "") + 256;
+      else if (block.type === "code") bytes += utf8ByteLength(block.code.code);
+      else {
+        bytes += block.table.headers.reduce((sum, cell) => sum + utf8ByteLength(cell), 0);
+        for (const row of block.table.rows) bytes += row.reduce((sum, cell) => sum + utf8ByteLength(cell), 0);
+      }
+    }
+  } else {
+    bytes += utf8ByteLength((_f = node.text) != null ? _f : "");
+    bytes += utf8ByteLength((_h = (_g = node.code) == null ? void 0 : _g.code) != null ? _h : "");
+    if (node.table) {
+      bytes += node.table.headers.reduce((sum, cell) => sum + utf8ByteLength(cell), 0);
+      for (const row of node.table.rows) bytes += row.reduce((sum, cell) => sum + utf8ByteLength(cell), 0);
+    }
+    if (node.image) bytes += 256;
+  }
+  return Math.max(192, bytes);
+}
 function renderArticleMode(container, options) {
-  var _a2, _b2, _c, _d;
+  var _a2, _b2, _c;
   options = options.contentBlockCache ? options : { ...options, contentBlockCache: /* @__PURE__ */ new WeakMap() };
   container.empty();
   const articleStyle = resolveArticleStyle(options.document.articleStyle);
@@ -8817,363 +8656,92 @@ function renderArticleMode(container, options) {
   const directoryOnly = options.showArticleToc && options.articleTocEntries.length > 0 && ((_c = options.document.view) == null ? void 0 : _c.articleLandingMode) !== "article";
   if (directoryOnly) {
     renderDirectory(page, options);
-    (_d = options.incremental) == null ? void 0 : _d.onComplete();
-    return;
+    return null;
   }
   const infos = buildArticleNodeInfo(options.document.root, options.articleBaseDepth, {
     enabled: options.articleLeafNumberingEnabled,
     threshold: options.articleLeafNumberingThreshold,
     style: options.articleLeafNumberingStyle
-  }, (node) => {
-    var _a3, _b3;
-    return (_b3 = (_a3 = articleNodeContentBlocks(node, options).find((block) => block.type === "text")) == null ? void 0 : _a3.text.trim()) != null ? _b3 : "";
+  }, articleNodePrimaryText);
+  const weights = infos.map(articleNodeRenderBytes);
+  const initialTarget = infos.findIndex((info) => info.node.id === options.selectedId);
+  let { start, end } = resolveByteWindow(weights, initialTarget >= 0 ? initialTarget : 0);
+  const before = page.createEl("button", {
+    cls: "mms-article-window-loader is-before",
+    text: "\u52A0\u8F7D\u524D\u6587",
+    attr: { type: "button", "aria-label": "\u52A0\u8F7D\u524D\u6587" }
   });
-  if (!options.incremental) {
-    for (const info of infos) {
-      const section = page.createEl("section");
-      renderArticleNodeSection(section, info, options);
-    }
-    renderArticlePager(page, options);
-    return;
-  }
-  const presentationFingerprint = articlePresentationFingerprint(options);
-  const previousCache = compatibleArticleCache(options.articleCache, options.currentFilePath, presentationFingerprint);
-  const nextCacheNodes = {};
-  const sections = /* @__PURE__ */ new Map();
-  const infoById = new Map(infos.map((info) => [info.node.id, info]));
-  const fingerprints = /* @__PURE__ */ new Map();
-  const cachedEntries = /* @__PURE__ */ new Map();
-  for (const info of infos) {
-    const section = page.createEl("section", { cls: `mms-article-node is-render-pending depth-${Math.min(info.depth, 8)}` });
-    section.dataset.nodeId = info.node.id;
-    section.id = info.anchor;
-    sections.set(info.node.id, section);
-    const fingerprint = articleNodeFingerprint(info, options);
-    fingerprints.set(info.node.id, fingerprint);
-    const cached = previousCache == null ? void 0 : previousCache.nodes[info.node.id];
-    if ((cached == null ? void 0 : cached.fingerprint) === fingerprint && isArticleNodeCacheable(info.node, options)) {
-      cachedEntries.set(info.node.id, cached);
-    }
-  }
-  const orderedIds = prioritizeArticleNodeIds(
-    infos.map((info) => info.node.id),
-    buildHierarchyFocusOrder(options.document.root, options.selectedId)
-  );
-  let firstContentRevealed = false;
-  const complete = () => {
-    var _a3;
-    renderArticlePager(page, options);
-    const now = Date.now();
-    const snapshot = {
-      schemaVersion: ARTICLE_RENDER_CACHE_SCHEMA_VERSION,
-      rendererRevision: ARTICLE_RENDERER_REVISION,
-      filePath: options.currentFilePath,
-      documentFingerprint: articleCacheFingerprint(infos.map((info) => {
-        var _a4;
-        return [info.node.id, (_a4 = fingerprints.get(info.node.id)) != null ? _a4 : ""];
-      })),
-      presentationFingerprint,
-      nodes: nextCacheNodes,
-      updatedAt: now,
-      lastAccessedAt: now
-    };
-    options.onArticleCacheUpdate(snapshot);
-    (_a3 = options.incremental) == null ? void 0 : _a3.onComplete();
-  };
-  const renderBatch = (startIndex) => {
-    var _a3, _b3, _c2, _d2;
-    if ((_a3 = options.incremental) == null ? void 0 : _a3.isCancelled()) return;
-    const startedAt = performance.now();
-    let index = startIndex;
-    const firstBatch = startIndex === 0;
-    const minimumBatch = firstBatch ? 1 : 3;
-    const frameBudget = firstBatch ? 4 : 10;
-    while (index < orderedIds.length && (index - startIndex < minimumBatch || performance.now() - startedAt < frameBudget)) {
-      const nodeId = orderedIds[index];
-      const info = infoById.get(nodeId);
-      const section = sections.get(nodeId);
-      if (info && section) {
-        const cached = cachedEntries.get(nodeId);
-        const restored = cached ? restoreCachedArticleSection(section, cached.html, info, options) : false;
-        if (restored && cached) {
-          nextCacheNodes[nodeId] = cached;
-          hydrateArticleNodeSection(section, info, options);
-        } else {
-          renderArticleNodeSection(section, info, options);
-          if (isArticleNodeCacheable(info.node, options)) {
-            nextCacheNodes[nodeId] = {
-              fingerprint: (_b3 = fingerprints.get(nodeId)) != null ? _b3 : articleNodeFingerprint(info, options),
-              html: snapshotArticleSectionHtml(section)
-            };
-          }
-        }
+  const sections = page.createDiv({ cls: "mms-article-window" });
+  const after = page.createEl("button", {
+    cls: "mms-article-window-loader is-after",
+    text: "\u52A0\u8F7D\u540E\u6587",
+    attr: { type: "button", "aria-label": "\u52A0\u8F7D\u540E\u6587" }
+  });
+  const renderRange = (rangeStart, rangeEnd, prepend = false) => {
+    if (prepend) {
+      for (let index = rangeEnd - 1; index >= rangeStart; index -= 1) {
+        const section = sections.createEl("section");
+        renderArticleNodeSection(section, infos[index], options);
+        sections.insertBefore(section, sections.firstChild);
       }
-      index += 1;
-    }
-    if (!firstContentRevealed && (firstBatch || index >= orderedIds.length)) {
-      (_c2 = options.incremental) == null ? void 0 : _c2.onFirstContent();
-      firstContentRevealed = true;
-    }
-    (_d2 = options.incremental) == null ? void 0 : _d2.onProgress();
-    if (index < orderedIds.length) {
-      window.requestAnimationFrame(() => renderBatch(index));
       return;
     }
-    complete();
+    for (let index = rangeStart; index < rangeEnd; index += 1) {
+      const section = sections.createEl("section");
+      renderArticleNodeSection(section, infos[index], options);
+    }
   };
-  if (!orderedIds.length) {
-    options.incremental.onFirstContent();
-    complete();
-    return;
-  }
-  renderBatch(0);
-}
-function compatibleArticleCache(snapshot, filePath, presentationFingerprint) {
-  if (!snapshot) return null;
-  if (snapshot.schemaVersion !== ARTICLE_RENDER_CACHE_SCHEMA_VERSION) return null;
-  if (snapshot.rendererRevision !== ARTICLE_RENDERER_REVISION) return null;
-  if (normalizeArticleCachePath(snapshot.filePath) !== normalizeArticleCachePath(filePath) || snapshot.presentationFingerprint !== presentationFingerprint) return null;
-  return snapshot;
-}
-function articlePresentationFingerprint(options) {
-  var _a2;
-  return articleCacheFingerprint({
-    rendererRevision: ARTICLE_RENDERER_REVISION,
-    articleBaseDepth: options.articleBaseDepth,
-    readOnly: options.readOnly,
-    showArticleToc: options.showArticleToc,
-    articleTocMaxDepth: options.articleTocMaxDepth,
-    articleLeafBulletsEnabled: options.articleLeafBulletsEnabled,
-    articleLeafBulletColor: options.articleLeafBulletColor,
-    articleLeafBulletStyle: options.articleLeafBulletStyle,
-    articleLeafTextAlignment: options.articleLeafTextAlignment,
-    articleLeafNumberingEnabled: options.articleLeafNumberingEnabled,
-    articleLeafNumberingStyle: options.articleLeafNumberingStyle,
-    articleLeafNumberingThreshold: options.articleLeafNumberingThreshold,
-    imageHostPriorityIds: options.imageHostPriorityIds,
-    articleNavigation: options.articleNavigation,
-    articleStyle: options.document.articleStyle,
-    articleLandingMode: (_a2 = options.document.view) == null ? void 0 : _a2.articleLandingMode
-  });
-}
-function articleNodeFingerprint(info, options) {
-  return articleNodeRenderFingerprint(info.node, {
-    rendererRevision: ARTICLE_RENDERER_REVISION,
-    depth: info.depth,
-    anchor: info.anchor,
-    label: info.label,
-    title: info.title,
-    isHeading: info.isHeading,
-    skipped: info.skipped,
-    numberedLeaf: info.numberedLeaf,
-    leafNumberingStyle: info.leafNumberingStyle,
-    leafNumberingIndex: info.leafNumberingIndex,
-    readOnly: options.readOnly,
-    leafBullets: options.articleLeafBulletsEnabled,
-    leafBulletColor: options.articleLeafBulletColor,
-    leafBulletStyle: options.articleLeafBulletStyle,
-    leafTextAlignment: options.articleLeafTextAlignment
-  });
-}
-function isArticleNodeCacheable(node, options) {
-  return !articleNodeContentBlocks(node, options).some((block) => block.type === "code");
-}
-function restoreCachedArticleSection(section, html, info, options) {
-  if (!html || /<\s*(script|iframe|object|embed)\b/i.test(html)) return false;
-  section.innerHTML = html;
-  section.querySelectorAll("script,iframe,object,embed").forEach((element) => element.remove());
-  section.querySelectorAll("*").forEach((element) => {
-    for (const attribute of Array.from(element.attributes)) {
-      if (/^on/i.test(attribute.name)) element.removeAttribute(attribute.name);
-    }
-  });
-  section.className = `mms-article-node depth-${Math.min(info.depth, 8)}${!options.readOnly && options.selectedId === info.node.id ? " is-selected" : ""}`;
-  section.dataset.nodeId = info.node.id;
-  section.id = info.anchor;
-  return true;
-}
-function snapshotArticleSectionHtml(section) {
-  const clone = section.cloneNode(true);
-  clone.querySelectorAll(".mms-inline-node-actions").forEach((element) => element.remove());
-  clone.querySelectorAll("*").forEach((element) => {
-    element.removeAttribute("contenteditable");
-    element.removeAttribute("spellcheck");
-    element.removeAttribute("tabindex");
-    for (const attribute of Array.from(element.attributes)) {
-      if (/^on/i.test(attribute.name)) element.removeAttribute(attribute.name);
-    }
-  });
-  clone.querySelectorAll("script,iframe,object,embed").forEach((element) => element.remove());
-  return clone.innerHTML;
-}
-function hydrateArticleNodeSection(section, info, options) {
-  const blockElements = indexArticleBlockElements(section);
-  section.addEventListener("click", () => {
-    if (!options.isReadOnly()) options.selectNode(info.node.id);
-  });
-  section.addEventListener("contextmenu", (event) => {
-    var _a2;
-    event.preventDefault();
-    event.stopPropagation();
-    const target = event.target instanceof HTMLElement ? event.target : null;
-    const blockId = (_a2 = target == null ? void 0 : target.closest("[data-block-id]")) == null ? void 0 : _a2.dataset.blockId;
-    options.selectNode(info.node.id);
-    options.openAiContextMenu(event, info.node.id, blockId);
-  });
-  if (info.isHeading) {
-    const heading = section.querySelector(".mms-article-section-heading");
-    const headingText = heading == null ? void 0 : heading.querySelector(".mms-article-heading-text");
-    const textBlock = articleNodeContentBlocks(info.node, options).find((block) => block.type === "text");
-    if (headingText) {
-      options.makeInlineEditable(headingText, info.node, "\u7AE0\u8282\u6807\u9898", textBlock == null ? void 0 : textBlock.id);
-      if (info.node.submap && headingText instanceof HTMLAnchorElement) {
-        headingText.dataset.mmsExplicitEditOnly = "true";
-        headingText.addEventListener("click", (event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          if (headingText.contentEditable === "true") return;
-          options.selectNode(info.node.id);
-          void options.callbacks.onOpenMindMap(info.node.submap.path);
-        });
-      }
-    }
-    if (heading) options.addInlineNodeActions(heading, info.node);
-    hydrateArticleNodeContent(section, info.node, false, options, blockElements);
-    return;
-  }
-  const blocks = articleNodeContentBlocks(info.node, options);
-  const firstTextBlock = blocks.find((block) => block.type === "text");
-  if (firstTextBlock) {
-    const paragraph = findBlockElement(blockElements, firstTextBlock.id, "p");
-    if (paragraph) options.makeInlineEditable(paragraph, info.node, "\u6B63\u6587\u6BB5\u843D", firstTextBlock.id);
-  } else if (!options.readOnly && blocks.length === 0) {
-    const paragraph = section.querySelector(".mms-article-leaf-text");
-    if (paragraph) options.makeInlineEditable(paragraph, info.node, "\u6B63\u6587\u6BB5\u843D");
-  }
-  options.addInlineNodeActions(section, info.node);
-  hydrateArticleNodeContent(section, info.node, false, options, blockElements);
-}
-function hydrateArticleNodeContent(container, node, treatTextAsBody, options, blockElements = indexArticleBlockElements(container)) {
-  let firstTextHandled = false;
-  for (const block of articleNodeContentBlocks(node, options)) {
-    if (block.type === "text") {
-      if (!treatTextAsBody && !firstTextHandled) {
-        firstTextHandled = true;
-        continue;
-      }
-      firstTextHandled = true;
-      const paragraph = findBlockElement(blockElements, block.id, "p");
-      if (paragraph) options.makeInlineEditable(paragraph, node, "\u6B63\u6587", block.id);
-    } else if (block.type === "image") {
-      const shell = findBlockElement(blockElements, block.id, ".mms-article-content-block");
-      const image = shell == null ? void 0 : shell.querySelector("img.mms-article-image");
-      if (!shell || !image) continue;
-      clearImageFailureDetails(shell);
-      let activeResolved = null;
-      loadImageWithFallback(
-        image,
-        shell,
-        block,
-        options.imageHostPriorityIds,
-        (source) => options.callbacks.resolveImage(source),
-        (_source, resolved) => {
-          activeResolved = resolved;
-        }
-      );
-      image.addEventListener("click", () => {
-        var _a2;
-        if (!activeResolved) return;
-        new ImagePreviewModal(
-          options.app,
-          activeResolved,
-          (_a2 = block.alt) != null ? _a2 : "\u56FE\u7247",
-          imageSourceCandidates(block, true, options.imageHostPriorityIds),
-          (source) => options.callbacks.resolveImage(source)
-        ).open();
-      });
-      shell.addEventListener("contextmenu", (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        options.selectNode(node.id);
-        options.openImageContextMenu(event, node.id, block.id);
-      });
-    } else if (block.type === "table") {
-      const wrap = findBlockElement(blockElements, block.id, ".mms-article-table-wrap");
-      if (wrap) hydrateArticleTable(wrap, node, block.table, block.id, options);
-    }
-  }
-  hydrateArticleQuestionDetails(container);
-}
-function indexArticleBlockElements(container) {
-  const index = /* @__PURE__ */ new Map();
-  container.querySelectorAll("[data-block-id]").forEach((element) => {
-    const blockId = element.dataset.blockId;
-    if (!blockId) return;
-    const elements = index.get(blockId);
-    if (elements) elements.push(element);
-    else index.set(blockId, [element]);
-  });
-  return index;
-}
-function findBlockElement(index, blockId, selector) {
-  var _a2, _b2;
-  return (_b2 = (_a2 = index.get(blockId)) == null ? void 0 : _a2.find((element) => element.matches(selector))) != null ? _b2 : null;
-}
-function hydrateArticleTable(wrap, node, tableData, blockId, options) {
-  var _a2;
-  const table = wrap.querySelector("table.mms-article-table");
-  if (!table) return;
-  const columns = Array.from(table.querySelectorAll("colgroup col"));
-  const headers = Array.from(table.querySelectorAll("thead th"));
-  const applyWidths = (widths) => {
-    table.addClass("has-custom-column-widths");
-    columns.forEach((column, index) => {
-      var _a3;
-      column.style.width = `${(_a3 = widths[index]) != null ? _a3 : 160}px`;
-    });
-    table.style.width = `${widths.reduce((sum, width) => sum + width, 0)}px`;
+  const updateLoaders = () => {
+    before.toggleClass("is-hidden", start <= 0);
+    after.toggleClass("is-hidden", end >= infos.length);
   };
-  if ((_a2 = tableData.columnWidths) == null ? void 0 : _a2.length) applyWidths(tableData.columnWidths);
-  bindTableDoubleClick(table, {
-    isReadOnly: options.isReadOnly,
-    isResizeTarget: (target) => target instanceof HTMLElement && Boolean(target.closest(".mms-table-column-resizer")),
-    edit: () => options.editTableBlock(node, tableData, blockId)
+  const resetAround = (targetIndex) => {
+    const next = resolveByteWindow(weights, targetIndex);
+    start = next.start;
+    end = next.end;
+    sections.empty();
+    renderRange(start, end);
+    updateLoaders();
+  };
+  renderRange(start, end);
+  updateLoaders();
+  before.addEventListener("click", () => {
+    var _a3;
+    return (_a3 = options.onArticleWindowExpand) == null ? void 0 : _a3.call(options, "before");
   });
-  headers.forEach((header, index) => {
-    let handle = header.querySelector(":scope > .mms-table-column-resizer");
-    if (!handle) {
-      handle = header.createSpan({
-        cls: "mms-table-column-resizer",
-        attr: { role: "separator", title: `\u62D6\u52A8\u8C03\u6574\u7B2C ${index + 1} \u5217\u5BBD\u5EA6`, "aria-label": `\u8C03\u6574\u7B2C ${index + 1} \u5217\u5BBD\u5EA6` }
-      });
-    }
-    handle.addEventListener("dblclick", (event) => event.stopPropagation());
-    bindTableColumnResize(handle, {
-      eventTarget: window,
-      isReadOnly: options.isReadOnly,
-      columnIndex: index,
-      initialWidths: () => headers.map((cell, columnIndex) => {
-        var _a3, _b2;
-        return (_b2 = (_a3 = tableData.columnWidths) == null ? void 0 : _a3[columnIndex]) != null ? _b2 : Math.max(64, Math.round(cell.getBoundingClientRect().width));
-      }),
-      applyWidths,
-      setResizing: (resizing) => wrap.toggleClass("is-resizing-columns", resizing),
-      commitWidths: (widths) => options.updateTableColumnWidths(node, blockId, widths)
-    });
+  after.addEventListener("click", () => {
+    var _a3;
+    return (_a3 = options.onArticleWindowExpand) == null ? void 0 : _a3.call(options, "after");
   });
-}
-function hydrateArticleQuestionDetails(container) {
-  container.querySelectorAll(".mms-question-panel").forEach((panel) => {
-    const toggle = panel.querySelector(".mms-question-toggle");
-    const reveal = panel.querySelector(".mms-question-reveal");
-    if (!toggle || !reveal) return;
-    toggle.addEventListener("click", () => {
-      const revealed = !reveal.hasClass("is-revealed");
-      reveal.toggleClass("is-revealed", revealed);
-      toggle.setText(revealed ? "\u9690\u85CF\u7B54\u6848\u4E0E\u89E3\u6790" : "\u663E\u793A\u7B54\u6848\u4E0E\u89E3\u6790");
-      toggle.setAttr("aria-expanded", String(revealed));
-    });
-  });
+  renderArticlePager(page, options);
+  return {
+    hasBefore: () => start > 0,
+    hasAfter: () => end < infos.length,
+    loadBefore: () => {
+      const nextStart = resolveByteChunk(weights, start, "before");
+      if (nextStart === start) return false;
+      renderRange(nextStart, start, true);
+      start = nextStart;
+      updateLoaders();
+      return true;
+    },
+    loadAfter: () => {
+      const nextEnd = resolveByteChunk(weights, end, "after");
+      if (nextEnd === end) return false;
+      renderRange(end, nextEnd);
+      end = nextEnd;
+      updateLoaders();
+      return true;
+    },
+    ensureNode: (nodeId) => {
+      if (nodeId === options.document.root.id) return true;
+      const targetIndex = infos.findIndex((info) => info.node.id === nodeId);
+      if (targetIndex < 0) return false;
+      if (targetIndex < start || targetIndex >= end) resetAround(targetIndex);
+      return true;
+    },
+    containsNode: (nodeId) => nodeId === options.document.root.id || infos.slice(start, end).some((info) => info.node.id === nodeId)
+  };
 }
 function renderArticleNodeSection(section, info, options) {
   var _a2;
@@ -9265,6 +8833,10 @@ function renderDirectory(page, options) {
     const link = item.createEl("a", { text: entry.displayTitle || entry.title || "\u672A\u547D\u540D\u6807\u9898", href: entry.filePath, attr: { title: entry.breadcrumb.join(" \u203A ") } });
     link.addEventListener("click", (event) => {
       event.preventDefault();
+      if (entry.filePath === options.currentFilePath && entry.nodeId) {
+        options.focusNode(entry.nodeId);
+        return;
+      }
       void options.callbacks.onOpenMindMap(entry.filePath, entry.nodeId);
     });
     if (entry.breadcrumb.length > 1) item.createSpan({ cls: "mms-article-toc-breadcrumb", text: entry.breadcrumb.join(" \u203A ") });
@@ -9487,7 +9059,7 @@ function renderArticlePager(page, options) {
   const parent = pager.createEl("button", { cls: "mms-article-pager-parent", attr: { type: "button" } });
   (0, import_obsidian9.setIcon)(parent, "corner-left-up");
   parent.createSpan({ text: "\u8FD4\u56DE\u4E0A\u4E00\u7EA7" });
-  parent.addEventListener("click", () => void options.callbacks.onOpenMindMap(navigation.parentPath));
+  parent.addEventListener("click", () => void options.callbacks.onOpenMindMap(navigation.parentPath, navigation.parentNodeId));
   if (next) addTarget("mms-article-pager-next", next.depth <= 1 ? "\u4E0B\u4E00\u7AE0 " : "\u4E0B\u4E00\u8282 ", next);
   else {
     const end = pager.createEl("button", { cls: "mms-article-pager-end", attr: { type: "button" } });
@@ -9692,7 +9264,7 @@ function attachSelectionFormatToolbar(options) {
 }
 
 // src/ai/markdown.ts
-function utf8ByteLength(value) {
+function utf8ByteLength2(value) {
   return new TextEncoder().encode(value).byteLength;
 }
 function formatByteSize(bytes) {
@@ -9714,7 +9286,7 @@ function buildAiMarkdownPayload(document2, nodeId, filePath, maxInputBytes) {
   const root = target != null ? target : document2.root;
   const scope = target ? "subtree" : "page";
   const markdown = documentToMarkdown(target ? subtreeDocument(document2, root) : document2).trim();
-  const byteSize = utf8ByteLength(markdown);
+  const byteSize = utf8ByteLength2(markdown);
   const normalizedLimit = Math.max(16 * 1024, Math.round(maxInputBytes));
   return {
     scope,
@@ -9817,7 +9389,7 @@ function previewAiMarkdownEdit(document2, scopeNodeId, responseText) {
   const markdown = extractAiEditMarkdown(responseText);
   if (!markdown) throw new Error("AI \u6CA1\u6709\u8FD4\u56DE\u53EF\u5E94\u7528\u7684 Markdown");
   if (!/^#\s+\S/.test(markdown)) throw new Error("AI \u4FEE\u6539\u63D0\u6848\u5FC5\u987B\u4EE5\u4E00\u7EA7 Markdown \u6807\u9898\u5F00\u5934");
-  if (utf8ByteLength(markdown) > 2 * 1024 * 1024) throw new Error("AI \u8FD4\u56DE\u7684 Markdown \u8D85\u8FC7 2 MB\uFF0C\u5DF2\u963B\u6B62\u5E94\u7528");
+  if (utf8ByteLength2(markdown) > 2 * 1024 * 1024) throw new Error("AI \u8FD4\u56DE\u7684 Markdown \u8D85\u8FC7 2 MB\uFF0C\u5DF2\u963B\u6B62\u5E94\u7528");
   const parsed = markdownToDocument(markdown, target ? nodePlainText(target) : document2.title);
   const replacementNodeCount = flattenNodes(parsed.root).length;
   if (replacementNodeCount > 5e3) throw new Error("AI \u8FD4\u56DE\u7684\u8282\u70B9\u8D85\u8FC7 5000 \u4E2A\uFF0C\u5DF2\u963B\u6B62\u5E94\u7528");
@@ -9829,8 +9401,8 @@ function previewAiMarkdownEdit(document2, scopeNodeId, responseText) {
     markdown,
     originalNodeCount: flattenNodes(target != null ? target : document2.root).length,
     replacementNodeCount,
-    originalByteSize: utf8ByteLength(JSON.stringify(target != null ? target : document2.root)),
-    replacementByteSize: utf8ByteLength(markdown)
+    originalByteSize: utf8ByteLength2(JSON.stringify(target != null ? target : document2.root)),
+    replacementByteSize: utf8ByteLength2(markdown)
   };
 }
 function applyAiMarkdownEdit(document2, preview) {
@@ -11165,23 +10737,6 @@ var MindMapEditor = class {
     this.incrementalRenderFrame = null;
     this.incrementalRenderToken = 0;
     this.mindMapRenderPending = false;
-    this.articleRenderFrame = null;
-    this.articleRenderToken = 0;
-    this.articleRenderPending = false;
-    this.articleRenderViewportSnapshot = null;
-    /** True after wheel, touch, pointer, or paging-key input claims the progressive article viewport. */
-    this.articleRenderViewportClaimedByUser = false;
-    /** Hidden render target used until the first article batch is ready to paint. */
-    this.articleRenderStageEl = null;
-    /** Partially or fully rendered article page already revealed while remaining nodes continue in later frames. */
-    this.articleRenderPageEl = null;
-    /** Visible loading status shown above the retained article page or first-load skeleton. */
-    this.articleRenderOverlayEl = null;
-    /** Current article page retained during an off-screen rebuild. */
-    this.articleRenderPreviousPageEl = null;
-    /** Delayed cleanup for the short enter/overlay fade after an article swap. */
-    this.articleRenderTransitionTimer = null;
-    this.pendingArticleRestoreLocation = null;
     this.pendingMindMapLayoutAnimation = false;
     this.allNodesCollapseToggleTimer = null;
     /** Active viewport interpolation used by fit-to-view and semantic centering. */
@@ -11206,6 +10761,9 @@ var MindMapEditor = class {
     this.articleMiniMapCleanup = null;
     this.collapsedArticleSectionIds = /* @__PURE__ */ new Set();
     this.articleScrollButtonCleanup = null;
+    this.articleRenderController = null;
+    this.pendingArticleFocusLocation = null;
+    this.articleWindowExpansionFrame = null;
     this.questionPracticeState = createQuestionPracticeState();
     var _a2;
     this.app = app;
@@ -11240,6 +10798,9 @@ var MindMapEditor = class {
     if (this.readOnlyPersistTimer !== null) window.clearTimeout(this.readOnlyPersistTimer);
     this.clearArticleMiniMap();
     (_a2 = this.articleScrollButtonCleanup) == null ? void 0 : _a2.call(this);
+    this.cancelArticleWindowExpansion();
+    this.articleRenderController = null;
+    this.pendingArticleFocusLocation = null;
     this.cleanupCallbacks.forEach((callback) => callback());
     this.cleanupCallbacks = [];
     (_b2 = this.resizeObserver) == null ? void 0 : _b2.disconnect();
@@ -11247,7 +10808,6 @@ var MindMapEditor = class {
     if (this.measuredLayoutFrame !== null) window.cancelAnimationFrame(this.measuredLayoutFrame);
     this.measuredLayoutFrame = null;
     this.cancelIncrementalRender();
-    this.cancelArticleRender();
     if (this.allNodesCollapseToggleTimer !== null) window.clearTimeout(this.allNodesCollapseToggleTimer);
     this.allNodesCollapseToggleTimer = null;
     if (this.viewportAnimationFrame !== null) window.cancelAnimationFrame(this.viewportAnimationFrame);
@@ -11540,16 +11100,6 @@ var MindMapEditor = class {
       this.selectedIds.clear();
       this.selectedIds.add(resolved.nodeId);
     }
-    if (mode === "article" && this.articleRenderPending) {
-      this.pendingArticleRestoreLocation = createReadingLocation(
-        this.readingLocationSections(),
-        resolved.filePath,
-        resolved.nodeId,
-        resolved.nodeRatio,
-        resolved.viewportRatio
-      );
-      return resolved;
-    }
     const restore = () => {
       this.applyResolvedReadingLocation(mode, resolved);
     };
@@ -11558,19 +11108,22 @@ var MindMapEditor = class {
     window.requestAnimationFrame(() => window.requestAnimationFrame(restore));
     return resolved;
   }
-  /** 把已解析的语义位置应用到当前 DOM；渐进文章占位尚未填充时返回 false。 */
+  /** 把已解析的语义位置应用到当前 DOM；目标不存在时返回 false。 */
   applyResolvedReadingLocation(mode, resolved) {
+    var _a2, _b2;
     if (mode === "mindmap") {
       this.applySelectionClasses();
       this.centerNode(resolved.nodeId);
       return true;
     }
     const scroller = mode === "outline" ? this.outlineEl : this.articleEl;
-    const target = Array.from(scroller.querySelectorAll("[data-node-id]")).find((element) => {
-      var _a2;
-      return element.dataset.nodeId === resolved.nodeId && ((_a2 = element.dataset.filePath) != null ? _a2 : this.options.currentFilePath) === resolved.filePath;
-    });
-    if (!target || mode === "article" && target.hasClass("is-render-pending")) return false;
+    if (mode === "article" && !((_a2 = this.articleRenderController) == null ? void 0 : _a2.containsNode(resolved.nodeId))) {
+      const mounted = ((_b2 = this.articleRenderController) == null ? void 0 : _b2.ensureNode(resolved.nodeId)) === true;
+      if (mounted) this.refreshArticleWindowChrome();
+    }
+    const selector = mode === "outline" ? `.mms-outline-row[data-node-id="${CSS.escape(resolved.nodeId)}"]` : mode === "article" ? resolved.nodeId === this.document.root.id ? `.mms-article-document-title[data-node-id="${CSS.escape(resolved.nodeId)}"]` : `.mms-article-node[data-node-id="${CSS.escape(resolved.nodeId)}"]` : `[data-node-id="${CSS.escape(resolved.nodeId)}"][data-file-path="${CSS.escape(resolved.filePath)}"]`;
+    const target = scroller.querySelector(selector);
+    if (!target) return false;
     this.blockReadingLocationCapture();
     this.applySelectionClasses();
     const viewport = scroller.getBoundingClientRect();
@@ -11580,13 +11133,6 @@ var MindMapEditor = class {
     scroller.scrollTop += targetY - desiredY;
     this.updateArticleMiniMapActiveMarker();
     return true;
-  }
-  /** 在大型文章分批填充期间持续把已渲染目标节点保持在原视口比例。 */
-  maintainPendingArticleLocation() {
-    const location = this.pendingArticleRestoreLocation;
-    if (!location || this.currentMode !== "article") return false;
-    const resolved = resolveReadingLocation(location, this.readingLocationSections(), this.options.currentFilePath);
-    return resolved ? this.applyResolvedReadingLocation("article", resolved) : false;
   }
   /**
    * 切换read only，并保持模型、界面和持久化状态的一致性。
@@ -11927,14 +11473,6 @@ var MindMapEditor = class {
     this.nodesLayerEl = this.sceneEl.createDiv({ cls: "mmc-nodes-layer" });
     this.outlineEl = this.rootEl.createDiv({ cls: "mms-outline-view" });
     this.articleEl = this.rootEl.createDiv({ cls: "mms-article-view" });
-    const claimProgressiveArticleViewport = () => this.claimProgressiveArticleViewport();
-    this.articleEl.addEventListener("wheel", claimProgressiveArticleViewport, { passive: true });
-    this.articleEl.addEventListener("touchstart", claimProgressiveArticleViewport, { passive: true });
-    this.articleEl.addEventListener("pointerdown", claimProgressiveArticleViewport, { passive: true });
-    this.rootEl.addEventListener("keydown", (event) => {
-      if (!["ArrowDown", "ArrowUp", "PageDown", "PageUp", "Home", "End", " "].includes(event.key)) return;
-      this.claimProgressiveArticleViewport();
-    });
     this.questionPracticeEl = this.rootEl.createDiv({ cls: "mms-question-practice-view" });
     const pageContextMenu = (event) => {
       const target = event.target;
@@ -12997,164 +12535,63 @@ var MindMapEditor = class {
    * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
    */
   renderArticle() {
-    var _a2, _b2;
-    this.articleEl.onscroll = () => this.scheduleReadingLocationCapture("article");
-    const viewportSnapshot = {
-      top: this.articleEl.scrollTop,
-      left: this.articleEl.scrollLeft,
-      height: Math.max(this.articleEl.clientHeight, this.articleEl.scrollHeight)
-    };
-    const token = this.beginArticleRender();
-    this.articleRenderViewportSnapshot = viewportSnapshot;
-    const previousPage = (_a2 = Array.from(this.articleEl.children).find((child) => child instanceof HTMLElement && child.matches(".mms-article-page"))) != null ? _a2 : null;
-    this.articleRenderPreviousPageEl = previousPage;
-    if (previousPage) {
-      previousPage.addClass("is-render-retained");
-      previousPage.setAttr("aria-hidden", "true");
-    } else {
-      const shell = this.articleEl.createDiv({ cls: "mms-article-loading-shell", attr: { "aria-hidden": "true" } });
-      const viewportHeight = Math.max(this.articleEl.clientHeight, Math.round(window.innerHeight * 0.72), 520);
-      shell.style.setProperty("--mms-loading-shell-height", `${viewportHeight}px`);
-      shell.createDiv({ cls: "mms-article-loading-shell-title" });
-      const widths = ["96%", "88%", "93%", "79%", "90%", "72%", "95%", "84%", "91%", "76%"];
-      const lineCount = Math.max(18, Math.ceil((viewportHeight - 150) / 30));
-      for (let index = 0; index < lineCount; index += 1) {
-        if (index > 0 && index % 7 === 0) shell.createDiv({ cls: "mms-article-loading-shell-subtitle" });
-        const line = shell.createDiv({ cls: "mms-article-loading-shell-line" });
-        line.style.setProperty("--mms-loading-line-width", widths[index % widths.length]);
-      }
-    }
-    this.articleEl.addClass("is-progressive-rendering");
-    this.articleEl.setAttr("aria-busy", "true");
-    const overlay = this.articleEl.createDiv({ cls: "mms-article-transition-overlay" });
-    const loading = overlay.createDiv({ cls: "mms-article-loading", attr: { role: "status", "aria-live": "polite" } });
-    loading.createSpan({ cls: "mms-article-loading-spinner", attr: { "aria-hidden": "true" } });
-    loading.createSpan({ text: previousPage ? "\u6B63\u5728\u66F4\u65B0\u6587\u7AE0\u2026" : "\u6B63\u5728\u52A0\u8F7D\u6587\u7AE0\u2026" });
-    this.articleRenderOverlayEl = overlay;
-    const stage = this.articleEl.createDiv({ cls: "mms-article-render-stage", attr: { "aria-hidden": "true" } });
-    this.articleRenderStageEl = stage;
-    this.articleEl.scrollTop = viewportSnapshot.top;
-    this.articleEl.scrollLeft = viewportSnapshot.left;
-    (_b2 = this.modeButtons.get("article")) == null ? void 0 : _b2.addClass("is-loading");
-    this.articleRenderFrame = window.requestAnimationFrame(() => {
-      this.articleRenderFrame = null;
-      if (token !== this.articleRenderToken || this.currentMode !== "article") return;
-      const incremental = {
-        isCancelled: () => token !== this.articleRenderToken || this.currentMode !== "article",
-        onFirstContent: () => this.revealArticleRender(token),
-        onProgress: () => this.maintainArticleRenderViewport(token),
-        onComplete: () => this.completeArticleRender(token)
-      };
-      renderArticleMode(stage, this.articleRendererOptions(incremental));
-    });
-  }
-  /** 用户开始滚动后，后台文章批次不得再覆盖当前视口或恢复旧阅读位置。 */
-  claimProgressiveArticleViewport() {
-    if (!this.articleRenderPending || this.currentMode !== "article") return;
-    this.articleRenderViewportClaimedByUser = true;
-    this.pendingArticleRestoreLocation = null;
-  }
-  /** 首批正文完成后立即显示文章；剩余节点继续在后续帧中填充。 */
-  revealArticleRender(token) {
-    var _a2, _b2, _c;
-    if (token !== this.articleRenderToken || this.currentMode !== "article" || this.articleRenderPageEl) return;
-    const stage = this.articleRenderStageEl;
-    const page = (_a2 = stage == null ? void 0 : stage.querySelector(":scope > .mms-article-page")) != null ? _a2 : null;
-    if (!stage || !page) return;
-    const previousPage = this.articleRenderPreviousPageEl;
-    const snapshot = this.articleRenderViewportSnapshot;
-    if (snapshot) page.style.minHeight = `${snapshot.height}px`;
-    if (previousPage == null ? void 0 : previousPage.isConnected) previousPage.replaceWith(page);
-    else this.articleEl.insertBefore(page, (_b2 = this.articleRenderOverlayEl) != null ? _b2 : stage);
-    stage.remove();
-    previousPage == null ? void 0 : previousPage.removeClass("is-render-retained");
-    previousPage == null ? void 0 : previousPage.removeAttribute("aria-hidden");
-    (_c = this.articleEl.querySelector(":scope > .mms-article-loading-shell")) == null ? void 0 : _c.remove();
-    this.articleRenderStageEl = null;
-    this.articleRenderPreviousPageEl = null;
-    this.articleRenderPageEl = page;
-    const overlay = this.articleRenderOverlayEl;
-    overlay == null ? void 0 : overlay.addClass("is-leaving");
-    if (overlay) {
-      if (this.articleRenderTransitionTimer !== null) window.clearTimeout(this.articleRenderTransitionTimer);
-      this.articleRenderTransitionTimer = window.setTimeout(() => {
-        this.articleRenderTransitionTimer = null;
-        overlay.remove();
-        if (this.articleRenderOverlayEl === overlay) this.articleRenderOverlayEl = null;
-      }, 180);
-    }
-  }
-  /** 保留旧文章高度，并在每批章节填充后优先恢复语义锚点。 */
-  maintainArticleRenderViewport(token) {
-    var _a2;
-    if (token !== this.articleRenderToken || this.currentMode !== "article") return;
-    const snapshot = this.articleRenderViewportSnapshot;
-    const page = (_a2 = this.articleRenderPageEl) != null ? _a2 : this.articleRenderPreviousPageEl;
-    if (snapshot && page) page.style.minHeight = `${snapshot.height}px`;
-    if (!snapshot || this.articleRenderViewportClaimedByUser) return;
-    this.articleEl.scrollLeft = snapshot.left;
-    const restoredSemanticLocation = page ? this.maintainPendingArticleLocation() : false;
-    if (!restoredSemanticLocation) this.articleEl.scrollTop = snapshot.top;
-  }
-  /** 完成文章分帧挂载，安装依赖完整章节 DOM 的交互并恢复语义阅读位置。 */
-  completeArticleRender(token) {
-    var _a2, _b2, _c, _d, _e;
-    if (token !== this.articleRenderToken || this.currentMode !== "article") return;
-    const stage = this.articleRenderStageEl;
-    const stagedPage = (_a2 = stage == null ? void 0 : stage.querySelector(":scope > .mms-article-page")) != null ? _a2 : null;
-    const page = (_b2 = this.articleRenderPageEl) != null ? _b2 : stagedPage;
-    if (!page) {
-      this.cancelArticleRender();
-      return;
-    }
-    const alreadyRevealed = this.articleRenderPageEl === page;
-    const previousPage = this.articleRenderPreviousPageEl;
-    const snapshot = this.articleRenderViewportSnapshot;
-    const restoreViewportAfterRender = !this.articleRenderViewportClaimedByUser;
-    if (!alreadyRevealed) {
-      page.addClass("is-render-entering");
-      if (snapshot) page.style.minHeight = `${snapshot.height}px`;
-      if (previousPage == null ? void 0 : previousPage.isConnected) previousPage.replaceWith(page);
-      else this.articleEl.insertBefore(page, (_c = this.articleRenderOverlayEl) != null ? _c : stage);
-    }
-    stage == null ? void 0 : stage.remove();
-    previousPage == null ? void 0 : previousPage.removeClass("is-render-retained");
-    previousPage == null ? void 0 : previousPage.removeAttribute("aria-hidden");
-    (_d = this.articleEl.querySelector(":scope > .mms-article-loading-shell")) == null ? void 0 : _d.remove();
-    this.articleRenderStageEl = null;
-    this.articleRenderPageEl = null;
-    this.articleRenderPreviousPageEl = null;
-    this.articleRenderPending = false;
-    this.installArticleSectionCollapse();
+    const requestedLocation = this.pendingArticleFocusLocation;
+    this.pendingArticleFocusLocation = null;
+    const existingPage = this.articleEl.querySelector(":scope > .mms-article-page");
+    const previousLocation = !requestedLocation && existingPage ? this.captureCurrentLocation("article") : null;
+    const previousScroll = { top: this.articleEl.scrollTop, left: this.articleEl.scrollLeft };
+    this.cancelArticleWindowExpansion();
+    this.articleEl.empty();
+    this.articleRenderController = renderArticleMode(this.articleEl, this.articleRendererOptions());
+    this.refreshArticleWindowChrome();
     this.addArticleScrollToTopButton();
+    this.articleEl.onscroll = () => {
+      this.scheduleReadingLocationCapture("article");
+      this.scheduleArticleWindowExpansion();
+    };
+    if (requestedLocation) this.restoreReadingLocation("article", requestedLocation);
+    else if (previousLocation) this.restoreReadingLocation("article", previousLocation);
+    else {
+      this.articleEl.scrollTop = previousScroll.top;
+      this.articleEl.scrollLeft = previousScroll.left;
+    }
+  }
+  /** Rebinds article-only controls after a bounded window grows or moves. */
+  refreshArticleWindowChrome() {
+    this.installArticleSectionCollapse();
     this.renderArticleMiniMap();
+    this.applySelectionClasses();
     this.applyArticleClickMoveUi();
-    const location = restoreViewportAfterRender ? (_e = this.pendingArticleRestoreLocation) != null ? _e : this.lastReadingLocation : null;
-    this.pendingArticleRestoreLocation = null;
-    if (location) this.restoreReadingLocation("article", location);
-    this.articleRenderViewportSnapshot = null;
-    window.requestAnimationFrame(() => {
-      page.style.removeProperty("min-height");
-      if (location) this.restoreReadingLocation("article", location);
-      else if (restoreViewportAfterRender && snapshot) {
-        this.articleEl.scrollLeft = snapshot.left;
-        this.articleEl.scrollTop = snapshot.top;
-      }
-      window.requestAnimationFrame(() => {
-        var _a3;
-        page.removeClass("is-render-entering");
-        this.articleEl.removeClass("is-progressive-rendering");
-        this.articleEl.removeAttribute("aria-busy");
-        (_a3 = this.modeButtons.get("article")) == null ? void 0 : _a3.removeClass("is-loading");
-        const overlay = this.articleRenderOverlayEl;
-        overlay == null ? void 0 : overlay.addClass("is-leaving");
-        if (this.articleRenderTransitionTimer !== null) window.clearTimeout(this.articleRenderTransitionTimer);
-        this.articleRenderTransitionTimer = window.setTimeout(() => {
-          this.articleRenderTransitionTimer = null;
-          overlay == null ? void 0 : overlay.remove();
-          if (this.articleRenderOverlayEl === overlay) this.articleRenderOverlayEl = null;
-        }, 180);
-      });
+  }
+  /** Cancels a deferred edge expansion before the article DOM is rebuilt. */
+  cancelArticleWindowExpansion() {
+    if (this.articleWindowExpansionFrame !== null) window.cancelAnimationFrame(this.articleWindowExpansionFrame);
+    this.articleWindowExpansionFrame = null;
+  }
+  /** Expands one approximately 5 KB article chunk while preserving the current viewport. */
+  expandArticleWindow(direction) {
+    const controller = this.articleRenderController;
+    if (!controller) return;
+    const previousHeight = this.articleEl.scrollHeight;
+    const previousTop = this.articleEl.scrollTop;
+    const changed = direction === "before" ? controller.loadBefore() : controller.loadAfter();
+    if (!changed) return;
+    if (direction === "before") {
+      this.blockReadingLocationCapture();
+      this.articleEl.scrollTop = previousTop + Math.max(0, this.articleEl.scrollHeight - previousHeight);
+    }
+    this.refreshArticleWindowChrome();
+  }
+  /** Loads another window only when the reader reaches a rendered edge. */
+  scheduleArticleWindowExpansion() {
+    const controller = this.articleRenderController;
+    if (!controller || this.currentMode !== "article" || this.articleWindowExpansionFrame !== null) return;
+    const threshold = Math.max(480, this.articleEl.clientHeight * 0.7);
+    const direction = this.articleEl.scrollTop <= threshold && controller.hasBefore() ? "before" : this.articleEl.scrollTop + this.articleEl.clientHeight >= this.articleEl.scrollHeight - threshold && controller.hasAfter() ? "after" : null;
+    if (!direction) return;
+    this.articleWindowExpansionFrame = window.requestAnimationFrame(() => {
+      this.articleWindowExpansionFrame = null;
+      this.expandArticleWindow(direction);
     });
   }
   /** Renders a compact structural navigator for article and continuous reading views. */
@@ -13330,10 +12767,11 @@ var MindMapEditor = class {
     miniMap.toggleClass("is-hidden", rootRect.right - pageRect.right < requiredGutter);
   }
   /** 构造文章渲染器所需的最小状态边界。 */
-  articleRendererOptions(incremental) {
+  articleRendererOptions() {
     return {
       app: this.app,
       document: this.document,
+      currentFilePath: this.options.currentFilePath,
       selectedId: this.selectedId,
       readOnly: this.readOnly,
       isReadOnly: () => this.readOnly,
@@ -13350,14 +12788,9 @@ var MindMapEditor = class {
       articleLeafNumberingThreshold: this.options.articleLeafNumberingThreshold,
       imageHostPriorityIds: this.options.imageHostPriorityIds,
       articleNavigation: this.options.articleNavigation,
-      currentFilePath: this.options.currentFilePath,
-      articleCache: this.options.articleRenderCache,
-      onArticleCacheUpdate: (snapshot) => {
-        this.options.articleRenderCache = snapshot;
-        this.callbacks.onArticleRenderCacheUpdate(snapshot);
-      },
       callbacks: this.callbacks,
       selectNode: (id) => this.selectNode(id),
+      focusNode: (id) => this.focusNode(id),
       openAiContextMenu: (event, nodeId, blockId) => {
         this.selectNode(nodeId);
         this.openContextMenu(event, blockId);
@@ -13368,7 +12801,7 @@ var MindMapEditor = class {
       makeInlineEditable: (element, node, placeholder, blockId) => this.makeInlineEditable(element, node, placeholder, blockId),
       makeInlineCodeEditable: (element, node, code, blockId) => this.makeInlineCodeEditable(element, node, code, blockId),
       addInlineNodeActions: (container, node) => this.addInlineNodeActions(container, node),
-      incremental
+      onArticleWindowExpand: (direction) => this.expandArticleWindow(direction)
     };
   }
   /**
@@ -13387,6 +12820,7 @@ var MindMapEditor = class {
   /** Adds Markdown-style collapse controls to headings and hides their descendant article sections. */
   installArticleSectionCollapse() {
     if (!this.options.articleSectionCollapseEnabled) return;
+    this.articleEl.querySelectorAll(".mms-article-collapse-toggle").forEach((toggle) => toggle.remove());
     const sections = Array.from(this.articleEl.querySelectorAll(".mms-article-node"));
     const depthOf = (section) => {
       var _a2, _b2;
@@ -13462,7 +12896,8 @@ var MindMapEditor = class {
    */
   render() {
     this.cancelIncrementalRender();
-    this.cancelArticleRender();
+    this.cancelArticleWindowExpansion();
+    if (this.currentMode !== "article") this.articleRenderController = null;
     this.clearArticleMiniMap();
     for (const id of Array.from(this.selectedIds)) {
       if (!findNode(this.document.root, id)) this.selectedIds.delete(id);
@@ -13486,7 +12921,7 @@ var MindMapEditor = class {
     else if (this.currentMode === "reading") this.renderReading();
     else if (this.currentMode === "question-bank") this.renderQuestionPractice();
     else this.renderMindMap();
-    if (!this.articleRenderPending) this.applyArticleClickMoveUi();
+    this.applyArticleClickMoveUi();
   }
   /** Renders the configured-folder practice surface and persists each automatic grading result. */
   renderQuestionPractice() {
@@ -13532,44 +12967,6 @@ var MindMapEditor = class {
     this.cancelIncrementalRender();
     this.incrementalRenderToken += 1;
     return this.incrementalRenderToken;
-  }
-  /** 取消尚未完成的文章挂载并移除工具栏和视图中的加载态。 */
-  cancelArticleRender() {
-    var _a2, _b2, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p;
-    this.articleRenderToken += 1;
-    this.articleRenderPending = false;
-    this.articleRenderViewportSnapshot = null;
-    this.articleRenderViewportClaimedByUser = false;
-    this.pendingArticleRestoreLocation = null;
-    if (this.articleRenderFrame !== null) window.cancelAnimationFrame(this.articleRenderFrame);
-    this.articleRenderFrame = null;
-    if (this.articleRenderTransitionTimer !== null) window.clearTimeout(this.articleRenderTransitionTimer);
-    this.articleRenderTransitionTimer = null;
-    (_a2 = this.articleRenderStageEl) == null ? void 0 : _a2.remove();
-    this.articleRenderStageEl = null;
-    (_b2 = this.articleRenderPageEl) == null ? void 0 : _b2.removeClass("is-render-entering");
-    (_c = this.articleRenderPageEl) == null ? void 0 : _c.style.removeProperty("min-height");
-    this.articleRenderPageEl = null;
-    (_d = this.articleRenderOverlayEl) == null ? void 0 : _d.remove();
-    this.articleRenderOverlayEl = null;
-    (_e = this.articleRenderPreviousPageEl) == null ? void 0 : _e.removeClass("is-render-retained");
-    (_f = this.articleRenderPreviousPageEl) == null ? void 0 : _f.removeAttribute("aria-hidden");
-    (_g = this.articleRenderPreviousPageEl) == null ? void 0 : _g.style.removeProperty("min-height");
-    this.articleRenderPreviousPageEl = null;
-    (_i = (_h = this.articleEl) == null ? void 0 : _h.querySelector(":scope > .mms-article-loading-shell")) == null ? void 0 : _i.remove();
-    (_k = (_j = this.articleEl) == null ? void 0 : _j.querySelector(":scope > .mms-article-page")) == null ? void 0 : _k.removeClass("is-render-entering");
-    (_m = (_l = this.articleEl) == null ? void 0 : _l.querySelector(":scope > .mms-article-page")) == null ? void 0 : _m.style.removeProperty("min-height");
-    (_n = this.articleEl) == null ? void 0 : _n.removeClass("is-progressive-rendering");
-    (_o = this.articleEl) == null ? void 0 : _o.removeAttribute("aria-busy");
-    (_p = this.modeButtons.get("article")) == null ? void 0 : _p.removeClass("is-loading");
-  }
-  /** 开始一次新的文章分帧挂载并返回本轮令牌。 */
-  beginArticleRender() {
-    this.cancelArticleRender();
-    this.articleRenderPending = true;
-    this.articleRenderViewportClaimedByUser = false;
-    this.articleRenderToken += 1;
-    return this.articleRenderToken;
   }
   /** 把当前缩放和平移转换为布局世界坐标，供当前和相邻视口优先排序。 */
   currentMindMapWorldViewport() {
@@ -15910,6 +15307,7 @@ var MindMapEditor = class {
    * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
    */
   focusNode(id, persistLocation = true) {
+    var _a2, _b2;
     const ancestors = findAncestors(this.document.root, id);
     const collapsed = ancestors.filter((node) => node.collapsed);
     if (collapsed.length) {
@@ -15923,24 +15321,21 @@ var MindMapEditor = class {
     this.selectedId = id;
     this.selectedIds.clear();
     this.selectedIds.add(id);
-    if (persistLocation) {
-      this.rememberLocation(createReadingLocation(
-        this.readingLocationSections(),
-        this.options.currentFilePath,
-        id,
-        0,
-        this.currentMode === "mindmap" ? 0.5 : 0.35
-      ), true);
+    if (this.currentMode === "article" && id !== this.document.root.id && this.options.showArticleToc && ((_a2 = this.document.view) == null ? void 0 : _a2.articleLandingMode) !== "article") {
+      this.document.view = { ...(_b2 = this.document.view) != null ? _b2 : {}, articleLandingMode: "article" };
+      this.callbacks.onChange(this.getDocument());
     }
+    const location = createReadingLocation(
+      this.readingLocationSections(),
+      this.options.currentFilePath,
+      id,
+      0,
+      this.currentMode === "mindmap" ? 0.5 : 0.35
+    );
+    if (persistLocation) this.rememberLocation(location, true);
+    if (this.currentMode === "article") this.pendingArticleFocusLocation = location;
     this.render();
-    window.setTimeout(() => {
-      var _a2;
-      if (this.currentMode === "mindmap") this.centerNode(id);
-      else {
-        const selector = this.currentMode === "outline" ? `.mms-outline-row[data-node-id="${CSS.escape(id)}"]` : `.mms-article-node[data-node-id="${CSS.escape(id)}"]`;
-        (_a2 = this.rootEl.querySelector(selector)) == null ? void 0 : _a2.scrollIntoView({ behavior: "smooth", block: "center" });
-      }
-    }, 20);
+    if (this.currentMode !== "article") this.restoreReadingLocation(this.currentMode, location);
   }
   /**
    * 定位node，并保持模型、界面和持久化状态的一致性。
@@ -16948,7 +16343,7 @@ var MindMapEditor = class {
     }
     if (this.currentMode === "article" && event.key === "Escape" && ((_a2 = this.options.articleNavigation) == null ? void 0 : _a2.parentPath)) {
       event.preventDefault();
-      void this.callbacks.onOpenMindMap(this.options.articleNavigation.parentPath);
+      void this.callbacks.onOpenMindMap(this.options.articleNavigation.parentPath, this.options.articleNavigation.parentNodeId);
       return;
     }
     if (this.readOnly) {
@@ -17804,7 +17199,6 @@ var MindMapStudioView = class _MindMapStudioView extends import_obsidian13.TextF
           this.plugin.settings.articleLastReadOnly = readOnly;
           await this.plugin.saveSettings();
         },
-        onArticleRenderCacheUpdate: (snapshot) => this.plugin.updateArticleRenderCache(snapshot),
         onRenderCode: (block, container) => {
           var _a3;
           return renderCodeBlock({
@@ -18063,7 +17457,7 @@ var MindMapStudioView = class _MindMapStudioView extends import_obsidian13.TextF
    * 读取并返回editor options，并保持模型、界面和持久化状态的一致性。
    */
   getEditorOptions(preferCurrentFileLocation = false) {
-    var _a2, _b2, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _A, _B, _C;
+    var _a2, _b2, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _A;
     return {
       defaultNodeShape: this.plugin.settings.defaultNodeShape,
       defaultAppearance: settingsToAppearance(this.plugin.settings),
@@ -18123,7 +17517,6 @@ var MindMapStudioView = class _MindMapStudioView extends import_obsidian13.TextF
       articleLeafNumberingThreshold: (_A = (_z = (_y = this.document) == null ? void 0 : _y.articleStyle) == null ? void 0 : _z.leafNumberingThreshold) != null ? _A : this.plugin.settings.articleLeafNumberingThreshold,
       showArticleToc: this.showArticleToc,
       articleNavigation: this.articleNavigation,
-      articleRenderCache: this.plugin.getArticleRenderCache((_C = (_B = this.file) == null ? void 0 : _B.path) != null ? _C : ""),
       readingSections: this.readingSections,
       readingProgressPosition: this.plugin.settings.readingProgressPosition,
       returnToTopVisibility: this.plugin.settings.returnToTopVisibility
@@ -20652,13 +20045,6 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
     this.settingsWriter = this.createSettingsWriter();
     this.installFileExplorerFilter();
     const pluginDir = (_a2 = this.manifest.dir) != null ? _a2 : (0, import_obsidian16.normalizePath)(`${this.app.vault.configDir}/plugins/${this.manifest.id}`);
-    const articleCacheDirectory = (0, import_obsidian16.normalizePath)(`${pluginDir}/cache`);
-    this.articleRenderCache = new ArticleRenderCacheStore(
-      this.app.vault.adapter,
-      articleCacheDirectory,
-      (0, import_obsidian16.normalizePath)(`${articleCacheDirectory}/article-render-cache.json`)
-    );
-    await this.articleRenderCache.initialize();
     this.searchIndex = new MindMapSearchIndex(this.app, (0, import_obsidian16.normalizePath)(`${pluginDir}/mindmap-search-index.json`), MINDMAP_EXTENSION);
     this.searchIndexReady = this.searchIndex.initialize();
     this.registerView(VIEW_TYPE_MINDMAP_STUDIO, (leaf) => new MindMapStudioView(leaf, this));
@@ -20798,17 +20184,14 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
     this.registerEvent(this.app.vault.on("delete", (file) => {
       if (file instanceof import_obsidian16.TFile && file.extension.toLowerCase() === MINDMAP_EXTENSION) {
         this.searchIndex.removeFile(file.path);
-        this.articleRenderCache.remove(file.path);
       }
     }));
     this.registerEvent(this.app.vault.on("rename", (file, oldPath) => {
       if (file instanceof import_obsidian16.TFile && this.isMindMapFile(file)) void this.renameReadingLocationPathInSettings(oldPath, file.path);
       if (file instanceof import_obsidian16.TFile && this.isMindMapFile(file)) {
         this.searchIndex.renameFile(file, oldPath);
-        this.articleRenderCache.rename(oldPath, file.path);
       } else if (oldPath.toLowerCase().endsWith(`.${MINDMAP_EXTENSION}`)) {
         this.searchIndex.removeFile(oldPath);
-        this.articleRenderCache.remove(oldPath);
       }
     }));
     this.registerMarkdownCodeBlockProcessor("mindmap", (source, el, ctx) => {
@@ -20824,7 +20207,7 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
    * 执行“onunload”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
    */
   onunload() {
-    var _a2, _b2, _c, _d;
+    var _a2, _b2, _c;
     this.unloading = true;
     if (this.fileExplorerFilterTimer !== null) window.clearTimeout(this.fileExplorerFilterTimer);
     this.fileExplorerFilterTimer = null;
@@ -20841,17 +20224,8 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
     for (const timer of this.remoteImageDeleteTimers.values()) window.clearTimeout(timer);
     this.remoteImageDeleteTimers.clear();
     (_b2 = this.searchIndex) == null ? void 0 : _b2.destroy();
-    void ((_c = this.articleRenderCache) == null ? void 0 : _c.flush());
     this.app.workspace.detachLeavesOfType(VIEW_TYPE_MINDMAP_STUDIO);
-    void ((_d = this.settingsWriter) == null ? void 0 : _d.flush());
-  }
-  /** Returns the synchronously preloaded article render snapshot for one map. */
-  getArticleRenderCache(filePath) {
-    return filePath ? this.articleRenderCache.get(filePath) : null;
-  }
-  /** Accepts a completed node-level article render snapshot and persists it through the plugin cache store. */
-  updateArticleRenderCache(snapshot) {
-    this.articleRenderCache.put(snapshot);
+    void ((_c = this.settingsWriter) == null ? void 0 : _c.flush());
   }
   /**
    * 打开global search，并保持模型、界面和持久化状态的一致性。
@@ -21633,7 +21007,7 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
    * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
    */
   async buildArticleContext(file, document2) {
-    var _a2, _b2;
+    var _a2, _b2, _c, _d;
     const baseDepth = await this.computeArticleBaseDepth(file, document2);
     let topFile = file;
     let topDocument = document2;
@@ -21719,11 +21093,26 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
     })), articleChildStartLevel(topDocument.root), 1);
     const siblingPages = resolveArticleSiblingPages(tocEntries, file.path);
     const parentFile = ((_b2 = document2.navigation) == null ? void 0 : _b2.parentPath) ? this.resolveMindMapFile(document2.navigation.parentPath, file.path) : null;
+    let parentNodeId = (_c = document2.navigation) == null ? void 0 : _c.parentNodeId;
+    if (parentFile && !parentNodeId) {
+      try {
+        const parentDocument = await this.readMindMapDocument(parentFile);
+        const currentPath = (0, import_obsidian16.normalizePath)(file.path);
+        parentNodeId = (_d = flattenNodes(parentDocument.root).find((node) => {
+          var _a3, _b3;
+          if (!((_a3 = node.submap) == null ? void 0 : _a3.path)) return false;
+          return ((_b3 = this.resolveMindMapFile(node.submap.path, parentFile.path)) == null ? void 0 : _b3.path) === currentPath;
+        })) == null ? void 0 : _d.id;
+      } catch (error) {
+        console.warn(`MindMap Studio could not resolve the parent mount node for article navigation: ${parentFile.path}`, error);
+      }
+    }
     const navigation = tocEntries.length ? {
       entries: siblingPages.entries,
       currentIndex: siblingPages.currentIndex,
       homePath: topFile.path,
-      parentPath: parentFile == null ? void 0 : parentFile.path
+      parentPath: parentFile == null ? void 0 : parentFile.path,
+      parentNodeId
     } : void 0;
     return {
       baseDepth,

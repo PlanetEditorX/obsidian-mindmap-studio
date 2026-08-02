@@ -19,41 +19,24 @@ import {
   articleTocDepth,
   buildArticleNodeInfo,
   currentArticlePageEntry,
+  type ArticleNodeInfo,
   type ArticlePageNavigation,
   type ArticleTocEntry
 } from "../article/modes";
 import { resolveArticleStyle } from "../article/article-style";
-import { buildHierarchyFocusOrder, prioritizeArticleNodeIds } from "../render/incremental-render";
+import { resolveByteChunk, resolveByteWindow, utf8ByteLength } from "../article/render-window";
 import type { MindMapEditorCallbacks } from "./editor-types";
 import { ImagePreviewModal } from "./editor-modals";
 import { renderInlineMarkdown, renderRichTextRuns } from "./rich-text-dom";
 import { bindTableColumnResize, bindTableDoubleClick } from "./table-interaction";
 import type { ArticleLeafBulletStyle } from "../settings";
-import { clearImageFailureDetails, loadImageWithFallback } from "./image-failure-view";
-import {
-  ARTICLE_RENDER_CACHE_SCHEMA_VERSION,
-  ARTICLE_RENDERER_REVISION,
-  articleCacheFingerprint,
-  articleNodeRenderFingerprint,
-  normalizeArticleCachePath,
-  type ArticleNodeRenderCacheEntry,
-  type ArticleRenderCacheSnapshot
-} from "../article/article-render-cache";
-
-/** 大型文章分帧挂载时使用的取消与完成回调。 */
-export interface ArticleIncrementalRenderOptions {
-  isCancelled: () => boolean;
-  /** 首批正文挂载后立即显示文章，不等待全部离屏节点完成。 */
-  onFirstContent: () => void;
-  /** 每批章节挂载后通知编辑器校正滚动锚点。 */
-  onProgress: () => void;
-  onComplete: () => void;
-}
+import { loadImageWithFallback } from "./image-failure-view";
 
 /** 文章渲染所需的编辑器状态和回调。 */
 export interface ArticleRendererOptions {
   app: App;
   document: MindMapDocument;
+  currentFilePath: string;
   selectedId: string;
   readOnly: boolean;
   /** Returns the live lock state after render-free reading/editing toggles. */
@@ -73,6 +56,7 @@ export interface ArticleRendererOptions {
   articleNavigation?: ArticlePageNavigation;
   callbacks: Pick<MindMapEditorCallbacks, "resolveImage" | "onRenderCode" | "onOpenMindMap" | "onOpenArticleDirectory">;
   selectNode: (id: string) => void;
+  focusNode: (id: string) => void;
   openAiContextMenu: (event: MouseEvent, nodeId: string, blockId?: string) => void;
   openImageContextMenu: (event: MouseEvent, nodeId: string, blockId: string) => void;
   editTableBlock: (node: MindMapNode, table: MindMapTable, blockId: string) => void;
@@ -80,13 +64,22 @@ export interface ArticleRendererOptions {
   makeInlineEditable: (element: HTMLElement, node: MindMapNode, placeholder: string, blockId?: string) => void;
   makeInlineCodeEditable: (element: HTMLElement, node: MindMapNode, code: MindMapCodeBlock, blockId: string) => void;
   addInlineNodeActions: (container: HTMLElement, node: MindMapNode) => void;
-  incremental?: ArticleIncrementalRenderOptions;
-  currentFilePath: string;
-  articleCache: ArticleRenderCacheSnapshot | null;
-  onArticleCacheUpdate: (snapshot: ArticleRenderCacheSnapshot) => void;
   /** One-render memo for normalized content blocks; callers normally leave this unset. */
   contentBlockCache?: WeakMap<MindMapNode, MindMapContentBlock[]>;
+  /** Requests another bounded article window when the reader approaches an unloaded edge. */
+  onArticleWindowExpand?: (direction: "before" | "after") => void;
 }
+
+/** Runtime handle for bounded article DOM expansion. */
+export interface ArticleRenderController {
+  hasBefore: () => boolean;
+  hasAfter: () => boolean;
+  loadBefore: () => boolean;
+  loadAfter: () => boolean;
+  ensureNode: (nodeId: string) => boolean;
+  containsNode: (nodeId: string) => boolean;
+}
+
 
 /** Normalizes one node at most once during a complete article render. */
 function articleNodeContentBlocks(node: MindMapNode, options: ArticleRendererOptions): MindMapContentBlock[] {
@@ -99,8 +92,44 @@ function articleNodeContentBlocks(node: MindMapNode, options: ArticleRendererOpt
   return blocks;
 }
 
-/** 根据文档文章样式和文章上下文渲染完整文章页。 */
-export function renderArticleMode(container: HTMLElement, options: ArticleRendererOptions): void {
+/** Reads the already-normalized first text block without rebuilding every block in a large document. */
+function articleNodePrimaryText(node: MindMapNode): string {
+  const first = node.content?.find((block): block is MindMapTextContentBlock => block.type === "text");
+  return (first?.text ?? node.text ?? "").trim();
+}
+
+/** Estimates the DOM work represented by one article node without serializing the complete node. */
+function articleNodeRenderBytes(info: ArticleNodeInfo): number {
+  const node = info.node;
+  let bytes = utf8ByteLength(info.title)
+    + utf8ByteLength(node.note ?? "")
+    + utf8ByteLength(node.link ?? "")
+    + (node.tags ?? []).reduce((sum, tag) => sum + utf8ByteLength(tag), 0);
+  const blocks = node.content?.length ? node.content : undefined;
+  if (blocks) {
+    for (const block of blocks) {
+      if (block.type === "text") bytes += utf8ByteLength(block.text);
+      else if (block.type === "image") bytes += utf8ByteLength(block.alt ?? "") + 256;
+      else if (block.type === "code") bytes += utf8ByteLength(block.code.code);
+      else {
+        bytes += block.table.headers.reduce((sum, cell) => sum + utf8ByteLength(cell), 0);
+        for (const row of block.table.rows) bytes += row.reduce((sum, cell) => sum + utf8ByteLength(cell), 0);
+      }
+    }
+  } else {
+    bytes += utf8ByteLength(node.text ?? "");
+    bytes += utf8ByteLength(node.code?.code ?? "");
+    if (node.table) {
+      bytes += node.table.headers.reduce((sum, cell) => sum + utf8ByteLength(cell), 0);
+      for (const row of node.table.rows) bytes += row.reduce((sum, cell) => sum + utf8ByteLength(cell), 0);
+    }
+    if (node.image) bytes += 256;
+  }
+  return Math.max(192, bytes);
+}
+
+/** 根据文档文章样式和文章上下文渲染文章页的首个稳定窗口。 */
+export function renderArticleMode(container: HTMLElement, options: ArticleRendererOptions): ArticleRenderController | null {
   options = options.contentBlockCache ? options : { ...options, contentBlockCache: new WeakMap() };
   container.empty();
   const articleStyle = resolveArticleStyle(options.document.articleStyle);
@@ -130,408 +159,93 @@ export function renderArticleMode(container: HTMLElement, options: ArticleRender
     && options.document.view?.articleLandingMode !== "article";
   if (directoryOnly) {
     renderDirectory(page, options);
-    options.incremental?.onComplete();
-    return;
+    return null;
   }
 
   const infos = buildArticleNodeInfo(options.document.root, options.articleBaseDepth, {
     enabled: options.articleLeafNumberingEnabled,
     threshold: options.articleLeafNumberingThreshold,
     style: options.articleLeafNumberingStyle
-  }, (node) => articleNodeContentBlocks(node, options)
-    .find((block): block is MindMapTextContentBlock => block.type === "text")?.text.trim() ?? "");
-  if (!options.incremental) {
-    for (const info of infos) {
-      const section = page.createEl("section");
-      renderArticleNodeSection(section, info, options);
-    }
-    renderArticlePager(page, options);
-    return;
-  }
+  }, articleNodePrimaryText);
+  const weights = infos.map(articleNodeRenderBytes);
+  const initialTarget = infos.findIndex((info) => info.node.id === options.selectedId);
+  let { start, end } = resolveByteWindow(weights, initialTarget >= 0 ? initialTarget : 0);
+  const before = page.createEl("button", {
+    cls: "mms-article-window-loader is-before",
+    text: "加载前文",
+    attr: { type: "button", "aria-label": "加载前文" }
+  });
+  const sections = page.createDiv({ cls: "mms-article-window" });
+  const after = page.createEl("button", {
+    cls: "mms-article-window-loader is-after",
+    text: "加载后文",
+    attr: { type: "button", "aria-label": "加载后文" }
+  });
 
-  const presentationFingerprint = articlePresentationFingerprint(options);
-  const previousCache = compatibleArticleCache(options.articleCache, options.currentFilePath, presentationFingerprint);
-  const nextCacheNodes: Record<string, ArticleNodeRenderCacheEntry> = {};
-  const sections = new Map<string, HTMLElement>();
-  const infoById = new Map(infos.map((info) => [info.node.id, info]));
-  const fingerprints = new Map<string, string>();
-  const cachedEntries = new Map<string, ArticleNodeRenderCacheEntry>();
-
-  for (const info of infos) {
-    const section = page.createEl("section", { cls: `mms-article-node is-render-pending depth-${Math.min(info.depth, 8)}` });
-    section.dataset.nodeId = info.node.id;
-    section.id = info.anchor;
-    sections.set(info.node.id, section);
-    const fingerprint = articleNodeFingerprint(info, options);
-    fingerprints.set(info.node.id, fingerprint);
-    const cached = previousCache?.nodes[info.node.id];
-    if (cached?.fingerprint === fingerprint && isArticleNodeCacheable(info.node, options)) {
-      cachedEntries.set(info.node.id, cached);
-    }
-  }
-
-  const orderedIds = prioritizeArticleNodeIds(
-    infos.map((info) => info.node.id),
-    buildHierarchyFocusOrder(options.document.root, options.selectedId)
-  );
-  let firstContentRevealed = false;
-
-  const complete = (): void => {
-    renderArticlePager(page, options);
-    const now = Date.now();
-    const snapshot: ArticleRenderCacheSnapshot = {
-      schemaVersion: ARTICLE_RENDER_CACHE_SCHEMA_VERSION,
-      rendererRevision: ARTICLE_RENDERER_REVISION,
-      filePath: options.currentFilePath,
-      documentFingerprint: articleCacheFingerprint(infos.map((info) => [info.node.id, fingerprints.get(info.node.id) ?? ""])),
-      presentationFingerprint,
-      nodes: nextCacheNodes,
-      updatedAt: now,
-      lastAccessedAt: now
-    };
-    options.onArticleCacheUpdate(snapshot);
-    options.incremental?.onComplete();
-  };
-
-  const renderBatch = (startIndex: number): void => {
-    if (options.incremental?.isCancelled()) return;
-    const startedAt = performance.now();
-    let index = startIndex;
-    const firstBatch = startIndex === 0;
-    const minimumBatch = firstBatch ? 1 : 3;
-    const frameBudget = firstBatch ? 4 : 10;
-    while (index < orderedIds.length && (index - startIndex < minimumBatch || performance.now() - startedAt < frameBudget)) {
-      const nodeId = orderedIds[index]!;
-      const info = infoById.get(nodeId);
-      const section = sections.get(nodeId);
-      if (info && section) {
-        const cached = cachedEntries.get(nodeId);
-        const restored = cached ? restoreCachedArticleSection(section, cached.html, info, options) : false;
-        if (restored && cached) {
-          nextCacheNodes[nodeId] = cached;
-          hydrateArticleNodeSection(section, info, options);
-        } else {
-          renderArticleNodeSection(section, info, options);
-          if (isArticleNodeCacheable(info.node, options)) {
-            nextCacheNodes[nodeId] = {
-              fingerprint: fingerprints.get(nodeId) ?? articleNodeFingerprint(info, options),
-              html: snapshotArticleSectionHtml(section)
-            };
-          }
-        }
+  const renderRange = (rangeStart: number, rangeEnd: number, prepend = false): void => {
+    if (prepend) {
+      for (let index = rangeEnd - 1; index >= rangeStart; index -= 1) {
+        const section = sections.createEl("section");
+        renderArticleNodeSection(section, infos[index]!, options);
+        sections.insertBefore(section, sections.firstChild);
       }
-      index += 1;
-    }
-    if (!firstContentRevealed && (firstBatch || index >= orderedIds.length)) {
-      options.incremental?.onFirstContent();
-      firstContentRevealed = true;
-    }
-    options.incremental?.onProgress();
-    if (index < orderedIds.length) {
-      window.requestAnimationFrame(() => renderBatch(index));
       return;
     }
-    complete();
+    for (let index = rangeStart; index < rangeEnd; index += 1) {
+      const section = sections.createEl("section");
+      renderArticleNodeSection(section, infos[index]!, options);
+    }
   };
-
-  if (!orderedIds.length) {
-    options.incremental.onFirstContent();
-    complete();
-    return;
-  }
-  renderBatch(0);
-}
-
-/** Returns a cache only when it belongs to the current file and presentation contract. */
-function compatibleArticleCache(
-  snapshot: ArticleRenderCacheSnapshot | null,
-  filePath: string,
-  presentationFingerprint: string
-): ArticleRenderCacheSnapshot | null {
-  if (!snapshot) return null;
-  if (snapshot.schemaVersion !== ARTICLE_RENDER_CACHE_SCHEMA_VERSION) return null;
-  if (snapshot.rendererRevision !== ARTICLE_RENDERER_REVISION) return null;
-  if (normalizeArticleCachePath(snapshot.filePath) !== normalizeArticleCachePath(filePath)
-    || snapshot.presentationFingerprint !== presentationFingerprint) return null;
-  return snapshot;
-}
-
-/** Presentation changes invalidate snapshots even when node content is unchanged. */
-function articlePresentationFingerprint(options: ArticleRendererOptions): string {
-  return articleCacheFingerprint({
-    rendererRevision: ARTICLE_RENDERER_REVISION,
-    articleBaseDepth: options.articleBaseDepth,
-    readOnly: options.readOnly,
-    showArticleToc: options.showArticleToc,
-    articleTocMaxDepth: options.articleTocMaxDepth,
-    articleLeafBulletsEnabled: options.articleLeafBulletsEnabled,
-    articleLeafBulletColor: options.articleLeafBulletColor,
-    articleLeafBulletStyle: options.articleLeafBulletStyle,
-    articleLeafTextAlignment: options.articleLeafTextAlignment,
-    articleLeafNumberingEnabled: options.articleLeafNumberingEnabled,
-    articleLeafNumberingStyle: options.articleLeafNumberingStyle,
-    articleLeafNumberingThreshold: options.articleLeafNumberingThreshold,
-    imageHostPriorityIds: options.imageHostPriorityIds,
-    articleNavigation: options.articleNavigation,
-    articleStyle: options.document.articleStyle,
-    articleLandingMode: options.document.view?.articleLandingMode
-  });
-}
-
-/** A moved, renumbered, restyled, or edited node receives a different fingerprint. */
-function articleNodeFingerprint(
-  info: ReturnType<typeof buildArticleNodeInfo>[number],
-  options: ArticleRendererOptions
-): string {
-  return articleNodeRenderFingerprint(info.node, {
-    rendererRevision: ARTICLE_RENDERER_REVISION,
-    depth: info.depth,
-    anchor: info.anchor,
-    label: info.label,
-    title: info.title,
-    isHeading: info.isHeading,
-    skipped: info.skipped,
-    numberedLeaf: info.numberedLeaf,
-    leafNumberingStyle: info.leafNumberingStyle,
-    leafNumberingIndex: info.leafNumberingIndex,
-    readOnly: options.readOnly,
-    leafBullets: options.articleLeafBulletsEnabled,
-    leafBulletColor: options.articleLeafBulletColor,
-    leafBulletStyle: options.articleLeafBulletStyle,
-    leafTextAlignment: options.articleLeafTextAlignment
-  });
-}
-
-/** Code blocks own asynchronous Markdown components, so they are rebuilt instead of persisted as inert HTML. */
-function isArticleNodeCacheable(node: MindMapNode, options: ArticleRendererOptions): boolean {
-  return !articleNodeContentBlocks(node, options).some((block) => block.type === "code");
-}
-
-/** Restores safe static HTML immediately; interactive behavior is hydrated in a later frame. */
-function restoreCachedArticleSection(
-  section: HTMLElement,
-  html: string,
-  info: ReturnType<typeof buildArticleNodeInfo>[number],
-  options: ArticleRendererOptions
-): boolean {
-  if (!html || /<\s*(script|iframe|object|embed)\b/i.test(html)) return false;
-  section.innerHTML = html;
-  section.querySelectorAll("script,iframe,object,embed").forEach((element) => element.remove());
-  section.querySelectorAll<HTMLElement>("*").forEach((element) => {
-    for (const attribute of Array.from(element.attributes)) {
-      if (/^on/i.test(attribute.name)) element.removeAttribute(attribute.name);
-    }
-  });
-  section.className = `mms-article-node depth-${Math.min(info.depth, 8)}${!options.readOnly && options.selectedId === info.node.id ? " is-selected" : ""}`;
-  section.dataset.nodeId = info.node.id;
-  section.id = info.anchor;
-  return true;
-}
-
-/** Stores only stable generated markup; live actions and edit state are recreated during hydration. */
-function snapshotArticleSectionHtml(section: HTMLElement): string {
-  const clone = section.cloneNode(true) as HTMLElement;
-  clone.querySelectorAll(".mms-inline-node-actions").forEach((element) => element.remove());
-  clone.querySelectorAll<HTMLElement>("*").forEach((element) => {
-    element.removeAttribute("contenteditable");
-    element.removeAttribute("spellcheck");
-    element.removeAttribute("tabindex");
-    for (const attribute of Array.from(element.attributes)) {
-      if (/^on/i.test(attribute.name)) element.removeAttribute(attribute.name);
-    }
-  });
-  clone.querySelectorAll("script,iframe,object,embed").forEach((element) => element.remove());
-  return clone.innerHTML;
-}
-
-/** Binds the current editor instance to one restored static node without rebuilding its visible DOM. */
-function hydrateArticleNodeSection(
-  section: HTMLElement,
-  info: ReturnType<typeof buildArticleNodeInfo>[number],
-  options: ArticleRendererOptions
-): void {
-  const blockElements = indexArticleBlockElements(section);
-  section.addEventListener("click", () => {
-    if (!options.isReadOnly()) options.selectNode(info.node.id);
-  });
-  section.addEventListener("contextmenu", (event) => {
-    event.preventDefault();
-    event.stopPropagation();
-    const target = event.target instanceof HTMLElement ? event.target : null;
-    const blockId = target?.closest<HTMLElement>("[data-block-id]")?.dataset.blockId;
-    options.selectNode(info.node.id);
-    options.openAiContextMenu(event, info.node.id, blockId);
-  });
-  if (info.isHeading) {
-    const heading = section.querySelector<HTMLElement>(".mms-article-section-heading");
-    const headingText = heading?.querySelector<HTMLElement>(".mms-article-heading-text");
-    const textBlock = articleNodeContentBlocks(info.node, options).find((block): block is MindMapTextContentBlock => block.type === "text");
-    if (headingText) {
-      options.makeInlineEditable(headingText, info.node, "章节标题", textBlock?.id);
-      if (info.node.submap && headingText instanceof HTMLAnchorElement) {
-        headingText.dataset.mmsExplicitEditOnly = "true";
-        headingText.addEventListener("click", (event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          if (headingText.contentEditable === "true") return;
-          options.selectNode(info.node.id);
-          void options.callbacks.onOpenMindMap(info.node.submap!.path);
-        });
-      }
-    }
-    if (heading) options.addInlineNodeActions(heading, info.node);
-    hydrateArticleNodeContent(section, info.node, false, options, blockElements);
-    return;
-  }
-
-  const blocks = articleNodeContentBlocks(info.node, options);
-  const firstTextBlock = blocks.find((block): block is MindMapTextContentBlock => block.type === "text");
-  if (firstTextBlock) {
-    const paragraph = findBlockElement(blockElements, firstTextBlock.id, "p");
-    if (paragraph) options.makeInlineEditable(paragraph, info.node, "正文段落", firstTextBlock.id);
-  } else if (!options.readOnly && blocks.length === 0) {
-    const paragraph = section.querySelector<HTMLElement>(".mms-article-leaf-text");
-    if (paragraph) options.makeInlineEditable(paragraph, info.node, "正文段落");
-  }
-  options.addInlineNodeActions(section, info.node);
-  hydrateArticleNodeContent(section, info.node, false, options, blockElements);
-}
-
-/** Rebinds text, image, table, and question interactions inside a restored node. */
-function hydrateArticleNodeContent(
-  container: HTMLElement,
-  node: MindMapNode,
-  treatTextAsBody: boolean,
-  options: ArticleRendererOptions,
-  blockElements: ArticleBlockElementIndex = indexArticleBlockElements(container)
-): void {
-  let firstTextHandled = false;
-  for (const block of articleNodeContentBlocks(node, options)) {
-    if (block.type === "text") {
-      if (!treatTextAsBody && !firstTextHandled) { firstTextHandled = true; continue; }
-      firstTextHandled = true;
-      const paragraph = findBlockElement(blockElements, block.id, "p");
-      if (paragraph) options.makeInlineEditable(paragraph, node, "正文", block.id);
-    } else if (block.type === "image") {
-      const shell = findBlockElement(blockElements, block.id, ".mms-article-content-block");
-      const image = shell?.querySelector<HTMLImageElement>("img.mms-article-image");
-      if (!shell || !image) continue;
-      clearImageFailureDetails(shell);
-      let activeResolved: string | null = null;
-      loadImageWithFallback(
-        image,
-        shell,
-        block,
-        options.imageHostPriorityIds,
-        (source) => options.callbacks.resolveImage(source),
-        (_source, resolved) => { activeResolved = resolved; }
-      );
-      image.addEventListener("click", () => {
-        if (!activeResolved) return;
-        new ImagePreviewModal(
-          options.app,
-          activeResolved,
-          block.alt ?? "图片",
-          imageSourceCandidates(block, true, options.imageHostPriorityIds),
-          (source) => options.callbacks.resolveImage(source)
-        ).open();
-      });
-      shell.addEventListener("contextmenu", (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        options.selectNode(node.id);
-        options.openImageContextMenu(event, node.id, block.id);
-      });
-    } else if (block.type === "table") {
-      const wrap = findBlockElement(blockElements, block.id, ".mms-article-table-wrap");
-      if (wrap) hydrateArticleTable(wrap, node, block.table, block.id, options);
-    }
-  }
-  hydrateArticleQuestionDetails(container);
-}
-
-/** Elements carrying the same block ID, indexed once for cached-node hydration. */
-type ArticleBlockElementIndex = Map<string, HTMLElement[]>;
-
-/** Builds a block lookup in one subtree scan instead of querying the whole section for every block. */
-function indexArticleBlockElements(container: HTMLElement): ArticleBlockElementIndex {
-  const index: ArticleBlockElementIndex = new Map();
-  container.querySelectorAll<HTMLElement>("[data-block-id]").forEach((element) => {
-    const blockId = element.dataset.blockId;
-    if (!blockId) return;
-    const elements = index.get(blockId);
-    if (elements) elements.push(element);
-    else index.set(blockId, [element]);
-  });
-  return index;
-}
-
-/** Finds a generated element among the small same-ID bucket without relying on CSS.escape support. */
-function findBlockElement(index: ArticleBlockElementIndex, blockId: string, selector: string): HTMLElement | null {
-  return index.get(blockId)?.find((element) => element.matches(selector)) ?? null;
-}
-
-/** Reconnects resize and edit behavior to a table restored from cached HTML. */
-function hydrateArticleTable(
-  wrap: HTMLElement,
-  node: MindMapNode,
-  tableData: MindMapTable,
-  blockId: string,
-  options: ArticleRendererOptions
-): void {
-  const table = wrap.querySelector<HTMLTableElement>("table.mms-article-table");
-  if (!table) return;
-  const columns = Array.from(table.querySelectorAll<HTMLTableColElement>("colgroup col"));
-  const headers = Array.from(table.querySelectorAll<HTMLTableCellElement>("thead th"));
-  const applyWidths = (widths: readonly number[]): void => {
-    table.addClass("has-custom-column-widths");
-    columns.forEach((column, index) => { column.style.width = `${widths[index] ?? 160}px`; });
-    table.style.width = `${widths.reduce((sum, width) => sum + width, 0)}px`;
+  const updateLoaders = (): void => {
+    before.toggleClass("is-hidden", start <= 0);
+    after.toggleClass("is-hidden", end >= infos.length);
   };
-  if (tableData.columnWidths?.length) applyWidths(tableData.columnWidths);
-  bindTableDoubleClick(table, {
-    isReadOnly: options.isReadOnly,
-    isResizeTarget: (target) => target instanceof HTMLElement && Boolean(target.closest(".mms-table-column-resizer")),
-    edit: () => options.editTableBlock(node, tableData, blockId)
-  });
-  headers.forEach((header, index) => {
-    let handle = header.querySelector<HTMLElement>(":scope > .mms-table-column-resizer");
-    if (!handle) {
-      handle = header.createSpan({
-        cls: "mms-table-column-resizer",
-        attr: { role: "separator", title: `拖动调整第 ${index + 1} 列宽度`, "aria-label": `调整第 ${index + 1} 列宽度` }
-      });
-    }
-    handle.addEventListener("dblclick", (event) => event.stopPropagation());
-    bindTableColumnResize(handle, {
-      eventTarget: window,
-      isReadOnly: options.isReadOnly,
-      columnIndex: index,
-      initialWidths: () => headers.map((cell, columnIndex) => tableData.columnWidths?.[columnIndex]
-        ?? Math.max(64, Math.round(cell.getBoundingClientRect().width))),
-      applyWidths,
-      setResizing: (resizing) => wrap.toggleClass("is-resizing-columns", resizing),
-      commitWidths: (widths) => options.updateTableColumnWidths(node, blockId, widths)
-    });
-  });
+  const resetAround = (targetIndex: number): void => {
+    const next = resolveByteWindow(weights, targetIndex);
+    start = next.start;
+    end = next.end;
+    sections.empty();
+    renderRange(start, end);
+    updateLoaders();
+  };
+  renderRange(start, end);
+  updateLoaders();
+  before.addEventListener("click", () => options.onArticleWindowExpand?.("before"));
+  after.addEventListener("click", () => options.onArticleWindowExpand?.("after"));
+  renderArticlePager(page, options);
+
+  return {
+    hasBefore: () => start > 0,
+    hasAfter: () => end < infos.length,
+    loadBefore: () => {
+      const nextStart = resolveByteChunk(weights, start, "before");
+      if (nextStart === start) return false;
+      renderRange(nextStart, start, true);
+      start = nextStart;
+      updateLoaders();
+      return true;
+    },
+    loadAfter: () => {
+      const nextEnd = resolveByteChunk(weights, end, "after");
+      if (nextEnd === end) return false;
+      renderRange(end, nextEnd);
+      end = nextEnd;
+      updateLoaders();
+      return true;
+    },
+    ensureNode: (nodeId: string) => {
+      if (nodeId === options.document.root.id) return true;
+      const targetIndex = infos.findIndex((info) => info.node.id === nodeId);
+      if (targetIndex < 0) return false;
+      if (targetIndex < start || targetIndex >= end) resetAround(targetIndex);
+      return true;
+    },
+    containsNode: (nodeId: string) => nodeId === options.document.root.id
+      || infos.slice(start, end).some((info) => info.node.id === nodeId)
+  };
 }
 
-/** Restores the answer/explanation toggle for cached question panels. */
-function hydrateArticleQuestionDetails(container: HTMLElement): void {
-  container.querySelectorAll<HTMLElement>(".mms-question-panel").forEach((panel) => {
-    const toggle = panel.querySelector<HTMLButtonElement>(".mms-question-toggle");
-    const reveal = panel.querySelector<HTMLElement>(".mms-question-reveal");
-    if (!toggle || !reveal) return;
-    toggle.addEventListener("click", () => {
-      const revealed = !reveal.hasClass("is-revealed");
-      reveal.toggleClass("is-revealed", revealed);
-      toggle.setText(revealed ? "隐藏答案与解析" : "显示答案与解析");
-      toggle.setAttr("aria-expanded", String(revealed));
-    });
-  });
-}
-
-/** 挂载一个文章节点占位区的完整内容和交互。 */
+/** 渲染一个完整文章节点及其内容和交互。 */
 function renderArticleNodeSection(
   section: HTMLElement,
   info: ReturnType<typeof buildArticleNodeInfo>[number],
@@ -640,6 +354,10 @@ function renderDirectory(page: HTMLElement, options: ArticleRendererOptions): vo
     const link = item.createEl("a", { text: entry.displayTitle || entry.title || "未命名标题", href: entry.filePath, attr: { title: entry.breadcrumb.join(" › ") } });
     link.addEventListener("click", (event) => {
       event.preventDefault();
+      if (entry.filePath === options.currentFilePath && entry.nodeId) {
+        options.focusNode(entry.nodeId);
+        return;
+      }
       void options.callbacks.onOpenMindMap(entry.filePath, entry.nodeId);
     });
     if (entry.breadcrumb.length > 1) item.createSpan({ cls: "mms-article-toc-breadcrumb", text: entry.breadcrumb.join(" › ") });
@@ -867,7 +585,7 @@ function renderArticlePager(page: HTMLElement, options: ArticleRendererOptions):
   const parent = pager.createEl("button", { cls: "mms-article-pager-parent", attr: { type: "button" } });
   setIcon(parent, "corner-left-up");
   parent.createSpan({ text: "返回上一级" });
-  parent.addEventListener("click", () => void options.callbacks.onOpenMindMap(navigation.parentPath!));
+  parent.addEventListener("click", () => void options.callbacks.onOpenMindMap(navigation.parentPath!, navigation.parentNodeId));
   if (next) addTarget("mms-article-pager-next", next.depth <= 1 ? "下一章 " : "下一节 ", next);
   else {
     const end = pager.createEl("button", { cls: "mms-article-pager-end", attr: { type: "button" } });
