@@ -1,5 +1,15 @@
 # Modified Files
 
+## 1.39.0 文件浏览器增量筛选与文章缓存写盘合并
+
+- `src/main.ts`：文件浏览器观察器收集新增/改路径局部根节点并去重，只在布局或筛选设置变化时完整扫描；移除仓库文件事件触发的全树刷新，并在卸载时清理待扫描状态。
+- `src/article/article-render-cache.ts`：缓存持久化改为修订号单飞循环，运行中更新合并为一份后续快照；只在缓存命中改变 LRU 顺序时写入访问状态，干净卸载和重复最新命中不再写盘。
+- `tests/file-explorer-filter.test.mjs`、`tests/article-render-cache.test.mjs`：增加局部扫描、禁止仓库写入触发全扫、干净刷新、LRU 跨重启与活动写入合并专项测试，单元测试扩展至 275 项。
+- `README.md`、`CHANGELOG.md`、`docs/ARCHITECTURE.md`、`docs/DEVELOPMENT.md`、`docs/SPECIAL_FEATURES.md`、`docs/TESTING.md`、`docs/FUNCTION_REFERENCE.md`：同步增量筛选、缓存持久化边界、测试和函数参考。
+- `package.json`、`package-lock.json`、`manifest.json`、`versions.json`、`update.json`：统一版本元数据为 1.39.0，并在最终安装包生成后写入 SHA-256。
+- `TEST_RESULTS.md`、Codex 项目衔接页：记录完整验证和真实 Win10 待验证事项。
+- `main.js`：由本轮 TypeScript 源码重新生产构建。
+
 ## 1.38.9 设置串行合并与文件浏览器筛选优化
 
 - `src/utils/coalesced-json-writer.ts`：新增通用 JSON 保存协调器，35 ms 尾随合并连续请求，严格单飞写入，并按请求版本完成或拒绝等待方。

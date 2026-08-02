@@ -149,3 +149,112 @@ test("cached article hydration indexes block elements and memoizes normalized bl
   assert.match(source, /index\.get\(blockId\)\?\.find\(\(element\) => element\.matches\(selector\)\)/);
   assert.doesNotMatch(source, /Array\.from\(container\.querySelectorAll<HTMLElement>\(selector\)\)/);
 });
+
+test("article cache persists access-only LRU changes and skips clean flushes", async () => {
+  const { module, cleanup } = await loadTypeScriptModule(modulePath);
+  const previousWindow = globalThis.window;
+  globalThis.window = globalThis;
+  try {
+    const initial = {
+      schemaVersion: module.ARTICLE_RENDER_CACHE_SCHEMA_VERSION,
+      entries: [{
+        schemaVersion: module.ARTICLE_RENDER_CACHE_SCHEMA_VERSION,
+        rendererRevision: module.ARTICLE_RENDERER_REVISION,
+        filePath: "folder/older.mindmap",
+        documentFingerprint: "doc-old",
+        presentationFingerprint: "view-a",
+        nodes: { n1: { fingerprint: "node-old", html: "<p>older</p>" } },
+        updatedAt: 1,
+        lastAccessedAt: 1
+      }, {
+        schemaVersion: module.ARTICLE_RENDER_CACHE_SCHEMA_VERSION,
+        rendererRevision: module.ARTICLE_RENDERER_REVISION,
+        filePath: "folder/newer.mindmap",
+        documentFingerprint: "doc-new",
+        presentationFingerprint: "view-a",
+        nodes: { n1: { fingerprint: "node-new", html: "<p>newer</p>" } },
+        updatedAt: 2,
+        lastAccessedAt: 2
+      }]
+    };
+    let stored = JSON.stringify(initial);
+    let writes = 0;
+    const adapter = {
+      async exists(target) { return target === "cache/article-render-cache.json" ? Boolean(stored) : target === "cache"; },
+      async read() { return stored; },
+      async write(_target, value) { writes += 1; stored = value; },
+      async mkdir() {}
+    };
+    const store = new module.ArticleRenderCacheStore(adapter, "cache", "cache/article-render-cache.json");
+    await store.initialize();
+    await store.flush();
+    assert.equal(writes, 0, "a clean cache must not rewrite its disk file during unload");
+
+    assert.ok(store.get("folder/older.mindmap"));
+    await store.flush();
+    assert.equal(writes, 1);
+    const persisted = JSON.parse(stored).entries;
+    assert.equal(persisted.at(-1).filePath, "folder/older.mindmap", "cache hits must persist cross-restart LRU order");
+    assert.ok(persisted.at(-1).lastAccessedAt > 1);
+
+    assert.ok(store.get("folder/older.mindmap"));
+    await store.flush();
+    assert.equal(writes, 1, "reopening the already newest cache entry must not cause another disk write");
+  } finally {
+    globalThis.window = previousWindow;
+    await cleanup();
+  }
+});
+
+test("article cache coalesces updates that arrive during an active disk write", async () => {
+  const { module, cleanup } = await loadTypeScriptModule(modulePath);
+  const previousWindow = globalThis.window;
+  globalThis.window = globalThis;
+  try {
+    let stored = "";
+    const writes = [];
+    let releaseFirstWrite;
+    let firstWriteStarted;
+    const started = new Promise((resolve) => { firstWriteStarted = resolve; });
+    const gate = new Promise((resolve) => { releaseFirstWrite = resolve; });
+    const adapter = {
+      async exists(target) { return target === "cache"; },
+      async read() { return stored; },
+      async write(_target, value) {
+        writes.push(JSON.parse(value));
+        if (writes.length === 1) {
+          firstWriteStarted();
+          await gate;
+        }
+        stored = value;
+      },
+      async mkdir() {}
+    };
+    const base = {
+      schemaVersion: module.ARTICLE_RENDER_CACHE_SCHEMA_VERSION,
+      rendererRevision: module.ARTICLE_RENDERER_REVISION,
+      filePath: "folder/map.mindmap",
+      documentFingerprint: "doc-a",
+      presentationFingerprint: "view-a",
+      nodes: { n1: { fingerprint: "node-a", html: "<p>a</p>" } },
+      updatedAt: 1,
+      lastAccessedAt: 1
+    };
+    const store = new module.ArticleRenderCacheStore(adapter, "cache", "cache/article-render-cache.json");
+    await store.initialize();
+    store.put(base);
+    const flushing = store.flush();
+    await started;
+    store.put({ ...base, documentFingerprint: "doc-b", nodes: { n1: { fingerprint: "node-b", html: "<p>b</p>" } } });
+    releaseFirstWrite();
+    await flushing;
+
+    assert.equal(writes.length, 2, "one active write should absorb all later changes into one follow-up snapshot");
+    assert.equal(writes[0].entries[0].documentFingerprint, "doc-a");
+    assert.equal(writes[1].entries[0].documentFingerprint, "doc-b");
+    assert.equal(JSON.parse(stored).entries[0].nodes.n1.html, "<p>b</p>");
+  } finally {
+    globalThis.window = previousWindow;
+    await cleanup();
+  }
+});

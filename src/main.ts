@@ -119,6 +119,9 @@ import { copyDesktopMarkdownImagesToDocument } from "./utils/desktop-import";
 import { ArticleRenderCacheStore, type ArticleRenderCacheSnapshot } from "./article/article-render-cache";
 
 export const MINDMAP_EXTENSION = "mindmap";
+const FILE_EXPLORER_CONTAINER_SELECTOR = ".nav-files-container, .workspace-leaf-content[data-type='file-explorer']";
+const FILE_EXPLORER_PATH_SELECTOR = "[data-path]";
+
 const PLUGIN_UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/PlanetEditorX/obsidian-mindmap-studio/main/update.json";
 const REMOTE_IMAGE_DELETE_DELAY_MS = 60_000;
 
@@ -178,6 +181,8 @@ export default class MindMapStudioPlugin extends Plugin {
   private articleRenderCache!: ArticleRenderCacheStore;
   private searchIndexReady: Promise<void> = Promise.resolve();
   private fileExplorerFilterTimer: number | null = null;
+  private fileExplorerFilterFullScanPending = false;
+  private readonly fileExplorerFilterRoots = new Set<Element>();
   private fileExplorerObserver: MutationObserver | null = null;
   private settingsWriter: CoalescedJsonWriter<MindMapStudioSettings> | null = null;
   private persistedFileExplorerFilterSignature = "";
@@ -338,22 +343,18 @@ export default class MindMapStudioPlugin extends Plugin {
     }));
 
     this.registerEvent(this.app.vault.on("create", (file) => {
-      this.scheduleFileExplorerFilter();
       if (file instanceof TFile && this.isMindMapFile(file)) this.searchIndex.queueFile(file, 80);
     }));
     this.registerEvent(this.app.vault.on("modify", (file) => {
-      this.scheduleFileExplorerFilter();
       if (file instanceof TFile && this.isMindMapFile(file)) this.searchIndex.queueFile(file);
     }));
     this.registerEvent(this.app.vault.on("delete", (file) => {
-      this.scheduleFileExplorerFilter();
       if (file instanceof TFile && file.extension.toLowerCase() === MINDMAP_EXTENSION) {
         this.searchIndex.removeFile(file.path);
         this.articleRenderCache.remove(file.path);
       }
     }));
     this.registerEvent(this.app.vault.on("rename", (file, oldPath) => {
-      this.scheduleFileExplorerFilter();
       if (file instanceof TFile && this.isMindMapFile(file)) void this.renameReadingLocationPathInSettings(oldPath, file.path);
       if (file instanceof TFile && this.isMindMapFile(file)) {
         this.searchIndex.renameFile(file, oldPath);
@@ -381,6 +382,9 @@ export default class MindMapStudioPlugin extends Plugin {
   onunload(): void {
     this.unloading = true;
     if (this.fileExplorerFilterTimer !== null) window.clearTimeout(this.fileExplorerFilterTimer);
+    this.fileExplorerFilterTimer = null;
+    this.fileExplorerFilterRoots.clear();
+    this.fileExplorerFilterFullScanPending = false;
     this.fileExplorerObserver?.disconnect();
     this.fileExplorerObserver = null;
     for (const timer of this.autoUploadTimers.values()) window.clearTimeout(timer);
@@ -1060,39 +1064,90 @@ export default class MindMapStudioPlugin extends Plugin {
     const observe = (): void => {
       this.fileExplorerObserver?.disconnect();
       this.fileExplorerObserver = new MutationObserver((records) => {
-        if (this.fileExplorerMutationIsRelevant(records)) this.scheduleFileExplorerFilter();
+        const roots = this.fileExplorerMutationRoots(records);
+        if (roots.length) this.scheduleFileExplorerFilter(roots);
       });
-      this.fileExplorerObserver.observe(document.body, { childList: true, subtree: true });
+      this.fileExplorerObserver.observe(document.body, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ["data-path"]
+      });
       this.scheduleFileExplorerFilter();
     };
     this.app.workspace.onLayoutReady(observe);
     this.register(() => this.fileExplorerObserver?.disconnect());
   }
 
-  /** Returns whether DOM mutations occurred inside, added, or removed a File Explorer tree. */
-  private fileExplorerMutationIsRelevant(records: MutationRecord[]): boolean {
-    const selector = ".nav-files-container, .workspace-leaf-content[data-type='file-explorer']";
-    const touchesFileExplorer = (node: Node): boolean => node instanceof Element
-      && (node.matches(selector) || Boolean(node.closest(selector)) || Boolean(node.querySelector(selector)));
-    return records.some((record) => touchesFileExplorer(record.target)
-      || Array.from(record.addedNodes).some(touchesFileExplorer)
-      || Array.from(record.removedNodes).some(touchesFileExplorer));
+  /** Collects only added or retargeted File Explorer subtrees that can contain unfiltered paths. */
+  private fileExplorerMutationRoots(records: MutationRecord[]): Element[] {
+    const roots = new Set<Element>();
+    const addRoot = (candidate: Element): void => {
+      for (const existing of roots) {
+        if (existing.contains(candidate)) return;
+        if (candidate.contains(existing)) roots.delete(existing);
+      }
+      roots.add(candidate);
+    };
+    const collect = (node: Node): void => {
+      if (!(node instanceof Element)) return;
+      if (node.matches(FILE_EXPLORER_CONTAINER_SELECTOR) || node.closest(FILE_EXPLORER_CONTAINER_SELECTOR)) addRoot(node);
+      node.querySelectorAll<Element>(FILE_EXPLORER_CONTAINER_SELECTOR).forEach(addRoot);
+    };
+    for (const record of records) {
+      if (record.type === "attributes") collect(record.target);
+      record.addedNodes.forEach(collect);
+    }
+    return Array.from(roots);
   }
 
-  /** Defers File Explorer filtering so expanding a folder does not cause repeated synchronous DOM scans. */
-  private scheduleFileExplorerFilter(): void {
+  /** Adds one incremental scan root while removing nested duplicates from the pending batch. */
+  private queueFileExplorerFilterRoot(root: Element): void {
+    for (const existing of this.fileExplorerFilterRoots) {
+      if (existing.contains(root)) return;
+      if (root.contains(existing)) this.fileExplorerFilterRoots.delete(existing);
+    }
+    this.fileExplorerFilterRoots.add(root);
+  }
+
+  /** Applies the compiled visibility rule to one File Explorer subtree. */
+  private applyFileExplorerFilterRoot(root: Element, shouldHidePath: (path: string) => boolean): void {
+    const apply = (element: HTMLElement): void => {
+      const path = element.dataset.path;
+      if (!path) return;
+      const fileItem = element.closest<HTMLElement>(".tree-item")
+        ?? element.closest<HTMLElement>(".nav-file, .nav-folder")
+        ?? element;
+      fileItem.toggleClass("mms-file-explorer-hidden", shouldHidePath(path));
+    };
+    if (root instanceof HTMLElement && root.matches(FILE_EXPLORER_PATH_SELECTOR)) apply(root);
+    root.querySelectorAll<HTMLElement>(FILE_EXPLORER_PATH_SELECTOR).forEach(apply);
+  }
+
+  /** Defers filtering and scans either the whole File Explorer or only newly changed subtrees. */
+  private scheduleFileExplorerFilter(roots?: Iterable<Element>): void {
+    if (roots) {
+      if (!this.fileExplorerFilterFullScanPending) {
+        for (const root of roots) this.queueFileExplorerFilterRoot(root);
+      }
+    } else {
+      this.fileExplorerFilterFullScanPending = true;
+      this.fileExplorerFilterRoots.clear();
+    }
     if (this.fileExplorerFilterTimer !== null) return;
     this.fileExplorerFilterTimer = window.setTimeout(() => {
       this.fileExplorerFilterTimer = null;
+      const fullScan = this.fileExplorerFilterFullScanPending;
+      const pendingRoots = fullScan
+        ? Array.from(document.querySelectorAll<Element>(FILE_EXPLORER_CONTAINER_SELECTOR))
+        : Array.from(this.fileExplorerFilterRoots);
+      this.fileExplorerFilterFullScanPending = false;
+      this.fileExplorerFilterRoots.clear();
       const shouldHidePath = createFileExplorerPathFilter(this.settings);
-      document.querySelectorAll<HTMLElement>(".nav-files-container [data-path], .workspace-leaf-content[data-type='file-explorer'] [data-path]").forEach((element) => {
-        const path = element.dataset.path;
-        if (!path) return;
-        const fileItem = element.closest<HTMLElement>(".tree-item")
-          ?? element.closest<HTMLElement>(".nav-file, .nav-folder")
-          ?? element;
-        fileItem.toggleClass("mms-file-explorer-hidden", shouldHidePath(path));
-      });
+      for (const root of pendingRoots) {
+        if (!root.isConnected) continue;
+        this.applyFileExplorerFilterRoot(root, shouldHidePath);
+      }
     }, 80);
   }
 

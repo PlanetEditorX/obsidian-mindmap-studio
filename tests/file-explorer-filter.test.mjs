@@ -197,9 +197,21 @@ test("fileExplorerFilterSignature ignores formatting-only rule changes", () => {
 });
 
 
-test("plugin scans File Explorer with one compiled predicate and ignores unrelated DOM mutations", async () => {
+test("plugin filters only changed File Explorer subtrees and reserves full scans for settings or layout changes", async () => {
   const mainSource = await readFile("src/main.ts", "utf8");
+  assert.match(mainSource, /const roots = this\.fileExplorerMutationRoots\(records\)/);
+  assert.match(mainSource, /if \(roots\.length\) this\.scheduleFileExplorerFilter\(roots\)/);
+  assert.match(mainSource, /attributeFilter: \["data-path"\]/);
+  assert.match(mainSource, /private scheduleFileExplorerFilter\(roots\?: Iterable<Element>\)/);
   assert.match(mainSource, /const shouldHidePath = createFileExplorerPathFilter\(this\.settings\)/);
-  assert.match(mainSource, /if \(this\.fileExplorerMutationIsRelevant\(records\)\) this\.scheduleFileExplorerFilter\(\)/);
+  assert.match(mainSource, /this\.applyFileExplorerFilterRoot\(root, shouldHidePath\)/);
+  assert.doesNotMatch(mainSource, /fileExplorerMutationIsRelevant/);
+  assert.doesNotMatch(mainSource, /\.nav-files-container \[data-path\], \.workspace-leaf-content/);
+
+  const vaultHandlers = mainSource.slice(
+    mainSource.indexOf('this.registerEvent(this.app.vault.on("create"'),
+    mainSource.indexOf('this.registerMarkdownCodeBlockProcessor("mindmap"')
+  );
+  assert.doesNotMatch(vaultHandlers, /scheduleFileExplorerFilter\(/, "vault writes must not trigger full DOM scans");
   assert.doesNotMatch(mainSource, /saveData\(this\.settings\)[\s\S]{0,120}scheduleFileExplorerFilter\(\)/);
 });
