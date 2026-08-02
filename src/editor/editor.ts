@@ -72,6 +72,8 @@ import { articleNumberLabel, articleTocDepth, buildArticleNodeInfo, DISPLAY_MODE
 import { resolveArticleStyle } from "../article/article-style";
 import { resolveArticleEntryReadOnly } from "../article/display-mode";
 import {
+  chooseArticleRefreshLocation,
+  chooseArticleTransitionLocation,
   createReadingLocation,
   resolveReadingLocation,
   sameReadingLocation,
@@ -1412,11 +1414,15 @@ export class MindMapEditor {
     const renderedLocation = this.currentMode === "mindmap"
       ? null
       : activeRestoreLocation ?? this.captureCurrentLocation(this.currentMode) ?? this.lastReadingLocation;
+    const preferredCurrentNodeId = options.preferredCurrentNodeId
+      && findNode(this.document.root, options.preferredCurrentNodeId)
+      ? options.preferredCurrentNodeId
+      : findNode(this.document.root, this.selectedId)?.id ?? this.document.root.id;
     const preferredCurrentLocation = options.preferCurrentFileLocation
       ? createReadingLocation(
         this.readingLocationSections(options),
         options.currentFilePath,
-        findNode(this.document.root, this.selectedId)?.id ?? this.document.root.id,
+        preferredCurrentNodeId,
         0,
         this.currentMode === "mindmap" ? 0.5 : 0.35
       )
@@ -1502,9 +1508,24 @@ export class MindMapEditor {
     // 文章和大纲会在重建 DOM 后恢复可见锚点；切换模式时也需要把语义位置带入目标模式。
     // 导图内的普通 options 刷新不是导航行为，不能按旧阅读位置展开祖先，否则用户刚执行的
     // “收起所有节点”会被延迟的文章上下文刷新部分撤销。
+    // A cross-file chapter click or parent return asks the refreshed article context to
+    // prefer the node that was explicitly opened in the current physical file. That target
+    // must outrank the location captured from the pre-context skeleton and the persisted
+    // family reading position; otherwise setOptions() can reopen the previous child map or
+    // replace the requested chapter with the document root before the two-frame mount.
     const locationToRestore = this.currentMode === "mindmap" && !modeChanged
       ? null
-      : renderedLocation ?? this.lastReadingLocation;
+      : chooseArticleRefreshLocation(preferredCurrentLocation, renderedLocation, this.lastReadingLocation);
+    this.callbacks.onDebugLog("navigation", "set-options-restore-choice", {
+      articleContextOnly,
+      preferCurrentFileLocation: options.preferCurrentFileLocation,
+      requestedPreferredNodeId: options.preferredCurrentNodeId,
+      preferredNodeId: preferredCurrentLocation?.nodeIds[0],
+      renderedNodeId: renderedLocation?.nodeIds[0],
+      rememberedNodeId: this.lastReadingLocation?.nodeIds[0],
+      chosenNodeId: locationToRestore?.nodeIds[0],
+      chosenFilePath: locationToRestore?.filePath
+    });
     const restored = locationToRestore
       ? this.restoreReadingLocation(this.currentMode, locationToRestore)
       : null;
@@ -3429,7 +3450,12 @@ export class MindMapEditor {
 
     const renderWindow = (): void => {
       if (this.currentMode !== "article" || !this.options.articleContextReady) return;
-      const latestRequestedLocation = directoryOnly ? null : this.pendingArticleFocusLocation ?? requestedLocation;
+      // The explicit target captured by this render owns the current entry transition.
+      // A restore scheduled later by setOptions() may only supply a target when this render
+      // had none; it must never replace the chapter that caused the skeleton to be shown.
+      const latestRequestedLocation = directoryOnly
+        ? null
+        : chooseArticleTransitionLocation(requestedLocation, this.pendingArticleFocusLocation);
       this.pendingArticleFocusLocation = null;
       this.articleEl.empty();
       this.articleEl.removeAttribute("aria-busy");

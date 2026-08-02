@@ -127,7 +127,7 @@ test("clicking a same-file directory chapter switches to article without reopeni
   assert.match(renderArticle, /const directoryOnly = !explicitTarget/);
   assert.match(renderArticle, /const requestedLocation = directoryOnly \? null : explicitTarget/);
   assert.match(renderArticle, /const previousLocation = !directoryOnly && !requestedLocation/);
-  assert.match(renderArticle, /const latestRequestedLocation = directoryOnly \? null : this\.pendingArticleFocusLocation \?\? requestedLocation/);
+  assert.match(renderArticle, /const latestRequestedLocation = directoryOnly[\s\S]*chooseArticleTransitionLocation\(requestedLocation, this\.pendingArticleFocusLocation\)/);
   assert.match(renderArticle, /const location = latestRequestedLocation \?\? previousLocation/);
   assert.match(renderArticle, /if \(location\) this\.restoreReadingLocation\("article", location\)/);
   assert.match(renderDirectory, /entry\.filePath === options\.currentFilePath && entry\.nodeId/);
@@ -149,7 +149,7 @@ test("article entry transition paints a bounded skeleton without delaying semant
   assert.match(renderArticle, /renderArticleSkeleton\(directoryOnly \? "toc" : "article"\)/);
   assert.match(renderArticle, /prefers-reduced-motion: reduce/);
   assert.match(renderArticle, /requestAnimationFrame\(\(\) => \{[\s\S]*?requestAnimationFrame/);
-  assert.match(renderArticle, /latestRequestedLocation = directoryOnly \? null : this\.pendingArticleFocusLocation \?\? requestedLocation/);
+  assert.match(renderArticle, /latestRequestedLocation = directoryOnly[\s\S]*chooseArticleTransitionLocation\(requestedLocation, this\.pendingArticleFocusLocation\)/);
   assert.match(restoreLocation, /articleInitialRenderFrame !== null/);
   assert.match(restoreLocation, /pendingArticleFocusLocation = normalizedLocation/);
   assert.match(expandWindow, /mms-article-window-loader\.is-\$\{direction\}/);
@@ -242,7 +242,7 @@ test("article-context refreshes skip redundant current-page rebuilds", async () 
   assert.match(editorSource, /setOptions\(options: MindMapEditorOptions, articleContextOnly = false\)/);
   assert.match(editorSource, /const articleContextPresentationChanged =/);
   assert.match(editorSource, /if \(articleContextOnly[\s\S]*?this\.currentMode !== "reading"[\s\S]*?articleContextPresentationChanged\)\) return/);
-  assert.match(viewSource, /this\.editor\?\.setOptions\(this\.getEditorOptions\(preferCurrentFile\), true\)/);
+  assert.match(viewSource, /this\.editor\?\.setOptions\(this\.getEditorOptions\(preferCurrentFile, preferredCurrentNodeId\), true\)/);
 });
 
 test("article return paths preserve the parent mount node", async () => {

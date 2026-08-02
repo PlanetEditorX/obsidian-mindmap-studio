@@ -221,6 +221,32 @@ export function resolveReadingLocation(
   };
 }
 
+
+/**
+ * Chooses the semantic location used after an asynchronous article-context refresh.
+ * An explicit node in the newly opened physical file must outrank both the location
+ * captured from the temporary skeleton and the persisted family reading position.
+ */
+export function chooseArticleRefreshLocation(
+  preferredCurrent: ReadingLocation | null | undefined,
+  rendered: ReadingLocation | null | undefined,
+  remembered: ReadingLocation | null | undefined
+): ReadingLocation | null {
+  return preferredCurrent ?? rendered ?? remembered ?? null;
+}
+
+/**
+ * Chooses the target owned by one article entry transition. The target captured when
+ * the transition began outranks a later generic restore request; a genuinely newer
+ * explicit click starts a new render token and therefore a new transition.
+ */
+export function chooseArticleTransitionLocation(
+  requested: ReadingLocation | null | undefined,
+  pendingRestore: ReadingLocation | null | undefined
+): ReadingLocation | null {
+  return requested ?? pendingRestore ?? null;
+}
+
 /** 比较两个位置是否具有相同语义，避免滚动期间重复写入设置。 */
 export function sameReadingLocation(left: ReadingLocation | null | undefined, right: ReadingLocation | null | undefined): boolean {
   const a = normalizeReadingLocation(left);
