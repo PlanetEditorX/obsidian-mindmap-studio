@@ -110,6 +110,13 @@ npm run test:docs
 6. 在测试仓库中完成新建、编辑、保存、重开、导入、导出和子导图导航冒烟测试。
 7. 确认源码包不含 `.ua/`、`.local-test-build/`、`node_modules/` 或真实凭据。
 
+### 中文 ZIP 路径兼容
+
+- 源码包包含中文文件或目录时，ZIP 主文件名必须直接写入 UTF-8，并设置 general-purpose bit 11；不要只依赖 `0x7075` Unicode Path Extra Field。
+- 某些 Windows 打包器会把兼容主文件名写成 `#Uxxxx`，再把真实中文名放进 `0x7075` 扩展字段。Win10 工具可能显示正常，但 Linux Info-ZIP 可能解压成字面量 `#Uxxxx`。
+- 在 Linux 接收这类包时，应使用可识别 Unicode Path Extra Field 的解压方式恢复中文名，再用标准 UTF-8 ZIP 重新打包。不要直接提交转义后的 examples 路径，也不要按正则盲目替换可能合法的文件名。
+- 交付前检查 ZIP 清单、UTF-8 bit 11 和一次 Linux 实际解压结果；`examples/中国文学示例.mindmap`、`examples/古诗.mindmap` 与 `examples/MindMap Assets/古诗/唐诗.mindmap` 必须保持可读。
+
 ## AI 交付物同步规则
 
 每轮代码修改完成后，必须使用同一个六位随机后缀同步生成并返回：完整源码 ZIP、Obsidian 本地测试安装 ZIP 和最新 Codex 交接 ZIP。生成 Codex 包前，应先更新项目衔接页中的当前状态、验证基线、待验证事项、下一步及最近交付包；不得复用上一轮 Codex 包。

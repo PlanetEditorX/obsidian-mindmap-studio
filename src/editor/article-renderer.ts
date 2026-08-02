@@ -33,6 +33,8 @@ import {
   ARTICLE_RENDER_CACHE_SCHEMA_VERSION,
   ARTICLE_RENDERER_REVISION,
   articleCacheFingerprint,
+  articleNodeRenderFingerprint,
+  normalizeArticleCachePath,
   type ArticleNodeRenderCacheEntry,
   type ArticleRenderCacheSnapshot
 } from "../article/article-render-cache";
@@ -175,7 +177,7 @@ export function renderArticleMode(container: HTMLElement, options: ArticleRender
       schemaVersion: ARTICLE_RENDER_CACHE_SCHEMA_VERSION,
       rendererRevision: ARTICLE_RENDERER_REVISION,
       filePath: options.currentFilePath,
-      documentFingerprint: articleCacheFingerprint(options.document),
+      documentFingerprint: articleCacheFingerprint(infos.map((info) => [info.node.id, fingerprints.get(info.node.id) ?? ""])),
       presentationFingerprint,
       nodes: nextCacheNodes,
       updatedAt: now,
@@ -239,7 +241,8 @@ function compatibleArticleCache(
   if (!snapshot) return null;
   if (snapshot.schemaVersion !== ARTICLE_RENDER_CACHE_SCHEMA_VERSION) return null;
   if (snapshot.rendererRevision !== ARTICLE_RENDERER_REVISION) return null;
-  if (snapshot.filePath !== filePath || snapshot.presentationFingerprint !== presentationFingerprint) return null;
+  if (normalizeArticleCachePath(snapshot.filePath) !== normalizeArticleCachePath(filePath)
+    || snapshot.presentationFingerprint !== presentationFingerprint) return null;
   return snapshot;
 }
 
@@ -269,9 +272,8 @@ function articleNodeFingerprint(
   info: ReturnType<typeof buildArticleNodeInfo>[number],
   options: ArticleRendererOptions
 ): string {
-  return articleCacheFingerprint({
+  return articleNodeRenderFingerprint(info.node, {
     rendererRevision: ARTICLE_RENDERER_REVISION,
-    node: info.node,
     depth: info.depth,
     anchor: info.anchor,
     label: info.label,

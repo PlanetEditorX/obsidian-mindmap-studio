@@ -4,9 +4,10 @@
  */
 
 import type { DataAdapter } from "obsidian";
+import type { MindMapNode } from "../core/model";
 
 export const ARTICLE_RENDER_CACHE_SCHEMA_VERSION = 1;
-export const ARTICLE_RENDERER_REVISION = "article-node-cache-v1";
+export const ARTICLE_RENDERER_REVISION = "article-node-cache-v2";
 
 /** Minimal cross-platform path normalization for vault-relative and plugin cache paths. */
 export function normalizeArticleCachePath(value: string): string {
@@ -75,6 +76,24 @@ export function articleCacheFingerprint(value: unknown): string {
   return `${first.toString(16).padStart(8, "0")}${second.toString(16).padStart(8, "0")}`;
 }
 
+/**
+ * 计算单个文章节点的渲染指纹，但不递归序列化后代节点。
+ *
+ * 文章章节 DOM 只由当前节点自身字段和调用方提供的层级、编号、只读状态等上下文决定；
+ * 把 `children` 一并序列化会让深链文档退化为近似 O(n²)，并让任意后代编辑无谓地
+ * 使所有祖先缓存失效。
+ *
+ * @param node 当前文章章节对应的节点。
+ * @param context 影响该章节输出的派生层级、编号和显示设置。
+ * @returns 不包含后代内容的稳定节点渲染指纹。
+ */
+export function articleNodeRenderFingerprint(node: MindMapNode, context: unknown): string {
+  return articleCacheFingerprint({
+    node: { ...node, children: [] },
+    context
+  });
+}
+
 /** 检查磁盘数据，拒绝异常大、旧版本或结构不完整的缓存。 */
 export function normalizeArticleRenderCacheSnapshot(value: unknown): ArticleRenderCacheSnapshot | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
@@ -84,7 +103,7 @@ export function normalizeArticleRenderCacheSnapshot(value: unknown): ArticleRend
   if (typeof candidate.filePath !== "string" || !candidate.filePath.trim()) return null;
   if (typeof candidate.documentFingerprint !== "string" || typeof candidate.presentationFingerprint !== "string") return null;
   if (!candidate.nodes || typeof candidate.nodes !== "object" || Array.isArray(candidate.nodes)) return null;
-  const nodes: Record<string, ArticleNodeRenderCacheEntry> = {};
+  const nodes: Record<string, ArticleNodeRenderCacheEntry> = Object.create(null) as Record<string, ArticleNodeRenderCacheEntry>;
   let totalCharacters = 0;
   for (const [nodeId, rawEntry] of Object.entries(candidate.nodes)) {
     if (!nodeId || !rawEntry || typeof rawEntry !== "object" || Array.isArray(rawEntry)) continue;
@@ -126,6 +145,7 @@ export class ArticleRenderCacheStore {
   /** 从磁盘加载最近使用的缓存，插件注册视图前即可完成。 */
   async initialize(): Promise<void> {
     try {
+      this.entries.clear();
       if (!await this.adapter.exists(this.cacheFile)) return;
       const parsed = JSON.parse(await this.adapter.read(this.cacheFile)) as Partial<PersistedArticleRenderCache>;
       if (parsed.schemaVersion !== ARTICLE_RENDER_CACHE_SCHEMA_VERSION || !Array.isArray(parsed.entries)) return;
@@ -133,13 +153,17 @@ export class ArticleRenderCacheStore {
         .map((entry) => normalizeArticleRenderCacheSnapshot(entry))
         .filter((entry): entry is ArticleRenderCacheSnapshot => Boolean(entry))
         .sort((left, right) => right.lastAccessedAt - left.lastAccessedAt);
+      const selected: ArticleRenderCacheSnapshot[] = [];
       let characters = 0;
       for (const snapshot of snapshots) {
         const size = this.snapshotCharacters(snapshot);
-        if (this.entries.size >= MAX_CACHE_ENTRIES || characters + size > MAX_CACHE_CHARACTERS) break;
-        this.entries.set(snapshot.filePath, snapshot);
+        if (selected.length >= MAX_CACHE_ENTRIES) break;
+        if (characters + size > MAX_CACHE_CHARACTERS) continue;
+        selected.push(snapshot);
         characters += size;
       }
+      // Map iteration order is the in-memory LRU order: oldest first, newest last.
+      for (const snapshot of selected.reverse()) this.entries.set(snapshot.filePath, snapshot);
     } catch (error) {
       console.warn("MindMap Studio article cache load failed", error);
       this.entries.clear();
