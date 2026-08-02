@@ -5638,7 +5638,7 @@ function readRichTextEditor(editor) {
 // src/editor/editor-modals.ts
 var import_obsidian5 = require("obsidian");
 
-// node_modules/fflate/esm/browser.js
+// ../../mms1399/obsidian-mindmap-studio/node_modules/fflate/esm/browser.js
 var u8 = Uint8Array;
 var u16 = Uint16Array;
 var i32 = Int32Array;
@@ -10759,6 +10759,13 @@ var MindMapEditor = class {
     this.readingCaptureBlocked = false;
     this.lastReadingLocation = null;
     this.pendingLocationNavigationKey = null;
+    /** Latest-wins semantic scroll transaction; stale retries must never move a newer target. */
+    this.readingRestoreToken = 0;
+    this.readingRestoreTimer = null;
+    this.readingRestoreDeadlineTimer = null;
+    this.readingRestoreFrame = null;
+    this.readingRestoreObserver = null;
+    this.activeReadingRestore = null;
     this.readOnlyPersistTimer = null;
     this.articleMiniMapEl = null;
     this.articleMiniMapTooltipEl = null;
@@ -10804,6 +10811,7 @@ var MindMapEditor = class {
     if (this.readingCaptureTimer !== null) window.clearTimeout(this.readingCaptureTimer);
     if (this.readingCaptureReleaseTimer !== null) window.clearTimeout(this.readingCaptureReleaseTimer);
     if (this.readOnlyPersistTimer !== null) window.clearTimeout(this.readOnlyPersistTimer);
+    this.cancelReadingLocationRestore();
     this.clearArticleMiniMap();
     (_a2 = this.articleScrollButtonCleanup) == null ? void 0 : _a2.call(this);
     this.cancelArticleInitialRender();
@@ -10852,13 +10860,14 @@ var MindMapEditor = class {
    * @param articleContextOnly 是否仅由异步文章族上下文刷新触发。
    */
   setOptions(options, articleContextOnly = false) {
-    var _a2, _b2, _c, _d, _e;
+    var _a2, _b2, _c, _d, _e, _f;
     const previousOptions = this.options;
-    const renderedLocation = this.currentMode === "mindmap" ? null : (_a2 = this.captureCurrentLocation(this.currentMode)) != null ? _a2 : this.lastReadingLocation;
+    const activeRestoreLocation = ((_a2 = this.activeReadingRestore) == null ? void 0 : _a2.mode) === this.currentMode ? this.activeReadingRestore.location : null;
+    const renderedLocation = this.currentMode === "mindmap" ? null : (_b2 = activeRestoreLocation != null ? activeRestoreLocation : this.captureCurrentLocation(this.currentMode)) != null ? _b2 : this.lastReadingLocation;
     const preferredCurrentLocation = options.preferCurrentFileLocation ? createReadingLocation(
       this.readingLocationSections(options),
       options.currentFilePath,
-      (_c = (_b2 = findNode(this.document.root, this.selectedId)) == null ? void 0 : _b2.id) != null ? _c : this.document.root.id,
+      (_d = (_c = findNode(this.document.root, this.selectedId)) == null ? void 0 : _c.id) != null ? _d : this.document.root.id,
       0,
       this.currentMode === "mindmap" ? 0.5 : 0.35
     ) : null;
@@ -10900,12 +10909,12 @@ var MindMapEditor = class {
         this.options.articleEntryLockMode,
         preserveReadingEdit ? false : this.readOnly,
         this.options.articleLastReadOnly
-      ) : resolved === "reading" || resolved === "question-bank" ? true : previousMode === "article" || previousMode === "reading" || previousMode === "question-bank" ? ((_d = this.document.view) == null ? void 0 : _d.readOnly) === true : this.readOnly;
+      ) : resolved === "reading" || resolved === "question-bank" ? true : previousMode === "article" || previousMode === "reading" || previousMode === "question-bank" ? ((_e = this.document.view) == null ? void 0 : _e.readOnly) === true : this.readOnly;
     }
     if (modesChanged || toolbarChanged) {
       this.cleanupCallbacks.forEach((callback) => callback());
       this.cleanupCallbacks = [];
-      (_e = this.resizeObserver) == null ? void 0 : _e.disconnect();
+      (_f = this.resizeObserver) == null ? void 0 : _f.disconnect();
       this.resizeObserver = null;
       this.modeButtons.clear();
       this.editControls.splice(0);
@@ -11020,9 +11029,10 @@ var MindMapEditor = class {
     const viewport = scroller.getBoundingClientRect();
     const viewportRatio = 0.35;
     const anchorY = viewport.top + viewport.height * viewportRatio;
-    const candidates = Array.from(scroller.querySelectorAll("[data-node-id]")).map((element) => ({ element, rect: element.getBoundingClientRect() })).filter(({ rect }) => rect.height > 0);
+    const selector = mode === "outline" ? ".mms-outline-row[data-node-id]" : mode === "article" ? ".mms-article-document-title[data-node-id], .mms-article-node[data-node-id]" : "[data-node-id][data-file-path]";
+    const candidates = Array.from(scroller.querySelectorAll(selector)).map((element) => ({ element, rect: element.getBoundingClientRect() })).filter(({ rect }) => rect.height > 0);
     if (!candidates.length) return null;
-    const containing = candidates.filter(({ rect }) => anchorY >= rect.top && anchorY <= rect.bottom).sort((left, right) => left.rect.height - right.rect.height)[0];
+    const containing = candidates.filter(({ rect }) => anchorY >= rect.top && anchorY < rect.bottom).sort((left, right) => Math.abs(left.rect.top - anchorY) - Math.abs(right.rect.top - anchorY))[0];
     const nearest = containing != null ? containing : candidates.sort((left, right) => {
       const leftDistance = anchorY < left.rect.top ? left.rect.top - anchorY : anchorY - left.rect.bottom;
       const rightDistance = anchorY < right.rect.top ? right.rect.top - anchorY : anchorY - right.rect.bottom;
@@ -11062,7 +11072,7 @@ var MindMapEditor = class {
   }
   /** 对滚动事件进行轻量防抖，避免每个像素变化都扫描章节 DOM。 */
   scheduleReadingLocationCapture(mode) {
-    if (this.readingCaptureBlocked) return;
+    if (this.readingCaptureBlocked || this.activeReadingRestore) return;
     if (this.readingCaptureTimer !== null) window.clearTimeout(this.readingCaptureTimer);
     this.readingCaptureTimer = window.setTimeout(() => {
       this.readingCaptureTimer = null;
@@ -11088,14 +11098,85 @@ var MindMapEditor = class {
       this.readingCaptureBlocked = false;
     }, 240);
   }
+  /** Clears all delayed work owned by the current semantic scroll transaction. */
+  cancelReadingLocationRestore() {
+    var _a2;
+    this.readingRestoreToken += 1;
+    if (this.readingRestoreTimer !== null) window.clearTimeout(this.readingRestoreTimer);
+    if (this.readingRestoreDeadlineTimer !== null) window.clearTimeout(this.readingRestoreDeadlineTimer);
+    if (this.readingRestoreFrame !== null) window.cancelAnimationFrame(this.readingRestoreFrame);
+    (_a2 = this.readingRestoreObserver) == null ? void 0 : _a2.disconnect();
+    this.readingRestoreTimer = null;
+    this.readingRestoreDeadlineTimer = null;
+    this.readingRestoreFrame = null;
+    this.readingRestoreObserver = null;
+    this.activeReadingRestore = null;
+  }
+  /** Finishes one still-current semantic scroll transaction without invalidating newer work. */
+  finishReadingLocationRestore(token) {
+    var _a2, _b2;
+    if (((_a2 = this.activeReadingRestore) == null ? void 0 : _a2.token) !== token) return;
+    if (this.readingRestoreTimer !== null) window.clearTimeout(this.readingRestoreTimer);
+    if (this.readingRestoreDeadlineTimer !== null) window.clearTimeout(this.readingRestoreDeadlineTimer);
+    if (this.readingRestoreFrame !== null) window.cancelAnimationFrame(this.readingRestoreFrame);
+    (_b2 = this.readingRestoreObserver) == null ? void 0 : _b2.disconnect();
+    this.readingRestoreTimer = null;
+    this.readingRestoreDeadlineTimer = null;
+    this.readingRestoreFrame = null;
+    this.readingRestoreObserver = null;
+    this.activeReadingRestore = null;
+  }
+  /** Keeps the selected semantic anchor stable until late article layout changes become quiet. */
+  beginReadingLocationRestore(mode, location, resolved) {
+    this.cancelReadingLocationRestore();
+    const token = this.readingRestoreToken;
+    this.activeReadingRestore = { token, mode, location, resolved };
+    const apply = () => {
+      var _a2;
+      if (((_a2 = this.activeReadingRestore) == null ? void 0 : _a2.token) !== token || this.currentMode !== mode) return false;
+      return this.applyResolvedReadingLocation(mode, resolved);
+    };
+    const scheduleFrame = () => {
+      var _a2;
+      if (((_a2 = this.activeReadingRestore) == null ? void 0 : _a2.token) !== token || this.readingRestoreFrame !== null) return;
+      this.readingRestoreFrame = window.requestAnimationFrame(() => {
+        this.readingRestoreFrame = null;
+        apply();
+      });
+    };
+    const observeLateLayout = () => {
+      var _a2, _b2;
+      if (((_a2 = this.activeReadingRestore) == null ? void 0 : _a2.token) !== token || this.readingRestoreObserver || typeof ResizeObserver === "undefined") return;
+      const scroller = mode === "outline" ? this.outlineEl : this.articleEl;
+      const observed = mode === "article" ? (_b2 = scroller.querySelector(":scope > .mms-article-page")) != null ? _b2 : scroller : scroller.firstElementChild instanceof HTMLElement ? scroller.firstElementChild : scroller;
+      this.readingRestoreObserver = new ResizeObserver(() => scheduleFrame());
+      this.readingRestoreObserver.observe(observed);
+    };
+    observeLateLayout();
+    apply();
+    this.readingRestoreTimer = window.setTimeout(() => {
+      this.readingRestoreTimer = null;
+      apply();
+    }, 20);
+    this.readingRestoreFrame = window.requestAnimationFrame(() => {
+      this.readingRestoreFrame = window.requestAnimationFrame(() => {
+        this.readingRestoreFrame = null;
+        apply();
+      });
+    });
+    this.readingRestoreDeadlineTimer = window.setTimeout(() => this.finishReadingLocationRestore(token), 5e3);
+  }
   /**
    * 在目标模式中恢复节点和节点内部比例。目标位于其他物理文件时只返回解析结果，
-   * 由视图层在模式同步完成后打开该文件。
+   * 由视图层在模式同步完成后打开该文件。每次调用都会使旧重试失效，确保最后一次导航独占滚动位置。
    */
   restoreReadingLocation(mode, location) {
     const resolved = resolveReadingLocation(location, this.readingLocationSections(), this.options.currentFilePath);
     if (!resolved) return null;
-    if (mode !== "reading" && resolved.filePath !== this.options.currentFilePath) return resolved;
+    if (mode !== "reading" && resolved.filePath !== this.options.currentFilePath) {
+      this.cancelReadingLocationRestore();
+      return resolved;
+    }
     const targetSection = this.readingLocationSections().find((section) => section.filePath === resolved.filePath);
     const collapsedAncestors = targetSection ? findAncestors(targetSection.document.root, resolved.nodeId).filter((node) => node.collapsed) : [];
     if (collapsedAncestors.length) {
@@ -11109,22 +11190,19 @@ var MindMapEditor = class {
       this.selectedIds.clear();
       this.selectedIds.add(resolved.nodeId);
     }
+    const normalizedLocation = createReadingLocation(
+      this.readingLocationSections(),
+      resolved.filePath,
+      resolved.nodeId,
+      resolved.nodeRatio,
+      resolved.viewportRatio
+    );
     if (mode === "article" && this.articleInitialRenderFrame !== null) {
-      this.pendingArticleFocusLocation = createReadingLocation(
-        this.readingLocationSections(),
-        resolved.filePath,
-        resolved.nodeId,
-        resolved.nodeRatio,
-        resolved.viewportRatio
-      );
+      this.cancelReadingLocationRestore();
+      this.pendingArticleFocusLocation = normalizedLocation;
       return resolved;
     }
-    const restore = () => {
-      this.applyResolvedReadingLocation(mode, resolved);
-    };
-    restore();
-    window.setTimeout(restore, 20);
-    window.requestAnimationFrame(() => window.requestAnimationFrame(restore));
+    this.beginReadingLocationRestore(mode, normalizedLocation, resolved);
     return resolved;
   }
   /** 把已解析的语义位置应用到当前 DOM；目标不存在时返回 false。 */
@@ -11149,7 +11227,8 @@ var MindMapEditor = class {
     const rect = target.getBoundingClientRect();
     const targetY = rect.top + rect.height * resolved.nodeRatio;
     const desiredY = viewport.top + viewport.height * resolved.viewportRatio;
-    scroller.scrollTop += targetY - desiredY;
+    const nextScrollTop = scroller.scrollTop + targetY - desiredY;
+    if (Math.abs(scroller.scrollTop - nextScrollTop) > 0.5) scroller.scrollTop = nextScrollTop;
     this.updateArticleMiniMapActiveMarker();
     return true;
   }
@@ -12554,18 +12633,20 @@ var MindMapEditor = class {
    * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
    */
   renderArticle() {
-    var _a2, _b2;
+    var _a2, _b2, _c;
     const requestedLocation = this.pendingArticleFocusLocation;
     this.pendingArticleFocusLocation = null;
     const existingPage = this.articleEl.querySelector(":scope > .mms-article-page");
-    const previousLocation = !requestedLocation && existingPage ? this.captureCurrentLocation("article") : null;
+    const activeRestoreLocation = ((_a2 = this.activeReadingRestore) == null ? void 0 : _a2.mode) === "article" ? this.activeReadingRestore.location : null;
+    const previousLocation = !requestedLocation && existingPage ? activeRestoreLocation != null ? activeRestoreLocation : this.captureCurrentLocation("article") : null;
     const previousScroll = { top: this.articleEl.scrollTop, left: this.articleEl.scrollLeft };
-    const directoryOnly = this.options.showArticleToc && this.options.articleTocEntries.length > 0 && ((_a2 = this.document.view) == null ? void 0 : _a2.articleLandingMode) !== "article";
-    const reducedMotion = ((_b2 = window.matchMedia) == null ? void 0 : _b2.call(window, "(prefers-reduced-motion: reduce)").matches) === true;
+    this.cancelReadingLocationRestore();
+    const directoryOnly = this.options.showArticleToc && this.options.articleTocEntries.length > 0 && ((_b2 = this.document.view) == null ? void 0 : _b2.articleLandingMode) !== "article";
+    const reducedMotion = ((_c = window.matchMedia) == null ? void 0 : _c.call(window, "(prefers-reduced-motion: reduce)").matches) === true;
     const needsEntryTransition = !directoryOnly && !reducedMotion && (requestedLocation !== null || !existingPage || existingPage.dataset.nodeId !== this.document.root.id || existingPage.querySelector(".mms-article-toc") !== null);
     this.cancelArticleWindowExpansion();
     const renderWindow = () => {
-      var _a3, _b3, _c;
+      var _a3, _b3, _c2;
       if (this.currentMode !== "article") return;
       const latestRequestedLocation = (_a3 = this.pendingArticleFocusLocation) != null ? _a3 : requestedLocation;
       this.pendingArticleFocusLocation = null;
@@ -12579,7 +12660,10 @@ var MindMapEditor = class {
         this.scheduleReadingLocationCapture("article");
         this.scheduleArticleWindowExpansion();
       };
-      const location = (_c = latestRequestedLocation != null ? latestRequestedLocation : previousLocation) != null ? _c : !existingPage ? this.lastReadingLocation : null;
+      this.articleEl.onwheel = () => this.cancelReadingLocationRestore();
+      this.articleEl.onpointerdown = () => this.cancelReadingLocationRestore();
+      this.articleEl.ontouchstart = () => this.cancelReadingLocationRestore();
+      const location = (_c2 = latestRequestedLocation != null ? latestRequestedLocation : previousLocation) != null ? _c2 : !existingPage ? this.lastReadingLocation : null;
       if (location) this.restoreReadingLocation("article", location);
       else {
         this.articleEl.scrollTop = previousScroll.top;
@@ -16412,6 +16496,9 @@ var MindMapEditor = class {
     }
     if (this.inlineEditingId !== null) return;
     if (target.closest("input, textarea, select, [contenteditable='true']")) return;
+    if (this.currentMode === "article" && this.activeReadingRestore && ["PageUp", "PageDown", "Home", "End", "ArrowUp", "ArrowDown", " "].includes(event.key)) {
+      this.cancelReadingLocationRestore();
+    }
     if (mod && key === "a") {
       event.preventDefault();
       event.stopPropagation();

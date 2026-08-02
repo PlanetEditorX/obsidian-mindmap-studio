@@ -1257,6 +1257,18 @@ export class MindMapEditor {
   private readingCaptureBlocked = false;
   private lastReadingLocation: ReadingLocation | null = null;
   private pendingLocationNavigationKey: string | null = null;
+  /** Latest-wins semantic scroll transaction; stale retries must never move a newer target. */
+  private readingRestoreToken = 0;
+  private readingRestoreTimer: number | null = null;
+  private readingRestoreDeadlineTimer: number | null = null;
+  private readingRestoreFrame: number | null = null;
+  private readingRestoreObserver: ResizeObserver | null = null;
+  private activeReadingRestore: {
+    token: number;
+    mode: DisplayMode;
+    location: ReadingLocation;
+    resolved: ResolvedReadingLocation;
+  } | null = null;
   private readOnlyPersistTimer: number | null = null;
   private articleMiniMapEl: HTMLElement | null = null;
   private articleMiniMapTooltipEl: HTMLElement | null = null;
@@ -1320,6 +1332,7 @@ export class MindMapEditor {
     if (this.readingCaptureTimer !== null) window.clearTimeout(this.readingCaptureTimer);
     if (this.readingCaptureReleaseTimer !== null) window.clearTimeout(this.readingCaptureReleaseTimer);
     if (this.readOnlyPersistTimer !== null) window.clearTimeout(this.readOnlyPersistTimer);
+    this.cancelReadingLocationRestore();
     this.clearArticleMiniMap();
     this.articleScrollButtonCleanup?.();
     this.cancelArticleInitialRender();
@@ -1376,9 +1389,12 @@ export class MindMapEditor {
     const previousOptions = this.options;
     // setOptions() 会重建文章 DOM。先从旧 DOM 捕获位置，避免异步文章上下文
     // 刷新（例如保存表格后）把滚动容器因 empty() 而回退到页面顶部。
+    const activeRestoreLocation = this.activeReadingRestore?.mode === this.currentMode
+      ? this.activeReadingRestore.location
+      : null;
     const renderedLocation = this.currentMode === "mindmap"
       ? null
-      : this.captureCurrentLocation(this.currentMode) ?? this.lastReadingLocation;
+      : activeRestoreLocation ?? this.captureCurrentLocation(this.currentMode) ?? this.lastReadingLocation;
     const preferredCurrentLocation = options.preferCurrentFileLocation
       ? createReadingLocation(
         this.readingLocationSections(options),
@@ -1592,13 +1608,18 @@ export class MindMapEditor {
     const viewport = scroller.getBoundingClientRect();
     const viewportRatio = 0.35;
     const anchorY = viewport.top + viewport.height * viewportRatio;
-    const candidates = Array.from(scroller.querySelectorAll<HTMLElement>("[data-node-id]"))
+    const selector = mode === "outline"
+      ? ".mms-outline-row[data-node-id]"
+      : mode === "article"
+        ? ".mms-article-document-title[data-node-id], .mms-article-node[data-node-id]"
+        : "[data-node-id][data-file-path]";
+    const candidates = Array.from(scroller.querySelectorAll<HTMLElement>(selector))
       .map((element) => ({ element, rect: element.getBoundingClientRect() }))
       .filter(({ rect }) => rect.height > 0);
     if (!candidates.length) return null;
     const containing = candidates
-      .filter(({ rect }) => anchorY >= rect.top && anchorY <= rect.bottom)
-      .sort((left, right) => left.rect.height - right.rect.height)[0];
+      .filter(({ rect }) => anchorY >= rect.top && anchorY < rect.bottom)
+      .sort((left, right) => Math.abs(left.rect.top - anchorY) - Math.abs(right.rect.top - anchorY))[0];
     const nearest = containing ?? candidates.sort((left, right) => {
       const leftDistance = anchorY < left.rect.top ? left.rect.top - anchorY : anchorY - left.rect.bottom;
       const rightDistance = anchorY < right.rect.top ? right.rect.top - anchorY : anchorY - right.rect.bottom;
@@ -1641,7 +1662,7 @@ export class MindMapEditor {
 
   /** 对滚动事件进行轻量防抖，避免每个像素变化都扫描章节 DOM。 */
   private scheduleReadingLocationCapture(mode: DisplayMode): void {
-    if (this.readingCaptureBlocked) return;
+    if (this.readingCaptureBlocked || this.activeReadingRestore) return;
     if (this.readingCaptureTimer !== null) window.clearTimeout(this.readingCaptureTimer);
     this.readingCaptureTimer = window.setTimeout(() => {
       this.readingCaptureTimer = null;
@@ -1669,14 +1690,93 @@ export class MindMapEditor {
     }, 240);
   }
 
+  /** Clears all delayed work owned by the current semantic scroll transaction. */
+  private cancelReadingLocationRestore(): void {
+    this.readingRestoreToken += 1;
+    if (this.readingRestoreTimer !== null) window.clearTimeout(this.readingRestoreTimer);
+    if (this.readingRestoreDeadlineTimer !== null) window.clearTimeout(this.readingRestoreDeadlineTimer);
+    if (this.readingRestoreFrame !== null) window.cancelAnimationFrame(this.readingRestoreFrame);
+    this.readingRestoreObserver?.disconnect();
+    this.readingRestoreTimer = null;
+    this.readingRestoreDeadlineTimer = null;
+    this.readingRestoreFrame = null;
+    this.readingRestoreObserver = null;
+    this.activeReadingRestore = null;
+  }
+
+  /** Finishes one still-current semantic scroll transaction without invalidating newer work. */
+  private finishReadingLocationRestore(token: number): void {
+    if (this.activeReadingRestore?.token !== token) return;
+    if (this.readingRestoreTimer !== null) window.clearTimeout(this.readingRestoreTimer);
+    if (this.readingRestoreDeadlineTimer !== null) window.clearTimeout(this.readingRestoreDeadlineTimer);
+    if (this.readingRestoreFrame !== null) window.cancelAnimationFrame(this.readingRestoreFrame);
+    this.readingRestoreObserver?.disconnect();
+    this.readingRestoreTimer = null;
+    this.readingRestoreDeadlineTimer = null;
+    this.readingRestoreFrame = null;
+    this.readingRestoreObserver = null;
+    this.activeReadingRestore = null;
+  }
+
+  /** Keeps the selected semantic anchor stable until late article layout changes become quiet. */
+  private beginReadingLocationRestore(
+    mode: DisplayMode,
+    location: ReadingLocation,
+    resolved: ResolvedReadingLocation
+  ): void {
+    this.cancelReadingLocationRestore();
+    const token = this.readingRestoreToken;
+    this.activeReadingRestore = { token, mode, location, resolved };
+
+    const apply = (): boolean => {
+      if (this.activeReadingRestore?.token !== token || this.currentMode !== mode) return false;
+      return this.applyResolvedReadingLocation(mode, resolved);
+    };
+    const scheduleFrame = (): void => {
+      if (this.activeReadingRestore?.token !== token || this.readingRestoreFrame !== null) return;
+      this.readingRestoreFrame = window.requestAnimationFrame(() => {
+        this.readingRestoreFrame = null;
+        apply();
+      });
+    };
+    const observeLateLayout = (): void => {
+      if (this.activeReadingRestore?.token !== token || this.readingRestoreObserver || typeof ResizeObserver === "undefined") return;
+      const scroller = mode === "outline" ? this.outlineEl : this.articleEl;
+      const observed = mode === "article"
+        ? scroller.querySelector<HTMLElement>(":scope > .mms-article-page") ?? scroller
+        : scroller.firstElementChild instanceof HTMLElement
+          ? scroller.firstElementChild
+          : scroller;
+      this.readingRestoreObserver = new ResizeObserver(() => scheduleFrame());
+      this.readingRestoreObserver.observe(observed);
+    };
+
+    observeLateLayout();
+    apply();
+    this.readingRestoreTimer = window.setTimeout(() => {
+      this.readingRestoreTimer = null;
+      apply();
+    }, 20);
+    this.readingRestoreFrame = window.requestAnimationFrame(() => {
+      this.readingRestoreFrame = window.requestAnimationFrame(() => {
+        this.readingRestoreFrame = null;
+        apply();
+      });
+    });
+    this.readingRestoreDeadlineTimer = window.setTimeout(() => this.finishReadingLocationRestore(token), 5000);
+  }
+
   /**
    * 在目标模式中恢复节点和节点内部比例。目标位于其他物理文件时只返回解析结果，
-   * 由视图层在模式同步完成后打开该文件。
+   * 由视图层在模式同步完成后打开该文件。每次调用都会使旧重试失效，确保最后一次导航独占滚动位置。
    */
   private restoreReadingLocation(mode: DisplayMode, location: ReadingLocation | null | undefined): ResolvedReadingLocation | null {
     const resolved = resolveReadingLocation(location, this.readingLocationSections(), this.options.currentFilePath);
     if (!resolved) return null;
-    if (mode !== "reading" && resolved.filePath !== this.options.currentFilePath) return resolved;
+    if (mode !== "reading" && resolved.filePath !== this.options.currentFilePath) {
+      this.cancelReadingLocationRestore();
+      return resolved;
+    }
     const targetSection = this.readingLocationSections().find((section) => section.filePath === resolved.filePath);
     const collapsedAncestors = targetSection
       ? findAncestors(targetSection.document.root, resolved.nodeId).filter((node) => node.collapsed)
@@ -1691,23 +1791,19 @@ export class MindMapEditor {
       this.selectedIds.clear();
       this.selectedIds.add(resolved.nodeId);
     }
+    const normalizedLocation = createReadingLocation(
+      this.readingLocationSections(),
+      resolved.filePath,
+      resolved.nodeId,
+      resolved.nodeRatio,
+      resolved.viewportRatio
+    );
     if (mode === "article" && this.articleInitialRenderFrame !== null) {
-      this.pendingArticleFocusLocation = createReadingLocation(
-        this.readingLocationSections(),
-        resolved.filePath,
-        resolved.nodeId,
-        resolved.nodeRatio,
-        resolved.viewportRatio
-      );
+      this.cancelReadingLocationRestore();
+      this.pendingArticleFocusLocation = normalizedLocation;
       return resolved;
     }
-    const restore = (): void => { this.applyResolvedReadingLocation(mode, resolved); };
-    // Restore once synchronously so replacing the article/outline DOM cannot
-    // paint a frame at scrollTop=0. Delayed retries remain for images, fonts,
-    // and other late layout changes that can move the semantic anchor.
-    restore();
-    window.setTimeout(restore, 20);
-    window.requestAnimationFrame(() => window.requestAnimationFrame(restore));
+    this.beginReadingLocationRestore(mode, normalizedLocation, resolved);
     return resolved;
   }
 
@@ -1738,7 +1834,8 @@ export class MindMapEditor {
     const rect = target.getBoundingClientRect();
     const targetY = rect.top + rect.height * resolved.nodeRatio;
     const desiredY = viewport.top + viewport.height * resolved.viewportRatio;
-    scroller.scrollTop += targetY - desiredY;
+    const nextScrollTop = scroller.scrollTop + targetY - desiredY;
+    if (Math.abs(scroller.scrollTop - nextScrollTop) > 0.5) scroller.scrollTop = nextScrollTop;
     this.updateArticleMiniMapActiveMarker();
     return true;
   }
@@ -3258,8 +3355,14 @@ export class MindMapEditor {
     const requestedLocation = this.pendingArticleFocusLocation;
     this.pendingArticleFocusLocation = null;
     const existingPage = this.articleEl.querySelector<HTMLElement>(":scope > .mms-article-page");
-    const previousLocation = !requestedLocation && existingPage ? this.captureCurrentLocation("article") : null;
+    const activeRestoreLocation = this.activeReadingRestore?.mode === "article"
+      ? this.activeReadingRestore.location
+      : null;
+    const previousLocation = !requestedLocation && existingPage
+      ? activeRestoreLocation ?? this.captureCurrentLocation("article")
+      : null;
     const previousScroll = { top: this.articleEl.scrollTop, left: this.articleEl.scrollLeft };
+    this.cancelReadingLocationRestore();
     const directoryOnly = this.options.showArticleToc
       && this.options.articleTocEntries.length > 0
       && this.document.view?.articleLandingMode !== "article";
@@ -3286,6 +3389,9 @@ export class MindMapEditor {
         this.scheduleReadingLocationCapture("article");
         this.scheduleArticleWindowExpansion();
       };
+      this.articleEl.onwheel = () => this.cancelReadingLocationRestore();
+      this.articleEl.onpointerdown = () => this.cancelReadingLocationRestore();
+      this.articleEl.ontouchstart = () => this.cancelReadingLocationRestore();
 
       const location = latestRequestedLocation ?? previousLocation
         ?? (!existingPage ? this.lastReadingLocation : null);
@@ -7419,6 +7525,11 @@ export class MindMapEditor {
     // does not make the configured capture command unavailable.
     if (this.inlineEditingId !== null) return;
     if (target.closest("input, textarea, select, [contenteditable='true']")) return;
+
+    if (this.currentMode === "article" && this.activeReadingRestore
+      && ["PageUp", "PageDown", "Home", "End", "ArrowUp", "ArrowDown", " "].includes(event.key)) {
+      this.cancelReadingLocationRestore();
+    }
 
     if (mod && key === "a") {
       event.preventDefault();

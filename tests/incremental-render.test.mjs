@@ -148,7 +148,7 @@ test("article entry transition paints a bounded skeleton without delaying semant
   assert.match(renderArticle, /requestAnimationFrame\(\(\) => \{[\s\S]*?requestAnimationFrame/);
   assert.match(renderArticle, /latestRequestedLocation = this\.pendingArticleFocusLocation \?\? requestedLocation/);
   assert.match(restoreLocation, /articleInitialRenderFrame !== null/);
-  assert.match(restoreLocation, /pendingArticleFocusLocation = createReadingLocation/);
+  assert.match(restoreLocation, /pendingArticleFocusLocation = normalizedLocation/);
   assert.match(expandWindow, /mms-article-window-loader\.is-\$\{direction\}/);
   assert.match(expandWindow, /requestAnimationFrame\(\(\) => \{[\s\S]*?requestAnimationFrame/);
   assert.match(rendererSource, /is-window-entering/);
@@ -157,6 +157,27 @@ test("article entry transition paints a bounded skeleton without delaying semant
   assert.match(cssSource, /prefers-reduced-motion: reduce/);
   const skeletonRule = cssSource.match(/\.mms-article-entry-skeleton \{[\s\S]*?\}/)?.[0] ?? "";
   assert.doesNotMatch(skeletonRule, /position:\s*fixed/);
+});
+
+
+test("article semantic navigation is latest-wins and never captures the page shell as the root node", async () => {
+  const editorSource = await readFile(path.join(rootDir, "src/editor/editor.ts"), "utf8");
+  const captureLocation = editorSource.match(/private captureCurrentLocation\([\s\S]*?\n  \}/)?.[0] ?? "";
+  const beginRestore = editorSource.match(/private beginReadingLocationRestore\([\s\S]*?\n  \}/)?.[0] ?? "";
+  const cancelRestore = editorSource.match(/private cancelReadingLocationRestore\([\s\S]*?\n  \}/)?.[0] ?? "";
+  const setOptions = editorSource.match(/setOptions\(options: MindMapEditorOptions, articleContextOnly = false\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
+
+  assert.match(captureLocation, /\.mms-article-document-title\[data-node-id\], \.mms-article-node\[data-node-id\]/);
+  assert.doesNotMatch(captureLocation, /querySelectorAll<HTMLElement>\("\[data-node-id\]"\)/);
+  assert.match(captureLocation, /anchorY >= rect\.top && anchorY < rect\.bottom/);
+  assert.match(beginRestore, /this\.cancelReadingLocationRestore\(\)/);
+  assert.match(beginRestore, /activeReadingRestore\?\.token !== token/);
+  assert.match(beginRestore, /new ResizeObserver/);
+  assert.match(beginRestore, /readingRestoreDeadlineTimer[\s\S]*5000/);
+  assert.doesNotMatch(beginRestore, /finishWhenQuiet/);
+  assert.match(cancelRestore, /readingRestoreToken \+= 1/);
+  assert.match(setOptions, /activeRestoreLocation[\s\S]*activeReadingRestore\?\.mode === this\.currentMode/);
+  assert.match(editorSource, /\["PageUp", "PageDown", "Home", "End", "ArrowUp", "ArrowDown", " "\]\.includes\(event\.key\)[\s\S]*cancelReadingLocationRestore/);
 });
 
 test("article-context refreshes skip redundant current-page rebuilds", async () => {
