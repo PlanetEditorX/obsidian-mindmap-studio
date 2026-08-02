@@ -1,5 +1,12 @@
 # Modified Files
 
+## 1.40.11 删除文章边缘加载按钮跑马灯
+
+- `styles.css`：删除加载按钮的角度自定义属性、圆角边框伪元素、`conic-gradient` 遮罩和边框无限动画；保留文字双轴居中与原有内部流光。
+- `tests/incremental-render.test.mjs`：新增跑马灯样式不存在的反向契约，并继续验证内部流光及减少动态效果回退。
+- `README.md`、`CHANGELOG.md`、`docs/SPECIAL_FEATURES.md`、`docs/TESTING.md`、`TEST_RESULTS.md`：同步当前加载反馈和资源边界。
+- `package.json`、`package-lock.json`、`manifest.json`、`versions.json`、`update.json`、`main.js`：同步 1.40.11 版本、最终安装包校验和生产构建。
+
 ## 1.40.10 文章边缘加载按钮跑马灯与文字居中
 
 - `styles.css`：加载按钮改为 Flex 双轴居中；实际加载时增加主题深色圆角边框跑马灯，保留内部流光，并兼容减少动态效果。
