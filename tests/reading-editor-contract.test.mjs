@@ -42,8 +42,16 @@ test("document mutations preserve the current article or reading anchor across a
 test("article option refresh restores the rendered anchor after rebuilding the page", () => {
   const setOptions = editorSource.match(/setOptions\(options: MindMapEditorOptions, articleContextOnly = false\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
   assert.match(setOptions, /const renderedLocation = this\.currentMode === "mindmap"[\s\S]*this\.captureCurrentLocation\(this\.currentMode\) \?\? this\.lastReadingLocation/);
-  assert.match(setOptions, /const locationToRestore = this\.currentMode === "mindmap" && !modeChanged[\s\S]*chooseArticleRefreshLocation\(preferredCurrentLocation, renderedLocation, this\.lastReadingLocation\)/);
+  assert.match(setOptions, /const articleDirectoryActive = this\.currentMode === "article"[\s\S]*articleLandingMode !== "article"/);
+  assert.match(setOptions, /const locationToRestore = this\.currentMode === "mindmap" && !modeChanged[\s\S]*chooseArticleLandingRefreshLocation\([\s\S]*articleDirectoryActive[\s\S]*preferredCurrentLocation[\s\S]*renderedLocation[\s\S]*this\.lastReadingLocation/);
   assert.match(setOptions, /locationToRestore[\s\S]*this\.restoreReadingLocation\(this\.currentMode, locationToRestore\)/);
+});
+
+test("article directory refresh cannot reopen a remembered child map", () => {
+  const setOptions = editorSource.match(/setOptions\(options: MindMapEditorOptions, articleContextOnly = false\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
+  assert.match(setOptions, /chooseArticleLandingRefreshLocation\([\s\S]*articleDirectoryActive/);
+  assert.match(setOptions, /if \(articleDirectoryActive\) \{[\s\S]*this\.pendingLocationNavigationKey = null;[\s\S]*this\.cancelReadingLocationRestore\(\)/);
+  assert.match(setOptions, /articleDirectoryActive,[\s\S]*chosenFilePath/);
 });
 
 test("mind-map option refresh does not reopen ancestors after collapse-all", () => {
@@ -92,7 +100,7 @@ test("explicit child-map navigation wins over stale cross-file progress", () => 
   assert.match(mainSource, /leaf\.view\.markExplicitNavigation\(focusNodeId\)/);
   assert.match(editorSource, /options\.preferredCurrentNodeId[\s\S]*preferredCurrentNodeId/);
   assert.match(editorSource, /options\.preferCurrentFileLocation[\s\S]*preferredCurrentLocation/);
-  assert.match(editorSource, /chooseArticleRefreshLocation\(preferredCurrentLocation, renderedLocation, this\.lastReadingLocation\)/);
+  assert.match(editorSource, /chooseArticleLandingRefreshLocation\([\s\S]*preferredCurrentLocation[\s\S]*renderedLocation[\s\S]*this\.lastReadingLocation/);
 });
 
 

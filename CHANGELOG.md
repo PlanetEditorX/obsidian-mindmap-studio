@@ -1,13 +1,12 @@
 # 更新记录
 
-## 1.40.7
+## 1.40.9
 
-- 根据 1.40.6 真实调试日志修复“返回父导图/返回上一级后显示原始文章而不是目录”。日志确认返回请求携带父节点 ID 后，被通用章节 `focusNode()` 处理并将 `articleLandingMode` 从 `toc` 强制改为 `article`。
-- 将导航意图拆分为“打开章节正文”和“打开文章目录”：目录章节点击继续使用精确节点正文跳转；顶部父级导航、底部返回上一级与文章模式 Esc 改用独立目录入口，不再排队文章章节焦点。
-- 父节点 ID 仅用于在目录中滚动并短暂标记对应条目，不创建 `ReadingLocation`，也不触发正文窗口或历史位置恢复。
-- 新增插件级目录意图队列。父文件在 `MindMapEditor` 构造前先消费目录意图并设置 `articleLandingMode="toc"`，避免先绘制原始文章/正文骨架再切换目录的首帧闪烁。
-- 调试日志新增 `open-directory-request`、`queue-directory`、`consume-pending-directory`、`apply-pending-directory`、`show-directory` 与 `directory-focus-applied/missing`，可直接核对目录意图是否在首帧前消费。
-- 新增父级目录意图、首帧消费和目录条目定位专项契约；单元测试增至 286 项。
+- 根据真实 1.40.8 调试日志修复“返回目录后立即再次进入子文章”。日志显示目录意图、目录首帧和 `directoryOnly=true` 均已成功，但文章上下文刷新后的 `set-options-restore-choice` 仍选择刚离开的子文件阅读位置，随后主动触发新的 `open-path-request`。
+- 文章目录现在是恢复链路的终止落地页：只要当前文章模式正在显示生成目录，异步上下文刷新就不恢复任何章节 `ReadingLocation`，也不允许历史子文件位置触发跨文件导航。
+- 新增 `chooseArticleLandingRefreshLocation()` 纯函数，将“目录禁止章节恢复”作为可执行规则；调试事件增加 `articleDirectoryActive`，可直接确认本次恢复是否被目录状态抑制。
+- 保留历史阅读位置本身，用户再次主动点击目录章节时仍按精确节点进入正文；仅禁止目录页面刷新自动消费旧位置。
+- 新增真实冲突回归：目录激活时返回 `null`，正文激活时仍按“显式目标 → 当前锚点 → 历史位置”恢复。单元测试增至 288 项。
 
 ## 1.40.5
 

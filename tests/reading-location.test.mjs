@@ -127,6 +127,13 @@ test("explicit current-file targets outrank stale skeleton and persisted locatio
   assert.equal(readingLocation.chooseArticleRefreshLocation(null, null, persisted), persisted);
 });
 
+test("an active generated directory suppresses remembered child-map restoration", () => {
+  const parent = { filePath: "parent.mindmap", nodeIds: ["mount"], fallbacks: [], nodeRatio: 0, viewportRatio: 0.35 };
+  const child = { filePath: "child.mindmap", nodeIds: ["section"], fallbacks: [], nodeRatio: 0.4, viewportRatio: 0.35 };
+  assert.equal(readingLocation.chooseArticleLandingRefreshLocation(true, null, parent, child), null);
+  assert.equal(readingLocation.chooseArticleLandingRefreshLocation(false, null, parent, child), parent);
+});
+
 test("the chapter that started an entry transition outranks a later generic restore", () => {
   const clicked = { filePath: "chapter.mindmap", nodeIds: ["clicked-section"], fallbacks: [], nodeRatio: 0, viewportRatio: 0.35 };
   const staleRoot = { filePath: "chapter.mindmap", nodeIds: ["document-root"], fallbacks: [], nodeRatio: 0, viewportRatio: 0.35 };

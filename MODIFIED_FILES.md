@@ -1,15 +1,12 @@
 # Modified Files
 
-## 1.40.7 父级返回目录意图修复
+## 1.40.9 目录页阻止历史子文件自动恢复
 
-- `src/main.ts`：新增独立的目录落地队列和 `openArticleDirectoryPath()`；父节点只用于目录定位，不通过 `openAsMindMap(..., focusNodeId)` 排队章节正文。
-- `src/view.ts`：在新文件编辑器构造前消费目录意图并预设 `articleLandingMode="toc"`；随后把可选父节点交给目录定位，不产生正文首帧。
-- `src/editor/editor-types.ts`、`src/editor/editor.ts`：`onOpenArticleDirectory` 支持目录目标节点；顶部父级按钮和 Esc 使用目录回调；目录挂载后定位对应目录条目，正文 `focusNode()` 与目录返回状态完全隔离。
-- `src/editor/article-renderer.ts`：底部“返回上一级”改用目录回调；目录链接增加稳定节点/文件数据属性，供返回定位。
-- `styles.css`：为返回后的父级目录条目增加短暂可识别边框。
-- `tests/reading-editor-contract.test.mjs`、`tests/incremental-render.test.mjs`：新增目录意图、首帧消费、父级入口和不创建正文焦点的契约。
-- `README.md`、`CHANGELOG.md`、`docs/READING_JUMP_FIX.zh-CN.md`、`TEST_RESULTS.md`：同步真实日志根因、导航意图区分和人工验证项。
-- `package.json`、`package-lock.json`、`manifest.json`、`versions.json`：版本提升为 1.40.7；`update.json` 和安装包 SHA-256 在最终打包后更新。
+- `src/article/reading-location.ts`：新增 `chooseArticleLandingRefreshLocation()`，目录激活时明确返回空恢复目标。
+- `src/editor/editor.ts`：识别生成目录终止状态，取消残留阅读恢复并禁止历史子文件位置触发 `onDisplayModeChange()`；调试事件增加 `articleDirectoryActive`。
+- `tests/reading-location.test.mjs`、`tests/reading-editor-contract.test.mjs`：增加目录抑制跨文件恢复的纯函数回归和编辑器集成契约。
+- `README.md`、`CHANGELOG.md`、`docs/READING_JUMP_FIX.zh-CN.md`、`docs/FUNCTION_REFERENCE.md`、`TEST_RESULTS.md`：同步真实 1.40.8 日志根因、行为边界和验证判据。
+- `package.json`、`package-lock.json`、`manifest.json`、`versions.json`、`update.json`、`main.js`：同步 1.40.9 版本、最终安装包校验和生产构建。
 
 ## 1.40.5 真实日志驱动的目标优先级热修复
 

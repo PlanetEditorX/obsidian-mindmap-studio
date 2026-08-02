@@ -68,6 +68,10 @@
 
 调试日志应出现 `open-directory-request → queue-directory → consume-pending-directory → apply-pending-directory → show-directory → render-decision(directoryOnly=true)`；该链路不应出现针对父节点的 `focus-node-start`。
 
+真实 1.40.8 日志进一步显示，上述目录意图和目录挂载都已成功，但紧接着的文章上下文刷新仍从整本导图的历史阅读位置中选中了刚离开的子文件，并主动发出新的 `open-path-request`。因此“目录导航意图”和“上下文恢复位置”必须同时受目录状态约束：只要当前为生成目录，`setOptions()` 的恢复目标固定为 `null`，不执行章节滚动，也不允许跨文件恢复。历史位置继续保留，只有用户再次主动点击目录章节时才会被新的显式目标替代。
+
+调试事件 `set-options-restore-choice.articleDirectoryActive` 为 `true` 时，`chosenNodeId` 与 `chosenFilePath` 应为空，后面不得出现由恢复链触发的 `open-path-request`。
+
 ### 上下文刷新目标优先级
 
 跨文件打开时，视图除了 `preferCurrentFileLocation` 外，还保留一次性的精确 `preferredCurrentNodeId`，直到对应文章上下文刷新完成。编辑器不再从可能被异步恢复修改的 `selectedId` 猜测目标。
