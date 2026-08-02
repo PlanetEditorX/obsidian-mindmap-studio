@@ -116,3 +116,20 @@ test("viewportAnchorRatio preserves the clicked node's current visual position",
   assert.equal(readingLocation.viewportAnchorRatio(1000, 100, 100, 800, 0.5, 0.35), 1);
   assert.equal(readingLocation.viewportAnchorRatio(0, 0, 0, 0, 0.5, 0.35), 0.35);
 });
+
+
+test("explicit current-file targets outrank stale skeleton and persisted locations", () => {
+  const explicit = { filePath: "parent.mindmap", nodeIds: ["parent-node"], fallbacks: [], nodeRatio: 0, viewportRatio: 0.35 };
+  const skeleton = { filePath: "child.mindmap", nodeIds: ["child-root"], fallbacks: [], nodeRatio: 0, viewportRatio: 0.35 };
+  const persisted = { filePath: "child.mindmap", nodeIds: ["old-section"], fallbacks: [], nodeRatio: 0.4, viewportRatio: 0.35 };
+  assert.equal(readingLocation.chooseArticleRefreshLocation(explicit, skeleton, persisted), explicit);
+  assert.equal(readingLocation.chooseArticleRefreshLocation(null, skeleton, persisted), skeleton);
+  assert.equal(readingLocation.chooseArticleRefreshLocation(null, null, persisted), persisted);
+});
+
+test("the chapter that started an entry transition outranks a later generic restore", () => {
+  const clicked = { filePath: "chapter.mindmap", nodeIds: ["clicked-section"], fallbacks: [], nodeRatio: 0, viewportRatio: 0.35 };
+  const staleRoot = { filePath: "chapter.mindmap", nodeIds: ["document-root"], fallbacks: [], nodeRatio: 0, viewportRatio: 0.35 };
+  assert.equal(readingLocation.chooseArticleTransitionLocation(clicked, staleRoot), clicked);
+  assert.equal(readingLocation.chooseArticleTransitionLocation(null, staleRoot), staleRoot);
+});

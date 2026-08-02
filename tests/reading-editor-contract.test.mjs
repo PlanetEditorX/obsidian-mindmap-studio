@@ -42,7 +42,7 @@ test("document mutations preserve the current article or reading anchor across a
 test("article option refresh restores the rendered anchor after rebuilding the page", () => {
   const setOptions = editorSource.match(/setOptions\(options: MindMapEditorOptions, articleContextOnly = false\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
   assert.match(setOptions, /const renderedLocation = this\.currentMode === "mindmap"[\s\S]*this\.captureCurrentLocation\(this\.currentMode\) \?\? this\.lastReadingLocation/);
-  assert.match(setOptions, /const locationToRestore = this\.currentMode === "mindmap" && !modeChanged[\s\S]*renderedLocation \?\? this\.lastReadingLocation/);
+  assert.match(setOptions, /const locationToRestore = this\.currentMode === "mindmap" && !modeChanged[\s\S]*chooseArticleRefreshLocation\(preferredCurrentLocation, renderedLocation, this\.lastReadingLocation\)/);
   assert.match(setOptions, /locationToRestore[\s\S]*this\.restoreReadingLocation\(this\.currentMode, locationToRestore\)/);
 });
 
@@ -87,9 +87,12 @@ test("node clicks preserve their current viewport anchor instead of forcing 35 p
 test("explicit child-map navigation wins over stale cross-file progress", () => {
   assert.match(viewSource, /markExplicitNavigation\(focusNodeId\?: string\): void/);
   assert.match(viewSource, /preferCurrentFileOnNextContextRefresh/);
-  assert.match(viewSource, /this\.editor\?\.setOptions\(this\.getEditorOptions\(preferCurrentFile\), true\)/);
+  assert.match(viewSource, /preferredCurrentNodeIdOnNextContextRefresh/);
+  assert.match(viewSource, /this\.editor\?\.setOptions\(this\.getEditorOptions\(preferCurrentFile, preferredCurrentNodeId\), true\)/);
   assert.match(mainSource, /leaf\.view\.markExplicitNavigation\(focusNodeId\)/);
+  assert.match(editorSource, /options\.preferredCurrentNodeId[\s\S]*preferredCurrentNodeId/);
   assert.match(editorSource, /options\.preferCurrentFileLocation[\s\S]*preferredCurrentLocation/);
+  assert.match(editorSource, /chooseArticleRefreshLocation\(preferredCurrentLocation, renderedLocation, this\.lastReadingLocation\)/);
 });
 
 

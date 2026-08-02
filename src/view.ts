@@ -45,6 +45,7 @@ export class MindMapStudioView extends TextFileView {
   private articleContextToken = 0;
   private articleContextTimer: number | null = null;
   private preferCurrentFileOnNextContextRefresh = false;
+  private preferredCurrentNodeIdOnNextContextRefresh: string | null = null;
 
   /**
    * 创建 MindMapStudioView 实例，保存依赖和初始状态；实际 DOM 构建通常在 onOpen() 或后续渲染流程中完成。
@@ -123,6 +124,7 @@ export class MindMapStudioView extends TextFileView {
       this.pendingFocusNodeId = queuedFocusNodeId;
       this.pendingFocusShouldPersist = false;
       this.preferCurrentFileOnNextContextRefresh = true;
+      this.preferredCurrentNodeIdOnNextContextRefresh = queuedFocusNodeId;
     }
     if (this.file) void this.plugin.resumePendingAutoUploads(this.file, this.document);
     this.articleContextReady = false;
@@ -333,6 +335,7 @@ export class MindMapStudioView extends TextFileView {
     this.plugin.logDebug("view", "mark-explicit-navigation", { filePath: this.file?.path, focusNodeId, hasEditor: Boolean(this.editor), articleContextReady: this.articleContextReady });
     this.preferCurrentFileOnNextContextRefresh = true;
     const nodeId = focusNodeId ?? this.document?.root.id;
+    this.preferredCurrentNodeIdOnNextContextRefresh = nodeId ?? null;
     if (!nodeId) return;
     if (!this.editor) {
       this.pendingFocusNodeId = nodeId;
@@ -456,7 +459,7 @@ export class MindMapStudioView extends TextFileView {
   /**
    * 读取并返回editor options，并保持模型、界面和持久化状态的一致性。
    */
-  private getEditorOptions(preferCurrentFileLocation = false) {
+  private getEditorOptions(preferCurrentFileLocation = false, preferredCurrentNodeId: string | null = null) {
     return {
       defaultNodeShape: this.plugin.settings.defaultNodeShape,
       defaultAppearance: settingsToAppearance(this.plugin.settings),
@@ -482,6 +485,7 @@ export class MindMapStudioView extends TextFileView {
         return homePath ? (this.plugin.settings.readingLocations[homePath] ?? null) : null;
       })(),
       preferCurrentFileLocation,
+      preferredCurrentNodeId,
       nodeEditorPosition: this.plugin.settings.nodeEditorPosition,
       richTextShortcuts: {
         bold: this.plugin.settings.richTextBoldShortcut,
@@ -554,9 +558,11 @@ export class MindMapStudioView extends TextFileView {
       this.readingSections = context.readingSections;
       this.articleContextReady = true;
       const preferCurrentFile = this.preferCurrentFileOnNextContextRefresh;
-      this.plugin.logDebug("article-context", "refresh-success", { filePath: file.path, token, baseDepth: context.baseDepth, tocEntries: context.tocEntries.length, showToc: context.showToc, readingSections: context.readingSections.length, preferCurrentFile });
-      this.editor?.setOptions(this.getEditorOptions(preferCurrentFile), true);
+      const preferredCurrentNodeId = preferCurrentFile ? this.preferredCurrentNodeIdOnNextContextRefresh : null;
+      this.plugin.logDebug("article-context", "refresh-success", { filePath: file.path, token, baseDepth: context.baseDepth, tocEntries: context.tocEntries.length, showToc: context.showToc, readingSections: context.readingSections.length, preferCurrentFile, preferredCurrentNodeId });
+      this.editor?.setOptions(this.getEditorOptions(preferCurrentFile, preferredCurrentNodeId), true);
       this.preferCurrentFileOnNextContextRefresh = false;
+      this.preferredCurrentNodeIdOnNextContextRefresh = null;
     } catch (error) {
       if (token !== this.articleContextToken || this.file?.path !== file.path) return;
       this.plugin.logDebug("article-context", "refresh-failed", { filePath: file.path, token, error });
@@ -568,9 +574,11 @@ export class MindMapStudioView extends TextFileView {
       this.readingSections = [{ filePath: file.path, document, baseDepth: 0 }];
       this.articleContextReady = true;
       const preferCurrentFile = this.preferCurrentFileOnNextContextRefresh;
-      this.plugin.logDebug("article-context", "refresh-fallback", { filePath: file.path, token, preferCurrentFile });
-      this.editor?.setOptions(this.getEditorOptions(preferCurrentFile), true);
+      const preferredCurrentNodeId = preferCurrentFile ? this.preferredCurrentNodeIdOnNextContextRefresh : null;
+      this.plugin.logDebug("article-context", "refresh-fallback", { filePath: file.path, token, preferCurrentFile, preferredCurrentNodeId });
+      this.editor?.setOptions(this.getEditorOptions(preferCurrentFile, preferredCurrentNodeId), true);
       this.preferCurrentFileOnNextContextRefresh = false;
+      this.preferredCurrentNodeIdOnNextContextRefresh = null;
     }
   }
 

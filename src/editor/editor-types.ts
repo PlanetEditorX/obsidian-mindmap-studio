@@ -95,6 +95,8 @@ export interface MindMapEditorOptions {
    * 不能立即根据旧的跨文件阅读记录跳回另一个父/子导图。
    */
   preferCurrentFileLocation: boolean;
+  /** Exact node requested by the cross-file navigation that owns the next context refresh. */
+  preferredCurrentNodeId: string | null;
   /** Cross-file article numbering and directory metadata have completed their first load. */
   articleContextReady: boolean;
   articleBaseDepth: number;

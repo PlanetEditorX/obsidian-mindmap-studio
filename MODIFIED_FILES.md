@@ -1,5 +1,14 @@
 # Modified Files
 
+## 1.40.5 真实日志驱动的目标优先级热修复
+
+- `src/article/reading-location.ts`：新增文章上下文刷新目标与入口过渡目标的纯函数优先级选择，显式目标始终压过骨架/历史恢复。
+- `src/view.ts`、`src/editor/editor-types.ts`：跨文件操作保留一次性精确 `preferredCurrentNodeId` 到上下文刷新完成，不再只传布尔标记。
+- `src/editor/editor.ts`：`setOptions()` 优先恢复精确当前文件目标；入口骨架不允许后到的普通恢复覆盖本次显式章节；新增恢复选择调试事件。
+- `tests/reading-location.test.mjs`、`tests/reading-editor-contract.test.mjs`、`tests/incremental-render.test.mjs`：增加真实日志冲突的可执行优先级回归和集成契约。
+- `README.md`、`CHANGELOG.md`、`docs/READING_JUMP_FIX.zh-CN.md`、`TEST_RESULTS.md`：同步真实根因、调试判据、源码基线差异与验证状态。
+- `package.json`、`package-lock.json`、`manifest.json`、`versions.json`：版本提升为 1.40.5；`update.json` 和安装包 SHA-256 在最终打包后更新。
+
 ## 1.39.13 父级返回、章节落地与运行调试记录
 
 - `src/main.ts`：新增显式导航目标校验与父挂载节点反查；目标文件切换前解析最终节点并排队；加入运行调试捕获、剪贴板复制命令和设置同步。

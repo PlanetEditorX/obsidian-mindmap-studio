@@ -5484,6 +5484,14 @@ function resolveReadingLocation(location, sections, preferredFilePath = "") {
     viewportRatio: (_d = normalized2 == null ? void 0 : normalized2.viewportRatio) != null ? _d : 0.35
   };
 }
+function chooseArticleRefreshLocation(preferredCurrent, rendered, remembered) {
+  var _a2, _b2;
+  return (_b2 = (_a2 = preferredCurrent != null ? preferredCurrent : rendered) != null ? _a2 : remembered) != null ? _b2 : null;
+}
+function chooseArticleTransitionLocation(requested, pendingRestore) {
+  var _a2;
+  return (_a2 = requested != null ? requested : pendingRestore) != null ? _a2 : null;
+}
 function sameReadingLocation(left, right) {
   const a = normalizeReadingLocation(left);
   const b = normalizeReadingLocation(right);
@@ -10882,14 +10890,15 @@ var MindMapEditor = class {
    * @param articleContextOnly 是否仅由异步文章族上下文刷新触发。
    */
   setOptions(options, articleContextOnly = false) {
-    var _a2, _b2, _c, _d, _e, _f;
+    var _a2, _b2, _c, _d, _e, _f, _g;
     const previousOptions = this.options;
     const activeRestoreLocation = ((_a2 = this.activeReadingRestore) == null ? void 0 : _a2.mode) === this.currentMode ? this.activeReadingRestore.location : null;
     const renderedLocation = this.currentMode === "mindmap" ? null : (_b2 = activeRestoreLocation != null ? activeRestoreLocation : this.captureCurrentLocation(this.currentMode)) != null ? _b2 : this.lastReadingLocation;
+    const preferredCurrentNodeId = options.preferredCurrentNodeId && findNode(this.document.root, options.preferredCurrentNodeId) ? options.preferredCurrentNodeId : (_d = (_c = findNode(this.document.root, this.selectedId)) == null ? void 0 : _c.id) != null ? _d : this.document.root.id;
     const preferredCurrentLocation = options.preferCurrentFileLocation ? createReadingLocation(
       this.readingLocationSections(options),
       options.currentFilePath,
-      (_d = (_c = findNode(this.document.root, this.selectedId)) == null ? void 0 : _c.id) != null ? _d : this.document.root.id,
+      preferredCurrentNodeId,
       0,
       this.currentMode === "mindmap" ? 0.5 : 0.35
     ) : null;
@@ -10945,7 +10954,17 @@ var MindMapEditor = class {
     if (articleContextOnly && !modeChanged && !modesChanged && !toolbarChanged && this.currentMode !== "reading" && (this.currentMode !== "article" || !articleContextPresentationChanged)) return;
     if (this.inlineEditingId && !modesChanged && !toolbarChanged && !globalModeChanged) return;
     this.render();
-    const locationToRestore = this.currentMode === "mindmap" && !modeChanged ? null : renderedLocation != null ? renderedLocation : this.lastReadingLocation;
+    const locationToRestore = this.currentMode === "mindmap" && !modeChanged ? null : chooseArticleRefreshLocation(preferredCurrentLocation, renderedLocation, this.lastReadingLocation);
+    this.callbacks.onDebugLog("navigation", "set-options-restore-choice", {
+      articleContextOnly,
+      preferCurrentFileLocation: options.preferCurrentFileLocation,
+      requestedPreferredNodeId: options.preferredCurrentNodeId,
+      preferredNodeId: preferredCurrentLocation == null ? void 0 : preferredCurrentLocation.nodeIds[0],
+      renderedNodeId: renderedLocation == null ? void 0 : renderedLocation.nodeIds[0],
+      rememberedNodeId: (_g = this.lastReadingLocation) == null ? void 0 : _g.nodeIds[0],
+      chosenNodeId: locationToRestore == null ? void 0 : locationToRestore.nodeIds[0],
+      chosenFilePath: locationToRestore == null ? void 0 : locationToRestore.filePath
+    });
     const restored = locationToRestore ? this.restoreReadingLocation(this.currentMode, locationToRestore) : null;
     if ((restored == null ? void 0 : restored.filePath) === this.options.currentFilePath) this.pendingLocationNavigationKey = null;
     if (restored && this.currentMode !== "reading" && restored.filePath !== this.options.currentFilePath) {
@@ -12711,9 +12730,9 @@ var MindMapEditor = class {
     const needsEntryTransition = !reducedMotion && (requestedLocation !== null || !existingPage || existingPage.dataset.nodeId !== this.document.root.id || existingDirectory !== directoryOnly);
     this.cancelArticleWindowExpansion();
     const renderWindow = () => {
-      var _a3, _b3, _c2;
+      var _a3, _b3;
       if (this.currentMode !== "article" || !this.options.articleContextReady) return;
-      const latestRequestedLocation = directoryOnly ? null : (_a3 = this.pendingArticleFocusLocation) != null ? _a3 : requestedLocation;
+      const latestRequestedLocation = directoryOnly ? null : chooseArticleTransitionLocation(requestedLocation, this.pendingArticleFocusLocation);
       this.pendingArticleFocusLocation = null;
       this.articleEl.empty();
       this.articleEl.removeAttribute("aria-busy");
@@ -12725,7 +12744,7 @@ var MindMapEditor = class {
         hasController: Boolean(this.articleRenderController),
         scrollTopBeforeRestore: this.articleEl.scrollTop
       });
-      (_b3 = this.articleEl.querySelector(":scope > .mms-article-page")) == null ? void 0 : _b3.addClass("is-window-entering");
+      (_a3 = this.articleEl.querySelector(":scope > .mms-article-page")) == null ? void 0 : _a3.addClass("is-window-entering");
       this.refreshArticleWindowChrome();
       this.addArticleScrollToTopButton();
       this.articleEl.onscroll = () => {
@@ -12741,7 +12760,7 @@ var MindMapEditor = class {
         this.articleEl.scrollLeft = 0;
         return;
       }
-      const location = (_c2 = latestRequestedLocation != null ? latestRequestedLocation : previousLocation) != null ? _c2 : !existingPage ? this.lastReadingLocation : null;
+      const location = (_b3 = latestRequestedLocation != null ? latestRequestedLocation : previousLocation) != null ? _b3 : !existingPage ? this.lastReadingLocation : null;
       if (location) this.restoreReadingLocation("article", location);
       else {
         this.articleEl.scrollTop = previousScroll.top;
@@ -17336,6 +17355,7 @@ var MindMapStudioView = class _MindMapStudioView extends import_obsidian13.TextF
     this.articleContextToken = 0;
     this.articleContextTimer = null;
     this.preferCurrentFileOnNextContextRefresh = false;
+    this.preferredCurrentNodeIdOnNextContextRefresh = null;
     this.plugin = plugin;
   }
   /**
@@ -17402,6 +17422,7 @@ var MindMapStudioView = class _MindMapStudioView extends import_obsidian13.TextF
       this.pendingFocusNodeId = queuedFocusNodeId;
       this.pendingFocusShouldPersist = false;
       this.preferCurrentFileOnNextContextRefresh = true;
+      this.preferredCurrentNodeIdOnNextContextRefresh = queuedFocusNodeId;
     }
     if (this.file) void this.plugin.resumePendingAutoUploads(this.file, this.document);
     this.articleContextReady = false;
@@ -17629,6 +17650,7 @@ var MindMapStudioView = class _MindMapStudioView extends import_obsidian13.TextF
     this.plugin.logDebug("view", "mark-explicit-navigation", { filePath: (_a2 = this.file) == null ? void 0 : _a2.path, focusNodeId, hasEditor: Boolean(this.editor), articleContextReady: this.articleContextReady });
     this.preferCurrentFileOnNextContextRefresh = true;
     const nodeId = focusNodeId != null ? focusNodeId : (_b2 = this.document) == null ? void 0 : _b2.root.id;
+    this.preferredCurrentNodeIdOnNextContextRefresh = nodeId != null ? nodeId : null;
     if (!nodeId) return;
     if (!this.editor) {
       this.pendingFocusNodeId = nodeId;
@@ -17764,7 +17786,7 @@ var MindMapStudioView = class _MindMapStudioView extends import_obsidian13.TextF
   /**
    * 读取并返回editor options，并保持模型、界面和持久化状态的一致性。
    */
-  getEditorOptions(preferCurrentFileLocation = false) {
+  getEditorOptions(preferCurrentFileLocation = false, preferredCurrentNodeId = null) {
     var _a2, _b2, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _A;
     return {
       defaultNodeShape: this.plugin.settings.defaultNodeShape,
@@ -17792,6 +17814,7 @@ var MindMapStudioView = class _MindMapStudioView extends import_obsidian13.TextF
         return homePath ? (_e2 = this.plugin.settings.readingLocations[homePath]) != null ? _e2 : null : null;
       })(),
       preferCurrentFileLocation,
+      preferredCurrentNodeId,
       nodeEditorPosition: this.plugin.settings.nodeEditorPosition,
       richTextShortcuts: {
         bold: this.plugin.settings.richTextBoldShortcut,
@@ -17863,9 +17886,11 @@ var MindMapStudioView = class _MindMapStudioView extends import_obsidian13.TextF
       this.readingSections = context.readingSections;
       this.articleContextReady = true;
       const preferCurrentFile = this.preferCurrentFileOnNextContextRefresh;
-      this.plugin.logDebug("article-context", "refresh-success", { filePath: file.path, token, baseDepth: context.baseDepth, tocEntries: context.tocEntries.length, showToc: context.showToc, readingSections: context.readingSections.length, preferCurrentFile });
-      (_d = this.editor) == null ? void 0 : _d.setOptions(this.getEditorOptions(preferCurrentFile), true);
+      const preferredCurrentNodeId = preferCurrentFile ? this.preferredCurrentNodeIdOnNextContextRefresh : null;
+      this.plugin.logDebug("article-context", "refresh-success", { filePath: file.path, token, baseDepth: context.baseDepth, tocEntries: context.tocEntries.length, showToc: context.showToc, readingSections: context.readingSections.length, preferCurrentFile, preferredCurrentNodeId });
+      (_d = this.editor) == null ? void 0 : _d.setOptions(this.getEditorOptions(preferCurrentFile, preferredCurrentNodeId), true);
       this.preferCurrentFileOnNextContextRefresh = false;
+      this.preferredCurrentNodeIdOnNextContextRefresh = null;
     } catch (error) {
       if (token !== this.articleContextToken || ((_e = this.file) == null ? void 0 : _e.path) !== file.path) return;
       this.plugin.logDebug("article-context", "refresh-failed", { filePath: file.path, token, error });
@@ -17877,9 +17902,11 @@ var MindMapStudioView = class _MindMapStudioView extends import_obsidian13.TextF
       this.readingSections = [{ filePath: file.path, document: document2, baseDepth: 0 }];
       this.articleContextReady = true;
       const preferCurrentFile = this.preferCurrentFileOnNextContextRefresh;
-      this.plugin.logDebug("article-context", "refresh-fallback", { filePath: file.path, token, preferCurrentFile });
-      (_f = this.editor) == null ? void 0 : _f.setOptions(this.getEditorOptions(preferCurrentFile), true);
+      const preferredCurrentNodeId = preferCurrentFile ? this.preferredCurrentNodeIdOnNextContextRefresh : null;
+      this.plugin.logDebug("article-context", "refresh-fallback", { filePath: file.path, token, preferCurrentFile, preferredCurrentNodeId });
+      (_f = this.editor) == null ? void 0 : _f.setOptions(this.getEditorOptions(preferCurrentFile, preferredCurrentNodeId), true);
       this.preferCurrentFileOnNextContextRefresh = false;
+      this.preferredCurrentNodeIdOnNextContextRefresh = null;
     }
   }
   /**
