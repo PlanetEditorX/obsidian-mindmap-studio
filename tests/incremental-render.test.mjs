@@ -78,10 +78,10 @@ test("article mode mounts a target-centered 5 KB window and expands only at rend
   assert.match(editorSource, /previousTop \+ Math\.max\(0, this\.articleEl\.scrollHeight - previousHeight\)/);
   assert.match(cssSource, /\.mms-article-window-loader/);
   assert.match(cssSource, /\.mms-article-window-loader \{[\s\S]*?display: flex;[\s\S]*?align-items: center;[\s\S]*?justify-content: center;[\s\S]*?line-height: 1\.2;/);
-  assert.match(cssSource, /@property --mms-article-loader-border-angle/);
-  assert.match(cssSource, /\.mms-article-window-loader\.is-loading::before \{[\s\S]*?conic-gradient\([\s\S]*?-webkit-mask-composite: xor;[\s\S]*?animation: mms-article-loader-border-run 1\.35s linear infinite;/);
-  assert.match(cssSource, /@keyframes mms-article-loader-border-run \{[\s\S]*?--mms-article-loader-border-angle: 360deg;/);
-  assert.match(cssSource, /prefers-reduced-motion: reduce[\s\S]*?mms-article-window-loader\.is-loading::before[\s\S]*?animation: none;/);
+  assert.doesNotMatch(cssSource, /--mms-article-loader-border-angle|mms-article-loader-border-run/);
+  assert.doesNotMatch(cssSource, /\.mms-article-window-loader\.is-loading::before/);
+  assert.match(cssSource, /\.mms-article-window-loader\.is-loading::after \{[\s\S]*?animation: mms-article-edge-loading 800ms ease-in-out infinite;/);
+  assert.match(cssSource, /prefers-reduced-motion: reduce[\s\S]*?mms-article-window-loader\.is-loading::after[\s\S]*?animation: none;/);
   assert.match(articleSource, /articleNodePrimaryText/);
   assert.doesNotMatch(articleSource, /JSON\.stringify\(\{[\s\S]*?content: articleNodeContentBlocks/);
   assert.doesNotMatch(articleSource, /is-render-pending|ArticleIncrementalRenderOptions|onFirstContent|onProgress/);

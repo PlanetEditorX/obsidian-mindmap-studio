@@ -3902,14 +3902,7 @@
   animation-name: mms-article-window-enter-before;
 }
 
-@property --mms-article-loader-border-angle {
-  syntax: "<angle>";
-  inherits: false;
-  initial-value: 0deg;
-}
-
 .mms-article-window-loader {
-  --mms-article-loader-border-angle: 0deg;
   position: relative;
   isolation: isolate;
   display: flex;
@@ -3935,29 +3928,6 @@
   cursor: progress;
 }
 
-.mms-article-window-loader.is-loading::before {
-  content: "";
-  position: absolute;
-  z-index: 2;
-  inset: -1px;
-  padding: 2px;
-  border-radius: inherit;
-  background: conic-gradient(
-    from var(--mms-article-loader-border-angle),
-    transparent 0deg 250deg,
-    color-mix(in srgb, var(--mms-article-accent, var(--interactive-accent)) 54%, transparent) 278deg,
-    var(--interactive-accent-hover, var(--mms-article-accent, var(--interactive-accent))) 315deg,
-    transparent 344deg 360deg
-  );
-  pointer-events: none;
-  -webkit-mask:
-    linear-gradient(#000 0 0) content-box,
-    linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
-  animation: mms-article-loader-border-run 1.35s linear infinite;
-}
-
 .mms-article-window-loader.is-loading::after {
   content: "";
   position: absolute;
@@ -3971,9 +3941,6 @@
   to { transform: translateX(100%); }
 }
 
-@keyframes mms-article-loader-border-run {
-  to { --mms-article-loader-border-angle: 360deg; }
-}
 
 .mms-article-window-loader:hover,
 .mms-article-window-loader:focus-visible {
@@ -4008,7 +3975,6 @@
   .mms-article-entry-skeleton .mms-article-skeleton-line,
   .mms-article-page.is-window-entering,
   .mms-article-node.is-window-entering,
-  .mms-article-window-loader.is-loading::before,
   .mms-article-window-loader.is-loading::after {
     animation: none;
   }
