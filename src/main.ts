@@ -805,6 +805,7 @@ export default class MindMapStudioPlugin extends Plugin {
         : "solid",
       articleLeafTextAlignment: raw.articleLeafTextAlignment === "flush" ? "flush" : "auto",
       articleLeafNumberingEnabled: raw.articleLeafNumberingEnabled === true,
+      articleLeafNumberingStyle: raw.articleLeafNumberingStyle === "circled" ? "circled" : "next-level",
       articleLeafNumberingThreshold: typeof raw.articleLeafNumberingThreshold === "number"
         ? Math.max(1, Math.min(20, Math.round(raw.articleLeafNumberingThreshold)))
         : DEFAULT_SETTINGS.articleLeafNumberingThreshold,

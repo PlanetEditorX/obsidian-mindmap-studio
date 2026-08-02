@@ -7,7 +7,7 @@ import type { DataAdapter } from "obsidian";
 import type { MindMapNode } from "../core/model";
 
 export const ARTICLE_RENDER_CACHE_SCHEMA_VERSION = 1;
-export const ARTICLE_RENDERER_REVISION = "article-node-cache-v2";
+export const ARTICLE_RENDERER_REVISION = "article-node-cache-v3";
 
 /** Minimal cross-platform path normalization for vault-relative and plugin cache paths. */
 export function normalizeArticleCachePath(value: string): string {

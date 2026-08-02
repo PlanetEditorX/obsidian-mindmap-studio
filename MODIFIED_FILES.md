@@ -1,5 +1,17 @@
 # Modified Files
 
+## 1.39.2 末端正文带圈序号
+
+- `src/core/model.ts`、`src/settings.ts`、`src/main.ts`：新增 `next-level` / `circled` 末端序号样式，提供全局默认、配置规范化与当前页面覆盖。
+- `src/article/modes.ts`：新增 `circledNumberLabel()`，原生映射 `①–㊿`；第 51 项以后保留十进制编号，并允许带圈末端序号跨越文章标题八级边界。
+- `src/editor/article-renderer.ts`、`src/editor/editor.ts`、`src/editor/editor-types.ts`、`styles.css`：在文章、通读与缓存指纹中传递带圈样式；51 以上使用 CSS 圆圈呈现。
+- `src/import/import-export.ts`、`src/view.ts`：HTML 导出支持 51 以上圆圈结构，Markdown 与 Word 使用 `◯51` 可读回退，页面覆盖优先于插件设置。
+- `tests/article-numbering.test.mjs`、`tests/article-content-block.test.mjs`、`scripts/test.mjs`：新增 Unicode 边界、67 个同级节点、深层结构和多格式导出专项测试。
+- `README.md`、`CHANGELOG.md`、`docs/ARCHITECTURE.md`、`docs/DATA_MODEL.md`、`docs/DEVELOPMENT.md`、`docs/SPECIAL_FEATURES.md`、`docs/TESTING.md`、`docs/FUNCTION_REFERENCE.md`：同步功能边界、导出回退、测试和函数参考。
+- `package.json`、`package-lock.json`、`manifest.json`、`versions.json`、`update.json`：统一版本元数据为 1.39.2，并在最终安装包生成后写入 SHA-256。
+- `TEST_RESULTS.md`、Codex 项目衔接页：记录完整验证和真实 Win10 待验证事项。
+- `main.js`：由新增功能后的 TypeScript 源码重新生产构建。
+
 ## 1.39.1 深层文章编号边界修复
 
 - `src/article/modes.ts`：集中定义八级文章编号上限；第 9 级及更深结构不再循环复用 `A.` / `（A）`，第 7、8 级字母序号超过 Z 后使用 AA、AB。

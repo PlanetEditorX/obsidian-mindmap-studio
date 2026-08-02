@@ -5,7 +5,7 @@
  * 导图、大纲、文章和通读模式读取同一节点树；本模块负责中文序号、标题判定、手动文章层级、子导图层级续接与可见模式容错。
  */
 
-import type { DisplayMode, MindMapDocument, MindMapNode } from "../core/model";
+import type { ArticleLeafNumberingStyle, DisplayMode, MindMapDocument, MindMapNode } from "../core/model";
 import { nodePrimaryText } from "../core/model";
 
 export const DISPLAY_MODE_LABELS: Record<DisplayMode, string> = {
@@ -48,6 +48,8 @@ const CHINESE_DIGITS = ["零", "一", "二", "三", "四", "五", "六", "七", 
 
 /** 文章编号支持的最高样式层级。更深结构继续保留标题层级，但不循环复用已有编号。 */
 export const MAX_ARTICLE_NUMBERING_LEVEL = 8;
+/** Unicode 提供单字符普通带圈数字的最大序号。 */
+export const MAX_NATIVE_CIRCLED_NUMBER = 50;
 
 /**
  * 执行“chinese number”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
@@ -101,6 +103,21 @@ export function articleNumberLabel(depth: number, index: number): string {
   if (normalizedDepth === 6) return `（${normalizedIndex}）`;
   const alphabet = alphabeticNumber(normalizedIndex);
   return normalizedDepth === 7 ? `${alphabet}.` : `（${alphabet}）`;
+}
+
+/**
+ * 返回带圈数字标签。1–50 使用 Unicode 单字符，51 及以上返回普通数字，
+ * 由文章 DOM 使用 CSS 圆圈渲染；纯文本导出可据此提供可读回退。
+ *
+ * @param index 一基末端节点序号。
+ * @returns ①–㊿，或 51 及以上的十进制数字。
+ */
+export function circledNumberLabel(index: number): string {
+  const normalizedIndex = Number.isFinite(index) ? Math.max(1, Math.floor(index)) : 1;
+  if (normalizedIndex <= 20) return String.fromCodePoint(0x2460 + normalizedIndex - 1);
+  if (normalizedIndex <= 35) return String.fromCodePoint(0x3251 + normalizedIndex - 21);
+  if (normalizedIndex <= MAX_NATIVE_CIRCLED_NUMBER) return String.fromCodePoint(0x32b1 + normalizedIndex - 36);
+  return String(normalizedIndex);
 }
 
 /**
@@ -181,8 +198,12 @@ export interface ArticleNodeInfo {
   title: string;
   displayTitle: string;
   isHeading: boolean;
-  /** Terminal body rendered with a generated next-level article number. */
+  /** Terminal body rendered with a generated article or circled number. */
   numberedLeaf: boolean;
+  /** Numbering style used by a converted terminal body. */
+  leafNumberingStyle?: ArticleLeafNumberingStyle;
+  /** One-based terminal sibling index; used for CSS fallback after Unicode ㊿. */
+  leafNumberingIndex?: number;
   skipped: boolean;
   anchor: string;
 }
@@ -304,6 +325,8 @@ export function currentArticlePageEntry(navigation: ArticlePageNavigation | unde
 export interface ArticleLeafNumberingOptions {
   enabled: boolean;
   threshold: number;
+  /** Existing next-level article numbering or independent circled numbers. */
+  style?: ArticleLeafNumberingStyle;
 }
 
 /**
@@ -324,7 +347,9 @@ export function buildArticleNodeInfo(
       else if (child.articleNumberingMode !== "none") terminalCount += 1;
     }
     const threshold = Math.max(1, Math.min(20, Math.floor(leafNumbering.threshold) || 4));
-    const convertLeaves = leafNumbering.enabled && terminalCount >= threshold && defaultLevel < MAX_ARTICLE_NUMBERING_LEVEL;
+    const leafNumberingStyle: ArticleLeafNumberingStyle = leafNumbering.style === "circled" ? "circled" : "next-level";
+    const hasSupportedLeafLabel = leafNumberingStyle === "circled" || defaultLevel <= MAX_ARTICLE_NUMBERING_LEVEL;
+    const convertLeaves = leafNumbering.enabled && terminalCount >= threshold && hasSupportedLeafLabel;
     const numberedIndexes = new Map<number, number>();
     for (const child of parent.children) {
       const numbering = resolveArticleNumbering(child, defaultLevel, siblingHasHeading);
@@ -337,16 +362,27 @@ export function buildArticleNodeInfo(
         ? (numberedIndexes.get(displayLevel) ?? 0) + 1
         : 0;
       if (numberedIndex) numberedIndexes.set(displayLevel, numberedIndex);
-      const label = numberedIndex ? articleNumberLabel(displayLevel, numberedIndex) : "";
+      const label = numberedIndex
+        ? numberedLeaf && leafNumberingStyle === "circled"
+          ? circledNumberLabel(numberedIndex)
+          : articleNumberLabel(displayLevel, numberedIndex)
+        : "";
       const title = primaryText(child) || (numbering.isHeading ? "未命名标题" : "");
+      const plainTextLabel = numberedLeaf
+        && leafNumberingStyle === "circled"
+        && numberedIndex > MAX_NATIVE_CIRCLED_NUMBER
+        ? `◯${label}`
+        : label;
       result.push({
         node: child,
         depth: displayLevel,
         label,
         title,
-        displayTitle: articleDisplayTitle(label, title),
+        displayTitle: articleDisplayTitle(plainTextLabel, title),
         isHeading: numbering.isHeading,
         numberedLeaf,
+        leafNumberingStyle: numberedLeaf ? leafNumberingStyle : undefined,
+        leafNumberingIndex: numberedLeaf ? numberedIndex : undefined,
         skipped: numbering.skipped,
         anchor: `mindmap-article-${child.id.replace(/[^a-zA-Z0-9_-]/g, "-")}`
       });

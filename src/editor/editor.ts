@@ -3633,6 +3633,7 @@ export class MindMapEditor {
       articleLeafBulletStyle: this.options.articleLeafBulletStyle,
       articleLeafTextAlignment: this.options.articleLeafTextAlignment,
       articleLeafNumberingEnabled: this.options.articleLeafNumberingEnabled,
+      articleLeafNumberingStyle: this.options.articleLeafNumberingStyle,
       articleLeafNumberingThreshold: this.options.articleLeafNumberingThreshold,
       imageHostPriorityIds: this.options.imageHostPriorityIds,
       articleNavigation: this.options.articleNavigation,
@@ -5402,6 +5403,7 @@ export class MindMapEditor {
       color: this.options.articleLeafBulletColor,
       alignment: this.options.articleLeafTextAlignment,
       numberingEnabled: this.options.articleLeafNumberingEnabled,
+      numberingStyle: this.options.articleLeafNumberingStyle,
       numberingThreshold: this.options.articleLeafNumberingThreshold
     }, (style) => {
       this.mutate(() => { this.document.articleStyle = style; });
@@ -5795,7 +5797,7 @@ export class MindMapEditor {
       const chapterTitleBlock = nodeContentBlocks(section.document.root).find((block): block is MindMapTextContentBlock => block.type === "text");
       renderRichTextRuns(chapterTitle, chapterTitleBlock?.richText, chapterTitleBlock?.text ?? (sectionEntry?.displayTitle || section.document.title));
       this.renderArticleContent(chapter, section.document.root, false);
-      for (const info of buildArticleNodeInfo(section.document.root, section.baseDepth, { enabled: this.options.articleLeafNumberingEnabled, threshold: this.options.articleLeafNumberingThreshold })) {
+      for (const info of buildArticleNodeInfo(section.document.root, section.baseDepth, { enabled: this.options.articleLeafNumberingEnabled, threshold: this.options.articleLeafNumberingThreshold, style: this.options.articleLeafNumberingStyle })) {
         const nodeSection = chapter.createEl("section", { cls: `mms-article-node depth-${Math.min(info.depth, 8)}` });
         nodeSection.dataset.nodeId = info.node.id;
         nodeSection.dataset.filePath = section.filePath;
@@ -5812,7 +5814,11 @@ export class MindMapEditor {
           if (firstTextBlock) {
             const paragraph = nodeSection.createEl("p", { cls: `mms-article-leaf-text${this.options.articleLeafBulletsEnabled && !info.numberedLeaf ? " is-bulleted" : ""}${this.options.articleLeafTextAlignment === "auto" ? " is-auto-aligned" : ""}${firstTextBlock.paragraphIndent === "none" ? " is-flush" : ""}${info.numberedLeaf ? " mms-article-leaf-numbered" : ""}` });
             paragraph.dataset.blockId = firstTextBlock.id;
-            if (info.numberedLeaf) paragraph.dataset.articleNumber = info.label;
+            if (info.numberedLeaf) {
+              paragraph.dataset.articleNumber = info.label;
+              if (info.leafNumberingStyle) paragraph.dataset.articleNumberStyle = info.leafNumberingStyle;
+              if ((info.leafNumberingIndex ?? 0) > 50) paragraph.dataset.articleNumberFallback = "true";
+            }
             if (this.options.articleLeafBulletsEnabled && !info.numberedLeaf) {
               paragraph.dataset.bulletStyle = this.options.articleLeafBulletStyle;
               if (this.options.articleLeafBulletColor) paragraph.style.setProperty("--mms-article-bullet-color", this.options.articleLeafBulletColor);

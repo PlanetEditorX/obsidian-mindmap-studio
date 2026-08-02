@@ -777,6 +777,7 @@ function normalizeArticleStyle(input) {
     leafMarkerColor: color(input.leafMarkerColor),
     leafTextAlignment: input.leafTextAlignment === "flush" || input.leafTextAlignment === "auto" ? input.leafTextAlignment : void 0,
     leafNumberingEnabled: typeof input.leafNumberingEnabled === "boolean" ? input.leafNumberingEnabled : void 0,
+    leafNumberingStyle: input.leafNumberingStyle === "circled" || input.leafNumberingStyle === "next-level" ? input.leafNumberingStyle : void 0,
     leafNumberingThreshold: typeof input.leafNumberingThreshold === "number" ? Math.max(1, Math.min(20, Math.round(input.leafNumberingThreshold))) : void 0
   };
 }
@@ -2212,6 +2213,7 @@ var DEFAULT_SETTINGS = {
   articleLeafBulletStyle: "solid",
   articleLeafTextAlignment: "auto",
   articleLeafNumberingEnabled: false,
+  articleLeafNumberingStyle: "next-level",
   articleLeafNumberingThreshold: 4,
   hideAssetFolderInFileExplorer: false,
   hideConfiguredFilesInFileExplorer: false,
@@ -2553,8 +2555,12 @@ var MindMapStudioSettingTab = class extends import_obsidian.PluginSettingTab {
       this.plugin.settings.articleLeafTextAlignment = value === "flush" ? "flush" : "auto";
       await this.saveAndRefresh();
     }));
-    new import_obsidian.Setting(containerEl).setName("\u672B\u7AEF\u6B63\u6587\u6807\u8BC6\u8F6C\u5E8F\u53F7").setDesc("\u540C\u4E00\u4E0A\u7EA7\u6807\u9898\u4E0B\u7684\u672B\u7AEF\u6B63\u6587\u8FBE\u5230\u9608\u503C\u65F6\uFF0C\u6539\u7528\u4E0A\u7EA7\u6807\u9898\u7684\u4E0B\u4E00\u7EA7\u6587\u7AE0\u5E8F\u53F7\uFF1B\u6CA1\u6709\u53EF\u7528\u7684\u66F4\u6DF1\u5C42\u7EA7\u65F6\u4ECD\u4FDD\u7559\u6807\u8BC6\u3002").addToggle((toggle) => toggle.setValue(this.plugin.settings.articleLeafNumberingEnabled).onChange(async (value) => {
+    new import_obsidian.Setting(containerEl).setName("\u672B\u7AEF\u6B63\u6587\u6807\u8BC6\u8F6C\u5E8F\u53F7").setDesc("\u540C\u4E00\u4E0A\u7EA7\u6807\u9898\u4E0B\u7684\u672B\u7AEF\u6B63\u6587\u8FBE\u5230\u9608\u503C\u65F6\uFF0C\u6539\u7528\u6240\u9009\u5E8F\u53F7\u6837\u5F0F\u3002").addToggle((toggle) => toggle.setValue(this.plugin.settings.articleLeafNumberingEnabled).onChange(async (value) => {
       this.plugin.settings.articleLeafNumberingEnabled = value;
+      await this.saveAndRefresh();
+    }));
+    new import_obsidian.Setting(containerEl).setName("\u672B\u7AEF\u6B63\u6587\u5E8F\u53F7\u6837\u5F0F").setDesc("\u4E0B\u4E00\u7EA7\u6587\u7AE0\u5E8F\u53F7\u6CBF\u7528\u6807\u9898\u5C42\u7EA7\uFF1B\u5E26\u5708\u6570\u5B57 1\u201350 \u4F7F\u7528 Unicode \u2460\u2013\u32BF\uFF0C51 \u4EE5\u4E0A\u81EA\u52A8\u7ED8\u5236\u5706\u5708\uFF0C\u53EF\u7EE7\u7EED\u7F16\u53F7\u5230\u516D\u4E03\u5341\u9879\u53CA\u66F4\u591A\u3002").addDropdown((dropdown) => dropdown.addOption("next-level", "\u4E0A\u7EA7\u6807\u9898\u7684\u4E0B\u4E00\u7EA7\u6587\u7AE0\u5E8F\u53F7").addOption("circled", "\u5E26\u5708\u6570\u5B57\uFF08\u2460\u2013\u32BF\uFF0C51+ \u5706\u5708\uFF09").setValue(this.plugin.settings.articleLeafNumberingStyle).onChange(async (value) => {
+      this.plugin.settings.articleLeafNumberingStyle = value === "circled" ? "circled" : "next-level";
       await this.saveAndRefresh();
     }));
     new import_obsidian.Setting(containerEl).setName("\u672B\u7AEF\u6B63\u6587\u8F6C\u5E8F\u53F7\u9608\u503C").setDesc("\u8FBE\u5230\u591A\u5C11\u4E2A\u672B\u7AEF\u6B63\u6587\u5144\u5F1F\u8282\u70B9\u540E\u81EA\u52A8\u8F6C\u4E3A\u5E8F\u53F7\uFF0C\u9ED8\u8BA4 4\uFF1B\u56E0\u6B64 3 \u4E2A\u8282\u70B9\u4ECD\u663E\u793A\u672B\u7AEF\u6B63\u6587\u6807\u8BC6\u3002").addText((text) => text.setValue(String(this.plugin.settings.articleLeafNumberingThreshold)).setPlaceholder("3").onChange(async (value) => {
@@ -5174,6 +5180,7 @@ function readingAnchorPart(value) {
 }
 var CHINESE_DIGITS = ["\u96F6", "\u4E00", "\u4E8C", "\u4E09", "\u56DB", "\u4E94", "\u516D", "\u4E03", "\u516B", "\u4E5D"];
 var MAX_ARTICLE_NUMBERING_LEVEL = 8;
+var MAX_NATIVE_CIRCLED_NUMBER = 50;
 function chineseNumber(value) {
   var _a2;
   const safe = Math.max(0, Math.floor(value));
@@ -5209,6 +5216,13 @@ function articleNumberLabel(depth, index) {
   if (normalizedDepth === 6) return `\uFF08${normalizedIndex}\uFF09`;
   const alphabet = alphabeticNumber(normalizedIndex);
   return normalizedDepth === 7 ? `${alphabet}.` : `\uFF08${alphabet}\uFF09`;
+}
+function circledNumberLabel(index) {
+  const normalizedIndex = Number.isFinite(index) ? Math.max(1, Math.floor(index)) : 1;
+  if (normalizedIndex <= 20) return String.fromCodePoint(9312 + normalizedIndex - 1);
+  if (normalizedIndex <= 35) return String.fromCodePoint(12881 + normalizedIndex - 21);
+  if (normalizedIndex <= MAX_NATIVE_CIRCLED_NUMBER) return String.fromCodePoint(12977 + normalizedIndex - 36);
+  return String(normalizedIndex);
 }
 function articleDisplayTitle(label, title) {
   if (!label) return title;
@@ -5275,7 +5289,9 @@ function buildArticleNodeInfo(root, baseDepth = 0, leafNumbering = { enabled: fa
       else if (child.articleNumberingMode !== "none") terminalCount += 1;
     }
     const threshold = Math.max(1, Math.min(20, Math.floor(leafNumbering.threshold) || 4));
-    const convertLeaves = leafNumbering.enabled && terminalCount >= threshold && defaultLevel < MAX_ARTICLE_NUMBERING_LEVEL;
+    const leafNumberingStyle = leafNumbering.style === "circled" ? "circled" : "next-level";
+    const hasSupportedLeafLabel = leafNumberingStyle === "circled" || defaultLevel <= MAX_ARTICLE_NUMBERING_LEVEL;
+    const convertLeaves = leafNumbering.enabled && terminalCount >= threshold && hasSupportedLeafLabel;
     const numberedIndexes = /* @__PURE__ */ new Map();
     for (const child of parent.children) {
       const numbering = resolveArticleNumbering(child, defaultLevel, siblingHasHeading);
@@ -5283,16 +5299,19 @@ function buildArticleNodeInfo(root, baseDepth = 0, leafNumbering = { enabled: fa
       const displayLevel = numberedLeaf ? defaultLevel : numbering.level;
       const numberedIndex = (numbering.shouldNumber || numberedLeaf) && !numbering.skipped ? ((_a2 = numberedIndexes.get(displayLevel)) != null ? _a2 : 0) + 1 : 0;
       if (numberedIndex) numberedIndexes.set(displayLevel, numberedIndex);
-      const label = numberedIndex ? articleNumberLabel(displayLevel, numberedIndex) : "";
+      const label = numberedIndex ? numberedLeaf && leafNumberingStyle === "circled" ? circledNumberLabel(numberedIndex) : articleNumberLabel(displayLevel, numberedIndex) : "";
       const title = primaryText(child) || (numbering.isHeading ? "\u672A\u547D\u540D\u6807\u9898" : "");
+      const plainTextLabel = numberedLeaf && leafNumberingStyle === "circled" && numberedIndex > MAX_NATIVE_CIRCLED_NUMBER ? `\u25EF${label}` : label;
       result.push({
         node: child,
         depth: displayLevel,
         label,
         title,
-        displayTitle: articleDisplayTitle(label, title),
+        displayTitle: articleDisplayTitle(plainTextLabel, title),
         isHeading: numbering.isHeading,
         numberedLeaf,
+        leafNumberingStyle: numberedLeaf ? leafNumberingStyle : void 0,
+        leafNumberingIndex: numberedLeaf ? numberedIndex : void 0,
         skipped: numbering.skipped,
         anchor: `mindmap-article-${child.id.replace(/[^a-zA-Z0-9_-]/g, "-")}`
       });
@@ -6670,6 +6689,22 @@ function xmindToDocument(source, fallbackTitle = "XMind \u5BFC\u5165") {
   return { ...createDefaultDocument(title), title, root };
 }
 var escapeHtml = (value) => value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
+function exportLeafNumbering(document2, options) {
+  var _a2, _b2, _c, _d, _e, _f, _g, _h, _i;
+  return {
+    enabled: (_c = (_b2 = (_a2 = document2.articleStyle) == null ? void 0 : _a2.leafNumberingEnabled) != null ? _b2 : options.leafNumberingEnabled) != null ? _c : false,
+    style: (_f = (_e = (_d = document2.articleStyle) == null ? void 0 : _d.leafNumberingStyle) != null ? _e : options.leafNumberingStyle) != null ? _f : "next-level",
+    threshold: (_i = (_h = (_g = document2.articleStyle) == null ? void 0 : _g.leafNumberingThreshold) != null ? _h : options.leafNumberingThreshold) != null ? _i : 4
+  };
+}
+function htmlArticleDisplayTitle(info) {
+  var _a2;
+  const title = escapeHtml(info.title || "\u672A\u547D\u540D");
+  if (info.numberedLeaf && info.leafNumberingStyle === "circled" && ((_a2 = info.leafNumberingIndex) != null ? _a2 : 0) > 50) {
+    return `<span class="circled-number">${escapeHtml(info.label)}</span> ${title}`;
+  }
+  return escapeHtml(info.displayTitle || info.title || "\u672A\u547D\u540D");
+}
 function exportAnchor(sectionIndex, anchor) {
   return `export-${sectionIndex}-${anchor}`;
 }
@@ -6703,7 +6738,7 @@ function htmlTocList(items) {
 function escapeXml2(value) {
   return escapeHtml(value).replaceAll("'", "&apos;");
 }
-function collectExportTocItems(sections, maxTocDepth, includeTerminalHeadings = true) {
+function collectExportTocItems(sections, maxTocDepth, includeTerminalHeadings = true, options = {}) {
   const items = [];
   const childSections = /* @__PURE__ */ new Map();
   sections.forEach((section, index) => {
@@ -6721,7 +6756,7 @@ function collectExportTocItems(sections, maxTocDepth, includeTerminalHeadings = 
     if (sectionIndex > 0 && !parentNodeKey(section.parentFilePath, section.parentNodeId)) {
       push(Math.max(1, section.baseDepth), nodePlainText(section.document.root) || section.document.title, exportAnchor(sectionIndex, `section-${sectionIndex}`));
     }
-    for (const info of buildArticleNodeInfo(section.document.root, section.baseDepth)) {
+    for (const info of buildArticleNodeInfo(section.document.root, section.baseDepth, exportLeafNumbering(section.document, options))) {
       const title = info.displayTitle || info.title || "\u672A\u547D\u540D";
       const childIndex = childSections.get(`${section.filePath}\0${info.node.id}`);
       if (childIndex !== void 0) {
@@ -6735,7 +6770,7 @@ function collectExportTocItems(sections, maxTocDepth, includeTerminalHeadings = 
   collect(0);
   return items;
 }
-function readingSectionsToHtml(sections, tocMaxDepth = 3) {
+function readingSectionsToHtml(sections, tocMaxDepth = 3, options = {}) {
   var _a2;
   const maxTocDepth = normalizedExportTocMaxDepth(tocMaxDepth);
   const tocItems = [];
@@ -6759,8 +6794,8 @@ function readingSectionsToHtml(sections, tocMaxDepth = 3) {
     if (sectionIndex > 0 && !parentNodeKey(section.parentFilePath, section.parentNodeId)) {
       pushTocItem(Math.max(1, section.baseDepth), escapeHtml(nodePlainText(section.document.root) || section.document.title), exportAnchor(sectionIndex, `section-${sectionIndex}`));
     }
-    for (const info of buildArticleNodeInfo(section.document.root, section.baseDepth)) {
-      const title2 = escapeHtml(info.displayTitle || info.title || "\u672A\u547D\u540D");
+    for (const info of buildArticleNodeInfo(section.document.root, section.baseDepth, exportLeafNumbering(section.document, options))) {
+      const title2 = htmlArticleDisplayTitle(info);
       const key = `${section.filePath}\0${info.node.id}`;
       const childSectionIndex = childSectionIndexes.get(key);
       if (childSectionIndex !== void 0) {
@@ -6771,8 +6806,8 @@ function readingSectionsToHtml(sections, tocMaxDepth = 3) {
       }
     }
   };
-  const renderArticleNode = (filePath, document2, baseDepth, sectionIndex) => buildArticleNodeInfo(document2.root, baseDepth).map((info) => {
-    const title2 = escapeHtml(info.displayTitle || info.title || "\u672A\u547D\u540D");
+  const renderArticleNode = (filePath, document2, baseDepth, sectionIndex) => buildArticleNodeInfo(document2.root, baseDepth, exportLeafNumbering(document2, options)).map((info) => {
+    const title2 = htmlArticleDisplayTitle(info);
     const childSectionAnchor = childSectionAnchors.get(`${filePath}\0${info.node.id}`);
     if (childSectionAnchor) return "";
     const note = info.node.note ? `<p class="note">${escapeHtml(info.node.note)}</p>` : "";
@@ -6791,18 +6826,18 @@ function readingSectionsToHtml(sections, tocMaxDepth = 3) {
     return `<section class="map-section">${heading}${renderArticleNode(filePath, document2, baseDepth, index)}</section>`;
   }).join("");
   collectTocItems(0);
-  tocItems.splice(0, tocItems.length, ...collectExportTocItems(sections, maxTocDepth).map((item) => ({ ...item, title: escapeHtml(item.title) })));
+  tocItems.splice(0, tocItems.length, ...collectExportTocItems(sections, maxTocDepth, true, options).map((item) => ({ ...item, title: escapeHtml(item.title) })));
   const toc = tocItems.length ? `<nav class="export-toc"><h2>\u76EE\u5F55</h2>${htmlTocList(tocItems)}</nav>` : "";
   return `<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width">
 <title>${title}</title><style>
 body{max-width:860px;margin:40px auto;padding:0 28px;color:#20242c;font:16px/1.85 system-ui,"Microsoft YaHei",sans-serif}
 h1{text-align:center;border-bottom:2px solid #ddd;padding-bottom:18px}h2,h3,h4,h5,h6{margin-top:1.7em;color:#172033}
-section{break-inside:auto}.export-toc{margin:2em 0 3em}.export-toc>ul{padding-left:0;list-style:none}.export-toc ul ul{padding-left:1.5em;list-style:none}.export-toc li{margin:.2em 0}.map-section+.map-section{margin-top:3em;border-top:1px solid #ddd}.body-paragraph{margin:.75em 0;text-align:justify;text-indent:2em}.note{padding:10px 14px;color:#555;background:#f6f7f9;border-left:3px solid #6366f1}
+section{break-inside:auto}.export-toc{margin:2em 0 3em}.export-toc>ul{padding-left:0;list-style:none}.export-toc ul ul{padding-left:1.5em;list-style:none}.export-toc li{margin:.2em 0}.map-section+.map-section{margin-top:3em;border-top:1px solid #ddd}.body-paragraph{margin:.75em 0;text-align:justify;text-indent:2em}.circled-number{box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;min-width:1.75em;height:1.75em;padding:0 .2em;border:.1em solid currentColor;border-radius:999px;font-size:.72em;font-weight:600;line-height:1;vertical-align:.08em}.note{padding:10px 14px;color:#555;background:#f6f7f9;border-left:3px solid #6366f1}
 @media print{body{margin:0;max-width:none}a{color:inherit}}
 </style></head><body><article><h1>${title}</h1>${toc}${body}</article></body></html>`;
 }
-function readingSectionsToDocx(sections, tocMaxDepth = 3) {
+function readingSectionsToDocx(sections, tocMaxDepth = 3, options = {}) {
   var _a2;
   const maxTocDepth = normalizedExportTocMaxDepth(tocMaxDepth);
   const first = (_a2 = sections[0]) == null ? void 0 : _a2.document;
@@ -6829,7 +6864,7 @@ function readingSectionsToDocx(sections, tocMaxDepth = 3) {
     const bookmarkEnd = anchor ? '<w:bookmarkEnd w:id="' + bookmarkId++ + '"/>' : "";
     return "<w:p><w:pPr>" + properties + "</w:pPr>" + bookmarkStart + '<w:r><w:t xml:space="preserve">' + escapeXml2(text) + "</w:t></w:r>" + bookmarkEnd + "</w:p>";
   };
-  const toc = collectExportTocItems(sections, maxTocDepth, false).map((item) => {
+  const toc = collectExportTocItems(sections, maxTocDepth, false, options).map((item) => {
     const indent = Math.max(0, item.depth - 1) * 720;
     return '<w:p><w:pPr><w:ind w:left="' + indent + '"/></w:pPr><w:hyperlink w:anchor="' + wordAnchor(item.anchor) + '" w:history="1"><w:r><w:rPr><w:color w:val="0563C1"/><w:u w:val="single"/></w:rPr><w:t xml:space="preserve">' + escapeXml2(item.title) + "</w:t></w:r></w:hyperlink></w:p>";
   }).join("");
@@ -6844,7 +6879,7 @@ function readingSectionsToDocx(sections, tocMaxDepth = 3) {
     if (sectionIndex > 0) {
       body.push(paragraph(nodePlainText(document2.root) || document2.title, "Heading" + Math.min(6, Math.max(1, baseDepth)), 0, wordAnchor(exportAnchor(sectionIndex, "section-" + sectionIndex))));
     }
-    for (const info of buildArticleNodeInfo(document2.root, baseDepth)) {
+    for (const info of buildArticleNodeInfo(document2.root, baseDepth, exportLeafNumbering(document2, options))) {
       if (childSectionAnchors.has(filePath + "\0" + info.node.id)) continue;
       const text = info.displayTitle || info.title || "\u672A\u547D\u540D";
       const isWordHeading = info.isHeading && info.node.children.length > 0;
@@ -6863,7 +6898,7 @@ function readingSectionsToDocx(sections, tocMaxDepth = 3) {
     "word/_rels/document.xml.rels": strToU8('<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"></Relationships>')
   });
 }
-function readingSectionsToMarkdown(sections, tocMaxDepth = 3) {
+function readingSectionsToMarkdown(sections, tocMaxDepth = 3, options = {}) {
   var _a2;
   const maxTocDepth = normalizedExportTocMaxDepth(tocMaxDepth);
   const first = (_a2 = sections[0]) == null ? void 0 : _a2.document;
@@ -6888,8 +6923,8 @@ function readingSectionsToMarkdown(sections, tocMaxDepth = 3) {
       if (!parentNodeKey((_b2 = sections[sectionIndex]) == null ? void 0 : _b2.parentFilePath, (_c = sections[sectionIndex]) == null ? void 0 : _c.parentNodeId)) pushTocItem(Math.max(1, baseDepth), heading, anchor);
       body.push("", markdownHeading(Math.min(6, Math.max(1, baseDepth + 1)), heading));
     }
-    for (const info of buildArticleNodeInfo(document2.root, baseDepth)) {
-      const heading = markdownTitle(info.label, info.title);
+    for (const info of buildArticleNodeInfo(document2.root, baseDepth, exportLeafNumbering(document2, options))) {
+      const heading = info.displayTitle || markdownTitle(info.label, info.title);
       const childSectionIndex = childSectionIndexes.get(`${filePath}\0${info.node.id}`);
       if (childSectionIndex !== void 0) {
         childSectionTitles.set(childSectionIndex, heading);
@@ -7499,10 +7534,15 @@ var ArticleStyleModal = class extends import_obsidian5.Modal {
     numberingEnabled.createEl("option", { text: `\u8DDF\u968F\u63D2\u4EF6\u8BBE\u7F6E\uFF08\u5F53\u524D${this.globalLeafPresentation.numberingEnabled ? "\u5F00\u542F" : "\u5173\u95ED"}\uFF09`, attr: { value: "" } });
     numberingEnabled.createEl("option", { text: "\u5F00\u542F", attr: { value: "true" } });
     numberingEnabled.createEl("option", { text: "\u5173\u95ED", attr: { value: "false" } });
+    const numberingStyleLabel = grid.createEl("label", { text: "\u672B\u7AEF\u6B63\u6587\u5E8F\u53F7\u6837\u5F0F" });
+    const numberingStyle = numberingStyleLabel.createEl("select");
+    numberingStyle.createEl("option", { text: `\u8DDF\u968F\u63D2\u4EF6\u8BBE\u7F6E\uFF08\u5F53\u524D${this.globalLeafPresentation.numberingStyle === "circled" ? "\u5E26\u5708\u6570\u5B57" : "\u4E0B\u4E00\u7EA7\u6587\u7AE0\u5E8F\u53F7"}\uFF09`, attr: { value: "" } });
+    numberingStyle.createEl("option", { text: "\u4E0A\u7EA7\u6807\u9898\u7684\u4E0B\u4E00\u7EA7\u6587\u7AE0\u5E8F\u53F7", attr: { value: "next-level" } });
+    numberingStyle.createEl("option", { text: "\u5E26\u5708\u6570\u5B57\uFF08\u2460\u2013\u32BF\uFF0C51+ \u5706\u5708\uFF09", attr: { value: "circled" } });
     const numberingThresholdLabel = grid.createEl("label", { text: "\u672B\u7AEF\u6B63\u6587\u8F6C\u5E8F\u53F7\u9608\u503C" });
     const numberingThreshold = numberingThresholdLabel.createEl("input", { type: "number", attr: { min: "1", max: "20", step: "1" } });
     const fill = (style) => {
-      var _a2, _b2, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l;
+      var _a2, _b2, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m;
       const resolved = resolveArticleStyle(style);
       preset.value = resolved.preset;
       fontFamily.value = (_a2 = resolved.fontFamily) != null ? _a2 : "";
@@ -7520,7 +7560,8 @@ var ArticleStyleModal = class extends import_obsidian5.Modal {
       markerColor.disabled = markerColorFollowGlobal.checked;
       alignment.value = (_k = style.leafTextAlignment) != null ? _k : "";
       numberingEnabled.value = style.leafNumberingEnabled === void 0 ? "" : String(style.leafNumberingEnabled);
-      numberingThreshold.value = String((_l = style.leafNumberingThreshold) != null ? _l : this.globalLeafPresentation.numberingThreshold);
+      numberingStyle.value = (_l = style.leafNumberingStyle) != null ? _l : "";
+      numberingThreshold.value = String((_m = style.leafNumberingThreshold) != null ? _m : this.globalLeafPresentation.numberingThreshold);
     };
     fill(this.style);
     preset.addEventListener("change", () => fill(ARTICLE_STYLE_PRESETS[preset.value]));
@@ -7548,6 +7589,7 @@ var ArticleStyleModal = class extends import_obsidian5.Modal {
         leafMarkerColor: markerColorFollowGlobal.checked ? void 0 : markerColor.value,
         leafTextAlignment: alignment.value === "flush" || alignment.value === "auto" ? alignment.value : void 0,
         leafNumberingEnabled: numberingEnabled.value === "" ? void 0 : numberingEnabled.value === "true",
+        leafNumberingStyle: numberingStyle.value === "circled" || numberingStyle.value === "next-level" ? numberingStyle.value : void 0,
         leafNumberingThreshold: numberingEnabled.value === "" && !this.style.leafNumberingThreshold ? void 0 : Math.max(1, Math.min(20, Math.round(Number(numberingThreshold.value) || this.globalLeafPresentation.numberingThreshold)))
       });
       this.close();
@@ -8511,7 +8553,7 @@ function bindTableColumnResize(handle, options) {
 
 // src/article/article-render-cache.ts
 var ARTICLE_RENDER_CACHE_SCHEMA_VERSION = 1;
-var ARTICLE_RENDERER_REVISION = "article-node-cache-v2";
+var ARTICLE_RENDERER_REVISION = "article-node-cache-v3";
 function normalizeArticleCachePath(value) {
   return value.replace(/\\/g, "/").replace(/\/{2,}/g, "/").replace(/^\.\//, "").replace(/\/$/, "");
 }
@@ -8780,7 +8822,8 @@ function renderArticleMode(container, options) {
   }
   const infos = buildArticleNodeInfo(options.document.root, options.articleBaseDepth, {
     enabled: options.articleLeafNumberingEnabled,
-    threshold: options.articleLeafNumberingThreshold
+    threshold: options.articleLeafNumberingThreshold,
+    style: options.articleLeafNumberingStyle
   }, (node) => {
     var _a3, _b3;
     return (_b3 = (_a3 = articleNodeContentBlocks(node, options).find((block) => block.type === "text")) == null ? void 0 : _a3.text.trim()) != null ? _b3 : "";
@@ -8905,6 +8948,7 @@ function articlePresentationFingerprint(options) {
     articleLeafBulletStyle: options.articleLeafBulletStyle,
     articleLeafTextAlignment: options.articleLeafTextAlignment,
     articleLeafNumberingEnabled: options.articleLeafNumberingEnabled,
+    articleLeafNumberingStyle: options.articleLeafNumberingStyle,
     articleLeafNumberingThreshold: options.articleLeafNumberingThreshold,
     imageHostPriorityIds: options.imageHostPriorityIds,
     articleNavigation: options.articleNavigation,
@@ -8922,6 +8966,8 @@ function articleNodeFingerprint(info, options) {
     isHeading: info.isHeading,
     skipped: info.skipped,
     numberedLeaf: info.numberedLeaf,
+    leafNumberingStyle: info.leafNumberingStyle,
+    leafNumberingIndex: info.leafNumberingIndex,
     readOnly: options.readOnly,
     leafBullets: options.articleLeafBulletsEnabled,
     leafBulletColor: options.articleLeafBulletColor,
@@ -9130,6 +9176,7 @@ function hydrateArticleQuestionDetails(container) {
   });
 }
 function renderArticleNodeSection(section, info, options) {
+  var _a2;
   section.empty();
   section.className = `mms-article-node depth-${Math.min(info.depth, 8)}${!options.readOnly && options.selectedId === info.node.id ? " is-selected" : ""}`;
   section.dataset.nodeId = info.node.id;
@@ -9138,11 +9185,11 @@ function renderArticleNodeSection(section, info, options) {
     if (!options.isReadOnly()) options.selectNode(info.node.id);
   });
   section.addEventListener("contextmenu", (event) => {
-    var _a2;
+    var _a3;
     event.preventDefault();
     event.stopPropagation();
     const target = event.target instanceof HTMLElement ? event.target : null;
-    const blockId = (_a2 = target == null ? void 0 : target.closest("[data-block-id]")) == null ? void 0 : _a2.dataset.blockId;
+    const blockId = (_a3 = target == null ? void 0 : target.closest("[data-block-id]")) == null ? void 0 : _a3.dataset.blockId;
     options.selectNode(info.node.id);
     options.openAiContextMenu(event, info.node.id, blockId);
   });
@@ -9166,7 +9213,11 @@ function renderArticleNodeSection(section, info, options) {
     const blockShell = createArticleContentBlock(section, firstTextBlock.id);
     const paragraph = blockShell.createEl("p", { cls: `${articleParagraphClass("mms-article-leaf-text", firstTextBlock, options.articleLeafBulletsEnabled && !info.numberedLeaf, options.articleLeafTextAlignment)}${info.numberedLeaf ? " mms-article-leaf-numbered" : ""}` });
     paragraph.dataset.blockId = firstTextBlock.id;
-    if (info.numberedLeaf) paragraph.dataset.articleNumber = info.label;
+    if (info.numberedLeaf) {
+      paragraph.dataset.articleNumber = info.label;
+      if (info.leafNumberingStyle) paragraph.dataset.articleNumberStyle = info.leafNumberingStyle;
+      if (((_a2 = info.leafNumberingIndex) != null ? _a2 : 0) > 50) paragraph.dataset.articleNumberFallback = "true";
+    }
     applyArticleLeafBulletStyle(paragraph, options, info.numberedLeaf);
     renderRichTextRuns(paragraph, firstTextBlock.richText, firstTextBlock.text);
     options.makeInlineEditable(paragraph, info.node, "\u6B63\u6587\u6BB5\u843D", firstTextBlock.id);
@@ -13296,6 +13347,7 @@ var MindMapEditor = class {
       articleLeafBulletStyle: this.options.articleLeafBulletStyle,
       articleLeafTextAlignment: this.options.articleLeafTextAlignment,
       articleLeafNumberingEnabled: this.options.articleLeafNumberingEnabled,
+      articleLeafNumberingStyle: this.options.articleLeafNumberingStyle,
       articleLeafNumberingThreshold: this.options.articleLeafNumberingThreshold,
       imageHostPriorityIds: this.options.imageHostPriorityIds,
       articleNavigation: this.options.articleNavigation,
@@ -14992,6 +15044,7 @@ var MindMapEditor = class {
       color: this.options.articleLeafBulletColor,
       alignment: this.options.articleLeafTextAlignment,
       numberingEnabled: this.options.articleLeafNumberingEnabled,
+      numberingStyle: this.options.articleLeafNumberingStyle,
       numberingThreshold: this.options.articleLeafNumberingThreshold
     }, (style) => {
       this.mutate(() => {
@@ -15284,7 +15337,7 @@ var MindMapEditor = class {
    * read-only book with an integrated directory and persisted progress.
    */
   renderReading() {
-    var _a2, _b2, _c, _d, _e;
+    var _a2, _b2, _c, _d, _e, _f;
     this.articleEl.empty();
     const sections = this.options.readingSections.length ? this.options.readingSections : [{ filePath: (_b2 = (_a2 = this.options.articleNavigation) == null ? void 0 : _a2.homePath) != null ? _b2 : "", document: this.document, baseDepth: 0 }];
     const style = resolveArticleStyle(this.document.articleStyle);
@@ -15347,7 +15400,7 @@ var MindMapEditor = class {
       const chapterTitleBlock = nodeContentBlocks(section.document.root).find((block) => block.type === "text");
       renderRichTextRuns(chapterTitle, chapterTitleBlock == null ? void 0 : chapterTitleBlock.richText, (_d = chapterTitleBlock == null ? void 0 : chapterTitleBlock.text) != null ? _d : (sectionEntry == null ? void 0 : sectionEntry.displayTitle) || section.document.title);
       this.renderArticleContent(chapter, section.document.root, false);
-      for (const info of buildArticleNodeInfo(section.document.root, section.baseDepth, { enabled: this.options.articleLeafNumberingEnabled, threshold: this.options.articleLeafNumberingThreshold })) {
+      for (const info of buildArticleNodeInfo(section.document.root, section.baseDepth, { enabled: this.options.articleLeafNumberingEnabled, threshold: this.options.articleLeafNumberingThreshold, style: this.options.articleLeafNumberingStyle })) {
         const nodeSection = chapter.createEl("section", { cls: `mms-article-node depth-${Math.min(info.depth, 8)}` });
         nodeSection.dataset.nodeId = info.node.id;
         nodeSection.dataset.filePath = section.filePath;
@@ -15364,7 +15417,11 @@ var MindMapEditor = class {
           if (firstTextBlock) {
             const paragraph = nodeSection.createEl("p", { cls: `mms-article-leaf-text${this.options.articleLeafBulletsEnabled && !info.numberedLeaf ? " is-bulleted" : ""}${this.options.articleLeafTextAlignment === "auto" ? " is-auto-aligned" : ""}${firstTextBlock.paragraphIndent === "none" ? " is-flush" : ""}${info.numberedLeaf ? " mms-article-leaf-numbered" : ""}` });
             paragraph.dataset.blockId = firstTextBlock.id;
-            if (info.numberedLeaf) paragraph.dataset.articleNumber = info.label;
+            if (info.numberedLeaf) {
+              paragraph.dataset.articleNumber = info.label;
+              if (info.leafNumberingStyle) paragraph.dataset.articleNumberStyle = info.leafNumberingStyle;
+              if (((_f = info.leafNumberingIndex) != null ? _f : 0) > 50) paragraph.dataset.articleNumberFallback = "true";
+            }
             if (this.options.articleLeafBulletsEnabled && !info.numberedLeaf) {
               paragraph.dataset.bulletStyle = this.options.articleLeafBulletStyle;
               if (this.options.articleLeafBulletColor) paragraph.style.setProperty("--mms-article-bullet-color", this.options.articleLeafBulletColor);
@@ -18008,7 +18065,7 @@ var MindMapStudioView = class _MindMapStudioView extends import_obsidian13.TextF
    * 读取并返回editor options，并保持模型、界面和持久化状态的一致性。
    */
   getEditorOptions(preferCurrentFileLocation = false) {
-    var _a2, _b2, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z;
+    var _a2, _b2, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x, _y, _z, _A, _B, _C;
     return {
       defaultNodeShape: this.plugin.settings.defaultNodeShape,
       defaultAppearance: settingsToAppearance(this.plugin.settings),
@@ -18064,10 +18121,11 @@ var MindMapStudioView = class _MindMapStudioView extends import_obsidian13.TextF
       articleLeafBulletStyle: (_o = (_n = (_m = this.document) == null ? void 0 : _m.articleStyle) == null ? void 0 : _n.leafMarkerStyle) != null ? _o : this.plugin.settings.articleLeafBulletStyle,
       articleLeafTextAlignment: (_r = (_q = (_p = this.document) == null ? void 0 : _p.articleStyle) == null ? void 0 : _q.leafTextAlignment) != null ? _r : this.plugin.settings.articleLeafTextAlignment,
       articleLeafNumberingEnabled: (_u = (_t = (_s = this.document) == null ? void 0 : _s.articleStyle) == null ? void 0 : _t.leafNumberingEnabled) != null ? _u : this.plugin.settings.articleLeafNumberingEnabled,
-      articleLeafNumberingThreshold: (_x = (_w = (_v = this.document) == null ? void 0 : _v.articleStyle) == null ? void 0 : _w.leafNumberingThreshold) != null ? _x : this.plugin.settings.articleLeafNumberingThreshold,
+      articleLeafNumberingStyle: (_x = (_w = (_v = this.document) == null ? void 0 : _v.articleStyle) == null ? void 0 : _w.leafNumberingStyle) != null ? _x : this.plugin.settings.articleLeafNumberingStyle,
+      articleLeafNumberingThreshold: (_A = (_z = (_y = this.document) == null ? void 0 : _y.articleStyle) == null ? void 0 : _z.leafNumberingThreshold) != null ? _A : this.plugin.settings.articleLeafNumberingThreshold,
       showArticleToc: this.showArticleToc,
       articleNavigation: this.articleNavigation,
-      articleRenderCache: this.plugin.getArticleRenderCache((_z = (_y = this.file) == null ? void 0 : _y.path) != null ? _z : ""),
+      articleRenderCache: this.plugin.getArticleRenderCache((_C = (_B = this.file) == null ? void 0 : _B.path) != null ? _C : ""),
       readingSections: this.readingSections,
       readingProgressPosition: this.plugin.settings.readingProgressPosition,
       returnToTopVisibility: this.plugin.settings.returnToTopVisibility
@@ -18216,16 +18274,21 @@ var MindMapStudioView = class _MindMapStudioView extends import_obsidian13.TextF
     await this.save();
     const sections = this.showArticleToc && this.readingSections.length ? this.readingSections : await this.plugin.buildDescendantReadingSections(file, document2);
     const tocMaxDepth = resolveArticleTocMaxDepth((_a2 = document2.view) == null ? void 0 : _a2.articleTocMaxDepth, this.plugin.settings.articleTocMaxDepth);
+    const articleExportOptions = {
+      leafNumberingEnabled: this.plugin.settings.articleLeafNumberingEnabled,
+      leafNumberingStyle: this.plugin.settings.articleLeafNumberingStyle,
+      leafNumberingThreshold: this.plugin.settings.articleLeafNumberingThreshold
+    };
     if (format === "md") {
-      const markdown = readingSectionsToMarkdown(sections, tocMaxDepth);
+      const markdown = readingSectionsToMarkdown(sections, tocMaxDepth, articleExportOptions);
       await this.exportTextFile("md", markdown, true);
       return;
     }
     if (format === "doc") {
-      await this.exportBinaryFile("docx", readingSectionsToDocx(sections, tocMaxDepth));
+      await this.exportBinaryFile("docx", readingSectionsToDocx(sections, tocMaxDepth, articleExportOptions));
       return;
     }
-    const html = readingSectionsToHtml(sections, tocMaxDepth);
+    const html = readingSectionsToHtml(sections, tocMaxDepth, articleExportOptions);
     if (format === "pdf") {
       const result = await saveDesktopPdfFile(file.basename, html);
       if (result == null ? void 0 : result.path) new import_obsidian13.Notice(`\u5DF2\u5BFC\u51FA\uFF1A${result.path}`);
@@ -21103,6 +21166,7 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
       articleLeafBulletStyle: raw.articleLeafBulletStyle === "hollow" || raw.articleLeafBulletStyle === "square" || raw.articleLeafBulletStyle === "dash" ? raw.articleLeafBulletStyle : "solid",
       articleLeafTextAlignment: raw.articleLeafTextAlignment === "flush" ? "flush" : "auto",
       articleLeafNumberingEnabled: raw.articleLeafNumberingEnabled === true,
+      articleLeafNumberingStyle: raw.articleLeafNumberingStyle === "circled" ? "circled" : "next-level",
       articleLeafNumberingThreshold: typeof raw.articleLeafNumberingThreshold === "number" ? Math.max(1, Math.min(20, Math.round(raw.articleLeafNumberingThreshold))) : DEFAULT_SETTINGS.articleLeafNumberingThreshold,
       hideAssetFolderInFileExplorer: raw.hideAssetFolderInFileExplorer === true,
       hideConfiguredFilesInFileExplorer: raw.hideConfiguredFilesInFileExplorer === true,
