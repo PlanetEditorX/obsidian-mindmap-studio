@@ -124,10 +124,39 @@ test("clicking a same-file directory chapter switches to article without reopeni
   assert.match(focusNode, /if \(this\.currentMode !== "article"\) this\.restoreReadingLocation/);
   assert.match(renderArticle, /const requestedLocation = this\.pendingArticleFocusLocation/);
   assert.match(renderArticle, /const previousLocation = !requestedLocation/);
-  assert.match(renderArticle, /if \(requestedLocation\) this\.restoreReadingLocation\("article", requestedLocation\)/);
+  assert.match(renderArticle, /const latestRequestedLocation = this\.pendingArticleFocusLocation \?\? requestedLocation/);
+  assert.match(renderArticle, /const location = latestRequestedLocation \?\? previousLocation/);
+  assert.match(renderArticle, /if \(location\) this\.restoreReadingLocation\("article", location\)/);
   assert.match(renderDirectory, /entry\.filePath === options\.currentFilePath && entry\.nodeId/);
   assert.match(renderDirectory, /options\.focusNode\(entry\.nodeId\)/);
   assert.doesNotMatch(focusNode, /scrollIntoView/);
+});
+
+
+test("article entry transition paints a bounded skeleton without delaying semantic navigation", async () => {
+  const [editorSource, rendererSource, cssSource] = await Promise.all([
+    readFile(path.join(rootDir, "src/editor/editor.ts"), "utf8"),
+    readFile(path.join(rootDir, "src/editor/article-renderer.ts"), "utf8"),
+    readFile(path.join(rootDir, "styles.css"), "utf8")
+  ]);
+  const renderArticle = editorSource.match(/private renderArticle\(\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
+  const restoreLocation = editorSource.match(/private restoreReadingLocation\([\s\S]*?\n  \}/)?.[0] ?? "";
+  const expandWindow = editorSource.match(/private expandArticleWindow\([\s\S]*?\n  \}/)?.[0] ?? "";
+
+  assert.match(renderArticle, /renderArticleSkeleton\(\)/);
+  assert.match(renderArticle, /prefers-reduced-motion: reduce/);
+  assert.match(renderArticle, /requestAnimationFrame\(\(\) => \{[\s\S]*?requestAnimationFrame/);
+  assert.match(renderArticle, /latestRequestedLocation = this\.pendingArticleFocusLocation \?\? requestedLocation/);
+  assert.match(restoreLocation, /articleInitialRenderFrame !== null/);
+  assert.match(restoreLocation, /pendingArticleFocusLocation = createReadingLocation/);
+  assert.match(expandWindow, /mms-article-window-loader\.is-\$\{direction\}/);
+  assert.match(expandWindow, /requestAnimationFrame\(\(\) => \{[\s\S]*?requestAnimationFrame/);
+  assert.match(rendererSource, /is-window-entering/);
+  assert.match(cssSource, /\.mms-article-entry-skeleton/);
+  assert.match(cssSource, /mms-article-skeleton-shimmer/);
+  assert.match(cssSource, /prefers-reduced-motion: reduce/);
+  const skeletonRule = cssSource.match(/\.mms-article-entry-skeleton \{[\s\S]*?\}/)?.[0] ?? "";
+  assert.doesNotMatch(skeletonRule, /position:\s*fixed/);
 });
 
 test("article-context refreshes skip redundant current-page rebuilds", async () => {
