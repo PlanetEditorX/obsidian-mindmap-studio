@@ -255,6 +255,8 @@ export interface ArticlePageNavigation {
   currentIndex: number;
   homePath: string;
   parentPath?: string;
+  /** Parent-map mount node used when returning from a child article page. */
+  parentNodeId?: string;
 }
 
 /** 当前物理文章页及其同层兄弟页的解析结果。 */
