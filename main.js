@@ -5632,7 +5632,7 @@ function readRichTextEditor(editor) {
 // src/editor/editor-modals.ts
 var import_obsidian5 = require("obsidian");
 
-// ../../work_plugin_utf8/node_modules/fflate/esm/browser.js
+// node_modules/fflate/esm/browser.js
 var u8 = Uint8Array;
 var u16 = Uint16Array;
 var i32 = Int32Array;
