@@ -95,7 +95,7 @@ npm run test:docs
 
 - 先在纯工具或模型层复现，再进入 DOM 和 Obsidian 集成层。
 - 文件保存问题同时检查 `parseDocument()`、`normalizeDocument()`、`serializeDocument()` 和视图 `getViewData()`。
-- 文章编号问题确保目录、正文、通读和导出共用同一解析函数。
+- 文章编号问题确保目录、正文、通读和导出共用同一解析函数；编号样式只支持 1–8 级，更深结构不得循环复用第 7、8 级字母标签。
 - 图床问题分别验证端点、Header、请求体、响应载荷和 URL 提取。
 - 识图问题分别验证图片读取、AI/本地 OCR 模式、不可变预览和并发快照；桌面 API 必须按需动态加载，不能让移动端在插件启动时解析 `node:*` 或 `electron`。
 - 子导图问题同时检查父节点 `submap` 与子文档 `navigation`。

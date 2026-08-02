@@ -473,6 +473,46 @@ export const setIcon = () => {};
   }, 1);
   assert.equal(childMapInfo[0]?.label, "第一节", "a child map must continue numbering from its parent article depth");
 
+  const deepNumberingDocument = model.normalizeDocument({
+    title: "深层编号",
+    root: {
+      id: "deep-numbering-root",
+      text: "根",
+      articleNumberingMode: "manual",
+      articleNumberingLevel: 7,
+      children: [
+        { id: "deep-letter-a", text: "第一部分", children: [{ id: "deep-letter-a-body", text: "正文", children: [] }] },
+        { id: "deep-letter-b", text: "第二部分", children: [{ id: "deep-letter-b-body", text: "正文", children: [] }] },
+        { id: "deep-letter-c", text: "第三部分", children: [{ id: "deep-letter-c-body", text: "正文", children: [] }] },
+        { id: "deep-letter-d", text: "第四部分", children: [{ id: "deep-letter-d-body", text: "正文", children: [] }] },
+        {
+          id: "deep-letter-e",
+          text: "第五部分",
+          children: [
+            { id: "deep-paren-a", text: "前置说明", children: [{ id: "deep-paren-a-body", text: "正文", children: [] }] },
+            {
+              id: "deep-paren-b",
+              text: "如何区分",
+              children: [
+                { id: "deep-level-nine-a", text: "关键词区分", children: [{ id: "deep-level-nine-a-body", text: "正文", children: [] }] },
+                { id: "deep-level-nine-b", text: "维度区分", children: [{ id: "deep-level-nine-b-body", text: "正文", children: [] }] }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  }, "fallback");
+  const deepNumberingInfo = new Map(modes.buildArticleNodeInfo(deepNumberingDocument.root).map((item) => [item.node.id, item]));
+  assert.equal(deepNumberingInfo.get("deep-letter-e")?.label, "E.");
+  assert.equal(deepNumberingInfo.get("deep-paren-a")?.label, "（A）");
+  assert.equal(deepNumberingInfo.get("deep-paren-b")?.label, "（B）");
+  assert.equal(deepNumberingInfo.get("deep-level-nine-a")?.depth, 9);
+  assert.equal(deepNumberingInfo.get("deep-level-nine-a")?.label, "", "level-nine headings must not cycle back to A.");
+  assert.equal(deepNumberingInfo.get("deep-level-nine-b")?.label, "", "level-nine siblings must remain structurally nested without recycled letters");
+  assert.equal(modes.articleNumberLabel(7, 27), "AA.", "alphabetic numbering must remain unique after Z");
+  assert.equal(modes.articleNumberLabel(8, 27), "（AA）");
+
   const normalizedManualNumbering = model.normalizeDocument({
     title: "手动文章层级",
     root: {

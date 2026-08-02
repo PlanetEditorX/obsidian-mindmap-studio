@@ -5173,6 +5173,7 @@ function readingAnchorPart(value) {
   return encodeURIComponent(value).replace(/%/g, "_");
 }
 var CHINESE_DIGITS = ["\u96F6", "\u4E00", "\u4E8C", "\u4E09", "\u56DB", "\u4E94", "\u516D", "\u4E03", "\u516B", "\u4E5D"];
+var MAX_ARTICLE_NUMBERING_LEVEL = 8;
 function chineseNumber(value) {
   var _a2;
   const safe = Math.max(0, Math.floor(value));
@@ -5185,16 +5186,29 @@ function chineseNumber(value) {
   }
   return String(safe);
 }
+function alphabeticNumber(index) {
+  let remaining = Math.max(1, Math.floor(index));
+  let result = "";
+  while (remaining > 0) {
+    remaining -= 1;
+    result = String.fromCharCode(65 + remaining % 26) + result;
+    remaining = Math.floor(remaining / 26);
+  }
+  return result;
+}
 function articleNumberLabel(depth, index) {
-  const cn = chineseNumber(index);
-  if (depth === 1) return `\u7B2C${cn}\u7AE0`;
-  if (depth === 2) return `\u7B2C${cn}\u8282`;
-  if (depth === 3) return `${cn}\u3001`;
-  if (depth === 4) return `\uFF08${cn}\uFF09`;
-  if (depth === 5) return `${index}.`;
-  if (depth === 6) return `\uFF08${index}\uFF09`;
-  const alphabet = String.fromCharCode(64 + (index - 1) % 26 + 1);
-  return depth % 2 === 1 ? `${alphabet}.` : `\uFF08${alphabet}\uFF09`;
+  const normalizedDepth = Number.isFinite(depth) ? Math.floor(depth) : 0;
+  if (normalizedDepth < 1 || normalizedDepth > MAX_ARTICLE_NUMBERING_LEVEL) return "";
+  const normalizedIndex = Number.isFinite(index) ? Math.max(1, Math.floor(index)) : 1;
+  const cn = chineseNumber(normalizedIndex);
+  if (normalizedDepth === 1) return `\u7B2C${cn}\u7AE0`;
+  if (normalizedDepth === 2) return `\u7B2C${cn}\u8282`;
+  if (normalizedDepth === 3) return `${cn}\u3001`;
+  if (normalizedDepth === 4) return `\uFF08${cn}\uFF09`;
+  if (normalizedDepth === 5) return `${normalizedIndex}.`;
+  if (normalizedDepth === 6) return `\uFF08${normalizedIndex}\uFF09`;
+  const alphabet = alphabeticNumber(normalizedIndex);
+  return normalizedDepth === 7 ? `${alphabet}.` : `\uFF08${alphabet}\uFF09`;
 }
 function articleDisplayTitle(label, title) {
   if (!label) return title;
@@ -5209,19 +5223,19 @@ function resolveArticleNumbering(node, defaultLevel, siblingHasHeading) {
   const mode = (_a2 = node.articleNumberingMode) != null ? _a2 : "auto";
   const manual = mode === "manual";
   const requestedLevel = Number.isFinite(node.articleNumberingLevel) ? Math.floor((_b2 = node.articleNumberingLevel) != null ? _b2 : defaultLevel) : defaultLevel;
-  const level = manual ? Math.min(8, Math.max(1, requestedLevel)) : Math.max(1, Math.floor(defaultLevel));
+  const level = manual ? Math.min(MAX_ARTICLE_NUMBERING_LEVEL, Math.max(1, requestedLevel)) : Math.max(1, Math.floor(defaultLevel));
   const isHeading = isArticleHeading(node) || siblingHasHeading;
   return {
     level,
     isHeading,
     skipped: mode === "none",
-    shouldNumber: mode !== "none" && isHeading
+    shouldNumber: mode !== "none" && isHeading && level <= MAX_ARTICLE_NUMBERING_LEVEL
   };
 }
 function articleChildStartLevel(root, baseDepth = 0) {
   var _a2;
   const normalizedBaseDepth = Math.max(0, Math.floor(baseDepth));
-  return root.articleNumberingMode === "manual" && Number.isFinite(root.articleNumberingLevel) ? Math.min(8, Math.max(1, Math.floor((_a2 = root.articleNumberingLevel) != null ? _a2 : normalizedBaseDepth))) : normalizedBaseDepth + 1;
+  return root.articleNumberingMode === "manual" && Number.isFinite(root.articleNumberingLevel) ? Math.min(MAX_ARTICLE_NUMBERING_LEVEL, Math.max(1, Math.floor((_a2 = root.articleNumberingLevel) != null ? _a2 : normalizedBaseDepth))) : normalizedBaseDepth + 1;
 }
 function articleTocDepth(entry) {
   return Number.isFinite(entry.tocDepth) ? Math.max(1, Math.floor(entry.tocDepth)) : 1;
@@ -5261,7 +5275,7 @@ function buildArticleNodeInfo(root, baseDepth = 0, leafNumbering = { enabled: fa
       else if (child.articleNumberingMode !== "none") terminalCount += 1;
     }
     const threshold = Math.max(1, Math.min(20, Math.floor(leafNumbering.threshold) || 4));
-    const convertLeaves = leafNumbering.enabled && terminalCount >= threshold && defaultLevel <= 7;
+    const convertLeaves = leafNumbering.enabled && terminalCount >= threshold && defaultLevel < MAX_ARTICLE_NUMBERING_LEVEL;
     const numberedIndexes = /* @__PURE__ */ new Map();
     for (const child of parent.children) {
       const numbering = resolveArticleNumbering(child, defaultLevel, siblingHasHeading);
@@ -5618,7 +5632,7 @@ function readRichTextEditor(editor) {
 // src/editor/editor-modals.ts
 var import_obsidian5 = require("obsidian");
 
-// node_modules/fflate/esm/browser.js
+// ../../work_plugin_utf8/node_modules/fflate/esm/browser.js
 var u8 = Uint8Array;
 var u16 = Uint16Array;
 var i32 = Int32Array;
@@ -10084,7 +10098,7 @@ function createArticleNumberingControls(container, currentMode, currentLevel, on
   numberingLevelSelect.value = String(currentLevel != null ? currentLevel : 1);
   const numberingHelp = container.createDiv({
     cls: "setting-item-description mmc-article-numbering-help",
-    text: "\u624B\u52A8\u5C42\u7EA7\u7528\u4E8E\u5B9A\u4E49\u5F53\u524D\u8282\u70B9\u6240\u5728\u5B50\u6811\u7684\u6700\u9AD8\u6587\u7AE0\u5C42\u7EA7\uFF1B\u7F16\u8F91\u4E2D\u5FC3\u8282\u70B9\u65F6\uFF0C\u4E00\u7EA7\u5B50\u8282\u70B9\u76F4\u63A5\u4F7F\u7528\u6240\u9009\u5C42\u7EA7\u3002\u672B\u7AEF\u8282\u70B9\u662F\u5426\u4F5C\u4E3A\u6807\u9898\u4ECD\u7531\u540C\u7EA7\u7ED3\u6784\u81EA\u52A8\u5224\u65AD\u3002"
+    text: "\u624B\u52A8\u5C42\u7EA7\u7528\u4E8E\u5B9A\u4E49\u5F53\u524D\u8282\u70B9\u6240\u5728\u5B50\u6811\u7684\u6700\u9AD8\u6587\u7AE0\u5C42\u7EA7\uFF1B\u7F16\u8F91\u4E2D\u5FC3\u8282\u70B9\u65F6\uFF0C\u4E00\u7EA7\u5B50\u8282\u70B9\u76F4\u63A5\u4F7F\u7528\u6240\u9009\u5C42\u7EA7\u3002\u672B\u7AEF\u8282\u70B9\u662F\u5426\u4F5C\u4E3A\u6807\u9898\u4ECD\u7531\u540C\u7EA7\u7ED3\u6784\u81EA\u52A8\u5224\u65AD\uFF1B\u8D85\u8FC7\u7B2C 8 \u7EA7\u7684\u66F4\u6DF1\u7ED3\u6784\u4FDD\u7559\u6807\u9898\u5C42\u7EA7\uFF0C\u4F46\u4E0D\u518D\u5FAA\u73AF\u751F\u6210 A. /\uFF08A\uFF09\u7F16\u53F7\u3002"
   });
   const updateNumberingLevelState = () => {
     const manual = numberingModeSelect.value === "manual";
