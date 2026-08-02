@@ -286,6 +286,8 @@ interface MindMapImageRemoteSource {
 
 以下字段保存在插件 `data.json`，不属于 `.mindmap` 文档模型：
 
+插件层对 `data.json` 的连续修改采用短窗口合并和严格串行写入。该机制不改变字段结构：每轮开始写入时截取最新 JSON 快照，写入期间的新状态在下一轮保存，避免旧请求晚完成后覆盖新状态。
+
 - `settingsExpandedSections: SettingsSectionTitle[]`：设置页上次由用户手动展开的一级分类。缺失或非法值规范化为空数组，因此首次打开默认全部收起；搜索命中的临时展开不写入此字段。
 - `articleEntryLockMode: "locked" | "inherit" | "remember"`：进入文章模式时的锁状态策略。旧配置缺失或非法时回退为 `locked`。
 - `articleLastReadOnly: boolean`：`remember` 策略使用的文章模式独立锁状态，默认 `true`。它不会写入 `MindMapDocumentView.readOnly`，因此不改变导图或大纲的文件级只读偏好。

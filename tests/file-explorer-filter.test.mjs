@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
+import { readFile } from "node:fs/promises";
 import { loadTypeScriptModule } from "./compile-typescript.mjs";
 
 let filterModule;
@@ -155,4 +156,50 @@ test("shouldHideFileExplorerPath handles asset folders with leading/trailing sla
 
   assert.equal(filterModule.shouldHideFileExplorerPath("my/assets/folder/file.md", settings), true);
   assert.equal(filterModule.shouldHideFileExplorerPath("my/assets/other/file.md", settings), false);
+});
+
+
+test("createFileExplorerPathFilter compiles reusable rules with the same behavior", () => {
+  const settings = {
+    assetFolder: "MindMap Assets",
+    hideAssetFolderInFileExplorer: true,
+    hideConfiguredFilesInFileExplorer: true,
+    hiddenFileExtensions: "md, PDF",
+    hiddenFileFolders: "hidden, secret/folder"
+  };
+  const shouldHide = filterModule.createFileExplorerPathFilter(settings);
+  assert.equal(shouldHide("book/MindMap Assets/image.png"), true);
+  assert.equal(shouldHide("notes/file.MD"), true);
+  assert.equal(shouldHide("other/hidden/file.txt"), true);
+  assert.equal(shouldHide("secret/folder/file.txt"), true);
+  assert.equal(shouldHide("other/secret/folder/file.txt"), false);
+  assert.equal(shouldHide("notes/file.txt"), false);
+});
+
+test("fileExplorerFilterSignature ignores formatting-only rule changes", () => {
+  const base = {
+    assetFolder: "MindMap Assets/",
+    hideAssetFolderInFileExplorer: true,
+    hideConfiguredFilesInFileExplorer: true,
+    hiddenFileExtensions: "md, PDF",
+    hiddenFileFolders: "hidden; secret/folder"
+  };
+  const reformatted = {
+    ...base,
+    assetFolder: "\\MindMap Assets",
+    hiddenFileExtensions: ".pdf  MD",
+    hiddenFileFolders: "secret\\folder\n hidden"
+  };
+  assert.equal(
+    filterModule.fileExplorerFilterSignature(base),
+    filterModule.fileExplorerFilterSignature(reformatted)
+  );
+});
+
+
+test("plugin scans File Explorer with one compiled predicate and ignores unrelated DOM mutations", async () => {
+  const mainSource = await readFile("src/main.ts", "utf8");
+  assert.match(mainSource, /const shouldHidePath = createFileExplorerPathFilter\(this\.settings\)/);
+  assert.match(mainSource, /if \(this\.fileExplorerMutationIsRelevant\(records\)\) this\.scheduleFileExplorerFilter\(\)/);
+  assert.doesNotMatch(mainSource, /saveData\(this\.settings\)[\s\S]{0,120}scheduleFileExplorerFilter\(\)/);
 });

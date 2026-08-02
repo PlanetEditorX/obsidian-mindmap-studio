@@ -85,7 +85,8 @@ import {
   type AiStreamUpdate
 } from "./ai/client";
 import type { AiMarkdownPayload } from "./ai/markdown";
-import { shouldHideFileExplorerPath } from "./file-explorer-filter";
+import { createFileExplorerPathFilter, fileExplorerFilterSignature } from "./file-explorer-filter";
+import { CoalescedJsonWriter } from "./utils/coalesced-json-writer";
 import { captureDesktopScreenshot } from "./utils/desktop-capture";
 import { recognizeImageWithLocalOcr } from "./vision/local-ocr";
 import {
@@ -178,12 +179,17 @@ export default class MindMapStudioPlugin extends Plugin {
   private searchIndexReady: Promise<void> = Promise.resolve();
   private fileExplorerFilterTimer: number | null = null;
   private fileExplorerObserver: MutationObserver | null = null;
+  private settingsWriter: CoalescedJsonWriter<MindMapStudioSettings> | null = null;
+  private persistedFileExplorerFilterSignature = "";
+  private unloading = false;
 
   /**
    * 执行“onload”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
    */
   async onload(): Promise<void> {
     await this.loadSettings();
+    this.persistedFileExplorerFilterSignature = fileExplorerFilterSignature(this.settings);
+    this.settingsWriter = this.createSettingsWriter();
     this.installFileExplorerFilter();
     const pluginDir = this.manifest.dir ?? normalizePath(`${this.app.vault.configDir}/plugins/${this.manifest.id}`);
     const articleCacheDirectory = normalizePath(`${pluginDir}/cache`);
@@ -373,6 +379,7 @@ export default class MindMapStudioPlugin extends Plugin {
    * 执行“onunload”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
    */
   onunload(): void {
+    this.unloading = true;
     if (this.fileExplorerFilterTimer !== null) window.clearTimeout(this.fileExplorerFilterTimer);
     this.fileExplorerObserver?.disconnect();
     this.fileExplorerObserver = null;
@@ -387,6 +394,7 @@ export default class MindMapStudioPlugin extends Plugin {
     this.searchIndex?.destroy();
     void this.articleRenderCache?.flush();
     this.app.workspace.detachLeavesOfType(VIEW_TYPE_MINDMAP_STUDIO);
+    void this.settingsWriter?.flush();
   }
 
   /** Returns the synchronously preloaded article render snapshot for one map. */
@@ -858,12 +866,28 @@ export default class MindMapStudioPlugin extends Plugin {
     this.refreshOpenViews();
   }
 
+  /** Creates the single-flight settings writer used by every settings mutation path. */
+  private createSettingsWriter(): CoalescedJsonWriter<MindMapStudioSettings> {
+    return new CoalescedJsonWriter<MindMapStudioSettings>({
+      delayMs: 35,
+      snapshot: () => JSON.parse(JSON.stringify(this.settings)) as MindMapStudioSettings,
+      write: async (snapshot) => {
+        await this.saveData(snapshot);
+        const nextFilterSignature = fileExplorerFilterSignature(snapshot);
+        if (nextFilterSignature !== this.persistedFileExplorerFilterSignature) {
+          this.persistedFileExplorerFilterSignature = nextFilterSignature;
+          if (!this.unloading) this.scheduleFileExplorerFilter();
+        }
+      }
+    });
+  }
+
   /**
-   * 保存settings，并保持模型、界面和持久化状态的一致性。
+   * 合并短时间内连续触发的设置保存，并保证所有磁盘写入严格串行。
    */
   async saveSettings(): Promise<void> {
-    await this.saveData(this.settings);
-    this.scheduleFileExplorerFilter();
+    if (!this.settingsWriter) this.settingsWriter = this.createSettingsWriter();
+    await this.settingsWriter.request();
   }
 
   /** Checks the release-workflow update manifest, verifies its archive, and requires a full app restart to activate it. */
@@ -1035,7 +1059,9 @@ export default class MindMapStudioPlugin extends Plugin {
   private installFileExplorerFilter(): void {
     const observe = (): void => {
       this.fileExplorerObserver?.disconnect();
-      this.fileExplorerObserver = new MutationObserver(() => this.scheduleFileExplorerFilter());
+      this.fileExplorerObserver = new MutationObserver((records) => {
+        if (this.fileExplorerMutationIsRelevant(records)) this.scheduleFileExplorerFilter();
+      });
       this.fileExplorerObserver.observe(document.body, { childList: true, subtree: true });
       this.scheduleFileExplorerFilter();
     };
@@ -1043,18 +1069,29 @@ export default class MindMapStudioPlugin extends Plugin {
     this.register(() => this.fileExplorerObserver?.disconnect());
   }
 
+  /** Returns whether DOM mutations occurred inside, added, or removed a File Explorer tree. */
+  private fileExplorerMutationIsRelevant(records: MutationRecord[]): boolean {
+    const selector = ".nav-files-container, .workspace-leaf-content[data-type='file-explorer']";
+    const touchesFileExplorer = (node: Node): boolean => node instanceof Element
+      && (node.matches(selector) || Boolean(node.closest(selector)) || Boolean(node.querySelector(selector)));
+    return records.some((record) => touchesFileExplorer(record.target)
+      || Array.from(record.addedNodes).some(touchesFileExplorer)
+      || Array.from(record.removedNodes).some(touchesFileExplorer));
+  }
+
   /** Defers File Explorer filtering so expanding a folder does not cause repeated synchronous DOM scans. */
   private scheduleFileExplorerFilter(): void {
     if (this.fileExplorerFilterTimer !== null) return;
     this.fileExplorerFilterTimer = window.setTimeout(() => {
       this.fileExplorerFilterTimer = null;
+      const shouldHidePath = createFileExplorerPathFilter(this.settings);
       document.querySelectorAll<HTMLElement>(".nav-files-container [data-path], .workspace-leaf-content[data-type='file-explorer'] [data-path]").forEach((element) => {
         const path = element.dataset.path;
         if (!path) return;
         const fileItem = element.closest<HTMLElement>(".tree-item")
           ?? element.closest<HTMLElement>(".nav-file, .nav-folder")
           ?? element;
-        fileItem.toggleClass("mms-file-explorer-hidden", shouldHideFileExplorerPath(path, this.settings));
+        fileItem.toggleClass("mms-file-explorer-hidden", shouldHidePath(path));
       });
     }, 80);
   }

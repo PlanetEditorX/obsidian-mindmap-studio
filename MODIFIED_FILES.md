@@ -1,5 +1,16 @@
 # Modified Files
 
+## 1.38.9 设置串行合并与文件浏览器筛选优化
+
+- `src/utils/coalesced-json-writer.ts`：新增通用 JSON 保存协调器，35 ms 尾随合并连续请求，严格单飞写入，并按请求版本完成或拒绝等待方。
+- `src/main.ts`：所有插件设置保存改走协调器；卸载时刷新待写状态。文件浏览器 MutationObserver 仅处理相关 DOM 变化，筛选设置语义未变化时不再无条件扫描。
+- `src/file-explorer-filter.ts`：新增筛选规则预编译与稳定语义签名；单次扫描复用扩展名集合、目录集合和路径规则。
+- `tests/coalesced-json-writer.test.mjs`、`tests/file-explorer-filter.test.mjs`、`package.json`：增加合并、串行、失败恢复、签名归一化和插件集成契约测试，单元测试扩展至 273 项。
+- `README.md`、`CHANGELOG.md`、`docs/ARCHITECTURE.md`、`docs/DATA_MODEL.md`、`docs/DEVELOPMENT.md`、`docs/SPECIAL_FEATURES.md`、`docs/TESTING.md`、`docs/FUNCTION_REFERENCE.md`：同步持久化边界、筛选触发条件、性能基准和验证说明。
+- `package.json`、`package-lock.json`、`manifest.json`、`versions.json`、`update.json`：统一版本元数据为 1.38.9，并在最终安装包生成后写入 SHA-256。
+- `TEST_RESULTS.md`、Codex 项目衔接页：记录完整验证、专项基准和真实 Obsidian 待验证事项。
+- `main.js`：由本轮 TypeScript 源码重新生产构建。
+
 ## 1.38.8 设置分区与文章锁状态记忆
 
 - `src/settings.ts`：一级设置分类默认全部收起，新增持久化展开列表；搜索驱动的临时展开不会污染用户记忆。“进入文章模式”增加“记住上次文章状态”。

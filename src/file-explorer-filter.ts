@@ -26,22 +26,51 @@ export function normalizeHiddenFolderPaths(value: string): string[] {
     .filter(Boolean))];
 }
 
+/** Normalizes one vault-relative path without resolving it against the operating system. */
+function normalizeVaultRelativePath(path: string): string {
+  return path.replace(/\\/g, "/").replace(/^\/+|\/+$/g, "");
+}
+
+/** Builds a stable semantic key so unrelated settings saves do not rescan File Explorer. */
+export function fileExplorerFilterSignature(settings: FileExplorerFilterSettings): string {
+  return JSON.stringify({
+    assetFolder: normalizeVaultRelativePath(settings.assetFolder),
+    hideAssetFolder: settings.hideAssetFolderInFileExplorer,
+    hideConfiguredFiles: settings.hideConfiguredFilesInFileExplorer,
+    extensions: normalizeHiddenFileExtensions(settings.hiddenFileExtensions).sort(),
+    folders: normalizeHiddenFolderPaths(settings.hiddenFileFolders).sort()
+  });
+}
+
+/** Compiles normalized extension and folder rules once for an entire File Explorer scan. */
+export function createFileExplorerPathFilter(settings: FileExplorerFilterSettings): (path: string) => boolean {
+  const assetFolder = normalizeVaultRelativePath(settings.assetFolder);
+  const assetName = settings.hideAssetFolderInFileExplorer && assetFolder
+    ? assetFolder.split("/").at(-1) ?? ""
+    : "";
+  const hiddenExtensions = new Set(normalizeHiddenFileExtensions(settings.hiddenFileExtensions));
+  const hiddenFolderSegments = new Set<string>();
+  const hiddenFolderPaths: string[] = [];
+  for (const folder of normalizeHiddenFolderPaths(settings.hiddenFileFolders)) {
+    if (folder.includes("/")) hiddenFolderPaths.push(folder);
+    else hiddenFolderSegments.add(folder);
+  }
+
+  return (path: string): boolean => {
+    const normalizedPath = normalizeVaultRelativePath(path);
+    if (!normalizedPath) return false;
+    const pathSegments = normalizedPath.split("/");
+    if (assetName && pathSegments.includes(assetName)) return true;
+    if (!settings.hideConfiguredFilesInFileExplorer) return false;
+    const fileName = pathSegments.at(-1)?.toLowerCase() ?? "";
+    const extensionIndex = fileName.lastIndexOf(".");
+    if (extensionIndex >= 0 && hiddenExtensions.has(fileName.slice(extensionIndex + 1))) return true;
+    if (pathSegments.some((segment) => hiddenFolderSegments.has(segment))) return true;
+    return hiddenFolderPaths.some((folder) => normalizedPath === folder || normalizedPath.startsWith(`${folder}/`));
+  };
+}
+
 /** Returns whether a File Explorer path should be hidden without altering vault files. */
 export function shouldHideFileExplorerPath(path: string, settings: FileExplorerFilterSettings): boolean {
-  const normalizedPath = path.replace(/\\/g, "/").replace(/^\/+|\/+$/g, "");
-  if (!normalizedPath) return false;
-  const pathSegments = normalizedPath.split("/");
-  const assetFolder = settings.assetFolder.replace(/\\/g, "/").replace(/^\/+|\/+$/g, "");
-  if (settings.hideAssetFolderInFileExplorer && assetFolder) {
-    const assetSegments = assetFolder.split("/");
-    const assetName = assetSegments[assetSegments.length - 1]!;
-    if (pathSegments.includes(assetName)) return true;
-  }
-  if (!settings.hideConfiguredFilesInFileExplorer) return false;
-  if (normalizeHiddenFileExtensions(settings.hiddenFileExtensions)
-    .some((extension) => normalizedPath.toLowerCase().endsWith(`.${extension}`))) return true;
-  return normalizeHiddenFolderPaths(settings.hiddenFileFolders).some((folder) => {
-    if (folder.includes("/")) return normalizedPath === folder || normalizedPath.startsWith(`${folder}/`);
-    return pathSegments.includes(folder);
-  });
+  return createFileExplorerPathFilter(settings)(path);
 }
