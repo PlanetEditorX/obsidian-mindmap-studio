@@ -2202,6 +2202,7 @@ var DEFAULT_SETTINGS = {
   visibleModes: ["mindmap", "outline", "article", "reading"],
   defaultViewMode: "mindmap",
   articleEntryLockMode: "locked",
+  articleLastReadOnly: true,
   readingLocations: {},
   articleTocMaxDepth: 3,
   showArticleMiniMap: true,
@@ -2246,8 +2247,14 @@ var DEFAULT_SETTINGS = {
   questionMemoryCurveEnabled: false,
   wrongBookMasteryCount: 3,
   lastImportFolder: "",
-  settingsSectionOrder: [...SETTINGS_SECTION_TITLES]
+  settingsSectionOrder: [...SETTINGS_SECTION_TITLES],
+  settingsExpandedSections: []
 };
+function normalizeSettingsExpandedSections(value) {
+  if (!Array.isArray(value)) return [];
+  const known = new Set(SETTINGS_SECTION_TITLES);
+  return [...new Set(value.filter((title) => typeof title === "string" && known.has(title)))];
+}
 function normalizeSettingsSectionOrder(value) {
   const known = new Set(SETTINGS_SECTION_TITLES);
   const legacyTitles = {
@@ -2371,9 +2378,10 @@ var MindMapStudioSettingTab = class extends import_obsidian.PluginSettingTab {
     super(app, plugin);
     this.expandedImageHostIds = /* @__PURE__ */ new Set();
     this.expandedAiProfileIds = /* @__PURE__ */ new Set();
-    this.expandedSettingsSectionTitles = /* @__PURE__ */ new Set(["\u4E3B\u9898\u4E0E\u5916\u89C2"]);
+    this.expandedSettingsSectionTitles = /* @__PURE__ */ new Set();
     this.settingsSearchQuery = "";
     this.plugin = plugin;
+    this.syncExpandedSettingsSectionsFromSettings();
   }
   /**
    * 构建完整插件设置页，包括主题、显示模式、节点默认值、搜索、图片、图床容灾和恢复初始设置。所有控件写入后立即保存并刷新打开视图。
@@ -2381,6 +2389,7 @@ var MindMapStudioSettingTab = class extends import_obsidian.PluginSettingTab {
    */
   display() {
     var _a2, _b2;
+    this.syncExpandedSettingsSectionsFromSettings();
     const { containerEl } = this;
     containerEl.empty();
     containerEl.createEl("h2", { text: "MindMap Studio" });
@@ -2494,8 +2503,8 @@ var MindMapStudioSettingTab = class extends import_obsidian.PluginSettingTab {
         await this.plugin.setGlobalDisplayMode(value);
       });
     });
-    new import_obsidian.Setting(containerEl).setName("\u8FDB\u5165\u6587\u7AE0\u6A21\u5F0F").setDesc("\u9ED8\u8BA4\u9501\u5B9A\u4F1A\u4EE5\u9605\u8BFB\u72B6\u6001\u6253\u5F00\u6587\u7AE0\uFF1B\u6CBF\u7528\u8FDB\u5165\u524D\u72B6\u6001\u4F1A\u4FDD\u7559\u4ECE\u5BFC\u56FE\u6216\u5927\u7EB2\u5207\u6362\u524D\u7684\u9501\u5B9A/\u7F16\u8F91\u72B6\u6001\u3002").addDropdown((dropdown) => dropdown.addOption("locked", "\u9ED8\u8BA4\u9501\u5B9A").addOption("inherit", "\u6CBF\u7528\u8FDB\u5165\u524D\u72B6\u6001").setValue(this.plugin.settings.articleEntryLockMode).onChange(async (value) => {
-      this.plugin.settings.articleEntryLockMode = value === "inherit" ? "inherit" : "locked";
+    new import_obsidian.Setting(containerEl).setName("\u8FDB\u5165\u6587\u7AE0\u6A21\u5F0F").setDesc("\u9ED8\u8BA4\u9501\u5B9A\u59CB\u7EC8\u4EE5\u9605\u8BFB\u72B6\u6001\u8FDB\u5165\uFF1B\u6CBF\u7528\u8FDB\u5165\u524D\u72B6\u6001\u4F1A\u53D7\u5BFC\u56FE\u6216\u5927\u7EB2\u7684\u9501\u5F71\u54CD\uFF1B\u8BB0\u4F4F\u4E0A\u6B21\u6587\u7AE0\u72B6\u6001\u53EA\u6062\u590D\u6587\u7AE0\u6A21\u5F0F\u81EA\u5DF1\u6700\u540E\u4E00\u6B21\u7684\u9501\u5B9A/\u7F16\u8F91\u72B6\u6001\u3002").addDropdown((dropdown) => dropdown.addOption("locked", "\u9ED8\u8BA4\u9501\u5B9A").addOption("inherit", "\u6CBF\u7528\u8FDB\u5165\u524D\u72B6\u6001").addOption("remember", "\u8BB0\u4F4F\u4E0A\u6B21\u6587\u7AE0\u72B6\u6001").setValue(this.plugin.settings.articleEntryLockMode).onChange(async (value) => {
+      this.plugin.settings.articleEntryLockMode = value === "inherit" || value === "remember" ? value : "locked";
       await this.saveAndRefresh();
     }));
     new import_obsidian.Setting(containerEl).setName("\u8282\u70B9\u7F16\u8F91\u5668\u663E\u793A\u4F4D\u7F6E").setDesc("\u5C45\u4E2D\u65F6\u4F7F\u7528\u5F39\u7A97\uFF1B\u9760\u53F3\u65F6\u4F5C\u4E3A\u53F3\u4FA7\u7F16\u8F91\u9762\u677F\u663E\u793A\uFF0C\u4FDD\u5B58\u6216\u70B9\u51FB\u9762\u677F\u5916\u4F1A\u81EA\u52A8\u6536\u8D77\u3002").addDropdown((dropdown) => dropdown.addOption("center", "\u5C45\u4E2D\u5F39\u7A97").addOption("right", "\u53F3\u4FA7\u9762\u677F").setValue(this.plugin.settings.nodeEditorPosition).onChange(async (value) => {
@@ -3422,7 +3431,7 @@ var MindMapStudioSettingTab = class extends import_obsidian.PluginSettingTab {
   }
   /** Converts top-level headings into searchable, reorderable collapsible settings sections. */
   organizeSettingsSections() {
-    var _a2, _b2, _c;
+    var _a2, _b2, _c, _d, _e;
     const query = this.settingsSearchQuery;
     let sections = Array.from(this.containerEl.querySelectorAll(":scope > .mms-settings-section"));
     if (!sections.length) {
@@ -3430,16 +3439,25 @@ var MindMapStudioSettingTab = class extends import_obsidian.PluginSettingTab {
       for (const element of Array.from(this.containerEl.children)) {
         if (element.tagName === "H3") {
           const heading = ((_a2 = element.textContent) == null ? void 0 : _a2.trim()) || "\u8BBE\u7F6E";
+          const sectionTitle = SETTINGS_SECTION_TITLES.includes(heading) ? heading : null;
           const section = document.createElement("details");
           section.addClass("mms-settings-section");
-          section.open = this.expandedSettingsSectionTitles.has(heading);
+          section.open = sectionTitle ? this.expandedSettingsSectionTitles.has(sectionTitle) : false;
           const summary = document.createElement("summary");
           summary.setText(heading);
           section.append(summary);
           element.replaceWith(section);
           section.addEventListener("toggle", () => {
-            if (section.open) this.expandedSettingsSectionTitles.add(heading);
-            else this.expandedSettingsSectionTitles.delete(heading);
+            const programmaticTarget = section.dataset.mmsProgrammaticToggle;
+            if (programmaticTarget) {
+              delete section.dataset.mmsProgrammaticToggle;
+              if (section.open === (programmaticTarget === "open")) return;
+            }
+            if (!sectionTitle) return;
+            if (section.open) this.expandedSettingsSectionTitles.add(sectionTitle);
+            else this.expandedSettingsSectionTitles.delete(sectionTitle);
+            this.plugin.settings.settingsExpandedSections = SETTINGS_SECTION_TITLES.filter((title) => this.expandedSettingsSectionTitles.has(title));
+            void this.plugin.saveSettings();
           });
           activeSection = section;
         } else if (activeSection) activeSection.append(element);
@@ -3448,17 +3466,30 @@ var MindMapStudioSettingTab = class extends import_obsidian.PluginSettingTab {
     }
     const sectionRank = new Map(this.plugin.settings.settingsSectionOrder.map((title, index) => [title, index]));
     sections.sort((left, right) => {
-      var _a3, _b3, _c2, _d, _e, _f, _g, _h;
+      var _a3, _b3, _c2, _d2, _e2, _f, _g, _h;
       const leftTitle = (_c2 = (_b3 = (_a3 = left.querySelector("summary")) == null ? void 0 : _a3.textContent) == null ? void 0 : _b3.trim()) != null ? _c2 : "";
-      const rightTitle = (_f = (_e = (_d = right.querySelector("summary")) == null ? void 0 : _d.textContent) == null ? void 0 : _e.trim()) != null ? _f : "";
+      const rightTitle = (_f = (_e2 = (_d2 = right.querySelector("summary")) == null ? void 0 : _d2.textContent) == null ? void 0 : _e2.trim()) != null ? _f : "";
       return ((_g = sectionRank.get(leftTitle)) != null ? _g : Number.MAX_SAFE_INTEGER) - ((_h = sectionRank.get(rightTitle)) != null ? _h : Number.MAX_SAFE_INTEGER);
     });
     sections.forEach((section) => this.containerEl.append(section));
     for (const section of sections) {
-      const matches = !query || ((_c = (_b2 = section.textContent) == null ? void 0 : _b2.toLocaleLowerCase().includes(query)) != null ? _c : false);
+      const title = (_c = (_b2 = section.querySelector("summary")) == null ? void 0 : _b2.textContent) == null ? void 0 : _c.trim();
+      const matches = !query || ((_e = (_d = section.textContent) == null ? void 0 : _d.toLocaleLowerCase().includes(query)) != null ? _e : false);
       section.toggleClass("is-search-hidden", !matches);
-      if (query && matches) section.open = true;
+      const rememberedOpen = title ? this.expandedSettingsSectionTitles.has(title) : false;
+      this.setSettingsSectionOpen(section, query && matches ? true : rememberedOpen);
     }
+  }
+  /** Reloads the remembered section list after imports, resets, or settings-page redraws. */
+  syncExpandedSettingsSectionsFromSettings() {
+    this.expandedSettingsSectionTitles.clear();
+    for (const title of this.plugin.settings.settingsExpandedSections) this.expandedSettingsSectionTitles.add(title);
+  }
+  /** Changes a details element without treating search-driven expansion as a user preference. */
+  setSettingsSectionOpen(section, open) {
+    if (section.open === open) return;
+    section.dataset.mmsProgrammaticToggle = open ? "open" : "closed";
+    section.open = open;
   }
   /** Renders persistent up/down controls for every movable settings category. */
   addSettingsSectionOrderControls(container) {
@@ -5279,6 +5310,34 @@ function resolveArticleStyle(style) {
   return { ...ARTICLE_STYLE_PRESETS[preset], ...style != null ? style : {}, preset };
 }
 
+// src/article/display-mode.ts
+var ALL_MODES = ["mindmap", "outline", "article", "reading", "question-bank"];
+function normalizeArticleEntryLockMode(value) {
+  return value === "inherit" || value === "remember" ? value : "locked";
+}
+function resolveArticleEntryReadOnly(mode, inheritedReadOnly, rememberedReadOnly) {
+  if (mode === "remember") return rememberedReadOnly;
+  if (mode === "inherit") return inheritedReadOnly;
+  return true;
+}
+function normalizeDisplayModes(value) {
+  const modes = value.filter((mode) => ALL_MODES.includes(mode));
+  const fallback = modes.length ? modes : ["mindmap"];
+  return [...new Set(fallback)];
+}
+function resolveStartupDisplayMode(preferred, visibleModes) {
+  var _a2, _b2;
+  const visible = normalizeDisplayModes(visibleModes);
+  if (preferred === "mindmap" || preferred === "article" || preferred === "reading") {
+    if (visible.includes(preferred)) return preferred;
+  }
+  if (visible.includes("mindmap")) return "mindmap";
+  return (_b2 = (_a2 = visible.find((mode) => mode !== "outline")) != null ? _a2 : visible[0]) != null ? _b2 : "mindmap";
+}
+function shouldPersistDisplayMode(mode) {
+  return mode !== "outline" && mode !== "question-bank";
+}
+
 // src/article/reading-location.ts
 var findNode2 = (root, id) => {
   if (root.id === id) return root;
@@ -5559,7 +5618,7 @@ function readRichTextEditor(editor) {
 // src/editor/editor-modals.ts
 var import_obsidian5 = require("obsidian");
 
-// node_modules/fflate/esm/browser.js
+// ../../work_plugin_utf8/node_modules/fflate/esm/browser.js
 var u8 = Uint8Array;
 var u16 = Uint16Array;
 var i32 = Int32Array;
@@ -11062,7 +11121,8 @@ var MindMapEditor = class {
     this.history = new DocumentHistory(() => this.options.historyLimit);
     this.document = cloneDocument(document2);
     this.currentMode = this.resolveMode(options.defaultViewMode);
-    this.readOnly = this.currentMode === "reading" || this.currentMode === "question-bank" || ((_a2 = this.document.view) == null ? void 0 : _a2.readOnly) === true || this.currentMode === "article" && this.options.articleEntryLockMode === "locked";
+    const documentReadOnly = ((_a2 = this.document.view) == null ? void 0 : _a2.readOnly) === true;
+    this.readOnly = this.currentMode === "article" ? resolveArticleEntryReadOnly(this.options.articleEntryLockMode, documentReadOnly, this.options.articleLastReadOnly) : this.currentMode === "reading" || this.currentMode === "question-bank" ? true : documentReadOnly;
     this.lastReadingLocation = options.readingLocation;
     const restoredLocation = this.resolveStoredLocation();
     this.selectedId = (restoredLocation == null ? void 0 : restoredLocation.filePath) === options.currentFilePath ? restoredLocation.nodeId : this.document.root.id;
@@ -11110,7 +11170,8 @@ var MindMapEditor = class {
     var _a2;
     this.document = cloneDocument(document2);
     this.currentMode = this.resolveMode(this.options.defaultViewMode);
-    this.readOnly = this.currentMode === "reading" || this.currentMode === "question-bank" || ((_a2 = this.document.view) == null ? void 0 : _a2.readOnly) === true || this.currentMode === "article" && this.options.articleEntryLockMode === "locked";
+    const documentReadOnly = ((_a2 = this.document.view) == null ? void 0 : _a2.readOnly) === true;
+    this.readOnly = this.currentMode === "article" ? resolveArticleEntryReadOnly(this.options.articleEntryLockMode, documentReadOnly, this.options.articleLastReadOnly) : this.currentMode === "reading" || this.currentMode === "question-bank" ? true : documentReadOnly;
     const restored = this.resolveStoredLocation();
     this.selectedId = (restored == null ? void 0 : restored.filePath) === this.options.currentFilePath ? restored.nodeId : this.document.root.id;
     if (resetHistory) {
@@ -11172,7 +11233,11 @@ var MindMapEditor = class {
       if (previousMode === "mindmap") this.persistMindMapViewportState();
       const preserveReadingEdit = previousMode === "reading" && resolved === "article" && !this.readOnly;
       this.currentMode = resolved;
-      this.readOnly = resolved === "article" ? preserveReadingEdit || this.options.articleEntryLockMode === "inherit" ? this.readOnly : true : resolved === "reading" || resolved === "question-bank" ? true : previousMode === "article" || previousMode === "reading" || previousMode === "question-bank" ? ((_d = this.document.view) == null ? void 0 : _d.readOnly) === true : this.readOnly;
+      this.readOnly = resolved === "article" ? resolveArticleEntryReadOnly(
+        this.options.articleEntryLockMode,
+        preserveReadingEdit ? false : this.readOnly,
+        this.options.articleLastReadOnly
+      ) : resolved === "reading" || resolved === "question-bank" ? true : previousMode === "article" || previousMode === "reading" || previousMode === "question-bank" ? ((_d = this.document.view) == null ? void 0 : _d.readOnly) === true : this.readOnly;
     }
     if (modesChanged || toolbarChanged) {
       this.cleanupCallbacks.forEach((callback) => callback());
@@ -11226,7 +11291,11 @@ var MindMapEditor = class {
     }
     this.currentMode = mode;
     if (mode === "article" && mode !== previousMode) {
-      this.readOnly = this.options.articleEntryLockMode === "locked" ? true : this.readOnly;
+      this.readOnly = resolveArticleEntryReadOnly(
+        this.options.articleEntryLockMode,
+        this.readOnly,
+        this.options.articleLastReadOnly
+      );
     } else if ((mode === "reading" || mode === "question-bank") && mode !== previousMode) {
       this.readOnly = true;
     } else if ((previousMode === "article" || previousMode === "reading" || previousMode === "question-bank") && mode !== "article" && mode !== "reading" && mode !== "question-bank") {
@@ -11444,7 +11513,7 @@ var MindMapEditor = class {
       const location = (_a2 = this.captureCurrentLocation("reading")) != null ? _a2 : this.lastReadingLocation;
       if (location) this.rememberLocation(location, true);
       this.currentMode = "article";
-      this.persistReadOnlyState();
+      this.rememberArticleReadOnlyState();
       this.render();
       const resolved = this.restoreReadingLocation("article", location);
       const navigationLocation = resolved ? createReadingLocation(this.readingLocationSections(), resolved.filePath, resolved.nodeId, resolved.nodeRatio, resolved.viewportRatio) : location != null ? location : void 0;
@@ -11452,7 +11521,8 @@ var MindMapEditor = class {
       new import_obsidian11.Notice("\u901A\u8BFB\u6A21\u5F0F\u5DF2\u5207\u6362\u4E3A\u6587\u7AE0\u7F16\u8F91\u6A21\u5F0F");
       return;
     }
-    if (this.currentMode !== "article" && this.currentMode !== "reading") this.persistReadOnlyState();
+    if (this.currentMode === "article") this.rememberArticleReadOnlyState();
+    else if (this.currentMode !== "reading") this.persistReadOnlyState();
     this.updateModeUi();
     this.applyReadOnlyStateToRenderedContent();
     if (scroller && scrollPosition) {
@@ -12150,6 +12220,12 @@ var MindMapEditor = class {
       this.callbacks.onChange(this.getDocument());
       this.markSaving();
     }, 0);
+  }
+  /** Persists article mode's own lock state without writing it into the current mind-map document. */
+  rememberArticleReadOnlyState() {
+    if (this.currentMode !== "article" || this.options.articleLastReadOnly === this.readOnly) return;
+    this.options = { ...this.options, articleLastReadOnly: this.readOnly };
+    void this.callbacks.onArticleReadOnlyChange(this.readOnly);
   }
   /** Updates edit affordances in the existing DOM without rebuilding the map or article. */
   applyReadOnlyStateToRenderedContent() {
@@ -17624,6 +17700,11 @@ var MindMapStudioView = class _MindMapStudioView extends import_obsidian13.TextF
           this.plugin.settings.readingLocations[path] = location;
           await this.plugin.saveSettings();
         },
+        onArticleReadOnlyChange: async (readOnly) => {
+          if (this.plugin.settings.articleLastReadOnly === readOnly) return;
+          this.plugin.settings.articleLastReadOnly = readOnly;
+          await this.plugin.saveSettings();
+        },
         onArticleRenderCacheUpdate: (snapshot) => this.plugin.updateArticleRenderCache(snapshot),
         onRenderCode: (block, container) => {
           var _a3;
@@ -17901,6 +17982,7 @@ var MindMapStudioView = class _MindMapStudioView extends import_obsidian13.TextF
       ],
       defaultViewMode: this.plugin.getActiveDisplayMode(),
       articleEntryLockMode: this.plugin.settings.articleEntryLockMode,
+      articleLastReadOnly: this.plugin.settings.articleLastReadOnly,
       currentFilePath: (_b2 = (_a2 = this.file) == null ? void 0 : _a2.path) != null ? _b2 : "",
       readingHomePath: (_f = (_e = (_c = this.readingSections[0]) == null ? void 0 : _c.filePath) != null ? _e : (_d = this.file) == null ? void 0 : _d.path) != null ? _f : "",
       readingLocation: (() => {
@@ -18939,26 +19021,6 @@ var GlobalMindMapSearchModal = class extends import_obsidian14.Modal {
     await this.onOpenResult(result);
   }
 };
-
-// src/article/display-mode.ts
-var ALL_MODES = ["mindmap", "outline", "article", "reading", "question-bank"];
-function normalizeDisplayModes(value) {
-  const modes = value.filter((mode) => ALL_MODES.includes(mode));
-  const fallback = modes.length ? modes : ["mindmap"];
-  return [...new Set(fallback)];
-}
-function resolveStartupDisplayMode(preferred, visibleModes) {
-  var _a2, _b2;
-  const visible = normalizeDisplayModes(visibleModes);
-  if (preferred === "mindmap" || preferred === "article" || preferred === "reading") {
-    if (visible.includes(preferred)) return preferred;
-  }
-  if (visible.includes("mindmap")) return "mindmap";
-  return (_b2 = (_a2 = visible.find((mode) => mode !== "outline")) != null ? _a2 : visible[0]) != null ? _b2 : "mindmap";
-}
-function shouldPersistDisplayMode(mode) {
-  return mode !== "outline" && mode !== "question-bank";
-}
 
 // src/ai/client.ts
 var import_obsidian15 = require("obsidian");
@@ -20854,6 +20916,7 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
       wrongBookMasteryCount: typeof raw.wrongBookMasteryCount === "number" ? Math.max(1, Math.min(20, Math.round(raw.wrongBookMasteryCount))) : DEFAULT_SETTINGS.wrongBookMasteryCount,
       lastImportFolder: typeof raw.lastImportFolder === "string" ? raw.lastImportFolder.trim().slice(0, 4e3) : DEFAULT_SETTINGS.lastImportFolder,
       settingsSectionOrder: normalizeSettingsSectionOrder(raw.settingsSectionOrder),
+      settingsExpandedSections: normalizeSettingsExpandedSections(raw.settingsExpandedSections),
       syncTitleToFilename: raw.syncTitleToFilename !== false,
       deleteLocalAfterUpload: raw.deleteLocalAfterUpload !== false,
       imageFailoverEnabled: raw.imageFailoverEnabled !== false,
@@ -20875,7 +20938,8 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
         return [.../* @__PURE__ */ new Set([...stored, ...DEFAULT_SETTINGS.toolbarItemOrder])];
       })(),
       defaultViewMode: typeof raw.defaultViewMode === "string" ? raw.defaultViewMode : DEFAULT_SETTINGS.defaultViewMode,
-      articleEntryLockMode: raw.articleEntryLockMode === "inherit" ? "inherit" : "locked",
+      articleEntryLockMode: normalizeArticleEntryLockMode(raw.articleEntryLockMode),
+      articleLastReadOnly: raw.articleLastReadOnly !== false,
       readingLocations: typeof raw.readingLocations === "object" && raw.readingLocations ? Object.fromEntries(Object.entries(raw.readingLocations).flatMap(([path, value]) => {
         const location = normalizeReadingLocation(value);
         return location ? [[path, location]] : [];

@@ -16,6 +16,7 @@ import type {
 import type { ArticlePageNavigation, ArticleTocEntry, ReadingSection } from "../article/modes";
 import type { ReadingLocation } from "../article/reading-location";
 import type { ArticleRenderCacheSnapshot } from "../article/article-render-cache";
+import type { ArticleEntryLockMode } from "../article/display-mode";
 import type { ArticleLeafBulletStyle, ArticleLeafTextAlignment, ImageHostChoice, ImageHostUploadBatch } from "../settings";
 import type { DesktopCaptureResult } from "../utils/desktop-capture";
 import type { ImageRecognitionItemResult, RecognizableImage } from "../vision/recognition";
@@ -60,6 +61,8 @@ export interface MindMapEditorCallbacks {
   onAskAi: (nodeId?: string) => void | Promise<void>;
   onDisplayModeChange: (mode: DisplayMode, location?: ReadingLocation) => void | Promise<void>;
   onReadingLocationChange: (path: string, location: ReadingLocation) => void | Promise<void>;
+  /** Persists article mode's own last lock state independently from other display modes. */
+  onArticleReadOnlyChange: (readOnly: boolean) => void | Promise<void>;
   onRenderCode: (block: MindMapCodeBlock, container: HTMLElement) => void | Promise<void>;
   /** Persist a newly completed article node-render snapshot. */
   onArticleRenderCacheUpdate: (snapshot: ArticleRenderCacheSnapshot) => void;
@@ -82,7 +85,8 @@ export interface MindMapEditorOptions {
   imageHostPriorityIds: string[];
   visibleModes: DisplayMode[];
   defaultViewMode: DisplayMode;
-  articleEntryLockMode: "locked" | "inherit";
+  articleEntryLockMode: ArticleEntryLockMode;
+  articleLastReadOnly: boolean;
   currentFilePath: string;
   readingHomePath: string;
   readingLocation: ReadingLocation | null;

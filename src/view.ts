@@ -199,6 +199,11 @@ export class MindMapStudioView extends TextFileView {
           this.plugin.settings.readingLocations[path] = location;
           await this.plugin.saveSettings();
         },
+        onArticleReadOnlyChange: async (readOnly) => {
+          if (this.plugin.settings.articleLastReadOnly === readOnly) return;
+          this.plugin.settings.articleLastReadOnly = readOnly;
+          await this.plugin.saveSettings();
+        },
         onArticleRenderCacheUpdate: (snapshot) => this.plugin.updateArticleRenderCache(snapshot),
         onRenderCode: (block, container) => renderCodeBlock({
           block,
@@ -455,6 +460,7 @@ export class MindMapStudioView extends TextFileView {
       ],
       defaultViewMode: this.plugin.getActiveDisplayMode(),
       articleEntryLockMode: this.plugin.settings.articleEntryLockMode,
+      articleLastReadOnly: this.plugin.settings.articleLastReadOnly,
       currentFilePath: this.file?.path ?? "",
       readingHomePath: this.readingSections[0]?.filePath ?? this.file?.path ?? "",
       readingLocation: (() => {

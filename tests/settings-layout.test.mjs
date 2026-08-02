@@ -61,18 +61,29 @@ test("node editor position is located in View and Reading settings", () => {
   assert.match(bundleReadableSource, /视图与阅读[\s\S]*节点编辑器显示位置[\s\S]*快捷键配置/);
 });
 
-test("article entry lock policy defaults to locked and can inherit the previous state", () => {
+test("article entry lock policy can restore article mode's own previous state", () => {
   const viewSection = settingsSource.indexOf('containerEl.createEl("h3", { text: "视图与阅读" })');
   const articleEntryLock = settingsSource.indexOf('.setName("进入文章模式")', viewSection);
   const nodeEditorPosition = settingsSource.indexOf('.setName("节点编辑器显示位置")', viewSection);
 
-  assert.match(settingsSource, /articleEntryLockMode: "locked" \| "inherit"/);
+  assert.match(settingsSource, /articleEntryLockMode: ArticleEntryLockMode/);
   assert.match(settingsSource, /articleEntryLockMode: "locked"/);
+  assert.match(settingsSource, /articleLastReadOnly: true/);
   assert.ok(viewSection >= 0 && articleEntryLock > viewSection && articleEntryLock < nodeEditorPosition);
-  assert.match(settingsSource.slice(articleEntryLock), /\.addOption\("locked", "默认锁定"\)[\s\S]*\.addOption\("inherit", "沿用进入前状态"\)/);
-  assert.match(mainSource, /articleEntryLockMode: raw\.articleEntryLockMode === "inherit" \? "inherit" : "locked"/);
-  assert.match(editorSource, /this\.options\.articleEntryLockMode === "locked" \? true : this\.readOnly/);
-  assert.match(bundleReadableSource, /进入文章模式[\s\S]*默认锁定[\s\S]*沿用进入前状态/);
+  assert.match(settingsSource.slice(articleEntryLock), /\.addOption\("locked", "默认锁定"\)[\s\S]*\.addOption\("inherit", "沿用进入前状态"\)[\s\S]*\.addOption\("remember", "记住上次文章状态"\)/);
+  assert.match(mainSource, /articleEntryLockMode: normalizeArticleEntryLockMode\(raw\.articleEntryLockMode\)/);
+  assert.match(mainSource, /articleLastReadOnly: raw\.articleLastReadOnly !== false/);
+  assert.match(editorSource, /resolveArticleEntryReadOnly\([\s\S]*this\.options\.articleLastReadOnly/);
+  assert.match(editorSource, /rememberArticleReadOnlyState\(\)[\s\S]*onArticleReadOnlyChange/);
+  assert.match(bundleReadableSource, /进入文章模式[\s\S]*默认锁定[\s\S]*沿用进入前状态[\s\S]*记住上次文章状态/);
+});
+
+test("settings sections default closed and persist only the user's expanded list", () => {
+  assert.match(settingsSource, /settingsExpandedSections: \[\]/);
+  assert.doesNotMatch(settingsSource, /expandedSettingsSectionTitles = new Set<[^>]+>\(\["主题与外观"\]\)/);
+  assert.match(settingsSource, /settingsExpandedSections = SETTINGS_SECTION_TITLES\.filter/);
+  assert.match(settingsSource, /mmsProgrammaticToggle/);
+  assert.match(mainSource, /settingsExpandedSections: normalizeSettingsExpandedSections\(raw\.settingsExpandedSections\)/);
 });
 
 test("node resize modifier is synchronized from live events and cannot swallow normal clicks", () => {

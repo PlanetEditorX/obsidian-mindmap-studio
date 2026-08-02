@@ -23,6 +23,7 @@ import type {
 } from "./core/model";
 import { appearanceFromThemePreset, MINDMAP_THEME_PRESETS } from "./themes";
 import type { ReadingLocation } from "./article/reading-location";
+import type { ArticleEntryLockMode } from "./article/display-mode";
 import type { ImageRecognitionMode } from "./vision/recognition";
 import {
   AI_PROVIDER_MODEL_PRESETS,
@@ -321,8 +322,10 @@ export interface MindMapStudioSettings {
   globalSearchMaxResults: number;
   visibleModes: DisplayMode[];
   defaultViewMode: DisplayMode;
-  /** 进入文章模式时是默认锁定，还是沿用切换前的锁定状态。 */
-  articleEntryLockMode: "locked" | "inherit";
+  /** 进入文章模式时默认锁定、沿用当前状态，或恢复上次文章状态。 */
+  articleEntryLockMode: ArticleEntryLockMode;
+  /** “记住上次文章状态”策略使用的持久化锁定状态。 */
+  articleLastReadOnly: boolean;
   /** 按文章族顶层文件保存的跨模式语义阅读位置。 */
   readingLocations: Record<string, ReadingLocation>;
   articleTocMaxDepth: number;
@@ -397,6 +400,8 @@ export interface MindMapStudioSettings {
   lastImportFolder: string;
   /** User-defined order of the first-level settings categories; management stays last. */
   settingsSectionOrder: SettingsSectionTitle[];
+  /** First-level settings categories left expanded when the settings page was last closed. */
+  settingsExpandedSections: SettingsSectionTitle[];
 }
 
 export const DEFAULT_SETTINGS: MindMapStudioSettings = {
@@ -461,6 +466,7 @@ export const DEFAULT_SETTINGS: MindMapStudioSettings = {
   visibleModes: ["mindmap", "outline", "article", "reading"],
   defaultViewMode: "mindmap",
   articleEntryLockMode: "locked",
+  articleLastReadOnly: true,
   readingLocations: {},
   articleTocMaxDepth: 3,
   showArticleMiniMap: true,
@@ -505,8 +511,16 @@ export const DEFAULT_SETTINGS: MindMapStudioSettings = {
   questionMemoryCurveEnabled: false,
   wrongBookMasteryCount: 3,
   lastImportFolder: "",
-  settingsSectionOrder: [...SETTINGS_SECTION_TITLES]
+  settingsSectionOrder: [...SETTINGS_SECTION_TITLES],
+  settingsExpandedSections: []
 };
+
+/** Keeps only known first-level sections in the stored expanded-section list. */
+export function normalizeSettingsExpandedSections(value: unknown): SettingsSectionTitle[] {
+  if (!Array.isArray(value)) return [];
+  const known = new Set<string>(SETTINGS_SECTION_TITLES);
+  return [...new Set(value.filter((title): title is SettingsSectionTitle => typeof title === "string" && known.has(title)))];
+}
 
 /** Normalizes stored category order while keeping configuration management at the end. */
 export function normalizeSettingsSectionOrder(value: unknown): SettingsSectionTitle[] {
@@ -647,7 +661,7 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
   private readonly plugin: MindMapStudioPlugin;
   private readonly expandedImageHostIds = new Set<string>();
   private readonly expandedAiProfileIds = new Set<string>();
-  private readonly expandedSettingsSectionTitles = new Set<string>(["主题与外观"]);
+  private readonly expandedSettingsSectionTitles = new Set<SettingsSectionTitle>();
   private settingsSearchQuery = "";
 
   /**
@@ -659,6 +673,7 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
   constructor(app: App, plugin: MindMapStudioPlugin) {
     super(app, plugin);
     this.plugin = plugin;
+    this.syncExpandedSettingsSectionsFromSettings();
   }
 
   /**
@@ -666,6 +681,7 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
    * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
    */
   display(): void {
+    this.syncExpandedSettingsSectionsFromSettings();
     const { containerEl } = this;
     containerEl.empty();
     containerEl.createEl("h2", { text: "MindMap Studio" });
@@ -820,13 +836,14 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName("进入文章模式")
-      .setDesc("默认锁定会以阅读状态打开文章；沿用进入前状态会保留从导图或大纲切换前的锁定/编辑状态。")
+      .setDesc("默认锁定始终以阅读状态进入；沿用进入前状态会受导图或大纲的锁影响；记住上次文章状态只恢复文章模式自己最后一次的锁定/编辑状态。")
       .addDropdown((dropdown) => dropdown
         .addOption("locked", "默认锁定")
         .addOption("inherit", "沿用进入前状态")
+        .addOption("remember", "记住上次文章状态")
         .setValue(this.plugin.settings.articleEntryLockMode)
         .onChange(async (value) => {
-          this.plugin.settings.articleEntryLockMode = value === "inherit" ? "inherit" : "locked";
+          this.plugin.settings.articleEntryLockMode = value === "inherit" || value === "remember" ? value : "locked";
           await this.saveAndRefresh();
         }));
 
@@ -2432,16 +2449,27 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
       for (const element of Array.from(this.containerEl.children)) {
         if (element.tagName === "H3") {
           const heading = element.textContent?.trim() || "设置";
+          const sectionTitle = SETTINGS_SECTION_TITLES.includes(heading as SettingsSectionTitle)
+            ? heading as SettingsSectionTitle
+            : null;
           const section = document.createElement("details");
           section.addClass("mms-settings-section");
-          section.open = this.expandedSettingsSectionTitles.has(heading);
+          section.open = sectionTitle ? this.expandedSettingsSectionTitles.has(sectionTitle) : false;
           const summary = document.createElement("summary");
           summary.setText(heading);
           section.append(summary);
           element.replaceWith(section);
           section.addEventListener("toggle", () => {
-            if (section.open) this.expandedSettingsSectionTitles.add(heading);
-            else this.expandedSettingsSectionTitles.delete(heading);
+            const programmaticTarget = section.dataset.mmsProgrammaticToggle;
+            if (programmaticTarget) {
+              delete section.dataset.mmsProgrammaticToggle;
+              if (section.open === (programmaticTarget === "open")) return;
+            }
+            if (!sectionTitle) return;
+            if (section.open) this.expandedSettingsSectionTitles.add(sectionTitle);
+            else this.expandedSettingsSectionTitles.delete(sectionTitle);
+            this.plugin.settings.settingsExpandedSections = SETTINGS_SECTION_TITLES.filter((title) => this.expandedSettingsSectionTitles.has(title));
+            void this.plugin.saveSettings();
           });
           activeSection = section;
         } else if (activeSection) activeSection.append(element);
@@ -2456,10 +2484,25 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
     });
     sections.forEach((section) => this.containerEl.append(section));
     for (const section of sections) {
+      const title = section.querySelector("summary")?.textContent?.trim() as SettingsSectionTitle | undefined;
       const matches = !query || (section.textContent?.toLocaleLowerCase().includes(query) ?? false);
       section.toggleClass("is-search-hidden", !matches);
-      if (query && matches) section.open = true;
+      const rememberedOpen = title ? this.expandedSettingsSectionTitles.has(title) : false;
+      this.setSettingsSectionOpen(section, query && matches ? true : rememberedOpen);
     }
+  }
+
+  /** Reloads the remembered section list after imports, resets, or settings-page redraws. */
+  private syncExpandedSettingsSectionsFromSettings(): void {
+    this.expandedSettingsSectionTitles.clear();
+    for (const title of this.plugin.settings.settingsExpandedSections) this.expandedSettingsSectionTitles.add(title);
+  }
+
+  /** Changes a details element without treating search-driven expansion as a user preference. */
+  private setSettingsSectionOpen(section: HTMLDetailsElement, open: boolean): void {
+    if (section.open === open) return;
+    section.dataset.mmsProgrammaticToggle = open ? "open" : "closed";
+    section.open = open;
   }
 
   /** Renders persistent up/down controls for every movable settings category. */

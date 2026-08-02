@@ -68,3 +68,15 @@ test("normalizeReturnToTopVisibility returns default for invalid inputs", () => 
   assert.equal(settingsModule.normalizeReturnToTopVisibility("abc%"), DEFAULT);
   assert.equal(settingsModule.normalizeReturnToTopVisibility("%%"), DEFAULT);
 });
+
+
+test("normalizeSettingsExpandedSections defaults closed and keeps only known unique sections", () => {
+  assert.deepEqual(settingsModule.normalizeSettingsExpandedSections(undefined), []);
+  assert.deepEqual(settingsModule.normalizeSettingsExpandedSections([
+    "主题与外观",
+    "视图与阅读",
+    "主题与外观",
+    "未知分区",
+    123
+  ]), ["主题与外观", "视图与阅读"]);
+});
