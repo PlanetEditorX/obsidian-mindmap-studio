@@ -39,7 +39,7 @@ import { saveDesktopExportFile } from "./utils/desktop-export";
 export const TOOLBAR_ITEMS = [
   ["lock", "阅读/编辑模式"], ["add-child", "添加子节点"], ["add-sibling", "添加同级节点"],
   ["edit", "完整编辑节点"], ["duplicate", "克隆分支"], ["delete", "删除节点"],
-  ["task", "任务状态"], ["collapse", "展开/收起"], ["collapse-all", "展开/折叠全部"], ["link", "打开链接"],
+  ["collapse", "展开/收起"], ["collapse-all", "展开/折叠全部"],
   ["search", "搜索导图"], ["global-search", "全局搜索"], ["ai", "询问 AI"], ["table", "表格"],
   ["code", "代码"], ["image", "粘贴图片"], ["screenshot", "插入截图"], ["screenshot-recognize", "插入截图并识别"], ["submap", "子导图"],
   ["undo", "撤销"], ["redo", "重做"],
@@ -269,7 +269,6 @@ export interface MindMapStudioSettings {
   defaultNodeWidth: number;
   autoNodeMaxWidth: number;
   twoFingerGestureAction: "zoom" | "pan";
-  showTaskProgress: boolean;
   /** Whether saving a mind map renames its file to the root node title. */
   syncTitleToFilename: boolean;
   autoFitOnOpen: boolean;
@@ -421,7 +420,6 @@ export const DEFAULT_SETTINGS: MindMapStudioSettings = {
   defaultNodeWidth: 176,
   autoNodeMaxWidth: 460,
   twoFingerGestureAction: "zoom",
-  showTaskProgress: true,
   syncTitleToFilename: true,
   autoFitOnOpen: true,
   historyLimit: 120,
@@ -877,16 +875,6 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
         .onChange(async (value) => {
           this.plugin.settings.autoFitOnOpen = value;
           await this.plugin.saveSettings();
-        }));
-
-    new Setting(containerEl)
-      .setName("显示任务进度")
-      .setDesc("在包含任务的分支节点底部显示完成百分比。")
-      .addToggle((toggle) => toggle
-        .setValue(this.plugin.settings.showTaskProgress)
-        .onChange(async (value) => {
-          this.plugin.settings.showTaskProgress = value;
-          await this.saveAndRefresh();
         }));
 
     new Setting(containerEl)

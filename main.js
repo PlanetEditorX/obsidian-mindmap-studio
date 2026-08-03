@@ -564,7 +564,7 @@ function applyImageUploadPatches(document2, patches) {
 function isRemovableEmptyNode(node) {
   var _a2, _b2, _c, _d;
   const hasContent = nodeContentBlocks(node).some((block) => block.type !== "text" || block.text.trim());
-  return !hasContent && node.children.length === 0 && !((_a2 = node.note) == null ? void 0 : _a2.trim()) && !((_b2 = node.link) == null ? void 0 : _b2.trim()) && !node.submap && !((_c = node.icon) == null ? void 0 : _c.trim()) && !((_d = node.tags) == null ? void 0 : _d.some((tag) => tag.trim())) && !node.question && !node.task;
+  return !hasContent && node.children.length === 0 && !((_a2 = node.note) == null ? void 0 : _a2.trim()) && !((_b2 = node.link) == null ? void 0 : _b2.trim()) && !node.submap && !((_c = node.icon) == null ? void 0 : _c.trim()) && !((_d = node.tags) == null ? void 0 : _d.some((tag) => tag.trim())) && !node.question;
 }
 function moveNodeContentBlock(root, sourceNodeId, blockId, targetNodeId, targetBlockId, position) {
   const sourceNode = findNode(root, sourceNodeId);
@@ -841,16 +841,6 @@ function extractFirstWikiLink(value) {
   const match = value.match(/\[\[([^\]|#]+(?:#[^\]|]+)?)(?:\|[^\]]+)?\]\]/);
   return (_b2 = (_a2 = match == null ? void 0 : match[1]) == null ? void 0 : _a2.trim()) != null ? _b2 : null;
 }
-function getTaskProgress(root) {
-  let done = 0;
-  let total = 0;
-  walkNodes(root, (node) => {
-    if (!node.task) return;
-    total += 1;
-    if (node.task === "done") done += 1;
-  });
-  return { done, total };
-}
 function nodeSearchText(node) {
   var _a2, _b2;
   return [nodePlainText(node), node.note, node.link, ...nodeContentBlocks(node).flatMap((block) => {
@@ -860,12 +850,6 @@ function nodeSearchText(node) {
     if (block.type === "code") return [block.code.language, block.code.code];
     return block.text;
   }), node.icon, (_a2 = node.submap) == null ? void 0 : _a2.path, ...(_b2 = node.tags) != null ? _b2 : []].filter((value) => Boolean(value)).join(" ").toLocaleLowerCase();
-}
-function taskPrefix(task) {
-  if (task === "done") return "[x] ";
-  if (task === "doing") return "[-] ";
-  if (task === "todo") return "[ ] ";
-  return "";
 }
 function escapeInlineMarkdown(value) {
   return value.replace(/([\\`*_{}\[\]<>])/g, "\\$1");
@@ -1015,18 +999,17 @@ function parseFencedCode(markdown) {
 function childrenToTable(node) {
   if (!node.children.length) return null;
   return {
-    headers: ["\u5B50\u8282\u70B9", "\u5907\u6CE8", "\u72B6\u6001", "\u6807\u7B7E", "\u4E0B\u7EA7\u6570\u91CF"],
+    headers: ["\u5B50\u8282\u70B9", "\u5907\u6CE8", "\u6807\u7B7E", "\u4E0B\u7EA7\u6570\u91CF"],
     rows: node.children.map((child) => {
       var _a2, _b2, _c;
       return [
         nodePlainText(child),
         (_a2 = child.note) != null ? _a2 : "",
-        child.task === "done" ? "\u5DF2\u5B8C\u6210" : child.task === "doing" ? "\u8FDB\u884C\u4E2D" : child.task === "todo" ? "\u5F85\u529E" : "",
         (_c = (_b2 = child.tags) == null ? void 0 : _b2.join(", ")) != null ? _c : "",
         String(child.children.length)
       ];
     }),
-    alignments: ["left", "left", "center", "left", "right"],
+    alignments: ["left", "left", "left", "right"],
     source: "children"
   };
 }
@@ -1063,7 +1046,7 @@ ${block.code.code}
     const link = node.link ? ` \u2192 ${node.link}` : "";
     const blocks = renderBlocks2(node);
     const firstText = (_c = blocks.find((value) => !value.startsWith("!["))) != null ? _c : (_b3 = blocks[0]) != null ? _b3 : "\u56FE\u7247\u8282\u70B9";
-    lines.push(`${indent}- ${taskPrefix(node.task)}${node.icon ? `${node.icon} ` : ""}${firstText}${tags}${link}`);
+    lines.push(`${indent}- ${node.icon ? `${node.icon} ` : ""}${firstText}${tags}${link}`);
     blocks.filter((value) => value !== firstText).forEach((value) => lines.push(`${indent}  ${value}`));
     if (node.note) lines.push(`${indent}  > ${node.note.replaceAll("\n", " ")}`);
     if (node.submap) lines.push(`${indent}  > \u5B50\u5BFC\u56FE\uFF1A[[${node.submap.path}]]`);
@@ -1071,14 +1054,6 @@ ${block.code.code}
   };
   doc.root.children.forEach((child) => visit(child, 1));
   return lines.join("\n");
-}
-function parseTaskText(value) {
-  var _a2;
-  const match = value.match(/^\[( |x|X|-)\]\s+(.+)$/);
-  if (!match) return { text: value };
-  const marker = match[1];
-  const task = marker === "x" || marker === "X" ? "done" : marker === "-" ? "doing" : "todo";
-  return { text: ((_a2 = match[2]) == null ? void 0 : _a2.trim()) || "\u4EFB\u52A1", task };
 }
 var IMPORTED_OUTLINE_NUMBER_PREFIX = /^(?:\s*(?:(?:[一二三四五六七八九十百千万零〇○]+)[、.．]|[（(][一二三四五六七八九十百千万零〇○0-9]+[）)]|\d+[、.．]|\d+[）)]))+\s*/u;
 var IMPORTED_NAVIGATION_LABEL = /^(?:目录|返回目录|回到目录|返回顶部|回到顶部|顶部)$/u;
@@ -1341,9 +1316,7 @@ function markdownToDocument(markdown, fallbackTitle = "\u601D\u7EF4\u5BFC\u56FE"
       const previous = stack.at(-1);
       const numberedParent = (previous == null ? void 0 : previous.kind) === "list" && previous.listKind === "numbered" && previous.level === parentLevel + 1 ? previous : (previous == null ? void 0 : previous.kind) === "list" && previous.listKind === "bullet" && previous.level === parentLevel + 2 && ((_D = stack.at(-2)) == null ? void 0 : _D.listKind) === "numbered" ? stack.at(-2) : void 0;
       const level = bullet && spaces === 0 && numberedParent ? numberedParent.level + 1 : parentLevel + Math.floor(spaces / 2) + 1;
-      const parsed = parseTaskText(((_E = listMatch[2]) != null ? _E : "\u8282\u70B9").trim());
-      const node = createMarkdownNode(parsed.text);
-      node.task = parsed.task;
+      const node = createMarkdownNode(((_E = listMatch[2]) != null ? _E : "\u8282\u70B9").trim());
       while (stack.length > 1 && ((_G = (_F = stack.at(-1)) == null ? void 0 : _F.level) != null ? _G : 0) >= level) stack.pop();
       const parent2 = (_I = (_H = stack.at(-1)) == null ? void 0 : _H.node) != null ? _I : doc.root;
       parent2.children.push(node);
@@ -2033,10 +2006,8 @@ var TOOLBAR_ITEMS = [
   ["edit", "\u5B8C\u6574\u7F16\u8F91\u8282\u70B9"],
   ["duplicate", "\u514B\u9686\u5206\u652F"],
   ["delete", "\u5220\u9664\u8282\u70B9"],
-  ["task", "\u4EFB\u52A1\u72B6\u6001"],
   ["collapse", "\u5C55\u5F00/\u6536\u8D77"],
   ["collapse-all", "\u5C55\u5F00/\u6298\u53E0\u5168\u90E8"],
-  ["link", "\u6253\u5F00\u94FE\u63A5"],
   ["search", "\u641C\u7D22\u5BFC\u56FE"],
   ["global-search", "\u5168\u5C40\u641C\u7D22"],
   ["ai", "\u8BE2\u95EE AI"],
@@ -2151,7 +2122,6 @@ var DEFAULT_SETTINGS = {
   defaultNodeWidth: 176,
   autoNodeMaxWidth: 460,
   twoFingerGestureAction: "zoom",
-  showTaskProgress: true,
   syncTitleToFilename: true,
   autoFitOnOpen: true,
   historyLimit: 120,
@@ -2518,10 +2488,6 @@ var MindMapStudioSettingTab = class extends import_obsidian.PluginSettingTab {
     new import_obsidian.Setting(containerEl).setName("\u6253\u5F00\u65F6\u81EA\u52A8\u9002\u5E94\u753B\u5E03").setDesc("\u6253\u5F00\u5BFC\u56FE\u6A21\u5F0F\u65F6\u81EA\u52A8\u7F29\u653E\u5E76\u5C45\u4E2D\u5168\u90E8\u53EF\u89C1\u8282\u70B9\u3002").addToggle((toggle) => toggle.setValue(this.plugin.settings.autoFitOnOpen).onChange(async (value) => {
       this.plugin.settings.autoFitOnOpen = value;
       await this.plugin.saveSettings();
-    }));
-    new import_obsidian.Setting(containerEl).setName("\u663E\u793A\u4EFB\u52A1\u8FDB\u5EA6").setDesc("\u5728\u5305\u542B\u4EFB\u52A1\u7684\u5206\u652F\u8282\u70B9\u5E95\u90E8\u663E\u793A\u5B8C\u6210\u767E\u5206\u6BD4\u3002").addToggle((toggle) => toggle.setValue(this.plugin.settings.showTaskProgress).onChange(async (value) => {
-      this.plugin.settings.showTaskProgress = value;
-      await this.saveAndRefresh();
     }));
     new import_obsidian.Setting(containerEl).setName("\u5D4C\u5165\u9884\u89C8\u6700\u5927\u9AD8\u5EA6").setDesc("\u63A7\u5236\u5D4C\u5165\u5F0F\u5BFC\u56FE\u9884\u89C8\u7684\u6700\u5927\u9AD8\u5EA6\uFF0C\u8303\u56F4 240\u20131200 \u50CF\u7D20\u3002").addSlider((slider) => slider.setLimits(240, 1200, 20).setDynamicTooltip().setValue(this.plugin.settings.embedMaxHeight).onChange(async (value) => {
       this.plugin.settings.embedMaxHeight = value;
@@ -3966,12 +3932,6 @@ function svgRadius(shape) {
   if (shape === "pill") return 28;
   return 14;
 }
-function taskGlyph(node) {
-  if (node.task === "done") return "\u2713 ";
-  if (node.task === "doing") return "\u25D0 ";
-  if (node.task === "todo") return "\u25CB ";
-  return "";
-}
 function truncateRuns(runs, maxLength) {
   const result = [];
   let remaining = maxLength;
@@ -4066,7 +4026,7 @@ function documentToSvg(root, mode, title, appearance = {}) {
     const branchColor = branchColorMap.get(node.id);
     const border = validColor((_c2 = node.style) == null ? void 0 : _c2.borderColor, isRoot ? background2 : branchColor != null ? branchColor : validColor(appearance.nodeBorderColor, "#94a3b8"));
     const borderWidth = (_f = (_e = (_d2 = node.style) == null ? void 0 : _d2.borderWidth) != null ? _e : appearance.nodeBorderWidth) != null ? _f : isRoot ? 2 : 1;
-    const prefix = `${node.icon ? `${node.icon} ` : ""}${taskGlyph(node)}`;
+    const prefix = node.icon ? `${node.icon} ` : "";
     const textAlign = (_i = (_h = (_g = node.style) == null ? void 0 : _g.textAlign) != null ? _h : appearance.nodeTextAlign) != null ? _i : "center";
     const textAnchor = textAlign === "left" ? "start" : textAlign === "right" ? "end" : "middle";
     const textX = textAlign === "left" ? x + 16 : textAlign === "right" ? x + position.width - 16 : position.x;
@@ -7014,15 +6974,6 @@ function setAllBranchesCollapsed(root, collapsed, includeRoot = false) {
     node.collapsed = (includeRoot || node !== root) && collapsed && node.children.length > 0;
   }
 }
-function nextTaskStatus(current) {
-  const states = {
-    "": "todo",
-    todo: "doing",
-    doing: "done",
-    done: void 0
-  };
-  return states[current != null ? current : ""];
-}
 
 // src/utils/desktop-import.ts
 function getElectronOpenRuntime() {
@@ -8231,18 +8182,6 @@ function renderOutlineMode(container, options) {
     const row = item.createDiv({ cls: `mms-outline-row${options.selectedId === node.id ? " is-selected" : ""}` });
     row.dataset.nodeId = node.id;
     row.createSpan({ cls: "mms-outline-bullet", text: node.children.length || node.submap ? "\u25C6" : "\u2022" });
-    if (node.task) {
-      const task = row.createEl("input", { type: "checkbox", cls: "mms-outline-task" });
-      task.checked = node.task === "done";
-      task.disabled = options.readOnly;
-      task.addEventListener("change", (event) => {
-        event.stopPropagation();
-        options.selectNode(node.id);
-        options.mutate(() => {
-          node.task = task.checked ? "done" : "todo";
-        });
-      });
-    }
     const label = nodePlainText(node) || ((_b2 = (_a3 = node.submap) == null ? void 0 : _a3.title) != null ? _b2 : "\u56FE\u7247\u8282\u70B9");
     if (node.submap) {
       const link = row.createEl("a", {
@@ -9799,7 +9738,7 @@ var NodeEditModal = class extends import_obsidian11.Modal {
    * 在弹窗或视图打开时创建界面、绑定事件并把当前数据填入控件。
    */
   onOpen() {
-    var _a2, _b2, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t;
+    var _a2, _b2, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s;
     this.modalEl.toggleClass("mms-node-editor-right", this.position === "right");
     if (this.position === "right" && this.panelHost) {
       const positionPanel = () => {
@@ -10175,17 +10114,13 @@ var NodeEditModal = class extends import_obsidian11.Modal {
     const iconLabel = detailsGrid.createEl("label", { text: "\u56FE\u6807\u6216 Emoji" });
     const iconInput = iconLabel.createEl("input", { type: "text", attr: { placeholder: "\u4F8B\u5982 \u{1F4A1}" } });
     iconInput.value = (_a2 = this.node.icon) != null ? _a2 : "";
-    const taskLabel = detailsGrid.createEl("label", { text: "\u4EFB\u52A1\u72B6\u6001" });
-    const taskSelect = taskLabel.createEl("select");
-    for (const [value, label] of [["", "\u65E0"], ["todo", "\u5F85\u529E"], ["doing", "\u8FDB\u884C\u4E2D"], ["done", "\u5DF2\u5B8C\u6210"]]) taskSelect.createEl("option", { text: label, attr: { value } });
-    taskSelect.value = (_b2 = this.node.task) != null ? _b2 : "";
     const shapeLabel = detailsGrid.createEl("label", { text: "\u8282\u70B9\u5F62\u72B6" });
     const shapeSelect = shapeLabel.createEl("select");
     for (const [value, label] of [["rounded", "\u5706\u89D2"], ["pill", "\u80F6\u56CA"], ["rectangle", "\u76F4\u89D2"]]) shapeSelect.createEl("option", { text: label, attr: { value } });
-    shapeSelect.value = (_d = (_c = this.node.style) == null ? void 0 : _c.shape) != null ? _d : this.defaultShape;
+    shapeSelect.value = (_c = (_b2 = this.node.style) == null ? void 0 : _b2.shape) != null ? _c : this.defaultShape;
     const tagsLabel = detailsGrid.createEl("label", { text: "\u6807\u7B7E\uFF08\u9017\u53F7\u5206\u9694\uFF09" });
     const tagsInput = tagsLabel.createEl("input", { type: "text" });
-    tagsInput.value = (_f = (_e = this.node.tags) == null ? void 0 : _e.join(", ")) != null ? _f : "";
+    tagsInput.value = (_e = (_d = this.node.tags) == null ? void 0 : _d.join(", ")) != null ? _e : "";
     const numberingControls = createArticleNumberingControls(
       detailsGrid,
       this.node.articleNumberingMode,
@@ -10208,9 +10143,9 @@ var NodeEditModal = class extends import_obsidian11.Modal {
       color.addEventListener("change", scheduleAutoSave);
       return [toggle, color];
     };
-    const [colorToggle, colorInput] = colorControl("\u8282\u70B9\u989C\u8272", (_g = this.node.style) == null ? void 0 : _g.color, "#4f46e5");
-    const [textColorToggle, textColorInput] = colorControl("\u6574\u8282\u70B9\u6587\u5B57\u989C\u8272", (_h = this.node.style) == null ? void 0 : _h.textColor, "#ffffff");
-    const [borderColorToggle, borderColorInput] = colorControl("\u8FB9\u6846\u989C\u8272", (_i = this.node.style) == null ? void 0 : _i.borderColor, "#94a3b8");
+    const [colorToggle, colorInput] = colorControl("\u8282\u70B9\u989C\u8272", (_f = this.node.style) == null ? void 0 : _f.color, "#4f46e5");
+    const [textColorToggle, textColorInput] = colorControl("\u6574\u8282\u70B9\u6587\u5B57\u989C\u8272", (_g = this.node.style) == null ? void 0 : _g.textColor, "#ffffff");
+    const [borderColorToggle, borderColorInput] = colorControl("\u8FB9\u6846\u989C\u8272", (_h = this.node.style) == null ? void 0 : _h.borderColor, "#94a3b8");
     const numberControl = (labelText, current, min, max2, step) => {
       var _a3;
       const label = styleGrid.createEl("label", { text: labelText });
@@ -10218,11 +10153,11 @@ var NodeEditModal = class extends import_obsidian11.Modal {
       input.value = (_a3 = current == null ? void 0 : current.toString()) != null ? _a3 : "";
       return input;
     };
-    const borderWidthInput = numberControl("\u8FB9\u6846\u7C97\u7EC6", (_j = this.node.style) == null ? void 0 : _j.borderWidth, 0, 6, 0.5);
-    const fontSizeInput = numberControl("\u5B57\u53F7", (_k = this.node.style) == null ? void 0 : _k.fontSize, 10, 32, 1);
-    const widthInput = numberControl("\u8282\u70B9\u5BBD\u5EA6\uFF08100\u2013900\uFF09", (_l = this.node.style) == null ? void 0 : _l.width, 100, 900, 10);
+    const borderWidthInput = numberControl("\u8FB9\u6846\u7C97\u7EC6", (_i = this.node.style) == null ? void 0 : _i.borderWidth, 0, 6, 0.5);
+    const fontSizeInput = numberControl("\u5B57\u53F7", (_j = this.node.style) == null ? void 0 : _j.fontSize, 10, 32, 1);
+    const widthInput = numberControl("\u8282\u70B9\u5BBD\u5EA6\uFF08100\u2013900\uFF09", (_k = this.node.style) == null ? void 0 : _k.width, 100, 900, 10);
     widthInput.placeholder = "\u81EA\u52A8\u5BBD\u5EA6";
-    const minHeightInput = numberControl("\u8282\u70B9\u6700\u5C0F\u9AD8\u5EA6\uFF0836\u2013600\uFF09", (_m = this.node.style) == null ? void 0 : _m.minHeight, 36, 600, 10);
+    const minHeightInput = numberControl("\u8282\u70B9\u6700\u5C0F\u9AD8\u5EA6\uFF0836\u2013600\uFF09", (_l = this.node.style) == null ? void 0 : _l.minHeight, 36, 600, 10);
     minHeightInput.placeholder = "\u81EA\u52A8\u9AD8\u5EA6";
     const alignLabel = styleGrid.createEl("label", { text: "\u6587\u5B57\u5BF9\u9F50" });
     const alignSelect = alignLabel.createEl("select");
@@ -10230,7 +10165,7 @@ var NodeEditModal = class extends import_obsidian11.Modal {
     alignSelect.createEl("option", { text: "\u5DE6\u5BF9\u9F50", attr: { value: "left" } });
     alignSelect.createEl("option", { text: "\u5C45\u4E2D", attr: { value: "center" } });
     alignSelect.createEl("option", { text: "\u53F3\u5BF9\u9F50", attr: { value: "right" } });
-    alignSelect.value = (_o = (_n = this.node.style) == null ? void 0 : _n.textAlign) != null ? _o : "inherit";
+    alignSelect.value = (_n = (_m = this.node.style) == null ? void 0 : _m.textAlign) != null ? _n : "inherit";
     const booleanControl = (labelText, current) => {
       const label = styleGrid.createEl("label", { text: labelText });
       const select = label.createEl("select");
@@ -10240,16 +10175,16 @@ var NodeEditModal = class extends import_obsidian11.Modal {
       select.value = current === void 0 ? "inherit" : current ? "true" : "false";
       return select;
     };
-    const boldInput = booleanControl("\u6574\u8282\u70B9\u52A0\u7C97", (_p = this.node.style) == null ? void 0 : _p.bold);
-    const italicInput = booleanControl("\u6574\u8282\u70B9\u659C\u4F53", (_q = this.node.style) == null ? void 0 : _q.italic);
-    const underlineInput = booleanControl("\u6574\u8282\u70B9\u4E0B\u5212\u7EBF", (_r = this.node.style) == null ? void 0 : _r.underline);
+    const boldInput = booleanControl("\u6574\u8282\u70B9\u52A0\u7C97", (_o = this.node.style) == null ? void 0 : _o.bold);
+    const italicInput = booleanControl("\u6574\u8282\u70B9\u659C\u4F53", (_p = this.node.style) == null ? void 0 : _p.italic);
+    const underlineInput = booleanControl("\u6574\u8282\u70B9\u4E0B\u5212\u7EBF", (_q = this.node.style) == null ? void 0 : _q.underline);
     const noteLabel = form.createEl("label", { text: "\u5907\u6CE8\uFF08\u53EF\u9009\uFF09" });
     const noteInput = noteLabel.createEl("textarea");
-    noteInput.value = (_s = this.node.note) != null ? _s : "";
+    noteInput.value = (_r = this.node.note) != null ? _r : "";
     noteInput.rows = 4;
     const linkLabel = form.createEl("label", { text: "\u94FE\u63A5\uFF08\u7F51\u5740\u3001\u7B14\u8BB0\u540D\u6216 [[\u53CC\u94FE]]\uFF09" });
     const linkInput = linkLabel.createEl("input", { type: "text" });
-    linkInput.value = (_t = this.node.link) != null ? _t : "";
+    linkInput.value = (_s = this.node.link) != null ? _s : "";
     const parseBool = (value) => value === "true" ? true : value === "false" ? false : void 0;
     const parseNumber = (value, min, max2) => value.trim() && Number.isFinite(Number(value)) ? Math.min(max2, Math.max(min, Number(value))) : void 0;
     const collectValues = (showNotice) => {
@@ -10258,7 +10193,6 @@ var NodeEditModal = class extends import_obsidian11.Modal {
         if (showNotice) new import_obsidian11.Notice("\u8282\u70B9\u81F3\u5C11\u9700\u8981\u4E00\u4E2A\u5185\u5BB9\u5757");
         return null;
       }
-      const task = taskSelect.value;
       const shape = shapeSelect.value;
       const numbering = numberingControls.read();
       return {
@@ -10267,7 +10201,6 @@ var NodeEditModal = class extends import_obsidian11.Modal {
         link: linkInput.value.trim(),
         icon: iconInput.value.trim().slice(0, 12),
         tags: Array.from(new Set(tagsInput.value.split(/[,，]/).map((tag) => tag.trim().replace(/^#/, "")).filter(Boolean))).slice(0, 12),
-        task: task === "todo" || task === "doing" || task === "done" ? task : void 0,
         articleNumberingMode: numbering.articleNumberingMode,
         articleNumberingLevel: numbering.articleNumberingLevel,
         color: colorToggle.checked ? colorInput.value : void 0,
@@ -10330,7 +10263,7 @@ var NodeEditModal = class extends import_obsidian11.Modal {
         this.close();
       }
     }, true);
-    [iconInput, taskSelect, shapeSelect, tagsInput, borderWidthInput, fontSizeInput, widthInput, minHeightInput, alignSelect, boldInput, italicInput, underlineInput, noteInput, linkInput].forEach((input) => {
+    [iconInput, shapeSelect, tagsInput, borderWidthInput, fontSizeInput, widthInput, minHeightInput, alignSelect, boldInput, italicInput, underlineInput, noteInput, linkInput].forEach((input) => {
       input.addEventListener("input", scheduleAutoSave);
       input.addEventListener("change", scheduleAutoSave);
     });
@@ -10689,7 +10622,7 @@ var AppearanceModal = class extends import_obsidian11.Modal {
     const actions = form.createDiv({ cls: "mmc-modal-actions" });
     const reset = actions.createEl("button", { text: "\u6062\u590D\u5168\u5C40\u9ED8\u8BA4", type: "button" });
     const cancel = actions.createEl("button", { text: "\u53D6\u6D88", type: "button" });
-    const save = actions.createEl("button", { text: "\u5E94\u7528", type: "submit", cls: "mod-cta" });
+    actions.createEl("button", { text: "\u5E94\u7528", type: "submit", cls: "mod-cta" });
     reset.addEventListener("click", () => {
       this.reset();
       this.close();
@@ -10730,7 +10663,13 @@ var AppearanceModal = class extends import_obsidian11.Modal {
       }, numberingControls.read(), tocDepthSelect.value ? resolveArticleTocMaxDepth(Number(tocDepthSelect.value), this.globalArticleTocMaxDepth) : void 0, miniMapSelect.value === "show" ? true : miniMapSelect.value === "hide" ? false : void 0, readingStyleControls.read());
       this.close();
     });
-    window.setTimeout(() => save.focus(), 20);
+    const restoreScrollTop = () => {
+      this.contentEl.scrollTop = 0;
+    };
+    window.requestAnimationFrame(() => {
+      restoreScrollTop();
+      window.requestAnimationFrame(restoreScrollTop);
+    });
   }
 };
 var MindMapEditor = class {
@@ -11847,7 +11786,7 @@ var MindMapEditor = class {
     for (const mode of this.options.visibleModes) {
       const button = modeGroup.createEl("button", {
         cls: "mms-mode-button",
-        attr: { type: "button", title: `${DISPLAY_MODE_LABELS[mode]}\u6A21\u5F0F` }
+        attr: { type: "button", "aria-label": `${DISPLAY_MODE_LABELS[mode]}\u6A21\u5F0F` }
       });
       (0, import_obsidian11.setIcon)(button, DISPLAY_MODE_ICONS[mode]);
       button.createSpan({ text: DISPLAY_MODE_LABELS[mode] });
@@ -11862,10 +11801,8 @@ var MindMapEditor = class {
     this.addToolbarButton("duplicate", "copy-plus", "\u514B\u9686\u5206\u652F\uFF08Ctrl/Cmd+D\uFF09", () => this.duplicateSelected(), true);
     this.addToolbarButton("delete", "trash-2", "\u5220\u9664\u8282\u70B9\uFF08Delete\uFF09", () => this.deleteSelected(), true);
     this.addToolbarSeparator();
-    this.addToolbarButton("task", "circle-check-big", "\u5207\u6362\u4EFB\u52A1\u72B6\u6001\uFF08Ctrl/Cmd+Enter\uFF09", () => this.cycleTask(), true);
     this.addToolbarButton("collapse", "fold-vertical", "\u5C55\u5F00/\u6536\u8D77\u8282\u70B9", () => this.toggleCollapse(), true);
     this.addToolbarButton("collapse-all", "chevrons-up-down", "\u5C55\u5F00/\u6298\u53E0\u5168\u90E8\u5B50\u9879", () => this.toggleAllNodesCollapsed());
-    this.addToolbarButton("link", "link", "\u6253\u5F00\u8282\u70B9\u94FE\u63A5", () => this.openSelectedLink());
     this.addToolbarButton("search", "search", "\u641C\u7D22\u5F53\u524D\u5BFC\u56FE\u53CA\u5168\u90E8\u5B50\u5BFC\u56FE\uFF08Ctrl/Cmd+Alt+F\uFF09", () => this.openSearch());
     this.addToolbarButton("global-search", "file-search", "\u5168\u5C40\u641C\u7D22\u6240\u6709\u5BFC\u56FE", () => this.callbacks.onGlobalSearch());
     this.aiButton = this.addToolbarButton("ai", "sparkles", "\u8BE2\u95EE AI\uFF08\u5F53\u524D\u9875\u9762\uFF0CCtrl/Cmd+Shift+A\uFF09", () => this.askAi());
@@ -11895,7 +11832,7 @@ var MindMapEditor = class {
     const spacer = this.toolbarEl.createSpan({ cls: "mmc-toolbar-spacer" });
     spacer.setAttr("aria-hidden", "true");
     const zoomControl = this.toolbarEl.createDiv({ cls: "mmc-zoom-control" });
-    const zoomOut = zoomControl.createEl("button", { cls: "clickable-icon mmc-zoom-step", attr: { type: "button", title: "\u7F29\u5C0F", "aria-label": "\u7F29\u5C0F" } });
+    const zoomOut = zoomControl.createEl("button", { cls: "clickable-icon mmc-zoom-step", attr: { type: "button", "aria-label": "\u7F29\u5C0F" } });
     (0, import_obsidian11.setIcon)(zoomOut, "minus");
     zoomOut.addEventListener("click", () => {
       this.setZoom(this.zoom / 1.15);
@@ -11903,7 +11840,7 @@ var MindMapEditor = class {
     });
     this.zoomStatusEl = zoomControl.createEl("input", {
       cls: "mmc-zoom-status mmc-zoom-input",
-      attr: { type: "text", inputmode: "decimal", title: "\u8F93\u5165\u7F29\u653E\u767E\u5206\u6BD4", "aria-label": "\u8F93\u5165\u7F29\u653E\u767E\u5206\u6BD4" }
+      attr: { type: "text", inputmode: "decimal", "aria-label": "\u8F93\u5165\u7F29\u653E\u767E\u5206\u6BD4" }
     });
     this.zoomStatusEl.value = "100%";
     this.zoomStatusEl.addEventListener("change", () => this.applyZoomInput());
@@ -11916,13 +11853,24 @@ var MindMapEditor = class {
         this.zoomStatusEl.blur();
       }
     });
-    const zoomIn = zoomControl.createEl("button", { cls: "clickable-icon mmc-zoom-step", attr: { type: "button", title: "\u653E\u5927", "aria-label": "\u653E\u5927" } });
+    const zoomIn = zoomControl.createEl("button", { cls: "clickable-icon mmc-zoom-step", attr: { type: "button", "aria-label": "\u653E\u5927" } });
     (0, import_obsidian11.setIcon)(zoomIn, "plus");
     zoomIn.addEventListener("click", () => {
       this.setZoom(this.zoom * 1.15);
       this.focus();
     });
     this.statusEl = this.toolbarEl.createSpan({ cls: "mmc-save-status", text: "\u5DF2\u4FDD\u5B58" });
+    const removeNativeToolbarTooltip = (event) => {
+      var _a2;
+      const target = event.target instanceof HTMLElement ? event.target : null;
+      const control = target == null ? void 0 : target.closest("button[title], input[title], [role='button'][title]");
+      if (!control || !this.toolbarEl.contains(control)) return;
+      const label = (_a2 = control.getAttribute("title")) == null ? void 0 : _a2.trim();
+      if (label && !control.getAttribute("aria-label")) control.setAttribute("aria-label", label);
+      control.removeAttribute("title");
+    };
+    this.toolbarEl.addEventListener("pointerover", removeNativeToolbarTooltip, true);
+    this.cleanupCallbacks.push(() => this.toolbarEl.removeEventListener("pointerover", removeNativeToolbarTooltip, true));
     const keydown = (event) => this.handleKeydown(event);
     this.rootEl.addEventListener("keydown", keydown, true);
     const syncResizeModifier = (trackEvent) => {
@@ -12254,7 +12202,7 @@ var MindMapEditor = class {
     const node = this.aiScopeNodeId ? findNode(this.document.root, this.aiScopeNodeId) : null;
     const label = node ? `\u8BE2\u95EE AI\uFF08\u8282\u70B9\u5206\u652F\uFF1A${nodePlainText(node) || "\u672A\u547D\u540D\u8282\u70B9"}\uFF09` : "\u8BE2\u95EE AI\uFF08\u5F53\u524D\u9875\u9762\uFF0CCtrl/Cmd+Shift+A\uFF09";
     this.aiButton.setAttr("aria-label", label);
-    this.aiButton.setAttr("title", label);
+    this.aiButton.removeAttribute("title");
     this.aiButton.toggleClass("has-node-scope", Boolean(node));
   }
   /**
@@ -12268,7 +12216,7 @@ var MindMapEditor = class {
    * @returns 当前操作生成、查找或规范化后的结果。
    */
   addToolbarButton(id, icon, label, action, editOnly = false) {
-    const button = this.toolbarEl.createEl("button", { cls: "clickable-icon mmc-toolbar-button", attr: { "aria-label": label, title: label, type: "button" } });
+    const button = this.toolbarEl.createEl("button", { cls: "clickable-icon mmc-toolbar-button", attr: { "aria-label": label, type: "button" } });
     button.dataset.toolbarId = id;
     (0, import_obsidian11.setIcon)(button, icon);
     button.toggleClass("is-hidden", !this.options.visibleToolbarItems.includes(id));
@@ -13531,7 +13479,6 @@ var MindMapEditor = class {
     if (this.selectedId === node.id || this.selectedIds.has(node.id)) nodeEl.addClass("is-selected");
     if (this.selectedIds.size > 1 && this.selectedIds.has(node.id)) nodeEl.addClass("is-multi-selected");
     if (this.searchQuery && nodeSearchText(node).includes(this.searchQuery)) nodeEl.addClass("is-search-match");
-    if (node.task) nodeEl.addClass(`task-${node.task}`);
     const isRoot = position.depth === 0;
     const bold = (_j = (_i = (_h = node.style) == null ? void 0 : _h.bold) != null ? _i : appearance.bold) != null ? _j : false;
     const italic = (_m = (_l = (_k = node.style) == null ? void 0 : _k.italic) != null ? _l : appearance.italic) != null ? _m : false;
@@ -13557,13 +13504,9 @@ var MindMapEditor = class {
     const content = nodeEl.createDiv({ cls: "mmc-node-content" });
     const blocks = nodeContentBlocks(node);
     const hasTextBlock = blocks.some((block) => block.type === "text" && block.text.trim());
-    if ((node.task || node.icon) && !hasTextBlock) {
+    if (node.icon && !hasTextBlock) {
       const meta = content.createDiv({ cls: "mmc-node-main mmc-node-meta-only" });
-      if (node.task) {
-        const task = meta.createSpan({ cls: `mmc-task-icon task-${node.task}`, text: node.task === "done" ? "\u2713" : node.task === "doing" ? "\u25D0" : "\u25CB" });
-        task.setAttr("aria-label", node.task === "done" ? "\u5DF2\u5B8C\u6210" : node.task === "doing" ? "\u8FDB\u884C\u4E2D" : "\u5F85\u529E");
-      }
-      if (node.icon) meta.createSpan({ cls: "mmc-node-icon", text: node.icon });
+      meta.createSpan({ cls: "mmc-node-icon", text: node.icon });
     }
     let prefixRendered = false;
     for (const block of blocks) {
@@ -13689,10 +13632,6 @@ var MindMapEditor = class {
       if (!block.text.trim()) continue;
       const main = content.createDiv({ cls: "mmc-node-main mmc-node-text-block" });
       main.dataset.blockId = block.id;
-      if (!prefixRendered && node.task) {
-        const task = main.createSpan({ cls: `mmc-task-icon task-${node.task}`, text: node.task === "done" ? "\u2713" : node.task === "doing" ? "\u25D0" : "\u25CB" });
-        task.setAttr("aria-label", node.task === "done" ? "\u5DF2\u5B8C\u6210" : node.task === "doing" ? "\u8FDB\u884C\u4E2D" : "\u5F85\u529E");
-      }
       if (!prefixRendered && node.icon) main.createSpan({ cls: "mmc-node-icon", text: node.icon });
       const isSubmapTitle = Boolean(node.submap) && !prefixRendered;
       prefixRendered = true;
@@ -13733,15 +13672,6 @@ var MindMapEditor = class {
     if ((_G = node.tags) == null ? void 0 : _G.length) {
       const tags = content.createDiv({ cls: "mmc-node-tags" });
       node.tags.slice(0, 4).forEach((tag) => tags.createSpan({ cls: "mmc-node-tag", text: `#${tag}` }));
-    }
-    if (this.options.showTaskProgress && node.children.length) {
-      const progress = getTaskProgress(node);
-      if (progress.total) {
-        const percent = Math.round(progress.done / progress.total * 100);
-        const progressEl = nodeEl.createDiv({ cls: "mmc-task-progress", attr: { title: `${progress.done}/${progress.total} \u4E2A\u4EFB\u52A1\u5DF2\u5B8C\u6210` } });
-        progressEl.createDiv({ cls: "mmc-task-progress-bar", attr: { style: `width:${percent}%` } });
-        progressEl.createSpan({ text: `${percent}%` });
-      }
     }
     if (node.children.length) {
       const fold = nodeEl.createEl("button", { cls: "mmc-fold-button", attr: { "aria-label": node.collapsed ? "\u5C55\u5F00" : "\u6536\u8D77" } });
@@ -14602,7 +14532,6 @@ var MindMapEditor = class {
       selected.link = values.link || void 0;
       selected.icon = values.icon || void 0;
       selected.tags = values.tags.length ? values.tags : void 0;
-      selected.task = values.task;
       selected.articleNumberingMode = values.articleNumberingMode;
       selected.articleNumberingLevel = values.articleNumberingMode === "manual" ? values.articleNumberingLevel : void 0;
       const style = {
@@ -14869,17 +14798,6 @@ var MindMapEditor = class {
     this.allNodesCollapseToggleTimer = window.setTimeout(() => {
       this.allNodesCollapseToggleTimer = null;
     }, 260);
-  }
-  /**
-   * 切换task，并保持模型、界面和持久化状态的一致性。
-   */
-  cycleTask() {
-    if (!this.ensureEditable()) return;
-    const selected = this.selectedNode();
-    if (!selected) return;
-    this.mutate(() => {
-      selected.task = nextTaskStatus(selected.task);
-    });
   }
   /**
    * 切换layout，并保持模型、界面和持久化状态的一致性。
@@ -15747,19 +15665,6 @@ var MindMapEditor = class {
     }
   }
   /**
-   * 打开selected link，并保持模型、界面和持久化状态的一致性。
-   */
-  openSelectedLink() {
-    const selected = this.selectedNode();
-    if (!selected) return;
-    const link = this.getNodeLink(selected);
-    if (!link) {
-      new import_obsidian11.Notice("\u5F53\u524D\u8282\u70B9\u6CA1\u6709\u94FE\u63A5\uFF1B\u53EF\u6309 F2 \u6DFB\u52A0\u94FE\u63A5\u6216\u5728\u6587\u5B57\u4E2D\u5199\u5165 [[\u7B14\u8BB0\u540D]]");
-      return;
-    }
-    void this.callbacks.onOpenLink(link);
-  }
-  /**
    * 判断parent navigation backlink，并保持模型、界面和持久化状态的一致性。
    *
    * @param node 当前处理的节点。
@@ -16217,7 +16122,6 @@ var MindMapEditor = class {
     menu.addSeparator();
     if (this.readOnly) {
       if (selected == null ? void 0 : selected.submap) menu.addItem((item) => item.setTitle("\u8FDB\u5165\u5B50\u5BFC\u56FE").setIcon("network").onClick(() => void this.createOrOpenSubmap()));
-      menu.addItem((item) => item.setTitle("\u6253\u5F00\u94FE\u63A5").setIcon("link").onClick(() => this.openSelectedLink()));
       menu.addItem((item) => item.setTitle("\u590D\u5236\u5206\u652F").setIcon("copy").onClick(() => void this.copySelectedBranch()));
       menu.showAtMouseEvent(event);
       return;
@@ -16277,7 +16181,6 @@ var MindMapEditor = class {
     menu.addItem((item) => item.setTitle("\u590D\u5236\u5206\u652F").setIcon("copy").onClick(() => void this.copySelectedBranch()));
     menu.addItem((item) => item.setTitle("\u7C98\u8D34\u4E3A\u5B50\u8282\u70B9").setIcon("clipboard-paste").onClick(() => void this.pasteAsChild()));
     menu.addSeparator();
-    menu.addItem((item) => item.setTitle(`\u4EFB\u52A1\u72B6\u6001\uFF1A${(selected == null ? void 0 : selected.task) === "done" ? "\u5DF2\u5B8C\u6210" : (selected == null ? void 0 : selected.task) === "doing" ? "\u8FDB\u884C\u4E2D" : (selected == null ? void 0 : selected.task) === "todo" ? "\u5F85\u529E" : "\u65E0"}`).setIcon("circle-check-big").onClick(() => this.cycleTask()));
     const numberingDisabled = (selected == null ? void 0 : selected.articleNumberingMode) === "none";
     menu.addItem((item) => item.setTitle(numberingDisabled ? "\u6587\u7AE0\u7F16\u53F7\uFF1A\u6062\u590D\u81EA\u52A8" : "\u6587\u7AE0\u7F16\u53F7\uFF1A\u5173\u95ED").setIcon("list-ordered").onClick(() => {
       if (!selected) return;
@@ -16287,7 +16190,6 @@ var MindMapEditor = class {
       });
     }));
     menu.addItem((item) => item.setTitle("\u5C55\u5F00/\u6536\u8D77").setIcon("fold-vertical").onClick(() => this.toggleCollapse()));
-    menu.addItem((item) => item.setTitle("\u6253\u5F00\u94FE\u63A5").setIcon("link").onClick(() => this.openSelectedLink()));
     if ((selected == null ? void 0 : selected.id) !== this.document.root.id) {
       menu.addSeparator();
       menu.addItem((item) => item.setTitle("\u5220\u9664\u8282\u70B9").setIcon("trash-2").onClick(() => this.deleteSelected()));
@@ -16998,11 +16900,6 @@ var MindMapEditor = class {
       void this.copySelectedBranch().then((copied) => {
         if (copied) this.deleteSelected();
       });
-      return;
-    }
-    if (mod && event.key === "Enter") {
-      event.preventDefault();
-      this.cycleTask();
       return;
     }
     if (mod && key === "z" && !event.shiftKey) {
@@ -18113,7 +18010,6 @@ var MindMapStudioView = class extends import_obsidian13.TextFileView {
     return {
       defaultNodeShape: this.plugin.settings.defaultNodeShape,
       defaultAppearance: settingsToAppearance(this.plugin.settings),
-      showTaskProgress: this.plugin.settings.showTaskProgress,
       autoFitOnOpen: this.plugin.settings.autoFitOnOpen,
       twoFingerGestureAction: this.plugin.settings.twoFingerGestureAction,
       historyLimit: this.plugin.settings.historyLimit,
@@ -21497,6 +21393,7 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
       colorfulBranches: typeof raw.colorfulBranches === "boolean" ? raw.colorfulBranches : DEFAULT_SETTINGS.colorfulBranches,
       branchColors: Array.isArray(raw.branchColors) ? raw.branchColors.filter((value) => typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value)).slice(0, 12) : [...DEFAULT_SETTINGS.branchColors]
     };
+    delete this.settings.showTaskProgress;
     this.settings.defaultViewMode = resolveStartupDisplayMode(this.settings.defaultViewMode, this.settings.visibleModes);
     this.activeDisplayMode = this.settings.defaultViewMode;
   }
@@ -23104,7 +23001,6 @@ ${uploaded.url}`, 9e3);
       if (node.richText) document2.root.richText = JSON.parse(JSON.stringify(node.richText));
       document2.root.note = node.note;
       document2.root.tags = (_a2 = node.tags) == null ? void 0 : _a2.slice();
-      document2.root.task = node.task;
       document2.root.icon = node.icon;
       if (node.code) document2.root.code = JSON.parse(JSON.stringify(node.code));
       if (node.table) document2.root.table = JSON.parse(JSON.stringify(node.table));

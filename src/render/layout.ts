@@ -435,19 +435,6 @@ function svgRadius(shape: NodeShape | undefined): number {
 }
 
 /**
- * 执行“task glyph”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
- *
- * @param node 当前处理的节点。
- * @returns 计算、解析或序列化后的字符串结果。
- */
-function taskGlyph(node: MindMapNode): string {
-  if (node.task === "done") return "✓ ";
-  if (node.task === "doing") return "◐ ";
-  if (node.task === "todo") return "○ ";
-  return "";
-}
-
-/**
  * 执行“truncate runs”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
  *
  * @param runs 按字符样式拆分的富文本运行段。
@@ -584,7 +571,7 @@ export function documentToSvg(root: MindMapNode, mode: LayoutMode, title: string
     const branchColor = branchColorMap.get(node.id);
     const border = validColor(node.style?.borderColor, isRoot ? background : branchColor ?? validColor(appearance.nodeBorderColor, "#94a3b8"));
     const borderWidth = node.style?.borderWidth ?? appearance.nodeBorderWidth ?? (isRoot ? 2 : 1);
-    const prefix = `${node.icon ? `${node.icon} ` : ""}${taskGlyph(node)}`;
+    const prefix = node.icon ? `${node.icon} ` : "";
     const textAlign = node.style?.textAlign ?? appearance.nodeTextAlign ?? "center";
     const textAnchor = textAlign === "left" ? "start" : textAlign === "right" ? "end" : "middle";
     const textX = textAlign === "left" ? x + 16 : textAlign === "right" ? x + position.width - 16 : position.x;

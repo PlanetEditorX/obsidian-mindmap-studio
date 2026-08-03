@@ -374,8 +374,6 @@ export const setIcon = () => {};
     }
   }, "节点操作").root;
   assert.deepEqual(nodeActions.topLevelSelectedNodeIds(actionRoot, ["action-a", "action-a1"]), ["action-a"]);
-  assert.equal(nodeActions.nextTaskStatus(undefined), "todo");
-  assert.equal(nodeActions.nextTaskStatus("done"), undefined);
   nodeActions.setAllBranchesCollapsed(actionRoot, true);
   assert.equal(actionRoot.collapsed, false);
   assert.equal(actionRoot.children[0]?.collapsed, true);
@@ -1107,7 +1105,7 @@ const command = "example";
   assert.equal(richReopened.navigation?.parentTitle, "Parent");
   assert.equal(richReopened.navigation?.parentNodeText, "进入子导图");
 
-  const childrenTable = model.childrenToTable({ id: "p", text: "父", children: [{ id: "c", text: "子", note: "说明", task: "done", tags: ["重点"], children: [] }] });
+  const childrenTable = model.childrenToTable({ id: "p", text: "父", children: [{ id: "c", text: "子", note: "说明", tags: ["重点"], children: [] }] });
   assert.equal(childrenTable?.source, "children");
   assert.equal(childrenTable?.rows[0]?.[0], "子");
 

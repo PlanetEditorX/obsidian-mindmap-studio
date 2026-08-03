@@ -68,16 +68,6 @@ export function renderOutlineMode(container: HTMLElement, options: OutlineRender
     const row = item.createDiv({ cls: `mms-outline-row${options.selectedId === node.id ? " is-selected" : ""}` });
     row.dataset.nodeId = node.id;
     row.createSpan({ cls: "mms-outline-bullet", text: node.children.length || node.submap ? "◆" : "•" });
-    if (node.task) {
-      const task = row.createEl("input", { type: "checkbox", cls: "mms-outline-task" });
-      task.checked = node.task === "done";
-      task.disabled = options.readOnly;
-      task.addEventListener("change", (event) => {
-        event.stopPropagation();
-        options.selectNode(node.id);
-        options.mutate(() => { node.task = task.checked ? "done" : "todo"; });
-      });
-    }
     const label = nodePlainText(node) || (node.submap?.title ?? "图片节点");
     if (node.submap) {
       const link = row.createEl("a", {

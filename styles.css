@@ -835,25 +835,12 @@
   user-select: none;
 }
 
-.mmc-node-icon,
-.mmc-task-icon {
+.mmc-node-icon {
   flex: 0 0 auto;
   font-size: 15px;
   line-height: 1;
 }
 
-.mmc-task-icon.task-todo { opacity: 0.72; }
-.mmc-task-icon.task-doing { color: var(--color-orange); }
-.mmc-task-icon.task-done { color: var(--color-green); }
-
-.mmc-node.task-done .mmc-node-text {
-  text-decoration: line-through;
-  opacity: 0.72;
-}
-
-.mmc-node.task-done.is-underlined .mmc-node-text {
-  text-decoration: line-through underline;
-}
 
 .mmc-node-text {
   min-width: 0;
@@ -991,52 +978,6 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   opacity: 0.78;
-}
-
-.mmc-task-progress {
-  position: absolute;
-  left: 12px;
-  right: 12px;
-  bottom: 3px;
-  height: 4px;
-  overflow: hidden;
-  border-radius: 999px;
-  background: color-mix(in srgb, currentColor 12%, transparent);
-}
-
-.mmc-task-progress-bar {
-  height: 100%;
-  border-radius: inherit;
-  background: var(--color-green);
-}
-
-.mmc-task-progress span {
-  position: absolute;
-  right: 0;
-  top: -14px;
-  font-size: 8px;
-  opacity: 0;
-  transition: opacity 100ms ease;
-}
-
-.mmc-node:hover .mmc-task-progress span {
-  opacity: 0.75;
-}
-
-.mmc-fold-button,
-.mmc-node-link {
-  position: absolute;
-  display: grid;
-  place-items: center;
-  width: 22px;
-  height: 22px;
-  padding: 0;
-  border: 1px solid var(--mmc-node-border);
-  border-radius: 50%;
-  background: var(--mmc-node-bg);
-  color: var(--text-muted);
-  font-size: 11px;
-  cursor: pointer;
 }
 
 .mmc-fold-button {

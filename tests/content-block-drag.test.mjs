@@ -131,7 +131,7 @@ test("only semantic empty leaves are removable after their final content is dele
   assert.equal(model.isRemovableEmptyNode(emptyLeaf), true);
   assert.equal(model.isRemovableEmptyNode({ ...emptyLeaf, children: [{ id: "child", text: "子节点", children: [] }] }), false);
   assert.equal(model.isRemovableEmptyNode({ ...emptyLeaf, note: "保留备注" }), false);
-  assert.equal(model.isRemovableEmptyNode({ ...emptyLeaf, task: "todo" }), false);
+  assert.equal(model.isRemovableEmptyNode({ ...emptyLeaf, task: "todo" }), true);
 });
 
 test("explicit article node move inserts C immediately after A", () => {
