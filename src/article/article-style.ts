@@ -13,9 +13,9 @@ export const ARTICLE_STYLE_PRESETS: Readonly<Record<ArticleStylePresetId, Articl
 };
 
 /**
- * 解析文章样式预设，并叠加当前文档的自定义值。
+ * 解析阅读样式预设，并叠加当前文档的自定义值。
  *
- * @param style 文档保存的文章样式。
+ * @param style 文档保存的阅读样式。
  * @returns 可直接用于渲染的完整样式。
  */
 export function resolveArticleStyle(style: ArticleStyle | undefined): ArticleStyle {

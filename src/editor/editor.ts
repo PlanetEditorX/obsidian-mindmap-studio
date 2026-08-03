@@ -37,7 +37,10 @@ import {
   applyRichTextStyleRange,
   applyImageUploadPatches,
   type BackgroundPattern,
+  type ArticleLeafNumberingStyle,
   type ArticleNumberingMode,
+  type ArticleStyle,
+  type ArticleStylePresetId,
   type DisplayMode,
   type EdgeStyle,
   type EdgeWidthMode,
@@ -69,7 +72,7 @@ import { createQuestionPracticeState, renderQuestionPracticeMode } from "./quest
 import { TOOLBAR_ITEMS } from "../settings";
 import { appearanceFromThemePreset, MINDMAP_THEME_PRESETS } from "../themes";
 import { articleNumberLabel, articleTocDepth, buildArticleNodeInfo, DISPLAY_MODE_ICONS, DISPLAY_MODE_LABELS, readingAnchorPart, resolveArticleTocMaxDepth } from "../article/modes";
-import { resolveArticleStyle } from "../article/article-style";
+import { ARTICLE_STYLE_PRESETS, resolveArticleStyle } from "../article/article-style";
 import { resolveArticleEntryReadOnly } from "../article/display-mode";
 import {
   chooseArticleLandingRefreshLocation,
@@ -84,7 +87,6 @@ import {
 import type { MindMapEditorCallbacks, MindMapEditorOptions } from "./editor-types";
 import { readRichTextEditor, renderInlineMarkdown, renderRichTextRuns } from "./rich-text-dom";
 import {
-  ArticleStyleModal,
   chooseImageHosts,
   DocumentExportModal,
   FormulaEditModal,
@@ -165,6 +167,149 @@ interface ArticleNumberingValues {
 /** 文章编号控件返回的读取句柄。 */
 interface ArticleNumberingControls {
   read: () => ArticleNumberingValues;
+}
+
+/** 插件级阅读样式默认值；当前页面可在“主题与外观”中覆盖。 */
+interface ReadingStyleDefaults {
+  enabled: boolean;
+  style: "solid" | "hollow" | "square" | "dash";
+  color: string;
+  alignment: "flush" | "auto";
+  numberingEnabled: boolean;
+  numberingStyle: ArticleLeafNumberingStyle;
+  numberingThreshold: number;
+}
+
+/** “阅读样式”控件在提交时返回的读取句柄。 */
+interface ReadingStyleControls {
+  read: () => ArticleStyle;
+}
+
+/**
+ * 创建文章与通读共用的阅读样式控件。
+ *
+ * @param container 承载控件的网格。
+ * @param style 当前页面保存的阅读样式。
+ * @param globalDefaults 插件级末端正文默认值。
+ * @returns 可在统一“主题与外观”提交时读取样式的句柄。
+ */
+function createReadingStyleControls(
+  container: HTMLElement,
+  style: ArticleStyle | undefined,
+  globalDefaults: ReadingStyleDefaults
+): ReadingStyleControls {
+  const source = style ?? { preset: "classic" as const };
+  const resolved = resolveArticleStyle(source);
+  const presetLabel = container.createEl("label", { text: "阅读样式预设" });
+  const preset = presetLabel.createEl("select");
+  for (const [id, name] of [["classic", "经典文档"], ["book", "书籍阅读"], ["modern", "现代报告"], ["minimal", "极简留白"]] as const) {
+    preset.createEl("option", { text: name, attr: { value: id } });
+  }
+  const addText = (labelText: string): HTMLInputElement => {
+    const label = container.createEl("label", { text: labelText });
+    return label.createEl("input", { type: "text" });
+  };
+  const addColor = (labelText: string): HTMLInputElement => {
+    const label = container.createEl("label", { text: labelText });
+    return label.createEl("input", { type: "color" });
+  };
+  const fontFamily = addText("阅读字体");
+  const textColor = addColor("正文颜色");
+  const headingColor = addColor("标题颜色");
+  const accentColor = addColor("强调色");
+  const backgroundColor = addColor("纸张背景");
+  const tocLabel = container.createEl("label", { text: "目录样式" });
+  const tocStyle = tocLabel.createEl("select");
+  for (const [id, name] of [["card", "卡片"], ["plain", "简洁"], ["lines", "引导线"]] as const) {
+    tocStyle.createEl("option", { text: name, attr: { value: id } });
+  }
+  const sizeLabel = container.createEl("label", { text: "正文字号" });
+  const fontSize = sizeLabel.createEl("input", { type: "number", attr: { min: "12", max: "24", step: "1" } });
+  const lineLabel = container.createEl("label", { text: "正文行高" });
+  const lineHeight = lineLabel.createEl("input", { type: "number", attr: { min: "1.2", max: "2.4", step: "0.05" } });
+
+  const markerEnabledLabel = container.createEl("label", { text: "末端正文标识" });
+  const markerEnabled = markerEnabledLabel.createEl("select");
+  markerEnabled.createEl("option", { text: `跟随插件设置（当前${globalDefaults.enabled ? "显示" : "隐藏"}）`, attr: { value: "" } });
+  markerEnabled.createEl("option", { text: "显示", attr: { value: "true" } });
+  markerEnabled.createEl("option", { text: "隐藏", attr: { value: "false" } });
+  const markerStyleLabel = container.createEl("label", { text: "末端正文标识样式" });
+  const markerStyle = markerStyleLabel.createEl("select");
+  markerStyle.createEl("option", { text: "跟随插件设置", attr: { value: "" } });
+  for (const [id, name] of [["solid", "实心圆"], ["hollow", "空心圆"], ["square", "实心方块"], ["dash", "短横线"]] as const) {
+    markerStyle.createEl("option", { text: name, attr: { value: id } });
+  }
+  const markerColor = addColor("末端正文标识颜色");
+  const markerColorGlobal = container.createEl("label", { text: "标识颜色来源" });
+  const markerColorFollowGlobal = markerColorGlobal.createEl("input", { type: "checkbox" });
+  markerColorGlobal.createSpan({ text: " 跟随插件设置" });
+  const alignmentLabel = container.createEl("label", { text: "末端正文对齐方式" });
+  const alignment = alignmentLabel.createEl("select");
+  alignment.createEl("option", { text: `跟随插件设置（当前${globalDefaults.alignment === "auto" ? "自动" : "顶格"}）`, attr: { value: "" } });
+  alignment.createEl("option", { text: "顶格", attr: { value: "flush" } });
+  alignment.createEl("option", { text: "自动（与上级标题对齐）", attr: { value: "auto" } });
+  const numberingEnabledLabel = container.createEl("label", { text: "末端正文标识转序号" });
+  const numberingEnabled = numberingEnabledLabel.createEl("select");
+  numberingEnabled.createEl("option", { text: `跟随插件设置（当前${globalDefaults.numberingEnabled ? "开启" : "关闭"}）`, attr: { value: "" } });
+  numberingEnabled.createEl("option", { text: "开启", attr: { value: "true" } });
+  numberingEnabled.createEl("option", { text: "关闭", attr: { value: "false" } });
+  const numberingStyleLabel = container.createEl("label", { text: "末端正文序号样式" });
+  const numberingStyle = numberingStyleLabel.createEl("select");
+  numberingStyle.createEl("option", { text: `跟随插件设置（当前${globalDefaults.numberingStyle === "circled" ? "带圈数字" : "下一级文章序号"}）`, attr: { value: "" } });
+  numberingStyle.createEl("option", { text: "上级标题的下一级文章序号", attr: { value: "next-level" } });
+  numberingStyle.createEl("option", { text: "带圈数字（统一圆圈，支持 51+）", attr: { value: "circled" } });
+  const numberingThresholdLabel = container.createEl("label", { text: "末端正文转序号阈值" });
+  const numberingThreshold = numberingThresholdLabel.createEl("input", { type: "number", attr: { min: "1", max: "20", step: "1" } });
+
+  const fill = (nextStyle: ArticleStyle): void => {
+    const nextResolved = resolveArticleStyle(nextStyle);
+    preset.value = nextResolved.preset;
+    fontFamily.value = nextResolved.fontFamily ?? "";
+    textColor.value = nextResolved.textColor ?? "#20242c";
+    headingColor.value = nextResolved.headingColor ?? "#111827";
+    accentColor.value = nextResolved.accentColor ?? "#7c3aed";
+    backgroundColor.value = nextResolved.backgroundColor ?? "#ffffff";
+    tocStyle.value = nextResolved.tocStyle ?? "card";
+    fontSize.value = String(nextResolved.fontSize ?? 16);
+    lineHeight.value = String(nextResolved.lineHeight ?? 1.85);
+    markerEnabled.value = nextStyle.leafMarkerEnabled === undefined ? "" : String(nextStyle.leafMarkerEnabled);
+    markerStyle.value = nextStyle.leafMarkerStyle ?? "";
+    markerColor.value = nextStyle.leafMarkerColor ?? (globalDefaults.color || "#ef4444");
+    markerColorFollowGlobal.checked = nextStyle.leafMarkerColor === undefined;
+    markerColor.disabled = markerColorFollowGlobal.checked;
+    alignment.value = nextStyle.leafTextAlignment ?? "";
+    numberingEnabled.value = nextStyle.leafNumberingEnabled === undefined ? "" : String(nextStyle.leafNumberingEnabled);
+    numberingStyle.value = nextStyle.leafNumberingStyle ?? "";
+    numberingThreshold.value = String(nextStyle.leafNumberingThreshold ?? globalDefaults.numberingThreshold);
+  };
+  fill(source);
+  preset.addEventListener("change", () => fill(ARTICLE_STYLE_PRESETS[preset.value as ArticleStylePresetId]));
+  markerColorFollowGlobal.addEventListener("change", () => { markerColor.disabled = markerColorFollowGlobal.checked; });
+
+  return {
+    read: () => ({
+      preset: preset.value as ArticleStylePresetId,
+      fontFamily: fontFamily.value.trim() || undefined,
+      textColor: textColor.value,
+      headingColor: headingColor.value,
+      accentColor: accentColor.value,
+      backgroundColor: backgroundColor.value,
+      tocStyle: tocStyle.value as ArticleStyle["tocStyle"],
+      fontSize: Math.max(12, Math.min(24, Number(fontSize.value) || resolved.fontSize || 16)),
+      lineHeight: Math.max(1.2, Math.min(2.4, Number(lineHeight.value) || resolved.lineHeight || 1.85)),
+      leafMarkerEnabled: markerEnabled.value === "" ? undefined : markerEnabled.value === "true",
+      leafMarkerStyle: markerStyle.value === "hollow" || markerStyle.value === "square" || markerStyle.value === "dash"
+        ? markerStyle.value
+        : markerStyle.value === "solid" ? "solid" : undefined,
+      leafMarkerColor: markerColorFollowGlobal.checked ? undefined : markerColor.value,
+      leafTextAlignment: alignment.value === "flush" || alignment.value === "auto" ? alignment.value : undefined,
+      leafNumberingEnabled: numberingEnabled.value === "" ? undefined : numberingEnabled.value === "true",
+      leafNumberingStyle: numberingStyle.value === "circled" || numberingStyle.value === "next-level" ? numberingStyle.value : undefined,
+      leafNumberingThreshold: numberingEnabled.value === "" && style?.leafNumberingThreshold === undefined
+        ? undefined
+        : Math.max(1, Math.min(20, Math.round(Number(numberingThreshold.value) || globalDefaults.numberingThreshold)))
+    })
+  };
 }
 
 /** 文章编辑工具栏发起的点击选点移动；块移动与整节点移动必须保持独立状态。 */
@@ -817,7 +962,9 @@ class AppearanceModal extends Modal {
   private readonly articleMiniMap: boolean | undefined;
   private readonly globalArticleMiniMap: boolean;
   private readonly pageCodeAppearance: MindMapAppearance;
-  private readonly submit: (appearance: MindMapAppearance, numbering: ArticleNumberingValues, articleTocMaxDepth: number | undefined, articleMiniMap: boolean | undefined) => void;
+  private readonly readingStyle: ArticleStyle | undefined;
+  private readonly globalReadingStyle: ReadingStyleDefaults;
+  private readonly submit: (appearance: MindMapAppearance, numbering: ArticleNumberingValues, articleTocMaxDepth: number | undefined, articleMiniMap: boolean | undefined, readingStyle: ArticleStyle) => void;
   private readonly reset: () => void;
 
   /**
@@ -840,7 +987,9 @@ class AppearanceModal extends Modal {
     articleMiniMap: boolean | undefined,
     globalArticleMiniMap: boolean,
     pageCodeAppearance: MindMapAppearance,
-    submit: (appearance: MindMapAppearance, numbering: ArticleNumberingValues, articleTocMaxDepth: number | undefined, articleMiniMap: boolean | undefined) => void,
+    readingStyle: ArticleStyle | undefined,
+    globalReadingStyle: ReadingStyleDefaults,
+    submit: (appearance: MindMapAppearance, numbering: ArticleNumberingValues, articleTocMaxDepth: number | undefined, articleMiniMap: boolean | undefined, readingStyle: ArticleStyle) => void,
     reset: () => void
   ) {
     super(app);
@@ -851,6 +1000,8 @@ class AppearanceModal extends Modal {
     this.articleMiniMap = articleMiniMap;
     this.globalArticleMiniMap = globalArticleMiniMap;
     this.pageCodeAppearance = pageCodeAppearance;
+    this.readingStyle = readingStyle;
+    this.globalReadingStyle = globalReadingStyle;
     this.submit = submit;
     this.reset = reset;
   }
@@ -865,7 +1016,7 @@ class AppearanceModal extends Modal {
     const form = this.contentEl.createEl("form");
     form.createEl("p", {
       cls: "setting-item-description",
-      text: "先选择主题模板，再按画布、节点、连线、阅读和代码分组调整。设置只保存到当前 .mindmap 文件，并优先于插件全局默认值。"
+      text: "先选择主题模板，再按画布、节点、连线、阅读样式、编号与代码分组调整。文章和通读共用阅读样式；设置只保存到当前 .mindmap 文件，并优先于插件全局默认值。"
     });
 
     let selectedPreset: MindMapThemePresetId = this.appearance.themePreset ?? "classic-indigo";
@@ -1024,6 +1175,13 @@ class AppearanceModal extends Modal {
     miniMapSelect.createEl("option", { text: "隐藏", attr: { value: "hide" } });
     miniMapSelect.value = this.articleMiniMap === undefined ? "" : this.articleMiniMap ? "show" : "hide";
 
+    const readingStyleSection = createAppearanceSection(
+      appearanceRightColumn,
+      "阅读样式",
+      "文章模式与通读模式共用同一套纸张、字体、目录和末端正文样式。只读状态只锁正文编辑，不锁这里的外观设置。"
+    );
+    const readingStyleControls = createReadingStyleControls(readingStyleSection.grid, this.readingStyle, this.globalReadingStyle);
+
     const codeSection = appearanceLeftColumn.createDiv({ cls: "mmc-appearance-section mmc-appearance-code-settings" });
     codeSection.createDiv({ cls: "mmc-theme-picker-title", text: "页面代码设置" });
     codeSection.createDiv({ cls: "setting-item-description mmc-appearance-section-description", text: "优先级 2：覆盖插件全局代码设置；节点代码设置仍可单独覆盖。" });
@@ -1180,7 +1338,7 @@ class AppearanceModal extends Modal {
         ...(pageCodeTheme.value ? { codeTheme: pageCodeTheme.value as "obsidian" | "github" | "monokai" | "dracula" } : {})
       }, numberingControls.read(), tocDepthSelect.value
         ? resolveArticleTocMaxDepth(Number(tocDepthSelect.value), this.globalArticleTocMaxDepth)
-        : undefined, miniMapSelect.value === "show" ? true : miniMapSelect.value === "hide" ? false : undefined);
+        : undefined, miniMapSelect.value === "show" ? true : miniMapSelect.value === "hide" ? false : undefined, readingStyleControls.read());
       this.close();
     });
     window.setTimeout(() => save.focus(), 20);
@@ -1214,7 +1372,6 @@ export class MindMapEditor {
   private zoomStatusEl!: HTMLInputElement;
   private lockButton!: HTMLButtonElement;
   private articleLandingButton!: HTMLButtonElement;
-  private articleStyleButton!: HTMLButtonElement;
   private aiButton!: HTMLButtonElement;
   private readonly modeButtons = new Map<DisplayMode, HTMLButtonElement>();
   private readonly editControls: HTMLElement[] = [];
@@ -2536,9 +2693,8 @@ export class MindMapEditor {
     this.addToolbarSeparator();
     this.addToolbarButton("fit", "maximize", "适应画布", () => this.fitToView());
     this.addToolbarButton("layout", "git-fork", "切换单侧/双侧布局", () => this.toggleLayout(), true);
-    this.addToolbarButton("appearance", "palette", "主题与外观", () => this.editAppearance(), true);
+    this.addToolbarButton("appearance", "palette", "主题与外观", () => this.editAppearance());
     this.articleLandingButton = this.addToolbarButton("article-landing", "list-tree", "切换目录 / 原始文章", () => this.toggleArticleLanding());
-    this.articleStyleButton = this.addToolbarButton("article-style", "paintbrush", "文章样式", () => this.editArticleStyle(), true);
     this.addToolbarSeparator();
     this.addToolbarButton("markdown", "file-text", "查看 Markdown 大纲", () => this.showOutline());
     this.addToolbarButton("json", "arrow-left-right", "导入 / 导出", () => this.showJsonTransfer(), true);
@@ -2870,7 +3026,6 @@ export class MindMapEditor {
     const isArticle = this.currentMode === "article";
     const hasLandingChoice = isArticle && this.options.showArticleToc;
     this.articleLandingButton.toggleClass("is-hidden", !hasLandingChoice || !this.options.visibleToolbarItems.includes("article-landing"));
-    this.articleStyleButton.toggleClass("is-hidden", !isArticle || !this.options.visibleToolbarItems.includes("article-style"));
     this.toolbarEl.querySelector<HTMLElement>("[data-toolbar-id='submap']")?.toggleClass(
       "is-hidden",
       this.currentMode !== "mindmap" || !this.options.visibleToolbarItems.includes("submap")
@@ -5754,29 +5909,11 @@ export class MindMapEditor {
     this.render();
   }
 
-  /**
-   * Opens article preset and typography controls for the current document.
-   */
-  private editArticleStyle(): void {
-    if (!this.ensureEditable()) return;
-    new ArticleStyleModal(this.app, this.document.articleStyle, {
-      enabled: this.options.articleLeafBulletsEnabled,
-      style: this.options.articleLeafBulletStyle,
-      color: this.options.articleLeafBulletColor,
-      alignment: this.options.articleLeafTextAlignment,
-      numberingEnabled: this.options.articleLeafNumberingEnabled,
-      numberingStyle: this.options.articleLeafNumberingStyle,
-      numberingThreshold: this.options.articleLeafNumberingThreshold
-    }, (style) => {
-      this.mutate(() => { this.document.articleStyle = style; });
-    }).open();
-  }
 
   /**
    * 编辑appearance，并保持模型、界面和持久化状态的一致性。
    */
   private editAppearance(): void {
-    if (!this.ensureEditable()) return;
     new AppearanceModal(
       this.app,
       this.getAppearance(),
@@ -5789,8 +5926,19 @@ export class MindMapEditor {
       this.document.view?.articleMiniMap,
       this.options.showArticleMiniMap,
       this.document.appearance ?? {},
-      (appearance, numbering, articleTocMaxDepth, articleMiniMap) => this.mutate(() => {
+      this.document.articleStyle,
+      {
+        enabled: this.options.articleLeafBulletsEnabled,
+        style: this.options.articleLeafBulletStyle,
+        color: this.options.articleLeafBulletColor,
+        alignment: this.options.articleLeafTextAlignment,
+        numberingEnabled: this.options.articleLeafNumberingEnabled,
+        numberingStyle: this.options.articleLeafNumberingStyle,
+        numberingThreshold: this.options.articleLeafNumberingThreshold
+      },
+      (appearance, numbering, articleTocMaxDepth, articleMiniMap, readingStyle) => this.mutatePresentation(() => {
         this.document.appearance = appearance;
+        this.document.articleStyle = readingStyle;
         this.document.root.articleNumberingMode = numbering.articleNumberingMode;
         this.document.root.articleNumberingLevel = numbering.articleNumberingMode === "manual" ? numbering.articleNumberingLevel : undefined;
         const view = { ...(this.document.view ?? {}) };
@@ -5800,8 +5948,9 @@ export class MindMapEditor {
         else view.articleMiniMap = articleMiniMap;
         this.document.view = Object.keys(view).length ? view : undefined;
       }),
-      () => this.mutate(() => {
+      () => this.mutatePresentation(() => {
         this.document.appearance = undefined;
+        this.document.articleStyle = undefined;
         this.document.root.articleNumberingMode = undefined;
         this.document.root.articleNumberingLevel = undefined;
         if (this.document.view) {
@@ -7640,6 +7789,23 @@ export class MindMapEditor {
       : new Map<string, string>();
     this.renderMindMapNode(position, appearance, branchColorMap);
     this.scheduleMeasuredMindMapLayout();
+  }
+
+  /**
+   * 保存当前页面的主题、阅读样式和其他展示配置。
+   * 只读状态只锁定正文与结构编辑，不阻止这些展示设置写回当前文件。
+   *
+   * @param action 需要应用到当前文档的展示设置修改。
+   */
+  private mutatePresentation(action: () => void): void {
+    const location = this.currentMode === "mindmap" ? null : this.captureCurrentLocation(this.currentMode);
+    if (location) this.rememberLocation(location, true);
+    this.history.capture(this.document);
+    action();
+    this.callbacks.onChange(this.getDocument());
+    this.markSaving();
+    this.render();
+    if (location) this.restoreReadingLocation(this.currentMode, location);
   }
 
   /**

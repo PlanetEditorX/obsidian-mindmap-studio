@@ -142,11 +142,11 @@ test("global appearance mirrors the page toolbar groups instead of only sharing 
   assert.match(settingsSource, /"主题与外观（全局默认）": "主题与外观"/);
   assert.match(settingsSource, /private organizeGlobalAppearanceSettings\(\): void/);
   assert.match(settingsSource, /text: "主题模板"/);
-  for (const group of ["画布与字体", "节点与文字", "连线与分支", "阅读外观", "代码外观"]) {
+  for (const group of ["画布与字体", "节点与文字", "连线与分支", "阅读样式", "代码外观"]) {
     assert.ok(settingsSource.includes(`createGroup("${group}"`), `missing global appearance group: ${group}`);
   }
   assert.match(settingsSource, /createGroup\("节点与文字"[\s\S]*"分支外观"[\s\S]*"默认节点文字对齐"[\s\S]*"默认节点边框粗细"/);
-  assert.match(settingsSource, /createGroup\("阅读外观"[\s\S]*"文章目录最大层级"[\s\S]*"文章\/通读缩略导航图"/);
+  assert.match(settingsSource, /createGroup\("阅读样式"[\s\S]*"文章目录最大层级"[\s\S]*"文章\/通读缩略导航图"[\s\S]*"末端正文标识"[\s\S]*"末端正文转序号阈值"/);
   assert.match(settingsSource, /themeGroup\.append\(defaultThemeSetting\)/);
   assert.match(settingsSource, /createGroup\("代码外观"[\s\S]*"代码默认折叠"[\s\S]*"不超过多少行时保持展开"[\s\S]*"超过多少行时显示行号"[\s\S]*"代码默认样式"/);
   assert.doesNotMatch(settingsSource, /containerEl\.createEl\("h3", \{ text: "代码行为" \}\)/);

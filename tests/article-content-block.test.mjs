@@ -98,16 +98,15 @@ test("article document title opens AI with the current-page scope", () => {
 });
 
 test("terminal body marker and alignment stay independently configurable", async () => {
-  const [settingsSource, viewSource, modalSource] = await Promise.all([
+  const [settingsSource, viewSource] = await Promise.all([
     readFile("src/settings.ts", "utf8"),
-    readFile("src/view.ts", "utf8"),
-    readFile("src/editor/editor-modals.ts", "utf8")
+    readFile("src/view.ts", "utf8")
   ]);
   assert.match(settingsSource, /setName\("末端正文标识"\)/);
   assert.match(settingsSource, /setName\("末端正文对齐方式"\)[\s\S]*addOption\("flush", "顶格"\)[\s\S]*addOption\("auto", "自动（与上级标题对齐）"\)/);
   assert.match(viewSource, /document\?\.articleStyle\?\.leafMarkerEnabled \?\? this\.plugin\.settings\.articleLeafBulletsEnabled/);
   assert.match(viewSource, /document\?\.articleStyle\?\.leafTextAlignment \?\? this\.plugin\.settings\.articleLeafTextAlignment/);
-  assert.match(modalSource, /text: "末端正文标识"[\s\S]*text: "末端正文对齐方式"/);
+  assert.match(editorSource, /text: "末端正文标识"[\s\S]*text: "末端正文对齐方式"/);
   assert.match(rendererSource, /is-auto-aligned/);
   assert.match(styles, /\.mms-article-leaf-text\.is-auto-aligned\s*\{[\s\S]*margin-inline-start:\s*1\.25em[\s\S]*text-indent:\s*1\.25em/);
   assert.match(styles, /\.mms-article-leaf-text\.is-auto-aligned\.is-bulleted\s*\{[\s\S]*text-indent:\s*0/);
