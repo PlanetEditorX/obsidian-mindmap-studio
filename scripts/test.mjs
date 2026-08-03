@@ -1760,6 +1760,7 @@ const command = "example";
   assert.match(cssSource, /\.mmc-editor\.is-reading \.mms-inline-node-actions[\s\S]*display:\s*none !important/, "reading mode must not reserve layout space for editing actions");
   assert.match(cssSource, /\.mms-article-paragraph\.is-inline-editing[\s\S]*margin-top:[\s\S]*padding:[\s\S]*box-shadow:/, "only the active article line should reserve space for its edit frame");
   assert.match(cssSource, /\.mms-inline-node-actions\s*\{[\s\S]*display:\s*none[\s\S]*\.mms-article-node:focus-within > \.mms-inline-node-actions[\s\S]*display:\s*inline-flex/, "inactive editing actions must not expand every article row");
+  assert.match(cssSource, /\.mmc-fold-button,\s*\n\.mmc-node-link\s*\{[\s\S]*width:\s*22px[\s\S]*height:\s*22px[\s\S]*border-radius:\s*50%/, "node fold controls must keep the original circular button style");
   assert.match(cssSource, /\.mmc-fold-button\s*\{[\s\S]*right:\s*-11px[\s\S]*bottom:\s*-11px[\s\S]*transform:\s*none/, "child counters must remain at the lower-right corner");
   assert.match(cssSource, /\.mmc-node\s*\{[\s\S]*padding:\s*9px 13px 11px/, "node content must keep equal horizontal padding after the fold control moved to the corner");
   assert.match(cssSource, /\.mmc-node\.is-root\s*\{[\s\S]*padding-right:\s*13px/, "root-node text must remain horizontally centered");

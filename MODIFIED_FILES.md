@@ -1,23 +1,11 @@
 # Modified Files
 
-## 1.42.5 动态工具栏与统一导入导出
+## 1.42.6 恢复导图节点折叠按钮圆形样式
 
-- `src/editor/editor.ts`、`src/editor/history-manager.ts`：按模式、锁定、选择与历史计算按钮可用性；不可用工具收缩隐藏；重排默认分组；截图入口相邻；画布缩放只在导图模式出现。
-- `src/settings.ts`、`src/main.ts`：规范化工具栏顺序，将旧导出和文章样式 ID 迁移到统一入口，并固定截图组和导入导出位置。
-- `src/editor/editor-modals.ts`：合并 JSON/文件导入、JSON/SVG 与完整文档导出；只读状态仅隐藏导入操作。
-- `styles.css`：增加工具栏与缩放控件的宽度、透明度和缩放过渡，以及减少动态效果回退。
-- `tests/settings-layout.test.mjs`、`tests/import-mode.test.mjs`、`tests/reading-editor-contract.test.mjs`、`scripts/test.mjs`：新增动态可用性、顺序、迁移和统一导出契约。
-- 安装包 SHA-256：`a0a01ab281891615586c6358961b1ef5d2a41c55bd1d216c71cc94871415d25d`。
-
-## 1.42.4 外观弹窗顶部、单一工具提示与任务状态移除
-
-- `src/editor/editor.ts`：取消外观弹窗底部按钮自动聚焦并两帧回到顶部；工具栏仅使用 `aria-label`，增加动态原生提示清理；删除任务工具栏、节点编辑、右键、快捷键、渲染和进度逻辑；保持重复链接命令删除。
-- `src/editor/outline-renderer.ts`、`src/editor/editor-types.ts`、`src/view.ts`：删除大纲任务复选框和任务进度运行参数。
-- `src/settings.ts`、`src/main.ts`：删除任务状态工具栏项和任务进度设置，加载时清理旧 `showTaskProgress`。
-- `src/core/model.ts`、`src/render/layout.ts`、`src/editor/node-actions.ts`：删除任务进度、任务循环、SVG/Markdown/子节点表格任务输出；历史字段仅做静默兼容。
-- `styles.css`：删除任务图标、完成状态和任务进度样式。
-- `tests/settings-layout.test.mjs`、`tests/content-block-drag.test.mjs`、`scripts/test.mjs`：新增弹窗顶部、单一提示和任务状态移除契约，并更新旧任务回归。
-- 安装包 SHA-256：`b12177f40a40567675c07d80c2153cb1e2675e9c44ecd4ccfec66f662bf87da1`。
+- `styles.css`：恢复 `.mmc-fold-button` 与 `.mmc-node-link` 共用的绝对定位、22px 尺寸、圆形边框、背景和文字样式；折叠按钮继续位于节点右下角。
+- `tests/settings-layout.test.mjs`、`scripts/test.mjs`：增加圆形折叠按钮 CSS 契约，防止界面清理或工具栏动画误伤节点内按钮。
+- `CHANGELOG.md`、`TEST_RESULTS.md`、`MODIFIED_FILES.md`：记录样式回归、验证结果和待手工检查项。
+- `package.json`、`package-lock.json`、`manifest.json`、`versions.json`、`update.json`：统一版本为 1.42.6，安装包 SHA-256 为 `a9ad5382ac67af61f7e3ec4dbec2eb833757f98c89a78b76dc48aebce93a13a9`。
 
 ## 1.41.10 通读编号使用当前内存文档
 

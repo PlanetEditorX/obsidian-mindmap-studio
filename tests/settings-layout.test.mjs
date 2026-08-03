@@ -212,6 +212,11 @@ test("task status is removed from settings, toolbar, node editing, rendering, an
   assert.match(mainSource, /delete \(this\.settings as unknown as Record<string, unknown>\)\.showTaskProgress/);
 });
 
+test("mind-map branch controls keep their original circular node style", () => {
+  assert.match(stylesSource, /\.mmc-fold-button,\s*\n\.mmc-node-link\s*\{[\s\S]*position: absolute[\s\S]*width: 22px[\s\S]*height: 22px[\s\S]*border-radius: 50%/);
+  assert.match(stylesSource, /\.mmc-fold-button\s*\{[\s\S]*right: -11px[\s\S]*bottom: -11px/);
+});
+
 test("toolbar hides unavailable actions with a reduced-motion-aware width transition", () => {
   assert.match(editorSource, /private toolbarItemAvailable\(id: ToolbarItemId\): boolean/);
   assert.match(editorSource, /case "undo": return canEdit && this\.history\.canUndo\(\)/);
