@@ -23,6 +23,16 @@ export class DocumentHistory {
     this.redoStack = [];
   }
 
+  /** 当前是否存在可撤销的文档快照。 */
+  canUndo(): boolean {
+    return this.undoStack.length > 0;
+  }
+
+  /** 当前是否存在可重做的文档快照。 */
+  canRedo(): boolean {
+    return this.redoStack.length > 0;
+  }
+
   /**
    * 在修改前记录当前文档，并使已有重做分支失效。
    *

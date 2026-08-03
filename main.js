@@ -2001,6 +2001,8 @@ async function saveDesktopPdfFile(baseName, html) {
 // src/settings.ts
 var TOOLBAR_ITEMS = [
   ["lock", "\u9605\u8BFB/\u7F16\u8F91\u6A21\u5F0F"],
+  ["undo", "\u64A4\u9500"],
+  ["redo", "\u91CD\u505A"],
   ["add-child", "\u6DFB\u52A0\u5B50\u8282\u70B9"],
   ["add-sibling", "\u6DFB\u52A0\u540C\u7EA7\u8282\u70B9"],
   ["edit", "\u5B8C\u6574\u7F16\u8F91\u8282\u70B9"],
@@ -2008,27 +2010,54 @@ var TOOLBAR_ITEMS = [
   ["delete", "\u5220\u9664\u8282\u70B9"],
   ["collapse", "\u5C55\u5F00/\u6536\u8D77"],
   ["collapse-all", "\u5C55\u5F00/\u6298\u53E0\u5168\u90E8"],
-  ["search", "\u641C\u7D22\u5BFC\u56FE"],
-  ["global-search", "\u5168\u5C40\u641C\u7D22"],
-  ["ai", "\u8BE2\u95EE AI"],
+  ["fit", "\u9002\u5E94\u753B\u5E03"],
+  ["layout", "\u5207\u6362\u5E03\u5C40"],
   ["table", "\u8868\u683C"],
   ["code", "\u4EE3\u7801"],
   ["image", "\u7C98\u8D34\u56FE\u7247"],
   ["screenshot", "\u63D2\u5165\u622A\u56FE"],
   ["screenshot-recognize", "\u63D2\u5165\u622A\u56FE\u5E76\u8BC6\u522B"],
+  ["question", "\u9898\u76EE\u8282\u70B9"],
   ["submap", "\u5B50\u5BFC\u56FE"],
-  ["undo", "\u64A4\u9500"],
-  ["redo", "\u91CD\u505A"],
-  ["fit", "\u9002\u5E94\u753B\u5E03"],
-  ["layout", "\u5207\u6362\u5E03\u5C40"],
+  ["search", "\u641C\u7D22\u5BFC\u56FE"],
+  ["global-search", "\u5168\u5C40\u641C\u7D22"],
+  ["ai", "\u8BE2\u95EE AI"],
   ["appearance", "\u4E3B\u9898\u4E0E\u5916\u89C2"],
   ["article-landing", "\u76EE\u5F55/\u539F\u59CB\u6587\u7AE0"],
   ["markdown", "Markdown \u5927\u7EB2"],
-  ["json", "\u5BFC\u5165\u6587\u4EF6 / JSON"],
-  ["export-document", "\u5BFC\u51FA\u6587\u6863"],
-  ["export-svg", "\u5BFC\u51FA SVG"],
-  ["question", "\u9898\u76EE\u8282\u70B9"]
+  ["import-export", "\u5BFC\u5165\u4E0E\u5BFC\u51FA"]
 ];
+var LEGACY_TOOLBAR_ITEM_ALIASES = {
+  "article-style": "appearance",
+  json: "import-export",
+  "export-document": "import-export",
+  "export-svg": "import-export"
+};
+function normalizeToolbarItemId(value) {
+  var _a2;
+  if (typeof value !== "string") return null;
+  const migrated = (_a2 = LEGACY_TOOLBAR_ITEM_ALIASES[value]) != null ? _a2 : value;
+  return TOOLBAR_ITEMS.some(([id]) => id === migrated) ? migrated : null;
+}
+function normalizeToolbarItemOrder(values) {
+  const defaults = TOOLBAR_ITEMS.map(([id]) => id);
+  const normalized2 = (values != null ? values : []).flatMap((value) => {
+    const id = normalizeToolbarItemId(value);
+    return id ? [id] : [];
+  });
+  const complete = [.../* @__PURE__ */ new Set([...normalized2, ...defaults])];
+  const screenshotIndex = Math.max(0, Math.min(
+    ...["screenshot", "screenshot-recognize"].map((id) => {
+      const index = complete.indexOf(id);
+      return index < 0 ? complete.length : index;
+    })
+  ));
+  const withoutPinned = complete.filter((id) => id !== "screenshot" && id !== "screenshot-recognize" && id !== "import-export");
+  const insertionIndex = Math.min(screenshotIndex, withoutPinned.length);
+  withoutPinned.splice(insertionIndex, 0, "screenshot", "screenshot-recognize");
+  withoutPinned.push("import-export");
+  return withoutPinned;
+}
 var SETTINGS_SECTION_TITLES = [
   "\u4E3B\u9898\u4E0E\u5916\u89C2",
   "\u89C6\u56FE\u4E0E\u9605\u8BFB",
@@ -2571,7 +2600,7 @@ var MindMapStudioSettingTab = class extends import_obsidian.PluginSettingTab {
     containerEl.createEl("h3", { text: "\u5DE5\u5177\u680F" });
     containerEl.createEl("p", {
       cls: "setting-item-description",
-      text: "\u9009\u62E9\u9700\u8981\u663E\u793A\u5728\u8111\u56FE\u9876\u90E8\u5DE5\u5177\u680F\u4E2D\u7684\u64CD\u4F5C\u3002\u663E\u793A\u6A21\u5F0F\u5207\u6362\u3001\u7F29\u653E\u6BD4\u4F8B\u548C\u4FDD\u5B58\u72B6\u6001\u59CB\u7EC8\u4FDD\u7559\u3002"
+      text: "\u9009\u62E9\u9700\u8981\u663E\u793A\u5728\u9876\u90E8\u5DE5\u5177\u680F\u4E2D\u7684\u64CD\u4F5C\u3002\u5F53\u524D\u4E0D\u53EF\u6267\u884C\u7684\u9879\u76EE\u4F1A\u81EA\u52A8\u6536\u8D77\uFF1B\u622A\u56FE\u64CD\u4F5C\u59CB\u7EC8\u76F8\u90BB\uFF0C\u5BFC\u5165\u4E0E\u5BFC\u51FA\u56FA\u5B9A\u5728\u64CD\u4F5C\u533A\u672B\u5C3E\u3002"
     });
     new import_obsidian.Setting(containerEl).setName("\u9898\u76EE\u8282\u70B9").setDesc("\u5F00\u542F\u540E\uFF0C\u5728\u5DE5\u5177\u680F\u548C\u8282\u70B9\u53F3\u952E\u83DC\u5355\u4E2D\u663E\u793A\u9009\u62E9\u9898/\u5927\u9898\u7684\u7ED3\u6784\u5316\u7F16\u8F91\u5165\u53E3\u3002").addToggle((toggle) => toggle.setValue(this.plugin.settings.questionNodesEnabled).onChange(async (value) => {
       this.plugin.settings.questionNodesEnabled = value;
@@ -2579,10 +2608,7 @@ var MindMapStudioSettingTab = class extends import_obsidian.PluginSettingTab {
     }));
     const defaultToolbarOrder = TOOLBAR_ITEMS.map(([id]) => id);
     const knownToolbarItems = new Map(TOOLBAR_ITEMS);
-    const toolbarOrder = [
-      ...this.plugin.settings.toolbarItemOrder.filter((id) => knownToolbarItems.has(id)),
-      ...defaultToolbarOrder.filter((id) => !this.plugin.settings.toolbarItemOrder.includes(id))
-    ];
+    const toolbarOrder = normalizeToolbarItemOrder(this.plugin.settings.toolbarItemOrder);
     this.plugin.settings.toolbarItemOrder = toolbarOrder;
     new import_obsidian.Setting(containerEl).setName("\u5DE5\u5177\u680F\u987A\u5E8F").setDesc("\u4F7F\u7528\u4E0A\u4E0B\u6309\u94AE\u8C03\u6574\u987A\u5E8F\uFF1B\u9690\u85CF\u7684\u9879\u76EE\u4E5F\u4F1A\u4FDD\u7559\u5F53\u524D\u4F4D\u7F6E\u3002").addButton((button) => button.setButtonText("\u6062\u590D\u9ED8\u8BA4\u987A\u5E8F").onClick(async () => {
       this.plugin.settings.toolbarItemOrder = [...defaultToolbarOrder];
@@ -2599,13 +2625,23 @@ var MindMapStudioSettingTab = class extends import_obsidian.PluginSettingTab {
       const controls = row.createDiv({ cls: "mms-toolbar-order-controls" });
       const upButton = controls.createEl("button", { text: "\u2191", attr: { type: "button", "aria-label": "\u4E0A\u79FB" } });
       const downButton = controls.createEl("button", { text: "\u2193", attr: { type: "button", "aria-label": "\u4E0B\u79FB" } });
-      upButton.disabled = index === 0;
-      downButton.disabled = index === toolbarOrder.length - 1;
+      const screenshotPair = id === "screenshot" || id === "screenshot-recognize";
+      const screenshotStart = Math.min(toolbarOrder.indexOf("screenshot"), toolbarOrder.indexOf("screenshot-recognize"));
+      upButton.disabled = id === "import-export" || (screenshotPair ? screenshotStart <= 0 : index === 0);
+      downButton.disabled = id === "import-export" || (screenshotPair ? screenshotStart >= toolbarOrder.length - 2 : index === toolbarOrder.length - 1);
       const move = async (offset) => {
-        const target = index + offset;
-        if (target < 0 || target >= toolbarOrder.length) return;
-        [toolbarOrder[index], toolbarOrder[target]] = [toolbarOrder[target], toolbarOrder[index]];
-        this.plugin.settings.toolbarItemOrder = [...toolbarOrder];
+        if (id === "import-export") return;
+        if (screenshotPair) {
+          const withoutPair = toolbarOrder.filter((itemId) => itemId !== "screenshot" && itemId !== "screenshot-recognize");
+          const target = Math.max(0, Math.min(withoutPair.length, screenshotStart + offset));
+          withoutPair.splice(target, 0, "screenshot", "screenshot-recognize");
+          this.plugin.settings.toolbarItemOrder = normalizeToolbarItemOrder(withoutPair);
+        } else {
+          const target = index + offset;
+          if (target < 0 || target >= toolbarOrder.length) return;
+          [toolbarOrder[index], toolbarOrder[target]] = [toolbarOrder[target], toolbarOrder[index]];
+          this.plugin.settings.toolbarItemOrder = normalizeToolbarItemOrder(toolbarOrder);
+        }
         await this.saveAndRefresh();
         this.display();
       };
@@ -7424,7 +7460,7 @@ var FormulaEditModal = class extends import_obsidian5.Modal {
     this.contentEl.empty();
   }
 };
-var JsonTransferModal = class extends import_obsidian5.Modal {
+var ImportExportModal = class extends import_obsidian5.Modal {
   /**
    * 创建 JSON 传输弹窗。
    *
@@ -7433,11 +7469,14 @@ var JsonTransferModal = class extends import_obsidian5.Modal {
    * @param onImport 导入完成回调及目标方式。
    * @param onExport 导出回调。
    */
-  constructor(app, document2, onImport, onExport, getLastImportFolder, onRememberImportFolder, onImportMarkdownImages) {
+  constructor(app, document2, onImport, onExportJson, onExportDocument, onExportSvg, canImport, getLastImportFolder, onRememberImportFolder, onImportMarkdownImages) {
     super(app);
     this.document = document2;
     this.onImport = onImport;
-    this.onExport = onExport;
+    this.onExportJson = onExportJson;
+    this.onExportDocument = onExportDocument;
+    this.onExportSvg = onExportSvg;
+    this.canImport = canImport;
     this.getLastImportFolder = getLastImportFolder;
     this.onRememberImportFolder = onRememberImportFolder;
     this.onImportMarkdownImages = onImportMarkdownImages;
@@ -7446,12 +7485,14 @@ var JsonTransferModal = class extends import_obsidian5.Modal {
    * 创建 JSON 文本区和文件导入操作。
    */
   onOpen() {
-    this.titleEl.setText("\u5BFC\u5165 / \u5BFC\u51FA");
-    const description = this.contentEl.createEl("p", {
-      text: "\u53EF\u5BFC\u5165 MindMap Studio JSON\u3001\u601D\u7EF4\u5BFC\u56FE\u6216 Markdown \u6587\u4EF6\u3002\u9ED8\u8BA4\u4F5C\u4E3A\u5F53\u524D\u9009\u4E2D\u8282\u70B9\u7684\u5B50\u5206\u652F\u5BFC\u5165\u3002"
+    this.titleEl.setText("\u5BFC\u5165\u4E0E\u5BFC\u51FA");
+    const importSection = this.contentEl.createDiv({ cls: "mms-import-export-section is-import" });
+    importSection.createEl("h3", { text: "\u5BFC\u5165" });
+    const description = importSection.createEl("p", {
+      text: "\u53EF\u5BFC\u5165 MindMap Studio JSON\u3001XMind \u6216 Markdown \u6587\u4EF6\u3002\u9ED8\u8BA4\u4F5C\u4E3A\u5F53\u524D\u9009\u4E2D\u8282\u70B9\u7684\u5B50\u5206\u652F\u5BFC\u5165\u3002"
     });
     description.addClass("setting-item-description");
-    const importProgress = this.contentEl.createDiv({ cls: "mmc-import-progress" });
+    const importProgress = importSection.createDiv({ cls: "mmc-import-progress" });
     const progressBar = importProgress.createEl("progress", { attr: { max: "100", value: "0" } });
     const progressStatus = importProgress.createSpan({ text: "\u7B49\u5F85\u9009\u62E9\u5BFC\u5165\u6587\u4EF6" });
     const updateImportProgress = async (value, status) => {
@@ -7459,9 +7500,9 @@ var JsonTransferModal = class extends import_obsidian5.Modal {
       progressStatus.setText(`${value}% \xB7 ${status}`);
       await new Promise((resolve) => window.requestAnimationFrame(() => resolve()));
     };
-    const textarea = this.contentEl.createEl("textarea", { cls: "mmc-json-textarea" });
+    const textarea = importSection.createEl("textarea", { cls: "mmc-json-textarea" });
     textarea.value = JSON.stringify(this.document, null, 2);
-    const importMode = this.contentEl.createEl("select", { cls: "mmc-import-mode", attr: { "aria-label": "\u5BFC\u5165\u65B9\u5F0F" } });
+    const importMode = importSection.createEl("select", { cls: "mmc-import-mode", attr: { "aria-label": "\u5BFC\u5165\u65B9\u5F0F" } });
     importMode.createEl("option", { text: "\u5BFC\u5165\u4E3A\u5B50\u8282\u70B9\uFF08\u9ED8\u8BA4\uFF09", value: "child" });
     importMode.createEl("option", { text: "\u5BFC\u5165\u5E76\u66FF\u6362\u5F53\u524D\u6587\u4EF6", value: "replace" });
     const applyImport = (document2) => {
@@ -7470,7 +7511,7 @@ var JsonTransferModal = class extends import_obsidian5.Modal {
       this.onImport(document2, mode);
       return true;
     };
-    const actions = this.contentEl.createDiv({ cls: "mmc-modal-actions mmc-json-actions" });
+    const actions = importSection.createDiv({ cls: "mmc-modal-actions mmc-json-actions" });
     const copy = actions.createEl("button", { text: "\u590D\u5236 JSON" });
     const importFileButton = actions.createEl("button", { text: "\u5BFC\u5165\u6587\u4EF6", attr: { type: "button" } });
     const exportButton = actions.createEl("button", { text: "\u5BFC\u51FA .json" });
@@ -7542,7 +7583,7 @@ var JsonTransferModal = class extends import_obsidian5.Modal {
         input.click();
       })();
     });
-    exportButton.addEventListener("click", () => this.onExport(textarea.value));
+    exportButton.addEventListener("click", () => this.onExportJson(textarea.value));
     importButton.addEventListener("click", () => {
       try {
         const parsed = JSON.parse(textarea.value);
@@ -7556,6 +7597,41 @@ var JsonTransferModal = class extends import_obsidian5.Modal {
         new import_obsidian5.Notice("JSON \u683C\u5F0F\u65E0\u6548\uFF0C\u8BF7\u68C0\u67E5\u540E\u91CD\u8BD5");
       }
     });
+    if (!this.canImport) {
+      description.setText("\u5F53\u524D\u4E3A\u53EA\u8BFB\u72B6\u6001\uFF1B\u53EF\u590D\u5236\u6216\u5BFC\u51FA\u5F53\u524D\u5BFC\u56FE JSON\uFF0C\u5207\u6362\u5230\u7F16\u8F91\u6A21\u5F0F\u540E\u624D\u4F1A\u663E\u793A\u5BFC\u5165\u64CD\u4F5C\u3002");
+      importProgress.remove();
+      importMode.remove();
+      importFileButton.remove();
+      importButton.remove();
+      textarea.readOnly = true;
+    }
+    const exportSection = this.contentEl.createDiv({ cls: "mms-import-export-section is-export" });
+    exportSection.createEl("h3", { text: "\u5BFC\u51FA" });
+    exportSection.createEl("p", {
+      cls: "setting-item-description",
+      text: "JSON \u4E0E SVG \u5BFC\u51FA\u5F53\u524D\u7269\u7406\u5BFC\u56FE\uFF1BHTML\u3001Word\u3001PDF \u548C Markdown \u6309\u7236\u5B50\u5BFC\u56FE\u5173\u7CFB\u5BFC\u51FA\u5B8C\u6574\u901A\u8BFB\u5185\u5BB9\u3002"
+    });
+    const formats = exportSection.createDiv({ cls: "mms-document-export-grid" });
+    for (const [format, title, summary] of [
+      ["svg", "SVG", "\u5F53\u524D\u5BFC\u56FE\u7684\u77E2\u91CF\u56FE"],
+      ["html", "HTML", "\u72EC\u7ACB\u7F51\u9875\uFF0C\u53EF\u7528\u6D4F\u89C8\u5668\u6253\u5F00"],
+      ["doc", "Word", "\u53EF\u7F16\u8F91\u7684 .docx \u6587\u6863"],
+      ["pdf", "PDF", "\u6253\u5F00\u6253\u5370\u7248\u5E76\u53E6\u5B58\u4E3A PDF"],
+      ["md", "Markdown", "\u5B8C\u6574\u7236\u5B50\u5BFC\u56FE\u6807\u9898\u7ED3\u6784"]
+    ]) {
+      const button = formats.createEl("button", { attr: { type: "button" } });
+      button.createEl("strong", { text: title });
+      button.createSpan({ text: summary });
+      button.addEventListener("click", () => {
+        if (format === "svg") this.onExportSvg();
+        else this.onExportDocument(format);
+        this.close();
+      });
+    }
+  }
+  /** Clears import/export controls when the modal closes. */
+  onClose() {
+    this.contentEl.empty();
   }
 };
 var OutlineModal = class extends import_obsidian5.Modal {
@@ -7596,40 +7672,6 @@ var OutlineModal = class extends import_obsidian5.Modal {
    */
   onClose() {
     this.contentEl.empty();
-  }
-};
-var DocumentExportModal = class extends import_obsidian5.Modal {
-  /**
-   * 创建文档导出格式弹窗。
-   *
-   * @param app Obsidian 应用实例。
-   * @param exportFormat 格式选择回调。
-   */
-  constructor(app, exportFormat) {
-    super(app);
-    this.exportFormat = exportFormat;
-  }
-  /**
-   * 创建各导出格式按钮。
-   */
-  onOpen() {
-    this.titleEl.setText("\u5BFC\u51FA\u6587\u6863");
-    this.contentEl.createEl("p", { cls: "setting-item-description", text: "\u9009\u62E9\u9002\u5408\u9605\u8BFB\u3001\u7F16\u8F91\u6216\u6253\u5370\u7684\u683C\u5F0F\u3002" });
-    const formats = this.contentEl.createDiv({ cls: "mms-document-export-grid" });
-    for (const [format, title, description] of [
-      ["html", "HTML", "\u72EC\u7ACB\u7F51\u9875\uFF0C\u53EF\u7528\u6D4F\u89C8\u5668\u6253\u5F00"],
-      ["doc", "Word", "Word \u6587\u6863\uFF08.docx\uFF09"],
-      ["pdf", "PDF", "\u6253\u5F00\u6253\u5370\u7248\u5E76\u53E6\u5B58\u4E3A PDF"],
-      ["md", "Markdown", "\u4FDD\u7559\u6807\u9898\u548C\u8282\u70B9\u5C42\u7EA7"]
-    ]) {
-      const button = formats.createEl("button", { attr: { type: "button" } });
-      button.createEl("strong", { text: title });
-      button.createSpan({ text: description });
-      button.addEventListener("click", () => {
-        this.exportFormat(format);
-        this.close();
-      });
-    }
   }
 };
 
@@ -8033,6 +8075,14 @@ var DocumentHistory = class {
   reset() {
     this.undoStack = [];
     this.redoStack = [];
+  }
+  /** 当前是否存在可撤销的文档快照。 */
+  canUndo() {
+    return this.undoStack.length > 0;
+  }
+  /** 当前是否存在可重做的文档快照。 */
+  canRedo() {
+    return this.redoStack.length > 0;
   }
   /**
    * 在修改前记录当前文档，并使已有重做分支失效。
@@ -9556,6 +9606,34 @@ var ImageRecognitionPreviewModal = class extends import_obsidian10.Modal {
 };
 
 // src/editor/editor.ts
+var TOOLBAR_GROUPS = {
+  lock: "access",
+  undo: "history",
+  redo: "history",
+  "add-child": "structure",
+  "add-sibling": "structure",
+  edit: "structure",
+  duplicate: "structure",
+  delete: "structure",
+  collapse: "canvas",
+  "collapse-all": "canvas",
+  fit: "canvas",
+  layout: "canvas",
+  table: "content",
+  code: "content",
+  image: "content",
+  screenshot: "capture",
+  "screenshot-recognize": "capture",
+  question: "content",
+  submap: "content",
+  search: "discover",
+  "global-search": "discover",
+  ai: "discover",
+  appearance: "view",
+  "article-landing": "view",
+  markdown: "view",
+  "import-export": "transfer"
+};
 function createReadingStyleControls(container, style, globalDefaults) {
   const source = style != null ? style : { preset: "classic" };
   const resolved = resolveArticleStyle(source);
@@ -11662,6 +11740,7 @@ var MindMapEditor = class {
   markSaving() {
     this.statusEl.setText("\u4FDD\u5B58\u4E2D\u2026");
     this.rootEl.addClass("is-dirty");
+    this.updateToolbarAvailability();
   }
   /**
    * 定位相关数据，并保持模型、界面和持久化状态的一致性。
@@ -11794,51 +11873,45 @@ var MindMapEditor = class {
       this.modeButtons.set(mode, button);
     }
     this.lockButton = this.addToolbarButton("lock", "lock-open", "\u5207\u6362\u9605\u8BFB / \u7F16\u8F91\u6A21\u5F0F", () => this.toggleReadOnly());
-    this.addToolbarSeparator();
+    this.addToolbarButton("undo", "undo-2", "\u64A4\u9500\uFF08Ctrl/Cmd+Z\uFF09", () => this.undo(), true);
+    this.addToolbarButton("redo", "redo-2", "\u91CD\u505A\uFF08Ctrl/Cmd+Y\uFF09", () => this.redo(), true);
     this.addToolbarButton("add-child", "plus-circle", "\u6DFB\u52A0\u5B50\u8282\u70B9\uFF08Tab\uFF09", () => this.addChild(), true);
     this.addToolbarButton("add-sibling", "list-plus", "\u6DFB\u52A0\u540C\u7EA7\u8282\u70B9\uFF08Enter\uFF09", () => this.addSibling(), true);
     this.addToolbarButton("edit", "pencil", "\u7F16\u8F91\u8282\u70B9\uFF08F2\uFF09", () => this.editSelected(), true);
     this.addToolbarButton("duplicate", "copy-plus", "\u514B\u9686\u5206\u652F\uFF08Ctrl/Cmd+D\uFF09", () => this.duplicateSelected(), true);
     this.addToolbarButton("delete", "trash-2", "\u5220\u9664\u8282\u70B9\uFF08Delete\uFF09", () => this.deleteSelected(), true);
-    this.addToolbarSeparator();
-    this.addToolbarButton("collapse", "fold-vertical", "\u5C55\u5F00/\u6536\u8D77\u8282\u70B9", () => this.toggleCollapse(), true);
+    this.addToolbarButton("collapse", "fold-vertical", "\u5C55\u5F00/\u6536\u8D77\u8282\u70B9", () => this.toggleCollapse());
     this.addToolbarButton("collapse-all", "chevrons-up-down", "\u5C55\u5F00/\u6298\u53E0\u5168\u90E8\u5B50\u9879", () => this.toggleAllNodesCollapsed());
+    this.addToolbarButton("fit", "maximize", "\u9002\u5E94\u753B\u5E03", () => this.fitToView());
+    this.addToolbarButton("layout", "git-fork", "\u5207\u6362\u5355\u4FA7/\u53CC\u4FA7\u5E03\u5C40", () => this.toggleLayout(), true);
+    this.addToolbarButton("table", "table-2", "\u63D2\u5165\u6216\u7F16\u8F91\u8868\u683C", () => this.editTable(), true);
+    this.addToolbarButton("code", "code-2", "\u63D2\u5165\u4EE3\u7801", () => this.editCode(), true);
+    this.addToolbarButton("image", "image-plus", "\u7C98\u8D34\u56FE\u7247\u5230\u5F53\u524D\u8282\u70B9\uFF08Ctrl/Cmd+V\uFF09", () => new import_obsidian11.Notice("\u5148\u590D\u5236\u56FE\u7247\uFF0C\u518D\u9009\u4E2D\u8282\u70B9\u5E76\u6309 Ctrl/Cmd+V"), true);
+    this.addToolbarButton("screenshot", "scan-line", `\u622A\u56FE\uFF08${this.options.screenshotShortcut || "Ctrl+Shift+S"}\uFF09`, () => void this.captureScreenshot(false));
+    this.addToolbarButton("screenshot-recognize", "scan-text", `\u622A\u56FE\u5E76\u8BC6\u522B\uFF08${this.options.screenshotRecognizeShortcut || "Ctrl+Shift+R"}\uFF09`, () => void this.captureScreenshot(true));
+    if (this.options.questionNodesEnabled) this.addToolbarButton("question", "file-plus-2", "\u65B0\u5EFA\u9898\u76EE\u5B50\u8282\u70B9", () => this.addQuestionChild(), true);
+    this.addToolbarButton("submap", "network", "\u521B\u5EFA\u6216\u8FDB\u5165\u5B50\u5BFC\u56FE", () => void this.createOrOpenSubmap());
     this.addToolbarButton("search", "search", "\u641C\u7D22\u5F53\u524D\u5BFC\u56FE\u53CA\u5168\u90E8\u5B50\u5BFC\u56FE\uFF08Ctrl/Cmd+Alt+F\uFF09", () => this.openSearch());
     this.addToolbarButton("global-search", "file-search", "\u5168\u5C40\u641C\u7D22\u6240\u6709\u5BFC\u56FE", () => this.callbacks.onGlobalSearch());
     this.aiButton = this.addToolbarButton("ai", "sparkles", "\u8BE2\u95EE AI\uFF08\u5F53\u524D\u9875\u9762\uFF0CCtrl/Cmd+Shift+A\uFF09", () => this.askAi());
     this.updateAiScopeButton();
-    this.addToolbarSeparator();
-    this.addToolbarButton("table", "table-2", "\u63D2\u5165\u6216\u7F16\u8F91\u8868\u683C", () => this.editTable(), true);
-    this.addToolbarButton("code", "code-2", "\u63D2\u5165\u4EE3\u7801", () => this.editCode(), true);
-    this.addToolbarButton("image", "image-plus", "\u7C98\u8D34\u56FE\u7247\u5230\u5F53\u524D\u8282\u70B9\uFF08Ctrl/Cmd+V\uFF09", () => new import_obsidian11.Notice("\u5148\u590D\u5236\u56FE\u7247\uFF0C\u518D\u9009\u4E2D\u8282\u70B9\u5E76\u6309 Ctrl/Cmd+V"), true);
-    if (this.options.questionNodesEnabled) this.addToolbarButton("question", "file-plus-2", "\u65B0\u5EFA\u9898\u76EE\u5B50\u8282\u70B9", () => this.addQuestionChild(), true);
-    this.addToolbarButton("screenshot", "scan-line", `\u622A\u56FE\uFF08${this.options.screenshotShortcut || "Ctrl+Shift+S"}\uFF09`, () => void this.captureScreenshot(false));
-    this.addToolbarButton("screenshot-recognize", "scan-text", `\u622A\u56FE\u5E76\u8BC6\u522B\uFF08${this.options.screenshotRecognizeShortcut || "Ctrl+Shift+R"}\uFF09`, () => void this.captureScreenshot(true));
-    this.addToolbarButton("submap", "network", "\u521B\u5EFA\u6216\u8FDB\u5165\u5B50\u5BFC\u56FE", () => void this.createOrOpenSubmap());
-    this.addToolbarSeparator();
-    this.addToolbarButton("undo", "undo-2", "\u64A4\u9500\uFF08Ctrl/Cmd+Z\uFF09", () => this.undo(), true);
-    this.addToolbarButton("redo", "redo-2", "\u91CD\u505A\uFF08Ctrl/Cmd+Y\uFF09", () => this.redo(), true);
-    this.addToolbarSeparator();
-    this.addToolbarButton("fit", "maximize", "\u9002\u5E94\u753B\u5E03", () => this.fitToView());
-    this.addToolbarButton("layout", "git-fork", "\u5207\u6362\u5355\u4FA7/\u53CC\u4FA7\u5E03\u5C40", () => this.toggleLayout(), true);
     this.addToolbarButton("appearance", "palette", "\u4E3B\u9898\u4E0E\u5916\u89C2", () => this.editAppearance());
     this.articleLandingButton = this.addToolbarButton("article-landing", "list-tree", "\u5207\u6362\u76EE\u5F55 / \u539F\u59CB\u6587\u7AE0", () => this.toggleArticleLanding());
-    this.addToolbarSeparator();
     this.addToolbarButton("markdown", "file-text", "\u67E5\u770B Markdown \u5927\u7EB2", () => this.showOutline());
-    this.addToolbarButton("json", "arrow-left-right", "\u5BFC\u5165 / \u5BFC\u51FA", () => this.showJsonTransfer(), true);
-    this.addToolbarButton("export-document", "file-down", "\u5BFC\u51FA HTML / Word / PDF / Markdown", () => this.showDocumentExport());
-    this.addToolbarButton("export-svg", "image", "\u5BFC\u51FA SVG", () => void this.callbacks.onExportSvg(documentToSvg(this.document.root, this.document.layout, this.document.title, this.getAppearance())));
+    this.addToolbarButton("import-export", "arrow-left-right", "\u5BFC\u5165\u4E0E\u5BFC\u51FA", () => this.showImportExport());
     this.applyToolbarOrder();
+    this.updateToolbarAvailability(false);
     const spacer = this.toolbarEl.createSpan({ cls: "mmc-toolbar-spacer" });
     spacer.setAttr("aria-hidden", "true");
-    const zoomControl = this.toolbarEl.createDiv({ cls: "mmc-zoom-control" });
-    const zoomOut = zoomControl.createEl("button", { cls: "clickable-icon mmc-zoom-step", attr: { type: "button", "aria-label": "\u7F29\u5C0F" } });
+    this.zoomControlEl = this.toolbarEl.createDiv({ cls: "mmc-zoom-control" });
+    this.zoomControlEl.toggleClass("is-hidden", this.currentMode !== "mindmap");
+    const zoomOut = this.zoomControlEl.createEl("button", { cls: "clickable-icon mmc-zoom-step", attr: { type: "button", "aria-label": "\u7F29\u5C0F" } });
     (0, import_obsidian11.setIcon)(zoomOut, "minus");
     zoomOut.addEventListener("click", () => {
       this.setZoom(this.zoom / 1.15);
       this.focus();
     });
-    this.zoomStatusEl = zoomControl.createEl("input", {
+    this.zoomStatusEl = this.zoomControlEl.createEl("input", {
       cls: "mmc-zoom-status mmc-zoom-input",
       attr: { type: "text", inputmode: "decimal", "aria-label": "\u8F93\u5165\u7F29\u653E\u767E\u5206\u6BD4" }
     });
@@ -11853,7 +11926,7 @@ var MindMapEditor = class {
         this.zoomStatusEl.blur();
       }
     });
-    const zoomIn = zoomControl.createEl("button", { cls: "clickable-icon mmc-zoom-step", attr: { type: "button", "aria-label": "\u653E\u5927" } });
+    const zoomIn = this.zoomControlEl.createEl("button", { cls: "clickable-icon mmc-zoom-step", attr: { type: "button", "aria-label": "\u653E\u5927" } });
     (0, import_obsidian11.setIcon)(zoomIn, "plus");
     zoomIn.addEventListener("click", () => {
       this.setZoom(this.zoom * 1.15);
@@ -12137,7 +12210,7 @@ var MindMapEditor = class {
    * 执行“update mode ui”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
    */
   updateModeUi() {
-    var _a2, _b2, _c;
+    var _a2, _b2;
     const readingContextLoading = this.currentMode === "reading" && !this.options.articleContextReady;
     for (const [mode, button] of this.modeButtons) {
       const loading = mode === "reading" && readingContextLoading;
@@ -12145,25 +12218,16 @@ var MindMapEditor = class {
       button.toggleClass("is-active", mode === this.currentMode);
       button.toggleClass("is-loading", loading);
       button.setAttr("aria-label", label);
-      button.setAttr("title", label);
+      button.removeAttribute("title");
       if (loading) button.setAttribute("aria-busy", "true");
       else button.removeAttribute("aria-busy");
     }
     const isArticle = this.currentMode === "article";
     const hasLandingChoice = isArticle && this.options.showArticleToc;
-    this.articleLandingButton.toggleClass("is-hidden", !hasLandingChoice || !this.options.visibleToolbarItems.includes("article-landing"));
-    (_a2 = this.toolbarEl.querySelector("[data-toolbar-id='submap']")) == null ? void 0 : _a2.toggleClass(
-      "is-hidden",
-      this.currentMode !== "mindmap" || !this.options.visibleToolbarItems.includes("submap")
-    );
-    (_b2 = this.toolbarEl.querySelector("[data-toolbar-id='collapse-all']")) == null ? void 0 : _b2.toggleClass(
-      "is-hidden",
-      this.currentMode !== "mindmap" || !this.options.visibleToolbarItems.includes("collapse-all")
-    );
     if (hasLandingChoice) {
-      const showingArticle = ((_c = this.document.view) == null ? void 0 : _c.articleLandingMode) === "article";
+      const showingArticle = ((_a2 = this.document.view) == null ? void 0 : _a2.articleLandingMode) === "article";
       this.articleLandingButton.setAttr("aria-label", showingArticle ? "\u663E\u793A\u76EE\u5F55" : "\u663E\u793A\u539F\u59CB\u6587\u7AE0");
-      this.articleLandingButton.setAttr("title", showingArticle ? "\u663E\u793A\u76EE\u5F55" : "\u663E\u793A\u539F\u59CB\u6587\u7AE0");
+      this.articleLandingButton.removeAttribute("title");
       this.articleLandingButton.empty();
       (0, import_obsidian11.setIcon)(this.articleLandingButton, showingArticle ? "list-tree" : "file-text");
       this.articleLandingButton.toggleClass("is-active", showingArticle);
@@ -12171,14 +12235,17 @@ var MindMapEditor = class {
     this.lockButton.empty();
     (0, import_obsidian11.setIcon)(this.lockButton, this.readOnly ? "lock" : "lock-open");
     this.lockButton.setAttr("aria-label", this.readOnly ? "\u5F53\u524D\u4E3A\u9605\u8BFB\u6A21\u5F0F\uFF0C\u70B9\u51FB\u5207\u6362\u5230\u7F16\u8F91\u6A21\u5F0F" : "\u5F53\u524D\u53EF\u7F16\u8F91\uFF0C\u70B9\u51FB\u5207\u6362\u5230\u9605\u8BFB\u6A21\u5F0F");
-    this.lockButton.setAttr("title", this.readOnly ? "\u9605\u8BFB\u6A21\u5F0F" : "\u7F16\u8F91\u6A21\u5F0F");
+    this.lockButton.removeAttribute("title");
     this.lockButton.toggleClass("is-active", this.readOnly);
     this.rootEl.toggleClass("is-read-only", this.readOnly);
     this.rootEl.toggleClass("is-reading", this.readOnly);
+    (_b2 = this.zoomControlEl) == null ? void 0 : _b2.toggleClass("is-hidden", this.currentMode !== "mindmap");
     for (const control of this.editControls) {
+      if (control.dataset.toolbarId) continue;
       if (control instanceof HTMLButtonElement || control instanceof HTMLInputElement || control instanceof HTMLSelectElement) control.disabled = this.readOnly;
       control.toggleClass("is-read-only-disabled", this.readOnly);
     }
+    this.updateToolbarAvailability();
   }
   /**
    * 执行“ensure editable”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
@@ -12195,6 +12262,96 @@ var MindMapEditor = class {
   clearImageLoadTimers() {
     for (const timer of this.imageLoadTimers) window.clearTimeout(timer);
     this.imageLoadTimers.clear();
+  }
+  /** Returns whether one configured toolbar action can perform a meaningful operation now. */
+  toolbarItemAvailable(id) {
+    const selected = this.selectedNode();
+    const selectedNonRootIds = Array.from(this.selectedIds).filter((nodeId) => nodeId !== this.document.root.id && Boolean(findNode(this.document.root, nodeId)));
+    const editableSurface = this.currentMode === "mindmap" || this.currentMode === "outline" || this.currentMode === "article";
+    const canEdit = editableSurface && !this.readOnly;
+    switch (id) {
+      case "lock":
+        return this.currentMode !== "question-bank";
+      case "undo":
+        return canEdit && this.history.canUndo();
+      case "redo":
+        return canEdit && this.history.canRedo();
+      case "add-child":
+        return canEdit;
+      case "add-sibling":
+        return canEdit && this.selectedIds.size <= 1 && Boolean(selected && selected.id !== this.document.root.id);
+      case "edit":
+        return canEdit && Boolean(selected);
+      case "duplicate":
+        return canEdit && this.selectedIds.size <= 1 && Boolean(selected && selected.id !== this.document.root.id);
+      case "delete":
+        return canEdit && selectedNonRootIds.length > 0;
+      case "collapse":
+        return this.currentMode === "mindmap" && Boolean(selected == null ? void 0 : selected.children.length);
+      case "collapse-all":
+        return this.currentMode === "mindmap" && flattenNodes(this.document.root).some((node) => node !== this.document.root && node.children.length > 0);
+      case "fit":
+        return this.currentMode === "mindmap";
+      case "layout":
+        return this.currentMode === "mindmap" && canEdit;
+      case "table":
+      case "code":
+      case "image":
+        return canEdit;
+      case "screenshot":
+      case "screenshot-recognize":
+        return true;
+      case "question":
+        return canEdit && this.options.questionNodesEnabled;
+      case "submap": {
+        if (this.currentMode !== "mindmap") return false;
+        const target = selected != null ? selected : this.document.root;
+        return Boolean(target.submap) || canEdit;
+      }
+      case "search":
+      case "global-search":
+      case "ai":
+      case "appearance":
+      case "markdown":
+      case "import-export":
+        return true;
+      case "article-landing":
+        return this.currentMode === "article" && this.options.showArticleToc;
+    }
+  }
+  /**
+   * Hides actions that cannot currently run and marks visual group starts after
+   * filtering, so the toolbar contracts smoothly instead of leaving disabled icons.
+   */
+  updateToolbarAvailability(animate = true) {
+    if (!this.toolbarEl) return;
+    if (!animate) this.toolbarEl.removeClass("is-toolbar-ready");
+    const buttons = Array.from(this.toolbarEl.querySelectorAll("[data-toolbar-id]"));
+    for (const button of buttons) {
+      const id = button.dataset.toolbarId;
+      if (!id) continue;
+      const visible = this.options.visibleToolbarItems.includes(id) && this.toolbarItemAvailable(id);
+      button.toggleClass("is-hidden", !visible);
+      button.disabled = !visible;
+      button.removeAttribute("title");
+      if (visible) {
+        button.removeAttribute("aria-hidden");
+        button.removeAttribute("tabindex");
+      } else {
+        button.setAttribute("aria-hidden", "true");
+        button.tabIndex = -1;
+      }
+      button.toggleClass("is-toolbar-group-start", false);
+    }
+    const visibleButtons = buttons.filter((button) => !button.hasClass("is-hidden"));
+    let previousGroup = null;
+    for (const button of visibleButtons) {
+      const id = button.dataset.toolbarId;
+      const group = TOOLBAR_GROUPS[id];
+      if (group !== previousGroup) button.addClass("is-toolbar-group-start");
+      previousGroup = group;
+    }
+    if (!animate) window.requestAnimationFrame(() => this.toolbarEl.addClass("is-toolbar-ready"));
   }
   /** 更新 AI 工具栏提示，使用户知道下一次提问会使用页面还是右键节点。 */
   updateAiScopeButton() {
@@ -12219,7 +12376,7 @@ var MindMapEditor = class {
     const button = this.toolbarEl.createEl("button", { cls: "clickable-icon mmc-toolbar-button", attr: { "aria-label": label, type: "button" } });
     button.dataset.toolbarId = id;
     (0, import_obsidian11.setIcon)(button, icon);
-    button.toggleClass("is-hidden", !this.options.visibleToolbarItems.includes(id));
+    button.addClass("is-hidden");
     if (editOnly) {
       button.addClass("mms-edit-only-control");
       this.editControls.push(button);
@@ -12241,17 +12398,10 @@ var MindMapEditor = class {
       if (id) buttons.set(id, button);
     }
     for (const separator of Array.from(this.toolbarEl.querySelectorAll(".mmc-toolbar-separator"))) separator.remove();
-    const order = [...this.options.toolbarItemOrder, ...TOOLBAR_ITEMS.map(([id]) => id)];
-    for (const id of new Set(order)) {
+    for (const id of normalizeToolbarItemOrder(this.options.toolbarItemOrder)) {
       const button = buttons.get(id);
       if (button) this.toolbarEl.appendChild(button);
     }
-  }
-  /**
-   * 添加toolbar separator，并保持模型、界面和持久化状态的一致性。
-   */
-  addToolbarSeparator() {
-    this.toolbarEl.createSpan({ cls: "mmc-toolbar-separator" });
   }
   /**
    * 读取并返回appearance，并保持模型、界面和持久化状态的一致性。
@@ -14088,6 +14238,7 @@ var MindMapEditor = class {
         element.toggleClass("is-multi-selected", selected && multi);
       }
     }
+    this.updateToolbarAvailability();
   }
   /**
    * 执行“selected node”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
@@ -15700,16 +15851,16 @@ var MindMapEditor = class {
     const markdown = documentToMarkdown(this.document);
     new OutlineModal(this.app, markdown, () => void this.callbacks.onExportMarkdown(markdown)).open();
   }
-  /**
-   * 执行“show json transfer”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
-   */
-  showJsonTransfer() {
-    if (!this.ensureEditable()) return;
-    new JsonTransferModal(
+  /** Opens the unified import/export surface; read-only mode keeps export actions available. */
+  showImportExport() {
+    new ImportExportModal(
       this.app,
       this.getDocument(),
       (document2, mode) => this.importDocument(document2, mode),
       (json) => void this.callbacks.onExportJson(json),
+      (format) => void this.callbacks.onExportDocument(format),
+      () => void this.callbacks.onExportSvg(documentToSvg(this.document.root, this.document.layout, this.document.title, this.getAppearance())),
+      !this.readOnly && this.currentMode !== "question-bank",
       () => this.callbacks.getLastImportFolder(),
       (folder) => this.callbacks.onRememberImportFolder(folder),
       (document2, sourceDirectory) => this.callbacks.onImportMarkdownImages(document2, sourceDirectory)
@@ -15751,14 +15902,6 @@ var MindMapEditor = class {
       }
     }
     return scheduled;
-  }
-  /**
-   * Opens the HTML, Word, PDF, and Markdown export chooser.
-   */
-  showDocumentExport() {
-    new DocumentExportModal(this.app, (format) => {
-      void this.callbacks.onExportDocument(format);
-    }).open();
   }
   /**
    * 打开search，并保持模型、界面和持久化状态的一致性。
@@ -21327,18 +21470,16 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
       globalSearchMaxResults: typeof raw.globalSearchMaxResults === "number" ? Math.max(20, Math.min(500, Math.round(raw.globalSearchMaxResults))) : DEFAULT_SETTINGS.globalSearchMaxResults,
       visibleModes: normalizeVisibleModes(raw.visibleModes),
       visibleToolbarItems: (() => {
-        const knownIds = new Set(TOOLBAR_ITEMS.map(([id]) => id));
-        const stored = Array.isArray(raw.visibleToolbarItems) ? raw.visibleToolbarItems.flatMap((id) => typeof id === "string" ? [id === "article-style" ? "appearance" : id] : []).filter((id) => knownIds.has(id)) : [...DEFAULT_SETTINGS.visibleToolbarItems];
+        const stored = Array.isArray(raw.visibleToolbarItems) ? raw.visibleToolbarItems.flatMap((value) => {
+          const id = normalizeToolbarItemId(value);
+          return id ? [id] : [];
+        }) : [...DEFAULT_SETTINGS.visibleToolbarItems];
         if (!hadAiSettings && !stored.includes("ai")) stored.push("ai");
         if (!stored.includes("screenshot")) stored.push("screenshot");
         if (!stored.includes("screenshot-recognize")) stored.push("screenshot-recognize");
         return [...new Set(stored)];
       })(),
-      toolbarItemOrder: (() => {
-        const validIds = new Set(TOOLBAR_ITEMS.map(([id]) => id));
-        const stored = Array.isArray(raw.toolbarItemOrder) ? raw.toolbarItemOrder.flatMap((id) => typeof id === "string" ? [id === "article-style" ? "appearance" : id] : []).filter((id) => validIds.has(id)) : [];
-        return [.../* @__PURE__ */ new Set([...stored, ...DEFAULT_SETTINGS.toolbarItemOrder])];
-      })(),
+      toolbarItemOrder: normalizeToolbarItemOrder(Array.isArray(raw.toolbarItemOrder) ? raw.toolbarItemOrder : void 0),
       defaultViewMode: typeof raw.defaultViewMode === "string" ? raw.defaultViewMode : DEFAULT_SETTINGS.defaultViewMode,
       articleEntryLockMode: normalizeArticleEntryLockMode(raw.articleEntryLockMode),
       articleLastReadOnly: raw.articleLastReadOnly !== false,

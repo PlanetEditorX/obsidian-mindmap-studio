@@ -67,7 +67,7 @@ import { buildCodeLineNumberText, countCodeLines } from "../render/code-block";
 import { CodeEditModal, TableEditModal } from "./content-modals";
 import { parseQuestionEnrichment, parseRecognizedQuestion, QuestionEditModal } from "./question-modal";
 import { createQuestionPracticeState, renderQuestionPracticeMode } from "./question-practice-mode";
-import { TOOLBAR_ITEMS } from "../settings";
+import { normalizeToolbarItemOrder, type ToolbarItemId } from "../settings";
 import { appearanceFromThemePreset, MINDMAP_THEME_PRESETS } from "../themes";
 import { articleNumberLabel, articleTocDepth, buildArticleNodeInfo, DISPLAY_MODE_ICONS, DISPLAY_MODE_LABELS, readingAnchorPart, resolveArticleTocMaxDepth, type ArticleTocEntry } from "../article/modes";
 import { ARTICLE_STYLE_PRESETS, resolveArticleStyle } from "../article/article-style";
@@ -86,10 +86,9 @@ import type { MindMapEditorCallbacks, MindMapEditorOptions } from "./editor-type
 import { readRichTextEditor, renderInlineMarkdown, renderRichTextRuns } from "./rich-text-dom";
 import {
   chooseImageHosts,
-  DocumentExportModal,
   FormulaEditModal,
   ImagePreviewModal,
-  JsonTransferModal,
+  ImportExportModal,
   OutlineModal
 } from "./editor-modals";
 import { parseClipboardContentBlocks, parseClipboardHtml, parseClipboardNodes } from "./clipboard-import";
@@ -131,6 +130,36 @@ interface ScreenshotInsertionTarget {
   nodeId: string;
   afterBlockId?: string;
 }
+
+/** Visual grouping used to keep related toolbar actions together after filtering. */
+const TOOLBAR_GROUPS: Readonly<Record<ToolbarItemId, string>> = {
+  lock: "access",
+  undo: "history",
+  redo: "history",
+  "add-child": "structure",
+  "add-sibling": "structure",
+  edit: "structure",
+  duplicate: "structure",
+  delete: "structure",
+  collapse: "canvas",
+  "collapse-all": "canvas",
+  fit: "canvas",
+  layout: "canvas",
+  table: "content",
+  code: "content",
+  image: "content",
+  screenshot: "capture",
+  "screenshot-recognize": "capture",
+  question: "content",
+  submap: "content",
+  search: "discover",
+  "global-search": "discover",
+  ai: "discover",
+  appearance: "view",
+  "article-landing": "view",
+  markdown: "view",
+  "import-export": "transfer"
+};
 
 /** 节点编辑弹窗读写的完整字段集合。 */
 interface NodeEditValues {
@@ -1367,6 +1396,7 @@ export class MindMapEditor {
   private edgesSvg!: SVGSVGElement;
   private statusEl!: HTMLSpanElement;
   private zoomStatusEl!: HTMLInputElement;
+  private zoomControlEl!: HTMLDivElement;
   private lockButton!: HTMLButtonElement;
   private articleLandingButton!: HTMLButtonElement;
   private aiButton!: HTMLButtonElement;
@@ -2520,6 +2550,7 @@ export class MindMapEditor {
   markSaving(): void {
     this.statusEl.setText("保存中…");
     this.rootEl.addClass("is-dirty");
+    this.updateToolbarAvailability();
   }
 
   /**
@@ -2661,49 +2692,43 @@ export class MindMapEditor {
       this.modeButtons.set(mode, button);
     }
     this.lockButton = this.addToolbarButton("lock", "lock-open", "切换阅读 / 编辑模式", () => this.toggleReadOnly());
-    this.addToolbarSeparator();
+    this.addToolbarButton("undo", "undo-2", "撤销（Ctrl/Cmd+Z）", () => this.undo(), true);
+    this.addToolbarButton("redo", "redo-2", "重做（Ctrl/Cmd+Y）", () => this.redo(), true);
     this.addToolbarButton("add-child", "plus-circle", "添加子节点（Tab）", () => this.addChild(), true);
     this.addToolbarButton("add-sibling", "list-plus", "添加同级节点（Enter）", () => this.addSibling(), true);
     this.addToolbarButton("edit", "pencil", "编辑节点（F2）", () => this.editSelected(), true);
     this.addToolbarButton("duplicate", "copy-plus", "克隆分支（Ctrl/Cmd+D）", () => this.duplicateSelected(), true);
     this.addToolbarButton("delete", "trash-2", "删除节点（Delete）", () => this.deleteSelected(), true);
-    this.addToolbarSeparator();
-    this.addToolbarButton("collapse", "fold-vertical", "展开/收起节点", () => this.toggleCollapse(), true);
+    this.addToolbarButton("collapse", "fold-vertical", "展开/收起节点", () => this.toggleCollapse());
     this.addToolbarButton("collapse-all", "chevrons-up-down", "展开/折叠全部子项", () => this.toggleAllNodesCollapsed());
+    this.addToolbarButton("fit", "maximize", "适应画布", () => this.fitToView());
+    this.addToolbarButton("layout", "git-fork", "切换单侧/双侧布局", () => this.toggleLayout(), true);
+    this.addToolbarButton("table", "table-2", "插入或编辑表格", () => this.editTable(), true);
+    this.addToolbarButton("code", "code-2", "插入代码", () => this.editCode(), true);
+    this.addToolbarButton("image", "image-plus", "粘贴图片到当前节点（Ctrl/Cmd+V）", () => new Notice("先复制图片，再选中节点并按 Ctrl/Cmd+V"), true);
+    this.addToolbarButton("screenshot", "scan-line", `截图（${this.options.screenshotShortcut || "Ctrl+Shift+S"}）`, () => void this.captureScreenshot(false));
+    this.addToolbarButton("screenshot-recognize", "scan-text", `截图并识别（${this.options.screenshotRecognizeShortcut || "Ctrl+Shift+R"}）`, () => void this.captureScreenshot(true));
+    if (this.options.questionNodesEnabled) this.addToolbarButton("question", "file-plus-2", "新建题目子节点", () => this.addQuestionChild(), true);
+    this.addToolbarButton("submap", "network", "创建或进入子导图", () => void this.createOrOpenSubmap());
     this.addToolbarButton("search", "search", "搜索当前导图及全部子导图（Ctrl/Cmd+Alt+F）", () => this.openSearch());
     this.addToolbarButton("global-search", "file-search", "全局搜索所有导图", () => this.callbacks.onGlobalSearch());
     this.aiButton = this.addToolbarButton("ai", "sparkles", "询问 AI（当前页面，Ctrl/Cmd+Shift+A）", () => this.askAi());
     this.updateAiScopeButton();
-    this.addToolbarSeparator();
-    this.addToolbarButton("table", "table-2", "插入或编辑表格", () => this.editTable(), true);
-    this.addToolbarButton("code", "code-2", "插入代码", () => this.editCode(), true);
-    this.addToolbarButton("image", "image-plus", "粘贴图片到当前节点（Ctrl/Cmd+V）", () => new Notice("先复制图片，再选中节点并按 Ctrl/Cmd+V"), true);
-    if (this.options.questionNodesEnabled) this.addToolbarButton("question", "file-plus-2", "新建题目子节点", () => this.addQuestionChild(), true);
-    this.addToolbarButton("screenshot", "scan-line", `截图（${this.options.screenshotShortcut || "Ctrl+Shift+S"}）`, () => void this.captureScreenshot(false));
-    this.addToolbarButton("screenshot-recognize", "scan-text", `截图并识别（${this.options.screenshotRecognizeShortcut || "Ctrl+Shift+R"}）`, () => void this.captureScreenshot(true));
-    this.addToolbarButton("submap", "network", "创建或进入子导图", () => void this.createOrOpenSubmap());
-    this.addToolbarSeparator();
-    this.addToolbarButton("undo", "undo-2", "撤销（Ctrl/Cmd+Z）", () => this.undo(), true);
-    this.addToolbarButton("redo", "redo-2", "重做（Ctrl/Cmd+Y）", () => this.redo(), true);
-    this.addToolbarSeparator();
-    this.addToolbarButton("fit", "maximize", "适应画布", () => this.fitToView());
-    this.addToolbarButton("layout", "git-fork", "切换单侧/双侧布局", () => this.toggleLayout(), true);
     this.addToolbarButton("appearance", "palette", "主题与外观", () => this.editAppearance());
     this.articleLandingButton = this.addToolbarButton("article-landing", "list-tree", "切换目录 / 原始文章", () => this.toggleArticleLanding());
-    this.addToolbarSeparator();
     this.addToolbarButton("markdown", "file-text", "查看 Markdown 大纲", () => this.showOutline());
-    this.addToolbarButton("json", "arrow-left-right", "导入 / 导出", () => this.showJsonTransfer(), true);
-    this.addToolbarButton("export-document", "file-down", "导出 HTML / Word / PDF / Markdown", () => this.showDocumentExport());
-    this.addToolbarButton("export-svg", "image", "导出 SVG", () => void this.callbacks.onExportSvg(documentToSvg(this.document.root, this.document.layout, this.document.title, this.getAppearance())));
+    this.addToolbarButton("import-export", "arrow-left-right", "导入与导出", () => this.showImportExport());
 
     this.applyToolbarOrder();
+    this.updateToolbarAvailability(false);
     const spacer = this.toolbarEl.createSpan({ cls: "mmc-toolbar-spacer" });
     spacer.setAttr("aria-hidden", "true");
-    const zoomControl = this.toolbarEl.createDiv({ cls: "mmc-zoom-control" });
-    const zoomOut = zoomControl.createEl("button", { cls: "clickable-icon mmc-zoom-step", attr: { type: "button", "aria-label": "缩小" } });
+    this.zoomControlEl = this.toolbarEl.createDiv({ cls: "mmc-zoom-control" });
+    this.zoomControlEl.toggleClass("is-hidden", this.currentMode !== "mindmap");
+    const zoomOut = this.zoomControlEl.createEl("button", { cls: "clickable-icon mmc-zoom-step", attr: { type: "button", "aria-label": "缩小" } });
     setIcon(zoomOut, "minus");
     zoomOut.addEventListener("click", () => { this.setZoom(this.zoom / 1.15); this.focus(); });
-    this.zoomStatusEl = zoomControl.createEl("input", {
+    this.zoomStatusEl = this.zoomControlEl.createEl("input", {
       cls: "mmc-zoom-status mmc-zoom-input",
       attr: { type: "text", inputmode: "decimal", "aria-label": "输入缩放百分比" }
     });
@@ -2718,7 +2743,7 @@ export class MindMapEditor {
         this.zoomStatusEl.blur();
       }
     });
-    const zoomIn = zoomControl.createEl("button", { cls: "clickable-icon mmc-zoom-step", attr: { type: "button", "aria-label": "放大" } });
+    const zoomIn = this.zoomControlEl.createEl("button", { cls: "clickable-icon mmc-zoom-step", attr: { type: "button", "aria-label": "放大" } });
     setIcon(zoomIn, "plus");
     zoomIn.addEventListener("click", () => { this.setZoom(this.zoom * 1.15); this.focus(); });
     this.statusEl = this.toolbarEl.createSpan({ cls: "mmc-save-status", text: "已保存" });
@@ -3025,25 +3050,16 @@ export class MindMapEditor {
       button.toggleClass("is-active", mode === this.currentMode);
       button.toggleClass("is-loading", loading);
       button.setAttr("aria-label", label);
-      button.setAttr("title", label);
+      button.removeAttribute("title");
       if (loading) button.setAttribute("aria-busy", "true");
       else button.removeAttribute("aria-busy");
     }
     const isArticle = this.currentMode === "article";
     const hasLandingChoice = isArticle && this.options.showArticleToc;
-    this.articleLandingButton.toggleClass("is-hidden", !hasLandingChoice || !this.options.visibleToolbarItems.includes("article-landing"));
-    this.toolbarEl.querySelector<HTMLElement>("[data-toolbar-id='submap']")?.toggleClass(
-      "is-hidden",
-      this.currentMode !== "mindmap" || !this.options.visibleToolbarItems.includes("submap")
-    );
-    this.toolbarEl.querySelector<HTMLElement>("[data-toolbar-id='collapse-all']")?.toggleClass(
-      "is-hidden",
-      this.currentMode !== "mindmap" || !this.options.visibleToolbarItems.includes("collapse-all")
-    );
     if (hasLandingChoice) {
       const showingArticle = this.document.view?.articleLandingMode === "article";
       this.articleLandingButton.setAttr("aria-label", showingArticle ? "显示目录" : "显示原始文章");
-      this.articleLandingButton.setAttr("title", showingArticle ? "显示目录" : "显示原始文章");
+      this.articleLandingButton.removeAttribute("title");
       this.articleLandingButton.empty();
       setIcon(this.articleLandingButton, showingArticle ? "list-tree" : "file-text");
       this.articleLandingButton.toggleClass("is-active", showingArticle);
@@ -3051,14 +3067,17 @@ export class MindMapEditor {
     this.lockButton.empty();
     setIcon(this.lockButton, this.readOnly ? "lock" : "lock-open");
     this.lockButton.setAttr("aria-label", this.readOnly ? "当前为阅读模式，点击切换到编辑模式" : "当前可编辑，点击切换到阅读模式");
-    this.lockButton.setAttr("title", this.readOnly ? "阅读模式" : "编辑模式");
+    this.lockButton.removeAttribute("title");
     this.lockButton.toggleClass("is-active", this.readOnly);
     this.rootEl.toggleClass("is-read-only", this.readOnly);
     this.rootEl.toggleClass("is-reading", this.readOnly);
+    this.zoomControlEl?.toggleClass("is-hidden", this.currentMode !== "mindmap");
     for (const control of this.editControls) {
+      if (control.dataset.toolbarId) continue;
       if (control instanceof HTMLButtonElement || control instanceof HTMLInputElement || control instanceof HTMLSelectElement) control.disabled = this.readOnly;
       control.toggleClass("is-read-only-disabled", this.readOnly);
     }
+    this.updateToolbarAvailability();
   }
 
   /**
@@ -3077,6 +3096,82 @@ export class MindMapEditor {
   private clearImageLoadTimers(): void {
     for (const timer of this.imageLoadTimers) window.clearTimeout(timer);
     this.imageLoadTimers.clear();
+  }
+
+  /** Returns whether one configured toolbar action can perform a meaningful operation now. */
+  private toolbarItemAvailable(id: ToolbarItemId): boolean {
+    const selected = this.selectedNode();
+    const selectedNonRootIds = Array.from(this.selectedIds).filter((nodeId) => nodeId !== this.document.root.id && Boolean(findNode(this.document.root, nodeId)));
+    const editableSurface = this.currentMode === "mindmap" || this.currentMode === "outline" || this.currentMode === "article";
+    const canEdit = editableSurface && !this.readOnly;
+    switch (id) {
+      case "lock": return this.currentMode !== "question-bank";
+      case "undo": return canEdit && this.history.canUndo();
+      case "redo": return canEdit && this.history.canRedo();
+      case "add-child": return canEdit;
+      case "add-sibling": return canEdit && this.selectedIds.size <= 1 && Boolean(selected && selected.id !== this.document.root.id);
+      case "edit": return canEdit && Boolean(selected);
+      case "duplicate": return canEdit && this.selectedIds.size <= 1 && Boolean(selected && selected.id !== this.document.root.id);
+      case "delete": return canEdit && selectedNonRootIds.length > 0;
+      case "collapse": return this.currentMode === "mindmap" && Boolean(selected?.children.length);
+      case "collapse-all": return this.currentMode === "mindmap"
+        && flattenNodes(this.document.root).some((node) => node !== this.document.root && node.children.length > 0);
+      case "fit": return this.currentMode === "mindmap";
+      case "layout": return this.currentMode === "mindmap" && canEdit;
+      case "table":
+      case "code":
+      case "image": return canEdit;
+      case "screenshot":
+      case "screenshot-recognize": return true;
+      case "question": return canEdit && this.options.questionNodesEnabled;
+      case "submap": {
+        if (this.currentMode !== "mindmap") return false;
+        const target = selected ?? this.document.root;
+        return Boolean(target.submap) || canEdit;
+      }
+      case "search":
+      case "global-search":
+      case "ai":
+      case "appearance":
+      case "markdown":
+      case "import-export": return true;
+      case "article-landing": return this.currentMode === "article" && this.options.showArticleToc;
+    }
+  }
+
+  /**
+   * Hides actions that cannot currently run and marks visual group starts after
+   * filtering, so the toolbar contracts smoothly instead of leaving disabled icons.
+   */
+  private updateToolbarAvailability(animate = true): void {
+    if (!this.toolbarEl) return;
+    if (!animate) this.toolbarEl.removeClass("is-toolbar-ready");
+    const buttons = Array.from(this.toolbarEl.querySelectorAll<HTMLButtonElement>("[data-toolbar-id]"));
+    for (const button of buttons) {
+      const id = button.dataset.toolbarId as ToolbarItemId | undefined;
+      if (!id) continue;
+      const visible = this.options.visibleToolbarItems.includes(id) && this.toolbarItemAvailable(id);
+      button.toggleClass("is-hidden", !visible);
+      button.disabled = !visible;
+      button.removeAttribute("title");
+      if (visible) {
+        button.removeAttribute("aria-hidden");
+        button.removeAttribute("tabindex");
+      } else {
+        button.setAttribute("aria-hidden", "true");
+        button.tabIndex = -1;
+      }
+      button.toggleClass("is-toolbar-group-start", false);
+    }
+    const visibleButtons = buttons.filter((button) => !button.hasClass("is-hidden"));
+    let previousGroup: string | null = null;
+    for (const button of visibleButtons) {
+      const id = button.dataset.toolbarId as ToolbarItemId;
+      const group = TOOLBAR_GROUPS[id];
+      if (group !== previousGroup) button.addClass("is-toolbar-group-start");
+      previousGroup = group;
+    }
+    if (!animate) window.requestAnimationFrame(() => this.toolbarEl.addClass("is-toolbar-ready"));
   }
 
   /** 更新 AI 工具栏提示，使用户知道下一次提问会使用页面还是右键节点。 */
@@ -3101,11 +3196,11 @@ export class MindMapEditor {
    * @param editOnly 该参数用于 add toolbar button 流程中的输入或控制。
    * @returns 当前操作生成、查找或规范化后的结果。
    */
-  private addToolbarButton(id: string, icon: string, label: string, action: () => void, editOnly = false): HTMLButtonElement {
+  private addToolbarButton(id: ToolbarItemId, icon: string, label: string, action: () => void, editOnly = false): HTMLButtonElement {
     const button = this.toolbarEl.createEl("button", { cls: "clickable-icon mmc-toolbar-button", attr: { "aria-label": label, type: "button" } });
     button.dataset.toolbarId = id;
     setIcon(button, icon);
-    button.toggleClass("is-hidden", !this.options.visibleToolbarItems.includes(id));
+    button.addClass("is-hidden");
     if (editOnly) {
       button.addClass("mms-edit-only-control");
       this.editControls.push(button);
@@ -3128,18 +3223,10 @@ export class MindMapEditor {
       if (id) buttons.set(id, button);
     }
     for (const separator of Array.from(this.toolbarEl.querySelectorAll(".mmc-toolbar-separator"))) separator.remove();
-    const order = [...this.options.toolbarItemOrder, ...TOOLBAR_ITEMS.map(([id]) => id)];
-    for (const id of new Set(order)) {
+    for (const id of normalizeToolbarItemOrder(this.options.toolbarItemOrder)) {
       const button = buttons.get(id);
       if (button) this.toolbarEl.appendChild(button);
     }
-  }
-
-  /**
-   * 添加toolbar separator，并保持模型、界面和持久化状态的一致性。
-   */
-  private addToolbarSeparator(): void {
-    this.toolbarEl.createSpan({ cls: "mmc-toolbar-separator" });
   }
 
   /**
@@ -5102,6 +5189,7 @@ export class MindMapEditor {
         element.toggleClass("is-multi-selected", selected && multi);
       }
     }
+    this.updateToolbarAvailability();
   }
 
   /**
@@ -6818,16 +6906,16 @@ export class MindMapEditor {
     new OutlineModal(this.app, markdown, () => void this.callbacks.onExportMarkdown(markdown)).open();
   }
 
-  /**
-   * 执行“show json transfer”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
-   */
-  private showJsonTransfer(): void {
-    if (!this.ensureEditable()) return;
-    new JsonTransferModal(
+  /** Opens the unified import/export surface; read-only mode keeps export actions available. */
+  private showImportExport(): void {
+    new ImportExportModal(
       this.app,
       this.getDocument(),
       (document, mode) => this.importDocument(document, mode),
       (json) => void this.callbacks.onExportJson(json),
+      (format) => void this.callbacks.onExportDocument(format),
+      () => void this.callbacks.onExportSvg(documentToSvg(this.document.root, this.document.layout, this.document.title, this.getAppearance())),
+      !this.readOnly && this.currentMode !== "question-bank",
       () => this.callbacks.getLastImportFolder(),
       (folder) => this.callbacks.onRememberImportFolder(folder),
       (document, sourceDirectory) => this.callbacks.onImportMarkdownImages(document, sourceDirectory)
@@ -6869,15 +6957,6 @@ export class MindMapEditor {
       }
     }
     return scheduled;
-  }
-
-  /**
-   * Opens the HTML, Word, PDF, and Markdown export chooser.
-   */
-  private showDocumentExport(): void {
-    new DocumentExportModal(this.app, (format) => {
-      void this.callbacks.onExportDocument(format);
-    }).open();
   }
 
   /**

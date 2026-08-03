@@ -37,17 +37,60 @@ import {
 import { saveDesktopExportFile } from "./utils/desktop-export";
 
 export const TOOLBAR_ITEMS = [
-  ["lock", "阅读/编辑模式"], ["add-child", "添加子节点"], ["add-sibling", "添加同级节点"],
+  ["lock", "阅读/编辑模式"],
+  ["undo", "撤销"], ["redo", "重做"],
+  ["add-child", "添加子节点"], ["add-sibling", "添加同级节点"],
   ["edit", "完整编辑节点"], ["duplicate", "克隆分支"], ["delete", "删除节点"],
   ["collapse", "展开/收起"], ["collapse-all", "展开/折叠全部"],
-  ["search", "搜索导图"], ["global-search", "全局搜索"], ["ai", "询问 AI"], ["table", "表格"],
-  ["code", "代码"], ["image", "粘贴图片"], ["screenshot", "插入截图"], ["screenshot-recognize", "插入截图并识别"], ["submap", "子导图"],
-  ["undo", "撤销"], ["redo", "重做"],
-  ["fit", "适应画布"], ["layout", "切换布局"], ["appearance", "主题与外观"],
-  ["article-landing", "目录/原始文章"],
-  ["markdown", "Markdown 大纲"], ["json", "导入文件 / JSON"], ["export-document", "导出文档"], ["export-svg", "导出 SVG"],
-  ["question", "题目节点"],
+  ["fit", "适应画布"], ["layout", "切换布局"],
+  ["table", "表格"], ["code", "代码"], ["image", "粘贴图片"],
+  ["screenshot", "插入截图"], ["screenshot-recognize", "插入截图并识别"],
+  ["question", "题目节点"], ["submap", "子导图"],
+  ["search", "搜索导图"], ["global-search", "全局搜索"], ["ai", "询问 AI"],
+  ["appearance", "主题与外观"], ["article-landing", "目录/原始文章"],
+  ["markdown", "Markdown 大纲"], ["import-export", "导入与导出"],
 ] as const;
+
+/** Stable toolbar item identifier used by settings, migration, and the editor. */
+export type ToolbarItemId = typeof TOOLBAR_ITEMS[number][0];
+
+const LEGACY_TOOLBAR_ITEM_ALIASES: Readonly<Record<string, ToolbarItemId>> = {
+  "article-style": "appearance",
+  json: "import-export",
+  "export-document": "import-export",
+  "export-svg": "import-export"
+};
+
+/** Converts one persisted toolbar identifier to the current identifier set. */
+export function normalizeToolbarItemId(value: unknown): ToolbarItemId | null {
+  if (typeof value !== "string") return null;
+  const migrated = LEGACY_TOOLBAR_ITEM_ALIASES[value] ?? value;
+  return TOOLBAR_ITEMS.some(([id]) => id === migrated) ? migrated as ToolbarItemId : null;
+}
+
+/**
+ * Normalizes toolbar order while keeping the two screenshot actions adjacent and
+ * the unified import/export entry at the end of the user-action area.
+ */
+export function normalizeToolbarItemOrder(values: readonly unknown[] | undefined): ToolbarItemId[] {
+  const defaults = TOOLBAR_ITEMS.map(([id]) => id);
+  const normalized = (values ?? []).flatMap((value): ToolbarItemId[] => {
+    const id = normalizeToolbarItemId(value);
+    return id ? [id] : [];
+  });
+  const complete = [...new Set([...normalized, ...defaults])];
+  const screenshotIndex = Math.max(0, Math.min(
+    ...["screenshot", "screenshot-recognize"].map((id) => {
+      const index = complete.indexOf(id as ToolbarItemId);
+      return index < 0 ? complete.length : index;
+    })
+  ));
+  const withoutPinned: ToolbarItemId[] = complete.filter((id): id is ToolbarItemId => id !== "screenshot" && id !== "screenshot-recognize" && id !== "import-export");
+  const insertionIndex = Math.min(screenshotIndex, withoutPinned.length);
+  withoutPinned.splice(insertionIndex, 0, "screenshot", "screenshot-recognize");
+  withoutPinned.push("import-export");
+  return withoutPinned;
+}
 
 /** All first-level settings categories in their default display order. */
 export const SETTINGS_SECTION_TITLES = [
@@ -1070,7 +1113,7 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
     containerEl.createEl("h3", { text: "工具栏" });
     containerEl.createEl("p", {
       cls: "setting-item-description",
-      text: "选择需要显示在脑图顶部工具栏中的操作。显示模式切换、缩放比例和保存状态始终保留。"
+      text: "选择需要显示在顶部工具栏中的操作。当前不可执行的项目会自动收起；截图操作始终相邻，导入与导出固定在操作区末尾。"
     });
     new Setting(containerEl)
       .setName("题目节点")
@@ -1082,12 +1125,9 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
           await this.saveAndRefresh();
         }));
 
-    const defaultToolbarOrder: string[] = TOOLBAR_ITEMS.map(([id]) => id);
+    const defaultToolbarOrder: ToolbarItemId[] = TOOLBAR_ITEMS.map(([id]) => id);
     const knownToolbarItems = new Map<string, string>(TOOLBAR_ITEMS);
-    const toolbarOrder = [
-      ...this.plugin.settings.toolbarItemOrder.filter((id) => knownToolbarItems.has(id)),
-      ...defaultToolbarOrder.filter((id) => !this.plugin.settings.toolbarItemOrder.includes(id))
-    ];
+    const toolbarOrder = normalizeToolbarItemOrder(this.plugin.settings.toolbarItemOrder);
     this.plugin.settings.toolbarItemOrder = toolbarOrder;
     new Setting(containerEl)
       .setName("工具栏顺序")
@@ -1109,13 +1149,23 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
       const controls = row.createDiv({ cls: "mms-toolbar-order-controls" });
       const upButton = controls.createEl("button", { text: "↑", attr: { type: "button", "aria-label": "上移" } });
       const downButton = controls.createEl("button", { text: "↓", attr: { type: "button", "aria-label": "下移" } });
-      upButton.disabled = index === 0;
-      downButton.disabled = index === toolbarOrder.length - 1;
+      const screenshotPair = id === "screenshot" || id === "screenshot-recognize";
+      const screenshotStart = Math.min(toolbarOrder.indexOf("screenshot"), toolbarOrder.indexOf("screenshot-recognize"));
+      upButton.disabled = id === "import-export" || (screenshotPair ? screenshotStart <= 0 : index === 0);
+      downButton.disabled = id === "import-export" || (screenshotPair ? screenshotStart >= toolbarOrder.length - 2 : index === toolbarOrder.length - 1);
       const move = async (offset: number): Promise<void> => {
-        const target = index + offset;
-        if (target < 0 || target >= toolbarOrder.length) return;
-        [toolbarOrder[index], toolbarOrder[target]] = [toolbarOrder[target], toolbarOrder[index]];
-        this.plugin.settings.toolbarItemOrder = [...toolbarOrder];
+        if (id === "import-export") return;
+        if (screenshotPair) {
+          const withoutPair: ToolbarItemId[] = toolbarOrder.filter((itemId): itemId is ToolbarItemId => itemId !== "screenshot" && itemId !== "screenshot-recognize");
+          const target = Math.max(0, Math.min(withoutPair.length, screenshotStart + offset));
+          withoutPair.splice(target, 0, "screenshot", "screenshot-recognize");
+          this.plugin.settings.toolbarItemOrder = normalizeToolbarItemOrder(withoutPair);
+        } else {
+          const target = index + offset;
+          if (target < 0 || target >= toolbarOrder.length) return;
+          [toolbarOrder[index], toolbarOrder[target]] = [toolbarOrder[target], toolbarOrder[index]];
+          this.plugin.settings.toolbarItemOrder = normalizeToolbarItemOrder(toolbarOrder);
+        }
         await this.saveAndRefresh();
         this.display();
       };
