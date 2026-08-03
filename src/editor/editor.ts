@@ -71,7 +71,7 @@ import { normalizeToolbarItemOrder, type ToolbarItemId } from "../settings";
 import { appearanceFromThemePreset, MINDMAP_THEME_PRESETS } from "../themes";
 import { articleNumberLabel, articleTocDepth, buildArticleNodeInfo, DISPLAY_MODE_ICONS, DISPLAY_MODE_LABELS, readingAnchorPart, resolveArticleTocMaxDepth, type ArticleTocEntry } from "../article/modes";
 import { ARTICLE_STYLE_PRESETS, resolveArticleStyle } from "../article/article-style";
-import { resolveArticleEntryReadOnly } from "../article/display-mode";
+import { resolveArticleEntryReadOnly, resolveParentReturnIntent } from "../article/display-mode";
 import {
   chooseArticleLandingRefreshLocation,
   chooseArticleTransitionLocation,
@@ -3301,10 +3301,28 @@ export class MindMapEditor {
       ? `返回父导图：${parentTitle}（来源节点：${navigation.parentNodeText}）`
       : `返回父导图：${parentTitle}`;
     const openParent = (): void => {
+      const destinationIntent = resolveParentReturnIntent(this.currentMode);
       this.callbacks.onDebugLog("navigation", "return-parent-click", {
-        currentFilePath: this.options.currentFilePath, parentPath: navigation.parentPath, parentNodeId: navigation.parentNodeId, parentNodeText: navigation.parentNodeText, currentMode: this.currentMode
+        currentFilePath: this.options.currentFilePath,
+        parentPath: navigation.parentPath,
+        parentNodeId: navigation.parentNodeId,
+        parentNodeText: navigation.parentNodeText,
+        currentMode: this.currentMode,
+        destinationIntent
       });
-      void this.navigateWithTransition(() => this.callbacks.onOpenArticleDirectory(navigation.parentPath, navigation.parentNodeId), "正在返回目录…", "正在保存当前位置并加载主导图目录");
+      if (destinationIntent === "article-directory") {
+        void this.navigateWithTransition(
+          () => this.callbacks.onOpenArticleDirectory(navigation.parentPath, navigation.parentNodeId),
+          "正在返回目录…",
+          "正在保存当前位置并加载主导图目录"
+        );
+        return;
+      }
+      void this.navigateWithTransition(
+        () => this.callbacks.onOpenMindMap(navigation.parentPath, navigation.parentNodeId),
+        "正在返回父导图…",
+        "正在保存当前位置并恢复父导图页面"
+      );
     };
 
     if (showCanvasBreadcrumb) {

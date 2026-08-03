@@ -42,3 +42,12 @@ test("article entry policy supports a mode-local remembered lock state", () => {
   assert.equal(displayMode.resolveArticleEntryReadOnly("remember", true, false), false);
   assert.equal(displayMode.resolveArticleEntryReadOnly("remember", false, true), true);
 });
+
+
+test("only article mode returns to the generated parent directory", () => {
+  assert.equal(displayMode.resolveParentReturnIntent("article"), "article-directory");
+  assert.equal(displayMode.resolveParentReturnIntent("mindmap"), "parent-map");
+  assert.equal(displayMode.resolveParentReturnIntent("outline"), "parent-map");
+  assert.equal(displayMode.resolveParentReturnIntent("reading"), "parent-map");
+  assert.equal(displayMode.resolveParentReturnIntent("question-bank"), "parent-map");
+});

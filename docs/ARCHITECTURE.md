@@ -231,6 +231,7 @@ Obsidian 读取文本
 - `MindMapEditor.beginPageTransition()` 在编辑器根节点创建唯一的模态状态层，设置 `role=status`、`aria-live=polite` 和根级 `aria-busy`。状态层使用 latest-wins 令牌，后发导航会使旧完成回调失效。
 - 所有可能跨文件或重建大页面的用户入口先等待两个 `requestAnimationFrame`，确保文字与遮罩已经绘制，再开始同步节点克隆、JSON 序列化、布局计算或目标页面渲染。动画不能让同步任务并行，但能避免主线程进入长任务前完全没有反馈。
 - `navigateWithTransition()` 统一包装父子导图、文章目录、画布节点和文章链接导航；错误会关闭状态层并给出 Notice，避免未处理拒绝留下永久忙碌状态。
+- `resolveParentReturnIntent()` 把父级返回分为 `article-directory` 与 `parent-map`：只有文章模式进入生成目录，导图、大纲、通读和题库模式必须通过 `onOpenMindMap()` 保持当前模式并聚焦父挂载节点。
 - 提取、创建和合并子导图使用同一状态层更新阶段文案，不叠加多个遮罩。新页面挂载或模式切换完成后，仅对当前活动内容面应用约 210ms 的入口动画。
 - `prefers-reduced-motion: reduce` 关闭图标脉冲、位移和淡入，但不会取消状态文字、输入阻断或两帧绘制门。
 

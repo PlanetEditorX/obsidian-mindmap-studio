@@ -10,6 +10,14 @@ const ALL_MODES: readonly DisplayMode[] = ["mindmap", "outline", "article", "rea
 /** Controls how article mode chooses its lock state when entered. */
 export type ArticleEntryLockMode = "locked" | "inherit" | "remember";
 
+/** Distinguishes article-directory returns from same-mode parent-map navigation. */
+export type ParentReturnIntent = "article-directory" | "parent-map";
+
+/** Keeps only article mode on the generated directory path when returning to a parent map. */
+export function resolveParentReturnIntent(mode: DisplayMode): ParentReturnIntent {
+  return mode === "article" ? "article-directory" : "parent-map";
+}
+
 /** Normalizes persisted article-entry policies from older or malformed settings. */
 export function normalizeArticleEntryLockMode(value: unknown): ArticleEntryLockMode {
   return value === "inherit" || value === "remember" ? value : "locked";
