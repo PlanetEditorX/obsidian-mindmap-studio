@@ -225,7 +225,15 @@ test("parent returns use directory intent instead of article focus", async () =>
     readFile("src/editor/article-renderer.ts", "utf8")
   ]);
   assert.match(typesSource, /onOpenArticleDirectory: \(path: string, focusNodeId\?: string\)/);
-  assert.match(editorSource, /return-parent-click[\s\S]*onOpenArticleDirectory\(navigation\.parentPath, navigation\.parentNodeId\)/);
+  const parentReturn = editorSource.slice(
+    editorSource.indexOf("const openParent = (): void =>"),
+    editorSource.indexOf("if (showCanvasBreadcrumb)", editorSource.indexOf("const openParent = (): void =>"))
+  );
+  assert.match(parentReturn, /resolveParentReturnIntent\(this\.currentMode\)/);
+  assert.match(parentReturn, /destinationIntent === "article-directory"/);
+  assert.match(parentReturn, /onOpenArticleDirectory\(navigation\.parentPath, navigation\.parentNodeId\)/);
+  assert.match(parentReturn, /onOpenMindMap\(navigation\.parentPath, navigation\.parentNodeId\)/);
+  assert.match(parentReturn, /destinationIntent/);
   assert.match(editorSource, /event\.key === "Escape"[\s\S]*const navigation = this\.options\.articleNavigation[\s\S]*onOpenArticleDirectory\(navigation\.parentPath!/);
   assert.match(rendererSource, /mms-article-pager-parent[\s\S]*onOpenArticleDirectory\(navigation\.parentPath!, navigation\.parentNodeId\)/);
   assert.match(viewSource, /openArticleDirectoryPath\(path, sourcePath, this\.leaf, focusNodeId\)/);

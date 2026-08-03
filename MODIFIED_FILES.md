@@ -1,5 +1,13 @@
 # Modified Files
 
+## 1.43.2 子导图父级返回模式分流
+
+- `src/article/display-mode.ts`：新增父级返回意图解析，只有文章模式使用文章目录，其余显示模式返回父导图。
+- `src/editor/editor.ts`：导图面包屑和非文章父级导航按显示模式分流，保留原挂载节点定位并记录目标意图。
+- `tests/display-mode.test.mjs`、`tests/reading-editor-contract.test.mjs`、`tests/incremental-render.test.mjs`：新增纯函数和导航契约，更新多行过渡调用检查。
+- `README.md`、`CHANGELOG.md`、`docs/ARCHITECTURE.md`、`docs/DEVELOPMENT.md`、`docs/SPECIAL_FEATURES.md`、`docs/TESTING.md`、`docs/FUNCTION_REFERENCE.md`：说明父级返回模式边界。
+- `package.json`、`package-lock.json`、`manifest.json`、`versions.json`、`update.json`、`main.js`：版本统一为 1.43.2，安装包校验值在打包后写入。
+
 ## 1.42.11 XMind 图片与 LaTeX 资源导入
 
 - `src/import/import-export.ts`：解析 XMind 主题图片、归档 `resources/` 二进制、共享资源引用和常见公式字段；保留图片尺寸，缺失资源不生成破损内容块，并为非界面调用提供 data URL 回退。

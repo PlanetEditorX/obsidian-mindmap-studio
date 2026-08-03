@@ -319,7 +319,7 @@ test("large page operations paint a semantic transition before blocking work", a
   assert.match(merge, /正在合并回主导图/);
   assert.match(modeTransition, /正在切换到\$\{DISPLAY_MODE_LABELS\[mode\]\}/);
   assert.match(editorSource, /navigateWithTransition\(\(\) => this\.callbacks\.onOpenMindMap/);
-  assert.match(editorSource, /navigateWithTransition\(\(\) => this\.callbacks\.onOpenArticleDirectory/);
+  assert.match(editorSource, /navigateWithTransition\([\s\S]*?this\.callbacks\.onOpenArticleDirectory/);
   assert.match(cssSource, /\.mms-page-transition\.is-visible/);
   assert.match(cssSource, /mms-page-surface-enter/);
   assert.match(cssSource, /prefers-reduced-motion: reduce[\s\S]*\.mms-page-transition/);
