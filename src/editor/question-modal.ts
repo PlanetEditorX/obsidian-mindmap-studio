@@ -14,6 +14,7 @@ import {
   type MindMapQuestionOption,
   type MindMapQuestionStatus
 } from "../core/model";
+import type { AiStreamUpdate } from "../ai/client";
 import type { MindMapEditorCallbacks } from "./editor-types";
 import { FormulaEditModal } from "./editor-modals";
 import { renderRichTextRuns } from "./rich-text-dom";
@@ -24,6 +25,29 @@ const QUESTION_TAGS = [
   "言语理解", "判断推理", "数量关系", "资料分析", "面试"
 ];
 const QUESTION_STATUS_LABELS: Record<MindMapQuestionStatus, string> = { unanswered: "未做", completed: "已做", favorite: "收藏", wrong: "错题", mastered: "掌握" };
+
+/** Visual states used by the question AI processing panel. */
+type QuestionAiProcessStatus = "idle" | "active" | "done" | "error";
+
+/** Runtime state retained while the question modal re-renders its form. */
+interface QuestionAiProcessState {
+  status: QuestionAiProcessStatus;
+  steps: Array<"pending" | "active" | "done" | "error">;
+  message: string;
+  thinking: string;
+  content: string;
+}
+
+/** Connected DOM references for updating the visible AI processing trace. */
+interface QuestionAiProcessView {
+  root: HTMLElement;
+  steps: HTMLElement[];
+  message: HTMLElement;
+  thinking: HTMLDetailsElement;
+  thinkingText: HTMLElement;
+  content: HTMLDetailsElement;
+  contentText: HTMLElement;
+}
 
 /** Parses a JSON-only vision result into the question fields supported by the editor. */
 export function parseRecognizedQuestion(value: string, fallback: MindMapQuestion): MindMapQuestion | null {
@@ -93,6 +117,14 @@ export function parseQuestionEnrichment(value: string, fallback: MindMapQuestion
 /** Modal editor for the structured question attached to a node. */
 export class QuestionEditModal extends Modal {
   private draft: MindMapQuestion;
+  private aiProcess: QuestionAiProcessState = {
+    status: "idle",
+    steps: ["pending", "pending", "pending", "pending", "pending"],
+    message: "",
+    thinking: "",
+    content: ""
+  };
+  private aiProcessView: QuestionAiProcessView | null = null;
 
   /** Creates a modal around the selected node's existing question payload. */
   constructor(
@@ -163,11 +195,100 @@ export class QuestionEditModal extends Modal {
       source.setAttr("target", "_blank");
       source.setAttr("rel", "noopener noreferrer");
     }
+    this.renderAiProcess();
     const actions = this.contentEl.createDiv({ cls: "modal-button-container" });
-    const enrich = actions.createEl("button", { text: "AI 智能处理题目", attr: { type: "button" } });
+    const enrich = actions.createEl("button", {
+      text: this.aiProcess.status === "active" ? "AI 正在处理…" : "AI 智能处理题目",
+      attr: { type: "button" }
+    });
+    enrich.disabled = this.aiProcess.status === "active";
     enrich.onclick = () => void this.convertAndEnrichQuestion();
     const save = actions.createEl("button", { text: "保存", cls: "mod-cta", attr: { type: "button" } });
+    save.disabled = this.aiProcess.status === "active";
     save.onclick = () => { this.onSubmit(this.draft); this.close(); };
+  }
+
+  /** Renders the retained AI processing trace below the question fields. */
+  private renderAiProcess(): void {
+    const root = this.contentEl.createDiv({ cls: "mms-question-ai-process" });
+    const title = root.createDiv({ cls: "mms-question-ai-process-title" });
+    title.createEl("strong", { text: "AI 解析过程" });
+    title.createSpan({ text: "显示处理阶段，以及接口实际返回的思考和结构化内容。" });
+    const track = root.createDiv({ cls: "mms-question-ai-track" });
+    const labels = ["读取题目", "识别题图与题型", "检索并分析", "接收答案与解析", "回填题目"];
+    const steps = labels.map((label, index) => {
+      const step = track.createDiv({ cls: "mms-question-ai-step" });
+      step.createSpan({ cls: "mms-question-ai-step-dot", text: String(index + 1) });
+      step.createSpan({ text: label });
+      return step;
+    });
+    const message = root.createDiv({ cls: "mms-question-ai-message" });
+    const thinking = root.createEl("details", { cls: "mms-question-ai-output" });
+    thinking.createEl("summary", { text: "模型分析（由当前 AI 接口返回）" });
+    const thinkingText = thinking.createEl("pre");
+    const content = root.createEl("details", { cls: "mms-question-ai-output" });
+    content.createEl("summary", { text: "正在生成的题目结构" });
+    const contentText = content.createEl("pre");
+    this.aiProcessView = { root, steps, message, thinking, thinkingText, content, contentText };
+    this.syncAiProcessView();
+  }
+
+  /** Synchronizes the visible processing panel with retained request state. */
+  private syncAiProcessView(): void {
+    const view = this.aiProcessView;
+    if (!view?.root.isConnected) return;
+    view.root.toggleClass("is-hidden", this.aiProcess.status === "idle");
+    view.root.dataset.state = this.aiProcess.status;
+    view.steps.forEach((step, index) => { step.dataset.state = this.aiProcess.steps[index] ?? "pending"; });
+    view.message.setText(this.aiProcess.message);
+    view.thinking.hidden = !this.aiProcess.thinking.trim();
+    view.thinking.open = this.aiProcess.status === "active" && Boolean(this.aiProcess.thinking.trim());
+    view.thinkingText.setText(this.aiProcess.thinking);
+    view.content.hidden = !this.aiProcess.content.trim();
+    view.content.open = this.aiProcess.status === "active" && Boolean(this.aiProcess.content.trim());
+    view.contentText.setText(this.aiProcess.content);
+  }
+
+  /** Starts a new five-stage AI question processing trace. */
+  private startAiProcess(message: string): void {
+    this.aiProcess = {
+      status: "active",
+      steps: ["active", "pending", "pending", "pending", "pending"],
+      message,
+      thinking: "",
+      content: ""
+    };
+    this.syncAiProcessView();
+  }
+
+  /** Moves the trace to one stage while preserving completed stages. */
+  private setAiProcessStep(index: number, message: string): void {
+    this.aiProcess.steps = this.aiProcess.steps.map((state, stepIndex) => {
+      if (stepIndex < index) return "done";
+      if (stepIndex === index) return "active";
+      return state === "done" ? state : "pending";
+    });
+    this.aiProcess.message = message;
+    this.syncAiProcessView();
+  }
+
+  /** Appends model-provided reasoning and generated JSON deltas to the visible trace. */
+  private appendAiProcessStream(update: AiStreamUpdate): void {
+    if (update.thinking) this.aiProcess.thinking += update.thinking;
+    if (update.content) this.aiProcess.content += update.content;
+    if (update.thinking) this.aiProcess.message = "模型正在分析题目条件与解题路径…";
+    else if (update.content) this.aiProcess.message = "模型正在生成答案、解析和题目结构…";
+    this.syncAiProcessView();
+  }
+
+  /** Completes or fails the current AI processing trace. */
+  private finishAiProcess(status: "done" | "error", message: string): void {
+    const activeIndex = this.aiProcess.steps.findIndex((state) => state === "active");
+    if (status === "done") this.aiProcess.steps = this.aiProcess.steps.map(() => "done");
+    else if (activeIndex >= 0) this.aiProcess.steps[activeIndex] = "error";
+    this.aiProcess.status = status;
+    this.aiProcess.message = message;
+    this.syncAiProcessView();
   }
 
   /** Renders one question field with inline LaTeX insertion and a live MathJax preview. */
@@ -223,7 +344,7 @@ export class QuestionEditModal extends Modal {
   }
 
   /** Sends the first question image to the configured vision service and applies a JSON result. */
-  private async recognizeQuestion(showSuccess = true): Promise<boolean> {
+  private async recognizeQuestion(showSuccess = true, rerender = true): Promise<boolean> {
     const image = [this.draft.stem, ...this.draft.options.map((option) => option.content), this.draft.answer, this.draft.explanation]
       .flat().find((block): block is MindMapImageContentBlock => block.type === "image");
     if (!image) { new Notice("请先在题干、选项、答案或解答中填写一张题图"); return false; }
@@ -235,7 +356,7 @@ export class QuestionEditModal extends Modal {
       const parsed = parseRecognizedQuestion(result.text, this.draft);
       if (!parsed) { new Notice("AI 未返回可解析的题目结构，请检查题图或模型输出"); return false; }
       this.draft = parsed;
-      this.render();
+      if (rerender) this.render();
       if (showSuccess) new Notice("题目已由 AI 填充，请核对后保存");
       return true;
     } catch (error) {
@@ -244,25 +365,48 @@ export class QuestionEditModal extends Modal {
     }
   }
 
-  /** Converts current text or image into a question, then looks up an original or generates missing analysis. */
+  /** Converts current text or image into a question, then streams lookup and solution analysis into the visible trace. */
   private async convertAndEnrichQuestion(): Promise<void> {
+    if (this.aiProcess.status === "active") return;
+    this.startAiProcess("正在读取题干、选项和已有答案…");
     const hasImage = [this.draft.stem, ...this.draft.options.map((option) => option.content), this.draft.answer, this.draft.explanation]
       .flat().some((block) => block.type === "image");
-    if (hasImage && !await this.recognizeQuestion(false)) return;
-    const questionText = [
-      ...this.draft.stem,
-      ...this.draft.options.flatMap((option) => option.content)
-    ].filter((block): block is Extract<MindMapContentBlock, { type: "text" }> => block.type === "text")
-      .map((block) => block.text.trim()).filter(Boolean).join("\n");
-    if (!questionText) { new Notice("请先填写题目文字或题图"); return; }
     try {
-      const result = parseQuestionEnrichment(await this.callbacks.onEnrichQuestion(questionText), this.draft);
-      if (!result) { new Notice("AI 未返回可解析的检索结果"); return; }
+      this.setAiProcessStep(1, hasImage ? "正在识别题图并整理题型…" : "未发现题图，正在识别文字题型…");
+      if (hasImage && !await this.recognizeQuestion(false, false)) {
+        this.finishAiProcess("error", "题图识别失败，未继续执行 AI 解析。请检查题图或视觉模型。");
+        this.render();
+        return;
+      }
+      const questionText = [
+        ...this.draft.stem,
+        ...this.draft.options.flatMap((option) => option.content)
+      ].filter((block): block is Extract<MindMapContentBlock, { type: "text" }> => block.type === "text")
+        .map((block) => block.text.trim()).filter(Boolean).join("\n");
+      if (!questionText) {
+        this.finishAiProcess("error", "没有可发送给 AI 的题目文字。");
+        this.render();
+        new Notice("请先填写题目文字或题图");
+        return;
+      }
+      this.setAiProcessStep(2, "正在检索可验证原题；未找到时将独立分析并生成完整解题过程…");
+      const response = await this.callbacks.onEnrichQuestion(questionText, (update) => this.appendAiProcessStream(update));
+      if (!this.aiProcess.content.trim()) this.aiProcess.content = response;
+      this.setAiProcessStep(3, "已收到模型结果，正在校验答案、解析和来源字段…");
+      const result = parseQuestionEnrichment(response, this.draft);
+      if (!result) throw new Error("AI 未返回可解析的检索结果");
+      this.setAiProcessStep(4, "正在把答案与 AI 解析过程回填到题目节点…");
       this.draft = result.question;
+      this.finishAiProcess("done", result.found
+        ? "处理完成：已找到可验证原题，并回填答案与完整解析。"
+        : "处理完成：未找到可靠原题，已由 AI 独立分析并回填答案与完整解析。");
       this.render();
-      new Notice(result.found ? "已找到原题并补齐答案与解析，请核对后保存" : "未找到可验证原题，已由 AI 分析补齐缺失答案与解答，请核对后保存");
+      new Notice(result.found ? "已找到原题并补齐答案与解析，请核对后保存" : "未找到可验证原题，已由 AI 分析补齐答案与解答，请核对后保存");
     } catch (error) {
-      new Notice(`原题检索失败：${error instanceof Error ? error.message : String(error)}`);
+      const message = error instanceof Error ? error.message : String(error);
+      this.finishAiProcess("error", `AI 智能处理失败：${message}`);
+      this.render();
+      new Notice(`原题检索失败：${message}`);
     }
   }
 }

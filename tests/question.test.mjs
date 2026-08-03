@@ -389,7 +389,12 @@ test("question assistant keeps an intelligent image-to-question pipeline and vis
   assert.match(editorSource, /applyAndEnrichAiQuestion\(responseText: string, nodeId\?: string\): Promise<boolean>/);
   assert.match(editorSource, /parseRecognizedQuestion\(responseText, fallback\)/);
   assert.match(viewSource, /onConvertToQuestion: \(responseText\) => this\.editor\?\.applyAndEnrichAiQuestion\(responseText, nodeId\) \?\? false/);
-  assert.match(modalSource, /已由 AI 分析补齐缺失答案与解答/);
+  assert.match(modalSource, /已由 AI 分析补齐答案与解答/);
+  assert.match(modalSource, /AI 解析过程/);
+  assert.match(modalSource, /appendAiProcessStream/);
+  assert.match(modalSource, /onEnrichQuestion\(questionText, \(update\) => this\.appendAiProcessStream\(update\)\)/);
+  assert.match(mainSource, /explanation 必须写出可核对的 AI 解析过程/);
+  assert.match(viewSource, /onEnrichQuestion: async \(questionText, onStreamUpdate\) => this\.plugin\.enrichQuestion\(questionText, onStreamUpdate\)/);
   assert.match(mainSource, /仍需基于题目独立分析/);
 });
 
@@ -413,4 +418,9 @@ test("question fields insert and preview inline or display LaTeX across every qu
   assert.match(editorSource, /renderQuestionSummary[\s\S]*renderRichTextRuns\(part, block\.richText, block\.text\)/);
   assert.match(practiceSource, /renderRichText: QuestionPracticeOptions\["renderRichText"\]/);
   assert.match(styles, /\.mms-question-field-preview\s*\{/);
+  assert.match(styles, /\.mms-node-math\s*\{[\s\S]*display: inline-flex !important;[\s\S]*width: auto !important;/);
+  assert.match(styles, /\.mms-node-math:not\(\.is-display\) mjx-container\s*\{[\s\S]*display: inline-block !important;[\s\S]*margin: 0 !important;/);
+  assert.match(styles, /\.mms-node-math\.is-display\s*\{[\s\S]*display: flex !important;[\s\S]*width: 100% !important;/);
+  assert.match(styles, /\.mms-question-ai-process\s*\{/);
+  assert.match(styles, /\.mms-question-ai-track\s*\{/);
 });

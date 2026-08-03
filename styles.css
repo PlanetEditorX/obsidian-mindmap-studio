@@ -1148,23 +1148,39 @@
 }
 
 .mms-node-math {
-  display: inline-block;
+  display: inline-flex !important;
+  width: auto !important;
   max-width: 100%;
+  flex: 0 1 auto;
+  align-items: baseline;
   overflow: visible !important;
-  vertical-align: middle;
+  vertical-align: baseline;
+  white-space: nowrap;
   scrollbar-width: none;
 }
 
+.mms-node-math:not(.is-display) mjx-container {
+  display: inline-block !important;
+  width: auto !important;
+  max-width: 100%;
+  margin: 0 !important;
+  overflow: visible !important;
+  vertical-align: baseline !important;
+}
+
 .mms-node-math.is-display {
-  display: flex;
+  display: flex !important;
+  width: 100% !important;
   max-width: none;
   align-items: center;
   justify-content: center;
   margin: 4px 0;
+  white-space: normal;
 }
 
-.mms-node-math mjx-container {
+.mms-node-math.is-display mjx-container {
   max-width: 100%;
+  margin: 0 !important;
   overflow: visible !important;
 }
 
@@ -5480,6 +5496,134 @@
 
 select.mms-question-status {
   margin: 8px 0;
+}
+
+.mms-question-ai-process {
+  display: grid;
+  gap: 10px;
+  margin: 16px 0 4px;
+  padding: 12px 14px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  background: var(--background-secondary);
+}
+
+.mms-question-ai-process.is-hidden {
+  display: none;
+}
+
+.mms-question-ai-process[data-state="done"] {
+  border-color: color-mix(in srgb, var(--color-green) 55%, var(--background-modifier-border));
+}
+
+.mms-question-ai-process[data-state="error"] {
+  border-color: color-mix(in srgb, var(--text-error) 65%, var(--background-modifier-border));
+}
+
+.mms-question-ai-process-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.mms-question-ai-process-title span,
+.mms-question-ai-message {
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+}
+
+.mms-question-ai-track {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.mms-question-ai-step {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-faint);
+  font-size: var(--font-ui-smaller);
+}
+
+.mms-question-ai-step-dot {
+  display: inline-grid;
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+  place-items: center;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 50%;
+  background: var(--background-primary);
+  font-size: 11px;
+}
+
+.mms-question-ai-step[data-state="active"] {
+  color: var(--text-normal);
+  font-weight: 600;
+}
+
+.mms-question-ai-step[data-state="active"] .mms-question-ai-step-dot {
+  border-color: var(--interactive-accent);
+  color: var(--text-on-accent);
+  background: var(--interactive-accent);
+  animation: mms-question-ai-pulse 1.2s ease-in-out infinite;
+}
+
+.mms-question-ai-step[data-state="done"] {
+  color: var(--text-success);
+}
+
+.mms-question-ai-step[data-state="done"] .mms-question-ai-step-dot {
+  border-color: var(--color-green);
+  color: var(--color-green);
+}
+
+.mms-question-ai-step[data-state="error"],
+.mms-question-ai-step[data-state="error"] .mms-question-ai-step-dot {
+  border-color: var(--text-error);
+  color: var(--text-error);
+}
+
+.mms-question-ai-output {
+  max-height: 220px;
+  overflow: auto;
+  padding: 8px 10px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-s);
+  background: var(--background-primary);
+}
+
+.mms-question-ai-output summary {
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+}
+
+.mms-question-ai-output pre {
+  margin: 8px 0 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-family: var(--font-text);
+}
+
+@keyframes mms-question-ai-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--interactive-accent) 35%, transparent); }
+  50% { box-shadow: 0 0 0 5px color-mix(in srgb, var(--interactive-accent) 0%, transparent); }
+}
+
+@media (max-width: 720px) {
+  .mms-question-ai-track {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mms-question-ai-step[data-state="active"] .mms-question-ai-step-dot {
+    animation: none;
+  }
 }
 
 .mms-question-practice-view {

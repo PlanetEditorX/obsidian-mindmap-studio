@@ -19,6 +19,7 @@ import type { ReadingLocation } from "../article/reading-location";
 import type { ArticleEntryLockMode } from "../article/display-mode";
 import type { ArticleLeafBulletStyle, ArticleLeafTextAlignment, ImageHostChoice, ImageHostUploadBatch } from "../settings";
 import type { DesktopCaptureResult } from "../utils/desktop-capture";
+import type { AiStreamUpdate } from "../ai/client";
 import type { ImageRecognitionItemResult, RecognizableImage } from "../vision/recognition";
 
 /** Controls host-side work after an editor document change. */
@@ -54,7 +55,7 @@ export interface MindMapEditorCallbacks {
   /** Removes remote mirrors only when no other map still references the same hash or URL. */
   onCleanupRemovedImageRemoteAssets: (block: MindMapImageContentBlock, documentAfterRemoval: MindMapDocument) => Promise<void>;
   onRecognizeImage: (image: RecognizableImage, blob: Blob, remoteUrl?: string, instruction?: string) => Promise<ImageRecognitionItemResult>;
-  onEnrichQuestion: (questionText: string) => Promise<string>;
+  onEnrichQuestion: (questionText: string, onStreamUpdate?: (update: AiStreamUpdate) => void) => Promise<string>;
   onCaptureScreenshot: (recognizeAfter?: boolean) => Promise<DesktopCaptureResult>;
   onCreateSubmap: (node: MindMapNode) => Promise<MindMapSubmap>;
   onDeleteSubmap: (submap: MindMapSubmap) => Promise<boolean>;
