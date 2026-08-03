@@ -2715,7 +2715,17 @@ export class MindMapEditor {
    * 执行“update mode ui”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
    */
   private updateModeUi(): void {
-    for (const [mode, button] of this.modeButtons) button.toggleClass("is-active", mode === this.currentMode);
+    const readingContextLoading = this.currentMode === "reading" && !this.options.articleContextReady;
+    for (const [mode, button] of this.modeButtons) {
+      const loading = mode === "reading" && readingContextLoading;
+      const label = loading ? "通读模式，正在解析" : `${DISPLAY_MODE_LABELS[mode]}模式`;
+      button.toggleClass("is-active", mode === this.currentMode);
+      button.toggleClass("is-loading", loading);
+      button.setAttr("aria-label", label);
+      button.setAttr("title", label);
+      if (loading) button.setAttribute("aria-busy", "true");
+      else button.removeAttribute("aria-busy");
+    }
     const isArticle = this.currentMode === "article";
     const hasLandingChoice = isArticle && this.options.showArticleToc;
     this.articleLandingButton.toggleClass("is-hidden", !hasLandingChoice || !this.options.visibleToolbarItems.includes("article-landing"));
@@ -5921,12 +5931,67 @@ export class MindMapEditor {
     }
   }
 
+  /** Renders a semantic loading state while the parent/child map family is being resolved. */
+  private renderReadingLoading(): void {
+    this.cancelReadingLocationRestore();
+    this.articleScrollButtonCleanup?.();
+    this.articleEl.onscroll = null;
+    this.articleEl.empty();
+    this.articleEl.setAttribute("aria-busy", "true");
+    const loading = this.articleEl.createDiv({
+      cls: "mms-reading-loading",
+      attr: {
+        role: "status",
+        "aria-live": "polite",
+        "aria-label": "正在解析通读内容"
+      }
+    });
+    const message = loading.createDiv({ cls: "mms-reading-loading-message" });
+    const icon = message.createDiv({
+      cls: "mms-reading-loading-icon",
+      attr: { "aria-hidden": "true" }
+    });
+    setIcon(icon, "book-open");
+    const copy = message.createDiv({ cls: "mms-reading-loading-copy" });
+    copy.createDiv({ cls: "mms-reading-loading-title", text: "正在解析通读内容…" });
+    copy.createDiv({
+      cls: "mms-reading-loading-description",
+      text: "正在读取父级与子导图，完成后将自动显示全文"
+    });
+    const skeleton = loading.createDiv({
+      cls: "mms-reading-loading-skeleton",
+      attr: { "aria-hidden": "true" }
+    });
+    skeleton.createDiv({ cls: "mms-article-skeleton-line is-title" });
+    const directory = skeleton.createDiv({ cls: "mms-article-skeleton-directory" });
+    for (let index = 0; index < 5; index += 1) {
+      directory.createDiv({
+        cls: `mms-article-skeleton-line is-toc-row depth-${index % 3}`
+      });
+    }
+    for (let index = 0; index < 2; index += 1) {
+      const block = skeleton.createDiv({ cls: "mms-article-skeleton-block" });
+      block.createDiv({ cls: "mms-article-skeleton-line is-heading" });
+      block.createDiv({ cls: "mms-article-skeleton-line is-body is-wide" });
+      block.createDiv({ cls: "mms-article-skeleton-line is-body" });
+    }
+  }
+
   /**
    * Renders every map in the current parent/child family as one continuous,
    * read-only book with an integrated directory and persisted progress.
    */
   private renderReading(): void {
+    if (!this.options.articleContextReady) {
+      this.callbacks.onDebugLog("reading", "render-waiting-context", {
+        selectedId: this.selectedId,
+        currentFilePath: this.options.currentFilePath
+      });
+      this.renderReadingLoading();
+      return;
+    }
     this.articleEl.empty();
+    this.articleEl.removeAttribute("aria-busy");
     const sections = this.options.readingSections.length
       ? this.options.readingSections
       : [{ filePath: this.options.articleNavigation?.homePath ?? "", document: this.document, baseDepth: 0 }];
@@ -5937,7 +6002,7 @@ export class MindMapEditor {
     progress.style.setProperty("--mms-reading-progress", initialProgress);
     progress.dataset.progress = initialProgress;
     progress.createSpan({ text: `阅读进度 ${initialProgress}` });
-    const page = this.articleEl.createDiv({ cls: `mms-article-page mms-reading-page article-${style.preset}` });
+    const page = this.articleEl.createDiv({ cls: `mms-article-page mms-reading-page is-entering article-${style.preset}` });
     page.dataset.filePath = sections[0]!.filePath;
     page.dataset.nodeId = sections[0]!.document.root.id;
     const bookTitle = page.createEl("h1", { cls: "mms-article-document-title" });

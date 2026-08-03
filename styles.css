@@ -3645,6 +3645,77 @@
   padding-bottom: 120px;
 }
 
+.mms-reading-page.is-entering {
+  animation: mms-reading-page-enter 190ms ease-out both;
+}
+
+.mms-reading-loading {
+  width: min(820px, calc(100% - 48px));
+  margin: 38px auto;
+  padding: 8px 0 44px;
+  pointer-events: none;
+}
+
+.mms-reading-loading-message {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 28px;
+  padding: 16px 18px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  background: color-mix(in srgb, var(--background-secondary) 84%, transparent);
+}
+
+.mms-reading-loading-icon {
+  display: grid;
+  flex: 0 0 38px;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border-radius: 12px;
+  color: var(--text-on-accent);
+  background: var(--interactive-accent);
+  box-shadow: 0 8px 20px color-mix(in srgb, var(--interactive-accent) 24%, transparent);
+  animation: mms-reading-loading-float 920ms ease-in-out infinite alternate;
+}
+
+.mms-reading-loading-icon svg {
+  width: 20px;
+  height: 20px;
+}
+
+.mms-reading-loading-copy {
+  min-width: 0;
+}
+
+.mms-reading-loading-title {
+  color: var(--text-normal);
+  font-size: var(--font-ui-medium);
+  font-weight: 650;
+}
+
+.mms-reading-loading-description {
+  margin-top: 4px;
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+  line-height: 1.55;
+}
+
+.mms-reading-loading-skeleton {
+  padding-inline: 4px;
+}
+
+@keyframes mms-reading-loading-float {
+  from { opacity: .72; transform: translateY(2px) scale(.96); }
+  to { opacity: 1; transform: translateY(-2px) scale(1); }
+}
+
+@keyframes mms-reading-page-enter {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 .mms-reading-progress {
   position: sticky;
   z-index: 12;
@@ -3973,6 +4044,9 @@
   }
 
   .mms-article-entry-skeleton .mms-article-skeleton-line,
+  .mms-reading-loading .mms-article-skeleton-line,
+  .mms-reading-loading-icon,
+  .mms-reading-page.is-entering,
   .mms-article-page.is-window-entering,
   .mms-article-node.is-window-entering,
   .mms-article-window-loader.is-loading::after {

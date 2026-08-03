@@ -12066,7 +12066,17 @@ var MindMapEditor = class {
    */
   updateModeUi() {
     var _a2, _b2, _c;
-    for (const [mode, button] of this.modeButtons) button.toggleClass("is-active", mode === this.currentMode);
+    const readingContextLoading = this.currentMode === "reading" && !this.options.articleContextReady;
+    for (const [mode, button] of this.modeButtons) {
+      const loading = mode === "reading" && readingContextLoading;
+      const label = loading ? "\u901A\u8BFB\u6A21\u5F0F\uFF0C\u6B63\u5728\u89E3\u6790" : `${DISPLAY_MODE_LABELS[mode]}\u6A21\u5F0F`;
+      button.toggleClass("is-active", mode === this.currentMode);
+      button.toggleClass("is-loading", loading);
+      button.setAttr("aria-label", label);
+      button.setAttr("title", label);
+      if (loading) button.setAttribute("aria-busy", "true");
+      else button.removeAttribute("aria-busy");
+    }
     const isArticle = this.currentMode === "article";
     const hasLandingChoice = isArticle && this.options.showArticleToc;
     this.articleLandingButton.toggleClass("is-hidden", !hasLandingChoice || !this.options.visibleToolbarItems.includes("article-landing"));
@@ -15072,13 +15082,68 @@ var MindMapEditor = class {
       new import_obsidian11.Notice("\u521B\u5EFA\u5B50\u5BFC\u56FE\u5931\u8D25");
     }
   }
+  /** Renders a semantic loading state while the parent/child map family is being resolved. */
+  renderReadingLoading() {
+    var _a2;
+    this.cancelReadingLocationRestore();
+    (_a2 = this.articleScrollButtonCleanup) == null ? void 0 : _a2.call(this);
+    this.articleEl.onscroll = null;
+    this.articleEl.empty();
+    this.articleEl.setAttribute("aria-busy", "true");
+    const loading = this.articleEl.createDiv({
+      cls: "mms-reading-loading",
+      attr: {
+        role: "status",
+        "aria-live": "polite",
+        "aria-label": "\u6B63\u5728\u89E3\u6790\u901A\u8BFB\u5185\u5BB9"
+      }
+    });
+    const message = loading.createDiv({ cls: "mms-reading-loading-message" });
+    const icon = message.createDiv({
+      cls: "mms-reading-loading-icon",
+      attr: { "aria-hidden": "true" }
+    });
+    (0, import_obsidian11.setIcon)(icon, "book-open");
+    const copy = message.createDiv({ cls: "mms-reading-loading-copy" });
+    copy.createDiv({ cls: "mms-reading-loading-title", text: "\u6B63\u5728\u89E3\u6790\u901A\u8BFB\u5185\u5BB9\u2026" });
+    copy.createDiv({
+      cls: "mms-reading-loading-description",
+      text: "\u6B63\u5728\u8BFB\u53D6\u7236\u7EA7\u4E0E\u5B50\u5BFC\u56FE\uFF0C\u5B8C\u6210\u540E\u5C06\u81EA\u52A8\u663E\u793A\u5168\u6587"
+    });
+    const skeleton = loading.createDiv({
+      cls: "mms-reading-loading-skeleton",
+      attr: { "aria-hidden": "true" }
+    });
+    skeleton.createDiv({ cls: "mms-article-skeleton-line is-title" });
+    const directory = skeleton.createDiv({ cls: "mms-article-skeleton-directory" });
+    for (let index = 0; index < 5; index += 1) {
+      directory.createDiv({
+        cls: `mms-article-skeleton-line is-toc-row depth-${index % 3}`
+      });
+    }
+    for (let index = 0; index < 2; index += 1) {
+      const block = skeleton.createDiv({ cls: "mms-article-skeleton-block" });
+      block.createDiv({ cls: "mms-article-skeleton-line is-heading" });
+      block.createDiv({ cls: "mms-article-skeleton-line is-body is-wide" });
+      block.createDiv({ cls: "mms-article-skeleton-line is-body" });
+    }
+  }
   /**
    * Renders every map in the current parent/child family as one continuous,
    * read-only book with an integrated directory and persisted progress.
    */
   renderReading() {
     var _a2, _b2, _c, _d, _e, _f;
+    if (!this.options.articleContextReady) {
+      this.callbacks.onDebugLog("reading", "render-waiting-context", {
+        selectedId: this.selectedId,
+        currentFilePath: this.options.currentFilePath
+      });
+      this.renderReadingLoading();
+      return;
+    }
     this.articleEl.empty();
+    this.articleEl.removeAttribute("aria-busy");
     const sections = this.options.readingSections.length ? this.options.readingSections : [{ filePath: (_b2 = (_a2 = this.options.articleNavigation) == null ? void 0 : _a2.homePath) != null ? _b2 : "", document: this.document, baseDepth: 0 }];
     const style = resolveArticleStyle(this.document.articleStyle);
     const progress = this.articleEl.createDiv({ cls: `mms-reading-progress position-${this.options.readingProgressPosition}` });
@@ -15087,7 +15152,7 @@ var MindMapEditor = class {
     progress.style.setProperty("--mms-reading-progress", initialProgress);
     progress.dataset.progress = initialProgress;
     progress.createSpan({ text: `\u9605\u8BFB\u8FDB\u5EA6 ${initialProgress}` });
-    const page = this.articleEl.createDiv({ cls: `mms-article-page mms-reading-page article-${style.preset}` });
+    const page = this.articleEl.createDiv({ cls: `mms-article-page mms-reading-page is-entering article-${style.preset}` });
     page.dataset.filePath = sections[0].filePath;
     page.dataset.nodeId = sections[0].document.root.id;
     const bookTitle = page.createEl("h1", { cls: "mms-article-document-title" });
