@@ -91,6 +91,16 @@ test("document-level numbering disable is shared by the directory, article title
   assert.match(editorSource, /关闭中心节点编号时，当前物理导图内的章节和末端序号全部隐藏/);
 });
 
+test("continuous reading reuses the active child document while numbering changes are still saving", () => {
+  const contextBuilder = mainSource.match(/async buildArticleContext\([\s\S]*?\n  \}/)?.[0] ?? "";
+  assert.match(contextBuilder, /const familyDocuments = new Map<string, MindMapDocument>\(\[\[file\.path, document\]\]\)/);
+  assert.match(contextBuilder, /const readFamilyDocument = async \(targetFile: TFile\): Promise<MindMapDocument> => \{[\s\S]*familyDocuments\.get\(targetFile\.path\)[\s\S]*this\.readMindMapDocument\(targetFile\)/);
+  assert.match(contextBuilder, /topDocument = await readFamilyDocument\(parentFile\)/);
+  assert.match(contextBuilder, /const childDocument = await readFamilyDocument\(childFile\)/);
+  assert.doesNotMatch(contextBuilder, /const childDocument = await this\.readMindMapDocument\(childFile\)/);
+});
+
+
 test("children below a level-eight heading keep structure without receiving a recycled A or B prefix", () => {
   const heading = (text, children = [model.createNode(`${text} 正文`)]) => {
     const node = model.createNode(text);
