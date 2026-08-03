@@ -11,6 +11,7 @@ import {
   type MindMapImageSourceCandidate
 } from "../core/model";
 import { ensureMathJax } from "./rich-text-dom";
+import { normalizeFormulaEditorSource, normalizeLatexForMathJax } from "../core/latex";
 import type { ImageHostChoice } from "../settings";
 import { xmindToDocument } from "../import/import-export";
 import { setAllBranchesCollapsed } from "./node-actions";
@@ -302,7 +303,7 @@ export class FormulaEditModal extends Modal {
     let previewToken = 0;
     const updatePreview = (): void => {
       const token = ++previewToken;
-      const value = source.value.trim();
+      const value = normalizeFormulaEditorSource(source.value);
       preview.empty();
       if (!value) {
         preview.createSpan({ cls: "setting-item-description", text: "公式预览" });
@@ -312,7 +313,7 @@ export class FormulaEditModal extends Modal {
         if (token !== previewToken || !preview.isConnected) return;
         preview.empty();
         try {
-          preview.appendChild(renderMath(value, displayMode.value === "display"));
+          preview.appendChild(renderMath(normalizeLatexForMathJax(value), displayMode.value === "display"));
           void finishRenderMath();
         } catch {
           preview.createSpan({ cls: "mod-warning", text: "公式语法暂时无法渲染" });
@@ -350,7 +351,7 @@ export class FormulaEditModal extends Modal {
     actions.createEl("button", { text: "取消", attr: { type: "button" } }).addEventListener("click", () => this.close());
     const save = actions.createEl("button", { text: "插入公式", cls: "mod-cta", attr: { type: "button" } });
     save.addEventListener("click", () => {
-      const value = source.value.trim();
+      const value = normalizeFormulaEditorSource(source.value);
       if (!value) {
         new Notice("请先输入或选择一个公式");
         return;

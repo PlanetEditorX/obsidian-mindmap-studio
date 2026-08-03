@@ -11,6 +11,7 @@ import {
   type MindMapTextRun,
   type MindMapTextStyle
 } from "../core/model";
+import { normalizeLatexForMathJax, splitLatexText } from "../core/latex";
 
 let mathJaxReady = false;
 let mathJaxLoading: Promise<void> | null = null;
@@ -75,7 +76,21 @@ export function renderRichTextRuns(
     if (decorations.length) span.style.textDecorationLine = decorations.join(" ");
     if (style?.color) span.style.color = style.color;
   };
-  const hasMath = latex && sourceRuns.some((run) => /(\$\$[\s\S]+?\$\$|\$[^$\n]+?\$)/.test(run.text));
+  const combinedText = sourceRuns.map((run) => run.text).join("");
+  const runRanges = sourceRuns.map((run, index) => ({
+    run,
+    start: sourceRuns.slice(0, index).reduce((total, item) => total + item.text.length, 0),
+    end: sourceRuns.slice(0, index + 1).reduce((total, item) => total + item.text.length, 0)
+  }));
+  const appendRange = (start: number, end: number): void => {
+    for (const range of runRanges) {
+      const from = Math.max(start, range.start);
+      const to = Math.min(end, range.end);
+      if (to > from) append(combinedText.slice(from, to), range.run.style);
+    }
+  };
+  const segments = latex ? splitLatexText(combinedText) : [];
+  const hasMath = latex && segments.some((segment) => segment.type === "math");
   if (hasMath && !mathJaxReady) {
     sourceRuns.forEach((run) => append(run.text, run.style));
     void ensureMathJax().then(() => {
@@ -85,32 +100,25 @@ export function renderRichTextRuns(
     }).catch(() => undefined);
     return;
   }
+  if (!latex || !hasMath) {
+    sourceRuns.forEach((run) => append(run.text, run.style));
+    return;
+  }
   let renderedMath = false;
-  for (const run of sourceRuns) {
-    if (!latex) {
-      append(run.text, run.style);
+  for (const segment of segments) {
+    if (segment.type === "text") {
+      appendRange(segment.start, segment.end);
       continue;
     }
-    const pattern = /(\$\$[\s\S]+?\$\$|\$[^$\n]+?\$)/g;
-    let offset = 0;
-    for (const match of run.text.matchAll(pattern)) {
-      const index = match.index ?? 0;
-      if (index > offset) append(run.text.slice(offset, index), run.style);
-      const token = match[0];
-      const display = token.startsWith("$$");
-      const source = token.slice(display ? 2 : 1, display ? -2 : -1).trim();
-      try {
-        const math = renderMath(source, display);
-        math.addClass("mms-node-math");
-        math.toggleClass("is-display", display);
-        container.appendChild(math);
-        renderedMath = true;
-      } catch {
-        append(token, run.style);
-      }
-      offset = index + token.length;
+    try {
+      const math = renderMath(normalizeLatexForMathJax(segment.source), segment.display);
+      math.addClass("mms-node-math");
+      math.toggleClass("is-display", segment.display);
+      container.appendChild(math);
+      renderedMath = true;
+    } catch {
+      appendRange(segment.start, segment.end);
     }
-    if (offset < run.text.length) append(run.text.slice(offset), run.style);
   }
   if (renderedMath) void finishRenderMath();
 }

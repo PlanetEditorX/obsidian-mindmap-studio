@@ -1148,24 +1148,24 @@
 }
 
 .mms-node-math {
-  display: inline-flex !important;
   width: auto !important;
   max-width: 100%;
-  flex: 0 1 auto;
-  align-items: baseline;
   overflow: visible !important;
   vertical-align: baseline;
   white-space: nowrap;
   scrollbar-width: none;
 }
 
+.mms-node-math:not(.is-display),
+mjx-container.mms-node-math:not(.is-display),
 .mms-node-math:not(.is-display) mjx-container {
   display: inline-block !important;
   width: auto !important;
+  min-width: 0 !important;
   max-width: 100%;
   margin: 0 !important;
   overflow: visible !important;
-  vertical-align: baseline !important;
+  vertical-align: -.08em !important;
 }
 
 .mms-node-math.is-display {
