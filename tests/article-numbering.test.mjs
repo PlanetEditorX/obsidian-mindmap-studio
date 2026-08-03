@@ -1,10 +1,14 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import { after, before, test } from "node:test";
 import { loadTypeScriptModules } from "./compile-typescript.mjs";
 
 let model;
 let modes;
 let cleanup;
+let mainSource;
+let articleRendererSource;
+let editorSource;
 
 before(async () => {
   const loaded = await loadTypeScriptModules([
@@ -19,6 +23,11 @@ before(async () => {
     "src/core/node-tree.ts",
     "src/core/model.ts"
   ], "src/core/model.ts");
+  [mainSource, articleRendererSource, editorSource] = await Promise.all([
+    readFile(new URL("../src/main.ts", import.meta.url), "utf8"),
+    readFile(new URL("../src/editor/article-renderer.ts", import.meta.url), "utf8"),
+    readFile(new URL("../src/editor/editor.ts", import.meta.url), "utf8")
+  ]);
   model = loadedModel.module;
   const modesCleanup = cleanup;
   cleanup = async () => {
@@ -42,6 +51,44 @@ test("alphabetic article numbering remains unique beyond Z", () => {
   assert.equal(modes.articleNumberLabel(7, 27), "AA.");
   assert.equal(modes.articleNumberLabel(8, 52), "（AZ）");
   assert.equal(modes.articleNumberLabel(8, 53), "（BA）");
+});
+
+
+test("disabling numbering on the document root suppresses every local article label without flattening structure", () => {
+  const root = model.createNode("根节点");
+  root.articleNumberingMode = "none";
+  const chapter = model.createNode("章节");
+  chapter.children = [model.createNode("正文一"), model.createNode("正文二"), model.createNode("正文三"), model.createNode("正文四")];
+  root.children = [chapter];
+
+  const infos = modes.buildArticleNodeInfo(root, 0, { enabled: true, threshold: 4, style: "circled" });
+  assert.deepEqual(infos.map((info) => info.label), ["", "", "", "", ""]);
+  assert.deepEqual(infos.map((info) => info.displayTitle), ["章节", "正文一", "正文二", "正文三", "正文四"]);
+  assert.equal(infos[0]?.depth, 1);
+  assert.equal(infos[1]?.depth, 2);
+  assert.equal(infos[0]?.skipped, false);
+  assert.equal(infos[1]?.numberedLeaf, false);
+});
+
+test("disabling a normal heading still skips only that heading instead of disabling its descendants", () => {
+  const root = model.createNode("根节点");
+  const chapter = model.createNode("章节");
+  chapter.articleNumberingMode = "none";
+  const section = model.createNode("小节");
+  section.children = [model.createNode("正文")];
+  chapter.children = [section];
+  root.children = [chapter];
+
+  const infos = modes.buildArticleNodeInfo(root);
+  assert.equal(infos.find((info) => info.title === "章节")?.label, "");
+  assert.equal(infos.find((info) => info.title === "章节")?.skipped, true);
+  assert.equal(infos.find((info) => info.title === "小节")?.label, "第一节");
+});
+
+test("document-level numbering disable is shared by the directory, article title, and settings help", () => {
+  assert.match(mainSource, /const documentNumberingDisabled = isDocumentArticleNumberingDisabled\(item\.document\.root\);[\s\S]*const numberedIndex = !documentNumberingDisabled/);
+  assert.match(articleRendererSource, /const pageEntry = isDocumentArticleNumberingDisabled\(options\.document\.root\)[\s\S]*\? undefined/);
+  assert.match(editorSource, /关闭中心节点编号时，当前物理导图内的章节和末端序号全部隐藏/);
 });
 
 test("children below a level-eight heading keep structure without receiving a recycled A or B prefix", () => {

@@ -141,6 +141,18 @@ export function isArticleHeading(node: MindMapNode): boolean {
   return node.children.length > 0 || Boolean(node.submap?.path);
 }
 
+/**
+ * 判断当前物理导图是否关闭整页文章编号。中心节点本身不参与编号，
+ * 因此保存在根节点上的 `none` 必须作用于该文件内全部正文标题和末端序号。
+ * 普通非根节点的 `none` 仍只跳过该节点，不影响后代的结构层级。
+ *
+ * @param root 当前物理导图的中心节点。
+ * @returns 根节点是否关闭当前文件的全部文章编号。
+ */
+export function isDocumentArticleNumberingDisabled(root: MindMapNode): boolean {
+  return root.articleNumberingMode === "none";
+}
+
 /** 文章节点在自动、关闭或手动最高层级规则下的解析结果。 */
 export interface ArticleNumberingResolution {
   level: number;
@@ -341,6 +353,7 @@ export function buildArticleNodeInfo(
   primaryText: (node: MindMapNode) => string = nodePrimaryText
 ): ArticleNodeInfo[] {
   const result: ArticleNodeInfo[] = [];
+  const documentNumberingDisabled = isDocumentArticleNumberingDisabled(root);
   const visitChildren = (parent: MindMapNode, defaultLevel: number): void => {
     let siblingHasHeading = false;
     let terminalCount = 0;
@@ -351,7 +364,7 @@ export function buildArticleNodeInfo(
     const threshold = Math.max(1, Math.min(20, Math.floor(leafNumbering.threshold) || 4));
     const leafNumberingStyle: ArticleLeafNumberingStyle = leafNumbering.style === "circled" ? "circled" : "next-level";
     const hasSupportedLeafLabel = leafNumberingStyle === "circled" || defaultLevel <= MAX_ARTICLE_NUMBERING_LEVEL;
-    const convertLeaves = leafNumbering.enabled && terminalCount >= threshold && hasSupportedLeafLabel;
+    const convertLeaves = !documentNumberingDisabled && leafNumbering.enabled && terminalCount >= threshold && hasSupportedLeafLabel;
     const numberedIndexes = new Map<number, number>();
     for (const child of parent.children) {
       const numbering = resolveArticleNumbering(child, defaultLevel, siblingHasHeading);
@@ -360,7 +373,7 @@ export function buildArticleNodeInfo(
       // its parent heading. Its own manual article-level metadata must not move
       // the generated prefix away from that structural level.
       const displayLevel = numberedLeaf ? defaultLevel : numbering.level;
-      const numberedIndex = (numbering.shouldNumber || numberedLeaf) && !numbering.skipped
+      const numberedIndex = !documentNumberingDisabled && (numbering.shouldNumber || numberedLeaf) && !numbering.skipped
         ? (numberedIndexes.get(displayLevel) ?? 0) + 1
         : 0;
       if (numberedIndex) numberedIndexes.set(displayLevel, numberedIndex);

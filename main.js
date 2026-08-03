@@ -5224,6 +5224,9 @@ function isArticleHeading(node) {
   var _a2;
   return node.children.length > 0 || Boolean((_a2 = node.submap) == null ? void 0 : _a2.path);
 }
+function isDocumentArticleNumberingDisabled(root) {
+  return root.articleNumberingMode === "none";
+}
 function resolveArticleNumbering(node, defaultLevel, siblingHasHeading) {
   var _a2, _b2;
   const mode = (_a2 = node.articleNumberingMode) != null ? _a2 : "auto";
@@ -5272,6 +5275,7 @@ function currentArticlePageEntry(navigation) {
 }
 function buildArticleNodeInfo(root, baseDepth = 0, leafNumbering = { enabled: false, threshold: 4 }, primaryText = nodePrimaryText) {
   const result = [];
+  const documentNumberingDisabled = isDocumentArticleNumberingDisabled(root);
   const visitChildren = (parent, defaultLevel) => {
     var _a2;
     let siblingHasHeading = false;
@@ -5283,13 +5287,13 @@ function buildArticleNodeInfo(root, baseDepth = 0, leafNumbering = { enabled: fa
     const threshold = Math.max(1, Math.min(20, Math.floor(leafNumbering.threshold) || 4));
     const leafNumberingStyle = leafNumbering.style === "circled" ? "circled" : "next-level";
     const hasSupportedLeafLabel = leafNumberingStyle === "circled" || defaultLevel <= MAX_ARTICLE_NUMBERING_LEVEL;
-    const convertLeaves = leafNumbering.enabled && terminalCount >= threshold && hasSupportedLeafLabel;
+    const convertLeaves = !documentNumberingDisabled && leafNumbering.enabled && terminalCount >= threshold && hasSupportedLeafLabel;
     const numberedIndexes = /* @__PURE__ */ new Map();
     for (const child of parent.children) {
       const numbering = resolveArticleNumbering(child, defaultLevel, siblingHasHeading);
       const numberedLeaf = convertLeaves && !numbering.isHeading && !numbering.skipped;
       const displayLevel = numberedLeaf ? defaultLevel : numbering.level;
-      const numberedIndex = (numbering.shouldNumber || numberedLeaf) && !numbering.skipped ? ((_a2 = numberedIndexes.get(displayLevel)) != null ? _a2 : 0) + 1 : 0;
+      const numberedIndex = !documentNumberingDisabled && (numbering.shouldNumber || numberedLeaf) && !numbering.skipped ? ((_a2 = numberedIndexes.get(displayLevel)) != null ? _a2 : 0) + 1 : 0;
       if (numberedIndex) numberedIndexes.set(displayLevel, numberedIndex);
       const label = numberedIndex ? numberedLeaf && leafNumberingStyle === "circled" ? circledNumberLabel(numberedIndex) : articleNumberLabel(displayLevel, numberedIndex) : "";
       const title = primaryText(child) || (numbering.isHeading ? "\u672A\u547D\u540D\u6807\u9898" : "");
@@ -8665,7 +8669,7 @@ function renderArticleMode(container, options) {
   const page = container.createDiv({ cls: `mms-article-page article-${articleStyle.preset} toc-${(_a2 = articleStyle.tocStyle) != null ? _a2 : "card"}` });
   page.dataset.nodeId = options.document.root.id;
   applyArticleStyle(page, articleStyle);
-  const pageEntry = currentArticlePageEntry(options.articleNavigation);
+  const pageEntry = isDocumentArticleNumberingDisabled(options.document.root) ? void 0 : currentArticlePageEntry(options.articleNavigation);
   const title = page.createEl("h1", { cls: "mms-article-document-title" });
   title.dataset.nodeId = options.document.root.id;
   if (pageEntry == null ? void 0 : pageEntry.label) {
@@ -9758,7 +9762,7 @@ function createArticleNumberingControls(container, currentMode, currentLevel, on
   numberingLevelSelect.value = String(currentLevel != null ? currentLevel : 1);
   const numberingHelp = container.createDiv({
     cls: "setting-item-description mmc-article-numbering-help",
-    text: "\u624B\u52A8\u5C42\u7EA7\u7528\u4E8E\u5B9A\u4E49\u5F53\u524D\u8282\u70B9\u6240\u5728\u5B50\u6811\u7684\u6700\u9AD8\u6587\u7AE0\u5C42\u7EA7\uFF1B\u7F16\u8F91\u4E2D\u5FC3\u8282\u70B9\u65F6\uFF0C\u4E00\u7EA7\u5B50\u8282\u70B9\u76F4\u63A5\u4F7F\u7528\u6240\u9009\u5C42\u7EA7\u3002\u672B\u7AEF\u8282\u70B9\u662F\u5426\u4F5C\u4E3A\u6807\u9898\u4ECD\u7531\u540C\u7EA7\u7ED3\u6784\u81EA\u52A8\u5224\u65AD\uFF1B\u8D85\u8FC7\u7B2C 8 \u7EA7\u7684\u66F4\u6DF1\u7ED3\u6784\u4FDD\u7559\u6807\u9898\u5C42\u7EA7\uFF0C\u4F46\u4E0D\u518D\u5FAA\u73AF\u751F\u6210 A. /\uFF08A\uFF09\u7F16\u53F7\u3002"
+    text: "\u5173\u95ED\u4E2D\u5FC3\u8282\u70B9\u7F16\u53F7\u65F6\uFF0C\u5F53\u524D\u7269\u7406\u5BFC\u56FE\u5185\u7684\u7AE0\u8282\u548C\u672B\u7AEF\u5E8F\u53F7\u5168\u90E8\u9690\u85CF\uFF1B\u5173\u95ED\u666E\u901A\u8282\u70B9\u65F6\u53EA\u8DF3\u8FC7\u8BE5\u8282\u70B9\u3002\u624B\u52A8\u5C42\u7EA7\u7528\u4E8E\u5B9A\u4E49\u5F53\u524D\u8282\u70B9\u6240\u5728\u5B50\u6811\u7684\u6700\u9AD8\u6587\u7AE0\u5C42\u7EA7\uFF1B\u7F16\u8F91\u4E2D\u5FC3\u8282\u70B9\u65F6\uFF0C\u4E00\u7EA7\u5B50\u8282\u70B9\u76F4\u63A5\u4F7F\u7528\u6240\u9009\u5C42\u7EA7\u3002\u8D85\u8FC7\u7B2C 8 \u7EA7\u7684\u66F4\u6DF1\u7ED3\u6784\u4FDD\u7559\u6807\u9898\u5C42\u7EA7\uFF0C\u4F46\u4E0D\u518D\u5FAA\u73AF\u751F\u6210 A. /\uFF08A\uFF09\u7F16\u53F7\u3002"
   });
   const updateNumberingLevelState = () => {
     const manual = numberingModeSelect.value === "manual";
@@ -21930,7 +21934,8 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
       for (const item of items) {
         const { node, file: sourceFile, breadcrumb } = item;
         const numbering = resolveArticleNumbering(node, defaultLevel, siblingHasHeading);
-        const numberedIndex = numbering.shouldNumber && !numbering.skipped ? ((_a3 = numberedIndexes.get(numbering.level)) != null ? _a3 : 0) + 1 : 0;
+        const documentNumberingDisabled = isDocumentArticleNumberingDisabled(item.document.root);
+        const numberedIndex = !documentNumberingDisabled && numbering.shouldNumber && !numbering.skipped ? ((_a3 = numberedIndexes.get(numbering.level)) != null ? _a3 : 0) + 1 : 0;
         if (numberedIndex) numberedIndexes.set(numbering.level, numberedIndex);
         const label = numberedIndex ? articleNumberLabel(numbering.level, numberedIndex) : "";
         const title = nodePlainText(node) || (numbering.isHeading ? "\u672A\u547D\u540D\u6807\u9898" : "");
