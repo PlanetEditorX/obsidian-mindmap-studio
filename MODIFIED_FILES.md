@@ -1,5 +1,12 @@
 # Modified Files
 
+## 1.43.4 CI 文档覆盖修复
+
+- `src/article/modes.ts`：为 `ArticleContextProgress` 增加完整 JSDoc，说明阶段、百分比与动态计数用途。
+- `src/editor/editor.ts`：为右下角文章上下文进度渲染方法增加 JSDoc，明确其只负责只读反馈。
+- `docs/FUNCTION_REFERENCE.md`：重新生成函数参考，文档覆盖提升为 56 个源码模块、1127 个具名声明。
+- `CHANGELOG.md`、`TEST_RESULTS.md`、版本元数据与交付配置：同步 1.43.4 CI 修复结果。
+
 
 ## 1.43.3 文章/通读右下角加载进度
 

@@ -11492,6 +11492,10 @@ var MindMapEditor = class {
       }, 640);
     }
   }
+  /**
+   * 根据当前显示模式与文章族解析状态，挂载、更新或移除右下角加载进度浮层。
+   * 该浮层仅提供只读反馈，不参与正文首帧门、滚动恢复或文档持久化。
+   */
   renderArticleContextLoadingProgress() {
     var _a2, _b2, _c, _d, _e;
     if (!this.rootEl) return;

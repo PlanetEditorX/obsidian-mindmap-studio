@@ -37,6 +37,10 @@ export interface ReadingSection {
   numberingDisabled?: boolean;
 }
 
+/**
+ * 文章族上下文构建过程中向视图层上报的阶段性进度。
+ * 百分比用于右下角加载提示，计数用于在动态发现子导图时保持进度稳定。
+ */
 export interface ArticleContextProgress {
   phase: "prepare" | "walk" | "finalize" | "complete";
   percent: number;
