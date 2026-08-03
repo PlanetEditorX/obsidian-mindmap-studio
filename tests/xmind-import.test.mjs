@@ -91,3 +91,77 @@ test("missing XMind resources are reported without broken image blocks", () => {
   assert.equal(result.images.length, 0);
   assert.deepEqual(model.nodeContentBlocks(result.document.root).map((block) => block.type), ["text", "text"]);
 });
+
+function nestedSheetFixture() {
+  return zipSync({
+    "content.json": strToU8(JSON.stringify([
+      {
+        id: "parent-sheet",
+        rootTopic: {
+          id: "parent-root",
+          title: "父导图",
+          children: {
+            attached: [{
+              id: "child-mount",
+              title: "一级子导图",
+              href: "xmind:#child-sheet"
+            }]
+          }
+        }
+      },
+      {
+        id: "child-sheet",
+        rootTopic: {
+          id: "child-root",
+          title: "一级子导图",
+          image: { src: "xap:resources/一级.png" },
+          notes: { plain: { content: "一级画布备注" } },
+          children: {
+            attached: [{
+              id: "grandchild-mount",
+              title: "二级子导图",
+              href: "xmind:#grandchild-sheet"
+            }]
+          }
+        }
+      },
+      {
+        id: "grandchild-sheet",
+        rootTopic: {
+          id: "grandchild-root",
+          title: "二级子导图",
+          image: { src: "xap:resources/二级.png" },
+          equation: { latex: "x^2+y^2=z^2" },
+          notes: { plain: { content: "二级画布备注" } }
+        }
+      }
+    ])),
+    "resources/一级.png": new Uint8Array([0x89, 0x50, 0x4e, 0x47, 1]),
+    "resources/二级.png": new Uint8Array([0x89, 0x50, 0x4e, 0x47, 2])
+  }).buffer;
+}
+
+test("nested linked XMind sheet roots keep images equations and notes at every depth", async () => {
+  const result = xmind.xmindToImportResult(nestedSheetFixture(), "fallback");
+  assert.equal(result.images.length, 2);
+  assert.equal(result.imageReferenceCount, 2);
+  assert.equal(result.equationCount, 1);
+  assert.equal(result.missingImageCount, 0);
+
+  const child = result.document.root.children[0];
+  const grandchild = child.children[0];
+  assert.equal(child.note, "一级画布备注");
+  assert.equal(grandchild.note, "二级画布备注");
+  assert.deepEqual(model.nodeContentBlocks(child).map((block) => block.type), ["text", "image"]);
+  assert.deepEqual(model.nodeContentBlocks(grandchild).map((block) => block.type), ["text", "text", "image"]);
+
+  const materialized = await xmind.materializeXMindImages(result, async (image) => `MindMap Assets/XMind/${image.filename}`);
+  assert.deepEqual(materialized, { saved: 2, rewritten: 2 });
+  const nestedImages = [child, grandchild]
+    .flatMap((node) => model.nodeContentBlocks(node))
+    .filter((block) => block.type === "image");
+  assert.deepEqual(nestedImages.map((block) => block.source), [
+    "MindMap Assets/XMind/一级.png",
+    "MindMap Assets/XMind/二级.png"
+  ]);
+});

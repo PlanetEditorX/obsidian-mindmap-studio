@@ -317,6 +317,46 @@ function rewriteXMindImageTokens(document: MindMapDocument, replacements: Map<st
 }
 
 /**
+ * Merges a linked XMind sheet root into its same-title mount topic.
+ *
+ * XMind uses same-title topic links as nested sheet portals. The mount topic
+ * already owns the visible title, so only the linked root's additional content
+ * blocks, notes, and children are merged. This preserves images and equations
+ * attached directly to deeply nested sheet roots without duplicating the title.
+ */
+function mergeLinkedXMindSheetRoot(target: MindMapNode, linkedRoot: MindMapNode): void {
+  const targetBlocks = nodeContentBlocks(target);
+  const mergedBlocks = [...targetBlocks];
+  const seen = new Set(targetBlocks.map((block) => {
+    if (block.type === "image") return `image\u0000${block.source}\u0000${block.width ?? ""}\u0000${block.height ?? ""}`;
+    if (block.type === "text") return `text\u0000${block.text}`;
+    return `${block.type}\u0000${block.id}`;
+  }));
+  let skippedLinkedTitle = false;
+  for (const block of nodeContentBlocks(linkedRoot)) {
+    if (!skippedLinkedTitle && block.type === "text" && block.text.trim() === target.text.trim()) {
+      skippedLinkedTitle = true;
+      continue;
+    }
+    const key = block.type === "image"
+      ? `image\u0000${block.source}\u0000${block.width ?? ""}\u0000${block.height ?? ""}`
+      : block.type === "text"
+        ? `text\u0000${block.text}`
+        : `${block.type}\u0000${block.id}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    mergedBlocks.push(block);
+  }
+  if (mergedBlocks.length !== targetBlocks.length) replaceNodeContentBlocks(target, mergedBlocks);
+  const linkedNote = linkedRoot.note?.trim();
+  if (linkedNote && !target.note?.trim()) target.note = linkedNote;
+  else if (linkedNote && target.note?.trim() !== linkedNote && !target.note?.includes(linkedNote)) {
+    target.note = `${target.note?.trim()}\n\n${linkedNote}`;
+  }
+  target.children.push(...linkedRoot.children);
+}
+
+/**
  * Parses a modern XMind archive while retaining images and LaTeX attachments.
  *
  * Embedded images receive temporary tokens so the UI can save each binary once
@@ -406,7 +446,7 @@ export function xmindToImportResult(source: ArrayBuffer, fallbackTitle = "XMind 
       const linkedSheet = sheetById.get(sheetReference(topic) ?? "");
       if (linkedSheet?.rootTopic && !ancestors.has(linkedSheet)) {
         const linkedRoot = convertSheet(linkedSheet, ancestors);
-        if (linkedRoot.text === node.text) node.children.push(...linkedRoot.children);
+        if (topicPrimaryTitle(linkedRoot) === topicPrimaryTitle(node)) mergeLinkedXMindSheetRoot(node, linkedRoot);
         else node.children.push(linkedRoot);
       }
       const topicChildren = Object.values(topic.children ?? {}).flatMap((items) => Array.isArray(items) ? items : []);

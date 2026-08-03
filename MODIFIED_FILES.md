@@ -1,5 +1,12 @@
 # Modified Files
 
+## 1.43.8 XMind 深层画布根图片保留
+
+- `src/import/import-export.ts`：同名跨画布挂载改用首个标题内容判断，合并被链接画布根主题除重复标题外的图片、公式、备注和后代，避免深层根图片被丢弃或被额外套一层同名节点。
+- `tests/xmind-import.test.mjs`：新增父导图 → 子导图 → 孙子导图两级链接场景，验证两层根图片、深层公式、备注、共享资源落盘和路径重写。
+- `README.md`、`docs/ARCHITECTURE.md`、`docs/DATA_MODEL.md`、`docs/SPECIAL_FEATURES.md`、`docs/TESTING.md`、`docs/FUNCTION_REFERENCE.md`、`CHANGELOG.md`：同步嵌套画布根内容合并规则。
+- `package.json`、`package-lock.json`、`manifest.json`、`versions.json`、`update.json`、`main.js`：版本统一为 1.43.8。
+
 ## 1.43.7 Ctrl/Cmd+F 搜索入口修复
 
 - `src/main.ts`、`src/view.ts`：活动 MindMap Studio 视图在窗口捕获阶段直接处理 `Ctrl/Cmd+F`，并通过公开视图边界打开当前父子导图族搜索；弹窗内保持原按键行为。
