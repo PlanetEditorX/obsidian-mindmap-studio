@@ -1401,7 +1401,7 @@ export default class MindMapStudioPlugin extends Plugin {
    * @returns 计算得到的数值结果。
    * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
    */
-  async buildArticleContext(file: TFile, document: MindMapDocument): Promise<{ baseDepth: number; tocEntries: ArticleTocEntry[]; readingTocEntries: ArticleTocEntry[]; showToc: boolean; navigation?: ArticlePageNavigation; readingSections: ReadingSection[] }> {
+  async buildArticleContext(file: TFile, document: MindMapDocument): Promise<{ baseDepth: number; tocEntries: ArticleTocEntry[]; showToc: boolean; navigation?: ArticlePageNavigation; readingSections: ReadingSection[] }> {
     const baseDepth = await this.computeArticleBaseDepth(file, document);
     let topFile = file;
     let topDocument = document;
@@ -1416,7 +1416,6 @@ export default class MindMapStudioPlugin extends Plugin {
     const isTopLevel = topFile.path === file.path;
 
     const tocEntries: ArticleTocEntry[] = [];
-    const readingTocEntries: ArticleTocEntry[] = [];
     const readingSections: ReadingSection[] = [{ filePath: topFile.path, document: topDocument, baseDepth: 0 }];
     const visitedFiles = new Set<string>([topFile.path]);
     let hasSubmaps = false;
@@ -1428,7 +1427,6 @@ export default class MindMapStudioPlugin extends Plugin {
     const processItems = async (items: Item[], defaultLevel: number, structureDepth: number): Promise<void> => {
       const siblingHasHeading = items.some(({ node }) => isArticleHeading(node));
       const numberedIndexes = new Map<number, number>();
-      const readingNumberedIndexes = new Map<number, number>();
       for (const item of items) {
         const { node, file: sourceFile, breadcrumb } = item;
         const numbering = resolveArticleNumbering(node, defaultLevel, siblingHasHeading);
@@ -1436,13 +1434,8 @@ export default class MindMapStudioPlugin extends Plugin {
         const numberedIndex = !documentNumberingDisabled && numbering.shouldNumber && !numbering.skipped
           ? (numberedIndexes.get(numbering.level) ?? 0) + 1
           : 0;
-        const readingNumberedIndex = numbering.shouldNumber && !numbering.skipped
-          ? (readingNumberedIndexes.get(numbering.level) ?? 0) + 1
-          : 0;
         if (numberedIndex) numberedIndexes.set(numbering.level, numberedIndex);
-        if (readingNumberedIndex) readingNumberedIndexes.set(numbering.level, readingNumberedIndex);
         const label = numberedIndex ? articleNumberLabel(numbering.level, numberedIndex) : "";
-        const readingLabel = readingNumberedIndex ? articleNumberLabel(numbering.level, readingNumberedIndex) : "";
         const title = nodePlainText(node) || (numbering.isHeading ? "未命名标题" : "");
         const nextBreadcrumb = [...breadcrumb, title || "未命名标题"];
         const tocEntry: ArticleTocEntry | null = numbering.isHeading
@@ -1458,19 +1451,6 @@ export default class MindMapStudioPlugin extends Plugin {
           }
           : null;
         if (tocEntry) tocEntries.push(tocEntry);
-        const readingTocEntry: ArticleTocEntry | null = numbering.isHeading
-          ? {
-            filePath: sourceFile.path,
-            nodeId: node.id,
-            depth: numbering.level,
-            tocDepth: structureDepth,
-            label: readingLabel,
-            title,
-            displayTitle: articleDisplayTitle(readingLabel, title),
-            breadcrumb: nextBreadcrumb
-          }
-          : null;
-        if (readingTocEntry) readingTocEntries.push(readingTocEntry);
 
         const descendants: Item[] = node.children.map((child) => ({
           node: child,
@@ -1484,10 +1464,6 @@ export default class MindMapStudioPlugin extends Plugin {
           if (childFile && tocEntry) {
             tocEntry.filePath = childFile.path;
             tocEntry.nodeId = undefined;
-          }
-          if (childFile && readingTocEntry) {
-            readingTocEntry.filePath = childFile.path;
-            readingTocEntry.nodeId = undefined;
           }
           if (childFile && !visitedFiles.has(childFile.path)) {
             visitedFiles.add(childFile.path);
@@ -1550,7 +1526,6 @@ export default class MindMapStudioPlugin extends Plugin {
     return {
       baseDepth,
       tocEntries,
-      readingTocEntries,
       showToc: isTopLevel && hasSubmaps && tocEntries.length > 0,
       navigation
       ,readingSections

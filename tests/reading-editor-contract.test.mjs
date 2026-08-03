@@ -216,7 +216,7 @@ test("article parent navigation preserves the parent mount node", async () => {
 });
 
 
-test("parent returns preserve non-article modes while article pages use directory intent", async () => {
+test("parent returns use directory intent instead of article focus", async () => {
   const [typesSource, editorSource, viewSource, mainSource, rendererSource] = await Promise.all([
     readFile("src/editor/editor-types.ts", "utf8"),
     readFile("src/editor/editor.ts", "utf8"),
@@ -225,8 +225,7 @@ test("parent returns preserve non-article modes while article pages use director
     readFile("src/editor/article-renderer.ts", "utf8")
   ]);
   assert.match(typesSource, /onOpenArticleDirectory: \(path: string, focusNodeId\?: string\)/);
-  assert.match(editorSource, /return-parent-click[\s\S]*this\.currentMode === "article"[\s\S]*onOpenArticleDirectory\(navigation\.parentPath, navigation\.parentNodeId\)[\s\S]*onOpenMindMap\(navigation\.parentPath, navigation\.parentNodeId\)/);
-  assert.match(editorSource, /正在返回父导图/);
+  assert.match(editorSource, /return-parent-click[\s\S]*onOpenArticleDirectory\(navigation\.parentPath, navigation\.parentNodeId\)/);
   assert.match(editorSource, /event\.key === "Escape"[\s\S]*const navigation = this\.options\.articleNavigation[\s\S]*onOpenArticleDirectory\(navigation\.parentPath!/);
   assert.match(rendererSource, /mms-article-pager-parent[\s\S]*onOpenArticleDirectory\(navigation\.parentPath!, navigation\.parentNodeId\)/);
   assert.match(viewSource, /openArticleDirectoryPath\(path, sourcePath, this\.leaf, focusNodeId\)/);
@@ -261,10 +260,41 @@ test("directory intent is consumed before the parent file first paint", async ()
   ]);
   assert.match(mainSource, /consumePendingMindMapDirectory\(filePath: string\)/);
   assert.match(viewSource, /consumePendingMindMapDirectory\(this\.file\.path\)/);
-  assert.match(viewSource, /if \(queuedDirectory\) \{[\s\S]*articleLandingMode: "toc"/);
+  assert.match(viewSource, /if \(queuedDirectory \|\| \(!queuedFocusNodeId && !this\.document\.navigation\?\.parentPath\)\) \{[\s\S]*articleLandingMode: "toc"/);
   assert.match(viewSource, /apply-pending-directory[\s\S]*showArticleDirectory\(queuedDirectory\.focusNodeId\)/);
   const parsedIndex = viewSource.indexOf("set-view-data-parsed");
   const editorIndex = viewSource.indexOf("new MindMapEditor", parsedIndex);
   const directoryModeIndex = viewSource.indexOf('articleLandingMode: "toc"', parsedIndex - 500);
   assert.ok(directoryModeIndex >= 0 && directoryModeIndex < editorIndex, "directory mode must be set before editor construction");
+});
+
+test("top-level article directories default to the directory on every file entry", async () => {
+  const [viewSource, editorSource] = await Promise.all([
+    readFile("src/view.ts", "utf8"),
+    readFile("src/editor/editor.ts", "utf8")
+  ]);
+  const getViewData = viewSource.slice(
+    viewSource.indexOf("getViewData(): string"),
+    viewSource.indexOf("async applyImageUploadPatches", viewSource.indexOf("getViewData(): string"))
+  );
+  const setViewData = viewSource.slice(
+    viewSource.indexOf("setViewData(data: string, clear: boolean): void"),
+    viewSource.indexOf("async onOpen", viewSource.indexOf("setViewData(data: string, clear: boolean): void"))
+  );
+  const applyDisplayMode = editorSource.slice(
+    editorSource.indexOf("private applyDisplayMode"),
+    editorSource.indexOf("applyGlobalDisplayMode", editorSource.indexOf("private applyDisplayMode"))
+  );
+  const setLanding = editorSource.slice(
+    editorSource.indexOf("private setArticleLandingMode"),
+    editorSource.indexOf("private editArticleStyle", editorSource.indexOf("private setArticleLandingMode"))
+  );
+
+  assert.match(setViewData, /!queuedFocusNodeId && !this\.document\.navigation\?\.parentPath/);
+  assert.match(getViewData, /!document\.navigation\?\.parentPath[\s\S]*articleLandingMode: "toc"/);
+  assert.match(applyDisplayMode, /mode === "article"[\s\S]*previousMode !== "article"[\s\S]*this\.options\.showArticleToc[\s\S]*!this\.pendingArticleFocusLocation[\s\S]*articleLandingMode: "toc"/);
+  assert.match(applyDisplayMode, /requestedTarget\.nodeId !== this\.document\.root\.id[\s\S]*!this\.options\.showArticleToc/);
+  assert.doesNotMatch(applyDisplayMode, /&& this\.options\.showArticleToc[\s\S]{0,160}articleLandingMode: "article"/);
+  assert.doesNotMatch(setLanding, /history\.capture|callbacks\.onChange|markSaving/);
+  assert.match(setLanding, /this\.document\.view = \{[\s\S]*articleLandingMode: mode/);
 });

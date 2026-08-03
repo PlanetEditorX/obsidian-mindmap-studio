@@ -247,33 +247,6 @@ export function articleTocDepth(entry: ArticleTocEntry): number {
 }
 
 /**
- * 使用全书目录中已经解析完成的跨文件编号结果修正通读正文节点。
- *
- * 通读目录会把父导图的本地子节点和子导图根节点下的内容放入同一结构层级计算；
- * 若正文在每个物理文件内再次独立判断标题，会出现目录已有“一、”等编号、正文却仍
- * 被当作普通段落的分叉。存在目录项时，以目录的层级、编号和标题分类作为权威结果；
- * 未进入目录的末端正文仍保留本地末端编号与段落规则。
- *
- * @param info 当前物理导图内计算得到的文章节点信息。
- * @param entry 同一文件和节点在全书通读目录中的条目。
- * @returns 供通读正文渲染使用的统一节点信息。
- */
-export function reconcileReadingNodeInfo(info: ArticleNodeInfo, entry: ArticleTocEntry | undefined): ArticleNodeInfo {
-  if (!entry) return info;
-  return {
-    ...info,
-    depth: entry.depth,
-    label: entry.label,
-    title: entry.title || info.title,
-    displayTitle: entry.displayTitle || info.displayTitle,
-    isHeading: true,
-    numberedLeaf: false,
-    leafNumberingStyle: undefined,
-    leafNumberingIndex: undefined
-  };
-}
-
-/**
  * 解析文章和通读目录使用的最大相对结构层级。当前脑图存在覆盖值时优先使用，
  * 否则跟随插件全局设置；两者都异常时回退到 3 层。
  *
@@ -433,25 +406,6 @@ export function buildArticleNodeInfo(
   };
   visitChildren(root, articleChildStartLevel(root, baseDepth));
   return result;
-}
-
-/**
- * 构建通读模式使用的章节信息。通读是一套独立的全书编号视图，因此只忽略
- * 当前物理导图中心节点上的整页“关闭编号”；普通节点的关闭与手动层级仍照常生效。
- * 这样文章页可保持无编号，而同一导图进入通读后仍按全书结构显示章、节与末端序号。
- *
- * @param root 当前物理导图的中心节点。
- * @param baseDepth 当前文件在全书中的基础层级。
- * @param leafNumbering 末端正文自动编号规则。
- * @returns 按通读编号语义展开的文章节点信息。
- */
-export function buildReadingArticleNodeInfo(
-  root: MindMapNode,
-  baseDepth = 0,
-  leafNumbering: ArticleLeafNumberingOptions = { enabled: false, threshold: 4 }
-): ArticleNodeInfo[] {
-  if (root.articleNumberingMode !== "none") return buildArticleNodeInfo(root, baseDepth, leafNumbering);
-  return buildArticleNodeInfo({ ...root, articleNumberingMode: undefined, articleNumberingLevel: undefined }, baseDepth, leafNumbering);
 }
 
 /**

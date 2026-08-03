@@ -319,10 +319,6 @@ export interface MindMapAppearance {
   codeCollapsed?: boolean;
   codeShowLineNumbers?: boolean;
   codeTheme?: "obsidian" | "github" | "monokai" | "dracula";
-  /** Page-level automatic expansion threshold; 0 disables, undefined follows global code appearance. */
-  codeAutoExpandMaxLines?: number;
-  /** Page-level automatic line-number threshold; 0 disables, undefined follows global code appearance. */
-  codeAutoLineNumbersMinLines?: number;
 }
 
 /**
@@ -617,9 +613,7 @@ function normalizeAppearance(input: Partial<MindMapAppearance> | undefined): Min
     codeShowLineNumbers: normalizeBooleanOverride(input.codeShowLineNumbers),
     codeTheme: input.codeTheme === "github" || input.codeTheme === "monokai" || input.codeTheme === "dracula" || input.codeTheme === "obsidian"
       ? input.codeTheme
-      : undefined,
-    codeAutoExpandMaxLines: normalizeNumber(input.codeAutoExpandMaxLines, 0, 1000),
-    codeAutoLineNumbersMinLines: normalizeNumber(input.codeAutoLineNumbersMinLines, 0, 1000)
+      : undefined
   };
   return Object.values(appearance).some((value) => value !== undefined) ? appearance : undefined;
 }

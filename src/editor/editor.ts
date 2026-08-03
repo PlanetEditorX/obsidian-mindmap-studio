@@ -68,7 +68,7 @@ import { parseQuestionEnrichment, parseRecognizedQuestion, QuestionEditModal } f
 import { createQuestionPracticeState, renderQuestionPracticeMode } from "./question-practice-mode";
 import { TOOLBAR_ITEMS } from "../settings";
 import { appearanceFromThemePreset, MINDMAP_THEME_PRESETS } from "../themes";
-import { articleNumberLabel, articleTocDepth, buildReadingArticleNodeInfo, DISPLAY_MODE_ICONS, DISPLAY_MODE_LABELS, readingAnchorPart, reconcileReadingNodeInfo, resolveArticleTocMaxDepth } from "../article/modes";
+import { articleNumberLabel, articleTocDepth, buildArticleNodeInfo, DISPLAY_MODE_ICONS, DISPLAY_MODE_LABELS, readingAnchorPart, resolveArticleTocMaxDepth } from "../article/modes";
 import { resolveArticleStyle } from "../article/article-style";
 import { resolveArticleEntryReadOnly } from "../article/display-mode";
 import {
@@ -1025,8 +1025,8 @@ class AppearanceModal extends Modal {
     miniMapSelect.value = this.articleMiniMap === undefined ? "" : this.articleMiniMap ? "show" : "hide";
 
     const codeSection = appearanceLeftColumn.createDiv({ cls: "mmc-appearance-section mmc-appearance-code-settings" });
-    codeSection.createDiv({ cls: "mmc-theme-picker-title", text: "代码外观" });
-    codeSection.createDiv({ cls: "setting-item-description mmc-appearance-section-description", text: "默认状态、行号、样式和自动规则统一覆盖插件全局代码外观；节点代码设置仍具有最高优先级。" });
+    codeSection.createDiv({ cls: "mmc-theme-picker-title", text: "页面代码设置" });
+    codeSection.createDiv({ cls: "setting-item-description mmc-appearance-section-description", text: "优先级 2：覆盖插件全局代码设置；节点代码设置仍可单独覆盖。" });
     const codeGrid = codeSection.createDiv({ cls: "mmc-form-grid mmc-appearance-grid" });
     const pageCodeCollapsedLabel = codeGrid.createEl("label", { text: "默认状态" });
     const pageCodeCollapsed = pageCodeCollapsedLabel.createEl("select");
@@ -1045,14 +1045,6 @@ class AppearanceModal extends Modal {
     pageCodeTheme.createEl("option", { value: "", text: "跟随全局设置" });
     (["obsidian", "github", "monokai", "dracula"] as const).forEach((value) => pageCodeTheme.createEl("option", { value, text: value === "obsidian" ? "Obsidian" : value === "github" ? "GitHub" : value === "monokai" ? "Monokai" : "Dracula" }));
     pageCodeTheme.value = this.pageCodeAppearance.codeTheme ?? "";
-    const pageCodeAutoExpandLabel = codeGrid.createEl("label", { text: "自动保持展开" });
-    const pageCodeAutoExpand = pageCodeAutoExpandLabel.createEl("input", { type: "number", attr: { min: "0", max: "1000", step: "1", placeholder: "跟随全局设置" } });
-    pageCodeAutoExpand.value = typeof this.pageCodeAppearance.codeAutoExpandMaxLines === "number" ? String(this.pageCodeAppearance.codeAutoExpandMaxLines) : "";
-    pageCodeAutoExpandLabel.createDiv({ cls: "setting-item-description", text: "代码不超过该行数时自动展开；留空跟随全局，0 关闭。" });
-    const pageCodeAutoLinesLabel = codeGrid.createEl("label", { text: "自动显示行号" });
-    const pageCodeAutoLines = pageCodeAutoLinesLabel.createEl("input", { type: "number", attr: { min: "0", max: "1000", step: "1", placeholder: "跟随全局设置" } });
-    pageCodeAutoLines.value = typeof this.pageCodeAppearance.codeAutoLineNumbersMinLines === "number" ? String(this.pageCodeAppearance.codeAutoLineNumbersMinLines) : "";
-    pageCodeAutoLinesLabel.createDiv({ cls: "setting-item-description", text: "代码超过该行数时自动显示行号；留空跟随全局，0 关闭。" });
 
     const setColor = (control: { toggle: HTMLInputElement; input: HTMLInputElement }, value: string | undefined, fallback: string): void => {
       control.toggle.checked = Boolean(value);
@@ -1185,9 +1177,7 @@ class AppearanceModal extends Modal {
         underline: underline.checked,
         ...(pageCodeCollapsed.value ? { codeCollapsed: pageCodeCollapsed.value === "true" } : {}),
         ...(pageCodeLines.value ? { codeShowLineNumbers: pageCodeLines.value === "true" } : {}),
-        ...(pageCodeTheme.value ? { codeTheme: pageCodeTheme.value as "obsidian" | "github" | "monokai" | "dracula" } : {}),
-        ...(pageCodeAutoExpand.value.trim() ? { codeAutoExpandMaxLines: clamp(pageCodeAutoExpand.value, 0, 1000, 0) } : {}),
-        ...(pageCodeAutoLines.value.trim() ? { codeAutoLineNumbersMinLines: clamp(pageCodeAutoLines.value, 0, 1000, 0) } : {})
+        ...(pageCodeTheme.value ? { codeTheme: pageCodeTheme.value as "obsidian" | "github" | "monokai" | "dracula" } : {})
       }, numberingControls.read(), tocDepthSelect.value
         ? resolveArticleTocMaxDepth(Number(tocDepthSelect.value), this.globalArticleTocMaxDepth)
         : undefined, miniMapSelect.value === "show" ? true : miniMapSelect.value === "hide" ? false : undefined);
@@ -1225,7 +1215,6 @@ export class MindMapEditor {
   private lockButton!: HTMLButtonElement;
   private articleLandingButton!: HTMLButtonElement;
   private articleStyleButton!: HTMLButtonElement;
-  private appearanceButton!: HTMLButtonElement;
   private aiButton!: HTMLButtonElement;
   private readonly modeButtons = new Map<DisplayMode, HTMLButtonElement>();
   private readonly editControls: HTMLElement[] = [];
@@ -1465,7 +1454,6 @@ export class MindMapEditor {
       || previousOptions.articleBaseDepth !== options.articleBaseDepth
       || previousOptions.showArticleToc !== options.showArticleToc
       || JSON.stringify(previousOptions.articleTocEntries) !== JSON.stringify(options.articleTocEntries)
-      || JSON.stringify(previousOptions.readingTocEntries) !== JSON.stringify(options.readingTocEntries)
       || JSON.stringify(previousOptions.articleNavigation) !== JSON.stringify(options.articleNavigation);
     const readingFamilyChanged = previousOptions.readingHomePath !== options.readingHomePath;
     if (readingFamilyChanged) {
@@ -1717,6 +1705,12 @@ export class MindMapEditor {
   private applyDisplayMode(mode: DisplayMode, notifyGlobal = true, persistCapturedLocation = true): void {
     if (!this.options.visibleModes.includes(mode)) return;
     const previousMode = this.currentMode;
+    if (mode === "article"
+      && previousMode !== "article"
+      && this.options.showArticleToc
+      && !this.pendingArticleFocusLocation) {
+      this.document.view = { ...(this.document.view ?? {}), articleLandingMode: "toc" };
+    }
     if (previousMode === "mindmap") this.persistMindMapViewportState();
     const location = this.captureCurrentLocation(previousMode) ?? this.lastReadingLocation;
     if (location && persistCapturedLocation) this.rememberLocation(location, true);
@@ -1724,10 +1718,9 @@ export class MindMapEditor {
     if (mode === "article"
       && requestedTarget?.filePath === this.options.currentFilePath
       && requestedTarget.nodeId !== this.document.root.id
-      && this.options.showArticleToc
+      && !this.options.showArticleToc
       && this.document.view?.articleLandingMode !== "article") {
       this.document.view = { ...(this.document.view ?? {}), articleLandingMode: "article" };
-      this.callbacks.onChange(this.getDocument());
     }
     this.currentMode = mode;
     if (mode === "article" && mode !== previousMode) {
@@ -2506,7 +2499,7 @@ export class MindMapEditor {
     for (const mode of this.options.visibleModes) {
       const button = modeGroup.createEl("button", {
         cls: "mms-mode-button",
-        attr: { type: "button", "aria-label": `${DISPLAY_MODE_LABELS[mode]}模式` }
+        attr: { type: "button", title: `${DISPLAY_MODE_LABELS[mode]}模式` }
       });
       setIcon(button, DISPLAY_MODE_ICONS[mode]);
       button.createSpan({ text: DISPLAY_MODE_LABELS[mode] });
@@ -2524,6 +2517,7 @@ export class MindMapEditor {
     this.addToolbarButton("task", "circle-check-big", "切换任务状态（Ctrl/Cmd+Enter）", () => this.cycleTask(), true);
     this.addToolbarButton("collapse", "fold-vertical", "展开/收起节点", () => this.toggleCollapse(), true);
     this.addToolbarButton("collapse-all", "chevrons-up-down", "展开/折叠全部子项", () => this.toggleAllNodesCollapsed());
+    this.addToolbarButton("link", "link", "打开节点链接", () => this.openSelectedLink());
     this.addToolbarButton("search", "search", "搜索当前导图及全部子导图（Ctrl/Cmd+Alt+F）", () => this.openSearch());
     this.addToolbarButton("global-search", "file-search", "全局搜索所有导图", () => this.callbacks.onGlobalSearch());
     this.aiButton = this.addToolbarButton("ai", "sparkles", "询问 AI（当前页面，Ctrl/Cmd+Shift+A）", () => this.askAi());
@@ -2542,7 +2536,7 @@ export class MindMapEditor {
     this.addToolbarSeparator();
     this.addToolbarButton("fit", "maximize", "适应画布", () => this.fitToView());
     this.addToolbarButton("layout", "git-fork", "切换单侧/双侧布局", () => this.toggleLayout(), true);
-    this.appearanceButton = this.addToolbarButton("appearance", "palette", "主题与外观", () => this.editAppearance());
+    this.addToolbarButton("appearance", "palette", "主题与外观", () => this.editAppearance(), true);
     this.articleLandingButton = this.addToolbarButton("article-landing", "list-tree", "切换目录 / 原始文章", () => this.toggleArticleLanding());
     this.articleStyleButton = this.addToolbarButton("article-style", "paintbrush", "文章样式", () => this.editArticleStyle(), true);
     this.addToolbarSeparator();
@@ -2555,12 +2549,12 @@ export class MindMapEditor {
     const spacer = this.toolbarEl.createSpan({ cls: "mmc-toolbar-spacer" });
     spacer.setAttr("aria-hidden", "true");
     const zoomControl = this.toolbarEl.createDiv({ cls: "mmc-zoom-control" });
-    const zoomOut = zoomControl.createEl("button", { cls: "clickable-icon mmc-zoom-step", attr: { type: "button", "aria-label": "缩小" } });
+    const zoomOut = zoomControl.createEl("button", { cls: "clickable-icon mmc-zoom-step", attr: { type: "button", title: "缩小", "aria-label": "缩小" } });
     setIcon(zoomOut, "minus");
     zoomOut.addEventListener("click", () => { this.setZoom(this.zoom / 1.15); this.focus(); });
     this.zoomStatusEl = zoomControl.createEl("input", {
       cls: "mmc-zoom-status mmc-zoom-input",
-      attr: { type: "text", inputmode: "decimal", "aria-label": "输入缩放百分比" }
+      attr: { type: "text", inputmode: "decimal", title: "输入缩放百分比", "aria-label": "输入缩放百分比" }
     });
     this.zoomStatusEl.value = "100%";
     this.zoomStatusEl.addEventListener("change", () => this.applyZoomInput());
@@ -2573,7 +2567,7 @@ export class MindMapEditor {
         this.zoomStatusEl.blur();
       }
     });
-    const zoomIn = zoomControl.createEl("button", { cls: "clickable-icon mmc-zoom-step", attr: { type: "button", "aria-label": "放大" } });
+    const zoomIn = zoomControl.createEl("button", { cls: "clickable-icon mmc-zoom-step", attr: { type: "button", title: "放大", "aria-label": "放大" } });
     setIcon(zoomIn, "plus");
     zoomIn.addEventListener("click", () => { this.setZoom(this.zoom * 1.15); this.focus(); });
     this.statusEl = this.toolbarEl.createSpan({ cls: "mmc-save-status", text: "已保存" });
@@ -2869,7 +2863,7 @@ export class MindMapEditor {
       button.toggleClass("is-active", mode === this.currentMode);
       button.toggleClass("is-loading", loading);
       button.setAttr("aria-label", label);
-      button.removeAttribute("title");
+      button.setAttr("title", label);
       if (loading) button.setAttribute("aria-busy", "true");
       else button.removeAttribute("aria-busy");
     }
@@ -2881,16 +2875,14 @@ export class MindMapEditor {
       "is-hidden",
       this.currentMode !== "mindmap" || !this.options.visibleToolbarItems.includes("submap")
     );
-    for (const id of ["collapse", "collapse-all", "fit"] as const) {
-      this.toolbarEl.querySelector<HTMLElement>(`[data-toolbar-id='${id}']`)?.toggleClass(
-        "is-hidden",
-        this.currentMode !== "mindmap" || !this.options.visibleToolbarItems.includes(id)
-      );
-    }
+    this.toolbarEl.querySelector<HTMLElement>("[data-toolbar-id='collapse-all']")?.toggleClass(
+      "is-hidden",
+      this.currentMode !== "mindmap" || !this.options.visibleToolbarItems.includes("collapse-all")
+    );
     if (hasLandingChoice) {
       const showingArticle = this.document.view?.articleLandingMode === "article";
       this.articleLandingButton.setAttr("aria-label", showingArticle ? "显示目录" : "显示原始文章");
-      this.articleLandingButton.removeAttribute("title");
+      this.articleLandingButton.setAttr("title", showingArticle ? "显示目录" : "显示原始文章");
       this.articleLandingButton.empty();
       setIcon(this.articleLandingButton, showingArticle ? "list-tree" : "file-text");
       this.articleLandingButton.toggleClass("is-active", showingArticle);
@@ -2898,7 +2890,7 @@ export class MindMapEditor {
     this.lockButton.empty();
     setIcon(this.lockButton, this.readOnly ? "lock" : "lock-open");
     this.lockButton.setAttr("aria-label", this.readOnly ? "当前为阅读模式，点击切换到编辑模式" : "当前可编辑，点击切换到阅读模式");
-    this.lockButton.removeAttribute("title");
+    this.lockButton.setAttr("title", this.readOnly ? "阅读模式" : "编辑模式");
     this.lockButton.toggleClass("is-active", this.readOnly);
     this.rootEl.toggleClass("is-read-only", this.readOnly);
     this.rootEl.toggleClass("is-reading", this.readOnly);
@@ -2906,9 +2898,6 @@ export class MindMapEditor {
       if (control instanceof HTMLButtonElement || control instanceof HTMLInputElement || control instanceof HTMLSelectElement) control.disabled = this.readOnly;
       control.toggleClass("is-read-only-disabled", this.readOnly);
     }
-    const appearanceDisabled = this.readOnly && this.currentMode !== "reading";
-    this.appearanceButton.disabled = appearanceDisabled;
-    this.appearanceButton.toggleClass("is-read-only-disabled", appearanceDisabled);
   }
 
   /**
@@ -2937,7 +2926,7 @@ export class MindMapEditor {
       ? `询问 AI（节点分支：${nodePlainText(node) || "未命名节点"}）`
       : "询问 AI（当前页面，Ctrl/Cmd+Shift+A）";
     this.aiButton.setAttr("aria-label", label);
-    this.aiButton.removeAttribute("title");
+    this.aiButton.setAttr("title", label);
     this.aiButton.toggleClass("has-node-scope", Boolean(node));
   }
 
@@ -2952,7 +2941,7 @@ export class MindMapEditor {
    * @returns 当前操作生成、查找或规范化后的结果。
    */
   private addToolbarButton(id: string, icon: string, label: string, action: () => void, editOnly = false): HTMLButtonElement {
-    const button = this.toolbarEl.createEl("button", { cls: "clickable-icon mmc-toolbar-button", attr: { "aria-label": label, type: "button" } });
+    const button = this.toolbarEl.createEl("button", { cls: "clickable-icon mmc-toolbar-button", attr: { "aria-label": label, title: label, type: "button" } });
     button.dataset.toolbarId = id;
     setIcon(button, icon);
     button.toggleClass("is-hidden", !this.options.visibleToolbarItems.includes(id));
@@ -3067,19 +3056,7 @@ export class MindMapEditor {
       this.callbacks.onDebugLog("navigation", "return-parent-click", {
         currentFilePath: this.options.currentFilePath, parentPath: navigation.parentPath, parentNodeId: navigation.parentNodeId, parentNodeText: navigation.parentNodeText, currentMode: this.currentMode
       });
-      if (this.currentMode === "article") {
-        void this.navigateWithTransition(
-          () => this.callbacks.onOpenArticleDirectory(navigation.parentPath, navigation.parentNodeId),
-          "正在返回目录…",
-          "正在保存当前位置并加载主导图目录"
-        );
-        return;
-      }
-      void this.navigateWithTransition(
-        () => this.callbacks.onOpenMindMap(navigation.parentPath, navigation.parentNodeId),
-        "正在返回父导图…",
-        "正在保存当前位置并恢复父导图页面"
-      );
+      void this.navigateWithTransition(() => this.callbacks.onOpenArticleDirectory(navigation.parentPath, navigation.parentNodeId), "正在返回目录…", "正在保存当前位置并加载主导图目录");
     };
 
     if (showCanvasBreadcrumb) {
@@ -5764,7 +5741,7 @@ export class MindMapEditor {
   /** Persists one article landing choice without restoring the outgoing page's chapter anchor. */
   private setArticleLandingMode(mode: "toc" | "article"): void {
     this.callbacks.onDebugLog("article", "set-landing-mode", { requestedMode: mode, currentMode: this.currentMode, currentLandingMode: this.document.view?.articleLandingMode, selectedId: this.selectedId });
-    if (this.currentMode !== "article" || !this.ensureEditable()) return;
+    if (this.currentMode !== "article" || !this.options.showArticleToc) return;
     const current = this.document.view?.articleLandingMode ?? "toc";
     if (current === mode) {
       this.render();
@@ -5773,10 +5750,7 @@ export class MindMapEditor {
     this.cancelReadingLocationRestore();
     this.pendingArticleFocusLocation = null;
     if (mode === "article") this.pendingArticleDirectoryFocusNodeId = null;
-    this.history.capture(this.document);
     this.document.view = { ...(this.document.view ?? {}), articleLandingMode: mode };
-    this.callbacks.onChange(this.getDocument());
-    this.markSaving();
     this.render();
   }
 
@@ -5802,10 +5776,7 @@ export class MindMapEditor {
    * 编辑appearance，并保持模型、界面和持久化状态的一致性。
    */
   private editAppearance(): void {
-    if (this.readOnly && this.currentMode !== "reading") {
-      new Notice("当前为阅读模式，请先点击锁按钮切换到编辑模式");
-      return;
-    }
+    if (!this.ensureEditable()) return;
     new AppearanceModal(
       this.app,
       this.getAppearance(),
@@ -5818,7 +5789,7 @@ export class MindMapEditor {
       this.document.view?.articleMiniMap,
       this.options.showArticleMiniMap,
       this.document.appearance ?? {},
-      (appearance, numbering, articleTocMaxDepth, articleMiniMap) => this.mutatePageAppearance(() => {
+      (appearance, numbering, articleTocMaxDepth, articleMiniMap) => this.mutate(() => {
         this.document.appearance = appearance;
         this.document.root.articleNumberingMode = numbering.articleNumberingMode;
         this.document.root.articleNumberingLevel = numbering.articleNumberingMode === "manual" ? numbering.articleNumberingLevel : undefined;
@@ -5829,7 +5800,7 @@ export class MindMapEditor {
         else view.articleMiniMap = articleMiniMap;
         this.document.view = Object.keys(view).length ? view : undefined;
       }),
-      () => this.mutatePageAppearance(() => {
+      () => this.mutate(() => {
         this.document.appearance = undefined;
         this.document.root.articleNumberingMode = undefined;
         this.document.root.articleNumberingLevel = undefined;
@@ -6197,13 +6168,8 @@ export class MindMapEditor {
     const contentSections = sections.length > 1 ? sections.slice(1) : sections;
     const contentPaths = new Set(contentSections.map((section) => section.filePath));
     const articleTocMaxDepth = this.effectiveArticleTocMaxDepth();
-    const tocEntries = this.options.readingTocEntries.filter(
+    const tocEntries = this.options.articleTocEntries.filter(
       (entry) => articleTocDepth(entry) <= articleTocMaxDepth && contentPaths.has(entry.filePath)
-    );
-    const readingEntryByNode = new Map(
-      this.options.readingTocEntries
-        .filter((entry) => Boolean(entry.nodeId))
-        .map((entry) => [`${entry.filePath}\u0000${entry.nodeId!}`, entry] as const)
     );
     const toc = page.createEl("nav", { cls: "mms-article-toc mms-reading-toc" });
     toc.createEl("h2", { text: "全书目录" });
@@ -6253,11 +6219,7 @@ export class MindMapEditor {
       const chapterTitleBlock = nodeContentBlocks(section.document.root).find((block): block is MindMapTextContentBlock => block.type === "text");
       renderRichTextRuns(chapterTitle, chapterTitleBlock?.richText, chapterTitleBlock?.text ?? (sectionEntry?.displayTitle || section.document.title));
       this.renderArticleContent(chapter, section.document.root, false);
-      for (const localInfo of buildReadingArticleNodeInfo(section.document.root, section.baseDepth, { enabled: this.options.articleLeafNumberingEnabled, threshold: this.options.articleLeafNumberingThreshold, style: this.options.articleLeafNumberingStyle })) {
-        const info = reconcileReadingNodeInfo(
-          localInfo,
-          readingEntryByNode.get(`${section.filePath}\u0000${localInfo.node.id}`)
-        );
+      for (const info of buildArticleNodeInfo(section.document.root, section.baseDepth, { enabled: this.options.articleLeafNumberingEnabled, threshold: this.options.articleLeafNumberingThreshold, style: this.options.articleLeafNumberingStyle })) {
         const nodeSection = chapter.createEl("section", { cls: `mms-article-node depth-${Math.min(info.depth, 8)}` });
         nodeSection.dataset.nodeId = info.node.id;
         nodeSection.dataset.filePath = section.filePath;
@@ -6674,6 +6636,20 @@ export class MindMapEditor {
   }
 
   /**
+   * 打开selected link，并保持模型、界面和持久化状态的一致性。
+   */
+  private openSelectedLink(): void {
+    const selected = this.selectedNode();
+    if (!selected) return;
+    const link = this.getNodeLink(selected);
+    if (!link) {
+      new Notice("当前节点没有链接；可按 F2 添加链接或在文字中写入 [[笔记名]]");
+      return;
+    }
+    void this.callbacks.onOpenLink(link);
+  }
+
+  /**
    * 判断parent navigation backlink，并保持模型、界面和持久化状态的一致性。
    *
    * @param node 当前处理的节点。
@@ -6808,7 +6784,6 @@ export class MindMapEditor {
       && id !== this.document.root.id
       && this.document.view?.articleLandingMode !== "article") {
       this.document.view = { ...(this.document.view ?? {}), articleLandingMode: "article" };
-      this.callbacks.onChange(this.getDocument());
     }
     const location = createReadingLocation(
       this.readingLocationSections(),
@@ -7167,6 +7142,7 @@ export class MindMapEditor {
     menu.addSeparator();
     if (this.readOnly) {
       if (selected?.submap) menu.addItem((item) => item.setTitle("进入子导图").setIcon("network").onClick(() => void this.createOrOpenSubmap()));
+      menu.addItem((item) => item.setTitle("打开链接").setIcon("link").onClick(() => this.openSelectedLink()));
       menu.addItem((item) => item.setTitle("复制分支").setIcon("copy").onClick(() => void this.copySelectedBranch()));
       menu.showAtMouseEvent(event);
       return;
@@ -7274,6 +7250,7 @@ export class MindMapEditor {
         });
       }));
     menu.addItem((item) => item.setTitle("展开/收起").setIcon("fold-vertical").onClick(() => this.toggleCollapse()));
+    menu.addItem((item) => item.setTitle("打开链接").setIcon("link").onClick(() => this.openSelectedLink()));
     if (selected?.id !== this.document.root.id) {
       menu.addSeparator();
       menu.addItem((item) => item.setTitle("删除节点").setIcon("trash-2").onClick(() => this.deleteSelected()));
@@ -7666,30 +7643,10 @@ export class MindMapEditor {
   }
 
   /**
-   * 保存当前页面外观。通读正文保持只读时仍允许进入该事务，并在重绘后恢复原语义阅读位置。
-   *
-   * @param action 需要在当前文档外观与视图字段上执行的同步修改。
-   */
-  private mutatePageAppearance(action: () => void): void {
-    if (this.readOnly && this.currentMode !== "reading") {
-      new Notice("当前为阅读模式，请先点击锁按钮切换到编辑模式");
-      return;
-    }
-    const location = this.currentMode === "mindmap" ? null : this.captureCurrentLocation(this.currentMode);
-    if (location) this.rememberLocation(location, true);
-    this.history.capture(this.document);
-    action();
-    this.callbacks.onChange(this.getDocument());
-    this.markSaving();
-    this.render();
-    if (location) this.restoreReadingLocation(this.currentMode, location);
-  }
-
-  /**
-   * 所有用户可撤销内容写操作的统一入口。只读状态由 `ensureEditable()` 阻止；修改完成后统一保存、重绘并恢复阅读位置。
+   * 所有用户可撤销写操作的统一入口。调用前克隆当前文档写入撤销栈，执行修改，规范化和重渲染，再通知视图自动保存；只读状态会在更上层阻止进入该流程。
    *
    * @param action 需要在当前文档上执行的同步修改。
-   * @param restoreLocation 可选的显式阅读位置；缺失时从当前非导图模式捕获。
+   * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
    */
   private mutate(action: () => void, restoreLocation?: ReadingLocation | null): void {
     if (!this.ensureEditable()) return;
