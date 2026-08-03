@@ -1,5 +1,12 @@
 # Modified Files
 
+## 1.43.7 Ctrl/Cmd+F 搜索入口修复
+
+- `src/main.ts`、`src/view.ts`：活动 MindMap Studio 视图在窗口捕获阶段直接处理 `Ctrl/Cmd+F`，并通过公开视图边界打开当前父子导图族搜索；弹窗内保持原按键行为。
+- `src/editor/editor.ts`、`src/search/global-search.ts`：编辑器根节点保留快捷键回退和旧版 `Ctrl/Cmd+Alt+F` 兼容，工具栏提示与搜索范围注释改为 `Ctrl/Cmd+F`。
+- `tests/reading-editor-contract.test.mjs`、`scripts/test.mjs`：更新快捷键优先级、窗口捕获、可编辑控件和非英文键盘布局契约。
+- `README.md`、`docs/ARCHITECTURE.md`、`docs/DEVELOPMENT.md`、`docs/SPECIAL_FEATURES.md`、`docs/TESTING.md`、`CHANGELOG.md`：同步新的搜索快捷键行为。
+
 ## 1.43.6 加载进度开关与完整范围替换
 
 - `src/settings.ts`、`src/main.ts`、`src/view.ts`、`src/editor/editor-types.ts`、`src/editor/editor.ts`：新增默认关闭的右下角加载进度开关，并只在文章/通读且开关启用时显示。

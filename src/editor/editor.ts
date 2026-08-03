@@ -2771,7 +2771,7 @@ export class MindMapEditor {
     this.addToolbarButton("screenshot-recognize", "scan-text", `截图并识别（${this.options.screenshotRecognizeShortcut || "Ctrl+Shift+R"}）`, () => void this.captureScreenshot(true));
     if (this.options.questionNodesEnabled) this.addToolbarButton("question", "file-plus-2", "新建题目子节点", () => this.addQuestionChild(), true);
     this.addToolbarButton("submap", "network", "创建或进入子导图", () => void this.createOrOpenSubmap());
-    this.addToolbarButton("search", "search", "搜索当前导图及全部子导图（Ctrl/Cmd+Alt+F）", () => this.openSearch());
+    this.addToolbarButton("search", "search", "搜索当前导图及全部子导图（Ctrl/Cmd+F）", () => this.openSearch());
     this.addToolbarButton("global-search", "file-search", "全局搜索所有导图", () => this.callbacks.onGlobalSearch());
     this.aiButton = this.addToolbarButton("ai", "sparkles", "询问 AI（当前页面，Ctrl/Cmd+Shift+A）", () => this.askAi());
     this.updateAiScopeButton();
@@ -8237,9 +8237,9 @@ export class MindMapEditor {
     const key = event.key.toLowerCase();
     const findKey = key === "f" || event.code === "KeyF";
 
-    // Ctrl/Cmd+F 保留给 Obsidian，Ctrl/Cmd+Shift+F 由插件全局搜索命令处理；导图族搜索使用 Ctrl/Cmd+Alt+F。
+    // Ctrl/Cmd+F 打开当前父子导图族；Ctrl/Cmd+Alt+F 继续兼容旧版本，配置的全局搜索快捷键由插件窗口捕获层优先处理。
     // 搜索快捷键必须先于可编辑元素过滤处理，否则在正文、标题或节点编辑时会被忽略。
-    if (mod && event.altKey && findKey && !event.shiftKey) {
+    if (mod && findKey && !event.shiftKey) {
       event.preventDefault();
       event.stopPropagation();
       if (event.repeat) return;

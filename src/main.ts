@@ -166,6 +166,13 @@ function matchesRecordedShortcut(event: KeyboardEvent, shortcut: string): boolea
     && event.altKey === expectsAlt;
 }
 
+/** Returns whether the event is the standard current-document find shortcut. */
+function isPlainFindShortcut(event: KeyboardEvent): boolean {
+  const key = event.key.toLowerCase();
+  const findKey = key === "f" || event.code === "KeyF";
+  return (event.ctrlKey || event.metaKey) && findKey && !event.shiftKey && !event.altKey;
+}
+
 /**
  * MindMapStudioPlugin 的主要实现类。负责封装相关状态、生命周期和对外操作，避免调用方直接操作内部数据结构。
  */
@@ -230,10 +237,19 @@ export default class MindMapStudioPlugin extends Plugin {
       callback: () => void this.copyDebugLogToClipboard()
     });
     this.registerDomEvent(window, "keydown", (event) => {
-      if (!matchesRecordedShortcut(event, this.settings.globalSearchShortcut)) return;
+      if (matchesRecordedShortcut(event, this.settings.globalSearchShortcut)) {
+        event.preventDefault();
+        event.stopPropagation();
+        if (!event.repeat) this.openGlobalSearch();
+        return;
+      }
+      const activeView = this.app.workspace.activeLeaf?.view;
+      if (!(activeView instanceof MindMapStudioView) || !isPlainFindShortcut(event)) return;
+      const target = event.target instanceof HTMLElement ? event.target : null;
+      if (target?.closest(".modal-container")) return;
       event.preventDefault();
       event.stopPropagation();
-      if (!event.repeat) this.openGlobalSearch();
+      if (!event.repeat) activeView.openMapFamilySearchFromShortcut();
     }, true);
     this.installRuntimeDebugCapture();
     this.addCommand({

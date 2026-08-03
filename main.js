@@ -12574,7 +12574,7 @@ var MindMapEditor = class {
     this.addToolbarButton("screenshot-recognize", "scan-text", `\u622A\u56FE\u5E76\u8BC6\u522B\uFF08${this.options.screenshotRecognizeShortcut || "Ctrl+Shift+R"}\uFF09`, () => void this.captureScreenshot(true));
     if (this.options.questionNodesEnabled) this.addToolbarButton("question", "file-plus-2", "\u65B0\u5EFA\u9898\u76EE\u5B50\u8282\u70B9", () => this.addQuestionChild(), true);
     this.addToolbarButton("submap", "network", "\u521B\u5EFA\u6216\u8FDB\u5165\u5B50\u5BFC\u56FE", () => void this.createOrOpenSubmap());
-    this.addToolbarButton("search", "search", "\u641C\u7D22\u5F53\u524D\u5BFC\u56FE\u53CA\u5168\u90E8\u5B50\u5BFC\u56FE\uFF08Ctrl/Cmd+Alt+F\uFF09", () => this.openSearch());
+    this.addToolbarButton("search", "search", "\u641C\u7D22\u5F53\u524D\u5BFC\u56FE\u53CA\u5168\u90E8\u5B50\u5BFC\u56FE\uFF08Ctrl/Cmd+F\uFF09", () => this.openSearch());
     this.addToolbarButton("global-search", "file-search", "\u5168\u5C40\u641C\u7D22\u6240\u6709\u5BFC\u56FE", () => this.callbacks.onGlobalSearch());
     this.aiButton = this.addToolbarButton("ai", "sparkles", "\u8BE2\u95EE AI\uFF08\u5F53\u524D\u9875\u9762\uFF0CCtrl/Cmd+Shift+A\uFF09", () => this.askAi());
     this.updateAiScopeButton();
@@ -17683,7 +17683,7 @@ var MindMapEditor = class {
     const mod = event.ctrlKey || event.metaKey;
     const key = event.key.toLowerCase();
     const findKey = key === "f" || event.code === "KeyF";
-    if (mod && event.altKey && findKey && !event.shiftKey) {
+    if (mod && findKey && !event.shiftKey) {
       event.preventDefault();
       event.stopPropagation();
       if (event.repeat) return;
@@ -18702,7 +18702,13 @@ var MindMapStudioView = class extends import_obsidian13.TextFileView {
     await super.onClose();
   }
   /**
-   * 打开map family search，并保持模型、界面和持久化状态的一致性。
+   * 从全局快捷键入口打开当前父子导图族搜索。公开边界让窗口捕获阶段在焦点不位于编辑器根节点时仍能可靠触发搜索。
+   */
+  openMapFamilySearchFromShortcut() {
+    void this.openMapFamilySearch();
+  }
+  /**
+   * 保存当前文件后打开当前父子导图族搜索，并把尚未落盘的编辑器文档作为当前文件索引快照。
    */
   async openMapFamilySearch() {
     var _a2, _b2, _c;
@@ -21621,6 +21627,11 @@ function matchesRecordedShortcut(event, shortcut) {
   const keyMatches = event.key.toLowerCase() === key || event.code.toLowerCase() === `key${key}` || key === "space" && event.code === "Space";
   return keyMatches && (event.ctrlKey || event.metaKey) === expectsCtrl && event.shiftKey === expectsShift && event.altKey === expectsAlt;
 }
+function isPlainFindShortcut(event) {
+  const key = event.key.toLowerCase();
+  const findKey = key === "f" || event.code === "KeyF";
+  return (event.ctrlKey || event.metaKey) && findKey && !event.shiftKey && !event.altKey;
+}
 var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
   constructor() {
     super(...arguments);
@@ -21679,10 +21690,20 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
       callback: () => void this.copyDebugLogToClipboard()
     });
     this.registerDomEvent(window, "keydown", (event) => {
-      if (!matchesRecordedShortcut(event, this.settings.globalSearchShortcut)) return;
+      var _a3;
+      if (matchesRecordedShortcut(event, this.settings.globalSearchShortcut)) {
+        event.preventDefault();
+        event.stopPropagation();
+        if (!event.repeat) this.openGlobalSearch();
+        return;
+      }
+      const activeView = (_a3 = this.app.workspace.activeLeaf) == null ? void 0 : _a3.view;
+      if (!(activeView instanceof MindMapStudioView) || !isPlainFindShortcut(event)) return;
+      const target = event.target instanceof HTMLElement ? event.target : null;
+      if (target == null ? void 0 : target.closest(".modal-container")) return;
       event.preventDefault();
       event.stopPropagation();
-      if (!event.repeat) this.openGlobalSearch();
+      if (!event.repeat) activeView.openMapFamilySearchFromShortcut();
     }, true);
     this.installRuntimeDebugCapture();
     this.addCommand({
