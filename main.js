@@ -6238,6 +6238,37 @@ function rewriteXMindImageTokens(document2, replacements, local) {
   }
   return rewritten;
 }
+function mergeLinkedXMindSheetRoot(target, linkedRoot) {
+  var _a2, _b2, _c, _d, _e, _f, _g;
+  const targetBlocks = nodeContentBlocks(target);
+  const mergedBlocks = [...targetBlocks];
+  const seen = new Set(targetBlocks.map((block) => {
+    var _a3, _b3;
+    if (block.type === "image") return `image\0${block.source}\0${(_a3 = block.width) != null ? _a3 : ""}\0${(_b3 = block.height) != null ? _b3 : ""}`;
+    if (block.type === "text") return `text\0${block.text}`;
+    return `${block.type}\0${block.id}`;
+  }));
+  let skippedLinkedTitle = false;
+  for (const block of nodeContentBlocks(linkedRoot)) {
+    if (!skippedLinkedTitle && block.type === "text" && block.text.trim() === target.text.trim()) {
+      skippedLinkedTitle = true;
+      continue;
+    }
+    const key = block.type === "image" ? `image\0${block.source}\0${(_a2 = block.width) != null ? _a2 : ""}\0${(_b2 = block.height) != null ? _b2 : ""}` : block.type === "text" ? `text\0${block.text}` : `${block.type}\0${block.id}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    mergedBlocks.push(block);
+  }
+  if (mergedBlocks.length !== targetBlocks.length) replaceNodeContentBlocks(target, mergedBlocks);
+  const linkedNote = (_c = linkedRoot.note) == null ? void 0 : _c.trim();
+  if (linkedNote && !((_d = target.note) == null ? void 0 : _d.trim())) target.note = linkedNote;
+  else if (linkedNote && ((_e = target.note) == null ? void 0 : _e.trim()) !== linkedNote && !((_f = target.note) == null ? void 0 : _f.includes(linkedNote))) {
+    target.note = `${(_g = target.note) == null ? void 0 : _g.trim()}
+
+${linkedNote}`;
+  }
+  target.children.push(...linkedRoot.children);
+}
 function xmindToImportResult(source, fallbackTitle = "XMind \u5BFC\u5165") {
   var _a2, _b2;
   const archive = unzipSync(new Uint8Array(source));
@@ -6326,7 +6357,7 @@ function xmindToImportResult(source, fallbackTitle = "XMind \u5BFC\u5165") {
       const linkedSheet = sheetById.get((_a4 = sheetReference(topic)) != null ? _a4 : "");
       if ((linkedSheet == null ? void 0 : linkedSheet.rootTopic) && !ancestors.has(linkedSheet)) {
         const linkedRoot = convertSheet(linkedSheet, ancestors);
-        if (linkedRoot.text === node.text) node.children.push(...linkedRoot.children);
+        if (topicPrimaryTitle(linkedRoot) === topicPrimaryTitle(node)) mergeLinkedXMindSheetRoot(node, linkedRoot);
         else node.children.push(linkedRoot);
       }
       const topicChildren = Object.values((_b3 = topic.children) != null ? _b3 : {}).flatMap((items) => Array.isArray(items) ? items : []);

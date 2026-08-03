@@ -7236,9 +7236,19 @@ Rewrites temporary XMind image tokens across document content blocks.
 function rewriteXMindImageTokens(document: MindMapDocument, replacements: Map<string, string>, local: boolean): number
 ```
 
+### 函数 `mergeLinkedXMindSheetRoot`
+
+源码：`src/import/import-export.ts:327`
+
+Merges a linked XMind sheet root into its same-title mount topic. XMind uses same-title topic links as nested sheet portals. The mount topic already owns the visible title, so only the linked root's additional content blocks, notes, and children are merged. This preserves images and equations attached directly to deeply nested sheet roots without duplicating the title.
+
+```ts
+function mergeLinkedXMindSheetRoot(target: MindMapNode, linkedRoot: MindMapNode): void
+```
+
 ### 函数 `xmindToImportResult`
 
-源码：`src/import/import-export.ts:325`
+源码：`src/import/import-export.ts:365`
 
 Parses a modern XMind archive while retaining images and LaTeX attachments. Embedded images receive temporary tokens so the UI can save each binary once into the current map's asset folder before the document enters edit history.
 
@@ -7248,7 +7258,7 @@ export function xmindToImportResult(source: ArrayBuffer, fallbackTitle = "XMind 
 
 ### 函数 `topicPrimaryTitle`
 
-源码：`src/import/import-export.ts:438`
+源码：`src/import/import-export.ts:478`
 
 Returns the first text block as an imported topic title fallback.
 
@@ -7258,7 +7268,7 @@ function topicPrimaryTitle(node: MindMapNode): string
 
 ### 函数 `materializeXMindImages`
 
-源码：`src/import/import-export.ts:444`
+源码：`src/import/import-export.ts:484`
 
 Saves embedded XMind images once and rewrites every referencing content block.
 
@@ -7268,7 +7278,7 @@ export async function materializeXMindImages( result: XMindImportResult, saveIma
 
 ### 函数 `xmindToDocument`
 
-源码：`src/import/import-export.ts:466`
+源码：`src/import/import-export.ts:506`
 
 Imports an XMind archive as a self-contained document. UI callers should prefer `xmindToImportResult()` plus `materializeXMindImages()` so archive images become normal vault assets.
 
@@ -7278,7 +7288,7 @@ export function xmindToDocument(source: ArrayBuffer, fallbackTitle = "XMind 导�
 
 ### 接口 `ArticleExportOptions`
 
-源码：`src/import/import-export.ts:483`
+源码：`src/import/import-export.ts:523`
 
 Global defaults used when a physical document does not override terminal numbering.
 
@@ -7288,7 +7298,7 @@ export interface ArticleExportOptions
 
 ### 函数 `exportLeafNumbering`
 
-源码：`src/import/import-export.ts:490`
+源码：`src/import/import-export.ts:530`
 
 Resolves terminal numbering with per-document style taking precedence over plugin defaults.
 
@@ -7298,7 +7308,7 @@ function exportLeafNumbering( document: MindMapDocument, options: ArticleExportO
 
 ### 函数 `htmlArticleDisplayTitle`
 
-源码：`src/import/import-export.ts:504`
+源码：`src/import/import-export.ts:544`
 
 Returns HTML title markup with a font-independent CSS ring for every circled terminal number.
 
@@ -7308,7 +7318,7 @@ function htmlArticleDisplayTitle(info: ArticleNodeInfo): string
 
 ### 函数 `exportAnchor`
 
-源码：`src/import/import-export.ts:513`
+源码：`src/import/import-export.ts:553`
 
 生成跨文件导出时稳定且唯一的标题锚点。
 
@@ -7318,7 +7328,7 @@ function exportAnchor(sectionIndex: number, anchor: string): string
 
 ### 函数 `markdownTitle`
 
-源码：`src/import/import-export.ts:518`
+源码：`src/import/import-export.ts:558`
 
 返回带目录编号的 Markdown 标题文本。
 
@@ -7328,7 +7338,7 @@ function markdownTitle(label: string, title: string, fallback = "未命名"): st
 
 ### 函数 `parentNodeKey`
 
-源码：`src/import/import-export.ts:523`
+源码：`src/import/import-export.ts:563`
 
 返回跨文件目录项映射键。
 
@@ -7338,7 +7348,7 @@ function parentNodeKey(filePath: string | undefined, nodeId: string | undefined)
 
 ### 函数 `normalizedExportTocMaxDepth`
 
-源码：`src/import/import-export.ts:528`
+源码：`src/import/import-export.ts:568`
 
 返回导出目录允许显示的层级。
 
@@ -7348,7 +7358,7 @@ function normalizedExportTocMaxDepth(value: number): number
 
 ### 函数 `markdownHeading`
 
-源码：`src/import/import-export.ts:533`
+源码：`src/import/import-export.ts:573`
 
 生成兼容常用 Markdown 渲染器的标题片段。
 
@@ -7358,7 +7368,7 @@ function markdownHeading(level: number, title: string): string
 
 ### 函数 `markdownAnchor`
 
-源码：`src/import/import-export.ts:538`
+源码：`src/import/import-export.ts:578`
 
 按常见 Markdown 标题规则生成目录片段。
 
@@ -7368,7 +7378,7 @@ function markdownAnchor(title: string): string
 
 ### 函数 `htmlTocList`
 
-源码：`src/import/import-export.ts:549`
+源码：`src/import/import-export.ts:589`
 
 将扁平的层级目录条目转换为兼容 Word 的嵌套列表。
 
@@ -7378,7 +7388,7 @@ function htmlTocList(items: Array<
 
 ### 类型 `TocBranch`
 
-源码：`src/import/import-export.ts:551`
+源码：`src/import/import-export.ts:591`
 
 嵌套目录中的单个章节及其下级章节。
 
@@ -7388,7 +7398,7 @@ type TocBranch =
 
 ### 函数 `escapeXml`
 
-源码：`src/import/import-export.ts:567`
+源码：`src/import/import-export.ts:607`
 
 转义 OOXML 文本内容。
 
@@ -7398,7 +7408,7 @@ function escapeXml(value: string): string
 
 ### 函数 `collectExportTocItems`
 
-源码：`src/import/import-export.ts:572`
+源码：`src/import/import-export.ts:612`
 
 将导出章节收集为父子导图顺序一致的目录项。
 
@@ -7408,7 +7418,7 @@ function collectExportTocItems( sections: ReadingSection[], maxTocDepth: number,
 
 ### 函数 `readingSectionsToHtml`
 
-源码：`src/import/import-export.ts:618`
+源码：`src/import/import-export.ts:658`
 
 Produces one portable article from a map and all recursively collected child maps in the same order used by continuous reading mode.
 
@@ -7418,7 +7428,7 @@ export function readingSectionsToHtml(sections: ReadingSection[], tocMaxDepth = 
 
 ### 函数 `readingSectionsToDocx`
 
-源码：`src/import/import-export.ts:702`
+源码：`src/import/import-export.ts:742`
 
 Produces a native Word document with bookmarks and internal TOC hyperlinks.
 
@@ -7428,7 +7438,7 @@ export function readingSectionsToDocx(sections: ReadingSection[], tocMaxDepth = 
 
 ### 函数 `readingSectionsToMarkdown`
 
-源码：`src/import/import-export.ts:774`
+源码：`src/import/import-export.ts:814`
 
 Produces article-oriented Markdown with a linked table of contents.
 
