@@ -21916,6 +21916,14 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
   async buildArticleContext(file, document2) {
     var _a2, _b2, _c, _d;
     const baseDepth = await this.computeArticleBaseDepth(file, document2);
+    const familyDocuments = /* @__PURE__ */ new Map([[file.path, document2]]);
+    const readFamilyDocument = async (targetFile) => {
+      const cached = familyDocuments.get(targetFile.path);
+      if (cached) return cached;
+      const loaded = await this.readMindMapDocument(targetFile);
+      familyDocuments.set(targetFile.path, loaded);
+      return loaded;
+    };
     let topFile = file;
     let topDocument = document2;
     const ancestorPaths = /* @__PURE__ */ new Set([file.path]);
@@ -21924,7 +21932,7 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
       if (!parentFile2 || ancestorPaths.has(parentFile2.path)) break;
       ancestorPaths.add(parentFile2.path);
       topFile = parentFile2;
-      topDocument = await this.readMindMapDocument(parentFile2);
+      topDocument = await readFamilyDocument(parentFile2);
     }
     const isTopLevel = topFile.path === file.path;
     const tocEntries = [];
@@ -21971,7 +21979,7 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
           if (childFile && !visitedFiles.has(childFile.path)) {
             visitedFiles.add(childFile.path);
             try {
-              const childDocument = await this.readMindMapDocument(childFile);
+              const childDocument = await readFamilyDocument(childFile);
               readingSections.push({
                 filePath: childFile.path,
                 document: childDocument,
@@ -22004,7 +22012,7 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
     let parentNodeId = (_c = document2.navigation) == null ? void 0 : _c.parentNodeId;
     if (parentFile && !parentNodeId) {
       try {
-        const parentDocument = await this.readMindMapDocument(parentFile);
+        const parentDocument = await readFamilyDocument(parentFile);
         const currentPath = (0, import_obsidian16.normalizePath)(file.path);
         parentNodeId = (_d = flattenNodes(parentDocument.root).find((node) => {
           var _a3, _b3;

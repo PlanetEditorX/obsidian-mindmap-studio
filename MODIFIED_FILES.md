@@ -1,13 +1,11 @@
 # Modified Files
 
-## 1.41.9 顶层文章目录默认落点与设置归类
+## 1.41.10 通读编号使用当前内存文档
 
-- `src/view.ts`：顶层导图每次加载时将文章落点重置为目录；序列化顶层文件时始终写回目录落点，避免手动“显示原始文章”跨文件重开保留。
-- `src/editor/editor.ts`：进入文章模式时优先目录，只有显式目录章节目标或无目录的子页面进入正文；目录/原始文章切换改为当前会话状态，不进入撤销和保存链路。
-- `src/settings.ts`：文件命名移入“文件与资源”；布局和打开/嵌入行为移入“视图与阅读”；明暗与全部代码设置并入“主题与外观”；节点编辑器与双指手势移入“编辑与交互”；旧“代码行为”分类自动迁移。
-- `tests/reading-editor-contract.test.mjs`、`tests/settings-layout.test.mjs`、`scripts/test.mjs`：新增顶层目录默认落点、临时原始文章切换、设置职责归类和旧分类迁移契约。
-- `README.md`、`CHANGELOG.md`、`docs/ARCHITECTURE.md`、`docs/SPECIAL_FEATURES.md`、`docs/TESTING.md`、`docs/PROJECT_GUIDE.zh-CN.md`：同步默认落点和设置分区语义。
-- `package.json`、`package-lock.json`、`manifest.json`、`versions.json`、`update.json`、`main.js`：统一版本为 1.41.9，安装包 SHA-256 在最终打包后写入。
+- `src/main.ts`：文章族刷新建立文件级文档缓存，并把当前编辑器文档预置为当前物理文件的权威快照；从子导图进入通读后修改编号时，不再读取尚未保存完成的旧磁盘副本。
+- `tests/article-numbering.test.mjs`：新增当前子导图编号修改在延迟保存期间仍被目录和正文读取的回归契约。
+- `README.md`、`CHANGELOG.md`、`docs/ARCHITECTURE.md`、`docs/DEVELOPMENT.md`、`docs/SPECIAL_FEATURES.md`、`docs/TESTING.md`、`docs/FUNCTION_REFERENCE.md`、`TEST_RESULTS.md`：同步行为、维护边界和验证结果。
+- `package.json`、`package-lock.json`、`manifest.json`、`versions.json`、`update.json`、`main.js`：统一版本为 1.41.10，安装包 SHA-256 为 `1cde15007c5fb14f4d998b3206b2263b500733ee1bab73f8fe13f7acc3ec6c13`。
 
 ## 1.41.5 中心节点关闭文章编号的整页语义
 

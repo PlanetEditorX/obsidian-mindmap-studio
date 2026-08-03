@@ -1403,6 +1403,19 @@ export default class MindMapStudioPlugin extends Plugin {
    */
   async buildArticleContext(file: TFile, document: MindMapDocument): Promise<{ baseDepth: number; tocEntries: ArticleTocEntry[]; showToc: boolean; navigation?: ArticlePageNavigation; readingSections: ReadingSection[] }> {
     const baseDepth = await this.computeArticleBaseDepth(file, document);
+    // The active editor document can be newer than the vault while a coalesced save is
+    // still pending. Continuous reading must reuse that in-memory snapshot whenever the
+    // family walk reaches the current physical file; otherwise a numbering change made
+    // from a child map is immediately replaced by the stale on-disk copy. Cache every
+    // other family member as well so one refresh uses one consistent document snapshot.
+    const familyDocuments = new Map<string, MindMapDocument>([[file.path, document]]);
+    const readFamilyDocument = async (targetFile: TFile): Promise<MindMapDocument> => {
+      const cached = familyDocuments.get(targetFile.path);
+      if (cached) return cached;
+      const loaded = await this.readMindMapDocument(targetFile);
+      familyDocuments.set(targetFile.path, loaded);
+      return loaded;
+    };
     let topFile = file;
     let topDocument = document;
     const ancestorPaths = new Set<string>([file.path]);
@@ -1411,7 +1424,7 @@ export default class MindMapStudioPlugin extends Plugin {
       if (!parentFile || ancestorPaths.has(parentFile.path)) break;
       ancestorPaths.add(parentFile.path);
       topFile = parentFile;
-      topDocument = await this.readMindMapDocument(parentFile);
+      topDocument = await readFamilyDocument(parentFile);
     }
     const isTopLevel = topFile.path === file.path;
 
@@ -1468,7 +1481,7 @@ export default class MindMapStudioPlugin extends Plugin {
           if (childFile && !visitedFiles.has(childFile.path)) {
             visitedFiles.add(childFile.path);
             try {
-              const childDocument = await this.readMindMapDocument(childFile);
+              const childDocument = await readFamilyDocument(childFile);
               readingSections.push({
                 filePath: childFile.path,
                 document: childDocument,
@@ -1504,7 +1517,7 @@ export default class MindMapStudioPlugin extends Plugin {
     let parentNodeId = document.navigation?.parentNodeId;
     if (parentFile && !parentNodeId) {
       try {
-        const parentDocument = await this.readMindMapDocument(parentFile);
+        const parentDocument = await readFamilyDocument(parentFile);
         const currentPath = normalizePath(file.path);
         parentNodeId = flattenNodes(parentDocument.root).find((node) => {
           if (!node.submap?.path) return false;
