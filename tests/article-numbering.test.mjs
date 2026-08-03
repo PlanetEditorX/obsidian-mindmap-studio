@@ -70,6 +70,24 @@ test("disabling numbering on the document root suppresses every local article la
   assert.equal(infos[1]?.numberedLeaf, false);
 });
 
+
+test("inherited document numbering disable also suppresses child-map headings and terminal numbers", () => {
+  const root = model.createNode("子导图");
+  const chapter = model.createNode("章节");
+  chapter.children = [model.createNode("正文一"), model.createNode("正文二"), model.createNode("正文三"), model.createNode("正文四")];
+  root.children = [chapter];
+
+  const infos = modes.buildArticleNodeInfo(root, 3, {
+    enabled: true,
+    threshold: 4,
+    style: "circled",
+    numberingDisabled: true
+  });
+  assert.deepEqual(infos.map((info) => info.label), ["", "", "", "", ""]);
+  assert.equal(infos.some((info) => info.numberedLeaf), false);
+  assert.equal(infos.find((info) => info.title === "章节")?.depth, 4);
+});
+
 test("disabling a normal heading still skips only that heading instead of disabling its descendants", () => {
   const root = model.createNode("根节点");
   const chapter = model.createNode("章节");
@@ -86,9 +104,27 @@ test("disabling a normal heading still skips only that heading instead of disabl
 });
 
 test("document-level numbering disable is shared by the directory, article title, and settings help", () => {
-  assert.match(mainSource, /const documentNumberingDisabled = isDocumentArticleNumberingDisabled\(item\.document\.root\);[\s\S]*const numberedIndex = !documentNumberingDisabled/);
-  assert.match(articleRendererSource, /const pageEntry = isDocumentArticleNumberingDisabled\(options\.document\.root\)[\s\S]*\? undefined/);
-  assert.match(editorSource, /关闭中心节点编号时，当前物理导图内的章节和末端序号全部隐藏/);
+  assert.match(mainSource, /const documentNumberingDisabled = item\.numberingDisabled[\s\S]*isDocumentArticleNumberingDisabled\(item\.document\.root\)[\s\S]*const numberedIndex = !documentNumberingDisabled/);
+  assert.match(mainSource, /numberingDisabled: documentNumberingDisabled/);
+  assert.match(mainSource, /const childNumberingDisabled = documentNumberingDisabled[\s\S]*isDocumentArticleNumberingDisabled\(childDocument\.root\)/);
+  assert.match(mainSource, /const topNumberingDisabled = isDocumentArticleNumberingDisabled\(topDocument\.root\)/);
+  assert.match(articleRendererSource, /const articleNumberingDisabled = options\.articleNavigation\?\.numberingDisabled === true[\s\S]*isDocumentArticleNumberingDisabled\(options\.document\.root\)[\s\S]*const pageEntry = articleNumberingDisabled/);
+  assert.match(editorSource, /如果当前文件是顶层总目录，关闭状态会继续作用到挂载的全部子导图/);
+});
+
+test("continuous reading keeps directory and body headings on the same numbering source", () => {
+  assert.match(editorSource, /const contentTocEntries = this\.options\.articleTocEntries/);
+  assert.match(editorSource, /const tocEntryByNode = new Map<string, ArticleTocEntry>/);
+  assert.match(editorSource, /const tocEntry = tocEntryByNode\.get\(`\$\{section\.filePath\}\\u0000\$\{info\.node\.id\}`\)/);
+  assert.match(editorSource, /const depth = tocEntry\?\.depth \?\? info\.depth/);
+  assert.match(editorSource, /const label = tocEntry\?\.label \?\? info\.label/);
+});
+
+test("continuous reading renders rich heading text beside the number instead of deleting the number span", () => {
+  assert.match(editorSource, /const chapterTitleText = chapterTitle\.createSpan\(\{ cls: "mms-reading-map-title-text" \}\)[\s\S]*renderRichTextRuns\(chapterTitleText/);
+  assert.match(editorSource, /const headingText = heading\.createSpan\(\{ cls: "mms-article-heading-text" \}\)[\s\S]*renderRichTextRuns\(headingText/);
+  assert.doesNotMatch(editorSource, /renderRichTextRuns\(chapterTitle,/);
+  assert.doesNotMatch(editorSource, /renderRichTextRuns\(heading,/);
 });
 
 test("continuous reading reuses the active child document while numbering changes are still saving", () => {

@@ -1433,13 +1433,26 @@ export default class MindMapStudioPlugin extends Plugin {
     const isTopLevel = topFile.path === file.path;
 
     const tocEntries: ArticleTocEntry[] = [];
-    const readingSections: ReadingSection[] = [{ filePath: topFile.path, document: topDocument, baseDepth: 0 }];
+    const topNumberingDisabled = isDocumentArticleNumberingDisabled(topDocument.root);
+    const readingSections: ReadingSection[] = [{
+      filePath: topFile.path,
+      document: topDocument,
+      baseDepth: 0,
+      numberingDisabled: topNumberingDisabled
+    }];
     const visitedFiles = new Set<string>([topFile.path]);
     let hasSubmaps = false;
     /**
      * Item 类型定义，用于限制可接受值并让序列化数据保持稳定。
      */
-    type Item = { node: MindMapNode; file: TFile; document: MindMapDocument; breadcrumb: string[] };
+    type Item = {
+      node: MindMapNode;
+      file: TFile;
+      document: MindMapDocument;
+      breadcrumb: string[];
+      /** A disabled ancestor document suppresses numbering for the whole mounted subtree. */
+      numberingDisabled: boolean;
+    };
 
     const processItems = async (items: Item[], defaultLevel: number, structureDepth: number): Promise<void> => {
       const siblingHasHeading = items.some(({ node }) => isArticleHeading(node));
@@ -1447,7 +1460,8 @@ export default class MindMapStudioPlugin extends Plugin {
       for (const item of items) {
         const { node, file: sourceFile, breadcrumb } = item;
         const numbering = resolveArticleNumbering(node, defaultLevel, siblingHasHeading);
-        const documentNumberingDisabled = isDocumentArticleNumberingDisabled(item.document.root);
+        const documentNumberingDisabled = item.numberingDisabled
+          || isDocumentArticleNumberingDisabled(item.document.root);
         const numberedIndex = !documentNumberingDisabled && numbering.shouldNumber && !numbering.skipped
           ? (numberedIndexes.get(numbering.level) ?? 0) + 1
           : 0;
@@ -1473,7 +1487,8 @@ export default class MindMapStudioPlugin extends Plugin {
           node: child,
           file: sourceFile,
           document: item.document,
-          breadcrumb: nextBreadcrumb
+          breadcrumb: nextBreadcrumb,
+          numberingDisabled: documentNumberingDisabled
         }));
         if (node.submap?.path) {
           hasSubmaps = true;
@@ -1486,18 +1501,22 @@ export default class MindMapStudioPlugin extends Plugin {
             visitedFiles.add(childFile.path);
             try {
               const childDocument = await readFamilyDocument(childFile);
+              const childNumberingDisabled = documentNumberingDisabled
+                || isDocumentArticleNumberingDisabled(childDocument.root);
               readingSections.push({
                 filePath: childFile.path,
                 document: childDocument,
                 baseDepth: numbering.level,
                 parentFilePath: sourceFile.path,
-                parentNodeId: node.id
+                parentNodeId: node.id,
+                numberingDisabled: childNumberingDisabled
               });
               descendants.push(...childDocument.root.children.map((child) => ({
                 node: child,
                 file: childFile,
                 document: childDocument,
-                breadcrumb: nextBreadcrumb
+                breadcrumb: nextBreadcrumb,
+                numberingDisabled: childNumberingDisabled
               })));
             } catch (error) {
               console.warn(`MindMap Studio could not read child map for article TOC: ${childFile.path}`, error);
@@ -1512,7 +1531,8 @@ export default class MindMapStudioPlugin extends Plugin {
       node,
       file: topFile,
       document: topDocument,
-      breadcrumb: [nodePlainText(topDocument.root) || topDocument.title]
+      breadcrumb: [nodePlainText(topDocument.root) || topDocument.title],
+      numberingDisabled: topNumberingDisabled
     })), articleChildStartLevel(topDocument.root), 1);
     const siblingPages = resolveArticleSiblingPages(tocEntries, file.path);
     const parentFile = document.navigation?.parentPath
@@ -1537,15 +1557,17 @@ export default class MindMapStudioPlugin extends Plugin {
         currentIndex: siblingPages.currentIndex,
         homePath: topFile.path,
         parentPath: parentFile?.path,
-        parentNodeId
+        parentNodeId,
+        numberingDisabled: readingSections.find((section) => section.filePath === file.path)?.numberingDisabled
+          ?? isDocumentArticleNumberingDisabled(document.root)
       }
       : undefined;
     return {
       baseDepth,
       tocEntries,
       showToc: isTopLevel && hasSubmaps && tocEntries.length > 0,
-      navigation
-      ,readingSections
+      navigation,
+      readingSections
     };
   }
 
@@ -1558,9 +1580,15 @@ export default class MindMapStudioPlugin extends Plugin {
    * @returns Ordered maps with their absolute depth relative to the current map.
    */
   async buildDescendantReadingSections(file: TFile, document: MindMapDocument): Promise<ReadingSection[]> {
-    const sections: ReadingSection[] = [{ filePath: file.path, document, baseDepth: 0 }];
+    const rootNumberingDisabled = isDocumentArticleNumberingDisabled(document.root);
+    const sections: ReadingSection[] = [{
+      filePath: file.path,
+      document,
+      baseDepth: 0,
+      numberingDisabled: rootNumberingDisabled
+    }];
     const visited = new Set<string>([file.path]);
-    const visit = async (nodes: MindMapNode[], sourceFile: TFile, defaultLevel: number): Promise<void> => {
+    const visit = async (nodes: MindMapNode[], sourceFile: TFile, defaultLevel: number, numberingDisabled: boolean): Promise<void> => {
       const siblingHasHeading = nodes.some((node) => isArticleHeading(node));
       for (const node of nodes) {
         const numbering = resolveArticleNumbering(node, defaultLevel, siblingHasHeading);
@@ -1570,23 +1598,31 @@ export default class MindMapStudioPlugin extends Plugin {
             visited.add(childFile.path);
             try {
               const childDocument = await this.readMindMapDocument(childFile);
+              const childNumberingDisabled = numberingDisabled
+                || isDocumentArticleNumberingDisabled(childDocument.root);
               sections.push({
                 filePath: childFile.path,
                 document: childDocument,
                 baseDepth: numbering.level,
                 parentFilePath: sourceFile.path,
-                parentNodeId: node.id
+                parentNodeId: node.id,
+                numberingDisabled: childNumberingDisabled
               });
-              await visit(childDocument.root.children, childFile, articleChildStartLevel(childDocument.root, numbering.level));
+              await visit(
+                childDocument.root.children,
+                childFile,
+                articleChildStartLevel(childDocument.root, numbering.level),
+                childNumberingDisabled
+              );
             } catch (error) {
               console.warn(`MindMap Studio could not read child map for export: ${childFile.path}`, error);
             }
           }
         }
-        if (node.children.length) await visit(node.children, sourceFile, numbering.level + 1);
+        if (node.children.length) await visit(node.children, sourceFile, numbering.level + 1, numberingDisabled);
       }
     };
-    await visit(document.root.children, file, articleChildStartLevel(document.root));
+    await visit(document.root.children, file, articleChildStartLevel(document.root), rootNumberingDisabled);
     return sections;
   }
 

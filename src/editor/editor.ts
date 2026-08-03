@@ -71,7 +71,7 @@ import { parseQuestionEnrichment, parseRecognizedQuestion, QuestionEditModal } f
 import { createQuestionPracticeState, renderQuestionPracticeMode } from "./question-practice-mode";
 import { TOOLBAR_ITEMS } from "../settings";
 import { appearanceFromThemePreset, MINDMAP_THEME_PRESETS } from "../themes";
-import { articleNumberLabel, articleTocDepth, buildArticleNodeInfo, DISPLAY_MODE_ICONS, DISPLAY_MODE_LABELS, readingAnchorPart, resolveArticleTocMaxDepth } from "../article/modes";
+import { articleNumberLabel, articleTocDepth, buildArticleNodeInfo, DISPLAY_MODE_ICONS, DISPLAY_MODE_LABELS, readingAnchorPart, resolveArticleTocMaxDepth, type ArticleTocEntry } from "../article/modes";
 import { ARTICLE_STYLE_PRESETS, resolveArticleStyle } from "../article/article-style";
 import { resolveArticleEntryReadOnly } from "../article/display-mode";
 import {
@@ -351,7 +351,7 @@ function createArticleNumberingControls(
   numberingLevelSelect.value = String(currentLevel ?? 1);
   const numberingHelp = container.createDiv({
     cls: "setting-item-description mmc-article-numbering-help",
-    text: "关闭中心节点编号时，当前物理导图内的章节和末端序号全部隐藏；关闭普通节点时只跳过该节点。手动层级用于定义当前节点所在子树的最高文章层级；编辑中心节点时，一级子节点直接使用所选层级。超过第 8 级的更深结构保留标题层级，但不再循环生成 A. /（A）编号。"
+    text: "关闭中心节点编号时，当前导图内的章节和末端序号全部隐藏；如果当前文件是顶层总目录，关闭状态会继续作用到挂载的全部子导图。关闭普通节点时只跳过该节点。手动层级用于定义当前节点所在子树的最高文章层级；编辑中心节点时，一级子节点直接使用所选层级。超过第 8 级的更深结构保留标题层级，但不再循环生成 A. /（A）编号。"
   });
   const updateNumberingLevelState = (): void => {
     const manual = numberingModeSelect.value === "manual";
@@ -6317,9 +6317,12 @@ export class MindMapEditor {
     const contentSections = sections.length > 1 ? sections.slice(1) : sections;
     const contentPaths = new Set(contentSections.map((section) => section.filePath));
     const articleTocMaxDepth = this.effectiveArticleTocMaxDepth();
-    const tocEntries = this.options.articleTocEntries.filter(
-      (entry) => articleTocDepth(entry) <= articleTocMaxDepth && contentPaths.has(entry.filePath)
-    );
+    const contentTocEntries = this.options.articleTocEntries.filter((entry) => contentPaths.has(entry.filePath));
+    const tocEntries = contentTocEntries.filter((entry) => articleTocDepth(entry) <= articleTocMaxDepth);
+    const tocEntryByNode = new Map<string, ArticleTocEntry>();
+    for (const entry of contentTocEntries) {
+      if (entry.nodeId) tocEntryByNode.set(`${entry.filePath}\u0000${entry.nodeId}`, entry);
+    }
     const toc = page.createEl("nav", { cls: "mms-article-toc mms-reading-toc" });
     toc.createEl("h2", { text: "全书目录" });
     const tocList = toc.createEl("ol");
@@ -6362,23 +6365,39 @@ export class MindMapEditor {
         mountAnchor.dataset.nodeId = section.parentNodeId;
         mountAnchor.id = `reading-${readingAnchorPart(section.parentFilePath)}-${readingAnchorPart(section.parentNodeId)}`;
       }
-      const sectionEntry = tocEntries.find((entry) => entry.filePath === section.filePath && !entry.nodeId);
-      const chapterTitle = chapter.createEl("h2", { cls: "mms-reading-map-title" });
+      const sectionEntry = contentTocEntries.find((entry) => entry.filePath === section.filePath && !entry.nodeId);
+      const chapterTitle = chapter.createEl("h2", {
+        cls: `mms-reading-map-title${sectionEntry?.label && /[、.）]$/.test(sectionEntry.label) ? " is-compact-number" : ""}`
+      });
       if (sectionEntry?.label) chapterTitle.createSpan({ cls: "mms-article-number", text: sectionEntry.label });
+      const chapterTitleText = chapterTitle.createSpan({ cls: "mms-reading-map-title-text" });
       const chapterTitleBlock = nodeContentBlocks(section.document.root).find((block): block is MindMapTextContentBlock => block.type === "text");
-      renderRichTextRuns(chapterTitle, chapterTitleBlock?.richText, chapterTitleBlock?.text ?? (sectionEntry?.displayTitle || section.document.title));
+      renderRichTextRuns(chapterTitleText, chapterTitleBlock?.richText, chapterTitleBlock?.text ?? section.document.title);
       this.renderArticleContent(chapter, section.document.root, false);
-      for (const info of buildArticleNodeInfo(section.document.root, section.baseDepth, { enabled: this.options.articleLeafNumberingEnabled, threshold: this.options.articleLeafNumberingThreshold, style: this.options.articleLeafNumberingStyle })) {
-        const nodeSection = chapter.createEl("section", { cls: `mms-article-node depth-${Math.min(info.depth, 8)}` });
+      for (const info of buildArticleNodeInfo(section.document.root, section.baseDepth, {
+        enabled: this.options.articleLeafNumberingEnabled,
+        threshold: this.options.articleLeafNumberingThreshold,
+        style: this.options.articleLeafNumberingStyle,
+        numberingDisabled: section.numberingDisabled
+      })) {
+        const tocEntry = tocEntryByNode.get(`${section.filePath}\u0000${info.node.id}`);
+        const depth = tocEntry?.depth ?? info.depth;
+        const label = tocEntry?.label ?? info.label;
+        const title = tocEntry?.title ?? info.title;
+        const isHeading = tocEntry ? true : info.isHeading;
+        const nodeSection = chapter.createEl("section", { cls: `mms-article-node depth-${Math.min(depth, 8)}` });
         nodeSection.dataset.nodeId = info.node.id;
         nodeSection.dataset.filePath = section.filePath;
         nodeSection.id = `reading-${fileKey}-${readingAnchorPart(info.node.id)}`;
-        if (info.isHeading) {
-          const level = Math.min(6, info.depth + 1);
-          const heading = nodeSection.createEl(`h${level}` as keyof HTMLElementTagNameMap, { cls: "mms-article-section-heading" });
-          if (info.label) heading.createSpan({ cls: "mms-article-number", text: info.label });
+        if (isHeading) {
+          const level = Math.min(6, depth + 1);
+          const heading = nodeSection.createEl(`h${level}` as keyof HTMLElementTagNameMap, {
+            cls: `mms-article-heading mms-article-section-heading${/[、.）]$/.test(label) ? " is-compact-number" : ""}`
+          });
+          if (label) heading.createSpan({ cls: "mms-article-number", text: label });
+          const headingText = heading.createSpan({ cls: "mms-article-heading-text" });
           const headingBlock = nodeContentBlocks(info.node).find((block): block is MindMapTextContentBlock => block.type === "text");
-          renderRichTextRuns(heading, headingBlock?.richText, headingBlock?.text ?? (info.displayTitle || info.title));
+          renderRichTextRuns(headingText, headingBlock?.richText, headingBlock?.text ?? title);
           this.renderArticleContent(nodeSection, info.node, false);
         } else {
           const firstTextBlock = nodeContentBlocks(info.node).find((block): block is MindMapTextContentBlock => block.type === "text");

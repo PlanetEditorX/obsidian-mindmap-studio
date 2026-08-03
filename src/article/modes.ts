@@ -33,6 +33,8 @@ export interface ReadingSection {
   parentFilePath?: string;
   /** 当前子导图在父导图中的挂载节点。 */
   parentNodeId?: string;
+  /** 顶层或祖先导图已关闭编号时，当前物理页也必须保持无编号。 */
+  numberingDisabled?: boolean;
 }
 
 /**
@@ -269,6 +271,8 @@ export interface ArticlePageNavigation {
   parentPath?: string;
   /** Parent-map mount node used when returning from a child article page. */
   parentNodeId?: string;
+  /** Numbering is disabled by the current document or one of its mounted ancestors. */
+  numberingDisabled?: boolean;
 }
 
 /** 当前物理文章页及其同层兄弟页的解析结果。 */
@@ -341,6 +345,8 @@ export interface ArticleLeafNumberingOptions {
   threshold: number;
   /** Existing next-level article numbering or independent circled numbers. */
   style?: ArticleLeafNumberingStyle;
+  /** Suppress heading and terminal labels inherited from an ancestor document. */
+  numberingDisabled?: boolean;
 }
 
 /**
@@ -353,7 +359,8 @@ export function buildArticleNodeInfo(
   primaryText: (node: MindMapNode) => string = nodePrimaryText
 ): ArticleNodeInfo[] {
   const result: ArticleNodeInfo[] = [];
-  const documentNumberingDisabled = isDocumentArticleNumberingDisabled(root);
+  const documentNumberingDisabled = leafNumbering.numberingDisabled === true
+    || isDocumentArticleNumberingDisabled(root);
   const visitChildren = (parent: MindMapNode, defaultLevel: number): void => {
     let siblingHasHeading = false;
     let terminalCount = 0;

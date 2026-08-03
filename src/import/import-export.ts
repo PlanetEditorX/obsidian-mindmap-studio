@@ -99,11 +99,16 @@ export interface ArticleExportOptions {
 }
 
 /** Resolves terminal numbering with per-document style taking precedence over plugin defaults. */
-function exportLeafNumbering(document: MindMapDocument, options: ArticleExportOptions): ArticleLeafNumberingOptions {
+function exportLeafNumbering(
+  document: MindMapDocument,
+  options: ArticleExportOptions,
+  numberingDisabled = false
+): ArticleLeafNumberingOptions {
   return {
     enabled: document.articleStyle?.leafNumberingEnabled ?? options.leafNumberingEnabled ?? false,
     style: document.articleStyle?.leafNumberingStyle ?? options.leafNumberingStyle ?? "next-level",
-    threshold: document.articleStyle?.leafNumberingThreshold ?? options.leafNumberingThreshold ?? 4
+    threshold: document.articleStyle?.leafNumberingThreshold ?? options.leafNumberingThreshold ?? 4,
+    numberingDisabled
   };
 }
 
@@ -199,7 +204,7 @@ function collectExportTocItems(
     if (sectionIndex > 0 && !parentNodeKey(section.parentFilePath, section.parentNodeId)) {
       push(Math.max(1, section.baseDepth), nodePlainText(section.document.root) || section.document.title, exportAnchor(sectionIndex, `section-${sectionIndex}`));
     }
-    for (const info of buildArticleNodeInfo(section.document.root, section.baseDepth, exportLeafNumbering(section.document, options))) {
+    for (const info of buildArticleNodeInfo(section.document.root, section.baseDepth, exportLeafNumbering(section.document, options, section.numberingDisabled))) {
       const title = info.displayTitle || info.title || "未命名";
       const childIndex = childSections.get(`${section.filePath}\u0000${info.node.id}`);
       if (childIndex !== undefined) {
@@ -245,7 +250,7 @@ export function readingSectionsToHtml(sections: ReadingSection[], tocMaxDepth = 
     if (sectionIndex > 0 && !parentNodeKey(section.parentFilePath, section.parentNodeId)) {
       pushTocItem(Math.max(1, section.baseDepth), escapeHtml(nodePlainText(section.document.root) || section.document.title), exportAnchor(sectionIndex, `section-${sectionIndex}`));
     }
-    for (const info of buildArticleNodeInfo(section.document.root, section.baseDepth, exportLeafNumbering(section.document, options))) {
+    for (const info of buildArticleNodeInfo(section.document.root, section.baseDepth, exportLeafNumbering(section.document, options, section.numberingDisabled))) {
       const title = htmlArticleDisplayTitle(info);
       const key = `${section.filePath}\u0000${info.node.id}`;
       const childSectionIndex = childSectionIndexes.get(key);
@@ -257,7 +262,13 @@ export function readingSectionsToHtml(sections: ReadingSection[], tocMaxDepth = 
       }
     }
   };
-  const renderArticleNode = (filePath: string, document: MindMapDocument, baseDepth: number, sectionIndex: number): string => buildArticleNodeInfo(document.root, baseDepth, exportLeafNumbering(document, options))
+  const renderArticleNode = (
+    filePath: string,
+    document: MindMapDocument,
+    baseDepth: number,
+    sectionIndex: number,
+    numberingDisabled = false
+  ): string => buildArticleNodeInfo(document.root, baseDepth, exportLeafNumbering(document, options, numberingDisabled))
     .map((info) => {
       const title = htmlArticleDisplayTitle(info);
       const childSectionAnchor = childSectionAnchors.get(`${filePath}\u0000${info.node.id}`);
@@ -271,12 +282,12 @@ export function readingSectionsToHtml(sections: ReadingSection[], tocMaxDepth = 
     .join("");
   const first = sections[0]?.document;
   const title = escapeHtml(first ? (nodePlainText(first.root) || first.title) : "导出文档");
-  const body = sections.map(({ filePath, document, baseDepth }, index) => {
+  const body = sections.map(({ filePath, document, baseDepth, numberingDisabled }, index) => {
     const sectionTitle = escapeHtml(nodePlainText(document.root) || document.title);
     const headingLevel = Math.min(6, Math.max(1, baseDepth + 1));
     const sectionAnchor = exportAnchor(index, `section-${index}`);
     const heading = index === 0 ? "" : `<h${headingLevel} id="${sectionAnchor}"><a name="${sectionAnchor}"></a>${sectionTitle}</h${headingLevel}>`;
-    return `<section class="map-section">${heading}${renderArticleNode(filePath, document, baseDepth, index)}</section>`;
+    return `<section class="map-section">${heading}${renderArticleNode(filePath, document, baseDepth, index, numberingDisabled)}</section>`;
   }).join("");
   collectTocItems(0);
   tocItems.splice(0, tocItems.length, ...collectExportTocItems(sections, maxTocDepth, true, options).map((item) => ({ ...item, title: escapeHtml(item.title) })));
@@ -339,11 +350,11 @@ export function readingSectionsToDocx(sections: ReadingSection[], tocMaxDepth = 
   });
   const body: string[] = [paragraph(title, "Title")];
   if (toc) body.push(paragraph("目录", "Heading1"), toc);
-  sections.forEach(({ filePath, document, baseDepth }, sectionIndex) => {
+  sections.forEach(({ filePath, document, baseDepth, numberingDisabled }, sectionIndex) => {
     if (sectionIndex > 0) {
       body.push(paragraph(nodePlainText(document.root) || document.title, "Heading" + Math.min(6, Math.max(1, baseDepth)), 0, wordAnchor(exportAnchor(sectionIndex, "section-" + sectionIndex))));
     }
-    for (const info of buildArticleNodeInfo(document.root, baseDepth, exportLeafNumbering(document, options))) {
+    for (const info of buildArticleNodeInfo(document.root, baseDepth, exportLeafNumbering(document, options, numberingDisabled))) {
       if (childSectionAnchors.has(filePath + "\u0000" + info.node.id)) continue;
       const text = info.displayTitle || info.title || "未命名";
       const isWordHeading = info.isHeading && info.node.children.length > 0;
@@ -387,7 +398,7 @@ export function readingSectionsToMarkdown(sections: ReadingSection[], tocMaxDept
     if (depth <= maxTocDepth) tocItems.push({ depth, title: itemTitle, anchor });
   };
   const body: string[] = [];
-  sections.forEach(({ filePath, document, baseDepth }, sectionIndex) => {
+  sections.forEach(({ filePath, document, baseDepth, numberingDisabled }, sectionIndex) => {
     if (sectionIndex > 0) {
       const sectionTitle = (childSectionTitles.get(sectionIndex) ?? nodePlainText(document.root)) || document.title;
       const heading = markdownTitle("", sectionTitle);
@@ -395,7 +406,7 @@ export function readingSectionsToMarkdown(sections: ReadingSection[], tocMaxDept
       if (!parentNodeKey(sections[sectionIndex]?.parentFilePath, sections[sectionIndex]?.parentNodeId)) pushTocItem(Math.max(1, baseDepth), heading, anchor);
       body.push("", markdownHeading(Math.min(6, Math.max(1, baseDepth + 1)), heading));
     }
-    for (const info of buildArticleNodeInfo(document.root, baseDepth, exportLeafNumbering(document, options))) {
+    for (const info of buildArticleNodeInfo(document.root, baseDepth, exportLeafNumbering(document, options, numberingDisabled))) {
       const heading = info.displayTitle || markdownTitle(info.label, info.title);
       const childSectionIndex = childSectionIndexes.get(`${filePath}\u0000${info.node.id}`);
       if (childSectionIndex !== undefined) {
