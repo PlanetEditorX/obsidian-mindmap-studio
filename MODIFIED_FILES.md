@@ -1,5 +1,14 @@
 # Modified Files
 
+## 1.41.5 中心节点关闭文章编号的整页语义
+
+- `src/article/modes.ts`：新增当前物理导图编号关闭判定；根节点为 `none` 时清空全部章节与末端序号，但保留结构深度；普通节点关闭仍只跳过自身。
+- `src/main.ts`：递归文章目录构建复用整页关闭状态，避免目录继续显示“第一章”。
+- `src/editor/article-renderer.ts`、`src/editor/editor.ts`：子文章页标题不再显示父级编号，并补充中心节点/普通节点关闭语义说明。
+- `tests/article-numbering.test.mjs`：新增整页关闭、普通节点单点跳号和目录/标题集成契约。
+- `README.md`、`CHANGELOG.md`、`docs/ARCHITECTURE.md`、`docs/DATA_MODEL.md`、`docs/DEVELOPMENT.md`、`docs/SPECIAL_FEATURES.md`、`docs/TESTING.md`、`docs/FUNCTION_REFERENCE.md`、`TEST_RESULTS.md`：同步行为、架构、数据语义和验证结果。
+- `package.json`、`package-lock.json`、`manifest.json`、`versions.json`、`update.json`、`main.js`：统一版本为 1.41.5，最终安装包 SHA-256 在打包后写入。
+
 ## 1.41.4 大文件操作与全局页面切换过渡
 
 - `src/editor/editor.ts`：新增统一页面过渡状态机、两帧绘制门、目标页面入口动画和导航异常边界；合并、提取、创建、父子导图跳转及显示模式切换接入分阶段状态。

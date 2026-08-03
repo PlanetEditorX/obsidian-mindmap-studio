@@ -19,6 +19,7 @@ import {
   articleTocDepth,
   buildArticleNodeInfo,
   currentArticlePageEntry,
+  isDocumentArticleNumberingDisabled,
   type ArticleNodeInfo,
   type ArticlePageNavigation,
   type ArticleTocEntry
@@ -136,7 +137,9 @@ export function renderArticleMode(container: HTMLElement, options: ArticleRender
   const page = container.createDiv({ cls: `mms-article-page article-${articleStyle.preset} toc-${articleStyle.tocStyle ?? "card"}` });
   page.dataset.nodeId = options.document.root.id;
   applyArticleStyle(page, articleStyle);
-  const pageEntry = currentArticlePageEntry(options.articleNavigation);
+  const pageEntry = isDocumentArticleNumberingDisabled(options.document.root)
+    ? undefined
+    : currentArticlePageEntry(options.articleNavigation);
   const title = page.createEl("h1", { cls: "mms-article-document-title" });
   title.dataset.nodeId = options.document.root.id;
   if (pageEntry?.label) {

@@ -64,6 +64,7 @@ import {
   articleNumberLabel,
   buildArticleNodeInfo,
   isArticleHeading,
+  isDocumentArticleNumberingDisabled,
   normalizeVisibleModes,
   resolveArticleNumbering,
   resolveArticleSiblingPages,
@@ -1429,7 +1430,8 @@ export default class MindMapStudioPlugin extends Plugin {
       for (const item of items) {
         const { node, file: sourceFile, breadcrumb } = item;
         const numbering = resolveArticleNumbering(node, defaultLevel, siblingHasHeading);
-        const numberedIndex = numbering.shouldNumber && !numbering.skipped
+        const documentNumberingDisabled = isDocumentArticleNumberingDisabled(item.document.root);
+        const numberedIndex = !documentNumberingDisabled && numbering.shouldNumber && !numbering.skipped
           ? (numberedIndexes.get(numbering.level) ?? 0) + 1
           : 0;
         if (numberedIndex) numberedIndexes.set(numbering.level, numberedIndex);

@@ -174,6 +174,7 @@ type ArticleClickMove =
 
 /**
  * 创建节点编辑与“主题与外观”共用的文章编号控件，确保两处设置语义和文案一致。
+ * 中心节点选择关闭时禁用当前物理导图的全部文章编号；普通节点选择关闭时只跳过该节点。
  * 手动层级表示当前节点所在子树的最高文章层级；中心节点本身不编号，一级子节点直接使用所选层级。
  *
  * @param container 承载表单控件的网格容器。
@@ -205,7 +206,7 @@ function createArticleNumberingControls(
   numberingLevelSelect.value = String(currentLevel ?? 1);
   const numberingHelp = container.createDiv({
     cls: "setting-item-description mmc-article-numbering-help",
-    text: "手动层级用于定义当前节点所在子树的最高文章层级；编辑中心节点时，一级子节点直接使用所选层级。末端节点是否作为标题仍由同级结构自动判断；超过第 8 级的更深结构保留标题层级，但不再循环生成 A. /（A）编号。"
+    text: "关闭中心节点编号时，当前物理导图内的章节和末端序号全部隐藏；关闭普通节点时只跳过该节点。手动层级用于定义当前节点所在子树的最高文章层级；编辑中心节点时，一级子节点直接使用所选层级。超过第 8 级的更深结构保留标题层级，但不再循环生成 A. /（A）编号。"
   });
   const updateNumberingLevelState = (): void => {
     const manual = numberingModeSelect.value === "manual";
