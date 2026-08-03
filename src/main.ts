@@ -510,6 +510,13 @@ export default class MindMapStudioPlugin extends Plugin {
       } catch { return text; }
     };
     let modifiedCount = 0;
+    this.logDebug("global-search", "replace-all-start", {
+      resultCount: results.length,
+      fileCount: byFile.size,
+      queryLength: replaceQ.length,
+      replacementLength: replacement.length,
+      useRegex
+    });
     for (const [filePath, fileResults] of byFile) {
       const file = this.app.vault.getAbstractFileByPath(filePath);
       if (!(file instanceof TFile)) continue;
@@ -560,13 +567,21 @@ export default class MindMapStudioPlugin extends Plugin {
           if (expectedNode.note !== persistedNode.note) continue;
           modifiedCount += 1;
         }
+        await this.searchIndex.refreshFile(file);
         // An open editor retains its own document instance. Refresh it from the
         // persisted replacement so a later editor save cannot restore old text.
         await this.refreshOpenMindMap(file, persisted);
+        this.logDebug("global-search", "replace-all-file-complete", {
+          filePath,
+          requestedNodes: nodeIds.size,
+          changedNodes: changedNodeIds.size
+        });
       } catch (err) {
+        this.logDebug("global-search", "replace-all-file-failed", { filePath, error: err });
         console.warn(`MindMap Studio could not replace in ${filePath}:`, err);
       }
     }
+    this.logDebug("global-search", "replace-all-complete", { modifiedCount, fileCount: byFile.size });
     return modifiedCount;
   }
 
@@ -877,6 +892,7 @@ export default class MindMapStudioPlugin extends Plugin {
         ? Math.max(1, Math.min(8, Math.round(raw.articleTocMaxDepth)))
         : DEFAULT_SETTINGS.articleTocMaxDepth,
       showArticleMiniMap: raw.showArticleMiniMap !== false,
+      showArticleContextProgress: raw.showArticleContextProgress === true,
       articleSectionCollapseEnabled: raw.articleSectionCollapseEnabled === true,
       articleLeafBulletsEnabled: raw.articleLeafBulletsEnabled === true,
       articleLeafBulletColor: typeof raw.articleLeafBulletColor === "string" && /^#[0-9a-f]{6}$/i.test(raw.articleLeafBulletColor)

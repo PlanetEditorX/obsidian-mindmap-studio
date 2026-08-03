@@ -1547,7 +1547,8 @@ export class MindMapEditor {
    */
   private renderArticleContextLoadingProgress(): void {
     if (!this.rootEl) return;
-    const visibleMode = this.currentMode === "article" || this.currentMode === "reading";
+    const visibleMode = this.options.showArticleContextProgress === true
+      && (this.currentMode === "article" || this.currentMode === "reading");
     const progress = this.articleContextLoadingProgress;
     if (!visibleMode || !progress) {
       this.articleContextLoadingEl?.remove();
