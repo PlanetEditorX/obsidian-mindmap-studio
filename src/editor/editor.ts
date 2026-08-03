@@ -3066,7 +3066,19 @@ export class MindMapEditor {
       this.callbacks.onDebugLog("navigation", "return-parent-click", {
         currentFilePath: this.options.currentFilePath, parentPath: navigation.parentPath, parentNodeId: navigation.parentNodeId, parentNodeText: navigation.parentNodeText, currentMode: this.currentMode
       });
-      void this.navigateWithTransition(() => this.callbacks.onOpenArticleDirectory(navigation.parentPath, navigation.parentNodeId), "正在返回目录…", "正在保存当前位置并加载主导图目录");
+      if (this.currentMode === "article") {
+        void this.navigateWithTransition(
+          () => this.callbacks.onOpenArticleDirectory(navigation.parentPath, navigation.parentNodeId),
+          "正在返回目录…",
+          "正在保存当前位置并加载主导图目录"
+        );
+        return;
+      }
+      void this.navigateWithTransition(
+        () => this.callbacks.onOpenMindMap(navigation.parentPath, navigation.parentNodeId),
+        "正在返回父导图…",
+        "正在保存当前位置并恢复父导图页面"
+      );
     };
 
     if (showCanvasBreadcrumb) {

@@ -5663,7 +5663,7 @@ function readRichTextEditor(editor) {
 // src/editor/editor-modals.ts
 var import_obsidian5 = require("obsidian");
 
-// node_modules/fflate/esm/browser.js
+// ../../work_mms/node_modules/fflate/esm/browser.js
 var u8 = Uint8Array;
 var u16 = Uint16Array;
 var i32 = Int32Array;
@@ -12407,7 +12407,19 @@ var MindMapEditor = class {
         parentNodeText: navigation.parentNodeText,
         currentMode: this.currentMode
       });
-      void this.navigateWithTransition(() => this.callbacks.onOpenArticleDirectory(navigation.parentPath, navigation.parentNodeId), "\u6B63\u5728\u8FD4\u56DE\u76EE\u5F55\u2026", "\u6B63\u5728\u4FDD\u5B58\u5F53\u524D\u4F4D\u7F6E\u5E76\u52A0\u8F7D\u4E3B\u5BFC\u56FE\u76EE\u5F55");
+      if (this.currentMode === "article") {
+        void this.navigateWithTransition(
+          () => this.callbacks.onOpenArticleDirectory(navigation.parentPath, navigation.parentNodeId),
+          "\u6B63\u5728\u8FD4\u56DE\u76EE\u5F55\u2026",
+          "\u6B63\u5728\u4FDD\u5B58\u5F53\u524D\u4F4D\u7F6E\u5E76\u52A0\u8F7D\u4E3B\u5BFC\u56FE\u76EE\u5F55"
+        );
+        return;
+      }
+      void this.navigateWithTransition(
+        () => this.callbacks.onOpenMindMap(navigation.parentPath, navigation.parentNodeId),
+        "\u6B63\u5728\u8FD4\u56DE\u7236\u5BFC\u56FE\u2026",
+        "\u6B63\u5728\u4FDD\u5B58\u5F53\u524D\u4F4D\u7F6E\u5E76\u6062\u590D\u7236\u5BFC\u56FE\u9875\u9762"
+      );
     };
     if (showCanvasBreadcrumb) {
       const shell = this.canvasBreadcrumbEl.createDiv({ cls: "mmc-canvas-breadcrumb-shell" });

@@ -216,7 +216,7 @@ test("article parent navigation preserves the parent mount node", async () => {
 });
 
 
-test("parent returns use directory intent instead of article focus", async () => {
+test("parent returns preserve non-article modes while article pages use directory intent", async () => {
   const [typesSource, editorSource, viewSource, mainSource, rendererSource] = await Promise.all([
     readFile("src/editor/editor-types.ts", "utf8"),
     readFile("src/editor/editor.ts", "utf8"),
@@ -225,7 +225,8 @@ test("parent returns use directory intent instead of article focus", async () =>
     readFile("src/editor/article-renderer.ts", "utf8")
   ]);
   assert.match(typesSource, /onOpenArticleDirectory: \(path: string, focusNodeId\?: string\)/);
-  assert.match(editorSource, /return-parent-click[\s\S]*onOpenArticleDirectory\(navigation\.parentPath, navigation\.parentNodeId\)/);
+  assert.match(editorSource, /return-parent-click[\s\S]*this\.currentMode === "article"[\s\S]*onOpenArticleDirectory\(navigation\.parentPath, navigation\.parentNodeId\)[\s\S]*onOpenMindMap\(navigation\.parentPath, navigation\.parentNodeId\)/);
+  assert.match(editorSource, /正在返回父导图/);
   assert.match(editorSource, /event\.key === "Escape"[\s\S]*const navigation = this\.options\.articleNavigation[\s\S]*onOpenArticleDirectory\(navigation\.parentPath!/);
   assert.match(rendererSource, /mms-article-pager-parent[\s\S]*onOpenArticleDirectory\(navigation\.parentPath!, navigation\.parentNodeId\)/);
   assert.match(viewSource, /openArticleDirectoryPath\(path, sourcePath, this\.leaf, focusNodeId\)/);
