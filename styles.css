@@ -30,6 +30,96 @@
   outline: none;
 }
 
+
+.mms-page-transition {
+  position: absolute;
+  z-index: 80;
+  inset: 44px 0 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  background: color-mix(in srgb, var(--mmc-canvas) 78%, transparent);
+  backdrop-filter: blur(8px);
+  transition: opacity 160ms ease, visibility 160ms step-end;
+}
+
+.mms-page-transition.is-visible {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transition: opacity 140ms ease, visibility 0ms step-start;
+}
+
+.mms-page-transition.is-leaving {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.mms-page-transition-card {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  width: min(440px, calc(100% - 32px));
+  padding: 18px 20px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--background-primary) 94%, transparent);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, .18);
+}
+
+.mms-page-transition-icon {
+  display: grid;
+  flex: 0 0 42px;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border-radius: 13px;
+  color: var(--text-on-accent);
+  background: var(--interactive-accent);
+  box-shadow: 0 8px 20px color-mix(in srgb, var(--interactive-accent) 28%, transparent);
+}
+
+.mms-page-transition-icon svg {
+  width: 21px;
+  height: 21px;
+  animation: mms-page-transition-pulse 850ms ease-in-out infinite alternate;
+}
+
+.mms-page-transition-copy { min-width: 0; }
+
+.mms-page-transition-title {
+  color: var(--text-normal);
+  font-size: var(--font-ui-medium);
+  font-weight: 680;
+}
+
+.mms-page-transition-description {
+  margin-top: 4px;
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+  line-height: 1.55;
+}
+
+.mmc-viewport.is-page-entering,
+.mms-outline-view.is-page-entering,
+.mms-article-view.is-page-entering,
+.mms-question-practice-view.is-page-entering {
+  animation: mms-page-surface-enter 210ms ease-out both;
+}
+
+@keyframes mms-page-transition-pulse {
+  from { opacity: .58; transform: scale(.9) rotate(-8deg); }
+  to { opacity: 1; transform: scale(1) rotate(8deg); }
+}
+
+@keyframes mms-page-surface-enter {
+  from { opacity: 0; transform: translateY(5px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 .mmc-force-light .mmc-editor {
   --mmc-canvas: #f8fafc;
   --mmc-toolbar: rgba(255, 255, 255, 0.94);
@@ -4035,6 +4125,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .mms-page-transition { transition: none; }
   .mms-mode-button.is-loading svg {
     animation: none;
   }
@@ -4046,6 +4137,11 @@
   .mms-article-entry-skeleton .mms-article-skeleton-line,
   .mms-reading-loading .mms-article-skeleton-line,
   .mms-reading-loading-icon,
+  .mms-page-transition-icon svg,
+  .mmc-viewport.is-page-entering,
+  .mms-outline-view.is-page-entering,
+  .mms-article-view.is-page-entering,
+  .mms-question-practice-view.is-page-entering,
   .mms-reading-page.is-entering,
   .mms-article-page.is-window-entering,
   .mms-article-node.is-window-entering,

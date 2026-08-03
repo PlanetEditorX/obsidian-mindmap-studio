@@ -1202,6 +1202,10 @@ export class MindMapEditor {
   private outlineEl!: HTMLDivElement;
   private articleEl!: HTMLDivElement;
   private questionPracticeEl!: HTMLDivElement;
+  private pageTransitionEl!: HTMLDivElement;
+  private pageTransitionIconEl!: HTMLDivElement;
+  private pageTransitionTitleEl!: HTMLDivElement;
+  private pageTransitionDescriptionEl!: HTMLDivElement;
   private sceneEl!: HTMLDivElement;
   private nodesLayerEl!: HTMLDivElement;
   private edgesSvg!: SVGSVGElement;
@@ -1287,6 +1291,9 @@ export class MindMapEditor {
   private articleInitialRenderToken = 0;
   private articleWindowExpansionFrame: number | null = null;
   private readonly questionPracticeState = createQuestionPracticeState();
+  private pageTransitionToken = 0;
+  private pageTransitionHideTimer: number | null = null;
+  private pageEnterTimer: number | null = null;
 
   /**
    * 创建 MindMapEditor 实例，保存依赖和初始状态；实际 DOM 构建通常在 onOpen() 或后续渲染流程中完成。
@@ -1322,6 +1329,7 @@ export class MindMapEditor {
     this.buildUi();
     this.rootEl.addClass("mmc-ctrl-resize");
     this.render();
+    this.playPageEnterTransition();
     this.restoreReadingLocation(this.currentMode, this.lastReadingLocation);
     this.initializeMindMapViewport(50);
   }
@@ -1355,6 +1363,10 @@ export class MindMapEditor {
     this.allNodesCollapseToggleTimer = null;
     if (this.viewportAnimationFrame !== null) window.cancelAnimationFrame(this.viewportAnimationFrame);
     this.viewportAnimationFrame = null;
+    if (this.pageTransitionHideTimer !== null) window.clearTimeout(this.pageTransitionHideTimer);
+    if (this.pageEnterTimer !== null) window.clearTimeout(this.pageEnterTimer);
+    this.pageTransitionHideTimer = null;
+    this.pageEnterTimer = null;
     this.host.empty();
   }
 
@@ -1397,6 +1409,7 @@ export class MindMapEditor {
       this.history.reset();
     }
     this.render();
+    if (fileChanged) this.playPageEnterTransition();
     this.restoreReadingLocation(this.currentMode, this.lastReadingLocation);
     this.initializeMindMapViewport(20);
   }
@@ -1572,11 +1585,123 @@ export class MindMapEditor {
     }
   }
 
+  /** Waits until the transition overlay has had a chance to paint before starting expensive work. */
+  private waitForTransitionPaint(): Promise<void> {
+    return new Promise((resolve) => {
+      window.requestAnimationFrame(() => window.requestAnimationFrame(() => resolve()));
+    });
+  }
+
+  /** Displays a blocking, semantic page transition and returns the latest-wins token. */
+  private async beginPageTransition(title: string, description: string, icon = "loader-circle"): Promise<number> {
+    const token = ++this.pageTransitionToken;
+    if (this.pageTransitionHideTimer !== null) window.clearTimeout(this.pageTransitionHideTimer);
+    this.pageTransitionHideTimer = null;
+    this.pageTransitionTitleEl.setText(title);
+    this.pageTransitionDescriptionEl.setText(description);
+    this.pageTransitionIconEl.empty();
+    setIcon(this.pageTransitionIconEl, icon);
+    this.pageTransitionEl.removeClass("is-leaving");
+    this.pageTransitionEl.addClass("is-visible");
+    this.pageTransitionEl.setAttr("aria-hidden", "false");
+    this.rootEl.addClass("is-page-transitioning");
+    this.rootEl.setAttr("aria-busy", "true");
+    await this.waitForTransitionPaint();
+    return token;
+  }
+
+  /** Updates an already visible transition without resetting its animation. */
+  private updatePageTransition(token: number, title: string, description: string, icon?: string): void {
+    if (token !== this.pageTransitionToken || !this.pageTransitionEl.isConnected) return;
+    this.pageTransitionTitleEl.setText(title);
+    this.pageTransitionDescriptionEl.setText(description);
+    if (icon) {
+      this.pageTransitionIconEl.empty();
+      setIcon(this.pageTransitionIconEl, icon);
+    }
+  }
+
+  /** Fades out the current transition and reveals the newly mounted page. */
+  private finishPageTransition(token: number): void {
+    if (token !== this.pageTransitionToken || !this.pageTransitionEl.isConnected) return;
+    this.playPageEnterTransition();
+    this.pageTransitionEl.addClass("is-leaving");
+    const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true;
+    this.pageTransitionHideTimer = window.setTimeout(() => {
+      if (token !== this.pageTransitionToken || !this.pageTransitionEl.isConnected) return;
+      this.pageTransitionEl.removeClasses(["is-visible", "is-leaving"]);
+      this.pageTransitionEl.setAttr("aria-hidden", "true");
+      this.rootEl.removeClass("is-page-transitioning");
+      this.rootEl.removeAttribute("aria-busy");
+      this.pageTransitionHideTimer = null;
+    }, reducedMotion ? 0 : 170);
+  }
+
+  /** Adds a short entrance animation only to the newly active content surface. */
+  private playPageEnterTransition(): void {
+    const surface = this.currentMode === "mindmap"
+      ? this.viewportEl
+      : this.currentMode === "outline"
+        ? this.outlineEl
+        : this.currentMode === "question-bank"
+          ? this.questionPracticeEl
+          : this.articleEl;
+    surface.removeClass("is-page-entering");
+    void surface.offsetWidth;
+    surface.addClass("is-page-entering");
+    if (this.pageEnterTimer !== null) window.clearTimeout(this.pageEnterTimer);
+    this.pageEnterTimer = window.setTimeout(() => {
+      surface.removeClass("is-page-entering");
+      this.pageEnterTimer = null;
+    }, 240);
+  }
+
+  /** Runs a cross-file navigation behind a painted transition overlay. */
+  private async navigateWithTransition(
+    action: () => void | Promise<void>,
+    title = "正在切换导图…",
+    description = "正在保存当前位置并加载目标页面"
+  ): Promise<void> {
+    const token = await this.beginPageTransition(title, description, "files");
+    try {
+      await action();
+      this.finishPageTransition(token);
+    } catch (error) {
+      this.finishPageTransition(token);
+      console.error("MindMap Studio page navigation failed", error);
+      new Notice("页面切换失败，请稍后重试");
+    }
+  }
+
   /**
    * 切换显示模式，并将当前语义位置同步到目标模式。通读中的目标属于子导图时，
    * 回调会在全局模式切换后打开对应物理文件并定位节点。
    */
   setDisplayMode(mode: DisplayMode, notifyGlobal = true, persistCapturedLocation = true): void {
+    if (!this.options.visibleModes.includes(mode) || mode === this.currentMode) return;
+    void this.transitionDisplayMode(mode, notifyGlobal, persistCapturedLocation);
+  }
+
+  /** Paints a transition before rendering a potentially large target mode. */
+  private async transitionDisplayMode(mode: DisplayMode, notifyGlobal: boolean, persistCapturedLocation: boolean): Promise<void> {
+    const token = await this.beginPageTransition(
+      `正在切换到${DISPLAY_MODE_LABELS[mode]}…`,
+      mode === "reading" ? "正在准备连续阅读内容" : "正在准备目标页面内容",
+      DISPLAY_MODE_ICONS[mode]
+    );
+    if (token !== this.pageTransitionToken) return;
+    try {
+      this.applyDisplayMode(mode, notifyGlobal, persistCapturedLocation);
+    } catch (error) {
+      console.error("MindMap Studio display mode transition failed", error);
+      new Notice("页面切换失败，请稍后重试");
+    } finally {
+      this.finishPageTransition(token);
+    }
+  }
+
+  /** Applies a display mode immediately after its transition has painted. */
+  private applyDisplayMode(mode: DisplayMode, notifyGlobal = true, persistCapturedLocation = true): void {
     if (!this.options.visibleModes.includes(mode)) return;
     const previousMode = this.currentMode;
     if (previousMode === "mindmap") this.persistMindMapViewportState();
@@ -2295,6 +2420,16 @@ export class MindMapEditor {
     this.outlineEl = this.rootEl.createDiv({ cls: "mms-outline-view" });
     this.articleEl = this.rootEl.createDiv({ cls: "mms-article-view" });
     this.questionPracticeEl = this.rootEl.createDiv({ cls: "mms-question-practice-view" });
+    this.pageTransitionEl = this.rootEl.createDiv({
+      cls: "mms-page-transition",
+      attr: { role: "status", "aria-live": "polite", "aria-hidden": "true" }
+    });
+    const transitionCard = this.pageTransitionEl.createDiv({ cls: "mms-page-transition-card" });
+    this.pageTransitionIconEl = transitionCard.createDiv({ cls: "mms-page-transition-icon", attr: { "aria-hidden": "true" } });
+    setIcon(this.pageTransitionIconEl, "loader-circle");
+    const transitionCopy = transitionCard.createDiv({ cls: "mms-page-transition-copy" });
+    this.pageTransitionTitleEl = transitionCopy.createDiv({ cls: "mms-page-transition-title", text: "正在切换页面…" });
+    this.pageTransitionDescriptionEl = transitionCopy.createDiv({ cls: "mms-page-transition-description", text: "正在准备目标内容" });
     const pageContextMenu = (event: MouseEvent): void => {
       const target = event.target as HTMLElement;
       if (target.closest("[data-node-id]")) return;
@@ -2915,7 +3050,7 @@ export class MindMapEditor {
       this.callbacks.onDebugLog("navigation", "return-parent-click", {
         currentFilePath: this.options.currentFilePath, parentPath: navigation.parentPath, parentNodeId: navigation.parentNodeId, parentNodeText: navigation.parentNodeText, currentMode: this.currentMode
       });
-      void this.callbacks.onOpenArticleDirectory(navigation.parentPath, navigation.parentNodeId);
+      void this.navigateWithTransition(() => this.callbacks.onOpenArticleDirectory(navigation.parentPath, navigation.parentNodeId), "正在返回目录…", "正在保存当前位置并加载主导图目录");
     };
 
     if (showCanvasBreadcrumb) {
@@ -3435,7 +3570,7 @@ export class MindMapEditor {
       editSelected: () => this.editSelected(),
       openAiContextMenu: (event, nodeId) => { this.selectNode(nodeId); this.openContextMenu(event); },
       openImageContextMenu: (event, nodeId, blockId) => this.openImageContextMenu(event, nodeId, blockId),
-      openMindMap: (path) => this.callbacks.onOpenMindMap(path),
+      openMindMap: (path) => this.navigateWithTransition(() => this.callbacks.onOpenMindMap(path)),
       resolveImage: this.callbacks.resolveImage,
       imageHostPriorityIds: this.options.imageHostPriorityIds,
       renderCode: this.callbacks.onRenderCode
@@ -3872,7 +4007,17 @@ export class MindMapEditor {
       articleLeafNumberingThreshold: this.options.articleLeafNumberingThreshold,
       imageHostPriorityIds: this.options.imageHostPriorityIds,
       articleNavigation: this.options.articleNavigation,
-      callbacks: this.callbacks,
+      callbacks: {
+        ...this.callbacks,
+        onOpenMindMap: (path: string, focusNodeId?: string) => this.navigateWithTransition(
+          () => this.callbacks.onOpenMindMap(path, focusNodeId)
+        ),
+        onOpenArticleDirectory: (path: string, focusNodeId?: string) => this.navigateWithTransition(
+          () => this.callbacks.onOpenArticleDirectory(path, focusNodeId),
+          "正在返回目录…",
+          "正在保存当前位置并加载主导图目录"
+        )
+      },
       selectNode: (id: string) => this.selectNode(id),
       focusNode: (id: string) => this.focusNode(id),
       openAiContextMenu: (event: MouseEvent, nodeId: string, blockId?: string) => { this.selectNode(nodeId); this.openContextMenu(event, blockId); },
@@ -4347,7 +4492,7 @@ export class MindMapEditor {
       submapIcon.addEventListener("click", (event) => {
         event.preventDefault();
         event.stopPropagation();
-        void this.callbacks.onOpenMindMap(node.submap!.path);
+        void this.navigateWithTransition(() => this.callbacks.onOpenMindMap(node.submap!.path));
       });
     }
 
@@ -4466,7 +4611,8 @@ export class MindMapEditor {
         return;
       }
       this.selectNode(node.id);
-      if (node.submap) void this.callbacks.onOpenMindMap(node.submap.path);
+      const submapPath = node.submap?.path;
+      if (submapPath) void this.navigateWithTransition(() => this.callbacks.onOpenMindMap(submapPath));
     });
     if (node.submap) {
       nodeEl.addEventListener("keydown", (event) => {
@@ -4474,7 +4620,7 @@ export class MindMapEditor {
         event.preventDefault();
         event.stopPropagation();
         this.selectNode(node.id);
-        void this.callbacks.onOpenMindMap(node.submap!.path);
+        void this.navigateWithTransition(() => this.callbacks.onOpenMindMap(node.submap!.path));
       });
     }
     nodeEl.addEventListener("dblclick", (event) => {
@@ -4484,8 +4630,9 @@ export class MindMapEditor {
         this.editQuestion(node);
         return;
       }
-      if (node.submap) {
-        void this.callbacks.onOpenMindMap(node.submap.path);
+      const submapPath = node.submap?.path;
+      if (submapPath) {
+        void this.navigateWithTransition(() => this.callbacks.onOpenMindMap(submapPath));
       } else if (!this.readOnly) {
         if (this.isNearNodeEdge(event, nodeEl)) this.editSelected();
         else {
@@ -5917,15 +6064,20 @@ export class MindMapEditor {
   private async createOrOpenSubmap(): Promise<void> {
     const selected = this.selectedNode() ?? this.document.root;
     if (selected.submap) {
-      await this.callbacks.onOpenMindMap(selected.submap.path);
+      await this.navigateWithTransition(() => this.callbacks.onOpenMindMap(selected.submap!.path));
       return;
     }
     if (!this.ensureEditable()) return;
+    const token = await this.beginPageTransition("正在创建子导图…", "正在准备文件并建立父子导图关联", "network");
     try {
       const submap = await this.callbacks.onCreateSubmap(selected);
+      this.updatePageTransition(token, "正在打开子导图…", "子导图已创建，正在加载页面", "files");
       this.mutate(() => { selected.submap = submap; });
+      await this.waitForTransitionPaint();
       await this.callbacks.onOpenMindMap(submap.path);
+      this.finishPageTransition(token);
     } catch (error) {
+      this.finishPageTransition(token);
       console.error("MindMap Studio create submap failed", error);
       new Notice("创建子导图失败");
     }
@@ -7111,14 +7263,20 @@ export class MindMapEditor {
     const selected = this.selectedNode();
     if (!selected || selected === this.document.root) return;
     if (!this.ensureEditable()) return;
+    const token = await this.beginPageTransition("正在提取为子导图…", "正在复制选中分支并创建独立文件", "layers");
     try {
       const submap = await this.callbacks.onExtractToSubmap(selected);
+      this.updatePageTransition(token, "正在更新主导图…", "正在替换原分支并保存子导图入口", "git-branch");
       this.mutate(() => {
         selected.children = [];
         selected.submap = submap;
       });
+      await this.waitForTransitionPaint();
+      this.updatePageTransition(token, "正在打开子导图…", "文件已创建，正在加载提取后的内容", "files");
       await this.callbacks.onOpenMindMap(submap.path);
+      this.finishPageTransition(token);
     } catch (error) {
+      this.finishPageTransition(token);
       console.error('MindMap Studio extract to submap failed', error);
       new Notice('提取子导图失败');
     }
@@ -7129,9 +7287,13 @@ export class MindMapEditor {
    */
   private async mergeFromSubmap(): Promise<void> {
     if (!this.ensureEditable()) return;
+    const token = await this.beginPageTransition("正在合并回主导图…", "正在读取父导图并合并当前子导图内容", "merge");
     try {
       await this.callbacks.onMergeFromSubmap();
+      this.updatePageTransition(token, "正在打开主导图…", "合并已完成，正在恢复父级页面", "files");
+      this.finishPageTransition(token);
     } catch (error) {
+      this.finishPageTransition(token);
       console.error('MindMap Studio merge from submap failed', error);
       new Notice('合并子导图失败');
     }
@@ -7795,7 +7957,12 @@ export class MindMapEditor {
     }
     if (this.currentMode === "article" && event.key === "Escape" && this.options.articleNavigation?.parentPath) {
       event.preventDefault();
-      void this.callbacks.onOpenArticleDirectory(this.options.articleNavigation.parentPath, this.options.articleNavigation.parentNodeId);
+      const navigation = this.options.articleNavigation;
+      void this.navigateWithTransition(
+        () => this.callbacks.onOpenArticleDirectory(navigation.parentPath!, navigation.parentNodeId),
+        "正在返回目录…",
+        "正在保存当前位置并加载主导图目录"
+      );
       return;
     }
     if (this.readOnly) {

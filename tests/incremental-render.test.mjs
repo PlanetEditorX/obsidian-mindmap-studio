@@ -291,6 +291,36 @@ test("article return paths preserve the parent mount node", async () => {
     readFile(path.join(rootDir, "src/main.ts"), "utf8")
   ]);
   assert.match(rendererSource, /onOpenArticleDirectory\(navigation\.parentPath!, navigation\.parentNodeId\)/);
-  assert.match(editorSource, /onOpenArticleDirectory\(this\.options\.articleNavigation\.parentPath, this\.options\.articleNavigation\.parentNodeId\)/);
+  assert.match(editorSource, /onOpenArticleDirectory\(navigation\.parentPath!, navigation\.parentNodeId\)/);
   assert.match(mainSource, /parentNodeId/);
+});
+
+test("large page operations paint a semantic transition before blocking work", async () => {
+  const [editorSource, cssSource] = await Promise.all([
+    readFile(path.join(rootDir, "src/editor/editor.ts"), "utf8"),
+    readFile(path.join(rootDir, "styles.css"), "utf8")
+  ]);
+  const beginTransition = editorSource.match(/private async beginPageTransition\([\s\S]*?\n  \}/)?.[0] ?? "";
+  const extractStart = editorSource.indexOf("private async extractToSubmap(): Promise<void> {");
+  const extractEnd = editorSource.indexOf("\n  /**\n   * 将当前子导图合并回父导图", extractStart);
+  const extract = editorSource.slice(extractStart, extractEnd);
+  const mergeStart = editorSource.indexOf("private async mergeFromSubmap(): Promise<void> {");
+  const mergeEnd = editorSource.indexOf("\n  /**\n   * Opens the canvas", mergeStart);
+  const merge = editorSource.slice(mergeStart, mergeEnd);
+  const modeTransition = editorSource.match(/private async transitionDisplayMode\([\s\S]*?\n  \}/)?.[0] ?? "";
+
+  assert.match(beginTransition, /role: "status"|pageTransitionEl/);
+  assert.match(beginTransition, /aria-busy/);
+  assert.match(beginTransition, /await this\.waitForTransitionPaint\(\)/);
+  assert.ok(extract.indexOf("beginPageTransition") < extract.indexOf("onExtractToSubmap"));
+  assert.match(extract, /正在提取为子导图/);
+  assert.match(extract, /正在打开子导图/);
+  assert.ok(merge.indexOf("beginPageTransition") < merge.indexOf("onMergeFromSubmap"));
+  assert.match(merge, /正在合并回主导图/);
+  assert.match(modeTransition, /正在切换到\$\{DISPLAY_MODE_LABELS\[mode\]\}/);
+  assert.match(editorSource, /navigateWithTransition\(\(\) => this\.callbacks\.onOpenMindMap/);
+  assert.match(editorSource, /navigateWithTransition\(\(\) => this\.callbacks\.onOpenArticleDirectory/);
+  assert.match(cssSource, /\.mms-page-transition\.is-visible/);
+  assert.match(cssSource, /mms-page-surface-enter/);
+  assert.match(cssSource, /prefers-reduced-motion: reduce[\s\S]*\.mms-page-transition/);
 });

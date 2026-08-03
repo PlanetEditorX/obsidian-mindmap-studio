@@ -1,5 +1,13 @@
 # Modified Files
 
+## 1.41.4 大文件操作与全局页面切换过渡
+
+- `src/editor/editor.ts`：新增统一页面过渡状态机、两帧绘制门、目标页面入口动画和导航异常边界；合并、提取、创建、父子导图跳转及显示模式切换接入分阶段状态。
+- `styles.css`：新增全屏模糊过渡层、状态卡片、主题图标脉冲、页面淡入及减少动态效果回退。
+- `tests/incremental-render.test.mjs`、`tests/reading-editor-contract.test.mjs`：新增大操作先绘制状态、全局导航包装、父级返回过渡和动画回退契约。
+- `README.md`、`CHANGELOG.md`、`docs/ARCHITECTURE.md`、`docs/DEVELOPMENT.md`、`docs/SPECIAL_FEATURES.md`、`docs/TESTING.md`、`docs/FUNCTION_REFERENCE.md`、`TEST_RESULTS.md`：同步交互状态机、维护边界、测试与交付状态。
+- `package.json`、`package-lock.json`、`manifest.json`、`versions.json`、`update.json`、`main.js`：统一版本为 1.41.4，最终安装包 SHA-256 在打包后写入并重新生成生产构建。
+
 ## 1.41.3 文章表格列宽稳定保存与页面适配
 
 - `src/editor/table-interaction.ts`：新增相邻列守恒调整算法，拖动当前分隔线时只让当前列与右侧列反向变化，并保持总宽度和最小列宽边界。

@@ -226,7 +226,7 @@ test("parent returns use directory intent instead of article focus", async () =>
   ]);
   assert.match(typesSource, /onOpenArticleDirectory: \(path: string, focusNodeId\?: string\)/);
   assert.match(editorSource, /return-parent-click[\s\S]*onOpenArticleDirectory\(navigation\.parentPath, navigation\.parentNodeId\)/);
-  assert.match(editorSource, /event\.key === "Escape"[\s\S]*onOpenArticleDirectory\(this\.options\.articleNavigation\.parentPath/);
+  assert.match(editorSource, /event\.key === "Escape"[\s\S]*const navigation = this\.options\.articleNavigation[\s\S]*onOpenArticleDirectory\(navigation\.parentPath!/);
   assert.match(rendererSource, /mms-article-pager-parent[\s\S]*onOpenArticleDirectory\(navigation\.parentPath!, navigation\.parentNodeId\)/);
   assert.match(viewSource, /openArticleDirectoryPath\(path, sourcePath, this\.leaf, focusNodeId\)/);
   assert.match(mainSource, /openArticleDirectoryPath[\s\S]*pendingMindMapDirectory\.set\(resolved\.path, directoryRequest\)[\s\S]*openAsMindMap\(resolved, preferredLeaf\)/);

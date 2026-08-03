@@ -10815,6 +10815,9 @@ var MindMapEditor = class {
     this.articleInitialRenderToken = 0;
     this.articleWindowExpansionFrame = null;
     this.questionPracticeState = createQuestionPracticeState();
+    this.pageTransitionToken = 0;
+    this.pageTransitionHideTimer = null;
+    this.pageEnterTimer = null;
     var _a2;
     this.app = app;
     this.host = host;
@@ -10832,6 +10835,7 @@ var MindMapEditor = class {
     this.buildUi();
     this.rootEl.addClass("mmc-ctrl-resize");
     this.render();
+    this.playPageEnterTransition();
     this.restoreReadingLocation(this.currentMode, this.lastReadingLocation);
     this.initializeMindMapViewport(50);
   }
@@ -10865,6 +10869,10 @@ var MindMapEditor = class {
     this.allNodesCollapseToggleTimer = null;
     if (this.viewportAnimationFrame !== null) window.cancelAnimationFrame(this.viewportAnimationFrame);
     this.viewportAnimationFrame = null;
+    if (this.pageTransitionHideTimer !== null) window.clearTimeout(this.pageTransitionHideTimer);
+    if (this.pageEnterTimer !== null) window.clearTimeout(this.pageEnterTimer);
+    this.pageTransitionHideTimer = null;
+    this.pageEnterTimer = null;
     this.host.empty();
   }
   /**
@@ -10903,6 +10911,7 @@ var MindMapEditor = class {
       this.history.reset();
     }
     this.render();
+    if (fileChanged) this.playPageEnterTransition();
     this.restoreReadingLocation(this.currentMode, this.lastReadingLocation);
     this.initializeMindMapViewport(20);
   }
@@ -11021,11 +11030,106 @@ var MindMapEditor = class {
       else window.setTimeout(() => this.applyTransform(), 20);
     }
   }
+  /** Waits until the transition overlay has had a chance to paint before starting expensive work. */
+  waitForTransitionPaint() {
+    return new Promise((resolve) => {
+      window.requestAnimationFrame(() => window.requestAnimationFrame(() => resolve()));
+    });
+  }
+  /** Displays a blocking, semantic page transition and returns the latest-wins token. */
+  async beginPageTransition(title, description, icon = "loader-circle") {
+    const token = ++this.pageTransitionToken;
+    if (this.pageTransitionHideTimer !== null) window.clearTimeout(this.pageTransitionHideTimer);
+    this.pageTransitionHideTimer = null;
+    this.pageTransitionTitleEl.setText(title);
+    this.pageTransitionDescriptionEl.setText(description);
+    this.pageTransitionIconEl.empty();
+    (0, import_obsidian11.setIcon)(this.pageTransitionIconEl, icon);
+    this.pageTransitionEl.removeClass("is-leaving");
+    this.pageTransitionEl.addClass("is-visible");
+    this.pageTransitionEl.setAttr("aria-hidden", "false");
+    this.rootEl.addClass("is-page-transitioning");
+    this.rootEl.setAttr("aria-busy", "true");
+    await this.waitForTransitionPaint();
+    return token;
+  }
+  /** Updates an already visible transition without resetting its animation. */
+  updatePageTransition(token, title, description, icon) {
+    if (token !== this.pageTransitionToken || !this.pageTransitionEl.isConnected) return;
+    this.pageTransitionTitleEl.setText(title);
+    this.pageTransitionDescriptionEl.setText(description);
+    if (icon) {
+      this.pageTransitionIconEl.empty();
+      (0, import_obsidian11.setIcon)(this.pageTransitionIconEl, icon);
+    }
+  }
+  /** Fades out the current transition and reveals the newly mounted page. */
+  finishPageTransition(token) {
+    var _a2;
+    if (token !== this.pageTransitionToken || !this.pageTransitionEl.isConnected) return;
+    this.playPageEnterTransition();
+    this.pageTransitionEl.addClass("is-leaving");
+    const reducedMotion = ((_a2 = window.matchMedia) == null ? void 0 : _a2.call(window, "(prefers-reduced-motion: reduce)").matches) === true;
+    this.pageTransitionHideTimer = window.setTimeout(() => {
+      if (token !== this.pageTransitionToken || !this.pageTransitionEl.isConnected) return;
+      this.pageTransitionEl.removeClasses(["is-visible", "is-leaving"]);
+      this.pageTransitionEl.setAttr("aria-hidden", "true");
+      this.rootEl.removeClass("is-page-transitioning");
+      this.rootEl.removeAttribute("aria-busy");
+      this.pageTransitionHideTimer = null;
+    }, reducedMotion ? 0 : 170);
+  }
+  /** Adds a short entrance animation only to the newly active content surface. */
+  playPageEnterTransition() {
+    const surface = this.currentMode === "mindmap" ? this.viewportEl : this.currentMode === "outline" ? this.outlineEl : this.currentMode === "question-bank" ? this.questionPracticeEl : this.articleEl;
+    surface.removeClass("is-page-entering");
+    void surface.offsetWidth;
+    surface.addClass("is-page-entering");
+    if (this.pageEnterTimer !== null) window.clearTimeout(this.pageEnterTimer);
+    this.pageEnterTimer = window.setTimeout(() => {
+      surface.removeClass("is-page-entering");
+      this.pageEnterTimer = null;
+    }, 240);
+  }
+  /** Runs a cross-file navigation behind a painted transition overlay. */
+  async navigateWithTransition(action, title = "\u6B63\u5728\u5207\u6362\u5BFC\u56FE\u2026", description = "\u6B63\u5728\u4FDD\u5B58\u5F53\u524D\u4F4D\u7F6E\u5E76\u52A0\u8F7D\u76EE\u6807\u9875\u9762") {
+    const token = await this.beginPageTransition(title, description, "files");
+    try {
+      await action();
+      this.finishPageTransition(token);
+    } catch (error) {
+      this.finishPageTransition(token);
+      console.error("MindMap Studio page navigation failed", error);
+      new import_obsidian11.Notice("\u9875\u9762\u5207\u6362\u5931\u8D25\uFF0C\u8BF7\u7A0D\u540E\u91CD\u8BD5");
+    }
+  }
   /**
    * 切换显示模式，并将当前语义位置同步到目标模式。通读中的目标属于子导图时，
    * 回调会在全局模式切换后打开对应物理文件并定位节点。
    */
   setDisplayMode(mode, notifyGlobal = true, persistCapturedLocation = true) {
+    if (!this.options.visibleModes.includes(mode) || mode === this.currentMode) return;
+    void this.transitionDisplayMode(mode, notifyGlobal, persistCapturedLocation);
+  }
+  /** Paints a transition before rendering a potentially large target mode. */
+  async transitionDisplayMode(mode, notifyGlobal, persistCapturedLocation) {
+    const token = await this.beginPageTransition(
+      `\u6B63\u5728\u5207\u6362\u5230${DISPLAY_MODE_LABELS[mode]}\u2026`,
+      mode === "reading" ? "\u6B63\u5728\u51C6\u5907\u8FDE\u7EED\u9605\u8BFB\u5185\u5BB9" : "\u6B63\u5728\u51C6\u5907\u76EE\u6807\u9875\u9762\u5185\u5BB9",
+      DISPLAY_MODE_ICONS[mode]
+    );
+    if (token !== this.pageTransitionToken) return;
+    try {
+      this.applyDisplayMode(mode, notifyGlobal, persistCapturedLocation);
+    } catch (error) {
+      console.error("MindMap Studio display mode transition failed", error);
+      new import_obsidian11.Notice("\u9875\u9762\u5207\u6362\u5931\u8D25\uFF0C\u8BF7\u7A0D\u540E\u91CD\u8BD5");
+    } finally {
+      this.finishPageTransition(token);
+    }
+  }
+  /** Applies a display mode immediately after its transition has painted. */
+  applyDisplayMode(mode, notifyGlobal = true, persistCapturedLocation = true) {
     var _a2, _b2, _c, _d;
     if (!this.options.visibleModes.includes(mode)) return;
     const previousMode = this.currentMode;
@@ -11678,6 +11782,16 @@ var MindMapEditor = class {
     this.outlineEl = this.rootEl.createDiv({ cls: "mms-outline-view" });
     this.articleEl = this.rootEl.createDiv({ cls: "mms-article-view" });
     this.questionPracticeEl = this.rootEl.createDiv({ cls: "mms-question-practice-view" });
+    this.pageTransitionEl = this.rootEl.createDiv({
+      cls: "mms-page-transition",
+      attr: { role: "status", "aria-live": "polite", "aria-hidden": "true" }
+    });
+    const transitionCard = this.pageTransitionEl.createDiv({ cls: "mms-page-transition-card" });
+    this.pageTransitionIconEl = transitionCard.createDiv({ cls: "mms-page-transition-icon", attr: { "aria-hidden": "true" } });
+    (0, import_obsidian11.setIcon)(this.pageTransitionIconEl, "loader-circle");
+    const transitionCopy = transitionCard.createDiv({ cls: "mms-page-transition-copy" });
+    this.pageTransitionTitleEl = transitionCopy.createDiv({ cls: "mms-page-transition-title", text: "\u6B63\u5728\u5207\u6362\u9875\u9762\u2026" });
+    this.pageTransitionDescriptionEl = transitionCopy.createDiv({ cls: "mms-page-transition-description", text: "\u6B63\u5728\u51C6\u5907\u76EE\u6807\u5185\u5BB9" });
     const pageContextMenu = (event) => {
       const target = event.target;
       if (target.closest("[data-node-id]")) return;
@@ -12271,7 +12385,7 @@ var MindMapEditor = class {
         parentNodeText: navigation.parentNodeText,
         currentMode: this.currentMode
       });
-      void this.callbacks.onOpenArticleDirectory(navigation.parentPath, navigation.parentNodeId);
+      void this.navigateWithTransition(() => this.callbacks.onOpenArticleDirectory(navigation.parentPath, navigation.parentNodeId), "\u6B63\u5728\u8FD4\u56DE\u76EE\u5F55\u2026", "\u6B63\u5728\u4FDD\u5B58\u5F53\u524D\u4F4D\u7F6E\u5E76\u52A0\u8F7D\u4E3B\u5BFC\u56FE\u76EE\u5F55");
     };
     if (showCanvasBreadcrumb) {
       const shell = this.canvasBreadcrumbEl.createDiv({ cls: "mmc-canvas-breadcrumb-shell" });
@@ -12744,7 +12858,7 @@ var MindMapEditor = class {
         this.openContextMenu(event);
       },
       openImageContextMenu: (event, nodeId, blockId) => this.openImageContextMenu(event, nodeId, blockId),
-      openMindMap: (path) => this.callbacks.onOpenMindMap(path),
+      openMindMap: (path) => this.navigateWithTransition(() => this.callbacks.onOpenMindMap(path)),
       resolveImage: this.callbacks.resolveImage,
       imageHostPriorityIds: this.options.imageHostPriorityIds,
       renderCode: this.callbacks.onRenderCode
@@ -13140,7 +13254,17 @@ var MindMapEditor = class {
       articleLeafNumberingThreshold: this.options.articleLeafNumberingThreshold,
       imageHostPriorityIds: this.options.imageHostPriorityIds,
       articleNavigation: this.options.articleNavigation,
-      callbacks: this.callbacks,
+      callbacks: {
+        ...this.callbacks,
+        onOpenMindMap: (path, focusNodeId) => this.navigateWithTransition(
+          () => this.callbacks.onOpenMindMap(path, focusNodeId)
+        ),
+        onOpenArticleDirectory: (path, focusNodeId) => this.navigateWithTransition(
+          () => this.callbacks.onOpenArticleDirectory(path, focusNodeId),
+          "\u6B63\u5728\u8FD4\u56DE\u76EE\u5F55\u2026",
+          "\u6B63\u5728\u4FDD\u5B58\u5F53\u524D\u4F4D\u7F6E\u5E76\u52A0\u8F7D\u4E3B\u5BFC\u56FE\u76EE\u5F55"
+        )
+      },
       selectNode: (id) => this.selectNode(id),
       focusNode: (id) => this.focusNode(id),
       openAiContextMenu: (event, nodeId, blockId) => {
@@ -13600,7 +13724,7 @@ var MindMapEditor = class {
       submapIcon.addEventListener("click", (event) => {
         event.preventDefault();
         event.stopPropagation();
-        void this.callbacks.onOpenMindMap(node.submap.path);
+        void this.navigateWithTransition(() => this.callbacks.onOpenMindMap(node.submap.path));
       });
     }
     if (node.submap) {
@@ -13707,13 +13831,15 @@ var MindMapEditor = class {
       });
     }
     nodeEl.addEventListener("click", (event) => {
+      var _a3;
       event.stopPropagation();
       if (event.shiftKey) {
         this.toggleNodeSelection(node.id);
         return;
       }
       this.selectNode(node.id);
-      if (node.submap) void this.callbacks.onOpenMindMap(node.submap.path);
+      const submapPath = (_a3 = node.submap) == null ? void 0 : _a3.path;
+      if (submapPath) void this.navigateWithTransition(() => this.callbacks.onOpenMindMap(submapPath));
     });
     if (node.submap) {
       nodeEl.addEventListener("keydown", (event) => {
@@ -13721,24 +13847,25 @@ var MindMapEditor = class {
         event.preventDefault();
         event.stopPropagation();
         this.selectNode(node.id);
-        void this.callbacks.onOpenMindMap(node.submap.path);
+        void this.navigateWithTransition(() => this.callbacks.onOpenMindMap(node.submap.path));
       });
     }
     nodeEl.addEventListener("dblclick", (event) => {
-      var _a3;
+      var _a3, _b3;
       event.stopPropagation();
       this.selectNode(node.id);
       if (node.question && this.options.questionNodesEnabled) {
         this.editQuestion(node);
         return;
       }
-      if (node.submap) {
-        void this.callbacks.onOpenMindMap(node.submap.path);
+      const submapPath = (_a3 = node.submap) == null ? void 0 : _a3.path;
+      if (submapPath) {
+        void this.navigateWithTransition(() => this.callbacks.onOpenMindMap(submapPath));
       } else if (!this.readOnly) {
         if (this.isNearNodeEdge(event, nodeEl)) this.editSelected();
         else {
           const target = event.target;
-          const blockId = (_a3 = target.closest("[data-block-id]")) == null ? void 0 : _a3.dataset.blockId;
+          const blockId = (_b3 = target.closest("[data-block-id]")) == null ? void 0 : _b3.dataset.blockId;
           const block = blocks.find((item) => item.id === blockId);
           if ((block == null ? void 0 : block.type) === "text") this.beginInlineEdit(node.id, block.id);
           else this.editSelected(blockId);
@@ -15082,17 +15209,22 @@ var MindMapEditor = class {
     var _a2;
     const selected = (_a2 = this.selectedNode()) != null ? _a2 : this.document.root;
     if (selected.submap) {
-      await this.callbacks.onOpenMindMap(selected.submap.path);
+      await this.navigateWithTransition(() => this.callbacks.onOpenMindMap(selected.submap.path));
       return;
     }
     if (!this.ensureEditable()) return;
+    const token = await this.beginPageTransition("\u6B63\u5728\u521B\u5EFA\u5B50\u5BFC\u56FE\u2026", "\u6B63\u5728\u51C6\u5907\u6587\u4EF6\u5E76\u5EFA\u7ACB\u7236\u5B50\u5BFC\u56FE\u5173\u8054", "network");
     try {
       const submap = await this.callbacks.onCreateSubmap(selected);
+      this.updatePageTransition(token, "\u6B63\u5728\u6253\u5F00\u5B50\u5BFC\u56FE\u2026", "\u5B50\u5BFC\u56FE\u5DF2\u521B\u5EFA\uFF0C\u6B63\u5728\u52A0\u8F7D\u9875\u9762", "files");
       this.mutate(() => {
         selected.submap = submap;
       });
+      await this.waitForTransitionPaint();
       await this.callbacks.onOpenMindMap(submap.path);
+      this.finishPageTransition(token);
     } catch (error) {
+      this.finishPageTransition(token);
       console.error("MindMap Studio create submap failed", error);
       new import_obsidian11.Notice("\u521B\u5EFA\u5B50\u5BFC\u56FE\u5931\u8D25");
     }
@@ -16168,14 +16300,20 @@ var MindMapEditor = class {
     const selected = this.selectedNode();
     if (!selected || selected === this.document.root) return;
     if (!this.ensureEditable()) return;
+    const token = await this.beginPageTransition("\u6B63\u5728\u63D0\u53D6\u4E3A\u5B50\u5BFC\u56FE\u2026", "\u6B63\u5728\u590D\u5236\u9009\u4E2D\u5206\u652F\u5E76\u521B\u5EFA\u72EC\u7ACB\u6587\u4EF6", "layers");
     try {
       const submap = await this.callbacks.onExtractToSubmap(selected);
+      this.updatePageTransition(token, "\u6B63\u5728\u66F4\u65B0\u4E3B\u5BFC\u56FE\u2026", "\u6B63\u5728\u66FF\u6362\u539F\u5206\u652F\u5E76\u4FDD\u5B58\u5B50\u5BFC\u56FE\u5165\u53E3", "git-branch");
       this.mutate(() => {
         selected.children = [];
         selected.submap = submap;
       });
+      await this.waitForTransitionPaint();
+      this.updatePageTransition(token, "\u6B63\u5728\u6253\u5F00\u5B50\u5BFC\u56FE\u2026", "\u6587\u4EF6\u5DF2\u521B\u5EFA\uFF0C\u6B63\u5728\u52A0\u8F7D\u63D0\u53D6\u540E\u7684\u5185\u5BB9", "files");
       await this.callbacks.onOpenMindMap(submap.path);
+      this.finishPageTransition(token);
     } catch (error) {
+      this.finishPageTransition(token);
       console.error("MindMap Studio extract to submap failed", error);
       new import_obsidian11.Notice("\u63D0\u53D6\u5B50\u5BFC\u56FE\u5931\u8D25");
     }
@@ -16185,9 +16323,13 @@ var MindMapEditor = class {
    */
   async mergeFromSubmap() {
     if (!this.ensureEditable()) return;
+    const token = await this.beginPageTransition("\u6B63\u5728\u5408\u5E76\u56DE\u4E3B\u5BFC\u56FE\u2026", "\u6B63\u5728\u8BFB\u53D6\u7236\u5BFC\u56FE\u5E76\u5408\u5E76\u5F53\u524D\u5B50\u5BFC\u56FE\u5185\u5BB9", "merge");
     try {
       await this.callbacks.onMergeFromSubmap();
+      this.updatePageTransition(token, "\u6B63\u5728\u6253\u5F00\u4E3B\u5BFC\u56FE\u2026", "\u5408\u5E76\u5DF2\u5B8C\u6210\uFF0C\u6B63\u5728\u6062\u590D\u7236\u7EA7\u9875\u9762", "files");
+      this.finishPageTransition(token);
     } catch (error) {
+      this.finishPageTransition(token);
       console.error("MindMap Studio merge from submap failed", error);
       new import_obsidian11.Notice("\u5408\u5E76\u5B50\u5BFC\u56FE\u5931\u8D25");
     }
@@ -16789,7 +16931,12 @@ var MindMapEditor = class {
     }
     if (this.currentMode === "article" && event.key === "Escape" && ((_a2 = this.options.articleNavigation) == null ? void 0 : _a2.parentPath)) {
       event.preventDefault();
-      void this.callbacks.onOpenArticleDirectory(this.options.articleNavigation.parentPath, this.options.articleNavigation.parentNodeId);
+      const navigation = this.options.articleNavigation;
+      void this.navigateWithTransition(
+        () => this.callbacks.onOpenArticleDirectory(navigation.parentPath, navigation.parentNodeId),
+        "\u6B63\u5728\u8FD4\u56DE\u76EE\u5F55\u2026",
+        "\u6B63\u5728\u4FDD\u5B58\u5F53\u524D\u4F4D\u7F6E\u5E76\u52A0\u8F7D\u4E3B\u5BFC\u56FE\u76EE\u5F55"
+      );
       return;
     }
     if (this.readOnly) {
