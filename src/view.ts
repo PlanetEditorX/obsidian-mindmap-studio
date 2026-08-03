@@ -600,7 +600,12 @@ export class MindMapStudioView extends TextFileView {
       this.articleTocEntries = [];
       this.showArticleToc = false;
       this.articleNavigation = undefined;
-      this.readingSections = [{ filePath: file.path, document, baseDepth: 0 }];
+      this.readingSections = [{
+        filePath: file.path,
+        document,
+        baseDepth: 0,
+        numberingDisabled: document.root.articleNumberingMode === "none"
+      }];
       this.articleContextReady = true;
       const preferCurrentFile = this.preferCurrentFileOnNextContextRefresh;
       const preferredCurrentNodeId = preferCurrentFile ? this.preferredCurrentNodeIdOnNextContextRefresh : null;

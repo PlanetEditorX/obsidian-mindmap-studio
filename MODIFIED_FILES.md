@@ -1,5 +1,15 @@
 # Modified Files
 
+## 1.42.3 通读目录与正文编号同源
+
+- `src/main.ts`：文章族遍历记录并继承物理导图编号关闭状态；顶层和子导图中心节点关闭后，挂载后代不会重新生成“第一节”等编号。
+- `src/article/modes.ts`、`src/editor/article-renderer.ts`、`src/view.ts`：为通读章节、文章导航和节点编号构建增加继承关闭状态，文章子页保持一致。
+- `src/editor/editor.ts`、`styles.css`：通读正文按目录条目复用跨文件层级与编号；编号和富文本标题分离渲染，避免富文本清空编号。
+- `src/import/import-export.ts`：HTML、Markdown 和 Word 导出继承文章族编号关闭状态。
+- `tests/article-numbering.test.mjs`、`tests/article-content-block.test.mjs`、`scripts/test.mjs`：新增跨子导图关闭、目录/正文同源、富文本编号保留和文章页继承契约。
+- `README.md`、`CHANGELOG.md`、`docs/*`、`TEST_RESULTS.md`、`Codex/项目/obsidian-mindmap-studio.md`：更新编号语义、维护边界和验证状态。
+- `package.json`、`package-lock.json`、`manifest.json`、`versions.json`、`update.json`、`main.js`：统一为 1.42.3，安装包校验值在打包后写入。
+
 ## 1.41.11 只读展示设置与统一阅读样式
 
 - `src/editor/editor.ts`：只读状态下允许打开和保存“主题与外观”；新增展示配置专用写入链路；将文章与通读共用的预设、字体、纸张、目录和末端正文配置并入“阅读样式”；移除独立文章样式按钮。

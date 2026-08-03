@@ -5278,7 +5278,7 @@ function currentArticlePageEntry(navigation) {
 }
 function buildArticleNodeInfo(root, baseDepth = 0, leafNumbering = { enabled: false, threshold: 4 }, primaryText = nodePrimaryText) {
   const result = [];
-  const documentNumberingDisabled = isDocumentArticleNumberingDisabled(root);
+  const documentNumberingDisabled = leafNumbering.numberingDisabled === true || isDocumentArticleNumberingDisabled(root);
   const visitChildren = (parent, defaultLevel) => {
     var _a2;
     let siblingHasHeading = false;
@@ -6699,12 +6699,13 @@ function xmindToDocument(source, fallbackTitle = "XMind \u5BFC\u5165") {
   return { ...createDefaultDocument(title), title, root };
 }
 var escapeHtml = (value) => value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
-function exportLeafNumbering(document2, options) {
+function exportLeafNumbering(document2, options, numberingDisabled = false) {
   var _a2, _b2, _c, _d, _e, _f, _g, _h, _i;
   return {
     enabled: (_c = (_b2 = (_a2 = document2.articleStyle) == null ? void 0 : _a2.leafNumberingEnabled) != null ? _b2 : options.leafNumberingEnabled) != null ? _c : false,
     style: (_f = (_e = (_d = document2.articleStyle) == null ? void 0 : _d.leafNumberingStyle) != null ? _e : options.leafNumberingStyle) != null ? _f : "next-level",
-    threshold: (_i = (_h = (_g = document2.articleStyle) == null ? void 0 : _g.leafNumberingThreshold) != null ? _h : options.leafNumberingThreshold) != null ? _i : 4
+    threshold: (_i = (_h = (_g = document2.articleStyle) == null ? void 0 : _g.leafNumberingThreshold) != null ? _h : options.leafNumberingThreshold) != null ? _i : 4,
+    numberingDisabled
   };
 }
 function htmlArticleDisplayTitle(info) {
@@ -6766,7 +6767,7 @@ function collectExportTocItems(sections, maxTocDepth, includeTerminalHeadings = 
     if (sectionIndex > 0 && !parentNodeKey(section.parentFilePath, section.parentNodeId)) {
       push(Math.max(1, section.baseDepth), nodePlainText(section.document.root) || section.document.title, exportAnchor(sectionIndex, `section-${sectionIndex}`));
     }
-    for (const info of buildArticleNodeInfo(section.document.root, section.baseDepth, exportLeafNumbering(section.document, options))) {
+    for (const info of buildArticleNodeInfo(section.document.root, section.baseDepth, exportLeafNumbering(section.document, options, section.numberingDisabled))) {
       const title = info.displayTitle || info.title || "\u672A\u547D\u540D";
       const childIndex = childSections.get(`${section.filePath}\0${info.node.id}`);
       if (childIndex !== void 0) {
@@ -6804,7 +6805,7 @@ function readingSectionsToHtml(sections, tocMaxDepth = 3, options = {}) {
     if (sectionIndex > 0 && !parentNodeKey(section.parentFilePath, section.parentNodeId)) {
       pushTocItem(Math.max(1, section.baseDepth), escapeHtml(nodePlainText(section.document.root) || section.document.title), exportAnchor(sectionIndex, `section-${sectionIndex}`));
     }
-    for (const info of buildArticleNodeInfo(section.document.root, section.baseDepth, exportLeafNumbering(section.document, options))) {
+    for (const info of buildArticleNodeInfo(section.document.root, section.baseDepth, exportLeafNumbering(section.document, options, section.numberingDisabled))) {
       const title2 = htmlArticleDisplayTitle(info);
       const key = `${section.filePath}\0${info.node.id}`;
       const childSectionIndex = childSectionIndexes.get(key);
@@ -6816,7 +6817,7 @@ function readingSectionsToHtml(sections, tocMaxDepth = 3, options = {}) {
       }
     }
   };
-  const renderArticleNode = (filePath, document2, baseDepth, sectionIndex) => buildArticleNodeInfo(document2.root, baseDepth, exportLeafNumbering(document2, options)).map((info) => {
+  const renderArticleNode = (filePath, document2, baseDepth, sectionIndex, numberingDisabled = false) => buildArticleNodeInfo(document2.root, baseDepth, exportLeafNumbering(document2, options, numberingDisabled)).map((info) => {
     const title2 = htmlArticleDisplayTitle(info);
     const childSectionAnchor = childSectionAnchors.get(`${filePath}\0${info.node.id}`);
     if (childSectionAnchor) return "";
@@ -6828,12 +6829,12 @@ function readingSectionsToHtml(sections, tocMaxDepth = 3, options = {}) {
   }).join("");
   const first = (_a2 = sections[0]) == null ? void 0 : _a2.document;
   const title = escapeHtml(first ? nodePlainText(first.root) || first.title : "\u5BFC\u51FA\u6587\u6863");
-  const body = sections.map(({ filePath, document: document2, baseDepth }, index) => {
+  const body = sections.map(({ filePath, document: document2, baseDepth, numberingDisabled }, index) => {
     const sectionTitle = escapeHtml(nodePlainText(document2.root) || document2.title);
     const headingLevel = Math.min(6, Math.max(1, baseDepth + 1));
     const sectionAnchor = exportAnchor(index, `section-${index}`);
     const heading = index === 0 ? "" : `<h${headingLevel} id="${sectionAnchor}"><a name="${sectionAnchor}"></a>${sectionTitle}</h${headingLevel}>`;
-    return `<section class="map-section">${heading}${renderArticleNode(filePath, document2, baseDepth, index)}</section>`;
+    return `<section class="map-section">${heading}${renderArticleNode(filePath, document2, baseDepth, index, numberingDisabled)}</section>`;
   }).join("");
   collectTocItems(0);
   tocItems.splice(0, tocItems.length, ...collectExportTocItems(sections, maxTocDepth, true, options).map((item) => ({ ...item, title: escapeHtml(item.title) })));
@@ -6885,11 +6886,11 @@ function readingSectionsToDocx(sections, tocMaxDepth = 3, options = {}) {
   });
   const body = [paragraph(title, "Title")];
   if (toc) body.push(paragraph("\u76EE\u5F55", "Heading1"), toc);
-  sections.forEach(({ filePath, document: document2, baseDepth }, sectionIndex) => {
+  sections.forEach(({ filePath, document: document2, baseDepth, numberingDisabled }, sectionIndex) => {
     if (sectionIndex > 0) {
       body.push(paragraph(nodePlainText(document2.root) || document2.title, "Heading" + Math.min(6, Math.max(1, baseDepth)), 0, wordAnchor(exportAnchor(sectionIndex, "section-" + sectionIndex))));
     }
-    for (const info of buildArticleNodeInfo(document2.root, baseDepth, exportLeafNumbering(document2, options))) {
+    for (const info of buildArticleNodeInfo(document2.root, baseDepth, exportLeafNumbering(document2, options, numberingDisabled))) {
       if (childSectionAnchors.has(filePath + "\0" + info.node.id)) continue;
       const text = info.displayTitle || info.title || "\u672A\u547D\u540D";
       const isWordHeading = info.isHeading && info.node.children.length > 0;
@@ -6924,7 +6925,7 @@ function readingSectionsToMarkdown(sections, tocMaxDepth = 3, options = {}) {
     if (depth <= maxTocDepth) tocItems.push({ depth, title: itemTitle, anchor });
   };
   const body = [];
-  sections.forEach(({ filePath, document: document2, baseDepth }, sectionIndex) => {
+  sections.forEach(({ filePath, document: document2, baseDepth, numberingDisabled }, sectionIndex) => {
     var _a3, _b2, _c;
     if (sectionIndex > 0) {
       const sectionTitle = ((_a3 = childSectionTitles.get(sectionIndex)) != null ? _a3 : nodePlainText(document2.root)) || document2.title;
@@ -6933,7 +6934,7 @@ function readingSectionsToMarkdown(sections, tocMaxDepth = 3, options = {}) {
       if (!parentNodeKey((_b2 = sections[sectionIndex]) == null ? void 0 : _b2.parentFilePath, (_c = sections[sectionIndex]) == null ? void 0 : _c.parentNodeId)) pushTocItem(Math.max(1, baseDepth), heading, anchor);
       body.push("", markdownHeading(Math.min(6, Math.max(1, baseDepth + 1)), heading));
     }
-    for (const info of buildArticleNodeInfo(document2.root, baseDepth, exportLeafNumbering(document2, options))) {
+    for (const info of buildArticleNodeInfo(document2.root, baseDepth, exportLeafNumbering(document2, options, numberingDisabled))) {
       const heading = info.displayTitle || markdownTitle(info.label, info.title);
       const childSectionIndex = childSectionIndexes.get(`${filePath}\0${info.node.id}`);
       if (childSectionIndex !== void 0) {
@@ -8531,14 +8532,15 @@ function articleNodeRenderBytes(info) {
   return Math.max(192, bytes);
 }
 function renderArticleMode(container, options) {
-  var _a2, _b2, _c;
+  var _a2, _b2, _c, _d;
   options = options.contentBlockCache ? options : { ...options, contentBlockCache: /* @__PURE__ */ new WeakMap() };
   container.empty();
   const articleStyle = resolveArticleStyle(options.document.articleStyle);
   const page = container.createDiv({ cls: `mms-article-page article-${articleStyle.preset} toc-${(_a2 = articleStyle.tocStyle) != null ? _a2 : "card"}` });
   page.dataset.nodeId = options.document.root.id;
   applyArticleStyle(page, articleStyle);
-  const pageEntry = isDocumentArticleNumberingDisabled(options.document.root) ? void 0 : currentArticlePageEntry(options.articleNavigation);
+  const articleNumberingDisabled = ((_b2 = options.articleNavigation) == null ? void 0 : _b2.numberingDisabled) === true || isDocumentArticleNumberingDisabled(options.document.root);
+  const pageEntry = articleNumberingDisabled ? void 0 : currentArticlePageEntry(options.articleNavigation);
   const title = page.createEl("h1", { cls: "mms-article-document-title" });
   title.dataset.nodeId = options.document.root.id;
   if (pageEntry == null ? void 0 : pageEntry.label) {
@@ -8547,7 +8549,7 @@ function renderArticleMode(container, options) {
   }
   const titleText = title.createSpan({ cls: "mms-article-document-title-text" });
   const rootTextBlock = articleNodeContentBlocks(options.document.root, options).find((block) => block.type === "text");
-  renderRichTextRuns(titleText, rootTextBlock == null ? void 0 : rootTextBlock.richText, (_b2 = rootTextBlock == null ? void 0 : rootTextBlock.text) != null ? _b2 : options.document.title);
+  renderRichTextRuns(titleText, rootTextBlock == null ? void 0 : rootTextBlock.richText, (_c = rootTextBlock == null ? void 0 : rootTextBlock.text) != null ? _c : options.document.title);
   options.makeInlineEditable(titleText, options.document.root, "\u6587\u7AE0\u6807\u9898", rootTextBlock == null ? void 0 : rootTextBlock.id);
   options.addInlineNodeActions(page, options.document.root);
   title.addEventListener("contextmenu", (event) => {
@@ -8555,7 +8557,7 @@ function renderArticleMode(container, options) {
     event.stopPropagation();
     options.openAiContextMenu(event, options.document.root.id);
   });
-  const directoryOnly = options.showArticleToc && options.articleTocEntries.length > 0 && ((_c = options.document.view) == null ? void 0 : _c.articleLandingMode) !== "article";
+  const directoryOnly = options.showArticleToc && options.articleTocEntries.length > 0 && ((_d = options.document.view) == null ? void 0 : _d.articleLandingMode) !== "article";
   if (directoryOnly) {
     renderDirectory(page, options);
     return null;
@@ -8563,7 +8565,8 @@ function renderArticleMode(container, options) {
   const infos = buildArticleNodeInfo(options.document.root, options.articleBaseDepth, {
     enabled: options.articleLeafNumberingEnabled,
     threshold: options.articleLeafNumberingThreshold,
-    style: options.articleLeafNumberingStyle
+    style: options.articleLeafNumberingStyle,
+    numberingDisabled: articleNumberingDisabled
   }, articleNodePrimaryText);
   const weights = infos.map(articleNodeRenderBytes);
   const initialTarget = infos.findIndex((info) => info.node.id === options.selectedId);
@@ -9741,7 +9744,7 @@ function createArticleNumberingControls(container, currentMode, currentLevel, on
   numberingLevelSelect.value = String(currentLevel != null ? currentLevel : 1);
   const numberingHelp = container.createDiv({
     cls: "setting-item-description mmc-article-numbering-help",
-    text: "\u5173\u95ED\u4E2D\u5FC3\u8282\u70B9\u7F16\u53F7\u65F6\uFF0C\u5F53\u524D\u7269\u7406\u5BFC\u56FE\u5185\u7684\u7AE0\u8282\u548C\u672B\u7AEF\u5E8F\u53F7\u5168\u90E8\u9690\u85CF\uFF1B\u5173\u95ED\u666E\u901A\u8282\u70B9\u65F6\u53EA\u8DF3\u8FC7\u8BE5\u8282\u70B9\u3002\u624B\u52A8\u5C42\u7EA7\u7528\u4E8E\u5B9A\u4E49\u5F53\u524D\u8282\u70B9\u6240\u5728\u5B50\u6811\u7684\u6700\u9AD8\u6587\u7AE0\u5C42\u7EA7\uFF1B\u7F16\u8F91\u4E2D\u5FC3\u8282\u70B9\u65F6\uFF0C\u4E00\u7EA7\u5B50\u8282\u70B9\u76F4\u63A5\u4F7F\u7528\u6240\u9009\u5C42\u7EA7\u3002\u8D85\u8FC7\u7B2C 8 \u7EA7\u7684\u66F4\u6DF1\u7ED3\u6784\u4FDD\u7559\u6807\u9898\u5C42\u7EA7\uFF0C\u4F46\u4E0D\u518D\u5FAA\u73AF\u751F\u6210 A. /\uFF08A\uFF09\u7F16\u53F7\u3002"
+    text: "\u5173\u95ED\u4E2D\u5FC3\u8282\u70B9\u7F16\u53F7\u65F6\uFF0C\u5F53\u524D\u5BFC\u56FE\u5185\u7684\u7AE0\u8282\u548C\u672B\u7AEF\u5E8F\u53F7\u5168\u90E8\u9690\u85CF\uFF1B\u5982\u679C\u5F53\u524D\u6587\u4EF6\u662F\u9876\u5C42\u603B\u76EE\u5F55\uFF0C\u5173\u95ED\u72B6\u6001\u4F1A\u7EE7\u7EED\u4F5C\u7528\u5230\u6302\u8F7D\u7684\u5168\u90E8\u5B50\u5BFC\u56FE\u3002\u5173\u95ED\u666E\u901A\u8282\u70B9\u65F6\u53EA\u8DF3\u8FC7\u8BE5\u8282\u70B9\u3002\u624B\u52A8\u5C42\u7EA7\u7528\u4E8E\u5B9A\u4E49\u5F53\u524D\u8282\u70B9\u6240\u5728\u5B50\u6811\u7684\u6700\u9AD8\u6587\u7AE0\u5C42\u7EA7\uFF1B\u7F16\u8F91\u4E2D\u5FC3\u8282\u70B9\u65F6\uFF0C\u4E00\u7EA7\u5B50\u8282\u70B9\u76F4\u63A5\u4F7F\u7528\u6240\u9009\u5C42\u7EA7\u3002\u8D85\u8FC7\u7B2C 8 \u7EA7\u7684\u66F4\u6DF1\u7ED3\u6784\u4FDD\u7559\u6807\u9898\u5C42\u7EA7\uFF0C\u4F46\u4E0D\u518D\u5FAA\u73AF\u751F\u6210 A. /\uFF08A\uFF09\u7F16\u53F7\u3002"
   });
   const updateNumberingLevelState = () => {
     const manual = numberingModeSelect.value === "manual";
@@ -15260,7 +15263,7 @@ var MindMapEditor = class {
    * read-only book with an integrated directory and persisted progress.
    */
   renderReading() {
-    var _a2, _b2, _c, _d, _e, _f;
+    var _a2, _b2, _c, _d, _e, _f, _g, _h, _i;
     if (!this.options.articleContextReady) {
       this.callbacks.onDebugLog("reading", "render-waiting-context", {
         selectedId: this.selectedId,
@@ -15288,9 +15291,12 @@ var MindMapEditor = class {
     const contentSections = sections.length > 1 ? sections.slice(1) : sections;
     const contentPaths = new Set(contentSections.map((section) => section.filePath));
     const articleTocMaxDepth = this.effectiveArticleTocMaxDepth();
-    const tocEntries = this.options.articleTocEntries.filter(
-      (entry) => articleTocDepth(entry) <= articleTocMaxDepth && contentPaths.has(entry.filePath)
-    );
+    const contentTocEntries = this.options.articleTocEntries.filter((entry) => contentPaths.has(entry.filePath));
+    const tocEntries = contentTocEntries.filter((entry) => articleTocDepth(entry) <= articleTocMaxDepth);
+    const tocEntryByNode = /* @__PURE__ */ new Map();
+    for (const entry of contentTocEntries) {
+      if (entry.nodeId) tocEntryByNode.set(`${entry.filePath}\0${entry.nodeId}`, entry);
+    }
     const toc = page.createEl("nav", { cls: "mms-article-toc mms-reading-toc" });
     toc.createEl("h2", { text: "\u5168\u4E66\u76EE\u5F55" });
     const tocList = toc.createEl("ol");
@@ -15326,23 +15332,39 @@ var MindMapEditor = class {
         mountAnchor.dataset.nodeId = section.parentNodeId;
         mountAnchor.id = `reading-${readingAnchorPart(section.parentFilePath)}-${readingAnchorPart(section.parentNodeId)}`;
       }
-      const sectionEntry = tocEntries.find((entry) => entry.filePath === section.filePath && !entry.nodeId);
-      const chapterTitle = chapter.createEl("h2", { cls: "mms-reading-map-title" });
+      const sectionEntry = contentTocEntries.find((entry) => entry.filePath === section.filePath && !entry.nodeId);
+      const chapterTitle = chapter.createEl("h2", {
+        cls: `mms-reading-map-title${(sectionEntry == null ? void 0 : sectionEntry.label) && /[、.）]$/.test(sectionEntry.label) ? " is-compact-number" : ""}`
+      });
       if (sectionEntry == null ? void 0 : sectionEntry.label) chapterTitle.createSpan({ cls: "mms-article-number", text: sectionEntry.label });
+      const chapterTitleText = chapterTitle.createSpan({ cls: "mms-reading-map-title-text" });
       const chapterTitleBlock = nodeContentBlocks(section.document.root).find((block) => block.type === "text");
-      renderRichTextRuns(chapterTitle, chapterTitleBlock == null ? void 0 : chapterTitleBlock.richText, (_d = chapterTitleBlock == null ? void 0 : chapterTitleBlock.text) != null ? _d : (sectionEntry == null ? void 0 : sectionEntry.displayTitle) || section.document.title);
+      renderRichTextRuns(chapterTitleText, chapterTitleBlock == null ? void 0 : chapterTitleBlock.richText, (_d = chapterTitleBlock == null ? void 0 : chapterTitleBlock.text) != null ? _d : section.document.title);
       this.renderArticleContent(chapter, section.document.root, false);
-      for (const info of buildArticleNodeInfo(section.document.root, section.baseDepth, { enabled: this.options.articleLeafNumberingEnabled, threshold: this.options.articleLeafNumberingThreshold, style: this.options.articleLeafNumberingStyle })) {
-        const nodeSection = chapter.createEl("section", { cls: `mms-article-node depth-${Math.min(info.depth, 8)}` });
+      for (const info of buildArticleNodeInfo(section.document.root, section.baseDepth, {
+        enabled: this.options.articleLeafNumberingEnabled,
+        threshold: this.options.articleLeafNumberingThreshold,
+        style: this.options.articleLeafNumberingStyle,
+        numberingDisabled: section.numberingDisabled
+      })) {
+        const tocEntry = tocEntryByNode.get(`${section.filePath}\0${info.node.id}`);
+        const depth = (_e = tocEntry == null ? void 0 : tocEntry.depth) != null ? _e : info.depth;
+        const label = (_f = tocEntry == null ? void 0 : tocEntry.label) != null ? _f : info.label;
+        const title = (_g = tocEntry == null ? void 0 : tocEntry.title) != null ? _g : info.title;
+        const isHeading = tocEntry ? true : info.isHeading;
+        const nodeSection = chapter.createEl("section", { cls: `mms-article-node depth-${Math.min(depth, 8)}` });
         nodeSection.dataset.nodeId = info.node.id;
         nodeSection.dataset.filePath = section.filePath;
         nodeSection.id = `reading-${fileKey}-${readingAnchorPart(info.node.id)}`;
-        if (info.isHeading) {
-          const level = Math.min(6, info.depth + 1);
-          const heading = nodeSection.createEl(`h${level}`, { cls: "mms-article-section-heading" });
-          if (info.label) heading.createSpan({ cls: "mms-article-number", text: info.label });
+        if (isHeading) {
+          const level = Math.min(6, depth + 1);
+          const heading = nodeSection.createEl(`h${level}`, {
+            cls: `mms-article-heading mms-article-section-heading${/[、.）]$/.test(label) ? " is-compact-number" : ""}`
+          });
+          if (label) heading.createSpan({ cls: "mms-article-number", text: label });
+          const headingText = heading.createSpan({ cls: "mms-article-heading-text" });
           const headingBlock = nodeContentBlocks(info.node).find((block) => block.type === "text");
-          renderRichTextRuns(heading, headingBlock == null ? void 0 : headingBlock.richText, (_e = headingBlock == null ? void 0 : headingBlock.text) != null ? _e : info.displayTitle || info.title);
+          renderRichTextRuns(headingText, headingBlock == null ? void 0 : headingBlock.richText, (_h = headingBlock == null ? void 0 : headingBlock.text) != null ? _h : title);
           this.renderArticleContent(nodeSection, info.node, false);
         } else {
           const firstTextBlock = nodeContentBlocks(info.node).find((block) => block.type === "text");
@@ -15350,7 +15372,7 @@ var MindMapEditor = class {
             const paragraph = nodeSection.createEl("p", { cls: `mms-article-leaf-text${this.options.articleLeafBulletsEnabled && !info.numberedLeaf ? " is-bulleted" : ""}${this.options.articleLeafTextAlignment === "auto" ? " is-auto-aligned" : ""}${firstTextBlock.paragraphIndent === "none" ? " is-flush" : ""}${info.numberedLeaf ? " mms-article-leaf-numbered" : ""}` });
             paragraph.dataset.blockId = firstTextBlock.id;
             if (info.numberedLeaf) {
-              paragraph.dataset.articleNumber = info.leafNumberingStyle === "circled" ? String((_f = info.leafNumberingIndex) != null ? _f : 1) : info.label;
+              paragraph.dataset.articleNumber = info.leafNumberingStyle === "circled" ? String((_i = info.leafNumberingIndex) != null ? _i : 1) : info.label;
               if (info.leafNumberingStyle) paragraph.dataset.articleNumberStyle = info.leafNumberingStyle;
             }
             if (this.options.articleLeafBulletsEnabled && !info.numberedLeaf) {
@@ -18199,7 +18221,12 @@ var MindMapStudioView = class extends import_obsidian13.TextFileView {
       this.articleTocEntries = [];
       this.showArticleToc = false;
       this.articleNavigation = void 0;
-      this.readingSections = [{ filePath: file.path, document: document2, baseDepth: 0 }];
+      this.readingSections = [{
+        filePath: file.path,
+        document: document2,
+        baseDepth: 0,
+        numberingDisabled: document2.root.articleNumberingMode === "none"
+      }];
       this.articleContextReady = true;
       const preferCurrentFile = this.preferCurrentFileOnNextContextRefresh;
       const preferredCurrentNodeId = preferCurrentFile ? this.preferredCurrentNodeIdOnNextContextRefresh : null;
@@ -21903,7 +21930,7 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
    * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
    */
   async buildArticleContext(file, document2) {
-    var _a2, _b2, _c, _d;
+    var _a2, _b2, _c, _d, _e, _f;
     const baseDepth = await this.computeArticleBaseDepth(file, document2);
     const familyDocuments = /* @__PURE__ */ new Map([[file.path, document2]]);
     const readFamilyDocument = async (targetFile) => {
@@ -21925,7 +21952,13 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
     }
     const isTopLevel = topFile.path === file.path;
     const tocEntries = [];
-    const readingSections = [{ filePath: topFile.path, document: topDocument, baseDepth: 0 }];
+    const topNumberingDisabled = isDocumentArticleNumberingDisabled(topDocument.root);
+    const readingSections = [{
+      filePath: topFile.path,
+      document: topDocument,
+      baseDepth: 0,
+      numberingDisabled: topNumberingDisabled
+    }];
     const visitedFiles = /* @__PURE__ */ new Set([topFile.path]);
     let hasSubmaps = false;
     const processItems = async (items, defaultLevel, structureDepth) => {
@@ -21935,7 +21968,7 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
       for (const item of items) {
         const { node, file: sourceFile, breadcrumb } = item;
         const numbering = resolveArticleNumbering(node, defaultLevel, siblingHasHeading);
-        const documentNumberingDisabled = isDocumentArticleNumberingDisabled(item.document.root);
+        const documentNumberingDisabled = item.numberingDisabled || isDocumentArticleNumberingDisabled(item.document.root);
         const numberedIndex = !documentNumberingDisabled && numbering.shouldNumber && !numbering.skipped ? ((_a3 = numberedIndexes.get(numbering.level)) != null ? _a3 : 0) + 1 : 0;
         if (numberedIndex) numberedIndexes.set(numbering.level, numberedIndex);
         const label = numberedIndex ? articleNumberLabel(numbering.level, numberedIndex) : "";
@@ -21956,7 +21989,8 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
           node: child,
           file: sourceFile,
           document: item.document,
-          breadcrumb: nextBreadcrumb
+          breadcrumb: nextBreadcrumb,
+          numberingDisabled: documentNumberingDisabled
         }));
         if ((_b3 = node.submap) == null ? void 0 : _b3.path) {
           hasSubmaps = true;
@@ -21969,18 +22003,21 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
             visitedFiles.add(childFile.path);
             try {
               const childDocument = await readFamilyDocument(childFile);
+              const childNumberingDisabled = documentNumberingDisabled || isDocumentArticleNumberingDisabled(childDocument.root);
               readingSections.push({
                 filePath: childFile.path,
                 document: childDocument,
                 baseDepth: numbering.level,
                 parentFilePath: sourceFile.path,
-                parentNodeId: node.id
+                parentNodeId: node.id,
+                numberingDisabled: childNumberingDisabled
               });
               descendants.push(...childDocument.root.children.map((child) => ({
                 node: child,
                 file: childFile,
                 document: childDocument,
-                breadcrumb: nextBreadcrumb
+                breadcrumb: nextBreadcrumb,
+                numberingDisabled: childNumberingDisabled
               })));
             } catch (error) {
               console.warn(`MindMap Studio could not read child map for article TOC: ${childFile.path}`, error);
@@ -21994,7 +22031,8 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
       node,
       file: topFile,
       document: topDocument,
-      breadcrumb: [nodePlainText(topDocument.root) || topDocument.title]
+      breadcrumb: [nodePlainText(topDocument.root) || topDocument.title],
+      numberingDisabled: topNumberingDisabled
     })), articleChildStartLevel(topDocument.root), 1);
     const siblingPages = resolveArticleSiblingPages(tocEntries, file.path);
     const parentFile = ((_b2 = document2.navigation) == null ? void 0 : _b2.parentPath) ? this.resolveMindMapFile(document2.navigation.parentPath, file.path) : null;
@@ -22017,7 +22055,8 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
       currentIndex: siblingPages.currentIndex,
       homePath: topFile.path,
       parentPath: parentFile == null ? void 0 : parentFile.path,
-      parentNodeId
+      parentNodeId,
+      numberingDisabled: (_f = (_e = readingSections.find((section) => section.filePath === file.path)) == null ? void 0 : _e.numberingDisabled) != null ? _f : isDocumentArticleNumberingDisabled(document2.root)
     } : void 0;
     return {
       baseDepth,
@@ -22036,9 +22075,15 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
    * @returns Ordered maps with their absolute depth relative to the current map.
    */
   async buildDescendantReadingSections(file, document2) {
-    const sections = [{ filePath: file.path, document: document2, baseDepth: 0 }];
+    const rootNumberingDisabled = isDocumentArticleNumberingDisabled(document2.root);
+    const sections = [{
+      filePath: file.path,
+      document: document2,
+      baseDepth: 0,
+      numberingDisabled: rootNumberingDisabled
+    }];
     const visited = /* @__PURE__ */ new Set([file.path]);
-    const visit = async (nodes, sourceFile, defaultLevel) => {
+    const visit = async (nodes, sourceFile, defaultLevel, numberingDisabled) => {
       var _a2;
       const siblingHasHeading = nodes.some((node) => isArticleHeading(node));
       for (const node of nodes) {
@@ -22049,23 +22094,30 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
             visited.add(childFile.path);
             try {
               const childDocument = await this.readMindMapDocument(childFile);
+              const childNumberingDisabled = numberingDisabled || isDocumentArticleNumberingDisabled(childDocument.root);
               sections.push({
                 filePath: childFile.path,
                 document: childDocument,
                 baseDepth: numbering.level,
                 parentFilePath: sourceFile.path,
-                parentNodeId: node.id
+                parentNodeId: node.id,
+                numberingDisabled: childNumberingDisabled
               });
-              await visit(childDocument.root.children, childFile, articleChildStartLevel(childDocument.root, numbering.level));
+              await visit(
+                childDocument.root.children,
+                childFile,
+                articleChildStartLevel(childDocument.root, numbering.level),
+                childNumberingDisabled
+              );
             } catch (error) {
               console.warn(`MindMap Studio could not read child map for export: ${childFile.path}`, error);
             }
           }
         }
-        if (node.children.length) await visit(node.children, sourceFile, numbering.level + 1);
+        if (node.children.length) await visit(node.children, sourceFile, numbering.level + 1, numberingDisabled);
       }
     };
-    await visit(document2.root.children, file, articleChildStartLevel(document2.root));
+    await visit(document2.root.children, file, articleChildStartLevel(document2.root), rootNumberingDisabled);
     return sections;
   }
   /**

@@ -3902,9 +3902,21 @@
 
 .mms-reading-map-title {
   position: relative;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
   margin-bottom: 28px;
   color: var(--mms-article-heading, var(--text-normal));
   font-size: 1.7em;
+}
+
+.mms-reading-map-title.is-compact-number {
+  gap: 0;
+}
+
+.mms-reading-map-title-text {
+  flex: 1 1 auto;
+  min-width: 30px;
 }
 
 .mms-article-page.toc-plain .mms-article-toc {

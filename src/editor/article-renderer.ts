@@ -137,7 +137,9 @@ export function renderArticleMode(container: HTMLElement, options: ArticleRender
   const page = container.createDiv({ cls: `mms-article-page article-${articleStyle.preset} toc-${articleStyle.tocStyle ?? "card"}` });
   page.dataset.nodeId = options.document.root.id;
   applyArticleStyle(page, articleStyle);
-  const pageEntry = isDocumentArticleNumberingDisabled(options.document.root)
+  const articleNumberingDisabled = options.articleNavigation?.numberingDisabled === true
+    || isDocumentArticleNumberingDisabled(options.document.root);
+  const pageEntry = articleNumberingDisabled
     ? undefined
     : currentArticlePageEntry(options.articleNavigation);
   const title = page.createEl("h1", { cls: "mms-article-document-title" });
@@ -168,7 +170,8 @@ export function renderArticleMode(container: HTMLElement, options: ArticleRender
   const infos = buildArticleNodeInfo(options.document.root, options.articleBaseDepth, {
     enabled: options.articleLeafNumberingEnabled,
     threshold: options.articleLeafNumberingThreshold,
-    style: options.articleLeafNumberingStyle
+    style: options.articleLeafNumberingStyle,
+    numberingDisabled: articleNumberingDisabled
   }, articleNodePrimaryText);
   const weights = infos.map(articleNodeRenderBytes);
   const initialTarget = infos.findIndex((info) => info.node.id === options.selectedId);

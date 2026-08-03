@@ -132,7 +132,7 @@ test("terminal body siblings can switch to the next article numbering level", as
   assert.match(modesSource, /articleNumberLabel\(displayLevel, numberedIndex\)/);
   assert.match(rendererSource, /info\.leafNumberingStyle === "circled"[\s\S]*String\(info\.leafNumberingIndex \?\? 1\)[\s\S]*: info\.label/);
   assert.match(rendererSource, /paragraph\.dataset\.articleNumberStyle = info\.leafNumberingStyle/);
-  assert.match(editorSource, /buildArticleNodeInfo\(section\.document\.root, section\.baseDepth, \{ enabled: this\.options\.articleLeafNumberingEnabled, threshold: this\.options\.articleLeafNumberingThreshold, style: this\.options\.articleLeafNumberingStyle \}\)/);
+  assert.match(editorSource, /buildArticleNodeInfo\(section\.document\.root, section\.baseDepth, \{[\s\S]*enabled: this\.options\.articleLeafNumberingEnabled,[\s\S]*threshold: this\.options\.articleLeafNumberingThreshold,[\s\S]*style: this\.options\.articleLeafNumberingStyle,[\s\S]*numberingDisabled: section\.numberingDisabled[\s\S]*\}\)/);
   assert.match(editorSource, /info\.leafNumberingStyle === "circled"[\s\S]*String\(info\.leafNumberingIndex \?\? 1\)[\s\S]*: info\.label/);
   assert.doesNotMatch(editorSource, /articleNumberFallback/);
   assert.match(styles, /\.mms-article-leaf-text\.mms-article-leaf-numbered\s*\{[\s\S]*margin-inline-start:\s*0/);
