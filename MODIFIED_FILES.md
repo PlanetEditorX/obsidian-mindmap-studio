@@ -1,5 +1,13 @@
 # Modified Files
 
+## 1.40.11 通读解析状态与过渡反馈
+
+- `src/editor/editor.ts`：新增 `renderReadingLoading()`，以文章族上下文就绪状态阻止不完整通读首帧；显示可见解析文案、骨架和无障碍状态，完成后全文淡入；通读按钮同步加载状态。
+- `styles.css`：新增通读解析提示卡、书本图标浮动、骨架复用和全文进入动画，并在减少动态效果下全部静止。
+- `tests/incremental-render.test.mjs`：新增通读上下文首帧门、提示文案、按钮状态、无障碍属性、动画及减少动态效果契约。
+- `README.md`、`CHANGELOG.md`、`docs/ARCHITECTURE.md`、`docs/FUNCTION_REFERENCE.md`、`TEST_RESULTS.md`：同步用户行为、架构边界、函数文档和验证结果。
+- `update.json`：写入本轮安装包 SHA-256；`main.js`：按源码重新生产构建。
+
 ## 1.40.11 删除文章边缘加载按钮跑马灯
 
 - `styles.css`：删除加载按钮的角度自定义属性、圆角边框伪元素、`conic-gradient` 遮罩和边框无限动画；保留文字双轴居中与原有内部流光。

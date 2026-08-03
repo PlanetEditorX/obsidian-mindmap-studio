@@ -201,6 +201,40 @@ test("article context gates the first paint and landing transitions are symmetri
   assert.match(cssSource, /\.mms-article-skeleton-line\.is-toc-row/);
 });
 
+test("continuous reading exposes a semantic parsing transition before the family context is ready", async () => {
+  const [editorSource, cssSource] = await Promise.all([
+    readFile(path.join(rootDir, "src/editor/editor.ts"), "utf8"),
+    readFile(path.join(rootDir, "styles.css"), "utf8")
+  ]);
+  const renderReadingStart = editorSource.indexOf("private renderReading(): void {");
+  const renderReadingEnd = editorSource.indexOf("\n  /**\n   * Adds the shared floating control", renderReadingStart);
+  const renderReading = editorSource.slice(renderReadingStart, renderReadingEnd);
+  const renderReadingLoadingStart = editorSource.indexOf("private renderReadingLoading(): void {");
+  const renderReadingLoadingEnd = editorSource.indexOf("\n  /**\n   * Renders every map", renderReadingLoadingStart);
+  const renderReadingLoading = editorSource.slice(renderReadingLoadingStart, renderReadingLoadingEnd);
+  const updateModeUiStart = editorSource.indexOf("private updateModeUi(): void {");
+  const updateModeUiEnd = editorSource.indexOf("\n  /**\n   * 执行“ensure editable”", updateModeUiStart);
+  const updateModeUi = editorSource.slice(updateModeUiStart, updateModeUiEnd);
+
+  assert.ok(renderReadingStart >= 0 && renderReadingEnd > renderReadingStart);
+  assert.ok(renderReading.indexOf("if (!this.options.articleContextReady)") < renderReading.indexOf("this.articleEl.empty()"));
+  assert.match(renderReading, /this\.renderReadingLoading\(\)/);
+  assert.match(renderReading, /removeAttribute\("aria-busy"\)/);
+  assert.match(renderReading, /mms-reading-page is-entering/);
+  assert.match(renderReadingLoading, /正在解析通读内容…/);
+  assert.match(renderReadingLoading, /正在读取父级与子导图，完成后将自动显示全文/);
+  assert.match(renderReadingLoading, /role: "status"/);
+  assert.match(renderReadingLoading, /"aria-live": "polite"/);
+  assert.match(renderReadingLoading, /setAttribute\("aria-busy", "true"\)/);
+  assert.match(updateModeUi, /mode === "reading" && readingContextLoading/);
+  assert.match(updateModeUi, /toggleClass\("is-loading", loading\)/);
+  assert.match(cssSource, /\.mms-reading-loading-message/);
+  assert.match(cssSource, /mms-reading-loading-float/);
+  assert.match(cssSource, /mms-reading-page-enter/);
+  assert.match(cssSource, /prefers-reduced-motion: reduce[\s\S]*\.mms-reading-loading-icon/);
+});
+
+
 test("debug mode records runtime operations and exposes a clipboard command", async () => {
   const [mainSource, settingsSource, typesSource, debugSource] = await Promise.all([
     readFile(path.join(rootDir, "src/main.ts"), "utf8"),
