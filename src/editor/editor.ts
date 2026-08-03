@@ -69,7 +69,7 @@ import { parseQuestionEnrichment, parseRecognizedQuestion, QuestionEditModal } f
 import { createQuestionPracticeState, renderQuestionPracticeMode } from "./question-practice-mode";
 import { normalizeToolbarItemOrder, type ToolbarItemId } from "../settings";
 import { appearanceFromThemePreset, MINDMAP_THEME_PRESETS } from "../themes";
-import { articleNumberLabel, articleTocDepth, buildArticleNodeInfo, DISPLAY_MODE_ICONS, DISPLAY_MODE_LABELS, readingAnchorPart, resolveArticleTocMaxDepth, type ArticleTocEntry } from "../article/modes";
+import { articleNumberLabel, articleTocDepth, buildArticleNodeInfo, DISPLAY_MODE_ICONS, DISPLAY_MODE_LABELS, readingAnchorPart, resolveArticleContextProgressPercent, resolveArticleTocMaxDepth, type ArticleContextProgress, type ArticleTocEntry } from "../article/modes";
 import { ARTICLE_STYLE_PRESETS, resolveArticleStyle } from "../article/article-style";
 import { resolveArticleEntryReadOnly, resolveParentReturnIntent } from "../article/display-mode";
 import {
@@ -1475,6 +1475,9 @@ export class MindMapEditor {
   private articleInitialRenderFrame: number | null = null;
   private articleInitialRenderToken = 0;
   private articleWindowExpansionFrame: number | null = null;
+  private articleContextLoadingProgress: ArticleContextProgress | null = null;
+  private articleContextLoadingEl: HTMLElement | null = null;
+  private articleContextLoadingHideTimer: number | null = null;
   private readonly questionPracticeState = createQuestionPracticeState();
   private pageTransitionToken = 0;
   private pageTransitionHideTimer: number | null = null;
@@ -1519,6 +1522,54 @@ export class MindMapEditor {
     this.initializeMindMapViewport(50);
   }
 
+  /** Updates the non-blocking lower-right parsing indicator used by article and continuous-reading mode. */
+  setArticleContextLoadingProgress(progress: ArticleContextProgress | null): void {
+    this.articleContextLoadingProgress = progress
+      ? { ...progress, percent: Math.max(0, Math.min(100, Math.round(progress.percent))) }
+      : null;
+    if (this.articleContextLoadingHideTimer !== null) {
+      window.clearTimeout(this.articleContextLoadingHideTimer);
+      this.articleContextLoadingHideTimer = null;
+    }
+    this.renderArticleContextLoadingProgress();
+    if (this.articleContextLoadingProgress?.percent === 100) {
+      this.articleContextLoadingHideTimer = window.setTimeout(() => {
+        this.articleContextLoadingHideTimer = null;
+        this.articleContextLoadingProgress = null;
+        this.renderArticleContextLoadingProgress();
+      }, 640);
+    }
+  }
+
+  private renderArticleContextLoadingProgress(): void {
+    if (!this.rootEl) return;
+    const visibleMode = this.currentMode === "article" || this.currentMode === "reading";
+    const progress = this.articleContextLoadingProgress;
+    if (!visibleMode || !progress) {
+      this.articleContextLoadingEl?.remove();
+      this.articleContextLoadingEl = null;
+      return;
+    }
+    const shell = this.articleContextLoadingEl ?? this.rootEl.createDiv({
+      cls: "mms-article-context-progress",
+      attr: { role: "status", "aria-live": "polite" }
+    });
+    this.articleContextLoadingEl = shell;
+    const fill = shell.querySelector<HTMLElement>(".mms-article-context-progress-fill")
+      ?? shell.createDiv({ cls: "mms-article-context-progress-fill" });
+    const label = shell.querySelector<HTMLElement>(".mms-article-context-progress-label")
+      ?? shell.createDiv({ cls: "mms-article-context-progress-label" });
+    const detail = shell.querySelector<HTMLElement>(".mms-article-context-progress-detail")
+      ?? shell.createDiv({ cls: "mms-article-context-progress-detail" });
+    const value = `${progress.percent}%`;
+    const boundedPercent = resolveArticleContextProgressPercent(progress.processed, progress.total, 0, 100);
+    fill.style.setProperty("--mms-article-context-progress", `${Math.max(progress.percent, boundedPercent)}%`);
+    label.setText(`加载进度 ${value}`);
+    detail.setText(progress.message);
+    shell.toggleClass("is-complete", progress.percent === 100);
+    shell.dataset.phase = progress.phase;
+    shell.dataset.progress = value;
+  }
   /**
    * 执行“destroy”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
    */
@@ -1529,6 +1580,11 @@ export class MindMapEditor {
     if (this.readingCaptureTimer !== null) window.clearTimeout(this.readingCaptureTimer);
     if (this.readingCaptureReleaseTimer !== null) window.clearTimeout(this.readingCaptureReleaseTimer);
     if (this.readOnlyPersistTimer !== null) window.clearTimeout(this.readOnlyPersistTimer);
+    if (this.articleContextLoadingHideTimer !== null) window.clearTimeout(this.articleContextLoadingHideTimer);
+    this.articleContextLoadingHideTimer = null;
+    this.articleContextLoadingEl?.remove();
+    this.articleContextLoadingEl = null;
+    this.articleContextLoadingProgress = null;
     this.cancelReadingLocationRestore();
     this.clearArticleMiniMap();
     this.articleScrollButtonCleanup?.();
@@ -4431,6 +4487,7 @@ export class MindMapEditor {
     else if (this.currentMode === "question-bank") this.renderQuestionPractice();
     else this.renderMindMap();
     this.applyArticleClickMoveUi();
+    this.renderArticleContextLoadingProgress();
   }
 
   /** Renders the configured-folder practice surface and persists each automatic grading result. */

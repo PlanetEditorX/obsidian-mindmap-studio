@@ -69,9 +69,11 @@ import {
   normalizeVisibleModes,
   resolveArticleNumbering,
   resolveArticleSiblingPages,
+  type ArticleContextProgress,
   type ArticlePageNavigation,
   type ArticleTocEntry,
-  type ReadingSection
+  type ReadingSection,
+  resolveArticleContextProgressPercent
 } from "./article/modes";
 import { normalizeArticleEntryLockMode, resolveStartupDisplayMode, shouldPersistDisplayMode } from "./article/display-mode";
 import type { DisplayMode } from "./core/model";
@@ -1075,7 +1077,7 @@ export default class MindMapStudioPlugin extends Plugin {
         language: this.settings.localOcrLanguage,
         extraArgs: this.settings.localOcrExtraArgs
       });
-      return { ...image, text: normalizeRecognizedText(text), mode: "local-ocr" };
+    return { ...image, text: normalizeRecognizedText(text), mode: "local-ocr" };
     }
     const selectedProfileId = profileId || this.settings.imageRecognitionAiProfileId || this.settings.defaultAiProfileId;
     const profile = this.settings.aiProfiles.find((item) => item.id === selectedProfileId && item.enabled);
@@ -1400,8 +1402,25 @@ export default class MindMapStudioPlugin extends Plugin {
    * @returns 计算得到的数值结果。
    * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
    */
-  async buildArticleContext(file: TFile, document: MindMapDocument): Promise<{ baseDepth: number; tocEntries: ArticleTocEntry[]; showToc: boolean; navigation?: ArticlePageNavigation; readingSections: ReadingSection[] }> {
+  async buildArticleContext(file: TFile, document: MindMapDocument, onProgress?: (progress: ArticleContextProgress) => void): Promise<{ baseDepth: number; tocEntries: ArticleTocEntry[]; showToc: boolean; navigation?: ArticlePageNavigation; readingSections: ReadingSection[] }> {
     const baseDepth = await this.computeArticleBaseDepth(file, document);
+    let progressTotal = Math.max(3, document.root.children.length + 3);
+    let progressProcessed = 0;
+    const reportProgress = (phase: ArticleContextProgress["phase"], message: string, options?: { processed?: number; total?: number; percent?: number }): void => {
+      if (typeof options?.total === "number") progressTotal = Math.max(progressTotal, Math.floor(options.total));
+      if (typeof options?.processed === "number") progressProcessed = Math.max(progressProcessed, Math.floor(options.processed));
+      const percent = typeof options?.percent === "number"
+        ? Math.max(0, Math.min(100, Math.round(options.percent)))
+        : resolveArticleContextProgressPercent(progressProcessed, progressTotal);
+      onProgress?.({
+        phase,
+        percent,
+        processed: progressProcessed,
+        total: progressTotal,
+        message
+      });
+    };
+    reportProgress("prepare", "正在解析文章结构…", { percent: 6 });
     // The active editor document can be newer than the vault while a coalesced save is
     // still pending. Continuous reading must reuse that in-memory snapshot whenever the
     // family walk reaches the current physical file; otherwise a numbering change made
@@ -1425,6 +1444,9 @@ export default class MindMapStudioPlugin extends Plugin {
       topFile = parentFile;
       topDocument = await readFamilyDocument(parentFile);
     }
+    progressTotal = Math.max(progressTotal, ancestorPaths.size + topDocument.root.children.length + 3);
+    progressProcessed = Math.max(progressProcessed, ancestorPaths.size);
+    reportProgress("prepare", "正在建立父子导图关系…", { percent: 18 });
     const isTopLevel = topFile.path === file.path;
 
     const tocEntries: ArticleTocEntry[] = [];
@@ -1437,6 +1459,7 @@ export default class MindMapStudioPlugin extends Plugin {
     }];
     const visitedFiles = new Set<string>([topFile.path]);
     let hasSubmaps = false;
+    reportProgress("walk", "正在生成目录与章节索引…", { percent: 24, total: progressTotal + topDocument.root.children.length });
     /**
      * Item 类型定义，用于限制可接受值并让序列化数据保持稳定。
      */
@@ -1498,6 +1521,8 @@ export default class MindMapStudioPlugin extends Plugin {
               const childDocument = await readFamilyDocument(childFile);
               const childNumberingDisabled = documentNumberingDisabled
                 || isDocumentArticleNumberingDisabled(childDocument.root);
+              progressTotal += Math.max(1, childDocument.root.children.length + 1);
+              reportProgress("walk", `正在加载子导图：${childFile.basename}…`);
               readingSections.push({
                 filePath: childFile.path,
                 document: childDocument,
@@ -1519,6 +1544,8 @@ export default class MindMapStudioPlugin extends Plugin {
           }
         }
         if (descendants.length) await processItems(descendants, numbering.level + 1, structureDepth + 1);
+        progressProcessed += 1;
+        reportProgress("walk", "正在生成目录与章节索引…");
       }
     };
 
@@ -1529,6 +1556,7 @@ export default class MindMapStudioPlugin extends Plugin {
       breadcrumb: [nodePlainText(topDocument.root) || topDocument.title],
       numberingDisabled: topNumberingDisabled
     })), articleChildStartLevel(topDocument.root), 1);
+    reportProgress("finalize", "正在整理分页与返回导航…", { percent: 94, processed: progressTotal });
     const siblingPages = resolveArticleSiblingPages(tocEntries, file.path);
     const parentFile = document.navigation?.parentPath
       ? this.resolveMindMapFile(document.navigation.parentPath, file.path)
@@ -1557,6 +1585,7 @@ export default class MindMapStudioPlugin extends Plugin {
           ?? isDocumentArticleNumberingDisabled(document.root)
       }
       : undefined;
+    reportProgress("complete", "通读内容已准备完成", { percent: 100, processed: progressTotal });
     return {
       baseDepth,
       tocEntries,

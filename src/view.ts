@@ -576,8 +576,18 @@ export class MindMapStudioView extends TextFileView {
     if (!file || !document) return;
     const token = ++this.articleContextToken;
     this.plugin.logDebug("article-context", "refresh-start", { filePath: file.path, token, pendingFocusNodeId: this.pendingFocusNodeId, preferCurrentFile: this.preferCurrentFileOnNextContextRefresh });
+    this.editor?.setArticleContextLoadingProgress({
+      phase: "prepare",
+      percent: 0,
+      processed: 0,
+      total: 1,
+      message: "正在解析文章结构…"
+    });
     try {
-      const context = await this.plugin.buildArticleContext(file, document);
+      const context = await this.plugin.buildArticleContext(file, document, (progress) => {
+        if (token !== this.articleContextToken || this.file?.path !== file.path) return;
+        this.editor?.setArticleContextLoadingProgress(progress);
+      });
       if (token !== this.articleContextToken || this.file?.path !== file.path) return;
       this.articleBaseDepth = context.baseDepth;
       this.articleTocEntries = context.tocEntries;
@@ -594,6 +604,13 @@ export class MindMapStudioView extends TextFileView {
     } catch (error) {
       if (token !== this.articleContextToken || this.file?.path !== file.path) return;
       this.plugin.logDebug("article-context", "refresh-failed", { filePath: file.path, token, error });
+      this.editor?.setArticleContextLoadingProgress({
+        phase: "complete",
+        percent: 100,
+        processed: 1,
+        total: 1,
+        message: "解析失败，已回退到当前导图"
+      });
       console.warn("MindMap Studio article context refresh failed", error);
       this.articleBaseDepth = 0;
       this.articleTocEntries = [];
