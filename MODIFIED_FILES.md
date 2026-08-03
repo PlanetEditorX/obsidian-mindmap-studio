@@ -1,5 +1,14 @@
 # Modified Files
 
+## 1.42.5 动态工具栏与统一导入导出
+
+- `src/editor/editor.ts`、`src/editor/history-manager.ts`：按模式、锁定、选择与历史计算按钮可用性；不可用工具收缩隐藏；重排默认分组；截图入口相邻；画布缩放只在导图模式出现。
+- `src/settings.ts`、`src/main.ts`：规范化工具栏顺序，将旧导出和文章样式 ID 迁移到统一入口，并固定截图组和导入导出位置。
+- `src/editor/editor-modals.ts`：合并 JSON/文件导入、JSON/SVG 与完整文档导出；只读状态仅隐藏导入操作。
+- `styles.css`：增加工具栏与缩放控件的宽度、透明度和缩放过渡，以及减少动态效果回退。
+- `tests/settings-layout.test.mjs`、`tests/import-mode.test.mjs`、`tests/reading-editor-contract.test.mjs`、`scripts/test.mjs`：新增动态可用性、顺序、迁移和统一导出契约。
+- 安装包 SHA-256：`a0a01ab281891615586c6358961b1ef5d2a41c55bd1d216c71cc94871415d25d`。
+
 ## 1.42.4 外观弹窗顶部、单一工具提示与任务状态移除
 
 - `src/editor/editor.ts`：取消外观弹窗底部按钮自动聚焦并两帧回到顶部；工具栏仅使用 `aria-label`，增加动态原生提示清理；删除任务工具栏、节点编辑、右键、快捷键、渲染和进度逻辑；保持重复链接命令删除。

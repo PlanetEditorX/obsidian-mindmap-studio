@@ -158,13 +158,56 @@
 }
 
 .mmc-toolbar-button {
+  position: relative;
   flex: 0 0 auto;
   width: 32px;
+  min-width: 32px;
+  max-width: 32px;
   height: 32px;
+  margin-inline-start: 0;
+  overflow: visible;
+  opacity: 1;
+  transform: scale(1);
+  transform-origin: center;
+}
+
+.mmc-toolbar.is-toolbar-ready .mmc-toolbar-button {
+  transition:
+    width 170ms ease,
+    min-width 170ms ease,
+    max-width 170ms ease,
+    margin 170ms ease,
+    padding 170ms ease,
+    opacity 120ms ease,
+    transform 170ms ease;
 }
 
 .mmc-toolbar-button.is-hidden {
-  display: none;
+  width: 0;
+  min-width: 0;
+  max-width: 0;
+  margin-inline: -1.5px;
+  padding-inline: 0;
+  overflow: hidden;
+  border-width: 0;
+  opacity: 0 !important;
+  pointer-events: none;
+  transform: scale(.72);
+}
+
+.mmc-toolbar-button.is-toolbar-group-start:not(.is-hidden) {
+  margin-inline-start: 10px;
+}
+
+.mmc-toolbar-button.is-toolbar-group-start:not(.is-hidden)::before {
+  position: absolute;
+  top: 5px;
+  left: -7px;
+  width: 1px;
+  height: 22px;
+  content: "";
+  background: var(--background-modifier-border);
+  pointer-events: none;
 }
 
 .mmc-toolbar-separator {
@@ -503,10 +546,30 @@
   flex: 0 0 auto;
   align-items: center;
   gap: 1px;
+  width: 112px;
+  max-width: 112px;
   padding: 2px;
+  overflow: hidden;
   border: 1px solid var(--background-modifier-border);
   border-radius: 8px;
   background: color-mix(in srgb, var(--background-secondary) 82%, transparent);
+  opacity: 1;
+  transform: scale(1);
+  transform-origin: right center;
+}
+
+.mmc-toolbar.is-toolbar-ready .mmc-zoom-control {
+  transition: width 170ms ease, max-width 170ms ease, padding 170ms ease, border-width 170ms ease, opacity 120ms ease, transform 170ms ease;
+}
+
+.mmc-zoom-control.is-hidden {
+  width: 0;
+  max-width: 0;
+  padding-inline: 0;
+  border-width: 0;
+  opacity: 0;
+  pointer-events: none;
+  transform: scale(.8);
 }
 
 .mmc-zoom-step {
@@ -1182,6 +1245,16 @@
   height: 25px;
   min-width: 25px;
   padding: 0;
+}
+
+.mms-import-export-section + .mms-import-export-section {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--background-modifier-border);
+}
+
+.mms-import-export-section > h3 {
+  margin: 0 0 8px;
 }
 
 .mms-document-export-grid {
@@ -4079,6 +4152,8 @@
 
 @media (prefers-reduced-motion: reduce) {
   .mms-page-transition { transition: none; }
+  .mmc-toolbar.is-toolbar-ready .mmc-toolbar-button,
+  .mmc-toolbar.is-toolbar-ready .mmc-zoom-control { transition: none; }
   .mms-mode-button.is-loading svg {
     animation: none;
   }

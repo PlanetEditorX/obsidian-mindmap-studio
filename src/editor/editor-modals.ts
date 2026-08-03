@@ -354,7 +354,7 @@ export class FormulaEditModal extends Modal {
 /**
  * 导入、导出或合并思维导图 JSON。
  */
-export class JsonTransferModal extends Modal {
+export class ImportExportModal extends Modal {
   /**
    * 创建 JSON 传输弹窗。
    *
@@ -367,7 +367,10 @@ export class JsonTransferModal extends Modal {
     app: App,
     private readonly document: MindMapDocument,
     private readonly onImport: (document: MindMapDocument, mode: "child" | "replace") => void,
-    private readonly onExport: (json: string) => void,
+    private readonly onExportJson: (json: string) => void,
+    private readonly onExportDocument: (format: "html" | "doc" | "pdf" | "md") => void,
+    private readonly onExportSvg: () => void,
+    private readonly canImport: boolean,
     private readonly getLastImportFolder: () => string,
     private readonly onRememberImportFolder: (folder: string) => void | Promise<void>,
     private readonly onImportMarkdownImages: (document: MindMapDocument, sourceDirectory: string) => Promise<number>
@@ -379,12 +382,14 @@ export class JsonTransferModal extends Modal {
    * 创建 JSON 文本区和文件导入操作。
    */
   onOpen(): void {
-    this.titleEl.setText("导入 / 导出");
-    const description = this.contentEl.createEl("p", {
-      text: "可导入 MindMap Studio JSON、思维导图或 Markdown 文件。默认作为当前选中节点的子分支导入。"
+    this.titleEl.setText("导入与导出");
+    const importSection = this.contentEl.createDiv({ cls: "mms-import-export-section is-import" });
+    importSection.createEl("h3", { text: "导入" });
+    const description = importSection.createEl("p", {
+      text: "可导入 MindMap Studio JSON、XMind 或 Markdown 文件。默认作为当前选中节点的子分支导入。"
     });
     description.addClass("setting-item-description");
-    const importProgress = this.contentEl.createDiv({ cls: "mmc-import-progress" });
+    const importProgress = importSection.createDiv({ cls: "mmc-import-progress" });
     const progressBar = importProgress.createEl("progress", { attr: { max: "100", value: "0" } });
     const progressStatus = importProgress.createSpan({ text: "等待选择导入文件" });
     const updateImportProgress = async (value: number, status: string): Promise<void> => {
@@ -392,9 +397,9 @@ export class JsonTransferModal extends Modal {
       progressStatus.setText(`${value}% · ${status}`);
       await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
     };
-    const textarea = this.contentEl.createEl("textarea", { cls: "mmc-json-textarea" });
+    const textarea = importSection.createEl("textarea", { cls: "mmc-json-textarea" });
     textarea.value = JSON.stringify(this.document, null, 2);
-    const importMode = this.contentEl.createEl("select", { cls: "mmc-import-mode", attr: { "aria-label": "导入方式" } });
+    const importMode = importSection.createEl("select", { cls: "mmc-import-mode", attr: { "aria-label": "导入方式" } });
     importMode.createEl("option", { text: "导入为子节点（默认）", value: "child" });
     importMode.createEl("option", { text: "导入并替换当前文件", value: "replace" });
     const applyImport = (document: MindMapDocument): boolean => {
@@ -403,7 +408,7 @@ export class JsonTransferModal extends Modal {
       this.onImport(document, mode);
       return true;
     };
-    const actions = this.contentEl.createDiv({ cls: "mmc-modal-actions mmc-json-actions" });
+    const actions = importSection.createDiv({ cls: "mmc-modal-actions mmc-json-actions" });
     const copy = actions.createEl("button", { text: "复制 JSON" });
     const importFileButton = actions.createEl("button", { text: "导入文件", attr: { type: "button" } });
     const exportButton = actions.createEl("button", { text: "导出 .json" });
@@ -486,7 +491,7 @@ export class JsonTransferModal extends Modal {
       input.click();
       })();
     });
-    exportButton.addEventListener("click", () => this.onExport(textarea.value));
+    exportButton.addEventListener("click", () => this.onExportJson(textarea.value));
     importButton.addEventListener("click", () => {
       try {
         const parsed = JSON.parse(textarea.value) as Partial<MindMapDocument>;
@@ -500,6 +505,43 @@ export class JsonTransferModal extends Modal {
         new Notice("JSON 格式无效，请检查后重试");
       }
     });
+    if (!this.canImport) {
+      description.setText("当前为只读状态；可复制或导出当前导图 JSON，切换到编辑模式后才会显示导入操作。");
+      importProgress.remove();
+      importMode.remove();
+      importFileButton.remove();
+      importButton.remove();
+      textarea.readOnly = true;
+    }
+
+    const exportSection = this.contentEl.createDiv({ cls: "mms-import-export-section is-export" });
+    exportSection.createEl("h3", { text: "导出" });
+    exportSection.createEl("p", {
+      cls: "setting-item-description",
+      text: "JSON 与 SVG 导出当前物理导图；HTML、Word、PDF 和 Markdown 按父子导图关系导出完整通读内容。"
+    });
+    const formats = exportSection.createDiv({ cls: "mms-document-export-grid" });
+    for (const [format, title, summary] of [
+      ["svg", "SVG", "当前导图的矢量图"],
+      ["html", "HTML", "独立网页，可用浏览器打开"],
+      ["doc", "Word", "可编辑的 .docx 文档"],
+      ["pdf", "PDF", "打开打印版并另存为 PDF"],
+      ["md", "Markdown", "完整父子导图标题结构"]
+    ] as const) {
+      const button = formats.createEl("button", { attr: { type: "button" } });
+      button.createEl("strong", { text: title });
+      button.createSpan({ text: summary });
+      button.addEventListener("click", () => {
+        if (format === "svg") this.onExportSvg();
+        else this.onExportDocument(format);
+        this.close();
+      });
+    }
+  }
+
+  /** Clears import/export controls when the modal closes. */
+  onClose(): void {
+    this.contentEl.empty();
   }
 }
 
@@ -544,43 +586,5 @@ export class OutlineModal extends Modal {
    */
   onClose(): void {
     this.contentEl.empty();
-  }
-}
-
-/**
- * 提供可移植文档格式的导出选择。
- */
-export class DocumentExportModal extends Modal {
-  /**
-   * 创建文档导出格式弹窗。
-   *
-   * @param app Obsidian 应用实例。
-   * @param exportFormat 格式选择回调。
-   */
-  constructor(app: App, private readonly exportFormat: (format: "html" | "doc" | "pdf" | "md") => void) {
-    super(app);
-  }
-
-  /**
-   * 创建各导出格式按钮。
-   */
-  onOpen(): void {
-    this.titleEl.setText("导出文档");
-    this.contentEl.createEl("p", { cls: "setting-item-description", text: "选择适合阅读、编辑或打印的格式。" });
-    const formats = this.contentEl.createDiv({ cls: "mms-document-export-grid" });
-    for (const [format, title, description] of [
-      ["html", "HTML", "独立网页，可用浏览器打开"],
-      ["doc", "Word", "Word 文档（.docx）"],
-      ["pdf", "PDF", "打开打印版并另存为 PDF"],
-      ["md", "Markdown", "保留标题和节点层级"]
-    ] as const) {
-      const button = formats.createEl("button", { attr: { type: "button" } });
-      button.createEl("strong", { text: title });
-      button.createSpan({ text: description });
-      button.addEventListener("click", () => {
-        this.exportFormat(format);
-        this.close();
-      });
-    }
   }
 }

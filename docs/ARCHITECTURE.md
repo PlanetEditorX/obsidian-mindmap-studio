@@ -65,7 +65,7 @@ src/
 - `src/article/article-style.ts`：文章与通读共用的阅读样式预设和纯样式解析，不依赖编辑器 DOM。
 - `src/editor/editor-types.ts`：编辑器回调与运行参数契约，隔离插件服务和 UI 实现。
 - `src/editor/rich-text-dom.ts`：富文本运行段与 `contenteditable` DOM 的双向转换，以及 MathJax 渲染。
-- `src/editor/editor-modals.ts`：图片预览、图床选择、公式编辑、JSON/文件导入、Markdown 大纲和文档导出等弹窗；阅读样式已并入编辑器的统一“主题与外观”面板。
+- `src/editor/editor-modals.ts`：图片预览、图床选择、公式编辑、统一导入与导出、Markdown 大纲等弹窗；阅读样式已并入编辑器的统一“主题与外观”面板。
 - `src/editor/clipboard-import.ts`：剪贴板 JSON、Markdown、缩进文本和 HTML 列表的单节点或有序多节点分支解析。
 - `src/editor/node-image-actions.ts`：节点图片选择、本地保存、图床上传和远程镜像合并。
 - `src/editor/node-rich-text-editor.ts`：节点文字块的选区样式、颜色、格式清理和实时预览。
@@ -406,3 +406,7 @@ mindmap-search-index.json
 重新打开导图恢复自动上传时，插件按 `TFile` 聚合同时到期的图片并串行处理同一文件。网络响应只生成 `MindMapImageUploadPatch`，随后按稳定节点 ID 和图片块 ID 合并到当前编辑器文档，或重新读取磁盘最新版本后一次写回。后台上传不得保存上传开始时的整份文档快照，也不得为每张图片刷新整个打开视图；这些约束用于避免重复成功通知、界面闪烁和最后写入覆盖造成的节点丢失。
 
 - 任务状态交互已删除。模型层仍容忍历史 `task` 字段，以避免旧文件解析失败，但编辑器、设置、导出和渲染均忽略该字段。
+
+### 工具栏可用性与排序
+
+工具栏按钮先按用户可见配置和规范化顺序创建，再由 `toolbarItemAvailable()` 根据显示模式、只读状态、选择节点、撤销历史和功能开关计算实际可用性。不可用按钮保留 DOM 身份但收缩为零宽并移出键盘顺序，重新可用时恢复；首帧在启用过渡前完成一次过滤，防止整排按钮闪现。截图与截图识别作为不可拆分相邻组，统一“导入与导出”固定在末尾。旧 `json`、`export-document`、`export-svg` 和 `article-style` 只作为加载迁移别名。

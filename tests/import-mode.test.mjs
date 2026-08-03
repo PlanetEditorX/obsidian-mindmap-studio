@@ -68,8 +68,7 @@ test("automatic image uploads follow a mind-map file renamed during the pre-uplo
 
 test("file import defaults to a child branch and keeps replacement explicit", () => {
   assert.match(modalSource, /text: "导入文件"/);
-  assert.match(modalSource, /可导入 MindMap Studio JSON、思维导图或 Markdown 文件/);
-  assert.doesNotMatch(modalSource, /可导入 MindMap Studio JSON、XMind 或 Markdown 文件/);
+  assert.match(modalSource, /可导入 MindMap Studio JSON、XMind 或 Markdown 文件/);
   assert.match(modalSource, /导入为子节点（默认）/);
   assert.match(modalSource, /导入并替换当前文件/);
   assert.match(modalSource, /mode === "replace" && !window\.confirm/);

@@ -325,6 +325,7 @@ test("read-only mode keeps the unified theme and reading-style panel editable", 
   assert.match(editorSource, /"阅读样式"[\s\S]*文章模式与通读模式共用同一套纸张、字体、目录和末端正文样式/);
   assert.doesNotMatch(editorSource, /data-toolbar-id=['"]article-style|addToolbarButton\("article-style"|private editArticleStyle/);
   assert.doesNotMatch(settingsSource, /\["article-style", "文章样式"\]/);
-  assert.match(mainSource, /id === "article-style" \? "appearance" : id/);
+  assert.match(settingsSource, /"article-style": "appearance"/);
+  assert.match(mainSource, /normalizeToolbarItemId\(value\)/);
   assert.doesNotMatch(modalSource, /class ArticleStyleModal|this\.titleEl\.setText\("文章样式"\)/);
 });

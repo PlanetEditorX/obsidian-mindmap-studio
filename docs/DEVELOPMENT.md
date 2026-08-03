@@ -145,3 +145,10 @@ npm run test:docs
 - 工具栏控件使用 `aria-label` 交给 Obsidian 显示黑底提示，不得同时写入原生 `title`；动态控件必须经过工具栏原生提示清理边界。
 - “主题与外观”不能聚焦底部操作按钮；完成布局后应恢复 `contentEl.scrollTop = 0`。
 - 任务状态功能已移除。历史 `MindMapNode.task` 只作为解析兼容字段保留，不得重新用于界面、快捷键、渲染、进度、Markdown、SVG 或表格输出。
+
+## 工具栏动态可用性边界
+
+- 新工具栏项必须加入 `TOOLBAR_ITEMS`、`TOOLBAR_GROUPS` 和 `toolbarItemAvailable()`，不得只通过 `disabled` 留下不可执行的灰色占位。
+- 初始化时按钮默认隐藏，完成一次可用性计算后才能增加 `is-toolbar-ready`，避免首帧全量闪现；后续状态切换使用宽度、透明度与缩放过渡，并提供减少动态效果回退。
+- 用户顺序必须经过 `normalizeToolbarItemOrder()`；截图和截图识别始终相邻，统一 `import-export` 始终位于末尾。旧导出按钮只用于迁移，不得重新创建独立入口。
+- 统一导入导出在只读状态必须保留导出并移除导入控件，不得因页面锁定而把整个入口隐藏。

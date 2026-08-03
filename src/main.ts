@@ -39,7 +39,8 @@ import {
 import {
   DEFAULT_SETTINGS,
   MindMapStudioSettingTab,
-  TOOLBAR_ITEMS,
+  normalizeToolbarItemId,
+  normalizeToolbarItemOrder,
   createImageHostConfig,
   applyImageHostPreset,
   normalizeSettingsSectionOrder,
@@ -847,26 +848,18 @@ export default class MindMapStudioPlugin extends Plugin {
         : DEFAULT_SETTINGS.globalSearchMaxResults,
       visibleModes: normalizeVisibleModes(raw.visibleModes),
       visibleToolbarItems: (() => {
-        const knownIds = new Set<string>(TOOLBAR_ITEMS.map(([id]) => id));
         const stored = Array.isArray(raw.visibleToolbarItems)
-          ? raw.visibleToolbarItems
-            .flatMap((id): string[] => typeof id === "string" ? [id === "article-style" ? "appearance" : id] : [])
-            .filter((id) => knownIds.has(id))
+          ? raw.visibleToolbarItems.flatMap((value): string[] => {
+            const id = normalizeToolbarItemId(value);
+            return id ? [id] : [];
+          })
           : [...DEFAULT_SETTINGS.visibleToolbarItems];
         if (!hadAiSettings && !stored.includes("ai")) stored.push("ai");
         if (!stored.includes("screenshot")) stored.push("screenshot");
         if (!stored.includes("screenshot-recognize")) stored.push("screenshot-recognize");
         return [...new Set(stored)];
       })(),
-      toolbarItemOrder: (() => {
-        const validIds = new Set<string>(TOOLBAR_ITEMS.map(([id]) => id));
-        const stored = Array.isArray(raw.toolbarItemOrder)
-          ? raw.toolbarItemOrder
-            .flatMap((id): string[] => typeof id === "string" ? [id === "article-style" ? "appearance" : id] : [])
-            .filter((id) => validIds.has(id))
-          : [];
-        return [...new Set([...stored, ...DEFAULT_SETTINGS.toolbarItemOrder])];
-      })(),
+      toolbarItemOrder: normalizeToolbarItemOrder(Array.isArray(raw.toolbarItemOrder) ? raw.toolbarItemOrder : undefined),
       defaultViewMode: typeof raw.defaultViewMode === "string"
         ? raw.defaultViewMode as DisplayMode
         : DEFAULT_SETTINGS.defaultViewMode,

@@ -211,3 +211,36 @@ test("task status is removed from settings, toolbar, node editing, rendering, an
   assert.doesNotMatch(bundleReadableSource, /任务状态|显示任务进度/);
   assert.match(mainSource, /delete \(this\.settings as unknown as Record<string, unknown>\)\.showTaskProgress/);
 });
+
+test("toolbar hides unavailable actions with a reduced-motion-aware width transition", () => {
+  assert.match(editorSource, /private toolbarItemAvailable\(id: ToolbarItemId\): boolean/);
+  assert.match(editorSource, /case "undo": return canEdit && this\.history\.canUndo\(\)/);
+  assert.match(editorSource, /case "collapse": return this\.currentMode === "mindmap" && Boolean\(selected\?\.children\.length\)/);
+  assert.match(editorSource, /case "layout": return this\.currentMode === "mindmap" && canEdit/);
+  assert.match(editorSource, /button\.toggleClass\("is-hidden", !visible\)/);
+  assert.match(editorSource, /button\.setAttribute\("aria-hidden", "true"\)/);
+  assert.match(editorSource, /this\.updateToolbarAvailability\(\);[\s\S]*private ensureEditable/);
+  assert.match(stylesSource, /\.mmc-toolbar\.is-toolbar-ready \.mmc-toolbar-button[\s\S]*transition:/);
+  assert.match(stylesSource, /\.mmc-toolbar-button\.is-hidden[\s\S]*max-width: 0[\s\S]*opacity: 0 !important/);
+  assert.doesNotMatch(stylesSource, /\.mmc-toolbar-button\.is-hidden\s*\{\s*display: none/);
+  assert.match(editorSource, /this\.zoomControlEl\?\.toggleClass\("is-hidden", this\.currentMode !== "mindmap"\)/);
+  assert.match(stylesSource, /\.mmc-zoom-control\.is-hidden[\s\S]*max-width: 0[\s\S]*opacity: 0/);
+  assert.match(stylesSource, /@media \(prefers-reduced-motion: reduce\)[\s\S]*\.mmc-toolbar\.is-toolbar-ready \.mmc-toolbar-button,[\s\S]*\.mmc-toolbar\.is-toolbar-ready \.mmc-zoom-control \{ transition: none; \}/);
+});
+
+test("toolbar keeps capture actions together and merges every export entry at the end", async () => {
+  const modalSource = await readFile("src/editor/editor-modals.ts", "utf8");
+  const toolbarItems = settingsSource.slice(settingsSource.indexOf("export const TOOLBAR_ITEMS"), settingsSource.indexOf("export const SETTINGS_SECTION_TITLES"));
+  assert.match(toolbarItems, /\["screenshot", "插入截图"\], \["screenshot-recognize", "插入截图并识别"\]/);
+  assert.match(toolbarItems, /\["markdown", "Markdown 大纲"\], \["import-export", "导入与导出"\][\s\S]*\] as const/);
+  assert.match(settingsSource, /json: "import-export"[\s\S]*"export-document": "import-export"[\s\S]*"export-svg": "import-export"/);
+  assert.match(settingsSource, /withoutPinned\.splice\(insertionIndex, 0, "screenshot", "screenshot-recognize"\)/);
+  assert.match(settingsSource, /withoutPinned\.push\("import-export"\)/);
+  const builder = editorSource.slice(editorSource.indexOf('this.addToolbarButton("screenshot"'), editorSource.indexOf("this.applyToolbarOrder()"));
+  assert.match(builder, /addToolbarButton\("screenshot"[\s\S]*addToolbarButton\("screenshot-recognize"/);
+  assert.doesNotMatch(builder, /addToolbarButton\("json"|addToolbarButton\("export-document"|addToolbarButton\("export-svg"/);
+  assert.match(builder, /addToolbarButton\("import-export", "arrow-left-right", "导入与导出"/);
+  assert.match(modalSource, /export class ImportExportModal extends Modal/);
+  assert.match(modalSource, /\["svg", "SVG"[\s\S]*\["html", "HTML"[\s\S]*\["doc", "Word"[\s\S]*\["pdf", "PDF"[\s\S]*\["md", "Markdown"/);
+  assert.doesNotMatch(modalSource, /export class DocumentExportModal/);
+});
