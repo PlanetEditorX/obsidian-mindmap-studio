@@ -6337,9 +6337,12 @@ export class MindMapEditor {
     const block = nodeContentBlocks(node).find((item) => item.type === "table" && item.id === blockId);
     if (!block || block.type !== "table") return;
     const columnWidths = block.table.headers.map((_, index) => Math.max(64, Math.min(1200, Math.round(widths[index] ?? 160))));
-    const viewportAnchor = this.captureMindMapViewportAnchor(node.id);
-    this.mutate(() => this.upsertStructuredBlock(node, "table", { ...block.table, columnWidths }, blockId));
-    this.restoreMindMapViewportAnchor(viewportAnchor);
+    const location = this.currentMode === "mindmap" ? null : this.captureCurrentLocation(this.currentMode);
+    if (location) this.rememberLocation(location, true);
+    this.history.capture(this.document);
+    this.upsertStructuredBlock(node, "table", { ...block.table, columnWidths }, blockId);
+    this.callbacks.onChange(this.getDocument(), { refreshArticleContext: false });
+    this.markSaving();
   }
 
   /** Opens the selected code block directly instead of routing through the node editor. */

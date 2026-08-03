@@ -484,10 +484,11 @@ function renderArticleTable(
   const columns = tableData.headers.map(() => colgroup.createEl("col"));
   const applyWidths = (widths: readonly number[]): void => {
     table.addClass("has-custom-column-widths");
+    const total = widths.reduce((sum, width) => sum + Math.max(1, width), 0) || 1;
     columns.forEach((column, index) => {
-      column.style.width = `${widths[index] ?? 160}px`;
+      column.style.width = `${((Math.max(1, widths[index] ?? 160) / total) * 100).toFixed(4)}%`;
     });
-    table.style.width = `${widths.reduce((sum, width) => sum + width, 0)}px`;
+    table.style.width = "100%";
   };
   if (tableData.columnWidths?.length) applyWidths(tableData.columnWidths);
   const tr = table.createEl("thead").createEl("tr");
@@ -511,7 +512,7 @@ function renderArticleTable(
     isResizeTarget: (target) => target instanceof HTMLElement && Boolean(target.closest(".mms-table-column-resizer")),
     edit: () => options.editTableBlock(node, tableData, blockId)
   });
-  headers.forEach((header, index) => {
+  headers.slice(0, -1).forEach((header, index) => {
     const handle = header.createSpan({
       cls: "mms-table-column-resizer",
       attr: {
@@ -526,8 +527,9 @@ function renderArticleTable(
       isReadOnly: options.isReadOnly,
       columnIndex: index,
       initialWidths: () => headers.map((cell, columnIndex) => {
+        const measured = Math.round(cell.getBoundingClientRect().width);
         const stored = tableData.columnWidths?.[columnIndex];
-        return stored ?? Math.max(64, Math.round(cell.getBoundingClientRect().width));
+        return measured > 0 ? measured : stored ?? 160;
       }),
       applyWidths,
       setResizing: (resizing) => wrap.toggleClass("is-resizing-columns", resizing),
