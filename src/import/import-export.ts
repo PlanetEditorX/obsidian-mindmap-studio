@@ -4,7 +4,21 @@
  */
 
 import { strFromU8, strToU8, unzipSync, zipSync } from "fflate";
-import { createDefaultDocument, createNode, nodePlainText, type ArticleLeafNumberingStyle, type MindMapDocument, type MindMapNode } from "../core/model";
+import {
+  createDefaultDocument,
+  createNode,
+  flattenNodes,
+  newId,
+  nodeContentBlocks,
+  nodePlainText,
+  replaceNodeContentBlocks,
+  type ArticleLeafNumberingStyle,
+  type MindMapContentBlock,
+  type MindMapDocument,
+  type MindMapImageContentBlock,
+  type MindMapNode
+} from "../core/model";
+import { normalizeFormulaEditorSource } from "../core/latex";
 import { buildArticleNodeInfo, type ArticleLeafNumberingOptions, type ArticleNodeInfo, type ReadingSection } from "../article/modes";
 
 /** 新版 XMind 导入时需要保留的主题字段与画布链接。 */
@@ -14,6 +28,14 @@ type XMindTopic = {
   notes?: { plain?: { content?: string } };
   href?: string;
   children?: Record<string, XMindTopic[] | undefined>;
+  image?: unknown;
+  images?: unknown;
+  equation?: unknown;
+  equations?: unknown;
+  formula?: unknown;
+  formulas?: unknown;
+  latex?: unknown;
+  tex?: unknown;
 };
 
 /** 新版 XMind 画布及其根主题的最小数据形状。 */
@@ -23,24 +45,302 @@ type XMindSheet = {
   rootTopic?: XMindTopic;
 };
 
+/** One binary image embedded inside an XMind archive. */
+export interface XMindEmbeddedImage {
+  token: string;
+  archivePath: string;
+  filename: string;
+  mimeType: string;
+  content: Uint8Array;
+}
+
+/** Parsed XMind document plus archive resources that still need vault paths. */
+export interface XMindImportResult {
+  document: MindMapDocument;
+  images: XMindEmbeddedImage[];
+  imageReferenceCount: number;
+  equationCount: number;
+  missingImageCount: number;
+}
+
+/** Result of saving XMind archive images and rewriting their node blocks. */
+export interface XMindImageMaterializeResult {
+  saved: number;
+  rewritten: number;
+}
+
+/** Normalized image reference discovered in XMind topic metadata. */
+interface XMindImageCandidate {
+  source: string;
+  width?: number;
+  height?: number;
+  alt?: string;
+}
+
+const XMIND_IMAGE_SOURCE_KEYS = ["src", "source", "path", "href", "url"] as const;
+const XMIND_EQUATION_KEYS = ["equation", "equations", "formula", "formulas", "latex", "tex"] as const;
+const XMIND_EQUATION_VALUE_KEYS = ["latex", "tex", "formula", "equation", "content", "value", "text", "source"] as const;
+
+/** Returns an object-shaped XMind metadata value, excluding arrays. */
+function xmindRecord(value: unknown): Record<string, unknown> | null {
+  return value !== null && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
+}
+
+/** Returns a trimmed non-empty XMind string value. */
+function xmindString(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+/** Normalizes a positive XMind image dimension to an integer pixel value. */
+function xmindDimension(value: unknown): number | undefined {
+  const parsed = typeof value === "number" ? value : typeof value === "string" ? Number(value) : Number.NaN;
+  return Number.isFinite(parsed) && parsed > 0 ? Math.round(parsed) : undefined;
+}
+
+/** Checks whether a metadata string looks like an image URL or archive resource path. */
+function xmindLooksLikeImageSource(value: string): boolean {
+  return /^(?:xap:|resources\/|attachments\/|https?:|data:image\/|file:)/i.test(value)
+    || /\.(?:avif|bmp|gif|jpe?g|png|svg|webp)(?:[?#].*)?$/i.test(value);
+}
+
+/** Recursively collects image references and optional dimensions from one metadata value. */
+function collectXMindImageValues(value: unknown, results: XMindImageCandidate[], inheritedAlt?: string): void {
+  if (Array.isArray(value)) {
+    value.forEach((item) => collectXMindImageValues(item, results, inheritedAlt));
+    return;
+  }
+  const direct = xmindString(value);
+  if (direct) {
+    if (xmindLooksLikeImageSource(direct)) results.push({ source: direct, alt: inheritedAlt });
+    return;
+  }
+  const record = xmindRecord(value);
+  if (!record) return;
+  const source = XMIND_IMAGE_SOURCE_KEYS.map((key) => xmindString(record[key])).find(Boolean);
+  const alt = xmindString(record.alt) ?? xmindString(record.title) ?? inheritedAlt;
+  if (source && xmindLooksLikeImageSource(source)) {
+    results.push({
+      source,
+      width: xmindDimension(record.width),
+      height: xmindDimension(record.height),
+      alt
+    });
+  }
+  for (const key of ["image", "images", "preview", "thumbnail", "svg"] as const) {
+    if (record[key] !== undefined && record[key] !== value) collectXMindImageValues(record[key], results, alt);
+  }
+}
+
+/** Walks bounded XMind topic metadata while excluding the normal child tree and notes. */
+function walkXMindMetadata(
+  value: unknown,
+  visitor: (key: string, value: unknown) => void,
+  depth = 0
+): void {
+  if (depth > 5) return;
+  const record = xmindRecord(value);
+  if (!record) return;
+  for (const [rawKey, nested] of Object.entries(record)) {
+    const key = rawKey.toLowerCase();
+    visitor(key, nested);
+    if (key === "children" || key === "notes") continue;
+    if (Array.isArray(nested)) nested.forEach((item) => walkXMindMetadata(item, visitor, depth + 1));
+    else walkXMindMetadata(nested, visitor, depth + 1);
+  }
+}
+
+/** Collects and deduplicates all image references attached to one XMind topic. */
+function collectXMindImages(topic: XMindTopic): XMindImageCandidate[] {
+  const results: XMindImageCandidate[] = [];
+  walkXMindMetadata(topic, (key, value) => {
+    if (key === "image" || key === "images") collectXMindImageValues(value, results, topic.title);
+    if (!(XMIND_EQUATION_KEYS as readonly string[]).includes(key)) return;
+    const record = xmindRecord(value);
+    if (!record) return;
+    for (const imageKey of ["image", "images", "preview", "thumbnail", "svg"] as const) {
+      collectXMindImageValues(record[imageKey], results, topic.title);
+    }
+    const renderedSource = XMIND_IMAGE_SOURCE_KEYS.map((sourceKey) => xmindString(record[sourceKey])).find(Boolean);
+    if (renderedSource && xmindLooksLikeImageSource(renderedSource)) {
+      results.push({
+        source: renderedSource,
+        width: xmindDimension(record.width),
+        height: xmindDimension(record.height),
+        alt: topic.title
+      });
+    }
+  });
+  const seen = new Set<string>();
+  return results.filter((candidate) => {
+    const key = `${candidate.source}\u0000${candidate.width ?? ""}\u0000${candidate.height ?? ""}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+/** Normalizes one candidate equation while rejecting URLs and rendered markup. */
+function xmindEquationSource(value: string): string | null {
+  const source = normalizeFormulaEditorSource(value).trim();
+  if (!source || /^(?:xap:|resources\/|attachments\/|https?:|data:|file:)/i.test(source)) return null;
+  if (/^<(?:svg|math|mathml)\b/i.test(source)) return null;
+  return source;
+}
+
+/** Recursively extracts LaTeX source strings from one XMind equation metadata value. */
+function collectXMindEquationValues(value: unknown, results: string[], depth = 0): void {
+  if (depth > 5) return;
+  if (Array.isArray(value)) {
+    value.forEach((item) => collectXMindEquationValues(item, results, depth + 1));
+    return;
+  }
+  const direct = xmindString(value);
+  if (direct) {
+    const source = xmindEquationSource(direct);
+    if (source) results.push(source);
+    return;
+  }
+  const record = xmindRecord(value);
+  if (!record) return;
+  for (const key of XMIND_EQUATION_VALUE_KEYS) {
+    if (record[key] !== undefined) collectXMindEquationValues(record[key], results, depth + 1);
+  }
+}
+
+/** Collects distinct LaTeX equations attached to one XMind topic. */
+function collectXMindEquations(topic: XMindTopic): string[] {
+  const results: string[] = [];
+  walkXMindMetadata(topic, (key, value) => {
+    if ((XMIND_EQUATION_KEYS as readonly string[]).includes(key)) collectXMindEquationValues(value, results);
+  });
+  return Array.from(new Set(results));
+}
+
+/** Converts an XMind image URI into a safe archive-relative resource path. */
+function xmindResourcePath(source: string): string | null {
+  let value = source.trim().replace(/^xap:/i, "").replace(/^file:\/\//i, "");
+  try {
+    value = decodeURIComponent(value);
+  } catch {
+    // Keep malformed but otherwise usable resource names unchanged.
+  }
+  value = value.replace(/\\/g, "/").replace(/^\/+/, "");
+  const parts = value.split("/").filter(Boolean);
+  if (!parts.length || parts.some((part) => part === "." || part === "..")) return null;
+  return parts.join("/");
+}
+
+/** Resolves an XMind image reference against archive entries using tolerant path matching. */
+function xmindArchiveEntry(
+  archive: Record<string, Uint8Array>,
+  lowerPaths: Map<string, string>,
+  source: string
+): { path: string; content: Uint8Array } | null {
+  const normalized = xmindResourcePath(source);
+  if (!normalized) return null;
+  const basename = normalized.split("/").at(-1) ?? normalized;
+  const candidates = [normalized];
+  if (!normalized.toLowerCase().startsWith("resources/")) candidates.push(`resources/${normalized}`);
+  if (basename !== normalized) candidates.push(`resources/${basename}`);
+  for (const candidate of candidates) {
+    const resolved = archive[candidate] ? candidate : lowerPaths.get(candidate.toLowerCase());
+    if (resolved && archive[resolved]) return { path: resolved, content: archive[resolved] };
+  }
+  return null;
+}
+
+/** Detects the MIME type of an embedded XMind image from its name and byte signature. */
+function xmindImageMimeType(filename: string, content: Uint8Array): string {
+  const extension = filename.split(".").at(-1)?.toLowerCase();
+  const byExtension: Record<string, string> = {
+    avif: "image/avif", bmp: "image/bmp", gif: "image/gif", jpeg: "image/jpeg", jpg: "image/jpeg",
+    png: "image/png", svg: "image/svg+xml", webp: "image/webp"
+  };
+  if (extension && byExtension[extension]) return byExtension[extension];
+  if (content[0] === 0x89 && content[1] === 0x50 && content[2] === 0x4e && content[3] === 0x47) return "image/png";
+  if (content[0] === 0xff && content[1] === 0xd8) return "image/jpeg";
+  if (content[0] === 0x47 && content[1] === 0x49 && content[2] === 0x46) return "image/gif";
+  if (content[0] === 0x52 && content[1] === 0x49 && content[2] === 0x46 && content[8] === 0x57 && content[9] === 0x45) return "image/webp";
+  const prefix = new TextDecoder().decode(content.slice(0, 256)).trimStart();
+  if (/^<\?xml\b|^<svg\b/i.test(prefix)) return "image/svg+xml";
+  return "application/octet-stream";
+}
+
+/** Produces a stable suggested filename for an embedded XMind image. */
+function xmindImageFilename(path: string, mimeType: string): string {
+  const raw = path.split("/").at(-1)?.split(/[?#]/)[0]?.trim() || `xmind-image-${newId()}`;
+  if (/\.[a-z0-9]{2,5}$/i.test(raw)) return raw;
+  const extension = mimeType === "image/png" ? ".png"
+    : mimeType === "image/jpeg" ? ".jpg"
+      : mimeType === "image/gif" ? ".gif"
+        : mimeType === "image/webp" ? ".webp"
+          : mimeType === "image/svg+xml" ? ".svg"
+            : ".bin";
+  return `${raw}${extension}`;
+}
+
+/** Encodes bytes as base64 without depending on browser-only global helpers. */
+function bytesToBase64(content: Uint8Array): string {
+  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  let result = "";
+  for (let index = 0; index < content.length; index += 3) {
+    const first = content[index] ?? 0;
+    const second = content[index + 1] ?? 0;
+    const third = content[index + 2] ?? 0;
+    const combined = (first << 16) | (second << 8) | third;
+    result += alphabet[(combined >> 18) & 63];
+    result += alphabet[(combined >> 12) & 63];
+    result += index + 1 < content.length ? alphabet[(combined >> 6) & 63] : "=";
+    result += index + 2 < content.length ? alphabet[combined & 63] : "=";
+  }
+  return result;
+}
+
+/** Rewrites temporary XMind image tokens across document content blocks. */
+function rewriteXMindImageTokens(document: MindMapDocument, replacements: Map<string, string>, local: boolean): number {
+  let rewritten = 0;
+  for (const node of flattenNodes(document.root)) {
+    const blocks = nodeContentBlocks(node);
+    let changed = false;
+    for (const block of blocks) {
+      if (block.type !== "image") continue;
+      const replacement = replacements.get(block.source);
+      if (!replacement) continue;
+      block.source = replacement;
+      block.localSource = local ? replacement : undefined;
+      rewritten += 1;
+      changed = true;
+    }
+    if (changed) replaceNodeContentBlocks(node, blocks);
+  }
+  return rewritten;
+}
+
 /**
- * 导入包含 content.json 的新版 XMind 归档，保留嵌套主题、画布链接和未链接画布。
+ * Parses a modern XMind archive while retaining images and LaTeX attachments.
  *
- * @param source Raw .xmind bytes.
- * @param fallbackTitle Filename-derived fallback title.
- * @returns Imported mind-map document.
+ * Embedded images receive temporary tokens so the UI can save each binary once
+ * into the current map's asset folder before the document enters edit history.
  */
-export function xmindToDocument(source: ArrayBuffer, fallbackTitle = "XMind 导入"): MindMapDocument {
+export function xmindToImportResult(source: ArrayBuffer, fallbackTitle = "XMind 导入"): XMindImportResult {
   const archive = unzipSync(new Uint8Array(source));
   const content = archive["content.json"];
   if (!content) throw new Error("仅支持包含 content.json 的新版 XMind 文件");
-  const sheets = JSON.parse(strFromU8(content)) as XMindSheet[];
-  const sheet = sheets.find((item) => item.rootTopic) ?? sheets[0];
-  if (!sheet?.rootTopic) throw new Error("XMind 文件中没有可导入的主题");
+  const parsed = JSON.parse(strFromU8(content)) as unknown;
+  if (!Array.isArray(parsed)) throw new Error("XMind content.json 结构无效");
+  const sheets = parsed.filter((item): item is XMindSheet => Boolean(xmindRecord(item)));
+  const sheet = sheets.find((item) => xmindRecord(item.rootTopic)) ?? sheets[0];
+  if (!sheet?.rootTopic || !xmindRecord(sheet.rootTopic)) throw new Error("XMind 文件中没有可导入的主题");
+
+  const lowerPaths = new Map(Object.keys(archive).map((path) => [path.toLowerCase(), path]));
+  const assetsByPath = new Map<string, XMindEmbeddedImage>();
+  let imageReferenceCount = 0;
+  let equationCount = 0;
+  let missingImageCount = 0;
   const sheetById = new Map<string, XMindSheet>();
   for (const item of sheets) {
-    if (item.id) sheetById.set(item.id, item);
-    if (item.rootTopic?.id) sheetById.set(item.rootTopic.id, item);
+    if (typeof item.id === "string" && item.id) sheetById.set(item.id, item);
+    if (typeof item.rootTopic?.id === "string" && item.rootTopic.id) sheetById.set(item.rootTopic.id, item);
   }
   const importedSheets = new Set<XMindSheet>();
   const sheetReference = (topic: XMindTopic): string | null => {
@@ -48,9 +348,51 @@ export function xmindToDocument(source: ArrayBuffer, fallbackTitle = "XMind 导�
     return match?.[1] ?? null;
   };
   const convert = (topic: XMindTopic): MindMapNode => {
-    const node = createNode(topic.title?.trim() || "未命名主题");
+    const title = topic.title?.trim() || "未命名主题";
+    const node = createNode(title);
     node.note = topic.notes?.plain?.content?.trim() || undefined;
-    const children = Object.values(topic.children ?? {}).flatMap((items) => items ?? []);
+    const blocks: MindMapContentBlock[] = [...nodeContentBlocks(node)];
+    for (const equation of collectXMindEquations(topic)) {
+      blocks.push({ id: newId(), type: "text", text: `$$${equation}$$` });
+      equationCount += 1;
+    }
+    for (const candidate of collectXMindImages(topic)) {
+      const imageBlock: MindMapImageContentBlock = {
+        id: newId(),
+        type: "image",
+        source: candidate.source,
+        alt: candidate.alt || title,
+        width: candidate.width,
+        height: candidate.height,
+        layout: "block"
+      };
+      imageReferenceCount += 1;
+      if (/^(?:https?:|data:image\/)/i.test(candidate.source)) {
+        blocks.push(imageBlock);
+        continue;
+      }
+      const entry = xmindArchiveEntry(archive, lowerPaths, candidate.source);
+      if (!entry) {
+        missingImageCount += 1;
+        continue;
+      }
+      let asset = assetsByPath.get(entry.path);
+      if (!asset) {
+        const mimeType = xmindImageMimeType(entry.path, entry.content);
+        asset = {
+          token: `xmind-resource://${newId()}`,
+          archivePath: entry.path,
+          filename: xmindImageFilename(entry.path, mimeType),
+          mimeType,
+          content: entry.content
+        };
+        assetsByPath.set(entry.path, asset);
+      }
+      imageBlock.source = asset.token;
+      blocks.push(imageBlock);
+    }
+    if (blocks.length > 1) replaceNodeContentBlocks(node, blocks);
+    const children = Object.values(topic.children ?? {}).flatMap((items) => Array.isArray(items) ? items : []);
     node.children = children.map(convert);
     return node;
   };
@@ -67,7 +409,7 @@ export function xmindToDocument(source: ArrayBuffer, fallbackTitle = "XMind 导�
         if (linkedRoot.text === node.text) node.children.push(...linkedRoot.children);
         else node.children.push(linkedRoot);
       }
-      const topicChildren = Object.values(topic.children ?? {}).flatMap((items) => items ?? []);
+      const topicChildren = Object.values(topic.children ?? {}).flatMap((items) => Array.isArray(items) ? items : []);
       topicChildren.forEach((child, index) => {
         const childNode = node.children[index];
         if (childNode) attachLinkedSheets(child, childNode);
@@ -81,8 +423,54 @@ export function xmindToDocument(source: ArrayBuffer, fallbackTitle = "XMind 导�
   for (const extraSheet of sheets) {
     if (extraSheet.rootTopic && !importedSheets.has(extraSheet)) root.children.push(convertSheet(extraSheet, new Set()));
   }
-  const title = root.text || sheet.title || fallbackTitle;
-  return { ...createDefaultDocument(title), title, root };
+  const title = topicPrimaryTitle(root) || sheet.title || fallbackTitle;
+  const document = { ...createDefaultDocument(title), title, root };
+  return {
+    document,
+    images: Array.from(assetsByPath.values()),
+    imageReferenceCount,
+    equationCount,
+    missingImageCount
+  };
+}
+
+/** Returns the first text block as an imported topic title fallback. */
+function topicPrimaryTitle(node: MindMapNode): string {
+  const first = nodeContentBlocks(node).find((block) => block.type === "text");
+  return first?.type === "text" ? first.text.trim() : node.text.trim();
+}
+
+/** Saves embedded XMind images once and rewrites every referencing content block. */
+export async function materializeXMindImages(
+  result: XMindImportResult,
+  saveImage: (image: XMindEmbeddedImage) => Promise<string>
+): Promise<XMindImageMaterializeResult> {
+  const replacements = new Map<string, string>();
+  for (const image of result.images) {
+    const targetPath = (await saveImage(image)).trim();
+    if (!targetPath) throw new Error(`无法保存 XMind 图片：${image.filename}`);
+    replacements.set(image.token, targetPath);
+  }
+  return {
+    saved: replacements.size,
+    rewritten: rewriteXMindImageTokens(result.document, replacements, true)
+  };
+}
+
+/**
+ * Imports an XMind archive as a self-contained document.
+ *
+ * UI callers should prefer `xmindToImportResult()` plus
+ * `materializeXMindImages()` so archive images become normal vault assets.
+ */
+export function xmindToDocument(source: ArrayBuffer, fallbackTitle = "XMind 导入"): MindMapDocument {
+  const result = xmindToImportResult(source, fallbackTitle);
+  const replacements = new Map(result.images.map((image) => [
+    image.token,
+    `data:${image.mimeType};base64,${bytesToBase64(image.content)}`
+  ]));
+  rewriteXMindImageTokens(result.document, replacements, false);
+  return result.document;
 }
 
 const escapeHtml = (value: string): string => value

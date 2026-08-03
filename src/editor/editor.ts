@@ -6940,7 +6940,8 @@ export class MindMapEditor {
       !this.readOnly && this.currentMode !== "question-bank",
       () => this.callbacks.getLastImportFolder(),
       (folder) => this.callbacks.onRememberImportFolder(folder),
-      (document, sourceDirectory) => this.callbacks.onImportMarkdownImages(document, sourceDirectory)
+      (document, sourceDirectory) => this.callbacks.onImportMarkdownImages(document, sourceDirectory),
+      (blob, suggestedName) => this.callbacks.onSavePastedImage(blob, suggestedName)
     ).open();
   }
 

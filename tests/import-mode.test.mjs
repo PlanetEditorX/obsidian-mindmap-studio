@@ -9,9 +9,10 @@ let settingsSource;
 let mainSource;
 let viewSource;
 let editorTypesSource;
+let importExportSource;
 
 before(async () => {
-  [editorSource, modalSource, desktopImportSource, settingsSource, mainSource, viewSource, editorTypesSource] = await Promise.all([
+  [editorSource, modalSource, desktopImportSource, settingsSource, mainSource, viewSource, editorTypesSource, importExportSource] = await Promise.all([
     readFile("src/editor/editor.ts", "utf8"),
     readFile("src/editor/editor-modals.ts", "utf8"),
     readFile("src/utils/desktop-import.ts", "utf8"),
@@ -19,6 +20,7 @@ before(async () => {
     readFile("src/main.ts", "utf8"),
     readFile("src/view.ts", "utf8"),
     readFile("src/editor/editor-types.ts", "utf8"),
+    readFile("src/import/import-export.ts", "utf8"),
   ]);
 });
 
@@ -75,4 +77,18 @@ test("file import defaults to a child branch and keeps replacement explicit", ()
   assert.match(editorSource, /private importDocument\(document: MindMapDocument, mode: "child" \| "replace"\): void/);
   assert.match(editorSource, /const importedRoot = cloneNodeWithFreshIds\(document\.root\)/);
   assert.match(editorSource, /appendChild\(parent, importedRoot\)/);
+});
+
+
+test("XMind import extracts archive images and keeps LaTeX as content blocks", () => {
+  assert.match(importExportSource, /export function xmindToImportResult\(source: ArrayBuffer/);
+  assert.match(importExportSource, /collectXMindEquations\(topic\)/);
+  assert.match(importExportSource, /type: "text", text: `\$\$\$\{equation\}\$\$`/);
+  assert.match(importExportSource, /xmindArchiveEntry\(archive, lowerPaths, candidate\.source\)/);
+  assert.match(importExportSource, /export async function materializeXMindImages/);
+  assert.match(importExportSource, /block\.source = replacement;\s*block\.localSource = local \? replacement : undefined/);
+  assert.match(modalSource, /xmindToImportResult\(source, fallbackTitle\)/);
+  assert.match(modalSource, /materializeXMindImages\(result, async \(image\)/);
+  assert.match(modalSource, /this\.onSaveImportedImage\(new Blob\(\[content\.buffer\]/);
+  assert.match(editorSource, /this\.callbacks\.onSavePastedImage\(blob, suggestedName\)/);
 });

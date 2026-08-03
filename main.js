@@ -6037,18 +6037,212 @@ function normalizeVisibleModes(modes) {
 }
 
 // src/import/import-export.ts
-function xmindToDocument(source, fallbackTitle = "XMind \u5BFC\u5165") {
+var XMIND_IMAGE_SOURCE_KEYS = ["src", "source", "path", "href", "url"];
+var XMIND_EQUATION_KEYS = ["equation", "equations", "formula", "formulas", "latex", "tex"];
+var XMIND_EQUATION_VALUE_KEYS = ["latex", "tex", "formula", "equation", "content", "value", "text", "source"];
+function xmindRecord(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value) ? value : null;
+}
+function xmindString(value) {
+  return typeof value === "string" && value.trim() ? value.trim() : void 0;
+}
+function xmindDimension(value) {
+  const parsed = typeof value === "number" ? value : typeof value === "string" ? Number(value) : Number.NaN;
+  return Number.isFinite(parsed) && parsed > 0 ? Math.round(parsed) : void 0;
+}
+function xmindLooksLikeImageSource(value) {
+  return /^(?:xap:|resources\/|attachments\/|https?:|data:image\/|file:)/i.test(value) || /\.(?:avif|bmp|gif|jpe?g|png|svg|webp)(?:[?#].*)?$/i.test(value);
+}
+function collectXMindImageValues(value, results, inheritedAlt) {
+  var _a2, _b2;
+  if (Array.isArray(value)) {
+    value.forEach((item) => collectXMindImageValues(item, results, inheritedAlt));
+    return;
+  }
+  const direct = xmindString(value);
+  if (direct) {
+    if (xmindLooksLikeImageSource(direct)) results.push({ source: direct, alt: inheritedAlt });
+    return;
+  }
+  const record = xmindRecord(value);
+  if (!record) return;
+  const source = XMIND_IMAGE_SOURCE_KEYS.map((key) => xmindString(record[key])).find(Boolean);
+  const alt = (_b2 = (_a2 = xmindString(record.alt)) != null ? _a2 : xmindString(record.title)) != null ? _b2 : inheritedAlt;
+  if (source && xmindLooksLikeImageSource(source)) {
+    results.push({
+      source,
+      width: xmindDimension(record.width),
+      height: xmindDimension(record.height),
+      alt
+    });
+  }
+  for (const key of ["image", "images", "preview", "thumbnail", "svg"]) {
+    if (record[key] !== void 0 && record[key] !== value) collectXMindImageValues(record[key], results, alt);
+  }
+}
+function walkXMindMetadata(value, visitor, depth = 0) {
+  if (depth > 5) return;
+  const record = xmindRecord(value);
+  if (!record) return;
+  for (const [rawKey, nested] of Object.entries(record)) {
+    const key = rawKey.toLowerCase();
+    visitor(key, nested);
+    if (key === "children" || key === "notes") continue;
+    if (Array.isArray(nested)) nested.forEach((item) => walkXMindMetadata(item, visitor, depth + 1));
+    else walkXMindMetadata(nested, visitor, depth + 1);
+  }
+}
+function collectXMindImages(topic) {
+  const results = [];
+  walkXMindMetadata(topic, (key, value) => {
+    if (key === "image" || key === "images") collectXMindImageValues(value, results, topic.title);
+    if (!XMIND_EQUATION_KEYS.includes(key)) return;
+    const record = xmindRecord(value);
+    if (!record) return;
+    for (const imageKey of ["image", "images", "preview", "thumbnail", "svg"]) {
+      collectXMindImageValues(record[imageKey], results, topic.title);
+    }
+    const renderedSource = XMIND_IMAGE_SOURCE_KEYS.map((sourceKey) => xmindString(record[sourceKey])).find(Boolean);
+    if (renderedSource && xmindLooksLikeImageSource(renderedSource)) {
+      results.push({
+        source: renderedSource,
+        width: xmindDimension(record.width),
+        height: xmindDimension(record.height),
+        alt: topic.title
+      });
+    }
+  });
+  const seen = /* @__PURE__ */ new Set();
+  return results.filter((candidate) => {
+    var _a2, _b2;
+    const key = `${candidate.source}\0${(_a2 = candidate.width) != null ? _a2 : ""}\0${(_b2 = candidate.height) != null ? _b2 : ""}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+function xmindEquationSource(value) {
+  const source = normalizeFormulaEditorSource(value).trim();
+  if (!source || /^(?:xap:|resources\/|attachments\/|https?:|data:|file:)/i.test(source)) return null;
+  if (/^<(?:svg|math|mathml)\b/i.test(source)) return null;
+  return source;
+}
+function collectXMindEquationValues(value, results, depth = 0) {
+  if (depth > 5) return;
+  if (Array.isArray(value)) {
+    value.forEach((item) => collectXMindEquationValues(item, results, depth + 1));
+    return;
+  }
+  const direct = xmindString(value);
+  if (direct) {
+    const source = xmindEquationSource(direct);
+    if (source) results.push(source);
+    return;
+  }
+  const record = xmindRecord(value);
+  if (!record) return;
+  for (const key of XMIND_EQUATION_VALUE_KEYS) {
+    if (record[key] !== void 0) collectXMindEquationValues(record[key], results, depth + 1);
+  }
+}
+function collectXMindEquations(topic) {
+  const results = [];
+  walkXMindMetadata(topic, (key, value) => {
+    if (XMIND_EQUATION_KEYS.includes(key)) collectXMindEquationValues(value, results);
+  });
+  return Array.from(new Set(results));
+}
+function xmindResourcePath(source) {
+  let value = source.trim().replace(/^xap:/i, "").replace(/^file:\/\//i, "");
+  try {
+    value = decodeURIComponent(value);
+  } catch (e) {
+  }
+  value = value.replace(/\\/g, "/").replace(/^\/+/, "");
+  const parts = value.split("/").filter(Boolean);
+  if (!parts.length || parts.some((part) => part === "." || part === "..")) return null;
+  return parts.join("/");
+}
+function xmindArchiveEntry(archive, lowerPaths, source) {
+  var _a2;
+  const normalized2 = xmindResourcePath(source);
+  if (!normalized2) return null;
+  const basename = (_a2 = normalized2.split("/").at(-1)) != null ? _a2 : normalized2;
+  const candidates = [normalized2];
+  if (!normalized2.toLowerCase().startsWith("resources/")) candidates.push(`resources/${normalized2}`);
+  if (basename !== normalized2) candidates.push(`resources/${basename}`);
+  for (const candidate of candidates) {
+    const resolved = archive[candidate] ? candidate : lowerPaths.get(candidate.toLowerCase());
+    if (resolved && archive[resolved]) return { path: resolved, content: archive[resolved] };
+  }
+  return null;
+}
+function xmindImageMimeType(filename, content) {
+  var _a2;
+  const extension = (_a2 = filename.split(".").at(-1)) == null ? void 0 : _a2.toLowerCase();
+  const byExtension = {
+    avif: "image/avif",
+    bmp: "image/bmp",
+    gif: "image/gif",
+    jpeg: "image/jpeg",
+    jpg: "image/jpeg",
+    png: "image/png",
+    svg: "image/svg+xml",
+    webp: "image/webp"
+  };
+  if (extension && byExtension[extension]) return byExtension[extension];
+  if (content[0] === 137 && content[1] === 80 && content[2] === 78 && content[3] === 71) return "image/png";
+  if (content[0] === 255 && content[1] === 216) return "image/jpeg";
+  if (content[0] === 71 && content[1] === 73 && content[2] === 70) return "image/gif";
+  if (content[0] === 82 && content[1] === 73 && content[2] === 70 && content[8] === 87 && content[9] === 69) return "image/webp";
+  const prefix = new TextDecoder().decode(content.slice(0, 256)).trimStart();
+  if (/^<\?xml\b|^<svg\b/i.test(prefix)) return "image/svg+xml";
+  return "application/octet-stream";
+}
+function xmindImageFilename(path, mimeType) {
+  var _a2, _b2;
+  const raw = ((_b2 = (_a2 = path.split("/").at(-1)) == null ? void 0 : _a2.split(/[?#]/)[0]) == null ? void 0 : _b2.trim()) || `xmind-image-${newId()}`;
+  if (/\.[a-z0-9]{2,5}$/i.test(raw)) return raw;
+  const extension = mimeType === "image/png" ? ".png" : mimeType === "image/jpeg" ? ".jpg" : mimeType === "image/gif" ? ".gif" : mimeType === "image/webp" ? ".webp" : mimeType === "image/svg+xml" ? ".svg" : ".bin";
+  return `${raw}${extension}`;
+}
+function rewriteXMindImageTokens(document2, replacements, local) {
+  let rewritten = 0;
+  for (const node of flattenNodes(document2.root)) {
+    const blocks = nodeContentBlocks(node);
+    let changed = false;
+    for (const block of blocks) {
+      if (block.type !== "image") continue;
+      const replacement = replacements.get(block.source);
+      if (!replacement) continue;
+      block.source = replacement;
+      block.localSource = local ? replacement : void 0;
+      rewritten += 1;
+      changed = true;
+    }
+    if (changed) replaceNodeContentBlocks(node, blocks);
+  }
+  return rewritten;
+}
+function xmindToImportResult(source, fallbackTitle = "XMind \u5BFC\u5165") {
   var _a2, _b2;
   const archive = unzipSync(new Uint8Array(source));
   const content = archive["content.json"];
   if (!content) throw new Error("\u4EC5\u652F\u6301\u5305\u542B content.json \u7684\u65B0\u7248 XMind \u6587\u4EF6");
-  const sheets = JSON.parse(strFromU8(content));
-  const sheet = (_a2 = sheets.find((item) => item.rootTopic)) != null ? _a2 : sheets[0];
-  if (!(sheet == null ? void 0 : sheet.rootTopic)) throw new Error("XMind \u6587\u4EF6\u4E2D\u6CA1\u6709\u53EF\u5BFC\u5165\u7684\u4E3B\u9898");
+  const parsed = JSON.parse(strFromU8(content));
+  if (!Array.isArray(parsed)) throw new Error("XMind content.json \u7ED3\u6784\u65E0\u6548");
+  const sheets = parsed.filter((item) => Boolean(xmindRecord(item)));
+  const sheet = (_a2 = sheets.find((item) => xmindRecord(item.rootTopic))) != null ? _a2 : sheets[0];
+  if (!(sheet == null ? void 0 : sheet.rootTopic) || !xmindRecord(sheet.rootTopic)) throw new Error("XMind \u6587\u4EF6\u4E2D\u6CA1\u6709\u53EF\u5BFC\u5165\u7684\u4E3B\u9898");
+  const lowerPaths = new Map(Object.keys(archive).map((path) => [path.toLowerCase(), path]));
+  const assetsByPath = /* @__PURE__ */ new Map();
+  let imageReferenceCount = 0;
+  let equationCount = 0;
+  let missingImageCount = 0;
   const sheetById = /* @__PURE__ */ new Map();
   for (const item of sheets) {
-    if (item.id) sheetById.set(item.id, item);
-    if ((_b2 = item.rootTopic) == null ? void 0 : _b2.id) sheetById.set(item.rootTopic.id, item);
+    if (typeof item.id === "string" && item.id) sheetById.set(item.id, item);
+    if (typeof ((_b2 = item.rootTopic) == null ? void 0 : _b2.id) === "string" && item.rootTopic.id) sheetById.set(item.rootTopic.id, item);
   }
   const importedSheets = /* @__PURE__ */ new Set();
   const sheetReference = (topic) => {
@@ -6058,9 +6252,51 @@ function xmindToDocument(source, fallbackTitle = "XMind \u5BFC\u5165") {
   };
   const convert = (topic) => {
     var _a3, _b3, _c, _d, _e;
-    const node = createNode(((_a3 = topic.title) == null ? void 0 : _a3.trim()) || "\u672A\u547D\u540D\u4E3B\u9898");
+    const title2 = ((_a3 = topic.title) == null ? void 0 : _a3.trim()) || "\u672A\u547D\u540D\u4E3B\u9898";
+    const node = createNode(title2);
     node.note = ((_d = (_c = (_b3 = topic.notes) == null ? void 0 : _b3.plain) == null ? void 0 : _c.content) == null ? void 0 : _d.trim()) || void 0;
-    const children = Object.values((_e = topic.children) != null ? _e : {}).flatMap((items) => items != null ? items : []);
+    const blocks = [...nodeContentBlocks(node)];
+    for (const equation of collectXMindEquations(topic)) {
+      blocks.push({ id: newId(), type: "text", text: `$$${equation}$$` });
+      equationCount += 1;
+    }
+    for (const candidate of collectXMindImages(topic)) {
+      const imageBlock = {
+        id: newId(),
+        type: "image",
+        source: candidate.source,
+        alt: candidate.alt || title2,
+        width: candidate.width,
+        height: candidate.height,
+        layout: "block"
+      };
+      imageReferenceCount += 1;
+      if (/^(?:https?:|data:image\/)/i.test(candidate.source)) {
+        blocks.push(imageBlock);
+        continue;
+      }
+      const entry = xmindArchiveEntry(archive, lowerPaths, candidate.source);
+      if (!entry) {
+        missingImageCount += 1;
+        continue;
+      }
+      let asset = assetsByPath.get(entry.path);
+      if (!asset) {
+        const mimeType = xmindImageMimeType(entry.path, entry.content);
+        asset = {
+          token: `xmind-resource://${newId()}`,
+          archivePath: entry.path,
+          filename: xmindImageFilename(entry.path, mimeType),
+          mimeType,
+          content: entry.content
+        };
+        assetsByPath.set(entry.path, asset);
+      }
+      imageBlock.source = asset.token;
+      blocks.push(imageBlock);
+    }
+    if (blocks.length > 1) replaceNodeContentBlocks(node, blocks);
+    const children = Object.values((_e = topic.children) != null ? _e : {}).flatMap((items) => Array.isArray(items) ? items : []);
     node.children = children.map(convert);
     return node;
   };
@@ -6079,7 +6315,7 @@ function xmindToDocument(source, fallbackTitle = "XMind \u5BFC\u5165") {
         if (linkedRoot.text === node.text) node.children.push(...linkedRoot.children);
         else node.children.push(linkedRoot);
       }
-      const topicChildren = Object.values((_b3 = topic.children) != null ? _b3 : {}).flatMap((items) => items != null ? items : []);
+      const topicChildren = Object.values((_b3 = topic.children) != null ? _b3 : {}).flatMap((items) => Array.isArray(items) ? items : []);
       topicChildren.forEach((child, index) => {
         const childNode = node.children[index];
         if (childNode) attachLinkedSheets(child, childNode);
@@ -6093,8 +6329,31 @@ function xmindToDocument(source, fallbackTitle = "XMind \u5BFC\u5165") {
   for (const extraSheet of sheets) {
     if (extraSheet.rootTopic && !importedSheets.has(extraSheet)) root.children.push(convertSheet(extraSheet, /* @__PURE__ */ new Set()));
   }
-  const title = root.text || sheet.title || fallbackTitle;
-  return { ...createDefaultDocument(title), title, root };
+  const title = topicPrimaryTitle(root) || sheet.title || fallbackTitle;
+  const document2 = { ...createDefaultDocument(title), title, root };
+  return {
+    document: document2,
+    images: Array.from(assetsByPath.values()),
+    imageReferenceCount,
+    equationCount,
+    missingImageCount
+  };
+}
+function topicPrimaryTitle(node) {
+  const first = nodeContentBlocks(node).find((block) => block.type === "text");
+  return (first == null ? void 0 : first.type) === "text" ? first.text.trim() : node.text.trim();
+}
+async function materializeXMindImages(result, saveImage) {
+  const replacements = /* @__PURE__ */ new Map();
+  for (const image of result.images) {
+    const targetPath = (await saveImage(image)).trim();
+    if (!targetPath) throw new Error(`\u65E0\u6CD5\u4FDD\u5B58 XMind \u56FE\u7247\uFF1A${image.filename}`);
+    replacements.set(image.token, targetPath);
+  }
+  return {
+    saved: replacements.size,
+    rewritten: rewriteXMindImageTokens(result.document, replacements, true)
+  };
 }
 var escapeHtml = (value) => value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
 function exportLeafNumbering(document2, options, numberingDisabled = false) {
@@ -6881,7 +7140,7 @@ var ImportExportModal = class extends import_obsidian4.Modal {
    * @param onImport 导入完成回调及目标方式。
    * @param onExport 导出回调。
    */
-  constructor(app, document2, onImport, onExportJson, onExportDocument, onExportSvg, canImport, getLastImportFolder, onRememberImportFolder, onImportMarkdownImages) {
+  constructor(app, document2, onImport, onExportJson, onExportDocument, onExportSvg, canImport, getLastImportFolder, onRememberImportFolder, onImportMarkdownImages, onSaveImportedImage) {
     super(app);
     this.document = document2;
     this.onImport = onImport;
@@ -6892,6 +7151,7 @@ var ImportExportModal = class extends import_obsidian4.Modal {
     this.getLastImportFolder = getLastImportFolder;
     this.onRememberImportFolder = onRememberImportFolder;
     this.onImportMarkdownImages = onImportMarkdownImages;
+    this.onSaveImportedImage = onSaveImportedImage;
   }
   /**
    * 创建 JSON 文本区和文件导入操作。
@@ -6911,6 +7171,27 @@ var ImportExportModal = class extends import_obsidian4.Modal {
       progressBar.value = value;
       progressStatus.setText(`${value}% \xB7 ${status}`);
       await new Promise((resolve) => window.requestAnimationFrame(() => resolve()));
+    };
+    const parseXMind = async (source, fallbackTitle) => {
+      const result = xmindToImportResult(source, fallbackTitle);
+      if (result.images.length) await updateImportProgress(68, `\u6B63\u5728\u63D0\u53D6 ${result.images.length} \u4E2A XMind \u56FE\u7247\u8D44\u6E90`);
+      const materialized = await materializeXMindImages(result, async (image) => {
+        const content = image.content.slice();
+        return this.onSaveImportedImage(new Blob([content.buffer], { type: image.mimeType }), image.filename);
+      });
+      return {
+        document: result.document,
+        copiedImages: materialized.saved,
+        equationCount: result.equationCount,
+        missingImages: result.missingImageCount
+      };
+    };
+    const importNotice = (name, copiedImages, equationCount, missingImages) => {
+      const details = [];
+      if (copiedImages > 0) details.push(`\u63D0\u53D6 ${copiedImages} \u5F20\u56FE\u7247`);
+      if (equationCount > 0) details.push(`\u8BC6\u522B ${equationCount} \u4E2A LaTeX \u516C\u5F0F`);
+      if (missingImages > 0) details.push(`${missingImages} \u5F20\u56FE\u7247\u8D44\u6E90\u7F3A\u5931`);
+      return details.length ? `\u5DF2\u5BFC\u5165\uFF1A${name}\uFF0C${details.join("\uFF0C")}` : `\u5DF2\u5BFC\u5165\uFF1A${name}`;
     };
     const textarea = importSection.createEl("textarea", { cls: "mmc-json-textarea" });
     textarea.value = JSON.stringify(this.document, null, 2);
@@ -6944,16 +7225,28 @@ var ImportExportModal = class extends import_obsidian4.Modal {
             await updateImportProgress(10, `\u6B63\u5728\u8BFB\u53D6 ${selected.file.name}`);
             const source = extension === "xmind" ? selected.file.content.buffer.slice(selected.file.content.byteOffset, selected.file.content.byteOffset + selected.file.content.byteLength) : new TextDecoder().decode(selected.file.content);
             await updateImportProgress(55, extension === "xmind" ? "\u6B63\u5728\u89E3\u6790 XMind \u753B\u5E03\u548C\u4E3B\u9898" : extension === "json" ? "\u6B63\u5728\u6821\u9A8C JSON \u6587\u4EF6" : "\u6B63\u5728\u89E3\u6790 Markdown \u6807\u9898\u548C\u5217\u8868");
-            const imported = extension === "xmind" ? xmindToDocument(source, selected.file.name.replace(/\.xmind$/i, "")) : extension === "json" ? normalizeDocument(JSON.parse(source), this.document.title) : markdownToDocument(source, selected.file.name.replace(/\.(?:md|markdown)$/i, ""));
-            if (extension === "md" || extension === "markdown") {
+            let imported;
+            let copiedImages = 0;
+            let equationCount = 0;
+            let missingImages = 0;
+            if (extension === "xmind") {
+              const parsed = await parseXMind(source, selected.file.name.replace(/\.xmind$/i, ""));
+              imported = parsed.document;
+              copiedImages = parsed.copiedImages;
+              equationCount = parsed.equationCount;
+              missingImages = parsed.missingImages;
+            } else if (extension === "json") {
+              imported = normalizeDocument(JSON.parse(source), this.document.title);
+            } else {
+              imported = markdownToDocument(source, selected.file.name.replace(/\.(?:md|markdown)$/i, ""));
               await updateImportProgress(70, "\u6B63\u5728\u8BFB\u53D6\u5E76\u590D\u5236 Markdown \u56FE\u7247");
+              copiedImages = await this.onImportMarkdownImages(imported, selected.file.directory);
             }
-            const copiedImages = extension === "md" || extension === "markdown" ? await this.onImportMarkdownImages(imported, selected.file.directory) : 0;
             await updateImportProgress(85, "\u6B63\u5728\u751F\u6210\u601D\u7EF4\u5BFC\u56FE");
             setAllBranchesCollapsed(imported.root, true);
             if (!applyImport(imported)) return;
             await updateImportProgress(100, "\u5BFC\u5165\u5B8C\u6210");
-            new import_obsidian4.Notice(copiedImages > 0 ? `\u5DF2\u5BFC\u5165\uFF1A${selected.file.name}\uFF0C\u5E76\u590D\u5236 ${copiedImages} \u5F20\u56FE\u7247` : `\u5DF2\u5BFC\u5165\uFF1A${selected.file.name}`);
+            new import_obsidian4.Notice(importNotice(selected.file.name, copiedImages, equationCount, missingImages));
             window.setTimeout(() => this.close(), 180);
           } catch (error) {
             console.error("MindMap Studio file import failed", error);
@@ -6977,12 +7270,26 @@ var ImportExportModal = class extends import_obsidian4.Modal {
               await updateImportProgress(10, `\u6B63\u5728\u8BFB\u53D6 ${file.name}`);
               const source = extension === "xmind" ? await file.arrayBuffer() : await file.text();
               await updateImportProgress(55, extension === "xmind" ? "\u6B63\u5728\u89E3\u6790 XMind \u753B\u5E03\u548C\u4E3B\u9898" : extension === "json" ? "\u6B63\u5728\u6821\u9A8C JSON \u6587\u6863" : "\u6B63\u5728\u89E3\u6790 Markdown \u6807\u9898\u548C\u5217\u8868");
-              const imported = extension === "xmind" ? xmindToDocument(source, file.name.replace(/\.xmind$/i, "")) : extension === "json" ? normalizeDocument(JSON.parse(source), this.document.title) : markdownToDocument(source, file.name.replace(/\.(?:md|markdown)$/i, ""));
+              let imported;
+              let copiedImages = 0;
+              let equationCount = 0;
+              let missingImages = 0;
+              if (extension === "xmind") {
+                const parsed = await parseXMind(source, file.name.replace(/\.xmind$/i, ""));
+                imported = parsed.document;
+                copiedImages = parsed.copiedImages;
+                equationCount = parsed.equationCount;
+                missingImages = parsed.missingImages;
+              } else if (extension === "json") {
+                imported = normalizeDocument(JSON.parse(source), this.document.title);
+              } else {
+                imported = markdownToDocument(source, file.name.replace(/\.(?:md|markdown)$/i, ""));
+              }
               await updateImportProgress(85, "\u6B63\u5728\u751F\u6210\u601D\u7EF4\u5BFC\u56FE");
               setAllBranchesCollapsed(imported.root, true);
               if (!applyImport(imported)) return;
               await updateImportProgress(100, "\u5BFC\u5165\u5B8C\u6210");
-              new import_obsidian4.Notice(`\u5DF2\u5BFC\u5165\uFF1A${file.name}`);
+              new import_obsidian4.Notice(importNotice(file.name, copiedImages, equationCount, missingImages));
               window.setTimeout(() => this.close(), 180);
             } catch (error) {
               console.error("MindMap Studio file import failed", error);
@@ -16191,7 +16498,8 @@ var MindMapEditor = class {
       !this.readOnly && this.currentMode !== "question-bank",
       () => this.callbacks.getLastImportFolder(),
       (folder) => this.callbacks.onRememberImportFolder(folder),
-      (document2, sourceDirectory) => this.callbacks.onImportMarkdownImages(document2, sourceDirectory)
+      (document2, sourceDirectory) => this.callbacks.onImportMarkdownImages(document2, sourceDirectory),
+      (blob, suggestedName) => this.callbacks.onSavePastedImage(blob, suggestedName)
     ).open();
   }
   /** Imports a document as a child branch or replaces the current document. */

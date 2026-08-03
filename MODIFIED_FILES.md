@@ -1,23 +1,12 @@
 # Modified Files
 
-## 1.42.10 公式分隔符恢复与中文 LaTeX 渲染
+## 1.42.11 XMind 图片与 LaTeX 资源导入
 
-- `src/core/latex.ts`：新增公式分隔符解析、历史重复美元恢复、行内/独立判定、编辑器源码清洗和中文标签 MathJax 归一化。
-- `src/editor/rich-text-dom.ts`：先合并富文本运行段再解析公式，嵌入文字的双美元公式按行内渲染，中文标签使用临时渲染副本。
-- `src/editor/editor-modals.ts`：公式预览和保存前剥离输入自带的美元分隔符，避免重复包裹。
-- `styles.css`：行内公式同时覆盖返回节点本身和内部 `mjx-container`，统一自适应宽度和基线。
-- `tests/latex.test.mjs`、`tests/question.test.mjs`：覆盖嵌入双美元、纯公式块、重复/不对称分隔符、跨运行段、中文标签和公式编辑清洗。
-- `README.md`、`CHANGELOG.md`、`docs/ARCHITECTURE.md`、`docs/DATA_MODEL.md`、`docs/DEVELOPMENT.md`、`docs/SPECIAL_FEATURES.md`、`docs/TESTING.md`、`docs/FUNCTION_REFERENCE.md`：同步公式兼容规则和验证方法。
-- `package.json`、`package-lock.json`、`manifest.json`、`versions.json`、`update.json`、`main.js`：版本统一为 1.42.10，安装包 SHA-256 为 `0eee1463def99c93ea1d3325a800f955ba0cc82c9e093b8fff3e6299c1a23463`。
-
-## 1.42.8 行内公式布局与题目 AI 解析过程
-
-- `styles.css`：行内公式外层和 MathJax `mjx-container` 强制使用自适应行内布局；独立公式继续整行居中。新增题目 AI 五阶段解析轨迹、实时分析/结构化输出和减少动态效果样式。
-- `src/editor/question-modal.ts`：题目智能处理保留阶段状态，流式显示接口返回的模型分析与生成内容，完成后回填答案和完整解答；题图识别与文字分析共用同一轨迹。
-- `src/editor/editor-types.ts`、`src/view.ts`、`src/main.ts`：题目补全回调增加可选流式更新，并要求 AI 返回包含条件、步骤、排除理由和结论的解析。
-- `tests/question.test.mjs`：增加行内公式内外层布局、五阶段 AI 过程、流式回调和完整解析提示词契约。
-- `README.md`、`CHANGELOG.md`、`docs/ARCHITECTURE.md`、`docs/DEVELOPMENT.md`、`docs/SPECIAL_FEATURES.md`、`docs/TESTING.md`、`docs/FUNCTION_REFERENCE.md`：同步行为、维护边界和验证方法。
-- `package.json`、`package-lock.json`、`manifest.json`、`versions.json`、`update.json`、`main.js`：统一版本为 1.42.8，安装包 SHA-256 为 `37bdd26d1429e324eabd910bc445ccf055e3a9bfd60858e45463f653217329fa`。
+- `src/import/import-export.ts`：解析 XMind 主题图片、归档 `resources/` 二进制、共享资源引用和常见公式字段；保留图片尺寸，缺失资源不生成破损内容块，并为非界面调用提供 data URL 回退。
+- `src/editor/editor-modals.ts`、`src/editor/editor.ts`：桌面与浏览器 XMind 导入统一保存图片到当前导图资源目录，显示图片提取、公式识别和缺失资源数量。
+- `tests/xmind-import.test.mjs`、`tests/import-mode.test.mjs`、`scripts/test.mjs`：新增图片资源提取、共享去重、路径改写、LaTeX 字段、缺失资源和自包含回退测试。
+- `README.md`、`CHANGELOG.md`、`docs/ARCHITECTURE.md`、`docs/DATA_MODEL.md`、`docs/DEVELOPMENT.md`、`docs/SPECIAL_FEATURES.md`、`docs/TESTING.md`、`docs/FUNCTION_REFERENCE.md`：说明 XMind 图片与公式导入行为及维护边界。
+- `package.json`、`package-lock.json`、`manifest.json`、`versions.json`、`update.json`、`main.js`：版本统一为 1.42.11；最终安装包校验值在打包后写入。
 
 ## 1.41.10 通读编号使用当前内存文档
 

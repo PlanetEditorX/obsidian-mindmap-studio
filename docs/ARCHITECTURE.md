@@ -48,7 +48,7 @@ src/
 ├── search/
 │   └── global-search.ts        本地增量索引与搜索
 ├── import/
-│   └── import-export.ts        XMind 多画布导入与文章导出
+│   └── import-export.ts        XMind 多画布/图片/公式导入与文章导出
 ├── utils/
 │   ├── coalesced-json-writer.ts 连续 JSON 保存请求的合并与串行写入
 │   ├── filename.ts             文件名、扩展名、时间戳与 MIME
@@ -67,6 +67,7 @@ src/
 - `src/core/latex.ts`：纯函数解析公式分隔符、恢复历史重复美元、判断行内/独立布局，并在渲染前把裸露中文标签转换为 MathJax 可识别的 `\text{...}`。
 - `src/editor/rich-text-dom.ts`：富文本运行段与 `contenteditable` DOM 的双向转换，以及 MathJax 渲染。公式先合并全部运行段再解析，因此分隔符跨颜色或加粗边界仍有效；查看态渲染公式，编辑态暂时显示源码，异步 MathJax 回调不得覆盖仍为 `contenteditable=true` 的活动编辑器。
 - `src/editor/editor-modals.ts`：图片预览、图床选择、公式编辑、统一导入与导出、Markdown 大纲等弹窗；阅读样式已并入编辑器的统一“主题与外观”面板。
+- XMind 归档先由 `xmindToImportResult()` 解析主题树、跨画布链接、公式和资源令牌；`ImportExportModal` 再通过宿主图片保存回调把每个归档资源保存一次，最后由 `materializeXMindImages()` 原位改写所有图片块的 `source/localSource`。纯解析调用 `xmindToDocument()` 时使用数据 URL 自包含回退，避免资源静默丢失。
 - `src/editor/clipboard-import.ts`：剪贴板 JSON、Markdown、缩进文本和 HTML 列表的单节点或有序多节点分支解析。
 - `src/editor/node-image-actions.ts`：节点图片选择、本地保存、图床上传和远程镜像合并。
 - `src/editor/node-rich-text-editor.ts`：节点文字块的选区样式、颜色、格式清理和实时预览。

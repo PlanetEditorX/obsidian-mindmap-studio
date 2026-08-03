@@ -13,7 +13,7 @@ import {
 import { ensureMathJax } from "./rich-text-dom";
 import { normalizeFormulaEditorSource, normalizeLatexForMathJax } from "../core/latex";
 import type { ImageHostChoice } from "../settings";
-import { xmindToDocument } from "../import/import-export";
+import { materializeXMindImages, xmindToImportResult } from "../import/import-export";
 import { setAllBranchesCollapsed } from "./node-actions";
 import { selectDesktopImportFile } from "../utils/desktop-import";
 
@@ -393,7 +393,8 @@ export class ImportExportModal extends Modal {
     private readonly canImport: boolean,
     private readonly getLastImportFolder: () => string,
     private readonly onRememberImportFolder: (folder: string) => void | Promise<void>,
-    private readonly onImportMarkdownImages: (document: MindMapDocument, sourceDirectory: string) => Promise<number>
+    private readonly onImportMarkdownImages: (document: MindMapDocument, sourceDirectory: string) => Promise<number>,
+    private readonly onSaveImportedImage: (blob: Blob, suggestedName: string) => Promise<string>
   ) {
     super(app);
   }
@@ -416,6 +417,32 @@ export class ImportExportModal extends Modal {
       progressBar.value = value;
       progressStatus.setText(`${value}% · ${status}`);
       await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+    };
+    const parseXMind = async (source: ArrayBuffer, fallbackTitle: string): Promise<{
+      document: MindMapDocument;
+      copiedImages: number;
+      equationCount: number;
+      missingImages: number;
+    }> => {
+      const result = xmindToImportResult(source, fallbackTitle);
+      if (result.images.length) await updateImportProgress(68, `正在提取 ${result.images.length} 个 XMind 图片资源`);
+      const materialized = await materializeXMindImages(result, async (image) => {
+        const content = image.content.slice();
+        return this.onSaveImportedImage(new Blob([content.buffer], { type: image.mimeType }), image.filename);
+      });
+      return {
+        document: result.document,
+        copiedImages: materialized.saved,
+        equationCount: result.equationCount,
+        missingImages: result.missingImageCount
+      };
+    };
+    const importNotice = (name: string, copiedImages: number, equationCount: number, missingImages: number): string => {
+      const details: string[] = [];
+      if (copiedImages > 0) details.push(`提取 ${copiedImages} 张图片`);
+      if (equationCount > 0) details.push(`识别 ${equationCount} 个 LaTeX 公式`);
+      if (missingImages > 0) details.push(`${missingImages} 张图片资源缺失`);
+      return details.length ? `已导入：${name}，${details.join("，")}` : `已导入：${name}`;
     };
     const textarea = importSection.createEl("textarea", { cls: "mmc-json-textarea" });
     textarea.value = JSON.stringify(this.document, null, 2);
@@ -450,24 +477,28 @@ export class ImportExportModal extends Modal {
               ? selected.file.content.buffer.slice(selected.file.content.byteOffset, selected.file.content.byteOffset + selected.file.content.byteLength)
               : new TextDecoder().decode(selected.file.content);
             await updateImportProgress(55, extension === "xmind" ? "正在解析 XMind 画布和主题" : extension === "json" ? "正在校验 JSON 文件" : "正在解析 Markdown 标题和列表");
-            const imported = extension === "xmind"
-              ? xmindToDocument(source as ArrayBuffer, selected.file.name.replace(/\.xmind$/i, ""))
-              : extension === "json"
-                ? normalizeDocument(JSON.parse(source as string) as Partial<MindMapDocument>, this.document.title)
-                : markdownToDocument(source as string, selected.file.name.replace(/\.(?:md|markdown)$/i, ""));
-            if (extension === "md" || extension === "markdown") {
+            let imported: MindMapDocument;
+            let copiedImages = 0;
+            let equationCount = 0;
+            let missingImages = 0;
+            if (extension === "xmind") {
+              const parsed = await parseXMind(source as ArrayBuffer, selected.file.name.replace(/\.xmind$/i, ""));
+              imported = parsed.document;
+              copiedImages = parsed.copiedImages;
+              equationCount = parsed.equationCount;
+              missingImages = parsed.missingImages;
+            } else if (extension === "json") {
+              imported = normalizeDocument(JSON.parse(source as string) as Partial<MindMapDocument>, this.document.title);
+            } else {
+              imported = markdownToDocument(source as string, selected.file.name.replace(/\.(?:md|markdown)$/i, ""));
               await updateImportProgress(70, "正在读取并复制 Markdown 图片");
+              copiedImages = await this.onImportMarkdownImages(imported, selected.file.directory);
             }
-            const copiedImages = extension === "md" || extension === "markdown"
-              ? await this.onImportMarkdownImages(imported, selected.file.directory)
-              : 0;
             await updateImportProgress(85, "正在生成思维导图");
             setAllBranchesCollapsed(imported.root, true);
             if (!applyImport(imported)) return;
             await updateImportProgress(100, "导入完成");
-            new Notice(copiedImages > 0
-              ? `已导入：${selected.file.name}，并复制 ${copiedImages} 张图片`
-              : `已导入：${selected.file.name}`);
+            new Notice(importNotice(selected.file.name, copiedImages, equationCount, missingImages));
             window.setTimeout(() => this.close(), 180);
           } catch (error) {
             console.error("MindMap Studio file import failed", error);
@@ -489,16 +520,26 @@ export class ImportExportModal extends Modal {
             await updateImportProgress(10, `正在读取 ${file.name}`);
             const source = extension === "xmind" ? await file.arrayBuffer() : await file.text();
             await updateImportProgress(55, extension === "xmind" ? "正在解析 XMind 画布和主题" : extension === "json" ? "正在校验 JSON 文档" : "正在解析 Markdown 标题和列表");
-            const imported = extension === "xmind"
-              ? xmindToDocument(source as ArrayBuffer, file.name.replace(/\.xmind$/i, ""))
-              : extension === "json"
-                ? normalizeDocument(JSON.parse(source as string) as Partial<MindMapDocument>, this.document.title)
-                : markdownToDocument(source as string, file.name.replace(/\.(?:md|markdown)$/i, ""));
+            let imported: MindMapDocument;
+            let copiedImages = 0;
+            let equationCount = 0;
+            let missingImages = 0;
+            if (extension === "xmind") {
+              const parsed = await parseXMind(source as ArrayBuffer, file.name.replace(/\.xmind$/i, ""));
+              imported = parsed.document;
+              copiedImages = parsed.copiedImages;
+              equationCount = parsed.equationCount;
+              missingImages = parsed.missingImages;
+            } else if (extension === "json") {
+              imported = normalizeDocument(JSON.parse(source as string) as Partial<MindMapDocument>, this.document.title);
+            } else {
+              imported = markdownToDocument(source as string, file.name.replace(/\.(?:md|markdown)$/i, ""));
+            }
             await updateImportProgress(85, "正在生成思维导图");
             setAllBranchesCollapsed(imported.root, true);
             if (!applyImport(imported)) return;
             await updateImportProgress(100, "导入完成");
-            new Notice(`已导入：${file.name}`);
+            new Notice(importNotice(file.name, copiedImages, equationCount, missingImages));
             window.setTimeout(() => this.close(), 180);
           } catch (error) {
             console.error("MindMap Studio file import failed", error);
