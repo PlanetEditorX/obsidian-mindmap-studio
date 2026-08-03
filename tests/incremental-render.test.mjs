@@ -284,14 +284,15 @@ test("article-context refreshes skip redundant current-page rebuilds", async () 
   assert.match(viewSource, /this\.editor\?\.setOptions\(this\.getEditorOptions\(preferCurrentFile, preferredCurrentNodeId\), true\)/);
 });
 
-test("article return paths preserve the parent mount node", async () => {
+test("parent return paths preserve the current mode and parent mount node", async () => {
   const [editorSource, rendererSource, mainSource] = await Promise.all([
     readFile(path.join(rootDir, "src/editor/editor.ts"), "utf8"),
     readFile(path.join(rootDir, "src/editor/article-renderer.ts"), "utf8"),
     readFile(path.join(rootDir, "src/main.ts"), "utf8")
   ]);
   assert.match(rendererSource, /onOpenArticleDirectory\(navigation\.parentPath!, navigation\.parentNodeId\)/);
-  assert.match(editorSource, /onOpenArticleDirectory\(navigation\.parentPath!, navigation\.parentNodeId\)/);
+  assert.match(editorSource, /this\.currentMode === "article"[\s\S]*onOpenArticleDirectory\(navigation\.parentPath, navigation\.parentNodeId\)/);
+  assert.match(editorSource, /onOpenMindMap\(navigation\.parentPath, navigation\.parentNodeId\)/);
   assert.match(mainSource, /parentNodeId/);
 });
 
@@ -319,7 +320,7 @@ test("large page operations paint a semantic transition before blocking work", a
   assert.match(merge, /正在合并回主导图/);
   assert.match(modeTransition, /正在切换到\$\{DISPLAY_MODE_LABELS\[mode\]\}/);
   assert.match(editorSource, /navigateWithTransition\(\(\) => this\.callbacks\.onOpenMindMap/);
-  assert.match(editorSource, /navigateWithTransition\(\(\) => this\.callbacks\.onOpenArticleDirectory/);
+  assert.match(editorSource, /navigateWithTransition\([\s\S]*?this\.callbacks\.onOpenArticleDirectory/);
   assert.match(cssSource, /\.mms-page-transition\.is-visible/);
   assert.match(cssSource, /mms-page-surface-enter/);
   assert.match(cssSource, /prefers-reduced-motion: reduce[\s\S]*\.mms-page-transition/);

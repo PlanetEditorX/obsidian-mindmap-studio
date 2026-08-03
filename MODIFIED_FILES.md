@@ -1,5 +1,12 @@
 # Modified Files
 
+## 1.41.7 子导图返回保持当前模式
+
+- `src/editor/editor.ts`：父级面包屑按当前显示模式选择导航；仅文章模式返回父目录，其余模式直接打开父导图并定位挂载节点，避免白色文章解析卡片与黑色过渡层重叠。
+- `tests/incremental-render.test.mjs`、`tests/reading-editor-contract.test.mjs`：更新父级返回契约，验证非文章模式保持当前模式、文章模式继续使用目录意图。
+- `README.md`、`CHANGELOG.md`、`docs/ARCHITECTURE.md`、`docs/SPECIAL_FEATURES.md`、`docs/TESTING.md`：更新父子导图返回行为和人工验证边界。
+- 版本元数据和生产构建更新为 1.41.7。
+
 ## 1.41.6 通读编号、外观编辑与代码设置统一
 
 - `src/article/modes.ts`、`src/main.ts`、`src/view.ts`、`src/editor/editor-types.ts`、`src/editor/editor.ts`：新增通读独立编号结果；通读忽略物理导图中心节点的文章关闭状态，并允许只读通读中修改页面外观后恢复位置。
