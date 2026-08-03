@@ -409,6 +409,25 @@ export function buildArticleNodeInfo(
 }
 
 /**
+ * 构建通读模式使用的章节信息。通读是一套独立的全书编号视图，因此只忽略
+ * 当前物理导图中心节点上的整页“关闭编号”；普通节点的关闭与手动层级仍照常生效。
+ * 这样文章页可保持无编号，而同一导图进入通读后仍按全书结构显示章、节与末端序号。
+ *
+ * @param root 当前物理导图的中心节点。
+ * @param baseDepth 当前文件在全书中的基础层级。
+ * @param leafNumbering 末端正文自动编号规则。
+ * @returns 按通读编号语义展开的文章节点信息。
+ */
+export function buildReadingArticleNodeInfo(
+  root: MindMapNode,
+  baseDepth = 0,
+  leafNumbering: ArticleLeafNumberingOptions = { enabled: false, threshold: 4 }
+): ArticleNodeInfo[] {
+  if (root.articleNumberingMode !== "none") return buildArticleNodeInfo(root, baseDepth, leafNumbering);
+  return buildArticleNodeInfo({ ...root, articleNumberingMode: undefined, articleNumberingLevel: undefined }, baseDepth, leafNumbering);
+}
+
+/**
  * 校验并规范化visible modes，并保持模型、界面和持久化状态的一致性。
  *
  * @param modes 该参数用于 normalize visible modes 流程中的输入或控制。

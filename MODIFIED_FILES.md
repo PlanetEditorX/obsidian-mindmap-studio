@@ -1,5 +1,13 @@
 # Modified Files
 
+## 1.41.6 通读编号、外观编辑与代码设置统一
+
+- `src/article/modes.ts`、`src/main.ts`、`src/view.ts`、`src/editor/editor-types.ts`、`src/editor/editor.ts`：新增通读独立编号结果；通读忽略物理导图中心节点的文章关闭状态，并允许只读通读中修改页面外观后恢复位置。
+- `src/core/model.ts`、`src/render/code-block.ts`、`src/settings.ts`：页面外观新增两项代码自动阈值；全局代码行为设置并入代码外观，旧分区名称兼容迁移。
+- `tests/article-numbering.test.mjs`、`tests/article-content-block.test.mjs`、`tests/code-block.test.mjs`、`tests/settings-layout.test.mjs`：新增通读编号、外观按钮、分区迁移和页面阈值覆盖契约。
+- `README.md`、`CHANGELOG.md`、`docs/ARCHITECTURE.md`、`docs/DATA_MODEL.md`、`docs/DEVELOPMENT.md`、`docs/SPECIAL_FEATURES.md`、`docs/TESTING.md`、`docs/CODE_BLOCK_RENDERING.zh-CN.md`：更新当前行为与维护边界。
+- 版本元数据和生产构建更新为 1.41.6。
+
 ## 1.41.5 中心节点关闭文章编号的整页语义
 
 - `src/article/modes.ts`：新增当前物理导图编号关闭判定；根节点为 `none` 时清空全部章节与末端序号，但保留结构深度；普通节点关闭仍只跳过自身。

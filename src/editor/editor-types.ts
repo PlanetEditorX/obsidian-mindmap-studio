@@ -107,6 +107,8 @@ export interface MindMapEditorOptions {
   articleContextReady: boolean;
   articleBaseDepth: number;
   articleTocEntries: ArticleTocEntry[];
+  /** Full-book numbering metadata; root-level article numbering disable does not suppress it. */
+  readingTocEntries: ArticleTocEntry[];
   articleTocMaxDepth: number;
   showArticleMiniMap: boolean;
   articleSectionCollapseEnabled: boolean;

@@ -201,6 +201,16 @@ test("code presentation preserves node precedence and automatic thresholds", () 
     lineCount: 2
   });
   assert.deepEqual(codeBlock.resolveCodeBlockPresentation(
+    { code: "a\nb\nc", language: "text" },
+    { codeCollapsed: true, codeShowLineNumbers: false, codeTheme: "github", codeAutoExpandMaxLines: 3, codeAutoLineNumbersMinLines: 1 },
+    defaults
+  ), {
+    collapsed: false,
+    showLineNumbers: true,
+    theme: "github",
+    lineCount: 3
+  });
+  assert.deepEqual(codeBlock.resolveCodeBlockPresentation(
     { code: "a\nb\nc", collapsed: false, showLineNumbers: false, theme: "dracula" },
     { codeCollapsed: true, codeShowLineNumbers: true, codeTheme: "github" },
     defaults

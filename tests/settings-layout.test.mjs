@@ -141,9 +141,20 @@ test("global appearance mirrors the page toolbar groups instead of only sharing 
   }
   assert.match(settingsSource, /createGroup\("节点与文字"[\s\S]*"分支外观"[\s\S]*"默认节点文字对齐"[\s\S]*"默认节点边框粗细"/);
   assert.match(settingsSource, /createGroup\("阅读外观"[\s\S]*"文章目录最大层级"[\s\S]*"文章\/通读缩略导航图"/);
-  assert.match(settingsSource, /createGroup\("代码外观"[\s\S]*"代码默认折叠"[\s\S]*"代码默认样式"/);
+  assert.match(settingsSource, /createGroup\("代码外观"[\s\S]*"代码默认折叠"[\s\S]*"不超过多少行时保持展开"[\s\S]*"超过多少行时显示行号"[\s\S]*"代码默认样式"/);
+  assert.doesNotMatch(settingsSource, /containerEl\.createEl\("h3", \{ text: "代码行为" \}\)/);
+  assert.match(settingsSource, /"代码行为": "主题与外观"/);
+  assert.match(editorSource, /text: "代码外观"[\s\S]*text: "自动保持展开"[\s\S]*text: "自动显示行号"/);
+  assert.match(editorSource, /codeAutoExpandMaxLines[\s\S]*codeAutoLineNumbersMinLines/);
   assert.match(editorSource, /this\.titleEl\.setText\("主题与外观"\)/);
   assert.match(stylesSource, /\.mms-global-appearance-groups[\s\S]*display: grid/);
+});
+
+test("continuous reading keeps the page appearance toolbar editable without unlocking content", () => {
+  assert.match(editorSource, /this\.appearanceButton = this\.addToolbarButton\("appearance"/);
+  assert.match(editorSource, /const appearanceDisabled = this\.readOnly && this\.currentMode !== "reading"/);
+  assert.match(editorSource, /private mutatePageAppearance\(action: \(\) => void\): void/);
+  assert.match(editorSource, /this\.readOnly && this\.currentMode !== "reading"/);
 });
 
 test("fit-to-view and bulk collapse use smooth viewport interpolation", () => {

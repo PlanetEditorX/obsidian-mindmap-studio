@@ -26,7 +26,7 @@ export interface ResolvedCodeBlockPresentation {
 export interface CodeBlockRenderOptions {
   block: MindMapCodeBlock;
   container: HTMLElement;
-  pageAppearance?: Pick<MindMapAppearance, "codeCollapsed" | "codeShowLineNumbers" | "codeTheme">;
+  pageAppearance?: Pick<MindMapAppearance, "codeCollapsed" | "codeShowLineNumbers" | "codeTheme" | "codeAutoExpandMaxLines" | "codeAutoLineNumbersMinLines">;
   defaults: CodeBlockGlobalDefaults;
   renderMarkdown: (markdown: string, target: HTMLElement) => void | Promise<void>;
 }
@@ -89,8 +89,8 @@ export function resolveCodeBlockPresentation(
   defaults: CodeBlockGlobalDefaults
 ): ResolvedCodeBlockPresentation {
   const lineCount = countCodeLines(block.code);
-  const expandThreshold = normalizeCodeLineThreshold(defaults.autoExpandMaxLines);
-  const lineNumberThreshold = normalizeCodeLineThreshold(defaults.autoLineNumbersMinLines);
+  const expandThreshold = normalizeCodeLineThreshold(pageAppearance?.codeAutoExpandMaxLines ?? defaults.autoExpandMaxLines);
+  const lineNumberThreshold = normalizeCodeLineThreshold(pageAppearance?.codeAutoLineNumbersMinLines ?? defaults.autoLineNumbersMinLines);
   const autoExpand = expandThreshold > 0 && lineCount <= expandThreshold;
   const autoLineNumbers = lineNumberThreshold > 0 ? lineCount > lineNumberThreshold : undefined;
   return {
