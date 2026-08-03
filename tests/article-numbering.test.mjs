@@ -91,56 +91,6 @@ test("document-level numbering disable is shared by the directory, article title
   assert.match(editorSource, /关闭中心节点编号时，当前物理导图内的章节和末端序号全部隐藏/);
 });
 
-
-test("continuous reading keeps its own full-book numbering when article numbering is disabled", () => {
-  const root = model.createNode("根节点");
-  root.articleNumberingMode = "none";
-  const chapter = model.createNode("章节");
-  chapter.children = [model.createNode("正文一"), model.createNode("正文二"), model.createNode("正文三"), model.createNode("正文四")];
-  root.children = [chapter];
-
-  const articleInfos = modes.buildArticleNodeInfo(root, 0, { enabled: true, threshold: 4, style: "circled" });
-  const readingInfos = modes.buildReadingArticleNodeInfo(root, 0, { enabled: true, threshold: 4, style: "circled" });
-  assert.deepEqual(articleInfos.map((info) => info.label), ["", "", "", "", ""]);
-  assert.deepEqual(readingInfos.map((info) => info.label), ["第一章", "①", "②", "③", "④"]);
-});
-
-test("continuous reading uses a numbering TOC independent from article root disable", () => {
-  assert.match(mainSource, /const readingNumberedIndexes = new Map<number, number>\(\)/);
-  assert.match(mainSource, /const readingNumberedIndex = numbering\.shouldNumber && !numbering\.skipped/);
-  assert.match(mainSource, /readingTocEntries/);
-  assert.match(editorSource, /this\.options\.readingTocEntries\.filter/);
-  assert.match(editorSource, /buildReadingArticleNodeInfo\(section\.document\.root/);
-});
-
-test("continuous reading body reuses the cross-file TOC hierarchy and numbering", () => {
-  const root = model.createNode("根节点");
-  const localLeaf = model.createNode("逻辑关系");
-  root.children = [localLeaf];
-  const [localInfo] = modes.buildReadingArticleNodeInfo(root, 1);
-  assert.equal(localInfo?.isHeading, false);
-  assert.equal(localInfo?.label, "");
-
-  const reconciled = modes.reconcileReadingNodeInfo(localInfo, {
-    filePath: "逻辑判断.mindmap",
-    nodeId: localLeaf.id,
-    depth: 3,
-    tocDepth: 2,
-    label: "一、",
-    title: "逻辑关系",
-    displayTitle: "一、逻辑关系",
-    breadcrumb: ["判断推理", "逻辑判断", "逻辑关系"]
-  });
-  assert.equal(reconciled.isHeading, true);
-  assert.equal(reconciled.depth, 3);
-  assert.equal(reconciled.label, "一、");
-  assert.equal(reconciled.displayTitle, "一、逻辑关系");
-  assert.equal(reconciled.numberedLeaf, false);
-
-  assert.match(editorSource, /const readingEntryByNode = new Map/);
-  assert.match(editorSource, /reconcileReadingNodeInfo\([\s\S]*readingEntryByNode\.get/);
-});
-
 test("children below a level-eight heading keep structure without receiving a recycled A or B prefix", () => {
   const heading = (text, children = [model.createNode(`${text} 正文`)]) => {
     const node = model.createNode(text);

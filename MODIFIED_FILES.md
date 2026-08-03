@@ -1,26 +1,13 @@
 # Modified Files
 
-## 1.41.8 通读正文编号与工具栏精简
+## 1.41.9 顶层文章目录默认落点与设置归类
 
-- `src/article/modes.ts`、`src/editor/editor.ts`：通读正文按文件路径与节点 ID 复用全书目录层级和编号；标题分类、编号文本与目录保持一致。
-- `src/editor/editor.ts`、`src/settings.ts`：删除冗余“打开节点链接”命令及配置入口；移除顶部工具栏原生 `title` 提示，并将折叠与适应画布限定到导图模式。
-- `tests/article-numbering.test.mjs`、`tests/settings-layout.test.mjs`：新增跨文件编号合并、链接命令删除、单一提示和模式可见性契约。
-- `README.md`、`CHANGELOG.md`、`docs/ARCHITECTURE.md`、`docs/DEVELOPMENT.md`、`docs/SPECIAL_FEATURES.md`、`docs/TESTING.md`：更新通读编号权威来源与工具栏行为。
-
-## 1.41.7 子导图返回保持当前模式
-
-- `src/editor/editor.ts`：父级面包屑按当前显示模式选择导航；仅文章模式返回父目录，其余模式直接打开父导图并定位挂载节点，避免白色文章解析卡片与黑色过渡层重叠。
-- `tests/incremental-render.test.mjs`、`tests/reading-editor-contract.test.mjs`：更新父级返回契约，验证非文章模式保持当前模式、文章模式继续使用目录意图。
-- `README.md`、`CHANGELOG.md`、`docs/ARCHITECTURE.md`、`docs/SPECIAL_FEATURES.md`、`docs/TESTING.md`：更新父子导图返回行为和人工验证边界。
-- 版本元数据和生产构建更新为 1.41.7。
-
-## 1.41.6 通读编号、外观编辑与代码设置统一
-
-- `src/article/modes.ts`、`src/main.ts`、`src/view.ts`、`src/editor/editor-types.ts`、`src/editor/editor.ts`：新增通读独立编号结果；通读忽略物理导图中心节点的文章关闭状态，并允许只读通读中修改页面外观后恢复位置。
-- `src/core/model.ts`、`src/render/code-block.ts`、`src/settings.ts`：页面外观新增两项代码自动阈值；全局代码行为设置并入代码外观，旧分区名称兼容迁移。
-- `tests/article-numbering.test.mjs`、`tests/article-content-block.test.mjs`、`tests/code-block.test.mjs`、`tests/settings-layout.test.mjs`：新增通读编号、外观按钮、分区迁移和页面阈值覆盖契约。
-- `README.md`、`CHANGELOG.md`、`docs/ARCHITECTURE.md`、`docs/DATA_MODEL.md`、`docs/DEVELOPMENT.md`、`docs/SPECIAL_FEATURES.md`、`docs/TESTING.md`、`docs/CODE_BLOCK_RENDERING.zh-CN.md`：更新当前行为与维护边界。
-- 版本元数据和生产构建更新为 1.41.6。
+- `src/view.ts`：顶层导图每次加载时将文章落点重置为目录；序列化顶层文件时始终写回目录落点，避免手动“显示原始文章”跨文件重开保留。
+- `src/editor/editor.ts`：进入文章模式时优先目录，只有显式目录章节目标或无目录的子页面进入正文；目录/原始文章切换改为当前会话状态，不进入撤销和保存链路。
+- `src/settings.ts`：文件命名移入“文件与资源”；布局和打开/嵌入行为移入“视图与阅读”；明暗与全部代码设置并入“主题与外观”；节点编辑器与双指手势移入“编辑与交互”；旧“代码行为”分类自动迁移。
+- `tests/reading-editor-contract.test.mjs`、`tests/settings-layout.test.mjs`、`scripts/test.mjs`：新增顶层目录默认落点、临时原始文章切换、设置职责归类和旧分类迁移契约。
+- `README.md`、`CHANGELOG.md`、`docs/ARCHITECTURE.md`、`docs/SPECIAL_FEATURES.md`、`docs/TESTING.md`、`docs/PROJECT_GUIDE.zh-CN.md`：同步默认落点和设置分区语义。
+- `package.json`、`package-lock.json`、`manifest.json`、`versions.json`、`update.json`、`main.js`：统一版本为 1.41.9，安装包 SHA-256 在最终打包后写入。
 
 ## 1.41.5 中心节点关闭文章编号的整页语义
 

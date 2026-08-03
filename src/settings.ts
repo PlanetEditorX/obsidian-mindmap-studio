@@ -39,7 +39,7 @@ import { saveDesktopExportFile } from "./utils/desktop-export";
 export const TOOLBAR_ITEMS = [
   ["lock", "阅读/编辑模式"], ["add-child", "添加子节点"], ["add-sibling", "添加同级节点"],
   ["edit", "完整编辑节点"], ["duplicate", "克隆分支"], ["delete", "删除节点"],
-  ["task", "任务状态"], ["collapse", "展开/收起"], ["collapse-all", "展开/折叠全部"],
+  ["task", "任务状态"], ["collapse", "展开/收起"], ["collapse-all", "展开/折叠全部"], ["link", "打开链接"],
   ["search", "搜索导图"], ["global-search", "全局搜索"], ["ai", "询问 AI"], ["table", "表格"],
   ["code", "代码"], ["image", "粘贴图片"], ["screenshot", "插入截图"], ["screenshot-recognize", "插入截图并识别"], ["submap", "子导图"],
   ["undo", "撤销"], ["redo", "重做"],
@@ -526,7 +526,10 @@ export const DEFAULT_SETTINGS: MindMapStudioSettings = {
 export function normalizeSettingsExpandedSections(value: unknown): SettingsSectionTitle[] {
   if (!Array.isArray(value)) return [];
   const known = new Set<string>(SETTINGS_SECTION_TITLES);
-  return [...new Set(value.filter((title): title is SettingsSectionTitle => typeof title === "string" && known.has(title)))];
+  return [...new Set(value.flatMap((title): SettingsSectionTitle[] => {
+    if (title === "代码行为" || title === "代码块" || title === "全局代码设置") return ["主题与外观"];
+    return typeof title === "string" && known.has(title) ? [title as SettingsSectionTitle] : [];
+  }))];
 }
 
 /** Normalizes stored category order while keeping configuration management at the end. */
@@ -739,6 +742,19 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
     }
 
     new Setting(containerEl)
+      .setName("默认明暗模式")
+      .setDesc("控制新建和未单独覆盖页面的明暗外观；可跟随 Obsidian，也可固定为浅色或深色。")
+      .addDropdown((dropdown) => dropdown
+        .addOption("auto", "跟随 Obsidian")
+        .addOption("light", "浅色")
+        .addOption("dark", "深色")
+        .setValue(this.plugin.settings.defaultTheme)
+        .onChange(async (value) => {
+          this.plugin.settings.defaultTheme = value as ThemeMode;
+          await this.plugin.saveSettings();
+        }));
+
+    new Setting(containerEl)
       .setName("代码默认折叠")
       .setDesc("优先级最低；页面或节点代码设置可覆盖。")
       .addToggle((toggle) => toggle.setValue(this.plugin.settings.defaultCodeCollapsed).onChange(async (value) => {
@@ -842,6 +858,50 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
       });
 
     new Setting(containerEl)
+      .setName("默认布局")
+      .setDesc("控制新建导图的初始结构：单侧适合流程拆解，双侧适合头脑风暴。")
+      .addDropdown((dropdown) => dropdown
+        .addOption("right", "向右展开")
+        .addOption("balanced", "左右平衡")
+        .setValue(this.plugin.settings.defaultLayout)
+        .onChange(async (value) => {
+          this.plugin.settings.defaultLayout = value as LayoutMode;
+          await this.plugin.saveSettings();
+        }));
+
+    new Setting(containerEl)
+      .setName("打开时自动适应画布")
+      .setDesc("打开导图模式时自动缩放并居中全部可见节点。")
+      .addToggle((toggle) => toggle
+        .setValue(this.plugin.settings.autoFitOnOpen)
+        .onChange(async (value) => {
+          this.plugin.settings.autoFitOnOpen = value;
+          await this.plugin.saveSettings();
+        }));
+
+    new Setting(containerEl)
+      .setName("显示任务进度")
+      .setDesc("在包含任务的分支节点底部显示完成百分比。")
+      .addToggle((toggle) => toggle
+        .setValue(this.plugin.settings.showTaskProgress)
+        .onChange(async (value) => {
+          this.plugin.settings.showTaskProgress = value;
+          await this.saveAndRefresh();
+        }));
+
+    new Setting(containerEl)
+      .setName("嵌入预览最大高度")
+      .setDesc("控制嵌入式导图预览的最大高度，范围 240–1200 像素。")
+      .addSlider((slider) => slider
+        .setLimits(240, 1200, 20)
+        .setDynamicTooltip()
+        .setValue(this.plugin.settings.embedMaxHeight)
+        .onChange(async (value) => {
+          this.plugin.settings.embedMaxHeight = value;
+          await this.plugin.saveSettings();
+        }));
+
+    new Setting(containerEl)
       .setName("进入文章模式")
       .setDesc("默认锁定始终以阅读状态进入；沿用进入前状态会受导图或大纲的锁影响；记住上次文章状态只恢复文章模式自己最后一次的锁定/编辑状态。")
       .addDropdown((dropdown) => dropdown
@@ -851,30 +911,6 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
         .setValue(this.plugin.settings.articleEntryLockMode)
         .onChange(async (value) => {
           this.plugin.settings.articleEntryLockMode = value === "inherit" || value === "remember" ? value : "locked";
-          await this.saveAndRefresh();
-        }));
-
-    new Setting(containerEl)
-      .setName("节点编辑器显示位置")
-      .setDesc("居中时使用弹窗；靠右时作为右侧编辑面板显示，保存或点击面板外会自动收起。")
-      .addDropdown((dropdown) => dropdown
-        .addOption("center", "居中弹窗")
-        .addOption("right", "右侧面板")
-        .setValue(this.plugin.settings.nodeEditorPosition)
-        .onChange(async (value) => {
-          this.plugin.settings.nodeEditorPosition = value === "right" ? "right" : "center";
-          await this.saveAndRefresh();
-        }));
-
-    new Setting(containerEl)
-      .setName("双指手势")
-      .setDesc("在导图画布上使用两根手指时，可选择以指间距离缩放，或以双指中心点移动画布。")
-      .addDropdown((dropdown) => dropdown
-        .addOption("zoom", "放大缩小")
-        .addOption("pan", "移动画布")
-        .setValue(this.plugin.settings.twoFingerGestureAction)
-        .onChange(async (value) => {
-          this.plugin.settings.twoFingerGestureAction = value === "pan" ? "pan" : "zoom";
           await this.saveAndRefresh();
         }));
 
@@ -1522,6 +1558,27 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
         }));
 
     new Setting(containerEl)
+      .setName("新文件名前缀")
+      .setDesc("新建脑图时使用：前缀 + 日期时间。文件后缀固定为 .mindmap。")
+      .addText((text) => text
+        .setPlaceholder("思维导图")
+        .setValue(this.plugin.settings.filePrefix)
+        .onChange(async (value) => {
+          this.plugin.settings.filePrefix = value.trim() || "思维导图";
+          await this.plugin.saveSettings();
+        }));
+
+    new Setting(containerEl)
+      .setName("中心节点标题同步文件名")
+      .setDesc("保存导图时，将 .mindmap 文件名同步为中心节点标题；同名文件会自动追加序号。子导图会同时更新父导图入口和子导图导航。")
+      .addToggle((toggle) => toggle
+        .setValue(this.plugin.settings.syncTitleToFilename)
+        .onChange(async (value) => {
+          this.plugin.settings.syncTitleToFilename = value;
+          await this.plugin.saveSettings();
+        }));
+
+    new Setting(containerEl)
       .setName("资源文件夹")
       .setDesc("仅用于图片、截图和子导图资源，路径相对于当前导图所在目录；不决定导图文件的保存位置。默认使用 MindMap Assets。")
       .addText((text) => text
@@ -1889,51 +1946,6 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
       });
     });
 
-    new Setting(containerEl)
-      .setName("新文件名前缀")
-      .setDesc("新建脑图时使用：前缀 + 日期时间。文件后缀固定为 .mindmap。")
-      .addText((text) => text
-        .setPlaceholder("思维导图")
-        .setValue(this.plugin.settings.filePrefix)
-        .onChange(async (value) => {
-          this.plugin.settings.filePrefix = value.trim() || "思维导图";
-          await this.plugin.saveSettings();
-        }));
-
-    new Setting(containerEl)
-      .setName("中心节点标题同步文件名")
-      .setDesc("保存导图时，将 .mindmap 文件名同步为中心节点标题；同名文件会自动追加序号。子导图会同时更新父导图入口和子导图导航。")
-      .addToggle((toggle) => toggle
-        .setValue(this.plugin.settings.syncTitleToFilename)
-        .onChange(async (value) => {
-          this.plugin.settings.syncTitleToFilename = value;
-          await this.plugin.saveSettings();
-        }));
-
-    new Setting(containerEl)
-      .setName("默认布局")
-      .setDesc("单侧适合流程拆解，双侧适合头脑风暴。")
-      .addDropdown((dropdown) => dropdown
-        .addOption("right", "向右展开")
-        .addOption("balanced", "左右平衡")
-        .setValue(this.plugin.settings.defaultLayout)
-        .onChange(async (value) => {
-          this.plugin.settings.defaultLayout = value as LayoutMode;
-          await this.plugin.saveSettings();
-        }));
-
-    new Setting(containerEl)
-      .setName("默认明暗模式")
-      .addDropdown((dropdown) => dropdown
-        .addOption("auto", "跟随 Obsidian")
-        .addOption("light", "浅色")
-        .addOption("dark", "深色")
-        .setValue(this.plugin.settings.defaultTheme)
-        .onChange(async (value) => {
-          this.plugin.settings.defaultTheme = value as ThemeMode;
-          await this.plugin.saveSettings();
-        }));
-
     containerEl.createEl("h3", { text: "画布与背景" });
 
     this.addOptionalColorSetting(
@@ -2258,22 +2270,27 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
     containerEl.createEl("h3", { text: "编辑与交互" });
 
     new Setting(containerEl)
-      .setName("显示任务进度")
-      .setDesc("在包含任务的分支节点底部显示完成百分比。")
-      .addToggle((toggle) => toggle
-        .setValue(this.plugin.settings.showTaskProgress)
+      .setName("节点编辑器显示位置")
+      .setDesc("居中时使用弹窗；靠右时作为右侧编辑面板显示，保存或点击面板外会自动收起。")
+      .addDropdown((dropdown) => dropdown
+        .addOption("center", "居中弹窗")
+        .addOption("right", "右侧面板")
+        .setValue(this.plugin.settings.nodeEditorPosition)
         .onChange(async (value) => {
-          this.plugin.settings.showTaskProgress = value;
+          this.plugin.settings.nodeEditorPosition = value === "right" ? "right" : "center";
           await this.saveAndRefresh();
         }));
 
     new Setting(containerEl)
-      .setName("打开时自动适应画布")
-      .addToggle((toggle) => toggle
-        .setValue(this.plugin.settings.autoFitOnOpen)
+      .setName("双指手势")
+      .setDesc("在导图画布上使用两根手指时，可选择以指间距离缩放，或以双指中心点移动画布。")
+      .addDropdown((dropdown) => dropdown
+        .addOption("zoom", "放大缩小")
+        .addOption("pan", "移动画布")
+        .setValue(this.plugin.settings.twoFingerGestureAction)
         .onChange(async (value) => {
-          this.plugin.settings.autoFitOnOpen = value;
-          await this.plugin.saveSettings();
+          this.plugin.settings.twoFingerGestureAction = value === "pan" ? "pan" : "zoom";
+          await this.saveAndRefresh();
         }));
 
     new Setting(containerEl)
@@ -2287,19 +2304,6 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
           this.plugin.settings.historyLimit = value;
           await this.saveAndRefresh();
         }));
-
-    new Setting(containerEl)
-      .setName("嵌入预览最大高度")
-      .setDesc("范围 240–1200 像素。")
-      .addSlider((slider) => slider
-        .setLimits(240, 1200, 20)
-        .setDynamicTooltip()
-        .setValue(this.plugin.settings.embedMaxHeight)
-        .onChange(async (value) => {
-          this.plugin.settings.embedMaxHeight = value;
-          await this.plugin.saveSettings();
-        }));
-
 
     containerEl.createEl("h3", { text: "全局搜索" });
     const searchStatus = this.plugin.getGlobalSearchIndexStatus();
@@ -2445,6 +2449,8 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
     themeGroup.createEl("p", { cls: "setting-item-description", text: "与页面工具栏中的“主题模板”一致，用于定义新页面和未单独覆盖页面的默认视觉方案。" });
     if (themeSetting) themeGroup.append(themeSetting);
     if (preview) themeGroup.append(preview);
+    const defaultThemeSetting = findSetting("默认明暗模式");
+    if (defaultThemeSetting) themeGroup.append(defaultThemeSetting);
     appearanceRoot.append(themeGroup);
 
     appearanceRoot.append(
@@ -2452,7 +2458,7 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
       createGroup("节点与文字", "对应页面“主题与外观”的节点与文字分组；节点单独设置仍具有更高优先级。", ["分支外观", "默认节点文字对齐", "中心主题颜色", "中心主题文字颜色", "默认节点背景色", "默认文字颜色", "默认节点边框颜色", "默认节点边框粗细", "默认文字加粗", "默认文字斜体", "默认文字下划线"]),
       createGroup("连线与分支", "对应页面“主题与外观”的连线与分支分组。", ["连线颜色", "连线类型", "连线粗细模式", "起始粗细", "连线粗细", "末端最细宽度", "彩色分支", "分支颜色"]),
       createGroup("阅读外观", "对应页面“主题与外观”的阅读分组。", ["文章目录最大层级", "文章/通读缩略导航图"]),
-      createGroup("代码外观", "与页面工具栏中的“代码外观”保持同一组设置和优先级。", ["代码默认折叠", "代码默认显示行号", "不超过多少行时保持展开", "超过多少行时显示行号", "代码默认样式"])
+      createGroup("代码外观", "对应页面“主题与外观”的代码分组；默认折叠、行号、主题和自动阈值统一在这里管理。", ["代码默认折叠", "代码默认显示行号", "不超过多少行时保持展开", "超过多少行时显示行号", "代码默认样式"])
     );
 
     for (const heading of headings) {
