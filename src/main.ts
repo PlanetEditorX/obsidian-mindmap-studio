@@ -1025,7 +1025,7 @@ export default class MindMapStudioPlugin extends Plugin {
   }
 
   /** Converts a transcribed question into a verified original-question lookup result when the selected model supports web retrieval. */
-  async enrichQuestion(questionText: string): Promise<string> {
+  async enrichQuestion(questionText: string, onStreamUpdate?: (update: AiStreamUpdate) => void): Promise<string> {
     const markdown = questionText.trim();
     if (!markdown) throw new Error("题目内容为空，无法检索原题");
     const profile = this.settings.aiProfiles.find((item) => item.id === this.settings.defaultAiProfileId && item.enabled);
@@ -1047,9 +1047,10 @@ export default class MindMapStudioPlugin extends Plugin {
       "将给出的题目整理为题库结构，并在你具备联网检索能力时搜索精确原题。",
       "只在找到可验证的原题来源时返回 found:true；必须提供可访问的 sourceUrl 和 sourceTitle。",
       "不能联网、未找到或来源不可靠时返回 found:false；此时仍需基于题目独立分析，补全缺失的 answer 和 explanation，但 sourceTitle、sourceUrl 必须留空，并明确不要伪造来源。",
-      "只返回 JSON，不要 Markdown：{\"found\":boolean,\"mode\":\"choice|essay\",\"stem\":\"\",\"options\":[{\"label\":\"A\",\"content\":\"\"}],\"answer\":\"\",\"explanation\":\"\",\"tags\":[\"\"],\"sourceTitle\":\"\",\"sourceUrl\":\"\"}。"
+      "explanation 必须写出可核对的 AI 解析过程，包括关键条件、判断或计算步骤、选项排除理由以及最终结论；不得只重复答案。",
+      "只返回 JSON，不要 Markdown：{\"found\":boolean,\"mode\":\"choice|judgment|essay\",\"stem\":\"\",\"options\":[{\"label\":\"A\",\"content\":\"\"}],\"answer\":\"\",\"explanation\":\"\",\"tags\":[\"\"],\"sourceTitle\":\"\",\"sourceUrl\":\"\"}。"
     ].join("\n");
-    const result = await requestAiCompletion(profile, payload, instruction);
+    const result = await requestAiCompletion(profile, payload, instruction, onStreamUpdate);
     return result.text;
   }
 

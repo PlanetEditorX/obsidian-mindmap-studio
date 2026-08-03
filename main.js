@@ -7066,6 +7066,14 @@ var QuestionEditModal = class extends import_obsidian5.Modal {
     this.nodeId = nodeId;
     this.callbacks = callbacks;
     this.onSubmit = onSubmit;
+    this.aiProcess = {
+      status: "idle",
+      steps: ["pending", "pending", "pending", "pending", "pending"],
+      message: "",
+      thinking: "",
+      content: ""
+    };
+    this.aiProcessView = null;
     this.draft = JSON.parse(JSON.stringify(question != null ? question : createMindMapQuestion()));
   }
   /** Initializes the modal surface and renders the current draft. */
@@ -7138,14 +7146,100 @@ var QuestionEditModal = class extends import_obsidian5.Modal {
       source.setAttr("target", "_blank");
       source.setAttr("rel", "noopener noreferrer");
     }
+    this.renderAiProcess();
     const actions = this.contentEl.createDiv({ cls: "modal-button-container" });
-    const enrich = actions.createEl("button", { text: "AI \u667A\u80FD\u5904\u7406\u9898\u76EE", attr: { type: "button" } });
+    const enrich = actions.createEl("button", {
+      text: this.aiProcess.status === "active" ? "AI \u6B63\u5728\u5904\u7406\u2026" : "AI \u667A\u80FD\u5904\u7406\u9898\u76EE",
+      attr: { type: "button" }
+    });
+    enrich.disabled = this.aiProcess.status === "active";
     enrich.onclick = () => void this.convertAndEnrichQuestion();
     const save = actions.createEl("button", { text: "\u4FDD\u5B58", cls: "mod-cta", attr: { type: "button" } });
+    save.disabled = this.aiProcess.status === "active";
     save.onclick = () => {
       this.onSubmit(this.draft);
       this.close();
     };
+  }
+  /** Renders the retained AI processing trace below the question fields. */
+  renderAiProcess() {
+    const root = this.contentEl.createDiv({ cls: "mms-question-ai-process" });
+    const title = root.createDiv({ cls: "mms-question-ai-process-title" });
+    title.createEl("strong", { text: "AI \u89E3\u6790\u8FC7\u7A0B" });
+    title.createSpan({ text: "\u663E\u793A\u5904\u7406\u9636\u6BB5\uFF0C\u4EE5\u53CA\u63A5\u53E3\u5B9E\u9645\u8FD4\u56DE\u7684\u601D\u8003\u548C\u7ED3\u6784\u5316\u5185\u5BB9\u3002" });
+    const track = root.createDiv({ cls: "mms-question-ai-track" });
+    const labels = ["\u8BFB\u53D6\u9898\u76EE", "\u8BC6\u522B\u9898\u56FE\u4E0E\u9898\u578B", "\u68C0\u7D22\u5E76\u5206\u6790", "\u63A5\u6536\u7B54\u6848\u4E0E\u89E3\u6790", "\u56DE\u586B\u9898\u76EE"];
+    const steps = labels.map((label, index) => {
+      const step = track.createDiv({ cls: "mms-question-ai-step" });
+      step.createSpan({ cls: "mms-question-ai-step-dot", text: String(index + 1) });
+      step.createSpan({ text: label });
+      return step;
+    });
+    const message = root.createDiv({ cls: "mms-question-ai-message" });
+    const thinking = root.createEl("details", { cls: "mms-question-ai-output" });
+    thinking.createEl("summary", { text: "\u6A21\u578B\u5206\u6790\uFF08\u7531\u5F53\u524D AI \u63A5\u53E3\u8FD4\u56DE\uFF09" });
+    const thinkingText = thinking.createEl("pre");
+    const content = root.createEl("details", { cls: "mms-question-ai-output" });
+    content.createEl("summary", { text: "\u6B63\u5728\u751F\u6210\u7684\u9898\u76EE\u7ED3\u6784" });
+    const contentText = content.createEl("pre");
+    this.aiProcessView = { root, steps, message, thinking, thinkingText, content, contentText };
+    this.syncAiProcessView();
+  }
+  /** Synchronizes the visible processing panel with retained request state. */
+  syncAiProcessView() {
+    const view = this.aiProcessView;
+    if (!(view == null ? void 0 : view.root.isConnected)) return;
+    view.root.toggleClass("is-hidden", this.aiProcess.status === "idle");
+    view.root.dataset.state = this.aiProcess.status;
+    view.steps.forEach((step, index) => {
+      var _a2;
+      step.dataset.state = (_a2 = this.aiProcess.steps[index]) != null ? _a2 : "pending";
+    });
+    view.message.setText(this.aiProcess.message);
+    view.thinking.hidden = !this.aiProcess.thinking.trim();
+    view.thinking.open = this.aiProcess.status === "active" && Boolean(this.aiProcess.thinking.trim());
+    view.thinkingText.setText(this.aiProcess.thinking);
+    view.content.hidden = !this.aiProcess.content.trim();
+    view.content.open = this.aiProcess.status === "active" && Boolean(this.aiProcess.content.trim());
+    view.contentText.setText(this.aiProcess.content);
+  }
+  /** Starts a new five-stage AI question processing trace. */
+  startAiProcess(message) {
+    this.aiProcess = {
+      status: "active",
+      steps: ["active", "pending", "pending", "pending", "pending"],
+      message,
+      thinking: "",
+      content: ""
+    };
+    this.syncAiProcessView();
+  }
+  /** Moves the trace to one stage while preserving completed stages. */
+  setAiProcessStep(index, message) {
+    this.aiProcess.steps = this.aiProcess.steps.map((state, stepIndex) => {
+      if (stepIndex < index) return "done";
+      if (stepIndex === index) return "active";
+      return state === "done" ? state : "pending";
+    });
+    this.aiProcess.message = message;
+    this.syncAiProcessView();
+  }
+  /** Appends model-provided reasoning and generated JSON deltas to the visible trace. */
+  appendAiProcessStream(update) {
+    if (update.thinking) this.aiProcess.thinking += update.thinking;
+    if (update.content) this.aiProcess.content += update.content;
+    if (update.thinking) this.aiProcess.message = "\u6A21\u578B\u6B63\u5728\u5206\u6790\u9898\u76EE\u6761\u4EF6\u4E0E\u89E3\u9898\u8DEF\u5F84\u2026";
+    else if (update.content) this.aiProcess.message = "\u6A21\u578B\u6B63\u5728\u751F\u6210\u7B54\u6848\u3001\u89E3\u6790\u548C\u9898\u76EE\u7ED3\u6784\u2026";
+    this.syncAiProcessView();
+  }
+  /** Completes or fails the current AI processing trace. */
+  finishAiProcess(status, message) {
+    const activeIndex = this.aiProcess.steps.findIndex((state) => state === "active");
+    if (status === "done") this.aiProcess.steps = this.aiProcess.steps.map(() => "done");
+    else if (activeIndex >= 0) this.aiProcess.steps[activeIndex] = "error";
+    this.aiProcess.status = status;
+    this.aiProcess.message = message;
+    this.syncAiProcessView();
   }
   /** Renders one question field with inline LaTeX insertion and a live MathJax preview. */
   renderBlocks(label, blocks, update) {
@@ -7199,7 +7293,7 @@ var QuestionEditModal = class extends import_obsidian5.Modal {
     renderPreview();
   }
   /** Sends the first question image to the configured vision service and applies a JSON result. */
-  async recognizeQuestion(showSuccess = true) {
+  async recognizeQuestion(showSuccess = true, rerender = true) {
     var _a2;
     const image = [this.draft.stem, ...this.draft.options.map((option) => option.content), this.draft.answer, this.draft.explanation].flat().find((block) => block.type === "image");
     if (!image) {
@@ -7220,7 +7314,7 @@ var QuestionEditModal = class extends import_obsidian5.Modal {
         return false;
       }
       this.draft = parsed;
-      this.render();
+      if (rerender) this.render();
       if (showSuccess) new import_obsidian5.Notice("\u9898\u76EE\u5DF2\u7531 AI \u586B\u5145\uFF0C\u8BF7\u6838\u5BF9\u540E\u4FDD\u5B58");
       return true;
     } catch (error) {
@@ -7228,29 +7322,44 @@ var QuestionEditModal = class extends import_obsidian5.Modal {
       return false;
     }
   }
-  /** Converts current text or image into a question, then looks up an original or generates missing analysis. */
+  /** Converts current text or image into a question, then streams lookup and solution analysis into the visible trace. */
   async convertAndEnrichQuestion() {
+    if (this.aiProcess.status === "active") return;
+    this.startAiProcess("\u6B63\u5728\u8BFB\u53D6\u9898\u5E72\u3001\u9009\u9879\u548C\u5DF2\u6709\u7B54\u6848\u2026");
     const hasImage = [this.draft.stem, ...this.draft.options.map((option) => option.content), this.draft.answer, this.draft.explanation].flat().some((block) => block.type === "image");
-    if (hasImage && !await this.recognizeQuestion(false)) return;
-    const questionText = [
-      ...this.draft.stem,
-      ...this.draft.options.flatMap((option) => option.content)
-    ].filter((block) => block.type === "text").map((block) => block.text.trim()).filter(Boolean).join("\n");
-    if (!questionText) {
-      new import_obsidian5.Notice("\u8BF7\u5148\u586B\u5199\u9898\u76EE\u6587\u5B57\u6216\u9898\u56FE");
-      return;
-    }
     try {
-      const result = parseQuestionEnrichment(await this.callbacks.onEnrichQuestion(questionText), this.draft);
-      if (!result) {
-        new import_obsidian5.Notice("AI \u672A\u8FD4\u56DE\u53EF\u89E3\u6790\u7684\u68C0\u7D22\u7ED3\u679C");
+      this.setAiProcessStep(1, hasImage ? "\u6B63\u5728\u8BC6\u522B\u9898\u56FE\u5E76\u6574\u7406\u9898\u578B\u2026" : "\u672A\u53D1\u73B0\u9898\u56FE\uFF0C\u6B63\u5728\u8BC6\u522B\u6587\u5B57\u9898\u578B\u2026");
+      if (hasImage && !await this.recognizeQuestion(false, false)) {
+        this.finishAiProcess("error", "\u9898\u56FE\u8BC6\u522B\u5931\u8D25\uFF0C\u672A\u7EE7\u7EED\u6267\u884C AI \u89E3\u6790\u3002\u8BF7\u68C0\u67E5\u9898\u56FE\u6216\u89C6\u89C9\u6A21\u578B\u3002");
+        this.render();
         return;
       }
+      const questionText = [
+        ...this.draft.stem,
+        ...this.draft.options.flatMap((option) => option.content)
+      ].filter((block) => block.type === "text").map((block) => block.text.trim()).filter(Boolean).join("\n");
+      if (!questionText) {
+        this.finishAiProcess("error", "\u6CA1\u6709\u53EF\u53D1\u9001\u7ED9 AI \u7684\u9898\u76EE\u6587\u5B57\u3002");
+        this.render();
+        new import_obsidian5.Notice("\u8BF7\u5148\u586B\u5199\u9898\u76EE\u6587\u5B57\u6216\u9898\u56FE");
+        return;
+      }
+      this.setAiProcessStep(2, "\u6B63\u5728\u68C0\u7D22\u53EF\u9A8C\u8BC1\u539F\u9898\uFF1B\u672A\u627E\u5230\u65F6\u5C06\u72EC\u7ACB\u5206\u6790\u5E76\u751F\u6210\u5B8C\u6574\u89E3\u9898\u8FC7\u7A0B\u2026");
+      const response = await this.callbacks.onEnrichQuestion(questionText, (update) => this.appendAiProcessStream(update));
+      if (!this.aiProcess.content.trim()) this.aiProcess.content = response;
+      this.setAiProcessStep(3, "\u5DF2\u6536\u5230\u6A21\u578B\u7ED3\u679C\uFF0C\u6B63\u5728\u6821\u9A8C\u7B54\u6848\u3001\u89E3\u6790\u548C\u6765\u6E90\u5B57\u6BB5\u2026");
+      const result = parseQuestionEnrichment(response, this.draft);
+      if (!result) throw new Error("AI \u672A\u8FD4\u56DE\u53EF\u89E3\u6790\u7684\u68C0\u7D22\u7ED3\u679C");
+      this.setAiProcessStep(4, "\u6B63\u5728\u628A\u7B54\u6848\u4E0E AI \u89E3\u6790\u8FC7\u7A0B\u56DE\u586B\u5230\u9898\u76EE\u8282\u70B9\u2026");
       this.draft = result.question;
+      this.finishAiProcess("done", result.found ? "\u5904\u7406\u5B8C\u6210\uFF1A\u5DF2\u627E\u5230\u53EF\u9A8C\u8BC1\u539F\u9898\uFF0C\u5E76\u56DE\u586B\u7B54\u6848\u4E0E\u5B8C\u6574\u89E3\u6790\u3002" : "\u5904\u7406\u5B8C\u6210\uFF1A\u672A\u627E\u5230\u53EF\u9760\u539F\u9898\uFF0C\u5DF2\u7531 AI \u72EC\u7ACB\u5206\u6790\u5E76\u56DE\u586B\u7B54\u6848\u4E0E\u5B8C\u6574\u89E3\u6790\u3002");
       this.render();
-      new import_obsidian5.Notice(result.found ? "\u5DF2\u627E\u5230\u539F\u9898\u5E76\u8865\u9F50\u7B54\u6848\u4E0E\u89E3\u6790\uFF0C\u8BF7\u6838\u5BF9\u540E\u4FDD\u5B58" : "\u672A\u627E\u5230\u53EF\u9A8C\u8BC1\u539F\u9898\uFF0C\u5DF2\u7531 AI \u5206\u6790\u8865\u9F50\u7F3A\u5931\u7B54\u6848\u4E0E\u89E3\u7B54\uFF0C\u8BF7\u6838\u5BF9\u540E\u4FDD\u5B58");
+      new import_obsidian5.Notice(result.found ? "\u5DF2\u627E\u5230\u539F\u9898\u5E76\u8865\u9F50\u7B54\u6848\u4E0E\u89E3\u6790\uFF0C\u8BF7\u6838\u5BF9\u540E\u4FDD\u5B58" : "\u672A\u627E\u5230\u53EF\u9A8C\u8BC1\u539F\u9898\uFF0C\u5DF2\u7531 AI \u5206\u6790\u8865\u9F50\u7B54\u6848\u4E0E\u89E3\u7B54\uFF0C\u8BF7\u6838\u5BF9\u540E\u4FDD\u5B58");
     } catch (error) {
-      new import_obsidian5.Notice(`\u539F\u9898\u68C0\u7D22\u5931\u8D25\uFF1A${error instanceof Error ? error.message : String(error)}`);
+      const message = error instanceof Error ? error.message : String(error);
+      this.finishAiProcess("error", `AI \u667A\u80FD\u5904\u7406\u5931\u8D25\uFF1A${message}`);
+      this.render();
+      new import_obsidian5.Notice(`\u539F\u9898\u68C0\u7D22\u5931\u8D25\uFF1A${message}`);
     }
   }
 };
@@ -17932,7 +18041,7 @@ var MindMapStudioView = class extends import_obsidian13.TextFileView {
           return this.plugin.cleanupRemovedImageRemoteAssets((_b3 = (_a3 = this.file) == null ? void 0 : _a3.path) != null ? _b3 : "", block, documentAfterRemoval);
         },
         onRecognizeImage: async (image, blob, remoteUrl, instruction) => this.plugin.recognizeImage(image, blob, void 0, instruction, remoteUrl),
-        onEnrichQuestion: async (questionText) => this.plugin.enrichQuestion(questionText),
+        onEnrichQuestion: async (questionText, onStreamUpdate) => this.plugin.enrichQuestion(questionText, onStreamUpdate),
         onCaptureScreenshot: async (recognizeAfter) => this.plugin.captureScreenshot(recognizeAfter),
         onCreateSubmap: async (node) => {
           if (!this.file) throw new Error("\u5F53\u524D\u8111\u56FE\u5C1A\u672A\u5173\u8054\u6587\u4EF6");
@@ -21729,7 +21838,7 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
     return requestAiCompletion(profile, payload, question, onStreamUpdate);
   }
   /** Converts a transcribed question into a verified original-question lookup result when the selected model supports web retrieval. */
-  async enrichQuestion(questionText) {
+  async enrichQuestion(questionText, onStreamUpdate) {
     const markdown = questionText.trim();
     if (!markdown) throw new Error("\u9898\u76EE\u5185\u5BB9\u4E3A\u7A7A\uFF0C\u65E0\u6CD5\u68C0\u7D22\u539F\u9898");
     const profile = this.settings.aiProfiles.find((item) => item.id === this.settings.defaultAiProfileId && item.enabled);
@@ -21751,9 +21860,10 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
       "\u5C06\u7ED9\u51FA\u7684\u9898\u76EE\u6574\u7406\u4E3A\u9898\u5E93\u7ED3\u6784\uFF0C\u5E76\u5728\u4F60\u5177\u5907\u8054\u7F51\u68C0\u7D22\u80FD\u529B\u65F6\u641C\u7D22\u7CBE\u786E\u539F\u9898\u3002",
       "\u53EA\u5728\u627E\u5230\u53EF\u9A8C\u8BC1\u7684\u539F\u9898\u6765\u6E90\u65F6\u8FD4\u56DE found:true\uFF1B\u5FC5\u987B\u63D0\u4F9B\u53EF\u8BBF\u95EE\u7684 sourceUrl \u548C sourceTitle\u3002",
       "\u4E0D\u80FD\u8054\u7F51\u3001\u672A\u627E\u5230\u6216\u6765\u6E90\u4E0D\u53EF\u9760\u65F6\u8FD4\u56DE found:false\uFF1B\u6B64\u65F6\u4ECD\u9700\u57FA\u4E8E\u9898\u76EE\u72EC\u7ACB\u5206\u6790\uFF0C\u8865\u5168\u7F3A\u5931\u7684 answer \u548C explanation\uFF0C\u4F46 sourceTitle\u3001sourceUrl \u5FC5\u987B\u7559\u7A7A\uFF0C\u5E76\u660E\u786E\u4E0D\u8981\u4F2A\u9020\u6765\u6E90\u3002",
-      '\u53EA\u8FD4\u56DE JSON\uFF0C\u4E0D\u8981 Markdown\uFF1A{"found":boolean,"mode":"choice|essay","stem":"","options":[{"label":"A","content":""}],"answer":"","explanation":"","tags":[""],"sourceTitle":"","sourceUrl":""}\u3002'
+      "explanation \u5FC5\u987B\u5199\u51FA\u53EF\u6838\u5BF9\u7684 AI \u89E3\u6790\u8FC7\u7A0B\uFF0C\u5305\u62EC\u5173\u952E\u6761\u4EF6\u3001\u5224\u65AD\u6216\u8BA1\u7B97\u6B65\u9AA4\u3001\u9009\u9879\u6392\u9664\u7406\u7531\u4EE5\u53CA\u6700\u7EC8\u7ED3\u8BBA\uFF1B\u4E0D\u5F97\u53EA\u91CD\u590D\u7B54\u6848\u3002",
+      '\u53EA\u8FD4\u56DE JSON\uFF0C\u4E0D\u8981 Markdown\uFF1A{"found":boolean,"mode":"choice|judgment|essay","stem":"","options":[{"label":"A","content":""}],"answer":"","explanation":"","tags":[""],"sourceTitle":"","sourceUrl":""}\u3002'
     ].join("\n");
-    const result = await requestAiCompletion(profile, payload, instruction);
+    const result = await requestAiCompletion(profile, payload, instruction, onStreamUpdate);
     return result.text;
   }
   /** 使用指定 AI 配置生成 Markdown 修改提案，但不直接修改导图。 */
