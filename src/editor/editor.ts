@@ -3401,11 +3401,14 @@ export class MindMapEditor {
     element.dataset.mmsInlineEditable = "true";
     element.dataset.mmsEditLabel = placeholder;
     if (!element.textContent?.trim()) element.dataset.placeholder = placeholder;
-    const initialBlock = blockId
-      ? nodeContentBlocks(node).find((block): block is MindMapTextContentBlock => block.type === "text" && block.id === blockId)
-      : nodeContentBlocks(node).find((block): block is MindMapTextContentBlock => block.type === "text");
-    if (!this.readOnly) renderRichTextRuns(element, initialBlock?.richText, initialBlock?.text ?? nodePrimaryText(node), false);
-    let original = readRichTextEditor(element);
+    const currentValue = (): { text: string; richText?: MindMapTextContentBlock["richText"] } => {
+      const liveNode = findNode(this.document.root, node.id) ?? node;
+      const liveBlock = blockId
+        ? nodeContentBlocks(liveNode).find((block): block is MindMapTextContentBlock => block.type === "text" && block.id === blockId)
+        : nodeContentBlocks(liveNode).find((block): block is MindMapTextContentBlock => block.type === "text");
+      return { text: liveBlock?.text ?? nodePrimaryText(liveNode), richText: liveBlock?.richText };
+    };
+    let original = currentValue();
     let toolbar: SelectionFormatToolbarHandle | null = null;
     element.addEventListener("pointerdown", () => {
       if (this.readOnly || element.contentEditable === "true" || element.dataset.mmsExplicitEditOnly === "true") return;
@@ -3419,7 +3422,8 @@ export class MindMapEditor {
       this.inlineEditingId = node.id;
       this.activeArticleBlock = this.currentMode === "article" && blockId ? { nodeId: node.id, blockId } : null;
       this.applyInlineEditingAccessibility(element);
-      original = readRichTextEditor(element);
+      original = currentValue();
+      renderRichTextRuns(element, original.richText, original.text, false);
       element.addClass("is-inline-editing");
       toolbar ??= attachSelectionFormatToolbar({
         editor: element,
@@ -3439,7 +3443,7 @@ export class MindMapEditor {
         event.preventDefault();
         event.stopPropagation();
         event.stopImmediatePropagation();
-        renderRichTextRuns(element, original.richText, original.text, false);
+        element.dataset.mmsCancelInlineEdit = "true";
         element.blur();
       }
     });
@@ -3458,7 +3462,9 @@ export class MindMapEditor {
         return;
       }
       element.removeClass("is-inline-editing");
-      const next = readRichTextEditor(element);
+      const cancelled = element.dataset.mmsCancelInlineEdit === "true";
+      delete element.dataset.mmsCancelInlineEdit;
+      const next = cancelled ? original : readRichTextEditor(element);
       element.contentEditable = "false";
       this.clearInlineEditingAccessibility(element);
       toolbar?.cleanup();
@@ -3471,9 +3477,9 @@ export class MindMapEditor {
       // focus. Ignore the detached editor's late blur instead of writing the
       // deleted node back into the document or triggering a second redraw.
       if (!findNode(this.document.root, node.id)) return;
-      if ((!next.text && node.id === this.document.root.id)
+      if (cancelled || (!next.text && node.id === this.document.root.id)
         || JSON.stringify(next) === JSON.stringify(original)) {
-        renderRichTextRuns(element, original.richText, original.text, false);
+        renderRichTextRuns(element, original.richText, original.text);
         return;
       }
       const hadMeaningfulContent = this.nodeHasMeaningfulContent(node);
@@ -3481,6 +3487,10 @@ export class MindMapEditor {
         this.updateNodeTextBlock(node, next, blockId);
         this.removeNodeAfterContentDeletion(node, hadMeaningfulContent);
       });
+      const committed = findNode(this.document.root, node.id);
+      if (!committed || !element.isConnected) return;
+      const value = currentValue();
+      renderRichTextRuns(element, value.richText, value.text);
     });
   }
 
@@ -4411,6 +4421,7 @@ export class MindMapEditor {
       document: this.document,
       state: this.questionPracticeState,
       resolveImage: this.callbacks.resolveImage,
+      renderRichText: (container, block, fallback) => renderRichTextRuns(container, block?.richText, fallback),
       order: this.options.questionPracticeOrder,
       memoryCurveEnabled: this.options.questionMemoryCurveEnabled,
       wrongBookMasteryCount: this.options.wrongBookMasteryCount,
@@ -6557,30 +6568,41 @@ export class MindMapEditor {
   private renderQuestionSummary(content: HTMLElement, node: MindMapNode): void {
     const question = node.question;
     if (!question) return;
-    const plainText = (blocks: MindMapContentBlock[]): string => blocks
-      .map((block) => block.type === "text" ? block.text.trim() : "[图片]")
-      .filter(Boolean).join(" ");
+    const hasContent = (blocks: readonly MindMapContentBlock[]): boolean => blocks.some((block) => block.type === "text" ? Boolean(block.text.trim()) : block.type === "image");
+    const renderValue = (container: HTMLElement, blocks: readonly MindMapContentBlock[]): void => {
+      blocks.forEach((block, index) => {
+        if (block.type === "text" && block.text.trim()) {
+          const part = container.createSpan({ cls: "mmc-question-text-part" });
+          renderRichTextRuns(part, block.richText, block.text);
+          if (index < blocks.length - 1) container.createEl("br");
+        } else if (block.type === "image") {
+          container.createSpan({ cls: "mmc-question-image-placeholder", text: "[图片]" });
+          if (index < blocks.length - 1) container.createEl("br");
+        }
+      });
+    };
     const summary = content.createDiv({ cls: "mmc-question-summary" });
     const meta = summary.createDiv({ cls: "mmc-question-meta" });
     meta.createDiv({ cls: "mmc-question-kind", text: question.mode === "essay" ? "大题" : question.mode === "judgment" ? "判断题" : "选择题" });
     const statusLabels = { unanswered: "未做", completed: "已做", favorite: "收藏", wrong: "错题", mastered: "掌握" } as const;
     meta.createDiv({ cls: `mmc-question-status is-${question.status}`, text: statusLabels[question.status] });
-    const appendField = (container: HTMLElement, label: string, value: string, cls = ""): void => {
-      if (!value) return;
-      const line = container.createDiv({ cls: `mmc-question-field ${cls}`.trim() });
+    const appendField = (fieldContainer: HTMLElement, label: string, blocks: readonly MindMapContentBlock[], cls = ""): void => {
+      if (!hasContent(blocks)) return;
+      const line = fieldContainer.createDiv({ cls: `mmc-question-field ${cls}`.trim() });
       line.createSpan({ cls: "mmc-question-label", text: `${label}：` });
-      line.createSpan({ cls: "mmc-question-value", text: value });
+      const value = line.createSpan({ cls: "mmc-question-value" });
+      renderValue(value, blocks);
     };
     if (question.mode !== "essay") {
-      for (const option of question.options) appendField(summary, option.label, plainText(option.content), "is-option");
+      for (const option of question.options) appendField(summary, option.label, option.content, "is-option");
     }
-    const answer = plainText(question.answer);
-    const explanation = plainText(question.explanation);
-    if (answer || explanation) {
+    const hasAnswer = hasContent(question.answer);
+    const hasExplanation = hasContent(question.explanation);
+    if (hasAnswer || hasExplanation) {
       const toggle = summary.createEl("button", { cls: "mmc-question-toggle", text: "显示答案与解析", attr: { type: "button", "aria-expanded": "false" } });
       const reveal = summary.createDiv({ cls: "mmc-question-reveal" });
-      appendField(reveal, "答案", answer, "is-answer");
-      appendField(reveal, "解答", explanation, "is-explanation");
+      appendField(reveal, "答案", question.answer, "is-answer");
+      appendField(reveal, "解答", question.explanation, "is-explanation");
       toggle.addEventListener("click", (event) => {
         event.stopPropagation();
         const revealed = !reveal.hasClass("is-revealed");
@@ -7544,14 +7566,23 @@ export class MindMapEditor {
   private insertFormula(): void {
     if (!this.ensureEditable()) return;
     const selected = this.selectedNode() ?? this.document.root;
-    new FormulaEditModal(this.app, (source) => {
+    new FormulaEditModal(this.app, (value) => {
       this.mutate(() => {
         const blocks = nodeContentBlocks(selected);
-        const formula = `$$${source}$$`;
+        const formula = value.display ? `$$${value.source}$$` : `$${value.source}$`;
         const emptyText = blocks.find((block): block is MindMapTextContentBlock => block.type === "text" && !block.text.trim());
         if (emptyText) {
           emptyText.text = formula;
           emptyText.richText = undefined;
+        } else if (!value.display) {
+          const textBlock = blocks.find((block): block is MindMapTextContentBlock => block.type === "text");
+          if (textBlock) {
+            const addition = `${textBlock.text && !/\s$/.test(textBlock.text) ? " " : ""}${formula}`;
+            textBlock.text += addition;
+            if (textBlock.richText?.length) textBlock.richText = [...textBlock.richText, { text: addition }];
+          } else {
+            blocks.unshift({ id: newId(), type: "text", text: formula });
+          }
         } else {
           blocks.push({ id: newId(), type: "text", text: formula });
         }

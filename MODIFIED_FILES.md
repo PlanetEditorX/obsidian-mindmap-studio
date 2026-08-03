@@ -1,5 +1,14 @@
 # Modified Files
 
+## 1.42.7 题目 LaTeX 与文章即时渲染
+
+- `src/editor/editor-modals.ts`、`src/editor/question-modal.ts`：公式编辑器支持行内/独立模式；题干、选项、答案和解答文字框支持右键按光标插入公式并即时预览。
+- `src/editor/editor.ts`、`src/editor/rich-text-dom.ts`：文章查看态保留公式，聚焦时显示源码，失焦后立即重新渲染；异步 MathJax 不覆盖活动编辑器；工具栏公式可直接追加到现有文字块中。
+- `src/editor/article-renderer.ts`、`src/editor/question-practice-mode.ts`：题目详情、摘要和练习模式统一使用富文本公式渲染。
+- `styles.css`：增加公式显示模式、题目字段标题和即时预览样式。
+- `tests/question.test.mjs`、`tests/reading-editor-contract.test.mjs`：增加题目各字段插入、行内混排、即时预览和文章首次/失焦渲染回归。
+- `package.json`、`package-lock.json`、`manifest.json`、`versions.json`、`update.json`：统一版本为 1.42.7，安装包 SHA-256 为 `7503eb6df226786de040fbb15be36a9fc2ce49bd99a95a75cfa13f56093c4919`。
+
 ## 1.42.6 恢复导图节点折叠按钮圆形样式
 
 - `styles.css`：恢复 `.mmc-fold-button` 与 `.mmc-node-link` 共用的绝对定位、22px 尺寸、圆形边框、背景和文字样式；折叠按钮继续位于节点右下角。

@@ -544,34 +544,51 @@ function renderArticleTable(
   });
 }
 
+/** Returns whether a structured-question field contains visible text or an image. */
+function questionFieldHasContent(blocks: readonly MindMapContentBlock[]): boolean {
+  return blocks.some((block) => block.type === "text" ? Boolean(block.text.trim()) : block.type === "image");
+}
+
+/** Renders question text blocks with the same inline/display LaTeX rules as normal node text. */
+function renderQuestionFieldValue(container: HTMLElement, blocks: readonly MindMapContentBlock[]): void {
+  blocks.forEach((block, index) => {
+    if (block.type === "text" && block.text.trim()) {
+      const part = container.createSpan({ cls: "mms-question-text-part" });
+      renderRichTextRuns(part, block.richText, block.text);
+      if (index < blocks.length - 1) container.createEl("br");
+    } else if (block.type === "image") {
+      container.createSpan({ cls: "mms-question-image-placeholder", text: "[图片]" });
+      if (index < blocks.length - 1) container.createEl("br");
+    }
+  });
+}
+
 /** Renders structured question options, answers, explanations, and original source in article and reading modes. */
 function renderArticleQuestionDetails(container: HTMLElement, node: MindMapNode): void {
   const question = node.question;
   if (!question) return;
-  const plainText = (blocks: typeof question.stem): string => blocks
-    .map((block) => block.type === "text" ? block.text.trim() : "[图片]")
-    .filter(Boolean).join(" ");
   const panel = container.createDiv({ cls: "mms-question-panel" });
   const meta = panel.createDiv({ cls: "mms-question-meta" });
   meta.createDiv({ cls: "mms-question-kind", text: question.mode === "essay" ? "大题" : question.mode === "judgment" ? "判断题" : "选择题" });
   const statusLabels = { unanswered: "未做", completed: "已做", favorite: "收藏", wrong: "错题", mastered: "掌握" } as const;
   meta.createDiv({ cls: `mms-question-status is-${question.status}`, text: statusLabels[question.status] });
-  const appendField = (container: HTMLElement, label: string, value: string, cls = ""): void => {
-    if (!value) return;
-    const row = container.createDiv({ cls: `mms-question-row ${cls}`.trim() });
+  const appendField = (fieldContainer: HTMLElement, label: string, blocks: readonly MindMapContentBlock[], cls = ""): void => {
+    if (!questionFieldHasContent(blocks)) return;
+    const row = fieldContainer.createDiv({ cls: `mms-question-row ${cls}`.trim() });
     row.createEl("strong", { text: `${label}：` });
-    row.createSpan({ text: value });
+    const value = row.createSpan({ cls: "mms-question-value" });
+    renderQuestionFieldValue(value, blocks);
   };
   if (question.mode !== "essay") {
-    for (const option of question.options) appendField(panel, option.label, plainText(option.content), "is-option");
+    for (const option of question.options) appendField(panel, option.label, option.content, "is-option");
   }
-  const answer = plainText(question.answer);
-  const explanation = plainText(question.explanation);
-  if (answer || explanation) {
+  const hasAnswer = questionFieldHasContent(question.answer);
+  const hasExplanation = questionFieldHasContent(question.explanation);
+  if (hasAnswer || hasExplanation) {
     const toggle = panel.createEl("button", { cls: "mms-question-toggle", text: "显示答案与解析", attr: { type: "button", "aria-expanded": "false" } });
     const reveal = panel.createDiv({ cls: "mms-question-reveal" });
-    appendField(reveal, "答案", answer, "is-answer");
-    appendField(reveal, "解答", explanation, "is-explanation");
+    appendField(reveal, "答案", question.answer, "is-answer");
+    appendField(reveal, "解答", question.explanation, "is-explanation");
     toggle.addEventListener("click", () => {
       const revealed = !reveal.hasClass("is-revealed");
       reveal.toggleClass("is-revealed", revealed);

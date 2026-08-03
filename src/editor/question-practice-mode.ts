@@ -30,6 +30,7 @@ export interface QuestionPracticeOptions {
   document: MindMapDocument;
   state: QuestionPracticeState;
   resolveImage: (source: string) => string | null;
+  renderRichText: (container: HTMLElement, block: Extract<MindMapContentBlock, { type: "text" }> | undefined, fallback: string) => void;
   order: QuestionPracticeOrder;
   memoryCurveEnabled: boolean;
   wrongBookMasteryCount: number;
@@ -112,8 +113,9 @@ export function renderQuestionPracticeMode(container: HTMLElement, options: Ques
   const multiple = question.mode === "choice" && answerLabels.length > 1;
   const questionKind = question.mode === "essay" ? "大题" : question.mode === "judgment" ? "判断题" : multiple ? "多选题" : "单选题";
   shell.createDiv({ cls: "mms-question-practice-progress", text: `${currentIndex + 1} / ${questions.length} · ${questionKind}` });
-  shell.createEl("h3", { cls: "mms-question-practice-stem", text: nodePlainText(node) || "未命名题目" });
-  renderBlocks(shell, question.stem.filter((block) => block.type !== "text"), options.resolveImage);
+  const stem = shell.createEl("h3", { cls: "mms-question-practice-stem" });
+  renderQuestionTextBlocks(stem, question.stem, nodePlainText(node) || "未命名题目", options.renderRichText);
+  renderBlocks(shell, question.stem.filter((block) => block.type !== "text"), options.resolveImage, options.renderRichText);
   if (question.mode !== "essay") {
     const choices = shell.createDiv({ cls: "mms-question-practice-choices" });
     question.options.forEach((option) => {
@@ -130,7 +132,7 @@ export function renderQuestionPracticeMode(container: HTMLElement, options: Ques
       input.checked = options.state.selectedOptionIds.includes(option.id);
       input.disabled = options.state.answerVisible;
       choice.createSpan({ cls: "mms-question-practice-option-label", text: option.label });
-      renderBlocks(choice, option.content, options.resolveImage);
+      renderBlocks(choice, option.content, options.resolveImage, options.renderRichText);
       input.addEventListener("change", () => {
         options.state.selectedOptionIds = multiple
           ? options.state.selectedOptionIds.includes(option.id)
@@ -169,10 +171,10 @@ export function renderQuestionPracticeMode(container: HTMLElement, options: Ques
   const result = shell.createDiv({ cls: `mms-question-practice-result ${options.state.lastCorrect ? "is-correct" : "is-wrong"}`, text: options.state.lastCorrect ? "回答正确" : "回答错误，已加入错题本" });
   result.setAttr("role", "status");
   shell.createEl("h4", { text: "参考答案" });
-  renderBlocks(shell, question.answer, options.resolveImage);
+  renderBlocks(shell, question.answer, options.resolveImage, options.renderRichText);
   if (question.explanation.length) {
     shell.createEl("h4", { text: "解析" });
-    renderExplanationBlocks(shell, question.explanation, options.resolveImage);
+    renderExplanationBlocks(shell, question.explanation, options.resolveImage, options.renderRichText);
   }
   const finalQuestion = currentIndex === questions.length - 1;
   const next = shell.createEl("button", { cls: "mod-cta mms-question-practice-submit", text: finalQuestion ? "结束答题" : "下一题", attr: { type: "button" } });
@@ -253,10 +255,37 @@ export function isQuestionJudgmentCorrect(node: MindMapNode, selectedIds: readon
   return normalizeJudgmentAnswer(blockText(selected.content) || selected.label) === normalizeJudgmentAnswer(blockText(node.question!.answer));
 }
 
+/** Renders one or more question text blocks with inline/display LaTeX support. */
+function renderQuestionTextBlocks(
+  container: HTMLElement,
+  blocks: readonly MindMapContentBlock[],
+  fallback: string,
+  renderRichText: QuestionPracticeOptions["renderRichText"]
+): void {
+  const textBlocks = blocks.filter((block): block is Extract<MindMapContentBlock, { type: "text" }> => block.type === "text" && Boolean(block.text.trim()));
+  if (!textBlocks.length) {
+    renderRichText(container, undefined, fallback);
+    return;
+  }
+  textBlocks.forEach((block, index) => {
+    const part = container.createSpan({ cls: "mms-question-practice-text-part" });
+    renderRichText(part, block, block.text);
+    if (index < textBlocks.length - 1) container.createEl("br");
+  });
+}
+
 /** Renders text and image blocks in their original order. */
-function renderBlocks(container: HTMLElement, blocks: readonly MindMapContentBlock[], resolveImage: (source: string) => string | null): void {
+function renderBlocks(
+  container: HTMLElement,
+  blocks: readonly MindMapContentBlock[],
+  resolveImage: (source: string) => string | null,
+  renderRichText: QuestionPracticeOptions["renderRichText"]
+): void {
   blocks.forEach((block) => {
-    if (block.type === "text" && block.text.trim()) container.createDiv({ cls: "mms-question-practice-text", text: block.text });
+    if (block.type === "text" && block.text.trim()) {
+      const text = container.createDiv({ cls: "mms-question-practice-text" });
+      renderRichText(text, block, block.text);
+    }
     if (block.type === "image") {
       const source = resolveImage(block.source);
       if (source) container.createEl("img", { cls: "mms-question-practice-image", attr: { src: source, alt: block.alt || "题目图片" } });
@@ -265,12 +294,20 @@ function renderBlocks(container: HTMLElement, blocks: readonly MindMapContentBlo
 }
 
 /** Renders A/B/C/D explanation paragraphs as separate readable lines. */
-function renderExplanationBlocks(container: HTMLElement, blocks: readonly MindMapContentBlock[], resolveImage: (source: string) => string | null): void {
+function renderExplanationBlocks(
+  container: HTMLElement,
+  blocks: readonly MindMapContentBlock[],
+  resolveImage: (source: string) => string | null,
+  renderRichText: QuestionPracticeOptions["renderRichText"]
+): void {
   for (const block of blocks) {
     if (block.type === "text") {
-      splitExplanationLines(block.text).forEach((text) => container.createDiv({ cls: "mms-question-practice-explanation-item", text }));
+      splitExplanationLines(block.text).forEach((text) => {
+        const line = container.createDiv({ cls: "mms-question-practice-explanation-item" });
+        renderRichText(line, undefined, text);
+      });
     } else {
-      renderBlocks(container, [block], resolveImage);
+      renderBlocks(container, [block], resolveImage, renderRichText);
     }
   }
 }

@@ -5809,3 +5809,48 @@ select.mms-question-status {
   outline-offset: 3px;
   border-radius: 4px;
 }
+
+/* LaTeX input and structured-question previews */
+.mms-formula-display-mode {
+  width: 100%;
+}
+
+.mms-question-field-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.mms-question-field-heading h3 {
+  margin: 0;
+}
+
+.mms-question-field-preview {
+  min-height: 42px;
+  margin-top: 6px;
+  padding: 8px 10px;
+  overflow-wrap: anywhere;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-s);
+  background: var(--background-secondary);
+  white-space: pre-wrap;
+}
+
+.mms-question-value,
+.mmc-question-value,
+.mms-question-practice-text,
+.mms-question-practice-text-part,
+.mms-question-practice-explanation-item {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.mms-question-value .mms-node-math:not(.is-display),
+.mmc-question-value .mms-node-math:not(.is-display),
+.mms-question-practice-text .mms-node-math:not(.is-display),
+.mms-question-practice-text-part .mms-node-math:not(.is-display),
+.mms-question-practice-explanation-item .mms-node-math:not(.is-display),
+.mms-question-field-preview .mms-node-math:not(.is-display) {
+  margin-inline: .08em;
+}
