@@ -131,4 +131,4 @@ npm run test:docs
 
 ### 文章编号关闭语义
 
-根节点的 `articleNumberingMode: "none"` 与普通节点语义不同：中心节点本身不显示编号，因此它代表当前物理导图的整页编号开关。正文、目录、通读、导出和子文章页标题必须共同调用 `isDocumentArticleNumberingDisabled()`，不得各自回退到自动“第一章”；普通节点仍只跳过自身编号。
+根节点的 `articleNumberingMode: "none"` 与普通节点语义不同：中心节点本身不显示编号，因此它代表当前物理导图的文章编号开关。文章正文、文章目录、导出和子文章页标题必须共同调用 `isDocumentArticleNumberingDisabled()`，不得各自回退到自动“第一章”；通读必须使用 `buildReadingArticleNodeInfo()` 和独立 `readingTocEntries`，只忽略中心节点关闭而继续尊重普通节点关闭与手动层级。

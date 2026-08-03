@@ -228,7 +228,9 @@ function normalizeAppearance(input) {
     underline: normalizeBooleanOverride(input.underline),
     codeCollapsed: normalizeBooleanOverride(input.codeCollapsed),
     codeShowLineNumbers: normalizeBooleanOverride(input.codeShowLineNumbers),
-    codeTheme: input.codeTheme === "github" || input.codeTheme === "monokai" || input.codeTheme === "dracula" || input.codeTheme === "obsidian" ? input.codeTheme : void 0
+    codeTheme: input.codeTheme === "github" || input.codeTheme === "monokai" || input.codeTheme === "dracula" || input.codeTheme === "obsidian" ? input.codeTheme : void 0,
+    codeAutoExpandMaxLines: normalizeNumber(input.codeAutoExpandMaxLines, 0, 1e3),
+    codeAutoLineNumbersMinLines: normalizeNumber(input.codeAutoLineNumbersMinLines, 0, 1e3)
   };
   return Object.values(appearance).some((value) => value !== void 0) ? appearance : void 0;
 }
@@ -2064,7 +2066,6 @@ var SETTINGS_SECTION_TITLES = [
   "\u89C6\u56FE\u4E0E\u9605\u8BFB",
   "\u7F16\u8F91\u4E0E\u4EA4\u4E92",
   "\u8282\u70B9\u5E03\u5C40\u4E0E\u5C3A\u5BF8",
-  "\u4EE3\u7801\u884C\u4E3A",
   "\u5DE5\u5177\u680F",
   "\u5FEB\u6377\u952E\u914D\u7F6E",
   "\u6587\u4EF6\u4E0E\u8D44\u6E90",
@@ -2273,13 +2274,14 @@ function normalizeSettingsSectionOrder(value) {
     "\u6587\u5B57\u4E0E\u6392\u7248": "\u4E3B\u9898\u4E0E\u5916\u89C2",
     "\u8282\u70B9\u5916\u89C2": "\u8282\u70B9\u5E03\u5C40\u4E0E\u5C3A\u5BF8",
     "\u8FDE\u7EBF\u4E0E\u5206\u652F": "\u4E3B\u9898\u4E0E\u5916\u89C2",
-    "\u4EE3\u7801\u5757": "\u4EE3\u7801\u884C\u4E3A",
+    "\u4EE3\u7801\u5757": "\u4E3B\u9898\u4E0E\u5916\u89C2",
     "\u7F16\u8F91\u9009\u9879": "\u7F16\u8F91\u4E0E\u4EA4\u4E92",
     "\u753B\u5E03\u80CC\u666F": "\u4E3B\u9898\u4E0E\u5916\u89C2",
     "\u5B57\u4F53\u4E0E\u6587\u5B57": "\u4E3B\u9898\u4E0E\u5916\u89C2",
     "\u8282\u70B9\u6837\u5F0F": "\u8282\u70B9\u5E03\u5C40\u4E0E\u5C3A\u5BF8",
     "\u8FDE\u7EBF\u6837\u5F0F": "\u4E3B\u9898\u4E0E\u5916\u89C2",
-    "\u5168\u5C40\u4EE3\u7801\u8BBE\u7F6E": "\u4EE3\u7801\u884C\u4E3A",
+    "\u5168\u5C40\u4EE3\u7801\u8BBE\u7F6E": "\u4E3B\u9898\u4E0E\u5916\u89C2",
+    "\u4EE3\u7801\u884C\u4E3A": "\u4E3B\u9898\u4E0E\u5916\u89C2",
     "\u6587\u4EF6\u4E0E\u5E03\u5C40": "\u6587\u4EF6\u4E0E\u8D44\u6E90",
     "\u6587\u4EF6\u5939": "\u6587\u4EF6\u4E0E\u8D44\u6E90",
     "\u5168\u5C40\u641C\u7D22\u7D22\u5F15": "\u5168\u5C40\u641C\u7D22",
@@ -2437,7 +2439,6 @@ var MindMapStudioSettingTab = class extends import_obsidian.PluginSettingTab {
         void this.saveAndRefresh().then(() => this.display());
       });
     }
-    containerEl.createEl("h3", { text: "\u4EE3\u7801\u884C\u4E3A" });
     new import_obsidian.Setting(containerEl).setName("\u4EE3\u7801\u9ED8\u8BA4\u6298\u53E0").setDesc("\u4F18\u5148\u7EA7\u6700\u4F4E\uFF1B\u9875\u9762\u6216\u8282\u70B9\u4EE3\u7801\u8BBE\u7F6E\u53EF\u8986\u76D6\u3002").addToggle((toggle) => toggle.setValue(this.plugin.settings.defaultCodeCollapsed).onChange(async (value) => {
       this.plugin.settings.defaultCodeCollapsed = value;
       await this.saveAndRefresh();
@@ -3423,7 +3424,7 @@ var MindMapStudioSettingTab = class extends import_obsidian.PluginSettingTab {
       createGroup("\u8282\u70B9\u4E0E\u6587\u5B57", "\u5BF9\u5E94\u9875\u9762\u201C\u4E3B\u9898\u4E0E\u5916\u89C2\u201D\u7684\u8282\u70B9\u4E0E\u6587\u5B57\u5206\u7EC4\uFF1B\u8282\u70B9\u5355\u72EC\u8BBE\u7F6E\u4ECD\u5177\u6709\u66F4\u9AD8\u4F18\u5148\u7EA7\u3002", ["\u5206\u652F\u5916\u89C2", "\u9ED8\u8BA4\u8282\u70B9\u6587\u5B57\u5BF9\u9F50", "\u4E2D\u5FC3\u4E3B\u9898\u989C\u8272", "\u4E2D\u5FC3\u4E3B\u9898\u6587\u5B57\u989C\u8272", "\u9ED8\u8BA4\u8282\u70B9\u80CC\u666F\u8272", "\u9ED8\u8BA4\u6587\u5B57\u989C\u8272", "\u9ED8\u8BA4\u8282\u70B9\u8FB9\u6846\u989C\u8272", "\u9ED8\u8BA4\u8282\u70B9\u8FB9\u6846\u7C97\u7EC6", "\u9ED8\u8BA4\u6587\u5B57\u52A0\u7C97", "\u9ED8\u8BA4\u6587\u5B57\u659C\u4F53", "\u9ED8\u8BA4\u6587\u5B57\u4E0B\u5212\u7EBF"]),
       createGroup("\u8FDE\u7EBF\u4E0E\u5206\u652F", "\u5BF9\u5E94\u9875\u9762\u201C\u4E3B\u9898\u4E0E\u5916\u89C2\u201D\u7684\u8FDE\u7EBF\u4E0E\u5206\u652F\u5206\u7EC4\u3002", ["\u8FDE\u7EBF\u989C\u8272", "\u8FDE\u7EBF\u7C7B\u578B", "\u8FDE\u7EBF\u7C97\u7EC6\u6A21\u5F0F", "\u8D77\u59CB\u7C97\u7EC6", "\u8FDE\u7EBF\u7C97\u7EC6", "\u672B\u7AEF\u6700\u7EC6\u5BBD\u5EA6", "\u5F69\u8272\u5206\u652F", "\u5206\u652F\u989C\u8272"]),
       createGroup("\u9605\u8BFB\u5916\u89C2", "\u5BF9\u5E94\u9875\u9762\u201C\u4E3B\u9898\u4E0E\u5916\u89C2\u201D\u7684\u9605\u8BFB\u5206\u7EC4\u3002", ["\u6587\u7AE0\u76EE\u5F55\u6700\u5927\u5C42\u7EA7", "\u6587\u7AE0/\u901A\u8BFB\u7F29\u7565\u5BFC\u822A\u56FE"]),
-      createGroup("\u4EE3\u7801\u5916\u89C2", "\u5BF9\u5E94\u9875\u9762\u201C\u4E3B\u9898\u4E0E\u5916\u89C2\u201D\u7684\u4EE3\u7801\u5206\u7EC4\uFF1B\u66F4\u7EC6\u7684\u81EA\u52A8\u5C55\u5F00\u89C4\u5219\u4FDD\u7559\u5728\u201C\u4EE3\u7801\u884C\u4E3A\u201D\u3002", ["\u4EE3\u7801\u9ED8\u8BA4\u6298\u53E0", "\u4EE3\u7801\u9ED8\u8BA4\u663E\u793A\u884C\u53F7", "\u4EE3\u7801\u9ED8\u8BA4\u6837\u5F0F"])
+      createGroup("\u4EE3\u7801\u5916\u89C2", "\u4E0E\u9875\u9762\u5DE5\u5177\u680F\u4E2D\u7684\u201C\u4EE3\u7801\u5916\u89C2\u201D\u4FDD\u6301\u540C\u4E00\u7EC4\u8BBE\u7F6E\u548C\u4F18\u5148\u7EA7\u3002", ["\u4EE3\u7801\u9ED8\u8BA4\u6298\u53E0", "\u4EE3\u7801\u9ED8\u8BA4\u663E\u793A\u884C\u53F7", "\u4E0D\u8D85\u8FC7\u591A\u5C11\u884C\u65F6\u4FDD\u6301\u5C55\u5F00", "\u8D85\u8FC7\u591A\u5C11\u884C\u65F6\u663E\u793A\u884C\u53F7", "\u4EE3\u7801\u9ED8\u8BA4\u6837\u5F0F"])
     );
     for (const heading of headings) {
       const title = (_a2 = heading.textContent) == null ? void 0 : _a2.trim();
@@ -4254,16 +4255,16 @@ ${block.code}
 ${fence}`;
 }
 function resolveCodeBlockPresentation(block, pageAppearance, defaults) {
-  var _a2, _b2, _c, _d, _e, _f, _g;
+  var _a2, _b2, _c, _d, _e, _f, _g, _h, _i;
   const lineCount = countCodeLines(block.code);
-  const expandThreshold = normalizeCodeLineThreshold(defaults.autoExpandMaxLines);
-  const lineNumberThreshold = normalizeCodeLineThreshold(defaults.autoLineNumbersMinLines);
+  const expandThreshold = normalizeCodeLineThreshold((_a2 = pageAppearance == null ? void 0 : pageAppearance.codeAutoExpandMaxLines) != null ? _a2 : defaults.autoExpandMaxLines);
+  const lineNumberThreshold = normalizeCodeLineThreshold((_b2 = pageAppearance == null ? void 0 : pageAppearance.codeAutoLineNumbersMinLines) != null ? _b2 : defaults.autoLineNumbersMinLines);
   const autoExpand = expandThreshold > 0 && lineCount <= expandThreshold;
   const autoLineNumbers = lineNumberThreshold > 0 ? lineCount > lineNumberThreshold : void 0;
   return {
-    collapsed: (_b2 = block.collapsed) != null ? _b2 : autoExpand ? false : (_a2 = pageAppearance == null ? void 0 : pageAppearance.codeCollapsed) != null ? _a2 : defaults.collapsed,
-    showLineNumbers: (_e = (_d = (_c = block.showLineNumbers) != null ? _c : autoLineNumbers) != null ? _d : pageAppearance == null ? void 0 : pageAppearance.codeShowLineNumbers) != null ? _e : defaults.showLineNumbers,
-    theme: (_g = (_f = block.theme) != null ? _f : pageAppearance == null ? void 0 : pageAppearance.codeTheme) != null ? _g : defaults.theme,
+    collapsed: (_d = block.collapsed) != null ? _d : autoExpand ? false : (_c = pageAppearance == null ? void 0 : pageAppearance.codeCollapsed) != null ? _c : defaults.collapsed,
+    showLineNumbers: (_g = (_f = (_e = block.showLineNumbers) != null ? _e : autoLineNumbers) != null ? _f : pageAppearance == null ? void 0 : pageAppearance.codeShowLineNumbers) != null ? _g : defaults.showLineNumbers,
+    theme: (_i = (_h = block.theme) != null ? _h : pageAppearance == null ? void 0 : pageAppearance.codeTheme) != null ? _i : defaults.theme,
     lineCount
   };
 }
@@ -5317,6 +5318,10 @@ function buildArticleNodeInfo(root, baseDepth = 0, leafNumbering = { enabled: fa
   visitChildren(root, articleChildStartLevel(root, baseDepth));
   return result;
 }
+function buildReadingArticleNodeInfo(root, baseDepth = 0, leafNumbering = { enabled: false, threshold: 4 }) {
+  if (root.articleNumberingMode !== "none") return buildArticleNodeInfo(root, baseDepth, leafNumbering);
+  return buildArticleNodeInfo({ ...root, articleNumberingMode: void 0, articleNumberingLevel: void 0 }, baseDepth, leafNumbering);
+}
 function normalizeVisibleModes(modes) {
   const raw = Array.isArray(modes) ? modes : [];
   const result = [];
@@ -5658,7 +5663,7 @@ function readRichTextEditor(editor) {
 // src/editor/editor-modals.ts
 var import_obsidian5 = require("obsidian");
 
-// node_modules/fflate/esm/browser.js
+// ../../work_mms/node_modules/fflate/esm/browser.js
 var u8 = Uint8Array;
 var u16 = Uint16Array;
 var i32 = Int32Array;
@@ -10587,8 +10592,8 @@ var AppearanceModal = class extends import_obsidian11.Modal {
     miniMapSelect.createEl("option", { text: "\u9690\u85CF", attr: { value: "hide" } });
     miniMapSelect.value = this.articleMiniMap === void 0 ? "" : this.articleMiniMap ? "show" : "hide";
     const codeSection = appearanceLeftColumn.createDiv({ cls: "mmc-appearance-section mmc-appearance-code-settings" });
-    codeSection.createDiv({ cls: "mmc-theme-picker-title", text: "\u9875\u9762\u4EE3\u7801\u8BBE\u7F6E" });
-    codeSection.createDiv({ cls: "setting-item-description mmc-appearance-section-description", text: "\u4F18\u5148\u7EA7 2\uFF1A\u8986\u76D6\u63D2\u4EF6\u5168\u5C40\u4EE3\u7801\u8BBE\u7F6E\uFF1B\u8282\u70B9\u4EE3\u7801\u8BBE\u7F6E\u4ECD\u53EF\u5355\u72EC\u8986\u76D6\u3002" });
+    codeSection.createDiv({ cls: "mmc-theme-picker-title", text: "\u4EE3\u7801\u5916\u89C2" });
+    codeSection.createDiv({ cls: "setting-item-description mmc-appearance-section-description", text: "\u9ED8\u8BA4\u72B6\u6001\u3001\u884C\u53F7\u3001\u6837\u5F0F\u548C\u81EA\u52A8\u89C4\u5219\u7EDF\u4E00\u8986\u76D6\u63D2\u4EF6\u5168\u5C40\u4EE3\u7801\u5916\u89C2\uFF1B\u8282\u70B9\u4EE3\u7801\u8BBE\u7F6E\u4ECD\u5177\u6709\u6700\u9AD8\u4F18\u5148\u7EA7\u3002" });
     const codeGrid = codeSection.createDiv({ cls: "mmc-form-grid mmc-appearance-grid" });
     const pageCodeCollapsedLabel = codeGrid.createEl("label", { text: "\u9ED8\u8BA4\u72B6\u6001" });
     const pageCodeCollapsed = pageCodeCollapsedLabel.createEl("select");
@@ -10607,6 +10612,14 @@ var AppearanceModal = class extends import_obsidian11.Modal {
     pageCodeTheme.createEl("option", { value: "", text: "\u8DDF\u968F\u5168\u5C40\u8BBE\u7F6E" });
     ["obsidian", "github", "monokai", "dracula"].forEach((value) => pageCodeTheme.createEl("option", { value, text: value === "obsidian" ? "Obsidian" : value === "github" ? "GitHub" : value === "monokai" ? "Monokai" : "Dracula" }));
     pageCodeTheme.value = (_n = this.pageCodeAppearance.codeTheme) != null ? _n : "";
+    const pageCodeAutoExpandLabel = codeGrid.createEl("label", { text: "\u81EA\u52A8\u4FDD\u6301\u5C55\u5F00" });
+    const pageCodeAutoExpand = pageCodeAutoExpandLabel.createEl("input", { type: "number", attr: { min: "0", max: "1000", step: "1", placeholder: "\u8DDF\u968F\u5168\u5C40\u8BBE\u7F6E" } });
+    pageCodeAutoExpand.value = typeof this.pageCodeAppearance.codeAutoExpandMaxLines === "number" ? String(this.pageCodeAppearance.codeAutoExpandMaxLines) : "";
+    pageCodeAutoExpandLabel.createDiv({ cls: "setting-item-description", text: "\u4EE3\u7801\u4E0D\u8D85\u8FC7\u8BE5\u884C\u6570\u65F6\u81EA\u52A8\u5C55\u5F00\uFF1B\u7559\u7A7A\u8DDF\u968F\u5168\u5C40\uFF0C0 \u5173\u95ED\u3002" });
+    const pageCodeAutoLinesLabel = codeGrid.createEl("label", { text: "\u81EA\u52A8\u663E\u793A\u884C\u53F7" });
+    const pageCodeAutoLines = pageCodeAutoLinesLabel.createEl("input", { type: "number", attr: { min: "0", max: "1000", step: "1", placeholder: "\u8DDF\u968F\u5168\u5C40\u8BBE\u7F6E" } });
+    pageCodeAutoLines.value = typeof this.pageCodeAppearance.codeAutoLineNumbersMinLines === "number" ? String(this.pageCodeAppearance.codeAutoLineNumbersMinLines) : "";
+    pageCodeAutoLinesLabel.createDiv({ cls: "setting-item-description", text: "\u4EE3\u7801\u8D85\u8FC7\u8BE5\u884C\u6570\u65F6\u81EA\u52A8\u663E\u793A\u884C\u53F7\uFF1B\u7559\u7A7A\u8DDF\u968F\u5168\u5C40\uFF0C0 \u5173\u95ED\u3002" });
     const setColor = (control, value, fallback) => {
       control.toggle.checked = Boolean(value);
       control.input.value = value != null ? value : fallback;
@@ -10736,7 +10749,9 @@ var AppearanceModal = class extends import_obsidian11.Modal {
         underline: underline.checked,
         ...pageCodeCollapsed.value ? { codeCollapsed: pageCodeCollapsed.value === "true" } : {},
         ...pageCodeLines.value ? { codeShowLineNumbers: pageCodeLines.value === "true" } : {},
-        ...pageCodeTheme.value ? { codeTheme: pageCodeTheme.value } : {}
+        ...pageCodeTheme.value ? { codeTheme: pageCodeTheme.value } : {},
+        ...pageCodeAutoExpand.value.trim() ? { codeAutoExpandMaxLines: clamp2(pageCodeAutoExpand.value, 0, 1e3, 0) } : {},
+        ...pageCodeAutoLines.value.trim() ? { codeAutoLineNumbersMinLines: clamp2(pageCodeAutoLines.value, 0, 1e3, 0) } : {}
       }, numberingControls.read(), tocDepthSelect.value ? resolveArticleTocMaxDepth(Number(tocDepthSelect.value), this.globalArticleTocMaxDepth) : void 0, miniMapSelect.value === "show" ? true : miniMapSelect.value === "hide" ? false : void 0);
       this.close();
     });
@@ -10942,7 +10957,7 @@ var MindMapEditor = class {
     const modesChanged = JSON.stringify(previousOptions.visibleModes) !== JSON.stringify(options.visibleModes);
     const toolbarChanged = JSON.stringify(previousOptions.visibleToolbarItems) !== JSON.stringify(options.visibleToolbarItems) || JSON.stringify(previousOptions.toolbarItemOrder) !== JSON.stringify(options.toolbarItemOrder) || previousOptions.questionNodesEnabled !== options.questionNodesEnabled;
     const globalModeChanged = previousOptions.defaultViewMode !== options.defaultViewMode;
-    const articleContextPresentationChanged = previousOptions.articleContextReady !== options.articleContextReady || previousOptions.articleBaseDepth !== options.articleBaseDepth || previousOptions.showArticleToc !== options.showArticleToc || JSON.stringify(previousOptions.articleTocEntries) !== JSON.stringify(options.articleTocEntries) || JSON.stringify(previousOptions.articleNavigation) !== JSON.stringify(options.articleNavigation);
+    const articleContextPresentationChanged = previousOptions.articleContextReady !== options.articleContextReady || previousOptions.articleBaseDepth !== options.articleBaseDepth || previousOptions.showArticleToc !== options.showArticleToc || JSON.stringify(previousOptions.articleTocEntries) !== JSON.stringify(options.articleTocEntries) || JSON.stringify(previousOptions.readingTocEntries) !== JSON.stringify(options.readingTocEntries) || JSON.stringify(previousOptions.articleNavigation) !== JSON.stringify(options.articleNavigation);
     const readingFamilyChanged = previousOptions.readingHomePath !== options.readingHomePath;
     if (readingFamilyChanged) {
       if (this.readingCaptureTimer !== null) {
@@ -11892,7 +11907,7 @@ var MindMapEditor = class {
     this.addToolbarSeparator();
     this.addToolbarButton("fit", "maximize", "\u9002\u5E94\u753B\u5E03", () => this.fitToView());
     this.addToolbarButton("layout", "git-fork", "\u5207\u6362\u5355\u4FA7/\u53CC\u4FA7\u5E03\u5C40", () => this.toggleLayout(), true);
-    this.addToolbarButton("appearance", "palette", "\u4E3B\u9898\u4E0E\u5916\u89C2", () => this.editAppearance(), true);
+    this.appearanceButton = this.addToolbarButton("appearance", "palette", "\u4E3B\u9898\u4E0E\u5916\u89C2", () => this.editAppearance());
     this.articleLandingButton = this.addToolbarButton("article-landing", "list-tree", "\u5207\u6362\u76EE\u5F55 / \u539F\u59CB\u6587\u7AE0", () => this.toggleArticleLanding());
     this.articleStyleButton = this.addToolbarButton("article-style", "paintbrush", "\u6587\u7AE0\u6837\u5F0F", () => this.editArticleStyle(), true);
     this.addToolbarSeparator();
@@ -12241,6 +12256,9 @@ var MindMapEditor = class {
       if (control instanceof HTMLButtonElement || control instanceof HTMLInputElement || control instanceof HTMLSelectElement) control.disabled = this.readOnly;
       control.toggleClass("is-read-only-disabled", this.readOnly);
     }
+    const appearanceDisabled = this.readOnly && this.currentMode !== "reading";
+    this.appearanceButton.disabled = appearanceDisabled;
+    this.appearanceButton.toggleClass("is-read-only-disabled", appearanceDisabled);
   }
   /**
    * 执行“ensure editable”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
@@ -14953,7 +14971,10 @@ var MindMapEditor = class {
    */
   editAppearance() {
     var _a2, _b2, _c;
-    if (!this.ensureEditable()) return;
+    if (this.readOnly && this.currentMode !== "reading") {
+      new import_obsidian11.Notice("\u5F53\u524D\u4E3A\u9605\u8BFB\u6A21\u5F0F\uFF0C\u8BF7\u5148\u70B9\u51FB\u9501\u6309\u94AE\u5207\u6362\u5230\u7F16\u8F91\u6A21\u5F0F");
+      return;
+    }
     new AppearanceModal(
       this.app,
       this.getAppearance(),
@@ -14966,7 +14987,7 @@ var MindMapEditor = class {
       (_b2 = this.document.view) == null ? void 0 : _b2.articleMiniMap,
       this.options.showArticleMiniMap,
       (_c = this.document.appearance) != null ? _c : {},
-      (appearance, numbering, articleTocMaxDepth, articleMiniMap) => this.mutate(() => {
+      (appearance, numbering, articleTocMaxDepth, articleMiniMap) => this.mutatePageAppearance(() => {
         var _a3;
         this.document.appearance = appearance;
         this.document.root.articleNumberingMode = numbering.articleNumberingMode;
@@ -14978,7 +14999,7 @@ var MindMapEditor = class {
         else view.articleMiniMap = articleMiniMap;
         this.document.view = Object.keys(view).length ? view : void 0;
       }),
-      () => this.mutate(() => {
+      () => this.mutatePageAppearance(() => {
         this.document.appearance = void 0;
         this.document.root.articleNumberingMode = void 0;
         this.document.root.articleNumberingLevel = void 0;
@@ -15312,7 +15333,7 @@ var MindMapEditor = class {
     const contentSections = sections.length > 1 ? sections.slice(1) : sections;
     const contentPaths = new Set(contentSections.map((section) => section.filePath));
     const articleTocMaxDepth = this.effectiveArticleTocMaxDepth();
-    const tocEntries = this.options.articleTocEntries.filter(
+    const tocEntries = this.options.readingTocEntries.filter(
       (entry) => articleTocDepth(entry) <= articleTocMaxDepth && contentPaths.has(entry.filePath)
     );
     const toc = page.createEl("nav", { cls: "mms-article-toc mms-reading-toc" });
@@ -15356,7 +15377,7 @@ var MindMapEditor = class {
       const chapterTitleBlock = nodeContentBlocks(section.document.root).find((block) => block.type === "text");
       renderRichTextRuns(chapterTitle, chapterTitleBlock == null ? void 0 : chapterTitleBlock.richText, (_d = chapterTitleBlock == null ? void 0 : chapterTitleBlock.text) != null ? _d : (sectionEntry == null ? void 0 : sectionEntry.displayTitle) || section.document.title);
       this.renderArticleContent(chapter, section.document.root, false);
-      for (const info of buildArticleNodeInfo(section.document.root, section.baseDepth, { enabled: this.options.articleLeafNumberingEnabled, threshold: this.options.articleLeafNumberingThreshold, style: this.options.articleLeafNumberingStyle })) {
+      for (const info of buildReadingArticleNodeInfo(section.document.root, section.baseDepth, { enabled: this.options.articleLeafNumberingEnabled, threshold: this.options.articleLeafNumberingThreshold, style: this.options.articleLeafNumberingStyle })) {
         const nodeSection = chapter.createEl("section", { cls: `mms-article-node depth-${Math.min(info.depth, 8)}` });
         nodeSection.dataset.nodeId = info.node.id;
         nodeSection.dataset.filePath = section.filePath;
@@ -16648,10 +16669,29 @@ var MindMapEditor = class {
     this.scheduleMeasuredMindMapLayout();
   }
   /**
-   * 所有用户可撤销写操作的统一入口。调用前克隆当前文档写入撤销栈，执行修改，规范化和重渲染，再通知视图自动保存；只读状态会在更上层阻止进入该流程。
+   * 保存当前页面外观。通读正文保持只读时仍允许进入该事务，并在重绘后恢复原语义阅读位置。
+   *
+   * @param action 需要在当前文档外观与视图字段上执行的同步修改。
+   */
+  mutatePageAppearance(action) {
+    if (this.readOnly && this.currentMode !== "reading") {
+      new import_obsidian11.Notice("\u5F53\u524D\u4E3A\u9605\u8BFB\u6A21\u5F0F\uFF0C\u8BF7\u5148\u70B9\u51FB\u9501\u6309\u94AE\u5207\u6362\u5230\u7F16\u8F91\u6A21\u5F0F");
+      return;
+    }
+    const location = this.currentMode === "mindmap" ? null : this.captureCurrentLocation(this.currentMode);
+    if (location) this.rememberLocation(location, true);
+    this.history.capture(this.document);
+    action();
+    this.callbacks.onChange(this.getDocument());
+    this.markSaving();
+    this.render();
+    if (location) this.restoreReadingLocation(this.currentMode, location);
+  }
+  /**
+   * 所有用户可撤销内容写操作的统一入口。只读状态由 `ensureEditable()` 阻止；修改完成后统一保存、重绘并恢复阅读位置。
    *
    * @param action 需要在当前文档上执行的同步修改。
-   * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
+   * @param restoreLocation 可选的显式阅读位置；缺失时从当前非导图模式捕获。
    */
   mutate(action, restoreLocation) {
     if (!this.ensureEditable()) return;
@@ -17633,6 +17673,7 @@ var MindMapStudioView = class extends import_obsidian13.TextFileView {
     this.articleContextReady = false;
     this.articleBaseDepth = 0;
     this.articleTocEntries = [];
+    this.readingTocEntries = [];
     this.showArticleToc = false;
     this.readingSections = [];
     this.articleContextToken = 0;
@@ -17723,6 +17764,7 @@ var MindMapStudioView = class extends import_obsidian13.TextFileView {
     this.articleContextReady = false;
     this.articleBaseDepth = 0;
     this.articleTocEntries = [];
+    this.readingTocEntries = [];
     this.showArticleToc = false;
     this.articleNavigation = void 0;
     this.readingSections = [];
@@ -18144,6 +18186,7 @@ var MindMapStudioView = class extends import_obsidian13.TextFileView {
       articleContextReady: this.articleContextReady,
       articleBaseDepth: this.articleBaseDepth,
       articleTocEntries: [...this.articleTocEntries],
+      readingTocEntries: [...this.readingTocEntries],
       articleTocMaxDepth: this.plugin.settings.articleTocMaxDepth,
       showArticleMiniMap: this.plugin.settings.showArticleMiniMap,
       articleSectionCollapseEnabled: this.plugin.settings.articleSectionCollapseEnabled,
@@ -18188,13 +18231,14 @@ var MindMapStudioView = class extends import_obsidian13.TextFileView {
       if (token !== this.articleContextToken || ((_c = this.file) == null ? void 0 : _c.path) !== file.path) return;
       this.articleBaseDepth = context.baseDepth;
       this.articleTocEntries = context.tocEntries;
+      this.readingTocEntries = context.readingTocEntries;
       this.showArticleToc = context.showToc;
       this.articleNavigation = context.navigation;
       this.readingSections = context.readingSections;
       this.articleContextReady = true;
       const preferCurrentFile = this.preferCurrentFileOnNextContextRefresh;
       const preferredCurrentNodeId = preferCurrentFile ? this.preferredCurrentNodeIdOnNextContextRefresh : null;
-      this.plugin.logDebug("article-context", "refresh-success", { filePath: file.path, token, baseDepth: context.baseDepth, tocEntries: context.tocEntries.length, showToc: context.showToc, readingSections: context.readingSections.length, preferCurrentFile, preferredCurrentNodeId });
+      this.plugin.logDebug("article-context", "refresh-success", { filePath: file.path, token, baseDepth: context.baseDepth, tocEntries: context.tocEntries.length, readingTocEntries: context.readingTocEntries.length, showToc: context.showToc, readingSections: context.readingSections.length, preferCurrentFile, preferredCurrentNodeId });
       (_d = this.editor) == null ? void 0 : _d.setOptions(this.getEditorOptions(preferCurrentFile, preferredCurrentNodeId), true);
       this.preferCurrentFileOnNextContextRefresh = false;
       this.preferredCurrentNodeIdOnNextContextRefresh = null;
@@ -18204,6 +18248,7 @@ var MindMapStudioView = class extends import_obsidian13.TextFileView {
       console.warn("MindMap Studio article context refresh failed", error);
       this.articleBaseDepth = 0;
       this.articleTocEntries = [];
+      this.readingTocEntries = [];
       this.showArticleToc = false;
       this.articleNavigation = void 0;
       this.readingSections = [{ filePath: file.path, document: document2, baseDepth: 0 }];
@@ -21924,20 +21969,25 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
     }
     const isTopLevel = topFile.path === file.path;
     const tocEntries = [];
+    const readingTocEntries = [];
     const readingSections = [{ filePath: topFile.path, document: topDocument, baseDepth: 0 }];
     const visitedFiles = /* @__PURE__ */ new Set([topFile.path]);
     let hasSubmaps = false;
     const processItems = async (items, defaultLevel, structureDepth) => {
-      var _a3, _b3;
+      var _a3, _b3, _c2;
       const siblingHasHeading = items.some(({ node }) => isArticleHeading(node));
       const numberedIndexes = /* @__PURE__ */ new Map();
+      const readingNumberedIndexes = /* @__PURE__ */ new Map();
       for (const item of items) {
         const { node, file: sourceFile, breadcrumb } = item;
         const numbering = resolveArticleNumbering(node, defaultLevel, siblingHasHeading);
         const documentNumberingDisabled = isDocumentArticleNumberingDisabled(item.document.root);
         const numberedIndex = !documentNumberingDisabled && numbering.shouldNumber && !numbering.skipped ? ((_a3 = numberedIndexes.get(numbering.level)) != null ? _a3 : 0) + 1 : 0;
+        const readingNumberedIndex = numbering.shouldNumber && !numbering.skipped ? ((_b3 = readingNumberedIndexes.get(numbering.level)) != null ? _b3 : 0) + 1 : 0;
         if (numberedIndex) numberedIndexes.set(numbering.level, numberedIndex);
+        if (readingNumberedIndex) readingNumberedIndexes.set(numbering.level, readingNumberedIndex);
         const label = numberedIndex ? articleNumberLabel(numbering.level, numberedIndex) : "";
+        const readingLabel = readingNumberedIndex ? articleNumberLabel(numbering.level, readingNumberedIndex) : "";
         const title = nodePlainText(node) || (numbering.isHeading ? "\u672A\u547D\u540D\u6807\u9898" : "");
         const nextBreadcrumb = [...breadcrumb, title || "\u672A\u547D\u540D\u6807\u9898"];
         const tocEntry = numbering.isHeading ? {
@@ -21951,18 +22001,33 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
           breadcrumb: nextBreadcrumb
         } : null;
         if (tocEntry) tocEntries.push(tocEntry);
+        const readingTocEntry = numbering.isHeading ? {
+          filePath: sourceFile.path,
+          nodeId: node.id,
+          depth: numbering.level,
+          tocDepth: structureDepth,
+          label: readingLabel,
+          title,
+          displayTitle: articleDisplayTitle(readingLabel, title),
+          breadcrumb: nextBreadcrumb
+        } : null;
+        if (readingTocEntry) readingTocEntries.push(readingTocEntry);
         const descendants = node.children.map((child) => ({
           node: child,
           file: sourceFile,
           document: item.document,
           breadcrumb: nextBreadcrumb
         }));
-        if ((_b3 = node.submap) == null ? void 0 : _b3.path) {
+        if ((_c2 = node.submap) == null ? void 0 : _c2.path) {
           hasSubmaps = true;
           const childFile = this.resolveMindMapFile(node.submap.path, sourceFile.path);
           if (childFile && tocEntry) {
             tocEntry.filePath = childFile.path;
             tocEntry.nodeId = void 0;
+          }
+          if (childFile && readingTocEntry) {
+            readingTocEntry.filePath = childFile.path;
+            readingTocEntry.nodeId = void 0;
           }
           if (childFile && !visitedFiles.has(childFile.path)) {
             visitedFiles.add(childFile.path);
@@ -22021,6 +22086,7 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
     return {
       baseDepth,
       tocEntries,
+      readingTocEntries,
       showToc: isTopLevel && hasSubmaps && tocEntries.length > 0,
       navigation,
       readingSections
