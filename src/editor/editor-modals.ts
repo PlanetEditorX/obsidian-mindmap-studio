@@ -225,17 +225,28 @@ export class ImagePreviewModal extends Modal {
   }
 }
 
+/** LaTeX 插入结果，display 为 true 时使用独立公式，false 时使用行内公式。 */
+export interface FormulaInsertValue {
+  source: string;
+  display: boolean;
+}
+
 /**
- * 图形化 LaTeX 公式编辑器，提供常用结构按钮和实时预览。
+ * 图形化 LaTeX 公式编辑器，提供常用结构、行内/独立模式和实时预览。
  */
 export class FormulaEditModal extends Modal {
   /**
    * 创建公式编辑器。
    *
    * @param app Obsidian 应用实例。
-   * @param submit 保存公式源码的回调。
+   * @param submit 保存公式源码和显示方式的回调。
+   * @param defaultDisplay 初始是否使用独立公式模式。
    */
-  constructor(app: App, private readonly submit: (source: string) => void) {
+  constructor(
+    app: App,
+    private readonly submit: (value: FormulaInsertValue) => void,
+    private readonly defaultDisplay = false
+  ) {
     super(app);
   }
 
@@ -247,8 +258,15 @@ export class FormulaEditModal extends Modal {
     this.contentEl.addClass("mms-formula-editor");
     this.contentEl.createEl("p", {
       cls: "setting-item-description",
-      text: "点击常用结构快速组合公式，也可以直接修改 LaTeX 源码。保存后节点会显示公式而不是源码。"
+      text: "行内公式可以和前后文字位于同一行；独立公式会单独居中显示。也可以直接修改 LaTeX 源码。"
     });
+    const displayMode = this.contentEl.createEl("select", {
+      cls: "mms-formula-display-mode",
+      attr: { "aria-label": "公式显示方式" }
+    });
+    displayMode.createEl("option", { value: "inline", text: "行内公式（可与文字混排）" });
+    displayMode.createEl("option", { value: "display", text: "独立公式（单独一行）" });
+    displayMode.value = this.defaultDisplay ? "display" : "inline";
     const templates: Array<[string, string, string]> = [
       ["x²", "x^{2}", "上标"], ["xᵢ", "x_{i}", "下标"], ["a⁄b", "\\frac{a}{b}", "分数"],
       ["√x", "\\sqrt{x}", "根号"], ["Σ", "\\sum_{i=1}^{n} x_i", "求和"],
@@ -294,7 +312,7 @@ export class FormulaEditModal extends Modal {
         if (token !== previewToken || !preview.isConnected) return;
         preview.empty();
         try {
-          preview.appendChild(renderMath(value, true));
+          preview.appendChild(renderMath(value, displayMode.value === "display"));
           void finishRenderMath();
         } catch {
           preview.createSpan({ cls: "mod-warning", text: "公式语法暂时无法渲染" });
@@ -327,6 +345,7 @@ export class FormulaEditModal extends Modal {
       button.addEventListener("click", () => insert(template));
     }
     source.addEventListener("input", updatePreview);
+    displayMode.addEventListener("change", updatePreview);
     const actions = this.contentEl.createDiv({ cls: "modal-button-container" });
     actions.createEl("button", { text: "取消", attr: { type: "button" } }).addEventListener("click", () => this.close());
     const save = actions.createEl("button", { text: "插入公式", cls: "mod-cta", attr: { type: "button" } });
@@ -336,7 +355,7 @@ export class FormulaEditModal extends Modal {
         new Notice("请先输入或选择一个公式");
         return;
       }
-      this.submit(value);
+      this.submit({ source: value, display: displayMode.value === "display" });
       this.close();
     });
     updatePreview();

@@ -329,3 +329,14 @@ test("read-only mode keeps the unified theme and reading-style panel editable", 
   assert.match(mainSource, /normalizeToolbarItemId\(value\)/);
   assert.doesNotMatch(modalSource, /class ArticleStyleModal|this\.titleEl\.setText\("文章样式"\)/);
 });
+
+test("article LaTeX stays rendered until editing and rerenders immediately after blur", async () => {
+  const richTextDomSource = await readFile("src/editor/rich-text-dom.ts", "utf8");
+  const makeInlineEditable = editorSource.match(/private makeInlineEditable\(element: HTMLElement, node: MindMapNode, placeholder: string, blockId\?: string\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
+  assert.doesNotMatch(makeInlineEditable, /if \(!this\.readOnly\) renderRichTextRuns\(element,[\s\S]*false\)/);
+  assert.match(makeInlineEditable, /element\.addEventListener\("focus"[\s\S]*renderRichTextRuns\(element, original\.richText, original\.text, false\)/);
+  assert.match(makeInlineEditable, /element\.addEventListener\("blur"[\s\S]*renderRichTextRuns\(element, original\.richText, original\.text\)/);
+  assert.match(makeInlineEditable, /const value = currentValue\(\);[\s\S]*renderRichTextRuns\(element, value\.richText, value\.text\)/);
+  assert.match(richTextDomSource, /container\.contentEditable !== "true"/);
+  assert.match(editorSource, /value\.display \? `\$\$\$\{value\.source\}\$\$` : `\$\$\{value\.source\}\$`/);
+});

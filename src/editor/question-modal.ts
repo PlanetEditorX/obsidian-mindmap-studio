@@ -3,7 +3,7 @@
  * @description Structured choice and essay question editor for mind-map nodes.
  */
 
-import { App, Modal, Notice } from "obsidian";
+import { App, Menu, Modal, Notice } from "obsidian";
 import {
   createMindMapQuestion,
   newId,
@@ -15,6 +15,8 @@ import {
   type MindMapQuestionStatus
 } from "../core/model";
 import type { MindMapEditorCallbacks } from "./editor-types";
+import { FormulaEditModal } from "./editor-modals";
+import { renderRichTextRuns } from "./rich-text-dom";
 
 const QUESTION_TAGS = [
   "公务员", "事业单位", "选调生", "三支一扶", "申论", "职测", "行测", "公共基础知识",
@@ -168,24 +170,56 @@ export class QuestionEditModal extends Modal {
     save.onclick = () => { this.onSubmit(this.draft); this.close(); };
   }
 
-  /** Renders a text and optional image-source editor for one question field. */
+  /** Renders one question field with inline LaTeX insertion and a live MathJax preview. */
   private renderBlocks(label: string, blocks: MindMapContentBlock[], update: (blocks: MindMapContentBlock[]) => void): void {
     const section = this.contentEl.createDiv({ cls: "mms-question-field" });
-    section.createEl("h3", { text: label });
-    const text = blocks.filter((block): block is Extract<MindMapContentBlock, { type: "text" }> => block.type === "text").map((block) => block.text).join("\n");
-    const textarea = section.createEl("textarea", { attr: { rows: "4", placeholder: `${label}文字` } });
-    textarea.value = text;
+    const heading = section.createDiv({ cls: "mms-question-field-heading" });
+    heading.createEl("h3", { text: label });
+    heading.createSpan({ cls: "setting-item-description", text: "右键文字框可插入 LaTeX" });
+    const textBlocks = blocks.filter((block): block is Extract<MindMapContentBlock, { type: "text" }> => block.type === "text");
+    const textarea = section.createEl("textarea", { attr: { rows: "4", placeholder: `${label}文字，可在文字中使用 $...$ 行内公式` } });
+    textarea.value = textBlocks.map((block) => block.text).join("\n");
     const image = blocks.find((block): block is MindMapImageContentBlock => block.type === "image");
     const imageSource = section.createEl("input", { attr: { placeholder: "图片路径、Obsidian 链接或 URL（可选）" } });
     imageSource.value = image?.source ?? "";
+    const preview = section.createDiv({ cls: "mms-question-field-preview" });
+    const renderPreview = (): void => {
+      preview.empty();
+      const value = textarea.value.replace(/\r\n?/g, "\n").trim();
+      if (!value) {
+        preview.createSpan({ cls: "setting-item-description", text: `${label}预览` });
+        return;
+      }
+      renderRichTextRuns(preview, undefined, value);
+    };
     const persist = (): void => {
       const next: MindMapContentBlock[] = [];
-      if (textarea.value.trim()) next.push({ id: blocks.find((block) => block.type === "text")?.id ?? newId(), type: "text", text: textarea.value.trim() });
+      const value = textarea.value.replace(/\r\n?/g, "\n").trim();
+      if (value) next.push({ id: textBlocks[0]?.id ?? newId(), type: "text", text: value });
       if (imageSource.value.trim()) next.push({ id: image?.id ?? newId(), type: "image", source: imageSource.value.trim(), alt: label });
       update(next);
+      renderPreview();
     };
-    textarea.onchange = persist;
-    imageSource.onchange = persist;
+    const insertFormula = (source: string, display: boolean): void => {
+      const token = display ? `$$${source}$$` : `$${source}$`;
+      const start = textarea.selectionStart ?? textarea.value.length;
+      const end = textarea.selectionEnd ?? start;
+      textarea.setRangeText(token, start, end, "end");
+      persist();
+      textarea.focus();
+    };
+    textarea.addEventListener("input", persist);
+    textarea.addEventListener("contextmenu", (event) => {
+      event.preventDefault();
+      const menu = new Menu();
+      menu.addItem((item) => item
+        .setTitle("插入 LaTeX 公式")
+        .setIcon("sigma")
+        .onClick(() => new FormulaEditModal(this.app, (value) => insertFormula(value.source, value.display)).open()));
+      menu.showAtMouseEvent(event);
+    });
+    imageSource.addEventListener("input", persist);
+    renderPreview();
   }
 
   /** Sends the first question image to the configured vision service and applies a JSON result. */

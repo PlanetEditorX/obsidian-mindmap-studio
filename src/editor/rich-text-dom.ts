@@ -79,7 +79,9 @@ export function renderRichTextRuns(
   if (hasMath && !mathJaxReady) {
     sourceRuns.forEach((run) => append(run.text, run.style));
     void ensureMathJax().then(() => {
-      if (container.isConnected) renderRichTextRuns(container, runs, fallbackText, latex);
+      if (container.isConnected && container.contentEditable !== "true") {
+        renderRichTextRuns(container, runs, fallbackText, latex);
+      }
     }).catch(() => undefined);
     return;
   }

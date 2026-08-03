@@ -4623,905 +4623,18 @@ var CodeEditModal = class extends import_obsidian2.Modal {
 };
 
 // src/editor/question-modal.ts
-var import_obsidian3 = require("obsidian");
-var QUESTION_TAGS = [
-  "\u516C\u52A1\u5458",
-  "\u4E8B\u4E1A\u5355\u4F4D",
-  "\u9009\u8C03\u751F",
-  "\u4E09\u652F\u4E00\u6276",
-  "\u7533\u8BBA",
-  "\u804C\u6D4B",
-  "\u884C\u6D4B",
-  "\u516C\u5171\u57FA\u7840\u77E5\u8BC6",
-  "\u5E38\u8BC6\u5224\u65AD",
-  "\u65F6\u653F",
-  "\u653F\u6CBB",
-  "\u7ECF\u6D4E",
-  "\u6CD5\u5F8B",
-  "\u4EBA\u6587\u5386\u53F2",
-  "\u5730\u7406\u79D1\u6280",
-  "\u8A00\u8BED\u7406\u89E3",
-  "\u5224\u65AD\u63A8\u7406",
-  "\u6570\u91CF\u5173\u7CFB",
-  "\u8D44\u6599\u5206\u6790",
-  "\u9762\u8BD5"
-];
-var QUESTION_STATUS_LABELS = { unanswered: "\u672A\u505A", completed: "\u5DF2\u505A", favorite: "\u6536\u85CF", wrong: "\u9519\u9898", mastered: "\u638C\u63E1" };
-function parseRecognizedQuestion(value, fallback) {
-  var _a2, _b2, _c;
-  const source = value.trim().replace(/^```json\s*|```$/gim, "");
-  const start = source.indexOf("{");
-  const end = source.lastIndexOf("}");
-  if (start < 0 || end <= start) return null;
-  try {
-    const parsed = JSON.parse(source.slice(start, end + 1));
-    const textBlocks = (input) => {
-      const text = Array.isArray(input) ? input.join("\n") : typeof input === "string" ? input : "";
-      return text.trim() ? [{ id: newId(), type: "text", text: text.trim() }] : [];
-    };
-    const mode = parsed.mode === "essay" ? "essay" : parsed.mode === "judgment" ? "judgment" : "choice";
-    const rawOptions = Array.isArray(parsed.options) ? parsed.options : [];
-    const options = mode === "choice" ? rawOptions.slice(0, 12).flatMap((item, index) => {
-      var _a3;
-      if (typeof item === "string") return [{ id: newId(), label: String.fromCharCode(65 + index), content: textBlocks(item) }];
-      if (!item || typeof item !== "object") return [];
-      const option = item;
-      return [{ id: newId(), label: typeof option.label === "string" ? option.label : String.fromCharCode(65 + index), content: textBlocks((_a3 = option.content) != null ? _a3 : option.text) }];
-    }) : mode === "judgment" ? createMindMapQuestion("judgment").options : [];
-    const preservedImages = fallback.stem.filter((block) => block.type === "image");
-    return {
-      mode,
-      stem: [...textBlocks((_a2 = parsed.stem) != null ? _a2 : parsed.question), ...preservedImages],
-      options,
-      answer: textBlocks(parsed.answer),
-      explanation: textBlocks((_b2 = parsed.explanation) != null ? _b2 : parsed.analysis),
-      tags: Array.from(/* @__PURE__ */ new Set([...(_c = fallback.tags) != null ? _c : [], ...Array.isArray(parsed.tags) ? parsed.tags.filter((tag) => typeof tag === "string") : []])).slice(0, 12),
-      source: fallback.source,
-      status: fallback.status,
-      attemptCount: fallback.attemptCount,
-      correctCount: fallback.correctCount,
-      lastPracticedAt: fallback.lastPracticedAt
-    };
-  } catch (e) {
-    return null;
-  }
-}
-function parseQuestionEnrichment(value, fallback) {
-  var _a2;
-  const source = value.trim().replace(/^```json\s*|```$/gim, "");
-  const start = source.indexOf("{");
-  const end = source.lastIndexOf("}");
-  if (start < 0 || end <= start) return null;
-  try {
-    const parsed = JSON.parse(source.slice(start, end + 1));
-    const found = parsed.found === true;
-    const question = (_a2 = parseRecognizedQuestion(source, fallback)) != null ? _a2 : fallback;
-    const sourceUrl = typeof parsed.sourceUrl === "string" ? parsed.sourceUrl.trim() : "";
-    const sourceTitle = typeof parsed.sourceTitle === "string" ? parsed.sourceTitle.trim() : "";
-    if (!found) return { found: false, question: { ...question, source: void 0 } };
-    if (!/^https?:\/\//i.test(sourceUrl) || !sourceTitle) return { found: false, question: { ...question, source: void 0 } };
-    return {
-      found: true,
-      question: {
-        ...question,
-        source: { title: sourceTitle.slice(0, 300), url: sourceUrl.slice(0, 2e3), matchedAt: (/* @__PURE__ */ new Date()).toISOString() }
-      }
-    };
-  } catch (e) {
-    return null;
-  }
-}
-var QuestionEditModal = class extends import_obsidian3.Modal {
-  /** Creates a modal around the selected node's existing question payload. */
-  constructor(app, question, nodeId, callbacks, onSubmit) {
-    super(app);
-    this.nodeId = nodeId;
-    this.callbacks = callbacks;
-    this.onSubmit = onSubmit;
-    this.draft = JSON.parse(JSON.stringify(question != null ? question : createMindMapQuestion()));
-  }
-  /** Initializes the modal surface and renders the current draft. */
-  onOpen() {
-    this.modalEl.addClass("mms-question-modal");
-    this.render();
-  }
-  /** Rebuilds the compact question form after a mode, tag, or field change. */
-  render() {
-    this.contentEl.empty();
-    this.contentEl.createEl("h2", { text: "\u9898\u76EE\u8282\u70B9" });
-    const mode = this.contentEl.createEl("select");
-    mode.createEl("option", { value: "choice", text: "\u9009\u62E9\u9898" });
-    mode.createEl("option", { value: "judgment", text: "\u5224\u65AD\u9898" });
-    mode.createEl("option", { value: "essay", text: "\u5927\u9898" });
-    mode.value = this.draft.mode;
-    mode.onchange = () => {
-      const nextMode = mode.value === "essay" ? "essay" : mode.value === "judgment" ? "judgment" : "choice";
-      this.draft = {
-        ...this.draft,
-        mode: nextMode,
-        options: nextMode === "essay" ? [] : nextMode === "judgment" ? createMindMapQuestion("judgment").options : this.draft.mode === "choice" && this.draft.options.length ? this.draft.options : createMindMapQuestion("choice").options
-      };
-      this.render();
-    };
-    const status = this.contentEl.createEl("select", { cls: "mms-question-status" });
-    for (const [value, label] of Object.entries(QUESTION_STATUS_LABELS)) status.createEl("option", { value, text: label });
-    status.value = this.draft.status;
-    status.onchange = () => {
-      this.draft.status = status.value;
-    };
-    this.renderBlocks("\u9898\u5E72", this.draft.stem, (blocks) => {
-      this.draft.stem = blocks;
-    });
-    if (this.draft.mode !== "essay") {
-      for (const option of this.draft.options) this.renderBlocks(`\u9009\u9879 ${option.label}`, option.content, (blocks) => {
-        option.content = blocks;
-      });
-      if (this.draft.mode === "choice") {
-        const add = this.contentEl.createEl("button", { text: "\u6DFB\u52A0\u9009\u9879", attr: { type: "button" } });
-        add.onclick = () => {
-          this.draft.options.push({ id: newId(), label: String.fromCharCode(65 + this.draft.options.length), content: [{ id: newId(), type: "text", text: "" }] });
-          this.render();
-        };
-      }
-    }
-    this.renderBlocks("\u7B54\u6848", this.draft.answer, (blocks) => {
-      this.draft.answer = blocks;
-    });
-    this.renderBlocks("\u89E3\u7B54", this.draft.explanation, (blocks) => {
-      this.draft.explanation = blocks;
-    });
-    const tagRow = this.contentEl.createDiv({ cls: "mms-question-tags" });
-    tagRow.createSpan({ text: "\u6807\u7B7E" });
-    for (const tag of QUESTION_TAGS) {
-      const button = tagRow.createEl("button", { text: tag, attr: { type: "button" } });
-      button.toggleClass("is-active", this.draft.tags.includes(tag));
-      button.onclick = () => {
-        this.draft.tags = this.draft.tags.includes(tag) ? this.draft.tags.filter((item) => item !== tag) : [...this.draft.tags, tag];
-        this.render();
-      };
-    }
-    const customTags = this.contentEl.createEl("input", { attr: { placeholder: "\u8865\u5145\u6807\u7B7E\uFF0C\u4F7F\u7528\u9017\u53F7\u5206\u9694" } });
-    customTags.value = this.draft.tags.filter((tag) => !QUESTION_TAGS.includes(tag)).join(", ");
-    customTags.onchange = () => {
-      this.draft.tags = Array.from(/* @__PURE__ */ new Set([...this.draft.tags.filter((tag) => QUESTION_TAGS.includes(tag)), ...customTags.value.split(/[，,]/).map((tag) => tag.trim()).filter(Boolean)])).slice(0, 12);
-    };
-    if (this.draft.source) {
-      const source = this.contentEl.createEl("a", { text: `\u539F\u9898\u6765\u6E90\uFF1A${this.draft.source.title}`, href: this.draft.source.url });
-      source.setAttr("target", "_blank");
-      source.setAttr("rel", "noopener noreferrer");
-    }
-    const actions = this.contentEl.createDiv({ cls: "modal-button-container" });
-    const enrich = actions.createEl("button", { text: "AI \u667A\u80FD\u5904\u7406\u9898\u76EE", attr: { type: "button" } });
-    enrich.onclick = () => void this.convertAndEnrichQuestion();
-    const save = actions.createEl("button", { text: "\u4FDD\u5B58", cls: "mod-cta", attr: { type: "button" } });
-    save.onclick = () => {
-      this.onSubmit(this.draft);
-      this.close();
-    };
-  }
-  /** Renders a text and optional image-source editor for one question field. */
-  renderBlocks(label, blocks, update) {
-    var _a2;
-    const section = this.contentEl.createDiv({ cls: "mms-question-field" });
-    section.createEl("h3", { text: label });
-    const text = blocks.filter((block) => block.type === "text").map((block) => block.text).join("\n");
-    const textarea = section.createEl("textarea", { attr: { rows: "4", placeholder: `${label}\u6587\u5B57` } });
-    textarea.value = text;
-    const image = blocks.find((block) => block.type === "image");
-    const imageSource = section.createEl("input", { attr: { placeholder: "\u56FE\u7247\u8DEF\u5F84\u3001Obsidian \u94FE\u63A5\u6216 URL\uFF08\u53EF\u9009\uFF09" } });
-    imageSource.value = (_a2 = image == null ? void 0 : image.source) != null ? _a2 : "";
-    const persist = () => {
-      var _a3, _b2, _c;
-      const next = [];
-      if (textarea.value.trim()) next.push({ id: (_b2 = (_a3 = blocks.find((block) => block.type === "text")) == null ? void 0 : _a3.id) != null ? _b2 : newId(), type: "text", text: textarea.value.trim() });
-      if (imageSource.value.trim()) next.push({ id: (_c = image == null ? void 0 : image.id) != null ? _c : newId(), type: "image", source: imageSource.value.trim(), alt: label });
-      update(next);
-    };
-    textarea.onchange = persist;
-    imageSource.onchange = persist;
-  }
-  /** Sends the first question image to the configured vision service and applies a JSON result. */
-  async recognizeQuestion(showSuccess = true) {
-    var _a2;
-    const image = [this.draft.stem, ...this.draft.options.map((option) => option.content), this.draft.answer, this.draft.explanation].flat().find((block) => block.type === "image");
-    if (!image) {
-      new import_obsidian3.Notice("\u8BF7\u5148\u5728\u9898\u5E72\u3001\u9009\u9879\u3001\u7B54\u6848\u6216\u89E3\u7B54\u4E2D\u586B\u5199\u4E00\u5F20\u9898\u56FE");
-      return false;
-    }
-    const source = await this.callbacks.onReadImageSource(image.source);
-    if (!source) {
-      new import_obsidian3.Notice("\u65E0\u6CD5\u8BFB\u53D6\u9898\u56FE");
-      return false;
-    }
-    const instruction = '\u8BC6\u522B\u8FD9\u9053\u539F\u9898\uFF0C\u53EA\u8FD4\u56DE JSON\uFF1A{"mode":"choice\u3001judgment \u6216 essay","stem":"\u9898\u5E72","options":[{"label":"A","content":"\u9009\u9879"}],"answer":"\u7B54\u6848","explanation":"\u89E3\u7B54","tags":["\u6807\u7B7E"]}\u3002\u5224\u65AD\u9898 mode \u4E3A judgment\uFF0C\u7B54\u6848\u4F7F\u7528 \u6B63\u786E \u6216 \u9519\u8BEF\u3002\u65E0\u6CD5\u8BC6\u522B\u7684\u5B57\u6BB5\u7559\u7A7A\u3002';
-    try {
-      const result = await this.callbacks.onRecognizeImage({ nodeId: this.nodeId, blockId: image.id, nodeLabel: "\u9898\u76EE\u8282\u70B9", source: image.source, alt: (_a2 = image.alt) != null ? _a2 : "\u9898\u56FE", index: 1, total: 1 }, source.blob, void 0, instruction);
-      const parsed = parseRecognizedQuestion(result.text, this.draft);
-      if (!parsed) {
-        new import_obsidian3.Notice("AI \u672A\u8FD4\u56DE\u53EF\u89E3\u6790\u7684\u9898\u76EE\u7ED3\u6784\uFF0C\u8BF7\u68C0\u67E5\u9898\u56FE\u6216\u6A21\u578B\u8F93\u51FA");
-        return false;
-      }
-      this.draft = parsed;
-      this.render();
-      if (showSuccess) new import_obsidian3.Notice("\u9898\u76EE\u5DF2\u7531 AI \u586B\u5145\uFF0C\u8BF7\u6838\u5BF9\u540E\u4FDD\u5B58");
-      return true;
-    } catch (error) {
-      new import_obsidian3.Notice(`\u9898\u56FE\u8BC6\u522B\u5931\u8D25\uFF1A${error instanceof Error ? error.message : String(error)}`);
-      return false;
-    }
-  }
-  /** Converts current text or image into a question, then looks up an original or generates missing analysis. */
-  async convertAndEnrichQuestion() {
-    const hasImage = [this.draft.stem, ...this.draft.options.map((option) => option.content), this.draft.answer, this.draft.explanation].flat().some((block) => block.type === "image");
-    if (hasImage && !await this.recognizeQuestion(false)) return;
-    const questionText = [
-      ...this.draft.stem,
-      ...this.draft.options.flatMap((option) => option.content)
-    ].filter((block) => block.type === "text").map((block) => block.text.trim()).filter(Boolean).join("\n");
-    if (!questionText) {
-      new import_obsidian3.Notice("\u8BF7\u5148\u586B\u5199\u9898\u76EE\u6587\u5B57\u6216\u9898\u56FE");
-      return;
-    }
-    try {
-      const result = parseQuestionEnrichment(await this.callbacks.onEnrichQuestion(questionText), this.draft);
-      if (!result) {
-        new import_obsidian3.Notice("AI \u672A\u8FD4\u56DE\u53EF\u89E3\u6790\u7684\u68C0\u7D22\u7ED3\u679C");
-        return;
-      }
-      this.draft = result.question;
-      this.render();
-      new import_obsidian3.Notice(result.found ? "\u5DF2\u627E\u5230\u539F\u9898\u5E76\u8865\u9F50\u7B54\u6848\u4E0E\u89E3\u6790\uFF0C\u8BF7\u6838\u5BF9\u540E\u4FDD\u5B58" : "\u672A\u627E\u5230\u53EF\u9A8C\u8BC1\u539F\u9898\uFF0C\u5DF2\u7531 AI \u5206\u6790\u8865\u9F50\u7F3A\u5931\u7B54\u6848\u4E0E\u89E3\u7B54\uFF0C\u8BF7\u6838\u5BF9\u540E\u4FDD\u5B58");
-    } catch (error) {
-      new import_obsidian3.Notice(`\u539F\u9898\u68C0\u7D22\u5931\u8D25\uFF1A${error instanceof Error ? error.message : String(error)}`);
-    }
-  }
-};
+var import_obsidian5 = require("obsidian");
 
-// src/editor/question-practice-mode.ts
-function createQuestionPracticeState() {
-  return { filter: "all", tag: null, currentNodeId: null, selectedOptionIds: [], essayAnswer: "", answerVisible: false, lastCorrect: null, finished: false, orderedNodeIds: [], orderMode: null };
-}
-function renderQuestionPracticeMode(container, options) {
-  var _a2, _b2;
-  container.empty();
-  const allQuestionNodes = flattenNodes(options.document.root).filter((node2) => node2.question);
-  const candidates = allQuestionNodes.filter((node2) => node2.question && (options.state.filter === "all" || node2.question.status === "wrong" || options.state.answerVisible && node2.id === options.state.currentNodeId) && (!options.state.tag || node2.question.tags.includes(options.state.tag)));
-  const questions = orderPracticeQuestions(candidates, options.state, options.order);
-  const shell = container.createDiv({ cls: "mms-question-practice-page" });
-  const header = shell.createDiv({ cls: "mms-question-practice-header" });
-  header.createEl("h2", { text: options.document.title || "\u7B54\u9898" });
-  const filters = header.createDiv({ cls: "mms-question-practice-filters" });
-  for (const [filter, label] of [["all", "\u5168\u90E8\u9898\u76EE"], ["wrong", "\u9519\u9898\u672C"]]) {
-    const button = filters.createEl("button", { text: label, attr: { type: "button" } });
-    button.toggleClass("is-active", options.state.filter === filter);
-    button.onclick = () => {
-      options.state.filter = filter;
-      options.state.currentNodeId = null;
-      options.state.selectedOptionIds = [];
-      options.state.essayAnswer = "";
-      options.state.answerVisible = false;
-      options.state.lastCorrect = null;
-      options.state.finished = false;
-      options.state.orderedNodeIds = [];
-      options.state.orderMode = null;
-      renderQuestionPracticeMode(container, options);
-    };
-  }
-  const tags = Array.from(new Set(allQuestionNodes.flatMap((node2) => node2.question.tags))).sort((left, right) => left.localeCompare(right, "zh-CN"));
-  if (tags.length) {
-    const tagSelect = filters.createEl("select", { cls: "mms-question-practice-tag-filter", attr: { "aria-label": "\u9898\u76EE\u6807\u7B7E" } });
-    tagSelect.createEl("option", { value: "", text: "\u5168\u90E8\u6807\u7B7E" });
-    tags.forEach((tag) => tagSelect.createEl("option", { value: tag, text: tag }));
-    tagSelect.value = (_a2 = options.state.tag) != null ? _a2 : "";
-    tagSelect.onchange = () => {
-      options.state.tag = tagSelect.value || null;
-      resetPracticeProgress(options.state);
-      renderQuestionPracticeMode(container, options);
-    };
-  }
-  if (!questions.length) {
-    shell.createDiv({ cls: "mms-question-practice-empty", text: options.state.filter === "wrong" ? "\u9519\u9898\u672C\u6682\u65E0\u9898\u76EE" : "\u5F53\u524D\u5BFC\u56FE\u8FD8\u6CA1\u6709\u9898\u76EE\u8282\u70B9" });
-    return;
-  }
-  if (options.state.finished) {
-    shell.createDiv({ cls: "mms-question-practice-finished", text: "\u672C\u8F6E\u7B54\u9898\u5DF2\u5B8C\u6210" });
-    const restart = shell.createEl("button", { cls: "mod-cta mms-question-practice-submit", text: "\u91CD\u65B0\u5F00\u59CB", attr: { type: "button" } });
-    restart.onclick = () => {
-      options.state.currentNodeId = null;
-      options.state.selectedOptionIds = [];
-      options.state.essayAnswer = "";
-      options.state.answerVisible = false;
-      options.state.lastCorrect = null;
-      options.state.finished = false;
-      options.state.orderedNodeIds = [];
-      options.state.orderMode = null;
-      renderQuestionPracticeMode(container, options);
-    };
-    return;
-  }
-  const currentIndex = Math.max(0, questions.findIndex((node2) => node2.id === options.state.currentNodeId));
-  const node = (_b2 = questions[currentIndex]) != null ? _b2 : questions[0];
-  options.state.currentNodeId = node.id;
-  const question = node.question;
-  const answerLabels = selectedAnswerLabels(node);
-  const multiple = question.mode === "choice" && answerLabels.length > 1;
-  const questionKind = question.mode === "essay" ? "\u5927\u9898" : question.mode === "judgment" ? "\u5224\u65AD\u9898" : multiple ? "\u591A\u9009\u9898" : "\u5355\u9009\u9898";
-  shell.createDiv({ cls: "mms-question-practice-progress", text: `${currentIndex + 1} / ${questions.length} \xB7 ${questionKind}` });
-  shell.createEl("h3", { cls: "mms-question-practice-stem", text: nodePlainText(node) || "\u672A\u547D\u540D\u9898\u76EE" });
-  renderBlocks(shell, question.stem.filter((block) => block.type !== "text"), options.resolveImage);
-  if (question.mode !== "essay") {
-    const choices = shell.createDiv({ cls: "mms-question-practice-choices" });
-    question.options.forEach((option) => {
-      const choice = choices.createEl("label", { cls: "mms-question-practice-choice" });
-      choice.toggleClass("is-selected", options.state.selectedOptionIds.includes(option.id));
-      const input = choice.createEl("input", {
-        attr: {
-          type: multiple ? "checkbox" : "radio",
-          name: `mms-question-${node.id}`,
-          value: option.id,
-          "aria-label": `\u9009\u62E9${option.label}`
-        }
-      });
-      input.checked = options.state.selectedOptionIds.includes(option.id);
-      input.disabled = options.state.answerVisible;
-      choice.createSpan({ cls: "mms-question-practice-option-label", text: option.label });
-      renderBlocks(choice, option.content, options.resolveImage);
-      input.addEventListener("change", () => {
-        options.state.selectedOptionIds = multiple ? options.state.selectedOptionIds.includes(option.id) ? options.state.selectedOptionIds.filter((id) => id !== option.id) : [...options.state.selectedOptionIds, option.id] : [option.id];
-        renderQuestionPracticeMode(container, options);
-      });
-    });
-  } else {
-    const answer = shell.createEl("textarea", { cls: "mms-question-practice-answer", attr: { placeholder: "\u8F93\u5165\u4F60\u7684\u7B54\u6848", rows: "7" } });
-    answer.value = options.state.essayAnswer;
-    answer.disabled = options.state.answerVisible;
-    answer.oninput = () => {
-      options.state.essayAnswer = answer.value;
-    };
-  }
-  if (!options.state.answerVisible) {
-    const reveal = shell.createEl("button", { cls: "mod-cta mms-question-practice-submit", text: "\u67E5\u770B\u7B54\u6848\u4E0E\u89E3\u6790", attr: { type: "button" } });
-    reveal.onclick = () => {
-      const correct = question.mode === "essay" ? isExactQuestionAnswer(options.state.essayAnswer, blockText(question.answer)) : question.mode === "judgment" ? isQuestionJudgmentCorrect(node, options.state.selectedOptionIds) : isQuestionChoiceCorrect(node, options.state.selectedOptionIds);
-      if (question.mode !== "essay" && !options.state.selectedOptionIds.length || question.mode === "essay" && !normalizeAnswer(options.state.essayAnswer)) {
-        options.onNotice("\u8BF7\u5148\u4F5C\u7B54");
-        return;
-      }
-      options.state.answerVisible = true;
-      options.state.lastCorrect = correct;
-      options.onRecord(node.id, correct);
-      options.onNotice(correct ? "\u56DE\u7B54\u6B63\u786E" : "\u56DE\u7B54\u9519\u8BEF\uFF0C\u5DF2\u52A0\u5165\u9519\u9898\u672C");
-      renderQuestionPracticeMode(container, options);
-    };
-    return;
-  }
-  const result = shell.createDiv({ cls: `mms-question-practice-result ${options.state.lastCorrect ? "is-correct" : "is-wrong"}`, text: options.state.lastCorrect ? "\u56DE\u7B54\u6B63\u786E" : "\u56DE\u7B54\u9519\u8BEF\uFF0C\u5DF2\u52A0\u5165\u9519\u9898\u672C" });
-  result.setAttr("role", "status");
-  shell.createEl("h4", { text: "\u53C2\u8003\u7B54\u6848" });
-  renderBlocks(shell, question.answer, options.resolveImage);
-  if (question.explanation.length) {
-    shell.createEl("h4", { text: "\u89E3\u6790" });
-    renderExplanationBlocks(shell, question.explanation, options.resolveImage);
-  }
-  const finalQuestion = currentIndex === questions.length - 1;
-  const next = shell.createEl("button", { cls: "mod-cta mms-question-practice-submit", text: finalQuestion ? "\u7ED3\u675F\u7B54\u9898" : "\u4E0B\u4E00\u9898", attr: { type: "button" } });
-  next.onclick = () => {
-    var _a3;
-    if (finalQuestion) {
-      options.state.finished = true;
-      options.state.selectedOptionIds = [];
-      options.state.essayAnswer = "";
-      options.state.answerVisible = false;
-      options.state.lastCorrect = null;
-      renderQuestionPracticeMode(container, options);
-      return;
-    }
-    const nextNode = questions[(currentIndex + 1) % questions.length];
-    options.state.currentNodeId = (_a3 = nextNode == null ? void 0 : nextNode.id) != null ? _a3 : null;
-    options.state.selectedOptionIds = [];
-    options.state.essayAnswer = "";
-    options.state.answerVisible = false;
-    options.state.lastCorrect = null;
-    renderQuestionPracticeMode(container, options);
-  };
-}
-function orderPracticeQuestions(nodes, state, order) {
-  if (state.orderMode !== order) {
-    state.orderMode = order;
-    state.orderedNodeIds = [];
-  }
-  const available = new Map(nodes.map((node) => [node.id, node]));
-  const retained = state.orderedNodeIds.filter((id) => available.has(id));
-  const appended = nodes.map((node) => node.id).filter((id) => !retained.includes(id));
-  if (order === "random") shuffle(appended);
-  state.orderedNodeIds = [...retained, ...appended];
-  return state.orderedNodeIds.flatMap((id) => {
-    var _a2;
-    return (_a2 = available.get(id)) != null ? _a2 : [];
-  });
-}
-function shuffle(items) {
-  for (let index = items.length - 1; index > 0; index -= 1) {
-    const target = Math.floor(Math.random() * (index + 1));
-    [items[index], items[target]] = [items[target], items[index]];
-  }
-}
-function selectedAnswerLabels(node) {
-  const question = node.question;
-  const compact2 = blockText(question.answer).toLocaleUpperCase().replace(/[^A-Z0-9]/g, "");
-  return question.options.filter((option) => compact2.includes(option.label.toLocaleUpperCase())).map((option) => option.label);
-}
-function isQuestionChoiceCorrect(node, selectedIds) {
-  const expected = new Set(selectedAnswerLabels(node));
-  const selected = node.question.options.filter((option) => selectedIds.includes(option.id)).map((option) => option.label);
-  return expected.size > 0 && expected.size === selected.length && selected.every((label) => expected.has(label));
-}
-function isQuestionJudgmentCorrect(node, selectedIds) {
-  const selected = node.question.options.find((option) => selectedIds.includes(option.id));
-  if (!selected) return false;
-  return normalizeJudgmentAnswer(blockText(selected.content) || selected.label) === normalizeJudgmentAnswer(blockText(node.question.answer));
-}
-function renderBlocks(container, blocks, resolveImage) {
-  blocks.forEach((block) => {
-    if (block.type === "text" && block.text.trim()) container.createDiv({ cls: "mms-question-practice-text", text: block.text });
-    if (block.type === "image") {
-      const source = resolveImage(block.source);
-      if (source) container.createEl("img", { cls: "mms-question-practice-image", attr: { src: source, alt: block.alt || "\u9898\u76EE\u56FE\u7247" } });
-    }
-  });
-}
-function renderExplanationBlocks(container, blocks, resolveImage) {
-  for (const block of blocks) {
-    if (block.type === "text") {
-      splitExplanationLines(block.text).forEach((text) => container.createDiv({ cls: "mms-question-practice-explanation-item", text }));
-    } else {
-      renderBlocks(container, [block], resolveImage);
-    }
-  }
-}
-function splitExplanationLines(value) {
-  const text = value.trim();
-  if (!text) return [];
-  const optionMarkers = Array.from(text.matchAll(/[A-DＡ-Ｄ]项/gu));
-  if (!optionMarkers.length) return [text];
-  const lines = [];
-  const prefix = text.slice(0, optionMarkers[0].index).trim();
-  if (prefix) lines.push(prefix);
-  optionMarkers.forEach((marker, index) => {
-    var _a2, _b2;
-    const start = marker.index;
-    const end = (_b2 = (_a2 = optionMarkers[index + 1]) == null ? void 0 : _a2.index) != null ? _b2 : text.length;
-    const segment = text.slice(start, end).trim();
-    if (!segment) return;
-    if (index === optionMarkers.length - 1) {
-      lines.push(...splitFinalOptionConclusion(segment));
-    } else {
-      lines.push(segment);
-    }
-  });
-  return lines;
-}
-function splitFinalOptionConclusion(segment) {
-  var _a2, _b2;
-  const optionMarker = (_b2 = (_a2 = segment.match(/^[A-DＡ-Ｄ]项/u)) == null ? void 0 : _a2[0]) != null ? _b2 : "";
-  const body = segment.slice(optionMarker.length);
-  const conclusionPattern = String.raw`(?:综上(?:所述|可知)?|(?:因此|所以|故而|故)?[，,:：]?\s*(?:本题)?(?:正确选项(?:是|为)?|正确答案(?:是|为)?|答案(?:是|为))|故选)`;
-  const afterPunctuation = body.match(new RegExp(`([\u3002\uFF01\uFF1F\uFF1B])(?:[ \\t]*|\\r?\\n[ \\t]*)(?=${conclusionPattern})`, "u"));
-  if ((afterPunctuation == null ? void 0 : afterPunctuation.index) !== void 0) {
-    const punctuationEnd = optionMarker.length + afterPunctuation.index + afterPunctuation[1].length;
-    const conclusionStart = optionMarker.length + afterPunctuation.index + afterPunctuation[0].length;
-    return [segment.slice(0, punctuationEnd).trim(), segment.slice(conclusionStart).trim()].filter(Boolean);
-  }
-  const afterLineBreak = body.match(new RegExp(`\\r?\\n[ \\t]*(?=${conclusionPattern})`, "u"));
-  if ((afterLineBreak == null ? void 0 : afterLineBreak.index) !== void 0) {
-    const optionEnd = optionMarker.length + afterLineBreak.index;
-    const conclusionStart = optionMarker.length + afterLineBreak.index + afterLineBreak[0].length;
-    return [segment.slice(0, optionEnd).trim(), segment.slice(conclusionStart).trim()].filter(Boolean);
-  }
-  const directSummary = body.match(new RegExp(conclusionPattern, "u"));
-  if ((directSummary == null ? void 0 : directSummary.index) !== void 0 && directSummary.index > 0) {
-    const conclusionStart = optionMarker.length + directSummary.index;
-    return [segment.slice(0, conclusionStart).trim(), segment.slice(conclusionStart).trim()].filter(Boolean);
-  }
-  return [segment];
-}
-function resetPracticeProgress(state) {
-  state.currentNodeId = null;
-  state.selectedOptionIds = [];
-  state.essayAnswer = "";
-  state.answerVisible = false;
-  state.lastCorrect = null;
-  state.finished = false;
-  state.orderedNodeIds = [];
-  state.orderMode = null;
-}
-function blockText(blocks) {
-  return blocks.filter((block) => block.type === "text").map((block) => block.text).join("\n");
-}
-function isExactQuestionAnswer(value, reference) {
-  return normalizeAnswer(value) === normalizeAnswer(reference);
-}
-function normalizeAnswer(value) {
-  return value.toLocaleLowerCase().replace(/[\s\p{P}\p{S}]/gu, "");
-}
-function normalizeJudgmentAnswer(value) {
-  const answer = normalizeAnswer(value);
-  if (["\u6B63\u786E", "\u5BF9", "\u662F", "true", "yes", "a"].includes(answer)) return true;
-  if (["\u9519\u8BEF", "\u9519", "\u5426", "false", "no", "b"].includes(answer)) return false;
-  return null;
-}
-
-// src/article/modes.ts
-var DISPLAY_MODE_LABELS = {
-  mindmap: "\u5BFC\u56FE",
-  outline: "\u5927\u7EB2",
-  article: "\u6587\u7AE0",
-  reading: "\u901A\u8BFB",
-  "question-bank": "\u7B54\u9898"
-};
-var DISPLAY_MODE_ICONS = {
-  mindmap: "brain-circuit",
-  outline: "list-tree",
-  article: "notebook-text",
-  reading: "book-open-text",
-  "question-bank": "graduation-cap"
-};
-function readingAnchorPart(value) {
-  return encodeURIComponent(value).replace(/%/g, "_");
-}
-var CHINESE_DIGITS = ["\u96F6", "\u4E00", "\u4E8C", "\u4E09", "\u56DB", "\u4E94", "\u516D", "\u4E03", "\u516B", "\u4E5D"];
-var MAX_ARTICLE_NUMBERING_LEVEL = 8;
-var MAX_NATIVE_CIRCLED_NUMBER = 50;
-function chineseNumber(value) {
-  var _a2;
-  const safe = Math.max(0, Math.floor(value));
-  if (safe < 10) return (_a2 = CHINESE_DIGITS[safe]) != null ? _a2 : String(safe);
-  if (safe < 20) return `\u5341${safe % 10 ? CHINESE_DIGITS[safe % 10] : ""}`;
-  if (safe < 100) {
-    const tens = Math.floor(safe / 10);
-    const ones = safe % 10;
-    return `${CHINESE_DIGITS[tens]}\u5341${ones ? CHINESE_DIGITS[ones] : ""}`;
-  }
-  return String(safe);
-}
-function alphabeticNumber(index) {
-  let remaining = Math.max(1, Math.floor(index));
-  let result = "";
-  while (remaining > 0) {
-    remaining -= 1;
-    result = String.fromCharCode(65 + remaining % 26) + result;
-    remaining = Math.floor(remaining / 26);
-  }
-  return result;
-}
-function articleNumberLabel(depth, index) {
-  const normalizedDepth = Number.isFinite(depth) ? Math.floor(depth) : 0;
-  if (normalizedDepth < 1 || normalizedDepth > MAX_ARTICLE_NUMBERING_LEVEL) return "";
-  const normalizedIndex = Number.isFinite(index) ? Math.max(1, Math.floor(index)) : 1;
-  const cn = chineseNumber(normalizedIndex);
-  if (normalizedDepth === 1) return `\u7B2C${cn}\u7AE0`;
-  if (normalizedDepth === 2) return `\u7B2C${cn}\u8282`;
-  if (normalizedDepth === 3) return `${cn}\u3001`;
-  if (normalizedDepth === 4) return `\uFF08${cn}\uFF09`;
-  if (normalizedDepth === 5) return `${normalizedIndex}.`;
-  if (normalizedDepth === 6) return `\uFF08${normalizedIndex}\uFF09`;
-  const alphabet = alphabeticNumber(normalizedIndex);
-  return normalizedDepth === 7 ? `${alphabet}.` : `\uFF08${alphabet}\uFF09`;
-}
-function circledNumberLabel(index) {
-  const normalizedIndex = Number.isFinite(index) ? Math.max(1, Math.floor(index)) : 1;
-  if (normalizedIndex <= 20) return String.fromCodePoint(9312 + normalizedIndex - 1);
-  if (normalizedIndex <= 35) return String.fromCodePoint(12881 + normalizedIndex - 21);
-  if (normalizedIndex <= MAX_NATIVE_CIRCLED_NUMBER) return String.fromCodePoint(12977 + normalizedIndex - 36);
-  return String(normalizedIndex);
-}
-function articleDisplayTitle(label, title) {
-  if (!label) return title;
-  return /[、.）]$/.test(label) ? `${label}${title}` : `${label} ${title}`;
-}
-function isArticleHeading(node) {
-  var _a2;
-  return node.children.length > 0 || Boolean((_a2 = node.submap) == null ? void 0 : _a2.path);
-}
-function isDocumentArticleNumberingDisabled(root) {
-  return root.articleNumberingMode === "none";
-}
-function resolveArticleNumbering(node, defaultLevel, siblingHasHeading) {
-  var _a2, _b2;
-  const mode = (_a2 = node.articleNumberingMode) != null ? _a2 : "auto";
-  const manual = mode === "manual";
-  const requestedLevel = Number.isFinite(node.articleNumberingLevel) ? Math.floor((_b2 = node.articleNumberingLevel) != null ? _b2 : defaultLevel) : defaultLevel;
-  const level = manual ? Math.min(MAX_ARTICLE_NUMBERING_LEVEL, Math.max(1, requestedLevel)) : Math.max(1, Math.floor(defaultLevel));
-  const isHeading = isArticleHeading(node) || siblingHasHeading;
-  return {
-    level,
-    isHeading,
-    skipped: mode === "none",
-    shouldNumber: mode !== "none" && isHeading && level <= MAX_ARTICLE_NUMBERING_LEVEL
-  };
-}
-function articleChildStartLevel(root, baseDepth = 0) {
-  var _a2;
-  const normalizedBaseDepth = Math.max(0, Math.floor(baseDepth));
-  return root.articleNumberingMode === "manual" && Number.isFinite(root.articleNumberingLevel) ? Math.min(MAX_ARTICLE_NUMBERING_LEVEL, Math.max(1, Math.floor((_a2 = root.articleNumberingLevel) != null ? _a2 : normalizedBaseDepth))) : normalizedBaseDepth + 1;
-}
-function articleTocDepth(entry) {
-  return Number.isFinite(entry.tocDepth) ? Math.max(1, Math.floor(entry.tocDepth)) : 1;
-}
-function resolveArticleTocMaxDepth(documentOverride, pluginDefault) {
-  const source = typeof documentOverride === "number" && Number.isFinite(documentOverride) ? documentOverride : pluginDefault;
-  return Math.max(1, Math.min(8, Math.round(Number.isFinite(source) ? source : 3)));
-}
-function sameBreadcrumb(left, right) {
-  return left.length === right.length && left.every((value, index) => value === right[index]);
-}
-function resolveArticleSiblingPages(entries, currentFilePath) {
-  const currentEntry = entries.find((entry) => entry.filePath === currentFilePath && !entry.nodeId);
-  if (!currentEntry) return { entries: [], currentIndex: 0 };
-  const structuralDepth = articleTocDepth(currentEntry);
-  const parentBreadcrumb = currentEntry.breadcrumb.slice(0, -1);
-  const siblingEntries = entries.filter((entry) => !entry.nodeId && articleTocDepth(entry) === structuralDepth && sameBreadcrumb(entry.breadcrumb.slice(0, -1), parentBreadcrumb));
-  const currentIndex = siblingEntries.findIndex((entry) => entry.filePath === currentFilePath);
-  return {
-    entries: siblingEntries,
-    currentIndex: Math.max(0, currentIndex),
-    currentEntry
-  };
-}
-function currentArticlePageEntry(navigation) {
-  if (!(navigation == null ? void 0 : navigation.parentPath)) return void 0;
-  return navigation.entries[navigation.currentIndex];
-}
-function buildArticleNodeInfo(root, baseDepth = 0, leafNumbering = { enabled: false, threshold: 4 }, primaryText = nodePrimaryText) {
-  const result = [];
-  const documentNumberingDisabled = leafNumbering.numberingDisabled === true || isDocumentArticleNumberingDisabled(root);
-  const visitChildren = (parent, defaultLevel) => {
-    var _a2;
-    let siblingHasHeading = false;
-    let terminalCount = 0;
-    for (const child of parent.children) {
-      if (isArticleHeading(child)) siblingHasHeading = true;
-      else if (child.articleNumberingMode !== "none") terminalCount += 1;
-    }
-    const threshold = Math.max(1, Math.min(20, Math.floor(leafNumbering.threshold) || 4));
-    const leafNumberingStyle = leafNumbering.style === "circled" ? "circled" : "next-level";
-    const hasSupportedLeafLabel = leafNumberingStyle === "circled" || defaultLevel <= MAX_ARTICLE_NUMBERING_LEVEL;
-    const convertLeaves = !documentNumberingDisabled && leafNumbering.enabled && terminalCount >= threshold && hasSupportedLeafLabel;
-    const numberedIndexes = /* @__PURE__ */ new Map();
-    for (const child of parent.children) {
-      const numbering = resolveArticleNumbering(child, defaultLevel, siblingHasHeading);
-      const numberedLeaf = convertLeaves && !numbering.isHeading && !numbering.skipped;
-      const displayLevel = numberedLeaf ? defaultLevel : numbering.level;
-      const numberedIndex = !documentNumberingDisabled && (numbering.shouldNumber || numberedLeaf) && !numbering.skipped ? ((_a2 = numberedIndexes.get(displayLevel)) != null ? _a2 : 0) + 1 : 0;
-      if (numberedIndex) numberedIndexes.set(displayLevel, numberedIndex);
-      const label = numberedIndex ? numberedLeaf && leafNumberingStyle === "circled" ? circledNumberLabel(numberedIndex) : articleNumberLabel(displayLevel, numberedIndex) : "";
-      const title = primaryText(child) || (numbering.isHeading ? "\u672A\u547D\u540D\u6807\u9898" : "");
-      const plainTextLabel = numberedLeaf && leafNumberingStyle === "circled" && numberedIndex > MAX_NATIVE_CIRCLED_NUMBER ? `\u25EF${label}` : label;
-      result.push({
-        node: child,
-        depth: displayLevel,
-        label,
-        title,
-        displayTitle: articleDisplayTitle(plainTextLabel, title),
-        isHeading: numbering.isHeading,
-        numberedLeaf,
-        leafNumberingStyle: numberedLeaf ? leafNumberingStyle : void 0,
-        leafNumberingIndex: numberedLeaf ? numberedIndex : void 0,
-        skipped: numbering.skipped,
-        anchor: `mindmap-article-${child.id.replace(/[^a-zA-Z0-9_-]/g, "-")}`
-      });
-      if (child.children.length) visitChildren(child, numbering.level + 1);
-    }
-  };
-  visitChildren(root, articleChildStartLevel(root, baseDepth));
-  return result;
-}
-function normalizeVisibleModes(modes) {
-  const raw = Array.isArray(modes) ? modes : [];
-  const result = [];
-  for (const value of raw) {
-    if ((value === "mindmap" || value === "outline" || value === "article" || value === "reading") && !result.includes(value)) result.push(value);
-  }
-  return result.length ? result : ["mindmap", "outline", "article", "reading"];
-}
-
-// src/article/article-style.ts
-var ARTICLE_STYLE_PRESETS = {
-  classic: { preset: "classic", tocStyle: "card", fontSize: 16, lineHeight: 1.85 },
-  book: { preset: "book", fontFamily: "Georgia, 'Noto Serif SC', serif", textColor: "#332b24", headingColor: "#241c16", accentColor: "#8b5e3c", backgroundColor: "#fffdf7", tocStyle: "lines", fontSize: 17, lineHeight: 2 },
-  modern: { preset: "modern", fontFamily: "Inter, 'Microsoft YaHei', sans-serif", textColor: "#243247", headingColor: "#12213a", accentColor: "#2563eb", backgroundColor: "#f8fafc", tocStyle: "card", fontSize: 16, lineHeight: 1.75 },
-  minimal: { preset: "minimal", fontFamily: "Arial, 'Microsoft YaHei', sans-serif", textColor: "#27272a", headingColor: "#18181b", accentColor: "#52525b", backgroundColor: "#ffffff", tocStyle: "plain", fontSize: 15, lineHeight: 1.8 }
-};
-function resolveArticleStyle(style) {
-  var _a2;
-  const preset = (_a2 = style == null ? void 0 : style.preset) != null ? _a2 : "classic";
-  return { ...ARTICLE_STYLE_PRESETS[preset], ...style != null ? style : {}, preset };
-}
-
-// src/article/display-mode.ts
-var ALL_MODES = ["mindmap", "outline", "article", "reading", "question-bank"];
-function normalizeArticleEntryLockMode(value) {
-  return value === "inherit" || value === "remember" ? value : "locked";
-}
-function resolveArticleEntryReadOnly(mode, inheritedReadOnly, rememberedReadOnly) {
-  if (mode === "remember") return rememberedReadOnly;
-  if (mode === "inherit") return inheritedReadOnly;
-  return true;
-}
-function normalizeDisplayModes(value) {
-  const modes = value.filter((mode) => ALL_MODES.includes(mode));
-  const fallback = modes.length ? modes : ["mindmap"];
-  return [...new Set(fallback)];
-}
-function resolveStartupDisplayMode(preferred, visibleModes) {
-  var _a2, _b2;
-  const visible = normalizeDisplayModes(visibleModes);
-  if (preferred === "mindmap" || preferred === "article" || preferred === "reading") {
-    if (visible.includes(preferred)) return preferred;
-  }
-  if (visible.includes("mindmap")) return "mindmap";
-  return (_b2 = (_a2 = visible.find((mode) => mode !== "outline")) != null ? _a2 : visible[0]) != null ? _b2 : "mindmap";
-}
-function shouldPersistDisplayMode(mode) {
-  return mode !== "outline" && mode !== "question-bank";
-}
-
-// src/article/reading-location.ts
-var findNode2 = (root, id) => {
-  if (root.id === id) return root;
-  for (const child of root.children) {
-    const found = findNode2(child, id);
-    if (found) return found;
-  }
-  return null;
-};
-var findAncestors2 = (root, id) => {
-  const path = [];
-  const visit = (node) => {
-    if (node.id === id) return true;
-    for (const child of node.children) {
-      path.push(node);
-      if (visit(child)) return true;
-      path.pop();
-    }
-    return false;
-  };
-  return visit(root) ? path : [];
-};
-var clampRatio = (value, fallback) => typeof value === "number" && Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : fallback;
-function viewportAnchorRatio(nodeTop, nodeHeight, viewportTop, viewportHeight, nodeRatio = 0.5, fallback = 0.35) {
-  if (![nodeTop, nodeHeight, viewportTop, viewportHeight].every(Number.isFinite) || nodeHeight <= 0 || viewportHeight <= 0) {
-    return clampRatio(fallback, 0.35);
-  }
-  const normalizedNodeRatio = clampRatio(nodeRatio, 0.5);
-  return clampRatio(
-    (nodeTop + nodeHeight * normalizedNodeRatio - viewportTop) / viewportHeight,
-    fallback
-  );
-}
-function nodeFallbackIds(document2, nodeId) {
-  const target = findNode2(document2.root, nodeId);
-  if (!target) return [document2.root.id];
-  return [target.id, ...findAncestors2(document2.root, target.id).reverse().map((node) => node.id)];
-}
-function createReadingLocation(sections, filePath, nodeId, nodeRatio = 0, viewportRatio = 0.35) {
-  var _a2, _b2;
-  const byPath = new Map(sections.map((section) => [section.filePath, section]));
-  const primary = (_a2 = byPath.get(filePath)) != null ? _a2 : sections[0];
-  if (!primary) {
-    return {
-      filePath: filePath.trim(),
-      nodeIds: nodeId.trim() ? [nodeId.trim()] : [],
-      fallbacks: [],
-      nodeRatio: clampRatio(nodeRatio, 0),
-      viewportRatio: clampRatio(viewportRatio, 0.35)
-    };
-  }
-  const fallbacks = [];
-  const visited = /* @__PURE__ */ new Set([primary.filePath]);
-  let current = primary;
-  while (current.parentFilePath && !visited.has(current.parentFilePath)) {
-    const parent = byPath.get(current.parentFilePath);
-    if (!parent) break;
-    visited.add(parent.filePath);
-    fallbacks.push({
-      filePath: parent.filePath,
-      nodeIds: nodeFallbackIds(parent.document, (_b2 = current.parentNodeId) != null ? _b2 : parent.document.root.id)
-    });
-    current = parent;
-  }
-  return {
-    filePath: primary.filePath,
-    nodeIds: nodeFallbackIds(primary.document, nodeId),
-    fallbacks,
-    nodeRatio: clampRatio(nodeRatio, 0),
-    viewportRatio: clampRatio(viewportRatio, 0.35)
-  };
-}
-function normalizeReadingLocation(value) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-  const input = value;
-  const filePath = typeof input.filePath === "string" ? input.filePath.trim() : "";
-  const nodeIds = Array.isArray(input.nodeIds) ? [...new Set(input.nodeIds.filter((id) => typeof id === "string" && Boolean(id.trim())).map((id) => id.trim()))] : [];
-  if (!filePath || !nodeIds.length) return null;
-  const fallbacks = Array.isArray(input.fallbacks) ? input.fallbacks.flatMap((fallback) => {
-    if (!fallback || typeof fallback !== "object" || Array.isArray(fallback)) return [];
-    const candidate = fallback;
-    const fallbackPath = typeof candidate.filePath === "string" ? candidate.filePath.trim() : "";
-    const fallbackNodeIds = Array.isArray(candidate.nodeIds) ? [...new Set(candidate.nodeIds.filter((id) => typeof id === "string" && Boolean(id.trim())).map((id) => id.trim()))] : [];
-    return fallbackPath && fallbackNodeIds.length ? [{ filePath: fallbackPath, nodeIds: fallbackNodeIds }] : [];
-  }) : [];
-  return {
-    filePath,
-    nodeIds,
-    fallbacks,
-    nodeRatio: clampRatio(input.nodeRatio, 0),
-    viewportRatio: clampRatio(input.viewportRatio, 0.35)
-  };
-}
-function resolveReadingLocation(location, sections, preferredFilePath = "") {
-  var _a2, _b2, _c, _d;
-  if (!sections.length) return null;
-  const byPath = new Map(sections.map((section) => [section.filePath, section]));
-  const normalized2 = normalizeReadingLocation(location);
-  const chains = normalized2 ? [{ filePath: normalized2.filePath, nodeIds: normalized2.nodeIds }, ...normalized2.fallbacks] : [];
-  for (const chain of chains) {
-    const section = byPath.get(chain.filePath);
-    if (!section) continue;
-    for (const nodeId of chain.nodeIds) {
-      if (findNode2(section.document.root, nodeId)) {
-        return {
-          filePath: section.filePath,
-          nodeId,
-          nodeRatio: (_a2 = normalized2 == null ? void 0 : normalized2.nodeRatio) != null ? _a2 : 0,
-          viewportRatio: (_b2 = normalized2 == null ? void 0 : normalized2.viewportRatio) != null ? _b2 : 0.35
-        };
-      }
-    }
-  }
-  const fallbackSection = (_c = byPath.get(preferredFilePath)) != null ? _c : sections[0];
-  return {
-    filePath: fallbackSection.filePath,
-    nodeId: fallbackSection.document.root.id,
-    nodeRatio: 0,
-    viewportRatio: (_d = normalized2 == null ? void 0 : normalized2.viewportRatio) != null ? _d : 0.35
-  };
-}
-function chooseArticleRefreshLocation(preferredCurrent, rendered, remembered) {
-  var _a2, _b2;
-  return (_b2 = (_a2 = preferredCurrent != null ? preferredCurrent : rendered) != null ? _a2 : remembered) != null ? _b2 : null;
-}
-function chooseArticleLandingRefreshLocation(directoryActive, preferredCurrent, rendered, remembered) {
-  return directoryActive ? null : chooseArticleRefreshLocation(preferredCurrent, rendered, remembered);
-}
-function chooseArticleTransitionLocation(requested, pendingRestore) {
-  var _a2;
-  return (_a2 = requested != null ? requested : pendingRestore) != null ? _a2 : null;
-}
-function sameReadingLocation(left, right) {
-  const a = normalizeReadingLocation(left);
-  const b = normalizeReadingLocation(right);
-  return JSON.stringify(a) === JSON.stringify(b);
-}
-function renameReadingLocationPath(location, oldPath, newPath) {
-  if (!oldPath || oldPath === newPath) return location;
-  return {
-    ...location,
-    filePath: location.filePath === oldPath ? newPath : location.filePath,
-    fallbacks: location.fallbacks.map((fallback) => ({
-      ...fallback,
-      filePath: fallback.filePath === oldPath ? newPath : fallback.filePath
-    }))
-  };
-}
+// src/editor/editor-modals.ts
+var import_obsidian4 = require("obsidian");
 
 // src/editor/rich-text-dom.ts
-var import_obsidian4 = require("obsidian");
+var import_obsidian3 = require("obsidian");
 var mathJaxReady = false;
 var mathJaxLoading = null;
 function ensureMathJax() {
   if (mathJaxReady) return Promise.resolve();
-  mathJaxLoading != null ? mathJaxLoading : mathJaxLoading = (0, import_obsidian4.loadMathJax)().then(() => {
+  mathJaxLoading != null ? mathJaxLoading : mathJaxLoading = (0, import_obsidian3.loadMathJax)().then(() => {
     mathJaxReady = true;
   });
   return mathJaxLoading;
@@ -5557,7 +4670,9 @@ function renderRichTextRuns(container, runs, fallbackText, latex = true) {
   if (hasMath && !mathJaxReady) {
     sourceRuns.forEach((run) => append(run.text, run.style));
     void ensureMathJax().then(() => {
-      if (container.isConnected) renderRichTextRuns(container, runs, fallbackText, latex);
+      if (container.isConnected && container.contentEditable !== "true") {
+        renderRichTextRuns(container, runs, fallbackText, latex);
+      }
     }).catch(() => void 0);
     return;
   }
@@ -5576,7 +4691,7 @@ function renderRichTextRuns(container, runs, fallbackText, latex = true) {
       const display = token.startsWith("$$");
       const source = token.slice(display ? 2 : 1, display ? -2 : -1).trim();
       try {
-        const math = (0, import_obsidian4.renderMath)(source, display);
+        const math = (0, import_obsidian3.renderMath)(source, display);
         math.addClass("mms-node-math");
         math.toggleClass("is-display", display);
         container.appendChild(math);
@@ -5588,7 +4703,7 @@ function renderRichTextRuns(container, runs, fallbackText, latex = true) {
     }
     if (offset < run.text.length) append(run.text.slice(offset), run.style);
   }
-  if (renderedMath) void (0, import_obsidian4.finishRenderMath)();
+  if (renderedMath) void (0, import_obsidian3.finishRenderMath)();
 }
 function renderInlineMarkdown(container, markdown) {
   const parsed = markdownInlineToRichText(markdown);
@@ -5653,9 +4768,6 @@ function readRichTextEditor(editor) {
   const richText = normalizeRichText(rawRuns, fallback);
   return { text: richTextPlainText(richText, fallback).trim(), richText };
 }
-
-// src/editor/editor-modals.ts
-var import_obsidian5 = require("obsidian");
 
 // node_modules/fflate/esm/browser.js
 var u8 = Uint8Array;
@@ -6634,6 +5746,180 @@ function unzipSync(data, opts) {
   return files;
 }
 
+// src/article/modes.ts
+var DISPLAY_MODE_LABELS = {
+  mindmap: "\u5BFC\u56FE",
+  outline: "\u5927\u7EB2",
+  article: "\u6587\u7AE0",
+  reading: "\u901A\u8BFB",
+  "question-bank": "\u7B54\u9898"
+};
+var DISPLAY_MODE_ICONS = {
+  mindmap: "brain-circuit",
+  outline: "list-tree",
+  article: "notebook-text",
+  reading: "book-open-text",
+  "question-bank": "graduation-cap"
+};
+function readingAnchorPart(value) {
+  return encodeURIComponent(value).replace(/%/g, "_");
+}
+var CHINESE_DIGITS = ["\u96F6", "\u4E00", "\u4E8C", "\u4E09", "\u56DB", "\u4E94", "\u516D", "\u4E03", "\u516B", "\u4E5D"];
+var MAX_ARTICLE_NUMBERING_LEVEL = 8;
+var MAX_NATIVE_CIRCLED_NUMBER = 50;
+function chineseNumber(value) {
+  var _a2;
+  const safe = Math.max(0, Math.floor(value));
+  if (safe < 10) return (_a2 = CHINESE_DIGITS[safe]) != null ? _a2 : String(safe);
+  if (safe < 20) return `\u5341${safe % 10 ? CHINESE_DIGITS[safe % 10] : ""}`;
+  if (safe < 100) {
+    const tens = Math.floor(safe / 10);
+    const ones = safe % 10;
+    return `${CHINESE_DIGITS[tens]}\u5341${ones ? CHINESE_DIGITS[ones] : ""}`;
+  }
+  return String(safe);
+}
+function alphabeticNumber(index) {
+  let remaining = Math.max(1, Math.floor(index));
+  let result = "";
+  while (remaining > 0) {
+    remaining -= 1;
+    result = String.fromCharCode(65 + remaining % 26) + result;
+    remaining = Math.floor(remaining / 26);
+  }
+  return result;
+}
+function articleNumberLabel(depth, index) {
+  const normalizedDepth = Number.isFinite(depth) ? Math.floor(depth) : 0;
+  if (normalizedDepth < 1 || normalizedDepth > MAX_ARTICLE_NUMBERING_LEVEL) return "";
+  const normalizedIndex = Number.isFinite(index) ? Math.max(1, Math.floor(index)) : 1;
+  const cn = chineseNumber(normalizedIndex);
+  if (normalizedDepth === 1) return `\u7B2C${cn}\u7AE0`;
+  if (normalizedDepth === 2) return `\u7B2C${cn}\u8282`;
+  if (normalizedDepth === 3) return `${cn}\u3001`;
+  if (normalizedDepth === 4) return `\uFF08${cn}\uFF09`;
+  if (normalizedDepth === 5) return `${normalizedIndex}.`;
+  if (normalizedDepth === 6) return `\uFF08${normalizedIndex}\uFF09`;
+  const alphabet = alphabeticNumber(normalizedIndex);
+  return normalizedDepth === 7 ? `${alphabet}.` : `\uFF08${alphabet}\uFF09`;
+}
+function circledNumberLabel(index) {
+  const normalizedIndex = Number.isFinite(index) ? Math.max(1, Math.floor(index)) : 1;
+  if (normalizedIndex <= 20) return String.fromCodePoint(9312 + normalizedIndex - 1);
+  if (normalizedIndex <= 35) return String.fromCodePoint(12881 + normalizedIndex - 21);
+  if (normalizedIndex <= MAX_NATIVE_CIRCLED_NUMBER) return String.fromCodePoint(12977 + normalizedIndex - 36);
+  return String(normalizedIndex);
+}
+function articleDisplayTitle(label, title) {
+  if (!label) return title;
+  return /[、.）]$/.test(label) ? `${label}${title}` : `${label} ${title}`;
+}
+function isArticleHeading(node) {
+  var _a2;
+  return node.children.length > 0 || Boolean((_a2 = node.submap) == null ? void 0 : _a2.path);
+}
+function isDocumentArticleNumberingDisabled(root) {
+  return root.articleNumberingMode === "none";
+}
+function resolveArticleNumbering(node, defaultLevel, siblingHasHeading) {
+  var _a2, _b2;
+  const mode = (_a2 = node.articleNumberingMode) != null ? _a2 : "auto";
+  const manual = mode === "manual";
+  const requestedLevel = Number.isFinite(node.articleNumberingLevel) ? Math.floor((_b2 = node.articleNumberingLevel) != null ? _b2 : defaultLevel) : defaultLevel;
+  const level = manual ? Math.min(MAX_ARTICLE_NUMBERING_LEVEL, Math.max(1, requestedLevel)) : Math.max(1, Math.floor(defaultLevel));
+  const isHeading = isArticleHeading(node) || siblingHasHeading;
+  return {
+    level,
+    isHeading,
+    skipped: mode === "none",
+    shouldNumber: mode !== "none" && isHeading && level <= MAX_ARTICLE_NUMBERING_LEVEL
+  };
+}
+function articleChildStartLevel(root, baseDepth = 0) {
+  var _a2;
+  const normalizedBaseDepth = Math.max(0, Math.floor(baseDepth));
+  return root.articleNumberingMode === "manual" && Number.isFinite(root.articleNumberingLevel) ? Math.min(MAX_ARTICLE_NUMBERING_LEVEL, Math.max(1, Math.floor((_a2 = root.articleNumberingLevel) != null ? _a2 : normalizedBaseDepth))) : normalizedBaseDepth + 1;
+}
+function articleTocDepth(entry) {
+  return Number.isFinite(entry.tocDepth) ? Math.max(1, Math.floor(entry.tocDepth)) : 1;
+}
+function resolveArticleTocMaxDepth(documentOverride, pluginDefault) {
+  const source = typeof documentOverride === "number" && Number.isFinite(documentOverride) ? documentOverride : pluginDefault;
+  return Math.max(1, Math.min(8, Math.round(Number.isFinite(source) ? source : 3)));
+}
+function sameBreadcrumb(left, right) {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+function resolveArticleSiblingPages(entries, currentFilePath) {
+  const currentEntry = entries.find((entry) => entry.filePath === currentFilePath && !entry.nodeId);
+  if (!currentEntry) return { entries: [], currentIndex: 0 };
+  const structuralDepth = articleTocDepth(currentEntry);
+  const parentBreadcrumb = currentEntry.breadcrumb.slice(0, -1);
+  const siblingEntries = entries.filter((entry) => !entry.nodeId && articleTocDepth(entry) === structuralDepth && sameBreadcrumb(entry.breadcrumb.slice(0, -1), parentBreadcrumb));
+  const currentIndex = siblingEntries.findIndex((entry) => entry.filePath === currentFilePath);
+  return {
+    entries: siblingEntries,
+    currentIndex: Math.max(0, currentIndex),
+    currentEntry
+  };
+}
+function currentArticlePageEntry(navigation) {
+  if (!(navigation == null ? void 0 : navigation.parentPath)) return void 0;
+  return navigation.entries[navigation.currentIndex];
+}
+function buildArticleNodeInfo(root, baseDepth = 0, leafNumbering = { enabled: false, threshold: 4 }, primaryText = nodePrimaryText) {
+  const result = [];
+  const documentNumberingDisabled = leafNumbering.numberingDisabled === true || isDocumentArticleNumberingDisabled(root);
+  const visitChildren = (parent, defaultLevel) => {
+    var _a2;
+    let siblingHasHeading = false;
+    let terminalCount = 0;
+    for (const child of parent.children) {
+      if (isArticleHeading(child)) siblingHasHeading = true;
+      else if (child.articleNumberingMode !== "none") terminalCount += 1;
+    }
+    const threshold = Math.max(1, Math.min(20, Math.floor(leafNumbering.threshold) || 4));
+    const leafNumberingStyle = leafNumbering.style === "circled" ? "circled" : "next-level";
+    const hasSupportedLeafLabel = leafNumberingStyle === "circled" || defaultLevel <= MAX_ARTICLE_NUMBERING_LEVEL;
+    const convertLeaves = !documentNumberingDisabled && leafNumbering.enabled && terminalCount >= threshold && hasSupportedLeafLabel;
+    const numberedIndexes = /* @__PURE__ */ new Map();
+    for (const child of parent.children) {
+      const numbering = resolveArticleNumbering(child, defaultLevel, siblingHasHeading);
+      const numberedLeaf = convertLeaves && !numbering.isHeading && !numbering.skipped;
+      const displayLevel = numberedLeaf ? defaultLevel : numbering.level;
+      const numberedIndex = !documentNumberingDisabled && (numbering.shouldNumber || numberedLeaf) && !numbering.skipped ? ((_a2 = numberedIndexes.get(displayLevel)) != null ? _a2 : 0) + 1 : 0;
+      if (numberedIndex) numberedIndexes.set(displayLevel, numberedIndex);
+      const label = numberedIndex ? numberedLeaf && leafNumberingStyle === "circled" ? circledNumberLabel(numberedIndex) : articleNumberLabel(displayLevel, numberedIndex) : "";
+      const title = primaryText(child) || (numbering.isHeading ? "\u672A\u547D\u540D\u6807\u9898" : "");
+      const plainTextLabel = numberedLeaf && leafNumberingStyle === "circled" && numberedIndex > MAX_NATIVE_CIRCLED_NUMBER ? `\u25EF${label}` : label;
+      result.push({
+        node: child,
+        depth: displayLevel,
+        label,
+        title,
+        displayTitle: articleDisplayTitle(plainTextLabel, title),
+        isHeading: numbering.isHeading,
+        numberedLeaf,
+        leafNumberingStyle: numberedLeaf ? leafNumberingStyle : void 0,
+        leafNumberingIndex: numberedLeaf ? numberedIndex : void 0,
+        skipped: numbering.skipped,
+        anchor: `mindmap-article-${child.id.replace(/[^a-zA-Z0-9_-]/g, "-")}`
+      });
+      if (child.children.length) visitChildren(child, numbering.level + 1);
+    }
+  };
+  visitChildren(root, articleChildStartLevel(root, baseDepth));
+  return result;
+}
+function normalizeVisibleModes(modes) {
+  const raw = Array.isArray(modes) ? modes : [];
+  const result = [];
+  for (const value of raw) {
+    if ((value === "mindmap" || value === "outline" || value === "article" || value === "reading") && !result.includes(value)) result.push(value);
+  }
+  return result.length ? result : ["mindmap", "outline", "article", "reading"];
+}
+
 // src/import/import-export.ts
 function xmindToDocument(source, fallbackTitle = "XMind \u5BFC\u5165") {
   var _a2, _b2;
@@ -7126,7 +6412,7 @@ async function copyDesktopMarkdownImagesToDocument(document2, sourceDirectory, s
 }
 
 // src/editor/editor-modals.ts
-var ImageHostPickerModal = class extends import_obsidian5.Modal {
+var ImageHostPickerModal = class extends import_obsidian4.Modal {
   /**
    * 创建图床选择弹窗。
    *
@@ -7169,7 +6455,7 @@ var ImageHostPickerModal = class extends import_obsidian5.Modal {
     const confirm = actions.createEl("button", { text: "\u786E\u5B9A", cls: "mod-cta", attr: { type: "button" } });
     confirm.addEventListener("click", () => {
       if (!this.selected.size) {
-        new import_obsidian5.Notice("\u8BF7\u81F3\u5C11\u9009\u62E9\u4E00\u4E2A\u56FE\u5E8A");
+        new import_obsidian4.Notice("\u8BF7\u81F3\u5C11\u9009\u62E9\u4E00\u4E2A\u56FE\u5E8A");
         return;
       }
       this.resolved = true;
@@ -7186,7 +6472,7 @@ var ImageHostPickerModal = class extends import_obsidian5.Modal {
 };
 function chooseImageHosts(app, hosts, initialIds) {
   if (!hosts.length) {
-    new import_obsidian5.Notice("\u6CA1\u6709\u53EF\u7528\u56FE\u5E8A\uFF0C\u8BF7\u5148\u5728\u63D2\u4EF6\u8BBE\u7F6E\u4E2D\u914D\u7F6E\u5E76\u542F\u7528\u56FE\u5E8A");
+    new import_obsidian4.Notice("\u6CA1\u6709\u53EF\u7528\u56FE\u5E8A\uFF0C\u8BF7\u5148\u5728\u63D2\u4EF6\u8BBE\u7F6E\u4E2D\u914D\u7F6E\u5E76\u542F\u7528\u56FE\u5E8A");
     return Promise.resolve(null);
   }
   const allowed = new Set(hosts.map((host) => host.id));
@@ -7195,7 +6481,7 @@ function chooseImageHosts(app, hosts, initialIds) {
     new ImageHostPickerModal(app, hosts, initial.length ? initial : [hosts[0].id], resolve).open();
   });
 }
-var ImagePreviewModal = class extends import_obsidian5.Modal {
+var ImagePreviewModal = class extends import_obsidian4.Modal {
   /**
    * 创建图片预览弹窗。
    *
@@ -7317,16 +6603,18 @@ var ImagePreviewModal = class extends import_obsidian5.Modal {
     });
   }
 };
-var FormulaEditModal = class extends import_obsidian5.Modal {
+var FormulaEditModal = class extends import_obsidian4.Modal {
   /**
    * 创建公式编辑器。
    *
    * @param app Obsidian 应用实例。
-   * @param submit 保存公式源码的回调。
+   * @param submit 保存公式源码和显示方式的回调。
+   * @param defaultDisplay 初始是否使用独立公式模式。
    */
-  constructor(app, submit) {
+  constructor(app, submit, defaultDisplay = false) {
     super(app);
     this.submit = submit;
+    this.defaultDisplay = defaultDisplay;
   }
   /**
    * 创建公式模板、源码输入和 MathJax 预览。
@@ -7336,8 +6624,15 @@ var FormulaEditModal = class extends import_obsidian5.Modal {
     this.contentEl.addClass("mms-formula-editor");
     this.contentEl.createEl("p", {
       cls: "setting-item-description",
-      text: "\u70B9\u51FB\u5E38\u7528\u7ED3\u6784\u5FEB\u901F\u7EC4\u5408\u516C\u5F0F\uFF0C\u4E5F\u53EF\u4EE5\u76F4\u63A5\u4FEE\u6539 LaTeX \u6E90\u7801\u3002\u4FDD\u5B58\u540E\u8282\u70B9\u4F1A\u663E\u793A\u516C\u5F0F\u800C\u4E0D\u662F\u6E90\u7801\u3002"
+      text: "\u884C\u5185\u516C\u5F0F\u53EF\u4EE5\u548C\u524D\u540E\u6587\u5B57\u4F4D\u4E8E\u540C\u4E00\u884C\uFF1B\u72EC\u7ACB\u516C\u5F0F\u4F1A\u5355\u72EC\u5C45\u4E2D\u663E\u793A\u3002\u4E5F\u53EF\u4EE5\u76F4\u63A5\u4FEE\u6539 LaTeX \u6E90\u7801\u3002"
     });
+    const displayMode = this.contentEl.createEl("select", {
+      cls: "mms-formula-display-mode",
+      attr: { "aria-label": "\u516C\u5F0F\u663E\u793A\u65B9\u5F0F" }
+    });
+    displayMode.createEl("option", { value: "inline", text: "\u884C\u5185\u516C\u5F0F\uFF08\u53EF\u4E0E\u6587\u5B57\u6DF7\u6392\uFF09" });
+    displayMode.createEl("option", { value: "display", text: "\u72EC\u7ACB\u516C\u5F0F\uFF08\u5355\u72EC\u4E00\u884C\uFF09" });
+    displayMode.value = this.defaultDisplay ? "display" : "inline";
     const templates = [
       ["x\xB2", "x^{2}", "\u4E0A\u6807"],
       ["x\u1D62", "x_{i}", "\u4E0B\u6807"],
@@ -7404,8 +6699,8 @@ var FormulaEditModal = class extends import_obsidian5.Modal {
         if (token !== previewToken || !preview.isConnected) return;
         preview.empty();
         try {
-          preview.appendChild((0, import_obsidian5.renderMath)(value, true));
-          void (0, import_obsidian5.finishRenderMath)();
+          preview.appendChild((0, import_obsidian4.renderMath)(value, displayMode.value === "display"));
+          void (0, import_obsidian4.finishRenderMath)();
         } catch (e) {
           preview.createSpan({ cls: "mod-warning", text: "\u516C\u5F0F\u8BED\u6CD5\u6682\u65F6\u65E0\u6CD5\u6E32\u67D3" });
         }
@@ -7438,16 +6733,17 @@ var FormulaEditModal = class extends import_obsidian5.Modal {
       button.addEventListener("click", () => insert(template));
     }
     source.addEventListener("input", updatePreview);
+    displayMode.addEventListener("change", updatePreview);
     const actions = this.contentEl.createDiv({ cls: "modal-button-container" });
     actions.createEl("button", { text: "\u53D6\u6D88", attr: { type: "button" } }).addEventListener("click", () => this.close());
     const save = actions.createEl("button", { text: "\u63D2\u5165\u516C\u5F0F", cls: "mod-cta", attr: { type: "button" } });
     save.addEventListener("click", () => {
       const value = source.value.trim();
       if (!value) {
-        new import_obsidian5.Notice("\u8BF7\u5148\u8F93\u5165\u6216\u9009\u62E9\u4E00\u4E2A\u516C\u5F0F");
+        new import_obsidian4.Notice("\u8BF7\u5148\u8F93\u5165\u6216\u9009\u62E9\u4E00\u4E2A\u516C\u5F0F");
         return;
       }
-      this.submit(value);
+      this.submit({ source: value, display: displayMode.value === "display" });
       this.close();
     });
     updatePreview();
@@ -7460,7 +6756,7 @@ var FormulaEditModal = class extends import_obsidian5.Modal {
     this.contentEl.empty();
   }
 };
-var ImportExportModal = class extends import_obsidian5.Modal {
+var ImportExportModal = class extends import_obsidian4.Modal {
   /**
    * 创建 JSON 传输弹窗。
    *
@@ -7518,7 +6814,7 @@ var ImportExportModal = class extends import_obsidian5.Modal {
     const importButton = actions.createEl("button", { text: "\u5BFC\u5165 JSON" });
     copy.addEventListener("click", () => {
       void navigator.clipboard.writeText(textarea.value);
-      new import_obsidian5.Notice("\u5DF2\u590D\u5236 JSON");
+      new import_obsidian4.Notice("\u5DF2\u590D\u5236 JSON");
     });
     importFileButton.addEventListener("click", () => {
       void (async () => {
@@ -7541,13 +6837,13 @@ var ImportExportModal = class extends import_obsidian5.Modal {
             setAllBranchesCollapsed(imported.root, true);
             if (!applyImport(imported)) return;
             await updateImportProgress(100, "\u5BFC\u5165\u5B8C\u6210");
-            new import_obsidian5.Notice(copiedImages > 0 ? `\u5DF2\u5BFC\u5165\uFF1A${selected.file.name}\uFF0C\u5E76\u590D\u5236 ${copiedImages} \u5F20\u56FE\u7247` : `\u5DF2\u5BFC\u5165\uFF1A${selected.file.name}`);
+            new import_obsidian4.Notice(copiedImages > 0 ? `\u5DF2\u5BFC\u5165\uFF1A${selected.file.name}\uFF0C\u5E76\u590D\u5236 ${copiedImages} \u5F20\u56FE\u7247` : `\u5DF2\u5BFC\u5165\uFF1A${selected.file.name}`);
             window.setTimeout(() => this.close(), 180);
           } catch (error) {
             console.error("MindMap Studio file import failed", error);
             const message = error instanceof Error ? error.message : "\u6587\u4EF6\u5BFC\u5165\u5931\u8D25";
             progressStatus.setText(`\u5BFC\u5165\u5931\u8D25\uFF1A${message}`);
-            new import_obsidian5.Notice(message);
+            new import_obsidian4.Notice(message);
           }
           return;
         }
@@ -7570,13 +6866,13 @@ var ImportExportModal = class extends import_obsidian5.Modal {
               setAllBranchesCollapsed(imported.root, true);
               if (!applyImport(imported)) return;
               await updateImportProgress(100, "\u5BFC\u5165\u5B8C\u6210");
-              new import_obsidian5.Notice(`\u5DF2\u5BFC\u5165\uFF1A${file.name}`);
+              new import_obsidian4.Notice(`\u5DF2\u5BFC\u5165\uFF1A${file.name}`);
               window.setTimeout(() => this.close(), 180);
             } catch (error) {
               console.error("MindMap Studio file import failed", error);
               const message = error instanceof Error ? error.message : "\u6587\u4EF6\u5BFC\u5165\u5931\u8D25";
               progressStatus.setText(`\u5BFC\u5165\u5931\u8D25\uFF1A${message}`);
-              new import_obsidian5.Notice(message);
+              new import_obsidian4.Notice(message);
             }
           })();
         }, { once: true });
@@ -7590,11 +6886,11 @@ var ImportExportModal = class extends import_obsidian5.Modal {
         const normalized2 = normalizeDocument(parsed, this.document.title);
         setAllBranchesCollapsed(normalized2.root, true);
         if (!applyImport(normalized2)) return;
-        new import_obsidian5.Notice("JSON \u5DF2\u5BFC\u5165");
+        new import_obsidian4.Notice("JSON \u5DF2\u5BFC\u5165");
         this.close();
       } catch (error) {
         console.error("MindMap Studio JSON import failed", error);
-        new import_obsidian5.Notice("JSON \u683C\u5F0F\u65E0\u6548\uFF0C\u8BF7\u68C0\u67E5\u540E\u91CD\u8BD5");
+        new import_obsidian4.Notice("JSON \u683C\u5F0F\u65E0\u6548\uFF0C\u8BF7\u68C0\u67E5\u540E\u91CD\u8BD5");
       }
     });
     if (!this.canImport) {
@@ -7634,7 +6930,7 @@ var ImportExportModal = class extends import_obsidian5.Modal {
     this.contentEl.empty();
   }
 };
-var OutlineModal = class extends import_obsidian5.Modal {
+var OutlineModal = class extends import_obsidian4.Modal {
   /**
    * 创建 Markdown 大纲弹窗。
    *
@@ -7660,7 +6956,7 @@ var OutlineModal = class extends import_obsidian5.Modal {
     const exportButton = actions.createEl("button", { text: "\u5BFC\u51FA\u4E3A .md", cls: "mod-cta" });
     copy.addEventListener("click", () => {
       void navigator.clipboard.writeText(this.markdown);
-      new import_obsidian5.Notice("\u5DF2\u590D\u5236 Markdown \u5927\u7EB2");
+      new import_obsidian4.Notice("\u5DF2\u590D\u5236 Markdown \u5927\u7EB2");
     });
     exportButton.addEventListener("click", () => {
       this.onExport();
@@ -7674,6 +6970,773 @@ var OutlineModal = class extends import_obsidian5.Modal {
     this.contentEl.empty();
   }
 };
+
+// src/editor/question-modal.ts
+var QUESTION_TAGS = [
+  "\u516C\u52A1\u5458",
+  "\u4E8B\u4E1A\u5355\u4F4D",
+  "\u9009\u8C03\u751F",
+  "\u4E09\u652F\u4E00\u6276",
+  "\u7533\u8BBA",
+  "\u804C\u6D4B",
+  "\u884C\u6D4B",
+  "\u516C\u5171\u57FA\u7840\u77E5\u8BC6",
+  "\u5E38\u8BC6\u5224\u65AD",
+  "\u65F6\u653F",
+  "\u653F\u6CBB",
+  "\u7ECF\u6D4E",
+  "\u6CD5\u5F8B",
+  "\u4EBA\u6587\u5386\u53F2",
+  "\u5730\u7406\u79D1\u6280",
+  "\u8A00\u8BED\u7406\u89E3",
+  "\u5224\u65AD\u63A8\u7406",
+  "\u6570\u91CF\u5173\u7CFB",
+  "\u8D44\u6599\u5206\u6790",
+  "\u9762\u8BD5"
+];
+var QUESTION_STATUS_LABELS = { unanswered: "\u672A\u505A", completed: "\u5DF2\u505A", favorite: "\u6536\u85CF", wrong: "\u9519\u9898", mastered: "\u638C\u63E1" };
+function parseRecognizedQuestion(value, fallback) {
+  var _a2, _b2, _c;
+  const source = value.trim().replace(/^```json\s*|```$/gim, "");
+  const start = source.indexOf("{");
+  const end = source.lastIndexOf("}");
+  if (start < 0 || end <= start) return null;
+  try {
+    const parsed = JSON.parse(source.slice(start, end + 1));
+    const textBlocks = (input) => {
+      const text = Array.isArray(input) ? input.join("\n") : typeof input === "string" ? input : "";
+      return text.trim() ? [{ id: newId(), type: "text", text: text.trim() }] : [];
+    };
+    const mode = parsed.mode === "essay" ? "essay" : parsed.mode === "judgment" ? "judgment" : "choice";
+    const rawOptions = Array.isArray(parsed.options) ? parsed.options : [];
+    const options = mode === "choice" ? rawOptions.slice(0, 12).flatMap((item, index) => {
+      var _a3;
+      if (typeof item === "string") return [{ id: newId(), label: String.fromCharCode(65 + index), content: textBlocks(item) }];
+      if (!item || typeof item !== "object") return [];
+      const option = item;
+      return [{ id: newId(), label: typeof option.label === "string" ? option.label : String.fromCharCode(65 + index), content: textBlocks((_a3 = option.content) != null ? _a3 : option.text) }];
+    }) : mode === "judgment" ? createMindMapQuestion("judgment").options : [];
+    const preservedImages = fallback.stem.filter((block) => block.type === "image");
+    return {
+      mode,
+      stem: [...textBlocks((_a2 = parsed.stem) != null ? _a2 : parsed.question), ...preservedImages],
+      options,
+      answer: textBlocks(parsed.answer),
+      explanation: textBlocks((_b2 = parsed.explanation) != null ? _b2 : parsed.analysis),
+      tags: Array.from(/* @__PURE__ */ new Set([...(_c = fallback.tags) != null ? _c : [], ...Array.isArray(parsed.tags) ? parsed.tags.filter((tag) => typeof tag === "string") : []])).slice(0, 12),
+      source: fallback.source,
+      status: fallback.status,
+      attemptCount: fallback.attemptCount,
+      correctCount: fallback.correctCount,
+      lastPracticedAt: fallback.lastPracticedAt
+    };
+  } catch (e) {
+    return null;
+  }
+}
+function parseQuestionEnrichment(value, fallback) {
+  var _a2;
+  const source = value.trim().replace(/^```json\s*|```$/gim, "");
+  const start = source.indexOf("{");
+  const end = source.lastIndexOf("}");
+  if (start < 0 || end <= start) return null;
+  try {
+    const parsed = JSON.parse(source.slice(start, end + 1));
+    const found = parsed.found === true;
+    const question = (_a2 = parseRecognizedQuestion(source, fallback)) != null ? _a2 : fallback;
+    const sourceUrl = typeof parsed.sourceUrl === "string" ? parsed.sourceUrl.trim() : "";
+    const sourceTitle = typeof parsed.sourceTitle === "string" ? parsed.sourceTitle.trim() : "";
+    if (!found) return { found: false, question: { ...question, source: void 0 } };
+    if (!/^https?:\/\//i.test(sourceUrl) || !sourceTitle) return { found: false, question: { ...question, source: void 0 } };
+    return {
+      found: true,
+      question: {
+        ...question,
+        source: { title: sourceTitle.slice(0, 300), url: sourceUrl.slice(0, 2e3), matchedAt: (/* @__PURE__ */ new Date()).toISOString() }
+      }
+    };
+  } catch (e) {
+    return null;
+  }
+}
+var QuestionEditModal = class extends import_obsidian5.Modal {
+  /** Creates a modal around the selected node's existing question payload. */
+  constructor(app, question, nodeId, callbacks, onSubmit) {
+    super(app);
+    this.nodeId = nodeId;
+    this.callbacks = callbacks;
+    this.onSubmit = onSubmit;
+    this.draft = JSON.parse(JSON.stringify(question != null ? question : createMindMapQuestion()));
+  }
+  /** Initializes the modal surface and renders the current draft. */
+  onOpen() {
+    this.modalEl.addClass("mms-question-modal");
+    this.render();
+  }
+  /** Rebuilds the compact question form after a mode, tag, or field change. */
+  render() {
+    this.contentEl.empty();
+    this.contentEl.createEl("h2", { text: "\u9898\u76EE\u8282\u70B9" });
+    const mode = this.contentEl.createEl("select");
+    mode.createEl("option", { value: "choice", text: "\u9009\u62E9\u9898" });
+    mode.createEl("option", { value: "judgment", text: "\u5224\u65AD\u9898" });
+    mode.createEl("option", { value: "essay", text: "\u5927\u9898" });
+    mode.value = this.draft.mode;
+    mode.onchange = () => {
+      const nextMode = mode.value === "essay" ? "essay" : mode.value === "judgment" ? "judgment" : "choice";
+      this.draft = {
+        ...this.draft,
+        mode: nextMode,
+        options: nextMode === "essay" ? [] : nextMode === "judgment" ? createMindMapQuestion("judgment").options : this.draft.mode === "choice" && this.draft.options.length ? this.draft.options : createMindMapQuestion("choice").options
+      };
+      this.render();
+    };
+    const status = this.contentEl.createEl("select", { cls: "mms-question-status" });
+    for (const [value, label] of Object.entries(QUESTION_STATUS_LABELS)) status.createEl("option", { value, text: label });
+    status.value = this.draft.status;
+    status.onchange = () => {
+      this.draft.status = status.value;
+    };
+    this.renderBlocks("\u9898\u5E72", this.draft.stem, (blocks) => {
+      this.draft.stem = blocks;
+    });
+    if (this.draft.mode !== "essay") {
+      for (const option of this.draft.options) this.renderBlocks(`\u9009\u9879 ${option.label}`, option.content, (blocks) => {
+        option.content = blocks;
+      });
+      if (this.draft.mode === "choice") {
+        const add = this.contentEl.createEl("button", { text: "\u6DFB\u52A0\u9009\u9879", attr: { type: "button" } });
+        add.onclick = () => {
+          this.draft.options.push({ id: newId(), label: String.fromCharCode(65 + this.draft.options.length), content: [{ id: newId(), type: "text", text: "" }] });
+          this.render();
+        };
+      }
+    }
+    this.renderBlocks("\u7B54\u6848", this.draft.answer, (blocks) => {
+      this.draft.answer = blocks;
+    });
+    this.renderBlocks("\u89E3\u7B54", this.draft.explanation, (blocks) => {
+      this.draft.explanation = blocks;
+    });
+    const tagRow = this.contentEl.createDiv({ cls: "mms-question-tags" });
+    tagRow.createSpan({ text: "\u6807\u7B7E" });
+    for (const tag of QUESTION_TAGS) {
+      const button = tagRow.createEl("button", { text: tag, attr: { type: "button" } });
+      button.toggleClass("is-active", this.draft.tags.includes(tag));
+      button.onclick = () => {
+        this.draft.tags = this.draft.tags.includes(tag) ? this.draft.tags.filter((item) => item !== tag) : [...this.draft.tags, tag];
+        this.render();
+      };
+    }
+    const customTags = this.contentEl.createEl("input", { attr: { placeholder: "\u8865\u5145\u6807\u7B7E\uFF0C\u4F7F\u7528\u9017\u53F7\u5206\u9694" } });
+    customTags.value = this.draft.tags.filter((tag) => !QUESTION_TAGS.includes(tag)).join(", ");
+    customTags.onchange = () => {
+      this.draft.tags = Array.from(/* @__PURE__ */ new Set([...this.draft.tags.filter((tag) => QUESTION_TAGS.includes(tag)), ...customTags.value.split(/[，,]/).map((tag) => tag.trim()).filter(Boolean)])).slice(0, 12);
+    };
+    if (this.draft.source) {
+      const source = this.contentEl.createEl("a", { text: `\u539F\u9898\u6765\u6E90\uFF1A${this.draft.source.title}`, href: this.draft.source.url });
+      source.setAttr("target", "_blank");
+      source.setAttr("rel", "noopener noreferrer");
+    }
+    const actions = this.contentEl.createDiv({ cls: "modal-button-container" });
+    const enrich = actions.createEl("button", { text: "AI \u667A\u80FD\u5904\u7406\u9898\u76EE", attr: { type: "button" } });
+    enrich.onclick = () => void this.convertAndEnrichQuestion();
+    const save = actions.createEl("button", { text: "\u4FDD\u5B58", cls: "mod-cta", attr: { type: "button" } });
+    save.onclick = () => {
+      this.onSubmit(this.draft);
+      this.close();
+    };
+  }
+  /** Renders one question field with inline LaTeX insertion and a live MathJax preview. */
+  renderBlocks(label, blocks, update) {
+    var _a2;
+    const section = this.contentEl.createDiv({ cls: "mms-question-field" });
+    const heading = section.createDiv({ cls: "mms-question-field-heading" });
+    heading.createEl("h3", { text: label });
+    heading.createSpan({ cls: "setting-item-description", text: "\u53F3\u952E\u6587\u5B57\u6846\u53EF\u63D2\u5165 LaTeX" });
+    const textBlocks = blocks.filter((block) => block.type === "text");
+    const textarea = section.createEl("textarea", { attr: { rows: "4", placeholder: `${label}\u6587\u5B57\uFF0C\u53EF\u5728\u6587\u5B57\u4E2D\u4F7F\u7528 $...$ \u884C\u5185\u516C\u5F0F` } });
+    textarea.value = textBlocks.map((block) => block.text).join("\n");
+    const image = blocks.find((block) => block.type === "image");
+    const imageSource = section.createEl("input", { attr: { placeholder: "\u56FE\u7247\u8DEF\u5F84\u3001Obsidian \u94FE\u63A5\u6216 URL\uFF08\u53EF\u9009\uFF09" } });
+    imageSource.value = (_a2 = image == null ? void 0 : image.source) != null ? _a2 : "";
+    const preview = section.createDiv({ cls: "mms-question-field-preview" });
+    const renderPreview = () => {
+      preview.empty();
+      const value = textarea.value.replace(/\r\n?/g, "\n").trim();
+      if (!value) {
+        preview.createSpan({ cls: "setting-item-description", text: `${label}\u9884\u89C8` });
+        return;
+      }
+      renderRichTextRuns(preview, void 0, value);
+    };
+    const persist = () => {
+      var _a3, _b2, _c;
+      const next = [];
+      const value = textarea.value.replace(/\r\n?/g, "\n").trim();
+      if (value) next.push({ id: (_b2 = (_a3 = textBlocks[0]) == null ? void 0 : _a3.id) != null ? _b2 : newId(), type: "text", text: value });
+      if (imageSource.value.trim()) next.push({ id: (_c = image == null ? void 0 : image.id) != null ? _c : newId(), type: "image", source: imageSource.value.trim(), alt: label });
+      update(next);
+      renderPreview();
+    };
+    const insertFormula = (source, display) => {
+      var _a3, _b2;
+      const token = display ? `$$${source}$$` : `$${source}$`;
+      const start = (_a3 = textarea.selectionStart) != null ? _a3 : textarea.value.length;
+      const end = (_b2 = textarea.selectionEnd) != null ? _b2 : start;
+      textarea.setRangeText(token, start, end, "end");
+      persist();
+      textarea.focus();
+    };
+    textarea.addEventListener("input", persist);
+    textarea.addEventListener("contextmenu", (event) => {
+      event.preventDefault();
+      const menu = new import_obsidian5.Menu();
+      menu.addItem((item) => item.setTitle("\u63D2\u5165 LaTeX \u516C\u5F0F").setIcon("sigma").onClick(() => new FormulaEditModal(this.app, (value) => insertFormula(value.source, value.display)).open()));
+      menu.showAtMouseEvent(event);
+    });
+    imageSource.addEventListener("input", persist);
+    renderPreview();
+  }
+  /** Sends the first question image to the configured vision service and applies a JSON result. */
+  async recognizeQuestion(showSuccess = true) {
+    var _a2;
+    const image = [this.draft.stem, ...this.draft.options.map((option) => option.content), this.draft.answer, this.draft.explanation].flat().find((block) => block.type === "image");
+    if (!image) {
+      new import_obsidian5.Notice("\u8BF7\u5148\u5728\u9898\u5E72\u3001\u9009\u9879\u3001\u7B54\u6848\u6216\u89E3\u7B54\u4E2D\u586B\u5199\u4E00\u5F20\u9898\u56FE");
+      return false;
+    }
+    const source = await this.callbacks.onReadImageSource(image.source);
+    if (!source) {
+      new import_obsidian5.Notice("\u65E0\u6CD5\u8BFB\u53D6\u9898\u56FE");
+      return false;
+    }
+    const instruction = '\u8BC6\u522B\u8FD9\u9053\u539F\u9898\uFF0C\u53EA\u8FD4\u56DE JSON\uFF1A{"mode":"choice\u3001judgment \u6216 essay","stem":"\u9898\u5E72","options":[{"label":"A","content":"\u9009\u9879"}],"answer":"\u7B54\u6848","explanation":"\u89E3\u7B54","tags":["\u6807\u7B7E"]}\u3002\u5224\u65AD\u9898 mode \u4E3A judgment\uFF0C\u7B54\u6848\u4F7F\u7528 \u6B63\u786E \u6216 \u9519\u8BEF\u3002\u65E0\u6CD5\u8BC6\u522B\u7684\u5B57\u6BB5\u7559\u7A7A\u3002';
+    try {
+      const result = await this.callbacks.onRecognizeImage({ nodeId: this.nodeId, blockId: image.id, nodeLabel: "\u9898\u76EE\u8282\u70B9", source: image.source, alt: (_a2 = image.alt) != null ? _a2 : "\u9898\u56FE", index: 1, total: 1 }, source.blob, void 0, instruction);
+      const parsed = parseRecognizedQuestion(result.text, this.draft);
+      if (!parsed) {
+        new import_obsidian5.Notice("AI \u672A\u8FD4\u56DE\u53EF\u89E3\u6790\u7684\u9898\u76EE\u7ED3\u6784\uFF0C\u8BF7\u68C0\u67E5\u9898\u56FE\u6216\u6A21\u578B\u8F93\u51FA");
+        return false;
+      }
+      this.draft = parsed;
+      this.render();
+      if (showSuccess) new import_obsidian5.Notice("\u9898\u76EE\u5DF2\u7531 AI \u586B\u5145\uFF0C\u8BF7\u6838\u5BF9\u540E\u4FDD\u5B58");
+      return true;
+    } catch (error) {
+      new import_obsidian5.Notice(`\u9898\u56FE\u8BC6\u522B\u5931\u8D25\uFF1A${error instanceof Error ? error.message : String(error)}`);
+      return false;
+    }
+  }
+  /** Converts current text or image into a question, then looks up an original or generates missing analysis. */
+  async convertAndEnrichQuestion() {
+    const hasImage = [this.draft.stem, ...this.draft.options.map((option) => option.content), this.draft.answer, this.draft.explanation].flat().some((block) => block.type === "image");
+    if (hasImage && !await this.recognizeQuestion(false)) return;
+    const questionText = [
+      ...this.draft.stem,
+      ...this.draft.options.flatMap((option) => option.content)
+    ].filter((block) => block.type === "text").map((block) => block.text.trim()).filter(Boolean).join("\n");
+    if (!questionText) {
+      new import_obsidian5.Notice("\u8BF7\u5148\u586B\u5199\u9898\u76EE\u6587\u5B57\u6216\u9898\u56FE");
+      return;
+    }
+    try {
+      const result = parseQuestionEnrichment(await this.callbacks.onEnrichQuestion(questionText), this.draft);
+      if (!result) {
+        new import_obsidian5.Notice("AI \u672A\u8FD4\u56DE\u53EF\u89E3\u6790\u7684\u68C0\u7D22\u7ED3\u679C");
+        return;
+      }
+      this.draft = result.question;
+      this.render();
+      new import_obsidian5.Notice(result.found ? "\u5DF2\u627E\u5230\u539F\u9898\u5E76\u8865\u9F50\u7B54\u6848\u4E0E\u89E3\u6790\uFF0C\u8BF7\u6838\u5BF9\u540E\u4FDD\u5B58" : "\u672A\u627E\u5230\u53EF\u9A8C\u8BC1\u539F\u9898\uFF0C\u5DF2\u7531 AI \u5206\u6790\u8865\u9F50\u7F3A\u5931\u7B54\u6848\u4E0E\u89E3\u7B54\uFF0C\u8BF7\u6838\u5BF9\u540E\u4FDD\u5B58");
+    } catch (error) {
+      new import_obsidian5.Notice(`\u539F\u9898\u68C0\u7D22\u5931\u8D25\uFF1A${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+};
+
+// src/editor/question-practice-mode.ts
+function createQuestionPracticeState() {
+  return { filter: "all", tag: null, currentNodeId: null, selectedOptionIds: [], essayAnswer: "", answerVisible: false, lastCorrect: null, finished: false, orderedNodeIds: [], orderMode: null };
+}
+function renderQuestionPracticeMode(container, options) {
+  var _a2, _b2;
+  container.empty();
+  const allQuestionNodes = flattenNodes(options.document.root).filter((node2) => node2.question);
+  const candidates = allQuestionNodes.filter((node2) => node2.question && (options.state.filter === "all" || node2.question.status === "wrong" || options.state.answerVisible && node2.id === options.state.currentNodeId) && (!options.state.tag || node2.question.tags.includes(options.state.tag)));
+  const questions = orderPracticeQuestions(candidates, options.state, options.order);
+  const shell = container.createDiv({ cls: "mms-question-practice-page" });
+  const header = shell.createDiv({ cls: "mms-question-practice-header" });
+  header.createEl("h2", { text: options.document.title || "\u7B54\u9898" });
+  const filters = header.createDiv({ cls: "mms-question-practice-filters" });
+  for (const [filter, label] of [["all", "\u5168\u90E8\u9898\u76EE"], ["wrong", "\u9519\u9898\u672C"]]) {
+    const button = filters.createEl("button", { text: label, attr: { type: "button" } });
+    button.toggleClass("is-active", options.state.filter === filter);
+    button.onclick = () => {
+      options.state.filter = filter;
+      options.state.currentNodeId = null;
+      options.state.selectedOptionIds = [];
+      options.state.essayAnswer = "";
+      options.state.answerVisible = false;
+      options.state.lastCorrect = null;
+      options.state.finished = false;
+      options.state.orderedNodeIds = [];
+      options.state.orderMode = null;
+      renderQuestionPracticeMode(container, options);
+    };
+  }
+  const tags = Array.from(new Set(allQuestionNodes.flatMap((node2) => node2.question.tags))).sort((left, right) => left.localeCompare(right, "zh-CN"));
+  if (tags.length) {
+    const tagSelect = filters.createEl("select", { cls: "mms-question-practice-tag-filter", attr: { "aria-label": "\u9898\u76EE\u6807\u7B7E" } });
+    tagSelect.createEl("option", { value: "", text: "\u5168\u90E8\u6807\u7B7E" });
+    tags.forEach((tag) => tagSelect.createEl("option", { value: tag, text: tag }));
+    tagSelect.value = (_a2 = options.state.tag) != null ? _a2 : "";
+    tagSelect.onchange = () => {
+      options.state.tag = tagSelect.value || null;
+      resetPracticeProgress(options.state);
+      renderQuestionPracticeMode(container, options);
+    };
+  }
+  if (!questions.length) {
+    shell.createDiv({ cls: "mms-question-practice-empty", text: options.state.filter === "wrong" ? "\u9519\u9898\u672C\u6682\u65E0\u9898\u76EE" : "\u5F53\u524D\u5BFC\u56FE\u8FD8\u6CA1\u6709\u9898\u76EE\u8282\u70B9" });
+    return;
+  }
+  if (options.state.finished) {
+    shell.createDiv({ cls: "mms-question-practice-finished", text: "\u672C\u8F6E\u7B54\u9898\u5DF2\u5B8C\u6210" });
+    const restart = shell.createEl("button", { cls: "mod-cta mms-question-practice-submit", text: "\u91CD\u65B0\u5F00\u59CB", attr: { type: "button" } });
+    restart.onclick = () => {
+      options.state.currentNodeId = null;
+      options.state.selectedOptionIds = [];
+      options.state.essayAnswer = "";
+      options.state.answerVisible = false;
+      options.state.lastCorrect = null;
+      options.state.finished = false;
+      options.state.orderedNodeIds = [];
+      options.state.orderMode = null;
+      renderQuestionPracticeMode(container, options);
+    };
+    return;
+  }
+  const currentIndex = Math.max(0, questions.findIndex((node2) => node2.id === options.state.currentNodeId));
+  const node = (_b2 = questions[currentIndex]) != null ? _b2 : questions[0];
+  options.state.currentNodeId = node.id;
+  const question = node.question;
+  const answerLabels = selectedAnswerLabels(node);
+  const multiple = question.mode === "choice" && answerLabels.length > 1;
+  const questionKind = question.mode === "essay" ? "\u5927\u9898" : question.mode === "judgment" ? "\u5224\u65AD\u9898" : multiple ? "\u591A\u9009\u9898" : "\u5355\u9009\u9898";
+  shell.createDiv({ cls: "mms-question-practice-progress", text: `${currentIndex + 1} / ${questions.length} \xB7 ${questionKind}` });
+  const stem = shell.createEl("h3", { cls: "mms-question-practice-stem" });
+  renderQuestionTextBlocks(stem, question.stem, nodePlainText(node) || "\u672A\u547D\u540D\u9898\u76EE", options.renderRichText);
+  renderBlocks(shell, question.stem.filter((block) => block.type !== "text"), options.resolveImage, options.renderRichText);
+  if (question.mode !== "essay") {
+    const choices = shell.createDiv({ cls: "mms-question-practice-choices" });
+    question.options.forEach((option) => {
+      const choice = choices.createEl("label", { cls: "mms-question-practice-choice" });
+      choice.toggleClass("is-selected", options.state.selectedOptionIds.includes(option.id));
+      const input = choice.createEl("input", {
+        attr: {
+          type: multiple ? "checkbox" : "radio",
+          name: `mms-question-${node.id}`,
+          value: option.id,
+          "aria-label": `\u9009\u62E9${option.label}`
+        }
+      });
+      input.checked = options.state.selectedOptionIds.includes(option.id);
+      input.disabled = options.state.answerVisible;
+      choice.createSpan({ cls: "mms-question-practice-option-label", text: option.label });
+      renderBlocks(choice, option.content, options.resolveImage, options.renderRichText);
+      input.addEventListener("change", () => {
+        options.state.selectedOptionIds = multiple ? options.state.selectedOptionIds.includes(option.id) ? options.state.selectedOptionIds.filter((id) => id !== option.id) : [...options.state.selectedOptionIds, option.id] : [option.id];
+        renderQuestionPracticeMode(container, options);
+      });
+    });
+  } else {
+    const answer = shell.createEl("textarea", { cls: "mms-question-practice-answer", attr: { placeholder: "\u8F93\u5165\u4F60\u7684\u7B54\u6848", rows: "7" } });
+    answer.value = options.state.essayAnswer;
+    answer.disabled = options.state.answerVisible;
+    answer.oninput = () => {
+      options.state.essayAnswer = answer.value;
+    };
+  }
+  if (!options.state.answerVisible) {
+    const reveal = shell.createEl("button", { cls: "mod-cta mms-question-practice-submit", text: "\u67E5\u770B\u7B54\u6848\u4E0E\u89E3\u6790", attr: { type: "button" } });
+    reveal.onclick = () => {
+      const correct = question.mode === "essay" ? isExactQuestionAnswer(options.state.essayAnswer, blockText(question.answer)) : question.mode === "judgment" ? isQuestionJudgmentCorrect(node, options.state.selectedOptionIds) : isQuestionChoiceCorrect(node, options.state.selectedOptionIds);
+      if (question.mode !== "essay" && !options.state.selectedOptionIds.length || question.mode === "essay" && !normalizeAnswer(options.state.essayAnswer)) {
+        options.onNotice("\u8BF7\u5148\u4F5C\u7B54");
+        return;
+      }
+      options.state.answerVisible = true;
+      options.state.lastCorrect = correct;
+      options.onRecord(node.id, correct);
+      options.onNotice(correct ? "\u56DE\u7B54\u6B63\u786E" : "\u56DE\u7B54\u9519\u8BEF\uFF0C\u5DF2\u52A0\u5165\u9519\u9898\u672C");
+      renderQuestionPracticeMode(container, options);
+    };
+    return;
+  }
+  const result = shell.createDiv({ cls: `mms-question-practice-result ${options.state.lastCorrect ? "is-correct" : "is-wrong"}`, text: options.state.lastCorrect ? "\u56DE\u7B54\u6B63\u786E" : "\u56DE\u7B54\u9519\u8BEF\uFF0C\u5DF2\u52A0\u5165\u9519\u9898\u672C" });
+  result.setAttr("role", "status");
+  shell.createEl("h4", { text: "\u53C2\u8003\u7B54\u6848" });
+  renderBlocks(shell, question.answer, options.resolveImage, options.renderRichText);
+  if (question.explanation.length) {
+    shell.createEl("h4", { text: "\u89E3\u6790" });
+    renderExplanationBlocks(shell, question.explanation, options.resolveImage, options.renderRichText);
+  }
+  const finalQuestion = currentIndex === questions.length - 1;
+  const next = shell.createEl("button", { cls: "mod-cta mms-question-practice-submit", text: finalQuestion ? "\u7ED3\u675F\u7B54\u9898" : "\u4E0B\u4E00\u9898", attr: { type: "button" } });
+  next.onclick = () => {
+    var _a3;
+    if (finalQuestion) {
+      options.state.finished = true;
+      options.state.selectedOptionIds = [];
+      options.state.essayAnswer = "";
+      options.state.answerVisible = false;
+      options.state.lastCorrect = null;
+      renderQuestionPracticeMode(container, options);
+      return;
+    }
+    const nextNode = questions[(currentIndex + 1) % questions.length];
+    options.state.currentNodeId = (_a3 = nextNode == null ? void 0 : nextNode.id) != null ? _a3 : null;
+    options.state.selectedOptionIds = [];
+    options.state.essayAnswer = "";
+    options.state.answerVisible = false;
+    options.state.lastCorrect = null;
+    renderQuestionPracticeMode(container, options);
+  };
+}
+function orderPracticeQuestions(nodes, state, order) {
+  if (state.orderMode !== order) {
+    state.orderMode = order;
+    state.orderedNodeIds = [];
+  }
+  const available = new Map(nodes.map((node) => [node.id, node]));
+  const retained = state.orderedNodeIds.filter((id) => available.has(id));
+  const appended = nodes.map((node) => node.id).filter((id) => !retained.includes(id));
+  if (order === "random") shuffle(appended);
+  state.orderedNodeIds = [...retained, ...appended];
+  return state.orderedNodeIds.flatMap((id) => {
+    var _a2;
+    return (_a2 = available.get(id)) != null ? _a2 : [];
+  });
+}
+function shuffle(items) {
+  for (let index = items.length - 1; index > 0; index -= 1) {
+    const target = Math.floor(Math.random() * (index + 1));
+    [items[index], items[target]] = [items[target], items[index]];
+  }
+}
+function selectedAnswerLabels(node) {
+  const question = node.question;
+  const compact2 = blockText(question.answer).toLocaleUpperCase().replace(/[^A-Z0-9]/g, "");
+  return question.options.filter((option) => compact2.includes(option.label.toLocaleUpperCase())).map((option) => option.label);
+}
+function isQuestionChoiceCorrect(node, selectedIds) {
+  const expected = new Set(selectedAnswerLabels(node));
+  const selected = node.question.options.filter((option) => selectedIds.includes(option.id)).map((option) => option.label);
+  return expected.size > 0 && expected.size === selected.length && selected.every((label) => expected.has(label));
+}
+function isQuestionJudgmentCorrect(node, selectedIds) {
+  const selected = node.question.options.find((option) => selectedIds.includes(option.id));
+  if (!selected) return false;
+  return normalizeJudgmentAnswer(blockText(selected.content) || selected.label) === normalizeJudgmentAnswer(blockText(node.question.answer));
+}
+function renderQuestionTextBlocks(container, blocks, fallback, renderRichText) {
+  const textBlocks = blocks.filter((block) => block.type === "text" && Boolean(block.text.trim()));
+  if (!textBlocks.length) {
+    renderRichText(container, void 0, fallback);
+    return;
+  }
+  textBlocks.forEach((block, index) => {
+    const part = container.createSpan({ cls: "mms-question-practice-text-part" });
+    renderRichText(part, block, block.text);
+    if (index < textBlocks.length - 1) container.createEl("br");
+  });
+}
+function renderBlocks(container, blocks, resolveImage, renderRichText) {
+  blocks.forEach((block) => {
+    if (block.type === "text" && block.text.trim()) {
+      const text = container.createDiv({ cls: "mms-question-practice-text" });
+      renderRichText(text, block, block.text);
+    }
+    if (block.type === "image") {
+      const source = resolveImage(block.source);
+      if (source) container.createEl("img", { cls: "mms-question-practice-image", attr: { src: source, alt: block.alt || "\u9898\u76EE\u56FE\u7247" } });
+    }
+  });
+}
+function renderExplanationBlocks(container, blocks, resolveImage, renderRichText) {
+  for (const block of blocks) {
+    if (block.type === "text") {
+      splitExplanationLines(block.text).forEach((text) => {
+        const line = container.createDiv({ cls: "mms-question-practice-explanation-item" });
+        renderRichText(line, void 0, text);
+      });
+    } else {
+      renderBlocks(container, [block], resolveImage, renderRichText);
+    }
+  }
+}
+function splitExplanationLines(value) {
+  const text = value.trim();
+  if (!text) return [];
+  const optionMarkers = Array.from(text.matchAll(/[A-DＡ-Ｄ]项/gu));
+  if (!optionMarkers.length) return [text];
+  const lines = [];
+  const prefix = text.slice(0, optionMarkers[0].index).trim();
+  if (prefix) lines.push(prefix);
+  optionMarkers.forEach((marker, index) => {
+    var _a2, _b2;
+    const start = marker.index;
+    const end = (_b2 = (_a2 = optionMarkers[index + 1]) == null ? void 0 : _a2.index) != null ? _b2 : text.length;
+    const segment = text.slice(start, end).trim();
+    if (!segment) return;
+    if (index === optionMarkers.length - 1) {
+      lines.push(...splitFinalOptionConclusion(segment));
+    } else {
+      lines.push(segment);
+    }
+  });
+  return lines;
+}
+function splitFinalOptionConclusion(segment) {
+  var _a2, _b2;
+  const optionMarker = (_b2 = (_a2 = segment.match(/^[A-DＡ-Ｄ]项/u)) == null ? void 0 : _a2[0]) != null ? _b2 : "";
+  const body = segment.slice(optionMarker.length);
+  const conclusionPattern = String.raw`(?:综上(?:所述|可知)?|(?:因此|所以|故而|故)?[，,:：]?\s*(?:本题)?(?:正确选项(?:是|为)?|正确答案(?:是|为)?|答案(?:是|为))|故选)`;
+  const afterPunctuation = body.match(new RegExp(`([\u3002\uFF01\uFF1F\uFF1B])(?:[ \\t]*|\\r?\\n[ \\t]*)(?=${conclusionPattern})`, "u"));
+  if ((afterPunctuation == null ? void 0 : afterPunctuation.index) !== void 0) {
+    const punctuationEnd = optionMarker.length + afterPunctuation.index + afterPunctuation[1].length;
+    const conclusionStart = optionMarker.length + afterPunctuation.index + afterPunctuation[0].length;
+    return [segment.slice(0, punctuationEnd).trim(), segment.slice(conclusionStart).trim()].filter(Boolean);
+  }
+  const afterLineBreak = body.match(new RegExp(`\\r?\\n[ \\t]*(?=${conclusionPattern})`, "u"));
+  if ((afterLineBreak == null ? void 0 : afterLineBreak.index) !== void 0) {
+    const optionEnd = optionMarker.length + afterLineBreak.index;
+    const conclusionStart = optionMarker.length + afterLineBreak.index + afterLineBreak[0].length;
+    return [segment.slice(0, optionEnd).trim(), segment.slice(conclusionStart).trim()].filter(Boolean);
+  }
+  const directSummary = body.match(new RegExp(conclusionPattern, "u"));
+  if ((directSummary == null ? void 0 : directSummary.index) !== void 0 && directSummary.index > 0) {
+    const conclusionStart = optionMarker.length + directSummary.index;
+    return [segment.slice(0, conclusionStart).trim(), segment.slice(conclusionStart).trim()].filter(Boolean);
+  }
+  return [segment];
+}
+function resetPracticeProgress(state) {
+  state.currentNodeId = null;
+  state.selectedOptionIds = [];
+  state.essayAnswer = "";
+  state.answerVisible = false;
+  state.lastCorrect = null;
+  state.finished = false;
+  state.orderedNodeIds = [];
+  state.orderMode = null;
+}
+function blockText(blocks) {
+  return blocks.filter((block) => block.type === "text").map((block) => block.text).join("\n");
+}
+function isExactQuestionAnswer(value, reference) {
+  return normalizeAnswer(value) === normalizeAnswer(reference);
+}
+function normalizeAnswer(value) {
+  return value.toLocaleLowerCase().replace(/[\s\p{P}\p{S}]/gu, "");
+}
+function normalizeJudgmentAnswer(value) {
+  const answer = normalizeAnswer(value);
+  if (["\u6B63\u786E", "\u5BF9", "\u662F", "true", "yes", "a"].includes(answer)) return true;
+  if (["\u9519\u8BEF", "\u9519", "\u5426", "false", "no", "b"].includes(answer)) return false;
+  return null;
+}
+
+// src/article/article-style.ts
+var ARTICLE_STYLE_PRESETS = {
+  classic: { preset: "classic", tocStyle: "card", fontSize: 16, lineHeight: 1.85 },
+  book: { preset: "book", fontFamily: "Georgia, 'Noto Serif SC', serif", textColor: "#332b24", headingColor: "#241c16", accentColor: "#8b5e3c", backgroundColor: "#fffdf7", tocStyle: "lines", fontSize: 17, lineHeight: 2 },
+  modern: { preset: "modern", fontFamily: "Inter, 'Microsoft YaHei', sans-serif", textColor: "#243247", headingColor: "#12213a", accentColor: "#2563eb", backgroundColor: "#f8fafc", tocStyle: "card", fontSize: 16, lineHeight: 1.75 },
+  minimal: { preset: "minimal", fontFamily: "Arial, 'Microsoft YaHei', sans-serif", textColor: "#27272a", headingColor: "#18181b", accentColor: "#52525b", backgroundColor: "#ffffff", tocStyle: "plain", fontSize: 15, lineHeight: 1.8 }
+};
+function resolveArticleStyle(style) {
+  var _a2;
+  const preset = (_a2 = style == null ? void 0 : style.preset) != null ? _a2 : "classic";
+  return { ...ARTICLE_STYLE_PRESETS[preset], ...style != null ? style : {}, preset };
+}
+
+// src/article/display-mode.ts
+var ALL_MODES = ["mindmap", "outline", "article", "reading", "question-bank"];
+function normalizeArticleEntryLockMode(value) {
+  return value === "inherit" || value === "remember" ? value : "locked";
+}
+function resolveArticleEntryReadOnly(mode, inheritedReadOnly, rememberedReadOnly) {
+  if (mode === "remember") return rememberedReadOnly;
+  if (mode === "inherit") return inheritedReadOnly;
+  return true;
+}
+function normalizeDisplayModes(value) {
+  const modes = value.filter((mode) => ALL_MODES.includes(mode));
+  const fallback = modes.length ? modes : ["mindmap"];
+  return [...new Set(fallback)];
+}
+function resolveStartupDisplayMode(preferred, visibleModes) {
+  var _a2, _b2;
+  const visible = normalizeDisplayModes(visibleModes);
+  if (preferred === "mindmap" || preferred === "article" || preferred === "reading") {
+    if (visible.includes(preferred)) return preferred;
+  }
+  if (visible.includes("mindmap")) return "mindmap";
+  return (_b2 = (_a2 = visible.find((mode) => mode !== "outline")) != null ? _a2 : visible[0]) != null ? _b2 : "mindmap";
+}
+function shouldPersistDisplayMode(mode) {
+  return mode !== "outline" && mode !== "question-bank";
+}
+
+// src/article/reading-location.ts
+var findNode2 = (root, id) => {
+  if (root.id === id) return root;
+  for (const child of root.children) {
+    const found = findNode2(child, id);
+    if (found) return found;
+  }
+  return null;
+};
+var findAncestors2 = (root, id) => {
+  const path = [];
+  const visit = (node) => {
+    if (node.id === id) return true;
+    for (const child of node.children) {
+      path.push(node);
+      if (visit(child)) return true;
+      path.pop();
+    }
+    return false;
+  };
+  return visit(root) ? path : [];
+};
+var clampRatio = (value, fallback) => typeof value === "number" && Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : fallback;
+function viewportAnchorRatio(nodeTop, nodeHeight, viewportTop, viewportHeight, nodeRatio = 0.5, fallback = 0.35) {
+  if (![nodeTop, nodeHeight, viewportTop, viewportHeight].every(Number.isFinite) || nodeHeight <= 0 || viewportHeight <= 0) {
+    return clampRatio(fallback, 0.35);
+  }
+  const normalizedNodeRatio = clampRatio(nodeRatio, 0.5);
+  return clampRatio(
+    (nodeTop + nodeHeight * normalizedNodeRatio - viewportTop) / viewportHeight,
+    fallback
+  );
+}
+function nodeFallbackIds(document2, nodeId) {
+  const target = findNode2(document2.root, nodeId);
+  if (!target) return [document2.root.id];
+  return [target.id, ...findAncestors2(document2.root, target.id).reverse().map((node) => node.id)];
+}
+function createReadingLocation(sections, filePath, nodeId, nodeRatio = 0, viewportRatio = 0.35) {
+  var _a2, _b2;
+  const byPath = new Map(sections.map((section) => [section.filePath, section]));
+  const primary = (_a2 = byPath.get(filePath)) != null ? _a2 : sections[0];
+  if (!primary) {
+    return {
+      filePath: filePath.trim(),
+      nodeIds: nodeId.trim() ? [nodeId.trim()] : [],
+      fallbacks: [],
+      nodeRatio: clampRatio(nodeRatio, 0),
+      viewportRatio: clampRatio(viewportRatio, 0.35)
+    };
+  }
+  const fallbacks = [];
+  const visited = /* @__PURE__ */ new Set([primary.filePath]);
+  let current = primary;
+  while (current.parentFilePath && !visited.has(current.parentFilePath)) {
+    const parent = byPath.get(current.parentFilePath);
+    if (!parent) break;
+    visited.add(parent.filePath);
+    fallbacks.push({
+      filePath: parent.filePath,
+      nodeIds: nodeFallbackIds(parent.document, (_b2 = current.parentNodeId) != null ? _b2 : parent.document.root.id)
+    });
+    current = parent;
+  }
+  return {
+    filePath: primary.filePath,
+    nodeIds: nodeFallbackIds(primary.document, nodeId),
+    fallbacks,
+    nodeRatio: clampRatio(nodeRatio, 0),
+    viewportRatio: clampRatio(viewportRatio, 0.35)
+  };
+}
+function normalizeReadingLocation(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const input = value;
+  const filePath = typeof input.filePath === "string" ? input.filePath.trim() : "";
+  const nodeIds = Array.isArray(input.nodeIds) ? [...new Set(input.nodeIds.filter((id) => typeof id === "string" && Boolean(id.trim())).map((id) => id.trim()))] : [];
+  if (!filePath || !nodeIds.length) return null;
+  const fallbacks = Array.isArray(input.fallbacks) ? input.fallbacks.flatMap((fallback) => {
+    if (!fallback || typeof fallback !== "object" || Array.isArray(fallback)) return [];
+    const candidate = fallback;
+    const fallbackPath = typeof candidate.filePath === "string" ? candidate.filePath.trim() : "";
+    const fallbackNodeIds = Array.isArray(candidate.nodeIds) ? [...new Set(candidate.nodeIds.filter((id) => typeof id === "string" && Boolean(id.trim())).map((id) => id.trim()))] : [];
+    return fallbackPath && fallbackNodeIds.length ? [{ filePath: fallbackPath, nodeIds: fallbackNodeIds }] : [];
+  }) : [];
+  return {
+    filePath,
+    nodeIds,
+    fallbacks,
+    nodeRatio: clampRatio(input.nodeRatio, 0),
+    viewportRatio: clampRatio(input.viewportRatio, 0.35)
+  };
+}
+function resolveReadingLocation(location, sections, preferredFilePath = "") {
+  var _a2, _b2, _c, _d;
+  if (!sections.length) return null;
+  const byPath = new Map(sections.map((section) => [section.filePath, section]));
+  const normalized2 = normalizeReadingLocation(location);
+  const chains = normalized2 ? [{ filePath: normalized2.filePath, nodeIds: normalized2.nodeIds }, ...normalized2.fallbacks] : [];
+  for (const chain of chains) {
+    const section = byPath.get(chain.filePath);
+    if (!section) continue;
+    for (const nodeId of chain.nodeIds) {
+      if (findNode2(section.document.root, nodeId)) {
+        return {
+          filePath: section.filePath,
+          nodeId,
+          nodeRatio: (_a2 = normalized2 == null ? void 0 : normalized2.nodeRatio) != null ? _a2 : 0,
+          viewportRatio: (_b2 = normalized2 == null ? void 0 : normalized2.viewportRatio) != null ? _b2 : 0.35
+        };
+      }
+    }
+  }
+  const fallbackSection = (_c = byPath.get(preferredFilePath)) != null ? _c : sections[0];
+  return {
+    filePath: fallbackSection.filePath,
+    nodeId: fallbackSection.document.root.id,
+    nodeRatio: 0,
+    viewportRatio: (_d = normalized2 == null ? void 0 : normalized2.viewportRatio) != null ? _d : 0.35
+  };
+}
+function chooseArticleRefreshLocation(preferredCurrent, rendered, remembered) {
+  var _a2, _b2;
+  return (_b2 = (_a2 = preferredCurrent != null ? preferredCurrent : rendered) != null ? _a2 : remembered) != null ? _b2 : null;
+}
+function chooseArticleLandingRefreshLocation(directoryActive, preferredCurrent, rendered, remembered) {
+  return directoryActive ? null : chooseArticleRefreshLocation(preferredCurrent, rendered, remembered);
+}
+function chooseArticleTransitionLocation(requested, pendingRestore) {
+  var _a2;
+  return (_a2 = requested != null ? requested : pendingRestore) != null ? _a2 : null;
+}
+function sameReadingLocation(left, right) {
+  const a = normalizeReadingLocation(left);
+  const b = normalizeReadingLocation(right);
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+function renameReadingLocationPath(location, oldPath, newPath) {
+  if (!oldPath || oldPath === newPath) return location;
+  return {
+    ...location,
+    filePath: location.filePath === oldPath ? newPath : location.filePath,
+    fallbacks: location.fallbacks.map((fallback) => ({
+      ...fallback,
+      filePath: fallback.filePath === oldPath ? newPath : fallback.filePath
+    }))
+  };
+}
 
 // src/editor/clipboard-import.ts
 function parseClipboardContentBlocks(text) {
@@ -8906,31 +8969,46 @@ function renderArticleTable(container, node, tableData, blockId, options) {
     });
   });
 }
+function questionFieldHasContent(blocks) {
+  return blocks.some((block) => block.type === "text" ? Boolean(block.text.trim()) : block.type === "image");
+}
+function renderQuestionFieldValue(container, blocks) {
+  blocks.forEach((block, index) => {
+    if (block.type === "text" && block.text.trim()) {
+      const part = container.createSpan({ cls: "mms-question-text-part" });
+      renderRichTextRuns(part, block.richText, block.text);
+      if (index < blocks.length - 1) container.createEl("br");
+    } else if (block.type === "image") {
+      container.createSpan({ cls: "mms-question-image-placeholder", text: "[\u56FE\u7247]" });
+      if (index < blocks.length - 1) container.createEl("br");
+    }
+  });
+}
 function renderArticleQuestionDetails(container, node) {
   const question = node.question;
   if (!question) return;
-  const plainText = (blocks) => blocks.map((block) => block.type === "text" ? block.text.trim() : "[\u56FE\u7247]").filter(Boolean).join(" ");
   const panel = container.createDiv({ cls: "mms-question-panel" });
   const meta = panel.createDiv({ cls: "mms-question-meta" });
   meta.createDiv({ cls: "mms-question-kind", text: question.mode === "essay" ? "\u5927\u9898" : question.mode === "judgment" ? "\u5224\u65AD\u9898" : "\u9009\u62E9\u9898" });
   const statusLabels = { unanswered: "\u672A\u505A", completed: "\u5DF2\u505A", favorite: "\u6536\u85CF", wrong: "\u9519\u9898", mastered: "\u638C\u63E1" };
   meta.createDiv({ cls: `mms-question-status is-${question.status}`, text: statusLabels[question.status] });
-  const appendField = (container2, label, value, cls = "") => {
-    if (!value) return;
-    const row = container2.createDiv({ cls: `mms-question-row ${cls}`.trim() });
+  const appendField = (fieldContainer, label, blocks, cls = "") => {
+    if (!questionFieldHasContent(blocks)) return;
+    const row = fieldContainer.createDiv({ cls: `mms-question-row ${cls}`.trim() });
     row.createEl("strong", { text: `${label}\uFF1A` });
-    row.createSpan({ text: value });
+    const value = row.createSpan({ cls: "mms-question-value" });
+    renderQuestionFieldValue(value, blocks);
   };
   if (question.mode !== "essay") {
-    for (const option of question.options) appendField(panel, option.label, plainText(option.content), "is-option");
+    for (const option of question.options) appendField(panel, option.label, option.content, "is-option");
   }
-  const answer = plainText(question.answer);
-  const explanation = plainText(question.explanation);
-  if (answer || explanation) {
+  const hasAnswer = questionFieldHasContent(question.answer);
+  const hasExplanation = questionFieldHasContent(question.explanation);
+  if (hasAnswer || hasExplanation) {
     const toggle = panel.createEl("button", { cls: "mms-question-toggle", text: "\u663E\u793A\u7B54\u6848\u4E0E\u89E3\u6790", attr: { type: "button", "aria-expanded": "false" } });
     const reveal = panel.createDiv({ cls: "mms-question-reveal" });
-    appendField(reveal, "\u7B54\u6848", answer, "is-answer");
-    appendField(reveal, "\u89E3\u7B54", explanation, "is-explanation");
+    appendField(reveal, "\u7B54\u6848", question.answer, "is-answer");
+    appendField(reveal, "\u89E3\u7B54", question.explanation, "is-explanation");
     toggle.addEventListener("click", () => {
       const revealed = !reveal.hasClass("is-revealed");
       reveal.toggleClass("is-revealed", revealed);
@@ -12551,14 +12629,18 @@ var MindMapEditor = class {
    * @param placeholder 该参数用于 make inline editable 流程中的输入或控制。
    */
   makeInlineEditable(element, node, placeholder, blockId) {
-    var _a2, _b2;
+    var _a2;
     element.contentEditable = "false";
     element.dataset.mmsInlineEditable = "true";
     element.dataset.mmsEditLabel = placeholder;
     if (!((_a2 = element.textContent) == null ? void 0 : _a2.trim())) element.dataset.placeholder = placeholder;
-    const initialBlock = blockId ? nodeContentBlocks(node).find((block) => block.type === "text" && block.id === blockId) : nodeContentBlocks(node).find((block) => block.type === "text");
-    if (!this.readOnly) renderRichTextRuns(element, initialBlock == null ? void 0 : initialBlock.richText, (_b2 = initialBlock == null ? void 0 : initialBlock.text) != null ? _b2 : nodePrimaryText(node), false);
-    let original = readRichTextEditor(element);
+    const currentValue = () => {
+      var _a3, _b2;
+      const liveNode = (_a3 = findNode(this.document.root, node.id)) != null ? _a3 : node;
+      const liveBlock = blockId ? nodeContentBlocks(liveNode).find((block) => block.type === "text" && block.id === blockId) : nodeContentBlocks(liveNode).find((block) => block.type === "text");
+      return { text: (_b2 = liveBlock == null ? void 0 : liveBlock.text) != null ? _b2 : nodePrimaryText(liveNode), richText: liveBlock == null ? void 0 : liveBlock.richText };
+    };
+    let original = currentValue();
     let toolbar = null;
     element.addEventListener("pointerdown", () => {
       if (this.readOnly || element.contentEditable === "true" || element.dataset.mmsExplicitEditOnly === "true") return;
@@ -12572,7 +12654,8 @@ var MindMapEditor = class {
       this.inlineEditingId = node.id;
       this.activeArticleBlock = this.currentMode === "article" && blockId ? { nodeId: node.id, blockId } : null;
       this.applyInlineEditingAccessibility(element);
-      original = readRichTextEditor(element);
+      original = currentValue();
+      renderRichTextRuns(element, original.richText, original.text, false);
       element.addClass("is-inline-editing");
       toolbar != null ? toolbar : toolbar = attachSelectionFormatToolbar({
         editor: element,
@@ -12592,13 +12675,13 @@ var MindMapEditor = class {
         event.preventDefault();
         event.stopPropagation();
         event.stopImmediatePropagation();
-        renderRichTextRuns(element, original.richText, original.text, false);
+        element.dataset.mmsCancelInlineEdit = "true";
         element.blur();
       }
     });
     element.addEventListener("paste", (event) => {
-      var _a3, _b3;
-      const text = (_b3 = (_a3 = event.clipboardData) == null ? void 0 : _a3.getData("text/plain")) != null ? _b3 : "";
+      var _a3, _b2;
+      const text = (_b2 = (_a3 = event.clipboardData) == null ? void 0 : _a3.getData("text/plain")) != null ? _b2 : "";
       const copiedNodes = parseClipboardNodes(text);
       if (!copiedNodes || !/^\s*\{/.test(text)) return;
       event.preventDefault();
@@ -12613,7 +12696,9 @@ var MindMapEditor = class {
         return;
       }
       element.removeClass("is-inline-editing");
-      const next = readRichTextEditor(element);
+      const cancelled = element.dataset.mmsCancelInlineEdit === "true";
+      delete element.dataset.mmsCancelInlineEdit;
+      const next = cancelled ? original : readRichTextEditor(element);
       element.contentEditable = "false";
       this.clearInlineEditingAccessibility(element);
       toolbar == null ? void 0 : toolbar.cleanup();
@@ -12623,8 +12708,8 @@ var MindMapEditor = class {
         this.activeArticleBlock = null;
       }
       if (!findNode(this.document.root, node.id)) return;
-      if (!next.text && node.id === this.document.root.id || JSON.stringify(next) === JSON.stringify(original)) {
-        renderRichTextRuns(element, original.richText, original.text, false);
+      if (cancelled || !next.text && node.id === this.document.root.id || JSON.stringify(next) === JSON.stringify(original)) {
+        renderRichTextRuns(element, original.richText, original.text);
         return;
       }
       const hadMeaningfulContent = this.nodeHasMeaningfulContent(node);
@@ -12632,6 +12717,10 @@ var MindMapEditor = class {
         this.updateNodeTextBlock(node, next, blockId);
         this.removeNodeAfterContentDeletion(node, hadMeaningfulContent);
       });
+      const committed = findNode(this.document.root, node.id);
+      if (!committed || !element.isConnected) return;
+      const value = currentValue();
+      renderRichTextRuns(element, value.richText, value.text);
     });
   }
   /** Adds textbox semantics only while an inline line is actively editable. */
@@ -13498,6 +13587,7 @@ var MindMapEditor = class {
       document: this.document,
       state: this.questionPracticeState,
       resolveImage: this.callbacks.resolveImage,
+      renderRichText: (container, block, fallback) => renderRichTextRuns(container, block == null ? void 0 : block.richText, fallback),
       order: this.options.questionPracticeOrder,
       memoryCurveEnabled: this.options.questionMemoryCurveEnabled,
       wrongBookMasteryCount: this.options.wrongBookMasteryCount,
@@ -15527,28 +15617,41 @@ var MindMapEditor = class {
   renderQuestionSummary(content, node) {
     const question = node.question;
     if (!question) return;
-    const plainText = (blocks) => blocks.map((block) => block.type === "text" ? block.text.trim() : "[\u56FE\u7247]").filter(Boolean).join(" ");
+    const hasContent = (blocks) => blocks.some((block) => block.type === "text" ? Boolean(block.text.trim()) : block.type === "image");
+    const renderValue = (container, blocks) => {
+      blocks.forEach((block, index) => {
+        if (block.type === "text" && block.text.trim()) {
+          const part = container.createSpan({ cls: "mmc-question-text-part" });
+          renderRichTextRuns(part, block.richText, block.text);
+          if (index < blocks.length - 1) container.createEl("br");
+        } else if (block.type === "image") {
+          container.createSpan({ cls: "mmc-question-image-placeholder", text: "[\u56FE\u7247]" });
+          if (index < blocks.length - 1) container.createEl("br");
+        }
+      });
+    };
     const summary = content.createDiv({ cls: "mmc-question-summary" });
     const meta = summary.createDiv({ cls: "mmc-question-meta" });
     meta.createDiv({ cls: "mmc-question-kind", text: question.mode === "essay" ? "\u5927\u9898" : question.mode === "judgment" ? "\u5224\u65AD\u9898" : "\u9009\u62E9\u9898" });
     const statusLabels = { unanswered: "\u672A\u505A", completed: "\u5DF2\u505A", favorite: "\u6536\u85CF", wrong: "\u9519\u9898", mastered: "\u638C\u63E1" };
     meta.createDiv({ cls: `mmc-question-status is-${question.status}`, text: statusLabels[question.status] });
-    const appendField = (container, label, value, cls = "") => {
-      if (!value) return;
-      const line = container.createDiv({ cls: `mmc-question-field ${cls}`.trim() });
+    const appendField = (fieldContainer, label, blocks, cls = "") => {
+      if (!hasContent(blocks)) return;
+      const line = fieldContainer.createDiv({ cls: `mmc-question-field ${cls}`.trim() });
       line.createSpan({ cls: "mmc-question-label", text: `${label}\uFF1A` });
-      line.createSpan({ cls: "mmc-question-value", text: value });
+      const value = line.createSpan({ cls: "mmc-question-value" });
+      renderValue(value, blocks);
     };
     if (question.mode !== "essay") {
-      for (const option of question.options) appendField(summary, option.label, plainText(option.content), "is-option");
+      for (const option of question.options) appendField(summary, option.label, option.content, "is-option");
     }
-    const answer = plainText(question.answer);
-    const explanation = plainText(question.explanation);
-    if (answer || explanation) {
+    const hasAnswer = hasContent(question.answer);
+    const hasExplanation = hasContent(question.explanation);
+    if (hasAnswer || hasExplanation) {
       const toggle = summary.createEl("button", { cls: "mmc-question-toggle", text: "\u663E\u793A\u7B54\u6848\u4E0E\u89E3\u6790", attr: { type: "button", "aria-expanded": "false" } });
       const reveal = summary.createDiv({ cls: "mmc-question-reveal" });
-      appendField(reveal, "\u7B54\u6848", answer, "is-answer");
-      appendField(reveal, "\u89E3\u7B54", explanation, "is-explanation");
+      appendField(reveal, "\u7B54\u6848", question.answer, "is-answer");
+      appendField(reveal, "\u89E3\u7B54", question.explanation, "is-explanation");
       toggle.addEventListener("click", (event) => {
         event.stopPropagation();
         const revealed = !reveal.hasClass("is-revealed");
@@ -16403,14 +16506,24 @@ var MindMapEditor = class {
     var _a2;
     if (!this.ensureEditable()) return;
     const selected = (_a2 = this.selectedNode()) != null ? _a2 : this.document.root;
-    new FormulaEditModal(this.app, (source) => {
+    new FormulaEditModal(this.app, (value) => {
       this.mutate(() => {
+        var _a3;
         const blocks = nodeContentBlocks(selected);
-        const formula = `$$${source}$$`;
+        const formula = value.display ? `$$${value.source}$$` : `$${value.source}$`;
         const emptyText = blocks.find((block) => block.type === "text" && !block.text.trim());
         if (emptyText) {
           emptyText.text = formula;
           emptyText.richText = void 0;
+        } else if (!value.display) {
+          const textBlock = blocks.find((block) => block.type === "text");
+          if (textBlock) {
+            const addition = `${textBlock.text && !/\s$/.test(textBlock.text) ? " " : ""}${formula}`;
+            textBlock.text += addition;
+            if ((_a3 = textBlock.richText) == null ? void 0 : _a3.length) textBlock.richText = [...textBlock.richText, { text: addition }];
+          } else {
+            blocks.unshift({ id: newId(), type: "text", text: formula });
+          }
         } else {
           blocks.push({ id: newId(), type: "text", text: formula });
         }

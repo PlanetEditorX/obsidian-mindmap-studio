@@ -392,3 +392,25 @@ test("question assistant keeps an intelligent image-to-question pipeline and vis
   assert.match(modalSource, /已由 AI 分析补齐缺失答案与解答/);
   assert.match(mainSource, /仍需基于题目独立分析/);
 });
+
+test("question fields insert and preview inline or display LaTeX across every question surface", async () => {
+  const [modalSource, formulaSource, articleSource, editorSource, practiceSource, styles] = await Promise.all([
+    readFile("src/editor/question-modal.ts", "utf8"),
+    readFile("src/editor/editor-modals.ts", "utf8"),
+    readFile("src/editor/article-renderer.ts", "utf8"),
+    readFile("src/editor/editor.ts", "utf8"),
+    readFile("src/editor/question-practice-mode.ts", "utf8"),
+    readFile("styles.css", "utf8")
+  ]);
+  assert.match(formulaSource, /行内公式（可与文字混排）/);
+  assert.match(formulaSource, /独立公式（单独一行）/);
+  assert.match(formulaSource, /this\.submit\(\{ source: value, display: displayMode\.value === "display" \}\)/);
+  assert.match(modalSource, /textarea\.addEventListener\("contextmenu"/);
+  assert.match(modalSource, /setTitle\("插入 LaTeX 公式"\)/);
+  assert.match(modalSource, /textarea\.setRangeText\(token, start, end, "end"\)/);
+  assert.match(modalSource, /renderRichTextRuns\(preview, undefined, value\)/);
+  assert.match(articleSource, /renderQuestionFieldValue[\s\S]*renderRichTextRuns\(part, block\.richText, block\.text\)/);
+  assert.match(editorSource, /renderQuestionSummary[\s\S]*renderRichTextRuns\(part, block\.richText, block\.text\)/);
+  assert.match(practiceSource, /renderRichText: QuestionPracticeOptions\["renderRichText"\]/);
+  assert.match(styles, /\.mms-question-field-preview\s*\{/);
+});
