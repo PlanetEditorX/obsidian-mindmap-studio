@@ -197,6 +197,10 @@ test("article context gates the first paint and landing transitions are symmetri
   assert.match(mainSource, /pendingMindMapFocus\.set\(file\.path, focusNodeId\)/);
   assert.match(mainSource, /resolveNavigationFocusNode\(resolved, sourcePath, focusNodeId\)/);
   assert.match(mainSource, /openAsMindMap\(resolved, preferredLeaf, resolvedFocusNodeId\)/);
+  assert.match(mainSource, /onProgress\?: \(progress: ArticleContextProgress\) => void/);
+  assert.match(editorSource, /setArticleContextLoadingProgress\(progress: ArticleContextProgress \| null\)/);
+  assert.match(viewSource, /setArticleContextLoadingProgress\(\{[\s\S]*phase: "prepare"/);
+  assert.match(viewSource, /buildArticleContext\(file, document, \(progress\) => \{/);
   assert.match(cssSource, /\.mms-article-entry-skeleton\.is-directory/);
   assert.match(cssSource, /\.mms-article-skeleton-line\.is-toc-row/);
 });
@@ -230,6 +234,7 @@ test("continuous reading exposes a semantic parsing transition before the family
   assert.match(updateModeUi, /toggleClass\("is-loading", loading\)/);
   assert.match(cssSource, /\.mms-reading-loading-message/);
   assert.match(cssSource, /mms-reading-loading-float/);
+  assert.match(cssSource, /.mms-article-context-progress/);
   assert.match(cssSource, /mms-reading-page-enter/);
   assert.match(cssSource, /prefers-reduced-motion: reduce[\s\S]*\.mms-reading-loading-icon/);
 });

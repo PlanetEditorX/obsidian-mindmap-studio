@@ -37,6 +37,28 @@ export interface ReadingSection {
   numberingDisabled?: boolean;
 }
 
+export interface ArticleContextProgress {
+  phase: "prepare" | "walk" | "finalize" | "complete";
+  percent: number;
+  processed: number;
+  total: number;
+  message: string;
+}
+
+/**
+ * 将文章族上下文的已完成工作量映射为稳定百分比，避免初始加载期间
+ * 反复回退，同时为右下角加载提示提供可测试的统一计算边界。
+ */
+export function resolveArticleContextProgressPercent(processed: number, total: number, start = 12, end = 92): number {
+  const safeStart = Math.max(0, Math.min(99, Math.round(start)));
+  const safeEnd = Math.max(safeStart, Math.min(100, Math.round(end)));
+  const safeTotal = Math.max(1, Math.floor(total));
+  const safeProcessed = Math.max(0, Math.min(safeTotal, Math.floor(processed)));
+  if (safeProcessed >= safeTotal) return safeEnd;
+  const span = safeEnd - safeStart;
+  return safeStart + Math.round((safeProcessed / safeTotal) * span);
+}
+
 /**
  * Encodes a file path or node id into a collision-free DOM anchor component.
  * Percent markers remain visible as underscores, so different Chinese paths

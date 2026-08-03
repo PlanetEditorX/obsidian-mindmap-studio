@@ -5877,6 +5877,15 @@ var DISPLAY_MODE_ICONS = {
   reading: "book-open-text",
   "question-bank": "graduation-cap"
 };
+function resolveArticleContextProgressPercent(processed, total, start = 12, end = 92) {
+  const safeStart = Math.max(0, Math.min(99, Math.round(start)));
+  const safeEnd = Math.max(safeStart, Math.min(100, Math.round(end)));
+  const safeTotal = Math.max(1, Math.floor(total));
+  const safeProcessed = Math.max(0, Math.min(safeTotal, Math.floor(processed)));
+  if (safeProcessed >= safeTotal) return safeEnd;
+  const span = safeEnd - safeStart;
+  return safeStart + Math.round(safeProcessed / safeTotal * span);
+}
 function readingAnchorPart(value) {
   return encodeURIComponent(value).replace(/%/g, "_");
 }
@@ -11438,6 +11447,9 @@ var MindMapEditor = class {
     this.articleInitialRenderFrame = null;
     this.articleInitialRenderToken = 0;
     this.articleWindowExpansionFrame = null;
+    this.articleContextLoadingProgress = null;
+    this.articleContextLoadingEl = null;
+    this.articleContextLoadingHideTimer = null;
     this.questionPracticeState = createQuestionPracticeState();
     this.pageTransitionToken = 0;
     this.pageTransitionHideTimer = null;
@@ -11463,20 +11475,69 @@ var MindMapEditor = class {
     this.restoreReadingLocation(this.currentMode, this.lastReadingLocation);
     this.initializeMindMapViewport(50);
   }
+  /** Updates the non-blocking lower-right parsing indicator used by article and continuous-reading mode. */
+  setArticleContextLoadingProgress(progress) {
+    var _a2;
+    this.articleContextLoadingProgress = progress ? { ...progress, percent: Math.max(0, Math.min(100, Math.round(progress.percent))) } : null;
+    if (this.articleContextLoadingHideTimer !== null) {
+      window.clearTimeout(this.articleContextLoadingHideTimer);
+      this.articleContextLoadingHideTimer = null;
+    }
+    this.renderArticleContextLoadingProgress();
+    if (((_a2 = this.articleContextLoadingProgress) == null ? void 0 : _a2.percent) === 100) {
+      this.articleContextLoadingHideTimer = window.setTimeout(() => {
+        this.articleContextLoadingHideTimer = null;
+        this.articleContextLoadingProgress = null;
+        this.renderArticleContextLoadingProgress();
+      }, 640);
+    }
+  }
+  renderArticleContextLoadingProgress() {
+    var _a2, _b2, _c, _d, _e;
+    if (!this.rootEl) return;
+    const visibleMode = this.currentMode === "article" || this.currentMode === "reading";
+    const progress = this.articleContextLoadingProgress;
+    if (!visibleMode || !progress) {
+      (_a2 = this.articleContextLoadingEl) == null ? void 0 : _a2.remove();
+      this.articleContextLoadingEl = null;
+      return;
+    }
+    const shell = (_b2 = this.articleContextLoadingEl) != null ? _b2 : this.rootEl.createDiv({
+      cls: "mms-article-context-progress",
+      attr: { role: "status", "aria-live": "polite" }
+    });
+    this.articleContextLoadingEl = shell;
+    const fill = (_c = shell.querySelector(".mms-article-context-progress-fill")) != null ? _c : shell.createDiv({ cls: "mms-article-context-progress-fill" });
+    const label = (_d = shell.querySelector(".mms-article-context-progress-label")) != null ? _d : shell.createDiv({ cls: "mms-article-context-progress-label" });
+    const detail = (_e = shell.querySelector(".mms-article-context-progress-detail")) != null ? _e : shell.createDiv({ cls: "mms-article-context-progress-detail" });
+    const value = `${progress.percent}%`;
+    const boundedPercent = resolveArticleContextProgressPercent(progress.processed, progress.total, 0, 100);
+    fill.style.setProperty("--mms-article-context-progress", `${Math.max(progress.percent, boundedPercent)}%`);
+    label.setText(`\u52A0\u8F7D\u8FDB\u5EA6 ${value}`);
+    detail.setText(progress.message);
+    shell.toggleClass("is-complete", progress.percent === 100);
+    shell.dataset.phase = progress.phase;
+    shell.dataset.progress = value;
+  }
   /**
    * 执行“destroy”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
    */
   destroy() {
-    var _a2, _b2;
+    var _a2, _b2, _c;
     this.clearImageLoadTimers();
     this.rememberCurrentLocation(this.currentMode, true);
     if (this.readingLocationTimer !== null) window.clearTimeout(this.readingLocationTimer);
     if (this.readingCaptureTimer !== null) window.clearTimeout(this.readingCaptureTimer);
     if (this.readingCaptureReleaseTimer !== null) window.clearTimeout(this.readingCaptureReleaseTimer);
     if (this.readOnlyPersistTimer !== null) window.clearTimeout(this.readOnlyPersistTimer);
+    if (this.articleContextLoadingHideTimer !== null) window.clearTimeout(this.articleContextLoadingHideTimer);
+    this.articleContextLoadingHideTimer = null;
+    (_a2 = this.articleContextLoadingEl) == null ? void 0 : _a2.remove();
+    this.articleContextLoadingEl = null;
+    this.articleContextLoadingProgress = null;
     this.cancelReadingLocationRestore();
     this.clearArticleMiniMap();
-    (_a2 = this.articleScrollButtonCleanup) == null ? void 0 : _a2.call(this);
+    (_b2 = this.articleScrollButtonCleanup) == null ? void 0 : _b2.call(this);
     this.cancelArticleInitialRender();
     this.cancelArticleWindowExpansion();
     this.articleRenderController = null;
@@ -11484,7 +11545,7 @@ var MindMapEditor = class {
     this.pendingArticleDirectoryFocusNodeId = null;
     this.cleanupCallbacks.forEach((callback) => callback());
     this.cleanupCallbacks = [];
-    (_b2 = this.resizeObserver) == null ? void 0 : _b2.disconnect();
+    (_c = this.resizeObserver) == null ? void 0 : _c.disconnect();
     this.resizeObserver = null;
     if (this.measuredLayoutFrame !== null) window.cancelAnimationFrame(this.measuredLayoutFrame);
     this.measuredLayoutFrame = null;
@@ -14129,6 +14190,7 @@ var MindMapEditor = class {
     else if (this.currentMode === "question-bank") this.renderQuestionPractice();
     else this.renderMindMap();
     this.applyArticleClickMoveUi();
+    this.renderArticleContextLoadingProgress();
   }
   /** Renders the configured-folder practice surface and persists each automatic grading result. */
   renderQuestionPractice() {
@@ -18894,15 +18956,26 @@ var MindMapStudioView = class extends import_obsidian13.TextFileView {
    * 刷新article context，并保持模型、界面和持久化状态的一致性。
    */
   async refreshArticleContext() {
-    var _a2, _b2, _c, _d, _e, _f;
+    var _a2, _b2, _c, _d, _e, _f, _g, _h;
     const file = this.file;
     const document2 = (_b2 = (_a2 = this.editor) == null ? void 0 : _a2.getDocument()) != null ? _b2 : this.document;
     if (!file || !document2) return;
     const token = ++this.articleContextToken;
     this.plugin.logDebug("article-context", "refresh-start", { filePath: file.path, token, pendingFocusNodeId: this.pendingFocusNodeId, preferCurrentFile: this.preferCurrentFileOnNextContextRefresh });
+    (_c = this.editor) == null ? void 0 : _c.setArticleContextLoadingProgress({
+      phase: "prepare",
+      percent: 0,
+      processed: 0,
+      total: 1,
+      message: "\u6B63\u5728\u89E3\u6790\u6587\u7AE0\u7ED3\u6784\u2026"
+    });
     try {
-      const context = await this.plugin.buildArticleContext(file, document2);
-      if (token !== this.articleContextToken || ((_c = this.file) == null ? void 0 : _c.path) !== file.path) return;
+      const context = await this.plugin.buildArticleContext(file, document2, (progress) => {
+        var _a3, _b3;
+        if (token !== this.articleContextToken || ((_a3 = this.file) == null ? void 0 : _a3.path) !== file.path) return;
+        (_b3 = this.editor) == null ? void 0 : _b3.setArticleContextLoadingProgress(progress);
+      });
+      if (token !== this.articleContextToken || ((_d = this.file) == null ? void 0 : _d.path) !== file.path) return;
       this.articleBaseDepth = context.baseDepth;
       this.articleTocEntries = context.tocEntries;
       this.showArticleToc = context.showToc;
@@ -18912,12 +18985,19 @@ var MindMapStudioView = class extends import_obsidian13.TextFileView {
       const preferCurrentFile = this.preferCurrentFileOnNextContextRefresh;
       const preferredCurrentNodeId = preferCurrentFile ? this.preferredCurrentNodeIdOnNextContextRefresh : null;
       this.plugin.logDebug("article-context", "refresh-success", { filePath: file.path, token, baseDepth: context.baseDepth, tocEntries: context.tocEntries.length, showToc: context.showToc, readingSections: context.readingSections.length, preferCurrentFile, preferredCurrentNodeId });
-      (_d = this.editor) == null ? void 0 : _d.setOptions(this.getEditorOptions(preferCurrentFile, preferredCurrentNodeId), true);
+      (_e = this.editor) == null ? void 0 : _e.setOptions(this.getEditorOptions(preferCurrentFile, preferredCurrentNodeId), true);
       this.preferCurrentFileOnNextContextRefresh = false;
       this.preferredCurrentNodeIdOnNextContextRefresh = null;
     } catch (error) {
-      if (token !== this.articleContextToken || ((_e = this.file) == null ? void 0 : _e.path) !== file.path) return;
+      if (token !== this.articleContextToken || ((_f = this.file) == null ? void 0 : _f.path) !== file.path) return;
       this.plugin.logDebug("article-context", "refresh-failed", { filePath: file.path, token, error });
+      (_g = this.editor) == null ? void 0 : _g.setArticleContextLoadingProgress({
+        phase: "complete",
+        percent: 100,
+        processed: 1,
+        total: 1,
+        message: "\u89E3\u6790\u5931\u8D25\uFF0C\u5DF2\u56DE\u9000\u5230\u5F53\u524D\u5BFC\u56FE"
+      });
       console.warn("MindMap Studio article context refresh failed", error);
       this.articleBaseDepth = 0;
       this.articleTocEntries = [];
@@ -18933,7 +19013,7 @@ var MindMapStudioView = class extends import_obsidian13.TextFileView {
       const preferCurrentFile = this.preferCurrentFileOnNextContextRefresh;
       const preferredCurrentNodeId = preferCurrentFile ? this.preferredCurrentNodeIdOnNextContextRefresh : null;
       this.plugin.logDebug("article-context", "refresh-fallback", { filePath: file.path, token, preferCurrentFile, preferredCurrentNodeId });
-      (_f = this.editor) == null ? void 0 : _f.setOptions(this.getEditorOptions(preferCurrentFile, preferredCurrentNodeId), true);
+      (_h = this.editor) == null ? void 0 : _h.setOptions(this.getEditorOptions(preferCurrentFile, preferredCurrentNodeId), true);
       this.preferCurrentFileOnNextContextRefresh = false;
       this.preferredCurrentNodeIdOnNextContextRefresh = null;
     }
@@ -22631,9 +22711,24 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
    * @returns 计算得到的数值结果。
    * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
    */
-  async buildArticleContext(file, document2) {
+  async buildArticleContext(file, document2, onProgress) {
     var _a2, _b2, _c, _d, _e, _f;
     const baseDepth = await this.computeArticleBaseDepth(file, document2);
+    let progressTotal = Math.max(3, document2.root.children.length + 3);
+    let progressProcessed = 0;
+    const reportProgress = (phase, message, options) => {
+      if (typeof (options == null ? void 0 : options.total) === "number") progressTotal = Math.max(progressTotal, Math.floor(options.total));
+      if (typeof (options == null ? void 0 : options.processed) === "number") progressProcessed = Math.max(progressProcessed, Math.floor(options.processed));
+      const percent = typeof (options == null ? void 0 : options.percent) === "number" ? Math.max(0, Math.min(100, Math.round(options.percent))) : resolveArticleContextProgressPercent(progressProcessed, progressTotal);
+      onProgress == null ? void 0 : onProgress({
+        phase,
+        percent,
+        processed: progressProcessed,
+        total: progressTotal,
+        message
+      });
+    };
+    reportProgress("prepare", "\u6B63\u5728\u89E3\u6790\u6587\u7AE0\u7ED3\u6784\u2026", { percent: 6 });
     const familyDocuments = /* @__PURE__ */ new Map([[file.path, document2]]);
     const readFamilyDocument = async (targetFile) => {
       const cached = familyDocuments.get(targetFile.path);
@@ -22652,6 +22747,9 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
       topFile = parentFile2;
       topDocument = await readFamilyDocument(parentFile2);
     }
+    progressTotal = Math.max(progressTotal, ancestorPaths.size + topDocument.root.children.length + 3);
+    progressProcessed = Math.max(progressProcessed, ancestorPaths.size);
+    reportProgress("prepare", "\u6B63\u5728\u5EFA\u7ACB\u7236\u5B50\u5BFC\u56FE\u5173\u7CFB\u2026", { percent: 18 });
     const isTopLevel = topFile.path === file.path;
     const tocEntries = [];
     const topNumberingDisabled = isDocumentArticleNumberingDisabled(topDocument.root);
@@ -22663,6 +22761,7 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
     }];
     const visitedFiles = /* @__PURE__ */ new Set([topFile.path]);
     let hasSubmaps = false;
+    reportProgress("walk", "\u6B63\u5728\u751F\u6210\u76EE\u5F55\u4E0E\u7AE0\u8282\u7D22\u5F15\u2026", { percent: 24, total: progressTotal + topDocument.root.children.length });
     const processItems = async (items, defaultLevel, structureDepth) => {
       var _a3, _b3;
       const siblingHasHeading = items.some(({ node }) => isArticleHeading(node));
@@ -22706,6 +22805,8 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
             try {
               const childDocument = await readFamilyDocument(childFile);
               const childNumberingDisabled = documentNumberingDisabled || isDocumentArticleNumberingDisabled(childDocument.root);
+              progressTotal += Math.max(1, childDocument.root.children.length + 1);
+              reportProgress("walk", `\u6B63\u5728\u52A0\u8F7D\u5B50\u5BFC\u56FE\uFF1A${childFile.basename}\u2026`);
               readingSections.push({
                 filePath: childFile.path,
                 document: childDocument,
@@ -22727,6 +22828,8 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
           }
         }
         if (descendants.length) await processItems(descendants, numbering.level + 1, structureDepth + 1);
+        progressProcessed += 1;
+        reportProgress("walk", "\u6B63\u5728\u751F\u6210\u76EE\u5F55\u4E0E\u7AE0\u8282\u7D22\u5F15\u2026");
       }
     };
     await processItems(topDocument.root.children.map((node) => ({
@@ -22736,6 +22839,7 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
       breadcrumb: [nodePlainText(topDocument.root) || topDocument.title],
       numberingDisabled: topNumberingDisabled
     })), articleChildStartLevel(topDocument.root), 1);
+    reportProgress("finalize", "\u6B63\u5728\u6574\u7406\u5206\u9875\u4E0E\u8FD4\u56DE\u5BFC\u822A\u2026", { percent: 94, processed: progressTotal });
     const siblingPages = resolveArticleSiblingPages(tocEntries, file.path);
     const parentFile = ((_b2 = document2.navigation) == null ? void 0 : _b2.parentPath) ? this.resolveMindMapFile(document2.navigation.parentPath, file.path) : null;
     let parentNodeId = (_c = document2.navigation) == null ? void 0 : _c.parentNodeId;
@@ -22760,6 +22864,7 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
       parentNodeId,
       numberingDisabled: (_f = (_e = readingSections.find((section) => section.filePath === file.path)) == null ? void 0 : _e.numberingDisabled) != null ? _f : isDocumentArticleNumberingDisabled(document2.root)
     } : void 0;
+    reportProgress("complete", "\u901A\u8BFB\u5185\u5BB9\u5DF2\u51C6\u5907\u5B8C\u6210", { percent: 100, processed: progressTotal });
     return {
       baseDepth,
       tocEntries,

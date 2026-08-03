@@ -3852,6 +3852,51 @@ mjx-container.mms-node-math:not(.is-display),
   to { opacity: 1; transform: translateY(0); }
 }
 
+
+.mms-article-context-progress {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  z-index: 44;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: min(240px, calc(100% - 32px));
+  padding: 11px 13px 10px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 12px;
+  color: var(--text-normal);
+  background: color-mix(in srgb, var(--background-primary) 90%, transparent);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, .16);
+  backdrop-filter: blur(10px);
+  pointer-events: none;
+}
+
+.mms-article-context-progress-fill {
+  height: 4px;
+  border-radius: 999px;
+  background:
+    linear-gradient(to right,
+      var(--interactive-accent) 0,
+      var(--interactive-accent) var(--mms-article-context-progress, 0%),
+      color-mix(in srgb, var(--interactive-accent) 12%, var(--background-modifier-border)) var(--mms-article-context-progress, 0%),
+      color-mix(in srgb, var(--interactive-accent) 12%, var(--background-modifier-border)) 100%);
+}
+
+.mms-article-context-progress-label {
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.mms-article-context-progress-detail {
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.mms-article-context-progress.is-complete {
+  opacity: .92;
+}
 .mms-reading-progress {
   position: sticky;
   z-index: 12;
