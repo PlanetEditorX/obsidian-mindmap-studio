@@ -2052,7 +2052,6 @@ var TOOLBAR_ITEMS = [
   ["layout", "\u5207\u6362\u5E03\u5C40"],
   ["appearance", "\u4E3B\u9898\u4E0E\u5916\u89C2"],
   ["article-landing", "\u76EE\u5F55/\u539F\u59CB\u6587\u7AE0"],
-  ["article-style", "\u6587\u7AE0\u6837\u5F0F"],
   ["markdown", "Markdown \u5927\u7EB2"],
   ["json", "\u5BFC\u5165\u6587\u4EF6 / JSON"],
   ["export-document", "\u5BFC\u51FA\u6587\u6863"],
@@ -3426,7 +3425,7 @@ var MindMapStudioSettingTab = class extends import_obsidian.PluginSettingTab {
       createGroup("\u753B\u5E03\u4E0E\u5B57\u4F53", "\u5BF9\u5E94\u9875\u9762\u201C\u4E3B\u9898\u4E0E\u5916\u89C2\u201D\u7684\u753B\u5E03\u4E0E\u5B57\u4F53\u5206\u7EC4\u3002", ["\u80CC\u666F\u989C\u8272", "\u80CC\u666F\u56FE\u6848", "\u80CC\u666F\u56FE\u6848\u989C\u8272", "\u9ED8\u8BA4\u5B57\u4F53", "\u81EA\u5B9A\u4E49\u5B57\u4F53\u540D\u79F0", "\u9ED8\u8BA4\u5B57\u53F7"]),
       createGroup("\u8282\u70B9\u4E0E\u6587\u5B57", "\u5BF9\u5E94\u9875\u9762\u201C\u4E3B\u9898\u4E0E\u5916\u89C2\u201D\u7684\u8282\u70B9\u4E0E\u6587\u5B57\u5206\u7EC4\uFF1B\u8282\u70B9\u5355\u72EC\u8BBE\u7F6E\u4ECD\u5177\u6709\u66F4\u9AD8\u4F18\u5148\u7EA7\u3002", ["\u5206\u652F\u5916\u89C2", "\u9ED8\u8BA4\u8282\u70B9\u6587\u5B57\u5BF9\u9F50", "\u4E2D\u5FC3\u4E3B\u9898\u989C\u8272", "\u4E2D\u5FC3\u4E3B\u9898\u6587\u5B57\u989C\u8272", "\u9ED8\u8BA4\u8282\u70B9\u80CC\u666F\u8272", "\u9ED8\u8BA4\u6587\u5B57\u989C\u8272", "\u9ED8\u8BA4\u8282\u70B9\u8FB9\u6846\u989C\u8272", "\u9ED8\u8BA4\u8282\u70B9\u8FB9\u6846\u7C97\u7EC6", "\u9ED8\u8BA4\u6587\u5B57\u52A0\u7C97", "\u9ED8\u8BA4\u6587\u5B57\u659C\u4F53", "\u9ED8\u8BA4\u6587\u5B57\u4E0B\u5212\u7EBF"]),
       createGroup("\u8FDE\u7EBF\u4E0E\u5206\u652F", "\u5BF9\u5E94\u9875\u9762\u201C\u4E3B\u9898\u4E0E\u5916\u89C2\u201D\u7684\u8FDE\u7EBF\u4E0E\u5206\u652F\u5206\u7EC4\u3002", ["\u8FDE\u7EBF\u989C\u8272", "\u8FDE\u7EBF\u7C7B\u578B", "\u8FDE\u7EBF\u7C97\u7EC6\u6A21\u5F0F", "\u8D77\u59CB\u7C97\u7EC6", "\u8FDE\u7EBF\u7C97\u7EC6", "\u672B\u7AEF\u6700\u7EC6\u5BBD\u5EA6", "\u5F69\u8272\u5206\u652F", "\u5206\u652F\u989C\u8272"]),
-      createGroup("\u9605\u8BFB\u5916\u89C2", "\u5BF9\u5E94\u9875\u9762\u201C\u4E3B\u9898\u4E0E\u5916\u89C2\u201D\u7684\u9605\u8BFB\u5206\u7EC4\u3002", ["\u6587\u7AE0\u76EE\u5F55\u6700\u5927\u5C42\u7EA7", "\u6587\u7AE0/\u901A\u8BFB\u7F29\u7565\u5BFC\u822A\u56FE"]),
+      createGroup("\u9605\u8BFB\u6837\u5F0F", "\u5BF9\u5E94\u9875\u9762\u201C\u4E3B\u9898\u4E0E\u5916\u89C2\u201D\u7684\u9605\u8BFB\u6837\u5F0F\u5206\u7EC4\uFF1B\u6587\u7AE0\u4E0E\u901A\u8BFB\u5171\u7528\u3002", ["\u6587\u7AE0\u76EE\u5F55\u6700\u5927\u5C42\u7EA7", "\u6587\u7AE0/\u901A\u8BFB\u7F29\u7565\u5BFC\u822A\u56FE", "\u672B\u7AEF\u6B63\u6587\u6807\u8BC6", "\u672B\u7AEF\u6B63\u6587\u6807\u8BC6\u6837\u5F0F", "\u672B\u7AEF\u6B63\u6587\u6807\u8BC6\u989C\u8272", "\u672B\u7AEF\u6B63\u6587\u5BF9\u9F50\u65B9\u5F0F", "\u672B\u7AEF\u6B63\u6587\u6807\u8BC6\u8F6C\u5E8F\u53F7", "\u672B\u7AEF\u6B63\u6587\u5E8F\u53F7\u6837\u5F0F", "\u672B\u7AEF\u6B63\u6587\u8F6C\u5E8F\u53F7\u9608\u503C"]),
       createGroup("\u4EE3\u7801\u5916\u89C2", "\u5BF9\u5E94\u9875\u9762\u201C\u4E3B\u9898\u4E0E\u5916\u89C2\u201D\u7684\u4EE3\u7801\u5206\u7EC4\uFF1B\u9ED8\u8BA4\u6298\u53E0\u3001\u884C\u53F7\u3001\u4E3B\u9898\u548C\u81EA\u52A8\u9608\u503C\u7EDF\u4E00\u5728\u8FD9\u91CC\u7BA1\u7406\u3002", ["\u4EE3\u7801\u9ED8\u8BA4\u6298\u53E0", "\u4EE3\u7801\u9ED8\u8BA4\u663E\u793A\u884C\u53F7", "\u4E0D\u8D85\u8FC7\u591A\u5C11\u884C\u65F6\u4FDD\u6301\u5C55\u5F00", "\u8D85\u8FC7\u591A\u5C11\u884C\u65F6\u663E\u793A\u884C\u53F7", "\u4EE3\u7801\u9ED8\u8BA4\u6837\u5F0F"])
     );
     for (const heading of headings) {
@@ -7473,140 +7472,6 @@ var FormulaEditModal = class extends import_obsidian5.Modal {
     this.contentEl.empty();
   }
 };
-var ArticleStyleModal = class extends import_obsidian5.Modal {
-  /**
-   * 创建文章样式编辑器。
-   *
-   * @param app Obsidian 应用实例。
-   * @param style 当前文档样式。
-   * @param submitStyle 样式提交回调。
-   */
-  constructor(app, style, globalLeafPresentation, submitStyle) {
-    super(app);
-    this.globalLeafPresentation = globalLeafPresentation;
-    this.submitStyle = submitStyle;
-    this.style = resolveArticleStyle(style);
-  }
-  /**
-   * 创建文章样式预设和自定义控件。
-   */
-  onOpen() {
-    this.titleEl.setText("\u6587\u7AE0\u6837\u5F0F");
-    this.contentEl.addClass("mms-article-style-modal");
-    const form = this.contentEl.createEl("form");
-    const grid = form.createDiv({ cls: "mmc-form-grid" });
-    const presetLabel = grid.createEl("label", { text: "\u6837\u5F0F\u9884\u8BBE" });
-    const preset = presetLabel.createEl("select");
-    for (const [id, name] of [["classic", "\u7ECF\u5178\u6587\u6863"], ["book", "\u4E66\u7C4D\u9605\u8BFB"], ["modern", "\u73B0\u4EE3\u62A5\u544A"], ["minimal", "\u6781\u7B80\u7559\u767D"]]) {
-      preset.createEl("option", { text: name, attr: { value: id } });
-    }
-    const addText = (labelText) => {
-      const label = grid.createEl("label", { text: labelText });
-      return label.createEl("input", { type: "text" });
-    };
-    const addColor = (labelText) => {
-      const label = grid.createEl("label", { text: labelText });
-      return label.createEl("input", { type: "color" });
-    };
-    const fontFamily = addText("\u5B57\u4F53");
-    const textColor = addColor("\u6B63\u6587\u989C\u8272");
-    const headingColor = addColor("\u6807\u9898\u989C\u8272");
-    const accentColor = addColor("\u5F3A\u8C03\u8272");
-    const backgroundColor = addColor("\u7EB8\u5F20\u80CC\u666F");
-    const tocLabel = grid.createEl("label", { text: "\u76EE\u5F55\u6837\u5F0F" });
-    const tocStyle = tocLabel.createEl("select");
-    for (const [id, name] of [["card", "\u5361\u7247"], ["plain", "\u7B80\u6D01"], ["lines", "\u5F15\u5BFC\u7EBF"]]) {
-      tocStyle.createEl("option", { text: name, attr: { value: id } });
-    }
-    const sizeLabel = grid.createEl("label", { text: "\u6B63\u6587\u5B57\u53F7" });
-    const fontSize = sizeLabel.createEl("input", { type: "number", attr: { min: "12", max: "24", step: "1" } });
-    const lineLabel = grid.createEl("label", { text: "\u6B63\u6587\u884C\u9AD8" });
-    const lineHeight = lineLabel.createEl("input", { type: "number", attr: { min: "1.2", max: "2.4", step: "0.05" } });
-    const markerEnabledLabel = grid.createEl("label", { text: "\u672B\u7AEF\u6B63\u6587\u6807\u8BC6" });
-    const markerEnabled = markerEnabledLabel.createEl("select");
-    markerEnabled.createEl("option", { text: `\u8DDF\u968F\u63D2\u4EF6\u8BBE\u7F6E\uFF08\u5F53\u524D${this.globalLeafPresentation.enabled ? "\u663E\u793A" : "\u9690\u85CF"}\uFF09`, attr: { value: "" } });
-    markerEnabled.createEl("option", { text: "\u663E\u793A", attr: { value: "true" } });
-    markerEnabled.createEl("option", { text: "\u9690\u85CF", attr: { value: "false" } });
-    const markerStyleLabel = grid.createEl("label", { text: "\u672B\u7AEF\u6B63\u6587\u6807\u8BC6\u6837\u5F0F" });
-    const markerStyle = markerStyleLabel.createEl("select");
-    markerStyle.createEl("option", { text: "\u8DDF\u968F\u63D2\u4EF6\u8BBE\u7F6E", attr: { value: "" } });
-    for (const [id, name] of [["solid", "\u5B9E\u5FC3\u5706"], ["hollow", "\u7A7A\u5FC3\u5706"], ["square", "\u5B9E\u5FC3\u65B9\u5757"], ["dash", "\u77ED\u6A2A\u7EBF"]]) markerStyle.createEl("option", { text: name, attr: { value: id } });
-    const markerColor = addColor("\u672B\u7AEF\u6B63\u6587\u6807\u8BC6\u989C\u8272");
-    const markerColorGlobal = grid.createEl("label", { text: "\u6807\u8BC6\u989C\u8272" });
-    const markerColorFollowGlobal = markerColorGlobal.createEl("input", { type: "checkbox" });
-    markerColorGlobal.createSpan({ text: " \u8DDF\u968F\u63D2\u4EF6\u8BBE\u7F6E" });
-    const alignmentLabel = grid.createEl("label", { text: "\u672B\u7AEF\u6B63\u6587\u5BF9\u9F50\u65B9\u5F0F" });
-    const alignment = alignmentLabel.createEl("select");
-    alignment.createEl("option", { text: `\u8DDF\u968F\u63D2\u4EF6\u8BBE\u7F6E\uFF08\u5F53\u524D${this.globalLeafPresentation.alignment === "auto" ? "\u81EA\u52A8" : "\u9876\u683C"}\uFF09`, attr: { value: "" } });
-    alignment.createEl("option", { text: "\u9876\u683C", attr: { value: "flush" } });
-    alignment.createEl("option", { text: "\u81EA\u52A8\uFF08\u4E0E\u4E0A\u7EA7\u6807\u9898\u5BF9\u9F50\uFF09", attr: { value: "auto" } });
-    const numberingEnabledLabel = grid.createEl("label", { text: "\u672B\u7AEF\u6B63\u6587\u6807\u8BC6\u8F6C\u5E8F\u53F7" });
-    const numberingEnabled = numberingEnabledLabel.createEl("select");
-    numberingEnabled.createEl("option", { text: `\u8DDF\u968F\u63D2\u4EF6\u8BBE\u7F6E\uFF08\u5F53\u524D${this.globalLeafPresentation.numberingEnabled ? "\u5F00\u542F" : "\u5173\u95ED"}\uFF09`, attr: { value: "" } });
-    numberingEnabled.createEl("option", { text: "\u5F00\u542F", attr: { value: "true" } });
-    numberingEnabled.createEl("option", { text: "\u5173\u95ED", attr: { value: "false" } });
-    const numberingStyleLabel = grid.createEl("label", { text: "\u672B\u7AEF\u6B63\u6587\u5E8F\u53F7\u6837\u5F0F" });
-    const numberingStyle = numberingStyleLabel.createEl("select");
-    numberingStyle.createEl("option", { text: `\u8DDF\u968F\u63D2\u4EF6\u8BBE\u7F6E\uFF08\u5F53\u524D${this.globalLeafPresentation.numberingStyle === "circled" ? "\u5E26\u5708\u6570\u5B57" : "\u4E0B\u4E00\u7EA7\u6587\u7AE0\u5E8F\u53F7"}\uFF09`, attr: { value: "" } });
-    numberingStyle.createEl("option", { text: "\u4E0A\u7EA7\u6807\u9898\u7684\u4E0B\u4E00\u7EA7\u6587\u7AE0\u5E8F\u53F7", attr: { value: "next-level" } });
-    numberingStyle.createEl("option", { text: "\u5E26\u5708\u6570\u5B57\uFF08\u7EDF\u4E00\u5706\u5708\uFF0C\u652F\u6301 51+\uFF09", attr: { value: "circled" } });
-    const numberingThresholdLabel = grid.createEl("label", { text: "\u672B\u7AEF\u6B63\u6587\u8F6C\u5E8F\u53F7\u9608\u503C" });
-    const numberingThreshold = numberingThresholdLabel.createEl("input", { type: "number", attr: { min: "1", max: "20", step: "1" } });
-    const fill = (style) => {
-      var _a2, _b2, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m;
-      const resolved = resolveArticleStyle(style);
-      preset.value = resolved.preset;
-      fontFamily.value = (_a2 = resolved.fontFamily) != null ? _a2 : "";
-      textColor.value = (_b2 = resolved.textColor) != null ? _b2 : "#20242c";
-      headingColor.value = (_c = resolved.headingColor) != null ? _c : "#111827";
-      accentColor.value = (_d = resolved.accentColor) != null ? _d : "#7c3aed";
-      backgroundColor.value = (_e = resolved.backgroundColor) != null ? _e : "#ffffff";
-      tocStyle.value = (_f = resolved.tocStyle) != null ? _f : "card";
-      fontSize.value = String((_g = resolved.fontSize) != null ? _g : 16);
-      lineHeight.value = String((_h = resolved.lineHeight) != null ? _h : 1.85);
-      markerEnabled.value = style.leafMarkerEnabled === void 0 ? "" : String(style.leafMarkerEnabled);
-      markerStyle.value = (_i = style.leafMarkerStyle) != null ? _i : "";
-      markerColor.value = (_j = style.leafMarkerColor) != null ? _j : this.globalLeafPresentation.color || "#ef4444";
-      markerColorFollowGlobal.checked = style.leafMarkerColor === void 0;
-      markerColor.disabled = markerColorFollowGlobal.checked;
-      alignment.value = (_k = style.leafTextAlignment) != null ? _k : "";
-      numberingEnabled.value = style.leafNumberingEnabled === void 0 ? "" : String(style.leafNumberingEnabled);
-      numberingStyle.value = (_l = style.leafNumberingStyle) != null ? _l : "";
-      numberingThreshold.value = String((_m = style.leafNumberingThreshold) != null ? _m : this.globalLeafPresentation.numberingThreshold);
-    };
-    fill(this.style);
-    preset.addEventListener("change", () => fill(ARTICLE_STYLE_PRESETS[preset.value]));
-    markerColorFollowGlobal.addEventListener("change", () => {
-      markerColor.disabled = markerColorFollowGlobal.checked;
-    });
-    const actions = form.createDiv({ cls: "mmc-modal-actions" });
-    const cancel = actions.createEl("button", { text: "\u53D6\u6D88", type: "button" });
-    actions.createEl("button", { text: "\u5E94\u7528", type: "submit", cls: "mod-cta" });
-    cancel.addEventListener("click", () => this.close());
-    form.addEventListener("submit", (event) => {
-      event.preventDefault();
-      this.submitStyle({
-        preset: preset.value,
-        fontFamily: fontFamily.value.trim() || void 0,
-        textColor: textColor.value,
-        headingColor: headingColor.value,
-        accentColor: accentColor.value,
-        backgroundColor: backgroundColor.value,
-        tocStyle: tocStyle.value,
-        fontSize: Math.max(12, Math.min(24, Number(fontSize.value) || 16)),
-        lineHeight: Math.max(1.2, Math.min(2.4, Number(lineHeight.value) || 1.85)),
-        leafMarkerEnabled: markerEnabled.value === "" ? void 0 : markerEnabled.value === "true",
-        leafMarkerStyle: markerStyle.value === "hollow" || markerStyle.value === "square" || markerStyle.value === "dash" ? markerStyle.value : markerStyle.value === "solid" ? "solid" : void 0,
-        leafMarkerColor: markerColorFollowGlobal.checked ? void 0 : markerColor.value,
-        leafTextAlignment: alignment.value === "flush" || alignment.value === "auto" ? alignment.value : void 0,
-        leafNumberingEnabled: numberingEnabled.value === "" ? void 0 : numberingEnabled.value === "true",
-        leafNumberingStyle: numberingStyle.value === "circled" || numberingStyle.value === "next-level" ? numberingStyle.value : void 0,
-        leafNumberingThreshold: numberingEnabled.value === "" && !this.style.leafNumberingThreshold ? void 0 : Math.max(1, Math.min(20, Math.round(Number(numberingThreshold.value) || this.globalLeafPresentation.numberingThreshold)))
-      });
-      this.close();
-    });
-  }
-};
 var JsonTransferModal = class extends import_obsidian5.Modal {
   /**
    * 创建 JSON 传输弹窗。
@@ -9749,6 +9614,116 @@ var ImageRecognitionPreviewModal = class extends import_obsidian10.Modal {
 };
 
 // src/editor/editor.ts
+function createReadingStyleControls(container, style, globalDefaults) {
+  const source = style != null ? style : { preset: "classic" };
+  const resolved = resolveArticleStyle(source);
+  const presetLabel = container.createEl("label", { text: "\u9605\u8BFB\u6837\u5F0F\u9884\u8BBE" });
+  const preset = presetLabel.createEl("select");
+  for (const [id, name] of [["classic", "\u7ECF\u5178\u6587\u6863"], ["book", "\u4E66\u7C4D\u9605\u8BFB"], ["modern", "\u73B0\u4EE3\u62A5\u544A"], ["minimal", "\u6781\u7B80\u7559\u767D"]]) {
+    preset.createEl("option", { text: name, attr: { value: id } });
+  }
+  const addText = (labelText) => {
+    const label = container.createEl("label", { text: labelText });
+    return label.createEl("input", { type: "text" });
+  };
+  const addColor = (labelText) => {
+    const label = container.createEl("label", { text: labelText });
+    return label.createEl("input", { type: "color" });
+  };
+  const fontFamily = addText("\u9605\u8BFB\u5B57\u4F53");
+  const textColor = addColor("\u6B63\u6587\u989C\u8272");
+  const headingColor = addColor("\u6807\u9898\u989C\u8272");
+  const accentColor = addColor("\u5F3A\u8C03\u8272");
+  const backgroundColor = addColor("\u7EB8\u5F20\u80CC\u666F");
+  const tocLabel = container.createEl("label", { text: "\u76EE\u5F55\u6837\u5F0F" });
+  const tocStyle = tocLabel.createEl("select");
+  for (const [id, name] of [["card", "\u5361\u7247"], ["plain", "\u7B80\u6D01"], ["lines", "\u5F15\u5BFC\u7EBF"]]) {
+    tocStyle.createEl("option", { text: name, attr: { value: id } });
+  }
+  const sizeLabel = container.createEl("label", { text: "\u6B63\u6587\u5B57\u53F7" });
+  const fontSize = sizeLabel.createEl("input", { type: "number", attr: { min: "12", max: "24", step: "1" } });
+  const lineLabel = container.createEl("label", { text: "\u6B63\u6587\u884C\u9AD8" });
+  const lineHeight = lineLabel.createEl("input", { type: "number", attr: { min: "1.2", max: "2.4", step: "0.05" } });
+  const markerEnabledLabel = container.createEl("label", { text: "\u672B\u7AEF\u6B63\u6587\u6807\u8BC6" });
+  const markerEnabled = markerEnabledLabel.createEl("select");
+  markerEnabled.createEl("option", { text: `\u8DDF\u968F\u63D2\u4EF6\u8BBE\u7F6E\uFF08\u5F53\u524D${globalDefaults.enabled ? "\u663E\u793A" : "\u9690\u85CF"}\uFF09`, attr: { value: "" } });
+  markerEnabled.createEl("option", { text: "\u663E\u793A", attr: { value: "true" } });
+  markerEnabled.createEl("option", { text: "\u9690\u85CF", attr: { value: "false" } });
+  const markerStyleLabel = container.createEl("label", { text: "\u672B\u7AEF\u6B63\u6587\u6807\u8BC6\u6837\u5F0F" });
+  const markerStyle = markerStyleLabel.createEl("select");
+  markerStyle.createEl("option", { text: "\u8DDF\u968F\u63D2\u4EF6\u8BBE\u7F6E", attr: { value: "" } });
+  for (const [id, name] of [["solid", "\u5B9E\u5FC3\u5706"], ["hollow", "\u7A7A\u5FC3\u5706"], ["square", "\u5B9E\u5FC3\u65B9\u5757"], ["dash", "\u77ED\u6A2A\u7EBF"]]) {
+    markerStyle.createEl("option", { text: name, attr: { value: id } });
+  }
+  const markerColor = addColor("\u672B\u7AEF\u6B63\u6587\u6807\u8BC6\u989C\u8272");
+  const markerColorGlobal = container.createEl("label", { text: "\u6807\u8BC6\u989C\u8272\u6765\u6E90" });
+  const markerColorFollowGlobal = markerColorGlobal.createEl("input", { type: "checkbox" });
+  markerColorGlobal.createSpan({ text: " \u8DDF\u968F\u63D2\u4EF6\u8BBE\u7F6E" });
+  const alignmentLabel = container.createEl("label", { text: "\u672B\u7AEF\u6B63\u6587\u5BF9\u9F50\u65B9\u5F0F" });
+  const alignment = alignmentLabel.createEl("select");
+  alignment.createEl("option", { text: `\u8DDF\u968F\u63D2\u4EF6\u8BBE\u7F6E\uFF08\u5F53\u524D${globalDefaults.alignment === "auto" ? "\u81EA\u52A8" : "\u9876\u683C"}\uFF09`, attr: { value: "" } });
+  alignment.createEl("option", { text: "\u9876\u683C", attr: { value: "flush" } });
+  alignment.createEl("option", { text: "\u81EA\u52A8\uFF08\u4E0E\u4E0A\u7EA7\u6807\u9898\u5BF9\u9F50\uFF09", attr: { value: "auto" } });
+  const numberingEnabledLabel = container.createEl("label", { text: "\u672B\u7AEF\u6B63\u6587\u6807\u8BC6\u8F6C\u5E8F\u53F7" });
+  const numberingEnabled = numberingEnabledLabel.createEl("select");
+  numberingEnabled.createEl("option", { text: `\u8DDF\u968F\u63D2\u4EF6\u8BBE\u7F6E\uFF08\u5F53\u524D${globalDefaults.numberingEnabled ? "\u5F00\u542F" : "\u5173\u95ED"}\uFF09`, attr: { value: "" } });
+  numberingEnabled.createEl("option", { text: "\u5F00\u542F", attr: { value: "true" } });
+  numberingEnabled.createEl("option", { text: "\u5173\u95ED", attr: { value: "false" } });
+  const numberingStyleLabel = container.createEl("label", { text: "\u672B\u7AEF\u6B63\u6587\u5E8F\u53F7\u6837\u5F0F" });
+  const numberingStyle = numberingStyleLabel.createEl("select");
+  numberingStyle.createEl("option", { text: `\u8DDF\u968F\u63D2\u4EF6\u8BBE\u7F6E\uFF08\u5F53\u524D${globalDefaults.numberingStyle === "circled" ? "\u5E26\u5708\u6570\u5B57" : "\u4E0B\u4E00\u7EA7\u6587\u7AE0\u5E8F\u53F7"}\uFF09`, attr: { value: "" } });
+  numberingStyle.createEl("option", { text: "\u4E0A\u7EA7\u6807\u9898\u7684\u4E0B\u4E00\u7EA7\u6587\u7AE0\u5E8F\u53F7", attr: { value: "next-level" } });
+  numberingStyle.createEl("option", { text: "\u5E26\u5708\u6570\u5B57\uFF08\u7EDF\u4E00\u5706\u5708\uFF0C\u652F\u6301 51+\uFF09", attr: { value: "circled" } });
+  const numberingThresholdLabel = container.createEl("label", { text: "\u672B\u7AEF\u6B63\u6587\u8F6C\u5E8F\u53F7\u9608\u503C" });
+  const numberingThreshold = numberingThresholdLabel.createEl("input", { type: "number", attr: { min: "1", max: "20", step: "1" } });
+  const fill = (nextStyle) => {
+    var _a2, _b2, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m;
+    const nextResolved = resolveArticleStyle(nextStyle);
+    preset.value = nextResolved.preset;
+    fontFamily.value = (_a2 = nextResolved.fontFamily) != null ? _a2 : "";
+    textColor.value = (_b2 = nextResolved.textColor) != null ? _b2 : "#20242c";
+    headingColor.value = (_c = nextResolved.headingColor) != null ? _c : "#111827";
+    accentColor.value = (_d = nextResolved.accentColor) != null ? _d : "#7c3aed";
+    backgroundColor.value = (_e = nextResolved.backgroundColor) != null ? _e : "#ffffff";
+    tocStyle.value = (_f = nextResolved.tocStyle) != null ? _f : "card";
+    fontSize.value = String((_g = nextResolved.fontSize) != null ? _g : 16);
+    lineHeight.value = String((_h = nextResolved.lineHeight) != null ? _h : 1.85);
+    markerEnabled.value = nextStyle.leafMarkerEnabled === void 0 ? "" : String(nextStyle.leafMarkerEnabled);
+    markerStyle.value = (_i = nextStyle.leafMarkerStyle) != null ? _i : "";
+    markerColor.value = (_j = nextStyle.leafMarkerColor) != null ? _j : globalDefaults.color || "#ef4444";
+    markerColorFollowGlobal.checked = nextStyle.leafMarkerColor === void 0;
+    markerColor.disabled = markerColorFollowGlobal.checked;
+    alignment.value = (_k = nextStyle.leafTextAlignment) != null ? _k : "";
+    numberingEnabled.value = nextStyle.leafNumberingEnabled === void 0 ? "" : String(nextStyle.leafNumberingEnabled);
+    numberingStyle.value = (_l = nextStyle.leafNumberingStyle) != null ? _l : "";
+    numberingThreshold.value = String((_m = nextStyle.leafNumberingThreshold) != null ? _m : globalDefaults.numberingThreshold);
+  };
+  fill(source);
+  preset.addEventListener("change", () => fill(ARTICLE_STYLE_PRESETS[preset.value]));
+  markerColorFollowGlobal.addEventListener("change", () => {
+    markerColor.disabled = markerColorFollowGlobal.checked;
+  });
+  return {
+    read: () => ({
+      preset: preset.value,
+      fontFamily: fontFamily.value.trim() || void 0,
+      textColor: textColor.value,
+      headingColor: headingColor.value,
+      accentColor: accentColor.value,
+      backgroundColor: backgroundColor.value,
+      tocStyle: tocStyle.value,
+      fontSize: Math.max(12, Math.min(24, Number(fontSize.value) || resolved.fontSize || 16)),
+      lineHeight: Math.max(1.2, Math.min(2.4, Number(lineHeight.value) || resolved.lineHeight || 1.85)),
+      leafMarkerEnabled: markerEnabled.value === "" ? void 0 : markerEnabled.value === "true",
+      leafMarkerStyle: markerStyle.value === "hollow" || markerStyle.value === "square" || markerStyle.value === "dash" ? markerStyle.value : markerStyle.value === "solid" ? "solid" : void 0,
+      leafMarkerColor: markerColorFollowGlobal.checked ? void 0 : markerColor.value,
+      leafTextAlignment: alignment.value === "flush" || alignment.value === "auto" ? alignment.value : void 0,
+      leafNumberingEnabled: numberingEnabled.value === "" ? void 0 : numberingEnabled.value === "true",
+      leafNumberingStyle: numberingStyle.value === "circled" || numberingStyle.value === "next-level" ? numberingStyle.value : void 0,
+      leafNumberingThreshold: numberingEnabled.value === "" && (style == null ? void 0 : style.leafNumberingThreshold) === void 0 ? void 0 : Math.max(1, Math.min(20, Math.round(Number(numberingThreshold.value) || globalDefaults.numberingThreshold)))
+    })
+  };
+}
 function createArticleNumberingControls(container, currentMode, currentLevel, onChange) {
   const numberingModeLabel = container.createEl("label", { cls: "mmc-article-numbering-control" });
   numberingModeLabel.createSpan({ text: "\u6587\u7AE0\u7F16\u53F7\u65B9\u5F0F" });
@@ -10413,7 +10388,7 @@ var AppearanceModal = class extends import_obsidian11.Modal {
    * @param submit 该参数用于 constructor 流程中的输入或控制。
    * @param reset 该参数用于 constructor 流程中的输入或控制。
    */
-  constructor(app, appearance, numbering, articleTocMaxDepth, globalArticleTocMaxDepth, articleMiniMap, globalArticleMiniMap, pageCodeAppearance, submit, reset) {
+  constructor(app, appearance, numbering, articleTocMaxDepth, globalArticleTocMaxDepth, articleMiniMap, globalArticleMiniMap, pageCodeAppearance, readingStyle, globalReadingStyle, submit, reset) {
     super(app);
     this.appearance = appearance;
     this.numbering = numbering;
@@ -10422,6 +10397,8 @@ var AppearanceModal = class extends import_obsidian11.Modal {
     this.articleMiniMap = articleMiniMap;
     this.globalArticleMiniMap = globalArticleMiniMap;
     this.pageCodeAppearance = pageCodeAppearance;
+    this.readingStyle = readingStyle;
+    this.globalReadingStyle = globalReadingStyle;
     this.submit = submit;
     this.reset = reset;
   }
@@ -10436,7 +10413,7 @@ var AppearanceModal = class extends import_obsidian11.Modal {
     const form = this.contentEl.createEl("form");
     form.createEl("p", {
       cls: "setting-item-description",
-      text: "\u5148\u9009\u62E9\u4E3B\u9898\u6A21\u677F\uFF0C\u518D\u6309\u753B\u5E03\u3001\u8282\u70B9\u3001\u8FDE\u7EBF\u3001\u9605\u8BFB\u548C\u4EE3\u7801\u5206\u7EC4\u8C03\u6574\u3002\u8BBE\u7F6E\u53EA\u4FDD\u5B58\u5230\u5F53\u524D .mindmap \u6587\u4EF6\uFF0C\u5E76\u4F18\u5148\u4E8E\u63D2\u4EF6\u5168\u5C40\u9ED8\u8BA4\u503C\u3002"
+      text: "\u5148\u9009\u62E9\u4E3B\u9898\u6A21\u677F\uFF0C\u518D\u6309\u753B\u5E03\u3001\u8282\u70B9\u3001\u8FDE\u7EBF\u3001\u9605\u8BFB\u6837\u5F0F\u3001\u7F16\u53F7\u4E0E\u4EE3\u7801\u5206\u7EC4\u8C03\u6574\u3002\u6587\u7AE0\u548C\u901A\u8BFB\u5171\u7528\u9605\u8BFB\u6837\u5F0F\uFF1B\u8BBE\u7F6E\u53EA\u4FDD\u5B58\u5230\u5F53\u524D .mindmap \u6587\u4EF6\uFF0C\u5E76\u4F18\u5148\u4E8E\u63D2\u4EF6\u5168\u5C40\u9ED8\u8BA4\u503C\u3002"
     });
     let selectedPreset = (_a2 = this.appearance.themePreset) != null ? _a2 : "classic-indigo";
     const themeSection = form.createDiv({ cls: "mmc-theme-picker mmc-appearance-section" });
@@ -10590,6 +10567,12 @@ var AppearanceModal = class extends import_obsidian11.Modal {
     miniMapSelect.createEl("option", { text: "\u663E\u793A", attr: { value: "show" } });
     miniMapSelect.createEl("option", { text: "\u9690\u85CF", attr: { value: "hide" } });
     miniMapSelect.value = this.articleMiniMap === void 0 ? "" : this.articleMiniMap ? "show" : "hide";
+    const readingStyleSection = createAppearanceSection(
+      appearanceRightColumn,
+      "\u9605\u8BFB\u6837\u5F0F",
+      "\u6587\u7AE0\u6A21\u5F0F\u4E0E\u901A\u8BFB\u6A21\u5F0F\u5171\u7528\u540C\u4E00\u5957\u7EB8\u5F20\u3001\u5B57\u4F53\u3001\u76EE\u5F55\u548C\u672B\u7AEF\u6B63\u6587\u6837\u5F0F\u3002\u53EA\u8BFB\u72B6\u6001\u53EA\u9501\u6B63\u6587\u7F16\u8F91\uFF0C\u4E0D\u9501\u8FD9\u91CC\u7684\u5916\u89C2\u8BBE\u7F6E\u3002"
+    );
+    const readingStyleControls = createReadingStyleControls(readingStyleSection.grid, this.readingStyle, this.globalReadingStyle);
     const codeSection = appearanceLeftColumn.createDiv({ cls: "mmc-appearance-section mmc-appearance-code-settings" });
     codeSection.createDiv({ cls: "mmc-theme-picker-title", text: "\u9875\u9762\u4EE3\u7801\u8BBE\u7F6E" });
     codeSection.createDiv({ cls: "setting-item-description mmc-appearance-section-description", text: "\u4F18\u5148\u7EA7 2\uFF1A\u8986\u76D6\u63D2\u4EF6\u5168\u5C40\u4EE3\u7801\u8BBE\u7F6E\uFF1B\u8282\u70B9\u4EE3\u7801\u8BBE\u7F6E\u4ECD\u53EF\u5355\u72EC\u8986\u76D6\u3002" });
@@ -10741,7 +10724,7 @@ var AppearanceModal = class extends import_obsidian11.Modal {
         ...pageCodeCollapsed.value ? { codeCollapsed: pageCodeCollapsed.value === "true" } : {},
         ...pageCodeLines.value ? { codeShowLineNumbers: pageCodeLines.value === "true" } : {},
         ...pageCodeTheme.value ? { codeTheme: pageCodeTheme.value } : {}
-      }, numberingControls.read(), tocDepthSelect.value ? resolveArticleTocMaxDepth(Number(tocDepthSelect.value), this.globalArticleTocMaxDepth) : void 0, miniMapSelect.value === "show" ? true : miniMapSelect.value === "hide" ? false : void 0);
+      }, numberingControls.read(), tocDepthSelect.value ? resolveArticleTocMaxDepth(Number(tocDepthSelect.value), this.globalArticleTocMaxDepth) : void 0, miniMapSelect.value === "show" ? true : miniMapSelect.value === "hide" ? false : void 0, readingStyleControls.read());
       this.close();
     });
     window.setTimeout(() => save.focus(), 20);
@@ -11898,9 +11881,8 @@ var MindMapEditor = class {
     this.addToolbarSeparator();
     this.addToolbarButton("fit", "maximize", "\u9002\u5E94\u753B\u5E03", () => this.fitToView());
     this.addToolbarButton("layout", "git-fork", "\u5207\u6362\u5355\u4FA7/\u53CC\u4FA7\u5E03\u5C40", () => this.toggleLayout(), true);
-    this.addToolbarButton("appearance", "palette", "\u4E3B\u9898\u4E0E\u5916\u89C2", () => this.editAppearance(), true);
+    this.addToolbarButton("appearance", "palette", "\u4E3B\u9898\u4E0E\u5916\u89C2", () => this.editAppearance());
     this.articleLandingButton = this.addToolbarButton("article-landing", "list-tree", "\u5207\u6362\u76EE\u5F55 / \u539F\u59CB\u6587\u7AE0", () => this.toggleArticleLanding());
-    this.articleStyleButton = this.addToolbarButton("article-style", "paintbrush", "\u6587\u7AE0\u6837\u5F0F", () => this.editArticleStyle(), true);
     this.addToolbarSeparator();
     this.addToolbarButton("markdown", "file-text", "\u67E5\u770B Markdown \u5927\u7EB2", () => this.showOutline());
     this.addToolbarButton("json", "arrow-left-right", "\u5BFC\u5165 / \u5BFC\u51FA", () => this.showJsonTransfer(), true);
@@ -12219,7 +12201,6 @@ var MindMapEditor = class {
     const isArticle = this.currentMode === "article";
     const hasLandingChoice = isArticle && this.options.showArticleToc;
     this.articleLandingButton.toggleClass("is-hidden", !hasLandingChoice || !this.options.visibleToolbarItems.includes("article-landing"));
-    this.articleStyleButton.toggleClass("is-hidden", !isArticle || !this.options.visibleToolbarItems.includes("article-style"));
     (_a2 = this.toolbarEl.querySelector("[data-toolbar-id='submap']")) == null ? void 0 : _a2.toggleClass(
       "is-hidden",
       this.currentMode !== "mindmap" || !this.options.visibleToolbarItems.includes("submap")
@@ -14933,30 +14914,10 @@ var MindMapEditor = class {
     this.render();
   }
   /**
-   * Opens article preset and typography controls for the current document.
-   */
-  editArticleStyle() {
-    if (!this.ensureEditable()) return;
-    new ArticleStyleModal(this.app, this.document.articleStyle, {
-      enabled: this.options.articleLeafBulletsEnabled,
-      style: this.options.articleLeafBulletStyle,
-      color: this.options.articleLeafBulletColor,
-      alignment: this.options.articleLeafTextAlignment,
-      numberingEnabled: this.options.articleLeafNumberingEnabled,
-      numberingStyle: this.options.articleLeafNumberingStyle,
-      numberingThreshold: this.options.articleLeafNumberingThreshold
-    }, (style) => {
-      this.mutate(() => {
-        this.document.articleStyle = style;
-      });
-    }).open();
-  }
-  /**
    * 编辑appearance，并保持模型、界面和持久化状态的一致性。
    */
   editAppearance() {
     var _a2, _b2, _c;
-    if (!this.ensureEditable()) return;
     new AppearanceModal(
       this.app,
       this.getAppearance(),
@@ -14969,9 +14930,20 @@ var MindMapEditor = class {
       (_b2 = this.document.view) == null ? void 0 : _b2.articleMiniMap,
       this.options.showArticleMiniMap,
       (_c = this.document.appearance) != null ? _c : {},
-      (appearance, numbering, articleTocMaxDepth, articleMiniMap) => this.mutate(() => {
+      this.document.articleStyle,
+      {
+        enabled: this.options.articleLeafBulletsEnabled,
+        style: this.options.articleLeafBulletStyle,
+        color: this.options.articleLeafBulletColor,
+        alignment: this.options.articleLeafTextAlignment,
+        numberingEnabled: this.options.articleLeafNumberingEnabled,
+        numberingStyle: this.options.articleLeafNumberingStyle,
+        numberingThreshold: this.options.articleLeafNumberingThreshold
+      },
+      (appearance, numbering, articleTocMaxDepth, articleMiniMap, readingStyle) => this.mutatePresentation(() => {
         var _a3;
         this.document.appearance = appearance;
+        this.document.articleStyle = readingStyle;
         this.document.root.articleNumberingMode = numbering.articleNumberingMode;
         this.document.root.articleNumberingLevel = numbering.articleNumberingMode === "manual" ? numbering.articleNumberingLevel : void 0;
         const view = { ...(_a3 = this.document.view) != null ? _a3 : {} };
@@ -14981,8 +14953,9 @@ var MindMapEditor = class {
         else view.articleMiniMap = articleMiniMap;
         this.document.view = Object.keys(view).length ? view : void 0;
       }),
-      () => this.mutate(() => {
+      () => this.mutatePresentation(() => {
         this.document.appearance = void 0;
+        this.document.articleStyle = void 0;
         this.document.root.articleNumberingMode = void 0;
         this.document.root.articleNumberingLevel = void 0;
         if (this.document.view) {
@@ -16648,6 +16621,22 @@ var MindMapEditor = class {
     const branchColorMap = appearance.colorfulBranches ? buildBranchColorMap(this.document.root, appearance.branchColors) : /* @__PURE__ */ new Map();
     this.renderMindMapNode(position, appearance, branchColorMap);
     this.scheduleMeasuredMindMapLayout();
+  }
+  /**
+   * 保存当前页面的主题、阅读样式和其他展示配置。
+   * 只读状态只锁定正文与结构编辑，不阻止这些展示设置写回当前文件。
+   *
+   * @param action 需要应用到当前文档的展示设置修改。
+   */
+  mutatePresentation(action) {
+    const location = this.currentMode === "mindmap" ? null : this.captureCurrentLocation(this.currentMode);
+    if (location) this.rememberLocation(location, true);
+    this.history.capture(this.document);
+    action();
+    this.callbacks.onChange(this.getDocument());
+    this.markSaving();
+    this.render();
+    if (location) this.restoreReadingLocation(this.currentMode, location);
   }
   /**
    * 所有用户可撤销写操作的统一入口。调用前克隆当前文档写入撤销栈，执行修改，规范化和重渲染，再通知视图自动保存；只读状态会在更上层阻止进入该流程。
@@ -21416,7 +21405,7 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
       visibleModes: normalizeVisibleModes(raw.visibleModes),
       visibleToolbarItems: (() => {
         const knownIds = new Set(TOOLBAR_ITEMS.map(([id]) => id));
-        const stored = Array.isArray(raw.visibleToolbarItems) ? raw.visibleToolbarItems.filter((id) => typeof id === "string" && knownIds.has(id)) : [...DEFAULT_SETTINGS.visibleToolbarItems];
+        const stored = Array.isArray(raw.visibleToolbarItems) ? raw.visibleToolbarItems.flatMap((id) => typeof id === "string" ? [id === "article-style" ? "appearance" : id] : []).filter((id) => knownIds.has(id)) : [...DEFAULT_SETTINGS.visibleToolbarItems];
         if (!hadAiSettings && !stored.includes("ai")) stored.push("ai");
         if (!stored.includes("screenshot")) stored.push("screenshot");
         if (!stored.includes("screenshot-recognize")) stored.push("screenshot-recognize");
@@ -21424,7 +21413,7 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
       })(),
       toolbarItemOrder: (() => {
         const validIds = new Set(TOOLBAR_ITEMS.map(([id]) => id));
-        const stored = Array.isArray(raw.toolbarItemOrder) ? raw.toolbarItemOrder.filter((id) => typeof id === "string" && validIds.has(id)) : [];
+        const stored = Array.isArray(raw.toolbarItemOrder) ? raw.toolbarItemOrder.flatMap((id) => typeof id === "string" ? [id === "article-style" ? "appearance" : id] : []).filter((id) => validIds.has(id)) : [];
         return [.../* @__PURE__ */ new Set([...stored, ...DEFAULT_SETTINGS.toolbarItemOrder])];
       })(),
       defaultViewMode: typeof raw.defaultViewMode === "string" ? raw.defaultViewMode : DEFAULT_SETTINGS.defaultViewMode,

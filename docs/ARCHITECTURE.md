@@ -39,7 +39,7 @@ src/
 │   ├── display-mode.ts         启动模式和会话持久化规则
 │   ├── reading-location.ts     跨模式、跨文件语义阅读位置
 │   ├── render-window.ts        文章 5 KB 首屏窗口与边缘扩展范围
-│   └── article-style.ts        文章样式解析
+│   └── article-style.ts        文章与通读共用的阅读样式解析
 ├── render/
 │   ├── layout.ts               坐标、连线与 SVG
 │   ├── collision-layout.ts     节点碰撞检测与子树避让
@@ -62,10 +62,10 @@ src/
 
 - `src/settings.ts`：插件设置、默认值、主题同步和设置页；一级分类展开列表持久化在插件配置中，搜索产生的临时展开不写入记忆。
 - `src/themes.ts`：内置主题预设。
-- `src/article/article-style.ts`：文章样式预设和纯样式解析，不依赖编辑器 DOM。
+- `src/article/article-style.ts`：文章与通读共用的阅读样式预设和纯样式解析，不依赖编辑器 DOM。
 - `src/editor/editor-types.ts`：编辑器回调与运行参数契约，隔离插件服务和 UI 实现。
 - `src/editor/rich-text-dom.ts`：富文本运行段与 `contenteditable` DOM 的双向转换，以及 MathJax 渲染。
-- `src/editor/editor-modals.ts`：图片预览、图床选择、公式编辑、文章样式、JSON/文件导入、Markdown 大纲和文档导出等弹窗。
+- `src/editor/editor-modals.ts`：图片预览、图床选择、公式编辑、JSON/文件导入、Markdown 大纲和文档导出等弹窗；阅读样式已并入编辑器的统一“主题与外观”面板。
 - `src/editor/clipboard-import.ts`：剪贴板 JSON、Markdown、缩进文本和 HTML 列表的单节点或有序多节点分支解析。
 - `src/editor/node-image-actions.ts`：节点图片选择、本地保存、图床上传和远程镜像合并。
 - `src/editor/node-rich-text-editor.ts`：节点文字块的选区样式、颜色、格式清理和实时预览。
@@ -370,7 +370,7 @@ mindmap-search-index.json
 2. 由 `view.ts` 提供 Obsidian 相关实现。
 3. `editor.ts` 只调用契约，不直接依赖插件主类。
 
-新增文章样式预设时，应在 `article-style.ts` 中维护预设和解析逻辑，文章渲染与样式编辑弹窗共用同一个解析入口。
+新增阅读样式预设时，应在 `article-style.ts` 中维护预设和解析逻辑；文章、通读与统一“主题与外观”面板共用同一个解析入口。只读锁仅限制内容和结构写入，展示配置通过独立的 `mutatePresentation()` 保存。
 
 富文本字符样式的规范化属于 `model.ts`，DOM 解析和渲染属于 `rich-text-dom.ts`。不要让模型层依赖浏览器 DOM 或 MathJax。
 

@@ -849,7 +849,9 @@ export default class MindMapStudioPlugin extends Plugin {
       visibleToolbarItems: (() => {
         const knownIds = new Set<string>(TOOLBAR_ITEMS.map(([id]) => id));
         const stored = Array.isArray(raw.visibleToolbarItems)
-          ? raw.visibleToolbarItems.filter((id): id is string => typeof id === "string" && knownIds.has(id))
+          ? raw.visibleToolbarItems
+            .flatMap((id): string[] => typeof id === "string" ? [id === "article-style" ? "appearance" : id] : [])
+            .filter((id) => knownIds.has(id))
           : [...DEFAULT_SETTINGS.visibleToolbarItems];
         if (!hadAiSettings && !stored.includes("ai")) stored.push("ai");
         if (!stored.includes("screenshot")) stored.push("screenshot");
@@ -859,7 +861,9 @@ export default class MindMapStudioPlugin extends Plugin {
       toolbarItemOrder: (() => {
         const validIds = new Set<string>(TOOLBAR_ITEMS.map(([id]) => id));
         const stored = Array.isArray(raw.toolbarItemOrder)
-          ? raw.toolbarItemOrder.filter((id): id is string => typeof id === "string" && validIds.has(id))
+          ? raw.toolbarItemOrder
+            .flatMap((id): string[] => typeof id === "string" ? [id === "article-style" ? "appearance" : id] : [])
+            .filter((id) => validIds.has(id))
           : [];
         return [...new Set([...stored, ...DEFAULT_SETTINGS.toolbarItemOrder])];
       })(),

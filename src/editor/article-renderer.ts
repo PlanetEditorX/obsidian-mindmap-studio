@@ -129,7 +129,7 @@ function articleNodeRenderBytes(info: ArticleNodeInfo): number {
   return Math.max(192, bytes);
 }
 
-/** 根据文档文章样式和文章上下文渲染文章页的首个稳定窗口。 */
+/** 根据文档阅读样式和文章上下文渲染文章页的首个稳定窗口。 */
 export function renderArticleMode(container: HTMLElement, options: ArticleRendererOptions): ArticleRenderController | null {
   options = options.contentBlockCache ? options : { ...options, contentBlockCache: new WeakMap() };
   container.empty();
@@ -344,7 +344,7 @@ function applyArticleLeafBulletStyle(paragraph: HTMLElement, options: ArticleRen
   if (options.articleLeafBulletColor) paragraph.style.setProperty("--mms-article-bullet-color", options.articleLeafBulletColor);
 }
 
-/** 将解析后的文章样式写入文章页 CSS 变量。 */
+/** 将解析后的阅读样式写入文章页 CSS 变量。 */
 function applyArticleStyle(page: HTMLElement, style: ReturnType<typeof resolveArticleStyle>): void {
   if (style.fontFamily) page.style.setProperty("--mms-article-font", style.fontFamily);
   if (style.textColor) page.style.setProperty("--mms-article-text", style.textColor);

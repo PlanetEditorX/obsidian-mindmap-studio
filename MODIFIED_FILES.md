@@ -1,5 +1,14 @@
 # Modified Files
 
+## 1.41.11 只读展示设置与统一阅读样式
+
+- `src/editor/editor.ts`：只读状态下允许打开和保存“主题与外观”；新增展示配置专用写入链路；将文章与通读共用的预设、字体、纸张、目录和末端正文配置并入“阅读样式”；移除独立文章样式按钮。
+- `src/editor/editor-modals.ts`：删除已并入统一外观面板的独立文章样式弹窗。
+- `src/settings.ts`、`src/main.ts`：工具栏移除 `article-style`，旧配置自动迁移到 `appearance`；插件全局阅读分组改为“阅读样式”并纳入末端正文默认项。
+- `src/core/model.ts`、`src/article/article-style.ts`、`src/editor/article-renderer.ts`：明确 `articleStyle` 兼容字段是文章与通读共用的阅读样式。
+- `tests/reading-editor-contract.test.mjs`、`tests/settings-layout.test.mjs`、`tests/article-content-block.test.mjs`：补充只读展示设置、统一阅读样式、旧工具栏迁移和分组契约。
+- `README.md`、`CHANGELOG.md`、`docs/*`、`TEST_RESULTS.md`、`Codex/项目/obsidian-mindmap-studio.md`：同步用户行为、维护边界和验证状态。
+- `package.json`、`package-lock.json`、`manifest.json`、`versions.json`、`update.json`、`main.js`：统一版本为 1.41.11，最终安装包校验值在打包后写入。
 ## 1.41.10 通读编号使用当前内存文档
 
 - `src/main.ts`：文章族刷新建立文件级文档缓存，并把当前编辑器文档预置为当前物理文件的权威快照；从子导图进入通读后修改编号时，不再读取尚未保存完成的旧磁盘副本。

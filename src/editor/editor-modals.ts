@@ -7,15 +7,11 @@ import { App, finishRenderMath, Modal, Notice, renderMath } from "obsidian";
 import {
   markdownToDocument,
   normalizeDocument,
-  type ArticleLeafNumberingStyle,
-  type ArticleStyle,
-  type ArticleStylePresetId,
   type MindMapDocument,
   type MindMapImageSourceCandidate
 } from "../core/model";
 import { ensureMathJax } from "./rich-text-dom";
-import { ARTICLE_STYLE_PRESETS, resolveArticleStyle } from "../article/article-style";
-import type { ArticleLeafBulletStyle, ArticleLeafTextAlignment, ImageHostChoice } from "../settings";
+import type { ImageHostChoice } from "../settings";
 import { xmindToDocument } from "../import/import-export";
 import { setAllBranchesCollapsed } from "./node-actions";
 import { selectDesktopImportFile } from "../utils/desktop-import";
@@ -352,147 +348,6 @@ export class FormulaEditModal extends Modal {
    */
   onClose(): void {
     this.contentEl.empty();
-  }
-}
-
-/**
- * 编辑文章模式的预设、字体和颜色。
- */
-export class ArticleStyleModal extends Modal {
-  private readonly style: ArticleStyle;
-
-  /**
-   * 创建文章样式编辑器。
-   *
-   * @param app Obsidian 应用实例。
-   * @param style 当前文档样式。
-   * @param submitStyle 样式提交回调。
-   */
-  constructor(
-    app: App,
-    style: ArticleStyle | undefined,
-    private readonly globalLeafPresentation: { enabled: boolean; style: ArticleLeafBulletStyle; color: string; alignment: ArticleLeafTextAlignment; numberingEnabled: boolean; numberingStyle: ArticleLeafNumberingStyle; numberingThreshold: number },
-    private readonly submitStyle: (style: ArticleStyle) => void
-  ) {
-    super(app);
-    this.style = resolveArticleStyle(style);
-  }
-
-  /**
-   * 创建文章样式预设和自定义控件。
-   */
-  onOpen(): void {
-    this.titleEl.setText("文章样式");
-    this.contentEl.addClass("mms-article-style-modal");
-    const form = this.contentEl.createEl("form");
-    const grid = form.createDiv({ cls: "mmc-form-grid" });
-    const presetLabel = grid.createEl("label", { text: "样式预设" });
-    const preset = presetLabel.createEl("select");
-    for (const [id, name] of [["classic", "经典文档"], ["book", "书籍阅读"], ["modern", "现代报告"], ["minimal", "极简留白"]] as const) {
-      preset.createEl("option", { text: name, attr: { value: id } });
-    }
-    const addText = (labelText: string): HTMLInputElement => {
-      const label = grid.createEl("label", { text: labelText });
-      return label.createEl("input", { type: "text" });
-    };
-    const addColor = (labelText: string): HTMLInputElement => {
-      const label = grid.createEl("label", { text: labelText });
-      return label.createEl("input", { type: "color" });
-    };
-    const fontFamily = addText("字体");
-    const textColor = addColor("正文颜色");
-    const headingColor = addColor("标题颜色");
-    const accentColor = addColor("强调色");
-    const backgroundColor = addColor("纸张背景");
-    const tocLabel = grid.createEl("label", { text: "目录样式" });
-    const tocStyle = tocLabel.createEl("select");
-    for (const [id, name] of [["card", "卡片"], ["plain", "简洁"], ["lines", "引导线"]] as const) {
-      tocStyle.createEl("option", { text: name, attr: { value: id } });
-    }
-    const sizeLabel = grid.createEl("label", { text: "正文字号" });
-    const fontSize = sizeLabel.createEl("input", { type: "number", attr: { min: "12", max: "24", step: "1" } });
-    const lineLabel = grid.createEl("label", { text: "正文行高" });
-    const lineHeight = lineLabel.createEl("input", { type: "number", attr: { min: "1.2", max: "2.4", step: "0.05" } });
-    const markerEnabledLabel = grid.createEl("label", { text: "末端正文标识" });
-    const markerEnabled = markerEnabledLabel.createEl("select");
-    markerEnabled.createEl("option", { text: `跟随插件设置（当前${this.globalLeafPresentation.enabled ? "显示" : "隐藏"}）`, attr: { value: "" } });
-    markerEnabled.createEl("option", { text: "显示", attr: { value: "true" } });
-    markerEnabled.createEl("option", { text: "隐藏", attr: { value: "false" } });
-    const markerStyleLabel = grid.createEl("label", { text: "末端正文标识样式" });
-    const markerStyle = markerStyleLabel.createEl("select");
-    markerStyle.createEl("option", { text: "跟随插件设置", attr: { value: "" } });
-    for (const [id, name] of [["solid", "实心圆"], ["hollow", "空心圆"], ["square", "实心方块"], ["dash", "短横线"]] as const) markerStyle.createEl("option", { text: name, attr: { value: id } });
-    const markerColor = addColor("末端正文标识颜色");
-    const markerColorGlobal = grid.createEl("label", { text: "标识颜色" });
-    const markerColorFollowGlobal = markerColorGlobal.createEl("input", { type: "checkbox" });
-    markerColorGlobal.createSpan({ text: " 跟随插件设置" });
-    const alignmentLabel = grid.createEl("label", { text: "末端正文对齐方式" });
-    const alignment = alignmentLabel.createEl("select");
-    alignment.createEl("option", { text: `跟随插件设置（当前${this.globalLeafPresentation.alignment === "auto" ? "自动" : "顶格"}）`, attr: { value: "" } });
-    alignment.createEl("option", { text: "顶格", attr: { value: "flush" } });
-    alignment.createEl("option", { text: "自动（与上级标题对齐）", attr: { value: "auto" } });
-    const numberingEnabledLabel = grid.createEl("label", { text: "末端正文标识转序号" });
-    const numberingEnabled = numberingEnabledLabel.createEl("select");
-    numberingEnabled.createEl("option", { text: `跟随插件设置（当前${this.globalLeafPresentation.numberingEnabled ? "开启" : "关闭"}）`, attr: { value: "" } });
-    numberingEnabled.createEl("option", { text: "开启", attr: { value: "true" } });
-    numberingEnabled.createEl("option", { text: "关闭", attr: { value: "false" } });
-    const numberingStyleLabel = grid.createEl("label", { text: "末端正文序号样式" });
-    const numberingStyle = numberingStyleLabel.createEl("select");
-    numberingStyle.createEl("option", { text: `跟随插件设置（当前${this.globalLeafPresentation.numberingStyle === "circled" ? "带圈数字" : "下一级文章序号"}）`, attr: { value: "" } });
-    numberingStyle.createEl("option", { text: "上级标题的下一级文章序号", attr: { value: "next-level" } });
-    numberingStyle.createEl("option", { text: "带圈数字（统一圆圈，支持 51+）", attr: { value: "circled" } });
-    const numberingThresholdLabel = grid.createEl("label", { text: "末端正文转序号阈值" });
-    const numberingThreshold = numberingThresholdLabel.createEl("input", { type: "number", attr: { min: "1", max: "20", step: "1" } });
-    const fill = (style: ArticleStyle): void => {
-      const resolved = resolveArticleStyle(style);
-      preset.value = resolved.preset;
-      fontFamily.value = resolved.fontFamily ?? "";
-      textColor.value = resolved.textColor ?? "#20242c";
-      headingColor.value = resolved.headingColor ?? "#111827";
-      accentColor.value = resolved.accentColor ?? "#7c3aed";
-      backgroundColor.value = resolved.backgroundColor ?? "#ffffff";
-      tocStyle.value = resolved.tocStyle ?? "card";
-      fontSize.value = String(resolved.fontSize ?? 16);
-      lineHeight.value = String(resolved.lineHeight ?? 1.85);
-      markerEnabled.value = style.leafMarkerEnabled === undefined ? "" : String(style.leafMarkerEnabled);
-      markerStyle.value = style.leafMarkerStyle ?? "";
-      markerColor.value = style.leafMarkerColor ?? (this.globalLeafPresentation.color || "#ef4444");
-      markerColorFollowGlobal.checked = style.leafMarkerColor === undefined;
-      markerColor.disabled = markerColorFollowGlobal.checked;
-      alignment.value = style.leafTextAlignment ?? "";
-      numberingEnabled.value = style.leafNumberingEnabled === undefined ? "" : String(style.leafNumberingEnabled);
-      numberingStyle.value = style.leafNumberingStyle ?? "";
-      numberingThreshold.value = String(style.leafNumberingThreshold ?? this.globalLeafPresentation.numberingThreshold);
-    };
-    fill(this.style);
-    preset.addEventListener("change", () => fill(ARTICLE_STYLE_PRESETS[preset.value as ArticleStylePresetId]));
-    markerColorFollowGlobal.addEventListener("change", () => { markerColor.disabled = markerColorFollowGlobal.checked; });
-    const actions = form.createDiv({ cls: "mmc-modal-actions" });
-    const cancel = actions.createEl("button", { text: "取消", type: "button" });
-    actions.createEl("button", { text: "应用", type: "submit", cls: "mod-cta" });
-    cancel.addEventListener("click", () => this.close());
-    form.addEventListener("submit", (event) => {
-      event.preventDefault();
-      this.submitStyle({
-        preset: preset.value as ArticleStylePresetId,
-        fontFamily: fontFamily.value.trim() || undefined,
-        textColor: textColor.value,
-        headingColor: headingColor.value,
-        accentColor: accentColor.value,
-        backgroundColor: backgroundColor.value,
-        tocStyle: tocStyle.value as ArticleStyle["tocStyle"],
-        fontSize: Math.max(12, Math.min(24, Number(fontSize.value) || 16)),
-        lineHeight: Math.max(1.2, Math.min(2.4, Number(lineHeight.value) || 1.85)),
-        leafMarkerEnabled: markerEnabled.value === "" ? undefined : markerEnabled.value === "true",
-        leafMarkerStyle: markerStyle.value === "hollow" || markerStyle.value === "square" || markerStyle.value === "dash" ? markerStyle.value : markerStyle.value === "solid" ? "solid" : undefined,
-        leafMarkerColor: markerColorFollowGlobal.checked ? undefined : markerColor.value,
-        leafTextAlignment: alignment.value === "flush" || alignment.value === "auto" ? alignment.value : undefined
-        ,leafNumberingEnabled: numberingEnabled.value === "" ? undefined : numberingEnabled.value === "true"
-        ,leafNumberingStyle: numberingStyle.value === "circled" || numberingStyle.value === "next-level" ? numberingStyle.value : undefined
-        ,leafNumberingThreshold: numberingEnabled.value === "" && !this.style.leafNumberingThreshold ? undefined : Math.max(1, Math.min(20, Math.round(Number(numberingThreshold.value) || this.globalLeafPresentation.numberingThreshold)))
-      });
-      this.close();
-    });
   }
 }
 

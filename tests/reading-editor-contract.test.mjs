@@ -287,7 +287,7 @@ test("top-level article directories default to the directory on every file entry
   );
   const setLanding = editorSource.slice(
     editorSource.indexOf("private setArticleLandingMode"),
-    editorSource.indexOf("private editArticleStyle", editorSource.indexOf("private setArticleLandingMode"))
+    editorSource.indexOf("private editAppearance", editorSource.indexOf("private setArticleLandingMode"))
   );
 
   assert.match(setViewData, /!queuedFocusNodeId && !this\.document\.navigation\?\.parentPath/);
@@ -297,4 +297,34 @@ test("top-level article directories default to the directory on every file entry
   assert.doesNotMatch(applyDisplayMode, /&& this\.options\.showArticleToc[\s\S]{0,160}articleLandingMode: "article"/);
   assert.doesNotMatch(setLanding, /history\.capture|callbacks\.onChange|markSaving/);
   assert.match(setLanding, /this\.document\.view = \{[\s\S]*articleLandingMode: mode/);
+});
+
+
+test("read-only mode keeps the unified theme and reading-style panel editable", async () => {
+  const [editorSource, settingsSource, mainSource, modalSource] = await Promise.all([
+    readFile("src/editor/editor.ts", "utf8"),
+    readFile("src/settings.ts", "utf8"),
+    readFile("src/main.ts", "utf8"),
+    readFile("src/editor/editor-modals.ts", "utf8")
+  ]);
+  const editAppearance = editorSource.slice(
+    editorSource.indexOf("private editAppearance"),
+    editorSource.indexOf("private editTable", editorSource.indexOf("private editAppearance"))
+  );
+  const mutatePresentation = editorSource.slice(
+    editorSource.indexOf("private mutatePresentation"),
+    editorSource.indexOf("private mutate(action", editorSource.indexOf("private mutatePresentation"))
+  );
+
+  assert.match(editorSource, /addToolbarButton\("appearance", "palette", "主题与外观", \(\) => this\.editAppearance\(\)\);/);
+  assert.doesNotMatch(editAppearance, /ensureEditable\(\)/);
+  assert.match(editAppearance, /this\.mutatePresentation\(/);
+  assert.match(editAppearance, /this\.document\.articleStyle = readingStyle/);
+  assert.match(editAppearance, /this\.document\.articleStyle = undefined/);
+  assert.doesNotMatch(mutatePresentation, /ensureEditable\(\)/);
+  assert.match(editorSource, /"阅读样式"[\s\S]*文章模式与通读模式共用同一套纸张、字体、目录和末端正文样式/);
+  assert.doesNotMatch(editorSource, /data-toolbar-id=['"]article-style|addToolbarButton\("article-style"|private editArticleStyle/);
+  assert.doesNotMatch(settingsSource, /\["article-style", "文章样式"\]/);
+  assert.match(mainSource, /id === "article-style" \? "appearance" : id/);
+  assert.doesNotMatch(modalSource, /class ArticleStyleModal|this\.titleEl\.setText\("文章样式"\)/);
 });

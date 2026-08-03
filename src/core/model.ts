@@ -32,9 +32,9 @@ export type ArticleLandingMode = "toc" | "article";
 export type ArticleNumberingMode = "none" | "manual";
 /** Numbering style used when terminal body siblings are converted into generated markers. */
 export type ArticleLeafNumberingStyle = "next-level" | "circled";
-/** Built-in article presentation presets. */
+/** Built-in reading-presentation presets shared by article and continuous-reading modes. */
 export type ArticleStylePresetId = "classic" | "book" | "modern" | "minimal";
-/** Per-document article presentation overrides. */
+/** Per-document reading-style overrides shared by article and continuous-reading modes. */
 export interface ArticleStyle {
   preset: ArticleStylePresetId;
   fontFamily?: string;

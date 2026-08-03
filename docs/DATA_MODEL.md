@@ -78,7 +78,7 @@ interface MindMapNode {
 题目还记录 `status`（未做、已做、收藏、错题、掌握）、`attemptCount`、`correctCount` 和 `lastPracticedAt`，用于题库文件夹内导图的整页练习和错题复盘；旧文件缺少这些字段时会自动初始化为“未做”。选择题根据答案中的选项标签自动判题，多答案标签会自动呈现为多选；大题以规范化文本与参考答案精确比对，答错会自动标为错题。
 - `view.articleTocMaxDepth` 是可选的 1–8 层目录深度覆盖。字段缺失时，文章模式和通读模式跟随插件全局 `articleTocMaxDepth`；字段存在时当前脑图优先。
 
-文章样式还可保存 `leafNumberingEnabled`、`leafNumberingStyle` 与 `leafNumberingThreshold`，用于覆盖插件全局的末端正文转序号开关、样式和阈值。`leafNumberingStyle` 可选 `next-level` 或 `circled`：前者使用上级标题的下一层文章编号，并遵守八级标题编号边界；后者在逻辑编号与纯文本导出中保留第 1–50 项的 Unicode `①–㊿` 映射，第 51 项以后使用普通数字回退。文章、通读和 HTML 则始终以十进制索引配合 CSS 圆环显示，使全部序号使用同一字体、字重、尺寸和基线，同时继续支持六七十项及更多。阈值未达到时仍使用末端正文标识。自动结构可以继续深入到第 9 级及以后，但标题编号不会循环复用第 7、8 级的 `A.` / `（A）`；带圈末端序号则可在这些更深层级继续使用。
+阅读样式（兼容字段 `articleStyle`）还可保存 `leafNumberingEnabled`、`leafNumberingStyle` 与 `leafNumberingThreshold`，用于覆盖插件全局的末端正文转序号开关、样式和阈值。`leafNumberingStyle` 可选 `next-level` 或 `circled`：前者使用上级标题的下一层文章编号，并遵守八级标题编号边界；后者在逻辑编号与纯文本导出中保留第 1–50 项的 Unicode `①–㊿` 映射，第 51 项以后使用普通数字回退。文章、通读和 HTML 则始终以十进制索引配合 CSS 圆环显示，使全部序号使用同一字体、字重、尺寸和基线，同时继续支持六七十项及更多。阈值未达到时仍使用末端正文标识。自动结构可以继续深入到第 9 级及以后，但标题编号不会循环复用第 7、8 级的 `A.` / `（A）`；带圈末端序号则可在这些更深层级继续使用。
 
 ## 4. 有序内容块
 
