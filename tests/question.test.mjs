@@ -409,6 +409,8 @@ test("question fields insert and preview inline or display LaTeX across every qu
   ]);
   assert.match(formulaSource, /行内公式（可与文字混排）/);
   assert.match(formulaSource, /独立公式（单独一行）/);
+  assert.match(formulaSource, /normalizeFormulaEditorSource\(source\.value\)/);
+  assert.match(formulaSource, /normalizeLatexForMathJax\(value\)/);
   assert.match(formulaSource, /this\.submit\(\{ source: value, display: displayMode\.value === "display" \}\)/);
   assert.match(modalSource, /textarea\.addEventListener\("contextmenu"/);
   assert.match(modalSource, /setTitle\("插入 LaTeX 公式"\)/);
@@ -417,9 +419,13 @@ test("question fields insert and preview inline or display LaTeX across every qu
   assert.match(articleSource, /renderQuestionFieldValue[\s\S]*renderRichTextRuns\(part, block\.richText, block\.text\)/);
   assert.match(editorSource, /renderQuestionSummary[\s\S]*renderRichTextRuns\(part, block\.richText, block\.text\)/);
   assert.match(practiceSource, /renderRichText: QuestionPracticeOptions\["renderRichText"\]/);
+  const richTextSource = await readFile("src/editor/rich-text-dom.ts", "utf8");
+  assert.match(richTextSource, /const combinedText = sourceRuns\.map/);
+  assert.match(richTextSource, /splitLatexText\(combinedText\)/);
+  assert.match(richTextSource, /normalizeLatexForMathJax\(segment\.source\)/);
   assert.match(styles, /\.mms-question-field-preview\s*\{/);
-  assert.match(styles, /\.mms-node-math\s*\{[\s\S]*display: inline-flex !important;[\s\S]*width: auto !important;/);
-  assert.match(styles, /\.mms-node-math:not\(\.is-display\) mjx-container\s*\{[\s\S]*display: inline-block !important;[\s\S]*margin: 0 !important;/);
+  assert.match(styles, /\.mms-node-math:not\(\.is-display\),[\s\S]*mjx-container\.mms-node-math:not\(\.is-display\),[\s\S]*display: inline-block !important;/);
+  assert.match(styles, /\.mms-node-math:not\(\.is-display\) mjx-container\s*\{[\s\S]*width: auto !important;[\s\S]*margin: 0 !important;/);
   assert.match(styles, /\.mms-node-math\.is-display\s*\{[\s\S]*display: flex !important;[\s\S]*width: 100% !important;/);
   assert.match(styles, /\.mms-question-ai-process\s*\{/);
   assert.match(styles, /\.mms-question-ai-track\s*\{/);

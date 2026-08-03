@@ -1380,6 +1380,50 @@ export function resolveByteWindow( weights: readonly number[], targetIndex: numb
 export function resolveByteChunk( weights: readonly number[], edge: number, direction: "before" | "after", byteBudget = ARTICLE_RENDER_WINDOW_BYTES ): number
 ```
 
+## `src/core/latex.ts`
+
+LaTeX delimiter recovery and MathJax-safe source normalization.
+
+### 接口 `LatexTextSegment`
+
+源码：`src/core/latex.ts:7`
+
+参见源码中的实现和调用位置。
+
+```ts
+export interface LatexTextSegment
+```
+
+### 函数 `normalizeFormulaEditorSource`
+
+源码：`src/core/latex.ts:21`
+
+Removes accidental outer dollar delimiters from formula-editor input. The editor owns the inline/display choice, so pasted `$...$`, `$$...$$`, or legacy repeated delimiters must not be wrapped a second time.
+
+```ts
+export function normalizeFormulaEditorSource(value: string): string
+```
+
+### 函数 `normalizeLatexForMathJax`
+
+源码：`src/core/latex.ts:39`
+
+Converts unescaped CJK words in math mode into `\text{...}` groups. AI-generated formulas often contain readable labels such as `项数` or `中间项`. MathJax can reject these when they are emitted as bare TeX math characters, so the renderer wraps only the unprotected CJK runs while leaving existing text-like commands intact.
+
+```ts
+export function normalizeLatexForMathJax(value: string): string
+```
+
+### 函数 `splitLatexText`
+
+源码：`src/core/latex.ts:64`
+
+Splits a text block into plain-text and formula segments. Double-dollar formulas only use display layout when the whole text block contains that formula and whitespace. This recovers legacy content such as `通项公式：$$a_n=...$$` as inline math. Repeated or asymmetric dollar runs from older double-wrapping bugs are also recovered as inline formulas.
+
+```ts
+export function splitLatexText(value: string): LatexTextSegment[]
+```
+
 ## `src/core/model.ts`
 
 核心领域模型与序列化层。
@@ -3084,7 +3128,7 @@ export function isRightChildZone(pointer: DropPointer, rect: DropTargetRect): bo
 
 ### 类 `ImageHostPickerModal`
 
-源码：`src/editor/editor-modals.ts:22`
+源码：`src/editor/editor-modals.ts:23`
 
 选择一个或多个图片上传目标。
 
@@ -3094,7 +3138,7 @@ class ImageHostPickerModal extends Modal
 
 ### 构造函数 `ImageHostPickerModal.constructor`
 
-源码：`src/editor/editor-modals.ts:34`
+源码：`src/editor/editor-modals.ts:35`
 
 创建图床选择弹窗。
 
@@ -3104,7 +3148,7 @@ constructor( app: App, private readonly hosts: ImageHostChoice[], initialIds: st
 
 ### 方法 `ImageHostPickerModal.onOpen`
 
-源码：`src/editor/editor-modals.ts:47`
+源码：`src/editor/editor-modals.ts:48`
 
 创建图床多选列表。
 
@@ -3114,7 +3158,7 @@ onOpen(): void
 
 ### 方法 `ImageHostPickerModal.onClose`
 
-源码：`src/editor/editor-modals.ts:83`
+源码：`src/editor/editor-modals.ts:84`
 
 未确认时返回取消结果。
 
@@ -3124,7 +3168,7 @@ onClose(): void
 
 ### 函数 `chooseImageHosts`
 
-源码：`src/editor/editor-modals.ts:96`
+源码：`src/editor/editor-modals.ts:97`
 
 打开图床选择器，并过滤已经失效的默认 ID。
 
@@ -3134,7 +3178,7 @@ export function chooseImageHosts( app: App, hosts: ImageHostChoice[], initialIds
 
 ### 类 `ImagePreviewModal`
 
-源码：`src/editor/editor-modals.ts:115`
+源码：`src/editor/editor-modals.ts:116`
 
 提供图片缩放和滚轮预览。
 
@@ -3144,7 +3188,7 @@ export class ImagePreviewModal extends Modal
 
 ### 构造函数 `ImagePreviewModal.constructor`
 
-源码：`src/editor/editor-modals.ts:127`
+源码：`src/editor/editor-modals.ts:128`
 
 创建图片预览弹窗。
 
@@ -3154,7 +3198,7 @@ constructor( app: App, private readonly source: string, private readonly alt: st
 
 ### 方法 `ImagePreviewModal.onOpen`
 
-源码：`src/editor/editor-modals.ts:140`
+源码：`src/editor/editor-modals.ts:141`
 
 创建图片预览界面和缩放控制。
 
@@ -3164,7 +3208,7 @@ onOpen(): void
 
 ### 接口 `FormulaInsertValue`
 
-源码：`src/editor/editor-modals.ts:229`
+源码：`src/editor/editor-modals.ts:230`
 
 LaTeX 插入结果，display 为 true 时使用独立公式，false 时使用行内公式。
 
@@ -3174,7 +3218,7 @@ export interface FormulaInsertValue
 
 ### 类 `FormulaEditModal`
 
-源码：`src/editor/editor-modals.ts:237`
+源码：`src/editor/editor-modals.ts:238`
 
 图形化 LaTeX 公式编辑器，提供常用结构、行内/独立模式和实时预览。
 
@@ -3184,7 +3228,7 @@ export class FormulaEditModal extends Modal
 
 ### 构造函数 `FormulaEditModal.constructor`
 
-源码：`src/editor/editor-modals.ts:245`
+源码：`src/editor/editor-modals.ts:246`
 
 创建公式编辑器。
 
@@ -3194,7 +3238,7 @@ constructor( app: App, private readonly submit: (value: FormulaInsertValue) => v
 
 ### 方法 `FormulaEditModal.onOpen`
 
-源码：`src/editor/editor-modals.ts:256`
+源码：`src/editor/editor-modals.ts:257`
 
 创建公式模板、源码输入和 MathJax 预览。
 
@@ -3204,7 +3248,7 @@ onOpen(): void
 
 ### 方法 `FormulaEditModal.onClose`
 
-源码：`src/editor/editor-modals.ts:368`
+源码：`src/editor/editor-modals.ts:369`
 
 清理公式编辑器 DOM。
 
@@ -3214,7 +3258,7 @@ onClose(): void
 
 ### 类 `ImportExportModal`
 
-源码：`src/editor/editor-modals.ts:376`
+源码：`src/editor/editor-modals.ts:377`
 
 导入、导出或合并思维导图 JSON。
 
@@ -3224,7 +3268,7 @@ export class ImportExportModal extends Modal
 
 ### 构造函数 `ImportExportModal.constructor`
 
-源码：`src/editor/editor-modals.ts:385`
+源码：`src/editor/editor-modals.ts:386`
 
 创建 JSON 传输弹窗。
 
@@ -3234,7 +3278,7 @@ constructor( app: App, private readonly document: MindMapDocument, private reado
 
 ### 方法 `ImportExportModal.onOpen`
 
-源码：`src/editor/editor-modals.ts:403`
+源码：`src/editor/editor-modals.ts:404`
 
 创建 JSON 文本区和文件导入操作。
 
@@ -3244,7 +3288,7 @@ onOpen(): void
 
 ### 方法 `ImportExportModal.onClose`
 
-源码：`src/editor/editor-modals.ts:562`
+源码：`src/editor/editor-modals.ts:563`
 
 Clears import/export controls when the modal closes.
 
@@ -3254,7 +3298,7 @@ onClose(): void
 
 ### 类 `OutlineModal`
 
-源码：`src/editor/editor-modals.ts:570`
+源码：`src/editor/editor-modals.ts:571`
 
 显示只读 Markdown 大纲并提供复制和导出入口。
 
@@ -3264,7 +3308,7 @@ export class OutlineModal extends Modal
 
 ### 构造函数 `OutlineModal.constructor`
 
-源码：`src/editor/editor-modals.ts:578`
+源码：`src/editor/editor-modals.ts:579`
 
 创建 Markdown 大纲弹窗。
 
@@ -3274,7 +3318,7 @@ constructor(app: App, private readonly markdown: string, private readonly onExpo
 
 ### 方法 `OutlineModal.onOpen`
 
-源码：`src/editor/editor-modals.ts:585`
+源码：`src/editor/editor-modals.ts:586`
 
 创建大纲内容和操作按钮。
 
@@ -3284,7 +3328,7 @@ onOpen(): void
 
 ### 方法 `OutlineModal.onClose`
 
-源码：`src/editor/editor-modals.ts:606`
+源码：`src/editor/editor-modals.ts:607`
 
 清理大纲弹窗 DOM。
 
@@ -6668,7 +6712,7 @@ function normalizeJudgmentAnswer(value: string): boolean | null
 
 ### 函数 `ensureMathJax`
 
-源码：`src/editor/rich-text-dom.ts:23`
+源码：`src/editor/rich-text-dom.ts:24`
 
 确保 Obsidian 的 MathJax 运行时已加载。
 
@@ -6678,7 +6722,7 @@ export function ensureMathJax(): Promise<void>
 
 ### 函数 `styleEquals`
 
-源码：`src/editor/rich-text-dom.ts:36`
+源码：`src/editor/rich-text-dom.ts:37`
 
 判断两个字符样式是否等价。
 
@@ -6688,7 +6732,7 @@ function styleEquals(left: MindMapTextStyle | undefined, right: MindMapTextStyle
 
 ### 函数 `renderRichTextRuns`
 
-源码：`src/editor/rich-text-dom.ts:48`
+源码：`src/editor/rich-text-dom.ts:49`
 
 将富文本运行段渲染到 DOM，并按需处理 LaTeX。
 
@@ -6698,7 +6742,7 @@ export function renderRichTextRuns( container: HTMLElement, runs: MindMapTextRun
 
 ### 函数 `renderInlineMarkdown`
 
-源码：`src/editor/rich-text-dom.ts:119`
+源码：`src/editor/rich-text-dom.ts:127`
 
 Renders the supported inline Markdown formatting used in table cells.
 
@@ -6708,7 +6752,7 @@ export function renderInlineMarkdown(container: HTMLElement, markdown: string): 
 
 ### 函数 `styleFromElement`
 
-源码：`src/editor/rich-text-dom.ts:131`
+源码：`src/editor/rich-text-dom.ts:139`
 
 合并元素标签、内联样式与继承样式。
 
@@ -6718,7 +6762,7 @@ function styleFromElement(element: HTMLElement, inherited: MindMapTextStyle): Mi
 
 ### 函数 `readRichTextEditor`
 
-源码：`src/editor/rich-text-dom.ts:167`
+源码：`src/editor/rich-text-dom.ts:175`
 
 将 contenteditable DOM 解析回富文本运行段。
 

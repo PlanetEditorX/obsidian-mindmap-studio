@@ -4630,6 +4630,116 @@ var import_obsidian4 = require("obsidian");
 
 // src/editor/rich-text-dom.ts
 var import_obsidian3 = require("obsidian");
+
+// src/core/latex.ts
+function normalizeFormulaEditorSource(value) {
+  var _a2, _b2, _c, _d;
+  let source = value.trim();
+  const leading = (_b2 = (_a2 = source.match(/^\$+/)) == null ? void 0 : _a2[0].length) != null ? _b2 : 0;
+  const trailing = (_d = (_c = source.match(/\$+$/)) == null ? void 0 : _c[0].length) != null ? _d : 0;
+  if (leading > 0 && trailing > 0 && leading + trailing < source.length) {
+    source = source.slice(leading, source.length - trailing).trim();
+  }
+  return source;
+}
+function normalizeLatexForMathJax(value) {
+  const protectedGroups = [];
+  const protectedSource = value.replace(
+    /\\(?:text|textrm|textsf|texttt|mathrm|mathbf|mathit|operatorname)\{[^{}]*[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff][^{}]*\}/g,
+    (match) => {
+      const marker = `@@MMS_LATEX_TEXT_${protectedGroups.length}@@`;
+      protectedGroups.push(match);
+      return marker;
+    }
+  );
+  const normalized2 = protectedSource.replace(
+    /[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]+/g,
+    (match) => `\\text{${match}}`
+  );
+  return normalized2.replace(/@@MMS_LATEX_TEXT_(\d+)@@/g, (_match, index) => {
+    var _a2;
+    return (_a2 = protectedGroups[Number(index)]) != null ? _a2 : "";
+  });
+}
+function splitLatexText(value) {
+  const formulas = [];
+  let cursor = 0;
+  while (cursor < value.length) {
+    const start = value.indexOf("$", cursor);
+    if (start < 0) break;
+    let openerEnd = start;
+    while (value[openerEnd] === "$") openerEnd += 1;
+    const openerLength = openerEnd - start;
+    if (openerLength === 1) {
+      const lineEnd = value.indexOf("\n", openerEnd);
+      const searchEnd = lineEnd < 0 ? value.length : lineEnd;
+      let closing2 = value.indexOf("$", openerEnd);
+      while (closing2 >= 0 && closing2 < searchEnd && value[closing2 - 1] === "\\") {
+        closing2 = value.indexOf("$", closing2 + 1);
+      }
+      if (closing2 < 0 || closing2 >= searchEnd || closing2 === openerEnd) {
+        cursor = openerEnd;
+        continue;
+      }
+      let closingEnd2 = closing2;
+      while (value[closingEnd2] === "$") closingEnd2 += 1;
+      formulas.push({
+        type: "math",
+        start,
+        end: closingEnd2,
+        source: value.slice(openerEnd, closing2).trim(),
+        display: false
+      });
+      cursor = closingEnd2;
+      continue;
+    }
+    let closing = openerEnd;
+    let closingEnd = -1;
+    while (closing < value.length) {
+      closing = value.indexOf("$$", closing);
+      if (closing < 0) break;
+      closingEnd = closing;
+      while (value[closingEnd] === "$") closingEnd += 1;
+      if (closing > openerEnd) break;
+      closing = Math.max(closingEnd, closing + 2);
+    }
+    if (closing < 0 || closingEnd < 0 || closing <= openerEnd) {
+      cursor = openerEnd;
+      continue;
+    }
+    const source = value.slice(openerEnd, closing).trim();
+    if (!source) {
+      cursor = closingEnd;
+      continue;
+    }
+    const closerLength = closingEnd - closing;
+    const blockOnly = !value.slice(0, start).trim() && !value.slice(closingEnd).trim();
+    formulas.push({
+      type: "math",
+      start,
+      end: closingEnd,
+      source,
+      display: openerLength === 2 && closerLength === 2 && blockOnly
+    });
+    cursor = closingEnd;
+  }
+  if (!formulas.length) return [{ type: "text", start: 0, end: value.length, source: value, display: false }];
+  const result = [];
+  let offset = 0;
+  for (const formula of formulas) {
+    if (formula.start > offset) {
+      result.push({ type: "text", start: offset, end: formula.start, source: value.slice(offset, formula.start), display: false });
+    }
+    result.push(formula);
+    offset = formula.end;
+  }
+  if (offset < value.length) {
+    result.push({ type: "text", start: offset, end: value.length, source: value.slice(offset), display: false });
+  }
+  return result;
+}
+
+// src/editor/rich-text-dom.ts
 var mathJaxReady = false;
 var mathJaxLoading = null;
 function ensureMathJax() {
@@ -4643,7 +4753,6 @@ function styleEquals(left, right) {
   return JSON.stringify(left != null ? left : {}) === JSON.stringify(right != null ? right : {});
 }
 function renderRichTextRuns(container, runs, fallbackText, latex = true) {
-  var _a2;
   container.empty();
   const sourceRuns = (runs == null ? void 0 : runs.length) ? runs : [{ text: fallbackText }];
   const append = (text, style) => {
@@ -4666,7 +4775,21 @@ function renderRichTextRuns(container, runs, fallbackText, latex = true) {
     if (decorations.length) span.style.textDecorationLine = decorations.join(" ");
     if (style == null ? void 0 : style.color) span.style.color = style.color;
   };
-  const hasMath = latex && sourceRuns.some((run) => /(\$\$[\s\S]+?\$\$|\$[^$\n]+?\$)/.test(run.text));
+  const combinedText = sourceRuns.map((run) => run.text).join("");
+  const runRanges = sourceRuns.map((run, index) => ({
+    run,
+    start: sourceRuns.slice(0, index).reduce((total, item) => total + item.text.length, 0),
+    end: sourceRuns.slice(0, index + 1).reduce((total, item) => total + item.text.length, 0)
+  }));
+  const appendRange = (start, end) => {
+    for (const range of runRanges) {
+      const from = Math.max(start, range.start);
+      const to = Math.min(end, range.end);
+      if (to > from) append(combinedText.slice(from, to), range.run.style);
+    }
+  };
+  const segments = latex ? splitLatexText(combinedText) : [];
+  const hasMath = latex && segments.some((segment) => segment.type === "math");
   if (hasMath && !mathJaxReady) {
     sourceRuns.forEach((run) => append(run.text, run.style));
     void ensureMathJax().then(() => {
@@ -4676,32 +4799,25 @@ function renderRichTextRuns(container, runs, fallbackText, latex = true) {
     }).catch(() => void 0);
     return;
   }
+  if (!latex || !hasMath) {
+    sourceRuns.forEach((run) => append(run.text, run.style));
+    return;
+  }
   let renderedMath = false;
-  for (const run of sourceRuns) {
-    if (!latex) {
-      append(run.text, run.style);
+  for (const segment of segments) {
+    if (segment.type === "text") {
+      appendRange(segment.start, segment.end);
       continue;
     }
-    const pattern = /(\$\$[\s\S]+?\$\$|\$[^$\n]+?\$)/g;
-    let offset = 0;
-    for (const match of run.text.matchAll(pattern)) {
-      const index = (_a2 = match.index) != null ? _a2 : 0;
-      if (index > offset) append(run.text.slice(offset, index), run.style);
-      const token = match[0];
-      const display = token.startsWith("$$");
-      const source = token.slice(display ? 2 : 1, display ? -2 : -1).trim();
-      try {
-        const math = (0, import_obsidian3.renderMath)(source, display);
-        math.addClass("mms-node-math");
-        math.toggleClass("is-display", display);
-        container.appendChild(math);
-        renderedMath = true;
-      } catch (e) {
-        append(token, run.style);
-      }
-      offset = index + token.length;
+    try {
+      const math = (0, import_obsidian3.renderMath)(normalizeLatexForMathJax(segment.source), segment.display);
+      math.addClass("mms-node-math");
+      math.toggleClass("is-display", segment.display);
+      container.appendChild(math);
+      renderedMath = true;
+    } catch (e) {
+      appendRange(segment.start, segment.end);
     }
-    if (offset < run.text.length) append(run.text.slice(offset), run.style);
   }
   if (renderedMath) void (0, import_obsidian3.finishRenderMath)();
 }
@@ -6689,7 +6805,7 @@ var FormulaEditModal = class extends import_obsidian4.Modal {
     let previewToken = 0;
     const updatePreview = () => {
       const token = ++previewToken;
-      const value = source.value.trim();
+      const value = normalizeFormulaEditorSource(source.value);
       preview.empty();
       if (!value) {
         preview.createSpan({ cls: "setting-item-description", text: "\u516C\u5F0F\u9884\u89C8" });
@@ -6699,7 +6815,7 @@ var FormulaEditModal = class extends import_obsidian4.Modal {
         if (token !== previewToken || !preview.isConnected) return;
         preview.empty();
         try {
-          preview.appendChild((0, import_obsidian4.renderMath)(value, displayMode.value === "display"));
+          preview.appendChild((0, import_obsidian4.renderMath)(normalizeLatexForMathJax(value), displayMode.value === "display"));
           void (0, import_obsidian4.finishRenderMath)();
         } catch (e) {
           preview.createSpan({ cls: "mod-warning", text: "\u516C\u5F0F\u8BED\u6CD5\u6682\u65F6\u65E0\u6CD5\u6E32\u67D3" });
@@ -6738,7 +6854,7 @@ var FormulaEditModal = class extends import_obsidian4.Modal {
     actions.createEl("button", { text: "\u53D6\u6D88", attr: { type: "button" } }).addEventListener("click", () => this.close());
     const save = actions.createEl("button", { text: "\u63D2\u5165\u516C\u5F0F", cls: "mod-cta", attr: { type: "button" } });
     save.addEventListener("click", () => {
-      const value = source.value.trim();
+      const value = normalizeFormulaEditorSource(source.value);
       if (!value) {
         new import_obsidian4.Notice("\u8BF7\u5148\u8F93\u5165\u6216\u9009\u62E9\u4E00\u4E2A\u516C\u5F0F");
         return;
