@@ -320,7 +320,14 @@ export class MindMapStudioView extends TextFileView {
   }
 
   /**
-   * 打开map family search，并保持模型、界面和持久化状态的一致性。
+   * 从全局快捷键入口打开当前父子导图族搜索。公开边界让窗口捕获阶段在焦点不位于编辑器根节点时仍能可靠触发搜索。
+   */
+  openMapFamilySearchFromShortcut(): void {
+    void this.openMapFamilySearch();
+  }
+
+  /**
+   * 保存当前文件后打开当前父子导图族搜索，并把尚未落盘的编辑器文档作为当前文件索引快照。
    */
   private async openMapFamilySearch(): Promise<void> {
     const file = this.file;

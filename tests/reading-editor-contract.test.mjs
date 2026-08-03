@@ -72,11 +72,13 @@ test("global mode broadcasts discard delayed writes from non-initiating views", 
   assert.match(applyGlobal, /this\.setDisplayMode\(mode, false, false\)/);
 });
 
-test("global search keeps Ctrl/Cmd+Shift+F while map-family search uses Ctrl/Cmd+Alt+F", () => {
+test("Ctrl/Cmd+F opens map-family search while the configurable shortcut keeps global search independent", () => {
   const keydown = editorSource.match(/private handleKeydown\(event: KeyboardEvent\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
-  assert.match(keydown, /mod && event\.altKey && findKey && !event\.shiftKey/);
-  assert.doesNotMatch(keydown, /mod && event\.shiftKey && findKey && !event\.altKey/);
-  assert.match(editorSource, /搜索当前导图及全部子导图（Ctrl\/Cmd\+Alt\+F）/);
+  assert.match(keydown, /mod && findKey && !event\.shiftKey/);
+  assert.match(keydown, /event\.preventDefault\(\);[\s\S]*event\.stopPropagation\(\);[\s\S]*this\.openSearch\(\)/);
+  assert.match(editorSource, /搜索当前导图及全部子导图（Ctrl\/Cmd\+F）/);
+  assert.match(mainSource, /matchesRecordedShortcut\(event, this\.settings\.globalSearchShortcut\)[\s\S]*activeView instanceof MindMapStudioView[\s\S]*isPlainFindShortcut\(event\)[\s\S]*activeView\.openMapFamilySearchFromShortcut\(\)/);
+  assert.match(viewSource, /openMapFamilySearchFromShortcut\(\): void \{[\s\S]*this\.openMapFamilySearch\(\)/);
 });
 
 test("programmatic scroll restoration cannot feed back into reading capture", () => {
