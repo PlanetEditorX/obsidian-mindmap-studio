@@ -164,3 +164,21 @@ test("fit-to-view and bulk collapse use smooth viewport interpolation", () => {
   assert.match(editorSource, /prefers-reduced-motion: reduce/);
   assert.match(editorSource, /if \(collapsed && this\.currentMode === "mindmap"\)[\s\S]*this\.fitToView\(true\)/);
 });
+
+test("toolbar removes the redundant open-link command and native white tooltips", () => {
+  assert.doesNotMatch(settingsSource, /\["link", "打开链接"\]/);
+  assert.doesNotMatch(editorSource, /打开节点链接|openSelectedLink|setTitle\("打开链接"\)/);
+
+  const addToolbarButton = editorSource.match(/private addToolbarButton\([\s\S]*?\n  \}/)?.[0] ?? "";
+  assert.match(addToolbarButton, /"aria-label": label/);
+  assert.doesNotMatch(addToolbarButton, /title:/);
+  assert.doesNotMatch(editorSource, /button\.setAttr\("title", label\)/);
+  assert.doesNotMatch(editorSource, /this\.aiButton\.setAttr\("title"/);
+  assert.match(editorSource, /button\.removeAttribute\("title"\)/);
+});
+
+test("collapse controls and fit-to-view are visible only in mind-map mode", () => {
+  const updateModeUi = editorSource.match(/private updateModeUi\(\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
+  assert.match(updateModeUi, /for \(const id of \["collapse", "collapse-all", "fit"\] as const\)/);
+  assert.match(updateModeUi, /this\.currentMode !== "mindmap" \|\| !this\.options\.visibleToolbarItems\.includes\(id\)/);
+});

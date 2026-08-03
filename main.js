@@ -2038,7 +2038,6 @@ var TOOLBAR_ITEMS = [
   ["task", "\u4EFB\u52A1\u72B6\u6001"],
   ["collapse", "\u5C55\u5F00/\u6536\u8D77"],
   ["collapse-all", "\u5C55\u5F00/\u6298\u53E0\u5168\u90E8"],
-  ["link", "\u6253\u5F00\u94FE\u63A5"],
   ["search", "\u641C\u7D22\u5BFC\u56FE"],
   ["global-search", "\u5168\u5C40\u641C\u7D22"],
   ["ai", "\u8BE2\u95EE AI"],
@@ -5249,6 +5248,20 @@ function articleChildStartLevel(root, baseDepth = 0) {
 }
 function articleTocDepth(entry) {
   return Number.isFinite(entry.tocDepth) ? Math.max(1, Math.floor(entry.tocDepth)) : 1;
+}
+function reconcileReadingNodeInfo(info, entry) {
+  if (!entry) return info;
+  return {
+    ...info,
+    depth: entry.depth,
+    label: entry.label,
+    title: entry.title || info.title,
+    displayTitle: entry.displayTitle || info.displayTitle,
+    isHeading: true,
+    numberedLeaf: false,
+    leafNumberingStyle: void 0,
+    leafNumberingIndex: void 0
+  };
 }
 function resolveArticleTocMaxDepth(documentOverride, pluginDefault) {
   const source = typeof documentOverride === "number" && Number.isFinite(documentOverride) ? documentOverride : pluginDefault;
@@ -11870,7 +11883,7 @@ var MindMapEditor = class {
     for (const mode of this.options.visibleModes) {
       const button = modeGroup.createEl("button", {
         cls: "mms-mode-button",
-        attr: { type: "button", title: `${DISPLAY_MODE_LABELS[mode]}\u6A21\u5F0F` }
+        attr: { type: "button", "aria-label": `${DISPLAY_MODE_LABELS[mode]}\u6A21\u5F0F` }
       });
       (0, import_obsidian11.setIcon)(button, DISPLAY_MODE_ICONS[mode]);
       button.createSpan({ text: DISPLAY_MODE_LABELS[mode] });
@@ -11888,7 +11901,6 @@ var MindMapEditor = class {
     this.addToolbarButton("task", "circle-check-big", "\u5207\u6362\u4EFB\u52A1\u72B6\u6001\uFF08Ctrl/Cmd+Enter\uFF09", () => this.cycleTask(), true);
     this.addToolbarButton("collapse", "fold-vertical", "\u5C55\u5F00/\u6536\u8D77\u8282\u70B9", () => this.toggleCollapse(), true);
     this.addToolbarButton("collapse-all", "chevrons-up-down", "\u5C55\u5F00/\u6298\u53E0\u5168\u90E8\u5B50\u9879", () => this.toggleAllNodesCollapsed());
-    this.addToolbarButton("link", "link", "\u6253\u5F00\u8282\u70B9\u94FE\u63A5", () => this.openSelectedLink());
     this.addToolbarButton("search", "search", "\u641C\u7D22\u5F53\u524D\u5BFC\u56FE\u53CA\u5168\u90E8\u5B50\u5BFC\u56FE\uFF08Ctrl/Cmd+Alt+F\uFF09", () => this.openSearch());
     this.addToolbarButton("global-search", "file-search", "\u5168\u5C40\u641C\u7D22\u6240\u6709\u5BFC\u56FE", () => this.callbacks.onGlobalSearch());
     this.aiButton = this.addToolbarButton("ai", "sparkles", "\u8BE2\u95EE AI\uFF08\u5F53\u524D\u9875\u9762\uFF0CCtrl/Cmd+Shift+A\uFF09", () => this.askAi());
@@ -11919,7 +11931,7 @@ var MindMapEditor = class {
     const spacer = this.toolbarEl.createSpan({ cls: "mmc-toolbar-spacer" });
     spacer.setAttr("aria-hidden", "true");
     const zoomControl = this.toolbarEl.createDiv({ cls: "mmc-zoom-control" });
-    const zoomOut = zoomControl.createEl("button", { cls: "clickable-icon mmc-zoom-step", attr: { type: "button", title: "\u7F29\u5C0F", "aria-label": "\u7F29\u5C0F" } });
+    const zoomOut = zoomControl.createEl("button", { cls: "clickable-icon mmc-zoom-step", attr: { type: "button", "aria-label": "\u7F29\u5C0F" } });
     (0, import_obsidian11.setIcon)(zoomOut, "minus");
     zoomOut.addEventListener("click", () => {
       this.setZoom(this.zoom / 1.15);
@@ -11927,7 +11939,7 @@ var MindMapEditor = class {
     });
     this.zoomStatusEl = zoomControl.createEl("input", {
       cls: "mmc-zoom-status mmc-zoom-input",
-      attr: { type: "text", inputmode: "decimal", title: "\u8F93\u5165\u7F29\u653E\u767E\u5206\u6BD4", "aria-label": "\u8F93\u5165\u7F29\u653E\u767E\u5206\u6BD4" }
+      attr: { type: "text", inputmode: "decimal", "aria-label": "\u8F93\u5165\u7F29\u653E\u767E\u5206\u6BD4" }
     });
     this.zoomStatusEl.value = "100%";
     this.zoomStatusEl.addEventListener("change", () => this.applyZoomInput());
@@ -11940,7 +11952,7 @@ var MindMapEditor = class {
         this.zoomStatusEl.blur();
       }
     });
-    const zoomIn = zoomControl.createEl("button", { cls: "clickable-icon mmc-zoom-step", attr: { type: "button", title: "\u653E\u5927", "aria-label": "\u653E\u5927" } });
+    const zoomIn = zoomControl.createEl("button", { cls: "clickable-icon mmc-zoom-step", attr: { type: "button", "aria-label": "\u653E\u5927" } });
     (0, import_obsidian11.setIcon)(zoomIn, "plus");
     zoomIn.addEventListener("click", () => {
       this.setZoom(this.zoom * 1.15);
@@ -12221,7 +12233,7 @@ var MindMapEditor = class {
       button.toggleClass("is-active", mode === this.currentMode);
       button.toggleClass("is-loading", loading);
       button.setAttr("aria-label", label);
-      button.setAttr("title", label);
+      button.removeAttribute("title");
       if (loading) button.setAttribute("aria-busy", "true");
       else button.removeAttribute("aria-busy");
     }
@@ -12233,14 +12245,16 @@ var MindMapEditor = class {
       "is-hidden",
       this.currentMode !== "mindmap" || !this.options.visibleToolbarItems.includes("submap")
     );
-    (_b2 = this.toolbarEl.querySelector("[data-toolbar-id='collapse-all']")) == null ? void 0 : _b2.toggleClass(
-      "is-hidden",
-      this.currentMode !== "mindmap" || !this.options.visibleToolbarItems.includes("collapse-all")
-    );
+    for (const id of ["collapse", "collapse-all", "fit"]) {
+      (_b2 = this.toolbarEl.querySelector(`[data-toolbar-id='${id}']`)) == null ? void 0 : _b2.toggleClass(
+        "is-hidden",
+        this.currentMode !== "mindmap" || !this.options.visibleToolbarItems.includes(id)
+      );
+    }
     if (hasLandingChoice) {
       const showingArticle = ((_c = this.document.view) == null ? void 0 : _c.articleLandingMode) === "article";
       this.articleLandingButton.setAttr("aria-label", showingArticle ? "\u663E\u793A\u76EE\u5F55" : "\u663E\u793A\u539F\u59CB\u6587\u7AE0");
-      this.articleLandingButton.setAttr("title", showingArticle ? "\u663E\u793A\u76EE\u5F55" : "\u663E\u793A\u539F\u59CB\u6587\u7AE0");
+      this.articleLandingButton.removeAttribute("title");
       this.articleLandingButton.empty();
       (0, import_obsidian11.setIcon)(this.articleLandingButton, showingArticle ? "list-tree" : "file-text");
       this.articleLandingButton.toggleClass("is-active", showingArticle);
@@ -12248,7 +12262,7 @@ var MindMapEditor = class {
     this.lockButton.empty();
     (0, import_obsidian11.setIcon)(this.lockButton, this.readOnly ? "lock" : "lock-open");
     this.lockButton.setAttr("aria-label", this.readOnly ? "\u5F53\u524D\u4E3A\u9605\u8BFB\u6A21\u5F0F\uFF0C\u70B9\u51FB\u5207\u6362\u5230\u7F16\u8F91\u6A21\u5F0F" : "\u5F53\u524D\u53EF\u7F16\u8F91\uFF0C\u70B9\u51FB\u5207\u6362\u5230\u9605\u8BFB\u6A21\u5F0F");
-    this.lockButton.setAttr("title", this.readOnly ? "\u9605\u8BFB\u6A21\u5F0F" : "\u7F16\u8F91\u6A21\u5F0F");
+    this.lockButton.removeAttribute("title");
     this.lockButton.toggleClass("is-active", this.readOnly);
     this.rootEl.toggleClass("is-read-only", this.readOnly);
     this.rootEl.toggleClass("is-reading", this.readOnly);
@@ -12282,7 +12296,7 @@ var MindMapEditor = class {
     const node = this.aiScopeNodeId ? findNode(this.document.root, this.aiScopeNodeId) : null;
     const label = node ? `\u8BE2\u95EE AI\uFF08\u8282\u70B9\u5206\u652F\uFF1A${nodePlainText(node) || "\u672A\u547D\u540D\u8282\u70B9"}\uFF09` : "\u8BE2\u95EE AI\uFF08\u5F53\u524D\u9875\u9762\uFF0CCtrl/Cmd+Shift+A\uFF09";
     this.aiButton.setAttr("aria-label", label);
-    this.aiButton.setAttr("title", label);
+    this.aiButton.removeAttribute("title");
     this.aiButton.toggleClass("has-node-scope", Boolean(node));
   }
   /**
@@ -12296,7 +12310,7 @@ var MindMapEditor = class {
    * @returns 当前操作生成、查找或规范化后的结果。
    */
   addToolbarButton(id, icon, label, action, editOnly = false) {
-    const button = this.toolbarEl.createEl("button", { cls: "clickable-icon mmc-toolbar-button", attr: { "aria-label": label, title: label, type: "button" } });
+    const button = this.toolbarEl.createEl("button", { cls: "clickable-icon mmc-toolbar-button", attr: { "aria-label": label, type: "button" } });
     button.dataset.toolbarId = id;
     (0, import_obsidian11.setIcon)(button, icon);
     button.toggleClass("is-hidden", !this.options.visibleToolbarItems.includes(id));
@@ -15348,6 +15362,9 @@ var MindMapEditor = class {
     const tocEntries = this.options.readingTocEntries.filter(
       (entry) => articleTocDepth(entry) <= articleTocMaxDepth && contentPaths.has(entry.filePath)
     );
+    const readingEntryByNode = new Map(
+      this.options.readingTocEntries.filter((entry) => Boolean(entry.nodeId)).map((entry) => [`${entry.filePath}\0${entry.nodeId}`, entry])
+    );
     const toc = page.createEl("nav", { cls: "mms-article-toc mms-reading-toc" });
     toc.createEl("h2", { text: "\u5168\u4E66\u76EE\u5F55" });
     const tocList = toc.createEl("ol");
@@ -15389,7 +15406,11 @@ var MindMapEditor = class {
       const chapterTitleBlock = nodeContentBlocks(section.document.root).find((block) => block.type === "text");
       renderRichTextRuns(chapterTitle, chapterTitleBlock == null ? void 0 : chapterTitleBlock.richText, (_d = chapterTitleBlock == null ? void 0 : chapterTitleBlock.text) != null ? _d : (sectionEntry == null ? void 0 : sectionEntry.displayTitle) || section.document.title);
       this.renderArticleContent(chapter, section.document.root, false);
-      for (const info of buildReadingArticleNodeInfo(section.document.root, section.baseDepth, { enabled: this.options.articleLeafNumberingEnabled, threshold: this.options.articleLeafNumberingThreshold, style: this.options.articleLeafNumberingStyle })) {
+      for (const localInfo of buildReadingArticleNodeInfo(section.document.root, section.baseDepth, { enabled: this.options.articleLeafNumberingEnabled, threshold: this.options.articleLeafNumberingThreshold, style: this.options.articleLeafNumberingStyle })) {
+        const info = reconcileReadingNodeInfo(
+          localInfo,
+          readingEntryByNode.get(`${section.filePath}\0${localInfo.node.id}`)
+        );
         const nodeSection = chapter.createEl("section", { cls: `mms-article-node depth-${Math.min(info.depth, 8)}` });
         nodeSection.dataset.nodeId = info.node.id;
         nodeSection.dataset.filePath = section.filePath;
@@ -15780,19 +15801,6 @@ var MindMapEditor = class {
         this.selectedId = (_b3 = (_a3 = clones[clones.length - 1]) == null ? void 0 : _a3.id) != null ? _b3 : selected.id;
       });
     }
-  }
-  /**
-   * 打开selected link，并保持模型、界面和持久化状态的一致性。
-   */
-  openSelectedLink() {
-    const selected = this.selectedNode();
-    if (!selected) return;
-    const link = this.getNodeLink(selected);
-    if (!link) {
-      new import_obsidian11.Notice("\u5F53\u524D\u8282\u70B9\u6CA1\u6709\u94FE\u63A5\uFF1B\u53EF\u6309 F2 \u6DFB\u52A0\u94FE\u63A5\u6216\u5728\u6587\u5B57\u4E2D\u5199\u5165 [[\u7B14\u8BB0\u540D]]");
-      return;
-    }
-    void this.callbacks.onOpenLink(link);
   }
   /**
    * 判断parent navigation backlink，并保持模型、界面和持久化状态的一致性。
@@ -16253,7 +16261,6 @@ var MindMapEditor = class {
     menu.addSeparator();
     if (this.readOnly) {
       if (selected == null ? void 0 : selected.submap) menu.addItem((item) => item.setTitle("\u8FDB\u5165\u5B50\u5BFC\u56FE").setIcon("network").onClick(() => void this.createOrOpenSubmap()));
-      menu.addItem((item) => item.setTitle("\u6253\u5F00\u94FE\u63A5").setIcon("link").onClick(() => this.openSelectedLink()));
       menu.addItem((item) => item.setTitle("\u590D\u5236\u5206\u652F").setIcon("copy").onClick(() => void this.copySelectedBranch()));
       menu.showAtMouseEvent(event);
       return;
@@ -16323,7 +16330,6 @@ var MindMapEditor = class {
       });
     }));
     menu.addItem((item) => item.setTitle("\u5C55\u5F00/\u6536\u8D77").setIcon("fold-vertical").onClick(() => this.toggleCollapse()));
-    menu.addItem((item) => item.setTitle("\u6253\u5F00\u94FE\u63A5").setIcon("link").onClick(() => this.openSelectedLink()));
     if ((selected == null ? void 0 : selected.id) !== this.document.root.id) {
       menu.addSeparator();
       menu.addItem((item) => item.setTitle("\u5220\u9664\u8282\u70B9").setIcon("trash-2").onClick(() => this.deleteSelected()));
