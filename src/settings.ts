@@ -373,6 +373,8 @@ export interface MindMapStudioSettings {
   readingLocations: Record<string, ReadingLocation>;
   articleTocMaxDepth: number;
   showArticleMiniMap: boolean;
+  /** Shows the lower-right article-family parsing progress in article and reading modes. */
+  showArticleContextProgress: boolean;
   /** Enables Markdown-style collapse controls for article and continuous-reading headings. */
   articleSectionCollapseEnabled: boolean;
   /** Shows a bullet before unnumbered terminal article paragraphs. */
@@ -516,6 +518,7 @@ export const DEFAULT_SETTINGS: MindMapStudioSettings = {
   readingLocations: {},
   articleTocMaxDepth: 3,
   showArticleMiniMap: true,
+  showArticleContextProgress: false,
   articleSectionCollapseEnabled: false,
   articleLeafBulletsEnabled: false,
   articleLeafBulletColor: "",
@@ -965,6 +968,16 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
         .setValue(this.plugin.settings.showArticleMiniMap)
         .onChange(async (value) => {
           this.plugin.settings.showArticleMiniMap = value;
+          await this.saveAndRefresh();
+        }));
+
+    new Setting(containerEl)
+      .setName("显示右下角加载进度")
+      .setDesc("在文章和通读模式解析父子导图、目录和章节索引时显示阶段进度；关闭后仍正常加载，只隐藏右下角提示。默认关闭。")
+      .addToggle((toggle) => toggle
+        .setValue(this.plugin.settings.showArticleContextProgress)
+        .onChange(async (value) => {
+          this.plugin.settings.showArticleContextProgress = value;
           await this.saveAndRefresh();
         }));
 

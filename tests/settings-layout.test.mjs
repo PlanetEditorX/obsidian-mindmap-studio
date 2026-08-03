@@ -249,3 +249,14 @@ test("toolbar keeps capture actions together and merges every export entry at th
   assert.match(modalSource, /\["svg", "SVG"[\s\S]*\["html", "HTML"[\s\S]*\["doc", "Word"[\s\S]*\["pdf", "PDF"[\s\S]*\["md", "Markdown"/);
   assert.doesNotMatch(modalSource, /export class DocumentExportModal/);
 });
+
+
+test("article context progress is opt-in and grouped with view and reading settings", () => {
+  const viewSection = settingsSource.indexOf('containerEl.createEl("h3", { text: "视图与阅读" })');
+  const progressSetting = settingsSource.indexOf('.setName("显示右下角加载进度")', viewSection);
+  const toolbarSection = settingsSource.indexOf('containerEl.createEl("h3", { text: "工具栏" })');
+  assert.ok(viewSection >= 0 && progressSetting > viewSection && progressSetting < toolbarSection);
+  assert.match(settingsSource, /showArticleContextProgress: false/);
+  assert.match(mainSource, /showArticleContextProgress: raw\.showArticleContextProgress === true/);
+  assert.match(editorSource, /this\.options\.showArticleContextProgress === true[\s\S]*currentMode === "article"[\s\S]*currentMode === "reading"/);
+});

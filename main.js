@@ -2204,6 +2204,7 @@ var DEFAULT_SETTINGS = {
   readingLocations: {},
   articleTocMaxDepth: 3,
   showArticleMiniMap: true,
+  showArticleContextProgress: false,
   articleSectionCollapseEnabled: false,
   articleLeafBulletsEnabled: false,
   articleLeafBulletColor: "",
@@ -2535,6 +2536,10 @@ var MindMapStudioSettingTab = class extends import_obsidian.PluginSettingTab {
     });
     new import_obsidian.Setting(containerEl).setName("\u6587\u7AE0/\u901A\u8BFB\u7F29\u7565\u5BFC\u822A\u56FE").setDesc("\u5728\u6587\u7AE0\u548C\u901A\u8BFB\u6A21\u5F0F\u53F3\u4E0A\u89D2\u663E\u793A\u7ED3\u6784\u7F29\u7565\u56FE\uFF1B\u70B9\u51FB\u53EF\u5FEB\u901F\u8DF3\u8F6C\uFF0C\u5F53\u524D\u7AE0\u8282\u4F1A\u9AD8\u4EAE\u3002\u5BFC\u822A\u56FE\u6CBF\u7528\u6587\u7AE0\u76EE\u5F55\u5C42\u7EA7\uFF0C\u5E76\u4F1A\u5728\u7A7A\u95F2 10 \u79D2\u540E\u81EA\u52A8\u9690\u85CF\u3002\u5F53\u524D\u8111\u56FE\u53EF\u5728\u201C\u4E3B\u9898\u4E0E\u5916\u89C2\u201D\u4E2D\u5355\u72EC\u8986\u76D6\u3002").addToggle((toggle) => toggle.setValue(this.plugin.settings.showArticleMiniMap).onChange(async (value) => {
       this.plugin.settings.showArticleMiniMap = value;
+      await this.saveAndRefresh();
+    }));
+    new import_obsidian.Setting(containerEl).setName("\u663E\u793A\u53F3\u4E0B\u89D2\u52A0\u8F7D\u8FDB\u5EA6").setDesc("\u5728\u6587\u7AE0\u548C\u901A\u8BFB\u6A21\u5F0F\u89E3\u6790\u7236\u5B50\u5BFC\u56FE\u3001\u76EE\u5F55\u548C\u7AE0\u8282\u7D22\u5F15\u65F6\u663E\u793A\u9636\u6BB5\u8FDB\u5EA6\uFF1B\u5173\u95ED\u540E\u4ECD\u6B63\u5E38\u52A0\u8F7D\uFF0C\u53EA\u9690\u85CF\u53F3\u4E0B\u89D2\u63D0\u793A\u3002\u9ED8\u8BA4\u5173\u95ED\u3002").addToggle((toggle) => toggle.setValue(this.plugin.settings.showArticleContextProgress).onChange(async (value) => {
+      this.plugin.settings.showArticleContextProgress = value;
       await this.saveAndRefresh();
     }));
     new import_obsidian.Setting(containerEl).setName("\u6587\u7AE0\u6807\u9898\u53EF\u6298\u53E0").setDesc("\u5728\u6587\u7AE0\u548C\u901A\u8BFB\u6A21\u5F0F\u7684\u7AE0\u8282\u6807\u9898\u524D\u663E\u793A\u6298\u53E0\u6309\u94AE\uFF1B\u6298\u53E0\u540E\u9690\u85CF\u8BE5\u6807\u9898\u4E0B\u7684\u5B50\u6807\u9898\u548C\u6B63\u6587\uFF0C\u884C\u4E3A\u7C7B\u4F3C Markdown \u6807\u9898\u6298\u53E0\u3002").addToggle((toggle) => toggle.setValue(this.plugin.settings.articleSectionCollapseEnabled).onChange(async (value) => {
@@ -11499,7 +11504,7 @@ var MindMapEditor = class {
   renderArticleContextLoadingProgress() {
     var _a2, _b2, _c, _d, _e;
     if (!this.rootEl) return;
-    const visibleMode = this.currentMode === "article" || this.currentMode === "reading";
+    const visibleMode = this.options.showArticleContextProgress === true && (this.currentMode === "article" || this.currentMode === "reading");
     const progress = this.articleContextLoadingProgress;
     if (!visibleMode || !progress) {
       (_a2 = this.articleContextLoadingEl) == null ? void 0 : _a2.remove();
@@ -18929,6 +18934,7 @@ var MindMapStudioView = class extends import_obsidian13.TextFileView {
       articleTocEntries: [...this.articleTocEntries],
       articleTocMaxDepth: this.plugin.settings.articleTocMaxDepth,
       showArticleMiniMap: this.plugin.settings.showArticleMiniMap,
+      showArticleContextProgress: this.plugin.settings.showArticleContextProgress,
       articleSectionCollapseEnabled: this.plugin.settings.articleSectionCollapseEnabled,
       articleLeafBulletsEnabled: (_i = (_h = (_g = this.document) == null ? void 0 : _g.articleStyle) == null ? void 0 : _h.leafMarkerEnabled) != null ? _i : this.plugin.settings.articleLeafBulletsEnabled,
       articleLeafBulletColor: (_l = (_k = (_j = this.document) == null ? void 0 : _j.articleStyle) == null ? void 0 : _k.leafMarkerColor) != null ? _l : this.plugin.settings.articleLeafBulletColor,
@@ -19515,6 +19521,23 @@ var MindMapSearchIndex = class {
     this.fileTimers.set(file.path, timer);
   }
   /**
+   * 立即重建单个导图文件的搜索条目并持久化索引。批量替换等已知写入流程
+   * 使用该入口，避免等待文件监听器的延迟队列而继续显示旧结果。
+   *
+   * @param file 刚刚完成持久化的思维导图文件。
+   */
+  async refreshFile(file) {
+    if (file.extension.toLocaleLowerCase() !== this.extension) return;
+    const previous = this.fileTimers.get(file.path);
+    if (previous !== void 0) {
+      window.clearTimeout(previous);
+      this.fileTimers.delete(file.path);
+    }
+    await this.indexFile(file);
+    this.data.generatedAt = (/* @__PURE__ */ new Date()).toISOString();
+    await this.saveNow();
+  }
+  /**
    * 删除file，并保持模型、界面和持久化状态的一致性。
    *
    * @param path 仓库内目标路径。
@@ -19811,7 +19834,8 @@ var GlobalMindMapSearchModal = class extends import_obsidian14.Modal {
       render();
     });
     replaceAllBtn.addEventListener("click", async () => {
-      if (!this.renderedResults.length) return;
+      const query = this.inputEl.value.trim();
+      if (!query || !this.renderedResults.length) return;
       if (!this.onReplaceAll) {
         new import_obsidian14.Notice("\u5F53\u524D\u6A21\u5F0F\u4E0D\u652F\u6301\u66FF\u6362\u64CD\u4F5C\u3002");
         return;
@@ -19819,18 +19843,20 @@ var GlobalMindMapSearchModal = class extends import_obsidian14.Modal {
       replaceAllBtn.disabled = true;
       replaceAllBtn.setText("\u66FF\u6362\u4E2D\u2026");
       try {
-        const count = await this.onReplaceAll(this.renderedResults, this.inputEl.value, this.replaceInputEl.value.trim(), this.useRegex);
+        const allResults = this.index.search(query, Number.MAX_SAFE_INTEGER, this.scopePaths, this.useRegex);
+        const count = await this.onReplaceAll(allResults, query, this.replaceInputEl.value, this.useRegex);
         if (!count) {
-          new import_obsidian14.Notice("\u8282\u70B9\u6587\u5B57\u6216\u5907\u6CE8\u4E2D\u672A\u627E\u5230\u5339\u914D\uFF0C\u672A\u4F5C\u66FF\u6362");
+          new import_obsidian14.Notice("\u8282\u70B9\u6587\u5B57\u4E2D\u672A\u627E\u5230\u53EF\u66FF\u6362\u7684\u5339\u914D");
           return;
         }
-        new import_obsidian14.Notice(`\u5DF2\u66FF\u6362 ${count} \u4E2A\u8282\u70B9\uFF0C\u6B63\u5728\u91CD\u5EFA\u7D22\u5F15\u2026`);
+        new import_obsidian14.Notice(`\u5DF2\u66FF\u6362 ${count} \u4E2A\u8282\u70B9\uFF0C\u6B63\u5728\u66F4\u65B0\u641C\u7D22\u7D22\u5F15\u2026`);
         this.renderedResults = [];
-        this.summaryEl.setText("\u5DF2\u66FF\u6362\u6240\u6709\u5339\u914D\u8282\u70B9\u3002\u8BF7\u91CD\u65B0\u641C\u7D22\u4EE5\u5237\u65B0\u7ED3\u679C\u3002");
+        this.summaryEl.setText(`\u5DF2\u66FF\u6362\u5168\u90E8 ${count} \u4E2A\u5339\u914D\u8282\u70B9\u3002`);
         this.resultsEl.empty();
-        this.resultsEl.createDiv({ cls: "mms-global-search-empty", text: "\u5DF2\u66FF\u6362\u6240\u6709\u5339\u914D\u8282\u70B9\uFF0C\u8BF7\u8F93\u5165\u65B0\u5173\u952E\u8BCD\u641C\u7D22\u3002" });
+        this.resultsEl.createDiv({ cls: "mms-global-search-empty", text: "\u5168\u90E8\u5339\u914D\u5DF2\u66FF\u6362\uFF0C\u8BF7\u8F93\u5165\u5173\u952E\u8BCD\u91CD\u65B0\u641C\u7D22\u3002" });
       } finally {
         replaceAllBtn.disabled = false;
+        replaceAllBtn.setText("");
         (0, import_obsidian14.setIcon)(replaceAllBtn, "check-check");
       }
     });
@@ -19919,7 +19945,7 @@ var GlobalMindMapSearchModal = class extends import_obsidian14.Modal {
       replaceOneBtn.createSpan({ text: "\u66FF\u6362\u6B64\u8282\u70B9" });
       replaceOneBtn.addEventListener("click", async (event) => {
         event.stopPropagation();
-        const replacement = this.replaceInputEl.value.trim();
+        const replacement = this.replaceInputEl.value;
         if (!this.onReplaceAll) {
           new import_obsidian14.Notice("\u5F53\u524D\u6A21\u5F0F\u4E0D\u652F\u6301\u66FF\u6362\u64CD\u4F5C\u3002");
           return;
@@ -21925,6 +21951,13 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
       }
     };
     let modifiedCount = 0;
+    this.logDebug("global-search", "replace-all-start", {
+      resultCount: results.length,
+      fileCount: byFile.size,
+      queryLength: replaceQ.length,
+      replacementLength: replacement.length,
+      useRegex
+    });
     for (const [filePath, fileResults] of byFile) {
       const file = this.app.vault.getAbstractFileByPath(filePath);
       if (!(file instanceof import_obsidian16.TFile)) continue;
@@ -21971,11 +22004,19 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
           if (expectedNode.note !== persistedNode.note) continue;
           modifiedCount += 1;
         }
+        await this.searchIndex.refreshFile(file);
         await this.refreshOpenMindMap(file, persisted);
+        this.logDebug("global-search", "replace-all-file-complete", {
+          filePath,
+          requestedNodes: nodeIds.size,
+          changedNodes: changedNodeIds.size
+        });
       } catch (err2) {
+        this.logDebug("global-search", "replace-all-file-failed", { filePath, error: err2 });
         console.warn(`MindMap Studio could not replace in ${filePath}:`, err2);
       }
     }
+    this.logDebug("global-search", "replace-all-complete", { modifiedCount, fileCount: byFile.size });
     return modifiedCount;
   }
   /** Writes one structured event into the current in-memory diagnostic session. */
@@ -22236,6 +22277,7 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
       })) : {},
       articleTocMaxDepth: typeof raw.articleTocMaxDepth === "number" ? Math.max(1, Math.min(8, Math.round(raw.articleTocMaxDepth))) : DEFAULT_SETTINGS.articleTocMaxDepth,
       showArticleMiniMap: raw.showArticleMiniMap !== false,
+      showArticleContextProgress: raw.showArticleContextProgress === true,
       articleSectionCollapseEnabled: raw.articleSectionCollapseEnabled === true,
       articleLeafBulletsEnabled: raw.articleLeafBulletsEnabled === true,
       articleLeafBulletColor: typeof raw.articleLeafBulletColor === "string" && /^#[0-9a-f]{6}$/i.test(raw.articleLeafBulletColor) ? raw.articleLeafBulletColor : "",

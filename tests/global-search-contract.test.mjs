@@ -33,3 +33,11 @@ test("global search indexes only node text while displaying the result file cont
   assert.match(styles, /\.mms-global-search-result-path \{[\s\S]*text-overflow: ellipsis/);
   assert.doesNotMatch(styles, /mms-global-search-badge/);
 });
+
+
+test("replace all searches the complete active scope instead of the capped visible result list", () => {
+  assert.match(source, /const allResults = this\.index\.search\(query, Number\.MAX_SAFE_INTEGER, this\.scopePaths, this\.useRegex\)/);
+  assert.match(source, /this\.onReplaceAll\(allResults, query, this\.replaceInputEl\.value, this\.useRegex\)/);
+  assert.doesNotMatch(source, /this\.onReplaceAll\(this\.renderedResults/);
+  assert.match(source, /async refreshFile\(file: TFile\): Promise<void>/);
+});

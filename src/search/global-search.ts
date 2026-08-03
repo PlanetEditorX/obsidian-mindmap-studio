@@ -538,6 +538,24 @@ export class MindMapSearchIndex {
   }
 
   /**
+   * 立即重建单个导图文件的搜索条目并持久化索引。批量替换等已知写入流程
+   * 使用该入口，避免等待文件监听器的延迟队列而继续显示旧结果。
+   *
+   * @param file 刚刚完成持久化的思维导图文件。
+   */
+  async refreshFile(file: TFile): Promise<void> {
+    if (file.extension.toLocaleLowerCase() !== this.extension) return;
+    const previous = this.fileTimers.get(file.path);
+    if (previous !== undefined) {
+      window.clearTimeout(previous);
+      this.fileTimers.delete(file.path);
+    }
+    await this.indexFile(file);
+    this.data.generatedAt = new Date().toISOString();
+    await this.saveNow();
+  }
+
+  /**
    * 删除file，并保持模型、界面和持久化状态的一致性。
    *
    * @param path 仓库内目标路径。
@@ -860,23 +878,29 @@ export class GlobalMindMapSearchModal extends Modal {
     });
 
     replaceAllBtn.addEventListener("click", async () => {
-      if (!this.renderedResults.length) return;
+      const query = this.inputEl.value.trim();
+      if (!query || !this.renderedResults.length) return;
       if (!this.onReplaceAll) { new Notice("当前模式不支持替换操作。"); return; }
       replaceAllBtn.disabled = true;
       replaceAllBtn.setText("替换中…");
       try {
-        const count = await this.onReplaceAll(this.renderedResults, this.inputEl.value, this.replaceInputEl.value.trim(), this.useRegex);
+        // The visible list is intentionally capped by globalSearchMaxResults.
+        // “全部替换” must query the entire active scope instead of silently
+        // replacing only the currently rendered first page.
+        const allResults = this.index.search(query, Number.MAX_SAFE_INTEGER, this.scopePaths, this.useRegex);
+        const count = await this.onReplaceAll(allResults, query, this.replaceInputEl.value, this.useRegex);
         if (!count) {
-          new Notice("节点文字或备注中未找到匹配，未作替换");
+          new Notice("节点文字中未找到可替换的匹配");
           return;
         }
-        new Notice(`已替换 ${count} 个节点，正在重建索引…`);
+        new Notice(`已替换 ${count} 个节点，正在更新搜索索引…`);
         this.renderedResults = [];
-        this.summaryEl.setText("已替换所有匹配节点。请重新搜索以刷新结果。");
+        this.summaryEl.setText(`已替换全部 ${count} 个匹配节点。`);
         this.resultsEl.empty();
-        this.resultsEl.createDiv({ cls: "mms-global-search-empty", text: "已替换所有匹配节点，请输入新关键词搜索。" });
+        this.resultsEl.createDiv({ cls: "mms-global-search-empty", text: "全部匹配已替换，请输入关键词重新搜索。" });
       } finally {
         replaceAllBtn.disabled = false;
+        replaceAllBtn.setText("");
         setIcon(replaceAllBtn, "check-check");
       }
     });
@@ -977,8 +1001,8 @@ export class GlobalMindMapSearchModal extends Modal {
       replaceOneBtn.createSpan({ text: "替换此节点" });
       replaceOneBtn.addEventListener("click", async (event) => {
         event.stopPropagation();
-        const replacement = this.replaceInputEl.value.trim();
-        
+        const replacement = this.replaceInputEl.value;
+
         if (!this.onReplaceAll) { new Notice("当前模式不支持替换操作。"); return; }
         replaceOneBtn.disabled = true;
         try {

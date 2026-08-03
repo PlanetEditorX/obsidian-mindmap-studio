@@ -1,5 +1,13 @@
 # Modified Files
 
+## 1.43.6 加载进度开关与完整范围替换
+
+- `src/settings.ts`、`src/main.ts`、`src/view.ts`、`src/editor/editor-types.ts`、`src/editor/editor.ts`：新增默认关闭的右下角加载进度开关，并只在文章/通读且开关启用时显示。
+- `src/search/global-search.ts`、`src/main.ts`：全部替换重新查询完整搜索作用域，不受显示结果上限影响；写回后立即刷新单文件索引并增加批量替换调试事件。
+- `tests/global-search-contract.test.mjs`、`tests/settings-layout.test.mjs`：新增完整范围替换、索引刷新和加载进度默认关闭契约测试。
+- `README.md`、`docs/ARCHITECTURE.md`、`docs/DEVELOPMENT.md`、`docs/SPECIAL_FEATURES.md`、`docs/TESTING.md`、`CHANGELOG.md`：同步用户行为、架构边界和手工验证范围。
+- `package.json`、`package-lock.json`、`manifest.json`、`versions.json`、`update.json`、`main.js`：版本统一为 1.43.6。
+
 ## 1.43.4 CI 文档覆盖修复
 
 - `src/article/modes.ts`：为 `ArticleContextProgress` 增加完整 JSDoc，说明阶段、百分比与动态计数用途。

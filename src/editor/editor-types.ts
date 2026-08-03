@@ -109,6 +109,7 @@ export interface MindMapEditorOptions {
   articleTocEntries: ArticleTocEntry[];
   articleTocMaxDepth: number;
   showArticleMiniMap: boolean;
+  showArticleContextProgress: boolean;
   articleSectionCollapseEnabled: boolean;
   articleLeafBulletsEnabled: boolean;
   articleLeafBulletColor: string;
