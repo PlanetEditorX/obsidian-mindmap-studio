@@ -131,4 +131,8 @@ npm run test:docs
 
 ### 文章编号关闭语义
 
-根节点的 `articleNumberingMode: "none"` 与普通节点语义不同：中心节点本身不显示编号，因此它代表当前物理导图的文章编号开关。文章正文、文章目录、导出和子文章页标题必须共同调用 `isDocumentArticleNumberingDisabled()`，不得各自回退到自动“第一章”；通读必须使用 `buildReadingArticleNodeInfo()` 和独立 `readingTocEntries`，只忽略中心节点关闭而继续尊重普通节点关闭与手动层级。
+根节点的 `articleNumberingMode: "none"` 与普通节点语义不同：中心节点本身不显示编号，因此它代表当前物理导图的文章编号开关。文章正文、文章目录、导出和子文章页标题必须共同调用 `isDocumentArticleNumberingDisabled()`，不得各自回退到自动“第一章”；通读必须使用 `buildReadingArticleNodeInfo()` 和独立 `readingTocEntries`，只忽略中心节点关闭而继续尊重普通节点关闭与手动层级。通读目录完成跨文件标题分类后，正文必须调用 `reconcileReadingNodeInfo()` 合并同一 `filePath + nodeId` 的目录项，不能在子导图内再次独立决定节点是标题还是正文。
+
+### 工具栏提示与模式边界
+
+顶部工具栏按钮只保留 `aria-label`，由 Obsidian 显示统一黑底提示；不得同时写入 `title`，否则 Chromium 会额外显示白底原生提示。`collapse`、`collapse-all` 与 `fit` 仅在导图模式可见，模式切换时由 `updateModeUi()` 根据当前模式和用户可见项设置共同决定。节点链接通过节点内链接按钮或富文本锚点直接打开，不再维护独立的“打开节点链接”工具栏/右键命令。

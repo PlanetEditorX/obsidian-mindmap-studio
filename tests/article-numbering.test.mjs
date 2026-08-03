@@ -113,6 +113,34 @@ test("continuous reading uses a numbering TOC independent from article root disa
   assert.match(editorSource, /buildReadingArticleNodeInfo\(section\.document\.root/);
 });
 
+test("continuous reading body reuses the cross-file TOC hierarchy and numbering", () => {
+  const root = model.createNode("根节点");
+  const localLeaf = model.createNode("逻辑关系");
+  root.children = [localLeaf];
+  const [localInfo] = modes.buildReadingArticleNodeInfo(root, 1);
+  assert.equal(localInfo?.isHeading, false);
+  assert.equal(localInfo?.label, "");
+
+  const reconciled = modes.reconcileReadingNodeInfo(localInfo, {
+    filePath: "逻辑判断.mindmap",
+    nodeId: localLeaf.id,
+    depth: 3,
+    tocDepth: 2,
+    label: "一、",
+    title: "逻辑关系",
+    displayTitle: "一、逻辑关系",
+    breadcrumb: ["判断推理", "逻辑判断", "逻辑关系"]
+  });
+  assert.equal(reconciled.isHeading, true);
+  assert.equal(reconciled.depth, 3);
+  assert.equal(reconciled.label, "一、");
+  assert.equal(reconciled.displayTitle, "一、逻辑关系");
+  assert.equal(reconciled.numberedLeaf, false);
+
+  assert.match(editorSource, /const readingEntryByNode = new Map/);
+  assert.match(editorSource, /reconcileReadingNodeInfo\([\s\S]*readingEntryByNode\.get/);
+});
+
 test("children below a level-eight heading keep structure without receiving a recycled A or B prefix", () => {
   const heading = (text, children = [model.createNode(`${text} 正文`)]) => {
     const node = model.createNode(text);

@@ -1,5 +1,12 @@
 # Modified Files
 
+## 1.41.8 通读正文编号与工具栏精简
+
+- `src/article/modes.ts`、`src/editor/editor.ts`：通读正文按文件路径与节点 ID 复用全书目录层级和编号；标题分类、编号文本与目录保持一致。
+- `src/editor/editor.ts`、`src/settings.ts`：删除冗余“打开节点链接”命令及配置入口；移除顶部工具栏原生 `title` 提示，并将折叠与适应画布限定到导图模式。
+- `tests/article-numbering.test.mjs`、`tests/settings-layout.test.mjs`：新增跨文件编号合并、链接命令删除、单一提示和模式可见性契约。
+- `README.md`、`CHANGELOG.md`、`docs/ARCHITECTURE.md`、`docs/DEVELOPMENT.md`、`docs/SPECIAL_FEATURES.md`、`docs/TESTING.md`：更新通读编号权威来源与工具栏行为。
+
 ## 1.41.7 子导图返回保持当前模式
 
 - `src/editor/editor.ts`：父级面包屑按当前显示模式选择导航；仅文章模式返回父目录，其余模式直接打开父导图并定位挂载节点，避免白色文章解析卡片与黑色过渡层重叠。
