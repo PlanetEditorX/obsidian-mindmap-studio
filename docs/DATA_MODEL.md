@@ -43,6 +43,7 @@ interface MindMapNode {
   tags?: string[];
   question?: MindMapQuestion;
   link?: string;
+  /** 历史兼容字段：当前版本不再渲染、编辑或导出任务状态。 */
   task?: "todo" | "doing" | "done";
   image?: string;
   table?: MindMapTable;

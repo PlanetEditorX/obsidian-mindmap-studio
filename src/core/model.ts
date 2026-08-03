@@ -72,9 +72,7 @@ export type NodeShape = "rounded" | "pill" | "rectangle";
 export type NodeVisualStyle = "card" | "branch";
 /** Default width calculation used for nodes without a manual width. */
 export type NodeWidthMode = "fixed" | "auto";
-/**
- * TaskStatus 类型定义，用于限制可接受值并让序列化数据保持稳定。
- */
+/** Legacy task-state values kept only so old files continue to parse without data loss. */
 export type TaskStatus = "todo" | "doing" | "done";
 /**
  * BackgroundPattern 类型定义，用于限制可接受值并让序列化数据保持稳定。
@@ -393,6 +391,7 @@ export interface MindMapNode {
   tags?: string[];
   /** Optional structured exercise content; the node's primary content mirrors its stem. */
   question?: MindMapQuestion;
+  /** Legacy compatibility only; current UI and exports ignore task state. */
   task?: TaskStatus;
   /** Disable numbering or force a manually selected article level; undefined keeps automatic behavior. */
   articleNumberingMode?: ArticleNumberingMode;
@@ -432,14 +431,6 @@ export interface MindMapDocument {
   view?: MindMapDocumentView;
   articleStyle?: ArticleStyle;
   root: MindMapNode;
-}
-
-/**
- * TaskProgress 的结构化数据约定。字段会在模块边界传递，用于保持类型安全和版本兼容。
- */
-export interface TaskProgress {
-  done: number;
-  total: number;
 }
 
 const MINDMAP_CODE_BLOCK = "mindmap-json";
@@ -1136,7 +1127,7 @@ export function applyImageUploadPatches(document: MindMapDocument, patches: read
  * 内容删除后，子节点、备注、链接、子导图、图标、标签、题目和任务都仍是
  * 独立语义，不能因为没有内容块而丢失。空白文字占位不视为有效内容。
  */
-export function isRemovableEmptyNode(node: Pick<MindMapNode, "content" | "text" | "richText" | "image" | "table" | "code" | "children" | "note" | "link" | "submap" | "icon" | "tags" | "question" | "task">): boolean {
+export function isRemovableEmptyNode(node: Pick<MindMapNode, "content" | "text" | "richText" | "image" | "table" | "code" | "children" | "note" | "link" | "submap" | "icon" | "tags" | "question">): boolean {
   const hasContent = nodeContentBlocks(node).some((block) => block.type !== "text" || block.text.trim());
   return !hasContent
     && node.children.length === 0
@@ -1145,8 +1136,7 @@ export function isRemovableEmptyNode(node: Pick<MindMapNode, "content" | "text" 
     && !node.submap
     && !node.icon?.trim()
     && !node.tags?.some((tag) => tag.trim())
-    && !node.question
-    && !node.task;
+    && !node.question;
 }
 
 /** 内容块相对目标块的放置位置；append 表示放到目标节点末尾。 */
@@ -1643,23 +1633,6 @@ export function extractFirstWikiLink(value: string): string | null {
 }
 
 /**
- * 读取并返回task progress，并保持模型、界面和持久化状态的一致性。
- *
- * @param root 节点树的根节点。
- * @returns 当前操作生成、查找或规范化后的结果。
- */
-export function getTaskProgress(root: MindMapNode): TaskProgress {
-  let done = 0;
-  let total = 0;
-  walkNodes(root, (node) => {
-    if (!node.task) return;
-    total += 1;
-    if (node.task === "done") done += 1;
-  });
-  return { done, total };
-}
-
-/**
  * 执行“node search text”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
  *
  * @param node 当前处理的节点。
@@ -1675,19 +1648,6 @@ export function nodeSearchText(node: MindMapNode): string {
     .filter((value): value is string => Boolean(value))
     .join(" ")
     .toLocaleLowerCase();
-}
-
-/**
- * 执行“task prefix”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
- *
- * @param task 该参数用于 task prefix 流程中的输入或控制。
- * @returns 计算、解析或序列化后的字符串结果。
- */
-function taskPrefix(task: TaskStatus | undefined): string {
-  if (task === "done") return "[x] ";
-  if (task === "doing") return "[-] ";
-  if (task === "todo") return "[ ] ";
-  return "";
 }
 
 /**
@@ -1882,15 +1842,14 @@ export function parseFencedCode(markdown: string): MindMapCodeBlock | null {
 export function childrenToTable(node: MindMapNode): MindMapTable | null {
   if (!node.children.length) return null;
   return {
-    headers: ["子节点", "备注", "状态", "标签", "下级数量"],
+    headers: ["子节点", "备注", "标签", "下级数量"],
     rows: node.children.map((child) => [
       nodePlainText(child),
       child.note ?? "",
-      child.task === "done" ? "已完成" : child.task === "doing" ? "进行中" : child.task === "todo" ? "待办" : "",
       child.tags?.join(", ") ?? "",
       String(child.children.length)
     ]),
-    alignments: ["left", "left", "center", "left", "right"],
+    alignments: ["left", "left", "left", "right"],
     source: "children"
   };
 }
@@ -1929,7 +1888,7 @@ export function documentToMarkdown(doc: MindMapDocument): string {
     const link = node.link ? ` → ${node.link}` : "";
     const blocks = renderBlocks(node);
     const firstText = blocks.find((value) => !value.startsWith("![")) ?? (blocks[0] ?? "图片节点");
-    lines.push(`${indent}- ${taskPrefix(node.task)}${node.icon ? `${node.icon} ` : ""}${firstText}${tags}${link}`);
+    lines.push(`${indent}- ${node.icon ? `${node.icon} ` : ""}${firstText}${tags}${link}`);
     blocks.filter((value) => value !== firstText).forEach((value) => lines.push(`${indent}  ${value}`));
     if (node.note) lines.push(`${indent}  > ${node.note.replaceAll("\n", " ")}`);
     if (node.submap) lines.push(`${indent}  > 子导图：[[${node.submap.path}]]`);
@@ -1937,20 +1896,6 @@ export function documentToMarkdown(doc: MindMapDocument): string {
   };
   doc.root.children.forEach((child) => visit(child, 1));
   return lines.join("\n");
-}
-
-/**
- * 解析task text，并保持模型、界面和持久化状态的一致性。
- *
- * @param value 待校验、转换或比较的输入值。
- * @returns 计算、解析或序列化后的字符串结果。
- */
-function parseTaskText(value: string): { text: string; task?: TaskStatus } {
-  const match = value.match(/^\[( |x|X|-)\]\s+(.+)$/);
-  if (!match) return { text: value };
-  const marker = match[1];
-  const task: TaskStatus = marker === "x" || marker === "X" ? "done" : marker === "-" ? "doing" : "todo";
-  return { text: match[2]?.trim() || "任务", task };
 }
 
 /** 导入标题中可由文章模式重新生成的常见章节、条目序号。 */
@@ -2266,9 +2211,7 @@ export function markdownToDocument(markdown: string, fallbackTitle = "思维导�
       const level = bullet && spaces === 0 && numberedParent
         ? numberedParent.level + 1
         : parentLevel + Math.floor(spaces / 2) + 1;
-      const parsed = parseTaskText((listMatch[2] ?? "节点").trim());
-      const node = createMarkdownNode(parsed.text);
-      node.task = parsed.task;
+      const node = createMarkdownNode((listMatch[2] ?? "节点").trim());
       while (stack.length > 1 && (stack.at(-1)?.level ?? 0) >= level) stack.pop();
       const parent = stack.at(-1)?.node ?? doc.root;
       parent.children.push(node);

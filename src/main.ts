@@ -944,6 +944,7 @@ export default class MindMapStudioPlugin extends Plugin {
         ? raw.branchColors.filter((value): value is string => typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value)).slice(0, 12)
         : [...DEFAULT_SETTINGS.branchColors]
     } as MindMapStudioSettings;
+    delete (this.settings as unknown as Record<string, unknown>).showTaskProgress;
     this.settings.defaultViewMode = resolveStartupDisplayMode(this.settings.defaultViewMode, this.settings.visibleModes);
     this.activeDisplayMode = this.settings.defaultViewMode;
   }
@@ -2612,7 +2613,6 @@ export default class MindMapStudioPlugin extends Plugin {
       if (node.richText) document.root.richText = JSON.parse(JSON.stringify(node.richText));
       document.root.note = node.note;
       document.root.tags = node.tags?.slice();
-      document.root.task = node.task;
       document.root.icon = node.icon;
       if (node.code) document.root.code = JSON.parse(JSON.stringify(node.code));
       if (node.table) document.root.table = JSON.parse(JSON.stringify(node.table));

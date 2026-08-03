@@ -80,7 +80,6 @@ export interface MindMapEditorCallbacks {
 export interface MindMapEditorOptions {
   defaultNodeShape: NodeShape;
   defaultAppearance: MindMapAppearance;
-  showTaskProgress: boolean;
   autoFitOnOpen: boolean;
   twoFingerGestureAction: "zoom" | "pan";
   historyLimit: number;

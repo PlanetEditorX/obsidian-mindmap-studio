@@ -1,24 +1,15 @@
 # Modified Files
 
-## 1.42.3 通读目录与正文编号同源
+## 1.42.4 外观弹窗顶部、单一工具提示与任务状态移除
 
-- `src/main.ts`：文章族遍历记录并继承物理导图编号关闭状态；顶层和子导图中心节点关闭后，挂载后代不会重新生成“第一节”等编号。
-- `src/article/modes.ts`、`src/editor/article-renderer.ts`、`src/view.ts`：为通读章节、文章导航和节点编号构建增加继承关闭状态，文章子页保持一致。
-- `src/editor/editor.ts`、`styles.css`：通读正文按目录条目复用跨文件层级与编号；编号和富文本标题分离渲染，避免富文本清空编号。
-- `src/import/import-export.ts`：HTML、Markdown 和 Word 导出继承文章族编号关闭状态。
-- `tests/article-numbering.test.mjs`、`tests/article-content-block.test.mjs`、`scripts/test.mjs`：新增跨子导图关闭、目录/正文同源、富文本编号保留和文章页继承契约。
-- `README.md`、`CHANGELOG.md`、`docs/*`、`TEST_RESULTS.md`、`Codex/项目/obsidian-mindmap-studio.md`：更新编号语义、维护边界和验证状态。
-- `package.json`、`package-lock.json`、`manifest.json`、`versions.json`、`update.json`、`main.js`：统一为 1.42.3，安装包校验值在打包后写入。
+- `src/editor/editor.ts`：取消外观弹窗底部按钮自动聚焦并两帧回到顶部；工具栏仅使用 `aria-label`，增加动态原生提示清理；删除任务工具栏、节点编辑、右键、快捷键、渲染和进度逻辑；保持重复链接命令删除。
+- `src/editor/outline-renderer.ts`、`src/editor/editor-types.ts`、`src/view.ts`：删除大纲任务复选框和任务进度运行参数。
+- `src/settings.ts`、`src/main.ts`：删除任务状态工具栏项和任务进度设置，加载时清理旧 `showTaskProgress`。
+- `src/core/model.ts`、`src/render/layout.ts`、`src/editor/node-actions.ts`：删除任务进度、任务循环、SVG/Markdown/子节点表格任务输出；历史字段仅做静默兼容。
+- `styles.css`：删除任务图标、完成状态和任务进度样式。
+- `tests/settings-layout.test.mjs`、`tests/content-block-drag.test.mjs`、`scripts/test.mjs`：新增弹窗顶部、单一提示和任务状态移除契约，并更新旧任务回归。
+- 安装包 SHA-256：`b12177f40a40567675c07d80c2153cb1e2675e9c44ecd4ccfec66f662bf87da1`。
 
-## 1.41.11 只读展示设置与统一阅读样式
-
-- `src/editor/editor.ts`：只读状态下允许打开和保存“主题与外观”；新增展示配置专用写入链路；将文章与通读共用的预设、字体、纸张、目录和末端正文配置并入“阅读样式”；移除独立文章样式按钮。
-- `src/editor/editor-modals.ts`：删除已并入统一外观面板的独立文章样式弹窗。
-- `src/settings.ts`、`src/main.ts`：工具栏移除 `article-style`，旧配置自动迁移到 `appearance`；插件全局阅读分组改为“阅读样式”并纳入末端正文默认项。
-- `src/core/model.ts`、`src/article/article-style.ts`、`src/editor/article-renderer.ts`：明确 `articleStyle` 兼容字段是文章与通读共用的阅读样式。
-- `tests/reading-editor-contract.test.mjs`、`tests/settings-layout.test.mjs`、`tests/article-content-block.test.mjs`：补充只读展示设置、统一阅读样式、旧工具栏迁移和分组契约。
-- `README.md`、`CHANGELOG.md`、`docs/*`、`TEST_RESULTS.md`、`Codex/项目/obsidian-mindmap-studio.md`：同步用户行为、维护边界和验证状态。
-- `package.json`、`package-lock.json`、`manifest.json`、`versions.json`、`update.json`、`main.js`：统一版本为 1.41.11，最终安装包校验值在打包后写入。
 ## 1.41.10 通读编号使用当前内存文档
 
 - `src/main.ts`：文章族刷新建立文件级文档缓存，并把当前编辑器文档预置为当前物理文件的权威快照；从子导图进入通读后修改编号时，不再读取尚未保存完成的旧磁盘副本。

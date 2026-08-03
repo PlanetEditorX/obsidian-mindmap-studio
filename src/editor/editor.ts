@@ -18,7 +18,6 @@ import {
   findNode,
   findParent,
   flattenNodes,
-  getTaskProgress,
   imageSourceCandidates,
   mergeAppearance,
   nodeSearchText,
@@ -58,7 +57,6 @@ import {
   type MindMapTextStyle,
   type NodeShape,
   type NodeTextAlign,
-  type TaskStatus,
   type NodeDropPosition,
   moveNodeRelative
 } from "../core/model";
@@ -105,7 +103,7 @@ import {
   renderArticleNodeContent,
   type ArticleRenderController
 } from "./article-renderer";
-import { appendChild, deletionSelectionFallback, deleteNodes, insertSiblingAfter, nextTaskStatus, setAllBranchesCollapsed, topLevelSelectedNodeIds } from "./node-actions";
+import { appendChild, deletionSelectionFallback, deleteNodes, insertSiblingAfter, setAllBranchesCollapsed, topLevelSelectedNodeIds } from "./node-actions";
 import { attachSelectionFormatToolbar, type SelectionFormatToolbarHandle } from "./selection-format-toolbar";
 import { clearImageFailureDetails, renderImageFailureDetails } from "./image-failure-view";
 import {
@@ -141,7 +139,6 @@ interface NodeEditValues {
   link: string;
   icon: string;
   tags: string[];
-  task?: TaskStatus;
   articleNumberingMode?: ArticleNumberingMode;
   articleNumberingLevel?: number;
   color?: string;
@@ -770,10 +767,6 @@ class NodeEditModal extends Modal {
     const iconLabel = detailsGrid.createEl("label", { text: "图标或 Emoji" });
     const iconInput = iconLabel.createEl("input", { type: "text", attr: { placeholder: "例如 💡" } });
     iconInput.value = this.node.icon ?? "";
-    const taskLabel = detailsGrid.createEl("label", { text: "任务状态" });
-    const taskSelect = taskLabel.createEl("select");
-    for (const [value, label] of [["", "无"], ["todo", "待办"], ["doing", "进行中"], ["done", "已完成"]] as const) taskSelect.createEl("option", { text: label, attr: { value } });
-    taskSelect.value = this.node.task ?? "";
     const shapeLabel = detailsGrid.createEl("label", { text: "节点形状" });
     const shapeSelect = shapeLabel.createEl("select");
     for (const [value, label] of [["rounded", "圆角"], ["pill", "胶囊"], ["rectangle", "直角"]] as const) shapeSelect.createEl("option", { text: label, attr: { value } });
@@ -843,14 +836,12 @@ class NodeEditModal extends Modal {
     const collectValues = (showNotice: boolean): NodeEditValues | null => {
       const content = validBlocks();
       if (!content.length) { if (showNotice) new Notice("节点至少需要一个内容块"); return null; }
-      const task = taskSelect.value;
       const shape = shapeSelect.value;
       const numbering = numberingControls.read();
       return {
         content,
         note: noteInput.value.trim(), link: linkInput.value.trim(), icon: iconInput.value.trim().slice(0, 12),
         tags: Array.from(new Set(tagsInput.value.split(/[,，]/).map((tag) => tag.trim().replace(/^#/, "")).filter(Boolean))).slice(0, 12),
-        task: task === "todo" || task === "doing" || task === "done" ? task : undefined,
         articleNumberingMode: numbering.articleNumberingMode,
         articleNumberingLevel: numbering.articleNumberingLevel,
         color: colorToggle.checked ? colorInput.value : undefined,
@@ -904,7 +895,7 @@ class NodeEditModal extends Modal {
       }
     }, true);
 
-    [iconInput, taskSelect, shapeSelect, tagsInput, borderWidthInput, fontSizeInput, widthInput, minHeightInput, alignSelect, boldInput, italicInput, underlineInput, noteInput, linkInput]
+    [iconInput, shapeSelect, tagsInput, borderWidthInput, fontSizeInput, widthInput, minHeightInput, alignSelect, boldInput, italicInput, underlineInput, noteInput, linkInput]
       .forEach((input) => { input.addEventListener("input", scheduleAutoSave); input.addEventListener("change", scheduleAutoSave); });
 
     const buttons = form.createDiv({ cls: "mmc-form-actions" });
@@ -1301,7 +1292,7 @@ class AppearanceModal extends Modal {
     const actions = form.createDiv({ cls: "mmc-modal-actions" });
     const reset = actions.createEl("button", { text: "恢复全局默认", type: "button" });
     const cancel = actions.createEl("button", { text: "取消", type: "button" });
-    const save = actions.createEl("button", { text: "应用", type: "submit", cls: "mod-cta" });
+    actions.createEl("button", { text: "应用", type: "submit", cls: "mod-cta" });
     reset.addEventListener("click", () => { this.reset(); this.close(); });
     cancel.addEventListener("click", () => this.close());
     form.addEventListener("submit", (event) => {
@@ -1341,7 +1332,13 @@ class AppearanceModal extends Modal {
         : undefined, miniMapSelect.value === "show" ? true : miniMapSelect.value === "hide" ? false : undefined, readingStyleControls.read());
       this.close();
     });
-    window.setTimeout(() => save.focus(), 20);
+    const restoreScrollTop = (): void => {
+      this.contentEl.scrollTop = 0;
+    };
+    window.requestAnimationFrame(() => {
+      restoreScrollTop();
+      window.requestAnimationFrame(restoreScrollTop);
+    });
   }
 }
 
@@ -2656,7 +2653,7 @@ export class MindMapEditor {
     for (const mode of this.options.visibleModes) {
       const button = modeGroup.createEl("button", {
         cls: "mms-mode-button",
-        attr: { type: "button", title: `${DISPLAY_MODE_LABELS[mode]}模式` }
+        attr: { type: "button", "aria-label": `${DISPLAY_MODE_LABELS[mode]}模式` }
       });
       setIcon(button, DISPLAY_MODE_ICONS[mode]);
       button.createSpan({ text: DISPLAY_MODE_LABELS[mode] });
@@ -2671,10 +2668,8 @@ export class MindMapEditor {
     this.addToolbarButton("duplicate", "copy-plus", "克隆分支（Ctrl/Cmd+D）", () => this.duplicateSelected(), true);
     this.addToolbarButton("delete", "trash-2", "删除节点（Delete）", () => this.deleteSelected(), true);
     this.addToolbarSeparator();
-    this.addToolbarButton("task", "circle-check-big", "切换任务状态（Ctrl/Cmd+Enter）", () => this.cycleTask(), true);
     this.addToolbarButton("collapse", "fold-vertical", "展开/收起节点", () => this.toggleCollapse(), true);
     this.addToolbarButton("collapse-all", "chevrons-up-down", "展开/折叠全部子项", () => this.toggleAllNodesCollapsed());
-    this.addToolbarButton("link", "link", "打开节点链接", () => this.openSelectedLink());
     this.addToolbarButton("search", "search", "搜索当前导图及全部子导图（Ctrl/Cmd+Alt+F）", () => this.openSearch());
     this.addToolbarButton("global-search", "file-search", "全局搜索所有导图", () => this.callbacks.onGlobalSearch());
     this.aiButton = this.addToolbarButton("ai", "sparkles", "询问 AI（当前页面，Ctrl/Cmd+Shift+A）", () => this.askAi());
@@ -2705,12 +2700,12 @@ export class MindMapEditor {
     const spacer = this.toolbarEl.createSpan({ cls: "mmc-toolbar-spacer" });
     spacer.setAttr("aria-hidden", "true");
     const zoomControl = this.toolbarEl.createDiv({ cls: "mmc-zoom-control" });
-    const zoomOut = zoomControl.createEl("button", { cls: "clickable-icon mmc-zoom-step", attr: { type: "button", title: "缩小", "aria-label": "缩小" } });
+    const zoomOut = zoomControl.createEl("button", { cls: "clickable-icon mmc-zoom-step", attr: { type: "button", "aria-label": "缩小" } });
     setIcon(zoomOut, "minus");
     zoomOut.addEventListener("click", () => { this.setZoom(this.zoom / 1.15); this.focus(); });
     this.zoomStatusEl = zoomControl.createEl("input", {
       cls: "mmc-zoom-status mmc-zoom-input",
-      attr: { type: "text", inputmode: "decimal", title: "输入缩放百分比", "aria-label": "输入缩放百分比" }
+      attr: { type: "text", inputmode: "decimal", "aria-label": "输入缩放百分比" }
     });
     this.zoomStatusEl.value = "100%";
     this.zoomStatusEl.addEventListener("change", () => this.applyZoomInput());
@@ -2723,10 +2718,21 @@ export class MindMapEditor {
         this.zoomStatusEl.blur();
       }
     });
-    const zoomIn = zoomControl.createEl("button", { cls: "clickable-icon mmc-zoom-step", attr: { type: "button", title: "放大", "aria-label": "放大" } });
+    const zoomIn = zoomControl.createEl("button", { cls: "clickable-icon mmc-zoom-step", attr: { type: "button", "aria-label": "放大" } });
     setIcon(zoomIn, "plus");
     zoomIn.addEventListener("click", () => { this.setZoom(this.zoom * 1.15); this.focus(); });
     this.statusEl = this.toolbarEl.createSpan({ cls: "mmc-save-status", text: "已保存" });
+
+    const removeNativeToolbarTooltip = (event: PointerEvent): void => {
+      const target = event.target instanceof HTMLElement ? event.target : null;
+      const control = target?.closest<HTMLElement>("button[title], input[title], [role='button'][title]");
+      if (!control || !this.toolbarEl.contains(control)) return;
+      const label = control.getAttribute("title")?.trim();
+      if (label && !control.getAttribute("aria-label")) control.setAttribute("aria-label", label);
+      control.removeAttribute("title");
+    };
+    this.toolbarEl.addEventListener("pointerover", removeNativeToolbarTooltip, true);
+    this.cleanupCallbacks.push(() => this.toolbarEl.removeEventListener("pointerover", removeNativeToolbarTooltip, true));
 
     const keydown = (event: KeyboardEvent): void => this.handleKeydown(event);
     this.rootEl.addEventListener("keydown", keydown, true);
@@ -3081,7 +3087,7 @@ export class MindMapEditor {
       ? `询问 AI（节点分支：${nodePlainText(node) || "未命名节点"}）`
       : "询问 AI（当前页面，Ctrl/Cmd+Shift+A）";
     this.aiButton.setAttr("aria-label", label);
-    this.aiButton.setAttr("title", label);
+    this.aiButton.removeAttribute("title");
     this.aiButton.toggleClass("has-node-scope", Boolean(node));
   }
 
@@ -3096,7 +3102,7 @@ export class MindMapEditor {
    * @returns 当前操作生成、查找或规范化后的结果。
    */
   private addToolbarButton(id: string, icon: string, label: string, action: () => void, editOnly = false): HTMLButtonElement {
-    const button = this.toolbarEl.createEl("button", { cls: "clickable-icon mmc-toolbar-button", attr: { "aria-label": label, title: label, type: "button" } });
+    const button = this.toolbarEl.createEl("button", { cls: "clickable-icon mmc-toolbar-button", attr: { "aria-label": label, type: "button" } });
     button.dataset.toolbarId = id;
     setIcon(button, icon);
     button.toggleClass("is-hidden", !this.options.visibleToolbarItems.includes(id));
@@ -4465,7 +4471,6 @@ export class MindMapEditor {
     if (this.selectedId === node.id || this.selectedIds.has(node.id)) nodeEl.addClass("is-selected");
     if (this.selectedIds.size > 1 && this.selectedIds.has(node.id)) nodeEl.addClass("is-multi-selected");
     if (this.searchQuery && nodeSearchText(node).includes(this.searchQuery)) nodeEl.addClass("is-search-match");
-    if (node.task) nodeEl.addClass(`task-${node.task}`);
     const isRoot = position.depth === 0;
     const bold = node.style?.bold ?? appearance.bold ?? false;
     const italic = node.style?.italic ?? appearance.italic ?? false;
@@ -4492,13 +4497,9 @@ export class MindMapEditor {
     const content = nodeEl.createDiv({ cls: "mmc-node-content" });
     const blocks = nodeContentBlocks(node);
     const hasTextBlock = blocks.some((block) => block.type === "text" && block.text.trim());
-    if ((node.task || node.icon) && !hasTextBlock) {
+    if (node.icon && !hasTextBlock) {
       const meta = content.createDiv({ cls: "mmc-node-main mmc-node-meta-only" });
-      if (node.task) {
-        const task = meta.createSpan({ cls: `mmc-task-icon task-${node.task}`, text: node.task === "done" ? "✓" : node.task === "doing" ? "◐" : "○" });
-        task.setAttr("aria-label", node.task === "done" ? "已完成" : node.task === "doing" ? "进行中" : "待办");
-      }
-      if (node.icon) meta.createSpan({ cls: "mmc-node-icon", text: node.icon });
+      meta.createSpan({ cls: "mmc-node-icon", text: node.icon });
     }
     let prefixRendered = false;
     for (const block of blocks) {
@@ -4623,10 +4624,6 @@ export class MindMapEditor {
       if (!block.text.trim()) continue;
       const main = content.createDiv({ cls: "mmc-node-main mmc-node-text-block" });
       main.dataset.blockId = block.id;
-      if (!prefixRendered && node.task) {
-        const task = main.createSpan({ cls: `mmc-task-icon task-${node.task}`, text: node.task === "done" ? "✓" : node.task === "doing" ? "◐" : "○" });
-        task.setAttr("aria-label", node.task === "done" ? "已完成" : node.task === "doing" ? "进行中" : "待办");
-      }
       if (!prefixRendered && node.icon) main.createSpan({ cls: "mmc-node-icon", text: node.icon });
       const isSubmapTitle = Boolean(node.submap) && !prefixRendered;
       prefixRendered = true;
@@ -4671,16 +4668,6 @@ export class MindMapEditor {
     if (node.tags?.length) {
       const tags = content.createDiv({ cls: "mmc-node-tags" });
       node.tags.slice(0, 4).forEach((tag) => tags.createSpan({ cls: "mmc-node-tag", text: `#${tag}` }));
-    }
-
-    if (this.options.showTaskProgress && node.children.length) {
-      const progress = getTaskProgress(node);
-      if (progress.total) {
-        const percent = Math.round((progress.done / progress.total) * 100);
-        const progressEl = nodeEl.createDiv({ cls: "mmc-task-progress", attr: { title: `${progress.done}/${progress.total} 个任务已完成` } });
-        progressEl.createDiv({ cls: "mmc-task-progress-bar", attr: { style: `width:${percent}%` } });
-        progressEl.createSpan({ text: `${percent}%` });
-      }
     }
 
     if (node.children.length) {
@@ -5583,7 +5570,6 @@ export class MindMapEditor {
       selected.link = values.link || undefined;
       selected.icon = values.icon || undefined;
       selected.tags = values.tags.length ? values.tags : undefined;
-      selected.task = values.task;
       selected.articleNumberingMode = values.articleNumberingMode;
       selected.articleNumberingLevel = values.articleNumberingMode === "manual" ? values.articleNumberingLevel : undefined;
       const style = {
@@ -5865,15 +5851,6 @@ export class MindMapEditor {
     }, 260);
   }
 
-  /**
-   * 切换task，并保持模型、界面和持久化状态的一致性。
-   */
-  private cycleTask(): void {
-    if (!this.ensureEditable()) return;
-    const selected = this.selectedNode();
-    if (!selected) return;
-    this.mutate(() => { selected.task = nextTaskStatus(selected.task); });
-  }
 
   /**
    * 切换layout，并保持模型、界面和持久化状态的一致性。
@@ -6803,19 +6780,6 @@ export class MindMapEditor {
     }
   }
 
-  /**
-   * 打开selected link，并保持模型、界面和持久化状态的一致性。
-   */
-  private openSelectedLink(): void {
-    const selected = this.selectedNode();
-    if (!selected) return;
-    const link = this.getNodeLink(selected);
-    if (!link) {
-      new Notice("当前节点没有链接；可按 F2 添加链接或在文字中写入 [[笔记名]]");
-      return;
-    }
-    void this.callbacks.onOpenLink(link);
-  }
 
   /**
    * 判断parent navigation backlink，并保持模型、界面和持久化状态的一致性。
@@ -7310,7 +7274,6 @@ export class MindMapEditor {
     menu.addSeparator();
     if (this.readOnly) {
       if (selected?.submap) menu.addItem((item) => item.setTitle("进入子导图").setIcon("network").onClick(() => void this.createOrOpenSubmap()));
-      menu.addItem((item) => item.setTitle("打开链接").setIcon("link").onClick(() => this.openSelectedLink()));
       menu.addItem((item) => item.setTitle("复制分支").setIcon("copy").onClick(() => void this.copySelectedBranch()));
       menu.showAtMouseEvent(event);
       return;
@@ -7405,7 +7368,6 @@ export class MindMapEditor {
     menu.addItem((item) => item.setTitle("复制分支").setIcon("copy").onClick(() => void this.copySelectedBranch()));
     menu.addItem((item) => item.setTitle("粘贴为子节点").setIcon("clipboard-paste").onClick(() => void this.pasteAsChild()));
     menu.addSeparator();
-    menu.addItem((item) => item.setTitle(`任务状态：${selected?.task === "done" ? "已完成" : selected?.task === "doing" ? "进行中" : selected?.task === "todo" ? "待办" : "无"}`).setIcon("circle-check-big").onClick(() => this.cycleTask()));
     const numberingDisabled = selected?.articleNumberingMode === "none";
     menu.addItem((item) => item
       .setTitle(numberingDisabled ? "文章编号：恢复自动" : "文章编号：关闭")
@@ -7418,7 +7380,6 @@ export class MindMapEditor {
         });
       }));
     menu.addItem((item) => item.setTitle("展开/收起").setIcon("fold-vertical").onClick(() => this.toggleCollapse()));
-    menu.addItem((item) => item.setTitle("打开链接").setIcon("link").onClick(() => this.openSelectedLink()));
     if (selected?.id !== this.document.root.id) {
       menu.addSeparator();
       menu.addItem((item) => item.setTitle("删除节点").setIcon("trash-2").onClick(() => this.deleteSelected()));
@@ -8188,11 +8149,6 @@ export class MindMapEditor {
     if (mod && key === "x") {
       event.preventDefault();
       void this.copySelectedBranch().then((copied) => { if (copied) this.deleteSelected(); });
-      return;
-    }
-    if (mod && event.key === "Enter") {
-      event.preventDefault();
-      this.cycleTask();
       return;
     }
     if (mod && key === "z" && !event.shiftKey) {

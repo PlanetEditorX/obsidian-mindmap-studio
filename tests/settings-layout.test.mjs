@@ -189,3 +189,25 @@ test("fit-to-view and bulk collapse use smooth viewport interpolation", () => {
   assert.match(editorSource, /prefers-reduced-motion: reduce/);
   assert.match(editorSource, /if \(collapsed && this\.currentMode === "mindmap"\)[\s\S]*this\.fitToView\(true\)/);
 });
+
+test("appearance panel opens at the top instead of focusing the footer action", () => {
+  assert.match(editorSource, /const restoreScrollTop = \(\): void => \{[\s\S]*this\.contentEl\.scrollTop = 0/);
+  assert.match(editorSource, /window\.requestAnimationFrame\(\(\) => \{[\s\S]*window\.requestAnimationFrame\(restoreScrollTop\)/);
+  assert.doesNotMatch(editorSource, /save\.focus\(\)/);
+});
+
+test("toolbar controls expose only Obsidian tooltips and no native title tooltip", () => {
+  const toolbarBuilder = editorSource.slice(editorSource.indexOf("const modeGroup = this.toolbarEl"), editorSource.indexOf("const keydown =", editorSource.indexOf("const modeGroup = this.toolbarEl")));
+  assert.doesNotMatch(toolbarBuilder, /title:/);
+  assert.match(toolbarBuilder, /"aria-label": `\$\{DISPLAY_MODE_LABELS\[mode\]\}模式`/);
+  assert.match(editorSource, /const removeNativeToolbarTooltip = \(event: PointerEvent\): void =>/);
+  assert.match(editorSource, /control\.removeAttribute\("title"\)/);
+});
+
+test("task status is removed from settings, toolbar, node editing, rendering, and shortcuts", () => {
+  assert.doesNotMatch(settingsSource, /\["task", "任务状态"\]|showTaskProgress|显示任务进度/);
+  assert.doesNotMatch(editorSource, /任务状态|cycleTask|nextTaskStatus|getTaskProgress|mmc-task-progress|mmc-task-icon/);
+  assert.doesNotMatch(editorSource, /mod && event\.key === "Enter"[\s\S]*cycleTask/);
+  assert.doesNotMatch(bundleReadableSource, /任务状态|显示任务进度/);
+  assert.match(mainSource, /delete \(this\.settings as unknown as Record<string, unknown>\)\.showTaskProgress/);
+});

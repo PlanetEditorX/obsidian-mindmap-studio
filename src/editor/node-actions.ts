@@ -1,6 +1,6 @@
 /**
  * @file node-actions.ts
- * @description 不依赖 DOM 的节点新增、批量删除、折叠和任务状态操作。
+ * @description 不依赖 DOM 的节点新增、批量删除和折叠操作。
  */
 
 import {
@@ -9,8 +9,7 @@ import {
   findParent,
   flattenNodes,
   removeNode,
-  type MindMapNode,
-  type TaskStatus
+  type MindMapNode
 } from "../core/model";
 
 /** 在父节点末尾插入子节点并自动展开父节点。 */
@@ -90,15 +89,4 @@ export function setAllBranchesCollapsed(root: MindMapNode, collapsed: boolean, i
   for (const node of flattenNodes(root)) {
     node.collapsed = (includeRoot || node !== root) && collapsed && node.children.length > 0;
   }
-}
-
-/** 按未设置、待办、进行中、完成的顺序循环任务状态。 */
-export function nextTaskStatus(current: TaskStatus | undefined): TaskStatus | undefined {
-  const states: Record<string, TaskStatus | undefined> = {
-    "": "todo",
-    todo: "doing",
-    doing: "done",
-    done: undefined
-  };
-  return states[current ?? ""];
 }
