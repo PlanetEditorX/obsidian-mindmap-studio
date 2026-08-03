@@ -8,7 +8,7 @@
 import { MarkdownRenderer, Notice, TextFileView, TFile, normalizePath, type WorkspaceLeaf } from "obsidian";
 import type MindMapStudioPlugin from "./main";
 import { MindMapEditor } from "./editor/editor";
-import { parseDocument, serializeDocument, type DisplayMode, type MindMapDocument, type MindMapImageUploadPatch } from "./core/model";
+import { nodePlainText, parseDocument, serializeDocument, type DisplayMode, type MindMapDocument, type MindMapImageUploadPatch } from "./core/model";
 import { settingsToAppearance } from "./settings";
 import { resolveArticleTocMaxDepth, type ArticlePageNavigation, type ArticleTocEntry } from "./article/modes";
 import { readingSectionsToDocx, readingSectionsToHtml, readingSectionsToMarkdown } from "./import/import-export";
@@ -46,6 +46,8 @@ export class MindMapStudioView extends TextFileView {
   private articleContextTimer: number | null = null;
   private preferCurrentFileOnNextContextRefresh = false;
   private preferredCurrentNodeIdOnNextContextRefresh: string | null = null;
+  /** Root title last loaded or saved; unrelated edits must not rename an already mismatched file. */
+  private persistedRootTitle = "";
 
   /**
    * 创建 MindMapStudioView 实例，保存依赖和初始状态；实际 DOM 构建通常在 onOpen() 或后续渲染流程中完成。
@@ -118,6 +120,7 @@ export class MindMapStudioView extends TextFileView {
     const title = this.file?.basename ?? "思维导图";
     this.plugin.logDebug("view", "set-view-data-start", { filePath: this.file?.path, clear, hasEditor: Boolean(this.editor), dataBytes: new TextEncoder().encode(data).byteLength });
     this.document = parseDocument(data, title);
+    this.persistedRootTitle = nodePlainText(this.document.root).trim();
     const queuedDirectory = this.file ? this.plugin.consumePendingMindMapDirectory(this.file.path) : null;
     const queuedFocusNodeId = queuedDirectory ? null : (this.file ? this.plugin.consumePendingMindMapFocus(this.file.path) : null);
     if (queuedDirectory) {
@@ -148,11 +151,11 @@ export class MindMapStudioView extends TextFileView {
       this.editor?.destroy();
       this.contentEl.empty();
       this.editor = new MindMapEditor(this.app, this.contentEl, this.document, {
-        onChange: (document) => {
+        onChange: (document, options) => {
           this.document = document;
           this.requestSave();
           this.scheduleSavedIndicator();
-          this.scheduleArticleContextRefresh(320);
+          if (options?.refreshArticleContext !== false) this.scheduleArticleContextRefresh(320);
         },
         onOpenLink: async (link) => this.openLink(link),
         onExportSvg: async (svg) => this.exportTextFile("svg", svg),
@@ -290,10 +293,13 @@ export class MindMapStudioView extends TextFileView {
    * @param clear 该参数用于 save 流程中的输入或控制。
    */
   async save(clear?: boolean): Promise<void> {
-    await super.save(clear);
     const file = this.file;
     const document = this.editor?.getDocument() ?? this.document;
-    if (file && document) await this.plugin.syncMindMapTitleToFilename(file, document);
+    const rootTitle = document ? nodePlainText(document.root).trim() : "";
+    const titleChanged = Boolean(document && rootTitle !== this.persistedRootTitle);
+    await super.save(clear);
+    if (file && document && titleChanged) await this.plugin.syncMindMapTitleToFilename(file, document);
+    this.persistedRootTitle = rootTitle;
     this.editor?.markSaved();
   }
 

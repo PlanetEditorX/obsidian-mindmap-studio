@@ -9,6 +9,7 @@ let interactionCleanup;
 let tableInteraction;
 let editorSource;
 let rendererSource;
+let viewSource;
 let styles;
 let mainBundle;
 
@@ -24,9 +25,10 @@ before(async () => {
   cleanup = loaded.cleanup;
   tableInteraction = interaction.module;
   interactionCleanup = interaction.cleanup;
-  [editorSource, rendererSource, styles, mainBundle] = await Promise.all([
+  [editorSource, rendererSource, viewSource, styles, mainBundle] = await Promise.all([
     readFile("src/editor/editor.ts", "utf8"),
     readFile("src/editor/article-renderer.ts", "utf8"),
+    readFile("src/view.ts", "utf8"),
     readFile("styles.css", "utf8"),
     readFile("main.js", "utf8")
   ]);
@@ -211,8 +213,19 @@ test("article tables open on double click and persist bounded column widths", ()
   assert.match(rendererSource, /bindTableDoubleClick\(table,[\s\S]*isReadOnly: options\.isReadOnly[\s\S]*options\.editTableBlock\(node, tableData, blockId\)/);
   assert.match(rendererSource, /bindTableColumnResize\(handle,[\s\S]*isReadOnly: options\.isReadOnly[\s\S]*options\.updateTableColumnWidths\(node, blockId, widths\)/);
   assert.match(rendererSource, /cls: "mms-table-column-resizer"/);
-  assert.match(editorSource, /private updateTableColumnWidths\([\s\S]*columnWidths[\s\S]*this\.upsertStructuredBlock\(node, "table", \{ \.\.\.block\.table, columnWidths \}, blockId\)/);
+  assert.match(rendererSource, /headers\.slice\(0, -1\)\.forEach/);
+  assert.match(rendererSource, /column\.style\.width = `\$\{\(\([\s\S]*\* 100\)\.toFixed\(4\)\}%`/);
+  assert.match(rendererSource, /table\.style\.width = "100%"/);
+  const widthCommit = editorSource.match(/private updateTableColumnWidths\([\s\S]*?\n  \}/)?.[0] ?? "";
+  assert.match(widthCommit, /this\.history\.capture\(this\.document\)/);
+  assert.match(widthCommit, /this\.upsertStructuredBlock\(node, "table", \{ \.\.\.block\.table, columnWidths \}, blockId\)/);
+  assert.match(widthCommit, /this\.callbacks\.onChange\(this\.getDocument\(\), \{ refreshArticleContext: false \}\)/);
+  assert.doesNotMatch(widthCommit, /this\.render\(\)|this\.mutate\(/, "column release must not rebuild the article DOM");
+  assert.match(viewSource, /if \(options\?\.refreshArticleContext !== false\) this\.scheduleArticleContextRefresh\(320\)/);
   assert.match(styles, /\.mms-table-column-resizer[\s\S]*cursor:\s*col-resize/);
+  assert.match(styles, /\.mms-article-table-wrap\s*\{[\s\S]*overflow-x:\s*hidden/);
+  assert.match(styles, /\.mms-article-table\s*\{[\s\S]*table-layout:\s*fixed/);
+  assert.match(styles, /\.mms-article-table td[\s\S]*overflow-wrap:\s*anywhere/);
 });
 
 test("mind-map tables open their editor only on double click", () => {
@@ -265,8 +278,20 @@ test("table interactions follow the live lock state and commit pointer resizing"
   handle.dispatchEvent(pointerEvent("pointerdown", 100));
   pointerTarget.dispatchEvent(pointerEvent("pointermove", 145));
   pointerTarget.dispatchEvent(pointerEvent("pointerup", 145));
-  assert.deepEqual(applied.at(-1), [145, 200]);
-  assert.deepEqual(committed, [145, 200]);
+  assert.deepEqual(applied.at(-1), [145, 155]);
+  assert.deepEqual(committed, [145, 155]);
+  assert.deepEqual(tableInteraction.resizeAdjacentTableColumns([80, 70], 0, 100), [86, 64]);
+  assert.deepEqual(tableInteraction.resizeAdjacentTableColumns([80, 70], 0, -100), [64, 86]);
+  assert.deepEqual(tableInteraction.resizeAdjacentTableColumns([80, 70], 1, 20), [80, 70]);
+});
+
+test("unrelated article edits do not rename an already mismatched mind-map file", () => {
+  assert.match(viewSource, /private persistedRootTitle = ""/);
+  assert.match(viewSource, /this\.persistedRootTitle = nodePlainText\(this\.document\.root\)\.trim\(\)/);
+  const save = viewSource.match(/async save\(clear\?: boolean\): Promise<void> \{[\s\S]*?\n  \}/)?.[0] ?? "";
+  assert.match(save, /const titleChanged = Boolean\(document && rootTitle !== this\.persistedRootTitle\)/);
+  assert.match(save, /if \(file && document && titleChanged\) await this\.plugin\.syncMindMapTitleToFilename/);
+  assert.match(save, /this\.persistedRootTitle = rootTitle/);
 });
 
 test("paragraph indentation is normalized, rendered, and toggled per text block", () => {
@@ -358,14 +383,16 @@ test("mind-map image paste ignores stale DOM focus and uses the live selection",
   assert.match(handlePaste, /const selected = nodeId \? findNode\(this\.document\.root, nodeId\) : null/);
 });
 
-test("table edits preserve the visible anchor before synchronous and measured relayout", () => {
+test("table edits preserve the visible anchor and column resizing avoids a synchronous article rebuild", () => {
   const openTableBlockEditor = editorSource.match(/private openTableBlockEditor\([\s\S]*?\n  \}/)?.[0] ?? "";
   const updateTableColumnWidths = editorSource.match(/private updateTableColumnWidths\([\s\S]*?\n  \}/)?.[0] ?? "";
   const applyMeasuredMindMapLayout = editorSource.match(/private applyMeasuredMindMapLayout\(\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
   const restoreReadingLocation = editorSource.match(/private restoreReadingLocation\([\s\S]*?\n  \}/)?.[0] ?? "";
   const beginReadingLocationRestore = editorSource.match(/private beginReadingLocationRestore\([\s\S]*?\n  \}/)?.[0] ?? "";
   assert.match(openTableBlockEditor, /captureMindMapViewportAnchor\(node\.id\)[\s\S]*this\.mutate\([\s\S]*restoreMindMapViewportAnchor\(viewportAnchor\)/);
-  assert.match(updateTableColumnWidths, /captureMindMapViewportAnchor\(node\.id\)[\s\S]*this\.mutate\([\s\S]*restoreMindMapViewportAnchor\(viewportAnchor\)/);
+  assert.match(updateTableColumnWidths, /captureCurrentLocation\(this\.currentMode\)[\s\S]*rememberLocation\(location, true\)/);
+  assert.match(updateTableColumnWidths, /history\.capture\(this\.document\)[\s\S]*callbacks\.onChange\(this\.getDocument\(\), \{ refreshArticleContext: false \}\)[\s\S]*markSaving\(\)/);
+  assert.doesNotMatch(updateTableColumnWidths, /this\.mutate\(|this\.render\(/);
   assert.match(applyMeasuredMindMapLayout, /captureMindMapViewportAnchor\(this\.selectedId\)[\s\S]*renderMindMapEdges[\s\S]*restoreMindMapViewportAnchor\(viewportAnchor\)/);
   assert.match(restoreReadingLocation, /beginReadingLocationRestore\(mode, normalizedLocation, resolved\)/);
   assert.match(beginReadingLocationRestore, /window\.setTimeout\([\s\S]*20\)/);

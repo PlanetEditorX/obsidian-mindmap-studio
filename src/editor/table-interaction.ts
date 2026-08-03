@@ -27,6 +27,29 @@ export interface TableColumnResizeOptions {
 }
 
 /**
+ * Resizes one table boundary while keeping the total table width unchanged.
+ * The column on the right absorbs the inverse delta, so article tables stay
+ * fitted to their page instead of creating a horizontal scrolling surface.
+ */
+export function resizeAdjacentTableColumns(
+  sourceWidths: readonly number[],
+  columnIndex: number,
+  delta: number,
+  minimumWidth = 64
+): number[] {
+  const widths = sourceWidths.map((width) => Math.max(1, Math.round(width)));
+  const adjacentIndex = columnIndex + 1;
+  if (columnIndex < 0 || adjacentIndex >= widths.length) return widths;
+  const left = widths[columnIndex] ?? minimumWidth;
+  const right = widths[adjacentIndex] ?? minimumWidth;
+  const minimum = Math.max(24, Math.min(minimumWidth, Math.floor((left + right) / 2)));
+  const boundedDelta = Math.max(minimum - left, Math.min(right - minimum, Math.round(delta)));
+  widths[columnIndex] = left + boundedDelta;
+  widths[adjacentIndex] = right - boundedDelta;
+  return widths;
+}
+
+/**
  * Binds table editing to the live lock state instead of the state captured
  * when article DOM was first rendered.
  *
@@ -57,13 +80,13 @@ export function bindTableColumnResize(handle: PointerCaptureEventTarget, options
     event.stopPropagation();
     handle.setPointerCapture?.(event.pointerId);
     const startX = event.clientX;
-    const widths = options.initialWidths();
-    const startWidth = widths[options.columnIndex] ?? 160;
+    const initialWidths = options.initialWidths();
+    let widths = [...initialWidths];
     options.applyWidths(widths);
     options.setResizing(true);
     const move = (rawMoveEvent: Event): void => {
       const moveEvent = rawMoveEvent as PointerEvent;
-      widths[options.columnIndex] = Math.max(64, Math.min(1200, Math.round(startWidth + moveEvent.clientX - startX)));
+      widths = resizeAdjacentTableColumns(initialWidths, options.columnIndex, moveEvent.clientX - startX);
       options.applyWidths(widths);
     };
     const finish = (): void => {

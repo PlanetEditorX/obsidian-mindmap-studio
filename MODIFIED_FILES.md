@@ -1,12 +1,15 @@
 # Modified Files
 
-## 1.40.11 通读解析状态与过渡反馈
+## 1.41.3 文章表格列宽稳定保存与页面适配
 
-- `src/editor/editor.ts`：新增 `renderReadingLoading()`，以文章族上下文就绪状态阻止不完整通读首帧；显示可见解析文案、骨架和无障碍状态，完成后全文淡入；通读按钮同步加载状态。
-- `styles.css`：新增通读解析提示卡、书本图标浮动、骨架复用和全文进入动画，并在减少动态效果下全部静止。
-- `tests/incremental-render.test.mjs`：新增通读上下文首帧门、提示文案、按钮状态、无障碍属性、动画及减少动态效果契约。
-- `README.md`、`CHANGELOG.md`、`docs/ARCHITECTURE.md`、`docs/FUNCTION_REFERENCE.md`、`TEST_RESULTS.md`：同步用户行为、架构边界、函数文档和验证结果。
-- `update.json`：写入本轮安装包 SHA-256；`main.js`：按源码重新生产构建。
+- `src/editor/table-interaction.ts`：新增相邻列守恒调整算法，拖动当前分隔线时只让当前列与右侧列反向变化，并保持总宽度和最小列宽边界。
+- `src/editor/article-renderer.ts`：保存值按总和转换为百分比，表格固定铺满文章宽度；只为非末列创建拖动柄，并优先从实际页面宽度开始调整。
+- `src/editor/editor.ts`：列宽释放后直接记录历史、更新稳定表格块并触发保存，不同步重建整篇文章 DOM，避免目录/正文状态和阅读位置竞争。
+- `src/view.ts`：记录最近一次持久化的中心标题，仅在标题确实变化时同步文件名，避免表格或样式保存将既有文件路径意外改名。
+- `styles.css`：表格和外壳限制为页面宽度，采用固定布局与单元格强制换行，隐藏横向溢出。
+- `tests/article-content-block.test.mjs`：新增相邻列边界、比例列宽、无末列拖动柄、无整页重绘、无横向滚动和标题同步保护回归。
+- `README.md`、`CHANGELOG.md`、`docs/ARCHITECTURE.md`、`docs/DATA_MODEL.md`、`docs/DEVELOPMENT.md`、`docs/SPECIAL_FEATURES.md`、`docs/TESTING.md`、`docs/FUNCTION_REFERENCE.md`、`TEST_RESULTS.md`：同步行为、数据边界、测试与交付状态。
+- `package.json`、`package-lock.json`、`manifest.json`、`versions.json`、`update.json`、`main.js`：统一版本为 1.41.3，写入最终安装包 SHA-256 并重新生成生产构建。
 
 ## 1.40.11 删除文章边缘加载按钮跑马灯
 

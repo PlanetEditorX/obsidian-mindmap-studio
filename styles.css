@@ -4342,12 +4342,15 @@
 .mms-article-image.image-align-right { margin-right: 0; margin-left: auto; }
 
 .mms-article-table-wrap {
+  max-width: 100%;
   margin: 18px 0;
-  overflow-x: auto;
+  overflow-x: hidden;
 }
 
 .mms-article-table {
   width: 100%;
+  max-width: 100%;
+  table-layout: fixed;
   border-collapse: collapse;
 }
 
@@ -4357,7 +4360,10 @@
 
 .mms-article-table th,
 .mms-article-table td {
+  min-width: 0;
   padding: 8px 10px;
+  overflow-wrap: anywhere;
+  word-break: break-word;
   border: 1px solid var(--background-modifier-border);
 }
 

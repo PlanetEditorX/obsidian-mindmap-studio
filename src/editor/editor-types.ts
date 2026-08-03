@@ -21,6 +21,12 @@ import type { ArticleLeafBulletStyle, ArticleLeafTextAlignment, ImageHostChoice,
 import type { DesktopCaptureResult } from "../utils/desktop-capture";
 import type { ImageRecognitionItemResult, RecognizableImage } from "../vision/recognition";
 
+/** Controls host-side work after an editor document change. */
+export interface MindMapEditorChangeOptions {
+  /** Skip rebuilding parent/child article context when the change cannot affect structure or navigation. */
+  refreshArticleContext?: boolean;
+}
+
 /**
  * Host services consumed by the editor.
  *
@@ -28,7 +34,7 @@ import type { ImageRecognitionItemResult, RecognizableImage } from "../vision/re
  * testable without constructing the complete Obsidian plugin.
  */
 export interface MindMapEditorCallbacks {
-  onChange: (document: MindMapDocument) => void;
+  onChange: (document: MindMapDocument, options?: MindMapEditorChangeOptions) => void;
   onOpenLink: (link: string) => void | Promise<void>;
   onExportSvg: (svg: string) => void | Promise<void>;
   onExportMarkdown: (markdown: string) => void | Promise<void>;

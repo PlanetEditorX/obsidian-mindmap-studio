@@ -36,7 +36,7 @@ npm run verify
 
 ### 编辑器层
 
-`src/editor/` 负责交互和渲染。所有可撤销写操作应通过统一 mutation/history 链路；不要直接修改文档后绕过撤销、重绘和保存通知。
+`src/editor/` 负责交互和渲染。所有可撤销写操作应通过统一 mutation/history 链路；不要直接修改文档后绕过撤销和保存通知。只有 DOM 已在连续交互中实时得到最终结果、且同步重绘会破坏当前位置时，才允许像文章表格列宽提交一样显式执行 `history.capture()`、稳定块更新、`onChange(..., { refreshArticleContext: false })` 和保存标记，同时跳过 `render()` 与文章族上下文刷新，并必须补充专项契约。
 
 ### 插件服务层
 

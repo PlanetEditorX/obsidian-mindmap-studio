@@ -8564,6 +8564,19 @@ function resolveByteChunk(weights, edge, direction, byteBudget = ARTICLE_RENDER_
 }
 
 // src/editor/table-interaction.ts
+function resizeAdjacentTableColumns(sourceWidths, columnIndex, delta, minimumWidth = 64) {
+  var _a2, _b2;
+  const widths = sourceWidths.map((width) => Math.max(1, Math.round(width)));
+  const adjacentIndex = columnIndex + 1;
+  if (columnIndex < 0 || adjacentIndex >= widths.length) return widths;
+  const left = (_a2 = widths[columnIndex]) != null ? _a2 : minimumWidth;
+  const right = (_b2 = widths[adjacentIndex]) != null ? _b2 : minimumWidth;
+  const minimum = Math.max(24, Math.min(minimumWidth, Math.floor((left + right) / 2)));
+  const boundedDelta = Math.max(minimum - left, Math.min(right - minimum, Math.round(delta)));
+  widths[columnIndex] = left + boundedDelta;
+  widths[adjacentIndex] = right - boundedDelta;
+  return widths;
+}
 function bindTableDoubleClick(target, options) {
   target.addEventListener("dblclick", (event) => {
     if (options.isReadOnly() || options.isResizeTarget(event.target)) return;
@@ -8574,20 +8587,20 @@ function bindTableDoubleClick(target, options) {
 }
 function bindTableColumnResize(handle, options) {
   handle.addEventListener("pointerdown", ((rawEvent) => {
-    var _a2, _b2;
+    var _a2;
     const event = rawEvent;
     if (options.isReadOnly() || event.button !== 0) return;
     event.preventDefault();
     event.stopPropagation();
     (_a2 = handle.setPointerCapture) == null ? void 0 : _a2.call(handle, event.pointerId);
     const startX = event.clientX;
-    const widths = options.initialWidths();
-    const startWidth = (_b2 = widths[options.columnIndex]) != null ? _b2 : 160;
+    const initialWidths = options.initialWidths();
+    let widths = [...initialWidths];
     options.applyWidths(widths);
     options.setResizing(true);
     const move = (rawMoveEvent) => {
       const moveEvent = rawMoveEvent;
-      widths[options.columnIndex] = Math.max(64, Math.min(1200, Math.round(startWidth + moveEvent.clientX - startX)));
+      widths = resizeAdjacentTableColumns(initialWidths, options.columnIndex, moveEvent.clientX - startX);
       options.applyWidths(widths);
     };
     const finish = () => {
@@ -8971,11 +8984,12 @@ function renderArticleTable(container, node, tableData, blockId, options) {
   const columns = tableData.headers.map(() => colgroup.createEl("col"));
   const applyWidths = (widths) => {
     table.addClass("has-custom-column-widths");
+    const total = widths.reduce((sum, width) => sum + Math.max(1, width), 0) || 1;
     columns.forEach((column, index) => {
       var _a3;
-      column.style.width = `${(_a3 = widths[index]) != null ? _a3 : 160}px`;
+      column.style.width = `${(Math.max(1, (_a3 = widths[index]) != null ? _a3 : 160) / total * 100).toFixed(4)}%`;
     });
-    table.style.width = `${widths.reduce((sum, width) => sum + width, 0)}px`;
+    table.style.width = "100%";
   };
   if ((_a2 = tableData.columnWidths) == null ? void 0 : _a2.length) applyWidths(tableData.columnWidths);
   const tr = table.createEl("thead").createEl("tr");
@@ -9001,7 +9015,7 @@ function renderArticleTable(container, node, tableData, blockId, options) {
     isResizeTarget: (target) => target instanceof HTMLElement && Boolean(target.closest(".mms-table-column-resizer")),
     edit: () => options.editTableBlock(node, tableData, blockId)
   });
-  headers.forEach((header, index) => {
+  headers.slice(0, -1).forEach((header, index) => {
     const handle = header.createSpan({
       cls: "mms-table-column-resizer",
       attr: {
@@ -9017,8 +9031,9 @@ function renderArticleTable(container, node, tableData, blockId, options) {
       columnIndex: index,
       initialWidths: () => headers.map((cell, columnIndex) => {
         var _a3;
+        const measured = Math.round(cell.getBoundingClientRect().width);
         const stored = (_a3 = tableData.columnWidths) == null ? void 0 : _a3[columnIndex];
-        return stored != null ? stored : Math.max(64, Math.round(cell.getBoundingClientRect().width));
+        return measured > 0 ? measured : stored != null ? stored : 160;
       }),
       applyWidths,
       setResizing: (resizing) => wrap.toggleClass("is-resizing-columns", resizing),
@@ -15474,9 +15489,12 @@ var MindMapEditor = class {
       var _a2;
       return Math.max(64, Math.min(1200, Math.round((_a2 = widths[index]) != null ? _a2 : 160)));
     });
-    const viewportAnchor = this.captureMindMapViewportAnchor(node.id);
-    this.mutate(() => this.upsertStructuredBlock(node, "table", { ...block.table, columnWidths }, blockId));
-    this.restoreMindMapViewportAnchor(viewportAnchor);
+    const location = this.currentMode === "mindmap" ? null : this.captureCurrentLocation(this.currentMode);
+    if (location) this.rememberLocation(location, true);
+    this.history.capture(this.document);
+    this.upsertStructuredBlock(node, "table", { ...block.table, columnWidths }, blockId);
+    this.callbacks.onChange(this.getDocument(), { refreshArticleContext: false });
+    this.markSaving();
   }
   /** Opens the selected code block directly instead of routing through the node editor. */
   openCodeBlockEditor(node, code, blockId) {
@@ -17470,6 +17488,8 @@ var MindMapStudioView = class extends import_obsidian13.TextFileView {
     this.articleContextTimer = null;
     this.preferCurrentFileOnNextContextRefresh = false;
     this.preferredCurrentNodeIdOnNextContextRefresh = null;
+    /** Root title last loaded or saved; unrelated edits must not rename an already mismatched file. */
+    this.persistedRootTitle = "";
     this.plugin = plugin;
   }
   /**
@@ -17530,6 +17550,7 @@ var MindMapStudioView = class extends import_obsidian13.TextFileView {
     const title = (_b2 = (_a2 = this.file) == null ? void 0 : _a2.basename) != null ? _b2 : "\u601D\u7EF4\u5BFC\u56FE";
     this.plugin.logDebug("view", "set-view-data-start", { filePath: (_c = this.file) == null ? void 0 : _c.path, clear, hasEditor: Boolean(this.editor), dataBytes: new TextEncoder().encode(data).byteLength });
     this.document = parseDocument(data, title);
+    this.persistedRootTitle = nodePlainText(this.document.root).trim();
     const queuedDirectory = this.file ? this.plugin.consumePendingMindMapDirectory(this.file.path) : null;
     const queuedFocusNodeId = queuedDirectory ? null : this.file ? this.plugin.consumePendingMindMapFocus(this.file.path) : null;
     if (queuedDirectory) {
@@ -17559,11 +17580,11 @@ var MindMapStudioView = class extends import_obsidian13.TextFileView {
       (_f = this.editor) == null ? void 0 : _f.destroy();
       this.contentEl.empty();
       this.editor = new MindMapEditor(this.app, this.contentEl, this.document, {
-        onChange: (document2) => {
+        onChange: (document2, options) => {
           this.document = document2;
           this.requestSave();
           this.scheduleSavedIndicator();
-          this.scheduleArticleContextRefresh(320);
+          if ((options == null ? void 0 : options.refreshArticleContext) !== false) this.scheduleArticleContextRefresh(320);
         },
         onOpenLink: async (link) => this.openLink(link),
         onExportSvg: async (svg) => this.exportTextFile("svg", svg),
@@ -17719,10 +17740,13 @@ var MindMapStudioView = class extends import_obsidian13.TextFileView {
    */
   async save(clear) {
     var _a2, _b2, _c;
-    await super.save(clear);
     const file = this.file;
     const document2 = (_b2 = (_a2 = this.editor) == null ? void 0 : _a2.getDocument()) != null ? _b2 : this.document;
-    if (file && document2) await this.plugin.syncMindMapTitleToFilename(file, document2);
+    const rootTitle = document2 ? nodePlainText(document2.root).trim() : "";
+    const titleChanged = Boolean(document2 && rootTitle !== this.persistedRootTitle);
+    await super.save(clear);
+    if (file && document2 && titleChanged) await this.plugin.syncMindMapTitleToFilename(file, document2);
+    this.persistedRootTitle = rootTitle;
     (_c = this.editor) == null ? void 0 : _c.markSaved();
   }
   /**
