@@ -1761,7 +1761,7 @@ const command = "example";
   assert.match(cssSource, /\.mmc-node\.is-root\s*\{[\s\S]*padding-right:\s*13px/, "root-node text must remain horizontally centered");
   assert.match(cssSource, /\.mmc-node-resize-handle\s*\{[\s\S]*right:\s*-7px[\s\S]*bottom:\s*-7px/, "resize control must remain anchored at the lower-right corner");
   assert.match(cssSource, /white-space:\s*pre-wrap/);
-  assert.match(editorSource, /if \(node\.submap\) void this\.callbacks\.onOpenMindMap\(node\.submap\.path\)/, "the whole linked node must open its child map");
+  assert.match(editorSource, /if \(node\.submap\)[\s\S]*navigateWithTransition\(\(\) => this\.callbacks\.onOpenMindMap\(node\.submap!\.path\)\)/, "the whole linked node must open its child map through the shared page transition");
   assert.match(editorSource, /拖动调整节点宽度和最小高度/);
   assert.match(editorSource, /this\.rootEl\.addClass\("mmc-ctrl-resize"\)/, "Ctrl/Cmd resize styling must be applied after the editor root exists");
   assert.match(settingsSource, /collapse-all/, "toolbar settings must include the expand/collapse-all control");
