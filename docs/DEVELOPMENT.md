@@ -32,7 +32,7 @@ npm run verify
 
 ### 模型层
 
-`src/core/model.ts` 与 `src/core/node-tree.ts` 负责当前数据结构、规范化、序列化和树结构操作。磁盘数据、Markdown、剪贴板和 XMind 等不可信输入必须先进入模型层，不应在 UI 中重复实现解析逻辑。
+`src/core/model.ts` 与 `src/core/node-tree.ts` 负责当前数据结构、规范化、序列化和树结构操作。磁盘数据、Markdown、剪贴板和 XMind 等不可信输入必须先进入解析/模型边界，不应在 UI 中重复实现格式判断。XMind 二进制资源解析留在 `src/import/import-export.ts`，UI 只提供保存图片的宿主回调；归档路径必须拒绝 `..`，共享资源必须去重，公式字段必须保留源码而不是仅导入渲染预览。
 
 ### 编辑器层
 
