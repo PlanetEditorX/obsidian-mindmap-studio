@@ -317,12 +317,13 @@ function rewriteXMindImageTokens(document: MindMapDocument, replacements: Map<st
 }
 
 /**
- * Merges a linked XMind sheet root into its same-title mount topic.
+ * Merges a linked XMind sheet root into its mount topic.
  *
- * XMind uses same-title topic links as nested sheet portals. The mount topic
- * already owns the visible title, so only the linked root's additional content
- * blocks, notes, and children are merged. This preserves images and equations
- * attached directly to deeply nested sheet roots without duplicating the title.
+ * XMind topic links are nested-sheet portals. The mount topic already owns the
+ * visible title, even when the linked sheet root was renamed independently, so
+ * only the linked root's additional content blocks, notes, and children are
+ * merged. This prevents an empty portal and a second, content-bearing root
+ * node from being imported side by side.
  */
 function mergeLinkedXMindSheetRoot(target: MindMapNode, linkedRoot: MindMapNode): void {
   const targetBlocks = nodeContentBlocks(target);
@@ -334,7 +335,7 @@ function mergeLinkedXMindSheetRoot(target: MindMapNode, linkedRoot: MindMapNode)
   }));
   let skippedLinkedTitle = false;
   for (const block of nodeContentBlocks(linkedRoot)) {
-    if (!skippedLinkedTitle && block.type === "text" && block.text.trim() === target.text.trim()) {
+    if (!skippedLinkedTitle && block.type === "text") {
       skippedLinkedTitle = true;
       continue;
     }
@@ -446,8 +447,7 @@ export function xmindToImportResult(source: ArrayBuffer, fallbackTitle = "XMind 
       const linkedSheet = sheetById.get(sheetReference(topic) ?? "");
       if (linkedSheet?.rootTopic && !ancestors.has(linkedSheet)) {
         const linkedRoot = convertSheet(linkedSheet, ancestors);
-        if (topicPrimaryTitle(linkedRoot) === topicPrimaryTitle(node)) mergeLinkedXMindSheetRoot(node, linkedRoot);
-        else node.children.push(linkedRoot);
+        mergeLinkedXMindSheetRoot(node, linkedRoot);
       }
       const topicChildren = Object.values(topic.children ?? {}).flatMap((items) => Array.isArray(items) ? items : []);
       topicChildren.forEach((child, index) => {

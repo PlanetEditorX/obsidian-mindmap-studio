@@ -6250,7 +6250,7 @@ function mergeLinkedXMindSheetRoot(target, linkedRoot) {
   }));
   let skippedLinkedTitle = false;
   for (const block of nodeContentBlocks(linkedRoot)) {
-    if (!skippedLinkedTitle && block.type === "text" && block.text.trim() === target.text.trim()) {
+    if (!skippedLinkedTitle && block.type === "text") {
       skippedLinkedTitle = true;
       continue;
     }
@@ -6357,8 +6357,7 @@ function xmindToImportResult(source, fallbackTitle = "XMind \u5BFC\u5165") {
       const linkedSheet = sheetById.get((_a4 = sheetReference(topic)) != null ? _a4 : "");
       if ((linkedSheet == null ? void 0 : linkedSheet.rootTopic) && !ancestors.has(linkedSheet)) {
         const linkedRoot = convertSheet(linkedSheet, ancestors);
-        if (topicPrimaryTitle(linkedRoot) === topicPrimaryTitle(node)) mergeLinkedXMindSheetRoot(node, linkedRoot);
-        else node.children.push(linkedRoot);
+        mergeLinkedXMindSheetRoot(node, linkedRoot);
       }
       const topicChildren = Object.values((_b3 = topic.children) != null ? _b3 : {}).flatMap((items) => Array.isArray(items) ? items : []);
       topicChildren.forEach((child, index) => {
