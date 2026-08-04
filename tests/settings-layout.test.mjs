@@ -5,6 +5,8 @@ import { before, test } from "node:test";
 let settingsSource;
 let mainSource;
 let editorSource;
+let modelSource;
+let articleRendererSource;
 let stylesSource;
 let bundleSource;
 let bundleReadableSource;
@@ -16,10 +18,12 @@ function decodeBundleUnicodeEscapes(source) {
 }
 
 before(async () => {
-  [settingsSource, mainSource, editorSource, stylesSource, bundleSource] = await Promise.all([
+  [settingsSource, mainSource, editorSource, modelSource, articleRendererSource, stylesSource, bundleSource] = await Promise.all([
     readFile("src/settings.ts", "utf8"),
     readFile("src/main.ts", "utf8"),
     readFile("src/editor/editor.ts", "utf8"),
+    readFile("src/core/model.ts", "utf8"),
+    readFile("src/editor/article-renderer.ts", "utf8"),
     readFile("styles.css", "utf8"),
     readFile("main.js", "utf8")
   ]);
@@ -152,6 +156,31 @@ test("toolbar marker color uses the same follow-theme representation as settings
   assert.match(editorSource, /leafMarkerColor: markerColorFollowsTheme \? undefined : markerColor\.value/);
   assert.doesNotMatch(editorSource, /标识颜色来源|markerColorFollowGlobal|跟随插件设置"\s*\}\);/);
   assert.doesNotMatch(stylesSource, /\.mmc-appearance-color-row button\.is-active/);
+});
+
+test("article directory exposes every preserved and previewed style without circular bullets", () => {
+  for (const [id, label] of [
+    ["card", "卡片（当前样式）"],
+    ["plain", "简洁"],
+    ["lines", "引导线"],
+    ["original", "最初样式"],
+    ["minimal-page", "极简书页"],
+    ["report", "现代报告"],
+    ["magazine", "杂志索引"],
+    ["tree", "层级树线"]
+  ]) {
+    assert.ok(editorSource.includes(`["${id}", "${label}"]`), `missing directory style option: ${id}`);
+    assert.ok(modelSource.includes(`input.tocStyle === "${id}"`), `missing directory style normalization: ${id}`);
+  }
+  assert.match(modelSource, /export type ArticleTocStyle = "card" \| "plain" \| "lines" \| "original" \| "minimal-page" \| "report" \| "magazine" \| "tree"/);
+  assert.match(articleRendererSource, /mms-article-toc-number[\s\S]*entry\.label[\s\S]*mms-article-toc-title/);
+  assert.match(stylesSource, /\.mms-article-toc-page li::before \{\s*display: none;\s*\}/);
+  assert.doesNotMatch(stylesSource, /\.mms-article-toc-page li::before \{[^}]*border-radius: 50%/);
+  for (const selector of ["toc-original", "toc-minimal-page", "toc-report", "toc-magazine", "toc-tree"]) {
+    assert.ok(stylesSource.includes(`.mms-article-page.${selector} .mms-article-toc-page`), `missing directory CSS: ${selector}`);
+  }
+  assert.match(stylesSource, /\.mms-article-page\.toc-magazine \.mms-article-toc-page > ol \{\s*display: block;/);
+  assert.match(stylesSource, /\.mms-article-page\.toc-magazine \.mms-article-toc-page li \{[\s\S]*?width: 100%;/);
 });
 
 test("article directory uses a responsive accessible modern layout", () => {

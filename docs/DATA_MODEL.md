@@ -83,6 +83,8 @@ interface MindMapNode {
 
 阅读样式（兼容字段 `articleStyle`）还可保存 `leafNumberingEnabled`、`leafNumberingStyle` 与 `leafNumberingThreshold`，用于覆盖插件全局的末端正文转序号开关、样式和阈值。`leafNumberingStyle` 可选 `next-level` 或 `circled`：前者使用上级标题的下一层文章编号，并遵守八级标题编号边界；后者在逻辑编号与纯文本导出中保留第 1–50 项的 Unicode `①–㊿` 映射，第 51 项以后使用普通数字回退。文章、通读和 HTML 则始终以十进制索引配合 CSS 圆环显示，使全部序号使用同一字体、字重、尺寸和基线，同时继续支持六七十项及更多。阈值未达到时仍使用末端正文标识。自动结构可以继续深入到第 9 级及以后，但标题编号不会循环复用第 7、8 级的 `A.` / `（A）`；带圈末端序号则可在这些更深层级继续使用。
 
+`articleStyle.tocStyle` 保存当前脑图的目录视觉，可选 `card`、`plain`、`lines`、`original`、`minimal-page`、`report`、`magazine` 或 `tree`。前三项继续兼容既有文档；其余选项分别对应最初样式、极简书页、现代报告、单列杂志索引和无圆点层级树线。全部样式都使用独立的编号与标题元素，并禁止在章节前渲染圆点；`magazine` 的每个目录项始终独占一行。
+
 ## 4. 有序内容块
 
 内容块的 `id` 在节点内排序和跨节点移动时保持不变。`moveNodeContentBlock()` 会从来源节点移除目标块，按目标块之前、之后或目标节点末尾插入，并对来源和目标分别调用权威内容替换逻辑，从而同步清理和重建 `text`、`richText`、`image`、`table`、`code` 兼容字段。移动只改变内容块归属与顺序，不复制内容，也不改变节点树结构。

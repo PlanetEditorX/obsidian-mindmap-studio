@@ -34,6 +34,8 @@ export type ArticleNumberingMode = "none" | "manual";
 export type ArticleLeafNumberingStyle = "next-level" | "circled";
 /** Built-in reading-presentation presets shared by article and continuous-reading modes. */
 export type ArticleStylePresetId = "classic" | "book" | "modern" | "minimal";
+/** Directory presentation saved per document and shared by article-family views. */
+export type ArticleTocStyle = "card" | "plain" | "lines" | "original" | "minimal-page" | "report" | "magazine" | "tree";
 /** Per-document reading-style overrides shared by article and continuous-reading modes. */
 export interface ArticleStyle {
   preset: ArticleStylePresetId;
@@ -42,7 +44,7 @@ export interface ArticleStyle {
   headingColor?: string;
   accentColor?: string;
   backgroundColor?: string;
-  tocStyle?: "card" | "plain" | "lines";
+  tocStyle?: ArticleTocStyle;
   fontSize?: number;
   lineHeight?: number;
   /** Per-page override for whether terminal body markers are displayed. */
@@ -1487,7 +1489,16 @@ function normalizeArticleStyle(input: Partial<ArticleStyle> | undefined): Articl
     ? input.preset
     : "classic";
   const color = (value: unknown): string | undefined => typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value) ? value : undefined;
-  const tocStyle = input.tocStyle === "plain" || input.tocStyle === "lines" ? input.tocStyle : input.tocStyle === "card" ? "card" : undefined;
+  const tocStyle: ArticleTocStyle | undefined = input.tocStyle === "card"
+    || input.tocStyle === "plain"
+    || input.tocStyle === "lines"
+    || input.tocStyle === "original"
+    || input.tocStyle === "minimal-page"
+    || input.tocStyle === "report"
+    || input.tocStyle === "magazine"
+    || input.tocStyle === "tree"
+    ? input.tocStyle
+    : undefined;
   const fontSize = typeof input.fontSize === "number" ? Math.max(12, Math.min(24, input.fontSize)) : undefined;
   const lineHeight = typeof input.lineHeight === "number" ? Math.max(1.2, Math.min(2.4, input.lineHeight)) : undefined;
   return {

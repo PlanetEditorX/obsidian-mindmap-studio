@@ -367,7 +367,9 @@ function renderDirectory(page: HTMLElement, options: ArticleRendererOptions): vo
     const tocDepth = articleTocDepth(entry);
     const item = list.createEl("li", { cls: `depth-${Math.min(tocDepth, 8)}` });
     item.style.setProperty("--mms-article-depth", String(tocDepth));
-    const link = item.createEl("a", { text: entry.displayTitle || entry.title || "未命名标题", href: entry.filePath, attr: { title: entry.breadcrumb.join(" › ") } });
+    const link = item.createEl("a", { href: entry.filePath, attr: { title: entry.breadcrumb.join(" › ") } });
+    if (entry.label) link.createSpan({ cls: "mms-article-toc-number", text: entry.label });
+    link.createSpan({ cls: "mms-article-toc-title", text: entry.title || "未命名标题" });
     link.dataset.nodeId = entry.nodeId;
     link.dataset.filePath = entry.filePath;
     link.addEventListener("click", (event) => {
