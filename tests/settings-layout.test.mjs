@@ -138,6 +138,12 @@ test("current-map appearance controls use a wide gap-free responsive layout", ()
   assert.match(bundleReadableSource, /当前脑图设置，优先于插件全局分支外观/);
 });
 
+test("current-map appearance color controls render as compact circular swatches", () => {
+  assert.match(stylesSource, /\.mmc-appearance-modal \.mmc-color-row input\[type="color"\] \{[\s\S]*width: 30px;[\s\S]*height: 30px;[\s\S]*border-radius: 50%;/);
+  assert.match(stylesSource, /\.mmc-appearance-modal \.mmc-color-row input\[type="color"\]::\-webkit-color-swatch-wrapper \{[\s\S]*padding: 0;/);
+  assert.match(stylesSource, /\.mmc-appearance-modal \.mmc-color-row input\[type="color"\]::\-webkit-color-swatch \{[\s\S]*border-radius: 50%;/);
+});
+
 test("global appearance mirrors the page toolbar groups instead of only sharing a title", () => {
   assert.match(settingsSource, /"主题与外观（全局默认）": "主题与外观"/);
   assert.match(settingsSource, /private organizeGlobalAppearanceSettings\(\): void/);
