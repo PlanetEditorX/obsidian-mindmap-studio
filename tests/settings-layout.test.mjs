@@ -138,10 +138,20 @@ test("current-map appearance controls use a wide gap-free responsive layout", ()
   assert.match(bundleReadableSource, /当前脑图设置，优先于插件全局分支外观/);
 });
 
-test("current-map appearance color controls render as compact circular swatches", () => {
-  assert.match(stylesSource, /\.mmc-appearance-modal \.mmc-color-row input\[type="color"\] \{[\s\S]*width: 30px;[\s\S]*height: 30px;[\s\S]*border-radius: 50%;/);
-  assert.match(stylesSource, /\.mmc-appearance-modal \.mmc-color-row input\[type="color"\]::\-webkit-color-swatch-wrapper \{[\s\S]*padding: 0;/);
-  assert.match(stylesSource, /\.mmc-appearance-modal \.mmc-color-row input\[type="color"\]::\-webkit-color-swatch \{[\s\S]*border-radius: 50%;/);
+test("every current-map appearance color control renders as an exact circular swatch", () => {
+  assert.match(editorSource, /const row = label\.createDiv\(\{ cls: "mmc-color-row mmc-appearance-color-row" \}\);[\s\S]*正文颜色[\s\S]*标题颜色[\s\S]*强调色[\s\S]*纸张背景/);
+  assert.match(stylesSource, /\.mmc-appearance-modal input\[type="color"\] \{[\s\S]*appearance: none;[\s\S]*width: 30px !important;[\s\S]*height: 30px;[\s\S]*aspect-ratio: 1;[\s\S]*border-radius: 50% !important;[\s\S]*clip-path: circle\(50% at 50% 50%\)/);
+  assert.match(stylesSource, /\.mmc-appearance-modal input\[type="color"\]::-webkit-color-swatch-wrapper \{[\s\S]*border-radius: 50%/);
+  assert.match(stylesSource, /\.mmc-appearance-modal input\[type="color"\]::-webkit-color-swatch \{[\s\S]*border-radius: 50%/);
+  assert.match(stylesSource, /\.mmc-appearance-modal input\[type="color"\]::-moz-color-swatch \{[\s\S]*border-radius: 50%/);
+});
+
+test("toolbar marker color uses the same follow-theme representation as settings", () => {
+  assert.match(editorSource, /text: "末端正文标识颜色"[\s\S]*text: "跟随主题"[\s\S]*"aria-pressed": "true"/);
+  assert.match(editorSource, /setMarkerColorFollowsTheme[\s\S]*syncMarkerColorPreview/);
+  assert.match(editorSource, /leafMarkerColor: markerColorFollowsTheme \? undefined : markerColor\.value/);
+  assert.doesNotMatch(editorSource, /标识颜色来源|markerColorFollowGlobal|跟随插件设置"\s*\}\);/);
+  assert.doesNotMatch(stylesSource, /\.mmc-appearance-color-row button\.is-active/);
 });
 
 test("article directory uses a responsive accessible modern layout", () => {

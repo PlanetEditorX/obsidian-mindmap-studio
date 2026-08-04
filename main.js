@@ -10305,7 +10305,8 @@ function createReadingStyleControls(container, style, globalDefaults) {
   };
   const addColor = (labelText) => {
     const label = container.createEl("label", { text: labelText });
-    return label.createEl("input", { type: "color" });
+    const row = label.createDiv({ cls: "mmc-color-row mmc-appearance-color-row" });
+    return row.createEl("input", { type: "color" });
   };
   const fontFamily = addText("\u9605\u8BFB\u5B57\u4F53");
   const textColor = addColor("\u6B63\u6587\u989C\u8272");
@@ -10332,10 +10333,22 @@ function createReadingStyleControls(container, style, globalDefaults) {
   for (const [id, name] of [["solid", "\u5B9E\u5FC3\u5706"], ["hollow", "\u7A7A\u5FC3\u5706"], ["square", "\u5B9E\u5FC3\u65B9\u5757"], ["dash", "\u77ED\u6A2A\u7EBF"]]) {
     markerStyle.createEl("option", { text: name, attr: { value: id } });
   }
-  const markerColor = addColor("\u672B\u7AEF\u6B63\u6587\u6807\u8BC6\u989C\u8272");
-  const markerColorGlobal = container.createEl("label", { text: "\u6807\u8BC6\u989C\u8272\u6765\u6E90" });
-  const markerColorFollowGlobal = markerColorGlobal.createEl("input", { type: "checkbox" });
-  markerColorGlobal.createSpan({ text: " \u8DDF\u968F\u63D2\u4EF6\u8BBE\u7F6E" });
+  const markerColorLabel = container.createEl("label", { text: "\u672B\u7AEF\u6B63\u6587\u6807\u8BC6\u989C\u8272" });
+  const markerColorRow = markerColorLabel.createDiv({ cls: "mmc-color-row mmc-appearance-color-row" });
+  const markerColor = markerColorRow.createEl("input", { type: "color" });
+  const markerColorFollowTheme = markerColorRow.createEl("button", {
+    text: "\u8DDF\u968F\u4E3B\u9898",
+    attr: { type: "button", "aria-pressed": "true" }
+  });
+  let markerColorFollowsTheme = true;
+  const setMarkerColorFollowsTheme = (followsTheme) => {
+    markerColorFollowsTheme = followsTheme;
+    markerColorFollowTheme.setAttribute("aria-pressed", String(followsTheme));
+  };
+  const syncMarkerColorPreview = () => {
+    if (!markerColorFollowsTheme) return;
+    markerColor.value = globalDefaults.color || accentColor.value || "#ef4444";
+  };
   const alignmentLabel = container.createEl("label", { text: "\u672B\u7AEF\u6B63\u6587\u5BF9\u9F50\u65B9\u5F0F" });
   const alignment = alignmentLabel.createEl("select");
   alignment.createEl("option", { text: `\u8DDF\u968F\u63D2\u4EF6\u8BBE\u7F6E\uFF08\u5F53\u524D${globalDefaults.alignment === "auto" ? "\u81EA\u52A8" : "\u9876\u683C"}\uFF09`, attr: { value: "" } });
@@ -10367,9 +10380,8 @@ function createReadingStyleControls(container, style, globalDefaults) {
     lineHeight.value = String((_h = nextResolved.lineHeight) != null ? _h : 1.85);
     markerEnabled.value = nextStyle.leafMarkerEnabled === void 0 ? "" : String(nextStyle.leafMarkerEnabled);
     markerStyle.value = (_i = nextStyle.leafMarkerStyle) != null ? _i : "";
-    markerColor.value = (_j = nextStyle.leafMarkerColor) != null ? _j : globalDefaults.color || "#ef4444";
-    markerColorFollowGlobal.checked = nextStyle.leafMarkerColor === void 0;
-    markerColor.disabled = markerColorFollowGlobal.checked;
+    setMarkerColorFollowsTheme(nextStyle.leafMarkerColor === void 0);
+    markerColor.value = (_j = nextStyle.leafMarkerColor) != null ? _j : globalDefaults.color || nextResolved.accentColor || "#ef4444";
     alignment.value = (_k = nextStyle.leafTextAlignment) != null ? _k : "";
     numberingEnabled.value = nextStyle.leafNumberingEnabled === void 0 ? "" : String(nextStyle.leafNumberingEnabled);
     numberingStyle.value = (_l = nextStyle.leafNumberingStyle) != null ? _l : "";
@@ -10377,9 +10389,12 @@ function createReadingStyleControls(container, style, globalDefaults) {
   };
   fill(source);
   preset.addEventListener("change", () => fill(ARTICLE_STYLE_PRESETS[preset.value]));
-  markerColorFollowGlobal.addEventListener("change", () => {
-    markerColor.disabled = markerColorFollowGlobal.checked;
+  markerColor.addEventListener("input", () => setMarkerColorFollowsTheme(false));
+  markerColorFollowTheme.addEventListener("click", () => {
+    setMarkerColorFollowsTheme(true);
+    syncMarkerColorPreview();
   });
+  accentColor.addEventListener("input", syncMarkerColorPreview);
   return {
     read: () => ({
       preset: preset.value,
@@ -10393,7 +10408,7 @@ function createReadingStyleControls(container, style, globalDefaults) {
       lineHeight: Math.max(1.2, Math.min(2.4, Number(lineHeight.value) || resolved.lineHeight || 1.85)),
       leafMarkerEnabled: markerEnabled.value === "" ? void 0 : markerEnabled.value === "true",
       leafMarkerStyle: markerStyle.value === "hollow" || markerStyle.value === "square" || markerStyle.value === "dash" ? markerStyle.value : markerStyle.value === "solid" ? "solid" : void 0,
-      leafMarkerColor: markerColorFollowGlobal.checked ? void 0 : markerColor.value,
+      leafMarkerColor: markerColorFollowsTheme ? void 0 : markerColor.value,
       leafTextAlignment: alignment.value === "flush" || alignment.value === "auto" ? alignment.value : void 0,
       leafNumberingEnabled: numberingEnabled.value === "" ? void 0 : numberingEnabled.value === "true",
       leafNumberingStyle: numberingStyle.value === "circled" || numberingStyle.value === "next-level" ? numberingStyle.value : void 0,
