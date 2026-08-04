@@ -237,7 +237,8 @@ function createReadingStyleControls(
   };
   const addColor = (labelText: string): HTMLInputElement => {
     const label = container.createEl("label", { text: labelText });
-    return label.createEl("input", { type: "color" });
+    const row = label.createDiv({ cls: "mmc-color-row mmc-appearance-color-row" });
+    return row.createEl("input", { type: "color" });
   };
   const fontFamily = addText("阅读字体");
   const textColor = addColor("正文颜色");
@@ -265,10 +266,22 @@ function createReadingStyleControls(
   for (const [id, name] of [["solid", "实心圆"], ["hollow", "空心圆"], ["square", "实心方块"], ["dash", "短横线"]] as const) {
     markerStyle.createEl("option", { text: name, attr: { value: id } });
   }
-  const markerColor = addColor("末端正文标识颜色");
-  const markerColorGlobal = container.createEl("label", { text: "标识颜色来源" });
-  const markerColorFollowGlobal = markerColorGlobal.createEl("input", { type: "checkbox" });
-  markerColorGlobal.createSpan({ text: " 跟随插件设置" });
+  const markerColorLabel = container.createEl("label", { text: "末端正文标识颜色" });
+  const markerColorRow = markerColorLabel.createDiv({ cls: "mmc-color-row mmc-appearance-color-row" });
+  const markerColor = markerColorRow.createEl("input", { type: "color" });
+  const markerColorFollowTheme = markerColorRow.createEl("button", {
+    text: "跟随主题",
+    attr: { type: "button", "aria-pressed": "true" }
+  });
+  let markerColorFollowsTheme = true;
+  const setMarkerColorFollowsTheme = (followsTheme: boolean): void => {
+    markerColorFollowsTheme = followsTheme;
+    markerColorFollowTheme.setAttribute("aria-pressed", String(followsTheme));
+  };
+  const syncMarkerColorPreview = (): void => {
+    if (!markerColorFollowsTheme) return;
+    markerColor.value = globalDefaults.color || accentColor.value || "#ef4444";
+  };
   const alignmentLabel = container.createEl("label", { text: "末端正文对齐方式" });
   const alignment = alignmentLabel.createEl("select");
   alignment.createEl("option", { text: `跟随插件设置（当前${globalDefaults.alignment === "auto" ? "自动" : "顶格"}）`, attr: { value: "" } });
@@ -300,9 +313,8 @@ function createReadingStyleControls(
     lineHeight.value = String(nextResolved.lineHeight ?? 1.85);
     markerEnabled.value = nextStyle.leafMarkerEnabled === undefined ? "" : String(nextStyle.leafMarkerEnabled);
     markerStyle.value = nextStyle.leafMarkerStyle ?? "";
-    markerColor.value = nextStyle.leafMarkerColor ?? (globalDefaults.color || "#ef4444");
-    markerColorFollowGlobal.checked = nextStyle.leafMarkerColor === undefined;
-    markerColor.disabled = markerColorFollowGlobal.checked;
+    setMarkerColorFollowsTheme(nextStyle.leafMarkerColor === undefined);
+    markerColor.value = nextStyle.leafMarkerColor ?? (globalDefaults.color || nextResolved.accentColor || "#ef4444");
     alignment.value = nextStyle.leafTextAlignment ?? "";
     numberingEnabled.value = nextStyle.leafNumberingEnabled === undefined ? "" : String(nextStyle.leafNumberingEnabled);
     numberingStyle.value = nextStyle.leafNumberingStyle ?? "";
@@ -310,7 +322,12 @@ function createReadingStyleControls(
   };
   fill(source);
   preset.addEventListener("change", () => fill(ARTICLE_STYLE_PRESETS[preset.value as ArticleStylePresetId]));
-  markerColorFollowGlobal.addEventListener("change", () => { markerColor.disabled = markerColorFollowGlobal.checked; });
+  markerColor.addEventListener("input", () => setMarkerColorFollowsTheme(false));
+  markerColorFollowTheme.addEventListener("click", () => {
+    setMarkerColorFollowsTheme(true);
+    syncMarkerColorPreview();
+  });
+  accentColor.addEventListener("input", syncMarkerColorPreview);
 
   return {
     read: () => ({
@@ -327,7 +344,7 @@ function createReadingStyleControls(
       leafMarkerStyle: markerStyle.value === "hollow" || markerStyle.value === "square" || markerStyle.value === "dash"
         ? markerStyle.value
         : markerStyle.value === "solid" ? "solid" : undefined,
-      leafMarkerColor: markerColorFollowGlobal.checked ? undefined : markerColor.value,
+      leafMarkerColor: markerColorFollowsTheme ? undefined : markerColor.value,
       leafTextAlignment: alignment.value === "flush" || alignment.value === "auto" ? alignment.value : undefined,
       leafNumberingEnabled: numberingEnabled.value === "" ? undefined : numberingEnabled.value === "true",
       leafNumberingStyle: numberingStyle.value === "circled" || numberingStyle.value === "next-level" ? numberingStyle.value : undefined,
