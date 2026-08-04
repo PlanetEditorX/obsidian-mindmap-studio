@@ -144,6 +144,17 @@ test("current-map appearance color controls render as compact circular swatches"
   assert.match(stylesSource, /\.mmc-appearance-modal \.mmc-color-row input\[type="color"\]::\-webkit-color-swatch \{[\s\S]*border-radius: 50%;/);
 });
 
+test("article directory uses a responsive accessible modern layout", () => {
+  assert.match(stylesSource, /\.mms-article-toc-page \{[\s\S]*border-radius: clamp\(14px, 2vw, 22px\)[\s\S]*radial-gradient[\s\S]*box-shadow:/);
+  assert.match(stylesSource, /\.mms-article-toc-page > h2 \{[\s\S]*text-align: left/);
+  assert.match(stylesSource, /\.mms-article-toc-page a::after \{[\s\S]*content: "→"[\s\S]*opacity: 0/);
+  assert.match(stylesSource, /\.mms-article-toc-page a:focus-visible \{[\s\S]*outline: 2px solid/);
+  assert.match(stylesSource, /\.mms-article-page\.toc-lines \.mms-article-toc \{[\s\S]*border-left: 3px solid/);
+  assert.match(stylesSource, /@media \(max-width: 600px\)[\s\S]*\.mms-article-toc-page \{[\s\S]*padding: 20px 14px/);
+  assert.match(stylesSource, /\.mms-article-toc-page li\.is-return-target > a \{[\s\S]*box-shadow: inset 3px 0 0/);
+  assert.match(stylesSource, /@media \(prefers-reduced-motion: reduce\)[\s\S]*\.mms-article-toc-page a,[\s\S]*transition: none/);
+});
+
 test("global appearance mirrors the page toolbar groups instead of only sharing a title", () => {
   assert.match(settingsSource, /"主题与外观（全局默认）": "主题与外观"/);
   assert.match(settingsSource, /private organizeGlobalAppearanceSettings\(\): void/);

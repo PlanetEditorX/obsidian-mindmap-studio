@@ -4034,14 +4034,18 @@ mjx-container.mms-node-math:not(.is-display),
   padding-inline: 0;
   background: transparent;
   border: 0;
+  border-radius: 0;
   box-shadow: none;
 }
 
 .mms-article-page.toc-lines .mms-article-toc {
-  background: transparent;
-  border-width: 0 0 0 3px;
-  border-color: var(--mms-article-accent, var(--interactive-accent));
-  border-radius: 0;
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--mms-article-accent, var(--interactive-accent)) 7%, transparent), transparent 34%),
+    var(--mms-article-paper, var(--background-primary));
+  border: 1px solid var(--background-modifier-border);
+  border-left: 3px solid var(--mms-article-accent, var(--interactive-accent));
+  border-radius: 0 var(--radius-l) var(--radius-l) 0;
+  box-shadow: none;
 }
 
 .mms-article-toc h2 {
@@ -4249,6 +4253,8 @@ mjx-container.mms-node-math:not(.is-display),
 
 @media (prefers-reduced-motion: reduce) {
   .mms-page-transition { transition: none; }
+  .mms-article-toc-page a,
+  .mms-article-toc-page a::after { transition: none; }
   .mmc-toolbar.is-toolbar-ready .mmc-toolbar-button,
   .mmc-toolbar.is-toolbar-ready .mmc-zoom-control { transition: none; }
   .mms-mode-button.is-loading svg {
@@ -4925,40 +4931,151 @@ mjx-container.mms-node-math:not(.is-display),
   min-width: 0;
 }
 
-/* A real directory page for the top-level article map family. */
+/* A polished directory page for the top-level article map family. */
 .mms-article-toc-page {
+  position: relative;
   min-height: 280px;
   margin: 0 0 48px;
+  overflow: hidden;
   padding: clamp(24px, 4vw, 44px);
   break-after: page;
   page-break-after: always;
+  border: 1px solid color-mix(in srgb, var(--mms-article-accent, var(--interactive-accent)) 18%, var(--background-modifier-border));
+  border-radius: clamp(14px, 2vw, 22px);
   background:
-    linear-gradient(180deg, color-mix(in srgb, var(--interactive-accent) 5%, transparent), transparent 110px),
-    var(--background-secondary);
+    radial-gradient(circle at 100% 0, color-mix(in srgb, var(--mms-article-accent, var(--interactive-accent)) 10%, transparent), transparent 34%),
+    var(--mms-article-paper, var(--background-primary));
+  box-shadow: 0 18px 44px rgba(15, 23, 42, .08);
+}
+
+.mms-article-toc-page::before {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 3px;
+  content: "";
+  background: linear-gradient(90deg, var(--mms-article-accent, var(--interactive-accent)), transparent 72%);
 }
 
 .mms-article-toc-page > h2 {
-  margin-bottom: 22px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid var(--background-modifier-border);
-  font-size: 1.45em;
-  text-align: center;
+  margin: 0 0 24px;
+  padding: 0;
+  border: 0;
+  color: var(--mms-article-heading, var(--text-normal));
+  font-size: clamp(1.35em, 2.4vw, 1.7em);
+  letter-spacing: .04em;
+  text-align: left;
+}
+
+.mms-article-toc-page > h2::after {
+  display: block;
+  width: 42px;
+  height: 3px;
+  margin-top: 12px;
+  border-radius: 999px;
+  content: "";
+  background: var(--mms-article-accent, var(--interactive-accent));
+}
+
+.mms-article-toc-page > ol {
+  display: grid;
+  gap: 4px;
 }
 
 .mms-article-toc-page li {
+  position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: 2px;
-  margin: 8px 0;
+  margin: 0;
+  padding-left: calc(max(0, var(--mms-article-depth) - 1) * 18px);
+}
+
+.mms-article-toc-page li::before {
+  position: absolute;
+  top: 17px;
+  left: calc(max(0, var(--mms-article-depth) - 1) * 18px - 10px);
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  content: "";
+  background: color-mix(in srgb, var(--mms-article-accent, var(--interactive-accent)) 52%, var(--background-modifier-border));
+}
+
+.mms-article-toc-page li.depth-1::before {
+  display: none;
+}
+
+.mms-article-toc-page a {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 40px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  color: var(--mms-article-heading, var(--text-normal));
+  font-weight: 560;
+  line-height: 1.45;
+  transition: color 140ms ease, background-color 140ms ease, transform 140ms ease;
+}
+
+.mms-article-toc-page a::after {
+  flex: 0 0 auto;
+  margin-left: 12px;
+  content: "→";
+  opacity: 0;
+  transform: translateX(-5px);
+  transition: opacity 140ms ease, transform 140ms ease;
+}
+
+.mms-article-toc-page a:hover,
+.mms-article-toc-page a:focus-visible {
+  color: var(--mms-article-accent, var(--text-accent));
+  background: color-mix(in srgb, var(--mms-article-accent, var(--interactive-accent)) 9%, transparent);
+  text-decoration: none;
+  transform: translateX(2px);
+}
+
+.mms-article-toc-page a:hover::after,
+.mms-article-toc-page a:focus-visible::after {
+  opacity: .72;
+  transform: translateX(0);
+}
+
+.mms-article-toc-page a:focus-visible {
+  outline: 2px solid var(--mms-article-accent, var(--interactive-accent));
+  outline-offset: 2px;
 }
 
 .mms-article-toc-breadcrumb {
   display: block;
   overflow: hidden;
+  margin: -2px 12px 4px;
+  padding-left: 12px;
   color: var(--text-faint);
   font-size: var(--font-ui-smaller);
+  line-height: 1.35;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+@media (max-width: 600px) {
+  .mms-article-toc-page {
+    margin-bottom: 32px;
+    padding: 20px 14px;
+    border-radius: 14px;
+  }
+
+  .mms-article-toc-page li {
+    padding-left: calc(max(0, var(--mms-article-depth) - 1) * 12px);
+  }
+
+  .mms-article-toc-page li::before {
+    left: calc(max(0, var(--mms-article-depth) - 1) * 12px - 7px);
+  }
+
+  .mms-article-toc-page a {
+    padding-inline: 9px;
+  }
 }
 
 .mms-article-number {
@@ -6014,9 +6131,11 @@ select.mms-question-status {
 
 /* Briefly marks the parent mount row after returning from a child article. */
 .mms-article-toc-page li.is-return-target > a {
-  outline: 2px solid var(--interactive-accent);
-  outline-offset: 3px;
-  border-radius: 4px;
+  color: var(--mms-article-accent, var(--text-accent));
+  background: color-mix(in srgb, var(--mms-article-accent, var(--interactive-accent)) 13%, transparent);
+  outline: 2px solid var(--mms-article-accent, var(--interactive-accent));
+  outline-offset: 2px;
+  box-shadow: inset 3px 0 0 var(--mms-article-accent, var(--interactive-accent));
 }
 
 /* LaTeX input and structured-question previews */
