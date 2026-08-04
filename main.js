@@ -759,7 +759,7 @@ function normalizeArticleStyle(input) {
   if (!input) return void 0;
   const preset = input.preset === "book" || input.preset === "modern" || input.preset === "minimal" ? input.preset : "classic";
   const color = (value) => typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value) ? value : void 0;
-  const tocStyle = input.tocStyle === "plain" || input.tocStyle === "lines" ? input.tocStyle : input.tocStyle === "card" ? "card" : void 0;
+  const tocStyle = input.tocStyle === "card" || input.tocStyle === "plain" || input.tocStyle === "lines" || input.tocStyle === "original" || input.tocStyle === "minimal-page" || input.tocStyle === "report" || input.tocStyle === "magazine" || input.tocStyle === "tree" ? input.tocStyle : void 0;
   const fontSize = typeof input.fontSize === "number" ? Math.max(12, Math.min(24, input.fontSize)) : void 0;
   const lineHeight = typeof input.lineHeight === "number" ? Math.max(1.2, Math.min(2.4, input.lineHeight)) : void 0;
   return {
@@ -9371,7 +9371,9 @@ function renderDirectory(page, options) {
     const tocDepth = articleTocDepth(entry);
     const item = list.createEl("li", { cls: `depth-${Math.min(tocDepth, 8)}` });
     item.style.setProperty("--mms-article-depth", String(tocDepth));
-    const link = item.createEl("a", { text: entry.displayTitle || entry.title || "\u672A\u547D\u540D\u6807\u9898", href: entry.filePath, attr: { title: entry.breadcrumb.join(" \u203A ") } });
+    const link = item.createEl("a", { href: entry.filePath, attr: { title: entry.breadcrumb.join(" \u203A ") } });
+    if (entry.label) link.createSpan({ cls: "mms-article-toc-number", text: entry.label });
+    link.createSpan({ cls: "mms-article-toc-title", text: entry.title || "\u672A\u547D\u540D\u6807\u9898" });
     link.dataset.nodeId = entry.nodeId;
     link.dataset.filePath = entry.filePath;
     link.addEventListener("click", (event) => {
@@ -10315,7 +10317,16 @@ function createReadingStyleControls(container, style, globalDefaults) {
   const backgroundColor = addColor("\u7EB8\u5F20\u80CC\u666F");
   const tocLabel = container.createEl("label", { text: "\u76EE\u5F55\u6837\u5F0F" });
   const tocStyle = tocLabel.createEl("select");
-  for (const [id, name] of [["card", "\u5361\u7247"], ["plain", "\u7B80\u6D01"], ["lines", "\u5F15\u5BFC\u7EBF"]]) {
+  for (const [id, name] of [
+    ["card", "\u5361\u7247\uFF08\u5F53\u524D\u6837\u5F0F\uFF09"],
+    ["plain", "\u7B80\u6D01"],
+    ["lines", "\u5F15\u5BFC\u7EBF"],
+    ["original", "\u6700\u521D\u6837\u5F0F"],
+    ["minimal-page", "\u6781\u7B80\u4E66\u9875"],
+    ["report", "\u73B0\u4EE3\u62A5\u544A"],
+    ["magazine", "\u6742\u5FD7\u7D22\u5F15"],
+    ["tree", "\u5C42\u7EA7\u6811\u7EBF"]
+  ]) {
     tocStyle.createEl("option", { text: name, attr: { value: id } });
   }
   const sizeLabel = container.createEl("label", { text: "\u6B63\u6587\u5B57\u53F7" });

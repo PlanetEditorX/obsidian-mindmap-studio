@@ -247,7 +247,16 @@ function createReadingStyleControls(
   const backgroundColor = addColor("纸张背景");
   const tocLabel = container.createEl("label", { text: "目录样式" });
   const tocStyle = tocLabel.createEl("select");
-  for (const [id, name] of [["card", "卡片"], ["plain", "简洁"], ["lines", "引导线"]] as const) {
+  for (const [id, name] of [
+    ["card", "卡片（当前样式）"],
+    ["plain", "简洁"],
+    ["lines", "引导线"],
+    ["original", "最初样式"],
+    ["minimal-page", "极简书页"],
+    ["report", "现代报告"],
+    ["magazine", "杂志索引"],
+    ["tree", "层级树线"]
+  ] as const) {
     tocStyle.createEl("option", { text: name, attr: { value: id } });
   }
   const sizeLabel = container.createEl("label", { text: "正文字号" });

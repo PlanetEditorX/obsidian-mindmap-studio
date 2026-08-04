@@ -5015,17 +5015,6 @@ mjx-container.mms-node-math:not(.is-display),
 }
 
 .mms-article-toc-page li::before {
-  position: absolute;
-  top: 17px;
-  left: calc(max(0, var(--mms-article-depth) - 1) * 18px - 10px);
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  content: "";
-  background: color-mix(in srgb, var(--mms-article-accent, var(--interactive-accent)) 52%, var(--background-modifier-border));
-}
-
-.mms-article-toc-page li.depth-1::before {
   display: none;
 }
 
@@ -5059,6 +5048,19 @@ mjx-container.mms-node-math:not(.is-display),
   transform: translateX(2px);
 }
 
+.mms-article-toc-number {
+  flex: 0 0 auto;
+  min-width: 3.6em;
+  color: var(--mms-article-accent, var(--text-accent));
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.mms-article-toc-title {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
 .mms-article-toc-page a:hover::after,
 .mms-article-toc-page a:focus-visible::after {
   opacity: .72;
@@ -5082,6 +5084,206 @@ mjx-container.mms-node-math:not(.is-display),
   white-space: nowrap;
 }
 
+/* Original directory appearance retained as an explicit compatibility choice. */
+.mms-article-page.toc-original .mms-article-toc-page {
+  padding: clamp(24px, 4vw, 44px);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--interactive-accent) 5%, transparent), transparent 110px),
+    var(--background-secondary);
+  box-shadow: none;
+}
+
+.mms-article-page.toc-original .mms-article-toc-page::before,
+.mms-article-page.toc-original .mms-article-toc-page > h2::after,
+.mms-article-page.toc-original .mms-article-toc-page a::after {
+  display: none;
+}
+
+.mms-article-page.toc-original .mms-article-toc-page > h2 {
+  margin-bottom: 22px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--background-modifier-border);
+  font-size: 1.45em;
+  text-align: center;
+}
+
+.mms-article-page.toc-original .mms-article-toc-page li {
+  margin: 8px 0;
+  padding-left: calc(max(0, var(--mms-article-depth) - 1) * 20px);
+}
+
+.mms-article-page.toc-original .mms-article-toc-page a {
+  min-height: 0;
+  padding: 0;
+  border-radius: 0;
+  font-weight: 400;
+  transition: none;
+}
+
+.mms-article-page.toc-original .mms-article-toc-page a:hover {
+  background: transparent;
+  text-decoration: underline;
+  transform: none;
+}
+
+/* Option A: restrained book-page index with dividers and a fixed number column. */
+.mms-article-page.toc-minimal-page .mms-article-toc-page {
+  border: 1px solid var(--background-modifier-border);
+  border-top: 3px solid var(--mms-article-accent, var(--interactive-accent));
+  border-radius: 0;
+  background: var(--mms-article-paper, var(--background-primary));
+  box-shadow: 0 18px 44px rgba(15, 23, 42, .07);
+}
+
+.mms-article-page.toc-minimal-page .mms-article-toc-page::before {
+  display: none;
+}
+
+.mms-article-page.toc-minimal-page .mms-article-toc-page > ol {
+  gap: 0;
+}
+
+.mms-article-page.toc-minimal-page .mms-article-toc-page li {
+  border-top: 1px solid var(--background-modifier-border);
+}
+
+.mms-article-page.toc-minimal-page .mms-article-toc-page li:last-child {
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.mms-article-page.toc-minimal-page .mms-article-toc-page a {
+  min-height: 54px;
+  padding-block: 8px;
+  border-radius: 0;
+}
+
+.mms-article-page.toc-minimal-page .mms-article-toc-number {
+  min-width: 4.2em;
+  color: var(--text-muted);
+}
+
+/* Option B: report-style rows with restrained card feedback. */
+.mms-article-page.toc-report .mms-article-toc-page {
+  background: color-mix(in srgb, var(--mms-article-paper, var(--background-primary)) 84%, var(--background-secondary));
+  border-color: var(--background-modifier-border);
+  border-radius: 18px;
+}
+
+.mms-article-page.toc-report .mms-article-toc-page > ol {
+  gap: 7px;
+}
+
+.mms-article-page.toc-report .mms-article-toc-page li {
+  padding-left: calc(max(0, var(--mms-article-depth) - 1) * 22px);
+}
+
+.mms-article-page.toc-report .mms-article-toc-page a {
+  min-height: 58px;
+  padding: 9px 13px;
+  border: 1px solid transparent;
+  border-radius: 11px;
+}
+
+.mms-article-page.toc-report .mms-article-toc-page li.depth-1 > a {
+  background: color-mix(in srgb, var(--mms-article-accent, var(--interactive-accent)) 6%, transparent);
+}
+
+.mms-article-page.toc-report .mms-article-toc-page a:hover,
+.mms-article-page.toc-report .mms-article-toc-page a:focus-visible {
+  border-color: color-mix(in srgb, var(--mms-article-accent, var(--interactive-accent)) 26%, var(--background-modifier-border));
+  background: var(--mms-article-paper, var(--background-primary));
+}
+
+/* Option C: magazine index. Every entry remains a full-width single row. */
+.mms-article-page.toc-magazine .mms-article-toc-page {
+  border-radius: 0;
+  background: color-mix(in srgb, var(--mms-article-paper, var(--background-primary)) 94%, var(--mms-article-accent, var(--interactive-accent)));
+}
+
+.mms-article-page.toc-magazine .mms-article-toc-page::before,
+.mms-article-page.toc-magazine .mms-article-toc-page > h2::after,
+.mms-article-page.toc-magazine .mms-article-toc-page a::after {
+  display: none;
+}
+
+.mms-article-page.toc-magazine .mms-article-toc-page > h2 {
+  padding-bottom: 18px;
+  border-bottom: 2px solid var(--mms-article-heading, var(--text-normal));
+}
+
+.mms-article-page.toc-magazine .mms-article-toc-page > ol {
+  display: block;
+}
+
+.mms-article-page.toc-magazine .mms-article-toc-page li {
+  width: 100%;
+  margin: 0;
+  padding-left: calc(max(0, var(--mms-article-depth) - 1) * 18px);
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.mms-article-page.toc-magazine .mms-article-toc-page a {
+  width: 100%;
+  min-height: 72px;
+  padding: 12px 0;
+  border-radius: 0;
+  transform: none;
+}
+
+.mms-article-page.toc-magazine .mms-article-toc-page a:hover,
+.mms-article-page.toc-magazine .mms-article-toc-page a:focus-visible {
+  background: transparent;
+  transform: none;
+}
+
+.mms-article-page.toc-magazine .mms-article-toc-number {
+  min-width: 3.2em;
+  font-size: 2em;
+  line-height: 1;
+}
+
+.mms-article-page.toc-magazine .mms-article-toc-title {
+  font-size: 1.08em;
+  font-weight: 560;
+}
+
+.mms-article-page.toc-magazine .mms-article-toc-breadcrumb {
+  display: none;
+}
+
+/* Option D: structural tree lines without circular bullets. */
+.mms-article-page.toc-tree .mms-article-toc-page {
+  border-left: 4px solid var(--mms-article-accent, var(--interactive-accent));
+  border-radius: 0 18px 18px 0;
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--mms-article-accent, var(--interactive-accent)) 8%, transparent), transparent 34%),
+    var(--mms-article-paper, var(--background-primary));
+  box-shadow: 0 18px 44px rgba(15, 23, 42, .07);
+}
+
+.mms-article-page.toc-tree .mms-article-toc-page li {
+  margin-left: calc(max(0, var(--mms-article-depth) - 1) * 24px);
+  padding-left: 18px;
+  border-left: 1px solid var(--background-modifier-border);
+}
+
+.mms-article-page.toc-tree .mms-article-toc-page li::after {
+  position: absolute;
+  top: 28px;
+  left: 0;
+  width: 12px;
+  height: 1px;
+  content: "";
+  background: var(--background-modifier-border);
+}
+
+.mms-article-page.toc-tree .mms-article-toc-page a {
+  min-height: 52px;
+  padding-block: 7px;
+}
+
 @media (max-width: 600px) {
   .mms-article-toc-page {
     margin-bottom: 32px;
@@ -5093,12 +5295,22 @@ mjx-container.mms-node-math:not(.is-display),
     padding-left: calc(max(0, var(--mms-article-depth) - 1) * 12px);
   }
 
-  .mms-article-toc-page li::before {
-    left: calc(max(0, var(--mms-article-depth) - 1) * 12px - 7px);
-  }
-
   .mms-article-toc-page a {
     padding-inline: 9px;
+  }
+
+  .mms-article-page.toc-report .mms-article-toc-page li,
+  .mms-article-page.toc-magazine .mms-article-toc-page li {
+    padding-left: calc(max(0, var(--mms-article-depth) - 1) * 12px);
+  }
+
+  .mms-article-page.toc-tree .mms-article-toc-page li {
+    margin-left: calc(max(0, var(--mms-article-depth) - 1) * 12px);
+  }
+
+  .mms-article-page.toc-magazine .mms-article-toc-number {
+    min-width: 2.8em;
+    font-size: 1.65em;
   }
 }
 
