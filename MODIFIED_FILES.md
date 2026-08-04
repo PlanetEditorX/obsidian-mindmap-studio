@@ -1,5 +1,12 @@
 # Modified Files
 
+## 1.43.9 文章与导图往返定位修复
+
+- `src/editor/editor.ts`：文章正文暂时切到导图或大纲后，返回文章会把当前节点预先写入显式文章目标，避免旧 DOM 像素滚动值抢占语义位置；语义恢复期间暂停边缘窗口自动扩展。
+- `tests/reading-editor-contract.test.mjs`：新增文章往返模式恢复当前节点、首次进入目录规则保持不变及恢复期间禁止自动加载前文的契约测试。
+- `README.md`、`docs/ARCHITECTURE.md`、`docs/READING_PROGRESS_SYNC.zh-CN.md`、`CHANGELOG.md`：同步文章往返定位行为和手工验证范围。
+- `package.json`、`package-lock.json`、`manifest.json`、`versions.json`、`update.json`、`main.js`：版本统一为 1.43.9。
+
 ## 1.43.8 XMind 深层画布根图片保留
 
 - `src/import/import-export.ts`：同名跨画布挂载改用首个标题内容判断，合并被链接画布根主题除重复标题外的图片、公式、备注和后代，避免深层根图片被丢弃或被额外套一层同名节点。

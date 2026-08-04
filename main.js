@@ -11855,18 +11855,27 @@ var MindMapEditor = class {
   }
   /** Applies a display mode immediately after its transition has painted. */
   applyDisplayMode(mode, notifyGlobal = true, persistCapturedLocation = true) {
-    var _a2, _b2, _c, _d, _e;
+    var _a2, _b2, _c, _d, _e, _f;
     if (!this.options.visibleModes.includes(mode)) return;
     const previousMode = this.currentMode;
-    if (mode === "article" && previousMode !== "article" && this.options.showArticleToc && !this.pendingArticleFocusLocation) {
-      this.document.view = { ...(_a2 = this.document.view) != null ? _a2 : {}, articleLandingMode: "toc" };
-    }
     if (previousMode === "mindmap") this.persistMindMapViewportState();
-    const location = (_b2 = this.captureCurrentLocation(previousMode)) != null ? _b2 : this.lastReadingLocation;
+    const location = (_a2 = this.captureCurrentLocation(previousMode)) != null ? _a2 : this.lastReadingLocation;
     if (location && persistCapturedLocation) this.rememberLocation(location, true);
     const requestedTarget = resolveReadingLocation(location, this.readingLocationSections(), this.options.currentFilePath);
-    if (mode === "article" && (requestedTarget == null ? void 0 : requestedTarget.filePath) === this.options.currentFilePath && requestedTarget.nodeId !== this.document.root.id && !this.options.showArticleToc && ((_c = this.document.view) == null ? void 0 : _c.articleLandingMode) !== "article") {
-      this.document.view = { ...(_d = this.document.view) != null ? _d : {}, articleLandingMode: "article" };
+    const resumeArticleContent = mode === "article" && previousMode !== "article" && ((_b2 = this.document.view) == null ? void 0 : _b2.articleLandingMode) === "article" && (requestedTarget == null ? void 0 : requestedTarget.filePath) === this.options.currentFilePath;
+    if (resumeArticleContent && requestedTarget) {
+      this.pendingArticleFocusLocation = createReadingLocation(
+        this.readingLocationSections(),
+        requestedTarget.filePath,
+        requestedTarget.nodeId,
+        requestedTarget.nodeRatio,
+        requestedTarget.viewportRatio
+      );
+    } else if (mode === "article" && previousMode !== "article" && this.options.showArticleToc && !this.pendingArticleFocusLocation) {
+      this.document.view = { ...(_c = this.document.view) != null ? _c : {}, articleLandingMode: "toc" };
+    }
+    if (mode === "article" && (requestedTarget == null ? void 0 : requestedTarget.filePath) === this.options.currentFilePath && requestedTarget.nodeId !== this.document.root.id && !this.options.showArticleToc && ((_d = this.document.view) == null ? void 0 : _d.articleLandingMode) !== "article") {
+      this.document.view = { ...(_e = this.document.view) != null ? _e : {}, articleLandingMode: "article" };
     }
     this.currentMode = mode;
     if (mode === "article" && mode !== previousMode) {
@@ -11878,7 +11887,7 @@ var MindMapEditor = class {
     } else if ((mode === "reading" || mode === "question-bank") && mode !== previousMode) {
       this.readOnly = true;
     } else if ((previousMode === "article" || previousMode === "reading" || previousMode === "question-bank") && mode !== "article" && mode !== "reading" && mode !== "question-bank") {
-      this.readOnly = ((_e = this.document.view) == null ? void 0 : _e.readOnly) === true;
+      this.readOnly = ((_f = this.document.view) == null ? void 0 : _f.readOnly) === true;
     }
     this.render();
     const resolved = this.restoreReadingLocation(mode, location);
@@ -13886,7 +13895,7 @@ var MindMapEditor = class {
   /** Loads another window only when the reader reaches a rendered edge. */
   scheduleArticleWindowExpansion() {
     const controller = this.articleRenderController;
-    if (!controller || this.currentMode !== "article" || this.articleWindowExpansionFrame !== null) return;
+    if (!controller || this.currentMode !== "article" || this.articleWindowExpansionFrame !== null || this.activeReadingRestore) return;
     const threshold = Math.max(480, this.articleEl.clientHeight * 0.7);
     const direction = this.articleEl.scrollTop <= threshold && controller.hasBefore() ? "before" : this.articleEl.scrollTop + this.articleEl.clientHeight >= this.articleEl.scrollHeight - threshold && controller.hasAfter() ? "after" : null;
     if (direction) this.expandArticleWindow(direction);

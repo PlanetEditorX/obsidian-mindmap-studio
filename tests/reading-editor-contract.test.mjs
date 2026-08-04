@@ -302,13 +302,28 @@ test("top-level article directories default to the directory on every file entry
 
   assert.match(setViewData, /!queuedFocusNodeId && !this\.document\.navigation\?\.parentPath/);
   assert.match(getViewData, /!document\.navigation\?\.parentPath[\s\S]*articleLandingMode: "toc"/);
-  assert.match(applyDisplayMode, /mode === "article"[\s\S]*previousMode !== "article"[\s\S]*this\.options\.showArticleToc[\s\S]*!this\.pendingArticleFocusLocation[\s\S]*articleLandingMode: "toc"/);
+  assert.match(applyDisplayMode, /const resumeArticleContent = mode === "article"[\s\S]*previousMode !== "article"[\s\S]*articleLandingMode === "article"[\s\S]*requestedTarget\?\.filePath === this\.options\.currentFilePath/);
+  assert.match(applyDisplayMode, /if \(resumeArticleContent && requestedTarget\)[\s\S]*pendingArticleFocusLocation = createReadingLocation/);
+  assert.match(applyDisplayMode, /else if \(mode === "article"[\s\S]*previousMode !== "article"[\s\S]*this\.options\.showArticleToc[\s\S]*!this\.pendingArticleFocusLocation[\s\S]*articleLandingMode: "toc"/);
   assert.match(applyDisplayMode, /requestedTarget\.nodeId !== this\.document\.root\.id[\s\S]*!this\.options\.showArticleToc/);
   assert.doesNotMatch(applyDisplayMode, /&& this\.options\.showArticleToc[\s\S]{0,160}articleLandingMode: "article"/);
   assert.doesNotMatch(setLanding, /history\.capture|callbacks\.onChange|markSaving/);
   assert.match(setLanding, /this\.document\.view = \{[\s\S]*articleLandingMode: mode/);
 });
 
+
+
+test("returning from article through a temporary mode restores the current semantic node", () => {
+  const applyDisplayMode = editorSource.slice(
+    editorSource.indexOf("private applyDisplayMode"),
+    editorSource.indexOf("applyGlobalDisplayMode", editorSource.indexOf("private applyDisplayMode"))
+  );
+  const scheduleExpansion = editorSource.match(/private scheduleArticleWindowExpansion\(\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
+
+  assert.match(applyDisplayMode, /resumeArticleContent[\s\S]*pendingArticleFocusLocation = createReadingLocation/);
+  assert.match(applyDisplayMode, /this\.render\(\);[\s\S]*this\.restoreReadingLocation\(mode, location\)/);
+  assert.match(scheduleExpansion, /this\.activeReadingRestore/);
+});
 
 test("read-only mode keeps the unified theme and reading-style panel editable", async () => {
   const [editorSource, settingsSource, mainSource, modalSource] = await Promise.all([

@@ -1950,16 +1950,31 @@ export class MindMapEditor {
   private applyDisplayMode(mode: DisplayMode, notifyGlobal = true, persistCapturedLocation = true): void {
     if (!this.options.visibleModes.includes(mode)) return;
     const previousMode = this.currentMode;
-    if (mode === "article"
+    if (previousMode === "mindmap") this.persistMindMapViewportState();
+    const location = this.captureCurrentLocation(previousMode) ?? this.lastReadingLocation;
+    if (location && persistCapturedLocation) this.rememberLocation(location, true);
+    const requestedTarget = resolveReadingLocation(location, this.readingLocationSections(), this.options.currentFilePath);
+    const resumeArticleContent = mode === "article"
+      && previousMode !== "article"
+      && this.document.view?.articleLandingMode === "article"
+      && requestedTarget?.filePath === this.options.currentFilePath;
+    if (resumeArticleContent && requestedTarget) {
+      // Returning from article to a temporary editing mode keeps the current semantic node as
+      // an explicit target. Without this handoff, the still-mounted article DOM can contribute
+      // its old pixel scroll position before restore runs, which repeatedly triggers load-before.
+      this.pendingArticleFocusLocation = createReadingLocation(
+        this.readingLocationSections(),
+        requestedTarget.filePath,
+        requestedTarget.nodeId,
+        requestedTarget.nodeRatio,
+        requestedTarget.viewportRatio
+      );
+    } else if (mode === "article"
       && previousMode !== "article"
       && this.options.showArticleToc
       && !this.pendingArticleFocusLocation) {
       this.document.view = { ...(this.document.view ?? {}), articleLandingMode: "toc" };
     }
-    if (previousMode === "mindmap") this.persistMindMapViewportState();
-    const location = this.captureCurrentLocation(previousMode) ?? this.lastReadingLocation;
-    if (location && persistCapturedLocation) this.rememberLocation(location, true);
-    const requestedTarget = resolveReadingLocation(location, this.readingLocationSections(), this.options.currentFilePath);
     if (mode === "article"
       && requestedTarget?.filePath === this.options.currentFilePath
       && requestedTarget.nodeId !== this.document.root.id
@@ -4135,7 +4150,7 @@ export class MindMapEditor {
   /** Loads another window only when the reader reaches a rendered edge. */
   private scheduleArticleWindowExpansion(): void {
     const controller = this.articleRenderController;
-    if (!controller || this.currentMode !== "article" || this.articleWindowExpansionFrame !== null) return;
+    if (!controller || this.currentMode !== "article" || this.articleWindowExpansionFrame !== null || this.activeReadingRestore) return;
     const threshold = Math.max(480, this.articleEl.clientHeight * 0.7);
     const direction = this.articleEl.scrollTop <= threshold && controller.hasBefore()
       ? "before"
