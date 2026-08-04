@@ -165,3 +165,33 @@ test("nested linked XMind sheet roots keep images equations and notes at every d
     "MindMap Assets/XMind/二级.png"
   ]);
 });
+
+test("linked XMind sheets merge into their portal even when the root title differs", () => {
+  const source = zipSync({
+    "content.json": strToU8(JSON.stringify([
+      {
+        id: "parent-sheet",
+        rootTopic: {
+          title: "主导图",
+          children: { attached: [{ title: "子节点入口", href: "xmind:#child-sheet" }] }
+        }
+      },
+      {
+        id: "child-sheet",
+        rootTopic: {
+          title: "子节点内容",
+          notes: { plain: { content: "来自子导图的备注" } },
+          children: { attached: [{ title: "实际内容" }] }
+        }
+      }
+    ]))
+  }).buffer;
+
+  const result = xmind.xmindToImportResult(source, "fallback");
+  const portal = result.document.root.children[0];
+  assert.equal(result.document.root.children.length, 1);
+  assert.equal(portal.text, "子节点入口");
+  assert.equal(portal.note, "来自子导图的备注");
+  assert.deepEqual(portal.children.map((node) => node.text), ["实际内容"]);
+  assert.deepEqual(model.nodeContentBlocks(portal).map((block) => block.text), ["子节点入口"]);
+});
