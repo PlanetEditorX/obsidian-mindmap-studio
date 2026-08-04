@@ -5,6 +5,7 @@
 
 import type {
   ArticleLeafNumberingStyle,
+  ArticleTocStyle,
   DisplayMode,
   MindMapAppearance,
   MindMapCodeBlock,
@@ -108,6 +109,7 @@ export interface MindMapEditorOptions {
   articleBaseDepth: number;
   articleTocEntries: ArticleTocEntry[];
   articleTocMaxDepth: number;
+  articleTocStyle: ArticleTocStyle;
   showArticleMiniMap: boolean;
   showArticleContextProgress: boolean;
   articleSectionCollapseEnabled: boolean;

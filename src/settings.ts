@@ -9,6 +9,7 @@ import { App, Notice, PluginSettingTab, Setting, SliderComponent, TextComponent 
 import type MindMapStudioPlugin from "./main";
 import type {
   ArticleLeafNumberingStyle,
+  ArticleTocStyle,
   BackgroundPattern,
   DisplayMode,
   EdgeStyle,
@@ -372,6 +373,8 @@ export interface MindMapStudioSettings {
   /** 按文章族顶层文件保存的跨模式语义阅读位置。 */
   readingLocations: Record<string, ReadingLocation>;
   articleTocMaxDepth: number;
+  /** Default article directory presentation; individual maps can override it. */
+  articleTocStyle: ArticleTocStyle;
   showArticleMiniMap: boolean;
   /** Shows the lower-right article-family parsing progress in article and reading modes. */
   showArticleContextProgress: boolean;
@@ -517,6 +520,7 @@ export const DEFAULT_SETTINGS: MindMapStudioSettings = {
   articleLastReadOnly: true,
   readingLocations: {},
   articleTocMaxDepth: 3,
+  articleTocStyle: "card",
   showArticleMiniMap: true,
   showArticleContextProgress: false,
   articleSectionCollapseEnabled: false,
@@ -960,6 +964,24 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
             await this.saveAndRefresh();
           });
       });
+
+    new Setting(containerEl)
+      .setName("文章目录样式")
+      .setDesc("设置文章和通读目录的全局默认样式；当前脑图可在工具栏“主题与外观”中单独覆盖。")
+      .addDropdown((dropdown) => dropdown
+        .addOption("card", "卡片（当前样式）")
+        .addOption("plain", "简洁")
+        .addOption("lines", "引导线")
+        .addOption("original", "最初样式")
+        .addOption("minimal-page", "极简书页")
+        .addOption("report", "现代报告")
+        .addOption("magazine", "杂志索引")
+        .addOption("tree", "层级树线")
+        .setValue(this.plugin.settings.articleTocStyle)
+        .onChange(async (value) => {
+          this.plugin.settings.articleTocStyle = value as ArticleTocStyle;
+          await this.saveAndRefresh();
+        }));
 
     new Setting(containerEl)
       .setName("文章/通读缩略导航图")
@@ -2508,7 +2530,7 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
       createGroup("画布与字体", "对应页面“主题与外观”的画布与字体分组。", ["背景颜色", "背景图案", "背景图案颜色", "默认字体", "自定义字体名称", "默认字号"]),
       createGroup("节点与文字", "对应页面“主题与外观”的节点与文字分组；节点单独设置仍具有更高优先级。", ["分支外观", "默认节点文字对齐", "中心主题颜色", "中心主题文字颜色", "默认节点背景色", "默认文字颜色", "默认节点边框颜色", "默认节点边框粗细", "默认文字加粗", "默认文字斜体", "默认文字下划线"]),
       createGroup("连线与分支", "对应页面“主题与外观”的连线与分支分组。", ["连线颜色", "连线类型", "连线粗细模式", "起始粗细", "连线粗细", "末端最细宽度", "彩色分支", "分支颜色"]),
-      createGroup("阅读样式", "对应页面“主题与外观”的阅读样式分组；文章与通读共用。", ["文章目录最大层级", "文章/通读缩略导航图", "末端正文标识", "末端正文标识样式", "末端正文标识颜色", "末端正文对齐方式", "末端正文标识转序号", "末端正文序号样式", "末端正文转序号阈值"]),
+      createGroup("阅读样式", "对应页面“主题与外观”的阅读样式分组；文章与通读共用。", ["文章目录最大层级", "文章目录样式", "文章/通读缩略导航图", "末端正文标识", "末端正文标识样式", "末端正文标识颜色", "末端正文对齐方式", "末端正文标识转序号", "末端正文序号样式", "末端正文转序号阈值"]),
       createGroup("代码外观", "对应页面“主题与外观”的代码分组；默认折叠、行号、主题和自动阈值统一在这里管理。", ["代码默认折叠", "代码默认显示行号", "不超过多少行时保持展开", "超过多少行时显示行号", "代码默认样式"])
     );
 

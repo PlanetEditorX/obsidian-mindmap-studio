@@ -2203,6 +2203,7 @@ var DEFAULT_SETTINGS = {
   articleLastReadOnly: true,
   readingLocations: {},
   articleTocMaxDepth: 3,
+  articleTocStyle: "card",
   showArticleMiniMap: true,
   showArticleContextProgress: false,
   articleSectionCollapseEnabled: false,
@@ -2534,6 +2535,10 @@ var MindMapStudioSettingTab = class extends import_obsidian.PluginSettingTab {
         await this.saveAndRefresh();
       });
     });
+    new import_obsidian.Setting(containerEl).setName("\u6587\u7AE0\u76EE\u5F55\u6837\u5F0F").setDesc("\u8BBE\u7F6E\u6587\u7AE0\u548C\u901A\u8BFB\u76EE\u5F55\u7684\u5168\u5C40\u9ED8\u8BA4\u6837\u5F0F\uFF1B\u5F53\u524D\u8111\u56FE\u53EF\u5728\u5DE5\u5177\u680F\u201C\u4E3B\u9898\u4E0E\u5916\u89C2\u201D\u4E2D\u5355\u72EC\u8986\u76D6\u3002").addDropdown((dropdown) => dropdown.addOption("card", "\u5361\u7247\uFF08\u5F53\u524D\u6837\u5F0F\uFF09").addOption("plain", "\u7B80\u6D01").addOption("lines", "\u5F15\u5BFC\u7EBF").addOption("original", "\u6700\u521D\u6837\u5F0F").addOption("minimal-page", "\u6781\u7B80\u4E66\u9875").addOption("report", "\u73B0\u4EE3\u62A5\u544A").addOption("magazine", "\u6742\u5FD7\u7D22\u5F15").addOption("tree", "\u5C42\u7EA7\u6811\u7EBF").setValue(this.plugin.settings.articleTocStyle).onChange(async (value) => {
+      this.plugin.settings.articleTocStyle = value;
+      await this.saveAndRefresh();
+    }));
     new import_obsidian.Setting(containerEl).setName("\u6587\u7AE0/\u901A\u8BFB\u7F29\u7565\u5BFC\u822A\u56FE").setDesc("\u5728\u6587\u7AE0\u548C\u901A\u8BFB\u6A21\u5F0F\u53F3\u4E0A\u89D2\u663E\u793A\u7ED3\u6784\u7F29\u7565\u56FE\uFF1B\u70B9\u51FB\u53EF\u5FEB\u901F\u8DF3\u8F6C\uFF0C\u5F53\u524D\u7AE0\u8282\u4F1A\u9AD8\u4EAE\u3002\u5BFC\u822A\u56FE\u6CBF\u7528\u6587\u7AE0\u76EE\u5F55\u5C42\u7EA7\uFF0C\u5E76\u4F1A\u5728\u7A7A\u95F2 10 \u79D2\u540E\u81EA\u52A8\u9690\u85CF\u3002\u5F53\u524D\u8111\u56FE\u53EF\u5728\u201C\u4E3B\u9898\u4E0E\u5916\u89C2\u201D\u4E2D\u5355\u72EC\u8986\u76D6\u3002").addToggle((toggle) => toggle.setValue(this.plugin.settings.showArticleMiniMap).onChange(async (value) => {
       this.plugin.settings.showArticleMiniMap = value;
       await this.saveAndRefresh();
@@ -3432,7 +3437,7 @@ var MindMapStudioSettingTab = class extends import_obsidian.PluginSettingTab {
       createGroup("\u753B\u5E03\u4E0E\u5B57\u4F53", "\u5BF9\u5E94\u9875\u9762\u201C\u4E3B\u9898\u4E0E\u5916\u89C2\u201D\u7684\u753B\u5E03\u4E0E\u5B57\u4F53\u5206\u7EC4\u3002", ["\u80CC\u666F\u989C\u8272", "\u80CC\u666F\u56FE\u6848", "\u80CC\u666F\u56FE\u6848\u989C\u8272", "\u9ED8\u8BA4\u5B57\u4F53", "\u81EA\u5B9A\u4E49\u5B57\u4F53\u540D\u79F0", "\u9ED8\u8BA4\u5B57\u53F7"]),
       createGroup("\u8282\u70B9\u4E0E\u6587\u5B57", "\u5BF9\u5E94\u9875\u9762\u201C\u4E3B\u9898\u4E0E\u5916\u89C2\u201D\u7684\u8282\u70B9\u4E0E\u6587\u5B57\u5206\u7EC4\uFF1B\u8282\u70B9\u5355\u72EC\u8BBE\u7F6E\u4ECD\u5177\u6709\u66F4\u9AD8\u4F18\u5148\u7EA7\u3002", ["\u5206\u652F\u5916\u89C2", "\u9ED8\u8BA4\u8282\u70B9\u6587\u5B57\u5BF9\u9F50", "\u4E2D\u5FC3\u4E3B\u9898\u989C\u8272", "\u4E2D\u5FC3\u4E3B\u9898\u6587\u5B57\u989C\u8272", "\u9ED8\u8BA4\u8282\u70B9\u80CC\u666F\u8272", "\u9ED8\u8BA4\u6587\u5B57\u989C\u8272", "\u9ED8\u8BA4\u8282\u70B9\u8FB9\u6846\u989C\u8272", "\u9ED8\u8BA4\u8282\u70B9\u8FB9\u6846\u7C97\u7EC6", "\u9ED8\u8BA4\u6587\u5B57\u52A0\u7C97", "\u9ED8\u8BA4\u6587\u5B57\u659C\u4F53", "\u9ED8\u8BA4\u6587\u5B57\u4E0B\u5212\u7EBF"]),
       createGroup("\u8FDE\u7EBF\u4E0E\u5206\u652F", "\u5BF9\u5E94\u9875\u9762\u201C\u4E3B\u9898\u4E0E\u5916\u89C2\u201D\u7684\u8FDE\u7EBF\u4E0E\u5206\u652F\u5206\u7EC4\u3002", ["\u8FDE\u7EBF\u989C\u8272", "\u8FDE\u7EBF\u7C7B\u578B", "\u8FDE\u7EBF\u7C97\u7EC6\u6A21\u5F0F", "\u8D77\u59CB\u7C97\u7EC6", "\u8FDE\u7EBF\u7C97\u7EC6", "\u672B\u7AEF\u6700\u7EC6\u5BBD\u5EA6", "\u5F69\u8272\u5206\u652F", "\u5206\u652F\u989C\u8272"]),
-      createGroup("\u9605\u8BFB\u6837\u5F0F", "\u5BF9\u5E94\u9875\u9762\u201C\u4E3B\u9898\u4E0E\u5916\u89C2\u201D\u7684\u9605\u8BFB\u6837\u5F0F\u5206\u7EC4\uFF1B\u6587\u7AE0\u4E0E\u901A\u8BFB\u5171\u7528\u3002", ["\u6587\u7AE0\u76EE\u5F55\u6700\u5927\u5C42\u7EA7", "\u6587\u7AE0/\u901A\u8BFB\u7F29\u7565\u5BFC\u822A\u56FE", "\u672B\u7AEF\u6B63\u6587\u6807\u8BC6", "\u672B\u7AEF\u6B63\u6587\u6807\u8BC6\u6837\u5F0F", "\u672B\u7AEF\u6B63\u6587\u6807\u8BC6\u989C\u8272", "\u672B\u7AEF\u6B63\u6587\u5BF9\u9F50\u65B9\u5F0F", "\u672B\u7AEF\u6B63\u6587\u6807\u8BC6\u8F6C\u5E8F\u53F7", "\u672B\u7AEF\u6B63\u6587\u5E8F\u53F7\u6837\u5F0F", "\u672B\u7AEF\u6B63\u6587\u8F6C\u5E8F\u53F7\u9608\u503C"]),
+      createGroup("\u9605\u8BFB\u6837\u5F0F", "\u5BF9\u5E94\u9875\u9762\u201C\u4E3B\u9898\u4E0E\u5916\u89C2\u201D\u7684\u9605\u8BFB\u6837\u5F0F\u5206\u7EC4\uFF1B\u6587\u7AE0\u4E0E\u901A\u8BFB\u5171\u7528\u3002", ["\u6587\u7AE0\u76EE\u5F55\u6700\u5927\u5C42\u7EA7", "\u6587\u7AE0\u76EE\u5F55\u6837\u5F0F", "\u6587\u7AE0/\u901A\u8BFB\u7F29\u7565\u5BFC\u822A\u56FE", "\u672B\u7AEF\u6B63\u6587\u6807\u8BC6", "\u672B\u7AEF\u6B63\u6587\u6807\u8BC6\u6837\u5F0F", "\u672B\u7AEF\u6B63\u6587\u6807\u8BC6\u989C\u8272", "\u672B\u7AEF\u6B63\u6587\u5BF9\u9F50\u65B9\u5F0F", "\u672B\u7AEF\u6B63\u6587\u6807\u8BC6\u8F6C\u5E8F\u53F7", "\u672B\u7AEF\u6B63\u6587\u5E8F\u53F7\u6837\u5F0F", "\u672B\u7AEF\u6B63\u6587\u8F6C\u5E8F\u53F7\u9608\u503C"]),
       createGroup("\u4EE3\u7801\u5916\u89C2", "\u5BF9\u5E94\u9875\u9762\u201C\u4E3B\u9898\u4E0E\u5916\u89C2\u201D\u7684\u4EE3\u7801\u5206\u7EC4\uFF1B\u9ED8\u8BA4\u6298\u53E0\u3001\u884C\u53F7\u3001\u4E3B\u9898\u548C\u81EA\u52A8\u9608\u503C\u7EDF\u4E00\u5728\u8FD9\u91CC\u7BA1\u7406\u3002", ["\u4EE3\u7801\u9ED8\u8BA4\u6298\u53E0", "\u4EE3\u7801\u9ED8\u8BA4\u663E\u793A\u884C\u53F7", "\u4E0D\u8D85\u8FC7\u591A\u5C11\u884C\u65F6\u4FDD\u6301\u5C55\u5F00", "\u8D85\u8FC7\u591A\u5C11\u884C\u65F6\u663E\u793A\u884C\u53F7", "\u4EE3\u7801\u9ED8\u8BA4\u6837\u5F0F"])
     );
     for (const heading of headings) {
@@ -9163,14 +9168,18 @@ function articleNodeRenderBytes(info) {
   return Math.max(192, bytes);
 }
 function renderArticleMode(container, options) {
-  var _a2, _b2, _c, _d;
+  var _a2, _b2, _c, _d, _e, _f, _g, _h;
   options = options.contentBlockCache ? options : { ...options, contentBlockCache: /* @__PURE__ */ new WeakMap() };
   container.empty();
-  const articleStyle = resolveArticleStyle(options.document.articleStyle);
-  const page = container.createDiv({ cls: `mms-article-page article-${articleStyle.preset} toc-${(_a2 = articleStyle.tocStyle) != null ? _a2 : "card"}` });
+  const articleStyle = resolveArticleStyle({
+    preset: (_b2 = (_a2 = options.document.articleStyle) == null ? void 0 : _a2.preset) != null ? _b2 : "classic",
+    ...options.document.articleStyle,
+    tocStyle: (_d = (_c = options.document.articleStyle) == null ? void 0 : _c.tocStyle) != null ? _d : options.articleTocStyle
+  });
+  const page = container.createDiv({ cls: `mms-article-page article-${articleStyle.preset} toc-${(_e = articleStyle.tocStyle) != null ? _e : "card"}` });
   page.dataset.nodeId = options.document.root.id;
   applyArticleStyle(page, articleStyle);
-  const articleNumberingDisabled = ((_b2 = options.articleNavigation) == null ? void 0 : _b2.numberingDisabled) === true || isDocumentArticleNumberingDisabled(options.document.root);
+  const articleNumberingDisabled = ((_f = options.articleNavigation) == null ? void 0 : _f.numberingDisabled) === true || isDocumentArticleNumberingDisabled(options.document.root);
   const pageEntry = articleNumberingDisabled ? void 0 : currentArticlePageEntry(options.articleNavigation);
   const title = page.createEl("h1", { cls: "mms-article-document-title" });
   title.dataset.nodeId = options.document.root.id;
@@ -9180,7 +9189,7 @@ function renderArticleMode(container, options) {
   }
   const titleText = title.createSpan({ cls: "mms-article-document-title-text" });
   const rootTextBlock = articleNodeContentBlocks(options.document.root, options).find((block) => block.type === "text");
-  renderRichTextRuns(titleText, rootTextBlock == null ? void 0 : rootTextBlock.richText, (_c = rootTextBlock == null ? void 0 : rootTextBlock.text) != null ? _c : options.document.title);
+  renderRichTextRuns(titleText, rootTextBlock == null ? void 0 : rootTextBlock.richText, (_g = rootTextBlock == null ? void 0 : rootTextBlock.text) != null ? _g : options.document.title);
   options.makeInlineEditable(titleText, options.document.root, "\u6587\u7AE0\u6807\u9898", rootTextBlock == null ? void 0 : rootTextBlock.id);
   options.addInlineNodeActions(page, options.document.root);
   title.addEventListener("contextmenu", (event) => {
@@ -9188,7 +9197,7 @@ function renderArticleMode(container, options) {
     event.stopPropagation();
     options.openAiContextMenu(event, options.document.root.id);
   });
-  const directoryOnly = options.showArticleToc && options.articleTocEntries.length > 0 && ((_d = options.document.view) == null ? void 0 : _d.articleLandingMode) !== "article";
+  const directoryOnly = options.showArticleToc && options.articleTocEntries.length > 0 && ((_h = options.document.view) == null ? void 0 : _h.articleLandingMode) !== "article";
   if (directoryOnly) {
     renderDirectory(page, options);
     return null;
@@ -10317,6 +10326,20 @@ function createReadingStyleControls(container, style, globalDefaults) {
   const backgroundColor = addColor("\u7EB8\u5F20\u80CC\u666F");
   const tocLabel = container.createEl("label", { text: "\u76EE\u5F55\u6837\u5F0F" });
   const tocStyle = tocLabel.createEl("select");
+  const tocStyleNames = {
+    card: "\u5361\u7247\uFF08\u5F53\u524D\u6837\u5F0F\uFF09",
+    plain: "\u7B80\u6D01",
+    lines: "\u5F15\u5BFC\u7EBF",
+    original: "\u6700\u521D\u6837\u5F0F",
+    "minimal-page": "\u6781\u7B80\u4E66\u9875",
+    report: "\u73B0\u4EE3\u62A5\u544A",
+    magazine: "\u6742\u5FD7\u7D22\u5F15",
+    tree: "\u5C42\u7EA7\u6811\u7EBF"
+  };
+  tocStyle.createEl("option", {
+    text: `\u8DDF\u968F\u63D2\u4EF6\u8BBE\u7F6E\uFF08\u5F53\u524D\uFF1A${tocStyleNames[globalDefaults.tocStyle]}\uFF09`,
+    attr: { value: "" }
+  });
   for (const [id, name] of [
     ["card", "\u5361\u7247\uFF08\u5F53\u524D\u6837\u5F0F\uFF09"],
     ["plain", "\u7B80\u6D01"],
@@ -10386,7 +10409,7 @@ function createReadingStyleControls(container, style, globalDefaults) {
     headingColor.value = (_c = nextResolved.headingColor) != null ? _c : "#111827";
     accentColor.value = (_d = nextResolved.accentColor) != null ? _d : "#7c3aed";
     backgroundColor.value = (_e = nextResolved.backgroundColor) != null ? _e : "#ffffff";
-    tocStyle.value = (_f = nextResolved.tocStyle) != null ? _f : "card";
+    tocStyle.value = (_f = nextStyle.tocStyle) != null ? _f : "";
     fontSize.value = String((_g = nextResolved.fontSize) != null ? _g : 16);
     lineHeight.value = String((_h = nextResolved.lineHeight) != null ? _h : 1.85);
     markerEnabled.value = nextStyle.leafMarkerEnabled === void 0 ? "" : String(nextStyle.leafMarkerEnabled);
@@ -10414,7 +10437,7 @@ function createReadingStyleControls(container, style, globalDefaults) {
       headingColor: headingColor.value,
       accentColor: accentColor.value,
       backgroundColor: backgroundColor.value,
-      tocStyle: tocStyle.value,
+      tocStyle: tocStyle.value ? tocStyle.value : void 0,
       fontSize: Math.max(12, Math.min(24, Number(fontSize.value) || resolved.fontSize || 16)),
       lineHeight: Math.max(1.2, Math.min(2.4, Number(lineHeight.value) || resolved.lineHeight || 1.85)),
       leafMarkerEnabled: markerEnabled.value === "" ? void 0 : markerEnabled.value === "true",
@@ -14110,6 +14133,7 @@ var MindMapEditor = class {
       showArticleToc: this.options.showArticleToc,
       articleTocEntries: this.options.articleTocEntries,
       articleTocMaxDepth: this.effectiveArticleTocMaxDepth(),
+      articleTocStyle: this.options.articleTocStyle,
       articleLeafBulletsEnabled: this.options.articleLeafBulletsEnabled,
       articleLeafBulletColor: this.options.articleLeafBulletColor,
       articleLeafBulletStyle: this.options.articleLeafBulletStyle,
@@ -15779,6 +15803,7 @@ var MindMapEditor = class {
       (_c = this.document.appearance) != null ? _c : {},
       this.document.articleStyle,
       {
+        tocStyle: this.options.articleTocStyle,
         enabled: this.options.articleLeafBulletsEnabled,
         style: this.options.articleLeafBulletStyle,
         color: this.options.articleLeafBulletColor,
@@ -16107,7 +16132,7 @@ var MindMapEditor = class {
    * read-only book with an integrated directory and persisted progress.
    */
   renderReading() {
-    var _a2, _b2, _c, _d, _e, _f, _g, _h, _i;
+    var _a2, _b2, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n;
     if (!this.options.articleContextReady) {
       this.callbacks.onDebugLog("reading", "render-waiting-context", {
         selectedId: this.selectedId,
@@ -16119,19 +16144,23 @@ var MindMapEditor = class {
     this.articleEl.empty();
     this.articleEl.removeAttribute("aria-busy");
     const sections = this.options.readingSections.length ? this.options.readingSections : [{ filePath: (_b2 = (_a2 = this.options.articleNavigation) == null ? void 0 : _a2.homePath) != null ? _b2 : "", document: this.document, baseDepth: 0 }];
-    const style = resolveArticleStyle(this.document.articleStyle);
+    const style = resolveArticleStyle({
+      preset: (_d = (_c = this.document.articleStyle) == null ? void 0 : _c.preset) != null ? _d : "classic",
+      ...this.document.articleStyle,
+      tocStyle: (_f = (_e = this.document.articleStyle) == null ? void 0 : _e.tocStyle) != null ? _f : this.options.articleTocStyle
+    });
     const progress = this.articleEl.createDiv({ cls: `mms-reading-progress position-${this.options.readingProgressPosition}` });
     progress.createDiv({ cls: "mms-reading-progress-bar" });
     const initialProgress = "0%";
     progress.style.setProperty("--mms-reading-progress", initialProgress);
     progress.dataset.progress = initialProgress;
     progress.createSpan({ text: `\u9605\u8BFB\u8FDB\u5EA6 ${initialProgress}` });
-    const page = this.articleEl.createDiv({ cls: `mms-article-page mms-reading-page is-entering article-${style.preset}` });
+    const page = this.articleEl.createDiv({ cls: `mms-article-page mms-reading-page is-entering article-${style.preset} toc-${(_g = style.tocStyle) != null ? _g : "card"}` });
     page.dataset.filePath = sections[0].filePath;
     page.dataset.nodeId = sections[0].document.root.id;
     const bookTitle = page.createEl("h1", { cls: "mms-article-document-title" });
     const bookTitleBlock = nodeContentBlocks(sections[0].document.root).find((block) => block.type === "text");
-    renderRichTextRuns(bookTitle, bookTitleBlock == null ? void 0 : bookTitleBlock.richText, (_c = bookTitleBlock == null ? void 0 : bookTitleBlock.text) != null ? _c : sections[0].document.title);
+    renderRichTextRuns(bookTitle, bookTitleBlock == null ? void 0 : bookTitleBlock.richText, (_h = bookTitleBlock == null ? void 0 : bookTitleBlock.text) != null ? _h : sections[0].document.title);
     const contentSections = sections.length > 1 ? sections.slice(1) : sections;
     const contentPaths = new Set(contentSections.map((section) => section.filePath));
     const articleTocMaxDepth = this.effectiveArticleTocMaxDepth();
@@ -16183,7 +16212,7 @@ var MindMapEditor = class {
       if (sectionEntry == null ? void 0 : sectionEntry.label) chapterTitle.createSpan({ cls: "mms-article-number", text: sectionEntry.label });
       const chapterTitleText = chapterTitle.createSpan({ cls: "mms-reading-map-title-text" });
       const chapterTitleBlock = nodeContentBlocks(section.document.root).find((block) => block.type === "text");
-      renderRichTextRuns(chapterTitleText, chapterTitleBlock == null ? void 0 : chapterTitleBlock.richText, (_d = chapterTitleBlock == null ? void 0 : chapterTitleBlock.text) != null ? _d : section.document.title);
+      renderRichTextRuns(chapterTitleText, chapterTitleBlock == null ? void 0 : chapterTitleBlock.richText, (_i = chapterTitleBlock == null ? void 0 : chapterTitleBlock.text) != null ? _i : section.document.title);
       this.renderArticleContent(chapter, section.document.root, false);
       for (const info of buildArticleNodeInfo(section.document.root, section.baseDepth, {
         enabled: this.options.articleLeafNumberingEnabled,
@@ -16192,9 +16221,9 @@ var MindMapEditor = class {
         numberingDisabled: section.numberingDisabled
       })) {
         const tocEntry = tocEntryByNode.get(`${section.filePath}\0${info.node.id}`);
-        const depth = (_e = tocEntry == null ? void 0 : tocEntry.depth) != null ? _e : info.depth;
-        const label = (_f = tocEntry == null ? void 0 : tocEntry.label) != null ? _f : info.label;
-        const title = (_g = tocEntry == null ? void 0 : tocEntry.title) != null ? _g : info.title;
+        const depth = (_j = tocEntry == null ? void 0 : tocEntry.depth) != null ? _j : info.depth;
+        const label = (_k = tocEntry == null ? void 0 : tocEntry.label) != null ? _k : info.label;
+        const title = (_l = tocEntry == null ? void 0 : tocEntry.title) != null ? _l : info.title;
         const isHeading = tocEntry ? true : info.isHeading;
         const nodeSection = chapter.createEl("section", { cls: `mms-article-node depth-${Math.min(depth, 8)}` });
         nodeSection.dataset.nodeId = info.node.id;
@@ -16208,7 +16237,7 @@ var MindMapEditor = class {
           if (label) heading.createSpan({ cls: "mms-article-number", text: label });
           const headingText = heading.createSpan({ cls: "mms-article-heading-text" });
           const headingBlock = nodeContentBlocks(info.node).find((block) => block.type === "text");
-          renderRichTextRuns(headingText, headingBlock == null ? void 0 : headingBlock.richText, (_h = headingBlock == null ? void 0 : headingBlock.text) != null ? _h : title);
+          renderRichTextRuns(headingText, headingBlock == null ? void 0 : headingBlock.richText, (_m = headingBlock == null ? void 0 : headingBlock.text) != null ? _m : title);
           this.renderArticleContent(nodeSection, info.node, false);
         } else {
           const firstTextBlock = nodeContentBlocks(info.node).find((block) => block.type === "text");
@@ -16216,7 +16245,7 @@ var MindMapEditor = class {
             const paragraph = nodeSection.createEl("p", { cls: `mms-article-leaf-text${this.options.articleLeafBulletsEnabled && !info.numberedLeaf ? " is-bulleted" : ""}${this.options.articleLeafTextAlignment === "auto" ? " is-auto-aligned" : ""}${firstTextBlock.paragraphIndent === "none" ? " is-flush" : ""}${info.numberedLeaf ? " mms-article-leaf-numbered" : ""}` });
             paragraph.dataset.blockId = firstTextBlock.id;
             if (info.numberedLeaf) {
-              paragraph.dataset.articleNumber = info.leafNumberingStyle === "circled" ? String((_i = info.leafNumberingIndex) != null ? _i : 1) : info.label;
+              paragraph.dataset.articleNumber = info.leafNumberingStyle === "circled" ? String((_n = info.leafNumberingIndex) != null ? _n : 1) : info.label;
               if (info.leafNumberingStyle) paragraph.dataset.articleNumberStyle = info.leafNumberingStyle;
             }
             if (this.options.articleLeafBulletsEnabled && !info.numberedLeaf) {
@@ -19004,6 +19033,7 @@ var MindMapStudioView = class extends import_obsidian13.TextFileView {
       articleBaseDepth: this.articleBaseDepth,
       articleTocEntries: [...this.articleTocEntries],
       articleTocMaxDepth: this.plugin.settings.articleTocMaxDepth,
+      articleTocStyle: this.plugin.settings.articleTocStyle,
       showArticleMiniMap: this.plugin.settings.showArticleMiniMap,
       showArticleContextProgress: this.plugin.settings.showArticleContextProgress,
       articleSectionCollapseEnabled: this.plugin.settings.articleSectionCollapseEnabled,
@@ -22362,6 +22392,7 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
         return location ? [[path, location]] : [];
       })) : {},
       articleTocMaxDepth: typeof raw.articleTocMaxDepth === "number" ? Math.max(1, Math.min(8, Math.round(raw.articleTocMaxDepth))) : DEFAULT_SETTINGS.articleTocMaxDepth,
+      articleTocStyle: raw.articleTocStyle === "plain" || raw.articleTocStyle === "lines" || raw.articleTocStyle === "original" || raw.articleTocStyle === "minimal-page" || raw.articleTocStyle === "report" || raw.articleTocStyle === "magazine" || raw.articleTocStyle === "tree" ? raw.articleTocStyle : "card",
       showArticleMiniMap: raw.showArticleMiniMap !== false,
       showArticleContextProgress: raw.showArticleContextProgress === true,
       articleSectionCollapseEnabled: raw.articleSectionCollapseEnabled === true,

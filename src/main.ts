@@ -907,6 +907,15 @@ export default class MindMapStudioPlugin extends Plugin {
       articleTocMaxDepth: typeof raw.articleTocMaxDepth === "number"
         ? Math.max(1, Math.min(8, Math.round(raw.articleTocMaxDepth)))
         : DEFAULT_SETTINGS.articleTocMaxDepth,
+      articleTocStyle: raw.articleTocStyle === "plain"
+        || raw.articleTocStyle === "lines"
+        || raw.articleTocStyle === "original"
+        || raw.articleTocStyle === "minimal-page"
+        || raw.articleTocStyle === "report"
+        || raw.articleTocStyle === "magazine"
+        || raw.articleTocStyle === "tree"
+        ? raw.articleTocStyle
+        : "card",
       showArticleMiniMap: raw.showArticleMiniMap !== false,
       showArticleContextProgress: raw.showArticleContextProgress === true,
       articleSectionCollapseEnabled: raw.articleSectionCollapseEnabled === true,

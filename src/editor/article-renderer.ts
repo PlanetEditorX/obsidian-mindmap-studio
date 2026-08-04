@@ -8,6 +8,7 @@ import {
   imageSourceCandidates,
   nodeContentBlocks,
   type ArticleLeafNumberingStyle,
+  type ArticleTocStyle,
   type MindMapCodeBlock,
   type MindMapContentBlock,
   type MindMapDocument,
@@ -46,6 +47,7 @@ export interface ArticleRendererOptions {
   showArticleToc: boolean;
   articleTocEntries: ArticleTocEntry[];
   articleTocMaxDepth: number;
+  articleTocStyle: ArticleTocStyle;
   articleLeafBulletsEnabled: boolean;
   articleLeafBulletColor: string;
   articleLeafBulletStyle: ArticleLeafBulletStyle;
@@ -133,7 +135,11 @@ function articleNodeRenderBytes(info: ArticleNodeInfo): number {
 export function renderArticleMode(container: HTMLElement, options: ArticleRendererOptions): ArticleRenderController | null {
   options = options.contentBlockCache ? options : { ...options, contentBlockCache: new WeakMap() };
   container.empty();
-  const articleStyle = resolveArticleStyle(options.document.articleStyle);
+  const articleStyle = resolveArticleStyle({
+    preset: options.document.articleStyle?.preset ?? "classic",
+    ...options.document.articleStyle,
+    tocStyle: options.document.articleStyle?.tocStyle ?? options.articleTocStyle
+  });
   const page = container.createDiv({ cls: `mms-article-page article-${articleStyle.preset} toc-${articleStyle.tocStyle ?? "card"}` });
   page.dataset.nodeId = options.document.root.id;
   applyArticleStyle(page, articleStyle);

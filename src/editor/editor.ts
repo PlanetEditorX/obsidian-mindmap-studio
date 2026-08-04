@@ -197,6 +197,7 @@ interface ArticleNumberingControls {
 
 /** 插件级阅读样式默认值；当前页面可在“主题与外观”中覆盖。 */
 interface ReadingStyleDefaults {
+  tocStyle: NonNullable<ArticleStyle["tocStyle"]>;
   enabled: boolean;
   style: "solid" | "hollow" | "square" | "dash";
   color: string;
@@ -247,6 +248,20 @@ function createReadingStyleControls(
   const backgroundColor = addColor("纸张背景");
   const tocLabel = container.createEl("label", { text: "目录样式" });
   const tocStyle = tocLabel.createEl("select");
+  const tocStyleNames: Record<NonNullable<ArticleStyle["tocStyle"]>, string> = {
+    card: "卡片（当前样式）",
+    plain: "简洁",
+    lines: "引导线",
+    original: "最初样式",
+    "minimal-page": "极简书页",
+    report: "现代报告",
+    magazine: "杂志索引",
+    tree: "层级树线"
+  };
+  tocStyle.createEl("option", {
+    text: `跟随插件设置（当前：${tocStyleNames[globalDefaults.tocStyle]}）`,
+    attr: { value: "" }
+  });
   for (const [id, name] of [
     ["card", "卡片（当前样式）"],
     ["plain", "简洁"],
@@ -317,7 +332,7 @@ function createReadingStyleControls(
     headingColor.value = nextResolved.headingColor ?? "#111827";
     accentColor.value = nextResolved.accentColor ?? "#7c3aed";
     backgroundColor.value = nextResolved.backgroundColor ?? "#ffffff";
-    tocStyle.value = nextResolved.tocStyle ?? "card";
+    tocStyle.value = nextStyle.tocStyle ?? "";
     fontSize.value = String(nextResolved.fontSize ?? 16);
     lineHeight.value = String(nextResolved.lineHeight ?? 1.85);
     markerEnabled.value = nextStyle.leafMarkerEnabled === undefined ? "" : String(nextStyle.leafMarkerEnabled);
@@ -346,7 +361,7 @@ function createReadingStyleControls(
       headingColor: headingColor.value,
       accentColor: accentColor.value,
       backgroundColor: backgroundColor.value,
-      tocStyle: tocStyle.value as ArticleStyle["tocStyle"],
+      tocStyle: tocStyle.value ? tocStyle.value as ArticleStyle["tocStyle"] : undefined,
       fontSize: Math.max(12, Math.min(24, Number(fontSize.value) || resolved.fontSize || 16)),
       lineHeight: Math.max(1.2, Math.min(2.4, Number(lineHeight.value) || resolved.lineHeight || 1.85)),
       leafMarkerEnabled: markerEnabled.value === "" ? undefined : markerEnabled.value === "true",
@@ -4382,6 +4397,7 @@ export class MindMapEditor {
       showArticleToc: this.options.showArticleToc,
       articleTocEntries: this.options.articleTocEntries,
       articleTocMaxDepth: this.effectiveArticleTocMaxDepth(),
+      articleTocStyle: this.options.articleTocStyle,
       articleLeafBulletsEnabled: this.options.articleLeafBulletsEnabled,
       articleLeafBulletColor: this.options.articleLeafBulletColor,
       articleLeafBulletStyle: this.options.articleLeafBulletStyle,
@@ -6125,6 +6141,7 @@ export class MindMapEditor {
       this.document.appearance ?? {},
       this.document.articleStyle,
       {
+        tocStyle: this.options.articleTocStyle,
         enabled: this.options.articleLeafBulletsEnabled,
         style: this.options.articleLeafBulletStyle,
         color: this.options.articleLeafBulletColor,
@@ -6496,14 +6513,18 @@ export class MindMapEditor {
     const sections = this.options.readingSections.length
       ? this.options.readingSections
       : [{ filePath: this.options.articleNavigation?.homePath ?? "", document: this.document, baseDepth: 0 }];
-    const style = resolveArticleStyle(this.document.articleStyle);
+    const style = resolveArticleStyle({
+      preset: this.document.articleStyle?.preset ?? "classic",
+      ...this.document.articleStyle,
+      tocStyle: this.document.articleStyle?.tocStyle ?? this.options.articleTocStyle
+    });
     const progress = this.articleEl.createDiv({ cls: `mms-reading-progress position-${this.options.readingProgressPosition}` });
     progress.createDiv({ cls: "mms-reading-progress-bar" });
     const initialProgress = "0%";
     progress.style.setProperty("--mms-reading-progress", initialProgress);
     progress.dataset.progress = initialProgress;
     progress.createSpan({ text: `阅读进度 ${initialProgress}` });
-    const page = this.articleEl.createDiv({ cls: `mms-article-page mms-reading-page is-entering article-${style.preset}` });
+    const page = this.articleEl.createDiv({ cls: `mms-article-page mms-reading-page is-entering article-${style.preset} toc-${style.tocStyle ?? "card"}` });
     page.dataset.filePath = sections[0]!.filePath;
     page.dataset.nodeId = sections[0]!.document.root.id;
     const bookTitle = page.createEl("h1", { cls: "mms-article-document-title" });
