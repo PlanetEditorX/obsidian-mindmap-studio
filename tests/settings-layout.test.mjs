@@ -173,6 +173,12 @@ test("article directory exposes every preserved and previewed style without circ
     assert.ok(modelSource.includes(`input.tocStyle === "${id}"`), `missing directory style normalization: ${id}`);
   }
   assert.match(modelSource, /export type ArticleTocStyle = "card" \| "plain" \| "lines" \| "original" \| "minimal-page" \| "report" \| "magazine" \| "tree"/);
+  assert.match(settingsSource, /\.setName\("文章目录样式"\)[\s\S]*?\.setValue\(this\.plugin\.settings\.articleTocStyle\)/);
+  assert.match(settingsSource, /createGroup\("阅读样式"[\s\S]*?"文章目录最大层级", "文章目录样式", "文章\/通读缩略导航图"/);
+  assert.match(mainSource, /articleTocStyle: raw\.articleTocStyle === "plain"[\s\S]*?: "card"/);
+  assert.match(editorSource, /跟随插件设置（当前：\$\{tocStyleNames\[globalDefaults\.tocStyle\]\}）/);
+  assert.match(editorSource, /tocStyle: tocStyle\.value \? tocStyle\.value as ArticleStyle\["tocStyle"\] : undefined/);
+  assert.match(articleRendererSource, /tocStyle: options\.document\.articleStyle\?\.tocStyle \?\? options\.articleTocStyle/);
   assert.match(articleRendererSource, /mms-article-toc-number[\s\S]*entry\.label[\s\S]*mms-article-toc-title/);
   assert.match(stylesSource, /\.mms-article-toc-page li::before \{\s*display: none;\s*\}/);
   assert.doesNotMatch(stylesSource, /\.mms-article-toc-page li::before \{[^}]*border-radius: 50%/);

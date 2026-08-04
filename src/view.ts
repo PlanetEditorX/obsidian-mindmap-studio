@@ -544,6 +544,7 @@ export class MindMapStudioView extends TextFileView {
       articleBaseDepth: this.articleBaseDepth,
       articleTocEntries: [...this.articleTocEntries],
       articleTocMaxDepth: this.plugin.settings.articleTocMaxDepth,
+      articleTocStyle: this.plugin.settings.articleTocStyle,
       showArticleMiniMap: this.plugin.settings.showArticleMiniMap,
       showArticleContextProgress: this.plugin.settings.showArticleContextProgress,
       articleSectionCollapseEnabled: this.plugin.settings.articleSectionCollapseEnabled,
