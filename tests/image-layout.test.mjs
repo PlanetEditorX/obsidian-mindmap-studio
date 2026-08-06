@@ -168,7 +168,7 @@ test("failed images expose every source address in map, outline, article, and re
 test("auto uploads are batched and merged into the live document instead of refreshing stale snapshots", () => {
   assert.match(mainSource, /readyAutoUploadJobs/);
   assert.match(mainSource, /autoUploadInFlightKeys/);
-  assert.match(mainSource, /private async runAutoUploadBatch\([\s\S]*const completed: CompletedAutoUploadJob\[\]/);
+  assert.match(mainSource, /private async runAutoUploadBatch\([\s\S]*const completedResults = await Promise\.all\(/);
   assert.match(mainSource, /const patches = completed\.flatMap[\s\S]*applyAutoUploadPatches\(mapFile, patches\)/);
   assert.match(mainSource, /已自动上传 \$\{succeeded\} 张图片/);
   const batch = mainSource.match(/private async runAutoUploadBatch\([\s\S]*?\n  \}\n\n  \/\*\* Applies upload patches/)?.[0] ?? "";

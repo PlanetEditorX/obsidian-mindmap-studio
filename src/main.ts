@@ -2369,19 +2369,18 @@ export default class MindMapStudioPlugin extends Plugin {
       const mapFile = this.app.vault.getAbstractFileByPath(mindMapFile.path);
       if (!(mapFile instanceof TFile)) return;
       const snapshot = parseDocument(await this.app.vault.read(mapFile), mapFile.basename);
-      const completed: CompletedAutoUploadJob[] = [];
 
-      for (const job of jobs) {
+      const completedResults = await Promise.all(jobs.map(async (job): Promise<CompletedAutoUploadJob | null> => {
         const node = findNode(snapshot.root, job.nodeId);
         const block = nodeContentBlocks(node ?? snapshot.root)
           .find((item): item is MindMapImageContentBlock => item.type === "image" && item.id === job.blockId);
         const localFile = this.app.vault.getAbstractFileByPath(normalizePath(job.localPath));
-        if (!node || !block || !(localFile instanceof TFile)) continue;
-        if (block.source !== job.localPath && block.localSource !== job.localPath) continue;
+        if (!node || !block || !(localFile instanceof TFile)) return null;
+        if (block.source !== job.localPath && block.localSource !== job.localPath) return null;
 
         const existingByHost = new Map((block.remoteSources ?? []).map((source) => [source.hostId, source]));
         const missingHostIds = job.hostIds.filter((hostId) => !existingByHost.has(hostId));
-        if (!missingHostIds.length) continue;
+        if (!missingHostIds.length) return null;
 
         try {
           const binary = await this.app.vault.readBinary(localFile);
@@ -2401,7 +2400,7 @@ export default class MindMapStudioPlugin extends Plugin {
           const preferredSource = allSucceeded
             ? job.hostIds.map((hostId) => existingByHost.get(hostId)?.url).find(Boolean)
             : undefined;
-          completed.push({
+          return {
             job,
             patch: {
               nodeId: job.nodeId,
@@ -2414,9 +2413,9 @@ export default class MindMapStudioPlugin extends Plugin {
             allSucceeded,
             failures: batch.failures,
             targetHostNames: batch.successes.map((item) => item.hostName)
-          });
+          };
         } catch (error) {
-          completed.push({
+          return {
             job,
             allSucceeded: false,
             failures: [{
@@ -2425,10 +2424,11 @@ export default class MindMapStudioPlugin extends Plugin {
               error: error instanceof Error ? error.message : String(error)
             }],
             targetHostNames: []
-          });
+          };
         }
-      }
+      }));
 
+      const completed = completedResults.filter((result): result is CompletedAutoUploadJob => result !== null);
       const patches = completed.flatMap((item) => item.patch ? [item.patch] : []);
       if (patches.length) await this.applyAutoUploadPatches(mapFile, patches);
 
