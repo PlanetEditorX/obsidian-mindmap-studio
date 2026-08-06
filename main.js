@@ -22323,7 +22323,10 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
         deleteKey: typeof candidate.deleteKey === "string" && candidate.deleteKey.trim() ? candidate.deleteKey.trim().slice(0, 2e3) : void 0
       }]];
     })) : {};
-    const enabledIds = new Set(imageHosts.filter((host) => host.enabled).map((host) => host.id));
+    const enabledIds = imageHosts.reduce((acc, host) => {
+      if (host.enabled) acc.add(host.id);
+      return acc;
+    }, /* @__PURE__ */ new Set());
     const selectedIds = Array.isArray(raw.autoUploadHostIds) ? raw.autoUploadHostIds.filter((id) => typeof id === "string" && enabledIds.has(id)) : [];
     const hadAiSettings = Array.isArray(raw.aiProfiles);
     const aiProfiles = hadAiSettings ? raw.aiProfiles.flatMap((value, index) => {
