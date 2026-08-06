@@ -782,7 +782,10 @@ export default class MindMapStudioPlugin extends Plugin {
       }))
       : {};
 
-    const enabledIds = new Set(imageHosts.filter((host) => host.enabled).map((host) => host.id));
+    const enabledIds = imageHosts.reduce((acc, host) => {
+      if (host.enabled) acc.add(host.id);
+      return acc;
+    }, new Set<string>());
     const selectedIds = Array.isArray(raw.autoUploadHostIds)
       ? raw.autoUploadHostIds.filter((id): id is string => typeof id === "string" && enabledIds.has(id))
       : [];
