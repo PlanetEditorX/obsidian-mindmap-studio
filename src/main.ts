@@ -2027,8 +2027,20 @@ export default class MindMapStudioPlugin extends Plugin {
       await this.saveSettings();
     }
     return {
-      successes: settled.filter((item): item is { ok: true; value: ImageHostUploadSuccess } => item.ok).map((item) => item.value),
-      failures: settled.filter((item): item is { ok: false; value: ImageHostUploadFailure } => !item.ok).map((item) => item.value),
+      ...settled.reduce(
+        (acc, item) => {
+          if (item.ok) {
+            acc.successes.push(item.value);
+          } else {
+            acc.failures.push(item.value);
+          }
+          return acc;
+        },
+        {
+          successes: [] as ImageHostUploadSuccess[],
+          failures: [] as ImageHostUploadFailure[],
+        }
+      ),
       contentHash
     };
   }

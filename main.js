@@ -23408,8 +23408,20 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
       await this.saveSettings();
     }
     return {
-      successes: settled.filter((item) => item.ok).map((item) => item.value),
-      failures: settled.filter((item) => !item.ok).map((item) => item.value),
+      ...settled.reduce(
+        (acc, item) => {
+          if (item.ok) {
+            acc.successes.push(item.value);
+          } else {
+            acc.failures.push(item.value);
+          }
+          return acc;
+        },
+        {
+          successes: [],
+          failures: []
+        }
+      ),
       contentHash
     };
   }
