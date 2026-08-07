@@ -817,7 +817,9 @@ async function editCapturedDisplay(
   captured: { bytes: Uint8Array; display: ElectronDisplay },
   mode: DesktopCaptureMode
 ): Promise<DesktopCaptureResult> {
-  const token = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const randomValues = new Uint32Array(2);
+  crypto.getRandomValues(randomValues);
+  const token = `${Date.now()}-${randomValues[0].toString(36)}${randomValues[1].toString(36)}`;
   const imageUrl = URL.createObjectURL(new Blob([copyBytesToArrayBuffer(captured.bytes)], { type: "image/png" }));
   const html = captureEditorHtml(captured.display, mode, imageUrl, token);
   const host = openCaptureEditorHost(html, captured.display);
