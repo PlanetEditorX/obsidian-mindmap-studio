@@ -442,7 +442,9 @@ const MINDMAP_CODE_BLOCK = "mindmap-json";
  * @returns 计算、解析或序列化后的字符串结果。
  */
 export function newId(): string {
-  const random = Math.random().toString(36).slice(2, 9);
+  const array = new Uint32Array(1);
+  crypto.getRandomValues(array);
+  const random = array[0].toString(36);
   return `n_${Date.now().toString(36)}_${random}`;
 }
 
