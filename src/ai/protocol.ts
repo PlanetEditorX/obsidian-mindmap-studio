@@ -43,6 +43,13 @@ export interface AiStreamDelta {
   content: string;
 }
 
+/** 已从完整 SSE 响应文本中汇总出的模型结果。 */
+export interface AiParsedStreamResponse {
+  model: string;
+  content: string;
+  usage?: unknown;
+}
+
 /**
  * 将 OpenAI 兼容服务的基础地址或完整地址统一为 Chat Completions 端点。
  *
@@ -236,4 +243,49 @@ export function extractAiStreamDelta(payload: unknown): AiStreamDelta {
     .filter((part): part is string => typeof part === "string")
     .join("");
   return { thinking, content };
+}
+
+/** 解析原生请求返回的完整 SSE 文本，并复用与浏览器流相同的增量回调。 */
+export function parseAiStreamResponseText(
+  source: string,
+  defaultModel: string,
+  onStreamUpdate?: (delta: AiStreamDelta) => void
+): AiParsedStreamResponse {
+  const trimmed = source.trim();
+  if (!trimmed) return { model: defaultModel, content: "" };
+  try {
+    const json = JSON.parse(trimmed) as unknown;
+    if (json && typeof json === "object" && !Array.isArray(json)) {
+      const record = json as Record<string, unknown>;
+      return {
+        model: typeof record.model === "string" ? record.model : defaultModel,
+        content: extractAiResponseText(json),
+        ...(record.usage !== undefined ? { usage: record.usage } : {})
+      };
+    }
+  } catch {
+    // The normal response is SSE; a few compatible proxies return one JSON object instead.
+  }
+
+  let model = defaultModel;
+  let content = "";
+  let usage: unknown;
+  const consumeEvent = (event: string): void => {
+    const data = event.split(/\r?\n/)
+      .filter((line) => line.startsWith("data:"))
+      .map((line) => line.slice(5).trimStart())
+      .join("\n");
+    if (!data || data === "[DONE]") return;
+    let json: unknown;
+    try { json = JSON.parse(data) as unknown; } catch { return; }
+    if (!json || typeof json !== "object") return;
+    const record = json as Record<string, unknown>;
+    if (typeof record.model === "string") model = record.model;
+    if (record.usage !== undefined) usage = record.usage;
+    const delta = extractAiStreamDelta(json);
+    if (delta.content) content += delta.content;
+    if (delta.thinking || delta.content) onStreamUpdate?.(delta);
+  };
+  source.split(/\r?\n\r?\n/).forEach(consumeEvent);
+  return { model, content, ...(usage !== undefined ? { usage } : {}) };
 }

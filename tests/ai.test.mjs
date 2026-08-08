@@ -177,6 +177,23 @@ test("AI protocol enables SSE only for interactive requests and reads thinking d
   );
 });
 
+test("AI protocol parses complete SSE text returned by the native request fallback", () => {
+  const updates = [];
+  const parsed = protocol.parseAiStreamResponseText([
+    'data: {"model":"gpt-native","choices":[{"delta":{"reasoning_content":"分析"}}]}',
+    '',
+    'data: {"choices":[{"delta":{"content":"回答"}}]}',
+    '',
+    'data: [DONE]'
+  ].join("\n"), "model-default", (delta) => updates.push(delta));
+  assert.equal(parsed.model, "gpt-native");
+  assert.equal(parsed.content, "回答");
+  assert.deepEqual(updates, [
+    { thinking: "分析", content: "" },
+    { thinking: "", content: "回答" }
+  ]);
+});
+
 test("AI protocol maps persistent thinking choices to each compatible provider", () => {
   const payload = markdown.buildAiMarkdownPayload(document, null, "book.mindmap", 1024 * 1024);
   const cases = [

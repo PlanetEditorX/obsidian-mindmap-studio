@@ -15,6 +15,7 @@ import {
   extractAiResponseText,
   extractAiStreamDelta,
   extractAiModelIds,
+  parseAiStreamResponseText,
   parseAiHeaders,
   resolveAiChatCompletionsEndpoint,
   resolveAiModelsEndpoint,
@@ -101,11 +102,17 @@ const requestStreamingChatCompletion = async (
   body: AiChatCompletionBody,
   onStreamUpdate?: (update: AiStreamUpdate) => void
 ): Promise<Record<string, unknown>> => {
-  const response = await fetch(endpoint, {
-    method: "POST",
-    headers: { ...buildRequestHeaders(profile), Accept: "text/event-stream" },
-    body: JSON.stringify(body)
-  });
+  let response: Response;
+  try {
+    response = await fetch(endpoint, {
+      method: "POST",
+      headers: { ...buildRequestHeaders(profile), Accept: "text/event-stream" },
+      body: JSON.stringify(body)
+    });
+  } catch (error) {
+    if (!isFetchNetworkError(error)) throw error;
+    return requestNativeStreamingChatCompletion(endpoint, profile, body, onStreamUpdate);
+  }
   if (!response.ok) throw new Error(`AI 接口请求失败（${response.status}）：${(await response.text()).slice(0, 500)}`);
   if (!response.body) throw new Error("AI 接口未返回可读取的流式响应");
   const reader = response.body.getReader();
@@ -122,7 +129,7 @@ const requestStreamingChatCompletion = async (
     if (!json || typeof json !== "object") return;
     const record = json as Record<string, unknown>;
     if (typeof record.model === "string") model = record.model;
-    if (record.usage) usage = record.usage;
+    if (record.usage !== undefined) usage = record.usage;
     const delta = extractAiStreamDelta(json);
     if (delta.content) content += delta.content;
     if (delta.thinking || delta.content) onStreamUpdate?.(delta);
@@ -136,7 +143,34 @@ const requestStreamingChatCompletion = async (
     if (done) break;
   }
   if (buffer.trim()) consumeEvent(buffer);
-  return { model, choices: [{ message: { content } }], ...(usage ? { usage } : {}) };
+  return { model, choices: [{ message: { content } }], ...(usage !== undefined ? { usage } : {}) };
+};
+
+/** 判断浏览器 fetch 是否因 CORS 或渲染器网络边界而无法建立连接。 */
+const isFetchNetworkError = (error: unknown): boolean => error instanceof TypeError
+  || error instanceof Error && /failed to fetch|load failed|networkerror/i.test(error.message);
+
+/** 用 Obsidian 原生请求读取跨域 SSE，避免服务端未开放渲染器 CORS 时失败。 */
+const requestNativeStreamingChatCompletion = async (
+  endpoint: string,
+  profile: AiProfileConfig,
+  body: AiChatCompletionBody,
+  onStreamUpdate?: (update: AiStreamUpdate) => void
+): Promise<Record<string, unknown>> => {
+  const response = await requestUrl({
+    url: endpoint,
+    method: "POST",
+    headers: { ...buildRequestHeaders(profile), Accept: "text/event-stream" },
+    contentType: "application/json",
+    body: JSON.stringify(body),
+    throw: true
+  });
+  const parsed = parseAiStreamResponseText(response.text, profile.model, onStreamUpdate);
+  return {
+    model: parsed.model,
+    choices: [{ message: { content: parsed.content } }],
+    ...(parsed.usage !== undefined ? { usage: parsed.usage } : {})
+  };
 };
 
 /** 发送 OpenAI Chat Completions 兼容请求。 */

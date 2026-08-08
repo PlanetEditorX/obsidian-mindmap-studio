@@ -20413,6 +20413,44 @@ function extractAiStreamDelta(payload) {
   const thinking = [value.reasoning_content, value.reasoning, value.reasoningContent].filter((part) => typeof part === "string").join("");
   return { thinking, content };
 }
+function parseAiStreamResponseText(source, defaultModel, onStreamUpdate) {
+  const trimmed = source.trim();
+  if (!trimmed) return { model: defaultModel, content: "" };
+  try {
+    const json = JSON.parse(trimmed);
+    if (json && typeof json === "object" && !Array.isArray(json)) {
+      const record = json;
+      return {
+        model: typeof record.model === "string" ? record.model : defaultModel,
+        content: extractAiResponseText(json),
+        ...record.usage !== void 0 ? { usage: record.usage } : {}
+      };
+    }
+  } catch (e) {
+  }
+  let model = defaultModel;
+  let content = "";
+  let usage;
+  const consumeEvent = (event) => {
+    const data = event.split(/\r?\n/).filter((line) => line.startsWith("data:")).map((line) => line.slice(5).trimStart()).join("\n");
+    if (!data || data === "[DONE]") return;
+    let json;
+    try {
+      json = JSON.parse(data);
+    } catch (e) {
+      return;
+    }
+    if (!json || typeof json !== "object") return;
+    const record = json;
+    if (typeof record.model === "string") model = record.model;
+    if (record.usage !== void 0) usage = record.usage;
+    const delta = extractAiStreamDelta(json);
+    if (delta.content) content += delta.content;
+    if (delta.thinking || delta.content) onStreamUpdate == null ? void 0 : onStreamUpdate(delta);
+  };
+  source.split(/\r?\n\r?\n/).forEach(consumeEvent);
+  return { model, content, ...usage !== void 0 ? { usage } : {} };
+}
 
 // src/ai/client.ts
 async function fetchAiProfileModels(profile) {
@@ -20470,11 +20508,17 @@ var requestChatCompletion = async (profile, body, onStreamUpdate) => {
 };
 var requestStreamingChatCompletion = async (endpoint, profile, body, onStreamUpdate) => {
   var _a2;
-  const response = await fetch(endpoint, {
-    method: "POST",
-    headers: { ...buildRequestHeaders(profile), Accept: "text/event-stream" },
-    body: JSON.stringify(body)
-  });
+  let response;
+  try {
+    response = await fetch(endpoint, {
+      method: "POST",
+      headers: { ...buildRequestHeaders(profile), Accept: "text/event-stream" },
+      body: JSON.stringify(body)
+    });
+  } catch (error) {
+    if (!isFetchNetworkError(error)) throw error;
+    return requestNativeStreamingChatCompletion(endpoint, profile, body, onStreamUpdate);
+  }
   if (!response.ok) throw new Error(`AI \u63A5\u53E3\u8BF7\u6C42\u5931\u8D25\uFF08${response.status}\uFF09\uFF1A${(await response.text()).slice(0, 500)}`);
   if (!response.body) throw new Error("AI \u63A5\u53E3\u672A\u8FD4\u56DE\u53EF\u8BFB\u53D6\u7684\u6D41\u5F0F\u54CD\u5E94");
   const reader = response.body.getReader();
@@ -20495,7 +20539,7 @@ var requestStreamingChatCompletion = async (endpoint, profile, body, onStreamUpd
     if (!json || typeof json !== "object") return;
     const record = json;
     if (typeof record.model === "string") model = record.model;
-    if (record.usage) usage = record.usage;
+    if (record.usage !== void 0) usage = record.usage;
     const delta = extractAiStreamDelta(json);
     if (delta.content) content += delta.content;
     if (delta.thinking || delta.content) onStreamUpdate == null ? void 0 : onStreamUpdate(delta);
@@ -20509,7 +20553,24 @@ var requestStreamingChatCompletion = async (endpoint, profile, body, onStreamUpd
     if (done) break;
   }
   if (buffer.trim()) consumeEvent(buffer);
-  return { model, choices: [{ message: { content } }], ...usage ? { usage } : {} };
+  return { model, choices: [{ message: { content } }], ...usage !== void 0 ? { usage } : {} };
+};
+var isFetchNetworkError = (error) => error instanceof TypeError || error instanceof Error && /failed to fetch|load failed|networkerror/i.test(error.message);
+var requestNativeStreamingChatCompletion = async (endpoint, profile, body, onStreamUpdate) => {
+  const response = await (0, import_obsidian15.requestUrl)({
+    url: endpoint,
+    method: "POST",
+    headers: { ...buildRequestHeaders(profile), Accept: "text/event-stream" },
+    contentType: "application/json",
+    body: JSON.stringify(body),
+    throw: true
+  });
+  const parsed = parseAiStreamResponseText(response.text, profile.model, onStreamUpdate);
+  return {
+    model: parsed.model,
+    choices: [{ message: { content: parsed.content } }],
+    ...parsed.usage !== void 0 ? { usage: parsed.usage } : {}
+  };
 };
 async function requestAiCompletion(profile, payload, question, onStreamUpdate) {
   if (payload.overLimit) throw new Error("Markdown \u8D85\u8FC7\u5F53\u524D\u5141\u8BB8\u4E0A\u4F20\u7684\u5927\u5C0F");
