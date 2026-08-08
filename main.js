@@ -21268,7 +21268,9 @@ async function writePngToClipboard(runtime, bytes) {
   throw new Error("\u5F53\u524D\u684C\u9762\u8FD0\u884C\u65F6\u65E0\u6CD5\u628A\u622A\u56FE\u5199\u5165\u7CFB\u7EDF\u526A\u8D34\u677F");
 }
 async function editCapturedDisplay(runtime, nodeRuntime, captured, mode) {
-  const token = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const randomValues = new Uint32Array(2);
+  crypto.getRandomValues(randomValues);
+  const token = `${Date.now()}-${randomValues[0].toString(36)}${randomValues[1].toString(36)}`;
   const imageUrl = URL.createObjectURL(new Blob([copyBytesToArrayBuffer(captured.bytes)], { type: "image/png" }));
   const html = captureEditorHtml(captured.display, mode, imageUrl, token);
   const host = openCaptureEditorHost(html, captured.display);
