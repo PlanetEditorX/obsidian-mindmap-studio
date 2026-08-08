@@ -116,7 +116,9 @@ function moveNodeRelative(root, draggedId, targetId, position) {
 // src/core/model.ts
 var MINDMAP_CODE_BLOCK = "mindmap-json";
 function newId() {
-  const random = Math.random().toString(36).slice(2, 9);
+  const array = new Uint32Array(1);
+  crypto.getRandomValues(array);
+  const random = array[0].toString(36);
   return `n_${Date.now().toString(36)}_${random}`;
 }
 function createNode(text = "\u65B0\u8282\u70B9") {
