@@ -469,44 +469,51 @@ export class MindMapSearchIndex {
       }
     }
 
-    const queue: string[] = [familyRoot];
+    let queue: string[] = [familyRoot];
     while (queue.length) {
-      const path = normalizePath(queue.shift() ?? "");
-      if (!path || family.has(path)) continue;
-      const file = this.app.vault.getAbstractFileByPath(path);
-      if (!(file instanceof TFile) || file.extension.toLocaleLowerCase() !== this.extension) continue;
-      family.add(path);
+      const batch = queue;
+      queue = [];
 
-      let document = documents.get(path);
-      if (!document) {
-        try {
-          document = parseDocument(await this.app.vault.cachedRead(file), file.basename);
-        } catch (error) {
-          console.warn(`MindMap Studio could not read map family member ${path}`, error);
-          continue;
-        }
-      }
+      await Promise.all(
+        batch.map(async (rawPath) => {
+          const path = normalizePath(rawPath ?? "");
+          if (!path || family.has(path)) return;
+          const file = this.app.vault.getAbstractFileByPath(path);
+          if (!(file instanceof TFile) || file.extension.toLocaleLowerCase() !== this.extension) return;
+          family.add(path);
 
-      this.data.files[path] = {
-        mtime: file.stat.mtime,
-        size: file.stat.size,
-        title: document.title,
-        navigation: document.navigation,
-        entries: buildSearchEntries(document, path)
-      };
+          let document = documents.get(path);
+          if (!document) {
+            try {
+              document = parseDocument(await this.app.vault.cachedRead(file), file.basename);
+            } catch (error) {
+              console.warn(`MindMap Studio could not read map family member ${path}`, error);
+              return;
+            }
+          }
 
-      for (const node of this.walkNodes(document.root)) {
-        const child = this.resolveSubmapFile(node.submap?.path, path);
-        if (child && !family.has(child.path)) queue.push(child.path);
-      }
+          this.data.files[path] = {
+            mtime: file.stat.mtime,
+            size: file.stat.size,
+            title: document.title,
+            navigation: document.navigation,
+            entries: buildSearchEntries(document, path)
+          };
 
-      // Compatibility fallback: a child document also records its parent path.
-      // This recovers older maps whose parent node lost the submap field.
-      for (const [candidatePath, indexed] of Object.entries(this.data.files)) {
-        const parentPath = indexed.navigation?.parentPath ?? indexed.entries[0]?.parentMapPath;
-        const resolvedParent = this.resolveSubmapFile(parentPath, candidatePath);
-        if (resolvedParent?.path === path && !family.has(candidatePath)) queue.push(candidatePath);
-      }
+          for (const node of this.walkNodes(document.root)) {
+            const child = this.resolveSubmapFile(node.submap?.path, path);
+            if (child && !family.has(child.path)) queue.push(child.path);
+          }
+
+          // Compatibility fallback: a child document also records its parent path.
+          // This recovers older maps whose parent node lost the submap field.
+          for (const [candidatePath, indexed] of Object.entries(this.data.files)) {
+            const parentPath = indexed.navigation?.parentPath ?? indexed.entries[0]?.parentMapPath;
+            const resolvedParent = this.resolveSubmapFile(parentPath, candidatePath);
+            if (resolvedParent?.path === path && !family.has(candidatePath)) queue.push(candidatePath);
+          }
+        })
+      );
     }
 
     // Merge relationships already present in the index. This covers older child

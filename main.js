@@ -19547,7 +19547,7 @@ var MindMapSearchIndex = class {
    * manually rebuilding the whole-vault index.
    */
   async refreshFamily(rootPath, currentDocument) {
-    var _a2, _b2, _c, _d, _e, _f;
+    var _a2;
     const normalizedRoot = (0, import_obsidian14.normalizePath)(rootPath);
     const family = /* @__PURE__ */ new Set();
     const documents = /* @__PURE__ */ new Map();
@@ -19568,38 +19568,45 @@ var MindMapSearchIndex = class {
         break;
       }
     }
-    const queue = [familyRoot];
+    let queue = [familyRoot];
     while (queue.length) {
-      const path = (0, import_obsidian14.normalizePath)((_b2 = queue.shift()) != null ? _b2 : "");
-      if (!path || family.has(path)) continue;
-      const file = this.app.vault.getAbstractFileByPath(path);
-      if (!(file instanceof import_obsidian14.TFile) || file.extension.toLocaleLowerCase() !== this.extension) continue;
-      family.add(path);
-      let document2 = documents.get(path);
-      if (!document2) {
-        try {
-          document2 = parseDocument(await this.app.vault.cachedRead(file), file.basename);
-        } catch (error) {
-          console.warn(`MindMap Studio could not read map family member ${path}`, error);
-          continue;
-        }
-      }
-      this.data.files[path] = {
-        mtime: file.stat.mtime,
-        size: file.stat.size,
-        title: document2.title,
-        navigation: document2.navigation,
-        entries: buildSearchEntries(document2, path)
-      };
-      for (const node of this.walkNodes(document2.root)) {
-        const child = this.resolveSubmapFile((_c = node.submap) == null ? void 0 : _c.path, path);
-        if (child && !family.has(child.path)) queue.push(child.path);
-      }
-      for (const [candidatePath, indexed] of Object.entries(this.data.files)) {
-        const parentPath = (_f = (_d = indexed.navigation) == null ? void 0 : _d.parentPath) != null ? _f : (_e = indexed.entries[0]) == null ? void 0 : _e.parentMapPath;
-        const resolvedParent = this.resolveSubmapFile(parentPath, candidatePath);
-        if ((resolvedParent == null ? void 0 : resolvedParent.path) === path && !family.has(candidatePath)) queue.push(candidatePath);
-      }
+      const batch = queue;
+      queue = [];
+      await Promise.all(
+        batch.map(async (rawPath) => {
+          var _a3, _b2, _c, _d;
+          const path = (0, import_obsidian14.normalizePath)(rawPath != null ? rawPath : "");
+          if (!path || family.has(path)) return;
+          const file = this.app.vault.getAbstractFileByPath(path);
+          if (!(file instanceof import_obsidian14.TFile) || file.extension.toLocaleLowerCase() !== this.extension) return;
+          family.add(path);
+          let document2 = documents.get(path);
+          if (!document2) {
+            try {
+              document2 = parseDocument(await this.app.vault.cachedRead(file), file.basename);
+            } catch (error) {
+              console.warn(`MindMap Studio could not read map family member ${path}`, error);
+              return;
+            }
+          }
+          this.data.files[path] = {
+            mtime: file.stat.mtime,
+            size: file.stat.size,
+            title: document2.title,
+            navigation: document2.navigation,
+            entries: buildSearchEntries(document2, path)
+          };
+          for (const node of this.walkNodes(document2.root)) {
+            const child = this.resolveSubmapFile((_a3 = node.submap) == null ? void 0 : _a3.path, path);
+            if (child && !family.has(child.path)) queue.push(child.path);
+          }
+          for (const [candidatePath, indexed] of Object.entries(this.data.files)) {
+            const parentPath = (_d = (_b2 = indexed.navigation) == null ? void 0 : _b2.parentPath) != null ? _d : (_c = indexed.entries[0]) == null ? void 0 : _c.parentMapPath;
+            const resolvedParent = this.resolveSubmapFile(parentPath, candidatePath);
+            if ((resolvedParent == null ? void 0 : resolvedParent.path) === path && !family.has(candidatePath)) queue.push(candidatePath);
+          }
+        })
+      );
     }
     for (const indexedPath of collectIndexedFamilyPaths(this.data.files, normalizedRoot)) family.add(indexedPath);
     this.data.generatedAt = (/* @__PURE__ */ new Date()).toISOString();
