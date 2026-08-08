@@ -46,7 +46,7 @@ AI 窗口默认选中“AI 整理并重新生成（确认后应用）”，并�
 
 询问模式和 AI 编辑模式分别保存自己的输入草稿。切换回询问模式时会恢复上次填写的问题，不会被编辑要求覆盖。
 
-询问、整理和题目整理会向 OpenAI Chat Completions 兼容接口请求 SSE 流式响应。接口返回 `reasoning_content`、`reasoning` 或 `reasoningContent` 时，窗口会实时显示“模型思考”；返回正文分片时会实时显示“正在生成”。最终回答仍会使用 Markdown 渲染，整理模式仍须先生成预览再确认应用。未返回思考字段的模型只显示生成内容；图片识图和接口检测仍使用普通 JSON 请求。
+询问、整理和题目整理会向 OpenAI Chat Completions 兼容接口请求 SSE 流式响应。接口返回 `reasoning_content`、`reasoning` 或 `reasoningContent` 时，窗口会实时显示“模型思考”；返回正文分片时会实时显示“正在生成”。若服务端未开放 Obsidian 渲染器的跨域读取，插件会自动改用 Obsidian 原生请求完成同一 SSE 请求，避免只在导图窗口中出现 `Failed to fetch`；这种回退会在响应完整到达后更新结果。最终回答仍会使用 Markdown 渲染，整理模式仍须先生成预览再确认应用。未返回思考字段的模型只显示生成内容；图片识图和接口检测仍使用普通 JSON 请求。
 
 ## AI 整理并重新生成
 

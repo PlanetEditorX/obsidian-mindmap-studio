@@ -8,7 +8,7 @@ OpenAI Chat Completions 兼容 AI 请求客户端。
 
 ### 类型 `AiStreamUpdate`
 
-源码：`src/ai/client.ts:25`
+源码：`src/ai/client.ts:26`
 
 流式响应到达时通知界面，以便即时显示模型思考和正文。
 
@@ -18,7 +18,7 @@ export type AiStreamUpdate =
 
 ### 接口 `AiCompletionResult`
 
-源码：`src/ai/client.ts:28`
+源码：`src/ai/client.ts:29`
 
 AI 请求完成后返回给界面的统一结果。
 
@@ -28,7 +28,7 @@ export interface AiCompletionResult
 
 ### 接口 `AiConnectionTestResult`
 
-源码：`src/ai/client.ts:39`
+源码：`src/ai/client.ts:40`
 
 AI 接口连通性检测结果。
 
@@ -38,7 +38,7 @@ export interface AiConnectionTestResult
 
 ### 函数 `fetchAiProfileModels`
 
-源码：`src/ai/client.ts:45`
+源码：`src/ai/client.ts:46`
 
 向兼容服务的 /models 目录请求可用模型 ID。
 
@@ -48,7 +48,7 @@ export async function fetchAiProfileModels(profile: AiProfileConfig): Promise<st
 
 ### 函数 `requestAiCompletion`
 
-源码：`src/ai/client.ts:143`
+源码：`src/ai/client.ts:176`
 
 发送 OpenAI Chat Completions 兼容请求。
 
@@ -58,7 +58,7 @@ export async function requestAiCompletion( profile: AiProfileConfig, payload: Ai
 
 ### 函数 `requestAiEditProposal`
 
-源码：`src/ai/client.ts:167`
+源码：`src/ai/client.ts:200`
 
 请求 AI 返回可解析的 Markdown 修改提案；不会直接修改导图。
 
@@ -68,7 +68,7 @@ export async function requestAiEditProposal( profile: AiProfileConfig, payload: 
 
 ### 函数 `imageBlobToDataUrl`
 
-源码：`src/ai/client.ts:191`
+源码：`src/ai/client.ts:224`
 
 把图片 Blob 转为 Chat Completions 可直接发送的 data URL。
 
@@ -78,7 +78,7 @@ export async function imageBlobToDataUrl(blob: Blob): Promise<string>
 
 ### 函数 `requestAiImageRecognition`
 
-源码：`src/ai/client.ts:203`
+源码：`src/ai/client.ts:236`
 
 使用支持视觉输入的 OpenAI 兼容模型识别单张图片。
 
@@ -88,7 +88,7 @@ export async function requestAiImageRecognition( profile: AiProfileConfig, image
 
 ### 函数 `testAiProfileConnection`
 
-源码：`src/ai/client.ts:241`
+源码：`src/ai/client.ts:274`
 
 使用最小提示词检测接口、鉴权和模型是否可用。 检测请求不会包含当前导图或节点正文。
 
@@ -546,9 +546,19 @@ export interface AiChatCompletionBody
 export interface AiStreamDelta
 ```
 
+### 接口 `AiParsedStreamResponse`
+
+源码：`src/ai/protocol.ts:47`
+
+已从完整 SSE 响应文本中汇总出的模型结果。
+
+```ts
+export interface AiParsedStreamResponse
+```
+
 ### 函数 `resolveAiChatCompletionsEndpoint`
 
-源码：`src/ai/protocol.ts:52`
+源码：`src/ai/protocol.ts:59`
 
 将 OpenAI 兼容服务的基础地址或完整地址统一为 Chat Completions 端点。 例如 `https://api.example.com/v1` 会转换为 `https://api.example.com/v1/chat/completions`；已经填写完整路径时保持不变。
 
@@ -558,7 +568,7 @@ export function resolveAiChatCompletionsEndpoint(endpoint: string): string
 
 ### 函数 `resolveAiModelsEndpoint`
 
-源码：`src/ai/protocol.ts:61`
+源码：`src/ai/protocol.ts:68`
 
 将配置的基础地址或完整聊天地址转换为模型目录端点。
 
@@ -568,7 +578,7 @@ export function resolveAiModelsEndpoint(endpoint: string): string
 
 ### 函数 `extractAiModelIds`
 
-源码：`src/ai/protocol.ts:70`
+源码：`src/ai/protocol.ts:77`
 
 从 OpenAI 兼容的 /models 响应中提取可供选择的模型 ID。
 
@@ -578,7 +588,7 @@ export function extractAiModelIds(payload: unknown): string[]
 
 ### 函数 `withThinkingMode`
 
-源码：`src/ai/protocol.ts:84`
+源码：`src/ai/protocol.ts:91`
 
 按服务商协议追加思考控制字段；auto 时完全不改变原始请求。
 
@@ -588,7 +598,7 @@ function withThinkingMode(profile: AiProfileConfig, body: AiChatCompletionBody):
 
 ### 函数 `parseAiHeaders`
 
-源码：`src/ai/protocol.ts:99`
+源码：`src/ai/protocol.ts:106`
 
 解析自定义请求头，并拒绝嵌套值、非法名称和 CRLF 注入。
 
@@ -598,7 +608,7 @@ export function parseAiHeaders(source: string): Record<string, string>
 
 ### 函数 `buildChatCompletionBody`
 
-源码：`src/ai/protocol.ts:118`
+源码：`src/ai/protocol.ts:125`
 
 构建 OpenAI Chat Completions 兼容请求体。
 
@@ -608,7 +618,7 @@ export function buildChatCompletionBody( profile: AiProfileConfig, payload: AiMa
 
 ### 函数 `buildAiEditCompletionBody`
 
-源码：`src/ai/protocol.ts:138`
+源码：`src/ai/protocol.ts:145`
 
 构建只返回 Markdown 修改提案的 OpenAI Chat Completions 请求体。
 
@@ -618,7 +628,7 @@ export function buildAiEditCompletionBody( profile: AiProfileConfig, payload: Ai
 
 ### 函数 `buildImageRecognitionCompletionBody`
 
-源码：`src/ai/protocol.ts:162`
+源码：`src/ai/protocol.ts:169`
 
 构建单张图片的 OpenAI 兼容多模态识图请求。
 
@@ -628,7 +638,7 @@ export function buildImageRecognitionCompletionBody( profile: AiProfileConfig, p
 
 ### 函数 `buildAiConnectionTestBody`
 
-源码：`src/ai/protocol.ts:187`
+源码：`src/ai/protocol.ts:194`
 
 构建不包含导图正文的最小连通性检测请求。
 
@@ -638,7 +648,7 @@ export function buildAiConnectionTestBody(profile: AiProfileConfig): AiChatCompl
 
 ### 函数 `extractAiResponseText`
 
-源码：`src/ai/protocol.ts:198`
+源码：`src/ai/protocol.ts:205`
 
 从 Chat Completions 及常见兼容响应中提取最终文本。
 
@@ -648,12 +658,22 @@ export function extractAiResponseText(payload: unknown): string
 
 ### 函数 `extractAiStreamDelta`
 
-源码：`src/ai/protocol.ts:220`
+源码：`src/ai/protocol.ts:227`
 
 从 OpenAI Chat Completions SSE 事件中读取思考与正文增量，兼容常见字段命名。
 
 ```ts
 export function extractAiStreamDelta(payload: unknown): AiStreamDelta
+```
+
+### 函数 `parseAiStreamResponseText`
+
+源码：`src/ai/protocol.ts:249`
+
+解析原生请求返回的完整 SSE 文本，并复用与浏览器流相同的增量回调。
+
+```ts
+export function parseAiStreamResponseText( source: string, defaultModel: string, onStreamUpdate?: (delta: AiStreamDelta) => void ): AiParsedStreamResponse
 ```
 
 ## `src/article/article-render-cache.ts`
