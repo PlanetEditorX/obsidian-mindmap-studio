@@ -20149,7 +20149,7 @@ function parseUploadHeaders(source) {
   return headers;
 }
 function createMultipartBoundary() {
-  const random = typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID().replaceAll("-", "") : `${Date.now().toString(16)}${Math.random().toString(16).slice(2)}`;
+  const random = crypto.randomUUID().replaceAll("-", "");
   return `----MindMapStudio${random}`;
 }
 async function buildMultipartUploadBody(fieldName, filename, mime, blob, boundary = createMultipartBoundary()) {
