@@ -22070,7 +22070,6 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
         return text;
       }
     };
-    let modifiedCount = 0;
     this.logDebug("global-search", "replace-all-start", {
       resultCount: results.length,
       fileCount: byFile.size,
@@ -22078,9 +22077,10 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
       replacementLength: replacement.length,
       useRegex
     });
-    for (const [filePath, fileResults] of byFile) {
+    const promises = Array.from(byFile.entries()).map(async ([filePath, fileResults]) => {
+      let localModifiedCount = 0;
       const file = this.app.vault.getAbstractFileByPath(filePath);
-      if (!(file instanceof import_obsidian16.TFile)) continue;
+      if (!(file instanceof import_obsidian16.TFile)) return 0;
       try {
         const content = await this.app.vault.read(file);
         const doc = parseDocument(content, file.basename);
@@ -22113,7 +22113,7 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
           changedNodeIds.add(nodeId);
           fileModified = true;
         }
-        if (!fileModified) continue;
+        if (!fileModified) return 0;
         await this.app.vault.modify(file, serializeDocument(doc));
         const persisted = parseDocument(await this.app.vault.read(file), file.basename);
         for (const nodeId of changedNodeIds) {
@@ -22122,7 +22122,7 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
           if (!expectedNode || !persistedNode) continue;
           if (nodePlainText(expectedNode) !== nodePlainText(persistedNode)) continue;
           if (expectedNode.note !== persistedNode.note) continue;
-          modifiedCount += 1;
+          localModifiedCount += 1;
         }
         await this.searchIndex.refreshFile(file);
         await this.refreshOpenMindMap(file, persisted);
@@ -22135,7 +22135,10 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
         this.logDebug("global-search", "replace-all-file-failed", { filePath, error: err2 });
         console.warn(`MindMap Studio could not replace in ${filePath}:`, err2);
       }
-    }
+      return localModifiedCount;
+    });
+    const resultsArray = await Promise.all(promises);
+    const modifiedCount = resultsArray.reduce((acc, count) => acc + count, 0);
     this.logDebug("global-search", "replace-all-complete", { modifiedCount, fileCount: byFile.size });
     return modifiedCount;
   }
