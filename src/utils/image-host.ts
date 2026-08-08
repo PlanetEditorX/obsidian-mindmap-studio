@@ -74,9 +74,7 @@ export function parseUploadHeaders(source: string): Record<string, string> {
  * @returns 以插件名称开头的 boundary。
  */
 export function createMultipartBoundary(): string {
-  const random = typeof crypto !== "undefined" && "randomUUID" in crypto
-    ? crypto.randomUUID().replaceAll("-", "")
-    : `${Date.now().toString(16)}${Math.random().toString(16).slice(2)}`;
+  const random = crypto.randomUUID().replaceAll("-", "");
   return `----MindMapStudio${random}`;
 }
 
