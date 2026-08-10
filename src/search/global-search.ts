@@ -1056,20 +1056,25 @@ export class GlobalMindMapSearchModal extends Modal {
     buttons[index]?.scrollIntoView({ block: "nearest" });
   }
 
-  /**
-   * 打开result，并保持模型、界面和持久化状态的一致性。
-   *
-   * @param result 该参数用于 open result 流程中的输入或控制。
-   */
+  /** Dismisses the search modal and removes any container left by a view transition. */
+  private dismissResultPanel(): void {
+    this.close();
+    window.requestAnimationFrame(() => {
+      if (this.containerEl.isConnected) this.containerEl.remove();
+    });
+  }
+
+  /** Opens a result after dismissing the search modal so view loading cannot keep it visible. */
   private async openResult(result: MindMapSearchResult): Promise<void> {
     if (this.openingResult) return;
     this.openingResult = true;
+    // Navigation can wait for the target view to finish loading. Dismiss the
+    // modal first so that a pending view transition cannot leave it visible.
+    this.dismissResultPanel();
     try {
       await this.onOpenResult(result);
     } finally {
-      // Keep the panel visible while Obsidian switches to the target, then
-      // always dismiss it once that navigation attempt has completed.
-      this.close();
+      this.dismissResultPanel();
     }
   }
 }

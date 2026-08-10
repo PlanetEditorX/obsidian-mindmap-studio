@@ -42,8 +42,9 @@ test("replace all searches the complete active scope instead of the capped visib
   assert.match(source, /async refreshFile\(file: TFile\): Promise<void>/);
 });
 
-test("opening a search result waits for navigation before closing the modal", () => {
+test("opening a search result dismisses the modal before navigation can stall", () => {
   assert.match(source, /private openingResult = false/);
-  assert.match(source, /if \(this\.openingResult\) return;/);
-  assert.match(source, /await this\.onOpenResult\(result\);[\s\S]*this\.close\(\);/);
+  assert.match(source, /private dismissResultPanel\(\): void/);
+  assert.match(source, /if \(this\.containerEl\.isConnected\) this\.containerEl\.remove\(\);/);
+  assert.match(source, /this\.dismissResultPanel\(\);[\s\S]*await this\.onOpenResult\(result\);/);
 });

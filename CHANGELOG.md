@@ -642,7 +642,7 @@
 
 ## Unreleased
 
-- Fixed global-search result navigation so the search panel closes after the target opens, with duplicate-click protection.
+- Fixed global-search result navigation so the search panel closes immediately when a result is selected, with duplicate-click protection.
 - Added regression coverage for search-result modal closing and Windows file-URL path resolution in the test suite.
 
 - 优化“收起所有节点”后的布局过渡：保留当前视口并平滑移动保留节点，不再跳转到固定位置。
