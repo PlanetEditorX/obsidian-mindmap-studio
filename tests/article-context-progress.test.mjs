@@ -1,9 +1,10 @@
-import assert from "node:assert/strict";
-import path from "node:path";
+﻿import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import path from "node:path";
 import { test } from "node:test";
+import { fileURLToPath } from "node:url";
 
-const rootDir = path.resolve(new URL("..", import.meta.url).pathname);
+const rootDir = fileURLToPath(new URL("..", import.meta.url));
 
 test("article context progress helper clamps totals, preserves the configured bounds, and finishes at the end bound", async () => {
   const source = await readFile(path.join(rootDir, "src/article/modes.ts"), "utf8");

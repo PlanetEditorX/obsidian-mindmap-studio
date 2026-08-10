@@ -789,6 +789,7 @@ export class GlobalMindMapSearchModal extends Modal {
   private activeIndex = -1;
   private renderedResults: MindMapSearchResult[] = [];
   private useRegex = false;
+  private openingResult = false;
 
   /**
    * 创建 GlobalMindMapSearchModal 实例，保存依赖和初始状态；实际 DOM 构建通常在 onOpen() 或后续渲染流程中完成。
@@ -1061,7 +1062,14 @@ export class GlobalMindMapSearchModal extends Modal {
    * @param result 该参数用于 open result 流程中的输入或控制。
    */
   private async openResult(result: MindMapSearchResult): Promise<void> {
-    this.close();
-    await this.onOpenResult(result);
+    if (this.openingResult) return;
+    this.openingResult = true;
+    try {
+      await this.onOpenResult(result);
+    } finally {
+      // Keep the panel visible while Obsidian switches to the target, then
+      // always dismiss it once that navigation attempt has completed.
+      this.close();
+    }
   }
 }

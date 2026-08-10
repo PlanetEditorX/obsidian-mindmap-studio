@@ -19881,6 +19881,7 @@ var GlobalMindMapSearchModal = class extends import_obsidian14.Modal {
     this.activeIndex = -1;
     this.renderedResults = [];
     this.useRegex = false;
+    this.openingResult = false;
   }
   /**
    * 在弹窗或视图打开时创建界面、绑定事件并把当前数据填入控件。
@@ -20108,8 +20109,13 @@ var GlobalMindMapSearchModal = class extends import_obsidian14.Modal {
    * @param result 该参数用于 open result 流程中的输入或控制。
    */
   async openResult(result) {
-    this.close();
-    await this.onOpenResult(result);
+    if (this.openingResult) return;
+    this.openingResult = true;
+    try {
+      await this.onOpenResult(result);
+    } finally {
+      this.close();
+    }
   }
 };
 

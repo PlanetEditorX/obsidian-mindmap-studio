@@ -41,3 +41,9 @@ test("replace all searches the complete active scope instead of the capped visib
   assert.doesNotMatch(source, /this\.onReplaceAll\(this\.renderedResults/);
   assert.match(source, /async refreshFile\(file: TFile\): Promise<void>/);
 });
+
+test("opening a search result waits for navigation before closing the modal", () => {
+  assert.match(source, /private openingResult = false/);
+  assert.match(source, /if \(this\.openingResult\) return;/);
+  assert.match(source, /await this\.onOpenResult\(result\);[\s\S]*this\.close\(\);/);
+});
