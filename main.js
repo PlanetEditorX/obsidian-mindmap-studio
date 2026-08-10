@@ -20103,18 +20103,22 @@ var GlobalMindMapSearchModal = class extends import_obsidian14.Modal {
     buttons.forEach((button, buttonIndex) => button.toggleClass("is-active", buttonIndex === index));
     (_a2 = buttons[index]) == null ? void 0 : _a2.scrollIntoView({ block: "nearest" });
   }
-  /**
-   * 打开result，并保持模型、界面和持久化状态的一致性。
-   *
-   * @param result 该参数用于 open result 流程中的输入或控制。
-   */
+  /** Dismisses the search modal and removes any container left by a view transition. */
+  dismissResultPanel() {
+    this.close();
+    window.requestAnimationFrame(() => {
+      if (this.containerEl.isConnected) this.containerEl.remove();
+    });
+  }
+  /** Opens a result after dismissing the search modal so view loading cannot keep it visible. */
   async openResult(result) {
     if (this.openingResult) return;
     this.openingResult = true;
+    this.dismissResultPanel();
     try {
       await this.onOpenResult(result);
     } finally {
-      this.close();
+      this.dismissResultPanel();
     }
   }
 };
