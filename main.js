@@ -20143,7 +20143,6 @@ var GlobalMindMapSearchModal = class extends import_obsidian14.Modal {
     ownerWindow == null ? void 0 : ownerWindow.setTimeout(removeSearchLayers, 0);
     ownerWindow == null ? void 0 : ownerWindow.setTimeout(removeSearchLayers, 120);
   }
-
   /** Opens a result after dismissing the search modal so view loading cannot keep it visible. */
   async openResult(result) {
     if (this.openingResult) return;
