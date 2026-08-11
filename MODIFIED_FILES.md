@@ -1,5 +1,14 @@
 # Modified Files
 
+## 1.45.3 全局/导图族搜索弹窗强制退出修复
+
+- `src/search/global-search.ts`：全局搜索与当前导图族搜索共用的结果打开流程改为同时隐藏 `modalEl`、`containerEl` 和实际 `.modal-container`，调用 `Modal.close()` 后同步移除捕获节点，并按 `.mms-global-search-modal` / `.mms-global-search-container-closing` 做同步及短延迟 DOM 兜底清理。
+- `tests/global-search-contract.test.mjs`：增加两种搜索入口共用同一 Modal 的契约，并验证源码与安装 bundle 都包含强制 DOM 清理。
+- `main.js`：同步应用 1.45.3 搜索弹窗强制退出逻辑；由于当前 Linux 环境只有 Windows esbuild，无法执行生产重构建，已通过 `node --check` 与专项 bundle 契约验证。
+- `README.md`、`docs/ARCHITECTURE.md`、`docs/SPECIAL_FEATURES.md`、`docs/TESTING.md`、`docs/FUNCTION_REFERENCE.md`、`CHANGELOG.md`：同步两种搜索统一关闭行为、架构边界和测试要求。
+- `package.json`、`package-lock.json`、`manifest.json`、`versions.json`：版本同步为 1.45.3；`update.json` 已写入 1.45.3 安装包 SHA-256 `faf6e84ba343f942ecf43c93d0d5864c35227918ab5e319cc4f5c6e713ae1603`。
+- `TEST_RESULTS.md`、Codex 交接：记录真实问题复现反馈、当前验证结果和仍需 Obsidian 桌面端手工确认的事项。
+
 ## 1.45.2 搜索结果跳转弹窗同步关闭修复
 
 - `src/search/global-search.ts`：搜索结果导航前同步隐藏并移除实际 `.modal-container`，同时保留 `Modal.close()` 生命周期与重复点击保护，避免页面已跳转但空白搜索弹窗残留。

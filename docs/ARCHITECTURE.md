@@ -224,6 +224,8 @@ Obsidian 读取文本
 
 搜索结果列表只负责展示，允许由 `globalSearchMaxResults` 限制 20–500 条；批量替换不得复用这份截断数组。`GlobalMindMapSearchModal` 在执行“全部替换”时用 `Number.MAX_SAFE_INTEGER` 重新查询当前全局或导图族范围，把完整结果传给插件服务层。每个文件写回并校验后立即调用 `MindMapSearchIndex.refreshFile()` 更新索引，再刷新已打开视图，避免用户马上重搜时看到旧结果。单条替换继续复用同一持久化函数。
 
+全局搜索与当前导图族搜索共用 `GlobalMindMapSearchModal`。打开结果时必须在导航 Promise 之前同步退出搜索 UI：同时隐藏 `modalEl`、Obsidian 暴露的 `containerEl` 与从 DOM 向上找到的 `.modal-container`，调用 `Modal.close()` 保留生命周期清理，再移除仍存活的搜索 modal/container；最后通过 `.mms-global-search-modal` 做一次页面级兜底扫描，防止视图切换期间旧容器引用重新残留。
+
 ### 运行调试记录
 
 `RuntimeDebugLog` 是插件级、会话级、有界内存缓冲区。只有“管理配置 → 调试模式”开启时才接收事件；启用会清空旧会话并记录新的 session 头，禁用或插件重载后不保留历史。宿主层捕获点击、双击、右键、指针、按键、滚轮、滚动、文件打开、活动叶变化、全局错误和未处理 Promise；编辑器与视图通过 `onDebugLog` 回调补充目标排队、上下文刷新、文章落地决策、窗口挂载、语义滚动事务和父级导航。

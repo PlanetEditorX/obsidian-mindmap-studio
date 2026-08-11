@@ -5,11 +5,13 @@ import { before, test } from "node:test";
 let source;
 let styles;
 let bundle;
+let mainSource;
 
 before(async () => {
   source = await readFile("src/search/global-search.ts", "utf8");
   styles = await readFile("styles.css", "utf8");
   bundle = await readFile("main.js", "utf8");
+  mainSource = await readFile("src/main.ts", "utf8");
 });
 
 test("single-result replacement is right-aligned and vertically centered", () => {
@@ -44,14 +46,28 @@ test("replace all searches the complete active scope instead of the capped visib
   assert.match(source, /async refreshFile\(file: TFile\): Promise<void>/);
 });
 
-test("opening a search result synchronously hides and removes the modal before navigation can stall", () => {
+
+test("global and map-family search entries share the same modal close path", () => {
+  assert.match(mainSource, /openGlobalSearchAfterIndexReady\(\)[\s\S]*new GlobalMindMapSearchModal\(/);
+  assert.match(mainSource, /openMapFamilySearch\(file: TFile[\s\S]*new GlobalMindMapSearchModal\(/);
+  assert.equal((mainSource.match(/new GlobalMindMapSearchModal\(/g) ?? []).length, 2);
+});
+
+test("opening either global or map-family results forcibly removes every surviving search modal before navigation", () => {
   assert.match(source, /private openingResult = false/);
   assert.match(source, /private dismissResultPanel\(\): void/);
-  assert.match(source, /this\.modalEl\.closest<HTMLElement>\("\.modal-container"\) \?\? this\.containerEl/);
-  assert.match(source, /container\.style\.display = "none"/);
-  assert.match(source, /container\.style\.pointerEvents = "none"/);
-  assert.match(source, /this\.close\(\);[\s\S]*if \(container\.isConnected\) container\.remove\(\);/);
-  assert.doesNotMatch(source, /requestAnimationFrame\(\(\) => \{[\s\S]*containerEl\.remove/);
+  assert.match(source, /containers\.add\(this\.containerEl\)/);
+  assert.match(source, /this\.modalEl\.closest<HTMLElement>\("\.modal-container"\)/);
+  assert.match(source, /element\.style\.setProperty\("display", "none", "important"\)/);
+  assert.match(source, /element\.style\.setProperty\("visibility", "hidden", "important"\)/);
+  assert.match(source, /hideImmediately\(this\.modalEl\)/);
+  assert.match(source, /this\.close\(\);[\s\S]*this\.modalEl\.remove\(\);[\s\S]*for \(const container of containers\) container\.remove\(\);/);
+  assert.match(source, /ownerDocument[\s\S]*querySelectorAll<HTMLElement>\("\.mms-global-search-modal, \.mms-global-search-container-closing"\)/);
+  assert.match(source, /container\.addClass\("mms-global-search-container-closing"\)/);
+  assert.match(source, /ownerWindow\?\.setTimeout\(removeSearchLayers, 0\)/);
+  assert.match(source, /ownerWindow\?\.setTimeout\(removeSearchLayers, 120\)/);
+  assert.match(styles, /\.mms-global-search-container-closing \{[\s\S]*display: none !important;[\s\S]*pointer-events: none !important/);
   assert.match(source, /this\.dismissResultPanel\(\);[\s\S]*await this\.onOpenResult\(result\);/);
-  assert.match(bundle, /container\.style\.display = "none";[\s\S]*container\.style\.pointerEvents = "none";[\s\S]*this\.close\(\);[\s\S]*container\.remove\(\)/);
+  assert.match(bundle, /querySelectorAll\("\.mms-global-search-modal, \.mms-global-search-container-closing"\)/);
+  assert.match(bundle, /setTimeout\(removeSearchLayers, 120\)/);
 });

@@ -9456,9 +9456,9 @@ private setActive(index: number): void
 
 ### 方法 `GlobalMindMapSearchModal.dismissResultPanel`
 
-源码：`src/search/global-search.ts:1066`
+源码：`src/search/global-search.ts:1068`
 
-立即隐藏并关闭搜索弹窗，避免跨文件视图切换期间只清空内容却残留空白遮罩。 Obsidian 的 Modal.close() 会触发生命周期清理，但页面切换可能让容器的视觉移除 延后到后续帧。这里先同步隐藏实际 modal-container，再调用 close()，最后移除仍连接 的容器；这样导航 Promise 无论耗时多久，搜索界面都会先从前台消失。
+立即隐藏并彻底移除搜索弹窗，避免跨文件视图切换后残留空白 Modal。 某些 Obsidian 版本/主题下，Modal.close() 已触发 onClose()（因此内容被清空）， 但外层容器仍可能短暂甚至持续留在 DOM。这里不只依赖单一 container 引用： 先同步隐藏 modalEl、containerEl 和实际 .modal-container，再执行 close() 生命周期， 然后按搜索弹窗/关闭容器专用 class 做同步与短延迟兜底清理。全局搜索和导图族 搜索共用该类，因此两种入口都会走同一套关闭逻辑。
 
 ```ts
 private dismissResultPanel(): void
@@ -9466,7 +9466,7 @@ private dismissResultPanel(): void
 
 ### 方法 `GlobalMindMapSearchModal.openResult`
 
-源码：`src/search/global-search.ts:1076`
+源码：`src/search/global-search.ts:1115`
 
 Opens a result after dismissing the search modal so view loading cannot keep it visible.
 

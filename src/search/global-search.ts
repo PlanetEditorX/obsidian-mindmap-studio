@@ -1057,19 +1057,58 @@ export class GlobalMindMapSearchModal extends Modal {
   }
 
   /**
-   * 立即隐藏并关闭搜索弹窗，避免跨文件视图切换期间只清空内容却残留空白遮罩。
+   * 立即隐藏并彻底移除搜索弹窗，避免跨文件视图切换后残留空白 Modal。
    *
-   * Obsidian 的 Modal.close() 会触发生命周期清理，但页面切换可能让容器的视觉移除
-   * 延后到后续帧。这里先同步隐藏实际 modal-container，再调用 close()，最后移除仍连接
-   * 的容器；这样导航 Promise 无论耗时多久，搜索界面都会先从前台消失。
+   * 某些 Obsidian 版本/主题下，Modal.close() 已触发 onClose()（因此内容被清空），
+   * 但外层容器仍可能短暂甚至持续留在 DOM。这里不只依赖单一 container 引用：
+   * 先同步隐藏 modalEl、containerEl 和实际 .modal-container，再执行 close() 生命周期，
+   * 然后按搜索弹窗/关闭容器专用 class 做同步与短延迟兜底清理。全局搜索和导图族
+   * 搜索共用该类，因此两种入口都会走同一套关闭逻辑。
    */
   private dismissResultPanel(): void {
-    const container = this.modalEl.closest<HTMLElement>(".modal-container") ?? this.containerEl;
-    container.setAttribute("aria-hidden", "true");
-    container.style.display = "none";
-    container.style.pointerEvents = "none";
+    const ownerDocument = this.modalEl.ownerDocument;
+    const containers = new Set<HTMLElement>();
+    containers.add(this.containerEl);
+    const closestContainer = this.modalEl.closest<HTMLElement>(".modal-container");
+    if (closestContainer) containers.add(closestContainer);
+
+    const hideImmediately = (element: HTMLElement): void => {
+      element.setAttribute("aria-hidden", "true");
+      element.style.setProperty("display", "none", "important");
+      element.style.setProperty("visibility", "hidden", "important");
+      element.style.setProperty("pointer-events", "none", "important");
+    };
+    const removeSearchLayers = (): void => {
+      ownerDocument
+        .querySelectorAll<HTMLElement>(".mms-global-search-modal, .mms-global-search-container-closing")
+        .forEach((element) => {
+          const container = element.matches(".modal-container")
+            ? element
+            : element.closest<HTMLElement>(".modal-container");
+          (container ?? element).remove();
+        });
+    };
+
+    hideImmediately(this.modalEl);
+    for (const container of containers) {
+      container.addClass("mms-global-search-container-closing");
+      hideImmediately(container);
+    }
+
+    // Keep Obsidian's own close lifecycle so onClose() and modal bookkeeping still run.
     this.close();
-    if (container.isConnected) container.remove();
+
+    // Remove every captured node even if close() left it attached.
+    this.modalEl.remove();
+    for (const container of containers) container.remove();
+    removeSearchLayers();
+
+    // Some host builds/themes finish modal stack bookkeeping after close() returns.
+    // The closing class keeps any reattached container invisible; these idempotent
+    // sweeps then remove it from the modal's own document without delaying navigation.
+    const ownerWindow = ownerDocument.defaultView;
+    ownerWindow?.setTimeout(removeSearchLayers, 0);
+    ownerWindow?.setTimeout(removeSearchLayers, 120);
   }
 
   /** Opens a result after dismissing the search modal so view loading cannot keep it visible. */

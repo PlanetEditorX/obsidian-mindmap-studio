@@ -6418,3 +6418,10 @@ select.mms-question-status {
 .mms-question-field-preview .mms-node-math:not(.is-display) {
   margin-inline: .08em;
 }
+
+/* Search-result navigation must never leave an empty modal overlay in front. */
+.mms-global-search-container-closing {
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
