@@ -4,10 +4,12 @@ import { before, test } from "node:test";
 
 let source;
 let styles;
+let bundle;
 
 before(async () => {
   source = await readFile("src/search/global-search.ts", "utf8");
   styles = await readFile("styles.css", "utf8");
+  bundle = await readFile("main.js", "utf8");
 });
 
 test("single-result replacement is right-aligned and vertically centered", () => {
@@ -42,9 +44,14 @@ test("replace all searches the complete active scope instead of the capped visib
   assert.match(source, /async refreshFile\(file: TFile\): Promise<void>/);
 });
 
-test("opening a search result dismisses the modal before navigation can stall", () => {
+test("opening a search result synchronously hides and removes the modal before navigation can stall", () => {
   assert.match(source, /private openingResult = false/);
   assert.match(source, /private dismissResultPanel\(\): void/);
-  assert.match(source, /if \(this\.containerEl\.isConnected\) this\.containerEl\.remove\(\);/);
+  assert.match(source, /this\.modalEl\.closest<HTMLElement>\("\.modal-container"\) \?\? this\.containerEl/);
+  assert.match(source, /container\.style\.display = "none"/);
+  assert.match(source, /container\.style\.pointerEvents = "none"/);
+  assert.match(source, /this\.close\(\);[\s\S]*if \(container\.isConnected\) container\.remove\(\);/);
+  assert.doesNotMatch(source, /requestAnimationFrame\(\(\) => \{[\s\S]*containerEl\.remove/);
   assert.match(source, /this\.dismissResultPanel\(\);[\s\S]*await this\.onOpenResult\(result\);/);
+  assert.match(bundle, /container\.style\.display = "none";[\s\S]*container\.style\.pointerEvents = "none";[\s\S]*this\.close\(\);[\s\S]*container\.remove\(\)/);
 });
