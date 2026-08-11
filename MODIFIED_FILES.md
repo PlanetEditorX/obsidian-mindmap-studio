@@ -1,5 +1,13 @@
 # Modified Files
 
+## 1.45.2 搜索结果跳转弹窗同步关闭修复
+
+- `src/search/global-search.ts`：搜索结果导航前同步隐藏并移除实际 `.modal-container`，同时保留 `Modal.close()` 生命周期与重复点击保护，避免页面已跳转但空白搜索弹窗残留。
+- `tests/global-search-contract.test.mjs`：新增同步隐藏、同步移除、禁止下一帧延迟清理以及 `main.js` 安装 bundle 同步逻辑契约。
+- `README.md`、`docs/ARCHITECTURE.md`、`docs/SPECIAL_FEATURES.md`、`docs/TESTING.md`、`docs/FUNCTION_REFERENCE.md`、`CHANGELOG.md`：同步用户行为、架构边界、测试要求和函数参考。
+- `TEST_RESULTS.md`：记录专项验证、类型/文档/仓库检查以及上传依赖为 Windows esbuild 导致完整 `npm run verify` 无法在当前 Linux 环境完成的限制。
+- `main.js`：同步应用与 TypeScript 源码等价的搜索弹窗立即关闭逻辑，并通过 `node --check` 与契约测试验证。
+
 ## 1.43.9 文章与导图往返定位修复
 
 - `src/editor/editor.ts`：文章正文暂时切到导图或大纲后，返回文章会把当前节点预先写入显式文章目标，避免旧 DOM 像素滚动值抢占语义位置；语义恢复期间暂停边缘窗口自动扩展。

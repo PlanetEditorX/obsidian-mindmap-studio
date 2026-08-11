@@ -1056,12 +1056,20 @@ export class GlobalMindMapSearchModal extends Modal {
     buttons[index]?.scrollIntoView({ block: "nearest" });
   }
 
-  /** Dismisses the search modal and removes any container left by a view transition. */
+  /**
+   * 立即隐藏并关闭搜索弹窗，避免跨文件视图切换期间只清空内容却残留空白遮罩。
+   *
+   * Obsidian 的 Modal.close() 会触发生命周期清理，但页面切换可能让容器的视觉移除
+   * 延后到后续帧。这里先同步隐藏实际 modal-container，再调用 close()，最后移除仍连接
+   * 的容器；这样导航 Promise 无论耗时多久，搜索界面都会先从前台消失。
+   */
   private dismissResultPanel(): void {
+    const container = this.modalEl.closest<HTMLElement>(".modal-container") ?? this.containerEl;
+    container.setAttribute("aria-hidden", "true");
+    container.style.display = "none";
+    container.style.pointerEvents = "none";
     this.close();
-    window.requestAnimationFrame(() => {
-      if (this.containerEl.isConnected) this.containerEl.remove();
-    });
+    if (container.isConnected) container.remove();
   }
 
   /** Opens a result after dismissing the search modal so view loading cannot keep it visible. */

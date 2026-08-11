@@ -345,6 +345,7 @@
 
 ### 修复
 
+- 修复搜索结果点击后目标页面已跳转、但前台搜索弹窗只被清空而没有自动隐藏的问题；结果导航现在会先同步隐藏并移除搜索弹窗容器，再执行跨文件或节点定位。
 - 修复 OpenCode Zen 等未开放渲染器跨域读取的 OpenAI 兼容接口在导图右键询问 AI 时提示 `Failed to fetch` 的问题：流式请求遇到浏览器网络/CORS 边界后，会使用同一 API 密钥和请求头通过 Obsidian 原生请求完成，并继续解析 SSE 结果。
 - 工具栏“主题与外观”中的背景、图案、节点、文字、边框和连线颜色改为紧凑的圆形色点，不再横向拉伸成长条。
 - 新增当前脑图外观颜色控件的样式回归测试，约束圆形尺寸与浏览器色板内层样式。
@@ -642,7 +643,7 @@
 
 ## Unreleased
 
-- Fixed global-search result navigation so the search panel closes immediately when a result is selected, with duplicate-click protection.
+- Fixed global-search result navigation so the search panel is synchronously hidden and detached before navigation, preventing an empty modal shell from remaining visible; duplicate-click protection is retained.
 - Added regression coverage for search-result modal closing and Windows file-URL path resolution in the test suite.
 
 - 优化“收起所有节点”后的布局过渡：保留当前视口并平滑移动保留节点，不再跳转到固定位置。
