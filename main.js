@@ -20111,8 +20111,8 @@ var GlobalMindMapSearchModal = class extends import_obsidian14.Modal {
    * 的容器；这样导航 Promise 无论耗时多久，搜索界面都会先从前台消失。
    */
   dismissResultPanel() {
-    var _a3;
-    const container = (_a3 = this.modalEl.closest(".modal-container")) != null ? _a3 : this.containerEl;
+    var _a2;
+    const container = (_a2 = this.modalEl.closest(".modal-container")) != null ? _a2 : this.containerEl;
     container.setAttribute("aria-hidden", "true");
     container.style.display = "none";
     container.style.pointerEvents = "none";
