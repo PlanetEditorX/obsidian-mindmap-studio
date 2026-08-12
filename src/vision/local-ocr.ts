@@ -53,52 +53,12 @@ function getLocalOcrRuntime(): LocalOcrRuntime | null {
 
 /** 把用户填写的附加命令参数解析为 execFile 参数数组，不经过 shell。 */
 export function parseCommandArguments(source: string): string[] {
-  const args: string[] = [];
-  let current = "";
-  let quote: "'" | '"' | null = null;
-  let escaping = false;
-  let inWord = false;
-  for (const character of source.trim()) {
-    if (escaping) {
-      current += character;
-      escaping = false;
-      inWord = true;
-      continue;
-    }
-    if (character === "\\" && quote !== "'") {
-      escaping = true;
-      inWord = true;
-      continue;
-    }
-    if (quote) {
-      if (character === quote) quote = null;
-      else current += character;
-      inWord = true;
-      continue;
-    }
-    if (character === "'" || character === '"') {
-      quote = character;
-      inWord = true;
-      continue;
-    }
-    if (/\s/.test(character)) {
-      if (inWord) {
-        args.push(current);
-        current = "";
-        inWord = false;
-      }
-      continue;
-    }
-    current += character;
-    inWord = true;
+  if (/["'&|;<>\n\r`]/.test(source)) {
+    throw new Error("本地 OCR 附加参数包含不允许的特殊字符（如引号或 shell 符号）");
   }
-  if (escaping) {
-    current += "\\";
-    inWord = true;
-  }
-  if (quote) throw new Error("本地 OCR 附加参数包含未闭合引号");
-  if (inWord) args.push(current);
-  return args;
+  const trimmed = source.trim();
+  if (!trimmed) return [];
+  return trimmed.split(/\s+/);
 }
 
 /** 使用 execFile 执行 Tesseract，参数不经过 shell。 */
