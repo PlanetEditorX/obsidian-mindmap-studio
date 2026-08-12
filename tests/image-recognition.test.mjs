@@ -223,6 +223,33 @@ test("local OCR arguments are parsed without a shell", () => {
   );
 });
 
+test("local OCR restricts executable filename to prevent arbitrary command execution", async () => {
+  globalThis.require = (id) => {
+    if (id === "node:child_process") return { execFile: () => {} };
+    if (id === "node:fs/promises") return { mkdtemp: async () => "", rm: async () => {}, writeFile: async () => {} };
+    if (id === "node:os") return { tmpdir: () => "" };
+    if (id === "node:path") return { join: () => "" };
+    throw new Error();
+  };
+  const blob = new Blob(["test"]);
+  const expectSecurityError = async (executable) => {
+    await assert.rejects(
+      localOcr.recognizeImageWithLocalOcr(blob, { executable, language: "eng", extraArgs: "" }),
+      /为防止任意命令执行，OCR 引擎文件名必须为 tesseract 或 tesseract\.exe/
+    );
+  };
+  try {
+    await expectSecurityError("cmd.exe");
+    await expectSecurityError("bash");
+    await expectSecurityError("/bin/sh");
+    await expectSecurityError("C:\\Windows\\System32\\cmd.exe");
+    await expectSecurityError("tesseract.bat");
+    await expectSecurityError("tesseract-ocr.exe");
+  } finally {
+    delete globalThis.require;
+  }
+});
+
 test("desktop screenshot helpers preserve PNG bytes and normalize display bounds", () => {
   const sourceBytes = new Uint8Array([1, 2, 3, 4]);
   const copiedBuffer = desktopCapture.copyBytesToArrayBuffer(sourceBytes);

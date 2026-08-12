@@ -21684,10 +21684,14 @@ function formatLocalOcrError(error, executable) {
   return message;
 }
 async function recognizeImageWithLocalOcr(blob, options) {
-  var _a2;
+  var _a2, _b2;
   const runtime = getLocalOcrRuntime();
   if (!runtime) throw new Error("\u672C\u5730 OCR \u4EC5\u652F\u6301 Obsidian \u684C\u9762\u7AEF");
   const executable = options.executable.trim() || "tesseract";
+  const executableName = (_a2 = executable.replace(/\\/g, "/").split("/").filter(Boolean).pop()) == null ? void 0 : _a2.toLowerCase();
+  if (executableName !== "tesseract" && executableName !== "tesseract.exe") {
+    throw new Error("\u5B89\u5168\u9650\u5236\uFF1A\u4E3A\u9632\u6B62\u4EFB\u610F\u547D\u4EE4\u6267\u884C\uFF0COCR \u5F15\u64CE\u6587\u4EF6\u540D\u5FC5\u987B\u4E3A tesseract \u6216 tesseract.exe");
+  }
   const language = options.language.trim() || "chi_sim+eng";
   const directory = await runtime.mkdtemp(runtime.joinPath(runtime.tmpdir(), "mindmap-studio-ocr-"));
   const inputPath = runtime.joinPath(directory, "input.png");
@@ -21698,7 +21702,7 @@ async function recognizeImageWithLocalOcr(blob, options) {
       runtime,
       executable,
       args,
-      Math.max(5e3, Math.min(3e5, (_a2 = options.timeoutMs) != null ? _a2 : 12e4))
+      Math.max(5e3, Math.min(3e5, (_b2 = options.timeoutMs) != null ? _b2 : 12e4))
     );
     const text = normalizeRecognizedText(stdout);
     if (!text) throw new Error(stderr.trim() || "\u672C\u5730 OCR \u6CA1\u6709\u8BC6\u522B\u5230\u6587\u5B57");
