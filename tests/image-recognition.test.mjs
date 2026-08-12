@@ -205,18 +205,17 @@ test("image-to-text replacement fills an existing empty text block", () => {
 });
 
 test("local OCR arguments are parsed without a shell", () => {
-  assert.deepEqual(localOcr.parseCommandArguments('--psm 6 -c "preserve_interword_spaces=1"'), [
+  assert.deepEqual(localOcr.parseCommandArguments("--psm 6 -c preserve_interword_spaces=1"), [
     "--psm",
     "6",
     "-c",
     "preserve_interword_spaces=1"
   ]);
-  assert.deepEqual(localOcr.parseCommandArguments("--user-words 'my words.txt'"), ["--user-words", "my words.txt"]);
-  assert.deepEqual(localOcr.parseCommandArguments('"" ""'), ["", ""]);
-  assert.deepEqual(localOcr.parseCommandArguments("'' ''"), ["", ""]);
-  assert.deepEqual(localOcr.parseCommandArguments('a""b'), ["ab"]);
-  assert.deepEqual(localOcr.parseCommandArguments('a\\ b'), ["a b"]);
-  assert.throws(() => localOcr.parseCommandArguments("--psm '6"), /未闭合引号/);
+  assert.deepEqual(localOcr.parseCommandArguments(""), []);
+  assert.deepEqual(localOcr.parseCommandArguments("  --oem 1  "), ["--oem", "1"]);
+  assert.throws(() => localOcr.parseCommandArguments("--psm 6 -c \"preserve_interword_spaces=1\""), /不允许的特殊字符/);
+  assert.throws(() => localOcr.parseCommandArguments("--user-words 'my words.txt'"), /不允许的特殊字符/);
+  assert.throws(() => localOcr.parseCommandArguments("a & b"), /不允许的特殊字符/);
   assert.match(
     localOcr.formatLocalOcrError(Object.assign(new Error("spawn tesseract ENOENT"), { code: "ENOENT" }), "tesseract"),
     /填写 tesseract\.exe 的完整路径/
