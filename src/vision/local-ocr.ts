@@ -99,6 +99,10 @@ export async function recognizeImageWithLocalOcr(blob: Blob, options: LocalOcrOp
   const runtime = getLocalOcrRuntime();
   if (!runtime) throw new Error("本地 OCR 仅支持 Obsidian 桌面端");
   const executable = options.executable.trim() || "tesseract";
+  const executableName = executable.replace(/\\/g, "/").split("/").filter(Boolean).pop()?.toLowerCase();
+  if (executableName !== "tesseract" && executableName !== "tesseract.exe") {
+    throw new Error("安全限制：为防止任意命令执行，OCR 引擎文件名必须为 tesseract 或 tesseract.exe");
+  }
   const language = options.language.trim() || "chi_sim+eng";
   const directory = await runtime.mkdtemp(runtime.joinPath(runtime.tmpdir(), "mindmap-studio-ocr-"));
   const inputPath = runtime.joinPath(directory, "input.png");
