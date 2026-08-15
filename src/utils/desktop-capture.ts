@@ -322,10 +322,15 @@ function getBrowserDisplay(): ElectronDisplay {
   });
 }
 
+/** 安全的 JSON 序列化函数，用于嵌入 HTML script 标签。 */
+function safeStringify(obj: unknown): string {
+  return JSON.stringify(obj).replace(/</g, "\\u003c").replace(/>/g, "\\u003e");
+}
+
 /** 生成截图覆盖层页面；普通截图双击确认，截图并识别按三秒空闲计时确认。 */
 export function captureEditorHtml(display: ElectronDisplay, mode: DesktopCaptureMode, imageDataUrl = "screen.png", messageToken = "test-token"): string {
-  const bounds = JSON.stringify(display.bounds);
-  const displays = JSON.stringify((display.displays?.length ? display.displays : [display]).map((item) => ({
+  const bounds = safeStringify(display.bounds);
+  const displays = safeStringify((display.displays?.length ? display.displays : [display]).map((item) => ({
     id: item.id,
     bounds: item.bounds,
     scaleFactor: item.scaleFactor ?? 1,
@@ -333,9 +338,9 @@ export function captureEditorHtml(display: ElectronDisplay, mode: DesktopCapture
     primary: item.primary === true,
     active: item.active === true
   })));
-  const captureMode = JSON.stringify(mode);
-  const source = JSON.stringify(imageDataUrl);
-  const token = JSON.stringify(messageToken);
+  const captureMode = safeStringify(mode);
+  const source = safeStringify(imageDataUrl);
+  const token = safeStringify(messageToken);
   const invisibleToolbarClass = mode === "capture-recognize" ? " recognition-invisible" : "";
   const toolbarMarkup = `<div id="toolbar" class="toolbar${invisibleToolbarClass}" aria-hidden="${mode === "capture-recognize" ? "true" : "false"}">
 <button data-tool="shape">几何图形</button><button data-tool="pen">画笔</button><button data-tool="arrow">箭头</button><button data-tool="text">文字</button><button data-tool="number">序号</button><button data-tool="mosaic">马赛克</button><button data-tool="eraser">橡皮擦</button><span class="sep"></span>
