@@ -10976,7 +10976,9 @@ var NodeEditModal = class extends import_obsidian11.Modal {
     const collectValues = (showNotice) => {
       const content = validBlocks();
       if (!content.length) {
-        if (showNotice) new import_obsidian11.Notice("\u8282\u70B9\u81F3\u5C11\u9700\u8981\u4E00\u4E2A\u5185\u5BB9\u5757");
+        if (showNotice) {
+          new import_obsidian11.Notice("\u8282\u70B9\u81F3\u5C11\u9700\u8981\u4E00\u4E2A\u5185\u5BB9\u5757");
+        }
         return null;
       }
       const shape = shapeSelect.value;
