@@ -2909,6 +2909,9 @@ export default class MindMapStudioPlugin extends Plugin {
     const targetFolder = normalizePath([mindMapFile.parent?.path ?? "", configuredFolder].filter(Boolean).join("/"));
     let copied = 0;
     const copiedPaths = new Map<string, string>();
+    const reservedPaths = new Set<string>();
+    const copyPromises: Promise<unknown>[] = [];
+    let folderEnsured = false;
 
     for (const node of flattenNodes(document.root)) {
       const blocks = nodeContentBlocks(node);
@@ -2924,11 +2927,32 @@ export default class MindMapStudioPlugin extends Plugin {
 
         let targetPath = copiedPaths.get(sourceImage.path);
         if (!targetPath) {
-          await this.ensureFolderPath(targetFolder);
+          if (!folderEnsured) {
+            await this.ensureFolderPath(targetFolder);
+            folderEnsured = true;
+          }
           const preferredPath = normalizePath(`${targetFolder}/${this.sanitizeFilename(sourceImage.basename)}.${sanitizeFileExtension(sourceImage.name, "png")}`);
-          targetPath = await this.getAvailablePath(preferredPath);
-          await this.app.vault.createBinary(targetPath, await this.app.vault.readBinary(sourceImage));
+
+          let candidate = preferredPath;
+          let index = 2;
+          const dot = candidate.lastIndexOf(".");
+          const base = dot > candidate.lastIndexOf("/") ? candidate.slice(0, dot) : candidate;
+          const extension = dot > candidate.lastIndexOf("/") ? candidate.slice(dot) : "";
+
+          while (this.app.vault.getAbstractFileByPath(candidate) || reservedPaths.has(candidate)) {
+            candidate = `${base} ${index}${extension}`;
+            index += 1;
+          }
+
+          targetPath = candidate;
+          reservedPaths.add(targetPath);
           copiedPaths.set(sourceImage.path, targetPath);
+
+          const src = sourceImage;
+          const dest = targetPath;
+          copyPromises.push(
+            this.app.vault.readBinary(src).then((data) => this.app.vault.createBinary(dest, data))
+          );
           copied += 1;
         }
         block.source = targetPath;
@@ -2937,6 +2961,8 @@ export default class MindMapStudioPlugin extends Plugin {
       }
       if (changed) replaceNodeContentBlocks(node, blocks);
     }
+
+    await Promise.all(copyPromises);
     return copied;
   }
 
