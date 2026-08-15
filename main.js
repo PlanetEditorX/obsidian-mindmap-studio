@@ -15453,12 +15453,20 @@ var MindMapEditor = class {
   /**
    * 编辑selected，并保持模型、界面和持久化状态的一致性。
    */
-  editSelected(initialBlockId, protectInitialFocus = false) {
+  editSelected(initialBlockId) {
     if (this.currentMode === "article") {
-      this.editSelectedArticleContent(protectInitialFocus);
+      this.editSelectedArticleContent();
       return;
     }
     this.openSelectedNodeEditor(initialBlockId);
+  }
+  /** Starts context-menu editing while isolating article-only focus handoff behavior. */
+  editSelectedFromContextMenu() {
+    if (this.currentMode === "article") {
+      this.editSelectedArticleContent(true);
+      return;
+    }
+    this.editSelected();
   }
   /** Opens the complete node editor used by the mind-map and outline modes. */
   openSelectedNodeEditor(initialBlockId) {
@@ -17106,7 +17114,7 @@ var MindMapEditor = class {
       menu.addItem((item) => item.setTitle("\u964D\u4E3A\u4E0A\u4E00\u4E2A\u8282\u70B9\u7684\u5B50\u8282\u70B9").setIcon("indent-increase").onClick(() => this.demoteArticleNode(selected.id)));
       menu.addItem((item) => item.setTitle("\u5347\u4E3A\u4E0A\u4E00\u4E2A\u8282\u70B9\u7684\u5144\u5F1F\u8282\u70B9").setIcon("indent-decrease").onClick(() => this.promoteArticleNode(selected.id)));
     }
-    menu.addItem((item) => item.setTitle(this.articleEditActionLabel(selected)).setIcon("pencil").onClick(() => this.editSelected(void 0, true)));
+    menu.addItem((item) => item.setTitle(this.articleEditActionLabel(selected)).setIcon("pencil").onClick(() => this.editSelectedFromContextMenu()));
     if (this.currentMode === "article") {
       menu.addItem((item) => item.setTitle("\u8282\u70B9\u8BBE\u7F6E").setIcon("settings-2").onClick(() => this.openSelectedNodeEditor()));
     }

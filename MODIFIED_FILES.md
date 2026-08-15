@@ -1,5 +1,14 @@
 # Modified Files
 
+## 1.45.8 文章菜单焦点保护契约收口
+
+- `src/editor/editor.ts`：恢复 `editSelected(initialBlockId?)` 原签名，新增 `editSelectedFromContextMenu()`；只有文章右键菜单调用 `editSelectedArticleContent(true)`，导图/大纲完整编辑路径不再携带焦点保护状态。
+- `tests/article-context-edit.test.mjs`、`scripts/test.mjs`：新增“菜单焦点保护必须与完整节点编辑 API 隔离”的专项和综合回归契约，并继续验证 `main.js`。
+- `docs/ARCHITECTURE.md`、`docs/TESTING.md`、`CHANGELOG.md`、`docs/FUNCTION_REFERENCE.md`：同步内部边界、CI 回归判据与 1.45.8 说明。
+- `package.json`、`package-lock.json`、`manifest.json`、`versions.json`：版本同步为 1.45.8；`update.json` 已写入 1.45.8 安装包 SHA-256 `995025a2018e98783039d09b389cf5e8eebc9a43ba71c5e0be6a2d761180ae19`。
+- `main.js`：同步 1.45.8 运行逻辑；当前 Linux 环境无法使用上传的跨平台 esbuild 二进制，因此以源码等价同步并执行语法、类型、专项 bundle 契约校验。
+- `TEST_RESULTS.md`、Codex 交接：记录用户上传的 GitHub Actions 日志根因、验证基线和待真实 Obsidian 冒烟项。
+
 ## 1.45.7 搜索跳转后文章行内编辑焦点修复
 
 - `src/editor/editor.ts`：文章右键菜单的“编辑当前内容/添加正文”改为显式启用初始焦点保护，并把保护参数传到现有 `activateInlineEditable()`；菜单关闭时的短暂 `blur` 会重新聚焦，保护窗口结束后恢复正常失焦提交。

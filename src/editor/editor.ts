@@ -5776,12 +5776,21 @@ export class MindMapEditor {
   /**
    * 编辑selected，并保持模型、界面和持久化状态的一致性。
    */
-  private editSelected(initialBlockId?: string, protectInitialFocus = false): void {
+  private editSelected(initialBlockId?: string): void {
     if (this.currentMode === "article") {
-      this.editSelectedArticleContent(protectInitialFocus);
+      this.editSelectedArticleContent();
       return;
     }
     this.openSelectedNodeEditor(initialBlockId);
+  }
+
+  /** Starts context-menu editing while isolating article-only focus handoff behavior. */
+  private editSelectedFromContextMenu(): void {
+    if (this.currentMode === "article") {
+      this.editSelectedArticleContent(true);
+      return;
+    }
+    this.editSelected();
   }
 
   /** Opens the complete node editor used by the mind-map and outline modes. */
@@ -7557,7 +7566,7 @@ export class MindMapEditor {
     menu.addItem((item) => item
       .setTitle(this.articleEditActionLabel(selected))
       .setIcon("pencil")
-      .onClick(() => this.editSelected(undefined, true)));
+      .onClick(() => this.editSelectedFromContextMenu()));
     if (this.currentMode === "article") {
       menu.addItem((item) => item
         .setTitle("节点设置")

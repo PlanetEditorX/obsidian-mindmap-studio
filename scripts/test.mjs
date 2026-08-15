@@ -1532,6 +1532,8 @@ const command = "example";
   assert.match(editorSource, /textEl\.dataset\.blockId = block\.id/, "rendered text blocks must expose stable hit targets");
   assert.match(editorSource, /wrap\.dataset\.blockId = block\.id/, "rendered image blocks must open their matching full editor card");
   assert.match(editorSource, /private editSelected\(initialBlockId\?: string\): void/, "full node editing must accept an initially targeted content block");
+  assert.match(editorSource, /private editSelectedFromContextMenu\(\): void[\s\S]*this\.editSelectedArticleContent\(true\)[\s\S]*this\.editSelected\(\)/, "context-menu focus protection must stay isolated from the full-editor API");
+  assert.doesNotMatch(editorSource, /private editSelected\(initialBlockId\?: string, protectInitialFocus/, "full node editing must not absorb article context-menu focus state");
   assert.match(editorSource, /private isNearNodeEdge\(event: MouseEvent, nodeEl: HTMLElement\): boolean[\s\S]*return distance <= 18/, "the node edge hit area must be explicit and stable");
   assert.match(
     editorSource,
