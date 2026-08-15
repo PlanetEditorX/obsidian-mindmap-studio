@@ -905,7 +905,12 @@ class NodeEditModal extends Modal {
     const parseNumber = (value: string, min: number, max: number): number | undefined => value.trim() && Number.isFinite(Number(value)) ? Math.min(max, Math.max(min, Number(value))) : undefined;
     const collectValues = (showNotice: boolean): NodeEditValues | null => {
       const content = validBlocks();
-      if (!content.length) { if (showNotice) new Notice("节点至少需要一个内容块"); return null; }
+      if (!content.length) {
+        if (showNotice) {
+          new Notice("节点至少需要一个内容块");
+        }
+        return null;
+      }
       const shape = shapeSelect.value;
       const numbering = numberingControls.read();
       return {
