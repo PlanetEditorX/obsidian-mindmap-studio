@@ -1,6 +1,39 @@
 # Test Results
 
-版本：1.45.15
+版本：1.45.16
+
+## 1.45.16 输入与修复
+
+- 用户要求取消“内容为空就自动删除导图节点”的行为，并反馈文章模式行内编辑清空后编辑区域会高度塌缩。
+- 空节点语义统一调整为“节点结构与内容是否为空解耦”：文章行内文字清空、导图快速编辑清空、完整节点编辑清空、删除最后一个文字/图片/表格/代码块，以及跨节点移走最后一个有效内容块后，都只更新内容，不再隐式删除节点；只有显式“删除节点”操作才移除树结构。
+- `moveNodeContentBlock()` 仍会清理无意义空文字占位块和同步旧版内容镜像，但来源节点即使最终没有任何内容块也保留在原树位置。
+- 文章标题/正文行内编辑样式增加 `min-height: 1.4em` 兼容回退与 `min-height: 1lh` 精确行高，并使用 `box-sizing: content-box`；即使 contenteditable 清空后浏览器保留 `<br>`、`:empty` 不命中，也至少维持一行可点击输入区域。
+
+## 1.45.16 自动验证
+
+- 空节点与文章空编辑高度专项：`node --test tests/content-block-drag.test.mjs tests/node-creation.test.mjs`：**15 / 15 通过**。
+- 相关内容模型/文章编辑组合：`node --test tests/content-block-drag.test.mjs tests/node-creation.test.mjs tests/article-content-block.test.mjs tests/article-context-edit.test.mjs tests/sync-node-content.test.mjs`：**59 / 59 通过**。
+- TypeScript：`node node_modules/typescript/bin/tsc --noEmit --skipLibCheck`：通过。
+- `node --check main.js`：通过；源码与安装 bundle 契约均确认不存在 `isRemovableEmptyNode` / `removeNodeAfterContentDeletion` 隐式清理入口。
+- `npm run docs:generate`、`npm run test:docs`：通过，**56 个源码模块、1138 个具名声明**满足文档覆盖。
+- `npm run test:repo`：通过。
+- 使用规范 UTF-8 示例路径执行完整单元测试：共 **356 项，346 通过 / 10 失败**；10 项全部来自上传依赖仅包含 `@esbuild/win32-x64`，当前 Linux 需要 `@esbuild/linux-x64`。本轮空节点/高度相关断言均通过。
+- `npm run test:regression`：在 `scripts/test.mjs` 首次启动 esbuild 时被同一平台二进制问题阻断。
+- `npm run build`：TypeScript 前置检查通过，随后 production esbuild 被同一平台问题阻断。
+- `npm run verify` 已执行，并在 `test:unit` 的上述 10 个平台失败处停止。当前环境不能声称生产重构建全绿，因此 `main.js` 按 TypeScript 源码等价同步，并通过语法、类型和专项 bundle 契约校验。
+
+## 1.45.16 仍需真实 Obsidian 验证
+
+1. 在文章模式新建空同级/子节点后直接按 Enter 或点击外部，空节点应继续保留，编辑区域不得缩成细条。
+2. 清空已有标题或正文后退出编辑，节点应保留；再次点击空行应容易重新进入编辑。
+3. 删除节点最后一个文字、图片、表格或代码块，以及把最后一个内容块移动到其他节点后，来源节点应继续保留为空节点。
+4. 显式执行“删除节点”仍应正常删除节点及其既有树结构。
+
+## 1.45.16 本轮安装包
+
+- 版本：1.45.16
+- 安装 ZIP：`mindmap-studio-1.45.16-480083.zip`
+- SHA-256：`b65509e55b23c7872846e7e7ebfaa392341a45c283d6bb30314e2ca0ed1e492f`
 
 ## 1.45.15 输入与修复
 

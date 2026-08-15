@@ -95,25 +95,19 @@ test("a content block can be appended to an empty target node", () => {
   assert.equal(root.children[1].code.code, "server {}");
 });
 
-test("moving the last block deletes only a truly empty source leaf node", () => {
+test("moving the last block keeps the source node even when it becomes empty", () => {
   const root = fixture();
   root.children[0].content = [{ id: "text-a", type: "text", text: "第一段" }];
   root.children[0].text = "第一段";
   root.children[0].code = undefined;
   assert.equal(model.moveNodeContentBlock(root, "source", "text-a", "target", "target-text", "after"), true);
-  assert.deepEqual(root.children.map((node) => node.id), ["target"]);
-  assert.deepEqual(root.children[0].content.map((block) => block.id), ["target-text", "text-a"]);
-
-  const guarded = fixture();
-  guarded.children[0].content = [{ id: "text-a", type: "text", text: "第一段" }];
-  guarded.children[0].text = "第一段";
-  guarded.children[0].code = undefined;
-  guarded.children[0].note = "保留节点";
-  assert.equal(model.moveNodeContentBlock(guarded, "source", "text-a", "target", "target-text", "after"), true);
-  assert.deepEqual(guarded.children.map((node) => node.id), ["source", "target"]);
+  assert.deepEqual(root.children.map((node) => node.id), ["source", "target"]);
+  assert.deepEqual(model.nodeContentBlocks(root.children[0]), []);
+  assert.equal(root.children[0].text, "");
+  assert.deepEqual(root.children[1].content.map((block) => block.id), ["target-text", "text-a"]);
 });
 
-test("moving the last meaningful block also removes blank text placeholders and the empty source leaf", () => {
+test("moving the last meaningful block removes blank placeholders but preserves the empty source node", () => {
   const root = fixture();
   root.children[0].content = [
     { id: "text-a", type: "text", text: "第一段" },
@@ -122,16 +116,9 @@ test("moving the last meaningful block also removes blank text placeholders and 
   root.children[0].text = "第一段";
   root.children[0].code = undefined;
   assert.equal(model.moveNodeContentBlock(root, "source", "text-a", "target", "target-text", "after"), true);
-  assert.deepEqual(root.children.map((node) => node.id), ["target"]);
-  assert.deepEqual(root.children[0].content.map((block) => block.id), ["target-text", "text-a"]);
-});
-
-test("only semantic empty leaves are removable after their final content is deleted", () => {
-  const emptyLeaf = { id: "empty", text: "", content: [], children: [] };
-  assert.equal(model.isRemovableEmptyNode(emptyLeaf), true);
-  assert.equal(model.isRemovableEmptyNode({ ...emptyLeaf, children: [{ id: "child", text: "子节点", children: [] }] }), false);
-  assert.equal(model.isRemovableEmptyNode({ ...emptyLeaf, note: "保留备注" }), false);
-  assert.equal(model.isRemovableEmptyNode({ ...emptyLeaf, task: "todo" }), true);
+  assert.deepEqual(root.children.map((node) => node.id), ["source", "target"]);
+  assert.deepEqual(model.nodeContentBlocks(root.children[0]), []);
+  assert.deepEqual(root.children[1].content.map((block) => block.id), ["target-text", "text-a"]);
 });
 
 test("explicit article node move inserts C immediately after A", () => {
@@ -163,8 +150,7 @@ test("mind-map keeps mouse block dragging while article mode uses explicit movem
   assert.doesNotMatch(editorSource, /articleKeyboardMovingBlock|bindArticleContentBlockMoveControl|moveArticleContentBlockByKeyboard|mms-article-block-move-button/);
   assert.match(editorSource, /target\.closest<HTMLElement>\("\[data-block-id\]"\)\?\.dataset\.blockId[\s\S]*openContextMenu\(event, blockId\)/);
   assert.match(editorSource, /setTitle\("删除当前块"\)[\s\S]*removeContentBlock\(selected\.id, contextBlock\.id\)/);
-  assert.match(editorSource, /private removeNodeAfterContentDeletion\(node: MindMapNode, hadMeaningfulContent: boolean\): boolean/);
-  assert.match(editorSource, /!hadMeaningfulContent \|\| node\.id === this\.document\.root\.id \|\| !isRemovableEmptyNode\(node\)/);
+  assert.doesNotMatch(editorSource, /removeNodeAfterContentDeletion|isRemovableEmptyNode/);
   assert.match(styles, /\.mmc-content-block-drag-handle[\s\S]*cursor: grab/);
   assert.match(styles, /\.mmc-content-block-drag-handle[\s\S]*left: -28px[\s\S]*transform: translateY\(-50%\)/);
   assert.match(styles, /\.mmc-node-structured-block-shell[\s\S]*position: relative/);
@@ -174,6 +160,7 @@ test("mind-map keeps mouse block dragging while article mode uses explicit movem
   assert.match(styles, /\.is-block-drop-before::before/);
   assert.match(mainBundle, /application\/x-mms-content-block/);
   assert.doesNotMatch(mainBundle, /mms-article-block-move-button/);
+  assert.doesNotMatch(mainBundle, /removeNodeAfterContentDeletion|isRemovableEmptyNode/);
   assert.match(mainBundle, /\\u5220\\u9664\\u5F53\\u524D\\u5757/i);
 });
 

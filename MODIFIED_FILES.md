@@ -1,5 +1,16 @@
 # Modified Files
 
+## 1.45.16 空节点保留与文章空编辑高度
+
+- `src/core/model.ts`：删除 `isRemovableEmptyNode()` 及 `moveNodeContentBlock()` 中“移动最后一个内容块后删除空来源节点”的隐式树结构修改；来源节点内容可为空，但节点本身始终保留。
+- `src/editor/editor.ts`：移除 `nodeHasMeaningfulContent()` / `removeNodeAfterContentDeletion()` 及文章行内编辑、导图快速编辑、完整节点编辑、结构化块删除、普通内容块删除和图片删除中的自动空节点清理调用；内容操作不再等价于删除节点。
+- `styles.css`：文章标题、末端正文和段落行内编辑统一增加一行最小高度与 content-box 盒模型，避免清空 contenteditable 后只剩 `<br>` 时高度塌缩。
+- `tests/content-block-drag.test.mjs`、`tests/node-creation.test.mjs`：更新最后内容块移动契约为保留空来源节点，增加源码/`main.js` 不得包含旧自动删除 helper 的契约，并新增文章空编辑至少一行高度测试。
+- `README.md`、`docs/DATA_MODEL.md`、`docs/SPECIAL_FEATURES.md`、`docs/TESTING.md`、`CHANGELOG.md`、`docs/FUNCTION_REFERENCE.md`：同步“内容为空不删除节点”语义、文章空编辑高度与手工验证边界。
+- `package.json`、`package-lock.json`、`manifest.json`、`versions.json`、`update.json`：版本同步为 1.45.16；安装包 SHA-256 为 `b65509e55b23c7872846e7e7ebfaa392341a45c283d6bb30314e2ca0ed1e492f`。
+- `main.js`：由于当前 Linux 环境无法运行上传依赖中的 Windows esbuild，按 TypeScript 源码等价同步取消空节点自动删除的运行逻辑；通过 TypeScript、专项 bundle 契约和 `node --check` 校验。
+- `TEST_RESULTS.md`、Codex 交接：记录 59/59 相关专项、356 项单测中的 10 个 esbuild 平台失败、真实 Obsidian 冒烟范围和 1.45.16 交付包。
+
 ## 1.45.15 全局搜索重复实例去重
 
 - `src/main.ts`：仅全局搜索入口增加 `globalSearchModal` 与 `globalSearchLaunchPending` 双重单例守卫，阻止同一快捷键被插件捕获层和 Obsidian 热键链重复处理时创建两层搜索 Modal；新增 `open-request`、`open-mounted`、`open-deduplicated` 调试事件。当前导图族 `openMapFamilySearch()` 保持独立。
