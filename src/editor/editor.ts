@@ -5776,9 +5776,9 @@ export class MindMapEditor {
   /**
    * 编辑selected，并保持模型、界面和持久化状态的一致性。
    */
-  private editSelected(initialBlockId?: string): void {
+  private editSelected(initialBlockId?: string, protectInitialFocus = false): void {
     if (this.currentMode === "article") {
-      this.editSelectedArticleContent();
+      this.editSelectedArticleContent(protectInitialFocus);
       return;
     }
     this.openSelectedNodeEditor(initialBlockId);
@@ -5868,14 +5868,18 @@ export class MindMapEditor {
     return this.articleInlineEditable(node.id) ? "编辑当前内容" : "添加正文";
   }
 
-  /** Focuses the current article line, or creates a temporary body line for content-only nodes. */
-  private editSelectedArticleContent(): void {
+  /**
+   * Focuses the current article line, or creates a temporary body line for content-only nodes.
+   *
+   * @param protectInitialFocus Whether to reclaim focus while an Obsidian context menu finishes closing.
+   */
+  private editSelectedArticleContent(protectInitialFocus = false): void {
     if (!this.ensureEditable()) return;
     const selected = this.selectedNode();
     if (!selected) return;
     const inlineElement = this.articleInlineEditable(selected.id);
     if (inlineElement) {
-      this.activateInlineEditable(inlineElement);
+      this.activateInlineEditable(inlineElement, true, protectInitialFocus);
       return;
     }
     const section = this.articleEl.querySelector<HTMLElement>(`[data-node-id="${CSS.escape(selected.id)}"]`);
@@ -5898,7 +5902,7 @@ export class MindMapEditor {
         if (paragraph.isConnected && !paragraph.textContent?.trim()) paragraph.remove();
       });
     }, { once: true });
-    this.activateInlineEditable(paragraph);
+    this.activateInlineEditable(paragraph, true, protectInitialFocus);
   }
 
   /** Creates a structured question as a child of the selected node. */
@@ -7553,7 +7557,7 @@ export class MindMapEditor {
     menu.addItem((item) => item
       .setTitle(this.articleEditActionLabel(selected))
       .setIcon("pencil")
-      .onClick(() => this.editSelected()));
+      .onClick(() => this.editSelected(undefined, true)));
     if (this.currentMode === "article") {
       menu.addItem((item) => item
         .setTitle("节点设置")

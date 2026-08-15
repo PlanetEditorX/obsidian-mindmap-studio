@@ -30,15 +30,30 @@ test("deleting nodes prefers the prior sibling and preserves its mind-map viewpo
 });
 
 test("article edit actions use inline editing while other modes keep the full node editor", () => {
-  const editSelected = editorSource.match(/private editSelected\(initialBlockId\?: string\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
+  const editSelected = editorSource.match(/private editSelected\(initialBlockId\?: string, protectInitialFocus = false\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
   const beginInlineEdit = editorSource.match(/private beginInlineEdit\([\s\S]*?\n  \}/)?.[0] ?? "";
 
-  assert.match(editSelected, /this\.currentMode === "article"[\s\S]*this\.editSelectedArticleContent\(\)/);
+  assert.match(editSelected, /this\.currentMode === "article"[\s\S]*this\.editSelectedArticleContent\(protectInitialFocus\)/);
   assert.match(editSelected, /this\.openSelectedNodeEditor\(initialBlockId\)/);
   assert.match(beginInlineEdit, /this\.currentMode === "mindmap" && this\.options\.nodeEditorPosition === "right"[\s\S]*this\.openSelectedNodeEditor\(\)/);
   assert.doesNotMatch(beginInlineEdit, /this\.options\.nodeEditorPosition === "right"\) this\.editSelected\(\)/);
 });
 
+
+
+test("article context-menu editing protects the initial inline focus handoff", () => {
+  const contextMenu = editorSource.match(/private openContextMenu\(event: MouseEvent, contextBlockId\?: string\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
+  const editSelected = editorSource.match(/private editSelected\(initialBlockId\?: string, protectInitialFocus = false\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
+  const editArticle = editorSource.match(/private editSelectedArticleContent\(protectInitialFocus = false\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
+  const activateInlineEditable = editorSource.match(/private activateInlineEditable\(element: HTMLElement, focus = true, protectInitialFocus = false\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
+
+  assert.match(contextMenu, /setTitle\(this\.articleEditActionLabel\(selected\)\)[\s\S]*\.onClick\(\(\) => this\.editSelected\(undefined, true\)\)/);
+  assert.match(editSelected, /this\.editSelectedArticleContent\(protectInitialFocus\)/);
+  assert.match(editArticle, /this\.activateInlineEditable\(inlineElement, true, protectInitialFocus\)/);
+  assert.match(editArticle, /this\.activateInlineEditable\(paragraph, true, protectInitialFocus\)/);
+  assert.match(activateInlineEditable, /if \(protectInitialFocus\) element\.dataset\.mmsProtectInitialFocus = "true"/);
+  assert.match(activateInlineEditable, /window\.requestAnimationFrame\(focusAtEnd\)[\s\S]*delete element\.dataset\.mmsProtectInitialFocus/);
+});
 test("article context menu shows edit-current-content or add-body and reading mode hides it", () => {
   const contextMenu = editorSource.match(/private openContextMenu\(event: MouseEvent, contextBlockId\?: string\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
   const label = editorSource.match(/private articleEditActionLabel\([\s\S]*?\n  \}/)?.[0] ?? "";
@@ -49,15 +64,15 @@ test("article context menu shows edit-current-content or add-body and reading mo
 });
 
 test("article edit focuses the rendered line and creates a removable body editor for content-only nodes", () => {
-  const editArticle = editorSource.match(/private editSelectedArticleContent\(\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
+  const editArticle = editorSource.match(/private editSelectedArticleContent\(protectInitialFocus = false\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
   const imageEdit = editorSource.match(/private editImageBlock\(blockId: string\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
 
   assert.match(editArticle, /const inlineElement = this\.articleInlineEditable\(selected\.id\)/);
-  assert.match(editArticle, /if \(inlineElement\) \{[\s\S]*this\.activateInlineEditable\(inlineElement\)/);
+  assert.match(editArticle, /if \(inlineElement\) \{[\s\S]*this\.activateInlineEditable\(inlineElement, true, protectInitialFocus\)/);
   assert.match(editArticle, /paragraph\.dataset\.mmsTransientArticleBody = "true"/);
   assert.match(editArticle, /this\.makeInlineEditable\(paragraph, selected, "正文段落"\)/);
   assert.match(editArticle, /if \(paragraph\.isConnected && !paragraph\.textContent\?\.trim\(\)\) paragraph\.remove\(\)/);
-  assert.match(editArticle, /this\.activateInlineEditable\(paragraph\)/);
+  assert.match(editArticle, /this\.activateInlineEditable\(paragraph, true, protectInitialFocus\)/);
   assert.match(imageEdit, /this\.openSelectedNodeEditor\(blockId\)/, "image-specific editing must still open the full editor");
 });
 
@@ -152,4 +167,5 @@ test("compiled plugin contains the article-specific edit routing", () => {
   assert.match(mainBundle, /\\u4F5C\\u4E3A\\u5757\\u79FB\\u52A8/i);
   assert.match(mainBundle, /\\u4F5C\\u4E3A\\u8282\\u70B9\\u79FB\\u52A8/i);
   assert.match(mainBundle, /deleteNodeById/);
+  assert.match(mainBundle, /editSelected\(void 0, true\)/, "compiled context-menu editing must keep initial focus protection");
 });
