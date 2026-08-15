@@ -13465,9 +13465,9 @@ var MindMapEditor = class {
    * used by setOptions() to avoid rebuilding the article during delayed context refreshes.
    */
   claimInlineEditInteraction(nodeId, blockId) {
-    var _a2, _b2, _c;
+    var _a2, _b2, _c, _d;
     const activeRestoreTarget = (_b2 = (_a2 = this.activeReadingRestore) == null ? void 0 : _a2.resolved.nodeId) != null ? _b2 : null;
-    const pendingArticleTarget = (_c = this.pendingArticleFocusLocation) == null ? void 0 : _c.nodeIds[0];
+    const pendingArticleTarget = (_d = (_c = this.pendingArticleFocusLocation) == null ? void 0 : _c.nodeIds[0]) != null ? _d : null;
     const hadWindowExpansion = this.articleWindowExpansionFrame !== null;
     this.cancelReadingLocationRestore();
     this.cancelArticleWindowExpansion();
@@ -13482,7 +13482,7 @@ var MindMapEditor = class {
       blockId,
       mode: this.currentMode,
       activeRestoreTarget,
-      pendingArticleTarget: pendingArticleTarget != null ? pendingArticleTarget : null,
+      pendingArticleTarget,
       hadWindowExpansion
     });
   }
