@@ -804,6 +804,8 @@ export class GlobalMindMapSearchModal extends Modal {
    * @param maxResults 该参数用于 constructor 流程中的输入或控制。
    * @param onOpenResult 该参数用于 constructor 流程中的输入或控制。
    * @param onRebuild 该参数用于 constructor 流程中的输入或控制。
+   * @param onReplaceAll 可选的批量替换回调。
+   * @param onDebug 可选的搜索 Modal 生命周期调试事件回调。
    * @param scopePaths 该参数用于 constructor 流程中的输入或控制。
    * @param scopeTitle 该参数用于 constructor 流程中的输入或控制。
    * @param scopeDescription 该参数用于 constructor 流程中的输入或控制。
@@ -815,11 +817,17 @@ export class GlobalMindMapSearchModal extends Modal {
     private readonly onOpenResult: (result: MindMapSearchResult) => void | Promise<void>,
     private readonly onRebuild: () => Promise<void>,
     private readonly onReplaceAll?: (results: MindMapSearchResult[], query: string, replacement: string, useRegex: boolean) => Promise<number>,
+    private readonly onDebug?: (event: string, details?: unknown) => void,
     private readonly scopePaths?: ReadonlySet<string>,
     private readonly scopeTitle = "全局搜索思维导图",
     private readonly scopeDescription = "所有导图中的节点文字"
   ) {
     super(app);
+  }
+
+  /** 返回当前搜索 Modal 是否仍挂载在文档中。 */
+  isMounted(): boolean {
+    return this.modalEl.isConnected || this.containerEl.isConnected;
   }
 
   /**
@@ -930,6 +938,11 @@ export class GlobalMindMapSearchModal extends Modal {
    * 在弹窗或视图关闭时释放临时 DOM、计时器和事件状态。
    */
   onClose(): void {
+    this.onDebug?.("modal-on-close", {
+      openingResult: this.openingResult,
+      modalConnected: this.modalEl.isConnected,
+      containerConnected: this.containerEl.isConnected
+    });
     this.contentEl.empty();
   }
 
@@ -1062,44 +1075,34 @@ export class GlobalMindMapSearchModal extends Modal {
   }
 
   /**
-   * 同步隐藏搜索弹窗并只通过 Obsidian 的 Modal.close() 释放宿主模态状态。
+   * 请求 Obsidian 通过公开 Modal.close() 关闭当前搜索层。
    *
-   * 1.45.3 为解决“内容已清空但空白 Modal 仍覆盖页面”曾在 close() 之后直接
-   * remove() modal/container，并在导航结束后再次 close。真实 Windows/Obsidian 1.12.7
-   * 日志证明这会留下宿主焦点约束：搜索后的正文 contenteditable 每次 focus 后约
-   * 6–8 ms 都会 blur(null)。因此这里只负责同步视觉隐藏，DOM 和 focus/scope 栈必须
-   * 完整交还给 Modal.close() 自己清理；即使主题留下外壳，closing class 也会让它
-   * 不可见且不接收指针。
+   * 1.45.13 的真实日志证明，程序化 `modal-bg.click()` 只产生 click 事件，
+   * 不等价于用户真实的 pointerdown/click 关闭手势，因此宿主 Modal 仍留在页面上。
+   * 这里不再模拟背景事件，也不修改/删除任何宿主 Modal DOM；只关闭 selection 恢复并
+   * 调用一次公开 close()，让 Obsidian 自己完成焦点 Scope、history 与关闭动画。
    */
   private dismissResultPanel(): void {
-    const containers = new Set<HTMLElement>();
-    containers.add(this.containerEl);
-    const closestContainer = this.modalEl.closest<HTMLElement>(".modal-container");
-    if (closestContainer) containers.add(closestContainer);
-
-    const hideImmediately = (element: HTMLElement): void => {
-      element.setAttribute("aria-hidden", "true");
-      element.style.setProperty("display", "none", "important");
-      element.style.setProperty("visibility", "hidden", "important");
-      element.style.setProperty("pointer-events", "none", "important");
-    };
-
-    hideImmediately(this.modalEl);
-    for (const container of containers) {
-      container.addClass("mms-global-search-container-closing");
-      hideImmediately(container);
-    }
-
-    // Navigation should not restore the search input selection/focus after the target view opens.
     this.shouldRestoreSelection = false;
-    // Never manually remove Modal-owned DOM and never call close() twice. Obsidian owns
-    // the modal stack/focus scope lifecycle; bypassing it can leave the workspace unable
-    // to retain focus even though the overlay itself is already hidden.
+    this.onDebug?.("result-close-request", {
+      modalConnected: this.modalEl.isConnected,
+      containerConnected: this.containerEl.isConnected,
+      activeTag: this.modalEl.ownerDocument.activeElement?.tagName.toLocaleLowerCase() ?? null
+    });
     this.close();
+    this.onDebug?.("result-close-return", {
+      modalConnected: this.modalEl.isConnected,
+      containerConnected: this.containerEl.isConnected
+    });
   }
 
-  /** Waits until the result-click event has unwound and Modal.close() has released host focus scope. */
-  private waitForModalFocusRelease(): Promise<void> {
+  /**
+   * 给 Obsidian 的 close/history/focus bookkeeping 两个绘制帧，再开始文件和节点导航。
+   *
+   * 该等待不依赖 onClose()，因此即使宿主把 onClose 延迟到关闭动画结束，也不会像
+   * 1.45.12 那样永久阻塞导航。
+   */
+  private waitForResultNavigationTurn(): Promise<void> {
     const ownerWindow = this.modalEl.ownerDocument.defaultView;
     if (!ownerWindow) return Promise.resolve();
     return new Promise((resolve) => {
@@ -1107,12 +1110,14 @@ export class GlobalMindMapSearchModal extends Modal {
     });
   }
 
-  /** Opens a result only after the search modal has fully yielded its host focus scope. */
+  /** 请求宿主关闭搜索层后，在不等待 onClose() 的情况下打开目标结果。 */
   private async openResult(result: MindMapSearchResult): Promise<void> {
     if (this.openingResult) return;
     this.openingResult = true;
     this.dismissResultPanel();
-    await this.waitForModalFocusRelease();
+    await this.waitForResultNavigationTurn();
+    this.onDebug?.("result-navigation-start", { filePath: result.filePath, nodeId: result.nodeId });
     await this.onOpenResult(result);
   }
+
 }

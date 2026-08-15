@@ -1,5 +1,33 @@
 # 更新记录
 
+## 1.45.15
+
+- 根据 1.45.14 Windows / Obsidian 1.12.7 日志确认：点击全局搜索结果时第一个搜索 Modal 已执行 `result-close-request → modal-on-close → result-close-return` 且 DOM 已断开，但随后页面仍存在第二个搜索遮罩，手动关闭时再次出现 `modal-on-close(openingResult=false)`；根因是全局搜索快捷键可被插件捕获层与 Obsidian 热键链重复触发，从而叠加两个全局搜索实例。
+- 全局搜索入口新增单实例守卫：`globalSearchLaunchPending` 覆盖索引 ready 的异步窗口，`globalSearchModal.isMounted()` 覆盖已打开实例；重复触发只记录 `open-deduplicated`，不再创建第二层 Modal。
+- 当前文件/当前导图族搜索继续走独立 `openMapFamilySearch()`，不使用全局单例守卫，保持已经验证正常的自动关闭行为不变。
+- 保留 1.45.14 的单次原生 `Modal.close()`、双 RAF 非阻塞导航和搜索后文章行内编辑保护。
+
+## 1.45.14
+
+- 修复 1.45.13 中“程序化 `.modal-bg.click()` 有调试 click 事件但搜索框仍不关闭”的回归：结果打开不再模拟遮罩点击，只调用一次 Obsidian 公开 `Modal.close()`。
+- 关闭搜索结果时继续设置 `shouldRestoreSelection=false`，但不修改/删除任何 `.modal-container`、`.modal-bg` 或 Modal DOM，也不等待 `onClose()`；只让出两个绘制帧后开始目标文件/节点导航。
+- 新增 `result-close-request`、`result-close-return`、`modal-on-close`、`result-navigation-start` 调试事件，真实桌面端可以直接确认原生关闭请求、宿主回调和导航的先后关系。
+- 更新全局搜索/当前导图族搜索关闭契约，明确禁止重新引入合成 backdrop click、PointerEvent、`display:none`、手工 remove 或阻塞式 `onClose()` Promise。
+
+## 1.45.13
+
+- 根据 1.45.12 Windows / Obsidian 1.12.7 日志确认：点击搜索结果后既没有 `open-view-start`，搜索层也仍在前台，说明导航被 `await waitForHostClose()` 卡住，而宿主没有解析本轮等待的 `onClose()`。
+- 搜索结果关闭不再等待 `onClose()` Promise；设置 `shouldRestoreSelection=false` 后仅隐藏搜索 Modal 内部内容，并自动触发当前 `.modal-container` 内 `.modal-bg.click()`，复用用户手动点击背景时已验证有效的宿主关闭路径。
+- 插件不再修改/删除 `.modal-container` 或 `.modal-bg`；导航只让出一个 `setTimeout(0)` 事件循环后立即执行，找不到背景节点时才回退到公开的 `Modal.close()`，避免再次出现“既不关闭也不跳转”。
+- 更新全局/导图族搜索契约与安装 bundle，继续保留搜索后文章编辑的导航事务接管和初始焦点保护。
+
+## 1.45.12
+
+- 根据 1.45.11 Windows / Obsidian 1.12.7 日志确认：搜索结果点击后页面已经开始导航，但搜索结果层和 `modal-bg` 仍可继续接收点击，说明 1.45.11 的 `display:none` 视觉兜底干扰了 Obsidian 原生 Modal 关闭完成流程。
+- 搜索结果现在先创建宿主关闭完成 Promise、关闭 `shouldRestoreSelection` 并只调用一次 `Modal.close()`；随后仅使用 `visibility:hidden` 与 `pointer-events:none` 立即隐藏正在关闭的搜索外壳，不再使用 `display:none`。
+- 文件/节点导航改为等待真实 `onClose()` 完成后再执行，不再用固定两个动画帧猜测焦点 Scope 已释放；继续禁止手工删除 Modal-owned DOM 和二次 `close()`。
+- 更新全局/导图族搜索契约，要求“点击结果立即视觉隐藏 + 原生 Modal teardown 完整完成 + 导航后文章编辑可持焦”三个边界同时成立。
+
 ## 1.45.11
 
 - 根据 1.45.10 的 Windows / Obsidian 1.12.7 真实日志确认最终根因：搜索前文章行内编辑可稳定持焦，搜索结果跳转后同一 `contenteditable` 会在获得焦点约 6–8 ms 后持续 `blur(null)`；这不是文章重绘或普通失焦，而是搜索 Modal 关闭后遗留的宿主焦点约束。

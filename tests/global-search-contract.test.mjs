@@ -53,20 +53,39 @@ test("global and map-family search entries share the same modal close path", () 
   assert.equal((mainSource.match(/new GlobalMindMapSearchModal\(/g) ?? []).length, 2);
 });
 
-test("opening either global or map-family results hides the modal but lets Obsidian own focus-scope teardown", () => {
+
+
+test("global search entry is singleton while map-family search remains independent", () => {
+  assert.match(mainSource, /private globalSearchModal: GlobalMindMapSearchModal \| null = null/);
+  assert.match(mainSource, /private globalSearchLaunchPending = false/);
+  assert.match(mainSource, /openGlobalSearch\(\): void \{[\s\S]*this\.globalSearchModal\?\.isMounted\(\)[\s\S]*open-deduplicated[\s\S]*this\.globalSearchLaunchPending = true[\s\S]*openGlobalSearchAfterIndexReady\(\)\.finally/);
+  assert.match(mainSource, /openGlobalSearchAfterIndexReady\(\): Promise<void> \{[\s\S]*this\.globalSearchModal\?\.isMounted\(\)[\s\S]*const modal = new GlobalMindMapSearchModal\([\s\S]*this\.globalSearchModal = modal;[\s\S]*modal\.open\(\)/);
+  assert.match(source, /isMounted\(\): boolean \{[\s\S]*this\.modalEl\.isConnected \|\| this\.containerEl\.isConnected/);
+  assert.match(bundle, /this\.globalSearchLaunchPending = false/);
+  assert.match(bundle, /openGlobalSearch\(\) \{[\s\S]*globalSearchModal[\s\S]*open-deduplicated[\s\S]*globalSearchLaunchPending = true/);
+  assert.match(bundle, /isMounted\(\) \{[\s\S]*this\.modalEl\.isConnected \|\| this\.containerEl\.isConnected/);
+  const familyBlock = mainSource.slice(mainSource.indexOf("async openMapFamilySearch("), mainSource.indexOf("async rebuildGlobalSearchIndex("));
+  assert.doesNotMatch(familyBlock, /globalSearchModal|globalSearchLaunchPending|open-deduplicated/);
+});
+test("opening either global or map-family results uses one native Modal.close without synthetic backdrop events or blocking navigation", () => {
+  const bundleSearchModal = bundle.slice(bundle.indexOf("var GlobalMindMapSearchModal"), bundle.indexOf("// src/ai/client.ts"));
   assert.match(source, /private openingResult = false/);
+  assert.doesNotMatch(source, /hostClosePromise|resolveHostClose|waitForHostClose/);
   assert.match(source, /private dismissResultPanel\(\): void/);
-  assert.match(source, /containers\.add\(this\.containerEl\)/);
-  assert.match(source, /this\.modalEl\.closest<HTMLElement>\("\.modal-container"\)/);
-  assert.match(source, /element\.style\.setProperty\("display", "none", "important"\)/);
-  assert.match(source, /element\.style\.setProperty\("visibility", "hidden", "important"\)/);
-  assert.match(source, /container\.addClass\("mms-global-search-container-closing"\)/);
-  assert.match(source, /this\.shouldRestoreSelection = false;[\s\S]*this\.close\(\);/);
-  assert.doesNotMatch(source, /this\.modalEl\.remove\(\)|container\.remove\(\)|removeSearchLayers/);
-  assert.match(source, /private waitForModalFocusRelease\(\): Promise<void>[\s\S]*requestAnimationFrame\(\(\) => ownerWindow\.requestAnimationFrame/);
-  assert.match(source, /this\.dismissResultPanel\(\);[\s\S]*await this\.waitForModalFocusRelease\(\);[\s\S]*await this\.onOpenResult\(result\);/);
-  assert.equal((source.match(/this\.dismissResultPanel\(\);/g) ?? []).length, 1, "a result must close the Modal only once");
-  assert.match(styles, /\.mms-global-search-container-closing \{[\s\S]*display: none !important;[\s\S]*pointer-events: none !important/);
-  assert.match(bundle, /shouldRestoreSelection = false/);
-  assert.doesNotMatch(bundle, /setTimeout\(removeSearchLayers|querySelectorAll\("\.mms-global-search-modal, \.mms-global-search-container-closing"\)/);
+  assert.match(source, /this\.shouldRestoreSelection = false/);
+  assert.match(source, /this\.onDebug\?\.\("result-close-request"/);
+  assert.match(source, /this\.close\(\);/);
+  assert.match(source, /this\.onDebug\?\.\("result-close-return"/);
+  assert.equal((source.match(/this\.close\(\);/g) ?? []).length, 1, "result opening must issue exactly one native Modal.close request");
+  assert.match(source, /private waitForResultNavigationTurn\(\): Promise<void>/);
+  assert.match(source, /ownerWindow\.requestAnimationFrame\(\(\) => ownerWindow\.requestAnimationFrame\(\(\) => resolve\(\)\)\)/);
+  assert.match(source, /this\.dismissResultPanel\(\);[\s\S]*await this\.waitForResultNavigationTurn\(\);[\s\S]*this\.onDebug\?\.\("result-navigation-start"[\s\S]*await this\.onOpenResult\(result\);/);
+  assert.match(source, /onClose\(\): void \{[\s\S]*this\.onDebug\?\.\("modal-on-close"/);
+  assert.doesNotMatch(source, /backdrop\.click\(\)|querySelector<HTMLElement>\("\.modal-bg"\)|new PointerEvent|dispatchEvent|mms-global-search-result-opening|mms-global-search-container-closing|style\.setProperty\("display", "none"|this\.modalEl\.remove\(\)|container\.remove\(\)|removeSearchLayers/);
+  assert.doesNotMatch(styles, /mms-global-search-result-opening|mms-global-search-container-closing/);
+  assert.doesNotMatch(bundleSearchModal, /backdrop\.click\(\)|querySelector\("\.modal-bg"\)|hostClosePromise|waitForHostClose|mms-global-search-result-opening|removeSearchLayers/);
+  assert.match(bundleSearchModal, /this\.shouldRestoreSelection = false/);
+  assert.match(bundleSearchModal, /this\.close\(\)/);
+  assert.match(bundleSearchModal, /requestAnimationFrame\(\(\) => ownerWindow\.requestAnimationFrame/);
+  assert.match(bundleSearchModal, /await this\.waitForResultNavigationTurn\(\);[\s\S]*await this\.onOpenResult\(result\);/);
 });

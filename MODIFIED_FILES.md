@@ -1,5 +1,46 @@
 # Modified Files
 
+## 1.45.15 全局搜索重复实例去重
+
+- `src/main.ts`：仅全局搜索入口增加 `globalSearchModal` 与 `globalSearchLaunchPending` 双重单例守卫，阻止同一快捷键被插件捕获层和 Obsidian 热键链重复处理时创建两层搜索 Modal；新增 `open-request`、`open-mounted`、`open-deduplicated` 调试事件。当前导图族 `openMapFamilySearch()` 保持独立。
+- `src/search/global-search.ts`：新增 `isMounted()`，供全局入口判断当前搜索实例是否仍挂载；关闭流程本身不变。
+- `tests/global-search-contract.test.mjs`、`scripts/test.mjs`：增加“全局搜索必须单实例、当前导图族搜索不受守卫影响”的专项与综合契约。
+- `README.md`、`docs/ARCHITECTURE.md`、`docs/SPECIAL_FEATURES.md`、`docs/TESTING.md`、`CHANGELOG.md`、`docs/FUNCTION_REFERENCE.md`：同步重复实例根因、入口边界与调试判据。
+- `package.json`、`package-lock.json`、`manifest.json`、`versions.json`、`update.json`：版本同步为 1.45.15；安装包 SHA-256 为 `d5af5c80b8b9f5dd0429689a6e68c5700927bfc9860d798fc93f20a165661c2c`。
+- `main.js`：同步全局搜索单实例守卫；当前导图族搜索运行逻辑不变。
+- `TEST_RESULTS.md`、Codex 交接：记录 1.45.14 真实日志证据、验证基线与待桌面端复测项。
+
+## 1.45.14 原生 Modal.close 自动关闭收口
+
+- `src/search/global-search.ts`：删除 1.45.13 的 `.modal-bg.click()` 合成关闭；结果点击后设置 `shouldRestoreSelection=false` 并只调用一次 `Modal.close()`，不再查询/模拟背景事件，不修改或删除宿主 Modal DOM；导航改为等待两个 `requestAnimationFrame`，不等待 `onClose()` Promise。新增 `result-close-request`、`result-close-return`、`modal-on-close`、`result-navigation-start` 调试事件。
+- `src/main.ts`：全局搜索与当前导图族搜索统一注入 `global-search-modal` 调试回调，真实桌面端可以记录关闭生命周期。
+- `styles.css`：移除 1.45.13 的 `mms-global-search-result-opening` 内容隐藏规则，使原生 `Modal.close()` 的宿主过渡不再受插件 CSS 干预。
+- `tests/global-search-contract.test.mjs`、`scripts/test.mjs`：关闭契约改为“单次原生 close + 双 RAF 非阻塞导航”，明确禁止 backdrop click、合成 PointerEvent、手工 DOM 删除、外层隐藏 class 与 `onClose()` Promise 阻塞。
+- `README.md`、`docs/ARCHITECTURE.md`、`docs/SPECIAL_FEATURES.md`、`docs/TESTING.md`、`CHANGELOG.md`、`docs/FUNCTION_REFERENCE.md`：同步 1.45.13 真实日志证据、原生关闭边界和调试事件。
+- `package.json`、`package-lock.json`、`manifest.json`、`versions.json`、`update.json`：版本同步为 1.45.14；安装包 SHA-256 为 `e401f2c38078e7d4156e90a22a23da58e81cea71ed2e23c64f88bd588af13f4c`。
+- `main.js`：按 TypeScript 源码等价同步单次 `Modal.close()`、双 RAF 导航和搜索 Modal 生命周期调试；当前 Linux 环境仍受 Windows esbuild 二进制限制。
+- `TEST_RESULTS.md`、Codex 交接：记录 1.45.13 “合成背景 click 不关闭”真实日志、验证基线与 1.45.14 待桌面端复测项。
+
+## 1.45.13 搜索背景宿主关闭与非阻塞导航
+
+- `src/search/global-search.ts`：移除 `hostClosePromise` / `waitForHostClose()`；结果点击后设置 `shouldRestoreSelection=false`、隐藏搜索 Modal 内部内容，并自动 `click()` 当前 `.modal-bg` 复用宿主背景关闭路径；仅让出一个 `setTimeout(0)` 后导航，不再等待 `onClose()`。找不到背景节点时保留 `Modal.close()` 回退。
+- `styles.css`：删除旧 `.mms-global-search-container-closing` 外层隐藏规则，改为 `.mms-global-search-result-opening > *` 只隐藏搜索 Modal 内部内容，不修改 `.modal-container` / `.modal-bg`。
+- `tests/global-search-contract.test.mjs`、`scripts/test.mjs`：新增“背景点击关闭 + 非阻塞下一事件循环导航”契约，并禁止重新引入 `waitForHostClose`、外层 DOM 删除或 `display:none`。
+- `README.md`、`docs/ARCHITECTURE.md`、`docs/SPECIAL_FEATURES.md`、`docs/TESTING.md`、`CHANGELOG.md`、`docs/FUNCTION_REFERENCE.md`：同步 1.45.12 真实日志和 1.45.13 关闭/导航边界。
+- `package.json`、`package-lock.json`、`manifest.json`、`versions.json`、`update.json`：版本同步为 1.45.13；安装包 SHA-256 为 `e82ede2440b90e013b41ac26baeae551e1973dab742160fb16a2bdd681d632fb`。
+- `main.js`：按 TypeScript 源码等价同步搜索 Modal 的背景关闭与非阻塞导航逻辑。
+- `TEST_RESULTS.md`、Codex 交接：记录 1.45.12 “既不关闭也不跳转”的真实日志、验证基线与真实桌面端待复测项。
+
+## 1.45.12 搜索结果自动隐藏与原生 Modal 关闭完成修复
+
+- `src/search/global-search.ts`：搜索结果关闭流程新增 `waitForHostClose()` 与 `onClose()` 完成信号；结果点击后先启动唯一一次原生 `Modal.close()`，再仅用 `visibility:hidden` / `pointer-events:none` 立即视觉隐藏搜索层，禁止 `display:none` 和手工删除 Modal DOM；目标导航等待真实 `onClose()` 完成。
+- `styles.css`：`.mms-global-search-container-closing` 删除 `display:none`，仅保留不可见与禁用指针，避免阻断宿主关闭 transition/completion。
+- `tests/global-search-contract.test.mjs`、`scripts/test.mjs`：更新搜索关闭契约，验证单次 close、真实 onClose 完成、禁止 `display:none/remove()`、导航等待 teardown。
+- `README.md`、`docs/ARCHITECTURE.md`、`docs/SPECIAL_FEATURES.md`、`docs/TESTING.md`、`CHANGELOG.md`、`docs/FUNCTION_REFERENCE.md`：同步 1.45.11 自动隐藏回归根因与 1.45.12 生命周期边界。
+- `package.json`、`package-lock.json`、`manifest.json`、`versions.json`、`update.json`：版本同步为 1.45.12；安装包 SHA-256 为 `c1dd31e2eaee48048c9dc0baa7cdf290b81cd5b045ea605329a4adde6e653674`。
+- `main.js`：按 TypeScript 源码等价同步搜索 Modal 的关闭完成等待逻辑。
+- `TEST_RESULTS.md`、Codex 交接：记录 1.45.11 真实日志、1.45.12 验证基线和待真实桌面端复测项。
+
 ## 1.45.11 搜索 Modal 焦点 Scope 生命周期修复
 
 - `src/search/global-search.ts`：修正结果打开时的 Modal 关闭边界；同步隐藏搜索 UI 后设置 `shouldRestoreSelection=false`，只调用一次 `Modal.close()`，不再手工 `remove()` `modalEl` / `containerEl` / `.modal-container`，也不再在导航结束后二次关闭。新增 `waitForModalFocusRelease()`，等待两个动画帧让 Obsidian 完成 Modal 栈与焦点 Scope 释放后再导航。
