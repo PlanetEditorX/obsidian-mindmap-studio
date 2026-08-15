@@ -157,7 +157,7 @@
 - 导图布局、碰撞处理和连接线。
 - 文章层级、目录、编号、分页和连续阅读。
 - 全局搜索索引和替换，包括显示结果上限不影响“全部替换”的完整范围，以及替换后索引立即刷新。
-- 搜索快捷键，包括活动 MindMap Studio 视图中的 `Ctrl/Cmd+F` 由窗口捕获层直接打开当前导图族、编辑控件聚焦时仍可触发、全局搜索自定义快捷键保持优先，以及弹窗内不重复截获；点击搜索结果时，全局搜索与当前导图族搜索必须统一先隐藏并移除 `modalEl`、`containerEl`、实际 `.modal-container`，再执行页面导航，并用 `.mms-global-search-modal` / `.mms-global-search-container-closing` 做同步及短延迟兜底清理，避免 `onClose()` 只清空内容后留下空白弹窗。文章模式从右键菜单执行“编辑当前内容/添加正文”时必须将 `protectInitialFocus` 传入共享行内编辑激活链路，并验证该保护只用于菜单焦点交接，不能改变双击、键盘编辑或普通失焦保存。
+- 搜索快捷键，包括活动 MindMap Studio 视图中的 `Ctrl/Cmd+F` 由窗口捕获层直接打开当前导图族、编辑控件聚焦时仍可触发、全局搜索自定义快捷键保持优先，以及弹窗内不重复截获；点击搜索结果时，全局搜索与当前导图族搜索必须统一先隐藏并移除 `modalEl`、`containerEl`、实际 `.modal-container`，再执行页面导航，并用 `.mms-global-search-modal` / `.mms-global-search-container-closing` 做同步及短延迟兜底清理，避免 `onClose()` 只清空内容后留下空白弹窗。文章模式从右键菜单执行“编辑当前内容/添加正文”时必须经 `editSelectedFromContextMenu()` 将 `protectInitialFocus` 传入共享行内编辑激活链路；同时回归检查 `editSelected(initialBlockId?)` 仍保持完整节点编辑签名，菜单保护不能改变双击、键盘编辑、导图/大纲完整编辑或普通失焦保存。
 - 文件浏览器筛选。
 - 关键 UI/CSS 契约与版本文件一致性。
 
