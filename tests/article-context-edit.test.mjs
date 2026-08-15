@@ -41,6 +41,22 @@ test("article edit actions use inline editing while other modes keep the full no
 
 
 
+test("article pointer editing takes ownership from search-navigation restore work", () => {
+  const inlineEditor = editorSource.match(/private makeInlineEditable\(element: HTMLElement, node: MindMapNode, placeholder: string, blockId\?: string\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
+  const claim = editorSource.match(/private claimInlineEditInteraction\(nodeId: string, blockId\?: string\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
+  const pointerActivate = editorSource.match(/private activateInlineEditableFromPointer\(element: HTMLElement\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
+
+  assert.match(inlineEditor, /element\.addEventListener\("pointerdown"[\s\S]*this\.claimInlineEditInteraction\(node\.id, blockId\)[\s\S]*this\.activateInlineEditableFromPointer\(element\)/);
+  assert.match(inlineEditor, /element\.addEventListener\("focus"[\s\S]*this\.claimInlineEditInteraction\(node\.id, blockId\)/);
+  assert.match(claim, /this\.cancelReadingLocationRestore\(\)[\s\S]*this\.cancelArticleWindowExpansion\(\)/);
+  assert.match(claim, /this\.pendingArticleFocusLocation = null[\s\S]*this\.pendingLocationNavigationKey = null/);
+  assert.match(claim, /this\.inlineEditingId = nodeId/);
+  assert.match(pointerActivate, /this\.activateInlineEditable\(element, false\)/);
+  assert.match(pointerActivate, /const protectInitialFocus = this\.currentMode === "article"[\s\S]*if \(protectInitialFocus\) element\.dataset\.mmsProtectInitialFocus = "true"/);
+  assert.match(pointerActivate, /window\.setTimeout\([\s\S]*delete element\.dataset\.mmsProtectInitialFocus[\s\S]*120/);
+  assert.match(inlineEditor, /"inline-edit-blur"[\s\S]*protectedInitialFocus[\s\S]*element\.focus\(\{ preventScroll: true \}\)[\s\S]*"inline-edit-refocus"/);
+});
+
 test("article context-menu editing protects the initial inline focus handoff", () => {
   const contextMenu = editorSource.match(/private openContextMenu\(event: MouseEvent, contextBlockId\?: string\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
   const contextEdit = editorSource.match(/private editSelectedFromContextMenu\(\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
@@ -170,4 +186,7 @@ test("compiled plugin contains the article-specific edit routing", () => {
   assert.match(mainBundle, /\\u4F5C\\u4E3A\\u8282\\u70B9\\u79FB\\u52A8/i);
   assert.match(mainBundle, /deleteNodeById/);
   assert.match(mainBundle, /editSelectedArticleContent\(true\)/, "compiled context-menu editing must keep initial focus protection");
+  assert.match(mainBundle, /claimInlineEditInteraction\(nodeId, blockId\)[\s\S]*cancelReadingLocationRestore\(\)[\s\S]*cancelArticleWindowExpansion\(\)/, "compiled pointer editing must cancel pending navigation work");
+  assert.match(mainBundle, /inline-edit-pointer-activate[\s\S]*mmsProtectInitialFocus[\s\S]*120/, "compiled pointer editing must keep the short initial focus handoff guard");
+  assert.match(mainBundle, /inline-edit-blur[\s\S]*preventScroll: true[\s\S]*inline-edit-refocus/, "compiled blur diagnostics and refocus protection must stay synchronized");
 });

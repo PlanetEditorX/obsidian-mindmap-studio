@@ -157,7 +157,7 @@
 - 导图布局、碰撞处理和连接线。
 - 文章层级、目录、编号、分页和连续阅读。
 - 全局搜索索引和替换，包括显示结果上限不影响“全部替换”的完整范围，以及替换后索引立即刷新。
-- 搜索快捷键，包括活动 MindMap Studio 视图中的 `Ctrl/Cmd+F` 由窗口捕获层直接打开当前导图族、编辑控件聚焦时仍可触发、全局搜索自定义快捷键保持优先，以及弹窗内不重复截获；点击搜索结果时，全局搜索与当前导图族搜索必须统一先隐藏并移除 `modalEl`、`containerEl`、实际 `.modal-container`，再执行页面导航，并用 `.mms-global-search-modal` / `.mms-global-search-container-closing` 做同步及短延迟兜底清理，避免 `onClose()` 只清空内容后留下空白弹窗。文章模式从右键菜单执行“编辑当前内容/添加正文”时必须经 `editSelectedFromContextMenu()` 将 `protectInitialFocus` 传入共享行内编辑激活链路；同时回归检查 `editSelected(initialBlockId?)` 仍保持完整节点编辑签名，菜单保护不能改变双击、键盘编辑、导图/大纲完整编辑或普通失焦保存。
+- 搜索快捷键，包括活动 MindMap Studio 视图中的 `Ctrl/Cmd+F` 由窗口捕获层直接打开当前导图族、编辑控件聚焦时仍可触发、全局搜索自定义快捷键保持优先，以及弹窗内不重复截获；点击搜索结果时，全局搜索与当前导图族搜索必须统一先隐藏 `modalEl`、`containerEl`、实际 `.modal-container`，设置 `shouldRestoreSelection = false` 后只调用一次 `Modal.close()`，禁止手工 `remove()` Modal-owned DOM 或导航结束后二次关闭；必须等待两个动画帧释放宿主焦点 Scope 后才执行页面导航，并用 `.mms-global-search-container-closing` 保证残留空壳不可见、不可点击。搜索跳转到文章节点后，直接单击可编辑文字必须先经 `claimInlineEditInteraction()` 取消语义恢复和窗口扩展、清除待定位目标并建立 `inlineEditingId`，再由 `activateInlineEditableFromPointer()` 开启编辑；指针激活不得强制把光标移动到末尾，最初 120 ms 的 `mmsProtectInitialFocus` 只处理宿主同一交互中的焦点交接，之后普通 `blur` 仍应提交。调试日志必须能区分 `inline-edit-claim/focus/blur/refocus`。文章模式从右键菜单执行“编辑当前内容/添加正文”时仍必须经 `editSelectedFromContextMenu()` 将 `protectInitialFocus` 传入共享激活链路；同时回归检查 `editSelected(initialBlockId?)` 保持完整节点编辑签名，菜单保护不能改变双击、键盘编辑、导图/大纲完整编辑或普通失焦保存。
 - 文件浏览器筛选。
 - 关键 UI/CSS 契约与版本文件一致性。
 
@@ -168,7 +168,7 @@
 - 将“单次最多显示结果”设为较小值，搜索超过上限的关键词后执行“全部替换”，确认全部匹配均被替换；随后立即重新搜索，不应出现旧结果。
 
 自动化通过后，在独立 Obsidian 测试仓库至少验证：
-- 从全局搜索和当前导图族搜索分别跳转到文章节点，右键选择“编辑当前内容”或“添加正文”，确认编辑器不会立刻退出；随后点击页面其他位置确认仍按正常失焦规则提交。
+- 从全局搜索和当前导图族搜索分别跳转到文章节点，先直接单击标题/正文进入行内编辑，确认不会出现“进入后立刻退出”，且光标停在实际点击位置；再点击页面其他位置确认保护窗口结束后仍按正常失焦规则提交。随后分别用右键“编辑当前内容/添加正文”复测菜单焦点交接。若仍失败，导出调试日志并检查同一节点的 `inline-edit-claim` → `inline-edit-focus` → `inline-edit-blur`；搜索前直接编辑应可稳定持焦，搜索后不应再出现每 6–20 ms 一次的 `focus/refocus → blur(null)` 焦点风暴。
 
 1. 新建导图、修改中心节点、保存并重开。
 2. 导图、大纲、文章和通读间双向切换，确认同一节点保持聚焦；关闭并重开后位置不丢失。
