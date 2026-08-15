@@ -7172,10 +7172,7 @@ var FormulaEditModal = class extends import_obsidian4.Modal {
    * 清理公式编辑器 DOM。
    */
   onClose() {
-    var _a2;
     this.contentEl.empty();
-    (_a2 = this.resolveHostClose) == null ? void 0 : _a2.call(this);
-    this.resolveHostClose = null;
   }
 };
 var ImportExportModal = class extends import_obsidian4.Modal {
@@ -13459,9 +13456,9 @@ var MindMapEditor = class {
    * used by setOptions() to avoid rebuilding the article during delayed context refreshes.
    */
   claimInlineEditInteraction(nodeId, blockId) {
-    var _a2, _b2, _c;
+    var _a2, _b2, _c, _d;
     const activeRestoreTarget = (_b2 = (_a2 = this.activeReadingRestore) == null ? void 0 : _a2.resolved.nodeId) != null ? _b2 : null;
-    const pendingArticleTarget = (_c = this.pendingArticleFocusLocation) == null ? void 0 : _c.nodeIds[0];
+    const pendingArticleTarget = (_d = (_c = this.pendingArticleFocusLocation) == null ? void 0 : _c.nodeIds[0]) != null ? _d : null;
     const hadWindowExpansion = this.articleWindowExpansionFrame !== null;
     this.cancelReadingLocationRestore();
     this.cancelArticleWindowExpansion();
@@ -13476,7 +13473,7 @@ var MindMapEditor = class {
       blockId,
       mode: this.currentMode,
       activeRestoreTarget,
-      pendingArticleTarget: pendingArticleTarget != null ? pendingArticleTarget : null,
+      pendingArticleTarget,
       hadWindowExpansion
     });
   }
@@ -19915,6 +19912,8 @@ var GlobalMindMapSearchModal = class extends import_obsidian14.Modal {
    * @param maxResults 该参数用于 constructor 流程中的输入或控制。
    * @param onOpenResult 该参数用于 constructor 流程中的输入或控制。
    * @param onRebuild 该参数用于 constructor 流程中的输入或控制。
+   * @param onReplaceAll 可选的批量替换回调。
+   * @param onDebug 可选的搜索 Modal 生命周期调试事件回调。
    * @param scopePaths 该参数用于 constructor 流程中的输入或控制。
    * @param scopeTitle 该参数用于 constructor 流程中的输入或控制。
    * @param scopeDescription 该参数用于 constructor 流程中的输入或控制。
@@ -20174,15 +20173,15 @@ var GlobalMindMapSearchModal = class extends import_obsidian14.Modal {
    * 调用一次公开 close()，让 Obsidian 自己完成焦点 Scope、history 与关闭动画。
    */
   dismissResultPanel() {
-    var _a2, _b;
+    var _a2, _b2, _c, _d;
     this.shouldRestoreSelection = false;
-    (_a2 = this.onDebug) == null ? void 0 : _a2.call(this, "result-close-request", {
+    (_c = this.onDebug) == null ? void 0 : _c.call(this, "result-close-request", {
       modalConnected: this.modalEl.isConnected,
       containerConnected: this.containerEl.isConnected,
-      activeTag: ((_b = this.modalEl.ownerDocument.activeElement) == null ? void 0 : _b.tagName.toLocaleLowerCase()) ?? null
+      activeTag: (_b2 = (_a2 = this.modalEl.ownerDocument.activeElement) == null ? void 0 : _a2.tagName.toLocaleLowerCase()) != null ? _b2 : null
     });
     this.close();
-    (_b = this.onDebug) == null ? void 0 : _b.call(this, "result-close-return", {
+    (_d = this.onDebug) == null ? void 0 : _d.call(this, "result-close-return", {
       modalConnected: this.modalEl.isConnected,
       containerConnected: this.containerEl.isConnected
     });
@@ -20210,7 +20209,6 @@ var GlobalMindMapSearchModal = class extends import_obsidian14.Modal {
     (_a2 = this.onDebug) == null ? void 0 : _a2.call(this, "result-navigation-start", { filePath: result.filePath, nodeId: result.nodeId });
     await this.onOpenResult(result);
   }
-
 };
 
 // src/ai/client.ts
@@ -21885,7 +21883,9 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
     this.autoUploadFileKeys = /* @__PURE__ */ new WeakMap();
     this.autoUploadFileKeySequence = 0;
     this.searchIndexReady = Promise.resolve();
+    /** 当前已挂载的全局搜索实例；当前导图族搜索不使用该单例。 */
     this.globalSearchModal = null;
+    /** 防止同一次全局快捷键在索引 ready await 期间重复创建两个 Modal。 */
     this.globalSearchLaunchPending = false;
     this.fileExplorerFilterTimer = null;
     this.fileExplorerFilterFullScanPending = false;
@@ -22110,12 +22110,12 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
    * 打开global search，并保持模型、界面和持久化状态的一致性。
    */
   openGlobalSearch() {
-    var _a2;
-    const mounted = (_a2 = this.globalSearchModal) == null ? void 0 : _a2.isMounted();
+    var _a2, _b2;
+    const mounted = (_b2 = (_a2 = this.globalSearchModal) == null ? void 0 : _a2.isMounted()) != null ? _b2 : false;
     if (this.globalSearchLaunchPending || mounted) {
       this.logDebug("global-search-modal", "open-deduplicated", {
         launchPending: this.globalSearchLaunchPending,
-        mounted: mounted != null ? mounted : false
+        mounted
       });
       return;
     }
