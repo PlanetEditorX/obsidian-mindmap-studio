@@ -1,11 +1,11 @@
-﻿/**
+/**
  * @file model.ts
  * @description 核心领域模型与序列化层。
  *
  * 定义 .mindmap 稳定数据结构，并负责字段规范化、富文本、内容块、节点树、Markdown 导入导出及图片镜像候选源排序。
  */
 
-import { findNode, removeNode, walkNodes } from "./node-tree";
+import { findNode, walkNodes } from "./node-tree";
 export {
   containsNode,
   findAncestors,
@@ -1125,24 +1125,6 @@ export function applyImageUploadPatches(document: MindMapDocument, patches: read
   return changed;
 }
 
-/**
- * 判断一个非根节点是否只剩可安全清理的空壳。
- *
- * 内容删除后，子节点、备注、链接、子导图、图标、标签、题目和任务都仍是
- * 独立语义，不能因为没有内容块而丢失。空白文字占位不视为有效内容。
- */
-export function isRemovableEmptyNode(node: Pick<MindMapNode, "content" | "text" | "richText" | "image" | "table" | "code" | "children" | "note" | "link" | "submap" | "icon" | "tags" | "question">): boolean {
-  const hasContent = nodeContentBlocks(node).some((block) => block.type !== "text" || block.text.trim());
-  return !hasContent
-    && node.children.length === 0
-    && !node.note?.trim()
-    && !node.link?.trim()
-    && !node.submap
-    && !node.icon?.trim()
-    && !node.tags?.some((tag) => tag.trim())
-    && !node.question;
-}
-
 /** 内容块相对目标块的放置位置；append 表示放到目标节点末尾。 */
 export type ContentBlockDropPosition = "before" | "after" | "append";
 
@@ -1204,8 +1186,6 @@ export function moveNodeContentBlock(
   targetBlocks.splice(insertIndex, 0, moving);
   replaceNodeContentBlocks(sourceNode, remainingSourceBlocks);
   replaceNodeContentBlocks(targetNode, targetBlocks);
-  const sourceIsEmpty = isRemovableEmptyNode(sourceNode);
-  if (sourceNodeId !== root.id && sourceIsEmpty) removeNode(root, sourceNodeId);
   return true;
 }
 

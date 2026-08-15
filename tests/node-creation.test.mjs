@@ -56,6 +56,14 @@ test("article mode renders and focuses a newly added empty child", () => {
   assert.match(mainBundle, /else if \(!options\.readOnly && blocks\.length === 0\)/);
 });
 
+test("article inline editors keep one line of height when their text is empty", () => {
+  const rule = styles.match(/\.mms-article-document-title-text\.is-inline-editing,[\s\S]*?\.mms-article-paragraph\.is-inline-editing\s*\{([\s\S]*?)\}/)?.[1] ?? "";
+  assert.match(rule, /min-height:\s*1\.4em/);
+  assert.match(rule, /min-height:\s*1lh/);
+  assert.match(rule, /box-sizing:\s*content-box/);
+  assert.match(mainBundle, /mms-article-heading-text/);
+});
+
 test("mind-map nodes keep a non-zero global minimum height", () => {
   assert.match(layoutSource, /const MIN_NODE_HEIGHT = 36/);
   assert.match(layoutSource, /Math\.max\(measured\.height, node\.style\?\.minHeight \?\? 0, MIN_NODE_HEIGHT\)/);

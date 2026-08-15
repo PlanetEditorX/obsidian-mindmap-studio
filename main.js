@@ -563,11 +563,6 @@ function applyImageUploadPatches(document2, patches) {
   }
   return changed;
 }
-function isRemovableEmptyNode(node) {
-  var _a2, _b2, _c, _d;
-  const hasContent = nodeContentBlocks(node).some((block) => block.type !== "text" || block.text.trim());
-  return !hasContent && node.children.length === 0 && !((_a2 = node.note) == null ? void 0 : _a2.trim()) && !((_b2 = node.link) == null ? void 0 : _b2.trim()) && !node.submap && !((_c = node.icon) == null ? void 0 : _c.trim()) && !((_d = node.tags) == null ? void 0 : _d.some((tag) => tag.trim())) && !node.question;
-}
 function moveNodeContentBlock(root, sourceNodeId, blockId, targetNodeId, targetBlockId, position) {
   const sourceNode = findNode(root, sourceNodeId);
   const targetNode = findNode(root, targetNodeId);
@@ -597,8 +592,6 @@ function moveNodeContentBlock(root, sourceNodeId, blockId, targetNodeId, targetB
   targetBlocks.splice(insertIndex, 0, moving);
   replaceNodeContentBlocks(sourceNode, remainingSourceBlocks);
   replaceNodeContentBlocks(targetNode, targetBlocks);
-  const sourceIsEmpty = isRemovableEmptyNode(sourceNode);
-  if (sourceNodeId !== root.id && sourceIsEmpty) removeNode(root, sourceNodeId);
   return true;
 }
 function normalizeCell(value) {
@@ -7179,7 +7172,10 @@ var FormulaEditModal = class extends import_obsidian4.Modal {
    * 清理公式编辑器 DOM。
    */
   onClose() {
+    var _a2;
     this.contentEl.empty();
+    (_a2 = this.resolveHostClose) == null ? void 0 : _a2.call(this);
+    this.resolveHostClose = null;
   }
 };
 var ImportExportModal = class extends import_obsidian4.Modal {
@@ -13445,10 +13441,8 @@ var MindMapEditor = class {
         renderRichTextRuns(element, original.richText, original.text);
         return;
       }
-      const hadMeaningfulContent = this.nodeHasMeaningfulContent(node);
       this.mutateInlineText(node.id, () => {
         this.updateNodeTextBlock(node, next, blockId);
-        this.removeNodeAfterContentDeletion(node, hadMeaningfulContent);
       });
       const committed = findNode(this.document.root, node.id);
       if (!committed || !element.isConnected) return;
@@ -13465,9 +13459,9 @@ var MindMapEditor = class {
    * used by setOptions() to avoid rebuilding the article during delayed context refreshes.
    */
   claimInlineEditInteraction(nodeId, blockId) {
-    var _a2, _b2, _c, _d;
+    var _a2, _b2, _c;
     const activeRestoreTarget = (_b2 = (_a2 = this.activeReadingRestore) == null ? void 0 : _a2.resolved.nodeId) != null ? _b2 : null;
-    const pendingArticleTarget = (_d = (_c = this.pendingArticleFocusLocation) == null ? void 0 : _c.nodeIds[0]) != null ? _d : null;
+    const pendingArticleTarget = (_c = this.pendingArticleFocusLocation) == null ? void 0 : _c.nodeIds[0];
     const hadWindowExpansion = this.articleWindowExpansionFrame !== null;
     this.cancelReadingLocationRestore();
     this.cancelArticleWindowExpansion();
@@ -13482,7 +13476,7 @@ var MindMapEditor = class {
       blockId,
       mode: this.currentMode,
       activeRestoreTarget,
-      pendingArticleTarget,
+      pendingArticleTarget: pendingArticleTarget != null ? pendingArticleTarget : null,
       hadWindowExpansion
     });
   }
@@ -15208,7 +15202,6 @@ var MindMapEditor = class {
         this.history.capture(this.document);
         historyCaptured = true;
       }
-      const hadMeaningfulContent = this.nodeHasMeaningfulContent(node);
       const blocks2 = nodeContentBlocks(node);
       let block = blocks2.find((item) => item.type === "text" && item.id === activeBlockId);
       if (!block) {
@@ -15226,14 +15219,9 @@ var MindMapEditor = class {
       }
       node.content = blocks2;
       syncNodeContentFields(node);
-      const removed = this.removeNodeAfterContentDeletion(node, hadMeaningfulContent);
       if (node.id === this.document.root.id && values.text) this.document.title = values.text;
       this.callbacks.onChange(this.getDocument());
       this.markSaving();
-      if (removed) {
-        this.render();
-        return;
-      }
       this.viewportEl.dispatchEvent(new CustomEvent("mms-inline-node-change", { detail: { nodeId } }));
     };
     let savedSelection = null;
@@ -15563,7 +15551,6 @@ var MindMapEditor = class {
         this.history.capture(this.document);
         historyCaptured = true;
       }
-      const hadMeaningfulContent = this.nodeHasMeaningfulContent(selected);
       replaceNodeContentBlocks(selected, values.content);
       selected.note = values.note || void 0;
       selected.link = values.link || void 0;
@@ -15586,16 +15573,13 @@ var MindMapEditor = class {
         minHeight: values.minHeight
       };
       selected.style = Object.values(style).some((value) => value !== void 0) ? style : void 0;
-      const removed = this.removeNodeAfterContentDeletion(selected, hadMeaningfulContent);
       if (selected.id === this.document.root.id) {
         const title = nodePlainText(selected);
         if (title) this.document.title = title;
       }
       this.callbacks.onChange(this.getDocument());
       this.markSaving();
-      if (removed) {
-        this.render();
-      } else if (this.inlineEditingId === selected.id) {
+      if (this.inlineEditingId === selected.id) {
         const inline = this.nodesLayerEl.querySelector(
           `.mmc-node[data-node-id="${CSS.escape(selected.id)}"] .mmc-node-text.is-inline-editing`
         );
@@ -16001,9 +15985,7 @@ var MindMapEditor = class {
   }
   /** Removes one structured block identified by its content-block ID. */
   removeStructuredBlock(node, blockId) {
-    const hadMeaningfulContent = this.nodeHasMeaningfulContent(node);
     replaceNodeContentBlocks(node, nodeContentBlocks(node).filter((block) => block.id !== blockId));
-    this.removeNodeAfterContentDeletion(node, hadMeaningfulContent);
   }
   /** Adds the explicit grip used to move one rendered content block without dragging its whole node. */
   bindContentBlockDragHandle(blockElement, nodeId, blockId) {
@@ -16120,29 +16102,9 @@ var MindMapEditor = class {
     if (!node || !this.ensureEditable()) return;
     const blocks = nodeContentBlocks(node);
     if (!blocks.some((block) => block.id === blockId)) return;
-    const hadMeaningfulContent = this.nodeHasMeaningfulContent(node);
     this.mutate(() => {
       replaceNodeContentBlocks(node, blocks.filter((block) => block.id !== blockId));
-      this.removeNodeAfterContentDeletion(node, hadMeaningfulContent);
     });
-  }
-  /** Returns whether a node currently has a non-blank text or structured content block. */
-  nodeHasMeaningfulContent(node) {
-    return nodeContentBlocks(node).some((block) => block.type !== "text" || block.text.trim());
-  }
-  /**
-   * Removes a node after its final real content was deleted, while keeping a just-created
-   * empty node available for its first input and preserving nodes with independent semantics.
-   */
-  removeNodeAfterContentDeletion(node, hadMeaningfulContent) {
-    if (!hadMeaningfulContent || node.id === this.document.root.id || !isRemovableEmptyNode(node)) return false;
-    const fallback = deletionSelectionFallback(this.document.root, [node.id]);
-    if (!deleteNodes(this.document.root, [node.id])) return false;
-    this.selectedId = fallback;
-    this.selectedIds.clear();
-    this.selectedIds.add(fallback);
-    if (this.inlineEditingId === node.id) this.inlineEditingId = null;
-    return true;
   }
   /**
    * 如果节点已有子导图则打开；否则创建独立 .mindmap 文件并在父节点与子文件导航元数据中建立双向关系。
@@ -17152,10 +17114,8 @@ var MindMapEditor = class {
     const removed = blocks.find((block) => block.type === "image" && block.id === blockId);
     if (!removed) return;
     const removedSnapshot = JSON.parse(JSON.stringify(removed));
-    const hadMeaningfulContent = this.nodeHasMeaningfulContent(node);
     this.mutate(() => {
       replaceNodeContentBlocks(node, blocks.filter((block) => block.id !== blockId));
-      this.removeNodeAfterContentDeletion(node, hadMeaningfulContent);
     });
     await this.callbacks.onCleanupRemovedImageRemoteAssets(removedSnapshot, this.getDocument());
   }
@@ -19955,8 +19915,6 @@ var GlobalMindMapSearchModal = class extends import_obsidian14.Modal {
    * @param maxResults 该参数用于 constructor 流程中的输入或控制。
    * @param onOpenResult 该参数用于 constructor 流程中的输入或控制。
    * @param onRebuild 该参数用于 constructor 流程中的输入或控制。
-   * @param onReplaceAll 可选的批量替换回调。
-   * @param onDebug 可选的搜索 Modal 生命周期调试事件回调。
    * @param scopePaths 该参数用于 constructor 流程中的输入或控制。
    * @param scopeTitle 该参数用于 constructor 流程中的输入或控制。
    * @param scopeDescription 该参数用于 constructor 流程中的输入或控制。
@@ -20216,15 +20174,15 @@ var GlobalMindMapSearchModal = class extends import_obsidian14.Modal {
    * 调用一次公开 close()，让 Obsidian 自己完成焦点 Scope、history 与关闭动画。
    */
   dismissResultPanel() {
-    var _a2, _b2, _c, _d;
+    var _a2, _b;
     this.shouldRestoreSelection = false;
-    (_c = this.onDebug) == null ? void 0 : _c.call(this, "result-close-request", {
+    (_a2 = this.onDebug) == null ? void 0 : _a2.call(this, "result-close-request", {
       modalConnected: this.modalEl.isConnected,
       containerConnected: this.containerEl.isConnected,
-      activeTag: (_b2 = (_a2 = this.modalEl.ownerDocument.activeElement) == null ? void 0 : _a2.tagName.toLocaleLowerCase()) != null ? _b2 : null
+      activeTag: ((_b = this.modalEl.ownerDocument.activeElement) == null ? void 0 : _b.tagName.toLocaleLowerCase()) ?? null
     });
     this.close();
-    (_d = this.onDebug) == null ? void 0 : _d.call(this, "result-close-return", {
+    (_b = this.onDebug) == null ? void 0 : _b.call(this, "result-close-return", {
       modalConnected: this.modalEl.isConnected,
       containerConnected: this.containerEl.isConnected
     });
@@ -20252,6 +20210,7 @@ var GlobalMindMapSearchModal = class extends import_obsidian14.Modal {
     (_a2 = this.onDebug) == null ? void 0 : _a2.call(this, "result-navigation-start", { filePath: result.filePath, nodeId: result.nodeId });
     await this.onOpenResult(result);
   }
+
 };
 
 // src/ai/client.ts
@@ -21926,9 +21885,7 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
     this.autoUploadFileKeys = /* @__PURE__ */ new WeakMap();
     this.autoUploadFileKeySequence = 0;
     this.searchIndexReady = Promise.resolve();
-    /** 当前已挂载的全局搜索实例；当前导图族搜索不使用该单例。 */
     this.globalSearchModal = null;
-    /** 防止同一次全局快捷键在索引 ready await 期间重复创建两个 Modal。 */
     this.globalSearchLaunchPending = false;
     this.fileExplorerFilterTimer = null;
     this.fileExplorerFilterFullScanPending = false;
@@ -22153,12 +22110,12 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
    * 打开global search，并保持模型、界面和持久化状态的一致性。
    */
   openGlobalSearch() {
-    var _a2, _b2;
-    const mounted = (_b2 = (_a2 = this.globalSearchModal) == null ? void 0 : _a2.isMounted()) != null ? _b2 : false;
+    var _a2;
+    const mounted = (_a2 = this.globalSearchModal) == null ? void 0 : _a2.isMounted();
     if (this.globalSearchLaunchPending || mounted) {
       this.logDebug("global-search-modal", "open-deduplicated", {
         launchPending: this.globalSearchLaunchPending,
-        mounted
+        mounted: mounted != null ? mounted : false
       });
       return;
     }
