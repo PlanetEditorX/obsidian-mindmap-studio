@@ -24365,6 +24365,9 @@ ${uploaded.url}`, 9e3);
     const targetFolder = (0, import_obsidian16.normalizePath)([(_b2 = (_a2 = mindMapFile.parent) == null ? void 0 : _a2.path) != null ? _b2 : "", configuredFolder].filter(Boolean).join("/"));
     let copied = 0;
     const copiedPaths = /* @__PURE__ */ new Map();
+    const reservedPaths = /* @__PURE__ */ new Set();
+    const copyPromises = [];
+    let folderEnsured = false;
     for (const node of flattenNodes(document2.root)) {
       const blocks = nodeContentBlocks(node);
       let changed = false;
@@ -24378,11 +24381,28 @@ ${uploaded.url}`, 9e3);
         if (!(sourceImage instanceof import_obsidian16.TFile) || sourceImage.path === mindMapFile.path) continue;
         let targetPath = copiedPaths.get(sourceImage.path);
         if (!targetPath) {
-          await this.ensureFolderPath(targetFolder);
+          if (!folderEnsured) {
+            await this.ensureFolderPath(targetFolder);
+            folderEnsured = true;
+          }
           const preferredPath = (0, import_obsidian16.normalizePath)(`${targetFolder}/${this.sanitizeFilename(sourceImage.basename)}.${sanitizeFileExtension(sourceImage.name, "png")}`);
-          targetPath = await this.getAvailablePath(preferredPath);
-          await this.app.vault.createBinary(targetPath, await this.app.vault.readBinary(sourceImage));
+          let candidate = preferredPath;
+          let index = 2;
+          const dot = candidate.lastIndexOf(".");
+          const base = dot > candidate.lastIndexOf("/") ? candidate.slice(0, dot) : candidate;
+          const extension = dot > candidate.lastIndexOf("/") ? candidate.slice(dot) : "";
+          while (this.app.vault.getAbstractFileByPath(candidate) || reservedPaths.has(candidate)) {
+            candidate = `${base} ${index}${extension}`;
+            index += 1;
+          }
+          targetPath = candidate;
+          reservedPaths.add(targetPath);
           copiedPaths.set(sourceImage.path, targetPath);
+          const src = sourceImage;
+          const dest = targetPath;
+          copyPromises.push(
+            this.app.vault.readBinary(src).then((data) => this.app.vault.createBinary(dest, data))
+          );
           copied += 1;
         }
         block.source = targetPath;
@@ -24391,6 +24411,7 @@ ${uploaded.url}`, 9e3);
       }
       if (changed) replaceNodeContentBlocks(node, blocks);
     }
+    await Promise.all(copyPromises);
     return copied;
   }
   /**
