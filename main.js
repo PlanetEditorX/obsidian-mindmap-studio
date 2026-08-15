@@ -21648,9 +21648,16 @@ async function recognizeImageWithLocalOcr(blob, options) {
   const runtime = getLocalOcrRuntime();
   if (!runtime) throw new Error("\u672C\u5730 OCR \u4EC5\u652F\u6301 Obsidian \u684C\u9762\u7AEF");
   const executable = options.executable.trim() || "tesseract";
-  const executableName = (_a2 = executable.replace(/\\/g, "/").split("/").filter(Boolean).pop()) == null ? void 0 : _a2.toLowerCase();
+  const normalizedExecutable = executable.replace(/\\/g, "/");
+  const executableName = (_a2 = normalizedExecutable.split("/").filter(Boolean).pop()) == null ? void 0 : _a2.toLowerCase();
+  const isExactCommand = executable === "tesseract" || executable === "tesseract.exe";
+  const isWindowsAbsolute = /^[a-zA-Z]:[\\/]/.test(executable);
+  const isUnixAbsolute = executable.startsWith("/") && !executable.startsWith("//");
   if (executableName !== "tesseract" && executableName !== "tesseract.exe") {
     throw new Error("\u5B89\u5168\u9650\u5236\uFF1A\u4E3A\u9632\u6B62\u4EFB\u610F\u547D\u4EE4\u6267\u884C\uFF0COCR \u5F15\u64CE\u6587\u4EF6\u540D\u5FC5\u987B\u4E3A tesseract \u6216 tesseract.exe");
+  }
+  if (!isExactCommand && !isWindowsAbsolute && !isUnixAbsolute) {
+    throw new Error("\u5B89\u5168\u9650\u5236\uFF1A\u4E3A\u9632\u6B62\u4EFB\u610F\u547D\u4EE4\u6267\u884C\uFF0COCR \u5F15\u64CE\u5FC5\u987B\u4F7F\u7528 tesseract \u57FA\u7840\u547D\u4EE4\u6216\u5B8C\u6574\u7684\u7EDD\u5BF9\u8DEF\u5F84");
   }
   const language = options.language.trim() || "chi_sim+eng";
   const directory = await runtime.mkdtemp(runtime.joinPath(runtime.tmpdir(), "mindmap-studio-ocr-"));

@@ -99,9 +99,16 @@ export async function recognizeImageWithLocalOcr(blob: Blob, options: LocalOcrOp
   const runtime = getLocalOcrRuntime();
   if (!runtime) throw new Error("本地 OCR 仅支持 Obsidian 桌面端");
   const executable = options.executable.trim() || "tesseract";
-  const executableName = executable.replace(/\\/g, "/").split("/").filter(Boolean).pop()?.toLowerCase();
+  const normalizedExecutable = executable.replace(/\\/g, "/");
+  const executableName = normalizedExecutable.split("/").filter(Boolean).pop()?.toLowerCase();
+  const isExactCommand = executable === "tesseract" || executable === "tesseract.exe";
+  const isWindowsAbsolute = /^[a-zA-Z]:[\\/]/.test(executable);
+  const isUnixAbsolute = executable.startsWith("/") && !executable.startsWith("//");
   if (executableName !== "tesseract" && executableName !== "tesseract.exe") {
     throw new Error("安全限制：为防止任意命令执行，OCR 引擎文件名必须为 tesseract 或 tesseract.exe");
+  }
+  if (!isExactCommand && !isWindowsAbsolute && !isUnixAbsolute) {
+    throw new Error("安全限制：为防止任意命令执行，OCR 引擎必须使用 tesseract 基础命令或完整的绝对路径");
   }
   const language = options.language.trim() || "chi_sim+eng";
   const directory = await runtime.mkdtemp(runtime.joinPath(runtime.tmpdir(), "mindmap-studio-ocr-"));
