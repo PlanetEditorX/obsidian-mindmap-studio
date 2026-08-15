@@ -20928,10 +20928,13 @@ function getBrowserDisplay() {
     scaleFactor: window.devicePixelRatio
   });
 }
+function safeStringify(obj) {
+  return JSON.stringify(obj).replace(/</g, "\\u003c").replace(/>/g, "\\u003e");
+}
 function captureEditorHtml(display, mode, imageDataUrl = "screen.png", messageToken = "test-token") {
   var _a2;
-  const bounds = JSON.stringify(display.bounds);
-  const displays = JSON.stringify((((_a2 = display.displays) == null ? void 0 : _a2.length) ? display.displays : [display]).map((item) => {
+  const bounds = safeStringify(display.bounds);
+  const displays = safeStringify((((_a2 = display.displays) == null ? void 0 : _a2.length) ? display.displays : [display]).map((item) => {
     var _a3;
     return {
       id: item.id,
@@ -20942,9 +20945,9 @@ function captureEditorHtml(display, mode, imageDataUrl = "screen.png", messageTo
       active: item.active === true
     };
   }));
-  const captureMode = JSON.stringify(mode);
-  const source = JSON.stringify(imageDataUrl);
-  const token = JSON.stringify(messageToken);
+  const captureMode = safeStringify(mode);
+  const source = safeStringify(imageDataUrl);
+  const token = safeStringify(messageToken);
   const invisibleToolbarClass = mode === "capture-recognize" ? " recognition-invisible" : "";
   const toolbarMarkup = `<div id="toolbar" class="toolbar${invisibleToolbarClass}" aria-hidden="${mode === "capture-recognize" ? "true" : "false"}">
 <button data-tool="shape">\u51E0\u4F55\u56FE\u5F62</button><button data-tool="pen">\u753B\u7B14</button><button data-tool="arrow">\u7BAD\u5934</button><button data-tool="text">\u6587\u5B57</button><button data-tool="number">\u5E8F\u53F7</button><button data-tool="mosaic">\u9A6C\u8D5B\u514B</button><button data-tool="eraser">\u6A61\u76AE\u64E6</button><span class="sep"></span>
