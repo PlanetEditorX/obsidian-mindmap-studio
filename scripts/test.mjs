@@ -1352,6 +1352,10 @@ const command = "example";
   assert.match(globalSearchSource, /mms-global-search-replace-row/, "search modal should include a replace row");
   assert.match(globalSearchSource, /mms-global-search-replace-one/, "search results should include a per-result replace button");
   assert.match(globalSearchSource, /role: "button", tabindex: "0"/, "result rows must not nest a replace button inside another button");
+  assert.match(globalSearchSource, /this\.shouldRestoreSelection = false;[\s\S]*this\.close\(\);/, "search navigation must let Obsidian release its own modal focus scope");
+  assert.doesNotMatch(globalSearchSource, /this\.modalEl\.remove\(\)|container\.remove\(\)|removeSearchLayers/, "search navigation must not manually delete Modal-owned DOM");
+  assert.match(globalSearchSource, /waitForModalFocusRelease\(\): Promise<void>[\s\S]*requestAnimationFrame[\s\S]*requestAnimationFrame/, "search navigation must yield two frames before opening the target view");
+  assert.equal((globalSearchSource.match(/this\.dismissResultPanel\(\);/g) ?? []).length, 1, "search results must close the Modal only once");
   assert.match(globalSearchSource, /古诗 › 唐诗/);
   assert.match(globalSearchSource, /first climb to the top parent/);
   assert.match(globalSearchSource, /version: 2/);
@@ -1503,8 +1507,18 @@ const command = "example";
   const activateInlineEditableSource = editorSource.match(/private activateInlineEditable\(element: HTMLElement, focus = true, protectInitialFocus = false\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
   assert.match(
     makeInlineEditableSource,
-    /element\.addEventListener\("pointerdown"[\s\S]*this\.activateInlineEditable\(element, false\)/,
-    "pointer activation must delegate to the shared inline-edit path"
+    /element\.addEventListener\("pointerdown"[\s\S]*this\.claimInlineEditInteraction\(node\.id, blockId\)[\s\S]*this\.activateInlineEditableFromPointer\(element\)/,
+    "pointer activation must claim navigation ownership before entering the shared inline-edit path"
+  );
+  assert.match(
+    editorSource,
+    /private claimInlineEditInteraction\(nodeId: string, blockId\?: string\): void[\s\S]*this\.cancelReadingLocationRestore\(\)[\s\S]*this\.cancelArticleWindowExpansion\(\)[\s\S]*this\.inlineEditingId = nodeId/,
+    "explicit text editing must cancel search-navigation restore work before delayed layout can reclaim the article"
+  );
+  assert.match(
+    editorSource,
+    /private activateInlineEditableFromPointer\(element: HTMLElement\): void[\s\S]*this\.activateInlineEditable\(element, false\)[\s\S]*this\.currentMode === "article"[\s\S]*mmsProtectInitialFocus[\s\S]*120/,
+    "pointer editing must protect only the initial host focus handoff without forcing the caret to the end"
   );
   assert.match(
     activateInlineEditableSource,

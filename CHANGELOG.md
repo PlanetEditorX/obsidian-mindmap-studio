@@ -1,5 +1,19 @@
 # 更新记录
 
+## 1.45.11
+
+- 根据 1.45.10 的 Windows / Obsidian 1.12.7 真实日志确认最终根因：搜索前文章行内编辑可稳定持焦，搜索结果跳转后同一 `contenteditable` 会在获得焦点约 6–8 ms 后持续 `blur(null)`；这不是文章重绘或普通失焦，而是搜索 Modal 关闭后遗留的宿主焦点约束。
+- 修正 1.45.3 的搜索弹窗兜底关闭：结果打开时仍同步隐藏 `modalEl`、`containerEl` 与实际 `.modal-container`，但不再手工 `remove()` Obsidian 管理的 Modal DOM，也不在导航完成后第二次 `close()`。
+- 关闭 `shouldRestoreSelection`，只调用一次 `Modal.close()`，并等待两个动画帧让 Obsidian 完成 Modal 栈与焦点 Scope 释放后再启动文件/节点导航；`.mms-global-search-container-closing` 继续保证主题残留空壳不可见且不接收指针。
+- 更新全局搜索关闭契约，明确禁止绕过宿主 Modal 生命周期；保留 1.45.10 的搜索定位接管和文章指针编辑保护作为独立兼容层。
+
+## 1.45.10
+
+- 根据真实 1.45.9 调试日志修正此前根因判断：问题发生在全局搜索结果跳转后的**直接单击文字编辑**，并非仅由右键菜单关闭回收焦点触发。
+- 用户通过指针开始文章行内编辑时现在先调用 `claimInlineEditInteraction()`，立即取消仍存活的语义位置恢复事务和文章窗口边缘扩展，清除待处理文章定位，并提前建立 `inlineEditingId` 保护，避免迟到的搜索定位/上下文刷新替换刚创建的 `contenteditable`。
+- 新增 `activateInlineEditableFromPointer()`：保留浏览器按单击位置放置光标，只在最初 120 ms 保护宿主焦点交接；同时增加 `inline-edit-claim/focus/blur/refocus` 调试事件，便于真实 Obsidian 继续定位。右键菜单保护、双击/键盘编辑和正常失焦提交语义保持兼容。
+- 新增搜索导航接管专项契约；本地单元测试增至 355 项，其中 345 通过，10 项仅因上传依赖缺少 Linux esbuild 二进制失败。
+
 ## 1.45.8
 
 - 修复 1.45.7 在 GitHub Actions `test:regression` 中破坏完整节点编辑契约的问题：`editSelected(initialBlockId?)` 恢复原签名，不再承载文章右键菜单专用焦点参数。

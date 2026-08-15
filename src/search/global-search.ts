@@ -1062,16 +1062,16 @@ export class GlobalMindMapSearchModal extends Modal {
   }
 
   /**
-   * 立即隐藏并彻底移除搜索弹窗，避免跨文件视图切换后残留空白 Modal。
+   * 同步隐藏搜索弹窗并只通过 Obsidian 的 Modal.close() 释放宿主模态状态。
    *
-   * 某些 Obsidian 版本/主题下，Modal.close() 已触发 onClose()（因此内容被清空），
-   * 但外层容器仍可能短暂甚至持续留在 DOM。这里不只依赖单一 container 引用：
-   * 先同步隐藏 modalEl、containerEl 和实际 .modal-container，再执行 close() 生命周期，
-   * 然后按搜索弹窗/关闭容器专用 class 做同步与短延迟兜底清理。全局搜索和导图族
-   * 搜索共用该类，因此两种入口都会走同一套关闭逻辑。
+   * 1.45.3 为解决“内容已清空但空白 Modal 仍覆盖页面”曾在 close() 之后直接
+   * remove() modal/container，并在导航结束后再次 close。真实 Windows/Obsidian 1.12.7
+   * 日志证明这会留下宿主焦点约束：搜索后的正文 contenteditable 每次 focus 后约
+   * 6–8 ms 都会 blur(null)。因此这里只负责同步视觉隐藏，DOM 和 focus/scope 栈必须
+   * 完整交还给 Modal.close() 自己清理；即使主题留下外壳，closing class 也会让它
+   * 不可见且不接收指针。
    */
   private dismissResultPanel(): void {
-    const ownerDocument = this.modalEl.ownerDocument;
     const containers = new Set<HTMLElement>();
     containers.add(this.containerEl);
     const closestContainer = this.modalEl.closest<HTMLElement>(".modal-container");
@@ -1083,16 +1083,6 @@ export class GlobalMindMapSearchModal extends Modal {
       element.style.setProperty("visibility", "hidden", "important");
       element.style.setProperty("pointer-events", "none", "important");
     };
-    const removeSearchLayers = (): void => {
-      ownerDocument
-        .querySelectorAll<HTMLElement>(".mms-global-search-modal, .mms-global-search-container-closing")
-        .forEach((element) => {
-          const container = element.matches(".modal-container")
-            ? element
-            : element.closest<HTMLElement>(".modal-container");
-          (container ?? element).remove();
-        });
-    };
 
     hideImmediately(this.modalEl);
     for (const container of containers) {
@@ -1100,33 +1090,29 @@ export class GlobalMindMapSearchModal extends Modal {
       hideImmediately(container);
     }
 
-    // Keep Obsidian's own close lifecycle so onClose() and modal bookkeeping still run.
+    // Navigation should not restore the search input selection/focus after the target view opens.
+    this.shouldRestoreSelection = false;
+    // Never manually remove Modal-owned DOM and never call close() twice. Obsidian owns
+    // the modal stack/focus scope lifecycle; bypassing it can leave the workspace unable
+    // to retain focus even though the overlay itself is already hidden.
     this.close();
-
-    // Remove every captured node even if close() left it attached.
-    this.modalEl.remove();
-    for (const container of containers) container.remove();
-    removeSearchLayers();
-
-    // Some host builds/themes finish modal stack bookkeeping after close() returns.
-    // The closing class keeps any reattached container invisible; these idempotent
-    // sweeps then remove it from the modal's own document without delaying navigation.
-    const ownerWindow = ownerDocument.defaultView;
-    ownerWindow?.setTimeout(removeSearchLayers, 0);
-    ownerWindow?.setTimeout(removeSearchLayers, 120);
   }
 
-  /** Opens a result after dismissing the search modal so view loading cannot keep it visible. */
+  /** Waits until the result-click event has unwound and Modal.close() has released host focus scope. */
+  private waitForModalFocusRelease(): Promise<void> {
+    const ownerWindow = this.modalEl.ownerDocument.defaultView;
+    if (!ownerWindow) return Promise.resolve();
+    return new Promise((resolve) => {
+      ownerWindow.requestAnimationFrame(() => ownerWindow.requestAnimationFrame(() => resolve()));
+    });
+  }
+
+  /** Opens a result only after the search modal has fully yielded its host focus scope. */
   private async openResult(result: MindMapSearchResult): Promise<void> {
     if (this.openingResult) return;
     this.openingResult = true;
-    // Navigation can wait for the target view to finish loading. Dismiss the
-    // modal first so that a pending view transition cannot leave it visible.
     this.dismissResultPanel();
-    try {
-      await this.onOpenResult(result);
-    } finally {
-      this.dismissResultPanel();
-    }
+    await this.waitForModalFocusRelease();
+    await this.onOpenResult(result);
   }
 }

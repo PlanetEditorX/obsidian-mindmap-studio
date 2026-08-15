@@ -53,21 +53,20 @@ test("global and map-family search entries share the same modal close path", () 
   assert.equal((mainSource.match(/new GlobalMindMapSearchModal\(/g) ?? []).length, 2);
 });
 
-test("opening either global or map-family results forcibly removes every surviving search modal before navigation", () => {
+test("opening either global or map-family results hides the modal but lets Obsidian own focus-scope teardown", () => {
   assert.match(source, /private openingResult = false/);
   assert.match(source, /private dismissResultPanel\(\): void/);
   assert.match(source, /containers\.add\(this\.containerEl\)/);
   assert.match(source, /this\.modalEl\.closest<HTMLElement>\("\.modal-container"\)/);
   assert.match(source, /element\.style\.setProperty\("display", "none", "important"\)/);
   assert.match(source, /element\.style\.setProperty\("visibility", "hidden", "important"\)/);
-  assert.match(source, /hideImmediately\(this\.modalEl\)/);
-  assert.match(source, /this\.close\(\);[\s\S]*this\.modalEl\.remove\(\);[\s\S]*for \(const container of containers\) container\.remove\(\);/);
-  assert.match(source, /ownerDocument[\s\S]*querySelectorAll<HTMLElement>\("\.mms-global-search-modal, \.mms-global-search-container-closing"\)/);
   assert.match(source, /container\.addClass\("mms-global-search-container-closing"\)/);
-  assert.match(source, /ownerWindow\?\.setTimeout\(removeSearchLayers, 0\)/);
-  assert.match(source, /ownerWindow\?\.setTimeout\(removeSearchLayers, 120\)/);
+  assert.match(source, /this\.shouldRestoreSelection = false;[\s\S]*this\.close\(\);/);
+  assert.doesNotMatch(source, /this\.modalEl\.remove\(\)|container\.remove\(\)|removeSearchLayers/);
+  assert.match(source, /private waitForModalFocusRelease\(\): Promise<void>[\s\S]*requestAnimationFrame\(\(\) => ownerWindow\.requestAnimationFrame/);
+  assert.match(source, /this\.dismissResultPanel\(\);[\s\S]*await this\.waitForModalFocusRelease\(\);[\s\S]*await this\.onOpenResult\(result\);/);
+  assert.equal((source.match(/this\.dismissResultPanel\(\);/g) ?? []).length, 1, "a result must close the Modal only once");
   assert.match(styles, /\.mms-global-search-container-closing \{[\s\S]*display: none !important;[\s\S]*pointer-events: none !important/);
-  assert.match(source, /this\.dismissResultPanel\(\);[\s\S]*await this\.onOpenResult\(result\);/);
-  assert.match(bundle, /querySelectorAll\("\.mms-global-search-modal, \.mms-global-search-container-closing"\)/);
-  assert.match(bundle, /setTimeout\(removeSearchLayers, 120\)/);
+  assert.match(bundle, /shouldRestoreSelection = false/);
+  assert.doesNotMatch(bundle, /setTimeout\(removeSearchLayers|querySelectorAll\("\.mms-global-search-modal, \.mms-global-search-container-closing"\)/);
 });

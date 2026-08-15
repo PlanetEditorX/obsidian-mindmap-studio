@@ -59,9 +59,9 @@ test("article inline editing updates the exact text block instead of the first b
   assert.match(updateNodeTextBlock, /exactTextBlock \?\? \([\s\S]*blockId && !node\.content\?\.length[\s\S]*blocks\.find/);
   assert.match(updateNodeTextBlock, /replaceNodeContentBlocks\(node, blocks\.filter\(\(block\) => block\.type !== "text" \|\| block\.text\.trim\(\)\)\)/);
   assert.match(rendererSource, /paragraph\.dataset\.blockId = block\.id/);
-  assert.match(makeInlineEditable, /element\.addEventListener\("pointerdown"[\s\S]*this\.inlineEditingId = node\.id[\s\S]*this\.activateInlineEditable\(element, false\)/);
-  assert.match(makeInlineEditable, /element\.addEventListener\("focus"[\s\S]*this\.inlineEditingId = node\.id/);
-  assert.match(makeInlineEditable, /element\.dataset\.mmsProtectInitialFocus === "true"[\s\S]*window\.requestAnimationFrame\(\(\) => this\.activateInlineEditable\(element\)\)/);
+  assert.match(makeInlineEditable, /element\.addEventListener\("pointerdown"[\s\S]*this\.claimInlineEditInteraction\(node\.id, blockId\)[\s\S]*this\.activateInlineEditableFromPointer\(element\)/);
+  assert.match(makeInlineEditable, /element\.addEventListener\("focus"[\s\S]*this\.claimInlineEditInteraction\(node\.id, blockId\)/);
+  assert.match(makeInlineEditable, /element\.dataset\.mmsProtectInitialFocus === "true"[\s\S]*element\.focus\(\{ preventScroll: true \}\)/);
   assert.match(makeInlineEditable, /if \(this\.inlineEditingId === node\.id\) this\.inlineEditingId = null/);
 });
 
@@ -85,7 +85,7 @@ test("Markdown import persists stable text-block IDs before article editing", ()
 
 test("empty article document title keeps a clickable inline-edit target after blur", () => {
   assert.match(rendererSource, /options\.makeInlineEditable\(titleText, options\.document\.root, "文章标题", rootTextBlock\?\.id\)/);
-  assert.match(editorSource, /element\.addEventListener\("pointerdown"[\s\S]*this\.activateInlineEditable\(element, false\)/);
+  assert.match(editorSource, /element\.addEventListener\("pointerdown"[\s\S]*this\.activateInlineEditableFromPointer\(element\)/);
   assert.match(styles, /\.mms-article-document-title-text:empty::before/);
   assert.match(styles, /\.mms-article-document-title-text\s*\{[\s\S]*display:\s*inline-block[\s\S]*min-width:\s*4em[\s\S]*min-height:\s*1\.2em/);
 });

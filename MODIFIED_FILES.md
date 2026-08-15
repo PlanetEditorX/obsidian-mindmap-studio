@@ -1,5 +1,24 @@
 # Modified Files
 
+## 1.45.11 搜索 Modal 焦点 Scope 生命周期修复
+
+- `src/search/global-search.ts`：修正结果打开时的 Modal 关闭边界；同步隐藏搜索 UI 后设置 `shouldRestoreSelection=false`，只调用一次 `Modal.close()`，不再手工 `remove()` `modalEl` / `containerEl` / `.modal-container`，也不再在导航结束后二次关闭。新增 `waitForModalFocusRelease()`，等待两个动画帧让 Obsidian 完成 Modal 栈与焦点 Scope 释放后再导航。
+- `tests/global-search-contract.test.mjs`、`scripts/test.mjs`：更新搜索关闭契约，明确禁止绕过宿主 Modal 生命周期，并验证源码/安装 bundle 均不存在旧 `removeSearchLayers` 强制删除逻辑。
+- `README.md`、`docs/ARCHITECTURE.md`、`docs/SPECIAL_FEATURES.md`、`docs/TESTING.md`、`CHANGELOG.md`、`docs/FUNCTION_REFERENCE.md`：同步 1.45.10 真实日志确认的最终根因、单次关闭与焦点 Scope 释放边界、测试和手工复测步骤。
+- `package.json`、`package-lock.json`、`manifest.json`、`versions.json`：版本同步为 1.45.11；`update.json` 已写入本轮安装包 SHA-256 `ec6b1b217ccb11f84c2b074a1de78e847014ddf528c24cc94a636da245152425`。
+- `main.js`：由于上传依赖缺少 Linux esbuild 二进制，按 TypeScript 源码等价同步搜索 Modal 关闭逻辑，并通过语法、类型、专项 bundle 契约校验。
+- `TEST_RESULTS.md`、Codex 交接：记录 1.45.10 Windows/Obsidian 1.12.7 焦点风暴日志、1.45.11 验证基线和真实桌面端待验证项。
+
+## 1.45.10 搜索跳转后直接单击编辑事务接管
+
+- `src/editor/editor.ts`：`makeInlineEditable()` 的指针入口新增 `claimInlineEditInteraction()`，在进入编辑前取消语义位置恢复和文章窗口扩展、清除待处理文章定位并建立当前行内编辑保护；新增 `activateInlineEditableFromPointer()`，保留点击位置光标并仅保护最初 120 ms 的宿主焦点交接。
+- `src/editor/editor.ts`：新增 `inline-edit-claim`、`inline-edit-focus`、`inline-edit-blur`、`inline-edit-refocus` 调试事件，记录连接状态、初始焦点保护和 `blur.relatedTarget`，用于真实 Obsidian 复现闭环。
+- `tests/article-context-edit.test.mjs`、`tests/article-content-block.test.mjs`、`tests/reading-editor-contract.test.mjs`、`scripts/test.mjs`：新增/更新直接指针编辑必须接管搜索导航事务的源码与综合回归契约；单元测试总数增至 355。
+- `README.md`、`docs/ARCHITECTURE.md`、`docs/SPECIAL_FEATURES.md`、`docs/TESTING.md`、`CHANGELOG.md`、`docs/FUNCTION_REFERENCE.md`：同步真实日志根因、编辑事务优先级、焦点诊断事件与手工复测步骤。
+- `package.json`、`package-lock.json`、`manifest.json`、`versions.json`：版本同步为 1.45.10；`update.json` 已写入安装包 SHA-256 `8fc69cdccc651acabed54dc95899453c311e58e8830cd9566262faad69feae47`。
+- `main.js`：由于上传依赖缺少 Linux esbuild 二进制，按 TypeScript 源码等价同步本轮运行逻辑，并执行语法、类型与 bundle 契约校验。
+- `TEST_RESULTS.md`、Codex 交接：记录 1.45.9 真实调试日志、1.45.10 验证基线、待真实 Obsidian 冒烟项和本轮交付包。
+
 ## 1.45.8 文章菜单焦点保护契约收口
 
 - `src/editor/editor.ts`：恢复 `editSelected(initialBlockId?)` 原签名，新增 `editSelectedFromContextMenu()`；只有文章右键菜单调用 `editSelectedArticleContent(true)`，导图/大纲完整编辑路径不再携带焦点保护状态。

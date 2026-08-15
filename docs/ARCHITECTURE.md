@@ -224,7 +224,7 @@ Obsidian 读取文本
 
 搜索结果列表只负责展示，允许由 `globalSearchMaxResults` 限制 20–500 条；批量替换不得复用这份截断数组。`GlobalMindMapSearchModal` 在执行“全部替换”时用 `Number.MAX_SAFE_INTEGER` 重新查询当前全局或导图族范围，把完整结果传给插件服务层。每个文件写回并校验后立即调用 `MindMapSearchIndex.refreshFile()` 更新索引，再刷新已打开视图，避免用户马上重搜时看到旧结果。单条替换继续复用同一持久化函数。
 
-全局搜索与当前导图族搜索共用 `GlobalMindMapSearchModal`。打开结果时必须在导航 Promise 之前同步退出搜索 UI：同时隐藏 `modalEl`、Obsidian 暴露的 `containerEl` 与从 DOM 向上找到的 `.modal-container`，调用 `Modal.close()` 保留生命周期清理，再移除仍存活的搜索 modal/container；最后通过 `.mms-global-search-modal` 做一次页面级兜底扫描，防止视图切换期间旧容器引用重新残留。
+全局搜索与当前导图族搜索共用 `GlobalMindMapSearchModal`。打开结果时必须在导航 Promise 之前同步退出搜索 UI：同时隐藏 `modalEl`、Obsidian 暴露的 `containerEl` 与从 DOM 向上找到的 `.modal-container`，但 **不得** 手工 `remove()` 这些由 Obsidian Modal 管理的 DOM，也不得二次调用 `close()`。关闭 `shouldRestoreSelection` 后只调用一次 `Modal.close()`，再等待两个动画帧让宿主完成 Modal 栈与焦点 Scope 清理后才开始导航；`.mms-global-search-container-closing` 仅负责把可能残留的空壳视觉隐藏并禁用指针。这样既避免空白弹窗遮挡，也不会留下搜索后的持久焦点约束。
 
 ### 运行调试记录
 
@@ -345,7 +345,7 @@ mindmap-search-index.json
 ```
 
 `Ctrl/Cmd+F` 搜索当前导图族，旧版 `Ctrl/Cmd+Alt+F` 继续兼容；配置项默认使用 `Ctrl/Cmd+Shift+F` 打开整个仓库的导图搜索。当前导图族快捷键由插件窗口捕获层在活动视图为 `MindMapStudioView` 时优先接管，因此不依赖 Obsidian 的“搜索当前文件”命令绑定；弹窗内按键不会被再次截获。全局与导图族搜索都只索引和显示节点文字，不匹配或展示子导图路径、备注、标签、链接、代码、表格和图片元数据。编辑器根节点仍保留同样的捕获阶段回退，并使用 `KeyboardEvent.code` 兼容非英文键盘布局。当前导图族搜索会在打开搜索时主动刷新父子链，不要求重新创建子导图。
-搜索结果导航先同步隐藏并移除当前搜索 `modal-container`，再等待跨文件视图切换和节点聚焦 Promise，避免 `Modal.onClose()` 已清空内容但外层弹窗仍滞留在前台。搜索落点进入文章模式后，右键菜单“编辑当前内容/添加正文”统一经过 `editSelectedFromContextMenu()`：文章模式只在该边界调用 `editSelectedArticleContent(true)` 并把保护标记传到 `activateInlineEditable()`；通用 `editSelected(initialBlockId?)` 保持完整节点编辑契约，不承载菜单时序状态。保护只覆盖 Obsidian 菜单关闭阶段的短暂焦点回收，随后恢复普通 `blur` 提交语义，避免扩散到双击、键盘编辑或导图/大纲完整编辑路径。
+搜索结果导航先同步隐藏当前搜索 `modal-container`，随后只由 `Modal.close()` 释放宿主拥有的 DOM/Modal 栈/焦点 Scope，并等待两个动画帧后再启动跨文件视图切换和节点聚焦 Promise。禁止在 `close()` 后手工删除 Modal DOM 或在导航完成后再次 `close()`；真实 Windows/Obsidian 1.12.7 日志证明这会让搜索后的文章 `contenteditable` 持续出现 `focus → blur(null)`。文章语义定位为了吸收图片、字体等迟到布局会短时保留 `ResizeObserver`、定时器与动画帧；因此搜索落点之后，**用户开始编辑必须高于仍存活的导航恢复事务**。`makeInlineEditable()` 的指针入口先调用 `claimInlineEditInteraction()`：取消 `activeReadingRestore` 与文章窗口边缘扩展、清除待处理文章定位，并在任何可能的延迟刷新之前建立 `inlineEditingId`/当前内容块保护；随后 `activateInlineEditableFromPointer()` 只打开 `contenteditable` 而不主动移动光标，让浏览器默认动作把光标落到实际点击位置。该指针入口仅在最初 120 ms 设置 `mmsProtectInitialFocus`，若 Obsidian 在同一交互中回收焦点则用 `focus({ preventScroll: true })` 恢复；保护期后普通 `blur` 仍提交。编辑接管、focus、blur 与恢复焦点分别记录 `inline-edit-claim`、`inline-edit-focus`、`inline-edit-blur`、`inline-edit-refocus` 调试事件。右键菜单“编辑当前内容/添加正文”仍统一经过 `editSelectedFromContextMenu()`，文章模式只在该边界调用 `editSelectedArticleContent(true)`；通用 `editSelected(initialBlockId?)` 保持完整节点编辑契约，不承载菜单时序状态。
 
 ## 10. 静态渲染与导出
 

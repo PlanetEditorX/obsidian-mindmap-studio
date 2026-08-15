@@ -3552,19 +3552,24 @@ export class MindMapEditor {
     let toolbar: SelectionFormatToolbarHandle | null = null;
     element.addEventListener("pointerdown", () => {
       if (this.readOnly || element.contentEditable === "true" || element.dataset.mmsExplicitEditOnly === "true") return;
-      this.inlineEditingId = node.id;
-      this.activeArticleBlock = this.currentMode === "article" && blockId ? { nodeId: node.id, blockId } : null;
+      this.claimInlineEditInteraction(node.id, blockId);
       this.selectNode(node.id);
-      this.activateInlineEditable(element, false);
+      this.activateInlineEditableFromPointer(element);
     });
     element.addEventListener("focus", () => {
       if (this.readOnly) return;
-      this.inlineEditingId = node.id;
-      this.activeArticleBlock = this.currentMode === "article" && blockId ? { nodeId: node.id, blockId } : null;
+      this.claimInlineEditInteraction(node.id, blockId);
       this.applyInlineEditingAccessibility(element);
       original = currentValue();
       renderRichTextRuns(element, original.richText, original.text, false);
       element.addClass("is-inline-editing");
+      this.callbacks.onDebugLog("editor", "inline-edit-focus", {
+        nodeId: node.id,
+        blockId,
+        mode: this.currentMode,
+        connected: element.isConnected,
+        protectedInitialFocus: element.dataset.mmsProtectInitialFocus === "true"
+      });
       toolbar ??= attachSelectionFormatToolbar({
         editor: element,
         shortcuts: this.options.richTextShortcuts,
@@ -3597,8 +3602,27 @@ export class MindMapEditor {
     element.addEventListener("blur", (event) => {
       if (this.readOnly) return;
       if (toolbar?.contains(event.relatedTarget)) return;
+      const relatedTarget = event.relatedTarget instanceof HTMLElement
+        ? {
+          tag: event.relatedTarget.tagName.toLowerCase(),
+          classes: Array.from(event.relatedTarget.classList).slice(0, 8),
+          editable: event.relatedTarget.isContentEditable
+        }
+        : null;
+      this.callbacks.onDebugLog("editor", "inline-edit-blur", {
+        nodeId: node.id,
+        blockId,
+        mode: this.currentMode,
+        connected: element.isConnected,
+        protectedInitialFocus: element.dataset.mmsProtectInitialFocus === "true",
+        relatedTarget
+      });
       if (element.dataset.mmsProtectInitialFocus === "true") {
-        window.requestAnimationFrame(() => this.activateInlineEditable(element));
+        window.requestAnimationFrame(() => {
+          if (!element.isConnected || element.dataset.mmsProtectInitialFocus !== "true") return;
+          element.focus({ preventScroll: true });
+          this.callbacks.onDebugLog("editor", "inline-edit-refocus", { nodeId: node.id, blockId, mode: this.currentMode });
+        });
         return;
       }
       element.removeClass("is-inline-editing");
@@ -3632,6 +3656,59 @@ export class MindMapEditor {
       const value = currentValue();
       renderRichTextRuns(element, value.richText, value.text);
     });
+  }
+
+  /**
+   * Gives an explicit user edit precedence over a still-running semantic article navigation.
+   *
+   * Search jumps may keep a ResizeObserver-backed restore transaction alive for late image/font
+   * layout. Once the user starts editing, that transaction and any queued edge expansion must no
+   * longer move or replace the article window. The live contenteditable also becomes the guard
+   * used by setOptions() to avoid rebuilding the article during delayed context refreshes.
+   */
+  private claimInlineEditInteraction(nodeId: string, blockId?: string): void {
+    const activeRestoreTarget = this.activeReadingRestore?.resolved.nodeId ?? null;
+    const pendingArticleTarget = this.pendingArticleFocusLocation?.nodeIds[0] ?? null;
+    const hadWindowExpansion = this.articleWindowExpansionFrame !== null;
+    this.cancelReadingLocationRestore();
+    this.cancelArticleWindowExpansion();
+    if (this.currentMode === "article") {
+      this.pendingArticleFocusLocation = null;
+      this.pendingLocationNavigationKey = null;
+    }
+    this.inlineEditingId = nodeId;
+    this.activeArticleBlock = this.currentMode === "article" && blockId ? { nodeId, blockId } : null;
+    this.callbacks.onDebugLog("editor", "inline-edit-claim", {
+      nodeId,
+      blockId,
+      mode: this.currentMode,
+      activeRestoreTarget,
+      pendingArticleTarget,
+      hadWindowExpansion
+    });
+  }
+
+  /**
+   * Activates a line from the user's pointer without stealing the browser's click-position caret.
+   *
+   * The pointer's native default action chooses the caret location. A short focus handoff guard
+   * only covers host/modal cleanup occurring in the same interaction; intentional later blur keeps
+   * the normal commit path.
+   */
+  private activateInlineEditableFromPointer(element: HTMLElement): void {
+    this.activateInlineEditable(element, false);
+    const protectInitialFocus = this.currentMode === "article";
+    if (protectInitialFocus) element.dataset.mmsProtectInitialFocus = "true";
+    this.callbacks.onDebugLog("editor", "inline-edit-pointer-activate", {
+      mode: this.currentMode,
+      connected: element.isConnected,
+      protectInitialFocus,
+      activeRestoreTarget: this.activeReadingRestore?.resolved.nodeId ?? null
+    });
+    if (!protectInitialFocus) return;
+    window.setTimeout(() => {
+      if (element.dataset.mmsProtectInitialFocus === "true") delete element.dataset.mmsProtectInitialFocus;
+    }, 120);
   }
 
   /** Adds textbox semantics only while an inline line is actively editable. */

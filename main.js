@@ -13355,19 +13355,24 @@ var MindMapEditor = class {
     let toolbar = null;
     element.addEventListener("pointerdown", () => {
       if (this.readOnly || element.contentEditable === "true" || element.dataset.mmsExplicitEditOnly === "true") return;
-      this.inlineEditingId = node.id;
-      this.activeArticleBlock = this.currentMode === "article" && blockId ? { nodeId: node.id, blockId } : null;
+      this.claimInlineEditInteraction(node.id, blockId);
       this.selectNode(node.id);
-      this.activateInlineEditable(element, false);
+      this.activateInlineEditableFromPointer(element);
     });
     element.addEventListener("focus", () => {
       if (this.readOnly) return;
-      this.inlineEditingId = node.id;
-      this.activeArticleBlock = this.currentMode === "article" && blockId ? { nodeId: node.id, blockId } : null;
+      this.claimInlineEditInteraction(node.id, blockId);
       this.applyInlineEditingAccessibility(element);
       original = currentValue();
       renderRichTextRuns(element, original.richText, original.text, false);
       element.addClass("is-inline-editing");
+      this.callbacks.onDebugLog("editor", "inline-edit-focus", {
+        nodeId: node.id,
+        blockId,
+        mode: this.currentMode,
+        connected: element.isConnected,
+        protectedInitialFocus: element.dataset.mmsProtectInitialFocus === "true"
+      });
       toolbar != null ? toolbar : toolbar = attachSelectionFormatToolbar({
         editor: element,
         shortcuts: this.options.richTextShortcuts,
@@ -13402,8 +13407,25 @@ var MindMapEditor = class {
       var _a3;
       if (this.readOnly) return;
       if (toolbar == null ? void 0 : toolbar.contains(event.relatedTarget)) return;
+      const relatedTarget = event.relatedTarget instanceof HTMLElement ? {
+        tag: event.relatedTarget.tagName.toLowerCase(),
+        classes: Array.from(event.relatedTarget.classList).slice(0, 8),
+        editable: event.relatedTarget.isContentEditable
+      } : null;
+      this.callbacks.onDebugLog("editor", "inline-edit-blur", {
+        nodeId: node.id,
+        blockId,
+        mode: this.currentMode,
+        connected: element.isConnected,
+        protectedInitialFocus: element.dataset.mmsProtectInitialFocus === "true",
+        relatedTarget
+      });
       if (element.dataset.mmsProtectInitialFocus === "true") {
-        window.requestAnimationFrame(() => this.activateInlineEditable(element));
+        window.requestAnimationFrame(() => {
+          if (!element.isConnected || element.dataset.mmsProtectInitialFocus !== "true") return;
+          element.focus({ preventScroll: true });
+          this.callbacks.onDebugLog("editor", "inline-edit-refocus", { nodeId: node.id, blockId, mode: this.currentMode });
+        });
         return;
       }
       element.removeClass("is-inline-editing");
@@ -13433,6 +13455,59 @@ var MindMapEditor = class {
       const value = currentValue();
       renderRichTextRuns(element, value.richText, value.text);
     });
+  }
+  /**
+   * Gives an explicit user edit precedence over a still-running semantic article navigation.
+   *
+   * Search jumps may keep a ResizeObserver-backed restore transaction alive for late image/font
+   * layout. Once the user starts editing, that transaction and any queued edge expansion must no
+   * longer move or replace the article window. The live contenteditable also becomes the guard
+   * used by setOptions() to avoid rebuilding the article during delayed context refreshes.
+   */
+  claimInlineEditInteraction(nodeId, blockId) {
+    var _a2, _b2, _c;
+    const activeRestoreTarget = (_b2 = (_a2 = this.activeReadingRestore) == null ? void 0 : _a2.resolved.nodeId) != null ? _b2 : null;
+    const pendingArticleTarget = (_c = this.pendingArticleFocusLocation) == null ? void 0 : _c.nodeIds[0];
+    const hadWindowExpansion = this.articleWindowExpansionFrame !== null;
+    this.cancelReadingLocationRestore();
+    this.cancelArticleWindowExpansion();
+    if (this.currentMode === "article") {
+      this.pendingArticleFocusLocation = null;
+      this.pendingLocationNavigationKey = null;
+    }
+    this.inlineEditingId = nodeId;
+    this.activeArticleBlock = this.currentMode === "article" && blockId ? { nodeId, blockId } : null;
+    this.callbacks.onDebugLog("editor", "inline-edit-claim", {
+      nodeId,
+      blockId,
+      mode: this.currentMode,
+      activeRestoreTarget,
+      pendingArticleTarget: pendingArticleTarget != null ? pendingArticleTarget : null,
+      hadWindowExpansion
+    });
+  }
+  /**
+   * Activates a line from the user's pointer without stealing the browser's click-position caret.
+   *
+   * The pointer's native default action chooses the caret location. A short focus handoff guard
+   * only covers host/modal cleanup occurring in the same interaction; intentional later blur keeps
+   * the normal commit path.
+   */
+  activateInlineEditableFromPointer(element) {
+    var _a2, _b2;
+    this.activateInlineEditable(element, false);
+    const protectInitialFocus = this.currentMode === "article";
+    if (protectInitialFocus) element.dataset.mmsProtectInitialFocus = "true";
+    this.callbacks.onDebugLog("editor", "inline-edit-pointer-activate", {
+      mode: this.currentMode,
+      connected: element.isConnected,
+      protectInitialFocus,
+      activeRestoreTarget: (_b2 = (_a2 = this.activeReadingRestore) == null ? void 0 : _a2.resolved.nodeId) != null ? _b2 : null
+    });
+    if (!protectInitialFocus) return;
+    window.setTimeout(() => {
+      if (element.dataset.mmsProtectInitialFocus === "true") delete element.dataset.mmsProtectInitialFocus;
+    }, 120);
   }
   /** Adds textbox semantics only while an inline line is actively editable. */
   applyInlineEditingAccessibility(element) {
@@ -20120,16 +20195,16 @@ var GlobalMindMapSearchModal = class extends import_obsidian14.Modal {
     (_a2 = buttons[index]) == null ? void 0 : _a2.scrollIntoView({ block: "nearest" });
   }
   /**
-   * 立即隐藏并彻底移除搜索弹窗，避免跨文件视图切换后残留空白 Modal。
+   * 同步隐藏搜索弹窗并只通过 Obsidian 的 Modal.close() 释放宿主模态状态。
    *
-   * 某些 Obsidian 版本/主题下，Modal.close() 已触发 onClose()（因此内容被清空），
-   * 但外层容器仍可能短暂甚至持续留在 DOM。这里不只依赖单一 container 引用：
-   * 先同步隐藏 modalEl、containerEl 和实际 .modal-container，再执行 close() 生命周期，
-   * 然后按搜索弹窗/关闭容器专用 class 做同步与短延迟兜底清理。全局搜索和导图族
-   * 搜索共用该类，因此两种入口都会走同一套关闭逻辑。
+   * 1.45.3 为解决“内容已清空但空白 Modal 仍覆盖页面”曾在 close() 之后直接
+   * remove() modal/container，并在导航结束后再次 close。真实 Windows/Obsidian 1.12.7
+   * 日志证明这会留下宿主焦点约束：搜索后的正文 contenteditable 每次 focus 后约
+   * 6–8 ms 都会 blur(null)。因此这里只负责同步视觉隐藏，DOM 和 focus/scope 栈必须
+   * 完整交还给 Modal.close() 自己清理；即使主题留下外壳，closing class 也会让它
+   * 不可见且不接收指针。
    */
   dismissResultPanel() {
-    const ownerDocument = this.modalEl.ownerDocument;
     const containers = /* @__PURE__ */ new Set();
     containers.add(this.containerEl);
     const closestContainer = this.modalEl.closest(".modal-container");
@@ -20140,35 +20215,29 @@ var GlobalMindMapSearchModal = class extends import_obsidian14.Modal {
       element.style.setProperty("visibility", "hidden", "important");
       element.style.setProperty("pointer-events", "none", "important");
     };
-    const removeSearchLayers = () => {
-      ownerDocument.querySelectorAll(".mms-global-search-modal, .mms-global-search-container-closing").forEach((element) => {
-        const container = element.matches(".modal-container") ? element : element.closest(".modal-container");
-        (container != null ? container : element).remove();
-      });
-    };
     hideImmediately(this.modalEl);
     for (const container of containers) {
       container.addClass("mms-global-search-container-closing");
       hideImmediately(container);
     }
+    this.shouldRestoreSelection = false;
     this.close();
-    this.modalEl.remove();
-    for (const container of containers) container.remove();
-    removeSearchLayers();
-    const ownerWindow = ownerDocument.defaultView;
-    ownerWindow == null ? void 0 : ownerWindow.setTimeout(removeSearchLayers, 0);
-    ownerWindow == null ? void 0 : ownerWindow.setTimeout(removeSearchLayers, 120);
   }
-  /** Opens a result after dismissing the search modal so view loading cannot keep it visible. */
+  /** Waits until the result-click event has unwound and Modal.close() has released host focus scope. */
+  waitForModalFocusRelease() {
+    const ownerWindow = this.modalEl.ownerDocument.defaultView;
+    if (!ownerWindow) return Promise.resolve();
+    return new Promise((resolve) => {
+      ownerWindow.requestAnimationFrame(() => ownerWindow.requestAnimationFrame(() => resolve()));
+    });
+  }
+  /** Opens a result only after the search modal has fully yielded its host focus scope. */
   async openResult(result) {
     if (this.openingResult) return;
     this.openingResult = true;
     this.dismissResultPanel();
-    try {
-      await this.onOpenResult(result);
-    } finally {
-      this.dismissResultPanel();
-    }
+    await this.waitForModalFocusRelease();
+    await this.onOpenResult(result);
   }
 };
 
