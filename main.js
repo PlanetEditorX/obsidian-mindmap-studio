@@ -15453,9 +15453,9 @@ var MindMapEditor = class {
   /**
    * 编辑selected，并保持模型、界面和持久化状态的一致性。
    */
-  editSelected(initialBlockId) {
+  editSelected(initialBlockId, protectInitialFocus = false) {
     if (this.currentMode === "article") {
-      this.editSelectedArticleContent();
+      this.editSelectedArticleContent(protectInitialFocus);
       return;
     }
     this.openSelectedNodeEditor(initialBlockId);
@@ -15540,14 +15540,18 @@ var MindMapEditor = class {
     if (this.currentMode !== "article" || !node) return "\u7F16\u8F91\u8282\u70B9";
     return this.articleInlineEditable(node.id) ? "\u7F16\u8F91\u5F53\u524D\u5185\u5BB9" : "\u6DFB\u52A0\u6B63\u6587";
   }
-  /** Focuses the current article line, or creates a temporary body line for content-only nodes. */
-  editSelectedArticleContent() {
+  /**
+   * Focuses the current article line, or creates a temporary body line for content-only nodes.
+   *
+   * @param protectInitialFocus Whether to reclaim focus while an Obsidian context menu finishes closing.
+   */
+  editSelectedArticleContent(protectInitialFocus = false) {
     if (!this.ensureEditable()) return;
     const selected = this.selectedNode();
     if (!selected) return;
     const inlineElement = this.articleInlineEditable(selected.id);
     if (inlineElement) {
-      this.activateInlineEditable(inlineElement);
+      this.activateInlineEditable(inlineElement, true, protectInitialFocus);
       return;
     }
     const section = this.articleEl.querySelector(`[data-node-id="${CSS.escape(selected.id)}"]`);
@@ -15571,7 +15575,7 @@ var MindMapEditor = class {
         if (paragraph.isConnected && !((_a2 = paragraph.textContent) == null ? void 0 : _a2.trim())) paragraph.remove();
       });
     }, { once: true });
-    this.activateInlineEditable(paragraph);
+    this.activateInlineEditable(paragraph, true, protectInitialFocus);
   }
   /** Creates a structured question as a child of the selected node. */
   addQuestionChild() {
@@ -17102,7 +17106,7 @@ var MindMapEditor = class {
       menu.addItem((item) => item.setTitle("\u964D\u4E3A\u4E0A\u4E00\u4E2A\u8282\u70B9\u7684\u5B50\u8282\u70B9").setIcon("indent-increase").onClick(() => this.demoteArticleNode(selected.id)));
       menu.addItem((item) => item.setTitle("\u5347\u4E3A\u4E0A\u4E00\u4E2A\u8282\u70B9\u7684\u5144\u5F1F\u8282\u70B9").setIcon("indent-decrease").onClick(() => this.promoteArticleNode(selected.id)));
     }
-    menu.addItem((item) => item.setTitle(this.articleEditActionLabel(selected)).setIcon("pencil").onClick(() => this.editSelected()));
+    menu.addItem((item) => item.setTitle(this.articleEditActionLabel(selected)).setIcon("pencil").onClick(() => this.editSelected(void 0, true)));
     if (this.currentMode === "article") {
       menu.addItem((item) => item.setTitle("\u8282\u70B9\u8BBE\u7F6E").setIcon("settings-2").onClick(() => this.openSelectedNodeEditor()));
     }

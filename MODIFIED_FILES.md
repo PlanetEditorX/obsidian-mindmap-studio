@@ -1,5 +1,14 @@
 # Modified Files
 
+## 1.45.7 搜索跳转后文章行内编辑焦点修复
+
+- `src/editor/editor.ts`：文章右键菜单的“编辑当前内容/添加正文”改为显式启用初始焦点保护，并把保护参数传到现有 `activateInlineEditable()`；菜单关闭时的短暂 `blur` 会重新聚焦，保护窗口结束后恢复正常失焦提交。
+- `tests/article-context-edit.test.mjs`：新增上下文菜单焦点交接专项契约，并验证安装 bundle 同步包含保护入口。
+- `README.md`、`docs/ARCHITECTURE.md`、`docs/SPECIAL_FEATURES.md`、`docs/TESTING.md`、`CHANGELOG.md`、`docs/FUNCTION_REFERENCE.md`：同步搜索跳转后的编辑行为、焦点边界与测试要求。
+- `package.json`、`package-lock.json`、`manifest.json`、`versions.json`：版本同步为 1.45.7；`update.json` 已写入 1.45.7 安装包 SHA-256 `10de29533723c911562b54802d1d46fab7569f42332438529f0e255f86afaa4d`。
+- `main.js`：同步 1.45.7 运行逻辑；若当前平台 esbuild 仍不可用，则以源码等价手工同步并执行语法、类型和 bundle 契约校验。
+- `TEST_RESULTS.md`、Codex 交接：记录问题根因、验证基线、真实 Obsidian 待验证项和本轮交付包。
+
 ## 1.45.3 全局/导图族搜索弹窗强制退出修复
 
 - `src/search/global-search.ts`：全局搜索与当前导图族搜索共用的结果打开流程改为同时隐藏 `modalEl`、`containerEl` 和实际 `.modal-container`，调用 `Modal.close()` 后同步移除捕获节点，并按 `.mms-global-search-modal` / `.mms-global-search-container-closing` 做同步及短延迟 DOM 兜底清理。

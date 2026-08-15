@@ -345,7 +345,7 @@ mindmap-search-index.json
 ```
 
 `Ctrl/Cmd+F` 搜索当前导图族，旧版 `Ctrl/Cmd+Alt+F` 继续兼容；配置项默认使用 `Ctrl/Cmd+Shift+F` 打开整个仓库的导图搜索。当前导图族快捷键由插件窗口捕获层在活动视图为 `MindMapStudioView` 时优先接管，因此不依赖 Obsidian 的“搜索当前文件”命令绑定；弹窗内按键不会被再次截获。全局与导图族搜索都只索引和显示节点文字，不匹配或展示子导图路径、备注、标签、链接、代码、表格和图片元数据。编辑器根节点仍保留同样的捕获阶段回退，并使用 `KeyboardEvent.code` 兼容非英文键盘布局。当前导图族搜索会在打开搜索时主动刷新父子链，不要求重新创建子导图。
-搜索结果导航先同步隐藏并移除当前搜索 `modal-container`，再等待跨文件视图切换和节点聚焦 Promise，避免 `Modal.onClose()` 已清空内容但外层弹窗仍滞留在前台。
+搜索结果导航先同步隐藏并移除当前搜索 `modal-container`，再等待跨文件视图切换和节点聚焦 Promise，避免 `Modal.onClose()` 已清空内容但外层弹窗仍滞留在前台。搜索落点进入文章模式后，右键菜单“编辑当前内容/添加正文”通过 `editSelected(..., protectInitialFocus=true)` 把保护标记传到 `activateInlineEditable()`；保护只覆盖 Obsidian 菜单关闭阶段的短暂焦点回收，随后恢复普通 `blur` 提交语义，避免把菜单时序修复扩散到双击或键盘编辑路径。
 
 ## 10. 静态渲染与导出
 
