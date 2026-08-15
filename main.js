@@ -7179,7 +7179,10 @@ var FormulaEditModal = class extends import_obsidian4.Modal {
    * 清理公式编辑器 DOM。
    */
   onClose() {
+    var _a2;
     this.contentEl.empty();
+    (_a2 = this.resolveHostClose) == null ? void 0 : _a2.call(this);
+    this.resolveHostClose = null;
   }
 };
 var ImportExportModal = class extends import_obsidian4.Modal {
@@ -13465,9 +13468,9 @@ var MindMapEditor = class {
    * used by setOptions() to avoid rebuilding the article during delayed context refreshes.
    */
   claimInlineEditInteraction(nodeId, blockId) {
-    var _a2, _b2, _c, _d;
+    var _a2, _b2, _c;
     const activeRestoreTarget = (_b2 = (_a2 = this.activeReadingRestore) == null ? void 0 : _a2.resolved.nodeId) != null ? _b2 : null;
-    const pendingArticleTarget = (_d = (_c = this.pendingArticleFocusLocation) == null ? void 0 : _c.nodeIds[0]) != null ? _d : null;
+    const pendingArticleTarget = (_c = this.pendingArticleFocusLocation) == null ? void 0 : _c.nodeIds[0];
     const hadWindowExpansion = this.articleWindowExpansionFrame !== null;
     this.cancelReadingLocationRestore();
     this.cancelArticleWindowExpansion();
@@ -13482,7 +13485,7 @@ var MindMapEditor = class {
       blockId,
       mode: this.currentMode,
       activeRestoreTarget,
-      pendingArticleTarget,
+      pendingArticleTarget: pendingArticleTarget != null ? pendingArticleTarget : null,
       hadWindowExpansion
     });
   }
@@ -19959,13 +19962,14 @@ var GlobalMindMapSearchModal = class extends import_obsidian14.Modal {
    * @param scopeTitle 该参数用于 constructor 流程中的输入或控制。
    * @param scopeDescription 该参数用于 constructor 流程中的输入或控制。
    */
-  constructor(app, index, maxResults, onOpenResult, onRebuild, onReplaceAll, scopePaths, scopeTitle = "\u5168\u5C40\u641C\u7D22\u601D\u7EF4\u5BFC\u56FE", scopeDescription = "\u6240\u6709\u5BFC\u56FE\u4E2D\u7684\u8282\u70B9\u6587\u5B57") {
+  constructor(app, index, maxResults, onOpenResult, onRebuild, onReplaceAll, onDebug, scopePaths, scopeTitle = "\u5168\u5C40\u641C\u7D22\u601D\u7EF4\u5BFC\u56FE", scopeDescription = "\u6240\u6709\u5BFC\u56FE\u4E2D\u7684\u8282\u70B9\u6587\u5B57") {
     super(app);
     this.index = index;
     this.maxResults = maxResults;
     this.onOpenResult = onOpenResult;
     this.onRebuild = onRebuild;
     this.onReplaceAll = onReplaceAll;
+    this.onDebug = onDebug;
     this.scopePaths = scopePaths;
     this.scopeTitle = scopeTitle;
     this.scopeDescription = scopeDescription;
@@ -19973,6 +19977,10 @@ var GlobalMindMapSearchModal = class extends import_obsidian14.Modal {
     this.renderedResults = [];
     this.useRegex = false;
     this.openingResult = false;
+  }
+  /** 返回当前搜索 Modal 是否仍挂载在文档中。 */
+  isMounted() {
+    return this.modalEl.isConnected || this.containerEl.isConnected;
   }
   /**
    * 在弹窗或视图打开时创建界面、绑定事件并把当前数据填入控件。
@@ -20073,6 +20081,12 @@ var GlobalMindMapSearchModal = class extends import_obsidian14.Modal {
    * 在弹窗或视图关闭时释放临时 DOM、计时器和事件状态。
    */
   onClose() {
+    var _a2;
+    (_a2 = this.onDebug) == null ? void 0 : _a2.call(this, "modal-on-close", {
+      openingResult: this.openingResult,
+      modalConnected: this.modalEl.isConnected,
+      containerConnected: this.containerEl.isConnected
+    });
     this.contentEl.empty();
   }
   /**
@@ -20195,50 +20209,51 @@ var GlobalMindMapSearchModal = class extends import_obsidian14.Modal {
     (_a2 = buttons[index]) == null ? void 0 : _a2.scrollIntoView({ block: "nearest" });
   }
   /**
-   * 同步隐藏搜索弹窗并只通过 Obsidian 的 Modal.close() 释放宿主模态状态。
+   * 请求 Obsidian 通过公开 Modal.close() 关闭当前搜索层。
    *
-   * 1.45.3 为解决“内容已清空但空白 Modal 仍覆盖页面”曾在 close() 之后直接
-   * remove() modal/container，并在导航结束后再次 close。真实 Windows/Obsidian 1.12.7
-   * 日志证明这会留下宿主焦点约束：搜索后的正文 contenteditable 每次 focus 后约
-   * 6–8 ms 都会 blur(null)。因此这里只负责同步视觉隐藏，DOM 和 focus/scope 栈必须
-   * 完整交还给 Modal.close() 自己清理；即使主题留下外壳，closing class 也会让它
-   * 不可见且不接收指针。
+   * 1.45.13 的真实日志证明，程序化 `modal-bg.click()` 只产生 click 事件，
+   * 不等价于用户真实的 pointerdown/click 关闭手势，因此宿主 Modal 仍留在页面上。
+   * 这里不再模拟背景事件，也不修改/删除任何宿主 Modal DOM；只关闭 selection 恢复并
+   * 调用一次公开 close()，让 Obsidian 自己完成焦点 Scope、history 与关闭动画。
    */
   dismissResultPanel() {
-    const containers = /* @__PURE__ */ new Set();
-    containers.add(this.containerEl);
-    const closestContainer = this.modalEl.closest(".modal-container");
-    if (closestContainer) containers.add(closestContainer);
-    const hideImmediately = (element) => {
-      element.setAttribute("aria-hidden", "true");
-      element.style.setProperty("display", "none", "important");
-      element.style.setProperty("visibility", "hidden", "important");
-      element.style.setProperty("pointer-events", "none", "important");
-    };
-    hideImmediately(this.modalEl);
-    for (const container of containers) {
-      container.addClass("mms-global-search-container-closing");
-      hideImmediately(container);
-    }
+    var _a2, _b;
     this.shouldRestoreSelection = false;
+    (_a2 = this.onDebug) == null ? void 0 : _a2.call(this, "result-close-request", {
+      modalConnected: this.modalEl.isConnected,
+      containerConnected: this.containerEl.isConnected,
+      activeTag: ((_b = this.modalEl.ownerDocument.activeElement) == null ? void 0 : _b.tagName.toLocaleLowerCase()) ?? null
+    });
     this.close();
+    (_b = this.onDebug) == null ? void 0 : _b.call(this, "result-close-return", {
+      modalConnected: this.modalEl.isConnected,
+      containerConnected: this.containerEl.isConnected
+    });
   }
-  /** Waits until the result-click event has unwound and Modal.close() has released host focus scope. */
-  waitForModalFocusRelease() {
+  /**
+   * 给 Obsidian 的 close/history/focus bookkeeping 两个绘制帧，再开始文件和节点导航。
+   *
+   * 该等待不依赖 onClose()，因此即使宿主把 onClose 延迟到关闭动画结束，也不会像
+   * 1.45.12 那样永久阻塞导航。
+   */
+  waitForResultNavigationTurn() {
     const ownerWindow = this.modalEl.ownerDocument.defaultView;
     if (!ownerWindow) return Promise.resolve();
     return new Promise((resolve) => {
       ownerWindow.requestAnimationFrame(() => ownerWindow.requestAnimationFrame(() => resolve()));
     });
   }
-  /** Opens a result only after the search modal has fully yielded its host focus scope. */
+  /** 请求宿主关闭搜索层后，在不等待 onClose() 的情况下打开目标结果。 */
   async openResult(result) {
+    var _a2;
     if (this.openingResult) return;
     this.openingResult = true;
     this.dismissResultPanel();
-    await this.waitForModalFocusRelease();
+    await this.waitForResultNavigationTurn();
+    (_a2 = this.onDebug) == null ? void 0 : _a2.call(this, "result-navigation-start", { filePath: result.filePath, nodeId: result.nodeId });
     await this.onOpenResult(result);
   }
+
 };
 
 // src/ai/client.ts
@@ -21913,6 +21928,8 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
     this.autoUploadFileKeys = /* @__PURE__ */ new WeakMap();
     this.autoUploadFileKeySequence = 0;
     this.searchIndexReady = Promise.resolve();
+    this.globalSearchModal = null;
+    this.globalSearchLaunchPending = false;
     this.fileExplorerFilterTimer = null;
     this.fileExplorerFilterFullScanPending = false;
     this.fileExplorerFilterRoots = /* @__PURE__ */ new Set();
@@ -22136,21 +22153,43 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
    * 打开global search，并保持模型、界面和持久化状态的一致性。
    */
   openGlobalSearch() {
-    void this.openGlobalSearchAfterIndexReady();
+    var _a2;
+    const mounted = (_a2 = this.globalSearchModal) == null ? void 0 : _a2.isMounted();
+    if (this.globalSearchLaunchPending || mounted) {
+      this.logDebug("global-search-modal", "open-deduplicated", {
+        launchPending: this.globalSearchLaunchPending,
+        mounted: mounted != null ? mounted : false
+      });
+      return;
+    }
+    this.globalSearchLaunchPending = true;
+    this.logDebug("global-search-modal", "open-request", { mounted: false });
+    void this.openGlobalSearchAfterIndexReady().finally(() => {
+      this.globalSearchLaunchPending = false;
+    });
   }
   /**
    * 打开global search after index ready，并保持模型、界面和持久化状态的一致性。
    */
   async openGlobalSearchAfterIndexReady() {
+    var _a2;
     await this.searchIndexReady;
-    new GlobalMindMapSearchModal(
+    if ((_a2 = this.globalSearchModal) == null ? void 0 : _a2.isMounted()) {
+      this.logDebug("global-search-modal", "open-deduplicated-after-index", { mounted: true });
+      return;
+    }
+    const modal = new GlobalMindMapSearchModal(
       this.app,
       this.searchIndex,
       this.settings.globalSearchMaxResults,
       (result) => this.openGlobalSearchResult(result),
       () => this.searchIndex.rebuildAll(),
-      (results, query, replacement, useRegex) => this.replaceAllInSearchResults(results, query, replacement, useRegex)
-    ).open();
+      (results, query, replacement, useRegex) => this.replaceAllInSearchResults(results, query, replacement, useRegex),
+      (event, details) => this.logDebug("global-search-modal", event, details)
+    );
+    this.globalSearchModal = modal;
+    modal.open();
+    this.logDebug("global-search-modal", "open-mounted", { mounted: modal.isMounted() });
   }
   /**
    * 打开map family search，并保持模型、界面和持久化状态的一致性。
@@ -22172,6 +22211,7 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
         for (const path of refreshed) familyPaths.add(path);
       },
       (results, query, replacement, useRegex) => this.replaceAllInSearchResults(results, query, replacement, useRegex),
+      (event, details) => this.logDebug("global-search-modal", event, details),
       familyPaths,
       "\u641C\u7D22\u5F53\u524D\u5BFC\u56FE\u53CA\u5B50\u5BFC\u56FE",
       `\u201C${file.basename}\u201D\u53CA\u9012\u5F52\u5173\u8054\u7684\u5168\u90E8\u5B50\u5BFC\u56FE`

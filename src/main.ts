@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file main.ts
  * @description 插件入口与跨文件服务层。
  *
@@ -194,6 +194,10 @@ export default class MindMapStudioPlugin extends Plugin {
   private autoUploadFileKeySequence = 0;
   private searchIndex!: MindMapSearchIndex;
   private searchIndexReady: Promise<void> = Promise.resolve();
+  /** 当前已挂载的全局搜索实例；当前导图族搜索不使用该单例。 */
+  private globalSearchModal: GlobalMindMapSearchModal | null = null;
+  /** 防止同一次全局快捷键在索引 ready await 期间重复创建两个 Modal。 */
+  private globalSearchLaunchPending = false;
   private fileExplorerFilterTimer: number | null = null;
   private fileExplorerFilterFullScanPending = false;
   private readonly fileExplorerFilterRoots = new Set<Element>();
@@ -427,7 +431,19 @@ export default class MindMapStudioPlugin extends Plugin {
    * 打开global search，并保持模型、界面和持久化状态的一致性。
    */
   openGlobalSearch(): void {
-    void this.openGlobalSearchAfterIndexReady();
+    const mounted = this.globalSearchModal?.isMounted() ?? false;
+    if (this.globalSearchLaunchPending || mounted) {
+      this.logDebug("global-search-modal", "open-deduplicated", {
+        launchPending: this.globalSearchLaunchPending,
+        mounted
+      });
+      return;
+    }
+    this.globalSearchLaunchPending = true;
+    this.logDebug("global-search-modal", "open-request", { mounted: false });
+    void this.openGlobalSearchAfterIndexReady().finally(() => {
+      this.globalSearchLaunchPending = false;
+    });
   }
 
   /**
@@ -435,14 +451,22 @@ export default class MindMapStudioPlugin extends Plugin {
    */
   private async openGlobalSearchAfterIndexReady(): Promise<void> {
     await this.searchIndexReady;
-    new GlobalMindMapSearchModal(
+    if (this.globalSearchModal?.isMounted()) {
+      this.logDebug("global-search-modal", "open-deduplicated-after-index", { mounted: true });
+      return;
+    }
+    const modal = new GlobalMindMapSearchModal(
       this.app,
       this.searchIndex,
       this.settings.globalSearchMaxResults,
       (result) => this.openGlobalSearchResult(result),
       () => this.searchIndex.rebuildAll(),
-      (results, query, replacement, useRegex) => this.replaceAllInSearchResults(results, query, replacement, useRegex)
-    ).open();
+      (results, query, replacement, useRegex) => this.replaceAllInSearchResults(results, query, replacement, useRegex),
+      (event, details) => this.logDebug("global-search-modal", event, details)
+    );
+    this.globalSearchModal = modal;
+    modal.open();
+    this.logDebug("global-search-modal", "open-mounted", { mounted: modal.isMounted() });
   }
 
   /**
@@ -465,6 +489,7 @@ export default class MindMapStudioPlugin extends Plugin {
         for (const path of refreshed) familyPaths.add(path);
       },
       (results, query, replacement, useRegex) => this.replaceAllInSearchResults(results, query, replacement, useRegex),
+      (event, details) => this.logDebug("global-search-modal", event, details),
       familyPaths,
       "搜索当前导图及子导图",
       `“${file.basename}”及递归关联的全部子导图`
