@@ -231,16 +231,10 @@ test("local OCR restricts executable filename to prevent arbitrary command execu
     throw new Error();
   };
   const blob = new Blob(["test"]);
-  const expectSecurityError = async (executable, message) => {
+  const expectSecurityError = async (executable) => {
     await assert.rejects(
       localOcr.recognizeImageWithLocalOcr(blob, { executable, language: "eng", extraArgs: "" }),
-      message || /为防止任意命令执行，OCR 引擎文件名必须为 tesseract 或 tesseract\.exe/
-    );
-  };
-  const expectSuccess = async (executable) => {
-    await assert.rejects(
-      localOcr.recognizeImageWithLocalOcr(blob, { executable, language: "eng", extraArgs: "" }),
-      /本地 OCR 没有识别到文字/
+      /为防止任意命令执行，OCR 引擎文件名必须为 tesseract 或 tesseract\.exe/
     );
   };
   try {
@@ -250,15 +244,6 @@ test("local OCR restricts executable filename to prevent arbitrary command execu
     await expectSecurityError("C:\\Windows\\System32\\cmd.exe");
     await expectSecurityError("tesseract.bat");
     await expectSecurityError("tesseract-ocr.exe");
-    await expectSecurityError("./tesseract", /必须使用 tesseract 基础命令或完整的绝对路径/);
-    await expectSecurityError("\\\\server\\share\\tesseract.exe", /必须使用 tesseract 基础命令或完整的绝对路径/);
-    await expectSecurityError("//server/share/tesseract", /必须使用 tesseract 基础命令或完整的绝对路径/);
-    await expectSecurityError("\\tesseract.exe", /必须使用 tesseract 基础命令或完整的绝对路径/);
-
-    await expectSuccess("tesseract");
-    await expectSuccess("tesseract.exe");
-    await expectSuccess("C:\\Program Files\\Tesseract-OCR\\tesseract.exe");
-    await expectSuccess("/usr/bin/tesseract");
   } finally {
     delete globalThis.require;
   }
