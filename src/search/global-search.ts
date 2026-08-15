@@ -761,7 +761,12 @@ function appendHighlightedText(container: HTMLElement, text: string, query: stri
       container.createEl("mark", { text: match[0] });
       lastIndex = regex.lastIndex;
     }
-    if (hasMatch) { if (lastIndex < text.length) container.appendText(text.slice(lastIndex)); return; }
+    if (hasMatch) {
+      if (lastIndex < text.length) {
+        container.appendText(text.slice(lastIndex));
+      }
+      return;
+    }
     container.setText(text);
     return;
   }

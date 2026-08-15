@@ -19838,7 +19838,9 @@ function appendHighlightedText(container, text, query, useRegex = false) {
       lastIndex = regex.lastIndex;
     }
     if (hasMatch) {
-      if (lastIndex < text.length) container.appendText(text.slice(lastIndex));
+      if (lastIndex < text.length) {
+        container.appendText(text.slice(lastIndex));
+      }
       return;
     }
     container.setText(text);
