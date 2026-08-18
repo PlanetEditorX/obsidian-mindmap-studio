@@ -5867,420 +5867,6 @@ function unzipSync(data, opts) {
   return files;
 }
 
-// src/article/article-context-cache.ts
-/**
- * @file article-context-cache.ts
- * @description 文章族上下文与已解析文档的同步内存缓存、依赖版本校验和插件私有 JSON 持久化。
- */
-const ARTICLE_CONTEXT_CACHE_SCHEMA_VERSION = 1;
-const ARTICLE_CONTEXT_CACHE_REVISION = "article-context-cache-v1";
-const MAX_CONTEXT_CACHE_ENTRIES = 12;
-const MAX_CONTEXT_CACHE_CHARACTERS = 24000000;
-const MAX_PERSISTED_CACHE_CHARACTERS = 28000000;
-const MAX_DOCUMENT_CACHE_ENTRIES = 32;
-/** 将 Windows 或重复分隔符路径规范为仓库相对路径。 */
-function normalizeArticleContextCachePath(value) {
-    return value.replace(/\\/g, "/").replace(/\/{2,}/g, "/").replace(/^\.\//, "").replace(/\/$/, "");
-}
-/** 克隆纯 JSON 领域对象；现代 Obsidian 优先使用原生 structuredClone。 */
-function cloneJsonValue(value) {
-    if (typeof structuredClone === "function")
-        return structuredClone(value);
-    return JSON.parse(JSON.stringify(value));
-}
-/** 判断外部 JSON 值是否为普通对象。 */
-function isRecord(value) {
-    return Boolean(value) && typeof value === "object" && !Array.isArray(value);
-}
-/** 规范化有限整数。 */
-function finiteNumber(value, fallback = 0) {
-    return typeof value === "number" && Number.isFinite(value) ? value : fallback;
-}
-/** 规范化字符串数组。 */
-function stringArray(value) {
-    return Array.isArray(value) ? value.filter((item) => typeof item === "string") : [];
-}
-/** 从不可信 JSON 恢复一个目录项。 */
-function normalizeTocEntry(value) {
-    if (!isRecord(value))
-        return null;
-    if (typeof value.filePath !== "string" || typeof value.title !== "string")
-        return null;
-    return {
-        filePath: normalizeArticleContextCachePath(value.filePath),
-        nodeId: typeof value.nodeId === "string" ? value.nodeId : undefined,
-        depth: Math.max(0, Math.floor(finiteNumber(value.depth))),
-        tocDepth: Math.max(1, Math.floor(finiteNumber(value.tocDepth, 1))),
-        label: typeof value.label === "string" ? value.label : "",
-        title: value.title,
-        displayTitle: typeof value.displayTitle === "string" ? value.displayTitle : value.title,
-        breadcrumb: stringArray(value.breadcrumb)
-    };
-}
-/** 从不可信 JSON 恢复文章分页导航。 */
-function normalizeNavigation(value) {
-    if (!isRecord(value) || typeof value.homePath !== "string")
-        return undefined;
-    const entries = Array.isArray(value.entries)
-        ? value.entries.map(normalizeTocEntry).filter((entry) => Boolean(entry))
-        : [];
-    return {
-        entries,
-        currentIndex: Math.max(0, Math.floor(finiteNumber(value.currentIndex))),
-        homePath: normalizeArticleContextCachePath(value.homePath),
-        parentPath: typeof value.parentPath === "string" ? normalizeArticleContextCachePath(value.parentPath) : undefined,
-        parentNodeId: typeof value.parentNodeId === "string" ? value.parentNodeId : undefined,
-        numberingDisabled: typeof value.numberingDisabled === "boolean" ? value.numberingDisabled : undefined
-    };
-}
-/** 从不可信 JSON 恢复一个通读物理页，并通过模型层重新规范化文档。 */
-function normalizeReadingSection(value) {
-    var _a;
-    if (!isRecord(value) || typeof value.filePath !== "string" || !isRecord(value.document))
-        return null;
-    const filePath = normalizeArticleContextCachePath(value.filePath);
-    const fallbackTitle = ((_a = filePath.split("/").at(-1)) === null || _a === void 0 ? void 0 : _a.replace(/\.mindmap$/i, "")) || "思维导图";
-    return {
-        filePath,
-        document: normalizeDocument(value.document, fallbackTitle),
-        baseDepth: Math.max(0, Math.floor(finiteNumber(value.baseDepth))),
-        parentFilePath: typeof value.parentFilePath === "string" ? normalizeArticleContextCachePath(value.parentFilePath) : undefined,
-        parentNodeId: typeof value.parentNodeId === "string" ? value.parentNodeId : undefined,
-        numberingDisabled: typeof value.numberingDisabled === "boolean" ? value.numberingDisabled : undefined
-    };
-}
-/** 从不可信 JSON 恢复文章上下文。 */
-function normalizeArticleContext(value) {
-    if (!isRecord(value))
-        return null;
-    const readingSections = Array.isArray(value.readingSections)
-        ? value.readingSections.map(normalizeReadingSection).filter((section) => Boolean(section))
-        : [];
-    if (!readingSections.length)
-        return null;
-    const tocEntries = Array.isArray(value.tocEntries)
-        ? value.tocEntries.map(normalizeTocEntry).filter((entry) => Boolean(entry))
-        : [];
-    return {
-        baseDepth: Math.max(0, Math.floor(finiteNumber(value.baseDepth))),
-        tocEntries,
-        showToc: value.showToc === true,
-        navigation: normalizeNavigation(value.navigation),
-        readingSections
-    };
-}
-/** 从不可信 JSON 恢复一个文件版本。 */
-function normalizeRevision(value) {
-    if (!isRecord(value) || typeof value.path !== "string" || !value.path.trim())
-        return null;
-    if (typeof value.mtime !== "number" || !Number.isFinite(value.mtime))
-        return null;
-    if (typeof value.size !== "number" || !Number.isFinite(value.size))
-        return null;
-    return {
-        path: normalizeArticleContextCachePath(value.path),
-        mtime: value.mtime,
-        size: value.size
-    };
-}
-/**
- * 校验并规范化一个持久文章上下文快照。
- *
- * @param value 来自插件私有 JSON 的不可信值。
- * @returns 可安全放入内存缓存的快照；版本或结构不兼容时返回 null。
- */
-function normalizeArticleContextCacheSnapshot(value) {
-    if (!isRecord(value))
-        return null;
-    if (value.schemaVersion !== ARTICLE_CONTEXT_CACHE_SCHEMA_VERSION || value.cacheRevision !== ARTICLE_CONTEXT_CACHE_REVISION)
-        return null;
-    if (typeof value.filePath !== "string" || !value.filePath.trim())
-        return null;
-    const filePath = normalizeArticleContextCachePath(value.filePath);
-    const dependencies = Array.isArray(value.dependencies)
-        ? value.dependencies.map(normalizeRevision).filter((revision) => Boolean(revision))
-        : [];
-    if (!dependencies.length || !dependencies.some((dependency) => dependency.path === filePath))
-        return null;
-    const context = normalizeArticleContext(value.context);
-    if (!context)
-        return null;
-    const dependencyPaths = new Set(dependencies.map((dependency) => dependency.path));
-    if (context.readingSections.some((section) => !dependencyPaths.has(section.filePath)))
-        return null;
-    const now = Date.now();
-    return {
-        schemaVersion: ARTICLE_CONTEXT_CACHE_SCHEMA_VERSION,
-        cacheRevision: ARTICLE_CONTEXT_CACHE_REVISION,
-        filePath,
-        dependencies,
-        context,
-        updatedAt: finiteNumber(value.updatedAt, now),
-        lastAccessedAt: finiteNumber(value.lastAccessedAt, now)
-    };
-}
-/** 比较两个文件版本是否完全一致。 */
-function sameMindMapFileRevision(left, right) {
-    return normalizeArticleContextCachePath(left.path) === normalizeArticleContextCachePath(right.path)
-        && left.mtime === right.mtime
-        && left.size === right.size;
-}
-/**
- * 插件级文章上下文缓存。initialize() 预载到内存后，视图打开可以同步校验全部依赖并命中。
- */
-class ArticleContextCacheStore {
-    /** 创建一个以插件私有 JSON 文件为后端的有界缓存。 */
-    constructor(adapter, cacheDirectory, cacheFile) {
-        this.adapter = adapter;
-        this.cacheDirectory = cacheDirectory;
-        this.cacheFile = cacheFile;
-        this.entries = new Map();
-        this.persistTimer = null;
-        this.requestedPersistRevision = 0;
-        this.persistedRevision = 0;
-        this.persistRunner = null;
-    }
-    /** 从磁盘预载最近使用的有效快照；异常缓存会被忽略而不会阻断插件启动。 */
-    async initialize() {
-        this.entries.clear();
-        try {
-            if (!await this.adapter.exists(this.cacheFile))
-                return;
-            const source = await this.adapter.read(this.cacheFile);
-            if (source.length > MAX_PERSISTED_CACHE_CHARACTERS)
-                return;
-            const parsed = JSON.parse(source);
-            if (!isRecord(parsed) || parsed.schemaVersion !== ARTICLE_CONTEXT_CACHE_SCHEMA_VERSION || !Array.isArray(parsed.entries))
-                return;
-            const snapshots = parsed.entries
-                .map(normalizeArticleContextCacheSnapshot)
-                .filter((snapshot) => Boolean(snapshot))
-                .sort((left, right) => right.lastAccessedAt - left.lastAccessedAt);
-            const selected = [];
-            let characters = 0;
-            for (const snapshot of snapshots) {
-                const size = this.snapshotCharacters(snapshot);
-                if (selected.length >= MAX_CONTEXT_CACHE_ENTRIES)
-                    break;
-                if (characters + size > MAX_CONTEXT_CACHE_CHARACTERS)
-                    continue;
-                selected.push(snapshot);
-                characters += size;
-            }
-            for (const snapshot of selected.reverse())
-                this.entries.set(snapshot.filePath, snapshot);
-        }
-        catch (error) {
-            console.warn("MindMap Studio article context cache load failed", error);
-            this.entries.clear();
-        }
-    }
-    /**
-     * 同步读取一个文章上下文；任意父/子导图的 mtime 或 size 不一致都会立即失效整个快照。
-     *
-     * @param filePath 当前打开的物理导图路径。
-     * @param resolveRevision 按依赖路径读取当前仓库文件版本的同步回调。
-     * @returns 命中时返回隔离克隆，避免调用方修改缓存对象。
-     */
-    get(filePath, resolveRevision) {
-        const normalizedPath = normalizeArticleContextCachePath(filePath);
-        const snapshot = this.entries.get(normalizedPath);
-        if (!snapshot)
-            return null;
-        const valid = snapshot.dependencies.every((dependency) => {
-            const current = resolveRevision(dependency.path);
-            return Boolean(current && sameMindMapFileRevision(dependency, current));
-        });
-        if (!valid) {
-            this.entries.delete(normalizedPath);
-            this.markDirty();
-            return null;
-        }
-        const newestPath = Array.from(this.entries.keys()).at(-1);
-        snapshot.lastAccessedAt = Date.now();
-        this.entries.delete(normalizedPath);
-        this.entries.set(normalizedPath, snapshot);
-        if (newestPath !== normalizedPath)
-            this.markDirty();
-        return cloneJsonValue(snapshot.context);
-    }
-    /** 写入一次完整文章族构建结果和构建结束时确认过的全部依赖版本。 */
-    put(filePath, context, dependencies) {
-        const normalizedPath = normalizeArticleContextCachePath(filePath);
-        const uniqueDependencies = new Map();
-        for (const dependency of dependencies) {
-            uniqueDependencies.set(normalizeArticleContextCachePath(dependency.path), {
-                path: normalizeArticleContextCachePath(dependency.path),
-                mtime: dependency.mtime,
-                size: dependency.size
-            });
-        }
-        if (!uniqueDependencies.has(normalizedPath))
-            return;
-        if (context.readingSections.some((section) => !uniqueDependencies.has(normalizeArticleContextCachePath(section.filePath))))
-            return;
-        const now = Date.now();
-        const snapshot = {
-            schemaVersion: ARTICLE_CONTEXT_CACHE_SCHEMA_VERSION,
-            cacheRevision: ARTICLE_CONTEXT_CACHE_REVISION,
-            filePath: normalizedPath,
-            dependencies: Array.from(uniqueDependencies.values()),
-            context: cloneJsonValue(context),
-            updatedAt: now,
-            lastAccessedAt: now
-        };
-        this.entries.delete(normalizedPath);
-        this.entries.set(normalizedPath, snapshot);
-        this.prune();
-        this.markDirty();
-    }
-    /** 清空全部文章上下文；用于新建或重命名可能让旧的“缺失子导图”引用突然可解析的情况。 */
-    clear() {
-        if (!this.entries.size)
-            return;
-        this.entries.clear();
-        this.markDirty();
-    }
-    /** 当前文件或任意依赖文件被修改、删除、重命名时，清除所有包含它的文章族快照。 */
-    invalidateDependency(filePath) {
-        const normalizedPath = normalizeArticleContextCachePath(filePath);
-        let changed = false;
-        for (const [key, snapshot] of Array.from(this.entries.entries())) {
-            if (snapshot.filePath !== normalizedPath && !snapshot.dependencies.some((dependency) => dependency.path === normalizedPath))
-                continue;
-            this.entries.delete(key);
-            changed = true;
-        }
-        if (changed)
-            this.markDirty();
-    }
-    /** 插件卸载前提交全部尚未写盘的 LRU/内容变化。 */
-    async flush() {
-        if (this.persistTimer !== null) {
-            window.clearTimeout(this.persistTimer);
-            this.persistTimer = null;
-        }
-        this.startPersistRunner();
-        if (this.persistRunner)
-            await this.persistRunner;
-    }
-    /** 标记内存状态需要持久化，并吸收连续更新。 */
-    markDirty() {
-        this.requestedPersistRevision += 1;
-        this.schedulePersist();
-    }
-    /** 以尾随防抖减少连续文章打开造成的磁盘写入。 */
-    schedulePersist() {
-        if (this.persistRunner)
-            return;
-        if (this.persistTimer !== null)
-            window.clearTimeout(this.persistTimer);
-        this.persistTimer = window.setTimeout(() => {
-            this.persistTimer = null;
-            this.startPersistRunner();
-        }, 800);
-    }
-    /** 启动唯一串行写入循环。 */
-    startPersistRunner() {
-        if (this.persistRunner || this.persistedRevision >= this.requestedPersistRevision)
-            return;
-        if (this.persistTimer !== null) {
-            window.clearTimeout(this.persistTimer);
-            this.persistTimer = null;
-        }
-        this.persistRunner = this.runPersistLoop().finally(() => {
-            this.persistRunner = null;
-            if (this.persistedRevision < this.requestedPersistRevision)
-                this.startPersistRunner();
-        });
-    }
-    /** 串行保存最新稳定快照，写入期间的新变化合并到下一轮。 */
-    async runPersistLoop() {
-        while (this.persistedRevision < this.requestedPersistRevision) {
-            const targetRevision = this.requestedPersistRevision;
-            const content = JSON.stringify({
-                schemaVersion: ARTICLE_CONTEXT_CACHE_SCHEMA_VERSION,
-                entries: Array.from(this.entries.values())
-            });
-            try {
-                if (!await this.adapter.exists(this.cacheDirectory))
-                    await this.adapter.mkdir(this.cacheDirectory);
-                await this.adapter.write(this.cacheFile, content);
-            }
-            catch (error) {
-                console.warn("MindMap Studio article context cache persist failed", error);
-                this.persistedRevision = targetRevision;
-                return;
-            }
-            this.persistedRevision = targetRevision;
-        }
-    }
-    /** 应用条目数与总字符数双重 LRU 上限。 */
-    prune() {
-        while (this.entries.size > MAX_CONTEXT_CACHE_ENTRIES) {
-            const oldest = this.entries.keys().next().value;
-            if (!oldest)
-                break;
-            this.entries.delete(oldest);
-        }
-        let total = Array.from(this.entries.values()).reduce((sum, snapshot) => sum + this.snapshotCharacters(snapshot), 0);
-        while (total > MAX_CONTEXT_CACHE_CHARACTERS && this.entries.size > 1) {
-            const oldest = this.entries.keys().next().value;
-            if (!oldest)
-                break;
-            const removed = this.entries.get(oldest);
-            this.entries.delete(oldest);
-            if (removed)
-                total -= this.snapshotCharacters(removed);
-        }
-    }
-    /** 估算单个快照字符数，用于持久缓存上限。 */
-    snapshotCharacters(snapshot) {
-        return JSON.stringify(snapshot).length;
-    }
-}
-/**
- * 已解析 MindMapDocument 的会话级 LRU。它只解决重复 parseDocument，不写盘；跨重启由 ArticleContextCacheStore 恢复完整上下文。
- */
-class MindMapDocumentCache {
-    constructor() {
-        this.entries = new Map();
-    }
-    /** 按文件版本同步读取隔离文档副本；版本不一致时自动清除。 */
-    get(revision) {
-        const path = normalizeArticleContextCachePath(revision.path);
-        const entry = this.entries.get(path);
-        if (!entry)
-            return null;
-        if (!sameMindMapFileRevision(entry.revision, { ...revision, path })) {
-            this.entries.delete(path);
-            return null;
-        }
-        this.entries.delete(path);
-        this.entries.set(path, entry);
-        return cloneJsonValue(entry.document);
-    }
-    /** 保存一个解析后的文档副本，并维持固定 LRU 容量。 */
-    put(revision, document) {
-        const path = normalizeArticleContextCachePath(revision.path);
-        this.entries.delete(path);
-        this.entries.set(path, {
-            revision: { ...revision, path },
-            document: cloneJsonValue(document)
-        });
-        while (this.entries.size > MAX_DOCUMENT_CACHE_ENTRIES) {
-            const oldest = this.entries.keys().next().value;
-            if (!oldest)
-                break;
-            this.entries.delete(oldest);
-        }
-    }
-    /** 文件内容或路径发生变化时清除解析结果。 */
-    remove(filePath) {
-        this.entries.delete(normalizeArticleContextCachePath(filePath));
-    }
-}
-
 // src/article/modes.ts
 var DISPLAY_MODE_LABELS = {
   mindmap: "\u5BFC\u56FE",
@@ -8582,6 +8168,56 @@ function shouldPersistDisplayMode(mode) {
   return mode !== "outline" && mode !== "question-bank";
 }
 
+// src/article/render-window.ts
+var ARTICLE_RENDER_WINDOW_BYTES = 5 * 1024;
+var ARTICLE_RENDER_CACHE_HIT_WINDOW_BYTES = 32 * 1024;
+function utf8ByteLength(value) {
+  var _a2;
+  let bytes = 0;
+  for (const character of value) {
+    const codePoint = (_a2 = character.codePointAt(0)) != null ? _a2 : 0;
+    bytes += codePoint <= 127 ? 1 : codePoint <= 2047 ? 2 : codePoint <= 65535 ? 3 : 4;
+  }
+  return bytes;
+}
+function resolveByteWindow(weights, targetIndex, byteBudget = ARTICLE_RENDER_WINDOW_BYTES) {
+  var _a2, _b2;
+  if (!weights.length) return { start: 0, end: 0 };
+  const budget = Math.max(1, Math.floor(byteBudget));
+  const target = Math.max(0, Math.min(weights.length - 1, Math.floor(targetIndex)));
+  let start = target;
+  let end = target + 1;
+  let beforeBytes = 0;
+  let afterBytes = 0;
+  while (start > 0 && beforeBytes < budget) {
+    start -= 1;
+    beforeBytes += Math.max(0, (_a2 = weights[start]) != null ? _a2 : 0);
+  }
+  while (end < weights.length && afterBytes < budget) {
+    afterBytes += Math.max(0, (_b2 = weights[end]) != null ? _b2 : 0);
+    end += 1;
+  }
+  return { start, end };
+}
+function resolveByteChunk(weights, edge, direction, byteBudget = ARTICLE_RENDER_WINDOW_BYTES) {
+  var _a2, _b2;
+  const budget = Math.max(1, Math.floor(byteBudget));
+  let next = Math.max(0, Math.min(weights.length, Math.floor(edge)));
+  let bytes = 0;
+  if (direction === "before") {
+    while (next > 0 && bytes < budget) {
+      next -= 1;
+      bytes += Math.max(0, (_a2 = weights[next]) != null ? _a2 : 0);
+    }
+  } else {
+    while (next < weights.length && bytes < budget) {
+      bytes += Math.max(0, (_b2 = weights[next]) != null ? _b2 : 0);
+      next += 1;
+    }
+  }
+  return next;
+}
+
 // src/article/reading-location.ts
 var findNode2 = (root, id) => {
   if (root.id === id) return root;
@@ -9433,56 +9069,6 @@ function renderOutlineContent(container, node, depth, options) {
 // src/editor/article-renderer.ts
 var import_obsidian9 = require("obsidian");
 
-// src/article/render-window.ts
-var ARTICLE_RENDER_WINDOW_BYTES = 5 * 1024;
-var ARTICLE_RENDER_CACHE_HIT_WINDOW_BYTES = 32 * 1024;
-function utf8ByteLength(value) {
-  var _a2;
-  let bytes = 0;
-  for (const character of value) {
-    const codePoint = (_a2 = character.codePointAt(0)) != null ? _a2 : 0;
-    bytes += codePoint <= 127 ? 1 : codePoint <= 2047 ? 2 : codePoint <= 65535 ? 3 : 4;
-  }
-  return bytes;
-}
-function resolveByteWindow(weights, targetIndex, byteBudget = ARTICLE_RENDER_WINDOW_BYTES) {
-  var _a2, _b2;
-  if (!weights.length) return { start: 0, end: 0 };
-  const budget = Math.max(1, Math.floor(byteBudget));
-  const target = Math.max(0, Math.min(weights.length - 1, Math.floor(targetIndex)));
-  let start = target;
-  let end = target + 1;
-  let beforeBytes = 0;
-  let afterBytes = 0;
-  while (start > 0 && beforeBytes < budget) {
-    start -= 1;
-    beforeBytes += Math.max(0, (_a2 = weights[start]) != null ? _a2 : 0);
-  }
-  while (end < weights.length && afterBytes < budget) {
-    afterBytes += Math.max(0, (_b2 = weights[end]) != null ? _b2 : 0);
-    end += 1;
-  }
-  return { start, end };
-}
-function resolveByteChunk(weights, edge, direction, byteBudget = ARTICLE_RENDER_WINDOW_BYTES) {
-  var _a2, _b2;
-  const budget = Math.max(1, Math.floor(byteBudget));
-  let next = Math.max(0, Math.min(weights.length, Math.floor(edge)));
-  let bytes = 0;
-  if (direction === "before") {
-    while (next > 0 && bytes < budget) {
-      next -= 1;
-      bytes += Math.max(0, (_a2 = weights[next]) != null ? _a2 : 0);
-    }
-  } else {
-    while (next < weights.length && bytes < budget) {
-      bytes += Math.max(0, (_b2 = weights[next]) != null ? _b2 : 0);
-      next += 1;
-    }
-  }
-  return next;
-}
-
 // src/editor/table-interaction.ts
 function resizeAdjacentTableColumns(sourceWidths, columnIndex, delta, minimumWidth = 64) {
   var _a2, _b2;
@@ -9620,7 +9206,11 @@ function renderArticleMode(container, options) {
   }, articleNodePrimaryText);
   const weights = infos.map(articleNodeRenderBytes);
   const initialTarget = infos.findIndex((info) => info.node.id === options.selectedId);
-  let { start, end } = resolveByteWindow(weights, initialTarget >= 0 ? initialTarget : 0, options.initialWindowByteBudget);
+  let { start, end } = resolveByteWindow(
+    weights,
+    initialTarget >= 0 ? initialTarget : 0,
+    options.initialWindowByteBudget
+  );
   const before = page.createEl("button", {
     cls: "mms-article-window-loader is-before",
     text: "\u52A0\u8F7D\u524D\u6587",
@@ -14395,7 +13985,7 @@ var MindMapEditor = class {
     this.applySelectionClasses();
     this.applyArticleClickMoveUi();
   }
-  /** Cancels a deferred background hydration before the article DOM is rebuilt. */
+  /** Cancels a deferred edge expansion before the article DOM is rebuilt. */
   cancelArticleWindowWarmup() {
     this.articleWindowWarmupToken += 1;
     if (this.articleWindowWarmupFrame !== null) window.cancelAnimationFrame(this.articleWindowWarmupFrame);
@@ -14441,7 +14031,12 @@ var MindMapEditor = class {
       });
     });
   }
-  /** Hydrates the remainder of the article without requiring a user scroll. */
+  /**
+   * Hydrates the rest of the current article in small animation-frame batches. The first target
+   * window still paints quickly, but the reader no longer has to touch the scroll wheel to make
+   * the document height and minimap grow. Loading after the target is prioritized; once the tail
+   * is complete, earlier chunks are prepended while preserving the semantic viewport.
+   */
   scheduleArticleWindowWarmup() {
     const controller = this.articleRenderController;
     if (!controller || this.currentMode !== "article" || this.articleWindowExpansionFrame !== null) return;
@@ -19116,7 +18711,7 @@ var MindMapStudioView = class extends import_obsidian13.TextFileView {
    * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
    */
   setViewData(data, clear) {
-    var _a2, _b2, _c, _d, _e, _f, _g, _h, _i;
+    var _a2, _b2, _c, _d, _e, _f, _g, _h, _i, _j, _k;
     const title = (_b2 = (_a2 = this.file) == null ? void 0 : _a2.basename) != null ? _b2 : "\u601D\u7EF4\u5BFC\u56FE";
     this.plugin.logDebug("view", "set-view-data-start", { filePath: (_c = this.file) == null ? void 0 : _c.path, clear, hasEditor: Boolean(this.editor), dataBytes: new TextEncoder().encode(data).byteLength });
     const cachedDocument = this.file ? this.plugin.getCachedMindMapDocument(this.file) : null;
@@ -19153,7 +18748,7 @@ var MindMapStudioView = class extends import_obsidian13.TextFileView {
       this.articleContextReady = true;
       this.articleContextCacheHit = true;
       this.plugin.logDebug("article-context", "cache-hit", {
-        filePath: this.file ? this.file.path : void 0,
+        filePath: (_g = this.file) == null ? void 0 : _g.path,
         tocEntries: cachedArticleContext.tocEntries.length,
         readingSections: cachedArticleContext.readingSections.length
       });
@@ -19165,11 +18760,11 @@ var MindMapStudioView = class extends import_obsidian13.TextFileView {
       this.showArticleToc = false;
       this.articleNavigation = void 0;
       this.readingSections = [];
-      this.plugin.logDebug("article-context", "cache-miss", { filePath: this.file ? this.file.path : void 0 });
+      this.plugin.logDebug("article-context", "cache-miss", { filePath: (_h = this.file) == null ? void 0 : _h.path });
     }
     this.applyViewClasses();
     if (!this.editor || clear) {
-      (_g = this.editor) == null ? void 0 : _g.destroy();
+      (_i = this.editor) == null ? void 0 : _i.destroy();
       this.contentEl.empty();
       this.editor = new MindMapEditor(this.app, this.contentEl, this.document, {
         onChange: (document2, options) => {
@@ -19295,7 +18890,7 @@ var MindMapStudioView = class extends import_obsidian13.TextFileView {
     }
     if (queuedDirectory && this.editor) {
       this.plugin.logDebug("view", "apply-pending-directory", {
-        filePath: (_h = this.file) == null ? void 0 : _h.path,
+        filePath: (_j = this.file) == null ? void 0 : _j.path,
         focusNodeId: queuedDirectory.focusNodeId,
         articleContextReady: this.articleContextReady
       });
@@ -19303,7 +18898,7 @@ var MindMapStudioView = class extends import_obsidian13.TextFileView {
     }
     if (this.pendingFocusNodeId && this.editor) {
       const nodeId = this.pendingFocusNodeId;
-      this.plugin.logDebug("view", "apply-pending-focus", { filePath: (_i = this.file) == null ? void 0 : _i.path, nodeId, persistLocation: this.pendingFocusShouldPersist, articleContextReady: this.articleContextReady });
+      this.plugin.logDebug("view", "apply-pending-focus", { filePath: (_k = this.file) == null ? void 0 : _k.path, nodeId, persistLocation: this.pendingFocusShouldPersist, articleContextReady: this.articleContextReady });
       const persistLocation = this.pendingFocusShouldPersist;
       this.pendingFocusNodeId = null;
       this.pendingFocusShouldPersist = true;
@@ -20743,6 +20338,338 @@ var GlobalMindMapSearchModal = class extends import_obsidian14.Modal {
     await this.waitForResultNavigationTurn();
     (_a2 = this.onDebug) == null ? void 0 : _a2.call(this, "result-navigation-start", { filePath: result.filePath, nodeId: result.nodeId });
     await this.onOpenResult(result);
+  }
+};
+
+// src/article/article-context-cache.ts
+var ARTICLE_CONTEXT_CACHE_SCHEMA_VERSION = 1;
+var ARTICLE_CONTEXT_CACHE_REVISION = "article-context-cache-v1";
+var MAX_CONTEXT_CACHE_ENTRIES = 12;
+var MAX_CONTEXT_CACHE_CHARACTERS = 24e6;
+var MAX_PERSISTED_CACHE_CHARACTERS = 28e6;
+var MAX_DOCUMENT_CACHE_ENTRIES = 32;
+function normalizeArticleContextCachePath(value) {
+  return value.replace(/\\/g, "/").replace(/\/{2,}/g, "/").replace(/^\.\//, "").replace(/\/$/, "");
+}
+function cloneJsonValue(value) {
+  if (typeof structuredClone === "function") return structuredClone(value);
+  return JSON.parse(JSON.stringify(value));
+}
+function isRecord(value) {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+function finiteNumber(value, fallback = 0) {
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+function stringArray(value) {
+  return Array.isArray(value) ? value.filter((item) => typeof item === "string") : [];
+}
+function normalizeTocEntry(value) {
+  if (!isRecord(value)) return null;
+  if (typeof value.filePath !== "string" || typeof value.title !== "string") return null;
+  return {
+    filePath: normalizeArticleContextCachePath(value.filePath),
+    nodeId: typeof value.nodeId === "string" ? value.nodeId : void 0,
+    depth: Math.max(0, Math.floor(finiteNumber(value.depth))),
+    tocDepth: Math.max(1, Math.floor(finiteNumber(value.tocDepth, 1))),
+    label: typeof value.label === "string" ? value.label : "",
+    title: value.title,
+    displayTitle: typeof value.displayTitle === "string" ? value.displayTitle : value.title,
+    breadcrumb: stringArray(value.breadcrumb)
+  };
+}
+function normalizeNavigation2(value) {
+  if (!isRecord(value) || typeof value.homePath !== "string") return void 0;
+  const entries = Array.isArray(value.entries) ? value.entries.map(normalizeTocEntry).filter((entry) => Boolean(entry)) : [];
+  return {
+    entries,
+    currentIndex: Math.max(0, Math.floor(finiteNumber(value.currentIndex))),
+    homePath: normalizeArticleContextCachePath(value.homePath),
+    parentPath: typeof value.parentPath === "string" ? normalizeArticleContextCachePath(value.parentPath) : void 0,
+    parentNodeId: typeof value.parentNodeId === "string" ? value.parentNodeId : void 0,
+    numberingDisabled: typeof value.numberingDisabled === "boolean" ? value.numberingDisabled : void 0
+  };
+}
+function normalizeReadingSection(value) {
+  var _a2;
+  if (!isRecord(value) || typeof value.filePath !== "string" || !isRecord(value.document)) return null;
+  const filePath = normalizeArticleContextCachePath(value.filePath);
+  const fallbackTitle = ((_a2 = filePath.split("/").at(-1)) == null ? void 0 : _a2.replace(/\.mindmap$/i, "")) || "\u601D\u7EF4\u5BFC\u56FE";
+  return {
+    filePath,
+    document: normalizeDocument(value.document, fallbackTitle),
+    baseDepth: Math.max(0, Math.floor(finiteNumber(value.baseDepth))),
+    parentFilePath: typeof value.parentFilePath === "string" ? normalizeArticleContextCachePath(value.parentFilePath) : void 0,
+    parentNodeId: typeof value.parentNodeId === "string" ? value.parentNodeId : void 0,
+    numberingDisabled: typeof value.numberingDisabled === "boolean" ? value.numberingDisabled : void 0
+  };
+}
+function normalizeArticleContext(value) {
+  if (!isRecord(value)) return null;
+  const readingSections = Array.isArray(value.readingSections) ? value.readingSections.map(normalizeReadingSection).filter((section) => Boolean(section)) : [];
+  if (!readingSections.length) return null;
+  const tocEntries = Array.isArray(value.tocEntries) ? value.tocEntries.map(normalizeTocEntry).filter((entry) => Boolean(entry)) : [];
+  return {
+    baseDepth: Math.max(0, Math.floor(finiteNumber(value.baseDepth))),
+    tocEntries,
+    showToc: value.showToc === true,
+    navigation: normalizeNavigation2(value.navigation),
+    readingSections
+  };
+}
+function normalizeRevision(value) {
+  if (!isRecord(value) || typeof value.path !== "string" || !value.path.trim()) return null;
+  if (typeof value.mtime !== "number" || !Number.isFinite(value.mtime)) return null;
+  if (typeof value.size !== "number" || !Number.isFinite(value.size)) return null;
+  return {
+    path: normalizeArticleContextCachePath(value.path),
+    mtime: value.mtime,
+    size: value.size
+  };
+}
+function normalizeArticleContextCacheSnapshot(value) {
+  if (!isRecord(value)) return null;
+  if (value.schemaVersion !== ARTICLE_CONTEXT_CACHE_SCHEMA_VERSION || value.cacheRevision !== ARTICLE_CONTEXT_CACHE_REVISION) return null;
+  if (typeof value.filePath !== "string" || !value.filePath.trim()) return null;
+  const filePath = normalizeArticleContextCachePath(value.filePath);
+  const dependencies = Array.isArray(value.dependencies) ? value.dependencies.map(normalizeRevision).filter((revision) => Boolean(revision)) : [];
+  if (!dependencies.length || !dependencies.some((dependency) => dependency.path === filePath)) return null;
+  const context = normalizeArticleContext(value.context);
+  if (!context) return null;
+  const dependencyPaths = new Set(dependencies.map((dependency) => dependency.path));
+  if (context.readingSections.some((section) => !dependencyPaths.has(section.filePath))) return null;
+  const now = Date.now();
+  return {
+    schemaVersion: ARTICLE_CONTEXT_CACHE_SCHEMA_VERSION,
+    cacheRevision: ARTICLE_CONTEXT_CACHE_REVISION,
+    filePath,
+    dependencies,
+    context,
+    updatedAt: finiteNumber(value.updatedAt, now),
+    lastAccessedAt: finiteNumber(value.lastAccessedAt, now)
+  };
+}
+function sameMindMapFileRevision(left, right) {
+  return normalizeArticleContextCachePath(left.path) === normalizeArticleContextCachePath(right.path) && left.mtime === right.mtime && left.size === right.size;
+}
+var ArticleContextCacheStore = class {
+  /** 创建一个以插件私有 JSON 文件为后端的有界缓存。 */
+  constructor(adapter, cacheDirectory, cacheFile) {
+    this.adapter = adapter;
+    this.cacheDirectory = cacheDirectory;
+    this.cacheFile = cacheFile;
+    this.entries = /* @__PURE__ */ new Map();
+    this.persistTimer = null;
+    this.requestedPersistRevision = 0;
+    this.persistedRevision = 0;
+    this.persistRunner = null;
+  }
+  /** 从磁盘预载最近使用的有效快照；异常缓存会被忽略而不会阻断插件启动。 */
+  async initialize() {
+    this.entries.clear();
+    try {
+      if (!await this.adapter.exists(this.cacheFile)) return;
+      const source = await this.adapter.read(this.cacheFile);
+      if (source.length > MAX_PERSISTED_CACHE_CHARACTERS) return;
+      const parsed = JSON.parse(source);
+      if (!isRecord(parsed) || parsed.schemaVersion !== ARTICLE_CONTEXT_CACHE_SCHEMA_VERSION || !Array.isArray(parsed.entries)) return;
+      const snapshots = parsed.entries.map(normalizeArticleContextCacheSnapshot).filter((snapshot) => Boolean(snapshot)).sort((left, right) => right.lastAccessedAt - left.lastAccessedAt);
+      const selected = [];
+      let characters = 0;
+      for (const snapshot of snapshots) {
+        const size = this.snapshotCharacters(snapshot);
+        if (selected.length >= MAX_CONTEXT_CACHE_ENTRIES) break;
+        if (characters + size > MAX_CONTEXT_CACHE_CHARACTERS) continue;
+        selected.push(snapshot);
+        characters += size;
+      }
+      for (const snapshot of selected.reverse()) this.entries.set(snapshot.filePath, snapshot);
+    } catch (error) {
+      console.warn("MindMap Studio article context cache load failed", error);
+      this.entries.clear();
+    }
+  }
+  /**
+   * 同步读取一个文章上下文；任意父/子导图的 mtime 或 size 不一致都会立即失效整个快照。
+   *
+   * @param filePath 当前打开的物理导图路径。
+   * @param resolveRevision 按依赖路径读取当前仓库文件版本的同步回调。
+   * @returns 命中时返回隔离克隆，避免调用方修改缓存对象。
+   */
+  get(filePath, resolveRevision) {
+    const normalizedPath = normalizeArticleContextCachePath(filePath);
+    const snapshot = this.entries.get(normalizedPath);
+    if (!snapshot) return null;
+    const valid = snapshot.dependencies.every((dependency) => {
+      const current = resolveRevision(dependency.path);
+      return Boolean(current && sameMindMapFileRevision(dependency, current));
+    });
+    if (!valid) {
+      this.entries.delete(normalizedPath);
+      this.markDirty();
+      return null;
+    }
+    const newestPath = Array.from(this.entries.keys()).at(-1);
+    snapshot.lastAccessedAt = Date.now();
+    this.entries.delete(normalizedPath);
+    this.entries.set(normalizedPath, snapshot);
+    if (newestPath !== normalizedPath) this.markDirty();
+    return cloneJsonValue(snapshot.context);
+  }
+  /** 写入一次完整文章族构建结果和构建结束时确认过的全部依赖版本。 */
+  put(filePath, context, dependencies) {
+    const normalizedPath = normalizeArticleContextCachePath(filePath);
+    const uniqueDependencies = /* @__PURE__ */ new Map();
+    for (const dependency of dependencies) {
+      uniqueDependencies.set(normalizeArticleContextCachePath(dependency.path), {
+        path: normalizeArticleContextCachePath(dependency.path),
+        mtime: dependency.mtime,
+        size: dependency.size
+      });
+    }
+    if (!uniqueDependencies.has(normalizedPath)) return;
+    if (context.readingSections.some((section) => !uniqueDependencies.has(normalizeArticleContextCachePath(section.filePath)))) return;
+    const now = Date.now();
+    const snapshot = {
+      schemaVersion: ARTICLE_CONTEXT_CACHE_SCHEMA_VERSION,
+      cacheRevision: ARTICLE_CONTEXT_CACHE_REVISION,
+      filePath: normalizedPath,
+      dependencies: Array.from(uniqueDependencies.values()),
+      context: cloneJsonValue(context),
+      updatedAt: now,
+      lastAccessedAt: now
+    };
+    this.entries.delete(normalizedPath);
+    this.entries.set(normalizedPath, snapshot);
+    this.prune();
+    this.markDirty();
+  }
+  /** 清空全部文章上下文；用于新建或重命名可能让旧的“缺失子导图”引用突然可解析的情况。 */
+  clear() {
+    if (!this.entries.size) return;
+    this.entries.clear();
+    this.markDirty();
+  }
+  /** 当前文件或任意依赖文件被修改、删除、重命名时，清除所有包含它的文章族快照。 */
+  invalidateDependency(filePath) {
+    const normalizedPath = normalizeArticleContextCachePath(filePath);
+    let changed = false;
+    for (const [key, snapshot] of Array.from(this.entries.entries())) {
+      if (snapshot.filePath !== normalizedPath && !snapshot.dependencies.some((dependency) => dependency.path === normalizedPath)) continue;
+      this.entries.delete(key);
+      changed = true;
+    }
+    if (changed) this.markDirty();
+  }
+  /** 插件卸载前提交全部尚未写盘的 LRU/内容变化。 */
+  async flush() {
+    if (this.persistTimer !== null) {
+      window.clearTimeout(this.persistTimer);
+      this.persistTimer = null;
+    }
+    this.startPersistRunner();
+    if (this.persistRunner) await this.persistRunner;
+  }
+  /** 标记内存状态需要持久化，并吸收连续更新。 */
+  markDirty() {
+    this.requestedPersistRevision += 1;
+    this.schedulePersist();
+  }
+  /** 以尾随防抖减少连续文章打开造成的磁盘写入。 */
+  schedulePersist() {
+    if (this.persistRunner) return;
+    if (this.persistTimer !== null) window.clearTimeout(this.persistTimer);
+    this.persistTimer = window.setTimeout(() => {
+      this.persistTimer = null;
+      this.startPersistRunner();
+    }, 800);
+  }
+  /** 启动唯一串行写入循环。 */
+  startPersistRunner() {
+    if (this.persistRunner || this.persistedRevision >= this.requestedPersistRevision) return;
+    if (this.persistTimer !== null) {
+      window.clearTimeout(this.persistTimer);
+      this.persistTimer = null;
+    }
+    this.persistRunner = this.runPersistLoop().finally(() => {
+      this.persistRunner = null;
+      if (this.persistedRevision < this.requestedPersistRevision) this.startPersistRunner();
+    });
+  }
+  /** 串行保存最新稳定快照，写入期间的新变化合并到下一轮。 */
+  async runPersistLoop() {
+    while (this.persistedRevision < this.requestedPersistRevision) {
+      const targetRevision = this.requestedPersistRevision;
+      const content = JSON.stringify({
+        schemaVersion: ARTICLE_CONTEXT_CACHE_SCHEMA_VERSION,
+        entries: Array.from(this.entries.values())
+      });
+      try {
+        if (!await this.adapter.exists(this.cacheDirectory)) await this.adapter.mkdir(this.cacheDirectory);
+        await this.adapter.write(this.cacheFile, content);
+      } catch (error) {
+        console.warn("MindMap Studio article context cache persist failed", error);
+        this.persistedRevision = targetRevision;
+        return;
+      }
+      this.persistedRevision = targetRevision;
+    }
+  }
+  /** 应用条目数与总字符数双重 LRU 上限。 */
+  prune() {
+    while (this.entries.size > MAX_CONTEXT_CACHE_ENTRIES) {
+      const oldest = this.entries.keys().next().value;
+      if (!oldest) break;
+      this.entries.delete(oldest);
+    }
+    let total = Array.from(this.entries.values()).reduce((sum, snapshot) => sum + this.snapshotCharacters(snapshot), 0);
+    while (total > MAX_CONTEXT_CACHE_CHARACTERS && this.entries.size > 1) {
+      const oldest = this.entries.keys().next().value;
+      if (!oldest) break;
+      const removed = this.entries.get(oldest);
+      this.entries.delete(oldest);
+      if (removed) total -= this.snapshotCharacters(removed);
+    }
+  }
+  /** 估算单个快照字符数，用于持久缓存上限。 */
+  snapshotCharacters(snapshot) {
+    return JSON.stringify(snapshot).length;
+  }
+};
+var MindMapDocumentCache = class {
+  constructor() {
+    this.entries = /* @__PURE__ */ new Map();
+  }
+  /** 按文件版本同步读取隔离文档副本；版本不一致时自动清除。 */
+  get(revision) {
+    const path = normalizeArticleContextCachePath(revision.path);
+    const entry = this.entries.get(path);
+    if (!entry) return null;
+    if (!sameMindMapFileRevision(entry.revision, { ...revision, path })) {
+      this.entries.delete(path);
+      return null;
+    }
+    this.entries.delete(path);
+    this.entries.set(path, entry);
+    return cloneJsonValue(entry.document);
+  }
+  /** 保存一个解析后的文档副本，并维持固定 LRU 容量。 */
+  put(revision, document2) {
+    const path = normalizeArticleContextCachePath(revision.path);
+    this.entries.delete(path);
+    this.entries.set(path, {
+      revision: { ...revision, path },
+      document: cloneJsonValue(document2)
+    });
+    while (this.entries.size > MAX_DOCUMENT_CACHE_ENTRIES) {
+      const oldest = this.entries.keys().next().value;
+      if (!oldest) break;
+      this.entries.delete(oldest);
+    }
+  }
+  /** 文件内容或路径发生变化时清除解析结果。 */
+  remove(filePath) {
+    this.entries.delete(normalizeArticleContextCachePath(filePath));
   }
 };
 
@@ -22430,7 +22357,9 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
     this.persistedFileExplorerFilterSignature = "";
     this.unloading = false;
     this.runtimeDebugLog = new RuntimeDebugLog();
+    /** 会话级已解析文档缓存，避免反复 parseDocument。 */
     this.mindMapDocumentCache = new MindMapDocumentCache();
+    /** 任意 .mindmap 变更都会推进该代数，阻止构建期间发生并发修改时写入陈旧快照。 */
     this.mindMapCacheRevision = 0;
   }
   /**
@@ -22640,7 +22569,7 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
    * 执行“onunload”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
    */
   onunload() {
-    var _a2, _b2, _c;
+    var _a2, _b2, _c, _d;
     this.unloading = true;
     if (this.fileExplorerFilterTimer !== null) window.clearTimeout(this.fileExplorerFilterTimer);
     this.fileExplorerFilterTimer = null;
@@ -22659,7 +22588,7 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
     (_b2 = this.searchIndex) == null ? void 0 : _b2.destroy();
     this.app.workspace.detachLeavesOfType(VIEW_TYPE_MINDMAP_STUDIO);
     void ((_c = this.settingsWriter) == null ? void 0 : _c.flush());
-    if (this.articleContextCache) void this.articleContextCache.flush();
+    void ((_d = this.articleContextCache) == null ? void 0 : _d.flush());
   }
   /**
    * 打开global search，并保持模型、界面和持久化状态的一致性。
@@ -23556,22 +23485,31 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
     this.rememberMindMapDocument(file, document2);
     return document2;
   }
+  /** 返回文件当前的 mtime + size 版本，用于同步缓存校验。 */
   mindMapFileRevision(file) {
     return { path: (0, import_obsidian16.normalizePath)(file.path), mtime: file.stat.mtime, size: file.stat.size };
   }
+  /** 按仓库路径读取一个仍存在的 .mindmap 文件版本。 */
   resolveMindMapFileRevision(path) {
     const file = this.app.vault.getAbstractFileByPath((0, import_obsidian16.normalizePath)(path));
     return file instanceof import_obsidian16.TFile && this.isMindMapFile(file) ? this.mindMapFileRevision(file) : null;
   }
+  /** 从会话级文档缓存同步恢复一个隔离的已解析文档。 */
   getCachedMindMapDocument(file) {
     return this.mindMapDocumentCache.get(this.mindMapFileRevision(file));
   }
+  /** 记录当前已解析文档，供后续视图打开和文章族遍历复用。 */
   rememberMindMapDocument(file, document2) {
     this.mindMapDocumentCache.put(this.mindMapFileRevision(file), document2);
   }
+  /** 返回当前缓存代数；文章上下文构建用它检测构建期间是否有并发文件变化。 */
   getMindMapCacheRevision() {
     return this.mindMapCacheRevision;
   }
+  /**
+   * 同步恢复仍与全部父子文件版本一致的文章上下文。当前物理页始终替换为刚加载的文档，
+   * 因此缓存只复用跨文件计算结果，不会覆盖 TextFileView 本次收到的数据。
+   */
   getCachedArticleContext(file, currentDocument) {
     const context = this.articleContextCache.get(file.path, (path) => this.resolveMindMapFileRevision(path));
     if (!context) return null;
@@ -23582,6 +23520,10 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
     }
     return context;
   }
+  /**
+   * 保存一次成功构建的文章上下文。若构建期间任何 .mindmap 发生过变化，则放弃本次快照，
+   * 避免旧文档内容与新的 mtime/size 被错误配对。
+   */
   cacheArticleContext(file, context, buildRevision) {
     if (buildRevision !== this.mindMapCacheRevision) return false;
     const dependencies = [];
@@ -23607,6 +23549,10 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
     }
     return true;
   }
+  /**
+   * 让一个物理导图及所有依赖它的文章族缓存失效。create/rename 可选择清空全部上下文，
+   * 因为新路径可能让旧快照中未记录的“缺失子导图”引用变为可解析。
+   */
   invalidateMindMapCaches(filePath, clearAllArticleContexts = false) {
     this.mindMapCacheRevision += 1;
     this.mindMapDocumentCache.remove(filePath);
