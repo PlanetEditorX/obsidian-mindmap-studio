@@ -39,6 +39,7 @@ src/
 │   ├── display-mode.ts         启动模式和会话持久化规则
 │   ├── reading-location.ts     跨模式、跨文件语义阅读位置
 │   ├── render-window.ts        文章 5 KB 首屏窗口与边缘扩展范围
+│   ├── article-context-cache.ts 文章族上下文 L1/L2 缓存与解析文档 LRU
 │   └── article-style.ts        文章与通读共用的阅读样式解析
 ├── render/
 │   ├── layout.ts               坐标、连线与 SVG
@@ -185,7 +186,7 @@ Obsidian 读取文本
 
 - 使用 `resolveArticleNumbering()` 统一解析自动、关闭和手动层级，再由 `buildArticleNodeInfo()` 生成正文节点信息。
 - 文章上下文准备完成后，`renderArticleMode()` 先由 `buildArticleNodeInfo()` 建立轻量章节顺序，再通过 `render-window.ts` 计算目标节点前后各约 5 KB 的左闭右开窗口；只为该范围创建真实章节 DOM。接近顶部或底部时，控制器分别调用 `loadBefore()` / `loadAfter()` 再扩展约 5 KB。
-- `MindMapDocumentView` 在打开文件时先将 `articleContextReady` 置为 `false`；文章编辑器只绘制与目标落地类型一致的目录或正文骨架，禁止在跨文件父子上下文未完成时用当前物理文件提前生成一次正文。上下文成功后一次性提交目录、分页与阅读快照；失败时回退当前文件上下文并显式结束准备态。
+- `MindMapStudioView.setViewData()` 先按当前 `TFile.stat.mtime + size` 查询会话级 `MindMapDocumentCache`，再同步查询已在插件启动阶段预载的 `ArticleContextCacheStore`。命中时会在创建编辑器前直接恢复 `articleContextReady`、目录、分页与通读章节，不显示解析骨架，也不再调用 `buildArticleContext()`；只有 MISS 才进入准备态并绘制与目标落地类型一致的目录或正文骨架。
 - 跨文件章节打开由插件在 `setViewState()` 前把 `filePath + nodeId` 写入短生命周期队列；新 `MindMapDocumentView.setViewData()` 创建编辑器前同步消费该目标，并在首次上下文刷新前调用 `focusNodeById()`。因此第一份真实章节信息直接使用目标节点，不会先用子文件根标题配合父章节编号绘制中间状态。显式节点目标不依赖 `showArticleToc`：只要队列或编辑器仍持有目标节点，目录落地配置就不能把本次导航改回目录。
 - 需要入口反馈时，编辑器先挂载固定尺寸的 `.mms-article-entry-skeleton`，通过双 `requestAnimationFrame()` 确保骨架实际绘制后再调用 `renderArticleMode()`。骨架只存在于文章滚动容器内，不覆盖页面、不模拟章节高度；快速导航或切换模式会用令牌和帧取消旧任务。系统启用 `prefers-reduced-motion: reduce` 时跳过该绘制门。
 - 向上插入前文时，编辑器记录扩展前后的 `scrollHeight` 差值并补偿 `scrollTop`，保持当前章节在屏幕中的位置。自动或手动扩展先让边缘按钮绘制一帧 `is-loading` 流光，再挂载约 5 KB 真实节点；新节点仅做短时淡入，不遮挡已显示内容。窗口移动和扩展后重新绑定章节折叠、缩略导航、选中状态与文章块移动 UI。
@@ -193,8 +194,9 @@ Obsidian 读取文本
 - 文章位置采集使用模式专属选择器，只扫描 `.mms-article-document-title[data-node-id]` 与 `.mms-article-node[data-node-id]`。`.mms-article-page` 即使保存根节点 ID 也不参与当前位置判断，锚点恰好位于章节边界时采用下一个真实章节，避免把页面空白误记为根节点并在刷新后回到页首。
 - 每次 `restoreReadingLocation()` 建立带递增令牌的“最后一次导航独占”事务；新事务会取消旧定时器、动画帧和 `ResizeObserver`，异步 `setOptions()` 重绘优先保留活动事务的精确 `ReadingLocation`。目标到位后，布局观察最多维持 5 秒，页面因图片、表格、代码或字体晚到而改变高度时重新应用同一语义锚点；滚轮、指针、触摸及 PageUp/PageDown/Home/End/方向键输入会立即取消事务。普通内容重绘仍保存并恢复当前语义位置。
 - `MindMapEditor.setDocument()` 在物理文件变化时先取消上一文件的恢复定时器、动画帧、窗口扩展与布局观察，再原子提交新文档和新文件路径选项；旧事务不能在新 DOM 已挂载后继续写入 `scrollTop`。
-- 章节重量只读取已规范化的原始文字、代码、表格等字段；不会在首屏前为全部节点执行内容块规范化或整节点 `JSON.stringify()`。实际挂载节点的内容块仍在当前渲染窗口内用 `WeakMap` 规范化一次。运行时不保存或恢复节点级 HTML 缓存。
-- 异步文章族上下文刷新通过 `setOptions(..., true)` 标记来源。文章、导图和大纲仅更新阅读上下文；只有文章目录层级、目录项或分页导航发生变化时才重建当前文章，通读模式因渲染跨文件内容仍完整刷新。 `buildArticleContext()` 为每次刷新建立文件级文档缓存，并预先写入当前编辑器文档；遍历父子导图再次遇到当前物理文件时必须复用这份内存快照，避免编号或外观修改在合并保存完成前被旧磁盘内容覆盖。该构建器通过 `ArticleContextProgress` 回调上报阶段；编辑器仅在 `showArticleContextProgress=true` 且当前为文章/通读模式时挂载右下角浮层，默认关闭，100% 后自动清理。
+- 章节重量只读取已规范化的原始文字、代码、表格等字段；不会在首屏前为全部节点执行内容块规范化或整节点 `JSON.stringify()`。实际挂载节点的内容块仍在当前渲染窗口内用 `WeakMap` 规范化一次。运行时不保存或恢复节点级 HTML 缓存；旧 `cache/article-render-cache.json` 仍不参与主链路。
+- `ArticleContextCacheStore` 把成功构建的 `baseDepth`、`tocEntries`、`navigation` 和 `readingSections` 持久化到 `cache/article-context-cache.json`，启动时先预载为内存 LRU。每个快照记录整篇文章族实际读取到的文件依赖及 `mtime + size`；任一依赖版本变化即同步淘汰整个快照。编辑器 `onChange`、vault `modify/delete` 直接按依赖失效；`create/rename` 额外清空全部文章上下文，覆盖“之前缺失的子导图路径现在可解析”这一无法从旧依赖列表得知的变化。全局缓存代数还会阻止构建期间发生文件修改时把旧内容与新文件版本配对写入。
+- 异步文章族上下文刷新通过 `setOptions(..., true)` 标记来源。文章、导图和大纲仅更新阅读上下文；只有文章目录层级、目录项或分页导航发生变化时才重建当前文章，通读模式因渲染跨文件内容仍完整刷新。`buildArticleContext()` 的跨文件读取统一经过 `MindMapDocumentCache`，当前编辑器文档仍作为当前物理文件的权威快照，避免编号或外观修改在合并保存完成前被旧磁盘内容覆盖。该构建器通过 `ArticleContextProgress` 回调上报阶段；编辑器仅在 `showArticleContextProgress=true` 且当前为文章/通读模式时挂载右下角浮层，默认关闭，100% 后自动清理。
 - “返回上一级”、顶部父级导航和键盘 `Esc` 都传递父导图路径与父挂载节点 ID。插件打开目标前会校验该 ID 是否仍存在；缺失、过期或来自旧元数据时，读取来源子导图的父级关系，并按子导图规范路径在目标父导图节点树中反查真实挂载节点。无法反查时仍打开父导图根节点并提示目标已不存在。
 - 自动模式把有子节点或关联子导图的节点视为自然标题；同级存在自然标题时，末端节点也按同级标题处理。手动模式只覆盖最高层级，不强制孤立末端节点标题化。
 - `articleChildStartLevel()` 让中心节点的手动最高层级直接成为一级子节点层级，并处理跨子导图续接。`isDocumentArticleNumberingDisabled()` 单独解释根节点的 `none`：结构层级继续推进，但当前物理导图内的正文标签、目录标签、末端自动序号和子文章页标题编号统一为空；当该文件位于文章族上层时，`ReadingSection.numberingDisabled` 与文章导航状态把关闭语义继续传给全部挂载后代。普通节点的 `none` 仍由 `resolveArticleNumbering()` 作为单节点跳号处理。

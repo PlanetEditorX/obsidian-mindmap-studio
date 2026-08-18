@@ -1,6 +1,41 @@
 # Test Results
 
-版本：1.45.16
+版本：1.46.2
+
+## 1.46.2 文章上下文与解析文档缓存
+
+- 新增 `ArticleContextCacheStore`：第一次完整构建文章族后，把 `baseDepth`、目录、分页导航和 `readingSections` 保存到插件私有 `cache/article-context-cache.json`；插件启动时预载到内存，`setViewData()` 可在创建编辑器之前同步命中。
+- 每份文章上下文快照记录完整父/子 `.mindmap` 依赖的 `path + mtime + size`；任意依赖改变、删除或重命名都会让相关缓存失效，新建/重命名会保守清空文章上下文，避免此前缺失的子导图引用突然变为可解析。
+- 新增会话级 `MindMapDocumentCache`，减少同一文件重复 `parseDocument()`；缓存对象克隆进出，避免编辑器原地修改污染缓存。
+- 构建开始记录全局缓存代数；若构建期间发生任何 `.mindmap` 修改，本次旧结果不写入缓存。持久 JSON 按不可信输入校验，若 `readingSections` 存在未被依赖版本覆盖的文件会拒绝整个快照。
+- 保留现有约 5 KB 文章窗口和现有编辑/搜索/目录定位流程，不恢复旧 `article-render-cache.json` 的节点 HTML 缓存。
+
+## 1.46.2 自动验证
+
+- 缓存专项：`node --test tests/article-context-cache.test.mjs`：**5 / 5 通过**；覆盖跨重启预载、调用方隔离、依赖变化失效、父文件级联失效、文档版本缓存、损坏/不完整依赖 JSON 拒绝，以及真实视图/插件/`main.js` 接线契约。
+- 文章相关组合：`article-context-cache + article-context-progress + article-context-edit + incremental-render + reading-editor-contract + article-numbering`：**81 / 81 通过**。
+- TypeScript：`npx tsc --noEmit --skipLibCheck`：通过。
+- `node --check main.js`：通过；缓存专项同时确认安装 bundle 含 `article-context-cache-v1`、同步命中入口和 `cache-hit` 运行路径。
+- `npm run docs:generate` / `npm run test:docs`：通过，**57 个源码模块、1182 个具名声明**满足文档覆盖。
+- `npm run test:repo`：通过；原上传 ZIP 的中文 `examples/` 已以真实 UTF-8 路径恢复后执行仓库测试。
+- 原始依赖环境执行完整 `npm run test:unit`：**361 项，351 通过 / 10 失败**；10 项全部在测试启动时因上传包只包含 `@esbuild/win32-x64`、当前 Linux 缺少 `@esbuild/linux-x64` 而失败，和缓存断言无关。
+- 为确认上述 10 个测试体本身没有回归，使用仅存在于临时测试目录、不进入任何交付物的 TypeScript 打包兼容层补跑 `plugin-update + xmind-import`：**10 / 10 通过**；同一临时兼容层执行 `scripts/test.mjs`：**全部综合回归通过**。
+- 标准 `npm run test:regression`：在首次启动正式 esbuild 时被同一平台二进制问题阻断。标准 `npm run build`：TypeScript 前置检查通过，production esbuild 随后被同一问题阻断。
+- 标准 `npm run verify` 已执行，并在 `test:unit` 的上述 10 个平台失败处停止。最终 `main.js` 以 1.46.2 上传包中的正式 esbuild bundle 为基线，等价同步本轮缓存运行逻辑，并通过语法、类型、缓存 bundle 契约和其余现有 bundle 契约；**当前容器不能声称正式 esbuild production 重构建全绿**。
+
+## 1.46.2 仍需真实 Obsidian 验证
+
+1. 第一次打开一个包含父/子导图的文章目录应正常构建；退出该页面后立即再次打开同一目录，在文件未修改时应直接命中缓存，不再先出现“正在解析文章结构”的加载过程。
+2. 修改任意父导图或子导图后再次打开，同一文章族必须 MISS 并重新生成目录/通读上下文；新建、删除、重命名子导图也要验证不会复用旧结构。
+3. 完全退出并重启 Obsidian 后，在文章族文件都未改变时再次打开，确认 `cache/article-context-cache.json` 能预载并同步命中。
+4. 缓存命中后复测约 5 KB 前后文窗口、目录跳转、父/子导航、搜索落点、返回目录和文章行内编辑；编辑保存后再次进入应展示新内容而不是旧缓存。
+5. 检查移动端/桌面端插件目录可正常创建 `cache/article-context-cache.json`，且缓存写入失败时只降级为重新构建，不影响文章打开。
+
+## 1.46.2 本轮安装包
+
+- 版本：1.46.2
+- 安装 ZIP：`mindmap-studio-1.46.2-432839.zip`
+- SHA-256：`f8087586db7c3e5692842d43116073d757b058d6ab732e49db86b3ad5cd21393`
 
 ## 1.45.16 输入与修复
 

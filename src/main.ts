@@ -78,6 +78,12 @@ import {
 import { normalizeArticleEntryLockMode, resolveStartupDisplayMode, shouldPersistDisplayMode } from "./article/display-mode";
 import type { DisplayMode } from "./core/model";
 import { normalizeReadingLocation, renameReadingLocationPath } from "./article/reading-location";
+import {
+  ArticleContextCacheStore,
+  MindMapDocumentCache,
+  type ArticleContextData,
+  type MindMapFileRevision
+} from "./article/article-context-cache";
 import { normalizeAiProfileConfig } from "./ai/config";
 import {
   requestAiCompletion,
@@ -206,6 +212,12 @@ export default class MindMapStudioPlugin extends Plugin {
   private persistedFileExplorerFilterSignature = "";
   private unloading = false;
   private readonly runtimeDebugLog = new RuntimeDebugLog();
+  /** 会话级已解析文档缓存，避免反复 parseDocument。 */
+  private readonly mindMapDocumentCache = new MindMapDocumentCache();
+  /** 文章族上下文的 L1/L2 缓存；onload() 中完成磁盘预载。 */
+  private articleContextCache!: ArticleContextCacheStore;
+  /** 任意 .mindmap 变更都会推进该代数，阻止构建期间发生并发修改时写入陈旧快照。 */
+  private mindMapCacheRevision = 0;
 
   /**
    * 执行“onload”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
@@ -218,6 +230,13 @@ export default class MindMapStudioPlugin extends Plugin {
     this.settingsWriter = this.createSettingsWriter();
     this.installFileExplorerFilter();
     const pluginDir = this.manifest.dir ?? normalizePath(`${this.app.vault.configDir}/plugins/${this.manifest.id}`);
+    const articleCacheDirectory = normalizePath(`${pluginDir}/cache`);
+    this.articleContextCache = new ArticleContextCacheStore(
+      this.app.vault.adapter,
+      articleCacheDirectory,
+      normalizePath(`${articleCacheDirectory}/article-context-cache.json`)
+    );
+    await this.articleContextCache.initialize();
     this.searchIndex = new MindMapSearchIndex(this.app, normalizePath(`${pluginDir}/mindmap-search-index.json`), MINDMAP_EXTENSION);
     this.searchIndexReady = this.searchIndex.initialize();
 
@@ -372,17 +391,27 @@ export default class MindMapStudioPlugin extends Plugin {
     }));
 
     this.registerEvent(this.app.vault.on("create", (file) => {
-      if (file instanceof TFile && this.isMindMapFile(file)) this.searchIndex.queueFile(file, 80);
+      if (!(file instanceof TFile) || !this.isMindMapFile(file)) return;
+      this.invalidateMindMapCaches(file.path, true);
+      this.searchIndex.queueFile(file, 80);
     }));
     this.registerEvent(this.app.vault.on("modify", (file) => {
-      if (file instanceof TFile && this.isMindMapFile(file)) this.searchIndex.queueFile(file);
+      if (!(file instanceof TFile) || !this.isMindMapFile(file)) return;
+      this.invalidateMindMapCaches(file.path);
+      this.searchIndex.queueFile(file);
     }));
     this.registerEvent(this.app.vault.on("delete", (file) => {
       if (file instanceof TFile && file.extension.toLowerCase() === MINDMAP_EXTENSION) {
+        this.invalidateMindMapCaches(file.path);
         this.searchIndex.removeFile(file.path);
       }
     }));
     this.registerEvent(this.app.vault.on("rename", (file, oldPath) => {
+      const isMindMapRename = (file instanceof TFile && this.isMindMapFile(file)) || oldPath.toLowerCase().endsWith(`.${MINDMAP_EXTENSION}`);
+      if (isMindMapRename) {
+        this.invalidateMindMapCaches(oldPath, true);
+        if (file instanceof TFile) this.mindMapDocumentCache.remove(file.path);
+      }
       if (file instanceof TFile && this.isMindMapFile(file)) void this.renameReadingLocationPathInSettings(oldPath, file.path);
       if (file instanceof TFile && this.isMindMapFile(file)) {
         this.searchIndex.renameFile(file, oldPath);
@@ -424,6 +453,7 @@ export default class MindMapStudioPlugin extends Plugin {
     this.searchIndex?.destroy();
     this.app.workspace.detachLeavesOfType(VIEW_TYPE_MINDMAP_STUDIO);
     void this.settingsWriter?.flush();
+    void this.articleContextCache?.flush();
   }
 
 
@@ -1426,7 +1456,95 @@ export default class MindMapStudioPlugin extends Plugin {
    * @returns 异步操作完成后的结果。
    */
   private async readMindMapDocument(file: TFile): Promise<MindMapDocument> {
-    return parseDocument(await this.app.vault.cachedRead(file), file.basename);
+    const cached = this.getCachedMindMapDocument(file);
+    if (cached) return cached;
+    const document = parseDocument(await this.app.vault.cachedRead(file), file.basename);
+    this.rememberMindMapDocument(file, document);
+    return document;
+  }
+
+  /** 返回文件当前的 mtime + size 版本，用于同步缓存校验。 */
+  private mindMapFileRevision(file: TFile): MindMapFileRevision {
+    return { path: normalizePath(file.path), mtime: file.stat.mtime, size: file.stat.size };
+  }
+
+  /** 按仓库路径读取一个仍存在的 .mindmap 文件版本。 */
+  private resolveMindMapFileRevision(path: string): MindMapFileRevision | null {
+    const file = this.app.vault.getAbstractFileByPath(normalizePath(path));
+    return file instanceof TFile && this.isMindMapFile(file) ? this.mindMapFileRevision(file) : null;
+  }
+
+  /** 从会话级文档缓存同步恢复一个隔离的已解析文档。 */
+  getCachedMindMapDocument(file: TFile): MindMapDocument | null {
+    return this.mindMapDocumentCache.get(this.mindMapFileRevision(file));
+  }
+
+  /** 记录当前已解析文档，供后续视图打开和文章族遍历复用。 */
+  rememberMindMapDocument(file: TFile, document: MindMapDocument): void {
+    this.mindMapDocumentCache.put(this.mindMapFileRevision(file), document);
+  }
+
+  /** 返回当前缓存代数；文章上下文构建用它检测构建期间是否有并发文件变化。 */
+  getMindMapCacheRevision(): number {
+    return this.mindMapCacheRevision;
+  }
+
+  /**
+   * 同步恢复仍与全部父子文件版本一致的文章上下文。当前物理页始终替换为刚加载的文档，
+   * 因此缓存只复用跨文件计算结果，不会覆盖 TextFileView 本次收到的数据。
+   */
+  getCachedArticleContext(file: TFile, currentDocument: MindMapDocument): ArticleContextData | null {
+    const context = this.articleContextCache.get(file.path, (path) => this.resolveMindMapFileRevision(path));
+    if (!context) return null;
+    context.readingSections = context.readingSections.map((section) => section.filePath === file.path
+      ? { ...section, document: currentDocument }
+      : section);
+    for (const section of context.readingSections) {
+      const target = this.app.vault.getAbstractFileByPath(normalizePath(section.filePath));
+      if (target instanceof TFile && this.isMindMapFile(target)) this.rememberMindMapDocument(target, section.document);
+    }
+    return context;
+  }
+
+  /**
+   * 保存一次成功构建的文章上下文。若构建期间任何 .mindmap 发生过变化，则放弃本次快照，
+   * 避免旧文档内容与新的 mtime/size 被错误配对。
+   */
+  cacheArticleContext(file: TFile, context: ArticleContextData, buildRevision: number): boolean {
+    if (buildRevision !== this.mindMapCacheRevision) return false;
+    const dependencies: MindMapFileRevision[] = [];
+    const seen = new Set<string>();
+    for (const section of context.readingSections) {
+      const path = normalizePath(section.filePath);
+      if (seen.has(path)) continue;
+      seen.add(path);
+      const revision = this.resolveMindMapFileRevision(path);
+      if (!revision) return false;
+      dependencies.push(revision);
+    }
+    if (!seen.has(file.path)) {
+      const revision = this.resolveMindMapFileRevision(file.path);
+      if (!revision) return false;
+      dependencies.push(revision);
+    }
+    if (buildRevision !== this.mindMapCacheRevision) return false;
+    this.articleContextCache.put(file.path, context, dependencies);
+    for (const section of context.readingSections) {
+      const target = this.app.vault.getAbstractFileByPath(normalizePath(section.filePath));
+      if (target instanceof TFile && this.isMindMapFile(target)) this.rememberMindMapDocument(target, section.document);
+    }
+    return true;
+  }
+
+  /**
+   * 让一个物理导图及所有依赖它的文章族缓存失效。create/rename 可选择清空全部上下文，
+   * 因为新路径可能让旧快照中未记录的“缺失子导图”引用变为可解析。
+   */
+  invalidateMindMapCaches(filePath: string, clearAllArticleContexts = false): void {
+    this.mindMapCacheRevision += 1;
+    this.mindMapDocumentCache.remove(filePath);
+    if (clearAllArticleContexts) this.articleContextCache.clear();
+    else this.articleContextCache.invalidateDependency(filePath);
   }
 
   /**
@@ -1477,7 +1595,7 @@ export default class MindMapStudioPlugin extends Plugin {
    * @returns 计算得到的数值结果。
    * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
    */
-  async buildArticleContext(file: TFile, document: MindMapDocument, onProgress?: (progress: ArticleContextProgress) => void): Promise<{ baseDepth: number; tocEntries: ArticleTocEntry[]; showToc: boolean; navigation?: ArticlePageNavigation; readingSections: ReadingSection[] }> {
+  async buildArticleContext(file: TFile, document: MindMapDocument, onProgress?: (progress: ArticleContextProgress) => void): Promise<ArticleContextData> {
     const baseDepth = await this.computeArticleBaseDepth(file, document);
     let progressTotal = Math.max(3, document.root.children.length + 3);
     let progressProcessed = 0;

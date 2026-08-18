@@ -1,5 +1,16 @@
 # Modified Files
 
+## 1.46.2 文章上下文持久缓存与解析文档复用
+
+- `src/article/article-context-cache.ts`：新增文章上下文 L1/L2 缓存、插件私有 JSON 预载/防抖写盘、依赖 `mtime + size` 同步校验、LRU 上限、不可信 JSON 规范化，以及会话级 `MindMapDocumentCache`。
+- `src/main.ts`：插件启动预载 `cache/article-context-cache.json`；`readMindMapDocument()` 优先复用解析文档；新增文章上下文同步读取/写入、构建代数保护和 create/modify/delete/rename 失效处理；卸载时刷新持久缓存。
+- `src/view.ts`：`setViewData()` 在编辑器构造前先读取文档缓存和文章上下文缓存；HIT 直接恢复目录、导航和通读章节且不安排首次 `refreshArticleContext(0)`，MISS 才沿用完整构建流程；编辑立即使相关缓存失效，保存后刷新文档缓存。
+- `tests/article-context-cache.test.mjs`、`package.json`：新增 5 项缓存专项并加入 `test:unit`，覆盖跨重启同步预载、依赖变化、调用方隔离、不完整依赖 JSON、文档 LRU、真实加载主链和 `main.js` 接线。
+- `README.md`、`CHANGELOG.md`、`docs/ARCHITECTURE.md`、`docs/SPECIAL_FEATURES.md`、`docs/TESTING.md`、`docs/FUNCTION_REFERENCE.md`：同步缓存边界、5 KB 渲染保持不变、失效策略、测试与人工验证说明。
+- `main.js`：当前容器缺少 Linux esbuild 二进制，无法执行正式 production esbuild；以原 1.46.2 正式 bundle 为基线等价同步本轮缓存运行代码，并由语法、类型、专项 bundle 契约和现有 bundle 契约校验。
+- `TEST_RESULTS.md`、Codex 交接：记录 81/81 文章相关专项、361 项完整单测中的 10 个 esbuild 平台失败、被阻断测试体的 10/10 临时兼容层补跑、综合回归补跑和真实 Obsidian 待验证项。
+- 本轮安装包：`mindmap-studio-1.46.2-432839.zip`，SHA-256 `f8087586db7c3e5692842d43116073d757b058d6ab732e49db86b3ad5cd21393`。
+
 ## 1.45.16 空节点保留与文章空编辑高度
 
 - `src/core/model.ts`：删除 `isRemovableEmptyNode()` 及 `moveNodeContentBlock()` 中“移动最后一个内容块后删除空来源节点”的隐式树结构修改；来源节点内容可为空，但节点本身始终保留。
