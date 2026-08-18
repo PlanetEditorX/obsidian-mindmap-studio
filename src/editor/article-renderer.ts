@@ -69,6 +69,8 @@ export interface ArticleRendererOptions {
   addInlineNodeActions: (container: HTMLElement, node: MindMapNode) => void;
   /** One-render memo for normalized content blocks; callers normally leave this unset. */
   contentBlockCache?: WeakMap<MindMapNode, MindMapContentBlock[]>;
+  /** Larger first window used after a verified article-context cache hit. */
+  initialWindowByteBudget?: number;
   /** Requests another bounded article window when the reader approaches an unloaded edge. */
   onArticleWindowExpand?: (direction: "before" | "after") => void;
 }
@@ -181,7 +183,11 @@ export function renderArticleMode(container: HTMLElement, options: ArticleRender
   }, articleNodePrimaryText);
   const weights = infos.map(articleNodeRenderBytes);
   const initialTarget = infos.findIndex((info) => info.node.id === options.selectedId);
-  let { start, end } = resolveByteWindow(weights, initialTarget >= 0 ? initialTarget : 0);
+  let { start, end } = resolveByteWindow(
+    weights,
+    initialTarget >= 0 ? initialTarget : 0,
+    options.initialWindowByteBudget
+  );
   const before = page.createEl("button", {
     cls: "mms-article-window-loader is-before",
     text: "加载前文",

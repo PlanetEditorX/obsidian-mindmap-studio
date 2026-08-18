@@ -71,6 +71,7 @@ import { appearanceFromThemePreset, MINDMAP_THEME_PRESETS } from "../themes";
 import { articleNumberLabel, articleTocDepth, buildArticleNodeInfo, DISPLAY_MODE_ICONS, DISPLAY_MODE_LABELS, readingAnchorPart, resolveArticleContextProgressPercent, resolveArticleTocMaxDepth, type ArticleContextProgress, type ArticleTocEntry } from "../article/modes";
 import { ARTICLE_STYLE_PRESETS, resolveArticleStyle } from "../article/article-style";
 import { resolveArticleEntryReadOnly, resolveParentReturnIntent } from "../article/display-mode";
+import { ARTICLE_RENDER_CACHE_HIT_WINDOW_BYTES } from "../article/render-window";
 import {
   chooseArticleLandingRefreshLocation,
   chooseArticleTransitionLocation,
@@ -1520,6 +1521,9 @@ export class MindMapEditor {
   private articleInitialRenderFrame: number | null = null;
   private articleInitialRenderToken = 0;
   private articleWindowExpansionFrame: number | null = null;
+  /** Background hydration frame that grows article DOM without requiring a user scroll. */
+  private articleWindowWarmupFrame: number | null = null;
+  private articleWindowWarmupToken = 0;
   private articleContextLoadingProgress: ArticleContextProgress | null = null;
   private articleContextLoadingEl: HTMLElement | null = null;
   private articleContextLoadingHideTimer: number | null = null;
@@ -4161,6 +4165,7 @@ export class MindMapEditor {
         this.articleEl.scrollTop = previousScroll.top;
         this.articleEl.scrollLeft = previousScroll.left;
       }
+      this.scheduleArticleWindowWarmup();
     };
 
     if (!needsEntryTransition) {
@@ -4233,7 +4238,15 @@ export class MindMapEditor {
   }
 
   /** Cancels a deferred edge expansion before the article DOM is rebuilt. */
+  private cancelArticleWindowWarmup(): void {
+    this.articleWindowWarmupToken += 1;
+    if (this.articleWindowWarmupFrame !== null) window.cancelAnimationFrame(this.articleWindowWarmupFrame);
+    this.articleWindowWarmupFrame = null;
+  }
+
+  /** Cancels user-triggered and background article expansion before the current DOM is replaced. */
   private cancelArticleWindowExpansion(): void {
+    this.cancelArticleWindowWarmup();
     if (this.articleWindowExpansionFrame !== null) window.cancelAnimationFrame(this.articleWindowExpansionFrame);
     this.articleWindowExpansionFrame = null;
     this.articleEl?.querySelectorAll<HTMLElement>(".mms-article-window-loader.is-loading").forEach((loader) => {
@@ -4246,6 +4259,7 @@ export class MindMapEditor {
   private expandArticleWindow(direction: "before" | "after"): void {
     const controller = this.articleRenderController;
     if (!controller || this.articleWindowExpansionFrame !== null) return;
+    this.cancelArticleWindowWarmup();
     const loader = this.articleEl.querySelector<HTMLElement>(`.mms-article-window-loader.is-${direction}`);
     loader?.addClass("is-loading");
     loader?.setAttribute("aria-busy", "true");
@@ -4257,20 +4271,81 @@ export class MindMapEditor {
         const changed = direction === "before" ? controller.loadBefore() : controller.loadAfter();
         loader?.removeClass("is-loading");
         loader?.removeAttribute("aria-busy");
-        if (!changed) return;
+        if (!changed) {
+          this.scheduleArticleWindowWarmup();
+          return;
+        }
         if (direction === "before") {
           this.blockReadingLocationCapture();
           this.articleEl.scrollTop = previousTop + Math.max(0, this.articleEl.scrollHeight - previousHeight);
         }
         this.refreshArticleWindowChrome();
+        this.scheduleArticleWindowWarmup();
       });
     });
+  }
+
+  /**
+   * Hydrates the rest of the current article in small animation-frame batches. The first target
+   * window still paints quickly, but the reader no longer has to touch the scroll wheel to make
+   * the document height and minimap grow. Loading after the target is prioritized; once the tail
+   * is complete, earlier chunks are prepended while preserving the semantic viewport.
+   */
+  private scheduleArticleWindowWarmup(): void {
+    const controller = this.articleRenderController;
+    if (!controller || this.currentMode !== "article" || this.articleWindowExpansionFrame !== null) return;
+    this.cancelArticleWindowWarmup();
+    const token = ++this.articleWindowWarmupToken;
+    this.callbacks.onDebugLog("article", "window-warmup-start", {
+      hasBefore: controller.hasBefore(),
+      hasAfter: controller.hasAfter(),
+      cacheHit: this.options.articleContextCacheHit
+    });
+    const step = (): void => {
+      this.articleWindowWarmupFrame = null;
+      if (token !== this.articleWindowWarmupToken || this.currentMode !== "article" || controller !== this.articleRenderController) return;
+      if (this.articleWindowExpansionFrame !== null) return;
+      if (this.activeReadingRestore) {
+        this.articleWindowWarmupFrame = window.requestAnimationFrame(step);
+        return;
+      }
+      const previousHeight = this.articleEl.scrollHeight;
+      const previousTop = this.articleEl.scrollTop;
+      let changed = false;
+      let loadedBefore = false;
+      let chunks = 0;
+      while (chunks < 4 && controller.hasAfter()) {
+        if (!controller.loadAfter()) break;
+        changed = true;
+        chunks += 1;
+      }
+      while (chunks < 4 && !controller.hasAfter() && controller.hasBefore()) {
+        if (!controller.loadBefore()) break;
+        changed = true;
+        loadedBefore = true;
+        chunks += 1;
+      }
+      if (loadedBefore) {
+        this.blockReadingLocationCapture();
+        this.articleEl.scrollTop = previousTop + Math.max(0, this.articleEl.scrollHeight - previousHeight);
+      }
+      if (changed) this.refreshArticleWindowChrome();
+      if (controller.hasAfter() || controller.hasBefore()) {
+        this.articleWindowWarmupFrame = window.requestAnimationFrame(step);
+        return;
+      }
+      this.callbacks.onDebugLog("article", "window-warmup-complete", {
+        scrollHeight: this.articleEl.scrollHeight,
+        selectedId: this.selectedId
+      });
+    };
+    this.articleWindowWarmupFrame = window.requestAnimationFrame(step);
   }
 
   /** Loads another window only when the reader reaches a rendered edge. */
   private scheduleArticleWindowExpansion(): void {
     const controller = this.articleRenderController;
-    if (!controller || this.currentMode !== "article" || this.articleWindowExpansionFrame !== null || this.activeReadingRestore) return;
+    if (!controller || this.currentMode !== "article" || this.articleWindowExpansionFrame !== null || this.articleWindowWarmupFrame !== null || this.activeReadingRestore) return;
     const threshold = Math.max(480, this.articleEl.clientHeight * 0.7);
     const direction = this.articleEl.scrollTop <= threshold && controller.hasBefore()
       ? "before"
@@ -4486,6 +4561,7 @@ export class MindMapEditor {
       articleLeafNumberingThreshold: this.options.articleLeafNumberingThreshold,
       imageHostPriorityIds: this.options.imageHostPriorityIds,
       articleNavigation: this.options.articleNavigation,
+      initialWindowByteBudget: this.options.articleContextCacheHit ? ARTICLE_RENDER_CACHE_HIT_WINDOW_BYTES : undefined,
       callbacks: {
         ...this.callbacks,
         onOpenMindMap: (path: string, focusNodeId?: string) => this.navigateWithTransition(

@@ -2,6 +2,48 @@
 
 版本：1.46.2
 
+## 1.46.2 目录进入自动补载与二次打开缓存修复
+
+### 用户日志确认的根因
+
+- 第一次从父目录打开 `图形推理.mindmap` 时，文章上下文先 `cache-miss`，随后构建出 338 个目录项并挂载正文窗口；窗口挂载后没有主动扩展事件，后续页面高度变化与新增章节只伴随用户的 `wheel/scroll` 发生。
+- 返回父目录后，缓存代数从 114 继续增加到 115、116；再次打开同一 `图形推理.mindmap` 仍记录 `cache-miss → refresh-start → refresh-success`，说明纯阅读往返触发了物理文件保存/`modify`，刚写入的文章族上下文因此被错误失效。
+- 本轮同时修复这两个链路：正文窗口挂载后主动后台预热；纯阅读无编辑时不再调用 `TextFileView.save()` 写回物理 `.mindmap`。
+
+### 实现验证
+
+- MISS 首窗保持目标前后约 5 KB，以保证首次进入快速可见；文章上下文同步缓存 HIT 时首窗预算提升为 **32 KB**。
+- `scheduleArticleWindowWarmup()` 在真实窗口挂载/目标恢复后启动，每个动画帧最多处理 4 个约 5 KB 分块，优先 `loadAfter()` 补齐后文，再 `loadBefore()` 补齐前文；每批都刷新文章窗口 Chrome，右侧缩略导航与滚动总高度应自动增长。活动语义恢复事务存在时先等待，向上补载按高度差补偿当前 `scrollTop`。
+- `MindMapDocumentView` 现在以 `documentChangeRevision` 区分真实文档编辑与临时视图状态。只有编辑器 `onChange` 提升修订后才允许 `super.save()`；干净导航记录 `save-skipped-clean` 并直接返回，因此“正文 → 返回目录 → 再打开正文”不会因为临时 `articleLandingMode`/折叠状态产生无意义 vault `modify`。真实编辑仍即时失效文章族缓存并正常保存。
+- 不恢复旧 `article-render-cache.json` 的节点级 HTML；后台预热直接分帧挂载当前渲染器产生的真实 DOM，图片、代码、表格、折叠、行内编辑和事件绑定继续走现有链路。
+
+### 自动测试
+
+- 核心缓存 + 文章窗口专项：`node --test tests/article-context-cache.test.mjs tests/incremental-render.test.mjs`：**21 / 21 通过**。
+- 文章组合回归：`article-context-cache + article-context-progress + article-context-edit + incremental-render + reading-editor-contract + article-numbering`：**82 / 82 通过**。
+- TypeScript：`node node_modules/typescript/bin/tsc --noEmit --skipLibCheck`：**通过**。
+- `node --check main.js`：**通过**。
+- `npm run docs:generate` / `npm run test:docs`：**通过**，当前 **57 个源码模块、1184 个具名声明**满足文档覆盖。
+- `npm run test:repo`：**通过**。
+- 原始上传依赖执行 `npm run test:unit`：**362 项，352 通过 / 10 失败**；10 项全部在 `plugin-update` / `xmind-import` 的测试构建钩子启动 esbuild 时失败，错误明确为当前 Linux 需要 `@esbuild/linux-x64`，而上传的 `node_modules` 只有 `@esbuild/win32-x64`。文章缓存、窗口和保存守卫没有新增失败。
+- 为验证被平台二进制阻断的测试体，本轮使用只存在于临时测试目录、不会进入交付物的 TypeScript 打包兼容层执行完整单测：**362 / 362 通过**；同一临时兼容层执行 `node scripts/test.mjs`：**全部综合回归通过**。测试后已恢复原 `node_modules/esbuild/lib/main.js`。
+- 标准 `npm run build`：TypeScript 前置检查通过，随后 production esbuild 因上述 Windows/Linux 二进制不匹配退出；因此当前容器不能声称正式 esbuild 重构建成功。`main.js` 以原 1.46.2 正式 bundle 为基线等价同步本轮运行逻辑，并由语法、类型、源码/安装 bundle 契约验证。
+
+### 真实 Obsidian 重点复测
+
+1. 从文章目录点击一篇大文章后不要滚动：首个正文窗口出现后，右侧缩略导航/滚动条高度应自行继续增长，后续正文自动出现，不需要先把滚动条拖到当前加载末端。
+2. 返回目录后立即再次打开同一文章，且期间不编辑任何正文：应命中 `article-context` 缓存，第二次首窗明显更大，并继续自动补齐；日志应出现 `save-skipped-clean`，不应因“返回目录”本身再次出现该文章的 `cache-miss`。
+3. 真正编辑一个节点并保存后再重开：缓存必须 MISS，重新构建并显示最新内容，以确认“干净导航不写盘”没有削弱真实编辑失效。
+4. 在后台预热过程中从目录跳深层章节、快速连续点击多个目录项、拖动滚动条、滚轮/PageDown、返回父目录；最终语义目标必须保持最后一次用户操作，向上后台补载不能把当前段落顶走。
+5. 复测图片、代码、表格、折叠、缩略导航和文章行内编辑；后台补齐结束后所有交互必须仍可用。
+
+### 本轮交付
+
+- 版本：1.46.2
+- 安装 ZIP：`mindmap-studio-1.46.2-620401.zip`
+- SHA-256：`868a3d35447baba8dae831b15ddcbd5ef4a682c4fcd06b0457b3a85b71762597`
+- 完整源码与 Codex 交接包使用同一 `620401` 后缀。
+
 ## 1.46.2 文章上下文与解析文档缓存
 
 - 新增 `ArticleContextCacheStore`：第一次完整构建文章族后，把 `baseDepth`、目录、分页导航和 `readingSections` 保存到插件私有 `cache/article-context-cache.json`；插件启动时预载到内存，`setViewData()` 可在创建编辑器之前同步命中。

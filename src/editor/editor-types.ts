@@ -106,6 +106,8 @@ export interface MindMapEditorOptions {
   preferredCurrentNodeId: string | null;
   /** Cross-file article numbering and directory metadata have completed their first load. */
   articleContextReady: boolean;
+  /** The current article context was restored synchronously from the persistent/in-memory cache. */
+  articleContextCacheHit: boolean;
   articleBaseDepth: number;
   articleTocEntries: ArticleTocEntry[];
   articleTocMaxDepth: number;

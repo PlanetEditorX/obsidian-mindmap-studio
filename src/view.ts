@@ -37,6 +37,8 @@ export class MindMapStudioView extends TextFileView {
   private pendingFocusNodeId: string | null = null;
   private pendingFocusShouldPersist = true;
   private articleContextReady = false;
+  /** True only when the current article context was restored synchronously from cache. */
+  private articleContextCacheHit = false;
   private articleBaseDepth = 0;
   private articleTocEntries: ArticleTocEntry[] = [];
   private showArticleToc = false;
@@ -48,6 +50,9 @@ export class MindMapStudioView extends TextFileView {
   private preferredCurrentNodeIdOnNextContextRefresh: string | null = null;
   /** Root title last loaded or saved; unrelated edits must not rename an already mismatched file. */
   private persistedRootTitle = "";
+  /** Monotonic content-edit generation. Pure reading/navigation state must never dirty the vault file. */
+  private documentChangeRevision = 0;
+  private savedDocumentChangeRevision = 0;
 
   /**
    * 创建 MindMapStudioView 实例，保存依赖和初始状态；实际 DOM 构建通常在 onOpen() 或后续渲染流程中完成。
@@ -125,6 +130,8 @@ export class MindMapStudioView extends TextFileView {
     this.plugin.logDebug("view", "set-view-data-start", { filePath: this.file?.path, clear, hasEditor: Boolean(this.editor), dataBytes: new TextEncoder().encode(data).byteLength });
     const cachedDocument = this.file ? this.plugin.getCachedMindMapDocument(this.file) : null;
     this.document = cachedDocument ?? parseDocument(data, title);
+    this.documentChangeRevision = 0;
+    this.savedDocumentChangeRevision = 0;
     if (this.file && !cachedDocument) this.plugin.rememberMindMapDocument(this.file, this.document);
     this.persistedRootTitle = nodePlainText(this.document.root).trim();
     const queuedDirectory = this.file ? this.plugin.consumePendingMindMapDirectory(this.file.path) : null;
@@ -153,6 +160,7 @@ export class MindMapStudioView extends TextFileView {
       this.articleNavigation = cachedArticleContext.navigation;
       this.readingSections = cachedArticleContext.readingSections;
       this.articleContextReady = true;
+      this.articleContextCacheHit = true;
       this.plugin.logDebug("article-context", "cache-hit", {
         filePath: this.file?.path,
         tocEntries: cachedArticleContext.tocEntries.length,
@@ -160,6 +168,7 @@ export class MindMapStudioView extends TextFileView {
       });
     } else {
       this.articleContextReady = false;
+      this.articleContextCacheHit = false;
       this.articleBaseDepth = 0;
       this.articleTocEntries = [];
       this.showArticleToc = false;
@@ -175,6 +184,8 @@ export class MindMapStudioView extends TextFileView {
       this.editor = new MindMapEditor(this.app, this.contentEl, this.document, {
         onChange: (document, options) => {
           this.document = document;
+          this.documentChangeRevision += 1;
+          this.articleContextCacheHit = false;
           if (this.file) this.plugin.invalidateMindMapCaches(this.file.path);
           this.requestSave();
           this.scheduleSavedIndicator();
@@ -326,11 +337,22 @@ export class MindMapStudioView extends TextFileView {
     const file = this.file;
     const document = this.editor?.getDocument() ?? this.document;
     const rootTitle = document ? nodePlainText(document.root).trim() : "";
+    const saveRevision = this.documentChangeRevision;
+    if (saveRevision === this.savedDocumentChangeRevision) {
+      this.plugin.logDebug("view", "save-skipped-clean", {
+        filePath: file?.path,
+        clear: clear === true,
+        revision: saveRevision
+      });
+      this.editor?.markSaved();
+      return;
+    }
     const titleChanged = Boolean(document && rootTitle !== this.persistedRootTitle);
     await super.save(clear);
     if (file && document) this.plugin.rememberMindMapDocument(file, document);
     if (file && document && titleChanged) await this.plugin.syncMindMapTitleToFilename(file, document);
     this.persistedRootTitle = rootTitle;
+    if (this.documentChangeRevision === saveRevision) this.savedDocumentChangeRevision = saveRevision;
     this.editor?.markSaved();
   }
 
@@ -568,6 +590,7 @@ export class MindMapStudioView extends TextFileView {
       questionMemoryCurveEnabled: this.plugin.settings.questionMemoryCurveEnabled,
       wrongBookMasteryCount: this.plugin.settings.wrongBookMasteryCount,
       articleContextReady: this.articleContextReady,
+      articleContextCacheHit: this.articleContextCacheHit,
       articleBaseDepth: this.articleBaseDepth,
       articleTocEntries: [...this.articleTocEntries],
       articleTocMaxDepth: this.plugin.settings.articleTocMaxDepth,
@@ -632,6 +655,7 @@ export class MindMapStudioView extends TextFileView {
       this.articleNavigation = context.navigation;
       this.readingSections = context.readingSections;
       this.articleContextReady = true;
+      this.articleContextCacheHit = false;
       const cacheStored = this.plugin.cacheArticleContext(file, context, cacheRevision);
       const preferCurrentFile = this.preferCurrentFileOnNextContextRefresh;
       const preferredCurrentNodeId = preferCurrentFile ? this.preferredCurrentNodeIdOnNextContextRefresh : null;
@@ -661,6 +685,7 @@ export class MindMapStudioView extends TextFileView {
         numberingDisabled: document.root.articleNumberingMode === "none"
       }];
       this.articleContextReady = true;
+      this.articleContextCacheHit = false;
       const preferCurrentFile = this.preferCurrentFileOnNextContextRefresh;
       const preferredCurrentNodeId = preferCurrentFile ? this.preferredCurrentNodeIdOnNextContextRefresh : null;
       this.plugin.logDebug("article-context", "refresh-fallback", { filePath: file.path, token, preferCurrentFile, preferredCurrentNodeId });

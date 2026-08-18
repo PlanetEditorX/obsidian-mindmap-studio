@@ -62,20 +62,29 @@ test("editor construction defers whole-tree mind-map layout until the canvas mod
   assert.match(mindMapRenderer, /this\.layout = computeLayout\(/);
 });
 
-test("article mode mounts a target-centered 5 KB window and expands only at rendered edges", async () => {
-  const [editorSource, articleSource, cssSource] = await Promise.all([
+test("article mode mounts a target-centered window, auto-warms in the background, and keeps manual edge expansion", async () => {
+  const [editorSource, articleSource, cssSource, bundleSource] = await Promise.all([
     readFile(path.join(rootDir, "src/editor/editor.ts"), "utf8"),
     readFile(path.join(rootDir, "src/editor/article-renderer.ts"), "utf8"),
-    readFile(path.join(rootDir, "styles.css"), "utf8")
+    readFile(path.join(rootDir, "styles.css"), "utf8"),
+    readFile(path.join(rootDir, "main.js"), "utf8")
   ]);
   const articleRender = editorSource.match(/private renderArticle\(\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
   const articleMode = articleSource.match(/export function renderArticleMode\([\s\S]*?\n\}/)?.[0] ?? "";
 
   assert.match(articleRender, /this\.articleRenderController = renderArticleMode\(this\.articleEl, this\.articleRendererOptions\(\)\)/);
-  assert.match(articleMode, /resolveByteWindow\(weights, initialTarget >= 0 \? initialTarget : 0\)/);
+  assert.match(articleMode, /resolveByteWindow\([\s\S]*?weights,[\s\S]*?initialTarget >= 0 \? initialTarget : 0,[\s\S]*?options\.initialWindowByteBudget/);
   assert.match(articleMode, /loadBefore:[\s\S]*resolveByteChunk\(weights, start, "before"\)/);
   assert.match(articleMode, /loadAfter:[\s\S]*resolveByteChunk\(weights, end, "after"\)/);
   assert.match(editorSource, /previousTop \+ Math\.max\(0, this\.articleEl\.scrollHeight - previousHeight\)/);
+  assert.match(editorSource, /scheduleArticleWindowWarmup\(\)/);
+  assert.match(editorSource, /private scheduleArticleWindowWarmup\(\): void \{[\s\S]*?controller\.loadAfter\(\)[\s\S]*?controller\.loadBefore\(\)/);
+  assert.match(editorSource, /window-warmup-complete/);
+  assert.match(editorSource, /articleContextCacheHit \? ARTICLE_RENDER_CACHE_HIT_WINDOW_BYTES : undefined/);
+  assert.match(bundleSource, /ARTICLE_RENDER_CACHE_HIT_WINDOW_BYTES = 32 \* 1024/);
+  assert.match(bundleSource, /window-warmup-start/);
+  assert.match(bundleSource, /window-warmup-complete/);
+  assert.match(bundleSource, /initialWindowByteBudget: this\.options\.articleContextCacheHit \? ARTICLE_RENDER_CACHE_HIT_WINDOW_BYTES : void 0/);
   assert.match(cssSource, /\.mms-article-window-loader/);
   assert.match(cssSource, /\.mms-article-window-loader \{[\s\S]*?display: flex;[\s\S]*?align-items: center;[\s\S]*?justify-content: center;[\s\S]*?line-height: 1\.2;/);
   assert.doesNotMatch(cssSource, /--mms-article-loader-border-angle|mms-article-loader-border-run/);
@@ -91,9 +100,11 @@ test("article byte windows keep the target and independently cap both sides", as
   const { module, cleanup } = await loadTypeScriptModule(articleWindowModulePath);
   try {
     assert.equal(module.ARTICLE_RENDER_WINDOW_BYTES, 5 * 1024);
+    assert.equal(module.ARTICLE_RENDER_CACHE_HIT_WINDOW_BYTES, 32 * 1024);
     assert.equal(module.utf8ByteLength("abc中文"), 9);
     assert.deepEqual(module.resolveByteWindow([3000, 3000, 100, 3000, 3000], 2, 5000), { start: 0, end: 5 });
     assert.deepEqual(module.resolveByteWindow([6000, 100, 6000], 1, 5000), { start: 0, end: 3 });
+    assert.deepEqual(module.resolveByteWindow([8000, 8000, 100, 8000, 8000], 2, module.ARTICLE_RENDER_CACHE_HIT_WINDOW_BYTES), { start: 0, end: 5 });
     assert.equal(module.resolveByteChunk([2000, 2000, 2000, 2000], 2, "before", 3000), 0);
     assert.equal(module.resolveByteChunk([2000, 2000, 2000, 2000], 2, "after", 3000), 4);
   } finally {

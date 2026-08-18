@@ -9435,6 +9435,7 @@ var import_obsidian9 = require("obsidian");
 
 // src/article/render-window.ts
 var ARTICLE_RENDER_WINDOW_BYTES = 5 * 1024;
+var ARTICLE_RENDER_CACHE_HIT_WINDOW_BYTES = 32 * 1024;
 function utf8ByteLength(value) {
   var _a2;
   let bytes = 0;
@@ -9619,7 +9620,7 @@ function renderArticleMode(container, options) {
   }, articleNodePrimaryText);
   const weights = infos.map(articleNodeRenderBytes);
   const initialTarget = infos.findIndex((info) => info.node.id === options.selectedId);
-  let { start, end } = resolveByteWindow(weights, initialTarget >= 0 ? initialTarget : 0);
+  let { start, end } = resolveByteWindow(weights, initialTarget >= 0 ? initialTarget : 0, options.initialWindowByteBudget);
   const before = page.createEl("button", {
     cls: "mms-article-window-loader is-before",
     text: "\u52A0\u8F7D\u524D\u6587",
@@ -11942,6 +11943,9 @@ var MindMapEditor = class {
     this.articleInitialRenderFrame = null;
     this.articleInitialRenderToken = 0;
     this.articleWindowExpansionFrame = null;
+    /** Background hydration frame that grows article DOM without requiring a user scroll. */
+    this.articleWindowWarmupFrame = null;
+    this.articleWindowWarmupToken = 0;
     this.articleContextLoadingProgress = null;
     this.articleContextLoadingEl = null;
     this.articleContextLoadingHideTimer = null;
@@ -14324,6 +14328,7 @@ var MindMapEditor = class {
         this.articleEl.scrollTop = previousScroll.top;
         this.articleEl.scrollLeft = previousScroll.left;
       }
+      this.scheduleArticleWindowWarmup();
     };
     if (!needsEntryTransition) {
       renderWindow();
@@ -14390,9 +14395,16 @@ var MindMapEditor = class {
     this.applySelectionClasses();
     this.applyArticleClickMoveUi();
   }
-  /** Cancels a deferred edge expansion before the article DOM is rebuilt. */
+  /** Cancels a deferred background hydration before the article DOM is rebuilt. */
+  cancelArticleWindowWarmup() {
+    this.articleWindowWarmupToken += 1;
+    if (this.articleWindowWarmupFrame !== null) window.cancelAnimationFrame(this.articleWindowWarmupFrame);
+    this.articleWindowWarmupFrame = null;
+  }
+  /** Cancels user-triggered and background article expansion before the current DOM is replaced. */
   cancelArticleWindowExpansion() {
     var _a2;
+    this.cancelArticleWindowWarmup();
     if (this.articleWindowExpansionFrame !== null) window.cancelAnimationFrame(this.articleWindowExpansionFrame);
     this.articleWindowExpansionFrame = null;
     (_a2 = this.articleEl) == null ? void 0 : _a2.querySelectorAll(".mms-article-window-loader.is-loading").forEach((loader) => {
@@ -14404,6 +14416,7 @@ var MindMapEditor = class {
   expandArticleWindow(direction) {
     const controller = this.articleRenderController;
     if (!controller || this.articleWindowExpansionFrame !== null) return;
+    this.cancelArticleWindowWarmup();
     const loader = this.articleEl.querySelector(`.mms-article-window-loader.is-${direction}`);
     loader == null ? void 0 : loader.addClass("is-loading");
     loader == null ? void 0 : loader.setAttribute("aria-busy", "true");
@@ -14415,19 +14428,74 @@ var MindMapEditor = class {
         const changed = direction === "before" ? controller.loadBefore() : controller.loadAfter();
         loader == null ? void 0 : loader.removeClass("is-loading");
         loader == null ? void 0 : loader.removeAttribute("aria-busy");
-        if (!changed) return;
+        if (!changed) {
+          this.scheduleArticleWindowWarmup();
+          return;
+        }
         if (direction === "before") {
           this.blockReadingLocationCapture();
           this.articleEl.scrollTop = previousTop + Math.max(0, this.articleEl.scrollHeight - previousHeight);
         }
         this.refreshArticleWindowChrome();
+        this.scheduleArticleWindowWarmup();
       });
     });
+  }
+  /** Hydrates the remainder of the article without requiring a user scroll. */
+  scheduleArticleWindowWarmup() {
+    const controller = this.articleRenderController;
+    if (!controller || this.currentMode !== "article" || this.articleWindowExpansionFrame !== null) return;
+    this.cancelArticleWindowWarmup();
+    const token = ++this.articleWindowWarmupToken;
+    this.callbacks.onDebugLog("article", "window-warmup-start", {
+      hasBefore: controller.hasBefore(),
+      hasAfter: controller.hasAfter(),
+      cacheHit: this.options.articleContextCacheHit
+    });
+    const step = () => {
+      this.articleWindowWarmupFrame = null;
+      if (token !== this.articleWindowWarmupToken || this.currentMode !== "article" || controller !== this.articleRenderController) return;
+      if (this.articleWindowExpansionFrame !== null) return;
+      if (this.activeReadingRestore) {
+        this.articleWindowWarmupFrame = window.requestAnimationFrame(step);
+        return;
+      }
+      const previousHeight = this.articleEl.scrollHeight;
+      const previousTop = this.articleEl.scrollTop;
+      let changed = false;
+      let loadedBefore = false;
+      let chunks = 0;
+      while (chunks < 4 && controller.hasAfter()) {
+        if (!controller.loadAfter()) break;
+        changed = true;
+        chunks += 1;
+      }
+      while (chunks < 4 && !controller.hasAfter() && controller.hasBefore()) {
+        if (!controller.loadBefore()) break;
+        changed = true;
+        loadedBefore = true;
+        chunks += 1;
+      }
+      if (loadedBefore) {
+        this.blockReadingLocationCapture();
+        this.articleEl.scrollTop = previousTop + Math.max(0, this.articleEl.scrollHeight - previousHeight);
+      }
+      if (changed) this.refreshArticleWindowChrome();
+      if (controller.hasAfter() || controller.hasBefore()) {
+        this.articleWindowWarmupFrame = window.requestAnimationFrame(step);
+        return;
+      }
+      this.callbacks.onDebugLog("article", "window-warmup-complete", {
+        scrollHeight: this.articleEl.scrollHeight,
+        selectedId: this.selectedId
+      });
+    };
+    this.articleWindowWarmupFrame = window.requestAnimationFrame(step);
   }
   /** Loads another window only when the reader reaches a rendered edge. */
   scheduleArticleWindowExpansion() {
     const controller = this.articleRenderController;
-    if (!controller || this.currentMode !== "article" || this.articleWindowExpansionFrame !== null || this.activeReadingRestore) return;
+    if (!controller || this.currentMode !== "article" || this.articleWindowExpansionFrame !== null || this.articleWindowWarmupFrame !== null || this.activeReadingRestore) return;
     const threshold = Math.max(480, this.articleEl.clientHeight * 0.7);
     const direction = this.articleEl.scrollTop <= threshold && controller.hasBefore() ? "before" : this.articleEl.scrollTop + this.articleEl.clientHeight >= this.articleEl.scrollHeight - threshold && controller.hasAfter() ? "after" : null;
     if (direction) this.expandArticleWindow(direction);
@@ -14627,6 +14695,7 @@ var MindMapEditor = class {
       articleLeafNumberingThreshold: this.options.articleLeafNumberingThreshold,
       imageHostPriorityIds: this.options.imageHostPriorityIds,
       articleNavigation: this.options.articleNavigation,
+      initialWindowByteBudget: this.options.articleContextCacheHit ? ARTICLE_RENDER_CACHE_HIT_WINDOW_BYTES : void 0,
       callbacks: {
         ...this.callbacks,
         onOpenMindMap: (path, focusNodeId) => this.navigateWithTransition(
@@ -18974,6 +19043,8 @@ var MindMapStudioView = class extends import_obsidian13.TextFileView {
     this.pendingFocusNodeId = null;
     this.pendingFocusShouldPersist = true;
     this.articleContextReady = false;
+    /** True only when the current article context was restored synchronously from cache. */
+    this.articleContextCacheHit = false;
     this.articleBaseDepth = 0;
     this.articleTocEntries = [];
     this.showArticleToc = false;
@@ -18984,6 +19055,9 @@ var MindMapStudioView = class extends import_obsidian13.TextFileView {
     this.preferredCurrentNodeIdOnNextContextRefresh = null;
     /** Root title last loaded or saved; unrelated edits must not rename an already mismatched file. */
     this.persistedRootTitle = "";
+    /** Monotonic content-edit generation. Pure reading/navigation state must never dirty the vault file. */
+    this.documentChangeRevision = 0;
+    this.savedDocumentChangeRevision = 0;
     this.plugin = plugin;
   }
   /**
@@ -19047,6 +19121,8 @@ var MindMapStudioView = class extends import_obsidian13.TextFileView {
     this.plugin.logDebug("view", "set-view-data-start", { filePath: (_c = this.file) == null ? void 0 : _c.path, clear, hasEditor: Boolean(this.editor), dataBytes: new TextEncoder().encode(data).byteLength });
     const cachedDocument = this.file ? this.plugin.getCachedMindMapDocument(this.file) : null;
     this.document = cachedDocument != null ? cachedDocument : parseDocument(data, title);
+    this.documentChangeRevision = 0;
+    this.savedDocumentChangeRevision = 0;
     if (this.file && !cachedDocument) this.plugin.rememberMindMapDocument(this.file, this.document);
     this.persistedRootTitle = nodePlainText(this.document.root).trim();
     const queuedDirectory = this.file ? this.plugin.consumePendingMindMapDirectory(this.file.path) : null;
@@ -19075,6 +19151,7 @@ var MindMapStudioView = class extends import_obsidian13.TextFileView {
       this.articleNavigation = cachedArticleContext.navigation;
       this.readingSections = cachedArticleContext.readingSections;
       this.articleContextReady = true;
+      this.articleContextCacheHit = true;
       this.plugin.logDebug("article-context", "cache-hit", {
         filePath: this.file ? this.file.path : void 0,
         tocEntries: cachedArticleContext.tocEntries.length,
@@ -19082,6 +19159,7 @@ var MindMapStudioView = class extends import_obsidian13.TextFileView {
       });
     } else {
       this.articleContextReady = false;
+      this.articleContextCacheHit = false;
       this.articleBaseDepth = 0;
       this.articleTocEntries = [];
       this.showArticleToc = false;
@@ -19096,6 +19174,8 @@ var MindMapStudioView = class extends import_obsidian13.TextFileView {
       this.editor = new MindMapEditor(this.app, this.contentEl, this.document, {
         onChange: (document2, options) => {
           this.document = document2;
+          this.documentChangeRevision += 1;
+          this.articleContextCacheHit = false;
           if (this.file) this.plugin.invalidateMindMapCaches(this.file.path);
           this.requestSave();
           this.scheduleSavedIndicator();
@@ -19259,16 +19339,27 @@ var MindMapStudioView = class extends import_obsidian13.TextFileView {
    * @param clear 该参数用于 save 流程中的输入或控制。
    */
   async save(clear) {
-    var _a2, _b2, _c;
+    var _a2, _b2, _c, _d;
     const file = this.file;
     const document2 = (_b2 = (_a2 = this.editor) == null ? void 0 : _a2.getDocument()) != null ? _b2 : this.document;
     const rootTitle = document2 ? nodePlainText(document2.root).trim() : "";
+    const saveRevision = this.documentChangeRevision;
+    if (saveRevision === this.savedDocumentChangeRevision) {
+      this.plugin.logDebug("view", "save-skipped-clean", {
+        filePath: file == null ? void 0 : file.path,
+        clear: clear === true,
+        revision: saveRevision
+      });
+      (_c = this.editor) == null ? void 0 : _c.markSaved();
+      return;
+    }
     const titleChanged = Boolean(document2 && rootTitle !== this.persistedRootTitle);
     await super.save(clear);
     if (file && document2) this.plugin.rememberMindMapDocument(file, document2);
     if (file && document2 && titleChanged) await this.plugin.syncMindMapTitleToFilename(file, document2);
     this.persistedRootTitle = rootTitle;
-    (_c = this.editor) == null ? void 0 : _c.markSaved();
+    if (this.documentChangeRevision === saveRevision) this.savedDocumentChangeRevision = saveRevision;
+    (_d = this.editor) == null ? void 0 : _d.markSaved();
   }
   /**
    * 在弹窗或视图关闭时释放临时 DOM、计时器和事件状态。
@@ -19517,6 +19608,7 @@ var MindMapStudioView = class extends import_obsidian13.TextFileView {
       questionMemoryCurveEnabled: this.plugin.settings.questionMemoryCurveEnabled,
       wrongBookMasteryCount: this.plugin.settings.wrongBookMasteryCount,
       articleContextReady: this.articleContextReady,
+      articleContextCacheHit: this.articleContextCacheHit,
       articleBaseDepth: this.articleBaseDepth,
       articleTocEntries: [...this.articleTocEntries],
       articleTocMaxDepth: this.plugin.settings.articleTocMaxDepth,
@@ -19581,6 +19673,7 @@ var MindMapStudioView = class extends import_obsidian13.TextFileView {
       this.articleNavigation = context.navigation;
       this.readingSections = context.readingSections;
       this.articleContextReady = true;
+      this.articleContextCacheHit = false;
       const cacheStored = this.plugin.cacheArticleContext(file, context, cacheRevision);
       const preferCurrentFile = this.preferCurrentFileOnNextContextRefresh;
       const preferredCurrentNodeId = preferCurrentFile ? this.preferredCurrentNodeIdOnNextContextRefresh : null;
@@ -19610,6 +19703,7 @@ var MindMapStudioView = class extends import_obsidian13.TextFileView {
         numberingDisabled: document2.root.articleNumberingMode === "none"
       }];
       this.articleContextReady = true;
+      this.articleContextCacheHit = false;
       const preferCurrentFile = this.preferCurrentFileOnNextContextRefresh;
       const preferredCurrentNodeId = preferCurrentFile ? this.preferredCurrentNodeIdOnNextContextRefresh : null;
       this.plugin.logDebug("article-context", "refresh-fallback", { filePath: file.path, token, preferCurrentFile, preferredCurrentNodeId });

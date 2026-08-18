@@ -1,5 +1,17 @@
 # Modified Files
 
+## 1.46.2 文章窗口自动预热与目录往返缓存修复
+
+- `src/editor/editor.ts`：正文真实窗口挂载并完成语义定位后启动 `scheduleArticleWindowWarmup()`；按动画帧优先补后文、再补前文，每帧最多 4 次约 5 KB 扩展，每批刷新折叠、缩略导航、选中态与文章块 UI。后台向前补载按新增 `scrollHeight` 补偿 `scrollTop`，并等待活动阅读恢复事务结束，避免自动加载与精确落点竞争；用户滚到边缘时原扩展逻辑继续作为兜底。
+- `src/article/render-window.ts`、`src/editor/article-renderer.ts`、`src/editor/editor-types.ts`：新增 `ARTICLE_RENDER_CACHE_HIT_WINDOW_BYTES = 32 * 1024` 和可选 `initialWindowByteBudget`；文章上下文同步缓存 HIT 时使用更大的首个真实窗口，MISS 仍保持原 5 KB 快速首屏。
+- `src/view.ts`：新增 `articleContextCacheHit`、`documentChangeRevision` 与 `savedDocumentChangeRevision`。真实编辑 `onChange` 才提升修订并失效缓存；纯阅读、章节定位、返回目录和文件切换未发生编辑时，`save()` 在 `super.save()` 前记录 `save-skipped-clean` 并返回，避免把临时 `articleLandingMode` 等视图状态写回 `.mindmap`、产生 vault `modify` 并清掉刚建立的文章族缓存。
+- `tests/incremental-render.test.mjs`：新增后台自动预热、后文优先/前文补齐、缓存 HIT 32 KB 首窗以及 `main.js` 等价 bundle 契约。
+- `tests/article-context-cache.test.mjs`：新增“干净文章导航不得写 vault”的回归，锁定 `onChange → revision`、无编辑 `save()` 早退、保存修订推进和 `articleContextCacheHit` 传递。
+- `README.md`、`CHANGELOG.md`、`docs/ARCHITECTURE.md`、`docs/SPECIAL_FEATURES.md`、`docs/TESTING.md`、`docs/READING_JUMP_FIX.zh-CN.md`、`docs/FUNCTION_REFERENCE.md`：同步“首屏窗口 + 后台真实 DOM 预热”、缓存 HIT 32 KB 首窗、干净导航不写盘及真实 Obsidian 冒烟判据。
+- `main.js`：以原 1.46.2 正式 esbuild bundle 为基线等价同步自动预热、32 KB 缓存命中首窗和干净导航保存守卫；`node --check`、TypeScript、专项源码/安装 bundle 契约均通过。当前 Linux 容器仍无法执行上传依赖中的 Windows-only esbuild production 二进制。
+- `TEST_RESULTS.md`：记录用户日志证据、82/82 文章专项、362 项完整单测中的 352 通过 / 10 个 esbuild 平台失败、临时测试兼容层 362/362 与综合回归通过、文档/仓库检查及待真实 Obsidian 验证项。
+- 本轮交付：`mindmap-studio-1.46.2-620401.zip`，SHA-256 `868a3d35447baba8dae831b15ddcbd5ef4a682c4fcd06b0457b3a85b71762597`；完整源码与 Codex 交接使用同一 `620401` 后缀。
+
 ## 1.46.2 文章上下文持久缓存与解析文档复用
 
 - `src/article/article-context-cache.ts`：新增文章上下文 L1/L2 缓存、插件私有 JSON 预载/防抖写盘、依赖 `mtime + size` 同步校验、LRU 上限、不可信 JSON 规范化，以及会话级 `MindMapDocumentCache`。
