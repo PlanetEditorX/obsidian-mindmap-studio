@@ -5,6 +5,8 @@
 
 /** 目标节点前后各自默认挂载的近似 UTF-8 内容预算。 */
 export const ARTICLE_RENDER_WINDOW_BYTES = 5 * 1024;
+/** Cache hits can afford a larger first DOM window before background hydration continues. */
+export const ARTICLE_RENDER_CACHE_HIT_WINDOW_BYTES = 32 * 1024;
 
 /** 不创建编码缓冲区地估算字符串的 UTF-8 字节数。 */
 export function utf8ByteLength(value: string): number {

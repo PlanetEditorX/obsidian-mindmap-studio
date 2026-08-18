@@ -202,3 +202,29 @@ test("view and plugin wire cache hits into the real article opening path", async
   assert.match(bundleSource, /getCachedArticleContext\(file, currentDocument\)/);
   assert.match(bundleSource, /"article-context", "cache-hit"/);
 });
+
+
+test("clean article navigation skips vault writes so cached family revisions survive a directory round trip", async () => {
+  const [viewSource, bundleSource] = await Promise.all([
+    readFile(path.join(rootDir, "src/view.ts"), "utf8"),
+    readFile(path.join(rootDir, "main.js"), "utf8")
+  ]);
+  const setViewData = viewSource.slice(
+    viewSource.indexOf("setViewData(data: string, clear: boolean): void"),
+    viewSource.indexOf("  clear(): void", viewSource.indexOf("setViewData(data: string, clear: boolean): void"))
+  );
+  const saveSource = viewSource.slice(
+    viewSource.indexOf("async save(clear?: boolean): Promise<void>"),
+    viewSource.indexOf("  async onClose", viewSource.indexOf("async save(clear?: boolean): Promise<void>"))
+  );
+  assert.match(setViewData, /this\.documentChangeRevision = 0;[\s\S]*this\.savedDocumentChangeRevision = 0;/);
+  assert.match(setViewData, /onChange: \(document, options\) => \{[\s\S]*this\.documentChangeRevision \+= 1;[\s\S]*invalidateMindMapCaches/);
+  assert.match(saveSource, /const saveRevision = this\.documentChangeRevision/);
+  assert.match(saveSource, /if \(saveRevision === this\.savedDocumentChangeRevision\) \{[\s\S]*save-skipped-clean[\s\S]*return;/);
+  assert.ok(saveSource.indexOf("save-skipped-clean") < saveSource.indexOf("await super.save(clear)"), "clean navigation must return before TextFileView writes the vault file");
+  assert.match(saveSource, /if \(this\.documentChangeRevision === saveRevision\) this\.savedDocumentChangeRevision = saveRevision/);
+  assert.match(viewSource, /articleContextCacheHit: this\.articleContextCacheHit/);
+  assert.match(bundleSource, /"view", "save-skipped-clean"/);
+  assert.match(bundleSource, /this\.documentChangeRevision \+= 1/);
+  assert.match(bundleSource, /articleContextCacheHit: this\.articleContextCacheHit/);
+});
