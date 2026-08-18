@@ -123,7 +123,9 @@ export class MindMapStudioView extends TextFileView {
   setViewData(data: string, clear: boolean): void {
     const title = this.file?.basename ?? "思维导图";
     this.plugin.logDebug("view", "set-view-data-start", { filePath: this.file?.path, clear, hasEditor: Boolean(this.editor), dataBytes: new TextEncoder().encode(data).byteLength });
-    this.document = parseDocument(data, title);
+    const cachedDocument = this.file ? this.plugin.getCachedMindMapDocument(this.file) : null;
+    this.document = cachedDocument ?? parseDocument(data, title);
+    if (this.file && !cachedDocument) this.plugin.rememberMindMapDocument(this.file, this.document);
     this.persistedRootTitle = nodePlainText(this.document.root).trim();
     const queuedDirectory = this.file ? this.plugin.consumePendingMindMapDirectory(this.file.path) : null;
     const queuedFocusNodeId = queuedDirectory ? null : (this.file ? this.plugin.consumePendingMindMapFocus(this.file.path) : null);
@@ -143,12 +145,28 @@ export class MindMapStudioView extends TextFileView {
       this.preferredCurrentNodeIdOnNextContextRefresh = queuedFocusNodeId;
     }
     if (this.file) void this.plugin.resumePendingAutoUploads(this.file, this.document);
-    this.articleContextReady = false;
-    this.articleBaseDepth = 0;
-    this.articleTocEntries = [];
-    this.showArticleToc = false;
-    this.articleNavigation = undefined;
-    this.readingSections = [];
+    const cachedArticleContext = this.file ? this.plugin.getCachedArticleContext(this.file, this.document) : null;
+    if (cachedArticleContext) {
+      this.articleBaseDepth = cachedArticleContext.baseDepth;
+      this.articleTocEntries = cachedArticleContext.tocEntries;
+      this.showArticleToc = cachedArticleContext.showToc;
+      this.articleNavigation = cachedArticleContext.navigation;
+      this.readingSections = cachedArticleContext.readingSections;
+      this.articleContextReady = true;
+      this.plugin.logDebug("article-context", "cache-hit", {
+        filePath: this.file?.path,
+        tocEntries: cachedArticleContext.tocEntries.length,
+        readingSections: cachedArticleContext.readingSections.length
+      });
+    } else {
+      this.articleContextReady = false;
+      this.articleBaseDepth = 0;
+      this.articleTocEntries = [];
+      this.showArticleToc = false;
+      this.articleNavigation = undefined;
+      this.readingSections = [];
+      this.plugin.logDebug("article-context", "cache-miss", { filePath: this.file?.path });
+    }
     this.applyViewClasses();
 
     if (!this.editor || clear) {
@@ -157,6 +175,7 @@ export class MindMapStudioView extends TextFileView {
       this.editor = new MindMapEditor(this.app, this.contentEl, this.document, {
         onChange: (document, options) => {
           this.document = document;
+          if (this.file) this.plugin.invalidateMindMapCaches(this.file.path);
           this.requestSave();
           this.scheduleSavedIndicator();
           if (options?.refreshArticleContext !== false) this.scheduleArticleContextRefresh(320);
@@ -270,7 +289,14 @@ export class MindMapStudioView extends TextFileView {
       this.pendingFocusShouldPersist = true;
       this.editor.focusNodeById(nodeId, persistLocation);
     }
-    this.scheduleArticleContextRefresh(0);
+    if (cachedArticleContext) {
+      // A synchronous hit already fulfilled the cross-file landing intent; do not let
+      // its stale preference leak into a later edit-triggered context refresh.
+      this.preferCurrentFileOnNextContextRefresh = false;
+      this.preferredCurrentNodeIdOnNextContextRefresh = null;
+    } else {
+      this.scheduleArticleContextRefresh(0);
+    }
   }
 
   /**
@@ -302,6 +328,7 @@ export class MindMapStudioView extends TextFileView {
     const rootTitle = document ? nodePlainText(document.root).trim() : "";
     const titleChanged = Boolean(document && rootTitle !== this.persistedRootTitle);
     await super.save(clear);
+    if (file && document) this.plugin.rememberMindMapDocument(file, document);
     if (file && document && titleChanged) await this.plugin.syncMindMapTitleToFilename(file, document);
     this.persistedRootTitle = rootTitle;
     this.editor?.markSaved();
@@ -584,7 +611,8 @@ export class MindMapStudioView extends TextFileView {
     const document = this.editor?.getDocument() ?? this.document;
     if (!file || !document) return;
     const token = ++this.articleContextToken;
-    this.plugin.logDebug("article-context", "refresh-start", { filePath: file.path, token, pendingFocusNodeId: this.pendingFocusNodeId, preferCurrentFile: this.preferCurrentFileOnNextContextRefresh });
+    const cacheRevision = this.plugin.getMindMapCacheRevision();
+    this.plugin.logDebug("article-context", "refresh-start", { filePath: file.path, token, cacheRevision, pendingFocusNodeId: this.pendingFocusNodeId, preferCurrentFile: this.preferCurrentFileOnNextContextRefresh });
     this.editor?.setArticleContextLoadingProgress({
       phase: "prepare",
       percent: 0,
@@ -604,9 +632,10 @@ export class MindMapStudioView extends TextFileView {
       this.articleNavigation = context.navigation;
       this.readingSections = context.readingSections;
       this.articleContextReady = true;
+      const cacheStored = this.plugin.cacheArticleContext(file, context, cacheRevision);
       const preferCurrentFile = this.preferCurrentFileOnNextContextRefresh;
       const preferredCurrentNodeId = preferCurrentFile ? this.preferredCurrentNodeIdOnNextContextRefresh : null;
-      this.plugin.logDebug("article-context", "refresh-success", { filePath: file.path, token, baseDepth: context.baseDepth, tocEntries: context.tocEntries.length, showToc: context.showToc, readingSections: context.readingSections.length, preferCurrentFile, preferredCurrentNodeId });
+      this.plugin.logDebug("article-context", "refresh-success", { filePath: file.path, token, cacheStored, baseDepth: context.baseDepth, tocEntries: context.tocEntries.length, showToc: context.showToc, readingSections: context.readingSections.length, preferCurrentFile, preferredCurrentNodeId });
       this.editor?.setOptions(this.getEditorOptions(preferCurrentFile, preferredCurrentNodeId), true);
       this.preferCurrentFileOnNextContextRefresh = false;
       this.preferredCurrentNodeIdOnNextContextRefresh = null;
