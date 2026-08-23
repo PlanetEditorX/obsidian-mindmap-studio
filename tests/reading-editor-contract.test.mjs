@@ -424,3 +424,16 @@ test("missing child navigation is recovered from the parent's indexed submap mou
   );
   assert.ok(bundleRecovery.indexOf("await this.searchIndexReady") < bundleRecovery.indexOf("findParentNavigationForChild(file.path)"));
 });
+
+test("read-only keyboard handling is isolated from the main keydown dispatcher", () => {
+  const readOnlyHandler = editorSource.match(/private handleReadOnlyKeydown\(event: KeyboardEvent, mod: boolean, key: string\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
+  const keydown = editorSource.match(/private handleKeydown\(event: KeyboardEvent\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
+  assert.match(keydown, /if \(this\.readOnly\) \{\s*this\.handleReadOnlyKeydown\(event, mod, key\);\s*return;\s*\}/);
+  assert.match(readOnlyHandler, /if \(mod && key === "c"\)/);
+  assert.match(readOnlyHandler, /switch \(key\)/);
+  assert.match(readOnlyHandler, /case "arrowleft":[\s\S]*this\.navigateSelection\("parent"\)/);
+  assert.match(readOnlyHandler, /case "arrowright":[\s\S]*this\.navigateSelection\("child"\)/);
+  assert.match(readOnlyHandler, /case "arrowup":[\s\S]*this\.navigateSelection\("previous"\)/);
+  assert.match(readOnlyHandler, /case "arrowdown":[\s\S]*this\.navigateSelection\("next"\)/);
+  assert.doesNotMatch(keydown, /const direction = key === "arrowleft"/);
+});

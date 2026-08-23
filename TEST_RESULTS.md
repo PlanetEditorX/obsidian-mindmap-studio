@@ -2,6 +2,42 @@
 
 版本：1.46.3
 
+## 1.46.3 静态分析告警整改与导图族索引复用
+
+### 处理结果
+
+- `src/editor/editor.ts` 的告警属于真实可维护性问题：只读模式键盘分支已拆为独立 `handleReadOnlyKeydown()`，主 `handleKeydown()` 只负责委派。原生选中文字复制、方向键导航、缩放、适应视图、折叠等行为保持不变。
+- `src/main.ts` 的“remote image load catch”告警描述与当前源码不完全一致：现有 `catch` 实际只保护从远程 URL 推导建议文件名，并不吞掉 `requestUrl()` 的网络读取错误。本轮把该解析抽成 `remoteImageSuggestedName()` 并补异常 URL / 空路径回退测试；网络失败仍继续抛错，避免被伪装成 `remote-image.png`。
+- `src/search/global-search.ts` 的顺序父链读取属于真实性能优化点，但不能简单 `Promise.all()`，因为下一层父路径依赖上一层导航元数据。本轮让 `refreshFamily()` 优先复用已通过 `mtime + size` 校验的新鲜搜索索引；只有索引缺失或过期才 `cachedRead()`，且同一轮父链解析结果会被向下遍历复用。
+
+### 自动验证
+
+- 静态分析整改专项：`filename + global-search-traversal + reading-editor-contract + global-search-contract` 共 **58 / 58 通过**。
+- 除当前环境启动即依赖 `esbuild` 的 `tests/plugin-update.test.mjs`、`tests/xmind-import.test.mjs` 外，其余完整单元测试：**357 / 357 通过**。
+- 标准 `npm run verify` 已执行：单元测试共 **359 项，357 通过 / 2 失败**；两项失败均在测试文件加载阶段报 `ERR_MODULE_NOT_FOUND: Cannot find package 'esbuild'`，未进入测试体，verify 因 `test:unit` 非零退出按脚本设计停止。
+- `npm run test:regression`：启动 `scripts/test.mjs` 时同样因缺少 `esbuild` 直接退出，未进入综合回归测试体。
+- `npm run build`：TypeScript 前置检查因上传源码没有完整 `obsidian`、`fflate` 等依赖/类型声明而停止；production esbuild 未执行。
+- 对本轮 4 个修改 TypeScript 文件单独执行 TypeScript `transpileModule` 语法检查：**4 / 4 通过**。
+- `npm run docs:generate`、`npm run test:docs`：**通过**，当前 **57 个源码模块、1193 个具名声明**满足文档覆盖。
+- `npm run test:repo`：**通过**。
+- `node --check main.js`：**通过**；安装 bundle 已等价同步本轮只读键盘拆分、远程图片文件名解析和导图族索引复用逻辑。
+- 当前容器因此不能声称标准 `npm run verify` 或正式 production build 全绿；`main.js` 继续以现有 1.46.3 bundle 为基线等价同步。正式发布前应在依赖完整的开发机执行 `npm ci && npm run verify` 重新生成 production bundle。
+
+### 性能与行为回归重点
+
+1. 在父子导图族搜索索引全部新鲜时打开当前导图族搜索，结果范围必须和修复前一致，同时不应为了找根节点重新读取每一级 `.mindmap`。
+2. 修改一个祖先导图后再次搜索，只应读取并重新解析实际过期的族成员；同一祖先不能在“向上找根 + 向下遍历”两个阶段重复读取。
+3. 继续复测上一轮旧子导图导航恢复：缺失 `navigation.parentPath` 的子导图仍应能通过父节点真实 `submap.path` 找回左上角返回按钮。
+4. 只读模式复测 `Ctrl/Cmd+C`：浏览器已有文字选区时保持原生复制；无文字选区时复制当前分支；方向键、`+/-`、`Ctrl/Cmd+0`、空格折叠行为不变。
+5. 远程图片正常 URL 仍以 URL 最后一段作为建议文件名；URL 结构异常时回退 `remote-image.png`；真实网络请求失败必须继续走原错误处理链，而不是假装成功返回文件名。
+
+### 本轮交付
+
+- 版本：1.46.3
+- 测试安装 ZIP：`mindmap-studio-1.46.3-test-146998.zip`
+- SHA-256：`d2d6fc54d917979156d410462e138749562033050fabf73fd0de7f4abf0af03a`
+- 完整源码与 Codex 交接包使用同一 `146998` 后缀。
+
 ## 1.46.3 子导图父级返回导航恢复
 
 ### 根因与修复

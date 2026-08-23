@@ -90,3 +90,18 @@ export function mimeTypeFromFilename(filename: string): string {
   };
   return mimeTypes[extension] ?? "application/octet-stream";
 }
+/**
+ * 从远程图片 URL 提取建议文件名；URL 缺少路径文件名或格式无效时返回后备名称。
+ *
+ * @param source 远程图片 URL。
+ * @param fallback 无法解析文件名时使用的名称。
+ * @returns URL 最后一段路径或后备名称。
+ */
+export function remoteImageSuggestedName(source: string, fallback = "remote-image.png"): string {
+  try {
+    return new URL(source).pathname.split("/").filter(Boolean).at(-1) || fallback;
+  } catch {
+    return fallback;
+  }
+}
+

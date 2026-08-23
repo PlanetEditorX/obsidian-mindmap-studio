@@ -8434,6 +8434,63 @@ export class MindMapEditor {
   }
 
   /**
+   * 处理只读模式允许的键盘导航、缩放和复制操作。
+   * 文本选择存在时保留浏览器原生复制；其余只读快捷键只改变视图状态，不修改文档。
+   *
+   * @param event 触发当前交互的键盘事件。
+   * @param mod 当前事件是否按下 Ctrl/Cmd。
+   * @param key 已规范化为小写的按键名称。
+   */
+  private handleReadOnlyKeydown(event: KeyboardEvent, mod: boolean, key: string): void {
+    if (mod && key === "c") {
+      const selection = window.getSelection();
+      if (selection && !selection.isCollapsed && selection.toString()) return;
+      event.preventDefault();
+      void this.copySelectedBranch();
+      return;
+    }
+
+    switch (key) {
+      case "arrowleft":
+        event.preventDefault();
+        this.navigateSelection("parent");
+        return;
+      case "arrowright":
+        event.preventDefault();
+        this.navigateSelection("child");
+        return;
+      case "arrowup":
+        event.preventDefault();
+        this.navigateSelection("previous");
+        return;
+      case "arrowdown":
+        event.preventDefault();
+        this.navigateSelection("next");
+        return;
+      case "+":
+      case "=":
+        event.preventDefault();
+        this.setZoom(this.zoom * 1.15);
+        return;
+      case "-":
+        event.preventDefault();
+        this.setZoom(this.zoom / 1.15);
+        return;
+      case "0":
+        if (!mod) return;
+        event.preventDefault();
+        this.fitToView();
+        return;
+      case " ":
+        event.preventDefault();
+        this.toggleCollapse();
+        return;
+      default:
+        return;
+    }
+  }
+
+  /**
    * 处理keydown，并保持模型、界面和持久化状态的一致性。
    *
    * @param event 触发当前交互的浏览器或 Obsidian 事件。
@@ -8512,26 +8569,7 @@ export class MindMapEditor {
       return;
     }
     if (this.readOnly) {
-      if (mod && key === "c") {
-        const selection = window.getSelection();
-        if (selection && !selection.isCollapsed && selection.toString()) return;
-        event.preventDefault();
-        void this.copySelectedBranch();
-        return;
-      }
-      if (["arrowleft", "arrowright", "arrowup", "arrowdown"].includes(key)) {
-        event.preventDefault();
-        const direction = key === "arrowleft" ? "parent" : key === "arrowright" ? "child" : key === "arrowup" ? "previous" : "next";
-        this.navigateSelection(direction);
-      } else if (event.key === "+" || event.key === "=") {
-        event.preventDefault(); this.setZoom(this.zoom * 1.15);
-      } else if (event.key === "-") {
-        event.preventDefault(); this.setZoom(this.zoom / 1.15);
-      } else if (mod && key === "0") {
-        event.preventDefault(); this.fitToView();
-      } else if (event.key === " ") {
-        event.preventDefault(); this.toggleCollapse();
-      }
+      this.handleReadOnlyKeydown(event, mod, key);
       return;
     }
     if (mod && key === "d") {

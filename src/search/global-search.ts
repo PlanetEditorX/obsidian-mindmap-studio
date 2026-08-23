@@ -466,10 +466,72 @@ export class MindMapSearchIndex {
   }
 
   /**
+   * 判断搜索索引中的文件快照是否仍与仓库文件一致。
+   *
+   * @param file 当前仓库文件。
+   * @param indexed 已持久化或会话内缓存的索引快照。
+   * @returns 修改时间和大小均匹配时返回 true。
+   */
+  private isIndexedFileFresh(file: TFile, indexed: IndexedMindMapFile | undefined): indexed is IndexedMindMapFile {
+    return Boolean(indexed && indexed.mtime === file.stat.mtime && indexed.size === file.stat.size);
+  }
+
+  /**
+   * 用已解析文档刷新单文件索引，并返回可直接用于族遍历的快照。
+   *
+   * @param file 当前仓库文件。
+   * @param document 已解析或由当前编辑器提供的权威文档。
+   * @returns 写入内存索引后的文件快照。
+   */
+  private indexFamilyDocument(file: TFile, document: MindMapDocument): IndexedMindMapFile {
+    const indexed: IndexedMindMapFile = {
+      mtime: file.stat.mtime,
+      size: file.stat.size,
+      title: document.title,
+      navigation: document.navigation,
+      entries: buildSearchEntries(document, file.path)
+    };
+    this.data.files[file.path] = indexed;
+    return indexed;
+  }
+
+  /**
+   * 获取导图族遍历所需的单文件索引。新鲜索引直接复用；只有缺失或过期时才读取并解析文件。
+   * 同一次族刷新内的解析结果会写入 documents，避免父级爬升和后续向下遍历重复读取同一文件。
+   *
+   * @param file 当前仓库文件。
+   * @param documents 本轮刷新已经解析的文档缓存。
+   * @returns 可用于父子关系遍历的索引快照；读取失败时返回 null。
+   */
+  private async familyIndexedFile(
+    file: TFile,
+    documents: Map<string, MindMapDocument>
+  ): Promise<IndexedMindMapFile | null> {
+    const cachedDocument = documents.get(file.path);
+    if (cachedDocument) return this.indexFamilyDocument(file, cachedDocument);
+
+    const indexed = this.data.files[file.path];
+    if (this.isIndexedFileFresh(file, indexed)) return indexed;
+
+    try {
+      const document = parseDocument(await this.app.vault.cachedRead(file), file.basename);
+      documents.set(file.path, document);
+      return this.indexFamilyDocument(file, document);
+    } catch (error) {
+      console.warn(`MindMap Studio could not read map family member ${file.path}`, error);
+      return null;
+    }
+  }
+
+  /**
    * Refresh a parent map and every recursively linked child map, then return the
-   * exact set of files that belongs to that map family. This is deliberately
-   * on-demand so an existing child map is searchable without recreating it or
-   * manually rebuilding the whole-vault index.
+   * exact set of files that belongs to that map family. Fresh search-index
+   * snapshots are reused so opening family search does not re-read every parent
+   * and child file when nothing changed on disk.
+   *
+   * @param rootPath The map where family search was opened.
+   * @param currentDocument Optional in-memory document that must override the on-disk snapshot for the active map.
+   * @returns Every map path reachable through parent/child relationships.
    */
   async refreshFamily(rootPath: string, currentDocument?: MindMapDocument): Promise<Set<string>> {
     const normalizedRoot = normalizePath(rootPath);
@@ -477,23 +539,22 @@ export class MindMapSearchIndex {
     const documents = new Map<string, MindMapDocument>();
     if (currentDocument) documents.set(normalizedRoot, currentDocument);
 
-    // If search is opened from a child map, first climb to the top parent so
-    // “唐诗” still belongs to the complete “古诗 › 唐诗” map family.
+    // Climb through navigation metadata to the top parent. Most calls arrive
+    // after initialize() refreshed the index, so this path is metadata-only.
+    // A stale or missing snapshot falls back to one cachedRead and is then
+    // reused by the downward traversal below.
     let familyRoot = normalizedRoot;
-    let climbDocument = currentDocument;
     const climbed = new Set<string>();
-    while (climbDocument?.navigation?.parentPath && !climbed.has(familyRoot)) {
+    while (!climbed.has(familyRoot)) {
       climbed.add(familyRoot);
-      const parent = this.resolveSubmapFile(climbDocument.navigation.parentPath, familyRoot);
+      const climbFile = this.app.vault.getAbstractFileByPath(familyRoot);
+      if (!(climbFile instanceof TFile) || climbFile.extension.toLocaleLowerCase() !== this.extension) break;
+      const indexed = await this.familyIndexedFile(climbFile, documents);
+      const parentPath = indexed?.navigation?.parentPath;
+      if (!parentPath) break;
+      const parent = this.resolveSubmapFile(parentPath, familyRoot);
       if (!parent) break;
       familyRoot = parent.path;
-      try {
-        climbDocument = parseDocument(await this.app.vault.cachedRead(parent), parent.basename);
-        documents.set(parent.path, climbDocument);
-      } catch (error) {
-        console.warn(`MindMap Studio could not read parent map ${parent.path}`, error);
-        break;
-      }
     }
 
     const queue: string[] = [familyRoot];
@@ -502,35 +563,20 @@ export class MindMapSearchIndex {
       if (!path || family.has(path)) continue;
       const file = this.app.vault.getAbstractFileByPath(path);
       if (!(file instanceof TFile) || file.extension.toLocaleLowerCase() !== this.extension) continue;
+
+      const indexed = await this.familyIndexedFile(file, documents);
+      if (!indexed) continue;
       family.add(path);
 
-      let document = documents.get(path);
-      if (!document) {
-        try {
-          document = parseDocument(await this.app.vault.cachedRead(file), file.basename);
-        } catch (error) {
-          console.warn(`MindMap Studio could not read map family member ${path}`, error);
-          continue;
-        }
-      }
-
-      this.data.files[path] = {
-        mtime: file.stat.mtime,
-        size: file.stat.size,
-        title: document.title,
-        navigation: document.navigation,
-        entries: buildSearchEntries(document, path)
-      };
-
-      for (const node of this.walkNodes(document.root)) {
-        const child = this.resolveSubmapFile(node.submap?.path, path);
+      for (const entry of indexed.entries) {
+        const child = this.resolveSubmapFile(entry.submapPath, path);
         if (child && !family.has(child.path)) queue.push(child.path);
       }
 
       // Compatibility fallback: a child document also records its parent path.
       // This recovers older maps whose parent node lost the submap field.
-      for (const [candidatePath, indexed] of Object.entries(this.data.files)) {
-        const parentPath = indexed.navigation?.parentPath ?? indexed.entries[0]?.parentMapPath;
+      for (const [candidatePath, candidate] of Object.entries(this.data.files)) {
+        const parentPath = candidate.navigation?.parentPath ?? candidate.entries[0]?.parentMapPath;
         const resolvedParent = this.resolveSubmapFile(parentPath, candidatePath);
         if (resolvedParent?.path === path && !family.has(candidatePath)) queue.push(candidatePath);
       }

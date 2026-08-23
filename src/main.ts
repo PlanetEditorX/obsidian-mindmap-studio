@@ -112,6 +112,7 @@ import {
   buildCompactTimestamp,
   buildDefaultMindMapTitle,
   mimeTypeFromFilename,
+  remoteImageSuggestedName,
   sanitizeFileExtension,
   sanitizeFilename as sanitizeCrossPlatformFilename
 } from "./utils/filename";
@@ -2094,10 +2095,7 @@ export default class MindMapStudioPlugin extends Plugin {
     if (/^https?:\/\//i.test(raw)) {
       const response = await requestUrl({ url: raw, method: "GET", throw: true });
       const contentType = response.headers["content-type"]?.split(";")[0]?.trim() || this.mimeFromFilename(raw);
-      const suggestedName = (() => {
-        try { return new URL(raw).pathname.split("/").filter(Boolean).at(-1) || "remote-image.png"; }
-        catch { return "remote-image.png"; }
-      })();
+      const suggestedName = remoteImageSuggestedName(raw);
       return { blob: new Blob([response.arrayBuffer], { type: contentType }), suggestedName };
     }
     if (/^(?:data|blob):/i.test(raw)) {
