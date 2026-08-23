@@ -152,7 +152,7 @@ Obsidian 读取文本
 5. 结构变化重新渲染当前模式；纯文字提交通过 `mutateInlineText()` 保留现有 DOM，只更新当前节点并安排必要的尺寸测量。
 6. 通知视图保存。
 
-文章表格列宽拖动是一个受限例外：拖动过程中 DOM 已实时反映最终结果，释放鼠标后 `updateTableColumnWidths()` 直接捕获历史、更新稳定表格块、通知保存并保留现有 DOM，不调用 `render()`，同时通过 `refreshArticleContext: false` 阻止视图层延迟重建文章族上下文。边界调整由 `resizeAdjacentTableColumns()` 同时修改当前列与右侧列，总宽度不变；渲染器把保存值转换为百分比列宽，表格继续适配当前页面。该例外仍保留撤销和自动保存，只跳过会造成文章闪烁与阅读位置竞争的同步整页重建。
+文章表格列宽拖动是一个受限例外：拖动过程中 DOM 已实时反映最终结果，释放鼠标后 `updateTableColumnWidths()` 直接捕获历史、更新稳定表格块、通知保存并保留现有 DOM，不调用 `render()`，同时通过 `articleContextImpact: "none"` 阻止视图层安排不必要的文章族上下文刷新。边界调整由 `resizeAdjacentTableColumns()` 同时修改当前列与右侧列，总宽度不变；渲染器把保存值转换为百分比列宽，表格继续适配当前页面。该例外仍保留撤销和自动保存，只跳过会造成文章闪烁与阅读位置竞争的同步整页重建。
 
 不应在 UI 事件中直接修改 `this.document` 后绕过 `mutate()`，否则会产生以下问题：
 
@@ -201,6 +201,7 @@ Obsidian 读取文本
 - `MindMapEditor.setDocument()` 在物理文件变化时先取消上一文件的恢复定时器、动画帧、窗口扩展与布局观察，再原子提交新文档和新文件路径选项；旧事务不能在新 DOM 已挂载后继续写入 `scrollTop`。
 - 章节重量只读取已规范化的原始文字、代码、表格等字段；不会在首屏前为全部节点执行内容块规范化或整节点 `JSON.stringify()`。实际挂载节点的内容块仍在当前渲染窗口内用 `WeakMap` 规范化一次。运行时不保存或恢复节点级 HTML 缓存；旧 `cache/article-render-cache.json` 仍不参与主链路。
 - `ArticleContextCacheStore` 把成功构建的 `baseDepth`、`tocEntries`、`navigation` 和 `readingSections` 持久化到 `cache/article-context-cache.json`，启动时先预载为内存 LRU。每个快照记录整篇文章族实际读取到的文件依赖及 `mtime + size`；任一依赖版本变化即同步淘汰整个快照。编辑器真实 `onChange`、vault `modify/delete` 直接按依赖失效；`create/rename` 额外清空全部文章上下文，覆盖“之前缺失的子导图路径现在可解析”这一无法从旧依赖列表得知的变化。`MindMapDocumentView` 额外维护 `documentChangeRevision/savedDocumentChangeRevision`：只有 `onChange` 提升过修订才调用 `TextFileView.save()`；纯阅读导航、返回目录和临时文章落地状态不写回物理文件，避免无内容变化的文件切换产生 `modify` 并错误淘汰缓存。全局缓存代数还会阻止构建期间发生文件修改时把旧内容与新文件版本配对写入。
+- 编辑器文档变化通过 `MindMapEditorChangeOptions.articleContextImpact` 区分 `none / content / structure`。`none` 只保存当前文档并失效持久缓存，不安排文章上下文刷新；`content` 以约 140 ms 防抖调用 `refreshArticleTocEntriesFromReadingSections()`，只使用当前已加载文章族快照重算目录标题、编号、breadcrumb 与当前章节文档引用，不执行 vault 读取；生成条目数量或目录层级与既有快照不一致时返回 `null` 并立即升级为完整构建。`structure` 保持约 320 ms 的完整 `buildArticleContext()`，用于节点拓扑、子导图挂载和文章编号变化。完整构建开始时捕获 `documentChangeRevision`，若异步返回前用户又产生编辑，则旧结果不会写入 UI，而是安排一次最新修订的完整构建，避免分级刷新后旧快照覆盖新内容。
 - 异步文章族上下文刷新通过 `setOptions(..., true)` 标记来源。文章、导图和大纲仅更新阅读上下文；只有文章目录层级、目录项或分页导航发生变化时才重建当前文章，通读模式因渲染跨文件内容仍完整刷新。`buildArticleContext()` 的跨文件读取统一经过 `MindMapDocumentCache`，当前编辑器文档仍作为当前物理文件的权威快照，避免编号或外观修改在合并保存完成前被旧磁盘内容覆盖。该构建器通过 `ArticleContextProgress` 回调上报阶段；编辑器仅在 `showArticleContextProgress=true` 且当前为文章/通读模式时挂载右下角浮层，默认关闭，100% 后自动清理。
 - “返回上一级”、顶部父级导航和键盘 `Esc` 都传递父导图路径与父挂载节点 ID。插件打开目标前会校验该 ID 是否仍存在；缺失、过期或来自旧元数据时，读取来源子导图的父级关系，并按子导图规范路径在目标父导图节点树中反查真实挂载节点。无法反查时仍打开父导图根节点并提示目标已不存在。
 - 自动模式把有子节点或关联子导图的节点视为自然标题；同级存在自然标题时，末端节点也按同级标题处理。手动模式只覆盖最高层级，不强制孤立末端节点标题化。

@@ -86,7 +86,7 @@ import {
   type ReadingLocation,
   type ResolvedReadingLocation
 } from "../article/reading-location";
-import type { MindMapEditorCallbacks, MindMapEditorOptions } from "./editor-types";
+import type { ArticleContextChangeImpact, MindMapEditorCallbacks, MindMapEditorOptions } from "./editor-types";
 import { readRichTextEditor, renderInlineMarkdown, renderRichTextRuns } from "./rich-text-dom";
 import {
   chooseImageHosts,
@@ -2451,6 +2451,11 @@ export class MindMapEditor {
     return cloneDocument(this.document);
   }
 
+  /** Sends one document snapshot to the host together with the minimum article-context work it requires. */
+  private notifyDocumentChange(articleContextImpact: ArticleContextChangeImpact = "structure"): void {
+    this.callbacks.onChange(this.getDocument(), { articleContextImpact });
+  }
+
   /**
    * 把后台图床上传结果合并到编辑器当前最新文档，不替换用户在上传期间继续编辑的节点树。
    *
@@ -2460,7 +2465,7 @@ export class MindMapEditor {
   applyImageUploadPatches(patches: readonly MindMapImageUploadPatch[]): number {
     const updated = applyImageUploadPatches(this.document, patches);
     if (!updated) return 0;
-    this.callbacks.onChange(this.getDocument());
+    this.notifyDocumentChange("none");
     this.markSaving();
     this.render();
     return updated;
@@ -2686,7 +2691,7 @@ export class MindMapEditor {
     recoverUi();
     window.setTimeout(() => {
       try {
-        this.callbacks.onChange(this.getDocument());
+        this.notifyDocumentChange("none");
       } catch (error) {
         console.error("MindMap Studio paste image save synchronization retry failed", error);
       }
@@ -3166,7 +3171,7 @@ export class MindMapEditor {
     // before the lock icon and existing content become interactive.
     this.readOnlyPersistTimer = window.setTimeout(() => {
       this.readOnlyPersistTimer = null;
-      this.callbacks.onChange(this.getDocument());
+      this.notifyDocumentChange("none");
       this.markSaving();
     }, 0);
   }
@@ -3845,7 +3850,7 @@ export class MindMapEditor {
         this.activeArticleBlock = null;
       }
       if (save && editor.value !== code.code) {
-        this.mutate(() => this.upsertStructuredBlock(node, "code", { ...code, code: editor.value }, blockId));
+        this.mutateWithoutArticleContext(() => this.upsertStructuredBlock(node, "code", { ...code, code: editor.value }, blockId));
       } else {
         this.render();
       }
@@ -4801,7 +4806,7 @@ export class MindMapEditor {
       if (this.options.questionMemoryCurveEnabled) question.correctCount = 0;
     }
     question.lastPracticedAt = new Date().toISOString();
-    this.callbacks.onChange(this.getDocument());
+    this.notifyDocumentChange("none");
     this.markSaving();
   }
 
@@ -5032,7 +5037,7 @@ export class MindMapEditor {
             const previous = block.remoteSources?.find((item) => item.url === block.source);
             block.source = candidate.source;
             replaceNodeContentBlocks(node, blocks);
-            this.callbacks.onChange(this.getDocument());
+            this.notifyDocumentChange("none");
             this.markSaving();
             const previousLabel = previous?.hostName || "当前图床";
             new Notice(`图片地址失效，已从 ${previousLabel} 自动切换到 ${candidate.label}`, 6000);
@@ -5160,7 +5165,7 @@ export class MindMapEditor {
         if (!event.ctrlKey && !event.metaKey) return;
         event.preventDefault();
         event.stopPropagation();
-        this.mutate(() => {
+        this.mutateWithoutArticleContext(() => {
           const next = { ...(node.style ?? {}), width: undefined, minHeight: undefined };
           node.style = Object.values(next).some((value) => value !== undefined) ? next : undefined;
         });
@@ -5192,7 +5197,7 @@ export class MindMapEditor {
           resizeHandle.removeEventListener("pointercancel", finish);
           if (resizeHandle.hasPointerCapture(upEvent.pointerId)) resizeHandle.releasePointerCapture(upEvent.pointerId);
           nodeEl.removeClass("is-resizing");
-          this.mutate(() => {
+          this.mutateWithoutArticleContext(() => {
             node.style = {
               ...(node.style ?? {}),
               width: Math.round(previewWidth),
@@ -5755,7 +5760,7 @@ export class MindMapEditor {
       node.content = blocks;
       syncNodeContentFields(node);
       if (node.id === this.document.root.id && values.text) this.document.title = values.text;
-      this.callbacks.onChange(this.getDocument());
+      this.notifyDocumentChange("content");
       this.markSaving();
       this.viewportEl.dispatchEvent(new CustomEvent("mms-inline-node-change", { detail: { nodeId } }));
     };
@@ -6049,7 +6054,7 @@ export class MindMapEditor {
     const selected = this.selectedNode();
     if (!selected) return;
     let blockId = "";
-    this.mutate(() => { blockId = this.insertTextBlockAfter(selected, afterBlockId); });
+    this.mutateWithoutArticleContext(() => { blockId = this.insertTextBlockAfter(selected, afterBlockId); });
     window.requestAnimationFrame(() => this.beginInlineEdit(selected.id, blockId, true));
   }
 
@@ -6088,6 +6093,9 @@ export class MindMapEditor {
       onReadImageSource: this.callbacks.onReadImageSource,
       onScheduleAutoUpload: this.callbacks.onScheduleAutoUpload
     }, (values, mode) => {
+      const previousArticleTitle = nodePlainText(selected);
+      const previousNumberingMode = selected.articleNumberingMode;
+      const previousNumberingLevel = selected.articleNumberingLevel;
       // A continuously open editor may autosave many times. Capture one undo
       // snapshot for the whole editing session instead of one snapshot per keypress.
       if (!historyCaptured) {
@@ -6120,7 +6128,14 @@ export class MindMapEditor {
         const title = nodePlainText(selected);
         if (title) this.document.title = title;
       }
-      this.callbacks.onChange(this.getDocument());
+      const articleContextImpact: ArticleContextChangeImpact =
+        previousNumberingMode !== selected.articleNumberingMode
+        || previousNumberingLevel !== selected.articleNumberingLevel
+          ? "structure"
+          : previousArticleTitle !== nodePlainText(selected)
+            ? "content"
+            : "none";
+      this.notifyDocumentChange(articleContextImpact);
       this.markSaving();
       if (this.inlineEditingId === selected.id) {
         const inline = this.mindMapNodeElements.get(selected.id)?.querySelector<HTMLElement>(
@@ -6339,7 +6354,7 @@ export class MindMapEditor {
       this.render();
       return;
     }
-    this.mutate(() => { selected.collapsed = !selected.collapsed; });
+    this.mutateWithoutArticleContext(() => { selected.collapsed = !selected.collapsed; });
   }
 
   /**
@@ -6361,7 +6376,7 @@ export class MindMapEditor {
       apply();
       this.render();
     } else {
-      this.mutate(apply);
+      this.mutateWithoutArticleContext(apply);
     }
     // Bulk collapse changes the complete visible bounds. Wait for the rebuilt and
     // measured compact tree, then smoothly bring it back into the viewport.
@@ -6387,7 +6402,7 @@ export class MindMapEditor {
    */
   private toggleLayout(): void {
     if (!this.ensureEditable()) return;
-    this.mutate(() => { this.document.layout = this.document.layout === "right" ? "balanced" : "right"; });
+    this.mutateWithoutArticleContext(() => { this.document.layout = this.document.layout === "right" ? "balanced" : "right"; });
     window.setTimeout(() => this.fitToView(), 20);
   }
 
@@ -6477,7 +6492,7 @@ export class MindMapEditor {
     if (!this.ensureEditable()) return;
     const selected = this.selectedNode() ?? this.document.root;
     new TableEditModal(this.app, selected.table, (table) => {
-      this.mutate(() => this.upsertStructuredBlock(selected, "table", table));
+      this.mutateWithoutArticleContext(() => this.upsertStructuredBlock(selected, "table", table));
     }).open();
   }
 
@@ -6489,7 +6504,7 @@ export class MindMapEditor {
     const selected = this.selectedNode() ?? this.document.root;
     const table = childrenToTable(selected);
     if (!table) { new Notice("当前节点没有可转换的子节点"); return; }
-    this.mutate(() => {
+    this.mutateWithoutArticleContext(() => {
       this.upsertStructuredBlock(selected, "table", table);
       selected.collapsed = true;
     });
@@ -6503,7 +6518,7 @@ export class MindMapEditor {
     if (!this.ensureEditable()) return;
     const selected = this.selectedNode() ?? this.document.root;
     new CodeEditModal(this.app, undefined, (code) => {
-      this.mutate(() => this.appendCodeBlock(selected, code));
+      this.mutateWithoutArticleContext(() => this.appendCodeBlock(selected, code));
     }).open();
   }
 
@@ -6659,7 +6674,7 @@ export class MindMapEditor {
   ): void {
     if (!this.ensureEditable()) return;
     let moved = false;
-    this.mutate(() => {
+    this.mutateArticleContent(() => {
       moved = moveNodeContentBlock(this.document.root, sourceNodeId, blockId, targetNodeId, targetBlockId, position);
       if (moved) {
         this.selectedId = targetNodeId;
@@ -6688,7 +6703,7 @@ export class MindMapEditor {
     if (!node || !this.ensureEditable()) return;
     const blocks = nodeContentBlocks(node);
     if (!blocks.some((block) => block.id === blockId)) return;
-    this.mutate(() => {
+    this.mutateArticleContent(() => {
       replaceNodeContentBlocks(node, blocks.filter((block) => block.id !== blockId));
     });
   }
@@ -6780,9 +6795,7 @@ export class MindMapEditor {
     }
     this.articleEl.empty();
     this.articleEl.removeAttribute("aria-busy");
-    const sections = this.options.readingSections.length
-      ? this.options.readingSections
-      : [{ filePath: this.options.articleNavigation?.homePath ?? "", document: this.document, baseDepth: 0 }];
+    const sections = this.readingLocationSections();
     const style = resolveArticleStyle({
       preset: this.document.articleStyle?.preset ?? "classic",
       ...this.document.articleStyle,
@@ -7126,7 +7139,7 @@ export class MindMapEditor {
     menu.addItem((item) => item.setTitle("编辑表格").setIcon("table-2").onClick(() => this.openTableBlockEditor(node, table, blockId)));
     if (blockId) menu.addItem((item) => item.setTitle("删除当前块").setIcon("trash-2").onClick(() => {
       if (!this.ensureEditable()) return;
-      this.mutate(() => this.removeStructuredBlock(node, blockId));
+      this.mutateWithoutArticleContext(() => this.removeStructuredBlock(node, blockId));
     }));
     menu.showAtMouseEvent(event);
   }
@@ -7137,7 +7150,7 @@ export class MindMapEditor {
     menu.addItem((item) => item.setTitle("编辑代码").setIcon("code-2").onClick(() => this.openCodeBlockEditor(node, code, blockId)));
     if (blockId) menu.addItem((item) => item.setTitle("删除当前块").setIcon("trash-2").onClick(() => {
       if (!this.ensureEditable()) return;
-      this.mutate(() => this.removeStructuredBlock(node, blockId));
+      this.mutateWithoutArticleContext(() => this.removeStructuredBlock(node, blockId));
     }));
     menu.showAtMouseEvent(event);
   }
@@ -7148,7 +7161,7 @@ export class MindMapEditor {
     this.selectNode(node.id);
     new TableEditModal(this.app, table, (next) => {
       const viewportAnchor = this.captureMindMapViewportAnchor(node.id);
-      this.mutate(() => this.upsertStructuredBlock(node, "table", next, blockId));
+      this.mutateWithoutArticleContext(() => this.upsertStructuredBlock(node, "table", next, blockId));
       this.restoreMindMapViewportAnchor(viewportAnchor);
     }).open();
   }
@@ -7163,7 +7176,7 @@ export class MindMapEditor {
     if (location) this.rememberLocation(location, true);
     this.history.capture(this.document);
     this.upsertStructuredBlock(node, "table", { ...block.table, columnWidths }, blockId);
-    this.callbacks.onChange(this.getDocument(), { refreshArticleContext: false });
+    this.notifyDocumentChange("none");
     this.markSaving();
   }
 
@@ -7172,7 +7185,7 @@ export class MindMapEditor {
     if (!this.ensureEditable()) return;
     this.selectNode(node.id);
     new CodeEditModal(this.app, code, (next) => {
-      this.mutate(() => this.upsertStructuredBlock(node, "code", next, blockId));
+      this.mutateWithoutArticleContext(() => this.upsertStructuredBlock(node, "code", next, blockId));
     }).open();
   }
 
@@ -7228,7 +7241,7 @@ export class MindMapEditor {
       }
       let inserted = false;
       try {
-        this.mutate(() => {
+        this.mutateWithoutArticleContext(() => {
           const blocks = nodeContentBlocks(selected);
           const afterIndex = afterBlockId ? blocks.findIndex((block) => block.id === afterBlockId) : -1;
           blocks.splice(afterIndex >= 0 ? afterIndex + 1 : blocks.length, 0, imageBlock);
@@ -7268,14 +7281,14 @@ export class MindMapEditor {
     const table = parseMarkdownTable(text);
     if (table) {
       event.preventDefault();
-      this.mutate(() => this.upsertStructuredBlock(selected, "table", table));
+      this.mutateWithoutArticleContext(() => this.upsertStructuredBlock(selected, "table", table));
       new Notice("已识别并插入 Markdown 表格");
       return;
     }
     const clipboardBlocks = parseClipboardContentBlocks(text);
     if (clipboardBlocks) {
       event.preventDefault();
-      this.mutate(() => {
+      this.mutateArticleContent(() => {
         const existing = nodeContentBlocks(selected);
         const onlyCodeBlock = clipboardBlocks.length === 1 && clipboardBlocks[0]?.type === "code"
           ? clipboardBlocks[0]
@@ -7421,7 +7434,7 @@ export class MindMapEditor {
     const collapsed = ancestors.filter((node) => node.collapsed);
     if (collapsed.length) {
       if (this.readOnly) collapsed.forEach((node) => { node.collapsed = false; });
-      else this.mutate(() => collapsed.forEach((node) => { node.collapsed = false; }));
+      else this.mutateWithoutArticleContext(() => collapsed.forEach((node) => { node.collapsed = false; }));
     }
     this.selectedId = id;
     this.selectedIds.clear();
@@ -7626,7 +7639,7 @@ export class MindMapEditor {
     const blocks = nodeContentBlocks(node);
     const block = blocks.find((item): item is MindMapImageContentBlock => item.type === "image" && item.id === blockId);
     if (!block) return;
-    this.mutate(() => {
+    this.mutateWithoutArticleContext(() => {
       update(block);
       replaceNodeContentBlocks(node, blocks);
     });
@@ -7639,7 +7652,7 @@ export class MindMapEditor {
     const blocks = nodeContentBlocks(node);
     const block = blocks.find((item): item is MindMapTextContentBlock => item.type === "text" && item.id === blockId);
     if (!block) return;
-    this.mutate(() => {
+    this.mutateWithoutArticleContext(() => {
       block.paragraphIndent = block.paragraphIndent === "none" ? undefined : "none";
       replaceNodeContentBlocks(node, blocks);
     });
@@ -7661,7 +7674,7 @@ export class MindMapEditor {
     if (!await uploadCurrentNodeImage(this.app, block, this.callbacks)) return;
     this.history.capture(previous);
     replaceNodeContentBlocks(node, blocks);
-    this.callbacks.onChange(this.getDocument());
+    this.notifyDocumentChange("none");
     this.markSaving();
     this.render();
   }
@@ -7732,7 +7745,7 @@ export class MindMapEditor {
 
     if (changed) {
       this.history.capture(previous);
-      this.callbacks.onChange(this.getDocument());
+      this.notifyDocumentChange("none");
       this.markSaving();
       this.render();
     }
@@ -7760,7 +7773,7 @@ export class MindMapEditor {
     const removed = blocks.find((block): block is MindMapImageContentBlock => block.type === "image" && block.id === blockId);
     if (!removed) return;
     const removedSnapshot = JSON.parse(JSON.stringify(removed)) as MindMapImageContentBlock;
-    this.mutate(() => {
+    this.mutateWithoutArticleContext(() => {
       replaceNodeContentBlocks(node, blocks.filter((block) => block.id !== blockId));
     });
     await this.callbacks.onCleanupRemovedImageRemoteAssets(removedSnapshot, this.getDocument());
@@ -7839,7 +7852,7 @@ export class MindMapEditor {
     if (selected?.style?.width !== undefined || selected?.style?.minHeight !== undefined) {
       menu.addItem((item) => item.setTitle("恢复节点自动大小").setIcon("maximize-2").onClick(() => {
         if (!selected) return;
-        this.mutate(() => {
+        this.mutateWithoutArticleContext(() => {
           const next = { ...(selected.style ?? {}), width: undefined, minHeight: undefined };
           selected.style = Object.values(next).some((value) => value !== undefined) ? next : undefined;
         });
@@ -7978,7 +7991,7 @@ export class MindMapEditor {
     if (!this.ensureEditable()) return;
     const selected = this.selectedNode() ?? this.document.root;
     new FormulaEditModal(this.app, (value) => {
-      this.mutate(() => {
+      this.mutateArticleContent(() => {
         const blocks = nodeContentBlocks(selected);
         const formula = value.display ? `$$${value.source}$$` : `$${value.source}$`;
         const emptyText = blocks.find((block): block is MindMapTextContentBlock => block.type === "text" && !block.text.trim());
@@ -8195,7 +8208,7 @@ export class MindMapEditor {
     this.selectedId = draggedId;
     this.selectedIds.clear();
     for (const id of requestedIds) this.selectedIds.add(id);
-    this.callbacks.onChange(this.getDocument());
+    this.notifyDocumentChange();
     this.markSaving();
     this.requestMindMapLayoutAnimation();
     this.render();
@@ -8211,7 +8224,7 @@ export class MindMapEditor {
     this.history.capture(this.document);
     this.document = cloneDocument(document);
     this.selectedId = this.document.root.id;
-    this.callbacks.onChange(this.getDocument());
+    this.notifyDocumentChange();
     this.markSaving();
     this.render();
     window.setTimeout(() => this.fitToView(), 20);
@@ -8231,7 +8244,7 @@ export class MindMapEditor {
     this.selectedId = this.nodeById(focusNodeId)?.id ?? this.document.root.id;
     this.selectedIds.clear();
     this.selectedIds.add(this.selectedId);
-    this.callbacks.onChange(this.getDocument());
+    this.notifyDocumentChange();
     this.markSaving();
     this.render();
     window.setTimeout(() => this.focusNodeById(this.selectedId), 20);
@@ -8247,7 +8260,7 @@ export class MindMapEditor {
     if (!this.ensureEditable()) return;
     this.history.capture(this.document);
     action();
-    this.callbacks.onChange(this.getDocument());
+    this.notifyDocumentChange("content");
     this.markSaving();
     if (!this.nodeById(nodeId)) {
       this.render();
@@ -8309,27 +8322,50 @@ export class MindMapEditor {
   private mutatePresentation(action: () => void): void {
     const location = this.currentMode === "mindmap" ? null : this.captureCurrentLocation(this.currentMode);
     if (location) this.rememberLocation(location, true);
+    const previousNumberingMode = this.document.root.articleNumberingMode;
+    const previousNumberingLevel = this.document.root.articleNumberingLevel;
     this.history.capture(this.document);
     action();
-    this.callbacks.onChange(this.getDocument());
+    const articleContextImpact: ArticleContextChangeImpact =
+      previousNumberingMode !== this.document.root.articleNumberingMode
+      || previousNumberingLevel !== this.document.root.articleNumberingLevel
+        ? "structure"
+        : "none";
+    this.notifyDocumentChange(articleContextImpact);
     this.markSaving();
     this.render();
     if (location) this.restoreReadingLocation(this.currentMode, location);
   }
 
+  /** Runs one mutation that cannot affect article titles, numbering, or family topology. */
+  private mutateWithoutArticleContext(action: () => void, restoreLocation?: ReadingLocation | null): void {
+    this.mutate(action, restoreLocation, "none");
+  }
+
+  /** Runs one mutation that can change article text but not article topology or numbering settings. */
+  private mutateArticleContent(action: () => void, restoreLocation?: ReadingLocation | null): void {
+    this.mutate(action, restoreLocation, "content");
+  }
+
   /**
-   * 所有用户可撤销写操作的统一入口。调用前克隆当前文档写入撤销栈，执行修改，规范化和重渲染，再通知视图自动保存；只读状态会在更上层阻止进入该流程。
+   * 所有用户可撤销写操作的统一入口。调用前克隆当前文档写入撤销栈，执行修改并重渲染，再按影响级别通知视图保存和刷新文章上下文。
    *
    * @param action 需要在当前文档上执行的同步修改。
-   * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
+   * @param restoreLocation 非导图模式下修改完成后需要恢复的语义阅读位置。
+   * @param articleContextImpact 当前修改对跨文件文章上下文的影响级别；未指定时按结构变化处理。
+   * @remarks 这是关键流程函数；修改时应同步检查撤销保存链路、文章上下文分级、数据兼容以及对应自动测试。
    */
-  private mutate(action: () => void, restoreLocation?: ReadingLocation | null): void {
+  private mutate(
+    action: () => void,
+    restoreLocation?: ReadingLocation | null,
+    articleContextImpact: ArticleContextChangeImpact = "structure"
+  ): void {
     if (!this.ensureEditable()) return;
     const location = restoreLocation ?? (this.currentMode === "mindmap" ? null : this.captureCurrentLocation(this.currentMode));
     if (location) this.rememberLocation(location, true);
     this.history.capture(this.document);
     action();
-    this.callbacks.onChange(this.getDocument());
+    this.notifyDocumentChange(articleContextImpact);
     this.markSaving();
     this.render();
     if (location) this.restoreReadingLocation(this.currentMode, location);
@@ -8344,7 +8380,7 @@ export class MindMapEditor {
     if (!previous) return;
     this.document = previous;
     this.selectedId = this.document.root.id;
-    this.callbacks.onChange(this.getDocument());
+    this.notifyDocumentChange();
     this.markSaving();
     this.render();
   }
@@ -8358,7 +8394,7 @@ export class MindMapEditor {
     if (!next) return;
     this.document = next;
     this.selectedId = this.document.root.id;
-    this.callbacks.onChange(this.getDocument());
+    this.notifyDocumentChange();
     this.markSaving();
     this.render();
   }
@@ -8685,7 +8721,7 @@ export class MindMapEditor {
 
     if (mod && key === "s") {
       event.preventDefault();
-      this.callbacks.onChange(this.getDocument());
+      this.notifyDocumentChange("none");
       this.markSaving();
       return;
     }

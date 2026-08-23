@@ -218,9 +218,9 @@ test("article tables open on double click and persist bounded column widths", ()
   const widthCommit = editorSource.match(/private updateTableColumnWidths\([\s\S]*?\n  \}/)?.[0] ?? "";
   assert.match(widthCommit, /this\.history\.capture\(this\.document\)/);
   assert.match(widthCommit, /this\.upsertStructuredBlock\(node, "table", \{ \.\.\.block\.table, columnWidths \}, blockId\)/);
-  assert.match(widthCommit, /this\.callbacks\.onChange\(this\.getDocument\(\), \{ refreshArticleContext: false \}\)/);
+  assert.match(widthCommit, /this\.notifyDocumentChange\("none"\)/);
   assert.doesNotMatch(widthCommit, /this\.render\(\)|this\.mutate\(/, "column release must not rebuild the article DOM");
-  assert.match(viewSource, /if \(options\?\.refreshArticleContext !== false\) this\.scheduleArticleContextRefresh\(320\)/);
+  assert.match(viewSource, /const impact = options\?\.articleContextImpact \?\? "structure"[\s\S]*impact === "structure"[\s\S]*scheduleArticleContextRefresh\(320\)[\s\S]*impact === "content"[\s\S]*scheduleArticleContentContextRefresh\(140\)/);
   assert.match(styles, /\.mms-table-column-resizer[\s\S]*cursor:\s*col-resize/);
   assert.match(styles, /\.mms-article-table-wrap\s*\{[\s\S]*overflow-x:\s*hidden/);
   assert.match(styles, /\.mms-article-table\s*\{[\s\S]*table-layout:\s*fixed/);
@@ -348,11 +348,11 @@ test("pasted images report storage, insertion, and auto-upload failures independ
   assert.match(handlePaste, /const afterBlockId = articleTargetAllowed[\s\S]*: undefined/);
   assert.match(handlePaste, /const selected = nodeId \? this\.nodeById\(nodeId\) : null[\s\S]*粘贴开始时选择的节点已不存在/);
   assert.doesNotMatch(imagePasteBranch, /this\.selectedNode\(\) \?\? this\.document\.root/);
-  assert.match(handlePaste, /this\.mutate\(\(\) => \{/);
+  assert.match(handlePaste, /this\.mutateWithoutArticleContext\(\(\) => \{/);
   assert.match(handlePaste, /if \(!inserted\)[\s\S]*paste image insertion failed[\s\S]*图片文件已保存，但插入节点失败/);
   assert.match(handlePaste, /post-commit synchronization deferred[\s\S]*recoverPastedImagePostCommit\(\)[\s\S]*onScheduleAutoUpload/);
   assert.match(handlePaste, /onScheduleAutoUpload\(selected\.id, imageBlock\.id, path, filename\)[\s\S]*paste image auto-upload scheduling failed[\s\S]*图片已保存：\$\{path\}；自动上传排程失败/);
-  assert.match(recoverPostCommit, /markSaving\(\)[\s\S]*render\(\)[\s\S]*window\.setTimeout\([\s\S]*callbacks\.onChange\(this\.getDocument\(\)\)/);
+  assert.match(recoverPostCommit, /markSaving\(\)[\s\S]*render\(\)[\s\S]*window\.setTimeout\([\s\S]*notifyDocumentChange\("none"\)/);
   assert.doesNotMatch(handlePaste, /new Notice\("粘贴图片失败"\)/);
   assert.doesNotMatch(handlePaste, /保存同步出现异常/);
   assert.match(mainBundle, /paste image storage failed[\s\S]*paste image insertion failed[\s\S]*post-commit synchronization deferred[\s\S]*paste image auto-upload scheduling failed/);
@@ -388,9 +388,9 @@ test("table edits preserve the visible anchor and column resizing avoids a synch
   const applyMeasuredMindMapLayout = editorSource.match(/private applyMeasuredMindMapLayout\(\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
   const restoreReadingLocation = editorSource.match(/private restoreReadingLocation\([\s\S]*?\n  \}/)?.[0] ?? "";
   const beginReadingLocationRestore = editorSource.match(/private beginReadingLocationRestore\([\s\S]*?\n  \}/)?.[0] ?? "";
-  assert.match(openTableBlockEditor, /captureMindMapViewportAnchor\(node\.id\)[\s\S]*this\.mutate\([\s\S]*restoreMindMapViewportAnchor\(viewportAnchor\)/);
+  assert.match(openTableBlockEditor, /captureMindMapViewportAnchor\(node\.id\)[\s\S]*this\.mutateWithoutArticleContext\([\s\S]*restoreMindMapViewportAnchor\(viewportAnchor\)/);
   assert.match(updateTableColumnWidths, /captureCurrentLocation\(this\.currentMode\)[\s\S]*rememberLocation\(location, true\)/);
-  assert.match(updateTableColumnWidths, /history\.capture\(this\.document\)[\s\S]*callbacks\.onChange\(this\.getDocument\(\), \{ refreshArticleContext: false \}\)[\s\S]*markSaving\(\)/);
+  assert.match(updateTableColumnWidths, /history\.capture\(this\.document\)[\s\S]*notifyDocumentChange\("none"\)[\s\S]*markSaving\(\)/);
   assert.doesNotMatch(updateTableColumnWidths, /this\.mutate\(|this\.render\(/);
   assert.match(applyMeasuredMindMapLayout, /captureMindMapViewportAnchor\(this\.selectedId\)[\s\S]*renderMindMapEdges[\s\S]*restoreMindMapViewportAnchor\(viewportAnchor\)/);
   assert.match(restoreReadingLocation, /beginReadingLocationRestore\(mode, normalizedLocation, resolved\)/);

@@ -2,6 +2,37 @@
 
 版本：1.46.3
 
+## 1.46.3 文章上下文性能优化第四批
+
+### 实现与行为验证
+
+- 新增 `none / content / structure` 三档文章上下文影响。`none` 只保存当前文档；`content` 使用已加载 `readingSections` 在内存中重算目录标题、编号与 breadcrumb；`structure` 保持完整父/子导图文章族构建。轻量重算检测到目录数量、编号层级或 `tocDepth` 与既有上下文不一致时返回 `null` 并自动安排完整刷新。
+- 完整 `refreshArticleContext()` 捕获 `documentChangeRevision`；异步构建期间如果用户又编辑了当前文档，成功路径会记录 `refresh-stale-document` 并丢弃旧结果，异常路径同样不写入旧回退快照，二者都会立即安排最新完整刷新。
+- `node --test tests/article-numbering.test.mjs tests/article-content-block.test.mjs tests/article-context-edit.test.mjs tests/article-context-cache.test.mjs tests/reading-editor-contract.test.mjs tests/incremental-render.test.mjs`：**112 / 112 通过**。
+- 排除当前环境入口即缺少 `esbuild` 的 `tests/xmind-import.test.mjs` 与 `tests/plugin-update.test.mjs` 后，正式 `test:unit` 其余文件：**370 / 370 通过**。直接执行完整 `npm run test:unit` 显示 **370 个测试通过、2 个测试文件在加载阶段因 `ERR_MODULE_NOT_FOUND: esbuild` 失败**，没有第四批业务断言失败。
+- 修改的 4 个 TypeScript 源码模块使用环境已有 TypeScript `transpileModule` 独立检查：**4 / 4 通过**。`node --check main.js` 与 `node --check scripts/test.mjs`：**通过**。
+- `npm run docs:generate`、`npm run test:docs`：**通过**，当前 **58 个源码模块、1219 个具名声明全部覆盖**；`npm run test:repo`：**通过**。
+
+### 本地环境边界
+
+- `npm run test:regression` 在执行任何回归断言前即因当前源码工作区缺 `esbuild` 停止；不是 regression 业务失败。
+- `npm run build` 无法在该工作区作为正式类型/production 结论：源码交付包按规则不包含完整 `node_modules`，当前仅临时复用全局 TypeScript，缺少 `obsidian` 等项目开发依赖会导致 Obsidian 基类属性/模块类型不可解析。正式发布前必须在 GitHub Actions 或完整开发机执行 `npm ci && npm run verify` 并重新生成 production `main.js`。
+- 本轮 `main.js` 因此是与源码等价同步的安装 bundle，不声称为当前容器 production esbuild 产物。
+
+### 真实 Obsidian 重点复测
+
+1. 在父导图/子导图文章模式连续修改标题，目录标题、编号和 breadcrumb 应快速更新，且不跳页、不错误改变子导图目录项目标。
+2. 连续修改图片、表格、代码、样式、节点尺寸与折叠状态，确认文章/通读当前位置稳定，不出现无意义的整族解析进度或页面闪烁。
+3. 新增、删除、移动节点，修改文章编号或创建/删除子导图后，完整目录结构、分页和通读仍正确刷新。
+4. 在首次/完整文章族解析仍进行时立即继续编辑标题，旧解析结果不得回写覆盖新标题；最终目录必须反映最新文档。
+5. 继续复测前三批大型导图性能、旧子导图返回按钮、搜索和撤销/保存，确认第四批只改变文章上下文刷新成本。
+
+### 本轮交付
+
+- 测试安装 ZIP：`mindmap-studio-1.46.3-test-421786.zip`
+- SHA-256：`3e0b96d6dea18a1875d5ee82289638663f1e1edfaddcb3c3e96b955e578ee6ed`
+- 完整源码与 Codex 交接使用同一 `421786` 后缀。
+
 ## 1.46.3 第三批性能优化 CI 全选契约修复
 
 ### 用户 GitHub Actions 日志

@@ -23,10 +23,17 @@ import type { DesktopCaptureResult } from "../utils/desktop-capture";
 import type { AiStreamUpdate } from "../ai/client";
 import type { ImageRecognitionItemResult, RecognizableImage } from "../vision/recognition";
 
+/** Describes how one editor mutation can affect the cross-file article context. */
+export type ArticleContextChangeImpact = "none" | "content" | "structure";
+
 /** Controls host-side work after an editor document change. */
 export interface MindMapEditorChangeOptions {
-  /** Skip rebuilding parent/child article context when the change cannot affect structure or navigation. */
-  refreshArticleContext?: boolean;
+  /**
+   * `none` keeps the existing article topology and TOC metadata, `content` refreshes
+   * titles/breadcrumbs from already loaded sections, and `structure` rebuilds the
+   * complete parent/child family context. Unspecified changes default to `structure`.
+   */
+  articleContextImpact?: ArticleContextChangeImpact;
 }
 
 /**

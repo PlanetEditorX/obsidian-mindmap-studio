@@ -47,34 +47,31 @@ function buildNodeTreeIndex(root) {
   return { root, nodes, byId, parentById, hasCollapsibleNodes };
 }
 function indexedAncestors(index, id) {
-  var _a2, _b2;
   if (!index.byId.has(id)) return [];
   const reversed = [];
-  let parent = (_a2 = index.parentById.get(id)) != null ? _a2 : null;
+  let parent = index.parentById.get(id) || null;
   while (parent) {
     reversed.push(parent);
-    parent = (_b2 = index.parentById.get(parent.id)) != null ? _b2 : null;
+    parent = index.parentById.get(parent.id) || null;
   }
   reversed.reverse();
   return reversed;
 }
 function indexedHasAncestor(index, id, ancestorId) {
-  var _a2, _b2;
   if (!index.byId.has(id)) return false;
-  let parent = (_a2 = index.parentById.get(id)) != null ? _a2 : null;
+  let parent = index.parentById.get(id) || null;
   while (parent) {
     if (parent.id === ancestorId) return true;
-    parent = (_b2 = index.parentById.get(parent.id)) != null ? _b2 : null;
+    parent = index.parentById.get(parent.id) || null;
   }
   return false;
 }
 function indexedHasAnyAncestor(index, id, ancestorIds) {
-  var _a2, _b2;
   if (!index.byId.has(id) || ancestorIds.size === 0) return false;
-  let parent = (_a2 = index.parentById.get(id)) != null ? _a2 : null;
+  let parent = index.parentById.get(id) || null;
   while (parent) {
     if (ancestorIds.has(parent.id)) return true;
-    parent = (_b2 = index.parentById.get(parent.id)) != null ? _b2 : null;
+    parent = index.parentById.get(parent.id) || null;
   }
   return false;
 }
@@ -117,6 +114,9 @@ function findAncestors(root, id) {
   };
   return visit(root) ? path : [];
 }
+function containsNode(root, id) {
+  return findNode(root, id) !== null;
+}
 function removeNode(root, id) {
   var _a2;
   for (let index = 0; index < root.children.length; index += 1) {
@@ -130,13 +130,12 @@ function removeNode(root, id) {
   return false;
 }
 function moveNodeRelative(root, draggedId, targetId, position, existingIndex) {
-  var _a2, _b2, _c, _d;
   if (draggedId === root.id || draggedId === targetId) return false;
   const index = existingIndex != null ? existingIndex : buildNodeTreeIndex(root);
-  const dragged = (_a2 = index.byId.get(draggedId)) != null ? _a2 : null;
-  const target = (_b2 = index.byId.get(targetId)) != null ? _b2 : null;
+  const dragged = index.byId.get(draggedId) || null;
+  const target = index.byId.get(targetId) || null;
   if (!dragged || !target || indexedHasAncestor(index, targetId, draggedId)) return false;
-  const oldParent = (_c = index.parentById.get(draggedId)) != null ? _c : null;
+  const oldParent = index.parentById.get(draggedId) || null;
   if (!oldParent) return false;
   const oldIndex = oldParent.children.findIndex((child) => child.id === draggedId);
   if (oldIndex < 0) return false;
@@ -148,7 +147,7 @@ function moveNodeRelative(root, draggedId, targetId, position, existingIndex) {
     return true;
   }
   if (target.id === root.id) return false;
-  const targetParent = (_d = index.parentById.get(targetId)) != null ? _d : null;
+  const targetParent = index.parentById.get(targetId) || null;
   if (!targetParent) return false;
   const targetIndexBeforeRemoval = targetParent.children.findIndex((child) => child.id === targetId);
   if (targetIndexBeforeRemoval < 0) return false;
@@ -6022,6 +6021,76 @@ function articleChildStartLevel(root, baseDepth = 0) {
 function articleTocDepth(entry) {
   return Number.isFinite(entry.tocDepth) ? Math.max(1, Math.floor(entry.tocDepth)) : 1;
 }
+function refreshArticleTocEntriesFromReadingSections(sections, previousEntries) {
+  var _a2;
+  if (!sections.length) return previousEntries.length ? null : [];
+  const topSection = (_a2 = sections.find((section) => !section.parentFilePath)) != null ? _a2 : sections[0];
+  const mountedSections = /* @__PURE__ */ new Map();
+  for (const section of sections) {
+    if (!section.parentFilePath || !section.parentNodeId) continue;
+    mountedSections.set(`${section.parentFilePath}\0${section.parentNodeId}`, section);
+  }
+  const generated = [];
+  const processItems = (items, defaultLevel, structureDepth) => {
+    var _a3;
+    const siblingHasHeading = items.some(({ node }) => isArticleHeading(node));
+    const numberedIndexes = /* @__PURE__ */ new Map();
+    for (const item of items) {
+      const numbering = resolveArticleNumbering(item.node, defaultLevel, siblingHasHeading);
+      const documentNumberingDisabled = item.numberingDisabled || item.section.numberingDisabled === true || isDocumentArticleNumberingDisabled(item.section.document.root);
+      const numberedIndex = !documentNumberingDisabled && numbering.shouldNumber && !numbering.skipped ? ((_a3 = numberedIndexes.get(numbering.level)) != null ? _a3 : 0) + 1 : 0;
+      if (numberedIndex) numberedIndexes.set(numbering.level, numberedIndex);
+      const label = numberedIndex ? articleNumberLabel(numbering.level, numberedIndex) : "";
+      const title = nodePlainText(item.node) || (numbering.isHeading ? "\u672A\u547D\u540D\u6807\u9898" : "");
+      const nextBreadcrumb = [...item.breadcrumb, title || "\u672A\u547D\u540D\u6807\u9898"];
+      if (numbering.isHeading) {
+        generated.push({
+          filePath: item.section.filePath,
+          nodeId: item.node.id,
+          depth: numbering.level,
+          tocDepth: structureDepth,
+          label,
+          title,
+          displayTitle: articleDisplayTitle(label, title),
+          breadcrumb: nextBreadcrumb
+        });
+      }
+      const descendants = item.node.children.map((child) => ({
+        node: child,
+        section: item.section,
+        breadcrumb: nextBreadcrumb,
+        numberingDisabled: documentNumberingDisabled
+      }));
+      const childSection = mountedSections.get(`${item.section.filePath}\0${item.node.id}`);
+      if (childSection) {
+        const childNumberingDisabled = documentNumberingDisabled || childSection.numberingDisabled === true || isDocumentArticleNumberingDisabled(childSection.document.root);
+        descendants.push(...childSection.document.root.children.map((child) => ({
+          node: child,
+          section: childSection,
+          breadcrumb: nextBreadcrumb,
+          numberingDisabled: childNumberingDisabled
+        })));
+      }
+      if (descendants.length) processItems(descendants, numbering.level + 1, structureDepth + 1);
+    }
+  };
+  const topNumberingDisabled = topSection.numberingDisabled === true || isDocumentArticleNumberingDisabled(topSection.document.root);
+  processItems(topSection.document.root.children.map((node) => ({
+    node,
+    section: topSection,
+    breadcrumb: [nodePlainText(topSection.document.root) || topSection.document.title],
+    numberingDisabled: topNumberingDisabled
+  })), articleChildStartLevel(topSection.document.root), 1);
+  if (generated.length !== previousEntries.length) return null;
+  const refreshed = [];
+  for (let index = 0; index < generated.length; index += 1) {
+    const entry = generated[index];
+    const previous = previousEntries[index];
+    if (entry.depth !== previous.depth || entry.tocDepth !== previous.tocDepth) return null;
+    refreshed.push({ ...entry, filePath: previous.filePath, nodeId: previous.nodeId });
+  }
+  return refreshed;
+}
 function resolveArticleTocMaxDepth(documentOverride, pluginDefault) {
   const source = typeof documentOverride === "number" && Number.isFinite(documentOverride) ? documentOverride : pluginDefault;
   return Math.max(1, Math.min(8, Math.round(Number.isFinite(source) ? source : 3)));
@@ -6736,15 +6805,14 @@ function deleteNodes(root, ids) {
   return removed;
 }
 function deletionSelectionFallback(root, ids, existingIndex) {
-  var _a2, _b2;
   const index = existingIndex != null ? existingIndex : buildNodeTreeIndex(root);
   const targets = topLevelSelectedNodeIds(root, ids, index);
   const target = targets[0];
   if (!target) return root.id;
   const removed = new Set(targets);
-  let current = (_a2 = index.byId.get(target)) != null ? _a2 : null;
+  let current = index.byId.get(target) || null;
   while (current && current.id !== root.id) {
-    const parent = (_b2 = index.parentById.get(current.id)) != null ? _b2 : null;
+    const parent = index.parentById.get(current.id) || null;
     if (!parent) return root.id;
     const childIndex = parent.children.findIndex((node) => node.id === current.id);
     const previous = parent.children.slice(0, childIndex).reverse().find((node) => !removed.has(node.id));
@@ -9878,22 +9946,6 @@ function attachSelectionFormatToolbar(options) {
   };
 }
 
-// src/editor/selection-class-delta.ts
-function selectionClassDelta(previous, next) {
-  const changed = /* @__PURE__ */ new Set();
-  for (const id of previous) {
-    if (!next.has(id)) changed.add(id);
-  }
-  for (const id of next) {
-    if (!previous.has(id)) changed.add(id);
-  }
-  if (previous.size > 1 !== next.size > 1) {
-    for (const id of previous) changed.add(id);
-    for (const id of next) changed.add(id);
-  }
-  return changed;
-}
-
 // src/ai/markdown.ts
 function utf8ByteLength2(value) {
   return new TextEncoder().encode(value).byteLength;
@@ -10332,6 +10384,22 @@ var ImageRecognitionPreviewModal = class extends import_obsidian10.Modal {
     this.contentEl.empty();
   }
 };
+
+// src/editor/selection-class-delta.ts
+function selectionClassDelta(previous, next) {
+  const changed = /* @__PURE__ */ new Set();
+  for (const id of previous) {
+    if (!next.has(id)) changed.add(id);
+  }
+  for (const id of next) {
+    if (!previous.has(id)) changed.add(id);
+  }
+  if ((previous.size > 1) !== (next.size > 1)) {
+    for (const id of previous) changed.add(id);
+    for (const id of next) changed.add(id);
+  }
+  return changed;
+}
 
 // src/editor/editor.ts
 var TOOLBAR_GROUPS = {
@@ -11529,16 +11597,13 @@ var MindMapEditor = class {
    * @param options 控制当前操作行为的可选配置。
    */
   constructor(app, host, document2, callbacks, options) {
-    /** Direct lookup for mounted mind-map nodes so hot paths never rescan the whole node layer. */
-    this.mindMapNodeElements = /* @__PURE__ */ new Map();
     this.modeButtons = /* @__PURE__ */ new Map();
     this.editControls = [];
-    /** Rebuilt once per full render so repeated node/parent lookups avoid whole-tree DFS scans. */
-    this.nodeTreeIndex = null;
+    this.mindMapNodeElements = /* @__PURE__ */ new Map();
     this.selectedIds = /* @__PURE__ */ new Set();
-    /** Selection state last synchronized to DOM classes; invalidated when non-canvas views rebuild their DOM. */
     this.appliedSelectionIds = /* @__PURE__ */ new Set();
     this.selectionClassSyncValid = false;
+    this.nodeTreeIndex = null;
     /** 仅由右键上下文设置；普通选择不会改变 AI 默认范围。 */
     this.aiScopeNodeId = null;
     this.zoom = 1;
@@ -12356,6 +12421,9 @@ var MindMapEditor = class {
     this.persistMindMapViewportState();
     return cloneDocument(this.document);
   }
+  notifyDocumentChange(articleContextImpact = "structure") {
+    this.callbacks.onChange(this.getDocument(), { articleContextImpact });
+  }
   /**
    * 把后台图床上传结果合并到编辑器当前最新文档，不替换用户在上传期间继续编辑的节点树。
    *
@@ -12365,7 +12433,7 @@ var MindMapEditor = class {
   applyImageUploadPatches(patches) {
     const updated = applyImageUploadPatches(this.document, patches);
     if (!updated) return 0;
-    this.callbacks.onChange(this.getDocument());
+    this.notifyDocumentChange("none");
     this.markSaving();
     this.render();
     return updated;
@@ -12576,7 +12644,7 @@ var MindMapEditor = class {
     recoverUi();
     window.setTimeout(() => {
       try {
-        this.callbacks.onChange(this.getDocument());
+        this.notifyDocumentChange("none");
       } catch (error) {
         console.error("MindMap Studio paste image save synchronization retry failed", error);
       }
@@ -13038,7 +13106,7 @@ var MindMapEditor = class {
     if (this.readOnlyPersistTimer !== null) window.clearTimeout(this.readOnlyPersistTimer);
     this.readOnlyPersistTimer = window.setTimeout(() => {
       this.readOnlyPersistTimer = null;
-      this.callbacks.onChange(this.getDocument());
+      this.notifyDocumentChange("none");
       this.markSaving();
     }, 0);
   }
@@ -13118,14 +13186,8 @@ var MindMapEditor = class {
     for (const timer of this.imageLoadTimers) window.clearTimeout(timer);
     this.imageLoadTimers.clear();
   }
-  /**
-   * Computes tree-dependent toolbar state in one traversal so each toolbar item
-   * does not independently rescan a large document.
-   *
-   * @returns Shared availability facts for the current toolbar refresh.
-   */
+  /** Computes tree-dependent toolbar state once per toolbar refresh. */
   toolbarAvailabilityContext() {
-    var _a2;
     const index = this.currentNodeTreeIndex();
     let selectedNonRootCount = 0;
     for (const id of this.selectedIds) {
@@ -13133,19 +13195,13 @@ var MindMapEditor = class {
     }
     const editableSurface = this.currentMode === "mindmap" || this.currentMode === "outline" || this.currentMode === "article";
     return {
-      selected: this.selectedId ? (_a2 = index.byId.get(this.selectedId)) != null ? _a2 : null : null,
+      selected: this.selectedId ? index.byId.get(this.selectedId) || null : null,
       selectedNonRootCount,
       hasCollapsibleNodes: index.hasCollapsibleNodes,
       canEdit: editableSurface && !this.readOnly
     };
   }
-  /**
-   * Returns whether one configured toolbar action can perform a meaningful operation now.
-   *
-   * @param id Toolbar action being evaluated.
-   * @param context Tree-dependent facts shared by every action in this refresh.
-   * @returns Whether the action should be visible and enabled.
-   */
+  /** Returns whether one configured toolbar action can perform a meaningful operation now. */
   toolbarItemAvailable(id, context) {
     const { selected, selectedNonRootCount, hasCollapsibleNodes, canEdit } = context;
     switch (id) {
@@ -13685,7 +13741,7 @@ var MindMapEditor = class {
         this.activeArticleBlock = null;
       }
       if (save && editor.value !== code.code) {
-        this.mutate(() => this.upsertStructuredBlock(node, "code", { ...code, code: editor.value }, blockId));
+        this.mutateWithoutArticleContext(() => this.upsertStructuredBlock(node, "code", { ...code, code: editor.value }, blockId));
       } else {
         this.render();
       }
@@ -14575,7 +14631,7 @@ var MindMapEditor = class {
       if (this.options.questionMemoryCurveEnabled) question.correctCount = 0;
     }
     question.lastPracticedAt = (/* @__PURE__ */ new Date()).toISOString();
-    this.callbacks.onChange(this.getDocument());
+    this.notifyDocumentChange("none");
     this.markSaving();
   }
   /** 取消尚未完成的分帧导图挂载，并使旧回调自动失效。 */
@@ -14791,7 +14847,7 @@ var MindMapEditor = class {
             const previous = (_b3 = block.remoteSources) == null ? void 0 : _b3.find((item) => item.url === block.source);
             block.source = candidate.source;
             replaceNodeContentBlocks(node, blocks);
-            this.callbacks.onChange(this.getDocument());
+            this.notifyDocumentChange("none");
             this.markSaving();
             const previousLabel = (previous == null ? void 0 : previous.hostName) || "\u5F53\u524D\u56FE\u5E8A";
             new import_obsidian11.Notice(`\u56FE\u7247\u5730\u5740\u5931\u6548\uFF0C\u5DF2\u4ECE ${previousLabel} \u81EA\u52A8\u5207\u6362\u5230 ${candidate.label}`, 6e3);
@@ -14913,7 +14969,7 @@ var MindMapEditor = class {
         if (!event.ctrlKey && !event.metaKey) return;
         event.preventDefault();
         event.stopPropagation();
-        this.mutate(() => {
+        this.mutateWithoutArticleContext(() => {
           var _a3;
           const next = { ...(_a3 = node.style) != null ? _a3 : {}, width: void 0, minHeight: void 0 };
           node.style = Object.values(next).some((value) => value !== void 0) ? next : void 0;
@@ -14946,7 +15002,7 @@ var MindMapEditor = class {
           resizeHandle.removeEventListener("pointercancel", finish);
           if (resizeHandle.hasPointerCapture(upEvent.pointerId)) resizeHandle.releasePointerCapture(upEvent.pointerId);
           nodeEl.removeClass("is-resizing");
-          this.mutate(() => {
+          this.mutateWithoutArticleContext(() => {
             var _a3;
             node.style = {
               ...(_a3 = node.style) != null ? _a3 : {},
@@ -15303,7 +15359,6 @@ var MindMapEditor = class {
    * Hidden views are rebuilt before becoming active, so they do not receive redundant selection writes.
    */
   applySelectionClasses() {
-    var _a2;
     const multi = this.selectedIds.size > 1;
     if (!this.selectionClassSyncValid) {
       if (this.currentMode === "mindmap") {
@@ -15314,7 +15369,7 @@ var MindMapEditor = class {
         }
       } else {
         const scope = this.activeSelectionScope();
-        const elements = (_a2 = scope == null ? void 0 : scope.querySelectorAll("[data-node-id]")) != null ? _a2 : [];
+        const elements = scope == null ? [] : scope.querySelectorAll("[data-node-id]");
         for (let index = 0; index < elements.length; index += 1) {
           const element = elements[index];
           const id = element.dataset.nodeId;
@@ -15332,42 +15387,33 @@ var MindMapEditor = class {
     this.syncAppliedSelectionSnapshot();
     this.updateToolbarAvailability();
   }
-  /** Rebuilds the live node/parent lookup snapshot after a structural tree change or full render. */
+  /**
+   * 执行“selected node”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+   * @returns 当前操作生成、查找或规范化后的结果。
+   */
   rebuildNodeTreeIndex() {
     this.nodeTreeIndex = buildNodeTreeIndex(this.document.root);
     return this.nodeTreeIndex;
   }
-  /** Returns the current tree snapshot, lazily creating it before the first render-time lookup. */
   currentNodeTreeIndex() {
     if (!this.nodeTreeIndex || this.nodeTreeIndex.root !== this.document.root) return this.rebuildNodeTreeIndex();
     return this.nodeTreeIndex;
   }
-  /** Finds a live node by stable ID without rescanning the document tree. */
   nodeById(nodeId) {
-    var _a2;
-    return (_a2 = this.currentNodeTreeIndex().byId.get(nodeId)) != null ? _a2 : null;
+    return this.currentNodeTreeIndex().byId.get(nodeId) || null;
   }
-  /** Finds the direct parent of a live node by stable ID without rescanning the document tree. */
   parentNodeById(nodeId) {
-    var _a2;
-    return (_a2 = this.currentNodeTreeIndex().parentById.get(nodeId)) != null ? _a2 : null;
+    return this.currentNodeTreeIndex().parentById.get(nodeId) || null;
   }
-  /** Returns the current depth-first node snapshot for repeated filtering and ordered operations. */
   nodeTreeNodes() {
     return this.currentNodeTreeIndex().nodes;
   }
-  /** Returns root-to-parent ancestors using the current parent lookup snapshot. */
   nodeAncestors(nodeId) {
     return indexedAncestors(this.currentNodeTreeIndex(), nodeId);
   }
-  /** Returns whether one live node is nested below the supplied ancestor. */
   nodeHasAncestor(nodeId, ancestorId) {
     return indexedHasAncestor(this.currentNodeTreeIndex(), nodeId, ancestorId);
   }
-  /**
-   * Resolves the primary selection through the shared node-tree index.
-   * @returns The live selected node, or null when the selection is stale.
-   */
   selectedNode() {
     return this.selectedId ? this.nodeById(this.selectedId) : null;
   }
@@ -15472,7 +15518,7 @@ var MindMapEditor = class {
       node.content = blocks2;
       syncNodeContentFields(node);
       if (node.id === this.document.root.id && values.text) this.document.title = values.text;
-      this.callbacks.onChange(this.getDocument());
+      this.notifyDocumentChange("content");
       this.markSaving();
       this.viewportEl.dispatchEvent(new CustomEvent("mms-inline-node-change", { detail: { nodeId } }));
     };
@@ -15760,7 +15806,7 @@ var MindMapEditor = class {
     const selected = this.selectedNode();
     if (!selected) return;
     let blockId = "";
-    this.mutate(() => {
+    this.mutateWithoutArticleContext(() => {
       blockId = this.insertTextBlockAfter(selected, afterBlockId);
     });
     window.requestAnimationFrame(() => this.beginInlineEdit(selected.id, blockId, true));
@@ -15798,7 +15844,10 @@ var MindMapEditor = class {
       onReadImageSource: this.callbacks.onReadImageSource,
       onScheduleAutoUpload: this.callbacks.onScheduleAutoUpload
     }, (values, mode) => {
-      var _a2, _b2, _c;
+      var _a2;
+      const previousArticleTitle = nodePlainText(selected);
+      const previousNumberingMode = selected.articleNumberingMode;
+      const previousNumberingLevel = selected.articleNumberingLevel;
       if (!historyCaptured) {
         this.history.capture(this.document);
         historyCaptured = true;
@@ -15829,14 +15878,14 @@ var MindMapEditor = class {
         const title = nodePlainText(selected);
         if (title) this.document.title = title;
       }
-      this.callbacks.onChange(this.getDocument());
+      const articleContextImpact = previousNumberingMode !== selected.articleNumberingMode || previousNumberingLevel !== selected.articleNumberingLevel ? "structure" : previousArticleTitle !== nodePlainText(selected) ? "content" : "none";
+      this.notifyDocumentChange(articleContextImpact);
       this.markSaving();
       if (this.inlineEditingId === selected.id) {
-        const inline = (_b2 = (_a2 = this.mindMapNodeElements.get(selected.id)) == null ? void 0 : _a2.querySelector(
-          ".mmc-node-text.is-inline-editing"
-        )) != null ? _b2 : null;
+        var _a3;
+        const inline = (_a3 = this.mindMapNodeElements.get(selected.id)) == null ? void 0 : _a3.querySelector(".mmc-node-text.is-inline-editing");
         const textBlock = nodeContentBlocks(selected).find((block) => block.type === "text");
-        if (inline && document.activeElement !== inline) renderRichTextRuns(inline, textBlock == null ? void 0 : textBlock.richText, (_c = textBlock == null ? void 0 : textBlock.text) != null ? _c : "", false);
+        if (inline && document.activeElement !== inline) renderRichTextRuns(inline, textBlock == null ? void 0 : textBlock.richText, (_a2 = textBlock == null ? void 0 : textBlock.text) != null ? _a2 : "", false);
       } else if (this.currentMode === "mindmap") {
         this.refreshMindMapNode(selected.id);
       } else if (mode === "commit") {
@@ -16040,7 +16089,7 @@ var MindMapEditor = class {
       this.render();
       return;
     }
-    this.mutate(() => {
+    this.mutateWithoutArticleContext(() => {
       selected.collapsed = !selected.collapsed;
     });
   }
@@ -16060,7 +16109,7 @@ var MindMapEditor = class {
       apply();
       this.render();
     } else {
-      this.mutate(apply);
+      this.mutateWithoutArticleContext(apply);
     }
     if (collapsed && this.currentMode === "mindmap") {
       window.setTimeout(() => this.fitToView(true), 40);
@@ -16081,7 +16130,7 @@ var MindMapEditor = class {
    */
   toggleLayout() {
     if (!this.ensureEditable()) return;
-    this.mutate(() => {
+    this.mutateWithoutArticleContext(() => {
       this.document.layout = this.document.layout === "right" ? "balanced" : "right";
     });
     window.setTimeout(() => this.fitToView(), 20);
@@ -16173,7 +16222,7 @@ var MindMapEditor = class {
     if (!this.ensureEditable()) return;
     const selected = (_a2 = this.selectedNode()) != null ? _a2 : this.document.root;
     new TableEditModal(this.app, selected.table, (table) => {
-      this.mutate(() => this.upsertStructuredBlock(selected, "table", table));
+      this.mutateWithoutArticleContext(() => this.upsertStructuredBlock(selected, "table", table));
     }).open();
   }
   /**
@@ -16188,7 +16237,7 @@ var MindMapEditor = class {
       new import_obsidian11.Notice("\u5F53\u524D\u8282\u70B9\u6CA1\u6709\u53EF\u8F6C\u6362\u7684\u5B50\u8282\u70B9");
       return;
     }
-    this.mutate(() => {
+    this.mutateWithoutArticleContext(() => {
       this.upsertStructuredBlock(selected, "table", table);
       selected.collapsed = true;
     });
@@ -16202,7 +16251,7 @@ var MindMapEditor = class {
     if (!this.ensureEditable()) return;
     const selected = (_a2 = this.selectedNode()) != null ? _a2 : this.document.root;
     new CodeEditModal(this.app, void 0, (code) => {
-      this.mutate(() => this.appendCodeBlock(selected, code));
+      this.mutateWithoutArticleContext(() => this.appendCodeBlock(selected, code));
     }).open();
   }
   /**
@@ -16328,7 +16377,7 @@ var MindMapEditor = class {
   moveContentBlock(sourceNodeId, blockId, targetNodeId, targetBlockId, position) {
     if (!this.ensureEditable()) return;
     let moved = false;
-    this.mutate(() => {
+    this.mutateArticleContent(() => {
       moved = moveNodeContentBlock(this.document.root, sourceNodeId, blockId, targetNodeId, targetBlockId, position);
       if (moved) {
         this.selectedId = targetNodeId;
@@ -16354,7 +16403,7 @@ var MindMapEditor = class {
     if (!node || !this.ensureEditable()) return;
     const blocks = nodeContentBlocks(node);
     if (!blocks.some((block) => block.id === blockId)) return;
-    this.mutate(() => {
+    this.mutateArticleContent(() => {
       replaceNodeContentBlocks(node, blocks.filter((block) => block.id !== blockId));
     });
   }
@@ -16448,7 +16497,7 @@ var MindMapEditor = class {
     }
     this.articleEl.empty();
     this.articleEl.removeAttribute("aria-busy");
-    const sections = this.options.readingSections.length ? this.options.readingSections : [{ filePath: (_b2 = (_a2 = this.options.articleNavigation) == null ? void 0 : _a2.homePath) != null ? _b2 : "", document: this.document, baseDepth: 0 }];
+    const sections = this.readingLocationSections();
     const style = resolveArticleStyle({
       preset: (_d = (_c = this.document.articleStyle) == null ? void 0 : _c.preset) != null ? _d : "classic",
       ...this.document.articleStyle,
@@ -16781,7 +16830,7 @@ var MindMapEditor = class {
     menu.addItem((item) => item.setTitle("\u7F16\u8F91\u8868\u683C").setIcon("table-2").onClick(() => this.openTableBlockEditor(node, table, blockId)));
     if (blockId) menu.addItem((item) => item.setTitle("\u5220\u9664\u5F53\u524D\u5757").setIcon("trash-2").onClick(() => {
       if (!this.ensureEditable()) return;
-      this.mutate(() => this.removeStructuredBlock(node, blockId));
+      this.mutateWithoutArticleContext(() => this.removeStructuredBlock(node, blockId));
     }));
     menu.showAtMouseEvent(event);
   }
@@ -16791,7 +16840,7 @@ var MindMapEditor = class {
     menu.addItem((item) => item.setTitle("\u7F16\u8F91\u4EE3\u7801").setIcon("code-2").onClick(() => this.openCodeBlockEditor(node, code, blockId)));
     if (blockId) menu.addItem((item) => item.setTitle("\u5220\u9664\u5F53\u524D\u5757").setIcon("trash-2").onClick(() => {
       if (!this.ensureEditable()) return;
-      this.mutate(() => this.removeStructuredBlock(node, blockId));
+      this.mutateWithoutArticleContext(() => this.removeStructuredBlock(node, blockId));
     }));
     menu.showAtMouseEvent(event);
   }
@@ -16801,7 +16850,7 @@ var MindMapEditor = class {
     this.selectNode(node.id);
     new TableEditModal(this.app, table, (next) => {
       const viewportAnchor = this.captureMindMapViewportAnchor(node.id);
-      this.mutate(() => this.upsertStructuredBlock(node, "table", next, blockId));
+      this.mutateWithoutArticleContext(() => this.upsertStructuredBlock(node, "table", next, blockId));
       this.restoreMindMapViewportAnchor(viewportAnchor);
     }).open();
   }
@@ -16818,7 +16867,7 @@ var MindMapEditor = class {
     if (location) this.rememberLocation(location, true);
     this.history.capture(this.document);
     this.upsertStructuredBlock(node, "table", { ...block.table, columnWidths }, blockId);
-    this.callbacks.onChange(this.getDocument(), { refreshArticleContext: false });
+    this.notifyDocumentChange("none");
     this.markSaving();
   }
   /** Opens the selected code block directly instead of routing through the node editor. */
@@ -16826,7 +16875,7 @@ var MindMapEditor = class {
     if (!this.ensureEditable()) return;
     this.selectNode(node.id);
     new CodeEditModal(this.app, code, (next) => {
-      this.mutate(() => this.upsertStructuredBlock(node, "code", next, blockId));
+      this.mutateWithoutArticleContext(() => this.upsertStructuredBlock(node, "code", next, blockId));
     }).open();
   }
   /**
@@ -16904,7 +16953,7 @@ var MindMapEditor = class {
     const table = parseMarkdownTable(text);
     if (table) {
       event.preventDefault();
-      this.mutate(() => this.upsertStructuredBlock(selected, "table", table));
+      this.mutateWithoutArticleContext(() => this.upsertStructuredBlock(selected, "table", table));
       new import_obsidian11.Notice("\u5DF2\u8BC6\u522B\u5E76\u63D2\u5165 Markdown \u8868\u683C");
       return;
     }
@@ -17061,7 +17110,7 @@ var MindMapEditor = class {
       if (this.readOnly) collapsed.forEach((node) => {
         node.collapsed = false;
       });
-      else this.mutate(() => collapsed.forEach((node) => {
+      else this.mutateWithoutArticleContext(() => collapsed.forEach((node) => {
         node.collapsed = false;
       }));
     }
@@ -17240,7 +17289,7 @@ var MindMapEditor = class {
     const blocks = nodeContentBlocks(node);
     const block = blocks.find((item) => item.type === "image" && item.id === blockId);
     if (!block) return;
-    this.mutate(() => {
+    this.mutateWithoutArticleContext(() => {
       update(block);
       replaceNodeContentBlocks(node, blocks);
     });
@@ -17252,7 +17301,7 @@ var MindMapEditor = class {
     const blocks = nodeContentBlocks(node);
     const block = blocks.find((item) => item.type === "text" && item.id === blockId);
     if (!block) return;
-    this.mutate(() => {
+    this.mutateWithoutArticleContext(() => {
       block.paragraphIndent = block.paragraphIndent === "none" ? void 0 : "none";
       replaceNodeContentBlocks(node, blocks);
     });
@@ -17272,7 +17321,7 @@ var MindMapEditor = class {
     if (!await uploadCurrentNodeImage(this.app, block, this.callbacks)) return;
     this.history.capture(previous);
     replaceNodeContentBlocks(node, blocks);
-    this.callbacks.onChange(this.getDocument());
+    this.notifyDocumentChange("none");
     this.markSaving();
     this.render();
   }
@@ -17340,7 +17389,7 @@ var MindMapEditor = class {
     }
     if (changed) {
       this.history.capture(previous);
-      this.callbacks.onChange(this.getDocument());
+      this.notifyDocumentChange("none");
       this.markSaving();
       this.render();
     }
@@ -17366,7 +17415,7 @@ var MindMapEditor = class {
     const removed = blocks.find((block) => block.type === "image" && block.id === blockId);
     if (!removed) return;
     const removedSnapshot = JSON.parse(JSON.stringify(removed));
-    this.mutate(() => {
+    this.mutateWithoutArticleContext(() => {
       replaceNodeContentBlocks(node, blocks.filter((block) => block.id !== blockId));
     });
     await this.callbacks.onCleanupRemovedImageRemoteAssets(removedSnapshot, this.getDocument());
@@ -17415,7 +17464,7 @@ var MindMapEditor = class {
     if (((_c = selected == null ? void 0 : selected.style) == null ? void 0 : _c.width) !== void 0 || ((_d = selected == null ? void 0 : selected.style) == null ? void 0 : _d.minHeight) !== void 0) {
       menu.addItem((item) => item.setTitle("\u6062\u590D\u8282\u70B9\u81EA\u52A8\u5927\u5C0F").setIcon("maximize-2").onClick(() => {
         if (!selected) return;
-        this.mutate(() => {
+        this.mutateWithoutArticleContext(() => {
           var _a3;
           const next = { ...(_a3 = selected.style) != null ? _a3 : {}, width: void 0, minHeight: void 0 };
           selected.style = Object.values(next).some((value) => value !== void 0) ? next : void 0;
@@ -17525,7 +17574,7 @@ var MindMapEditor = class {
     if (!this.ensureEditable()) return;
     const selected = (_a2 = this.selectedNode()) != null ? _a2 : this.document.root;
     new FormulaEditModal(this.app, (value) => {
-      this.mutate(() => {
+      this.mutateArticleContent(() => {
         var _a3;
         const blocks = nodeContentBlocks(selected);
         const formula = value.display ? `$$${value.source}$$` : `$${value.source}$`;
@@ -17717,20 +17766,14 @@ var MindMapEditor = class {
     let changed = false;
     for (let moveIndex = 0; moveIndex < moveOrder.length; moveIndex += 1) {
       const id = moveOrder[moveIndex];
-      changed = moveNodeRelative(
-        this.document.root,
-        id,
-        targetId,
-        position,
-        moveIndex === 0 ? index : void 0
-      ) || changed;
+      changed = moveNodeRelative(this.document.root, id, targetId, position, moveIndex === 0 ? index : void 0) || changed;
     }
     if (!changed) return;
     this.history.capture(historyDocument);
     this.selectedId = draggedId;
     this.selectedIds.clear();
     for (const id of requestedIds) this.selectedIds.add(id);
-    this.callbacks.onChange(this.getDocument());
+    this.notifyDocumentChange();
     this.markSaving();
     this.requestMindMapLayoutAnimation();
     this.render();
@@ -17745,7 +17788,7 @@ var MindMapEditor = class {
     this.history.capture(this.document);
     this.document = cloneDocument(document2);
     this.selectedId = this.document.root.id;
-    this.callbacks.onChange(this.getDocument());
+    this.notifyDocumentChange();
     this.markSaving();
     this.render();
     window.setTimeout(() => this.fitToView(), 20);
@@ -17765,7 +17808,7 @@ var MindMapEditor = class {
     this.selectedId = (_b2 = (_a2 = this.nodeById(focusNodeId)) == null ? void 0 : _a2.id) != null ? _b2 : this.document.root.id;
     this.selectedIds.clear();
     this.selectedIds.add(this.selectedId);
-    this.callbacks.onChange(this.getDocument());
+    this.notifyDocumentChange();
     this.markSaving();
     this.render();
     window.setTimeout(() => this.focusNodeById(this.selectedId), 20);
@@ -17780,7 +17823,7 @@ var MindMapEditor = class {
     if (!this.ensureEditable()) return;
     this.history.capture(this.document);
     action();
-    this.callbacks.onChange(this.getDocument());
+    this.notifyDocumentChange("content");
     this.markSaving();
     if (!this.nodeById(nodeId)) {
       this.render();
@@ -17838,9 +17881,12 @@ var MindMapEditor = class {
   mutatePresentation(action) {
     const location = this.currentMode === "mindmap" ? null : this.captureCurrentLocation(this.currentMode);
     if (location) this.rememberLocation(location, true);
+    const previousNumberingMode = this.document.root.articleNumberingMode;
+    const previousNumberingLevel = this.document.root.articleNumberingLevel;
     this.history.capture(this.document);
     action();
-    this.callbacks.onChange(this.getDocument());
+    const articleContextImpact = previousNumberingMode !== this.document.root.articleNumberingMode || previousNumberingLevel !== this.document.root.articleNumberingLevel ? "structure" : "none";
+    this.notifyDocumentChange(articleContextImpact);
     this.markSaving();
     this.render();
     if (location) this.restoreReadingLocation(this.currentMode, location);
@@ -17851,13 +17897,19 @@ var MindMapEditor = class {
    * @param action 需要在当前文档上执行的同步修改。
    * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
    */
-  mutate(action, restoreLocation) {
+  mutateWithoutArticleContext(action, restoreLocation) {
+    this.mutate(action, restoreLocation, "none");
+  }
+  mutateArticleContent(action, restoreLocation) {
+    this.mutate(action, restoreLocation, "content");
+  }
+  mutate(action, restoreLocation, articleContextImpact = "structure") {
     if (!this.ensureEditable()) return;
     const location = restoreLocation != null ? restoreLocation : this.currentMode === "mindmap" ? null : this.captureCurrentLocation(this.currentMode);
     if (location) this.rememberLocation(location, true);
     this.history.capture(this.document);
     action();
-    this.callbacks.onChange(this.getDocument());
+    this.notifyDocumentChange(articleContextImpact);
     this.markSaving();
     this.render();
     if (location) this.restoreReadingLocation(this.currentMode, location);
@@ -17871,7 +17923,7 @@ var MindMapEditor = class {
     if (!previous) return;
     this.document = previous;
     this.selectedId = this.document.root.id;
-    this.callbacks.onChange(this.getDocument());
+    this.notifyDocumentChange();
     this.markSaving();
     this.render();
   }
@@ -17884,7 +17936,7 @@ var MindMapEditor = class {
     if (!next) return;
     this.document = next;
     this.selectedId = this.document.root.id;
-    this.callbacks.onChange(this.getDocument());
+    this.notifyDocumentChange();
     this.markSaving();
     this.render();
   }
@@ -18182,7 +18234,7 @@ var MindMapEditor = class {
     }
     if (mod && key === "s") {
       event.preventDefault();
-      this.callbacks.onChange(this.getDocument());
+      this.notifyDocumentChange("none");
       this.markSaving();
       return;
     }
@@ -18864,6 +18916,7 @@ var MindMapStudioView = class extends import_obsidian13.TextFileView {
     this.readingSections = [];
     this.articleContextToken = 0;
     this.articleContextTimer = null;
+    this.articleContentContextTimer = null;
     this.preferCurrentFileOnNextContextRefresh = false;
     this.preferredCurrentNodeIdOnNextContextRefresh = null;
     /** Root title last loaded or saved; unrelated edits must not rename an already mismatched file. */
@@ -18929,7 +18982,7 @@ var MindMapStudioView = class extends import_obsidian13.TextFileView {
    * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
    */
   setViewData(data, clear) {
-    var _a2, _b2, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l;
+    var _a2, _b2, _c, _d, _e, _f, _g, _h, _i, _j, _k;
     const title = (_b2 = (_a2 = this.file) == null ? void 0 : _a2.basename) != null ? _b2 : "\u601D\u7EF4\u5BFC\u56FE";
     this.plugin.logDebug("view", "set-view-data-start", { filePath: (_c = this.file) == null ? void 0 : _c.path, clear, hasEditor: Boolean(this.editor), dataBytes: new TextEncoder().encode(data).byteLength });
     const cachedDocument = this.file ? this.plugin.getCachedMindMapDocument(this.file) : null;
@@ -18969,7 +19022,7 @@ var MindMapStudioView = class extends import_obsidian13.TextFileView {
       this.articleContextReady = true;
       this.articleContextCacheHit = true;
       this.plugin.logDebug("article-context", "cache-hit", {
-        filePath: (_h = this.file) == null ? void 0 : _h.path,
+        filePath: (_g = this.file) == null ? void 0 : _g.path,
         tocEntries: cachedArticleContext.tocEntries.length,
         readingSections: cachedArticleContext.readingSections.length
       });
@@ -18981,21 +19034,25 @@ var MindMapStudioView = class extends import_obsidian13.TextFileView {
       this.showArticleToc = false;
       this.articleNavigation = void 0;
       this.readingSections = [];
-      this.plugin.logDebug("article-context", "cache-miss", { filePath: (_i = this.file) == null ? void 0 : _i.path });
+      this.plugin.logDebug("article-context", "cache-miss", { filePath: (_h = this.file) == null ? void 0 : _h.path });
     }
     this.applyViewClasses();
     if (!this.editor || clear) {
-      (_j = this.editor) == null ? void 0 : _j.destroy();
+      (_i = this.editor) == null ? void 0 : _i.destroy();
       this.contentEl.empty();
       this.editor = new MindMapEditor(this.app, this.contentEl, this.document, {
         onChange: (document2, options) => {
+          var _a3;
           this.document = document2;
           this.documentChangeRevision += 1;
           this.articleContextCacheHit = false;
+          this.syncCurrentReadingSection(document2);
           if (this.file) this.plugin.invalidateMindMapCaches(this.file.path);
           this.requestSave();
           this.scheduleSavedIndicator();
-          if ((options == null ? void 0 : options.refreshArticleContext) !== false) this.scheduleArticleContextRefresh(320);
+          const impact = (_a3 = options == null ? void 0 : options.articleContextImpact) != null ? _a3 : "structure";
+          if (impact === "structure") this.scheduleArticleContextRefresh(320);
+          else if (impact === "content") this.scheduleArticleContentContextRefresh(140);
         },
         onOpenLink: async (link) => this.openLink(link),
         onExportSvg: async (svg) => this.exportTextFile("svg", svg),
@@ -19111,7 +19168,7 @@ var MindMapStudioView = class extends import_obsidian13.TextFileView {
     }
     if (queuedDirectory && this.editor) {
       this.plugin.logDebug("view", "apply-pending-directory", {
-        filePath: (_k = this.file) == null ? void 0 : _k.path,
+        filePath: (_j = this.file) == null ? void 0 : _j.path,
         focusNodeId: queuedDirectory.focusNodeId,
         articleContextReady: this.articleContextReady
       });
@@ -19119,7 +19176,7 @@ var MindMapStudioView = class extends import_obsidian13.TextFileView {
     }
     if (this.pendingFocusNodeId && this.editor) {
       const nodeId = this.pendingFocusNodeId;
-      this.plugin.logDebug("view", "apply-pending-focus", { filePath: (_l = this.file) == null ? void 0 : _l.path, nodeId, persistLocation: this.pendingFocusShouldPersist, articleContextReady: this.articleContextReady });
+      this.plugin.logDebug("view", "apply-pending-focus", { filePath: (_k = this.file) == null ? void 0 : _k.path, nodeId, persistLocation: this.pendingFocusShouldPersist, articleContextReady: this.articleContextReady });
       const persistLocation = this.pendingFocusShouldPersist;
       this.pendingFocusNodeId = null;
       this.pendingFocusShouldPersist = true;
@@ -19140,7 +19197,7 @@ var MindMapStudioView = class extends import_obsidian13.TextFileView {
    * @param document 发起恢复时的文档快照。
    */
   async recoverMissingSubmapNavigation(file, document2) {
-    var _a2, _b2, _c;
+    var _a2, _b2;
     try {
       const navigation = await this.plugin.recoverSubmapNavigation(file, document2);
       if (!(navigation == null ? void 0 : navigation.parentPath)) return;
@@ -19148,7 +19205,7 @@ var MindMapStudioView = class extends import_obsidian13.TextFileView {
       this.document.navigation = { ...navigation };
       this.plugin.invalidateMindMapCaches(file.path);
       this.plugin.rememberMindMapDocument(file, this.document);
-      (_c = this.editor) == null ? void 0 : _c.applyRecoveredNavigation(navigation);
+      if (this.editor) this.editor.applyRecoveredNavigation(navigation);
       this.articleContextCacheHit = false;
       this.plugin.logDebug("view", "apply-recovered-parent-navigation", {
         filePath: file.path,
@@ -19212,6 +19269,7 @@ var MindMapStudioView = class extends import_obsidian13.TextFileView {
     var _a2;
     if (this.savedTimer !== null) window.clearTimeout(this.savedTimer);
     if (this.articleContextTimer !== null) window.clearTimeout(this.articleContextTimer);
+    if (this.articleContentContextTimer !== null) window.clearTimeout(this.articleContentContextTimer);
     this.articleContextToken += 1;
     (_a2 = this.editor) == null ? void 0 : _a2.destroy();
     this.editor = null;
@@ -19480,11 +19538,59 @@ var MindMapStudioView = class extends import_obsidian13.TextFileView {
    * @param delay 该参数用于 schedule article context refresh 流程中的输入或控制。
    */
   scheduleArticleContextRefresh(delay) {
+    if (this.articleContentContextTimer !== null) {
+      window.clearTimeout(this.articleContentContextTimer);
+      this.articleContentContextTimer = null;
+    }
     if (this.articleContextTimer !== null) window.clearTimeout(this.articleContextTimer);
     this.articleContextTimer = window.setTimeout(() => {
       this.articleContextTimer = null;
       void this.refreshArticleContext();
     }, Math.max(0, delay));
+  }
+  scheduleArticleContentContextRefresh(delay) {
+    if (this.articleContextTimer !== null) return;
+    if (this.articleContentContextTimer !== null) window.clearTimeout(this.articleContentContextTimer);
+    this.articleContentContextTimer = window.setTimeout(() => {
+      this.articleContentContextTimer = null;
+      this.refreshArticleContentContext();
+    }, Math.max(0, delay));
+  }
+  syncCurrentReadingSection(document2) {
+    var _a2;
+    const filePath = (_a2 = this.file) == null ? void 0 : _a2.path;
+    if (!filePath || !this.readingSections.length) return false;
+    const index = this.readingSections.findIndex((section) => section.filePath === filePath);
+    if (index < 0) return false;
+    const current = this.readingSections[index];
+    this.readingSections[index] = {
+      ...current,
+      document: document2,
+      numberingDisabled: current.numberingDisabled === true || document2.root.articleNumberingMode === "none"
+    };
+    return true;
+  }
+  refreshArticleContentContext() {
+    var _a2;
+    const document2 = this.document;
+    if (!document2 || !this.file || !this.articleContextReady || !this.readingSections.length) return;
+    if (!this.syncCurrentReadingSection(document2)) {
+      this.scheduleArticleContextRefresh(0);
+      return;
+    }
+    const refreshed = refreshArticleTocEntriesFromReadingSections(this.readingSections, this.articleTocEntries);
+    if (!refreshed) {
+      this.plugin.logDebug("article-context", "content-refresh-fallback", { filePath: this.file.path });
+      this.scheduleArticleContextRefresh(0);
+      return;
+    }
+    this.articleTocEntries = refreshed;
+    this.plugin.logDebug("article-context", "content-refresh", {
+      filePath: this.file.path,
+      tocEntries: refreshed.length,
+      readingSections: this.readingSections.length
+    });
+    (_a2 = this.editor) == null ? void 0 : _a2.setOptions(this.getEditorOptions(), true);
   }
   /**
    * 刷新article context，并保持模型、界面和持久化状态的一致性。
@@ -19495,6 +19601,7 @@ var MindMapStudioView = class extends import_obsidian13.TextFileView {
     const document2 = (_b2 = (_a2 = this.editor) == null ? void 0 : _a2.getDocument()) != null ? _b2 : this.document;
     if (!file || !document2) return;
     const token = ++this.articleContextToken;
+    const documentRevision = this.documentChangeRevision;
     const cacheRevision = this.plugin.getMindMapCacheRevision();
     this.plugin.logDebug("article-context", "refresh-start", { filePath: file.path, token, cacheRevision, pendingFocusNodeId: this.pendingFocusNodeId, preferCurrentFile: this.preferCurrentFileOnNextContextRefresh });
     (_c = this.editor) == null ? void 0 : _c.setArticleContextLoadingProgress({
@@ -19511,6 +19618,11 @@ var MindMapStudioView = class extends import_obsidian13.TextFileView {
         (_b3 = this.editor) == null ? void 0 : _b3.setArticleContextLoadingProgress(progress);
       });
       if (token !== this.articleContextToken || ((_d = this.file) == null ? void 0 : _d.path) !== file.path) return;
+      if (documentRevision !== this.documentChangeRevision) {
+        this.plugin.logDebug("article-context", "refresh-stale-document", { filePath: file.path, token, documentRevision, currentRevision: this.documentChangeRevision });
+        this.scheduleArticleContextRefresh(0);
+        return;
+      }
       this.articleBaseDepth = context.baseDepth;
       this.articleTocEntries = context.tocEntries;
       this.showArticleToc = context.showToc;
@@ -19527,6 +19639,10 @@ var MindMapStudioView = class extends import_obsidian13.TextFileView {
       this.preferredCurrentNodeIdOnNextContextRefresh = null;
     } catch (error) {
       if (token !== this.articleContextToken || ((_f = this.file) == null ? void 0 : _f.path) !== file.path) return;
+      if (documentRevision !== this.documentChangeRevision) {
+        this.scheduleArticleContextRefresh(0);
+        return;
+      }
       this.plugin.logDebug("article-context", "refresh-failed", { filePath: file.path, token, error });
       (_g = this.editor) == null ? void 0 : _g.setArticleContextLoadingProgress({
         phase: "complete",
@@ -20053,7 +20169,7 @@ var MindMapSearchIndex = class {
    * @returns Every map path reachable through parent/child relationships.
    */
   async refreshFamily(rootPath, currentDocument) {
-    var _a2, _b2, _c, _d, _e;
+    var _a2, _b2;
     const normalizedRoot = (0, import_obsidian14.normalizePath)(rootPath);
     const family = /* @__PURE__ */ new Set();
     const documents = /* @__PURE__ */ new Map();
@@ -20085,7 +20201,8 @@ var MindMapSearchIndex = class {
         if (child && !family.has(child.path)) queue.push(child.path);
       }
       for (const [candidatePath, candidate] of Object.entries(this.data.files)) {
-        const parentPath = (_e = (_c = candidate.navigation) == null ? void 0 : _c.parentPath) != null ? _e : (_d = candidate.entries[0]) == null ? void 0 : _d.parentMapPath;
+        var _a3, _b3, _c;
+        const parentPath = (_c = (_a3 = candidate.navigation) == null ? void 0 : _a3.parentPath) != null ? _c : (_b3 = candidate.entries[0]) == null ? void 0 : _b3.parentMapPath;
         const resolvedParent = this.resolveSubmapFile(parentPath, candidatePath);
         if ((resolvedParent == null ? void 0 : resolvedParent.path) === path && !family.has(candidatePath)) queue.push(candidatePath);
       }

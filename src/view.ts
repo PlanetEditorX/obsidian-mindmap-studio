@@ -10,7 +10,7 @@ import type MindMapStudioPlugin from "./main";
 import { MindMapEditor } from "./editor/editor";
 import { nodePlainText, parseDocument, serializeDocument, type DisplayMode, type MindMapDocument, type MindMapImageUploadPatch } from "./core/model";
 import { settingsToAppearance } from "./settings";
-import { resolveArticleTocMaxDepth, type ArticlePageNavigation, type ArticleTocEntry } from "./article/modes";
+import { refreshArticleTocEntriesFromReadingSections, resolveArticleTocMaxDepth, type ArticlePageNavigation, type ArticleTocEntry } from "./article/modes";
 import { readingSectionsToDocx, readingSectionsToHtml, readingSectionsToMarkdown } from "./import/import-export";
 import { AiAskModal } from "./ai/modal";
 import { enabledAiProfiles } from "./ai/config";
@@ -46,6 +46,7 @@ export class MindMapStudioView extends TextFileView {
   private readingSections: import("./article/modes").ReadingSection[] = [];
   private articleContextToken = 0;
   private articleContextTimer: number | null = null;
+  private articleContentContextTimer: number | null = null;
   private preferCurrentFileOnNextContextRefresh = false;
   private preferredCurrentNodeIdOnNextContextRefresh: string | null = null;
   /** Root title last loaded or saved; unrelated edits must not rename an already mismatched file. */
@@ -189,10 +190,13 @@ export class MindMapStudioView extends TextFileView {
           this.document = document;
           this.documentChangeRevision += 1;
           this.articleContextCacheHit = false;
+          this.syncCurrentReadingSection(document);
           if (this.file) this.plugin.invalidateMindMapCaches(this.file.path);
           this.requestSave();
           this.scheduleSavedIndicator();
-          if (options?.refreshArticleContext !== false) this.scheduleArticleContextRefresh(320);
+          const impact = options?.articleContextImpact ?? "structure";
+          if (impact === "structure") this.scheduleArticleContextRefresh(320);
+          else if (impact === "content") this.scheduleArticleContentContextRefresh(140);
         },
         onOpenLink: async (link) => this.openLink(link),
         onExportSvg: async (svg) => this.exportTextFile("svg", svg),
@@ -394,6 +398,7 @@ export class MindMapStudioView extends TextFileView {
   async onClose(): Promise<void> {
     if (this.savedTimer !== null) window.clearTimeout(this.savedTimer);
     if (this.articleContextTimer !== null) window.clearTimeout(this.articleContextTimer);
+    if (this.articleContentContextTimer !== null) window.clearTimeout(this.articleContentContextTimer);
     this.articleContextToken += 1;
     this.editor?.destroy();
     this.editor = null;
@@ -651,11 +656,63 @@ export class MindMapStudioView extends TextFileView {
    * @param delay 该参数用于 schedule article context refresh 流程中的输入或控制。
    */
   private scheduleArticleContextRefresh(delay: number): void {
+    if (this.articleContentContextTimer !== null) {
+      window.clearTimeout(this.articleContentContextTimer);
+      this.articleContentContextTimer = null;
+    }
     if (this.articleContextTimer !== null) window.clearTimeout(this.articleContextTimer);
     this.articleContextTimer = window.setTimeout(() => {
       this.articleContextTimer = null;
       void this.refreshArticleContext();
     }, Math.max(0, delay));
+  }
+
+  /** Schedules a metadata-only article refresh that never reads another mind-map file. */
+  private scheduleArticleContentContextRefresh(delay: number): void {
+    if (this.articleContextTimer !== null) return;
+    if (this.articleContentContextTimer !== null) window.clearTimeout(this.articleContentContextTimer);
+    this.articleContentContextTimer = window.setTimeout(() => {
+      this.articleContentContextTimer = null;
+      this.refreshArticleContentContext();
+    }, Math.max(0, delay));
+  }
+
+  /** Replaces only the current physical page inside the already loaded continuous-reading family. */
+  private syncCurrentReadingSection(document: MindMapDocument): boolean {
+    const filePath = this.file?.path;
+    if (!filePath || !this.readingSections.length) return false;
+    const index = this.readingSections.findIndex((section) => section.filePath === filePath);
+    if (index < 0) return false;
+    const current = this.readingSections[index]!;
+    this.readingSections[index] = {
+      ...current,
+      document,
+      numberingDisabled: current.numberingDisabled === true || document.root.articleNumberingMode === "none"
+    };
+    return true;
+  }
+
+  /** Refreshes article titles, numbering, and breadcrumbs from memory without rediscovering the map family. */
+  private refreshArticleContentContext(): void {
+    const document = this.document;
+    if (!document || !this.file || !this.articleContextReady || !this.readingSections.length) return;
+    if (!this.syncCurrentReadingSection(document)) {
+      this.scheduleArticleContextRefresh(0);
+      return;
+    }
+    const refreshed = refreshArticleTocEntriesFromReadingSections(this.readingSections, this.articleTocEntries);
+    if (!refreshed) {
+      this.plugin.logDebug("article-context", "content-refresh-fallback", { filePath: this.file.path });
+      this.scheduleArticleContextRefresh(0);
+      return;
+    }
+    this.articleTocEntries = refreshed;
+    this.plugin.logDebug("article-context", "content-refresh", {
+      filePath: this.file.path,
+      tocEntries: refreshed.length,
+      readingSections: this.readingSections.length
+    });
+    this.editor?.setOptions(this.getEditorOptions(), true);
   }
 
   /**
@@ -666,6 +723,7 @@ export class MindMapStudioView extends TextFileView {
     const document = this.editor?.getDocument() ?? this.document;
     if (!file || !document) return;
     const token = ++this.articleContextToken;
+    const documentRevision = this.documentChangeRevision;
     const cacheRevision = this.plugin.getMindMapCacheRevision();
     this.plugin.logDebug("article-context", "refresh-start", { filePath: file.path, token, cacheRevision, pendingFocusNodeId: this.pendingFocusNodeId, preferCurrentFile: this.preferCurrentFileOnNextContextRefresh });
     this.editor?.setArticleContextLoadingProgress({
@@ -681,6 +739,16 @@ export class MindMapStudioView extends TextFileView {
         this.editor?.setArticleContextLoadingProgress(progress);
       });
       if (token !== this.articleContextToken || this.file?.path !== file.path) return;
+      if (documentRevision !== this.documentChangeRevision) {
+        this.plugin.logDebug("article-context", "refresh-stale-document", {
+          filePath: file.path,
+          token,
+          documentRevision,
+          currentRevision: this.documentChangeRevision
+        });
+        this.scheduleArticleContextRefresh(0);
+        return;
+      }
       this.articleBaseDepth = context.baseDepth;
       this.articleTocEntries = context.tocEntries;
       this.showArticleToc = context.showToc;
@@ -697,6 +765,10 @@ export class MindMapStudioView extends TextFileView {
       this.preferredCurrentNodeIdOnNextContextRefresh = null;
     } catch (error) {
       if (token !== this.articleContextToken || this.file?.path !== file.path) return;
+      if (documentRevision !== this.documentChangeRevision) {
+        this.scheduleArticleContextRefresh(0);
+        return;
+      }
       this.plugin.logDebug("article-context", "refresh-failed", { filePath: file.path, token, error });
       this.editor?.setArticleContextLoadingProgress({
         phase: "complete",

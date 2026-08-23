@@ -190,3 +190,29 @@ test("compiled plugin contains the article-specific edit routing", () => {
   assert.match(mainBundle, /inline-edit-pointer-activate[\s\S]*mmsProtectInitialFocus[\s\S]*120/, "compiled pointer editing must keep the short initial focus handoff guard");
   assert.match(mainBundle, /inline-edit-blur[\s\S]*preventScroll: true[\s\S]*inline-edit-refocus/, "compiled blur diagnostics and refocus protection must stay synchronized");
 });
+
+
+test("article change-impact routing keeps local edits in memory and rejects stale full-context builds", async () => {
+  const [viewSource, editorTypesSource] = await Promise.all([
+    readFile("src/view.ts", "utf8"),
+    readFile("src/editor/editor-types.ts", "utf8")
+  ]);
+  assert.match(editorTypesSource, /ArticleContextChangeImpact = "none" \| "content" \| "structure"/);
+  assert.match(editorSource, /notifyDocumentChange\(articleContextImpact: ArticleContextChangeImpact = "structure"\)[\s\S]*articleContextImpact/);
+  assert.match(editorSource, /mutateWithoutArticleContext\(action[\s\S]*this\.mutate\(action, restoreLocation, "none"\)/);
+  assert.match(editorSource, /mutateArticleContent\(action[\s\S]*this\.mutate\(action, restoreLocation, "content"\)/);
+  assert.match(editorSource, /private mutate\([\s\S]*articleContextImpact: ArticleContextChangeImpact = "structure"[\s\S]*notifyDocumentChange\(articleContextImpact\)/);
+  assert.match(viewSource, /const impact = options\?\.articleContextImpact \?\? "structure"/);
+  assert.match(viewSource, /impact === "structure"[\s\S]*scheduleArticleContextRefresh\(320\)/);
+  assert.match(viewSource, /impact === "content"[\s\S]*scheduleArticleContentContextRefresh\(140\)/);
+  assert.match(viewSource, /refreshArticleTocEntriesFromReadingSections\(this\.readingSections, this\.articleTocEntries\)/);
+  assert.match(viewSource, /content-refresh-fallback[\s\S]*scheduleArticleContextRefresh\(0\)/);
+  assert.match(viewSource, /const documentRevision = this\.documentChangeRevision/);
+  assert.match(viewSource, /documentRevision !== this\.documentChangeRevision[\s\S]*refresh-stale-document[\s\S]*scheduleArticleContextRefresh\(0\)/);
+  assert.match(mainBundle, /refreshArticleTocEntriesFromReadingSections/);
+  assert.match(mainBundle, /scheduleArticleContentContextRefresh\(140\)/);
+  assert.match(mainBundle, /notifyDocumentChange\(articleContextImpact = "structure"\)/);
+  assert.match(mainBundle, /mutateWithoutArticleContext\(action, restoreLocation\)[\s\S]*this\.mutate\(action, restoreLocation, "none"\)/);
+  assert.match(mainBundle, /mutateArticleContent\(action, restoreLocation\)[\s\S]*this\.mutate\(action, restoreLocation, "content"\)/);
+  assert.match(mainBundle, /documentRevision !== this\.documentChangeRevision[\s\S]*refresh-stale-document[\s\S]*scheduleArticleContextRefresh\(0\)/);
+});
