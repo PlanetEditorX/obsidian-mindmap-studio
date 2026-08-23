@@ -140,18 +140,18 @@ test("article context menu exposes the four explicit movement rules", () => {
   assert.match(contextMenu, /setTitle\("升为上一个节点的兄弟节点"\)[\s\S]*this\.promoteArticleNode\(selected\.id\)/);
   assert.match(blockMove, /preferredBlockId \?\? \(active\?\.nodeId === nodeId \? active\.blockId : undefined\)/);
   assert.match(demote, /parent\?\.children\[index - 1\][\s\S]*this\.moveNode\(nodeId, previous\.id, "child"\)/);
-  assert.match(promote, /findParent\(this\.document\.root, parent\.id\)[\s\S]*this\.moveNode\(nodeId, parent\.id, "after"\)/);
+  assert.match(promote, /this\.parentNodeById\(parent\.id\)[\s\S]*this\.moveNode\(nodeId, parent\.id, "after"\)/);
 });
 
 test("inline deletion targets the bound node and ignores a deleted editor's late blur", () => {
   const directDelete = editorSource.match(/private deleteNodeById\(nodeId: string\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
   const inlineEditor = editorSource.match(/private makeInlineEditable\(element: HTMLElement, node: MindMapNode, placeholder: string, blockId\?: string\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
 
-  assert.match(directDelete, /findNode\(this\.document\.root, nodeId\)/);
-  assert.match(directDelete, /deletionSelectionFallback\(this\.document\.root, \[nodeId\]\)/);
+  assert.match(directDelete, /this\.nodeById\(nodeId\)/);
+  assert.match(directDelete, /deletionSelectionFallback\(this\.document\.root, \[nodeId\], this\.currentNodeTreeIndex\(\)\)/);
   assert.match(directDelete, /deleteNodes\(this\.document\.root, \[nodeId\]\)/);
   assert.doesNotMatch(directDelete, /this\.selectedNode\(\)/, "an inline delete must not depend on selection changed by blur or redraw");
-  assert.match(inlineEditor, /if \(!findNode\(this\.document\.root, node\.id\)\) return/);
+  assert.match(inlineEditor, /if \(!this\.nodeById\(node\.id\)\) return/);
 });
 
 test("article click move keeps block and node semantics separate", () => {
@@ -159,7 +159,7 @@ test("article click move keeps block and node semantics separate", () => {
   assert.match(editorSource, /private startArticleBlockClickMove\([\s\S]*activeArticleBlock[\s\S]*pendingArticleClickMove = \{ kind: "block"/);
   assert.match(editorSource, /private completeArticleClickMove\([\s\S]*targetBlockId\?: string[\s\S]*position\?: "before" \| "after"[\s\S]*moveContentBlock\([\s\S]*targetBlockId[\s\S]*targetBlockId && position \? position : "append"/);
   assert.match(editorSource, /private completeArticleClickMove\([\s\S]*this\.selectNode\(pending\.sourceNodeId\)[\s\S]*this\.moveNode\(pending\.sourceNodeId, targetNodeId, "after"\)/);
-  assert.match(editorSource, /private articleClickMoveTargetAllowed\([\s\S]*pending\.kind === "node" && pending\.sourceNodeId === targetNodeId[\s\S]*targetNodeId === this\.document\.root\.id[\s\S]*findAncestors\(this\.document\.root, targetNodeId\)/);
+  assert.match(editorSource, /private articleClickMoveTargetAllowed\([\s\S]*pending\.kind === "node" && pending\.sourceNodeId === targetNodeId[\s\S]*targetNodeId === this\.document\.root\.id[\s\S]*this\.nodeHasAncestor\(targetNodeId, pending\.sourceNodeId\)/);
   assert.match(editorSource, /private articleBlockMoveTargetAllowed\([\s\S]*pending\.sourceNodeId === targetNodeId && pending\.blockId === targetBlockId/);
   assert.match(editorSource, /this\.articleEl\.addEventListener\("click", articleClickMoveTarget, true\)/);
   assert.match(editorSource, /this\.pendingArticleClickMove && event\.key === "Escape"[\s\S]*this\.cancelArticleClickMove\(\)/);

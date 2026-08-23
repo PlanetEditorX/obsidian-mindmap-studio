@@ -7,16 +7,20 @@
 
 import { findNode, walkNodes } from "./node-tree";
 export {
+  buildNodeTreeIndex,
   containsNode,
   findAncestors,
   findNode,
   findParent,
   flattenNodes,
+  indexedAncestors,
+  indexedHasAncestor,
+  indexedHasAnyAncestor,
   moveNodeRelative,
   removeNode,
   walkNodes
 } from "./node-tree";
-export type { NodeDropPosition } from "./node-tree";
+export type { NodeDropPosition, NodeTreeIndex } from "./node-tree";
 
 /**
  * LayoutMode 类型定义，用于限制可接受值并让序列化数据保持稳定。

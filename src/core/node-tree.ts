@@ -8,6 +8,75 @@ import type { MindMapNode } from "./model";
 /** 可用于节点拖放的目标位置。 */
 export type NodeDropPosition = "before" | "child" | "after";
 
+/** Read-only node lookup tables rebuilt after structural tree changes. */
+export interface NodeTreeIndex {
+  root: MindMapNode;
+  nodes: readonly MindMapNode[];
+  byId: ReadonlyMap<string, MindMapNode>;
+  parentById: ReadonlyMap<string, MindMapNode | null>;
+  hasCollapsibleNodes: boolean;
+}
+
+/**
+ * Builds one depth-first snapshot for repeated node, parent and traversal lookups.
+ * The index stores live node references, so callers must rebuild it after changing
+ * parent/child relationships; content-only edits do not invalidate the snapshot.
+ */
+export function buildNodeTreeIndex(root: MindMapNode): NodeTreeIndex {
+  const nodes: MindMapNode[] = [];
+  const byId = new Map<string, MindMapNode>();
+  const parentById = new Map<string, MindMapNode | null>();
+  let hasCollapsibleNodes = false;
+  const stack: Array<{ node: MindMapNode; parent: MindMapNode | null }> = [{ node: root, parent: null }];
+  while (stack.length) {
+    const current = stack.pop()!;
+    const { node, parent } = current;
+    nodes.push(node);
+    byId.set(node.id, node);
+    parentById.set(node.id, parent);
+    if (node !== root && node.children.length > 0) hasCollapsibleNodes = true;
+    for (let index = node.children.length - 1; index >= 0; index -= 1) {
+      stack.push({ node: node.children[index]!, parent: node });
+    }
+  }
+  return { root, nodes, byId, parentById, hasCollapsibleNodes };
+}
+
+/** Returns the ancestor path from root through the direct parent using an existing index. */
+export function indexedAncestors(index: NodeTreeIndex, id: string): MindMapNode[] {
+  if (!index.byId.has(id)) return [];
+  const reversed: MindMapNode[] = [];
+  let parent = index.parentById.get(id) ?? null;
+  while (parent) {
+    reversed.push(parent);
+    parent = index.parentById.get(parent.id) ?? null;
+  }
+  reversed.reverse();
+  return reversed;
+}
+
+/** Returns whether the indexed node is nested anywhere below the supplied ancestor ID. */
+export function indexedHasAncestor(index: NodeTreeIndex, id: string, ancestorId: string): boolean {
+  if (!index.byId.has(id)) return false;
+  let parent = index.parentById.get(id) ?? null;
+  while (parent) {
+    if (parent.id === ancestorId) return true;
+    parent = index.parentById.get(parent.id) ?? null;
+  }
+  return false;
+}
+
+/** Returns whether any ancestor of the indexed node belongs to the supplied ID set. */
+export function indexedHasAnyAncestor(index: NodeTreeIndex, id: string, ancestorIds: ReadonlySet<string>): boolean {
+  if (!index.byId.has(id) || ancestorIds.size === 0) return false;
+  let parent = index.parentById.get(id) ?? null;
+  while (parent) {
+    if (ancestorIds.has(parent.id)) return true;
+    parent = index.parentById.get(parent.id) ?? null;
+  }
+  return false;
+}
+
 /** 深度优先遍历节点树，并提供每个节点的父节点。 */
 export function walkNodes(root: MindMapNode, visitor: (node: MindMapNode, parent: MindMapNode | null) => void): void {
   const visit = (node: MindMapNode, parent: MindMapNode | null): void => {
@@ -80,13 +149,20 @@ export function removeNode(root: MindMapNode, id: string): boolean {
  *
  * @returns 实际发生结构变更时返回 true。
  */
-export function moveNodeRelative(root: MindMapNode, draggedId: string, targetId: string, position: NodeDropPosition): boolean {
+export function moveNodeRelative(
+  root: MindMapNode,
+  draggedId: string,
+  targetId: string,
+  position: NodeDropPosition,
+  existingIndex?: NodeTreeIndex
+): boolean {
   if (draggedId === root.id || draggedId === targetId) return false;
-  const dragged = findNode(root, draggedId);
-  const target = findNode(root, targetId);
-  if (!dragged || !target || containsNode(dragged, targetId)) return false;
+  const index = existingIndex ?? buildNodeTreeIndex(root);
+  const dragged = index.byId.get(draggedId) ?? null;
+  const target = index.byId.get(targetId) ?? null;
+  if (!dragged || !target || indexedHasAncestor(index, targetId, draggedId)) return false;
 
-  const oldParent = findParent(root, draggedId);
+  const oldParent = index.parentById.get(draggedId) ?? null;
   if (!oldParent) return false;
   const oldIndex = oldParent.children.findIndex((child) => child.id === draggedId);
   if (oldIndex < 0) return false;
@@ -100,7 +176,7 @@ export function moveNodeRelative(root: MindMapNode, draggedId: string, targetId:
   }
 
   if (target.id === root.id) return false;
-  const targetParent = findParent(root, targetId);
+  const targetParent = index.parentById.get(targetId) ?? null;
   if (!targetParent) return false;
   const targetIndexBeforeRemoval = targetParent.children.findIndex((child) => child.id === targetId);
   if (targetIndexBeforeRemoval < 0) return false;
