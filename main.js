@@ -10272,6 +10272,22 @@ var ImageRecognitionPreviewModal = class extends import_obsidian10.Modal {
   }
 };
 
+// src/editor/selection-class-delta.ts
+function selectionClassDelta(previous, next) {
+  const changed = /* @__PURE__ */ new Set();
+  for (const id of previous) {
+    if (!next.has(id)) changed.add(id);
+  }
+  for (const id of next) {
+    if (!previous.has(id)) changed.add(id);
+  }
+  if ((previous.size > 1) !== (next.size > 1)) {
+    for (const id of previous) changed.add(id);
+    for (const id of next) changed.add(id);
+  }
+  return changed;
+}
+
 // src/editor/editor.ts
 var TOOLBAR_GROUPS = {
   lock: "access",
@@ -11470,7 +11486,10 @@ var MindMapEditor = class {
   constructor(app, host, document2, callbacks, options) {
     this.modeButtons = /* @__PURE__ */ new Map();
     this.editControls = [];
+    this.mindMapNodeElements = /* @__PURE__ */ new Map();
     this.selectedIds = /* @__PURE__ */ new Set();
+    this.appliedSelectionIds = /* @__PURE__ */ new Set();
+    this.selectionClassSyncValid = false;
     /** 仅由右键上下文设置；普通选择不会改变 AI 默认范围。 */
     this.aiScopeNodeId = null;
     this.zoom = 1;
@@ -11650,6 +11669,7 @@ var MindMapEditor = class {
     if (this.pageEnterTimer !== null) window.clearTimeout(this.pageEnterTimer);
     this.pageTransitionHideTimer = null;
     this.pageEnterTimer = null;
+    this.mindMapNodeElements.clear();
     this.host.empty();
   }
   /**
@@ -12842,9 +12862,8 @@ var MindMapEditor = class {
           const bottom = Math.max(event.clientY, moveEvent.clientY);
           this.selectedIds.clear();
           for (const id of baseSelection) this.selectedIds.add(id);
-          const nodeEls = this.nodesLayerEl.querySelectorAll(".mmc-node[data-node-id]");
-          for (let i = 0, len = nodeEls.length; i < len; i++) {
-            const nodeEl = nodeEls[i];
+          const nodeEls = this.mindMapNodeElements.values();
+          for (const nodeEl of nodeEls) {
             const rect = nodeEl.getBoundingClientRect();
             if (rect.right >= left && rect.left <= right && rect.bottom >= top && rect.top <= bottom) {
               const id = nodeEl.dataset.nodeId;
@@ -12989,9 +13008,9 @@ var MindMapEditor = class {
       this.clearInlineEditingAccessibility(element);
     });
     if (this.currentMode !== "mindmap") return;
-    this.nodesLayerEl.querySelectorAll(".mmc-node").forEach((nodeEl) => {
+    for (const nodeEl of this.mindMapNodeElements.values()) {
       nodeEl.draggable = !this.readOnly && !nodeEl.hasClass("is-root");
-    });
+    }
   }
   /**
    * 执行“update mode ui”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
@@ -13050,12 +13069,7 @@ var MindMapEditor = class {
     for (const timer of this.imageLoadTimers) window.clearTimeout(timer);
     this.imageLoadTimers.clear();
   }
-  /**
-   * Computes tree-dependent toolbar state in one traversal so each toolbar item
-   * does not independently rescan a large document.
-   *
-   * @returns Shared availability facts for the current toolbar refresh.
-   */
+  /** Computes tree-dependent toolbar state once per toolbar refresh. */
   toolbarAvailabilityContext() {
     let selected = null;
     let selectedNonRootCount = 0;
@@ -13069,20 +13083,9 @@ var MindMapEditor = class {
       for (let index = node.children.length - 1; index >= 0; index -= 1) stack.push(node.children[index]);
     }
     const editableSurface = this.currentMode === "mindmap" || this.currentMode === "outline" || this.currentMode === "article";
-    return {
-      selected,
-      selectedNonRootCount,
-      hasCollapsibleNodes,
-      canEdit: editableSurface && !this.readOnly
-    };
+    return { selected, selectedNonRootCount, hasCollapsibleNodes, canEdit: editableSurface && !this.readOnly };
   }
-  /**
-   * Returns whether one configured toolbar action can perform a meaningful operation now.
-   *
-   * @param id Toolbar action being evaluated.
-   * @param context Tree-dependent facts shared by every action in this refresh.
-   * @returns Whether the action should be visible and enabled.
-   */
+  /** Returns whether one configured toolbar action can perform a meaningful operation now. */
   toolbarItemAvailable(id, context) {
     const { selected, selectedNonRootCount, hasCollapsibleNodes, canEdit } = context;
     switch (id) {
@@ -14023,6 +14026,7 @@ var MindMapEditor = class {
   refreshArticleWindowChrome() {
     this.installArticleSectionCollapse();
     this.renderArticleMiniMap();
+    this.selectionClassSyncValid = false;
     this.applySelectionClasses();
     this.applyArticleClickMoveUi();
   }
@@ -14471,6 +14475,7 @@ var MindMapEditor = class {
     this.articleEl.toggleClass("is-hidden", this.currentMode !== "article" && this.currentMode !== "reading");
     this.questionPracticeEl.toggleClass("is-hidden", this.currentMode !== "question-bank");
     this.rootEl.dataset.displayMode = this.currentMode;
+    if (this.currentMode !== "mindmap") this.selectionClassSyncValid = false;
     if (this.currentMode === "outline") this.renderOutline();
     else if (this.currentMode === "article") this.renderArticle();
     else if (this.currentMode === "reading") this.renderReading();
@@ -14552,6 +14557,7 @@ var MindMapEditor = class {
     const branchColorMap = appearance.colorfulBranches ? buildBranchColorMap(this.document.root, appearance.branchColors) : /* @__PURE__ */ new Map();
     this.clearDropPreview();
     this.observedMindMapNodeSizes.clear();
+    this.mindMapNodeElements.clear();
     this.nodesLayerEl.empty();
     while (this.edgesSvg.firstChild) this.edgesSvg.removeChild(this.edgesSvg.firstChild);
     this.renderMindMapEdges(appearance, branchColorMap);
@@ -14579,8 +14585,7 @@ var MindMapEditor = class {
       const minimumBatch = startIndex === 0 ? 10 : 4;
       while (index < positions.length && (index - startIndex < minimumBatch || performance.now() - startedAt < 7)) {
         const position = positions[index];
-        const existing = this.nodesLayerEl.querySelector(`.mmc-node[data-node-id="${CSS.escape(position.node.id)}"]`);
-        if (!existing) this.renderMindMapNode(position, appearance, branchColorMap);
+        if (!this.mindMapNodeElements.has(position.node.id)) this.renderMindMapNode(position, appearance, branchColorMap);
         index += 1;
       }
       if (index < positions.length) {
@@ -14597,6 +14602,7 @@ var MindMapEditor = class {
       }
     };
     renderBatch(0);
+    this.syncAppliedSelectionSnapshot();
     this.applyTransform();
   }
   /** 将一个已完成布局的导图节点挂载到画布，并绑定其内容、选择、拖放和尺寸交互。 */
@@ -14608,6 +14614,7 @@ var MindMapEditor = class {
     const classes = ["mmc-node", position.depth === 0 ? "is-root" : "", node.submap ? "is-submap-node" : "", `shape-${shape}`, `text-align-${textAlign}`].filter(Boolean).join(" ");
     const nodeEl = this.nodesLayerEl.createDiv({ cls: classes });
     nodeEl.dataset.nodeId = node.id;
+    this.mindMapNodeElements.set(node.id, nodeEl);
     nodeEl.style.left = `${position.x}px`;
     nodeEl.style.top = `${position.y}px`;
     nodeEl.style.width = `${position.width}px`;
@@ -14956,7 +14963,7 @@ var MindMapEditor = class {
       if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
       const draggingIds = this.selectedIds.has(node.id) ? this.selectedIds : /* @__PURE__ */ new Set([node.id]);
       for (const draggingId of draggingIds) {
-        (_b3 = this.nodesLayerEl.querySelector(`[data-node-id="${CSS.escape(draggingId)}"]`)) == null ? void 0 : _b3.addClass("is-dragging");
+        (_b3 = this.mindMapNodeElements.get(draggingId)) == null ? void 0 : _b3.addClass("is-dragging");
       }
     });
     nodeEl.addEventListener("dragover", (event) => {
@@ -14989,7 +14996,7 @@ var MindMapEditor = class {
       this.dragDropPosition = null;
       this.clearDropIndicators();
       this.clearDropPreview();
-      this.nodesLayerEl.querySelectorAll(".is-dragging").forEach((element) => element.removeClass("is-dragging"));
+      for (const draggingNode of this.mindMapNodeElements.values()) draggingNode.removeClass("is-dragging");
     });
     (_H = this.resizeObserver) == null ? void 0 : _H.observe(nodeEl);
   }
@@ -15044,10 +15051,9 @@ var MindMapEditor = class {
     if (!this.pendingMindMapLayoutAnimation) return /* @__PURE__ */ new Map();
     this.pendingMindMapLayoutAnimation = false;
     const rects = /* @__PURE__ */ new Map();
-    this.nodesLayerEl.querySelectorAll(".mmc-node[data-node-id]").forEach((element) => {
-      const id = element.dataset.nodeId;
-      if (id) rects.set(id, element.getBoundingClientRect());
-    });
+    for (const [id, element] of this.mindMapNodeElements) {
+      rects.set(id, element.getBoundingClientRect());
+    }
     return rects;
   }
   /**
@@ -15057,13 +15063,13 @@ var MindMapEditor = class {
    */
   playMindMapLayoutAnimation(previousNodeRects) {
     if (!previousNodeRects.size || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    this.nodesLayerEl.querySelectorAll(".mmc-node[data-node-id]").forEach((element) => {
-      const previous = element.dataset.nodeId ? previousNodeRects.get(element.dataset.nodeId) : void 0;
-      if (!previous) return;
+    for (const [id, element] of this.mindMapNodeElements) {
+      const previous = previousNodeRects.get(id);
+      if (!previous) continue;
       const next = element.getBoundingClientRect();
       const deltaX = previous.left - next.left;
       const deltaY = previous.top - next.top;
-      if (Math.abs(deltaX) < 1 && Math.abs(deltaY) < 1) return;
+      if (Math.abs(deltaX) < 1 && Math.abs(deltaY) < 1) continue;
       const transform = getComputedStyle(element).transform;
       const baseTransform = transform === "none" ? "" : transform;
       element.animate([
@@ -15073,7 +15079,7 @@ var MindMapEditor = class {
         duration: 220,
         easing: "cubic-bezier(0.22, 1, 0.36, 1)"
       });
-    });
+    }
     this.edgesSvg.animate([{ opacity: "0.3" }, { opacity: "1" }], {
       duration: 180,
       easing: "ease-out"
@@ -15100,19 +15106,18 @@ var MindMapEditor = class {
     const previousNodeRects = this.captureMindMapNodeRects();
     const appearance = this.getAppearance();
     const measured = /* @__PURE__ */ new Map();
-    this.nodesLayerEl.querySelectorAll(".mmc-node[data-node-id]").forEach((element) => {
-      const id = element.dataset.nodeId;
-      if (!id) return;
-      measured.set(id, {
+    for (const [id, element] of this.mindMapNodeElements) {
+      const size = {
         width: Math.max(1, element.offsetWidth),
         height: Math.max(1, element.offsetHeight)
-      });
-      this.observedMindMapNodeSizes.set(id, measured.get(id));
-    });
+      };
+      measured.set(id, size);
+      this.observedMindMapNodeSizes.set(id, size);
+    }
     if (!measured.size) return;
     this.layout = computeLayout(this.document.root, this.document.layout, (_a2 = appearance.fontSize) != null ? _a2 : 14, (_b2 = appearance.nodeVisualStyle) != null ? _b2 : "card", appearance, measured);
     for (const position of this.layout.nodes) {
-      const element = this.nodesLayerEl.querySelector(`.mmc-node[data-node-id="${CSS.escape(position.node.id)}"]`);
+      const element = this.mindMapNodeElements.get(position.node.id);
       if (!element) continue;
       element.style.left = `${position.x}px`;
       element.style.top = `${position.y}px`;
@@ -15185,7 +15190,7 @@ var MindMapEditor = class {
     }
     const scroller = this.currentMode === "outline" ? this.outlineEl : this.articleEl;
     const viewport = scroller.getBoundingClientRect();
-    const matches = Array.from(scroller.querySelectorAll("[data-node-id]")).filter((element) => element.dataset.nodeId === id).map((element) => ({ element, rect: element.getBoundingClientRect() })).filter(({ rect }) => rect.height > 0).sort((left, right) => {
+    const matches = Array.from(scroller.querySelectorAll(`[data-node-id="${CSS.escape(id)}"]`)).map((element) => ({ element, rect: element.getBoundingClientRect() })).filter(({ rect }) => rect.height > 0).sort((left, right) => {
       const leftVisible = left.rect.bottom >= viewport.top && left.rect.top <= viewport.bottom ? 0 : 1;
       const rightVisible = right.rect.bottom >= viewport.top && right.rect.top <= viewport.bottom ? 0 : 1;
       return leftVisible - rightVisible || left.rect.height - right.rect.height;
@@ -15201,24 +15206,68 @@ var MindMapEditor = class {
       viewportAnchorRatio(target.rect.top, target.rect.height, viewport.top, viewport.height, 0.5, 0.35)
     );
   }
+  /** Records the current logical selection as the state already represented by rendered DOM. */
+  syncAppliedSelectionSnapshot() {
+    this.appliedSelectionIds.clear();
+    for (const id of this.selectedIds) this.appliedSelectionIds.add(id);
+    this.selectionClassSyncValid = true;
+  }
+  /** Returns the currently visible non-canvas container that can render node selection classes. */
+  activeSelectionScope() {
+    if (this.currentMode === "outline") return this.outlineEl;
+    if (this.currentMode === "article" || this.currentMode === "reading") return this.articleEl;
+    return null;
+  }
+  /** Applies selection CSS classes to the active rendered representation of one node ID. */
+  applySelectionClassesForId(id, multi) {
+    const selected = this.selectedIds.has(id);
+    const apply = (element) => {
+      element.toggleClass("is-selected", selected);
+      element.toggleClass("is-multi-selected", selected && multi);
+    };
+    if (this.currentMode === "mindmap") {
+      const mindMapElement = this.mindMapNodeElements.get(id);
+      if (mindMapElement) apply(mindMapElement);
+      return;
+    }
+    const scope = this.activeSelectionScope();
+    if (!scope) return;
+    scope.querySelectorAll(`[data-node-id="${CSS.escape(id)}"]`).forEach(apply);
+  }
   /**
-   * Synchronizes selection classes across all editor views.
+   * Synchronizes selection classes in the active editor view.
+   *
+   * Normal clicks and marquee updates touch only IDs whose selected or multi-selected state changed.
+   * A rebuilt outline/article DOM invalidates the snapshot and intentionally performs one full sync.
+   * Hidden views are rebuilt before becoming active, so they do not receive redundant selection writes.
    */
   applySelectionClasses() {
     const multi = this.selectedIds.size > 1;
-    for (const scope of [this.nodesLayerEl, this.outlineEl, this.articleEl]) {
-      if (!scope) continue;
-      const elements = scope.querySelectorAll("[data-node-id]");
-      if (elements.length === 0) continue;
-      for (let i = 0; i < elements.length; i++) {
-        const element = elements[i];
-        const id = element.dataset.nodeId;
-        if (!id) continue;
-        const selected = this.selectedIds.has(id);
-        element.toggleClass("is-selected", selected);
-        element.toggleClass("is-multi-selected", selected && multi);
+    if (!this.selectionClassSyncValid) {
+      if (this.currentMode === "mindmap") {
+        for (const [id, element] of this.mindMapNodeElements) {
+          const selected = this.selectedIds.has(id);
+          element.toggleClass("is-selected", selected);
+          element.toggleClass("is-multi-selected", selected && multi);
+        }
+      } else {
+        const scope = this.activeSelectionScope();
+        const elements = scope == null ? [] : scope.querySelectorAll("[data-node-id]");
+        for (let index = 0; index < elements.length; index += 1) {
+          const element = elements[index];
+          const id = element.dataset.nodeId;
+          if (!id) continue;
+          const selected = this.selectedIds.has(id);
+          element.toggleClass("is-selected", selected);
+          element.toggleClass("is-multi-selected", selected && multi);
+        }
+      }
+    } else {
+      for (const id of selectionClassDelta(this.appliedSelectionIds, this.selectedIds)) {
+        this.applySelectionClassesForId(id, multi);
       }
     }
+    this.syncAppliedSelectionSnapshot();
     this.updateToolbarAvailability();
   }
   /**
@@ -15288,7 +15337,7 @@ var MindMapEditor = class {
       if (inlineElement) this.activateInlineEditable(inlineElement, true, protectInitialFocus);
       return;
     }
-    const nodeEl = this.nodesLayerEl.querySelector(`.mmc-node[data-node-id="${CSS.escape(nodeId)}"]`);
+    const nodeEl = this.mindMapNodeElements.get(nodeId);
     const content = nodeEl == null ? void 0 : nodeEl.querySelector(".mmc-node-content");
     if (!nodeEl || !content) return;
     const blocks = nodeContentBlocks(node);
@@ -15689,9 +15738,8 @@ var MindMapEditor = class {
       this.callbacks.onChange(this.getDocument());
       this.markSaving();
       if (this.inlineEditingId === selected.id) {
-        const inline = this.nodesLayerEl.querySelector(
-          `.mmc-node[data-node-id="${CSS.escape(selected.id)}"] .mmc-node-text.is-inline-editing`
-        );
+        var _a3;
+        const inline = (_a3 = this.mindMapNodeElements.get(selected.id)) == null ? void 0 : _a3.querySelector(".mmc-node-text.is-inline-editing");
         const textBlock = nodeContentBlocks(selected).find((block) => block.type === "text");
         if (inline && document.activeElement !== inline) renderRichTextRuns(inline, textBlock == null ? void 0 : textBlock.richText, (_a2 = textBlock == null ? void 0 : textBlock.text) != null ? _a2 : "", false);
       } else if (this.currentMode === "mindmap") {
@@ -17645,7 +17693,7 @@ var MindMapEditor = class {
   refreshAfterInlineTextCommit(nodeId) {
     if (this.currentMode === "mindmap") {
       const node = findNode(this.document.root, nodeId);
-      const nodeEl = this.nodesLayerEl.querySelector(`.mmc-node[data-node-id="${CSS.escape(nodeId)}"]`);
+      const nodeEl = this.mindMapNodeElements.get(nodeId);
       if (node && nodeEl) nodeEl.toggleClass("is-search-match", Boolean(this.searchQuery && nodeSearchText(node).includes(this.searchQuery)));
       this.scheduleMeasuredMindMapLayout();
       return;
@@ -17667,10 +17715,11 @@ var MindMapEditor = class {
       this.render();
       return;
     }
-    const existing = this.nodesLayerEl.querySelector(`.mmc-node[data-node-id="${CSS.escape(nodeId)}"]`);
+    const existing = this.mindMapNodeElements.get(nodeId);
     if (existing) {
       (_a2 = this.resizeObserver) == null ? void 0 : _a2.unobserve(existing);
       existing.remove();
+      this.mindMapNodeElements.delete(nodeId);
     }
     const appearance = this.getAppearance();
     const branchColorMap = appearance.colorfulBranches ? buildBranchColorMap(this.document.root, appearance.branchColors) : /* @__PURE__ */ new Map();
@@ -18777,7 +18826,7 @@ var MindMapStudioView = class extends import_obsidian13.TextFileView {
    * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
    */
   setViewData(data, clear) {
-    var _a2, _b2, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l;
+    var _a2, _b2, _c, _d, _e, _f, _g, _h, _i, _j, _k;
     const title = (_b2 = (_a2 = this.file) == null ? void 0 : _a2.basename) != null ? _b2 : "\u601D\u7EF4\u5BFC\u56FE";
     this.plugin.logDebug("view", "set-view-data-start", { filePath: (_c = this.file) == null ? void 0 : _c.path, clear, hasEditor: Boolean(this.editor), dataBytes: new TextEncoder().encode(data).byteLength });
     const cachedDocument = this.file ? this.plugin.getCachedMindMapDocument(this.file) : null;
@@ -18817,7 +18866,7 @@ var MindMapStudioView = class extends import_obsidian13.TextFileView {
       this.articleContextReady = true;
       this.articleContextCacheHit = true;
       this.plugin.logDebug("article-context", "cache-hit", {
-        filePath: (_h = this.file) == null ? void 0 : _h.path,
+        filePath: (_g = this.file) == null ? void 0 : _g.path,
         tocEntries: cachedArticleContext.tocEntries.length,
         readingSections: cachedArticleContext.readingSections.length
       });
@@ -18829,11 +18878,11 @@ var MindMapStudioView = class extends import_obsidian13.TextFileView {
       this.showArticleToc = false;
       this.articleNavigation = void 0;
       this.readingSections = [];
-      this.plugin.logDebug("article-context", "cache-miss", { filePath: (_i = this.file) == null ? void 0 : _i.path });
+      this.plugin.logDebug("article-context", "cache-miss", { filePath: (_h = this.file) == null ? void 0 : _h.path });
     }
     this.applyViewClasses();
     if (!this.editor || clear) {
-      (_j = this.editor) == null ? void 0 : _j.destroy();
+      (_i = this.editor) == null ? void 0 : _i.destroy();
       this.contentEl.empty();
       this.editor = new MindMapEditor(this.app, this.contentEl, this.document, {
         onChange: (document2, options) => {
@@ -18959,7 +19008,7 @@ var MindMapStudioView = class extends import_obsidian13.TextFileView {
     }
     if (queuedDirectory && this.editor) {
       this.plugin.logDebug("view", "apply-pending-directory", {
-        filePath: (_k = this.file) == null ? void 0 : _k.path,
+        filePath: (_j = this.file) == null ? void 0 : _j.path,
         focusNodeId: queuedDirectory.focusNodeId,
         articleContextReady: this.articleContextReady
       });
@@ -18967,7 +19016,7 @@ var MindMapStudioView = class extends import_obsidian13.TextFileView {
     }
     if (this.pendingFocusNodeId && this.editor) {
       const nodeId = this.pendingFocusNodeId;
-      this.plugin.logDebug("view", "apply-pending-focus", { filePath: (_l = this.file) == null ? void 0 : _l.path, nodeId, persistLocation: this.pendingFocusShouldPersist, articleContextReady: this.articleContextReady });
+      this.plugin.logDebug("view", "apply-pending-focus", { filePath: (_k = this.file) == null ? void 0 : _k.path, nodeId, persistLocation: this.pendingFocusShouldPersist, articleContextReady: this.articleContextReady });
       const persistLocation = this.pendingFocusShouldPersist;
       this.pendingFocusNodeId = null;
       this.pendingFocusShouldPersist = true;
@@ -18988,7 +19037,7 @@ var MindMapStudioView = class extends import_obsidian13.TextFileView {
    * @param document 发起恢复时的文档快照。
    */
   async recoverMissingSubmapNavigation(file, document2) {
-    var _a2, _b2, _c;
+    var _a2, _b2;
     try {
       const navigation = await this.plugin.recoverSubmapNavigation(file, document2);
       if (!(navigation == null ? void 0 : navigation.parentPath)) return;
@@ -18996,7 +19045,7 @@ var MindMapStudioView = class extends import_obsidian13.TextFileView {
       this.document.navigation = { ...navigation };
       this.plugin.invalidateMindMapCaches(file.path);
       this.plugin.rememberMindMapDocument(file, this.document);
-      (_c = this.editor) == null ? void 0 : _c.applyRecoveredNavigation(navigation);
+      if (this.editor) this.editor.applyRecoveredNavigation(navigation);
       this.articleContextCacheHit = false;
       this.plugin.logDebug("view", "apply-recovered-parent-navigation", {
         filePath: file.path,
@@ -19901,7 +19950,7 @@ var MindMapSearchIndex = class {
    * @returns Every map path reachable through parent/child relationships.
    */
   async refreshFamily(rootPath, currentDocument) {
-    var _a2, _b2, _c, _d, _e;
+    var _a2, _b2;
     const normalizedRoot = (0, import_obsidian14.normalizePath)(rootPath);
     const family = /* @__PURE__ */ new Set();
     const documents = /* @__PURE__ */ new Map();
@@ -19933,7 +19982,8 @@ var MindMapSearchIndex = class {
         if (child && !family.has(child.path)) queue.push(child.path);
       }
       for (const [candidatePath, candidate] of Object.entries(this.data.files)) {
-        const parentPath = (_e = (_c = candidate.navigation) == null ? void 0 : _c.parentPath) != null ? _e : (_d = candidate.entries[0]) == null ? void 0 : _d.parentMapPath;
+        var _a3, _b3, _c;
+        const parentPath = (_c = (_a3 = candidate.navigation) == null ? void 0 : _a3.parentPath) != null ? _c : (_b3 = candidate.entries[0]) == null ? void 0 : _b3.parentMapPath;
         const resolvedParent = this.resolveSubmapFile(parentPath, candidatePath);
         if ((resolvedParent == null ? void 0 : resolvedParent.path) === path && !family.has(candidatePath)) queue.push(candidatePath);
       }

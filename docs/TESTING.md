@@ -99,6 +99,8 @@
 
 - 实测尺寸二次布局只调用一次权威 `computeLayout()`，不得重新在编辑器层调用 `resolveLayoutCollisions()` 或重复重建 `byId/minX/maxX/minY/maxY`；碰撞扫描必须在纵向间距已经满足时提前 `break`。
 - 工具栏可用性刷新只创建一次共享树上下文，不能在每个按钮判断中重新 `findNode()` / `flattenNodes()`；分帧渲染空间优先级必须先预计算 band、focus rank 和 distance，再进入只比较数值的 `sort`。
+- 导图画布热路径必须维护 `mindMapNodeElements` 索引：渐进挂载、尺寸测量、FLIP、拖拽、行内编辑和单节点刷新不得重新退化为逐节点 `nodesLayerEl.querySelector(...)`；整图重绘与节点替换必须同步清理索引。
+- `selectionClassDelta()` 必须覆盖普通单选切换、多选新增/移除以及单选↔多选边界；普通选择变化只刷新差集 ID，大纲/文章 DOM 重建后允许一次全量选择样式同步。源码与安装 `main.js` 都要保留同等契约。
 - 当前节点、兄弟、父节点、父级兄弟和祖先的确定性聚焦顺序。
 - 当前视口、相邻视口和远端导图节点的空间优先级，且排序不修改原布局数组。
 - 编辑器构造阶段不提前计算全树布局，真正进入导图模式后才执行权威布局。

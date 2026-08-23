@@ -9,6 +9,7 @@ const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 const modulePath = path.join(rootDir, "src/render/incremental-render.ts");
 const articleWindowModulePath = path.join(rootDir, "src/article/render-window.ts");
 const collisionModulePath = path.join(rootDir, "src/render/collision-layout.ts");
+const selectionDeltaModulePath = path.join(rootDir, "src/editor/selection-class-delta.ts");
 
 function node(id, children = []) {
   return { id, children };
@@ -53,6 +54,20 @@ test("collision resolution preserves separated layouts and moves overlapping sib
   }
 });
 
+
+test("selection class deltas update only changed nodes and preserve multi-select transitions", async () => {
+  const { module, cleanup } = await loadTypeScriptModule(selectionDeltaModulePath);
+  try {
+    assert.deepEqual([...module.selectionClassDelta(new Set(["a"]), new Set(["b"]))].sort(), ["a", "b"]);
+    assert.deepEqual([...module.selectionClassDelta(new Set(["a"]), new Set(["a", "b"]))].sort(), ["a", "b"]);
+    assert.deepEqual([...module.selectionClassDelta(new Set(["a", "b"]), new Set(["a", "c"]))].sort(), ["b", "c"]);
+    assert.deepEqual([...module.selectionClassDelta(new Set(["a", "b"]), new Set(["b"]))].sort(), ["a", "b"]);
+    assert.deepEqual([...module.selectionClassDelta(new Set(), new Set())], []);
+  } finally {
+    await cleanup();
+  }
+});
+
 test("measured layout and render priority avoid repeated hot-path work", async () => {
   const [editorSource, collisionSource, renderSource, bundleSource] = await Promise.all([
     readFile(path.join(rootDir, "src/editor/editor.ts"), "utf8"),
@@ -82,6 +97,21 @@ test("measured layout and render priority avoid repeated hot-path work", async (
   assert.match(bundleSource, /if \(requiredOffset <= 0\) break;/);
   assert.match(bundleSource, /const ranked = items\.map\(\(item\) =>/);
   assert.match(bundleSource, /toolbarAvailabilityContext\(\)/);
+
+  assert.match(editorSource, /private readonly mindMapNodeElements = new Map<string, HTMLElement>\(\)/);
+  assert.match(editorSource, /this\.mindMapNodeElements\.set\(node\.id, nodeEl\)/);
+  assert.match(editorSource, /for \(const \[id, element\] of this\.mindMapNodeElements\)/);
+  assert.match(editorSource, /selectionClassDelta\(this\.appliedSelectionIds, this\.selectedIds\)/);
+  assert.match(editorSource, /const nodeEls = this\.mindMapNodeElements\.values\(\)/);
+  const measuredDomLookup = editorSource.slice(measuredStart, measuredEnd);
+  assert.doesNotMatch(measuredDomLookup, /nodesLayerEl\.querySelector/);
+  const refreshNodeStart = editorSource.indexOf("  private refreshMindMapNode(nodeId: string): void {");
+  const refreshNodeEnd = editorSource.indexOf("\n  /**", refreshNodeStart + 4);
+  const refreshNodeSource = editorSource.slice(refreshNodeStart, refreshNodeEnd);
+  assert.match(refreshNodeSource, /this\.mindMapNodeElements\.get\(nodeId\)/);
+  assert.doesNotMatch(refreshNodeSource, /nodesLayerEl\.querySelector/);
+  assert.match(bundleSource, /mindMapNodeElements = \/\* @__PURE__ \*\/ new Map\(\)/);
+  assert.match(bundleSource, /selectionClassDelta\(this\.appliedSelectionIds, this\.selectedIds\)/);
   const bundledMeasured = bundleSource.match(/applyMeasuredMindMapLayout\(\) \{[\s\S]*?\n  \}/)?.[0] ?? "";
   assert.match(bundledMeasured, /this\.layout = computeLayout\(/);
   assert.doesNotMatch(bundledMeasured, /resolveLayoutCollisions\(next\.nodes|next\.minX = Math\.min/);

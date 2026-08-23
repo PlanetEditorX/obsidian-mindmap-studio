@@ -2,6 +2,38 @@
 
 版本：1.46.3
 
+## 1.46.3 大型导图性能优化第二批
+
+### 实现与专项验证
+
+- 已挂载导图节点新增 `nodeId → HTMLElement` 索引；渐进挂载、拖拽、框选矩形读取、实测尺寸、FLIP、行内编辑和单节点刷新不再为每个节点重新扫描整个节点层。普通单选从 A 切换到 B 时，选择 CSS 候选由“全部已渲染节点”缩小为 A/B 两个 ID；5000 节点场景的候选操作数理论上由 5000 降为 2，约减少 **99.96%**。该数字是 DOM 写入候选数量，不等同于真实 Obsidian 整帧耗时。
+- `selectionClassDelta()` 覆盖普通单选切换、多选增加/移除以及单选↔多选边界；大纲/文章 DOM 重建后故意执行一次全量同步，避免新挂载章节漏掉选择样式。
+- `node --test tests/incremental-render.test.mjs tests/image-layout.test.mjs`：**29 / 29 通过**。
+- 除本地缺失依赖/交付源码省略资源以及两个与本批无关的历史文章缓存源码文本契约外，其余单测批量补跑：**356 / 356 通过**。其中 `article-render-cache.test.mjs` 的两条失败断言检查当前源码已不存在的旧 `compatibleArticleCache(...)` / `buildArticleNodeInfo(...callback)` 文本结构，本批未修改文章渲染器；`settings-normalize` 及 `plugin-update` / `xmind-import` 在当前不完整 `node_modules` 下分别缺 `obsidian` / `esbuild`，`repository-cleanup` 的样例路径检查则依赖按源码交付规则未包含的 `examples/`。
+- 本轮两个修改 TypeScript 模块使用环境已有 TypeScript `transpileModule` 做独立语法检查：**2 / 2 通过**。
+- `npm run docs:generate`、`npm run test:docs`：**通过**，当前 **58 个源码模块、1198 个具名声明**全部覆盖。
+- `npm run test:repo`：**通过**。
+- `node --check main.js`：**通过**。
+
+### 构建边界
+
+- 当前工作区此前尝试 `npm ci` 时网络超时，只留下不完整开发依赖。`npm run build` 在 TypeScript 前置检查阶段因缺 `codemirror`、`estree`、`node`、`tern` 类型定义停止，未进入 production esbuild；这属于当前容器依赖状态，不是本批 TypeScript 业务错误。
+- 因此 `main.js` 为基于现有 1.46.3 bundle 的等价同步版本。正式发布前必须在依赖完整的 GitHub Actions / 开发机执行 `npm ci && npm run verify`，并以正式 esbuild 产物覆盖安装包。
+
+### 真实 Obsidian 重点复测
+
+1. 5000 节点以上导图中快速单选、Ctrl/Cmd 多选与取消多选，确认选择描边和 `is-multi-selected` 状态无残留，工具栏响应比上一版更稳定。
+2. 持续拖拽节点、框选大区域和快速移动鼠标，确认拖拽提示、框选范围和节点命中保持正确，指针移动不再伴随明显 DOM 扫描卡顿。
+3. 含图片、表格、代码的大分支连续展开/折叠，确认 ResizeObserver 实测尺寸、FLIP 动画、连接线和视口锚点保持稳定。
+4. 在导图、大纲、文章、通读之间切换并保持已有选择，确认非导图 DOM 重建后的首次全量选择同步不会漏选或残留多选样式。
+5. 继续复测旧子导图左上角返回父导图按钮、全局搜索和第一批碰撞/排序优化，确认跨文件行为未受本批 DOM 索引影响。
+
+### 本轮交付
+
+- 测试安装 ZIP：`mindmap-studio-1.46.3-test-634215.zip`
+- SHA-256：`8e35d04708f8b25c564e971eb1c6fc849c68b297c0418a365554ccf96441b3dd`
+- 完整源码与 Codex 交接使用同一 `634215` 后缀。
+
 ## 1.46.3 CI production build 未使用代码修复
 
 ### 用户 CI 日志

@@ -1,5 +1,18 @@
 # Modified Files
 
+## 1.46.3 大型导图性能优化第二批
+
+- `src/editor/editor.ts`：新增 `mindMapNodeElements`，为已挂载导图节点维护 `nodeId → HTMLElement` 直接索引；渐进挂载去重、拖拽状态、框选尺寸采集、实测尺寸、FLIP 动画、行内编辑与单节点刷新改为复用索引，不再在热路径反复 `querySelector()` / `querySelectorAll()` 扫描整个节点层。节点替换、销毁和整图重绘同步删除或清空索引。
+- `src/editor/selection-class-delta.ts`：新增纯函数 `selectionClassDelta()`，计算前后选择集合中真正需要重写 CSS 类的节点 ID；选择数量跨越单选/多选边界时同时刷新仍被选中的节点，保证 `is-multi-selected` 一致。
+- `src/editor/editor.ts`：新增 `appliedSelectionIds` 与选择同步有效位；普通点击、Ctrl/Cmd 多选和框选只更新选择差集，大纲/文章/通读 DOM 重建或扩展后才触发一次全量同步。隐藏模式不做重复选择样式写入。
+- `tests/incremental-render.test.mjs`：新增选择差集行为测试，并锁定源码/安装 bundle 必须使用 DOM 索引、增量选择同步且不得在实测布局/单节点刷新重新退化为逐节点 selector 扫描。
+- `tests/image-layout.test.mjs`：更新 ResizeObserver 缓存契约，要求尺寸采集直接遍历 `mindMapNodeElements` 并写入实测尺寸缓存。
+- `README.md`、`CHANGELOG.md`、`docs/ARCHITECTURE.md`、`docs/TESTING.md`、`docs/FUNCTION_REFERENCE.md`：同步第二批大型导图交互热路径优化、索引生命周期、增量选择边界与回归测试。
+- `main.js`：当前容器依赖不完整，无法执行正式 production esbuild；以现有 1.46.3 bundle 为基线等价同步本批运行逻辑，并由源码/bundle 契约、TypeScript 独立语法检查和 `node --check` 兜底。正式发布前仍应在完整依赖 CI 重新执行 production build。
+- 本轮不改变 `.mindmap` 数据格式、撤销/保存语义、父子导图导航或文章编号规则。
+
+- 本轮测试安装包：`mindmap-studio-1.46.3-test-634215.zip`，SHA-256 `8e35d04708f8b25c564e971eb1c6fc849c68b297c0418a365554ccf96441b3dd`；完整源码与 Codex 交接使用同一 `634215` 后缀。
+
 ## 1.46.3 CI production build 未使用代码修复
 
 - `src/search/global-search.ts`：删除上一轮 `refreshFamily()` 索引复用重构后已不再调用的私有生成器 `walkNodes()`，修复 GitHub Actions `tsc --noEmit --skipLibCheck` 的 `TS6133`。
