@@ -98,7 +98,7 @@ npm run test:docs
 - 文章编号问题确保目录、正文、通读和导出共用同一解析函数；文章族上下文刷新必须把当前编辑器文档作为当前物理文件的权威快照，不能在自动保存完成前重新从仓库读取旧副本；标题编号只支持 1–8 级，更深结构不得循环复用第 7、8 级字母标签。末端正文的 `circled` 样式是独立展示序列，可跨越该深度边界；文章 DOM 与 HTML 必须对全部序号使用正文数字和统一 CSS 圆环，避免系统字体回退，Markdown/Word 等无 CSS 环境仍保留 1–50 Unicode 与 51+ 可读回退。自动对齐的带圈序号必须与普通末端圆点保持同一正文起点，不能被通用编号样式清除 `margin-inline-start`；圆圈允许在编号区内略向左补偿，但右边缘与正文之间必须保留至少 0.18em 的可读间距。快速编辑出现额外块级 padding 时只允许补偿 `::before` 的垂直位置，不得改正文编辑框的 padding、margin、宽度或正文起点。修改带圈编号 DOM 结构时必须提升 `ARTICLE_RENDERER_REVISION`，防止旧缓存恢复双圈或错误字形。
 - 图床问题分别验证端点、Header、请求体、响应载荷和 URL 提取。
 - 识图问题分别验证图片读取、AI/本地 OCR 模式、不可变预览和并发快照；桌面 API 必须按需动态加载，不能让移动端在插件启动时解析 `node:*` 或 `electron`。
-- 子导图问题同时检查父节点 `submap` 与子文档 `navigation`；父级返回必须按当前显示模式调用 `resolveParentReturnIntent()`，不得让导图面包屑直接调用文章目录入口。
+- 子导图问题同时检查父节点 `submap` 与子文档 `navigation`；父级返回必须按当前显示模式调用 `resolveParentReturnIntent()`，不得让导图面包屑直接调用文章目录入口。若 `navigation.parentPath` 缺失，优先检查 `MindMapSearchIndex.findParentNavigationForChild()` 是否能从父节点 `submap.path` 反查当前文件，以及视图是否执行 `applyRecoveredNavigation()`；兼容恢复不得触发 `onChange` 或仅因打开文件写盘。
 - 全局替换问题同时检查“可见结果上限”和“真实替换范围”：列表可以截断，但“全部替换”必须重新查询完整作用域，并在文件写回后同步刷新索引。文章加载进度属于可选 UI，默认关闭；新增阶段时继续通过 `ArticleContextProgress` 上报，不得让隐藏设置跳过真实上下文构建。
 - 搜索快捷键问题同时检查窗口捕获层和编辑器根节点：活动 MindMap Studio 视图中的 `Ctrl/Cmd+F` 必须直接打开当前导图族搜索，不依赖 Obsidian 命令绑定；可配置的全局搜索快捷键优先，弹窗内部不得重复打开搜索。
 

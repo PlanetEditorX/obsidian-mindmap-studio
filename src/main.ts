@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @file main.ts
  * @description 插件入口与跨文件服务层。
  *
@@ -33,6 +33,7 @@ import {
   type MindMapImageContentBlock,
   type MindMapImageUploadPatch,
   type MindMapImageRemoteSource,
+  type MindMapNavigation,
   type MindMapNode,
   type MindMapSubmap
 } from "./core/model";
@@ -1477,6 +1478,34 @@ export default class MindMapStudioPlugin extends Plugin {
   /** 从会话级文档缓存同步恢复一个隔离的已解析文档。 */
   getCachedMindMapDocument(file: TFile): MindMapDocument | null {
     return this.mindMapDocumentCache.get(this.mindMapFileRevision(file));
+  }
+
+  /**
+   * 为缺失 `navigation.parentPath` 的旧子导图恢复父级导航。
+   * 先等待全局搜索索引完成启动时的增量校验，再从已校验条目中反查父级挂载关系。
+   * 恢复关系必须来自父节点真实的 `submap.path`，因此不会把普通节点链接当成父导图。
+   *
+   * @param file 当前打开的 .mindmap 文件。
+   * @param document 当前解析文档；已有父级导航时直接复用。
+   * @returns 恢复出的父级导航；当前文件确为顶层导图时返回 null。
+   */
+  async recoverSubmapNavigation(file: TFile, document: MindMapDocument): Promise<MindMapNavigation | null> {
+    if (document.navigation?.parentPath) return { ...document.navigation };
+
+    try {
+      await this.searchIndexReady;
+    } catch (error) {
+      this.logDebug("navigation", "parent-recovery-index-failed", { filePath: file.path, error });
+    }
+    const navigation = this.searchIndex.findParentNavigationForChild(file.path);
+    if (!navigation?.parentPath) return null;
+
+    this.logDebug("navigation", "parent-recovered-from-submap-index", {
+      filePath: file.path,
+      parentPath: navigation.parentPath,
+      parentNodeId: navigation.parentNodeId
+    });
+    return { ...navigation };
   }
 
   /** 记录当前已解析文档，供后续视图打开和文章族遍历复用。 */

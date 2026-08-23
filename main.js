@@ -11694,6 +11694,18 @@ var MindMapEditor = class {
     this.initializeMindMapViewport(20);
   }
   /**
+   * 把视图层从父节点 `submap.path` 反查出的父级导航应用到当前运行态。
+   * 这里只刷新导航控件，不进入撤销历史、不触发保存，也不重绘画布节点。
+   *
+   * @param navigation 已验证的父级导航元数据。
+   */
+  applyRecoveredNavigation(navigation) {
+    var _a2;
+    if (((_a2 = this.document.navigation) == null ? void 0 : _a2.parentPath) || !navigation.parentPath) return;
+    this.document.navigation = { ...navigation };
+    this.renderNavigation();
+  }
+  /**
    * 更新编辑器运行参数。文章族上下文或持久化阅读位置在异步加载完成后变化时，
    * 会重新解析节点并恢复到同一语义位置，而不是恢复旧的像素滚动值。
    *
@@ -18738,6 +18750,9 @@ var MindMapStudioView = class extends import_obsidian13.TextFileView {
       this.preferredCurrentNodeIdOnNextContextRefresh = queuedFocusNodeId;
     }
     if (this.file) void this.plugin.resumePendingAutoUploads(this.file, this.document);
+    if (this.file && !((_g = this.document.navigation) == null ? void 0 : _g.parentPath)) {
+      void this.recoverMissingSubmapNavigation(this.file, this.document);
+    }
     const cachedArticleContext = this.file ? this.plugin.getCachedArticleContext(this.file, this.document) : null;
     if (cachedArticleContext) {
       this.articleBaseDepth = cachedArticleContext.baseDepth;
@@ -18909,6 +18924,34 @@ var MindMapStudioView = class extends import_obsidian13.TextFileView {
       this.preferredCurrentNodeIdOnNextContextRefresh = null;
     } else {
       this.scheduleArticleContextRefresh(0);
+    }
+  }
+  /**
+   * 异步恢复旧子导图缺失的父级导航，并只刷新受影响的导航控件与文章上下文。
+   * 该兼容修复不会把文件标记为已编辑；用户之后产生真实内容修改时，恢复出的导航会随正常保存一并持久化。
+   *
+   * @param file 发起恢复时的当前文件。
+   * @param document 发起恢复时的文档快照。
+   */
+  async recoverMissingSubmapNavigation(file, document2) {
+    var _a2, _b2;
+    try {
+      const navigation = await this.plugin.recoverSubmapNavigation(file, document2);
+      if (!(navigation == null ? void 0 : navigation.parentPath)) return;
+      if (((_a2 = this.file) == null ? void 0 : _a2.path) !== file.path || !this.document || ((_b2 = this.document.navigation) == null ? void 0 : _b2.parentPath)) return;
+      this.document.navigation = { ...navigation };
+      this.plugin.invalidateMindMapCaches(file.path);
+      this.plugin.rememberMindMapDocument(file, this.document);
+      if (this.editor) this.editor.applyRecoveredNavigation(navigation);
+      this.articleContextCacheHit = false;
+      this.plugin.logDebug("view", "apply-recovered-parent-navigation", {
+        filePath: file.path,
+        parentPath: navigation.parentPath,
+        parentNodeId: navigation.parentNodeId
+      });
+      this.scheduleArticleContextRefresh(0);
+    } catch (error) {
+      this.plugin.logDebug("view", "recover-parent-navigation-failed", { filePath: file.path, error });
     }
   }
   /**
@@ -19715,6 +19758,33 @@ var MindMapSearchIndex = class {
    */
   search(query, limit = 100, filePaths, useRegex = false) {
     return searchEntries(this.allEntries(filePaths), query, limit, useRegex);
+  }
+  /**
+   * 从已完成版本校验的搜索索引中反查当前子导图的父级挂载节点。
+   * 仅接受父节点 `submap.path` 实际解析到目标子文件的关系，避免把普通链接误判为父子导航。
+   *
+   * @param childPath 当前子导图的仓库路径。
+   * @returns 可直接写入子文档运行态的父级导航；索引中不存在可靠关系时返回 null。
+   */
+  findParentNavigationForChild(childPath) {
+    var _a2;
+    const normalizedChildPath = (0, import_obsidian14.normalizePath)(childPath);
+    for (const [parentPath, indexed] of Object.entries(this.data.files)) {
+      if ((0, import_obsidian14.normalizePath)(parentPath) === normalizedChildPath) continue;
+      const mountEntry = indexed.entries.find((entry) => {
+        var _a3;
+        if (!entry.submapPath) return false;
+        return ((_a3 = this.resolveSubmapFile(entry.submapPath, parentPath)) == null ? void 0 : _a3.path) === normalizedChildPath;
+      });
+      if (!mountEntry) continue;
+      return {
+        parentPath,
+        parentNodeId: mountEntry.nodeId,
+        parentTitle: indexed.title || ((_a2 = parentPath.split("/").at(-1)) == null ? void 0 : _a2.replace(/\.mindmap$/i, "")),
+        parentNodeText: mountEntry.nodeText || void 0
+      };
+    }
+    return null;
   }
   /**
    * Refresh a parent map and every recursively linked child map, then return the
@@ -23497,6 +23567,32 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
   /** 从会话级文档缓存同步恢复一个隔离的已解析文档。 */
   getCachedMindMapDocument(file) {
     return this.mindMapDocumentCache.get(this.mindMapFileRevision(file));
+  }
+  /**
+   * 为缺失 `navigation.parentPath` 的旧子导图恢复父级导航。
+   * 先等待全局搜索索引完成启动时的增量校验，再从已校验条目中反查父级挂载关系。
+   * 恢复关系必须来自父节点真实的 `submap.path`，因此不会把普通节点链接当成父导图。
+   *
+   * @param file 当前打开的 .mindmap 文件。
+   * @param document 当前解析文档；已有父级导航时直接复用。
+   * @returns 恢复出的父级导航；当前文件确为顶层导图时返回 null。
+   */
+  async recoverSubmapNavigation(file, document2) {
+    var _a2;
+    if ((_a2 = document2.navigation) == null ? void 0 : _a2.parentPath) return { ...document2.navigation };
+    try {
+      await this.searchIndexReady;
+    } catch (error) {
+      this.logDebug("navigation", "parent-recovery-index-failed", { filePath: file.path, error });
+    }
+    const navigation = this.searchIndex.findParentNavigationForChild(file.path);
+    if (!(navigation == null ? void 0 : navigation.parentPath)) return null;
+    this.logDebug("navigation", "parent-recovered-from-submap-index", {
+      filePath: file.path,
+      parentPath: navigation.parentPath,
+      parentNodeId: navigation.parentNodeId
+    });
+    return { ...navigation };
   }
   /** 记录当前已解析文档，供后续视图打开和文章族遍历复用。 */
   rememberMindMapDocument(file, document2) {

@@ -365,3 +365,62 @@ test("article LaTeX stays rendered until editing and rerenders immediately after
   assert.match(richTextDomSource, /container\.contentEditable !== "true"/);
   assert.match(editorSource, /value\.display \? `\$\$\$\{value\.source\}\$\$` : `\$\$\{value\.source\}\$`/);
 });
+
+test("missing child navigation is recovered from the parent's indexed submap mount", async () => {
+  const [searchSource, mainSource, viewSource, editorSource, bundleSource] = await Promise.all([
+    readFile("src/search/global-search.ts", "utf8"),
+    readFile("src/main.ts", "utf8"),
+    readFile("src/view.ts", "utf8"),
+    readFile("src/editor/editor.ts", "utf8"),
+    readFile("main.js", "utf8")
+  ]);
+
+  const indexedRecovery = searchSource.slice(
+    searchSource.indexOf("findParentNavigationForChild(childPath: string)"),
+    searchSource.indexOf("async refreshFamily", searchSource.indexOf("findParentNavigationForChild(childPath: string)"))
+  );
+  assert.match(indexedRecovery, /entry\.submapPath/);
+  assert.match(indexedRecovery, /resolveSubmapFile\(entry\.submapPath, parentPath\)\?\.path === normalizedChildPath/);
+  assert.match(indexedRecovery, /parentNodeId: mountEntry\.nodeId/);
+  assert.match(indexedRecovery, /parentNodeText: mountEntry\.nodeText/);
+
+  const serviceRecovery = mainSource.slice(
+    mainSource.indexOf("async recoverSubmapNavigation"),
+    mainSource.indexOf("rememberMindMapDocument", mainSource.indexOf("async recoverSubmapNavigation"))
+  );
+  assert.match(serviceRecovery, /if \(document\.navigation\?\.parentPath\) return \{ \.\.\.document\.navigation \}/);
+  assert.match(serviceRecovery, /await this\.searchIndexReady/);
+  assert.match(serviceRecovery, /const navigation = this\.searchIndex\.findParentNavigationForChild\(file\.path\)/);
+  assert.ok(
+    serviceRecovery.indexOf("await this.searchIndexReady") < serviceRecovery.indexOf("findParentNavigationForChild(file.path)"),
+    "parent recovery should wait for changed-file index validation before reading the reverse mount relation"
+  );
+
+  const viewRecovery = viewSource.slice(
+    viewSource.indexOf("private async recoverMissingSubmapNavigation"),
+    viewSource.indexOf("clear(): void", viewSource.indexOf("private async recoverMissingSubmapNavigation"))
+  );
+  assert.match(viewSource, /!this\.document\.navigation\?\.parentPath[\s\S]*recoverMissingSubmapNavigation\(this\.file, this\.document\)/);
+  assert.match(viewRecovery, /this\.document\.navigation = \{ \.\.\.navigation \}/);
+  assert.match(viewRecovery, /invalidateMindMapCaches\(file\.path\)/);
+  assert.match(viewRecovery, /applyRecoveredNavigation\(navigation\)/);
+  assert.match(viewRecovery, /scheduleArticleContextRefresh\(0\)/);
+
+  const editorRecovery = editorSource.slice(
+    editorSource.indexOf("applyRecoveredNavigation(navigation:"),
+    editorSource.indexOf("setOptions(options:", editorSource.indexOf("applyRecoveredNavigation(navigation:"))
+  );
+  assert.match(editorRecovery, /this\.document\.navigation = \{ \.\.\.navigation \}/);
+  assert.match(editorRecovery, /this\.renderNavigation\(\)/);
+  assert.doesNotMatch(editorRecovery, /callbacks\.onChange|history\.|this\.render\(\)/);
+
+  assert.match(bundleSource, /findParentNavigationForChild\(childPath\)/);
+  assert.match(bundleSource, /async recoverMissingSubmapNavigation\(file, document2\)/);
+  assert.match(bundleSource, /async recoverSubmapNavigation\(file, document2\)/);
+  assert.match(bundleSource, /applyRecoveredNavigation\(navigation\)/);
+  const bundleRecovery = bundleSource.slice(
+    bundleSource.indexOf("async recoverSubmapNavigation(file, document2)"),
+    bundleSource.indexOf("rememberMindMapDocument(file, document2)", bundleSource.indexOf("async recoverSubmapNavigation(file, document2)"))
+  );
+  assert.ok(bundleRecovery.indexOf("await this.searchIndexReady") < bundleRecovery.indexOf("findParentNavigationForChild(file.path)"));
+});
