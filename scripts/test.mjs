@@ -1408,7 +1408,7 @@ const command = "example";
   assert.match(handleKeydownSource, /if \(mod && findKey && !event\.shiftKey\) \{[\s\S]*?event\.preventDefault\(\);[\s\S]*?event\.stopPropagation\(\);[\s\S]*?this\.openSearch\(\)/);
   assert.match(mainSource, /activeView instanceof MindMapStudioView[\s\S]*isPlainFindShortcut\(event\)[\s\S]*openMapFamilySearchFromShortcut\(\)/, "Ctrl/Cmd+F must be captured at the window level when a mind-map view is active");
   assert.match(handleKeydownSource, /if \(mod && key === "a"\) \{[\s\S]*?event\.preventDefault\(\);[\s\S]*?event\.stopPropagation\(\);[\s\S]*?this\.selectAllNodesExceptRoot\(\)/, "Ctrl/Cmd+A must select mind-map nodes instead of page text");
-  assert.match(editorSource, /private selectAllNodesExceptRoot\(\): void \{[\s\S]*?flattenNodes\(this\.document\.root\)[\s\S]*?node\.id !== this\.document\.root\.id[\s\S]*?this\.selectedIds\.add\(id\)/, "select all must include all descendants while excluding the root node");
+  assert.match(editorSource, /private selectAllNodesExceptRoot\(\): void \{[\s\S]*?this\.nodeTreeNodes\(\)[\s\S]*?node\.id !== this\.document\.root\.id[\s\S]*?this\.selectedIds\.add\(id\)/, "select all must reuse the node-tree index while including all descendants and excluding the root node");
   assert.match(editorSource, /搜索当前导图及全部子导图（Ctrl\/Cmd\+F）/);
   assert.match(editorSource, /"全局搜索所有导图"/);
   assert.doesNotMatch(editorSource, /markWrappedArticleParagraph/);
