@@ -2,6 +2,40 @@
 
 版本：1.46.3
 
+## 1.46.3 文档快照复用性能优化第五批 5.1
+
+### 实现与行为验证
+
+- 编辑器 `notifyDocumentChange()` 继续通过 `getDocument()` 在 mutation 边界生成一份与内部模型隔离的完整文档快照；View 不再在同一修订内重复调用 `editor.getDocument()`。`getViewData()` / `save()` 改为 `currentDocumentSnapshot(true)`，只从 `getPersistedViewState()` 合并最新 zoom/pan 等轻量 `view` 元数据。当前导图族搜索、AI 上下文、图片识别和完整文章上下文刷新直接复用当前宿主 `this.document` 快照。
+- `node --test tests/document-snapshot-reuse.test.mjs`：**3 / 3 通过**；源码与 `main.js` 双重契约确认 View 内重复 `editor.getDocument()` 为 0 处，同时保留 change callback 的一次隔离 clone。
+- 第四批文章上下文 + 第三批节点索引 + 第二批增量渲染 + 本批快照复用联合专项：**80 / 80 通过**。
+- 恢复原仓库 `examples/` 仅用于测试后执行正式 `npm run test:unit`：共 **375 项**，其中 **373 项通过**；只有 `tests/plugin-update.test.mjs` 与 `tests/xmind-import.test.mjs` 在加载阶段因当前环境缺 `esbuild` 失败，没有第五批业务断言失败。
+- 修改的 TypeScript 模块使用环境已有 TypeScript `transpileModule` 独立检查：`src/editor/editor.ts`、`src/view.ts` **2 / 2 通过**；`node --check main.js` 与 `node --check tests/document-snapshot-reuse.test.mjs`：通过。
+- `npm run docs:generate`、`npm run test:docs`：通过，当前 **58 个源码模块、1221 个具名声明全部覆盖**；`npm run test:repo`：通过。
+
+### 隔离性能基准
+
+- 使用结构化 1,000 / 5,000 / 10,000 节点文档模拟“同一修订被 5 个宿主只读路径消费”。旧方式执行 5 次 `JSON.parse(JSON.stringify(doc))`；新方式执行 1 次隔离 clone + 4 次顶层/`view` 浅合并。中位耗时约为：1,000 节点 **3.05 ms → 0.57 ms**；5,000 节点 **17.88 ms → 3.53 ms**；10,000 节点 **33.10 ms → 7.39 ms**。该结果只衡量被删除的重复快照成本，不代表 Obsidian 完整帧耗时或整体加速倍数。
+
+### 本地环境边界
+
+- `npm run test:regression` 在执行任何断言前因当前工作区缺 `esbuild` 退出；与本批业务逻辑无关。
+- 当前源码交付环境仍没有完整 `obsidian` / `esbuild` 等项目开发依赖，不能把本地 `npm run build` 作为 production 结论。`main.js` 按第四批现有 bundle 等价同步第五批 5.1 运行逻辑，正式发布前需在 GitHub Actions 或完整开发机执行 `npm ci && npm run verify` 并重新生成 production bundle。
+- 临时恢复的 `examples/` 和本地 TypeScript 软链接只用于验证，最终源码交付包继续按仓库规则排除 `examples/` 与 `node_modules/`。
+
+### 真实 Obsidian 重点复测
+
+1. 5000+ 节点导图连续编辑文字/样式/图片后等待自动保存，确认保存状态与文件内容正确且交互卡顿降低。
+2. 编辑后立即打开 AI、图片识别或 `Ctrl/Cmd+F` 当前导图族搜索，确认使用最新内容，不出现上一修订快照。
+3. 仅缩放/平移画布后触发 Obsidian 保存或关闭重开，确认 zoom/pan 仍正确持久化。
+4. 继续验证 undo/redo、父子导图返回、文章 change-impact 分级与后台图片上传；本批不应改变这些语义。
+
+### 本轮交付
+
+- 测试安装 ZIP：`mindmap-studio-1.46.3-test-517306.zip`
+- SHA-256：`02a2dc424da95f4e47eb91d31f50699acce2da77f1e44068f142fe738cadd099`
+- 完整源码与 Codex 交接使用同一 `517306` 后缀。
+
 ## 1.46.3 文章上下文性能优化第四批
 
 ### 实现与行为验证
