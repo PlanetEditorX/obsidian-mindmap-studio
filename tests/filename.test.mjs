@@ -83,3 +83,10 @@ test("mimeTypeFromFilename covers supported formats and unknown files", () => {
   assert.equal(filename.mimeTypeFromFilename("diagram.svg"), "image/svg+xml");
   assert.equal(filename.mimeTypeFromFilename("document.bin"), "application/octet-stream");
 });
+
+test("remoteImageSuggestedName returns the URL filename and covers malformed URL fallback", () => {
+  assert.equal(filename.remoteImageSuggestedName("https://example.com/images/photo.webp?size=large"), "photo.webp");
+  assert.equal(filename.remoteImageSuggestedName("https://example.com/"), "remote-image.png");
+  assert.equal(filename.remoteImageSuggestedName("https://["), "remote-image.png");
+  assert.equal(filename.remoteImageSuggestedName("https://[", "fallback.jpg"), "fallback.jpg");
+});

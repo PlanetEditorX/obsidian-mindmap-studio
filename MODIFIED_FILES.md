@@ -1,5 +1,17 @@
 # Modified Files
 
+## 1.46.3 静态分析告警整改与导图族索引复用
+
+- `src/editor/editor.ts`：新增 `handleReadOnlyKeydown()`，把只读复制、方向导航、缩放、适应视图和折叠从主 `handleKeydown()` 拆出；保留选中文字时的浏览器原生复制和全部既有快捷键语义。
+- `src/utils/filename.ts`、`src/main.ts`：新增纯函数 `remoteImageSuggestedName()` 并由 `readImageSource()` 复用；无效 URL/无路径名称回退 `remote-image.png`，网络 `requestUrl` 失败继续抛错。
+- `src/search/global-search.ts`：新增新鲜索引判断、文档快照写入和 `familyIndexedFile()`；`refreshFamily()` 优先用 `mtime + size` 新鲜索引完成父链/子图遍历，仅过期或缺失文件才 `cachedRead`，且父级爬升读取结果在同轮向下遍历复用。
+- `tests/filename.test.mjs`：覆盖远程图片建议文件名正常、空路径与异常 URL 回退。
+- `tests/global-search-traversal.test.mjs`：新增新鲜父子索引 **0 次文件读取**、过期祖先跨爬升/向下遍历 **仅 1 次读取** 的行为测试。
+- `tests/reading-editor-contract.test.mjs`：锁定主键盘分发器只委派给独立只读处理函数，并检查方向键映射。
+- `README.md`、`CHANGELOG.md`、`docs/ARCHITECTURE.md`、`docs/TESTING.md`、`docs/FUNCTION_REFERENCE.md`：同步缓存边界、异常测试与只读键盘职责。
+- `main.js`：当前环境仍缺完整 production 构建依赖，因此基于现有 1.46.3 bundle 等价同步上述三项逻辑；需继续由 `node --check`、专项 bundle/source 契约和可运行单测验证，正式发布前在完整依赖环境重建。
+- 本轮测试安装包：`mindmap-studio-1.46.3-test-146998.zip`，SHA-256 `d2d6fc54d917979156d410462e138749562033050fabf73fd0de7f4abf0af03a`；完整源码与 Codex 交接使用同一 `146998` 后缀。
+
 ## 1.46.3 子导图父级返回导航恢复
 
 - `src/search/global-search.ts`：新增 `findParentNavigationForChild()`，在启动增量校验完成后的搜索索引中，仅接受父节点 `submap.path` 实际解析到当前子文件的条目，反查父文件、挂载节点 ID、父标题和来源节点文字。

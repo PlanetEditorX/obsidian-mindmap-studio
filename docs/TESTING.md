@@ -35,6 +35,7 @@
 覆盖：
 
 - `outline` 不作为持久化启动模式，并回退到可见的导图、文章或通读模式。
+- 只读模式键盘交互由独立处理函数负责；文本选择复制必须保留浏览器原生行为，节点复制、方向导航、缩放、适应视图和折叠仍不得进入文档修改链。
 - 大纲会话级、导图/文章/通读持久化规则。
 - 目标节点到根节点的祖先回退顺序。
 - 子导图消失时回到父导图挂载节点。
@@ -53,6 +54,7 @@
 - 文件扩展名提取与后备值。
 - 本地时间戳和默认标题。
 - 图片 MIME 映射。
+- 远程图片 URL 建议文件名提取；无路径文件名和格式无效 URL 都必须稳定回退，覆盖异常捕获分支。
 
 ### 图床工具
 
@@ -160,7 +162,7 @@
 - XMind 多画布导入、跨两级以上同名画布挂载的根图片/公式/备注合并、归档图片提取、共享图片去重、LaTeX 字段兼容、缺失资源报告，以及 HTML/文章导出。
 - 导图布局、碰撞处理和连接线。
 - 文章层级、目录、编号、分页和连续阅读。
-- 全局搜索索引和替换，包括显示结果上限不影响“全部替换”的完整范围，以及替换后索引立即刷新。索引还承担旧子导图父级导航兼容反查：缺失 `navigation.parentPath` 时，必须只接受父节点 `submap.path` 实际解析到当前文件的条目，并恢复 `parentNodeId` 后局部刷新左上角面包屑；该流程不得进入撤销历史或触发无内容保存。
+- 全局搜索索引和替换，包括显示结果上限不影响“全部替换”的完整范围，以及替换后索引立即刷新。导图族刷新还必须验证缓存读取边界：`mtime + size` 未变化的父子文件直接复用索引、不调用 `cachedRead`；过期祖先在父级爬升读取后必须被本轮文档缓存复用，向下遍历不得二次读取。索引还承担旧子导图父级导航兼容反查：缺失 `navigation.parentPath` 时，必须只接受父节点 `submap.path` 实际解析到当前文件的条目，并恢复 `parentNodeId` 后局部刷新左上角面包屑；该流程不得进入撤销历史或触发无内容保存。
 - 搜索快捷键，包括活动 MindMap Studio 视图中的 `Ctrl/Cmd+F` 由窗口捕获层直接打开当前导图族、编辑控件聚焦时仍可触发、全局搜索自定义快捷键保持优先，以及弹窗内不重复截获；点击搜索结果时，全局搜索与当前导图族搜索必须统一设置 `shouldRestoreSelection = false`，并只调用一次公开 `Modal.close()`。禁止程序化 `.modal-bg.click()`、PointerEvent/dispatchEvent 模拟，禁止等待 `onClose()` Promise，禁止修改/删除 `.modal-container` / `.modal-bg`，禁止 `display:none` 和 `removeSearchLayers`；文件/节点导航只等待两个 `requestAnimationFrame`，并通过 `result-close-request`、`modal-on-close`、`result-navigation-start` 调试事件验证桌面端顺序。搜索跳转到文章节点后，直接单击可编辑文字必须先经 `claimInlineEditInteraction()` 取消语义恢复和窗口扩展、清除待定位目标并建立 `inlineEditingId`，再由 `activateInlineEditableFromPointer()` 开启编辑；指针激活不得强制把光标移动到末尾，最初 120 ms 的 `mmsProtectInitialFocus` 只处理宿主同一交互中的焦点交接，之后普通 `blur` 仍应提交。调试日志必须能区分 `inline-edit-claim/focus/blur/refocus`。 还必须回归全局搜索入口的单实例守卫：`globalSearchLaunchPending` 要覆盖索引初始化 await，已挂载实例要由 `globalSearchModal.isMounted()` 阻止再次创建；当前导图族 `openMapFamilySearch()` 不得使用这两个守卫。文章模式从右键菜单执行“编辑当前内容/添加正文”时仍必须经 `editSelectedFromContextMenu()` 将 `protectInitialFocus` 传入共享激活链路；同时回归检查 `editSelected(initialBlockId?)` 保持完整节点编辑签名，菜单保护不能改变双击、键盘编辑、导图/大纲完整编辑或普通失焦保存。
 - 文件浏览器筛选。
 - 关键 UI/CSS 契约与版本文件一致性。
