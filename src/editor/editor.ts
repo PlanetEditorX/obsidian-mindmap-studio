@@ -104,6 +104,7 @@ import {
 } from "./article-renderer";
 import { appendChild, deletionSelectionFallback, deleteNodes, insertSiblingAfter, setAllBranchesCollapsed, topLevelSelectedNodeIds } from "./node-actions";
 import { attachSelectionFormatToolbar, type SelectionFormatToolbarHandle } from "./selection-format-toolbar";
+import { selectionClassDelta } from "./selection-class-delta";
 import { clearImageFailureDetails, renderImageFailureDetails } from "./image-failure-view";
 import {
   applyAiMarkdownEdit,
@@ -1447,6 +1448,8 @@ export class MindMapEditor {
   private pageTransitionDescriptionEl!: HTMLDivElement;
   private sceneEl!: HTMLDivElement;
   private nodesLayerEl!: HTMLDivElement;
+  /** Direct lookup for mounted mind-map nodes so hot paths never rescan the whole node layer. */
+  private readonly mindMapNodeElements = new Map<string, HTMLElement>();
   private edgesSvg!: SVGSVGElement;
   private statusEl!: HTMLSpanElement;
   private zoomStatusEl!: HTMLInputElement;
@@ -1460,6 +1463,9 @@ export class MindMapEditor {
   private layout: LayoutResult;
   private selectedId: string;
   private readonly selectedIds = new Set<string>();
+  /** Selection state last synchronized to DOM classes; invalidated when non-canvas views rebuild their DOM. */
+  private readonly appliedSelectionIds = new Set<string>();
+  private selectionClassSyncValid = false;
   /** 仅由右键上下文设置；普通选择不会改变 AI 默认范围。 */
   private aiScopeNodeId: string | null = null;
   private zoom = 1;
@@ -1670,6 +1676,7 @@ export class MindMapEditor {
     if (this.pageEnterTimer !== null) window.clearTimeout(this.pageEnterTimer);
     this.pageTransitionHideTimer = null;
     this.pageEnterTimer = null;
+    this.mindMapNodeElements.clear();
     this.host.empty();
   }
 
@@ -3021,9 +3028,8 @@ export class MindMapEditor {
           const bottom = Math.max(event.clientY, moveEvent.clientY);
           this.selectedIds.clear();
           for (const id of baseSelection) this.selectedIds.add(id);
-          const nodeEls = this.nodesLayerEl.querySelectorAll<HTMLElement>(".mmc-node[data-node-id]");
-          for (let i = 0, len = nodeEls.length; i < len; i++) {
-            const nodeEl = nodeEls[i];
+          const nodeEls = this.mindMapNodeElements.values();
+          for (const nodeEl of nodeEls) {
             const rect = nodeEl.getBoundingClientRect();
             if (rect.right >= left && rect.left <= right && rect.bottom >= top && rect.top <= bottom) {
               const id = nodeEl.dataset.nodeId;
@@ -3179,9 +3185,9 @@ export class MindMapEditor {
       this.clearInlineEditingAccessibility(element);
     });
     if (this.currentMode !== "mindmap") return;
-    this.nodesLayerEl.querySelectorAll<HTMLElement>(".mmc-node").forEach((nodeEl) => {
+    for (const nodeEl of this.mindMapNodeElements.values()) {
       nodeEl.draggable = !this.readOnly && !nodeEl.hasClass("is-root");
-    });
+    }
   }
 
   /**
@@ -4286,6 +4292,7 @@ export class MindMapEditor {
   private refreshArticleWindowChrome(): void {
     this.installArticleSectionCollapse();
     this.renderArticleMiniMap();
+    this.selectionClassSyncValid = false;
     this.applySelectionClasses();
     this.applyArticleClickMoveUi();
   }
@@ -4751,6 +4758,7 @@ export class MindMapEditor {
     this.articleEl.toggleClass("is-hidden", this.currentMode !== "article" && this.currentMode !== "reading");
     this.questionPracticeEl.toggleClass("is-hidden", this.currentMode !== "question-bank");
     this.rootEl.dataset.displayMode = this.currentMode;
+    if (this.currentMode !== "mindmap") this.selectionClassSyncValid = false;
     if (this.currentMode === "outline") this.renderOutline();
     else if (this.currentMode === "article") this.renderArticle();
     else if (this.currentMode === "reading") this.renderReading();
@@ -4839,6 +4847,7 @@ export class MindMapEditor {
     const branchColorMap = appearance.colorfulBranches ? buildBranchColorMap(this.document.root, appearance.branchColors) : new Map<string, string>();
     this.clearDropPreview();
     this.observedMindMapNodeSizes.clear();
+    this.mindMapNodeElements.clear();
     this.nodesLayerEl.empty();
     while (this.edgesSvg.firstChild) this.edgesSvg.removeChild(this.edgesSvg.firstChild);
 
@@ -4868,8 +4877,7 @@ export class MindMapEditor {
       const minimumBatch = startIndex === 0 ? 10 : 4;
       while (index < positions.length && (index - startIndex < minimumBatch || performance.now() - startedAt < 7)) {
         const position = positions[index]!;
-        const existing = this.nodesLayerEl.querySelector<HTMLElement>(`.mmc-node[data-node-id="${CSS.escape(position.node.id)}"]`);
-        if (!existing) this.renderMindMapNode(position, appearance, branchColorMap);
+        if (!this.mindMapNodeElements.has(position.node.id)) this.renderMindMapNode(position, appearance, branchColorMap);
         index += 1;
       }
       if (index < positions.length) {
@@ -4886,6 +4894,7 @@ export class MindMapEditor {
       }
     };
     renderBatch(0);
+    this.syncAppliedSelectionSnapshot();
     this.applyTransform();
   }
 
@@ -4901,6 +4910,7 @@ export class MindMapEditor {
     const classes = ["mmc-node", position.depth === 0 ? "is-root" : "", node.submap ? "is-submap-node" : "", `shape-${shape}`, `text-align-${textAlign}`].filter(Boolean).join(" ");
     const nodeEl = this.nodesLayerEl.createDiv({ cls: classes });
     nodeEl.dataset.nodeId = node.id;
+    this.mindMapNodeElements.set(node.id, nodeEl);
     nodeEl.style.left = `${position.x}px`;
     nodeEl.style.top = `${position.y}px`;
     nodeEl.style.width = `${position.width}px`;
@@ -5252,7 +5262,7 @@ export class MindMapEditor {
       if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
       const draggingIds = this.selectedIds.has(node.id) ? this.selectedIds : new Set([node.id]);
       for (const draggingId of draggingIds) {
-        this.nodesLayerEl.querySelector<HTMLElement>(`[data-node-id="${CSS.escape(draggingId)}"]`)?.addClass("is-dragging");
+        this.mindMapNodeElements.get(draggingId)?.addClass("is-dragging");
       }
     });
     nodeEl.addEventListener("dragover", (event) => {
@@ -5286,7 +5296,7 @@ export class MindMapEditor {
       this.dragDropPosition = null;
       this.clearDropIndicators();
       this.clearDropPreview();
-      this.nodesLayerEl.querySelectorAll(".is-dragging").forEach((element) => element.removeClass("is-dragging"));
+      for (const draggingNode of this.mindMapNodeElements.values()) draggingNode.removeClass("is-dragging");
     });
     this.resizeObserver?.observe(nodeEl);
   }
@@ -5347,10 +5357,9 @@ export class MindMapEditor {
     if (!this.pendingMindMapLayoutAnimation) return new Map();
     this.pendingMindMapLayoutAnimation = false;
     const rects = new Map<string, DOMRect>();
-    this.nodesLayerEl.querySelectorAll<HTMLElement>(".mmc-node[data-node-id]").forEach((element) => {
-      const id = element.dataset.nodeId;
-      if (id) rects.set(id, element.getBoundingClientRect());
-    });
+    for (const [id, element] of this.mindMapNodeElements) {
+      rects.set(id, element.getBoundingClientRect());
+    }
     return rects;
   }
 
@@ -5361,13 +5370,13 @@ export class MindMapEditor {
    */
   private playMindMapLayoutAnimation(previousNodeRects: ReadonlyMap<string, DOMRect>): void {
     if (!previousNodeRects.size || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    this.nodesLayerEl.querySelectorAll<HTMLElement>(".mmc-node[data-node-id]").forEach((element) => {
-      const previous = element.dataset.nodeId ? previousNodeRects.get(element.dataset.nodeId) : undefined;
-      if (!previous) return;
+    for (const [id, element] of this.mindMapNodeElements) {
+      const previous = previousNodeRects.get(id);
+      if (!previous) continue;
       const next = element.getBoundingClientRect();
       const deltaX = previous.left - next.left;
       const deltaY = previous.top - next.top;
-      if (Math.abs(deltaX) < 1 && Math.abs(deltaY) < 1) return;
+      if (Math.abs(deltaX) < 1 && Math.abs(deltaY) < 1) continue;
       const transform = getComputedStyle(element).transform;
       const baseTransform = transform === "none" ? "" : transform;
       element.animate([
@@ -5377,7 +5386,7 @@ export class MindMapEditor {
         duration: 220,
         easing: "cubic-bezier(0.22, 1, 0.36, 1)"
       });
-    });
+    }
     this.edgesSvg.animate([{ opacity: "0.3" }, { opacity: "1" }], {
       duration: 180,
       easing: "ease-out"
@@ -5405,21 +5414,20 @@ export class MindMapEditor {
     const previousNodeRects = this.captureMindMapNodeRects();
     const appearance = this.getAppearance();
     const measured = new Map<string, { width: number; height: number }>();
-    this.nodesLayerEl.querySelectorAll<HTMLElement>(".mmc-node[data-node-id]").forEach((element) => {
-      const id = element.dataset.nodeId;
-      if (!id) return;
-      measured.set(id, {
+    for (const [id, element] of this.mindMapNodeElements) {
+      const size = {
         width: Math.max(1, element.offsetWidth),
         height: Math.max(1, element.offsetHeight)
-      });
-      this.observedMindMapNodeSizes.set(id, measured.get(id)!);
-    });
+      };
+      measured.set(id, size);
+      this.observedMindMapNodeSizes.set(id, size);
+    }
     if (!measured.size) return;
 
     this.layout = computeLayout(this.document.root, this.document.layout, appearance.fontSize ?? 14, appearance.nodeVisualStyle ?? "card", appearance, measured);
 
     for (const position of this.layout.nodes) {
-      const element = this.nodesLayerEl.querySelector<HTMLElement>(`.mmc-node[data-node-id="${CSS.escape(position.node.id)}"]`);
+      const element = this.mindMapNodeElements.get(position.node.id);
       if (!element) continue;
       element.style.left = `${position.x}px`;
       element.style.top = `${position.y}px`;
@@ -5497,8 +5505,7 @@ export class MindMapEditor {
     }
     const scroller = this.currentMode === "outline" ? this.outlineEl : this.articleEl;
     const viewport = scroller.getBoundingClientRect();
-    const matches = Array.from(scroller.querySelectorAll<HTMLElement>("[data-node-id]"))
-      .filter((element) => element.dataset.nodeId === id)
+    const matches = Array.from(scroller.querySelectorAll<HTMLElement>(`[data-node-id="${CSS.escape(id)}"]`))
       .map((element) => ({ element, rect: element.getBoundingClientRect() }))
       .filter(({ rect }) => rect.height > 0)
       .sort((left, right) => {
@@ -5518,26 +5525,71 @@ export class MindMapEditor {
     );
   }
 
+  /** Records the current logical selection as the state already represented by rendered DOM. */
+  private syncAppliedSelectionSnapshot(): void {
+    this.appliedSelectionIds.clear();
+    for (const id of this.selectedIds) this.appliedSelectionIds.add(id);
+    this.selectionClassSyncValid = true;
+  }
+
+  /** Returns the currently visible non-canvas container that can render node selection classes. */
+  private activeSelectionScope(): HTMLElement | null {
+    if (this.currentMode === "outline") return this.outlineEl;
+    if (this.currentMode === "article" || this.currentMode === "reading") return this.articleEl;
+    return null;
+  }
+
+  /** Applies selection CSS classes to the active rendered representation of one node ID. */
+  private applySelectionClassesForId(id: string, multi: boolean): void {
+    const selected = this.selectedIds.has(id);
+    const apply = (element: HTMLElement): void => {
+      element.toggleClass("is-selected", selected);
+      element.toggleClass("is-multi-selected", selected && multi);
+    };
+    if (this.currentMode === "mindmap") {
+      const mindMapElement = this.mindMapNodeElements.get(id);
+      if (mindMapElement) apply(mindMapElement);
+      return;
+    }
+    const scope = this.activeSelectionScope();
+    if (!scope) return;
+    scope.querySelectorAll<HTMLElement>(`[data-node-id="${CSS.escape(id)}"]`).forEach(apply);
+  }
+
   /**
-   * Synchronizes selection classes across all editor views.
+   * Synchronizes selection classes in the active editor view.
+   *
+   * Normal clicks and marquee updates touch only IDs whose selected or multi-selected state changed.
+   * A rebuilt outline/article DOM invalidates the snapshot and intentionally performs one full sync.
+   * Hidden views are rebuilt before becoming active, so they do not receive redundant selection writes.
    */
   private applySelectionClasses(): void {
     const multi = this.selectedIds.size > 1;
-    for (const scope of [this.nodesLayerEl, this.outlineEl, this.articleEl]) {
-      if (!scope) continue;
-      const elements = scope.querySelectorAll<HTMLElement>("[data-node-id]");
-      if (elements.length === 0) continue;
-
-      for (let i = 0; i < elements.length; i++) {
-        const element = elements[i];
-        const id = element.dataset.nodeId;
-        if (!id) continue;
-
-        const selected = this.selectedIds.has(id);
-        element.toggleClass("is-selected", selected);
-        element.toggleClass("is-multi-selected", selected && multi);
+    if (!this.selectionClassSyncValid) {
+      if (this.currentMode === "mindmap") {
+        for (const [id, element] of this.mindMapNodeElements) {
+          const selected = this.selectedIds.has(id);
+          element.toggleClass("is-selected", selected);
+          element.toggleClass("is-multi-selected", selected && multi);
+        }
+      } else {
+        const scope = this.activeSelectionScope();
+        const elements = scope?.querySelectorAll<HTMLElement>("[data-node-id]") ?? [];
+        for (let index = 0; index < elements.length; index += 1) {
+          const element = elements[index]!;
+          const id = element.dataset.nodeId;
+          if (!id) continue;
+          const selected = this.selectedIds.has(id);
+          element.toggleClass("is-selected", selected);
+          element.toggleClass("is-multi-selected", selected && multi);
+        }
+      }
+    } else {
+      for (const id of selectionClassDelta(this.appliedSelectionIds, this.selectedIds)) {
+        this.applySelectionClassesForId(id, multi);
       }
     }
+    this.syncAppliedSelectionSnapshot();
     this.updateToolbarAvailability();
   }
 
@@ -5616,7 +5668,7 @@ export class MindMapEditor {
       if (inlineElement) this.activateInlineEditable(inlineElement, true, protectInitialFocus);
       return;
     }
-    const nodeEl = this.nodesLayerEl.querySelector<HTMLElement>(`.mmc-node[data-node-id="${CSS.escape(nodeId)}"]`);
+    const nodeEl = this.mindMapNodeElements.get(nodeId);
     const content = nodeEl?.querySelector<HTMLElement>(".mmc-node-content");
     if (!nodeEl || !content) return;
     const blocks = nodeContentBlocks(node);
@@ -6033,9 +6085,9 @@ export class MindMapEditor {
       this.callbacks.onChange(this.getDocument());
       this.markSaving();
       if (this.inlineEditingId === selected.id) {
-        const inline = this.nodesLayerEl.querySelector<HTMLElement>(
-          `.mmc-node[data-node-id="${CSS.escape(selected.id)}"] .mmc-node-text.is-inline-editing`
-        );
+        const inline = this.mindMapNodeElements.get(selected.id)?.querySelector<HTMLElement>(
+          ".mmc-node-text.is-inline-editing"
+        ) ?? null;
         const textBlock = nodeContentBlocks(selected).find((block): block is MindMapTextContentBlock => block.type === "text");
         if (inline && document.activeElement !== inline) renderRichTextRuns(inline, textBlock?.richText, textBlock?.text ?? "", false);
       } else if (this.currentMode === "mindmap") {
@@ -8167,7 +8219,7 @@ export class MindMapEditor {
   private refreshAfterInlineTextCommit(nodeId: string): void {
     if (this.currentMode === "mindmap") {
       const node = findNode(this.document.root, nodeId);
-      const nodeEl = this.nodesLayerEl.querySelector<HTMLElement>(`.mmc-node[data-node-id="${CSS.escape(nodeId)}"]`);
+      const nodeEl = this.mindMapNodeElements.get(nodeId);
       if (node && nodeEl) nodeEl.toggleClass("is-search-match", Boolean(this.searchQuery && nodeSearchText(node).includes(this.searchQuery)));
       this.scheduleMeasuredMindMapLayout();
       return;
@@ -8189,10 +8241,11 @@ export class MindMapEditor {
       this.render();
       return;
     }
-    const existing = this.nodesLayerEl.querySelector<HTMLElement>(`.mmc-node[data-node-id="${CSS.escape(nodeId)}"]`);
+    const existing = this.mindMapNodeElements.get(nodeId);
     if (existing) {
       this.resizeObserver?.unobserve(existing);
       existing.remove();
+      this.mindMapNodeElements.delete(nodeId);
     }
     const appearance = this.getAppearance();
     const branchColorMap = appearance.colorfulBranches

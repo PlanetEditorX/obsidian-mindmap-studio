@@ -150,7 +150,7 @@ test("selection-only resize notifications do not repeatedly relayout the whole m
   assert.match(editorSource, /observedMindMapNodeSizes = new Map<string, \{ width: number; height: number \}>/);
   assert.match(editorSource, /let nodeSizeChanged = false;[\s\S]*Math\.abs\(previous\.width - next\.width\) > 0\.5[\s\S]*Math\.abs\(previous\.height - next\.height\) > 0\.5/);
   assert.match(editorSource, /if \(nodeSizeChanged\) \{\s*this\.scheduleMeasuredMindMapLayout\(\)/);
-  assert.match(editorSource, /this\.observedMindMapNodeSizes\.set\(id, measured\.get\(id\)!\)/);
+  assert.match(editorSource, /for \(const \[id, element\] of this\.mindMapNodeElements\) \{[\s\S]*?this\.observedMindMapNodeSizes\.set\(id, size\)/);
 });
 
 test("failed images expose every source address in map, outline, article, and reading renderers", () => {
