@@ -238,9 +238,10 @@ interface MindMapSubmap {
 
 ```ts
 interface MindMapNavigation {
-  parentPath?: string;
+  parentPath: string;
   parentNodeId?: string;
   parentTitle?: string;
+  parentNodeText?: string;
 }
 ```
 
@@ -251,6 +252,8 @@ interface MindMapNavigation {
 - 文章编号续接。
 - 顶层递归目录。
 - 返回父导图后定位来源节点。
+
+`navigation.parentPath` 是当前格式判断“此文件为子导图”的规范字段。为兼容旧文件或异常写回导致该字段缺失的情况，运行时允许利用全局搜索索引中父节点保存的 `submap.path` 反向恢复一份导航对象；只有路径真实解析到当前子文件时才接受该关系。该恢复默认不主动写盘，避免单纯打开文件产生修改事件；之后若用户真实编辑文档，正常序列化会把恢复出的导航一起保存。
 
 ## 10. 图片镜像元数据
 

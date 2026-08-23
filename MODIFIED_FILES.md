@@ -1,5 +1,17 @@
 # Modified Files
 
+## 1.46.3 子导图父级返回导航恢复
+
+- `src/search/global-search.ts`：新增 `findParentNavigationForChild()`，在启动增量校验完成后的搜索索引中，仅接受父节点 `submap.path` 实际解析到当前子文件的条目，反查父文件、挂载节点 ID、父标题和来源节点文字。
+- `src/main.ts`：新增 `recoverSubmapNavigation()`；旧子导图缺失 `navigation.parentPath` 时先等待 `searchIndexReady` 完成启动增量校验，再执行父级反查，索引失败时记录调试事件并安全降级。
+- `src/view.ts`：`setViewData()` 对缺失父级导航的文档异步恢复运行态 `navigation`；恢复后失效文章上下文缓存、刷新文档缓存并重建文章上下文，但不提升编辑修订、不触发打开即保存。
+- `src/editor/editor.ts`：新增 `applyRecoveredNavigation()`，只写入已验证导航并调用 `renderNavigation()`，让导图模式左上角 `← 父导图 › 当前导图` 重新出现，不进入撤销历史、不重绘整张画布。
+- `tests/reading-editor-contract.test.mjs`：新增旧子导图父级反查契约，并检查源码与安装 `main.js` 均等待索引校验、使用真实 `submap.path`、局部刷新导航且不触发 `onChange` / history。
+- `README.md`、`CHANGELOG.md`、`docs/ARCHITECTURE.md`、`docs/DATA_MODEL.md`、`docs/DEVELOPMENT.md`、`docs/SPECIAL_FEATURES.md`、`docs/TESTING.md`、`docs/FUNCTION_REFERENCE.md`：同步旧子导图兼容恢复、缓存边界、调试入口、测试和真实 Obsidian 验证说明。
+- `main.js`：上传源码包没有可用 `esbuild` / Obsidian 类型依赖，且当前环境无法联网恢复依赖；因此以现有 1.46.3 bundle 为基线等价同步本轮运行逻辑，并通过 `node --check`、专项源码/安装 bundle 契约。正式发布前仍应在依赖完整环境执行 production build。
+- `TEST_RESULTS.md`、Codex 交接：记录专项 **33/33**、不依赖缺失包的单测 **353/353**、文档/仓库/语法检查，以及标准 `verify` 被 `esbuild`/`fflate` 与类型依赖缺失阻断的边界。
+- 本轮测试安装包：`mindmap-studio-1.46.3-test-228042.zip`，SHA-256 `1cbef89d4977ee9c9ff42fbc901ae9b1ad7fa3a623ca9d865fa3268ddcef0028`；完整源码与 Codex 交接使用同一 `228042` 后缀。
+
 ## 1.46.2 文章窗口自动预热与目录往返缓存修复
 
 - `src/editor/editor.ts`：正文真实窗口挂载并完成语义定位后启动 `scheduleArticleWindowWarmup()`；按动画帧优先补后文、再补前文，每帧最多 4 次约 5 KB 扩展，每批刷新折叠、缩略导航、选中态与文章块 UI。后台向前补载按新增 `scrollHeight` 补偿 `scrollTop`，并等待活动阅读恢复事务结束，避免自动加载与精确落点竞争；用户滚到边缘时原扩展逻辑继续作为兜底。

@@ -160,7 +160,7 @@
 - XMind 多画布导入、跨两级以上同名画布挂载的根图片/公式/备注合并、归档图片提取、共享图片去重、LaTeX 字段兼容、缺失资源报告，以及 HTML/文章导出。
 - 导图布局、碰撞处理和连接线。
 - 文章层级、目录、编号、分页和连续阅读。
-- 全局搜索索引和替换，包括显示结果上限不影响“全部替换”的完整范围，以及替换后索引立即刷新。
+- 全局搜索索引和替换，包括显示结果上限不影响“全部替换”的完整范围，以及替换后索引立即刷新。索引还承担旧子导图父级导航兼容反查：缺失 `navigation.parentPath` 时，必须只接受父节点 `submap.path` 实际解析到当前文件的条目，并恢复 `parentNodeId` 后局部刷新左上角面包屑；该流程不得进入撤销历史或触发无内容保存。
 - 搜索快捷键，包括活动 MindMap Studio 视图中的 `Ctrl/Cmd+F` 由窗口捕获层直接打开当前导图族、编辑控件聚焦时仍可触发、全局搜索自定义快捷键保持优先，以及弹窗内不重复截获；点击搜索结果时，全局搜索与当前导图族搜索必须统一设置 `shouldRestoreSelection = false`，并只调用一次公开 `Modal.close()`。禁止程序化 `.modal-bg.click()`、PointerEvent/dispatchEvent 模拟，禁止等待 `onClose()` Promise，禁止修改/删除 `.modal-container` / `.modal-bg`，禁止 `display:none` 和 `removeSearchLayers`；文件/节点导航只等待两个 `requestAnimationFrame`，并通过 `result-close-request`、`modal-on-close`、`result-navigation-start` 调试事件验证桌面端顺序。搜索跳转到文章节点后，直接单击可编辑文字必须先经 `claimInlineEditInteraction()` 取消语义恢复和窗口扩展、清除待定位目标并建立 `inlineEditingId`，再由 `activateInlineEditableFromPointer()` 开启编辑；指针激活不得强制把光标移动到末尾，最初 120 ms 的 `mmsProtectInitialFocus` 只处理宿主同一交互中的焦点交接，之后普通 `blur` 仍应提交。调试日志必须能区分 `inline-edit-claim/focus/blur/refocus`。 还必须回归全局搜索入口的单实例守卫：`globalSearchLaunchPending` 要覆盖索引初始化 await，已挂载实例要由 `globalSearchModal.isMounted()` 阻止再次创建；当前导图族 `openMapFamilySearch()` 不得使用这两个守卫。文章模式从右键菜单执行“编辑当前内容/添加正文”时仍必须经 `editSelectedFromContextMenu()` 将 `protectInitialFocus` 传入共享激活链路；同时回归检查 `editSelected(initialBlockId?)` 保持完整节点编辑签名，菜单保护不能改变双击、键盘编辑、导图/大纲完整编辑或普通失焦保存。
 - 文件浏览器筛选。
 - 关键 UI/CSS 契约与版本文件一致性。
@@ -172,6 +172,7 @@
 - 将“单次最多显示结果”设为较小值，搜索超过上限的关键词后执行“全部替换”，确认全部匹配均被替换；随后立即重新搜索，不应出现旧结果。
 
 自动化通过后，在独立 Obsidian 测试仓库至少验证：
+- 准备一个父节点仍保存 `submap.path`、但子文件手工移除 `navigation` 的旧格式样本；直接打开子文件后确认导图模式左上角重新出现 `← 父导图 › 当前导图`，点击箭头返回父导图并定位挂载节点。仅打开/返回而不编辑时，子文件不应产生额外 `modify`；随后真实编辑一次再保存，确认恢复后的 `navigation` 随正常保存持久化。
 - 从全局搜索和当前导图族搜索分别跳转到文章节点，先直接单击标题/正文进入行内编辑，确认不会出现“进入后立刻退出”，且光标停在实际点击位置；再点击页面其他位置确认保护窗口结束后仍按正常失焦规则提交。随后分别用右键“编辑当前内容/添加正文”复测菜单焦点交接。若仍失败，导出调试日志并检查同一节点的 `inline-edit-claim` → `inline-edit-focus` → `inline-edit-blur`；搜索前直接编辑应可稳定持焦，搜索后不应再出现每 6–20 ms 一次的 `focus/refocus → blur(null)` 焦点风暴。
 
 1. 新建导图、修改中心节点、保存并重开。

@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @file global-search.ts
  * @description 搜索领域的本地索引与导图族搜索模块。
  *
@@ -11,6 +11,7 @@ import {
   nodePlainText,
   parseDocument,
   type MindMapDocument,
+  type MindMapNavigation,
   type MindMapNode
 } from "../core/model";
 
@@ -436,6 +437,32 @@ export class MindMapSearchIndex {
    */
   search(query: string, limit = 100, filePaths?: ReadonlySet<string>, useRegex = false): MindMapSearchResult[] {
     return searchEntries(this.allEntries(filePaths), query, limit, useRegex);
+  }
+
+  /**
+   * 从已完成版本校验的搜索索引中反查当前子导图的父级挂载节点。
+   * 仅接受父节点 `submap.path` 实际解析到目标子文件的关系，避免把普通链接误判为父子导航。
+   *
+   * @param childPath 当前子导图的仓库路径。
+   * @returns 可直接写入子文档运行态的父级导航；索引中不存在可靠关系时返回 null。
+   */
+  findParentNavigationForChild(childPath: string): MindMapNavigation | null {
+    const normalizedChildPath = normalizePath(childPath);
+    for (const [parentPath, indexed] of Object.entries(this.data.files)) {
+      if (normalizePath(parentPath) === normalizedChildPath) continue;
+      const mountEntry = indexed.entries.find((entry) => {
+        if (!entry.submapPath) return false;
+        return this.resolveSubmapFile(entry.submapPath, parentPath)?.path === normalizedChildPath;
+      });
+      if (!mountEntry) continue;
+      return {
+        parentPath,
+        parentNodeId: mountEntry.nodeId,
+        parentTitle: indexed.title || parentPath.split("/").at(-1)?.replace(/\.mindmap$/i, ""),
+        parentNodeText: mountEntry.nodeText || undefined
+      };
+    }
+    return null;
   }
 
   /**

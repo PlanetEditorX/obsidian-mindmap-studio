@@ -49,6 +49,7 @@ import {
   type MindMapContentBlock,
   type MindMapImageContentBlock,
   type MindMapImageUploadPatch,
+  type MindMapNavigation,
   type MindMapTable,
   type MindMapCodeBlock,
   type MindMapNode,
@@ -1707,6 +1708,18 @@ export class MindMapEditor {
     if (fileChanged) this.playPageEnterTransition();
     this.restoreReadingLocation(this.currentMode, this.lastReadingLocation);
     this.initializeMindMapViewport(20);
+  }
+
+  /**
+   * 把视图层从父节点 `submap.path` 反查出的父级导航应用到当前运行态。
+   * 这里只刷新导航控件，不进入撤销历史、不触发保存，也不重绘画布节点。
+   *
+   * @param navigation 已验证的父级导航元数据。
+   */
+  applyRecoveredNavigation(navigation: MindMapNavigation): void {
+    if (this.document.navigation?.parentPath || !navigation.parentPath) return;
+    this.document.navigation = { ...navigation };
+    this.renderNavigation();
   }
 
   /**

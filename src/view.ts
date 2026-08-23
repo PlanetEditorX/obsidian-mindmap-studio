@@ -152,6 +152,9 @@ export class MindMapStudioView extends TextFileView {
       this.preferredCurrentNodeIdOnNextContextRefresh = queuedFocusNodeId;
     }
     if (this.file) void this.plugin.resumePendingAutoUploads(this.file, this.document);
+    if (this.file && !this.document.navigation?.parentPath) {
+      void this.recoverMissingSubmapNavigation(this.file, this.document);
+    }
     const cachedArticleContext = this.file ? this.plugin.getCachedArticleContext(this.file, this.document) : null;
     if (cachedArticleContext) {
       this.articleBaseDepth = cachedArticleContext.baseDepth;
@@ -307,6 +310,35 @@ export class MindMapStudioView extends TextFileView {
       this.preferredCurrentNodeIdOnNextContextRefresh = null;
     } else {
       this.scheduleArticleContextRefresh(0);
+    }
+  }
+
+  /**
+   * 异步恢复旧子导图缺失的父级导航，并只刷新受影响的导航控件与文章上下文。
+   * 该兼容修复不会把文件标记为已编辑；用户之后产生真实内容修改时，恢复出的导航会随正常保存一并持久化。
+   *
+   * @param file 发起恢复时的当前文件。
+   * @param document 发起恢复时的文档快照。
+   */
+  private async recoverMissingSubmapNavigation(file: TFile, document: MindMapDocument): Promise<void> {
+    try {
+      const navigation = await this.plugin.recoverSubmapNavigation(file, document);
+      if (!navigation?.parentPath) return;
+      if (this.file?.path !== file.path || !this.document || this.document.navigation?.parentPath) return;
+
+      this.document.navigation = { ...navigation };
+      this.plugin.invalidateMindMapCaches(file.path);
+      this.plugin.rememberMindMapDocument(file, this.document);
+      this.editor?.applyRecoveredNavigation(navigation);
+      this.articleContextCacheHit = false;
+      this.plugin.logDebug("view", "apply-recovered-parent-navigation", {
+        filePath: file.path,
+        parentPath: navigation.parentPath,
+        parentNodeId: navigation.parentNodeId
+      });
+      this.scheduleArticleContextRefresh(0);
+    } catch (error) {
+      this.plugin.logDebug("view", "recover-parent-navigation-failed", { filePath: file.path, error });
     }
   }
 

@@ -1,6 +1,40 @@
 # Test Results
 
-版本：1.46.2
+版本：1.46.3
+
+## 1.46.3 子导图父级返回导航恢复
+
+### 根因与修复
+
+- 左上角返回面包屑代码并未被删除；`MindMapEditor.renderNavigation()` 仍以 `document.navigation.parentPath` 作为唯一父级显示条件。旧子导图、异常写回或历史数据一旦丢失该字段，整个 `← 父导图 › 当前导图` 会被隐藏。
+- 新恢复链路先等待全局搜索索引完成启动时的 `mtime + size` 增量校验，再从父节点索引的 `submap.path` 反查当前子文件。只有路径经 Obsidian 文件解析后真实指向当前 `.mindmap` 才接受，并恢复 `parentPath`、`parentNodeId`、父标题和来源节点文字。
+- 恢复只修改当前会话文档和导航控件：编辑器只执行 `renderNavigation()`，不进入撤销历史、不调用编辑 `onChange`；视图同步失效文章上下文缓存并异步重建。用户之后产生真实内容编辑时，恢复出的 `navigation` 才随正常保存持久化。
+
+### 自动验证
+
+- `node --test tests/reading-editor-contract.test.mjs`：**33 / 33 通过**；新增契约同时检查 TypeScript 源码和 `main.js`，并锁定“索引校验完成后反查 → 真实 `submap.path` → 局部刷新导航 → 不进入保存/撤销链”。
+- 除当前环境缺失 `esbuild` / `fflate` 的 `tests/plugin-update.test.mjs` 与 `tests/xmind-import.test.mjs` 外，其余单元测试：**353 / 353 通过**。
+- `npm run test:repo`：**通过**。验证前从用户上传 ZIP 的 UTF-8 中央目录重新提取了原始中文 `examples/` 路径；该恢复仅用于测试，未修改示例内容，最终源码 ZIP 按仓库规则排除未修改 `examples/`。
+- `npm run docs:generate`、`npm run test:docs`：**通过**，当前 **57 个源码模块、1188 个具名声明**满足文档覆盖。
+- `node --check main.js`：**通过**。安装 bundle 已等价同步 `findParentNavigationForChild()`、`recoverSubmapNavigation()`、`recoverMissingSubmapNavigation()` 与 `applyRecoveredNavigation()`。
+- 标准 `npm run verify` 已执行：单元测试阶段 **355 项，353 通过 / 2 失败**；失败均是测试文件启动时找不到中断安装后缺失的 `esbuild`/`fflate` 包，和本轮导航断言无关。由于 `test:unit` 非零退出，verify 按脚本设计停止。
+- 单独 `npm run test:regression`：启动时找不到 `node_modules/esbuild/index.js`，未进入综合回归测试体。
+- 单独 `npm run build`：当前 `node_modules` 来自网络不可达环境下中断的 `npm ci`，缺少 `codemirror`、`estree`、`node`、`tern` 类型定义，因此 TypeScript 前置阶段即停止；正式 esbuild production build 无法执行。上传源码本身没有完整依赖，本轮尝试恢复依赖时 registry DNS/网络不可用。
+- 因此当前容器**不能声称标准 `npm run verify` 或正式 production build 全绿**；`main.js` 以现有 1.46.3 bundle 为基线等价同步，并由专项 bundle 契约和语法检查兜底。
+
+### 仍需真实 Obsidian 验证
+
+1. 准备父节点仍包含有效 `submap.path`、但子 `.mindmap` 手工移除 `navigation` 的旧格式样本；直接打开子导图，确认左上角自动恢复 `← 父导图 › 当前导图`。
+2. 点击左箭头，确认返回正确父文件并聚焦原挂载节点；导图、大纲、通读和题库保持当前模式，文章模式仍按现有规则回父级文章目录。
+3. 只打开旧子导图并返回、全程不编辑，确认子文件没有额外 `modify`；随后真实编辑一次并保存，确认恢复后的 `navigation` 正常持久化。
+4. 顶层导图没有任何父节点 `submap.path` 指向它时，左上角不得误显示返回按钮；普通 Wiki 链接也不得被误判为父子关系。
+
+### 本轮交付
+
+- 版本：1.46.3
+- 测试安装 ZIP：`mindmap-studio-1.46.3-test-228042.zip`
+- SHA-256：`1cbef89d4977ee9c9ff42fbc901ae9b1ad7fa3a623ca9d865fa3268ddcef0028`
+- 完整源码与 Codex 交接包使用同一 `228042` 后缀。
 
 ## 1.46.2 目录进入自动补载与二次打开缓存修复
 
