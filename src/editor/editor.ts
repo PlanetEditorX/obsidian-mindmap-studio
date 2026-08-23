@@ -62,7 +62,6 @@ import {
 } from "../core/model";
 import { buildBranchColorMap, computeLayout, documentToSvg, edgePath, edgeWidthForDepth, roundedElbowEdgePath, type LayoutResult } from "../render/layout";
 import { buildHierarchyFocusOrder, prioritizeSpatialRenderItems } from "../render/incremental-render";
-import { resolveLayoutCollisions } from "../render/collision-layout";
 import { buildCodeLineNumberText, countCodeLines } from "../render/code-block";
 import { CodeEditModal, TableEditModal } from "./content-modals";
 import { parseQuestionEnrichment, parseRecognizedQuestion, QuestionEditModal } from "./question-modal";
@@ -206,6 +205,14 @@ interface ReadingStyleDefaults {
   numberingEnabled: boolean;
   numberingStyle: ArticleLeafNumberingStyle;
   numberingThreshold: number;
+}
+
+/** Shared tree-derived facts used by one toolbar availability refresh. */
+interface ToolbarAvailabilityContext {
+  selected: MindMapNode | null;
+  selectedNonRootCount: number;
+  hasCollapsibleNodes: boolean;
+  canEdit: boolean;
 }
 
 /** “阅读样式”控件在提交时返回的读取句柄。 */
@@ -3236,12 +3243,45 @@ export class MindMapEditor {
     this.imageLoadTimers.clear();
   }
 
-  /** Returns whether one configured toolbar action can perform a meaningful operation now. */
-  private toolbarItemAvailable(id: ToolbarItemId): boolean {
-    const selected = this.selectedNode();
-    const selectedNonRootIds = Array.from(this.selectedIds).filter((nodeId) => nodeId !== this.document.root.id && Boolean(findNode(this.document.root, nodeId)));
+  /**
+   * Computes tree-dependent toolbar state in one traversal so each toolbar item
+   * does not independently rescan a large document.
+   *
+   * @returns Shared availability facts for the current toolbar refresh.
+   */
+  private toolbarAvailabilityContext(): ToolbarAvailabilityContext {
+    let selected: MindMapNode | null = null;
+    let selectedNonRootCount = 0;
+    let hasCollapsibleNodes = false;
+    const stack: MindMapNode[] = [this.document.root];
+    while (stack.length) {
+      const node = stack.pop()!;
+      if (node.id === this.selectedId) selected = node;
+      if (node.id !== this.document.root.id && this.selectedIds.has(node.id)) selectedNonRootCount += 1;
+      if (node.id !== this.document.root.id && node.children.length > 0) hasCollapsibleNodes = true;
+      for (let index = node.children.length - 1; index >= 0; index -= 1) stack.push(node.children[index]!);
+    }
     const editableSurface = this.currentMode === "mindmap" || this.currentMode === "outline" || this.currentMode === "article";
-    const canEdit = editableSurface && !this.readOnly;
+    return {
+      selected,
+      selectedNonRootCount,
+      hasCollapsibleNodes,
+      canEdit: editableSurface && !this.readOnly
+    };
+  }
+
+  /**
+   * Returns whether one configured toolbar action can perform a meaningful operation now.
+   *
+   * @param id Toolbar action being evaluated.
+   * @param context Tree-dependent facts shared by every action in this refresh.
+   * @returns Whether the action should be visible and enabled.
+   */
+  private toolbarItemAvailable(
+    id: ToolbarItemId,
+    context: ToolbarAvailabilityContext
+  ): boolean {
+    const { selected, selectedNonRootCount, hasCollapsibleNodes, canEdit } = context;
     switch (id) {
       case "lock": return this.currentMode !== "question-bank";
       case "undo": return canEdit && this.history.canUndo();
@@ -3250,10 +3290,9 @@ export class MindMapEditor {
       case "add-sibling": return canEdit && this.selectedIds.size <= 1 && Boolean(selected && selected.id !== this.document.root.id);
       case "edit": return canEdit && Boolean(selected);
       case "duplicate": return canEdit && this.selectedIds.size <= 1 && Boolean(selected && selected.id !== this.document.root.id);
-      case "delete": return canEdit && selectedNonRootIds.length > 0;
+      case "delete": return canEdit && selectedNonRootCount > 0;
       case "collapse": return this.currentMode === "mindmap" && Boolean(selected?.children.length);
-      case "collapse-all": return this.currentMode === "mindmap"
-        && flattenNodes(this.document.root).some((node) => node !== this.document.root && node.children.length > 0);
+      case "collapse-all": return this.currentMode === "mindmap" && hasCollapsibleNodes;
       case "fit": return this.currentMode === "mindmap";
       case "layout": return this.currentMode === "mindmap" && canEdit;
       case "table":
@@ -3285,10 +3324,11 @@ export class MindMapEditor {
     if (!this.toolbarEl) return;
     if (!animate) this.toolbarEl.removeClass("is-toolbar-ready");
     const buttons = Array.from(this.toolbarEl.querySelectorAll<HTMLButtonElement>("[data-toolbar-id]"));
+    const availabilityContext = this.toolbarAvailabilityContext();
     for (const button of buttons) {
       const id = button.dataset.toolbarId as ToolbarItemId | undefined;
       if (!id) continue;
-      const visible = this.options.visibleToolbarItems.includes(id) && this.toolbarItemAvailable(id);
+      const visible = this.options.visibleToolbarItems.includes(id) && this.toolbarItemAvailable(id, availabilityContext);
       button.toggleClass("is-hidden", !visible);
       button.disabled = !visible;
       button.removeAttribute("title");
@@ -5376,14 +5416,7 @@ export class MindMapEditor {
     });
     if (!measured.size) return;
 
-    const next = computeLayout(this.document.root, this.document.layout, appearance.fontSize ?? 14, appearance.nodeVisualStyle ?? "card", appearance, measured);
-    resolveLayoutCollisions(next.nodes, appearance.nodeVisualStyle === "branch" ? 18 : 24);
-    next.byId = new Map(next.nodes.map((position) => [position.node.id, position]));
-    next.minX = Math.min(...next.nodes.map((position) => position.x - position.width / 2));
-    next.maxX = Math.max(...next.nodes.map((position) => position.x + position.width / 2));
-    next.minY = Math.min(...next.nodes.map((position) => position.y - position.height / 2));
-    next.maxY = Math.max(...next.nodes.map((position) => position.y + position.height / 2));
-    this.layout = next;
+    this.layout = computeLayout(this.document.root, this.document.layout, appearance.fontSize ?? 14, appearance.nodeVisualStyle ?? "card", appearance, measured);
 
     for (const position of this.layout.nodes) {
       const element = this.nodesLayerEl.querySelector<HTMLElement>(`.mmc-node[data-node-id="${CSS.escape(position.node.id)}"]`);

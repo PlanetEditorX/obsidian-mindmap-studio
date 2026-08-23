@@ -2,6 +2,42 @@
 
 版本：1.46.3
 
+## 1.46.3 大型导图性能优化第一批
+
+### 实现与行为验证
+
+- 实测尺寸二次布局现在只调用一次权威 `computeLayout()`；该函数内部已经完成碰撞消解、节点映射和画布边界计算，编辑器层不再重复执行第二轮 collision 或重新计算 `byId/minX/maxX/minY/maxY`。
+- `resolveLayoutCollisions()` 保留原先的节点顺序与子树移动语义，但利用顶部排序提前结束已经满足纵向间距的后续扫描。随机生成 **300 组**树形布局逐组对比优化前后 `moves` 与全部节点坐标，**300 / 300 完全一致**。
+- `prioritizeSpatialRenderItems()` 把 band、focus rank、distance 从 `sort` 比较器移到一次性预计算。随机生成 **500 组**布局项、视口和聚焦顺序逐组对比，**500 / 500 排序结果完全一致**。
+- 隔离算法微基准仅用于方向性比较：5000 个纵向已分离节点的 collision 中位耗时约从 **71.7 ms 降至 7.3 ms（约 9.8×）**；20000 个布局项的空间排序约从 **13.5 ms 降至 7.9 ms（约 1.7×）**。这些数字不等同于真实 Obsidian 整体帧耗时。
+- 工具栏可用性由 `toolbarAvailabilityContext()` 单次遍历节点树后共享给全部按钮；`delete/collapse-all/selected` 等判断不再为每个工具栏项重复调用 `findNode()` / `flattenNodes()`。
+
+### 自动验证
+
+- 第一批性能专项：`code-block + incremental-render + settings-layout` 共 **48 / 48 通过**。
+- 完整 `npm run test:unit`：共 **361 项，359 通过 / 2 失败**；仅 `tests/plugin-update.test.mjs` 与 `tests/xmind-import.test.mjs` 在文件加载阶段因当前源码环境缺少 `esbuild` 报 `ERR_MODULE_NOT_FOUND`，未进入测试体。`examples/` 为按交付规则不进入源码 ZIP 的未修改样例，本轮验证时从用户原始 ZIP 恢复真实 UTF-8 路径后执行。
+- `npm run test:regression`：`scripts/test.mjs` 启动时因缺少 `esbuild` 退出，未进入综合回归测试体。
+- `npm run build`：上传源码没有完整 `obsidian` / `fflate` 等开发依赖和类型声明，TypeScript 前置检查阶段停止；production esbuild 未执行。
+- 本轮 3 个修改 TypeScript 文件使用环境已有 TypeScript `transpileModule` 做独立语法检查：**3 / 3 通过**；临时 `node_modules/typescript` 链接不进入交付物。
+- `npm run docs:generate`：**通过**；`npm run test:docs`：**通过**，当前 **57 个源码模块、1195 个具名声明**满足文档覆盖。
+- `npm run test:repo`：**通过**。
+- `node --check main.js`：**通过**；专项测试同时检查安装 bundle 已同步提前 collision break、排序键预计算、工具栏共享上下文和单次 measured layout。
+- 当前容器因此不能声称标准 `npm run verify` 或正式 production build 全绿；正式发布前仍需在依赖完整开发机执行 `npm ci && npm run verify` 并用正式 esbuild 结果替换当前等价同步 bundle。
+
+### 真实 Obsidian 重点复测
+
+1. 1000–5000 节点导图中连续展开/折叠含表格、代码或图片的分支，确认实测尺寸重排后节点不重叠、连接线和视口锚点稳定。
+2. 5000 节点以上导图中快速切换单选、多选并触发工具栏状态变化，确认按钮显示逻辑和优化前一致，点击响应无明显卡顿。
+3. 打开节点分布很稀疏的大导图并缩放/移动视口，确认首批分帧挂载仍按“焦点关系链 → 当前视口 → 相邻视口 → 远端”顺序出现。
+4. 继续复测上一轮旧子导图父级导航和全局搜索索引优化，确认本轮布局热路径变更没有影响跨文件逻辑。
+
+### 本轮交付
+
+- 版本：1.46.3
+- 测试安装 ZIP：`mindmap-studio-1.46.3-test-736957.zip`
+- SHA-256：`3b0943a3b1db78d41d3e3616c385f30f1295d0c9c4adb77c0a6684bc882b4273`
+- 完整源码与 Codex 交接包使用同一 `736957` 后缀。
+
 ## 1.46.3 静态分析告警整改与导图族索引复用
 
 ### 处理结果

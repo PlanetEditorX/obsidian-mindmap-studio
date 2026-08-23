@@ -3693,13 +3693,13 @@ function resolveLayoutCollisions(nodes, verticalGap) {
     );
     for (let firstIndex = 0; firstIndex < ordered.length; firstIndex += 1) {
       const first = ordered[firstIndex];
+      const firstBottom = first.y + first.height / 2;
       for (let secondIndex = firstIndex + 1; secondIndex < ordered.length; secondIndex += 1) {
         const second = ordered[secondIndex];
-        if (!overlapsHorizontally(first, second)) continue;
-        const firstBottom = first.y + first.height / 2;
         const secondTop = second.y - second.height / 2;
         const requiredOffset = firstBottom + verticalGap - secondTop;
-        if (requiredOffset <= 0) continue;
+        if (requiredOffset <= 0) break;
+        if (!overlapsHorizontally(first, second)) continue;
         if (first.parentId && first.parentId === second.parentId) {
           const firstIndex2 = (_b2 = siblingIndexes.get(first.node.id)) != null ? _b2 : 0;
           const secondIndex2 = (_c = siblingIndexes.get(second.node.id)) != null ? _c : 0;
@@ -4208,29 +4208,28 @@ function prioritizeSpatialRenderItems(items, focusOrder, viewport) {
     const halfHeight = item.height / 2;
     return item.x + halfWidth >= viewport.left - viewportWidth * expansion && item.x - halfWidth <= viewport.right + viewportWidth * expansion && item.y + halfHeight >= viewport.top - viewportHeight * expansion && item.y - halfHeight <= viewport.bottom + viewportHeight * expansion;
   };
-  const band = (item) => {
-    if (focusRank.has(item.id)) return -1;
-    if (intersects(item, 0)) return 0;
-    if (intersects(item, 1)) return 1;
-    return 2;
-  };
-  const distance = (item) => {
+  const ranked = items.map((item) => {
+    const rank = focusRank.get(item.id);
+    const band = rank !== void 0 ? -1 : intersects(item, 0) ? 0 : intersects(item, 1) ? 1 : 2;
     const dx = item.x - centerX;
     const dy = item.y - centerY;
-    return dx * dx + dy * dy;
-  };
-  return [...items].sort((left, right) => {
-    var _a2, _b2;
-    const leftBand = band(left);
-    const rightBand = band(right);
-    if (leftBand !== rightBand) return leftBand - rightBand;
-    if (leftBand === -1) return ((_a2 = focusRank.get(left.id)) != null ? _a2 : Number.MAX_SAFE_INTEGER) - ((_b2 = focusRank.get(right.id)) != null ? _b2 : Number.MAX_SAFE_INTEGER);
-    if (viewport && leftBand <= 2) {
-      const spatial = distance(left) - distance(right);
+    return {
+      item,
+      band,
+      focusRank: rank != null ? rank : Number.MAX_SAFE_INTEGER,
+      distance: viewport && band >= 0 ? dx * dx + dy * dy : 0
+    };
+  });
+  ranked.sort((left, right) => {
+    if (left.band !== right.band) return left.band - right.band;
+    if (left.band === -1) return left.focusRank - right.focusRank;
+    if (viewport) {
+      const spatial = left.distance - right.distance;
       if (spatial) return spatial;
     }
-    return left.order - right.order;
+    return left.item.order - right.item.order;
   });
+  return ranked.map(({ item }) => item);
 }
 
 // src/render/code-block.ts
@@ -13051,12 +13050,25 @@ var MindMapEditor = class {
     for (const timer of this.imageLoadTimers) window.clearTimeout(timer);
     this.imageLoadTimers.clear();
   }
-  /** Returns whether one configured toolbar action can perform a meaningful operation now. */
-  toolbarItemAvailable(id) {
-    const selected = this.selectedNode();
-    const selectedNonRootIds = Array.from(this.selectedIds).filter((nodeId) => nodeId !== this.document.root.id && Boolean(findNode(this.document.root, nodeId)));
+  /** Computes tree-dependent toolbar state once per toolbar refresh. */
+  toolbarAvailabilityContext() {
+    let selected = null;
+    let selectedNonRootCount = 0;
+    let hasCollapsibleNodes = false;
+    const stack = [this.document.root];
+    while (stack.length) {
+      const node = stack.pop();
+      if (node.id === this.selectedId) selected = node;
+      if (node.id !== this.document.root.id && this.selectedIds.has(node.id)) selectedNonRootCount += 1;
+      if (node.id !== this.document.root.id && node.children.length > 0) hasCollapsibleNodes = true;
+      for (let index = node.children.length - 1; index >= 0; index -= 1) stack.push(node.children[index]);
+    }
     const editableSurface = this.currentMode === "mindmap" || this.currentMode === "outline" || this.currentMode === "article";
-    const canEdit = editableSurface && !this.readOnly;
+    return { selected, selectedNonRootCount, hasCollapsibleNodes, canEdit: editableSurface && !this.readOnly };
+  }
+  /** Returns whether one configured toolbar action can perform a meaningful operation now. */
+  toolbarItemAvailable(id, context) {
+    const { selected, selectedNonRootCount, hasCollapsibleNodes, canEdit } = context;
     switch (id) {
       case "lock":
         return this.currentMode !== "question-bank";
@@ -13073,11 +13085,11 @@ var MindMapEditor = class {
       case "duplicate":
         return canEdit && this.selectedIds.size <= 1 && Boolean(selected && selected.id !== this.document.root.id);
       case "delete":
-        return canEdit && selectedNonRootIds.length > 0;
+        return canEdit && selectedNonRootCount > 0;
       case "collapse":
         return this.currentMode === "mindmap" && Boolean(selected == null ? void 0 : selected.children.length);
       case "collapse-all":
-        return this.currentMode === "mindmap" && flattenNodes(this.document.root).some((node) => node !== this.document.root && node.children.length > 0);
+        return this.currentMode === "mindmap" && hasCollapsibleNodes;
       case "fit":
         return this.currentMode === "mindmap";
       case "layout":
@@ -13115,10 +13127,11 @@ var MindMapEditor = class {
     if (!this.toolbarEl) return;
     if (!animate) this.toolbarEl.removeClass("is-toolbar-ready");
     const buttons = Array.from(this.toolbarEl.querySelectorAll("[data-toolbar-id]"));
+    const availabilityContext = this.toolbarAvailabilityContext();
     for (const button of buttons) {
       const id = button.dataset.toolbarId;
       if (!id) continue;
-      const visible = this.options.visibleToolbarItems.includes(id) && this.toolbarItemAvailable(id);
+      const visible = this.options.visibleToolbarItems.includes(id) && this.toolbarItemAvailable(id, availabilityContext);
       button.toggleClass("is-hidden", !visible);
       button.disabled = !visible;
       button.removeAttribute("title");
@@ -15081,14 +15094,7 @@ var MindMapEditor = class {
       this.observedMindMapNodeSizes.set(id, measured.get(id));
     });
     if (!measured.size) return;
-    const next = computeLayout(this.document.root, this.document.layout, (_a2 = appearance.fontSize) != null ? _a2 : 14, (_b2 = appearance.nodeVisualStyle) != null ? _b2 : "card", appearance, measured);
-    resolveLayoutCollisions(next.nodes, appearance.nodeVisualStyle === "branch" ? 18 : 24);
-    next.byId = new Map(next.nodes.map((position) => [position.node.id, position]));
-    next.minX = Math.min(...next.nodes.map((position) => position.x - position.width / 2));
-    next.maxX = Math.max(...next.nodes.map((position) => position.x + position.width / 2));
-    next.minY = Math.min(...next.nodes.map((position) => position.y - position.height / 2));
-    next.maxY = Math.max(...next.nodes.map((position) => position.y + position.height / 2));
-    this.layout = next;
+    this.layout = computeLayout(this.document.root, this.document.layout, (_a2 = appearance.fontSize) != null ? _a2 : 14, (_b2 = appearance.nodeVisualStyle) != null ? _b2 : "card", appearance, measured);
     for (const position of this.layout.nodes) {
       const element = this.nodesLayerEl.querySelector(`.mmc-node[data-node-id="${CSS.escape(position.node.id)}"]`);
       if (!element) continue;

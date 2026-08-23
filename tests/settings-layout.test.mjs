@@ -280,7 +280,7 @@ test("mind-map branch controls keep their original circular node style", () => {
 });
 
 test("toolbar hides unavailable actions with a reduced-motion-aware width transition", () => {
-  assert.match(editorSource, /private toolbarItemAvailable\(id: ToolbarItemId\): boolean/);
+  assert.match(editorSource, /private toolbarItemAvailable\([\s\S]*?id: ToolbarItemId,[\s\S]*?context: ToolbarAvailabilityContext[\s\S]*?\): boolean/);
   assert.match(editorSource, /case "undo": return canEdit && this\.history\.canUndo\(\)/);
   assert.match(editorSource, /case "collapse": return this\.currentMode === "mindmap" && Boolean\(selected\?\.children\.length\)/);
   assert.match(editorSource, /case "layout": return this\.currentMode === "mindmap" && canEdit/);

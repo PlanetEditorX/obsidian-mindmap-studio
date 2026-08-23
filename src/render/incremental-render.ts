@@ -87,28 +87,28 @@ export function prioritizeSpatialRenderItems<T extends SpatialRenderItem>(
       && item.y + halfHeight >= viewport.top - viewportHeight * expansion
       && item.y - halfHeight <= viewport.bottom + viewportHeight * expansion;
   };
-  const band = (item: T): number => {
-    if (focusRank.has(item.id)) return -1;
-    if (intersects(item, 0)) return 0;
-    if (intersects(item, 1)) return 1;
-    return 2;
-  };
-  const distance = (item: T): number => {
+
+  const ranked = items.map((item) => {
+    const rank = focusRank.get(item.id);
+    const band = rank !== undefined ? -1 : intersects(item, 0) ? 0 : intersects(item, 1) ? 1 : 2;
     const dx = item.x - centerX;
     const dy = item.y - centerY;
-    return dx * dx + dy * dy;
-  };
+    return {
+      item,
+      band,
+      focusRank: rank ?? Number.MAX_SAFE_INTEGER,
+      distance: viewport && band >= 0 ? dx * dx + dy * dy : 0
+    };
+  });
 
-  return [...items].sort((left, right) => {
-    const leftBand = band(left);
-    const rightBand = band(right);
-    if (leftBand !== rightBand) return leftBand - rightBand;
-    if (leftBand === -1) return (focusRank.get(left.id) ?? Number.MAX_SAFE_INTEGER)
-      - (focusRank.get(right.id) ?? Number.MAX_SAFE_INTEGER);
-    if (viewport && leftBand <= 2) {
-      const spatial = distance(left) - distance(right);
+  ranked.sort((left, right) => {
+    if (left.band !== right.band) return left.band - right.band;
+    if (left.band === -1) return left.focusRank - right.focusRank;
+    if (viewport) {
+      const spatial = left.distance - right.distance;
       if (spatial) return spatial;
     }
-    return left.order - right.order;
+    return left.item.order - right.item.order;
   });
+  return ranked.map(({ item }) => item);
 }

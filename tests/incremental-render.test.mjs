@@ -8,6 +8,7 @@ import { loadTypeScriptModule } from "./compile-typescript.mjs";
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const modulePath = path.join(rootDir, "src/render/incremental-render.ts");
 const articleWindowModulePath = path.join(rootDir, "src/article/render-window.ts");
+const collisionModulePath = path.join(rootDir, "src/render/collision-layout.ts");
 
 function node(id, children = []) {
   return { id, children };
@@ -25,6 +26,65 @@ test("hierarchy focus order prioritizes current node, siblings, parent families,
   } finally {
     await cleanup();
   }
+});
+
+test("collision resolution preserves separated layouts and moves overlapping sibling subtrees", async () => {
+  const { module, cleanup } = await loadTypeScriptModule(collisionModulePath);
+  try {
+    const separated = [
+      { node: { id: "a" }, parentId: null, x: 0, y: 0, width: 80, height: 40 },
+      { node: { id: "b" }, parentId: "a", x: 160, y: 100, width: 80, height: 40 }
+    ];
+    assert.equal(module.resolveLayoutCollisions(separated, 24), 0);
+    assert.equal(separated[1].y, 100);
+
+    const overlapping = [
+      { node: { id: "root" }, parentId: null, x: 0, y: 0, width: 80, height: 40 },
+      { node: { id: "first" }, parentId: "root", x: 160, y: 0, width: 100, height: 80 },
+      { node: { id: "second" }, parentId: "root", x: 160, y: 20, width: 100, height: 80 },
+      { node: { id: "child" }, parentId: "second", x: 280, y: 20, width: 80, height: 40 }
+    ];
+    const beforeOffset = overlapping[3].y - overlapping[2].y;
+    assert.ok(module.resolveLayoutCollisions(overlapping, 24) > 0);
+    assert.ok(overlapping[2].y > overlapping[1].y);
+    assert.equal(overlapping[3].y - overlapping[2].y, beforeOffset);
+  } finally {
+    await cleanup();
+  }
+});
+
+test("measured layout and render priority avoid repeated hot-path work", async () => {
+  const [editorSource, collisionSource, renderSource, bundleSource] = await Promise.all([
+    readFile(path.join(rootDir, "src/editor/editor.ts"), "utf8"),
+    readFile(collisionModulePath, "utf8"),
+    readFile(modulePath, "utf8"),
+    readFile(path.join(rootDir, "main.js"), "utf8")
+  ]);
+  const measuredStart = editorSource.indexOf("  private applyMeasuredMindMapLayout(): void {");
+  const measuredEnd = editorSource.indexOf("\n  /**", measuredStart + 4);
+  const measuredSource = editorSource.slice(measuredStart, measuredEnd);
+  assert.match(measuredSource, /this\.layout = computeLayout\(/);
+  assert.doesNotMatch(measuredSource, /resolveLayoutCollisions|next\.byId = new Map|next\.minX = Math\.min/);
+
+  const toolbarStart = editorSource.indexOf("  private toolbarAvailabilityContext(): ToolbarAvailabilityContext {");
+  const toolbarEnd = editorSource.indexOf("\n  /**", toolbarStart + 4);
+  const toolbarContext = editorSource.slice(toolbarStart, toolbarEnd);
+  assert.match(toolbarContext, /const stack: MindMapNode\[\] = \[this\.document\.root\]/);
+  assert.doesNotMatch(toolbarContext, /findNode\(|flattenNodes\(/);
+  assert.match(editorSource, /const availabilityContext = this\.toolbarAvailabilityContext\(\)/);
+  assert.match(editorSource, /this\.toolbarItemAvailable\(id, availabilityContext\)/);
+
+  assert.match(collisionSource, /if \(requiredOffset <= 0\) break;/);
+  assert.match(renderSource, /const ranked = items\.map\(\(item\) =>/);
+  const sortBody = renderSource.match(/ranked\.sort\(\(left, right\) => \{[\s\S]*?\n  \}\);/)?.[0] ?? "";
+  assert.doesNotMatch(sortBody, /intersects\(|focusRank\.get\(|Math\./);
+
+  assert.match(bundleSource, /if \(requiredOffset <= 0\) break;/);
+  assert.match(bundleSource, /const ranked = items\.map\(\(item\) =>/);
+  assert.match(bundleSource, /toolbarAvailabilityContext\(\)/);
+  const bundledMeasured = bundleSource.match(/applyMeasuredMindMapLayout\(\) \{[\s\S]*?\n  \}/)?.[0] ?? "";
+  assert.match(bundledMeasured, /this\.layout = computeLayout\(/);
+  assert.doesNotMatch(bundledMeasured, /resolveLayoutCollisions\(next\.nodes|next\.minX = Math\.min/);
 });
 
 test("spatial priority renders hierarchy focus, current viewport, adjacent viewport, then distant nodes", async () => {

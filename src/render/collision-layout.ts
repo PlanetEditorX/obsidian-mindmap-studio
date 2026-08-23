@@ -69,13 +69,15 @@ export function resolveLayoutCollisions<T extends CollisionNode>(nodes: T[], ver
     );
     for (let firstIndex = 0; firstIndex < ordered.length; firstIndex += 1) {
       const first = ordered[firstIndex]!;
+      const firstBottom = first.y + first.height / 2;
       for (let secondIndex = firstIndex + 1; secondIndex < ordered.length; secondIndex += 1) {
         const second = ordered[secondIndex]!;
-        if (!overlapsHorizontally(first, second)) continue;
-        const firstBottom = first.y + first.height / 2;
         const secondTop = second.y - second.height / 2;
         const requiredOffset = firstBottom + verticalGap - secondTop;
-        if (requiredOffset <= 0) continue;
+        // ordered is sorted by top edge; once the vertical gap is already
+        // satisfied, every remaining node is even farther below this node.
+        if (requiredOffset <= 0) break;
+        if (!overlapsHorizontally(first, second)) continue;
 
         // Measured content can be much taller than its initial estimate.
         // Preserve sibling order instead of moving an earlier sibling below a
