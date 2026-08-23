@@ -21,7 +21,7 @@ test("view reuses the detached change snapshot instead of recloning the full doc
   ]);
 
   assert.match(editorSource, /getPersistedViewState\(\): MindMapDocument\["view"\][\s\S]*persistMindMapViewportState\(\)[\s\S]*return this\.document\.view \? \{ \.\.\.this\.document\.view \} : undefined;/);
-  assert.match(editorSource, /this\.callbacks\.onChange\(this\.getDocument\(\), \{ articleContextImpact \}\)/, "change callbacks must still receive one isolated document clone");
+  assert.match(editorSource, /this\.callbacks\.onChange\(this\.createDetachedDocumentSnapshot\(true\), \{ articleContextImpact \}\)/, "change callbacks must still receive one freshly serialized isolated document snapshot");
 
   const getViewData = methodBlock(viewSource, "getViewData(): string", "async applyImageUploadPatches");
   assert.match(getViewData, /currentDocumentSnapshot\(true\)/);
@@ -57,6 +57,7 @@ test("read-only host consumers use the current revision snapshot for search, AI,
 test("installed bundle carries the same snapshot reuse contract", async () => {
   const bundle = await readFile(path.join(rootDir, "main.js"), "utf8");
   assert.match(bundle, /getPersistedViewState\(\) \{[\s\S]*persistMindMapViewportState\(\)[\s\S]*return this\.document\.view \? \{ \.\.\.this\.document\.view \} : void 0;/);
+  assert.match(bundle, /notifyDocumentChange\(articleContextImpact = "structure"\) \{[\s\S]*createDetachedDocumentSnapshot\(true\)/);
   assert.match(bundle, /currentDocumentSnapshot\(includeViewport = false\)/);
   assert.match(bundle, /const document2 = this\.currentDocumentSnapshot\(true\);/);
 

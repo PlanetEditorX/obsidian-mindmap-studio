@@ -47,34 +47,31 @@ function buildNodeTreeIndex(root) {
   return { root, nodes, byId, parentById, hasCollapsibleNodes };
 }
 function indexedAncestors(index, id) {
-  var _a2, _b2;
   if (!index.byId.has(id)) return [];
   const reversed = [];
-  let parent = (_a2 = index.parentById.get(id)) != null ? _a2 : null;
+  let parent = index.parentById.get(id) || null;
   while (parent) {
     reversed.push(parent);
-    parent = (_b2 = index.parentById.get(parent.id)) != null ? _b2 : null;
+    parent = index.parentById.get(parent.id) || null;
   }
   reversed.reverse();
   return reversed;
 }
 function indexedHasAncestor(index, id, ancestorId) {
-  var _a2, _b2;
   if (!index.byId.has(id)) return false;
-  let parent = (_a2 = index.parentById.get(id)) != null ? _a2 : null;
+  let parent = index.parentById.get(id) || null;
   while (parent) {
     if (parent.id === ancestorId) return true;
-    parent = (_b2 = index.parentById.get(parent.id)) != null ? _b2 : null;
+    parent = index.parentById.get(parent.id) || null;
   }
   return false;
 }
 function indexedHasAnyAncestor(index, id, ancestorIds) {
-  var _a2, _b2;
   if (!index.byId.has(id) || ancestorIds.size === 0) return false;
-  let parent = (_a2 = index.parentById.get(id)) != null ? _a2 : null;
+  let parent = index.parentById.get(id) || null;
   while (parent) {
     if (ancestorIds.has(parent.id)) return true;
-    parent = (_b2 = index.parentById.get(parent.id)) != null ? _b2 : null;
+    parent = index.parentById.get(parent.id) || null;
   }
   return false;
 }
@@ -117,6 +114,9 @@ function findAncestors(root, id) {
   };
   return visit(root) ? path : [];
 }
+function containsNode(root, id) {
+  return findNode(root, id) !== null;
+}
 function removeNode(root, id) {
   var _a2;
   for (let index = 0; index < root.children.length; index += 1) {
@@ -130,13 +130,12 @@ function removeNode(root, id) {
   return false;
 }
 function moveNodeRelative(root, draggedId, targetId, position, existingIndex) {
-  var _a2, _b2, _c, _d;
   if (draggedId === root.id || draggedId === targetId) return false;
   const index = existingIndex != null ? existingIndex : buildNodeTreeIndex(root);
-  const dragged = (_a2 = index.byId.get(draggedId)) != null ? _a2 : null;
-  const target = (_b2 = index.byId.get(targetId)) != null ? _b2 : null;
+  const dragged = index.byId.get(draggedId) || null;
+  const target = index.byId.get(targetId) || null;
   if (!dragged || !target || indexedHasAncestor(index, targetId, draggedId)) return false;
-  const oldParent = (_c = index.parentById.get(draggedId)) != null ? _c : null;
+  const oldParent = index.parentById.get(draggedId) || null;
   if (!oldParent) return false;
   const oldIndex = oldParent.children.findIndex((child) => child.id === draggedId);
   if (oldIndex < 0) return false;
@@ -148,7 +147,7 @@ function moveNodeRelative(root, draggedId, targetId, position, existingIndex) {
     return true;
   }
   if (target.id === root.id) return false;
-  const targetParent = (_d = index.parentById.get(targetId)) != null ? _d : null;
+  const targetParent = index.parentById.get(targetId) || null;
   if (!targetParent) return false;
   const targetIndexBeforeRemoval = targetParent.children.findIndex((child) => child.id === targetId);
   if (targetIndexBeforeRemoval < 0) return false;
@@ -6806,15 +6805,14 @@ function deleteNodes(root, ids) {
   return removed;
 }
 function deletionSelectionFallback(root, ids, existingIndex) {
-  var _a2, _b2;
   const index = existingIndex != null ? existingIndex : buildNodeTreeIndex(root);
   const targets = topLevelSelectedNodeIds(root, ids, index);
   const target = targets[0];
   if (!target) return root.id;
   const removed = new Set(targets);
-  let current = (_a2 = index.byId.get(target)) != null ? _a2 : null;
+  let current = index.byId.get(target) || null;
   while (current && current.id !== root.id) {
-    const parent = (_b2 = index.parentById.get(current.id)) != null ? _b2 : null;
+    const parent = index.parentById.get(current.id) || null;
     if (!parent) return root.id;
     const childIndex = parent.children.findIndex((node) => node.id === current.id);
     const previous = parent.children.slice(0, childIndex).reverse().find((node) => !removed.has(node.id));
@@ -8896,7 +8894,10 @@ var DocumentHistory = class {
    * @param document 即将被修改的文档。
    */
   capture(document2) {
-    this.undoStack.push(this.serialize(document2));
+    this.captureSnapshot(this.createSnapshot(document2));
+  }
+  captureSnapshot(snapshot) {
+    this.undoStack.push(snapshot);
     this.trim();
     this.redoStack = [];
   }
@@ -8906,10 +8907,14 @@ var DocumentHistory = class {
    * @param current 当前文档。
    */
   undo(current) {
+    const previous = this.undoSnapshot(this.createSnapshot(current));
+    return previous ? this.restoreSnapshot(previous) : null;
+  }
+  undoSnapshot(currentSnapshot) {
     const previous = this.undoStack.pop();
     if (!previous) return null;
-    this.redoStack.push(this.serialize(current));
-    return this.deserialize(previous);
+    this.redoStack.push(currentSnapshot);
+    return previous;
   }
   /**
    * 返回下一份文档，同时把当前文档放回撤销栈。
@@ -8917,23 +8922,25 @@ var DocumentHistory = class {
    * @param current 当前文档。
    */
   redo(current) {
+    const next = this.redoSnapshot(this.createSnapshot(current));
+    return next ? this.restoreSnapshot(next) : null;
+  }
+  redoSnapshot(currentSnapshot) {
     const next = this.redoStack.pop();
     if (!next) return null;
-    this.undoStack.push(this.serialize(current));
+    this.undoStack.push(currentSnapshot);
     this.trim();
-    return this.deserialize(next);
+    return next;
   }
   /** 按设置限制裁剪最旧的历史快照。 */
   trim() {
     const limit = Math.max(10, Math.min(500, this.limitProvider()));
     while (this.undoStack.length > limit) this.undoStack.shift();
   }
-  /** 将文档转换为与运行时对象隔离的快照。 */
-  serialize(document2) {
+  createSnapshot(document2) {
     return JSON.stringify(document2);
   }
-  /** 从内部快照恢复文档对象。 */
-  deserialize(snapshot) {
+  restoreSnapshot(snapshot) {
     return JSON.parse(snapshot);
   }
 };
@@ -9948,22 +9955,6 @@ function attachSelectionFormatToolbar(options) {
   };
 }
 
-// src/editor/selection-class-delta.ts
-function selectionClassDelta(previous, next) {
-  const changed = /* @__PURE__ */ new Set();
-  for (const id of previous) {
-    if (!next.has(id)) changed.add(id);
-  }
-  for (const id of next) {
-    if (!previous.has(id)) changed.add(id);
-  }
-  if (previous.size > 1 !== next.size > 1) {
-    for (const id of previous) changed.add(id);
-    for (const id of next) changed.add(id);
-  }
-  return changed;
-}
-
 // src/ai/markdown.ts
 function utf8ByteLength2(value) {
   return new TextEncoder().encode(value).byteLength;
@@ -10402,6 +10393,22 @@ var ImageRecognitionPreviewModal = class extends import_obsidian10.Modal {
     this.contentEl.empty();
   }
 };
+
+// src/editor/selection-class-delta.ts
+function selectionClassDelta(previous, next) {
+  const changed = /* @__PURE__ */ new Set();
+  for (const id of previous) {
+    if (!next.has(id)) changed.add(id);
+  }
+  for (const id of next) {
+    if (!previous.has(id)) changed.add(id);
+  }
+  if ((previous.size > 1) !== (next.size > 1)) {
+    for (const id of previous) changed.add(id);
+    for (const id of next) changed.add(id);
+  }
+  return changed;
+}
 
 // src/editor/editor.ts
 var TOOLBAR_GROUPS = {
@@ -11599,22 +11606,20 @@ var MindMapEditor = class {
    * @param options 控制当前操作行为的可选配置。
    */
   constructor(app, host, document2, callbacks, options) {
-    /** Direct lookup for mounted mind-map nodes so hot paths never rescan the whole node layer. */
-    this.mindMapNodeElements = /* @__PURE__ */ new Map();
     this.modeButtons = /* @__PURE__ */ new Map();
     this.editControls = [];
-    /** Rebuilt once per full render so repeated node/parent lookups avoid whole-tree DFS scans. */
-    this.nodeTreeIndex = null;
+    this.mindMapNodeElements = /* @__PURE__ */ new Map();
     this.selectedIds = /* @__PURE__ */ new Set();
-    /** Selection state last synchronized to DOM classes; invalidated when non-canvas views rebuild their DOM. */
     this.appliedSelectionIds = /* @__PURE__ */ new Set();
     this.selectionClassSyncValid = false;
+    this.nodeTreeIndex = null;
     /** 仅由右键上下文设置；普通选择不会改变 AI 默认范围。 */
     this.aiScopeNodeId = null;
     this.zoom = 1;
     this.panX = 0;
     this.panY = 0;
     this.mindMapViewportInitialized = false;
+    this.documentSnapshotJson = null;
     this.draggingId = null;
     this.draggingContentBlock = null;
     this.dragDropPosition = null;
@@ -11687,6 +11692,7 @@ var MindMapEditor = class {
     this.options = options;
     this.history = new DocumentHistory(() => this.options.historyLimit);
     this.document = cloneDocument(document2);
+    this.documentSnapshotJson = null;
     this.currentMode = this.resolveMode(options.defaultViewMode);
     const documentReadOnly = ((_a2 = this.document.view) == null ? void 0 : _a2.readOnly) === true;
     this.readOnly = this.currentMode === "article" ? resolveArticleEntryReadOnly(this.options.articleEntryLockMode, documentReadOnly, this.options.articleLastReadOnly) : this.currentMode === "reading" || this.currentMode === "question-bank" ? true : documentReadOnly;
@@ -11818,6 +11824,7 @@ var MindMapEditor = class {
     if (fileChanged) this.lastReadingLocation = this.options.readingLocation;
     this.callbacks.onDebugLog("view", "editor-set-document", { previousFilePath, nextFilePath, fileChanged, resetHistory, readingLocationNodeId: (_b2 = this.lastReadingLocation) == null ? void 0 : _b2.nodeIds[0] });
     this.document = cloneDocument(document2);
+    this.documentSnapshotJson = null;
     this.currentMode = this.resolveMode(this.options.defaultViewMode);
     const documentReadOnly = ((_c = this.document.view) == null ? void 0 : _c.readOnly) === true;
     this.readOnly = this.currentMode === "article" ? resolveArticleEntryReadOnly(this.options.articleEntryLockMode, documentReadOnly, this.options.articleLastReadOnly) : this.currentMode === "reading" || this.currentMode === "question-bank" ? true : documentReadOnly;
@@ -11841,6 +11848,7 @@ var MindMapEditor = class {
     var _a2;
     if (((_a2 = this.document.navigation) == null ? void 0 : _a2.parentPath) || !navigation.parentPath) return;
     this.document.navigation = { ...navigation };
+    this.invalidateDocumentSnapshotJson();
     this.renderNavigation();
   }
   /**
@@ -12076,9 +12084,11 @@ var MindMapEditor = class {
       );
     } else if (mode === "article" && previousMode !== "article" && this.options.showArticleToc && !this.pendingArticleFocusLocation) {
       this.document.view = { ...(_c = this.document.view) != null ? _c : {}, articleLandingMode: "toc" };
+      this.invalidateDocumentSnapshotJson();
     }
     if (mode === "article" && (requestedTarget == null ? void 0 : requestedTarget.filePath) === this.options.currentFilePath && requestedTarget.nodeId !== this.document.root.id && !this.options.showArticleToc && ((_d = this.document.view) == null ? void 0 : _d.articleLandingMode) !== "article") {
       this.document.view = { ...(_e = this.document.view) != null ? _e : {}, articleLandingMode: "article" };
+      this.invalidateDocumentSnapshotJson();
     }
     this.currentMode = mode;
     if (mode === "article" && mode !== previousMode) {
@@ -12303,6 +12313,7 @@ var MindMapEditor = class {
       collapsedAncestors.forEach((node) => {
         node.collapsed = false;
       });
+      if ((targetSection == null ? void 0 : targetSection.document) === this.document) this.invalidateDocumentSnapshotJson();
       this.render();
     }
     if (resolved.filePath === this.options.currentFilePath && this.nodeById(resolved.nodeId)) {
@@ -12418,22 +12429,37 @@ var MindMapEditor = class {
     if (this.aiScopeNodeId && !this.nodeById(this.aiScopeNodeId)) this.aiScopeNodeId = null;
     void this.callbacks.onAskAi((_a2 = this.aiScopeNodeId) != null ? _a2 : void 0);
   }
+  invalidateDocumentSnapshotJson() {
+    this.documentSnapshotJson = null;
+  }
+  currentDocumentSnapshotJson() {
+    if (this.documentSnapshotJson === null) this.documentSnapshotJson = this.history.createSnapshot(this.document);
+    return this.documentSnapshotJson;
+  }
+  captureHistorySnapshot() {
+    this.history.captureSnapshot(this.currentDocumentSnapshotJson());
+    this.invalidateDocumentSnapshotJson();
+  }
+  createDetachedDocumentSnapshot(forceSerialize = false) {
+    this.persistMindMapViewportState();
+    const snapshot = forceSerialize ? this.history.createSnapshot(this.document) : this.currentDocumentSnapshotJson();
+    this.documentSnapshotJson = snapshot;
+    return this.history.restoreSnapshot(snapshot);
+  }
   /**
    * 读取并返回document，并保持模型、界面和持久化状态的一致性。
    * @returns 当前操作生成、查找或规范化后的结果。
    */
   getDocument() {
-    this.persistMindMapViewportState();
-    return cloneDocument(this.document);
+    return this.createDetachedDocumentSnapshot();
   }
   /** Returns only the current persisted view metadata so host saves can reuse their existing detached document snapshot. */
   getPersistedViewState() {
     this.persistMindMapViewportState();
     return this.document.view ? { ...this.document.view } : void 0;
   }
-  /** Sends one document snapshot to the host together with the minimum article-context work it requires. */
   notifyDocumentChange(articleContextImpact = "structure") {
-    this.callbacks.onChange(this.getDocument(), { articleContextImpact });
+    this.callbacks.onChange(this.createDetachedDocumentSnapshot(true), { articleContextImpact });
   }
   /**
    * 把后台图床上传结果合并到编辑器当前最新文档，不替换用户在上传期间继续编辑的节点树。
@@ -13114,6 +13140,7 @@ var MindMapEditor = class {
     var _a2;
     this.document.view = { ...(_a2 = this.document.view) != null ? _a2 : {}, readOnly: this.readOnly };
     delete this.document.view.mode;
+    this.invalidateDocumentSnapshotJson();
     if (this.readOnlyPersistTimer !== null) window.clearTimeout(this.readOnlyPersistTimer);
     this.readOnlyPersistTimer = window.setTimeout(() => {
       this.readOnlyPersistTimer = null;
@@ -13197,14 +13224,8 @@ var MindMapEditor = class {
     for (const timer of this.imageLoadTimers) window.clearTimeout(timer);
     this.imageLoadTimers.clear();
   }
-  /**
-   * Computes tree-dependent toolbar state in one traversal so each toolbar item
-   * does not independently rescan a large document.
-   *
-   * @returns Shared availability facts for the current toolbar refresh.
-   */
+  /** Computes tree-dependent toolbar state once per toolbar refresh. */
   toolbarAvailabilityContext() {
-    var _a2;
     const index = this.currentNodeTreeIndex();
     let selectedNonRootCount = 0;
     for (const id of this.selectedIds) {
@@ -13212,19 +13233,13 @@ var MindMapEditor = class {
     }
     const editableSurface = this.currentMode === "mindmap" || this.currentMode === "outline" || this.currentMode === "article";
     return {
-      selected: this.selectedId ? (_a2 = index.byId.get(this.selectedId)) != null ? _a2 : null : null,
+      selected: this.selectedId ? index.byId.get(this.selectedId) || null : null,
       selectedNonRootCount,
       hasCollapsibleNodes: index.hasCollapsibleNodes,
       canEdit: editableSurface && !this.readOnly
     };
   }
-  /**
-   * Returns whether one configured toolbar action can perform a meaningful operation now.
-   *
-   * @param id Toolbar action being evaluated.
-   * @param context Tree-dependent facts shared by every action in this refresh.
-   * @returns Whether the action should be visible and enabled.
-   */
+  /** Returns whether one configured toolbar action can perform a meaningful operation now. */
   toolbarItemAvailable(id, context) {
     const { selected, selectedNonRootCount, hasCollapsibleNodes, canEdit } = context;
     switch (id) {
@@ -14642,7 +14657,7 @@ var MindMapEditor = class {
   recordQuestionPractice(nodeId, correct) {
     const node = this.nodeById(nodeId);
     if (!(node == null ? void 0 : node.question)) return;
-    this.history.capture(this.document);
+    this.captureHistorySnapshot();
     const question = node.question;
     question.attemptCount += 1;
     if (correct) {
@@ -15382,7 +15397,6 @@ var MindMapEditor = class {
    * Hidden views are rebuilt before becoming active, so they do not receive redundant selection writes.
    */
   applySelectionClasses() {
-    var _a2;
     const multi = this.selectedIds.size > 1;
     if (!this.selectionClassSyncValid) {
       if (this.currentMode === "mindmap") {
@@ -15393,7 +15407,7 @@ var MindMapEditor = class {
         }
       } else {
         const scope = this.activeSelectionScope();
-        const elements = (_a2 = scope == null ? void 0 : scope.querySelectorAll("[data-node-id]")) != null ? _a2 : [];
+        const elements = scope == null ? [] : scope.querySelectorAll("[data-node-id]");
         for (let index = 0; index < elements.length; index += 1) {
           const element = elements[index];
           const id = element.dataset.nodeId;
@@ -15411,42 +15425,33 @@ var MindMapEditor = class {
     this.syncAppliedSelectionSnapshot();
     this.updateToolbarAvailability();
   }
-  /** Rebuilds the live node/parent lookup snapshot after a structural tree change or full render. */
+  /**
+   * 执行“selected node”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+   * @returns 当前操作生成、查找或规范化后的结果。
+   */
   rebuildNodeTreeIndex() {
     this.nodeTreeIndex = buildNodeTreeIndex(this.document.root);
     return this.nodeTreeIndex;
   }
-  /** Returns the current tree snapshot, lazily creating it before the first render-time lookup. */
   currentNodeTreeIndex() {
     if (!this.nodeTreeIndex || this.nodeTreeIndex.root !== this.document.root) return this.rebuildNodeTreeIndex();
     return this.nodeTreeIndex;
   }
-  /** Finds a live node by stable ID without rescanning the document tree. */
   nodeById(nodeId) {
-    var _a2;
-    return (_a2 = this.currentNodeTreeIndex().byId.get(nodeId)) != null ? _a2 : null;
+    return this.currentNodeTreeIndex().byId.get(nodeId) || null;
   }
-  /** Finds the direct parent of a live node by stable ID without rescanning the document tree. */
   parentNodeById(nodeId) {
-    var _a2;
-    return (_a2 = this.currentNodeTreeIndex().parentById.get(nodeId)) != null ? _a2 : null;
+    return this.currentNodeTreeIndex().parentById.get(nodeId) || null;
   }
-  /** Returns the current depth-first node snapshot for repeated filtering and ordered operations. */
   nodeTreeNodes() {
     return this.currentNodeTreeIndex().nodes;
   }
-  /** Returns root-to-parent ancestors using the current parent lookup snapshot. */
   nodeAncestors(nodeId) {
     return indexedAncestors(this.currentNodeTreeIndex(), nodeId);
   }
-  /** Returns whether one live node is nested below the supplied ancestor. */
   nodeHasAncestor(nodeId, ancestorId) {
     return indexedHasAncestor(this.currentNodeTreeIndex(), nodeId, ancestorId);
   }
-  /**
-   * Resolves the primary selection through the shared node-tree index.
-   * @returns The live selected node, or null when the selection is stale.
-   */
   selectedNode() {
     return this.selectedId ? this.nodeById(this.selectedId) : null;
   }
@@ -15530,7 +15535,7 @@ var MindMapEditor = class {
       const values = readRichTextEditor(editor);
       const normalized2 = normalizeMarkdownRichText(values.richText, values.text);
       if (!historyCaptured) {
-        this.history.capture(this.document);
+        this.captureHistorySnapshot();
         historyCaptured = true;
       }
       const blocks2 = nodeContentBlocks(node);
@@ -15877,12 +15882,12 @@ var MindMapEditor = class {
       onReadImageSource: this.callbacks.onReadImageSource,
       onScheduleAutoUpload: this.callbacks.onScheduleAutoUpload
     }, (values, mode) => {
-      var _a2, _b2, _c;
+      var _a2;
       const previousArticleTitle = nodePlainText(selected);
       const previousNumberingMode = selected.articleNumberingMode;
       const previousNumberingLevel = selected.articleNumberingLevel;
       if (!historyCaptured) {
-        this.history.capture(this.document);
+        this.captureHistorySnapshot();
         historyCaptured = true;
       }
       replaceNodeContentBlocks(selected, values.content);
@@ -15915,11 +15920,10 @@ var MindMapEditor = class {
       this.notifyDocumentChange(articleContextImpact);
       this.markSaving();
       if (this.inlineEditingId === selected.id) {
-        const inline = (_b2 = (_a2 = this.mindMapNodeElements.get(selected.id)) == null ? void 0 : _a2.querySelector(
-          ".mmc-node-text.is-inline-editing"
-        )) != null ? _b2 : null;
+        var _a3;
+        const inline = (_a3 = this.mindMapNodeElements.get(selected.id)) == null ? void 0 : _a3.querySelector(".mmc-node-text.is-inline-editing");
         const textBlock = nodeContentBlocks(selected).find((block) => block.type === "text");
-        if (inline && document.activeElement !== inline) renderRichTextRuns(inline, textBlock == null ? void 0 : textBlock.richText, (_c = textBlock == null ? void 0 : textBlock.text) != null ? _c : "", false);
+        if (inline && document.activeElement !== inline) renderRichTextRuns(inline, textBlock == null ? void 0 : textBlock.richText, (_a2 = textBlock == null ? void 0 : textBlock.text) != null ? _a2 : "", false);
       } else if (this.currentMode === "mindmap") {
         this.refreshMindMapNode(selected.id);
       } else if (mode === "commit") {
@@ -16192,6 +16196,7 @@ var MindMapEditor = class {
     this.pendingArticleFocusLocation = null;
     if (mode === "article") this.pendingArticleDirectoryFocusNodeId = null;
     this.document.view = { ...(_d = this.document.view) != null ? _d : {}, articleLandingMode: mode };
+    this.invalidateDocumentSnapshotJson();
     this.render();
   }
   /**
@@ -16520,7 +16525,7 @@ var MindMapEditor = class {
    * read-only book with an integrated directory and persisted progress.
    */
   renderReading() {
-    var _a2, _b2, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l;
+    var _a2, _b2, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n;
     if (!this.options.articleContextReady) {
       this.callbacks.onDebugLog("reading", "render-waiting-context", {
         selectedId: this.selectedId,
@@ -16533,9 +16538,9 @@ var MindMapEditor = class {
     this.articleEl.removeAttribute("aria-busy");
     const sections = this.readingLocationSections();
     const style = resolveArticleStyle({
-      preset: (_b2 = (_a2 = this.document.articleStyle) == null ? void 0 : _a2.preset) != null ? _b2 : "classic",
+      preset: (_d = (_c = this.document.articleStyle) == null ? void 0 : _c.preset) != null ? _d : "classic",
       ...this.document.articleStyle,
-      tocStyle: (_d = (_c = this.document.articleStyle) == null ? void 0 : _c.tocStyle) != null ? _d : this.options.articleTocStyle
+      tocStyle: (_f = (_e = this.document.articleStyle) == null ? void 0 : _e.tocStyle) != null ? _f : this.options.articleTocStyle
     });
     const progress = this.articleEl.createDiv({ cls: `mms-reading-progress position-${this.options.readingProgressPosition}` });
     progress.createDiv({ cls: "mms-reading-progress-bar" });
@@ -16543,12 +16548,12 @@ var MindMapEditor = class {
     progress.style.setProperty("--mms-reading-progress", initialProgress);
     progress.dataset.progress = initialProgress;
     progress.createSpan({ text: `\u9605\u8BFB\u8FDB\u5EA6 ${initialProgress}` });
-    const page = this.articleEl.createDiv({ cls: `mms-article-page mms-reading-page is-entering article-${style.preset} toc-${(_e = style.tocStyle) != null ? _e : "card"}` });
+    const page = this.articleEl.createDiv({ cls: `mms-article-page mms-reading-page is-entering article-${style.preset} toc-${(_g = style.tocStyle) != null ? _g : "card"}` });
     page.dataset.filePath = sections[0].filePath;
     page.dataset.nodeId = sections[0].document.root.id;
     const bookTitle = page.createEl("h1", { cls: "mms-article-document-title" });
     const bookTitleBlock = nodeContentBlocks(sections[0].document.root).find((block) => block.type === "text");
-    renderRichTextRuns(bookTitle, bookTitleBlock == null ? void 0 : bookTitleBlock.richText, (_f = bookTitleBlock == null ? void 0 : bookTitleBlock.text) != null ? _f : sections[0].document.title);
+    renderRichTextRuns(bookTitle, bookTitleBlock == null ? void 0 : bookTitleBlock.richText, (_h = bookTitleBlock == null ? void 0 : bookTitleBlock.text) != null ? _h : sections[0].document.title);
     const contentSections = sections.length > 1 ? sections.slice(1) : sections;
     const contentPaths = new Set(contentSections.map((section) => section.filePath));
     const articleTocMaxDepth = this.effectiveArticleTocMaxDepth();
@@ -16600,7 +16605,7 @@ var MindMapEditor = class {
       if (sectionEntry == null ? void 0 : sectionEntry.label) chapterTitle.createSpan({ cls: "mms-article-number", text: sectionEntry.label });
       const chapterTitleText = chapterTitle.createSpan({ cls: "mms-reading-map-title-text" });
       const chapterTitleBlock = nodeContentBlocks(section.document.root).find((block) => block.type === "text");
-      renderRichTextRuns(chapterTitleText, chapterTitleBlock == null ? void 0 : chapterTitleBlock.richText, (_g = chapterTitleBlock == null ? void 0 : chapterTitleBlock.text) != null ? _g : section.document.title);
+      renderRichTextRuns(chapterTitleText, chapterTitleBlock == null ? void 0 : chapterTitleBlock.richText, (_i = chapterTitleBlock == null ? void 0 : chapterTitleBlock.text) != null ? _i : section.document.title);
       this.renderArticleContent(chapter, section.document.root, false);
       for (const info of buildArticleNodeInfo(section.document.root, section.baseDepth, {
         enabled: this.options.articleLeafNumberingEnabled,
@@ -16609,9 +16614,9 @@ var MindMapEditor = class {
         numberingDisabled: section.numberingDisabled
       })) {
         const tocEntry = tocEntryByNode.get(`${section.filePath}\0${info.node.id}`);
-        const depth = (_h = tocEntry == null ? void 0 : tocEntry.depth) != null ? _h : info.depth;
-        const label = (_i = tocEntry == null ? void 0 : tocEntry.label) != null ? _i : info.label;
-        const title = (_j = tocEntry == null ? void 0 : tocEntry.title) != null ? _j : info.title;
+        const depth = (_j = tocEntry == null ? void 0 : tocEntry.depth) != null ? _j : info.depth;
+        const label = (_k = tocEntry == null ? void 0 : tocEntry.label) != null ? _k : info.label;
+        const title = (_l = tocEntry == null ? void 0 : tocEntry.title) != null ? _l : info.title;
         const isHeading = tocEntry ? true : info.isHeading;
         const nodeSection = chapter.createEl("section", { cls: `mms-article-node depth-${Math.min(depth, 8)}` });
         nodeSection.dataset.nodeId = info.node.id;
@@ -16625,7 +16630,7 @@ var MindMapEditor = class {
           if (label) heading.createSpan({ cls: "mms-article-number", text: label });
           const headingText = heading.createSpan({ cls: "mms-article-heading-text" });
           const headingBlock = nodeContentBlocks(info.node).find((block) => block.type === "text");
-          renderRichTextRuns(headingText, headingBlock == null ? void 0 : headingBlock.richText, (_k = headingBlock == null ? void 0 : headingBlock.text) != null ? _k : title);
+          renderRichTextRuns(headingText, headingBlock == null ? void 0 : headingBlock.richText, (_m = headingBlock == null ? void 0 : headingBlock.text) != null ? _m : title);
           this.renderArticleContent(nodeSection, info.node, false);
         } else {
           const firstTextBlock = nodeContentBlocks(info.node).find((block) => block.type === "text");
@@ -16633,7 +16638,7 @@ var MindMapEditor = class {
             const paragraph = nodeSection.createEl("p", { cls: `mms-article-leaf-text${this.options.articleLeafBulletsEnabled && !info.numberedLeaf ? " is-bulleted" : ""}${this.options.articleLeafTextAlignment === "auto" ? " is-auto-aligned" : ""}${firstTextBlock.paragraphIndent === "none" ? " is-flush" : ""}${info.numberedLeaf ? " mms-article-leaf-numbered" : ""}` });
             paragraph.dataset.blockId = firstTextBlock.id;
             if (info.numberedLeaf) {
-              paragraph.dataset.articleNumber = info.leafNumberingStyle === "circled" ? String((_l = info.leafNumberingIndex) != null ? _l : 1) : info.label;
+              paragraph.dataset.articleNumber = info.leafNumberingStyle === "circled" ? String((_n = info.leafNumberingIndex) != null ? _n : 1) : info.label;
               if (info.leafNumberingStyle) paragraph.dataset.articleNumberStyle = info.leafNumberingStyle;
             }
             if (this.options.articleLeafBulletsEnabled && !info.numberedLeaf) {
@@ -16899,7 +16904,7 @@ var MindMapEditor = class {
     });
     const location = this.currentMode === "mindmap" ? null : this.captureCurrentLocation(this.currentMode);
     if (location) this.rememberLocation(location, true);
-    this.history.capture(this.document);
+    this.captureHistorySnapshot();
     this.upsertStructuredBlock(node, "table", { ...block.table, columnWidths }, blockId);
     this.notifyDocumentChange("none");
     this.markSaving();
@@ -16953,7 +16958,7 @@ var MindMapEditor = class {
       }
       let inserted = false;
       try {
-        this.mutateWithoutArticleContext(() => {
+        this.mutate(() => {
           const blocks = nodeContentBlocks(selected2);
           const afterIndex = afterBlockId ? blocks.findIndex((block) => block.id === afterBlockId) : -1;
           blocks.splice(afterIndex >= 0 ? afterIndex + 1 : blocks.length, 0, imageBlock);
@@ -16994,7 +16999,7 @@ var MindMapEditor = class {
     const clipboardBlocks = parseClipboardContentBlocks(text);
     if (clipboardBlocks) {
       event.preventDefault();
-      this.mutateArticleContent(() => {
+      this.mutate(() => {
         var _a3;
         const existing = nodeContentBlocks(selected);
         const onlyCodeBlock = clipboardBlocks.length === 1 && ((_a3 = clipboardBlocks[0]) == null ? void 0 : _a3.type) === "code" ? clipboardBlocks[0] : null;
@@ -17141,10 +17146,12 @@ var MindMapEditor = class {
     const ancestors = this.nodeAncestors(id);
     const collapsed = ancestors.filter((node) => node.collapsed);
     if (collapsed.length) {
-      if (this.readOnly) collapsed.forEach((node) => {
-        node.collapsed = false;
-      });
-      else this.mutateWithoutArticleContext(() => collapsed.forEach((node) => {
+      if (this.readOnly) {
+        collapsed.forEach((node) => {
+          node.collapsed = false;
+        });
+        this.invalidateDocumentSnapshotJson();
+      } else this.mutateWithoutArticleContext(() => collapsed.forEach((node) => {
         node.collapsed = false;
       }));
     }
@@ -17153,6 +17160,7 @@ var MindMapEditor = class {
     this.selectedIds.add(id);
     if (this.currentMode === "article" && id !== this.document.root.id && ((_c = this.document.view) == null ? void 0 : _c.articleLandingMode) !== "article") {
       this.document.view = { ...(_d = this.document.view) != null ? _d : {}, articleLandingMode: "article" };
+      this.invalidateDocumentSnapshotJson();
     }
     const location = createReadingLocation(
       this.readingLocationSections(),
@@ -17351,9 +17359,10 @@ var MindMapEditor = class {
     const blocks = nodeContentBlocks(node);
     const block = blocks.find((item) => item.type === "image" && item.id === blockId);
     if (!block) return;
-    const previous = cloneDocument(this.document);
+    const previousSnapshot = this.currentDocumentSnapshotJson();
+    this.invalidateDocumentSnapshotJson();
     if (!await uploadCurrentNodeImage(this.app, block, this.callbacks)) return;
-    this.history.capture(previous);
+    this.history.captureSnapshot(previousSnapshot);
     replaceNodeContentBlocks(node, blocks);
     this.notifyDocumentChange("none");
     this.markSaving();
@@ -17369,7 +17378,8 @@ var MindMapEditor = class {
       this.callbacks.getDefaultUploadHostIds()
     );
     if (!hostIds) return;
-    const previous = cloneDocument(this.document);
+    const previousSnapshot = this.currentDocumentSnapshotJson();
+    this.invalidateDocumentSnapshotJson();
     let uploadedImages = 0;
     let skippedImages = 0;
     let failedImages = 0;
@@ -17422,7 +17432,7 @@ var MindMapEditor = class {
       if (nodeChanged) replaceNodeContentBlocks(node, blocks);
     }
     if (changed) {
-      this.history.capture(previous);
+      this.history.captureSnapshot(previousSnapshot);
       this.notifyDocumentChange("none");
       this.markSaving();
       this.render();
@@ -17795,21 +17805,16 @@ var MindMapEditor = class {
     const index = this.currentNodeTreeIndex();
     const draggedIds = index.nodes.filter((node) => requestedIds.has(node.id) && !indexedHasAnyAncestor(index, node.id, requestedIds)).map((node) => node.id);
     if (!draggedIds.length) return;
-    const historyDocument = cloneDocument(this.document);
+    const historySnapshot = this.currentDocumentSnapshotJson();
+    this.invalidateDocumentSnapshotJson();
     const moveOrder = position === "after" ? [...draggedIds].reverse() : draggedIds;
     let changed = false;
     for (let moveIndex = 0; moveIndex < moveOrder.length; moveIndex += 1) {
       const id = moveOrder[moveIndex];
-      changed = moveNodeRelative(
-        this.document.root,
-        id,
-        targetId,
-        position,
-        moveIndex === 0 ? index : void 0
-      ) || changed;
+      changed = moveNodeRelative(this.document.root, id, targetId, position, moveIndex === 0 ? index : void 0) || changed;
     }
     if (!changed) return;
-    this.history.capture(historyDocument);
+    this.history.captureSnapshot(historySnapshot);
     this.selectedId = draggedId;
     this.selectedIds.clear();
     for (const id of requestedIds) this.selectedIds.add(id);
@@ -17825,7 +17830,7 @@ var MindMapEditor = class {
    */
   replaceDocument(document2) {
     if (!this.ensureEditable()) return;
-    this.history.capture(this.document);
+    this.captureHistorySnapshot();
     this.document = cloneDocument(document2);
     this.selectedId = this.document.root.id;
     this.notifyDocumentChange();
@@ -17843,7 +17848,7 @@ var MindMapEditor = class {
   /** 用外部确认的完整文档替换当前状态，并统一接入撤销、保存、渲染和聚焦。 */
   replaceDocumentFromExternalEdit(document2, focusNodeId) {
     var _a2, _b2;
-    this.history.capture(this.document);
+    this.captureHistorySnapshot();
     this.document = cloneDocument(document2);
     this.selectedId = (_b2 = (_a2 = this.nodeById(focusNodeId)) == null ? void 0 : _a2.id) != null ? _b2 : this.document.root.id;
     this.selectedIds.clear();
@@ -17861,7 +17866,7 @@ var MindMapEditor = class {
    */
   mutateInlineText(nodeId, action) {
     if (!this.ensureEditable()) return;
-    this.history.capture(this.document);
+    this.captureHistorySnapshot();
     action();
     this.notifyDocumentChange("content");
     this.markSaving();
@@ -17923,7 +17928,7 @@ var MindMapEditor = class {
     if (location) this.rememberLocation(location, true);
     const previousNumberingMode = this.document.root.articleNumberingMode;
     const previousNumberingLevel = this.document.root.articleNumberingLevel;
-    this.history.capture(this.document);
+    this.captureHistorySnapshot();
     action();
     const articleContextImpact = previousNumberingMode !== this.document.root.articleNumberingMode || previousNumberingLevel !== this.document.root.articleNumberingLevel ? "structure" : "none";
     this.notifyDocumentChange(articleContextImpact);
@@ -17931,27 +17936,23 @@ var MindMapEditor = class {
     this.render();
     if (location) this.restoreReadingLocation(this.currentMode, location);
   }
-  /** Runs one mutation that cannot affect article titles, numbering, or family topology. */
+  /**
+   * 所有用户可撤销写操作的统一入口。调用前克隆当前文档写入撤销栈，执行修改，规范化和重渲染，再通知视图自动保存；只读状态会在更上层阻止进入该流程。
+   *
+   * @param action 需要在当前文档上执行的同步修改。
+   * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
+   */
   mutateWithoutArticleContext(action, restoreLocation) {
     this.mutate(action, restoreLocation, "none");
   }
-  /** Runs one mutation that can change article text but not article topology or numbering settings. */
   mutateArticleContent(action, restoreLocation) {
     this.mutate(action, restoreLocation, "content");
   }
-  /**
-   * 所有用户可撤销写操作的统一入口。调用前克隆当前文档写入撤销栈，执行修改并重渲染，再按影响级别通知视图保存和刷新文章上下文。
-   *
-   * @param action 需要在当前文档上执行的同步修改。
-   * @param restoreLocation 非导图模式下修改完成后需要恢复的语义阅读位置。
-   * @param articleContextImpact 当前修改对跨文件文章上下文的影响级别；未指定时按结构变化处理。
-   * @remarks 这是关键流程函数；修改时应同步检查撤销保存链路、文章上下文分级、数据兼容以及对应自动测试。
-   */
   mutate(action, restoreLocation, articleContextImpact = "structure") {
     if (!this.ensureEditable()) return;
     const location = restoreLocation != null ? restoreLocation : this.currentMode === "mindmap" ? null : this.captureCurrentLocation(this.currentMode);
     if (location) this.rememberLocation(location, true);
-    this.history.capture(this.document);
+    this.captureHistorySnapshot();
     action();
     this.notifyDocumentChange(articleContextImpact);
     this.markSaving();
@@ -17963,9 +17964,10 @@ var MindMapEditor = class {
    */
   undo() {
     if (!this.ensureEditable()) return;
-    const previous = this.history.undo(this.document);
-    if (!previous) return;
-    this.document = previous;
+    const previousSnapshot = this.history.undoSnapshot(this.currentDocumentSnapshotJson());
+    if (!previousSnapshot) return;
+    this.document = this.history.restoreSnapshot(previousSnapshot);
+    this.documentSnapshotJson = previousSnapshot;
     this.selectedId = this.document.root.id;
     this.notifyDocumentChange();
     this.markSaving();
@@ -17976,9 +17978,10 @@ var MindMapEditor = class {
    */
   redo() {
     if (!this.ensureEditable()) return;
-    const next = this.history.redo(this.document);
-    if (!next) return;
-    this.document = next;
+    const nextSnapshot = this.history.redoSnapshot(this.currentDocumentSnapshotJson());
+    if (!nextSnapshot) return;
+    this.document = this.history.restoreSnapshot(nextSnapshot);
+    this.documentSnapshotJson = nextSnapshot;
     this.selectedId = this.document.root.id;
     this.notifyDocumentChange();
     this.markSaving();
@@ -18064,14 +18067,16 @@ var MindMapEditor = class {
    * 因此文章、大纲和通读模式重渲染不会把用户视口恢复为默认自适应大小。
    */
   persistMindMapViewportState() {
-    var _a2;
     if (!this.mindMapViewportInitialized) return;
+    const current = this.document.view;
+    if ((current == null ? void 0 : current.zoom) === this.zoom && (current == null ? void 0 : current.panX) === this.panX && (current == null ? void 0 : current.panY) === this.panY) return;
     this.document.view = {
-      ...(_a2 = this.document.view) != null ? _a2 : {},
+      ...current != null ? current : {},
       zoom: this.zoom,
       panX: this.panX,
       panY: this.panY
     };
+    this.invalidateDocumentSnapshotJson();
   }
   /**
    * 更新并应用zoom，并保持模型、界面和持久化状态的一致性。
@@ -19025,7 +19030,7 @@ var MindMapStudioView = class extends import_obsidian13.TextFileView {
    * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
    */
   setViewData(data, clear) {
-    var _a2, _b2, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l;
+    var _a2, _b2, _c, _d, _e, _f, _g, _h, _i, _j, _k;
     const title = (_b2 = (_a2 = this.file) == null ? void 0 : _a2.basename) != null ? _b2 : "\u601D\u7EF4\u5BFC\u56FE";
     this.plugin.logDebug("view", "set-view-data-start", { filePath: (_c = this.file) == null ? void 0 : _c.path, clear, hasEditor: Boolean(this.editor), dataBytes: new TextEncoder().encode(data).byteLength });
     const cachedDocument = this.file ? this.plugin.getCachedMindMapDocument(this.file) : null;
@@ -19065,7 +19070,7 @@ var MindMapStudioView = class extends import_obsidian13.TextFileView {
       this.articleContextReady = true;
       this.articleContextCacheHit = true;
       this.plugin.logDebug("article-context", "cache-hit", {
-        filePath: (_h = this.file) == null ? void 0 : _h.path,
+        filePath: (_g = this.file) == null ? void 0 : _g.path,
         tocEntries: cachedArticleContext.tocEntries.length,
         readingSections: cachedArticleContext.readingSections.length
       });
@@ -19077,11 +19082,11 @@ var MindMapStudioView = class extends import_obsidian13.TextFileView {
       this.showArticleToc = false;
       this.articleNavigation = void 0;
       this.readingSections = [];
-      this.plugin.logDebug("article-context", "cache-miss", { filePath: (_i = this.file) == null ? void 0 : _i.path });
+      this.plugin.logDebug("article-context", "cache-miss", { filePath: (_h = this.file) == null ? void 0 : _h.path });
     }
     this.applyViewClasses();
     if (!this.editor || clear) {
-      (_j = this.editor) == null ? void 0 : _j.destroy();
+      (_i = this.editor) == null ? void 0 : _i.destroy();
       this.contentEl.empty();
       this.editor = new MindMapEditor(this.app, this.contentEl, this.document, {
         onChange: (document2, options) => {
@@ -19211,7 +19216,7 @@ var MindMapStudioView = class extends import_obsidian13.TextFileView {
     }
     if (queuedDirectory && this.editor) {
       this.plugin.logDebug("view", "apply-pending-directory", {
-        filePath: (_k = this.file) == null ? void 0 : _k.path,
+        filePath: (_j = this.file) == null ? void 0 : _j.path,
         focusNodeId: queuedDirectory.focusNodeId,
         articleContextReady: this.articleContextReady
       });
@@ -19219,7 +19224,7 @@ var MindMapStudioView = class extends import_obsidian13.TextFileView {
     }
     if (this.pendingFocusNodeId && this.editor) {
       const nodeId = this.pendingFocusNodeId;
-      this.plugin.logDebug("view", "apply-pending-focus", { filePath: (_l = this.file) == null ? void 0 : _l.path, nodeId, persistLocation: this.pendingFocusShouldPersist, articleContextReady: this.articleContextReady });
+      this.plugin.logDebug("view", "apply-pending-focus", { filePath: (_k = this.file) == null ? void 0 : _k.path, nodeId, persistLocation: this.pendingFocusShouldPersist, articleContextReady: this.articleContextReady });
       const persistLocation = this.pendingFocusShouldPersist;
       this.pendingFocusNodeId = null;
       this.pendingFocusShouldPersist = true;
@@ -19240,7 +19245,7 @@ var MindMapStudioView = class extends import_obsidian13.TextFileView {
    * @param document 发起恢复时的文档快照。
    */
   async recoverMissingSubmapNavigation(file, document2) {
-    var _a2, _b2, _c;
+    var _a2, _b2;
     try {
       const navigation = await this.plugin.recoverSubmapNavigation(file, document2);
       if (!(navigation == null ? void 0 : navigation.parentPath)) return;
@@ -19248,7 +19253,7 @@ var MindMapStudioView = class extends import_obsidian13.TextFileView {
       this.document.navigation = { ...navigation };
       this.plugin.invalidateMindMapCaches(file.path);
       this.plugin.rememberMindMapDocument(file, this.document);
-      (_c = this.editor) == null ? void 0 : _c.applyRecoveredNavigation(navigation);
+      if (this.editor) this.editor.applyRecoveredNavigation(navigation);
       this.articleContextCacheHit = false;
       this.plugin.logDebug("view", "apply-recovered-parent-navigation", {
         filePath: file.path,
@@ -19343,14 +19348,13 @@ var MindMapStudioView = class extends import_obsidian13.TextFileView {
    * 保存当前文件后打开当前父子导图族搜索，并把尚未落盘的编辑器文档作为当前文件索引快照。
    */
   async openMapFamilySearch() {
-    var _a2;
     const file = this.file;
     if (!file) {
       new import_obsidian13.Notice("\u5F53\u524D\u5BFC\u56FE\u5C1A\u672A\u4FDD\u5B58\uFF0C\u65E0\u6CD5\u641C\u7D22\u5B50\u5BFC\u56FE");
       return;
     }
     await this.save();
-    await this.plugin.openMapFamilySearch(file, (_a2 = this.document) != null ? _a2 : void 0);
+    await this.plugin.openMapFamilySearch(file, this.document != null ? this.document : void 0);
   }
   /**
    * 刷新appearance，并保持模型、界面和持久化状态的一致性。
@@ -19605,7 +19609,6 @@ var MindMapStudioView = class extends import_obsidian13.TextFileView {
       void this.refreshArticleContext();
     }, Math.max(0, delay));
   }
-  /** Schedules a metadata-only article refresh that never reads another mind-map file. */
   scheduleArticleContentContextRefresh(delay) {
     if (this.articleContextTimer !== null) return;
     if (this.articleContentContextTimer !== null) window.clearTimeout(this.articleContentContextTimer);
@@ -19614,7 +19617,6 @@ var MindMapStudioView = class extends import_obsidian13.TextFileView {
       this.refreshArticleContentContext();
     }, Math.max(0, delay));
   }
-  /** Replaces only the current physical page inside the already loaded continuous-reading family. */
   syncCurrentReadingSection(document2) {
     var _a2;
     const filePath = (_a2 = this.file) == null ? void 0 : _a2.path;
@@ -19629,7 +19631,6 @@ var MindMapStudioView = class extends import_obsidian13.TextFileView {
     };
     return true;
   }
-  /** Refreshes article titles, numbering, and breadcrumbs from memory without rediscovering the map family. */
   refreshArticleContentContext() {
     var _a2;
     const document2 = this.document;
@@ -19656,7 +19657,7 @@ var MindMapStudioView = class extends import_obsidian13.TextFileView {
    * 刷新article context，并保持模型、界面和持久化状态的一致性。
    */
   async refreshArticleContext() {
-    var _a2, _b2, _c, _d, _e, _f;
+    var _a2, _b2, _c, _d, _e, _f, _g, _h;
     const file = this.file;
     const document2 = this.document;
     if (!file || !document2) return;
@@ -19664,7 +19665,7 @@ var MindMapStudioView = class extends import_obsidian13.TextFileView {
     const documentRevision = this.documentChangeRevision;
     const cacheRevision = this.plugin.getMindMapCacheRevision();
     this.plugin.logDebug("article-context", "refresh-start", { filePath: file.path, token, cacheRevision, pendingFocusNodeId: this.pendingFocusNodeId, preferCurrentFile: this.preferCurrentFileOnNextContextRefresh });
-    (_a2 = this.editor) == null ? void 0 : _a2.setArticleContextLoadingProgress({
+    (_c = this.editor) == null ? void 0 : _c.setArticleContextLoadingProgress({
       phase: "prepare",
       percent: 0,
       processed: 0,
@@ -19677,14 +19678,9 @@ var MindMapStudioView = class extends import_obsidian13.TextFileView {
         if (token !== this.articleContextToken || ((_a3 = this.file) == null ? void 0 : _a3.path) !== file.path) return;
         (_b3 = this.editor) == null ? void 0 : _b3.setArticleContextLoadingProgress(progress);
       });
-      if (token !== this.articleContextToken || ((_b2 = this.file) == null ? void 0 : _b2.path) !== file.path) return;
+      if (token !== this.articleContextToken || ((_d = this.file) == null ? void 0 : _d.path) !== file.path) return;
       if (documentRevision !== this.documentChangeRevision) {
-        this.plugin.logDebug("article-context", "refresh-stale-document", {
-          filePath: file.path,
-          token,
-          documentRevision,
-          currentRevision: this.documentChangeRevision
-        });
+        this.plugin.logDebug("article-context", "refresh-stale-document", { filePath: file.path, token, documentRevision, currentRevision: this.documentChangeRevision });
         this.scheduleArticleContextRefresh(0);
         return;
       }
@@ -19699,17 +19695,17 @@ var MindMapStudioView = class extends import_obsidian13.TextFileView {
       const preferCurrentFile = this.preferCurrentFileOnNextContextRefresh;
       const preferredCurrentNodeId = preferCurrentFile ? this.preferredCurrentNodeIdOnNextContextRefresh : null;
       this.plugin.logDebug("article-context", "refresh-success", { filePath: file.path, token, cacheStored, baseDepth: context.baseDepth, tocEntries: context.tocEntries.length, showToc: context.showToc, readingSections: context.readingSections.length, preferCurrentFile, preferredCurrentNodeId });
-      (_c = this.editor) == null ? void 0 : _c.setOptions(this.getEditorOptions(preferCurrentFile, preferredCurrentNodeId), true);
+      (_e = this.editor) == null ? void 0 : _e.setOptions(this.getEditorOptions(preferCurrentFile, preferredCurrentNodeId), true);
       this.preferCurrentFileOnNextContextRefresh = false;
       this.preferredCurrentNodeIdOnNextContextRefresh = null;
     } catch (error) {
-      if (token !== this.articleContextToken || ((_d = this.file) == null ? void 0 : _d.path) !== file.path) return;
+      if (token !== this.articleContextToken || ((_f = this.file) == null ? void 0 : _f.path) !== file.path) return;
       if (documentRevision !== this.documentChangeRevision) {
         this.scheduleArticleContextRefresh(0);
         return;
       }
       this.plugin.logDebug("article-context", "refresh-failed", { filePath: file.path, token, error });
-      (_e = this.editor) == null ? void 0 : _e.setArticleContextLoadingProgress({
+      (_g = this.editor) == null ? void 0 : _g.setArticleContextLoadingProgress({
         phase: "complete",
         percent: 100,
         processed: 1,
@@ -19732,7 +19728,7 @@ var MindMapStudioView = class extends import_obsidian13.TextFileView {
       const preferCurrentFile = this.preferCurrentFileOnNextContextRefresh;
       const preferredCurrentNodeId = preferCurrentFile ? this.preferredCurrentNodeIdOnNextContextRefresh : null;
       this.plugin.logDebug("article-context", "refresh-fallback", { filePath: file.path, token, preferCurrentFile, preferredCurrentNodeId });
-      (_f = this.editor) == null ? void 0 : _f.setOptions(this.getEditorOptions(preferCurrentFile, preferredCurrentNodeId), true);
+      (_h = this.editor) == null ? void 0 : _h.setOptions(this.getEditorOptions(preferCurrentFile, preferredCurrentNodeId), true);
       this.preferCurrentFileOnNextContextRefresh = false;
       this.preferredCurrentNodeIdOnNextContextRefresh = null;
     }
@@ -20234,7 +20230,7 @@ var MindMapSearchIndex = class {
    * @returns Every map path reachable through parent/child relationships.
    */
   async refreshFamily(rootPath, currentDocument) {
-    var _a2, _b2, _c, _d, _e;
+    var _a2, _b2;
     const normalizedRoot = (0, import_obsidian14.normalizePath)(rootPath);
     const family = /* @__PURE__ */ new Set();
     const documents = /* @__PURE__ */ new Map();
@@ -20266,7 +20262,8 @@ var MindMapSearchIndex = class {
         if (child && !family.has(child.path)) queue.push(child.path);
       }
       for (const [candidatePath, candidate] of Object.entries(this.data.files)) {
-        const parentPath = (_e = (_c = candidate.navigation) == null ? void 0 : _c.parentPath) != null ? _e : (_d = candidate.entries[0]) == null ? void 0 : _d.parentMapPath;
+        var _a3, _b3, _c;
+        const parentPath = (_c = (_a3 = candidate.navigation) == null ? void 0 : _a3.parentPath) != null ? _c : (_b3 = candidate.entries[0]) == null ? void 0 : _b3.parentMapPath;
         const resolvedParent = this.resolveSubmapFile(parentPath, candidatePath);
         if ((resolvedParent == null ? void 0 : resolvedParent.path) === path && !family.has(candidatePath)) queue.push(candidatePath);
       }

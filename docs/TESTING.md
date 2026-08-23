@@ -99,7 +99,7 @@
 
 ### 文档快照复用
 
-第五批 5.1 性能回归由 `tests/document-snapshot-reuse.test.mjs` 锁定源码和安装 bundle：编辑器 `onChange` 必须继续通过 `getDocument()` 给宿主一份与内部模型隔离的完整快照，但 `MindMapDocumentView` 内不得再出现 `editor.getDocument()` 的重复整树读取。`getViewData()` 与 `save()` 使用 `currentDocumentSnapshot(true)`，只通过 `getPersistedViewState()` 合并最新 zoom/pan；当前导图族搜索、AI 上下文、图片识别和完整文章上下文刷新直接使用当前修订的 `this.document`。测试同时要求 `main.js` 保留相同契约，防止源码减少 clone 而安装包仍走旧热路径。
+第五批 5.1/5.2 性能回归由 `tests/document-snapshot-reuse.test.mjs` 与 `tests/history-snapshot-reuse.test.mjs` 同时锁定源码和安装 bundle。宿主层仍不得出现 `editor.getDocument()` 的重复整树读取；`getViewData()` / `save()` 只通过 `currentDocumentSnapshot(true)` 合并最新 zoom/pan，当前导图族搜索、AI、图片识别和文章上下文直接复用当前修订宿主快照。编辑器侧 `notifyDocumentChange()` 必须通过 `createDetachedDocumentSnapshot(true)` 对修改后状态只执行一次权威序列化并恢复隔离对象；普通 mutation 的修改前历史必须通过 `captureHistorySnapshot()` / `DocumentHistory.captureSnapshot()` 复用上一修订 JSON，不得重新退化为 `history.capture(this.document)`。真实历史测试必须覆盖字符串快照 `captureSnapshot → undoSnapshot → redoSnapshot` 的完整往返，并继续验证旧 `capture/undo/redo` API 兼容。测试还必须锁定 zoom/pan、恢复导航、只读和文章落地等未立即发布的持久字段会使序列化缓存失效；源码与 `main.js` 必须保持同等契约。
 
 ### 导图渐进渲染与文章目标窗口
 

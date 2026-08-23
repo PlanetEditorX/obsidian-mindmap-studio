@@ -1,5 +1,16 @@
 # Modified Files
 
+## 1.46.3 mutation 序列化快照复用性能优化第五批 5.2
+
+- `src/editor/history-manager.ts`：为完整 JSON 历史新增 `createSnapshot()` / `restoreSnapshot()`、`captureSnapshot()`、`undoSnapshot()`、`redoSnapshot()`；旧 `capture/undo/redo` API 继续委托新入口，撤销栈和重做栈仍保存完整文档字符串。
+- `src/editor/editor.ts`：新增 `documentSnapshotJson` 修订缓存、`currentDocumentSnapshotJson()`、`captureHistorySnapshot()` 与 `createDetachedDocumentSnapshot()`；普通 mutation 复用上一已发布修订 JSON 作为修改前历史，完成后只序列化一次新状态并恢复隔离宿主对象。异步图片上传、批量上传和拖放也冻结字符串历史而非为了备用 undo 深拷贝整树。
+- `src/editor/editor.ts`：zoom/pan、恢复父级导航、只读状态、文章落地模式和阅读恢复中的折叠状态等未立即发布的持久写入会调用 `invalidateDocumentSnapshotJson()`；缓存不精确时自动回退一次完整序列化，优先保证撤销/保存正确。
+- `tests/history-snapshot-reuse.test.mjs`、`tests/document-snapshot-reuse.test.mjs`、`tests/article-content-block.test.mjs`、`package.json`：新增真实 `DocumentHistory` 字符串快照往返、旧 API 兼容、源码 + 安装 bundle mutation 契约以及未发布状态失效测试，并把新测试纳入正式 `test:unit`；表格列宽的旧 `history.capture(this.document)` 源码契约同步更新为稳定的 `captureHistorySnapshot()` 入口。
+- `README.md`、`CHANGELOG.md`、`docs/ARCHITECTURE.md`、`docs/DEVELOPMENT.md`、`docs/TESTING.md`、`docs/FUNCTION_REFERENCE.md`、`TEST_RESULTS.md`：同步第五批 5.2 的序列化缓存所有权、完整快照历史边界、失效规则和性能验证。
+- `main.js`：当前容器缺完整 production 构建依赖，按 TypeScript 源码等价同步 `DocumentHistory` 字符串 API、编辑器序列化修订缓存和全部失效路径；正式发布前仍需完整 CI production build。
+- 本批不引入 patch-based undo，不改变 `.mindmap` 数据格式、history 上限、文章 change-impact 或 View 第五批 5.1 的宿主快照复用语义。
+- 本轮测试安装包：`mindmap-studio-1.46.3-test-392641.zip`，SHA-256 `4277a89bb1b287388a766e1f8f3fc48f9a49a3d31bd1e584cb20e1a83c8ab106`；完整源码与 Codex 交接使用同一 `392641` 后缀。
+
 ## 1.46.3 文档快照复用性能优化第五批 5.1
 
 - `src/editor/editor.ts`：新增 `getPersistedViewState()`，只复制当前 `document.view` 的 zoom/pan 等轻量视图元数据；`getDocument()` 继续作为 mutation 边界的一次性隔离整文档快照，不改变内部模型隔离。

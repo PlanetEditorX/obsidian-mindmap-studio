@@ -216,7 +216,7 @@ test("article tables open on double click and persist bounded column widths", ()
   assert.match(rendererSource, /column\.style\.width = `\$\{\(\([\s\S]*\* 100\)\.toFixed\(4\)\}%`/);
   assert.match(rendererSource, /table\.style\.width = "100%"/);
   const widthCommit = editorSource.match(/private updateTableColumnWidths\([\s\S]*?\n  \}/)?.[0] ?? "";
-  assert.match(widthCommit, /this\.history\.capture\(this\.document\)/);
+  assert.match(widthCommit, /this\.captureHistorySnapshot\(\)/);
   assert.match(widthCommit, /this\.upsertStructuredBlock\(node, "table", \{ \.\.\.block\.table, columnWidths \}, blockId\)/);
   assert.match(widthCommit, /this\.notifyDocumentChange\("none"\)/);
   assert.doesNotMatch(widthCommit, /this\.render\(\)|this\.mutate\(/, "column release must not rebuild the article DOM");
@@ -390,7 +390,7 @@ test("table edits preserve the visible anchor and column resizing avoids a synch
   const beginReadingLocationRestore = editorSource.match(/private beginReadingLocationRestore\([\s\S]*?\n  \}/)?.[0] ?? "";
   assert.match(openTableBlockEditor, /captureMindMapViewportAnchor\(node\.id\)[\s\S]*this\.mutateWithoutArticleContext\([\s\S]*restoreMindMapViewportAnchor\(viewportAnchor\)/);
   assert.match(updateTableColumnWidths, /captureCurrentLocation\(this\.currentMode\)[\s\S]*rememberLocation\(location, true\)/);
-  assert.match(updateTableColumnWidths, /history\.capture\(this\.document\)[\s\S]*notifyDocumentChange\("none"\)[\s\S]*markSaving\(\)/);
+  assert.match(updateTableColumnWidths, /captureHistorySnapshot\(\)[\s\S]*notifyDocumentChange\("none"\)[\s\S]*markSaving\(\)/);
   assert.doesNotMatch(updateTableColumnWidths, /this\.mutate\(|this\.render\(/);
   assert.match(applyMeasuredMindMapLayout, /captureMindMapViewportAnchor\(this\.selectedId\)[\s\S]*renderMindMapEdges[\s\S]*restoreMindMapViewportAnchor\(viewportAnchor\)/);
   assert.match(restoreReadingLocation, /beginReadingLocationRestore\(mode, normalizedLocation, resolved\)/);

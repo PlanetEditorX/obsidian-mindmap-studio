@@ -2,6 +2,7 @@
 
 ## 1.46.3
 
+- 第五批 5.2 mutation 快照优化：编辑器缓存最近一次已发布修订的完整 JSON，下一次可撤销写操作直接通过 `DocumentHistory.captureSnapshot()` 复用该字符串作为修改前历史，不再额外 `JSON.stringify()` 旧文档；修改完成后 `notifyDocumentChange()` 只强制序列化一次新修订并恢复隔离宿主对象。`DocumentHistory` 新增字符串快照 API 但仍保存完整 JSON；zoom/pan、恢复导航、只读和文章落地等未立即 `onChange` 的持久状态会主动使缓存失效，保证不会把旧序列化结果写入撤销栈或宿主。
 - 第五批 5.1 大型文档性能优化：编辑器 `onChange` 仍只生成一份与内部模型隔离的完整文档快照，但 `MindMapDocumentView` 在同一文档修订内复用该快照；自动保存、文章族刷新、AI 上下文、图片识别和当前导图族搜索不再分别调用 `editor.getDocument()` 重复深拷贝整棵节点树。仅 zoom/pan 等可在无 mutation 情况下变化的画布视图元数据通过 `getPersistedViewState()` 以浅层 `view` 对象合并到持久化快照，撤销/重做与 `.mindmap` 文件格式保持不变。
 - 第四批文章编辑性能优化：编辑器变更新增 `none / content / structure` 文章上下文影响分级；图片、表格、代码、样式、尺寸、折叠等本地变化不再触发父子导图族刷新，标题文字只从已加载 `readingSections` 在内存中重算目录标题、编号与 breadcrumb，节点结构、子导图关系和文章编号变化才执行完整跨文件构建。轻量刷新检测到目录数量/层级变化会自动回退完整刷新；完整构建期间若文档修订变化会丢弃旧结果并立即重建，避免旧快照覆盖新编辑。
 - 修复第三批节点树索引优化后的 CI 综合回归契约：`selectAllNodesExceptRoot()` 测试不再硬编码要求旧 `flattenNodes(this.document.root)` 扫描，而改为验证当前 `nodeTreeNodes()` 索引快照、排除 root 并写入全部后代选择集合；运行时代码与 `main.js` 不变。
