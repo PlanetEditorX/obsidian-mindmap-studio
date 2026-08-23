@@ -1,5 +1,15 @@
 # Modified Files
 
+## 1.46.3 文档快照复用性能优化第五批 5.1
+
+- `src/editor/editor.ts`：新增 `getPersistedViewState()`，只复制当前 `document.view` 的 zoom/pan 等轻量视图元数据；`getDocument()` 继续作为 mutation 边界的一次性隔离整文档快照，不改变内部模型隔离。
+- `src/view.ts`：新增 `currentDocumentSnapshot()`；`getViewData()` / `save()` 复用 `onChange` 已收到的当前修订快照，只浅合并最新视图元数据。移除 View 内全部 `editor.getDocument()` 重复读取；自动上传补丁、当前导图族搜索、AI、图片识别和文章上下文均复用当前宿主快照。
+- `tests/document-snapshot-reuse.test.mjs`、`package.json`：新增源码 + 安装 bundle 防回退测试并纳入正式 `test:unit`，要求 View 不再出现重复整树 clone 路径，同时保留编辑器 change callback 的隔离快照。
+- `README.md`、`CHANGELOG.md`、`docs/ARCHITECTURE.md`、`docs/DEVELOPMENT.md`、`docs/TESTING.md`、`docs/FUNCTION_REFERENCE.md`：同步第五批 5.1 的快照所有权、视图状态例外、性能边界和验证规则。
+- `main.js`：当前容器缺完整 production 构建依赖，按 TypeScript 源码等价同步 `getPersistedViewState()`、`currentDocumentSnapshot()` 与所有宿主快照复用路径；正式发布前仍需 CI production build。
+- 本批不修改 `DocumentHistory`、undo/redo、`.mindmap` 数据格式或文章 change-impact 语义；增量/patch 历史留待后续高风险批次评估。
+- 本轮测试安装包：`mindmap-studio-1.46.3-test-517306.zip`，SHA-256 `02a2dc424da95f4e47eb91d31f50699acce2da77f1e44068f142fe738cadd099`；完整源码与 Codex 交接使用同一 `517306` 后缀。
+
 ## 1.46.3 文章上下文性能优化第四批
 
 - `src/editor/editor-types.ts`：新增 `ArticleContextChangeImpact = "none" | "content" | "structure"`，`MindMapEditorChangeOptions` 改为携带变更对跨文件文章上下文的影响级别；未指定仍安全回退 `structure`。

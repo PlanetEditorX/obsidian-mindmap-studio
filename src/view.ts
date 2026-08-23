@@ -96,7 +96,7 @@ export class MindMapStudioView extends TextFileView {
    * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
    */
   getViewData(): string {
-    const document = this.editor?.getDocument() ?? this.document;
+    const document = this.currentDocumentSnapshot(true);
     if (!document) return serializeDocument(this.plugin.createConfiguredDocument("思维导图"));
     const persistedDocument = !document.navigation?.parentPath
       ? { ...document, view: { ...(document.view ?? {}), articleLandingMode: "toc" as const } }
@@ -114,7 +114,6 @@ export class MindMapStudioView extends TextFileView {
     if (!this.editor) return 0;
     const updated = this.editor.applyImageUploadPatches(patches);
     if (!updated) return 0;
-    this.document = this.editor.getDocument();
     await this.save();
     return updated;
   }
@@ -365,13 +364,29 @@ export class MindMapStudioView extends TextFileView {
   }
 
   /**
+   * Reuses the detached document snapshot received from the editor change callback.
+   * Only viewport metadata can change without a document mutation, so persistence
+   * merges that small object instead of cloning the complete node tree again.
+   *
+   * @param includeViewport Whether to merge the editor's latest zoom/pan metadata before returning.
+   */
+  private currentDocumentSnapshot(includeViewport = false): MindMapDocument | null {
+    const document = this.document;
+    if (!document || !includeViewport || !this.editor) return document;
+    const view = this.editor.getPersistedViewState();
+    if (view === undefined && document.view === undefined) return document;
+    this.document = { ...document, view };
+    return this.document;
+  }
+
+  /**
    * 保存相关数据，并保持模型、界面和持久化状态的一致性。
    *
    * @param clear 该参数用于 save 流程中的输入或控制。
    */
   async save(clear?: boolean): Promise<void> {
     const file = this.file;
-    const document = this.editor?.getDocument() ?? this.document;
+    const document = this.currentDocumentSnapshot(true);
     const rootTitle = document ? nodePlainText(document.root).trim() : "";
     const saveRevision = this.documentChangeRevision;
     if (saveRevision === this.savedDocumentChangeRevision) {
@@ -422,7 +437,7 @@ export class MindMapStudioView extends TextFileView {
       return;
     }
     await this.save();
-    await this.plugin.openMapFamilySearch(file, this.editor?.getDocument() ?? this.document ?? undefined);
+    await this.plugin.openMapFamilySearch(file, this.document ?? undefined);
   }
 
   /**
@@ -509,7 +524,7 @@ export class MindMapStudioView extends TextFileView {
 
   /** 构建 Markdown 上下文并打开 AI 窗口。 */
   private openAiModal(nodeId?: string): void {
-    const document = this.editor?.getDocument() ?? this.document;
+    const document = this.document;
     if (!document) { new Notice("当前导图尚未加载"); return; }
     const profiles = enabledAiProfiles(this.plugin.settings.aiProfiles);
     const payload = buildAiMarkdownPayload(
@@ -554,7 +569,7 @@ export class MindMapStudioView extends TextFileView {
 
   /** 按节点树顺序逐张读取并识别当前页面或节点子树中的全部图片。 */
   private async recognizeImages(nodeId: string | undefined, profileId: string, instruction: string): Promise<ImageRecognitionBatchResult> {
-    const document = this.editor?.getDocument() ?? this.document;
+    const document = this.document;
     if (!document) throw new Error("当前导图尚未加载");
     const images = collectRecognizableImages(document, nodeId);
     if (!images.length) throw new Error("当前范围没有可识别的图片");
@@ -720,7 +735,7 @@ export class MindMapStudioView extends TextFileView {
    */
   private async refreshArticleContext(): Promise<void> {
     const file = this.file;
-    const document = this.editor?.getDocument() ?? this.document;
+    const document = this.document;
     if (!file || !document) return;
     const token = ++this.articleContextToken;
     const documentRevision = this.documentChangeRevision;

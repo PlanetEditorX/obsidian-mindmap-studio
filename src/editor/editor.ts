@@ -2451,6 +2451,12 @@ export class MindMapEditor {
     return cloneDocument(this.document);
   }
 
+  /** Returns only the current persisted view metadata so host saves can reuse their existing detached document snapshot. */
+  getPersistedViewState(): MindMapDocument["view"] {
+    this.persistMindMapViewportState();
+    return this.document.view ? { ...this.document.view } : undefined;
+  }
+
   /** Sends one document snapshot to the host together with the minimum article-context work it requires. */
   private notifyDocumentChange(articleContextImpact: ArticleContextChangeImpact = "structure"): void {
     this.callbacks.onChange(this.getDocument(), { articleContextImpact });

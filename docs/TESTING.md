@@ -97,6 +97,10 @@
 
 第四批性能回归必须同时覆盖源码和安装 `main.js`：编辑器 mutation 通过 `ArticleContextChangeImpact` 分为 `none / content / structure`，不得重新退化为每次 `onChange` 都完整构建文章族。`none` 操作不应安排文章上下文刷新；`content` 约 140 ms 防抖并调用 `refreshArticleTocEntriesFromReadingSections()`，以已加载 `readingSections` 重算标题、编号与 breadcrumb，不允许引入 vault 文件读取；`structure` 约 320 ms 安排完整跨文件刷新。行为测试必须覆盖跨父/子导图标题变化时挂载目录项的 `filePath/nodeId` 身份保持不变，以及目录条目数量或 `tocDepth` 不匹配时轻量 helper 返回 `null` 并回退完整刷新。异步完整构建还必须捕获 `documentChangeRevision`：构建期间发生编辑时旧结果必须被丢弃并立即安排最新完整刷新，成功路径和异常路径都不能让旧快照覆盖新编辑。
 
+### 文档快照复用
+
+第五批 5.1 性能回归由 `tests/document-snapshot-reuse.test.mjs` 锁定源码和安装 bundle：编辑器 `onChange` 必须继续通过 `getDocument()` 给宿主一份与内部模型隔离的完整快照，但 `MindMapDocumentView` 内不得再出现 `editor.getDocument()` 的重复整树读取。`getViewData()` 与 `save()` 使用 `currentDocumentSnapshot(true)`，只通过 `getPersistedViewState()` 合并最新 zoom/pan；当前导图族搜索、AI 上下文、图片识别和完整文章上下文刷新直接使用当前修订的 `this.document`。测试同时要求 `main.js` 保留相同契约，防止源码减少 clone 而安装包仍走旧热路径。
+
 ### 导图渐进渲染与文章目标窗口
 
 `tests/incremental-render.test.mjs` 覆盖：
