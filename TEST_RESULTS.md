@@ -2,6 +2,29 @@
 
 版本：1.46.3
 
+## 1.46.3 第三批性能优化 CI 全选契约修复
+
+### 用户 GitHub Actions 日志
+
+- `npm ci` 成功；`npm run test:unit`：**377 / 377 通过**，说明上一轮图片粘贴 `nodeById()` 契约修复已经生效，第三批运行时行为没有单测回归。
+- `npm run test:regression` 随后唯一失败于 `scripts/test.mjs` 的“select all must include all descendants while excluding the root node”源码契约；旧断言仍要求 `flattenNodes(this.document.root)`，而第三批已经把全选改为 `this.nodeTreeNodes()` 复用 `NodeTreeIndex.nodes`。
+- CI 因 regression 非零退出未继续 docs、repo 或 production build；日志没有显示新的业务错误或 TypeScript 错误。
+
+### 本轮修复与本地验证
+
+- `scripts/test.mjs` 更新为验证 `selectAllNodesExceptRoot()` 调用 `this.nodeTreeNodes()`、过滤 `document.root.id` 并把 ID 写入 `selectedIds`；`Ctrl/Cmd+A` 捕获与调用入口契约保持不变。
+- 对当前 `src/editor/editor.ts` 单独执行更新后的正则契约：**通过**；同时确认旧 `flattenNodes(this.document.root)` 全选契约已不存在。
+- `node --check scripts/test.mjs`：**通过**。
+- `npm run test:repo`：**通过**。
+- 当前容器重新执行 `npm ci --ignore-scripts --no-audit --no-fund` 仍因 registry 获取超时，无法本地启动依赖 `esbuild` 的完整 `test:regression` / `npm run verify`。下一次 GitHub Actions 应首先验证 regression 继续通过，再观察 docs/repo/production build。
+- 本轮没有修改 `src/` 或运行时代码，因此 `main.js` 与第三批性能优化版本保持一致。
+
+### 本轮交付
+
+- 测试安装 ZIP：`mindmap-studio-1.46.3-test-885141.zip`
+- SHA-256：`5a5385cbb1c35273ca3a765d67a4dabb8190b08637a2f92a57747fc16d52c9f2`
+- 完整源码与 Codex 交接使用同一 `885141` 后缀。
+
 ## 1.46.3 第三批性能优化 CI 图片粘贴契约修复
 
 ### 用户 GitHub Actions 日志

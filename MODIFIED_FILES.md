@@ -1,5 +1,13 @@
 # Modified Files
 
+## 1.46.3 第三批性能优化 CI 全选契约修复
+
+- `scripts/test.mjs`：`selectAllNodesExceptRoot()` 综合回归从旧 `flattenNodes(this.document.root)` 实现文本更新为第三批节点树索引入口 `this.nodeTreeNodes()`；继续锁定排除 root、选择全部后代和 `Ctrl/Cmd+A` 路由。
+- `CHANGELOG.md`、`TEST_RESULTS.md`、Codex 交接：记录用户 CI 已 **377 / 377 单测通过**，综合回归仅被该旧源码结构契约阻塞，以及本轮修复和下一次 CI 验收边界。
+- 本轮没有修改 `src/`、`styles.css` 或运行时代码；`main.js` 保持第三批性能优化版本不变。
+
+- 本轮测试安装包：`mindmap-studio-1.46.3-test-885141.zip`，SHA-256 `5a5385cbb1c35273ca3a765d67a4dabb8190b08637a2f92a57747fc16d52c9f2`；完整源码与 Codex 交接使用同一 `885141` 后缀。
+
 ## 1.46.3 第三批性能优化 CI 图片粘贴契约修复
 
 - `tests/article-content-block.test.mjs`：两条图片粘贴源码契约从旧 `findNode(this.document.root, nodeId)` 更新为第三批节点树索引入口 `this.nodeById(nodeId)`；保留实时选择、目标节点消失提示、错误分流和自动上传排程边界。
