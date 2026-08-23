@@ -9858,19 +9858,9 @@ private async performRebuild(force: boolean): Promise<void>
 private async indexFile(file: TFile): Promise<void>
 ```
 
-### 方法 `MindMapSearchIndex.walkNodes`
-
-源码：`src/search/global-search.ts:733`
-
-递归遍历nodes，并保持模型、界面和持久化状态的一致性。
-
-```ts
-private *walkNodes(root: MindMapNode): Generator<MindMapNode>
-```
-
 ### 方法 `MindMapSearchIndex.resolveSubmapFile`
 
-源码：`src/search/global-search.ts:750`
+源码：`src/search/global-search.ts:735`
 
 解析并确定submap file，并保持模型、界面和持久化状态的一致性。
 
@@ -9880,7 +9870,7 @@ private resolveSubmapFile(rawPath: string | undefined, sourcePath: string): TFil
 
 ### 方法 `MindMapSearchIndex.load`
 
-源码：`src/search/global-search.ts:764`
+源码：`src/search/global-search.ts:749`
 
 加载相关数据，并保持模型、界面和持久化状态的一致性。
 
@@ -9890,7 +9880,7 @@ private async load(): Promise<void>
 
 ### 方法 `MindMapSearchIndex.scheduleSave`
 
-源码：`src/search/global-search.ts:792`
+源码：`src/search/global-search.ts:777`
 
 安排延迟执行save，并保持模型、界面和持久化状态的一致性。
 
@@ -9900,7 +9890,7 @@ private scheduleSave(): void
 
 ### 方法 `MindMapSearchIndex.saveNow`
 
-源码：`src/search/global-search.ts:803`
+源码：`src/search/global-search.ts:788`
 
 保存now，并保持模型、界面和持久化状态的一致性。
 
@@ -9910,7 +9900,7 @@ private async saveNow(): Promise<void>
 
 ### 函数 `appendHighlightedText`
 
-源码：`src/search/global-search.ts:819`
+源码：`src/search/global-search.ts:804`
 
 执行“append highlighted text”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
 
@@ -9920,7 +9910,7 @@ function appendHighlightedText(container: HTMLElement, text: string, query: stri
 
 ### 类 `GlobalMindMapSearchModal`
 
-源码：`src/search/global-search.ts:861`
+源码：`src/search/global-search.ts:846`
 
 GlobalMindMapSearchModal 的主要实现类。负责封装相关状态、生命周期和对外操作，避免调用方直接操作内部数据结构。
 
@@ -9930,7 +9920,7 @@ export class GlobalMindMapSearchModal extends Modal
 
 ### 构造函数 `GlobalMindMapSearchModal.constructor`
 
-源码：`src/search/global-search.ts:886`
+源码：`src/search/global-search.ts:871`
 
 创建 GlobalMindMapSearchModal 实例，保存依赖和初始状态；实际 DOM 构建通常在 onOpen() 或后续渲染流程中完成。
 
@@ -9940,7 +9930,7 @@ constructor( app: App, private readonly index: MindMapSearchIndex, private reado
 
 ### 方法 `GlobalMindMapSearchModal.isMounted`
 
-源码：`src/search/global-search.ts:902`
+源码：`src/search/global-search.ts:887`
 
 返回当前搜索 Modal 是否仍挂载在文档中。
 
@@ -9950,7 +9940,7 @@ isMounted(): boolean
 
 ### 方法 `GlobalMindMapSearchModal.onOpen`
 
-源码：`src/search/global-search.ts:909`
+源码：`src/search/global-search.ts:894`
 
 在弹窗或视图打开时创建界面、绑定事件并把当前数据填入控件。
 
@@ -9960,7 +9950,7 @@ onOpen(): void
 
 ### 方法 `GlobalMindMapSearchModal.onClose`
 
-源码：`src/search/global-search.ts:1013`
+源码：`src/search/global-search.ts:998`
 
 在弹窗或视图关闭时释放临时 DOM、计时器和事件状态。
 
@@ -9970,7 +9960,7 @@ onClose(): void
 
 ### 方法 `GlobalMindMapSearchModal.renderResults`
 
-源码：`src/search/global-search.ts:1027`
+源码：`src/search/global-search.ts:1012`
 
 渲染results，并保持模型、界面和持久化状态的一致性。
 
@@ -9980,7 +9970,7 @@ private renderResults(query: string): void
 
 ### 方法 `GlobalMindMapSearchModal.renderResultList`
 
-源码：`src/search/global-search.ts:1057`
+源码：`src/search/global-search.ts:1042`
 
 从当前 renderedResults 列表重新渲染结果，不重新查询索引。
 
@@ -9990,7 +9980,7 @@ private renderResultList(): void
 
 ### 方法 `GlobalMindMapSearchModal.renderResultItems`
 
-源码：`src/search/global-search.ts:1072`
+源码：`src/search/global-search.ts:1057`
 
 渲染结果列表项。
 
@@ -10000,7 +9990,7 @@ private renderResultItems(query: string): void
 
 ### 方法 `GlobalMindMapSearchModal.moveActive`
 
-源码：`src/search/global-search.ts:1132`
+源码：`src/search/global-search.ts:1117`
 
 执行“move active”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
 
@@ -10010,7 +10000,7 @@ private moveActive(delta: number): void
 
 ### 方法 `GlobalMindMapSearchModal.setActive`
 
-源码：`src/search/global-search.ts:1143`
+源码：`src/search/global-search.ts:1128`
 
 更新并应用active，并保持模型、界面和持久化状态的一致性。
 
@@ -10020,7 +10010,7 @@ private setActive(index: number): void
 
 ### 方法 `GlobalMindMapSearchModal.dismissResultPanel`
 
-源码：`src/search/global-search.ts:1158`
+源码：`src/search/global-search.ts:1143`
 
 请求 Obsidian 通过公开 Modal.close() 关闭当前搜索层。 1.45.13 的真实日志证明，程序化 `modal-bg.click()` 只产生 click 事件， 不等价于用户真实的 pointerdown/click 关闭手势，因此宿主 Modal 仍留在页面上。 这里不再模拟背景事件，也不修改/删除任何宿主 Modal DOM；只关闭 selection 恢复并 调用一次公开 close()，让 Obsidian 自己完成焦点 Scope、history 与关闭动画。
 
@@ -10030,7 +10020,7 @@ private dismissResultPanel(): void
 
 ### 方法 `GlobalMindMapSearchModal.waitForResultNavigationTurn`
 
-源码：`src/search/global-search.ts:1178`
+源码：`src/search/global-search.ts:1163`
 
 给 Obsidian 的 close/history/focus bookkeeping 两个绘制帧，再开始文件和节点导航。 该等待不依赖 onClose()，因此即使宿主把 onClose 延迟到关闭动画结束，也不会像 1.45.12 那样永久阻塞导航。
 
@@ -10040,7 +10030,7 @@ private waitForResultNavigationTurn(): Promise<void>
 
 ### 方法 `GlobalMindMapSearchModal.openResult`
 
-源码：`src/search/global-search.ts:1187`
+源码：`src/search/global-search.ts:1172`
 
 请求宿主关闭搜索层后，在不等待 onClose() 的情况下打开目标结果。
 

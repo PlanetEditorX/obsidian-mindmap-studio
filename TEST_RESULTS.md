@@ -2,6 +2,28 @@
 
 版本：1.46.3
 
+## 1.46.3 CI production build 未使用代码修复
+
+### 用户 CI 日志
+
+- `npm ci` 成功。
+- `npm run test:unit`：**369 / 369 通过**。
+- `npm run test:regression`：**通过**，上轮 `first climb to the top parent` 旧注释契约问题已修复。
+- `npm run test:docs`：**通过**，当时为 57 个源码模块、1195 个具名声明。
+- `npm run test:repo`：**通过**。
+- `npm run build` 进入 TypeScript 前置检查后仅失败于 `src/search/global-search.ts(733,12): TS6133: 'walkNodes' is declared but its value is never read.`；没有第二个业务/类型错误。
+
+### 本轮修复与本地验证
+
+- 删除 `GlobalMindMapSearchIndex.walkNodes()`；该私有生成器在当前源码没有任何调用，属于索引重构后的残留死代码。
+- `node --test tests/global-search-traversal.test.mjs`：**4 / 4 通过**。
+- `npm run docs:generate`：**通过**；`npm run test:docs`：**通过**，当前 57 个源码模块、**1194 个具名声明**。
+- `npm run test:repo`：**通过**。
+- `node --check main.js`：**通过**；安装 bundle 同步删除无用方法。
+- 当前容器重新执行 `npm ci` 因外部依赖获取超时，只获得不完整 `node_modules`；因此无法在本地重新执行完整 `npm run verify`/正式 esbuild production build。用户 CI 已证明修复前除该唯一 `TS6133` 外，369 个单测、regression、docs、repo 均通过；下一次 GitHub Actions 应验证 build 继续完成。
+
+- 本轮测试安装包：`mindmap-studio-1.46.3-test-740774.zip`，SHA-256 `0053ba3e0a70dbb33913b6d9a2cfedaf3ce821abd71238a8c9af9296affb59c6`；完整源码与 Codex 交接使用同一 `740774` 后缀。
+
 ## 1.46.3 CI 综合回归契约修复
 
 ### 用户 CI 日志与根因
