@@ -47,31 +47,34 @@ function buildNodeTreeIndex(root) {
   return { root, nodes, byId, parentById, hasCollapsibleNodes };
 }
 function indexedAncestors(index, id) {
+  var _a2, _b2;
   if (!index.byId.has(id)) return [];
   const reversed = [];
-  let parent = index.parentById.get(id) || null;
+  let parent = (_a2 = index.parentById.get(id)) != null ? _a2 : null;
   while (parent) {
     reversed.push(parent);
-    parent = index.parentById.get(parent.id) || null;
+    parent = (_b2 = index.parentById.get(parent.id)) != null ? _b2 : null;
   }
   reversed.reverse();
   return reversed;
 }
 function indexedHasAncestor(index, id, ancestorId) {
+  var _a2, _b2;
   if (!index.byId.has(id)) return false;
-  let parent = index.parentById.get(id) || null;
+  let parent = (_a2 = index.parentById.get(id)) != null ? _a2 : null;
   while (parent) {
     if (parent.id === ancestorId) return true;
-    parent = index.parentById.get(parent.id) || null;
+    parent = (_b2 = index.parentById.get(parent.id)) != null ? _b2 : null;
   }
   return false;
 }
 function indexedHasAnyAncestor(index, id, ancestorIds) {
+  var _a2, _b2;
   if (!index.byId.has(id) || ancestorIds.size === 0) return false;
-  let parent = index.parentById.get(id) || null;
+  let parent = (_a2 = index.parentById.get(id)) != null ? _a2 : null;
   while (parent) {
     if (ancestorIds.has(parent.id)) return true;
-    parent = index.parentById.get(parent.id) || null;
+    parent = (_b2 = index.parentById.get(parent.id)) != null ? _b2 : null;
   }
   return false;
 }
@@ -114,9 +117,6 @@ function findAncestors(root, id) {
   };
   return visit(root) ? path : [];
 }
-function containsNode(root, id) {
-  return findNode(root, id) !== null;
-}
 function removeNode(root, id) {
   var _a2;
   for (let index = 0; index < root.children.length; index += 1) {
@@ -130,12 +130,13 @@ function removeNode(root, id) {
   return false;
 }
 function moveNodeRelative(root, draggedId, targetId, position, existingIndex) {
+  var _a2, _b2, _c, _d;
   if (draggedId === root.id || draggedId === targetId) return false;
   const index = existingIndex != null ? existingIndex : buildNodeTreeIndex(root);
-  const dragged = index.byId.get(draggedId) || null;
-  const target = index.byId.get(targetId) || null;
+  const dragged = (_a2 = index.byId.get(draggedId)) != null ? _a2 : null;
+  const target = (_b2 = index.byId.get(targetId)) != null ? _b2 : null;
   if (!dragged || !target || indexedHasAncestor(index, targetId, draggedId)) return false;
-  const oldParent = index.parentById.get(draggedId) || null;
+  const oldParent = (_c = index.parentById.get(draggedId)) != null ? _c : null;
   if (!oldParent) return false;
   const oldIndex = oldParent.children.findIndex((child) => child.id === draggedId);
   if (oldIndex < 0) return false;
@@ -147,7 +148,7 @@ function moveNodeRelative(root, draggedId, targetId, position, existingIndex) {
     return true;
   }
   if (target.id === root.id) return false;
-  const targetParent = index.parentById.get(targetId) || null;
+  const targetParent = (_d = index.parentById.get(targetId)) != null ? _d : null;
   if (!targetParent) return false;
   const targetIndexBeforeRemoval = targetParent.children.findIndex((child) => child.id === targetId);
   if (targetIndexBeforeRemoval < 0) return false;
@@ -6735,14 +6736,15 @@ function deleteNodes(root, ids) {
   return removed;
 }
 function deletionSelectionFallback(root, ids, existingIndex) {
+  var _a2, _b2;
   const index = existingIndex != null ? existingIndex : buildNodeTreeIndex(root);
   const targets = topLevelSelectedNodeIds(root, ids, index);
   const target = targets[0];
   if (!target) return root.id;
   const removed = new Set(targets);
-  let current = index.byId.get(target) || null;
+  let current = (_a2 = index.byId.get(target)) != null ? _a2 : null;
   while (current && current.id !== root.id) {
-    const parent = index.parentById.get(current.id) || null;
+    const parent = (_b2 = index.parentById.get(current.id)) != null ? _b2 : null;
     if (!parent) return root.id;
     const childIndex = parent.children.findIndex((node) => node.id === current.id);
     const previous = parent.children.slice(0, childIndex).reverse().find((node) => !removed.has(node.id));
@@ -9876,6 +9878,22 @@ function attachSelectionFormatToolbar(options) {
   };
 }
 
+// src/editor/selection-class-delta.ts
+function selectionClassDelta(previous, next) {
+  const changed = /* @__PURE__ */ new Set();
+  for (const id of previous) {
+    if (!next.has(id)) changed.add(id);
+  }
+  for (const id of next) {
+    if (!previous.has(id)) changed.add(id);
+  }
+  if (previous.size > 1 !== next.size > 1) {
+    for (const id of previous) changed.add(id);
+    for (const id of next) changed.add(id);
+  }
+  return changed;
+}
+
 // src/ai/markdown.ts
 function utf8ByteLength2(value) {
   return new TextEncoder().encode(value).byteLength;
@@ -10314,22 +10332,6 @@ var ImageRecognitionPreviewModal = class extends import_obsidian10.Modal {
     this.contentEl.empty();
   }
 };
-
-// src/editor/selection-class-delta.ts
-function selectionClassDelta(previous, next) {
-  const changed = /* @__PURE__ */ new Set();
-  for (const id of previous) {
-    if (!next.has(id)) changed.add(id);
-  }
-  for (const id of next) {
-    if (!previous.has(id)) changed.add(id);
-  }
-  if ((previous.size > 1) !== (next.size > 1)) {
-    for (const id of previous) changed.add(id);
-    for (const id of next) changed.add(id);
-  }
-  return changed;
-}
 
 // src/editor/editor.ts
 var TOOLBAR_GROUPS = {
@@ -11527,13 +11529,16 @@ var MindMapEditor = class {
    * @param options 控制当前操作行为的可选配置。
    */
   constructor(app, host, document2, callbacks, options) {
+    /** Direct lookup for mounted mind-map nodes so hot paths never rescan the whole node layer. */
+    this.mindMapNodeElements = /* @__PURE__ */ new Map();
     this.modeButtons = /* @__PURE__ */ new Map();
     this.editControls = [];
-    this.mindMapNodeElements = /* @__PURE__ */ new Map();
+    /** Rebuilt once per full render so repeated node/parent lookups avoid whole-tree DFS scans. */
+    this.nodeTreeIndex = null;
     this.selectedIds = /* @__PURE__ */ new Set();
+    /** Selection state last synchronized to DOM classes; invalidated when non-canvas views rebuild their DOM. */
     this.appliedSelectionIds = /* @__PURE__ */ new Set();
     this.selectionClassSyncValid = false;
-    this.nodeTreeIndex = null;
     /** 仅由右键上下文设置；普通选择不会改变 AI 默认范围。 */
     this.aiScopeNodeId = null;
     this.zoom = 1;
@@ -13113,8 +13118,14 @@ var MindMapEditor = class {
     for (const timer of this.imageLoadTimers) window.clearTimeout(timer);
     this.imageLoadTimers.clear();
   }
-  /** Computes tree-dependent toolbar state once per toolbar refresh. */
+  /**
+   * Computes tree-dependent toolbar state in one traversal so each toolbar item
+   * does not independently rescan a large document.
+   *
+   * @returns Shared availability facts for the current toolbar refresh.
+   */
   toolbarAvailabilityContext() {
+    var _a2;
     const index = this.currentNodeTreeIndex();
     let selectedNonRootCount = 0;
     for (const id of this.selectedIds) {
@@ -13122,13 +13133,19 @@ var MindMapEditor = class {
     }
     const editableSurface = this.currentMode === "mindmap" || this.currentMode === "outline" || this.currentMode === "article";
     return {
-      selected: this.selectedId ? index.byId.get(this.selectedId) || null : null,
+      selected: this.selectedId ? (_a2 = index.byId.get(this.selectedId)) != null ? _a2 : null : null,
       selectedNonRootCount,
       hasCollapsibleNodes: index.hasCollapsibleNodes,
       canEdit: editableSurface && !this.readOnly
     };
   }
-  /** Returns whether one configured toolbar action can perform a meaningful operation now. */
+  /**
+   * Returns whether one configured toolbar action can perform a meaningful operation now.
+   *
+   * @param id Toolbar action being evaluated.
+   * @param context Tree-dependent facts shared by every action in this refresh.
+   * @returns Whether the action should be visible and enabled.
+   */
   toolbarItemAvailable(id, context) {
     const { selected, selectedNonRootCount, hasCollapsibleNodes, canEdit } = context;
     switch (id) {
@@ -15286,6 +15303,7 @@ var MindMapEditor = class {
    * Hidden views are rebuilt before becoming active, so they do not receive redundant selection writes.
    */
   applySelectionClasses() {
+    var _a2;
     const multi = this.selectedIds.size > 1;
     if (!this.selectionClassSyncValid) {
       if (this.currentMode === "mindmap") {
@@ -15296,7 +15314,7 @@ var MindMapEditor = class {
         }
       } else {
         const scope = this.activeSelectionScope();
-        const elements = scope == null ? [] : scope.querySelectorAll("[data-node-id]");
+        const elements = (_a2 = scope == null ? void 0 : scope.querySelectorAll("[data-node-id]")) != null ? _a2 : [];
         for (let index = 0; index < elements.length; index += 1) {
           const element = elements[index];
           const id = element.dataset.nodeId;
@@ -15314,33 +15332,42 @@ var MindMapEditor = class {
     this.syncAppliedSelectionSnapshot();
     this.updateToolbarAvailability();
   }
-  /**
-   * 执行“selected node”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
-   * @returns 当前操作生成、查找或规范化后的结果。
-   */
+  /** Rebuilds the live node/parent lookup snapshot after a structural tree change or full render. */
   rebuildNodeTreeIndex() {
     this.nodeTreeIndex = buildNodeTreeIndex(this.document.root);
     return this.nodeTreeIndex;
   }
+  /** Returns the current tree snapshot, lazily creating it before the first render-time lookup. */
   currentNodeTreeIndex() {
     if (!this.nodeTreeIndex || this.nodeTreeIndex.root !== this.document.root) return this.rebuildNodeTreeIndex();
     return this.nodeTreeIndex;
   }
+  /** Finds a live node by stable ID without rescanning the document tree. */
   nodeById(nodeId) {
-    return this.currentNodeTreeIndex().byId.get(nodeId) || null;
+    var _a2;
+    return (_a2 = this.currentNodeTreeIndex().byId.get(nodeId)) != null ? _a2 : null;
   }
+  /** Finds the direct parent of a live node by stable ID without rescanning the document tree. */
   parentNodeById(nodeId) {
-    return this.currentNodeTreeIndex().parentById.get(nodeId) || null;
+    var _a2;
+    return (_a2 = this.currentNodeTreeIndex().parentById.get(nodeId)) != null ? _a2 : null;
   }
+  /** Returns the current depth-first node snapshot for repeated filtering and ordered operations. */
   nodeTreeNodes() {
     return this.currentNodeTreeIndex().nodes;
   }
+  /** Returns root-to-parent ancestors using the current parent lookup snapshot. */
   nodeAncestors(nodeId) {
     return indexedAncestors(this.currentNodeTreeIndex(), nodeId);
   }
+  /** Returns whether one live node is nested below the supplied ancestor. */
   nodeHasAncestor(nodeId, ancestorId) {
     return indexedHasAncestor(this.currentNodeTreeIndex(), nodeId, ancestorId);
   }
+  /**
+   * Resolves the primary selection through the shared node-tree index.
+   * @returns The live selected node, or null when the selection is stale.
+   */
   selectedNode() {
     return this.selectedId ? this.nodeById(this.selectedId) : null;
   }
@@ -15771,7 +15798,7 @@ var MindMapEditor = class {
       onReadImageSource: this.callbacks.onReadImageSource,
       onScheduleAutoUpload: this.callbacks.onScheduleAutoUpload
     }, (values, mode) => {
-      var _a2;
+      var _a2, _b2, _c;
       if (!historyCaptured) {
         this.history.capture(this.document);
         historyCaptured = true;
@@ -15805,10 +15832,11 @@ var MindMapEditor = class {
       this.callbacks.onChange(this.getDocument());
       this.markSaving();
       if (this.inlineEditingId === selected.id) {
-        var _a3;
-        const inline = (_a3 = this.mindMapNodeElements.get(selected.id)) == null ? void 0 : _a3.querySelector(".mmc-node-text.is-inline-editing");
+        const inline = (_b2 = (_a2 = this.mindMapNodeElements.get(selected.id)) == null ? void 0 : _a2.querySelector(
+          ".mmc-node-text.is-inline-editing"
+        )) != null ? _b2 : null;
         const textBlock = nodeContentBlocks(selected).find((block) => block.type === "text");
-        if (inline && document.activeElement !== inline) renderRichTextRuns(inline, textBlock == null ? void 0 : textBlock.richText, (_a2 = textBlock == null ? void 0 : textBlock.text) != null ? _a2 : "", false);
+        if (inline && document.activeElement !== inline) renderRichTextRuns(inline, textBlock == null ? void 0 : textBlock.richText, (_c = textBlock == null ? void 0 : textBlock.text) != null ? _c : "", false);
       } else if (this.currentMode === "mindmap") {
         this.refreshMindMapNode(selected.id);
       } else if (mode === "commit") {
@@ -17689,7 +17717,13 @@ var MindMapEditor = class {
     let changed = false;
     for (let moveIndex = 0; moveIndex < moveOrder.length; moveIndex += 1) {
       const id = moveOrder[moveIndex];
-      changed = moveNodeRelative(this.document.root, id, targetId, position, moveIndex === 0 ? index : void 0) || changed;
+      changed = moveNodeRelative(
+        this.document.root,
+        id,
+        targetId,
+        position,
+        moveIndex === 0 ? index : void 0
+      ) || changed;
     }
     if (!changed) return;
     this.history.capture(historyDocument);
@@ -18895,7 +18929,7 @@ var MindMapStudioView = class extends import_obsidian13.TextFileView {
    * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
    */
   setViewData(data, clear) {
-    var _a2, _b2, _c, _d, _e, _f, _g, _h, _i, _j, _k;
+    var _a2, _b2, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l;
     const title = (_b2 = (_a2 = this.file) == null ? void 0 : _a2.basename) != null ? _b2 : "\u601D\u7EF4\u5BFC\u56FE";
     this.plugin.logDebug("view", "set-view-data-start", { filePath: (_c = this.file) == null ? void 0 : _c.path, clear, hasEditor: Boolean(this.editor), dataBytes: new TextEncoder().encode(data).byteLength });
     const cachedDocument = this.file ? this.plugin.getCachedMindMapDocument(this.file) : null;
@@ -18935,7 +18969,7 @@ var MindMapStudioView = class extends import_obsidian13.TextFileView {
       this.articleContextReady = true;
       this.articleContextCacheHit = true;
       this.plugin.logDebug("article-context", "cache-hit", {
-        filePath: (_g = this.file) == null ? void 0 : _g.path,
+        filePath: (_h = this.file) == null ? void 0 : _h.path,
         tocEntries: cachedArticleContext.tocEntries.length,
         readingSections: cachedArticleContext.readingSections.length
       });
@@ -18947,11 +18981,11 @@ var MindMapStudioView = class extends import_obsidian13.TextFileView {
       this.showArticleToc = false;
       this.articleNavigation = void 0;
       this.readingSections = [];
-      this.plugin.logDebug("article-context", "cache-miss", { filePath: (_h = this.file) == null ? void 0 : _h.path });
+      this.plugin.logDebug("article-context", "cache-miss", { filePath: (_i = this.file) == null ? void 0 : _i.path });
     }
     this.applyViewClasses();
     if (!this.editor || clear) {
-      (_i = this.editor) == null ? void 0 : _i.destroy();
+      (_j = this.editor) == null ? void 0 : _j.destroy();
       this.contentEl.empty();
       this.editor = new MindMapEditor(this.app, this.contentEl, this.document, {
         onChange: (document2, options) => {
@@ -19077,7 +19111,7 @@ var MindMapStudioView = class extends import_obsidian13.TextFileView {
     }
     if (queuedDirectory && this.editor) {
       this.plugin.logDebug("view", "apply-pending-directory", {
-        filePath: (_j = this.file) == null ? void 0 : _j.path,
+        filePath: (_k = this.file) == null ? void 0 : _k.path,
         focusNodeId: queuedDirectory.focusNodeId,
         articleContextReady: this.articleContextReady
       });
@@ -19085,7 +19119,7 @@ var MindMapStudioView = class extends import_obsidian13.TextFileView {
     }
     if (this.pendingFocusNodeId && this.editor) {
       const nodeId = this.pendingFocusNodeId;
-      this.plugin.logDebug("view", "apply-pending-focus", { filePath: (_k = this.file) == null ? void 0 : _k.path, nodeId, persistLocation: this.pendingFocusShouldPersist, articleContextReady: this.articleContextReady });
+      this.plugin.logDebug("view", "apply-pending-focus", { filePath: (_l = this.file) == null ? void 0 : _l.path, nodeId, persistLocation: this.pendingFocusShouldPersist, articleContextReady: this.articleContextReady });
       const persistLocation = this.pendingFocusShouldPersist;
       this.pendingFocusNodeId = null;
       this.pendingFocusShouldPersist = true;
@@ -19106,7 +19140,7 @@ var MindMapStudioView = class extends import_obsidian13.TextFileView {
    * @param document 发起恢复时的文档快照。
    */
   async recoverMissingSubmapNavigation(file, document2) {
-    var _a2, _b2;
+    var _a2, _b2, _c;
     try {
       const navigation = await this.plugin.recoverSubmapNavigation(file, document2);
       if (!(navigation == null ? void 0 : navigation.parentPath)) return;
@@ -19114,7 +19148,7 @@ var MindMapStudioView = class extends import_obsidian13.TextFileView {
       this.document.navigation = { ...navigation };
       this.plugin.invalidateMindMapCaches(file.path);
       this.plugin.rememberMindMapDocument(file, this.document);
-      if (this.editor) this.editor.applyRecoveredNavigation(navigation);
+      (_c = this.editor) == null ? void 0 : _c.applyRecoveredNavigation(navigation);
       this.articleContextCacheHit = false;
       this.plugin.logDebug("view", "apply-recovered-parent-navigation", {
         filePath: file.path,
@@ -20019,7 +20053,7 @@ var MindMapSearchIndex = class {
    * @returns Every map path reachable through parent/child relationships.
    */
   async refreshFamily(rootPath, currentDocument) {
-    var _a2, _b2;
+    var _a2, _b2, _c, _d, _e;
     const normalizedRoot = (0, import_obsidian14.normalizePath)(rootPath);
     const family = /* @__PURE__ */ new Set();
     const documents = /* @__PURE__ */ new Map();
@@ -20051,8 +20085,7 @@ var MindMapSearchIndex = class {
         if (child && !family.has(child.path)) queue.push(child.path);
       }
       for (const [candidatePath, candidate] of Object.entries(this.data.files)) {
-        var _a3, _b3, _c;
-        const parentPath = (_c = (_a3 = candidate.navigation) == null ? void 0 : _a3.parentPath) != null ? _c : (_b3 = candidate.entries[0]) == null ? void 0 : _b3.parentMapPath;
+        const parentPath = (_e = (_c = candidate.navigation) == null ? void 0 : _c.parentPath) != null ? _e : (_d = candidate.entries[0]) == null ? void 0 : _d.parentMapPath;
         const resolvedParent = this.resolveSubmapFile(parentPath, candidatePath);
         if ((resolvedParent == null ? void 0 : resolvedParent.path) === path && !family.has(candidatePath)) queue.push(candidatePath);
       }
