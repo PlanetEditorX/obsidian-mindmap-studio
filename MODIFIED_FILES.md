@@ -1,5 +1,14 @@
 # Modified Files
 
+## 1.46.3 CI 综合回归契约修复
+
+- `scripts/test.mjs`：删除对历史注释文本 `first climb to the top parent` 的脆弱断言，改为验证 `refreshFamily()` 实际执行“循环防护 → `familyIndexedFile()` → `navigation.parentPath` → 父文件解析 → 更新 `familyRoot`”的数据流。
+- `tests/global-search-traversal.test.mjs`：无需改业务测试；现有行为用例继续锁定新鲜父子索引 **0 次读取**、过期祖先跨父链/向下遍历 **仅 1 次读取**。
+- `docs/TESTING.md`：补充综合回归源码契约原则，禁止用实现注释或说明性 prose 作为行为存在性的唯一判据。
+- `CHANGELOG.md`、`TEST_RESULTS.md`、Codex 交接：同步 CI 根因、验证边界和后续 GitHub Actions 验收。
+- 本轮没有修改 `src/`、`styles.css` 或运行时代码，`main.js` 保持第一批性能优化交付版本不变。
+- 本轮测试安装包：`mindmap-studio-1.46.3-test-527971.zip`，SHA-256 `02aae55163facd84e9c67cfbf938687cb73305373b86e1664410f80336b38fe3`；完整源码与 Codex 交接使用同一 `527971` 后缀。
+
 ## 1.46.3 大型导图性能优化第一批
 
 - `src/editor/editor.ts`：`applyMeasuredMindMapLayout()` 改为直接复用 `computeLayout()` 已完成的碰撞消解、`byId` 与边界结果，删除调用方第二次 `resolveLayoutCollisions()` 和重复边界重算；新增 `ToolbarAvailabilityContext` / `toolbarAvailabilityContext()`，一次树遍历计算当前选择、有效非根选择和可折叠状态，全部工具栏按钮共享该上下文。
