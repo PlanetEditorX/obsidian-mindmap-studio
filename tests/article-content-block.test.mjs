@@ -346,7 +346,7 @@ test("pasted images report storage, insertion, and auto-upload failures independ
   assert.match(handlePaste, /const articleTargetAllowed = this\.currentMode === "article" \|\| this\.currentMode === "reading"/);
   assert.match(handlePaste, /const nodeId = articleTargetAllowed[\s\S]*targetNode\?\.dataset\.nodeId \?\? this\.activeArticleBlock\?\.nodeId \?\? this\.selectedId[\s\S]*: this\.selectedId/);
   assert.match(handlePaste, /const afterBlockId = articleTargetAllowed[\s\S]*: undefined/);
-  assert.match(handlePaste, /const selected = nodeId \? findNode\(this\.document\.root, nodeId\) : null[\s\S]*粘贴开始时选择的节点已不存在/);
+  assert.match(handlePaste, /const selected = nodeId \? this\.nodeById\(nodeId\) : null[\s\S]*粘贴开始时选择的节点已不存在/);
   assert.doesNotMatch(imagePasteBranch, /this\.selectedNode\(\) \?\? this\.document\.root/);
   assert.match(handlePaste, /this\.mutate\(\(\) => \{/);
   assert.match(handlePaste, /if \(!inserted\)[\s\S]*paste image insertion failed[\s\S]*图片文件已保存，但插入节点失败/);
@@ -379,7 +379,7 @@ test("mind-map image paste ignores stale DOM focus and uses the live selection",
   const handlePaste = editorSource.match(/private async handlePaste\(event: ClipboardEvent\): Promise<void> \{[\s\S]*?\n  \}/)?.[0] ?? "";
   assert.match(handlePaste, /const nodeId = articleTargetAllowed[\s\S]*: this\.selectedId/);
   assert.doesNotMatch(handlePaste, /const nodeId = targetNode\?\.dataset\.nodeId\s*\?\?/);
-  assert.match(handlePaste, /const selected = nodeId \? findNode\(this\.document\.root, nodeId\) : null/);
+  assert.match(handlePaste, /const selected = nodeId \? this\.nodeById\(nodeId\) : null/);
 });
 
 test("table edits preserve the visible anchor and column resizing avoids a synchronous article rebuild", () => {

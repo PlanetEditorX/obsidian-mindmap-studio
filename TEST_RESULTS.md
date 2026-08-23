@@ -2,6 +2,28 @@
 
 版本：1.46.3
 
+## 1.46.3 第三批性能优化 CI 图片粘贴契约修复
+
+### 用户 GitHub Actions 日志
+
+- `npm ci`：成功，安装 18 个包，审计 19 个包，0 个漏洞。
+- `npm run test:unit` 共 **377 项，375 通过 / 2 失败**。两个失败都位于 `tests/article-content-block.test.mjs`，分别是“图片粘贴错误分流”和“导图图片粘贴使用实时选择”源码契约。
+- 两个失败都仍硬编码匹配旧实现 `findNode(this.document.root, nodeId)`；第三批节点树索引已经把该查询等价优化为 `this.nodeById(nodeId)`，CI 日志中的实际 `handlePaste()` 同时保留“粘贴开始时选择的节点已不存在”提示以及实时 `selectedId` 目标冻结逻辑。
+- 因 `test:unit` 非零退出，本次 CI 没有继续执行 `test:regression`、docs、repo 或 production build；日志没有显示第三批运行时代码失败。
+
+### 本轮修复与本地验证
+
+- `tests/article-content-block.test.mjs` 两条契约改为要求 `const selected = nodeId ? this.nodeById(nodeId) : null`，与第三批 `NodeTreeIndex` 热路径一致；继续验证导图模式不得被旧 DOM focus 覆盖实时选择，且异步保存完成时目标节点已不存在必须给出独立提示。
+- 临时复用环境已有 TypeScript 后执行 `node --test tests/article-content-block.test.mjs`：**23 / 23 通过**，包括用户 CI 中失败的两条。
+- 本轮没有修改 `src/`、`styles.css` 或运行时代码；`main.js` 与第三批性能优化交付保持一致，无需因测试正则变更而重构建。
+- 当前容器尝试 `npm ci --ignore-scripts --no-audit --no-fund` 仍因网络获取超时，不能本地复现 GitHub Actions 的完整 `npm run verify`。下一次 CI 应先确认 377 项单测全部通过，再继续执行 regression/docs/repo/build。
+
+### 本轮交付
+
+- 测试安装 ZIP：`mindmap-studio-1.46.3-test-465824.zip`
+- SHA-256：`5a5385cbb1c35273ca3a765d67a4dabb8190b08637a2f92a57747fc16d52c9f2`
+- 完整源码与 Codex 交接使用同一 `465824` 后缀。
+
 ## 1.46.3 大型导图性能优化第三批
 
 ### 实现与专项验证

@@ -1,5 +1,14 @@
 # Modified Files
 
+## 1.46.3 第三批性能优化 CI 图片粘贴契约修复
+
+- `tests/article-content-block.test.mjs`：两条图片粘贴源码契约从旧 `findNode(this.document.root, nodeId)` 更新为第三批节点树索引入口 `this.nodeById(nodeId)`；保留实时选择、目标节点消失提示、错误分流和自动上传排程边界。
+- `docs/TESTING.md`：补充性能重构后的源码契约规则：若稳定抽象已经由扫描式 helper 替换为索引 helper，测试应锁定当前可执行接线/行为，不得继续要求已废弃 helper 名称。
+- `CHANGELOG.md`、`TEST_RESULTS.md`、Codex 交接：记录用户 CI 的 **377 项中 375 通过 / 2 个旧契约失败**、修复范围和后续 GitHub Actions 验收边界。
+- 本轮没有修改 `src/`、`styles.css` 或运行时代码；`main.js` 保持第三批性能优化版本不变。
+
+- 本轮测试安装包：`mindmap-studio-1.46.3-test-465824.zip`，SHA-256 `5a5385cbb1c35273ca3a765d67a4dabb8190b08637a2f92a57747fc16d52c9f2`；完整源码与 Codex 交接使用同一 `465824` 后缀。
+
 ## 1.46.3 大型导图性能优化第三批
 
 - `src/core/node-tree.ts`、`src/core/model.ts`：新增 `NodeTreeIndex`、`buildNodeTreeIndex()` 与父链祖先查询辅助函数；一次 DFS 建立稳定节点顺序、`nodeId → node`、`nodeId → parent` 和可折叠状态，并允许 `moveNodeRelative()` 在结构变化前的首步复用已有索引。
