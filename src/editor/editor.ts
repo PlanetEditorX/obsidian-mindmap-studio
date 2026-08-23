@@ -1479,6 +1479,8 @@ export class MindMapEditor {
   private panY = 0;
   private mindMapViewportInitialized = false;
   private readonly history: DocumentHistory;
+  /** Serialized current revision reused as the next pre-mutation undo snapshot until unnotified state changes invalidate it. */
+  private documentSnapshotJson: string | null = null;
   private draggingId: string | null = null;
   private draggingContentBlock: { nodeId: string; blockId: string } | null = null;
   private dragDropPosition: NodeDropPosition | null = null;
@@ -1568,6 +1570,7 @@ export class MindMapEditor {
     this.options = options;
     this.history = new DocumentHistory(() => this.options.historyLimit);
     this.document = cloneDocument(document);
+    this.documentSnapshotJson = null;
     this.currentMode = this.resolveMode(options.defaultViewMode);
     const documentReadOnly = this.document.view?.readOnly === true;
     this.readOnly = this.currentMode === "article"
@@ -1712,6 +1715,7 @@ export class MindMapEditor {
     if (fileChanged) this.lastReadingLocation = this.options.readingLocation;
     this.callbacks.onDebugLog("view", "editor-set-document", { previousFilePath, nextFilePath, fileChanged, resetHistory, readingLocationNodeId: this.lastReadingLocation?.nodeIds[0] });
     this.document = cloneDocument(document);
+    this.documentSnapshotJson = null;
     this.currentMode = this.resolveMode(this.options.defaultViewMode);
     const documentReadOnly = this.document.view?.readOnly === true;
     this.readOnly = this.currentMode === "article"
@@ -1739,6 +1743,7 @@ export class MindMapEditor {
   applyRecoveredNavigation(navigation: MindMapNavigation): void {
     if (this.document.navigation?.parentPath || !navigation.parentPath) return;
     this.document.navigation = { ...navigation };
+    this.invalidateDocumentSnapshotJson();
     this.renderNavigation();
   }
 
@@ -2056,6 +2061,7 @@ export class MindMapEditor {
       && this.options.showArticleToc
       && !this.pendingArticleFocusLocation) {
       this.document.view = { ...(this.document.view ?? {}), articleLandingMode: "toc" };
+      this.invalidateDocumentSnapshotJson();
     }
     if (mode === "article"
       && requestedTarget?.filePath === this.options.currentFilePath
@@ -2063,6 +2069,7 @@ export class MindMapEditor {
       && !this.options.showArticleToc
       && this.document.view?.articleLandingMode !== "article") {
       this.document.view = { ...(this.document.view ?? {}), articleLandingMode: "article" };
+      this.invalidateDocumentSnapshotJson();
     }
     this.currentMode = mode;
     if (mode === "article" && mode !== previousMode) {
@@ -2319,6 +2326,7 @@ export class MindMapEditor {
     if (collapsedAncestors.length) {
       // 恢复位置属于导航行为，不写入撤销栈；只在当前编辑器快照中展开到目标节点。
       collapsedAncestors.forEach((node) => { node.collapsed = false; });
+      if (targetSection?.document === this.document) this.invalidateDocumentSnapshotJson();
       this.render();
     }
     if (resolved.filePath === this.options.currentFilePath && this.nodeById(resolved.nodeId)) {
@@ -2442,13 +2450,44 @@ export class MindMapEditor {
     void this.callbacks.onAskAi(this.aiScopeNodeId ?? undefined);
   }
 
+  /** Marks the serialized current-revision cache stale after state changes that do not immediately publish onChange. */
+  private invalidateDocumentSnapshotJson(): void {
+    this.documentSnapshotJson = null;
+  }
+
+  /** Returns the serialized current document, reusing the latest published revision when it is still exact. */
+  private currentDocumentSnapshotJson(): string {
+    if (this.documentSnapshotJson === null) this.documentSnapshotJson = this.history.createSnapshot(this.document);
+    return this.documentSnapshotJson;
+  }
+
+  /** Pushes the current pre-mutation revision into undo history without re-stringifying a known serialized snapshot. */
+  private captureHistorySnapshot(): void {
+    this.history.captureSnapshot(this.currentDocumentSnapshotJson());
+    this.invalidateDocumentSnapshotJson();
+  }
+
+  /**
+   * Restores one detached document object from the serialized current revision.
+   *
+   * @param forceSerialize True after a mutation, when the previous revision cache must not be reused.
+   * @returns A document object isolated from the editor's mutable model.
+   */
+  private createDetachedDocumentSnapshot(forceSerialize = false): MindMapDocument {
+    this.persistMindMapViewportState();
+    const snapshot = forceSerialize
+      ? this.history.createSnapshot(this.document)
+      : this.currentDocumentSnapshotJson();
+    this.documentSnapshotJson = snapshot;
+    return this.history.restoreSnapshot(snapshot);
+  }
+
   /**
    * 读取并返回document，并保持模型、界面和持久化状态的一致性。
    * @returns 当前操作生成、查找或规范化后的结果。
    */
   getDocument(): MindMapDocument {
-    this.persistMindMapViewportState();
-    return cloneDocument(this.document);
+    return this.createDetachedDocumentSnapshot();
   }
 
   /** Returns only the current persisted view metadata so host saves can reuse their existing detached document snapshot. */
@@ -2459,7 +2498,7 @@ export class MindMapEditor {
 
   /** Sends one document snapshot to the host together with the minimum article-context work it requires. */
   private notifyDocumentChange(articleContextImpact: ArticleContextChangeImpact = "structure"): void {
-    this.callbacks.onChange(this.getDocument(), { articleContextImpact });
+    this.callbacks.onChange(this.createDetachedDocumentSnapshot(true), { articleContextImpact });
   }
 
   /**
@@ -3172,6 +3211,7 @@ export class MindMapEditor {
   private persistReadOnlyState(): void {
     this.document.view = { ...(this.document.view ?? {}), readOnly: this.readOnly };
     delete this.document.view.mode;
+    this.invalidateDocumentSnapshotJson();
     if (this.readOnlyPersistTimer !== null) window.clearTimeout(this.readOnlyPersistTimer);
     // State changes must not wait for a full document clone and serialization
     // before the lock icon and existing content become interactive.
@@ -4799,7 +4839,7 @@ export class MindMapEditor {
   private recordQuestionPractice(nodeId: string, correct: boolean): void {
     const node = this.nodeById(nodeId);
     if (!node?.question) return;
-    this.history.capture(this.document);
+    this.captureHistorySnapshot();
     const question = node.question;
     question.attemptCount += 1;
     if (correct) {
@@ -5743,7 +5783,7 @@ export class MindMapEditor {
       const values = readRichTextEditor(editor!);
       const normalized = normalizeMarkdownRichText(values.richText, values.text);
       if (!historyCaptured) {
-        this.history.capture(this.document);
+        this.captureHistorySnapshot();
         historyCaptured = true;
       }
       const blocks = nodeContentBlocks(node);
@@ -6105,7 +6145,7 @@ export class MindMapEditor {
       // A continuously open editor may autosave many times. Capture one undo
       // snapshot for the whole editing session instead of one snapshot per keypress.
       if (!historyCaptured) {
-        this.history.capture(this.document);
+        this.captureHistorySnapshot();
         historyCaptured = true;
       }
       replaceNodeContentBlocks(selected, values.content);
@@ -6434,6 +6474,7 @@ export class MindMapEditor {
     this.pendingArticleFocusLocation = null;
     if (mode === "article") this.pendingArticleDirectoryFocusNodeId = null;
     this.document.view = { ...(this.document.view ?? {}), articleLandingMode: mode };
+    this.invalidateDocumentSnapshotJson();
     this.render();
   }
 
@@ -7180,7 +7221,7 @@ export class MindMapEditor {
     const columnWidths = block.table.headers.map((_, index) => Math.max(64, Math.min(1200, Math.round(widths[index] ?? 160))));
     const location = this.currentMode === "mindmap" ? null : this.captureCurrentLocation(this.currentMode);
     if (location) this.rememberLocation(location, true);
-    this.history.capture(this.document);
+    this.captureHistorySnapshot();
     this.upsertStructuredBlock(node, "table", { ...block.table, columnWidths }, blockId);
     this.notifyDocumentChange("none");
     this.markSaving();
@@ -7439,8 +7480,12 @@ export class MindMapEditor {
     const ancestors = this.nodeAncestors(id);
     const collapsed = ancestors.filter((node) => node.collapsed);
     if (collapsed.length) {
-      if (this.readOnly) collapsed.forEach((node) => { node.collapsed = false; });
-      else this.mutateWithoutArticleContext(() => collapsed.forEach((node) => { node.collapsed = false; }));
+      if (this.readOnly) {
+        collapsed.forEach((node) => { node.collapsed = false; });
+        this.invalidateDocumentSnapshotJson();
+      } else {
+        this.mutateWithoutArticleContext(() => collapsed.forEach((node) => { node.collapsed = false; }));
+      }
     }
     this.selectedId = id;
     this.selectedIds.clear();
@@ -7449,6 +7494,7 @@ export class MindMapEditor {
       && id !== this.document.root.id
       && this.document.view?.articleLandingMode !== "article") {
       this.document.view = { ...(this.document.view ?? {}), articleLandingMode: "article" };
+      this.invalidateDocumentSnapshotJson();
     }
     const location = createReadingLocation(
       this.readingLocationSections(),
@@ -7676,9 +7722,10 @@ export class MindMapEditor {
     const blocks = nodeContentBlocks(node);
     const block = blocks.find((item): item is MindMapImageContentBlock => item.type === "image" && item.id === blockId);
     if (!block) return;
-    const previous = cloneDocument(this.document);
+    const previousSnapshot = this.currentDocumentSnapshotJson();
+    this.invalidateDocumentSnapshotJson();
     if (!await uploadCurrentNodeImage(this.app, block, this.callbacks)) return;
-    this.history.capture(previous);
+    this.history.captureSnapshot(previousSnapshot);
     replaceNodeContentBlocks(node, blocks);
     this.notifyDocumentChange("none");
     this.markSaving();
@@ -7695,7 +7742,8 @@ export class MindMapEditor {
     );
     if (!hostIds) return;
 
-    const previous = cloneDocument(this.document);
+    const previousSnapshot = this.currentDocumentSnapshotJson();
+    this.invalidateDocumentSnapshotJson();
     let uploadedImages = 0;
     let skippedImages = 0;
     let failedImages = 0;
@@ -7750,7 +7798,7 @@ export class MindMapEditor {
     }
 
     if (changed) {
-      this.history.capture(previous);
+      this.history.captureSnapshot(previousSnapshot);
       this.notifyDocumentChange("none");
       this.markSaving();
       this.render();
@@ -8196,7 +8244,8 @@ export class MindMapEditor {
       .filter((node) => requestedIds.has(node.id) && !indexedHasAnyAncestor(index, node.id, requestedIds))
       .map((node) => node.id);
     if (!draggedIds.length) return;
-    const historyDocument = cloneDocument(this.document);
+    const historySnapshot = this.currentDocumentSnapshotJson();
+    this.invalidateDocumentSnapshotJson();
     const moveOrder = position === "after" ? [...draggedIds].reverse() : draggedIds;
     let changed = false;
     for (let moveIndex = 0; moveIndex < moveOrder.length; moveIndex += 1) {
@@ -8210,7 +8259,7 @@ export class MindMapEditor {
       ) || changed;
     }
     if (!changed) return;
-    this.history.capture(historyDocument);
+    this.history.captureSnapshot(historySnapshot);
     this.selectedId = draggedId;
     this.selectedIds.clear();
     for (const id of requestedIds) this.selectedIds.add(id);
@@ -8227,7 +8276,7 @@ export class MindMapEditor {
    */
   private replaceDocument(document: MindMapDocument): void {
     if (!this.ensureEditable()) return;
-    this.history.capture(this.document);
+    this.captureHistorySnapshot();
     this.document = cloneDocument(document);
     this.selectedId = this.document.root.id;
     this.notifyDocumentChange();
@@ -8245,7 +8294,7 @@ export class MindMapEditor {
 
   /** 用外部确认的完整文档替换当前状态，并统一接入撤销、保存、渲染和聚焦。 */
   private replaceDocumentFromExternalEdit(document: MindMapDocument, focusNodeId: string): void {
-    this.history.capture(this.document);
+    this.captureHistorySnapshot();
     this.document = cloneDocument(document);
     this.selectedId = this.nodeById(focusNodeId)?.id ?? this.document.root.id;
     this.selectedIds.clear();
@@ -8264,7 +8313,7 @@ export class MindMapEditor {
    */
   private mutateInlineText(nodeId: string, action: () => void): void {
     if (!this.ensureEditable()) return;
-    this.history.capture(this.document);
+    this.captureHistorySnapshot();
     action();
     this.notifyDocumentChange("content");
     this.markSaving();
@@ -8330,7 +8379,7 @@ export class MindMapEditor {
     if (location) this.rememberLocation(location, true);
     const previousNumberingMode = this.document.root.articleNumberingMode;
     const previousNumberingLevel = this.document.root.articleNumberingLevel;
-    this.history.capture(this.document);
+    this.captureHistorySnapshot();
     action();
     const articleContextImpact: ArticleContextChangeImpact =
       previousNumberingMode !== this.document.root.articleNumberingMode
@@ -8369,7 +8418,7 @@ export class MindMapEditor {
     if (!this.ensureEditable()) return;
     const location = restoreLocation ?? (this.currentMode === "mindmap" ? null : this.captureCurrentLocation(this.currentMode));
     if (location) this.rememberLocation(location, true);
-    this.history.capture(this.document);
+    this.captureHistorySnapshot();
     action();
     this.notifyDocumentChange(articleContextImpact);
     this.markSaving();
@@ -8382,9 +8431,10 @@ export class MindMapEditor {
    */
   private undo(): void {
     if (!this.ensureEditable()) return;
-    const previous = this.history.undo(this.document);
-    if (!previous) return;
-    this.document = previous;
+    const previousSnapshot = this.history.undoSnapshot(this.currentDocumentSnapshotJson());
+    if (!previousSnapshot) return;
+    this.document = this.history.restoreSnapshot(previousSnapshot);
+    this.documentSnapshotJson = previousSnapshot;
     this.selectedId = this.document.root.id;
     this.notifyDocumentChange();
     this.markSaving();
@@ -8396,9 +8446,10 @@ export class MindMapEditor {
    */
   private redo(): void {
     if (!this.ensureEditable()) return;
-    const next = this.history.redo(this.document);
-    if (!next) return;
-    this.document = next;
+    const nextSnapshot = this.history.redoSnapshot(this.currentDocumentSnapshotJson());
+    if (!nextSnapshot) return;
+    this.document = this.history.restoreSnapshot(nextSnapshot);
+    this.documentSnapshotJson = nextSnapshot;
     this.selectedId = this.document.root.id;
     this.notifyDocumentChange();
     this.markSaving();
@@ -8491,12 +8542,15 @@ export class MindMapEditor {
    */
   private persistMindMapViewportState(): void {
     if (!this.mindMapViewportInitialized) return;
+    const current = this.document.view;
+    if (current?.zoom === this.zoom && current.panX === this.panX && current.panY === this.panY) return;
     this.document.view = {
-      ...(this.document.view ?? {}),
+      ...(current ?? {}),
       zoom: this.zoom,
       panX: this.panX,
       panY: this.panY
     };
+    this.invalidateDocumentSnapshotJson();
   }
 
   /**

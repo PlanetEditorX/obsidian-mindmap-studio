@@ -39,7 +39,16 @@ export class DocumentHistory {
    * @param document 即将被修改的文档。
    */
   capture(document: MindMapDocument): void {
-    this.undoStack.push(this.serialize(document));
+    this.captureSnapshot(this.createSnapshot(document));
+  }
+
+  /**
+   * 直接记录已经序列化好的修改前文档，避免调用方为了撤销再次遍历整棵文档树。
+   *
+   * @param snapshot 与当前文档完全对应的 JSON 快照。
+   */
+  captureSnapshot(snapshot: string): void {
+    this.undoStack.push(snapshot);
     this.trim();
     this.redoStack = [];
   }
@@ -50,10 +59,21 @@ export class DocumentHistory {
    * @param current 当前文档。
    */
   undo(current: MindMapDocument): MindMapDocument | null {
+    const previous = this.undoSnapshot(this.createSnapshot(current));
+    return previous ? this.restoreSnapshot(previous) : null;
+  }
+
+  /**
+   * 使用已经序列化好的当前状态执行撤销，并返回上一份 JSON 快照。
+   *
+   * @param currentSnapshot 当前文档的完整 JSON 快照。
+   * @returns 上一份快照；没有可撤销记录时返回 null。
+   */
+  undoSnapshot(currentSnapshot: string): string | null {
     const previous = this.undoStack.pop();
     if (!previous) return null;
-    this.redoStack.push(this.serialize(current));
-    return this.deserialize(previous);
+    this.redoStack.push(currentSnapshot);
+    return previous;
   }
 
   /**
@@ -62,11 +82,22 @@ export class DocumentHistory {
    * @param current 当前文档。
    */
   redo(current: MindMapDocument): MindMapDocument | null {
+    const next = this.redoSnapshot(this.createSnapshot(current));
+    return next ? this.restoreSnapshot(next) : null;
+  }
+
+  /**
+   * 使用已经序列化好的当前状态执行重做，并返回下一份 JSON 快照。
+   *
+   * @param currentSnapshot 当前文档的完整 JSON 快照。
+   * @returns 下一份快照；没有可重做记录时返回 null。
+   */
+  redoSnapshot(currentSnapshot: string): string | null {
     const next = this.redoStack.pop();
     if (!next) return null;
-    this.undoStack.push(this.serialize(current));
+    this.undoStack.push(currentSnapshot);
     this.trim();
-    return this.deserialize(next);
+    return next;
   }
 
   /** 按设置限制裁剪最旧的历史快照。 */
@@ -75,13 +106,23 @@ export class DocumentHistory {
     while (this.undoStack.length > limit) this.undoStack.shift();
   }
 
-  /** 将文档转换为与运行时对象隔离的快照。 */
-  private serialize(document: MindMapDocument): string {
+  /**
+   * 将文档转换为与运行时对象隔离的 JSON 快照。
+   *
+   * @param document 要序列化的当前文档。
+   * @returns 可直接放入历史栈或跨边界传递的完整 JSON。
+   */
+  createSnapshot(document: MindMapDocument): string {
     return JSON.stringify(document);
   }
 
-  /** 从内部快照恢复文档对象。 */
-  private deserialize(snapshot: string): MindMapDocument {
+  /**
+   * 从 JSON 快照恢复新的文档对象。
+   *
+   * @param snapshot 完整文档 JSON。
+   * @returns 与历史栈字符串隔离的新文档对象。
+   */
+  restoreSnapshot(snapshot: string): MindMapDocument {
     return JSON.parse(snapshot) as MindMapDocument;
   }
 }

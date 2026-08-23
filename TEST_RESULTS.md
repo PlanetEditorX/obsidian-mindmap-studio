@@ -2,6 +2,41 @@
 
 版本：1.46.3
 
+## 1.46.3 mutation 序列化快照复用性能优化第五批 5.2
+
+### 实现与行为验证
+
+- `DocumentHistory` 新增字符串快照入口，但 undo/redo 仍保存完整文档 JSON。普通 mutation 通过 `captureHistorySnapshot()` 复用最近一次已发布修订字符串作为修改前历史，不再额外序列化旧树；`notifyDocumentChange()` 使用 `createDetachedDocumentSnapshot(true)` 强制只序列化一次修改后状态，再恢复一个与编辑器内部模型隔离的宿主对象。
+- zoom/pan、恢复导航、只读、文章落地和阅读恢复折叠等未立即触发 `onChange` 的持久字段会显式使 `documentSnapshotJson` 失效；下一次读取/历史捕获自动回退完整序列化。异步图片上传、批量上传和拖放的备用 undo 也改为冻结字符串快照，避免为了“可能失败”先深拷贝整棵文档。
+- `node --test tests/history-snapshot-reuse.test.mjs`：**5 / 5 通过**；覆盖字符串快照 `captureSnapshot / undoSnapshot / redoSnapshot` 往返、旧 `capture/undo/redo` API 兼容、普通 mutation 不再使用 `history.capture(this.document)`、未发布状态缓存失效以及安装 `main.js` 同等契约。
+- 第五批 5.1 宿主快照 + 5.2 历史序列化 + 文章/阅读/渐进渲染联合专项：**75 / 75 通过**。
+- 修改的 TypeScript 模块使用环境已有 TypeScript `transpileModule` 独立检查：`src/editor/history-manager.ts`、`src/editor/editor.ts` **2 / 2 通过**；`node --check main.js` 通过。
+- 两条表格编辑测试原先硬编码 `history.capture(this.document)`；更新为 `captureHistorySnapshot()` 后，`article-content-block + history-snapshot-reuse + document-snapshot-reuse` 联合专项 **31 / 31 通过**。
+- 恢复原仓库 `examples/` 仅用于测试后执行正式 `npm run test:unit`：共 **380 项**，其中 **378 项通过**；只有 `tests/plugin-update.test.mjs` 与 `tests/xmind-import.test.mjs` 在测试文件加载阶段因当前环境缺 `esbuild` 失败，没有第五批 5.2 业务断言失败。
+- `npm run docs:generate`、`npm run test:docs`：通过，当前 **58 个源码模块、1228 个具名声明全部覆盖**；`npm run test:repo`：通过；`node --check tests/history-snapshot-reuse.test.mjs` / `tests/document-snapshot-reuse.test.mjs`：通过。
+
+### 隔离性能基准
+
+- 使用结构化文档模拟连续 mutation 的稳定态成本。旧方式每次执行“history 对修改前文档 `JSON.stringify` + change snapshot 对修改后文档 `JSON.stringify + JSON.parse`”；新方式直接复用上一修订字符串进入 history，只对新修订执行一次 `stringify + parse`。中位耗时：1,000 节点约 **0.689 ms → 0.537 ms（1.28×）**；5,000 节点约 **3.979 ms → 2.921 ms（1.36×）**；10,000 节点约 **7.271 ms → 5.583 ms（1.30×）**。该结果只衡量 mutation 边界被删除的一次旧树序列化，不代表 Obsidian 整帧同倍数加速。
+
+### 本地环境边界
+
+- `npm run test:regression` 在执行任何断言前因当前工作区缺 `esbuild` 退出；与本批业务逻辑无关。
+- `npm run build` 在 TypeScript 检查阶段因当前源码交付环境缺 `obsidian` 及其扩展 DOM 类型而失败，未进入 production esbuild；这不是 5.2 的源码类型结论。`main.js` 按现有 1.46.3 bundle 等价同步，正式发布前需在完整 GitHub Actions 执行 `npm ci && npm run verify` 并重新生成 production bundle。
+- 临时恢复的 `examples/` 和本地 TypeScript 软链接只用于验证，最终源码交付包按仓库规则排除 `examples/` 与 `node_modules/`。
+
+### 安全边界
+
+- `documentSnapshotJson` 只有在与当前可持久文档完全一致时才能复用；任何绕过 `notifyDocumentChange()` 的持久状态写入都必须显式失效。性能优化不能以复用过期 JSON 为代价。
+- `DocumentHistory` 仍使用完整 JSON 快照、原 history limit 和原 undo/redo 行为；本批没有实现增量 patch history。
+- View 第五批 5.1 的宿主快照复用保持不变；编辑器内部可变 `this.document` 仍不会直接暴露给 View 或异步服务。
+
+### 本轮交付
+
+- 测试安装 ZIP：`mindmap-studio-1.46.3-test-392641.zip`
+- SHA-256：`4277a89bb1b287388a766e1f8f3fc48f9a49a3d31bd1e584cb20e1a83c8ab106`
+- 完整源码与 Codex 交接使用相同 `392641` 后缀。
+
 ## 1.46.3 文档快照复用性能优化第五批 5.1
 
 ### 实现与行为验证
