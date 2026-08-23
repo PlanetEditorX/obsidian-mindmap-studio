@@ -1,5 +1,18 @@
 # Modified Files
 
+## 1.46.3 文章上下文性能优化第四批
+
+- `src/editor/editor-types.ts`：新增 `ArticleContextChangeImpact = "none" | "content" | "structure"`，`MindMapEditorChangeOptions` 改为携带变更对跨文件文章上下文的影响级别；未指定仍安全回退 `structure`。
+- `src/editor/editor.ts`：统一写操作通过 `notifyDocumentChange()` 上报影响级别；图片、表格、代码、样式、尺寸、折叠等本地变化走 `none`，标题/正文文字变化走 `content`，节点增删移动、子导图关系和文章编号变化继续走 `structure`。新增 `mutateWithoutArticleContext()` / `mutateArticleContent()`，保留统一 history/save/render 链路。
+- `src/article/modes.ts`：新增 `refreshArticleTocEntriesFromReadingSections()`，直接从已加载 `ReadingSection` 重算目录标题、编号、breadcrumb，并按既有目录遍历位置保留跨文件 `filePath/nodeId` 身份；数量或层级不匹配返回 `null`，要求调用方升级完整构建。
+- `src/view.ts`：新增约 140 ms 的内容级文章上下文防抖刷新，与约 320 ms 的结构级完整刷新分离；内容级刷新只修补当前 `readingSections` 文档并在内存重算目录。完整异步构建捕获 `documentChangeRevision`，构建期间发生编辑时丢弃旧结果并立即按最新文档重建，成功/异常路径都不允许旧快照覆盖新编辑。
+- `tests/article-numbering.test.mjs`、`tests/article-context-edit.test.mjs`、`tests/article-content-block.test.mjs`、`tests/reading-editor-contract.test.mjs`：覆盖跨父/子导图内容级目录重算、目录拓扑不匹配回退、源码与安装 bundle 的三档接线、旧构建修订保护，以及原有文章编辑/表格/图片契约；同步修正测试方法块提取对新 `mutate()` 签名的脆弱依赖。
+- `README.md`、`CHANGELOG.md`、`docs/DEVELOPMENT.md`、`docs/ARCHITECTURE.md`、`docs/TESTING.md`、`docs/FUNCTION_REFERENCE.md`：记录 change-impact 分类边界、无跨文件读取的轻量路径、自动回退和异步旧结果保护。
+- `main.js`：当前容器缺完整 production 构建依赖，基于现有 1.46.3 bundle 等价同步第四批运行逻辑；源码/bundle 双重契约、TypeScript `transpileModule` 和 Node 语法检查用于本地防回退，正式发布前仍需完整 CI production build。
+- 本轮不改变 `.mindmap` 数据格式、撤销/保存语义、父子导图导航或文章编号规则；只是减少不必要的文章族读取/解析。
+
+- 本轮测试安装包：`mindmap-studio-1.46.3-test-421786.zip`，SHA-256 `3e0b96d6dea18a1875d5ee82289638663f1e1edfaddcb3c3e96b955e578ee6ed`；完整源码与 Codex 交接使用同一 `421786` 后缀。
+
 ## 1.46.3 第三批性能优化 CI 全选契约修复
 
 - `scripts/test.mjs`：`selectAllNodesExceptRoot()` 综合回归从旧 `flattenNodes(this.document.root)` 实现文本更新为第三批节点树索引入口 `this.nodeTreeNodes()`；继续锁定排除 root、选择全部后代和 `Ctrl/Cmd+A` 路由。

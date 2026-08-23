@@ -36,7 +36,7 @@ npm run verify
 
 ### 编辑器层
 
-`src/editor/` 负责交互和渲染。所有可撤销写操作应通过统一 mutation/history 链路；不要直接修改文档后绕过撤销和保存通知。只有 DOM 已在连续交互中实时得到最终结果、且同步重绘会破坏当前位置时，才允许像文章表格列宽提交一样显式执行 `history.capture()`、稳定块更新、`onChange(..., { refreshArticleContext: false })` 和保存标记，同时跳过 `render()` 与文章族上下文刷新，并必须补充专项契约。
+`src/editor/` 负责交互和渲染。所有可撤销写操作应通过统一 mutation/history 链路；不要直接修改文档后绕过撤销和保存通知。每个 mutation 都必须按文章上下文影响选择 `ArticleContextChangeImpact`：`none` 用于只改变展示或不影响目录语义的内容，`content` 用于可能改变文章标题文字但不改变节点拓扑/编号，`structure` 用于节点增删移动、子导图关系或文章编号变化；未指定时默认 `structure`。只有 DOM 已在连续交互中实时得到最终结果、且同步重绘会破坏当前位置时，才允许像文章表格列宽提交一样显式捕获历史、稳定块更新并通知 `articleContextImpact: "none"`，同时跳过同步 `render()`；这类例外必须补充专项契约。
 
 ### 插件服务层
 

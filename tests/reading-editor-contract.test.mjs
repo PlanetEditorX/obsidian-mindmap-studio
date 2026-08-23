@@ -33,7 +33,9 @@ test("pending local progress is not replaced by stale option refreshes", () => {
 });
 
 test("document mutations preserve the current article or reading anchor across a redraw", () => {
-  const mutate = editorSource.match(/private mutate\(action: \(\) => void, restoreLocation\?: ReadingLocation \| null\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
+  const mutateStart = editorSource.indexOf("private mutate(\n");
+  const mutateEnd = editorSource.indexOf("\n  /**\n   * 撤销", mutateStart);
+  const mutate = editorSource.slice(mutateStart, mutateEnd);
   assert.match(mutate, /const location = restoreLocation \?\? \(this\.currentMode === "mindmap" \? null : this\.captureCurrentLocation\(this\.currentMode\)\)/);
   assert.match(mutate, /if \(location\) this\.rememberLocation\(location, true\)/);
   assert.match(mutate, /this\.render\(\);[\s\S]*if \(location\) this\.restoreReadingLocation\(this\.currentMode, location\)/);
@@ -171,7 +173,9 @@ test("deleting an article node restores the closest surviving sibling instead of
   const directDelete = editorSource.match(/private deleteNodeById\(nodeId: string\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
   assert.match(directDelete, /const restoreLocation = this\.currentMode === "mindmap" \? null : this\.createSelectionLocation\(fallback\)/);
   assert.match(directDelete, /\}, restoreLocation\);/);
-  const mutate = editorSource.match(/private mutate\(action: \(\) => void, restoreLocation\?: ReadingLocation \| null\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
+  const mutateStart = editorSource.indexOf("private mutate(\n");
+  const mutateEnd = editorSource.indexOf("\n  /**\n   * 撤销", mutateStart);
+  const mutate = editorSource.slice(mutateStart, mutateEnd);
   assert.match(mutate, /const location = restoreLocation \?\? \(this\.currentMode === "mindmap" \? null : this\.captureCurrentLocation\(this\.currentMode\)\)/);
 });
 
@@ -338,7 +342,7 @@ test("read-only mode keeps the unified theme and reading-style panel editable", 
   );
   const mutatePresentation = editorSource.slice(
     editorSource.indexOf("private mutatePresentation"),
-    editorSource.indexOf("private mutate(action", editorSource.indexOf("private mutatePresentation"))
+    editorSource.indexOf("private mutateWithoutArticleContext", editorSource.indexOf("private mutatePresentation"))
   );
 
   assert.match(editorSource, /addToolbarButton\("appearance", "palette", "主题与外观", \(\) => this\.editAppearance\(\)\);/);

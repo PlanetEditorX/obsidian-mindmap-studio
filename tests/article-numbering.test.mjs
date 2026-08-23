@@ -171,6 +171,55 @@ test("children below a level-eight heading keep structure without receiving a re
   assert.equal(byTitle.get("关键词区分")?.displayTitle, "关键词区分");
 });
 
+
+test("content-only article refresh recomputes cross-file titles while preserving resolved TOC identity", () => {
+  const root = model.createNode("全书");
+  const mount = model.createNode("旧章节");
+  mount.submap = { path: "child.mindmap", title: "子导图" };
+  root.children = [mount];
+  const topDocument = model.normalizeDocument({ title: "全书", root });
+
+  const childRoot = model.createNode("子导图");
+  const chapter = model.createNode("旧子标题");
+  chapter.children = [model.createNode("正文")];
+  childRoot.children = [chapter];
+  const childDocument = model.normalizeDocument({ title: "子导图", root: childRoot });
+  const sections = [
+    { filePath: "root.mindmap", document: topDocument, baseDepth: 0 },
+    { filePath: "child.mindmap", document: childDocument, baseDepth: 1, parentFilePath: "root.mindmap", parentNodeId: mount.id }
+  ];
+  const previous = [
+    { filePath: "child.mindmap", depth: 1, tocDepth: 1, label: "第一章", title: "旧章节", displayTitle: "第一章 旧章节", breadcrumb: ["全书", "旧章节"] },
+    { filePath: "child.mindmap", nodeId: chapter.id, depth: 2, tocDepth: 2, label: "第一节", title: "旧子标题", displayTitle: "第一节 旧子标题", breadcrumb: ["全书", "旧章节", "旧子标题"] }
+  ];
+
+  model.replaceNodeContentBlocks(topDocument.root.children[0], [{ id: "mount-text", type: "text", text: "新章节" }]);
+  model.replaceNodeContentBlocks(childDocument.root.children[0], [{ id: "chapter-text", type: "text", text: "新子标题" }]);
+  const refreshed = modes.refreshArticleTocEntriesFromReadingSections(sections, previous);
+  assert.ok(refreshed);
+  assert.equal(refreshed.length, 2);
+  assert.equal(refreshed[0]?.filePath, "child.mindmap");
+  assert.equal(refreshed[0]?.nodeId, undefined);
+  assert.equal(refreshed[0]?.title, "新章节");
+  assert.equal(refreshed[1]?.filePath, "child.mindmap");
+  assert.equal(refreshed[1]?.nodeId, chapter.id);
+  assert.equal(refreshed[1]?.title, "新子标题");
+  assert.deepEqual(refreshed[1]?.breadcrumb, ["全书", "新章节", "新子标题"]);
+});
+
+test("content-only article refresh falls back when topology or numbering depth no longer matches", () => {
+  const root = model.createNode("根节点");
+  const heading = model.createNode("标题");
+  heading.children = [model.createNode("正文")];
+  root.children = [heading];
+  const document = model.normalizeDocument({ title: "根节点", root });
+  const sections = [{ filePath: "root.mindmap", document, baseDepth: 0 }];
+
+  assert.equal(modes.refreshArticleTocEntriesFromReadingSections(sections, []), null);
+  const wrongDepth = [{ filePath: "root.mindmap", nodeId: heading.id, depth: 8, tocDepth: 1, label: "", title: "标题", displayTitle: "标题", breadcrumb: ["根节点", "标题"] }];
+  assert.equal(modes.refreshArticleTocEntriesFromReadingSections(sections, wrongDepth), null);
+});
+
 test("circled terminal numbering keeps Unicode text labels through 50 and numeric labels afterwards", () => {
   assert.equal(modes.circledNumberLabel(1), "①");
   assert.equal(modes.circledNumberLabel(20), "⑳");

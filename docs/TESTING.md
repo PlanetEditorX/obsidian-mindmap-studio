@@ -93,6 +93,10 @@
 
 `tests/article-context-cache.test.mjs` 覆盖：跨重启 JSON 预载后可同步命中；父/子导图任一 `mtime + size` 变化会让整个文章族快照失效并从持久缓存移除；依赖文件修改会同时清除所有引用它的物理页缓存；`MindMapDocumentCache` 按版本复用解析结果且返回隔离克隆；真实 `setViewData()` 必须在创建 `MindMapEditor` 前查询缓存，并且只有 MISS 才安排 `refreshArticleContext(0)`。测试还锁定编辑器真实 `onChange` 才提升文档修订、无编辑的 `save()` 必须在 `super.save()` 之前返回、保存完成才推进已保存修订，以及 `articleContextCacheHit` 必须传入文章窗口；因此纯阅读“正文 → 目录 → 正文”不能再通过无意义写盘制造 vault `modify`。同时继续覆盖 vault 修改事件、构建期缓存代数、启动预载顺序和 `main.js` 安装 bundle，防止未来重构重新变成“每次打开都遍历父子导图”。
 
+### 文章上下文 change-impact 分级
+
+第四批性能回归必须同时覆盖源码和安装 `main.js`：编辑器 mutation 通过 `ArticleContextChangeImpact` 分为 `none / content / structure`，不得重新退化为每次 `onChange` 都完整构建文章族。`none` 操作不应安排文章上下文刷新；`content` 约 140 ms 防抖并调用 `refreshArticleTocEntriesFromReadingSections()`，以已加载 `readingSections` 重算标题、编号与 breadcrumb，不允许引入 vault 文件读取；`structure` 约 320 ms 安排完整跨文件刷新。行为测试必须覆盖跨父/子导图标题变化时挂载目录项的 `filePath/nodeId` 身份保持不变，以及目录条目数量或 `tocDepth` 不匹配时轻量 helper 返回 `null` 并回退完整刷新。异步完整构建还必须捕获 `documentChangeRevision`：构建期间发生编辑时旧结果必须被丢弃并立即安排最新完整刷新，成功路径和异常路径都不能让旧快照覆盖新编辑。
+
 ### 导图渐进渲染与文章目标窗口
 
 `tests/incremental-render.test.mjs` 覆盖：

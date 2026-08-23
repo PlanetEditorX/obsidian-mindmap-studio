@@ -6,7 +6,7 @@
  */
 
 import type { ArticleLeafNumberingStyle, DisplayMode, MindMapDocument, MindMapNode } from "../core/model";
-import { nodePrimaryText } from "../core/model";
+import { nodePlainText, nodePrimaryText } from "../core/model";
 
 export const DISPLAY_MODE_LABELS: Record<DisplayMode, string> = {
   mindmap: "导图",
@@ -272,6 +272,112 @@ export interface ArticleTocEntry {
  */
 export function articleTocDepth(entry: ArticleTocEntry): number {
   return Number.isFinite(entry.tocDepth) ? Math.max(1, Math.floor(entry.tocDepth)) : 1;
+}
+
+
+/**
+ * Recomputes article TOC titles, breadcrumbs, and numbering from the already loaded
+ * continuous-reading family. This path performs no vault reads and is intended for
+ * text-only edits that cannot change family topology or article numbering settings.
+ *
+ * The persisted TOC intentionally points a mounted heading at its child file and
+ * clears `nodeId`. Because that loses the source mount-node identity, this helper
+ * preserves the existing entry identity by stable traversal position. A mismatch in
+ * entry count/depth means the mutation was not content-only and the caller must fall
+ * back to a complete article-context rebuild.
+ *
+ * @param sections Current in-memory reading family with the edited physical document already patched in.
+ * @param previousEntries Previously resolved TOC entries whose cross-file identity must be preserved.
+ * @returns Refreshed TOC entries, or `null` when the existing topology no longer matches.
+ */
+export function refreshArticleTocEntriesFromReadingSections(
+  sections: readonly ReadingSection[],
+  previousEntries: readonly ArticleTocEntry[]
+): ArticleTocEntry[] | null {
+  if (!sections.length) return previousEntries.length ? null : [];
+  const topSection = sections.find((section) => !section.parentFilePath) ?? sections[0]!;
+  const mountedSections = new Map<string, ReadingSection>();
+  for (const section of sections) {
+    if (!section.parentFilePath || !section.parentNodeId) continue;
+    mountedSections.set(`${section.parentFilePath}\u0000${section.parentNodeId}`, section);
+  }
+
+  const generated: ArticleTocEntry[] = [];
+  /** One in-memory article traversal item used while refreshing TOC metadata. */
+  type Item = {
+    node: MindMapNode;
+    section: ReadingSection;
+    breadcrumb: string[];
+    numberingDisabled: boolean;
+  };
+  const processItems = (items: Item[], defaultLevel: number, structureDepth: number): void => {
+    const siblingHasHeading = items.some(({ node }) => isArticleHeading(node));
+    const numberedIndexes = new Map<number, number>();
+    for (const item of items) {
+      const numbering = resolveArticleNumbering(item.node, defaultLevel, siblingHasHeading);
+      const documentNumberingDisabled = item.numberingDisabled
+        || item.section.numberingDisabled === true
+        || isDocumentArticleNumberingDisabled(item.section.document.root);
+      const numberedIndex = !documentNumberingDisabled && numbering.shouldNumber && !numbering.skipped
+        ? (numberedIndexes.get(numbering.level) ?? 0) + 1
+        : 0;
+      if (numberedIndex) numberedIndexes.set(numbering.level, numberedIndex);
+      const label = numberedIndex ? articleNumberLabel(numbering.level, numberedIndex) : "";
+      const title = nodePlainText(item.node) || (numbering.isHeading ? "未命名标题" : "");
+      const nextBreadcrumb = [...item.breadcrumb, title || "未命名标题"];
+      if (numbering.isHeading) {
+        generated.push({
+          filePath: item.section.filePath,
+          nodeId: item.node.id,
+          depth: numbering.level,
+          tocDepth: structureDepth,
+          label,
+          title,
+          displayTitle: articleDisplayTitle(label, title),
+          breadcrumb: nextBreadcrumb
+        });
+      }
+
+      const descendants: Item[] = item.node.children.map((child) => ({
+        node: child,
+        section: item.section,
+        breadcrumb: nextBreadcrumb,
+        numberingDisabled: documentNumberingDisabled
+      }));
+      const childSection = mountedSections.get(`${item.section.filePath}\u0000${item.node.id}`);
+      if (childSection) {
+        const childNumberingDisabled = documentNumberingDisabled
+          || childSection.numberingDisabled === true
+          || isDocumentArticleNumberingDisabled(childSection.document.root);
+        descendants.push(...childSection.document.root.children.map((child) => ({
+          node: child,
+          section: childSection,
+          breadcrumb: nextBreadcrumb,
+          numberingDisabled: childNumberingDisabled
+        })));
+      }
+      if (descendants.length) processItems(descendants, numbering.level + 1, structureDepth + 1);
+    }
+  };
+
+  const topNumberingDisabled = topSection.numberingDisabled === true
+    || isDocumentArticleNumberingDisabled(topSection.document.root);
+  processItems(topSection.document.root.children.map((node) => ({
+    node,
+    section: topSection,
+    breadcrumb: [nodePlainText(topSection.document.root) || topSection.document.title],
+    numberingDisabled: topNumberingDisabled
+  })), articleChildStartLevel(topSection.document.root), 1);
+
+  if (generated.length !== previousEntries.length) return null;
+  const refreshed: ArticleTocEntry[] = [];
+  for (let index = 0; index < generated.length; index += 1) {
+    const entry = generated[index]!;
+    const previous = previousEntries[index]!;
+    if (entry.depth !== previous.depth || entry.tocDepth !== previous.tocDepth) return null;
+    refreshed.push({ ...entry, filePath: previous.filePath, nodeId: previous.nodeId });
+  }
+  return refreshed;
 }
 
 /**
