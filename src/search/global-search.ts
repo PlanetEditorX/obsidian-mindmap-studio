@@ -724,21 +724,6 @@ export class MindMapSearchIndex {
     }
   }
 
-  /**
-   * 递归遍历nodes，并保持模型、界面和持久化状态的一致性。
-   *
-   * @param root 节点树的根节点。
-   * @returns 当前操作生成、查找或规范化后的结果。
-   */
-  private *walkNodes(root: MindMapNode): Generator<MindMapNode> {
-    const stack: MindMapNode[] = [root];
-    while (stack.length) {
-      const node = stack.pop();
-      if (!node) continue;
-      yield node;
-      for (let index = node.children.length - 1; index >= 0; index -= 1) stack.push(node.children[index]);
-    }
-  }
 
   /**
    * 解析并确定submap file，并保持模型、界面和持久化状态的一致性。

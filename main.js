@@ -20057,21 +20057,6 @@ var MindMapSearchIndex = class {
     }
   }
   /**
-   * 递归遍历nodes，并保持模型、界面和持久化状态的一致性。
-   *
-   * @param root 节点树的根节点。
-   * @returns 当前操作生成、查找或规范化后的结果。
-   */
-  *walkNodes(root) {
-    const stack = [root];
-    while (stack.length) {
-      const node = stack.pop();
-      if (!node) continue;
-      yield node;
-      for (let index = node.children.length - 1; index >= 0; index -= 1) stack.push(node.children[index]);
-    }
-  }
-  /**
    * 解析并确定submap file，并保持模型、界面和持久化状态的一致性。
    *
    * @param rawPath 该参数用于 resolve submap file 流程中的输入或控制。

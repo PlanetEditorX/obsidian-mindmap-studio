@@ -1,5 +1,15 @@
 # Modified Files
 
+## 1.46.3 CI production build 未使用代码修复
+
+- `src/search/global-search.ts`：删除上一轮 `refreshFamily()` 索引复用重构后已不再调用的私有生成器 `walkNodes()`，修复 GitHub Actions `tsc --noEmit --skipLibCheck` 的 `TS6133`。
+- `main.js`：同步移除同一无用类方法；运行时搜索/导航逻辑不变。
+- `docs/FUNCTION_REFERENCE.md`：重新生成函数参考，具名声明由 1195 个降为 1194 个，对应被删除的无用私有方法。
+- `CHANGELOG.md`、`TEST_RESULTS.md`、Codex 交接：同步用户 CI 已通过的 369/369 单测、综合回归、文档/仓库检查，以及本轮唯一 build 阻塞与修复。
+- 本轮不改变 `.mindmap` 数据格式、搜索结果、父子导图恢复或第一批性能优化行为。
+
+- 本轮测试安装包：`mindmap-studio-1.46.3-test-740774.zip`，SHA-256 `0053ba3e0a70dbb33913b6d9a2cfedaf3ce821abd71238a8c9af9296affb59c6`；完整源码与 Codex 交接使用同一 `740774` 后缀。
+
 ## 1.46.3 CI 综合回归契约修复
 
 - `scripts/test.mjs`：删除对历史注释文本 `first climb to the top parent` 的脆弱断言，改为验证 `refreshFamily()` 实际执行“循环防护 → `familyIndexedFile()` → `navigation.parentPath` → 父文件解析 → 更新 `familyRoot`”的数据流。
