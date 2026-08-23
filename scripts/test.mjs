@@ -1365,7 +1365,7 @@ const command = "example";
   assert.doesNotMatch(globalSearchSource, /style\.setProperty\("display", "none"|this\.modalEl\.remove\(\)|container\.remove\(\)|removeSearchLayers|waitForModalFocusRelease|mms-global-search-result-opening|mms-global-search-container-closing/, "search navigation must not suppress/delete host-owned Modal DOM or rely on synthetic hiding classes");
   assert.match(globalSearchSource, /this\.dismissResultPanel\(\);[\s\S]*await this\.waitForResultNavigationTurn\(\);[\s\S]*await this\.onOpenResult\(result\);/, "search result navigation must not wait indefinitely for Modal onClose");
   assert.match(globalSearchSource, /古诗 › 唐诗/);
-  assert.match(globalSearchSource, /first climb to the top parent/);
+  assert.match(globalSearchSource, /while \(!climbed\.has\(familyRoot\)\)[\s\S]*await this\.familyIndexedFile\(climbFile, documents\)[\s\S]*const parentPath = indexed\?\.navigation\?\.parentPath[\s\S]*familyRoot = parent\.path;/, "family refresh must climb indexed parent navigation before traversing descendants");
   assert.match(globalSearchSource, /version: 2/);
   const editorSource = await readFile("src/editor/editor.ts", "utf8");
   assert.match(editorSource, /captureCurrentLocation/, "every display mode must expose a shared semantic position");

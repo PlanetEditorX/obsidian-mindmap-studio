@@ -2,6 +2,25 @@
 
 版本：1.46.3
 
+## 1.46.3 CI 综合回归契约修复
+
+### 用户 CI 日志与根因
+
+- 用户提供的 GitHub Actions 日志确认依赖安装成功，完整 `test:unit` 共 **369 / 369 通过**；第一批性能优化没有产生单元测试回归。
+- `test:regression` 随后在 `scripts/test.mjs:1368` 失败，唯一原因是仍要求 `src/search/global-search.ts` 包含历史注释文本 `first climb to the top parent`。上一轮导图族索引优化已重写该段注释/实现说明，因此这是测试契约过期，不是父链搜索行为失败。
+- 本轮把该断言改为检查 `refreshFamily()` 的实际父链数据流，不再把注释 wording 当成程序行为。
+
+### 自动验证
+
+- `node --test tests/global-search-traversal.test.mjs`：**4 / 4 通过**；其中包含“新鲜索引 0 次 `cachedRead`”与“过期祖先跨爬升/向下遍历只读 1 次”的真实行为测试。
+- 新综合回归源码契约单独执行：**通过**；同时确认 `scripts/test.mjs` 已不存在旧 `first climb to the top parent` 断言。
+- `npm run test:docs`：**通过**，当前 **57 个源码模块、1195 个具名声明**满足文档覆盖。
+- `npm run test:repo`：**通过**。
+- `node --check main.js`：**通过**。
+- 当前本地源码包仍缺 `esbuild`，所以直接执行 `npm run test:regression` 会在 `import { build } from "esbuild"` 阶段退出，无法在本容器复现 GitHub Actions 的完整综合回归；用户日志已证明 GitHub CI 环境具备完整依赖。下一次 CI 应首先验证本轮修复后是否继续通过后续 regression/build 阶段。
+- 本轮没有运行时代码修改，因此无需重新生成 `main.js`；安装包运行时与第一批性能优化版本一致。
+- 本轮测试安装包：`mindmap-studio-1.46.3-test-527971.zip`，SHA-256 `02aae55163facd84e9c67cfbf938687cb73305373b86e1664410f80336b38fe3`；完整源码与 Codex 交接使用同一 `527971` 后缀。
+
 ## 1.46.3 大型导图性能优化第一批
 
 ### 实现与行为验证
