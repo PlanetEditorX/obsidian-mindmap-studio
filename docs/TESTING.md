@@ -95,6 +95,8 @@
 
 `tests/incremental-render.test.mjs` 覆盖：
 
+- 实测尺寸二次布局只调用一次权威 `computeLayout()`，不得重新在编辑器层调用 `resolveLayoutCollisions()` 或重复重建 `byId/minX/maxX/minY/maxY`；碰撞扫描必须在纵向间距已经满足时提前 `break`。
+- 工具栏可用性刷新只创建一次共享树上下文，不能在每个按钮判断中重新 `findNode()` / `flattenNodes()`；分帧渲染空间优先级必须先预计算 band、focus rank 和 distance，再进入只比较数值的 `sort`。
 - 当前节点、兄弟、父节点、父级兄弟和祖先的确定性聚焦顺序。
 - 当前视口、相邻视口和远端导图节点的空间优先级，且排序不修改原布局数组。
 - 编辑器构造阶段不提前计算全树布局，真正进入导图模式后才执行权威布局。

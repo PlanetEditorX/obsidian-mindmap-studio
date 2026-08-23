@@ -1,5 +1,16 @@
 # Modified Files
 
+## 1.46.3 大型导图性能优化第一批
+
+- `src/editor/editor.ts`：`applyMeasuredMindMapLayout()` 改为直接复用 `computeLayout()` 已完成的碰撞消解、`byId` 与边界结果，删除调用方第二次 `resolveLayoutCollisions()` 和重复边界重算；新增 `ToolbarAvailabilityContext` / `toolbarAvailabilityContext()`，一次树遍历计算当前选择、有效非根选择和可折叠状态，全部工具栏按钮共享该上下文。
+- `src/render/collision-layout.ts`：利用已按节点顶部排序的扫描顺序；当当前节点与后续节点已经满足 `verticalGap` 时立即结束内层循环，跳过不可能再发生纵向碰撞的剩余节点。
+- `src/render/incremental-render.ts`：`prioritizeSpatialRenderItems()` 先为每个布局项预计算 band、focus rank 和距离，再进行纯数值排序，避免 `Array.sort()` 比较器重复执行视口相交、Map 查询与距离计算。
+- `tests/incremental-render.test.mjs`：新增碰撞行为测试和性能结构契约，并同时检查 TypeScript 源码与安装 `main.js` 不得恢复重复碰撞、重复树扫描或比较器内几何计算。
+- `tests/settings-layout.test.mjs`：更新工具栏可用性签名契约，要求共享 `ToolbarAvailabilityContext`。
+- `README.md`、`CHANGELOG.md`、`docs/ARCHITECTURE.md`、`docs/TESTING.md`、`docs/FUNCTION_REFERENCE.md`：同步大型导图热路径优化、架构边界和回归测试。
+- `main.js`：当前环境没有完整 `esbuild` / Obsidian 开发依赖，无法执行正式 production build；以现有 1.46.3 bundle 为基线等价同步本批三条运行热路径，并由源码/bundle 契约、`node --check` 和差分测试兜底。
+- 本轮测试安装包：`mindmap-studio-1.46.3-test-736957.zip`，SHA-256 `3b0943a3b1db78d41d3e3616c385f30f1295d0c9c4adb77c0a6684bc882b4273`；完整源码与 Codex 交接使用同一 `736957` 后缀。
+
 ## 1.46.3 静态分析告警整改与导图族索引复用
 
 - `src/editor/editor.ts`：新增 `handleReadOnlyKeydown()`，把只读复制、方向导航、缩放、适应视图和折叠从主 `handleKeydown()` 拆出；保留选中文字时的浏览器原生复制和全部既有快捷键语义。
