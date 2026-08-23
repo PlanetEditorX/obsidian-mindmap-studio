@@ -2,6 +2,7 @@
 
 ## 1.46.3
 
+- 第三批大型导图性能优化：新增 `NodeTreeIndex`，每次完整渲染只构建一次 DFS 节点顺序、`nodeId → node`、`nodeId → parent` 和可折叠状态；选择、工具栏、键盘导航、节点编辑、删除回退、拖放合法性与多选顶层分支过滤复用索引，祖先关系改为沿父链判断，避免高频 `findNode()` / `findParent()` / 子树扫描。结构修改后的下一次完整渲染统一重建索引，纯内容编辑不额外失效。
 - 第二批大型导图性能优化：为已挂载导图节点建立 `nodeId → HTMLElement` 索引，渐进挂载、拖拽、尺寸测量、FLIP、行内编辑和单节点刷新不再重复扫描整个节点层；选择 CSS 改为基于前后选择集合差集增量更新，普通单选切换只触碰离开/进入的节点，大纲或文章 DOM 重建后才执行一次全量同步。
 - 修复 GitHub Actions production build 的 TypeScript `TS6133`：删除上一轮导图族索引优化后已无调用的私有生成器 `walkNodes()`，并同步安装 bundle 与函数参考文档；不改变搜索、导航或运行时行为。
 - 修复第一批性能优化后的 CI 综合回归误报：`scripts/test.mjs` 不再通过旧注释文本 `first climb to the top parent` 判断导图族父链逻辑存在，而改为检查 `refreshFamily()` 的可执行父链爬升结构；真实“新鲜索引 0 次读取 / 过期祖先仅 1 次读取”继续由 `global-search-traversal` 行为测试覆盖。

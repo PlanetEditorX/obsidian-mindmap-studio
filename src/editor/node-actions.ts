@@ -4,12 +4,13 @@
  */
 
 import {
-  containsNode,
-  findNode,
+  buildNodeTreeIndex,
   findParent,
   flattenNodes,
+  indexedHasAnyAncestor,
   removeNode,
-  type MindMapNode
+  type MindMapNode,
+  type NodeTreeIndex
 } from "../core/model";
 
 /** 在父节点末尾插入子节点并自动展开父节点。 */
@@ -19,8 +20,13 @@ export function appendChild(parent: MindMapNode, child: MindMapNode): void {
 }
 
 /** 在目标节点之后插入同级节点。 */
-export function insertSiblingAfter(root: MindMapNode, targetId: string, sibling: MindMapNode): boolean {
-  const parent = findParent(root, targetId);
+export function insertSiblingAfter(
+  root: MindMapNode,
+  targetId: string,
+  sibling: MindMapNode,
+  existingIndex?: NodeTreeIndex
+): boolean {
+  const parent = existingIndex?.parentById.get(targetId) ?? findParent(root, targetId);
   if (!parent) return false;
   const index = parent.children.findIndex((child) => child.id === targetId);
   if (index < 0) return false;
@@ -31,14 +37,15 @@ export function insertSiblingAfter(root: MindMapNode, targetId: string, sibling:
 /**
  * 从多选集合中过滤掉根节点、无效节点以及已被另一所选祖先覆盖的后代。
  */
-export function topLevelSelectedNodeIds(root: MindMapNode, selectedIds: Iterable<string>): string[] {
+export function topLevelSelectedNodeIds(
+  root: MindMapNode,
+  selectedIds: Iterable<string>,
+  existingIndex?: NodeTreeIndex
+): string[] {
+  const index = existingIndex ?? buildNodeTreeIndex(root);
   const ids = Array.from(selectedIds).filter((id) => id !== root.id);
-  return ids.filter((id) => {
-    const node = findNode(root, id);
-    return Boolean(node && !ids.some((otherId) =>
-      otherId !== id && node && containsNode(findNode(root, otherId) ?? root, id)
-    ));
-  });
+  const selected = new Set(ids);
+  return ids.filter((id) => index.byId.has(id) && !indexedHasAnyAncestor(index, id, selected));
 }
 
 /** 删除指定节点集合并返回实际删除数量。 */
@@ -58,18 +65,23 @@ export function deleteNodes(root: MindMapNode, ids: Iterable<string>): number {
  * ancestor is also being removed, the same rule is applied recursively until a
  * surviving parent or the protected root is reached.
  */
-export function deletionSelectionFallback(root: MindMapNode, ids: Iterable<string>): string {
-  const targets = topLevelSelectedNodeIds(root, ids);
+export function deletionSelectionFallback(
+  root: MindMapNode,
+  ids: Iterable<string>,
+  existingIndex?: NodeTreeIndex
+): string {
+  const index = existingIndex ?? buildNodeTreeIndex(root);
+  const targets = topLevelSelectedNodeIds(root, ids, index);
   const target = targets[0];
   if (!target) return root.id;
   const removed = new Set(targets);
-  let current = findNode(root, target);
+  let current = index.byId.get(target) ?? null;
   while (current && current.id !== root.id) {
-    const parent = findParent(root, current.id);
+    const parent = index.parentById.get(current.id) ?? null;
     if (!parent) return root.id;
-    const index = parent.children.findIndex((node) => node.id === current!.id);
-    const previous = parent.children.slice(0, index).reverse().find((node) => !removed.has(node.id));
-    const next = parent.children.slice(index + 1).find((node) => !removed.has(node.id));
+    const childIndex = parent.children.findIndex((node) => node.id === current!.id);
+    const previous = parent.children.slice(0, childIndex).reverse().find((node) => !removed.has(node.id));
+    const next = parent.children.slice(childIndex + 1).find((node) => !removed.has(node.id));
     if (previous) return previous.id;
     if (next) return next.id;
     if (!removed.has(parent.id)) return parent.id;

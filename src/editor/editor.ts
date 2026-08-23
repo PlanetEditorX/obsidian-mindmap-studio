@@ -7,6 +7,7 @@
 
 import { App, Menu, Modal, Notice, setIcon } from "obsidian";
 import {
+  buildNodeTreeIndex,
   cloneDocument,
   cloneNodeWithFreshIds,
   childrenToTable,
@@ -16,8 +17,10 @@ import {
   extractFirstWikiLink,
   findAncestors,
   findNode,
-  findParent,
   flattenNodes,
+  indexedAncestors,
+  indexedHasAncestor,
+  indexedHasAnyAncestor,
   imageSourceCandidates,
   mergeAppearance,
   nodeSearchText,
@@ -58,6 +61,7 @@ import {
   type NodeShape,
   type NodeTextAlign,
   type NodeDropPosition,
+  type NodeTreeIndex,
   moveNodeRelative
 } from "../core/model";
 import { buildBranchColorMap, computeLayout, documentToSvg, edgePath, edgeWidthForDepth, roundedElbowEdgePath, type LayoutResult } from "../render/layout";
@@ -1460,6 +1464,8 @@ export class MindMapEditor {
   private readonly modeButtons = new Map<DisplayMode, HTMLButtonElement>();
   private readonly editControls: HTMLElement[] = [];
   private document: MindMapDocument;
+  /** Rebuilt once per full render so repeated node/parent lookups avoid whole-tree DFS scans. */
+  private nodeTreeIndex: NodeTreeIndex | null = null;
   private layout: LayoutResult;
   private selectedId: string;
   private readonly selectedIds = new Set<string>();
@@ -1754,9 +1760,9 @@ export class MindMapEditor {
       ? null
       : activeRestoreLocation ?? this.captureCurrentLocation(this.currentMode) ?? this.lastReadingLocation;
     const preferredCurrentNodeId = options.preferredCurrentNodeId
-      && findNode(this.document.root, options.preferredCurrentNodeId)
+      && this.nodeById(options.preferredCurrentNodeId)
       ? options.preferredCurrentNodeId
-      : findNode(this.document.root, this.selectedId)?.id ?? this.document.root.id;
+      : this.nodeById(this.selectedId)?.id ?? this.document.root.id;
     const preferredCurrentLocation = options.preferCurrentFileLocation
       ? createReadingLocation(
         this.readingLocationSections(options),
@@ -2126,7 +2132,7 @@ export class MindMapEditor {
       return createReadingLocation(
         sections,
         this.options.currentFilePath,
-        findNode(this.document.root, this.selectedId)?.id ?? this.document.root.id,
+        this.nodeById(this.selectedId)?.id ?? this.document.root.id,
         0,
         0.5
       );
@@ -2315,7 +2321,7 @@ export class MindMapEditor {
       collapsedAncestors.forEach((node) => { node.collapsed = false; });
       this.render();
     }
-    if (resolved.filePath === this.options.currentFilePath && findNode(this.document.root, resolved.nodeId)) {
+    if (resolved.filePath === this.options.currentFilePath && this.nodeById(resolved.nodeId)) {
       this.selectedId = resolved.nodeId;
       this.selectedIds.clear();
       this.selectedIds.add(resolved.nodeId);
@@ -2432,7 +2438,7 @@ export class MindMapEditor {
 
   /** 使用最近一次右键范围询问 AI；未右键节点时默认询问当前页面。 */
   askAi(): void {
-    if (this.aiScopeNodeId && !findNode(this.document.root, this.aiScopeNodeId)) this.aiScopeNodeId = null;
+    if (this.aiScopeNodeId && !this.nodeById(this.aiScopeNodeId)) this.aiScopeNodeId = null;
     void this.callbacks.onAskAi(this.aiScopeNodeId ?? undefined);
   }
 
@@ -2579,7 +2585,7 @@ export class MindMapEditor {
       const nodeElement = element?.closest<HTMLElement>("[data-node-id]");
       if (!nodeElement || !this.rootEl.contains(nodeElement)) return null;
       const nodeId = nodeElement.dataset.nodeId;
-      if (!nodeId || !findNode(this.document.root, nodeId)) return null;
+      if (!nodeId || !this.nodeById(nodeId)) return null;
       const blockElement = element?.closest<HTMLElement>("[data-block-id]");
       return {
         nodeId,
@@ -2593,7 +2599,7 @@ export class MindMapEditor {
     const active = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const activeTarget = fromElement(active);
     if (activeTarget) return activeTarget;
-    if (active && this.rootEl.contains(active) && findNode(this.document.root, this.selectedId)) {
+    if (active && this.rootEl.contains(active) && this.nodeById(this.selectedId)) {
       return { nodeId: this.selectedId };
     }
     return null;
@@ -2728,7 +2734,7 @@ export class MindMapEditor {
     this.currentMode = "article";
     this.cancelReadingLocationRestore();
     this.pendingArticleFocusLocation = null;
-    this.pendingArticleDirectoryFocusNodeId = focusNodeId && findNode(this.document.root, focusNodeId)
+    this.pendingArticleDirectoryFocusNodeId = focusNodeId && this.nodeById(focusNodeId)
       ? focusNodeId
       : null;
     if (this.pendingArticleDirectoryFocusNodeId) {
@@ -3256,22 +3262,16 @@ export class MindMapEditor {
    * @returns Shared availability facts for the current toolbar refresh.
    */
   private toolbarAvailabilityContext(): ToolbarAvailabilityContext {
-    let selected: MindMapNode | null = null;
+    const index = this.currentNodeTreeIndex();
     let selectedNonRootCount = 0;
-    let hasCollapsibleNodes = false;
-    const stack: MindMapNode[] = [this.document.root];
-    while (stack.length) {
-      const node = stack.pop()!;
-      if (node.id === this.selectedId) selected = node;
-      if (node.id !== this.document.root.id && this.selectedIds.has(node.id)) selectedNonRootCount += 1;
-      if (node.id !== this.document.root.id && node.children.length > 0) hasCollapsibleNodes = true;
-      for (let index = node.children.length - 1; index >= 0; index -= 1) stack.push(node.children[index]!);
+    for (const id of this.selectedIds) {
+      if (id !== this.document.root.id && index.byId.has(id)) selectedNonRootCount += 1;
     }
     const editableSurface = this.currentMode === "mindmap" || this.currentMode === "outline" || this.currentMode === "article";
     return {
-      selected,
+      selected: this.selectedId ? index.byId.get(this.selectedId) ?? null : null,
       selectedNonRootCount,
-      hasCollapsibleNodes,
+      hasCollapsibleNodes: index.hasCollapsibleNodes,
       canEdit: editableSurface && !this.readOnly
     };
   }
@@ -3361,7 +3361,7 @@ export class MindMapEditor {
   /** 更新 AI 工具栏提示，使用户知道下一次提问会使用页面还是右键节点。 */
   private updateAiScopeButton(): void {
     if (!this.aiButton) return;
-    const node = this.aiScopeNodeId ? findNode(this.document.root, this.aiScopeNodeId) : null;
+    const node = this.aiScopeNodeId ? this.nodeById(this.aiScopeNodeId) : null;
     const label = node
       ? `询问 AI（节点分支：${nodePlainText(node) || "未命名节点"}）`
       : "询问 AI（当前页面，Ctrl/Cmd+Shift+A）";
@@ -3604,7 +3604,7 @@ export class MindMapEditor {
     element.dataset.mmsEditLabel = placeholder;
     if (!element.textContent?.trim()) element.dataset.placeholder = placeholder;
     const currentValue = (): { text: string; richText?: MindMapTextContentBlock["richText"] } => {
-      const liveNode = findNode(this.document.root, node.id) ?? node;
+      const liveNode = this.nodeById(node.id) ?? node;
       const liveBlock = blockId
         ? nodeContentBlocks(liveNode).find((block): block is MindMapTextContentBlock => block.type === "text" && block.id === blockId)
         : nodeContentBlocks(liveNode).find((block): block is MindMapTextContentBlock => block.type === "text");
@@ -3702,7 +3702,7 @@ export class MindMapEditor {
       // A node action can remove this node while its inline editor still owns
       // focus. Ignore the detached editor's late blur instead of writing the
       // deleted node back into the document or triggering a second redraw.
-      if (!findNode(this.document.root, node.id)) return;
+      if (!this.nodeById(node.id)) return;
       if (cancelled || (!next.text && node.id === this.document.root.id)
         || JSON.stringify(next) === JSON.stringify(original)) {
         renderRichTextRuns(element, original.richText, original.text);
@@ -3711,7 +3711,7 @@ export class MindMapEditor {
       this.mutateInlineText(node.id, () => {
         this.updateNodeTextBlock(node, next, blockId);
       });
-      const committed = findNode(this.document.root, node.id);
+      const committed = this.nodeById(node.id);
       if (!committed || !element.isConnected) return;
       const value = currentValue();
       renderRichTextRuns(element, value.richText, value.text);
@@ -3915,7 +3915,7 @@ export class MindMapEditor {
   private startArticleBlockClickMove(nodeId: string, preferredBlockId?: string): void {
     if (!this.ensureEditable() || this.currentMode !== "article" || nodeId === this.document.root.id) return;
     const active = this.activeArticleBlock;
-    const node = findNode(this.document.root, nodeId);
+    const node = this.nodeById(nodeId);
     const blockId = preferredBlockId ?? (active?.nodeId === nodeId ? active.blockId : undefined);
     if (!node || !blockId || !nodeContentBlocks(node).some((block) => block.id === blockId)) {
       new Notice("请先编辑要移动的具体内容块");
@@ -3938,7 +3938,7 @@ export class MindMapEditor {
   /** 从文章编辑工具栏进入“选择目标节点后插入其后”的单节点移动模式。 */
   private startArticleNodeClickMove(nodeId: string): void {
     if (!this.ensureEditable() || this.currentMode !== "article" || nodeId === this.document.root.id) return;
-    if (!findNode(this.document.root, nodeId)) return;
+    if (!this.nodeById(nodeId)) return;
     if (this.pendingArticleClickMove?.kind === "node" && this.pendingArticleClickMove.sourceNodeId === nodeId) {
       this.cancelArticleClickMove();
       return;
@@ -3954,7 +3954,7 @@ export class MindMapEditor {
   /** 将当前文章节点降为同级上一个节点的子节点，保留全部内容、子树和元数据。 */
   private demoteArticleNode(nodeId: string): void {
     if (!this.ensureEditable() || this.currentMode !== "article" || nodeId === this.document.root.id) return;
-    const parent = findParent(this.document.root, nodeId);
+    const parent = this.parentNodeById(nodeId);
     const index = parent?.children.findIndex((child) => child.id === nodeId) ?? -1;
     const previous = index > 0 ? parent?.children[index - 1] : undefined;
     if (!parent || !previous) {
@@ -3968,8 +3968,8 @@ export class MindMapEditor {
   /** 将当前文章节点升为其父节点的同级节点，并紧跟在父节点之后。 */
   private promoteArticleNode(nodeId: string): void {
     if (!this.ensureEditable() || this.currentMode !== "article" || nodeId === this.document.root.id) return;
-    const parent = findParent(this.document.root, nodeId);
-    const grandparent = parent ? findParent(this.document.root, parent.id) : null;
+    const parent = this.parentNodeById(nodeId);
+    const grandparent = parent ? this.parentNodeById(parent.id) : null;
     if (!parent || !grandparent) {
       new Notice("当前节点已经是最高可提升层级");
       return;
@@ -4012,20 +4012,20 @@ export class MindMapEditor {
 
   /** 判断一个文章节点能否作为当前点击移动的目标。 */
   private articleClickMoveTargetAllowed(pending: ArticleClickMove, targetNodeId: string): boolean {
-    const source = findNode(this.document.root, pending.sourceNodeId);
-    const target = findNode(this.document.root, targetNodeId);
+    const source = this.nodeById(pending.sourceNodeId);
+    const target = this.nodeById(targetNodeId);
     if (!source || !target || (pending.kind === "node" && pending.sourceNodeId === targetNodeId)) return false;
     if (pending.kind === "block") {
       return nodeContentBlocks(source).some((block) => block.id === pending.blockId);
     }
     if (targetNodeId === this.document.root.id) return false;
-    return !findAncestors(this.document.root, targetNodeId).some((ancestor) => ancestor.id === pending.sourceNodeId);
+    return !this.nodeHasAncestor(targetNodeId, pending.sourceNodeId);
   }
 
   /** 判断一个内容块能否作为文章块移动的精确前后插入目标。 */
   private articleBlockMoveTargetAllowed(pending: Extract<ArticleClickMove, { kind: "block" }>, targetNodeId: string, targetBlockId: string | undefined): boolean {
     if (!targetBlockId || (pending.sourceNodeId === targetNodeId && pending.blockId === targetBlockId)) return false;
-    const target = findNode(this.document.root, targetNodeId);
+    const target = this.nodeById(targetNodeId);
     return Boolean(target && nodeContentBlocks(target).some((block) => block.id === targetBlockId));
   }
 
@@ -4736,13 +4736,14 @@ export class MindMapEditor {
    * 渲染相关数据，并保持模型、界面和持久化状态的一致性。
    */
   private render(): void {
+    this.rebuildNodeTreeIndex();
     this.cancelIncrementalRender();
     this.cancelArticleInitialRender();
     this.cancelArticleWindowExpansion();
     if (this.currentMode !== "article") this.articleRenderController = null;
     this.clearArticleMiniMap();
     for (const id of Array.from(this.selectedIds)) {
-      if (!findNode(this.document.root, id)) this.selectedIds.delete(id);
+      if (!this.nodeById(id)) this.selectedIds.delete(id);
     }
     if (this.selectedId && !this.selectedIds.has(this.selectedId)) {
       this.selectedIds.clear();
@@ -4785,7 +4786,7 @@ export class MindMapEditor {
 
   /** Persists learning progress from the read-only practice surface without enabling document editing. */
   private recordQuestionPractice(nodeId: string, correct: boolean): void {
-    const node = findNode(this.document.root, nodeId);
+    const node = this.nodeById(nodeId);
     if (!node?.question) return;
     this.history.capture(this.document);
     const question = node.question;
@@ -5452,7 +5453,7 @@ export class MindMapEditor {
    * Selects every non-root node so bulk operations never affect the protected main node.
    */
   private selectAllNodesExceptRoot(): void {
-    const ids = flattenNodes(this.document.root)
+    const ids = this.nodeTreeNodes()
       .filter((node) => node.id !== this.document.root.id)
       .map((node) => node.id);
     this.selectedIds.clear();
@@ -5593,12 +5594,49 @@ export class MindMapEditor {
     this.updateToolbarAvailability();
   }
 
+  /** Rebuilds the live node/parent lookup snapshot after a structural tree change or full render. */
+  private rebuildNodeTreeIndex(): NodeTreeIndex {
+    this.nodeTreeIndex = buildNodeTreeIndex(this.document.root);
+    return this.nodeTreeIndex;
+  }
+
+  /** Returns the current tree snapshot, lazily creating it before the first render-time lookup. */
+  private currentNodeTreeIndex(): NodeTreeIndex {
+    if (!this.nodeTreeIndex || this.nodeTreeIndex.root !== this.document.root) return this.rebuildNodeTreeIndex();
+    return this.nodeTreeIndex;
+  }
+
+  /** Finds a live node by stable ID without rescanning the document tree. */
+  private nodeById(nodeId: string): MindMapNode | null {
+    return this.currentNodeTreeIndex().byId.get(nodeId) ?? null;
+  }
+
+  /** Finds the direct parent of a live node by stable ID without rescanning the document tree. */
+  private parentNodeById(nodeId: string): MindMapNode | null {
+    return this.currentNodeTreeIndex().parentById.get(nodeId) ?? null;
+  }
+
+  /** Returns the current depth-first node snapshot for repeated filtering and ordered operations. */
+  private nodeTreeNodes(): readonly MindMapNode[] {
+    return this.currentNodeTreeIndex().nodes;
+  }
+
+  /** Returns root-to-parent ancestors using the current parent lookup snapshot. */
+  private nodeAncestors(nodeId: string): MindMapNode[] {
+    return indexedAncestors(this.currentNodeTreeIndex(), nodeId);
+  }
+
+  /** Returns whether one live node is nested below the supplied ancestor. */
+  private nodeHasAncestor(nodeId: string, ancestorId: string): boolean {
+    return indexedHasAncestor(this.currentNodeTreeIndex(), nodeId, ancestorId);
+  }
+
   /**
-   * 执行“selected node”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
-   * @returns 当前操作生成、查找或规范化后的结果。
+   * Resolves the primary selection through the shared node-tree index.
+   * @returns The live selected node, or null when the selection is stale.
    */
   private selectedNode(): MindMapNode | null {
-    return this.selectedId ? findNode(this.document.root, this.selectedId) : null;
+    return this.selectedId ? this.nodeById(this.selectedId) : null;
   }
 
   /**
@@ -5652,7 +5690,7 @@ export class MindMapEditor {
   /** 在节点本体中启动轻量富文本输入。 */
   private beginInlineEdit(nodeId: string, blockId?: string, protectInitialFocus = false): void {
     if (this.readOnly) return;
-    const node = findNode(this.document.root, nodeId);
+    const node = this.nodeById(nodeId);
     if (!node) return;
     this.selectNode(nodeId);
     this.inlineEditingId = nodeId;
@@ -5944,7 +5982,7 @@ export class MindMapEditor {
       document.removeEventListener("selectionchange", selectionChange);
       save();
       formatBar.remove();
-      if (!findNode(this.document.root, node.id)) return;
+      if (!this.nodeById(node.id)) return;
       editor!.contentEditable = "false";
       editor!.removeClass("is-inline-editing");
       editor!.removeAttribute("role");
@@ -5995,11 +6033,11 @@ export class MindMapEditor {
       this.addChild();
       return;
     }
-    const parent = findParent(this.document.root, selected.id);
+    const parent = this.parentNodeById(selected.id);
     if (!parent) return;
     const node = this.createConfiguredNode("");
     this.mutate(() => {
-      insertSiblingAfter(this.document.root, selected.id, node);
+      insertSiblingAfter(this.document.root, selected.id, node, this.currentNodeTreeIndex());
       this.selectedId = node.id;
     });
     window.requestAnimationFrame(() => this.beginInlineEdit(node.id, undefined, true));
@@ -6170,7 +6208,7 @@ export class MindMapEditor {
   /** Applies an AI JSON response to the scoped node or adds it as a question child for page-wide AI. */
   applyAiQuestion(responseText: string, nodeId?: string): boolean {
     if (!this.ensureEditable()) return false;
-    const scopedNode = nodeId ? findNode(this.document.root, nodeId) : null;
+    const scopedNode = nodeId ? this.nodeById(nodeId) : null;
     if (nodeId && !scopedNode) throw new Error("要整理的节点已经不存在，请重新打开 AI 助手");
     const parent = scopedNode ?? this.selectedNode() ?? this.document.root;
     const fallback = scopedNode?.question ?? {
@@ -6199,7 +6237,7 @@ export class MindMapEditor {
   /** Converts AI JSON into a question node, then fills missing answers and analysis through the configured question assistant. */
   async applyAndEnrichAiQuestion(responseText: string, nodeId?: string): Promise<boolean> {
     if (!this.applyAiQuestion(responseText, nodeId)) return false;
-    const node = nodeId ? findNode(this.document.root, nodeId) : this.selectedNode();
+    const node = nodeId ? this.nodeById(nodeId) : this.selectedNode();
     if (!node?.question) return true;
     const questionText = [node.question.stem, ...node.question.options.map((option) => option.content)]
       .flat().filter((block): block is MindMapTextContentBlock => block.type === "text")
@@ -6234,12 +6272,12 @@ export class MindMapEditor {
   /** Deletes the node bound to an inline action without relying on mutable selection state. */
   private deleteNodeById(nodeId: string): void {
     if (!this.ensureEditable()) return;
-    const node = findNode(this.document.root, nodeId);
+    const node = this.nodeById(nodeId);
     if (!node || node.id === this.document.root.id) {
       new Notice("根节点不能删除");
       return;
     }
-    const fallback = deletionSelectionFallback(this.document.root, [nodeId]);
+    const fallback = deletionSelectionFallback(this.document.root, [nodeId], this.currentNodeTreeIndex());
     const restoreLocation = this.currentMode === "mindmap" ? null : this.createSelectionLocation(fallback);
     const mindMapAnchor = this.captureMindMapViewportAnchor(fallback);
     if (this.inlineEditingId === nodeId) this.inlineEditingId = null;
@@ -6257,9 +6295,9 @@ export class MindMapEditor {
    */
   private deleteSelected(): void {
     if (!this.ensureEditable()) return;
-    const batch = topLevelSelectedNodeIds(this.document.root, this.selectedIds);
+    const batch = topLevelSelectedNodeIds(this.document.root, this.selectedIds, this.currentNodeTreeIndex());
     if (this.selectedIds.size > 1 && batch.length) {
-      const fallback = deletionSelectionFallback(this.document.root, batch);
+      const fallback = deletionSelectionFallback(this.document.root, batch, this.currentNodeTreeIndex());
       const restoreLocation = this.currentMode === "mindmap" ? null : this.createSelectionLocation(fallback);
       const mindMapAnchor = this.captureMindMapViewportAnchor(fallback);
       this.mutate(() => {
@@ -6277,7 +6315,7 @@ export class MindMapEditor {
       new Notice("根节点不能删除");
       return;
     }
-    const fallback = deletionSelectionFallback(this.document.root, [selected.id]);
+    const fallback = deletionSelectionFallback(this.document.root, [selected.id], this.currentNodeTreeIndex());
     const restoreLocation = this.currentMode === "mindmap" ? null : this.createSelectionLocation(fallback);
     const mindMapAnchor = this.captureMindMapViewportAnchor(fallback);
     this.mutate(() => {
@@ -6310,7 +6348,7 @@ export class MindMapEditor {
    * @param collapsed Whether branches should be collapsed.
    */
   private setAllNodesCollapsed(collapsed: boolean): void {
-    const branches = flattenNodes(this.document.root).filter((node) => node !== this.document.root && node.children.length > 0);
+    const branches = this.nodeTreeNodes().filter((node) => node !== this.document.root && node.children.length > 0);
     if (!branches.some((node) => node.collapsed !== collapsed)) return;
     const apply = (): void => {
       setAllBranchesCollapsed(this.document.root, collapsed);
@@ -6335,7 +6373,7 @@ export class MindMapEditor {
   /** Toggles every non-root branch between fully expanded and fully collapsed. */
   private toggleAllNodesCollapsed(): void {
     if (this.allNodesCollapseToggleTimer !== null) return;
-    const branches = flattenNodes(this.document.root).filter((node) => node !== this.document.root && node.children.length > 0);
+    const branches = this.nodeTreeNodes().filter((node) => node !== this.document.root && node.children.length > 0);
     if (!branches.length) return;
     this.setAllNodesCollapsed(branches.some((node) => !node.collapsed));
     this.allNodesCollapseToggleTimer = window.setTimeout(() => {
@@ -6646,7 +6684,7 @@ export class MindMapEditor {
 
   /** Deletes exactly one content block selected by its owning node and stable block ID. */
   private removeContentBlock(nodeId: string, blockId: string): void {
-    const node = findNode(this.document.root, nodeId);
+    const node = this.nodeById(nodeId);
     if (!node || !this.ensureEditable()) return;
     const blocks = nodeContentBlocks(node);
     if (!blocks.some((block) => block.id === blockId)) return;
@@ -7183,7 +7221,7 @@ export class MindMapEditor {
       }
 
       const imageBlock: MindMapImageContentBlock = { id: newId(), type: "image", source: path, localSource: path };
-      const selected = nodeId ? findNode(this.document.root, nodeId) : null;
+      const selected = nodeId ? this.nodeById(nodeId) : null;
       if (!selected) {
         new Notice(`图片已保存，但粘贴开始时选择的节点已不存在：${path}`, 7000);
         return;
@@ -7370,7 +7408,7 @@ export class MindMapEditor {
    * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
    */
   private focusNode(id: string, persistLocation = true): void {
-    const exists = Boolean(findNode(this.document.root, id));
+    const exists = Boolean(this.nodeById(id));
     this.callbacks.onDebugLog("navigation", "focus-node-start", {
       id, exists, persistLocation, currentMode: this.currentMode, currentFilePath: this.options.currentFilePath,
       articleContextReady: this.options.articleContextReady, showArticleToc: this.options.showArticleToc,
@@ -7379,7 +7417,7 @@ export class MindMapEditor {
     if (!exists) return;
     this.cancelReadingLocationRestore();
     this.pendingArticleDirectoryFocusNodeId = null;
-    const ancestors = findAncestors(this.document.root, id);
+    const ancestors = this.nodeAncestors(id);
     const collapsed = ancestors.filter((node) => node.collapsed);
     if (collapsed.length) {
       if (this.readOnly) collapsed.forEach((node) => { node.collapsed = false; });
@@ -7427,7 +7465,7 @@ export class MindMapEditor {
    * 根节点代表当前物理页面，必须使用整页范围而不是把它当作普通子树。
    */
   private openAiScopeContextMenu(event: MouseEvent, nodeId: string | null): void {
-    this.aiScopeNodeId = nodeId && nodeId !== this.document.root.id && findNode(this.document.root, nodeId) ? nodeId : null;
+    this.aiScopeNodeId = nodeId && nodeId !== this.document.root.id && this.nodeById(nodeId) ? nodeId : null;
     this.updateAiScopeButton();
     if (this.aiScopeNodeId) this.selectNode(this.aiScopeNodeId);
     const menu = new Menu();
@@ -7441,7 +7479,7 @@ export class MindMapEditor {
   /** Converts one image block into a question node, then runs recognition, source lookup, and analysis. */
   private async convertImageToQuestion(nodeId: string, blockId: string): Promise<void> {
     if (!this.ensureEditable()) return;
-    const node = findNode(this.document.root, nodeId);
+    const node = this.nodeById(nodeId);
     const image = node ? nodeContentBlocks(node).find((block): block is MindMapImageContentBlock => block.type === "image" && block.id === blockId) : null;
     if (!node || !image) { new Notice("图片节点已不存在"); return; }
     let question = createMindMapQuestion();
@@ -7491,7 +7529,7 @@ export class MindMapEditor {
 
   /** 显示图片专用右键菜单，提供识图、布局、图床和编辑等快速操作。 */
   private openImageContextMenu(event: MouseEvent, nodeId: string, blockId: string): void {
-    const node = findNode(this.document.root, nodeId);
+    const node = this.nodeById(nodeId);
     const block = node ? nodeContentBlocks(node).find((item): item is MindMapImageContentBlock => item.type === "image" && item.id === blockId) : undefined;
     if (!node || !block) return;
     const modeLabel = this.options.imageRecognitionMode === "local-ocr" ? "本地 OCR" : "AI 识图";
@@ -7583,7 +7621,7 @@ export class MindMapEditor {
    * @param update 图片块更新逻辑。
    */
   private updateImageBlock(nodeId: string, blockId: string, update: (block: MindMapImageContentBlock) => void): void {
-    const node = findNode(this.document.root, nodeId);
+    const node = this.nodeById(nodeId);
     if (!node || !this.ensureEditable()) return;
     const blocks = nodeContentBlocks(node);
     const block = blocks.find((item): item is MindMapImageContentBlock => item.type === "image" && item.id === blockId);
@@ -7596,7 +7634,7 @@ export class MindMapEditor {
 
   /** Toggles one article text block between the default first-line indent and flush-left. */
   private toggleTextBlockParagraphIndent(nodeId: string, blockId: string): void {
-    const node = findNode(this.document.root, nodeId);
+    const node = this.nodeById(nodeId);
     if (!node || !this.ensureEditable()) return;
     const blocks = nodeContentBlocks(node);
     const block = blocks.find((item): item is MindMapTextContentBlock => item.type === "text" && item.id === blockId);
@@ -7614,7 +7652,7 @@ export class MindMapEditor {
 
   /** 将当前图片上传到用户选择的图床，并保留本地来源与已有镜像。 */
   private async uploadImageBlock(nodeId: string, blockId: string): Promise<void> {
-    const node = findNode(this.document.root, nodeId);
+    const node = this.nodeById(nodeId);
     if (!node || !this.ensureEditable()) return;
     const blocks = nodeContentBlocks(node);
     const block = blocks.find((item): item is MindMapImageContentBlock => item.type === "image" && item.id === blockId);
@@ -7644,7 +7682,7 @@ export class MindMapEditor {
     let failedImages = 0;
     let changed = false;
 
-    for (const node of flattenNodes(this.document.root)) {
+    for (const node of this.nodeTreeNodes()) {
       const blocks = nodeContentBlocks(node);
       let nodeChanged = false;
       for (const block of blocks) {
@@ -7716,7 +7754,7 @@ export class MindMapEditor {
 
   /** 从节点的有序内容块中移除指定图片。 */
   private async removeImageBlock(nodeId: string, blockId: string): Promise<void> {
-    const node = findNode(this.document.root, nodeId);
+    const node = this.nodeById(nodeId);
     if (!node || !this.ensureEditable()) return;
     const blocks = nodeContentBlocks(node);
     const removed = blocks.find((block): block is MindMapImageContentBlock => block.type === "image" && block.id === blockId);
@@ -7973,9 +8011,9 @@ export class MindMapEditor {
   private async copySelectedBranch(): Promise<boolean> {
     const selected = this.selectedNode();
     if (!selected) return false;
-    const selectedIds = topLevelSelectedNodeIds(this.document.root, this.selectedIds);
+    const selectedIds = topLevelSelectedNodeIds(this.document.root, this.selectedIds, this.currentNodeTreeIndex());
     const sourceNodes = this.selectedIds.size > 1 && selectedIds.length
-      ? flattenNodes(this.document.root).filter((node) => selectedIds.includes(node.id))
+      ? this.nodeTreeNodes().filter((node) => selectedIds.includes(node.id))
       : [selected];
     this.branchClipboard = sourceNodes.map((node) => cloneDocument({
       version: 10,
@@ -8033,7 +8071,7 @@ export class MindMapEditor {
       new Notice("请选择非根节点后克隆分支");
       return;
     }
-    const parent = findParent(this.document.root, selected.id);
+    const parent = this.parentNodeById(selected.id);
     if (!parent) return;
     const clone = cloneNodeWithFreshIds(selected);
     this.mutate(() => {
@@ -8051,7 +8089,7 @@ export class MindMapEditor {
    * @returns 操作条件是否成立或处理是否成功。
    */
   private canMoveNode(draggedId: string | null, targetId: string): boolean {
-    return canMoveNodes(this.document.root, this.selectedIds, draggedId, targetId);
+    return canMoveNodes(this.document.root, this.selectedIds, draggedId, targetId, this.currentNodeTreeIndex());
   }
 
   /**
@@ -8134,16 +8172,23 @@ export class MindMapEditor {
     const requestedIds = this.selectedIds.has(draggedId) && this.selectedIds.size > 1
       ? new Set(this.selectedIds)
       : new Set([draggedId]);
-    const draggedIds = flattenNodes(this.document.root)
-      .filter((node) => requestedIds.has(node.id))
-      .filter((node) => !findAncestors(this.document.root, node.id).some((ancestor) => requestedIds.has(ancestor.id)))
+    const index = this.currentNodeTreeIndex();
+    const draggedIds = index.nodes
+      .filter((node) => requestedIds.has(node.id) && !indexedHasAnyAncestor(index, node.id, requestedIds))
       .map((node) => node.id);
     if (!draggedIds.length) return;
     const historyDocument = cloneDocument(this.document);
     const moveOrder = position === "after" ? [...draggedIds].reverse() : draggedIds;
     let changed = false;
-    for (const id of moveOrder) {
-      changed = moveNodeRelative(this.document.root, id, targetId, position) || changed;
+    for (let moveIndex = 0; moveIndex < moveOrder.length; moveIndex += 1) {
+      const id = moveOrder[moveIndex]!;
+      changed = moveNodeRelative(
+        this.document.root,
+        id,
+        targetId,
+        position,
+        moveIndex === 0 ? index : undefined
+      ) || changed;
     }
     if (!changed) return;
     this.history.capture(historyDocument);
@@ -8183,7 +8228,7 @@ export class MindMapEditor {
   private replaceDocumentFromExternalEdit(document: MindMapDocument, focusNodeId: string): void {
     this.history.capture(this.document);
     this.document = cloneDocument(document);
-    this.selectedId = findNode(this.document.root, focusNodeId)?.id ?? this.document.root.id;
+    this.selectedId = this.nodeById(focusNodeId)?.id ?? this.document.root.id;
     this.selectedIds.clear();
     this.selectedIds.add(this.selectedId);
     this.callbacks.onChange(this.getDocument());
@@ -8204,7 +8249,7 @@ export class MindMapEditor {
     action();
     this.callbacks.onChange(this.getDocument());
     this.markSaving();
-    if (!findNode(this.document.root, nodeId)) {
+    if (!this.nodeById(nodeId)) {
       this.render();
       return;
     }
@@ -8218,7 +8263,7 @@ export class MindMapEditor {
    */
   private refreshAfterInlineTextCommit(nodeId: string): void {
     if (this.currentMode === "mindmap") {
-      const node = findNode(this.document.root, nodeId);
+      const node = this.nodeById(nodeId);
       const nodeEl = this.mindMapNodeElements.get(nodeId);
       if (node && nodeEl) nodeEl.toggleClass("is-search-match", Boolean(this.searchQuery && nodeSearchText(node).includes(this.searchQuery)));
       this.scheduleMeasuredMindMapLayout();
@@ -8503,10 +8548,10 @@ export class MindMapEditor {
   private navigateSelection(direction: "parent" | "child" | "previous" | "next"): void {
     const selected = this.selectedNode() ?? this.document.root;
     let target: MindMapNode | null = null;
-    if (direction === "parent") target = findParent(this.document.root, selected.id);
+    if (direction === "parent") target = this.parentNodeById(selected.id);
     if (direction === "child") target = selected.children[0] ?? null;
     if (direction === "previous" || direction === "next") {
-      const parent = findParent(this.document.root, selected.id);
+      const parent = this.parentNodeById(selected.id);
       if (parent) {
         const index = parent.children.findIndex((child) => child.id === selected.id);
         const offset = direction === "previous" ? -1 : 1;

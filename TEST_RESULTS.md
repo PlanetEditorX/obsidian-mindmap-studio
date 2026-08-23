@@ -2,6 +2,37 @@
 
 版本：1.46.3
 
+## 1.46.3 大型导图性能优化第三批
+
+### 实现与专项验证
+
+- 新增 `NodeTreeIndex`：完整渲染只做一次 DFS，建立 `nodes`、`byId`、`parentById` 与 `hasCollapsibleNodes`。普通选择、工具栏、键盘导航、节点编辑、删除回退与多数结构操作直接复用索引；多选顶层过滤和拖放合法性改为沿父链判断祖先。
+- 结构生命周期采用“完整渲染统一重建 + 根对象变化懒重建”：纯内容编辑继续复用实时节点引用；批量移动第一步允许使用现有索引，后续树结构已变化时重新按当前树构建临时索引，避免缓存父关系过期。
+- `node --test tests/article-context-edit.test.mjs tests/incremental-render.test.mjs tests/node-tree.test.mjs tests/node-tree-index-actions.test.mjs`：**51 / 51 通过**，包含节点索引 DFS 顺序、直接父节点、祖先判断、现有索引首步移动，以及文章编辑/第二批 DOM 性能回归。
+- 本轮 5 个修改 TypeScript 模块使用环境已有 TypeScript `transpileModule` 做独立语法检查：**5 / 5 通过**；`node --check main.js`：**通过**。
+- `npm run docs:generate`、`npm run test:docs`：**通过**，当前 **58 个源码模块、1210 个具名声明**全部覆盖；`npm run test:repo`：**通过**；`node --check scripts/test.mjs`：**通过**。
+- 隔离算法微基准（非真实 Obsidian 帧耗时）：300 次工具栏/选择类查询在约 5000 节点树上，旧式重复树扫描约 **28.5 ms**，一次索引构建约 **2.1 ms**，索引热路径约 **0.19 ms**；约 20000 节点时旧扫描约 **95.1 ms**、索引构建约 **4.8 ms**、热路径约 **0.18 ms**。该数据只说明重复 DFS 被消除，不代表整个插件获得同倍数加速。
+
+### 构建边界
+
+- 当前工作区来自源码交付包，本就不包含完整 `node_modules`；本轮尝试 `npm ci` 时当前容器无法稳定访问 npm registry，留下的依赖目录不完整，无法在本地可信执行完整 `npm run verify` / production esbuild。正式发布前必须在 GitHub Actions / 完整开发机执行 `npm ci && npm run verify`。
+- `tsc --noEmit --skipLibCheck` 当前在加载源码前即因不完整依赖缺少隐式类型库 `codemirror`、`estree`、`node`、`tern` 停止，因此该结果不能用于判断本批源码类型；修改文件另以 `transpileModule` 语法检查和专项行为测试兜底。
+- `main.js` 因此继续采用现有 1.46.3 bundle 等价同步本批运行逻辑；源码与 bundle 契约测试、TypeScript 独立语法检查和 Node 语法检查用于本地防回退，不替代正式 production build。
+
+### 真实 Obsidian 重点复测
+
+1. 5000+ 节点导图持续快速单选、方向键导航和工具栏操作，确认节点定位与按钮可用性正确且响应稳定。
+2. Ctrl/Cmd 多选父子节点后复制、删除、拖放，确认只处理顶层选择分支，顺序与旧版本一致。
+3. 尝试把父节点拖入自己的任意深层后代，必须继续拒绝；合法跨分支移动、before/after/child 三种位置均保持正确。
+4. 连续新增、删除、移动节点以及撤销/重做，确认每次结构变化后的选择回退、父节点判断和后续操作没有读取旧索引。
+5. 继续复测第二批 DOM 索引、旧子导图返回父导图、全局搜索和文章/通读模式，确认本批只改变树查询成本，不改变跨文件行为。
+
+### 本轮交付
+
+- 测试安装 ZIP：`mindmap-studio-1.46.3-test-745464.zip`
+- SHA-256：`8a7589062fa296889fb51d0e913a1fabf255494bb22c541c497f3770b1b6fa0a`
+- 完整源码与 Codex 交接使用同一 `745464` 后缀。
+
 ## 1.46.3 大型导图性能优化第二批
 
 ### 实现与专项验证

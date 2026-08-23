@@ -1,5 +1,19 @@
 # Modified Files
 
+## 1.46.3 大型导图性能优化第三批
+
+- `src/core/node-tree.ts`、`src/core/model.ts`：新增 `NodeTreeIndex`、`buildNodeTreeIndex()` 与父链祖先查询辅助函数；一次 DFS 建立稳定节点顺序、`nodeId → node`、`nodeId → parent` 和可折叠状态，并允许 `moveNodeRelative()` 在结构变化前的首步复用已有索引。
+- `src/editor/editor.ts`：完整渲染开始统一重建节点树索引；选中节点、父节点/祖先、工具栏、多选复制/删除、删除回退、键盘与拖放热路径改为复用索引。文档根对象整体替换时通过根身份检查懒重建；纯内容修改不额外失效。
+- `src/editor/node-actions.ts`：`topLevelSelectedNodeIds()`、`deletionSelectionFallback()` 与 `insertSiblingAfter()` 支持传入现有索引；多选顶层分支过滤沿 `parentById` 判断祖先，不再为每个候选反复 `findNode()` / `containsNode()` 扫描子树。
+- `src/editor/drag-drop.ts`：`canMoveNodes()` 支持复用 `NodeTreeIndex`，通过父链判断目标是否位于任一拖动分支内部，替代重复子树 DFS。
+- `tests/node-tree.test.mjs`、`tests/node-tree-index-actions.test.mjs`、`tests/incremental-render.test.mjs`、`tests/article-context-edit.test.mjs`、`scripts/test.mjs`：增加节点/父节点索引、父链查询、首步结构移动复用、顶层多选过滤/删除回退/拖放合法性行为及源码/安装 bundle 防退化契约，并更新原有节点查询文本契约。
+- `package.json`：把 `node-tree-index-actions.test.mjs` 纳入正式 `test:unit`，让 CI 持续执行本批共享索引行为回归。
+- `README.md`、`CHANGELOG.md`、`docs/ARCHITECTURE.md`、`docs/TESTING.md`、`docs/FUNCTION_REFERENCE.md`：同步第三批节点树索引生命周期、性能边界与测试要求。
+- `main.js`：当前容器依赖安装仍不完整，无法执行正式 production esbuild；以现有 1.46.3 bundle 为基线等价同步本批运行逻辑，并由源码/bundle 契约、TypeScript 独立语法检查和 `node --check` 验证。正式发布前必须由完整 CI 重新 production build。
+- 本轮不改变 `.mindmap` 数据格式、撤销/保存语义、父子导图导航或文章编号规则。
+
+- 本轮测试安装包：`mindmap-studio-1.46.3-test-745464.zip`，SHA-256 `8a7589062fa296889fb51d0e913a1fabf255494bb22c541c497f3770b1b6fa0a`；完整源码与 Codex 交接使用同一 `745464` 后缀。
+
 ## 1.46.3 大型导图性能优化第二批
 
 - `src/editor/editor.ts`：新增 `mindMapNodeElements`，为已挂载导图节点维护 `nodeId → HTMLElement` 直接索引；渐进挂载去重、拖拽状态、框选尺寸采集、实测尺寸、FLIP 动画、行内编辑与单节点刷新改为复用索引，不再在热路径反复 `querySelector()` / `querySelectorAll()` 扫描整个节点层。节点替换、销毁和整图重绘同步删除或清空索引。

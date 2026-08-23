@@ -3,7 +3,7 @@
  * @description 节点拖放合法性与指针落点的纯计算规则。
  */
 
-import { containsNode, findNode, type MindMapNode } from "../core/model";
+import { buildNodeTreeIndex, indexedHasAncestor, type MindMapNode, type NodeTreeIndex } from "../core/model";
 
 /** 拖放指针与目标节点矩形所需的最小坐标信息。 */
 export interface DropPointer {
@@ -22,16 +22,20 @@ export interface DropTargetRect {
 /**
  * 判断一个或一组已选节点能否移动到目标节点。
  */
-export function canMoveNodes(root: MindMapNode, selectedIds: ReadonlySet<string>, draggedId: string | null, targetId: string): boolean {
+export function canMoveNodes(
+  root: MindMapNode,
+  selectedIds: ReadonlySet<string>,
+  draggedId: string | null,
+  targetId: string,
+  existingIndex?: NodeTreeIndex
+): boolean {
   if (!draggedId || draggedId === root.id || draggedId === targetId) return false;
   const candidateIds = selectedIds.has(draggedId) && selectedIds.size > 1
     ? Array.from(selectedIds)
     : [draggedId];
   if (candidateIds.includes(targetId) || candidateIds.includes(root.id)) return false;
-  return candidateIds.every((id) => {
-    const dragged = findNode(root, id);
-    return Boolean(dragged && !containsNode(dragged, targetId));
-  });
+  const index = existingIndex ?? buildNodeTreeIndex(root);
+  return candidateIds.every((id) => index.byId.has(id) && !indexedHasAncestor(index, targetId, id));
 }
 
 /**

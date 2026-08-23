@@ -189,3 +189,46 @@ test("moveNodeRelative fails when draggedId is root or targetId", () => {
   assert.equal(nodeTree.moveNodeRelative(root, "root", "a", "child"), false);
   assert.equal(nodeTree.moveNodeRelative(root, "a", "a", "child"), false);
 });
+
+test("buildNodeTreeIndex provides stable DFS nodes plus O(1) node and parent lookups", () => {
+  const root = createNode("root", [
+    createNode("a", [createNode("a1"), createNode("a2")]),
+    createNode("b")
+  ]);
+
+  const index = nodeTree.buildNodeTreeIndex(root);
+  assert.deepEqual(index.nodes.map((node) => node.id), ["root", "a", "a1", "a2", "b"]);
+  assert.equal(index.byId.get("a1"), root.children[0].children[0]);
+  assert.equal(index.parentById.get("a1"), root.children[0]);
+  assert.equal(index.parentById.get("root"), null);
+  assert.equal(index.hasCollapsibleNodes, true);
+});
+
+test("indexed ancestor helpers climb parent links without rescanning subtrees", () => {
+  const root = createNode("root", [
+    createNode("a", [createNode("a1", [createNode("a1_1")]), createNode("a2")]),
+    createNode("b")
+  ]);
+  const index = nodeTree.buildNodeTreeIndex(root);
+
+  assert.deepEqual(nodeTree.indexedAncestors(index, "a1_1").map((node) => node.id), ["root", "a", "a1"]);
+  assert.equal(nodeTree.indexedHasAncestor(index, "a1_1", "a"), true);
+  assert.equal(nodeTree.indexedHasAncestor(index, "a", "a1_1"), false);
+  assert.equal(nodeTree.indexedHasAnyAncestor(index, "a1_1", new Set(["a", "b"])), true);
+  assert.equal(nodeTree.indexedHasAnyAncestor(index, "a2", new Set(["a1", "b"])), false);
+  assert.equal(nodeTree.indexedHasAnyAncestor(index, "missing", new Set(["root"])), false);
+});
+
+test("moveNodeRelative reuses a provided tree index for the first structural move", () => {
+  const root = createNode("root", [
+    createNode("a"),
+    createNode("b", [createNode("b1"), createNode("b2")])
+  ]);
+  const index = nodeTree.buildNodeTreeIndex(root);
+
+  const result = nodeTree.moveNodeRelative(root, "b1", "a", "child", index);
+  assert.equal(result, true);
+  assert.deepEqual(root.children.map((node) => node.id), ["a", "b"]);
+  assert.deepEqual(root.children[0].children.map((node) => node.id), ["b1"]);
+  assert.deepEqual(root.children[1].children.map((node) => node.id), ["b2"]);
+});

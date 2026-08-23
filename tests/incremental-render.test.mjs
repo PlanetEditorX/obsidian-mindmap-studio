@@ -69,10 +69,13 @@ test("selection class deltas update only changed nodes and preserve multi-select
 });
 
 test("measured layout and render priority avoid repeated hot-path work", async () => {
-  const [editorSource, collisionSource, renderSource, bundleSource] = await Promise.all([
+  const [editorSource, collisionSource, renderSource, nodeTreeSource, nodeActionsSource, dragDropSource, bundleSource] = await Promise.all([
     readFile(path.join(rootDir, "src/editor/editor.ts"), "utf8"),
     readFile(collisionModulePath, "utf8"),
     readFile(modulePath, "utf8"),
+    readFile(path.join(rootDir, "src/core/node-tree.ts"), "utf8"),
+    readFile(path.join(rootDir, "src/editor/node-actions.ts"), "utf8"),
+    readFile(path.join(rootDir, "src/editor/drag-drop.ts"), "utf8"),
     readFile(path.join(rootDir, "main.js"), "utf8")
   ]);
   const measuredStart = editorSource.indexOf("  private applyMeasuredMindMapLayout(): void {");
@@ -84,10 +87,24 @@ test("measured layout and render priority avoid repeated hot-path work", async (
   const toolbarStart = editorSource.indexOf("  private toolbarAvailabilityContext(): ToolbarAvailabilityContext {");
   const toolbarEnd = editorSource.indexOf("\n  /**", toolbarStart + 4);
   const toolbarContext = editorSource.slice(toolbarStart, toolbarEnd);
-  assert.match(toolbarContext, /const stack: MindMapNode\[\] = \[this\.document\.root\]/);
-  assert.doesNotMatch(toolbarContext, /findNode\(|flattenNodes\(/);
+  assert.match(toolbarContext, /const index = this\.currentNodeTreeIndex\(\)/);
+  assert.match(toolbarContext, /index\.byId\.has\(id\)/);
+  assert.match(toolbarContext, /hasCollapsibleNodes: index\.hasCollapsibleNodes/);
+  assert.doesNotMatch(toolbarContext, /const stack:|findNode\(|flattenNodes\(/);
   assert.match(editorSource, /const availabilityContext = this\.toolbarAvailabilityContext\(\)/);
   assert.match(editorSource, /this\.toolbarItemAvailable\(id, availabilityContext\)/);
+  assert.match(editorSource, /private nodeTreeIndex: NodeTreeIndex \| null = null/);
+  assert.match(editorSource, /private render\(\): void \{\s*this\.rebuildNodeTreeIndex\(\)/);
+  assert.match(editorSource, /private nodeById\(nodeId: string\): MindMapNode \| null \{[\s\S]*?\.byId\.get\(nodeId\)/);
+  assert.match(editorSource, /private parentNodeById\(nodeId: string\): MindMapNode \| null \{[\s\S]*?\.parentById\.get\(nodeId\)/);
+  assert.match(nodeTreeSource, /export function buildNodeTreeIndex\([\s\S]*?byId\.set\(node\.id, node\)[\s\S]*?parentById\.set\(node\.id, parent\)/);
+  const topLevelSelection = nodeActionsSource.match(/export function topLevelSelectedNodeIds\([\s\S]*?\n\}/)?.[0] ?? "";
+  assert.match(topLevelSelection, /indexedHasAnyAncestor\(index, id, selected\)/);
+  assert.doesNotMatch(topLevelSelection, /findNode\(|containsNode\(/);
+  const moveValidation = dragDropSource.match(/export function canMoveNodes\([\s\S]*?\n\}/)?.[0] ?? "";
+  assert.match(moveValidation, /existingIndex\?: NodeTreeIndex/);
+  assert.match(moveValidation, /indexedHasAncestor\(index, targetId, id\)/);
+  assert.doesNotMatch(moveValidation, /findNode\(|containsNode\(/);
 
   assert.match(collisionSource, /if \(requiredOffset <= 0\) break;/);
   assert.match(renderSource, /const ranked = items\.map\(\(item\) =>/);
@@ -97,6 +114,9 @@ test("measured layout and render priority avoid repeated hot-path work", async (
   assert.match(bundleSource, /if \(requiredOffset <= 0\) break;/);
   assert.match(bundleSource, /const ranked = items\.map\(\(item\) =>/);
   assert.match(bundleSource, /toolbarAvailabilityContext\(\)/);
+  assert.match(bundleSource, /function buildNodeTreeIndex\(root\)/);
+  assert.match(bundleSource, /function indexedHasAnyAncestor\(index, id, ancestorIds\)/);
+  assert.match(bundleSource, /canMoveNodes\(root, selectedIds, draggedId, targetId, existingIndex\)/);
 
   assert.match(editorSource, /private readonly mindMapNodeElements = new Map<string, HTMLElement>\(\)/);
   assert.match(editorSource, /this\.mindMapNodeElements\.set\(node\.id, nodeEl\)/);
