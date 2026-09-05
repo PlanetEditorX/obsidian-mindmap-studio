@@ -1,5 +1,14 @@
 # 更新记录
 
+## 1.47.1
+
+- AI 请求支持主动取消：`AiAskModal` 为每轮请求持有 `AbortController`，关闭窗口或再次发送时立即中止上一轮；流式问答/整理通过 `AbortSignal` 传入浏览器 Fetch，取消后 `reader.read()` 拒绝并向上传播，不再出现后台连接持续占用或界面卡在“生成中”。
+- 中止判定与 SSE 读取下沉到可测试纯模块：`src/ai/protocol.ts` 新增 `isAiRequestCancelled()`、`throwIfSignalAborted()`、`createAiAbortError()` 与 `consumeAiStreamReader()`，完整文本解析与流式读取共用同一 SSE 事件累计器；`requestUrl` 路径在请求前后校验信号（Obsidian `requestUrl` 不支持中途取消）。
+- 识图串行批处理响应取消信号：每张图片处理前检查中止状态，被取消的错误不再计入失败图片而是直接终止批量流程；AI 识图错误包装放过取消错误，避免把“已取消”误报为模型不支持视觉输入。
+- AI 窗口把取消与失败区分显示：主动取消显示“已取消”，不再标记为错误阶段或输出错误日志。`requestAiCompletion`、`requestAiEditProposal`、`requestAiImageRecognition`、`fetchAiProfileModels`、`testAiProfileConnection` 均新增可选 `AbortSignal` 参数，旧调用保持兼容。
+- 修复测试工具 `loadTypeScriptModules()` 的 Windows 兼容问题：绝对源码路径先按 `process.cwd()` 归一化，避免 `path.join` 在 Windows 拼出含盘符的非法临时目录；不影响 Linux 行为。
+- 新增专项测试并更新 AI 助手、架构、测试文档与函数参考。
+
 ## 1.46.3
 
 - 第五批 5.2 mutation 快照优化：编辑器缓存最近一次已发布修订的完整 JSON，下一次可撤销写操作直接通过 `DocumentHistory.captureSnapshot()` 复用该字符串作为修改前历史，不再额外 `JSON.stringify()` 旧文档；修改完成后 `notifyDocumentChange()` 只强制序列化一次新修订并恢复隔离宿主对象。`DocumentHistory` 新增字符串快照 API 但仍保存完整 JSON；zoom/pan、恢复导航、只读和文章落地等未立即 `onChange` 的持久状态会主动使缓存失效，保证不会把旧序列化结果写入撤销栈或宿主。

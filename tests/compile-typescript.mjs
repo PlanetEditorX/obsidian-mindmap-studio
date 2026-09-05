@@ -38,11 +38,16 @@ export async function loadTypeScriptModule(sourcePath) {
 /**
  * Transpile a small dependency graph of TypeScript files and load one entry.
  * Relative imports between the supplied files are preserved in the temp tree.
+ * Callers may pass absolute source paths; they are normalized against the
+ * current working directory so the temp layout stays valid on Windows too.
  */
 export async function loadTypeScriptModules(sourcePaths, entryPath) {
+  const normalize = (sourcePath) => path.isAbsolute(sourcePath)
+    ? path.relative(process.cwd(), sourcePath).replaceAll("\\", "/")
+    : sourcePath;
   const directory = await mkdtemp(path.join(tmpdir(), "mindmap-studio-unit-graph-"));
-  for (const sourcePath of sourcePaths) {
-    const source = await readFile(sourcePath, "utf8");
+  for (const sourcePath of sourcePaths.map(normalize)) {
+    const source = await readFile(path.resolve(sourcePath), "utf8");
     const result = ts.transpileModule(source, {
       compilerOptions: {
         module: ts.ModuleKind.CommonJS,
@@ -64,7 +69,7 @@ export async function loadTypeScriptModules(sourcePaths, entryPath) {
   }
   const require = createRequire(import.meta.url);
   return {
-    module: require(path.join(directory, entryPath.replace(/\.ts$/, ".js"))),
+    module: require(path.join(directory, normalize(entryPath).replace(/\.ts$/, ".js"))),
     cleanup: () => rm(directory, { recursive: true, force: true })
   };
 }

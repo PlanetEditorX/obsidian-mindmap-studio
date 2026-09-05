@@ -15,6 +15,7 @@ import { readingSectionsToDocx, readingSectionsToHtml, readingSectionsToMarkdown
 import { AiAskModal } from "./ai/modal";
 import { enabledAiProfiles } from "./ai/config";
 import { buildAiMarkdownPayload } from "./ai/markdown";
+import { isAiRequestCancelled, throwIfSignalAborted } from "./ai/protocol";
 import { saveDesktopExportFile, saveDesktopPdfFile } from "./utils/desktop-export";
 import {
   collectRecognizableImages,
@@ -544,11 +545,11 @@ export class MindMapStudioView extends TextFileView {
       imageRecognitionAutoConfirmDelaySeconds: this.plugin.settings.imageRecognitionAutoConfirmDelaySeconds,
       imageCount: collectRecognizableImages(document, nodeId).length,
       sourcePath: this.file?.path ?? "",
-      onAsk: async (profileId, question, onStreamUpdate) => this.plugin.askAi(profileId, payload, question, onStreamUpdate),
+      onAsk: async (profileId, question, onStreamUpdate, signal) => this.plugin.askAi(profileId, payload, question, onStreamUpdate, signal),
       onSetThinkingMode: (profileId, enabled) => this.plugin.setAiProfileThinkingMode(profileId, enabled),
-      onProposeEdit: async (profileId, instruction, onStreamUpdate) => this.plugin.proposeAiEdit(profileId, payload, instruction, onStreamUpdate),
+      onProposeEdit: async (profileId, instruction, onStreamUpdate, signal) => this.plugin.proposeAiEdit(profileId, payload, instruction, onStreamUpdate, signal),
       onConvertToQuestion: (responseText) => this.editor?.applyAndEnrichAiQuestion(responseText, nodeId) ?? false,
-      onRecognizeImages: async (profileId, instruction) => this.recognizeImages(nodeId, profileId, instruction),
+      onRecognizeImages: async (profileId, instruction, signal) => this.recognizeImages(nodeId, profileId, instruction, signal),
       onPreviewImageTextReplacements: (items) => {
         if (!this.editor) throw new Error("当前导图编辑器尚未加载");
         return this.editor.previewImageTextReplacements(items);
@@ -567,8 +568,8 @@ export class MindMapStudioView extends TextFileView {
     }).open();
   }
 
-  /** 按节点树顺序逐张读取并识别当前页面或节点子树中的全部图片。 */
-  private async recognizeImages(nodeId: string | undefined, profileId: string, instruction: string): Promise<ImageRecognitionBatchResult> {
+  /** 按节点树顺序逐张读取并识别当前页面或节点子树中的全部图片；收到取消信号时停止后续图片。 */
+  private async recognizeImages(nodeId: string | undefined, profileId: string, instruction: string, signal?: AbortSignal): Promise<ImageRecognitionBatchResult> {
     const document = this.document;
     if (!document) throw new Error("当前导图尚未加载");
     const images = collectRecognizableImages(document, nodeId);
@@ -576,12 +577,14 @@ export class MindMapStudioView extends TextFileView {
     const items: ImageRecognitionItemResult[] = [];
     const failed: Array<RecognizableImage & { error: string }> = [];
     for (const image of images) {
+      throwIfSignalAborted(signal, "图片识别");
       try {
         const source = await this.plugin.readImageSource(image.source, this.file);
         if (!source) throw new Error("无法读取图片来源");
         const remoteUrl = /^https:\/\//i.test(image.source) ? image.source : undefined;
-        items.push(await this.plugin.recognizeImage(image, source.blob, profileId, instruction, remoteUrl));
+        items.push(await this.plugin.recognizeImage(image, source.blob, profileId, instruction, remoteUrl, signal));
       } catch (error) {
+        if (isAiRequestCancelled(error)) throw error;
         failed.push({ ...image, error: error instanceof Error ? error.message : String(error) });
       }
     }

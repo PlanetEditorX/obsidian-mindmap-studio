@@ -1,5 +1,20 @@
 # Modified Files
 
+## 1.47.1 AI 请求可取消（AbortSignal）
+
+- `src/ai/protocol.ts`：新增 `isAiRequestCancelled()`（识别 `AbortError`/`TimeoutError` 与常见中止消息文本）、`throwIfSignalAborted()`（包裹不支持中途取消的 `requestUrl`）、`createAiAbortError()`；抽出 `createAiSseEventAccumulator()` 供完整文本解析与流式读取共用，并新增 `consumeAiStreamReader()` 以最小读取器接口消费浏览器 Fetch SSE，取消错误原样向上传播。
+- `src/ai/client.ts`：`fetchAiProfileModels()`、`requestAiCompletion()`、`requestAiEditProposal()`、`requestAiImageRecognition()`、`testAiProfileConnection()` 新增可选 `AbortSignal` 参数并透传；流式路径把信号传入 Fetch，非流式 `requestUrl` 路径在请求前后校验；流式 Fetch 失败回退的原生请求路径同样校验；AI 识图错误包装放过取消错误，不改写为视觉模型提示。
+- `src/main.ts`：`askAi()`、`proposeAiEdit()`、`recognizeImage()` 新增可选 `signal` 参数并透传客户端；`enrichQuestion()` 保持原签名不接入取消。
+- `src/view.ts`：AI 窗口回调 `onAsk` / `onProposeEdit` / `onRecognizeImages` 增加 `signal` 形参并传给插件方法；`recognizeImages()` 每张图片处理前执行 `throwIfSignalAborted()`，取消错误不再计入失败图片而是终止批量流程。
+- `src/ai/modal.ts`：新增 `activeRequestController` 与 `beginRequestSignal()`，发送问答/整理/识图时创建控制器并在再次发送时中止上一轮；`onClose()` 中止进行中的请求；取消错误显示“已取消”而不进入错误阶段；`onAsk` / `onProposeEdit` / `onRecognizeImages` 选项签名增加可选 `signal`。
+- `tests/ai.test.mjs`：新增中止判定、信号前后校验、跨块 SSE 读取与增量回调、读取器中止传播、modal/view 取消接线源码契约 5 项测试；更新问答/整理调用的 `beginRequestSignal()` 契约。
+- `tests/compile-typescript.mjs`：`loadTypeScriptModules()` 对绝对源码路径先按 `process.cwd()` 归一化再写入临时目录，修复 Windows 下 `path.join` 拼出含盘符非法路径导致 `article-context-cache` 等测试必然失败的问题；Linux 行为不变。
+- `package.json`、`manifest.json`、`versions.json`：版本升至 `1.47.1`。
+- `README.md`、`CHANGELOG.md`、`docs/ARCHITECTURE.md`、`docs/AI_ASSISTANT.zh-CN.md`、`docs/TESTING.md`、`docs/FUNCTION_REFERENCE.md`、`TEST_RESULTS.md`：同步取消语义、测试覆盖与函数参考。
+- `main.js`：以 production esbuild 重新构建，包含本批取消逻辑。
+- 本轮不改变 `.mindmap` 数据格式、AI 请求体、接口配置结构、撤销/保存语义和识图串行顺序；旧调用（不传 `signal`）行为完全不变。
+- 本轮测试安装包：`mindmap-studio-1.47.1-test-741761.zip`，SHA-256 `b110c15eda0401880738734cf8ccd63a826570932364de6d3372c7c4792c8ad2`；完整源码与 Codex 交接使用同一 `741761` 后缀。
+
 ## 1.46.3 mutation 序列化快照复用性能优化第五批 5.2
 
 - `src/editor/history-manager.ts`：为完整 JSON 历史新增 `createSnapshot()` / `restoreSnapshot()`、`captureSnapshot()`、`undoSnapshot()`、`redoSnapshot()`；旧 `capture/undo/redo` API 继续委托新入口，撤销栈和重做栈仍保存完整文档字符串。

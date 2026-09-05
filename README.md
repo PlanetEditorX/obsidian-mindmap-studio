@@ -92,6 +92,7 @@ MindMap Studio 是一个本地优先的 Obsidian 思维导图插件。它使用�
 - AI 编辑先生成完整 Markdown 提案并显示节点数量和内容预览，用户确认后才替换页面或节点子树，并可撤销。
 - 本地替换不联网，可在相同范围内替换节点文字、备注和表格，同时避开链接、代码、图片地址和子导图路径。
 - 询问窗口显示“转换 Markdown、上传上下文、模型处理、接收结果”处理轨迹并渲染 Markdown 回答。
+- 关闭 AI 窗口或再次发送会立即中止进行中的流式请求与识图批量处理；主动取消显示“已取消”而不是请求失败。
 
 详细配置、安全边界和操作方式见 [docs/AI_ASSISTANT.zh-CN.md](docs/AI_ASSISTANT.zh-CN.md) 与 [docs/IMAGE_RECOGNITION_SCREENSHOT.zh-CN.md](docs/IMAGE_RECOGNITION_SCREENSHOT.zh-CN.md)。
 

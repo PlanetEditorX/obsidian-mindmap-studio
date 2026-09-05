@@ -12,13 +12,15 @@ import {
   buildAiEditCompletionBody,
   buildChatCompletionBody,
   buildImageRecognitionCompletionBody,
+  consumeAiStreamReader,
   extractAiResponseText,
-  extractAiStreamDelta,
   extractAiModelIds,
+  isAiRequestCancelled,
   parseAiStreamResponseText,
   parseAiHeaders,
   resolveAiChatCompletionsEndpoint,
   resolveAiModelsEndpoint,
+  throwIfSignalAborted,
   type AiChatCompletionBody
 } from "./protocol";
 
@@ -43,14 +45,16 @@ export interface AiConnectionTestResult {
 }
 
 /** 向兼容服务的 /models 目录请求可用模型 ID。 */
-export async function fetchAiProfileModels(profile: AiProfileConfig): Promise<string[]> {
+export async function fetchAiProfileModels(profile: AiProfileConfig, signal?: AbortSignal): Promise<string[]> {
   const endpoint = normalizeHttpUrl(resolveAiModelsEndpoint(profile.endpoint), "AI 模型目录接口");
+  throwIfSignalAborted(signal, "模型目录请求");
   const response = await requestUrl({
     url: endpoint,
     method: "GET",
     headers: buildRequestHeaders(profile),
     throw: true
   });
+  throwIfSignalAborted(signal, "模型目录请求");
   const json = response.json ?? (() => {
     try { return JSON.parse(response.text) as unknown; } catch { return null; }
   })();
@@ -73,14 +77,16 @@ const buildRequestHeaders = (profile: AiProfileConfig): Record<string, string> =
 const requestChatCompletion = async (
   profile: AiProfileConfig,
   body: AiChatCompletionBody,
-  onStreamUpdate?: (update: AiStreamUpdate) => void
+  onStreamUpdate?: (update: AiStreamUpdate) => void,
+  signal?: AbortSignal
 ): Promise<Record<string, unknown>> => {
   const endpoint = normalizeHttpUrl(
     resolveAiChatCompletionsEndpoint(profile.endpoint),
     "AI 接口"
   );
   if (!profile.model.trim()) throw new Error("请先配置模型名称");
-  if (body.stream) return requestStreamingChatCompletion(endpoint, profile, body, onStreamUpdate);
+  if (body.stream) return requestStreamingChatCompletion(endpoint, profile, body, onStreamUpdate, signal);
+  throwIfSignalAborted(signal, "AI 接口请求");
   const response = await requestUrl({
     url: endpoint,
     method: "POST",
@@ -89,61 +95,50 @@ const requestChatCompletion = async (
     body: JSON.stringify(body),
     throw: true
   });
+  throwIfSignalAborted(signal, "AI 接口请求");
   const json = response.json ?? (() => {
     try { return JSON.parse(response.text) as unknown; } catch { return null; }
   })();
   return json && typeof json === "object" ? json as Record<string, unknown> : {};
 };
 
-/** 通过原生 Fetch 消费 OpenAI 兼容 SSE；requestUrl 不提供可读取的响应流。 */
+/**
+ * 通过原生 Fetch 消费 OpenAI 兼容 SSE；requestUrl 不提供可读取的响应流。
+ *
+ * `signal` 中止时 Fetch 会中断连接并让读取拒绝，取消错误原样向上传播，
+ * 由调用方（AI 助手窗口）识别为“已取消”而不是请求失败。
+ */
 const requestStreamingChatCompletion = async (
   endpoint: string,
   profile: AiProfileConfig,
   body: AiChatCompletionBody,
-  onStreamUpdate?: (update: AiStreamUpdate) => void
+  onStreamUpdate?: (update: AiStreamUpdate) => void,
+  signal?: AbortSignal
 ): Promise<Record<string, unknown>> => {
+  throwIfSignalAborted(signal, "AI 接口请求");
   let response: Response;
   try {
     response = await fetch(endpoint, {
       method: "POST",
       headers: { ...buildRequestHeaders(profile), Accept: "text/event-stream" },
-      body: JSON.stringify(body)
+      body: JSON.stringify(body),
+      signal
     });
   } catch (error) {
     if (!isFetchNetworkError(error)) throw error;
-    return requestNativeStreamingChatCompletion(endpoint, profile, body, onStreamUpdate);
+    return requestNativeStreamingChatCompletion(endpoint, profile, body, onStreamUpdate, signal);
   }
   if (!response.ok) throw new Error(`AI 接口请求失败（${response.status}）：${(await response.text()).slice(0, 500)}`);
   if (!response.body) throw new Error("AI 接口未返回可读取的流式响应");
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-  let content = "";
-  let model = profile.model;
-  let usage: unknown;
-  const consumeEvent = (event: string): void => {
-    const data = event.split(/\r?\n/).filter((line) => line.startsWith("data:")).map((line) => line.slice(5).trimStart()).join("\n");
-    if (!data || data === "[DONE]") return;
-    let json: unknown;
-    try { json = JSON.parse(data) as unknown; } catch { return; }
-    if (!json || typeof json !== "object") return;
-    const record = json as Record<string, unknown>;
-    if (typeof record.model === "string") model = record.model;
-    if (record.usage !== undefined) usage = record.usage;
-    const delta = extractAiStreamDelta(json);
-    if (delta.content) content += delta.content;
-    if (delta.thinking || delta.content) onStreamUpdate?.(delta);
+  const parsed = await consumeAiStreamReader(response.body.getReader(), {
+    defaultModel: profile.model,
+    onStreamUpdate
+  });
+  return {
+    model: parsed.model,
+    choices: [{ message: { content: parsed.content } }],
+    ...(parsed.usage !== undefined ? { usage: parsed.usage } : {})
   };
-  while (true) {
-    const { done, value } = await reader.read();
-    buffer += decoder.decode(value, { stream: !done });
-    const events = buffer.split(/\r?\n\r?\n/);
-    buffer = events.pop() ?? "";
-    events.forEach(consumeEvent);
-    if (done) break;
-  }
-  if (buffer.trim()) consumeEvent(buffer);
-  return { model, choices: [{ message: { content } }], ...(usage !== undefined ? { usage } : {}) };
 };
 
 /** 判断浏览器 fetch 是否因 CORS 或渲染器网络边界而无法建立连接。 */
@@ -155,8 +150,10 @@ const requestNativeStreamingChatCompletion = async (
   endpoint: string,
   profile: AiProfileConfig,
   body: AiChatCompletionBody,
-  onStreamUpdate?: (update: AiStreamUpdate) => void
+  onStreamUpdate?: (update: AiStreamUpdate) => void,
+  signal?: AbortSignal
 ): Promise<Record<string, unknown>> => {
+  throwIfSignalAborted(signal, "AI 接口请求");
   const response = await requestUrl({
     url: endpoint,
     method: "POST",
@@ -165,6 +162,7 @@ const requestNativeStreamingChatCompletion = async (
     body: JSON.stringify(body),
     throw: true
   });
+  throwIfSignalAborted(signal, "AI 接口请求");
   const parsed = parseAiStreamResponseText(response.text, profile.model, onStreamUpdate);
   return {
     model: parsed.model,
@@ -178,10 +176,11 @@ export async function requestAiCompletion(
   profile: AiProfileConfig,
   payload: AiMarkdownPayload,
   question: string,
-  onStreamUpdate?: (update: AiStreamUpdate) => void
+  onStreamUpdate?: (update: AiStreamUpdate) => void,
+  signal?: AbortSignal
 ): Promise<AiCompletionResult> {
   if (payload.overLimit) throw new Error("Markdown 超过当前允许上传的大小");
-  const json = await requestChatCompletion(profile, buildChatCompletionBody(profile, payload, question, Boolean(onStreamUpdate)), onStreamUpdate);
+  const json = await requestChatCompletion(profile, buildChatCompletionBody(profile, payload, question, Boolean(onStreamUpdate)), onStreamUpdate, signal);
   const text = extractAiResponseText(json);
   if (!text) throw new Error("AI 接口返回成功，但没有可读取的文本内容");
   const usage = json.usage && typeof json.usage === "object" ? json.usage as Record<string, unknown> : undefined;
@@ -202,10 +201,11 @@ export async function requestAiEditProposal(
   profile: AiProfileConfig,
   payload: AiMarkdownPayload,
   instruction: string,
-  onStreamUpdate?: (update: AiStreamUpdate) => void
+  onStreamUpdate?: (update: AiStreamUpdate) => void,
+  signal?: AbortSignal
 ): Promise<AiCompletionResult> {
   if (payload.overLimit) throw new Error("Markdown 超过当前允许上传的大小");
-  const json = await requestChatCompletion(profile, buildAiEditCompletionBody(profile, payload, instruction, Boolean(onStreamUpdate)), onStreamUpdate);
+  const json = await requestChatCompletion(profile, buildAiEditCompletionBody(profile, payload, instruction, Boolean(onStreamUpdate)), onStreamUpdate, signal);
   const text = extractAiResponseText(json);
   if (!text) throw new Error("AI 接口返回成功，但没有可读取的 Markdown 修改提案");
   const usage = json.usage && typeof json.usage === "object" ? json.usage as Record<string, unknown> : undefined;
@@ -237,7 +237,8 @@ export async function imageBlobToDataUrl(blob: Blob): Promise<string> {
 export async function requestAiImageRecognition(
   profile: AiProfileConfig,
   image: Blob | string,
-  prompt: string
+  prompt: string,
+  signal?: AbortSignal
 ): Promise<AiCompletionResult> {
   let imageUrl: string;
   if (typeof image === "string") imageUrl = normalizeHttpUrl(image, "图片地址");
@@ -248,8 +249,9 @@ export async function requestAiImageRecognition(
   }
   let json: Record<string, unknown>;
   try {
-    json = await requestChatCompletion(profile, buildImageRecognitionCompletionBody(profile, prompt, imageUrl));
+    json = await requestChatCompletion(profile, buildImageRecognitionCompletionBody(profile, prompt, imageUrl), undefined, signal);
   } catch (error) {
+    if (isAiRequestCancelled(error)) throw error;
     const message = error instanceof Error ? error.message : String(error);
     throw new Error(`${message}。请确认“${profile.name}”使用支持图片输入的视觉模型；也可在设置中为 AI 识图单独选择接口。`);
   }
@@ -272,8 +274,8 @@ export async function requestAiImageRecognition(
  *
  * 检测请求不会包含当前导图或节点正文。
  */
-export async function testAiProfileConnection(profile: AiProfileConfig): Promise<AiConnectionTestResult> {
-  const json = await requestChatCompletion(profile, buildAiConnectionTestBody(profile));
+export async function testAiProfileConnection(profile: AiProfileConfig, signal?: AbortSignal): Promise<AiConnectionTestResult> {
+  const json = await requestChatCompletion(profile, buildAiConnectionTestBody(profile), undefined, signal);
   const text = extractAiResponseText(json);
   if (!text) throw new Error("接口返回成功，但没有可读取的检测文本");
   return {

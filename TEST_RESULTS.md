@@ -1,6 +1,28 @@
 # Test Results
 
-版本：1.46.3
+版本：1.47.1
+
+## 1.47.1 AI 请求可取消（AbortSignal）
+
+### 实现与行为验证
+
+- `AiAskModal` 每轮 AI 请求（问答、整理、识图批处理）持有独立 `AbortController`；窗口关闭或再次发送立即中止上一轮。流式路径把 `AbortSignal` 传入浏览器 Fetch，读取拒绝原样向上传播；`requestUrl` 路径在请求前后执行 `throwIfSignalAborted()` 校验（Obsidian `requestUrl` 不支持中途取消，已在架构文档明确该边界）。
+- 取消与失败在 UI 上分离：主动取消显示“已取消本次 AI 请求 / 已取消本次图片识别”，不进入错误阶段、不输出错误日志；AI 识图错误包装放过取消错误，不再把取消误报为“模型不支持视觉输入”。
+- 识图串行批处理每张图片处理前检查信号，取消后剩余图片不再发起网络请求，已完成的识别结果保留。
+- `node --test tests/ai.test.mjs`：**30 / 30 通过**；其中新增 5 项——`isAiRequestCancelled()` 对 `AbortError`、`TimeoutError`、常见中止消息与普通网络错误的判定边界；`throwIfSignalAborted()` 对未中止/已中止信号的行为；`consumeAiStreamReader()` 跨块 SSE 事件累计、思考与正文增量回调、`model`/`usage` 覆盖与 `[DONE]` 忽略；读取器中止错误原样传播；modal/view 取消接线（关闭中止、`beginRequestSignal()`、识图取消不计入失败图片）的源码与安装 bundle 契约。
+- 修复测试工具 `loadTypeScriptModules()` 的 Windows 兼容问题：调用方传入绝对源码路径时先按 `process.cwd()` 归一化为相对路径，避免 `path.join` 在 Windows 拼出含盘符的非法临时目录；Linux 行为不变。`tests/article-context-cache.test.mjs` 等 4 个此前在本机必然失败的测试文件恢复正常。
+- `npm run verify`（本机完整执行）：`test:unit` **393 / 393 通过**；`test:regression` 全部通过（含 `main.js` 安装 bundle 契约）；`test:docs` 覆盖 **58 个源码模块、1236 个具名声明**；`test:repo` 通过；`tsc --noEmit` 与 production esbuild 通过，`main.js` 已用本批逻辑重新构建。
+
+### 兼容性边界
+
+- `requestAiCompletion()` / `requestAiEditProposal()` / `requestAiImageRecognition()` / `fetchAiProfileModels()` / `testAiProfileConnection()` 新增的 `AbortSignal` 参数全部可选；不传信号时行为与 1.47.0 完全一致。
+- AI 请求体、SSE 解析结果、接口配置结构、撤销/保存链路与 `.mindmap` 数据格式均不变。
+
+### 仍需手工验证
+
+- 真实桌面端：流式问答进行中关闭 AI 窗口，确认状态不再停留“生成中”、无异常日志；再次发送时上一轮立即中止。
+- 真实桌面端：识图批处理进行中关闭窗口，确认剩余图片不再请求，取消提示正确显示。
+- 跨域回退路径（服务端未开放 CORS）下取消仅在前置校验生效，属预期行为。
 
 ## 1.46.3 mutation 序列化快照复用性能优化第五批 5.2
 

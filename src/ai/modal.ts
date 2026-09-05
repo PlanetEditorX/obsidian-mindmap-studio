@@ -20,6 +20,7 @@ import {
   type AiInteractionMode,
   type LocalReplacePreview
 } from "./edit";
+import { isAiRequestCancelled } from "./protocol";
 
 /** 创建 AI 窗口所需的上下文、接口和安全应用回调。 */
 export interface AiAskModalOptions {
@@ -33,11 +34,11 @@ export interface AiAskModalOptions {
   imageRecognitionAutoConfirmDelaySeconds: 0 | 5 | 10 | 15 | null;
   imageCount: number;
   sourcePath: string;
-  onAsk: (profileId: string, question: string, onStreamUpdate: (update: AiStreamUpdate) => void) => Promise<AiCompletionResult>;
+  onAsk: (profileId: string, question: string, onStreamUpdate: (update: AiStreamUpdate) => void, signal?: AbortSignal) => Promise<AiCompletionResult>;
   onSetThinkingMode: (profileId: string, enabled: boolean) => Promise<void>;
-  onProposeEdit: (profileId: string, instruction: string, onStreamUpdate: (update: AiStreamUpdate) => void) => Promise<AiCompletionResult>;
+  onProposeEdit: (profileId: string, instruction: string, onStreamUpdate: (update: AiStreamUpdate) => void, signal?: AbortSignal) => Promise<AiCompletionResult>;
   onConvertToQuestion: (responseText: string) => boolean | Promise<boolean>;
-  onRecognizeImages: (profileId: string, instruction: string) => Promise<ImageRecognitionBatchResult>;
+  onRecognizeImages: (profileId: string, instruction: string, signal?: AbortSignal) => Promise<ImageRecognitionBatchResult>;
   onPreviewImageTextReplacements: (items: ImageRecognitionItemResult[]) => ImageTextReplacementPreview[];
   onApplyImageTextReplacements: (previews: ImageTextReplacementPreview[]) => boolean | Promise<boolean>;
   onPreviewAiEdit: (responseText: string) => AiEditPreview;
@@ -56,12 +57,22 @@ export class AiAskModal extends Modal {
   /** 标识当前打开会话，防止关闭后的异步响应继续写入旧 DOM。 */
   private modalSession = 0;
   private imageAutoConfirmTimer: number | null = null;
+  /** 当前进行中的 AI 请求控制器；窗口关闭或重新发送时中止，避免后台连接继续占用。 */
+  private activeRequestController: AbortController | null = null;
   /** Updates elapsed waiting time while a non-streaming AI request is active. */
   private requestProgressTimer: number | null = null;
 
   /** 保存窗口上下文并初始化 Obsidian Modal。 */
   constructor(app: App, private readonly options: AiAskModalOptions) {
     super(app);
+  }
+
+  /** 开始一轮可取消的 AI 请求；再次发送时先中止上一轮，窗口关闭时也会中止。 */
+  private beginRequestSignal(): AbortSignal {
+    this.activeRequestController?.abort();
+    const controller = new AbortController();
+    this.activeRequestController = controller;
+    return controller.signal;
   }
 
   /** 构建模式选择、大小提示、处理轨迹、修改预览和确认应用区域。 */
@@ -523,7 +534,8 @@ export class AiAskModal extends Modal {
         setStep(0, "active");
         status.setText(`正在读取并依次识别 ${this.options.imageCount} 张图片…`);
         startRequestProgress(`正在处理 ${this.options.imageCount} 张图片`);
-        void this.options.onRecognizeImages(provider.value, prompt)
+        const signal = this.beginRequestSignal();
+        void this.options.onRecognizeImages(provider.value, prompt, signal)
           .then((batch) => {
             if (session !== this.modalSession) return;
             setStep(0, "done");
@@ -537,6 +549,11 @@ export class AiAskModal extends Modal {
           })
           .catch((error) => {
             if (session !== this.modalSession) return;
+            if (isAiRequestCancelled(error)) {
+              status.setText("已取消本次图片识别");
+              finishRequestProgress("done", "图片识别已取消");
+              return;
+            }
             const activeIndex = steps.findIndex((step) => step.dataset.state === "active");
             setStep(Math.max(0, activeIndex), "error");
             status.setText(error instanceof Error ? error.message : "图片识别失败");
@@ -559,8 +576,8 @@ export class AiAskModal extends Modal {
         updateRequestProgress("模型处理中");
       }, 180);
       const request = currentMode() === "edit"
-        ? this.options.onProposeEdit(provider.value, prompt, showStreamUpdate)
-        : this.options.onAsk(provider.value, prompt, showStreamUpdate);
+        ? this.options.onProposeEdit(provider.value, prompt, showStreamUpdate, this.beginRequestSignal())
+        : this.options.onAsk(provider.value, prompt, showStreamUpdate, this.beginRequestSignal());
       void request
         .then(async (response) => {
           window.clearTimeout(modelStageTimer);
@@ -600,6 +617,11 @@ export class AiAskModal extends Modal {
         .catch((error) => {
           window.clearTimeout(modelStageTimer);
           if (session !== this.modalSession) return;
+          if (isAiRequestCancelled(error)) {
+            status.setText("已取消本次 AI 请求");
+            finishRequestProgress("done", "AI 请求已取消");
+            return;
+          }
           const failedStage = steps[2]?.dataset.state === "active" ? 2 : 1;
           setStep(failedStage, "error");
           status.setText(error instanceof Error ? error.message : "AI 请求失败");
@@ -615,6 +637,8 @@ export class AiAskModal extends Modal {
   /** 释放 Markdown 渲染器注册的子组件和事件，避免窗口关闭后继续更新 DOM。 */
   onClose(): void {
     this.modalSession += 1;
+    this.activeRequestController?.abort();
+    this.activeRequestController = null;
     if (this.imageAutoConfirmTimer !== null) window.clearTimeout(this.imageAutoConfirmTimer);
     this.imageAutoConfirmTimer = null;
     if (this.requestProgressTimer !== null) window.clearInterval(this.requestProgressTimer);

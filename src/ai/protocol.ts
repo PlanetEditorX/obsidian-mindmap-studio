@@ -267,6 +267,55 @@ export function parseAiStreamResponseText(
     // The normal response is SSE; a few compatible proxies return one JSON object instead.
   }
 
+  const accumulator = createAiSseEventAccumulator(defaultModel, onStreamUpdate);
+  source.split(/\r?\n\r?\n/).forEach(accumulator.consumeEvent);
+  return accumulator.snapshot();
+}
+
+/**
+ * 判断错误是否由请求被主动取消（`AbortSignal`）引起，而不是真实的网络或服务端失败。
+ *
+ * Electron 渲染进程抛出的取消错误可能是 `DOMException: AbortError`，
+ * 也可能是其他运行时包装后的普通 `Error`，因此同时匹配名称与常见消息文本。
+ */
+export function isAiRequestCancelled(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const candidate = error as { name?: unknown; message?: unknown };
+  if (candidate.name === "AbortError" || candidate.name === "TimeoutError") return true;
+  return typeof candidate.message === "string" && /operation was aborted|signal is aborted without reason|aborted/i.test(candidate.message);
+}
+
+/**
+ * 若信号已中止则立刻抛出取消错误，用于包裹不支持中途取消的 `requestUrl` 调用。
+ *
+ * @param signal 调用方传入的可选中止信号。
+ * @param context 错误消息中用于定位请求的上下文描述。
+ */
+export function throwIfSignalAborted(signal: AbortSignal | undefined, context = "AI 请求"): void {
+  if (!signal?.aborted) return;
+  throw createAiAbortError(context);
+}
+
+/** 创建与浏览器 `fetch` 取消行为一致的 AbortError，便于调用方统一识别。 */
+export function createAiAbortError(context = "AI 请求"): Error {
+  const message = `${context}已取消`;
+  if (typeof DOMException === "function") return new DOMException(message, "AbortError");
+  const error = new Error(message);
+  error.name = "AbortError";
+  return error;
+}
+
+/** 共享的 SSE 事件汇总器：解析单个事件并把增量写入累计结果。 */
+interface AiSseEventAccumulator {
+  consumeEvent: (event: string) => void;
+  snapshot: () => AiParsedStreamResponse;
+}
+
+/** 创建供完整文本解析与流式读取共用的 SSE 事件累计器。 */
+function createAiSseEventAccumulator(
+  defaultModel: string,
+  onStreamUpdate?: (delta: AiStreamDelta) => void
+): AiSseEventAccumulator {
   let model = defaultModel;
   let content = "";
   let usage: unknown;
@@ -286,6 +335,38 @@ export function parseAiStreamResponseText(
     if (delta.content) content += delta.content;
     if (delta.thinking || delta.content) onStreamUpdate?.(delta);
   };
-  source.split(/\r?\n\r?\n/).forEach(consumeEvent);
-  return { model, content, ...(usage !== undefined ? { usage } : {}) };
+  return {
+    consumeEvent,
+    snapshot: () => ({ model, content, ...(usage !== undefined ? { usage } : {}) })
+  };
+}
+
+/** 与 `Response.body.getReader()` 兼容的最小读取器接口，便于测试注入。 */
+export interface AiStreamReaderLike {
+  read(): Promise<{ done: boolean; value?: Uint8Array }>;
+}
+
+/**
+ * 从浏览器 Fetch 读取器逐块消费 OpenAI 兼容 SSE 流。
+ *
+ * 读取器在请求被 `AbortSignal` 取消时会拒绝读取，错误原样向上传播；
+ * 流结束后仍会处理最后一个未以空行结尾的事件，行为与常见 SSE 客户端一致。
+ */
+export async function consumeAiStreamReader(
+  reader: AiStreamReaderLike,
+  options: { defaultModel: string; onStreamUpdate?: (delta: AiStreamDelta) => void }
+): Promise<AiParsedStreamResponse> {
+  const decoder = new TextDecoder();
+  const accumulator = createAiSseEventAccumulator(options.defaultModel, options.onStreamUpdate);
+  let buffer = "";
+  while (true) {
+    const { done, value } = await reader.read();
+    buffer += decoder.decode(value, { stream: !done });
+    const events = buffer.split(/\r?\n\r?\n/);
+    buffer = events.pop() ?? "";
+    events.forEach(accumulator.consumeEvent);
+    if (done) break;
+  }
+  if (buffer.trim()) accumulator.consumeEvent(buffer);
+  return accumulator.snapshot();
 }

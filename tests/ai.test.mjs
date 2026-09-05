@@ -494,8 +494,8 @@ test("AI integration exposes toolbar, shortcut, page scope and node scope contra
   assert.match(modalSource, /mms-ai-request-progress/);
   assert.match(modalSource, /mms-ai-stream-output/);
   assert.match(modalSource, /showStreamUpdate/);
-  assert.match(modalSource, /onProposeEdit\(provider\.value, prompt, showStreamUpdate\)/);
-  assert.match(modalSource, /onAsk\(provider\.value, prompt, showStreamUpdate\)/);
+  assert.match(modalSource, /onProposeEdit\(provider\.value, prompt, showStreamUpdate, this\.beginRequestSignal\(\)\)/);
+  assert.match(modalSource, /onAsk\(provider\.value, prompt, showStreamUpdate, this\.beginRequestSignal\(\)\)/);
   assert.match(modalSource, /requestProgressTimer = window\.setInterval\(renderRequestProgress, 1000\)/);
   assert.match(modalSource, /模型处理中[\s\S]*updateRequestProgress\("模型处理中"\)/);
   assert.match(modalSource, /已等待 \$\{elapsed\} 秒/);
@@ -530,4 +530,79 @@ test("formatByteSize formats bytes to appropriate units at boundaries", () => {
   assert.equal(markdown.formatByteSize(1048575), "1024 KB");
   assert.equal(markdown.formatByteSize(1048576), "1.00 MB");
   assert.equal(markdown.formatByteSize(1048576 * 2.5), "2.50 MB");
+});
+
+test("isAiRequestCancelled recognizes abort errors from fetch and wrapped runtimes", () => {
+  assert.equal(protocol.isAiRequestCancelled(new DOMException("The operation was aborted.", "AbortError")), true);
+  assert.equal(protocol.isAiRequestCancelled(Object.assign(new Error("已取消"), { name: "AbortError" })), true);
+  assert.equal(protocol.isAiRequestCancelled(new Error("This operation was aborted")), true);
+  assert.equal(protocol.isAiRequestCancelled(new Error("request aborted by signal")), true);
+  assert.equal(protocol.isAiRequestCancelled(new Error("AI 接口请求失败（500）")), false);
+  assert.equal(protocol.isAiRequestCancelled(new TypeError("Failed to fetch")), false);
+  assert.equal(protocol.isAiRequestCancelled("abort"), false);
+  assert.equal(protocol.isAiRequestCancelled(null), false);
+});
+
+test("throwIfSignalAborted only throws for already aborted signals", () => {
+  const live = new AbortController();
+  assert.doesNotThrow(() => protocol.throwIfSignalAborted(live.signal, "AI 接口请求"));
+  assert.doesNotThrow(() => protocol.throwIfSignalAborted(undefined, "AI 接口请求"));
+
+  const aborted = new AbortController();
+  aborted.abort();
+  assert.throws(
+    () => protocol.throwIfSignalAborted(aborted.signal, "图片识别"),
+    (error) => error.name === "AbortError" && error.message.includes("图片识别")
+  );
+});
+
+test("consumeAiStreamReader accumulates cross-chunk SSE events and reports deltas", async () => {
+  const encoder = new TextEncoder();
+  const chunks = [
+    encoder.encode('data: {"model":"glm-5","choices":[{"delta":{"content":"你"}}]}\n\n'),
+    encoder.encode('data: {"choices":[{"delta":{"reasoning_content":"思考"}}]}\n\ndata: {"choices":[{"delta":{"content":"好"}}]}'),
+    encoder.encode("\n\ndata: [DONE]\n\n"),
+    encoder.encode('data: {"usage":{"total_tokens":42}}')
+  ];
+  let cursor = 0;
+  const reader = {
+    read: async () => cursor < chunks.length
+      ? { done: false, value: chunks[cursor++] }
+      : { done: true, value: undefined }
+  };
+  const updates = [];
+  const result = await protocol.consumeAiStreamReader(reader, {
+    defaultModel: "fallback",
+    onStreamUpdate: (delta) => updates.push(delta)
+  });
+  assert.equal(result.model, "glm-5");
+  assert.equal(result.content, "你好");
+  assert.deepEqual(result.usage, { total_tokens: 42 });
+  assert.deepEqual(updates, [{ thinking: "", content: "你" }, { thinking: "思考", content: "" }, { thinking: "", content: "好" }]);
+});
+
+test("consumeAiStreamReader propagates reader abort errors to the caller", async () => {
+  const abortError = new DOMException("The operation was aborted.", "AbortError");
+  const reader = {
+    read: async () => { throw abortError; }
+  };
+  await assert.rejects(
+    protocol.consumeAiStreamReader(reader, { defaultModel: "fallback" }),
+    (error) => error === abortError && protocol.isAiRequestCancelled(error)
+  );
+});
+
+test("modal and view wiring abort the active AI request on close and pass signals through", async () => {
+  const [modalSource, viewSource] = await Promise.all([
+    readFile("src/ai/modal.ts", "utf8"),
+    readFile("src/view.ts", "utf8")
+  ]);
+  assert.match(modalSource, /private activeRequestController: AbortController \| null = null;/);
+  assert.match(modalSource, /onClose\(\): void[\s\S]*activeRequestController\?\.abort\(\)/);
+  assert.match(modalSource, /onRecognizeImages\(provider\.value, prompt, signal\)/);
+  assert.match(modalSource, /isAiRequestCancelled\(error\)/);
+  assert.match(viewSource, /onAsk: async \(profileId, question, onStreamUpdate, signal\)/);
+  assert.match(viewSource, /onProposeEdit: async \(profileId, instruction, onStreamUpdate, signal\)/);
+  assert.match(viewSource, /throwIfSignalAborted\(signal, "图片识别"\)/);
+  assert.match(viewSource, /isAiRequestCancelled\(error\)[\s\S]*?failed\.push/);
 });
