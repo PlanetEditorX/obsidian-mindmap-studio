@@ -38,6 +38,7 @@ npm run verify
 
 ## Git
 
+- 版本号由 release 工作流统一递增并发布：代码、文档和测试提交一律不得手动修改 `package.json` / `manifest.json` / `package-lock.json` / `versions.json` / `update.json` 的版本号；交付 ZIP 文件名中的版本仅作交付追踪标识，以 GitHub Release 实际发布版本为准。
 - 所有 Git 提示使用中文。
 - 使用 Conventional Commits：首行 `type(scope): 中文主题`，后续直接以 `- ` 列出真实代码行为、兼容处理、测试、文档、Codex 更新和 `main.js` 重建。
 - 只提供中文 Conventional Commits 提交说明，不输出 `git add`、`git commit` 等命令，也不得声称已经实际提交。
