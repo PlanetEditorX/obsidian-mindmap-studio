@@ -111,19 +111,19 @@ export function chooseImageHosts(
 }
 
 /**
- * 提供图片缩放和滚轮预览。
- */
-/**
  * 图片预览弹窗内的一次来源变更请求。
  *
- * `reupload` 表示用图片的本地文件重新上传图床镜像；`remove` 删除一个来源（没有任何剩余来源时
- * 由宿主删除整个图片块）；`add` 把用户手动填写的 URL 添加为新来源；`setDefault` 写入图片级来源优先级。
+ * `reupload` 表示选择本地图片并上传图床（图床与手动 URL 来源）；`replaceLocal` 表示选择本地
+ * 图片替换本地副本；`remove` 删除一个来源（没有任何剩余来源时由宿主删除整个图片块）；
+ * `add` 把用户手动填写的 URL 添加为新来源；`setDefault` / `unsetDefault` 写入或取消图片级来源优先级。
  */
 export type ImagePreviewSourceChange =
   | { type: "reupload" }
+  | { type: "replaceLocal" }
   | { type: "remove"; source: string }
   | { type: "add"; url: string }
-  | { type: "setDefault"; source: string };
+  | { type: "setDefault"; source: string }
+  | { type: "unsetDefault"; source: string };
 
 /**
  * 图片预览弹窗来源管理动作，由编辑器注入并走统一历史与保存链路。
@@ -134,6 +134,8 @@ export type ImagePreviewSourceChange =
 export interface ImagePreviewSourceActions {
   /** 重新读取图片块的最新候选来源（含图片级优先级排序）。 */
   getSources: () => MindMapImageSourceCandidate[];
+  /** 读取当前被显式固定为默认显示来源的地址；未固定时返回 null。 */
+  getDefaultSource: () => string | null;
   /** 通过统一历史链路执行一次来源变更。 */
   applyChange: (change: ImagePreviewSourceChange) => Promise<boolean>;
 }
@@ -188,11 +190,47 @@ export class ImagePreviewModal extends Modal {
     let baseWidth = 0;
     let baseHeight = 0;
     let activeSource = this.source;
+    let panX = 0;
+    let panY = 0;
+    let addPanelOpen = false;
     const applyScale = (): void => {
       if (!baseWidth || !baseHeight) return;
       image.style.width = `${Math.max(1, Math.round(baseWidth * this.scale))}px`;
       image.style.height = `${Math.max(1, Math.round(baseHeight * this.scale))}px`;
+      image.style.transform = `translate(${Math.round(panX)}px, ${Math.round(panY)}px)`;
     };
+    let panPointerId: number | null = null;
+    let panStartX = 0;
+    let panStartY = 0;
+    let panBaseX = 0;
+    let panBaseY = 0;
+    const resetPan = (): void => {
+      panX = 0;
+      panY = 0;
+    };
+    image.addEventListener("pointerdown", (event) => {
+      if (event.button !== 0) return;
+      panPointerId = event.pointerId;
+      panStartX = event.clientX;
+      panStartY = event.clientY;
+      panBaseX = panX;
+      panBaseY = panY;
+      image.setPointerCapture(event.pointerId);
+      image.addClass("is-panning");
+    });
+    image.addEventListener("pointermove", (event) => {
+      if (panPointerId !== event.pointerId) return;
+      panX = panBaseX + (event.clientX - panStartX);
+      panY = panBaseY + (event.clientY - panStartY);
+      applyScale();
+    });
+    const endPan = (event: PointerEvent): void => {
+      if (panPointerId !== event.pointerId) return;
+      panPointerId = null;
+      image.removeClass("is-panning");
+    };
+    image.addEventListener("pointerup", endPan);
+    image.addEventListener("pointercancel", endPan);
     image.addEventListener("load", () => {
       const availableWidth = Math.max(320, imageWrap.clientWidth * 0.9);
       const availableHeight = Math.max(220, imageWrap.clientHeight * 0.9);
@@ -225,6 +263,7 @@ export class ImagePreviewModal extends Modal {
       this.scale = 1;
       baseWidth = 0;
       baseHeight = 0;
+      resetPan();
       activeSource = candidate.source;
       sourceStatus.dataset.label = candidate.label;
       sourceStatus.setText(`${candidate.label} · 加载中…`);
@@ -237,15 +276,30 @@ export class ImagePreviewModal extends Modal {
       if (!this.actions) return;
       event.preventDefault();
       const menu = new Menu();
-      menu.addItem((item) => item
-        .setTitle("设为默认显示来源")
-        .setIcon("star")
-        .onClick(() => void this.runSourceChange({ type: "setDefault", source: candidate.source })));
+      const pinned = this.actions.getDefaultSource();
+      if (pinned === candidate.source) {
+        menu.addItem((item) => item
+          .setTitle("取消默认显示来源")
+          .setIcon("star-off")
+          .onClick(() => void this.runSourceChange({ type: "unsetDefault", source: candidate.source })));
+      } else {
+        menu.addItem((item) => item
+          .setTitle("设为默认显示来源")
+          .setIcon("star")
+          .onClick(() => void this.runSourceChange({ type: "setDefault", source: candidate.source })));
+      }
       menu.addSeparator();
-      menu.addItem((item) => item
-        .setTitle("更新上传（选择本地图片并上传图床）")
-        .setIcon("refresh-cw")
-        .onClick(() => void this.runSourceChange({ type: "reupload" })));
+      if (candidate.kind === "local") {
+        menu.addItem((item) => item
+          .setTitle("更新替换（选择本地图片）")
+          .setIcon("image-plus")
+          .onClick(() => void this.runSourceChange({ type: "replaceLocal" })));
+      } else {
+        menu.addItem((item) => item
+          .setTitle("更新上传（选择本地图片并上传图床）")
+          .setIcon("refresh-cw")
+          .onClick(() => void this.runSourceChange({ type: "reupload" })));
+      }
       menu.addItem((item) => item
         .setTitle("删除此来源")
         .setIcon("trash-2")
@@ -287,7 +341,14 @@ export class ImagePreviewModal extends Modal {
       if (active) sourceStatus.dataset.label = active.label;
       if (!this.actions) return;
       const addWrap = sourceBar.createDiv({ cls: "mmc-image-preview-source-add" });
-      const urlInput = addWrap.createEl("input", {
+      addWrap.toggleClass("is-open", addPanelOpen);
+      const toggle = addWrap.createEl("button", {
+        text: "＋",
+        cls: "mmc-image-preview-source-add-toggle",
+        attr: { type: "button", title: "手动添加图片 URL 来源", "aria-expanded": String(addPanelOpen) }
+      });
+      const addPanel = addWrap.createDiv({ cls: "mmc-image-preview-source-add-panel" });
+      const urlInput = addPanel.createEl("input", {
         cls: "mmc-image-preview-source-add-input",
         attr: { type: "text", placeholder: "手动添加图片 URL 来源" }
       });
@@ -295,15 +356,22 @@ export class ImagePreviewModal extends Modal {
         const url = urlInput.value.trim();
         if (!url) return;
         urlInput.value = "";
+        addPanelOpen = false;
         void this.runSourceChange({ type: "add", url });
       };
-      addWrap.createEl("button", { text: "添加来源", attr: { type: "button" } })
+      addPanel.createEl("button", { text: "添加来源", attr: { type: "button" } })
         .addEventListener("click", submit);
       urlInput.addEventListener("keydown", (event: KeyboardEvent) => {
         if (event.key === "Enter") {
           event.preventDefault();
           submit();
         }
+      });
+      toggle.addEventListener("click", () => {
+        addPanelOpen = !addPanelOpen;
+        addWrap.toggleClass("is-open", addPanelOpen);
+        toggle.setAttribute("aria-expanded", String(addPanelOpen));
+        if (addPanelOpen) urlInput.focus();
       });
     };
     renderSourceBar();
@@ -313,7 +381,11 @@ export class ImagePreviewModal extends Modal {
       this.scale = Math.min(5, Math.max(0.2, this.scale + (event.deltaY < 0 ? 0.15 : -0.15)));
       applyScale();
     }, { passive: false });
-    image.addEventListener("dblclick", () => { this.scale = 1; applyScale(); });
+    image.addEventListener("dblclick", () => {
+      this.scale = 1;
+      resetPan();
+      applyScale();
+    });
 
     /** 执行一次来源变更并刷新来源栏；图片块被删除时关闭弹窗。 */
     this.runSourceChangeImpl = async (change: ImagePreviewSourceChange): Promise<void> => {

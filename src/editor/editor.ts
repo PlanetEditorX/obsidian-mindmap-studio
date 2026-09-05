@@ -22,6 +22,7 @@ import {
   indexedHasAncestor,
   indexedHasAnyAncestor,
   createManualImageRemoteSource,
+  clearImageSourceDefault,
   imageSourceCandidates,
   removeImageSourceCandidate,
   setImageSourceDefault,
@@ -7671,6 +7672,7 @@ export class MindMapEditor {
         const located = this.locateImageBlock(nodeId, blockId);
         return located ? imageSourceCandidates(located.block, true, this.options.imageHostPriorityIds) : [];
       },
+      getDefaultSource: () => this.locateImageBlock(nodeId, blockId)?.block.sourcePriority?.[0] ?? null,
       applyChange: (change: ImagePreviewSourceChange) => this.applyImagePreviewSourceChange(nodeId, blockId, change)
     };
     new ImagePreviewModal(this.app, preferred, block.alt ?? "图片预览", candidates, this.callbacks.resolveImage, actions).open();
@@ -7757,6 +7759,38 @@ export class MindMapEditor {
       }
       this.mutateWithoutArticleContext(() => {
         located.block.remoteSources = [...(located.block.remoteSources ?? []), entry];
+        replaceNodeContentBlocks(located.node, located.blocks);
+      });
+      return true;
+    }
+    if (change.type === "replaceLocal") {
+      const located = this.locateImageBlock(nodeId, blockId);
+      if (!located) {
+        new Notice("图片已不存在");
+        return false;
+      }
+      const file = await selectImageFile();
+      if (!file) return true;
+      const path = await this.callbacks.onSavePastedImage(file, file.name);
+      if (!path) {
+        new Notice("保存本地图片失败", 7000);
+        return true;
+      }
+      this.mutateWithoutArticleContext(() => {
+        located.block.localSource = path;
+        replaceNodeContentBlocks(located.node, located.blocks);
+      });
+      new Notice("本地副本已更新");
+      return true;
+    }
+    if (change.type === "unsetDefault") {
+      const located = this.locateImageBlock(nodeId, blockId);
+      if (!located) {
+        new Notice("图片已不存在");
+        return false;
+      }
+      this.mutateWithoutArticleContext(() => {
+        clearImageSourceDefault(located.block, change.source);
         replaceNodeContentBlocks(located.node, located.blocks);
       });
       return true;

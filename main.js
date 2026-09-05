@@ -582,6 +582,11 @@ function createManualImageRemoteSource(url) {
     uploadedAt: (/* @__PURE__ */ new Date()).toISOString()
   };
 }
+function clearImageSourceDefault(block, source) {
+  var _a2;
+  const rest = ((_a2 = block.sourcePriority) != null ? _a2 : []).filter((url) => url !== source);
+  block.sourcePriority = rest.length ? rest : void 0;
+}
 function setImageSourceDefault(block, source) {
   const candidates = imageSourceCandidates(block, true, []);
   if (!candidates.some((candidate) => candidate.source === source)) return false;
@@ -7132,11 +7137,47 @@ var ImagePreviewModal = class extends import_obsidian4.Modal {
     let baseWidth = 0;
     let baseHeight = 0;
     let activeSource = this.source;
+    let panX = 0;
+    let panY = 0;
+    let addPanelOpen = false;
     const applyScale = () => {
       if (!baseWidth || !baseHeight) return;
       image.style.width = `${Math.max(1, Math.round(baseWidth * this.scale))}px`;
       image.style.height = `${Math.max(1, Math.round(baseHeight * this.scale))}px`;
+      image.style.transform = `translate(${Math.round(panX)}px, ${Math.round(panY)}px)`;
     };
+    let panPointerId = null;
+    let panStartX = 0;
+    let panStartY = 0;
+    let panBaseX = 0;
+    let panBaseY = 0;
+    const resetPan = () => {
+      panX = 0;
+      panY = 0;
+    };
+    image.addEventListener("pointerdown", (event) => {
+      if (event.button !== 0) return;
+      panPointerId = event.pointerId;
+      panStartX = event.clientX;
+      panStartY = event.clientY;
+      panBaseX = panX;
+      panBaseY = panY;
+      image.setPointerCapture(event.pointerId);
+      image.addClass("is-panning");
+    });
+    image.addEventListener("pointermove", (event) => {
+      if (panPointerId !== event.pointerId) return;
+      panX = panBaseX + (event.clientX - panStartX);
+      panY = panBaseY + (event.clientY - panStartY);
+      applyScale();
+    });
+    const endPan = (event) => {
+      if (panPointerId !== event.pointerId) return;
+      panPointerId = null;
+      image.removeClass("is-panning");
+    };
+    image.addEventListener("pointerup", endPan);
+    image.addEventListener("pointercancel", endPan);
     image.addEventListener("load", () => {
       var _a2;
       const availableWidth = Math.max(320, imageWrap.clientWidth * 0.9);
@@ -7184,6 +7225,7 @@ var ImagePreviewModal = class extends import_obsidian4.Modal {
       this.scale = 1;
       baseWidth = 0;
       baseHeight = 0;
+      resetPan();
       activeSource = candidate.source;
       sourceStatus.dataset.label = candidate.label;
       sourceStatus.setText(`${candidate.label} \xB7 \u52A0\u8F7D\u4E2D\u2026`);
@@ -7196,9 +7238,18 @@ var ImagePreviewModal = class extends import_obsidian4.Modal {
       if (!this.actions) return;
       event.preventDefault();
       const menu = new import_obsidian4.Menu();
-      menu.addItem((item) => item.setTitle("\u8BBE\u4E3A\u9ED8\u8BA4\u663E\u793A\u6765\u6E90").setIcon("star").onClick(() => void this.runSourceChange({ type: "setDefault", source: candidate.source })));
+      const pinned = this.actions.getDefaultSource();
+      if (pinned === candidate.source) {
+        menu.addItem((item) => item.setTitle("\u53D6\u6D88\u9ED8\u8BA4\u663E\u793A\u6765\u6E90").setIcon("star-off").onClick(() => void this.runSourceChange({ type: "unsetDefault", source: candidate.source })));
+      } else {
+        menu.addItem((item) => item.setTitle("\u8BBE\u4E3A\u9ED8\u8BA4\u663E\u793A\u6765\u6E90").setIcon("star").onClick(() => void this.runSourceChange({ type: "setDefault", source: candidate.source })));
+      }
       menu.addSeparator();
-      menu.addItem((item) => item.setTitle("\u66F4\u65B0\u4E0A\u4F20\uFF08\u9009\u62E9\u672C\u5730\u56FE\u7247\u5E76\u4E0A\u4F20\u56FE\u5E8A\uFF09").setIcon("refresh-cw").onClick(() => void this.runSourceChange({ type: "reupload" })));
+      if (candidate.kind === "local") {
+        menu.addItem((item) => item.setTitle("\u66F4\u65B0\u66FF\u6362\uFF08\u9009\u62E9\u672C\u5730\u56FE\u7247\uFF09").setIcon("image-plus").onClick(() => void this.runSourceChange({ type: "replaceLocal" })));
+      } else {
+        menu.addItem((item) => item.setTitle("\u66F4\u65B0\u4E0A\u4F20\uFF08\u9009\u62E9\u672C\u5730\u56FE\u7247\u5E76\u4E0A\u4F20\u56FE\u5E8A\uFF09").setIcon("refresh-cw").onClick(() => void this.runSourceChange({ type: "reupload" })));
+      }
       menu.addItem((item) => item.setTitle("\u5220\u9664\u6B64\u6765\u6E90").setIcon("trash-2").onClick(() => void this.runSourceChange({ type: "remove", source: candidate.source })));
       menu.showAtMouseEvent(event);
     };
@@ -7238,7 +7289,14 @@ var ImagePreviewModal = class extends import_obsidian4.Modal {
       if (active) sourceStatus.dataset.label = active.label;
       if (!this.actions) return;
       const addWrap = sourceBar.createDiv({ cls: "mmc-image-preview-source-add" });
-      const urlInput = addWrap.createEl("input", {
+      addWrap.toggleClass("is-open", addPanelOpen);
+      const toggle = addWrap.createEl("button", {
+        text: "\uFF0B",
+        cls: "mmc-image-preview-source-add-toggle",
+        attr: { type: "button", title: "\u624B\u52A8\u6DFB\u52A0\u56FE\u7247 URL \u6765\u6E90", "aria-expanded": String(addPanelOpen) }
+      });
+      const addPanel = addWrap.createDiv({ cls: "mmc-image-preview-source-add-panel" });
+      const urlInput = addPanel.createEl("input", {
         cls: "mmc-image-preview-source-add-input",
         attr: { type: "text", placeholder: "\u624B\u52A8\u6DFB\u52A0\u56FE\u7247 URL \u6765\u6E90" }
       });
@@ -7246,14 +7304,21 @@ var ImagePreviewModal = class extends import_obsidian4.Modal {
         const url = urlInput.value.trim();
         if (!url) return;
         urlInput.value = "";
+        addPanelOpen = false;
         void this.runSourceChange({ type: "add", url });
       };
-      addWrap.createEl("button", { text: "\u6DFB\u52A0\u6765\u6E90", attr: { type: "button" } }).addEventListener("click", submit);
+      addPanel.createEl("button", { text: "\u6DFB\u52A0\u6765\u6E90", attr: { type: "button" } }).addEventListener("click", submit);
       urlInput.addEventListener("keydown", (event) => {
         if (event.key === "Enter") {
           event.preventDefault();
           submit();
         }
+      });
+      toggle.addEventListener("click", () => {
+        addPanelOpen = !addPanelOpen;
+        addWrap.toggleClass("is-open", addPanelOpen);
+        toggle.setAttribute("aria-expanded", String(addPanelOpen));
+        if (addPanelOpen) urlInput.focus();
       });
     };
     renderSourceBar();
@@ -7264,6 +7329,7 @@ var ImagePreviewModal = class extends import_obsidian4.Modal {
     }, { passive: false });
     image.addEventListener("dblclick", () => {
       this.scale = 1;
+      resetPan();
       applyScale();
     });
     this.runSourceChangeImpl = async (change) => {
@@ -17508,6 +17574,10 @@ var MindMapEditor = class {
         const located = this.locateImageBlock(nodeId, blockId);
         return located ? imageSourceCandidates(located.block, true, this.options.imageHostPriorityIds) : [];
       },
+      getDefaultSource: () => {
+        var _a3, _b3, _c2;
+        return (_c2 = (_b3 = (_a3 = this.locateImageBlock(nodeId, blockId)) == null ? void 0 : _a3.block.sourcePriority) == null ? void 0 : _b3[0]) != null ? _c2 : null;
+      },
       applyChange: (change) => this.applyImagePreviewSourceChange(nodeId, blockId, change)
     };
     new ImagePreviewModal(this.app, preferred, (_e = block.alt) != null ? _e : "\u56FE\u7247\u9884\u89C8", candidates, this.callbacks.resolveImage, actions).open();
@@ -17594,6 +17664,38 @@ var MindMapEditor = class {
       this.mutateWithoutArticleContext(() => {
         var _a3;
         located2.block.remoteSources = [...(_a3 = located2.block.remoteSources) != null ? _a3 : [], entry];
+        replaceNodeContentBlocks(located2.node, located2.blocks);
+      });
+      return true;
+    }
+    if (change.type === "replaceLocal") {
+      const located2 = this.locateImageBlock(nodeId, blockId);
+      if (!located2) {
+        new import_obsidian11.Notice("\u56FE\u7247\u5DF2\u4E0D\u5B58\u5728");
+        return false;
+      }
+      const file = await selectImageFile();
+      if (!file) return true;
+      const path = await this.callbacks.onSavePastedImage(file, file.name);
+      if (!path) {
+        new import_obsidian11.Notice("\u4FDD\u5B58\u672C\u5730\u56FE\u7247\u5931\u8D25", 7e3);
+        return true;
+      }
+      this.mutateWithoutArticleContext(() => {
+        located2.block.localSource = path;
+        replaceNodeContentBlocks(located2.node, located2.blocks);
+      });
+      new import_obsidian11.Notice("\u672C\u5730\u526F\u672C\u5DF2\u66F4\u65B0");
+      return true;
+    }
+    if (change.type === "unsetDefault") {
+      const located2 = this.locateImageBlock(nodeId, blockId);
+      if (!located2) {
+        new import_obsidian11.Notice("\u56FE\u7247\u5DF2\u4E0D\u5B58\u5728");
+        return false;
+      }
+      this.mutateWithoutArticleContext(() => {
+        clearImageSourceDefault(located2.block, change.source);
         replaceNodeContentBlocks(located2.node, located2.blocks);
       });
       return true;

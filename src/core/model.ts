@@ -1075,6 +1075,17 @@ export function createManualImageRemoteSource(url: string): MindMapImageRemoteSo
 }
 
 /**
+ * 取消某个来源的默认显示来源状态（从图片级来源优先级中移除）。
+ *
+ * @param block 当前图片内容块。
+ * @param source 要取消置顶的来源地址。
+ */
+export function clearImageSourceDefault(block: MindMapImageContentBlock, source: string): void {
+  const rest = (block.sourcePriority ?? []).filter((url) => url !== source);
+  block.sourcePriority = rest.length ? rest : undefined;
+}
+
+/**
  * 把某个来源设为该图片的默认显示来源（写入图片级来源优先级首位）。
  *
  * @param block 当前图片内容块。

@@ -1,5 +1,17 @@
 # Modified Files
 
+## 1.48.3 来源右键菜单状态区分、本地副本更新替换、＋折叠添加与拖拽平移
+
+- `src/editor/editor-modals.ts`：右键菜单按 `getDefaultSource()` 区分“设为默认显示来源 / 取消默认显示来源”；按来源类型区分更新动作（图床/手动 URL 为“更新上传（选择本地图片并上传图床）”，本地副本为“更新替换（选择本地图片）”）；新增 `replaceLocal` / `unsetDefault` 变更类型；来源栏“＋”按钮默认只显示加号，点击展开手动 URL 输入面板（提交后自动收起）；预览图片支持指针拖拽平移（`setPointerCapture`，切换来源/双击复位归零）。
+- `src/editor/editor.ts`：`applyImagePreviewSourceChange()` 新增 `replaceLocal`（`selectImageFile` + `onSavePastedImage` 存库后更新 `localSource`）与 `unsetDefault`（`clearImageSourceDefault`）分支；actions 注入 `getDefaultSource()`。
+- `src/core/model.ts`：新增 `clearImageSourceDefault()` 纯函数（取消固定后无剩余项则移除 `sourcePriority`）。
+- `styles.css`：新增 `＋`切换按钮与折叠面板样式（`.mmc-image-preview-source-add.is-open`）、预览图片 `cursor: grab` / `touch-action: none` 与拖拽中 `grabbing`。
+- `tests/image-source-candidates.test.mjs`：新增取消默认来源纯函数测试；契约锁定菜单状态区分、按类型更新、＋折叠面板、拖拽平移与 `getDefaultSource` 接线。
+- `CHANGELOG.md`、`docs/FUNCTION_REFERENCE.md`、`TEST_RESULTS.md`：同步本批说明。
+
+- 本轮测试安装包：`mindmap-studio-1.48.2-test-862881.zip`，SHA-256 `15b7dfbd00e1496d8c79ffa67031b0a85daee633efc2d442a4e57cc5784724fb`；完整源码与 Codex 交接使用同一 `862881` 后缀（输出到仓库父目录 `D:\Downloads`）。
+
+## 1.48.2 图片预览更新上传接入文件选择器 + 行尾归一化
 ## 1.48.2 图片预览更新上传接入文件选择器 + 行尾归一化
 
 - `src/editor/node-image-actions.ts`：导出 `selectImageFile()`（系统图片文件选择器），供图片预览弹窗复用。

@@ -2658,6 +2658,24 @@ mjx-container.mms-node-math:not(.is-display),
   margin-left: 8px;
 }
 
+.mmc-image-preview-source-add-toggle {
+  min-height: 30px;
+  min-width: 30px;
+  padding: 3px 10px;
+  font-size: var(--font-ui-lg);
+  line-height: 1;
+}
+
+.mmc-image-preview-source-add-panel {
+  display: none;
+  align-items: center;
+  gap: 4px;
+}
+
+.mmc-image-preview-source-add.is-open .mmc-image-preview-source-add-panel {
+  display: flex;
+}
+
 .mmc-image-preview-source-add-input {
   width: 220px;
   max-width: 32vw;
@@ -2666,7 +2684,7 @@ mjx-container.mms-node-math:not(.is-display),
   font-size: var(--font-ui-smaller);
 }
 
-.mmc-image-preview-source-add button {
+.mmc-image-preview-source-add-panel button {
   min-height: 30px;
   padding: 3px 10px;
 }
@@ -2695,7 +2713,13 @@ mjx-container.mms-node-math:not(.is-display),
   max-height: none;
   object-fit: contain;
   transition: width 80ms ease-out, height 80ms ease-out;
-  cursor: zoom-in;
+  cursor: grab;
+  touch-action: none;
+}
+
+.mmc-image-preview-stage img.is-panning {
+  cursor: grabbing;
+  transition: none;
 }
 
 /* Multi-image-host settings and picker */

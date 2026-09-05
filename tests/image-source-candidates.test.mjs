@@ -229,6 +229,21 @@ test("setImageSourceDefault writes the chosen candidate to the front of per-imag
   assert.equal(model.setImageSourceDefault(block, "https://missing.example/x.png"), false);
 });
 
+test("clearImageSourceDefault unpins the source and drops the override when empty", () => {
+  const block = {
+    id: "img",
+    type: "image",
+    source: "https://fast.example/a.png",
+    sourcePriority: ["https://slow.example/a.png", "https://fast.example/a.png"]
+  };
+  model.clearImageSourceDefault(block, "https://slow.example/a.png");
+  assert.deepEqual(block.sourcePriority, ["https://fast.example/a.png"]);
+  model.clearImageSourceDefault(block, "https://fast.example/a.png");
+  assert.equal(block.sourcePriority, undefined);
+  model.clearImageSourceDefault(block, "https://missing.example/x.png");
+  assert.equal(block.sourcePriority, undefined);
+});
+
 test("image preview modal exposes source management and editor wires unified-history actions", async () => {
   const [modalSource, editorSource, articleSource, outlineSource, stylesSource] = await Promise.all([
     readFile("src/editor/editor-modals.ts", "utf8"),
@@ -240,9 +255,17 @@ test("image preview modal exposes source management and editor wires unified-his
   assert.match(modalSource, /export type ImagePreviewSourceChange/);
   assert.match(modalSource, /export interface ImagePreviewSourceActions/);
   assert.match(modalSource, /设为默认显示来源/);
+  assert.match(modalSource, /取消默认显示来源/);
   assert.match(modalSource, /更新上传（选择本地图片并上传图床）/);
+  assert.match(modalSource, /更新替换（选择本地图片）/);
+  assert.match(modalSource, /candidate\.kind === "local"\s*\?\s*[\s\S]*replaceLocal|candidate\.kind === "local"[\s\S]*replaceLocal/s);
   assert.match(modalSource, /删除此来源/);
   assert.match(modalSource, /手动添加图片 URL 来源/);
+  assert.match(modalSource, /mmc-image-preview-source-add-toggle/);
+  assert.match(modalSource, /image\.setPointerCapture\(event\.pointerId\)/);
+  assert.match(modalSource, /getDefaultSource: \(\) =>/);
+  assert.match(stylesSource, /\.mmc-image-preview-source-add\.is-open \.mmc-image-preview-source-add-panel/);
+  assert.match(stylesSource, /\.mmc-image-preview-stage img \{[\s\S]*touch-action: none;/);
   assert.match(modalSource, /contextmenu.*showSourceMenu|showSourceMenu\(candidate, event\)/s);
   assert.match(modalSource, /if \(!stillExists\) \{\s*this\.close\(\);/s);
 
@@ -250,6 +273,10 @@ test("image preview modal exposes source management and editor wires unified-his
   assert.match(editorSource, /openImagePreviewWithSources\(nodeId: string, blockId: string\)/);
   assert.match(editorSource, /removeImageSourceCandidate\(located\.block, change\.source\)/);
   assert.match(editorSource, /await this\.removeImageBlock\(nodeId, blockId\);\s*return false;/s);
+  assert.match(editorSource, /change\.type === "replaceLocal"/);
+  assert.match(editorSource, /change\.type === "unsetDefault"/);
+  assert.match(editorSource, /clearImageSourceDefault\(located\.block, change\.source\)/);
+  assert.match(editorSource, /onSavePastedImage\(file, file\.name\)/);
   assert.match(editorSource, /change\.type === "reupload"[\s\S]*chooseImageHosts\(this\.app, this\.callbacks\.getImageHosts\(\)[\s\S]*selectImageFile\(\)[\s\S]*this\.callbacks\.onUploadImage\(file, file\.name, hostIds\)/, "preview re-upload must open the host picker and the system image file picker");
 
   assert.match(articleSource, /options\.openImagePreview\(node\.id, block\.id\)/);
