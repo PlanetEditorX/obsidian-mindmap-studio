@@ -130,7 +130,7 @@ test("current-map appearance controls use a wide gap-free responsive layout", ()
   assert.match(editorSource, /appearanceRightColumn\.createDiv\(\{ cls: "mmc-appearance-section mmc-appearance-article-numbering" \}\)/);
   assert.match(editorSource, /appearanceLeftColumn\.createDiv\(\{ cls: "mmc-appearance-section mmc-appearance-code-settings" \}\)/);
   assert.match(editorSource, /当前脑图设置，优先于插件全局分支外观/);
-  assert.match(stylesSource, /\.mmc-appearance-dialog,[\s\S]*--modal-width: min\(1280px, 96vw\)[\s\S]*width: min\(1280px, 96vw\) !important/);
+  assert.match(stylesSource, /\.mmc-appearance-dialog,[\s\S]*--modal-width: var\(--mms-modal-lg\)[\s\S]*width: var\(--mms-modal-lg\) !important/);
   assert.match(stylesSource, /\.mmc-appearance-columns[\s\S]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
   assert.match(stylesSource, /\.mmc-appearance-column[\s\S]*flex-direction: column/);
   assert.match(stylesSource, /\.mmc-appearance-style-option span[\s\S]*white-space: normal[\s\S]*overflow-wrap: anywhere/);

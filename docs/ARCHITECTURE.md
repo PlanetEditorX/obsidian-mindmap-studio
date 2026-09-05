@@ -67,7 +67,7 @@ src/
 - `src/editor/editor-types.ts`：编辑器回调与运行参数契约，隔离插件服务和 UI 实现。
 - `src/core/latex.ts`：纯函数解析公式分隔符、恢复历史重复美元、判断行内/独立布局，并在渲染前把裸露中文标签转换为 MathJax 可识别的 `\text{...}`。
 - `src/editor/rich-text-dom.ts`：富文本运行段与 `contenteditable` DOM 的双向转换，以及 MathJax 渲染。公式先合并全部运行段再解析，因此分隔符跨颜色或加粗边界仍有效；查看态渲染公式，编辑态暂时显示源码，异步 MathJax 回调不得覆盖仍为 `contenteditable=true` 的活动编辑器。
-- `src/editor/editor-modals.ts`：图片预览、图床选择、公式编辑、统一导入与导出、Markdown 大纲等弹窗；阅读样式已并入编辑器的统一“主题与外观”面板。
+- `src/editor/editor-modals.ts`：图片预览、图床选择、公式编辑、统一导入与导出、Markdown 大纲等弹窗；阅读样式已并入编辑器的统一“主题与外观”面板。图片预览支持来源管理：编辑器通过 `ImagePreviewSourceActions` 注入动作，来源变更一律回到编辑器的统一历史与保存链路（`mutateWithoutArticleContext` / `removeImageBlock` / 冻结快照上传），弹窗自身不直接改文档；弹窗宽度统一使用 `--mms-modal-md / lg / xl` 三档变量，同类弹窗不得各自硬编码宽度。
 - XMind 归档先由 `xmindToImportResult()` 解析主题树、跨画布链接、公式和资源令牌；同名画布挂载通过 `mergeLinkedXMindSheetRoot()` 合并被链接根主题的非标题内容、备注和后代，避免深层画布根图片因只拼接子节点而丢失。`ImportExportModal` 再通过宿主图片保存回调把每个归档资源保存一次，最后由 `materializeXMindImages()` 原位改写所有图片块的 `source/localSource`。纯解析调用 `xmindToDocument()` 时使用数据 URL 自包含回退，避免资源静默丢失。
 - `src/editor/clipboard-import.ts`：剪贴板 JSON、Markdown、缩进文本和 HTML 列表的单节点或有序多节点分支解析。
 - `src/editor/node-image-actions.ts`：节点图片选择、本地保存、图床上传和远程镜像合并。

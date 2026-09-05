@@ -21,7 +21,10 @@ import {
   indexedAncestors,
   indexedHasAncestor,
   indexedHasAnyAncestor,
+  createManualImageRemoteSource,
   imageSourceCandidates,
+  removeImageSourceCandidate,
+  setImageSourceDefault,
   mergeAppearance,
   nodeSearchText,
   newId,
@@ -93,7 +96,8 @@ import {
   FormulaEditModal,
   ImagePreviewModal,
   ImportExportModal,
-  OutlineModal
+  OutlineModal,
+  type ImagePreviewSourceChange
 } from "./editor-modals";
 import { parseClipboardContentBlocks, parseClipboardHtml, parseClipboardNodes } from "./clipboard-import";
 import { selectNodeImage, uploadCurrentNodeImage } from "./node-image-actions";
@@ -4162,6 +4166,7 @@ export class MindMapEditor {
       editSelected: () => this.editSelected(),
       openAiContextMenu: (event, nodeId) => { this.selectNode(nodeId); this.openContextMenu(event); },
       openImageContextMenu: (event, nodeId, blockId) => this.openImageContextMenu(event, nodeId, blockId),
+      openImagePreview: (nodeId, blockId) => this.openImagePreviewWithSources(nodeId, blockId),
       openMindMap: (path) => this.navigateWithTransition(() => this.callbacks.onOpenMindMap(path)),
       resolveImage: this.callbacks.resolveImage,
       imageHostPriorityIds: this.options.imageHostPriorityIds,
@@ -4688,6 +4693,7 @@ export class MindMapEditor {
       focusNode: (id: string) => this.focusNode(id),
       openAiContextMenu: (event: MouseEvent, nodeId: string, blockId?: string) => { this.selectNode(nodeId); this.openContextMenu(event, blockId); },
       openImageContextMenu: (event: MouseEvent, nodeId: string, blockId: string) => this.openImageContextMenu(event, nodeId, blockId),
+      openImagePreview: (nodeId: string, blockId: string) => this.openImagePreviewWithSources(nodeId, blockId),
       editTableBlock: (node: MindMapNode, table: MindMapTable, blockId: string) => this.openTableBlockEditor(node, table, blockId),
       updateTableColumnWidths: (node: MindMapNode, blockId: string, widths: number[]) => this.updateTableColumnWidths(node, blockId, widths),
       makeInlineEditable: (element: HTMLElement, node: MindMapNode, placeholder: string, blockId?: string) => this.makeInlineEditable(element, node, placeholder, blockId),
@@ -5096,13 +5102,7 @@ export class MindMapEditor {
         };
         image.addEventListener("click", (event) => {
           event.stopPropagation();
-          if (activeResolved) new ImagePreviewModal(
-            this.app,
-            activeResolved,
-            block.alt ?? "图片预览",
-            imageSourceCandidates(block, true, this.options.imageHostPriorityIds),
-            (source) => this.callbacks.resolveImage(source)
-          ).open();
+          if (activeResolved) this.openImagePreviewWithSources(node.id, block.id);
         });
         image.addEventListener("contextmenu", (event) => {
           event.preventDefault();
@@ -7602,7 +7602,7 @@ export class MindMapEditor {
     menu.addItem((item) => item
       .setTitle("放大预览")
       .setIcon("maximize-2")
-      .onClick(() => this.previewImageBlock(block)));
+      .onClick(() => this.previewImageBlock(nodeId, blockId)));
     menu.addItem((item) => item
       .setTitle(`${modeLabel}并转为文字`)
       .setIcon("scan-text")
@@ -7650,10 +7650,123 @@ export class MindMapEditor {
     menu.showAtMouseEvent(event);
   }
 
-  /** 打开图片预览，并按当前图床优先级提供候选地址。 */
-  private previewImageBlock(block: MindMapImageContentBlock): void {
-    const source = this.callbacks.resolveImage(block.source) ?? block.source;
-    new ImagePreviewModal(this.app, source, block.alt ?? "图片预览", imageSourceCandidates(block, true, this.options.imageHostPriorityIds), this.callbacks.resolveImage).open();
+  /** 打开图片预览，并按图片级来源优先级与图床优先级提供候选地址。 */
+  private previewImageBlock(nodeId: string, blockId: string): void {
+    this.openImagePreviewWithSources(nodeId, blockId);
+  }
+
+  /**
+   * 打开带来源管理动作的图片预览：右键来源可设默认、更新上传和删除，同一行可手动添加 URL 来源。
+   *
+   * @param nodeId 图片所属节点标识。
+   * @param blockId 图片内容块标识。
+   */
+  private openImagePreviewWithSources(nodeId: string, blockId: string): void {
+    const block = this.locateImageBlock(nodeId, blockId)?.block;
+    if (!block) return;
+    const candidates = imageSourceCandidates(block, true, this.options.imageHostPriorityIds);
+    const preferred = this.callbacks.resolveImage(candidates[0]?.source ?? block.source) ?? block.source;
+    const actions = {
+      getSources: () => {
+        const located = this.locateImageBlock(nodeId, blockId);
+        return located ? imageSourceCandidates(located.block, true, this.options.imageHostPriorityIds) : [];
+      },
+      applyChange: (change: ImagePreviewSourceChange) => this.applyImagePreviewSourceChange(nodeId, blockId, change)
+    };
+    new ImagePreviewModal(this.app, preferred, block.alt ?? "图片预览", candidates, this.callbacks.resolveImage, actions).open();
+  }
+
+  /** 按节点与内容块 ID 定位图片块；不存在时返回 null。 */
+  private locateImageBlock(nodeId: string, blockId: string): { node: MindMapNode; blocks: MindMapContentBlock[]; block: MindMapImageContentBlock } | null {
+    const node = this.nodeById(nodeId);
+    if (!node) return null;
+    const blocks = nodeContentBlocks(node);
+    const block = blocks.find((item): item is MindMapImageContentBlock => item.type === "image" && item.id === blockId);
+    return block ? { node, blocks, block } : null;
+  }
+
+  /**
+   * 通过统一历史与保存链路执行图片预览弹窗发起的一次来源变更。
+   *
+   * @returns 图片块是否仍然存在；false 时预览弹窗会自动关闭。
+   */
+  private async applyImagePreviewSourceChange(nodeId: string, blockId: string, change: ImagePreviewSourceChange): Promise<boolean> {
+    if (!this.ensureEditable()) return true;
+    if (change.type === "reupload") {
+      const located = this.locateImageBlock(nodeId, blockId);
+      if (!located) {
+        new Notice("图片已不存在");
+        return false;
+      }
+      const previousSnapshot = this.currentDocumentSnapshotJson();
+      this.invalidateDocumentSnapshotJson();
+      const changed = await uploadCurrentNodeImage(this.app, located.block, this.callbacks);
+      if (!changed) return true;
+      if (!this.locateImageBlock(nodeId, blockId)) {
+        new Notice("图片已在此期间被移除");
+        return false;
+      }
+      this.history.captureSnapshot(previousSnapshot);
+      replaceNodeContentBlocks(located.node, located.blocks);
+      this.notifyDocumentChange("none");
+      this.markSaving();
+      this.render();
+      return true;
+    }
+    if (change.type === "add") {
+      const located = this.locateImageBlock(nodeId, blockId);
+      if (!located) {
+        new Notice("图片已不存在");
+        return false;
+      }
+      const entry = createManualImageRemoteSource(change.url);
+      if (!entry) {
+        new Notice("请输入有效的 http(s) 图片地址");
+        return true;
+      }
+      if (imageSourceCandidates(located.block, true, []).some((candidate) => candidate.source === entry.url)) {
+        new Notice("该地址已经在来源列表中");
+        return true;
+      }
+      this.mutateWithoutArticleContext(() => {
+        located.block.remoteSources = [...(located.block.remoteSources ?? []), entry];
+        replaceNodeContentBlocks(located.node, located.blocks);
+      });
+      return true;
+    }
+    if (change.type === "setDefault") {
+      const located = this.locateImageBlock(nodeId, blockId);
+      if (!located) {
+        new Notice("图片已不存在");
+        return false;
+      }
+      if (!setImageSourceDefault(located.block, change.source)) {
+        new Notice("该来源不在当前图片的来源列表中");
+        return true;
+      }
+      this.mutateWithoutArticleContext(() => {
+        replaceNodeContentBlocks(located.node, located.blocks);
+      });
+      return true;
+    }
+    const located = this.locateImageBlock(nodeId, blockId);
+    if (!located) {
+      new Notice("图片已不存在");
+      return false;
+    }
+    const remaining = removeImageSourceCandidate(located.block, change.source);
+    if (!remaining) {
+      await this.removeImageBlock(nodeId, blockId);
+      return false;
+    }
+    this.mutateWithoutArticleContext(() => {
+      located.block.source = remaining.source;
+      located.block.localSource = remaining.localSource;
+      located.block.remoteSources = remaining.remoteSources;
+      located.block.sourcePriority = remaining.sourcePriority;
+      replaceNodeContentBlocks(located.node, located.blocks);
+    });
+    return true;
   }
 
   /** 将图片块设置为指定的水平对齐方式。 */

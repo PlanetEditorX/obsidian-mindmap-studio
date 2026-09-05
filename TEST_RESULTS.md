@@ -1,6 +1,30 @@
 # Test Results
 
-版本：1.47.1
+版本：1.48.0
+
+## 1.48.0 图片来源管理与弹窗宽度档位
+
+### 实现与行为验证
+
+- 图片预览弹窗来源管理：来源按钮右键提供“设为默认显示来源 / 更新上传（用本地图片重新上传图床）/ 删除此来源”，同一行输入框可手动添加图片 URL 来源；变更后来源栏即时刷新，删除整个图片块后弹窗自动关闭，节点保留为空节点（1.45.16 规则不变）。
+- 图片级来源优先级 `sourcePriority`：`imageSourceCandidates()` 以图片级优先级为主排序键、图床优先级次之；设默认写入候选顺序首位，覆盖全局设置；未设置时排序结果与旧实现逐项一致（原有 5 项候选测试全部原样通过）。
+- 统一历史链路：删除/添加/置顶走 `mutateWithoutArticleContext()`（进入撤销与保存链路）；删除最后一个来源复用 `removeImageBlock()`（含 `onCleanupRemovedImageRemoteAssets` 远程清理，遵循“未引用自动清理”设置）；“更新上传”复用 `uploadCurrentNodeImage` 冻结快照模式——上传取消或失败不产生撤销记录、不写回文档。
+- 弹窗宽度档位：AI 助手、题目、表格、代码、全局搜索统一 `min(920px, 92vw)`（修复 AI 弹窗被 Obsidian 默认宽度卡在约 640px 的过窄问题）；外观设置 `min(1280px, 96vw)`；图片预览与识图预览统一 `min(1440px, 98vw)`。
+- `node --test tests/image-source-candidates.test.mjs`：**12 / 12 通过**；新增 6 项纯函数测试（优先级排序覆盖、规范化、移除接任/裁剪、无剩余来源返回 null、手动 URL 校验、置顶默认）与 1 项来源管理接线契约（右键菜单、统一历史链路、冻结快照上传、弹窗关窗、宽度档位）。
+- 综合回归契约同步：文章/大纲渲染器改为锁定 `options.openImagePreview(node.id, block.id)` 注入式预览，编辑器锁定 `openImagePreviewWithSources` + `applyImagePreviewSourceChange` 统一链路；`image-layout` / `settings-layout` 弹窗宽度契约从硬编码像素改为档位变量。
+- `npm run verify`（本机完整执行）：`test:unit` **400 / 400 通过**；`test:regression` 全部通过（含 `main.js` 安装 bundle 契约）；`test:docs` 覆盖 **58 个源码模块、1246 个具名声明**；`test:repo` 通过；`tsc --noEmit` 与 production esbuild 通过，`main.js` 已重建。
+
+### 兼容性边界
+
+- `sourcePriority` 为 `.mindmap` 图片块纯新增可选字段；无该字段的文档解析、渲染、预览行为与 1.47.x 完全一致。
+- 节点编辑器内容块卡片内的图片点击预览保持只读（该处使用节点编辑器本地工作块与独立保存流程），来源管理入口在画布点击、图片右键“放大预览”、文章、大纲与通读模式生效。
+
+### 仍需手工验证
+
+- 真实桌面端：右键来源执行“更新上传”，确认选择图床、上传成功后镜像合并与默认来源切换；取消上传不产生撤销条目。
+- 真实桌面端：删除最后一个来源后图片块被删除、弹窗关闭、可撤销恢复；远程文件按“未引用自动清理”设置处理。
+- 手动添加的 URL 来源可正常显示；设为默认后重开文档仍按该优先级显示。
+- 各弹窗宽度在实际 Obsidian 窗口（含小窗口）下的视觉检查。
 
 ## 1.47.1 AI 请求可取消（AbortSignal）
 

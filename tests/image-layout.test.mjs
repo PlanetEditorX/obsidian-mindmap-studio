@@ -29,8 +29,8 @@ before(async () => {
 });
 
 test("image preview uses a screen-shaped stage without scrollbars", () => {
-  assert.match(stylesSource, /\.mmc-image-preview-modal \{[\s\S]*--modal-width: min\(86vw, 1400px\)[\s\S]*--modal-height: min\(82vh, 900px\)/);
-  assert.match(stylesSource, /\.mmc-image-preview-modal \{[\s\S]*width: min\(86vw, 1400px\) !important[\s\S]*height: min\(82vh, 900px\) !important/);
+  assert.match(stylesSource, /\.mmc-image-preview-modal \{[\s\S]*--modal-width: var\(--mms-modal-xl\)[\s\S]*--modal-height: min\(82vh, 900px\)/);
+  assert.match(stylesSource, /\.mmc-image-preview-modal \{[\s\S]*width: var\(--mms-modal-xl\) !important[\s\S]*height: min\(82vh, 900px\) !important/);
   assert.match(stylesSource, /\.mmc-image-preview-modal \.modal-content \{[\s\S]*overflow: hidden/);
   assert.match(stylesSource, /\.mmc-image-preview-stage \{[\s\S]*aspect-ratio: 16 \/ 9;[\s\S]*overflow: hidden/);
 });

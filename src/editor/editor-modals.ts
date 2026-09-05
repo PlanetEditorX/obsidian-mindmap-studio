@@ -3,7 +3,7 @@
  * @description 编辑器领域的通用预览和导出弹窗。
  */
 
-import { App, finishRenderMath, Modal, Notice, renderMath } from "obsidian";
+import { App, finishRenderMath, Menu, Modal, Notice, renderMath } from "obsidian";
 import {
   markdownToDocument,
   normalizeDocument,
@@ -113,8 +113,38 @@ export function chooseImageHosts(
 /**
  * 提供图片缩放和滚轮预览。
  */
+/**
+ * 图片预览弹窗内的一次来源变更请求。
+ *
+ * `reupload` 表示用图片的本地文件重新上传图床镜像；`remove` 删除一个来源（没有任何剩余来源时
+ * 由宿主删除整个图片块）；`add` 把用户手动填写的 URL 添加为新来源；`setDefault` 写入图片级来源优先级。
+ */
+export type ImagePreviewSourceChange =
+  | { type: "reupload" }
+  | { type: "remove"; source: string }
+  | { type: "add"; url: string }
+  | { type: "setDefault"; source: string };
+
+/**
+ * 图片预览弹窗来源管理动作，由编辑器注入并走统一历史与保存链路。
+ *
+ * `applyChange` 返回 true 表示图片块仍然存在（弹窗保持打开并刷新来源栏），
+ * 返回 false 表示图片块已被删除（弹窗应关闭）。
+ */
+export interface ImagePreviewSourceActions {
+  /** 重新读取图片块的最新候选来源（含图片级优先级排序）。 */
+  getSources: () => MindMapImageSourceCandidate[];
+  /** 通过统一历史链路执行一次来源变更。 */
+  applyChange: (change: ImagePreviewSourceChange) => Promise<boolean>;
+}
+
+/**
+ * 图片放大预览弹窗：按来源优先级列出图床镜像、手动 URL 和本地副本，支持缩放与来源管理。
+ */
 export class ImagePreviewModal extends Modal {
   private scale = 1;
+  /** 当前来源变更执行器；onOpen 时注入。 */
+  private runSourceChangeImpl: ((change: ImagePreviewSourceChange) => Promise<void>) | null = null;
 
   /**
    * 创建图片预览弹窗。
@@ -124,15 +154,22 @@ export class ImagePreviewModal extends Modal {
    * @param alt 图片说明。
    * @param sources 当前图片已经保存的图床镜像及本地来源。
    * @param resolveSource 将仓库路径转换为可显示地址的解析器。
+   * @param actions 可选的来源管理动作；缺省时预览保持只读。
    */
   constructor(
     app: App,
     private readonly source: string,
     private readonly alt: string,
     private readonly sources: MindMapImageSourceCandidate[] = [],
-    private readonly resolveSource?: (source: string) => string | null
+    private readonly resolveSource?: (source: string) => string | null,
+    private readonly actions?: ImagePreviewSourceActions
   ) {
     super(app);
+  }
+
+  /** 统一入口：执行来源变更并容忍重复触发。 */
+  private runSourceChange(change: ImagePreviewSourceChange): Promise<void> {
+    return this.runSourceChangeImpl?.(change) ?? Promise.resolve();
   }
 
   /**
@@ -140,16 +177,17 @@ export class ImagePreviewModal extends Modal {
    */
   onOpen(): void {
     this.modalEl.addClass("mmc-image-preview-modal");
-    this.modalEl.style.setProperty("width", "min(86vw, 1400px)", "important");
+    this.modalEl.style.setProperty("width", "min(98vw, 1440px)", "important");
     this.modalEl.style.setProperty("height", "min(82vh, 900px)", "important");
     this.titleEl.setText(this.alt || "图片预览");
     const toolbar = this.contentEl.createDiv({ cls: "mmc-image-preview-toolbar" });
     const sourceBar = this.contentEl.createDiv({ cls: "mmc-image-preview-sources" });
     const imageWrap = this.contentEl.createDiv({ cls: "mmc-image-preview-stage" });
     const image = imageWrap.createEl("img", { attr: { src: this.source, alt: this.alt || "图片" } });
-    let sourceStatus: HTMLSpanElement;
+    let sourceStatus: HTMLElement;
     let baseWidth = 0;
     let baseHeight = 0;
+    let activeSource = this.source;
     const applyScale = (): void => {
       if (!baseWidth || !baseHeight) return;
       image.style.width = `${Math.max(1, Math.round(baseWidth * this.scale))}px`;
@@ -177,45 +215,98 @@ export class ImagePreviewModal extends Modal {
     button("100%", () => { this.scale = 1; applyScale(); });
     button("+", () => { this.scale = Math.min(5, this.scale + 0.2); applyScale(); });
 
-    const sourceCandidates = (this.sources.length
-      ? this.sources
-      : [{ source: this.source, label: "当前图片", kind: "current" as const }]);
-    const availableCandidates = sourceCandidates
-      .filter((candidate) => candidate.kind !== "local" || Boolean(this.resolveSource?.(candidate.source)));
-    const candidates = availableCandidates.length ? availableCandidates : sourceCandidates.slice(0, 1);
-    const sourceButtons: HTMLButtonElement[] = [];
-    sourceBar.createSpan({ cls: "mmc-image-preview-sources-label", text: "图片来源：" });
-    const switchSource = (candidate: MindMapImageSourceCandidate, sourceButton: HTMLButtonElement): void => {
+    const candidates = (): MindMapImageSourceCandidate[] => {
+      const list = this.actions?.getSources() ?? this.sources;
+      const available = list.filter((candidate) => candidate.kind !== "local" || Boolean(this.resolveSource?.(candidate.source)));
+      return available.length ? available : list.slice(0, 1);
+    };
+    const switchSource = (candidate: MindMapImageSourceCandidate): void => {
       const resolved = this.resolveSource?.(candidate.source) ?? candidate.source;
       this.scale = 1;
       baseWidth = 0;
       baseHeight = 0;
+      activeSource = candidate.source;
       sourceStatus.dataset.label = candidate.label;
       sourceStatus.setText(`${candidate.label} · 加载中…`);
       sourceBar.removeClass("has-error");
-      sourceButtons.forEach((item) => item.removeClass("is-active"));
-      sourceButton.addClass("is-active");
+      sourceBar.querySelectorAll(".mmc-image-preview-source-button.is-active").forEach((item) => item.removeClass("is-active"));
       image.removeAttribute("style");
       image.src = resolved;
     };
-    for (const candidate of candidates) {
-      const sourceButton = sourceBar.createEl("button", {
-        text: candidate.label,
-        cls: "mmc-image-preview-source-button",
-        attr: { type: "button", title: `预览来源：${candidate.label}` }
+    const showSourceMenu = (candidate: MindMapImageSourceCandidate, event: MouseEvent): void => {
+      if (!this.actions) return;
+      event.preventDefault();
+      const menu = new Menu();
+      menu.addItem((item) => item
+        .setTitle("设为默认显示来源")
+        .setIcon("star")
+        .onClick(() => void this.runSourceChange({ type: "setDefault", source: candidate.source })));
+      menu.addSeparator();
+      menu.addItem((item) => item
+        .setTitle("更新上传（用本地图片重新上传图床）")
+        .setIcon("refresh-cw")
+        .onClick(() => void this.runSourceChange({ type: "reupload" })));
+      menu.addItem((item) => item
+        .setTitle("删除此来源")
+        .setIcon("trash-2")
+        .onClick(() => void this.runSourceChange({ type: "remove", source: candidate.source })));
+      menu.showAtMouseEvent(event);
+    };
+    const bindSourceStatus = (): void => {
+      sourceStatus = sourceBar.querySelector<HTMLElement>(".mmc-image-preview-source-status")
+        ?? sourceBar.createSpan({ cls: "mmc-image-preview-source-status", text: "当前图片" });
+    };
+    const renderSourceBar = (): void => {
+      const list = candidates();
+      const loading = activeSource;
+      sourceBar.empty();
+      sourceBar.createSpan({ cls: "mmc-image-preview-sources-label", text: "图片来源：" });
+      for (const candidate of list) {
+        const sourceButton = sourceBar.createEl("button", {
+          text: candidate.label,
+          cls: "mmc-image-preview-source-button",
+          attr: { type: "button", title: `预览来源：${candidate.label}${this.actions ? "；右键可管理来源" : ""}` }
+        });
+        if (candidate.source === activeSource) sourceButton.addClass("is-active");
+        sourceButton.addEventListener("click", () => switchSource(candidate));
+        sourceButton.addEventListener("contextmenu", (event) => showSourceMenu(candidate, event));
+      }
+      if (!list.some((candidate) => candidate.source === activeSource) && list.length) {
+        activeSource = list[0]!.source;
+      }
+      if (list.length && activeSource !== loading) {
+        const resolved = this.resolveSource?.(activeSource) ?? activeSource;
+        this.scale = 1;
+        baseWidth = 0;
+        baseHeight = 0;
+        image.removeAttribute("style");
+        image.src = resolved;
+      }
+      bindSourceStatus();
+      const active = list.find((candidate) => candidate.source === activeSource);
+      if (active) sourceStatus.dataset.label = active.label;
+      if (!this.actions) return;
+      const addWrap = sourceBar.createDiv({ cls: "mmc-image-preview-source-add" });
+      const urlInput = addWrap.createEl("input", {
+        cls: "mmc-image-preview-source-add-input",
+        attr: { type: "text", placeholder: "手动添加图片 URL 来源" }
       });
-      sourceButtons.push(sourceButton);
-      sourceButton.addEventListener("click", () => switchSource(candidate, sourceButton));
-    }
-    sourceStatus = sourceBar.createSpan({ cls: "mmc-image-preview-source-status", text: "当前图片" });
-    const initialIndex = Math.max(0, candidates.findIndex((candidate) => {
-      const resolved = this.resolveSource?.(candidate.source) ?? candidate.source;
-      return resolved === this.source || candidate.source === this.source;
-    }));
-    const initialCandidate = candidates[initialIndex]!;
-    const initialButton = sourceButtons[initialIndex]!;
-    sourceStatus.dataset.label = initialCandidate.label;
-    initialButton.addClass("is-active");
+      const submit = (): void => {
+        const url = urlInput.value.trim();
+        if (!url) return;
+        urlInput.value = "";
+        void this.runSourceChange({ type: "add", url });
+      };
+      addWrap.createEl("button", { text: "添加来源", attr: { type: "button" } })
+        .addEventListener("click", submit);
+      urlInput.addEventListener("keydown", (event: KeyboardEvent) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          submit();
+        }
+      });
+    };
+    renderSourceBar();
 
     imageWrap.addEventListener("wheel", (event) => {
       event.preventDefault();
@@ -223,6 +314,21 @@ export class ImagePreviewModal extends Modal {
       applyScale();
     }, { passive: false });
     image.addEventListener("dblclick", () => { this.scale = 1; applyScale(); });
+
+    /** 执行一次来源变更并刷新来源栏；图片块被删除时关闭弹窗。 */
+    this.runSourceChangeImpl = async (change: ImagePreviewSourceChange): Promise<void> => {
+      if (!this.actions) return;
+      const stillExists = await this.actions.applyChange(change);
+      if (!stillExists) {
+        this.close();
+        return;
+      }
+      if (!candidates().length) {
+        this.close();
+        return;
+      }
+      renderSourceBar();
+    };
   }
 }
 

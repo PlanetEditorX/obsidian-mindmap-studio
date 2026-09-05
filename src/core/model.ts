@@ -232,6 +232,12 @@ export interface MindMapImageContentBlock {
   localSource?: string;
   /** Mirror URLs returned by one or more configured image hosts. */
   remoteSources?: MindMapImageRemoteSource[];
+  /**
+   * Per-image source priority: candidate source URLs in display order, most preferred first.
+   * When present it overrides the global image-host priority for this image; sources not
+   * listed keep the global order after the listed ones. Absent means "follow global priority".
+   */
+  sourcePriority?: string[];
 }
 
 /**
@@ -926,7 +932,8 @@ function normalizeContentBlock(input: unknown): MindMapContentBlock | null {
         }];
       })
       : undefined;
-    return { id, type: "image", source, alt, align, width, height, layout, contentHash, localSource, remoteSources: remoteSources?.length ? remoteSources : undefined };
+    const sourcePriority = normalizeImageSourcePriority(image.sourcePriority);
+    return { id, type: "image", source, alt, align, width, height, layout, contentHash, localSource, remoteSources: remoteSources?.length ? remoteSources : undefined, sourcePriority: sourcePriority?.length ? sourcePriority : undefined };
   }
   if (candidate.type === "text") {
     const textCandidate = candidate as Partial<MindMapTextContentBlock>;
@@ -941,7 +948,8 @@ function normalizeContentBlock(input: unknown): MindMapContentBlock | null {
 }
 
 /**
- * 为图片内容块构建有序、去重的加载候选列表。远程镜像按图床优先级排序，最后按设置选择本地地址，从而支持失效图床自动切换。
+ * 为图片内容块构建有序、去重的加载候选列表。远程镜像按图片级来源优先级（`sourcePriority`）
+ * 和图床优先级排序，最后按设置选择本地地址，从而支持失效图床自动切换。
  *
  * @param block 当前内容块，通常是文字块或图片块。
  * @param includeLocal 是否把本地图片地址作为最终回退候选。
@@ -960,27 +968,124 @@ export function imageSourceCandidates(block: MindMapImageContentBlock, includeLo
   };
 
   const priority = new Map(hostPriorityIds.map((id, index) => [id, index]));
+  const perImagePriority = new Map((block.sourcePriority ?? []).map((url, index) => [url, index]));
   const remotes = block.remoteSources ?? [];
-  const orderedRemotes = remotes
-    .map((remote, index) => ({ remote, index }))
-    .sort((left, right) => (priority.get(left.remote.hostId) ?? Number.MAX_SAFE_INTEGER) - (priority.get(right.remote.hostId) ?? Number.MAX_SAFE_INTEGER) || left.index - right.index)
-    .map((item) => item.remote);
-  for (const remote of orderedRemotes) {
-    add({
-      source: remote.url,
-      label: remote.hostName || (remote.url === block.source ? "当前图床" : "备用图床"),
-      hostId: remote.hostId,
-      hostName: remote.hostName,
-      kind: remote.url === block.source ? "current" : "remote"
+  const raw: Array<{ candidate: MindMapImageSourceCandidate; hostRank: number; order: number }> = [];
+  remotes.forEach((remote, index) => {
+    raw.push({
+      candidate: {
+        source: remote.url,
+        label: remote.hostName || (remote.url === block.source ? "当前图床" : "备用图床"),
+        hostId: remote.hostId,
+        hostName: remote.hostName,
+        kind: remote.url === block.source ? "current" : "remote"
+      },
+      hostRank: priority.get(remote.hostId) ?? Number.MAX_SAFE_INTEGER,
+      order: index
     });
-  }
+  });
+  let manualOrder = remotes.length;
   if (!remotes.some((item) => item.url === block.source) && block.source !== block.localSource) {
-    add({ source: block.source, label: "当前图片", kind: "current" });
+    raw.push({ candidate: { source: block.source, label: "当前图片", kind: "current" }, hostRank: Number.MAX_SAFE_INTEGER, order: manualOrder++ });
   }
   if (includeLocal && block.localSource) {
-    add({ source: block.localSource, label: "本地副本", kind: "local" });
+    raw.push({ candidate: { source: block.localSource, label: "本地副本", kind: "local" }, hostRank: Number.MAX_SAFE_INTEGER, order: manualOrder++ });
   }
+  raw
+    .sort((left, right) => {
+      const leftPriority = perImagePriority.get(left.candidate.source) ?? Number.MAX_SAFE_INTEGER;
+      const rightPriority = perImagePriority.get(right.candidate.source) ?? Number.MAX_SAFE_INTEGER;
+      return leftPriority - rightPriority || left.hostRank - right.hostRank || left.order - right.order;
+    })
+    .forEach((item) => add(item.candidate));
   return candidates;
+}
+
+/** 规范化图片级来源优先级：去空白、去重、按原顺序截断到 16 条。 */
+export function normalizeImageSourcePriority(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const item of value) {
+    if (typeof item !== "string") continue;
+    const url = item.trim();
+    if (!url || seen.has(url)) continue;
+    seen.add(url);
+    result.push(url);
+    if (result.length >= 16) break;
+  }
+  return result;
+}
+
+/**
+ * 从图片块移除一个来源候选，返回应写回的更新字段。
+ *
+ * @param block 当前图片内容块。
+ * @param source 要移除的来源地址（图床 URL、手动 URL 或本地路径）。
+ * @returns 移除后应写回的 `source / localSource / remoteSources / sourcePriority`；没有任何剩余来源时返回 `null`，调用方应删除整个图片块。
+ */
+export function removeImageSourceCandidate(
+  block: MindMapImageContentBlock,
+  source: string
+): Pick<MindMapImageContentBlock, "source" | "localSource" | "remoteSources" | "sourcePriority"> | null {
+  const target = source.trim();
+  const remotes = (block.remoteSources ?? []).filter((item) => item.url !== target);
+  const localSource = block.localSource === target ? undefined : block.localSource;
+  const keepCurrent = block.source !== target
+    && Boolean(block.source)
+    && !remotes.some((item) => item.url === block.source)
+    && block.source !== localSource;
+  const fallback = remotes[0]?.url ?? localSource ?? "";
+  const next: MindMapImageContentBlock = {
+    ...block,
+    source: keepCurrent ? block.source : fallback,
+    remoteSources: remotes.length ? remotes : undefined,
+    localSource,
+    sourcePriority: (block.sourcePriority ?? []).filter((url) => url !== target)
+  };
+  const candidates = imageSourceCandidates(next, true, []);
+  if (!candidates.length) return null;
+  const remainingUrls = new Set(candidates.map((candidate) => candidate.source));
+  const sourcePriority = (next.sourcePriority ?? []).filter((url) => remainingUrls.has(url));
+  return {
+    source: candidates[0]!.source,
+    localSource,
+    remoteSources: remotes.length ? remotes : undefined,
+    sourcePriority: sourcePriority.length ? sourcePriority : undefined
+  };
+}
+
+/** 创建一个由用户手动填写的远程来源条目；地址必须是可以直接加载的 http(s) URL。 */
+export function createManualImageRemoteSource(url: string): MindMapImageRemoteSource | null {
+  const trimmed = url.trim();
+  if (!trimmed || trimmed.length > 4000) return null;
+  let parsed: URL;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    return null;
+  }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return null;
+  return {
+    hostId: "manual",
+    hostName: "手动来源",
+    url: trimmed,
+    uploadedAt: new Date().toISOString()
+  };
+}
+
+/**
+ * 把某个来源设为该图片的默认显示来源（写入图片级来源优先级首位）。
+ *
+ * @param block 当前图片内容块。
+ * @param source 要置顶的来源地址；必须是该图片的现有候选。
+ * @returns 是否写入成功；来源不在候选列表中时返回 false。
+ */
+export function setImageSourceDefault(block: MindMapImageContentBlock, source: string): boolean {
+  const candidates = imageSourceCandidates(block, true, []);
+  if (!candidates.some((candidate) => candidate.source === source)) return false;
+  block.sourcePriority = normalizeImageSourcePriority([source, ...candidates.map((candidate) => candidate.source)]);
+  return true;
 }
 
 /**

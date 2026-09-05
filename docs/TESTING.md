@@ -239,6 +239,10 @@ GitHub Actions 和 GitLab CI 均从干净检出开始执行 `npm ci` 与 `npm ru
 
 `tests/image-recognition.test.mjs` 覆盖整页/节点子树图片的稳定顺序、识图提示词与文本规范化、原位置图片转文字、过期预览拒绝、Tesseract 参数的无 shell 解析、显示器边界规范化、本机非交互式抓屏候选、当前 Obsidian 文档根节点全屏覆盖层契约、禁止异步截图弹窗与静默系统截图回退、抓屏硬超时、临时 Blob URL 释放、明显边框、八方向选区、坐标尺寸、十二项工具栏、独立截图/识别动作、普通截图双击确认、截图并识别完整透明工具栏 DOM、保留原提示文案的整数 3/2/1 倒计时、边框/拖动条/缩放手柄悬停暂停、离开或重新框选后重启，以及 iframe/宿主双层 Esc 取消，以及移动端懒加载契约。真实视觉模型、本机 Tesseract 以及 Windows/macOS/Linux 覆盖层像素交互仍属于手动冒烟测试；自动测试不上传图片，也不启动真实桌面窗口。
 
+### 图片来源管理与弹窗宽度
+
+`tests/image-source-candidates.test.mjs` 覆盖图片级来源优先级（`sourcePriority`）排序覆盖全局图床优先级、优先级规范化（去空白/去重/16 条上限）、来源移除后默认显示接任与优先级裁剪、无剩余来源返回 null（调用方删除整个图片块）、手动 URL 来源条目校验（仅 http(s)、长度上限）、默认来源置顶，以及图片预览弹窗来源管理（右键“设为默认显示来源 / 更新上传 / 删除此来源”、同行手动添加 URL 输入、变更后刷新来源栏、图片块删除后关窗）与编辑器统一历史链路接线（`openImagePreviewWithSources` / `applyImagePreviewSourceChange` / 冻结快照上传 / `removeImageBlock` 远程清理）的源码契约。弹窗宽度档位（`--mms-modal-md / lg / xl`）及 AI、题目、表格、代码、搜索、外观、图片预览、识图预览的归档由 `tests/image-layout.test.mjs`、`tests/settings-layout.test.mjs` 与来源契约共同锁定。真实图床上传、远程删除与手动来源 URL 的实际加载仍属手动冒烟。
+
 ### 图片失败、粘贴目标与批量自动上传
 
 专项测试确认：

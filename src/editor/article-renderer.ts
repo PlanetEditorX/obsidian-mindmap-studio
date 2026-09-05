@@ -5,7 +5,6 @@
 
 import { App, setIcon } from "obsidian";
 import {
-  imageSourceCandidates,
   nodeContentBlocks,
   type ArticleLeafNumberingStyle,
   type ArticleTocStyle,
@@ -28,7 +27,6 @@ import {
 import { resolveArticleStyle } from "../article/article-style";
 import { resolveByteChunk, resolveByteWindow, utf8ByteLength } from "../article/render-window";
 import type { MindMapEditorCallbacks } from "./editor-types";
-import { ImagePreviewModal } from "./editor-modals";
 import { renderInlineMarkdown, renderRichTextRuns } from "./rich-text-dom";
 import { bindTableColumnResize, bindTableDoubleClick } from "./table-interaction";
 import type { ArticleLeafBulletStyle } from "../settings";
@@ -62,6 +60,7 @@ export interface ArticleRendererOptions {
   focusNode: (id: string) => void;
   openAiContextMenu: (event: MouseEvent, nodeId: string, blockId?: string) => void;
   openImageContextMenu: (event: MouseEvent, nodeId: string, blockId: string) => void;
+  openImagePreview: (nodeId: string, blockId: string) => void;
   editTableBlock: (node: MindMapNode, table: MindMapTable, blockId: string) => void;
   updateTableColumnWidths: (node: MindMapNode, blockId: string, widths: number[]) => void;
   makeInlineEditable: (element: HTMLElement, node: MindMapNode, placeholder: string, blockId?: string) => void;
@@ -454,13 +453,7 @@ export function renderArticleNodeContent(container: HTMLElement, node: MindMapNo
       );
       image.addEventListener("click", () => {
         if (!activeResolved) return;
-        new ImagePreviewModal(
-          options.app,
-          activeResolved,
-          block.alt ?? "图片",
-          imageSourceCandidates(block, true, options.imageHostPriorityIds),
-          (source) => options.callbacks.resolveImage(source)
-        ).open();
+        options.openImagePreview(node.id, block.id);
       });
       shell.addEventListener("contextmenu", (event) => {
         event.preventDefault();

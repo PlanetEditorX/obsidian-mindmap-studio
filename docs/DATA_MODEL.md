@@ -132,6 +132,7 @@ interface MindMapImageContentBlock {
   contentHash?: string; // 图片二进制 SHA-256
   localSource?: string;
   remoteSources?: MindMapImageRemoteSource[];
+  sourcePriority?: string[]; // 图片级来源优先级（候选地址，越靠前越优先显示）
 }
 ```
 
@@ -140,6 +141,8 @@ interface MindMapImageContentBlock {
 ```text
 图片 → 文字 → 图片 → 文字
 ```
+
+`sourcePriority` 是可选的图片级来源优先级：保存候选地址的显示顺序，越靠前越优先作为默认显示来源；设置后覆盖全局图床优先级，未列入的候选按全局优先级排在已列入项之后，缺失时完全遵循全局设置。候选包含图床镜像 URL、手动添加的 URL（`hostId: "manual"`）和本地副本路径，规范化时去空白、去重并截断到 16 条。图片预览弹窗可右键来源“设为默认显示来源 / 更新上传 / 删除此来源”，并在同一行手动添加 URL 来源；删除最后一个来源等价于删除整个图片块（远程与本地文件仍按“未引用自动清理”设置处理），节点本身保留为空节点。
 
 节点可以是纯图片节点，不强制存在文字。`layout: "inline"` 会让连续图片在导图、文章、通读和大纲中进入同一横向容器，按内容块顺序同行并自动换行；`block` 或缺失时独占一行。`contentHash` 用于同一图床内上传去重和最后引用删除判断，不替代图片地址。
 

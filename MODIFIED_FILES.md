@@ -1,5 +1,22 @@
 # Modified Files
 
+## 1.48.0 图片来源管理与弹窗宽度档位
+
+- `src/core/model.ts`：`MindMapImageContentBlock` 新增可选 `sourcePriority`（图片级来源优先级，规范化去空白/去重/截断 16 条）；`imageSourceCandidates()` 以图片级优先级为主排序键、图床优先级次之；新增 `normalizeImageSourcePriority()`、`removeImageSourceCandidate()`（返回移除后应写回的字段，无剩余来源返回 null）、`createManualImageRemoteSource()`（手动 URL 来源条目校验）与 `setImageSourceDefault()`（置顶默认显示来源）。
+- `src/editor/editor-modals.ts`：`ImagePreviewModal` 来源栏改为可重建渲染，支持编辑器注入 `ImagePreviewSourceActions`；新增 `ImagePreviewSourceChange` 类型；来源按钮右键菜单（设为默认显示 / 更新上传 / 删除此来源）与同行“手动添加图片 URL 来源”输入框；变更后刷新来源栏，图片块被删除时自动关闭弹窗；弹窗宽度改为 `--mms-modal-xl` 档。未注入动作时保持只读预览，行为不变。
+- `src/editor/editor.ts`：新增 `openImagePreviewWithSources()` 与 `applyImagePreviewSourceChange()`；删除来源走 `mutateWithoutArticleContext` 统一历史链路，最后来源复用 `removeImageBlock()`（含 `onCleanupRemovedImageRemoteAssets` 远程清理与“未引用自动清理”设置）；更新上传复用 `uploadCurrentNodeImage` 冻结快照模式；画布图片点击与图片右键“放大预览”接入来源管理。
+- `src/editor/article-renderer.ts`、`src/editor/outline-renderer.ts`：渲染器选项新增 `openImagePreview(nodeId, blockId)` 并由编辑器注入；文章/大纲/通读图片点击改为打开可管理来源的预览。
+- `styles.css`：新增 `--mms-modal-md / lg / xl` 三档弹窗宽度变量；AI 助手、题目、表格、代码、全局搜索统一到 md 档（AI 弹窗修复过窄），外观设置归 lg 档，图片预览与识图预览统一到 xl 档；新增来源“添加 URL”输入框样式。
+- `tests/image-source-candidates.test.mjs`：新增图片级优先级排序、优先级规范化、来源移除接任/裁剪、无剩余来源返回 null、手动 URL 校验、默认来源置顶 6 项纯函数测试与 1 项来源管理接线源码契约。
+- `tests/image-layout.test.mjs`、`tests/settings-layout.test.mjs`：弹窗宽度契约从硬编码像素更新为对应档位变量。
+- `package.json`、`manifest.json`、`versions.json`、`package-lock.json`：版本升至 `1.48.0`。
+- `README.md`、`CHANGELOG.md`、`docs/DATA_MODEL.md`、`docs/ARCHITECTURE.md`、`docs/SPECIAL_FEATURES.md`、`docs/TESTING.md`、`docs/FUNCTION_REFERENCE.md`、`TEST_RESULTS.md`：同步来源管理、优先级字段、宽度档位与测试要求。
+- `main.js`：production esbuild 重新构建。
+- 本轮测试安装包：`mindmap-studio-1.48.0-test-190027.zip`，SHA-256 `7160d492c84645c18b5d189e7271635035dbe9aeeefcb54856099ad24d00c1ee`；完整源码与 Codex 交接使用同一 `190027` 后缀。
+
+- 本轮不改变 `.mindmap` 既有字段语义：`sourcePriority` 为纯新增可选字段；无图床配置或未注入动作时预览行为与 1.47.x 完全一致。
+
+## 1.47.1 AI 请求可取消（AbortSignal）
 ## 1.47.1 AI 请求可取消（AbortSignal）
 
 - `src/ai/protocol.ts`：新增 `isAiRequestCancelled()`（识别 `AbortError`/`TimeoutError` 与常见中止消息文本）、`throwIfSignalAborted()`（包裹不支持中途取消的 `requestUrl`）、`createAiAbortError()`；抽出 `createAiSseEventAccumulator()` 供完整文本解析与流式读取共用，并新增 `consumeAiStreamReader()` 以最小读取器接口消费浏览器 Fetch SSE，取消错误原样向上传播。

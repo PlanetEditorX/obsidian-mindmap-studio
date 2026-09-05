@@ -471,7 +471,8 @@ function normalizeContentBlock(input) {
         failureCount: typeof item.failureCount === "number" && Number.isFinite(item.failureCount) ? Math.max(0, Math.min(1e6, Math.floor(item.failureCount))) : void 0
       }];
     }) : void 0;
-    return { id, type: "image", source, alt, align, width, height, layout, contentHash, localSource, remoteSources: (remoteSources == null ? void 0 : remoteSources.length) ? remoteSources : void 0 };
+    const sourcePriority = normalizeImageSourcePriority(image.sourcePriority);
+    return { id, type: "image", source, alt, align, width, height, layout, contentHash, localSource, remoteSources: (remoteSources == null ? void 0 : remoteSources.length) ? remoteSources : void 0, sourcePriority: (sourcePriority == null ? void 0 : sourcePriority.length) ? sourcePriority : void 0 };
   }
   if (candidate.type === "text") {
     const textCandidate = candidate;
@@ -483,7 +484,7 @@ function normalizeContentBlock(input) {
   return null;
 }
 function imageSourceCandidates(block, includeLocal = true, hostPriorityIds = []) {
-  var _a2;
+  var _a2, _b2;
   const candidates = [];
   const seen = /* @__PURE__ */ new Set();
   const add = (candidate) => {
@@ -493,27 +494,99 @@ function imageSourceCandidates(block, includeLocal = true, hostPriorityIds = [])
     candidates.push({ ...candidate, source });
   };
   const priority = new Map(hostPriorityIds.map((id, index) => [id, index]));
-  const remotes = (_a2 = block.remoteSources) != null ? _a2 : [];
-  const orderedRemotes = remotes.map((remote, index) => ({ remote, index })).sort((left, right) => {
-    var _a3, _b2;
-    return ((_a3 = priority.get(left.remote.hostId)) != null ? _a3 : Number.MAX_SAFE_INTEGER) - ((_b2 = priority.get(right.remote.hostId)) != null ? _b2 : Number.MAX_SAFE_INTEGER) || left.index - right.index;
-  }).map((item) => item.remote);
-  for (const remote of orderedRemotes) {
-    add({
-      source: remote.url,
-      label: remote.hostName || (remote.url === block.source ? "\u5F53\u524D\u56FE\u5E8A" : "\u5907\u7528\u56FE\u5E8A"),
-      hostId: remote.hostId,
-      hostName: remote.hostName,
-      kind: remote.url === block.source ? "current" : "remote"
+  const perImagePriority = new Map(((_a2 = block.sourcePriority) != null ? _a2 : []).map((url, index) => [url, index]));
+  const remotes = (_b2 = block.remoteSources) != null ? _b2 : [];
+  const raw = [];
+  remotes.forEach((remote, index) => {
+    var _a3;
+    raw.push({
+      candidate: {
+        source: remote.url,
+        label: remote.hostName || (remote.url === block.source ? "\u5F53\u524D\u56FE\u5E8A" : "\u5907\u7528\u56FE\u5E8A"),
+        hostId: remote.hostId,
+        hostName: remote.hostName,
+        kind: remote.url === block.source ? "current" : "remote"
+      },
+      hostRank: (_a3 = priority.get(remote.hostId)) != null ? _a3 : Number.MAX_SAFE_INTEGER,
+      order: index
     });
-  }
+  });
+  let manualOrder = remotes.length;
   if (!remotes.some((item) => item.url === block.source) && block.source !== block.localSource) {
-    add({ source: block.source, label: "\u5F53\u524D\u56FE\u7247", kind: "current" });
+    raw.push({ candidate: { source: block.source, label: "\u5F53\u524D\u56FE\u7247", kind: "current" }, hostRank: Number.MAX_SAFE_INTEGER, order: manualOrder++ });
   }
   if (includeLocal && block.localSource) {
-    add({ source: block.localSource, label: "\u672C\u5730\u526F\u672C", kind: "local" });
+    raw.push({ candidate: { source: block.localSource, label: "\u672C\u5730\u526F\u672C", kind: "local" }, hostRank: Number.MAX_SAFE_INTEGER, order: manualOrder++ });
   }
+  raw.sort((left, right) => {
+    var _a3, _b3;
+    const leftPriority = (_a3 = perImagePriority.get(left.candidate.source)) != null ? _a3 : Number.MAX_SAFE_INTEGER;
+    const rightPriority = (_b3 = perImagePriority.get(right.candidate.source)) != null ? _b3 : Number.MAX_SAFE_INTEGER;
+    return leftPriority - rightPriority || left.hostRank - right.hostRank || left.order - right.order;
+  }).forEach((item) => add(item.candidate));
   return candidates;
+}
+function normalizeImageSourcePriority(value) {
+  if (!Array.isArray(value)) return [];
+  const seen = /* @__PURE__ */ new Set();
+  const result = [];
+  for (const item of value) {
+    if (typeof item !== "string") continue;
+    const url = item.trim();
+    if (!url || seen.has(url)) continue;
+    seen.add(url);
+    result.push(url);
+    if (result.length >= 16) break;
+  }
+  return result;
+}
+function removeImageSourceCandidate(block, source) {
+  var _a2, _b2, _c, _d, _e, _f;
+  const target = source.trim();
+  const remotes = ((_a2 = block.remoteSources) != null ? _a2 : []).filter((item) => item.url !== target);
+  const localSource = block.localSource === target ? void 0 : block.localSource;
+  const keepCurrent = block.source !== target && Boolean(block.source) && !remotes.some((item) => item.url === block.source) && block.source !== localSource;
+  const fallback = (_d = (_c = (_b2 = remotes[0]) == null ? void 0 : _b2.url) != null ? _c : localSource) != null ? _d : "";
+  const next = {
+    ...block,
+    source: keepCurrent ? block.source : fallback,
+    remoteSources: remotes.length ? remotes : void 0,
+    localSource,
+    sourcePriority: ((_e = block.sourcePriority) != null ? _e : []).filter((url) => url !== target)
+  };
+  const candidates = imageSourceCandidates(next, true, []);
+  if (!candidates.length) return null;
+  const remainingUrls = new Set(candidates.map((candidate) => candidate.source));
+  const sourcePriority = ((_f = next.sourcePriority) != null ? _f : []).filter((url) => remainingUrls.has(url));
+  return {
+    source: candidates[0].source,
+    localSource,
+    remoteSources: remotes.length ? remotes : void 0,
+    sourcePriority: sourcePriority.length ? sourcePriority : void 0
+  };
+}
+function createManualImageRemoteSource(url) {
+  const trimmed = url.trim();
+  if (!trimmed || trimmed.length > 4e3) return null;
+  let parsed;
+  try {
+    parsed = new URL(trimmed);
+  } catch (e) {
+    return null;
+  }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return null;
+  return {
+    hostId: "manual",
+    hostName: "\u624B\u52A8\u6765\u6E90",
+    url: trimmed,
+    uploadedAt: (/* @__PURE__ */ new Date()).toISOString()
+  };
+}
+function setImageSourceDefault(block, source) {
+  const candidates = imageSourceCandidates(block, true, []);
+  if (!candidates.some((candidate) => candidate.source === source)) return false;
+  block.sourcePriority = normalizeImageSourcePriority([source, ...candidates.map((candidate) => candidate.source)]);
+  return true;
 }
 function nodeContentBlocks(node) {
   var _a2, _b2, _c, _d, _e, _f;
@@ -7025,21 +7098,30 @@ var ImagePreviewModal = class extends import_obsidian4.Modal {
    * @param alt 图片说明。
    * @param sources 当前图片已经保存的图床镜像及本地来源。
    * @param resolveSource 将仓库路径转换为可显示地址的解析器。
+   * @param actions 可选的来源管理动作；缺省时预览保持只读。
    */
-  constructor(app, source, alt, sources = [], resolveSource) {
+  constructor(app, source, alt, sources = [], resolveSource, actions) {
     super(app);
     this.source = source;
     this.alt = alt;
     this.sources = sources;
     this.resolveSource = resolveSource;
+    this.actions = actions;
     this.scale = 1;
+    /** 当前来源变更执行器；onOpen 时注入。 */
+    this.runSourceChangeImpl = null;
+  }
+  /** 统一入口：执行来源变更并容忍重复触发。 */
+  runSourceChange(change) {
+    var _a2, _b2;
+    return (_b2 = (_a2 = this.runSourceChangeImpl) == null ? void 0 : _a2.call(this, change)) != null ? _b2 : Promise.resolve();
   }
   /**
    * 创建图片预览界面和缩放控制。
    */
   onOpen() {
     this.modalEl.addClass("mmc-image-preview-modal");
-    this.modalEl.style.setProperty("width", "min(86vw, 1400px)", "important");
+    this.modalEl.style.setProperty("width", "min(98vw, 1440px)", "important");
     this.modalEl.style.setProperty("height", "min(82vh, 900px)", "important");
     this.titleEl.setText(this.alt || "\u56FE\u7247\u9884\u89C8");
     const toolbar = this.contentEl.createDiv({ cls: "mmc-image-preview-toolbar" });
@@ -7049,6 +7131,7 @@ var ImagePreviewModal = class extends import_obsidian4.Modal {
     let sourceStatus;
     let baseWidth = 0;
     let baseHeight = 0;
+    let activeSource = this.source;
     const applyScale = () => {
       if (!baseWidth || !baseHeight) return;
       image.style.width = `${Math.max(1, Math.round(baseWidth * this.scale))}px`;
@@ -7086,47 +7169,94 @@ var ImagePreviewModal = class extends import_obsidian4.Modal {
       this.scale = Math.min(5, this.scale + 0.2);
       applyScale();
     });
-    const sourceCandidates = this.sources.length ? this.sources : [{ source: this.source, label: "\u5F53\u524D\u56FE\u7247", kind: "current" }];
-    const availableCandidates = sourceCandidates.filter((candidate) => {
-      var _a2;
-      return candidate.kind !== "local" || Boolean((_a2 = this.resolveSource) == null ? void 0 : _a2.call(this, candidate.source));
-    });
-    const candidates = availableCandidates.length ? availableCandidates : sourceCandidates.slice(0, 1);
-    const sourceButtons = [];
-    sourceBar.createSpan({ cls: "mmc-image-preview-sources-label", text: "\u56FE\u7247\u6765\u6E90\uFF1A" });
-    const switchSource = (candidate, sourceButton) => {
+    const candidates = () => {
+      var _a2, _b2;
+      const list = (_b2 = (_a2 = this.actions) == null ? void 0 : _a2.getSources()) != null ? _b2 : this.sources;
+      const available = list.filter((candidate) => {
+        var _a3;
+        return candidate.kind !== "local" || Boolean((_a3 = this.resolveSource) == null ? void 0 : _a3.call(this, candidate.source));
+      });
+      return available.length ? available : list.slice(0, 1);
+    };
+    const switchSource = (candidate) => {
       var _a2, _b2;
       const resolved = (_b2 = (_a2 = this.resolveSource) == null ? void 0 : _a2.call(this, candidate.source)) != null ? _b2 : candidate.source;
       this.scale = 1;
       baseWidth = 0;
       baseHeight = 0;
+      activeSource = candidate.source;
       sourceStatus.dataset.label = candidate.label;
       sourceStatus.setText(`${candidate.label} \xB7 \u52A0\u8F7D\u4E2D\u2026`);
       sourceBar.removeClass("has-error");
-      sourceButtons.forEach((item) => item.removeClass("is-active"));
-      sourceButton.addClass("is-active");
+      sourceBar.querySelectorAll(".mmc-image-preview-source-button.is-active").forEach((item) => item.removeClass("is-active"));
       image.removeAttribute("style");
       image.src = resolved;
     };
-    for (const candidate of candidates) {
-      const sourceButton = sourceBar.createEl("button", {
-        text: candidate.label,
-        cls: "mmc-image-preview-source-button",
-        attr: { type: "button", title: `\u9884\u89C8\u6765\u6E90\uFF1A${candidate.label}` }
-      });
-      sourceButtons.push(sourceButton);
-      sourceButton.addEventListener("click", () => switchSource(candidate, sourceButton));
-    }
-    sourceStatus = sourceBar.createSpan({ cls: "mmc-image-preview-source-status", text: "\u5F53\u524D\u56FE\u7247" });
-    const initialIndex = Math.max(0, candidates.findIndex((candidate) => {
+    const showSourceMenu = (candidate, event) => {
+      if (!this.actions) return;
+      event.preventDefault();
+      const menu = new import_obsidian4.Menu();
+      menu.addItem((item) => item.setTitle("\u8BBE\u4E3A\u9ED8\u8BA4\u663E\u793A\u6765\u6E90").setIcon("star").onClick(() => void this.runSourceChange({ type: "setDefault", source: candidate.source })));
+      menu.addSeparator();
+      menu.addItem((item) => item.setTitle("\u66F4\u65B0\u4E0A\u4F20\uFF08\u7528\u672C\u5730\u56FE\u7247\u91CD\u65B0\u4E0A\u4F20\u56FE\u5E8A\uFF09").setIcon("refresh-cw").onClick(() => void this.runSourceChange({ type: "reupload" })));
+      menu.addItem((item) => item.setTitle("\u5220\u9664\u6B64\u6765\u6E90").setIcon("trash-2").onClick(() => void this.runSourceChange({ type: "remove", source: candidate.source })));
+      menu.showAtMouseEvent(event);
+    };
+    const bindSourceStatus = () => {
+      var _a2;
+      sourceStatus = (_a2 = sourceBar.querySelector(".mmc-image-preview-source-status")) != null ? _a2 : sourceBar.createSpan({ cls: "mmc-image-preview-source-status", text: "\u5F53\u524D\u56FE\u7247" });
+    };
+    const renderSourceBar = () => {
       var _a2, _b2;
-      const resolved = (_b2 = (_a2 = this.resolveSource) == null ? void 0 : _a2.call(this, candidate.source)) != null ? _b2 : candidate.source;
-      return resolved === this.source || candidate.source === this.source;
-    }));
-    const initialCandidate = candidates[initialIndex];
-    const initialButton = sourceButtons[initialIndex];
-    sourceStatus.dataset.label = initialCandidate.label;
-    initialButton.addClass("is-active");
+      const list = candidates();
+      const loading = activeSource;
+      sourceBar.empty();
+      sourceBar.createSpan({ cls: "mmc-image-preview-sources-label", text: "\u56FE\u7247\u6765\u6E90\uFF1A" });
+      for (const candidate of list) {
+        const sourceButton = sourceBar.createEl("button", {
+          text: candidate.label,
+          cls: "mmc-image-preview-source-button",
+          attr: { type: "button", title: `\u9884\u89C8\u6765\u6E90\uFF1A${candidate.label}${this.actions ? "\uFF1B\u53F3\u952E\u53EF\u7BA1\u7406\u6765\u6E90" : ""}` }
+        });
+        if (candidate.source === activeSource) sourceButton.addClass("is-active");
+        sourceButton.addEventListener("click", () => switchSource(candidate));
+        sourceButton.addEventListener("contextmenu", (event) => showSourceMenu(candidate, event));
+      }
+      if (!list.some((candidate) => candidate.source === activeSource) && list.length) {
+        activeSource = list[0].source;
+      }
+      if (list.length && activeSource !== loading) {
+        const resolved = (_b2 = (_a2 = this.resolveSource) == null ? void 0 : _a2.call(this, activeSource)) != null ? _b2 : activeSource;
+        this.scale = 1;
+        baseWidth = 0;
+        baseHeight = 0;
+        image.removeAttribute("style");
+        image.src = resolved;
+      }
+      bindSourceStatus();
+      const active = list.find((candidate) => candidate.source === activeSource);
+      if (active) sourceStatus.dataset.label = active.label;
+      if (!this.actions) return;
+      const addWrap = sourceBar.createDiv({ cls: "mmc-image-preview-source-add" });
+      const urlInput = addWrap.createEl("input", {
+        cls: "mmc-image-preview-source-add-input",
+        attr: { type: "text", placeholder: "\u624B\u52A8\u6DFB\u52A0\u56FE\u7247 URL \u6765\u6E90" }
+      });
+      const submit = () => {
+        const url = urlInput.value.trim();
+        if (!url) return;
+        urlInput.value = "";
+        void this.runSourceChange({ type: "add", url });
+      };
+      addWrap.createEl("button", { text: "\u6DFB\u52A0\u6765\u6E90", attr: { type: "button" } }).addEventListener("click", submit);
+      urlInput.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          submit();
+        }
+      });
+    };
+    renderSourceBar();
     imageWrap.addEventListener("wheel", (event) => {
       event.preventDefault();
       this.scale = Math.min(5, Math.max(0.2, this.scale + (event.deltaY < 0 ? 0.15 : -0.15)));
@@ -7136,6 +7266,19 @@ var ImagePreviewModal = class extends import_obsidian4.Modal {
       this.scale = 1;
       applyScale();
     });
+    this.runSourceChangeImpl = async (change) => {
+      if (!this.actions) return;
+      const stillExists = await this.actions.applyChange(change);
+      if (!stillExists) {
+        this.close();
+        return;
+      }
+      if (!candidates().length) {
+        this.close();
+        return;
+      }
+      renderSourceBar();
+    };
   }
 };
 var FormulaEditModal = class extends import_obsidian4.Modal {
@@ -9162,15 +9305,8 @@ function renderOutlineContent(container, node, depth, options) {
       }
     );
     image.addEventListener("click", () => {
-      var _a3;
       if (!activeResolved) return;
-      new ImagePreviewModal(
-        options.app,
-        activeResolved,
-        (_a3 = block.alt) != null ? _a3 : "\u56FE\u7247",
-        imageSourceCandidates(block, true, options.imageHostPriorityIds),
-        options.resolveImage
-      ).open();
+      options.openImagePreview(node.id, block.id);
     });
     figure.addEventListener("contextmenu", (event) => {
       event.preventDefault();
@@ -9609,15 +9745,8 @@ function renderArticleNodeContent(container, node, treatTextAsBody, options) {
         }
       );
       image.addEventListener("click", () => {
-        var _a3;
         if (!activeResolved) return;
-        new ImagePreviewModal(
-          options.app,
-          activeResolved,
-          (_a3 = block.alt) != null ? _a3 : "\u56FE\u7247",
-          imageSourceCandidates(block, true, options.imageHostPriorityIds),
-          (source) => options.callbacks.resolveImage(source)
-        ).open();
+        options.openImagePreview(node.id, block.id);
       });
       shell.addEventListener("contextmenu", (event) => {
         event.preventDefault();
@@ -14079,6 +14208,7 @@ var MindMapEditor = class {
         this.openContextMenu(event);
       },
       openImageContextMenu: (event, nodeId, blockId) => this.openImageContextMenu(event, nodeId, blockId),
+      openImagePreview: (nodeId, blockId) => this.openImagePreviewWithSources(nodeId, blockId),
       openMindMap: (path) => this.navigateWithTransition(() => this.callbacks.onOpenMindMap(path)),
       resolveImage: this.callbacks.resolveImage,
       imageHostPriorityIds: this.options.imageHostPriorityIds,
@@ -14565,6 +14695,7 @@ var MindMapEditor = class {
         this.openContextMenu(event, blockId);
       },
       openImageContextMenu: (event, nodeId, blockId) => this.openImageContextMenu(event, nodeId, blockId),
+      openImagePreview: (nodeId, blockId) => this.openImagePreviewWithSources(nodeId, blockId),
       editTableBlock: (node, table, blockId) => this.openTableBlockEditor(node, table, blockId),
       updateTableColumnWidths: (node, blockId, widths) => this.updateTableColumnWidths(node, blockId, widths),
       makeInlineEditable: (element, node, placeholder, blockId) => this.makeInlineEditable(element, node, placeholder, blockId),
@@ -14954,15 +15085,8 @@ var MindMapEditor = class {
           probe.src = resolved;
         };
         image.addEventListener("click", (event) => {
-          var _a3;
           event.stopPropagation();
-          if (activeResolved) new ImagePreviewModal(
-            this.app,
-            activeResolved,
-            (_a3 = block.alt) != null ? _a3 : "\u56FE\u7247\u9884\u89C8",
-            imageSourceCandidates(block, true, this.options.imageHostPriorityIds),
-            (source) => this.callbacks.resolveImage(source)
-          ).open();
+          if (activeResolved) this.openImagePreviewWithSources(node.id, block.id);
         });
         image.addEventListener("contextmenu", (event) => {
           event.preventDefault();
@@ -17333,7 +17457,7 @@ var MindMapEditor = class {
     if (!node || !block) return;
     const modeLabel = this.options.imageRecognitionMode === "local-ocr" ? "\u672C\u5730 OCR" : "AI \u8BC6\u56FE";
     const menu = new import_obsidian11.Menu();
-    menu.addItem((item) => item.setTitle("\u653E\u5927\u9884\u89C8").setIcon("maximize-2").onClick(() => this.previewImageBlock(block)));
+    menu.addItem((item) => item.setTitle("\u653E\u5927\u9884\u89C8").setIcon("maximize-2").onClick(() => this.previewImageBlock(nodeId, blockId)));
     menu.addItem((item) => item.setTitle(`${modeLabel}\u5E76\u8F6C\u4E3A\u6587\u5B57`).setIcon("scan-text").onClick(() => void this.recognizeImageBlock(nodeId, blockId)));
     if (this.options.questionNodesEnabled) {
       menu.addItem((item) => item.setTitle("\u8F6C\u4E3A\u9898\u76EE\u8282\u70B9\u5E76\u667A\u80FD\u5904\u7406").setIcon("circle-help").onClick(() => void this.convertImageToQuestion(nodeId, blockId)));
@@ -17363,11 +17487,122 @@ var MindMapEditor = class {
     }
     menu.showAtMouseEvent(event);
   }
-  /** 打开图片预览，并按当前图床优先级提供候选地址。 */
-  previewImageBlock(block) {
-    var _a2, _b2;
-    const source = (_a2 = this.callbacks.resolveImage(block.source)) != null ? _a2 : block.source;
-    new ImagePreviewModal(this.app, source, (_b2 = block.alt) != null ? _b2 : "\u56FE\u7247\u9884\u89C8", imageSourceCandidates(block, true, this.options.imageHostPriorityIds), this.callbacks.resolveImage).open();
+  /** 打开图片预览，并按图片级来源优先级与图床优先级提供候选地址。 */
+  previewImageBlock(nodeId, blockId) {
+    this.openImagePreviewWithSources(nodeId, blockId);
+  }
+  /**
+   * 打开带来源管理动作的图片预览：右键来源可设默认、更新上传和删除，同一行可手动添加 URL 来源。
+   *
+   * @param nodeId 图片所属节点标识。
+   * @param blockId 图片内容块标识。
+   */
+  openImagePreviewWithSources(nodeId, blockId) {
+    var _a2, _b2, _c, _d, _e;
+    const block = (_a2 = this.locateImageBlock(nodeId, blockId)) == null ? void 0 : _a2.block;
+    if (!block) return;
+    const candidates = imageSourceCandidates(block, true, this.options.imageHostPriorityIds);
+    const preferred = (_d = this.callbacks.resolveImage((_c = (_b2 = candidates[0]) == null ? void 0 : _b2.source) != null ? _c : block.source)) != null ? _d : block.source;
+    const actions = {
+      getSources: () => {
+        const located = this.locateImageBlock(nodeId, blockId);
+        return located ? imageSourceCandidates(located.block, true, this.options.imageHostPriorityIds) : [];
+      },
+      applyChange: (change) => this.applyImagePreviewSourceChange(nodeId, blockId, change)
+    };
+    new ImagePreviewModal(this.app, preferred, (_e = block.alt) != null ? _e : "\u56FE\u7247\u9884\u89C8", candidates, this.callbacks.resolveImage, actions).open();
+  }
+  /** 按节点与内容块 ID 定位图片块；不存在时返回 null。 */
+  locateImageBlock(nodeId, blockId) {
+    const node = this.nodeById(nodeId);
+    if (!node) return null;
+    const blocks = nodeContentBlocks(node);
+    const block = blocks.find((item) => item.type === "image" && item.id === blockId);
+    return block ? { node, blocks, block } : null;
+  }
+  /**
+   * 通过统一历史与保存链路执行图片预览弹窗发起的一次来源变更。
+   *
+   * @returns 图片块是否仍然存在；false 时预览弹窗会自动关闭。
+   */
+  async applyImagePreviewSourceChange(nodeId, blockId, change) {
+    if (!this.ensureEditable()) return true;
+    if (change.type === "reupload") {
+      const located2 = this.locateImageBlock(nodeId, blockId);
+      if (!located2) {
+        new import_obsidian11.Notice("\u56FE\u7247\u5DF2\u4E0D\u5B58\u5728");
+        return false;
+      }
+      const previousSnapshot = this.currentDocumentSnapshotJson();
+      this.invalidateDocumentSnapshotJson();
+      const changed = await uploadCurrentNodeImage(this.app, located2.block, this.callbacks);
+      if (!changed) return true;
+      if (!this.locateImageBlock(nodeId, blockId)) {
+        new import_obsidian11.Notice("\u56FE\u7247\u5DF2\u5728\u6B64\u671F\u95F4\u88AB\u79FB\u9664");
+        return false;
+      }
+      this.history.captureSnapshot(previousSnapshot);
+      replaceNodeContentBlocks(located2.node, located2.blocks);
+      this.notifyDocumentChange("none");
+      this.markSaving();
+      this.render();
+      return true;
+    }
+    if (change.type === "add") {
+      const located2 = this.locateImageBlock(nodeId, blockId);
+      if (!located2) {
+        new import_obsidian11.Notice("\u56FE\u7247\u5DF2\u4E0D\u5B58\u5728");
+        return false;
+      }
+      const entry = createManualImageRemoteSource(change.url);
+      if (!entry) {
+        new import_obsidian11.Notice("\u8BF7\u8F93\u5165\u6709\u6548\u7684 http(s) \u56FE\u7247\u5730\u5740");
+        return true;
+      }
+      if (imageSourceCandidates(located2.block, true, []).some((candidate) => candidate.source === entry.url)) {
+        new import_obsidian11.Notice("\u8BE5\u5730\u5740\u5DF2\u7ECF\u5728\u6765\u6E90\u5217\u8868\u4E2D");
+        return true;
+      }
+      this.mutateWithoutArticleContext(() => {
+        var _a2;
+        located2.block.remoteSources = [...(_a2 = located2.block.remoteSources) != null ? _a2 : [], entry];
+        replaceNodeContentBlocks(located2.node, located2.blocks);
+      });
+      return true;
+    }
+    if (change.type === "setDefault") {
+      const located2 = this.locateImageBlock(nodeId, blockId);
+      if (!located2) {
+        new import_obsidian11.Notice("\u56FE\u7247\u5DF2\u4E0D\u5B58\u5728");
+        return false;
+      }
+      if (!setImageSourceDefault(located2.block, change.source)) {
+        new import_obsidian11.Notice("\u8BE5\u6765\u6E90\u4E0D\u5728\u5F53\u524D\u56FE\u7247\u7684\u6765\u6E90\u5217\u8868\u4E2D");
+        return true;
+      }
+      this.mutateWithoutArticleContext(() => {
+        replaceNodeContentBlocks(located2.node, located2.blocks);
+      });
+      return true;
+    }
+    const located = this.locateImageBlock(nodeId, blockId);
+    if (!located) {
+      new import_obsidian11.Notice("\u56FE\u7247\u5DF2\u4E0D\u5B58\u5728");
+      return false;
+    }
+    const remaining = removeImageSourceCandidate(located.block, change.source);
+    if (!remaining) {
+      await this.removeImageBlock(nodeId, blockId);
+      return false;
+    }
+    this.mutateWithoutArticleContext(() => {
+      located.block.source = remaining.source;
+      located.block.localSource = remaining.localSource;
+      located.block.remoteSources = remaining.remoteSources;
+      located.block.sourcePriority = remaining.sourcePriority;
+      replaceNodeContentBlocks(located.node, located.blocks);
+    });
+    return true;
   }
   /** 将图片块设置为指定的水平对齐方式。 */
   setImageBlockAlignment(nodeId, blockId, align) {

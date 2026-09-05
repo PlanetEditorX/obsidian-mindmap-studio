@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
+import { readFile } from "node:fs/promises";
 import { loadTypeScriptModules } from "./compile-typescript.mjs";
 
 let model;
@@ -127,4 +128,136 @@ test("image upload patches ignore stale local-image jobs", () => {
   }]);
   assert.equal(updated, 0);
   assert.equal(model.nodeContentBlocks(document.root)[0].source, "assets/new.png");
+});
+
+test("per-image source priority overrides global host priority and default display", () => {
+  const block = {
+    id: "img",
+    type: "image",
+    source: "https://fast.example/a.png",
+    localSource: "assets/local.png",
+    remoteSources: [
+      { hostId: "fast", hostName: "快图床", url: "https://fast.example/a.png" },
+      { hostId: "slow", hostName: "慢图床", url: "https://slow.example/a.png" }
+    ]
+  };
+  assert.deepEqual(
+    model.imageSourceCandidates(block, true, ["fast", "slow"]).map((candidate) => candidate.source),
+    ["https://fast.example/a.png", "https://slow.example/a.png", "assets/local.png"]
+  );
+
+  block.sourcePriority = ["https://slow.example/a.png"];
+  const ordered = model.imageSourceCandidates(block, true, ["fast", "slow"]).map((candidate) => candidate.source);
+  assert.deepEqual(ordered, ["https://slow.example/a.png", "https://fast.example/a.png", "assets/local.png"]);
+
+  block.sourcePriority = ["assets/local.png"];
+  const localFirst = model.imageSourceCandidates(block, true, ["fast", "slow"]);
+  assert.equal(localFirst[0].source, "assets/local.png");
+  assert.equal(localFirst[0].kind, "local");
+});
+
+test("normalizeImageSourcePriority trims, de-duplicates and caps entries", () => {
+  assert.deepEqual(
+    model.normalizeImageSourcePriority([" https://a.example/1 ", "https://a.example/1", "", 42, "https://b.example/2"]),
+    ["https://a.example/1", "https://b.example/2"]
+  );
+  assert.deepEqual(model.normalizeImageSourcePriority("not-an-array"), []);
+  const many = Array.from({ length: 30 }, (_, index) => `https://host.example/${index}`);
+  assert.equal(model.normalizeImageSourcePriority(many).length, 16);
+});
+
+test("removeImageSourceCandidate re-points default source and prunes per-image priority", () => {
+  const block = {
+    id: "img",
+    type: "image",
+    source: "https://fast.example/a.png",
+    localSource: "assets/local.png",
+    remoteSources: [
+      { hostId: "fast", hostName: "快图床", url: "https://fast.example/a.png" },
+      { hostId: "slow", hostName: "慢图床", url: "https://slow.example/a.png" }
+    ],
+    sourcePriority: ["https://fast.example/a.png", "https://slow.example/a.png"]
+  };
+
+  const removedFast = model.removeImageSourceCandidate(block, "https://fast.example/a.png");
+  assert.equal(removedFast.source, "https://slow.example/a.png");
+  assert.equal(removedFast.localSource, "assets/local.png");
+  assert.deepEqual(removedFast.remoteSources.map((item) => item.url), ["https://slow.example/a.png"]);
+  assert.deepEqual(removedFast.sourcePriority, ["https://slow.example/a.png"]);
+
+  const removedLocal = model.removeImageSourceCandidate(block, "assets/local.png");
+  assert.equal(removedLocal.localSource, undefined);
+  assert.equal(removedLocal.source, "https://fast.example/a.png");
+  assert.deepEqual(removedLocal.sourcePriority, ["https://fast.example/a.png", "https://slow.example/a.png"]);
+
+  let current = { ...block, sourcePriority: undefined };
+  for (const url of ["https://fast.example/a.png", "https://slow.example/a.png", "assets/local.png"]) {
+    current = { ...current, ...model.removeImageSourceCandidate(current, url) };
+  }
+  assert.equal(model.removeImageSourceCandidate(current, current.source), null);
+});
+
+test("removeImageSourceCandidate returns null only when no source remains", () => {
+  const block = { id: "img", type: "image", source: "https://only.example/a.png" };
+  const remaining = model.removeImageSourceCandidate(block, "https://only.example/a.png");
+  assert.equal(remaining, null);
+
+  const localOnly = { id: "img", type: "image", source: "assets/local.png", localSource: "assets/local.png" };
+  assert.equal(model.removeImageSourceCandidate(localOnly, "assets/local.png"), null);
+});
+
+test("createManualImageRemoteSource validates http(s) URLs and rejects duplicates by caller", () => {
+  const entry = model.createManualImageRemoteSource("  https://cdn.example/pic.png  ");
+  assert.equal(entry.hostId, "manual");
+  assert.equal(entry.url, "https://cdn.example/pic.png");
+  assert.equal(model.createManualImageRemoteSource("ftp://cdn.example/pic.png"), null);
+  assert.equal(model.createManualImageRemoteSource("not a url"), null);
+  assert.equal(model.createManualImageRemoteSource(""), null);
+  assert.equal(model.createManualImageRemoteSource(`https://a.example/${"x".repeat(5000)}`), null);
+});
+
+test("setImageSourceDefault writes the chosen candidate to the front of per-image priority", () => {
+  const block = {
+    id: "img",
+    type: "image",
+    source: "https://fast.example/a.png",
+    localSource: "assets/local.png",
+    remoteSources: [{ hostId: "fast", hostName: "快图床", url: "https://fast.example/a.png" }]
+  };
+  assert.equal(model.setImageSourceDefault(block, "assets/local.png"), true);
+  assert.equal(block.sourcePriority[0], "assets/local.png");
+  assert.equal(model.setImageSourceDefault(block, "https://missing.example/x.png"), false);
+});
+
+test("image preview modal exposes source management and editor wires unified-history actions", async () => {
+  const [modalSource, editorSource, articleSource, outlineSource, stylesSource] = await Promise.all([
+    readFile("src/editor/editor-modals.ts", "utf8"),
+    readFile("src/editor/editor.ts", "utf8"),
+    readFile("src/editor/article-renderer.ts", "utf8"),
+    readFile("src/editor/outline-renderer.ts", "utf8"),
+    readFile("styles.css", "utf8")
+  ]);
+  assert.match(modalSource, /export type ImagePreviewSourceChange/);
+  assert.match(modalSource, /export interface ImagePreviewSourceActions/);
+  assert.match(modalSource, /设为默认显示来源/);
+  assert.match(modalSource, /更新上传（用本地图片重新上传图床）/);
+  assert.match(modalSource, /删除此来源/);
+  assert.match(modalSource, /手动添加图片 URL 来源/);
+  assert.match(modalSource, /contextmenu.*showSourceMenu|showSourceMenu\(candidate, event\)/s);
+  assert.match(modalSource, /if \(!stillExists\) \{\s*this\.close\(\);/s);
+
+  assert.match(editorSource, /applyImagePreviewSourceChange\(nodeId: string, blockId: string, change: ImagePreviewSourceChange\)/);
+  assert.match(editorSource, /openImagePreviewWithSources\(nodeId: string, blockId: string\)/);
+  assert.match(editorSource, /removeImageSourceCandidate\(located\.block, change\.source\)/);
+  assert.match(editorSource, /await this\.removeImageBlock\(nodeId, blockId\);\s*return false;/s);
+  assert.match(editorSource, /uploadCurrentNodeImage\(this\.app, located\.block, this\.callbacks\)/);
+
+  assert.match(articleSource, /options\.openImagePreview\(node\.id, block\.id\)/);
+  assert.match(outlineSource, /options\.openImagePreview\(node\.id, block\.id\)/);
+
+  assert.match(stylesSource, /--mms-modal-md: min\(920px, 92vw\)/);
+  assert.match(stylesSource, /--mms-modal-lg: min\(1280px, 96vw\)/);
+  assert.match(stylesSource, /--mms-modal-xl: min\(1440px, 98vw\)/);
+  assert.match(stylesSource, /\.mms-ai-modal \{\s*width: var\(--mms-modal-md\);/s);
+  assert.match(stylesSource, /\.mms-image-recognition-modal \{\s*width: var\(--mms-modal-xl\);/s);
 });

@@ -5,7 +5,6 @@
 
 import { App } from "obsidian";
 import {
-  imageSourceCandidates,
   nodeContentBlocks,
   nodePlainText,
   type MindMapDocument,
@@ -14,7 +13,6 @@ import {
 } from "../core/model";
 import { articleNumberLabel } from "../article/modes";
 import type { MindMapEditorCallbacks } from "./editor-types";
-import { ImagePreviewModal } from "./editor-modals";
 import { renderInlineMarkdown, renderRichTextRuns } from "./rich-text-dom";
 import { loadImageWithFallback } from "./image-failure-view";
 
@@ -31,6 +29,7 @@ export interface OutlineRendererOptions {
   editSelected: () => void;
   openAiContextMenu: (event: MouseEvent, nodeId: string) => void;
   openImageContextMenu: (event: MouseEvent, nodeId: string, blockId: string) => void;
+  openImagePreview: (nodeId: string, blockId: string) => void;
   openMindMap: (path: string) => void | Promise<void>;
   resolveImage: MindMapEditorCallbacks["resolveImage"];
   imageHostPriorityIds: string[];
@@ -150,13 +149,7 @@ function renderOutlineContent(container: HTMLElement, node: MindMapNode, depth: 
     );
     image.addEventListener("click", () => {
       if (!activeResolved) return;
-      new ImagePreviewModal(
-        options.app,
-        activeResolved,
-        block.alt ?? "图片",
-        imageSourceCandidates(block, true, options.imageHostPriorityIds),
-        options.resolveImage
-      ).open();
+      options.openImagePreview(node.id, block.id);
     });
     figure.addEventListener("contextmenu", (event) => {
       event.preventDefault();
