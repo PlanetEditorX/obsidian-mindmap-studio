@@ -1,5 +1,17 @@
 # Modified Files
 
+## 1.48.2 图片预览更新上传接入文件选择器 + 行尾归一化
+
+- `src/editor/node-image-actions.ts`：导出 `selectImageFile()`（系统图片文件选择器），供图片预览弹窗复用。
+- `src/editor/editor.ts`：`applyImagePreviewSourceChange()` 的 `reupload` 分支改为“图床选择弹窗 → 系统文件选择器 → 上传 → 按图床合并镜像并更新默认来源”；未配置图床时提示并保持弹窗打开；冻结快照上传语义与“未引用自动清理”边界不变。
+- `src/editor/editor-modals.ts`：右键菜单文案改为“更新上传（选择本地图片并上传图床）”。
+- `.gitattributes`：新增 `* text=auto eol=lf` 并对仓库统一行尾归一化，修复 Windows `autocrlf` 下 rebase 检出 CRLF 导致 4 项源码契约测试误报；不含内容变更。
+- `tests/image-source-candidates.test.mjs`：契约更新为“图床选择 → 文件选择器 → 上传”完整链路与新菜单文案。
+- `CHANGELOG.md`、`TEST_RESULTS.md`、`docs/FUNCTION_REFERENCE.md`：同步本批说明。
+
+- 本轮测试安装包：`mindmap-studio-1.48.1-test-791956.zip`，SHA-256 `a0132bbb29996f84fadb024b7a96617c7539e07265835984237a7b065eb2899a`；完整源码与 Codex 交接使用同一 `791956` 后缀（输出到仓库父目录 `D:\Downloads`）。
+
+## 1.48.0 图片来源管理与弹窗宽度档位
 ## 1.48.0 图片来源管理与弹窗宽度档位
 
 - `src/core/model.ts`：`MindMapImageContentBlock` 新增可选 `sourcePriority`（图片级来源优先级，规范化去空白/去重/截断 16 条）；`imageSourceCandidates()` 以图片级优先级为主排序键、图床优先级次之；新增 `normalizeImageSourcePriority()`、`removeImageSourceCandidate()`（返回移除后应写回的字段，无剩余来源返回 null）、`createManualImageRemoteSource()`（手动 URL 来源条目校验）与 `setImageSourceDefault()`（置顶默认显示来源）。

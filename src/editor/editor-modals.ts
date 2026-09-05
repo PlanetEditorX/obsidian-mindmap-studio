@@ -243,7 +243,7 @@ export class ImagePreviewModal extends Modal {
         .onClick(() => void this.runSourceChange({ type: "setDefault", source: candidate.source })));
       menu.addSeparator();
       menu.addItem((item) => item
-        .setTitle("更新上传（用本地图片重新上传图床）")
+        .setTitle("更新上传（选择本地图片并上传图床）")
         .setIcon("refresh-cw")
         .onClick(() => void this.runSourceChange({ type: "reupload" })));
       menu.addItem((item) => item

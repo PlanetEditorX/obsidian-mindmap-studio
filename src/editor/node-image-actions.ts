@@ -25,7 +25,7 @@ type NodeImageCallbacks = Pick<
  *
  * @returns 用户选择的图片文件；取消时返回 null。
  */
-function selectImageFile(): Promise<File | null> {
+export function selectImageFile(): Promise<File | null> {
   return new Promise((resolve) => {
     const input = document.createElement("input");
     input.type = "file";

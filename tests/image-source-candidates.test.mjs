@@ -240,7 +240,7 @@ test("image preview modal exposes source management and editor wires unified-his
   assert.match(modalSource, /export type ImagePreviewSourceChange/);
   assert.match(modalSource, /export interface ImagePreviewSourceActions/);
   assert.match(modalSource, /设为默认显示来源/);
-  assert.match(modalSource, /更新上传（用本地图片重新上传图床）/);
+  assert.match(modalSource, /更新上传（选择本地图片并上传图床）/);
   assert.match(modalSource, /删除此来源/);
   assert.match(modalSource, /手动添加图片 URL 来源/);
   assert.match(modalSource, /contextmenu.*showSourceMenu|showSourceMenu\(candidate, event\)/s);
@@ -250,7 +250,7 @@ test("image preview modal exposes source management and editor wires unified-his
   assert.match(editorSource, /openImagePreviewWithSources\(nodeId: string, blockId: string\)/);
   assert.match(editorSource, /removeImageSourceCandidate\(located\.block, change\.source\)/);
   assert.match(editorSource, /await this\.removeImageBlock\(nodeId, blockId\);\s*return false;/s);
-  assert.match(editorSource, /uploadCurrentNodeImage\(this\.app, located\.block, this\.callbacks\)/);
+  assert.match(editorSource, /change\.type === "reupload"[\s\S]*chooseImageHosts\(this\.app, this\.callbacks\.getImageHosts\(\)[\s\S]*selectImageFile\(\)[\s\S]*this\.callbacks\.onUploadImage\(file, file\.name, hostIds\)/, "preview re-upload must open the host picker and the system image file picker");
 
   assert.match(articleSource, /options\.openImagePreview\(node\.id, block\.id\)/);
   assert.match(outlineSource, /options\.openImagePreview\(node\.id, block\.id\)/);

@@ -100,7 +100,7 @@ import {
   type ImagePreviewSourceChange
 } from "./editor-modals";
 import { parseClipboardContentBlocks, parseClipboardHtml, parseClipboardNodes } from "./clipboard-import";
-import { selectNodeImage, uploadCurrentNodeImage } from "./node-image-actions";
+import { selectImageFile, selectNodeImage, uploadCurrentNodeImage } from "./node-image-actions";
 import { renderNodeRichTextEditor } from "./node-rich-text-editor";
 import { canMoveNodes, isRightChildZone, resolveDropPosition } from "./drag-drop";
 import { DocumentHistory } from "./history-manager";
@@ -7698,19 +7698,46 @@ export class MindMapEditor {
         new Notice("图片已不存在");
         return false;
       }
+      if (!this.callbacks.getImageHosts().length) {
+        new Notice("请先在设置中启用至少一个图床");
+        return true;
+      }
+      const hostIds = await chooseImageHosts(this.app, this.callbacks.getImageHosts(), this.callbacks.getDefaultUploadHostIds());
+      if (!hostIds) return true;
+      const file = await selectImageFile();
+      if (!file) return true;
       const previousSnapshot = this.currentDocumentSnapshotJson();
       this.invalidateDocumentSnapshotJson();
-      const changed = await uploadCurrentNodeImage(this.app, located.block, this.callbacks);
-      if (!changed) return true;
+      const batch = await this.callbacks.onUploadImage(file, file.name, hostIds);
+      if (!batch.successes.length) {
+        new Notice(`上传失败：${batch.failures.map((item) => `${item.hostName}：${item.error}`).join("；") || "未知错误"}`, 7000);
+        return true;
+      }
       if (!this.locateImageBlock(nodeId, blockId)) {
         new Notice("图片已在此期间被移除");
         return false;
       }
+      const uploadedAt = new Date().toISOString();
       this.history.captureSnapshot(previousSnapshot);
-      replaceNodeContentBlocks(located.node, located.blocks);
+      const merged = this.locateImageBlock(nodeId, blockId)!;
+      const existing = new Map((merged.block.remoteSources ?? []).map((item) => [item.hostId, item]));
+      batch.successes.forEach((item) => existing.set(item.hostId, {
+        hostId: item.hostId,
+        hostName: item.hostName,
+        url: item.url,
+        deleteKey: item.deleteKey,
+        uploadedAt
+      }));
+      merged.block.remoteSources = Array.from(existing.values());
+      merged.block.source = batch.successes[0]!.url;
+      merged.block.localSource = undefined;
+      merged.block.contentHash = batch.contentHash;
+      if (!merged.block.alt) merged.block.alt = file.name.replace(/\.[^.]+$/, "");
+      replaceNodeContentBlocks(merged.node, merged.blocks);
       this.notifyDocumentChange("none");
       this.markSaving();
       this.render();
+      new Notice(`已更新并上传到：${batch.successes.map((item) => item.hostName).join("、")}`);
       return true;
     }
     if (change.type === "add") {

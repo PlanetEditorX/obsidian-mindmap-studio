@@ -7198,7 +7198,7 @@ var ImagePreviewModal = class extends import_obsidian4.Modal {
       const menu = new import_obsidian4.Menu();
       menu.addItem((item) => item.setTitle("\u8BBE\u4E3A\u9ED8\u8BA4\u663E\u793A\u6765\u6E90").setIcon("star").onClick(() => void this.runSourceChange({ type: "setDefault", source: candidate.source })));
       menu.addSeparator();
-      menu.addItem((item) => item.setTitle("\u66F4\u65B0\u4E0A\u4F20\uFF08\u7528\u672C\u5730\u56FE\u7247\u91CD\u65B0\u4E0A\u4F20\u56FE\u5E8A\uFF09").setIcon("refresh-cw").onClick(() => void this.runSourceChange({ type: "reupload" })));
+      menu.addItem((item) => item.setTitle("\u66F4\u65B0\u4E0A\u4F20\uFF08\u9009\u62E9\u672C\u5730\u56FE\u7247\u5E76\u4E0A\u4F20\u56FE\u5E8A\uFF09").setIcon("refresh-cw").onClick(() => void this.runSourceChange({ type: "reupload" })));
       menu.addItem((item) => item.setTitle("\u5220\u9664\u6B64\u6765\u6E90").setIcon("trash-2").onClick(() => void this.runSourceChange({ type: "remove", source: candidate.source })));
       menu.showAtMouseEvent(event);
     };
@@ -17526,6 +17526,7 @@ var MindMapEditor = class {
    * @returns 图片块是否仍然存在；false 时预览弹窗会自动关闭。
    */
   async applyImagePreviewSourceChange(nodeId, blockId, change) {
+    var _a2;
     if (!this.ensureEditable()) return true;
     if (change.type === "reupload") {
       const located2 = this.locateImageBlock(nodeId, blockId);
@@ -17533,19 +17534,46 @@ var MindMapEditor = class {
         new import_obsidian11.Notice("\u56FE\u7247\u5DF2\u4E0D\u5B58\u5728");
         return false;
       }
+      if (!this.callbacks.getImageHosts().length) {
+        new import_obsidian11.Notice("\u8BF7\u5148\u5728\u8BBE\u7F6E\u4E2D\u542F\u7528\u81F3\u5C11\u4E00\u4E2A\u56FE\u5E8A");
+        return true;
+      }
+      const hostIds = await chooseImageHosts(this.app, this.callbacks.getImageHosts(), this.callbacks.getDefaultUploadHostIds());
+      if (!hostIds) return true;
+      const file = await selectImageFile();
+      if (!file) return true;
       const previousSnapshot = this.currentDocumentSnapshotJson();
       this.invalidateDocumentSnapshotJson();
-      const changed = await uploadCurrentNodeImage(this.app, located2.block, this.callbacks);
-      if (!changed) return true;
+      const batch = await this.callbacks.onUploadImage(file, file.name, hostIds);
+      if (!batch.successes.length) {
+        new import_obsidian11.Notice(`\u4E0A\u4F20\u5931\u8D25\uFF1A${batch.failures.map((item) => `${item.hostName}\uFF1A${item.error}`).join("\uFF1B") || "\u672A\u77E5\u9519\u8BEF"}`, 7e3);
+        return true;
+      }
       if (!this.locateImageBlock(nodeId, blockId)) {
         new import_obsidian11.Notice("\u56FE\u7247\u5DF2\u5728\u6B64\u671F\u95F4\u88AB\u79FB\u9664");
         return false;
       }
+      const uploadedAt = (/* @__PURE__ */ new Date()).toISOString();
       this.history.captureSnapshot(previousSnapshot);
-      replaceNodeContentBlocks(located2.node, located2.blocks);
+      const merged = this.locateImageBlock(nodeId, blockId);
+      const existing = new Map(((_a2 = merged.block.remoteSources) != null ? _a2 : []).map((item) => [item.hostId, item]));
+      batch.successes.forEach((item) => existing.set(item.hostId, {
+        hostId: item.hostId,
+        hostName: item.hostName,
+        url: item.url,
+        deleteKey: item.deleteKey,
+        uploadedAt
+      }));
+      merged.block.remoteSources = Array.from(existing.values());
+      merged.block.source = batch.successes[0].url;
+      merged.block.localSource = void 0;
+      merged.block.contentHash = batch.contentHash;
+      if (!merged.block.alt) merged.block.alt = file.name.replace(/\.[^.]+$/, "");
+      replaceNodeContentBlocks(merged.node, merged.blocks);
       this.notifyDocumentChange("none");
       this.markSaving();
       this.render();
+      new import_obsidian11.Notice(`\u5DF2\u66F4\u65B0\u5E76\u4E0A\u4F20\u5230\uFF1A${batch.successes.map((item) => item.hostName).join("\u3001")}`);
       return true;
     }
     if (change.type === "add") {
@@ -17564,8 +17592,8 @@ var MindMapEditor = class {
         return true;
       }
       this.mutateWithoutArticleContext(() => {
-        var _a2;
-        located2.block.remoteSources = [...(_a2 = located2.block.remoteSources) != null ? _a2 : [], entry];
+        var _a3;
+        located2.block.remoteSources = [...(_a3 = located2.block.remoteSources) != null ? _a3 : [], entry];
         replaceNodeContentBlocks(located2.node, located2.blocks);
       });
       return true;
