@@ -1,5 +1,15 @@
 # Modified Files
 
+## 1.48.4 修复预览拖拽平移被原生图片拖拽接管
+
+- `src/editor/editor-modals.ts`：预览图片 `draggable="false"`；`pointerdown` 调用 `preventDefault()` 并新增 `dragstart` 拦截，禁用浏览器原生图片拖拽，指针平移不再被中断。
+- `styles.css`：预览图片新增 `-webkit-user-drag: none` 与 `user-select: none`。
+- `tests/image-source-candidates.test.mjs`：契约锁定禁用原生拖拽三要素。
+- `CHANGELOG.md`、`TEST_RESULTS.md`：同步说明。
+
+- 本轮测试安装包：`mindmap-studio-1.48.3-test-302400.zip`，SHA-256 `58f16c77d09c5011c639b43fb110126b97943f9ab8905134f58d87440b4da709`；完整源码与 Codex 交接使用同一 `302400` 后缀（输出到仓库父目录 `D:\Downloads`）。
+
+## 1.48.3 来源右键菜单状态区分、本地副本更新替换、＋折叠添加与拖拽平移
 ## 1.48.3 来源右键菜单状态区分、本地副本更新替换、＋折叠添加与拖拽平移
 
 - `src/editor/editor-modals.ts`：右键菜单按 `getDefaultSource()` 区分“设为默认显示来源 / 取消默认显示来源”；按来源类型区分更新动作（图床/手动 URL 为“更新上传（选择本地图片并上传图床）”，本地副本为“更新替换（选择本地图片）”）；新增 `replaceLocal` / `unsetDefault` 变更类型；来源栏“＋”按钮默认只显示加号，点击展开手动 URL 输入面板（提交后自动收起）；预览图片支持指针拖拽平移（`setPointerCapture`，切换来源/双击复位归零）。

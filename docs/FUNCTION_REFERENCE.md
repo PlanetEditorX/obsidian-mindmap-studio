@@ -3862,7 +3862,7 @@ onOpen(): void
 
 ### 接口 `FormulaInsertValue`
 
-源码：`src/editor/editor-modals.ts:408`
+源码：`src/editor/editor-modals.ts:410`
 
 LaTeX 插入结果，display 为 true 时使用独立公式，false 时使用行内公式。
 
@@ -3872,7 +3872,7 @@ export interface FormulaInsertValue
 
 ### 类 `FormulaEditModal`
 
-源码：`src/editor/editor-modals.ts:416`
+源码：`src/editor/editor-modals.ts:418`
 
 图形化 LaTeX 公式编辑器，提供常用结构、行内/独立模式和实时预览。
 
@@ -3882,7 +3882,7 @@ export class FormulaEditModal extends Modal
 
 ### 构造函数 `FormulaEditModal.constructor`
 
-源码：`src/editor/editor-modals.ts:424`
+源码：`src/editor/editor-modals.ts:426`
 
 创建公式编辑器。
 
@@ -3892,7 +3892,7 @@ constructor( app: App, private readonly submit: (value: FormulaInsertValue) => v
 
 ### 方法 `FormulaEditModal.onOpen`
 
-源码：`src/editor/editor-modals.ts:435`
+源码：`src/editor/editor-modals.ts:437`
 
 创建公式模板、源码输入和 MathJax 预览。
 
@@ -3902,7 +3902,7 @@ onOpen(): void
 
 ### 方法 `FormulaEditModal.onClose`
 
-源码：`src/editor/editor-modals.ts:547`
+源码：`src/editor/editor-modals.ts:549`
 
 清理公式编辑器 DOM。
 
@@ -3912,7 +3912,7 @@ onClose(): void
 
 ### 类 `ImportExportModal`
 
-源码：`src/editor/editor-modals.ts:555`
+源码：`src/editor/editor-modals.ts:557`
 
 导入、导出或合并思维导图 JSON。
 
@@ -3922,7 +3922,7 @@ export class ImportExportModal extends Modal
 
 ### 构造函数 `ImportExportModal.constructor`
 
-源码：`src/editor/editor-modals.ts:564`
+源码：`src/editor/editor-modals.ts:566`
 
 创建 JSON 传输弹窗。
 
@@ -3932,7 +3932,7 @@ constructor( app: App, private readonly document: MindMapDocument, private reado
 
 ### 方法 `ImportExportModal.onOpen`
 
-源码：`src/editor/editor-modals.ts:583`
+源码：`src/editor/editor-modals.ts:585`
 
 创建 JSON 文本区和文件导入操作。
 
@@ -3942,7 +3942,7 @@ onOpen(): void
 
 ### 方法 `ImportExportModal.onClose`
 
-源码：`src/editor/editor-modals.ts:782`
+源码：`src/editor/editor-modals.ts:784`
 
 Clears import/export controls when the modal closes.
 
@@ -3952,7 +3952,7 @@ onClose(): void
 
 ### 类 `OutlineModal`
 
-源码：`src/editor/editor-modals.ts:790`
+源码：`src/editor/editor-modals.ts:792`
 
 显示只读 Markdown 大纲并提供复制和导出入口。
 
@@ -3962,7 +3962,7 @@ export class OutlineModal extends Modal
 
 ### 构造函数 `OutlineModal.constructor`
 
-源码：`src/editor/editor-modals.ts:798`
+源码：`src/editor/editor-modals.ts:800`
 
 创建 Markdown 大纲弹窗。
 
@@ -3972,7 +3972,7 @@ constructor(app: App, private readonly markdown: string, private readonly onExpo
 
 ### 方法 `OutlineModal.onOpen`
 
-源码：`src/editor/editor-modals.ts:805`
+源码：`src/editor/editor-modals.ts:807`
 
 创建大纲内容和操作按钮。
 
@@ -3982,7 +3982,7 @@ onOpen(): void
 
 ### 方法 `OutlineModal.onClose`
 
-源码：`src/editor/editor-modals.ts:826`
+源码：`src/editor/editor-modals.ts:828`
 
 清理大纲弹窗 DOM。
 

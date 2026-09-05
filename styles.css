@@ -2715,6 +2715,8 @@ mjx-container.mms-node-math:not(.is-display),
   transition: width 80ms ease-out, height 80ms ease-out;
   cursor: grab;
   touch-action: none;
+  -webkit-user-drag: none;
+  user-select: none;
 }
 
 .mmc-image-preview-stage img.is-panning {

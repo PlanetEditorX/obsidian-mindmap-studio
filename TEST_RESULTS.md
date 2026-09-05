@@ -1,7 +1,14 @@
 # Test Results
 
-版本：1.48.2（本轮改动将随工作流自动发布为 1.48.3）
+版本：1.48.3（本轮修复将随工作流自动发布为 1.48.4）
 
+## 1.48.4 修复预览拖拽平移被原生图片拖拽接管
+
+- 根因：`<img>` 的浏览器原生 HTML5 拖拽在按下数像素后接管指针事件，`pointermove` 流中断，平移只能移动几像素（与用户调试日志中大量 img `pointerdown` 无后续移动吻合）。
+- 修复：`draggable="false"`、`pointerdown` 阻止默认行为、`dragstart` 拦截、CSS `-webkit-user-drag: none` / `user-select: none`；契约测试锁定三要素。
+- `npm run verify`：`test:unit` **401 / 401 通过**；`test:regression` 全部通过；`test:docs` 通过；`test:repo` 通过；production esbuild 通过。
+
+## 1.48.3 来源右键菜单状态区分、本地副本更新替换、＋折叠添加与拖拽平移
 ## 1.48.3 来源右键菜单状态区分、本地副本更新替换、＋折叠添加与拖拽平移
 
 ### 实现与行为验证

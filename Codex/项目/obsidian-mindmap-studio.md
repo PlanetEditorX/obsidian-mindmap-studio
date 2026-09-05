@@ -4,7 +4,9 @@
 - 版本基线：1.48.0（package.json / manifest.json / versions.json / package-lock.json 已同步）。
 - 仓库规则：见根目录 `AGENTS.md`；每轮代码交付三份 ZIP（源码 / 安装 / Codex 交接）共用同一六位后缀；验证入口 `npm run verify`。
 
-## 当前状态（1.48.3 待发布 / 线上 1.48.2）
+## 当前状态（1.48.4 待发布 / 线上 1.48.3）
+
+- 本轮修复：图片预览放大后拖拽平移只动几像素——`<img>` 浏览器原生 HTML5 拖拽接管指针事件掐断 `pointermove` 流。修复：`draggable="false"` + `pointerdown` 阻止默认 + `dragstart` 拦截 + CSS `-webkit-user-drag: none` / `user-select: none`。契约测试锁定三要素。
 
 - 本轮改进：来源右键菜单按状态区分默认来源（已固定显示“取消默认显示来源”，取消后回退全局优先级）；更新动作按来源类型区分——图床/手动 URL 为“更新上传（选择本地图片并上传图床）”，本地副本为“更新替换（选择本地图片）”（`onSavePastedImage` 存库后更新 `localSource`）；来源栏手动添加 URL 改为“＋”按钮点击展开；预览图片支持指针拖拽平移（切换来源/双击复位归零）。新增 `clearImageSourceDefault()` 纯函数。
 
@@ -38,7 +40,9 @@
 
 - 后缀 `862881`：完整源码 `obsidian-mindmap-studio-1.48.2-862881.zip`、安装包 `mindmap-studio-1.48.2-test-862881.zip`（SHA-256 `15b7dfbd00e1496d8c79ffa67031b0a85daee633efc2d442a4e57cc5784724fb`）、交接 `Codex-1.48.2-handoff-862881.zip`。
 
-## 最近交付包（历史）
+- 后缀 `302400`：完整源码 `obsidian-mindmap-studio-1.48.3-302400.zip`、安装包 `mindmap-studio-1.48.3-test-302400.zip`（SHA-256 `58f16c77d09c5011c639b43fb110126b97943f9ab8905134f58d87440b4da709`）、交接 `Codex-1.48.3-handoff-302400.zip`。
+
+## 最近交付包（历史）（历史）
 
 - 后缀 `190027`：完整源码 `obsidian-mindmap-studio-1.48.0-190027.zip`、安装包 `mindmap-studio-1.48.0-test-190027.zip`（SHA-256 见 `MODIFIED_FILES.md`）、交接 `Codex-1.48.0-handoff-190027.zip`；三份 ZIP 已按新规则输出到仓库父目录 `D:\Downloads`，仓库内及 Git 历史不含任何 ZIP（1.47.1 的两个历史 ZIP 已通过重写历史剥离并强制推送）。
 - 后续交付一律把三份 ZIP 输出到 `D:\Downloads`，严禁写入仓库内部或提交。

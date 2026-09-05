@@ -7132,7 +7132,7 @@ var ImagePreviewModal = class extends import_obsidian4.Modal {
     const toolbar = this.contentEl.createDiv({ cls: "mmc-image-preview-toolbar" });
     const sourceBar = this.contentEl.createDiv({ cls: "mmc-image-preview-sources" });
     const imageWrap = this.contentEl.createDiv({ cls: "mmc-image-preview-stage" });
-    const image = imageWrap.createEl("img", { attr: { src: this.source, alt: this.alt || "\u56FE\u7247" } });
+    const image = imageWrap.createEl("img", { attr: { src: this.source, alt: this.alt || "\u56FE\u7247", draggable: "false" } });
     let sourceStatus;
     let baseWidth = 0;
     let baseHeight = 0;
@@ -7157,6 +7157,7 @@ var ImagePreviewModal = class extends import_obsidian4.Modal {
     };
     image.addEventListener("pointerdown", (event) => {
       if (event.button !== 0) return;
+      event.preventDefault();
       panPointerId = event.pointerId;
       panStartX = event.clientX;
       panStartY = event.clientY;
@@ -7165,6 +7166,7 @@ var ImagePreviewModal = class extends import_obsidian4.Modal {
       image.setPointerCapture(event.pointerId);
       image.addClass("is-panning");
     });
+    image.addEventListener("dragstart", (event) => event.preventDefault());
     image.addEventListener("pointermove", (event) => {
       if (panPointerId !== event.pointerId) return;
       panX = panBaseX + (event.clientX - panStartX);

@@ -263,6 +263,9 @@ test("image preview modal exposes source management and editor wires unified-his
   assert.match(modalSource, /手动添加图片 URL 来源/);
   assert.match(modalSource, /mmc-image-preview-source-add-toggle/);
   assert.match(modalSource, /image\.setPointerCapture\(event\.pointerId\)/);
+  assert.match(modalSource, /event\.preventDefault\(\);\s*panPointerId = event\.pointerId;/s);
+  assert.match(modalSource, /addEventListener\("dragstart", \(event\) => event\.preventDefault\(\)\)/);
+  assert.match(modalSource, /draggable: "false"/);
   assert.match(modalSource, /getDefaultSource: \(\) =>/);
   assert.match(stylesSource, /\.mmc-image-preview-source-add\.is-open \.mmc-image-preview-source-add-panel/);
   assert.match(stylesSource, /\.mmc-image-preview-stage img \{[\s\S]*touch-action: none;/);
