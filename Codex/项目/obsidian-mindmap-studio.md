@@ -94,6 +94,8 @@
 
 - 后缀 `668980`：完整源码 `obsidian-mindmap-studio-1.49.2-668980.zip`、安装包 `mindmap-studio-1.49.2-test-668980.zip`（SHA-256 `ccf8ba56a4d528004cbc35f5c24b2479bfc3639c419e6e40931ac235ba6b692d`）、交接 `Codex-1.49.2-handoff-668980.zip`。
 
+- 后缀 `419062`：完整源码 `obsidian-mindmap-studio-1.49.2-419062.zip`、安装包 `mindmap-studio-1.49.2-test-419062.zip`（SHA-256 `4d148e8b12e9b6178937244dd705b109071c8aaf70a232cea312844ed4079c33`，内容与 668980 一致，仅修复测试脚本契约）、交接 `Codex-1.49.2-handoff-419062.zip`。
+
 ## 最近交付包（历史）（历史）（历史）（历史）（历史）
 
 - 后缀 `190027`：完整源码 `obsidian-mindmap-studio-1.48.0-190027.zip`、安装包 `mindmap-studio-1.48.0-test-190027.zip`（SHA-256 见 `MODIFIED_FILES.md`）、交接 `Codex-1.48.0-handoff-190027.zip`；三份 ZIP 已按新规则输出到仓库父目录 `D:\Downloads`，仓库内及 Git 历史不含任何 ZIP（1.47.1 的两个历史 ZIP 已通过重写历史剥离并强制推送）。
