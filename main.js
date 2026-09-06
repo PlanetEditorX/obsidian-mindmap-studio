@@ -24,7 +24,7 @@ __export(main_exports, {
   default: () => MindMapStudioPlugin
 });
 module.exports = __toCommonJS(main_exports);
-var import_obsidian16 = require("obsidian");
+var import_obsidian18 = require("obsidian");
 
 // src/core/node-tree.ts
 function buildNodeTreeIndex(root) {
@@ -4290,10 +4290,10 @@ function renderStaticSource(container, source, fallbackTitle, defaultAppearance)
 }
 
 // src/view.ts
-var import_obsidian13 = require("obsidian");
+var import_obsidian15 = require("obsidian");
 
 // src/editor/editor.ts
-var import_obsidian11 = require("obsidian");
+var import_obsidian13 = require("obsidian");
 
 // src/render/incremental-render.ts
 function buildHierarchyFocusOrder(root, selectedId) {
@@ -8694,80 +8694,8 @@ function renameReadingLocationPath(location, oldPath, newPath) {
   };
 }
 
-// src/editor/clipboard-import.ts
-function parseClipboardContentBlocks(text) {
-  const fence = /```([^\n`]*)\n([\s\S]*?)\n```/g;
-  const blocks = [];
-  let cursor = 0;
-  let match;
-  const appendText = (value) => {
-    const normalized2 = value.replace(/^\s*\n|\n\s*$/g, "");
-    if (normalized2.trim()) blocks.push({ id: newId(), type: "text", text: normalized2 });
-  };
-  while ((match = fence.exec(text)) !== null) {
-    appendText(text.slice(cursor, match.index));
-    const code = parseFencedCode(match[0]);
-    if (code) blocks.push({ id: newId(), type: "code", code });
-    cursor = match.index + match[0].length;
-  }
-  if (!blocks.some((block) => block.type === "code")) return null;
-  appendText(text.slice(cursor));
-  return blocks;
-}
-function parseClipboardNodes(text) {
-  try {
-    const parsed = JSON.parse(text);
-    const inputs = parsed.type === "mindmap-studio-nodes" && Array.isArray(parsed.nodes) ? parsed.nodes : [];
-    if (!inputs.length) return null;
-    return inputs.map((input) => {
-      var _a2, _b2;
-      return normalizeDocument(
-        { title: (_a2 = input.text) != null ? _a2 : "\u7C98\u8D34\u8282\u70B9", root: input },
-        (_b2 = input.text) != null ? _b2 : "\u7C98\u8D34\u8282\u70B9"
-      ).root;
-    });
-  } catch (e) {
-    const trimmed = text.trim();
-    if (!trimmed) return null;
-    const looksLikeMarkdown = /^(?:#{1,6}\s+|[-*+]\s+|\d+[.)]\s+)/m.test(trimmed);
-    if (looksLikeMarkdown || trimmed.includes("\n")) {
-      const markdown = looksLikeMarkdown ? trimmed : indentedTextToMarkdown(text);
-      const document2 = markdownToDocument(markdown, "\u7C98\u8D34\u5185\u5BB9");
-      if (document2.root.text === "\u7C98\u8D34\u5185\u5BB9") {
-        if (document2.root.children.length === 1) {
-          return document2.root.children[0] ? [document2.root.children[0]] : null;
-        }
-        return document2.root.children.length ? document2.root.children : null;
-      }
-      return [document2.root];
-    }
-    return [createNode(trimmed)];
-  }
-}
-function parseClipboardHtml(html) {
-  var _a2;
-  if (!html.trim() || typeof DOMParser === "undefined") return null;
-  const document2 = new DOMParser().parseFromString(html, "text/html");
-  const firstList = document2.body.querySelector("ul, ol");
-  if (!firstList) return null;
-  const parseItem = (item) => {
-    var _a3;
-    const clone = item.cloneNode(true);
-    clone.querySelectorAll("ul, ol").forEach((list) => list.remove());
-    const node = createNode(((_a3 = clone.textContent) == null ? void 0 : _a3.trim()) || "\u8282\u70B9");
-    const nested = Array.from(item.children).find((child) => child.matches("ul, ol"));
-    if (nested) {
-      node.children = Array.from(nested.children).filter((child) => child.matches("li")).map(parseItem);
-    }
-    return node;
-  };
-  const roots = Array.from(firstList.children).filter((child) => child.matches("li")).map(parseItem);
-  if (!roots.length) return null;
-  if (roots.length === 1) return (_a2 = roots[0]) != null ? _a2 : null;
-  const root = createNode("\u7C98\u8D34\u5185\u5BB9");
-  root.children = roots;
-  return roots.length ? root : null;
-}
+// src/editor/node-edit-modal.ts
+var import_obsidian9 = require("obsidian");
 
 // src/editor/node-image-actions.ts
 var import_obsidian6 = require("obsidian");
@@ -9057,6 +8985,1242 @@ function renderNodeRichTextEditor(container, block, onChange, shortcuts) {
   remember();
 }
 
+// src/editor/appearance-modal.ts
+var import_obsidian8 = require("obsidian");
+function createReadingStyleControls(container, style, globalDefaults) {
+  const source = style != null ? style : { preset: "classic" };
+  const resolved = resolveArticleStyle(source);
+  const presetLabel = container.createEl("label", { text: "\u9605\u8BFB\u6837\u5F0F\u9884\u8BBE" });
+  const preset = presetLabel.createEl("select");
+  for (const [id, name] of [["classic", "\u7ECF\u5178\u6587\u6863"], ["book", "\u4E66\u7C4D\u9605\u8BFB"], ["modern", "\u73B0\u4EE3\u62A5\u544A"], ["minimal", "\u6781\u7B80\u7559\u767D"]]) {
+    preset.createEl("option", { text: name, attr: { value: id } });
+  }
+  const addText = (labelText) => {
+    const label = container.createEl("label", { text: labelText });
+    return label.createEl("input", { type: "text" });
+  };
+  const addColor = (labelText) => {
+    const label = container.createEl("label", { text: labelText });
+    const row = label.createDiv({ cls: "mmc-color-row mmc-appearance-color-row" });
+    return row.createEl("input", { type: "color" });
+  };
+  const fontFamily = addText("\u9605\u8BFB\u5B57\u4F53");
+  const textColor = addColor("\u6B63\u6587\u989C\u8272");
+  const headingColor = addColor("\u6807\u9898\u989C\u8272");
+  const accentColor = addColor("\u5F3A\u8C03\u8272");
+  const backgroundColor = addColor("\u7EB8\u5F20\u80CC\u666F");
+  const tocLabel = container.createEl("label", { text: "\u76EE\u5F55\u6837\u5F0F" });
+  const tocStyle = tocLabel.createEl("select");
+  const tocStyleNames = {
+    card: "\u5361\u7247\uFF08\u5F53\u524D\u6837\u5F0F\uFF09",
+    plain: "\u7B80\u6D01",
+    lines: "\u5F15\u5BFC\u7EBF",
+    original: "\u6700\u521D\u6837\u5F0F",
+    "minimal-page": "\u6781\u7B80\u4E66\u9875",
+    report: "\u73B0\u4EE3\u62A5\u544A",
+    magazine: "\u6742\u5FD7\u7D22\u5F15",
+    tree: "\u5C42\u7EA7\u6811\u7EBF"
+  };
+  tocStyle.createEl("option", {
+    text: `\u8DDF\u968F\u63D2\u4EF6\u8BBE\u7F6E\uFF08\u5F53\u524D\uFF1A${tocStyleNames[globalDefaults.tocStyle]}\uFF09`,
+    attr: { value: "" }
+  });
+  for (const [id, name] of [
+    ["card", "\u5361\u7247\uFF08\u5F53\u524D\u6837\u5F0F\uFF09"],
+    ["plain", "\u7B80\u6D01"],
+    ["lines", "\u5F15\u5BFC\u7EBF"],
+    ["original", "\u6700\u521D\u6837\u5F0F"],
+    ["minimal-page", "\u6781\u7B80\u4E66\u9875"],
+    ["report", "\u73B0\u4EE3\u62A5\u544A"],
+    ["magazine", "\u6742\u5FD7\u7D22\u5F15"],
+    ["tree", "\u5C42\u7EA7\u6811\u7EBF"]
+  ]) {
+    tocStyle.createEl("option", { text: name, attr: { value: id } });
+  }
+  const sizeLabel = container.createEl("label", { text: "\u6B63\u6587\u5B57\u53F7" });
+  const fontSize = sizeLabel.createEl("input", { type: "number", attr: { min: "12", max: "24", step: "1" } });
+  const lineLabel = container.createEl("label", { text: "\u6B63\u6587\u884C\u9AD8" });
+  const lineHeight = lineLabel.createEl("input", { type: "number", attr: { min: "1.2", max: "2.4", step: "0.05" } });
+  const markerEnabledLabel = container.createEl("label", { text: "\u672B\u7AEF\u6B63\u6587\u6807\u8BC6" });
+  const markerEnabled = markerEnabledLabel.createEl("select");
+  markerEnabled.createEl("option", { text: `\u8DDF\u968F\u63D2\u4EF6\u8BBE\u7F6E\uFF08\u5F53\u524D${globalDefaults.enabled ? "\u663E\u793A" : "\u9690\u85CF"}\uFF09`, attr: { value: "" } });
+  markerEnabled.createEl("option", { text: "\u663E\u793A", attr: { value: "true" } });
+  markerEnabled.createEl("option", { text: "\u9690\u85CF", attr: { value: "false" } });
+  const markerStyleLabel = container.createEl("label", { text: "\u672B\u7AEF\u6B63\u6587\u6807\u8BC6\u6837\u5F0F" });
+  const markerStyle = markerStyleLabel.createEl("select");
+  markerStyle.createEl("option", { text: "\u8DDF\u968F\u63D2\u4EF6\u8BBE\u7F6E", attr: { value: "" } });
+  for (const [id, name] of [["solid", "\u5B9E\u5FC3\u5706"], ["hollow", "\u7A7A\u5FC3\u5706"], ["square", "\u5B9E\u5FC3\u65B9\u5757"], ["dash", "\u77ED\u6A2A\u7EBF"]]) {
+    markerStyle.createEl("option", { text: name, attr: { value: id } });
+  }
+  const markerColorLabel = container.createEl("label", { text: "\u672B\u7AEF\u6B63\u6587\u6807\u8BC6\u989C\u8272" });
+  const markerColorRow = markerColorLabel.createDiv({ cls: "mmc-color-row mmc-appearance-color-row" });
+  const markerColor = markerColorRow.createEl("input", { type: "color" });
+  const markerColorFollowTheme = markerColorRow.createEl("button", {
+    text: "\u8DDF\u968F\u4E3B\u9898",
+    attr: { type: "button", "aria-pressed": "true" }
+  });
+  let markerColorFollowsTheme = true;
+  const setMarkerColorFollowsTheme = (followsTheme) => {
+    markerColorFollowsTheme = followsTheme;
+    markerColorFollowTheme.setAttribute("aria-pressed", String(followsTheme));
+  };
+  const syncMarkerColorPreview = () => {
+    if (!markerColorFollowsTheme) return;
+    markerColor.value = globalDefaults.color || accentColor.value || "#ef4444";
+  };
+  const alignmentLabel = container.createEl("label", { text: "\u672B\u7AEF\u6B63\u6587\u5BF9\u9F50\u65B9\u5F0F" });
+  const alignment = alignmentLabel.createEl("select");
+  alignment.createEl("option", { text: `\u8DDF\u968F\u63D2\u4EF6\u8BBE\u7F6E\uFF08\u5F53\u524D${globalDefaults.alignment === "auto" ? "\u81EA\u52A8" : "\u9876\u683C"}\uFF09`, attr: { value: "" } });
+  alignment.createEl("option", { text: "\u9876\u683C", attr: { value: "flush" } });
+  alignment.createEl("option", { text: "\u81EA\u52A8\uFF08\u4E0E\u4E0A\u7EA7\u6807\u9898\u5BF9\u9F50\uFF09", attr: { value: "auto" } });
+  const numberingEnabledLabel = container.createEl("label", { text: "\u672B\u7AEF\u6B63\u6587\u6807\u8BC6\u8F6C\u5E8F\u53F7" });
+  const numberingEnabled = numberingEnabledLabel.createEl("select");
+  numberingEnabled.createEl("option", { text: `\u8DDF\u968F\u63D2\u4EF6\u8BBE\u7F6E\uFF08\u5F53\u524D${globalDefaults.numberingEnabled ? "\u5F00\u542F" : "\u5173\u95ED"}\uFF09`, attr: { value: "" } });
+  numberingEnabled.createEl("option", { text: "\u5F00\u542F", attr: { value: "true" } });
+  numberingEnabled.createEl("option", { text: "\u5173\u95ED", attr: { value: "false" } });
+  const numberingStyleLabel = container.createEl("label", { text: "\u672B\u7AEF\u6B63\u6587\u5E8F\u53F7\u6837\u5F0F" });
+  const numberingStyle = numberingStyleLabel.createEl("select");
+  numberingStyle.createEl("option", { text: `\u8DDF\u968F\u63D2\u4EF6\u8BBE\u7F6E\uFF08\u5F53\u524D${globalDefaults.numberingStyle === "circled" ? "\u5E26\u5708\u6570\u5B57" : "\u4E0B\u4E00\u7EA7\u6587\u7AE0\u5E8F\u53F7"}\uFF09`, attr: { value: "" } });
+  numberingStyle.createEl("option", { text: "\u4E0A\u7EA7\u6807\u9898\u7684\u4E0B\u4E00\u7EA7\u6587\u7AE0\u5E8F\u53F7", attr: { value: "next-level" } });
+  numberingStyle.createEl("option", { text: "\u5E26\u5708\u6570\u5B57\uFF08\u7EDF\u4E00\u5706\u5708\uFF0C\u652F\u6301 51+\uFF09", attr: { value: "circled" } });
+  const numberingThresholdLabel = container.createEl("label", { text: "\u672B\u7AEF\u6B63\u6587\u8F6C\u5E8F\u53F7\u9608\u503C" });
+  const numberingThreshold = numberingThresholdLabel.createEl("input", { type: "number", attr: { min: "1", max: "20", step: "1" } });
+  const fill = (nextStyle) => {
+    var _a2, _b2, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m;
+    const nextResolved = resolveArticleStyle(nextStyle);
+    preset.value = nextResolved.preset;
+    fontFamily.value = (_a2 = nextResolved.fontFamily) != null ? _a2 : "";
+    textColor.value = (_b2 = nextResolved.textColor) != null ? _b2 : "#20242c";
+    headingColor.value = (_c = nextResolved.headingColor) != null ? _c : "#111827";
+    accentColor.value = (_d = nextResolved.accentColor) != null ? _d : "#7c3aed";
+    backgroundColor.value = (_e = nextResolved.backgroundColor) != null ? _e : "#ffffff";
+    tocStyle.value = (_f = nextStyle.tocStyle) != null ? _f : "";
+    fontSize.value = String((_g = nextResolved.fontSize) != null ? _g : 16);
+    lineHeight.value = String((_h = nextResolved.lineHeight) != null ? _h : 1.85);
+    markerEnabled.value = nextStyle.leafMarkerEnabled === void 0 ? "" : String(nextStyle.leafMarkerEnabled);
+    markerStyle.value = (_i = nextStyle.leafMarkerStyle) != null ? _i : "";
+    setMarkerColorFollowsTheme(nextStyle.leafMarkerColor === void 0);
+    markerColor.value = (_j = nextStyle.leafMarkerColor) != null ? _j : globalDefaults.color || nextResolved.accentColor || "#ef4444";
+    alignment.value = (_k = nextStyle.leafTextAlignment) != null ? _k : "";
+    numberingEnabled.value = nextStyle.leafNumberingEnabled === void 0 ? "" : String(nextStyle.leafNumberingEnabled);
+    numberingStyle.value = (_l = nextStyle.leafNumberingStyle) != null ? _l : "";
+    numberingThreshold.value = String((_m = nextStyle.leafNumberingThreshold) != null ? _m : globalDefaults.numberingThreshold);
+  };
+  fill(source);
+  preset.addEventListener("change", () => fill(ARTICLE_STYLE_PRESETS[preset.value]));
+  markerColor.addEventListener("input", () => setMarkerColorFollowsTheme(false));
+  markerColorFollowTheme.addEventListener("click", () => {
+    setMarkerColorFollowsTheme(true);
+    syncMarkerColorPreview();
+  });
+  accentColor.addEventListener("input", syncMarkerColorPreview);
+  return {
+    read: () => ({
+      preset: preset.value,
+      fontFamily: fontFamily.value.trim() || void 0,
+      textColor: textColor.value,
+      headingColor: headingColor.value,
+      accentColor: accentColor.value,
+      backgroundColor: backgroundColor.value,
+      tocStyle: tocStyle.value ? tocStyle.value : void 0,
+      fontSize: Math.max(12, Math.min(24, Number(fontSize.value) || resolved.fontSize || 16)),
+      lineHeight: Math.max(1.2, Math.min(2.4, Number(lineHeight.value) || resolved.lineHeight || 1.85)),
+      leafMarkerEnabled: markerEnabled.value === "" ? void 0 : markerEnabled.value === "true",
+      leafMarkerStyle: markerStyle.value === "hollow" || markerStyle.value === "square" || markerStyle.value === "dash" ? markerStyle.value : markerStyle.value === "solid" ? "solid" : void 0,
+      leafMarkerColor: markerColorFollowsTheme ? void 0 : markerColor.value,
+      leafTextAlignment: alignment.value === "flush" || alignment.value === "auto" ? alignment.value : void 0,
+      leafNumberingEnabled: numberingEnabled.value === "" ? void 0 : numberingEnabled.value === "true",
+      leafNumberingStyle: numberingStyle.value === "circled" || numberingStyle.value === "next-level" ? numberingStyle.value : void 0,
+      leafNumberingThreshold: numberingEnabled.value === "" && (style == null ? void 0 : style.leafNumberingThreshold) === void 0 ? void 0 : Math.max(1, Math.min(20, Math.round(Number(numberingThreshold.value) || globalDefaults.numberingThreshold)))
+    })
+  };
+}
+function createArticleNumberingControls(container, currentMode, currentLevel, onChange) {
+  const numberingModeLabel = container.createEl("label", { cls: "mmc-article-numbering-control" });
+  numberingModeLabel.createSpan({ text: "\u6587\u7AE0\u7F16\u53F7\u65B9\u5F0F" });
+  const numberingModeSelect = numberingModeLabel.createEl("select");
+  numberingModeSelect.createEl("option", { text: "\u81EA\u52A8\uFF08\u6309\u6811\u5C42\u7EA7\u4E0E\u6807\u9898\u7ED3\u6784\uFF09", attr: { value: "auto" } });
+  numberingModeSelect.createEl("option", { text: "\u5173\u95ED\uFF08\u4E0D\u663E\u793A\u4E14\u4E0D\u5360\u5E8F\u53F7\uFF09", attr: { value: "none" } });
+  numberingModeSelect.createEl("option", { text: "\u624B\u52A8\u5C42\u7EA7\uFF08\u81EA\u5B9A\u4E49\u6700\u9AD8\u5C42\u7EA7\uFF09", attr: { value: "manual" } });
+  numberingModeSelect.value = currentMode != null ? currentMode : "auto";
+  const numberingLevelLabel = container.createEl("label", { cls: "mmc-article-numbering-control mmc-article-numbering-level" });
+  numberingLevelLabel.createSpan({ text: "\u6700\u9AD8\u6587\u7AE0\u5C42\u7EA7" });
+  const numberingLevelSelect = numberingLevelLabel.createEl("select");
+  for (let level = 1; level <= 8; level += 1) {
+    numberingLevelSelect.createEl("option", { text: `${level} \u7EA7 \xB7 ${articleNumberLabel(level, 1)}\u793A\u4F8B`, attr: { value: String(level) } });
+  }
+  numberingLevelSelect.value = String(currentLevel != null ? currentLevel : 1);
+  const numberingHelp = container.createDiv({
+    cls: "setting-item-description mmc-article-numbering-help",
+    text: "\u5173\u95ED\u4E2D\u5FC3\u8282\u70B9\u7F16\u53F7\u65F6\uFF0C\u5F53\u524D\u5BFC\u56FE\u5185\u7684\u7AE0\u8282\u548C\u672B\u7AEF\u5E8F\u53F7\u5168\u90E8\u9690\u85CF\uFF1B\u5982\u679C\u5F53\u524D\u6587\u4EF6\u662F\u9876\u5C42\u603B\u76EE\u5F55\uFF0C\u5173\u95ED\u72B6\u6001\u4F1A\u7EE7\u7EED\u4F5C\u7528\u5230\u6302\u8F7D\u7684\u5168\u90E8\u5B50\u5BFC\u56FE\u3002\u5173\u95ED\u666E\u901A\u8282\u70B9\u65F6\u53EA\u8DF3\u8FC7\u8BE5\u8282\u70B9\u3002\u624B\u52A8\u5C42\u7EA7\u7528\u4E8E\u5B9A\u4E49\u5F53\u524D\u8282\u70B9\u6240\u5728\u5B50\u6811\u7684\u6700\u9AD8\u6587\u7AE0\u5C42\u7EA7\uFF1B\u7F16\u8F91\u4E2D\u5FC3\u8282\u70B9\u65F6\uFF0C\u4E00\u7EA7\u5B50\u8282\u70B9\u76F4\u63A5\u4F7F\u7528\u6240\u9009\u5C42\u7EA7\u3002\u8D85\u8FC7\u7B2C 8 \u7EA7\u7684\u66F4\u6DF1\u7ED3\u6784\u4FDD\u7559\u6807\u9898\u5C42\u7EA7\uFF0C\u4F46\u4E0D\u518D\u5FAA\u73AF\u751F\u6210 A. /\uFF08A\uFF09\u7F16\u53F7\u3002"
+  });
+  const updateNumberingLevelState = () => {
+    const manual = numberingModeSelect.value === "manual";
+    numberingLevelSelect.disabled = !manual;
+    numberingLevelLabel.toggleClass("is-disabled", !manual);
+    numberingHelp.toggleClass("is-disabled", !manual);
+  };
+  numberingModeSelect.addEventListener("change", () => {
+    updateNumberingLevelState();
+    onChange == null ? void 0 : onChange();
+  });
+  numberingLevelSelect.addEventListener("change", () => onChange == null ? void 0 : onChange());
+  updateNumberingLevelState();
+  return {
+    read: () => ({
+      articleNumberingMode: numberingModeSelect.value === "manual" || numberingModeSelect.value === "none" ? numberingModeSelect.value : void 0,
+      articleNumberingLevel: numberingModeSelect.value === "manual" ? Number(numberingLevelSelect.value) : void 0
+    })
+  };
+}
+var AppearanceModal = class extends import_obsidian8.Modal {
+  /**
+   * 创建 AppearanceModal 实例，保存依赖和初始状态；实际 DOM 构建通常在 onOpen() 或后续渲染流程中完成。
+   *
+   * @param app Obsidian 应用实例，用于访问仓库、工作区和 UI 服务。
+   * @param appearance 导图外观配置。
+   * @param numbering 当前中心节点保存的文章编号覆盖设置。
+   * @param articleTocMaxDepth 当前脑图保存的目录最大层级覆盖值；undefined 表示跟随插件设置。
+   * @param globalArticleTocMaxDepth 插件设置中的目录最大层级，用于界面提示和回退。
+   * @param submit 该参数用于 constructor 流程中的输入或控制。
+   * @param reset 该参数用于 constructor 流程中的输入或控制。
+   */
+  constructor(app, appearance, numbering, articleTocMaxDepth, globalArticleTocMaxDepth, articleMiniMap, globalArticleMiniMap, pageCodeAppearance, readingStyle, globalReadingStyle, submit, reset) {
+    super(app);
+    this.appearance = appearance;
+    this.numbering = numbering;
+    this.articleTocMaxDepth = articleTocMaxDepth;
+    this.globalArticleTocMaxDepth = resolveArticleTocMaxDepth(void 0, globalArticleTocMaxDepth);
+    this.articleMiniMap = articleMiniMap;
+    this.globalArticleMiniMap = globalArticleMiniMap;
+    this.pageCodeAppearance = pageCodeAppearance;
+    this.readingStyle = readingStyle;
+    this.globalReadingStyle = globalReadingStyle;
+    this.submit = submit;
+    this.reset = reset;
+  }
+  /**
+   * 在弹窗或视图打开时创建界面、绑定事件并把当前数据填入控件。
+   */
+  onOpen() {
+    var _a2, _b2, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r;
+    this.titleEl.setText("\u4E3B\u9898\u4E0E\u5916\u89C2");
+    this.modalEl.addClass("mmc-appearance-dialog");
+    this.contentEl.addClass("mmc-appearance-modal");
+    const form = this.contentEl.createEl("form");
+    form.createEl("p", {
+      cls: "setting-item-description",
+      text: "\u5148\u9009\u62E9\u4E3B\u9898\u6A21\u677F\uFF0C\u518D\u6309\u753B\u5E03\u3001\u8282\u70B9\u3001\u8FDE\u7EBF\u3001\u9605\u8BFB\u6837\u5F0F\u3001\u7F16\u53F7\u4E0E\u4EE3\u7801\u5206\u7EC4\u8C03\u6574\u3002\u6587\u7AE0\u548C\u901A\u8BFB\u5171\u7528\u9605\u8BFB\u6837\u5F0F\uFF1B\u8BBE\u7F6E\u53EA\u4FDD\u5B58\u5230\u5F53\u524D .mindmap \u6587\u4EF6\uFF0C\u5E76\u4F18\u5148\u4E8E\u63D2\u4EF6\u5168\u5C40\u9ED8\u8BA4\u503C\u3002"
+    });
+    let selectedPreset = (_a2 = this.appearance.themePreset) != null ? _a2 : "classic-indigo";
+    const themeSection = form.createDiv({ cls: "mmc-theme-picker mmc-appearance-section" });
+    themeSection.createDiv({ cls: "mmc-theme-picker-title", text: "\u4E3B\u9898\u6A21\u677F" });
+    themeSection.createDiv({
+      cls: "setting-item-description mmc-appearance-section-description",
+      text: "\u4E3B\u9898\u6A21\u677F\u4F1A\u4E00\u6B21\u66F4\u65B0\u989C\u8272\u3001\u5B57\u4F53\u548C\u8FDE\u7EBF\uFF1B\u4E0B\u65B9\u5355\u9879\u4ECD\u53EF\u7EE7\u7EED\u8986\u76D6\u3002"
+    });
+    const themeGrid = themeSection.createDiv({ cls: "mmc-theme-card-grid" });
+    const themeCards = /* @__PURE__ */ new Map();
+    const appearanceColumns = form.createDiv({ cls: "mmc-appearance-columns" });
+    const appearanceLeftColumn = appearanceColumns.createDiv({ cls: "mmc-appearance-column" });
+    const appearanceRightColumn = appearanceColumns.createDiv({ cls: "mmc-appearance-column" });
+    const createAppearanceSection = (container, title, description) => {
+      const section = container.createDiv({ cls: "mmc-appearance-section" });
+      section.createDiv({ cls: "mmc-theme-picker-title", text: title });
+      section.createDiv({ cls: "setting-item-description mmc-appearance-section-description", text: description });
+      const grid = section.createDiv({ cls: "mmc-form-grid mmc-appearance-grid" });
+      return { section, grid };
+    };
+    const addColor = (container, labelText, value, fallback) => {
+      const label = container.createEl("label", { text: labelText });
+      const row = label.createDiv({ cls: "mmc-color-row" });
+      const toggle = row.createEl("input", { type: "checkbox" });
+      const input = row.createEl("input", { type: "color" });
+      toggle.checked = Boolean(value);
+      input.value = value != null ? value : fallback;
+      input.disabled = !toggle.checked;
+      toggle.addEventListener("change", () => {
+        input.disabled = !toggle.checked;
+      });
+      return { toggle, input };
+    };
+    const canvasSection = createAppearanceSection(appearanceLeftColumn, "\u753B\u5E03\u4E0E\u5B57\u4F53", "\u96C6\u4E2D\u8BBE\u7F6E\u80CC\u666F\u3001\u56FE\u6848\u548C\u5F53\u524D\u8111\u56FE\u7684\u57FA\u7840\u5B57\u4F53\u3002");
+    const background = addColor(canvasSection.grid, "\u80CC\u666F\u989C\u8272", this.appearance.backgroundColor, "#f8fafc");
+    const patternLabel = canvasSection.grid.createEl("label", { text: "\u80CC\u666F\u56FE\u6848" });
+    const patternSelect = patternLabel.createEl("select");
+    for (const [value, label] of [["none", "\u65E0"], ["grid", "\u7F51\u683C"], ["dots", "\u70B9\u9635"]]) patternSelect.createEl("option", { text: label, attr: { value } });
+    patternSelect.value = (_b2 = this.appearance.backgroundPattern) != null ? _b2 : "grid";
+    const patternColor = addColor(canvasSection.grid, "\u56FE\u6848\u989C\u8272", this.appearance.patternColor, "#94a3b8");
+    const fontLabel = canvasSection.grid.createEl("label", { text: "\u5B57\u4F53" });
+    const fontSelect = fontLabel.createEl("select");
+    for (const [value, label] of [["obsidian", "\u8DDF\u968F Obsidian"], ["sans", "\u65E0\u886C\u7EBF"], ["serif", "\u886C\u7EBF"], ["mono", "\u7B49\u5BBD"], ["custom", "\u81EA\u5B9A\u4E49"]]) fontSelect.createEl("option", { text: label, attr: { value } });
+    fontSelect.value = (_c = this.appearance.fontFamily) != null ? _c : "obsidian";
+    const customFontLabel = canvasSection.grid.createEl("label", { text: "\u81EA\u5B9A\u4E49\u5B57\u4F53\u540D\u79F0" });
+    const customFontInput = customFontLabel.createEl("input", { type: "text", attr: { placeholder: "Microsoft YaHei" } });
+    customFontInput.value = (_d = this.appearance.customFont) != null ? _d : "";
+    const updateCustomFont = () => {
+      customFontInput.disabled = fontSelect.value !== "custom";
+      customFontLabel.toggleClass("is-disabled", customFontInput.disabled);
+    };
+    fontSelect.addEventListener("change", updateCustomFont);
+    updateCustomFont();
+    const fontSizeLabel = canvasSection.grid.createEl("label", { text: "\u5B57\u53F7\uFF0810\u201330\uFF09" });
+    const fontSizeInput = fontSizeLabel.createEl("input", { type: "number", attr: { min: "10", max: "30", step: "1" } });
+    fontSizeInput.value = String((_e = this.appearance.fontSize) != null ? _e : 14);
+    const nodeSection = createAppearanceSection(appearanceRightColumn, "\u8282\u70B9\u4E0E\u6587\u5B57", "\u8BBE\u7F6E\u5206\u652F\u5F62\u6001\u3001\u8282\u70B9\u914D\u8272\u3001\u8FB9\u6846\u548C\u9ED8\u8BA4\u6587\u5B57\u8868\u73B0\u3002");
+    const nodeVisualStyleLabel = nodeSection.grid.createEl("label", { text: "\u5206\u652F\u5916\u89C2" });
+    const nodeVisualStyleSelect = nodeVisualStyleLabel.createEl("select");
+    nodeVisualStyleSelect.createEl("option", { text: "\u5706\u6DA6\u5361\u7247\u5206\u652F\uFF08\u66F2\u7EBF\uFF09", attr: { value: "card" } });
+    nodeVisualStyleSelect.createEl("option", { text: "\u5706\u89D2\u5206\u652F\uFF08\u6298\u7EBF\uFF09", attr: { value: "branch" } });
+    nodeVisualStyleSelect.value = (_f = this.appearance.nodeVisualStyle) != null ? _f : "card";
+    nodeVisualStyleLabel.createDiv({ cls: "setting-item-description", text: "\u5F53\u524D\u8111\u56FE\u8BBE\u7F6E\uFF0C\u4F18\u5148\u4E8E\u63D2\u4EF6\u5168\u5C40\u5206\u652F\u5916\u89C2\u3002" });
+    const nodeTextAlignLabel = nodeSection.grid.createEl("label", { text: "\u8282\u70B9\u6587\u5B57\u5BF9\u9F50" });
+    const nodeTextAlignSelect = nodeTextAlignLabel.createEl("select");
+    nodeTextAlignSelect.createEl("option", { text: "\u5DE6\u5BF9\u9F50", attr: { value: "left" } });
+    nodeTextAlignSelect.createEl("option", { text: "\u5C45\u4E2D", attr: { value: "center" } });
+    nodeTextAlignSelect.createEl("option", { text: "\u53F3\u5BF9\u9F50", attr: { value: "right" } });
+    nodeTextAlignSelect.value = (_g = this.appearance.nodeTextAlign) != null ? _g : "center";
+    const rootColor = addColor(nodeSection.grid, "\u4E2D\u5FC3\u4E3B\u9898\u989C\u8272", this.appearance.rootColor, "#4f46e5");
+    const rootTextColor = addColor(nodeSection.grid, "\u4E2D\u5FC3\u4E3B\u9898\u6587\u5B57", this.appearance.rootTextColor, "#ffffff");
+    const nodeColor = addColor(nodeSection.grid, "\u8282\u70B9\u80CC\u666F\u8272", this.appearance.nodeColor, "#ffffff");
+    const textColor = addColor(nodeSection.grid, "\u6587\u5B57\u989C\u8272", this.appearance.textColor, "#0f172a");
+    const borderColor = addColor(nodeSection.grid, "\u8282\u70B9\u8FB9\u6846\u989C\u8272", this.appearance.nodeBorderColor, "#94a3b8");
+    const borderWidthLabel = nodeSection.grid.createEl("label", { text: "\u8FB9\u6846\u7C97\u7EC6\uFF080\u20136\uFF09" });
+    const borderWidthInput = borderWidthLabel.createEl("input", { type: "number", attr: { min: "0", max: "6", step: "0.5" } });
+    borderWidthInput.value = String((_h = this.appearance.nodeBorderWidth) != null ? _h : 1);
+    const textStyleSection = nodeSection.section.createDiv({ cls: "mmc-appearance-text-style" });
+    textStyleSection.createDiv({ cls: "mmc-appearance-text-style-title", text: "\u6587\u5B57\u6837\u5F0F" });
+    const textStyle = textStyleSection.createDiv({ cls: "mmc-appearance-style-options" });
+    const addCheck = (text, checked) => {
+      const label = textStyle.createEl("label", { cls: "mmc-appearance-style-option" });
+      const input = label.createEl("input", { type: "checkbox" });
+      input.checked = checked;
+      label.createSpan({ text });
+      return input;
+    };
+    const bold = addCheck("\u6587\u5B57\u52A0\u7C97", this.appearance.bold === true);
+    const italic = addCheck("\u6587\u5B57\u659C\u4F53", this.appearance.italic === true);
+    const underline = addCheck("\u6587\u5B57\u4E0B\u5212\u7EBF", this.appearance.underline === true);
+    const edgeSection = createAppearanceSection(appearanceLeftColumn, "\u8FDE\u7EBF\u4E0E\u5206\u652F", "\u7EDF\u4E00\u7BA1\u7406\u8FDE\u7EBF\u5F62\u6001\u3001\u7C97\u7EC6\u53D8\u5316\u548C\u5F69\u8272\u4E00\u7EA7\u5206\u652F\u3002");
+    const edgeColor = addColor(edgeSection.grid, "\u8FDE\u7EBF\u989C\u8272", this.appearance.edgeColor, "#7c8aa5");
+    const edgeStyleLabel = edgeSection.grid.createEl("label", { text: "\u8FDE\u7EBF\u7C7B\u578B" });
+    const edgeStyleSelect = edgeStyleLabel.createEl("select");
+    for (const [value, label] of [["curved", "\u66F2\u7EBF"], ["straight", "\u76F4\u7EBF"], ["elbow", "\u6298\u7EBF"]]) edgeStyleSelect.createEl("option", { text: label, attr: { value } });
+    edgeStyleSelect.value = (_i = this.appearance.edgeStyle) != null ? _i : "curved";
+    const edgeWidthModeLabel = edgeSection.grid.createEl("label", { text: "\u8FDE\u7EBF\u7C97\u7EC6\u6A21\u5F0F" });
+    const edgeWidthModeSelect = edgeWidthModeLabel.createEl("select");
+    edgeWidthModeSelect.createEl("option", { text: "\u7EDF\u4E00\u7C97\u7EC6", attr: { value: "uniform" } });
+    edgeWidthModeSelect.createEl("option", { text: "\u4ECE\u7C97\u5230\u7EC6", attr: { value: "tapered" } });
+    edgeWidthModeSelect.value = (_j = this.appearance.edgeWidthMode) != null ? _j : "tapered";
+    const edgeWidthLabel = edgeSection.grid.createEl("label", { text: "\u8D77\u59CB\u7C97\u7EC6\uFF080.5\u20138\uFF09" });
+    const edgeWidthInput = edgeWidthLabel.createEl("input", { type: "number", attr: { min: "0.5", max: "8", step: "0.05" } });
+    edgeWidthInput.value = String((_k = this.appearance.edgeWidth) != null ? _k : 4.2);
+    const edgeMinWidthLabel = edgeSection.grid.createEl("label", { text: "\u672B\u7AEF\u6700\u7EC6\uFF080.25\u20134\uFF09" });
+    const edgeMinWidthInput = edgeMinWidthLabel.createEl("input", { type: "number", attr: { min: "0.25", max: "4", step: "0.05" } });
+    edgeMinWidthInput.value = String((_l = this.appearance.edgeMinWidth) != null ? _l : 1.2);
+    const updateEdgeMin = () => {
+      const tapered = edgeWidthModeSelect.value === "tapered";
+      edgeMinWidthInput.disabled = !tapered;
+      edgeMinWidthLabel.toggleClass("is-disabled", !tapered);
+      edgeWidthLabel.childNodes[0].textContent = tapered ? "\u8D77\u59CB\u7C97\u7EC6\uFF080.5\u20138\uFF09" : "\u8FDE\u7EBF\u7C97\u7EC6\uFF080.5\u20138\uFF09";
+    };
+    edgeWidthModeSelect.addEventListener("change", updateEdgeMin);
+    updateEdgeMin();
+    const branchLabel = edgeSection.grid.createEl("label", { text: "\u5F69\u8272\u5206\u652F" });
+    const branchToggleRow = branchLabel.createDiv({ cls: "mmc-toggle-row" });
+    const colorfulBranches = branchToggleRow.createEl("input", { type: "checkbox" });
+    colorfulBranches.checked = this.appearance.colorfulBranches === true;
+    branchToggleRow.createSpan({ text: "\u6309\u4E00\u7EA7\u5206\u652F\u5FAA\u73AF\u914D\u8272" });
+    const branchColorsLabel = edgeSection.grid.createEl("label", { text: "\u5206\u652F\u989C\u8272\uFF08\u9017\u53F7\u5206\u9694\uFF09" });
+    branchColorsLabel.addClass("mmc-appearance-grid-span-2");
+    const branchColorsInput = branchColorsLabel.createEl("textarea", { attr: { rows: "2", placeholder: "#4f46e5, #0284c7, #0f766e" } });
+    branchColorsInput.value = ((_m = this.appearance.branchColors) != null ? _m : []).join(", ");
+    const numberingSection = appearanceRightColumn.createDiv({ cls: "mmc-appearance-section mmc-appearance-article-numbering" });
+    numberingSection.createDiv({ cls: "mmc-theme-picker-title", text: "\u6587\u7AE0\u7F16\u53F7\u4E0E\u76EE\u5F55" });
+    numberingSection.createDiv({ cls: "setting-item-description mmc-appearance-section-description", text: "\u63A7\u5236\u5F53\u524D\u8111\u56FE\u7684\u6587\u7AE0\u7F16\u53F7\u3001\u76EE\u5F55\u5C42\u7EA7\u548C\u9605\u8BFB\u7F29\u7565\u5BFC\u822A\u3002" });
+    const numberingGrid = numberingSection.createDiv({ cls: "mmc-form-grid mmc-appearance-grid" });
+    const numberingControls = createArticleNumberingControls(
+      numberingGrid,
+      this.numbering.articleNumberingMode,
+      this.numbering.articleNumberingLevel
+    );
+    const tocDepthLabel = numberingGrid.createEl("label", { text: "\u76EE\u5F55\u6700\u5927\u5C42\u7EA7" });
+    const tocDepthSelect = tocDepthLabel.createEl("select");
+    tocDepthSelect.createEl("option", {
+      text: `\u8DDF\u968F\u63D2\u4EF6\u8BBE\u7F6E\uFF08\u5F53\u524D ${this.globalArticleTocMaxDepth} \u5C42\uFF09`,
+      attr: { value: "" }
+    });
+    for (let depth = 1; depth <= 8; depth += 1) {
+      tocDepthSelect.createEl("option", { text: `${depth} \u5C42`, attr: { value: String(depth) } });
+    }
+    tocDepthSelect.value = Number.isFinite(this.articleTocMaxDepth) ? String(resolveArticleTocMaxDepth(this.articleTocMaxDepth, this.globalArticleTocMaxDepth)) : "";
+    tocDepthLabel.createDiv({
+      cls: "setting-item-description",
+      text: "\u540C\u65F6\u7528\u4E8E\u6587\u7AE0\u6A21\u5F0F\u76EE\u5F55\u548C\u901A\u8BFB\u6A21\u5F0F\u5168\u4E66\u76EE\u5F55\u3002\u624B\u52A8\u9009\u62E9\u540E\u4F18\u5148\u4E8E\u63D2\u4EF6\u5168\u5C40\u8BBE\u7F6E\u3002"
+    });
+    const miniMapLabel = numberingGrid.createEl("label", { text: "\u9605\u8BFB\u7F29\u7565\u5BFC\u822A\u56FE" });
+    const miniMapSelect = miniMapLabel.createEl("select");
+    miniMapSelect.createEl("option", { text: `\u8DDF\u968F\u63D2\u4EF6\u8BBE\u7F6E\uFF08\u5F53\u524D${this.globalArticleMiniMap ? "\u663E\u793A" : "\u9690\u85CF"}\uFF09`, attr: { value: "" } });
+    miniMapSelect.createEl("option", { text: "\u663E\u793A", attr: { value: "show" } });
+    miniMapSelect.createEl("option", { text: "\u9690\u85CF", attr: { value: "hide" } });
+    miniMapSelect.value = this.articleMiniMap === void 0 ? "" : this.articleMiniMap ? "show" : "hide";
+    const readingStyleSection = createAppearanceSection(
+      appearanceRightColumn,
+      "\u9605\u8BFB\u6837\u5F0F",
+      "\u6587\u7AE0\u6A21\u5F0F\u4E0E\u901A\u8BFB\u6A21\u5F0F\u5171\u7528\u540C\u4E00\u5957\u7EB8\u5F20\u3001\u5B57\u4F53\u3001\u76EE\u5F55\u548C\u672B\u7AEF\u6B63\u6587\u6837\u5F0F\u3002\u53EA\u8BFB\u72B6\u6001\u53EA\u9501\u6B63\u6587\u7F16\u8F91\uFF0C\u4E0D\u9501\u8FD9\u91CC\u7684\u5916\u89C2\u8BBE\u7F6E\u3002"
+    );
+    const readingStyleControls = createReadingStyleControls(readingStyleSection.grid, this.readingStyle, this.globalReadingStyle);
+    const codeSection = appearanceLeftColumn.createDiv({ cls: "mmc-appearance-section mmc-appearance-code-settings" });
+    codeSection.createDiv({ cls: "mmc-theme-picker-title", text: "\u9875\u9762\u4EE3\u7801\u8BBE\u7F6E" });
+    codeSection.createDiv({ cls: "setting-item-description mmc-appearance-section-description", text: "\u4F18\u5148\u7EA7 2\uFF1A\u8986\u76D6\u63D2\u4EF6\u5168\u5C40\u4EE3\u7801\u8BBE\u7F6E\uFF1B\u8282\u70B9\u4EE3\u7801\u8BBE\u7F6E\u4ECD\u53EF\u5355\u72EC\u8986\u76D6\u3002" });
+    const codeGrid = codeSection.createDiv({ cls: "mmc-form-grid mmc-appearance-grid" });
+    const pageCodeCollapsedLabel = codeGrid.createEl("label", { text: "\u9ED8\u8BA4\u72B6\u6001" });
+    const pageCodeCollapsed = pageCodeCollapsedLabel.createEl("select");
+    pageCodeCollapsed.createEl("option", { value: "", text: "\u8DDF\u968F\u5168\u5C40\u8BBE\u7F6E" });
+    pageCodeCollapsed.createEl("option", { value: "true", text: "\u6298\u53E0" });
+    pageCodeCollapsed.createEl("option", { value: "false", text: "\u5C55\u5F00" });
+    pageCodeCollapsed.value = typeof this.pageCodeAppearance.codeCollapsed === "boolean" ? String(this.pageCodeAppearance.codeCollapsed) : "";
+    const pageCodeLinesLabel = codeGrid.createEl("label", { text: "\u884C\u53F7" });
+    const pageCodeLines = pageCodeLinesLabel.createEl("select");
+    pageCodeLines.createEl("option", { value: "", text: "\u8DDF\u968F\u5168\u5C40\u8BBE\u7F6E" });
+    pageCodeLines.createEl("option", { value: "true", text: "\u663E\u793A" });
+    pageCodeLines.createEl("option", { value: "false", text: "\u9690\u85CF" });
+    pageCodeLines.value = typeof this.pageCodeAppearance.codeShowLineNumbers === "boolean" ? String(this.pageCodeAppearance.codeShowLineNumbers) : "";
+    const pageCodeThemeLabel = codeGrid.createEl("label", { text: "\u4EE3\u7801\u6837\u5F0F" });
+    const pageCodeTheme = pageCodeThemeLabel.createEl("select");
+    pageCodeTheme.createEl("option", { value: "", text: "\u8DDF\u968F\u5168\u5C40\u8BBE\u7F6E" });
+    ["obsidian", "github", "monokai", "dracula"].forEach((value) => pageCodeTheme.createEl("option", { value, text: value === "obsidian" ? "Obsidian" : value === "github" ? "GitHub" : value === "monokai" ? "Monokai" : "Dracula" }));
+    pageCodeTheme.value = (_n = this.pageCodeAppearance.codeTheme) != null ? _n : "";
+    const setColor = (control, value, fallback) => {
+      control.toggle.checked = Boolean(value);
+      control.input.value = value != null ? value : fallback;
+      control.input.disabled = !control.toggle.checked;
+    };
+    const updateSelectedCards = () => {
+      for (const [id, card] of themeCards) card.toggleClass("is-selected", id === selectedPreset);
+    };
+    const applyPreset = (presetId) => {
+      var _a3, _b3, _c2, _d2, _e2, _f2, _g2, _h2, _i2, _j2, _k2;
+      selectedPreset = presetId;
+      const appearance = appearanceFromThemePreset(presetId);
+      setColor(background, appearance.backgroundColor, "#f8fafc");
+      patternSelect.value = (_a3 = appearance.backgroundPattern) != null ? _a3 : "none";
+      setColor(patternColor, appearance.patternColor, "#94a3b8");
+      fontSelect.value = (_b3 = appearance.fontFamily) != null ? _b3 : "obsidian";
+      customFontInput.value = (_c2 = appearance.customFont) != null ? _c2 : "";
+      fontSizeInput.value = String((_d2 = appearance.fontSize) != null ? _d2 : 14);
+      nodeTextAlignSelect.value = (_e2 = appearance.nodeTextAlign) != null ? _e2 : "center";
+      setColor(rootColor, appearance.rootColor, "#4f46e5");
+      setColor(rootTextColor, appearance.rootTextColor, "#ffffff");
+      setColor(nodeColor, appearance.nodeColor, "#ffffff");
+      setColor(textColor, appearance.textColor, "#0f172a");
+      setColor(borderColor, appearance.nodeBorderColor, "#94a3b8");
+      borderWidthInput.value = String((_f2 = appearance.nodeBorderWidth) != null ? _f2 : 1);
+      setColor(edgeColor, appearance.edgeColor, "#7c8aa5");
+      edgeStyleSelect.value = (_g2 = appearance.edgeStyle) != null ? _g2 : "curved";
+      edgeWidthModeSelect.value = (_h2 = appearance.edgeWidthMode) != null ? _h2 : "uniform";
+      edgeWidthInput.value = String((_i2 = appearance.edgeWidth) != null ? _i2 : 2.2);
+      edgeMinWidthInput.value = String((_j2 = appearance.edgeMinWidth) != null ? _j2 : 1);
+      colorfulBranches.checked = appearance.colorfulBranches === true;
+      branchColorsInput.value = ((_k2 = appearance.branchColors) != null ? _k2 : []).join(", ");
+      bold.checked = appearance.bold === true;
+      italic.checked = appearance.italic === true;
+      underline.checked = appearance.underline === true;
+      updateCustomFont();
+      updateEdgeMin();
+      updateSelectedCards();
+    };
+    for (const preset of MINDMAP_THEME_PRESETS) {
+      const card = themeGrid.createEl("button", { cls: "mmc-theme-card", attr: { type: "button", title: preset.description } });
+      themeCards.set(preset.id, card);
+      const preview = card.createDiv({ cls: "mmc-theme-card-preview" });
+      preview.style.backgroundColor = (_o = preset.appearance.backgroundColor) != null ? _o : "#ffffff";
+      const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      svg.setAttribute("viewBox", "0 0 112 44");
+      svg.setAttribute("aria-hidden", "true");
+      const colors = (_q = preset.appearance.branchColors) != null ? _q : [(_p = preset.appearance.edgeColor) != null ? _p : "#7c8aa5"];
+      const rootColorValue = (_r = preset.appearance.rootColor) != null ? _r : "#4f46e5";
+      const rootNode = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+      rootNode.setAttribute("x", "8");
+      rootNode.setAttribute("y", "15");
+      rootNode.setAttribute("width", "32");
+      rootNode.setAttribute("height", "14");
+      rootNode.setAttribute("rx", "5");
+      rootNode.setAttribute("fill", rootColorValue);
+      svg.appendChild(rootNode);
+      [8, 19, 30].forEach((y, index) => {
+        var _a3;
+        const color = (_a3 = colors[index % colors.length]) != null ? _a3 : rootColorValue;
+        const edge = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        edge.setAttribute("d", `M 40 22 C 51 22, 50 ${y + 3}, 61 ${y + 3} L 70 ${y + 3}`);
+        edge.setAttribute("fill", "none");
+        edge.setAttribute("stroke", color);
+        edge.setAttribute("stroke-width", index === 0 ? "2.6" : "2");
+        edge.setAttribute("stroke-linecap", "round");
+        svg.appendChild(edge);
+        const childNode = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+        childNode.setAttribute("x", "70");
+        childNode.setAttribute("y", String(y));
+        childNode.setAttribute("width", String(31 - index * 3));
+        childNode.setAttribute("height", "7");
+        childNode.setAttribute("rx", "3");
+        childNode.setAttribute("fill", color);
+        childNode.setAttribute("fill-opacity", ".22");
+        childNode.setAttribute("stroke", color);
+        childNode.setAttribute("stroke-width", ".8");
+        svg.appendChild(childNode);
+      });
+      preview.appendChild(svg);
+      card.createDiv({ cls: "mmc-theme-card-name", text: preset.name });
+      card.addEventListener("click", () => applyPreset(preset.id));
+    }
+    updateSelectedCards();
+    const clamp2 = (value, min, max2, fallback) => {
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? Math.min(max2, Math.max(min, parsed)) : fallback;
+    };
+    const parseBranchColors = () => branchColorsInput.value.split(/[,，\s]+/).map((value) => value.trim()).filter((value) => /^#[0-9a-f]{6}$/i.test(value)).slice(0, 12);
+    const actions = form.createDiv({ cls: "mmc-modal-actions" });
+    const reset = actions.createEl("button", { text: "\u6062\u590D\u5168\u5C40\u9ED8\u8BA4", type: "button" });
+    const cancel = actions.createEl("button", { text: "\u53D6\u6D88", type: "button" });
+    actions.createEl("button", { text: "\u5E94\u7528", type: "submit", cls: "mod-cta" });
+    reset.addEventListener("click", () => {
+      this.reset();
+      this.close();
+    });
+    cancel.addEventListener("click", () => this.close());
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      const maxWidth = clamp2(edgeWidthInput.value, 0.5, 8, 4.2);
+      this.submit({
+        themePreset: selectedPreset,
+        backgroundColor: background.toggle.checked ? background.input.value : void 0,
+        backgroundPattern: patternSelect.value,
+        patternColor: patternColor.toggle.checked ? patternColor.input.value : void 0,
+        fontFamily: fontSelect.value,
+        customFont: fontSelect.value === "custom" ? customFontInput.value.trim().slice(0, 120) || void 0 : void 0,
+        fontSize: clamp2(fontSizeInput.value, 10, 30, 14),
+        nodeVisualStyle: nodeVisualStyleSelect.value,
+        nodeTextAlign: nodeTextAlignSelect.value,
+        rootColor: rootColor.toggle.checked ? rootColor.input.value : void 0,
+        rootTextColor: rootTextColor.toggle.checked ? rootTextColor.input.value : void 0,
+        nodeColor: nodeColor.toggle.checked ? nodeColor.input.value : void 0,
+        textColor: textColor.toggle.checked ? textColor.input.value : void 0,
+        nodeBorderColor: borderColor.toggle.checked ? borderColor.input.value : void 0,
+        nodeBorderWidth: clamp2(borderWidthInput.value, 0, 6, 1),
+        edgeColor: edgeColor.toggle.checked ? edgeColor.input.value : void 0,
+        edgeWidth: maxWidth,
+        edgeStyle: edgeStyleSelect.value,
+        edgeWidthMode: edgeWidthModeSelect.value,
+        edgeMinWidth: Math.min(maxWidth, clamp2(edgeMinWidthInput.value, 0.25, 4, 1.2)),
+        colorfulBranches: colorfulBranches.checked,
+        branchColors: parseBranchColors(),
+        bold: bold.checked,
+        italic: italic.checked,
+        underline: underline.checked,
+        ...pageCodeCollapsed.value ? { codeCollapsed: pageCodeCollapsed.value === "true" } : {},
+        ...pageCodeLines.value ? { codeShowLineNumbers: pageCodeLines.value === "true" } : {},
+        ...pageCodeTheme.value ? { codeTheme: pageCodeTheme.value } : {}
+      }, numberingControls.read(), tocDepthSelect.value ? resolveArticleTocMaxDepth(Number(tocDepthSelect.value), this.globalArticleTocMaxDepth) : void 0, miniMapSelect.value === "show" ? true : miniMapSelect.value === "hide" ? false : void 0, readingStyleControls.read());
+      this.close();
+    });
+    const restoreScrollTop = () => {
+      this.contentEl.scrollTop = 0;
+    };
+    window.requestAnimationFrame(() => {
+      restoreScrollTop();
+      window.requestAnimationFrame(restoreScrollTop);
+    });
+  }
+};
+
+// src/editor/node-edit-modal.ts
+var NodeEditModal = class extends import_obsidian9.Modal {
+  /**
+   * 创建 NodeEditModal 实例，保存依赖和初始状态；实际 DOM 构建通常在 onOpen() 或后续渲染流程中完成。
+   *
+   * @param app Obsidian 应用实例，用于访问仓库、工作区和 UI 服务。
+   * @param node 当前处理的节点。
+   * @param defaultShape 该参数用于 constructor 流程中的输入或控制。
+   * @param callbacks 编辑器向视图层发送事件的一组回调。
+   * @param articleMiniMap 当前脑图保存的阅读缩略导航图覆盖值；undefined 表示跟随插件设置。
+   * @param globalArticleMiniMap 插件设置中的阅读缩略导航图默认值，用于界面提示和回退。
+   * @param submit 提交主题、文章编号、目录及缩略导航图配置的回调。
+   * @param position 编辑器显示在居中弹窗还是右侧画布面板。
+   * @param panelHost 右侧面板需要限制在其中的画布元素。
+   */
+  constructor(app, node, defaultShape, callbacks, submit, richTextShortcuts, position = "center", panelHost, initialBlockId) {
+    super(app);
+    this.richTextShortcuts = richTextShortcuts;
+    this.position = position;
+    this.panelHost = panelHost;
+    this.initialBlockId = initialBlockId;
+    this.saveOnClose = null;
+    this.closeWithoutFlush = false;
+    this.outsidePointerHandler = null;
+    this.resizeHandler = null;
+    this.externalNodeHandler = null;
+    this.node = node;
+    this.defaultShape = defaultShape;
+    this.callbacks = callbacks;
+    this.submit = submit;
+  }
+  /**
+   * 在弹窗或视图打开时创建界面、绑定事件并把当前数据填入控件。
+   */
+  onOpen() {
+    var _a2, _b2, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s;
+    this.modalEl.toggleClass("mms-node-editor-right", this.position === "right");
+    if (this.position === "right" && this.panelHost) {
+      const positionPanel = () => {
+        const rect = this.panelHost.getBoundingClientRect();
+        const container = this.modalEl.parentElement;
+        if (!container) return;
+        container.style.left = `${rect.left}px`;
+        container.style.top = `${rect.top}px`;
+        container.style.width = `${rect.width}px`;
+        container.style.height = `${rect.height}px`;
+        container.style.right = "auto";
+        container.style.bottom = "auto";
+      };
+      this.resizeHandler = positionPanel;
+      positionPanel();
+      window.addEventListener("resize", positionPanel);
+    }
+    this.titleEl.setText("\u7F16\u8F91\u8282\u70B9\u5185\u5BB9");
+    this.contentEl.addClass("mmc-node-edit-modal");
+    const form = this.contentEl.createDiv({ cls: "mmc-node-edit-form" });
+    form.createEl("p", {
+      cls: "setting-item-description",
+      text: "\u8282\u70B9\u5185\u5BB9\u7531\u53EF\u6392\u5E8F\u7684\u6587\u5B57\u3001\u56FE\u7247\u3001\u8868\u683C\u548C\u4EE3\u7801\u5757\u7EC4\u6210\uFF0C\u53EF\u6309\u9700\u8981\u7EC4\u5408\u548C\u8C03\u6574\u987A\u5E8F\u3002"
+    });
+    let workingBlocks = JSON.parse(JSON.stringify(nodeContentBlocks(this.node)));
+    if (!workingBlocks.length) workingBlocks = [{ id: newId(), type: "text", text: "\u65B0\u8282\u70B9" }];
+    let scheduleAutoSave = () => void 0;
+    const pendingAutoUploads = /* @__PURE__ */ new Map();
+    const actionRow = form.createDiv({ cls: "mmc-content-block-actions" });
+    const blocksEl = form.createDiv({ cls: "mmc-content-block-list" });
+    let draggedBlockId = null;
+    const cloneBlocks = () => JSON.parse(JSON.stringify(workingBlocks));
+    const validBlocks = () => cloneBlocks().filter((block) => {
+      if (block.type === "image") return Boolean(block.source.trim());
+      if (block.type === "table") return Boolean(block.table.headers.some((header) => header.trim()));
+      if (block.type === "code") return Boolean(block.code.code.trim());
+      return Boolean(block.text.trim());
+    });
+    const renderBlocks2 = () => {
+      blocksEl.empty();
+      workingBlocks.forEach((block, index) => {
+        var _a3, _b3, _c2;
+        const card = blocksEl.createDiv({ cls: `mmc-content-block is-${block.type}` });
+        card.dataset.blockId = block.id;
+        card.toggleClass("is-targeted", block.id === this.initialBlockId);
+        const header = card.createDiv({ cls: "mmc-content-block-header" });
+        const blockTitle = block.type === "text" ? "\u6587\u5B57\u5757" : block.type === "image" ? "\u56FE\u7247\u5757" : block.type === "table" ? "\u8868\u683C\u5757" : "\u4EE3\u7801\u5757";
+        header.createSpan({ cls: "mmc-content-block-title", text: `${blockTitle} ${index + 1}` });
+        const controls = header.createDiv({ cls: "mmc-content-block-controls" });
+        const control = (icon, title, action, disabled = false) => {
+          const btn = controls.createEl("button", { cls: "clickable-icon", attr: { type: "button", title, "aria-label": title } });
+          (0, import_obsidian9.setIcon)(btn, icon);
+          btn.disabled = disabled;
+          btn.addEventListener("click", (event) => {
+            event.preventDefault();
+            action();
+          });
+        };
+        const dragHandle = controls.createEl("button", {
+          cls: "clickable-icon mmc-content-block-editor-drag-handle",
+          attr: { type: "button", title: "\u62D6\u52A8\u5185\u5BB9\u5757", "aria-label": "\u62D6\u52A8\u5185\u5BB9\u5757", draggable: "true" }
+        });
+        (0, import_obsidian9.setIcon)(dragHandle, "grip-vertical");
+        dragHandle.addEventListener("pointerdown", (event) => event.stopPropagation());
+        dragHandle.addEventListener("click", (event) => event.preventDefault());
+        dragHandle.addEventListener("dragstart", (event) => {
+          var _a4;
+          event.stopPropagation();
+          draggedBlockId = block.id;
+          (_a4 = event.dataTransfer) == null ? void 0 : _a4.setData("application/x-mms-content-block", block.id);
+          if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
+          card.addClass("is-block-dragging");
+        });
+        dragHandle.addEventListener("dragend", () => {
+          draggedBlockId = null;
+          blocksEl.querySelectorAll(".is-block-dragging, .is-block-drop-before, .is-block-drop-after").forEach((element) => element.removeClasses(["is-block-dragging", "is-block-drop-before", "is-block-drop-after"]));
+        });
+        card.addEventListener("dragover", (event) => {
+          if (!draggedBlockId || draggedBlockId === block.id) return;
+          event.preventDefault();
+          event.stopPropagation();
+          blocksEl.querySelectorAll(".is-block-drop-before, .is-block-drop-after").forEach((element) => element.removeClasses(["is-block-drop-before", "is-block-drop-after"]));
+          const position = event.clientY < card.getBoundingClientRect().top + card.getBoundingClientRect().height / 2 ? "before" : "after";
+          card.addClass(`is-block-drop-${position}`);
+          if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+        });
+        card.addEventListener("drop", (event) => {
+          if (!draggedBlockId || draggedBlockId === block.id) return;
+          event.preventDefault();
+          event.stopPropagation();
+          const sourceIndex = workingBlocks.findIndex((item) => item.id === draggedBlockId);
+          const targetIndex = workingBlocks.findIndex((item) => item.id === block.id);
+          if (sourceIndex < 0 || targetIndex < 0) return;
+          const position = event.clientY < card.getBoundingClientRect().top + card.getBoundingClientRect().height / 2 ? "before" : "after";
+          const [moving] = workingBlocks.splice(sourceIndex, 1);
+          if (!moving) return;
+          const updatedTargetIndex = workingBlocks.findIndex((item) => item.id === block.id);
+          workingBlocks.splice(updatedTargetIndex + (position === "after" ? 1 : 0), 0, moving);
+          draggedBlockId = null;
+          renderBlocks2();
+          scheduleAutoSave();
+        });
+        card.addEventListener("contextmenu", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          const menu = new import_obsidian9.Menu();
+          menu.addItem((item) => item.setTitle("\u5220\u9664\u5F53\u524D\u5757").setIcon("trash-2").onClick(() => {
+            const currentIndex = workingBlocks.findIndex((item2) => item2.id === block.id);
+            if (currentIndex < 0) return;
+            workingBlocks.splice(currentIndex, 1);
+            renderBlocks2();
+            scheduleAutoSave();
+          }));
+          menu.showAtMouseEvent(event);
+        });
+        control("arrow-up", "\u4E0A\u79FB", () => {
+          [workingBlocks[index - 1], workingBlocks[index]] = [workingBlocks[index], workingBlocks[index - 1]];
+          renderBlocks2();
+          scheduleAutoSave();
+        }, index === 0);
+        control("arrow-down", "\u4E0B\u79FB", () => {
+          [workingBlocks[index + 1], workingBlocks[index]] = [workingBlocks[index], workingBlocks[index + 1]];
+          renderBlocks2();
+          scheduleAutoSave();
+        }, index === workingBlocks.length - 1);
+        control("trash-2", "\u5220\u9664\u5185\u5BB9\u5757", () => {
+          workingBlocks.splice(index, 1);
+          renderBlocks2();
+          scheduleAutoSave();
+        });
+        if (block.type === "text") {
+          renderNodeRichTextEditor(
+            card.createDiv({ cls: "mmc-content-block-body" }),
+            block,
+            scheduleAutoSave,
+            this.richTextShortcuts
+          );
+        } else if (block.type === "image") {
+          const body = card.createDiv({ cls: "mmc-content-block-body mmc-image-block-editor" });
+          const preview = body.createDiv({ cls: "mmc-image-block-preview" });
+          const refresh = () => {
+            var _a4;
+            preview.empty();
+            const resolved = this.callbacks.resolveImage(block.source);
+            if (resolved) {
+              const img = preview.createEl("img", { attr: { src: resolved, alt: block.alt || "\u56FE\u7247" } });
+              img.addEventListener("click", () => new ImagePreviewModal(
+                this.app,
+                resolved,
+                block.alt || "\u56FE\u7247",
+                imageSourceCandidates(block, true),
+                (source2) => this.callbacks.resolveImage(source2)
+              ).open());
+            } else preview.createDiv({ cls: "mmc-image-placeholder", text: block.source ? "\u65E0\u6CD5\u52A0\u8F7D\u56FE\u7247" : "\u5C1A\u672A\u9009\u62E9\u56FE\u7247" });
+            source.value = block.source;
+            alt.value = (_a4 = block.alt) != null ? _a4 : "";
+          };
+          const sourceLabel = body.createEl("label", { text: "\u56FE\u7247\u8DEF\u5F84\u6216\u7F51\u5740" });
+          const source = sourceLabel.createEl("input", { type: "text", attr: { placeholder: "\u4ED3\u5E93\u8DEF\u5F84\u3001[[\u56FE\u7247]] \u6216 https://..." } });
+          const altLabel = body.createEl("label", { text: "\u56FE\u7247\u8BF4\u660E\uFF08\u53EF\u9009\uFF09" });
+          const alt = altLabel.createEl("input", { type: "text", attr: { placeholder: "\u56FE\u7247\u8BF4\u660E" } });
+          const sizeGrid = body.createDiv({ cls: "mmc-image-size-inputs" });
+          const addSizeInput = (labelText, key) => {
+            const label = sizeGrid.createEl("label", { text: labelText });
+            const input = label.createEl("input", { type: "number", attr: { min: "20", max: "2000", step: "1", placeholder: "\u81EA\u52A8" } });
+            input.value = block[key] === void 0 ? "" : String(block[key]);
+            input.addEventListener("input", () => {
+              const value = Number(input.value);
+              block[key] = input.value && Number.isFinite(value) ? Math.max(20, Math.min(2e3, Math.round(value))) : void 0;
+              scheduleAutoSave();
+            });
+          };
+          addSizeInput("\u663E\u793A\u5BBD\u5EA6\uFF08px\uFF09", "width");
+          addSizeInput("\u663E\u793A\u9AD8\u5EA6\uFF08px\uFF09", "height");
+          const layoutLabel = body.createEl("label", { text: "\u56FE\u7247\u6392\u7248" });
+          const layout = layoutLabel.createEl("select");
+          layout.createEl("option", { value: "block", text: "\u72EC\u5360\u4E00\u884C" });
+          layout.createEl("option", { value: "inline", text: "\u4E0E\u76F8\u90BB\u56FE\u7247\u540C\u884C" });
+          layout.value = (_a3 = block.layout) != null ? _a3 : "block";
+          layout.addEventListener("change", () => {
+            block.layout = layout.value === "inline" ? "inline" : void 0;
+            scheduleAutoSave();
+          });
+          const alignLabel2 = body.createEl("label", { text: "\u56FE\u7247\u5BF9\u9F50" });
+          const align = alignLabel2.createEl("select");
+          [
+            ["left", "\u5DE6\u5BF9\u9F50"],
+            ["center", "\u5C45\u4E2D"],
+            ["right", "\u53F3\u5BF9\u9F50"]
+          ].forEach(([value, label]) => align.createEl("option", { value, text: label }));
+          align.value = (_b3 = block.align) != null ? _b3 : "center";
+          align.addEventListener("change", () => {
+            block.align = align.value === "left" || align.value === "right" ? align.value : void 0;
+            scheduleAutoSave();
+          });
+          source.addEventListener("input", () => {
+            const next = source.value.trim();
+            if (next !== block.source) {
+              block.source = next;
+              block.localSource = void 0;
+              block.remoteSources = void 0;
+              block.contentHash = void 0;
+            }
+            refresh();
+            scheduleAutoSave();
+          });
+          alt.addEventListener("input", () => {
+            block.alt = alt.value.trim() || void 0;
+            scheduleAutoSave();
+          });
+          const actions = body.createDiv({ cls: "mmc-image-block-actions" });
+          const pasteCurrent = actions.createEl("button", { text: "\u7C98\u8D34\u526A\u8D34\u677F\u56FE\u7247", attr: { type: "button" } });
+          pasteCurrent.addEventListener("click", () => {
+            void pasteClipboardImage(block);
+          });
+          const local = actions.createEl("button", { text: "\u4FDD\u5B58\u5230\u4ED3\u5E93", attr: { type: "button" } });
+          const applyImageAction = (action) => {
+            void action.then((changed) => {
+              if (!changed) return;
+              refresh();
+              scheduleAutoSave();
+            });
+          };
+          local.addEventListener("click", () => {
+            applyImageAction(selectNodeImage(this.app, block, "local", this.callbacks));
+          });
+          const remote = actions.createEl("button", { text: "\u9009\u62E9\u6587\u4EF6\u5E76\u4E0A\u4F20", attr: { type: "button" } });
+          remote.addEventListener("click", () => {
+            applyImageAction(selectNodeImage(this.app, block, "remote", this.callbacks));
+          });
+          if (block.localSource || block.source && !/^https?:\/\//i.test(block.source)) {
+            const uploadCurrent = actions.createEl("button", { text: "\u4E0A\u4F20\u5F53\u524D\u56FE\u7247", attr: { type: "button" } });
+            uploadCurrent.addEventListener("click", () => {
+              applyImageAction(uploadCurrentNodeImage(this.app, block, this.callbacks));
+            });
+          }
+          if ((_c2 = block.remoteSources) == null ? void 0 : _c2.length) {
+            const mirrors = body.createDiv({ cls: "mms-image-mirrors" });
+            mirrors.createSpan({ cls: "mms-image-mirrors-label", text: "\u8FDC\u7A0B\u955C\u50CF\uFF1A" });
+            block.remoteSources.forEach((item, mirrorIndex) => {
+              const link = mirrors.createEl("a", {
+                text: item.hostName || `\u56FE\u5E8A ${mirrorIndex + 1}`,
+                href: item.url,
+                attr: { target: "_blank", rel: "noopener" }
+              });
+              link.addEventListener("click", (event) => event.stopPropagation());
+            });
+          }
+          refresh();
+        } else if (block.type === "table") {
+          const body = card.createDiv({ cls: "mmc-content-block-body" });
+          body.createDiv({ cls: "setting-item-description", text: `${block.table.headers.length} \u5217 \xB7 ${block.table.rows.length} \u884C` });
+          const edit = body.createEl("button", { text: "\u7F16\u8F91\u8868\u683C", attr: { type: "button" } });
+          edit.addEventListener("click", () => new TableEditModal(this.app, block.table, (table) => {
+            block.table = table;
+            renderBlocks2();
+            scheduleAutoSave();
+          }).open());
+        } else {
+          const body = card.createDiv({ cls: "mmc-content-block-body" });
+          body.createDiv({ cls: "setting-item-description", text: block.code.language || "bash" });
+          const edit = body.createEl("button", { text: "\u7F16\u8F91\u4EE3\u7801", attr: { type: "button" } });
+          edit.addEventListener("click", () => new CodeEditModal(this.app, block.code, (code) => {
+            block.code = code;
+            renderBlocks2();
+            scheduleAutoSave();
+          }).open());
+        }
+      });
+      if (!workingBlocks.length) blocksEl.createDiv({ cls: "mmc-empty-content-hint", text: "\u5F53\u524D\u6CA1\u6709\u5185\u5BB9\u5757\u3002\u8BF7\u6DFB\u52A0\u6587\u5B57\u3001\u56FE\u7247\u3001\u8868\u683C\u6216\u4EE3\u7801\u3002" });
+    };
+    const suggestedClipboardImageName = (blob) => {
+      var _a3;
+      const extension = ((_a3 = blob.type.split("/")[1]) == null ? void 0 : _a3.replace("jpeg", "jpg").replace("svg+xml", "svg")) || "png";
+      return `mindmap-image.${extension}`;
+    };
+    const savePastedImage = async (blob, existingBlock, suppliedName) => {
+      const filename = suppliedName || suggestedClipboardImageName(blob);
+      let path;
+      try {
+        path = await this.callbacks.onSavePastedImage(blob, filename);
+      } catch (error) {
+        console.error("MindMap Studio node modal paste image storage failed", error);
+        new import_obsidian9.Notice(`\u7C98\u8D34\u56FE\u7247\u5931\u8D25\uFF1A${error instanceof Error ? error.message : String(error)}`, 7e3);
+        return;
+      }
+      const block = existingBlock != null ? existingBlock : { id: newId(), type: "image", source: "" };
+      block.source = path;
+      block.localSource = path;
+      block.remoteSources = void 0;
+      block.contentHash = void 0;
+      if (!existingBlock) workingBlocks.push(block);
+      pendingAutoUploads.set(block.id, { path, filename });
+      renderBlocks2();
+      scheduleAutoSave();
+      new import_obsidian9.Notice("\u56FE\u7247\u5DF2\u4ECE\u526A\u8D34\u677F\u6DFB\u52A0\u5230\u5F53\u524D\u8282\u70B9");
+    };
+    const readClipboardImage = async () => {
+      var _a3;
+      if (!((_a3 = navigator.clipboard) == null ? void 0 : _a3.read)) {
+        new import_obsidian9.Notice("\u5F53\u524D\u73AF\u5883\u65E0\u6CD5\u76F4\u63A5\u8BFB\u53D6\u526A\u8D34\u677F\uFF0C\u8BF7\u5728\u7F16\u8F91\u8282\u70B9\u7A97\u53E3\u4E2D\u6309 Ctrl/Cmd+V");
+        return null;
+      }
+      try {
+        const items = await navigator.clipboard.read();
+        for (const item of items) {
+          const type = item.types.find((candidate) => candidate.startsWith("image/"));
+          if (!type) continue;
+          const blob = await item.getType(type);
+          return { blob, filename: suggestedClipboardImageName(blob) };
+        }
+      } catch (error) {
+        console.error("MindMap Studio node modal clipboard read failed", error);
+        new import_obsidian9.Notice("\u65E0\u6CD5\u76F4\u63A5\u8BFB\u53D6\u526A\u8D34\u677F\uFF0C\u8BF7\u5728\u7F16\u8F91\u8282\u70B9\u7A97\u53E3\u4E2D\u6309 Ctrl/Cmd+V");
+        return null;
+      }
+      new import_obsidian9.Notice("\u526A\u8D34\u677F\u4E2D\u6CA1\u6709\u53EF\u7C98\u8D34\u7684\u56FE\u7247");
+      return null;
+    };
+    const pasteClipboardImage = async (existingBlock) => {
+      const image = await readClipboardImage();
+      if (!image) return;
+      await savePastedImage(image.blob, existingBlock, image.filename);
+    };
+    form.addEventListener("paste", (event) => {
+      var _a3, _b3;
+      const imageItem = Array.from((_b3 = (_a3 = event.clipboardData) == null ? void 0 : _a3.items) != null ? _b3 : []).find((item) => item.kind === "file" && item.type.startsWith("image/"));
+      const blob = imageItem == null ? void 0 : imageItem.getAsFile();
+      if (!blob) return;
+      event.preventDefault();
+      event.stopPropagation();
+      void savePastedImage(blob, void 0, blob.name || suggestedClipboardImageName(blob));
+    }, true);
+    const addText = actionRow.createEl("button", { text: "+ \u6587\u5B57", attr: { type: "button" } });
+    addText.addEventListener("click", () => {
+      workingBlocks.push({ id: newId(), type: "text", text: "" });
+      renderBlocks2();
+      scheduleAutoSave();
+    });
+    const addImage = actionRow.createEl("button", { text: "+ \u56FE\u7247", attr: { type: "button" } });
+    addImage.addEventListener("click", () => {
+      workingBlocks.push({ id: newId(), type: "image", source: "" });
+      renderBlocks2();
+      scheduleAutoSave();
+    });
+    const pasteImage = actionRow.createEl("button", { text: "+ \u7C98\u8D34\u56FE\u7247", attr: { type: "button" } });
+    pasteImage.addEventListener("click", () => {
+      void pasteClipboardImage();
+    });
+    const addTable = actionRow.createEl("button", { text: "+ \u8868\u683C", attr: { type: "button" } });
+    addTable.addEventListener("click", () => {
+      workingBlocks.push({ id: newId(), type: "table", table: { headers: ["\u5217 1", "\u5217 2"], rows: [["", ""]], source: "manual" } });
+      renderBlocks2();
+      scheduleAutoSave();
+    });
+    const addCode = actionRow.createEl("button", { text: "+ \u4EE3\u7801", attr: { type: "button" } });
+    addCode.addEventListener("click", () => {
+      workingBlocks.push({ id: newId(), type: "code", code: { language: "bash", code: "" } });
+      renderBlocks2();
+      scheduleAutoSave();
+    });
+    renderBlocks2();
+    if (this.position === "right" && this.panelHost) {
+      this.externalNodeHandler = (event) => {
+        const detail = event.detail;
+        if ((detail == null ? void 0 : detail.nodeId) !== this.node.id) return;
+        workingBlocks = JSON.parse(JSON.stringify(nodeContentBlocks(this.node)));
+        renderBlocks2();
+      };
+      this.panelHost.addEventListener("mms-inline-node-change", this.externalNodeHandler);
+    }
+    const detailsGrid = form.createDiv({ cls: "mmc-form-grid" });
+    const iconLabel = detailsGrid.createEl("label", { text: "\u56FE\u6807\u6216 Emoji" });
+    const iconInput = iconLabel.createEl("input", { type: "text", attr: { placeholder: "\u4F8B\u5982 \u{1F4A1}" } });
+    iconInput.value = (_a2 = this.node.icon) != null ? _a2 : "";
+    const shapeLabel = detailsGrid.createEl("label", { text: "\u8282\u70B9\u5F62\u72B6" });
+    const shapeSelect = shapeLabel.createEl("select");
+    for (const [value, label] of [["rounded", "\u5706\u89D2"], ["pill", "\u80F6\u56CA"], ["rectangle", "\u76F4\u89D2"]]) shapeSelect.createEl("option", { text: label, attr: { value } });
+    shapeSelect.value = (_c = (_b2 = this.node.style) == null ? void 0 : _b2.shape) != null ? _c : this.defaultShape;
+    const tagsLabel = detailsGrid.createEl("label", { text: "\u6807\u7B7E\uFF08\u9017\u53F7\u5206\u9694\uFF09" });
+    const tagsInput = tagsLabel.createEl("input", { type: "text" });
+    tagsInput.value = (_e = (_d = this.node.tags) == null ? void 0 : _d.join(", ")) != null ? _e : "";
+    const numberingControls = createArticleNumberingControls(
+      detailsGrid,
+      this.node.articleNumberingMode,
+      this.node.articleNumberingLevel,
+      () => scheduleAutoSave()
+    );
+    const styleGrid = form.createDiv({ cls: "mmc-form-grid mmc-style-grid" });
+    const colorControl = (labelText, current, fallback) => {
+      const label = styleGrid.createEl("label", { text: labelText });
+      const row = label.createDiv({ cls: "mmc-color-row" });
+      const toggle = row.createEl("input", { type: "checkbox" });
+      const color = row.createEl("input", { type: "color" });
+      toggle.checked = Boolean(current);
+      color.value = current != null ? current : fallback;
+      color.disabled = !toggle.checked;
+      toggle.addEventListener("change", () => {
+        color.disabled = !toggle.checked;
+        scheduleAutoSave();
+      });
+      color.addEventListener("change", scheduleAutoSave);
+      return [toggle, color];
+    };
+    const [colorToggle, colorInput] = colorControl("\u8282\u70B9\u989C\u8272", (_f = this.node.style) == null ? void 0 : _f.color, "#4f46e5");
+    const [textColorToggle, textColorInput] = colorControl("\u6574\u8282\u70B9\u6587\u5B57\u989C\u8272", (_g = this.node.style) == null ? void 0 : _g.textColor, "#ffffff");
+    const [borderColorToggle, borderColorInput] = colorControl("\u8FB9\u6846\u989C\u8272", (_h = this.node.style) == null ? void 0 : _h.borderColor, "#94a3b8");
+    const numberControl = (labelText, current, min, max2, step) => {
+      var _a3;
+      const label = styleGrid.createEl("label", { text: labelText });
+      const input = label.createEl("input", { type: "number", attr: { min: String(min), max: String(max2), step: String(step), placeholder: "\u8DDF\u968F\u9ED8\u8BA4" } });
+      input.value = (_a3 = current == null ? void 0 : current.toString()) != null ? _a3 : "";
+      return input;
+    };
+    const borderWidthInput = numberControl("\u8FB9\u6846\u7C97\u7EC6", (_i = this.node.style) == null ? void 0 : _i.borderWidth, 0, 6, 0.5);
+    const fontSizeInput = numberControl("\u5B57\u53F7", (_j = this.node.style) == null ? void 0 : _j.fontSize, 10, 32, 1);
+    const widthInput = numberControl("\u8282\u70B9\u5BBD\u5EA6\uFF08100\u2013900\uFF09", (_k = this.node.style) == null ? void 0 : _k.width, 100, 900, 10);
+    widthInput.placeholder = "\u81EA\u52A8\u5BBD\u5EA6";
+    const minHeightInput = numberControl("\u8282\u70B9\u6700\u5C0F\u9AD8\u5EA6\uFF0836\u2013600\uFF09", (_l = this.node.style) == null ? void 0 : _l.minHeight, 36, 600, 10);
+    minHeightInput.placeholder = "\u81EA\u52A8\u9AD8\u5EA6";
+    const alignLabel = styleGrid.createEl("label", { text: "\u6587\u5B57\u5BF9\u9F50" });
+    const alignSelect = alignLabel.createEl("select");
+    alignSelect.createEl("option", { text: "\u8DDF\u968F\u5168\u5C40", attr: { value: "inherit" } });
+    alignSelect.createEl("option", { text: "\u5DE6\u5BF9\u9F50", attr: { value: "left" } });
+    alignSelect.createEl("option", { text: "\u5C45\u4E2D", attr: { value: "center" } });
+    alignSelect.createEl("option", { text: "\u53F3\u5BF9\u9F50", attr: { value: "right" } });
+    alignSelect.value = (_n = (_m = this.node.style) == null ? void 0 : _m.textAlign) != null ? _n : "inherit";
+    const booleanControl = (labelText, current) => {
+      const label = styleGrid.createEl("label", { text: labelText });
+      const select = label.createEl("select");
+      select.createEl("option", { text: "\u8DDF\u968F\u9ED8\u8BA4", attr: { value: "inherit" } });
+      select.createEl("option", { text: "\u5F00\u542F", attr: { value: "true" } });
+      select.createEl("option", { text: "\u5173\u95ED", attr: { value: "false" } });
+      select.value = current === void 0 ? "inherit" : current ? "true" : "false";
+      return select;
+    };
+    const boldInput = booleanControl("\u6574\u8282\u70B9\u52A0\u7C97", (_o = this.node.style) == null ? void 0 : _o.bold);
+    const italicInput = booleanControl("\u6574\u8282\u70B9\u659C\u4F53", (_p = this.node.style) == null ? void 0 : _p.italic);
+    const underlineInput = booleanControl("\u6574\u8282\u70B9\u4E0B\u5212\u7EBF", (_q = this.node.style) == null ? void 0 : _q.underline);
+    const noteLabel = form.createEl("label", { text: "\u5907\u6CE8\uFF08\u53EF\u9009\uFF09" });
+    const noteInput = noteLabel.createEl("textarea");
+    noteInput.value = (_r = this.node.note) != null ? _r : "";
+    noteInput.rows = 4;
+    const linkLabel = form.createEl("label", { text: "\u94FE\u63A5\uFF08\u7F51\u5740\u3001\u7B14\u8BB0\u540D\u6216 [[\u53CC\u94FE]]\uFF09" });
+    const linkInput = linkLabel.createEl("input", { type: "text" });
+    linkInput.value = (_s = this.node.link) != null ? _s : "";
+    const parseBool = (value) => value === "true" ? true : value === "false" ? false : void 0;
+    const parseNumber = (value, min, max2) => value.trim() && Number.isFinite(Number(value)) ? Math.min(max2, Math.max(min, Number(value))) : void 0;
+    const collectValues = (showNotice) => {
+      const content = validBlocks();
+      if (!content.length) {
+        if (showNotice) {
+          new import_obsidian9.Notice("\u8282\u70B9\u81F3\u5C11\u9700\u8981\u4E00\u4E2A\u5185\u5BB9\u5757");
+        }
+        return null;
+      }
+      const shape = shapeSelect.value;
+      const numbering = numberingControls.read();
+      return {
+        content,
+        note: noteInput.value.trim(),
+        link: linkInput.value.trim(),
+        icon: iconInput.value.trim().slice(0, 12),
+        tags: Array.from(new Set(tagsInput.value.split(/[,，]/).map((tag) => tag.trim().replace(/^#/, "")).filter(Boolean))).slice(0, 12),
+        articleNumberingMode: numbering.articleNumberingMode,
+        articleNumberingLevel: numbering.articleNumberingLevel,
+        color: colorToggle.checked ? colorInput.value : void 0,
+        textColor: textColorToggle.checked ? textColorInput.value : void 0,
+        borderColor: borderColorToggle.checked ? borderColorInput.value : void 0,
+        borderWidth: parseNumber(borderWidthInput.value, 0, 6),
+        shape: shape === "pill" || shape === "rectangle" || shape === "rounded" ? shape : void 0,
+        bold: parseBool(boldInput.value),
+        italic: parseBool(italicInput.value),
+        underline: parseBool(underlineInput.value),
+        fontSize: parseNumber(fontSizeInput.value, 10, 32),
+        textAlign: alignSelect.value === "left" || alignSelect.value === "right" || alignSelect.value === "center" ? alignSelect.value : void 0,
+        width: parseNumber(widthInput.value, 100, 900),
+        minHeight: parseNumber(minHeightInput.value, 36, 600)
+      };
+    };
+    let timer = null;
+    let last = JSON.stringify(collectValues(false));
+    const saveNow = (mode, showNotice = false) => {
+      if (timer !== null) {
+        window.clearTimeout(timer);
+        timer = null;
+      }
+      const values = collectValues(showNotice);
+      if (!values) return false;
+      const signature = JSON.stringify(values);
+      if (signature !== last) {
+        this.submit(values, mode);
+        last = signature;
+        for (const [blockId, pending] of pendingAutoUploads) {
+          if (!values.content.some((block) => block.type === "image" && block.id === blockId)) {
+            pendingAutoUploads.delete(blockId);
+            continue;
+          }
+          try {
+            this.callbacks.onScheduleAutoUpload(this.node.id, blockId, pending.path, pending.filename);
+          } catch (error) {
+            console.error("MindMap Studio node modal paste image auto-upload scheduling failed", error);
+          } finally {
+            pendingAutoUploads.delete(blockId);
+          }
+        }
+      }
+      return true;
+    };
+    scheduleAutoSave = () => {
+      if (timer !== null) window.clearTimeout(timer);
+      timer = window.setTimeout(() => saveNow("autosave"), 280);
+    };
+    this.saveOnClose = () => {
+      saveNow("commit");
+    };
+    form.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" || event.shiftKey || event.isComposing) return;
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
+      if (saveNow("commit", true)) {
+        this.closeWithoutFlush = true;
+        this.close();
+      }
+    }, true);
+    [iconInput, shapeSelect, tagsInput, borderWidthInput, fontSizeInput, widthInput, minHeightInput, alignSelect, boldInput, italicInput, underlineInput, noteInput, linkInput].forEach((input) => {
+      input.addEventListener("input", scheduleAutoSave);
+      input.addEventListener("change", scheduleAutoSave);
+    });
+    const buttons = form.createDiv({ cls: "mmc-form-actions" });
+    const closeButton = buttons.createEl("button", { cls: "mod-cta", text: "\u4FDD\u5B58\u5E76\u5173\u95ED", attr: { type: "button" } });
+    closeButton.addEventListener("click", () => {
+      if (saveNow("commit", true)) {
+        this.closeWithoutFlush = true;
+        this.close();
+      }
+    });
+    this.outsidePointerHandler = (event) => {
+      var _a3;
+      const targetNode = event.target;
+      const targetElement = targetNode instanceof Element ? targetNode : targetNode == null ? void 0 : targetNode.parentElement;
+      if (targetNode && this.modalEl.contains(targetNode)) return;
+      const ownModalContainer = this.modalEl.closest(".modal-container");
+      const targetModal = targetElement == null ? void 0 : targetElement.closest(".modal");
+      const targetModalContainer = targetElement == null ? void 0 : targetElement.closest(".modal-container");
+      if (targetModal && targetModal !== this.modalEl) return;
+      if (targetModalContainer && ownModalContainer && targetModalContainer !== ownModalContainer) return;
+      if (this.position === "right" && (targetElement == null ? void 0 : targetElement.closest(".mmc-node"))) return;
+      (_a3 = this.saveOnClose) == null ? void 0 : _a3.call(this);
+      this.closeWithoutFlush = true;
+      this.close();
+    };
+    window.setTimeout(() => document.addEventListener("pointerdown", this.outsidePointerHandler, true), 0);
+  }
+  /**
+   * 在弹窗或视图关闭时释放临时 DOM、计时器和事件状态。
+   */
+  onClose() {
+    var _a2;
+    if (!this.closeWithoutFlush) (_a2 = this.saveOnClose) == null ? void 0 : _a2.call(this);
+    if (this.outsidePointerHandler) document.removeEventListener("pointerdown", this.outsidePointerHandler, true);
+    if (this.resizeHandler) window.removeEventListener("resize", this.resizeHandler);
+    if (this.externalNodeHandler && this.panelHost) {
+      this.panelHost.removeEventListener("mms-inline-node-change", this.externalNodeHandler);
+    }
+    this.contentEl.empty();
+  }
+  /**
+   * 右侧面板与画布快速输入并存时，释放 Modal 的全局按键作用域。
+   */
+  releaseKeyboardScope() {
+    this.app.keymap.popScope(this.scope);
+  }
+};
+
+// src/editor/clipboard-import.ts
+function parseClipboardContentBlocks(text) {
+  const fence = /```([^\n`]*)\n([\s\S]*?)\n```/g;
+  const blocks = [];
+  let cursor = 0;
+  let match;
+  const appendText = (value) => {
+    const normalized2 = value.replace(/^\s*\n|\n\s*$/g, "");
+    if (normalized2.trim()) blocks.push({ id: newId(), type: "text", text: normalized2 });
+  };
+  while ((match = fence.exec(text)) !== null) {
+    appendText(text.slice(cursor, match.index));
+    const code = parseFencedCode(match[0]);
+    if (code) blocks.push({ id: newId(), type: "code", code });
+    cursor = match.index + match[0].length;
+  }
+  if (!blocks.some((block) => block.type === "code")) return null;
+  appendText(text.slice(cursor));
+  return blocks;
+}
+function parseClipboardNodes(text) {
+  try {
+    const parsed = JSON.parse(text);
+    const inputs = parsed.type === "mindmap-studio-nodes" && Array.isArray(parsed.nodes) ? parsed.nodes : [];
+    if (!inputs.length) return null;
+    return inputs.map((input) => {
+      var _a2, _b2;
+      return normalizeDocument(
+        { title: (_a2 = input.text) != null ? _a2 : "\u7C98\u8D34\u8282\u70B9", root: input },
+        (_b2 = input.text) != null ? _b2 : "\u7C98\u8D34\u8282\u70B9"
+      ).root;
+    });
+  } catch (e) {
+    const trimmed = text.trim();
+    if (!trimmed) return null;
+    const looksLikeMarkdown = /^(?:#{1,6}\s+|[-*+]\s+|\d+[.)]\s+)/m.test(trimmed);
+    if (looksLikeMarkdown || trimmed.includes("\n")) {
+      const markdown = looksLikeMarkdown ? trimmed : indentedTextToMarkdown(text);
+      const document2 = markdownToDocument(markdown, "\u7C98\u8D34\u5185\u5BB9");
+      if (document2.root.text === "\u7C98\u8D34\u5185\u5BB9") {
+        if (document2.root.children.length === 1) {
+          return document2.root.children[0] ? [document2.root.children[0]] : null;
+        }
+        return document2.root.children.length ? document2.root.children : null;
+      }
+      return [document2.root];
+    }
+    return [createNode(trimmed)];
+  }
+}
+function parseClipboardHtml(html) {
+  var _a2;
+  if (!html.trim() || typeof DOMParser === "undefined") return null;
+  const document2 = new DOMParser().parseFromString(html, "text/html");
+  const firstList = document2.body.querySelector("ul, ol");
+  if (!firstList) return null;
+  const parseItem = (item) => {
+    var _a3;
+    const clone = item.cloneNode(true);
+    clone.querySelectorAll("ul, ol").forEach((list) => list.remove());
+    const node = createNode(((_a3 = clone.textContent) == null ? void 0 : _a3.trim()) || "\u8282\u70B9");
+    const nested = Array.from(item.children).find((child) => child.matches("ul, ol"));
+    if (nested) {
+      node.children = Array.from(nested.children).filter((child) => child.matches("li")).map(parseItem);
+    }
+    return node;
+  };
+  const roots = Array.from(firstList.children).filter((child) => child.matches("li")).map(parseItem);
+  if (!roots.length) return null;
+  if (roots.length === 1) return (_a2 = roots[0]) != null ? _a2 : null;
+  const root = createNode("\u7C98\u8D34\u5185\u5BB9");
+  root.children = roots;
+  return roots.length ? root : null;
+}
+
 // src/editor/drag-drop.ts
 function canMoveNodes(root, selectedIds, draggedId, targetId, existingIndex) {
   if (!draggedId || draggedId === root.id || draggedId === targetId) return false;
@@ -9188,7 +10352,7 @@ var DocumentHistory = class {
 };
 
 // src/editor/image-failure-view.ts
-var import_obsidian8 = require("obsidian");
+var import_obsidian10 = require("obsidian");
 function imageFailureSources(block, imageHostPriorityIds = []) {
   const values = imageSourceCandidates(block, true, imageHostPriorityIds).map((candidate) => candidate.source.trim());
   if (block.source.trim()) values.push(block.source.trim());
@@ -9219,8 +10383,8 @@ function renderImageFailureDetails(container, block, imageHostPriorityIds = []) 
       event.preventDefault();
       event.stopPropagation();
       void navigator.clipboard.writeText(source).then(
-        () => new import_obsidian8.Notice("\u56FE\u7247\u5730\u5740\u5DF2\u590D\u5236"),
-        () => new import_obsidian8.Notice("\u590D\u5236\u56FE\u7247\u5730\u5740\u5931\u8D25")
+        () => new import_obsidian10.Notice("\u56FE\u7247\u5730\u5740\u5DF2\u590D\u5236"),
+        () => new import_obsidian10.Notice("\u590D\u5236\u56FE\u7247\u5730\u5740\u5931\u8D25")
       );
     });
   }
@@ -9423,7 +10587,7 @@ function renderOutlineContent(container, node, depth, options) {
 }
 
 // src/editor/article-renderer.ts
-var import_obsidian9 = require("obsidian");
+var import_obsidian11 = require("obsidian");
 
 // src/editor/table-interaction.ts
 function resizeAdjacentTableColumns(sourceWidths, columnIndex, delta, minimumWidth = 64) {
@@ -9977,7 +11141,7 @@ function renderArticlePager(page, options) {
   if (previous) addTarget("mms-article-pager-previous", previous.depth <= 1 ? "\u4E0A\u4E00\u7AE0 " : "\u4E0A\u4E00\u8282 ", previous);
   else pager.createSpan({ cls: "mms-article-pager-placeholder" });
   const parent = pager.createEl("button", { cls: "mms-article-pager-parent", attr: { type: "button" } });
-  (0, import_obsidian9.setIcon)(parent, "corner-left-up");
+  (0, import_obsidian11.setIcon)(parent, "corner-left-up");
   parent.createSpan({ text: "\u8FD4\u56DE\u4E0A\u4E00\u7EA7" });
   parent.addEventListener("click", () => void options.callbacks.onOpenArticleDirectory(navigation.parentPath, navigation.parentNodeId));
   if (next) addTarget("mms-article-pager-next", next.depth <= 1 ? "\u4E0B\u4E00\u7AE0 " : "\u4E0B\u4E00\u8282 ", next);
@@ -10568,8 +11732,8 @@ function applyImageTextReplacements(document2, previews) {
 }
 
 // src/vision/modal.ts
-var import_obsidian10 = require("obsidian");
-var ImageRecognitionPreviewModal = class extends import_obsidian10.Modal {
+var import_obsidian12 = require("obsidian");
+var ImageRecognitionPreviewModal = class extends import_obsidian12.Modal {
   /** 保存预览参数并初始化 Obsidian Modal。 */
   constructor(app, options) {
     super(app);
@@ -10608,7 +11772,7 @@ var ImageRecognitionPreviewModal = class extends import_obsidian10.Modal {
       }
       const nextText = text.value.trim();
       if (!nextText) {
-        new import_obsidian10.Notice("\u8BC6\u522B\u6587\u5B57\u4E0D\u80FD\u4E3A\u7A7A");
+        new import_obsidian12.Notice("\u8BC6\u522B\u6587\u5B57\u4E0D\u80FD\u4E3A\u7A7A");
         text.focus();
         return;
       }
@@ -10619,7 +11783,7 @@ var ImageRecognitionPreviewModal = class extends import_obsidian10.Modal {
         else confirm.disabled = false;
       }).catch((error) => {
         confirm.disabled = false;
-        new import_obsidian10.Notice(error instanceof Error ? error.message : "\u56FE\u7247\u66FF\u6362\u5931\u8D25");
+        new import_obsidian12.Notice(error instanceof Error ? error.message : "\u56FE\u7247\u66FF\u6362\u5931\u8D25");
       });
     };
     confirm.addEventListener("click", confirmReplacement);
@@ -10667,1162 +11831,6 @@ var TOOLBAR_GROUPS = {
   "article-landing": "view",
   markdown: "view",
   "import-export": "transfer"
-};
-function createReadingStyleControls(container, style, globalDefaults) {
-  const source = style != null ? style : { preset: "classic" };
-  const resolved = resolveArticleStyle(source);
-  const presetLabel = container.createEl("label", { text: "\u9605\u8BFB\u6837\u5F0F\u9884\u8BBE" });
-  const preset = presetLabel.createEl("select");
-  for (const [id, name] of [["classic", "\u7ECF\u5178\u6587\u6863"], ["book", "\u4E66\u7C4D\u9605\u8BFB"], ["modern", "\u73B0\u4EE3\u62A5\u544A"], ["minimal", "\u6781\u7B80\u7559\u767D"]]) {
-    preset.createEl("option", { text: name, attr: { value: id } });
-  }
-  const addText = (labelText) => {
-    const label = container.createEl("label", { text: labelText });
-    return label.createEl("input", { type: "text" });
-  };
-  const addColor = (labelText) => {
-    const label = container.createEl("label", { text: labelText });
-    const row = label.createDiv({ cls: "mmc-color-row mmc-appearance-color-row" });
-    return row.createEl("input", { type: "color" });
-  };
-  const fontFamily = addText("\u9605\u8BFB\u5B57\u4F53");
-  const textColor = addColor("\u6B63\u6587\u989C\u8272");
-  const headingColor = addColor("\u6807\u9898\u989C\u8272");
-  const accentColor = addColor("\u5F3A\u8C03\u8272");
-  const backgroundColor = addColor("\u7EB8\u5F20\u80CC\u666F");
-  const tocLabel = container.createEl("label", { text: "\u76EE\u5F55\u6837\u5F0F" });
-  const tocStyle = tocLabel.createEl("select");
-  const tocStyleNames = {
-    card: "\u5361\u7247\uFF08\u5F53\u524D\u6837\u5F0F\uFF09",
-    plain: "\u7B80\u6D01",
-    lines: "\u5F15\u5BFC\u7EBF",
-    original: "\u6700\u521D\u6837\u5F0F",
-    "minimal-page": "\u6781\u7B80\u4E66\u9875",
-    report: "\u73B0\u4EE3\u62A5\u544A",
-    magazine: "\u6742\u5FD7\u7D22\u5F15",
-    tree: "\u5C42\u7EA7\u6811\u7EBF"
-  };
-  tocStyle.createEl("option", {
-    text: `\u8DDF\u968F\u63D2\u4EF6\u8BBE\u7F6E\uFF08\u5F53\u524D\uFF1A${tocStyleNames[globalDefaults.tocStyle]}\uFF09`,
-    attr: { value: "" }
-  });
-  for (const [id, name] of [
-    ["card", "\u5361\u7247\uFF08\u5F53\u524D\u6837\u5F0F\uFF09"],
-    ["plain", "\u7B80\u6D01"],
-    ["lines", "\u5F15\u5BFC\u7EBF"],
-    ["original", "\u6700\u521D\u6837\u5F0F"],
-    ["minimal-page", "\u6781\u7B80\u4E66\u9875"],
-    ["report", "\u73B0\u4EE3\u62A5\u544A"],
-    ["magazine", "\u6742\u5FD7\u7D22\u5F15"],
-    ["tree", "\u5C42\u7EA7\u6811\u7EBF"]
-  ]) {
-    tocStyle.createEl("option", { text: name, attr: { value: id } });
-  }
-  const sizeLabel = container.createEl("label", { text: "\u6B63\u6587\u5B57\u53F7" });
-  const fontSize = sizeLabel.createEl("input", { type: "number", attr: { min: "12", max: "24", step: "1" } });
-  const lineLabel = container.createEl("label", { text: "\u6B63\u6587\u884C\u9AD8" });
-  const lineHeight = lineLabel.createEl("input", { type: "number", attr: { min: "1.2", max: "2.4", step: "0.05" } });
-  const markerEnabledLabel = container.createEl("label", { text: "\u672B\u7AEF\u6B63\u6587\u6807\u8BC6" });
-  const markerEnabled = markerEnabledLabel.createEl("select");
-  markerEnabled.createEl("option", { text: `\u8DDF\u968F\u63D2\u4EF6\u8BBE\u7F6E\uFF08\u5F53\u524D${globalDefaults.enabled ? "\u663E\u793A" : "\u9690\u85CF"}\uFF09`, attr: { value: "" } });
-  markerEnabled.createEl("option", { text: "\u663E\u793A", attr: { value: "true" } });
-  markerEnabled.createEl("option", { text: "\u9690\u85CF", attr: { value: "false" } });
-  const markerStyleLabel = container.createEl("label", { text: "\u672B\u7AEF\u6B63\u6587\u6807\u8BC6\u6837\u5F0F" });
-  const markerStyle = markerStyleLabel.createEl("select");
-  markerStyle.createEl("option", { text: "\u8DDF\u968F\u63D2\u4EF6\u8BBE\u7F6E", attr: { value: "" } });
-  for (const [id, name] of [["solid", "\u5B9E\u5FC3\u5706"], ["hollow", "\u7A7A\u5FC3\u5706"], ["square", "\u5B9E\u5FC3\u65B9\u5757"], ["dash", "\u77ED\u6A2A\u7EBF"]]) {
-    markerStyle.createEl("option", { text: name, attr: { value: id } });
-  }
-  const markerColorLabel = container.createEl("label", { text: "\u672B\u7AEF\u6B63\u6587\u6807\u8BC6\u989C\u8272" });
-  const markerColorRow = markerColorLabel.createDiv({ cls: "mmc-color-row mmc-appearance-color-row" });
-  const markerColor = markerColorRow.createEl("input", { type: "color" });
-  const markerColorFollowTheme = markerColorRow.createEl("button", {
-    text: "\u8DDF\u968F\u4E3B\u9898",
-    attr: { type: "button", "aria-pressed": "true" }
-  });
-  let markerColorFollowsTheme = true;
-  const setMarkerColorFollowsTheme = (followsTheme) => {
-    markerColorFollowsTheme = followsTheme;
-    markerColorFollowTheme.setAttribute("aria-pressed", String(followsTheme));
-  };
-  const syncMarkerColorPreview = () => {
-    if (!markerColorFollowsTheme) return;
-    markerColor.value = globalDefaults.color || accentColor.value || "#ef4444";
-  };
-  const alignmentLabel = container.createEl("label", { text: "\u672B\u7AEF\u6B63\u6587\u5BF9\u9F50\u65B9\u5F0F" });
-  const alignment = alignmentLabel.createEl("select");
-  alignment.createEl("option", { text: `\u8DDF\u968F\u63D2\u4EF6\u8BBE\u7F6E\uFF08\u5F53\u524D${globalDefaults.alignment === "auto" ? "\u81EA\u52A8" : "\u9876\u683C"}\uFF09`, attr: { value: "" } });
-  alignment.createEl("option", { text: "\u9876\u683C", attr: { value: "flush" } });
-  alignment.createEl("option", { text: "\u81EA\u52A8\uFF08\u4E0E\u4E0A\u7EA7\u6807\u9898\u5BF9\u9F50\uFF09", attr: { value: "auto" } });
-  const numberingEnabledLabel = container.createEl("label", { text: "\u672B\u7AEF\u6B63\u6587\u6807\u8BC6\u8F6C\u5E8F\u53F7" });
-  const numberingEnabled = numberingEnabledLabel.createEl("select");
-  numberingEnabled.createEl("option", { text: `\u8DDF\u968F\u63D2\u4EF6\u8BBE\u7F6E\uFF08\u5F53\u524D${globalDefaults.numberingEnabled ? "\u5F00\u542F" : "\u5173\u95ED"}\uFF09`, attr: { value: "" } });
-  numberingEnabled.createEl("option", { text: "\u5F00\u542F", attr: { value: "true" } });
-  numberingEnabled.createEl("option", { text: "\u5173\u95ED", attr: { value: "false" } });
-  const numberingStyleLabel = container.createEl("label", { text: "\u672B\u7AEF\u6B63\u6587\u5E8F\u53F7\u6837\u5F0F" });
-  const numberingStyle = numberingStyleLabel.createEl("select");
-  numberingStyle.createEl("option", { text: `\u8DDF\u968F\u63D2\u4EF6\u8BBE\u7F6E\uFF08\u5F53\u524D${globalDefaults.numberingStyle === "circled" ? "\u5E26\u5708\u6570\u5B57" : "\u4E0B\u4E00\u7EA7\u6587\u7AE0\u5E8F\u53F7"}\uFF09`, attr: { value: "" } });
-  numberingStyle.createEl("option", { text: "\u4E0A\u7EA7\u6807\u9898\u7684\u4E0B\u4E00\u7EA7\u6587\u7AE0\u5E8F\u53F7", attr: { value: "next-level" } });
-  numberingStyle.createEl("option", { text: "\u5E26\u5708\u6570\u5B57\uFF08\u7EDF\u4E00\u5706\u5708\uFF0C\u652F\u6301 51+\uFF09", attr: { value: "circled" } });
-  const numberingThresholdLabel = container.createEl("label", { text: "\u672B\u7AEF\u6B63\u6587\u8F6C\u5E8F\u53F7\u9608\u503C" });
-  const numberingThreshold = numberingThresholdLabel.createEl("input", { type: "number", attr: { min: "1", max: "20", step: "1" } });
-  const fill = (nextStyle) => {
-    var _a2, _b2, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m;
-    const nextResolved = resolveArticleStyle(nextStyle);
-    preset.value = nextResolved.preset;
-    fontFamily.value = (_a2 = nextResolved.fontFamily) != null ? _a2 : "";
-    textColor.value = (_b2 = nextResolved.textColor) != null ? _b2 : "#20242c";
-    headingColor.value = (_c = nextResolved.headingColor) != null ? _c : "#111827";
-    accentColor.value = (_d = nextResolved.accentColor) != null ? _d : "#7c3aed";
-    backgroundColor.value = (_e = nextResolved.backgroundColor) != null ? _e : "#ffffff";
-    tocStyle.value = (_f = nextStyle.tocStyle) != null ? _f : "";
-    fontSize.value = String((_g = nextResolved.fontSize) != null ? _g : 16);
-    lineHeight.value = String((_h = nextResolved.lineHeight) != null ? _h : 1.85);
-    markerEnabled.value = nextStyle.leafMarkerEnabled === void 0 ? "" : String(nextStyle.leafMarkerEnabled);
-    markerStyle.value = (_i = nextStyle.leafMarkerStyle) != null ? _i : "";
-    setMarkerColorFollowsTheme(nextStyle.leafMarkerColor === void 0);
-    markerColor.value = (_j = nextStyle.leafMarkerColor) != null ? _j : globalDefaults.color || nextResolved.accentColor || "#ef4444";
-    alignment.value = (_k = nextStyle.leafTextAlignment) != null ? _k : "";
-    numberingEnabled.value = nextStyle.leafNumberingEnabled === void 0 ? "" : String(nextStyle.leafNumberingEnabled);
-    numberingStyle.value = (_l = nextStyle.leafNumberingStyle) != null ? _l : "";
-    numberingThreshold.value = String((_m = nextStyle.leafNumberingThreshold) != null ? _m : globalDefaults.numberingThreshold);
-  };
-  fill(source);
-  preset.addEventListener("change", () => fill(ARTICLE_STYLE_PRESETS[preset.value]));
-  markerColor.addEventListener("input", () => setMarkerColorFollowsTheme(false));
-  markerColorFollowTheme.addEventListener("click", () => {
-    setMarkerColorFollowsTheme(true);
-    syncMarkerColorPreview();
-  });
-  accentColor.addEventListener("input", syncMarkerColorPreview);
-  return {
-    read: () => ({
-      preset: preset.value,
-      fontFamily: fontFamily.value.trim() || void 0,
-      textColor: textColor.value,
-      headingColor: headingColor.value,
-      accentColor: accentColor.value,
-      backgroundColor: backgroundColor.value,
-      tocStyle: tocStyle.value ? tocStyle.value : void 0,
-      fontSize: Math.max(12, Math.min(24, Number(fontSize.value) || resolved.fontSize || 16)),
-      lineHeight: Math.max(1.2, Math.min(2.4, Number(lineHeight.value) || resolved.lineHeight || 1.85)),
-      leafMarkerEnabled: markerEnabled.value === "" ? void 0 : markerEnabled.value === "true",
-      leafMarkerStyle: markerStyle.value === "hollow" || markerStyle.value === "square" || markerStyle.value === "dash" ? markerStyle.value : markerStyle.value === "solid" ? "solid" : void 0,
-      leafMarkerColor: markerColorFollowsTheme ? void 0 : markerColor.value,
-      leafTextAlignment: alignment.value === "flush" || alignment.value === "auto" ? alignment.value : void 0,
-      leafNumberingEnabled: numberingEnabled.value === "" ? void 0 : numberingEnabled.value === "true",
-      leafNumberingStyle: numberingStyle.value === "circled" || numberingStyle.value === "next-level" ? numberingStyle.value : void 0,
-      leafNumberingThreshold: numberingEnabled.value === "" && (style == null ? void 0 : style.leafNumberingThreshold) === void 0 ? void 0 : Math.max(1, Math.min(20, Math.round(Number(numberingThreshold.value) || globalDefaults.numberingThreshold)))
-    })
-  };
-}
-function createArticleNumberingControls(container, currentMode, currentLevel, onChange) {
-  const numberingModeLabel = container.createEl("label", { cls: "mmc-article-numbering-control" });
-  numberingModeLabel.createSpan({ text: "\u6587\u7AE0\u7F16\u53F7\u65B9\u5F0F" });
-  const numberingModeSelect = numberingModeLabel.createEl("select");
-  numberingModeSelect.createEl("option", { text: "\u81EA\u52A8\uFF08\u6309\u6811\u5C42\u7EA7\u4E0E\u6807\u9898\u7ED3\u6784\uFF09", attr: { value: "auto" } });
-  numberingModeSelect.createEl("option", { text: "\u5173\u95ED\uFF08\u4E0D\u663E\u793A\u4E14\u4E0D\u5360\u5E8F\u53F7\uFF09", attr: { value: "none" } });
-  numberingModeSelect.createEl("option", { text: "\u624B\u52A8\u5C42\u7EA7\uFF08\u81EA\u5B9A\u4E49\u6700\u9AD8\u5C42\u7EA7\uFF09", attr: { value: "manual" } });
-  numberingModeSelect.value = currentMode != null ? currentMode : "auto";
-  const numberingLevelLabel = container.createEl("label", { cls: "mmc-article-numbering-control mmc-article-numbering-level" });
-  numberingLevelLabel.createSpan({ text: "\u6700\u9AD8\u6587\u7AE0\u5C42\u7EA7" });
-  const numberingLevelSelect = numberingLevelLabel.createEl("select");
-  for (let level = 1; level <= 8; level += 1) {
-    numberingLevelSelect.createEl("option", { text: `${level} \u7EA7 \xB7 ${articleNumberLabel(level, 1)}\u793A\u4F8B`, attr: { value: String(level) } });
-  }
-  numberingLevelSelect.value = String(currentLevel != null ? currentLevel : 1);
-  const numberingHelp = container.createDiv({
-    cls: "setting-item-description mmc-article-numbering-help",
-    text: "\u5173\u95ED\u4E2D\u5FC3\u8282\u70B9\u7F16\u53F7\u65F6\uFF0C\u5F53\u524D\u5BFC\u56FE\u5185\u7684\u7AE0\u8282\u548C\u672B\u7AEF\u5E8F\u53F7\u5168\u90E8\u9690\u85CF\uFF1B\u5982\u679C\u5F53\u524D\u6587\u4EF6\u662F\u9876\u5C42\u603B\u76EE\u5F55\uFF0C\u5173\u95ED\u72B6\u6001\u4F1A\u7EE7\u7EED\u4F5C\u7528\u5230\u6302\u8F7D\u7684\u5168\u90E8\u5B50\u5BFC\u56FE\u3002\u5173\u95ED\u666E\u901A\u8282\u70B9\u65F6\u53EA\u8DF3\u8FC7\u8BE5\u8282\u70B9\u3002\u624B\u52A8\u5C42\u7EA7\u7528\u4E8E\u5B9A\u4E49\u5F53\u524D\u8282\u70B9\u6240\u5728\u5B50\u6811\u7684\u6700\u9AD8\u6587\u7AE0\u5C42\u7EA7\uFF1B\u7F16\u8F91\u4E2D\u5FC3\u8282\u70B9\u65F6\uFF0C\u4E00\u7EA7\u5B50\u8282\u70B9\u76F4\u63A5\u4F7F\u7528\u6240\u9009\u5C42\u7EA7\u3002\u8D85\u8FC7\u7B2C 8 \u7EA7\u7684\u66F4\u6DF1\u7ED3\u6784\u4FDD\u7559\u6807\u9898\u5C42\u7EA7\uFF0C\u4F46\u4E0D\u518D\u5FAA\u73AF\u751F\u6210 A. /\uFF08A\uFF09\u7F16\u53F7\u3002"
-  });
-  const updateNumberingLevelState = () => {
-    const manual = numberingModeSelect.value === "manual";
-    numberingLevelSelect.disabled = !manual;
-    numberingLevelLabel.toggleClass("is-disabled", !manual);
-    numberingHelp.toggleClass("is-disabled", !manual);
-  };
-  numberingModeSelect.addEventListener("change", () => {
-    updateNumberingLevelState();
-    onChange == null ? void 0 : onChange();
-  });
-  numberingLevelSelect.addEventListener("change", () => onChange == null ? void 0 : onChange());
-  updateNumberingLevelState();
-  return {
-    read: () => ({
-      articleNumberingMode: numberingModeSelect.value === "manual" || numberingModeSelect.value === "none" ? numberingModeSelect.value : void 0,
-      articleNumberingLevel: numberingModeSelect.value === "manual" ? Number(numberingLevelSelect.value) : void 0
-    })
-  };
-}
-var NodeEditModal = class extends import_obsidian11.Modal {
-  /**
-   * 创建 NodeEditModal 实例，保存依赖和初始状态；实际 DOM 构建通常在 onOpen() 或后续渲染流程中完成。
-   *
-   * @param app Obsidian 应用实例，用于访问仓库、工作区和 UI 服务。
-   * @param node 当前处理的节点。
-   * @param defaultShape 该参数用于 constructor 流程中的输入或控制。
-   * @param callbacks 编辑器向视图层发送事件的一组回调。
-   * @param articleMiniMap 当前脑图保存的阅读缩略导航图覆盖值；undefined 表示跟随插件设置。
-   * @param globalArticleMiniMap 插件设置中的阅读缩略导航图默认值，用于界面提示和回退。
-   * @param submit 提交主题、文章编号、目录及缩略导航图配置的回调。
-   * @param position 编辑器显示在居中弹窗还是右侧画布面板。
-   * @param panelHost 右侧面板需要限制在其中的画布元素。
-   */
-  constructor(app, node, defaultShape, callbacks, submit, richTextShortcuts, position = "center", panelHost, initialBlockId) {
-    super(app);
-    this.richTextShortcuts = richTextShortcuts;
-    this.position = position;
-    this.panelHost = panelHost;
-    this.initialBlockId = initialBlockId;
-    this.saveOnClose = null;
-    this.closeWithoutFlush = false;
-    this.outsidePointerHandler = null;
-    this.resizeHandler = null;
-    this.externalNodeHandler = null;
-    this.node = node;
-    this.defaultShape = defaultShape;
-    this.callbacks = callbacks;
-    this.submit = submit;
-  }
-  /**
-   * 在弹窗或视图打开时创建界面、绑定事件并把当前数据填入控件。
-   */
-  onOpen() {
-    var _a2, _b2, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s;
-    this.modalEl.toggleClass("mms-node-editor-right", this.position === "right");
-    if (this.position === "right" && this.panelHost) {
-      const positionPanel = () => {
-        const rect = this.panelHost.getBoundingClientRect();
-        const container = this.modalEl.parentElement;
-        if (!container) return;
-        container.style.left = `${rect.left}px`;
-        container.style.top = `${rect.top}px`;
-        container.style.width = `${rect.width}px`;
-        container.style.height = `${rect.height}px`;
-        container.style.right = "auto";
-        container.style.bottom = "auto";
-      };
-      this.resizeHandler = positionPanel;
-      positionPanel();
-      window.addEventListener("resize", positionPanel);
-    }
-    this.titleEl.setText("\u7F16\u8F91\u8282\u70B9\u5185\u5BB9");
-    this.contentEl.addClass("mmc-node-edit-modal");
-    const form = this.contentEl.createDiv({ cls: "mmc-node-edit-form" });
-    form.createEl("p", {
-      cls: "setting-item-description",
-      text: "\u8282\u70B9\u5185\u5BB9\u7531\u53EF\u6392\u5E8F\u7684\u6587\u5B57\u3001\u56FE\u7247\u3001\u8868\u683C\u548C\u4EE3\u7801\u5757\u7EC4\u6210\uFF0C\u53EF\u6309\u9700\u8981\u7EC4\u5408\u548C\u8C03\u6574\u987A\u5E8F\u3002"
-    });
-    let workingBlocks = JSON.parse(JSON.stringify(nodeContentBlocks(this.node)));
-    if (!workingBlocks.length) workingBlocks = [{ id: newId(), type: "text", text: "\u65B0\u8282\u70B9" }];
-    let scheduleAutoSave = () => void 0;
-    const pendingAutoUploads = /* @__PURE__ */ new Map();
-    const actionRow = form.createDiv({ cls: "mmc-content-block-actions" });
-    const blocksEl = form.createDiv({ cls: "mmc-content-block-list" });
-    let draggedBlockId = null;
-    const cloneBlocks = () => JSON.parse(JSON.stringify(workingBlocks));
-    const validBlocks = () => cloneBlocks().filter((block) => {
-      if (block.type === "image") return Boolean(block.source.trim());
-      if (block.type === "table") return Boolean(block.table.headers.some((header) => header.trim()));
-      if (block.type === "code") return Boolean(block.code.code.trim());
-      return Boolean(block.text.trim());
-    });
-    const renderBlocks2 = () => {
-      blocksEl.empty();
-      workingBlocks.forEach((block, index) => {
-        var _a3, _b3, _c2;
-        const card = blocksEl.createDiv({ cls: `mmc-content-block is-${block.type}` });
-        card.dataset.blockId = block.id;
-        card.toggleClass("is-targeted", block.id === this.initialBlockId);
-        const header = card.createDiv({ cls: "mmc-content-block-header" });
-        const blockTitle = block.type === "text" ? "\u6587\u5B57\u5757" : block.type === "image" ? "\u56FE\u7247\u5757" : block.type === "table" ? "\u8868\u683C\u5757" : "\u4EE3\u7801\u5757";
-        header.createSpan({ cls: "mmc-content-block-title", text: `${blockTitle} ${index + 1}` });
-        const controls = header.createDiv({ cls: "mmc-content-block-controls" });
-        const control = (icon, title, action, disabled = false) => {
-          const btn = controls.createEl("button", { cls: "clickable-icon", attr: { type: "button", title, "aria-label": title } });
-          (0, import_obsidian11.setIcon)(btn, icon);
-          btn.disabled = disabled;
-          btn.addEventListener("click", (event) => {
-            event.preventDefault();
-            action();
-          });
-        };
-        const dragHandle = controls.createEl("button", {
-          cls: "clickable-icon mmc-content-block-editor-drag-handle",
-          attr: { type: "button", title: "\u62D6\u52A8\u5185\u5BB9\u5757", "aria-label": "\u62D6\u52A8\u5185\u5BB9\u5757", draggable: "true" }
-        });
-        (0, import_obsidian11.setIcon)(dragHandle, "grip-vertical");
-        dragHandle.addEventListener("pointerdown", (event) => event.stopPropagation());
-        dragHandle.addEventListener("click", (event) => event.preventDefault());
-        dragHandle.addEventListener("dragstart", (event) => {
-          var _a4;
-          event.stopPropagation();
-          draggedBlockId = block.id;
-          (_a4 = event.dataTransfer) == null ? void 0 : _a4.setData("application/x-mms-content-block", block.id);
-          if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
-          card.addClass("is-block-dragging");
-        });
-        dragHandle.addEventListener("dragend", () => {
-          draggedBlockId = null;
-          blocksEl.querySelectorAll(".is-block-dragging, .is-block-drop-before, .is-block-drop-after").forEach((element) => element.removeClasses(["is-block-dragging", "is-block-drop-before", "is-block-drop-after"]));
-        });
-        card.addEventListener("dragover", (event) => {
-          if (!draggedBlockId || draggedBlockId === block.id) return;
-          event.preventDefault();
-          event.stopPropagation();
-          blocksEl.querySelectorAll(".is-block-drop-before, .is-block-drop-after").forEach((element) => element.removeClasses(["is-block-drop-before", "is-block-drop-after"]));
-          const position = event.clientY < card.getBoundingClientRect().top + card.getBoundingClientRect().height / 2 ? "before" : "after";
-          card.addClass(`is-block-drop-${position}`);
-          if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
-        });
-        card.addEventListener("drop", (event) => {
-          if (!draggedBlockId || draggedBlockId === block.id) return;
-          event.preventDefault();
-          event.stopPropagation();
-          const sourceIndex = workingBlocks.findIndex((item) => item.id === draggedBlockId);
-          const targetIndex = workingBlocks.findIndex((item) => item.id === block.id);
-          if (sourceIndex < 0 || targetIndex < 0) return;
-          const position = event.clientY < card.getBoundingClientRect().top + card.getBoundingClientRect().height / 2 ? "before" : "after";
-          const [moving] = workingBlocks.splice(sourceIndex, 1);
-          if (!moving) return;
-          const updatedTargetIndex = workingBlocks.findIndex((item) => item.id === block.id);
-          workingBlocks.splice(updatedTargetIndex + (position === "after" ? 1 : 0), 0, moving);
-          draggedBlockId = null;
-          renderBlocks2();
-          scheduleAutoSave();
-        });
-        card.addEventListener("contextmenu", (event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          const menu = new import_obsidian11.Menu();
-          menu.addItem((item) => item.setTitle("\u5220\u9664\u5F53\u524D\u5757").setIcon("trash-2").onClick(() => {
-            const currentIndex = workingBlocks.findIndex((item2) => item2.id === block.id);
-            if (currentIndex < 0) return;
-            workingBlocks.splice(currentIndex, 1);
-            renderBlocks2();
-            scheduleAutoSave();
-          }));
-          menu.showAtMouseEvent(event);
-        });
-        control("arrow-up", "\u4E0A\u79FB", () => {
-          [workingBlocks[index - 1], workingBlocks[index]] = [workingBlocks[index], workingBlocks[index - 1]];
-          renderBlocks2();
-          scheduleAutoSave();
-        }, index === 0);
-        control("arrow-down", "\u4E0B\u79FB", () => {
-          [workingBlocks[index + 1], workingBlocks[index]] = [workingBlocks[index], workingBlocks[index + 1]];
-          renderBlocks2();
-          scheduleAutoSave();
-        }, index === workingBlocks.length - 1);
-        control("trash-2", "\u5220\u9664\u5185\u5BB9\u5757", () => {
-          workingBlocks.splice(index, 1);
-          renderBlocks2();
-          scheduleAutoSave();
-        });
-        if (block.type === "text") {
-          renderNodeRichTextEditor(
-            card.createDiv({ cls: "mmc-content-block-body" }),
-            block,
-            scheduleAutoSave,
-            this.richTextShortcuts
-          );
-        } else if (block.type === "image") {
-          const body = card.createDiv({ cls: "mmc-content-block-body mmc-image-block-editor" });
-          const preview = body.createDiv({ cls: "mmc-image-block-preview" });
-          const refresh = () => {
-            var _a4;
-            preview.empty();
-            const resolved = this.callbacks.resolveImage(block.source);
-            if (resolved) {
-              const img = preview.createEl("img", { attr: { src: resolved, alt: block.alt || "\u56FE\u7247" } });
-              img.addEventListener("click", () => new ImagePreviewModal(
-                this.app,
-                resolved,
-                block.alt || "\u56FE\u7247",
-                imageSourceCandidates(block, true),
-                (source2) => this.callbacks.resolveImage(source2)
-              ).open());
-            } else preview.createDiv({ cls: "mmc-image-placeholder", text: block.source ? "\u65E0\u6CD5\u52A0\u8F7D\u56FE\u7247" : "\u5C1A\u672A\u9009\u62E9\u56FE\u7247" });
-            source.value = block.source;
-            alt.value = (_a4 = block.alt) != null ? _a4 : "";
-          };
-          const sourceLabel = body.createEl("label", { text: "\u56FE\u7247\u8DEF\u5F84\u6216\u7F51\u5740" });
-          const source = sourceLabel.createEl("input", { type: "text", attr: { placeholder: "\u4ED3\u5E93\u8DEF\u5F84\u3001[[\u56FE\u7247]] \u6216 https://..." } });
-          const altLabel = body.createEl("label", { text: "\u56FE\u7247\u8BF4\u660E\uFF08\u53EF\u9009\uFF09" });
-          const alt = altLabel.createEl("input", { type: "text", attr: { placeholder: "\u56FE\u7247\u8BF4\u660E" } });
-          const sizeGrid = body.createDiv({ cls: "mmc-image-size-inputs" });
-          const addSizeInput = (labelText, key) => {
-            const label = sizeGrid.createEl("label", { text: labelText });
-            const input = label.createEl("input", { type: "number", attr: { min: "20", max: "2000", step: "1", placeholder: "\u81EA\u52A8" } });
-            input.value = block[key] === void 0 ? "" : String(block[key]);
-            input.addEventListener("input", () => {
-              const value = Number(input.value);
-              block[key] = input.value && Number.isFinite(value) ? Math.max(20, Math.min(2e3, Math.round(value))) : void 0;
-              scheduleAutoSave();
-            });
-          };
-          addSizeInput("\u663E\u793A\u5BBD\u5EA6\uFF08px\uFF09", "width");
-          addSizeInput("\u663E\u793A\u9AD8\u5EA6\uFF08px\uFF09", "height");
-          const layoutLabel = body.createEl("label", { text: "\u56FE\u7247\u6392\u7248" });
-          const layout = layoutLabel.createEl("select");
-          layout.createEl("option", { value: "block", text: "\u72EC\u5360\u4E00\u884C" });
-          layout.createEl("option", { value: "inline", text: "\u4E0E\u76F8\u90BB\u56FE\u7247\u540C\u884C" });
-          layout.value = (_a3 = block.layout) != null ? _a3 : "block";
-          layout.addEventListener("change", () => {
-            block.layout = layout.value === "inline" ? "inline" : void 0;
-            scheduleAutoSave();
-          });
-          const alignLabel2 = body.createEl("label", { text: "\u56FE\u7247\u5BF9\u9F50" });
-          const align = alignLabel2.createEl("select");
-          [
-            ["left", "\u5DE6\u5BF9\u9F50"],
-            ["center", "\u5C45\u4E2D"],
-            ["right", "\u53F3\u5BF9\u9F50"]
-          ].forEach(([value, label]) => align.createEl("option", { value, text: label }));
-          align.value = (_b3 = block.align) != null ? _b3 : "center";
-          align.addEventListener("change", () => {
-            block.align = align.value === "left" || align.value === "right" ? align.value : void 0;
-            scheduleAutoSave();
-          });
-          source.addEventListener("input", () => {
-            const next = source.value.trim();
-            if (next !== block.source) {
-              block.source = next;
-              block.localSource = void 0;
-              block.remoteSources = void 0;
-              block.contentHash = void 0;
-            }
-            refresh();
-            scheduleAutoSave();
-          });
-          alt.addEventListener("input", () => {
-            block.alt = alt.value.trim() || void 0;
-            scheduleAutoSave();
-          });
-          const actions = body.createDiv({ cls: "mmc-image-block-actions" });
-          const pasteCurrent = actions.createEl("button", { text: "\u7C98\u8D34\u526A\u8D34\u677F\u56FE\u7247", attr: { type: "button" } });
-          pasteCurrent.addEventListener("click", () => {
-            void pasteClipboardImage(block);
-          });
-          const local = actions.createEl("button", { text: "\u4FDD\u5B58\u5230\u4ED3\u5E93", attr: { type: "button" } });
-          const applyImageAction = (action) => {
-            void action.then((changed) => {
-              if (!changed) return;
-              refresh();
-              scheduleAutoSave();
-            });
-          };
-          local.addEventListener("click", () => {
-            applyImageAction(selectNodeImage(this.app, block, "local", this.callbacks));
-          });
-          const remote = actions.createEl("button", { text: "\u9009\u62E9\u6587\u4EF6\u5E76\u4E0A\u4F20", attr: { type: "button" } });
-          remote.addEventListener("click", () => {
-            applyImageAction(selectNodeImage(this.app, block, "remote", this.callbacks));
-          });
-          if (block.localSource || block.source && !/^https?:\/\//i.test(block.source)) {
-            const uploadCurrent = actions.createEl("button", { text: "\u4E0A\u4F20\u5F53\u524D\u56FE\u7247", attr: { type: "button" } });
-            uploadCurrent.addEventListener("click", () => {
-              applyImageAction(uploadCurrentNodeImage(this.app, block, this.callbacks));
-            });
-          }
-          if ((_c2 = block.remoteSources) == null ? void 0 : _c2.length) {
-            const mirrors = body.createDiv({ cls: "mms-image-mirrors" });
-            mirrors.createSpan({ cls: "mms-image-mirrors-label", text: "\u8FDC\u7A0B\u955C\u50CF\uFF1A" });
-            block.remoteSources.forEach((item, mirrorIndex) => {
-              const link = mirrors.createEl("a", {
-                text: item.hostName || `\u56FE\u5E8A ${mirrorIndex + 1}`,
-                href: item.url,
-                attr: { target: "_blank", rel: "noopener" }
-              });
-              link.addEventListener("click", (event) => event.stopPropagation());
-            });
-          }
-          refresh();
-        } else if (block.type === "table") {
-          const body = card.createDiv({ cls: "mmc-content-block-body" });
-          body.createDiv({ cls: "setting-item-description", text: `${block.table.headers.length} \u5217 \xB7 ${block.table.rows.length} \u884C` });
-          const edit = body.createEl("button", { text: "\u7F16\u8F91\u8868\u683C", attr: { type: "button" } });
-          edit.addEventListener("click", () => new TableEditModal(this.app, block.table, (table) => {
-            block.table = table;
-            renderBlocks2();
-            scheduleAutoSave();
-          }).open());
-        } else {
-          const body = card.createDiv({ cls: "mmc-content-block-body" });
-          body.createDiv({ cls: "setting-item-description", text: block.code.language || "bash" });
-          const edit = body.createEl("button", { text: "\u7F16\u8F91\u4EE3\u7801", attr: { type: "button" } });
-          edit.addEventListener("click", () => new CodeEditModal(this.app, block.code, (code) => {
-            block.code = code;
-            renderBlocks2();
-            scheduleAutoSave();
-          }).open());
-        }
-      });
-      if (!workingBlocks.length) blocksEl.createDiv({ cls: "mmc-empty-content-hint", text: "\u5F53\u524D\u6CA1\u6709\u5185\u5BB9\u5757\u3002\u8BF7\u6DFB\u52A0\u6587\u5B57\u3001\u56FE\u7247\u3001\u8868\u683C\u6216\u4EE3\u7801\u3002" });
-    };
-    const suggestedClipboardImageName = (blob) => {
-      var _a3;
-      const extension = ((_a3 = blob.type.split("/")[1]) == null ? void 0 : _a3.replace("jpeg", "jpg").replace("svg+xml", "svg")) || "png";
-      return `mindmap-image.${extension}`;
-    };
-    const savePastedImage = async (blob, existingBlock, suppliedName) => {
-      const filename = suppliedName || suggestedClipboardImageName(blob);
-      let path;
-      try {
-        path = await this.callbacks.onSavePastedImage(blob, filename);
-      } catch (error) {
-        console.error("MindMap Studio node modal paste image storage failed", error);
-        new import_obsidian11.Notice(`\u7C98\u8D34\u56FE\u7247\u5931\u8D25\uFF1A${error instanceof Error ? error.message : String(error)}`, 7e3);
-        return;
-      }
-      const block = existingBlock != null ? existingBlock : { id: newId(), type: "image", source: "" };
-      block.source = path;
-      block.localSource = path;
-      block.remoteSources = void 0;
-      block.contentHash = void 0;
-      if (!existingBlock) workingBlocks.push(block);
-      pendingAutoUploads.set(block.id, { path, filename });
-      renderBlocks2();
-      scheduleAutoSave();
-      new import_obsidian11.Notice("\u56FE\u7247\u5DF2\u4ECE\u526A\u8D34\u677F\u6DFB\u52A0\u5230\u5F53\u524D\u8282\u70B9");
-    };
-    const readClipboardImage = async () => {
-      var _a3;
-      if (!((_a3 = navigator.clipboard) == null ? void 0 : _a3.read)) {
-        new import_obsidian11.Notice("\u5F53\u524D\u73AF\u5883\u65E0\u6CD5\u76F4\u63A5\u8BFB\u53D6\u526A\u8D34\u677F\uFF0C\u8BF7\u5728\u7F16\u8F91\u8282\u70B9\u7A97\u53E3\u4E2D\u6309 Ctrl/Cmd+V");
-        return null;
-      }
-      try {
-        const items = await navigator.clipboard.read();
-        for (const item of items) {
-          const type = item.types.find((candidate) => candidate.startsWith("image/"));
-          if (!type) continue;
-          const blob = await item.getType(type);
-          return { blob, filename: suggestedClipboardImageName(blob) };
-        }
-      } catch (error) {
-        console.error("MindMap Studio node modal clipboard read failed", error);
-        new import_obsidian11.Notice("\u65E0\u6CD5\u76F4\u63A5\u8BFB\u53D6\u526A\u8D34\u677F\uFF0C\u8BF7\u5728\u7F16\u8F91\u8282\u70B9\u7A97\u53E3\u4E2D\u6309 Ctrl/Cmd+V");
-        return null;
-      }
-      new import_obsidian11.Notice("\u526A\u8D34\u677F\u4E2D\u6CA1\u6709\u53EF\u7C98\u8D34\u7684\u56FE\u7247");
-      return null;
-    };
-    const pasteClipboardImage = async (existingBlock) => {
-      const image = await readClipboardImage();
-      if (!image) return;
-      await savePastedImage(image.blob, existingBlock, image.filename);
-    };
-    form.addEventListener("paste", (event) => {
-      var _a3, _b3;
-      const imageItem = Array.from((_b3 = (_a3 = event.clipboardData) == null ? void 0 : _a3.items) != null ? _b3 : []).find((item) => item.kind === "file" && item.type.startsWith("image/"));
-      const blob = imageItem == null ? void 0 : imageItem.getAsFile();
-      if (!blob) return;
-      event.preventDefault();
-      event.stopPropagation();
-      void savePastedImage(blob, void 0, blob.name || suggestedClipboardImageName(blob));
-    }, true);
-    const addText = actionRow.createEl("button", { text: "+ \u6587\u5B57", attr: { type: "button" } });
-    addText.addEventListener("click", () => {
-      workingBlocks.push({ id: newId(), type: "text", text: "" });
-      renderBlocks2();
-      scheduleAutoSave();
-    });
-    const addImage = actionRow.createEl("button", { text: "+ \u56FE\u7247", attr: { type: "button" } });
-    addImage.addEventListener("click", () => {
-      workingBlocks.push({ id: newId(), type: "image", source: "" });
-      renderBlocks2();
-      scheduleAutoSave();
-    });
-    const pasteImage = actionRow.createEl("button", { text: "+ \u7C98\u8D34\u56FE\u7247", attr: { type: "button" } });
-    pasteImage.addEventListener("click", () => {
-      void pasteClipboardImage();
-    });
-    const addTable = actionRow.createEl("button", { text: "+ \u8868\u683C", attr: { type: "button" } });
-    addTable.addEventListener("click", () => {
-      workingBlocks.push({ id: newId(), type: "table", table: { headers: ["\u5217 1", "\u5217 2"], rows: [["", ""]], source: "manual" } });
-      renderBlocks2();
-      scheduleAutoSave();
-    });
-    const addCode = actionRow.createEl("button", { text: "+ \u4EE3\u7801", attr: { type: "button" } });
-    addCode.addEventListener("click", () => {
-      workingBlocks.push({ id: newId(), type: "code", code: { language: "bash", code: "" } });
-      renderBlocks2();
-      scheduleAutoSave();
-    });
-    renderBlocks2();
-    if (this.position === "right" && this.panelHost) {
-      this.externalNodeHandler = (event) => {
-        const detail = event.detail;
-        if ((detail == null ? void 0 : detail.nodeId) !== this.node.id) return;
-        workingBlocks = JSON.parse(JSON.stringify(nodeContentBlocks(this.node)));
-        renderBlocks2();
-      };
-      this.panelHost.addEventListener("mms-inline-node-change", this.externalNodeHandler);
-    }
-    const detailsGrid = form.createDiv({ cls: "mmc-form-grid" });
-    const iconLabel = detailsGrid.createEl("label", { text: "\u56FE\u6807\u6216 Emoji" });
-    const iconInput = iconLabel.createEl("input", { type: "text", attr: { placeholder: "\u4F8B\u5982 \u{1F4A1}" } });
-    iconInput.value = (_a2 = this.node.icon) != null ? _a2 : "";
-    const shapeLabel = detailsGrid.createEl("label", { text: "\u8282\u70B9\u5F62\u72B6" });
-    const shapeSelect = shapeLabel.createEl("select");
-    for (const [value, label] of [["rounded", "\u5706\u89D2"], ["pill", "\u80F6\u56CA"], ["rectangle", "\u76F4\u89D2"]]) shapeSelect.createEl("option", { text: label, attr: { value } });
-    shapeSelect.value = (_c = (_b2 = this.node.style) == null ? void 0 : _b2.shape) != null ? _c : this.defaultShape;
-    const tagsLabel = detailsGrid.createEl("label", { text: "\u6807\u7B7E\uFF08\u9017\u53F7\u5206\u9694\uFF09" });
-    const tagsInput = tagsLabel.createEl("input", { type: "text" });
-    tagsInput.value = (_e = (_d = this.node.tags) == null ? void 0 : _d.join(", ")) != null ? _e : "";
-    const numberingControls = createArticleNumberingControls(
-      detailsGrid,
-      this.node.articleNumberingMode,
-      this.node.articleNumberingLevel,
-      () => scheduleAutoSave()
-    );
-    const styleGrid = form.createDiv({ cls: "mmc-form-grid mmc-style-grid" });
-    const colorControl = (labelText, current, fallback) => {
-      const label = styleGrid.createEl("label", { text: labelText });
-      const row = label.createDiv({ cls: "mmc-color-row" });
-      const toggle = row.createEl("input", { type: "checkbox" });
-      const color = row.createEl("input", { type: "color" });
-      toggle.checked = Boolean(current);
-      color.value = current != null ? current : fallback;
-      color.disabled = !toggle.checked;
-      toggle.addEventListener("change", () => {
-        color.disabled = !toggle.checked;
-        scheduleAutoSave();
-      });
-      color.addEventListener("change", scheduleAutoSave);
-      return [toggle, color];
-    };
-    const [colorToggle, colorInput] = colorControl("\u8282\u70B9\u989C\u8272", (_f = this.node.style) == null ? void 0 : _f.color, "#4f46e5");
-    const [textColorToggle, textColorInput] = colorControl("\u6574\u8282\u70B9\u6587\u5B57\u989C\u8272", (_g = this.node.style) == null ? void 0 : _g.textColor, "#ffffff");
-    const [borderColorToggle, borderColorInput] = colorControl("\u8FB9\u6846\u989C\u8272", (_h = this.node.style) == null ? void 0 : _h.borderColor, "#94a3b8");
-    const numberControl = (labelText, current, min, max2, step) => {
-      var _a3;
-      const label = styleGrid.createEl("label", { text: labelText });
-      const input = label.createEl("input", { type: "number", attr: { min: String(min), max: String(max2), step: String(step), placeholder: "\u8DDF\u968F\u9ED8\u8BA4" } });
-      input.value = (_a3 = current == null ? void 0 : current.toString()) != null ? _a3 : "";
-      return input;
-    };
-    const borderWidthInput = numberControl("\u8FB9\u6846\u7C97\u7EC6", (_i = this.node.style) == null ? void 0 : _i.borderWidth, 0, 6, 0.5);
-    const fontSizeInput = numberControl("\u5B57\u53F7", (_j = this.node.style) == null ? void 0 : _j.fontSize, 10, 32, 1);
-    const widthInput = numberControl("\u8282\u70B9\u5BBD\u5EA6\uFF08100\u2013900\uFF09", (_k = this.node.style) == null ? void 0 : _k.width, 100, 900, 10);
-    widthInput.placeholder = "\u81EA\u52A8\u5BBD\u5EA6";
-    const minHeightInput = numberControl("\u8282\u70B9\u6700\u5C0F\u9AD8\u5EA6\uFF0836\u2013600\uFF09", (_l = this.node.style) == null ? void 0 : _l.minHeight, 36, 600, 10);
-    minHeightInput.placeholder = "\u81EA\u52A8\u9AD8\u5EA6";
-    const alignLabel = styleGrid.createEl("label", { text: "\u6587\u5B57\u5BF9\u9F50" });
-    const alignSelect = alignLabel.createEl("select");
-    alignSelect.createEl("option", { text: "\u8DDF\u968F\u5168\u5C40", attr: { value: "inherit" } });
-    alignSelect.createEl("option", { text: "\u5DE6\u5BF9\u9F50", attr: { value: "left" } });
-    alignSelect.createEl("option", { text: "\u5C45\u4E2D", attr: { value: "center" } });
-    alignSelect.createEl("option", { text: "\u53F3\u5BF9\u9F50", attr: { value: "right" } });
-    alignSelect.value = (_n = (_m = this.node.style) == null ? void 0 : _m.textAlign) != null ? _n : "inherit";
-    const booleanControl = (labelText, current) => {
-      const label = styleGrid.createEl("label", { text: labelText });
-      const select = label.createEl("select");
-      select.createEl("option", { text: "\u8DDF\u968F\u9ED8\u8BA4", attr: { value: "inherit" } });
-      select.createEl("option", { text: "\u5F00\u542F", attr: { value: "true" } });
-      select.createEl("option", { text: "\u5173\u95ED", attr: { value: "false" } });
-      select.value = current === void 0 ? "inherit" : current ? "true" : "false";
-      return select;
-    };
-    const boldInput = booleanControl("\u6574\u8282\u70B9\u52A0\u7C97", (_o = this.node.style) == null ? void 0 : _o.bold);
-    const italicInput = booleanControl("\u6574\u8282\u70B9\u659C\u4F53", (_p = this.node.style) == null ? void 0 : _p.italic);
-    const underlineInput = booleanControl("\u6574\u8282\u70B9\u4E0B\u5212\u7EBF", (_q = this.node.style) == null ? void 0 : _q.underline);
-    const noteLabel = form.createEl("label", { text: "\u5907\u6CE8\uFF08\u53EF\u9009\uFF09" });
-    const noteInput = noteLabel.createEl("textarea");
-    noteInput.value = (_r = this.node.note) != null ? _r : "";
-    noteInput.rows = 4;
-    const linkLabel = form.createEl("label", { text: "\u94FE\u63A5\uFF08\u7F51\u5740\u3001\u7B14\u8BB0\u540D\u6216 [[\u53CC\u94FE]]\uFF09" });
-    const linkInput = linkLabel.createEl("input", { type: "text" });
-    linkInput.value = (_s = this.node.link) != null ? _s : "";
-    const parseBool = (value) => value === "true" ? true : value === "false" ? false : void 0;
-    const parseNumber = (value, min, max2) => value.trim() && Number.isFinite(Number(value)) ? Math.min(max2, Math.max(min, Number(value))) : void 0;
-    const collectValues = (showNotice) => {
-      const content = validBlocks();
-      if (!content.length) {
-        if (showNotice) {
-          new import_obsidian11.Notice("\u8282\u70B9\u81F3\u5C11\u9700\u8981\u4E00\u4E2A\u5185\u5BB9\u5757");
-        }
-        return null;
-      }
-      const shape = shapeSelect.value;
-      const numbering = numberingControls.read();
-      return {
-        content,
-        note: noteInput.value.trim(),
-        link: linkInput.value.trim(),
-        icon: iconInput.value.trim().slice(0, 12),
-        tags: Array.from(new Set(tagsInput.value.split(/[,，]/).map((tag) => tag.trim().replace(/^#/, "")).filter(Boolean))).slice(0, 12),
-        articleNumberingMode: numbering.articleNumberingMode,
-        articleNumberingLevel: numbering.articleNumberingLevel,
-        color: colorToggle.checked ? colorInput.value : void 0,
-        textColor: textColorToggle.checked ? textColorInput.value : void 0,
-        borderColor: borderColorToggle.checked ? borderColorInput.value : void 0,
-        borderWidth: parseNumber(borderWidthInput.value, 0, 6),
-        shape: shape === "pill" || shape === "rectangle" || shape === "rounded" ? shape : void 0,
-        bold: parseBool(boldInput.value),
-        italic: parseBool(italicInput.value),
-        underline: parseBool(underlineInput.value),
-        fontSize: parseNumber(fontSizeInput.value, 10, 32),
-        textAlign: alignSelect.value === "left" || alignSelect.value === "right" || alignSelect.value === "center" ? alignSelect.value : void 0,
-        width: parseNumber(widthInput.value, 100, 900),
-        minHeight: parseNumber(minHeightInput.value, 36, 600)
-      };
-    };
-    let timer = null;
-    let last = JSON.stringify(collectValues(false));
-    const saveNow = (mode, showNotice = false) => {
-      if (timer !== null) {
-        window.clearTimeout(timer);
-        timer = null;
-      }
-      const values = collectValues(showNotice);
-      if (!values) return false;
-      const signature = JSON.stringify(values);
-      if (signature !== last) {
-        this.submit(values, mode);
-        last = signature;
-        for (const [blockId, pending] of pendingAutoUploads) {
-          if (!values.content.some((block) => block.type === "image" && block.id === blockId)) {
-            pendingAutoUploads.delete(blockId);
-            continue;
-          }
-          try {
-            this.callbacks.onScheduleAutoUpload(this.node.id, blockId, pending.path, pending.filename);
-          } catch (error) {
-            console.error("MindMap Studio node modal paste image auto-upload scheduling failed", error);
-          } finally {
-            pendingAutoUploads.delete(blockId);
-          }
-        }
-      }
-      return true;
-    };
-    scheduleAutoSave = () => {
-      if (timer !== null) window.clearTimeout(timer);
-      timer = window.setTimeout(() => saveNow("autosave"), 280);
-    };
-    this.saveOnClose = () => {
-      saveNow("commit");
-    };
-    form.addEventListener("keydown", (event) => {
-      if (event.key !== "Enter" || event.shiftKey || event.isComposing) return;
-      event.preventDefault();
-      event.stopPropagation();
-      event.stopImmediatePropagation();
-      if (saveNow("commit", true)) {
-        this.closeWithoutFlush = true;
-        this.close();
-      }
-    }, true);
-    [iconInput, shapeSelect, tagsInput, borderWidthInput, fontSizeInput, widthInput, minHeightInput, alignSelect, boldInput, italicInput, underlineInput, noteInput, linkInput].forEach((input) => {
-      input.addEventListener("input", scheduleAutoSave);
-      input.addEventListener("change", scheduleAutoSave);
-    });
-    const buttons = form.createDiv({ cls: "mmc-form-actions" });
-    const closeButton = buttons.createEl("button", { cls: "mod-cta", text: "\u4FDD\u5B58\u5E76\u5173\u95ED", attr: { type: "button" } });
-    closeButton.addEventListener("click", () => {
-      if (saveNow("commit", true)) {
-        this.closeWithoutFlush = true;
-        this.close();
-      }
-    });
-    this.outsidePointerHandler = (event) => {
-      var _a3;
-      const targetNode = event.target;
-      const targetElement = targetNode instanceof Element ? targetNode : targetNode == null ? void 0 : targetNode.parentElement;
-      if (targetNode && this.modalEl.contains(targetNode)) return;
-      const ownModalContainer = this.modalEl.closest(".modal-container");
-      const targetModal = targetElement == null ? void 0 : targetElement.closest(".modal");
-      const targetModalContainer = targetElement == null ? void 0 : targetElement.closest(".modal-container");
-      if (targetModal && targetModal !== this.modalEl) return;
-      if (targetModalContainer && ownModalContainer && targetModalContainer !== ownModalContainer) return;
-      if (this.position === "right" && (targetElement == null ? void 0 : targetElement.closest(".mmc-node"))) return;
-      (_a3 = this.saveOnClose) == null ? void 0 : _a3.call(this);
-      this.closeWithoutFlush = true;
-      this.close();
-    };
-    window.setTimeout(() => document.addEventListener("pointerdown", this.outsidePointerHandler, true), 0);
-  }
-  /**
-   * 在弹窗或视图关闭时释放临时 DOM、计时器和事件状态。
-   */
-  onClose() {
-    var _a2;
-    if (!this.closeWithoutFlush) (_a2 = this.saveOnClose) == null ? void 0 : _a2.call(this);
-    if (this.outsidePointerHandler) document.removeEventListener("pointerdown", this.outsidePointerHandler, true);
-    if (this.resizeHandler) window.removeEventListener("resize", this.resizeHandler);
-    if (this.externalNodeHandler && this.panelHost) {
-      this.panelHost.removeEventListener("mms-inline-node-change", this.externalNodeHandler);
-    }
-    this.contentEl.empty();
-  }
-  /**
-   * 右侧面板与画布快速输入并存时，释放 Modal 的全局按键作用域。
-   */
-  releaseKeyboardScope() {
-    this.app.keymap.popScope(this.scope);
-  }
-};
-var AppearanceModal = class extends import_obsidian11.Modal {
-  /**
-   * 创建 AppearanceModal 实例，保存依赖和初始状态；实际 DOM 构建通常在 onOpen() 或后续渲染流程中完成。
-   *
-   * @param app Obsidian 应用实例，用于访问仓库、工作区和 UI 服务。
-   * @param appearance 导图外观配置。
-   * @param numbering 当前中心节点保存的文章编号覆盖设置。
-   * @param articleTocMaxDepth 当前脑图保存的目录最大层级覆盖值；undefined 表示跟随插件设置。
-   * @param globalArticleTocMaxDepth 插件设置中的目录最大层级，用于界面提示和回退。
-   * @param submit 该参数用于 constructor 流程中的输入或控制。
-   * @param reset 该参数用于 constructor 流程中的输入或控制。
-   */
-  constructor(app, appearance, numbering, articleTocMaxDepth, globalArticleTocMaxDepth, articleMiniMap, globalArticleMiniMap, pageCodeAppearance, readingStyle, globalReadingStyle, submit, reset) {
-    super(app);
-    this.appearance = appearance;
-    this.numbering = numbering;
-    this.articleTocMaxDepth = articleTocMaxDepth;
-    this.globalArticleTocMaxDepth = resolveArticleTocMaxDepth(void 0, globalArticleTocMaxDepth);
-    this.articleMiniMap = articleMiniMap;
-    this.globalArticleMiniMap = globalArticleMiniMap;
-    this.pageCodeAppearance = pageCodeAppearance;
-    this.readingStyle = readingStyle;
-    this.globalReadingStyle = globalReadingStyle;
-    this.submit = submit;
-    this.reset = reset;
-  }
-  /**
-   * 在弹窗或视图打开时创建界面、绑定事件并把当前数据填入控件。
-   */
-  onOpen() {
-    var _a2, _b2, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r;
-    this.titleEl.setText("\u4E3B\u9898\u4E0E\u5916\u89C2");
-    this.modalEl.addClass("mmc-appearance-dialog");
-    this.contentEl.addClass("mmc-appearance-modal");
-    const form = this.contentEl.createEl("form");
-    form.createEl("p", {
-      cls: "setting-item-description",
-      text: "\u5148\u9009\u62E9\u4E3B\u9898\u6A21\u677F\uFF0C\u518D\u6309\u753B\u5E03\u3001\u8282\u70B9\u3001\u8FDE\u7EBF\u3001\u9605\u8BFB\u6837\u5F0F\u3001\u7F16\u53F7\u4E0E\u4EE3\u7801\u5206\u7EC4\u8C03\u6574\u3002\u6587\u7AE0\u548C\u901A\u8BFB\u5171\u7528\u9605\u8BFB\u6837\u5F0F\uFF1B\u8BBE\u7F6E\u53EA\u4FDD\u5B58\u5230\u5F53\u524D .mindmap \u6587\u4EF6\uFF0C\u5E76\u4F18\u5148\u4E8E\u63D2\u4EF6\u5168\u5C40\u9ED8\u8BA4\u503C\u3002"
-    });
-    let selectedPreset = (_a2 = this.appearance.themePreset) != null ? _a2 : "classic-indigo";
-    const themeSection = form.createDiv({ cls: "mmc-theme-picker mmc-appearance-section" });
-    themeSection.createDiv({ cls: "mmc-theme-picker-title", text: "\u4E3B\u9898\u6A21\u677F" });
-    themeSection.createDiv({
-      cls: "setting-item-description mmc-appearance-section-description",
-      text: "\u4E3B\u9898\u6A21\u677F\u4F1A\u4E00\u6B21\u66F4\u65B0\u989C\u8272\u3001\u5B57\u4F53\u548C\u8FDE\u7EBF\uFF1B\u4E0B\u65B9\u5355\u9879\u4ECD\u53EF\u7EE7\u7EED\u8986\u76D6\u3002"
-    });
-    const themeGrid = themeSection.createDiv({ cls: "mmc-theme-card-grid" });
-    const themeCards = /* @__PURE__ */ new Map();
-    const appearanceColumns = form.createDiv({ cls: "mmc-appearance-columns" });
-    const appearanceLeftColumn = appearanceColumns.createDiv({ cls: "mmc-appearance-column" });
-    const appearanceRightColumn = appearanceColumns.createDiv({ cls: "mmc-appearance-column" });
-    const createAppearanceSection = (container, title, description) => {
-      const section = container.createDiv({ cls: "mmc-appearance-section" });
-      section.createDiv({ cls: "mmc-theme-picker-title", text: title });
-      section.createDiv({ cls: "setting-item-description mmc-appearance-section-description", text: description });
-      const grid = section.createDiv({ cls: "mmc-form-grid mmc-appearance-grid" });
-      return { section, grid };
-    };
-    const addColor = (container, labelText, value, fallback) => {
-      const label = container.createEl("label", { text: labelText });
-      const row = label.createDiv({ cls: "mmc-color-row" });
-      const toggle = row.createEl("input", { type: "checkbox" });
-      const input = row.createEl("input", { type: "color" });
-      toggle.checked = Boolean(value);
-      input.value = value != null ? value : fallback;
-      input.disabled = !toggle.checked;
-      toggle.addEventListener("change", () => {
-        input.disabled = !toggle.checked;
-      });
-      return { toggle, input };
-    };
-    const canvasSection = createAppearanceSection(appearanceLeftColumn, "\u753B\u5E03\u4E0E\u5B57\u4F53", "\u96C6\u4E2D\u8BBE\u7F6E\u80CC\u666F\u3001\u56FE\u6848\u548C\u5F53\u524D\u8111\u56FE\u7684\u57FA\u7840\u5B57\u4F53\u3002");
-    const background = addColor(canvasSection.grid, "\u80CC\u666F\u989C\u8272", this.appearance.backgroundColor, "#f8fafc");
-    const patternLabel = canvasSection.grid.createEl("label", { text: "\u80CC\u666F\u56FE\u6848" });
-    const patternSelect = patternLabel.createEl("select");
-    for (const [value, label] of [["none", "\u65E0"], ["grid", "\u7F51\u683C"], ["dots", "\u70B9\u9635"]]) patternSelect.createEl("option", { text: label, attr: { value } });
-    patternSelect.value = (_b2 = this.appearance.backgroundPattern) != null ? _b2 : "grid";
-    const patternColor = addColor(canvasSection.grid, "\u56FE\u6848\u989C\u8272", this.appearance.patternColor, "#94a3b8");
-    const fontLabel = canvasSection.grid.createEl("label", { text: "\u5B57\u4F53" });
-    const fontSelect = fontLabel.createEl("select");
-    for (const [value, label] of [["obsidian", "\u8DDF\u968F Obsidian"], ["sans", "\u65E0\u886C\u7EBF"], ["serif", "\u886C\u7EBF"], ["mono", "\u7B49\u5BBD"], ["custom", "\u81EA\u5B9A\u4E49"]]) fontSelect.createEl("option", { text: label, attr: { value } });
-    fontSelect.value = (_c = this.appearance.fontFamily) != null ? _c : "obsidian";
-    const customFontLabel = canvasSection.grid.createEl("label", { text: "\u81EA\u5B9A\u4E49\u5B57\u4F53\u540D\u79F0" });
-    const customFontInput = customFontLabel.createEl("input", { type: "text", attr: { placeholder: "Microsoft YaHei" } });
-    customFontInput.value = (_d = this.appearance.customFont) != null ? _d : "";
-    const updateCustomFont = () => {
-      customFontInput.disabled = fontSelect.value !== "custom";
-      customFontLabel.toggleClass("is-disabled", customFontInput.disabled);
-    };
-    fontSelect.addEventListener("change", updateCustomFont);
-    updateCustomFont();
-    const fontSizeLabel = canvasSection.grid.createEl("label", { text: "\u5B57\u53F7\uFF0810\u201330\uFF09" });
-    const fontSizeInput = fontSizeLabel.createEl("input", { type: "number", attr: { min: "10", max: "30", step: "1" } });
-    fontSizeInput.value = String((_e = this.appearance.fontSize) != null ? _e : 14);
-    const nodeSection = createAppearanceSection(appearanceRightColumn, "\u8282\u70B9\u4E0E\u6587\u5B57", "\u8BBE\u7F6E\u5206\u652F\u5F62\u6001\u3001\u8282\u70B9\u914D\u8272\u3001\u8FB9\u6846\u548C\u9ED8\u8BA4\u6587\u5B57\u8868\u73B0\u3002");
-    const nodeVisualStyleLabel = nodeSection.grid.createEl("label", { text: "\u5206\u652F\u5916\u89C2" });
-    const nodeVisualStyleSelect = nodeVisualStyleLabel.createEl("select");
-    nodeVisualStyleSelect.createEl("option", { text: "\u5706\u6DA6\u5361\u7247\u5206\u652F\uFF08\u66F2\u7EBF\uFF09", attr: { value: "card" } });
-    nodeVisualStyleSelect.createEl("option", { text: "\u5706\u89D2\u5206\u652F\uFF08\u6298\u7EBF\uFF09", attr: { value: "branch" } });
-    nodeVisualStyleSelect.value = (_f = this.appearance.nodeVisualStyle) != null ? _f : "card";
-    nodeVisualStyleLabel.createDiv({ cls: "setting-item-description", text: "\u5F53\u524D\u8111\u56FE\u8BBE\u7F6E\uFF0C\u4F18\u5148\u4E8E\u63D2\u4EF6\u5168\u5C40\u5206\u652F\u5916\u89C2\u3002" });
-    const nodeTextAlignLabel = nodeSection.grid.createEl("label", { text: "\u8282\u70B9\u6587\u5B57\u5BF9\u9F50" });
-    const nodeTextAlignSelect = nodeTextAlignLabel.createEl("select");
-    nodeTextAlignSelect.createEl("option", { text: "\u5DE6\u5BF9\u9F50", attr: { value: "left" } });
-    nodeTextAlignSelect.createEl("option", { text: "\u5C45\u4E2D", attr: { value: "center" } });
-    nodeTextAlignSelect.createEl("option", { text: "\u53F3\u5BF9\u9F50", attr: { value: "right" } });
-    nodeTextAlignSelect.value = (_g = this.appearance.nodeTextAlign) != null ? _g : "center";
-    const rootColor = addColor(nodeSection.grid, "\u4E2D\u5FC3\u4E3B\u9898\u989C\u8272", this.appearance.rootColor, "#4f46e5");
-    const rootTextColor = addColor(nodeSection.grid, "\u4E2D\u5FC3\u4E3B\u9898\u6587\u5B57", this.appearance.rootTextColor, "#ffffff");
-    const nodeColor = addColor(nodeSection.grid, "\u8282\u70B9\u80CC\u666F\u8272", this.appearance.nodeColor, "#ffffff");
-    const textColor = addColor(nodeSection.grid, "\u6587\u5B57\u989C\u8272", this.appearance.textColor, "#0f172a");
-    const borderColor = addColor(nodeSection.grid, "\u8282\u70B9\u8FB9\u6846\u989C\u8272", this.appearance.nodeBorderColor, "#94a3b8");
-    const borderWidthLabel = nodeSection.grid.createEl("label", { text: "\u8FB9\u6846\u7C97\u7EC6\uFF080\u20136\uFF09" });
-    const borderWidthInput = borderWidthLabel.createEl("input", { type: "number", attr: { min: "0", max: "6", step: "0.5" } });
-    borderWidthInput.value = String((_h = this.appearance.nodeBorderWidth) != null ? _h : 1);
-    const textStyleSection = nodeSection.section.createDiv({ cls: "mmc-appearance-text-style" });
-    textStyleSection.createDiv({ cls: "mmc-appearance-text-style-title", text: "\u6587\u5B57\u6837\u5F0F" });
-    const textStyle = textStyleSection.createDiv({ cls: "mmc-appearance-style-options" });
-    const addCheck = (text, checked) => {
-      const label = textStyle.createEl("label", { cls: "mmc-appearance-style-option" });
-      const input = label.createEl("input", { type: "checkbox" });
-      input.checked = checked;
-      label.createSpan({ text });
-      return input;
-    };
-    const bold = addCheck("\u6587\u5B57\u52A0\u7C97", this.appearance.bold === true);
-    const italic = addCheck("\u6587\u5B57\u659C\u4F53", this.appearance.italic === true);
-    const underline = addCheck("\u6587\u5B57\u4E0B\u5212\u7EBF", this.appearance.underline === true);
-    const edgeSection = createAppearanceSection(appearanceLeftColumn, "\u8FDE\u7EBF\u4E0E\u5206\u652F", "\u7EDF\u4E00\u7BA1\u7406\u8FDE\u7EBF\u5F62\u6001\u3001\u7C97\u7EC6\u53D8\u5316\u548C\u5F69\u8272\u4E00\u7EA7\u5206\u652F\u3002");
-    const edgeColor = addColor(edgeSection.grid, "\u8FDE\u7EBF\u989C\u8272", this.appearance.edgeColor, "#7c8aa5");
-    const edgeStyleLabel = edgeSection.grid.createEl("label", { text: "\u8FDE\u7EBF\u7C7B\u578B" });
-    const edgeStyleSelect = edgeStyleLabel.createEl("select");
-    for (const [value, label] of [["curved", "\u66F2\u7EBF"], ["straight", "\u76F4\u7EBF"], ["elbow", "\u6298\u7EBF"]]) edgeStyleSelect.createEl("option", { text: label, attr: { value } });
-    edgeStyleSelect.value = (_i = this.appearance.edgeStyle) != null ? _i : "curved";
-    const edgeWidthModeLabel = edgeSection.grid.createEl("label", { text: "\u8FDE\u7EBF\u7C97\u7EC6\u6A21\u5F0F" });
-    const edgeWidthModeSelect = edgeWidthModeLabel.createEl("select");
-    edgeWidthModeSelect.createEl("option", { text: "\u7EDF\u4E00\u7C97\u7EC6", attr: { value: "uniform" } });
-    edgeWidthModeSelect.createEl("option", { text: "\u4ECE\u7C97\u5230\u7EC6", attr: { value: "tapered" } });
-    edgeWidthModeSelect.value = (_j = this.appearance.edgeWidthMode) != null ? _j : "tapered";
-    const edgeWidthLabel = edgeSection.grid.createEl("label", { text: "\u8D77\u59CB\u7C97\u7EC6\uFF080.5\u20138\uFF09" });
-    const edgeWidthInput = edgeWidthLabel.createEl("input", { type: "number", attr: { min: "0.5", max: "8", step: "0.05" } });
-    edgeWidthInput.value = String((_k = this.appearance.edgeWidth) != null ? _k : 4.2);
-    const edgeMinWidthLabel = edgeSection.grid.createEl("label", { text: "\u672B\u7AEF\u6700\u7EC6\uFF080.25\u20134\uFF09" });
-    const edgeMinWidthInput = edgeMinWidthLabel.createEl("input", { type: "number", attr: { min: "0.25", max: "4", step: "0.05" } });
-    edgeMinWidthInput.value = String((_l = this.appearance.edgeMinWidth) != null ? _l : 1.2);
-    const updateEdgeMin = () => {
-      const tapered = edgeWidthModeSelect.value === "tapered";
-      edgeMinWidthInput.disabled = !tapered;
-      edgeMinWidthLabel.toggleClass("is-disabled", !tapered);
-      edgeWidthLabel.childNodes[0].textContent = tapered ? "\u8D77\u59CB\u7C97\u7EC6\uFF080.5\u20138\uFF09" : "\u8FDE\u7EBF\u7C97\u7EC6\uFF080.5\u20138\uFF09";
-    };
-    edgeWidthModeSelect.addEventListener("change", updateEdgeMin);
-    updateEdgeMin();
-    const branchLabel = edgeSection.grid.createEl("label", { text: "\u5F69\u8272\u5206\u652F" });
-    const branchToggleRow = branchLabel.createDiv({ cls: "mmc-toggle-row" });
-    const colorfulBranches = branchToggleRow.createEl("input", { type: "checkbox" });
-    colorfulBranches.checked = this.appearance.colorfulBranches === true;
-    branchToggleRow.createSpan({ text: "\u6309\u4E00\u7EA7\u5206\u652F\u5FAA\u73AF\u914D\u8272" });
-    const branchColorsLabel = edgeSection.grid.createEl("label", { text: "\u5206\u652F\u989C\u8272\uFF08\u9017\u53F7\u5206\u9694\uFF09" });
-    branchColorsLabel.addClass("mmc-appearance-grid-span-2");
-    const branchColorsInput = branchColorsLabel.createEl("textarea", { attr: { rows: "2", placeholder: "#4f46e5, #0284c7, #0f766e" } });
-    branchColorsInput.value = ((_m = this.appearance.branchColors) != null ? _m : []).join(", ");
-    const numberingSection = appearanceRightColumn.createDiv({ cls: "mmc-appearance-section mmc-appearance-article-numbering" });
-    numberingSection.createDiv({ cls: "mmc-theme-picker-title", text: "\u6587\u7AE0\u7F16\u53F7\u4E0E\u76EE\u5F55" });
-    numberingSection.createDiv({ cls: "setting-item-description mmc-appearance-section-description", text: "\u63A7\u5236\u5F53\u524D\u8111\u56FE\u7684\u6587\u7AE0\u7F16\u53F7\u3001\u76EE\u5F55\u5C42\u7EA7\u548C\u9605\u8BFB\u7F29\u7565\u5BFC\u822A\u3002" });
-    const numberingGrid = numberingSection.createDiv({ cls: "mmc-form-grid mmc-appearance-grid" });
-    const numberingControls = createArticleNumberingControls(
-      numberingGrid,
-      this.numbering.articleNumberingMode,
-      this.numbering.articleNumberingLevel
-    );
-    const tocDepthLabel = numberingGrid.createEl("label", { text: "\u76EE\u5F55\u6700\u5927\u5C42\u7EA7" });
-    const tocDepthSelect = tocDepthLabel.createEl("select");
-    tocDepthSelect.createEl("option", {
-      text: `\u8DDF\u968F\u63D2\u4EF6\u8BBE\u7F6E\uFF08\u5F53\u524D ${this.globalArticleTocMaxDepth} \u5C42\uFF09`,
-      attr: { value: "" }
-    });
-    for (let depth = 1; depth <= 8; depth += 1) {
-      tocDepthSelect.createEl("option", { text: `${depth} \u5C42`, attr: { value: String(depth) } });
-    }
-    tocDepthSelect.value = Number.isFinite(this.articleTocMaxDepth) ? String(resolveArticleTocMaxDepth(this.articleTocMaxDepth, this.globalArticleTocMaxDepth)) : "";
-    tocDepthLabel.createDiv({
-      cls: "setting-item-description",
-      text: "\u540C\u65F6\u7528\u4E8E\u6587\u7AE0\u6A21\u5F0F\u76EE\u5F55\u548C\u901A\u8BFB\u6A21\u5F0F\u5168\u4E66\u76EE\u5F55\u3002\u624B\u52A8\u9009\u62E9\u540E\u4F18\u5148\u4E8E\u63D2\u4EF6\u5168\u5C40\u8BBE\u7F6E\u3002"
-    });
-    const miniMapLabel = numberingGrid.createEl("label", { text: "\u9605\u8BFB\u7F29\u7565\u5BFC\u822A\u56FE" });
-    const miniMapSelect = miniMapLabel.createEl("select");
-    miniMapSelect.createEl("option", { text: `\u8DDF\u968F\u63D2\u4EF6\u8BBE\u7F6E\uFF08\u5F53\u524D${this.globalArticleMiniMap ? "\u663E\u793A" : "\u9690\u85CF"}\uFF09`, attr: { value: "" } });
-    miniMapSelect.createEl("option", { text: "\u663E\u793A", attr: { value: "show" } });
-    miniMapSelect.createEl("option", { text: "\u9690\u85CF", attr: { value: "hide" } });
-    miniMapSelect.value = this.articleMiniMap === void 0 ? "" : this.articleMiniMap ? "show" : "hide";
-    const readingStyleSection = createAppearanceSection(
-      appearanceRightColumn,
-      "\u9605\u8BFB\u6837\u5F0F",
-      "\u6587\u7AE0\u6A21\u5F0F\u4E0E\u901A\u8BFB\u6A21\u5F0F\u5171\u7528\u540C\u4E00\u5957\u7EB8\u5F20\u3001\u5B57\u4F53\u3001\u76EE\u5F55\u548C\u672B\u7AEF\u6B63\u6587\u6837\u5F0F\u3002\u53EA\u8BFB\u72B6\u6001\u53EA\u9501\u6B63\u6587\u7F16\u8F91\uFF0C\u4E0D\u9501\u8FD9\u91CC\u7684\u5916\u89C2\u8BBE\u7F6E\u3002"
-    );
-    const readingStyleControls = createReadingStyleControls(readingStyleSection.grid, this.readingStyle, this.globalReadingStyle);
-    const codeSection = appearanceLeftColumn.createDiv({ cls: "mmc-appearance-section mmc-appearance-code-settings" });
-    codeSection.createDiv({ cls: "mmc-theme-picker-title", text: "\u9875\u9762\u4EE3\u7801\u8BBE\u7F6E" });
-    codeSection.createDiv({ cls: "setting-item-description mmc-appearance-section-description", text: "\u4F18\u5148\u7EA7 2\uFF1A\u8986\u76D6\u63D2\u4EF6\u5168\u5C40\u4EE3\u7801\u8BBE\u7F6E\uFF1B\u8282\u70B9\u4EE3\u7801\u8BBE\u7F6E\u4ECD\u53EF\u5355\u72EC\u8986\u76D6\u3002" });
-    const codeGrid = codeSection.createDiv({ cls: "mmc-form-grid mmc-appearance-grid" });
-    const pageCodeCollapsedLabel = codeGrid.createEl("label", { text: "\u9ED8\u8BA4\u72B6\u6001" });
-    const pageCodeCollapsed = pageCodeCollapsedLabel.createEl("select");
-    pageCodeCollapsed.createEl("option", { value: "", text: "\u8DDF\u968F\u5168\u5C40\u8BBE\u7F6E" });
-    pageCodeCollapsed.createEl("option", { value: "true", text: "\u6298\u53E0" });
-    pageCodeCollapsed.createEl("option", { value: "false", text: "\u5C55\u5F00" });
-    pageCodeCollapsed.value = typeof this.pageCodeAppearance.codeCollapsed === "boolean" ? String(this.pageCodeAppearance.codeCollapsed) : "";
-    const pageCodeLinesLabel = codeGrid.createEl("label", { text: "\u884C\u53F7" });
-    const pageCodeLines = pageCodeLinesLabel.createEl("select");
-    pageCodeLines.createEl("option", { value: "", text: "\u8DDF\u968F\u5168\u5C40\u8BBE\u7F6E" });
-    pageCodeLines.createEl("option", { value: "true", text: "\u663E\u793A" });
-    pageCodeLines.createEl("option", { value: "false", text: "\u9690\u85CF" });
-    pageCodeLines.value = typeof this.pageCodeAppearance.codeShowLineNumbers === "boolean" ? String(this.pageCodeAppearance.codeShowLineNumbers) : "";
-    const pageCodeThemeLabel = codeGrid.createEl("label", { text: "\u4EE3\u7801\u6837\u5F0F" });
-    const pageCodeTheme = pageCodeThemeLabel.createEl("select");
-    pageCodeTheme.createEl("option", { value: "", text: "\u8DDF\u968F\u5168\u5C40\u8BBE\u7F6E" });
-    ["obsidian", "github", "monokai", "dracula"].forEach((value) => pageCodeTheme.createEl("option", { value, text: value === "obsidian" ? "Obsidian" : value === "github" ? "GitHub" : value === "monokai" ? "Monokai" : "Dracula" }));
-    pageCodeTheme.value = (_n = this.pageCodeAppearance.codeTheme) != null ? _n : "";
-    const setColor = (control, value, fallback) => {
-      control.toggle.checked = Boolean(value);
-      control.input.value = value != null ? value : fallback;
-      control.input.disabled = !control.toggle.checked;
-    };
-    const updateSelectedCards = () => {
-      for (const [id, card] of themeCards) card.toggleClass("is-selected", id === selectedPreset);
-    };
-    const applyPreset = (presetId) => {
-      var _a3, _b3, _c2, _d2, _e2, _f2, _g2, _h2, _i2, _j2, _k2;
-      selectedPreset = presetId;
-      const appearance = appearanceFromThemePreset(presetId);
-      setColor(background, appearance.backgroundColor, "#f8fafc");
-      patternSelect.value = (_a3 = appearance.backgroundPattern) != null ? _a3 : "none";
-      setColor(patternColor, appearance.patternColor, "#94a3b8");
-      fontSelect.value = (_b3 = appearance.fontFamily) != null ? _b3 : "obsidian";
-      customFontInput.value = (_c2 = appearance.customFont) != null ? _c2 : "";
-      fontSizeInput.value = String((_d2 = appearance.fontSize) != null ? _d2 : 14);
-      nodeTextAlignSelect.value = (_e2 = appearance.nodeTextAlign) != null ? _e2 : "center";
-      setColor(rootColor, appearance.rootColor, "#4f46e5");
-      setColor(rootTextColor, appearance.rootTextColor, "#ffffff");
-      setColor(nodeColor, appearance.nodeColor, "#ffffff");
-      setColor(textColor, appearance.textColor, "#0f172a");
-      setColor(borderColor, appearance.nodeBorderColor, "#94a3b8");
-      borderWidthInput.value = String((_f2 = appearance.nodeBorderWidth) != null ? _f2 : 1);
-      setColor(edgeColor, appearance.edgeColor, "#7c8aa5");
-      edgeStyleSelect.value = (_g2 = appearance.edgeStyle) != null ? _g2 : "curved";
-      edgeWidthModeSelect.value = (_h2 = appearance.edgeWidthMode) != null ? _h2 : "uniform";
-      edgeWidthInput.value = String((_i2 = appearance.edgeWidth) != null ? _i2 : 2.2);
-      edgeMinWidthInput.value = String((_j2 = appearance.edgeMinWidth) != null ? _j2 : 1);
-      colorfulBranches.checked = appearance.colorfulBranches === true;
-      branchColorsInput.value = ((_k2 = appearance.branchColors) != null ? _k2 : []).join(", ");
-      bold.checked = appearance.bold === true;
-      italic.checked = appearance.italic === true;
-      underline.checked = appearance.underline === true;
-      updateCustomFont();
-      updateEdgeMin();
-      updateSelectedCards();
-    };
-    for (const preset of MINDMAP_THEME_PRESETS) {
-      const card = themeGrid.createEl("button", { cls: "mmc-theme-card", attr: { type: "button", title: preset.description } });
-      themeCards.set(preset.id, card);
-      const preview = card.createDiv({ cls: "mmc-theme-card-preview" });
-      preview.style.backgroundColor = (_o = preset.appearance.backgroundColor) != null ? _o : "#ffffff";
-      const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-      svg.setAttribute("viewBox", "0 0 112 44");
-      svg.setAttribute("aria-hidden", "true");
-      const colors = (_q = preset.appearance.branchColors) != null ? _q : [(_p = preset.appearance.edgeColor) != null ? _p : "#7c8aa5"];
-      const rootColorValue = (_r = preset.appearance.rootColor) != null ? _r : "#4f46e5";
-      const rootNode = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-      rootNode.setAttribute("x", "8");
-      rootNode.setAttribute("y", "15");
-      rootNode.setAttribute("width", "32");
-      rootNode.setAttribute("height", "14");
-      rootNode.setAttribute("rx", "5");
-      rootNode.setAttribute("fill", rootColorValue);
-      svg.appendChild(rootNode);
-      [8, 19, 30].forEach((y, index) => {
-        var _a3;
-        const color = (_a3 = colors[index % colors.length]) != null ? _a3 : rootColorValue;
-        const edge = document.createElementNS("http://www.w3.org/2000/svg", "path");
-        edge.setAttribute("d", `M 40 22 C 51 22, 50 ${y + 3}, 61 ${y + 3} L 70 ${y + 3}`);
-        edge.setAttribute("fill", "none");
-        edge.setAttribute("stroke", color);
-        edge.setAttribute("stroke-width", index === 0 ? "2.6" : "2");
-        edge.setAttribute("stroke-linecap", "round");
-        svg.appendChild(edge);
-        const childNode = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-        childNode.setAttribute("x", "70");
-        childNode.setAttribute("y", String(y));
-        childNode.setAttribute("width", String(31 - index * 3));
-        childNode.setAttribute("height", "7");
-        childNode.setAttribute("rx", "3");
-        childNode.setAttribute("fill", color);
-        childNode.setAttribute("fill-opacity", ".22");
-        childNode.setAttribute("stroke", color);
-        childNode.setAttribute("stroke-width", ".8");
-        svg.appendChild(childNode);
-      });
-      preview.appendChild(svg);
-      card.createDiv({ cls: "mmc-theme-card-name", text: preset.name });
-      card.addEventListener("click", () => applyPreset(preset.id));
-    }
-    updateSelectedCards();
-    const clamp2 = (value, min, max2, fallback) => {
-      const parsed = Number(value);
-      return Number.isFinite(parsed) ? Math.min(max2, Math.max(min, parsed)) : fallback;
-    };
-    const parseBranchColors = () => branchColorsInput.value.split(/[,，\s]+/).map((value) => value.trim()).filter((value) => /^#[0-9a-f]{6}$/i.test(value)).slice(0, 12);
-    const actions = form.createDiv({ cls: "mmc-modal-actions" });
-    const reset = actions.createEl("button", { text: "\u6062\u590D\u5168\u5C40\u9ED8\u8BA4", type: "button" });
-    const cancel = actions.createEl("button", { text: "\u53D6\u6D88", type: "button" });
-    actions.createEl("button", { text: "\u5E94\u7528", type: "submit", cls: "mod-cta" });
-    reset.addEventListener("click", () => {
-      this.reset();
-      this.close();
-    });
-    cancel.addEventListener("click", () => this.close());
-    form.addEventListener("submit", (event) => {
-      event.preventDefault();
-      const maxWidth = clamp2(edgeWidthInput.value, 0.5, 8, 4.2);
-      this.submit({
-        themePreset: selectedPreset,
-        backgroundColor: background.toggle.checked ? background.input.value : void 0,
-        backgroundPattern: patternSelect.value,
-        patternColor: patternColor.toggle.checked ? patternColor.input.value : void 0,
-        fontFamily: fontSelect.value,
-        customFont: fontSelect.value === "custom" ? customFontInput.value.trim().slice(0, 120) || void 0 : void 0,
-        fontSize: clamp2(fontSizeInput.value, 10, 30, 14),
-        nodeVisualStyle: nodeVisualStyleSelect.value,
-        nodeTextAlign: nodeTextAlignSelect.value,
-        rootColor: rootColor.toggle.checked ? rootColor.input.value : void 0,
-        rootTextColor: rootTextColor.toggle.checked ? rootTextColor.input.value : void 0,
-        nodeColor: nodeColor.toggle.checked ? nodeColor.input.value : void 0,
-        textColor: textColor.toggle.checked ? textColor.input.value : void 0,
-        nodeBorderColor: borderColor.toggle.checked ? borderColor.input.value : void 0,
-        nodeBorderWidth: clamp2(borderWidthInput.value, 0, 6, 1),
-        edgeColor: edgeColor.toggle.checked ? edgeColor.input.value : void 0,
-        edgeWidth: maxWidth,
-        edgeStyle: edgeStyleSelect.value,
-        edgeWidthMode: edgeWidthModeSelect.value,
-        edgeMinWidth: Math.min(maxWidth, clamp2(edgeMinWidthInput.value, 0.25, 4, 1.2)),
-        colorfulBranches: colorfulBranches.checked,
-        branchColors: parseBranchColors(),
-        bold: bold.checked,
-        italic: italic.checked,
-        underline: underline.checked,
-        ...pageCodeCollapsed.value ? { codeCollapsed: pageCodeCollapsed.value === "true" } : {},
-        ...pageCodeLines.value ? { codeShowLineNumbers: pageCodeLines.value === "true" } : {},
-        ...pageCodeTheme.value ? { codeTheme: pageCodeTheme.value } : {}
-      }, numberingControls.read(), tocDepthSelect.value ? resolveArticleTocMaxDepth(Number(tocDepthSelect.value), this.globalArticleTocMaxDepth) : void 0, miniMapSelect.value === "show" ? true : miniMapSelect.value === "hide" ? false : void 0, readingStyleControls.read());
-      this.close();
-    });
-    const restoreScrollTop = () => {
-      this.contentEl.scrollTop = 0;
-    };
-    window.requestAnimationFrame(() => {
-      restoreScrollTop();
-      window.requestAnimationFrame(restoreScrollTop);
-    });
-  }
 };
 var MindMapEditor = class {
   /**
@@ -12217,7 +12225,7 @@ var MindMapEditor = class {
     this.pageTransitionTitleEl.setText(title);
     this.pageTransitionDescriptionEl.setText(description);
     this.pageTransitionIconEl.empty();
-    (0, import_obsidian11.setIcon)(this.pageTransitionIconEl, icon);
+    (0, import_obsidian13.setIcon)(this.pageTransitionIconEl, icon);
     this.pageTransitionEl.removeClass("is-leaving");
     this.pageTransitionEl.addClass("is-visible");
     this.pageTransitionEl.setAttr("aria-hidden", "false");
@@ -12233,7 +12241,7 @@ var MindMapEditor = class {
     this.pageTransitionDescriptionEl.setText(description);
     if (icon) {
       this.pageTransitionIconEl.empty();
-      (0, import_obsidian11.setIcon)(this.pageTransitionIconEl, icon);
+      (0, import_obsidian13.setIcon)(this.pageTransitionIconEl, icon);
     }
   }
   /** Fades out the current transition and reveals the newly mounted page. */
@@ -12273,7 +12281,7 @@ var MindMapEditor = class {
     } catch (error) {
       this.finishPageTransition(token);
       console.error("MindMap Studio page navigation failed", error);
-      new import_obsidian11.Notice("\u9875\u9762\u5207\u6362\u5931\u8D25\uFF0C\u8BF7\u7A0D\u540E\u91CD\u8BD5");
+      new import_obsidian13.Notice("\u9875\u9762\u5207\u6362\u5931\u8D25\uFF0C\u8BF7\u7A0D\u540E\u91CD\u8BD5");
     }
   }
   /**
@@ -12296,7 +12304,7 @@ var MindMapEditor = class {
       this.applyDisplayMode(mode, notifyGlobal, persistCapturedLocation);
     } catch (error) {
       console.error("MindMap Studio display mode transition failed", error);
-      new import_obsidian11.Notice("\u9875\u9762\u5207\u6362\u5931\u8D25\uFF0C\u8BF7\u7A0D\u540E\u91CD\u8BD5");
+      new import_obsidian13.Notice("\u9875\u9762\u5207\u6362\u5931\u8D25\uFF0C\u8BF7\u7A0D\u540E\u91CD\u8BD5");
     } finally {
       this.finishPageTransition(token);
     }
@@ -12643,7 +12651,7 @@ var MindMapEditor = class {
       const resolved = this.restoreReadingLocation("article", location);
       const navigationLocation = resolved ? createReadingLocation(this.readingLocationSections(), resolved.filePath, resolved.nodeId, resolved.nodeRatio, resolved.viewportRatio) : location != null ? location : void 0;
       void this.callbacks.onDisplayModeChange("article", navigationLocation);
-      new import_obsidian11.Notice("\u901A\u8BFB\u6A21\u5F0F\u5DF2\u5207\u6362\u4E3A\u6587\u7AE0\u7F16\u8F91\u6A21\u5F0F");
+      new import_obsidian13.Notice("\u901A\u8BFB\u6A21\u5F0F\u5DF2\u5207\u6362\u4E3A\u6587\u7AE0\u7F16\u8F91\u6A21\u5F0F");
       return;
     }
     if (this.currentMode === "article") this.rememberArticleReadOnlyState();
@@ -12658,7 +12666,7 @@ var MindMapEditor = class {
       restore();
       window.requestAnimationFrame(restore);
     }
-    new import_obsidian11.Notice(this.readOnly ? "\u5DF2\u8FDB\u5165\u9605\u8BFB\u6A21\u5F0F" : "\u5DF2\u8FDB\u5165\u7F16\u8F91\u6A21\u5F0F");
+    new import_obsidian13.Notice(this.readOnly ? "\u5DF2\u8FDB\u5165\u9605\u8BFB\u6A21\u5F0F" : "\u5DF2\u8FDB\u5165\u7F16\u8F91\u6A21\u5F0F");
   }
   /** 使用最近一次右键范围询问 AI；未右键节点时默认询问当前页面。 */
   askAi() {
@@ -12751,10 +12759,10 @@ var MindMapEditor = class {
     try {
       const applied = applyAiMarkdownEdit(this.document, preview);
       this.replaceDocumentFromExternalEdit(applied.document, applied.focusNodeId);
-      new import_obsidian11.Notice(`AI \u4FEE\u6539\u5DF2\u5E94\u7528\uFF1A${applied.changedNodeCount} \u4E2A\u8282\u70B9`);
+      new import_obsidian13.Notice(`AI \u4FEE\u6539\u5DF2\u5E94\u7528\uFF1A${applied.changedNodeCount} \u4E2A\u8282\u70B9`);
       return true;
     } catch (error) {
-      new import_obsidian11.Notice(error instanceof Error ? error.message : "AI \u4FEE\u6539\u5E94\u7528\u5931\u8D25");
+      new import_obsidian13.Notice(error instanceof Error ? error.message : "AI \u4FEE\u6539\u5E94\u7528\u5931\u8D25");
       return false;
     }
   }
@@ -12768,21 +12776,21 @@ var MindMapEditor = class {
     try {
       const applied = applyLocalTextReplace(this.document, preview);
       this.replaceDocumentFromExternalEdit(applied.document, applied.focusNodeId);
-      new import_obsidian11.Notice(`\u672C\u5730\u66FF\u6362\u5DF2\u5B8C\u6210\uFF1A\u5F71\u54CD ${applied.changedNodeCount} \u4E2A\u8282\u70B9`);
+      new import_obsidian13.Notice(`\u672C\u5730\u66FF\u6362\u5DF2\u5B8C\u6210\uFF1A\u5F71\u54CD ${applied.changedNodeCount} \u4E2A\u8282\u70B9`);
       return true;
     } catch (error) {
-      new import_obsidian11.Notice(error instanceof Error ? error.message : "\u672C\u5730\u66FF\u6362\u5931\u8D25");
+      new import_obsidian13.Notice(error instanceof Error ? error.message : "\u672C\u5730\u66FF\u6362\u5931\u8D25");
       return false;
     }
   }
   /** 启动截图编辑器；普通截图与截图并识别使用完全独立的调用链。 */
   async captureScreenshot(recognizeAfter = false, targetOverride) {
     const insertionTarget = targetOverride != null ? targetOverride : this.screenshotInsertionTarget();
-    new import_obsidian11.Notice(recognizeAfter ? "\u6B63\u5728\u51C6\u5907\u622A\u56FE\u5E76\u8BC6\u522B\u2026" : "\u6B63\u5728\u51C6\u5907\u622A\u56FE\u7F16\u8F91\u5668\u2026", 2500);
+    new import_obsidian13.Notice(recognizeAfter ? "\u6B63\u5728\u51C6\u5907\u622A\u56FE\u5E76\u8BC6\u522B\u2026" : "\u6B63\u5728\u51C6\u5907\u622A\u56FE\u7F16\u8F91\u5668\u2026", 2500);
     try {
       const capture = await this.callbacks.onCaptureScreenshot(recognizeAfter);
       if (capture.action === "download") {
-        new import_obsidian11.Notice("\u622A\u56FE\u5DF2\u4E0B\u8F7D");
+        new import_obsidian13.Notice("\u622A\u56FE\u5DF2\u4E0B\u8F7D");
         return;
       }
       if (capture.action === "recognize-copy") {
@@ -12791,12 +12799,12 @@ var MindMapEditor = class {
       }
       if (!insertionTarget) {
         if (recognizeAfter) await this.recognizeCapturedScreenshotToClipboard(capture.blob);
-        else new import_obsidian11.Notice("\u622A\u56FE\u5DF2\u590D\u5236\u5230\u526A\u8D34\u677F\uFF1B\u622A\u56FE\u524D\u6CA1\u6709\u805A\u7126\u5BFC\u56FE\u8282\u70B9\u6216\u6587\u7AE0\u6BB5\u843D");
+        else new import_obsidian13.Notice("\u622A\u56FE\u5DF2\u590D\u5236\u5230\u526A\u8D34\u677F\uFF1B\u622A\u56FE\u524D\u6CA1\u6709\u805A\u7126\u5BFC\u56FE\u8282\u70B9\u6216\u6587\u7AE0\u6BB5\u843D");
         return;
       }
       if (!this.ensureExternalEditAllowed()) {
         if (recognizeAfter) await this.recognizeCapturedScreenshotToClipboard(capture.blob);
-        else new import_obsidian11.Notice("\u622A\u56FE\u5DF2\u590D\u5236\u5230\u526A\u8D34\u677F\uFF1B\u5F53\u524D\u5BFC\u56FE\u53EA\u8BFB\uFF0C\u672A\u63D2\u5165\u56FE\u7247");
+        else new import_obsidian13.Notice("\u622A\u56FE\u5DF2\u590D\u5236\u5230\u526A\u8D34\u677F\uFF1B\u5F53\u524D\u5BFC\u56FE\u53EA\u8BFB\uFF0C\u672A\u63D2\u5165\u56FE\u7247");
         return;
       }
       const path = await this.callbacks.onSavePastedImage(capture.blob, capture.suggestedName);
@@ -12810,7 +12818,7 @@ var MindMapEditor = class {
       const next = cloneDocument(this.document);
       const target = findNode(next.root, insertionTarget.nodeId);
       if (!target) {
-        new import_obsidian11.Notice("\u622A\u56FE\u5DF2\u590D\u5236\u5230\u526A\u8D34\u677F\uFF1B\u622A\u56FE\u524D\u805A\u7126\u7684\u8282\u70B9\u5DF2\u4E0D\u5B58\u5728");
+        new import_obsidian13.Notice("\u622A\u56FE\u5DF2\u590D\u5236\u5230\u526A\u8D34\u677F\uFF1B\u622A\u56FE\u524D\u805A\u7126\u7684\u8282\u70B9\u5DF2\u4E0D\u5B58\u5728");
         return;
       }
       const blocks = nodeContentBlocks(target);
@@ -12820,14 +12828,14 @@ var MindMapEditor = class {
       syncNodeContentFields(target);
       this.replaceDocumentFromExternalEdit(next, target.id);
       const scheduled = this.callbacks.onScheduleAutoUpload(target.id, imageBlock.id, path, capture.suggestedName);
-      new import_obsidian11.Notice(scheduled ? `\u622A\u56FE\u5DF2\u63D2\u5165\uFF0C${this.autoUploadScheduleMessage()}` : `\u622A\u56FE\u5DF2\u63D2\u5165\uFF1A${path}`);
+      new import_obsidian13.Notice(scheduled ? `\u622A\u56FE\u5DF2\u63D2\u5165\uFF0C${this.autoUploadScheduleMessage()}` : `\u622A\u56FE\u5DF2\u63D2\u5165\uFF1A${path}`);
       if (recognizeAfter) await this.recognizeImageBlock(target.id, imageBlock.id);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      if (/取消截图操作/.test(message)) new import_obsidian11.Notice("\u5DF2\u53D6\u6D88\u622A\u56FE");
+      if (/取消截图操作/.test(message)) new import_obsidian13.Notice("\u5DF2\u53D6\u6D88\u622A\u56FE");
       else {
         console.error("MindMap Studio screenshot failed", error);
-        new import_obsidian11.Notice(`\u622A\u56FE\u5931\u8D25\uFF1A${message}`);
+        new import_obsidian13.Notice(`\u622A\u56FE\u5931\u8D25\uFF1A${message}`);
       }
     }
   }
@@ -12844,7 +12852,7 @@ var MindMapEditor = class {
     }, blob);
     if (!result.text.trim()) throw new Error("\u622A\u56FE\u4E2D\u6CA1\u6709\u8BC6\u522B\u5230\u53EF\u590D\u5236\u7684\u6587\u5B57");
     await navigator.clipboard.writeText(result.text);
-    new import_obsidian11.Notice("\u8BC6\u522B\u6587\u5B57\u5DF2\u590D\u5236\u5230\u526A\u8D34\u677F");
+    new import_obsidian13.Notice("\u8BC6\u522B\u6587\u5B57\u5DF2\u590D\u5236\u5230\u526A\u8D34\u677F");
   }
   /** 返回截图操作开始前实际聚焦的节点或文章段落；命令面板等外部焦点返回 null。 */
   screenshotInsertionTarget() {
@@ -12880,7 +12888,7 @@ var MindMapEditor = class {
       if (!image) throw new Error("\u51C6\u5907\u8BC6\u522B\u7684\u56FE\u7247\u5DF2\u7ECF\u4E0D\u5B58\u5728");
       const source = await this.callbacks.onReadImageSource(image.source);
       if (!source) throw new Error("\u65E0\u6CD5\u8BFB\u53D6\u8BE5\u56FE\u7247\uFF1B\u8BF7\u68C0\u67E5\u672C\u5730\u8DEF\u5F84\u6216\u8FDC\u7A0B\u5730\u5740");
-      new import_obsidian11.Notice(this.options.imageRecognitionMode === "local-ocr" ? "\u6B63\u5728\u6267\u884C\u672C\u5730 OCR\u2026" : "\u6B63\u5728\u8FDB\u884C AI \u8BC6\u56FE\u2026");
+      new import_obsidian13.Notice(this.options.imageRecognitionMode === "local-ocr" ? "\u6B63\u5728\u6267\u884C\u672C\u5730 OCR\u2026" : "\u6B63\u5728\u8FDB\u884C AI \u8BC6\u56FE\u2026");
       const remoteUrl = /^https:\/\//i.test(image.source) ? image.source : void 0;
       const result = await this.callbacks.onRecognizeImage(image, source.blob, remoteUrl);
       const preview = previewImageTextReplacement(this.document, nodeId, blockId, result.text);
@@ -12898,7 +12906,7 @@ var MindMapEditor = class {
       }).open();
     } catch (error) {
       console.error("MindMap Studio image recognition failed", error);
-      new import_obsidian11.Notice(error instanceof Error ? error.message : "\u56FE\u7247\u8BC6\u522B\u5931\u8D25");
+      new import_obsidian13.Notice(error instanceof Error ? error.message : "\u56FE\u7247\u8BC6\u522B\u5931\u8D25");
     }
   }
   /** 为 AI 助手的每张识图结果创建独立且可校验的原位替换预览。 */
@@ -12914,10 +12922,10 @@ var MindMapEditor = class {
       const deleted = await Promise.all(previews.flatMap((preview) => preview.localSource ? [this.callbacks.onDeleteRecognizedImageLocalAsset(preview.localSource, preview.blockId)] : []));
       const deletedCount = deleted.filter(Boolean).length;
       const replacementMessage = previews.length === 1 ? "\u56FE\u7247\u5DF2\u66FF\u6362\u4E3A\u8BC6\u522B\u6587\u5B57" : `\u5DF2\u5728\u539F\u4F4D\u7F6E\u66FF\u6362 ${previews.length} \u5F20\u56FE\u7247`;
-      new import_obsidian11.Notice(deletedCount ? `${replacementMessage}\uFF0C\u672C\u5730\u56FE\u7247\u5DF2\u5220\u9664` : replacementMessage);
+      new import_obsidian13.Notice(deletedCount ? `${replacementMessage}\uFF0C\u672C\u5730\u56FE\u7247\u5DF2\u5220\u9664` : replacementMessage);
       return true;
     } catch (error) {
-      new import_obsidian11.Notice(error instanceof Error ? error.message : "\u56FE\u7247\u66FF\u6362\u5931\u8D25");
+      new import_obsidian13.Notice(error instanceof Error ? error.message : "\u56FE\u7247\u66FF\u6362\u5931\u8D25");
       return false;
     }
   }
@@ -13029,7 +13037,7 @@ var MindMapEditor = class {
     });
     const transitionCard = this.pageTransitionEl.createDiv({ cls: "mms-page-transition-card" });
     this.pageTransitionIconEl = transitionCard.createDiv({ cls: "mms-page-transition-icon", attr: { "aria-hidden": "true" } });
-    (0, import_obsidian11.setIcon)(this.pageTransitionIconEl, "loader-circle");
+    (0, import_obsidian13.setIcon)(this.pageTransitionIconEl, "loader-circle");
     const transitionCopy = transitionCard.createDiv({ cls: "mms-page-transition-copy" });
     this.pageTransitionTitleEl = transitionCopy.createDiv({ cls: "mms-page-transition-title", text: "\u6B63\u5728\u5207\u6362\u9875\u9762\u2026" });
     this.pageTransitionDescriptionEl = transitionCopy.createDiv({ cls: "mms-page-transition-description", text: "\u6B63\u5728\u51C6\u5907\u76EE\u6807\u5185\u5BB9" });
@@ -13094,7 +13102,7 @@ var MindMapEditor = class {
         cls: "mms-mode-button",
         attr: { type: "button", "aria-label": `${DISPLAY_MODE_LABELS[mode]}\u6A21\u5F0F` }
       });
-      (0, import_obsidian11.setIcon)(button, DISPLAY_MODE_ICONS[mode]);
+      (0, import_obsidian13.setIcon)(button, DISPLAY_MODE_ICONS[mode]);
       button.createSpan({ text: DISPLAY_MODE_LABELS[mode] });
       button.addEventListener("click", () => this.setDisplayMode(mode));
       this.modeButtons.set(mode, button);
@@ -13113,7 +13121,7 @@ var MindMapEditor = class {
     this.addToolbarButton("layout", "git-fork", "\u5207\u6362\u5355\u4FA7/\u53CC\u4FA7\u5E03\u5C40", () => this.toggleLayout(), true);
     this.addToolbarButton("table", "table-2", "\u63D2\u5165\u6216\u7F16\u8F91\u8868\u683C", () => this.editTable(), true);
     this.addToolbarButton("code", "code-2", "\u63D2\u5165\u4EE3\u7801", () => this.editCode(), true);
-    this.addToolbarButton("image", "image-plus", "\u7C98\u8D34\u56FE\u7247\u5230\u5F53\u524D\u8282\u70B9\uFF08Ctrl/Cmd+V\uFF09", () => new import_obsidian11.Notice("\u5148\u590D\u5236\u56FE\u7247\uFF0C\u518D\u9009\u4E2D\u8282\u70B9\u5E76\u6309 Ctrl/Cmd+V"), true);
+    this.addToolbarButton("image", "image-plus", "\u7C98\u8D34\u56FE\u7247\u5230\u5F53\u524D\u8282\u70B9\uFF08Ctrl/Cmd+V\uFF09", () => new import_obsidian13.Notice("\u5148\u590D\u5236\u56FE\u7247\uFF0C\u518D\u9009\u4E2D\u8282\u70B9\u5E76\u6309 Ctrl/Cmd+V"), true);
     this.addToolbarButton("screenshot", "scan-line", `\u622A\u56FE\uFF08${this.options.screenshotShortcut || "Ctrl+Shift+S"}\uFF09`, () => void this.captureScreenshot(false));
     this.addToolbarButton("screenshot-recognize", "scan-text", `\u622A\u56FE\u5E76\u8BC6\u522B\uFF08${this.options.screenshotRecognizeShortcut || "Ctrl+Shift+R"}\uFF09`, () => void this.captureScreenshot(true));
     if (this.options.questionNodesEnabled) this.addToolbarButton("question", "file-plus-2", "\u65B0\u5EFA\u9898\u76EE\u5B50\u8282\u70B9", () => this.addQuestionChild(), true);
@@ -13133,7 +13141,7 @@ var MindMapEditor = class {
     this.zoomControlEl = this.toolbarEl.createDiv({ cls: "mmc-zoom-control" });
     this.zoomControlEl.toggleClass("is-hidden", this.currentMode !== "mindmap");
     const zoomOut = this.zoomControlEl.createEl("button", { cls: "clickable-icon mmc-zoom-step", attr: { type: "button", "aria-label": "\u7F29\u5C0F" } });
-    (0, import_obsidian11.setIcon)(zoomOut, "minus");
+    (0, import_obsidian13.setIcon)(zoomOut, "minus");
     zoomOut.addEventListener("click", () => {
       this.setZoom(this.zoom / 1.15);
       this.focus();
@@ -13154,7 +13162,7 @@ var MindMapEditor = class {
       }
     });
     const zoomIn = this.zoomControlEl.createEl("button", { cls: "clickable-icon mmc-zoom-step", attr: { type: "button", "aria-label": "\u653E\u5927" } });
-    (0, import_obsidian11.setIcon)(zoomIn, "plus");
+    (0, import_obsidian13.setIcon)(zoomIn, "plus");
     zoomIn.addEventListener("click", () => {
       this.setZoom(this.zoom * 1.15);
       this.focus();
@@ -13456,11 +13464,11 @@ var MindMapEditor = class {
       this.articleLandingButton.setAttr("aria-label", showingArticle ? "\u663E\u793A\u76EE\u5F55" : "\u663E\u793A\u539F\u59CB\u6587\u7AE0");
       this.articleLandingButton.removeAttribute("title");
       this.articleLandingButton.empty();
-      (0, import_obsidian11.setIcon)(this.articleLandingButton, showingArticle ? "list-tree" : "file-text");
+      (0, import_obsidian13.setIcon)(this.articleLandingButton, showingArticle ? "list-tree" : "file-text");
       this.articleLandingButton.toggleClass("is-active", showingArticle);
     }
     this.lockButton.empty();
-    (0, import_obsidian11.setIcon)(this.lockButton, this.readOnly ? "lock" : "lock-open");
+    (0, import_obsidian13.setIcon)(this.lockButton, this.readOnly ? "lock" : "lock-open");
     this.lockButton.setAttr("aria-label", this.readOnly ? "\u5F53\u524D\u4E3A\u9605\u8BFB\u6A21\u5F0F\uFF0C\u70B9\u51FB\u5207\u6362\u5230\u7F16\u8F91\u6A21\u5F0F" : "\u5F53\u524D\u53EF\u7F16\u8F91\uFF0C\u70B9\u51FB\u5207\u6362\u5230\u9605\u8BFB\u6A21\u5F0F");
     this.lockButton.removeAttribute("title");
     this.lockButton.toggleClass("is-active", this.readOnly);
@@ -13480,7 +13488,7 @@ var MindMapEditor = class {
    */
   ensureEditable() {
     if (!this.readOnly) return true;
-    new import_obsidian11.Notice("\u5F53\u524D\u4E3A\u9605\u8BFB\u6A21\u5F0F\uFF0C\u8BF7\u5148\u70B9\u51FB\u9501\u6309\u94AE\u5207\u6362\u5230\u7F16\u8F91\u6A21\u5F0F");
+    new import_obsidian13.Notice("\u5F53\u524D\u4E3A\u9605\u8BFB\u6A21\u5F0F\uFF0C\u8BF7\u5148\u70B9\u51FB\u9501\u6309\u94AE\u5207\u6362\u5230\u7F16\u8F91\u6A21\u5F0F");
     return false;
   }
   /**
@@ -13627,7 +13635,7 @@ var MindMapEditor = class {
   addToolbarButton(id, icon, label, action, editOnly = false) {
     const button = this.toolbarEl.createEl("button", { cls: "clickable-icon mmc-toolbar-button", attr: { "aria-label": label, type: "button" } });
     button.dataset.toolbarId = id;
-    (0, import_obsidian11.setIcon)(button, icon);
+    (0, import_obsidian13.setIcon)(button, icon);
     button.addClass("is-hidden");
     if (editOnly) {
       button.addClass("mms-edit-only-control");
@@ -13751,7 +13759,7 @@ var MindMapEditor = class {
         cls: "mmc-canvas-breadcrumb-back",
         attr: { type: "button", title: returnTitle, "aria-label": returnTitle }
       });
-      (0, import_obsidian11.setIcon)(backButton, "arrow-left");
+      (0, import_obsidian13.setIcon)(backButton, "arrow-left");
       backButton.addEventListener("click", (event) => {
         event.preventDefault();
         event.stopPropagation();
@@ -13777,7 +13785,7 @@ var MindMapEditor = class {
       cls: "mmc-parent-navigation-button",
       attr: { type: "button", title: returnTitle }
     });
-    (0, import_obsidian11.setIcon)(button, "arrow-left");
+    (0, import_obsidian13.setIcon)(button, "arrow-left");
     const labels = button.createDiv({ cls: "mmc-parent-navigation-labels" });
     labels.createDiv({ cls: "mmc-parent-navigation-title", text: `\u8FD4\u56DE\u7236\u5BFC\u56FE\uFF1A${parentTitle}` });
     if (navigation.parentNodeText) labels.createDiv({ cls: "mmc-parent-navigation-node", text: `\u6765\u6E90\u8282\u70B9\uFF1A${navigation.parentNodeText}` });
@@ -14089,7 +14097,7 @@ var MindMapEditor = class {
     const actions = container.createDiv({ cls: "mms-inline-node-actions" });
     const action = (icon, label, handler) => {
       const button = actions.createEl("button", { cls: "clickable-icon", attr: { type: "button", title: label, "aria-label": label } });
-      (0, import_obsidian11.setIcon)(button, icon);
+      (0, import_obsidian13.setIcon)(button, icon);
       button.addEventListener("pointerdown", (event) => {
         event.preventDefault();
         event.stopPropagation();
@@ -14126,7 +14134,7 @@ var MindMapEditor = class {
     const node = this.nodeById(nodeId);
     const blockId = preferredBlockId != null ? preferredBlockId : (active == null ? void 0 : active.nodeId) === nodeId ? active.blockId : void 0;
     if (!node || !blockId || !nodeContentBlocks(node).some((block) => block.id === blockId)) {
-      new import_obsidian11.Notice("\u8BF7\u5148\u7F16\u8F91\u8981\u79FB\u52A8\u7684\u5177\u4F53\u5185\u5BB9\u5757");
+      new import_obsidian13.Notice("\u8BF7\u5148\u7F16\u8F91\u8981\u79FB\u52A8\u7684\u5177\u4F53\u5185\u5BB9\u5757");
       return;
     }
     if (((_a2 = this.pendingArticleClickMove) == null ? void 0 : _a2.kind) === "block" && this.pendingArticleClickMove.sourceNodeId === nodeId && this.pendingArticleClickMove.blockId === blockId) {
@@ -14138,7 +14146,7 @@ var MindMapEditor = class {
     const focused = document.activeElement;
     if (focused instanceof HTMLElement && this.articleEl.contains(focused)) focused.blur();
     this.applyArticleClickMoveUi();
-    new import_obsidian11.Notice("\u8BF7\u9009\u62E9\u76EE\u6807\u8282\u70B9\uFF0C\u5F53\u524D\u5757\u5C06\u8FFD\u52A0\u5230\u8BE5\u8282\u70B9\u672B\u5C3E\uFF1B\u6309 Esc \u53D6\u6D88");
+    new import_obsidian13.Notice("\u8BF7\u9009\u62E9\u76EE\u6807\u8282\u70B9\uFF0C\u5F53\u524D\u5757\u5C06\u8FFD\u52A0\u5230\u8BE5\u8282\u70B9\u672B\u5C3E\uFF1B\u6309 Esc \u53D6\u6D88");
   }
   /** 从文章编辑工具栏进入“选择目标节点后插入其后”的单节点移动模式。 */
   startArticleNodeClickMove(nodeId) {
@@ -14154,7 +14162,7 @@ var MindMapEditor = class {
     const focused = document.activeElement;
     if (focused instanceof HTMLElement && this.articleEl.contains(focused)) focused.blur();
     this.applyArticleClickMoveUi();
-    new import_obsidian11.Notice("\u8BF7\u9009\u62E9\u76EE\u6807\u8282\u70B9\uFF0C\u5F53\u524D\u8282\u70B9\u5C06\u63D2\u5165\u5230\u5176\u540E\uFF1B\u6309 Esc \u53D6\u6D88");
+    new import_obsidian13.Notice("\u8BF7\u9009\u62E9\u76EE\u6807\u8282\u70B9\uFF0C\u5F53\u524D\u8282\u70B9\u5C06\u63D2\u5165\u5230\u5176\u540E\uFF1B\u6309 Esc \u53D6\u6D88");
   }
   /** 将当前文章节点降为同级上一个节点的子节点，保留全部内容、子树和元数据。 */
   demoteArticleNode(nodeId) {
@@ -14164,7 +14172,7 @@ var MindMapEditor = class {
     const index = (_a2 = parent == null ? void 0 : parent.children.findIndex((child) => child.id === nodeId)) != null ? _a2 : -1;
     const previous = index > 0 ? parent == null ? void 0 : parent.children[index - 1] : void 0;
     if (!parent || !previous) {
-      new import_obsidian11.Notice("\u5F53\u524D\u8282\u70B9\u524D\u6CA1\u6709\u53EF\u4F5C\u4E3A\u7236\u8282\u70B9\u7684\u540C\u7EA7\u8282\u70B9");
+      new import_obsidian13.Notice("\u5F53\u524D\u8282\u70B9\u524D\u6CA1\u6709\u53EF\u4F5C\u4E3A\u7236\u8282\u70B9\u7684\u540C\u7EA7\u8282\u70B9");
       return;
     }
     this.selectNode(nodeId);
@@ -14176,7 +14184,7 @@ var MindMapEditor = class {
     const parent = this.parentNodeById(nodeId);
     const grandparent = parent ? this.parentNodeById(parent.id) : null;
     if (!parent || !grandparent) {
-      new import_obsidian11.Notice("\u5F53\u524D\u8282\u70B9\u5DF2\u7ECF\u662F\u6700\u9AD8\u53EF\u63D0\u5347\u5C42\u7EA7");
+      new import_obsidian13.Notice("\u5F53\u524D\u8282\u70B9\u5DF2\u7ECF\u662F\u6700\u9AD8\u53EF\u63D0\u5347\u5C42\u7EA7");
       return;
     }
     this.selectNode(nodeId);
@@ -14187,7 +14195,7 @@ var MindMapEditor = class {
     const pending = this.pendingArticleClickMove;
     if (!pending) return;
     if (!this.articleClickMoveTargetAllowed(pending, targetNodeId) || pending.kind === "block" && targetBlockId !== void 0 && !this.articleBlockMoveTargetAllowed(pending, targetNodeId, targetBlockId)) {
-      new import_obsidian11.Notice(pending.kind === "block" ? "\u8BF7\u9009\u62E9\u5F53\u524D\u5757\u6240\u5C5E\u8282\u70B9\u4E4B\u5916\u7684\u76EE\u6807\u8282\u70B9" : "\u4E0D\u80FD\u79FB\u52A8\u5230\u6839\u8282\u70B9\u3001\u81EA\u8EAB\u6216\u81EA\u5DF1\u7684\u540E\u4EE3");
+      new import_obsidian13.Notice(pending.kind === "block" ? "\u8BF7\u9009\u62E9\u5F53\u524D\u5757\u6240\u5C5E\u8282\u70B9\u4E4B\u5916\u7684\u76EE\u6807\u8282\u70B9" : "\u4E0D\u80FD\u79FB\u52A8\u5230\u6839\u8282\u70B9\u3001\u81EA\u8EAB\u6216\u81EA\u5DF1\u7684\u540E\u4EE3");
       return;
     }
     this.pendingArticleClickMove = null;
@@ -14237,7 +14245,7 @@ var MindMapEditor = class {
       cls: "clickable-icon",
       attr: { type: "button", title: "\u53D6\u6D88\u79FB\u52A8", "aria-label": "\u53D6\u6D88\u79FB\u52A8" }
     });
-    (0, import_obsidian11.setIcon)(cancel, "x");
+    (0, import_obsidian13.setIcon)(cancel, "x");
     cancel.addEventListener("click", (event) => {
       event.preventDefault();
       event.stopPropagation();
@@ -14839,7 +14847,7 @@ var MindMapEditor = class {
       }
       collapsible.forEach(({ section, key }) => {
         const toggle = section.querySelector(":scope > .mms-article-section-heading > .mms-article-collapse-toggle, :scope > h2 > .mms-article-collapse-toggle, :scope > h3 > .mms-article-collapse-toggle, :scope > h4 > .mms-article-collapse-toggle, :scope > h5 > .mms-article-collapse-toggle, :scope > h6 > .mms-article-collapse-toggle");
-        if (toggle) (0, import_obsidian11.setIcon)(toggle, this.collapsedArticleSectionIds.has(key) ? "chevron-right" : "chevron-down");
+        if (toggle) (0, import_obsidian13.setIcon)(toggle, this.collapsedArticleSectionIds.has(key) ? "chevron-right" : "chevron-down");
       });
     };
     collapsible.forEach(({ section, key }) => {
@@ -14871,7 +14879,7 @@ var MindMapEditor = class {
       const apply = () => {
         const collapsed = this.collapsedArticleSectionIds.has(key);
         chapter.toggleClass("is-section-collapsed", collapsed);
-        (0, import_obsidian11.setIcon)(toggle, collapsed ? "chevron-right" : "chevron-down");
+        (0, import_obsidian13.setIcon)(toggle, collapsed ? "chevron-right" : "chevron-down");
       };
       toggle.addEventListener("click", (event) => {
         event.preventDefault();
@@ -14930,7 +14938,7 @@ var MindMapEditor = class {
       memoryCurveEnabled: this.options.questionMemoryCurveEnabled,
       wrongBookMasteryCount: this.options.wrongBookMasteryCount,
       onRecord: (nodeId, correct) => this.recordQuestionPractice(nodeId, correct),
-      onNotice: (message) => new import_obsidian11.Notice(message)
+      onNotice: (message) => new import_obsidian13.Notice(message)
     });
   }
   /** Persists learning progress from the read-only practice surface without enabling document editing. */
@@ -15168,7 +15176,7 @@ var MindMapEditor = class {
             this.notifyDocumentChange("none");
             this.markSaving();
             const previousLabel = (previous == null ? void 0 : previous.hostName) || "\u5F53\u524D\u56FE\u5E8A";
-            new import_obsidian11.Notice(`\u56FE\u7247\u5730\u5740\u5931\u6548\uFF0C\u5DF2\u4ECE ${previousLabel} \u81EA\u52A8\u5207\u6362\u5230 ${candidate.label}`, 6e3);
+            new import_obsidian13.Notice(`\u56FE\u7247\u5730\u5740\u5931\u6548\uFF0C\u5DF2\u4ECE ${previousLabel} \u81EA\u52A8\u5207\u6362\u5230 ${candidate.label}`, 6e3);
           };
           probe.onerror = fail;
           const timeoutMs = Math.max(2, Math.min(30, this.options.imageFailoverTimeoutSeconds)) * 1e3;
@@ -15214,7 +15222,7 @@ var MindMapEditor = class {
       textEl.style.fontSize = `${(_C = (_B = (_A = node.style) == null ? void 0 : _A.fontSize) != null ? _B : appearance.fontSize) != null ? _C : 14}px`;
       if (isSubmapTitle) {
         const indicator = textEl.createSpan({ cls: "mmc-submap-inline-indicator", attr: { "aria-hidden": "true" } });
-        (0, import_obsidian11.setIcon)(indicator, "arrow-up-right");
+        (0, import_obsidian13.setIcon)(indicator, "arrow-up-right");
       }
       this.bindContentBlockDragHandle(main, node.id, block.id);
     }
@@ -15226,7 +15234,7 @@ var MindMapEditor = class {
           title: `\u6253\u5F00\u5B50\u5BFC\u56FE\uFF1A${(_E = node.submap.title) != null ? _E : node.submap.path}`
         }
       });
-      (0, import_obsidian11.setIcon)(submapIcon, "arrow-up-right");
+      (0, import_obsidian13.setIcon)(submapIcon, "arrow-up-right");
       submapIcon.addEventListener("click", (event) => {
         event.preventDefault();
         event.stopPropagation();
@@ -15258,7 +15266,7 @@ var MindMapEditor = class {
     const link = this.getNodeLink(node);
     if (link) {
       const linkButton = nodeEl.createEl("button", { cls: "mmc-node-link", attr: { "aria-label": `\u6253\u5F00 ${link}` } });
-      (0, import_obsidian11.setIcon)(linkButton, "external-link");
+      (0, import_obsidian13.setIcon)(linkButton, "external-link");
       linkButton.addEventListener("click", (event) => {
         event.stopPropagation();
         void this.callbacks.onOpenLink(link);
@@ -15895,7 +15903,7 @@ var MindMapEditor = class {
       var _a3;
       const selected = (_a3 = rememberSelection()) != null ? _a3 : savedSelection;
       if (!selected || selected.start === selected.end) {
-        new import_obsidian11.Notice("\u8BF7\u5148\u9009\u62E9\u9700\u8981\u8BBE\u7F6E\u683C\u5F0F\u7684\u6587\u5B57");
+        new import_obsidian13.Notice("\u8BF7\u5148\u9009\u62E9\u9700\u8981\u8BBE\u7F6E\u683C\u5F0F\u7684\u6587\u5B57");
         return;
       }
       save();
@@ -16353,7 +16361,7 @@ var MindMapEditor = class {
     if (!this.ensureEditable()) return;
     const node = this.nodeById(nodeId);
     if (!node || node.id === this.document.root.id) {
-      new import_obsidian11.Notice("\u6839\u8282\u70B9\u4E0D\u80FD\u5220\u9664");
+      new import_obsidian13.Notice("\u6839\u8282\u70B9\u4E0D\u80FD\u5220\u9664");
       return;
     }
     const fallback = deletionSelectionFallback(this.document.root, [nodeId], this.currentNodeTreeIndex());
@@ -16385,12 +16393,12 @@ var MindMapEditor = class {
         this.selectedIds.add(fallback2);
       }, restoreLocation2);
       this.restoreMindMapViewportAnchor(mindMapAnchor2);
-      new import_obsidian11.Notice(`\u5DF2\u5220\u9664 ${batch.length} \u4E2A\u6240\u9009\u8282\u70B9`);
+      new import_obsidian13.Notice(`\u5DF2\u5220\u9664 ${batch.length} \u4E2A\u6240\u9009\u8282\u70B9`);
       return;
     }
     const selected = this.selectedNode();
     if (!selected || selected.id === this.document.root.id) {
-      new import_obsidian11.Notice("\u6839\u8282\u70B9\u4E0D\u80FD\u5220\u9664");
+      new import_obsidian13.Notice("\u6839\u8282\u70B9\u4E0D\u80FD\u5220\u9664");
       return;
     }
     const fallback = deletionSelectionFallback(this.document.root, [selected.id], this.currentNodeTreeIndex());
@@ -16562,14 +16570,14 @@ var MindMapEditor = class {
     const selected = (_a2 = this.selectedNode()) != null ? _a2 : this.document.root;
     const table = childrenToTable(selected);
     if (!table) {
-      new import_obsidian11.Notice("\u5F53\u524D\u8282\u70B9\u6CA1\u6709\u53EF\u8F6C\u6362\u7684\u5B50\u8282\u70B9");
+      new import_obsidian13.Notice("\u5F53\u524D\u8282\u70B9\u6CA1\u6709\u53EF\u8F6C\u6362\u7684\u5B50\u8282\u70B9");
       return;
     }
     this.mutateWithoutArticleContext(() => {
       this.upsertStructuredBlock(selected, "table", table);
       selected.collapsed = true;
     });
-    new import_obsidian11.Notice("\u5DF2\u751F\u6210\u5B50\u8282\u70B9\u8868\u683C\uFF1B\u539F\u5B50\u8282\u70B9\u5DF2\u4FDD\u7559\u5E76\u6536\u8D77");
+    new import_obsidian13.Notice("\u5DF2\u751F\u6210\u5B50\u8282\u70B9\u8868\u683C\uFF1B\u539F\u5B50\u8282\u70B9\u5DF2\u4FDD\u7559\u5E76\u6536\u8D77");
   }
   /**
    * 编辑code，并保持模型、界面和持久化状态的一致性。
@@ -16629,7 +16637,7 @@ var MindMapEditor = class {
         draggable: "true"
       }
     });
-    (0, import_obsidian11.setIcon)(handle, "grip-vertical");
+    (0, import_obsidian13.setIcon)(handle, "grip-vertical");
     handle.addEventListener("pointerdown", (event) => {
       event.stopPropagation();
     });
@@ -16715,7 +16723,7 @@ var MindMapEditor = class {
     });
     this.draggingContentBlock = null;
     this.clearContentBlockDropIndicators();
-    if (moved) new import_obsidian11.Notice(sourceNodeId === targetNodeId ? "\u5DF2\u8C03\u6574\u5185\u5BB9\u5757\u987A\u5E8F" : "\u5DF2\u79FB\u52A8\u5185\u5BB9\u5757\u5230\u76EE\u6807\u8282\u70B9");
+    if (moved) new import_obsidian13.Notice(sourceNodeId === targetNodeId ? "\u5DF2\u8C03\u6574\u5185\u5BB9\u5757\u987A\u5E8F" : "\u5DF2\u79FB\u52A8\u5185\u5BB9\u5757\u5230\u76EE\u6807\u8282\u70B9");
   }
   /** Clears temporary block drag styling while optionally preserving the active drag state. */
   clearContentBlockDropIndicators(clearDragging = true) {
@@ -16760,7 +16768,7 @@ var MindMapEditor = class {
     } catch (error) {
       this.finishPageTransition(token);
       console.error("MindMap Studio create submap failed", error);
-      new import_obsidian11.Notice("\u521B\u5EFA\u5B50\u5BFC\u56FE\u5931\u8D25");
+      new import_obsidian13.Notice("\u521B\u5EFA\u5B50\u5BFC\u56FE\u5931\u8D25");
     }
   }
   /** Renders a semantic loading state while the parent/child map family is being resolved. */
@@ -16784,7 +16792,7 @@ var MindMapEditor = class {
       cls: "mms-reading-loading-icon",
       attr: { "aria-hidden": "true" }
     });
-    (0, import_obsidian11.setIcon)(icon, "book-open");
+    (0, import_obsidian13.setIcon)(icon, "book-open");
     const copy = message.createDiv({ cls: "mms-reading-loading-copy" });
     copy.createDiv({ cls: "mms-reading-loading-title", text: "\u6B63\u5728\u89E3\u6790\u901A\u8BFB\u5185\u5BB9\u2026" });
     copy.createDiv({
@@ -16964,7 +16972,7 @@ var MindMapEditor = class {
       cls: "mms-article-scroll-top",
       attr: { type: "button", title: "\u56DE\u5230\u9876\u90E8", "aria-label": "\u56DE\u5230\u9876\u90E8" }
     });
-    (0, import_obsidian11.setIcon)(button, "arrow-up");
+    (0, import_obsidian13.setIcon)(button, "arrow-up");
     button.addEventListener("click", () => this.articleEl.scrollTo({ top: 0, behavior: "smooth" }));
     const updateVisibility = () => {
       const { scrollTop, clientHeight, scrollHeight } = this.articleEl;
@@ -16997,10 +17005,10 @@ var MindMapEditor = class {
       this.mutate(() => {
         selected.submap = void 0;
       });
-      new import_obsidian11.Notice(deleted ? "\u5DF2\u5220\u9664\u5B50\u5BFC\u56FE\u5E76\u79FB\u9664\u94FE\u63A5" : "\u5B50\u5BFC\u56FE\u6587\u4EF6\u4E0D\u5B58\u5728\uFF0C\u5DF2\u79FB\u9664\u5931\u6548\u94FE\u63A5");
+      new import_obsidian13.Notice(deleted ? "\u5DF2\u5220\u9664\u5B50\u5BFC\u56FE\u5E76\u79FB\u9664\u94FE\u63A5" : "\u5B50\u5BFC\u56FE\u6587\u4EF6\u4E0D\u5B58\u5728\uFF0C\u5DF2\u79FB\u9664\u5931\u6548\u94FE\u63A5");
     } catch (error) {
       console.error("MindMap Studio delete submap failed", error);
-      new import_obsidian11.Notice("\u5220\u9664\u5B50\u5BFC\u56FE\u5931\u8D25");
+      new import_obsidian13.Notice("\u5220\u9664\u5B50\u5BFC\u56FE\u5931\u8D25");
     }
   }
   /**
@@ -17121,10 +17129,10 @@ var MindMapEditor = class {
     const header = block.createDiv({ cls: "mmc-code-header" });
     header.createSpan({ text: codeData.language || "code" });
     const copy = header.createEl("button", { cls: "clickable-icon", attr: { "aria-label": "\u590D\u5236\u4EE3\u7801" } });
-    (0, import_obsidian11.setIcon)(copy, "copy");
+    (0, import_obsidian13.setIcon)(copy, "copy");
     copy.addEventListener("click", (event) => {
       event.stopPropagation();
-      void navigator.clipboard.writeText(codeData.code).then(() => new import_obsidian11.Notice("\u4EE3\u7801\u5DF2\u590D\u5236"));
+      void navigator.clipboard.writeText(codeData.code).then(() => new import_obsidian13.Notice("\u4EE3\u7801\u5DF2\u590D\u5236"));
     });
     const rendered = block.createDiv({ cls: "mmc-code-rendered markdown-rendered" });
     void Promise.resolve(this.callbacks.onRenderCode(codeData, rendered)).then(() => {
@@ -17154,7 +17162,7 @@ var MindMapEditor = class {
   }
   /** Opens edit and block-specific removal actions for a rendered table. */
   openTableBlockContextMenu(event, node, table, blockId) {
-    const menu = new import_obsidian11.Menu();
+    const menu = new import_obsidian13.Menu();
     menu.addItem((item) => item.setTitle("\u7F16\u8F91\u8868\u683C").setIcon("table-2").onClick(() => this.openTableBlockEditor(node, table, blockId)));
     if (blockId) menu.addItem((item) => item.setTitle("\u5220\u9664\u5F53\u524D\u5757").setIcon("trash-2").onClick(() => {
       if (!this.ensureEditable()) return;
@@ -17164,7 +17172,7 @@ var MindMapEditor = class {
   }
   /** Opens edit and block-specific removal actions for a rendered code block. */
   openCodeBlockContextMenu(event, node, code, blockId) {
-    const menu = new import_obsidian11.Menu();
+    const menu = new import_obsidian13.Menu();
     menu.addItem((item) => item.setTitle("\u7F16\u8F91\u4EE3\u7801").setIcon("code-2").onClick(() => this.openCodeBlockEditor(node, code, blockId)));
     if (blockId) menu.addItem((item) => item.setTitle("\u5220\u9664\u5F53\u524D\u5757").setIcon("trash-2").onClick(() => {
       if (!this.ensureEditable()) return;
@@ -17236,13 +17244,13 @@ var MindMapEditor = class {
         path = await this.callbacks.onSavePastedImage(blob, filename);
       } catch (error) {
         console.error("MindMap Studio paste image storage failed", error);
-        new import_obsidian11.Notice(`\u7C98\u8D34\u56FE\u7247\u5931\u8D25\uFF1A${error instanceof Error ? error.message : String(error)}`, 7e3);
+        new import_obsidian13.Notice(`\u7C98\u8D34\u56FE\u7247\u5931\u8D25\uFF1A${error instanceof Error ? error.message : String(error)}`, 7e3);
         return;
       }
       const imageBlock = { id: newId(), type: "image", source: path, localSource: path };
       const selected2 = nodeId ? this.nodeById(nodeId) : null;
       if (!selected2) {
-        new import_obsidian11.Notice(`\u56FE\u7247\u5DF2\u4FDD\u5B58\uFF0C\u4F46\u7C98\u8D34\u5F00\u59CB\u65F6\u9009\u62E9\u7684\u8282\u70B9\u5DF2\u4E0D\u5B58\u5728\uFF1A${path}`, 7e3);
+        new import_obsidian13.Notice(`\u56FE\u7247\u5DF2\u4FDD\u5B58\uFF0C\u4F46\u7C98\u8D34\u5F00\u59CB\u65F6\u9009\u62E9\u7684\u8282\u70B9\u5DF2\u4E0D\u5B58\u5728\uFF1A${path}`, 7e3);
         return;
       }
       let inserted = false;
@@ -17258,7 +17266,7 @@ var MindMapEditor = class {
       } catch (error) {
         if (!inserted) {
           console.error("MindMap Studio paste image insertion failed", error);
-          new import_obsidian11.Notice(`\u56FE\u7247\u6587\u4EF6\u5DF2\u4FDD\u5B58\uFF0C\u4F46\u63D2\u5165\u8282\u70B9\u5931\u8D25\uFF1A${path}`, 7e3);
+          new import_obsidian13.Notice(`\u56FE\u7247\u6587\u4EF6\u5DF2\u4FDD\u5B58\uFF0C\u4F46\u63D2\u5165\u8282\u70B9\u5931\u8D25\uFF1A${path}`, 7e3);
           return;
         }
         console.warn("MindMap Studio paste image post-commit synchronization deferred", error);
@@ -17266,10 +17274,10 @@ var MindMapEditor = class {
       }
       try {
         const scheduled = this.callbacks.onScheduleAutoUpload(selected2.id, imageBlock.id, path, filename);
-        new import_obsidian11.Notice(scheduled ? `\u56FE\u7247\u5DF2\u4FDD\u5B58\uFF0C${this.autoUploadScheduleMessage()}` : `\u56FE\u7247\u5DF2\u4FDD\u5B58\uFF1A${path}`);
+        new import_obsidian13.Notice(scheduled ? `\u56FE\u7247\u5DF2\u4FDD\u5B58\uFF0C${this.autoUploadScheduleMessage()}` : `\u56FE\u7247\u5DF2\u4FDD\u5B58\uFF1A${path}`);
       } catch (error) {
         console.error("MindMap Studio paste image auto-upload scheduling failed", error);
-        new import_obsidian11.Notice(`\u56FE\u7247\u5DF2\u4FDD\u5B58\uFF1A${path}\uFF1B\u81EA\u52A8\u4E0A\u4F20\u6392\u7A0B\u5931\u8D25\uFF0C\u53EF\u7A0D\u540E\u624B\u52A8\u4E0A\u4F20`, 7e3);
+        new import_obsidian13.Notice(`\u56FE\u7247\u5DF2\u4FDD\u5B58\uFF1A${path}\uFF1B\u81EA\u52A8\u4E0A\u4F20\u6392\u7A0B\u5931\u8D25\uFF0C\u53EF\u7A0D\u540E\u624B\u52A8\u4E0A\u4F20`, 7e3);
       }
       return;
     }
@@ -17282,7 +17290,7 @@ var MindMapEditor = class {
     if (table) {
       event.preventDefault();
       this.mutateWithoutArticleContext(() => this.upsertStructuredBlock(selected, "table", table));
-      new import_obsidian11.Notice("\u5DF2\u8BC6\u522B\u5E76\u63D2\u5165 Markdown \u8868\u683C");
+      new import_obsidian13.Notice("\u5DF2\u8BC6\u522B\u5E76\u63D2\u5165 Markdown \u8868\u683C");
       return;
     }
     const clipboardBlocks = parseClipboardContentBlocks(text);
@@ -17296,7 +17304,7 @@ var MindMapEditor = class {
         else replaceNodeContentBlocks(selected, [...existing, ...clipboardBlocks]);
       });
       const codeCount = clipboardBlocks.filter((block) => block.type === "code").length;
-      new import_obsidian11.Notice(`\u5DF2\u8BC6\u522B\u5E76\u63D2\u5165 ${codeCount} \u4E2A\u4EE3\u7801\u5757\uFF0C\u4FDD\u7559\u5176\u4F59\u6587\u5B57\u5185\u5BB9`);
+      new import_obsidian13.Notice(`\u5DF2\u8BC6\u522B\u5E76\u63D2\u5165 ${codeCount} \u4E2A\u4EE3\u7801\u5757\uFF0C\u4FDD\u7559\u5176\u4F59\u6587\u5B57\u5185\u5BB9`);
       return;
     }
     const sourceNodes = htmlBranch ? [htmlBranch] : parseClipboardNodes(text);
@@ -17488,7 +17496,7 @@ var MindMapEditor = class {
     this.aiScopeNodeId = nodeId && nodeId !== this.document.root.id && this.nodeById(nodeId) ? nodeId : null;
     this.updateAiScopeButton();
     if (this.aiScopeNodeId) this.selectNode(this.aiScopeNodeId);
-    const menu = new import_obsidian11.Menu();
+    const menu = new import_obsidian13.Menu();
     menu.addItem((item) => item.setTitle(this.aiScopeNodeId ? "\u8BE2\u95EE AI\uFF08\u6B64\u8282\u70B9\u53CA\u5168\u90E8\u5B50\u8282\u70B9\uFF09" : "\u8BE2\u95EE AI\uFF08\u5F53\u524D\u9875\u9762\uFF09").setIcon("sparkles").onClick(() => {
       var _a2;
       return void this.callbacks.onAskAi((_a2 = this.aiScopeNodeId) != null ? _a2 : void 0);
@@ -17502,7 +17510,7 @@ var MindMapEditor = class {
     const node = this.nodeById(nodeId);
     const image = node ? nodeContentBlocks(node).find((block) => block.type === "image" && block.id === blockId) : null;
     if (!node || !image) {
-      new import_obsidian11.Notice("\u56FE\u7247\u8282\u70B9\u5DF2\u4E0D\u5B58\u5728");
+      new import_obsidian13.Notice("\u56FE\u7247\u8282\u70B9\u5DF2\u4E0D\u5B58\u5728");
       return;
     }
     let question = createMindMapQuestion();
@@ -17542,9 +17550,9 @@ var MindMapEditor = class {
         node.question = question;
         syncMindMapQuestionFields(node);
       });
-      new import_obsidian11.Notice(enriched.found ? "\u5DF2\u627E\u5230\u539F\u9898\u5E76\u8865\u9F50\u7B54\u6848\u4E0E\u89E3\u6790" : "\u672A\u627E\u5230\u53EF\u9A8C\u8BC1\u539F\u9898\uFF0C\u5DF2\u7531 AI \u5206\u6790\u8865\u9F50\u7B54\u6848\u4E0E\u89E3\u7B54");
+      new import_obsidian13.Notice(enriched.found ? "\u5DF2\u627E\u5230\u539F\u9898\u5E76\u8865\u9F50\u7B54\u6848\u4E0E\u89E3\u6790" : "\u672A\u627E\u5230\u53EF\u9A8C\u8BC1\u539F\u9898\uFF0C\u5DF2\u7531 AI \u5206\u6790\u8865\u9F50\u7B54\u6848\u4E0E\u89E3\u7B54");
     } catch (error) {
-      new import_obsidian11.Notice(`\u9898\u76EE\u667A\u80FD\u5904\u7406\u5931\u8D25\uFF1A${error instanceof Error ? error.message : String(error)}`);
+      new import_obsidian13.Notice(`\u9898\u76EE\u667A\u80FD\u5904\u7406\u5931\u8D25\uFF1A${error instanceof Error ? error.message : String(error)}`);
     }
   }
   /** 显示图片专用右键菜单，提供识图、布局、图床和编辑等快速操作。 */
@@ -17553,7 +17561,7 @@ var MindMapEditor = class {
     const block = node ? nodeContentBlocks(node).find((item) => item.type === "image" && item.id === blockId) : void 0;
     if (!node || !block) return;
     const modeLabel = this.options.imageRecognitionMode === "local-ocr" ? "\u672C\u5730 OCR" : "AI \u8BC6\u56FE";
-    const menu = new import_obsidian11.Menu();
+    const menu = new import_obsidian13.Menu();
     menu.addItem((item) => item.setTitle("\u653E\u5927\u9884\u89C8").setIcon("maximize-2").onClick(() => this.previewImageBlock(nodeId, blockId)));
     menu.addItem((item) => item.setTitle(`${modeLabel}\u5E76\u8F6C\u4E3A\u6587\u5B57`).setIcon("scan-text").onClick(() => void this.recognizeImageBlock(nodeId, blockId)));
     if (this.options.questionNodesEnabled) {
@@ -17632,11 +17640,11 @@ var MindMapEditor = class {
     if (change.type === "reupload") {
       const located2 = this.locateImageBlock(nodeId, blockId);
       if (!located2) {
-        new import_obsidian11.Notice("\u56FE\u7247\u5DF2\u4E0D\u5B58\u5728");
+        new import_obsidian13.Notice("\u56FE\u7247\u5DF2\u4E0D\u5B58\u5728");
         return false;
       }
       if (!this.callbacks.getImageHosts().length) {
-        new import_obsidian11.Notice("\u8BF7\u5148\u5728\u8BBE\u7F6E\u4E2D\u542F\u7528\u81F3\u5C11\u4E00\u4E2A\u56FE\u5E8A");
+        new import_obsidian13.Notice("\u8BF7\u5148\u5728\u8BBE\u7F6E\u4E2D\u542F\u7528\u81F3\u5C11\u4E00\u4E2A\u56FE\u5E8A");
         return true;
       }
       const hostIds = await chooseImageHosts(this.app, this.callbacks.getImageHosts(), this.callbacks.getDefaultUploadHostIds());
@@ -17647,11 +17655,11 @@ var MindMapEditor = class {
       this.invalidateDocumentSnapshotJson();
       const batch = await this.callbacks.onUploadImage(file, file.name, hostIds);
       if (!batch.successes.length) {
-        new import_obsidian11.Notice(`\u4E0A\u4F20\u5931\u8D25\uFF1A${batch.failures.map((item) => `${item.hostName}\uFF1A${item.error}`).join("\uFF1B") || "\u672A\u77E5\u9519\u8BEF"}`, 7e3);
+        new import_obsidian13.Notice(`\u4E0A\u4F20\u5931\u8D25\uFF1A${batch.failures.map((item) => `${item.hostName}\uFF1A${item.error}`).join("\uFF1B") || "\u672A\u77E5\u9519\u8BEF"}`, 7e3);
         return true;
       }
       if (!this.locateImageBlock(nodeId, blockId)) {
-        new import_obsidian11.Notice("\u56FE\u7247\u5DF2\u5728\u6B64\u671F\u95F4\u88AB\u79FB\u9664");
+        new import_obsidian13.Notice("\u56FE\u7247\u5DF2\u5728\u6B64\u671F\u95F4\u88AB\u79FB\u9664");
         return false;
       }
       const uploadedAt = (/* @__PURE__ */ new Date()).toISOString();
@@ -17674,22 +17682,22 @@ var MindMapEditor = class {
       this.notifyDocumentChange("none");
       this.markSaving();
       this.render();
-      new import_obsidian11.Notice(`\u5DF2\u66F4\u65B0\u5E76\u4E0A\u4F20\u5230\uFF1A${batch.successes.map((item) => item.hostName).join("\u3001")}`);
+      new import_obsidian13.Notice(`\u5DF2\u66F4\u65B0\u5E76\u4E0A\u4F20\u5230\uFF1A${batch.successes.map((item) => item.hostName).join("\u3001")}`);
       return true;
     }
     if (change.type === "add") {
       const located2 = this.locateImageBlock(nodeId, blockId);
       if (!located2) {
-        new import_obsidian11.Notice("\u56FE\u7247\u5DF2\u4E0D\u5B58\u5728");
+        new import_obsidian13.Notice("\u56FE\u7247\u5DF2\u4E0D\u5B58\u5728");
         return false;
       }
       const entry = createManualImageRemoteSource(change.url);
       if (!entry) {
-        new import_obsidian11.Notice("\u8BF7\u8F93\u5165\u6709\u6548\u7684 http(s) \u56FE\u7247\u5730\u5740");
+        new import_obsidian13.Notice("\u8BF7\u8F93\u5165\u6709\u6548\u7684 http(s) \u56FE\u7247\u5730\u5740");
         return true;
       }
       if (imageSourceCandidates(located2.block, true, []).some((candidate) => candidate.source === entry.url)) {
-        new import_obsidian11.Notice("\u8BE5\u5730\u5740\u5DF2\u7ECF\u5728\u6765\u6E90\u5217\u8868\u4E2D");
+        new import_obsidian13.Notice("\u8BE5\u5730\u5740\u5DF2\u7ECF\u5728\u6765\u6E90\u5217\u8868\u4E2D");
         return true;
       }
       this.mutateWithoutArticleContext(() => {
@@ -17702,27 +17710,27 @@ var MindMapEditor = class {
     if (change.type === "replaceLocal") {
       const located2 = this.locateImageBlock(nodeId, blockId);
       if (!located2) {
-        new import_obsidian11.Notice("\u56FE\u7247\u5DF2\u4E0D\u5B58\u5728");
+        new import_obsidian13.Notice("\u56FE\u7247\u5DF2\u4E0D\u5B58\u5728");
         return false;
       }
       const file = await selectImageFile();
       if (!file) return true;
       const path = await this.callbacks.onSavePastedImage(file, file.name);
       if (!path) {
-        new import_obsidian11.Notice("\u4FDD\u5B58\u672C\u5730\u56FE\u7247\u5931\u8D25", 7e3);
+        new import_obsidian13.Notice("\u4FDD\u5B58\u672C\u5730\u56FE\u7247\u5931\u8D25", 7e3);
         return true;
       }
       this.mutateWithoutArticleContext(() => {
         located2.block.localSource = path;
         replaceNodeContentBlocks(located2.node, located2.blocks);
       });
-      new import_obsidian11.Notice("\u672C\u5730\u526F\u672C\u5DF2\u66F4\u65B0");
+      new import_obsidian13.Notice("\u672C\u5730\u526F\u672C\u5DF2\u66F4\u65B0");
       return true;
     }
     if (change.type === "unsetDefault") {
       const located2 = this.locateImageBlock(nodeId, blockId);
       if (!located2) {
-        new import_obsidian11.Notice("\u56FE\u7247\u5DF2\u4E0D\u5B58\u5728");
+        new import_obsidian13.Notice("\u56FE\u7247\u5DF2\u4E0D\u5B58\u5728");
         return false;
       }
       this.mutateWithoutArticleContext(() => {
@@ -17734,11 +17742,11 @@ var MindMapEditor = class {
     if (change.type === "setDefault") {
       const located2 = this.locateImageBlock(nodeId, blockId);
       if (!located2) {
-        new import_obsidian11.Notice("\u56FE\u7247\u5DF2\u4E0D\u5B58\u5728");
+        new import_obsidian13.Notice("\u56FE\u7247\u5DF2\u4E0D\u5B58\u5728");
         return false;
       }
       if (!setImageSourceDefault(located2.block, change.source)) {
-        new import_obsidian11.Notice("\u8BE5\u6765\u6E90\u4E0D\u5728\u5F53\u524D\u56FE\u7247\u7684\u6765\u6E90\u5217\u8868\u4E2D");
+        new import_obsidian13.Notice("\u8BE5\u6765\u6E90\u4E0D\u5728\u5F53\u524D\u56FE\u7247\u7684\u6765\u6E90\u5217\u8868\u4E2D");
         return true;
       }
       this.mutateWithoutArticleContext(() => {
@@ -17748,7 +17756,7 @@ var MindMapEditor = class {
     }
     const located = this.locateImageBlock(nodeId, blockId);
     if (!located) {
-      new import_obsidian11.Notice("\u56FE\u7247\u5DF2\u4E0D\u5B58\u5728");
+      new import_obsidian13.Notice("\u56FE\u7247\u5DF2\u4E0D\u5B58\u5728");
       return false;
     }
     const remaining = removeImageSourceCandidate(located.block, change.source);
@@ -17906,15 +17914,15 @@ var MindMapEditor = class {
     const parts = [`\u6210\u529F ${uploadedImages} \u5F20`];
     if (skippedImages) parts.push(`\u5DF2\u5B58\u5728 ${skippedImages} \u5F20`);
     if (failedImages) parts.push(`\u5931\u8D25\u6216\u90E8\u5206\u5931\u8D25 ${failedImages} \u5F20`);
-    new import_obsidian11.Notice(`\u5F53\u524D\u9875\u9762\u56FE\u7247\u4E0A\u4F20\u5B8C\u6210\uFF1A${parts.join("\uFF0C")}`, failedImages ? 8e3 : 5e3);
+    new import_obsidian13.Notice(`\u5F53\u524D\u9875\u9762\u56FE\u7247\u4E0A\u4F20\u5B8C\u6210\uFF1A${parts.join("\uFF0C")}`, failedImages ? 8e3 : 5e3);
   }
   /** 复制当前图片的主地址，供外部编辑器或浏览器直接使用。 */
   async copyImageSource(source) {
     try {
       await navigator.clipboard.writeText(source);
-      new import_obsidian11.Notice("\u56FE\u7247\u5730\u5740\u5DF2\u590D\u5236");
+      new import_obsidian13.Notice("\u56FE\u7247\u5730\u5740\u5DF2\u590D\u5236");
     } catch (e) {
-      new import_obsidian11.Notice("\u65E0\u6CD5\u8BBF\u95EE\u7CFB\u7EDF\u526A\u8D34\u677F");
+      new import_obsidian13.Notice("\u65E0\u6CD5\u8BBF\u95EE\u7CFB\u7EDF\u526A\u8D34\u677F");
     }
   }
   /** 从节点的有序内容块中移除指定图片。 */
@@ -17940,7 +17948,7 @@ var MindMapEditor = class {
     const selected = this.selectedNode();
     const contextBlock = selected && contextBlockId ? nodeContentBlocks(selected).find((block) => block.id === contextBlockId) : void 0;
     const contextIsArticleParagraph = this.currentMode === "article" && Boolean((_b2 = (_a2 = event.target) == null ? void 0 : _a2.closest) == null ? void 0 : _b2.call(_a2, ".mms-article-leaf-text, .mms-article-paragraph"));
-    const menu = new import_obsidian11.Menu();
+    const menu = new import_obsidian13.Menu();
     menu.addItem((item) => item.setTitle("\u8BE2\u95EE AI\uFF08\u6B64\u8282\u70B9\u53CA\u5168\u90E8\u5B50\u8282\u70B9\uFF09").setIcon("sparkles").onClick(() => void this.callbacks.onAskAi(selected == null ? void 0 : selected.id)));
     menu.addSeparator();
     if (this.readOnly) {
@@ -18041,7 +18049,7 @@ var MindMapEditor = class {
     } catch (error) {
       this.finishPageTransition(token);
       console.error("MindMap Studio extract to submap failed", error);
-      new import_obsidian11.Notice("\u63D0\u53D6\u5B50\u5BFC\u56FE\u5931\u8D25");
+      new import_obsidian13.Notice("\u63D0\u53D6\u5B50\u5BFC\u56FE\u5931\u8D25");
     }
   }
   /**
@@ -18057,7 +18065,7 @@ var MindMapEditor = class {
     } catch (error) {
       this.finishPageTransition(token);
       console.error("MindMap Studio merge from submap failed", error);
-      new import_obsidian11.Notice("\u5408\u5E76\u5B50\u5BFC\u56FE\u5931\u8D25");
+      new import_obsidian13.Notice("\u5408\u5E76\u5B50\u5BFC\u56FE\u5931\u8D25");
     }
   }
   /**
@@ -18066,7 +18074,7 @@ var MindMapEditor = class {
    * @param event Mouse event used to position the menu.
    */
   openAllNodesContextMenu(event) {
-    const menu = new import_obsidian11.Menu();
+    const menu = new import_obsidian13.Menu();
     menu.addItem((item) => item.setTitle("\u8BE2\u95EE AI\uFF08\u5F53\u524D\u9875\u9762\uFF09").setIcon("sparkles").onClick(() => void this.callbacks.onAskAi()));
     if (!this.readOnly) {
       menu.addItem((item) => item.setTitle("\u4E0A\u4F20\u5F53\u524D\u9875\u9762\u6240\u6709\u56FE\u7247").setIcon("cloud-upload").onClick(() => void this.uploadAllPageImages()));
@@ -18129,9 +18137,9 @@ var MindMapEditor = class {
     const payload = JSON.stringify({ type: "mindmap-studio-nodes", nodes: sourceNodes }, null, 2);
     try {
       await navigator.clipboard.writeText(payload);
-      new import_obsidian11.Notice(sourceNodes.length > 1 ? `\u5DF2\u590D\u5236 ${sourceNodes.length} \u4E2A\u8282\u70B9\u5206\u652F` : "\u5DF2\u590D\u5236\u8282\u70B9\u5206\u652F");
+      new import_obsidian13.Notice(sourceNodes.length > 1 ? `\u5DF2\u590D\u5236 ${sourceNodes.length} \u4E2A\u8282\u70B9\u5206\u652F` : "\u5DF2\u590D\u5236\u8282\u70B9\u5206\u652F");
     } catch (e) {
-      new import_obsidian11.Notice(sourceNodes.length > 1 ? `${sourceNodes.length} \u4E2A\u8282\u70B9\u5206\u652F\u5DF2\u590D\u5236\u5230\u63D2\u4EF6\u5185\u90E8\u526A\u8D34\u677F` : "\u8282\u70B9\u5206\u652F\u5DF2\u590D\u5236\u5230\u63D2\u4EF6\u5185\u90E8\u526A\u8D34\u677F");
+      new import_obsidian13.Notice(sourceNodes.length > 1 ? `${sourceNodes.length} \u4E2A\u8282\u70B9\u5206\u652F\u5DF2\u590D\u5236\u5230\u63D2\u4EF6\u5185\u90E8\u526A\u8D34\u677F` : "\u8282\u70B9\u5206\u652F\u5DF2\u590D\u5236\u5230\u63D2\u4EF6\u5185\u90E8\u526A\u8D34\u677F");
     }
     return true;
   }
@@ -18150,7 +18158,7 @@ var MindMapEditor = class {
     }
     sourceNodes != null ? sourceNodes : sourceNodes = this.branchClipboard;
     if (!(sourceNodes == null ? void 0 : sourceNodes.length)) {
-      new import_obsidian11.Notice("\u526A\u8D34\u677F\u4E2D\u6CA1\u6709\u53EF\u7C98\u8D34\u7684 MindMap \u8282\u70B9");
+      new import_obsidian13.Notice("\u526A\u8D34\u677F\u4E2D\u6CA1\u6709\u53EF\u7C98\u8D34\u7684 MindMap \u8282\u70B9");
       return;
     }
     const clones = sourceNodes.map((node) => cloneNodeWithFreshIds(node));
@@ -18171,7 +18179,7 @@ var MindMapEditor = class {
     if (!this.ensureEditable()) return;
     const selected = this.selectedNode();
     if (!selected || selected.id === this.document.root.id) {
-      new import_obsidian11.Notice("\u8BF7\u9009\u62E9\u975E\u6839\u8282\u70B9\u540E\u514B\u9686\u5206\u652F");
+      new import_obsidian13.Notice("\u8BF7\u9009\u62E9\u975E\u6839\u8282\u70B9\u540E\u514B\u9686\u5206\u652F");
       return;
     }
     const parent = this.parentNodeById(selected.id);
@@ -18315,7 +18323,7 @@ var MindMapEditor = class {
   ensureExternalEditAllowed() {
     var _a2;
     if (((_a2 = this.document.view) == null ? void 0 : _a2.readOnly) !== true) return true;
-    new import_obsidian11.Notice("\u5F53\u524D\u5BFC\u56FE\u5DF2\u9501\u5B9A\u4E3A\u53EA\u8BFB\uFF0C\u8BF7\u5148\u89E3\u9664\u9501\u5B9A\u518D\u5E94\u7528\u53D8\u66F4");
+    new import_obsidian13.Notice("\u5F53\u524D\u5BFC\u56FE\u5DF2\u9501\u5B9A\u4E3A\u53EA\u8BFB\uFF0C\u8BF7\u5148\u89E3\u9664\u9501\u5B9A\u518D\u5E94\u7528\u53D8\u66F4");
     return false;
   }
   /** 用外部确认的完整文档替换当前状态，并统一接入撤销、保存、渲染和聚焦。 */
@@ -18866,7 +18874,7 @@ var MindMapEditor = class {
 };
 
 // src/ai/modal.ts
-var import_obsidian12 = require("obsidian");
+var import_obsidian14 = require("obsidian");
 
 // src/ai/protocol.ts
 function resolveAiChatCompletionsEndpoint(endpoint) {
@@ -19091,7 +19099,7 @@ async function consumeAiStreamReader(reader, options) {
 }
 
 // src/ai/modal.ts
-var AiAskModal = class extends import_obsidian12.Modal {
+var AiAskModal = class extends import_obsidian14.Modal {
   /** 保存窗口上下文并初始化 Obsidian Modal。 */
   constructor(app, options) {
     super(app);
@@ -19119,7 +19127,7 @@ var AiAskModal = class extends import_obsidian12.Modal {
     var _a2;
     const session = ++this.modalSession;
     (_a2 = this.markdownRenderComponent) == null ? void 0 : _a2.unload();
-    this.markdownRenderComponent = new import_obsidian12.Component();
+    this.markdownRenderComponent = new import_obsidian14.Component();
     this.markdownRenderComponent.load();
     this.titleEl.setText("AI \u52A9\u624B");
     this.modalEl.addClass("mms-ai-modal");
@@ -19233,7 +19241,7 @@ var AiAskModal = class extends import_obsidian12.Modal {
     const apply = actions.createEl("button", { cls: "mod-warning is-hidden", attr: { type: "button" }, text: "\u786E\u8BA4\u5E94\u7528\u53D8\u66F4" });
     const close = actions.createEl("button", { attr: { type: "button" }, text: "\u5173\u95ED" });
     const submit = actions.createEl("button", { cls: "mod-cta", attr: { type: "submit" } });
-    (0, import_obsidian12.setIcon)(submit, "sparkles");
+    (0, import_obsidian14.setIcon)(submit, "sparkles");
     const submitText = submit.createSpan({ text: "\u53D1\u9001" });
     let answerText = "";
     let pendingAiPreview = null;
@@ -19487,9 +19495,9 @@ var AiAskModal = class extends import_obsidian12.Modal {
       void this.options.onSetThinkingMode(profile.id, enabled).then(() => {
         profile.thinkingMode = enabled ? "on" : "off";
         syncThinkingToggle();
-        new import_obsidian12.Notice(`\u6DF1\u5EA6\u601D\u8003\u5DF2${enabled ? "\u5F00\u542F" : "\u5173\u95ED"}`);
+        new import_obsidian14.Notice(`\u6DF1\u5EA6\u601D\u8003\u5DF2${enabled ? "\u5F00\u542F" : "\u5173\u95ED"}`);
       }).catch((error) => {
-        new import_obsidian12.Notice(`\u4FDD\u5B58\u6DF1\u5EA6\u601D\u8003\u8BBE\u7F6E\u5931\u8D25\uFF1A${error instanceof Error ? error.message : String(error)}`);
+        new import_obsidian14.Notice(`\u4FDD\u5B58\u6DF1\u5EA6\u601D\u8003\u8BBE\u7F6E\u5931\u8D25\uFF1A${error instanceof Error ? error.message : String(error)}`);
       }).finally(() => {
         thinkingToggle.disabled = false;
       });
@@ -19497,7 +19505,7 @@ var AiAskModal = class extends import_obsidian12.Modal {
     close.addEventListener("click", () => this.close());
     copy.addEventListener("click", () => {
       if (!answerText) return;
-      void navigator.clipboard.writeText(answerText).then(() => new import_obsidian12.Notice(currentMode() === "vision" ? "\u8BC6\u56FE\u7ED3\u679C\u5DF2\u590D\u5236" : "AI \u56DE\u7B54\u5DF2\u590D\u5236"));
+      void navigator.clipboard.writeText(answerText).then(() => new import_obsidian14.Notice(currentMode() === "vision" ? "\u8BC6\u56FE\u7ED3\u679C\u5DF2\u590D\u5236" : "AI \u56DE\u7B54\u5DF2\u590D\u5236"));
     });
     apply.addEventListener("click", () => {
       if (this.imageAutoConfirmTimer !== null) window.clearTimeout(this.imageAutoConfirmTimer);
@@ -19538,12 +19546,12 @@ var AiAskModal = class extends import_obsidian12.Modal {
       }
       const prompt = question.value.trim();
       if (!prompt) {
-        new import_obsidian12.Notice(currentMode() === "edit" || currentMode() === "question" ? "\u8BF7\u8F93\u5165\u6574\u7406\u8981\u6C42" : currentMode() === "vision" ? "\u8BF7\u8F93\u5165\u8BC6\u56FE\u8981\u6C42" : "\u8BF7\u8F93\u5165\u8981\u8BE2\u95EE\u7684\u95EE\u9898");
+        new import_obsidian14.Notice(currentMode() === "edit" || currentMode() === "question" ? "\u8BF7\u8F93\u5165\u6574\u7406\u8981\u6C42" : currentMode() === "vision" ? "\u8BF7\u8F93\u5165\u8BC6\u56FE\u8981\u6C42" : "\u8BF7\u8F93\u5165\u8981\u8BE2\u95EE\u7684\u95EE\u9898");
         question.focus();
         return;
       }
       if (requiresAiProfile() && !provider.value) {
-        new import_obsidian12.Notice("\u8BF7\u5148\u914D\u7F6E\u5E76\u542F\u7528 AI \u63A5\u53E3");
+        new import_obsidian14.Notice("\u8BF7\u5148\u914D\u7F6E\u5E76\u542F\u7528 AI \u63A5\u53E3");
         return;
       }
       if (currentMode() === "vision") {
@@ -19618,7 +19626,7 @@ var AiAskModal = class extends import_obsidian12.Modal {
           status.setText("\u5DF2\u63A5\u6536\u56DE\u7B54\uFF0C\u6B63\u5728\u6E32\u67D3\u2026");
           if (!this.markdownRenderComponent) return;
           answerText = response.text;
-          await import_obsidian12.MarkdownRenderer.render(this.app, answerText, result, this.options.sourcePath, this.markdownRenderComponent);
+          await import_obsidian14.MarkdownRenderer.render(this.app, answerText, result, this.options.sourcePath, this.markdownRenderComponent);
           if (session !== this.modalSession) return;
           result.removeClass("is-hidden");
           const usage = ((_a3 = response.usage) == null ? void 0 : _a3.totalTokens) ? ` \xB7 ${response.usage.totalTokens} tokens` : "";
@@ -19667,7 +19675,7 @@ var AiAskModal = class extends import_obsidian12.Modal {
 
 // src/view.ts
 var VIEW_TYPE_MINDMAP_STUDIO = "mindmap-studio-view";
-var MindMapStudioView = class extends import_obsidian13.TextFileView {
+var MindMapStudioView = class extends import_obsidian15.TextFileView {
   /**
    * 创建 MindMapStudioView 实例，保存依赖和初始状态；实际 DOM 构建通常在 onOpen() 或后续渲染流程中完成。
    *
@@ -19871,7 +19879,7 @@ var MindMapStudioView = class extends import_obsidian13.TextFileView {
         },
         onMergeFromSubmap: async () => {
           if (!this.file) {
-            new import_obsidian13.Notice("\u5F53\u524D\u8111\u56FE\u5C1A\u672A\u5173\u8054\u6587\u4EF6");
+            new import_obsidian15.Notice("\u5F53\u524D\u8111\u56FE\u5C1A\u672A\u5173\u8054\u6587\u4EF6");
             return;
           }
           await this.save();
@@ -19927,7 +19935,7 @@ var MindMapStudioView = class extends import_obsidian13.TextFileView {
             },
             renderMarkdown: (markdown, target) => {
               var _a4, _b3;
-              return import_obsidian13.MarkdownRenderer.render(this.app, markdown, target, (_b3 = (_a4 = this.file) == null ? void 0 : _a4.path) != null ? _b3 : "", this);
+              return import_obsidian15.MarkdownRenderer.render(this.app, markdown, target, (_b3 = (_a4 = this.file) == null ? void 0 : _a4.path) != null ? _b3 : "", this);
             }
           });
         },
@@ -20076,7 +20084,7 @@ var MindMapStudioView = class extends import_obsidian13.TextFileView {
     var _a2;
     const file = this.file;
     if (!file) {
-      new import_obsidian13.Notice("\u5F53\u524D\u5BFC\u56FE\u5C1A\u672A\u4FDD\u5B58\uFF0C\u65E0\u6CD5\u641C\u7D22\u5B50\u5BFC\u56FE");
+      new import_obsidian15.Notice("\u5F53\u524D\u5BFC\u56FE\u5C1A\u672A\u4FDD\u5B58\uFF0C\u65E0\u6CD5\u641C\u7D22\u5B50\u5BFC\u56FE");
       return;
     }
     await this.save();
@@ -20156,7 +20164,7 @@ var MindMapStudioView = class extends import_obsidian13.TextFileView {
   /** 启动截图并让编辑器根据截图前焦点决定插入节点或保留剪贴板。 */
   async captureScreenshot(recognizeAfter = false) {
     if (!this.editor) {
-      new import_obsidian13.Notice("\u5F53\u524D\u5BFC\u56FE\u5C1A\u672A\u52A0\u8F7D");
+      new import_obsidian15.Notice("\u5F53\u524D\u5BFC\u56FE\u5C1A\u672A\u52A0\u8F7D");
       return;
     }
     await this.editor.captureScreenshot(recognizeAfter);
@@ -20166,7 +20174,7 @@ var MindMapStudioView = class extends import_obsidian13.TextFileView {
     var _a2, _b2, _c, _d;
     const document2 = this.document;
     if (!document2) {
-      new import_obsidian13.Notice("\u5F53\u524D\u5BFC\u56FE\u5C1A\u672A\u52A0\u8F7D");
+      new import_obsidian15.Notice("\u5F53\u524D\u5BFC\u56FE\u5C1A\u672A\u52A0\u8F7D");
       return;
     }
     const profiles = enabledAiProfiles(this.plugin.settings.aiProfiles);
@@ -20517,9 +20525,9 @@ var MindMapStudioView = class extends import_obsidian13.TextFileView {
     if (/^(https?:|data:|blob:)/i.test(source)) return source;
     const wikiMatch = source.match(/^!?\[\[([\s\S]+?)\]\]$/);
     const target = (_d = (_c = (_b2 = ((_a2 = wikiMatch == null ? void 0 : wikiMatch[1]) != null ? _a2 : source).split("|")[0]) == null ? void 0 : _b2.split("#")[0]) == null ? void 0 : _c.trim()) != null ? _d : source;
-    const direct = this.app.vault.getAbstractFileByPath((0, import_obsidian13.normalizePath)(target.replace(/^\/+/, "")));
-    const file = direct instanceof import_obsidian13.TFile ? direct : this.app.metadataCache.getFirstLinkpathDest(target, (_f = (_e = this.file) == null ? void 0 : _e.path) != null ? _f : "");
-    if (!(file instanceof import_obsidian13.TFile)) return null;
+    const direct = this.app.vault.getAbstractFileByPath((0, import_obsidian15.normalizePath)(target.replace(/^\/+/, "")));
+    const file = direct instanceof import_obsidian15.TFile ? direct : this.app.metadataCache.getFirstLinkpathDest(target, (_f = (_e = this.file) == null ? void 0 : _e.path) != null ? _f : "");
+    if (!(file instanceof import_obsidian15.TFile)) return null;
     return this.app.vault.getResourcePath(file);
   }
   /**
@@ -20535,14 +20543,14 @@ var MindMapStudioView = class extends import_obsidian13.TextFileView {
     if (preferExternal) {
       const desktopResult = await saveDesktopExportFile(extension, baseName, content);
       if (desktopResult) {
-        if (desktopResult.path) new import_obsidian13.Notice(`\u5DF2\u5BFC\u51FA\uFF1A${desktopResult.path}`);
+        if (desktopResult.path) new import_obsidian15.Notice(`\u5DF2\u5BFC\u51FA\uFF1A${desktopResult.path}`);
         return;
       }
     }
     const parentPath = (_e = (_d = file == null ? void 0 : file.parent) == null ? void 0 : _d.path) != null ? _e : "";
-    const path = await this.plugin.getAvailablePath((0, import_obsidian13.normalizePath)(`${parentPath ? `${parentPath}/` : ""}${baseName}.${extension}`));
+    const path = await this.plugin.getAvailablePath((0, import_obsidian15.normalizePath)(`${parentPath ? `${parentPath}/` : ""}${baseName}.${extension}`));
     await this.app.vault.create(path, content);
-    new import_obsidian13.Notice(`\u5DF2\u5BFC\u51FA\uFF1A${path}`);
+    new import_obsidian15.Notice(`\u5DF2\u5BFC\u51FA\uFF1A${path}`);
   }
   /** 将二进制文档写入所选位置或当前库。 */
   async exportBinaryFile(extension, content) {
@@ -20551,15 +20559,15 @@ var MindMapStudioView = class extends import_obsidian13.TextFileView {
     const baseName = (_c = (_b2 = file == null ? void 0 : file.basename) != null ? _b2 : (_a2 = this.document) == null ? void 0 : _a2.title) != null ? _c : "\u601D\u7EF4\u5BFC\u56FE";
     const desktopResult = await saveDesktopExportFile(extension, baseName, content);
     if (desktopResult) {
-      if (desktopResult.path) new import_obsidian13.Notice(`\u5DF2\u5BFC\u51FA\uFF1A${desktopResult.path}`);
+      if (desktopResult.path) new import_obsidian15.Notice(`\u5DF2\u5BFC\u51FA\uFF1A${desktopResult.path}`);
       return;
     }
     const parentPath = (_e = (_d = file == null ? void 0 : file.parent) == null ? void 0 : _d.path) != null ? _e : "";
-    const path = await this.plugin.getAvailablePath((0, import_obsidian13.normalizePath)(`${parentPath ? `${parentPath}/` : ""}${baseName}.${extension}`));
+    const path = await this.plugin.getAvailablePath((0, import_obsidian15.normalizePath)(`${parentPath ? `${parentPath}/` : ""}${baseName}.${extension}`));
     const binary = new ArrayBuffer(content.byteLength);
     new Uint8Array(binary).set(content);
     await this.app.vault.createBinary(path, binary);
-    new import_obsidian13.Notice(`\u5DF2\u5BFC\u51FA\uFF1A${path}`);
+    new import_obsidian15.Notice(`\u5DF2\u5BFC\u51FA\uFF1A${path}`);
   }
   /**
    * Exports the current map family as one continuous document. A top-level
@@ -20593,14 +20601,14 @@ var MindMapStudioView = class extends import_obsidian13.TextFileView {
     const html = readingSectionsToHtml(sections, tocMaxDepth, articleExportOptions);
     if (format === "pdf") {
       const result = await saveDesktopPdfFile(file.basename, html);
-      if (result == null ? void 0 : result.path) new import_obsidian13.Notice(`\u5DF2\u5BFC\u51FA\uFF1A${result.path}`);
-      else if (!result) new import_obsidian13.Notice("PDF \u5BFC\u51FA\u4EC5\u652F\u6301 Obsidian \u684C\u9762\u7AEF");
+      if (result == null ? void 0 : result.path) new import_obsidian15.Notice(`\u5DF2\u5BFC\u51FA\uFF1A${result.path}`);
+      else if (!result) new import_obsidian15.Notice("PDF \u5BFC\u51FA\u4EC5\u652F\u6301 Obsidian \u684C\u9762\u7AEF");
     } else await this.exportTextFile(format, html, true);
   }
 };
 
 // src/search/global-search.ts
-var import_obsidian14 = require("obsidian");
+var import_obsidian16 = require("obsidian");
 function normalized(value) {
   return value.normalize("NFKC").toLocaleLowerCase().replace(/\s+/g, " ").trim();
 }
@@ -20661,10 +20669,10 @@ function resolveHierarchicalEntries(files) {
   var _a2, _b2, _c;
   const lineageCache = /* @__PURE__ */ new Map();
   const normalizedFiles = /* @__PURE__ */ new Map();
-  Object.entries(files).forEach(([path, file]) => normalizedFiles.set((0, import_obsidian14.normalizePath)(path), file));
+  Object.entries(files).forEach(([path, file]) => normalizedFiles.set((0, import_obsidian16.normalizePath)(path), file));
   const resolveLineage = (filePath, visiting = /* @__PURE__ */ new Set()) => {
     var _a3;
-    const path = (0, import_obsidian14.normalizePath)(filePath);
+    const path = (0, import_obsidian16.normalizePath)(filePath);
     const cached = lineageCache.get(path);
     if (cached) return cached;
     const file = normalizedFiles.get(path);
@@ -20680,7 +20688,7 @@ function resolveHierarchicalEntries(files) {
     }
     const nextVisiting = new Set(visiting);
     nextVisiting.add(path);
-    const parentPath = (0, import_obsidian14.normalizePath)(navigation.parentPath);
+    const parentPath = (0, import_obsidian16.normalizePath)(navigation.parentPath);
     const parentFile = normalizedFiles.get(parentPath);
     if (!parentFile) {
       const fallback = [navigation.parentTitle, navigation.parentNodeText].filter((item) => Boolean(item == null ? void 0 : item.trim()));
@@ -20696,7 +20704,7 @@ function resolveHierarchicalEntries(files) {
   };
   const resolvedEntries = [];
   for (const [rawPath, file] of Object.entries(files)) {
-    const filePath = (0, import_obsidian14.normalizePath)(rawPath);
+    const filePath = (0, import_obsidian16.normalizePath)(rawPath);
     const lineage = resolveLineage(filePath);
     const localRoot = (_c = (_b2 = (_a2 = file.entries[0]) == null ? void 0 : _a2.breadcrumb) == null ? void 0 : _b2[0]) != null ? _c : file.title;
     const mapHierarchy = mergeHierarchy(lineage, [localRoot]);
@@ -20774,21 +20782,21 @@ function searchEntries(entries, query, limit = 100, useRegex = false) {
 }
 function collectIndexedFamilyPaths(files, rootPath) {
   var _a2, _b2, _c;
-  const normalizedFiles = new Map(Object.entries(files).map(([path, value]) => [(0, import_obsidian14.normalizePath)(path), value]));
+  const normalizedFiles = new Map(Object.entries(files).map(([path, value]) => [(0, import_obsidian16.normalizePath)(path), value]));
   const family = /* @__PURE__ */ new Set();
-  const queue = [(0, import_obsidian14.normalizePath)(rootPath)];
+  const queue = [(0, import_obsidian16.normalizePath)(rootPath)];
   while (queue.length) {
-    const path = (0, import_obsidian14.normalizePath)((_a2 = queue.shift()) != null ? _a2 : "");
+    const path = (0, import_obsidian16.normalizePath)((_a2 = queue.shift()) != null ? _a2 : "");
     if (!path || family.has(path) || !normalizedFiles.has(path)) continue;
     family.add(path);
     const indexed = normalizedFiles.get(path);
     for (const entry of (_b2 = indexed == null ? void 0 : indexed.entries) != null ? _b2 : []) {
-      const childPath = entry.submapPath ? (0, import_obsidian14.normalizePath)(entry.submapPath) : "";
+      const childPath = entry.submapPath ? (0, import_obsidian16.normalizePath)(entry.submapPath) : "";
       if (childPath && normalizedFiles.has(childPath) && !family.has(childPath)) queue.push(childPath);
     }
     for (const [candidatePath, candidate] of normalizedFiles) {
       const parentPath = (_c = candidate.entries[0]) == null ? void 0 : _c.parentMapPath;
-      if (parentPath && (0, import_obsidian14.normalizePath)(parentPath) === path && !family.has(candidatePath)) queue.push(candidatePath);
+      if (parentPath && (0, import_obsidian16.normalizePath)(parentPath) === path && !family.has(candidatePath)) queue.push(candidatePath);
     }
   }
   return family;
@@ -20846,8 +20854,8 @@ var MindMapSearchIndex = class {
   allEntries(filePaths) {
     const resolved = resolveHierarchicalEntries(this.data.files);
     if (!filePaths) return resolved;
-    const normalizedPaths = new Set(Array.from(filePaths, (path) => (0, import_obsidian14.normalizePath)(path)));
-    return resolved.filter((entry) => normalizedPaths.has((0, import_obsidian14.normalizePath)(entry.filePath)));
+    const normalizedPaths = new Set(Array.from(filePaths, (path) => (0, import_obsidian16.normalizePath)(path)));
+    return resolved.filter((entry) => normalizedPaths.has((0, import_obsidian16.normalizePath)(entry.filePath)));
   }
   /**
    * 读取并返回scoped status，并保持模型、界面和持久化状态的一致性。
@@ -20856,7 +20864,7 @@ var MindMapSearchIndex = class {
    * @returns 计算得到的数值结果。
    */
   getScopedStatus(filePaths) {
-    const normalizedPaths = new Set(Array.from(filePaths, (path) => (0, import_obsidian14.normalizePath)(path)));
+    const normalizedPaths = new Set(Array.from(filePaths, (path) => (0, import_obsidian16.normalizePath)(path)));
     let files = 0;
     let nodes = 0;
     for (const path of normalizedPaths) {
@@ -20887,9 +20895,9 @@ var MindMapSearchIndex = class {
    */
   findParentNavigationForChild(childPath) {
     var _a2;
-    const normalizedChildPath = (0, import_obsidian14.normalizePath)(childPath);
+    const normalizedChildPath = (0, import_obsidian16.normalizePath)(childPath);
     for (const [parentPath, indexed] of Object.entries(this.data.files)) {
-      if ((0, import_obsidian14.normalizePath)(parentPath) === normalizedChildPath) continue;
+      if ((0, import_obsidian16.normalizePath)(parentPath) === normalizedChildPath) continue;
       const mountEntry = indexed.entries.find((entry) => {
         var _a3;
         if (!entry.submapPath) return false;
@@ -20967,7 +20975,7 @@ var MindMapSearchIndex = class {
    */
   async refreshFamily(rootPath, currentDocument) {
     var _a2, _b2, _c, _d, _e;
-    const normalizedRoot = (0, import_obsidian14.normalizePath)(rootPath);
+    const normalizedRoot = (0, import_obsidian16.normalizePath)(rootPath);
     const family = /* @__PURE__ */ new Set();
     const documents = /* @__PURE__ */ new Map();
     if (currentDocument) documents.set(normalizedRoot, currentDocument);
@@ -20976,7 +20984,7 @@ var MindMapSearchIndex = class {
     while (!climbed.has(familyRoot)) {
       climbed.add(familyRoot);
       const climbFile = this.app.vault.getAbstractFileByPath(familyRoot);
-      if (!(climbFile instanceof import_obsidian14.TFile) || climbFile.extension.toLocaleLowerCase() !== this.extension) break;
+      if (!(climbFile instanceof import_obsidian16.TFile) || climbFile.extension.toLocaleLowerCase() !== this.extension) break;
       const indexed = await this.familyIndexedFile(climbFile, documents);
       const parentPath = (_a2 = indexed == null ? void 0 : indexed.navigation) == null ? void 0 : _a2.parentPath;
       if (!parentPath) break;
@@ -20986,10 +20994,10 @@ var MindMapSearchIndex = class {
     }
     const queue = [familyRoot];
     while (queue.length) {
-      const path = (0, import_obsidian14.normalizePath)((_b2 = queue.shift()) != null ? _b2 : "");
+      const path = (0, import_obsidian16.normalizePath)((_b2 = queue.shift()) != null ? _b2 : "");
       if (!path || family.has(path)) continue;
       const file = this.app.vault.getAbstractFileByPath(path);
-      if (!(file instanceof import_obsidian14.TFile) || file.extension.toLocaleLowerCase() !== this.extension) continue;
+      if (!(file instanceof import_obsidian16.TFile) || file.extension.toLocaleLowerCase() !== this.extension) continue;
       const indexed = await this.familyIndexedFile(file, documents);
       if (!indexed) continue;
       family.add(path);
@@ -21048,7 +21056,7 @@ var MindMapSearchIndex = class {
    * @param path 仓库内目标路径。
    */
   removeFile(path) {
-    const normalizedPath = (0, import_obsidian14.normalizePath)(path);
+    const normalizedPath = (0, import_obsidian16.normalizePath)(path);
     if (!this.data.files[normalizedPath]) return;
     delete this.data.files[normalizedPath];
     this.data.generatedAt = (/* @__PURE__ */ new Date()).toISOString();
@@ -21148,11 +21156,11 @@ var MindMapSearchIndex = class {
     const raw = rawPath == null ? void 0 : rawPath.trim();
     if (!raw) return null;
     const unwrapped = (_c = (_b2 = (_a2 = raw.replace(/^!?\[\[|\]\]$/g, "").split("|")[0]) == null ? void 0 : _a2.split("#")[0]) == null ? void 0 : _b2.trim()) != null ? _c : raw;
-    const normalizedPath = (0, import_obsidian14.normalizePath)(unwrapped);
+    const normalizedPath = (0, import_obsidian16.normalizePath)(unwrapped);
     const direct = this.app.vault.getAbstractFileByPath(normalizedPath);
-    if (direct instanceof import_obsidian14.TFile && direct.extension.toLocaleLowerCase() === this.extension) return direct;
+    if (direct instanceof import_obsidian16.TFile && direct.extension.toLocaleLowerCase() === this.extension) return direct;
     const resolved = this.app.metadataCache.getFirstLinkpathDest(unwrapped, sourcePath);
-    return resolved instanceof import_obsidian14.TFile && resolved.extension.toLocaleLowerCase() === this.extension ? resolved : null;
+    return resolved instanceof import_obsidian16.TFile && resolved.extension.toLocaleLowerCase() === this.extension ? resolved : null;
   }
   /**
    * 加载相关数据，并保持模型、界面和持久化状态的一致性。
@@ -21244,7 +21252,7 @@ function appendHighlightedText(container, text, query, useRegex = false) {
   container.createEl("mark", { text: text.slice(index, index + phrase.length) });
   if (index + phrase.length < text.length) container.appendText(text.slice(index + phrase.length));
 }
-var GlobalMindMapSearchModal = class extends import_obsidian14.Modal {
+var GlobalMindMapSearchModal = class extends import_obsidian16.Modal {
   /**
    * 创建 GlobalMindMapSearchModal 实例，保存依赖和初始状态；实际 DOM 构建通常在 onOpen() 或后续渲染流程中完成。
    *
@@ -21287,7 +21295,7 @@ var GlobalMindMapSearchModal = class extends import_obsidian14.Modal {
     this.titleEl.setText(this.scopeTitle);
     const searchRow = this.contentEl.createDiv({ cls: "mms-global-search-row" });
     const icon = searchRow.createSpan({ cls: "mms-global-search-icon" });
-    (0, import_obsidian14.setIcon)(icon, "search");
+    (0, import_obsidian16.setIcon)(icon, "search");
     this.inputEl = searchRow.createEl("input", {
       type: "search",
       cls: "mms-global-search-input",
@@ -21303,14 +21311,14 @@ var GlobalMindMapSearchModal = class extends import_obsidian14.Modal {
       cls: "mms-global-search-replace-all",
       attr: { type: "button", title: "\u5168\u90E8\u66FF\u6362" }
     });
-    (0, import_obsidian14.setIcon)(replaceAllBtn, "check-check");
+    (0, import_obsidian16.setIcon)(replaceAllBtn, "check-check");
     this.replaceInputEl = this.replaceRowEl.createEl("input", {
       type: "text",
       cls: "mms-global-search-replace-input",
       attr: { placeholder: "\u66FF\u6362\u4E3A\u2026", autocomplete: "off" }
     });
     const rebuild = this.replaceRowEl.createEl("button", { cls: "mms-global-search-rebuild", attr: { type: "button", title: "\u91CD\u5EFA\u7D22\u5F15" } });
-    (0, import_obsidian14.setIcon)(rebuild, "refresh-cw");
+    (0, import_obsidian16.setIcon)(rebuild, "refresh-cw");
     this.summaryEl = this.contentEl.createDiv({ cls: "mms-global-search-summary" });
     this.resultsEl = this.contentEl.createDiv({ cls: "mms-global-search-results" });
     const render = () => this.renderResults(this.inputEl.value);
@@ -21337,7 +21345,7 @@ var GlobalMindMapSearchModal = class extends import_obsidian14.Modal {
       const query = this.inputEl.value.trim();
       if (!query || !this.renderedResults.length) return;
       if (!this.onReplaceAll) {
-        new import_obsidian14.Notice("\u5F53\u524D\u6A21\u5F0F\u4E0D\u652F\u6301\u66FF\u6362\u64CD\u4F5C\u3002");
+        new import_obsidian16.Notice("\u5F53\u524D\u6A21\u5F0F\u4E0D\u652F\u6301\u66FF\u6362\u64CD\u4F5C\u3002");
         return;
       }
       replaceAllBtn.disabled = true;
@@ -21346,10 +21354,10 @@ var GlobalMindMapSearchModal = class extends import_obsidian14.Modal {
         const allResults = this.index.search(query, Number.MAX_SAFE_INTEGER, this.scopePaths, this.useRegex);
         const count = await this.onReplaceAll(allResults, query, this.replaceInputEl.value, this.useRegex);
         if (!count) {
-          new import_obsidian14.Notice("\u8282\u70B9\u6587\u5B57\u4E2D\u672A\u627E\u5230\u53EF\u66FF\u6362\u7684\u5339\u914D");
+          new import_obsidian16.Notice("\u8282\u70B9\u6587\u5B57\u4E2D\u672A\u627E\u5230\u53EF\u66FF\u6362\u7684\u5339\u914D");
           return;
         }
-        new import_obsidian14.Notice(`\u5DF2\u66FF\u6362 ${count} \u4E2A\u8282\u70B9\uFF0C\u6B63\u5728\u66F4\u65B0\u641C\u7D22\u7D22\u5F15\u2026`);
+        new import_obsidian16.Notice(`\u5DF2\u66FF\u6362 ${count} \u4E2A\u8282\u70B9\uFF0C\u6B63\u5728\u66F4\u65B0\u641C\u7D22\u7D22\u5F15\u2026`);
         this.renderedResults = [];
         this.summaryEl.setText(`\u5DF2\u66FF\u6362\u5168\u90E8 ${count} \u4E2A\u5339\u914D\u8282\u70B9\u3002`);
         this.resultsEl.empty();
@@ -21357,7 +21365,7 @@ var GlobalMindMapSearchModal = class extends import_obsidian14.Modal {
       } finally {
         replaceAllBtn.disabled = false;
         replaceAllBtn.setText("");
-        (0, import_obsidian14.setIcon)(replaceAllBtn, "check-check");
+        (0, import_obsidian16.setIcon)(replaceAllBtn, "check-check");
       }
     });
     rebuild.addEventListener("click", async () => {
@@ -21365,7 +21373,7 @@ var GlobalMindMapSearchModal = class extends import_obsidian14.Modal {
       this.summaryEl.setText("\u6B63\u5728\u91CD\u5EFA\u7D22\u5F15\u2026");
       try {
         await this.onRebuild();
-        new import_obsidian14.Notice("\u601D\u7EF4\u5BFC\u56FE\u641C\u7D22\u7D22\u5F15\u5DF2\u91CD\u5EFA");
+        new import_obsidian16.Notice("\u601D\u7EF4\u5BFC\u56FE\u641C\u7D22\u7D22\u5F15\u5DF2\u91CD\u5EFA");
         render();
       } finally {
         rebuild.disabled = false;
@@ -21447,27 +21455,27 @@ var GlobalMindMapSearchModal = class extends import_obsidian14.Modal {
         cls: "mms-global-search-replace-one",
         attr: { type: "button", title: "\u66FF\u6362\u6B64\u8282\u70B9" }
       });
-      (0, import_obsidian14.setIcon)(replaceOneBtn, "rotate-ccw");
+      (0, import_obsidian16.setIcon)(replaceOneBtn, "rotate-ccw");
       replaceOneBtn.createSpan({ text: "\u66FF\u6362\u6B64\u8282\u70B9" });
       replaceOneBtn.addEventListener("click", async (event) => {
         event.stopPropagation();
         const replacement = this.replaceInputEl.value;
         if (!this.onReplaceAll) {
-          new import_obsidian14.Notice("\u5F53\u524D\u6A21\u5F0F\u4E0D\u652F\u6301\u66FF\u6362\u64CD\u4F5C\u3002");
+          new import_obsidian16.Notice("\u5F53\u524D\u6A21\u5F0F\u4E0D\u652F\u6301\u66FF\u6362\u64CD\u4F5C\u3002");
           return;
         }
         replaceOneBtn.disabled = true;
         try {
           const count = await this.onReplaceAll([result], this.inputEl.value, replacement, this.useRegex);
           if (count > 0) {
-            new import_obsidian14.Notice("\u5DF2\u66FF\u6362\u6B64\u8282\u70B9");
+            new import_obsidian16.Notice("\u5DF2\u66FF\u6362\u6B64\u8282\u70B9");
             const idx = this.renderedResults.indexOf(result);
             if (idx >= 0) {
               this.renderedResults.splice(idx, 1);
               this.renderResultList();
             }
           } else {
-            new import_obsidian14.Notice("\u8282\u70B9\u6587\u5B57\u4E2D\u672A\u627E\u5230\u5339\u914D\uFF0C\u672A\u4F5C\u66FF\u6362");
+            new import_obsidian16.Notice("\u8282\u70B9\u6587\u5B57\u4E2D\u672A\u627E\u5230\u5339\u914D\uFF0C\u672A\u4F5C\u66FF\u6362");
           }
         } finally {
           replaceOneBtn.disabled = false;
@@ -21885,7 +21893,7 @@ var MindMapDocumentCache = class {
 };
 
 // src/ai/client.ts
-var import_obsidian15 = require("obsidian");
+var import_obsidian17 = require("obsidian");
 
 // src/utils/image-host.ts
 var DEFAULT_IMAGE_URL_PATHS = ["data.url", "url", "result.url", "result.image", "image.url", "src"];
@@ -22046,7 +22054,7 @@ async function fetchAiProfileModels(profile, signal) {
   var _a2;
   const endpoint = normalizeHttpUrl(resolveAiModelsEndpoint(profile.endpoint), "AI \u6A21\u578B\u76EE\u5F55\u63A5\u53E3");
   throwIfSignalAborted(signal, "\u6A21\u578B\u76EE\u5F55\u8BF7\u6C42");
-  const response = await (0, import_obsidian15.requestUrl)({
+  const response = await (0, import_obsidian17.requestUrl)({
     url: endpoint,
     method: "GET",
     headers: buildRequestHeaders(profile),
@@ -22081,7 +22089,7 @@ var requestChatCompletion = async (profile, body, onStreamUpdate, signal) => {
   if (!profile.model.trim()) throw new Error("\u8BF7\u5148\u914D\u7F6E\u6A21\u578B\u540D\u79F0");
   if (body.stream) return requestStreamingChatCompletion(endpoint, profile, body, onStreamUpdate, signal);
   throwIfSignalAborted(signal, "AI \u63A5\u53E3\u8BF7\u6C42");
-  const response = await (0, import_obsidian15.requestUrl)({
+  const response = await (0, import_obsidian17.requestUrl)({
     url: endpoint,
     method: "POST",
     headers: buildRequestHeaders(profile),
@@ -22128,7 +22136,7 @@ var requestStreamingChatCompletion = async (endpoint, profile, body, onStreamUpd
 var isFetchNetworkError = (error) => error instanceof TypeError || error instanceof Error && /failed to fetch|load failed|networkerror/i.test(error.message);
 var requestNativeStreamingChatCompletion = async (endpoint, profile, body, onStreamUpdate, signal) => {
   throwIfSignalAborted(signal, "AI \u63A5\u53E3\u8BF7\u6C42");
-  const response = await (0, import_obsidian15.requestUrl)({
+  const response = await (0, import_obsidian17.requestUrl)({
     url: endpoint,
     method: "POST",
     headers: { ...buildRequestHeaders(profile), Accept: "text/event-stream" },
@@ -23323,7 +23331,7 @@ function isPlainFindShortcut(event) {
   const findKey = key === "f" || event.code === "KeyF";
   return (event.ctrlKey || event.metaKey) && findKey && !event.shiftKey && !event.altKey;
 }
-var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
+var MindMapStudioPlugin = class extends import_obsidian18.Plugin {
   constructor() {
     super(...arguments);
     /** Explicit cross-file chapter targets queued before TextFileView receives the new file data. */
@@ -23370,15 +23378,15 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
     this.persistedFileExplorerFilterSignature = fileExplorerFilterSignature(this.settings);
     this.settingsWriter = this.createSettingsWriter();
     this.installFileExplorerFilter();
-    const pluginDir = (_a2 = this.manifest.dir) != null ? _a2 : (0, import_obsidian16.normalizePath)(`${this.app.vault.configDir}/plugins/${this.manifest.id}`);
-    const articleCacheDirectory = (0, import_obsidian16.normalizePath)(`${pluginDir}/cache`);
+    const pluginDir = (_a2 = this.manifest.dir) != null ? _a2 : (0, import_obsidian18.normalizePath)(`${this.app.vault.configDir}/plugins/${this.manifest.id}`);
+    const articleCacheDirectory = (0, import_obsidian18.normalizePath)(`${pluginDir}/cache`);
     this.articleContextCache = new ArticleContextCacheStore(
       this.app.vault.adapter,
       articleCacheDirectory,
-      (0, import_obsidian16.normalizePath)(`${articleCacheDirectory}/article-context-cache.json`)
+      (0, import_obsidian18.normalizePath)(`${articleCacheDirectory}/article-context-cache.json`)
     );
     await this.articleContextCache.initialize();
-    this.searchIndex = new MindMapSearchIndex(this.app, (0, import_obsidian16.normalizePath)(`${pluginDir}/mindmap-search-index.json`), MINDMAP_EXTENSION);
+    this.searchIndex = new MindMapSearchIndex(this.app, (0, import_obsidian18.normalizePath)(`${pluginDir}/mindmap-search-index.json`), MINDMAP_EXTENSION);
     this.searchIndexReady = this.searchIndex.initialize();
     this.registerView(VIEW_TYPE_MINDMAP_STUDIO, (leaf) => new MindMapStudioView(leaf, this));
     this.registerExtensions([MINDMAP_EXTENSION], VIEW_TYPE_MINDMAP_STUDIO);
@@ -23514,40 +23522,40 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
       }
     });
     this.registerEvent(this.app.workspace.on("file-menu", (menu, file) => {
-      if (file instanceof import_obsidian16.TFolder) {
+      if (file instanceof import_obsidian18.TFolder) {
         menu.addItem((item) => item.setTitle("\u65B0\u5EFA\u601D\u7EF4\u5BFC\u56FE").setIcon("brain-circuit").onClick(() => void this.createMindMap({ folder: file.path })));
         return;
       }
-      if (!(file instanceof import_obsidian16.TFile)) return;
+      if (!(file instanceof import_obsidian18.TFile)) return;
       if (this.isMindMapFile(file)) {
         menu.addSeparator();
         menu.addItem((item) => item.setTitle("\u4EE5\u53EF\u7F16\u8F91\u601D\u7EF4\u5BFC\u56FE\u6253\u5F00").setIcon("brain-circuit").onClick(() => void this.openAsMindMap(file)));
       }
     }));
     this.registerEvent(this.app.vault.on("create", (file) => {
-      if (!(file instanceof import_obsidian16.TFile) || !this.isMindMapFile(file)) return;
+      if (!(file instanceof import_obsidian18.TFile) || !this.isMindMapFile(file)) return;
       this.invalidateMindMapCaches(file.path, true);
       this.searchIndex.queueFile(file, 80);
     }));
     this.registerEvent(this.app.vault.on("modify", (file) => {
-      if (!(file instanceof import_obsidian16.TFile) || !this.isMindMapFile(file)) return;
+      if (!(file instanceof import_obsidian18.TFile) || !this.isMindMapFile(file)) return;
       this.invalidateMindMapCaches(file.path);
       this.searchIndex.queueFile(file);
     }));
     this.registerEvent(this.app.vault.on("delete", (file) => {
-      if (file instanceof import_obsidian16.TFile && file.extension.toLowerCase() === MINDMAP_EXTENSION) {
+      if (file instanceof import_obsidian18.TFile && file.extension.toLowerCase() === MINDMAP_EXTENSION) {
         this.invalidateMindMapCaches(file.path);
         this.searchIndex.removeFile(file.path);
       }
     }));
     this.registerEvent(this.app.vault.on("rename", (file, oldPath) => {
-      const isMindMapRename = file instanceof import_obsidian16.TFile && this.isMindMapFile(file) || oldPath.toLowerCase().endsWith(`.${MINDMAP_EXTENSION}`);
+      const isMindMapRename = file instanceof import_obsidian18.TFile && this.isMindMapFile(file) || oldPath.toLowerCase().endsWith(`.${MINDMAP_EXTENSION}`);
       if (isMindMapRename) {
         this.invalidateMindMapCaches(oldPath, true);
-        if (file instanceof import_obsidian16.TFile) this.mindMapDocumentCache.remove(file.path);
+        if (file instanceof import_obsidian18.TFile) this.mindMapDocumentCache.remove(file.path);
       }
-      if (file instanceof import_obsidian16.TFile && this.isMindMapFile(file)) void this.renameReadingLocationPathInSettings(oldPath, file.path);
-      if (file instanceof import_obsidian16.TFile && this.isMindMapFile(file)) {
+      if (file instanceof import_obsidian18.TFile && this.isMindMapFile(file)) void this.renameReadingLocationPathInSettings(oldPath, file.path);
+      if (file instanceof import_obsidian18.TFile && this.isMindMapFile(file)) {
         this.searchIndex.renameFile(file, oldPath);
       } else if (oldPath.toLowerCase().endsWith(`.${MINDMAP_EXTENSION}`)) {
         this.searchIndex.removeFile(oldPath);
@@ -23659,10 +23667,10 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
    * 重建global search index，并保持模型、界面和持久化状态的一致性。
    */
   async rebuildGlobalSearchIndex() {
-    new import_obsidian16.Notice("\u6B63\u5728\u91CD\u5EFA\u601D\u7EF4\u5BFC\u56FE\u641C\u7D22\u7D22\u5F15\u2026");
+    new import_obsidian18.Notice("\u6B63\u5728\u91CD\u5EFA\u601D\u7EF4\u5BFC\u56FE\u641C\u7D22\u7D22\u5F15\u2026");
     await this.searchIndex.rebuildAll();
     const status = this.searchIndex.getStatus();
-    new import_obsidian16.Notice(`\u641C\u7D22\u7D22\u5F15\u5DF2\u91CD\u5EFA\uFF1A${status.files} \u4E2A\u5BFC\u56FE\uFF0C${status.nodes} \u4E2A\u8282\u70B9`);
+    new import_obsidian18.Notice(`\u641C\u7D22\u7D22\u5F15\u5DF2\u91CD\u5EFA\uFF1A${status.files} \u4E2A\u5BFC\u56FE\uFF0C${status.nodes} \u4E2A\u8282\u70B9`);
   }
   /**
    * 读取并返回global search index status，并保持模型、界面和持久化状态的一致性。
@@ -23677,9 +23685,9 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
    */
   async openGlobalSearchResult(result) {
     const file = this.app.vault.getAbstractFileByPath(result.filePath);
-    if (!(file instanceof import_obsidian16.TFile) || !this.isMindMapFile(file)) {
+    if (!(file instanceof import_obsidian18.TFile) || !this.isMindMapFile(file)) {
       this.searchIndex.removeFile(result.filePath);
-      new import_obsidian16.Notice(`\u641C\u7D22\u7ED3\u679C\u5BF9\u5E94\u7684\u5BFC\u56FE\u5DF2\u4E0D\u5B58\u5728\uFF1A${result.filePath}`);
+      new import_obsidian18.Notice(`\u641C\u7D22\u7ED3\u679C\u5BF9\u5E94\u7684\u5BFC\u56FE\u5DF2\u4E0D\u5B58\u5728\uFF1A${result.filePath}`);
       return;
     }
     await this.openAsMindMap(file, void 0, result.nodeId);
@@ -23721,7 +23729,7 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
     const promises = Array.from(byFile.entries()).map(async ([filePath, fileResults]) => {
       let localModifiedCount = 0;
       const file = this.app.vault.getAbstractFileByPath(filePath);
-      if (!(file instanceof import_obsidian16.TFile)) return 0;
+      if (!(file instanceof import_obsidian18.TFile)) return 0;
       try {
         const content = await this.app.vault.read(file);
         const doc = parseDocument(content, file.basename);
@@ -23798,7 +23806,7 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
   async copyDebugLogToClipboard() {
     var _a2, _b2, _c, _d, _e;
     if (!this.settings.debugMode || !this.runtimeDebugLog.isEnabled()) {
-      new import_obsidian16.Notice("\u8BF7\u5148\u5728 MindMap Studio \u8BBE\u7F6E\u4E2D\u5F00\u542F\u8C03\u8BD5\u6A21\u5F0F");
+      new import_obsidian18.Notice("\u8BF7\u5148\u5728 MindMap Studio \u8BBE\u7F6E\u4E2D\u5F00\u542F\u8C03\u8BD5\u6A21\u5F0F");
       return;
     }
     const activeFile = this.app.workspace.getActiveFile();
@@ -23825,7 +23833,7 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
       textarea.remove();
       if (!copied) throw new Error("\u6D4F\u89C8\u5668\u62D2\u7EDD\u8BBF\u95EE\u526A\u8D34\u677F");
     }
-    new import_obsidian16.Notice(`\u5DF2\u590D\u5236 ${this.runtimeDebugLog.size()} \u6761\u8C03\u8BD5\u8BB0\u5F55`);
+    new import_obsidian18.Notice(`\u5DF2\u590D\u5236 ${this.runtimeDebugLog.size()} \u6761\u8C03\u8BD5\u8BB0\u5F55`);
   }
   /** Captures user operations and uncaught failures while debug mode is enabled. */
   installRuntimeDebugCapture() {
@@ -24008,8 +24016,8 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
       screenshotRecognizeShortcut: typeof raw.screenshotRecognizeShortcut === "string" && raw.screenshotRecognizeShortcut.trim() ? raw.screenshotRecognizeShortcut.trim().slice(0, 120) : DEFAULT_SETTINGS.screenshotRecognizeShortcut,
       globalSearchShortcut: typeof raw.globalSearchShortcut === "string" && raw.globalSearchShortcut.trim() ? raw.globalSearchShortcut.trim().slice(0, 120) : DEFAULT_SETTINGS.globalSearchShortcut,
       questionNodesEnabled: raw.questionNodesEnabled === true,
-      questionBankFolder: typeof raw.questionBankFolder === "string" ? (0, import_obsidian16.normalizePath)(raw.questionBankFolder.trim().replace(/^\/+|\/+$/g, "")).slice(0, 1e3) : DEFAULT_SETTINGS.questionBankFolder,
-      questionBankFolders: Array.isArray(raw.questionBankFolders) ? Array.from(new Set(raw.questionBankFolders.filter((folder) => typeof folder === "string").map((folder) => (0, import_obsidian16.normalizePath)(folder.trim().replace(/^\/+|\/+$/g, "")).slice(0, 1e3)).filter(Boolean))) : typeof raw.questionBankFolder === "string" && raw.questionBankFolder.trim() ? [(0, import_obsidian16.normalizePath)(raw.questionBankFolder.trim().replace(/^\/+|\/+$/g, "")).slice(0, 1e3)] : [],
+      questionBankFolder: typeof raw.questionBankFolder === "string" ? (0, import_obsidian18.normalizePath)(raw.questionBankFolder.trim().replace(/^\/+|\/+$/g, "")).slice(0, 1e3) : DEFAULT_SETTINGS.questionBankFolder,
+      questionBankFolders: Array.isArray(raw.questionBankFolders) ? Array.from(new Set(raw.questionBankFolders.filter((folder) => typeof folder === "string").map((folder) => (0, import_obsidian18.normalizePath)(folder.trim().replace(/^\/+|\/+$/g, "")).slice(0, 1e3)).filter(Boolean))) : typeof raw.questionBankFolder === "string" && raw.questionBankFolder.trim() ? [(0, import_obsidian18.normalizePath)(raw.questionBankFolder.trim().replace(/^\/+|\/+$/g, "")).slice(0, 1e3)] : [],
       questionPracticeOrder: raw.questionPracticeOrder === "sequential" ? "sequential" : "random",
       questionMemoryCurveEnabled: raw.questionMemoryCurveEnabled === true,
       wrongBookMasteryCount: typeof raw.wrongBookMasteryCount === "number" ? Math.max(1, Math.min(20, Math.round(raw.wrongBookMasteryCount))) : DEFAULT_SETTINGS.wrongBookMasteryCount,
@@ -24131,8 +24139,8 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
   /** Checks the release-workflow update manifest, verifies its archive, and requires a full app restart to activate it. */
   async checkForPluginUpdate() {
     var _a2;
-    new import_obsidian16.Notice("\u6B63\u5728\u68C0\u67E5 MindMap Studio \u66F4\u65B0\u2026");
-    const response = await (0, import_obsidian16.requestUrl)({
+    new import_obsidian18.Notice("\u6B63\u5728\u68C0\u67E5 MindMap Studio \u66F4\u65B0\u2026");
+    const response = await (0, import_obsidian18.requestUrl)({
       url: PLUGIN_UPDATE_MANIFEST_URL,
       method: "GET",
       headers: { "Cache-Control": "no-cache" },
@@ -24140,21 +24148,21 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
     });
     const release = parsePluginUpdateManifest(response.text);
     if (comparePluginVersions(release.version, this.manifest.version) <= 0) {
-      new import_obsidian16.Notice(`\u5DF2\u662F\u6700\u65B0\u7248\u672C\uFF08${this.manifest.version}\uFF09`);
+      new import_obsidian18.Notice(`\u5DF2\u662F\u6700\u65B0\u7248\u672C\uFF08${this.manifest.version}\uFF09`);
       return "up-to-date";
     }
-    const archiveResponse = await (0, import_obsidian16.requestUrl)({ url: release.downloadUrl, method: "GET", throw: true });
+    const archiveResponse = await (0, import_obsidian18.requestUrl)({ url: release.downloadUrl, method: "GET", throw: true });
     const archive = await archiveResponse.arrayBuffer;
     if (!await verifyPluginArchiveHash(archive, release.sha256)) throw new Error("\u66F4\u65B0\u5305 SHA-256 \u6821\u9A8C\u5931\u8D25\uFF0C\u5DF2\u53D6\u6D88\u5B89\u88C5");
     const update = extractPluginReleaseFiles(archive);
     if (update.manifest.id !== this.manifest.id) throw new Error("\u66F4\u65B0\u5305\u7684\u63D2\u4EF6\u6807\u8BC6\u4E0D\u5339\u914D\uFF0C\u5DF2\u53D6\u6D88\u5B89\u88C5");
     if (update.manifest.version !== release.version) throw new Error("\u66F4\u65B0\u5305\u7248\u672C\u4E0E\u66F4\u65B0\u4FE1\u606F\u4E0D\u4E00\u81F4\uFF0C\u5DF2\u53D6\u6D88\u5B89\u88C5");
-    const pluginDir = (_a2 = this.manifest.dir) != null ? _a2 : (0, import_obsidian16.normalizePath)(`${this.app.vault.configDir}/plugins/${this.manifest.id}`);
+    const pluginDir = (_a2 = this.manifest.dir) != null ? _a2 : (0, import_obsidian18.normalizePath)(`${this.app.vault.configDir}/plugins/${this.manifest.id}`);
     const adapter = this.app.vault.adapter;
     const files = [
-      { path: (0, import_obsidian16.normalizePath)(`${pluginDir}/main.js`), content: update.main },
-      { path: (0, import_obsidian16.normalizePath)(`${pluginDir}/styles.css`), content: update.styles },
-      { path: (0, import_obsidian16.normalizePath)(`${pluginDir}/manifest.json`), content: new TextEncoder().encode(update.manifestText).buffer }
+      { path: (0, import_obsidian18.normalizePath)(`${pluginDir}/main.js`), content: update.main },
+      { path: (0, import_obsidian18.normalizePath)(`${pluginDir}/styles.css`), content: update.styles },
+      { path: (0, import_obsidian18.normalizePath)(`${pluginDir}/manifest.json`), content: new TextEncoder().encode(update.manifestText).buffer }
     ];
     const originals = await Promise.all(files.map(async (file) => ({ path: file.path, content: await adapter.readBinary(file.path) })));
     try {
@@ -24163,7 +24171,7 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
       await Promise.all(originals.map((file) => adapter.writeBinary(file.path, file.content).catch(() => void 0)));
       throw error;
     }
-    new import_obsidian16.Notice(`MindMap Studio \u5DF2\u66F4\u65B0\u81F3 ${update.manifest.version}\u3002\u8BF7\u5B8C\u6574\u91CD\u542F Obsidian \u4EE5\u542F\u7528\u65B0\u7248\u672C\u3002`, 1e4);
+    new import_obsidian18.Notice(`MindMap Studio \u5DF2\u66F4\u65B0\u81F3 ${update.manifest.version}\u3002\u8BF7\u5B8C\u6574\u91CD\u542F Obsidian \u4EE5\u542F\u7528\u65B0\u7248\u672C\u3002`, 1e4);
     return "updated";
   }
   /** 使用指定 AI 配置发送当前 Markdown 上下文。 */
@@ -24244,15 +24252,15 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
   async testAiProfile(profileId) {
     const profile = this.settings.aiProfiles.find((item) => item.id === profileId);
     if (!profile) {
-      new import_obsidian16.Notice("\u627E\u4E0D\u5230\u8BE5 AI \u63A5\u53E3\u914D\u7F6E");
+      new import_obsidian18.Notice("\u627E\u4E0D\u5230\u8BE5 AI \u63A5\u53E3\u914D\u7F6E");
       return;
     }
     if (!profile.endpoint.trim()) {
-      new import_obsidian16.Notice(`\u8BF7\u5148\u586B\u5199 ${profile.name} \u7684\u63A5\u53E3\u5730\u5740`);
+      new import_obsidian18.Notice(`\u8BF7\u5148\u586B\u5199 ${profile.name} \u7684\u63A5\u53E3\u5730\u5740`);
       return;
     }
     if (!profile.model.trim()) {
-      new import_obsidian16.Notice(`\u8BF7\u5148\u586B\u5199 ${profile.name} \u7684\u6A21\u578B\u540D\u79F0`);
+      new import_obsidian18.Notice(`\u8BF7\u5148\u586B\u5199 ${profile.name} \u7684\u6A21\u578B\u540D\u79F0`);
       return;
     }
     const started = performance.now();
@@ -24260,12 +24268,12 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
       const result = await testAiProfileConnection(profile);
       const elapsed = Math.max(1, Math.round(performance.now() - started));
       const preview = result.text.replace(/\s+/g, " ").trim().slice(0, 160);
-      new import_obsidian16.Notice(`${profile.name} \u68C0\u6D4B\u6210\u529F\uFF08${elapsed} ms\uFF09
+      new import_obsidian18.Notice(`${profile.name} \u68C0\u6D4B\u6210\u529F\uFF08${elapsed} ms\uFF09
 \u6A21\u578B\uFF1A${result.model}
 \u54CD\u5E94\uFF1A${preview}`, 8e3);
     } catch (error) {
       console.error("MindMap Studio AI connectivity test failed", error);
-      new import_obsidian16.Notice(`${profile.name} \u68C0\u6D4B\u5931\u8D25\uFF1A${error instanceof Error ? error.message : String(error)}`, 8e3);
+      new import_obsidian18.Notice(`${profile.name} \u68C0\u6D4B\u5931\u8D25\uFF1A${error instanceof Error ? error.message : String(error)}`, 8e3);
     }
   }
   /** 获取配置服务公开的模型目录，不改变当前选择的模型。 */
@@ -24377,7 +24385,7 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
   }
   /** Returns whether a map path belongs to the configured question-bank folder or one of its descendants. */
   isQuestionBankFile(file) {
-    const folders = Array.from(/* @__PURE__ */ new Set([...this.settings.questionBankFolders, this.settings.questionBankFolder])).map((folder) => (0, import_obsidian16.normalizePath)(folder)).filter(Boolean);
+    const folders = Array.from(/* @__PURE__ */ new Set([...this.settings.questionBankFolders, this.settings.questionBankFolder])).map((folder) => (0, import_obsidian18.normalizePath)(folder)).filter(Boolean);
     return Boolean(file && folders.some((folder) => {
       var _a2;
       return ((_a2 = file.parent) == null ? void 0 : _a2.path) === folder || file.path.startsWith(`${folder}/`);
@@ -24464,11 +24472,11 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
   resolveMindMapFile(path, sourcePath = "") {
     var _a2, _b2;
     const cleaned = (_b2 = (_a2 = path.replace(/^\[\[|\]\]$/g, "").split("|")[0]) == null ? void 0 : _a2.trim()) != null ? _b2 : path;
-    const normalized2 = (0, import_obsidian16.normalizePath)(cleaned);
+    const normalized2 = (0, import_obsidian18.normalizePath)(cleaned);
     const direct = this.app.vault.getAbstractFileByPath(normalized2);
-    if (direct instanceof import_obsidian16.TFile && this.isMindMapFile(direct)) return direct;
+    if (direct instanceof import_obsidian18.TFile && this.isMindMapFile(direct)) return direct;
     const linked = this.app.metadataCache.getFirstLinkpathDest(cleaned, sourcePath);
-    return linked instanceof import_obsidian16.TFile && this.isMindMapFile(linked) ? linked : null;
+    return linked instanceof import_obsidian18.TFile && this.isMindMapFile(linked) ? linked : null;
   }
   /**
    * 执行“read mind map document”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
@@ -24485,12 +24493,12 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
   }
   /** 返回文件当前的 mtime + size 版本，用于同步缓存校验。 */
   mindMapFileRevision(file) {
-    return { path: (0, import_obsidian16.normalizePath)(file.path), mtime: file.stat.mtime, size: file.stat.size };
+    return { path: (0, import_obsidian18.normalizePath)(file.path), mtime: file.stat.mtime, size: file.stat.size };
   }
   /** 按仓库路径读取一个仍存在的 .mindmap 文件版本。 */
   resolveMindMapFileRevision(path) {
-    const file = this.app.vault.getAbstractFileByPath((0, import_obsidian16.normalizePath)(path));
-    return file instanceof import_obsidian16.TFile && this.isMindMapFile(file) ? this.mindMapFileRevision(file) : null;
+    const file = this.app.vault.getAbstractFileByPath((0, import_obsidian18.normalizePath)(path));
+    return file instanceof import_obsidian18.TFile && this.isMindMapFile(file) ? this.mindMapFileRevision(file) : null;
   }
   /** 从会话级文档缓存同步恢复一个隔离的已解析文档。 */
   getCachedMindMapDocument(file) {
@@ -24539,8 +24547,8 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
     if (!context) return null;
     context.readingSections = context.readingSections.map((section) => section.filePath === file.path ? { ...section, document: currentDocument } : section);
     for (const section of context.readingSections) {
-      const target = this.app.vault.getAbstractFileByPath((0, import_obsidian16.normalizePath)(section.filePath));
-      if (target instanceof import_obsidian16.TFile && this.isMindMapFile(target)) this.rememberMindMapDocument(target, section.document);
+      const target = this.app.vault.getAbstractFileByPath((0, import_obsidian18.normalizePath)(section.filePath));
+      if (target instanceof import_obsidian18.TFile && this.isMindMapFile(target)) this.rememberMindMapDocument(target, section.document);
     }
     return context;
   }
@@ -24553,7 +24561,7 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
     const dependencies = [];
     const seen = /* @__PURE__ */ new Set();
     for (const section of context.readingSections) {
-      const path = (0, import_obsidian16.normalizePath)(section.filePath);
+      const path = (0, import_obsidian18.normalizePath)(section.filePath);
       if (seen.has(path)) continue;
       seen.add(path);
       const revision = this.resolveMindMapFileRevision(path);
@@ -24568,8 +24576,8 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
     if (buildRevision !== this.mindMapCacheRevision) return false;
     this.articleContextCache.put(file.path, context, dependencies);
     for (const section of context.readingSections) {
-      const target = this.app.vault.getAbstractFileByPath((0, import_obsidian16.normalizePath)(section.filePath));
-      if (target instanceof import_obsidian16.TFile && this.isMindMapFile(target)) this.rememberMindMapDocument(target, section.document);
+      const target = this.app.vault.getAbstractFileByPath((0, import_obsidian18.normalizePath)(section.filePath));
+      if (target instanceof import_obsidian18.TFile && this.isMindMapFile(target)) this.rememberMindMapDocument(target, section.document);
     }
     return true;
   }
@@ -24613,7 +24621,7 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
     const parentBase = await this.computeArticleBaseDepth(parentFile, parentDocument, visited);
     let parentNodeId = document2.navigation.parentNodeId;
     if (!parentNodeId) {
-      const currentPath = (0, import_obsidian16.normalizePath)(file.path);
+      const currentPath = (0, import_obsidian18.normalizePath)(file.path);
       parentNodeId = (_b2 = flattenNodes(parentDocument.root).find((node) => {
         var _a3, _b3;
         if (!((_a3 = node.submap) == null ? void 0 : _a3.path)) return false;
@@ -24765,7 +24773,7 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
     if (parentFile && !parentNodeId) {
       try {
         const parentDocument = await readFamilyDocument(parentFile);
-        const currentPath = (0, import_obsidian16.normalizePath)(file.path);
+        const currentPath = (0, import_obsidian18.normalizePath)(file.path);
         parentNodeId = (_d = flattenNodes(parentDocument.root).find((node) => {
           var _a3, _b3;
           if (!((_a3 = node.submap) == null ? void 0 : _a3.path)) return false;
@@ -24853,7 +24861,7 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
    * @returns 计算、解析或序列化后的字符串结果。
    */
   async getAvailablePath(preferredPath) {
-    const normalized2 = (0, import_obsidian16.normalizePath)(preferredPath);
+    const normalized2 = (0, import_obsidian18.normalizePath)(preferredPath);
     if (!this.app.vault.getAbstractFileByPath(normalized2)) return normalized2;
     const dot = normalized2.lastIndexOf(".");
     const base = dot > normalized2.lastIndexOf("/") ? normalized2.slice(0, dot) : normalized2;
@@ -24874,7 +24882,7 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
     const folder = await this.resolveFolder(options.folder, activeBefore);
     const title = (_a2 = options.title) != null ? _a2 : this.buildNewTitle();
     const filename = this.sanitizeFilename(title);
-    const path = await this.getAvailablePath((0, import_obsidian16.normalizePath)(`${folder ? `${folder}/` : ""}${filename}.${MINDMAP_EXTENSION}`));
+    const path = await this.getAvailablePath((0, import_obsidian18.normalizePath)(`${folder ? `${folder}/` : ""}${filename}.${MINDMAP_EXTENSION}`));
     const document2 = (_b2 = options.document) != null ? _b2 : this.createConfiguredDocument(title);
     const file = await this.app.vault.create(path, serializeDocument(document2));
     if (options.insertIntoCurrent && activeBefore && activeBefore.extension === "md" && activeBefore.path !== file.path) {
@@ -24904,11 +24912,11 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
     if (!title || filename === file.basename) return file;
     const oldPath = file.path;
     const parentPath = (_b2 = (_a2 = file.parent) == null ? void 0 : _a2.path) != null ? _b2 : "";
-    const targetPath = await this.getAvailablePath((0, import_obsidian16.normalizePath)(`${parentPath ? `${parentPath}/` : ""}${filename}.${MINDMAP_EXTENSION}`));
+    const targetPath = await this.getAvailablePath((0, import_obsidian18.normalizePath)(`${parentPath ? `${parentPath}/` : ""}${filename}.${MINDMAP_EXTENSION}`));
     if (targetPath === oldPath) return file;
     await this.app.vault.rename(file, targetPath);
     const renamed = this.app.vault.getAbstractFileByPath(targetPath);
-    if (!(renamed instanceof import_obsidian16.TFile)) return file;
+    if (!(renamed instanceof import_obsidian18.TFile)) return file;
     await this.updateParentSubmapReference(renamed, oldPath, (_c = document2.navigation) == null ? void 0 : _c.parentPath, (_d = document2.navigation) == null ? void 0 : _d.parentNodeId);
     await this.updateChildSubmapNavigation(renamed, oldPath, document2);
     return renamed;
@@ -24922,7 +24930,7 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
     const linkedNode = parentNodeId ? findNode(parentDocument.root, parentNodeId) : void 0;
     const node = linkedNode != null ? linkedNode : flattenNodes(parentDocument.root).find((candidate) => {
       var _a2, _b2;
-      return (0, import_obsidian16.normalizePath)((_b2 = (_a2 = candidate.submap) == null ? void 0 : _a2.path) != null ? _b2 : "") === oldPath;
+      return (0, import_obsidian18.normalizePath)((_b2 = (_a2 = candidate.submap) == null ? void 0 : _a2.path) != null ? _b2 : "") === oldPath;
     });
     if (!(node == null ? void 0 : node.submap)) return;
     node.submap.path = file.path;
@@ -24948,7 +24956,7 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
   /** Returns and clears a chapter target queued before a mind-map view starts loading its file. */
   consumePendingMindMapFocus(filePath) {
     var _a2;
-    const normalized2 = (0, import_obsidian16.normalizePath)(filePath);
+    const normalized2 = (0, import_obsidian18.normalizePath)(filePath);
     const nodeId = (_a2 = this.pendingMindMapFocus.get(normalized2)) != null ? _a2 : null;
     this.pendingMindMapFocus.delete(normalized2);
     this.logDebug("navigation", "consume-pending-focus", { filePath: normalized2, nodeId, remaining: this.pendingMindMapFocus.size });
@@ -24957,7 +24965,7 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
   /** Returns and clears a queued directory landing intent for the file being loaded. */
   consumePendingMindMapDirectory(filePath) {
     var _a2;
-    const normalized2 = (0, import_obsidian16.normalizePath)(filePath);
+    const normalized2 = (0, import_obsidian18.normalizePath)(filePath);
     const request = (_a2 = this.pendingMindMapDirectory.get(normalized2)) != null ? _a2 : null;
     this.pendingMindMapDirectory.delete(normalized2);
     this.logDebug("navigation", "consume-pending-directory", {
@@ -25007,13 +25015,13 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
   async savePastedImage(blob, suggestedName, sourceFile) {
     var _a2, _b2, _c;
     const sourceFolder = (_b2 = (_a2 = sourceFile == null ? void 0 : sourceFile.parent) == null ? void 0 : _a2.path) != null ? _b2 : "";
-    const configuredFolder = (0, import_obsidian16.normalizePath)((this.settings.assetFolder || "MindMap Assets").replace(/^\/+|\/+$/g, ""));
-    const folder = (0, import_obsidian16.normalizePath)([sourceFolder, configuredFolder].filter(Boolean).join("/"));
+    const configuredFolder = (0, import_obsidian18.normalizePath)((this.settings.assetFolder || "MindMap Assets").replace(/^\/+|\/+$/g, ""));
+    const folder = (0, import_obsidian18.normalizePath)([sourceFolder, configuredFolder].filter(Boolean).join("/"));
     await this.ensureFolderPath(folder);
     const stamp = buildCompactTimestamp(/* @__PURE__ */ new Date());
     const extension = sanitizeFileExtension(suggestedName, "png");
     const base = this.sanitizeFilename((_c = sourceFile == null ? void 0 : sourceFile.basename) != null ? _c : "mindmap");
-    const preferred = (0, import_obsidian16.normalizePath)(`${folder}/${base}-${stamp}.${extension}`);
+    const preferred = (0, import_obsidian18.normalizePath)(`${folder}/${base}-${stamp}.${extension}`);
     const path = await this.getAvailablePath(preferred);
     await this.app.vault.createBinary(path, await blob.arrayBuffer());
     return path;
@@ -25057,7 +25065,7 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
     const raw = source.trim();
     if (!raw) return null;
     if (/^https?:\/\//i.test(raw)) {
-      const response = await (0, import_obsidian16.requestUrl)({ url: raw, method: "GET", throw: true });
+      const response = await (0, import_obsidian18.requestUrl)({ url: raw, method: "GET", throw: true });
       const contentType = ((_b2 = (_a2 = response.headers["content-type"]) == null ? void 0 : _a2.split(";")[0]) == null ? void 0 : _b2.trim()) || this.mimeFromFilename(raw);
       const suggestedName = remoteImageSuggestedName(raw);
       return { blob: new Blob([response.arrayBuffer], { type: contentType }), suggestedName };
@@ -25070,9 +25078,9 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
     }
     const wikiMatch = raw.match(/^!?\[\[([\s\S]+?)\]\]$/);
     const target = (_g = (_f = (_e = ((_d = wikiMatch == null ? void 0 : wikiMatch[1]) != null ? _d : raw).split("|")[0]) == null ? void 0 : _e.split("#")[0]) == null ? void 0 : _f.trim()) != null ? _g : raw;
-    const direct = this.app.vault.getAbstractFileByPath((0, import_obsidian16.normalizePath)(target));
-    const file = direct instanceof import_obsidian16.TFile ? direct : this.app.metadataCache.getFirstLinkpathDest(target, (_h = sourceFile == null ? void 0 : sourceFile.path) != null ? _h : "");
-    if (!(file instanceof import_obsidian16.TFile)) return null;
+    const direct = this.app.vault.getAbstractFileByPath((0, import_obsidian18.normalizePath)(target));
+    const file = direct instanceof import_obsidian18.TFile ? direct : this.app.metadataCache.getFirstLinkpathDest(target, (_h = sourceFile == null ? void 0 : sourceFile.path) != null ? _h : "");
+    if (!(file instanceof import_obsidian18.TFile)) return null;
     const binary = await this.app.vault.readBinary(file);
     return { blob: new Blob([binary], { type: this.mimeFromFilename(file.name) }), suggestedName: file.name };
   }
@@ -25180,11 +25188,11 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
   async testImageHost(hostId) {
     const host = this.settings.imageHosts.find((item) => item.id === hostId);
     if (!host) {
-      new import_obsidian16.Notice("\u627E\u4E0D\u5230\u8BE5\u56FE\u5E8A\u914D\u7F6E");
+      new import_obsidian18.Notice("\u627E\u4E0D\u5230\u8BE5\u56FE\u5E8A\u914D\u7F6E");
       return;
     }
     if (!host.endpoint.trim()) {
-      new import_obsidian16.Notice(`\u8BF7\u5148\u586B\u5199 ${host.name} \u7684\u4E0A\u4F20 API`);
+      new import_obsidian18.Notice(`\u8BF7\u5148\u586B\u5199 ${host.name} \u7684\u4E0A\u4F20 API`);
       return;
     }
     const png = new Uint8Array([
@@ -25268,12 +25276,12 @@ var MindMapStudioPlugin = class extends import_obsidian16.Plugin {
         deleteKey: uploaded.deleteKey
       }, "connectivity-test");
       const cleanupMessage = scheduled ? "\u6D4B\u8BD5\u56FE\u7247\u5C06\u5728 1 \u5206\u949F\u540E\u81EA\u52A8\u5220\u9664" : "\u8BE5\u56FE\u5E8A\u672A\u914D\u7F6E\u5220\u9664 API\uFF0C\u6D4B\u8BD5\u56FE\u7247\u9700\u8981\u624B\u52A8\u6E05\u7406";
-      new import_obsidian16.Notice(`${host.name} \u8FDE\u63A5\u6210\u529F\uFF08${elapsed} ms\uFF09
+      new import_obsidian18.Notice(`${host.name} \u8FDE\u63A5\u6210\u529F\uFF08${elapsed} ms\uFF09
 ${cleanupMessage}
 ${uploaded.url}`, 9e3);
     } catch (error) {
       console.error("MindMap Studio image host connectivity test failed", error);
-      new import_obsidian16.Notice(`${host.name} \u8FDE\u63A5\u5931\u8D25\uFF1A${error instanceof Error ? error.message : String(error)}`, 8e3);
+      new import_obsidian18.Notice(`${host.name} \u8FDE\u63A5\u5931\u8D25\uFF1A${error instanceof Error ? error.message : String(error)}`, 8e3);
     }
   }
   /**
@@ -25290,7 +25298,7 @@ ${uploaded.url}`, 9e3);
     if (!file || !this.settings.autoUploadEnabled) return false;
     const hostIds = this.getDefaultUploadHostIds();
     if (!hostIds.length) {
-      new import_obsidian16.Notice("\u56FE\u7247\u5DF2\u4FDD\u5B58\u5230\u672C\u5730\uFF1B\u81EA\u52A8\u4E0A\u4F20\u672A\u9009\u62E9\u53EF\u7528\u56FE\u5E8A", 5e3);
+      new import_obsidian18.Notice("\u56FE\u7247\u5DF2\u4FDD\u5B58\u5230\u672C\u5730\uFF1B\u81EA\u52A8\u4E0A\u4F20\u672A\u9009\u62E9\u53EF\u7528\u56FE\u5E8A", 5e3);
       return false;
     }
     this.queueAutoUpload(file, nodeId, blockId, localPath, suggestedName, hostIds, this.settings.autoUploadDelaySeconds * 1e3);
@@ -25351,7 +25359,7 @@ ${uploaded.url}`, 9e3);
     const parts = [];
     if (scheduled.length) parts.push(`\u5DF2\u5B89\u6392 1 \u5206\u949F\u540E\u5220\u9664\uFF1A${scheduled.join("\u3001")}\uFF08\u671F\u95F4\u64A4\u9500\u6062\u590D\u4F1A\u81EA\u52A8\u53D6\u6D88\uFF09`);
     if (retained.length) parts.push(`\u672A\u914D\u7F6E\u5220\u9664 API\uFF0C\u8FDC\u7A0B\u56FE\u7247\u4FDD\u7559\uFF1A${retained.join("\u3001")}`);
-    if (parts.length) new import_obsidian16.Notice(parts.join("\n"), 8e3);
+    if (parts.length) new import_obsidian18.Notice(parts.join("\n"), 8e3);
   }
   /** Adds or refreshes one persistent one-minute remote deletion task. */
   async scheduleImageHostDeletion(host, image, reason) {
@@ -25397,13 +25405,13 @@ ${uploaded.url}`, 9e3);
     if (!(host == null ? void 0 : host.deleteEndpoint.trim())) {
       delete this.settings.pendingImageHostDeletions[id];
       await this.saveSettings();
-      new import_obsidian16.Notice(`${pending.hostName || "\u56FE\u5E8A"} \u672A\u914D\u7F6E\u5220\u9664 API\uFF0C\u8FDC\u7A0B\u56FE\u7247\u5DF2\u4FDD\u7559`, 7e3);
+      new import_obsidian18.Notice(`${pending.hostName || "\u56FE\u5E8A"} \u672A\u914D\u7F6E\u5220\u9664 API\uFF0C\u8FDC\u7A0B\u56FE\u7247\u5DF2\u4FDD\u7559`, 7e3);
       return;
     }
     if (pending.reason === "removed-image" && await this.isPendingRemoteImageReferenced(pending)) {
       delete this.settings.pendingImageHostDeletions[id];
       await this.saveSettings();
-      new import_obsidian16.Notice("\u68C0\u6D4B\u5230\u56FE\u7247\u5DF2\u6062\u590D\uFF0C\u5DF2\u53D6\u6D88\u56FE\u5E8A\u5220\u9664", 5e3);
+      new import_obsidian18.Notice("\u68C0\u6D4B\u5230\u56FE\u7247\u5DF2\u6062\u590D\uFF0C\u5DF2\u53D6\u6D88\u56FE\u5E8A\u5220\u9664", 5e3);
       return;
     }
     try {
@@ -25411,12 +25419,12 @@ ${uploaded.url}`, 9e3);
       if (pending.hash) delete this.settings.imageUploadCache[`${pending.hostId}:${pending.hash}`];
       delete this.settings.pendingImageHostDeletions[id];
       await this.saveSettings();
-      new import_obsidian16.Notice(pending.reason === "connectivity-test" ? `${pending.hostName || host.name} \u7684\u8FDE\u901A\u6027\u6D4B\u8BD5\u56FE\u7247\u5DF2\u5220\u9664` : `${pending.hostName || host.name} \u7684\u8FDC\u7A0B\u56FE\u7247\u5DF2\u5220\u9664`, 5e3);
+      new import_obsidian18.Notice(pending.reason === "connectivity-test" ? `${pending.hostName || host.name} \u7684\u8FDE\u901A\u6027\u6D4B\u8BD5\u56FE\u7247\u5DF2\u5220\u9664` : `${pending.hostName || host.name} \u7684\u8FDC\u7A0B\u56FE\u7247\u5DF2\u5220\u9664`, 5e3);
     } catch (error) {
       console.warn("MindMap Studio delayed remote image deletion failed", error);
       delete this.settings.pendingImageHostDeletions[id];
       await this.saveSettings();
-      new import_obsidian16.Notice(`${pending.hostName || host.name} \u5220\u9664\u5931\u8D25\uFF1A${error instanceof Error ? error.message : String(error)}`, 9e3);
+      new import_obsidian18.Notice(`${pending.hostName || host.name} \u5220\u9664\u5931\u8D25\uFF1A${error instanceof Error ? error.message : String(error)}`, 9e3);
     }
   }
   /** Returns true when any currently saved or open mind map references a pending remote image. */
@@ -25472,12 +25480,12 @@ ${uploaded.url}`, 9e3);
       for (const block of nodeContentBlocks(node)) {
         if (block.type !== "image") continue;
         const localPath = (_a2 = block.localSource) != null ? _a2 : /^https?:\/\//i.test(block.source) ? "" : block.source;
-        const localFile = localPath ? this.app.vault.getAbstractFileByPath((0, import_obsidian16.normalizePath)(localPath)) : null;
+        const localFile = localPath ? this.app.vault.getAbstractFileByPath((0, import_obsidian18.normalizePath)(localPath)) : null;
         const uploaded = hostIds.every((hostId) => {
           var _a3;
           return (_a3 = block.remoteSources) == null ? void 0 : _a3.some((source) => source.hostId === hostId);
         });
-        if (!(localFile instanceof import_obsidian16.TFile) || uploaded) continue;
+        if (!(localFile instanceof import_obsidian18.TFile) || uploaded) continue;
         const remainingMs = Math.max(0, delayMs - Math.max(0, Date.now() - localFile.stat.mtime));
         this.queueAutoUpload(file, node.id, block.id, localPath, localFile.name, hostIds, remainingMs);
       }
@@ -25546,14 +25554,14 @@ ${uploaded.url}`, 9e3);
     try {
       await this.flushOpenView(mindMapFile.path);
       const mapFile = this.app.vault.getAbstractFileByPath(mindMapFile.path);
-      if (!(mapFile instanceof import_obsidian16.TFile)) return;
+      if (!(mapFile instanceof import_obsidian18.TFile)) return;
       const snapshot = parseDocument(await this.app.vault.read(mapFile), mapFile.basename);
       const completed = [];
       for (const job of jobs) {
         const node = findNode(snapshot.root, job.nodeId);
         const block = nodeContentBlocks(node != null ? node : snapshot.root).find((item) => item.type === "image" && item.id === job.blockId);
-        const localFile = this.app.vault.getAbstractFileByPath((0, import_obsidian16.normalizePath)(job.localPath));
-        if (!node || !block || !(localFile instanceof import_obsidian16.TFile)) continue;
+        const localFile = this.app.vault.getAbstractFileByPath((0, import_obsidian18.normalizePath)(job.localPath));
+        if (!node || !block || !(localFile instanceof import_obsidian18.TFile)) continue;
         if (block.source !== job.localPath && block.localSource !== job.localPath) continue;
         const existingByHost = new Map(((_a2 = block.remoteSources) != null ? _a2 : []).map((source) => [source.hostId, source]));
         const missingHostIds = job.hostIds.filter((hostId) => !existingByHost.has(hostId));
@@ -25626,15 +25634,15 @@ ${uploaded.url}`, 9e3);
       if (succeeded) {
         const hostNames = Array.from(new Set(completed.flatMap((item) => item.targetHostNames))).join("\u3001") || "\u56FE\u5E93";
         const suffix = this.settings.deleteLocalAfterUpload ? clearLocalPatches.length === succeeded ? "\uFF0C\u672C\u5730\u56FE\u7247\u5DF2\u5B89\u5168\u5220\u9664" : "\uFF0C\u4ECD\u88AB\u5F15\u7528\u6216\u5220\u9664\u5931\u8D25\u7684\u672C\u5730\u56FE\u7247\u5DF2\u4FDD\u7559" : "\uFF0C\u672C\u5730\u56FE\u7247\u5DF2\u4FDD\u7559";
-        new import_obsidian16.Notice(`\u5DF2\u81EA\u52A8\u4E0A\u4F20 ${succeeded} \u5F20\u56FE\u7247\u5230 ${hostNames}${suffix}`, 7e3);
+        new import_obsidian18.Notice(`\u5DF2\u81EA\u52A8\u4E0A\u4F20 ${succeeded} \u5F20\u56FE\u7247\u5230 ${hostNames}${suffix}`, 7e3);
       }
       if (failed.length) {
         const details = failed.flatMap((item) => item.failures.map((failure) => `${failure.hostName}\uFF1A${failure.error}`)).slice(0, 3).join("\uFF1B");
-        new import_obsidian16.Notice(`\u6709 ${failed.length} \u5F20\u56FE\u7247\u81EA\u52A8\u4E0A\u4F20\u5931\u8D25\uFF0C\u672C\u5730\u56FE\u7247\u5DF2\u4FDD\u7559${details ? `\uFF1A${details}` : ""}`, 9e3);
+        new import_obsidian18.Notice(`\u6709 ${failed.length} \u5F20\u56FE\u7247\u81EA\u52A8\u4E0A\u4F20\u5931\u8D25\uFF0C\u672C\u5730\u56FE\u7247\u5DF2\u4FDD\u7559${details ? `\uFF1A${details}` : ""}`, 9e3);
       }
     } catch (error) {
       console.error("MindMap Studio automatic image upload batch failed", error);
-      new import_obsidian16.Notice(`\u56FE\u7247\u81EA\u52A8\u4E0A\u4F20\u5931\u8D25\uFF0C\u672C\u5730\u56FE\u7247\u5DF2\u4FDD\u7559\uFF1A${error instanceof Error ? error.message : String(error)}`, 8e3);
+      new import_obsidian18.Notice(`\u56FE\u7247\u81EA\u52A8\u4E0A\u4F20\u5931\u8D25\uFF0C\u672C\u5730\u56FE\u7247\u5DF2\u4FDD\u7559\uFF1A${error instanceof Error ? error.message : String(error)}`, 8e3);
     }
   }
   /** Applies upload patches to live views when open, otherwise to a freshly re-read disk document. */
@@ -25676,7 +25684,7 @@ ${uploaded.url}`, 9e3);
     } else {
       body = await blob.arrayBuffer();
     }
-    const response = await (0, import_obsidian16.requestUrl)({
+    const response = await (0, import_obsidian18.requestUrl)({
       url: endpoint,
       method: host.method,
       contentType,
@@ -25710,7 +25718,7 @@ ${uploaded.url}`, 9e3);
     const target = new URL(imageUrl);
     const targetName = decodeURIComponent((_a2 = target.pathname.split("/").filter(Boolean).at(-1)) != null ? _a2 : "");
     const query = new URLSearchParams({ page: "1", perpage: "100", filter: "all", searchField: "name", searchQuery: targetName });
-    const response = await (0, import_obsidian16.requestUrl)({
+    const response = await (0, import_obsidian18.requestUrl)({
       url: `${upload.origin}/api/user/files?${query.toString()}`,
       method: "GET",
       headers: parseUploadHeaders(host.headers),
@@ -25729,7 +25737,7 @@ ${uploaded.url}`, 9e3);
     const endpoint = normalizeHttpUrl(applyImageDeleteTemplate(host.deleteEndpoint, values, "url"), "\u5220\u9664 API");
     const headers = parseUploadHeaders(host.headers);
     const body = host.deleteBody.trim() ? applyImageDeleteTemplate(host.deleteBody, values, "json") : void 0;
-    await (0, import_obsidian16.requestUrl)({
+    await (0, import_obsidian18.requestUrl)({
       url: endpoint,
       method: host.deleteMethod,
       headers,
@@ -25772,11 +25780,11 @@ ${uploaded.url}`, 9e3);
    * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
    */
   async deleteLocalAssetIfSafe(localPath, currentMindMapPath, blockId) {
-    const normalized2 = (0, import_obsidian16.normalizePath)(localPath);
+    const normalized2 = (0, import_obsidian18.normalizePath)(localPath);
     const target = this.app.vault.getAbstractFileByPath(normalized2);
-    if (!(target instanceof import_obsidian16.TFile)) return false;
+    if (!(target instanceof import_obsidian18.TFile)) return false;
     const current = this.app.vault.getAbstractFileByPath(currentMindMapPath);
-    if (current instanceof import_obsidian16.TFile) {
+    if (current instanceof import_obsidian18.TFile) {
       const doc = parseDocument(await this.app.vault.read(current), current.basename);
       const stillUsed = flattenNodes(doc.root).some((node) => nodeContentBlocks(node).some((block) => block.type === "image" && block.id !== blockId && (block.source === normalized2 || block.localSource === normalized2)));
       if (stillUsed) return false;
@@ -25864,12 +25872,12 @@ ${uploaded.url}`, 9e3);
   async persistSubmapDocument(parentFile, node, document2) {
     var _a2, _b2;
     const parentFolder = (_b2 = (_a2 = parentFile.parent) == null ? void 0 : _a2.path) != null ? _b2 : "";
-    const configuredAssets = (0, import_obsidian16.normalizePath)(this.settings.assetFolder || "MindMap Assets");
+    const configuredAssets = (0, import_obsidian18.normalizePath)(this.settings.assetFolder || "MindMap Assets");
     const parentMapFolder = this.sanitizeFilename(parentFile.basename);
-    const submapFolder = (0, import_obsidian16.normalizePath)([parentFolder, configuredAssets, parentMapFolder].filter(Boolean).join("/"));
+    const submapFolder = (0, import_obsidian18.normalizePath)([parentFolder, configuredAssets, parentMapFolder].filter(Boolean).join("/"));
     await this.ensureFolderPath(submapFolder);
     const title = (nodePlainText(node) || "\u5B50\u5BFC\u56FE").trim();
-    const path = await this.getAvailablePath((0, import_obsidian16.normalizePath)(`${submapFolder}/${this.sanitizeFilename(title)}.${MINDMAP_EXTENSION}`));
+    const path = await this.getAvailablePath((0, import_obsidian18.normalizePath)(`${submapFolder}/${this.sanitizeFilename(title)}.${MINDMAP_EXTENSION}`));
     const file = await this.app.vault.create(path, serializeDocument(document2));
     return { path: file.path, title: file.basename };
   }
@@ -25895,13 +25903,13 @@ ${uploaded.url}`, 9e3);
    * @param focusNodeId 该参数用于 open mind map path 流程中的输入或控制。
    */
   async openMindMapPath(path, sourcePath = "", preferredLeaf, focusNodeId) {
-    const normalized2 = (0, import_obsidian16.normalizePath)(path.replace(/^\[\[|\]\]$/g, ""));
+    const normalized2 = (0, import_obsidian18.normalizePath)(path.replace(/^\[\[|\]\]$/g, ""));
     this.logDebug("navigation", "open-path-request", { path, normalized: normalized2, sourcePath, focusNodeId });
     const direct = this.app.vault.getAbstractFileByPath(normalized2);
-    const resolved = direct instanceof import_obsidian16.TFile ? direct : this.app.metadataCache.getFirstLinkpathDest(path, sourcePath);
-    if (!(resolved instanceof import_obsidian16.TFile) || !this.isMindMapFile(resolved)) {
+    const resolved = direct instanceof import_obsidian18.TFile ? direct : this.app.metadataCache.getFirstLinkpathDest(path, sourcePath);
+    if (!(resolved instanceof import_obsidian18.TFile) || !this.isMindMapFile(resolved)) {
       this.logDebug("navigation", "open-path-missing", { path, normalized: normalized2, sourcePath, focusNodeId });
-      new import_obsidian16.Notice(`\u627E\u4E0D\u5230\u5B50\u5BFC\u56FE\uFF1A${path}`);
+      new import_obsidian18.Notice(`\u627E\u4E0D\u5230\u5B50\u5BFC\u56FE\uFF1A${path}`);
       return;
     }
     const resolvedFocusNodeId = await this.resolveNavigationFocusNode(resolved, sourcePath, focusNodeId);
@@ -25910,13 +25918,13 @@ ${uploaded.url}`, 9e3);
   }
   /** Opens a parent/home map as its generated directory without treating the mount node as an article chapter target. */
   async openArticleDirectoryPath(path, sourcePath = "", preferredLeaf, focusNodeId) {
-    const normalized2 = (0, import_obsidian16.normalizePath)(path.replace(/^\[\[|\]\]$/g, ""));
+    const normalized2 = (0, import_obsidian18.normalizePath)(path.replace(/^\[\[|\]\]$/g, ""));
     this.logDebug("navigation", "open-directory-request", { path, normalized: normalized2, sourcePath, focusNodeId });
     const direct = this.app.vault.getAbstractFileByPath(normalized2);
-    const resolved = direct instanceof import_obsidian16.TFile ? direct : this.app.metadataCache.getFirstLinkpathDest(path, sourcePath);
-    if (!(resolved instanceof import_obsidian16.TFile) || !this.isMindMapFile(resolved)) {
+    const resolved = direct instanceof import_obsidian18.TFile ? direct : this.app.metadataCache.getFirstLinkpathDest(path, sourcePath);
+    if (!(resolved instanceof import_obsidian18.TFile) || !this.isMindMapFile(resolved)) {
       this.logDebug("navigation", "open-directory-missing", { path, normalized: normalized2, sourcePath, focusNodeId });
-      new import_obsidian16.Notice(`\u627E\u4E0D\u5230\u7236\u5BFC\u56FE\uFF1A${path}`);
+      new import_obsidian18.Notice(`\u627E\u4E0D\u5230\u7236\u5BFC\u56FE\uFF1A${path}`);
       return;
     }
     let resolvedDirectoryNodeId = focusNodeId;
@@ -25946,9 +25954,9 @@ ${uploaded.url}`, 9e3);
     try {
       const targetDocument = await this.readMindMapDocument(targetFile);
       if (requestedNodeId && findNode(targetDocument.root, requestedNodeId)) return requestedNodeId;
-      const normalizedSourcePath = sourcePath ? (0, import_obsidian16.normalizePath)(sourcePath) : "";
+      const normalizedSourcePath = sourcePath ? (0, import_obsidian18.normalizePath)(sourcePath) : "";
       const sourceFile = normalizedSourcePath ? this.app.vault.getAbstractFileByPath(normalizedSourcePath) : null;
-      if (sourceFile instanceof import_obsidian16.TFile && this.isMindMapFile(sourceFile)) {
+      if (sourceFile instanceof import_obsidian18.TFile && this.isMindMapFile(sourceFile)) {
         const sourceDocument = await this.readMindMapDocument(sourceFile);
         const declaredParent = ((_a2 = sourceDocument.navigation) == null ? void 0 : _a2.parentPath) ? this.resolveMindMapFile(sourceDocument.navigation.parentPath, sourceFile.path) : null;
         if ((declaredParent == null ? void 0 : declaredParent.path) === targetFile.path) {
@@ -25970,7 +25978,7 @@ ${uploaded.url}`, 9e3);
       }
       if (requestedNodeId) {
         this.logDebug("navigation", "focus-node-not-found", { targetPath: targetFile.path, sourcePath, requestedNodeId });
-        new import_obsidian16.Notice("\u76EE\u6807\u7AE0\u8282\u5DF2\u4E0D\u5B58\u5728\uFF0C\u5DF2\u6253\u5F00\u76EE\u6807\u5BFC\u56FE");
+        new import_obsidian18.Notice("\u76EE\u6807\u7AE0\u8282\u5DF2\u4E0D\u5B58\u5728\uFF0C\u5DF2\u6253\u5F00\u76EE\u6807\u5BFC\u56FE");
       }
     } catch (error) {
       this.logDebug("navigation", "focus-validation-failed", { targetPath: targetFile.path, sourcePath, requestedNodeId, error });
@@ -25984,8 +25992,8 @@ ${uploaded.url}`, 9e3);
    * @param folder 目标 Obsidian 文件夹对象。
    */
   async ensureFolderPath(folder) {
-    const normalized2 = (0, import_obsidian16.normalizePath)(folder);
-    if (!normalized2 || this.app.vault.getAbstractFileByPath(normalized2) instanceof import_obsidian16.TFolder) return;
+    const normalized2 = (0, import_obsidian18.normalizePath)(folder);
+    if (!normalized2 || this.app.vault.getAbstractFileByPath(normalized2) instanceof import_obsidian18.TFolder) return;
     const parts = normalized2.split("/").filter(Boolean);
     let current = "";
     for (const part of parts) {
@@ -26033,8 +26041,8 @@ ${uploaded.url}`, 9e3);
    */
   async copyImportedMarkdownImages(document2, markdownFile, mindMapFile) {
     var _a2, _b2, _c, _d, _e;
-    const configuredFolder = (0, import_obsidian16.normalizePath)((this.settings.assetFolder || "MindMap Assets").replace(/^\/+|\/+$/g, ""));
-    const targetFolder = (0, import_obsidian16.normalizePath)([(_b2 = (_a2 = mindMapFile.parent) == null ? void 0 : _a2.path) != null ? _b2 : "", configuredFolder].filter(Boolean).join("/"));
+    const configuredFolder = (0, import_obsidian18.normalizePath)((this.settings.assetFolder || "MindMap Assets").replace(/^\/+|\/+$/g, ""));
+    const targetFolder = (0, import_obsidian18.normalizePath)([(_b2 = (_a2 = mindMapFile.parent) == null ? void 0 : _a2.path) != null ? _b2 : "", configuredFolder].filter(Boolean).join("/"));
     let copied = 0;
     const copiedPaths = /* @__PURE__ */ new Map();
     const reservedPaths = /* @__PURE__ */ new Set();
@@ -26050,14 +26058,14 @@ ${uploaded.url}`, 9e3);
         const linkPath = (_e = (_d = (_c = rawSource.replace(/^!?\[\[|\]\]$/g, "").split("|")[0]) == null ? void 0 : _c.split("#")[0]) == null ? void 0 : _d.trim()) != null ? _e : "";
         if (!linkPath) continue;
         const sourceImage = this.resolveImportedMarkdownImage(linkPath, markdownFile);
-        if (!(sourceImage instanceof import_obsidian16.TFile) || sourceImage.path === mindMapFile.path) continue;
+        if (!(sourceImage instanceof import_obsidian18.TFile) || sourceImage.path === mindMapFile.path) continue;
         let targetPath = copiedPaths.get(sourceImage.path);
         if (!targetPath) {
           if (!folderEnsured) {
             await this.ensureFolderPath(targetFolder);
             folderEnsured = true;
           }
-          const preferredPath = (0, import_obsidian16.normalizePath)(`${targetFolder}/${this.sanitizeFilename(sourceImage.basename)}.${sanitizeFileExtension(sourceImage.name, "png")}`);
+          const preferredPath = (0, import_obsidian18.normalizePath)(`${targetFolder}/${this.sanitizeFilename(sourceImage.basename)}.${sanitizeFileExtension(sourceImage.name, "png")}`);
           let candidate = preferredPath;
           let index = 2;
           const dot = candidate.lastIndexOf(".");
@@ -26098,19 +26106,19 @@ ${uploaded.url}`, 9e3);
    */
   resolveImportedMarkdownImage(linkPath, markdownFile) {
     var _a2, _b2, _c, _d;
-    const normalizedLink = (0, import_obsidian16.normalizePath)(linkPath.replace(/^\/+/, ""));
+    const normalizedLink = (0, import_obsidian18.normalizePath)(linkPath.replace(/^\/+/, ""));
     const markdownFolder = (_b2 = (_a2 = markdownFile.parent) == null ? void 0 : _a2.path) != null ? _b2 : "";
     const segments = normalizedLink.split("/").filter(Boolean);
     const withoutAssets = ((_c = segments[0]) == null ? void 0 : _c.toLowerCase()) === "assets" ? segments.slice(1).join("/") : normalizedLink;
     const filename = (_d = segments.at(-1)) != null ? _d : normalizedLink;
-    const relativeCandidates = [normalizedLink, withoutAssets, filename].filter(Boolean).map((relativePath) => (0, import_obsidian16.normalizePath)([markdownFolder, relativePath].filter(Boolean).join("/")));
+    const relativeCandidates = [normalizedLink, withoutAssets, filename].filter(Boolean).map((relativePath) => (0, import_obsidian18.normalizePath)([markdownFolder, relativePath].filter(Boolean).join("/")));
     const candidates = [normalizedLink, ...relativeCandidates];
     for (const candidate of [...new Set(candidates)]) {
       const file = this.app.vault.getAbstractFileByPath(candidate);
-      if (file instanceof import_obsidian16.TFile) return file;
+      if (file instanceof import_obsidian18.TFile) return file;
     }
     const resolved = this.app.metadataCache.getFirstLinkpathDest(normalizedLink, markdownFile.path);
-    return resolved instanceof import_obsidian16.TFile ? resolved : null;
+    return resolved instanceof import_obsidian18.TFile ? resolved : null;
   }
   /**
    * 解析并确定folder，并保持模型、界面和持久化状态的一致性。
@@ -26123,9 +26131,9 @@ ${uploaded.url}`, 9e3);
     var _a2;
     const candidate = explicitFolder != null ? explicitFolder : this.settings.defaultFolder || ((_a2 = activeFile == null ? void 0 : activeFile.parent) == null ? void 0 : _a2.path) || "";
     if (!candidate) return "";
-    const normalized2 = (0, import_obsidian16.normalizePath)(candidate);
+    const normalized2 = (0, import_obsidian18.normalizePath)(candidate);
     const existing = this.app.vault.getAbstractFileByPath(normalized2);
-    if (existing instanceof import_obsidian16.TFolder) return normalized2;
+    if (existing instanceof import_obsidian18.TFolder) return normalized2;
     await this.ensureFolderPath(normalized2);
     return normalized2;
   }
@@ -26153,7 +26161,7 @@ ${uploaded.url}`, 9e3);
    */
   getSourceTitle(context) {
     const sourceFile = this.app.vault.getAbstractFileByPath(context.sourcePath);
-    return sourceFile instanceof import_obsidian16.TFile ? sourceFile.basename : "\u601D\u7EF4\u5BFC\u56FE";
+    return sourceFile instanceof import_obsidian18.TFile ? sourceFile.basename : "\u601D\u7EF4\u5BFC\u56FE";
   }
   /**
    * 注册 Markdown 代码块静态渲染，并在阅读模式中解析嵌入的思维导图源。静态预览不会修改原文件。
@@ -26171,7 +26179,7 @@ ${uploaded.url}`, 9e3);
       const linkPath = (_e = (_d = (_c = rawSource.split("#")[0]) == null ? void 0 : _c.split("|")[0]) == null ? void 0 : _d.trim()) != null ? _e : "";
       if (!linkPath.toLowerCase().endsWith(`.${MINDMAP_EXTENSION}`)) continue;
       const file = this.app.metadataCache.getFirstLinkpathDest(linkPath, context.sourcePath);
-      if (!(file instanceof import_obsidian16.TFile) || !this.isMindMapFile(file)) continue;
+      if (!(file instanceof import_obsidian18.TFile) || !this.isMindMapFile(file)) continue;
       embed.dataset.mmcProcessed = "true";
       try {
         const source = await this.app.vault.cachedRead(file);
@@ -26206,12 +26214,12 @@ ${uploaded.url}`, 9e3);
     const submapDoc = parseDocument(submapContent, submapFile.basename);
     const parentPath = (_a2 = submapDoc.navigation) == null ? void 0 : _a2.parentPath;
     if (!parentPath) {
-      new import_obsidian16.Notice("\u6B64\u5B50\u5BFC\u56FE\u6CA1\u6709\u7236\u5BFC\u56FE\u5F15\u7528\uFF0C\u65E0\u6CD5\u5408\u5E76");
+      new import_obsidian18.Notice("\u6B64\u5B50\u5BFC\u56FE\u6CA1\u6709\u7236\u5BFC\u56FE\u5F15\u7528\uFF0C\u65E0\u6CD5\u5408\u5E76");
       return;
     }
-    const parentFile = this.app.vault.getAbstractFileByPath((0, import_obsidian16.normalizePath)(parentPath));
-    if (!(parentFile instanceof import_obsidian16.TFile)) {
-      new import_obsidian16.Notice("\u7236\u5BFC\u56FE\u6587\u4EF6\u4E0D\u5B58\u5728");
+    const parentFile = this.app.vault.getAbstractFileByPath((0, import_obsidian18.normalizePath)(parentPath));
+    if (!(parentFile instanceof import_obsidian18.TFile)) {
+      new import_obsidian18.Notice("\u7236\u5BFC\u56FE\u6587\u4EF6\u4E0D\u5B58\u5728");
       return;
     }
     const parentContent = await this.app.vault.read(parentFile);
@@ -26231,7 +26239,7 @@ ${uploaded.url}`, 9e3);
     };
     searchParent(parentDoc.root);
     if (!targetNode) {
-      new import_obsidian16.Notice("\u7236\u5BFC\u56FE\u4E2D\u627E\u4E0D\u5230\u94FE\u63A5\u5230\u8BE5\u5B50\u5BFC\u56FE\u7684\u8282\u70B9");
+      new import_obsidian18.Notice("\u7236\u5BFC\u56FE\u4E2D\u627E\u4E0D\u5230\u94FE\u63A5\u5230\u8BE5\u5B50\u5BFC\u56FE\u7684\u8282\u70B9");
       return;
     }
     const merged = JSON.parse(JSON.stringify(submapDoc.root.children));
@@ -26239,7 +26247,7 @@ ${uploaded.url}`, 9e3);
     targetNode.submap = void 0;
     await this.app.vault.modify(parentFile, serializeDocument(parentDoc));
     await this.app.vault.trash(submapFile, true);
-    new import_obsidian16.Notice("\u5DF2\u5408\u5E76\u5230 " + parentFile.basename + " \u5E76\u5220\u9664\u5B50\u5BFC\u56FE");
+    new import_obsidian18.Notice("\u5DF2\u5408\u5E76\u5230 " + parentFile.basename + " \u5E76\u5220\u9664\u5B50\u5BFC\u56FE");
     await this.openMindMapPath(parentFile.path, "", void 0);
   }
 };
