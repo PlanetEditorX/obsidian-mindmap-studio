@@ -1,5 +1,14 @@
 # Modified Files
 
+## 1.48.6 AI 客户端完成结果汇总去重
+
+- `src/ai/client.ts`：新增私有 `buildCompletionResult(json, fallbackModel, emptyResultError)`；`requestAiCompletion`、`requestAiEditProposal`、`requestAiImageRecognition`、`testAiProfileConnection` 改为复用，删除四处重复的 usage 字段抽取与结果组装；错误消息与返回结构不变。
+- `tests/ai.test.mjs`：新增契约——usage 抽取全局唯一、四个公开函数共用同一助手、三条空结果错误消息保留。
+- `CHANGELOG.md`、`TEST_RESULTS.md`：同步说明。
+
+- 本轮测试安装包：`mindmap-studio-1.48.5-test-631488.zip`，SHA-256 `31f44d8023f25ec6ce468811c28b23eae2b9d0b5a8146c429ecccedccd247bfa`；完整源码与 Codex 交接使用同一 `631488` 后缀（输出到仓库父目录 `D:\Downloads`）。
+
+## 1.48.5 编辑器加固：快照抽样自愈校验 + 节点索引过期标记
 ## 1.48.5 编辑器加固：快照抽样自愈校验 + 节点索引过期标记
 
 - `src/editor/editor.ts`：新增 `SNAPSHOT_CACHE_ASSERTION_INTERVAL_MS`（10 秒）与 `snapshotAssertionDueAt` 字段；`assertDocumentSnapshotCacheFresh()` 抽样比对缓存与当前文档，不一致时失效缓存、回退完整序列化并发出 `document-snapshot-cache-mismatch` 调试事件；`currentDocumentSnapshotJson()` 在缓存命中时先执行抽样校验。新增 `nodeTreeIndexStale` 字段与 `markNodeTreeIndexStale()`；`captureHistorySnapshot()`、`mutate()` 动作之后、拖拽批量移动流程统一标记索引过期；`currentNodeTreeIndex()` 增加 `nodeTreeIndexStale` 判断；`rebuildNodeTreeIndex()` 复位标记。

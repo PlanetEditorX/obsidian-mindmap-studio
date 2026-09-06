@@ -171,6 +171,26 @@ const requestNativeStreamingChatCompletion = async (
   };
 };
 
+/** 把 OpenAI 兼容响应汇总为统一的完成结果，并兼容缺失的 usage 字段。 */
+const buildCompletionResult = (
+  json: Record<string, unknown>,
+  fallbackModel: string,
+  emptyResultError: string
+): AiCompletionResult => {
+  const text = extractAiResponseText(json);
+  if (!text) throw new Error(emptyResultError);
+  const usage = json.usage && typeof json.usage === "object" ? json.usage as Record<string, unknown> : undefined;
+  return {
+    text,
+    model: typeof json.model === "string" ? json.model : fallbackModel,
+    usage: usage ? {
+      promptTokens: typeof usage.prompt_tokens === "number" ? usage.prompt_tokens : undefined,
+      completionTokens: typeof usage.completion_tokens === "number" ? usage.completion_tokens : undefined,
+      totalTokens: typeof usage.total_tokens === "number" ? usage.total_tokens : undefined
+    } : undefined
+  };
+};
+
 /** 发送 OpenAI Chat Completions 兼容请求。 */
 export async function requestAiCompletion(
   profile: AiProfileConfig,
@@ -181,18 +201,7 @@ export async function requestAiCompletion(
 ): Promise<AiCompletionResult> {
   if (payload.overLimit) throw new Error("Markdown 超过当前允许上传的大小");
   const json = await requestChatCompletion(profile, buildChatCompletionBody(profile, payload, question, Boolean(onStreamUpdate)), onStreamUpdate, signal);
-  const text = extractAiResponseText(json);
-  if (!text) throw new Error("AI 接口返回成功，但没有可读取的文本内容");
-  const usage = json.usage && typeof json.usage === "object" ? json.usage as Record<string, unknown> : undefined;
-  return {
-    text,
-    model: typeof json.model === "string" ? json.model : profile.model,
-    usage: usage ? {
-      promptTokens: typeof usage.prompt_tokens === "number" ? usage.prompt_tokens : undefined,
-      completionTokens: typeof usage.completion_tokens === "number" ? usage.completion_tokens : undefined,
-      totalTokens: typeof usage.total_tokens === "number" ? usage.total_tokens : undefined
-    } : undefined
-  };
+  return buildCompletionResult(json, profile.model, "AI 接口返回成功，但没有可读取的文本内容");
 }
 
 
@@ -206,18 +215,7 @@ export async function requestAiEditProposal(
 ): Promise<AiCompletionResult> {
   if (payload.overLimit) throw new Error("Markdown 超过当前允许上传的大小");
   const json = await requestChatCompletion(profile, buildAiEditCompletionBody(profile, payload, instruction, Boolean(onStreamUpdate)), onStreamUpdate, signal);
-  const text = extractAiResponseText(json);
-  if (!text) throw new Error("AI 接口返回成功，但没有可读取的 Markdown 修改提案");
-  const usage = json.usage && typeof json.usage === "object" ? json.usage as Record<string, unknown> : undefined;
-  return {
-    text,
-    model: typeof json.model === "string" ? json.model : profile.model,
-    usage: usage ? {
-      promptTokens: typeof usage.prompt_tokens === "number" ? usage.prompt_tokens : undefined,
-      completionTokens: typeof usage.completion_tokens === "number" ? usage.completion_tokens : undefined,
-      totalTokens: typeof usage.total_tokens === "number" ? usage.total_tokens : undefined
-    } : undefined
-  };
+  return buildCompletionResult(json, profile.model, "AI 接口返回成功，但没有可读取的 Markdown 修改提案");
 }
 
 
@@ -255,18 +253,7 @@ export async function requestAiImageRecognition(
     const message = error instanceof Error ? error.message : String(error);
     throw new Error(`${message}。请确认“${profile.name}”使用支持图片输入的视觉模型；也可在设置中为 AI 识图单独选择接口。`);
   }
-  const text = extractAiResponseText(json);
-  if (!text) throw new Error("AI 接口返回成功，但没有可读取的识图文字");
-  const usage = json.usage && typeof json.usage === "object" ? json.usage as Record<string, unknown> : undefined;
-  return {
-    text,
-    model: typeof json.model === "string" ? json.model : profile.model,
-    usage: usage ? {
-      promptTokens: typeof usage.prompt_tokens === "number" ? usage.prompt_tokens : undefined,
-      completionTokens: typeof usage.completion_tokens === "number" ? usage.completion_tokens : undefined,
-      totalTokens: typeof usage.total_tokens === "number" ? usage.total_tokens : undefined
-    } : undefined
-  };
+  return buildCompletionResult(json, profile.model, "AI 接口返回成功，但没有可读取的识图文字");
 }
 
 /**
@@ -276,10 +263,6 @@ export async function requestAiImageRecognition(
  */
 export async function testAiProfileConnection(profile: AiProfileConfig, signal?: AbortSignal): Promise<AiConnectionTestResult> {
   const json = await requestChatCompletion(profile, buildAiConnectionTestBody(profile), undefined, signal);
-  const text = extractAiResponseText(json);
-  if (!text) throw new Error("接口返回成功，但没有可读取的检测文本");
-  return {
-    text,
-    model: typeof json.model === "string" ? json.model : profile.model
-  };
+  const result = buildCompletionResult(json, profile.model, "接口返回成功，但没有可读取的检测文本");
+  return { text: result.text, model: result.model };
 }

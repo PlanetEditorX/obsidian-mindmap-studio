@@ -22144,37 +22144,29 @@ var requestNativeStreamingChatCompletion = async (endpoint, profile, body, onStr
     ...parsed.usage !== void 0 ? { usage: parsed.usage } : {}
   };
 };
-async function requestAiCompletion(profile, payload, question, onStreamUpdate, signal) {
-  if (payload.overLimit) throw new Error("Markdown \u8D85\u8FC7\u5F53\u524D\u5141\u8BB8\u4E0A\u4F20\u7684\u5927\u5C0F");
-  const json = await requestChatCompletion(profile, buildChatCompletionBody(profile, payload, question, Boolean(onStreamUpdate)), onStreamUpdate, signal);
+var buildCompletionResult = (json, fallbackModel, emptyResultError) => {
   const text = extractAiResponseText(json);
-  if (!text) throw new Error("AI \u63A5\u53E3\u8FD4\u56DE\u6210\u529F\uFF0C\u4F46\u6CA1\u6709\u53EF\u8BFB\u53D6\u7684\u6587\u672C\u5185\u5BB9");
+  if (!text) throw new Error(emptyResultError);
   const usage = json.usage && typeof json.usage === "object" ? json.usage : void 0;
   return {
     text,
-    model: typeof json.model === "string" ? json.model : profile.model,
+    model: typeof json.model === "string" ? json.model : fallbackModel,
     usage: usage ? {
       promptTokens: typeof usage.prompt_tokens === "number" ? usage.prompt_tokens : void 0,
       completionTokens: typeof usage.completion_tokens === "number" ? usage.completion_tokens : void 0,
       totalTokens: typeof usage.total_tokens === "number" ? usage.total_tokens : void 0
     } : void 0
   };
+};
+async function requestAiCompletion(profile, payload, question, onStreamUpdate, signal) {
+  if (payload.overLimit) throw new Error("Markdown \u8D85\u8FC7\u5F53\u524D\u5141\u8BB8\u4E0A\u4F20\u7684\u5927\u5C0F");
+  const json = await requestChatCompletion(profile, buildChatCompletionBody(profile, payload, question, Boolean(onStreamUpdate)), onStreamUpdate, signal);
+  return buildCompletionResult(json, profile.model, "AI \u63A5\u53E3\u8FD4\u56DE\u6210\u529F\uFF0C\u4F46\u6CA1\u6709\u53EF\u8BFB\u53D6\u7684\u6587\u672C\u5185\u5BB9");
 }
 async function requestAiEditProposal(profile, payload, instruction, onStreamUpdate, signal) {
   if (payload.overLimit) throw new Error("Markdown \u8D85\u8FC7\u5F53\u524D\u5141\u8BB8\u4E0A\u4F20\u7684\u5927\u5C0F");
   const json = await requestChatCompletion(profile, buildAiEditCompletionBody(profile, payload, instruction, Boolean(onStreamUpdate)), onStreamUpdate, signal);
-  const text = extractAiResponseText(json);
-  if (!text) throw new Error("AI \u63A5\u53E3\u8FD4\u56DE\u6210\u529F\uFF0C\u4F46\u6CA1\u6709\u53EF\u8BFB\u53D6\u7684 Markdown \u4FEE\u6539\u63D0\u6848");
-  const usage = json.usage && typeof json.usage === "object" ? json.usage : void 0;
-  return {
-    text,
-    model: typeof json.model === "string" ? json.model : profile.model,
-    usage: usage ? {
-      promptTokens: typeof usage.prompt_tokens === "number" ? usage.prompt_tokens : void 0,
-      completionTokens: typeof usage.completion_tokens === "number" ? usage.completion_tokens : void 0,
-      totalTokens: typeof usage.total_tokens === "number" ? usage.total_tokens : void 0
-    } : void 0
-  };
+  return buildCompletionResult(json, profile.model, "AI \u63A5\u53E3\u8FD4\u56DE\u6210\u529F\uFF0C\u4F46\u6CA1\u6709\u53EF\u8BFB\u53D6\u7684 Markdown \u4FEE\u6539\u63D0\u6848");
 }
 async function imageBlobToDataUrl(blob) {
   return new Promise((resolve, reject) => {
@@ -22203,27 +22195,12 @@ async function requestAiImageRecognition(profile, image, prompt, signal) {
     const message = error instanceof Error ? error.message : String(error);
     throw new Error(`${message}\u3002\u8BF7\u786E\u8BA4\u201C${profile.name}\u201D\u4F7F\u7528\u652F\u6301\u56FE\u7247\u8F93\u5165\u7684\u89C6\u89C9\u6A21\u578B\uFF1B\u4E5F\u53EF\u5728\u8BBE\u7F6E\u4E2D\u4E3A AI \u8BC6\u56FE\u5355\u72EC\u9009\u62E9\u63A5\u53E3\u3002`);
   }
-  const text = extractAiResponseText(json);
-  if (!text) throw new Error("AI \u63A5\u53E3\u8FD4\u56DE\u6210\u529F\uFF0C\u4F46\u6CA1\u6709\u53EF\u8BFB\u53D6\u7684\u8BC6\u56FE\u6587\u5B57");
-  const usage = json.usage && typeof json.usage === "object" ? json.usage : void 0;
-  return {
-    text,
-    model: typeof json.model === "string" ? json.model : profile.model,
-    usage: usage ? {
-      promptTokens: typeof usage.prompt_tokens === "number" ? usage.prompt_tokens : void 0,
-      completionTokens: typeof usage.completion_tokens === "number" ? usage.completion_tokens : void 0,
-      totalTokens: typeof usage.total_tokens === "number" ? usage.total_tokens : void 0
-    } : void 0
-  };
+  return buildCompletionResult(json, profile.model, "AI \u63A5\u53E3\u8FD4\u56DE\u6210\u529F\uFF0C\u4F46\u6CA1\u6709\u53EF\u8BFB\u53D6\u7684\u8BC6\u56FE\u6587\u5B57");
 }
 async function testAiProfileConnection(profile, signal) {
   const json = await requestChatCompletion(profile, buildAiConnectionTestBody(profile), void 0, signal);
-  const text = extractAiResponseText(json);
-  if (!text) throw new Error("\u63A5\u53E3\u8FD4\u56DE\u6210\u529F\uFF0C\u4F46\u6CA1\u6709\u53EF\u8BFB\u53D6\u7684\u68C0\u6D4B\u6587\u672C");
-  return {
-    text,
-    model: typeof json.model === "string" ? json.model : profile.model
-  };
+  const result = buildCompletionResult(json, profile.model, "\u63A5\u53E3\u8FD4\u56DE\u6210\u529F\uFF0C\u4F46\u6CA1\u6709\u53EF\u8BFB\u53D6\u7684\u68C0\u6D4B\u6587\u672C");
+  return { text: result.text, model: result.model };
 }
 
 // src/file-explorer-filter.ts

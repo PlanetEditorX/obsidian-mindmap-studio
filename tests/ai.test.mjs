@@ -606,3 +606,13 @@ test("modal and view wiring abort the active AI request on close and pass signal
   assert.match(viewSource, /throwIfSignalAborted\(signal, "图片识别"\)/);
   assert.match(viewSource, /isAiRequestCancelled\(error\)[\s\S]*?failed\.push/);
 });
+
+test("AI client summarizes completion results through a single shared helper", async () => {
+  const clientSource = await readFile("src/ai/client.ts", "utf8");
+  assert.match(clientSource, /const buildCompletionResult = \([\s\S]*?extractAiResponseText\(json\)[\s\S]*?promptTokens:/);
+  assert.equal((clientSource.match(/promptTokens:/g) ?? []).length, 1, "usage extraction must exist exactly once");
+  assert.equal((clientSource.match(/buildCompletionResult\(json, profile\.model/g) ?? []).length, 4, "all four public request functions must share the helper");
+  assert.match(clientSource, /return buildCompletionResult\(json, profile\.model, "AI 接口返回成功，但没有可读取的文本内容"\);/);
+  assert.match(clientSource, /return buildCompletionResult\(json, profile\.model, "AI 接口返回成功，但没有可读取的 Markdown 修改提案"\);/);
+  assert.match(clientSource, /return buildCompletionResult\(json, profile\.model, "AI 接口返回成功，但没有可读取的识图文字"\);/);
+});

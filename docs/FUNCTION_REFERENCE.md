@@ -48,7 +48,7 @@ export async function fetchAiProfileModels(profile: AiProfileConfig, signal?: Ab
 
 ### 函数 `requestAiCompletion`
 
-源码：`src/ai/client.ts:175`
+源码：`src/ai/client.ts:195`
 
 发送 OpenAI Chat Completions 兼容请求。
 
@@ -58,7 +58,7 @@ export async function requestAiCompletion( profile: AiProfileConfig, payload: Ai
 
 ### 函数 `requestAiEditProposal`
 
-源码：`src/ai/client.ts:200`
+源码：`src/ai/client.ts:209`
 
 请求 AI 返回可解析的 Markdown 修改提案；不会直接修改导图。
 
@@ -68,7 +68,7 @@ export async function requestAiEditProposal( profile: AiProfileConfig, payload: 
 
 ### 函数 `imageBlobToDataUrl`
 
-源码：`src/ai/client.ts:225`
+源码：`src/ai/client.ts:223`
 
 把图片 Blob 转为 Chat Completions 可直接发送的 data URL。
 
@@ -78,7 +78,7 @@ export async function imageBlobToDataUrl(blob: Blob): Promise<string>
 
 ### 函数 `requestAiImageRecognition`
 
-源码：`src/ai/client.ts:237`
+源码：`src/ai/client.ts:235`
 
 使用支持视觉输入的 OpenAI 兼容模型识别单张图片。
 
@@ -88,7 +88,7 @@ export async function requestAiImageRecognition( profile: AiProfileConfig, image
 
 ### 函数 `testAiProfileConnection`
 
-源码：`src/ai/client.ts:277`
+源码：`src/ai/client.ts:264`
 
 使用最小提示词检测接口、鉴权和模型是否可用。 检测请求不会包含当前导图或节点正文。
 

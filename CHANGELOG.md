@@ -1,5 +1,10 @@
 # 更新记录
 
+## 1.48.6
+
+- 审查清单第 4 项：抽取 `buildCompletionResult()` 统一汇总 OpenAI 兼容响应的文本、模型回退与 usage 字段（`prompt/completion/total_tokens` → `promptTokens/completionTokens/totalTokens`），`requestAiCompletion`、`requestAiEditProposal`、`requestAiImageRecognition`、`testAiProfileConnection` 四个公开请求函数全部复用，删除四处重复实现；空结果错误消息按调用方保留。行为与返回结构不变，契约测试锁定 usage 抽取全局唯一。
+
+## 1.48.5
 ## 1.48.5
 
 - 编辑器加固第一批（审查清单第 2 项）：`documentSnapshotJson` 修订序列化缓存新增低频抽样自愈校验——缓存命中时每 10 秒最多一次将其与当前文档的新鲜序列化比对，发现不一致立即失效缓存、回退完整序列化并通过 `onDebugLog("view", "document-snapshot-cache-mismatch")` 与控制台错误暴露。任何绕过统一失效入口的持久字段写入都会被自动发现并自愈，不再可能把过期 JSON 送入撤销栈或宿主保存链路；间隔采样保证大型导图不承担频繁序列化成本。
