@@ -21,7 +21,7 @@ before(async () => {
   [settingsSource, mainSource, editorSource, modelSource, articleRendererSource, stylesSource, bundleSource] = await Promise.all([
     readFile("src/settings.ts", "utf8"),
     readFile("src/main.ts", "utf8"),
-    readFile("src/editor/editor.ts", "utf8"),
+    (Promise.all([readFile("src/editor/editor.ts", "utf8"), readFile("src/editor/node-edit-modal.ts", "utf8"), readFile("src/editor/appearance-modal.ts", "utf8")]).then((parts) => parts.join("\n"))),
     readFile("src/core/model.ts", "utf8"),
     readFile("src/editor/article-renderer.ts", "utf8"),
     readFile("styles.css", "utf8"),

@@ -17,7 +17,7 @@ before(async () => {
       ["src/core/node-tree.ts", "src/core/model.ts"],
       "src/core/model.ts"
     ),
-    readFile("src/editor/editor.ts", "utf8"),
+    (Promise.all([readFile("src/editor/editor.ts", "utf8"), readFile("src/editor/node-edit-modal.ts", "utf8"), readFile("src/editor/appearance-modal.ts", "utf8")]).then((parts) => parts.join("\n"))),
     readFile("src/editor/article-renderer.ts", "utf8"),
     readFile("src/editor/node-rich-text-editor.ts", "utf8"),
     readFile("styles.css", "utf8"),

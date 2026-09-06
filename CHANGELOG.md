@@ -1,5 +1,13 @@
 # 更新记录
 
+## 1.48.7
+
+- 审查清单第 5 项（编辑器拆分第一批）：`src/editor/editor.ts` 从 9,094 行降至 7,842 行。自包含弹窗拆分为独立模块——`src/editor/node-edit-modal.ts`（618 行，节点编辑弹窗与 `NodeEditValues`）与 `src/editor/appearance-modal.ts`（675 行，统一“主题与外观”弹窗及节点编辑与外观弹窗共用的文章编号控件、阅读样式控件）。
+- 拆分沿用既有组合模块模式：弹窗通过构造参数与 `MindMapEditorCallbacks` 回调与 `MindMapEditor` 通信，不共享实例状态；`editor.ts` 仅新增两个 import，删除随之不再使用的 12 项导入。
+- 契约测试与源码解耦：涉及编辑器核心的契约测试统一读取 `editor.ts + node-edit-modal.ts + appearance-modal.ts` 拼接内容（含 `scripts/test.mjs` 综合回归），后续继续拆分时契约无需逐个改指向。
+- 运行时行为、数据格式与 `main.js` bundle 契约不变；production esbuild 重新构建。
+
+## 1.48.6
 ## 1.48.6
 
 - 审查清单第 4 项：抽取 `buildCompletionResult()` 统一汇总 OpenAI 兼容响应的文本、模型回退与 usage 字段（`prompt/completion/total_tokens` → `promptTokens/completionTokens/totalTokens`），`requestAiCompletion`、`requestAiEditProposal`、`requestAiImageRecognition`、`testAiProfileConnection` 四个公开请求函数全部复用，删除四处重复实现；空结果错误消息按调用方保留。行为与返回结构不变，契约测试锁定 usage 抽取全局唯一。

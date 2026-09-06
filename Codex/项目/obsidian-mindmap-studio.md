@@ -4,7 +4,10 @@
 - 版本基线：1.48.0（package.json / manifest.json / versions.json / package-lock.json 已同步）。
 - 仓库规则：见根目录 `AGENTS.md`；每轮代码交付三份 ZIP（源码 / 安装 / Codex 交接）共用同一六位后缀；验证入口 `npm run verify`。
 
-## 当前状态（1.48.5 待发布 / 线上 1.48.4）
+## 当前状态（1.48.7 待发布 / 线上 1.48.6）
+
+- 本轮完成审查清单第 5 项（编辑器拆分第一批）：`editor.ts` 9,094 → 7,842 行；`NodeEditModal`（node-edit-modal.ts，618 行）与 `AppearanceModal`（appearance-modal.ts，675 行）拆为独立模块（构造参数 + 回调注入，不共享实例状态）；编辑器核心契约测试改为读取 editor.ts + 两个新文件的拼接内容，与代码所在文件解耦。运行时行为与数据格式不变。
+- 拆分后续批次（建议单独排期，每批保持契约全绿）：视口手势与缩放、行内编辑与富文本协调、题目系统流程——三者与实例状态耦合更深，需按“上下文对象 + 独立类”模式迁移。
 
 - 本轮完成审查清单第 2、3 项编辑器加固：`documentSnapshotJson` 缓存命中读取由 10 秒间隔的抽样自愈校验兜底（不一致立即失效并发出 `document-snapshot-cache-mismatch` 调试事件，防止过期 JSON 进入撤销栈/保存链路）；节点树索引新增 `nodeTreeIndexStale` 过期标记，`captureHistorySnapshot()` / `mutate()` / 拖拽移动流程统一标记，`currentNodeTreeIndex()` 三条件重建。正确代码下运行时行为不变。
 - 本轮完成审查清单第 4 项：`src/ai/client.ts` 抽取 `buildCompletionResult()`，四个公开请求函数共用文本/模型/usage 汇总，删除四处重复实现；契约锁定 usage 抽取全局唯一。
@@ -50,7 +53,9 @@
 
 - 后缀 `631488`：完整源码 `obsidian-mindmap-studio-1.48.5-631488.zip`、安装包 `mindmap-studio-1.48.5-test-631488.zip`（SHA-256 `31f44d8023f25ec6ce468811c28b23eae2b9d0b5a8146c429ecccedccd247bfa`）、交接 `Codex-1.48.5-handoff-631488.zip`。
 
-## 最近交付包（历史）（历史）（历史）（历史）
+- 后缀 `816555`：完整源码 `obsidian-mindmap-studio-1.48.6-816555.zip`、安装包 `mindmap-studio-1.48.6-test-816555.zip`（SHA-256 `9c0eff6ce82296470e8264a2e0694dec8250917a41d6a1d48b23a494edf3470c`）、交接 `Codex-1.48.6-handoff-816555.zip`。
+
+## 最近交付包（历史）（历史）（历史）（历史）（历史）
 
 - 后缀 `190027`：完整源码 `obsidian-mindmap-studio-1.48.0-190027.zip`、安装包 `mindmap-studio-1.48.0-test-190027.zip`（SHA-256 见 `MODIFIED_FILES.md`）、交接 `Codex-1.48.0-handoff-190027.zip`；三份 ZIP 已按新规则输出到仓库父目录 `D:\Downloads`，仓库内及 Git 历史不含任何 ZIP（1.47.1 的两个历史 ZIP 已通过重写历史剥离并强制推送）。
 - 后续交付一律把三份 ZIP 输出到 `D:\Downloads`，严禁写入仓库内部或提交。

@@ -1,5 +1,17 @@
 # Modified Files
 
+## 1.48.7 编辑器拆分第一批：节点编辑与外观弹窗独立模块
+
+- `src/editor/node-edit-modal.ts`（新增，618 行）：`NodeEditModal` 类与 `NodeEditValues` 类型，自包含内容块编辑、图片操作与编号覆盖界面。
+- `src/editor/appearance-modal.ts`（新增，675 行）：`AppearanceModal` 类与共用的 `createArticleNumberingControls` / `createReadingStyleControls` 及相关类型。
+- `src/editor/editor.ts`：移除上述代码（9,094 → 7,842 行），新增两个 import，清理 12 项不再使用的导入；`ScreenshotInsertionTarget` 等仍被核心使用的声明保留。
+- `tests/settings-layout.test.mjs`、`tests/article-content-block.test.mjs`、`tests/article-numbering.test.mjs`、`tests/content-block-drag.test.mjs`、`tests/image-layout.test.mjs`、`tests/question.test.mjs`、`tests/reading-editor-contract.test.mjs`、`scripts/test.mjs`：编辑器核心契约改为读取三文件拼接内容，与代码所在文件解耦。
+- `docs/ARCHITECTURE.md`、`docs/TESTING.md`、`docs/FUNCTION_REFERENCE.md`、`CHANGELOG.md`、`TEST_RESULTS.md`：同步模块清单、契约说明与本批记录。
+- 运行时行为与 `.mindmap` 数据格式不变。
+
+- 本轮测试安装包：`mindmap-studio-1.48.6-test-816555.zip`，SHA-256 `9c0eff6ce82296470e8264a2e0694dec8250917a41d6a1d48b23a494edf3470c`；完整源码与 Codex 交接使用同一 `816555` 后缀（输出到仓库父目录 `D:\Downloads`）。
+
+## 1.48.6 AI 客户端完成结果汇总去重
 ## 1.48.6 AI 客户端完成结果汇总去重
 
 - `src/ai/client.ts`：新增私有 `buildCompletionResult(json, fallbackModel, emptyResultError)`；`requestAiCompletion`、`requestAiEditProposal`、`requestAiImageRecognition`、`testAiProfileConnection` 改为复用，删除四处重复的 usage 字段抽取与结果组装；错误消息与返回结构不变。

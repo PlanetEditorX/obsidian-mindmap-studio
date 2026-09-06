@@ -314,7 +314,7 @@ test("question-bank grading distinguishes single choice, multiple choice, judgme
 
 test("question-bank practice persists attempts, routes mistakes to review, and advances after showing feedback", async () => {
   const [editorSource, practiceSource] = await Promise.all([
-    readFile("src/editor/editor.ts", "utf8"),
+    (Promise.all([readFile("src/editor/editor.ts", "utf8"), readFile("src/editor/node-edit-modal.ts", "utf8"), readFile("src/editor/appearance-modal.ts", "utf8")]).then((parts) => parts.join("\n"))),
     readFile("src/editor/question-practice-mode.ts", "utf8")
   ]);
   assert.match(editorSource, /question\.attemptCount \+= 1/);
@@ -338,7 +338,7 @@ test("question-bank practice persists attempts, routes mistakes to review, and a
 
 test("question assistant keeps an intelligent image-to-question pipeline and visible answer fields", async () => {
   const [editorSource, articleSource, modalSource, practiceSource, mainSource, settingsSource, viewSource] = await Promise.all([
-    readFile("src/editor/editor.ts", "utf8"),
+    (Promise.all([readFile("src/editor/editor.ts", "utf8"), readFile("src/editor/node-edit-modal.ts", "utf8"), readFile("src/editor/appearance-modal.ts", "utf8")]).then((parts) => parts.join("\n"))),
     readFile("src/editor/article-renderer.ts", "utf8"),
     readFile("src/editor/question-modal.ts", "utf8"),
     readFile("src/editor/question-practice-mode.ts", "utf8"),
@@ -403,7 +403,7 @@ test("question fields insert and preview inline or display LaTeX across every qu
     readFile("src/editor/question-modal.ts", "utf8"),
     readFile("src/editor/editor-modals.ts", "utf8"),
     readFile("src/editor/article-renderer.ts", "utf8"),
-    readFile("src/editor/editor.ts", "utf8"),
+    (Promise.all([readFile("src/editor/editor.ts", "utf8"), readFile("src/editor/node-edit-modal.ts", "utf8"), readFile("src/editor/appearance-modal.ts", "utf8")]).then((parts) => parts.join("\n"))),
     readFile("src/editor/question-practice-mode.ts", "utf8"),
     readFile("styles.css", "utf8")
   ]);

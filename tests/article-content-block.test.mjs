@@ -26,7 +26,7 @@ before(async () => {
   tableInteraction = interaction.module;
   interactionCleanup = interaction.cleanup;
   [editorSource, rendererSource, viewSource, styles, mainBundle] = await Promise.all([
-    readFile("src/editor/editor.ts", "utf8"),
+    (Promise.all([readFile("src/editor/editor.ts", "utf8"), readFile("src/editor/node-edit-modal.ts", "utf8"), readFile("src/editor/appearance-modal.ts", "utf8")]).then((parts) => parts.join("\n"))),
     readFile("src/editor/article-renderer.ts", "utf8"),
     readFile("src/view.ts", "utf8"),
     readFile("styles.css", "utf8"),
@@ -118,7 +118,7 @@ test("terminal body siblings can switch to the next article numbering level", as
     readFile("src/view.ts", "utf8"),
     readFile("src/article/modes.ts", "utf8"),
     readFile("src/editor/article-renderer.ts", "utf8"),
-    readFile("src/editor/editor.ts", "utf8")
+    (Promise.all([readFile("src/editor/editor.ts", "utf8"), readFile("src/editor/node-edit-modal.ts", "utf8"), readFile("src/editor/appearance-modal.ts", "utf8")]).then((parts) => parts.join("\n")))
   ]);
   assert.match(settingsSource, /articleLeafNumberingEnabled: boolean/);
   assert.match(settingsSource, /articleLeafNumberingThreshold: number/);
