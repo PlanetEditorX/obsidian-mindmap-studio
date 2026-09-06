@@ -99,7 +99,7 @@
 
 ### 文档快照复用
 
-第五批 5.1/5.2 性能回归由 `tests/document-snapshot-reuse.test.mjs` 与 `tests/history-snapshot-reuse.test.mjs` 同时锁定源码和安装 bundle。宿主层仍不得出现 `editor.getDocument()` 的重复整树读取；`getViewData()` / `save()` 只通过 `currentDocumentSnapshot(true)` 合并最新 zoom/pan，当前导图族搜索、AI、图片识别和文章上下文直接复用当前修订宿主快照。编辑器侧 `notifyDocumentChange()` 必须通过 `createDetachedDocumentSnapshot(true)` 对修改后状态只执行一次权威序列化并恢复隔离对象；普通 mutation 的修改前历史必须通过 `captureHistorySnapshot()` / `DocumentHistory.captureSnapshot()` 复用上一修订 JSON，不得重新退化为 `history.capture(this.document)`。真实历史测试必须覆盖字符串快照 `captureSnapshot → undoSnapshot → redoSnapshot` 的完整往返，并继续验证旧 `capture/undo/redo` API 兼容。测试还必须锁定 zoom/pan、恢复导航、只读和文章落地等未立即发布的持久字段会使序列化缓存失效；源码与 `main.js` 必须保持同等契约。
+第五批 5.1/5.2 性能回归由 `tests/document-snapshot-reuse.test.mjs` 与 `tests/history-snapshot-reuse.test.mjs` 同时锁定源码和安装 bundle。宿主层仍不得出现 `editor.getDocument()` 的重复整树读取；缓存命中读取由低频抽样自愈校验兜底（10 秒间隔，`document-snapshot-cache-mismatch` 调试事件），节点树索引由 `nodeTreeIndexStale` 过期标记保护且 `captureHistorySnapshot()` / `mutate()` / 拖拽移动流程必须标记过期，两项契约由 `tests/incremental-render.test.mjs` 锁定；`getViewData()` / `save()` 只通过 `currentDocumentSnapshot(true)` 合并最新 zoom/pan，当前导图族搜索、AI、图片识别和文章上下文直接复用当前修订宿主快照。编辑器侧 `notifyDocumentChange()` 必须通过 `createDetachedDocumentSnapshot(true)` 对修改后状态只执行一次权威序列化并恢复隔离对象；普通 mutation 的修改前历史必须通过 `captureHistorySnapshot()` / `DocumentHistory.captureSnapshot()` 复用上一修订 JSON，不得重新退化为 `history.capture(this.document)`。真实历史测试必须覆盖字符串快照 `captureSnapshot → undoSnapshot → redoSnapshot` 的完整往返，并继续验证旧 `capture/undo/redo` API 兼容。测试还必须锁定 zoom/pan、恢复导航、只读和文章落地等未立即发布的持久字段会使序列化缓存失效；源码与 `main.js` 必须保持同等契约。
 
 ### 导图渐进渲染与文章目标窗口
 

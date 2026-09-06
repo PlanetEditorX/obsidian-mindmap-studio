@@ -142,6 +142,9 @@ interface ScreenshotInsertionTarget {
 }
 
 /** Visual grouping used to keep related toolbar actions together after filtering. */
+/** 已缓存修订序列化的抽样校验间隔（毫秒），避免大型导图频繁承担全量序列化成本。 */
+const SNAPSHOT_CACHE_ASSERTION_INTERVAL_MS = 10_000;
+
 const TOOLBAR_GROUPS: Readonly<Record<ToolbarItemId, string>> = {
   lock: "access",
   undo: "history",
@@ -1471,6 +1474,10 @@ export class MindMapEditor {
   private document: MindMapDocument;
   /** Rebuilt once per full render so repeated node/parent lookups avoid whole-tree DFS scans. */
   private nodeTreeIndex: NodeTreeIndex | null = null;
+  /** 结构性修改后置真；下一次索引读取重建，`render()` 重建后复位。 */
+  private nodeTreeIndexStale = false;
+  /** 下一次允许执行修订序列化抽样校验的时间戳。 */
+  private snapshotAssertionDueAt = 0;
   private layout: LayoutResult;
   private selectedId: string;
   private readonly selectedIds = new Set<string>();
@@ -2460,8 +2467,27 @@ export class MindMapEditor {
     this.documentSnapshotJson = null;
   }
 
+  /**
+   * 低频抽样校验已缓存的修订序列化与当前文档完全一致。
+   *
+   * 任何绕过统一失效入口的持久字段写入都会在这里被发现并自愈：缓存立即失效，
+   * 下一次读取回到完整序列化，防止过期 JSON 进入撤销栈或宿主保存链路。
+   * 间隔采样避免大型导图频繁承担全量序列化成本。
+   */
+  private assertDocumentSnapshotCacheFresh(): void {
+    const now = Date.now();
+    if (now < this.snapshotAssertionDueAt) return;
+    this.snapshotAssertionDueAt = now + SNAPSHOT_CACHE_ASSERTION_INTERVAL_MS;
+    const fresh = JSON.stringify(this.document);
+    if (fresh === this.documentSnapshotJson) return;
+    this.documentSnapshotJson = null;
+    this.callbacks.onDebugLog("view", "document-snapshot-cache-mismatch", { recovered: true });
+    console.error("MindMap Studio 检测到过期的文档快照缓存并已自动失效；如果该日志反复出现请连同调试记录一起反馈。");
+  }
+
   /** Returns the serialized current document, reusing the latest published revision when it is still exact. */
   private currentDocumentSnapshotJson(): string {
+    if (this.documentSnapshotJson !== null) this.assertDocumentSnapshotCacheFresh();
     if (this.documentSnapshotJson === null) this.documentSnapshotJson = this.history.createSnapshot(this.document);
     return this.documentSnapshotJson;
   }
@@ -2470,6 +2496,7 @@ export class MindMapEditor {
   private captureHistorySnapshot(): void {
     this.history.captureSnapshot(this.currentDocumentSnapshotJson());
     this.invalidateDocumentSnapshotJson();
+    this.markNodeTreeIndexStale();
   }
 
   /**
@@ -5649,12 +5676,18 @@ export class MindMapEditor {
   /** Rebuilds the live node/parent lookup snapshot after a structural tree change or full render. */
   private rebuildNodeTreeIndex(): NodeTreeIndex {
     this.nodeTreeIndex = buildNodeTreeIndex(this.document.root);
+    this.nodeTreeIndexStale = false;
     return this.nodeTreeIndex;
   }
 
-  /** Returns the current tree snapshot, lazily creating it before the first render-time lookup. */
+  /** Marks the live node/parent index stale after a structural mutation; the next read rebuilds it. */
+  private markNodeTreeIndexStale(): void {
+    this.nodeTreeIndexStale = true;
+  }
+
+  /** Returns the current tree snapshot, rebuilding after structural changes even when the root identity is unchanged. */
   private currentNodeTreeIndex(): NodeTreeIndex {
-    if (!this.nodeTreeIndex || this.nodeTreeIndex.root !== this.document.root) return this.rebuildNodeTreeIndex();
+    if (!this.nodeTreeIndex || this.nodeTreeIndexStale || this.nodeTreeIndex.root !== this.document.root) return this.rebuildNodeTreeIndex();
     return this.nodeTreeIndex;
   }
 
@@ -8420,6 +8453,7 @@ export class MindMapEditor {
     if (!draggedIds.length) return;
     const historySnapshot = this.currentDocumentSnapshotJson();
     this.invalidateDocumentSnapshotJson();
+    this.markNodeTreeIndexStale();
     const moveOrder = position === "after" ? [...draggedIds].reverse() : draggedIds;
     let changed = false;
     for (let moveIndex = 0; moveIndex < moveOrder.length; moveIndex += 1) {
@@ -8594,6 +8628,7 @@ export class MindMapEditor {
     if (location) this.rememberLocation(location, true);
     this.captureHistorySnapshot();
     action();
+    this.markNodeTreeIndexStale();
     this.notifyDocumentChange(articleContextImpact);
     this.markSaving();
     this.render();

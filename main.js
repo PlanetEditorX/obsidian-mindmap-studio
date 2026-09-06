@@ -10639,6 +10639,7 @@ var ImageRecognitionPreviewModal = class extends import_obsidian10.Modal {
 };
 
 // src/editor/editor.ts
+var SNAPSHOT_CACHE_ASSERTION_INTERVAL_MS = 1e4;
 var TOOLBAR_GROUPS = {
   lock: "access",
   undo: "history",
@@ -11840,6 +11841,10 @@ var MindMapEditor = class {
     this.editControls = [];
     /** Rebuilt once per full render so repeated node/parent lookups avoid whole-tree DFS scans. */
     this.nodeTreeIndex = null;
+    /** 结构性修改后置真；下一次索引读取重建，`render()` 重建后复位。 */
+    this.nodeTreeIndexStale = false;
+    /** 下一次允许执行修订序列化抽样校验的时间戳。 */
+    this.snapshotAssertionDueAt = 0;
     this.selectedIds = /* @__PURE__ */ new Set();
     /** Selection state last synchronized to DOM classes; invalidated when non-canvas views rebuild their DOM. */
     this.appliedSelectionIds = /* @__PURE__ */ new Set();
@@ -12665,8 +12670,26 @@ var MindMapEditor = class {
   invalidateDocumentSnapshotJson() {
     this.documentSnapshotJson = null;
   }
+  /**
+   * 低频抽样校验已缓存的修订序列化与当前文档完全一致。
+   *
+   * 任何绕过统一失效入口的持久字段写入都会在这里被发现并自愈：缓存立即失效，
+   * 下一次读取回到完整序列化，防止过期 JSON 进入撤销栈或宿主保存链路。
+   * 间隔采样避免大型导图频繁承担全量序列化成本。
+   */
+  assertDocumentSnapshotCacheFresh() {
+    const now = Date.now();
+    if (now < this.snapshotAssertionDueAt) return;
+    this.snapshotAssertionDueAt = now + SNAPSHOT_CACHE_ASSERTION_INTERVAL_MS;
+    const fresh = JSON.stringify(this.document);
+    if (fresh === this.documentSnapshotJson) return;
+    this.documentSnapshotJson = null;
+    this.callbacks.onDebugLog("view", "document-snapshot-cache-mismatch", { recovered: true });
+    console.error("MindMap Studio \u68C0\u6D4B\u5230\u8FC7\u671F\u7684\u6587\u6863\u5FEB\u7167\u7F13\u5B58\u5E76\u5DF2\u81EA\u52A8\u5931\u6548\uFF1B\u5982\u679C\u8BE5\u65E5\u5FD7\u53CD\u590D\u51FA\u73B0\u8BF7\u8FDE\u540C\u8C03\u8BD5\u8BB0\u5F55\u4E00\u8D77\u53CD\u9988\u3002");
+  }
   /** Returns the serialized current document, reusing the latest published revision when it is still exact. */
   currentDocumentSnapshotJson() {
+    if (this.documentSnapshotJson !== null) this.assertDocumentSnapshotCacheFresh();
     if (this.documentSnapshotJson === null) this.documentSnapshotJson = this.history.createSnapshot(this.document);
     return this.documentSnapshotJson;
   }
@@ -12674,6 +12697,7 @@ var MindMapEditor = class {
   captureHistorySnapshot() {
     this.history.captureSnapshot(this.currentDocumentSnapshotJson());
     this.invalidateDocumentSnapshotJson();
+    this.markNodeTreeIndexStale();
   }
   /**
    * Restores one detached document object from the serialized current revision.
@@ -15678,11 +15702,16 @@ var MindMapEditor = class {
   /** Rebuilds the live node/parent lookup snapshot after a structural tree change or full render. */
   rebuildNodeTreeIndex() {
     this.nodeTreeIndex = buildNodeTreeIndex(this.document.root);
+    this.nodeTreeIndexStale = false;
     return this.nodeTreeIndex;
   }
-  /** Returns the current tree snapshot, lazily creating it before the first render-time lookup. */
+  /** Marks the live node/parent index stale after a structural mutation; the next read rebuilds it. */
+  markNodeTreeIndexStale() {
+    this.nodeTreeIndexStale = true;
+  }
+  /** Returns the current tree snapshot, rebuilding after structural changes even when the root identity is unchanged. */
   currentNodeTreeIndex() {
-    if (!this.nodeTreeIndex || this.nodeTreeIndex.root !== this.document.root) return this.rebuildNodeTreeIndex();
+    if (!this.nodeTreeIndex || this.nodeTreeIndexStale || this.nodeTreeIndex.root !== this.document.root) return this.rebuildNodeTreeIndex();
     return this.nodeTreeIndex;
   }
   /** Finds a live node by stable ID without rescanning the document tree. */
@@ -18244,6 +18273,7 @@ var MindMapEditor = class {
     if (!draggedIds.length) return;
     const historySnapshot = this.currentDocumentSnapshotJson();
     this.invalidateDocumentSnapshotJson();
+    this.markNodeTreeIndexStale();
     const moveOrder = position === "after" ? [...draggedIds].reverse() : draggedIds;
     let changed = false;
     for (let moveIndex = 0; moveIndex < moveOrder.length; moveIndex += 1) {
@@ -18401,6 +18431,7 @@ var MindMapEditor = class {
     if (location) this.rememberLocation(location, true);
     this.captureHistorySnapshot();
     action();
+    this.markNodeTreeIndexStale();
     this.notifyDocumentChange(articleContextImpact);
     this.markSaving();
     this.render();

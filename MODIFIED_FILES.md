@@ -1,5 +1,15 @@
 # Modified Files
 
+## 1.48.5 编辑器加固：快照抽样自愈校验 + 节点索引过期标记
+
+- `src/editor/editor.ts`：新增 `SNAPSHOT_CACHE_ASSERTION_INTERVAL_MS`（10 秒）与 `snapshotAssertionDueAt` 字段；`assertDocumentSnapshotCacheFresh()` 抽样比对缓存与当前文档，不一致时失效缓存、回退完整序列化并发出 `document-snapshot-cache-mismatch` 调试事件；`currentDocumentSnapshotJson()` 在缓存命中时先执行抽样校验。新增 `nodeTreeIndexStale` 字段与 `markNodeTreeIndexStale()`；`captureHistorySnapshot()`、`mutate()` 动作之后、拖拽批量移动流程统一标记索引过期；`currentNodeTreeIndex()` 增加 `nodeTreeIndexStale` 判断；`rebuildNodeTreeIndex()` 复位标记。
+- `tests/incremental-render.test.mjs`：新增 5 项源码契约（索引过期标记生命周期与三个标记点、抽样校验间隔门控/自愈/调试事件/读取前置）。
+- `CHANGELOG.md`、`docs/ARCHITECTURE.md`、`docs/TESTING.md`、`docs/FUNCTION_REFERENCE.md`、`TEST_RESULTS.md`：同步说明。
+- 不改变运行时行为与数据格式：抽样校验在正确代码下永不触发；索引过期仅在结构性修改后的首次读取多一次 DFS（`render()` 本就会重建）。
+
+- 本轮测试安装包：`mindmap-studio-1.48.4-test-877178.zip`，SHA-256 `b6ad78088952ecd78c0c60679211f82d139c1f57250650455b0dac44e8b281aa`；完整源码与 Codex 交接使用同一 `877178` 后缀（输出到仓库父目录 `D:\Downloads`）。
+
+## 1.48.4 修复预览拖拽平移被原生图片拖拽接管
 ## 1.48.4 修复预览拖拽平移被原生图片拖拽接管
 
 - `src/editor/editor-modals.ts`：预览图片 `draggable="false"`；`pointerdown` 调用 `preventDefault()` 并新增 `dragstart` 拦截，禁用浏览器原生图片拖拽，指针平移不再被中断。

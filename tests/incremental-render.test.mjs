@@ -94,6 +94,12 @@ test("measured layout and render priority avoid repeated hot-path work", async (
   assert.match(editorSource, /const availabilityContext = this\.toolbarAvailabilityContext\(\)/);
   assert.match(editorSource, /this\.toolbarItemAvailable\(id, availabilityContext\)/);
   assert.match(editorSource, /private nodeTreeIndex: NodeTreeIndex \| null = null/);
+  assert.match(editorSource, /private nodeTreeIndexStale = false/, "structural mutations must be able to mark the node index stale");
+  assert.match(editorSource, /private rebuildNodeTreeIndex\(\): NodeTreeIndex \{[\s\S]*?nodeTreeIndexStale = false/, "rebuilding the index must clear the staleness flag");
+  assert.match(editorSource, /private currentNodeTreeIndex\(\): NodeTreeIndex \{\s*if \(!this\.nodeTreeIndex \|\| this\.nodeTreeIndexStale \|\| this\.nodeTreeIndex\.root !== this\.document\.root\) return this\.rebuildNodeTreeIndex\(\);/);
+  assert.match(editorSource, /private captureHistorySnapshot\(\): void \{[\s\S]*?this\.markNodeTreeIndexStale\(\)/, "the unified history capture entry must mark the node index stale");
+  assert.match(editorSource, /action\(\);\s*this\.markNodeTreeIndexStale\(\);\s*this\.notifyDocumentChange\(articleContextImpact\)/, "mutate must mark the node index stale after the mutation action");
+  assert.match(editorSource, /this\.invalidateDocumentSnapshotJson\(\);\s*this\.markNodeTreeIndexStale\(\);\s*const moveOrder/, "the drag move flow must mark the node index stale without relying on render");
   assert.match(editorSource, /private render\(\): void \{\s*this\.rebuildNodeTreeIndex\(\)/);
   assert.match(editorSource, /private nodeById\(nodeId: string\): MindMapNode \| null \{[\s\S]*?\.byId\.get\(nodeId\)/);
   assert.match(editorSource, /private parentNodeById\(nodeId: string\): MindMapNode \| null \{[\s\S]*?\.parentById\.get\(nodeId\)/);
@@ -449,4 +455,17 @@ test("large page operations paint a semantic transition before blocking work", a
   assert.match(cssSource, /\.mms-page-transition\.is-visible/);
   assert.match(cssSource, /mms-page-surface-enter/);
   assert.match(cssSource, /prefers-reduced-motion: reduce[\s\S]*\.mms-page-transition/);
+});
+
+test("document snapshot cache carries a low-frequency sampled self-healing assertion", async () => {
+  const editorSource = await readFile(path.join(rootDir, "src/editor/editor.ts"), "utf8");
+  assert.match(editorSource, /const SNAPSHOT_CACHE_ASSERTION_INTERVAL_MS = 10_000;/, "the sampled assertion must be interval-gated to bound serialization cost");
+  assert.match(
+    editorSource,
+    /private assertDocumentSnapshotCacheFresh\(\): void \{[\s\S]*?const now = Date\.now\(\);[\s\S]*?now < this\.snapshotAssertionDueAt[\s\S]*?JSON\.stringify\(this\.document\)[\s\S]*?fresh === this\.documentSnapshotJson[\s\S]*?this\.documentSnapshotJson = null;[\s\S]*?document-snapshot-cache-mismatch/,
+    "the cached revision must be sampled against a fresh serialization and self-heal with a debug event on mismatch"
+  );
+  assert.match(editorSource, /private currentDocumentSnapshotJson\(\): string \{\s*if \(this\.documentSnapshotJson !== null\) this\.assertDocumentSnapshotCacheFresh\(\);/, "cache reads must run the sampled assertion before reuse");
+  assert.match(editorSource, /if \(this\.documentSnapshotJson === null\) this\.documentSnapshotJson = this\.history\.createSnapshot\(this\.document\);\s*return this\.documentSnapshotJson;/, "a healed cache must fall back to a fresh serialization");
+  assert.match(editorSource, /private snapshotAssertionDueAt = 0;/);
 });

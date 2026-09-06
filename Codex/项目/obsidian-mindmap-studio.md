@@ -4,7 +4,10 @@
 - 版本基线：1.48.0（package.json / manifest.json / versions.json / package-lock.json 已同步）。
 - 仓库规则：见根目录 `AGENTS.md`；每轮代码交付三份 ZIP（源码 / 安装 / Codex 交接）共用同一六位后缀；验证入口 `npm run verify`。
 
-## 当前状态（1.48.4 待发布 / 线上 1.48.3）
+## 当前状态（1.48.5 待发布 / 线上 1.48.4）
+
+- 本轮完成审查清单第 2、3 项编辑器加固：`documentSnapshotJson` 缓存命中读取由 10 秒间隔的抽样自愈校验兜底（不一致立即失效并发出 `document-snapshot-cache-mismatch` 调试事件，防止过期 JSON 进入撤销栈/保存链路）；节点树索引新增 `nodeTreeIndexStale` 过期标记，`captureHistorySnapshot()` / `mutate()` / 拖拽移动流程统一标记，`currentNodeTreeIndex()` 三条件重建。正确代码下运行时行为不变。
+- 审查清单剩余建议：`src/ai/client.ts` 三处重复 usage 提取可抽 `buildCompletionResult()`；`src/editor/editor.ts` 约 9,000 行可按文章渲染、视口手势、行内编辑、题目系统边界拆分。
 
 - 本轮修复：图片预览放大后拖拽平移只动几像素——`<img>` 浏览器原生 HTML5 拖拽接管指针事件掐断 `pointermove` 流。修复：`draggable="false"` + `pointerdown` 阻止默认 + `dragstart` 拦截 + CSS `-webkit-user-drag: none` / `user-select: none`。契约测试锁定三要素。
 
@@ -42,7 +45,9 @@
 
 - 后缀 `302400`：完整源码 `obsidian-mindmap-studio-1.48.3-302400.zip`、安装包 `mindmap-studio-1.48.3-test-302400.zip`（SHA-256 `58f16c77d09c5011c639b43fb110126b97943f9ab8905134f58d87440b4da709`）、交接 `Codex-1.48.3-handoff-302400.zip`。
 
-## 最近交付包（历史）（历史）
+- 后缀 `877178`：完整源码 `obsidian-mindmap-studio-1.48.4-877178.zip`、安装包 `mindmap-studio-1.48.4-test-877178.zip`（SHA-256 `b6ad78088952ecd78c0c60679211f82d139c1f57250650455b0dac44e8b281aa`）、交接 `Codex-1.48.4-handoff-877178.zip`。
+
+## 最近交付包（历史）（历史）（历史）
 
 - 后缀 `190027`：完整源码 `obsidian-mindmap-studio-1.48.0-190027.zip`、安装包 `mindmap-studio-1.48.0-test-190027.zip`（SHA-256 见 `MODIFIED_FILES.md`）、交接 `Codex-1.48.0-handoff-190027.zip`；三份 ZIP 已按新规则输出到仓库父目录 `D:\Downloads`，仓库内及 Git 历史不含任何 ZIP（1.47.1 的两个历史 ZIP 已通过重写历史剥离并强制推送）。
 - 后续交付一律把三份 ZIP 输出到 `D:\Downloads`，严禁写入仓库内部或提交。
