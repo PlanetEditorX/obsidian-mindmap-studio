@@ -2,7 +2,7 @@
 
 ## 目标
 
-> 源码契约说明：涉及编辑器核心的契约测试统一读取 `src/editor/editor.ts` 与 `src/editor/node-edit-modal.ts`、`src/editor/appearance-modal.ts` 三个文件的拼接内容，断言与具体代码所在文件解耦，后续继续拆分模块时契约无需逐个改指向。
+> 源码契约说明：涉及编辑器核心的契约测试统一读取 `src/editor/editor.ts` 与 `src/editor/node-edit-modal.ts`、`src/editor/appearance-modal.ts`、`src/editor/viewport-controller.ts` 四个文件的拼接内容，断言与具体代码所在文件解耦，后续继续拆分模块时契约无需逐个改指向。
 
 ### 图片粘贴目标与节点弹窗
 

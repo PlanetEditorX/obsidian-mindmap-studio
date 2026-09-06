@@ -90,6 +90,7 @@ import {
 } from "./editor-modals";
 import { NodeEditModal } from "./node-edit-modal";
 import { AppearanceModal } from "./appearance-modal";
+import { ViewportController, type TouchGestureState } from "./viewport-controller";
 import { parseClipboardContentBlocks, parseClipboardHtml, parseClipboardNodes } from "./clipboard-import";
 import { selectImageFile, uploadCurrentNodeImage } from "./node-image-actions";
 import { canMoveNodes, isRightChildZone, resolveDropPosition } from "./drag-drop";
@@ -234,10 +235,21 @@ export class MindMapEditor {
   private selectionClassSyncValid = false;
   /** 仅由右键上下文设置；普通选择不会改变 AI 默认范围。 */
   private aiScopeNodeId: string | null = null;
-  private zoom = 1;
-  private panX = 0;
-  private panY = 0;
-  private mindMapViewportInitialized = false;
+  private readonly viewportController = new ViewportController();
+
+  private get zoom(): number { return this.viewportController.zoom; }
+  private set zoom(value: number) { this.viewportController.zoom = value; }
+  private get panX(): number { return this.viewportController.panX; }
+  private set panX(value: number) { this.viewportController.panX = value; }
+  private get panY(): number { return this.viewportController.panY; }
+  private set panY(value: number) { this.viewportController.panY = value; }
+  private get touchGesture(): TouchGestureState | null { return this.viewportController.touchGesture; }
+  private set touchGesture(value: TouchGestureState | null) { this.viewportController.touchGesture = value; }
+  private get touchPointers(): Map<number, { x: number; y: number }> { return this.viewportController.touchPointers; }
+  private get viewportAnimationFrame(): number | null { return this.viewportController.viewportAnimationFrame; }
+  private set viewportAnimationFrame(value: number | null) { this.viewportController.viewportAnimationFrame = value; }
+  private get mindMapViewportInitialized(): boolean { return this.viewportController.mindMapViewportInitialized; }
+  private set mindMapViewportInitialized(value: boolean) { this.viewportController.mindMapViewportInitialized = value; }
   private readonly history: DocumentHistory;
   /** Serialized current revision reused as the next pre-mutation undo snapshot until unnotified state changes invalidate it. */
   private documentSnapshotJson: string | null = null;
@@ -247,8 +259,6 @@ export class MindMapEditor {
   private dropPreviewEl: HTMLElement | null = null;
   private panning = false;
   private panStart = { x: 0, y: 0, panX: 0, panY: 0 };
-  private readonly touchPointers = new Map<number, { x: number; y: number }>();
-  private touchGesture: { centerX: number; centerY: number; distance: number; zoom: number; panX: number; panY: number } | null = null;
   private cleanupCallbacks: Array<() => void> = [];
   private resizeObserver: ResizeObserver | null = null;
   /** Last observed outer dimensions for each rendered mind-map node. */
@@ -260,7 +270,6 @@ export class MindMapEditor {
   private pendingMindMapLayoutAnimation = false;
   private allNodesCollapseToggleTimer: number | null = null;
   /** Active viewport interpolation used by fit-to-view and semantic centering. */
-  private viewportAnimationFrame: number | null = null;
   private branchClipboard: MindMapNode[] | null = null;
   private searchQuery = "";
   private lastRichTextColor = "#ef4444";
@@ -1592,6 +1601,7 @@ export class MindMapEditor {
     this.viewportEl = this.rootEl.createDiv({ cls: "mmc-viewport" });
     this.canvasBreadcrumbEl = this.viewportEl.createDiv({ cls: "mmc-canvas-breadcrumb is-hidden" });
     this.sceneEl = this.viewportEl.createDiv({ cls: "mmc-scene" });
+    this.viewportController.attach({ viewportEl: this.viewportEl, sceneEl: this.sceneEl, rootEl: this.rootEl });
     this.edgesSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     this.edgesSvg.classList.add("mmc-edges");
     this.sceneEl.appendChild(this.edgesSvg);
@@ -1720,7 +1730,8 @@ export class MindMapEditor {
       cls: "mmc-zoom-status mmc-zoom-input",
       attr: { type: "text", inputmode: "decimal", "aria-label": "输入缩放百分比" }
     });
-    this.zoomStatusEl.value = "100%";
+
+    this.viewportController.zoomStatusEl = this.zoomStatusEl;    this.zoomStatusEl.value = "100%";
     this.zoomStatusEl.addEventListener("change", () => this.applyZoomInput());
     this.zoomStatusEl.addEventListener("focus", () => this.zoomStatusEl.select());
     this.zoomStatusEl.addEventListener("keydown", (event) => {
@@ -4270,10 +4281,7 @@ export class MindMapEditor {
    * 应用transform，并保持模型、界面和持久化状态的一致性。
    */
   private applyTransform(): void {
-    const rect = this.viewportEl.getBoundingClientRect();
-    this.sceneEl.style.transform = `translate(${rect.width / 2 + this.panX}px, ${rect.height / 2 + this.panY}px) scale(${this.zoom})`;
-    this.rootEl.style.setProperty("--mmc-zoom", String(this.zoom));
-    if (this.zoomStatusEl) this.zoomStatusEl.value = `${Math.round(this.zoom * 100)}%`;
+    this.viewportController.applyTransform();
   }
 
   /**
@@ -7417,52 +7425,7 @@ export class MindMapEditor {
    * 执行“fit to view”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
    */
   private fitToView(animated = true): void {
-    const rect = this.viewportEl.getBoundingClientRect();
-    const width = Math.max(1, this.layout.maxX - this.layout.minX + 100);
-    const height = Math.max(1, this.layout.maxY - this.layout.minY + 100);
-    const targetZoom = this.clampZoom(Math.min((rect.width - 40) / width, (rect.height - 40) / height, 1.25));
-    const centerX = (this.layout.minX + this.layout.maxX) / 2;
-    const centerY = (this.layout.minY + this.layout.maxY) / 2;
-    const targetPanX = -centerX * targetZoom;
-    const targetPanY = -centerY * targetZoom;
-    this.mindMapViewportInitialized = true;
-    this.animateViewportTo(targetZoom, targetPanX, targetPanY, animated);
-  }
-
-  /** Smoothly interpolates the canvas transform instead of jumping to its destination. */
-  private animateViewportTo(targetZoom: number, targetPanX: number, targetPanY: number, animated = true): void {
-    if (this.viewportAnimationFrame !== null) window.cancelAnimationFrame(this.viewportAnimationFrame);
-    this.viewportAnimationFrame = null;
-    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const startZoom = this.zoom;
-    const startPanX = this.panX;
-    const startPanY = this.panY;
-    const distance = Math.hypot(targetPanX - startPanX, targetPanY - startPanY);
-    const zoomDistance = Math.abs(targetZoom - startZoom);
-    if (!animated || reducedMotion || (distance < 1 && zoomDistance < 0.002)) {
-      this.zoom = targetZoom;
-      this.panX = targetPanX;
-      this.panY = targetPanY;
-      this.applyTransform();
-      return;
-    }
-    const startedAt = performance.now();
-    const duration = Math.min(520, Math.max(260, 260 + distance * 0.08 + zoomDistance * 120));
-    const ease = (value: number): number => 1 - Math.pow(1 - value, 3);
-    const step = (now: number): void => {
-      const progress = Math.min(1, (now - startedAt) / duration);
-      const eased = ease(progress);
-      this.zoom = startZoom + (targetZoom - startZoom) * eased;
-      this.panX = startPanX + (targetPanX - startPanX) * eased;
-      this.panY = startPanY + (targetPanY - startPanY) * eased;
-      this.applyTransform();
-      if (progress < 1) {
-        this.viewportAnimationFrame = window.requestAnimationFrame(step);
-      } else {
-        this.viewportAnimationFrame = null;
-      }
-    };
-    this.viewportAnimationFrame = window.requestAnimationFrame(step);
+    this.viewportController.fitToView(this.layout, animated);
   }
 
   /**
@@ -7516,71 +7479,28 @@ export class MindMapEditor {
    * @param value 待校验、转换或比较的输入值。
    */
   private setZoom(value: number): void {
-    this.zoom = this.clampZoom(value);
-    this.mindMapViewportInitialized = true;
-    this.applyTransform();
+    this.viewportController.setZoom(value);
   }
 
   /**
    * 解析工具栏中的缩放百分比输入，并将有效值应用到画布。
    */
   private applyZoomInput(): void {
-    const percent = Number(this.zoomStatusEl.value.trim().replace(/%$/, ""));
-    if (!Number.isFinite(percent) || percent <= 0) {
-      this.applyTransform();
-      return;
-    }
-    this.setZoom(percent / 100);
+    this.viewportController.applyZoomInput();
   }
 
   /**
    * 记录当前双指手势的初始中心点、间距和画布位置。
    */
   private beginTwoFingerGesture(): void {
-    const [first, second] = Array.from(this.touchPointers.values());
-    if (!first || !second) return;
-    this.touchGesture = {
-      centerX: (first.x + second.x) / 2,
-      centerY: (first.y + second.y) / 2,
-      distance: Math.max(1, Math.hypot(second.x - first.x, second.y - first.y)),
-      zoom: this.zoom,
-      panX: this.panX,
-      panY: this.panY
-    };
+    this.viewportController.beginTwoFingerGesture();
   }
 
   /**
    * 按设置将双指手势解释为缩放或画布平移。
    */
   private updateTwoFingerGesture(): void {
-    if (!this.touchGesture) this.beginTwoFingerGesture();
-    const gesture = this.touchGesture;
-    const [first, second] = Array.from(this.touchPointers.values());
-    if (!gesture || !first || !second) return;
-    const centerX = (first.x + second.x) / 2;
-    const centerY = (first.y + second.y) / 2;
-    if (this.options.twoFingerGestureAction === "pan") {
-      this.panX = gesture.panX + centerX - gesture.centerX;
-      this.panY = gesture.panY + centerY - gesture.centerY;
-      this.mindMapViewportInitialized = true;
-      this.applyTransform();
-      return;
-    }
-
-    const distance = Math.max(1, Math.hypot(second.x - first.x, second.y - first.y));
-    const nextZoom = this.clampZoom(gesture.zoom * distance / gesture.distance);
-    const rect = this.viewportEl.getBoundingClientRect();
-    const initialX = gesture.centerX - rect.left - rect.width / 2;
-    const initialY = gesture.centerY - rect.top - rect.height / 2;
-    const worldX = (initialX - gesture.panX) / gesture.zoom;
-    const worldY = (initialY - gesture.panY) / gesture.zoom;
-    const currentX = centerX - rect.left - rect.width / 2;
-    const currentY = centerY - rect.top - rect.height / 2;
-    this.zoom = nextZoom;
-    this.panX = currentX - worldX * nextZoom;
-    this.panY = currentY - worldY * nextZoom;
-    this.mindMapViewportInitialized = true;
-    this.applyTransform();
+    this.viewportController.updateTwoFingerGesture(this.options.twoFingerGestureAction);
   }
 
   /**
@@ -7590,7 +7510,7 @@ export class MindMapEditor {
    * @returns 计算得到的数值结果。
    */
   private clampZoom(value: number): number {
-    return Math.min(2.5, Math.max(0.2, value));
+    return this.viewportController.clampZoom(value);
   }
 
   /**

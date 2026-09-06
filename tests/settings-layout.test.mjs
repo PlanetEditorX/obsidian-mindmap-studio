@@ -21,7 +21,7 @@ before(async () => {
   [settingsSource, mainSource, editorSource, modelSource, articleRendererSource, stylesSource, bundleSource] = await Promise.all([
     readFile("src/settings.ts", "utf8"),
     readFile("src/main.ts", "utf8"),
-    (Promise.all([readFile("src/editor/editor.ts", "utf8"), readFile("src/editor/node-edit-modal.ts", "utf8"), readFile("src/editor/appearance-modal.ts", "utf8")]).then((parts) => parts.join("\n"))),
+    (Promise.all([readFile("src/editor/editor.ts", "utf8"), readFile("src/editor/node-edit-modal.ts", "utf8"), readFile("src/editor/appearance-modal.ts", "utf8"), readFile("src/editor/viewport-controller.ts", "utf8")]).then((parts) => parts.join("\n"))),
     readFile("src/core/model.ts", "utf8"),
     readFile("src/editor/article-renderer.ts", "utf8"),
     readFile("styles.css", "utf8"),
@@ -247,7 +247,7 @@ test("view defaults and file naming settings are grouped by their actual respons
 test("fit-to-view and bulk collapse use smooth viewport interpolation", () => {
   assert.match(editorSource, /private fitToView\(animated = true\): void/);
   assert.match(editorSource, /this\.animateViewportTo\(targetZoom, targetPanX, targetPanY, animated\)/);
-  assert.match(editorSource, /private animateViewportTo\([\s\S]*requestAnimationFrame\(step\)/);
+  assert.match(editorSource, /animateViewportTo\(targetZoom: number, targetPanX: number, targetPanY: number, animated = true\): void \{[\s\S]*requestAnimationFrame\(step\)/);
   assert.match(editorSource, /prefers-reduced-motion: reduce/);
   assert.match(editorSource, /if \(collapsed && this\.currentMode === "mindmap"\)[\s\S]*this\.fitToView\(true\)/);
 });

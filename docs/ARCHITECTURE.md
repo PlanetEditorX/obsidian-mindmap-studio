@@ -23,6 +23,7 @@ src/
 │   ├── editor.ts               核心控制器：画布/选择/历史/模式调度
 │   ├── node-edit-modal.ts      节点编辑弹窗（内容块/备注/链接/图标）
 │   ├── appearance-modal.ts     统一主题与外观弹窗及编号/阅读样式控件
+│   ├── viewport-controller.ts  导图画布缩放/平移状态与变换机制
 │   ├── editor-types.ts         宿主服务契约
 │   ├── editor-modals.ts        编辑器弹窗
 │   ├── content-modals.ts       表格与代码弹窗
@@ -69,6 +70,7 @@ src/
 - `src/editor/editor-types.ts`：编辑器回调与运行参数契约，隔离插件服务和 UI 实现。
 - `src/core/latex.ts`：纯函数解析公式分隔符、恢复历史重复美元、判断行内/独立布局，并在渲染前把裸露中文标签转换为 MathJax 可识别的 `\text{...}`。
 - `src/editor/rich-text-dom.ts`：富文本运行段与 `contenteditable` DOM 的双向转换，以及 MathJax 渲染。公式先合并全部运行段再解析，因此分隔符跨颜色或加粗边界仍有效；查看态渲染公式，编辑态暂时显示源码，异步 MathJax 回调不得覆盖仍为 `contenteditable=true` 的活动编辑器。
+- `src/editor/viewport-controller.ts`：导图画布视口控制器，持有缩放/平移/双指手势状态与变换、适应视图、动画机制；交互监听仍由编辑器注册（与选区逻辑交织），状态经编辑器存取器转发。
 - `src/editor/node-edit-modal.ts`：节点编辑弹窗（内容块编辑、备注、链接、图标、编号覆盖与图片操作），通过 `MindMapEditorCallbacks` 注入宿主能力；`NodeEditValues` 类型随模块导出。
 - `src/editor/appearance-modal.ts`：统一“主题与外观”弹窗，以及节点编辑弹窗与外观弹窗共用的文章编号控件（`createArticleNumberingControls`）和阅读样式控件（`createReadingStyleControls`）。
 - `src/editor/editor-modals.ts`：图片预览、图床选择、公式编辑、统一导入与导出、Markdown 大纲等弹窗；阅读样式已并入编辑器的统一“主题与外观”面板。图片预览支持来源管理：编辑器通过 `ImagePreviewSourceActions` 注入动作，来源变更一律回到编辑器的统一历史与保存链路（`mutateWithoutArticleContext` / `removeImageBlock` / 冻结快照上传），弹窗自身不直接改文档；弹窗宽度统一使用 `--mms-modal-md / lg / xl` 三档变量，同类弹窗不得各自硬编码宽度。

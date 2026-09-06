@@ -1,5 +1,15 @@
 # Modified Files
 
+## 1.48.8 编辑器拆分第二批：视口控制器
+
+- `src/editor/viewport-controller.ts`（新增，约 190 行）：`ViewportController` 持有 zoom/panX/panY/双指手势/动画帧状态与 `applyTransform` / `fitToView` / `animateViewportTo` / `setZoom` / `clampZoom` / `applyZoomInput` / 双指手势机制；`TouchGestureState` / `ViewportLayoutBounds` 类型导出。
+- `src/editor/editor.ts`：删除对应字段与方法体，改为存取器转发 + 单行委托；`attach()` 在画布元素创建后调用，`zoomStatusEl` 创建后回填控制器。
+- `tests/settings-layout.test.mjs` 等契约拼接列表加入新模块；视口动画契约适配控制器签名。
+- `docs/ARCHITECTURE.md`、`docs/TESTING.md`、`docs/FUNCTION_REFERENCE.md`、`CHANGELOG.md`、`TEST_RESULTS.md`：同步说明。
+
+- 本轮测试安装包：`mindmap-studio-1.48.7-test-801804.zip`，SHA-256 `c9df7db36437d6edf92f66e33bed15a505a13a4571947de5162e1bfac368a4a0`；完整源码与 Codex 交接使用同一 `801804` 后缀（输出到仓库父目录 `D:\Downloads`）。
+
+## 1.48.7 编辑器拆分第一批：节点编辑与外观弹窗独立模块
 - 本轮测试安装包：`mindmap-studio-1.48.7-test-722319.zip`，SHA-256 `3c5258afb5a9b535d302d0633d4c1d5e3c89be64ad8151b714d1873bdf7ffd7b`；完整源码与 Codex 交接使用同一 `722319` 后缀（输出到仓库父目录 `D:\Downloads`）。
 
 ## 1.48.7 编辑器拆分第一批：节点编辑与外观弹窗独立模块

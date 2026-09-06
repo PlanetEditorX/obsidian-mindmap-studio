@@ -1,5 +1,11 @@
 # 更新记录
 
+## 1.48.8
+
+- 编辑器拆分第二批（视口手势与缩放）：新增 `src/editor/viewport-controller.ts`，`MindMapEditor` 的缩放/平移/双指手势状态与变换机制（`applyTransform` / `fitToView` / `animateViewportTo` / `setZoom` / `clampZoom` / `applyZoomInput` / 双指手势）迁移到 `ViewportController`；编辑器通过存取器转发保持全部既有状态引用与调用点零改动，交互监听（与选区逻辑交织）仍留在编辑器内。`editor.ts` 进一步降至约 7,700 行。
+- 契约测试拼接列表加入新模块；适配视口动画契约到控制器公开签名。运行时行为不变。
+
+## 1.48.7
 ## 1.48.7
 
 - 审查清单第 5 项（编辑器拆分第一批）：`src/editor/editor.ts` 从 9,094 行降至 7,842 行。自包含弹窗拆分为独立模块——`src/editor/node-edit-modal.ts`（618 行，节点编辑弹窗与 `NodeEditValues`）与 `src/editor/appearance-modal.ts`（675 行，统一“主题与外观”弹窗及节点编辑与外观弹窗共用的文章编号控件、阅读样式控件）。

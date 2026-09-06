@@ -1367,7 +1367,7 @@ const command = "example";
   assert.match(globalSearchSource, /古诗 › 唐诗/);
   assert.match(globalSearchSource, /while \(!climbed\.has\(familyRoot\)\)[\s\S]*await this\.familyIndexedFile\(climbFile, documents\)[\s\S]*const parentPath = indexed\?\.navigation\?\.parentPath[\s\S]*familyRoot = parent\.path;/, "family refresh must climb indexed parent navigation before traversing descendants");
   assert.match(globalSearchSource, /version: 2/);
-  const editorSource = await (Promise.all([readFile("src/editor/editor.ts", "utf8"), readFile("src/editor/node-edit-modal.ts", "utf8"), readFile("src/editor/appearance-modal.ts", "utf8")]).then((parts) => parts.join("\n")));
+  const editorSource = await (Promise.all([readFile("src/editor/editor.ts", "utf8"), readFile("src/editor/node-edit-modal.ts", "utf8"), readFile("src/editor/appearance-modal.ts", "utf8"), readFile("src/editor/viewport-controller.ts", "utf8")]).then((parts) => parts.join("\n")));
   assert.match(editorSource, /captureCurrentLocation/, "every display mode must expose a shared semantic position");
   assert.match(editorSource, /restoreReadingLocation/, "mode switches must restore the shared semantic position");
   assert.match(editorSource, /pendingLocationNavigationKey/, "cross-file startup restoration must avoid duplicate navigation");

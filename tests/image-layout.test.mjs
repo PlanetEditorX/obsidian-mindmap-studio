@@ -16,7 +16,7 @@ let viewSource;
 before(async () => {
   [modelSource, editorSource, outlineSource, articleSource, richEditorSource, mainSource, settingsSource, stylesSource, imageFailureSource, viewSource] = await Promise.all([
     readFile("src/core/model.ts", "utf8"),
-    (Promise.all([readFile("src/editor/editor.ts", "utf8"), readFile("src/editor/node-edit-modal.ts", "utf8"), readFile("src/editor/appearance-modal.ts", "utf8")]).then((parts) => parts.join("\n"))),
+    (Promise.all([readFile("src/editor/editor.ts", "utf8"), readFile("src/editor/node-edit-modal.ts", "utf8"), readFile("src/editor/appearance-modal.ts", "utf8"), readFile("src/editor/viewport-controller.ts", "utf8")]).then((parts) => parts.join("\n"))),
     readFile("src/editor/outline-renderer.ts", "utf8"),
     readFile("src/editor/article-renderer.ts", "utf8"),
     readFile("src/editor/node-rich-text-editor.ts", "utf8"),
