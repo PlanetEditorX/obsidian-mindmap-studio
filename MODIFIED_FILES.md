@@ -1,5 +1,7 @@
 # Modified Files
 
+- 本轮测试安装包：`mindmap-studio-1.49.1-test-552380.zip`，SHA-256 `cf1b6cb9ff0f6abf094b71a0039933405594f6071a118b6fddf358c62e78cf07`；完整源码与 Codex 交接使用同一 `552380` 后缀（输出到仓库父目录 D:\Downloads）。
+
 ## 1.49.2 目录主题重整：保留 4 种重命名 + 新增 5 种设计移植
 
 - `src/core/model.ts`：`ArticleTocStyle` 调整为 card/plain/original/minimal-page/magazine/timeline/editorial/glass/index 九值；规范化白名单同步，旧值（lines/report/tree）回退 undefined。
