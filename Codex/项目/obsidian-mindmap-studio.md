@@ -4,7 +4,10 @@
 - 版本基线：1.48.0（package.json / manifest.json / versions.json / package-lock.json 已同步）。
 - 仓库规则：见根目录 `AGENTS.md`；每轮代码交付三份 ZIP（源码 / 安装 / Codex 交接）共用同一六位后缀；验证入口 `npm run verify`。
 
-## 当前状态（1.48.10 待发布 / 线上 1.48.9）
+## 当前状态（1.48.11 待发布 / 线上 1.48.10）
+
+- 本轮修复文章模式懒加载视口跳变：`.mms-article-view` 显式 `overflow-anchor: none`，消除 Chromium 原生滚动锚定与懒加载手动补偿的双重叠加（用户滚轮取消恢复事务后视口被推飞、焦点看起来跳到其它节点）。契约锁定该 CSS 规则。
+- 行为澄清：首次打开的分窗口加载（先出聚焦窗口再后台预热全文）是设计行为；同会话未修改文件时窗口缓存命中。
 
 - 本轮修复 CI 抓到的契约拼接跨文件误报：表格双击 `doesNotMatch` 契约限定在处理器体内检查；24 处引用已迁移成员的断言统一接受 `this.` / `ctx.` 前缀；补回两处缺失 JSDoc。
 - 经验教训：多文件拼接的契约中，`doesNotMatch(/A[\s\S]*B/)` 类跨标记模式天然脆弱，新增此类契约时必须限定作用域；引用已迁移成员的断言一律写 `(?:this|ctx).` 前缀。
@@ -71,6 +74,8 @@
 - 后缀 `105752`：完整源码 `obsidian-mindmap-studio-1.48.8-105752.zip`、安装包 `mindmap-studio-1.48.8-test-105752.zip`（SHA-256 `8f90952b70443e4a58f9ff1cf9e273b6ef8b49cfd0a56366c57a294f10c6e61a`）、交接 `Codex-1.48.8-handoff-105752.zip`。
 
 - 后缀 `625169`：完整源码 `obsidian-mindmap-studio-1.48.9-625169.zip`、安装包 `mindmap-studio-1.48.9-test-625169.zip`（SHA-256 `6cbe1a4c055d2ceb867d465631a5da831b88d78eff11e110f530b821739338d4`）、交接 `Codex-1.48.9-handoff-625169.zip`。
+
+- 后缀 `917448`：完整源码 `obsidian-mindmap-studio-1.48.10-917448.zip`、安装包 `mindmap-studio-1.48.10-test-917448.zip`（SHA-256 `ce1a8ac611e605ef1b47e8638ae4e9ab2c43f7faf750c140dd6e51858a3d0215`）、交接 `Codex-1.48.10-handoff-917448.zip`。
 
 ## 最近交付包（历史）（历史）（历史）（历史）（历史）
 

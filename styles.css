@@ -3362,6 +3362,12 @@ mjx-container.mms-node-math:not(.is-display),
   background: var(--mmc-canvas);
 }
 
+/* 文章窗口懒加载用 scrollTop 手动补偿上方插入的内容；
+   必须禁用 Chromium 原生滚动锚定，否则两套补偿叠加会把视口推飞。 */
+.mms-article-view {
+  overflow-anchor: none;
+}
+
 .mms-article-minimap {
   position: absolute;
   z-index: 12;

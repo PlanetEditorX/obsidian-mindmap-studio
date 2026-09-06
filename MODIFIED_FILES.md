@@ -1,5 +1,13 @@
 # Modified Files
 
+## 1.48.11 修复文章懒加载视口跳变（禁用原生滚动锚定）
+
+- `styles.css`：`.mms-article-view` 显式 `overflow-anchor: none`，禁用 Chromium 原生滚动锚定与懒加载手动补偿的双重叠加。
+- `tests/reading-editor-contract.test.mjs`：新增契约锁定该规则；补充 `stylesSource` 加载。
+
+- 本轮测试安装包：`mindmap-studio-1.48.10-test-917448.zip`，SHA-256 `ce1a8ac611e605ef1b47e8638ae4e9ab2c43f7faf750c140dd6e51858a3d0215`；完整源码与 Codex 交接使用同一 `917448` 后缀（输出到仓库父目录 `D:\Downloads`）。
+
+## 1.48.10 修复契约拼接的跨文件误报
 ## 1.48.10 修复契约拼接的跨文件误报
 
 - `scripts/test.mjs`：表格双击契约改为限定处理器体内检查；24 处引用已迁移成员的断言统一接受 `this.` / `ctx.` 前缀。

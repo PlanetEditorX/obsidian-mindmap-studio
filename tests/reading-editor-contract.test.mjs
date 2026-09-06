@@ -6,12 +6,14 @@ let editorSource;
 let viewSource;
 let mainSource;
 let articleRendererSource;
+let stylesSource;
 
 before(async () => {
   editorSource = await (Promise.all([readFile("src/editor/editor.ts", "utf8"), readFile("src/editor/node-edit-modal.ts", "utf8"), readFile("src/editor/appearance-modal.ts", "utf8"), readFile("src/editor/viewport-controller.ts", "utf8"), readFile("src/editor/mind-map-node-renderer.ts", "utf8")]).then((parts) => parts.join("\n")));
   viewSource = await readFile("src/view.ts", "utf8");
   mainSource = await readFile("src/main.ts", "utf8");
   articleRendererSource = await readFile("src/editor/article-renderer.ts", "utf8");
+  stylesSource = await readFile("styles.css", "utf8");
 });
 
 test("continuous reading exposes semantic anchors for directory-only parent nodes", () => {
@@ -441,3 +443,8 @@ test("read-only keyboard handling is isolated from the main keydown dispatcher",
   assert.match(readOnlyHandler, /case "arrowdown":[\s\S]*this\.navigateSelection\("next"\)/);
   assert.doesNotMatch(keydown, /const direction = key === "arrowleft"/);
 });
+
+test("article scroller disables native scroll anchoring so lazy-load compensation stays exact", () => {
+  assert.match(stylesSource, /\.mms-article-view \{\s*overflow-anchor: none;/);
+});
+
