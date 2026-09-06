@@ -454,10 +454,10 @@ test("directory page ships extra toc themes with grouped card layouts", () => {
   assert.match(articleRendererSource, /tocStyle === "magazine" \|\| tocStyle === "glass"/, "magazine and glass themes must group chapters into cards");
   assert.match(articleRendererSource, /mms-article-toc-groups/);
   assert.match(articleRendererSource, /dataset\.chapterIndex/);
-  for (const value of ["magazine", "timeline", "glass", "aurora", "ink", "sunset"]) {
+  for (const value of ["magazine", "glass", "aurora", "ink", "sunset"]) {
     assert.match(stylesSource, new RegExp(`toc-${value}`), `css must style toc-${value}`);
   }
-  assert.doesNotMatch(stylesSource, /toc-(lines|report|tree|editorial|index)/, "removed legacy toc styles must not keep css");
+  assert.doesNotMatch(stylesSource, /toc-(lines|report|tree|editorial|index|timeline)/, "removed legacy toc styles must not keep css");
   assert.match(stylesSource, /\.mms-article-page\.toc-glass \.mms-article-toc-page > h2 \{[\s\S]*?var\(--mms-article-accent/, "glass theme must follow the theme accent color");
 });
 

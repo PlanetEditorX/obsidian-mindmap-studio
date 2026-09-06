@@ -85,13 +85,12 @@ function createReadingStyleControls(
   const tocLabel = container.createEl("label", { text: "目录样式" });
   const tocStyle = tocLabel.createEl("select");
   const tocStyleNames: Record<NonNullable<ArticleStyle["tocStyle"]>, string> = {
-    card: "卡片",
+    card: "经典卡片",
     plain: "简洁列表",
     original: "素雅面板",
     "minimal-page": "极简书页",
     magazine: "杂志网格",
-    timeline: "垂直时间线",
-    glass: "暗色玻璃",
+    glass: "透明玻璃",
     aurora: "极光列表",
     ink: "墨韵书卷",
     sunset: "落日暖橙"
@@ -101,13 +100,12 @@ function createReadingStyleControls(
     attr: { value: "" }
   });
   for (const [id, name] of [
-    ["card", "卡片"],
+    ["card", "经典卡片"],
     ["plain", "简洁列表"],
     ["original", "素雅面板"],
     ["minimal-page", "极简书页"],
     ["magazine", "杂志网格"],
-    ["timeline", "垂直时间线"],
-    ["glass", "暗色玻璃"],
+    ["glass", "透明玻璃"],
     ["aurora", "极光列表"],
     ["ink", "墨韵书卷"],
     ["sunset", "落日暖橙"]

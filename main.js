@@ -882,7 +882,7 @@ function normalizeArticleStyle(input) {
   if (!input) return void 0;
   const preset = input.preset === "book" || input.preset === "modern" || input.preset === "minimal" ? input.preset : "classic";
   const color = (value) => typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value) ? value : void 0;
-  const tocStyle = input.tocStyle === "card" || input.tocStyle === "plain" || input.tocStyle === "original" || input.tocStyle === "minimal-page" || input.tocStyle === "magazine" || input.tocStyle === "timeline" || input.tocStyle === "glass" || input.tocStyle === "aurora" || input.tocStyle === "ink" || input.tocStyle === "sunset" ? input.tocStyle : void 0;
+  const tocStyle = input.tocStyle === "card" || input.tocStyle === "plain" || input.tocStyle === "original" || input.tocStyle === "minimal-page" || input.tocStyle === "magazine" || input.tocStyle === "glass" || input.tocStyle === "aurora" || input.tocStyle === "ink" || input.tocStyle === "sunset" ? input.tocStyle : void 0;
   const fontSize = typeof input.fontSize === "number" ? Math.max(12, Math.min(24, input.fontSize)) : void 0;
   const lineHeight = typeof input.lineHeight === "number" ? Math.max(1.2, Math.min(2.4, input.lineHeight)) : void 0;
   return {
@@ -2658,7 +2658,7 @@ var MindMapStudioSettingTab = class extends import_obsidian.PluginSettingTab {
         await this.saveAndRefresh();
       });
     });
-    new import_obsidian.Setting(containerEl).setName("\u6587\u7AE0\u76EE\u5F55\u6837\u5F0F").setDesc("\u8BBE\u7F6E\u6587\u7AE0\u548C\u901A\u8BFB\u76EE\u5F55\u7684\u5168\u5C40\u9ED8\u8BA4\u6837\u5F0F\uFF1B\u5F53\u524D\u8111\u56FE\u53EF\u5728\u5DE5\u5177\u680F\u201C\u4E3B\u9898\u4E0E\u5916\u89C2\u201D\u4E2D\u5355\u72EC\u8986\u76D6\u3002").addDropdown((dropdown) => dropdown.addOption("card", "\u5361\u7247").addOption("plain", "\u7B80\u6D01\u5217\u8868").addOption("original", "\u7D20\u96C5\u9762\u677F").addOption("minimal-page", "\u6781\u7B80\u4E66\u9875").addOption("magazine", "\u6742\u5FD7\u7F51\u683C").addOption("timeline", "\u5782\u76F4\u65F6\u95F4\u7EBF").addOption("glass", "\u6697\u8272\u73BB\u7483").addOption("aurora", "\u6781\u5149\u5217\u8868").addOption("ink", "\u58A8\u97F5\u4E66\u5377").addOption("sunset", "\u843D\u65E5\u6696\u6A59").setValue(this.plugin.settings.articleTocStyle).onChange(async (value) => {
+    new import_obsidian.Setting(containerEl).setName("\u6587\u7AE0\u76EE\u5F55\u6837\u5F0F").setDesc("\u8BBE\u7F6E\u6587\u7AE0\u548C\u901A\u8BFB\u76EE\u5F55\u7684\u5168\u5C40\u9ED8\u8BA4\u6837\u5F0F\uFF1B\u5F53\u524D\u8111\u56FE\u53EF\u5728\u5DE5\u5177\u680F\u201C\u4E3B\u9898\u4E0E\u5916\u89C2\u201D\u4E2D\u5355\u72EC\u8986\u76D6\u3002").addDropdown((dropdown) => dropdown.addOption("card", "\u7ECF\u5178\u5361\u7247").addOption("plain", "\u7B80\u6D01\u5217\u8868").addOption("original", "\u7D20\u96C5\u9762\u677F").addOption("minimal-page", "\u6781\u7B80\u4E66\u9875").addOption("magazine", "\u6742\u5FD7\u7F51\u683C").addOption("glass", "\u900F\u660E\u73BB\u7483").addOption("aurora", "\u6781\u5149\u5217\u8868").addOption("ink", "\u58A8\u97F5\u4E66\u5377").addOption("sunset", "\u843D\u65E5\u6696\u6A59").setValue(this.plugin.settings.articleTocStyle).onChange(async (value) => {
       this.plugin.settings.articleTocStyle = value;
       await this.saveAndRefresh();
     }));
@@ -9012,13 +9012,12 @@ function createReadingStyleControls(container, style, globalDefaults) {
   const tocLabel = container.createEl("label", { text: "\u76EE\u5F55\u6837\u5F0F" });
   const tocStyle = tocLabel.createEl("select");
   const tocStyleNames = {
-    card: "\u5361\u7247",
+    card: "\u7ECF\u5178\u5361\u7247",
     plain: "\u7B80\u6D01\u5217\u8868",
     original: "\u7D20\u96C5\u9762\u677F",
     "minimal-page": "\u6781\u7B80\u4E66\u9875",
     magazine: "\u6742\u5FD7\u7F51\u683C",
-    timeline: "\u5782\u76F4\u65F6\u95F4\u7EBF",
-    glass: "\u6697\u8272\u73BB\u7483",
+    glass: "\u900F\u660E\u73BB\u7483",
     aurora: "\u6781\u5149\u5217\u8868",
     ink: "\u58A8\u97F5\u4E66\u5377",
     sunset: "\u843D\u65E5\u6696\u6A59"
@@ -9028,13 +9027,12 @@ function createReadingStyleControls(container, style, globalDefaults) {
     attr: { value: "" }
   });
   for (const [id, name] of [
-    ["card", "\u5361\u7247"],
+    ["card", "\u7ECF\u5178\u5361\u7247"],
     ["plain", "\u7B80\u6D01\u5217\u8868"],
     ["original", "\u7D20\u96C5\u9762\u677F"],
     ["minimal-page", "\u6781\u7B80\u4E66\u9875"],
     ["magazine", "\u6742\u5FD7\u7F51\u683C"],
-    ["timeline", "\u5782\u76F4\u65F6\u95F4\u7EBF"],
-    ["glass", "\u6697\u8272\u73BB\u7483"],
+    ["glass", "\u900F\u660E\u73BB\u7483"],
     ["aurora", "\u6781\u5149\u5217\u8868"],
     ["ink", "\u58A8\u97F5\u4E66\u5377"],
     ["sunset", "\u843D\u65E5\u6696\u6A59"]
@@ -24274,7 +24272,7 @@ var MindMapStudioPlugin = class extends import_obsidian19.Plugin {
       })) : {},
       articleTocMaxDepth: typeof raw.articleTocMaxDepth === "number" ? Math.max(1, Math.min(8, Math.round(raw.articleTocMaxDepth))) : DEFAULT_SETTINGS.articleTocMaxDepth,
       // 旧版目录样式（lines/report/tree）已移除：历史配置回退到默认卡片样式。
-      articleTocStyle: raw.articleTocStyle === "plain" || raw.articleTocStyle === "original" || raw.articleTocStyle === "minimal-page" || raw.articleTocStyle === "magazine" || raw.articleTocStyle === "timeline" || raw.articleTocStyle === "glass" || raw.articleTocStyle === "aurora" || raw.articleTocStyle === "ink" || raw.articleTocStyle === "sunset" ? raw.articleTocStyle : "card",
+      articleTocStyle: raw.articleTocStyle === "plain" || raw.articleTocStyle === "original" || raw.articleTocStyle === "minimal-page" || raw.articleTocStyle === "magazine" || raw.articleTocStyle === "glass" || raw.articleTocStyle === "aurora" || raw.articleTocStyle === "ink" || raw.articleTocStyle === "sunset" ? raw.articleTocStyle : "card",
       showArticleMiniMap: raw.showArticleMiniMap !== false,
       showArticleContextProgress: raw.showArticleContextProgress === true,
       articleSectionCollapseEnabled: raw.articleSectionCollapseEnabled === true,

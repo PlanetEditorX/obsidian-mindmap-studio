@@ -6358,37 +6358,21 @@ select.mms-question-status {
 .mms-article-page.toc-magazine .mms-article-toc-sub li a:hover { color: var(--mms-article-accent, var(--interactive-accent)); background: color-mix(in srgb, var(--mms-article-accent, var(--interactive-accent)) 8%, transparent); }
 .mms-article-page.toc-magazine .mms-article-toc-breadcrumb { display: none; }
 
-/* -- toc-timeline 垂直时间线：竖线 + 圆点 -- */
-.mms-article-page.toc-timeline .mms-article-toc-page { border: 1px solid var(--background-modifier-border); border-radius: 18px; }
-.mms-article-page.toc-timeline .mms-article-toc-page > h2 { text-align: center; letter-spacing: .14em; }
-.mms-article-page.toc-timeline .mms-article-toc-page > h2::after { margin-inline: auto; }
-.mms-article-page.toc-timeline .mms-article-toc-page > ol { list-style: none; position: relative; margin: 28px auto 0; padding: 0 0 0 34px; max-width: 620px; }
-.mms-article-page.toc-timeline .mms-article-toc-page > ol::before { content: ""; position: absolute; left: 11px; top: 6px; bottom: 6px; width: 2px; background: linear-gradient(var(--background-modifier-border), transparent); }
-.mms-article-page.toc-timeline li { position: relative; list-style: none; padding: 9px 0 9px 18px; border: 0; }
-.mms-article-page.toc-timeline li::before { content: ""; position: absolute; left: -28px; top: 50%; width: 9px; height: 9px; transform: translateY(-50%); border-radius: 50%; background: var(--mms-article-paper, var(--background-primary)); border: 3px solid var(--text-muted); transition: transform .18s, border-color .18s, background .18s; }
-.mms-article-page.toc-timeline li:hover::before { transform: translateY(-50%) scale(1.3); border-color: var(--mms-article-accent, var(--interactive-accent)); background: color-mix(in srgb, var(--mms-article-accent, var(--interactive-accent)) 18%, var(--mms-article-paper, var(--background-primary))); }
-.mms-article-page.toc-timeline li.depth-1::before { background: var(--mms-article-heading, var(--text-normal)); border-color: var(--mms-article-heading, var(--text-normal)); }
-.mms-article-page.toc-timeline li.depth-2 { margin-left: 24px; }
-.mms-article-page.toc-timeline li.depth-3 { margin-left: 48px; }
-.mms-article-page.toc-timeline li a { border: 0; background: none; }
-.mms-article-page.toc-timeline li a:hover { background: none; transform: none; }
-.mms-article-page.toc-timeline .mms-article-toc-number { color: var(--text-faint); font-variant-numeric: tabular-nums; }
-.mms-article-page.toc-timeline .mms-article-toc-breadcrumb { display: block; margin: 2px 0 0 0; padding: 0; color: var(--text-faint); font-size: .78em; }
 
-/* -- toc-glass 暗色玻璃：深底光斑 + 分组毛玻璃卡 -- */
-.mms-article-page.toc-glass .mms-article-toc-page { border: 1px solid rgba(148, 163, 184, .16); border-radius: 18px; background: radial-gradient(600px 300px at 85% -10%, color-mix(in srgb, var(--mms-article-accent, var(--interactive-accent)) 22%, transparent), transparent 60%), radial-gradient(500px 320px at 0% 100%, color-mix(in srgb, var(--mms-article-accent, var(--interactive-accent)) 12%, transparent), transparent 60%), #0b1120; color: #e2e8f0; }
-.mms-article-page.toc-glass .mms-article-toc-page > h2 { color: #f1f5f9; background: linear-gradient(120deg, #f8fafc, var(--mms-article-accent, var(--interactive-accent))); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+/* -- toc-glass 透明玻璃：半透明磨砂面板，跟随主题明暗与强调色 -- */
+.mms-article-page.toc-glass .mms-article-toc-page { border: 1px solid color-mix(in srgb, var(--mms-article-accent, var(--interactive-accent)) 24%, var(--background-modifier-border)); border-radius: 18px; background: radial-gradient(600px 300px at 85% -10%, color-mix(in srgb, var(--mms-article-accent, var(--interactive-accent)) 14%, transparent), transparent 60%), radial-gradient(500px 320px at 0% 100%, color-mix(in srgb, var(--mms-article-accent, var(--interactive-accent)) 8%, transparent), transparent 60%), color-mix(in srgb, var(--mms-article-paper, var(--background-primary)) 46%, transparent); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); color: var(--mms-article-text, var(--text-normal)); }
+.mms-article-page.toc-glass .mms-article-toc-page > h2 { color: var(--mms-article-heading, var(--text-normal)); background: linear-gradient(120deg, var(--mms-article-heading, var(--text-normal)), var(--mms-article-accent, var(--interactive-accent))); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
 .mms-article-page.toc-glass .mms-article-toc-page > h2::after { background: var(--mms-article-accent, var(--interactive-accent)); }
 .mms-article-page.toc-glass .mms-article-toc-groups { list-style: none; margin: 26px 0 0; padding: 0; display: flex; flex-direction: column; gap: 14px; }
-.mms-article-page.toc-glass .mms-article-toc-group { border: 1px solid rgba(148, 163, 184, .16); background: rgba(148, 163, 184, .07); backdrop-filter: blur(10px); border-radius: 16px; padding: 16px 22px; transition: border-color .2s, transform .2s, background .2s; }
-.mms-article-page.toc-glass .mms-article-toc-group:hover { border-color: color-mix(in srgb, var(--mms-article-accent, var(--interactive-accent)) 45%, transparent); background: color-mix(in srgb, var(--mms-article-accent, var(--interactive-accent)) 8%, transparent); transform: translateX(6px); }
-.mms-article-page.toc-glass .mms-article-toc-group-head { display: flex; gap: 12px; align-items: baseline; margin-bottom: 6px; text-decoration: none; color: #f1f5f9; font-weight: 600; }
+.mms-article-page.toc-glass .mms-article-toc-group { border: 1px solid color-mix(in srgb, var(--mms-article-accent, var(--interactive-accent)) 22%, var(--background-modifier-border)); background: color-mix(in srgb, var(--mms-article-paper, var(--background-primary)) 34%, transparent); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border-radius: 16px; padding: 16px 22px; transition: border-color .2s, transform .2s, background .2s; }
+.mms-article-page.toc-glass .mms-article-toc-group:hover { border-color: color-mix(in srgb, var(--mms-article-accent, var(--interactive-accent)) 52%, transparent); background: color-mix(in srgb, var(--mms-article-accent, var(--interactive-accent)) 10%, transparent); transform: translateX(6px); }
+.mms-article-page.toc-glass .mms-article-toc-group-head { display: flex; gap: 12px; align-items: baseline; margin-bottom: 6px; text-decoration: none; color: var(--mms-article-heading, var(--text-normal)); font-weight: 600; }
 .mms-article-page.toc-glass .mms-article-toc-group-head .mms-article-toc-number { color: var(--mms-article-accent, var(--interactive-accent)); }
 .mms-article-page.toc-glass .mms-article-toc-group-head:hover .mms-article-toc-title { color: var(--mms-article-accent, var(--interactive-accent)); }
 .mms-article-page.toc-glass .mms-article-toc-sub { list-style: none; margin: 0; padding: 0 0 0 6px; }
-.mms-article-page.toc-glass .mms-article-toc-sub li a { display: flex; gap: 10px; padding: 5px 8px; border-radius: 8px; color: #94a3b8; text-decoration: none; font-size: .92em; }
-.mms-article-page.toc-glass .mms-article-toc-sub li a:hover { color: color-mix(in srgb, var(--mms-article-accent, var(--interactive-accent)) 35%, #f8fafc); background: color-mix(in srgb, var(--mms-article-accent, var(--interactive-accent)) 10%, transparent); }
-.mms-article-page.toc-glass .mms-article-toc-sub .mms-article-toc-number { color: #475569; font-size: .8em; }
+.mms-article-page.toc-glass .mms-article-toc-sub li a { display: flex; gap: 10px; padding: 5px 8px; border-radius: 8px; color: var(--mms-article-text, var(--text-muted)); text-decoration: none; font-size: .92em; }
+.mms-article-page.toc-glass .mms-article-toc-sub li a:hover { color: var(--mms-article-accent, var(--interactive-accent)); background: color-mix(in srgb, var(--mms-article-accent, var(--interactive-accent)) 10%, transparent); }
+.mms-article-page.toc-glass .mms-article-toc-sub .mms-article-toc-number { color: color-mix(in srgb, var(--mms-article-accent, var(--interactive-accent)) 65%, var(--text-muted)); font-size: .8em; }
 
 /* -- toc-aurora 极光列表：渐变编号胶囊 + 柔和光晕 -- */
 .mms-article-page.toc-aurora .mms-article-toc-page { border: 1px solid color-mix(in srgb, #818cf8 24%, var(--background-modifier-border)); border-radius: 18px; background: linear-gradient(165deg, color-mix(in srgb, #22d3ee 7%, var(--background-primary)), color-mix(in srgb, #f472b6 6%, var(--background-primary)) 55%, var(--background-primary)); }

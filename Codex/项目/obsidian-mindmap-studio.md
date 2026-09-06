@@ -4,7 +4,9 @@
 - 版本基线：1.48.0（package.json / manifest.json / versions.json / package-lock.json 已同步）。
 - 仓库规则：见根目录 `AGENTS.md`；每轮代码交付三份 ZIP（源码 / 安装 / Codex 交接）共用同一六位后缀；验证入口 `npm run verify`。
 
-## 当前状态（1.49.3 待发布 / 线上 1.49.2）
+## 当前状态（1.49.5 待发布 / 线上 1.49.4）
+
+- 本轮按用户反馈移除垂直时间线主题（枚举/CSS/下拉/契约），「卡片」更名「经典卡片」，九种目录主题名称统一四字：经典卡片/简洁列表/素雅面板/极简书页/杂志网格/透明玻璃/极光列表/墨韵书卷/落日暖橙。历史值（timeline）自动回退。
 
 - 本轮按用户实测反馈二次调整目录主题：移除书脊索引/编辑部极简；暗色玻璃改跟随主题强调色（光斑/标题渐变/边框/悬停全取 `--mms-article-accent`）；杂志网格去除子条目“—”前缀；新增极光列表/墨韵书卷/落日暖橙，合计 10 种。书籍预设目录改为墨韵书卷。历史值（editorial/index）自动回退。
 
@@ -95,6 +97,8 @@
 - 后缀 `668980`：完整源码 `obsidian-mindmap-studio-1.49.2-668980.zip`、安装包 `mindmap-studio-1.49.2-test-668980.zip`（SHA-256 `ccf8ba56a4d528004cbc35f5c24b2479bfc3639c419e6e40931ac235ba6b692d`）、交接 `Codex-1.49.2-handoff-668980.zip`。
 
 - 后缀 `419062`：完整源码 `obsidian-mindmap-studio-1.49.2-419062.zip`、安装包 `mindmap-studio-1.49.2-test-419062.zip`（SHA-256 `4d148e8b12e9b6178937244dd705b109071c8aaf70a232cea312844ed4079c33`，内容与 668980 一致，仅修复测试脚本契约）、交接 `Codex-1.49.2-handoff-419062.zip`。
+
+- 后缀 `148308`：完整源码 `obsidian-mindmap-studio-1.49.4-148308.zip`、安装包 `mindmap-studio-1.49.4-test-148308.zip`（SHA-256 `ddb37a0a53d362ee15abe67c7af25a82758546e236f944964245d6c0625709de`）、交接 `Codex-1.49.4-handoff-148308.zip`。
 
 ## 最近交付包（历史）（历史）（历史）（历史）（历史）
 

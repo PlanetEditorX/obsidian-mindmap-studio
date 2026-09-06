@@ -1,5 +1,25 @@
 # Modified Files
 
+## 1.49.5 移除垂直时间线并统一四字主题名
+
+- `src/core/model.ts`、`src/main.ts`：`ArticleTocStyle` 移除 `timeline`，规范化白名单同步（历史值回退默认卡片）。
+- `styles.css`：移除 toc-timeline 样式块。
+- `src/settings.ts`、`src/editor/appearance-modal.ts`：移除垂直时间线选项；「卡片」→「经典卡片」。
+- `tests/settings-layout.test.mjs`、`tests/reading-editor-contract.test.mjs`：契约同步。
+- `CHANGELOG.md`、`TEST_RESULTS.md`：同步说明。
+
+- 本轮测试安装包：`mindmap-studio-1.49.4-test-148308.zip`，SHA-256 `ddb37a0a53d362ee15abe67c7af25a82758546e236f944964245d6c0625709de`；完整源码与 Codex 交接使用同一 `148308` 后缀（输出到仓库父目录 `D:\Downloads`）。
+
+## 1.49.4 暗色玻璃升级为透明玻璃
+## 1.49.4 暗色玻璃升级为透明玻璃
+
+- `styles.css`：`toc-glass` 移除固定深色底与硬编码文字色，页面与分组卡改为半透明磨砂（纸色低透明混合 + `backdrop-filter`），全部文字/边框/强调改用主题变量。
+- `src/settings.ts`、`src/editor/appearance-modal.ts`：主题名「暗色玻璃」→「透明玻璃」。
+- `tests/settings-layout.test.mjs`：标签契约同步。
+
+- 本轮测试安装包：`mindmap-studio-1.49.3-test-389168.zip`，SHA-256 `9cdc9eab75152260ea3d2b234ca4591e4710329323c68f39229f799d4ce87f1c`；完整源码与 Codex 交接使用同一 `389168` 后缀（输出到仓库父目录 `D:\Downloads`）。
+
+## 1.49.3 目录主题二次调整：删二改一加三
 ## 1.49.3 目录主题二次调整：删二改一加三
 
 - `src/core/model.ts`、`src/main.ts`：`ArticleTocStyle` 调整为十值（移除 editorial/index，新增 aurora/ink/sunset），规范化白名单同步，历史值自动回退。

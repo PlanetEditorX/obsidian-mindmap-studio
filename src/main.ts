@@ -978,7 +978,6 @@ export default class MindMapStudioPlugin extends Plugin {
         || raw.articleTocStyle === "original"
         || raw.articleTocStyle === "minimal-page"
         || raw.articleTocStyle === "magazine"
-        || raw.articleTocStyle === "timeline"
         || raw.articleTocStyle === "glass"
         || raw.articleTocStyle === "aurora"
         || raw.articleTocStyle === "ink"

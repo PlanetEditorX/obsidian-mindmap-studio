@@ -161,13 +161,12 @@ test("toolbar marker color uses the same follow-theme representation as settings
 
 test("article directory exposes every preserved and previewed style without circular bullets", () => {
   for (const [id, label] of [
-    ["card", "卡片"],
+    ["card", "经典卡片"],
     ["plain", "简洁列表"],
     ["original", "素雅面板"],
     ["minimal-page", "极简书页"],
     ["magazine", "杂志网格"],
-    ["timeline", "垂直时间线"],
-    ["glass", "暗色玻璃"],
+    ["glass", "透明玻璃"],
     ["aurora", "极光列表"],
     ["ink", "墨韵书卷"],
     ["sunset", "落日暖橙"]
@@ -175,7 +174,7 @@ test("article directory exposes every preserved and previewed style without circ
     assert.ok(editorSource.includes(`["${id}", "${label}"]`), `missing directory style option: ${id}`);
     assert.ok(modelSource.includes(`input.tocStyle === "${id}"`), `missing directory style normalization: ${id}`);
   }
-  assert.match(modelSource, /export type ArticleTocStyle = "card" \| "plain" \| "original" \| "minimal-page" \| "magazine" \| "timeline" \| "glass" \| "aurora" \| "ink" \| "sunset"/);
+  assert.match(modelSource, /export type ArticleTocStyle = "card" \| "plain" \| "original" \| "minimal-page" \| "magazine" \| "glass" \| "aurora" \| "ink" \| "sunset"/);
   assert.match(settingsSource, /\.setName\("文章目录样式"\)[\s\S]*?\.setValue\(this\.plugin\.settings\.articleTocStyle\)/);
   assert.match(settingsSource, /createGroup\("阅读样式"[\s\S]*?"文章目录最大层级", "文章目录样式", "文章\/通读缩略导航图"/);
   assert.match(mainSource, /articleTocStyle: raw\.articleTocStyle === "plain"[\s\S]*?: "card"/);
@@ -185,10 +184,10 @@ test("article directory exposes every preserved and previewed style without circ
   assert.match(articleRendererSource, /mms-article-toc-number[\s\S]*entry\.label[\s\S]*mms-article-toc-title/);
   assert.match(stylesSource, /\.mms-article-toc-page li::before \{\s*display: none;\s*\}/);
   assert.doesNotMatch(stylesSource, /\.mms-article-toc-page li::before \{[^}]*border-radius: 50%/);
-  for (const selector of ["toc-original", "toc-minimal-page", "toc-magazine", "toc-timeline", "toc-glass", "toc-aurora", "toc-ink", "toc-sunset"]) {
+  for (const selector of ["toc-original", "toc-minimal-page", "toc-magazine", "toc-glass", "toc-aurora", "toc-ink", "toc-sunset"]) {
     assert.ok(stylesSource.includes(`.mms-article-page.${selector} .mms-article-toc-page`), `missing directory CSS: ${selector}`);
   }
-  assert.doesNotMatch(stylesSource, /toc-(lines|report|tree|editorial|index)/, "removed legacy toc styles must not keep css");
+  assert.doesNotMatch(stylesSource, /toc-(lines|report|tree|editorial|index|timeline)/, "removed legacy toc styles must not keep css");
   assert.match(stylesSource, /\.mms-article-page\.toc-magazine \.mms-article-toc-groups \{[\s\S]*?grid-template-columns: repeat\(auto-fit, minmax\(280px, 1fr\)\)/);
 });
 
