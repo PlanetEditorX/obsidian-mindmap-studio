@@ -449,3 +449,15 @@ test("article scroller disables native scroll anchoring so lazy-load compensatio
   assert.match(stylesSource, /\.mms-article-view \{\s*overflow-anchor: none;/);
 });
 
+test("directory page ships five extra toc themes with grouped and rail layouts", () => {
+  assert.match(articleRendererSource, /tocStyle === "index"/, "spine-index theme must render the chapter rail");
+  assert.match(articleRendererSource, /mms-article-toc-rail/);
+  assert.match(articleRendererSource, /tocStyle === "magazine" \|\| tocStyle === "glass"/, "magazine and glass themes must group chapters into cards");
+  assert.match(articleRendererSource, /mms-article-toc-groups/);
+  assert.match(articleRendererSource, /dataset\.chapterIndex/);
+  for (const value of ["magazine", "timeline", "editorial", "glass", "index"]) {
+    assert.match(stylesSource, new RegExp(`toc-${value}`), `css must style toc-${value}`);
+  }
+  assert.doesNotMatch(stylesSource, /toc-(lines|report|tree)/, "removed legacy toc styles must not keep css");
+});
+

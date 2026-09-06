@@ -161,19 +161,20 @@ test("toolbar marker color uses the same follow-theme representation as settings
 
 test("article directory exposes every preserved and previewed style without circular bullets", () => {
   for (const [id, label] of [
-    ["card", "卡片（当前样式）"],
-    ["plain", "简洁"],
-    ["lines", "引导线"],
-    ["original", "最初样式"],
+    ["card", "卡片"],
+    ["plain", "简洁列表"],
+    ["original", "素雅面板"],
     ["minimal-page", "极简书页"],
-    ["report", "现代报告"],
-    ["magazine", "杂志索引"],
-    ["tree", "层级树线"]
+    ["magazine", "杂志网格"],
+    ["timeline", "垂直时间线"],
+    ["editorial", "编辑部极简"],
+    ["glass", "暗色玻璃"],
+    ["index", "书脊索引"]
   ]) {
     assert.ok(editorSource.includes(`["${id}", "${label}"]`), `missing directory style option: ${id}`);
     assert.ok(modelSource.includes(`input.tocStyle === "${id}"`), `missing directory style normalization: ${id}`);
   }
-  assert.match(modelSource, /export type ArticleTocStyle = "card" \| "plain" \| "lines" \| "original" \| "minimal-page" \| "report" \| "magazine" \| "tree"/);
+  assert.match(modelSource, /export type ArticleTocStyle = "card" \| "plain" \| "original" \| "minimal-page" \| "magazine" \| "timeline" \| "editorial" \| "glass" \| "index"/);
   assert.match(settingsSource, /\.setName\("文章目录样式"\)[\s\S]*?\.setValue\(this\.plugin\.settings\.articleTocStyle\)/);
   assert.match(settingsSource, /createGroup\("阅读样式"[\s\S]*?"文章目录最大层级", "文章目录样式", "文章\/通读缩略导航图"/);
   assert.match(mainSource, /articleTocStyle: raw\.articleTocStyle === "plain"[\s\S]*?: "card"/);
@@ -183,11 +184,12 @@ test("article directory exposes every preserved and previewed style without circ
   assert.match(articleRendererSource, /mms-article-toc-number[\s\S]*entry\.label[\s\S]*mms-article-toc-title/);
   assert.match(stylesSource, /\.mms-article-toc-page li::before \{\s*display: none;\s*\}/);
   assert.doesNotMatch(stylesSource, /\.mms-article-toc-page li::before \{[^}]*border-radius: 50%/);
-  for (const selector of ["toc-original", "toc-minimal-page", "toc-report", "toc-magazine", "toc-tree"]) {
+  for (const selector of ["toc-original", "toc-minimal-page", "toc-magazine", "toc-timeline", "toc-editorial", "toc-glass", "toc-index"]) {
     assert.ok(stylesSource.includes(`.mms-article-page.${selector} .mms-article-toc-page`), `missing directory CSS: ${selector}`);
   }
-  assert.match(stylesSource, /\.mms-article-page\.toc-magazine \.mms-article-toc-page > ol \{\s*display: block;/);
-  assert.match(stylesSource, /\.mms-article-page\.toc-magazine \.mms-article-toc-page li \{[\s\S]*?width: 100%;/);
+  assert.doesNotMatch(stylesSource, /toc-(lines|report|tree)/, "removed legacy toc styles must not keep css");
+  assert.match(stylesSource, /\.mms-article-page\.toc-magazine \.mms-article-toc-groups \{[\s\S]*?grid-template-columns: repeat\(auto-fit, minmax\(280px, 1fr\)\)/);
+  assert.match(stylesSource, /\.mms-article-toc-index-wrap \{\s*display: flex;/);
 });
 
 test("article directory uses a responsive accessible modern layout", () => {
@@ -195,7 +197,7 @@ test("article directory uses a responsive accessible modern layout", () => {
   assert.match(stylesSource, /\.mms-article-toc-page > h2 \{[\s\S]*text-align: left/);
   assert.match(stylesSource, /\.mms-article-toc-page a::after \{[\s\S]*content: "→"[\s\S]*opacity: 0/);
   assert.match(stylesSource, /\.mms-article-toc-page a:focus-visible \{[\s\S]*outline: 2px solid/);
-  assert.match(stylesSource, /\.mms-article-page\.toc-lines \.mms-article-toc \{[\s\S]*border-left: 3px solid/);
+  assert.match(stylesSource, /\.mms-article-toc-rail a \{[\s\S]*border-left: 3px solid transparent[\s\S]*\.mms-article-toc-rail a\.is-on \{[\s\S]*border-left-color: var\(--mms-article-accent/);
   assert.match(stylesSource, /@media \(max-width: 600px\)[\s\S]*\.mms-article-toc-page \{[\s\S]*padding: 20px 14px/);
   assert.match(stylesSource, /\.mms-article-toc-page li\.is-return-target > a \{[\s\S]*box-shadow: inset 3px 0 0/);
   assert.match(stylesSource, /@media \(prefers-reduced-motion: reduce\)[\s\S]*\.mms-article-toc-page a,[\s\S]*transition: none/);

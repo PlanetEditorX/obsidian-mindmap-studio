@@ -39,7 +39,7 @@ export type ArticleLeafNumberingStyle = "next-level" | "circled";
 /** Built-in reading-presentation presets shared by article and continuous-reading modes. */
 export type ArticleStylePresetId = "classic" | "book" | "modern" | "minimal";
 /** Directory presentation saved per document and shared by article-family views. */
-export type ArticleTocStyle = "card" | "plain" | "lines" | "original" | "minimal-page" | "report" | "magazine" | "tree";
+export type ArticleTocStyle = "card" | "plain" | "original" | "minimal-page" | "magazine" | "timeline" | "editorial" | "glass" | "index";
 /** Per-document reading-style overrides shared by article and continuous-reading modes. */
 export interface ArticleStyle {
   preset: ArticleStylePresetId;
@@ -1591,14 +1591,16 @@ function normalizeArticleStyle(input: Partial<ArticleStyle> | undefined): Articl
     ? input.preset
     : "classic";
   const color = (value: unknown): string | undefined => typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value) ? value : undefined;
+  // 旧版目录样式（lines/report/tree）已移除：历史值统一回退到 undefined，渲染时落到默认卡片样式。
   const tocStyle: ArticleTocStyle | undefined = input.tocStyle === "card"
     || input.tocStyle === "plain"
-    || input.tocStyle === "lines"
     || input.tocStyle === "original"
     || input.tocStyle === "minimal-page"
-    || input.tocStyle === "report"
     || input.tocStyle === "magazine"
-    || input.tocStyle === "tree"
+    || input.tocStyle === "timeline"
+    || input.tocStyle === "editorial"
+    || input.tocStyle === "glass"
+    || input.tocStyle === "index"
     ? input.tocStyle
     : undefined;
   const fontSize = typeof input.fontSize === "number" ? Math.max(12, Math.min(24, input.fontSize)) : undefined;

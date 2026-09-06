@@ -973,13 +973,15 @@ export default class MindMapStudioPlugin extends Plugin {
       articleTocMaxDepth: typeof raw.articleTocMaxDepth === "number"
         ? Math.max(1, Math.min(8, Math.round(raw.articleTocMaxDepth)))
         : DEFAULT_SETTINGS.articleTocMaxDepth,
+      // 旧版目录样式（lines/report/tree）已移除：历史配置回退到默认卡片样式。
       articleTocStyle: raw.articleTocStyle === "plain"
-        || raw.articleTocStyle === "lines"
         || raw.articleTocStyle === "original"
         || raw.articleTocStyle === "minimal-page"
-        || raw.articleTocStyle === "report"
         || raw.articleTocStyle === "magazine"
-        || raw.articleTocStyle === "tree"
+        || raw.articleTocStyle === "timeline"
+        || raw.articleTocStyle === "editorial"
+        || raw.articleTocStyle === "glass"
+        || raw.articleTocStyle === "index"
         ? raw.articleTocStyle
         : "card",
       showArticleMiniMap: raw.showArticleMiniMap !== false,

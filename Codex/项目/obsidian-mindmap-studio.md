@@ -4,7 +4,11 @@
 - 版本基线：1.48.0（package.json / manifest.json / versions.json / package-lock.json 已同步）。
 - 仓库规则：见根目录 `AGENTS.md`；每轮代码交付三份 ZIP（源码 / 安装 / Codex 交接）共用同一六位后缀；验证入口 `npm run verify`。
 
-## 当前状态（1.48.11 / 维护整固轮）
+## 当前状态（1.49.2 待发布 / 线上 1.49.1）
+
+- 本轮完成目录主题重整（应用户实测反馈“原先的样式不好看”）：保留并重命名卡片/简洁列表/素雅面板/极简书页 4 种，移除引导线/现代报告/杂志索引旧实现/层级树线 4 种（历史值自动回退），新增杂志网格/垂直时间线/编辑部极简/暗色玻璃/书脊索引 5 种设计移植，合计 9 种。
+- `renderDirectory` 支持章节分组卡片（magazine/glass，含大数字编号）与书脊索引侧轨过滤（index）；书籍预设目录改为编辑部极简。设计稿预览保留在 `D:\Downloads	oc-theme-previews\`。
+- 拆分剩余批次：题目系统流程、行内编辑深化（收益递减，按需推进）。
 
 - 本轮维护整固：契约源码加载收敛到 `tests/helpers/editor-sources.mjs`（12 处内联拼接 → 1 处清单，杜绝漏改导致的 CI 误报）；`restoreReadingLocation()` 与图片“更新上传”热路径去重。不触碰发布触发路径，无新版本。
 - 编辑器拆分剩余批次（题目系统流程、行内编辑深化）收益递减，建议按需推进；`nodeContentBlocks()` 记忆化因旧格式临时块 ID 的语义设计暂不实施。
@@ -81,6 +85,8 @@
 - 后缀 `917448`：完整源码 `obsidian-mindmap-studio-1.48.10-917448.zip`、安装包 `mindmap-studio-1.48.10-test-917448.zip`（SHA-256 `ce1a8ac611e605ef1b47e8638ae4e9ab2c43f7faf750c140dd6e51858a3d0215`）、交接 `Codex-1.48.10-handoff-917448.zip`。
 
 - 后缀 `246457`：完整源码 `obsidian-mindmap-studio-1.48.10-246457.zip`、安装包 `mindmap-studio-1.48.10-test-246457.zip`（SHA-256 `518561b5e57f6ab14cc5c3ad7b17d06b598183870a7dc5cd903fc7a28cf34621`）、交接 `Codex-1.48.10-handoff-246457.zip`。
+
+- 后缀 `287157`：完整源码 `obsidian-mindmap-studio-1.49.1-287157.zip`、安装包 `mindmap-studio-1.49.1-test-287157.zip`（SHA-256 `5cd49ea5e4ff17b179f0915d35fbc8b33558822c85a46c7862387b8fd47a0db3`）、交接 `Codex-1.49.1-handoff-287157.zip`。
 
 ## 最近交付包（历史）（历史）（历史）（历史）（历史）
 

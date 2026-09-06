@@ -371,10 +371,13 @@ function applyArticleStyle(page: HTMLElement, style: ReturnType<typeof resolveAr
 
 /** 渲染文章目录页。 */
 function renderDirectory(page: HTMLElement, options: ArticleRendererOptions): void {
+  const tocStyle = options.document.articleStyle?.tocStyle ?? options.articleTocStyle ?? "card";
   const tocPage = page.createEl("nav", { cls: "mms-article-toc mms-article-toc-page" });
   tocPage.createEl("h2", { text: "目录" });
-  const list = tocPage.createEl("ol");
-  for (const entry of options.articleTocEntries.filter((item) => articleTocDepth(item) <= options.articleTocMaxDepth)) {
+  const entries = options.articleTocEntries.filter((item) => articleTocDepth(item) <= options.articleTocMaxDepth);
+
+  /** 渲染单个目录条目（编号 + 标题 + 面包屑），供平铺与分组布局复用。 */
+  const renderEntryItem = (list: HTMLElement, entry: ArticleTocEntry): void => {
     const tocDepth = articleTocDepth(entry);
     const item = list.createEl("li", { cls: `depth-${Math.min(tocDepth, 8)}` });
     item.style.setProperty("--mms-article-depth", String(tocDepth));
@@ -392,9 +395,104 @@ function renderDirectory(page: HTMLElement, options: ArticleRendererOptions): vo
       void options.callbacks.onOpenMindMap(entry.filePath, entry.nodeId);
     });
     if (entry.breadcrumb.length > 1) item.createSpan({ cls: "mms-article-toc-breadcrumb", text: entry.breadcrumb.join(" › ") });
-  }
-}
+  };
 
+  /** 按顶层章节分组：depth-1 开启新组，其后的更深条目归入该组。 */
+  const groupEntries = (): Array<{ chapter: ArticleTocEntry | null; children: ArticleTocEntry[] }> => {
+    const groups: Array<{ chapter: ArticleTocEntry | null; children: ArticleTocEntry[] }> = [];
+    for (const entry of entries) {
+      if (articleTocDepth(entry) <= 1 || groups.length === 0) {
+        groups.push({ chapter: articleTocDepth(entry) <= 1 ? entry : null, children: [] });
+        continue;
+      }
+      groups[groups.length - 1].children.push(entry);
+    }
+    return groups;
+  };
+
+  if (tocStyle === "index") {
+    const groups = groupEntries().filter((group) => group.chapter);
+    const wrap = tocPage.createDiv({ cls: "mms-article-toc-index-wrap" });
+    const rail = wrap.createDiv({ cls: "mms-article-toc-rail" });
+    rail.createEl("span", { cls: "mms-article-toc-rail-logo", text: "目" });
+    const main = wrap.createDiv({ cls: "mms-article-toc-index-main" });
+    main.createEl("p", { cls: "mms-article-toc-index-sub", text: `${entries.length} 个条目 · 点击侧轨按章过滤` });
+    const list = main.createEl("ol");
+    const groupEls: Array<{ el: HTMLElement; chapterId: string }> = [];
+    for (const group of groups) {
+      const chapter = group.chapter!;
+      const nodeId = chapter.nodeId ?? "";
+      const groupEl = list.createEl("li", { cls: "mms-article-toc-group" });
+      groupEl.dataset.chapterId = nodeId;
+      const head = groupEl.createEl("a", { cls: "mms-article-toc-group-head", href: chapter.filePath, attr: { title: chapter.breadcrumb.join(" › ") } });
+      if (chapter.label) head.createSpan({ cls: "mms-article-toc-number", text: chapter.label });
+      head.createSpan({ cls: "mms-article-toc-title", text: chapter.title || "未命名标题" });
+      head.dataset.nodeId = nodeId;
+      head.dataset.filePath = chapter.filePath;
+      head.addEventListener("click", (event) => {
+        event.preventDefault();
+        if (chapter.filePath === options.currentFilePath && nodeId) {
+          options.focusNode(nodeId);
+          return;
+        }
+        void options.callbacks.onOpenMindMap(chapter.filePath, nodeId);
+      });
+      const sub = groupEl.createEl("ul", { cls: "mms-article-toc-sub" });
+      for (const child of group.children) renderEntryItem(sub, child);
+      groupEls.push({ el: groupEl, chapterId: nodeId });
+    }
+    const railLinks: HTMLAnchorElement[] = [];
+    const setFilter = (chapterId: string | null): void => {
+      for (const { el, chapterId: id } of groupEls) el.toggleClass("is-hidden", chapterId !== null && id !== chapterId);
+      for (const link of railLinks) link.toggleClass("is-on", link.dataset.chapterId === (chapterId ?? "__all__"));
+    };
+    const allLink = rail.createEl("a", { text: "全部", cls: "is-on" });
+    allLink.dataset.chapterId = "__all__";
+    allLink.addEventListener("click", (event) => { event.preventDefault(); setFilter(null); });
+    railLinks.push(allLink);
+    for (const group of groups) {
+      const chapter = group.chapter!;
+      const railLink = rail.createEl("a", { text: chapter.title || "未命名章节" });
+      railLink.dataset.chapterId = chapter.nodeId ?? "";
+      railLink.addEventListener("click", (event) => { event.preventDefault(); setFilter(chapter.nodeId ?? null); });
+      railLinks.push(railLink);
+    }
+    rail.createEl("span", { cls: "mms-article-toc-rail-foot", text: "INDEX" });
+    return;
+  }
+
+  if (tocStyle === "magazine" || tocStyle === "glass") {
+    const list = tocPage.createEl("ol", { cls: "mms-article-toc-groups" });
+    let chapterIndex = 0;
+    for (const group of groupEntries()) {
+      const groupEl = list.createEl("li", { cls: "mms-article-toc-group" });
+      if (group.chapter) groupEl.dataset.chapterIndex = String(++chapterIndex).padStart(2, "0");
+      if (group.chapter) {
+        const chapter = group.chapter;
+        const nodeId = chapter.nodeId ?? null;
+        const head = groupEl.createEl("a", { cls: "mms-article-toc-group-head", href: chapter.filePath, attr: { title: chapter.breadcrumb.join(" › ") } });
+        if (chapter.label) head.createSpan({ cls: "mms-article-toc-number", text: chapter.label });
+        head.createSpan({ cls: "mms-article-toc-title", text: chapter.title || "未命名标题" });
+        head.dataset.nodeId = nodeId ?? "";
+        head.dataset.filePath = chapter.filePath;
+        head.addEventListener("click", (event) => {
+          event.preventDefault();
+          if (chapter.filePath === options.currentFilePath && nodeId) {
+            options.focusNode(nodeId);
+            return;
+          }
+          void options.callbacks.onOpenMindMap(chapter.filePath, nodeId ?? undefined);
+        });
+      }
+      const sub = groupEl.createEl("ul", { cls: "mms-article-toc-sub" });
+      for (const child of group.children) renderEntryItem(sub, child);
+    }
+    return;
+  }
+
+  const list = tocPage.createEl("ol");
+  for (const entry of entries) renderEntryItem(list, entry);
+}
 /** 渲染章节标题或子导图链接。 */
 function renderHeading(heading: HTMLElement, node: MindMapNode, title: string, options: ArticleRendererOptions): void {
   if (node.submap) {

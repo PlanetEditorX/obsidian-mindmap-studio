@@ -969,14 +969,15 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
       .setName("文章目录样式")
       .setDesc("设置文章和通读目录的全局默认样式；当前脑图可在工具栏“主题与外观”中单独覆盖。")
       .addDropdown((dropdown) => dropdown
-        .addOption("card", "卡片（当前样式）")
-        .addOption("plain", "简洁")
-        .addOption("lines", "引导线")
-        .addOption("original", "最初样式")
+        .addOption("card", "卡片")
+        .addOption("plain", "简洁列表")
+        .addOption("original", "素雅面板")
         .addOption("minimal-page", "极简书页")
-        .addOption("report", "现代报告")
-        .addOption("magazine", "杂志索引")
-        .addOption("tree", "层级树线")
+        .addOption("magazine", "杂志网格")
+        .addOption("timeline", "垂直时间线")
+        .addOption("editorial", "编辑部极简")
+        .addOption("glass", "暗色玻璃")
+        .addOption("index", "书脊索引")
         .setValue(this.plugin.settings.articleTocStyle)
         .onChange(async (value) => {
           this.plugin.settings.articleTocStyle = value as ArticleTocStyle;

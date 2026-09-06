@@ -85,28 +85,30 @@ function createReadingStyleControls(
   const tocLabel = container.createEl("label", { text: "目录样式" });
   const tocStyle = tocLabel.createEl("select");
   const tocStyleNames: Record<NonNullable<ArticleStyle["tocStyle"]>, string> = {
-    card: "卡片（当前样式）",
-    plain: "简洁",
-    lines: "引导线",
-    original: "最初样式",
+    card: "卡片",
+    plain: "简洁列表",
+    original: "素雅面板",
     "minimal-page": "极简书页",
-    report: "现代报告",
-    magazine: "杂志索引",
-    tree: "层级树线"
+    magazine: "杂志网格",
+    timeline: "垂直时间线",
+    editorial: "编辑部极简",
+    glass: "暗色玻璃",
+    index: "书脊索引"
   };
   tocStyle.createEl("option", {
     text: `跟随插件设置（当前：${tocStyleNames[globalDefaults.tocStyle]}）`,
     attr: { value: "" }
   });
   for (const [id, name] of [
-    ["card", "卡片（当前样式）"],
-    ["plain", "简洁"],
-    ["lines", "引导线"],
-    ["original", "最初样式"],
+    ["card", "卡片"],
+    ["plain", "简洁列表"],
+    ["original", "素雅面板"],
     ["minimal-page", "极简书页"],
-    ["report", "现代报告"],
-    ["magazine", "杂志索引"],
-    ["tree", "层级树线"]
+    ["magazine", "杂志网格"],
+    ["timeline", "垂直时间线"],
+    ["editorial", "编辑部极简"],
+    ["glass", "暗色玻璃"],
+    ["index", "书脊索引"]
   ] as const) {
     tocStyle.createEl("option", { text: name, attr: { value: id } });
   }

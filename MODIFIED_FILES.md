@@ -1,5 +1,18 @@
 # Modified Files
 
+## 1.49.2 目录主题重整：保留 4 种重命名 + 新增 5 种设计移植
+
+- `src/core/model.ts`：`ArticleTocStyle` 调整为 card/plain/original/minimal-page/magazine/timeline/editorial/glass/index 九值；规范化白名单同步，旧值（lines/report/tree）回退 undefined。
+- `src/editor/article-renderer.ts`：`renderDirectory` 重写——公共条目渲染与章节分组助手；新增书脊索引布局（章节侧轨 + 过滤 + 组头跳转）与杂志/暗色玻璃分组卡片布局（`data-chapter-index` 大数字编号）；平铺布局保持原逻辑。
+- `src/article/article-style.ts`：书籍预设目录样式 lines → editorial。
+- `styles.css`：移除 lines/report/tree 旧样式块（含 @media 内），新增 magazine/timeline/editorial/glass/index 五套主题样式。
+- `src/settings.ts`、`src/editor/appearance-modal.ts`：目录样式下拉 9 项新标签。
+- `tests/settings-layout.test.mjs`、`tests/reading-editor-contract.test.mjs`：更新标签/类型/CSS 契约，新增分组布局、侧轨过滤与 CSS 存在性断言。
+- `CHANGELOG.md`、`TEST_RESULTS.md`：同步说明。
+
+- 本轮测试安装包：`mindmap-studio-1.49.1-test-287157.zip`，SHA-256 `5cd49ea5e4ff17b179f0915d35fbc8b33558822c85a46c7862387b8fd47a0db3`；完整源码与 Codex 交接使用同一 `287157` 后缀（输出到仓库父目录 `D:\Downloads`）。
+
+## 1.49.1 契约加载收敛与热路径去重
 ## 1.48.12 契约加载收敛与热路径去重
 
 - `tests/helpers/editor-sources.mjs`（新增）：`loadEditorSources()` 统一编辑器核心源码（5 文件拼接）的契约加载清单。
