@@ -882,7 +882,7 @@ function normalizeArticleStyle(input) {
   if (!input) return void 0;
   const preset = input.preset === "book" || input.preset === "modern" || input.preset === "minimal" ? input.preset : "classic";
   const color = (value) => typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value) ? value : void 0;
-  const tocStyle = input.tocStyle === "card" || input.tocStyle === "plain" || input.tocStyle === "lines" || input.tocStyle === "original" || input.tocStyle === "minimal-page" || input.tocStyle === "report" || input.tocStyle === "magazine" || input.tocStyle === "tree" ? input.tocStyle : void 0;
+  const tocStyle = input.tocStyle === "card" || input.tocStyle === "plain" || input.tocStyle === "original" || input.tocStyle === "minimal-page" || input.tocStyle === "magazine" || input.tocStyle === "timeline" || input.tocStyle === "editorial" || input.tocStyle === "glass" || input.tocStyle === "index" ? input.tocStyle : void 0;
   const fontSize = typeof input.fontSize === "number" ? Math.max(12, Math.min(24, input.fontSize)) : void 0;
   const lineHeight = typeof input.lineHeight === "number" ? Math.max(1.2, Math.min(2.4, input.lineHeight)) : void 0;
   return {
@@ -2658,7 +2658,7 @@ var MindMapStudioSettingTab = class extends import_obsidian.PluginSettingTab {
         await this.saveAndRefresh();
       });
     });
-    new import_obsidian.Setting(containerEl).setName("\u6587\u7AE0\u76EE\u5F55\u6837\u5F0F").setDesc("\u8BBE\u7F6E\u6587\u7AE0\u548C\u901A\u8BFB\u76EE\u5F55\u7684\u5168\u5C40\u9ED8\u8BA4\u6837\u5F0F\uFF1B\u5F53\u524D\u8111\u56FE\u53EF\u5728\u5DE5\u5177\u680F\u201C\u4E3B\u9898\u4E0E\u5916\u89C2\u201D\u4E2D\u5355\u72EC\u8986\u76D6\u3002").addDropdown((dropdown) => dropdown.addOption("card", "\u5361\u7247\uFF08\u5F53\u524D\u6837\u5F0F\uFF09").addOption("plain", "\u7B80\u6D01").addOption("lines", "\u5F15\u5BFC\u7EBF").addOption("original", "\u6700\u521D\u6837\u5F0F").addOption("minimal-page", "\u6781\u7B80\u4E66\u9875").addOption("report", "\u73B0\u4EE3\u62A5\u544A").addOption("magazine", "\u6742\u5FD7\u7D22\u5F15").addOption("tree", "\u5C42\u7EA7\u6811\u7EBF").setValue(this.plugin.settings.articleTocStyle).onChange(async (value) => {
+    new import_obsidian.Setting(containerEl).setName("\u6587\u7AE0\u76EE\u5F55\u6837\u5F0F").setDesc("\u8BBE\u7F6E\u6587\u7AE0\u548C\u901A\u8BFB\u76EE\u5F55\u7684\u5168\u5C40\u9ED8\u8BA4\u6837\u5F0F\uFF1B\u5F53\u524D\u8111\u56FE\u53EF\u5728\u5DE5\u5177\u680F\u201C\u4E3B\u9898\u4E0E\u5916\u89C2\u201D\u4E2D\u5355\u72EC\u8986\u76D6\u3002").addDropdown((dropdown) => dropdown.addOption("card", "\u5361\u7247").addOption("plain", "\u7B80\u6D01\u5217\u8868").addOption("original", "\u7D20\u96C5\u9762\u677F").addOption("minimal-page", "\u6781\u7B80\u4E66\u9875").addOption("magazine", "\u6742\u5FD7\u7F51\u683C").addOption("timeline", "\u5782\u76F4\u65F6\u95F4\u7EBF").addOption("editorial", "\u7F16\u8F91\u90E8\u6781\u7B80").addOption("glass", "\u6697\u8272\u73BB\u7483").addOption("index", "\u4E66\u810A\u7D22\u5F15").setValue(this.plugin.settings.articleTocStyle).onChange(async (value) => {
       this.plugin.settings.articleTocStyle = value;
       await this.saveAndRefresh();
     }));
@@ -8454,7 +8454,7 @@ function normalizeJudgmentAnswer(value) {
 // src/article/article-style.ts
 var ARTICLE_STYLE_PRESETS = {
   classic: { preset: "classic", tocStyle: "card", fontSize: 16, lineHeight: 1.85 },
-  book: { preset: "book", fontFamily: "Georgia, 'Noto Serif SC', serif", textColor: "#332b24", headingColor: "#241c16", accentColor: "#8b5e3c", backgroundColor: "#fffdf7", tocStyle: "lines", fontSize: 17, lineHeight: 2 },
+  book: { preset: "book", fontFamily: "Georgia, 'Noto Serif SC', serif", textColor: "#332b24", headingColor: "#241c16", accentColor: "#8b5e3c", backgroundColor: "#fffdf7", tocStyle: "editorial", fontSize: 17, lineHeight: 2 },
   modern: { preset: "modern", fontFamily: "Inter, 'Microsoft YaHei', sans-serif", textColor: "#243247", headingColor: "#12213a", accentColor: "#2563eb", backgroundColor: "#f8fafc", tocStyle: "card", fontSize: 16, lineHeight: 1.75 },
   minimal: { preset: "minimal", fontFamily: "Arial, 'Microsoft YaHei', sans-serif", textColor: "#27272a", headingColor: "#18181b", accentColor: "#52525b", backgroundColor: "#ffffff", tocStyle: "plain", fontSize: 15, lineHeight: 1.8 }
 };
@@ -9012,28 +9012,30 @@ function createReadingStyleControls(container, style, globalDefaults) {
   const tocLabel = container.createEl("label", { text: "\u76EE\u5F55\u6837\u5F0F" });
   const tocStyle = tocLabel.createEl("select");
   const tocStyleNames = {
-    card: "\u5361\u7247\uFF08\u5F53\u524D\u6837\u5F0F\uFF09",
-    plain: "\u7B80\u6D01",
-    lines: "\u5F15\u5BFC\u7EBF",
-    original: "\u6700\u521D\u6837\u5F0F",
+    card: "\u5361\u7247",
+    plain: "\u7B80\u6D01\u5217\u8868",
+    original: "\u7D20\u96C5\u9762\u677F",
     "minimal-page": "\u6781\u7B80\u4E66\u9875",
-    report: "\u73B0\u4EE3\u62A5\u544A",
-    magazine: "\u6742\u5FD7\u7D22\u5F15",
-    tree: "\u5C42\u7EA7\u6811\u7EBF"
+    magazine: "\u6742\u5FD7\u7F51\u683C",
+    timeline: "\u5782\u76F4\u65F6\u95F4\u7EBF",
+    editorial: "\u7F16\u8F91\u90E8\u6781\u7B80",
+    glass: "\u6697\u8272\u73BB\u7483",
+    index: "\u4E66\u810A\u7D22\u5F15"
   };
   tocStyle.createEl("option", {
     text: `\u8DDF\u968F\u63D2\u4EF6\u8BBE\u7F6E\uFF08\u5F53\u524D\uFF1A${tocStyleNames[globalDefaults.tocStyle]}\uFF09`,
     attr: { value: "" }
   });
   for (const [id, name] of [
-    ["card", "\u5361\u7247\uFF08\u5F53\u524D\u6837\u5F0F\uFF09"],
-    ["plain", "\u7B80\u6D01"],
-    ["lines", "\u5F15\u5BFC\u7EBF"],
-    ["original", "\u6700\u521D\u6837\u5F0F"],
+    ["card", "\u5361\u7247"],
+    ["plain", "\u7B80\u6D01\u5217\u8868"],
+    ["original", "\u7D20\u96C5\u9762\u677F"],
     ["minimal-page", "\u6781\u7B80\u4E66\u9875"],
-    ["report", "\u73B0\u4EE3\u62A5\u544A"],
-    ["magazine", "\u6742\u5FD7\u7D22\u5F15"],
-    ["tree", "\u5C42\u7EA7\u6811\u7EBF"]
+    ["magazine", "\u6742\u5FD7\u7F51\u683C"],
+    ["timeline", "\u5782\u76F4\u65F6\u95F4\u7EBF"],
+    ["editorial", "\u7F16\u8F91\u90E8\u6781\u7B80"],
+    ["glass", "\u6697\u8272\u73BB\u7483"],
+    ["index", "\u4E66\u810A\u7D22\u5F15"]
   ]) {
     tocStyle.createEl("option", { text: name, attr: { value: id } });
   }
@@ -11426,12 +11428,14 @@ function applyArticleStyle(page, style) {
   page.style.setProperty("--mms-article-line-height", String((_b2 = style.lineHeight) != null ? _b2 : 1.85));
 }
 function renderDirectory(page, options) {
+  var _a2, _b2, _c, _d, _e, _f;
+  const tocStyle = (_c = (_b2 = (_a2 = options.document.articleStyle) == null ? void 0 : _a2.tocStyle) != null ? _b2 : options.articleTocStyle) != null ? _c : "card";
   const tocPage = page.createEl("nav", { cls: "mms-article-toc mms-article-toc-page" });
   tocPage.createEl("h2", { text: "\u76EE\u5F55" });
-  const list = tocPage.createEl("ol");
-  for (const entry of options.articleTocEntries.filter((item) => articleTocDepth(item) <= options.articleTocMaxDepth)) {
+  const entries = options.articleTocEntries.filter((item) => articleTocDepth(item) <= options.articleTocMaxDepth);
+  const renderEntryItem = (list2, entry) => {
     const tocDepth = articleTocDepth(entry);
-    const item = list.createEl("li", { cls: `depth-${Math.min(tocDepth, 8)}` });
+    const item = list2.createEl("li", { cls: `depth-${Math.min(tocDepth, 8)}` });
     item.style.setProperty("--mms-article-depth", String(tocDepth));
     const link = item.createEl("a", { href: entry.filePath, attr: { title: entry.breadcrumb.join(" \u203A ") } });
     if (entry.label) link.createSpan({ cls: "mms-article-toc-number", text: entry.label });
@@ -11447,7 +11451,105 @@ function renderDirectory(page, options) {
       void options.callbacks.onOpenMindMap(entry.filePath, entry.nodeId);
     });
     if (entry.breadcrumb.length > 1) item.createSpan({ cls: "mms-article-toc-breadcrumb", text: entry.breadcrumb.join(" \u203A ") });
+  };
+  const groupEntries = () => {
+    const groups = [];
+    for (const entry of entries) {
+      if (articleTocDepth(entry) <= 1 || groups.length === 0) {
+        groups.push({ chapter: articleTocDepth(entry) <= 1 ? entry : null, children: [] });
+        continue;
+      }
+      groups[groups.length - 1].children.push(entry);
+    }
+    return groups;
+  };
+  if (tocStyle === "index") {
+    const groups = groupEntries().filter((group) => group.chapter);
+    const wrap = tocPage.createDiv({ cls: "mms-article-toc-index-wrap" });
+    const rail = wrap.createDiv({ cls: "mms-article-toc-rail" });
+    rail.createEl("span", { cls: "mms-article-toc-rail-logo", text: "\u76EE" });
+    const main = wrap.createDiv({ cls: "mms-article-toc-index-main" });
+    main.createEl("p", { cls: "mms-article-toc-index-sub", text: `${entries.length} \u4E2A\u6761\u76EE \xB7 \u70B9\u51FB\u4FA7\u8F68\u6309\u7AE0\u8FC7\u6EE4` });
+    const list2 = main.createEl("ol");
+    const groupEls = [];
+    for (const group of groups) {
+      const chapter = group.chapter;
+      const nodeId = (_d = chapter.nodeId) != null ? _d : "";
+      const groupEl = list2.createEl("li", { cls: "mms-article-toc-group" });
+      groupEl.dataset.chapterId = nodeId;
+      const head = groupEl.createEl("a", { cls: "mms-article-toc-group-head", href: chapter.filePath, attr: { title: chapter.breadcrumb.join(" \u203A ") } });
+      if (chapter.label) head.createSpan({ cls: "mms-article-toc-number", text: chapter.label });
+      head.createSpan({ cls: "mms-article-toc-title", text: chapter.title || "\u672A\u547D\u540D\u6807\u9898" });
+      head.dataset.nodeId = nodeId;
+      head.dataset.filePath = chapter.filePath;
+      head.addEventListener("click", (event) => {
+        event.preventDefault();
+        if (chapter.filePath === options.currentFilePath && nodeId) {
+          options.focusNode(nodeId);
+          return;
+        }
+        void options.callbacks.onOpenMindMap(chapter.filePath, nodeId);
+      });
+      const sub = groupEl.createEl("ul", { cls: "mms-article-toc-sub" });
+      for (const child of group.children) renderEntryItem(sub, child);
+      groupEls.push({ el: groupEl, chapterId: nodeId });
+    }
+    const railLinks = [];
+    const setFilter = (chapterId) => {
+      for (const { el, chapterId: id } of groupEls) el.toggleClass("is-hidden", chapterId !== null && id !== chapterId);
+      for (const link of railLinks) link.toggleClass("is-on", link.dataset.chapterId === (chapterId != null ? chapterId : "__all__"));
+    };
+    const allLink = rail.createEl("a", { text: "\u5168\u90E8", cls: "is-on" });
+    allLink.dataset.chapterId = "__all__";
+    allLink.addEventListener("click", (event) => {
+      event.preventDefault();
+      setFilter(null);
+    });
+    railLinks.push(allLink);
+    for (const group of groups) {
+      const chapter = group.chapter;
+      const railLink = rail.createEl("a", { text: chapter.title || "\u672A\u547D\u540D\u7AE0\u8282" });
+      railLink.dataset.chapterId = (_e = chapter.nodeId) != null ? _e : "";
+      railLink.addEventListener("click", (event) => {
+        var _a3;
+        event.preventDefault();
+        setFilter((_a3 = chapter.nodeId) != null ? _a3 : null);
+      });
+      railLinks.push(railLink);
+    }
+    rail.createEl("span", { cls: "mms-article-toc-rail-foot", text: "INDEX" });
+    return;
   }
+  if (tocStyle === "magazine" || tocStyle === "glass") {
+    const list2 = tocPage.createEl("ol", { cls: "mms-article-toc-groups" });
+    let chapterIndex = 0;
+    for (const group of groupEntries()) {
+      const groupEl = list2.createEl("li", { cls: "mms-article-toc-group" });
+      if (group.chapter) groupEl.dataset.chapterIndex = String(++chapterIndex).padStart(2, "0");
+      if (group.chapter) {
+        const chapter = group.chapter;
+        const nodeId = (_f = chapter.nodeId) != null ? _f : null;
+        const head = groupEl.createEl("a", { cls: "mms-article-toc-group-head", href: chapter.filePath, attr: { title: chapter.breadcrumb.join(" \u203A ") } });
+        if (chapter.label) head.createSpan({ cls: "mms-article-toc-number", text: chapter.label });
+        head.createSpan({ cls: "mms-article-toc-title", text: chapter.title || "\u672A\u547D\u540D\u6807\u9898" });
+        head.dataset.nodeId = nodeId != null ? nodeId : "";
+        head.dataset.filePath = chapter.filePath;
+        head.addEventListener("click", (event) => {
+          event.preventDefault();
+          if (chapter.filePath === options.currentFilePath && nodeId) {
+            options.focusNode(nodeId);
+            return;
+          }
+          void options.callbacks.onOpenMindMap(chapter.filePath, nodeId != null ? nodeId : void 0);
+        });
+      }
+      const sub = groupEl.createEl("ul", { cls: "mms-article-toc-sub" });
+      for (const child of group.children) renderEntryItem(sub, child);
+    }
+    return;
+  }
+  const list = tocPage.createEl("ol");
+  for (const entry of entries) renderEntryItem(list, entry);
 }
 function renderHeading(heading, node, title, options) {
   var _a2, _b2, _c;
@@ -24226,7 +24328,8 @@ var MindMapStudioPlugin = class extends import_obsidian19.Plugin {
         return location ? [[path, location]] : [];
       })) : {},
       articleTocMaxDepth: typeof raw.articleTocMaxDepth === "number" ? Math.max(1, Math.min(8, Math.round(raw.articleTocMaxDepth))) : DEFAULT_SETTINGS.articleTocMaxDepth,
-      articleTocStyle: raw.articleTocStyle === "plain" || raw.articleTocStyle === "lines" || raw.articleTocStyle === "original" || raw.articleTocStyle === "minimal-page" || raw.articleTocStyle === "report" || raw.articleTocStyle === "magazine" || raw.articleTocStyle === "tree" ? raw.articleTocStyle : "card",
+      // 旧版目录样式（lines/report/tree）已移除：历史配置回退到默认卡片样式。
+      articleTocStyle: raw.articleTocStyle === "plain" || raw.articleTocStyle === "original" || raw.articleTocStyle === "minimal-page" || raw.articleTocStyle === "magazine" || raw.articleTocStyle === "timeline" || raw.articleTocStyle === "editorial" || raw.articleTocStyle === "glass" || raw.articleTocStyle === "index" ? raw.articleTocStyle : "card",
       showArticleMiniMap: raw.showArticleMiniMap !== false,
       showArticleContextProgress: raw.showArticleContextProgress === true,
       articleSectionCollapseEnabled: raw.articleSectionCollapseEnabled === true,

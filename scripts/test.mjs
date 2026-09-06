@@ -351,7 +351,7 @@ export const setIcon = () => {};
     headingColor: "#241c16",
     accentColor: "#8b5e3c",
     backgroundColor: "#fffdf7",
-    tocStyle: "lines",
+    tocStyle: "editorial",
     fontSize: 17,
     lineHeight: 2
   };
@@ -378,7 +378,7 @@ export const setIcon = () => {};
   assert.equal(reopened.view?.articleLandingMode, "toc");
   assert.equal(reopened.view?.articleTocMaxDepth, 6, "per-document TOC depth overrides must survive serialization");
   assert.equal(reopened.articleStyle?.preset, "book");
-  assert.equal(reopened.articleStyle?.tocStyle, "lines");
+  assert.equal(reopened.articleStyle?.tocStyle, "editorial", "the book preset must now carry the editorial toc style");
   assert.equal(reopened.articleStyle?.fontSize, 17);
   assert.equal(reopened.root.children.at(-1)?.text, "保存后仍可编辑");
   const reorderRoot = model.normalizeDocument({
