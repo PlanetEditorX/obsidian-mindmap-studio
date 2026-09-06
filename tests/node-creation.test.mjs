@@ -19,7 +19,7 @@ before(async () => {
   const sources = await Promise.all([
     readFile("src/main.ts", "utf8"),
     readFile("src/core/model.ts", "utf8"),
-    readFile("src/editor/editor.ts", "utf8"),
+    (Promise.all([readFile("src/editor/editor.ts", "utf8"), readFile("src/editor/node-edit-modal.ts", "utf8"), readFile("src/editor/appearance-modal.ts", "utf8"), readFile("src/editor/viewport-controller.ts", "utf8"), readFile("src/editor/mind-map-node-renderer.ts", "utf8")]).then((parts) => parts.join("\n"))),
     readFile("src/editor/article-renderer.ts", "utf8"),
     readFile("src/render/layout.ts", "utf8"),
     readFile("styles.css", "utf8"),

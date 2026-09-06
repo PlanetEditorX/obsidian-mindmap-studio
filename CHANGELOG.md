@@ -1,5 +1,11 @@
 # 更新记录
 
+## 1.48.9
+
+- 编辑器拆分第三批（节点渲染）：新增 `src/editor/mind-map-node-renderer.ts`（469 行），`renderMindMapNode` 及其内容块渲染、拖拽绑定、上下文菜单与选择行为迁移为 `renderMindMapNode(ctx, ...)` 纯渲染函数；编辑器经 `MindMapNodeRendererContext` 注入状态读取器（`options`/`readOnly`/`selectedId` 等用 getter 保持实时，`draggingId`/`dragDropPosition`/`aiScopeNodeId` 三个可写字段用 get/set 闭包接回）与交互回调。`editor.ts` 降至 7,485 行。
+- 拆分后 DOM 输出与拆分前一致；契约拼接列表加入新模块，三个渲染相关断言接受 `ctx.` 前缀。运行时行为不变。
+
+## 1.48.8
 ## 1.48.8
 
 - 编辑器拆分第二批（视口手势与缩放）：新增 `src/editor/viewport-controller.ts`，`MindMapEditor` 的缩放/平移/双指手势状态与变换机制（`applyTransform` / `fitToView` / `animateViewportTo` / `setZoom` / `clampZoom` / `applyZoomInput` / 双指手势）迁移到 `ViewportController`；编辑器通过存取器转发保持全部既有状态引用与调用点零改动，交互监听（与选区逻辑交织）仍留在编辑器内。`editor.ts` 进一步降至约 7,700 行。

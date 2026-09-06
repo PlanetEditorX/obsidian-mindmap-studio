@@ -70,7 +70,7 @@ test("selection class deltas update only changed nodes and preserve multi-select
 
 test("measured layout and render priority avoid repeated hot-path work", async () => {
   const [editorSource, collisionSource, renderSource, nodeTreeSource, nodeActionsSource, dragDropSource, bundleSource] = await Promise.all([
-    readFile(path.join(rootDir, "src/editor/editor.ts"), "utf8"),
+    (Promise.all([readFile(path.join(rootDir, "src/editor/editor.ts"), "utf8"), readFile(path.join(rootDir, "src/editor/node-edit-modal.ts"), "utf8"), readFile(path.join(rootDir, "src/editor/appearance-modal.ts"), "utf8"), readFile(path.join(rootDir, "src/editor/viewport-controller.ts"), "utf8"), readFile(path.join(rootDir, "src/editor/mind-map-node-renderer.ts"), "utf8")]).then((parts) => parts.join("\n"))),
     readFile(collisionModulePath, "utf8"),
     readFile(modulePath, "utf8"),
     readFile(path.join(rootDir, "src/core/node-tree.ts"), "utf8"),
@@ -125,7 +125,7 @@ test("measured layout and render priority avoid repeated hot-path work", async (
   assert.match(bundleSource, /canMoveNodes\(root, selectedIds, draggedId, targetId, existingIndex\)/);
 
   assert.match(editorSource, /private readonly mindMapNodeElements = new Map<string, HTMLElement>\(\)/);
-  assert.match(editorSource, /this\.mindMapNodeElements\.set\(node\.id, nodeEl\)/);
+  assert.match(editorSource, /(?:this|ctx)\.mindMapNodeElements\.set\(node\.id, nodeEl\)/);
   assert.match(editorSource, /for \(const \[id, element\] of this\.mindMapNodeElements\)/);
   assert.match(editorSource, /selectionClassDelta\(this\.appliedSelectionIds, this\.selectedIds\)/);
   assert.match(editorSource, /const nodeEls = this\.mindMapNodeElements\.values\(\)/);
@@ -166,7 +166,7 @@ test("spatial priority renders hierarchy focus, current viewport, adjacent viewp
 });
 
 test("editor construction defers whole-tree mind-map layout until the canvas mode actually renders", async () => {
-  const editorSource = await readFile(path.join(rootDir, "src/editor/editor.ts"), "utf8");
+  const editorSource = await (Promise.all([readFile(path.join(rootDir, "src/editor/editor.ts"), "utf8"), readFile(path.join(rootDir, "src/editor/node-edit-modal.ts"), "utf8"), readFile(path.join(rootDir, "src/editor/appearance-modal.ts"), "utf8"), readFile(path.join(rootDir, "src/editor/viewport-controller.ts"), "utf8"), readFile(path.join(rootDir, "src/editor/mind-map-node-renderer.ts"), "utf8")]).then((parts) => parts.join("\n")));
   const constructorStart = editorSource.indexOf("  constructor(app: App, host: HTMLElement");
   const constructorEnd = editorSource.indexOf(`\n  /**\n   * 执行“destroy”`, constructorStart);
   const constructorSource = editorSource.slice(constructorStart, constructorEnd);
@@ -180,7 +180,7 @@ test("editor construction defers whole-tree mind-map layout until the canvas mod
 
 test("article mode mounts a target-centered window, auto-warms in the background, and keeps manual edge expansion", async () => {
   const [editorSource, articleSource, cssSource, bundleSource] = await Promise.all([
-    readFile(path.join(rootDir, "src/editor/editor.ts"), "utf8"),
+    (Promise.all([readFile(path.join(rootDir, "src/editor/editor.ts"), "utf8"), readFile(path.join(rootDir, "src/editor/node-edit-modal.ts"), "utf8"), readFile(path.join(rootDir, "src/editor/appearance-modal.ts"), "utf8"), readFile(path.join(rootDir, "src/editor/viewport-controller.ts"), "utf8"), readFile(path.join(rootDir, "src/editor/mind-map-node-renderer.ts"), "utf8")]).then((parts) => parts.join("\n"))),
     readFile(path.join(rootDir, "src/editor/article-renderer.ts"), "utf8"),
     readFile(path.join(rootDir, "styles.css"), "utf8"),
     readFile(path.join(rootDir, "main.js"), "utf8")
@@ -230,7 +230,7 @@ test("article byte windows keep the target and independently cap both sides", as
 
 test("article semantic navigation mounts the requested real section before positioning", async () => {
   const [editorSource, cssSource] = await Promise.all([
-    readFile(path.join(rootDir, "src/editor/editor.ts"), "utf8"),
+    (Promise.all([readFile(path.join(rootDir, "src/editor/editor.ts"), "utf8"), readFile(path.join(rootDir, "src/editor/node-edit-modal.ts"), "utf8"), readFile(path.join(rootDir, "src/editor/appearance-modal.ts"), "utf8"), readFile(path.join(rootDir, "src/editor/viewport-controller.ts"), "utf8"), readFile(path.join(rootDir, "src/editor/mind-map-node-renderer.ts"), "utf8")]).then((parts) => parts.join("\n"))),
     readFile(path.join(rootDir, "styles.css"), "utf8")
   ]);
   const applyLocation = editorSource.match(/private applyResolvedReadingLocation\([\s\S]*?\n  \}/)?.[0] ?? "";
@@ -244,7 +244,7 @@ test("article semantic navigation mounts the requested real section before posit
 
 test("clicking a same-file directory chapter switches to article without reopening the file or racing the old anchor", async () => {
   const [editorSource, articleSource] = await Promise.all([
-    readFile(path.join(rootDir, "src/editor/editor.ts"), "utf8"),
+    (Promise.all([readFile(path.join(rootDir, "src/editor/editor.ts"), "utf8"), readFile(path.join(rootDir, "src/editor/node-edit-modal.ts"), "utf8"), readFile(path.join(rootDir, "src/editor/appearance-modal.ts"), "utf8"), readFile(path.join(rootDir, "src/editor/viewport-controller.ts"), "utf8"), readFile(path.join(rootDir, "src/editor/mind-map-node-renderer.ts"), "utf8")]).then((parts) => parts.join("\n"))),
     readFile(path.join(rootDir, "src/editor/article-renderer.ts"), "utf8")
   ]);
   const focusNode = editorSource.match(/private focusNode\(id: string, persistLocation = true\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
@@ -270,7 +270,7 @@ test("clicking a same-file directory chapter switches to article without reopeni
 
 test("article entry transition paints a bounded skeleton without delaying semantic navigation", async () => {
   const [editorSource, rendererSource, cssSource] = await Promise.all([
-    readFile(path.join(rootDir, "src/editor/editor.ts"), "utf8"),
+    (Promise.all([readFile(path.join(rootDir, "src/editor/editor.ts"), "utf8"), readFile(path.join(rootDir, "src/editor/node-edit-modal.ts"), "utf8"), readFile(path.join(rootDir, "src/editor/appearance-modal.ts"), "utf8"), readFile(path.join(rootDir, "src/editor/viewport-controller.ts"), "utf8"), readFile(path.join(rootDir, "src/editor/mind-map-node-renderer.ts"), "utf8")]).then((parts) => parts.join("\n"))),
     readFile(path.join(rootDir, "src/editor/article-renderer.ts"), "utf8"),
     readFile(path.join(rootDir, "styles.css"), "utf8")
   ]);
@@ -297,7 +297,7 @@ test("article entry transition paints a bounded skeleton without delaying semant
 
 test("article context gates the first paint and landing transitions are symmetric", async () => {
   const [editorSource, viewSource, mainSource, typesSource, cssSource] = await Promise.all([
-    readFile(path.join(rootDir, "src/editor/editor.ts"), "utf8"),
+    (Promise.all([readFile(path.join(rootDir, "src/editor/editor.ts"), "utf8"), readFile(path.join(rootDir, "src/editor/node-edit-modal.ts"), "utf8"), readFile(path.join(rootDir, "src/editor/appearance-modal.ts"), "utf8"), readFile(path.join(rootDir, "src/editor/viewport-controller.ts"), "utf8"), readFile(path.join(rootDir, "src/editor/mind-map-node-renderer.ts"), "utf8")]).then((parts) => parts.join("\n"))),
     readFile(path.join(rootDir, "src/view.ts"), "utf8"),
     readFile(path.join(rootDir, "src/main.ts"), "utf8"),
     readFile(path.join(rootDir, "src/editor/editor-types.ts"), "utf8"),
@@ -334,7 +334,7 @@ test("article context gates the first paint and landing transitions are symmetri
 
 test("continuous reading exposes a semantic parsing transition before the family context is ready", async () => {
   const [editorSource, cssSource] = await Promise.all([
-    readFile(path.join(rootDir, "src/editor/editor.ts"), "utf8"),
+    (Promise.all([readFile(path.join(rootDir, "src/editor/editor.ts"), "utf8"), readFile(path.join(rootDir, "src/editor/node-edit-modal.ts"), "utf8"), readFile(path.join(rootDir, "src/editor/appearance-modal.ts"), "utf8"), readFile(path.join(rootDir, "src/editor/viewport-controller.ts"), "utf8"), readFile(path.join(rootDir, "src/editor/mind-map-node-renderer.ts"), "utf8")]).then((parts) => parts.join("\n"))),
     readFile(path.join(rootDir, "styles.css"), "utf8")
   ]);
   const renderReadingStart = editorSource.indexOf("private renderReading(): void {");
@@ -386,7 +386,7 @@ test("debug mode records runtime operations and exposes a clipboard command", as
 });
 
 test("article semantic navigation is latest-wins and never captures the page shell as the root node", async () => {
-  const editorSource = await readFile(path.join(rootDir, "src/editor/editor.ts"), "utf8");
+  const editorSource = await (Promise.all([readFile(path.join(rootDir, "src/editor/editor.ts"), "utf8"), readFile(path.join(rootDir, "src/editor/node-edit-modal.ts"), "utf8"), readFile(path.join(rootDir, "src/editor/appearance-modal.ts"), "utf8"), readFile(path.join(rootDir, "src/editor/viewport-controller.ts"), "utf8"), readFile(path.join(rootDir, "src/editor/mind-map-node-renderer.ts"), "utf8")]).then((parts) => parts.join("\n")));
   const captureLocation = editorSource.match(/private captureCurrentLocation\([\s\S]*?\n  \}/)?.[0] ?? "";
   const beginRestore = editorSource.match(/private beginReadingLocationRestore\([\s\S]*?\n  \}/)?.[0] ?? "";
   const cancelRestore = editorSource.match(/private cancelReadingLocationRestore\([\s\S]*?\n  \}/)?.[0] ?? "";
@@ -407,7 +407,7 @@ test("article semantic navigation is latest-wins and never captures the page she
 
 test("article-context refreshes skip redundant current-page rebuilds", async () => {
   const [editorSource, viewSource] = await Promise.all([
-    readFile(path.join(rootDir, "src/editor/editor.ts"), "utf8"),
+    (Promise.all([readFile(path.join(rootDir, "src/editor/editor.ts"), "utf8"), readFile(path.join(rootDir, "src/editor/node-edit-modal.ts"), "utf8"), readFile(path.join(rootDir, "src/editor/appearance-modal.ts"), "utf8"), readFile(path.join(rootDir, "src/editor/viewport-controller.ts"), "utf8"), readFile(path.join(rootDir, "src/editor/mind-map-node-renderer.ts"), "utf8")]).then((parts) => parts.join("\n"))),
     readFile(path.join(rootDir, "src/view.ts"), "utf8")
   ]);
   assert.match(editorSource, /setOptions\(options: MindMapEditorOptions, articleContextOnly = false\)/);
@@ -418,7 +418,7 @@ test("article-context refreshes skip redundant current-page rebuilds", async () 
 
 test("article return paths preserve the parent mount node", async () => {
   const [editorSource, rendererSource, mainSource] = await Promise.all([
-    readFile(path.join(rootDir, "src/editor/editor.ts"), "utf8"),
+    (Promise.all([readFile(path.join(rootDir, "src/editor/editor.ts"), "utf8"), readFile(path.join(rootDir, "src/editor/node-edit-modal.ts"), "utf8"), readFile(path.join(rootDir, "src/editor/appearance-modal.ts"), "utf8"), readFile(path.join(rootDir, "src/editor/viewport-controller.ts"), "utf8"), readFile(path.join(rootDir, "src/editor/mind-map-node-renderer.ts"), "utf8")]).then((parts) => parts.join("\n"))),
     readFile(path.join(rootDir, "src/editor/article-renderer.ts"), "utf8"),
     readFile(path.join(rootDir, "src/main.ts"), "utf8")
   ]);
@@ -429,7 +429,7 @@ test("article return paths preserve the parent mount node", async () => {
 
 test("large page operations paint a semantic transition before blocking work", async () => {
   const [editorSource, cssSource] = await Promise.all([
-    readFile(path.join(rootDir, "src/editor/editor.ts"), "utf8"),
+    (Promise.all([readFile(path.join(rootDir, "src/editor/editor.ts"), "utf8"), readFile(path.join(rootDir, "src/editor/node-edit-modal.ts"), "utf8"), readFile(path.join(rootDir, "src/editor/appearance-modal.ts"), "utf8"), readFile(path.join(rootDir, "src/editor/viewport-controller.ts"), "utf8"), readFile(path.join(rootDir, "src/editor/mind-map-node-renderer.ts"), "utf8")]).then((parts) => parts.join("\n"))),
     readFile(path.join(rootDir, "styles.css"), "utf8")
   ]);
   const beginTransition = editorSource.match(/private async beginPageTransition\([\s\S]*?\n  \}/)?.[0] ?? "";
@@ -458,7 +458,7 @@ test("large page operations paint a semantic transition before blocking work", a
 });
 
 test("document snapshot cache carries a low-frequency sampled self-healing assertion", async () => {
-  const editorSource = await readFile(path.join(rootDir, "src/editor/editor.ts"), "utf8");
+  const editorSource = await (Promise.all([readFile(path.join(rootDir, "src/editor/editor.ts"), "utf8"), readFile(path.join(rootDir, "src/editor/node-edit-modal.ts"), "utf8"), readFile(path.join(rootDir, "src/editor/appearance-modal.ts"), "utf8"), readFile(path.join(rootDir, "src/editor/viewport-controller.ts"), "utf8"), readFile(path.join(rootDir, "src/editor/mind-map-node-renderer.ts"), "utf8")]).then((parts) => parts.join("\n")));
   assert.match(editorSource, /const SNAPSHOT_CACHE_ASSERTION_INTERVAL_MS = 10_000;/, "the sampled assertion must be interval-gated to bound serialization cost");
   assert.match(
     editorSource,

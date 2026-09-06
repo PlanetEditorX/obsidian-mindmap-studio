@@ -21,7 +21,7 @@ before(async () => {
   [settingsSource, mainSource, editorSource, modelSource, articleRendererSource, stylesSource, bundleSource] = await Promise.all([
     readFile("src/settings.ts", "utf8"),
     readFile("src/main.ts", "utf8"),
-    (Promise.all([readFile("src/editor/editor.ts", "utf8"), readFile("src/editor/node-edit-modal.ts", "utf8"), readFile("src/editor/appearance-modal.ts", "utf8"), readFile("src/editor/viewport-controller.ts", "utf8")]).then((parts) => parts.join("\n"))),
+    (Promise.all([readFile("src/editor/editor.ts", "utf8"), readFile("src/editor/node-edit-modal.ts", "utf8"), readFile("src/editor/appearance-modal.ts", "utf8"), readFile("src/editor/viewport-controller.ts", "utf8"), readFile("src/editor/mind-map-node-renderer.ts", "utf8")]).then((parts) => parts.join("\n"))),
     readFile("src/core/model.ts", "utf8"),
     readFile("src/editor/article-renderer.ts", "utf8"),
     readFile("styles.css", "utf8"),
@@ -103,7 +103,7 @@ test("node resize modifier is synchronized from live events and cannot swallow n
   assert.match(editorSource, /document\.addEventListener\("visibilitychange", clearResizeModifier\)/);
   const resizeHandle = editorSource.match(/const resizeHandle = nodeEl\.createDiv\([\s\S]*?resizeHandle\.addEventListener\("pointerdown"/)?.[0] ?? "";
   assert.match(resizeHandle, /resizeHandle\.addEventListener\("click", \(event\) => \{\s*if \(!event\.ctrlKey && !event\.metaKey\) return;/);
-  assert.match(resizeHandle, /resizeHandle\.addEventListener\("dblclick", \(event\) => \{\s*if \(this\.readOnly\) return;\s*if \(!event\.ctrlKey && !event\.metaKey\) return;/);
+  assert.match(resizeHandle, /resizeHandle\.addEventListener\("dblclick", \(event\) => \{\s*if \((?:this|ctx)\.readOnly\) return;\s*if \(!event\.ctrlKey && !event\.metaKey\) return;/);
 });
 
 test("branch appearance is a normalized global setting and appearance fallback", () => {

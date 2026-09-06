@@ -24,6 +24,7 @@ src/
 │   ├── node-edit-modal.ts      节点编辑弹窗（内容块/备注/链接/图标）
 │   ├── appearance-modal.ts     统一主题与外观弹窗及编号/阅读样式控件
 │   ├── viewport-controller.ts  导图画布缩放/平移状态与变换机制
+│   ├── mind-map-node-renderer.ts 导图节点 DOM 渲染（内容块/拖拽/菜单）
 │   ├── editor-types.ts         宿主服务契约
 │   ├── editor-modals.ts        编辑器弹窗
 │   ├── content-modals.ts       表格与代码弹窗
@@ -70,6 +71,7 @@ src/
 - `src/editor/editor-types.ts`：编辑器回调与运行参数契约，隔离插件服务和 UI 实现。
 - `src/core/latex.ts`：纯函数解析公式分隔符、恢复历史重复美元、判断行内/独立布局，并在渲染前把裸露中文标签转换为 MathJax 可识别的 `\text{...}`。
 - `src/editor/rich-text-dom.ts`：富文本运行段与 `contenteditable` DOM 的双向转换，以及 MathJax 渲染。公式先合并全部运行段再解析，因此分隔符跨颜色或加粗边界仍有效；查看态渲染公式，编辑态暂时显示源码，异步 MathJax 回调不得覆盖仍为 `contenteditable=true` 的活动编辑器。
+- `src/editor/mind-map-node-renderer.ts`：`renderMindMapNode(ctx, ...)` 负责单个导图节点的 DOM 构建、内容块渲染与拖拽/菜单/选择绑定；编辑器经 `MindMapNodeRendererContext` 注入状态读取器（可写字段用 get/set 闭包接回）与交互回调，DOM 输出与拆分前逐字节一致。
 - `src/editor/viewport-controller.ts`：导图画布视口控制器，持有缩放/平移/双指手势状态与变换、适应视图、动画机制；交互监听仍由编辑器注册（与选区逻辑交织），状态经编辑器存取器转发。
 - `src/editor/node-edit-modal.ts`：节点编辑弹窗（内容块编辑、备注、链接、图标、编号覆盖与图片操作），通过 `MindMapEditorCallbacks` 注入宿主能力；`NodeEditValues` 类型随模块导出。
 - `src/editor/appearance-modal.ts`：统一“主题与外观”弹窗，以及节点编辑弹窗与外观弹窗共用的文章编号控件（`createArticleNumberingControls`）和阅读样式控件（`createReadingStyleControls`）。

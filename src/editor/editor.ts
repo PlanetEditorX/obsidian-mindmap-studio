@@ -91,9 +91,10 @@ import {
 import { NodeEditModal } from "./node-edit-modal";
 import { AppearanceModal } from "./appearance-modal";
 import { ViewportController, type TouchGestureState } from "./viewport-controller";
+import { renderMindMapNode as renderMindMapNodeInto, type MindMapNodeRendererContext } from "./mind-map-node-renderer";
 import { parseClipboardContentBlocks, parseClipboardHtml, parseClipboardNodes } from "./clipboard-import";
 import { selectImageFile, uploadCurrentNodeImage } from "./node-image-actions";
-import { canMoveNodes, isRightChildZone, resolveDropPosition } from "./drag-drop";
+import { canMoveNodes, resolveDropPosition } from "./drag-drop";
 import { DocumentHistory } from "./history-manager";
 import { renderOutlineMode } from "./outline-renderer";
 import {
@@ -104,7 +105,6 @@ import {
 import { appendChild, deletionSelectionFallback, deleteNodes, insertSiblingAfter, setAllBranchesCollapsed, topLevelSelectedNodeIds } from "./node-actions";
 import { attachSelectionFormatToolbar, type SelectionFormatToolbarHandle } from "./selection-format-toolbar";
 import { selectionClassDelta } from "./selection-class-delta";
-import { clearImageFailureDetails, renderImageFailureDetails } from "./image-failure-view";
 import {
   applyAiMarkdownEdit,
   applyLocalTextReplace,
@@ -236,6 +236,7 @@ export class MindMapEditor {
   /** 仅由右键上下文设置；普通选择不会改变 AI 默认范围。 */
   private aiScopeNodeId: string | null = null;
   private readonly viewportController = new ViewportController();
+  private nodeRendererContext: MindMapNodeRendererContext | null = null;
 
   private get zoom(): number { return this.viewportController.zoom; }
   private set zoom(value: number) { this.viewportController.zoom = value; }
@@ -3744,403 +3745,126 @@ export class MindMapEditor {
   }
 
   /** 将一个已完成布局的导图节点挂载到画布，并绑定其内容、选择、拖放和尺寸交互。 */
-  private renderMindMapNode(
-    position: LayoutResult["nodes"][number],
-    appearance: MindMapAppearance,
-    branchColorMap: ReadonlyMap<string, string>
-  ): void {
-    const node = position.node;
-    const shape = node.style?.shape ?? this.options.defaultNodeShape;
-    const textAlign = node.style?.textAlign ?? appearance.nodeTextAlign ?? "center";
-    const classes = ["mmc-node", position.depth === 0 ? "is-root" : "", node.submap ? "is-submap-node" : "", `shape-${shape}`, `text-align-${textAlign}`].filter(Boolean).join(" ");
-    const nodeEl = this.nodesLayerEl.createDiv({ cls: classes });
-    nodeEl.dataset.nodeId = node.id;
-    this.mindMapNodeElements.set(node.id, nodeEl);
-    nodeEl.style.left = `${position.x}px`;
-    nodeEl.style.top = `${position.y}px`;
-    nodeEl.style.width = `${position.width}px`;
-    // Layout estimates are only provisional coordinates. Keep a small global
-    // floor so a brand-new empty node remains visible and editable, while
-    // still allowing rich content and collapsed code blocks to shrink to
-    // their real DOM height. User-defined minimum height continues to win.
-    nodeEl.style.minHeight = `${Math.max(36, node.style?.minHeight ?? 0)}px`;
-    nodeEl.style.setProperty("--mmc-node-text-align", textAlign);
-    nodeEl.draggable = position.depth > 0 && !this.readOnly;
-    if (this.selectedId === node.id || this.selectedIds.has(node.id)) nodeEl.addClass("is-selected");
-    if (this.selectedIds.size > 1 && this.selectedIds.has(node.id)) nodeEl.addClass("is-multi-selected");
-    if (this.searchQuery && nodeSearchText(node).includes(this.searchQuery)) nodeEl.addClass("is-search-match");
-    const isRoot = position.depth === 0;
-    const bold = node.style?.bold ?? appearance.bold ?? false;
-    const italic = node.style?.italic ?? appearance.italic ?? false;
-    const underline = node.style?.underline ?? appearance.underline ?? false;
-    if (bold) nodeEl.addClass("is-bold");
-    if (italic) nodeEl.addClass("is-italic");
-    if (underline) nodeEl.addClass("is-underlined");
-    const branchColor = branchColorMap.get(node.id);
-    if (node.style?.color) nodeEl.style.backgroundColor = node.style.color;
-    else if (isRoot && appearance.rootColor) nodeEl.style.backgroundColor = appearance.rootColor;
-    else if (!isRoot && branchColor && appearance.nodeVisualStyle === "branch") {
-      nodeEl.style.backgroundColor = `color-mix(in srgb, ${branchColor} 16%, ${appearance.nodeColor ?? "#ffffff"})`;
-    } else if (!isRoot && appearance.nodeColor) nodeEl.style.backgroundColor = appearance.nodeColor;
-    if (node.style?.textColor) nodeEl.style.color = node.style.textColor;
-    else if (isRoot && appearance.rootTextColor) nodeEl.style.color = appearance.rootTextColor;
-    else if (!isRoot && appearance.textColor) nodeEl.style.color = appearance.textColor;
-    if (node.style?.borderColor) nodeEl.style.borderColor = node.style.borderColor;
-    else if (!isRoot && branchColor && appearance.nodeVisualStyle === "branch") {
-      nodeEl.style.borderColor = `color-mix(in srgb, ${branchColor} 38%, transparent)`;
-    } else if (!isRoot && branchColor) nodeEl.style.borderColor = branchColor;
-    else if (!isRoot && appearance.nodeBorderColor) nodeEl.style.borderColor = appearance.nodeBorderColor;
-    nodeEl.style.borderWidth = `${node.style?.borderWidth ?? appearance.nodeBorderWidth ?? (isRoot ? 2 : 1)}px`;
+  private getNodeRendererContext(): MindMapNodeRendererContext {
 
-    const content = nodeEl.createDiv({ cls: "mmc-node-content" });
-    const blocks = nodeContentBlocks(node);
-    const hasTextBlock = blocks.some((block) => block.type === "text" && block.text.trim());
-    if (node.icon && !hasTextBlock) {
-      const meta = content.createDiv({ cls: "mmc-node-main mmc-node-meta-only" });
-      meta.createSpan({ cls: "mmc-node-icon", text: node.icon });
-    }
-    let prefixRendered = false;
-    for (const block of blocks) {
-      if (block.type === "image") {
-        const wrap = content.createDiv({ cls: `mmc-node-image-block image-layout-${block.layout ?? "block"}` });
-        wrap.addClass(`image-align-${block.align ?? "center"}`);
-        wrap.dataset.blockId = block.id;
-        const image = wrap.createEl("img", { cls: "mmc-node-image is-loading", attr: { alt: block.alt ?? (nodePlainText(node) || "图片") } });
-        if (block.width) image.style.width = `${block.width}px`;
-        if (block.height) image.style.height = `${block.height}px`;
-        const candidates = this.options.imageFailoverEnabled
-          ? imageSourceCandidates(block, this.options.imageFailoverUseLocalFallback, this.options.imageHostPriorityIds)
-          : imageSourceCandidates(block, false, this.options.imageHostPriorityIds).slice(0, 1);
-        let activeResolved: string | null = null;
-        let attemptToken = 0;
-        let attemptTimer: number | null = null;
-        const clearAttemptTimer = (): void => {
-          if (attemptTimer === null) return;
-          window.clearTimeout(attemptTimer);
-          this.imageLoadTimers.delete(attemptTimer);
-          attemptTimer = null;
-        };
-        const markRemoteFailure = (source: string): void => {
-          const remote = block.remoteSources?.find((item) => item.url === source);
-          if (!remote) return;
-          remote.lastFailureAt = new Date().toISOString();
-          remote.failureCount = Math.min(1000000, (remote.failureCount ?? 0) + 1);
-        };
-        const tryCandidate = (index: number): void => {
-          clearAttemptTimer();
-          const candidate = candidates[index];
-          attemptToken += 1;
-          const token = attemptToken;
-          if (!candidate) {
-            activeResolved = null;
-            image.removeAttribute("src");
-            image.removeClass("is-loading");
-            image.addClass("is-unresolved");
-            image.addClass("is-hidden");
-            renderImageFailureDetails(wrap, block, this.options.imageHostPriorityIds);
-            return;
-          }
-          const resolved = this.callbacks.resolveImage(candidate.source);
-          if (!resolved) {
-            markRemoteFailure(candidate.source);
-            tryCandidate(index + 1);
-            return;
-          }
-          const probe = new Image();
-          const fail = (): void => {
-            if (token !== attemptToken) return;
-            clearAttemptTimer();
-            markRemoteFailure(candidate.source);
-            if (this.options.imageFailoverEnabled) tryCandidate(index + 1);
-            else {
-              image.removeClass("is-loading");
-              image.addClass("is-unresolved");
-              image.addClass("is-hidden");
-              renderImageFailureDetails(wrap, block, this.options.imageHostPriorityIds);
-            }
-          };
-          probe.onload = () => {
-            if (token !== attemptToken || probe.naturalWidth <= 0) return;
-            clearAttemptTimer();
-            activeResolved = resolved;
-            image.src = resolved;
-            image.removeClass("is-loading");
-            image.removeClass("is-unresolved");
-            image.removeClass("is-hidden");
-            clearImageFailureDetails(wrap);
-            image.setAttr("title", index === 0 ? "点击放大图片" : `已自动切换到：${candidate.label}`);
-            const switched = candidate.source !== block.source;
-            const remote = block.remoteSources?.find((item) => item.url === candidate.source);
-            if (remote) remote.lastSuccessAt = new Date().toISOString();
-            if (!switched) return;
-            const previous = block.remoteSources?.find((item) => item.url === block.source);
-            block.source = candidate.source;
-            replaceNodeContentBlocks(node, blocks);
-            this.notifyDocumentChange("none");
-            this.markSaving();
-            const previousLabel = previous?.hostName || "当前图床";
-            new Notice(`图片地址失效，已从 ${previousLabel} 自动切换到 ${candidate.label}`, 6000);
-          };
-          probe.onerror = fail;
-          const timeoutMs = Math.max(2, Math.min(30, this.options.imageFailoverTimeoutSeconds)) * 1000;
-          attemptTimer = window.setTimeout(fail, timeoutMs);
-          this.imageLoadTimers.add(attemptTimer);
-          probe.src = resolved;
-        };
-        image.addEventListener("click", (event) => {
-          event.stopPropagation();
-          if (activeResolved) this.openImagePreviewWithSources(node.id, block.id);
-        });
-        image.addEventListener("contextmenu", (event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          this.selectNode(node.id);
-          this.openImageContextMenu(event, node.id, block.id);
-        });
-        tryCandidate(0);
-        this.bindContentBlockDragHandle(wrap, node.id, block.id);
-        continue;
-      }
-      if (block.type === "table") {
-        const shell = content.createDiv({ cls: "mmc-node-structured-block-shell" });
-        this.renderNodeTable(shell, node, block.table, block.id);
-        this.bindContentBlockDragHandle(shell, node.id, block.id);
-        continue;
-      }
-      if (block.type === "code") {
-        const shell = content.createDiv({ cls: "mmc-node-structured-block-shell" });
-        this.renderNodeCode(shell, node, block.code, block.id);
-        this.bindContentBlockDragHandle(shell, node.id, block.id);
-        continue;
-      }
-      if (!block.text.trim()) continue;
-      const main = content.createDiv({ cls: "mmc-node-main mmc-node-text-block" });
-      main.dataset.blockId = block.id;
-      if (!prefixRendered && node.icon) main.createSpan({ cls: "mmc-node-icon", text: node.icon });
-      const isSubmapTitle = Boolean(node.submap) && !prefixRendered;
-      prefixRendered = true;
-      const textEl = main.createDiv({ cls: `mmc-node-text${isSubmapTitle ? " is-submap-link" : ""}` });
-      textEl.dataset.blockId = block.id;
-      renderRichTextRuns(textEl, block.richText, block.text);
-      textEl.style.fontSize = `${node.style?.fontSize ?? appearance.fontSize ?? 14}px`;
-      if (isSubmapTitle) {
-        const indicator = textEl.createSpan({ cls: "mmc-submap-inline-indicator", attr: { "aria-hidden": "true" } });
-        setIcon(indicator, "arrow-up-right");
-      }
-      this.bindContentBlockDragHandle(main, node.id, block.id);
-    }
+    if (this.nodeRendererContext) return this.nodeRendererContext;
 
-    if (node.submap && !hasTextBlock) {
-      const submapIcon = nodeEl.createEl("button", {
-        cls: "mmc-submap-corner-link",
-        attr: {
-          "aria-label": `打开子导图：${node.submap.title ?? node.submap.path}`,
-          title: `打开子导图：${node.submap.title ?? node.submap.path}`
-        }
-      });
-      setIcon(submapIcon, "arrow-up-right");
-      submapIcon.addEventListener("click", (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        void this.navigateWithTransition(() => this.callbacks.onOpenMindMap(node.submap!.path));
-      });
-    }
+    const editor = this;
 
-    if (node.submap) {
-      nodeEl.setAttr("role", "link");
-      nodeEl.setAttr("tabindex", "0");
-      nodeEl.setAttr("aria-label", `打开子导图：${node.submap.title ?? node.submap.path}`);
-    }
+    this.nodeRendererContext = {
 
-    if (node.table && !blocks.some((block) => block.type === "table")) this.renderNodeTable(content, node, node.table);
-    if (node.code && !blocks.some((block) => block.type === "code")) this.renderNodeCode(content, node, node.code);
-    this.bindContentBlockAppendDropTarget(nodeEl, node.id);
-    if (node.question) this.renderQuestionSummary(content, node);
+      get aiScopeNodeId() { return editor.aiScopeNodeId; },
 
-    if (node.tags?.length) {
-      const tags = content.createDiv({ cls: "mmc-node-tags" });
-      node.tags.slice(0, 4).forEach((tag) => tags.createSpan({ cls: "mmc-node-tag", text: `#${tag}` }));
-    }
+      set aiScopeNodeId(value) { editor.aiScopeNodeId = value; },
 
-    if (node.children.length) {
-      const fold = nodeEl.createEl("button", { cls: "mmc-fold-button", attr: { "aria-label": node.collapsed ? "展开" : "收起" } });
-      fold.setText(node.collapsed ? `+${node.children.length}` : "−");
-      fold.addEventListener("click", (event) => {
-        event.stopPropagation();
-        this.selectNode(node.id);
-        this.toggleCollapse();
-      });
-    }
+      beginInlineEdit: (nodeId, blockId, protectInitialFocus) => editor.beginInlineEdit(nodeId, blockId, protectInitialFocus),
 
-    const link = this.getNodeLink(node);
-    if (link) {
-      const linkButton = nodeEl.createEl("button", { cls: "mmc-node-link", attr: { "aria-label": `打开 ${link}` } });
-      setIcon(linkButton, "external-link");
-      linkButton.addEventListener("click", (event) => {
-        event.stopPropagation();
-        void this.callbacks.onOpenLink(link);
-      });
-    }
+      bindContentBlockAppendDropTarget: (dropTarget, nodeId) => editor.bindContentBlockAppendDropTarget(dropTarget, nodeId),
 
-    {
-      const resizeHandle = nodeEl.createDiv({
-        cls: "mmc-node-resize-handle",
-        attr: { role: "separator", tabindex: "0", "aria-label": "拖动调整节点宽度和最小高度", title: "拖动调整节点大小；双击恢复自动大小" }
-      });
-      resizeHandle.setAttr("draggable", "false");
-      resizeHandle.addEventListener("click", (event) => {
-        if (!event.ctrlKey && !event.metaKey) return;
-        event.preventDefault();
-        event.stopPropagation();
-      });
-      resizeHandle.addEventListener("dblclick", (event) => {
-        if (this.readOnly) return;
-        if (!event.ctrlKey && !event.metaKey) return;
-        event.preventDefault();
-        event.stopPropagation();
-        this.mutateWithoutArticleContext(() => {
-          const next = { ...(node.style ?? {}), width: undefined, minHeight: undefined };
-          node.style = Object.values(next).some((value) => value !== undefined) ? next : undefined;
-        });
-      });
-      resizeHandle.addEventListener("pointerdown", (event) => {
-        if (this.readOnly) return;
-        if (event.button !== 0) return;
-        if (!event.ctrlKey && !event.metaKey) return;
-        event.preventDefault();
-        event.stopPropagation();
-        const startX = event.clientX;
-        const startY = event.clientY;
-        const startWidth = position.width;
-        const startHeight = position.height;
-        let previewWidth = startWidth;
-        let previewHeight = startHeight;
-        resizeHandle.setPointerCapture(event.pointerId);
-        nodeEl.addClass("is-resizing");
-        const move = (moveEvent: PointerEvent): void => {
-          const scale = Math.max(.1, this.zoom);
-          previewWidth = Math.min(900, Math.max(100, startWidth + (moveEvent.clientX - startX) / scale));
-          previewHeight = Math.min(600, Math.max(36, startHeight + (moveEvent.clientY - startY) / scale));
-          nodeEl.style.width = `${Math.round(previewWidth)}px`;
-          nodeEl.style.minHeight = `${Math.round(previewHeight)}px`;
-        };
-        const finish = (upEvent: PointerEvent): void => {
-          resizeHandle.removeEventListener("pointermove", move);
-          resizeHandle.removeEventListener("pointerup", finish);
-          resizeHandle.removeEventListener("pointercancel", finish);
-          if (resizeHandle.hasPointerCapture(upEvent.pointerId)) resizeHandle.releasePointerCapture(upEvent.pointerId);
-          nodeEl.removeClass("is-resizing");
-          this.mutateWithoutArticleContext(() => {
-            node.style = {
-              ...(node.style ?? {}),
-              width: Math.round(previewWidth),
-              minHeight: Math.round(previewHeight)
-            };
-          });
-        };
-        resizeHandle.addEventListener("pointermove", move);
-        resizeHandle.addEventListener("pointerup", finish);
-        resizeHandle.addEventListener("pointercancel", finish);
-      });
-    }
+      bindContentBlockDragHandle: (blockElement, nodeId, blockId) => editor.bindContentBlockDragHandle(blockElement, nodeId, blockId),
 
-    nodeEl.addEventListener("click", (event) => {
-      event.stopPropagation();
-      if (event.shiftKey) {
-        this.toggleNodeSelection(node.id);
-        return;
-      }
-      this.selectNode(node.id);
-      const submapPath = node.submap?.path;
-      if (submapPath) void this.navigateWithTransition(() => this.callbacks.onOpenMindMap(submapPath));
-    });
-    if (node.submap) {
-      nodeEl.addEventListener("keydown", (event) => {
-        if (event.key !== "Enter" && event.key !== " ") return;
-        event.preventDefault();
-        event.stopPropagation();
-        this.selectNode(node.id);
-        void this.navigateWithTransition(() => this.callbacks.onOpenMindMap(node.submap!.path));
-      });
-    }
-    nodeEl.addEventListener("dblclick", (event) => {
-      event.stopPropagation();
-      this.selectNode(node.id);
-      if (node.question && this.options.questionNodesEnabled) {
-        this.editQuestion(node);
-        return;
-      }
-      const submapPath = node.submap?.path;
-      if (submapPath) {
-        void this.navigateWithTransition(() => this.callbacks.onOpenMindMap(submapPath));
-      } else if (!this.readOnly) {
-        if (this.isNearNodeEdge(event, nodeEl)) this.editSelected();
-        else {
-          const target = event.target as HTMLElement;
-          const blockId = target.closest<HTMLElement>("[data-block-id]")?.dataset.blockId;
-          const block = blocks.find((item) => item.id === blockId);
-          if (block?.type === "text") this.beginInlineEdit(node.id, block.id);
-          else this.editSelected(blockId);
-        }
-      }
-    });
-    nodeEl.addEventListener("contextmenu", (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      this.aiScopeNodeId = node.id;
-      this.updateAiScopeButton();
-      this.selectNode(node.id);
-      const target = event.target as HTMLElement;
-      const blockId = target.closest<HTMLElement>("[data-block-id]")?.dataset.blockId;
-      this.openContextMenu(event, blockId);
-    });
-    nodeEl.addEventListener("dragstart", (event) => {
-      if (this.readOnly) { event.preventDefault(); return; }
-      this.draggingId = node.id;
-      event.dataTransfer?.setData("text/plain", node.id);
-      if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
-      const draggingIds = this.selectedIds.has(node.id) ? this.selectedIds : new Set([node.id]);
-      for (const draggingId of draggingIds) {
-        this.mindMapNodeElements.get(draggingId)?.addClass("is-dragging");
-      }
-    });
-    nodeEl.addEventListener("dragover", (event) => {
-      if (!this.canMoveNode(this.draggingId, node.id)) return;
-      event.preventDefault();
-      if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
-      const position = this.dropPositionForEvent(event, nodeEl, node.id);
-      this.dragDropPosition = position;
-      this.clearDropIndicators();
-      const indicator = position === "child" && isRightChildZone(event, nodeEl.getBoundingClientRect())
-        ? "is-drop-child-right"
-        : `is-drop-${position}`;
-      nodeEl.addClasses(["is-drop-target", indicator]);
-      this.showDropPreview(node.id, position);
-    });
-    nodeEl.addEventListener("dragleave", (event) => {
-      if (event.relatedTarget instanceof Node && nodeEl.contains(event.relatedTarget)) return;
-      nodeEl.removeClasses(["is-drop-target", "is-drop-before", "is-drop-child", "is-drop-child-right", "is-drop-after"]);
-      this.clearDropPreview();
-    });
-    nodeEl.addEventListener("drop", (event) => {
-      event.preventDefault();
-      const position = this.dragDropPosition ?? this.dropPositionForEvent(event, nodeEl, node.id);
-      this.clearDropIndicators();
-      this.clearDropPreview();
-      const draggedId = this.draggingId ?? event.dataTransfer?.getData("text/plain") ?? null;
-      if (draggedId) this.moveNode(draggedId, node.id, position);
-    });
-    nodeEl.addEventListener("dragend", () => {
-      this.draggingId = null;
-      this.dragDropPosition = null;
-      this.clearDropIndicators();
-      this.clearDropPreview();
-      for (const draggingNode of this.mindMapNodeElements.values()) draggingNode.removeClass("is-dragging");
-    });
-    this.resizeObserver?.observe(nodeEl);
+      callbacks: editor.callbacks,
+
+      canMoveNode: (draggedId, targetId) => editor.canMoveNode(draggedId, targetId),
+
+      clearDropIndicators: () => editor.clearDropIndicators(),
+
+      clearDropPreview: () => editor.clearDropPreview(),
+
+      get dragDropPosition() { return editor.dragDropPosition; },
+
+      set dragDropPosition(value) { editor.dragDropPosition = value; },
+
+      get draggingId() { return editor.draggingId; },
+
+      set draggingId(value) { editor.draggingId = value; },
+
+      dropPositionForEvent: (event, targetEl, targetId) => editor.dropPositionForEvent(event, targetEl, targetId),
+
+      editQuestion: (node) => editor.editQuestion(node),
+
+      editSelected: (initialBlockId) => editor.editSelected(initialBlockId),
+
+      getNodeLink: (node) => editor.getNodeLink(node),
+
+      imageLoadTimers: editor.imageLoadTimers,
+
+      isNearNodeEdge: (event, nodeEl) => editor.isNearNodeEdge(event, nodeEl),
+
+      markSaving: () => editor.markSaving(),
+
+      mindMapNodeElements: editor.mindMapNodeElements,
+
+      moveNode: (draggedId, targetId, position) => editor.moveNode(draggedId, targetId, position),
+
+      mutateWithoutArticleContext: (action, restoreLocation) => editor.mutateWithoutArticleContext(action, restoreLocation),
+
+      navigateWithTransition: (action, title, description) => editor.navigateWithTransition(action, title, description),
+
+      get nodesLayerEl() { return editor.nodesLayerEl; },
+
+      notifyDocumentChange: (articleContextImpact) => editor.notifyDocumentChange(articleContextImpact),
+
+      openContextMenu: (event, contextBlockId) => editor.openContextMenu(event, contextBlockId),
+
+      openImageContextMenu: (event, nodeId, blockId) => editor.openImageContextMenu(event, nodeId, blockId),
+
+      openImagePreviewWithSources: (nodeId, blockId) => editor.openImagePreviewWithSources(nodeId, blockId),
+
+      get options() { return editor.options; },
+
+      get readOnly() { return editor.readOnly; },
+
+      renderNodeCode: (content, node, codeData, blockId) => editor.renderNodeCode(content, node, codeData, blockId),
+
+      renderNodeTable: (content, node, tableData, blockId) => editor.renderNodeTable(content, node, tableData, blockId),
+
+      renderQuestionSummary: (content, node) => editor.renderQuestionSummary(content, node),
+
+      get resizeObserver() { return editor.resizeObserver; },
+
+      get searchQuery() { return editor.searchQuery; },
+
+      selectNode: (id) => editor.selectNode(id),
+
+      get selectedId() { return editor.selectedId; },
+
+      selectedIds: editor.selectedIds,
+
+      showDropPreview: (targetId, position) => editor.showDropPreview(targetId, position),
+
+      toggleCollapse: () => editor.toggleCollapse(),
+
+      toggleNodeSelection: (id) => editor.toggleNodeSelection(id),
+
+      updateAiScopeButton: () => editor.updateAiScopeButton(),
+
+      get zoom() { return editor.zoom; }
+
+    };
+
+    return this.nodeRendererContext;
+
   }
 
-  /** 使用当前布局坐标重新绘制全部连接线。 */
+
+
+  /** 渲染单个导图节点；DOM 构建与交互绑定在 mind-map-node-renderer 模块中实现。 */
+
+  private renderMindMapNode(
+
+    position: LayoutResult["nodes"][number],
+
+    appearance: MindMapAppearance,
+
+    branchColorMap: ReadonlyMap<string, string>
+
+  ): void {
+
+    renderMindMapNodeInto(this.getNodeRendererContext(), position, appearance, branchColorMap);
+
+  }
+
   private renderMindMapEdges(appearance: MindMapAppearance, branchColorMap: Map<string, string>): void {
     while (this.edgesSvg.firstChild) this.edgesSvg.removeChild(this.edgesSvg.firstChild);
     const maxDepth = Math.max(1, ...this.layout.nodes.map((position) => position.depth));

@@ -8,7 +8,7 @@ let mainSource;
 let articleRendererSource;
 
 before(async () => {
-  editorSource = await (Promise.all([readFile("src/editor/editor.ts", "utf8"), readFile("src/editor/node-edit-modal.ts", "utf8"), readFile("src/editor/appearance-modal.ts", "utf8"), readFile("src/editor/viewport-controller.ts", "utf8")]).then((parts) => parts.join("\n")));
+  editorSource = await (Promise.all([readFile("src/editor/editor.ts", "utf8"), readFile("src/editor/node-edit-modal.ts", "utf8"), readFile("src/editor/appearance-modal.ts", "utf8"), readFile("src/editor/viewport-controller.ts", "utf8"), readFile("src/editor/mind-map-node-renderer.ts", "utf8")]).then((parts) => parts.join("\n")));
   viewSource = await readFile("src/view.ts", "utf8");
   mainSource = await readFile("src/main.ts", "utf8");
   articleRendererSource = await readFile("src/editor/article-renderer.ts", "utf8");
@@ -225,7 +225,7 @@ test("article parent navigation preserves the parent mount node", async () => {
 test("parent returns use directory intent instead of article focus", async () => {
   const [typesSource, editorSource, viewSource, mainSource, rendererSource] = await Promise.all([
     readFile("src/editor/editor-types.ts", "utf8"),
-    (Promise.all([readFile("src/editor/editor.ts", "utf8"), readFile("src/editor/node-edit-modal.ts", "utf8"), readFile("src/editor/appearance-modal.ts", "utf8"), readFile("src/editor/viewport-controller.ts", "utf8")]).then((parts) => parts.join("\n"))),
+    (Promise.all([readFile("src/editor/editor.ts", "utf8"), readFile("src/editor/node-edit-modal.ts", "utf8"), readFile("src/editor/appearance-modal.ts", "utf8"), readFile("src/editor/viewport-controller.ts", "utf8"), readFile("src/editor/mind-map-node-renderer.ts", "utf8")]).then((parts) => parts.join("\n"))),
     readFile("src/view.ts", "utf8"),
     readFile("src/main.ts", "utf8"),
     readFile("src/editor/article-renderer.ts", "utf8")
@@ -253,7 +253,7 @@ test("parent returns use directory intent instead of article focus", async () =>
 
 test("directory return target is revealed without creating an article focus location", async () => {
   const [editorSource, rendererSource] = await Promise.all([
-    (Promise.all([readFile("src/editor/editor.ts", "utf8"), readFile("src/editor/node-edit-modal.ts", "utf8"), readFile("src/editor/appearance-modal.ts", "utf8"), readFile("src/editor/viewport-controller.ts", "utf8")]).then((parts) => parts.join("\n"))),
+    (Promise.all([readFile("src/editor/editor.ts", "utf8"), readFile("src/editor/node-edit-modal.ts", "utf8"), readFile("src/editor/appearance-modal.ts", "utf8"), readFile("src/editor/viewport-controller.ts", "utf8"), readFile("src/editor/mind-map-node-renderer.ts", "utf8")]).then((parts) => parts.join("\n"))),
     readFile("src/editor/article-renderer.ts", "utf8")
   ]);
   const showDirectory = editorSource.slice(
@@ -285,7 +285,7 @@ test("directory intent is consumed before the parent file first paint", async ()
 test("top-level article directories default to the directory on every file entry", async () => {
   const [viewSource, editorSource] = await Promise.all([
     readFile("src/view.ts", "utf8"),
-    (Promise.all([readFile("src/editor/editor.ts", "utf8"), readFile("src/editor/node-edit-modal.ts", "utf8"), readFile("src/editor/appearance-modal.ts", "utf8"), readFile("src/editor/viewport-controller.ts", "utf8")]).then((parts) => parts.join("\n")))
+    (Promise.all([readFile("src/editor/editor.ts", "utf8"), readFile("src/editor/node-edit-modal.ts", "utf8"), readFile("src/editor/appearance-modal.ts", "utf8"), readFile("src/editor/viewport-controller.ts", "utf8"), readFile("src/editor/mind-map-node-renderer.ts", "utf8")]).then((parts) => parts.join("\n")))
   ]);
   const getViewData = viewSource.slice(
     viewSource.indexOf("getViewData(): string"),
@@ -331,7 +331,7 @@ test("returning from article through a temporary mode restores the current seman
 
 test("read-only mode keeps the unified theme and reading-style panel editable", async () => {
   const [editorSource, settingsSource, mainSource, modalSource] = await Promise.all([
-    (Promise.all([readFile("src/editor/editor.ts", "utf8"), readFile("src/editor/node-edit-modal.ts", "utf8"), readFile("src/editor/appearance-modal.ts", "utf8"), readFile("src/editor/viewport-controller.ts", "utf8")]).then((parts) => parts.join("\n"))),
+    (Promise.all([readFile("src/editor/editor.ts", "utf8"), readFile("src/editor/node-edit-modal.ts", "utf8"), readFile("src/editor/appearance-modal.ts", "utf8"), readFile("src/editor/viewport-controller.ts", "utf8"), readFile("src/editor/mind-map-node-renderer.ts", "utf8")]).then((parts) => parts.join("\n"))),
     readFile("src/settings.ts", "utf8"),
     readFile("src/main.ts", "utf8"),
     readFile("src/editor/editor-modals.ts", "utf8")
@@ -375,7 +375,7 @@ test("missing child navigation is recovered from the parent's indexed submap mou
     readFile("src/search/global-search.ts", "utf8"),
     readFile("src/main.ts", "utf8"),
     readFile("src/view.ts", "utf8"),
-    (Promise.all([readFile("src/editor/editor.ts", "utf8"), readFile("src/editor/node-edit-modal.ts", "utf8"), readFile("src/editor/appearance-modal.ts", "utf8"), readFile("src/editor/viewport-controller.ts", "utf8")]).then((parts) => parts.join("\n"))),
+    (Promise.all([readFile("src/editor/editor.ts", "utf8"), readFile("src/editor/node-edit-modal.ts", "utf8"), readFile("src/editor/appearance-modal.ts", "utf8"), readFile("src/editor/viewport-controller.ts", "utf8"), readFile("src/editor/mind-map-node-renderer.ts", "utf8")]).then((parts) => parts.join("\n"))),
     readFile("main.js", "utf8")
   ]);
 

@@ -16,7 +16,7 @@ let viewSource;
 before(async () => {
   [modelSource, editorSource, outlineSource, articleSource, richEditorSource, mainSource, settingsSource, stylesSource, imageFailureSource, viewSource] = await Promise.all([
     readFile("src/core/model.ts", "utf8"),
-    (Promise.all([readFile("src/editor/editor.ts", "utf8"), readFile("src/editor/node-edit-modal.ts", "utf8"), readFile("src/editor/appearance-modal.ts", "utf8"), readFile("src/editor/viewport-controller.ts", "utf8")]).then((parts) => parts.join("\n"))),
+    (Promise.all([readFile("src/editor/editor.ts", "utf8"), readFile("src/editor/node-edit-modal.ts", "utf8"), readFile("src/editor/appearance-modal.ts", "utf8"), readFile("src/editor/viewport-controller.ts", "utf8"), readFile("src/editor/mind-map-node-renderer.ts", "utf8")]).then((parts) => parts.join("\n"))),
     readFile("src/editor/outline-renderer.ts", "utf8"),
     readFile("src/editor/article-renderer.ts", "utf8"),
     readFile("src/editor/node-rich-text-editor.ts", "utf8"),
@@ -157,7 +157,7 @@ test("failed images expose every source address in map, outline, article, and re
   assert.match(imageFailureSource, /imageFailureSources[\s\S]*imageSourceCandidates\(block, true, imageHostPriorityIds\)/);
   assert.match(imageFailureSource, /图片加载失败[\s\S]*复制地址/);
   assert.match(imageFailureSource, /loadImageWithFallback[\s\S]*renderImageFailureDetails[\s\S]*image\.onerror = attempt/);
-  assert.match(editorSource, /renderImageFailureDetails\(wrap, block, this\.options\.imageHostPriorityIds\)/);
+  assert.match(editorSource, /renderImageFailureDetails\(wrap, block, (?:this|ctx)\.options\.imageHostPriorityIds\)/);
   assert.doesNotMatch(editorSource.match(/if \(!candidate\) \{[\s\S]*?return;\n          \}/)?.[0] ?? "", /callbacks\.onChange|markSaving/);
   assert.match(outlineSource, /loadImageWithFallback\([\s\S]*figure/);
   assert.match(articleSource, /loadImageWithFallback\([\s\S]*shell/);

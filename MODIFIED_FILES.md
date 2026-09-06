@@ -1,5 +1,15 @@
 # Modified Files
 
+## 1.48.9 编辑器拆分第三批：导图节点渲染模块
+
+- `src/editor/mind-map-node-renderer.ts`（新增，469 行）：`renderMindMapNode(ctx, position, appearance, branchColorMap)` 与 `MindMapNodeRendererContext` 接口（41 个成员：可写字段 get/set 接回、可变读取字段 getter、交互回调箭头封装）。
+- `src/editor/editor.ts`：移除 `renderMindMapNode` 方法体（7,734 → 7,485 行），新增缓存化上下文构建器与单行委托；清理 2 项不再使用的导入。
+- 契约拼接列表加入新模块（11 个文件）；3 个渲染相关断言接受 `ctx.` 前缀。
+- `docs/ARCHITECTURE.md`、`docs/TESTING.md`、`docs/FUNCTION_REFERENCE.md`、`CHANGELOG.md`、`TEST_RESULTS.md`：同步说明。
+
+- 本轮测试安装包：`mindmap-studio-1.48.8-test-105752.zip`，SHA-256 `8f90952b70443e4a58f9ff1cf9e273b6ef8b49cfd0a56366c57a294f10c6e61a`；完整源码与 Codex 交接使用同一 `105752` 后缀（输出到仓库父目录 `D:\Downloads`）。
+
+## 1.48.8 编辑器拆分第二批：视口控制器
 ## 1.48.8 编辑器拆分第二批：视口控制器
 
 - `src/editor/viewport-controller.ts`（新增，约 190 行）：`ViewportController` 持有 zoom/panX/panY/双指手势/动画帧状态与 `applyTransform` / `fitToView` / `animateViewportTo` / `setZoom` / `clampZoom` / `applyZoomInput` / 双指手势机制；`TouchGestureState` / `ViewportLayoutBounds` 类型导出。
