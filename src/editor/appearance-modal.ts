@@ -91,9 +91,10 @@ function createReadingStyleControls(
     "minimal-page": "极简书页",
     magazine: "杂志网格",
     timeline: "垂直时间线",
-    editorial: "编辑部极简",
     glass: "暗色玻璃",
-    index: "书脊索引"
+    aurora: "极光列表",
+    ink: "墨韵书卷",
+    sunset: "落日暖橙"
   };
   tocStyle.createEl("option", {
     text: `跟随插件设置（当前：${tocStyleNames[globalDefaults.tocStyle]}）`,
@@ -106,9 +107,10 @@ function createReadingStyleControls(
     ["minimal-page", "极简书页"],
     ["magazine", "杂志网格"],
     ["timeline", "垂直时间线"],
-    ["editorial", "编辑部极简"],
     ["glass", "暗色玻璃"],
-    ["index", "书脊索引"]
+    ["aurora", "极光列表"],
+    ["ink", "墨韵书卷"],
+    ["sunset", "落日暖橙"]
   ] as const) {
     tocStyle.createEl("option", { text: name, attr: { value: id } });
   }

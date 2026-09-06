@@ -979,9 +979,10 @@ export default class MindMapStudioPlugin extends Plugin {
         || raw.articleTocStyle === "minimal-page"
         || raw.articleTocStyle === "magazine"
         || raw.articleTocStyle === "timeline"
-        || raw.articleTocStyle === "editorial"
         || raw.articleTocStyle === "glass"
-        || raw.articleTocStyle === "index"
+        || raw.articleTocStyle === "aurora"
+        || raw.articleTocStyle === "ink"
+        || raw.articleTocStyle === "sunset"
         ? raw.articleTocStyle
         : "card",
       showArticleMiniMap: raw.showArticleMiniMap !== false,

@@ -39,7 +39,7 @@ export type ArticleLeafNumberingStyle = "next-level" | "circled";
 /** Built-in reading-presentation presets shared by article and continuous-reading modes. */
 export type ArticleStylePresetId = "classic" | "book" | "modern" | "minimal";
 /** Directory presentation saved per document and shared by article-family views. */
-export type ArticleTocStyle = "card" | "plain" | "original" | "minimal-page" | "magazine" | "timeline" | "editorial" | "glass" | "index";
+export type ArticleTocStyle = "card" | "plain" | "original" | "minimal-page" | "magazine" | "timeline" | "glass" | "aurora" | "ink" | "sunset";
 /** Per-document reading-style overrides shared by article and continuous-reading modes. */
 export interface ArticleStyle {
   preset: ArticleStylePresetId;
@@ -1598,9 +1598,10 @@ function normalizeArticleStyle(input: Partial<ArticleStyle> | undefined): Articl
     || input.tocStyle === "minimal-page"
     || input.tocStyle === "magazine"
     || input.tocStyle === "timeline"
-    || input.tocStyle === "editorial"
     || input.tocStyle === "glass"
-    || input.tocStyle === "index"
+    || input.tocStyle === "aurora"
+    || input.tocStyle === "ink"
+    || input.tocStyle === "sunset"
     ? input.tocStyle
     : undefined;
   const fontSize = typeof input.fontSize === "number" ? Math.max(12, Math.min(24, input.fontSize)) : undefined;

@@ -975,9 +975,10 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
         .addOption("minimal-page", "极简书页")
         .addOption("magazine", "杂志网格")
         .addOption("timeline", "垂直时间线")
-        .addOption("editorial", "编辑部极简")
         .addOption("glass", "暗色玻璃")
-        .addOption("index", "书脊索引")
+        .addOption("aurora", "极光列表")
+        .addOption("ink", "墨韵书卷")
+        .addOption("sunset", "落日暖橙")
         .setValue(this.plugin.settings.articleTocStyle)
         .onChange(async (value) => {
           this.plugin.settings.articleTocStyle = value as ArticleTocStyle;

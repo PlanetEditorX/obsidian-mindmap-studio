@@ -1,5 +1,18 @@
 # Modified Files
 
+## 1.49.3 目录主题二次调整：删二改一加三
+
+- `src/core/model.ts`、`src/main.ts`：`ArticleTocStyle` 调整为十值（移除 editorial/index，新增 aurora/ink/sunset），规范化白名单同步，历史值自动回退。
+- `src/editor/article-renderer.ts`：移除书脊索引侧轨分支；杂志/暗色玻璃分组布局保留。
+- `styles.css`：移除 toc-editorial/toc-index 样式块；toc-glass 全部强调色改跟随 `--mms-article-accent`；去除杂志网格子条目“—”前缀；新增 toc-aurora/toc-ink/toc-sunset 三套样式。
+- `src/article/article-style.ts`：书籍预设目录样式 editorial → ink。
+- `src/settings.ts`、`src/editor/appearance-modal.ts`：目录样式下拉同步十项标签。
+- `tests/settings-layout.test.mjs`、`tests/reading-editor-contract.test.mjs`：契约同步（含玻璃跟随强调色断言与废弃值扫描）。
+- `CHANGELOG.md`、`TEST_RESULTS.md`：同步说明。
+
+- 本轮测试安装包：`mindmap-studio-1.49.2-test-668980.zip`，SHA-256 `ccf8ba56a4d528004cbc35f5c24b2479bfc3639c419e6e40931ac235ba6b692d`；完整源码与 Codex 交接使用同一 `668980` 后缀（输出到仓库父目录 `D:\Downloads`）。
+
+## 1.49.2 目录主题重整：保留 4 种重命名 + 新增 5 种设计移植
 - 本轮测试安装包：`mindmap-studio-1.49.1-test-552380.zip`，SHA-256 `cf1b6cb9ff0f6abf094b71a0039933405594f6071a118b6fddf358c62e78cf07`；完整源码与 Codex 交接使用同一 `552380` 后缀（输出到仓库父目录 D:\Downloads）。
 
 ## 1.49.2 目录主题重整：保留 4 种重命名 + 新增 5 种设计移植
