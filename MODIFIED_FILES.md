@@ -1,5 +1,7 @@
 # Modified Files
 
+- 本轮测试安装包：`mindmap-studio-1.48.7-test-722319.zip`，SHA-256 `9c0eff6ce82296470e8264a2e0694dec8250917a41d6a1d48b23a494edf3470c`；完整源码与 Codex 交接使用同一 `722319` 后缀（输出到仓库父目录 `D:\Downloads`）。
+
 ## 1.48.7 编辑器拆分第一批：节点编辑与外观弹窗独立模块
 
 - `src/editor/node-edit-modal.ts`（新增，618 行）：`NodeEditModal` 类与 `NodeEditValues` 类型，自包含内容块编辑、图片操作与编号覆盖界面。
