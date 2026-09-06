@@ -1,11 +1,21 @@
 # Modified Files
 
+## 1.48.12 契约加载收敛与热路径去重
+
+- `tests/helpers/editor-sources.mjs`（新增）：`loadEditorSources()` 统一编辑器核心源码（5 文件拼接）的契约加载清单。
+- 12 个契约测试文件与 `scripts/test.mjs`：内联拼接表达式全部替换为 `loadEditorSources()`（含 `article-numbering` 的 `new URL` 变体与 `ai` 的解构数组变体）。
+- `src/editor/editor.ts`：`restoreReadingLocation()` 局部复用 `readingLocationSections()`（3 次 → 1 次）；图片“更新上传”成功后合并重复的 `locateImageBlock()` 调用。
+- `CHANGELOG.md`、`TEST_RESULTS.md`：同步说明。
+
+## 1.48.11 修复文章懒加载视口跳变（禁用原生滚动锚定）
 ## 1.48.11 修复文章懒加载视口跳变（禁用原生滚动锚定）
 
 - `styles.css`：`.mms-article-view` 显式 `overflow-anchor: none`，禁用 Chromium 原生滚动锚定与懒加载手动补偿的双重叠加。
 - `tests/reading-editor-contract.test.mjs`：新增契约锁定该规则；补充 `stylesSource` 加载。
 
 - 本轮测试安装包：`mindmap-studio-1.48.10-test-917448.zip`，SHA-256 `ce1a8ac611e605ef1b47e8638ae4e9ab2c43f7faf750c140dd6e51858a3d0215`；完整源码与 Codex 交接使用同一 `917448` 后缀（输出到仓库父目录 `D:\Downloads`）。
+
+- 本轮测试安装包：`mindmap-studio-1.48.10-test-246457.zip`，SHA-256 `518561b5e57f6ab14cc5c3ad7b17d06b598183870a7dc5cd903fc7a28cf34621`；完整源码与 Codex 交接使用同一 `246457` 后缀（输出到仓库父目录 `D:\Downloads`）。
 
 ## 1.48.10 修复契约拼接的跨文件误报
 ## 1.48.10 修复契约拼接的跨文件误报

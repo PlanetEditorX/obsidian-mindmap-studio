@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { loadEditorSources } from "./helpers/editor-sources.mjs";
 import { readFile } from "node:fs/promises";
 import test, { after, before } from "node:test";
 import { loadTypeScriptModule } from "./compile-typescript.mjs";
@@ -11,7 +12,7 @@ let contentModalSource;
 before(async () => {
   const [loaded, editor, contentModal] = await Promise.all([
     loadTypeScriptModule("src/render/code-block.ts"),
-    (Promise.all([readFile("src/editor/editor.ts", "utf8"), readFile("src/editor/node-edit-modal.ts", "utf8"), readFile("src/editor/appearance-modal.ts", "utf8"), readFile("src/editor/viewport-controller.ts", "utf8"), readFile("src/editor/mind-map-node-renderer.ts", "utf8")]).then((parts) => parts.join("\n"))),
+    loadEditorSources(),
     readFile("src/editor/content-modals.ts", "utf8")
   ]);
   codeBlock = loaded.module;
@@ -285,7 +286,7 @@ test("shared renderer clears stale themes and augments Markdown-highlighted DOM"
 test("all four display modes use the same host callback and no pseudo-element line numbers remain", async () => {
   const [viewSource, editorSource, outlineSource, articleSource, styles] = await Promise.all([
     readFile("src/view.ts", "utf8"),
-    (Promise.all([readFile("src/editor/editor.ts", "utf8"), readFile("src/editor/node-edit-modal.ts", "utf8"), readFile("src/editor/appearance-modal.ts", "utf8"), readFile("src/editor/viewport-controller.ts", "utf8"), readFile("src/editor/mind-map-node-renderer.ts", "utf8")]).then((parts) => parts.join("\n"))),
+    loadEditorSources(),
     readFile("src/editor/outline-renderer.ts", "utf8"),
     readFile("src/editor/article-renderer.ts", "utf8"),
     readFile("styles.css", "utf8")

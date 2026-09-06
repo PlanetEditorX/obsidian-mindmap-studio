@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { loadEditorSources } from "./helpers/editor-sources.mjs";
 import { readFile } from "node:fs/promises";
 import { before, test } from "node:test";
 
@@ -16,7 +17,7 @@ let viewSource;
 before(async () => {
   [modelSource, editorSource, outlineSource, articleSource, richEditorSource, mainSource, settingsSource, stylesSource, imageFailureSource, viewSource] = await Promise.all([
     readFile("src/core/model.ts", "utf8"),
-    (Promise.all([readFile("src/editor/editor.ts", "utf8"), readFile("src/editor/node-edit-modal.ts", "utf8"), readFile("src/editor/appearance-modal.ts", "utf8"), readFile("src/editor/viewport-controller.ts", "utf8"), readFile("src/editor/mind-map-node-renderer.ts", "utf8")]).then((parts) => parts.join("\n"))),
+    loadEditorSources(),
     readFile("src/editor/outline-renderer.ts", "utf8"),
     readFile("src/editor/article-renderer.ts", "utf8"),
     readFile("src/editor/node-rich-text-editor.ts", "utf8"),

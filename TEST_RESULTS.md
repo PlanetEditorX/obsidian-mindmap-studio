@@ -1,7 +1,14 @@
 # Test Results
 
-版本：1.48.10（本轮修复将随工作流自动发布为 1.48.11）
+版本：1.48.11（本轮改动不触碰发布触发路径，版本随下次功能提交自动递增）
 
+## 1.48.12 契约加载收敛与热路径去重
+
+- 契约源码加载收敛到 `tests/helpers/editor-sources.mjs`（12 处内联表达式 → 1 处清单）；`restoreReadingLocation()` 去掉 3 次重复 sections 构建；“更新上传”合并重复块定位调用。
+- `npm run verify`（本机完整执行）：`test:unit` **404 / 404 通过**；`test:regression` 全部通过；`test:docs` 通过；`test:repo` 通过；production esbuild 通过。
+- 本轮不触及发布触发路径（`main.js` / `styles.css` / `manifest.json` / `package*.json` / `src/` 均未变更），不产生新版本。
+
+## 1.48.11 修复文章懒加载视口跳变
 ## 1.48.11 修复文章懒加载视口跳变
 
 - 根因：文章窗口懒加载的手动 scrollTop 补偿与 Chromium 原生滚动锚定叠加，用户滚轮取消恢复事务后双重补偿把视口推飞（调试日志：scrollTop 2425 → 8098，约两倍插入量，与上方插入内容量吻合）。

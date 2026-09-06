@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { loadEditorSources } from "./helpers/editor-sources.mjs";
 import { after, before, test } from "node:test";
 import { readFile } from "node:fs/promises";
 import { loadTypeScriptModule, loadTypeScriptModules } from "./compile-typescript.mjs";
@@ -401,7 +402,7 @@ test("AI integration exposes toolbar, shortcut, page scope and node scope contra
   const [settingsSource, mainSource, editorSource, viewSource, modalSource, editSource, editorModalsSource, stylesSource] = await Promise.all([
     readFile("src/settings.ts", "utf8"),
     readFile("src/main.ts", "utf8"),
-    readFile("src/editor/editor.ts", "utf8"),
+    loadEditorSources(),
     readFile("src/view.ts", "utf8"),
     readFile("src/ai/modal.ts", "utf8"),
     readFile("src/ai/edit.ts", "utf8"),

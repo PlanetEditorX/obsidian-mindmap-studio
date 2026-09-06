@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { loadEditorSources } from "./helpers/editor-sources.mjs";
 import { readFile } from "node:fs/promises";
 import { after, before, test } from "node:test";
 import { loadTypeScriptModules } from "./compile-typescript.mjs";
@@ -26,7 +27,7 @@ before(async () => {
   [mainSource, articleRendererSource, editorSource] = await Promise.all([
     readFile(new URL("../src/main.ts", import.meta.url), "utf8"),
     readFile(new URL("../src/editor/article-renderer.ts", import.meta.url), "utf8"),
-    (Promise.all([readFile(new URL("../src/editor/editor.ts", import.meta.url), "utf8"), readFile(new URL("../src/editor/node-edit-modal.ts", import.meta.url), "utf8"), readFile(new URL("../src/editor/appearance-modal.ts", import.meta.url), "utf8"), readFile(new URL("../src/editor/viewport-controller.ts", import.meta.url), "utf8"), readFile(new URL("../src/editor/mind-map-node-renderer.ts", import.meta.url), "utf8")]).then((parts) => parts.join("\n")))
+    loadEditorSources()
   ]);
   model = loadedModel.module;
   const modesCleanup = cleanup;

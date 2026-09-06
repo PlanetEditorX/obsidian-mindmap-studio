@@ -1083,13 +1083,14 @@ export class MindMapEditor {
    * 由视图层在模式同步完成后打开该文件。每次调用都会使旧重试失效，确保最后一次导航独占滚动位置。
    */
   private restoreReadingLocation(mode: DisplayMode, location: ReadingLocation | null | undefined): ResolvedReadingLocation | null {
-    const resolved = resolveReadingLocation(location, this.readingLocationSections(), this.options.currentFilePath);
+    const sections = this.readingLocationSections();
+    const resolved = resolveReadingLocation(location, sections, this.options.currentFilePath);
     if (!resolved) return null;
     if (mode !== "reading" && resolved.filePath !== this.options.currentFilePath) {
       this.cancelReadingLocationRestore();
       return resolved;
     }
-    const targetSection = this.readingLocationSections().find((section) => section.filePath === resolved.filePath);
+    const targetSection = sections.find((section) => section.filePath === resolved.filePath);
     const collapsedAncestors = targetSection
       ? findAncestors(targetSection.document.root, resolved.nodeId).filter((node) => node.collapsed)
       : [];
@@ -1105,7 +1106,7 @@ export class MindMapEditor {
       this.selectedIds.add(resolved.nodeId);
     }
     const normalizedLocation = createReadingLocation(
-      this.readingLocationSections(),
+      sections,
       resolved.filePath,
       resolved.nodeId,
       resolved.nodeRatio,
@@ -6228,13 +6229,13 @@ export class MindMapEditor {
         new Notice(`上传失败：${batch.failures.map((item) => `${item.hostName}：${item.error}`).join("；") || "未知错误"}`, 7000);
         return true;
       }
-      if (!this.locateImageBlock(nodeId, blockId)) {
+      const merged = this.locateImageBlock(nodeId, blockId);
+      if (!merged) {
         new Notice("图片已在此期间被移除");
         return false;
       }
       const uploadedAt = new Date().toISOString();
       this.history.captureSnapshot(previousSnapshot);
-      const merged = this.locateImageBlock(nodeId, blockId)!;
       const existing = new Map((merged.block.remoteSources ?? []).map((item) => [item.hostId, item]));
       batch.successes.forEach((item) => existing.set(item.hostId, {
         hostId: item.hostId,

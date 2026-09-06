@@ -13113,13 +13113,14 @@ var MindMapEditor = class {
    * 由视图层在模式同步完成后打开该文件。每次调用都会使旧重试失效，确保最后一次导航独占滚动位置。
    */
   restoreReadingLocation(mode, location) {
-    const resolved = resolveReadingLocation(location, this.readingLocationSections(), this.options.currentFilePath);
+    const sections = this.readingLocationSections();
+    const resolved = resolveReadingLocation(location, sections, this.options.currentFilePath);
     if (!resolved) return null;
     if (mode !== "reading" && resolved.filePath !== this.options.currentFilePath) {
       this.cancelReadingLocationRestore();
       return resolved;
     }
-    const targetSection = this.readingLocationSections().find((section) => section.filePath === resolved.filePath);
+    const targetSection = sections.find((section) => section.filePath === resolved.filePath);
     const collapsedAncestors = targetSection ? findAncestors(targetSection.document.root, resolved.nodeId).filter((node) => node.collapsed) : [];
     if (collapsedAncestors.length) {
       collapsedAncestors.forEach((node) => {
@@ -13134,7 +13135,7 @@ var MindMapEditor = class {
       this.selectedIds.add(resolved.nodeId);
     }
     const normalizedLocation = createReadingLocation(
-      this.readingLocationSections(),
+      sections,
       resolved.filePath,
       resolved.nodeId,
       resolved.nodeRatio,
@@ -17918,13 +17919,13 @@ var MindMapEditor = class {
         new import_obsidian14.Notice(`\u4E0A\u4F20\u5931\u8D25\uFF1A${batch.failures.map((item) => `${item.hostName}\uFF1A${item.error}`).join("\uFF1B") || "\u672A\u77E5\u9519\u8BEF"}`, 7e3);
         return true;
       }
-      if (!this.locateImageBlock(nodeId, blockId)) {
+      const merged = this.locateImageBlock(nodeId, blockId);
+      if (!merged) {
         new import_obsidian14.Notice("\u56FE\u7247\u5DF2\u5728\u6B64\u671F\u95F4\u88AB\u79FB\u9664");
         return false;
       }
       const uploadedAt = (/* @__PURE__ */ new Date()).toISOString();
       this.history.captureSnapshot(previousSnapshot);
-      const merged = this.locateImageBlock(nodeId, blockId);
       const existing = new Map(((_a2 = merged.block.remoteSources) != null ? _a2 : []).map((item) => [item.hostId, item]));
       batch.successes.forEach((item) => existing.set(item.hostId, {
         hostId: item.hostId,

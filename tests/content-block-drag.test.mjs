@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { loadEditorSources } from "./helpers/editor-sources.mjs";
 import { readFile } from "node:fs/promises";
 import test, { after, before } from "node:test";
 import { loadTypeScriptModules } from "./compile-typescript.mjs";
@@ -17,7 +18,7 @@ before(async () => {
       ["src/core/node-tree.ts", "src/core/model.ts"],
       "src/core/model.ts"
     ),
-    (Promise.all([readFile("src/editor/editor.ts", "utf8"), readFile("src/editor/node-edit-modal.ts", "utf8"), readFile("src/editor/appearance-modal.ts", "utf8"), readFile("src/editor/viewport-controller.ts", "utf8"), readFile("src/editor/mind-map-node-renderer.ts", "utf8")]).then((parts) => parts.join("\n"))),
+    loadEditorSources(),
     readFile("src/editor/article-renderer.ts", "utf8"),
     readFile("src/editor/node-rich-text-editor.ts", "utf8"),
     readFile("styles.css", "utf8"),
