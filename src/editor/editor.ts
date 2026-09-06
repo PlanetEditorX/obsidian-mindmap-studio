@@ -3864,7 +3864,7 @@ export class MindMapEditor {
     renderMindMapNodeInto(this.getNodeRendererContext(), position, appearance, branchColorMap);
 
   }
-
+  /** 使用当前布局坐标重新绘制全部连接线。 */
   private renderMindMapEdges(appearance: MindMapAppearance, branchColorMap: Map<string, string>): void {
     while (this.edgesSvg.firstChild) this.edgesSvg.removeChild(this.edgesSvg.firstChild);
     const maxDepth = Math.max(1, ...this.layout.nodes.map((position) => position.depth));

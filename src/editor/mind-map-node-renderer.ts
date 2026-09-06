@@ -23,6 +23,9 @@ import type { LayoutResult } from "../render/layout";
 import type { ArticleContextChangeImpact, MindMapEditorCallbacks, MindMapEditorOptions } from "./editor-types";
 import type { ReadingLocation } from "../article/reading-location";
 
+/**
+ * 节点渲染上下文：编辑器注入的状态读取器（可写字段经 get/set 闭包接回）、交互回调与画布元素。
+ */
 export interface MindMapNodeRendererContext {
   /** 右键 AI 作用域节点；拖拽与右键交互会写回。 */
   aiScopeNodeId: string | null;

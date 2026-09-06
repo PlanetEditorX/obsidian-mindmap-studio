@@ -5496,7 +5496,7 @@ private renderMindMapNode( position: LayoutResult["nodes"][number], appearance: 
 
 源码：`src/editor/editor.ts:3868`
 
-参见源码中的实现和调用位置。
+使用当前布局坐标重新绘制全部连接线。
 
 ```ts
 private renderMindMapEdges(appearance: MindMapAppearance, branchColorMap: Map<string, string>): void
@@ -7116,9 +7116,9 @@ export function loadImageWithFallback( image: HTMLImageElement, container: HTMLE
 
 ### 接口 `MindMapNodeRendererContext`
 
-源码：`src/editor/mind-map-node-renderer.ts:26`
+源码：`src/editor/mind-map-node-renderer.ts:29`
 
-参见源码中的实现和调用位置。
+节点渲染上下文：编辑器注入的状态读取器（可写字段经 get/set 闭包接回）、交互回调与画布元素。
 
 ```ts
 export interface MindMapNodeRendererContext
@@ -7126,7 +7126,7 @@ export interface MindMapNodeRendererContext
 
 ### 函数 `renderMindMapNode`
 
-源码：`src/editor/mind-map-node-renderer.ts:74`
+源码：`src/editor/mind-map-node-renderer.ts:77`
 
 渲染单个导图节点及其全部内容块与交互绑定；状态经 `ctx` 读写编辑器。
 

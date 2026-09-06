@@ -1408,7 +1408,7 @@ const command = "example";
   assert.match(handleKeydownSource, /if \(mod && findKey && !event\.shiftKey\) \{[\s\S]*?event\.preventDefault\(\);[\s\S]*?event\.stopPropagation\(\);[\s\S]*?this\.openSearch\(\)/);
   assert.match(mainSource, /activeView instanceof MindMapStudioView[\s\S]*isPlainFindShortcut\(event\)[\s\S]*openMapFamilySearchFromShortcut\(\)/, "Ctrl/Cmd+F must be captured at the window level when a mind-map view is active");
   assert.match(handleKeydownSource, /if \(mod && key === "a"\) \{[\s\S]*?event\.preventDefault\(\);[\s\S]*?event\.stopPropagation\(\);[\s\S]*?this\.selectAllNodesExceptRoot\(\)/, "Ctrl/Cmd+A must select mind-map nodes instead of page text");
-  assert.match(editorSource, /private selectAllNodesExceptRoot\(\): void \{[\s\S]*?this\.nodeTreeNodes\(\)[\s\S]*?node\.id !== this\.document\.root\.id[\s\S]*?this\.selectedIds\.add\(id\)/, "select all must reuse the node-tree index while including all descendants and excluding the root node");
+  assert.match(editorSource, /private selectAllNodesExceptRoot\(\): void \{[\s\S]*?this\.nodeTreeNodes\(\)[\s\S]*?node\.id !== this\.document\.root\.id[\s\S]*?(?:this|ctx)\.selectedIds\.add\(id\)/, "select all must reuse the node-tree index while including all descendants and excluding the root node");
   assert.match(editorSource, /搜索当前导图及全部子导图（Ctrl\/Cmd\+F）/);
   assert.match(editorSource, /"全局搜索所有导图"/);
   assert.doesNotMatch(editorSource, /markWrappedArticleParagraph/);
@@ -1424,7 +1424,11 @@ const command = "example";
   assert.match(editorSource, /deletionSelectionFallback\(this\.document\.root, \[selected\.id\], this\.currentNodeTreeIndex\(\)\)/, "deleting a node must prefer a surviving sibling as the selection fallback");
   assert.match(editorSource, /addToolbarButton\("import-export", "arrow-left-right", "导入与导出"/, "the unified import/export action must use a bidirectional transfer icon");
   assert.doesNotMatch(editorSource, /addToolbarButton\("json"|addToolbarButton\("export-document"|addToolbarButton\("export-svg"/, "legacy export buttons must be merged into one action");
-  assert.doesNotMatch(editorSource, /wrap\.addEventListener\("dblclick"[\s\S]*editSelected\(blockId\)/, "table double-clicks must not route through the node editor");
+  const tableDblclickStart = editorSource.indexOf('wrap.addEventListener("dblclick"');
+  if (tableDblclickStart >= 0) {
+    const tableDblclickBody = editorSource.slice(tableDblclickStart, editorSource.indexOf("});", tableDblclickStart));
+    assert.doesNotMatch(tableDblclickBody, /editSelected\(/, "table double-clicks must not route through the node editor");
+  }
   assert.match(outlineRendererSource, /options\.renderCode/);
   assert.match(outlineRendererSource, /options\.openImagePreview\(node\.id, block\.id\)/, "outline image preview must open through the editor's source-managed preview");
   assert.match(outlineRendererSource, /additionalText/);
@@ -1455,7 +1459,7 @@ const command = "example";
   assert.match(editorSource, /edgeMinWidthInput = edgeMinWidthLabel\.createEl\("input", \{ type: "number", attr: \{ min: "0\.25", max: "4", step: "0\.05" \} \}\)/, "appearance modal must accept one-decimal tapered endpoints without browser validation errors");
   assert.match(editorSource, /element\.offsetHeight/, "collision layout must use the browser-rendered node height");
   assert.match(editorSource, /applyMeasuredMindMapLayout/);
-  assert.match(editorSource, /this\.resizeObserver\?\.observe\(nodeEl\)/, "table and image size changes must trigger a measured reflow");
+  assert.match(editorSource, /(?:this|ctx)\.resizeObserver\?\.observe\(nodeEl\)/, "table and image size changes must trigger a measured reflow");
   assert.match(editorSource, /this\.renderMindMapEdges\(appearance, branchColorMap\)/, "measured reflow must redraw connector paths");
   const viewSource = await readFile("src/view.ts", "utf8");
   assert.match(viewSource, /exportArticleFamily/);
@@ -1491,7 +1495,7 @@ const command = "example";
   assert.match(editorModalSource, /图片来源：/);
   assert.match(editorModalSource, /sourceButton\.addClass\("is-active"\)/);
   assert.match(editorModalSource, /加载失败/);
-  assert.match(editorSource, /private openImagePreviewWithSources\(nodeId: string, blockId: string\)[\s\S]*imageSourceCandidates\(block, true, this\.options\.imageHostPriorityIds\)/, "mind-map image preview must receive every stored mirror in host priority order");
+  assert.match(editorSource, /private openImagePreviewWithSources\(nodeId: string, blockId: string\)[\s\S]*imageSourceCandidates\(block, true, (?:this|ctx)\.options\.imageHostPriorityIds\)/, "mind-map image preview must receive every stored mirror in host priority order");
   assert.match(editorSource, /applyImagePreviewSourceChange\(nodeId: string, blockId: string, change: ImagePreviewSourceChange\)/, "preview source changes must flow through the editor's unified history chain");
   assert.match(articleRendererSource, /options\.openImagePreview\(node\.id, block\.id\)/, "article image preview must open through the editor's source-managed preview");
   assert.match(outlineRendererSource, /options\.openImagePreview\(node\.id, block\.id\)/, "outline image preview must open through the editor's source-managed preview");
@@ -1509,14 +1513,14 @@ const command = "example";
   assert.match(editorSource, /toggleReadOnly/);
   const toggleReadOnlySource = editorSource.match(/toggleReadOnly\(\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
   assert.match(toggleReadOnlySource, /applyReadOnlyStateToRenderedContent\(\)/, "read-only toggles must update the existing DOM instead of rebuilding content");
-  assert.match(toggleReadOnlySource, /currentMode === "reading" && !this\.readOnly[\s\S]*this\.render\(\)[\s\S]*return;[\s\S]*this\.applyReadOnlyStateToRenderedContent\(\)/, "only the deliberate continuous-book to article-editor transition may render; ordinary toggles must use the fast path");
+  assert.match(toggleReadOnlySource, /currentMode === "reading" && !(?:this|ctx)\.readOnly[\s\S]*this\.render\(\)[\s\S]*return;[\s\S]*this\.applyReadOnlyStateToRenderedContent\(\)/, "only the deliberate continuous-book to article-editor transition may render; ordinary toggles must use the fast path");
   assert.match(editorSource, /private applyReadOnlyStateToRenderedContent\(\): void[\s\S]*data-mms-inline-editable[\s\S]*nodeEl\.draggable/, "the fast path must update inline editors and node dragging in place");
-  assert.match(editorSource, /dataset\.mmsInlineEditable = "true"[\s\S]*if \(this\.readOnly\) return;[\s\S]*attachSelectionFormatToolbar/, "inline editor listeners must remain available when read-only content becomes editable");
+  assert.match(editorSource, /dataset\.mmsInlineEditable = "true"[\s\S]*if \((?:this|ctx)\.readOnly\) return;[\s\S]*attachSelectionFormatToolbar/, "inline editor listeners must remain available when read-only content becomes editable");
   const makeInlineEditableSource = editorSource.match(/private makeInlineEditable\(element: HTMLElement, node: MindMapNode, placeholder: string, blockId\?: string\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
   const activateInlineEditableSource = editorSource.match(/private activateInlineEditable\(element: HTMLElement, focus = true, protectInitialFocus = false\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
   assert.match(
     makeInlineEditableSource,
-    /element\.addEventListener\("pointerdown"[\s\S]*this\.claimInlineEditInteraction\(node\.id, blockId\)[\s\S]*this\.activateInlineEditableFromPointer\(element\)/,
+    /element\.addEventListener\("pointerdown"[\s\S]*this\.claimInlineEditInteraction\(node\.id, blockId\)[\s\S]*(?:this|ctx)\.activateInlineEditableFromPointer\(element\)/,
     "pointer activation must claim navigation ownership before entering the shared inline-edit path"
   );
   assert.match(
@@ -1526,7 +1530,7 @@ const command = "example";
   );
   assert.match(
     editorSource,
-    /private activateInlineEditableFromPointer\(element: HTMLElement\): void[\s\S]*this\.activateInlineEditable\(element, false\)[\s\S]*this\.currentMode === "article"[\s\S]*mmsProtectInitialFocus[\s\S]*120/,
+    /private activateInlineEditableFromPointer\(element: HTMLElement\): void[\s\S]*(?:this|ctx)\.activateInlineEditable\(element, false\)[\s\S]*this\.currentMode === "article"[\s\S]*mmsProtectInitialFocus[\s\S]*120/,
     "pointer editing must protect only the initial host focus handoff without forcing the caret to the end"
   );
   assert.match(
@@ -1544,18 +1548,18 @@ const command = "example";
     /private activateInlineEditable\(element: HTMLElement, focus = true, protectInitialFocus = false\): void/,
     "keyboard quick-edit must activate the same click-to-edit line path"
   );
-  assert.match(editorSource, /currentMode === "reading" && !this\.readOnly[\s\S]*this\.currentMode = "article"[\s\S]*通读模式已切换为文章编辑模式/, "editing from a continuous reading book must enter a writable article view");
-  assert.match(editorSource, /const preserveReadingEdit = previousMode === "reading" && resolved === "article" && !this\.readOnly/, "global article-mode propagation must preserve the current map's requested edit state");
+  assert.match(editorSource, /currentMode === "reading" && !(?:this|ctx)\.readOnly[\s\S]*this\.currentMode = "article"[\s\S]*通读模式已切换为文章编辑模式/, "editing from a continuous reading book must enter a writable article view");
+  assert.match(editorSource, /const preserveReadingEdit = previousMode === "reading" && resolved === "article" && !(?:this|ctx)\.readOnly/, "global article-mode propagation must preserve the current map's requested edit state");
   assert.match(editorSource, /已进入阅读模式/, "the non-editing state must be presented as reading mode");
-  assert.match(editorSource, /if \(this\.readOnly\) this\.articleEl\.querySelectorAll\("\.is-selected, \.is-multi-selected"\)/, "switching to reading mode must clear residual article selection frames");
+  assert.match(editorSource, /if \((?:this|ctx)\.readOnly\) this\.articleEl\.querySelectorAll\("\.is-selected, \.is-multi-selected"\)/, "switching to reading mode must clear residual article selection frames");
   assert.match(editorSource, /element\.addClass\("is-inline-editing"\)[\s\S]*element\.removeClass\("is-inline-editing"\)/, "only the focused inline text should enter the editing-frame state");
-  assert.match(editorSource, /isNearNodeEdge\(event, nodeEl\)\) this\.editSelected\(\);[\s\S]*target\.closest<HTMLElement>\("\[data-block-id\]"\)[\s\S]*this\.beginInlineEdit\(node\.id, block\.id\)/, "double-clicks must edit the exact text block while edge clicks open the full editor");
-  assert.match(editorSource, /window\.requestAnimationFrame\(\(\) => this\.beginInlineEdit\(node\.id, undefined, true\)\)/, "new Tab or Enter nodes must defer and protect inline-editor focus");
+  assert.match(editorSource, /isNearNodeEdge\(event, nodeEl\)\) (?:this|ctx)\.editSelected\(\);[\s\S]*target\.closest<HTMLElement>\("\[data-block-id\]"\)[\s\S]*(?:this|ctx)\.beginInlineEdit\(node\.id, block\.id\)/, "double-clicks must edit the exact text block while edge clicks open the full editor");
+  assert.match(editorSource, /window\.requestAnimationFrame\(\(\) => (?:this|ctx)\.beginInlineEdit\(node\.id, undefined, true\)\)/, "new Tab or Enter nodes must defer and protect inline-editor focus");
   assert.match(editorSource, /if \(initialFocusProtected\) \{[\s\S]*window\.requestAnimationFrame\(focusAtEnd\)/, "new-node inline editing must recover from first-frame focus loss");
   assert.match(editorSource, /textEl\.dataset\.blockId = block\.id/, "rendered text blocks must expose stable hit targets");
   assert.match(editorSource, /wrap\.dataset\.blockId = block\.id/, "rendered image blocks must open their matching full editor card");
   assert.match(editorSource, /private editSelected\(initialBlockId\?: string\): void/, "full node editing must accept an initially targeted content block");
-  assert.match(editorSource, /private editSelectedFromContextMenu\(\): void[\s\S]*this\.editSelectedArticleContent\(true\)[\s\S]*this\.editSelected\(\)/, "context-menu focus protection must stay isolated from the full-editor API");
+  assert.match(editorSource, /private editSelectedFromContextMenu\(\): void[\s\S]*(?:this|ctx)\.editSelectedArticleContent\(true\)[\s\S]*(?:this|ctx)\.editSelected\(\)/, "context-menu focus protection must stay isolated from the full-editor API");
   assert.doesNotMatch(editorSource, /private editSelected\(initialBlockId\?: string, protectInitialFocus/, "full node editing must not absorb article context-menu focus state");
   assert.match(editorSource, /private isNearNodeEdge\(event: MouseEvent, nodeEl: HTMLElement\): boolean[\s\S]*return distance <= 18/, "the node edge hit area must be explicit and stable");
   assert.match(
@@ -1584,8 +1588,8 @@ const command = "example";
   assert.match(editorSource, /renderOutline/);
   assert.match(editorSource, /renderArticle/);
   assert.match(articleRendererSource, /!options\.readOnly && options\.selectedId === info\.node\.id[\s\S]*section\.addEventListener\("click", \(\) => \{[\s\S]*if \(!options\.isReadOnly\(\)\) options\.selectNode/, "article node selection must follow the live lock state without adding reading-mode frames");
-  assert.match(editorSource, /this\.currentMode === "article"[\s\S]*resolveArticleEntryReadOnly\(this\.options\.articleEntryLockMode, documentReadOnly, this\.options\.articleLastReadOnly\)[\s\S]*this\.currentMode === "reading" \|\| this\.currentMode === "question-bank"/, "article initialization must use its configured entry policy while reading and question-bank always lock");
-  assert.match(editorSource, /if \(mode === "article" && mode !== previousMode\) \{[\s\S]*resolveArticleEntryReadOnly\([\s\S]*this\.options\.articleLastReadOnly[\s\S]*else if \(\(mode === "reading" \|\| mode === "question-bank"\) && mode !== previousMode\) \{[\s\S]*this\.readOnly = true/, "article entry must honor its own remembered state while reading and question-bank always lock");
+  assert.match(editorSource, /this\.currentMode === "article"[\s\S]*resolveArticleEntryReadOnly\((?:this|ctx)\.options\.articleEntryLockMode, documentReadOnly, (?:this|ctx)\.options\.articleLastReadOnly\)[\s\S]*this\.currentMode === "reading" \|\| this\.currentMode === "question-bank"/, "article initialization must use its configured entry policy while reading and question-bank always lock");
+  assert.match(editorSource, /if \(mode === "article" && mode !== previousMode\) \{[\s\S]*resolveArticleEntryReadOnly\([\s\S]*(?:this|ctx)\.options\.articleLastReadOnly[\s\S]*else if \(\(mode === "reading" \|\| mode === "question-bank"\) && mode !== previousMode\) \{[\s\S]*(?:this|ctx)\.readOnly = true/, "article entry must honor its own remembered state while reading and question-bank always lock");
   assert.match(editorSource, /if \(this\.currentMode === "article"\) this\.rememberArticleReadOnlyState\(\);[\s\S]*else if \(this\.currentMode !== "reading"\) this\.persistReadOnlyState\(\)/, "article lock changes must persist separately from the document read-only preference");
   assert.match(editorSource, /private renderReading\(\)/);
   assert.match(editorSource, /mms-reading-progress/, "continuous reading must display live progress without a second persisted state");
@@ -1616,7 +1620,7 @@ const command = "example";
   assert.match(editorSource, /initializeMindMapViewport\(50\)/);
   assert.match(editorSource, /private persistMindMapViewportState\(\): void/);
   assert.match(editorSource, /if \(mode === "mindmap"\) \{[\s\S]*mindMapViewportInitialized[\s\S]*applyTransform/, "returning to mind-map mode must restore the existing transform instead of always fitting");
-  assert.doesNotMatch(editorSource, /mode === "mindmap" && this\.options\.autoFitOnOpen\) window\.setTimeout\(\(\) => this\.fitToView\(\), 20\);/, "mode switching must not unconditionally fit the canvas");
+  assert.doesNotMatch(editorSource, /mode === "mindmap" && (?:this|ctx)\.options\.autoFitOnOpen\) window\.setTimeout\(\(\) => this\.fitToView\(\), 20\);/, "mode switching must not unconditionally fit the canvas");
   assert.match(editorSource, /articleNumberingLevel/);
   assert.match(articleRendererSource, /is-compact-number/, "punctuation-style numbering must not insert an artificial visual gap");
   assert.match(mainSource, /const numberedIndexes = new Map<number, number>\(\)/, "cross-file TOC numbering must count each manual level independently");
@@ -1638,7 +1642,7 @@ const command = "example";
   assert.match(editorSource, /44 \+ emphasis \* 18/, "the nearest minimap marker must expand while neighbours taper");
   assert.match(editorSource, /depth === highestDepth \? 8 : 4/, "the highest and next-highest levels must use different marker thicknesses");
   assert.match(editorSource, /rootRect\.right - pageRect\.right < requiredGutter/, "the minimap must hide when the page has no safe right gutter");
-  assert.match(editorSource, /this\.resizeObserver\.observe\(this\.rootEl\)/, "opening a sidebar must re-evaluate minimap visibility without rebuilding the article");
+  assert.match(editorSource, /(?:this|ctx)\.resizeObserver\.observe\(this\.rootEl\)/, "opening a sidebar must re-evaluate minimap visibility without rebuilding the article");
   assert.match(editorSource, /private scrollToArticleMiniMapTarget\(target: HTMLElement\): void/, "minimap markers must calculate an exact container scroll target");
   assert.match(editorSource, /this\.articleEl\.scrollTo\(\{ top: Math\.max\(0, top\), behavior: "smooth" \}\)/, "minimap markers must jump to the exact article position");
   assert.doesNotMatch(editorSource, /textEl\.setAttr\("aria-label", isSubmapTitle/, "mind-map node text must not expose its full content as a hover tooltip");
@@ -1666,7 +1670,7 @@ const command = "example";
   assert.match(editorSource, /"aria-label": label, "data-tooltip": label/, "minimap markers must expose an accessible chapter label and an above-marker tooltip");
   assert.match(editorSource, /getBoundingClientRect\(\)\.top \+ 2/, "the active marker must align to the exact article top instead of the next section");
   assert.match(editorSource, /case "submap": \{[\s\S]*this\.currentMode !== "mindmap"[\s\S]*const target = selected \?\? this\.document\.root[\s\S]*return Boolean\(target\.submap\) \|\| canEdit/, "submap toolbar actions must remain hidden outside mind-map mode and expose read-only navigation only for existing submaps");
-  assert.match(editorSource, /this\.document\.view\?\.articleTocMaxDepth, this\.options\.articleTocMaxDepth/, "article and reading modes must resolve the document TOC override before the plugin setting");
+  assert.match(editorSource, /this\.document\.view\?\.articleTocMaxDepth, (?:this|ctx)\.options\.articleTocMaxDepth/, "article and reading modes must resolve the document TOC override before the plugin setting");
   assert.match(editorSource, /同时用于文章模式目录和通读模式全书目录/, "the current-map TOC-depth control must describe both affected modes");
   assert.match(mainSource, /let hasSubmaps = false[\s\S]*hasSubmaps = true[\s\S]*showToc: isTopLevel && hasSubmaps && tocEntries\.length > 0/, "article directory availability must retain the original child-map requirement");
   assert.match(articleRendererSource, /const directoryOnly = options\.showArticleToc[\s\S]*articleLandingMode !== "article"[\s\S]*renderDirectory\(page, options\);[\s\S]*return;/, "article mode must switch between a pure directory page and the original article body");
@@ -1711,7 +1715,7 @@ const command = "example";
   assert.match(aiModalSource, /new Component\(\)/, "AI modal must create a Component lifecycle host for Markdown rendering");
   assert.match(aiModalSource, /this\.markdownRenderComponent\.load\(\)/, "AI modal must load its Markdown lifecycle component before rendering");
   assert.match(aiModalSource, /MarkdownRenderer\.render\([\s\S]*this\.markdownRenderComponent[\s\S]*\)/, "AI answers must render through a Component rather than the Modal instance");
-  assert.doesNotMatch(aiModalSource, /MarkdownRenderer\.render\([\s\S]*this\.options\.sourcePath,\s*this\s*\)/, "AI modal must not pass Modal as the MarkdownRenderer Component");
+  assert.doesNotMatch(aiModalSource, /MarkdownRenderer\.render\([\s\S]*(?:this|ctx)\.options\.sourcePath,\s*this\s*\)/, "AI modal must not pass Modal as the MarkdownRenderer Component");
   assert.match(aiModalSource, /onClose\(\): void[\s\S]*markdownRenderComponent\?\.unload\(\)/, "AI modal must unload Markdown child components on close");
   assert.match(settingsSource, /\.setLimits\(0\.5, 8, 0\.05\)[\s\S]*\.setLimits\(0\.25, 4, 0\.05\)/, "global edge-width controls must use the same precision as the appearance modal");
   assert.match(settingsSource, /autoUploadEnabled/);
@@ -1747,8 +1751,8 @@ const command = "example";
   assert.match(mainSource, /twoFingerGestureAction: raw\.twoFingerGestureAction === "pan" \? "pan" : "zoom"/, "stored two-finger gesture settings must be normalized");
   assert.match(articleRendererSource, /articleTocDepth\(item\) <= options\.articleTocMaxDepth/, "article TOC rendering should honor the configured maximum depth");
   assert.match(articleRendererSource, /if \(firstTextBlock\?\.text\.trim\(\)\)/, "table-only article nodes must not create an empty body placeholder");
-  assert.match(editorSource, /position-\$\{this\.options\.readingProgressPosition\}/);
-  assert.match(editorSource, /progress \* 100 >= this\.options\.returnToTopVisibility[\s\S]*?button\.toggleClass\("is-visible", visible\)/, "return-to-top visibility must honor the configured percentage threshold");
+  assert.match(editorSource, /position-\$\{(?:this|ctx)\.options\.readingProgressPosition\}/);
+  assert.match(editorSource, /progress \* 100 >= (?:this|ctx)\.options\.returnToTopVisibility[\s\S]*?button\.toggleClass\("is-visible", visible\)/, "return-to-top visibility must honor the configured percentage threshold");
 
   assert.match(settingsSource, /visibleModes/);
   assert.match(settingsSource, /当前全局显示模式/);
@@ -1839,7 +1843,7 @@ const command = "example";
   assert.match(cssSource, /\.mmc-node\.is-root\s*\{[\s\S]*padding-right:\s*13px/, "root-node text must remain horizontally centered");
   assert.match(cssSource, /\.mmc-node-resize-handle\s*\{[\s\S]*right:\s*-7px[\s\S]*bottom:\s*-7px/, "resize control must remain anchored at the lower-right corner");
   assert.match(cssSource, /white-space:\s*pre-wrap/);
-  assert.match(editorSource, /if \(node\.submap\)[\s\S]*navigateWithTransition\(\(\) => this\.callbacks\.onOpenMindMap\(node\.submap!\.path\)\)/, "the whole linked node must open its child map through the shared page transition");
+  assert.match(editorSource, /if \(node\.submap\)[\s\S]*navigateWithTransition\(\(\) => (?:this|ctx)\.callbacks\.onOpenMindMap\(node\.submap!\.path\)\)/, "the whole linked node must open its child map through the shared page transition");
   assert.match(editorSource, /拖动调整节点宽度和最小高度/);
   assert.match(editorSource, /this\.rootEl\.addClass\("mmc-ctrl-resize"\)/, "Ctrl/Cmd resize styling must be applied after the editor root exists");
   assert.match(settingsSource, /collapse-all/, "toolbar settings must include the expand/collapse-all control");
@@ -1854,8 +1858,8 @@ const command = "example";
   assert.match(editorSource, /dropPositionForEvent/);
   assert.match(editorSource, /moveNodeRelative/);
   assert.match(editorSource, /const index = this\.currentNodeTreeIndex\(\)[\s\S]*indexedHasAnyAncestor\(index, node\.id, requestedIds\)[\s\S]*moveOrder/, "multi-selection drag should move top-level selected nodes as one ordered batch");
-  assert.match(editorSource, /topLevelSelectedNodeIds\(this\.document\.root, this\.selectedIds, this\.currentNodeTreeIndex\(\)\)[\s\S]*this\.nodeTreeNodes\(\)[\s\S]*nodes: sourceNodes/, "multi-selection copy must serialize the ordered top-level branches");
-  assert.match(editorSource, /this\.selectedIds\.size > 1 && batch\.length/, "multi-selection deletion must use the same top-level branches as copying");
+  assert.match(editorSource, /topLevelSelectedNodeIds\(this\.document\.root, (?:this|ctx)\.selectedIds, this\.currentNodeTreeIndex\(\)\)[\s\S]*this\.nodeTreeNodes\(\)[\s\S]*nodes: sourceNodes/, "multi-selection copy must serialize the ordered top-level branches");
+  assert.match(editorSource, /(?:this|ctx)\.selectedIds\.size > 1 && batch\.length/, "multi-selection deletion must use the same top-level branches as copying");
   assert.match(editorSource, /parseClipboardNodes\(text\)[\s\S]*selected\.children\.push\(\.\.\.clones\)/, "multi-selection paste must append every copied branch");
   assert.match(editorSource, /setAllBranchesCollapsed\(clone, true, true\)/, "pasted branches must be collapsed by default");
   assert.match(clipboardImportSource, /export function parseClipboardNodes/, "clipboard imports must recognize multi-node payloads");

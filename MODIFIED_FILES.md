@@ -1,5 +1,16 @@
 # Modified Files
 
+## 1.48.10 修复契约拼接的跨文件误报
+
+- `scripts/test.mjs`：表格双击契约改为限定处理器体内检查；24 处引用已迁移成员的断言统一接受 `this.` / `ctx.` 前缀。
+- `tests/settings-layout.test.mjs`、`tests/incremental-render.test.mjs`、`tests/image-layout.test.mjs`：同类 `ctx.` 前缀适配。
+- `src/editor/editor.ts`：补回 `renderMindMapEdges` JSDoc。
+- `src/editor/mind-map-node-renderer.ts`：`MindMapNodeRendererContext` 补充接口 JSDoc。
+- `CHANGELOG.md`、`TEST_RESULTS.md`：同步说明。
+
+- 本轮测试安装包：`mindmap-studio-1.48.9-test-625169.zip`，SHA-256 `6cbe1a4c055d2ceb867d465631a5da831b88d78eff11e110f530b821739338d4`；完整源码与 Codex 交接使用同一 `625169` 后缀（输出到仓库父目录 `D:\Downloads`）。
+
+## 1.48.9 编辑器拆分第三批：导图节点渲染模块
 ## 1.48.9 编辑器拆分第三批：导图节点渲染模块
 
 - `src/editor/mind-map-node-renderer.ts`（新增，469 行）：`renderMindMapNode(ctx, position, appearance, branchColorMap)` 与 `MindMapNodeRendererContext` 接口（41 个成员：可写字段 get/set 接回、可变读取字段 getter、交互回调箭头封装）。

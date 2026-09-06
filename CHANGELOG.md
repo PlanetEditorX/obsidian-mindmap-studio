@@ -1,5 +1,12 @@
 # 更新记录
 
+## 1.48.10
+
+- 修复综合回归在 CI 上因契约拼接引入的跨文件误报：`doesNotMatch(/wrap.addEventListener("dblclick")[\s\S]*editSelected(blockId)/)` 在拼接源码上会把节点渲染模块中合法的 `editSelected(blockId)`（拖拽菜单“编辑当前块”）误判为“表格双击路由到节点编辑器”回归。契约改为限定在表格双击处理器体内检查 `editSelected(`，保持原意且与源码拼接免疫。
+- 综合回归与单测中引用已迁移到渲染/视口模块的成员（`resizeObserver`、`renderNodeTable`、`beginInlineEdit` 等 24 处）统一接受 `this.` / `ctx.` 两种前缀。
+- 补回批量搬移时被吞掉的 `renderMindMapEdges` JSDoc，并为 `MindMapNodeRendererContext` 补充接口说明。
+
+## 1.48.9
 ## 1.48.9
 
 - 编辑器拆分第三批（节点渲染）：新增 `src/editor/mind-map-node-renderer.ts`（469 行），`renderMindMapNode` 及其内容块渲染、拖拽绑定、上下文菜单与选择行为迁移为 `renderMindMapNode(ctx, ...)` 纯渲染函数；编辑器经 `MindMapNodeRendererContext` 注入状态读取器（`options`/`readOnly`/`selectedId` 等用 getter 保持实时，`draggingId`/`dragDropPosition`/`aiScopeNodeId` 三个可写字段用 get/set 闭包接回）与交互回调。`editor.ts` 降至 7,485 行。

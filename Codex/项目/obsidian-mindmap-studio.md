@@ -4,7 +4,10 @@
 - 版本基线：1.48.0（package.json / manifest.json / versions.json / package-lock.json 已同步）。
 - 仓库规则：见根目录 `AGENTS.md`；每轮代码交付三份 ZIP（源码 / 安装 / Codex 交接）共用同一六位后缀；验证入口 `npm run verify`。
 
-## 当前状态（1.48.9 待发布 / 线上 1.48.8）
+## 当前状态（1.48.10 待发布 / 线上 1.48.9）
+
+- 本轮修复 CI 抓到的契约拼接跨文件误报：表格双击 `doesNotMatch` 契约限定在处理器体内检查；24 处引用已迁移成员的断言统一接受 `this.` / `ctx.` 前缀；补回两处缺失 JSDoc。
+- 经验教训：多文件拼接的契约中，`doesNotMatch(/A[\s\S]*B/)` 类跨标记模式天然脆弱，新增此类契约时必须限定作用域；引用已迁移成员的断言一律写 `(?:this|ctx).` 前缀。
 
 - 本轮完成编辑器拆分第三批（节点渲染）：`renderMindMapNode` 迁移为 `mind-map-node-renderer.ts`（469 行）纯渲染函数，经 `MindMapNodeRendererContext`（41 成员：get/set 接回可写拖拽状态、getter 实时读取、回调箭头封装）接入编辑器。`editor.ts` 7,734 → 7,485 行。DOM 输出与拆分前一致。
 - 拆分剩余批次：题目系统流程、行内编辑深化。核心大方法（buildUi 402 行、beginInlineEdit 325 行）与实例状态耦合极深，后续批次收益递减，建议按需推进。
@@ -66,6 +69,8 @@
 - 后缀 `801804`：完整源码 `obsidian-mindmap-studio-1.48.7-801804.zip`、安装包 `mindmap-studio-1.48.7-test-801804.zip`（SHA-256 `c9df7db36437d6edf92f66e33bed15a505a13a4571947de5162e1bfac368a4a0`）、交接 `Codex-1.48.7-handoff-801804.zip`。
 
 - 后缀 `105752`：完整源码 `obsidian-mindmap-studio-1.48.8-105752.zip`、安装包 `mindmap-studio-1.48.8-test-105752.zip`（SHA-256 `8f90952b70443e4a58f9ff1cf9e273b6ef8b49cfd0a56366c57a294f10c6e61a`）、交接 `Codex-1.48.8-handoff-105752.zip`。
+
+- 后缀 `625169`：完整源码 `obsidian-mindmap-studio-1.48.9-625169.zip`、安装包 `mindmap-studio-1.48.9-test-625169.zip`（SHA-256 `6cbe1a4c055d2ceb867d465631a5da831b88d78eff11e110f530b821739338d4`）、交接 `Codex-1.48.9-handoff-625169.zip`。
 
 ## 最近交付包（历史）（历史）（历史）（历史）（历史）
 
