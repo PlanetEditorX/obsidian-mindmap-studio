@@ -4586,6 +4586,28 @@ mjx-container.mms-node-math:not(.is-display),
   font-size: .9em;
 }
 
+.mms-question-card {
+  margin: 18px 0;
+  padding: 14px 16px;
+  border: 1px solid var(--background-modifier-border);
+  border-left: 3px solid var(--interactive-accent);
+  border-radius: 6px;
+  background: var(--background-secondary);
+}
+
+.mms-question-card .mms-article-paragraph,
+.mms-question-card .mms-article-leaf-text,
+.mms-question-card .mms-article-note {
+  text-indent: 0;
+}
+
+.mms-question-card .mms-question-panel {
+  margin: 12px 0 0 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+}
+
 .mms-article-note {
   padding: 10px 14px;
   color: var(--text-muted);

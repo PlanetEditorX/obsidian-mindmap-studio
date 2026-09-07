@@ -266,6 +266,7 @@ mindmap-studio/
 - [图片识图、OCR 与截图](docs/IMAGE_RECOGNITION_SCREENSHOT.zh-CN.md)
 - [架构说明](docs/ARCHITECTURE.md)
 - [数据模型](docs/DATA_MODEL.md)
+- [题库构建指南](docs/QUESTION_BANK.zh-CN.md)
 - [特殊功能实现](docs/SPECIAL_FEATURES.md)
 - [四模式阅读进度同步](docs/READING_PROGRESS_SYNC.zh-CN.md)
 - [开发指南](docs/DEVELOPMENT.md)

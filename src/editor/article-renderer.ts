@@ -310,8 +310,9 @@ function renderArticleNodeSection(
 
   const blocks = articleNodeContentBlocks(info.node, options);
   const firstTextBlock = blocks.find((block): block is MindMapTextContentBlock => block.type === "text");
+  const contentContainer = info.node.question ? section.createDiv({ cls: "mms-question-card" }) : section;
   if (firstTextBlock?.text.trim()) {
-    const blockShell = createArticleContentBlock(section, firstTextBlock.id);
+    const blockShell = createArticleContentBlock(contentContainer, firstTextBlock.id);
     const paragraph = blockShell.createEl("p", { cls: `${articleParagraphClass("mms-article-leaf-text", firstTextBlock, options.articleLeafBulletsEnabled && !info.numberedLeaf, options.articleLeafTextAlignment)}${info.numberedLeaf ? " mms-article-leaf-numbered" : ""}` });
     paragraph.dataset.blockId = firstTextBlock.id;
     if (info.numberedLeaf) {
@@ -324,13 +325,13 @@ function renderArticleNodeSection(
     renderRichTextRuns(paragraph, firstTextBlock.richText, firstTextBlock.text);
     options.makeInlineEditable(paragraph, info.node, "正文段落", firstTextBlock.id);
   } else if (!options.readOnly && blocks.length === 0) {
-    const paragraph = section.createEl("p", { cls: articleParagraphClass("mms-article-leaf-text", undefined, options.articleLeafBulletsEnabled, options.articleLeafTextAlignment) });
+    const paragraph = contentContainer.createEl("p", { cls: articleParagraphClass("mms-article-leaf-text", undefined, options.articleLeafBulletsEnabled, options.articleLeafTextAlignment) });
     applyArticleLeafBulletStyle(paragraph, options);
     renderRichTextRuns(paragraph, undefined, "");
     options.makeInlineEditable(paragraph, info.node, "正文段落");
   }
   options.addInlineNodeActions(section, info.node);
-  renderArticleNodeContent(section, info.node, false, options);
+  renderArticleNodeContent(contentContainer, info.node, false, options);
 }
 
 /** Creates an article block shell for right-click targeting without adding a floating drag handle. */

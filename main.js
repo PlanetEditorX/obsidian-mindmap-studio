@@ -11382,8 +11382,9 @@ function renderArticleNodeSection(section, info, options) {
   }
   const blocks = articleNodeContentBlocks(info.node, options);
   const firstTextBlock = blocks.find((block) => block.type === "text");
+  const contentContainer = info.node.question ? section.createDiv({ cls: "mms-question-card" }) : section;
   if (firstTextBlock == null ? void 0 : firstTextBlock.text.trim()) {
-    const blockShell = createArticleContentBlock(section, firstTextBlock.id);
+    const blockShell = createArticleContentBlock(contentContainer, firstTextBlock.id);
     const paragraph = blockShell.createEl("p", { cls: `${articleParagraphClass("mms-article-leaf-text", firstTextBlock, options.articleLeafBulletsEnabled && !info.numberedLeaf, options.articleLeafTextAlignment)}${info.numberedLeaf ? " mms-article-leaf-numbered" : ""}` });
     paragraph.dataset.blockId = firstTextBlock.id;
     if (info.numberedLeaf) {
@@ -11394,13 +11395,13 @@ function renderArticleNodeSection(section, info, options) {
     renderRichTextRuns(paragraph, firstTextBlock.richText, firstTextBlock.text);
     options.makeInlineEditable(paragraph, info.node, "\u6B63\u6587\u6BB5\u843D", firstTextBlock.id);
   } else if (!options.readOnly && blocks.length === 0) {
-    const paragraph = section.createEl("p", { cls: articleParagraphClass("mms-article-leaf-text", void 0, options.articleLeafBulletsEnabled, options.articleLeafTextAlignment) });
+    const paragraph = contentContainer.createEl("p", { cls: articleParagraphClass("mms-article-leaf-text", void 0, options.articleLeafBulletsEnabled, options.articleLeafTextAlignment) });
     applyArticleLeafBulletStyle(paragraph, options);
     renderRichTextRuns(paragraph, void 0, "");
     options.makeInlineEditable(paragraph, info.node, "\u6B63\u6587\u6BB5\u843D");
   }
   options.addInlineNodeActions(section, info.node);
-  renderArticleNodeContent(section, info.node, false, options);
+  renderArticleNodeContent(contentContainer, info.node, false, options);
 }
 function createArticleContentBlock(container, blockId, indentToParagraph = false) {
   const shell = container.createDiv({
@@ -17236,9 +17237,10 @@ var MindMapEditor = class {
           renderRichTextRuns(headingText, headingBlock == null ? void 0 : headingBlock.richText, (_k = headingBlock == null ? void 0 : headingBlock.text) != null ? _k : title);
           this.renderArticleContent(nodeSection, info.node, false);
         } else {
+          const contentContainer = info.node.question ? nodeSection.createDiv({ cls: "mms-question-card" }) : nodeSection;
           const firstTextBlock = nodeContentBlocks(info.node).find((block) => block.type === "text");
           if (firstTextBlock) {
-            const paragraph = nodeSection.createEl("p", { cls: `mms-article-leaf-text${this.options.articleLeafBulletsEnabled && !info.numberedLeaf ? " is-bulleted" : ""}${this.options.articleLeafTextAlignment === "auto" ? " is-auto-aligned" : ""}${firstTextBlock.paragraphIndent === "none" ? " is-flush" : ""}${info.numberedLeaf ? " mms-article-leaf-numbered" : ""}` });
+            const paragraph = contentContainer.createEl("p", { cls: `mms-article-leaf-text${this.options.articleLeafBulletsEnabled && !info.numberedLeaf ? " is-bulleted" : ""}${this.options.articleLeafTextAlignment === "auto" ? " is-auto-aligned" : ""}${firstTextBlock.paragraphIndent === "none" ? " is-flush" : ""}${info.numberedLeaf ? " mms-article-leaf-numbered" : ""}` });
             paragraph.dataset.blockId = firstTextBlock.id;
             if (info.numberedLeaf) {
               paragraph.dataset.articleNumber = info.leafNumberingStyle === "circled" ? String((_l = info.leafNumberingIndex) != null ? _l : 1) : info.label;
@@ -17250,7 +17252,7 @@ var MindMapEditor = class {
             }
             renderRichTextRuns(paragraph, firstTextBlock.richText, firstTextBlock.text);
           }
-          this.renderArticleContent(nodeSection, info.node, false);
+          this.renderArticleContent(contentContainer, info.node, false);
         }
       }
     }

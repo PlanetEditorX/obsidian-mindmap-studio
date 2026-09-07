@@ -5463,9 +5463,10 @@ export class MindMapEditor {
           renderRichTextRuns(headingText, headingBlock?.richText, headingBlock?.text ?? title);
           this.renderArticleContent(nodeSection, info.node, false);
         } else {
+          const contentContainer = info.node.question ? nodeSection.createDiv({ cls: "mms-question-card" }) : nodeSection;
           const firstTextBlock = nodeContentBlocks(info.node).find((block): block is MindMapTextContentBlock => block.type === "text");
           if (firstTextBlock) {
-            const paragraph = nodeSection.createEl("p", { cls: `mms-article-leaf-text${this.options.articleLeafBulletsEnabled && !info.numberedLeaf ? " is-bulleted" : ""}${this.options.articleLeafTextAlignment === "auto" ? " is-auto-aligned" : ""}${firstTextBlock.paragraphIndent === "none" ? " is-flush" : ""}${info.numberedLeaf ? " mms-article-leaf-numbered" : ""}` });
+            const paragraph = contentContainer.createEl("p", { cls: `mms-article-leaf-text${this.options.articleLeafBulletsEnabled && !info.numberedLeaf ? " is-bulleted" : ""}${this.options.articleLeafTextAlignment === "auto" ? " is-auto-aligned" : ""}${firstTextBlock.paragraphIndent === "none" ? " is-flush" : ""}${info.numberedLeaf ? " mms-article-leaf-numbered" : ""}` });
             paragraph.dataset.blockId = firstTextBlock.id;
             if (info.numberedLeaf) {
               paragraph.dataset.articleNumber = info.leafNumberingStyle === "circled"
@@ -5479,7 +5480,7 @@ export class MindMapEditor {
             }
             renderRichTextRuns(paragraph, firstTextBlock.richText, firstTextBlock.text);
           }
-          this.renderArticleContent(nodeSection, info.node, false);
+          this.renderArticleContent(contentContainer, info.node, false);
         }
       }
     }
