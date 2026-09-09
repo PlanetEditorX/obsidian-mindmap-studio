@@ -1,10 +1,15 @@
 # obsidian-mindmap-studio 项目交接
 
 - 插件：MindMap Studio（Obsidian 本地优先 .mindmap 导图，含导图/大纲/文章/通读模式、全局搜索、图床、AI 助手与桌面截图链路）。
-- 版本基线：1.48.0（package.json / manifest.json / versions.json / package-lock.json 已同步）。
+- 版本基线：1.49.5（package.json / manifest.json / versions.json / package-lock.json 已同步，v1.49.5 已由 release 工作流发布）。
 - 仓库规则：见根目录 `AGENTS.md`；每轮代码交付三份 ZIP（源码 / 安装 / Codex 交接）共用同一六位后缀；验证入口 `npm run verify`。
 
-## 当前状态（1.49.5 待发布 / 线上 1.49.4）
+## 当前状态（本轮修复待发布 1.49.6 / 线上 1.49.5）
+
+- 本轮修复用户实测反馈：复制纯文本 → 节点上粘贴生成子节点 → 聚焦该节点按空格，理应进入行内快速编辑，实际节点出现两行完全相同的内容。根因：粘贴纯文本经 `createNode()` 生成只有 `text` 镜像的 legacy 节点，`nodeContentBlocks()` 对 legacy 节点每次读取都用 `newId()` 合成临时文本块 ID；渲染器把合成 ID 写进 DOM `data-block-id`，而空格触发的 `beginInlineEdit(nodeId)` 不带 `blockId`，再次读取模型又合成新 ID，`querySelector` 匹配不到已渲染块，于是追加一个新的 contenteditable div 并填入相同文字（仅 DOM 重复，保存后数据仍只有一个文本块）。双击路径不受影响，因为它把 DOM 的 `blockId` 传回。
+- 修复方式（`src/editor/editor.ts` `beginInlineEdit()` 导图分支）：无显式 `blockId` 时优先取 DOM 中第一个 `.mmc-node-text[data-block-id]` 的已渲染 ID 原地转为编辑器，取不到再回退 `textBlock?.id ?? newId()`（Tab 新建的空节点行为不变）。`save()` 的 legacy 替换逻辑保证写入 `node.content` 后仍只有一个文本块。
+- 测试：`tests/node-creation.test.mjs` 新增契约“space-triggered inline edit reuses the rendered text block before synthesizing IDs”；`tests/question.test.mjs` 中引用旧单行实现的断言同步更新为新链路。
+- 兼容性：`content` 数组节点的 DOM ID 本就来自同一份稳定块 ID，行为不变；legacy 节点（粘贴、旧文档）由“追加重复块”变为“原地编辑”，保存数据不变。
 
 - 本轮按用户反馈移除垂直时间线主题（枚举/CSS/下拉/契约），「卡片」更名「经典卡片」，九种目录主题名称统一四字：经典卡片/简洁列表/素雅面板/极简书页/杂志网格/透明玻璃/极光列表/墨韵书卷/落日暖橙。历史值（timeline）自动回退。
 
@@ -51,22 +56,19 @@
 
 ## 验证基线
 
-- `npm run verify` 本机完整通过：`test:unit` 400/400（`tests/image-source-candidates.test.mjs` 12 项，含 6 项来源管理纯函数 + 1 项接线契约）；`test:regression` 全部通过（文章/大纲渲染器契约改为锁定 `options.openImagePreview` 注入式预览）；`test:docs` 覆盖 58 个源码模块、1246 个具名声明；`test:repo` 通过；production esbuild 通过，`main.js` 已重建。
-- 详细数据见根目录 `TEST_RESULTS.md` 1.48.0 小节。
+- `npm run verify` 本机完整通过：`test:unit` 406/406（含本轮新增“space-triggered inline edit reuses the rendered text block before synthesizing IDs”契约）；`test:regression` 全部通过；`test:docs` 覆盖 62 个源码模块、1264 个具名声明；`test:repo` 通过；production esbuild 通过，`main.js` 已重建。
+- 详细数据见根目录 `TEST_RESULTS.md`。
 
-## 待验证事项（需真实 Obsidian 桌面端手工冒烟）
+## 待验证事项（需真实 Obsidian 案端手工冒烟）
 
-- 右键来源“更新上传”：选图床 → 文件管理器选本地图片 → 上传成功后预览与默认来源切换；取消选图不产生撤销条目。
-- 右键来源“更新上传”：选择图床 → 上传成功后镜像合并与默认来源切换；取消上传不产生撤销条目。
-- 删除最后一个来源：图片块删除、弹窗关闭、可撤销恢复；远程文件按“未引用自动清理”设置处理。
-- 手动添加 URL 来源可显示；设为默认后重开文档仍按该优先级显示。
-- 各弹窗宽度在实际窗口（含小窗口）下的视觉检查。
+- 复制纯文本 → 节点粘贴生成子节点 → 聣焦按空格：应原地进入行内快速编辑，节点不再出现两行相同内容；编辑后数据仍只有一个文本块。
+- 双击节点文本块进入行内编辑回归确认（该路径此前正常，本轮未改动其语义）。
+- Tab/Enter 新建空节点按空格直接输入的回归确认（走 newId() 回退分支，行为应与此前一致）。
 
 ## 下一步建议
 
 - 编辑器侧优化仍待实施：把 `documentSnapshotJson` 失效与 `nodeTreeIndex` 重建收拢进 `mutate()` 单一入口；可加 debug 抽样断言缓存一致性。
-- `src/editor/editor.ts` 约 9,000 行，后续可按文章渲染、视口手势、行内编辑、题目系统边界拆分。
-- `src/ai/client.ts` 三处重复的 usage 提取可抽成 `buildCompletionResult()` 帮助函数。
+- 编辑器拆分剩余批次（题目系统流程、行内编辑深化）收益递减，建议按需推进；`nodeContentBlocks()` 记忆化因旧格式临时块 ID 的语义设计暂不实施。
 
 - 后缀 `862881`：完整源码 `obsidian-mindmap-studio-1.48.2-862881.zip`、安装包 `mindmap-studio-1.48.2-test-862881.zip`（SHA-256 `15b7dfbd00e1496d8c79ffa67031b0a85daee633efc2d442a4e57cc5784724fb`）、交接 `Codex-1.48.2-handoff-862881.zip`。
 
@@ -98,9 +100,15 @@
 
 - 后缀 `419062`：完整源码 `obsidian-mindmap-studio-1.49.2-419062.zip`、安装包 `mindmap-studio-1.49.2-test-419062.zip`（SHA-256 `4d148e8b12e9b6178937244dd705b109071c8aaf70a232cea312844ed4079c33`，内容与 668980 一致，仅修复测试脚本契约）、交接 `Codex-1.49.2-handoff-419062.zip`。
 
+## 最近交付包
+
+- 后缀 `276442`：完整源码 `obsidian-mindmap-studio-1.49.5-276442.zip`（SHA-256 `4ee43ec1d0d5c2e7c726df657c610fe400014f2aa746542c82e7b68a90c6b631`）、安装包 `mindmap-studio-1.49.5-test-276442.zip`（SHA-256 `d61788782ce1ec41b45216bae6d386fdf1f8d16760818db8ba654280c0972449`）、交接 `Codex-1.49.5-handoff-276442.zip`。本轮修复空格触发行内编辑在 legacy（粘贴纯文本）节点上重复渲染文本块的问题。
+
+## 历史交付包
+
 - 后缀 `148308`：完整源码 `obsidian-mindmap-studio-1.49.4-148308.zip`、安装包 `mindmap-studio-1.49.4-test-148308.zip`（SHA-256 `ddb37a0a53d362ee15abe67c7af25a82758546e236f944964245d6c0625709de`）、交接 `Codex-1.49.4-handoff-148308.zip`。
 
-## 最近交付包（历史）（历史）（历史）（历史）（历史）
+## 更早交付包（历史）
 
 - 后缀 `190027`：完整源码 `obsidian-mindmap-studio-1.48.0-190027.zip`、安装包 `mindmap-studio-1.48.0-test-190027.zip`（SHA-256 见 `MODIFIED_FILES.md`）、交接 `Codex-1.48.0-handoff-190027.zip`；三份 ZIP 已按新规则输出到仓库父目录 `D:\Downloads`，仓库内及 Git 历史不含任何 ZIP（1.47.1 的两个历史 ZIP 已通过重写历史剥离并强制推送）。
 - 后续交付一律把三份 ZIP 输出到 `D:\Downloads`，严禁写入仓库内部或提交。

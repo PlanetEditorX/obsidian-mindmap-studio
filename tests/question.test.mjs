@@ -360,7 +360,7 @@ test("question assistant keeps an intelligent image-to-question pipeline and vis
   assert.match(practiceSource, /isQuestionJudgmentCorrect/);
   assert.match(editorSource, /addToolbarButton\("question", "file-plus-2"/);
   assert.match(editorSource, /renderQuestionPracticeMode/);
-  assert.match(editorSource, /const activeBlockId = blockId \?\? textBlock\?\.id \?\? newId\(\)/);
+  assert.match(editorSource, /const activeBlockId = blockId\s*\?\?\s*content\.querySelector<HTMLElement>\("\.mmc-node-text\[data-block-id\]"\)\?\.dataset\.blockId\s*\?\?\s*textBlock\?\.id\s*\?\?\s*newId\(\)/);
   assert.doesNotMatch(editorSource, /selected\.text = plainText/);
   assert.doesNotMatch(editorSource, /addToolbarButton\("question-bank"/);
   const contentModalSource = await readFile("src/editor/content-modals.ts", "utf8");

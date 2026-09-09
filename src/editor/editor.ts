@@ -4282,7 +4282,14 @@ export class MindMapEditor {
     const textBlock = blockId
       ? blocks.find((block): block is MindMapTextContentBlock => block.type === "text" && block.id === blockId)
       : blocks.find((block): block is MindMapTextContentBlock => block.type === "text");
-    const activeBlockId = blockId ?? textBlock?.id ?? newId();
+    // Space-triggered edits pass no blockId. Legacy and pasted nodes only have
+    // `text`, so every model read synthesizes a fresh block ID that never matches
+    // the rendered DOM. Prefer the ID already rendered in the DOM and turn that
+    // exact element into the editor; otherwise a duplicate text block appears.
+    const activeBlockId = blockId
+      ?? content.querySelector<HTMLElement>(".mmc-node-text[data-block-id]")?.dataset.blockId
+      ?? textBlock?.id
+      ?? newId();
     let editor = content.querySelector<HTMLElement>(`.mmc-node-text[data-block-id="${CSS.escape(activeBlockId)}"]`);
     if (!editor) editor = content.createDiv({ cls: "mmc-node-main mmc-node-text-block" }).createDiv({ cls: "mmc-node-text" });
     editor.dataset.blockId = activeBlockId;

@@ -16102,7 +16102,7 @@ var MindMapEditor = class {
   }
   /** 在节点本体中启动轻量富文本输入。 */
   beginInlineEdit(nodeId, blockId, protectInitialFocus = false) {
-    var _a2, _b2;
+    var _a2, _b2, _c, _d;
     if (this.readOnly) return;
     const node = this.nodeById(nodeId);
     if (!node) return;
@@ -16123,7 +16123,7 @@ var MindMapEditor = class {
     if (!nodeEl || !content) return;
     const blocks = nodeContentBlocks(node);
     const textBlock = blockId ? blocks.find((block) => block.type === "text" && block.id === blockId) : blocks.find((block) => block.type === "text");
-    const activeBlockId = (_a2 = blockId != null ? blockId : textBlock == null ? void 0 : textBlock.id) != null ? _a2 : newId();
+    const activeBlockId = (_c = (_b2 = blockId != null ? blockId : (_a2 = content.querySelector(".mmc-node-text[data-block-id]")) == null ? void 0 : _a2.dataset.blockId) != null ? _b2 : textBlock == null ? void 0 : textBlock.id) != null ? _c : newId();
     let editor = content.querySelector(`.mmc-node-text[data-block-id="${CSS.escape(activeBlockId)}"]`);
     if (!editor) editor = content.createDiv({ cls: "mmc-node-main mmc-node-text-block" }).createDiv({ cls: "mmc-node-text" });
     editor.dataset.blockId = activeBlockId;
@@ -16132,7 +16132,7 @@ var MindMapEditor = class {
     editor.addClass("is-inline-editing");
     editor.setAttr("role", "textbox");
     editor.setAttr("aria-label", "\u8F93\u5165\u8282\u70B9\u6587\u5B57");
-    renderRichTextRuns(editor, textBlock == null ? void 0 : textBlock.richText, (_b2 = textBlock == null ? void 0 : textBlock.text) != null ? _b2 : nodePlainText(node), false);
+    renderRichTextRuns(editor, textBlock == null ? void 0 : textBlock.richText, (_d = textBlock == null ? void 0 : textBlock.text) != null ? _d : nodePlainText(node), false);
     let historyCaptured = false;
     const save = () => {
       const values = readRichTextEditor(editor);

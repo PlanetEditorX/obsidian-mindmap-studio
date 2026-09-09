@@ -74,3 +74,16 @@ test("mind-map nodes keep a non-zero global minimum height", () => {
   assert.match(mainBundle, /var MIN_NODE_HEIGHT = 36/);
   assert.match(mainBundle, /nodeEl\.style\.minHeight = `\$\{Math\.max\(36,/);
 });
+
+test("space-triggered inline edit reuses the rendered text block before synthesizing IDs", () => {
+  const beginInlineEdit = editorSource.match(/private beginInlineEdit\([\s\S]*?\n  \}/)?.[0] ?? "";
+  // Legacy/pasted nodes synthesize a fresh block ID on every model read, so an
+  // edit without an explicit blockId must reuse the DOM's rendered data-block-id
+  // instead of appending a duplicate editor block.
+  assert.match(
+    beginInlineEdit,
+    /const activeBlockId = blockId\s*\?\?\s*content\.querySelector<HTMLElement>\("\.mmc-node-text\[data-block-id\]"\)\?\.dataset\.blockId\s*\?\?\s*textBlock\?\.id\s*\?\?\s*newId\(\)/,
+    "DOM block ID must win over a freshly synthesized one when blockId is absent"
+  );
+  assert.match(beginInlineEdit, /let editor = content\.querySelector<HTMLElement>\(`\.mmc-node-text\[data-block-id="\$\{CSS\.escape\(activeBlockId\)\}"\]`\)/);
+});
