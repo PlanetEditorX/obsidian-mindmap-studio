@@ -17618,7 +17618,11 @@ var MindMapEditor = class {
     const sourceNodes = htmlBranch ? [htmlBranch] : parseClipboardNodes(text);
     if (sourceNodes == null ? void 0 : sourceNodes.length) {
       event.preventDefault();
-      const clones = sourceNodes.map((node) => cloneNodeWithFreshIds(node));
+      const clones = sourceNodes.map((node) => {
+        const clone = cloneNodeWithFreshIds(node);
+        replaceNodeContentBlocks(clone, nodeContentBlocks(clone));
+        return clone;
+      });
       clones.forEach((clone) => setAllBranchesCollapsed(clone, true, true));
       this.mutate(() => {
         var _a3, _b3;
@@ -18469,7 +18473,11 @@ var MindMapEditor = class {
       new import_obsidian14.Notice("\u526A\u8D34\u677F\u4E2D\u6CA1\u6709\u53EF\u7C98\u8D34\u7684 MindMap \u8282\u70B9");
       return;
     }
-    const clones = sourceNodes.map((node) => cloneNodeWithFreshIds(node));
+    const clones = sourceNodes.map((node) => {
+      const clone = cloneNodeWithFreshIds(node);
+      replaceNodeContentBlocks(clone, nodeContentBlocks(clone));
+      return clone;
+    });
     clones.forEach((clone) => setAllBranchesCollapsed(clone, true, true));
     this.mutate(() => {
       var _a3, _b2;

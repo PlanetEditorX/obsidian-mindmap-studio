@@ -87,3 +87,14 @@ test("space-triggered inline edit reuses the rendered text block before synthesi
   );
   assert.match(beginInlineEdit, /let editor = content\.querySelector<HTMLElement>\(`\.mmc-node-text\[data-block-id="\$\{CSS\.escape\(activeBlockId\)\}"\]`\)/);
 });
+
+test("paste-created clones materialize content blocks to keep block IDs stable", () => {
+  // Plain-text paste creates legacy text-only nodes whose synthesized block IDs
+  // differ on every model read; both paste entry points must materialize the
+  // content array so drag handles, double-click and space edits match the DOM.
+  const handlePaste = editorSource.match(/private async handlePaste\(event: ClipboardEvent\): Promise<void> \{[\s\S]*?\n  \}/)?.[0] ?? "";
+  const pasteAsChild = editorSource.match(/private async pasteAsChild\(\): Promise<void> \{[\s\S]*?\n  \}/)?.[0] ?? "";
+  const materialize = /const clone = cloneNodeWithFreshIds\(node\);\s*replaceNodeContentBlocks\(clone, nodeContentBlocks\(clone\)\);\s*return clone;/;
+  assert.match(handlePaste, materialize, "canvas paste must materialize cloned content blocks");
+  assert.match(pasteAsChild, materialize, "paste-as-child must materialize cloned content blocks");
+});

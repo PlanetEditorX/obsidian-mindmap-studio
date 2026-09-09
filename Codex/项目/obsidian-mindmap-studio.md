@@ -4,7 +4,12 @@
 - 版本基线：1.49.5（package.json / manifest.json / versions.json / package-lock.json 已同步，v1.49.5 已由 release 工作流发布）。
 - 仓库规则：见根目录 `AGENTS.md`；每轮代码交付三份 ZIP（源码 / 安装 / Codex 交接）共用同一六位后缀；验证入口 `npm run verify`。
 
-## 当前状态（本轮修复待发布 1.49.6 / 线上 1.49.5）
+## 当前状态（本轮修复待发布 1.49.7 / 线上 1.49.6）
+
+- 本轮使用 bug 排查（同族问题审计）：确认磁盘加载文档经 `normalizeNode` 已把 legacy 字段物化为稳定 `content` 数组，图片右键/预览/表格/代码块的块 ID 匹配安全；article/outline 行内编辑保存（`updateNodeTextBlock`）已有 legacy 兜底；双击编辑路径自洽。
+- 发现并修复同族遗留 bug：`cloneNodeWithFreshIds()` 只刷新节点 ID、不物化 `content`，纯文本粘贴生成的子节点保持 legacy 状态，其内容块拖拽 handle 携带渲染时合成 ID，释放时 `moveNodeContentBlock()` 重新合成新 ID 查找失败，拖拽静默无效（跨节点移动与排序均无反应、无提示）。
+- 修复方式：`handlePaste()` 与 `pasteAsChild()` 两个粘贴入口在创建克隆后立即 `replaceNodeContentBlocks(clone, nodeContentBlocks(clone))` 物化内容块，legacy 状态不再进入渲染；粘贴本就是写操作，物化无损（`text`/`image` 等镜像字段由 `syncNodeContentFields` 同步保留）。空格行内编辑的 DOM 优先修复保留作双保险。
+- 测试：`tests/node-creation.test.mjs` 新增契约“paste-created clones materialize content blocks to keep block IDs stable”，锁定两个粘贴入口的物化链路。
 
 - 本轮修复用户实测反馈：复制纯文本 → 节点上粘贴生成子节点 → 聚焦该节点按空格，理应进入行内快速编辑，实际节点出现两行完全相同的内容。根因：粘贴纯文本经 `createNode()` 生成只有 `text` 镜像的 legacy 节点，`nodeContentBlocks()` 对 legacy 节点每次读取都用 `newId()` 合成临时文本块 ID；渲染器把合成 ID 写进 DOM `data-block-id`，而空格触发的 `beginInlineEdit(nodeId)` 不带 `blockId`，再次读取模型又合成新 ID，`querySelector` 匹配不到已渲染块，于是追加一个新的 contenteditable div 并填入相同文字（仅 DOM 重复，保存后数据仍只有一个文本块）。双击路径不受影响，因为它把 DOM 的 `blockId` 传回。
 - 修复方式（`src/editor/editor.ts` `beginInlineEdit()` 导图分支）：无显式 `blockId` 时优先取 DOM 中第一个 `.mmc-node-text[data-block-id]` 的已渲染 ID 原地转为编辑器，取不到再回退 `textBlock?.id ?? newId()`（Tab 新建的空节点行为不变）。`save()` 的 legacy 替换逻辑保证写入 `node.content` 后仍只有一个文本块。
@@ -56,12 +61,13 @@
 
 ## 验证基线
 
-- `npm run verify` 本机完整通过：`test:unit` 406/406（含本轮新增“space-triggered inline edit reuses the rendered text block before synthesizing IDs”契约）；`test:regression` 全部通过；`test:docs` 覆盖 62 个源码模块、1264 个具名声明；`test:repo` 通过；production esbuild 通过，`main.js` 已重建。
+- `npm run verify` 本机完整通过：`test:unit` 407/407（含“space-triggered inline edit reuses the rendered text block before synthesizing IDs”与“paste-created clones materialize content blocks to keep block IDs stable”两项新契约）；`test:regression` 全部通过；`test:docs` 覆盖 62 个源码模块、1264 个具名声明；`test:repo` 通过；production esbuild 通过，`main.js` 已重建。
 - 详细数据见根目录 `TEST_RESULTS.md`。
 
-## 待验证事项（需真实 Obsidian 案端手工冒烟）
+## 待验证事项（需真实 Obsidian 桌面端手工冒烟）
 
-- 复制纯文本 → 节点粘贴生成子节点 → 聣焦按空格：应原地进入行内快速编辑，节点不再出现两行相同内容；编辑后数据仍只有一个文本块。
+- 复制纯文本 → 节点粘贴生成子节点 → 聚焦按空格：应原地进入行内快速编辑，节点不再出现两行相同内容；编辑后数据仍只有一个文本块。
+- 刚粘贴未编辑的纯文本子节点：拖动其文本块拖拽把手到其它节点/排序应生效并出现“已移动内容块”提示（此前静默无效）。
 - 双击节点文本块进入行内编辑回归确认（该路径此前正常，本轮未改动其语义）。
 - Tab/Enter 新建空节点按空格直接输入的回归确认（走 newId() 回退分支，行为应与此前一致）。
 
@@ -101,6 +107,8 @@
 - 后缀 `419062`：完整源码 `obsidian-mindmap-studio-1.49.2-419062.zip`、安装包 `mindmap-studio-1.49.2-test-419062.zip`（SHA-256 `4d148e8b12e9b6178937244dd705b109071c8aaf70a232cea312844ed4079c33`，内容与 668980 一致，仅修复测试脚本契约）、交接 `Codex-1.49.2-handoff-419062.zip`。
 
 ## 最近交付包
+
+- 后缀 `439372`：完整源码 `obsidian-mindmap-studio-1.49.6-439372.zip`（SHA-256 `cd4f8593dfda1a55f28e210b3743d38d203c0224beb0fb38e15819b9d6c36685`）、安装包 `mindmap-studio-1.49.6-test-439372.zip`（SHA-256 `fc0794423b854df28c36bf755fe96e967686f79fde6ee82fb7c840ce9f6bd9fc`）、交接 `Codex-1.49.6-handoff-439372.zip`。本轮同族 bug 审计：粘贴克隆物化内容块，修复纯文本粘贴子节点内容块拖拽静默失效（并巩固空格行内编辑修复）。
 
 - 后缀 `276442`：完整源码 `obsidian-mindmap-studio-1.49.5-276442.zip`（SHA-256 `4ee43ec1d0d5c2e7c726df657c610fe400014f2aa746542c82e7b68a90c6b631`）、安装包 `mindmap-studio-1.49.5-test-276442.zip`（SHA-256 `d61788782ce1ec41b45216bae6d386fdf1f8d16760818db8ba654280c0972449`）、交接 `Codex-1.49.5-handoff-276442.zip`。本轮修复空格触发行内编辑在 legacy（粘贴纯文本）节点上重复渲染文本块的问题。
 

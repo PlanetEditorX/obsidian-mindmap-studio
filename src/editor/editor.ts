@@ -5873,7 +5873,14 @@ export class MindMapEditor {
     const sourceNodes = htmlBranch ? [htmlBranch] : parseClipboardNodes(text);
     if (sourceNodes?.length) {
       event.preventDefault();
-      const clones = sourceNodes.map((node) => cloneNodeWithFreshIds(node));
+      // Plain-text paste creates legacy text-only nodes whose synthesized block
+      // IDs differ on every model read, breaking drag handles and inline edits.
+      // Materialize the content array once so rendered block IDs stay stable.
+      const clones = sourceNodes.map((node) => {
+        const clone = cloneNodeWithFreshIds(node);
+        replaceNodeContentBlocks(clone, nodeContentBlocks(clone));
+        return clone;
+      });
       clones.forEach((clone) => setAllBranchesCollapsed(clone, true, true));
       this.mutate(() => {
         selected.collapsed = false;
@@ -6813,7 +6820,13 @@ export class MindMapEditor {
       new Notice("剪贴板中没有可粘贴的 MindMap 节点");
       return;
     }
-    const clones = sourceNodes.map((node) => cloneNodeWithFreshIds(node));
+    // Same materialization as handlePaste: keep pasted clones off the legacy
+    // synthesized-block-ID path so drag handles and inline edits stay stable.
+    const clones = sourceNodes.map((node) => {
+      const clone = cloneNodeWithFreshIds(node);
+      replaceNodeContentBlocks(clone, nodeContentBlocks(clone));
+      return clone;
+    });
     clones.forEach((clone) => setAllBranchesCollapsed(clone, true, true));
     this.mutate(() => {
       selected.collapsed = false;
