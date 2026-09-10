@@ -4,9 +4,11 @@
 - 版本基线：1.49.7（package.json / manifest.json / versions.json / package-lock.json 已同步，线上已发布 v1.49.6，本轮待 release 工作流发布 1.49.7）。
 - 仓库规则：见根目录 `AGENTS.md`；每轮代码交付三份 ZIP（源码 / 安装 / Codex 交接）共用同一六位后缀；验证入口 `npm run verify`。
 
-## 当前状态（本轮功能：节点文件上传，待发布 1.49.7）
+## 当前状态（本轮功能：节点文件上传 + 拖拽直传修复，待发布 1.49.8）
 
 - 本轮新增节点文件上传功能：节点右键菜单新增“上传文件”，选择本地任意文件后保存到当前导图资源目录（与图片同目录逻辑：`<导图目录>/<assetFolder>/原文件名`，重名自动追加序号），并在节点内容块中插入 `file` 块卡片。
+- 拖拽直传修复：外部文件拖到节点上直接落盘上传（drop 直接消费 `dataTransfer.files`），不再误触系统文件选择窗口；上传实现拆分为 `uploadFileToNode()`（右键菜单走 `selectAnyFile()`）与共用 `uploadFilesToNode()`（拖拽与菜单共用，支持多文件，逐个重校验节点避免孤儿文件）。
+- 画布样式修复：文件卡片在导图画布内改为轻量无框样式（`.mmc-file-card.is-canvas` 透明背景 + 透明边框，hover 才显示背景），不再用边框和底色盖住节点边框；文章、大纲、编辑弹窗仍用带框卡片。
 - 数据模型（`src/core/model.ts`）：新增 `MindMapFileContentBlock`（`id/source/name/size?`），并入 `MindMapContentBlock` 联合类型；`normalizeContentBlock` 要求 `source` 与 `name` 非空（否则整块丢弃）、`size` 取整；`nodeSearchText()` 按 `name + source` 参与搜索；`documentToMarkdown()` 导出为 `[name](source)` 链接；Markdown 导入不生成文件块。
 - 插件层（`src/main.ts`）：`saveAttachmentFile()` 落盘保留原文件名；`scheduleFileAssetDeletion()` 登记 60 秒延迟回收（同路径去重）；`cancelFileAssetDeletion()` 撤销/重新引用时取消；到期执行 `deleteFileAssetIfSafe()`——全库 `.mindmap` 引用检查通过后 `vault.trash(target, true)` 移入系统回收站；`openFileAsset()` 用 Obsidian 打开附件；`onunload` 清理未到期定时器。
 - 编辑器（`src/editor/editor.ts`）：右键“上传文件”与外部文件拖拽均收敛到 `uploadFileToNode()`；拖拽分支优先判定 `dataTransfer.types.includes("Files")` 避免被内容块拖拽吞掉；删除内容块（`removeContentBlock`）、删除节点、批量删除统一调度 `onScheduleFileAssetDeletion`，撤销收口统一调用 `onCancelFileAssetDeletion(collectFileAssetPaths())`；新增 `selectAnyFile()`（node-image-actions.ts）。
@@ -122,6 +124,8 @@
 - 后缀 `419062`：完整源码 `obsidian-mindmap-studio-1.49.2-419062.zip`、安装包 `mindmap-studio-1.49.2-test-419062.zip`（SHA-256 `4d148e8b12e9b6178937244dd705b109071c8aaf70a232cea312844ed4079c33`，内容与 668980 一致，仅修复测试脚本契约）、交接 `Codex-1.49.2-handoff-419062.zip`。
 
 ## 最近交付包
+
+- 后缀 `338898`：完整源码 `obsidian-mindmap-studio-1.49.8-338898.zip`（SHA-256 `4b141bb897fcb8de7e20c7b8f28ca19bcd1ff97605eb9e589c66729a69038f71`）、安装包 `mindmap-studio-1.49.8-test-338898.zip`（SHA-256 `c2bf68e591b714508a36c10d62a1aa7b79a0b82b0fc611e98d1604d91850f880`）、交接 `Codex-1.49.8-handoff-338898.zip`。本轮：节点文件上传 + 拖拽直传修复（不弹选择窗口）+ 画布文件卡片无框化。
 
 - 后缀 `162948`：完整源码 `obsidian-mindmap-studio-1.49.7-162948.zip`（SHA-256 `74a9d2f319076e6cbc7fed70377bef4b701dbd4e50de99a6128ffa6d4780ac0b`）、安装包 `mindmap-studio-1.49.7-test-162948.zip`（SHA-256 `85e43608db973688e8821fc12819762c9f003948f34cf7ee26b91e8b8dd16cd8`）、交接 `Codex-1.49.7-handoff-162948.zip`。本轮新功能：节点文件上传（右键/拖拽上传、五面统一文件卡片、60 秒延迟回收站删除与撤销取消）。
 

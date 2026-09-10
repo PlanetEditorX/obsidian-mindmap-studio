@@ -5282,7 +5282,9 @@ export class MindMapEditor {
         event.stopPropagation();
         event.stopImmediatePropagation();
         dropTarget.removeClass("is-block-drop-append");
-        void this.uploadFileToNode(nodeId);
+        // 直接消费拖拽携带的文件，不再打开系统文件选择窗口。
+        const files = Array.from(event.dataTransfer.files ?? []);
+        if (files.length) void this.uploadFilesToNode(nodeId, files);
         return;
       }
       const dragging = this.draggingContentBlock;
@@ -5354,26 +5356,46 @@ export class MindMapEditor {
     try {
       const file = await selectAnyFile();
       if (!file) return;
-      // 对话框等待期间节点可能已被删除；重新校验后再落盘与写入，避免产生无引用的孤儿文件。
-      const node = this.nodeById(nodeId);
+      await this.uploadFilesToNode(nodeId, [file], afterBlockId);
+    } catch (error) {
+      console.error("MindMap Studio file upload failed", error);
+      new Notice(`上传文件失败：${error instanceof Error ? error.message : String(error)}`, 7000);
+    }
+  }
+
+  /** Saves dropped or picked files as file content blocks on the target node; drag flows call this with dataTransfer.files directly. */
+  private async uploadFilesToNode(nodeId: string, files: File[], afterBlockId?: string): Promise<void> {
+    if (!this.ensureEditable() || !files.length) return;
+    try {
+      // 保存与写块之间可能耗时；逐个重新校验节点，避免产生无引用的孤儿文件。
+      let node = this.nodeById(nodeId);
       if (!node) return;
-      const path = await this.callbacks.onSaveAttachmentFile(file);
-      const block: MindMapFileContentBlock = {
-        id: newId(),
-        type: "file",
-        source: path,
-        name: file.name || path.split("/").pop() || "附件",
-        size: file.size > 0 ? file.size : undefined
-      };
+      const created: MindMapFileContentBlock[] = [];
+      for (const file of files) {
+        node = this.nodeById(nodeId);
+        if (!node) break;
+        const path = await this.callbacks.onSaveAttachmentFile(file);
+        created.push({
+          id: newId(),
+          type: "file",
+          source: path,
+          name: file.name || path.split("/").pop() || "附件",
+          size: file.size > 0 ? file.size : undefined
+        });
+      }
+      node = this.nodeById(nodeId);
+      if (!node || !created.length) return;
       this.mutateArticleContent(() => {
-        const blocks = nodeContentBlocks(node);
+        const target = this.nodeById(nodeId);
+        if (!target) return;
+        const blocks = nodeContentBlocks(target);
         const afterIndex = afterBlockId ? blocks.findIndex((item) => item.id === afterBlockId) : -1;
         const insertIndex = afterIndex >= 0 ? afterIndex + 1 : blocks.length;
-        blocks.splice(insertIndex, 0, block);
-        replaceNodeContentBlocks(node, blocks);
+        blocks.splice(insertIndex, 0, ...created);
+        replaceNodeContentBlocks(target, blocks);
       });
       this.selectNode(nodeId);
-      new Notice(`已上传文件：${block.name}`);
+      new Notice(created.length > 1 ? `已上传 ${created.length} 个文件` : `已上传文件：${created[0].name}`);
     } catch (error) {
       console.error("MindMap Studio file upload failed", error);
       new Notice(`上传文件失败：${error instanceof Error ? error.message : String(error)}`, 7000);

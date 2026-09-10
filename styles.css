@@ -2452,7 +2452,24 @@ mjx-container.mms-node-math:not(.is-display),
 /* 文件内容块：统一卡片（画布 / 文章 / 大纲 / 编辑器共用） */
 .mmc-node-file-block {
   flex: 0 0 100%;
+  min-width: 0;
   margin: 2px 0;
+  padding: 0 4px;
+}
+
+/* 画布节点内使用轻量无框样式，避免卡片边框与节点边框叠加冲突 */
+.mmc-file-card.is-canvas {
+  display: flex;
+  width: auto;
+  max-width: 100%;
+  padding: 3px 6px;
+  background: transparent;
+  border-color: transparent;
+}
+
+.mmc-file-card.is-canvas:hover {
+  background: var(--background-modifier-hover);
+  border-color: transparent;
 }
 
 .mmc-file-card {

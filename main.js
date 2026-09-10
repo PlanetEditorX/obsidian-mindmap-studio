@@ -17186,7 +17186,7 @@ var MindMapEditor = class {
       if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
     });
     dropTarget.addEventListener("drop", (event) => {
-      var _a2;
+      var _a2, _b2;
       if (this.readOnly) return;
       const target = event.target instanceof Element ? event.target : null;
       if (((_a2 = event.dataTransfer) == null ? void 0 : _a2.types.includes("Files")) && !this.draggingContentBlock) {
@@ -17195,7 +17195,8 @@ var MindMapEditor = class {
         event.stopPropagation();
         event.stopImmediatePropagation();
         dropTarget.removeClass("is-block-drop-append");
-        void this.uploadFileToNode(nodeId);
+        const files = Array.from((_b2 = event.dataTransfer.files) != null ? _b2 : []);
+        if (files.length) void this.uploadFilesToNode(nodeId, files);
         return;
       }
       const dragging = this.draggingContentBlock;
@@ -17255,25 +17256,44 @@ var MindMapEditor = class {
     try {
       const file = await selectAnyFile();
       if (!file) return;
-      const node = this.nodeById(nodeId);
+      await this.uploadFilesToNode(nodeId, [file], afterBlockId);
+    } catch (error) {
+      console.error("MindMap Studio file upload failed", error);
+      new import_obsidian15.Notice(`\u4E0A\u4F20\u6587\u4EF6\u5931\u8D25\uFF1A${error instanceof Error ? error.message : String(error)}`, 7e3);
+    }
+  }
+  /** Saves dropped or picked files as file content blocks on the target node; drag flows call this with dataTransfer.files directly. */
+  async uploadFilesToNode(nodeId, files, afterBlockId) {
+    if (!this.ensureEditable() || !files.length) return;
+    try {
+      let node = this.nodeById(nodeId);
       if (!node) return;
-      const path = await this.callbacks.onSaveAttachmentFile(file);
-      const block = {
-        id: newId(),
-        type: "file",
-        source: path,
-        name: file.name || path.split("/").pop() || "\u9644\u4EF6",
-        size: file.size > 0 ? file.size : void 0
-      };
+      const created = [];
+      for (const file of files) {
+        node = this.nodeById(nodeId);
+        if (!node) break;
+        const path = await this.callbacks.onSaveAttachmentFile(file);
+        created.push({
+          id: newId(),
+          type: "file",
+          source: path,
+          name: file.name || path.split("/").pop() || "\u9644\u4EF6",
+          size: file.size > 0 ? file.size : void 0
+        });
+      }
+      node = this.nodeById(nodeId);
+      if (!node || !created.length) return;
       this.mutateArticleContent(() => {
-        const blocks = nodeContentBlocks(node);
+        const target = this.nodeById(nodeId);
+        if (!target) return;
+        const blocks = nodeContentBlocks(target);
         const afterIndex = afterBlockId ? blocks.findIndex((item) => item.id === afterBlockId) : -1;
         const insertIndex = afterIndex >= 0 ? afterIndex + 1 : blocks.length;
-        blocks.splice(insertIndex, 0, block);
-        replaceNodeContentBlocks(node, blocks);
+        blocks.splice(insertIndex, 0, ...created);
+        replaceNodeContentBlocks(target, blocks);
       });
       this.selectNode(nodeId);
-      new import_obsidian15.Notice(`\u5DF2\u4E0A\u4F20\u6587\u4EF6\uFF1A${block.name}`);
+      new import_obsidian15.Notice(created.length > 1 ? `\u5DF2\u4E0A\u4F20 ${created.length} \u4E2A\u6587\u4EF6` : `\u5DF2\u4E0A\u4F20\u6587\u4EF6\uFF1A${created[0].name}`);
     } catch (error) {
       console.error("MindMap Studio file upload failed", error);
       new import_obsidian15.Notice(`\u4E0A\u4F20\u6587\u4EF6\u5931\u8D25\uFF1A${error instanceof Error ? error.message : String(error)}`, 7e3);

@@ -121,15 +121,18 @@ test("node context menu uploads a file into the targeted node and stores the vau
   assert.match(editorSource, /setTitle\("上传文件"\)[\s\S]{0,120}onClick\(\(\) => void this\.uploadFileToNode\(selected\.id, contextBlockId\)\)/);
   const upload = editorSource.match(/private async uploadFileToNode\(nodeId: string, afterBlockId\?: string\): Promise<void> \{[\s\S]*?\n  \}/)?.[0] ?? "";
   assert.match(upload, /await selectAnyFile\(\)/);
-  assert.match(upload, /await this\.callbacks\.onSaveAttachmentFile\(file\)/);
-  assert.match(upload, /type: "file",/);
-  assert.match(upload, /source: path/);
-  assert.match(upload, /name: file\.name \|\| path\.split\("\/"\)\.pop\(\) \|\| "附件"/);
+  assert.match(upload, /await this\.uploadFilesToNode\(nodeId, \[file\], afterBlockId\)/);
+  const shared = editorSource.match(/private async uploadFilesToNode\(nodeId: string, files: File\[\], afterBlockId\?: string\): Promise<void> \{[\s\S]*?\n  \}/)?.[0] ?? "";
+  assert.match(shared, /await this\.callbacks\.onSaveAttachmentFile\(file\)/);
+  assert.match(shared, /type: "file",/);
+  assert.match(shared, /source: path/);
+  assert.match(shared, /name: file\.name \|\| path\.split\("\/"\)\.pop\(\) \|\| "附件"/);
 });
 
-test("dragging external files onto a node appends a file upload before content-block drags", () => {
-  assert.match(editorSource, /event\.dataTransfer\?\.types\.includes\("Files"\) && !this\.draggingContentBlock[\s\S]{0,320}void this\.uploadFileToNode\(nodeId\)/);
-  assert.match(editorSource, /外部文件拖入必须先于内容块拖拽判空处理/);
+test("dragging external files drops them in place instead of opening the file picker", () => {
+  assert.match(editorSource, /event\.dataTransfer\?\.types\.includes\("Files"\) && !this\.draggingContentBlock[\s\S]{0,500}void this\.uploadFilesToNode\(nodeId, files\)/);
+  assert.match(editorSource, /const files = Array\.from\(event\.dataTransfer\.files \?\? \[\]\);/);
+  assert.match(editorSource, /直接消费拖拽携带的文件，不再打开系统文件选择窗口/);
 });
 
 test("block and node deletions schedule delayed file asset cleanup with undo cancellation", () => {
