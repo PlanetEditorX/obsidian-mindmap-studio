@@ -50,7 +50,7 @@ test("article mode renders and focuses a newly added empty child", () => {
   assert.match(leafBranch, /renderRichTextRuns\(paragraph, undefined, ""\)/);
   assert.match(leafBranch, /options\.makeInlineEditable\(paragraph, info\.node, "正文段落"\)/);
   assert.doesNotMatch(leafBranch, /firstTextBlock\?\.text\.trim\(\) \|\|/, "table/image/code nodes must not share the empty-node placeholder condition");
-  assert.match(addChild, /window\.requestAnimationFrame\(\(\) => this\.beginInlineEdit\(node\.id, undefined, true\)\)/);
+  assert.match(addChild, /this\.bringNodeIntoView\(node\.id\);\s*\n\s*this\.beginInlineEdit\(node\.id, undefined, true\)/);
   assert.match(beginInlineEdit, /const nodeScope = scope\.querySelector<HTMLElement>\(`\[data-node-id="\$\{CSS\.escape\(nodeId\)\}"\]`\)/);
   assert.match(beginInlineEdit, /blockId[\s\S]*\[data-block-id="\$\{CSS\.escape\(blockId\)\}"\]\[data-mms-inline-editable="true"\]/);
   assert.match(beginInlineEdit, /if \(inlineElement\) this\.activateInlineEditable\(inlineElement, true, protectInitialFocus\)/);

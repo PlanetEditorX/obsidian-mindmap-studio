@@ -1555,7 +1555,7 @@ const command = "example";
   assert.match(editorSource, /if \((?:this|ctx)\.readOnly\) this\.articleEl\.querySelectorAll\("\.is-selected, \.is-multi-selected"\)/, "switching to reading mode must clear residual article selection frames");
   assert.match(editorSource, /element\.addClass\("is-inline-editing"\)[\s\S]*element\.removeClass\("is-inline-editing"\)/, "only the focused inline text should enter the editing-frame state");
   assert.match(editorSource, /isNearNodeEdge\(event, nodeEl\)\) (?:this|ctx)\.editSelected\(\);[\s\S]*target\.closest<HTMLElement>\("\[data-block-id\]"\)[\s\S]*(?:this|ctx)\.beginInlineEdit\(node\.id, block\.id\)/, "double-clicks must edit the exact text block while edge clicks open the full editor");
-  assert.match(editorSource, /window\.requestAnimationFrame\(\(\) => (?:this|ctx)\.beginInlineEdit\(node\.id, undefined, true\)\)/, "new Tab or Enter nodes must defer and protect inline-editor focus");
+  assert.match(editorSource, /this\.bringNodeIntoView\(node\.id\);\s*\n\s*(?:this|ctx)\.beginInlineEdit\(node\.id, undefined, true\)/, "new Tab or Enter nodes must defer and protect inline-editor focus and stay inside the viewport");
   assert.match(editorSource, /if \(initialFocusProtected\) \{[\s\S]*window\.requestAnimationFrame\(focusAtEnd\)/, "new-node inline editing must recover from first-frame focus loss");
   assert.match(editorSource, /textEl\.dataset\.blockId = block\.id/, "rendered text blocks must expose stable hit targets");
   assert.match(editorSource, /wrap\.dataset\.blockId = block\.id/, "rendered image blocks must open their matching full editor card");

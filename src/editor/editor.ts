@@ -3944,6 +3944,46 @@ export class MindMapEditor {
   }
 
   /**
+   * Pans the canvas minimally so a freshly created node is fully visible.
+   *
+   * Large maps can push new children far outside the viewport (layout shifts
+   * move the whole subtree), which made created nodes appear to vanish. This
+   * only translates when the node is off-screen; no forced recentering.
+   */
+  private bringNodeIntoView(nodeId: string): void {
+    if (this.currentMode !== "mindmap") return;
+    const position = this.layout.byId.get(nodeId);
+    if (!position) return;
+    const rect = this.viewportEl.getBoundingClientRect();
+    const left = rect.left + rect.width / 2 + this.panX + (position.x - position.width / 2) * this.zoom;
+    const top = rect.top + rect.height / 2 + this.panY + (position.y - position.height / 2) * this.zoom;
+    const right = left + position.width * this.zoom;
+    const bottom = top + position.height * this.zoom;
+    const margin = 24;
+    let dx = 0;
+    let dy = 0;
+    if (right - left >= rect.width - margin * 2) {
+      dx = (left + right) / 2 - (rect.left + rect.width / 2);
+    } else if (left < rect.left + margin) {
+      dx = rect.left + margin - left;
+    } else if (right > rect.right - margin) {
+      dx = rect.right - margin - right;
+    }
+    if (bottom - top >= rect.height - margin * 2) {
+      dy = (top + bottom) / 2 - (rect.top + rect.height / 2);
+    } else if (top < rect.top + margin) {
+      dy = rect.top + margin - top;
+    } else if (bottom > rect.bottom - margin) {
+      dy = rect.bottom - margin - bottom;
+    }
+    if (!dx && !dy) return;
+    this.panX += dx;
+    this.panY += dy;
+    this.mindMapViewportInitialized = true;
+    this.applyTransform();
+  }
+
+  /**
    * 在销毁旧节点前记录其屏幕矩形，供下一次重绘使用 FLIP 过渡。
    *
    * @returns 按节点标识索引的旧渲染矩形；没有待执行动画时为空。
@@ -4576,8 +4616,13 @@ export class MindMapEditor {
       if (editingFinished || (related instanceof Node && (formatBar.contains(related)
         || document.querySelector(".mms-node-editor-right")?.contains(related)))) return;
       if (initialFocusProtected) {
-        window.requestAnimationFrame(focusAtEnd);
-        return;
+        // A stale keyup from the creating Enter/Tab press blurs without a related
+        // target; pull focus back. Real user clicks carry a relatedTarget and end
+        // editing normally instead of fighting the pointer.
+        if (!related) {
+          window.requestAnimationFrame(focusAtEnd);
+          return;
+        }
       }
       editingFinished = true;
       this.inlineEditingId = null;
@@ -4606,10 +4651,12 @@ export class MindMapEditor {
     focusAtEnd();
     if (this.options.nodeEditorPosition === "right" || protectInitialFocus) {
       window.requestAnimationFrame(focusAtEnd);
+      // The stale keyup of the creating Enter/Tab press can arrive well after
+      // 50ms (slow key release), so creation flows guard for a longer window.
       window.setTimeout(() => {
         initialFocusProtected = false;
         focusAtEnd();
-      }, 50);
+      }, protectInitialFocus ? 220 : 50);
     }
   }
 
@@ -4624,7 +4671,10 @@ export class MindMapEditor {
       appendChild(selected, node);
       this.selectedId = node.id;
     });
-    window.requestAnimationFrame(() => this.beginInlineEdit(node.id, undefined, true));
+    window.requestAnimationFrame(() => {
+      this.bringNodeIntoView(node.id);
+      this.beginInlineEdit(node.id, undefined, true);
+    });
   }
 
   /**
@@ -4644,7 +4694,10 @@ export class MindMapEditor {
       insertSiblingAfter(this.document.root, selected.id, node, this.currentNodeTreeIndex());
       this.selectedId = node.id;
     });
-    window.requestAnimationFrame(() => this.beginInlineEdit(node.id, undefined, true));
+    window.requestAnimationFrame(() => {
+      this.bringNodeIntoView(node.id);
+      this.beginInlineEdit(node.id, undefined, true);
+    });
   }
 
   /** Inserts a text block after the context block, or appends it when no block was targeted. */
@@ -4654,7 +4707,10 @@ export class MindMapEditor {
     if (!selected) return;
     let blockId = "";
     this.mutateWithoutArticleContext(() => { blockId = this.insertTextBlockAfter(selected, afterBlockId); });
-    window.requestAnimationFrame(() => this.beginInlineEdit(selected.id, blockId, true));
+    window.requestAnimationFrame(() => {
+      this.bringNodeIntoView(selected.id);
+      this.beginInlineEdit(selected.id, blockId, true);
+    });
   }
 
   /**
