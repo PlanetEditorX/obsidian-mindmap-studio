@@ -271,9 +271,24 @@ export interface MindMapCodeContentBlock {
 }
 
 /**
+ * MindMapFileContentBlock 的结构化数据约定：节点附件文件块。
+ *
+ * `source` 是仓库内附件文件的权威相对路径（与图片落盘同目录规则）；
+ * `name` 保留原始文件名用于展示与搜索；`size` 为可选字节大小。
+ * 删除块或节点时文件由插件层延迟 60 秒安全回收（进系统回收站）。
+ */
+export interface MindMapFileContentBlock {
+  id: string;
+  type: "file";
+  source: string;
+  name: string;
+  size?: number;
+}
+
+/**
  * MindMapContentBlock 类型定义，用于限制可接受值并让序列化数据保持稳定。
  */
-export type MindMapContentBlock = MindMapTextContentBlock | MindMapImageContentBlock | MindMapTableContentBlock | MindMapCodeContentBlock;
+export type MindMapContentBlock = MindMapTextContentBlock | MindMapImageContentBlock | MindMapTableContentBlock | MindMapCodeContentBlock | MindMapFileContentBlock;
 
 /**
  * MindMapSubmap 的结构化数据约定。字段会在模块边界传递，用于保持类型安全和版本兼容。
@@ -934,6 +949,16 @@ function normalizeContentBlock(input: unknown): MindMapContentBlock | null {
       : undefined;
     const sourcePriority = normalizeImageSourcePriority(image.sourcePriority);
     return { id, type: "image", source, alt, align, width, height, layout, contentHash, localSource, remoteSources: remoteSources?.length ? remoteSources : undefined, sourcePriority: sourcePriority?.length ? sourcePriority : undefined };
+  }
+  if (candidate.type === "file") {
+    const file = candidate as Partial<MindMapFileContentBlock>;
+    const source = typeof file.source === "string" ? file.source.trim().slice(0, 2000) : "";
+    const name = typeof file.name === "string" ? file.name.trim().slice(0, 500) : "";
+    if (!source || !name) return null;
+    const size = typeof file.size === "number" && Number.isFinite(file.size) && file.size >= 0
+      ? Math.round(file.size)
+      : undefined;
+    return { id, type: "file", source, name, size };
   }
   if (candidate.type === "text") {
     const textCandidate = candidate as Partial<MindMapTextContentBlock>;
@@ -1758,6 +1783,7 @@ export function nodeSearchText(node: MindMapNode): string {
     if (block.type === "image") return `${block.source} ${block.alt ?? ""}`;
     if (block.type === "table") return [...block.table.headers, ...block.table.rows.flat()];
     if (block.type === "code") return [block.code.language, block.code.code];
+    if (block.type === "file") return `${block.name} ${block.source}`;
     return block.text;
   }), node.icon, node.submap?.path, ...(node.tags ?? [])]
     .filter((value): value is string => Boolean(value))
@@ -1986,6 +2012,8 @@ export function documentToMarkdown(doc: MindMapDocument): string {
         result.push(`![${escapeInlineMarkdown(block.alt ?? "图片")}](${block.source})`);
       } else if (block.type === "table") {
         result.push(tableToMarkdown(block.table));
+      } else if (block.type === "file") {
+        result.push(`[${escapeInlineMarkdown(block.name)}](${block.source})`);
       } else {
         result.push(`\`\`\`${block.code.language ?? ""}\n${block.code.code}\n\`\`\``);
       }

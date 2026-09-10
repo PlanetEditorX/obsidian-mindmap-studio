@@ -412,6 +412,8 @@ mindmap-search-index.json
 
 节点编辑弹窗中的图片 I/O 应通过 `node-image-actions.ts` 完成。弹窗只在操作成功后刷新预览并触发自动保存。
 
+文件块附件的宿主能力由 `main.ts` 的 `saveAttachmentFile()`、`scheduleFileAssetDeletion()`/`cancelFileAssetDeletion()` 与 `openFileAsset()` 提供，经 `editor-types.ts` 契约注入。文件选择通过 `node-image-actions.ts` 的 `selectAnyFile()` 完成；右键菜单“上传文件”与外部文件拖拽都收敛到编辑器的 `uploadFileToNode()`。所有引用删除路径（删除块、删除节点、批量删除、编辑弹窗移除）必须经 `onScheduleFileAssetDeletion()` 登记 60 秒延迟回收，撤销与重新引用经 `onCancelFileAssetDeletion()` 取消；实际删除前由插件层再次执行全库 `.mindmap` 引用检查并移入系统回收站。统一文件卡片由 `file-block-view.ts` 渲染，导图画布、文章、大纲与编辑弹窗共用同一 DOM 结构。
+
 节点文字块的字符级格式编辑应通过 `node-rich-text-editor.ts` 完成，弹窗只提供内容块容器和变更回调。
 
 新增跨文件功能时，应放在 `main.ts` 或专用服务类中，由 `view.ts` 和 `editor.ts` 通过回调调用。

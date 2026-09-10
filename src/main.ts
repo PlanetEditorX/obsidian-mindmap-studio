@@ -198,6 +198,8 @@ export default class MindMapStudioPlugin extends Plugin {
   private readonly autoUploadFileChains = new Map<TFile, Promise<void>>();
   private readonly autoUploadInFlightKeys = new Set<string>();
   private readonly remoteImageDeleteTimers = new Map<string, number>();
+  /** 文件块删除引用后的延迟回收定时器：key 为 vault 内附件路径。 */
+  private readonly pendingFileDeletionTimers = new Map<string, number>();
   private readonly autoUploadFileKeys = new WeakMap<TFile, string>();
   private autoUploadFileKeySequence = 0;
   private searchIndex!: MindMapSearchIndex;
@@ -452,6 +454,8 @@ export default class MindMapStudioPlugin extends Plugin {
     this.autoUploadInFlightKeys.clear();
     for (const timer of this.remoteImageDeleteTimers.values()) window.clearTimeout(timer);
     this.remoteImageDeleteTimers.clear();
+    for (const timer of this.pendingFileDeletionTimers.values()) window.clearTimeout(timer);
+    this.pendingFileDeletionTimers.clear();
     this.searchIndex?.destroy();
     this.app.workspace.detachLeavesOfType(VIEW_TYPE_MINDMAP_STUDIO);
     void this.settingsWriter?.flush();
@@ -2056,6 +2060,115 @@ export default class MindMapStudioPlugin extends Plugin {
     const path = await this.getAvailablePath(preferred);
     await this.app.vault.createBinary(path, await blob.arrayBuffer());
     return path;
+  }
+
+  /**
+   * 保存节点上传的任意附件文件到当前导图的资源目录，保留原文件名并自动处理重名。
+   *
+   * @param file 用户通过系统文件选择器或拖拽选中的文件。
+   * @param sourceFile 当前导图文件，用于确定资源保存目录。
+   * @returns 附件在仓库内的相对路径。
+   */
+  async saveAttachmentFile(file: File, sourceFile: TFile | null): Promise<string> {
+    const sourceFolder = sourceFile?.parent?.path ?? "";
+    const configuredFolder = normalizePath((this.settings.assetFolder || "MindMap Assets").replace(/^\/+|\/+$/g, ""));
+    const folder = normalizePath([sourceFolder, configuredFolder].filter(Boolean).join("/"));
+    await this.ensureFolderPath(folder);
+    const filename = this.sanitizeFilename(file.name || "附件");
+    const preferred = normalizePath(`${folder}/${filename}`);
+    const path = await this.getAvailablePath(preferred);
+    await this.app.vault.createBinary(path, await file.arrayBuffer());
+    return path;
+  }
+
+  /**
+   * 为已删除引用的文件块附件登记 60 秒延迟回收任务。
+   *
+   * 同一路径重复调度只保留首个定时器；到期执行时仍有全库引用检查兜底，
+   * 期间任何文档变化（撤销、粘贴恢复等）都会经 cancelFileAssetDeletion 取消任务。
+   *
+   * @param paths 被删除引用的附件路径集合。
+   * @param currentMindMapPath 当前导图文件路径，用于到期时的引用检查。
+   */
+  scheduleFileAssetDeletion(paths: string[], currentMindMapPath: string): void {
+    if (this.unloading) return;
+    for (const rawPath of paths) {
+      const path = normalizePath(rawPath);
+      if (!path || this.pendingFileDeletionTimers.has(path)) continue;
+      const timer = window.setTimeout(() => {
+        this.pendingFileDeletionTimers.delete(path);
+        void this.deleteFileAssetIfSafe(path, currentMindMapPath);
+      }, 60_000);
+      this.pendingFileDeletionTimers.set(path, timer);
+    }
+  }
+
+  /**
+   * 取消尚未到期的文件块附件延迟回收任务。
+   *
+   * @param paths 当前文档中仍被引用（或重新被引用）的附件路径集合。
+   */
+  cancelFileAssetDeletion(paths: string[]): void {
+    for (const rawPath of paths) {
+      const path = normalizePath(rawPath);
+      const timer = this.pendingFileDeletionTimers.get(path);
+      if (timer === undefined) continue;
+      window.clearTimeout(timer);
+      this.pendingFileDeletionTimers.delete(path);
+    }
+  }
+
+  /**
+   * 在删除文件块附件前进行最终安全检查：文件必须存在于仓库内，且没有任何 .mindmap 文档仍然引用该路径。
+   *
+   * @param localPath 附件在仓库内的相对路径。
+   * @param currentMindMapPath 当前导图文件路径。
+   * @returns 是否已成功移入系统回收站。
+   */
+  private async deleteFileAssetIfSafe(localPath: string, currentMindMapPath: string): Promise<boolean> {
+    const normalized = normalizePath(localPath);
+    const target = this.app.vault.getAbstractFileByPath(normalized);
+    if (!(target instanceof TFile)) return false;
+    const referencedInDocument = (document: MindMapDocument): boolean =>
+      flattenNodes(document.root).some((node) => nodeContentBlocks(node).some((block) => block.type === "file" && block.source === normalized));
+    const current = this.app.vault.getAbstractFileByPath(currentMindMapPath);
+    if (current instanceof TFile) {
+      try {
+        if (referencedInDocument(parseDocument(await this.app.vault.read(current), current.basename))) return false;
+      } catch {
+        return false;
+      }
+    }
+    for (const file of this.app.vault.getFiles()) {
+      if (file.path === currentMindMapPath || file.extension.toLowerCase() !== MINDMAP_EXTENSION) continue;
+      try {
+        const text = await this.app.vault.cachedRead(file);
+        if (text.includes(normalized)) return false;
+      } catch {
+        // Ignore an unreadable unrelated map and keep checking other files.
+      }
+    }
+    try {
+      await this.app.vault.trash(target, true);
+      return true;
+    } catch (error) {
+      console.warn("MindMap Studio could not trash node attachment file", error);
+      return false;
+    }
+  }
+
+  /**
+   * 用 Obsidian 打开文件块指向的仓库内附件；桌面端未知类型会回退到系统默认程序。
+   *
+   * @param path 附件在仓库内的相对路径。
+   */
+  async openFileAsset(path: string): Promise<void> {
+    const normalized = normalizePath(path);
+    if (!this.app.vault.getAbstractFileByPath(normalized)) {
+      new Notice(`文件不存在：${normalized}`);
+      return;
+    }
+    await this.app.workspace.openLinkText(normalized, "", false);
   }
 
   /**

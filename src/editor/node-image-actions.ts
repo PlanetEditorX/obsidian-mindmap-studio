@@ -36,6 +36,20 @@ export function selectImageFile(): Promise<File | null> {
 }
 
 /**
+ * 打开系统文件选择器，允许选择任意类型的单个文件。
+ *
+ * @returns 用户选择的文件；取消时返回 null。
+ */
+export function selectAnyFile(): Promise<File | null> {
+  return new Promise((resolve) => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.addEventListener("change", () => resolve(input.files?.[0] ?? null), { once: true });
+    input.click();
+  });
+}
+
+/**
  * 选择图片并保存到仓库或上传到图床。
  *
  * @param app Obsidian 应用实例。

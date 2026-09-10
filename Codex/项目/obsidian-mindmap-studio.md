@@ -1,10 +1,22 @@
 # obsidian-mindmap-studio 项目交接
 
 - 插件：MindMap Studio（Obsidian 本地优先 .mindmap 导图，含导图/大纲/文章/通读模式、全局搜索、图床、AI 助手与桌面截图链路）。
-- 版本基线：1.49.5（package.json / manifest.json / versions.json / package-lock.json 已同步，v1.49.5 已由 release 工作流发布）。
+- 版本基线：1.49.7（package.json / manifest.json / versions.json / package-lock.json 已同步，线上已发布 v1.49.6，本轮待 release 工作流发布 1.49.7）。
 - 仓库规则：见根目录 `AGENTS.md`；每轮代码交付三份 ZIP（源码 / 安装 / Codex 交接）共用同一六位后缀；验证入口 `npm run verify`。
 
-## 当前状态（本轮修复待发布 1.49.7 / 线上 1.49.6）
+## 当前状态（本轮功能：节点文件上传，待发布 1.49.7）
+
+- 本轮新增节点文件上传功能：节点右键菜单新增“上传文件”，选择本地任意文件后保存到当前导图资源目录（与图片同目录逻辑：`<导图目录>/<assetFolder>/原文件名`，重名自动追加序号），并在节点内容块中插入 `file` 块卡片。
+- 数据模型（`src/core/model.ts`）：新增 `MindMapFileContentBlock`（`id/source/name/size?`），并入 `MindMapContentBlock` 联合类型；`normalizeContentBlock` 要求 `source` 与 `name` 非空（否则整块丢弃）、`size` 取整；`nodeSearchText()` 按 `name + source` 参与搜索；`documentToMarkdown()` 导出为 `[name](source)` 链接；Markdown 导入不生成文件块。
+- 插件层（`src/main.ts`）：`saveAttachmentFile()` 落盘保留原文件名；`scheduleFileAssetDeletion()` 登记 60 秒延迟回收（同路径去重）；`cancelFileAssetDeletion()` 撤销/重新引用时取消；到期执行 `deleteFileAssetIfSafe()`——全库 `.mindmap` 引用检查通过后 `vault.trash(target, true)` 移入系统回收站；`openFileAsset()` 用 Obsidian 打开附件；`onunload` 清理未到期定时器。
+- 编辑器（`src/editor/editor.ts`）：右键“上传文件”与外部文件拖拽均收敛到 `uploadFileToNode()`；拖拽分支优先判定 `dataTransfer.types.includes("Files")` 避免被内容块拖拽吞掉；删除内容块（`removeContentBlock`）、删除节点、批量删除统一调度 `onScheduleFileAssetDeletion`，撤销收口统一调用 `onCancelFileAssetDeletion(collectFileAssetPaths())`；新增 `selectAnyFile()`（node-image-actions.ts）。
+- 统一渲染（`src/editor/file-block-view.ts`）：`renderFileCard()` + `fileCardSizeLabel()` 提供统一文件卡片（图标 + 文件名 + 可读大小，点击打开、右键交宿主菜单）；导图画布（`mind-map-node-renderer.ts`）、文章（`article-renderer.ts`，含字节估算分支）、大纲（`outline-renderer.ts`，含 contentOnly/占位名分支）、节点编辑弹窗（`node-edit-modal.ts` 的“+ 文件”按钮与 removeWorkingBlock 延迟回收）五面共用；`layout.ts` 自动宽度（268px）与高度（40px）估算、SVG 导出输出 📎 行。
+- 回调契约（`src/editor/editor-types.ts` + `src/view.ts`）：新增 `onSaveAttachmentFile` / `onScheduleFileAssetDeletion` / `onCancelFileAssetDeletion` / `onOpenFileAsset` 四个回调。
+- 样式：`styles.css` 新增 `.mmc-file-card` 系列与画布/文章/大纲/编辑器四宿主面适配。
+- 测试：新增 `tests/file-block.test.mjs`（12 项契约：模型规范化/搜索/导出、四个回调接线、保存与延迟回收链路、菜单与拖拽上传、删除调度与撤销收口、五面渲染共用、布局估算与 SVG、样式），并登记进 `package.json` 的 `test:unit` 清单。
+- 已知边界：文件块只做仓库内引用，不支持图床镜像与来源优先级；全局搜索语料仍只含节点文字（与图片一致），纯文件节点在结果中显示为“文件：名称”。
+
+- 上一轮（1.49.6）修复：粘贴克隆物化内容块——`handlePaste()` 与 `pasteAsChild()` 创建克隆后立即 `replaceNodeContentBlocks(clone, nodeContentBlocks(clone))`，修复纯文本粘贴子节点内容块拖拽静默失效；空格行内编辑优先复用 DOM 已渲染块 ID（`beginInlineEdit()` 导图分支），修复 legacy 节点出现两行相同内容。
 
 - 本轮使用 bug 排查（同族问题审计）：确认磁盘加载文档经 `normalizeNode` 已把 legacy 字段物化为稳定 `content` 数组，图片右键/预览/表格/代码块的块 ID 匹配安全；article/outline 行内编辑保存（`updateNodeTextBlock`）已有 legacy 兜底；双击编辑路径自洽。
 - 发现并修复同族遗留 bug：`cloneNodeWithFreshIds()` 只刷新节点 ID、不物化 `content`，纯文本粘贴生成的子节点保持 legacy 状态，其内容块拖拽 handle 携带渲染时合成 ID，释放时 `moveNodeContentBlock()` 重新合成新 ID 查找失败，拖拽静默无效（跨节点移动与排序均无反应、无提示）。
@@ -61,18 +73,21 @@
 
 ## 验证基线
 
-- `npm run verify` 本机完整通过：`test:unit` 407/407（含“space-triggered inline edit reuses the rendered text block before synthesizing IDs”与“paste-created clones materialize content blocks to keep block IDs stable”两项新契约）；`test:regression` 全部通过；`test:docs` 覆盖 62 个源码模块、1264 个具名声明；`test:repo` 通过；production esbuild 通过，`main.js` 已重建。
+- `npm run verify` 本机完整通过：`test:unit` 419/419（新增 `tests/file-block.test.mjs` 12 项契约并登记进 test:unit 清单；含 1.49.6 的“space-triggered inline edit reuses the rendered text block before synthesizing IDs”与“paste-created clones materialize content blocks to keep block IDs stable”契约）；`test:regression` 全部通过；`test:docs` 覆盖 63 个源码模块、1277 个具名声明；`test:repo` 通过；production esbuild 通过，`main.js` 已重建。
 - 详细数据见根目录 `TEST_RESULTS.md`。
 
 ## 待验证事项（需真实 Obsidian 桌面端手工冒烟）
 
-- 复制纯文本 → 节点粘贴生成子节点 → 聚焦按空格：应原地进入行内快速编辑，节点不再出现两行相同内容；编辑后数据仍只有一个文本块。
-- 刚粘贴未编辑的纯文本子节点：拖动其文本块拖拽把手到其它节点/排序应生效并出现“已移动内容块”提示（此前静默无效）。
-- 双击节点文本块进入行内编辑回归确认（该路径此前正常，本轮未改动其语义）。
-- Tab/Enter 新建空节点按空格直接输入的回归确认（走 newId() 回退分支，行为应与此前一致）。
+- 节点右键“上传文件”：选择本地文件（含中文名、无扩展名）后节点出现文件卡片，文件落盘到 `<导图目录>/MindMap Assets/原文件名`，重名自动追加序号；点击卡片用 Obsidian 打开附件。
+- 外部文件从资源管理器拖到节点/文章/大纲/编辑弹窗：出现追加目标高亮，松手后文件卡片插入目标节点；与内容块内部拖拽互不干扰。
+- 删除文件块（卡片右键删除/编辑弹窗删除/删除节点/批量删除）：60 秒后附件文件进入系统回收站；期间 Ctrl+Z 撤销或重新粘贴同引用可取消删除；仍有其它 `.mindmap` 引用同一文件时不删除。
+- 文件块五面显示回归：导图画布卡片宽度/高度布局正常、SVG 导出含 📎 文件名行；文章/大纲/通读模式卡片渲染与点击打开正常；节点编辑弹窗“+ 文件”可添加、删除走延迟回收。
+- 全局搜索：纯文件节点结果显示“文件：名称”；文件名不进入搜索语料（与图片一致）。
+- 回归确认 1.49.6 修复项：粘贴纯文本子节点空格行内编辑不重复、内容块拖拽正常。
 
 ## 下一步建议
 
+- 文件块后续可选增强：文件块点击右键菜单补充“在系统中显示/复制路径”；大量附件时的资源目录清理入口。
 - 编辑器侧优化仍待实施：把 `documentSnapshotJson` 失效与 `nodeTreeIndex` 重建收拢进 `mutate()` 单一入口；可加 debug 抽样断言缓存一致性。
 - 编辑器拆分剩余批次（题目系统流程、行内编辑深化）收益递减，建议按需推进；`nodeContentBlocks()` 记忆化因旧格式临时块 ID 的语义设计暂不实施。
 
@@ -107,6 +122,8 @@
 - 后缀 `419062`：完整源码 `obsidian-mindmap-studio-1.49.2-419062.zip`、安装包 `mindmap-studio-1.49.2-test-419062.zip`（SHA-256 `4d148e8b12e9b6178937244dd705b109071c8aaf70a232cea312844ed4079c33`，内容与 668980 一致，仅修复测试脚本契约）、交接 `Codex-1.49.2-handoff-419062.zip`。
 
 ## 最近交付包
+
+- 后缀 `162948`：完整源码 `obsidian-mindmap-studio-1.49.7-162948.zip`（SHA-256 `74a9d2f319076e6cbc7fed70377bef4b701dbd4e50de99a6128ffa6d4780ac0b`）、安装包 `mindmap-studio-1.49.7-test-162948.zip`（SHA-256 `85e43608db973688e8821fc12819762c9f003948f34cf7ee26b91e8b8dd16cd8`）、交接 `Codex-1.49.7-handoff-162948.zip`。本轮新功能：节点文件上传（右键/拖拽上传、五面统一文件卡片、60 秒延迟回收站删除与撤销取消）。
 
 - 后缀 `439372`：完整源码 `obsidian-mindmap-studio-1.49.6-439372.zip`（SHA-256 `cd4f8593dfda1a55f28e210b3743d38d203c0224beb0fb38e15819b9d6c36685`）、安装包 `mindmap-studio-1.49.6-test-439372.zip`（SHA-256 `fc0794423b854df28c36bf755fe96e967686f79fde6ee82fb7c840ce9f6bd9fc`）、交接 `Codex-1.49.6-handoff-439372.zip`。本轮同族 bug 审计：粘贴克隆物化内容块，修复纯文本粘贴子节点内容块拖拽静默失效（并巩固空格行内编辑修复）。
 

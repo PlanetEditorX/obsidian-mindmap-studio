@@ -2449,6 +2449,84 @@ mjx-container.mms-node-math:not(.is-display),
   font-size: var(--font-ui-smaller);
 }
 
+/* 文件内容块：统一卡片（画布 / 文章 / 大纲 / 编辑器共用） */
+.mmc-node-file-block {
+  flex: 0 0 100%;
+  margin: 2px 0;
+}
+
+.mmc-file-card {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  padding: 6px 12px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-s);
+  background: var(--background-secondary);
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+
+.mmc-file-card:hover {
+  background: var(--background-modifier-hover);
+  border-color: var(--interactive-accent);
+}
+
+.mmc-file-card-icon {
+  display: inline-flex;
+  flex: none;
+  color: var(--text-muted);
+}
+
+.mmc-file-card-icon .svg-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.mmc-file-card-body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.mmc-file-card-name {
+  font-size: 0.86em;
+  line-height: 1.3;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mmc-file-card-size {
+  font-size: 0.72em;
+  line-height: 1.2;
+  color: var(--text-faint);
+}
+
+.mmc-file-card.is-article,
+.mmc-file-card.is-outline,
+.mmc-file-card.is-editor {
+  display: flex;
+  width: 100%;
+  max-width: 360px;
+}
+
+.mms-article-file-block-wrap {
+  margin: 8px 0;
+}
+
+.mms-outline-file {
+  margin: 4px 0;
+}
+
+.mmc-file-block-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
 .mmc-node-meta-only {
   min-height: 24px;
 }

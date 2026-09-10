@@ -148,6 +148,20 @@ interface MindMapImageContentBlock {
 
 节点可以是纯图片节点，不强制存在文字。`layout: "inline"` 会让连续图片在导图、文章、通读和大纲中进入同一横向容器，按内容块顺序同行并自动换行；`block` 或缺失时独占一行。`contentHash` 用于同一图床内上传去重和最后引用删除判断，不替代图片地址。
 
+### 文件块
+
+```ts
+interface MindMapFileContentBlock {
+  id: string;
+  type: "file";
+  source: string; // 仓库内附件相对路径
+  name: string; // 展示与搜索使用的原始文件名
+  size?: number; // 字节数，未知时缺省
+}
+```
+
+文件块用于把任意附件上传到当前导图的资源目录：路径与图片一致（`<导图目录>/<资源目录>/原文件名`，重名自动追加序号）。`source` 必须指向仓库内文件，规范化时同时要求 `source` 与 `name` 非空，否则整块被丢弃；`size` 非负数值时四舍五入保存。文件块参与 `nodeSearchText()`（按 `name + source` 匹配）和 Markdown 导出（输出 `[name](source)` 链接）；Markdown 导入不生成文件块。删除引用（删除块、删除节点或编辑弹窗移除）后，插件层登记 60 秒延迟回收：期间撤销或重新引用会取消任务，到期时再次执行全库 `.mindmap` 引用检查，确认无任何引用后移入系统回收站。文件块只做引用，不支持图床镜像与来源优先级。
+
 ## 5. 富文本
 
 ```ts

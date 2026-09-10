@@ -14,7 +14,8 @@ import {
   type NodeTextAlign
 } from "../core/model";
 import { TableEditModal, CodeEditModal } from "./content-modals";
-import { selectNodeImage, uploadCurrentNodeImage } from "./node-image-actions";
+import { selectNodeImage, selectAnyFile, uploadCurrentNodeImage } from "./node-image-actions";
+import { renderFileCard } from "./file-block-view";
 import { renderNodeRichTextEditor } from "./node-rich-text-editor";
 import { ImagePreviewModal } from "./editor-modals";
 import { createArticleNumberingControls } from "./appearance-modal";
@@ -50,7 +51,7 @@ export interface NodeEditValues {
 export class NodeEditModal extends Modal {
   private readonly node: MindMapNode;
   private readonly defaultShape: NodeShape;
-  private readonly callbacks: Pick<MindMapEditorCallbacks, "resolveImage" | "onSavePastedImage" | "getImageHosts" | "getDefaultUploadHostIds" | "onUploadImage" | "onReadImageSource" | "onScheduleAutoUpload">;
+  private readonly callbacks: Pick<MindMapEditorCallbacks, "resolveImage" | "onSavePastedImage" | "getImageHosts" | "getDefaultUploadHostIds" | "onUploadImage" | "onReadImageSource" | "onScheduleAutoUpload" | "onSaveAttachmentFile" | "onScheduleFileAssetDeletion" | "onOpenFileAsset">;
   private readonly submit: (values: NodeEditValues, mode: "autosave" | "commit") => void;
   private saveOnClose: (() => void) | null = null;
   private closeWithoutFlush = false;
@@ -75,7 +76,7 @@ export class NodeEditModal extends Modal {
     app: App,
     node: MindMapNode,
     defaultShape: NodeShape,
-    callbacks: Pick<MindMapEditorCallbacks, "resolveImage" | "onSavePastedImage" | "getImageHosts" | "getDefaultUploadHostIds" | "onUploadImage" | "onReadImageSource" | "onScheduleAutoUpload">,
+    callbacks: Pick<MindMapEditorCallbacks, "resolveImage" | "onSavePastedImage" | "getImageHosts" | "getDefaultUploadHostIds" | "onUploadImage" | "onReadImageSource" | "onScheduleAutoUpload" | "onSaveAttachmentFile" | "onScheduleFileAssetDeletion" | "onOpenFileAsset">,
     submit: (values: NodeEditValues, mode: "autosave" | "commit") => void,
     private readonly richTextShortcuts: Pick<MindMapEditorOptions["richTextShortcuts"], "bold" | "italic" | "underline" | "color">,
     private readonly position: "center" | "right" = "center",
@@ -128,8 +129,20 @@ export class NodeEditModal extends Modal {
     let draggedBlockId: string | null = null;
 
     const cloneBlocks = (): MindMapContentBlock[] => JSON.parse(JSON.stringify(workingBlocks)) as MindMapContentBlock[];
+    /** 从工作块列表移除一个块；文件块引用被删除后进入插件层 60 秒延迟回收。 */
+    const removeWorkingBlock = (blockId: string): void => {
+      const currentIndex = workingBlocks.findIndex((item) => item.id === blockId);
+      if (currentIndex < 0) return;
+      const [removed] = workingBlocks.splice(currentIndex, 1);
+      if (removed?.type === "file" && removed.source.trim()) {
+        this.callbacks.onScheduleFileAssetDeletion([removed.source]);
+      }
+      renderBlocks();
+      scheduleAutoSave();
+    };
     const validBlocks = (): MindMapContentBlock[] => cloneBlocks().filter((block) => {
       if (block.type === "image") return Boolean(block.source.trim());
+      if (block.type === "file") return Boolean(block.source.trim() && block.name.trim());
       if (block.type === "table") return Boolean(block.table.headers.some((header) => header.trim()));
       if (block.type === "code") return Boolean(block.code.code.trim());
       return Boolean(block.text.trim());
@@ -142,7 +155,7 @@ export class NodeEditModal extends Modal {
         card.dataset.blockId = block.id;
         card.toggleClass("is-targeted", block.id === this.initialBlockId);
         const header = card.createDiv({ cls: "mmc-content-block-header" });
-        const blockTitle = block.type === "text" ? "文字块" : block.type === "image" ? "图片块" : block.type === "table" ? "表格块" : "代码块";
+        const blockTitle = block.type === "text" ? "文字块" : block.type === "image" ? "图片块" : block.type === "table" ? "表格块" : block.type === "file" ? "文件块" : "代码块";
         header.createSpan({ cls: "mmc-content-block-title", text: `${blockTitle} ${index + 1}` });
         const controls = header.createDiv({ cls: "mmc-content-block-controls" });
         const control = (icon: string, title: string, action: () => void, disabled = false): void => {
@@ -199,18 +212,12 @@ export class NodeEditModal extends Modal {
           event.preventDefault();
           event.stopPropagation();
           const menu = new Menu();
-          menu.addItem((item) => item.setTitle("删除当前块").setIcon("trash-2").onClick(() => {
-            const currentIndex = workingBlocks.findIndex((item) => item.id === block.id);
-            if (currentIndex < 0) return;
-            workingBlocks.splice(currentIndex, 1);
-            renderBlocks();
-            scheduleAutoSave();
-          }));
+          menu.addItem((item) => item.setTitle("删除当前块").setIcon("trash-2").onClick(() => removeWorkingBlock(block.id)));
           menu.showAtMouseEvent(event);
         });
         control("arrow-up", "上移", () => { [workingBlocks[index - 1], workingBlocks[index]] = [workingBlocks[index]!, workingBlocks[index - 1]!]; renderBlocks(); scheduleAutoSave(); }, index === 0);
         control("arrow-down", "下移", () => { [workingBlocks[index + 1], workingBlocks[index]] = [workingBlocks[index]!, workingBlocks[index + 1]!]; renderBlocks(); scheduleAutoSave(); }, index === workingBlocks.length - 1);
-        control("trash-2", "删除内容块", () => { workingBlocks.splice(index, 1); renderBlocks(); scheduleAutoSave(); });
+        control("trash-2", "删除内容块", () => removeWorkingBlock(block.id));
         if (block.type === "text") {
           renderNodeRichTextEditor(
             card.createDiv({ cls: "mmc-content-block-body" }),
@@ -324,6 +331,13 @@ export class NodeEditModal extends Modal {
             });
           }
           refresh();
+        } else if (block.type === "file") {
+          const body = card.createDiv({ cls: "mmc-content-block-body mmc-file-block-editor" });
+          renderFileCard(body, block, {
+            cls: "is-editor",
+            onOpen: () => void this.callbacks.onOpenFileAsset(block.source)
+          });
+          body.createDiv({ cls: "setting-item-description", text: `附件路径：${block.source}` });
         } else if (block.type === "table") {
           const body = card.createDiv({ cls: "mmc-content-block-body" });
           body.createDiv({ cls: "setting-item-description", text: `${block.table.headers.length} 列 · ${block.table.rows.length} 行` });
@@ -422,6 +436,29 @@ export class NodeEditModal extends Modal {
     addTable.addEventListener("click", () => { workingBlocks.push({ id: newId(), type: "table", table: { headers: ["列 1", "列 2"], rows: [["", ""]], source: "manual" } }); renderBlocks(); scheduleAutoSave(); });
     const addCode = actionRow.createEl("button", { text: "+ 代码", attr: { type: "button" } });
     addCode.addEventListener("click", () => { workingBlocks.push({ id: newId(), type: "code", code: { language: "bash", code: "" } }); renderBlocks(); scheduleAutoSave(); });
+    const addFile = actionRow.createEl("button", { text: "+ 文件", attr: { type: "button" } });
+    addFile.addEventListener("click", () => {
+      void (async (): Promise<void> => {
+        try {
+          const file = await selectAnyFile();
+          if (!file) return;
+          const path = await this.callbacks.onSaveAttachmentFile(file);
+          workingBlocks.push({
+            id: newId(),
+            type: "file",
+            source: path,
+            name: file.name || path.split("/").pop() || "附件",
+            size: file.size > 0 ? file.size : undefined
+          });
+          renderBlocks();
+          scheduleAutoSave();
+          new Notice("文件已添加到当前节点");
+        } catch (error) {
+          console.error("MindMap Studio node modal file upload failed", error);
+          new Notice(`添加文件失败：${error instanceof Error ? error.message : String(error)}`, 7000);
+        }
+      })();
+    });
     renderBlocks();
     if (this.position === "right" && this.panelHost) {
       this.externalNodeHandler = (event: Event): void => {

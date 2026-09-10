@@ -15,6 +15,7 @@ import { articleNumberLabel } from "../article/modes";
 import type { MindMapEditorCallbacks } from "./editor-types";
 import { renderInlineMarkdown, renderRichTextRuns } from "./rich-text-dom";
 import { loadImageWithFallback } from "./image-failure-view";
+import { renderFileCard } from "./file-block-view";
 
 /** 大纲渲染所需的编辑器回调边界。 */
 export interface OutlineRendererOptions {
@@ -27,10 +28,11 @@ export interface OutlineRendererOptions {
   addInlineNodeActions: (container: HTMLElement, node: MindMapNode) => void;
   mutate: (action: () => void) => void;
   editSelected: () => void;
-  openAiContextMenu: (event: MouseEvent, nodeId: string) => void;
+  openAiContextMenu: (event: MouseEvent, nodeId: string, blockId?: string) => void;
   openImageContextMenu: (event: MouseEvent, nodeId: string, blockId: string) => void;
   openImagePreview: (nodeId: string, blockId: string) => void;
   openMindMap: (path: string) => void | Promise<void>;
+  openFileAsset: (path: string) => Promise<void>;
   resolveImage: MindMapEditorCallbacks["resolveImage"];
   imageHostPriorityIds: string[];
   renderCode: MindMapEditorCallbacks["onRenderCode"];
@@ -62,12 +64,13 @@ export function renderOutlineMode(container: HTMLElement, options: OutlineRender
     item.style.setProperty("--mms-outline-depth", String(depth));
     const firstTextBlock = nodeContentBlocks(node).find((block): block is MindMapTextContentBlock => block.type === "text");
     const contentOnly = !firstTextBlock?.text.trim() && !node.submap
-      && Boolean(node.table || node.code || node.note || nodeContentBlocks(node).some((block) => block.type === "image"));
+      && Boolean(node.table || node.code || node.note || nodeContentBlocks(node).some((block) => block.type === "image" || block.type === "file"));
     item.toggleClass("is-content-only", contentOnly);
     const row = item.createDiv({ cls: `mms-outline-row${options.selectedId === node.id ? " is-selected" : ""}` });
     row.dataset.nodeId = node.id;
     row.createSpan({ cls: "mms-outline-bullet", text: node.children.length || node.submap ? "◆" : "•" });
-    const label = nodePlainText(node) || (node.submap?.title ?? "图片节点");
+    const label = nodePlainText(node)
+      || (node.submap?.title ?? (nodeContentBlocks(node).some((block) => block.type === "file") ? "文件节点" : "图片节点"));
     if (node.submap) {
       const link = row.createEl("a", {
         cls: "mms-outline-title mms-submap-text-link",
@@ -105,12 +108,13 @@ export function renderOutlineMode(container: HTMLElement, options: OutlineRender
   root.children.forEach((child) => visit(child, 1));
 }
 
-/** 渲染节点主标题以外的文字、图片、表格、代码和备注内容。 */
+/** 渲染节点主标题以外的文字、图片、表格、代码、附件文件和备注内容。 */
 function renderOutlineContent(container: HTMLElement, node: MindMapNode, depth: number, options: OutlineRendererOptions): void {
   const blocks = nodeContentBlocks(node);
   const additionalText = blocks.filter((block): block is MindMapTextContentBlock => block.type === "text").slice(1);
   const images = blocks.filter((block) => block.type === "image");
-  if (!additionalText.length && !images.length && !node.table && !node.code && !node.note) return;
+  const files = blocks.filter((block) => block.type === "file");
+  if (!additionalText.length && !images.length && !files.length && !node.table && !node.code && !node.note) return;
 
   const content = container.createDiv({ cls: "mms-outline-content" });
   content.style.setProperty("--mms-outline-content-depth", String(depth));
@@ -158,6 +162,17 @@ function renderOutlineContent(container: HTMLElement, node: MindMapNode, depth: 
       options.openImageContextMenu(event, node.id, block.id);
     });
     if (block.alt) figure.createEl("figcaption", { text: block.alt });
+  }
+  for (const block of files) {
+    const wrap = content.createDiv({ cls: "mms-outline-file" });
+    renderFileCard(wrap, block, {
+      cls: "is-outline",
+      onOpen: () => void options.openFileAsset(block.source),
+      onContextMenu: (event) => {
+        options.selectNode(node.id);
+        options.openAiContextMenu(event, node.id, block.id);
+      }
+    });
   }
   if (node.table) {
     const tableWrap = content.createDiv({ cls: "mms-outline-table-wrap" });

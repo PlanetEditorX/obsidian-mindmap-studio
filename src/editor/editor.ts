@@ -45,6 +45,7 @@ import {
   type MindMapAppearance,
   type MindMapDocument,
   type MindMapContentBlock,
+  type MindMapFileContentBlock,
   type MindMapImageContentBlock,
   type MindMapImageUploadPatch,
   type MindMapNavigation,
@@ -93,7 +94,7 @@ import { AppearanceModal } from "./appearance-modal";
 import { ViewportController, type TouchGestureState } from "./viewport-controller";
 import { renderMindMapNode as renderMindMapNodeInto, type MindMapNodeRendererContext } from "./mind-map-node-renderer";
 import { parseClipboardContentBlocks, parseClipboardHtml, parseClipboardNodes } from "./clipboard-import";
-import { selectImageFile, uploadCurrentNodeImage } from "./node-image-actions";
+import { selectImageFile, selectAnyFile, uploadCurrentNodeImage } from "./node-image-actions";
 import { canMoveNodes, resolveDropPosition } from "./drag-drop";
 import { DocumentHistory } from "./history-manager";
 import { renderOutlineMode } from "./outline-renderer";
@@ -1289,7 +1290,36 @@ export class MindMapEditor {
 
   /** Sends one document snapshot to the host together with the minimum article-context work it requires. */
   private notifyDocumentChange(articleContextImpact: ArticleContextChangeImpact = "structure"): void {
+    // 每次文档变化后同步当前引用的附件路径，取消仍在文档中的延迟删除任务
+    //（覆盖撤销、重做、粘贴恢复、内容块重排等一切引用恢复场景）。
+    this.callbacks.onCancelFileAssetDeletion(this.collectFileAssetPaths());
     this.callbacks.onChange(this.createDetachedDocumentSnapshot(true), { articleContextImpact });
+  }
+
+  /** 收集当前文档全部文件块引用的附件路径，用于取消延迟删除任务。 */
+  private collectFileAssetPaths(): string[] {
+    const paths: string[] = [];
+    for (const node of flattenNodes(this.document.root)) {
+      for (const block of nodeContentBlocks(node)) {
+        if (block.type === "file") paths.push(block.source);
+      }
+    }
+    return paths;
+  }
+
+  /** 收集指定节点及其后代中全部文件块引用的附件路径，用于节点删除后的延迟回收。 */
+  private collectDeletedFileAssetPaths(nodeIds: readonly string[]): string[] {
+    const paths = new Set<string>();
+    for (const nodeId of nodeIds) {
+      const node = this.nodeById(nodeId);
+      if (!node) continue;
+      for (const descendant of flattenNodes(node)) {
+        for (const block of nodeContentBlocks(descendant)) {
+          if (block.type === "file") paths.add(block.source);
+        }
+      }
+    }
+    return [...paths];
   }
 
   /**
@@ -2953,10 +2983,11 @@ export class MindMapEditor {
       addInlineNodeActions: (container, node) => this.addInlineNodeActions(container, node),
       mutate: (action) => this.mutate(action),
       editSelected: () => this.editSelected(),
-      openAiContextMenu: (event, nodeId) => { this.selectNode(nodeId); this.openContextMenu(event); },
+      openAiContextMenu: (event, nodeId, blockId) => { this.selectNode(nodeId); this.openContextMenu(event, blockId); },
       openImageContextMenu: (event, nodeId, blockId) => this.openImageContextMenu(event, nodeId, blockId),
       openImagePreview: (nodeId, blockId) => this.openImagePreviewWithSources(nodeId, blockId),
       openMindMap: (path) => this.navigateWithTransition(() => this.callbacks.onOpenMindMap(path)),
+      openFileAsset: (path) => this.callbacks.onOpenFileAsset(path),
       resolveImage: this.callbacks.resolveImage,
       imageHostPriorityIds: this.options.imageHostPriorityIds,
       renderCode: this.callbacks.onRenderCode
@@ -4659,7 +4690,10 @@ export class MindMapEditor {
       getDefaultUploadHostIds: this.callbacks.getDefaultUploadHostIds,
       onUploadImage: this.callbacks.onUploadImage,
       onReadImageSource: this.callbacks.onReadImageSource,
-      onScheduleAutoUpload: this.callbacks.onScheduleAutoUpload
+      onScheduleAutoUpload: this.callbacks.onScheduleAutoUpload,
+      onSaveAttachmentFile: this.callbacks.onSaveAttachmentFile,
+      onScheduleFileAssetDeletion: this.callbacks.onScheduleFileAssetDeletion,
+      onOpenFileAsset: this.callbacks.onOpenFileAsset
     }, (values, mode) => {
       const previousArticleTitle = nodePlainText(selected);
       const previousNumberingMode = selected.articleNumberingMode;
@@ -4860,6 +4894,7 @@ export class MindMapEditor {
       new Notice("根节点不能删除");
       return;
     }
+    const removedFileAssets = this.collectDeletedFileAssetPaths([nodeId]);
     const fallback = deletionSelectionFallback(this.document.root, [nodeId], this.currentNodeTreeIndex());
     const restoreLocation = this.currentMode === "mindmap" ? null : this.createSelectionLocation(fallback);
     const mindMapAnchor = this.captureMindMapViewportAnchor(fallback);
@@ -4871,6 +4906,7 @@ export class MindMapEditor {
       this.selectedIds.add(fallback);
     }, restoreLocation);
     this.restoreMindMapViewportAnchor(mindMapAnchor);
+    if (removedFileAssets.length) this.callbacks.onScheduleFileAssetDeletion(removedFileAssets);
   }
 
   /**
@@ -4880,6 +4916,7 @@ export class MindMapEditor {
     if (!this.ensureEditable()) return;
     const batch = topLevelSelectedNodeIds(this.document.root, this.selectedIds, this.currentNodeTreeIndex());
     if (this.selectedIds.size > 1 && batch.length) {
+      const removedFileAssets = this.collectDeletedFileAssetPaths(batch);
       const fallback = deletionSelectionFallback(this.document.root, batch, this.currentNodeTreeIndex());
       const restoreLocation = this.currentMode === "mindmap" ? null : this.createSelectionLocation(fallback);
       const mindMapAnchor = this.captureMindMapViewportAnchor(fallback);
@@ -4890,6 +4927,7 @@ export class MindMapEditor {
         this.selectedIds.add(fallback);
       }, restoreLocation);
       this.restoreMindMapViewportAnchor(mindMapAnchor);
+      if (removedFileAssets.length) this.callbacks.onScheduleFileAssetDeletion(removedFileAssets);
       new Notice(`已删除 ${batch.length} 个所选节点`);
       return;
     }
@@ -4898,6 +4936,7 @@ export class MindMapEditor {
       new Notice("根节点不能删除");
       return;
     }
+    const removedFileAssets = this.collectDeletedFileAssetPaths([selected.id]);
     const fallback = deletionSelectionFallback(this.document.root, [selected.id], this.currentNodeTreeIndex());
     const restoreLocation = this.currentMode === "mindmap" ? null : this.createSelectionLocation(fallback);
     const mindMapAnchor = this.captureMindMapViewportAnchor(fallback);
@@ -4908,6 +4947,7 @@ export class MindMapEditor {
       this.selectedIds.add(this.selectedId);
     }, restoreLocation);
     this.restoreMindMapViewportAnchor(mindMapAnchor);
+    if (removedFileAssets.length) this.callbacks.onScheduleFileAssetDeletion(removedFileAssets);
   }
 
   /**
@@ -5207,11 +5247,23 @@ export class MindMapEditor {
     });
   }
 
-  /** Lets a dragged content block be appended after all blocks in a target node. */
+  /** Lets a dragged content block be appended after all blocks in a target node; external files trigger an attachment upload. */
   private bindContentBlockAppendDropTarget(dropTarget: HTMLElement, nodeId: string): void {
     dropTarget.addClass("mmc-content-block-append-target");
     dropTarget.addEventListener("dragover", (event) => {
-      if (this.readOnly || !this.draggingContentBlock) return;
+      if (this.readOnly) return;
+      // 外部文件拖入必须先于内容块拖拽判空处理，否则节点自身的 drop 会吞掉文件拖放。
+      if (event.dataTransfer?.types.includes("Files") && !this.draggingContentBlock) {
+        const target = event.target instanceof Element ? event.target : null;
+        if (target?.closest("[data-block-id]")) return;
+        event.preventDefault();
+        event.stopPropagation();
+        event.stopImmediatePropagation();
+        dropTarget.addClass("is-block-drop-append");
+        if (event.dataTransfer) event.dataTransfer.dropEffect = "copy";
+        return;
+      }
+      if (!this.draggingContentBlock) return;
       const target = event.target instanceof Element ? event.target : null;
       if (target?.closest("[data-block-id]")) return;
       event.preventDefault();
@@ -5222,9 +5274,19 @@ export class MindMapEditor {
       if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
     });
     dropTarget.addEventListener("drop", (event) => {
-      const dragging = this.draggingContentBlock;
-      if (this.readOnly || !dragging) return;
+      if (this.readOnly) return;
       const target = event.target instanceof Element ? event.target : null;
+      if (event.dataTransfer?.types.includes("Files") && !this.draggingContentBlock) {
+        if (target?.closest("[data-block-id]")) return;
+        event.preventDefault();
+        event.stopPropagation();
+        event.stopImmediatePropagation();
+        dropTarget.removeClass("is-block-drop-append");
+        void this.uploadFileToNode(nodeId);
+        return;
+      }
+      const dragging = this.draggingContentBlock;
+      if (!dragging) return;
       if (target?.closest("[data-block-id]")) return;
       event.preventDefault();
       event.stopPropagation();
@@ -5271,10 +5333,51 @@ export class MindMapEditor {
     const node = this.nodeById(nodeId);
     if (!node || !this.ensureEditable()) return;
     const blocks = nodeContentBlocks(node);
-    if (!blocks.some((block) => block.id === blockId)) return;
+    const removed = blocks.find((block) => block.id === blockId);
+    if (!removed) return;
     this.mutateArticleContent(() => {
       replaceNodeContentBlocks(node, blocks.filter((block) => block.id !== blockId));
     });
+    // 文件块引用被显式删除后进入 60 秒延迟回收；撤销或恢复引用会自动取消。
+    if (removed.type === "file") this.callbacks.onScheduleFileAssetDeletion([removed.source]);
+  }
+
+  /**
+   * 上传任意文件到指定节点：经系统文件选择器选文件、落盘到附件目录后插入文件内容块。
+   *
+   * @param nodeId 目标节点 ID。
+   * @param afterBlockId 插入锚点内容块 ID；缺省时追加到节点内容末尾。
+   */
+  private async uploadFileToNode(nodeId: string, afterBlockId?: string): Promise<void> {
+    if (!this.ensureEditable()) return;
+    if (!this.nodeById(nodeId)) return;
+    try {
+      const file = await selectAnyFile();
+      if (!file) return;
+      // 对话框等待期间节点可能已被删除；重新校验后再落盘与写入，避免产生无引用的孤儿文件。
+      const node = this.nodeById(nodeId);
+      if (!node) return;
+      const path = await this.callbacks.onSaveAttachmentFile(file);
+      const block: MindMapFileContentBlock = {
+        id: newId(),
+        type: "file",
+        source: path,
+        name: file.name || path.split("/").pop() || "附件",
+        size: file.size > 0 ? file.size : undefined
+      };
+      this.mutateArticleContent(() => {
+        const blocks = nodeContentBlocks(node);
+        const afterIndex = afterBlockId ? blocks.findIndex((item) => item.id === afterBlockId) : -1;
+        const insertIndex = afterIndex >= 0 ? afterIndex + 1 : blocks.length;
+        blocks.splice(insertIndex, 0, block);
+        replaceNodeContentBlocks(node, blocks);
+      });
+      this.selectNode(nodeId);
+      new Notice(`已上传文件：${block.name}`);
+    } catch (error) {
+      console.error("MindMap Studio file upload failed", error);
+      new Notice(`上传文件失败：${error instanceof Error ? error.message : String(error)}`, 7000);
+    }
   }
 
   /**
@@ -6637,6 +6740,10 @@ export class MindMapEditor {
         .setTitle("插入截图并识别")
         .setIcon("scan-text")
         .onClick(() => void this.captureScreenshot(true, screenshotTarget)));
+      menu.addItem((item) => item
+        .setTitle("上传文件")
+        .setIcon("file-up")
+        .onClick(() => void this.uploadFileToNode(selected.id, contextBlockId)));
     }
     menu.addItem((item) => item.setTitle(selected?.table ? "编辑表格" : "插入表格").setIcon("table-2").onClick(() => this.editTable()));
     menu.addItem((item) => item.setTitle("插入 LaTeX 公式").setIcon("sigma").onClick(() => this.insertFormula()));

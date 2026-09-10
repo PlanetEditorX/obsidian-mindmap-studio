@@ -18,6 +18,7 @@ import {
 
 import { clearImageFailureDetails, renderImageFailureDetails } from "./image-failure-view";
 import { renderRichTextRuns } from "./rich-text-dom";
+import { renderFileCard } from "./file-block-view";
 import { isRightChildZone } from "./drag-drop";
 import type { LayoutResult } from "../render/layout";
 import type { ArticleContextChangeImpact, MindMapEditorCallbacks, MindMapEditorOptions } from "./editor-types";
@@ -241,6 +242,18 @@ export function renderMindMapNode(
       const shell = content.createDiv({ cls: "mmc-node-structured-block-shell" });
       ctx.renderNodeCode(shell, node, block.code, block.id);
       ctx.bindContentBlockDragHandle(shell, node.id, block.id);
+      continue;
+    }
+    if (block.type === "file") {
+      const wrap = content.createDiv({ cls: "mmc-node-file-block" });
+      renderFileCard(wrap, block, {
+        cls: "is-canvas",
+        onOpen: () => void ctx.callbacks.onOpenFileAsset(block.source),
+        onContextMenu: (event) => {
+          ctx.selectNode(node.id);
+          ctx.openContextMenu(event, block.id);
+        }
+      });
       continue;
     }
     if (!block.text.trim()) continue;

@@ -54,6 +54,14 @@ export interface MindMapEditorCallbacks {
   onExportDocument: (format: "html" | "doc" | "pdf" | "md") => void | Promise<void>;
   resolveImage: (source: string) => string | null;
   onSavePastedImage: (blob: Blob, suggestedName: string) => Promise<string>;
+  /** Saves a user-picked attachment file into the current map's asset folder and returns the vault path. */
+  onSaveAttachmentFile: (file: File) => Promise<string>;
+  /** Registers 60-second deferred trash jobs for attachment paths whose references were just removed. */
+  onScheduleFileAssetDeletion: (paths: string[]) => void;
+  /** Cancels pending deferred deletion jobs for attachment paths that are referenced again. */
+  onCancelFileAssetDeletion: (paths: string[]) => void;
+  /** Opens a vault attachment file with Obsidian (unknown desktop types fall back to the system app). */
+  onOpenFileAsset: (path: string) => Promise<void>;
   getImageHosts: () => ImageHostChoice[];
   getDefaultUploadHostIds: () => string[];
   onUploadImage: (blob: Blob, suggestedName: string, hostIds: string[]) => Promise<ImageHostUploadBatch>;

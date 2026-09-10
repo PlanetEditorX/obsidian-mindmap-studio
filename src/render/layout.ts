@@ -117,6 +117,9 @@ function nodeDimensions(node: MindMapNode, depth: number, defaultFontSize = 14, 
           .reduce((sum, character) => sum + (/[\u2e80-\u9fff\uff00-\uffef]/u.test(character) ? 1 : .62), 0);
         const horizontalPadding = fitted ? (depth === 0 ? 48 : 58) : 80;
         width = Math.max(width, Math.min(automaticMaximum, horizontalPadding + Math.min(visualUnits, 90) * fontSize));
+      } else if (block.type === "file") {
+        flushInlineImageWidth();
+        width = Math.max(width, Math.min(900, 268));
       }
     }
     flushInlineImageWidth();
@@ -151,6 +154,9 @@ function nodeDimensions(node: MindMapNode, depth: number, defaultFontSize = 14, 
     } else if (block.type === "text") {
       flushInlineImageHeight();
       height += Math.max(30, estimatedTextLines(block.text, width, fontSize) * (fontSize + 8));
+    } else if (block.type === "file") {
+      flushInlineImageHeight();
+      height += 40;
     }
   }
   flushInlineImageHeight();
@@ -584,6 +590,9 @@ export function documentToSvg(root: MindMapNode, mode: LayoutMode, title: string
       if (block.type === "image") {
         contentParts.push(`<rect x="${position.x - 70}" y="${contentY - 14}" width="140" height="94" rx="8" fill="rgba(127,127,127,.12)"/><text x="${position.x}" y="${contentY + 38}" text-anchor="middle" fill="${foreground}" font-size="12">🖼 ${escapeXml((block.alt ?? "图片").slice(0, 20))}</text>`);
         contentY += 112;
+      } else if (block.type === "file") {
+        contentParts.push(`<text x="${textX}" y="${contentY}" text-anchor="${textAnchor}" fill="${foreground}" font-size="12">📎 ${escapeXml(block.name.slice(0, 24))}</text>`);
+        contentY += 26;
       } else if (block.type === "text" && block.text.trim()) {
         const blockPrefix = prefixUsed ? "" : prefix;
         prefixUsed = true;

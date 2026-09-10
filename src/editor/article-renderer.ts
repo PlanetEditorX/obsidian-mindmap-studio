@@ -29,6 +29,7 @@ import { resolveByteChunk, resolveByteWindow, utf8ByteLength } from "../article/
 import type { MindMapEditorCallbacks } from "./editor-types";
 import { renderInlineMarkdown, renderRichTextRuns } from "./rich-text-dom";
 import { bindTableColumnResize, bindTableDoubleClick } from "./table-interaction";
+import { renderFileCard } from "./file-block-view";
 import type { ArticleLeafBulletStyle } from "../settings";
 import { loadImageWithFallback } from "./image-failure-view";
 
@@ -55,7 +56,7 @@ export interface ArticleRendererOptions {
   articleLeafNumberingThreshold: number;
   imageHostPriorityIds: string[];
   articleNavigation?: ArticlePageNavigation;
-  callbacks: Pick<MindMapEditorCallbacks, "resolveImage" | "onRenderCode" | "onOpenMindMap" | "onOpenArticleDirectory">;
+  callbacks: Pick<MindMapEditorCallbacks, "resolveImage" | "onRenderCode" | "onOpenMindMap" | "onOpenArticleDirectory" | "onOpenFileAsset">;
   selectNode: (id: string) => void;
   focusNode: (id: string) => void;
   openAiContextMenu: (event: MouseEvent, nodeId: string, blockId?: string) => void;
@@ -115,6 +116,7 @@ function articleNodeRenderBytes(info: ArticleNodeInfo): number {
       if (block.type === "text") bytes += utf8ByteLength(block.text);
       else if (block.type === "image") bytes += utf8ByteLength(block.alt ?? "") + 256;
       else if (block.type === "code") bytes += utf8ByteLength(block.code.code);
+      else if (block.type === "file") bytes += utf8ByteLength(block.name) + utf8ByteLength(block.source) + 64;
       else {
         bytes += block.table.headers.reduce((sum, cell) => sum + utf8ByteLength(cell), 0);
         for (const row of block.table.rows) bytes += row.reduce((sum, cell) => sum + utf8ByteLength(cell), 0);
@@ -513,6 +515,18 @@ export function renderArticleNodeContent(container: HTMLElement, node: MindMapNo
       inlineImageRow = null;
       const shell = createArticleContentBlock(container, block.id, true);
       renderArticleTable(shell, node, block.table, block.id, options);
+    } else if (block.type === "file") {
+      inlineImageRow = null;
+      const shell = createArticleContentBlock(container, block.id, true);
+      shell.addClass("mms-article-file-block-wrap");
+      renderFileCard(shell, block, {
+        cls: "is-article",
+        onOpen: () => void options.callbacks.onOpenFileAsset(block.source),
+        onContextMenu: (event) => {
+          options.selectNode(node.id);
+          options.openAiContextMenu(event, node.id, block.id);
+        }
+      });
     } else {
       inlineImageRow = null;
       const shell = createArticleContentBlock(container, block.id, true);

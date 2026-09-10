@@ -11,6 +11,7 @@ import {
   nodePlainText,
   parseDocument,
   type MindMapDocument,
+  type MindMapFileContentBlock,
   type MindMapNavigation,
   type MindMapNode
 } from "../core/model";
@@ -113,6 +114,8 @@ function nodeDisplayText(node: MindMapNode): string {
   if (text) return text;
   if (node.code?.code.trim()) return `代码：${compact(node.code.code, 64)}`;
   if (node.table) return `表格：${node.table.headers.join(" / ") || `${node.table.rows.length} 行`}`;
+  const firstFile = nodeContentBlocks(node).find((block): block is MindMapFileContentBlock => block.type === "file");
+  if (firstFile) return `文件：${firstFile.name || firstFile.source}`;
   if (nodeContentBlocks(node).some((block) => block.type === "image")) return "图片节点";
   return "未命名节点";
 }
