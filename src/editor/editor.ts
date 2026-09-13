@@ -16,7 +16,6 @@ import {
   documentToMarkdown,
   extractFirstWikiLink,
   findAncestors,
-  findNode,
   flattenNodes,
   indexedAncestors,
   indexedHasAncestor,
@@ -1426,31 +1425,18 @@ export class MindMapEditor {
         else new Notice("截图已复制到剪贴板；当前导图只读，未插入图片");
         return;
       }
-      const path = await this.callbacks.onSavePastedImage(capture.blob, capture.suggestedName);
-      const imageBlock: MindMapImageContentBlock = {
-        id: newId(),
-        type: "image",
-        source: path,
-        localSource: path,
-        alt: "截图"
-      };
-      const next = cloneDocument(this.document);
-      const target = findNode(next.root, insertionTarget.nodeId);
-      if (!target) {
-        new Notice("截图已复制到剪贴板；截图前聚焦的节点已不存在");
-        return;
-      }
-      const blocks = nodeContentBlocks(target);
-      const afterIndex = insertionTarget.afterBlockId
-        ? blocks.findIndex((block) => block.id === insertionTarget.afterBlockId)
-        : -1;
-      blocks.splice(afterIndex >= 0 ? afterIndex + 1 : blocks.length, 0, imageBlock);
-      target.content = blocks;
-      syncNodeContentFields(target);
-      this.replaceDocumentFromExternalEdit(next, target.id);
-      const scheduled = this.callbacks.onScheduleAutoUpload(target.id, imageBlock.id, path, capture.suggestedName);
-      new Notice(scheduled ? `截图已插入，${this.autoUploadScheduleMessage()}` : `截图已插入：${path}`);
-      if (recognizeAfter) await this.recognizeImageBlock(target.id, imageBlock.id);
+      // 截图与右键选图、粘贴图片共用统一插入链路：走 mutate 保留撤销与阅读位置，
+      // 不再整份替换文档，也不再强制聚焦目标节点拉走当前阅读位置。
+      const imageBlock = await this.insertImageBlockToNode(
+        insertionTarget.nodeId,
+        capture.blob,
+        capture.suggestedName,
+        "截图",
+        "截图",
+        insertionTarget.afterBlockId
+      );
+      if (!imageBlock) return;
+      if (recognizeAfter) await this.recognizeImageBlock(insertionTarget.nodeId, imageBlock.id);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       if (/取消截图操作/.test(message)) new Notice("已取消截图");
@@ -5447,35 +5433,49 @@ export class MindMapEditor {
   }
 
   /**
-   * 经系统文件选择器为节点插入本地图片内容块，与粘贴图片共用保存、插入和自动上传链路。
+   * 将图片 Blob 落盘并作为内容块插入目标节点，右键选图、粘贴图片与截图插入共用。
+   * 走统一 mutate 链路（撤销、保存、阅读位置记忆），并按节点当前状态排程图床自动上传。
    *
    * @param nodeId 目标节点 ID。
+   * @param blob 图片数据。
+   * @param filename 落盘文件名（含扩展名）。
+   * @param alt 图片替代文字；缺省时不写入 alt 字段。
+   * @param label 通知用语中的资源名称（如“图片”“截图”）。
    * @param afterBlockId 插入锚点内容块 ID；缺省时追加到节点内容末尾。
+   * @returns 实际插入的图片内容块；目标节点不存在、落盘失败或文档只读时返回 null。
    */
-  private async insertImageToNode(nodeId: string, afterBlockId?: string): Promise<void> {
-    if (!this.ensureEditable()) return;
-    const node = this.nodeById(nodeId);
-    if (!node) return;
-    const file = await selectImageFile();
-    if (!file) return;
-    const extension = file.type.split("/")[1]?.replace("jpeg", "jpg").replace("svg+xml", "svg")
-      || file.name.split(".").pop()?.toLowerCase()
-      || "png";
-    const filename = `mindmap-image.${extension}`;
+  private async insertImageBlockToNode(
+    nodeId: string,
+    blob: Blob,
+    filename: string,
+    alt: string | undefined,
+    label: string,
+    afterBlockId?: string
+  ): Promise<MindMapImageContentBlock | null> {
+    if (!this.ensureEditable()) return null;
+    if (!this.nodeById(nodeId)) return null;
     let path: string;
     try {
-      path = await this.callbacks.onSavePastedImage(file, filename);
+      path = await this.callbacks.onSavePastedImage(blob, filename);
     } catch (error) {
-      console.error("MindMap Studio insert image storage failed", error);
-      new Notice(`插入图片失败：${error instanceof Error ? error.message : String(error)}`, 7000);
-      return;
+      console.error("MindMap Studio image storage failed", error);
+      new Notice(`插入${label}失败：${error instanceof Error ? error.message : String(error)}`, 7000);
+      return null;
     }
-    const imageBlock: MindMapImageContentBlock = { id: newId(), type: "image", source: path, localSource: path };
+    const imageBlock: MindMapImageContentBlock = {
+      id: newId(),
+      type: "image",
+      source: path,
+      localSource: path,
+      ...(alt ? { alt } : {})
+    };
     if (!this.nodeById(nodeId)) {
-      new Notice(`图片已保存，但目标节点已不存在：${path}`, 7000);
-      return;
+      new Notice(`${label}已保存，但目标节点已不存在：${path}`, 7000);
+      return null;
     }
     this.mutateWithoutArticleContext(() => {
+      const node = this.nodeById(nodeId);
+      if (!node) return;
       const blocks = nodeContentBlocks(node);
       const afterIndex = afterBlockId ? blocks.findIndex((block) => block.id === afterBlockId) : -1;
       blocks.splice(afterIndex >= 0 ? afterIndex + 1 : blocks.length, 0, imageBlock);
@@ -5484,11 +5484,27 @@ export class MindMapEditor {
     });
     try {
       const scheduled = this.callbacks.onScheduleAutoUpload(nodeId, imageBlock.id, path, filename);
-      new Notice(scheduled ? `图片已插入，${this.autoUploadScheduleMessage()}` : `图片已插入：${path}`);
+      new Notice(scheduled ? `${label}已插入，${this.autoUploadScheduleMessage()}` : `${label}已插入：${path}`);
     } catch (error) {
-      console.error("MindMap Studio insert image auto-upload scheduling failed", error);
-      new Notice(`图片已插入：${path}；自动上传排程失败，可稍后手动上传`, 7000);
+      console.error("MindMap Studio image auto-upload scheduling failed", error);
+      new Notice(`${label}已插入：${path}；自动上传排程失败，可稍后手动上传`, 7000);
     }
+    return imageBlock;
+  }
+
+  /**
+   * 经系统文件选择器为节点插入本地图片内容块，与粘贴图片共用保存、插入和自动上传链路。
+   *
+   * @param nodeId 目标节点 ID。
+   * @param afterBlockId 插入锚点内容块 ID；缺省时追加到节点内容末尾。
+   */
+  private async insertImageToNode(nodeId: string, afterBlockId?: string): Promise<void> {
+    const file = await selectImageFile();
+    if (!file) return;
+    const extension = file.type.split("/")[1]?.replace("jpeg", "jpg").replace("svg+xml", "svg")
+      || file.name.split(".").pop()?.toLowerCase()
+      || "png";
+    await this.insertImageBlockToNode(nodeId, file, `mindmap-image.${extension}`, "", "图片", afterBlockId);
   }
 
   /** Saves dropped or picked files as file content blocks on the target node; drag flows call this with dataTransfer.files directly. */

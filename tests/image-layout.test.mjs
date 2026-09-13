@@ -113,9 +113,21 @@ test("node context menu offers local image insertion reusing the paste save chai
   assert.match(editorSource, /onClick\(\(\) => void this\.insertImageToNode\(selected\.id, contextBlockId\)\)/);
   const insert = editorSource.match(/private async insertImageToNode\(nodeId: string, afterBlockId\?: string\): Promise<void> \{[\s\S]*?\n  \}/)?.[0] ?? "";
   assert.match(insert, /selectImageFile\(\)/, "must open the shared image file picker");
-  assert.match(insert, /onSavePastedImage\(file, filename\)/, "must reuse the paste-image storage chain");
-  assert.match(insert, /onScheduleAutoUpload\(nodeId, imageBlock\.id, path, filename\)/, "must schedule auto upload like pasted images");
+  assert.match(insert, /insertImageBlockToNode\(nodeId, file, `mindmap-image\.\$\{extension\}`, "", "图片", afterBlockId\)/, "must delegate to the shared insert chain");
   assert.match(insert, /svg\+xml", "svg"/, "svg picks must keep the svg extension");
+});
+
+test("screenshot, right-click image picker and paste share one insert chain", () => {
+  // 三条图片入口共用 insertImageBlockToNode：统一 mutate 链路（撤销、阅读位置、保存），
+  // 截图不再整份替换文档、不再强制聚焦目标节点拉走阅读位置，目标节点消失时给出含路径提示。
+  const shared = editorSource.match(/private async insertImageBlockToNode\(\s*\n\s*nodeId: string,[\s\S]*?\n  \}/)?.[0] ?? "";
+  assert.match(shared, /onSavePastedImage\(blob, filename\)/, "storage must go through the paste-image chain");
+  assert.match(shared, /mutateWithoutArticleContext\(/, "insertion must run through the unified mutate chain");
+  assert.match(shared, /onScheduleAutoUpload\(nodeId, imageBlock\.id, path, filename\)/, "auto upload scheduling must be shared");
+  assert.match(shared, /已保存，但目标节点已不存在/, "orphan storage must be reported with the saved path");
+  const capture = editorSource.match(/async captureScreenshot\(recognizeAfter = false, targetOverride\?: ScreenshotInsertionTarget\): Promise<void> \{[\s\S]*?\n  \}/)?.[0] ?? "";
+  assert.match(capture, /await this\.insertImageBlockToNode\(\s*\n\s*insertionTarget\.nodeId,\s*\n\s*capture\.blob,\s*\n\s*capture\.suggestedName,\s*\n\s*"截图"/, "screenshot insertion must reuse the shared chain");
+  assert.doesNotMatch(capture, /replaceDocumentFromExternalEdit|cloneDocument/, "screenshot insertion must not clone or replace the whole document");
 });
 
 test("full node editor honors the same rich-text shortcuts as quick editing", () => {
