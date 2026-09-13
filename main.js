@@ -9864,15 +9864,17 @@ var NodeEditModal = class extends import_obsidian10.Modal {
           local.addEventListener("click", () => {
             applyImageAction(selectNodeImage(this.app, block, "local", this.callbacks));
           });
-          const remote = actions.createEl("button", { text: "\u9009\u62E9\u6587\u4EF6\u5E76\u4E0A\u4F20", attr: { type: "button" } });
-          remote.addEventListener("click", () => {
-            applyImageAction(selectNodeImage(this.app, block, "remote", this.callbacks));
-          });
-          if (block.localSource || block.source && !/^https?:\/\//i.test(block.source)) {
-            const uploadCurrent = actions.createEl("button", { text: "\u4E0A\u4F20\u5F53\u524D\u56FE\u7247", attr: { type: "button" } });
-            uploadCurrent.addEventListener("click", () => {
-              applyImageAction(uploadCurrentNodeImage(this.app, block, this.callbacks));
+          if (this.callbacks.getImageHosts().length) {
+            const remote = actions.createEl("button", { text: "\u9009\u62E9\u6587\u4EF6\u5E76\u4E0A\u4F20", attr: { type: "button" } });
+            remote.addEventListener("click", () => {
+              applyImageAction(selectNodeImage(this.app, block, "remote", this.callbacks));
             });
+            if (block.localSource || block.source && !/^https?:\/\//i.test(block.source)) {
+              const uploadCurrent = actions.createEl("button", { text: "\u4E0A\u4F20\u5F53\u524D\u56FE\u7247", attr: { type: "button" } });
+              uploadCurrent.addEventListener("click", () => {
+                applyImageAction(uploadCurrentNodeImage(this.app, block, this.callbacks));
+              });
+            }
           }
           if ((_c2 = block.remoteSources) == null ? void 0 : _c2.length) {
             const mirrors = body.createDiv({ cls: "mms-image-mirrors" });

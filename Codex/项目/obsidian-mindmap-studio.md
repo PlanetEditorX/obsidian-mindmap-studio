@@ -1,11 +1,12 @@
 # obsidian-mindmap-studio 项目交接
 
 - 插件：MindMap Studio（Obsidian 本地优先 .mindmap 导图，含导图/大纲/文章/通读模式、全局搜索、图床、AI 助手与桌面截图链路）。
-- 版本基线：1.49.7（package.json / manifest.json / versions.json / package-lock.json 已同步，线上已发布 v1.49.6，本轮待 release 工作流发布 1.49.7）。
+- 版本基线：1.50.0（package.json / manifest.json / versions.json / package-lock.json 已同步，线上已发布 v1.50.0；上一轮 Enter 失焦与新节点出屏修复已随 v1.49.9/v1.50.0 发布）。
 - 仓库规则：见根目录 `AGENTS.md`；每轮代码交付三份 ZIP（源码 / 安装 / Codex 交接）共用同一六位后缀；验证入口 `npm run verify`。
 
-## 当前状态（本轮修复：Enter 失焦 + 新节点出屏，待发布 1.49.9）
+## 当前状态（本轮修复：Enter 失焦 + 新节点出屏 + 编辑弹窗图床上传入口隐藏）
 
+- 编辑弹窗图床上传入口隐藏（应用户反馈）：节点编辑弹窗的图片块在未启用任何有效图床时不再渲染“选择文件并上传”与“上传当前图片”两个按钮（统一包进 `this.callbacks.getImageHosts().length` 判断，与画布图片右键菜单 `hasEnabledImageHost` 同源同规则），“保存到仓库”“粘贴剪贴板图片”两个本地入口始终可用；避免用户点击按钮后才遇到“没有可用图床”报错，也澄清了“选择文件并上传”= 图床远程托管（本地手动选图应使用“保存到仓库”）。契约测试 `image-layout.test.mjs` 新增“node edit modal hides image host upload buttons when no host is enabled”。说明：图片/文件选择链路本身无 SVG 限制（`accept="image/*"`、MIME 映射、导入导出均支持 SVG），此前的困惑源于未配图床时上传流程在文件窗口弹出前即被拦截。
 - Enter 失焦修复：新建节点的行内编辑保护窗口从 50ms 延长到 220ms——触发创建的 Enter/Tab 键 keyup 释放较慢时会穿透旧窗口触发 `handleFormatShortcut`（save+blur），导致新节点“创建后立刻退出编辑”；同时 `initialFocusProtected` 期间的 blur 恢复只在无 `relatedTarget`（程序性失焦）时拉回焦点，用户真实点击其它 UI 仍正常结束编辑。
 - 新节点出屏修复：新增 `bringNodeIntoView()`——Tab/Enter 创建节点后按最小平移把节点滚入视口（仅越界时平移，不强制居中），修复大型导图上布局重排把新建节点推到屏幕外、必须手动移动画布才能找到的问题；`addChild()`/`addSibling()`/`insertTextBlock()` 三处 rAF 回调统一先 `bringNodeIntoView` 再 `beginInlineEdit`。
 - 本轮新增 `tests/node-creation-focus.test.mjs`（2 项契约：三处创建流滚入视口、行内编辑抗旧按键失焦），并更新 `scripts/test.mjs` 与 `tests/node-creation.test.mjs` 的旧 rAF 形式断言。
@@ -77,11 +78,13 @@
 
 ## 验证基线
 
-- `npm run verify` 本机完整通过：`test:unit` 419/419（新增 `tests/file-block.test.mjs` 12 项契约并登记进 test:unit 清单；含 1.49.6 的“space-triggered inline edit reuses the rendered text block before synthesizing IDs”与“paste-created clones materialize content blocks to keep block IDs stable”契约）；`test:regression` 全部通过；`test:docs` 覆盖 63 个源码模块、1277 个具名声明；`test:repo` 通过；production esbuild 通过，`main.js` 已重建。
+- `npm run verify` 本机完整通过：`test:unit` 422/422（含本轮新增契约“node edit modal hides image host upload buttons when no host is enabled”与上一轮 `tests/node-creation-focus.test.mjs` 2 项契约；`tests/image-layout.test.mjs` 补载 `node-edit-modal.ts` 源码）；`test:regression` 全部通过；`test:docs` 覆盖 63 个源码模块、1279 个具名声明；`test:repo` 通过；production esbuild 通过，`main.js` 已重建。
 - 详细数据见根目录 `TEST_RESULTS.md`。
 
 ## 待验证事项（需真实 Obsidian 桌面端手工冒烟）
 
+- 未启用图床时：节点编辑弹窗图片块只显示“粘贴剪贴板图片”“保存到仓库”，无图床上传按钮；配置图床后两个上传按钮恢复显示。SVG 文件可通过“保存到仓库”正常选入并渲染。
+- Enter 创建兄弟节点后不再立即失焦，可直接输入；多节点导图连续 Tab 创建子节点时画布不乱跳、新节点始终在视口内。
 - 节点右键“上传文件”：选择本地文件（含中文名、无扩展名）后节点出现文件卡片，文件落盘到 `<导图目录>/MindMap Assets/原文件名`，重名自动追加序号；点击卡片用 Obsidian 打开附件。
 - 外部文件从资源管理器拖到节点/文章/大纲/编辑弹窗：出现追加目标高亮，松手后文件卡片插入目标节点；与内容块内部拖拽互不干扰。
 - 删除文件块（卡片右键删除/编辑弹窗删除/删除节点/批量删除）：60 秒后附件文件进入系统回收站；期间 Ctrl+Z 撤销或重新粘贴同引用可取消删除；仍有其它 `.mindmap` 引用同一文件时不删除。

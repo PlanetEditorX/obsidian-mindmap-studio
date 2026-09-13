@@ -308,15 +308,17 @@ export class NodeEditModal extends Modal {
           local.addEventListener("click", () => {
             applyImageAction(selectNodeImage(this.app, block, "local", this.callbacks));
           });
-          const remote = actions.createEl("button", { text: "选择文件并上传", attr: { type: "button" } });
-          remote.addEventListener("click", () => {
-            applyImageAction(selectNodeImage(this.app, block, "remote", this.callbacks));
-          });
-          if (block.localSource || (block.source && !/^https?:\/\//i.test(block.source))) {
-            const uploadCurrent = actions.createEl("button", { text: "上传当前图片", attr: { type: "button" } });
-            uploadCurrent.addEventListener("click", () => {
-              applyImageAction(uploadCurrentNodeImage(this.app, block, this.callbacks));
+          if (this.callbacks.getImageHosts().length) {
+            const remote = actions.createEl("button", { text: "选择文件并上传", attr: { type: "button" } });
+            remote.addEventListener("click", () => {
+              applyImageAction(selectNodeImage(this.app, block, "remote", this.callbacks));
             });
+            if (block.localSource || (block.source && !/^https?:\/\//i.test(block.source))) {
+              const uploadCurrent = actions.createEl("button", { text: "上传当前图片", attr: { type: "button" } });
+              uploadCurrent.addEventListener("click", () => {
+                applyImageAction(uploadCurrentNodeImage(this.app, block, this.callbacks));
+              });
+            }
           }
           if (block.remoteSources?.length) {
             const mirrors = body.createDiv({ cls: "mms-image-mirrors" });

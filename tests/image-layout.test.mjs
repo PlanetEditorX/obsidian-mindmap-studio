@@ -13,9 +13,10 @@ let settingsSource;
 let stylesSource;
 let imageFailureSource;
 let viewSource;
+let modalSource;
 
 before(async () => {
-  [modelSource, editorSource, outlineSource, articleSource, richEditorSource, mainSource, settingsSource, stylesSource, imageFailureSource, viewSource] = await Promise.all([
+  [modelSource, editorSource, outlineSource, articleSource, richEditorSource, mainSource, settingsSource, stylesSource, imageFailureSource, viewSource, modalSource] = await Promise.all([
     readFile("src/core/model.ts", "utf8"),
     loadEditorSources(),
     readFile("src/editor/outline-renderer.ts", "utf8"),
@@ -25,7 +26,8 @@ before(async () => {
     readFile("src/settings.ts", "utf8"),
     readFile("styles.css", "utf8"),
     readFile("src/editor/image-failure-view.ts", "utf8"),
-    readFile("src/view.ts", "utf8")
+    readFile("src/view.ts", "utf8"),
+    readFile("src/editor/node-edit-modal.ts", "utf8")
   ]);
 });
 
@@ -71,6 +73,17 @@ test("image context menu exposes layout, sizing, upload and edit actions", () =>
   assert.match(stylesSource, /\.mms-outline-image\.image-layout-inline \{ flex: 0 1 auto; margin: 0; \}/);
   assert.match(stylesSource, /\.mms-article-image-row \{[\s\S]*display: flex;[\s\S]*flex-wrap: wrap/);
   assert.match(stylesSource, /\.mms-article-content-block\.image-layout-inline/);
+});
+
+test("node edit modal hides image host upload buttons when no host is enabled", () => {
+  // 与画布图片右键菜单同一规则：未启用任何有效图床时不渲染上传入口，
+  // 避免用户点击后才遇到"没有可用图床"的报错。
+  const guard = modalSource.indexOf("if (this.callbacks.getImageHosts().length) {");
+  assert.ok(guard >= 0, "host upload buttons must be wrapped in an enabled-host guard");
+  const section = modalSource.slice(guard, guard + 700);
+  assert.ok(section.includes("选择文件并上传"), "file-picker upload button lives inside the guard");
+  assert.ok(section.includes("上传当前图片"), "upload-current button lives inside the guard");
+  assert.ok(!section.includes("保存到仓库"), "local save stays outside the guard and always available");
 });
 
 test("full node editor honors the same rich-text shortcuts as quick editing", () => {
