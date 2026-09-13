@@ -3,7 +3,7 @@
 ## 开始工作
 
 1. 阅读 `README.md`、`CONTRIBUTING.md`、`docs/ARCHITECTURE.md`、`docs/DATA_MODEL.md` 和 `docs/DEVELOPMENT.md`。
-2. 阅读 `Codex/README.md`、`Codex/偏好与交付规则.md` 与对应项目文件，以上一轮的当前状态、待验证和下一步为续接起点。
+2. 阅读 `Agent/项目/obsidian-mindmap-studio.md`，以上一轮的当前状态、待验证和下一步为续接起点。
 3. 修改前定位相关源码、调用方和测试；不要做无关重构。
 
 ## 实现与兼容性
@@ -30,31 +30,31 @@ npm run verify
 ## 交付
 
 - 代码修复说明实际行为、兼容性、测试结果和仍需手工验证的事项；回答直接、精简。
-- 每轮代码修改后必须同步返回三份交付物：完整源码 ZIP、Obsidian 本地测试安装 ZIP、最新 Codex 交接 ZIP；三者使用同一个六位随机数字后缀，不得只发送其中一份或沿用上一轮 Codex。Codex 交接 ZIP 的外部文件名必须严格使用 `Codex-<版本>-handoff-<六位后缀>.zip`，不得包含项目名或其他字段。
-- 源码 ZIP 根目录固定为 `obsidian-mindmap-studio`，必须包含源码、测试、文档、`manifest.json`、`package.json`、`styles.css` 和重新构建的 `main.js`；排除 `Codex/`、`node_modules/`、`.git/`、临时目录、嵌套 ZIP 和未修改的 `examples/`。
+- 每轮代码修改后必须同步返回三份交付物：完整源码 ZIP、Obsidian 本地测试安装 ZIP、最新 Agent 交接 ZIP；三者使用同一个六位随机数字后缀，不得只发送其中一份或沿用上一轮 Agent。Agent 交接 ZIP 的外部文件名必须严格使用 `Agent-<版本>-handoff-<六位后缀>.zip`，不得包含项目名或其他字段。
+- 源码 ZIP 根目录固定为 `obsidian-mindmap-studio`，必须包含源码、测试、文档、`manifest.json`、`package.json`、`styles.css` 和重新构建的 `main.js`；排除 `Agent/`、`node_modules/`、`.git/`、临时目录、嵌套 ZIP 和未修改的 `examples/`。
 - 安装 ZIP 根目录固定为 `mindmap-studio`，至少包含本轮重新构建的 `main.js`、`manifest.json` 和 `styles.css`。
-- 打包前更新 `Codex/项目/obsidian-mindmap-studio.md` 的当前状态、验证基线、待验证事项、下一步和最近交付包；Codex ZIP 外部文件名必须严格使用 `Codex-<版本>-handoff-<六位后缀>.zip`，不得包含项目名或其他字段；ZIP 内部根目录固定为 `Codex`，仅包含长期衔接文件，不包含源码、依赖、历史归档和临时内容。
+- 打包前更新 `Agent/项目/obsidian-mindmap-studio.md` 的当前状态、验证基线、待验证事项、下一步和最近交付包；Agent ZIP 外部文件名必须严格使用 `Agent-<版本>-handoff-<六位后缀>.zip`，不得包含项目名或其他字段；ZIP 内部根目录固定为 `Agent`，仅包含长期衔接文件，不包含源码、依赖、历史归档和临时内容。
 - 每次代码交付的回复必须同时给出三份 ZIP 下载链接和本轮中文 Git 说明；即使用户没有再次提出，也不得省略。
 
 ## Git
 
 - 版本号由 release 工作流统一递增并发布：代码、文档和测试提交一律不得手动修改 `package.json` / `manifest.json` / `package-lock.json` / `versions.json` / `update.json` 的版本号；交付 ZIP 文件名中的版本仅作交付追踪标识，以 GitHub Release 实际发布版本为准。
 - 所有 Git 提示使用中文。
-- 使用 Conventional Commits：首行 `type(scope): 中文主题`，后续直接以 `- ` 列出真实代码行为、兼容处理、测试、文档、Codex 更新和 `main.js` 重建。
+- 使用 Conventional Commits：首行 `type(scope): 中文主题`，后续直接以 `- ` 列出真实代码行为、兼容处理、测试、文档、Agent 更新和 `main.js` 重建。
 - 只提供中文 Conventional Commits 提交说明，不输出 `git add`、`git commit` 等命令，也不得声称已经实际提交。
 
 ## 交付压缩包目录规则
 
 
-- 所有交付 ZIP（源码、安装包、Codex 交接）必须直接输出到仓库父目录（即 `D:\Downloads`），严禁写入仓库工作区内部；打包后必须确认仓库根目录与整个工作区没有任何 `.zip` 文件。
+- 所有交付 ZIP（源码、安装包、Agent 交接）必须直接输出到仓库父目录（即 `D:\Downloads`），严禁写入仓库工作区内部；打包后必须确认仓库根目录与整个工作区没有任何 `.zip` 文件。
 - 交付 ZIP 不得 `git add`、不得提交、不得进入 Git 历史；若历史上已存在 ZIP，必须重写历史将其从所有提交中彻底移除（含远端强制推送）。
 - 完整源码 ZIP 的外部文件名可以包含版本号与六位交付后缀。
 - 源码 ZIP 解压后的第一层目录必须固定为 `obsidian-mindmap-studio/`。
 - 禁止在 ZIP 内部目录名追加版本号、随机后缀或日期，例如禁止 `obsidian-mindmap-studio-1.35.2/`。
 - Obsidian 本地安装包仍按插件安装结构打包，不额外嵌套版本目录。
-- Codex 交接 ZIP 的外部文件名必须严格为 `Codex-<版本>-handoff-<六位后缀>.zip`，不得包含项目名；ZIP 内部第一层仍固定为 `Codex/`。
+- Agent 交接 ZIP 的外部文件名必须严格为 `Agent-<版本>-handoff-<六位后缀>.zip`，不得包含项目名；ZIP 内部第一层仍固定为 `Agent/`。
 - 每次交付前必须使用 `unzip -l` 或等价命令检查压缩包第一层目录。
-- Codex 交接 ZIP 不在项目根目录下，和代码仓库同属于一个父目录下，也不会被提交到仓库中。
+- Agent 交接 ZIP 不在项目根目录下，和代码仓库同属于一个父目录下，也不会被提交到仓库中。
 - ZIP 中包含中文文件名或目录名时，必须使用支持 UTF-8 文件名标志的打包方式；交付前检查每个中文条目的 UTF-8 标志及解压后的实际名称，禁止使用会将中文路径写成 CP437 乱码的打包命令。
 - Linux 接收的 Windows ZIP 若主文件名显示为 `#Uxxxx`、但中央目录带 `0x7075` Unicode Path Extra Field，必须先用能识别该字段的方式恢复真实中文路径（例如 Python `zipfile`），再以标准 UTF-8 主文件名和 general-purpose bit 11 重新打包；不得把 `#Uxxxx` 当作仓库真实文件名，也不得仅凭字符串模式盲目改名。
 - 中文 ZIP 交付检查必须同时确认：目录中不存在异常 `#Uxxxx` 占位名、所有非 ASCII 条目设置 UTF-8 bit 11、Linux 实际解压后仍为可读中文路径。

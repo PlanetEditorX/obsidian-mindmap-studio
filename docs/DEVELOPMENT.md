@@ -122,7 +122,7 @@ npm run test:docs
 
 ## AI 交付物同步规则
 
-每轮代码修改完成后，必须使用同一个六位随机后缀同步生成并返回：完整源码 ZIP、Obsidian 本地测试安装 ZIP 和最新 Codex 交接 ZIP。生成 Codex 包前，应先更新项目衔接页中的当前状态、验证基线、待验证事项、下一步及最近交付包；不得复用上一轮 Codex 包。
+每轮代码修改完成后，必须使用同一个六位随机后缀同步生成并返回：完整源码 ZIP、Obsidian 本地测试安装 ZIP 和最新 Agent 交接 ZIP。生成 Agent 包前，应先更新 `Agent/项目/obsidian-mindmap-studio.md` 衔接页中的当前状态、验证基线、待验证事项、下一步及最近交付包；不得复用上一轮 Agent 包。
 
 
 ## 页面切换与长任务维护边界
