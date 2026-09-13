@@ -48,8 +48,19 @@ test("article option refresh restores the rendered anchor after rebuilding the p
   const setOptions = editorSource.match(/setOptions\(options: MindMapEditorOptions, articleContextOnly = false\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
   assert.match(setOptions, /const renderedLocation = this\.currentMode === "mindmap"[\s\S]*this\.captureCurrentLocation\(this\.currentMode\) \?\? this\.lastReadingLocation/);
   assert.match(setOptions, /const articleDirectoryActive = this\.currentMode === "article"[\s\S]*articleLandingMode !== "article"/);
-  assert.match(setOptions, /const locationToRestore = this\.currentMode === "mindmap" && !modeChanged[\s\S]*chooseArticleLandingRefreshLocation\([\s\S]*articleDirectoryActive[\s\S]*preferredCurrentLocation[\s\S]*renderedLocation[\s\S]*this\.lastReadingLocation/);
+  assert.match(setOptions, /const locationToRestore = rememberedInitialLocation\s*\n\s*\? rememberedInitialLocation\s*\n\s*: this\.currentMode === "mindmap" && !modeChanged[\s\S]*chooseArticleLandingRefreshLocation\([\s\S]*articleDirectoryActive[\s\S]*preferredCurrentLocation[\s\S]*renderedLocation[\s\S]*this\.lastReadingLocation/);
   assert.match(setOptions, /locationToRestore[\s\S]*this\.restoreReadingLocation\(this\.currentMode, locationToRestore\)/);
+});
+
+test("first family refresh after opening a file prefers the remembered reading position", () => {
+  // 重开文件时初次挂载渲染的是标题/骨架；若让 rendered 优先于 remembered，
+  // 上次阅读进度会永远丢失。首次族上下文刷新必须给同文件记忆位置一次恢复机会。
+  const setOptions = editorSource.match(/setOptions\(options: MindMapEditorOptions, articleContextOnly = false\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
+  assert.match(setOptions, /const rememberedInitialLocation = this\.initialReadingLocationRestorePending\s*\n\s*&& this\.currentMode !== "mindmap"\s*\n\s*&& !articleDirectoryActive\s*\n\s*&& normalizeReadingLocation\(this\.lastReadingLocation\)\?\.filePath === this\.options\.currentFilePath\s*\n\s*\? this\.lastReadingLocation\s*\n\s*: null;/);
+  assert.match(setOptions, /if \(rememberedInitialLocation\) this\.initialReadingLocationRestorePending = false;/);
+  assert.match(editorSource, /this\.initialReadingLocationRestorePending = this\.currentMode !== "mindmap";/, "editor mount and file switch must arm the one-shot restore");
+  assert.match(editorSource, /\/\/ 用户滚动接管了位置，首次族刷新的记忆恢复授权随之作废。\s*\n\s*this\.initialReadingLocationRestorePending = false;/, "user scrolling must cancel the pending restore");
+  assert.doesNotMatch(editorSource, /initialReadingLocationRestorePending = this\.currentMode !== "mindmap" && /);
 });
 
 test("article directory refresh cannot reopen a remembered child map", () => {

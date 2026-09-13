@@ -12639,6 +12639,14 @@ var MindMapEditor = class {
     this.readingCaptureBlocked = false;
     this.lastReadingLocation = null;
     this.pendingLocationNavigationKey = null;
+    /**
+     * 文件刚打开、文章族上下文尚未加载时的首次位置恢复授权。
+     * 初次挂载读到的持久化位置键可能不完整（族首键要等族上下文加载后才出现），
+     * 首次族上下文刷新需要用记忆位置优先于“当前渲染位置”（骨架/标题），
+     * 否则重开文件会永远停在文档标题而不是上次阅读位置。
+     * 用户一旦滚动接管或完成一次恢复尝试即失效。
+     */
+    this.initialReadingLocationRestorePending = false;
     /** Latest-wins semantic scroll transaction; stale retries must never move a newer target. */
     this.readingRestoreToken = 0;
     this.readingRestoreTimer = null;
@@ -12683,6 +12691,7 @@ var MindMapEditor = class {
     const documentReadOnly = ((_a2 = this.document.view) == null ? void 0 : _a2.readOnly) === true;
     this.readOnly = this.currentMode === "article" ? resolveArticleEntryReadOnly(this.options.articleEntryLockMode, documentReadOnly, this.options.articleLastReadOnly) : this.currentMode === "reading" || this.currentMode === "question-bank" ? true : documentReadOnly;
     this.lastReadingLocation = options.readingLocation;
+    this.initialReadingLocationRestorePending = this.currentMode !== "mindmap";
     const restoredLocation = this.resolveStoredLocation();
     this.selectedId = (restoredLocation == null ? void 0 : restoredLocation.filePath) === options.currentFilePath ? restoredLocation.nodeId : this.document.root.id;
     this.layout = { nodes: [], byId: /* @__PURE__ */ new Map(), minX: 0, maxX: 0, minY: 0, maxY: 0 };
@@ -12855,6 +12864,7 @@ var MindMapEditor = class {
     this.readOnly = this.currentMode === "article" ? resolveArticleEntryReadOnly(this.options.articleEntryLockMode, documentReadOnly, this.options.articleLastReadOnly) : this.currentMode === "reading" || this.currentMode === "question-bank" ? true : documentReadOnly;
     const restored = this.resolveStoredLocation();
     this.selectedId = (restored == null ? void 0 : restored.filePath) === this.options.currentFilePath ? restored.nodeId : this.document.root.id;
+    if (fileChanged) this.initialReadingLocationRestorePending = this.currentMode !== "mindmap";
     if (resetHistory) {
       this.history.reset();
     }
@@ -12884,7 +12894,7 @@ var MindMapEditor = class {
    * @param articleContextOnly 是否仅由异步文章族上下文刷新触发。
    */
   setOptions(options, articleContextOnly = false) {
-    var _a2, _b2, _c, _d, _e, _f, _g, _h;
+    var _a2, _b2, _c, _d, _e, _f, _g, _h, _i;
     const previousOptions = this.options;
     const activeRestoreLocation = ((_a2 = this.activeReadingRestore) == null ? void 0 : _a2.mode) === this.currentMode ? this.activeReadingRestore.location : null;
     const renderedLocation = this.currentMode === "mindmap" ? null : (_b2 = activeRestoreLocation != null ? activeRestoreLocation : this.captureCurrentLocation(this.currentMode)) != null ? _b2 : this.lastReadingLocation;
@@ -12949,7 +12959,9 @@ var MindMapEditor = class {
     if (this.inlineEditingId && !modesChanged && !toolbarChanged && !globalModeChanged) return;
     this.render();
     const articleDirectoryActive = this.currentMode === "article" && options.showArticleToc && options.articleTocEntries.length > 0 && ((_g = this.document.view) == null ? void 0 : _g.articleLandingMode) !== "article";
-    const locationToRestore = this.currentMode === "mindmap" && !modeChanged ? null : chooseArticleLandingRefreshLocation(
+    const rememberedInitialLocation = this.initialReadingLocationRestorePending && this.currentMode !== "mindmap" && !articleDirectoryActive && ((_h = normalizeReadingLocation(this.lastReadingLocation)) == null ? void 0 : _h.filePath) === this.options.currentFilePath ? this.lastReadingLocation : null;
+    if (rememberedInitialLocation) this.initialReadingLocationRestorePending = false;
+    const locationToRestore = rememberedInitialLocation ? rememberedInitialLocation : this.currentMode === "mindmap" && !modeChanged ? null : chooseArticleLandingRefreshLocation(
       articleDirectoryActive,
       preferredCurrentLocation,
       renderedLocation,
@@ -12966,7 +12978,7 @@ var MindMapEditor = class {
       requestedPreferredNodeId: options.preferredCurrentNodeId,
       preferredNodeId: preferredCurrentLocation == null ? void 0 : preferredCurrentLocation.nodeIds[0],
       renderedNodeId: renderedLocation == null ? void 0 : renderedLocation.nodeIds[0],
-      rememberedNodeId: (_h = this.lastReadingLocation) == null ? void 0 : _h.nodeIds[0],
+      rememberedNodeId: (_i = this.lastReadingLocation) == null ? void 0 : _i.nodeIds[0],
       chosenNodeId: locationToRestore == null ? void 0 : locationToRestore.nodeIds[0],
       chosenFilePath: locationToRestore == null ? void 0 : locationToRestore.filePath
     });
@@ -13207,7 +13219,10 @@ var MindMapEditor = class {
   rememberLocation(location, immediate = false) {
     const changed = !sameReadingLocation(this.lastReadingLocation, location);
     if (!changed && !immediate) return;
-    if (changed) this.lastReadingLocation = location;
+    if (changed) {
+      this.lastReadingLocation = location;
+      this.initialReadingLocationRestorePending = false;
+    }
     if (this.readingLocationTimer !== null) window.clearTimeout(this.readingLocationTimer);
     const persist = () => {
       this.readingLocationTimer = null;

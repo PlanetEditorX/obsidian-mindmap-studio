@@ -73,6 +73,7 @@ import {
   chooseArticleLandingRefreshLocation,
   chooseArticleTransitionLocation,
   createReadingLocation,
+  normalizeReadingLocation,
   resolveReadingLocation,
   sameReadingLocation,
   viewportAnchorRatio,
@@ -287,6 +288,14 @@ export class MindMapEditor {
   private readingCaptureBlocked = false;
   private lastReadingLocation: ReadingLocation | null = null;
   private pendingLocationNavigationKey: string | null = null;
+  /**
+   * 文件刚打开、文章族上下文尚未加载时的首次位置恢复授权。
+   * 初次挂载读到的持久化位置键可能不完整（族首键要等族上下文加载后才出现），
+   * 首次族上下文刷新需要用记忆位置优先于“当前渲染位置”（骨架/标题），
+   * 否则重开文件会永远停在文档标题而不是上次阅读位置。
+   * 用户一旦滚动接管或完成一次恢复尝试即失效。
+   */
+  private initialReadingLocationRestorePending = false;
   /** Latest-wins semantic scroll transaction; stale retries must never move a newer target. */
   private readingRestoreToken = 0;
   private readingRestoreTimer: number | null = null;
@@ -350,6 +359,7 @@ export class MindMapEditor {
         ? true
         : documentReadOnly;
     this.lastReadingLocation = options.readingLocation;
+    this.initialReadingLocationRestorePending = this.currentMode !== "mindmap";
     const restoredLocation = this.resolveStoredLocation();
     this.selectedId = restoredLocation?.filePath === options.currentFilePath
       ? restoredLocation.nodeId
@@ -496,6 +506,7 @@ export class MindMapEditor {
         : documentReadOnly;
     const restored = this.resolveStoredLocation();
     this.selectedId = restored?.filePath === this.options.currentFilePath ? restored.nodeId : this.document.root.id;
+    if (fileChanged) this.initialReadingLocationRestorePending = this.currentMode !== "mindmap";
     if (resetHistory) {
       this.history.reset();
     }
@@ -638,14 +649,26 @@ export class MindMapEditor {
       && options.showArticleToc
       && options.articleTocEntries.length > 0
       && this.document.view?.articleLandingMode !== "article";
-    const locationToRestore = this.currentMode === "mindmap" && !modeChanged
-      ? null
-      : chooseArticleLandingRefreshLocation(
-        articleDirectoryActive,
-        preferredCurrentLocation,
-        renderedLocation,
-        this.lastReadingLocation
-      );
+    // 文件刚打开时的首次族上下文刷新：持久化记忆位置（同文件）优先于“当前渲染位置”。
+    // 初次挂载渲染的是标题/骨架，若让 rendered 优先，重开文件将永远丢失上次阅读进度。
+    // 目录落地页与导图模式不参与；恢复机会一次性消耗，失败也不重试。
+    const rememberedInitialLocation = this.initialReadingLocationRestorePending
+      && this.currentMode !== "mindmap"
+      && !articleDirectoryActive
+      && normalizeReadingLocation(this.lastReadingLocation)?.filePath === this.options.currentFilePath
+      ? this.lastReadingLocation
+      : null;
+    if (rememberedInitialLocation) this.initialReadingLocationRestorePending = false;
+    const locationToRestore = rememberedInitialLocation
+      ? rememberedInitialLocation
+      : this.currentMode === "mindmap" && !modeChanged
+        ? null
+        : chooseArticleLandingRefreshLocation(
+          articleDirectoryActive,
+          preferredCurrentLocation,
+          renderedLocation,
+          this.lastReadingLocation
+        );
     if (articleDirectoryActive) {
       // A generated directory is a terminal landing page, not a transient article
       // skeleton. Restoring a persisted child-map location here immediately invokes
@@ -953,7 +976,11 @@ export class MindMapEditor {
   private rememberLocation(location: ReadingLocation, immediate = false): void {
     const changed = !sameReadingLocation(this.lastReadingLocation, location);
     if (!changed && !immediate) return;
-    if (changed) this.lastReadingLocation = location;
+    if (changed) {
+      this.lastReadingLocation = location;
+      // 用户滚动接管了位置，首次族刷新的记忆恢复授权随之作废。
+      this.initialReadingLocationRestorePending = false;
+    }
     if (this.readingLocationTimer !== null) window.clearTimeout(this.readingLocationTimer);
     const persist = (): void => {
       this.readingLocationTimer = null;
