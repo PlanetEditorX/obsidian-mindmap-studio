@@ -9602,6 +9602,25 @@ var AppearanceModal = class extends import_obsidian9.Modal {
 };
 
 // src/editor/node-edit-modal.ts
+function parseDataUrlImageFromHtml(html) {
+  var _a2, _b2;
+  const match = html.match(/<img[^>]+src=["']data:(image\/[a-z0-9.+-]+)(?:;([a-z0-9=-]*))?,([^"'>]+)/i);
+  if (!match) return null;
+  const mime = match[1].toLowerCase();
+  const encoding = (_b2 = (_a2 = match[2]) == null ? void 0 : _a2.trim().toLowerCase()) != null ? _b2 : "";
+  const payload = match[3].replace(/\s+/g, "").replace(/&amp;/gi, "&");
+  try {
+    if (encoding === "base64") {
+      const binary = atob(payload);
+      const bytes = new Uint8Array(binary.length);
+      for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+      return new Blob([bytes], { type: mime });
+    }
+    return new Blob([decodeURIComponent(payload)], { type: mime });
+  } catch (e) {
+    return null;
+  }
+}
 var NodeEditModal = class extends import_obsidian10.Modal {
   /**
    * 创建 NodeEditModal 实例，保存依赖和初始状态；实际 DOM 构建通常在 onOpen() 或后续渲染流程中完成。
@@ -9958,12 +9977,19 @@ var NodeEditModal = class extends import_obsidian10.Modal {
           const blob = await item.getType(type);
           return { blob, filename: suggestedClipboardImageName(blob) };
         }
+        for (const item of items) {
+          if (!item.types.includes("text/html")) continue;
+          const html = await (await item.getType("text/html")).text();
+          const blob = parseDataUrlImageFromHtml(html);
+          if (!blob) continue;
+          return { blob, filename: suggestedClipboardImageName(blob) };
+        }
       } catch (error) {
         console.error("MindMap Studio node modal clipboard read failed", error);
         new import_obsidian10.Notice("\u65E0\u6CD5\u76F4\u63A5\u8BFB\u53D6\u526A\u8D34\u677F\uFF0C\u8BF7\u5728\u7F16\u8F91\u8282\u70B9\u7A97\u53E3\u4E2D\u6309 Ctrl/Cmd+V");
         return null;
       }
-      new import_obsidian10.Notice("\u526A\u8D34\u677F\u4E2D\u6CA1\u6709\u53EF\u7C98\u8D34\u7684\u56FE\u7247");
+      new import_obsidian10.Notice("\u526A\u8D34\u677F\u4E2D\u6CA1\u6709\u53EF\u7C98\u8D34\u7684\u56FE\u7247\uFF1B\u82E5\u4ECE\u8D44\u6E90\u7BA1\u7406\u5668\u590D\u5236\u4E86\u6587\u4EF6\uFF0C\u8BF7\u5728\u5F39\u7A97\u5185\u6309 Ctrl/Cmd+V");
       return null;
     };
     const pasteClipboardImage = async (existingBlock) => {

@@ -86,6 +86,16 @@ test("node edit modal hides image host upload buttons when no host is enabled", 
   assert.ok(!section.includes("保存到仓库"), "local save stays outside the guard and always available");
 });
 
+test("node edit modal clipboard button recovers svg images from clipboard html", () => {
+  // Chromium 的 navigator.clipboard.read() 白名单不返回 image/svg+xml：网页复制的
+  // SVG 只出现在 text/html 内嵌 data URI 中，按钮路径必须在位图缺失时兜底提取。
+  assert.match(modalSource, /function parseDataUrlImageFromHtml\(html: string\): Blob \| null \{/);
+  assert.match(modalSource, /<img\[\^>\]\+src=\["'\]data:\(image\\\/\[a-z0-9\.\+-\]\+\)/);
+  assert.match(modalSource, /if \(!item\.types\.includes\("text\/html"\)\) continue;/);
+  assert.match(modalSource, /const blob = parseDataUrlImageFromHtml\(html\);/);
+  assert.match(modalSource, /若从资源管理器复制了文件，请在弹窗内按 Ctrl\/Cmd\+V/);
+});
+
 test("full node editor honors the same rich-text shortcuts as quick editing", () => {
   assert.match(editorSource, /renderNodeRichTextEditor\([\s\S]*this\.richTextShortcuts/);
   assert.match(richEditorSource, /source\.addEventListener\("keydown"/);

@@ -22,6 +22,35 @@ import { createArticleNumberingControls } from "./appearance-modal";
 import type { MindMapEditorCallbacks, MindMapEditorOptions } from "./editor-types";
 
 
+/**
+ * 从剪贴板 text/html 中提取首个内嵌 data URI 图片。
+ *
+ * Chromium 的 `navigator.clipboard.read()` 只暴露位图白名单格式，网页复制的
+ * SVG（image/svg+xml）仅存在于 text/html 的 `<img src="data:image/...">` 中；
+ * 这里解析并解码首个匹配项，避免按钮路径误报“没有可粘贴的图片”。
+ *
+ * @param html 剪贴板 HTML 片段。
+ * @returns 解码出的图片 Blob；未找到内嵌图片或解码失败时返回 null。
+ */
+function parseDataUrlImageFromHtml(html: string): Blob | null {
+  const match = html.match(/<img[^>]+src=["']data:(image\/[a-z0-9.+-]+)(?:;([a-z0-9=-]*))?,([^"'>]+)/i);
+  if (!match) return null;
+  const mime = match[1].toLowerCase();
+  const encoding = match[2]?.trim().toLowerCase() ?? "";
+  const payload = match[3].replace(/\s+/g, "").replace(/&amp;/gi, "&");
+  try {
+    if (encoding === "base64") {
+      const binary = atob(payload);
+      const bytes = new Uint8Array(binary.length);
+      for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+      return new Blob([bytes], { type: mime });
+    }
+    return new Blob([decodeURIComponent(payload)], { type: mime });
+  } catch {
+    return null;
+  }
+}
+
 /** 节点编辑弹窗读写的完整字段集合。 */
 export interface NodeEditValues {
   content: MindMapContentBlock[];
@@ -403,12 +432,21 @@ export class NodeEditModal extends Modal {
           const blob = await item.getType(type);
           return { blob, filename: suggestedClipboardImageName(blob) };
         }
+        // Chromium 的 clipboard.read() 白名单不返回 image/svg+xml：网页复制的
+        // SVG 只出现在 text/html 内嵌 data URI 中，这里兜底提取。
+        for (const item of items) {
+          if (!item.types.includes("text/html")) continue;
+          const html = await (await item.getType("text/html")).text();
+          const blob = parseDataUrlImageFromHtml(html);
+          if (!blob) continue;
+          return { blob, filename: suggestedClipboardImageName(blob) };
+        }
       } catch (error) {
         console.error("MindMap Studio node modal clipboard read failed", error);
         new Notice("无法直接读取剪贴板，请在编辑节点窗口中按 Ctrl/Cmd+V");
         return null;
       }
-      new Notice("剪贴板中没有可粘贴的图片");
+      new Notice("剪贴板中没有可粘贴的图片；若从资源管理器复制了文件，请在弹窗内按 Ctrl/Cmd+V");
       return null;
     };
 
