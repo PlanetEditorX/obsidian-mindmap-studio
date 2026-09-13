@@ -9810,7 +9810,13 @@ var NodeEditModal = class extends import_obsidian10.Modal {
                 imageSourceCandidates(block, true),
                 (source2) => this.callbacks.resolveImage(source2)
               ).open());
-            } else preview.createDiv({ cls: "mmc-image-placeholder", text: block.source ? "\u65E0\u6CD5\u52A0\u8F7D\u56FE\u7247" : "\u5C1A\u672A\u9009\u62E9\u56FE\u7247" });
+            } else if (!block.source) {
+              const placeholder = preview.createDiv({ cls: "mmc-image-placeholder is-empty", text: "\u5C1A\u672A\u9009\u62E9\u56FE\u7247" });
+              placeholder.setAttribute("title", "\u53CC\u51FB\u9009\u62E9\u672C\u5730\u56FE\u7247");
+              placeholder.addEventListener("dblclick", () => {
+                applyImageAction(selectNodeImage(this.app, block, "local", this.callbacks));
+              });
+            } else preview.createDiv({ cls: "mmc-image-placeholder", text: "\u65E0\u6CD5\u52A0\u8F7D\u56FE\u7247" });
             source.value = block.source;
             alt.value = (_a4 = block.alt) != null ? _a4 : "";
           };

@@ -96,6 +96,17 @@ test("node edit modal clipboard button recovers svg images from clipboard html",
   assert.match(modalSource, /若从资源管理器复制了文件，请在弹窗内按 Ctrl\/Cmd\+V/);
 });
 
+test("empty image placeholder opens the local image picker on double click", () => {
+  // “尚未选择图片”占位双击 = 与“保存到仓库”按钮同一本地选图链路；
+  // “无法加载图片”（已有 source 但加载失败）不提供双击入口。
+  const branch = modalSource.match(/} else if \(!block\.source\) \{[\s\S]*?无法加载图片/)?.[0] ?? "";
+  assert.ok(branch, "empty-placeholder branch must precede the load-failure branch");
+  assert.match(branch, /mmc-image-placeholder is-empty/);
+  assert.match(branch, /title", "双击选择本地图片"/);
+  assert.match(branch, /dblclick", \(\) => \{\s*\n\s*applyImageAction\(selectNodeImage\(this\.app, block, "local", this\.callbacks\)\)/);
+  assert.match(stylesSource, /\.mmc-image-placeholder\.is-empty \{\s*\n\s*cursor: pointer;/);
+});
+
 test("full node editor honors the same rich-text shortcuts as quick editing", () => {
   assert.match(editorSource, /renderNodeRichTextEditor\([\s\S]*this\.richTextShortcuts/);
   assert.match(richEditorSource, /source\.addEventListener\("keydown"/);

@@ -4,8 +4,9 @@
 - 版本基线：1.50.0（package.json / manifest.json / versions.json / package-lock.json 已同步，线上已发布 v1.50.0；上一轮 Enter 失焦与新节点出屏修复已随 v1.49.9/v1.50.0 发布）。
 - 仓库规则：见根目录 `AGENTS.md`；每轮代码交付三份 ZIP（源码 / 安装 / Codex 交接）共用同一六位后缀；验证入口 `npm run verify`。
 
-## 当前状态（本轮修复：编辑弹窗剪贴板按钮 SVG 兜底 + 图床上传入口隐藏）
+## 当前状态（本轮：空图占位双击选图 + 剪贴板按钮 SVG 兜底 + 图床上传入口隐藏）
 
+- 空图片占位双击选图（应用户需求）：节点编辑弹窗图片块的“尚未选择图片”占位支持双击——直接打开系统文件选择框并走“保存到仓库”同一条本地选图链路（`selectNodeImage(..., "local", ...)`），选择后自动刷新预览并入自动保存；占位增加 `is-empty` 样式（pointer 光标、悬停提色）与 `title="双击选择本地图片"` 提示；“无法加载图片”（有 source 但加载失败）不提供双击入口。契约测试 `image-layout.test.mjs` 新增“empty image placeholder opens the local image picker on double click”。
 - 编辑弹窗剪贴板按钮 SVG 兜底（应用户反馈）：复制网页 SVG 后，“粘贴剪贴板图片”按钮报“剪贴板中没有可粘贴的图片”，而节点上 Ctrl+V 正常。根因：画布/弹窗 Ctrl+V 走 paste 事件（剪贴板含 `image/svg+xml` 即可识别），按钮走 `navigator.clipboard.read()`，Chromium 的 read() 白名单不返回 `image/svg+xml`（网页复制的 SVG 只在 text/html 内嵌 data URI 中）。修复：`readClipboardImage()` 在位图缺失时遍历 `text/html` 提取首个 `<img src="data:image/...">`（`parseDataUrlImageFromHtml()` 支持 base64 与 URL-encoded，含 `&amp;` 实体还原），彻底无图片时提示引导改用弹窗内 Ctrl/Cmd+V（覆盖资源管理器复制文件的 HDROP 场景，paste 事件可拿到文件而 read() 拿不到）。契约测试 `image-layout.test.mjs` 新增“node edit modal clipboard button recovers svg images from clipboard html”。
 - 编辑弹窗图床上传入口隐藏（应用户反馈）：节点编辑弹窗的图片块在未启用任何有效图床时不再渲染“选择文件并上传”与“上传当前图片”两个按钮（统一包进 `this.callbacks.getImageHosts().length` 判断，与画布图片右键菜单 `hasEnabledImageHost` 同源同规则），“保存到仓库”“粘贴剪贴板图片”两个本地入口始终可用；避免用户点击按钮后才遇到“没有可用图床”报错，也澄清了“选择文件并上传”= 图床远程托管（本地手动选图应使用“保存到仓库”）。契约测试 `image-layout.test.mjs` 新增“node edit modal hides image host upload buttons when no host is enabled”。说明：图片/文件选择链路本身无 SVG 限制（`accept="image/*"`、MIME 映射、导入导出均支持 SVG），此前的困惑源于未配图床时上传流程在文件窗口弹出前即被拦截。
 - Enter 失焦修复：新建节点的行内编辑保护窗口从 50ms 延长到 220ms——触发创建的 Enter/Tab 键 keyup 释放较慢时会穿透旧窗口触发 `handleFormatShortcut`（save+blur），导致新节点“创建后立刻退出编辑”；同时 `initialFocusProtected` 期间的 blur 恢复只在无 `relatedTarget`（程序性失焦）时拉回焦点，用户真实点击其它 UI 仍正常结束编辑。
@@ -79,11 +80,12 @@
 
 ## 验证基线
 
-- `npm run verify` 本机完整通过：`test:unit` 423/423（含本轮 `tests/image-layout.test.mjs` 新增 2 项契约“node edit modal hides image host upload buttons when no host is enabled”“node edit modal clipboard button recovers svg images from clipboard html”与上一轮 `tests/node-creation-focus.test.mjs` 2 项契约；该测试文件补载 `node-edit-modal.ts` 源码）；`test:regression` 全部通过；`test:docs` 覆盖 63 个源码模块、1280 个具名声明；`test:repo` 通过；production esbuild 通过，`main.js` 已重建。
+- `npm run verify` 本机完整通过：`test:unit` 424/424（含本轮 `tests/image-layout.test.mjs` 新增 3 项契约“node edit modal hides image host upload buttons when no host is enabled”“node edit modal clipboard button recovers svg images from clipboard html”“empty image placeholder opens the local image picker on double click”与上一轮 `tests/node-creation-focus.test.mjs` 2 项契约；该测试文件补载 `node-edit-modal.ts` 源码）；`test:regression` 全部通过；`test:docs` 覆盖 63 个源码模块、1280 个具名声明；`test:repo` 通过；production esbuild 通过，`main.js` 已重建。
 - 详细数据见根目录 `TEST_RESULTS.md`。
 
 ## 待验证事项（需真实 Obsidian 桌面端手工冒烟）
 
+- 节点编辑弹窗新建图片块：双击“尚未选择图片”占位弹出文件选择框，选择图片后预览刷新并保存；鼠标悬停占位显示 pointer 光标与“双击选择本地图片”提示；“无法加载图片”占位无双击行为。
 - 复制网页 SVG 图片后：编辑弹窗“粘贴剪贴板图片”按钮能插入 SVG（不再误报无图片）；复制资源管理器中的 SVG 文件后按钮给出 Ctrl/Cmd+V 引导提示，且弹窗内 Ctrl/Cmd+V 可粘贴成功。
 - 未启用图床时：节点编辑弹窗图片块只显示“粘贴剪贴板图片”“保存到仓库”，无图床上传按钮；配置图床后两个上传按钮恢复显示。SVG 文件可通过“保存到仓库”正常选入并渲染。
 - Enter 创建兄弟节点后不再立即失焦，可直接输入；多节点导图连续 Tab 创建子节点时画布不乱跳、新节点始终在视口内。

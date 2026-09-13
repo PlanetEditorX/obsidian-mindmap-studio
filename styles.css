@@ -2650,6 +2650,14 @@ mjx-container.mms-node-math:not(.is-display),
   text-align: center;
 }
 
+.mmc-image-placeholder.is-empty {
+  cursor: pointer;
+}
+
+.mmc-image-placeholder.is-empty:hover {
+  color: var(--text-normal);
+}
+
 .mmc-image-block-actions {
   display: flex;
   flex-wrap: wrap;

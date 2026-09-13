@@ -269,7 +269,14 @@ export class NodeEditModal extends Modal {
                 imageSourceCandidates(block, true),
                 (source) => this.callbacks.resolveImage(source)
               ).open());
-            } else preview.createDiv({ cls: "mmc-image-placeholder", text: block.source ? "无法加载图片" : "尚未选择图片" });
+            } else if (!block.source) {
+              // 空图片占位支持双击快速选图（本地保存到仓库，与“保存到仓库”按钮同一链路）。
+              const placeholder = preview.createDiv({ cls: "mmc-image-placeholder is-empty", text: "尚未选择图片" });
+              placeholder.setAttribute("title", "双击选择本地图片");
+              placeholder.addEventListener("dblclick", () => {
+                applyImageAction(selectNodeImage(this.app, block, "local", this.callbacks));
+              });
+            } else preview.createDiv({ cls: "mmc-image-placeholder", text: "无法加载图片" });
             source.value = block.source;
             alt.value = block.alt ?? "";
           };
