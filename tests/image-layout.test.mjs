@@ -107,6 +107,17 @@ test("empty image placeholder opens the local image picker on double click", () 
   assert.match(stylesSource, /\.mmc-image-placeholder\.is-empty \{\s*\n\s*cursor: pointer;/);
 });
 
+test("node context menu offers local image insertion reusing the paste save chain", () => {
+  // 画布/文章右键菜单提供“插入图片”：系统文件选择器 + 与粘贴图片同一保存、插入、自动上传链路。
+  assert.match(editorSource, /setTitle\(contextBlockId \? "在此块后插入图片" : "插入图片"\)/);
+  assert.match(editorSource, /onClick\(\(\) => void this\.insertImageToNode\(selected\.id, contextBlockId\)\)/);
+  const insert = editorSource.match(/private async insertImageToNode\(nodeId: string, afterBlockId\?: string\): Promise<void> \{[\s\S]*?\n  \}/)?.[0] ?? "";
+  assert.match(insert, /selectImageFile\(\)/, "must open the shared image file picker");
+  assert.match(insert, /onSavePastedImage\(file, filename\)/, "must reuse the paste-image storage chain");
+  assert.match(insert, /onScheduleAutoUpload\(nodeId, imageBlock\.id, path, filename\)/, "must schedule auto upload like pasted images");
+  assert.match(insert, /svg\+xml", "svg"/, "svg picks must keep the svg extension");
+});
+
 test("full node editor honors the same rich-text shortcuts as quick editing", () => {
   assert.match(editorSource, /renderNodeRichTextEditor\([\s\S]*this\.richTextShortcuts/);
   assert.match(richEditorSource, /source\.addEventListener\("keydown"/);

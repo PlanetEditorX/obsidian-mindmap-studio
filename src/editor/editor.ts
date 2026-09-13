@@ -5419,6 +5419,51 @@ export class MindMapEditor {
     }
   }
 
+  /**
+   * 经系统文件选择器为节点插入本地图片内容块，与粘贴图片共用保存、插入和自动上传链路。
+   *
+   * @param nodeId 目标节点 ID。
+   * @param afterBlockId 插入锚点内容块 ID；缺省时追加到节点内容末尾。
+   */
+  private async insertImageToNode(nodeId: string, afterBlockId?: string): Promise<void> {
+    if (!this.ensureEditable()) return;
+    const node = this.nodeById(nodeId);
+    if (!node) return;
+    const file = await selectImageFile();
+    if (!file) return;
+    const extension = file.type.split("/")[1]?.replace("jpeg", "jpg").replace("svg+xml", "svg")
+      || file.name.split(".").pop()?.toLowerCase()
+      || "png";
+    const filename = `mindmap-image.${extension}`;
+    let path: string;
+    try {
+      path = await this.callbacks.onSavePastedImage(file, filename);
+    } catch (error) {
+      console.error("MindMap Studio insert image storage failed", error);
+      new Notice(`插入图片失败：${error instanceof Error ? error.message : String(error)}`, 7000);
+      return;
+    }
+    const imageBlock: MindMapImageContentBlock = { id: newId(), type: "image", source: path, localSource: path };
+    if (!this.nodeById(nodeId)) {
+      new Notice(`图片已保存，但目标节点已不存在：${path}`, 7000);
+      return;
+    }
+    this.mutateWithoutArticleContext(() => {
+      const blocks = nodeContentBlocks(node);
+      const afterIndex = afterBlockId ? blocks.findIndex((block) => block.id === afterBlockId) : -1;
+      blocks.splice(afterIndex >= 0 ? afterIndex + 1 : blocks.length, 0, imageBlock);
+      node.content = blocks;
+      syncNodeContentFields(node);
+    });
+    try {
+      const scheduled = this.callbacks.onScheduleAutoUpload(nodeId, imageBlock.id, path, filename);
+      new Notice(scheduled ? `图片已插入，${this.autoUploadScheduleMessage()}` : `图片已插入：${path}`);
+    } catch (error) {
+      console.error("MindMap Studio insert image auto-upload scheduling failed", error);
+      new Notice(`图片已插入：${path}；自动上传排程失败，可稍后手动上传`, 7000);
+    }
+  }
+
   /** Saves dropped or picked files as file content blocks on the target node; drag flows call this with dataTransfer.files directly. */
   private async uploadFilesToNode(nodeId: string, files: File[], afterBlockId?: string): Promise<void> {
     if (!this.ensureEditable() || !files.length) return;
@@ -6809,6 +6854,10 @@ export class MindMapEditor {
       .setIcon("text-cursor-input")
       .onClick(() => this.insertTextBlock(contextBlockId)));
     if (selected) {
+      menu.addItem((item) => item
+        .setTitle(contextBlockId ? "在此块后插入图片" : "插入图片")
+        .setIcon("image-plus")
+        .onClick(() => void this.insertImageToNode(selected.id, contextBlockId)));
       const screenshotTarget: ScreenshotInsertionTarget = { nodeId: selected.id, afterBlockId: contextBlockId };
       menu.addItem((item) => item
         .setTitle("插入截图")

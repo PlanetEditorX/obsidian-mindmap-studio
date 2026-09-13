@@ -17346,6 +17346,49 @@ var MindMapEditor = class {
       new import_obsidian15.Notice(`\u4E0A\u4F20\u6587\u4EF6\u5931\u8D25\uFF1A${error instanceof Error ? error.message : String(error)}`, 7e3);
     }
   }
+  /**
+   * 经系统文件选择器为节点插入本地图片内容块，与粘贴图片共用保存、插入和自动上传链路。
+   *
+   * @param nodeId 目标节点 ID。
+   * @param afterBlockId 插入锚点内容块 ID；缺省时追加到节点内容末尾。
+   */
+  async insertImageToNode(nodeId, afterBlockId) {
+    var _a2, _b2;
+    if (!this.ensureEditable()) return;
+    const node = this.nodeById(nodeId);
+    if (!node) return;
+    const file = await selectImageFile();
+    if (!file) return;
+    const extension = ((_a2 = file.type.split("/")[1]) == null ? void 0 : _a2.replace("jpeg", "jpg").replace("svg+xml", "svg")) || ((_b2 = file.name.split(".").pop()) == null ? void 0 : _b2.toLowerCase()) || "png";
+    const filename = `mindmap-image.${extension}`;
+    let path;
+    try {
+      path = await this.callbacks.onSavePastedImage(file, filename);
+    } catch (error) {
+      console.error("MindMap Studio insert image storage failed", error);
+      new import_obsidian15.Notice(`\u63D2\u5165\u56FE\u7247\u5931\u8D25\uFF1A${error instanceof Error ? error.message : String(error)}`, 7e3);
+      return;
+    }
+    const imageBlock = { id: newId(), type: "image", source: path, localSource: path };
+    if (!this.nodeById(nodeId)) {
+      new import_obsidian15.Notice(`\u56FE\u7247\u5DF2\u4FDD\u5B58\uFF0C\u4F46\u76EE\u6807\u8282\u70B9\u5DF2\u4E0D\u5B58\u5728\uFF1A${path}`, 7e3);
+      return;
+    }
+    this.mutateWithoutArticleContext(() => {
+      const blocks = nodeContentBlocks(node);
+      const afterIndex = afterBlockId ? blocks.findIndex((block) => block.id === afterBlockId) : -1;
+      blocks.splice(afterIndex >= 0 ? afterIndex + 1 : blocks.length, 0, imageBlock);
+      node.content = blocks;
+      syncNodeContentFields(node);
+    });
+    try {
+      const scheduled = this.callbacks.onScheduleAutoUpload(nodeId, imageBlock.id, path, filename);
+      new import_obsidian15.Notice(scheduled ? `\u56FE\u7247\u5DF2\u63D2\u5165\uFF0C${this.autoUploadScheduleMessage()}` : `\u56FE\u7247\u5DF2\u63D2\u5165\uFF1A${path}`);
+    } catch (error) {
+      console.error("MindMap Studio insert image auto-upload scheduling failed", error);
+      new import_obsidian15.Notice(`\u56FE\u7247\u5DF2\u63D2\u5165\uFF1A${path}\uFF1B\u81EA\u52A8\u4E0A\u4F20\u6392\u7A0B\u5931\u8D25\uFF0C\u53EF\u7A0D\u540E\u624B\u52A8\u4E0A\u4F20`, 7e3);
+    }
+  }
   /** Saves dropped or picked files as file content blocks on the target node; drag flows call this with dataTransfer.files directly. */
   async uploadFilesToNode(nodeId, files, afterBlockId) {
     if (!this.ensureEditable() || !files.length) return;
@@ -18641,6 +18684,7 @@ var MindMapEditor = class {
     }
     menu.addItem((item) => item.setTitle(contextBlockId ? "\u5728\u6B64\u5757\u540E\u63D2\u5165\u6587\u5B57" : "\u63D2\u5165\u6587\u5B57").setIcon("text-cursor-input").onClick(() => this.insertTextBlock(contextBlockId)));
     if (selected) {
+      menu.addItem((item) => item.setTitle(contextBlockId ? "\u5728\u6B64\u5757\u540E\u63D2\u5165\u56FE\u7247" : "\u63D2\u5165\u56FE\u7247").setIcon("image-plus").onClick(() => void this.insertImageToNode(selected.id, contextBlockId)));
       const screenshotTarget = { nodeId: selected.id, afterBlockId: contextBlockId };
       menu.addItem((item) => item.setTitle("\u63D2\u5165\u622A\u56FE").setIcon("scan-line").onClick(() => void this.captureScreenshot(false, screenshotTarget)));
       menu.addItem((item) => item.setTitle("\u63D2\u5165\u622A\u56FE\u5E76\u8BC6\u522B").setIcon("scan-text").onClick(() => void this.captureScreenshot(true, screenshotTarget)));
