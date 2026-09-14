@@ -146,6 +146,19 @@ test("image local copies reveal in the system file explorer with selection", () 
   assert.ok(requireFn, "electron must be acquired lazily to keep mobile loading safe");
 });
 
+test("image preview source changes pin the article scroll position", () => {
+  // 来源变更（替换/上传/设默认/删除来源）会触发文章全量重渲染与语义位置恢复，
+  // warmup 高度不准导致恢复偏离真实位置，连续操作累积为“乱跳丢进度”。
+  // 所有来源变更必须通过 runWithPinnedArticleScroll 钉住滚动，900ms 后放开接管。
+  const pinned = editorSource.match(/private runWithPinnedArticleScroll\(run: \(\) => void\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
+  assert.match(pinned, /const scrollTopBefore = scroller\.scrollTop;/);
+  assert.match(pinned, /scroller\.addEventListener\("scroll", guard, true\)/, "capture-phase guard must also pin programmatic restores");
+  assert.match(pinned, /window\.setTimeout\(detach, 900\)/, "the guard must release so user scrolling takes over");
+  const changeBody = editorSource.match(/private async applyImagePreviewSourceChange\([\s\S]*?\n  \}/)?.[0] ?? "";
+  const mutateCount = (changeBody.match(/this\.runWithPinnedArticleScroll\(\(\) => \{/g) ?? []).length;
+  assert.ok(mutateCount >= 5, `reupload, add, replaceLocal, unsetDefault/setDefault and remove branches must pin the scroll (found ${mutateCount})`);
+});
+
 test("image preview source menu reveals local images in the system explorer", () => {
   // 预览弹窗“本地图片”来源行右键在“更新替换”后提供资源管理器定位入口。
   assert.match(editorModalsSource, /revealLocal\?: \(path: string\) => void;/);

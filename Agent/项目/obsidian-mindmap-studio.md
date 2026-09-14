@@ -4,9 +4,10 @@
 - 版本基线：1.50.7（线上已发布 v1.50.7；工作区待提交：替换本地图片后来源跟随修复 + 预览来源行资源管理器入口）。
 - 仓库规则：见根目录 `AGENTS.md`；每轮代码交付三份 ZIP（源码 / 安装 / Agent 交接）共用同一六位后缀；验证入口 `npm run verify`。
 
-## 当前状态（工作区待提交：替换本地图片后来源跟随修复 + 预览来源行资源管理器入口）
+## 当前状态（工作区待提交：来源变更滚动保位 + 替换来源跟随修复 + 预览来源行资源管理器入口）
 
 - 替换本地图片后当前来源不跟随（应用户反馈）：`replaceLocal` 原先只更新 `localSource`，`source` 仍指向旧本地路径，来源列表出现“当前图片（旧）+ 本地图片（新）”两个候选；旧文件 60 秒回收后“当前图片”加载失败。修复：当前显示来源为本地路径（非 http(s)）时随替换更新为新路径，图片级默认来源（sourcePriority）中引用旧路径的项同步映射；被替换的旧 source 与旧 localSource 去重后进入 60 秒延迟回收。纯远程镜像块替换本地副本不影响 source。
+- 替换图片后阅读位置乱跳（应用户日志定位）：每次来源变更触发文章全量重渲染 + 语义位置恢复，warmup 期间目标节点高度未就绪（日志 targetHeight 0），恢复 scrollTop 与真实位置偏差数百像素，连续操作（替换→设默认→再替换）累积漂移。修复：新增 `runWithPinnedArticleScroll()`，reupload/add/replaceLocal/unsetDefault/setDefault/remove 六个来源变更分支的 mutate/render 全部在 900ms 滚动保护窗口内执行（capture 阶段 scroll guard 钉住 scrollTop，窗口结束用户滚动接管）；rememberLocation 语义进度仍正常持久化。file-block.test.mjs 新增契约锁定六分支包裹。
 - 预览弹窗“本地图片”来源行右键新增“在文件资源管理器中打开”（位于“更新替换”之后）：`ImagePreviewSourceActions` 新增可选 `revealLocal` 回调，editor 注入 `onRevealFileInSystemExplorer`；actions 对象补 `ImagePreviewSourceActions` 显式类型标注。file-block.test.mjs 新增契约锁定来源跟随与 reveal 入口。
 
 - 截图插入链路优化：`captureScreenshot` 原先独立实现插入——整份 `cloneDocument` + `replaceDocumentFromExternalEdit` 替换文档、`focusNodeById` 强制聚焦目标节点、`onSavePastedImage` 落盘后才校验目标节点（失败时孤儿文件无提示）。现重构出共用方法 `insertImageBlockToNode()`（落盘 → mutate 插入 → 自动上传排程 → 通知），截图、右键“插入图片”、粘贴图片三条入口全部收敛：截图插入改走统一 mutate 链路（保留撤销与阅读位置记忆，不再整份替换文档、不再强制聚焦拉走阅读位置、不再丢失多选状态），目标节点消失时统一提示含落盘路径。契约测试 `image-layout.test.mjs` 新增“screenshot, right-click image picker and paste share one insert chain”。
@@ -18,12 +19,12 @@
 
 ## 验证基线
 
-- `npm run verify` 本机完整通过：`test:unit` 430/430；`test:regression` 全部通过；`test:docs` 覆盖 63 个源码模块、1283 个具名声明；`test:repo` 通过；production esbuild 通过，`main.js` 已重建。
+- `npm run verify` 本机完整通过：`test:unit` 431/431；`test:regression` 全部通过；`test:docs` 覆盖 63 个源码模块、1283 个具名声明；`test:repo` 通过；production esbuild 通过，`main.js` 已重建。
 - 详细数据见根目录 `TEST_RESULTS.md`。
 
 ## 待验证事项（需真实 Obsidian 桌面端手工冒烟）
 
-- 替换本地图片：来源列表只保留一个“本地图片”候选且立即显示新图；60 秒后旧文件进入系统回收站；替换后立即撤销则恢复旧图并取消回收。
+- 替换本地图片：立即显示新图、来源列表只保留“本地图片”；**阅读位置保持不动不再乱跳**（连续多次来源变更位置稳定）；60 秒后旧文件进入系统回收站；替换后立即撤销则恢复旧图并取消回收。
 - 预览弹窗“本地图片”来源行右键“在文件资源管理器中打开”打开目录并选中文件。
 - 图片块右键“在文件资源管理器中显示”打开目录并选中文件；预览来源栏与设置项显示“本地图片”。
 - 阅读进度恢复：文章/通读模式翻到中间或末尾 → 关闭 Obsidian → 重新打开同一文件，应自动滚回上次阅读位置（首次族上下文刷新后约 1~2 秒内完成）；用户打开后立即滚动则完全接管，不会被记忆位置拉走。
