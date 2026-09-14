@@ -161,6 +161,10 @@ test("image preview source changes restore the pixel scroll instead of semantic 
   const warmupPin = editorSource.match(/if \(this\.pendingArticlePixelRestoreTop !== null\) \{[\s\S]{0,400}?this\.pendingArticlePixelRestoreTop = null;/);
   assert.ok(warmupPin, "warmup must pin the scroll to the recorded target each frame");
   assert.match(warmupPin?.[0] ?? "", /Math\.min\(target, maxScroll\)/, "the pin must clamp until content catches up, then land exactly");
+  // warmup 完成后仍可能有程序性滚动改动位置（用户日志 seq 182：complete 后 48ms 从 17956 跳到 19632），
+  // 需要 capture 阶段 guard 压制到目标并稳定两拍后才解除。
+  assert.match(editorSource, /private startArticlePixelRestoreGuard\(target: number\): void \{[\s\S]*?addEventListener\("scroll", guard, true\)/, "a capture-phase guard must suppress post-warmup programmatic scrolls");
+  assert.match(editorSource, /this\.pendingArticlePixelRestoreTop = previousScroll\.top;[\s\S]{0,200}?this\.startArticlePixelRestoreGuard\(previousScroll\.top\);/);
 });
 
 test("image preview source menu reveals local images in the system explorer", () => {
