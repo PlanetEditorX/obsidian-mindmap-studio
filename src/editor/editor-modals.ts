@@ -138,6 +138,8 @@ export interface ImagePreviewSourceActions {
   getDefaultSource: () => string | null;
   /** 通过统一历史链路执行一次来源变更。 */
   applyChange: (change: ImagePreviewSourceChange) => Promise<boolean>;
+  /** 在系统文件资源管理器中定位本地图片（桌面端）；缺省时来源行不显示该菜单项。 */
+  revealLocal?: (path: string) => void;
 }
 
 /**
@@ -296,6 +298,12 @@ export class ImagePreviewModal extends Modal {
           .setTitle("更新替换（选择本地图片）")
           .setIcon("image-plus")
           .onClick(() => void this.runSourceChange({ type: "replaceLocal" })));
+        if (this.actions.revealLocal) {
+          menu.addItem((item) => item
+            .setTitle("在文件资源管理器中打开")
+            .setIcon("folder-open")
+            .onClick(() => this.actions?.revealLocal?.(candidate.source)));
+        }
       } else {
         menu.addItem((item) => item
           .setTitle("更新上传（选择本地图片并上传图床）")

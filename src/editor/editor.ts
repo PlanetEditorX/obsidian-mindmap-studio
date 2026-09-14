@@ -87,6 +87,7 @@ import {
   ImagePreviewModal,
   ImportExportModal,
   OutlineModal,
+  type ImagePreviewSourceActions,
   type ImagePreviewSourceChange
 } from "./editor-modals";
 import { NodeEditModal } from "./node-edit-modal";
@@ -6474,13 +6475,14 @@ export class MindMapEditor {
     if (!block) return;
     const candidates = imageSourceCandidates(block, true, this.options.imageHostPriorityIds);
     const preferred = this.callbacks.resolveImage(candidates[0]?.source ?? block.source) ?? block.source;
-    const actions = {
+    const actions: ImagePreviewSourceActions = {
       getSources: () => {
         const located = this.locateImageBlock(nodeId, blockId);
         return located ? imageSourceCandidates(located.block, true, this.options.imageHostPriorityIds) : [];
       },
       getDefaultSource: () => this.locateImageBlock(nodeId, blockId)?.block.sourcePriority?.[0] ?? null,
-      applyChange: (change: ImagePreviewSourceChange) => this.applyImagePreviewSourceChange(nodeId, blockId, change)
+      applyChange: (change: ImagePreviewSourceChange) => this.applyImagePreviewSourceChange(nodeId, blockId, change),
+      revealLocal: (path) => this.callbacks.onRevealFileInSystemExplorer(path)
     };
     new ImagePreviewModal(this.app, preferred, block.alt ?? "图片预览", candidates, this.callbacks.resolveImage, actions).open();
   }
@@ -6577,6 +6579,8 @@ export class MindMapEditor {
         return false;
       }
       const previousLocal = located.block.localSource;
+      const previousSource = located.block.source;
+      const sourceWasLocal = !/^https?:\/\//i.test(previousSource);
       const file = await selectImageFile();
       if (!file) return true;
       const path = await this.callbacks.onSavePastedImage(file, file.name);
@@ -6586,11 +6590,21 @@ export class MindMapEditor {
       }
       this.mutateWithoutArticleContext(() => {
         located.block.localSource = path;
+        // 当前显示来源若本来指向本地文件，替换后必须跟随新本地路径，
+        // 否则旧文件回收后“当前图片”候选将加载失败；图片级默认来源同理。
+        if (sourceWasLocal) located.block.source = path;
+        if (located.block.sourcePriority?.length) {
+          located.block.sourcePriority = located.block.sourcePriority.map((item) =>
+            (sourceWasLocal && item === previousSource) || item === previousLocal ? path : item);
+        }
         replaceNodeContentBlocks(located.node, located.blocks);
       });
       // 被替换的旧本地图片进入 60 秒延迟回收；撤销恢复引用会自动取消，
       // 到期前仍做全库引用检查，避免误删其它导图仍在使用的文件。
-      if (previousLocal && previousLocal !== path) this.callbacks.onScheduleFileAssetDeletion([previousLocal]);
+      const recycled = new Set<string>();
+      if (previousLocal && previousLocal !== path) recycled.add(previousLocal);
+      if (sourceWasLocal && previousSource !== path) recycled.add(previousSource);
+      if (recycled.size) this.callbacks.onScheduleFileAssetDeletion([...recycled]);
       new Notice("本地图片已更新");
       return true;
     }

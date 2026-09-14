@@ -7269,6 +7269,12 @@ var ImagePreviewModal = class extends import_obsidian4.Modal {
       menu.addSeparator();
       if (candidate.kind === "local") {
         menu.addItem((item) => item.setTitle("\u66F4\u65B0\u66FF\u6362\uFF08\u9009\u62E9\u672C\u5730\u56FE\u7247\uFF09").setIcon("image-plus").onClick(() => void this.runSourceChange({ type: "replaceLocal" })));
+        if (this.actions.revealLocal) {
+          menu.addItem((item) => item.setTitle("\u5728\u6587\u4EF6\u8D44\u6E90\u7BA1\u7406\u5668\u4E2D\u6253\u5F00").setIcon("folder-open").onClick(() => {
+            var _a2, _b2;
+            return (_b2 = (_a2 = this.actions) == null ? void 0 : _a2.revealLocal) == null ? void 0 : _b2.call(_a2, candidate.source);
+          }));
+        }
       } else {
         menu.addItem((item) => item.setTitle("\u66F4\u65B0\u4E0A\u4F20\uFF08\u9009\u62E9\u672C\u5730\u56FE\u7247\u5E76\u4E0A\u4F20\u56FE\u5E8A\uFF09").setIcon("refresh-cw").onClick(() => void this.runSourceChange({ type: "reupload" })));
       }
@@ -18335,7 +18341,8 @@ var MindMapEditor = class {
         var _a3, _b3, _c2;
         return (_c2 = (_b3 = (_a3 = this.locateImageBlock(nodeId, blockId)) == null ? void 0 : _a3.block.sourcePriority) == null ? void 0 : _b3[0]) != null ? _c2 : null;
       },
-      applyChange: (change) => this.applyImagePreviewSourceChange(nodeId, blockId, change)
+      applyChange: (change) => this.applyImagePreviewSourceChange(nodeId, blockId, change),
+      revealLocal: (path) => this.callbacks.onRevealFileInSystemExplorer(path)
     };
     new ImagePreviewModal(this.app, preferred, (_e = block.alt) != null ? _e : "\u56FE\u7247\u9884\u89C8", candidates, this.callbacks.resolveImage, actions).open();
   }
@@ -18432,6 +18439,8 @@ var MindMapEditor = class {
         return false;
       }
       const previousLocal = located2.block.localSource;
+      const previousSource = located2.block.source;
+      const sourceWasLocal = !/^https?:\/\//i.test(previousSource);
       const file = await selectImageFile();
       if (!file) return true;
       const path = await this.callbacks.onSavePastedImage(file, file.name);
@@ -18440,10 +18449,18 @@ var MindMapEditor = class {
         return true;
       }
       this.mutateWithoutArticleContext(() => {
+        var _a3;
         located2.block.localSource = path;
+        if (sourceWasLocal) located2.block.source = path;
+        if ((_a3 = located2.block.sourcePriority) == null ? void 0 : _a3.length) {
+          located2.block.sourcePriority = located2.block.sourcePriority.map((item) => sourceWasLocal && item === previousSource || item === previousLocal ? path : item);
+        }
         replaceNodeContentBlocks(located2.node, located2.blocks);
       });
-      if (previousLocal && previousLocal !== path) this.callbacks.onScheduleFileAssetDeletion([previousLocal]);
+      const recycled = /* @__PURE__ */ new Set();
+      if (previousLocal && previousLocal !== path) recycled.add(previousLocal);
+      if (sourceWasLocal && previousSource !== path) recycled.add(previousSource);
+      if (recycled.size) this.callbacks.onScheduleFileAssetDeletion([...recycled]);
       new import_obsidian15.Notice("\u672C\u5730\u56FE\u7247\u5DF2\u66F4\u65B0");
       return true;
     }

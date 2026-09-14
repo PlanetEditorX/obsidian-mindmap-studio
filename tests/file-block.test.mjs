@@ -16,9 +16,10 @@ let outlineSource;
 let layoutSource;
 let stylesSource;
 let editorTypesSource;
+let editorModalsSource;
 
 before(async () => {
-  const [loaded, editor, main, view, modal, fileView, canvas, article, outline, layout, styles, editorTypes] = await Promise.all([
+  const [loaded, editor, main, view, modal, fileView, canvas, article, outline, layout, styles, editorTypes, editorModals] = await Promise.all([
     loadTypeScriptModules(["src/core/node-tree.ts", "src/core/model.ts"], "src/core/model.ts"),
     readFile("src/editor/editor.ts", "utf8"),
     readFile("src/main.ts", "utf8"),
@@ -30,7 +31,8 @@ before(async () => {
     readFile("src/editor/outline-renderer.ts", "utf8"),
     readFile("src/render/layout.ts", "utf8"),
     readFile("styles.css", "utf8"),
-    readFile("src/editor/editor-types.ts", "utf8")
+    readFile("src/editor/editor-types.ts", "utf8"),
+    readFile("src/editor/editor-modals.ts", "utf8")
   ]);
   model = loaded.module;
   cleanup = loaded.cleanup;
@@ -45,6 +47,7 @@ before(async () => {
   layoutSource = layout;
   stylesSource = styles;
   editorTypesSource = editorTypes;
+  editorModalsSource = editorModals;
 });
 
 after(() => cleanup?.());
@@ -127,7 +130,8 @@ test("replaced and removed image local copies enter deferred recycling", () => {
   assert.match(deleted, /block\.type === "image" && block\.localSource\) paths\.add\(block\.localSource\)/, "node deletion must recycle dropped image local copies");
   const replaceLocal = editorSource.match(/if \(change\.type === "replaceLocal"\) \{[\s\S]*?\n    \}/)?.[0] ?? "";
   assert.match(replaceLocal, /const previousLocal = located\.block\.localSource;/);
-  assert.match(replaceLocal, /if \(previousLocal && previousLocal !== path\) this\.callbacks\.onScheduleFileAssetDeletion\(\[previousLocal\]\);/, "replaced local images must enter deferred recycling");
+  assert.match(replaceLocal, /if \(sourceWasLocal\) located\.block\.source = path;/, "a local current source must follow the replacement so the preview keeps working after recycling");
+  assert.match(replaceLocal, /if \(recycled\.size\) this\.callbacks\.onScheduleFileAssetDeletion\(\[\.\.\.recycled\]\);/, "replaced local images must enter deferred recycling");
   const removeBlock = editorSource.match(/private removeContentBlock\(nodeId: string, blockId: string\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
   assert.match(removeBlock, /removed\.type === "image" && removed\.localSource\) this\.callbacks\.onScheduleFileAssetDeletion\(\[removed\.localSource\]/, "deleted image blocks must recycle their local copy");
 });
@@ -140,6 +144,13 @@ test("image local copies reveal in the system file explorer with selection", () 
   assert.match(reveal, /showItemInFolder\(absolutePath\)/, "explorer must open with the file selected");
   const requireFn = reveal.match(/require\??: \(id: string\) => unknown/);
   assert.ok(requireFn, "electron must be acquired lazily to keep mobile loading safe");
+});
+
+test("image preview source menu reveals local images in the system explorer", () => {
+  // 预览弹窗“本地图片”来源行右键在“更新替换”后提供资源管理器定位入口。
+  assert.match(editorModalsSource, /revealLocal\?: \(path: string\) => void;/);
+  assert.match(editorModalsSource, /setTitle\("在文件资源管理器中打开"\)\s*\n\s*\.setIcon\("folder-open"\)\s*\n\s*\.onClick\(\(\) => this\.actions\?\.revealLocal\?\.\(candidate\.source\)\)/);
+  assert.match(editorSource, /revealLocal: \(path\) => this\.callbacks\.onRevealFileInSystemExplorer\(path\)/);
 });
 
 test("node context menu uploads a file into the targeted node and stores the vault path", () => {
