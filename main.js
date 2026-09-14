@@ -524,7 +524,7 @@ function imageSourceCandidates(block, includeLocal = true, hostPriorityIds = [])
     raw.push({ candidate: { source: block.source, label: "\u5F53\u524D\u56FE\u7247", kind: "current" }, hostRank: Number.MAX_SAFE_INTEGER, order: manualOrder++ });
   }
   if (includeLocal && block.localSource) {
-    raw.push({ candidate: { source: block.localSource, label: "\u672C\u5730\u526F\u672C", kind: "local" }, hostRank: Number.MAX_SAFE_INTEGER, order: manualOrder++ });
+    raw.push({ candidate: { source: block.localSource, label: "\u672C\u5730\u56FE\u7247", kind: "local" }, hostRank: Number.MAX_SAFE_INTEGER, order: manualOrder++ });
   }
   raw.sort((left, right) => {
     var _a3, _b3;
@@ -3135,7 +3135,7 @@ var MindMapStudioSettingTab = class extends import_obsidian.PluginSettingTab {
         this.plugin.settings.imageFailoverTimeoutSeconds = value;
         await this.plugin.saveSettings();
       }));
-      new import_obsidian.Setting(containerEl).setName("\u672C\u5730\u526F\u672C\u4F5C\u4E3A\u6700\u540E\u56DE\u9000").setDesc("\u8FDC\u7A0B\u955C\u50CF\u5168\u90E8\u5931\u6548\u65F6\uFF0C\u5982\u679C\u672C\u5730\u56FE\u7247\u4ECD\u5B58\u5728\uFF0C\u5219\u6700\u540E\u5C1D\u8BD5\u672C\u5730\u526F\u672C\u3002").addToggle((toggle) => toggle.setValue(this.plugin.settings.imageFailoverUseLocalFallback).onChange(async (value) => {
+      new import_obsidian.Setting(containerEl).setName("\u672C\u5730\u56FE\u7247\u4F5C\u4E3A\u6700\u540E\u56DE\u9000").setDesc("\u8FDC\u7A0B\u955C\u50CF\u5168\u90E8\u5931\u6548\u65F6\uFF0C\u5982\u679C\u672C\u5730\u56FE\u7247\u4ECD\u5B58\u5728\uFF0C\u5219\u6700\u540E\u5C1D\u8BD5\u672C\u5730\u56FE\u7247\u3002").addToggle((toggle) => toggle.setValue(this.plugin.settings.imageFailoverUseLocalFallback).onChange(async (value) => {
         this.plugin.settings.imageFailoverUseLocalFallback = value;
         await this.plugin.saveSettings();
       }));
@@ -13538,11 +13538,12 @@ var MindMapEditor = class {
     for (const node of flattenNodes(this.document.root)) {
       for (const block of nodeContentBlocks(node)) {
         if (block.type === "file") paths.push(block.source);
+        else if (block.type === "image" && block.localSource) paths.push(block.localSource);
       }
     }
     return paths;
   }
-  /** 收集指定节点及其后代中全部文件块引用的附件路径，用于节点删除后的延迟回收。 */
+  /** 收集指定节点及其后代中全部文件块与图片本地副本引用的附件路径，用于节点删除后的延迟回收。 */
   collectDeletedFileAssetPaths(nodeIds) {
     const paths = /* @__PURE__ */ new Set();
     for (const nodeId of nodeIds) {
@@ -13551,6 +13552,7 @@ var MindMapEditor = class {
       for (const descendant of flattenNodes(node)) {
         for (const block of nodeContentBlocks(descendant)) {
           if (block.type === "file") paths.add(block.source);
+          else if (block.type === "image" && block.localSource) paths.add(block.localSource);
         }
       }
     }
@@ -17329,6 +17331,7 @@ var MindMapEditor = class {
       replaceNodeContentBlocks(node, blocks.filter((block) => block.id !== blockId));
     });
     if (removed.type === "file") this.callbacks.onScheduleFileAssetDeletion([removed.source]);
+    else if (removed.type === "image" && removed.localSource) this.callbacks.onScheduleFileAssetDeletion([removed.localSource]);
   }
   /**
    * 上传任意文件到指定节点：经系统文件选择器选文件、落盘到附件目录后插入文件内容块。
@@ -18299,6 +18302,9 @@ var MindMapEditor = class {
     }
     menu.addSeparator();
     menu.addItem((item) => item.setTitle("\u590D\u5236\u56FE\u7247\u5730\u5740").setIcon("copy").onClick(() => void this.copyImageSource(block.source)));
+    if (block.localSource) {
+      menu.addItem((item) => item.setTitle("\u5728\u6587\u4EF6\u8D44\u6E90\u7BA1\u7406\u5668\u4E2D\u663E\u793A").setIcon("folder-open").onClick(() => this.callbacks.onRevealFileInSystemExplorer(block.localSource)));
+    }
     if (!this.readOnly) {
       menu.addItem((item) => item.setTitle("\u5220\u9664\u5F53\u524D\u5757").setIcon("trash-2").onClick(() => void this.removeImageBlock(nodeId, blockId)));
     }
@@ -18425,6 +18431,7 @@ var MindMapEditor = class {
         new import_obsidian15.Notice("\u56FE\u7247\u5DF2\u4E0D\u5B58\u5728");
         return false;
       }
+      const previousLocal = located2.block.localSource;
       const file = await selectImageFile();
       if (!file) return true;
       const path = await this.callbacks.onSavePastedImage(file, file.name);
@@ -18436,7 +18443,8 @@ var MindMapEditor = class {
         located2.block.localSource = path;
         replaceNodeContentBlocks(located2.node, located2.blocks);
       });
-      new import_obsidian15.Notice("\u672C\u5730\u526F\u672C\u5DF2\u66F4\u65B0");
+      if (previousLocal && previousLocal !== path) this.callbacks.onScheduleFileAssetDeletion([previousLocal]);
+      new import_obsidian15.Notice("\u672C\u5730\u56FE\u7247\u5DF2\u66F4\u65B0");
       return true;
     }
     if (change.type === "unsetDefault") {
@@ -20487,6 +20495,7 @@ var MindMapStudioView = class extends import_obsidian17.TextFileView {
         },
         onCancelFileAssetDeletion: (paths) => this.plugin.cancelFileAssetDeletion(paths),
         onOpenFileAsset: async (path) => this.plugin.openFileAsset(path),
+        onRevealFileInSystemExplorer: (path) => void this.plugin.revealFileInSystemExplorer(path),
         getImageHosts: () => this.plugin.getImageHostChoices(),
         getDefaultUploadHostIds: () => this.plugin.getDefaultUploadHostIds(),
         onUploadImage: async (blob, suggestedName, hostIds) => this.plugin.uploadImageToHosts(blob, suggestedName, hostIds),
@@ -25728,6 +25737,7 @@ var MindMapStudioPlugin = class extends import_obsidian20.Plugin {
   }
   /**
    * 在删除文件块附件前进行最终安全检查：文件必须存在于仓库内，且没有任何 .mindmap 文档仍然引用该路径。
+   * 引用检查同时覆盖文件块 source 与图片块本地副本 localSource。
    *
    * @param localPath 附件在仓库内的相对路径。
    * @param currentMindMapPath 当前导图文件路径。
@@ -25737,7 +25747,7 @@ var MindMapStudioPlugin = class extends import_obsidian20.Plugin {
     const normalized2 = (0, import_obsidian20.normalizePath)(localPath);
     const target = this.app.vault.getAbstractFileByPath(normalized2);
     if (!(target instanceof import_obsidian20.TFile)) return false;
-    const referencedInDocument = (document2) => flattenNodes(document2.root).some((node) => nodeContentBlocks(node).some((block) => block.type === "file" && block.source === normalized2));
+    const referencedInDocument = (document2) => flattenNodes(document2.root).some((node) => nodeContentBlocks(node).some((block) => block.type === "file" && block.source === normalized2 || block.type === "image" && block.localSource === normalized2));
     const current = this.app.vault.getAbstractFileByPath(currentMindMapPath);
     if (current instanceof import_obsidian20.TFile) {
       try {
@@ -25760,6 +25770,46 @@ var MindMapStudioPlugin = class extends import_obsidian20.Plugin {
     } catch (error) {
       console.warn("MindMap Studio could not trash node attachment file", error);
       return false;
+    }
+  }
+  /**
+   * 在系统文件资源管理器中显示仓库内文件并聚焦选中（桌面端，行为同 VS Code 的 Reveal in Explorer）。
+   * 移动端或 Electron API 不可用时提示不支持；文件不存在时先给出明确提示。
+   *
+   * @param vaultPath 附件在仓库内的相对路径。
+   */
+  async revealFileInSystemExplorer(vaultPath) {
+    var _a2;
+    const path = (0, import_obsidian20.normalizePath)(vaultPath);
+    if (!(this.app.vault.getAbstractFileByPath(path) instanceof import_obsidian20.TFile)) {
+      new import_obsidian20.Notice("\u6587\u4EF6\u4E0D\u5B58\u5728\u6216\u5DF2\u79FB\u51FA\u4ED3\u5E93");
+      return;
+    }
+    if (!import_obsidian20.Platform.isDesktopApp) {
+      new import_obsidian20.Notice("\u79FB\u52A8\u7AEF\u4E0D\u652F\u6301\u5728\u6587\u4EF6\u8D44\u6E90\u7BA1\u7406\u5668\u4E2D\u663E\u793A");
+      return;
+    }
+    let absolutePath;
+    try {
+      const adapter = this.app.vault.adapter;
+      absolutePath = adapter.getFullPath(path);
+    } catch (error) {
+      new import_obsidian20.Notice("\u65E0\u6CD5\u89E3\u6790\u6587\u4EF6\u5728\u78C1\u76D8\u4E0A\u7684\u4F4D\u7F6E");
+      console.warn("MindMap Studio could not resolve absolute path", error);
+      return;
+    }
+    const requireFunction = typeof window !== "undefined" ? window.require : void 0;
+    if (!requireFunction) {
+      new import_obsidian20.Notice("\u5F53\u524D\u73AF\u5883\u4E0D\u652F\u6301\u5728\u6587\u4EF6\u8D44\u6E90\u7BA1\u7406\u5668\u4E2D\u663E\u793A");
+      return;
+    }
+    try {
+      const electron = requireFunction("electron");
+      if (!((_a2 = electron.shell) == null ? void 0 : _a2.showItemInFolder)) throw new Error("shell.showItemInFolder unavailable");
+      electron.shell.showItemInFolder(absolutePath);
+    } catch (error) {
+      new import_obsidian20.Notice("\u65E0\u6CD5\u6253\u5F00\u6587\u4EF6\u8D44\u6E90\u7BA1\u7406\u5668");
+      console.warn("MindMap Studio could not reveal file in system explorer", error);
     }
   }
   /**

@@ -36,7 +36,7 @@ test("image source candidates prefer configured image host priority before local
     "https://slow.example/a.png",
     "assets/local.png"
   ]);
-  assert.deepEqual(candidates.map((item) => item.label), ["快图床", "慢图床", "本地副本"]);
+  assert.deepEqual(candidates.map((item) => item.label), ["快图床", "慢图床", "本地图片"]);
 });
 
 test("image source candidates de-duplicate current remote while keeping priority order", () => {

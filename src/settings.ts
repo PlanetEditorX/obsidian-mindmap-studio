@@ -1776,8 +1776,8 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
           }));
 
       new Setting(containerEl)
-        .setName("本地副本作为最后回退")
-        .setDesc("远程镜像全部失效时，如果本地图片仍存在，则最后尝试本地副本。")
+        .setName("本地图片作为最后回退")
+        .setDesc("远程镜像全部失效时，如果本地图片仍存在，则最后尝试本地图片。")
         .addToggle((toggle) => toggle
           .setValue(this.plugin.settings.imageFailoverUseLocalFallback)
           .onChange(async (value) => {

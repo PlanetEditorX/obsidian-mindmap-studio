@@ -1729,7 +1729,7 @@ const command = "example";
   assert.match(settingsSource, /createEl\("summary", \{ cls: "mms-image-host-card-title" \}\)/);
   assert.match(settingsSource, /远程图片自动故障转移/);
   assert.match(settingsSource, /单个镜像等待时间/);
-  assert.match(settingsSource, /本地副本作为最后回退/);
+  assert.match(settingsSource, /本地图片作为最后回退/);
   assert.match(settingsSource, /默认节点文字对齐/);
   assert.match(settingsSource, /双指手势/);
   assert.match(settingsSource, /twoFingerGestureAction/);

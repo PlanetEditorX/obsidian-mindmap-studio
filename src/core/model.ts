@@ -1014,7 +1014,7 @@ export function imageSourceCandidates(block: MindMapImageContentBlock, includeLo
     raw.push({ candidate: { source: block.source, label: "当前图片", kind: "current" }, hostRank: Number.MAX_SAFE_INTEGER, order: manualOrder++ });
   }
   if (includeLocal && block.localSource) {
-    raw.push({ candidate: { source: block.localSource, label: "本地副本", kind: "local" }, hostRank: Number.MAX_SAFE_INTEGER, order: manualOrder++ });
+    raw.push({ candidate: { source: block.localSource, label: "本地图片", kind: "local" }, hostRank: Number.MAX_SAFE_INTEGER, order: manualOrder++ });
   }
   raw
     .sort((left, right) => {

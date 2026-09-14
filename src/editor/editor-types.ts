@@ -62,6 +62,8 @@ export interface MindMapEditorCallbacks {
   onCancelFileAssetDeletion: (paths: string[]) => void;
   /** Opens a vault attachment file with Obsidian (unknown desktop types fall back to the system app). */
   onOpenFileAsset: (path: string) => Promise<void>;
+  /** Reveals a vault file in the system file explorer with selection (desktop only). */
+  onRevealFileInSystemExplorer: (path: string) => void;
   getImageHosts: () => ImageHostChoice[];
   getDefaultUploadHostIds: () => string[];
   onUploadImage: (blob: Blob, suggestedName: string, hostIds: string[]) => Promise<ImageHostUploadBatch>;

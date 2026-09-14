@@ -114,7 +114,7 @@ export function chooseImageHosts(
  * 图片预览弹窗内的一次来源变更请求。
  *
  * `reupload` 表示选择本地图片并上传图床（图床与手动 URL 来源）；`replaceLocal` 表示选择本地
- * 图片替换本地副本；`remove` 删除一个来源（没有任何剩余来源时由宿主删除整个图片块）；
+ * 图片替换本地图片；`remove` 删除一个来源（没有任何剩余来源时由宿主删除整个图片块）；
  * `add` 把用户手动填写的 URL 添加为新来源；`setDefault` / `unsetDefault` 写入或取消图片级来源优先级。
  */
 export type ImagePreviewSourceChange =
@@ -141,7 +141,7 @@ export interface ImagePreviewSourceActions {
 }
 
 /**
- * 图片放大预览弹窗：按来源优先级列出图床镜像、手动 URL 和本地副本，支持缩放与来源管理。
+ * 图片放大预览弹窗：按来源优先级列出图床镜像、手动 URL 和本地图片，支持缩放与来源管理。
  */
 export class ImagePreviewModal extends Modal {
   private scale = 1;

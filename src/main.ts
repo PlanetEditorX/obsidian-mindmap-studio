@@ -6,8 +6,10 @@
  */
 
 import {
+  FileSystemAdapter,
   Menu,
   Notice,
+  Platform,
   Plugin,
   TFile,
   TFolder,
@@ -2120,6 +2122,7 @@ export default class MindMapStudioPlugin extends Plugin {
 
   /**
    * 在删除文件块附件前进行最终安全检查：文件必须存在于仓库内，且没有任何 .mindmap 文档仍然引用该路径。
+   * 引用检查同时覆盖文件块 source 与图片块本地副本 localSource。
    *
    * @param localPath 附件在仓库内的相对路径。
    * @param currentMindMapPath 当前导图文件路径。
@@ -2130,7 +2133,9 @@ export default class MindMapStudioPlugin extends Plugin {
     const target = this.app.vault.getAbstractFileByPath(normalized);
     if (!(target instanceof TFile)) return false;
     const referencedInDocument = (document: MindMapDocument): boolean =>
-      flattenNodes(document.root).some((node) => nodeContentBlocks(node).some((block) => block.type === "file" && block.source === normalized));
+      flattenNodes(document.root).some((node) => nodeContentBlocks(node).some((block) =>
+        (block.type === "file" && block.source === normalized)
+        || (block.type === "image" && block.localSource === normalized)));
     const current = this.app.vault.getAbstractFileByPath(currentMindMapPath);
     if (current instanceof TFile) {
       try {
@@ -2154,6 +2159,48 @@ export default class MindMapStudioPlugin extends Plugin {
     } catch (error) {
       console.warn("MindMap Studio could not trash node attachment file", error);
       return false;
+    }
+  }
+
+  /**
+   * 在系统文件资源管理器中显示仓库内文件并聚焦选中（桌面端，行为同 VS Code 的 Reveal in Explorer）。
+   * 移动端或 Electron API 不可用时提示不支持；文件不存在时先给出明确提示。
+   *
+   * @param vaultPath 附件在仓库内的相对路径。
+   */
+  async revealFileInSystemExplorer(vaultPath: string): Promise<void> {
+    const path = normalizePath(vaultPath);
+    if (!(this.app.vault.getAbstractFileByPath(path) instanceof TFile)) {
+      new Notice("文件不存在或已移出仓库");
+      return;
+    }
+    if (!Platform.isDesktopApp) {
+      new Notice("移动端不支持在文件资源管理器中显示");
+      return;
+    }
+    let absolutePath: string;
+    try {
+      const adapter = this.app.vault.adapter as FileSystemAdapter;
+      absolutePath = adapter.getFullPath(path);
+    } catch (error) {
+      new Notice("无法解析文件在磁盘上的位置");
+      console.warn("MindMap Studio could not resolve absolute path", error);
+      return;
+    }
+    const requireFunction = typeof window !== "undefined"
+      ? (window as unknown as { require?: (id: string) => unknown }).require
+      : undefined;
+    if (!requireFunction) {
+      new Notice("当前环境不支持在文件资源管理器中显示");
+      return;
+    }
+    try {
+      const electron = requireFunction("electron") as { shell?: { showItemInFolder?: (itemPath: string) => boolean } };
+      if (!electron.shell?.showItemInFolder) throw new Error("shell.showItemInFolder unavailable");
+      electron.shell.showItemInFolder(absolutePath);
+    } catch (error) {
+      new Notice("无法打开文件资源管理器");
+      console.warn("MindMap Studio could not reveal file in system explorer", error);
     }
   }
 

@@ -113,8 +113,33 @@ test("plugin deletes unreferenced file assets to the system trash after a cancel
 
   const safeDelete = mainSource.match(/private async deleteFileAssetIfSafe\([\s\S]*?\n  \}/)?.[0] ?? "";
   assert.match(safeDelete, /block\.type === "file" && block\.source === normalized/, "final check scans every .mindmap for remaining references");
+  assert.match(safeDelete, /block\.type === "image" && block\.localSource === normalized/, "image local copies must also protect the asset from removal");
   assert.match(safeDelete, /this\.app\.vault\.trash\(target, true\)/, "removal must go to the system trash");
   assert.match(mainSource, /for \(const timer of this\.pendingFileDeletionTimers\.values\(\)\) window\.clearTimeout\(timer\)/, "onunload clears pending timers");
+});
+
+test("replaced and removed image local copies enter deferred recycling", () => {
+  // 更新替换或删除图片块后，旧本地图片走与文件块相同的 60 秒延迟回收：
+  // 撤销恢复引用会自动取消，到期前全库引用检查兜底。
+  const collect = editorSource.match(/private collectFileAssetPaths\(\): string\[\] \{[\s\S]*?\n  \}/)?.[0] ?? "";
+  assert.match(collect, /block\.type === "image" && block\.localSource\) paths\.push\(block\.localSource\)/, "undo cancellation must also track image local copies");
+  const deleted = editorSource.match(/private collectDeletedFileAssetPaths\(nodeIds: readonly string\[\]\): string\[\] \{[\s\S]*?\n  \}/)?.[0] ?? "";
+  assert.match(deleted, /block\.type === "image" && block\.localSource\) paths\.add\(block\.localSource\)/, "node deletion must recycle dropped image local copies");
+  const replaceLocal = editorSource.match(/if \(change\.type === "replaceLocal"\) \{[\s\S]*?\n    \}/)?.[0] ?? "";
+  assert.match(replaceLocal, /const previousLocal = located\.block\.localSource;/);
+  assert.match(replaceLocal, /if \(previousLocal && previousLocal !== path\) this\.callbacks\.onScheduleFileAssetDeletion\(\[previousLocal\]\);/, "replaced local images must enter deferred recycling");
+  const removeBlock = editorSource.match(/private removeContentBlock\(nodeId: string, blockId: string\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
+  assert.match(removeBlock, /removed\.type === "image" && removed\.localSource\) this\.callbacks\.onScheduleFileAssetDeletion\(\[removed\.localSource\]/, "deleted image blocks must recycle their local copy");
+});
+
+test("image local copies reveal in the system file explorer with selection", () => {
+  assert.match(editorSource, /setTitle\("在文件资源管理器中显示"\)[\s\S]{0,120}onRevealFileInSystemExplorer\(block\.localSource!\)/);
+  const reveal = mainSource.match(/async revealFileInSystemExplorer\(vaultPath: string\): Promise<void> \{[\s\S]*?\n  \}/)?.[0] ?? "";
+  assert.match(reveal, /Platform\.isDesktopApp/, "mobile clients must be rejected gracefully");
+  assert.match(reveal, /adapter\.getFullPath\(path\)/, "vault paths must translate to absolute disk paths");
+  assert.match(reveal, /showItemInFolder\(absolutePath\)/, "explorer must open with the file selected");
+  const requireFn = reveal.match(/require\??: \(id: string\) => unknown/);
+  assert.ok(requireFn, "electron must be acquired lazily to keep mobile loading safe");
 });
 
 test("node context menu uploads a file into the targeted node and stores the vault path", () => {

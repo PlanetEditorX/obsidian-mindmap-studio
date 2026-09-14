@@ -1328,12 +1328,13 @@ export class MindMapEditor {
     for (const node of flattenNodes(this.document.root)) {
       for (const block of nodeContentBlocks(node)) {
         if (block.type === "file") paths.push(block.source);
+        else if (block.type === "image" && block.localSource) paths.push(block.localSource);
       }
     }
     return paths;
   }
 
-  /** 收集指定节点及其后代中全部文件块引用的附件路径，用于节点删除后的延迟回收。 */
+  /** 收集指定节点及其后代中全部文件块与图片本地副本引用的附件路径，用于节点删除后的延迟回收。 */
   private collectDeletedFileAssetPaths(nodeIds: readonly string[]): string[] {
     const paths = new Set<string>();
     for (const nodeId of nodeIds) {
@@ -1342,6 +1343,7 @@ export class MindMapEditor {
       for (const descendant of flattenNodes(node)) {
         for (const block of nodeContentBlocks(descendant)) {
           if (block.type === "file") paths.add(block.source);
+          else if (block.type === "image" && block.localSource) paths.add(block.localSource);
         }
       }
     }
@@ -5409,8 +5411,9 @@ export class MindMapEditor {
     this.mutateArticleContent(() => {
       replaceNodeContentBlocks(node, blocks.filter((block) => block.id !== blockId));
     });
-    // 文件块引用被显式删除后进入 60 秒延迟回收；撤销或恢复引用会自动取消。
+    // 文件块与图片本地副本的引用被显式删除后进入 60 秒延迟回收；撤销或恢复引用会自动取消。
     if (removed.type === "file") this.callbacks.onScheduleFileAssetDeletion([removed.source]);
+    else if (removed.type === "image" && removed.localSource) this.callbacks.onScheduleFileAssetDeletion([removed.localSource]);
   }
 
   /**
@@ -6443,6 +6446,12 @@ export class MindMapEditor {
     }
     menu.addSeparator();
     menu.addItem((item) => item.setTitle("复制图片地址").setIcon("copy").onClick(() => void this.copyImageSource(block.source)));
+    if (block.localSource) {
+      menu.addItem((item) => item
+        .setTitle("在文件资源管理器中显示")
+        .setIcon("folder-open")
+        .onClick(() => this.callbacks.onRevealFileInSystemExplorer(block.localSource!)));
+    }
     if (!this.readOnly) {
       menu.addItem((item) => item.setTitle("删除当前块").setIcon("trash-2").onClick(() => void this.removeImageBlock(nodeId, blockId)));
     }
@@ -6567,6 +6576,7 @@ export class MindMapEditor {
         new Notice("图片已不存在");
         return false;
       }
+      const previousLocal = located.block.localSource;
       const file = await selectImageFile();
       if (!file) return true;
       const path = await this.callbacks.onSavePastedImage(file, file.name);
@@ -6578,7 +6588,10 @@ export class MindMapEditor {
         located.block.localSource = path;
         replaceNodeContentBlocks(located.node, located.blocks);
       });
-      new Notice("本地副本已更新");
+      // 被替换的旧本地图片进入 60 秒延迟回收；撤销恢复引用会自动取消，
+      // 到期前仍做全库引用检查，避免误删其它导图仍在使用的文件。
+      if (previousLocal && previousLocal !== path) this.callbacks.onScheduleFileAssetDeletion([previousLocal]);
+      new Notice("本地图片已更新");
       return true;
     }
     if (change.type === "unsetDefault") {
