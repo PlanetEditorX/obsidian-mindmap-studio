@@ -12674,6 +12674,12 @@ var MindMapEditor = class {
     /** Two-frame paint gate used only when an article needs an entry transition. */
     this.articleInitialRenderFrame = null;
     this.articleInitialRenderToken = 0;
+    /**
+     * 来源变更（图片替换/上传/设默认等）不改变文本布局：置位后下一次文章窗口渲染
+     * 跳过语义位置恢复，直接按渲染前的像素 scrollTop 恢复（配合 warmup 分帧补偿），
+     * 避免 warmup 期间节点高度不准的语义恢复把视口拉走。
+     */
+    this.suppressNextArticleSemanticRestore = false;
     this.articleWindowExpansionFrame = null;
     /** Background hydration frame that grows article DOM without requiring a user scroll. */
     this.articleWindowWarmupFrame = null;
@@ -15216,7 +15222,9 @@ var MindMapEditor = class {
         }
         return;
       }
-      const location = (_c2 = latestRequestedLocation != null ? latestRequestedLocation : previousLocation) != null ? _c2 : !existingPage ? this.lastReadingLocation : null;
+      const suppressSemanticRestore = this.suppressNextArticleSemanticRestore;
+      this.suppressNextArticleSemanticRestore = false;
+      const location = suppressSemanticRestore ? null : (_c2 = latestRequestedLocation != null ? latestRequestedLocation : previousLocation) != null ? _c2 : !existingPage ? this.lastReadingLocation : null;
       if (location) this.restoreReadingLocation("article", location);
       else {
         this.articleEl.scrollTop = previousScroll.top;
@@ -18389,6 +18397,7 @@ var MindMapEditor = class {
         return false;
       }
       const uploadedAt = (/* @__PURE__ */ new Date()).toISOString();
+      this.suppressNextArticleSemanticRestore = true;
       this.history.captureSnapshot(previousSnapshot);
       const existing = new Map(((_a2 = merged.block.remoteSources) != null ? _a2 : []).map((item) => [item.hostId, item]));
       batch.successes.forEach((item) => existing.set(item.hostId, {
@@ -18425,6 +18434,7 @@ var MindMapEditor = class {
         new import_obsidian15.Notice("\u8BE5\u5730\u5740\u5DF2\u7ECF\u5728\u6765\u6E90\u5217\u8868\u4E2D");
         return true;
       }
+      this.suppressNextArticleSemanticRestore = true;
       this.mutateWithoutArticleContext(() => {
         var _a3;
         located2.block.remoteSources = [...(_a3 = located2.block.remoteSources) != null ? _a3 : [], entry];
@@ -18448,6 +18458,7 @@ var MindMapEditor = class {
         new import_obsidian15.Notice("\u4FDD\u5B58\u672C\u5730\u56FE\u7247\u5931\u8D25", 7e3);
         return true;
       }
+      this.suppressNextArticleSemanticRestore = true;
       this.mutateWithoutArticleContext(() => {
         var _a3;
         located2.block.localSource = path;
@@ -18470,6 +18481,7 @@ var MindMapEditor = class {
         new import_obsidian15.Notice("\u56FE\u7247\u5DF2\u4E0D\u5B58\u5728");
         return false;
       }
+      this.suppressNextArticleSemanticRestore = true;
       this.mutateWithoutArticleContext(() => {
         clearImageSourceDefault(located2.block, change.source);
         replaceNodeContentBlocks(located2.node, located2.blocks);
@@ -18486,6 +18498,7 @@ var MindMapEditor = class {
         new import_obsidian15.Notice("\u8BE5\u6765\u6E90\u4E0D\u5728\u5F53\u524D\u56FE\u7247\u7684\u6765\u6E90\u5217\u8868\u4E2D");
         return true;
       }
+      this.suppressNextArticleSemanticRestore = true;
       this.mutateWithoutArticleContext(() => {
         replaceNodeContentBlocks(located2.node, located2.blocks);
       }, null);
@@ -18501,6 +18514,7 @@ var MindMapEditor = class {
       await this.removeImageBlock(nodeId, blockId);
       return false;
     }
+    this.suppressNextArticleSemanticRestore = true;
     this.mutateWithoutArticleContext(() => {
       located.block.source = remaining.source;
       located.block.localSource = remaining.localSource;
