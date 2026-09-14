@@ -1,13 +1,13 @@
 # obsidian-mindmap-studio 项目交接
 
 - 插件：MindMap Studio（Obsidian 本地优先 .mindmap 导图，含导图/大纲/文章/通读模式、全局搜索、图床、AI 助手与桌面截图链路）。
-- 版本基线：1.51.0（线上已发布；工作区待提交：来源变更像素恢复修复——上一轮 8b1b9ff 的 mutate(null) 只挡住 mutate 自身恢复，render 窗口内的 previousLocation 语义恢复仍会启动恢复事务导致跳变）。
+- 版本基线：1.51.0（线上已发布；工作区提交基线 v1.51.3：节点锚点来源变更恢复——图片块所在节点为锚，替换/删除来源后按节点视口偏移恢复阅读位置）。
 - 仓库规则：见根目录 `AGENTS.md`；每轮代码交付三份 ZIP（源码 / 安装 / Agent 交接）共用同一六位后缀；验证入口 `npm run verify`。
 
 ## 当前状态（待提交：来源变更像素恢复修复；上一轮 8b1b9ff + v1.51.0 已发布但修复不完整）
 
 - 替换本地图片后当前来源不跟随（应用户反馈）：`replaceLocal` 原先只更新 `localSource`，`source` 仍指向旧本地路径，来源列表出现“当前图片（旧）+ 本地图片（新）”两个候选；旧文件 60 秒回收后“当前图片”加载失败。修复：当前显示来源为本地路径（非 http(s)）时随替换更新为新路径，图片级默认来源（sourcePriority）中引用旧路径的项同步映射；被替换的旧 source 与旧 localSource 去重后进入 60 秒延迟回收。纯远程镜像块替换本地副本不影响 source。
-- 替换图片后阅读位置乱跳（应用户四轮日志定位）：第一层 mutate(null) 挡住 mutate 自身恢复（8b1b9ff）；第二层 suppressNextArticleSemanticRestore 让 renderArticle 窗口渲染跳过语义恢复、走像素 scrollTop 恢复（3173796 / v1.51.1）；第三层（本轮）：v1.51.1 日志显示像素恢复仍不准——窗口重建把 scrollTop 从 13641 钳制到 4374，warmup 的按帧累计补偿（previousTop + Δheight）只能加回插入高度、补不回钳制差额，最终停在 16589。修复：新增 `pendingArticlePixelRestoreTop` 像素目标，warmup 每帧直接 `scrollTop = Math.min(target, maxScroll)` 钉住，内容补足即精确回位并解除；用户 wheel/pointerdown 立即接管。契约测试锁定钉住机制。
+- 替换图片后阅读位置乱跳（应用户四轮日志定位）：第一层 mutate(null) 挡住 mutate 自身恢复（8b1b9ff）；第二层 suppressNextArticleSemanticRestore 让 renderArticle 窗口渲染跳过语义恢复、走像素 scrollTop 恢复（3173796 / v1.51.1）；第三层 pendingArticlePixelRestoreTop 像素目标 + warmup 分帧钉住 + capture 阶段 guard（v1.51.2）；第四层（本轮 v1.51.3）：用户仍反馈“还是不行，图片块总在一个节点里面”。根因：绝对像素目标本身会被顺位内容高度变化破坏——替换/删除来源改变图片块高度，图片块及其后内容被挤压，同一 scrollTop 已不再对应原阅读位置。修复：改为节点锚点恢复——图片块总在某个节点内，渲染前 `captureArticleNodeAnchor(nodeId)` 记录该节点在视口中的滚动无关偏移量（`offsetTop` 经由 `getBoundingClientRect` 差值，不依赖定位祖先）；重渲染后 `startArticleNodeAnchorGuard()` 以 capture 阶段 scroll guard 把该节点按原视口偏移实时钉回，保持阅读位置相对该节点不变，不再使用会被高度变化破坏的绝对像素；warmup 的 `loadedBefore` 在节点锚点激活时跳过像素增量以免污染；用户 wheel/pointerdown/touch 立即接管。所有来源变更分支（reupload/add/replaceLocal/unsetDefault/setDefault/remove）统一在 `applyImagePreviewSourceChange` 入口捕获锚点。契约测试 `file-block.test.mjs` 扩展锁定节点锚点优先、capture 守卫与入口捕获。
 - 教训：验证构建产物必须搜 esbuild 编译形式（`void 0` 而非 `undefined`），且 Select-String 勿用 -First 截断；GitHub Release 产物只含已提交代码，工作区修复需提交发布后才能通过插件更新获取；overflow-anchor:none 已存在时不要臆断浏览器锚定参与补偿。
 - 预览弹窗“本地图片”来源行右键新增“在文件资源管理器中打开”（位于“更新替换”之后）：`ImagePreviewSourceActions` 新增可选 `revealLocal` 回调，editor 注入 `onRevealFileInSystemExplorer`；actions 对象补 `ImagePreviewSourceActions` 显式类型标注。file-block.test.mjs 新增契约锁定来源跟随与 reveal 入口。
 
@@ -20,12 +20,12 @@
 
 ## 验证基线
 
-- `npm run verify` 本机完整通过：`test:unit` 431/431；`test:regression` 全部通过；`test:docs` 覆盖 63 个源码模块、1283 个具名声明；`test:repo` 通过；production esbuild 通过，`main.js` 已重建。
+- `npm run verify` 本机完整通过：`test:unit` 431/431；`test:regression` 全部通过；`test:docs` 覆盖 63 个源码模块、1288 个具名声明；`test:repo` 通过；production esbuild 通过，`main.js` 已重建。
 - 详细数据见根目录 `TEST_RESULTS.md`。
 
 ## 待验证事项（需真实 Obsidian 桌面端手工冒烟）
 
-- 替换本地图片：立即显示新图、来源列表只保留“本地图片”；**阅读位置完全不动**（视口由浏览器保持，无恢复事务）；60 秒后旧文件进入系统回收站；替换后立即撤销则恢复旧图并取消回收。
+- 替换本地图片：立即显示新图、来源列表只保留“本地图片”；**阅读位置完全不动**（以图片块所在节点为锚，替换/删除来源/上传后均保持同一视口偏移，不跳位）；60 秒后旧文件进入系统回收站；替换后立即撤销则恢复旧图并取消回收。
 - 预览弹窗“本地图片”来源行右键“在文件资源管理器中打开”打开目录并选中文件。
 - 图片块右键“在文件资源管理器中显示”打开目录并选中文件；预览来源栏与设置项显示“本地图片”。
 - 阅读进度恢复：文章/通读模式翻到中间或末尾 → 关闭 Obsidian → 重新打开同一文件，应自动滚回上次阅读位置（首次族上下文刷新后约 1~2 秒内完成）；用户打开后立即滚动则完全接管，不会被记忆位置拉走。

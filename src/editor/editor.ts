@@ -336,6 +336,16 @@ export class MindMapEditor {
   private pendingArticlePixelRestoreTop: number | null = null;
   /** 像素恢复期间的 capture 阶段 scroll guard：压制 warmup 完成后残余的程序性滚动。 */
   private articlePixelRestoreGuard: (() => void) | null = null;
+  /**
+   * 节点锚点恢复目标：图片块总在某个节点内，替换/删除来源只改变该节点及其之后的内容高度，
+   * 绝对像素目标会因为顺位内容被挤压而失准。记录包含图片块的节点 ID 与其在视口中的偏移量，
+   * 重渲染后按节点实时位置把同一视口偏移重新钉回，从而保持阅读位置相对该节点不变。
+   */
+  private articleNodeAnchorId: string | null = null;
+  /** 锚点节点顶部相对文章滚动容器的视口偏移量（capture 时记录，滚动无关、内容高度无关）。 */
+  private articleNodeAnchorOffset: number | null = null;
+  /** 节点锚点恢复期间的 capture 阶段 scroll guard。 */
+  private articleNodeAnchorGuard: (() => void) | null = null;
   private articleWindowExpansionFrame: number | null = null;
   /** Background hydration frame that grows article DOM without requiring a user scroll. */
   private articleWindowWarmupFrame: number | null = null;
@@ -3103,11 +3113,17 @@ export class MindMapEditor {
       this.articleEl.onwheel = () => {
         this.pendingArticlePixelRestoreTop = null;
         this.stopArticlePixelRestoreGuard();
+        this.articleNodeAnchorId = null;
+        this.articleNodeAnchorOffset = null;
+        this.stopArticleNodeAnchorGuard();
         this.cancelReadingLocationRestore();
       };
       this.articleEl.onpointerdown = () => {
         this.pendingArticlePixelRestoreTop = null;
         this.stopArticlePixelRestoreGuard();
+        this.articleNodeAnchorId = null;
+        this.articleNodeAnchorOffset = null;
+        this.stopArticleNodeAnchorGuard();
         this.cancelReadingLocationRestore();
       };
       this.articleEl.ontouchstart = () => this.cancelReadingLocationRestore();
@@ -3138,7 +3154,12 @@ export class MindMapEditor {
       const location = suppressSemanticRestore ? null : (latestRequestedLocation ?? previousLocation
         ?? (!existingPage ? this.lastReadingLocation : null));
       if (location) this.restoreReadingLocation("article", location);
-      else {
+      else if (this.articleNodeAnchorOffset !== null) {
+        // 图片块所在节点锚点：顺位内容高度变化后按该节点实时位置恢复，保持阅读位置相对该节点不变。
+        this.pendingArticlePixelRestoreTop = null;
+        this.articleEl.scrollLeft = previousScroll.left;
+        this.startArticleNodeAnchorGuard();
+      } else {
         this.pendingArticlePixelRestoreTop = previousScroll.top;
         this.articleEl.scrollTop = previousScroll.top;
         this.articleEl.scrollLeft = previousScroll.left;
@@ -3307,7 +3328,9 @@ export class MindMapEditor {
       }
       if (loadedBefore) {
         this.blockReadingLocationCapture();
-        if (this.pendingArticlePixelRestoreTop !== null) {
+        if (this.articleNodeAnchorId !== null) {
+          // 节点锚点恢复由 capture 守卫按节点实时位置钉位，跳过像素增量以免污染锚点。
+        } else if (this.pendingArticlePixelRestoreTop !== null) {
           // 像素目标钉住：每帧直接钉向渲染前的 scrollTop，clamp 丢失的差额
           // 由分帧补齐后精确回位；到位后立即解除，避免拦截用户滚动。
           const target = this.pendingArticlePixelRestoreTop;
@@ -3366,6 +3389,80 @@ export class MindMapEditor {
   private stopArticlePixelRestoreGuard(): void {
     this.articlePixelRestoreGuard?.();
     this.articlePixelRestoreGuard = null;
+  }
+
+  /**
+   * 在图片来源变更渲染前记录节点锚点：图片块总是位于某节点内，重渲染后按该节点
+   * 当前的视口偏移量恢复阅读位置，而不是依赖会被顺位内容高度变化破坏的绝对像素。
+   *
+   * @param nodeId 包含被操作图片块的节点 ID。
+   */
+  private captureArticleNodeAnchor(nodeId: string): void {
+    this.articleNodeAnchorId = null;
+    this.articleNodeAnchorOffset = null;
+    this.stopArticleNodeAnchorGuard();
+    if (this.currentMode !== "article" || !this.articleEl) return;
+    const selector = nodeId === this.document?.root.id
+      ? `.mms-article-document-title[data-node-id="${CSS.escape(nodeId)}"]`
+      : `.mms-article-node[data-node-id="${CSS.escape(nodeId)}"]`;
+    const nodeEl = this.articleEl.querySelector<HTMLElement>(selector);
+    if (!nodeEl) return;
+    this.articleNodeAnchorId = nodeId;
+    // 节点顶部相对滚动容器的视口偏移：滚动无关，重渲染后保持同一偏移即可让阅读位置相对该节点不变。
+    this.articleNodeAnchorOffset = nodeEl.getBoundingClientRect().top - this.articleEl.getBoundingClientRect().top;
+  }
+
+  /**
+   * 节点锚点恢复强钉：以包含图片块的节点为锚，capture 阶段把该节点按渲染前的视口偏移
+   * 重新钉回，覆盖内容高度变化和 warmup 分帧导致的位置跳变；用户 wheel/pointerdown 清除目标后自动停止。
+   */
+  private startArticleNodeAnchorGuard(): void {
+    this.stopArticlePixelRestoreGuard();
+    this.stopArticleNodeAnchorGuard();
+    const scroller = this.articleEl;
+    const anchorId = this.articleNodeAnchorId;
+    const offset = this.articleNodeAnchorOffset ?? 0;
+    const selector = anchorId
+      ? (anchorId === this.document?.root.id
+          ? `.mms-article-document-title[data-node-id="${CSS.escape(anchorId)}"]`
+          : `.mms-article-node[data-node-id="${CSS.escape(anchorId)}"]`)
+      : null;
+    let settled = 0;
+    const guard = (): void => {
+      if (this.articleNodeAnchorId === null) {
+        this.stopArticleNodeAnchorGuard();
+        return;
+      }
+      if (!selector) return;
+      const nodeEl = scroller.querySelector<HTMLElement>(selector);
+      if (!nodeEl) {
+        settled = 0;
+        return;
+      }
+      const current = nodeEl.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
+      const diff = offset - current;
+      if (Math.abs(diff) > 1) {
+        const maxScroll = scroller.scrollHeight - scroller.clientHeight;
+        scroller.scrollTop = Math.max(0, Math.min(scroller.scrollTop + diff, maxScroll));
+        settled = 0;
+        return;
+      }
+      settled += 1;
+      if (settled >= 2) {
+        this.articleNodeAnchorId = null;
+        this.articleNodeAnchorOffset = null;
+        this.stopArticleNodeAnchorGuard();
+      }
+    };
+    scroller.addEventListener("scroll", guard, true);
+    this.articleNodeAnchorGuard = () => scroller.removeEventListener("scroll", guard, true);
+    guard();
+  }
+
+  /** 停止节点锚点恢复 capture guard 并移除其 scroll 监听。 */
+  private stopArticleNodeAnchorGuard(): void {
+    this.articleNodeAnchorGuard?.();
+    this.articleNodeAnchorGuard = null;
   }
 
   /** Loads another window only when the reader reaches a rendered edge. */
@@ -6577,6 +6674,8 @@ export class MindMapEditor {
    */
   private async applyImagePreviewSourceChange(nodeId: string, blockId: string, change: ImagePreviewSourceChange): Promise<boolean> {
     if (!this.ensureEditable()) return true;
+    // 图片块总在某个节点内：渲染前记录该节点锚点，重渲染后按节点位置恢复阅读位置。
+    this.captureArticleNodeAnchor(nodeId);
     if (change.type === "reupload") {
       const located = this.locateImageBlock(nodeId, blockId);
       if (!located) {
