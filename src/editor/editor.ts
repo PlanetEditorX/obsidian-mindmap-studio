@@ -322,6 +322,12 @@ export class MindMapEditor {
   /** Two-frame paint gate used only when an article needs an entry transition. */
   private articleInitialRenderFrame: number | null = null;
   private articleInitialRenderToken = 0;
+  /**
+   * 来源变更（图片替换/上传/设默认等）不改变文本布局：置位后下一次文章窗口渲染
+   * 跳过语义位置恢复，直接按渲染前的像素 scrollTop 恢复（配合 warmup 分帧补偿），
+   * 避免 warmup 期间节点高度不准的语义恢复把视口拉走。
+   */
+  private suppressNextArticleSemanticRestore = false;
   private articleWindowExpansionFrame: number | null = null;
   /** Background hydration frame that grows article DOM without requiring a user scroll. */
   private articleWindowWarmupFrame: number | null = null;
@@ -3109,8 +3115,12 @@ export class MindMapEditor {
         }
         return;
       }
-      const location = latestRequestedLocation ?? previousLocation
-        ?? (!existingPage ? this.lastReadingLocation : null);
+      // 来源变更请求的渲染必须走像素恢复：warmup 期间节点高度未就绪，语义恢复会把
+      // 视口拉到错误位置（日志表现为 restore-target-applied targetHeight 0）。
+      const suppressSemanticRestore = this.suppressNextArticleSemanticRestore;
+      this.suppressNextArticleSemanticRestore = false;
+      const location = suppressSemanticRestore ? null : (latestRequestedLocation ?? previousLocation
+        ?? (!existingPage ? this.lastReadingLocation : null));
       if (location) this.restoreReadingLocation("article", location);
       else {
         this.articleEl.scrollTop = previousScroll.top;
@@ -6530,6 +6540,7 @@ export class MindMapEditor {
         return false;
       }
       const uploadedAt = new Date().toISOString();
+      this.suppressNextArticleSemanticRestore = true;
       this.history.captureSnapshot(previousSnapshot);
       const existing = new Map((merged.block.remoteSources ?? []).map((item) => [item.hostId, item]));
       batch.successes.forEach((item) => existing.set(item.hostId, {
@@ -6567,6 +6578,7 @@ export class MindMapEditor {
         return true;
       }
       // 来源变更不改变文本布局：mutate 传 null 跳过语义位置恢复，视口由浏览器保持。
+      this.suppressNextArticleSemanticRestore = true;
       this.mutateWithoutArticleContext(() => {
         located.block.remoteSources = [...(located.block.remoteSources ?? []), entry];
         replaceNodeContentBlocks(located.node, located.blocks);
@@ -6589,6 +6601,7 @@ export class MindMapEditor {
         new Notice("保存本地图片失败", 7000);
         return true;
       }
+      this.suppressNextArticleSemanticRestore = true;
       this.mutateWithoutArticleContext(() => {
         located.block.localSource = path;
         // 当前显示来源若本来指向本地文件，替换后必须跟随新本地路径，
@@ -6615,6 +6628,7 @@ export class MindMapEditor {
         new Notice("图片已不存在");
         return false;
       }
+      this.suppressNextArticleSemanticRestore = true;
       this.mutateWithoutArticleContext(() => {
         clearImageSourceDefault(located.block, change.source);
         replaceNodeContentBlocks(located.node, located.blocks);
@@ -6631,6 +6645,7 @@ export class MindMapEditor {
         new Notice("该来源不在当前图片的来源列表中");
         return true;
       }
+      this.suppressNextArticleSemanticRestore = true;
       this.mutateWithoutArticleContext(() => {
         replaceNodeContentBlocks(located.node, located.blocks);
       }, null);
@@ -6646,6 +6661,7 @@ export class MindMapEditor {
       await this.removeImageBlock(nodeId, blockId);
       return false;
     }
+    this.suppressNextArticleSemanticRestore = true;
     this.mutateWithoutArticleContext(() => {
       located.block.source = remaining.source;
       located.block.localSource = remaining.localSource;

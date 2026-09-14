@@ -146,16 +146,16 @@ test("image local copies reveal in the system file explorer with selection", () 
   assert.ok(requireFn, "electron must be acquired lazily to keep mobile loading safe");
 });
 
-test("image preview source changes skip reading-location restore entirely", () => {
-  // 来源变更（替换/上传/设默认/删除来源）会触发文章全量重渲染；warmup 期间节点高度
-  // 不准使语义恢复偏离真实位置，恢复事务与钉位互相踩踏。因此所有来源变更的 mutate
-  // 必须显式传 null：不记忆不恢复，视口由浏览器保持。
-  const mutateBody = editorSource.match(/const location = restoreLocation !== undefined\s*\n\s*\? restoreLocation\s*\n\s*: \(this\.currentMode === "mindmap" \? null : this\.captureCurrentLocation\(this\.currentMode\)\);/);
-  assert.ok(mutateBody, "mutate must treat an explicit null as 'leave the scroll alone'");
+test("image preview source changes restore the pixel scroll instead of semantic location", () => {
+  // 来源变更（替换/上传/设默认/删除来源）会触发文章窗口全量重建；warmup 期间节点高度
+  // 不准使语义恢复偏离真实位置（restore-target-applied targetHeight 0）。所有来源变更
+  // 必须置位 suppressNextArticleSemanticRestore，让渲染走像素 scrollTop 恢复分支。
   const changeBody = editorSource.match(/private async applyImagePreviewSourceChange\([\s\S]*?\n  \}/)?.[0] ?? "";
-  const nullCount = (changeBody.match(/this\.mutateWithoutArticleContext\(\(\) => \{[\s\S]*?\}, null\);/g) ?? []).length;
-  assert.ok(nullCount >= 5, `reupload aside, add/replaceLocal/unsetDefault/setDefault/remove must pass null (found ${nullCount})`);
-  assert.doesNotMatch(editorSource, /runWithPinnedArticleScroll/, "the guard approach must stay removed: it fought the restore transaction");
+  const flags = (changeBody.match(/this\.suppressNextArticleSemanticRestore = true;/g) ?? []).length;
+  assert.ok(flags >= 6, `reupload plus add/replaceLocal/unsetDefault/setDefault/remove branches must suppress semantic restore (found ${flags})`);
+  const renderWindow = editorSource.match(/const suppressSemanticRestore = this\.suppressNextArticleSemanticRestore;[\s\S]{0,700}?this\.scheduleArticleWindowWarmup\(\);/)?.[0] ?? "";
+  assert.match(renderWindow, /const location = suppressSemanticRestore \? null : \(latestRequestedLocation \?\? previousLocation/, "suppressed renders must fall through to the pixel-scroll branch");
+  assert.match(renderWindow, /this\.articleEl\.scrollTop = previousScroll\.top;/, "pixel restore must reuse the pre-render scrollTop");
 });
 
 test("image preview source menu reveals local images in the system explorer", () => {
