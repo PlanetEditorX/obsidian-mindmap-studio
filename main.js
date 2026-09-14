@@ -12686,6 +12686,8 @@ var MindMapEditor = class {
      * 记录渲染前的 scrollTop，warmup 每帧直接钉向该目标（内容补足即精确到位）。
      */
     this.pendingArticlePixelRestoreTop = null;
+    /** 像素恢复期间的 capture 阶段 scroll guard：压制 warmup 完成后残余的程序性滚动。 */
+    this.articlePixelRestoreGuard = null;
     this.articleWindowExpansionFrame = null;
     /** Background hydration frame that grows article DOM without requiring a user scroll. */
     this.articleWindowWarmupFrame = null;
@@ -15208,10 +15210,12 @@ var MindMapEditor = class {
       };
       this.articleEl.onwheel = () => {
         this.pendingArticlePixelRestoreTop = null;
+        this.stopArticlePixelRestoreGuard();
         this.cancelReadingLocationRestore();
       };
       this.articleEl.onpointerdown = () => {
         this.pendingArticlePixelRestoreTop = null;
+        this.stopArticlePixelRestoreGuard();
         this.cancelReadingLocationRestore();
       };
       this.articleEl.ontouchstart = () => this.cancelReadingLocationRestore();
@@ -15242,6 +15246,7 @@ var MindMapEditor = class {
         this.pendingArticlePixelRestoreTop = previousScroll.top;
         this.articleEl.scrollTop = previousScroll.top;
         this.articleEl.scrollLeft = previousScroll.left;
+        this.startArticlePixelRestoreGuard(previousScroll.top);
       }
       this.scheduleArticleWindowWarmup();
     };
@@ -15419,6 +15424,42 @@ var MindMapEditor = class {
       });
     };
     this.articleWindowWarmupFrame = window.requestAnimationFrame(step);
+  }
+  /**
+   * 像素恢复强钉：capture 阶段把任何偏离目标的程序性滚动压回（覆盖 warmup 完成后的残余跳变），
+   * 到位并短暂稳定后解除；用户 wheel/pointerdown 清除目标后自动停止。
+   */
+  startArticlePixelRestoreGuard(target) {
+    this.stopArticlePixelRestoreGuard();
+    const scroller = this.articleEl;
+    let settled = 0;
+    const guard = () => {
+      if (this.pendingArticlePixelRestoreTop === null) {
+        this.stopArticlePixelRestoreGuard();
+        return;
+      }
+      const wanted = Math.min(target, scroller.scrollHeight - scroller.clientHeight);
+      if (Math.abs(scroller.scrollTop - wanted) > 1) {
+        scroller.scrollTop = wanted;
+        settled = 0;
+        return;
+      }
+      if (wanted >= target - 1) {
+        settled += 1;
+        if (settled >= 2) {
+          this.pendingArticlePixelRestoreTop = null;
+          this.stopArticlePixelRestoreGuard();
+        }
+      }
+    };
+    scroller.addEventListener("scroll", guard, true);
+    this.articlePixelRestoreGuard = () => scroller.removeEventListener("scroll", guard, true);
+  }
+  /** 停止像素恢复 capture guard 并移除其 scroll 监听。 */
+  stopArticlePixelRestoreGuard() {
+    var _a2;
+    (_a2 = this.articlePixelRestoreGuard) == null ? void 0 : _a2.call(this);
+    this.articlePixelRestoreGuard = null;
   }
   /** Loads another window only when the reader reaches a rendered edge. */
   scheduleArticleWindowExpansion() {
