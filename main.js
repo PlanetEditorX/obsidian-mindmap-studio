@@ -12689,15 +12689,12 @@ var MindMapEditor = class {
     /** 像素恢复期间的 capture 阶段 scroll guard：压制 warmup 完成后残余的程序性滚动。 */
     this.articlePixelRestoreGuard = null;
     /**
-     * 节点锚点恢复目标：图片块总在某个节点内，替换/删除来源只改变该节点及其之后的内容高度，
-     * 绝对像素目标会因为顺位内容被挤压而失准。记录包含图片块的节点 ID 与其在视口中的偏移量，
-     * 重渲染后按节点实时位置把同一视口偏移重新钉回，从而保持阅读位置相对该节点不变。
+     * 来源变更重建前捕获的真实滚动位置：文章窗口重渲染先把 scrollHeight 压到极小、
+     * 浏览器把 scrollTop 钳制到顶部，再于 renderWindow 里取 previousScroll.top 只会拿到
+     * 已塌缩的错误目标。必须在此方法（渲染发生前）记录真实 scrollTop，重渲染后以它为
+     * 硬钉目标，warmup 按帧 min(target, 当前 maxScroll) 爬升，内容补齐后精确回原位。
      */
-    this.articleNodeAnchorId = null;
-    /** 锚点节点顶部相对文章滚动容器的视口偏移量（capture 时记录，滚动无关、内容高度无关）。 */
-    this.articleNodeAnchorOffset = null;
-    /** 节点锚点恢复期间的 capture 阶段 scroll guard。 */
-    this.articleNodeAnchorGuard = null;
+    this.articleNodeAnchorScroll = null;
     this.articleWindowExpansionFrame = null;
     /** Background hydration frame that grows article DOM without requiring a user scroll. */
     this.articleWindowWarmupFrame = null;
@@ -15220,18 +15217,14 @@ var MindMapEditor = class {
       };
       this.articleEl.onwheel = () => {
         this.pendingArticlePixelRestoreTop = null;
+        this.articleNodeAnchorScroll = null;
         this.stopArticlePixelRestoreGuard();
-        this.articleNodeAnchorId = null;
-        this.articleNodeAnchorOffset = null;
-        this.stopArticleNodeAnchorGuard();
         this.cancelReadingLocationRestore();
       };
       this.articleEl.onpointerdown = () => {
         this.pendingArticlePixelRestoreTop = null;
+        this.articleNodeAnchorScroll = null;
         this.stopArticlePixelRestoreGuard();
-        this.articleNodeAnchorId = null;
-        this.articleNodeAnchorOffset = null;
-        this.stopArticleNodeAnchorGuard();
         this.cancelReadingLocationRestore();
       };
       this.articleEl.ontouchstart = () => this.cancelReadingLocationRestore();
@@ -15258,10 +15251,11 @@ var MindMapEditor = class {
       this.suppressNextArticleSemanticRestore = false;
       const location = suppressSemanticRestore ? null : (_c2 = latestRequestedLocation != null ? latestRequestedLocation : previousLocation) != null ? _c2 : !existingPage ? this.lastReadingLocation : null;
       if (location) this.restoreReadingLocation("article", location);
-      else if (this.articleNodeAnchorOffset !== null) {
-        this.pendingArticlePixelRestoreTop = null;
+      else if (this.articleNodeAnchorScroll !== null) {
+        this.pendingArticlePixelRestoreTop = this.articleNodeAnchorScroll;
+        this.articleEl.scrollTop = Math.min(this.articleNodeAnchorScroll, this.articleEl.scrollHeight - this.articleEl.clientHeight);
         this.articleEl.scrollLeft = previousScroll.left;
-        this.startArticleNodeAnchorGuard();
+        this.startArticlePixelRestoreGuard(this.articleNodeAnchorScroll);
       } else {
         this.pendingArticlePixelRestoreTop = previousScroll.top;
         this.articleEl.scrollTop = previousScroll.top;
@@ -15424,8 +15418,7 @@ var MindMapEditor = class {
       }
       if (loadedBefore) {
         this.blockReadingLocationCapture();
-        if (this.articleNodeAnchorId !== null) {
-        } else if (this.pendingArticlePixelRestoreTop !== null) {
+        if (this.pendingArticlePixelRestoreTop !== null) {
           const target = this.pendingArticlePixelRestoreTop;
           const maxScroll = this.articleEl.scrollHeight - this.articleEl.clientHeight;
           this.articleEl.scrollTop = Math.min(target, maxScroll);
@@ -15483,71 +15476,22 @@ var MindMapEditor = class {
     this.articlePixelRestoreGuard = null;
   }
   /**
-   * 在图片来源变更渲染前记录节点锚点：图片块总是位于某节点内，重渲染后按该节点
-   * 当前的视口偏移量恢复阅读位置，而不是依赖会被顺位内容高度变化破坏的绝对像素。
+   * 在来源变更渲染发生前记录真实滚动位置：文章窗口重渲染会先塌缩 scrollHeight 并把
+   * scrollTop 钳制到顶部，事后（renderWindow）读取 previousScroll.top 只会拿到已塌缩的
+   * 错误目标。这里在 mutate/渲染触发前捕获，重渲染后以它为硬钉目标。
    *
-   * @param nodeId 包含被操作图片块的节点 ID。
+   * @param nodeId 包含被操作图片块的节点 ID（用于确认节点存在），不参与滚动计算。
    */
   captureArticleNodeAnchor(nodeId) {
     var _a2;
-    this.articleNodeAnchorId = null;
-    this.articleNodeAnchorOffset = null;
-    this.stopArticleNodeAnchorGuard();
+    this.articleNodeAnchorScroll = null;
+    this.stopArticlePixelRestoreGuard();
     if (this.currentMode !== "article" || !this.articleEl) return;
     const selector = nodeId === ((_a2 = this.document) == null ? void 0 : _a2.root.id) ? `.mms-article-document-title[data-node-id="${CSS.escape(nodeId)}"]` : `.mms-article-node[data-node-id="${CSS.escape(nodeId)}"]`;
-    const nodeEl = this.articleEl.querySelector(selector);
-    if (!nodeEl) return;
-    this.articleNodeAnchorId = nodeId;
-    this.articleNodeAnchorOffset = nodeEl.getBoundingClientRect().top - this.articleEl.getBoundingClientRect().top;
-  }
-  /**
-   * 节点锚点恢复强钉：以包含图片块的节点为锚，capture 阶段把该节点按渲染前的视口偏移
-   * 重新钉回，覆盖内容高度变化和 warmup 分帧导致的位置跳变；用户 wheel/pointerdown 清除目标后自动停止。
-   */
-  startArticleNodeAnchorGuard() {
-    var _a2, _b2;
-    this.stopArticlePixelRestoreGuard();
-    this.stopArticleNodeAnchorGuard();
-    const scroller = this.articleEl;
-    const anchorId = this.articleNodeAnchorId;
-    const offset = (_a2 = this.articleNodeAnchorOffset) != null ? _a2 : 0;
-    const selector = anchorId ? anchorId === ((_b2 = this.document) == null ? void 0 : _b2.root.id) ? `.mms-article-document-title[data-node-id="${CSS.escape(anchorId)}"]` : `.mms-article-node[data-node-id="${CSS.escape(anchorId)}"]` : null;
-    let settled = 0;
-    const guard = () => {
-      if (this.articleNodeAnchorId === null) {
-        this.stopArticleNodeAnchorGuard();
-        return;
-      }
-      if (!selector) return;
-      const nodeEl = scroller.querySelector(selector);
-      if (!nodeEl) {
-        settled = 0;
-        return;
-      }
-      const current = nodeEl.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
-      const diff = offset - current;
-      if (Math.abs(diff) > 1) {
-        const maxScroll = scroller.scrollHeight - scroller.clientHeight;
-        scroller.scrollTop = Math.max(0, Math.min(scroller.scrollTop + diff, maxScroll));
-        settled = 0;
-        return;
-      }
-      settled += 1;
-      if (settled >= 2) {
-        this.articleNodeAnchorId = null;
-        this.articleNodeAnchorOffset = null;
-        this.stopArticleNodeAnchorGuard();
-      }
-    };
-    scroller.addEventListener("scroll", guard, true);
-    this.articleNodeAnchorGuard = () => scroller.removeEventListener("scroll", guard, true);
-    guard();
-  }
-  /** 停止节点锚点恢复 capture guard 并移除其 scroll 监听。 */
-  stopArticleNodeAnchorGuard() {
-    var _a2;
-    (_a2 = this.articleNodeAnchorGuard) == null ? void 0 : _a2.call(this);
-    this.articleNodeAnchorGuard = null;
+    if (!this.articleEl.querySelector(selector)) return;
+    const top = this.articleEl.scrollTop;
+    this.articleNodeAnchorScroll = top;
+    this.pendingArticlePixelRestoreTop = top;
   }
   /** Loads another window only when the reader reaches a rendered edge. */
   scheduleArticleWindowExpansion() {

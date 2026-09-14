@@ -155,13 +155,14 @@ test("image preview source changes restore the pixel scroll instead of semantic 
   assert.ok(flags >= 6, `reupload plus add/replaceLocal/unsetDefault/setDefault/remove branches must suppress semantic restore (found ${flags})`);
   const renderWindow = editorSource.match(/const suppressSemanticRestore = this\.suppressNextArticleSemanticRestore;[\s\S]{0,1200}?this\.scheduleArticleWindowWarmup\(\);/)?.[0] ?? "";
   assert.match(renderWindow, /const location = suppressSemanticRestore \? null : \(latestRequestedLocation \?\? previousLocation/, "suppressed renders must fall through to the pixel-scroll branch");
-  // 图片块总在某个节点内，来源变更只改变该节点自身及顺位内容高度：渲染前记录节点锚点，
-  // 重渲染后按该节点实时视口偏移恢复，而不是依赖会被顺位高度变化破坏的绝对像素。
-  assert.match(renderWindow, /else if \(this\.articleNodeAnchorOffset !== null\) \{/, "source-change renders must prefer the node-anchored restore over the absolute pixel pin");
+  // 来源变更会重建文章窗口：重建先把 scrollHeight 压到极小、浏览器把 scrollTop 钳制到顶部，
+  // 此时（renderWindow 内）读取 previousScroll.top 只见已塌缩的错误值。必须在重建发生前（source
+  // change 入口）捕获真实 scrollTop，重渲染后以它为硬钉目标，warmup 按 min(target, maxScroll) 爬升回位。
   assert.match(changeBody, /this\.captureArticleNodeAnchor\(nodeId\);/);
+  assert.match(editorSource, /private captureArticleNodeAnchor\(nodeId: string\): void \{[\s\S]{0,1200}?this\.pendingArticlePixelRestoreTop = top;/, "the source-change entry must capture the true pre-rebuild scrollTop before any render");
+  assert.match(renderWindow, /else if \(this\.articleNodeAnchorScroll !== null\) \{/, "source-change renders must restore the captured pre-rebuild scroll as the pin target");
+  assert.match(renderWindow, /this\.pendingArticlePixelRestoreTop = this\.articleNodeAnchorScroll;/, "the pinned target must be the pre-rebuild scroll, not the collapsed post-rebuild scroll");
   assert.match(renderWindow, /this\.pendingArticlePixelRestoreTop = previousScroll\.top;/, "pixel restore must record the pre-render scrollTop as a pin target");
-  assert.match(editorSource, /private captureArticleNodeAnchor\(nodeId: string\): void \{[\s\S]*?getBoundingClientRect\(\).top - this\.articleEl\.getBoundingClientRect\(\).top/, "the node anchor must record a scroll-independent viewport offset, not an absolute scrollTop");
-  assert.match(editorSource, /private startArticleNodeAnchorGuard\(\): void \{[\s\S]*?addEventListener\("scroll", guard, true\)[\s\S]*?guard\(\)/, "a capture-phase node-anchor guard must re-pin the anchor node while warmup/height changes settle");
   // warmup 分帧必须钉住目标而不是按帧累计：窗口重建把 scrollTop 钳制到远小于原位，
   // 累计补偿只能加回插入高度、补不回钳制差额，最终停在错误位置。
   const warmupPin = editorSource.match(/if \(this\.pendingArticlePixelRestoreTop !== null\) \{[\s\S]{0,400}?this\.pendingArticlePixelRestoreTop = null;/);
