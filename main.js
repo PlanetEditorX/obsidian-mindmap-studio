@@ -12680,6 +12680,12 @@ var MindMapEditor = class {
      * 避免 warmup 期间节点高度不准的语义恢复把视口拉走。
      */
     this.suppressNextArticleSemanticRestore = false;
+    /**
+     * 像素恢复目标：来源变更渲染后由 warmup 分帧钉住。窗口重建时内容高度骤减，
+     * scrollTop 被浏览器钳制丢失大段差额，按帧累计补偿无法精确回到原位；
+     * 记录渲染前的 scrollTop，warmup 每帧直接钉向该目标（内容补足即精确到位）。
+     */
+    this.pendingArticlePixelRestoreTop = null;
     this.articleWindowExpansionFrame = null;
     /** Background hydration frame that grows article DOM without requiring a user scroll. */
     this.articleWindowWarmupFrame = null;
@@ -15200,8 +15206,14 @@ var MindMapEditor = class {
         this.scheduleReadingLocationCapture("article");
         this.scheduleArticleWindowExpansion();
       };
-      this.articleEl.onwheel = () => this.cancelReadingLocationRestore();
-      this.articleEl.onpointerdown = () => this.cancelReadingLocationRestore();
+      this.articleEl.onwheel = () => {
+        this.pendingArticlePixelRestoreTop = null;
+        this.cancelReadingLocationRestore();
+      };
+      this.articleEl.onpointerdown = () => {
+        this.pendingArticlePixelRestoreTop = null;
+        this.cancelReadingLocationRestore();
+      };
       this.articleEl.ontouchstart = () => this.cancelReadingLocationRestore();
       if (directoryOnly) {
         this.blockReadingLocationCapture();
@@ -15227,6 +15239,7 @@ var MindMapEditor = class {
       const location = suppressSemanticRestore ? null : (_c2 = latestRequestedLocation != null ? latestRequestedLocation : previousLocation) != null ? _c2 : !existingPage ? this.lastReadingLocation : null;
       if (location) this.restoreReadingLocation("article", location);
       else {
+        this.pendingArticlePixelRestoreTop = previousScroll.top;
         this.articleEl.scrollTop = previousScroll.top;
         this.articleEl.scrollLeft = previousScroll.left;
       }
@@ -15386,7 +15399,14 @@ var MindMapEditor = class {
       }
       if (loadedBefore) {
         this.blockReadingLocationCapture();
-        this.articleEl.scrollTop = previousTop + Math.max(0, this.articleEl.scrollHeight - previousHeight);
+        if (this.pendingArticlePixelRestoreTop !== null) {
+          const target = this.pendingArticlePixelRestoreTop;
+          const maxScroll = this.articleEl.scrollHeight - this.articleEl.clientHeight;
+          this.articleEl.scrollTop = Math.min(target, maxScroll);
+          if (this.articleEl.scrollTop >= target - 0.5) this.pendingArticlePixelRestoreTop = null;
+        } else {
+          this.articleEl.scrollTop = previousTop + Math.max(0, this.articleEl.scrollHeight - previousHeight);
+        }
       }
       if (changed) this.refreshArticleWindowChrome();
       if (controller.hasAfter() || controller.hasBefore()) {
