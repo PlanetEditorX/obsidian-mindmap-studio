@@ -155,7 +155,12 @@ test("image preview source changes restore the pixel scroll instead of semantic 
   assert.ok(flags >= 6, `reupload plus add/replaceLocal/unsetDefault/setDefault/remove branches must suppress semantic restore (found ${flags})`);
   const renderWindow = editorSource.match(/const suppressSemanticRestore = this\.suppressNextArticleSemanticRestore;[\s\S]{0,700}?this\.scheduleArticleWindowWarmup\(\);/)?.[0] ?? "";
   assert.match(renderWindow, /const location = suppressSemanticRestore \? null : \(latestRequestedLocation \?\? previousLocation/, "suppressed renders must fall through to the pixel-scroll branch");
-  assert.match(renderWindow, /this\.articleEl\.scrollTop = previousScroll\.top;/, "pixel restore must reuse the pre-render scrollTop");
+  assert.match(renderWindow, /this\.pendingArticlePixelRestoreTop = previousScroll\.top;/, "pixel restore must record the pre-render scrollTop as a pin target");
+  // warmup 分帧必须钉住目标而不是按帧累计：窗口重建把 scrollTop 钳制到远小于原位，
+  // 累计补偿只能加回插入高度、补不回钳制差额，最终停在错误位置。
+  const warmupPin = editorSource.match(/if \(this\.pendingArticlePixelRestoreTop !== null\) \{[\s\S]{0,400}?this\.pendingArticlePixelRestoreTop = null;/);
+  assert.ok(warmupPin, "warmup must pin the scroll to the recorded target each frame");
+  assert.match(warmupPin?.[0] ?? "", /Math\.min\(target, maxScroll\)/, "the pin must clamp until content catches up, then land exactly");
 });
 
 test("image preview source menu reveals local images in the system explorer", () => {

@@ -328,6 +328,12 @@ export class MindMapEditor {
    * 避免 warmup 期间节点高度不准的语义恢复把视口拉走。
    */
   private suppressNextArticleSemanticRestore = false;
+  /**
+   * 像素恢复目标：来源变更渲染后由 warmup 分帧钉住。窗口重建时内容高度骤减，
+   * scrollTop 被浏览器钳制丢失大段差额，按帧累计补偿无法精确回到原位；
+   * 记录渲染前的 scrollTop，warmup 每帧直接钉向该目标（内容补足即精确到位）。
+   */
+  private pendingArticlePixelRestoreTop: number | null = null;
   private articleWindowExpansionFrame: number | null = null;
   /** Background hydration frame that grows article DOM without requiring a user scroll. */
   private articleWindowWarmupFrame: number | null = null;
@@ -3092,8 +3098,14 @@ export class MindMapEditor {
         this.scheduleReadingLocationCapture("article");
         this.scheduleArticleWindowExpansion();
       };
-      this.articleEl.onwheel = () => this.cancelReadingLocationRestore();
-      this.articleEl.onpointerdown = () => this.cancelReadingLocationRestore();
+      this.articleEl.onwheel = () => {
+        this.pendingArticlePixelRestoreTop = null;
+        this.cancelReadingLocationRestore();
+      };
+      this.articleEl.onpointerdown = () => {
+        this.pendingArticlePixelRestoreTop = null;
+        this.cancelReadingLocationRestore();
+      };
       this.articleEl.ontouchstart = () => this.cancelReadingLocationRestore();
 
       if (directoryOnly) {
@@ -3123,6 +3135,7 @@ export class MindMapEditor {
         ?? (!existingPage ? this.lastReadingLocation : null));
       if (location) this.restoreReadingLocation("article", location);
       else {
+        this.pendingArticlePixelRestoreTop = previousScroll.top;
         this.articleEl.scrollTop = previousScroll.top;
         this.articleEl.scrollLeft = previousScroll.left;
       }
@@ -3289,7 +3302,16 @@ export class MindMapEditor {
       }
       if (loadedBefore) {
         this.blockReadingLocationCapture();
-        this.articleEl.scrollTop = previousTop + Math.max(0, this.articleEl.scrollHeight - previousHeight);
+        if (this.pendingArticlePixelRestoreTop !== null) {
+          // 像素目标钉住：每帧直接钉向渲染前的 scrollTop，clamp 丢失的差额
+          // 由分帧补齐后精确回位；到位后立即解除，避免拦截用户滚动。
+          const target = this.pendingArticlePixelRestoreTop;
+          const maxScroll = this.articleEl.scrollHeight - this.articleEl.clientHeight;
+          this.articleEl.scrollTop = Math.min(target, maxScroll);
+          if (this.articleEl.scrollTop >= target - 0.5) this.pendingArticlePixelRestoreTop = null;
+        } else {
+          this.articleEl.scrollTop = previousTop + Math.max(0, this.articleEl.scrollHeight - previousHeight);
+        }
       }
       if (changed) this.refreshArticleWindowChrome();
       if (controller.hasAfter() || controller.hasBefore()) {
