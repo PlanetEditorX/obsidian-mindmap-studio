@@ -39,7 +39,8 @@ test("document mutations preserve the current article or reading anchor across a
   const mutateStart = editorSource.indexOf("private mutate(\n");
   const mutateEnd = editorSource.indexOf("\n  /**\n   * 撤销", mutateStart);
   const mutate = editorSource.slice(mutateStart, mutateEnd);
-  assert.match(mutate, /const location = restoreLocation \?\? \(this\.currentMode === "mindmap" \? null : this\.captureCurrentLocation\(this\.currentMode\)\)/);
+  // undefined = 按当前模式捕获语义位置；显式 null = 不记忆不恢复（来源变更等纯视觉操作用）。
+  assert.match(mutate, /const location = restoreLocation !== undefined\s*\n\s*\? restoreLocation\s*\n\s*: \(this\.currentMode === "mindmap" \? null : this\.captureCurrentLocation\(this\.currentMode\)\)/);
   assert.match(mutate, /if \(location\) this\.rememberLocation\(location, true\)/);
   assert.match(mutate, /this\.render\(\);[\s\S]*if \(location\) this\.restoreReadingLocation\(this\.currentMode, location\)/);
 });
@@ -190,7 +191,8 @@ test("deleting an article node restores the closest surviving sibling instead of
   const mutateStart = editorSource.indexOf("private mutate(\n");
   const mutateEnd = editorSource.indexOf("\n  /**\n   * 撤销", mutateStart);
   const mutate = editorSource.slice(mutateStart, mutateEnd);
-  assert.match(mutate, /const location = restoreLocation \?\? \(this\.currentMode === "mindmap" \? null : this\.captureCurrentLocation\(this\.currentMode\)\)/);
+  // undefined = 按当前模式捕获语义位置；显式 null = 不记忆不恢复（来源变更等纯视觉操作用）。
+  assert.match(mutate, /const location = restoreLocation !== undefined\s*\n\s*\? restoreLocation\s*\n\s*: \(this\.currentMode === "mindmap" \? null : this\.captureCurrentLocation\(this\.currentMode\)\)/);
 });
 
 test("structural mind-map changes use a reduced-motion-aware FLIP layout transition", () => {

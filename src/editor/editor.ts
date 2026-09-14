@@ -6497,34 +6497,6 @@ export class MindMapEditor {
   }
 
   /**
-   * 图片来源变更会触发文章全量重渲染与语义位置恢复；warmup 期间目标节点高度尚未就绪，
-   * 恢复结果会偏离用户真实滚动位置，连续操作时偏差不断累积表现为“丢进度、乱跳”。
-   * 来源变更不改变文本布局，因此在保护窗口内把滚动钉回原位，保持视口像素级稳定；
-   * 窗口结束后用户滚动立即接管。
-   */
-  private runWithPinnedArticleScroll(run: () => void): void {
-    const scroller = this.currentMode === "outline"
-      ? this.outlineEl
-      : this.currentMode === "article" || this.currentMode === "reading"
-        ? this.articleEl
-        : null;
-    if (!scroller) {
-      run();
-      return;
-    }
-    const scrollTopBefore = scroller.scrollTop;
-    const guard = () => {
-      if (scroller.scrollTop !== scrollTopBefore) scroller.scrollTop = scrollTopBefore;
-    };
-    scroller.addEventListener("scroll", guard, true);
-    const detach = () => scroller.removeEventListener("scroll", guard, true);
-    window.setTimeout(detach, 900);
-    run();
-    guard();
-    window.requestAnimationFrame(guard);
-  }
-
-  /**
    * 通过统一历史与保存链路执行图片预览弹窗发起的一次来源变更。
    *
    * @returns 图片块是否仍然存在；false 时预览弹窗会自动关闭。
@@ -6558,26 +6530,24 @@ export class MindMapEditor {
         return false;
       }
       const uploadedAt = new Date().toISOString();
-      this.runWithPinnedArticleScroll(() => {
-        this.history.captureSnapshot(previousSnapshot);
-        const existing = new Map((merged.block.remoteSources ?? []).map((item) => [item.hostId, item]));
-        batch.successes.forEach((item) => existing.set(item.hostId, {
-          hostId: item.hostId,
-          hostName: item.hostName,
-          url: item.url,
-          deleteKey: item.deleteKey,
-          uploadedAt
-        }));
-        merged.block.remoteSources = Array.from(existing.values());
-        merged.block.source = batch.successes[0]!.url;
-        merged.block.localSource = undefined;
-        merged.block.contentHash = batch.contentHash;
-        if (!merged.block.alt) merged.block.alt = file.name.replace(/\.[^.]+$/, "");
-        replaceNodeContentBlocks(merged.node, merged.blocks);
-        this.notifyDocumentChange("none");
-        this.markSaving();
-        this.render();
-      });
+      this.history.captureSnapshot(previousSnapshot);
+      const existing = new Map((merged.block.remoteSources ?? []).map((item) => [item.hostId, item]));
+      batch.successes.forEach((item) => existing.set(item.hostId, {
+        hostId: item.hostId,
+        hostName: item.hostName,
+        url: item.url,
+        deleteKey: item.deleteKey,
+        uploadedAt
+      }));
+      merged.block.remoteSources = Array.from(existing.values());
+      merged.block.source = batch.successes[0]!.url;
+      merged.block.localSource = undefined;
+      merged.block.contentHash = batch.contentHash;
+      if (!merged.block.alt) merged.block.alt = file.name.replace(/\.[^.]+$/, "");
+      replaceNodeContentBlocks(merged.node, merged.blocks);
+      this.notifyDocumentChange("none");
+      this.markSaving();
+      this.render();
       new Notice(`已更新并上传到：${batch.successes.map((item) => item.hostName).join("、")}`);
       return true;
     }
@@ -6596,12 +6566,11 @@ export class MindMapEditor {
         new Notice("该地址已经在来源列表中");
         return true;
       }
-      this.runWithPinnedArticleScroll(() => {
-        this.mutateWithoutArticleContext(() => {
-          located.block.remoteSources = [...(located.block.remoteSources ?? []), entry];
-          replaceNodeContentBlocks(located.node, located.blocks);
-        });
-      });
+      // 来源变更不改变文本布局：mutate 传 null 跳过语义位置恢复，视口由浏览器保持。
+      this.mutateWithoutArticleContext(() => {
+        located.block.remoteSources = [...(located.block.remoteSources ?? []), entry];
+        replaceNodeContentBlocks(located.node, located.blocks);
+      }, null);
       return true;
     }
     if (change.type === "replaceLocal") {
@@ -6620,19 +6589,17 @@ export class MindMapEditor {
         new Notice("保存本地图片失败", 7000);
         return true;
       }
-      this.runWithPinnedArticleScroll(() => {
-        this.mutateWithoutArticleContext(() => {
-          located.block.localSource = path;
-          // 当前显示来源若本来指向本地文件，替换后必须跟随新本地路径，
-          // 否则旧文件回收后“当前图片”候选将加载失败；图片级默认来源同理。
-          if (sourceWasLocal) located.block.source = path;
-          if (located.block.sourcePriority?.length) {
-            located.block.sourcePriority = located.block.sourcePriority.map((item) =>
-              (sourceWasLocal && item === previousSource) || item === previousLocal ? path : item);
-          }
-          replaceNodeContentBlocks(located.node, located.blocks);
-        });
-      });
+      this.mutateWithoutArticleContext(() => {
+        located.block.localSource = path;
+        // 当前显示来源若本来指向本地文件，替换后必须跟随新本地路径，
+        // 否则旧文件回收后“当前图片”候选将加载失败；图片级默认来源同理。
+        if (sourceWasLocal) located.block.source = path;
+        if (located.block.sourcePriority?.length) {
+          located.block.sourcePriority = located.block.sourcePriority.map((item) =>
+            (sourceWasLocal && item === previousSource) || item === previousLocal ? path : item);
+        }
+        replaceNodeContentBlocks(located.node, located.blocks);
+      }, null);
       // 被替换的旧本地图片进入 60 秒延迟回收；撤销恢复引用会自动取消，
       // 到期前仍做全库引用检查，避免误删其它导图仍在使用的文件。
       const recycled = new Set<string>();
@@ -6648,12 +6615,10 @@ export class MindMapEditor {
         new Notice("图片已不存在");
         return false;
       }
-      this.runWithPinnedArticleScroll(() => {
-        this.mutateWithoutArticleContext(() => {
-          clearImageSourceDefault(located.block, change.source);
-          replaceNodeContentBlocks(located.node, located.blocks);
-        });
-      });
+      this.mutateWithoutArticleContext(() => {
+        clearImageSourceDefault(located.block, change.source);
+        replaceNodeContentBlocks(located.node, located.blocks);
+      }, null);
       return true;
     }
     if (change.type === "setDefault") {
@@ -6666,11 +6631,9 @@ export class MindMapEditor {
         new Notice("该来源不在当前图片的来源列表中");
         return true;
       }
-      this.runWithPinnedArticleScroll(() => {
-        this.mutateWithoutArticleContext(() => {
-          replaceNodeContentBlocks(located.node, located.blocks);
-        });
-      });
+      this.mutateWithoutArticleContext(() => {
+        replaceNodeContentBlocks(located.node, located.blocks);
+      }, null);
       return true;
     }
     const located = this.locateImageBlock(nodeId, blockId);
@@ -6683,15 +6646,13 @@ export class MindMapEditor {
       await this.removeImageBlock(nodeId, blockId);
       return false;
     }
-    this.runWithPinnedArticleScroll(() => {
-      this.mutateWithoutArticleContext(() => {
-        located.block.source = remaining.source;
-        located.block.localSource = remaining.localSource;
-        located.block.remoteSources = remaining.remoteSources;
-        located.block.sourcePriority = remaining.sourcePriority;
-        replaceNodeContentBlocks(located.node, located.blocks);
-      });
-    });
+    this.mutateWithoutArticleContext(() => {
+      located.block.source = remaining.source;
+      located.block.localSource = remaining.localSource;
+      located.block.remoteSources = remaining.remoteSources;
+      located.block.sourcePriority = remaining.sourcePriority;
+      replaceNodeContentBlocks(located.node, located.blocks);
+    }, null);
     return true;
   }
 
@@ -7470,7 +7431,11 @@ export class MindMapEditor {
     articleContextImpact: ArticleContextChangeImpact = "structure"
   ): void {
     if (!this.ensureEditable()) return;
-    const location = restoreLocation ?? (this.currentMode === "mindmap" ? null : this.captureCurrentLocation(this.currentMode));
+    // 显式传入 null 表示“不动阅读位置”：不记忆也不恢复，重渲染后视口由浏览器保持。
+    // 未传（undefined）时才按当前模式捕获语义位置。
+    const location = restoreLocation !== undefined
+      ? restoreLocation
+      : (this.currentMode === "mindmap" ? null : this.captureCurrentLocation(this.currentMode));
     if (location) this.rememberLocation(location, true);
     this.captureHistorySnapshot();
     action();

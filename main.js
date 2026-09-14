@@ -18355,34 +18355,12 @@ var MindMapEditor = class {
     return block ? { node, blocks, block } : null;
   }
   /**
-   * 图片来源变更会触发文章全量重渲染与语义位置恢复；warmup 期间目标节点高度尚未就绪，
-   * 恢复结果会偏离用户真实滚动位置，连续操作时偏差不断累积表现为“丢进度、乱跳”。
-   * 来源变更不改变文本布局，因此在保护窗口内把滚动钉回原位，保持视口像素级稳定；
-   * 窗口结束后用户滚动立即接管。
-   */
-  runWithPinnedArticleScroll(run) {
-    const scroller = this.currentMode === "outline" ? this.outlineEl : this.currentMode === "article" || this.currentMode === "reading" ? this.articleEl : null;
-    if (!scroller) {
-      run();
-      return;
-    }
-    const scrollTopBefore = scroller.scrollTop;
-    const guard = () => {
-      if (scroller.scrollTop !== scrollTopBefore) scroller.scrollTop = scrollTopBefore;
-    };
-    scroller.addEventListener("scroll", guard, true);
-    const detach = () => scroller.removeEventListener("scroll", guard, true);
-    window.setTimeout(detach, 900);
-    run();
-    guard();
-    window.requestAnimationFrame(guard);
-  }
-  /**
    * 通过统一历史与保存链路执行图片预览弹窗发起的一次来源变更。
    *
    * @returns 图片块是否仍然存在；false 时预览弹窗会自动关闭。
    */
   async applyImagePreviewSourceChange(nodeId, blockId, change) {
+    var _a2;
     if (!this.ensureEditable()) return true;
     if (change.type === "reupload") {
       const located2 = this.locateImageBlock(nodeId, blockId);
@@ -18411,27 +18389,24 @@ var MindMapEditor = class {
         return false;
       }
       const uploadedAt = (/* @__PURE__ */ new Date()).toISOString();
-      this.runWithPinnedArticleScroll(() => {
-        var _a2;
-        this.history.captureSnapshot(previousSnapshot);
-        const existing = new Map(((_a2 = merged.block.remoteSources) != null ? _a2 : []).map((item) => [item.hostId, item]));
-        batch.successes.forEach((item) => existing.set(item.hostId, {
-          hostId: item.hostId,
-          hostName: item.hostName,
-          url: item.url,
-          deleteKey: item.deleteKey,
-          uploadedAt
-        }));
-        merged.block.remoteSources = Array.from(existing.values());
-        merged.block.source = batch.successes[0].url;
-        merged.block.localSource = void 0;
-        merged.block.contentHash = batch.contentHash;
-        if (!merged.block.alt) merged.block.alt = file.name.replace(/\.[^.]+$/, "");
-        replaceNodeContentBlocks(merged.node, merged.blocks);
-        this.notifyDocumentChange("none");
-        this.markSaving();
-        this.render();
-      });
+      this.history.captureSnapshot(previousSnapshot);
+      const existing = new Map(((_a2 = merged.block.remoteSources) != null ? _a2 : []).map((item) => [item.hostId, item]));
+      batch.successes.forEach((item) => existing.set(item.hostId, {
+        hostId: item.hostId,
+        hostName: item.hostName,
+        url: item.url,
+        deleteKey: item.deleteKey,
+        uploadedAt
+      }));
+      merged.block.remoteSources = Array.from(existing.values());
+      merged.block.source = batch.successes[0].url;
+      merged.block.localSource = void 0;
+      merged.block.contentHash = batch.contentHash;
+      if (!merged.block.alt) merged.block.alt = file.name.replace(/\.[^.]+$/, "");
+      replaceNodeContentBlocks(merged.node, merged.blocks);
+      this.notifyDocumentChange("none");
+      this.markSaving();
+      this.render();
       new import_obsidian15.Notice(`\u5DF2\u66F4\u65B0\u5E76\u4E0A\u4F20\u5230\uFF1A${batch.successes.map((item) => item.hostName).join("\u3001")}`);
       return true;
     }
@@ -18450,13 +18425,11 @@ var MindMapEditor = class {
         new import_obsidian15.Notice("\u8BE5\u5730\u5740\u5DF2\u7ECF\u5728\u6765\u6E90\u5217\u8868\u4E2D");
         return true;
       }
-      this.runWithPinnedArticleScroll(() => {
-        this.mutateWithoutArticleContext(() => {
-          var _a2;
-          located2.block.remoteSources = [...(_a2 = located2.block.remoteSources) != null ? _a2 : [], entry];
-          replaceNodeContentBlocks(located2.node, located2.blocks);
-        });
-      });
+      this.mutateWithoutArticleContext(() => {
+        var _a3;
+        located2.block.remoteSources = [...(_a3 = located2.block.remoteSources) != null ? _a3 : [], entry];
+        replaceNodeContentBlocks(located2.node, located2.blocks);
+      }, null);
       return true;
     }
     if (change.type === "replaceLocal") {
@@ -18475,17 +18448,15 @@ var MindMapEditor = class {
         new import_obsidian15.Notice("\u4FDD\u5B58\u672C\u5730\u56FE\u7247\u5931\u8D25", 7e3);
         return true;
       }
-      this.runWithPinnedArticleScroll(() => {
-        this.mutateWithoutArticleContext(() => {
-          var _a2;
-          located2.block.localSource = path;
-          if (sourceWasLocal) located2.block.source = path;
-          if ((_a2 = located2.block.sourcePriority) == null ? void 0 : _a2.length) {
-            located2.block.sourcePriority = located2.block.sourcePriority.map((item) => sourceWasLocal && item === previousSource || item === previousLocal ? path : item);
-          }
-          replaceNodeContentBlocks(located2.node, located2.blocks);
-        });
-      });
+      this.mutateWithoutArticleContext(() => {
+        var _a3;
+        located2.block.localSource = path;
+        if (sourceWasLocal) located2.block.source = path;
+        if ((_a3 = located2.block.sourcePriority) == null ? void 0 : _a3.length) {
+          located2.block.sourcePriority = located2.block.sourcePriority.map((item) => sourceWasLocal && item === previousSource || item === previousLocal ? path : item);
+        }
+        replaceNodeContentBlocks(located2.node, located2.blocks);
+      }, null);
       const recycled = /* @__PURE__ */ new Set();
       if (previousLocal && previousLocal !== path) recycled.add(previousLocal);
       if (sourceWasLocal && previousSource !== path) recycled.add(previousSource);
@@ -18499,12 +18470,10 @@ var MindMapEditor = class {
         new import_obsidian15.Notice("\u56FE\u7247\u5DF2\u4E0D\u5B58\u5728");
         return false;
       }
-      this.runWithPinnedArticleScroll(() => {
-        this.mutateWithoutArticleContext(() => {
-          clearImageSourceDefault(located2.block, change.source);
-          replaceNodeContentBlocks(located2.node, located2.blocks);
-        });
-      });
+      this.mutateWithoutArticleContext(() => {
+        clearImageSourceDefault(located2.block, change.source);
+        replaceNodeContentBlocks(located2.node, located2.blocks);
+      }, null);
       return true;
     }
     if (change.type === "setDefault") {
@@ -18517,11 +18486,9 @@ var MindMapEditor = class {
         new import_obsidian15.Notice("\u8BE5\u6765\u6E90\u4E0D\u5728\u5F53\u524D\u56FE\u7247\u7684\u6765\u6E90\u5217\u8868\u4E2D");
         return true;
       }
-      this.runWithPinnedArticleScroll(() => {
-        this.mutateWithoutArticleContext(() => {
-          replaceNodeContentBlocks(located2.node, located2.blocks);
-        });
-      });
+      this.mutateWithoutArticleContext(() => {
+        replaceNodeContentBlocks(located2.node, located2.blocks);
+      }, null);
       return true;
     }
     const located = this.locateImageBlock(nodeId, blockId);
@@ -18534,15 +18501,13 @@ var MindMapEditor = class {
       await this.removeImageBlock(nodeId, blockId);
       return false;
     }
-    this.runWithPinnedArticleScroll(() => {
-      this.mutateWithoutArticleContext(() => {
-        located.block.source = remaining.source;
-        located.block.localSource = remaining.localSource;
-        located.block.remoteSources = remaining.remoteSources;
-        located.block.sourcePriority = remaining.sourcePriority;
-        replaceNodeContentBlocks(located.node, located.blocks);
-      });
-    });
+    this.mutateWithoutArticleContext(() => {
+      located.block.source = remaining.source;
+      located.block.localSource = remaining.localSource;
+      located.block.remoteSources = remaining.remoteSources;
+      located.block.sourcePriority = remaining.sourcePriority;
+      replaceNodeContentBlocks(located.node, located.blocks);
+    }, null);
     return true;
   }
   /** 将图片块设置为指定的水平对齐方式。 */
@@ -19213,7 +19178,7 @@ var MindMapEditor = class {
    */
   mutate(action, restoreLocation, articleContextImpact = "structure") {
     if (!this.ensureEditable()) return;
-    const location = restoreLocation != null ? restoreLocation : this.currentMode === "mindmap" ? null : this.captureCurrentLocation(this.currentMode);
+    const location = restoreLocation !== void 0 ? restoreLocation : this.currentMode === "mindmap" ? null : this.captureCurrentLocation(this.currentMode);
     if (location) this.rememberLocation(location, true);
     this.captureHistorySnapshot();
     action();
