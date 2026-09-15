@@ -88,4 +88,6 @@ test("merge back deletes an emptied submap asset folder instead of leaving a bla
   assert.match(mainSource, /if \(!\(folder instanceof TFolder\) \|\| folder\.children\.length\) return;/);
   assert.match(mainSource, /private async cleanupEmptySubmapAssetsFolder\(submapFile: TFile\)/);
   assert.match(mainSource, /assetFolder \|\| "MindMap Assets"/);
+  // 重名附件用连字符序号追加（例如 a-2.png），而非空格 2
+  assert.match(mainSource, /\$\{base\}-\$\{index\}\$\{extension\}/);
 });

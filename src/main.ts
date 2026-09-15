@@ -3476,7 +3476,7 @@ export default class MindMapStudioPlugin extends Plugin {
         const base = dot > candidate.lastIndexOf("/") ? candidate.slice(0, dot) : candidate;
         const extension = dot > candidate.lastIndexOf("/") ? candidate.slice(dot) : "";
         while (this.app.vault.getAbstractFileByPath(candidate) || reservedPaths.has(candidate)) {
-          candidate = `${base} ${index}${extension}`;
+          candidate = `${base}-${index}${extension}`;
           index += 1;
         }
         targetPath = candidate;
