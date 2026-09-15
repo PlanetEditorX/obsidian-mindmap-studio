@@ -653,6 +653,36 @@ function replaceNodeContentBlocks(node, blocks) {
   node.code = void 0;
   syncNodeContentFields(node);
 }
+function migrateLocalAssetBlocks(root, resolveNewPath) {
+  let rewritten = 0;
+  for (const node of flattenNodes(root)) {
+    const blocks = nodeContentBlocks(node);
+    let changed = false;
+    for (const block of blocks) {
+      let oldLocal = "";
+      if (block.type === "image") {
+        oldLocal = (block.localSource || block.source || "").trim();
+      } else if (block.type === "file") {
+        oldLocal = (block.source || "").trim();
+      } else {
+        continue;
+      }
+      if (!oldLocal) continue;
+      const newPath = resolveNewPath(oldLocal);
+      if (!newPath || newPath === oldLocal) continue;
+      if (block.type === "image") {
+        block.localSource = newPath;
+        if (block.source === oldLocal) block.source = newPath;
+      } else {
+        block.source = newPath;
+      }
+      changed = true;
+      rewritten += 1;
+    }
+    if (changed) replaceNodeContentBlocks(node, blocks);
+  }
+  return rewritten;
+}
 function applyImageUploadPatches(document2, patches) {
   var _a2, _b2, _c;
   let changed = 0;
@@ -27118,6 +27148,10 @@ ${uploaded.url}`, 9e3);
   }
   /**
    * 将指定节点及其后代提取为独立子导图文件。
+   *
+   * 提取时会同步把该子树引用的本地图片与上传文件块迁移到子导图自己的资源目录并改写引用，
+   * 使子导图完全独立，不再依赖父导图的附件。
+   *
    * @param parentFile 当前父导图文件。
    * @param node 要提取的节点（及其后代）。
    * @returns 创建的子导图引用。
@@ -27125,7 +27159,76 @@ ${uploaded.url}`, 9e3);
    */
   async extractToSubmap(parentFile, node) {
     const document2 = this.buildSubmapDocument(parentFile, node, true);
-    return this.persistSubmapDocument(parentFile, node, document2);
+    const submap = await this.persistSubmapDocument(parentFile, node, document2);
+    const submapFile = this.app.vault.getAbstractFileByPath((0, import_obsidian20.normalizePath)(submap.path));
+    if (submapFile instanceof import_obsidian20.TFile) {
+      const migrated = await this.migrateSubmapAssets(document2, submapFile, false);
+      if (migrated.length) await this.app.vault.modify(submapFile, serializeDocument(document2));
+    }
+    return submap;
+  }
+  /**
+   * 将文档内容块引用的本地图片块与上传文件块迁移到目标导图自己的资源目录，并改写引用。
+   *
+   * 子导图提取（复制保留原图）或合并回父导图（复制并按需回收原图）时调用，
+   * 保证子导图与父导图各自自包含、相互独立。远程图床 URL 不迁移。
+   *
+   * @param document 待迁移的内容所在文档（会就地改写内容块引用）。
+   * @param targetFile 目标导图文件，其所在目录决定新的资源目录。
+   * @param deleteOriginals 为 true 时在全部复制成功后把旧附件移入回收站；提取场景传 false 保留父导图原图。
+   * @returns 被迁移的旧附件路径集合。
+   */
+  async migrateSubmapAssets(document2, targetFile, deleteOriginals) {
+    var _a2, _b2;
+    const configuredFolder = (0, import_obsidian20.normalizePath)((this.settings.assetFolder || "MindMap Assets").replace(/^\/+|\/+$/g, ""));
+    const targetFolder = (0, import_obsidian20.normalizePath)([(_b2 = (_a2 = targetFile.parent) == null ? void 0 : _a2.path) != null ? _b2 : "", configuredFolder].filter(Boolean).join("/"));
+    const migratedPaths = /* @__PURE__ */ new Map();
+    const reservedPaths = /* @__PURE__ */ new Set();
+    const copyPromises = [];
+    const oldPaths = [];
+    let ensureFolderPromise = null;
+    const ensureTargetFolder = () => ensureFolderPromise != null ? ensureFolderPromise : ensureFolderPromise = this.ensureFolderPath(targetFolder);
+    const isLocalPath = (value) => Boolean(value.trim()) && !/^(?:https?:|data:|blob:|file:)/i.test(value.trim());
+    const resolveNewPath = (oldLocal) => {
+      if (!isLocalPath(oldLocal)) return null;
+      const source = this.app.vault.getAbstractFileByPath((0, import_obsidian20.normalizePath)(oldLocal));
+      if (!(source instanceof import_obsidian20.TFile) || source.path === targetFile.path) return null;
+      let targetPath = migratedPaths.get(source.path);
+      if (!targetPath) {
+        const preferredPath = (0, import_obsidian20.normalizePath)(`${targetFolder}/${this.sanitizeFilename(source.basename)}.${sanitizeFileExtension(source.name, "bin")}`);
+        let candidate = preferredPath;
+        let index = 2;
+        const dot = candidate.lastIndexOf(".");
+        const base = dot > candidate.lastIndexOf("/") ? candidate.slice(0, dot) : candidate;
+        const extension = dot > candidate.lastIndexOf("/") ? candidate.slice(dot) : "";
+        while (this.app.vault.getAbstractFileByPath(candidate) || reservedPaths.has(candidate)) {
+          candidate = `${base} ${index}${extension}`;
+          index += 1;
+        }
+        targetPath = candidate;
+        reservedPaths.add(targetPath);
+        migratedPaths.set(source.path, targetPath);
+        oldPaths.push(source.path);
+        copyPromises.push(
+          ensureTargetFolder().then(() => this.app.vault.readBinary(source)).then((data) => this.app.vault.createBinary(targetPath, data))
+        );
+      }
+      return targetPath;
+    };
+    migrateLocalAssetBlocks(document2.root, resolveNewPath);
+    await Promise.all(copyPromises);
+    if (deleteOriginals && oldPaths.length) {
+      for (const path of oldPaths) {
+        const existing = this.app.vault.getAbstractFileByPath((0, import_obsidian20.normalizePath)(path));
+        if (existing instanceof import_obsidian20.TFile) {
+          try {
+            await this.app.vault.trash(existing, true);
+          } catch (e) {
+          }
+        }
+      }
+    }
+    return oldPaths;
   }
   /**
    * 将当前子导图合并回其父导图。
@@ -27166,6 +27269,7 @@ ${uploaded.url}`, 9e3);
       new import_obsidian20.Notice("\u7236\u5BFC\u56FE\u4E2D\u627E\u4E0D\u5230\u94FE\u63A5\u5230\u8BE5\u5B50\u5BFC\u56FE\u7684\u8282\u70B9");
       return;
     }
+    await this.migrateSubmapAssets(submapDoc, parentFile, true);
     const merged = JSON.parse(JSON.stringify(submapDoc.root.children));
     targetNode.children.push(...merged);
     targetNode.submap = void 0;

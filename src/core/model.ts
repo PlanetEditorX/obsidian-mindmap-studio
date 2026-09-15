@@ -5,7 +5,7 @@
  * 定义 .mindmap 稳定数据结构，并负责字段规范化、富文本、内容块、节点树、Markdown 导入导出及图片镜像候选源排序。
  */
 
-import { findNode, walkNodes } from "./node-tree";
+import { findNode, flattenNodes, walkNodes } from "./node-tree";
 export {
   buildNodeTreeIndex,
   containsNode,
@@ -1210,6 +1210,52 @@ export function replaceNodeContentBlocks(node: MindMapNode, blocks: MindMapConte
   node.table = undefined;
   node.code = undefined;
   syncNodeContentFields(node);
+}
+
+/**
+ * 遍历文档节点内容块，把本地图片块与上传文件块迁移到新仓库路径并改写权威引用。
+ *
+ * 纯逻辑函数，不执行任何文件系统操作；`resolveNewPath` 由调用方实现，负责根据
+ * 旧本地路径返回迁移后的新路径（返回 null 表示无需迁移）。图片块同时改写
+ * `localSource`，并在 `source` 仍指向旧本地路径时一并改写；上传文件块改写
+ * `source`。远程图床 URL 与 `remoteSources` 保持原样，不参与迁移。
+ *
+ * @param root 文档根节点，会被原地改写。
+ * @param resolveNewPath 给定旧本地路径返回新的仓库路径；返回 null 表示跳过。
+ * @returns 实际改写的块数量。
+ */
+export function migrateLocalAssetBlocks(
+  root: MindMapNode,
+  resolveNewPath: (oldPath: string) => string | null
+): number {
+  let rewritten = 0;
+  for (const node of flattenNodes(root)) {
+    const blocks = nodeContentBlocks(node);
+    let changed = false;
+    for (const block of blocks) {
+      let oldLocal = "";
+      if (block.type === "image") {
+        oldLocal = (block.localSource || block.source || "").trim();
+      } else if (block.type === "file") {
+        oldLocal = (block.source || "").trim();
+      } else {
+        continue;
+      }
+      if (!oldLocal) continue;
+      const newPath = resolveNewPath(oldLocal);
+      if (!newPath || newPath === oldLocal) continue;
+      if (block.type === "image") {
+        block.localSource = newPath;
+        if (block.source === oldLocal) block.source = newPath;
+      } else {
+        block.source = newPath;
+      }
+      changed = true;
+      rewritten += 1;
+    }
+    if (changed) replaceNodeContentBlocks(node, blocks);
+  }
+  return rewritten;
 }
 
 /**

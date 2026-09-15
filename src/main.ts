@@ -24,6 +24,7 @@ import {
   findNode,
   flattenNodes,
   markdownToDocument,
+  migrateLocalAssetBlocks,
   nodeContentBlocks,
   nodePlainText,
   reconcileRichTextAfterEdit,
@@ -3408,6 +3409,10 @@ export default class MindMapStudioPlugin extends Plugin {
 
   /**
    * 将指定节点及其后代提取为独立子导图文件。
+   *
+   * 提取时会同步把该子树引用的本地图片与上传文件块迁移到子导图自己的资源目录并改写引用，
+   * 使子导图完全独立，不再依赖父导图的附件。
+   *
    * @param parentFile 当前父导图文件。
    * @param node 要提取的节点（及其后代）。
    * @returns 创建的子导图引用。
@@ -3415,7 +3420,87 @@ export default class MindMapStudioPlugin extends Plugin {
    */
   async extractToSubmap(parentFile: TFile, node: MindMapNode): Promise<MindMapSubmap> {
     const document = this.buildSubmapDocument(parentFile, node, true);
-    return this.persistSubmapDocument(parentFile, node, document);
+    const submap = await this.persistSubmapDocument(parentFile, node, document);
+    const submapFile = this.app.vault.getAbstractFileByPath(normalizePath(submap.path));
+    if (submapFile instanceof TFile) {
+      const migrated = await this.migrateSubmapAssets(document, submapFile, false);
+      if (migrated.length) await this.app.vault.modify(submapFile, serializeDocument(document));
+    }
+    return submap;
+  }
+
+  /**
+   * 将文档内容块引用的本地图片块与上传文件块迁移到目标导图自己的资源目录，并改写引用。
+   *
+   * 子导图提取（复制保留原图）或合并回父导图（复制并按需回收原图）时调用，
+   * 保证子导图与父导图各自自包含、相互独立。远程图床 URL 不迁移。
+   *
+   * @param document 待迁移的内容所在文档（会就地改写内容块引用）。
+   * @param targetFile 目标导图文件，其所在目录决定新的资源目录。
+   * @param deleteOriginals 为 true 时在全部复制成功后把旧附件移入回收站；提取场景传 false 保留父导图原图。
+   * @returns 被迁移的旧附件路径集合。
+   */
+  private async migrateSubmapAssets(
+    document: MindMapDocument,
+    targetFile: TFile,
+    deleteOriginals: boolean
+  ): Promise<string[]> {
+    const configuredFolder = normalizePath((this.settings.assetFolder || "MindMap Assets").replace(/^\/+|\/+$/g, ""));
+    const targetFolder = normalizePath([targetFile.parent?.path ?? "", configuredFolder].filter(Boolean).join("/"));
+    const migratedPaths = new Map<string, string>();
+    const reservedPaths = new Set<string>();
+    const copyPromises: Promise<unknown>[] = [];
+    const oldPaths: string[] = [];
+    let ensureFolderPromise: Promise<void> | null = null;
+    const ensureTargetFolder = (): Promise<void> =>
+      ensureFolderPromise ??= this.ensureFolderPath(targetFolder);
+
+    const isLocalPath = (value: string): boolean => Boolean(value.trim()) && !/^(?:https?:|data:|blob:|file:)/i.test(value.trim());
+
+    const resolveNewPath = (oldLocal: string): string | null => {
+      if (!isLocalPath(oldLocal)) return null;
+      const source = this.app.vault.getAbstractFileByPath(normalizePath(oldLocal));
+      if (!(source instanceof TFile) || source.path === targetFile.path) return null;
+      let targetPath = migratedPaths.get(source.path);
+      if (!targetPath) {
+        const preferredPath = normalizePath(`${targetFolder}/${this.sanitizeFilename(source.basename)}.${sanitizeFileExtension(source.name, "bin")}`);
+        let candidate = preferredPath;
+        let index = 2;
+        const dot = candidate.lastIndexOf(".");
+        const base = dot > candidate.lastIndexOf("/") ? candidate.slice(0, dot) : candidate;
+        const extension = dot > candidate.lastIndexOf("/") ? candidate.slice(dot) : "";
+        while (this.app.vault.getAbstractFileByPath(candidate) || reservedPaths.has(candidate)) {
+          candidate = `${base} ${index}${extension}`;
+          index += 1;
+        }
+        targetPath = candidate;
+        reservedPaths.add(targetPath);
+        migratedPaths.set(source.path, targetPath);
+        oldPaths.push(source.path);
+        copyPromises.push(
+          ensureTargetFolder()
+            .then(() => this.app.vault.readBinary(source))
+            .then((data) => this.app.vault.createBinary(targetPath!, data))
+        );
+      }
+      return targetPath;
+    };
+
+    migrateLocalAssetBlocks(document.root, resolveNewPath);
+    await Promise.all(copyPromises);
+    if (deleteOriginals && oldPaths.length) {
+      for (const path of oldPaths) {
+        const existing = this.app.vault.getAbstractFileByPath(normalizePath(path));
+        if (existing instanceof TFile) {
+          try {
+            await this.app.vault.trash(existing, true);
+          } catch {
+            // Keep the original attachment if trashing fails.
+          }
+        }
+      }
+    }
+    return oldPaths;
   }
 
   /**
@@ -3443,6 +3528,9 @@ export default class MindMapStudioPlugin extends Plugin {
     };
     searchParent(parentDoc.root);
     if (!targetNode) { new Notice("父导图中找不到链接到该子导图的节点"); return; }
+    // 合并前把子导图引用的本地图片与文件迁移回父导图自己的资源目录并改写引用，
+    // 子导图删除后旧附件一并回收，父导图保持自包含、独立。
+    await this.migrateSubmapAssets(submapDoc, parentFile, true);
     const merged = JSON.parse(JSON.stringify(submapDoc.root.children)) as MindMapNode[];
     (targetNode as MindMapNode).children.push(...merged);
     (targetNode as MindMapNode).submap = undefined;
