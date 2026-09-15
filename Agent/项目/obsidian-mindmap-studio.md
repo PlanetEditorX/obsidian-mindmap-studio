@@ -1,11 +1,12 @@
 # obsidian-mindmap-studio 项目交接
 
 - 插件：MindMap Studio（Obsidian 本地优先 .mindmap 导图，含导图/大纲/文章/通读模式、全局搜索、图床、AI 助手与桌面截图链路）。
-- 版本基线：1.51.5（线上 1.51.0 已发布；工作区提交基线 v1.51.3：节点锚点来源变更恢复；本轮 v1.51.5：子导图提取/合并迁移本地图片与上传文件，使子导图完全独立）。
+- 版本基线：1.51.5（线上 1.51.0 已发布；工作区提交基线 v1.51.3：节点锚点来源变更恢复；本轮工作区：子导图提取/合并迁移本地图片与上传文件（含 60 秒延迟回收）＋截图标注工具增强（箭头/线宽/序号/橡皮擦））。
 - 仓库规则：见根目录 `AGENTS.md`；每轮代码交付三份 ZIP（源码 / 安装 / Agent 交接）共用同一六位后缀；验证入口 `npm run verify`。
 
 ## 当前状态（本轮：子导图提取/合并迁移本地图片与上传文件）
 
+- 截图标注工具增强（应用户 5 点反馈，均在 `desktop-capture.ts` 内嵌编辑器）：(1) 箭头头部从圆形改为清晰三角尖——杆状路径在箭头基底 `bx,by` 处截断（`lineCap='butt'`），头部用填充三角形画到尖点，不再被圆头线段遮成圆点；(2) 箭头样式组新增“渐粗”喇叭形（`line-style=tapered`），自尾端到头部由细到粗的实心锥体，另保留原“箭头/直线”；(3) 线宽从“细/中/粗”三档改为 1~20 滑条（`#widthRange` + 数值标签），画布箭头/文字/矩形/椭圆/笔刷共用；(4) 序号数字 `textBaseline='middle'` 基础上向下微移 1.5px 实现光学居中；(5) 马赛克与橡皮擦大小跟随线宽滑条（此前橡皮擦固定、马赛克固定 32，且样式栏对马赛克/橡皮擦工具不显示，现 `setTool` 把二者纳入样式栏显示、`mosaicAt` size=strokeWidth*3、橡皮擦 lineWidth=max(8,strokeWidth*3)）。契约测试 `image-recognition.test.mjs` 新增“sharp tapered arrow, 1-20 width slider and resizable mosaic/eraser”。
 - 子导图提取/合并迁移附件（应用户反馈）：“提取为子导图”与“合并回去”之前，导图引用的本地图片与上传文件都不迁移，文件仍留在原导图 MindMap Assets、引用原样保留，子导图依赖父导图附件。本轮修复：新增纯逻辑助手 `migrateLocalAssetBlocks()`（core/model，遍历内容块，把本地图片块与文件块迁移到新仓库路径并改写权威引用，`localSource`/`source` 同步、文件改 `source`，远程图床 URL 与 `remoteSources` 不迁移），并由 main.ts 的 `migrateSubmapAssets()` 复用 `copyImportedMarkdownImages` 的命名去重（重名追加序号）+ 批量复制（串行复制、全部成功后再按需回收）。提取时（`extractToSubmap`）：从父导图复制到子导图自己的 MindMap Assets 并改写子导图引用，父导图原图保留，`main.js` 重写后写回子导图文件，子导图完全自包含。合并时（`mergeFromSubmap`）：把子导图引用的本地图片/文件复制回父导图自己的 MindMap Assets 并改写引用，随后删除子导图时旧附件一并回收，父导图保持独立。专项测试 `tests/submap-asset-migration.test.mjs` 锁定“本地图片+文件+远程图混合节点正确迁移、远程 URL 不受影响、同路径/空解析跳过”。
 - 替换图片后阅读位置乱跳（多轮定位）：第一层 mutate(null) 挡 mutate 自身恢复（8b1b9ff）；第二层 suppressNextArticleSemanticRestore 跳过语义恢复走像素恢复（3173796）；第三、四层（v1.51.2/1.51.4）在 renderWindow 内取 previousScroll.top 作为像素目标、并以图片块所在节点为锚——但**都拿错了目标**：文章窗口重渲染先把 scrollHeight 压到极小、浏览器把 scrollTop 钳制到顶部，renderWindow 内读取的只是塌缩后的值（日志：原 20955 → 重建后 2677）。本轮（v1.51.5 工作区）改为在来源变更入口 `applyImagePreviewSourceChange` → `captureArticleNodeAnchor(nodeId)` **重建发生前**捕获真实 scrollTop，renderWindow 以它为 `pendingArticlePixelRestoreTop` 硬钉目标，warmup 按 `Math.min(target, maxScroll)` 分帧爬升，内容补齐后精确回位；wheel/pointerdown 立即接管。契约测试锁定“入口捕获真实值、非塌缩值”。
 - 教训：验证构建产物必须搜 esbuild 编译形式（`void 0` 而非 `undefined`），且 Select-String 勿用 -First 截断；GitHub Release 产物只含已提交代码，工作区修复需提交发布后才能通过插件更新获取；overflow-anchor:none 已存在时不要臆断浏览器锚定参与补偿。
@@ -20,7 +21,7 @@
 
 ## 验证基线
 
-- `npm run verify` 本机完整通过：`test:unit` 431/431（含新增 `submap-asset-migration.test.mjs` 2 条，累计 433）；`test:regression` 全部通过；`test:docs` 覆盖 63 个源码模块、1288 个具名声明；`test:repo` 通过；production esbuild 通过，`main.js` 已重建。
+- `npm run verify` 本机完整通过：`test:unit` 432/432（含新增截图标注契约测试 1 条；子导图迁移测试 2 条）；`test:regression` 全部通过；`test:docs` 全部通过；`test:repo` 通过；production esbuild 通过，`main.js` 已重建。
 - 详细数据见根目录 `TEST_RESULTS.md`。
 
 ## 待验证事项（需真实 Obsidian 桌面端手工冒烟）
@@ -28,6 +29,7 @@
 - 提取为子导图：子树内的本地图片与上传文件被复制到子导图自己的 MindMap Assets；打开子导图图片/文件正常显示；父导图原图与图片不受影响。
 - 合并回父导图：子导图引用的本地图片/文件被复制回父导图 Mind Map Assets 并正常显示；子导图及其旧附件被回收后父导图依然自包含。
 - 重名附件迁移后在目标导图资源目录追加序号，不互相覆盖。
+- 截图标注（新）：至少在 Windows 桌面上截图，逐项确认——(a) 箭头头部为清晰三角尖（非圆形）；样式栏“箭头”组下拉选“渐粗”得到尾端到头部由细到粗的喇叭形箭头、选“直线”为纯直线；(b) 样式栏线宽滑条 1~20 拖动时箭头/文字/矩形/椭圆/笔刷随之增粗或变细；(c) 序号工具点出数字在圆圈内视觉居中（不再偏上）；(d) 选中马赛克/橡皮擦工具时样式栏带线宽滑条，拖动可改变马赛克方块与橡皮擦圆头大小。
 
 - 替换本地图片：立即显示新图、来源列表只保留“本地图片”；**阅读位置完全不动**（以图片块所在节点为锚，替换/删除来源/上传后均保持同一视口偏移，不跳位）；60 秒后旧文件进入系统回收站；替换后立即撤销则恢复旧图并取消回收。
 - 预览弹窗“本地图片”来源行右键“在文件资源管理器中打开”打开目录并选中文件。

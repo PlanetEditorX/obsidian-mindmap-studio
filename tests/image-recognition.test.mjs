@@ -437,6 +437,29 @@ test("recognition overlay keeps the complete invisible control tree so countdown
   assert.doesNotThrow(() => new Function(script));
 });
 
+test("screenshot editor exposes a sharp tapered arrow, 1-20 width slider and resizable mosaic/eraser", async () => {
+  const html = desktopCapture.captureEditorHtml(
+    { id: 1, bounds: { x: 0, y: 0, width: 1920, height: 1080 }, scaleFactor: 1 },
+    "capture"
+  );
+  // 箭头样式组新增“渐粗”（尾端到头部由细到粗）选项
+  assert.match(html, /data-line-style="tapered">渐粗/);
+  // 清晰三角尖：杆状路径在箭头基底处截断，头部为填充三角形
+  assert.match(html, /ctx\.lineCap='butt'/);
+  assert.match(html, /const head=Math\.max\(13,strokeWidth\*3\.2\),bx=b\.x-head\*dirx,by=b\.y-head\*diry/);
+  assert.match(html, /if\(lineKind==='tapered'\)\{const tail=Math\.max\(1\.2,strokeWidth\*0\.4\)/);
+  // 线宽从 1 到 20 可调，替换原先的细/中/粗三档
+  assert.match(html, /id="widthRange" min="1" max="20" step="1" value="4"/);
+  assert.match(html, /strokeWidth=Math\.max\(1,Math\.min\(20,Math\.round\(Number\(widthRange\.value\)\|\|4\)\)\)/);
+  // 马赛克与橡皮擦大小跟随线宽滑条
+  assert.match(html, /function mosaicAt\(p\)\{const size=Math\.max\(12,strokeWidth\*3\)/);
+  assert.match(html, /actx\.lineWidth=Math\.max\(8,strokeWidth\*3\)/);
+  // 序号数字向下微移实现光学居中
+  assert.match(html, /actx\.fillText\(String\(number\+\+\),rect\.x\+p\.x,rect\.y\+p\.y\+1\.5\)/);
+  const script = html.match(/<script>([\s\S]*)<\/script>/)?.[1] ?? "";
+  assert.doesNotThrow(() => new Function(script));
+});
+
 test("capture timeout rejects stalled desktop APIs instead of leaving screenshot commands pending", async () => {
   await assert.rejects(
     desktopCapture.withCaptureTimeout(new Promise(() => {}), 10, "测试抓屏"),
