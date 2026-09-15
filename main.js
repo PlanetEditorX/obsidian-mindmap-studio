@@ -27280,7 +27280,24 @@ ${uploaded.url}`, 9e3);
     targetNode.submap = void 0;
     await this.app.vault.modify(parentFile, serializeDocument(parentDoc));
     await this.app.vault.trash(submapFile, true);
+    await this.cleanupEmptySubmapAssetsFolder(submapFile);
     new import_obsidian20.Notice("\u5DF2\u5408\u5E76\u5230 " + parentFile.basename + " \u5E76\u5220\u9664\u5B50\u5BFC\u56FE");
     await this.openMindMapPath(parentFile.path, "", void 0);
+  }
+  /**
+   * 合并回父导图后，子导图引用的附件已被迁出并回收；若其资源目录因此变成空目录，
+   * 主动删除，避免留下空白目录。
+   * @param submapFile 已删除的子导图文件。
+   */
+  async cleanupEmptySubmapAssetsFolder(submapFile) {
+    var _a2, _b2;
+    const configuredFolder = (0, import_obsidian20.normalizePath)((this.settings.assetFolder || "MindMap Assets").replace(/^\/+|\/+$/g, ""));
+    const assetFolder = (0, import_obsidian20.normalizePath)([(_b2 = (_a2 = submapFile.parent) == null ? void 0 : _a2.path) != null ? _b2 : "", configuredFolder].filter(Boolean).join("/"));
+    const folder = this.app.vault.getAbstractFileByPath(assetFolder);
+    if (!(folder instanceof import_obsidian20.TFolder) || folder.children.length) return;
+    try {
+      await this.app.vault.delete(folder, false);
+    } catch (e) {
+    }
   }
 };

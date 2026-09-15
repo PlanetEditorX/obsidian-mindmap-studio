@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { after, before, test } from "node:test";
 import { loadTypeScriptModules } from "./compile-typescript.mjs";
@@ -77,4 +78,14 @@ test("submap asset migration skips remote-only images and same-path results", ()
   assert.equal(rewritten, 0);
   assert.equal(root.content[0].source, "https://cdn.example.com/a.png");
   assert.equal(root.content[1].source, "MindMap Assets/doc.pdf");
+});
+
+test("merge back deletes an emptied submap asset folder instead of leaving a blank directory", async () => {
+  const mainSource = await readFile("src/main.ts", "utf8");
+  // 合并回父导图后，子导图引用的附件迁移并回收，随即清理可能变空的资源目录
+  assert.match(mainSource, /await this\.cleanupEmptySubmapAssetsFolder\(submapFile\);/);
+  // 仅在目录存在且为空时删除，非空目录保留，避免误删其它文件
+  assert.match(mainSource, /if \(!\(folder instanceof TFolder\) \|\| folder\.children\.length\) return;/);
+  assert.match(mainSource, /private async cleanupEmptySubmapAssetsFolder\(submapFile: TFile\)/);
+  assert.match(mainSource, /assetFolder \|\| "MindMap Assets"/);
 });

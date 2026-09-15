@@ -3542,7 +3542,25 @@ export default class MindMapStudioPlugin extends Plugin {
     (targetNode as MindMapNode).submap = undefined;
     await this.app.vault.modify(parentFile, serializeDocument(parentDoc));
     await this.app.vault.trash(submapFile, true);
+    await this.cleanupEmptySubmapAssetsFolder(submapFile);
     new Notice("已合并到 " + parentFile.basename + " 并删除子导图");
     await this.openMindMapPath(parentFile.path, "", undefined);
+  }
+
+  /**
+   * 合并回父导图后，子导图引用的附件已被迁出并回收；若其资源目录因此变成空目录，
+   * 主动删除，避免留下空白目录。
+   * @param submapFile 已删除的子导图文件。
+   */
+  private async cleanupEmptySubmapAssetsFolder(submapFile: TFile): Promise<void> {
+    const configuredFolder = normalizePath((this.settings.assetFolder || "MindMap Assets").replace(/^\/+|\/+$/g, ""));
+    const assetFolder = normalizePath([submapFile.parent?.path ?? "", configuredFolder].filter(Boolean).join("/"));
+    const folder = this.app.vault.getAbstractFileByPath(assetFolder);
+    if (!(folder instanceof TFolder) || folder.children.length) return;
+    try {
+      await this.app.vault.delete(folder, false);
+    } catch {
+      // 空目录删除失败时静默忽略，不阻塞合并流程。
+    }
   }
 }
