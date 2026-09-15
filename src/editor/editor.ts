@@ -389,7 +389,7 @@ export class MindMapEditor {
     // Avoid a redundant synchronous whole-tree layout before article/outline/reading can paint.
     this.layout = { nodes: [], byId: new Map(), minX: 0, maxX: 0, minY: 0, maxY: 0 };
     this.buildUi();
-    this.rootEl.addClass("mmc-ctrl-resize");
+    this.rootEl.addClass("mmc-shift-resize");
     this.render();
     this.playPageEnterTransition();
     this.restoreReadingLocation(this.currentMode, this.lastReadingLocation);
@@ -1831,11 +1831,11 @@ export class MindMapEditor {
     this.rootEl.addEventListener("keydown", keydown, true);
     // Keep the resize affordance in sync with the live modifier state. Keyup
     // can be lost when the app window blurs, so pointer events and blur also
-    // clear stale Ctrl/Cmd state.
+    // clear stale Shift state.
     const syncResizeModifier = (trackEvent: KeyboardEvent | PointerEvent): void => {
-      this.rootEl.toggleClass("is-ctrl-held", trackEvent.ctrlKey || trackEvent.metaKey);
+      this.rootEl.toggleClass("is-shift-held", trackEvent.shiftKey);
     };
-    const clearResizeModifier = (): void => this.rootEl.removeClass("is-ctrl-held");
+    const clearResizeModifier = (): void => this.rootEl.removeClass("is-shift-held");
     document.addEventListener("keydown", syncResizeModifier);
     document.addEventListener("keyup", syncResizeModifier);
     this.rootEl.addEventListener("pointermove", syncResizeModifier, true);
@@ -1920,7 +1920,7 @@ export class MindMapEditor {
         }
         return;
       }
-      if (event.button === 0 && event.shiftKey) {
+      if (event.button === 0 && (event.ctrlKey || event.metaKey)) {
         const viewportRect = this.viewportEl.getBoundingClientRect();
         const startX = event.clientX - viewportRect.left;
         const startY = event.clientY - viewportRect.top;

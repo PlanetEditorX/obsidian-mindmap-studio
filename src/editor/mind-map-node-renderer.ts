@@ -332,13 +332,13 @@ export function renderMindMapNode(
     });
     resizeHandle.setAttr("draggable", "false");
     resizeHandle.addEventListener("click", (event) => {
-      if (!event.ctrlKey && !event.metaKey) return;
+      if (!event.shiftKey) return;
       event.preventDefault();
       event.stopPropagation();
     });
     resizeHandle.addEventListener("dblclick", (event) => {
       if (ctx.readOnly) return;
-      if (!event.ctrlKey && !event.metaKey) return;
+      if (!event.shiftKey) return;
       event.preventDefault();
       event.stopPropagation();
       ctx.mutateWithoutArticleContext(() => {
@@ -349,7 +349,7 @@ export function renderMindMapNode(
     resizeHandle.addEventListener("pointerdown", (event) => {
       if (ctx.readOnly) return;
       if (event.button !== 0) return;
-      if (!event.ctrlKey && !event.metaKey) return;
+      if (!event.shiftKey) return;
       event.preventDefault();
       event.stopPropagation();
       const startX = event.clientX;
@@ -389,7 +389,7 @@ export function renderMindMapNode(
 
   nodeEl.addEventListener("click", (event) => {
     event.stopPropagation();
-    if (event.shiftKey) {
+    if (event.ctrlKey || event.metaKey) {
       ctx.toggleNodeSelection(node.id);
       return;
     }

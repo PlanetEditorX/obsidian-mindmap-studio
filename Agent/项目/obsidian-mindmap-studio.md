@@ -4,9 +4,10 @@
 - 版本基线：1.51.5（线上 1.51.0 已发布；工作区提交基线 v1.51.3：节点锚点来源变更恢复；本轮工作区：子导图提取/合并迁移本地图片与上传文件（含 60 秒延迟回收）＋截图标注工具增强（箭头/线宽/序号/橡皮擦））。
 - 仓库规则：见根目录 `AGENTS.md`；每轮代码交付三份 ZIP（源码 / 安装 / Agent 交接）共用同一六位后缀；验证入口 `npm run verify`。
 
-## 当前状态（本轮：导图行内编辑提交后键盘失焦修复）
+## 当前状态（本轮：Ctrl/Shift 对调——多选改 Ctrl、缩放手柄改 Shift）
 
-- 行内编辑回车提交后键盘捷径失效（应用户日志反馈）：导图节点行内编辑完成按回车/Esc 提交时，`editor.blur()` 无 `relatedTarget`，DOM 焦点落到 `<body>`；而全局 `handleKeydown` 以 capture 绑定在 `rootEl` 上，焦点在 `body`（rootEl 之外）时后续按键根本不进入 `rootEl`，表现为“回车无反应、像失焦、节点外残留蓝色选中遮罩、Tab 原生跳到第一个兄弟节点内容块拖动悬浮图标、再按 Tab/回车又回到原节点执行对应操作”。修复：在 `beginInlineEdit` 的失焦提交清理末尾，当 `currentMode === "mindmap"` 且提交为程序性失焦（`!related`）时调用 `rootEl.focus({ preventScroll: true })` 把焦点拉回编辑器根，global mind-map 快捷键恢复；真实点击（带 `relatedTarget`）不回抢焦点。契约测试 `tests/node-creation-focus.test.mjs` 新增“Enter/Escape commit restores DOM focus to the mind-map editor root”。
+- 按键对调（应用户反馈，对齐业界惯例）：此前导图多选固定用 `Shift`（节点 `Shift+点击` 切换选中、空白 `Shift+拖拽` 框选矩形），节点尺寸缩放手柄固定用 `Ctrl/Cmd`。本轮把二者对调：多选统一为 `Ctrl/Cmd` 点击切换 + 空白 `Ctrl/Cmd` 拖拽框选（`el ctrlKey || metaKey`）；尺寸缩放手柄改为按住 `Shift` 悬停显示并拖拽（renderer 的 pointerdown/dblclick/click 守卫与 editor 的 `syncResizeModifier`、CSS 类 `mmc-ctrl-resize`/`is-ctrl-held` 全部改名为 `mmc-shift-resize`/`is-shift-held`）。未采用“裸左键框选”方案，以免与空白拖拽平移冲突。契约更新：`scripts/test.mjs` 多选/尺寸修饰键断言、`tests/settings-layout.test.mjs` resize 修饰键断言；文档同步 `SPECIAL_FEATURES.md`/`ARCHITECTURE.md`/`TESTING.md`。
+- 接上一轮：导图行内编辑回车提交后键盘失焦修复 —— `beginInlineEdit` 失焦提交清理末尾，mindmap + `!related`（回车/Esc 程序性失焦）时 `rootEl.focus({ preventScroll: true })` 拉回焦点，global `handleKeydown`（绑定 rootEl capture）恢复；真实点击不抢焦点。契约测试 `tests/node-creation-focus.test.mjs` 新增 Enter/Esc 提交回拉。
 - 截图标注工具增强（应用户 5 点反馈，均在 `desktop-capture.ts` 内嵌编辑器）：(1) 箭头头部从圆形改为清晰三角尖——杆状路径在箭头基底 `bx,by` 处截断（`lineCap='butt'`），头部用填充三角形画到尖点，不再被圆头线段遮成圆点；(2) 箭头样式组新增“渐粗”喇叭形（`line-style=tapered`），自尾端到头部由细到粗的实心锥体，另保留原“箭头/直线”；(3) 线宽从“细/中/粗”三档改为 1~20 滑条（`#widthRange` + 数值标签），画布箭头/文字/矩形/椭圆/笔刷共用；(4) 序号数字 `textBaseline='middle'` 基础上向下微移 1.5px 实现光学居中；(5) 马赛克与橡皮擦大小跟随线宽滑条（此前橡皮擦固定、马赛克固定 32，且样式栏对马赛克/橡皮擦工具不显示，现 `setTool` 把二者纳入样式栏显示、`mosaicAt` size=strokeWidth*3、橡皮擦 lineWidth=max(8,strokeWidth*3)）。契约测试 `image-recognition.test.mjs` 新增“sharp tapered arrow, 1-20 width slider and resizable mosaic/eraser”。
 - 子导图提取/合并迁移附件（应用户反馈）：“提取为子导图”与“合并回去”之前，导图引用的本地图片与上传文件都不迁移，文件仍留在原导图 MindMap Assets、引用原样保留，子导图依赖父导图附件。本轮修复：新增纯逻辑助手 `migrateLocalAssetBlocks()`（core/model，遍历内容块，把本地图片块与文件块迁移到新仓库路径并改写权威引用，`localSource`/`source` 同步、文件改 `source`，远程图床 URL 与 `remoteSources` 不迁移），并由 main.ts 的 `migrateSubmapAssets()` 复用 `copyImportedMarkdownImages` 的命名去重（重名追加序号）+ 批量复制（串行复制、全部成功后再按需回收）。提取时（`extractToSubmap`）：从父导图复制到子导图自己的 MindMap Assets 并改写子导图引用，父导图原图保留，`main.js` 重写后写回子导图文件，子导图完全自包含。合并时（`mergeFromSubmap`）：把子导图引用的本地图片/文件复制回父导图自己的 MindMap Assets 并改写引用，随后删除子导图时旧附件一并回收，父导图保持独立。专项测试 `tests/submap-asset-migration.test.mjs` 锁定“本地图片+文件+远程图混合节点正确迁移、远程 URL 不受影响、同路径/空解析跳过”。
 - 子导图合并回父导图（应用户反馈）：合并完成后若子导图资源目录已因附件迁出+回收而清空，调用 `cleanupEmptySubmapAssetsFolder(submapFile)` 在目录空时才删除，非空目录保留、失败静默；重名附件序号改为连字符（`a-2.png`）而非空格（`a 2.png`，提取后 1 分钟内合并回主图时主图原图未回收会触发撞名所致）。
@@ -23,11 +24,13 @@
 
 ## 验证基线
 
-- `npm run verify` 本机完整通过：`test:unit` 433/433（含新增行内编辑提交失焦回拉契约测试 1 条；下行的小计沿用既有计数值）；`test:regression` 全部通过；`test:docs` 全部通过；`test:repo` 通过；production esbuild 通过。
+- `npm run verify` 本机完整通过：`test:unit` 433/433、`test:regression` 全部通过（含 Ctrl/Shift 对调后的多选与尺寸修饰键契约）、`test:docs` 全部通过、`test:repo` 通过、production esbuild 通过。
 - 详细数据见根目录 `TEST_RESULTS.md`。
 
 ## 待验证事项（需真实 Obsidian 桌面端手工冒烟）
 
+- 多选改 Ctrl/Cmd：按住 Ctrl（macOS Cmd）+点击节点逐个切换选中/取消；空白处按住 Ctrl+拖拽出现框选矩形、覆盖的节点被选中；macOS 下 Cmd+点击不被当作右键菜单。
+- 缩放开 Shift：按住 Shift 悬停节点右下角才显示尺寸控制点并拖拽；常规点击/双击节点不再误触缩放；缩放手柄的双击恢复自动大小仍需按住 Shift；切窗松开 Shift 后手柄立即隐藏。
 - 行内编辑提交后键盘恢复：导图模式下双击节点编辑文字 → 回车提交 → 再按回车应新增兄弟节点、按 Tab 应新增子节点（不再“无反应/焦点丢失/原生 Tab 跳到拖动图标”）；按 Esc 取消后同样恢复；编辑后点击空白或其它节点提交不应被强行拉回编辑框。
 - 提取为子导图：子树内的本地图片与上传文件被复制到子导图自己的 MindMap Assets；打开子导图图片/文件正常显示；父导图原图与图片不受影响。
 - 合并回父导图：子导图引用的本地图片/文件被复制回父导图 Mind Map Assets 并正常显示；子导图及其旧附件被回收后父导图依然自包含。

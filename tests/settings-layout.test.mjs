@@ -98,13 +98,13 @@ test("settings sections default closed and persist only the user's expanded list
 });
 
 test("node resize modifier is synchronized from live events and cannot swallow normal clicks", () => {
-  assert.match(editorSource, /const syncResizeModifier = \(trackEvent: KeyboardEvent \| PointerEvent\): void => \{[\s\S]*trackEvent\.ctrlKey \|\| trackEvent\.metaKey/);
+  assert.match(editorSource, /const syncResizeModifier = \(trackEvent: KeyboardEvent \| PointerEvent\): void => \{[\s\S]*trackEvent\.shiftKey/);
   assert.match(editorSource, /this\.rootEl\.addEventListener\("pointermove", syncResizeModifier, true\)/);
   assert.match(editorSource, /window\.addEventListener\("blur", clearResizeModifier\)/);
   assert.match(editorSource, /document\.addEventListener\("visibilitychange", clearResizeModifier\)/);
   const resizeHandle = editorSource.match(/const resizeHandle = nodeEl\.createDiv\([\s\S]*?resizeHandle\.addEventListener\("pointerdown"/)?.[0] ?? "";
-  assert.match(resizeHandle, /resizeHandle\.addEventListener\("click", \(event\) => \{\s*if \(!event\.ctrlKey && !event\.metaKey\) return;/);
-  assert.match(resizeHandle, /resizeHandle\.addEventListener\("dblclick", \(event\) => \{\s*if \((?:this|ctx)\.readOnly\) return;\s*if \(!event\.ctrlKey && !event\.metaKey\) return;/);
+  assert.match(resizeHandle, /resizeHandle\.addEventListener\("click", \(event\) => \{\s*if \(!event\.shiftKey\) return;/);
+  assert.match(resizeHandle, /resizeHandle\.addEventListener\("dblclick", \(event\) => \{\s*if \((?:this|ctx)\.readOnly\) return;\s*if \(!event\.shiftKey\) return;/);
 });
 
 test("branch appearance is a normalized global setting and appearance fallback", () => {

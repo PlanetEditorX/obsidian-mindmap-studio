@@ -10788,13 +10788,13 @@ function renderMindMapNode(ctx, position, appearance, branchColorMap) {
     });
     resizeHandle.setAttr("draggable", "false");
     resizeHandle.addEventListener("click", (event) => {
-      if (!event.ctrlKey && !event.metaKey) return;
+      if (!event.shiftKey) return;
       event.preventDefault();
       event.stopPropagation();
     });
     resizeHandle.addEventListener("dblclick", (event) => {
       if (ctx.readOnly) return;
-      if (!event.ctrlKey && !event.metaKey) return;
+      if (!event.shiftKey) return;
       event.preventDefault();
       event.stopPropagation();
       ctx.mutateWithoutArticleContext(() => {
@@ -10806,7 +10806,7 @@ function renderMindMapNode(ctx, position, appearance, branchColorMap) {
     resizeHandle.addEventListener("pointerdown", (event) => {
       if (ctx.readOnly) return;
       if (event.button !== 0) return;
-      if (!event.ctrlKey && !event.metaKey) return;
+      if (!event.shiftKey) return;
       event.preventDefault();
       event.stopPropagation();
       const startX = event.clientX;
@@ -10847,7 +10847,7 @@ function renderMindMapNode(ctx, position, appearance, branchColorMap) {
   nodeEl.addEventListener("click", (event) => {
     var _a3;
     event.stopPropagation();
-    if (event.shiftKey) {
+    if (event.ctrlKey || event.metaKey) {
       ctx.toggleNodeSelection(node.id);
       return;
     }
@@ -12753,7 +12753,7 @@ var MindMapEditor = class {
     this.selectedId = (restoredLocation == null ? void 0 : restoredLocation.filePath) === options.currentFilePath ? restoredLocation.nodeId : this.document.root.id;
     this.layout = { nodes: [], byId: /* @__PURE__ */ new Map(), minX: 0, maxX: 0, minY: 0, maxY: 0 };
     this.buildUi();
-    this.rootEl.addClass("mmc-ctrl-resize");
+    this.rootEl.addClass("mmc-shift-resize");
     this.render();
     this.playPageEnterTransition();
     this.restoreReadingLocation(this.currentMode, this.lastReadingLocation);
@@ -14051,9 +14051,9 @@ var MindMapEditor = class {
     const keydown = (event) => this.handleKeydown(event);
     this.rootEl.addEventListener("keydown", keydown, true);
     const syncResizeModifier = (trackEvent) => {
-      this.rootEl.toggleClass("is-ctrl-held", trackEvent.ctrlKey || trackEvent.metaKey);
+      this.rootEl.toggleClass("is-shift-held", trackEvent.shiftKey);
     };
-    const clearResizeModifier = () => this.rootEl.removeClass("is-ctrl-held");
+    const clearResizeModifier = () => this.rootEl.removeClass("is-shift-held");
     document.addEventListener("keydown", syncResizeModifier);
     document.addEventListener("keyup", syncResizeModifier);
     this.rootEl.addEventListener("pointermove", syncResizeModifier, true);
@@ -14135,7 +14135,7 @@ var MindMapEditor = class {
         }
         return;
       }
-      if (event.button === 0 && event.shiftKey) {
+      if (event.button === 0 && (event.ctrlKey || event.metaKey)) {
         const viewportRect = this.viewportEl.getBoundingClientRect();
         const startX = event.clientX - viewportRect.left;
         const startY = event.clientY - viewportRect.top;
