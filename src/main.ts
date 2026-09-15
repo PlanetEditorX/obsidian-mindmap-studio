@@ -3515,6 +3515,8 @@ export default class MindMapStudioPlugin extends Plugin {
    * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
    */
   async mergeFromSubmap(submapFile: TFile): Promise<void> {
+    // 子导图删除后 parent 会被 Obsidian 置空，须在 trash 前捕获其父目录路径以定位资源目录。
+    const submapDirPath = submapFile.parent?.path ?? "";
     const submapContent = await this.app.vault.read(submapFile);
     const submapDoc = parseDocument(submapContent, submapFile.basename);
     const parentPath = submapDoc.navigation?.parentPath;
@@ -3542,7 +3544,7 @@ export default class MindMapStudioPlugin extends Plugin {
     (targetNode as MindMapNode).submap = undefined;
     await this.app.vault.modify(parentFile, serializeDocument(parentDoc));
     await this.app.vault.trash(submapFile, true);
-    await this.cleanupEmptySubmapAssetsFolder(submapFile, parentFile);
+    await this.cleanupEmptySubmapAssetsFolder(submapDirPath, parentFile);
     new Notice("已合并到 " + parentFile.basename + " 并删除子导图");
     await this.openMindMapPath(parentFile.path, "", undefined);
   }
@@ -3554,28 +3556,42 @@ export default class MindMapStudioPlugin extends Plugin {
    * @param submapFile 已删除的子导图文件。
    * @param parentFile 合并目标父导图文件，用于识别主导图自己的资产根目录并停止向上清理。
    */
-  private async cleanupEmptySubmapAssetsFolder(submapFile: TFile, parentFile?: TFile): Promise<void> {
+  private async cleanupEmptySubmapAssetsFolder(submapDirPath: string, parentFile?: TFile): Promise<void> {
     const configuredFolder = normalizePath((this.settings.assetFolder || "MindMap Assets").replace(/^\/+|\/+$/g, ""));
-    const assetFolder = normalizePath([submapFile.parent?.path ?? "", configuredFolder].filter(Boolean).join("/"));
+    const assetFolder = normalizePath([submapDirPath, configuredFolder].filter(Boolean).join("/"));
     const stopAt = parentFile
       ? normalizePath([parentFile.parent?.path ?? "", configuredFolder].filter(Boolean).join("/"))
       : "";
     let currentPath = assetFolder;
     while (currentPath) {
-      if (stopAt && currentPath === stopAt) break;
+      if (stopAt && currentPath === stopAt) {
+        console.warn("[mindmap-studio] 清理空目录：到达主导图资源根目录，停止向上：", currentPath);
+        break;
+      }
       const node = this.app.vault.getAbstractFileByPath(currentPath);
-      if (!(node instanceof TFolder) || node.children.length) break;
+      if (!(node instanceof TFolder)) {
+        console.warn("[mindmap-studio] 清理空目录：路径不是文件夹或尚未建立索引，跳过：", currentPath);
+        break;
+      }
+      if (node.children.length) {
+        console.warn("[mindmap-studio] 清理空目录：目录非空不删除，剩余条目：", currentPath, node.children.map((c) => c.name));
+        break;
+      }
       const name = node.name;
+      let removed = false;
       try {
         await this.app.vault.delete(node, true);
-      } catch {
+        removed = true;
+      } catch (e1) {
+        console.warn("[mindmap-studio] vault.delete 删除空目录失败，改用 adapter.remove：", currentPath, e1);
         try {
-          // 兜底：vault.delete 对个别空目录可能静默失败；改用底层适配器直接移除（等价 rmdir，非空目录会报错，符合“仅删空目录”的语义）。
           await this.app.vault.adapter.remove(currentPath);
-        } catch {
-          break;
+          removed = true;
+        } catch (e2) {
+          console.warn("[mindmap-studio] adapter.remove 删除空目录仍失败：", currentPath, e2);
         }
       }
+      if (!removed) break;
       if (!name) break;
       const divider = currentPath.lastIndexOf("/");
       currentPath = divider <= 0 ? "" : currentPath.slice(0, divider);

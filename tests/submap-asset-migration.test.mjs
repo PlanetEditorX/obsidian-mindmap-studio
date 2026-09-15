@@ -83,10 +83,12 @@ test("submap asset migration skips remote-only images and same-path results", ()
 test("merge back deletes an emptied submap asset folder instead of leaving a blank directory", async () => {
   const mainSource = await readFile("src/main.ts", "utf8");
   // 合并回父导图后，子导图引用的附件迁移并回收，随即清理可能变空的资源目录
-  assert.match(mainSource, /await this\.cleanupEmptySubmapAssetsFolder\(submapFile, parentFile\);/);
+  assert.match(mainSource, /await this\.cleanupEmptySubmapAssetsFolder\(submapDirPath, parentFile\);/);
+  // 子导图删除后 parent 被置空，须在 trash 前捕获其父目录路径
+  assert.match(mainSource, /const submapDirPath = submapFile\.parent\?\.path \?\? "";/);
   // 仅在目录存在且为空时删除，非空目录保留，避免误删其它文件
   assert.match(mainSource, /node\.children\.length\) break;/);
-  assert.match(mainSource, /private async cleanupEmptySubmapAssetsFolder\(submapFile: TFile, parentFile\?: TFile\)/);
+  assert.match(mainSource, /private async cleanupEmptySubmapAssetsFolder\(submapDirPath: string, parentFile\?: TFile\)/);
   // 沿空目录链向上清理，并保留主导图自己的资源根目录
   assert.match(mainSource, /stopAt && currentPath === stopAt\) break;/);
   assert.match(mainSource, /assetFolder \|\| "MindMap Assets"/);

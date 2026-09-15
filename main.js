@@ -27241,10 +27241,11 @@ ${uploaded.url}`, 9e3);
    * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
    */
   async mergeFromSubmap(submapFile) {
-    var _a2;
+    var _a2, _b2, _c;
+    const submapDirPath = (_b2 = (_a2 = submapFile.parent) == null ? void 0 : _a2.path) != null ? _b2 : "";
     const submapContent = await this.app.vault.read(submapFile);
     const submapDoc = parseDocument(submapContent, submapFile.basename);
-    const parentPath = (_a2 = submapDoc.navigation) == null ? void 0 : _a2.parentPath;
+    const parentPath = (_c = submapDoc.navigation) == null ? void 0 : _c.parentPath;
     if (!parentPath) {
       new import_obsidian20.Notice("\u6B64\u5B50\u5BFC\u56FE\u6CA1\u6709\u7236\u5BFC\u56FE\u5F15\u7528\uFF0C\u65E0\u6CD5\u5408\u5E76");
       return;
@@ -27280,7 +27281,7 @@ ${uploaded.url}`, 9e3);
     targetNode.submap = void 0;
     await this.app.vault.modify(parentFile, serializeDocument(parentDoc));
     await this.app.vault.trash(submapFile, true);
-    await this.cleanupEmptySubmapAssetsFolder(submapFile, parentFile);
+    await this.cleanupEmptySubmapAssetsFolder(submapDirPath, parentFile);
     new import_obsidian20.Notice("\u5DF2\u5408\u5E76\u5230 " + parentFile.basename + " \u5E76\u5220\u9664\u5B50\u5BFC\u56FE");
     await this.openMindMapPath(parentFile.path, "", void 0);
   }
@@ -27291,26 +27292,41 @@ ${uploaded.url}`, 9e3);
    * @param submapFile 已删除的子导图文件。
    * @param parentFile 合并目标父导图文件，用于识别主导图自己的资产根目录并停止向上清理。
    */
-  async cleanupEmptySubmapAssetsFolder(submapFile, parentFile) {
-    var _a2, _b2, _c, _d;
+  async cleanupEmptySubmapAssetsFolder(submapDirPath, parentFile) {
+    var _a2, _b2;
     const configuredFolder = (0, import_obsidian20.normalizePath)((this.settings.assetFolder || "MindMap Assets").replace(/^\/+|\/+$/g, ""));
-    const assetFolder = (0, import_obsidian20.normalizePath)([(_b2 = (_a2 = submapFile.parent) == null ? void 0 : _a2.path) != null ? _b2 : "", configuredFolder].filter(Boolean).join("/"));
-    const stopAt = parentFile ? (0, import_obsidian20.normalizePath)([(_d = (_c = parentFile.parent) == null ? void 0 : _c.path) != null ? _d : "", configuredFolder].filter(Boolean).join("/")) : "";
+    const assetFolder = (0, import_obsidian20.normalizePath)([submapDirPath, configuredFolder].filter(Boolean).join("/"));
+    const stopAt = parentFile ? (0, import_obsidian20.normalizePath)([(_b2 = (_a2 = parentFile.parent) == null ? void 0 : _a2.path) != null ? _b2 : "", configuredFolder].filter(Boolean).join("/")) : "";
     let currentPath = assetFolder;
     while (currentPath) {
-      if (stopAt && currentPath === stopAt) break;
+      if (stopAt && currentPath === stopAt) {
+        console.warn("[mindmap-studio] \u6E05\u7406\u7A7A\u76EE\u5F55\uFF1A\u5230\u8FBE\u4E3B\u5BFC\u56FE\u8D44\u6E90\u6839\u76EE\u5F55\uFF0C\u505C\u6B62\u5411\u4E0A\uFF1A", currentPath);
+        break;
+      }
       const node = this.app.vault.getAbstractFileByPath(currentPath);
-      if (!(node instanceof import_obsidian20.TFolder) || node.children.length) break;
+      if (!(node instanceof import_obsidian20.TFolder)) {
+        console.warn("[mindmap-studio] \u6E05\u7406\u7A7A\u76EE\u5F55\uFF1A\u8DEF\u5F84\u4E0D\u662F\u6587\u4EF6\u5939\u6216\u5C1A\u672A\u5EFA\u7ACB\u7D22\u5F15\uFF0C\u8DF3\u8FC7\uFF1A", currentPath);
+        break;
+      }
+      if (node.children.length) {
+        console.warn("[mindmap-studio] \u6E05\u7406\u7A7A\u76EE\u5F55\uFF1A\u76EE\u5F55\u975E\u7A7A\u4E0D\u5220\u9664\uFF0C\u5269\u4F59\u6761\u76EE\uFF1A", currentPath, node.children.map((c) => c.name));
+        break;
+      }
       const name = node.name;
+      let removed = false;
       try {
         await this.app.vault.delete(node, true);
-      } catch (e) {
+        removed = true;
+      } catch (e1) {
+        console.warn("[mindmap-studio] vault.delete \u5220\u9664\u7A7A\u76EE\u5F55\u5931\u8D25\uFF0C\u6539\u7528 adapter.remove\uFF1A", currentPath, e1);
         try {
           await this.app.vault.adapter.remove(currentPath);
+          removed = true;
         } catch (e2) {
-          break;
+          console.warn("[mindmap-studio] adapter.remove \u5220\u9664\u7A7A\u76EE\u5F55\u4ECD\u5931\u8D25\uFF1A", currentPath, e2);
         }
       }
+      if (!removed) break;
       if (!name) break;
       const divider = currentPath.lastIndexOf("/");
       currentPath = divider <= 0 ? "" : currentPath.slice(0, divider);
