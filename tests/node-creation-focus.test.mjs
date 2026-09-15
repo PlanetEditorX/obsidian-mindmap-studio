@@ -25,3 +25,13 @@ test("inline editors survive the stale creating key press", () => {
   assert.ok(blurGuard, "programmatic blurs are pulled back while user clicks end editing normally");
   assert.match(editorSource, /A stale keyup from the creating Enter\/Tab press/);
 });
+
+test("Enter/Escape commit restores DOM focus to the mind-map editor root", () => {
+  // handleKeydown is bound to rootEl (capture). When an inline edit commits via
+  // blur with no relatedTarget, focus falls back to <body> and every following
+  // Enter/Tab is lost (Enter no-op, Tab runs native tab navigation). The commit
+  // path must refocus rootEl so global mind-map shortcuts resume.
+  assert.match(editorSource, /if \(this\.currentMode === "mindmap" && !related\) \{/);
+  assert.match(editorSource, /handleKeydown is bound to rootEl \(capture\)/);
+  assert.match(editorSource, /this\.rootEl\.focus\(\{ preventScroll: true \}\)/);
+});

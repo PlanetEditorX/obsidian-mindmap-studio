@@ -16763,6 +16763,10 @@ var MindMapEditor = class {
       editor.removeAttribute("role");
       editor.removeAttribute("aria-label");
       this.refreshAfterInlineTextCommit(node.id);
+      if (this.currentMode === "mindmap" && !related) {
+        this.rootEl.focus({ preventScroll: true });
+        this.callbacks.onDebugLog("editor", "inline-edit-commit-refocus", { nodeId: node.id, blockId: activeBlockId });
+      }
     });
     const focusAtEnd = () => {
       if (!document.body.contains(editor)) return;

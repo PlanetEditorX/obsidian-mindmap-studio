@@ -4763,6 +4763,15 @@ export class MindMapEditor {
       editor!.removeAttribute("role");
       editor!.removeAttribute("aria-label");
       this.refreshAfterInlineTextCommit(node.id);
+      // Enter/Escape blur the editor without a relatedTarget, leaving DOM focus
+      // on <body>. handleKeydown is bound to rootEl (capture), so keys that
+      // follow are lost (Enter no-op, Tab does native tab navigation instead of
+      // adding a node). Pull focus back onto the focusable editor root so global
+      // mind-map shortcuts resume. Never steal focus from a real click target.
+      if (this.currentMode === "mindmap" && !related) {
+        this.rootEl.focus({ preventScroll: true });
+        this.callbacks.onDebugLog("editor", "inline-edit-commit-refocus", { nodeId: node.id, blockId: activeBlockId });
+      }
     });
     const focusAtEnd = (): void => {
       if (!document.body.contains(editor!)) return;
