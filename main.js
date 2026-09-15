@@ -27303,9 +27303,13 @@ ${uploaded.url}`, 9e3);
       if (!(node instanceof import_obsidian20.TFolder) || node.children.length) break;
       const name = node.name;
       try {
-        await this.app.vault.delete(node, false);
+        await this.app.vault.delete(node, true);
       } catch (e) {
-        break;
+        try {
+          await this.app.vault.adapter.remove(currentPath);
+        } catch (e2) {
+          break;
+        }
       }
       if (!name) break;
       const divider = currentPath.lastIndexOf("/");

@@ -3567,9 +3567,14 @@ export default class MindMapStudioPlugin extends Plugin {
       if (!(node instanceof TFolder) || node.children.length) break;
       const name = node.name;
       try {
-        await this.app.vault.delete(node, false);
+        await this.app.vault.delete(node, true);
       } catch {
-        break;
+        try {
+          // 兜底：vault.delete 对个别空目录可能静默失败；改用底层适配器直接移除（等价 rmdir，非空目录会报错，符合“仅删空目录”的语义）。
+          await this.app.vault.adapter.remove(currentPath);
+        } catch {
+          break;
+        }
       }
       if (!name) break;
       const divider = currentPath.lastIndexOf("/");
