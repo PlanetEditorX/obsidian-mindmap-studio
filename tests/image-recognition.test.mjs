@@ -437,17 +437,17 @@ test("recognition overlay keeps the complete invisible control tree so countdown
   assert.doesNotThrow(() => new Function(script));
 });
 
-test("screenshot editor exposes a sharp tapered arrow, 1-20 width slider and resizable mosaic/eraser", async () => {
+test("screenshot editor exposes a sharp triangular arrow, 1-20 width slider and resizable mosaic/eraser", async () => {
   const html = desktopCapture.captureEditorHtml(
     { id: 1, bounds: { x: 0, y: 0, width: 1920, height: 1080 }, scaleFactor: 1 },
     "capture"
   );
-  // 箭头样式组新增“渐粗”（尾端到头部由细到粗）选项
-  assert.match(html, /data-line-style="tapered">渐粗/);
+  // 箭头保留“箭头/直线”两种样式，无渐粗
+  assert.doesNotMatch(html, /data-line-style="tapered"/);
+  assert.doesNotMatch(html, /lineKind==='tapered'/);
   // 清晰三角尖：杆状路径在箭头基底处截断，头部为填充三角形
   assert.match(html, /ctx\.lineCap='butt'/);
   assert.match(html, /const head=Math\.max\(13,strokeWidth\*3\.2\),bx=b\.x-head\*dirx,by=b\.y-head\*diry/);
-  assert.match(html, /if\(lineKind==='tapered'\)\{const tail=Math\.max\(1\.2,strokeWidth\*0\.4\)/);
   // 线宽从 1 到 20 可调，替换原先的细/中/粗三档
   assert.match(html, /id="widthRange" min="1" max="20" step="1" value="4"/);
   assert.match(html, /strokeWidth=Math\.max\(1,Math\.min\(20,Math\.round\(Number\(widthRange\.value\)\|\|4\)\)\)/);
