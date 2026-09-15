@@ -3411,7 +3411,8 @@ export default class MindMapStudioPlugin extends Plugin {
    * 将指定节点及其后代提取为独立子导图文件。
    *
    * 提取时会同步把该子树引用的本地图片与上传文件块迁移到子导图自己的资源目录并改写引用，
-   * 使子导图完全独立，不再依赖父导图的附件。
+   * 使子导图完全独立；父导图子树被移除后，原附件不再被引用，登记 60 秒延迟安全回收，
+   * 避免与子导图副本重复并存。
    *
    * @param parentFile 当前父导图文件。
    * @param node 要提取的节点（及其后代）。
@@ -3424,7 +3425,12 @@ export default class MindMapStudioPlugin extends Plugin {
     const submapFile = this.app.vault.getAbstractFileByPath(normalizePath(submap.path));
     if (submapFile instanceof TFile) {
       const migrated = await this.migrateSubmapAssets(document, submapFile, false);
-      if (migrated.length) await this.app.vault.modify(submapFile, serializeDocument(document));
+      if (migrated.length) {
+        await this.app.vault.modify(submapFile, serializeDocument(document));
+        // 父导图子树随后被替换为子导图入口，原附件不再被引用，延迟 60 秒安全回收。
+        // 延迟窗口内撤销会取消任务；到期仍带全库引用检查兜底。
+        this.scheduleFileAssetDeletion(migrated, parentFile.path);
+      }
     }
     return submap;
   }
