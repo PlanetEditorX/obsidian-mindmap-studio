@@ -27280,24 +27280,36 @@ ${uploaded.url}`, 9e3);
     targetNode.submap = void 0;
     await this.app.vault.modify(parentFile, serializeDocument(parentDoc));
     await this.app.vault.trash(submapFile, true);
-    await this.cleanupEmptySubmapAssetsFolder(submapFile);
+    await this.cleanupEmptySubmapAssetsFolder(submapFile, parentFile);
     new import_obsidian20.Notice("\u5DF2\u5408\u5E76\u5230 " + parentFile.basename + " \u5E76\u5220\u9664\u5B50\u5BFC\u56FE");
     await this.openMindMapPath(parentFile.path, "", void 0);
   }
   /**
    * 合并回父导图后，子导图引用的附件已被迁出并回收；若其资源目录因此变成空目录，
-   * 主动删除，避免留下空白目录。
+   * 主动删除。嵌套场景下（子导图被保存在主图资产目录内的子目录等）会沿空目录链向上
+   * 继续清理，保留主导图自己的资源根目录以免误删。
    * @param submapFile 已删除的子导图文件。
+   * @param parentFile 合并目标父导图文件，用于识别主导图自己的资产根目录并停止向上清理。
    */
-  async cleanupEmptySubmapAssetsFolder(submapFile) {
-    var _a2, _b2;
+  async cleanupEmptySubmapAssetsFolder(submapFile, parentFile) {
+    var _a2, _b2, _c, _d;
     const configuredFolder = (0, import_obsidian20.normalizePath)((this.settings.assetFolder || "MindMap Assets").replace(/^\/+|\/+$/g, ""));
     const assetFolder = (0, import_obsidian20.normalizePath)([(_b2 = (_a2 = submapFile.parent) == null ? void 0 : _a2.path) != null ? _b2 : "", configuredFolder].filter(Boolean).join("/"));
-    const folder = this.app.vault.getAbstractFileByPath(assetFolder);
-    if (!(folder instanceof import_obsidian20.TFolder) || folder.children.length) return;
-    try {
-      await this.app.vault.delete(folder, false);
-    } catch (e) {
+    const stopAt = parentFile ? (0, import_obsidian20.normalizePath)([(_d = (_c = parentFile.parent) == null ? void 0 : _c.path) != null ? _d : "", configuredFolder].filter(Boolean).join("/")) : "";
+    let currentPath = assetFolder;
+    while (currentPath) {
+      if (stopAt && currentPath === stopAt) break;
+      const node = this.app.vault.getAbstractFileByPath(currentPath);
+      if (!(node instanceof import_obsidian20.TFolder) || node.children.length) break;
+      const name = node.name;
+      try {
+        await this.app.vault.delete(node, false);
+      } catch (e) {
+        break;
+      }
+      if (!name) break;
+      const divider = currentPath.lastIndexOf("/");
+      currentPath = divider <= 0 ? "" : currentPath.slice(0, divider);
     }
   }
 };

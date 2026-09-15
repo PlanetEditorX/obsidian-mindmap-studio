@@ -3542,25 +3542,38 @@ export default class MindMapStudioPlugin extends Plugin {
     (targetNode as MindMapNode).submap = undefined;
     await this.app.vault.modify(parentFile, serializeDocument(parentDoc));
     await this.app.vault.trash(submapFile, true);
-    await this.cleanupEmptySubmapAssetsFolder(submapFile);
+    await this.cleanupEmptySubmapAssetsFolder(submapFile, parentFile);
     new Notice("已合并到 " + parentFile.basename + " 并删除子导图");
     await this.openMindMapPath(parentFile.path, "", undefined);
   }
 
   /**
    * 合并回父导图后，子导图引用的附件已被迁出并回收；若其资源目录因此变成空目录，
-   * 主动删除，避免留下空白目录。
+   * 主动删除。嵌套场景下（子导图被保存在主图资产目录内的子目录等）会沿空目录链向上
+   * 继续清理，保留主导图自己的资源根目录以免误删。
    * @param submapFile 已删除的子导图文件。
+   * @param parentFile 合并目标父导图文件，用于识别主导图自己的资产根目录并停止向上清理。
    */
-  private async cleanupEmptySubmapAssetsFolder(submapFile: TFile): Promise<void> {
+  private async cleanupEmptySubmapAssetsFolder(submapFile: TFile, parentFile?: TFile): Promise<void> {
     const configuredFolder = normalizePath((this.settings.assetFolder || "MindMap Assets").replace(/^\/+|\/+$/g, ""));
     const assetFolder = normalizePath([submapFile.parent?.path ?? "", configuredFolder].filter(Boolean).join("/"));
-    const folder = this.app.vault.getAbstractFileByPath(assetFolder);
-    if (!(folder instanceof TFolder) || folder.children.length) return;
-    try {
-      await this.app.vault.delete(folder, false);
-    } catch {
-      // 空目录删除失败时静默忽略，不阻塞合并流程。
+    const stopAt = parentFile
+      ? normalizePath([parentFile.parent?.path ?? "", configuredFolder].filter(Boolean).join("/"))
+      : "";
+    let currentPath = assetFolder;
+    while (currentPath) {
+      if (stopAt && currentPath === stopAt) break;
+      const node = this.app.vault.getAbstractFileByPath(currentPath);
+      if (!(node instanceof TFolder) || node.children.length) break;
+      const name = node.name;
+      try {
+        await this.app.vault.delete(node, false);
+      } catch {
+        break;
+      }
+      if (!name) break;
+      const divider = currentPath.lastIndexOf("/");
+      currentPath = divider <= 0 ? "" : currentPath.slice(0, divider);
     }
   }
 }
