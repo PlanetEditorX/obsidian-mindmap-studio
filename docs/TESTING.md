@@ -243,7 +243,7 @@ GitHub Actions 和 GitLab CI 均从干净检出开始执行 `npm ci` 与 `npm ru
 
 ### 图片来源管理与弹窗宽度
 
-`tests/image-source-candidates.test.mjs` 覆盖图片级来源优先级（`sourcePriority`）排序覆盖全局图床优先级、优先级规范化（去空白/去重/16 条上限）、来源移除后默认显示接任与优先级裁剪、无剩余来源返回 null（调用方删除整个图片块）、手动 URL 来源条目校验（仅 http(s)、长度上限）、默认来源置顶，以及图片预览弹窗来源管理（右键“设为默认显示来源 / 更新上传 / 删除此来源”、同行手动添加 URL 输入、变更后刷新来源栏、图片块删除后关窗）与编辑器统一历史链路接线（`openImagePreviewWithSources` / `applyImagePreviewSourceChange` / 冻结快照上传 / `removeImageBlock` 远程清理）的源码契约。弹窗宽度档位（`--mms-modal-md / lg / xl`）及 AI、题目、表格、代码、搜索、外观、图片预览、识图预览的归档由 `tests/image-layout.test.mjs`、`tests/settings-layout.test.mjs` 与来源契约共同锁定。真实图床上传、远程删除与手动来源 URL 的实际加载仍属手动冒烟。
+`tests/image-source-candidates.test.mjs` 覆盖图片级来源优先级（`sourcePriority`）排序覆盖全局图床优先级、优先级规范化（去空白/去重/16 条上限）、来源移除后默认显示接任与优先级裁剪、无剩余来源返回 null（调用方局部删除整个图片块）、手动 URL 来源条目校验（仅 http(s)、长度上限）、默认来源置顶，以及图片预览弹窗来源管理（右键“设为默认显示来源 / 更新上传 / 删除此来源”、同行手动添加 URL 输入、变更后刷新来源栏、图片块删除后关窗）与编辑器统一历史链路接线。`tests/file-block.test.mjs` 额外锁定来源变更必须走 `commitImagePreviewSourceChange()` / `refreshImagePreviewSourceDom()` 局部刷新而不是整页 `render()`，并锁定文章像素恢复目标直到 window warmup 真正完成后才允许释放。弹窗宽度档位（`--mms-modal-md / lg / xl`）及 AI、题目、表格、代码、搜索、外观、图片预览、识图预览的归档由 `tests/image-layout.test.mjs`、`tests/settings-layout.test.mjs` 与来源契约共同锁定。真实图床上传、远程删除与手动来源 URL 的实际加载仍属手动冒烟。
 
 ### 图片失败、粘贴目标与批量自动上传
 

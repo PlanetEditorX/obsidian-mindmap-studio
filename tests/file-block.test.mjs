@@ -146,32 +146,43 @@ test("image local copies reveal in the system file explorer with selection", () 
   assert.ok(requireFn, "electron must be acquired lazily to keep mobile loading safe");
 });
 
-test("image preview source changes restore the pixel scroll instead of semantic location", () => {
-  // 来源变更（替换/上传/设默认/删除来源）会触发文章窗口全量重建；warmup 期间节点高度
-  // 不准使语义恢复偏离真实位置（restore-target-applied targetHeight 0）。所有来源变更
-  // 必须置位 suppressNextArticleSemanticRestore，让渲染走像素 scrollTop 恢复分支。
+test("image preview source changes update only the affected image block", () => {
   const changeBody = editorSource.match(/private async applyImagePreviewSourceChange\([\s\S]*?\n  \}/)?.[0] ?? "";
-  const flags = (changeBody.match(/this\.suppressNextArticleSemanticRestore = true;/g) ?? []).length;
-  assert.ok(flags >= 6, `reupload plus add/replaceLocal/unsetDefault/setDefault/remove branches must suppress semantic restore (found ${flags})`);
-  const renderWindow = editorSource.match(/const suppressSemanticRestore = this\.suppressNextArticleSemanticRestore;[\s\S]{0,1200}?this\.scheduleArticleWindowWarmup\(\);/)?.[0] ?? "";
-  assert.match(renderWindow, /const location = suppressSemanticRestore \? null : \(latestRequestedLocation \?\? previousLocation/, "suppressed renders must fall through to the pixel-scroll branch");
-  // 来源变更会重建文章窗口：重建先把 scrollHeight 压到极小、浏览器把 scrollTop 钳制到顶部，
-  // 此时（renderWindow 内）读取 previousScroll.top 只见已塌缩的错误值。必须在重建发生前（source
-  // change 入口）捕获真实 scrollTop，重渲染后以它为硬钉目标，warmup 按 min(target, maxScroll) 爬升回位。
-  assert.match(changeBody, /this\.captureArticleNodeAnchor\(nodeId\);/);
-  assert.match(editorSource, /private captureArticleNodeAnchor\(nodeId: string\): void \{[\s\S]{0,1200}?this\.pendingArticlePixelRestoreTop = top;/, "the source-change entry must capture the true pre-rebuild scrollTop before any render");
-  assert.match(renderWindow, /else if \(this\.articleNodeAnchorScroll !== null\) \{/, "source-change renders must restore the captured pre-rebuild scroll as the pin target");
-  assert.match(renderWindow, /this\.pendingArticlePixelRestoreTop = this\.articleNodeAnchorScroll;/, "the pinned target must be the pre-rebuild scroll, not the collapsed post-rebuild scroll");
-  assert.match(renderWindow, /this\.pendingArticlePixelRestoreTop = previousScroll\.top;/, "pixel restore must record the pre-render scrollTop as a pin target");
-  // warmup 分帧必须钉住目标而不是按帧累计：窗口重建把 scrollTop 钳制到远小于原位，
-  // 累计补偿只能加回插入高度、补不回钳制差额，最终停在错误位置。
-  const warmupPin = editorSource.match(/if \(this\.pendingArticlePixelRestoreTop !== null\) \{[\s\S]{0,400}?this\.pendingArticlePixelRestoreTop = null;/);
-  assert.ok(warmupPin, "warmup must pin the scroll to the recorded target each frame");
-  assert.match(warmupPin?.[0] ?? "", /Math\.min\(target, maxScroll\)/, "the pin must clamp until content catches up, then land exactly");
-  // warmup 完成后仍可能有程序性滚动改动位置（用户日志 seq 182：complete 后 48ms 从 17956 跳到 19632），
-  // 需要 capture 阶段 guard 压制到目标并稳定两拍后才解除。
-  assert.match(editorSource, /private startArticlePixelRestoreGuard\(target: number\): void \{[\s\S]*?addEventListener\("scroll", guard, true\)/, "a capture-phase guard must suppress post-warmup programmatic scrolls");
-  assert.match(editorSource, /this\.pendingArticlePixelRestoreTop = previousScroll\.top;[\s\S]{0,200}?this\.startArticlePixelRestoreGuard\(previousScroll\.top\);/);
+  const commitBody = editorSource.match(/private commitImagePreviewSourceChange\([\s\S]*?\n  \}/)?.[0] ?? "";
+  const refreshBody = editorSource.match(/private refreshImagePreviewSourceDom\([\s\S]*?\n  \}/)?.[0] ?? "";
+
+  assert.doesNotMatch(changeBody, /this\.render\(\)/, "preview source changes must not rebuild the whole active view");
+  assert.doesNotMatch(changeBody, /suppressNextArticleSemanticRestore|captureArticleNodeAnchor/, "source changes no longer need full-render scroll recovery flags");
+  assert.match(changeBody, /this\.commitImagePreviewSourceChange\(nodeId, blockId,/);
+  assert.match(changeBody, /await this\.removeImageBlock\(nodeId, blockId, true\)/, "removing the last source must also use the local-refresh path");
+
+  assert.match(commitBody, /this\.captureHistorySnapshot\(\)/, "local refresh must keep the normal undo history path");
+  assert.match(commitBody, /this\.history\.captureSnapshot\(previousSnapshot\)/, "async re-upload keeps its frozen pre-upload history snapshot");
+  assert.match(commitBody, /this\.notifyDocumentChange\("none"\)/);
+  assert.match(commitBody, /this\.markSaving\(\)/);
+  assert.match(commitBody, /this\.refreshImagePreviewSourceDom\(nodeId, blockId\)/);
+  assert.doesNotMatch(commitBody, /this\.render\(\)/, "source-only commit must preserve the article DOM and image load state");
+
+  assert.match(refreshBody, /this\.refreshMindMapNode\(nodeId\)/, "mind-map mode may redraw only the affected node");
+  assert.match(refreshBody, /mms-article-content-block\[data-block-id=/, "article/reading refresh must target only the matching image shell");
+  assert.match(refreshBody, /mms-outline-image\[data-block-id=/, "outline refresh must target only the matching image figure");
+  assert.match(refreshBody, /loadImageWithFallback\(/, "the refreshed image must keep the normal source failover loader");
+  assert.match(refreshBody, /cloneNode\(false\)/, "source refresh should retain the current image element state until the replacement source takes over");
+});
+
+test("article pixel restore stays pinned until warmup really completes", () => {
+  const warmup = editorSource.match(/private scheduleArticleWindowWarmup\(\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
+  const guard = editorSource.match(/private startArticlePixelRestoreGuard\(target: number\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
+  const finish = editorSource.match(/private finishArticlePixelRestoreGuard\(\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
+
+  assert.match(warmup, /this\.articleEl\.scrollTop = Math\.min\(target, maxScroll\)/, "every prepend frame must stay pinned to the recorded pixel target");
+  assert.doesNotMatch(warmup, /scrollTop >= target[\s\S]{0,80}pendingArticlePixelRestoreTop = null/, "an intermediate warmup frame must not release the pin");
+  assert.match(warmup, /window-warmup-complete[\s\S]*this\.finishArticlePixelRestoreGuard\(\)/, "release starts only after all before/after chunks are loaded");
+  assert.match(guard, /addEventListener\("scroll", guard, true\)/, "capture-phase guard must suppress programmatic drift while warmup is active");
+  assert.doesNotMatch(guard, /pendingArticlePixelRestoreTop = null/, "the scroll listener itself must never declare restoration complete");
+  assert.match(finish, /stableFrames >= 2/);
+  assert.match(finish, /this\.pendingArticlePixelRestoreTop = null/);
+  assert.match(finish, /window\.requestAnimationFrame\(settle\)/, "completion must be based on stable animation frames, not incidental scroll events");
 });
 
 test("image preview source menu reveals local images in the system explorer", () => {

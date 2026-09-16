@@ -1,5 +1,15 @@
 # Test Results
 
+## 1.52.3 工作区：图片来源局部刷新与阅读位置稳定
+
+- 修复图片预览中新增/替换/更新/设默认/取消默认/删除来源触发整篇文章 DOM 重建的问题；来源变化只刷新目标图片块，删除最后来源只移除目标块，其它图片保持已加载状态。
+- 文章完整重建的像素恢复目标在 window warmup 全程保持钉住，warmup 完成后连续两个动画帧稳定才释放，避免继续 prepend 前文时把阅读位置再次推走。
+- `setDefault` 的模型写入移动到历史快照边界内部，保证撤销记录的是修改前状态。
+- 专项：`node --test tests/file-block.test.mjs tests/image-source-candidates.test.mjs tests/incremental-render.test.mjs` **49 / 49 通过**。
+- 完整单元测试：`npm run test:unit` **424 / 426 通过**；仅 `tests/plugin-update.test.mjs`、`tests/xmind-import.test.mjs` 因当前运行环境 `node_modules/esbuild` 未安装而无法启动。
+- `npm run test:docs` 通过（63 个源码模块、1291 个具名声明）；`npm run test:repo` 通过；`node --check main.js` 通过；63 个 TypeScript 源文件均通过 `transpileModule` 语法检查。
+- 当前容器访问 npm registry 时 DNS 返回 `EAI_AGAIN`，`npm ci` 无法补齐依赖，因此 `npm run test:regression` 与 production `npm run build` 无法在本环境完成。为保证本地安装包可测试，已把修复后的 TypeScript 方法同步到既有 `main.js` 并执行语法检查；仍需在依赖完整的开发机运行一次 `npm ci && npm run verify`，以及真实 Obsidian 桌面端手工冒烟。
+
 版本：1.49.4（本轮改动将随工作流自动发布为 1.49.5）
 
 ## 1.49.5 移除垂直时间线并统一四字主题名

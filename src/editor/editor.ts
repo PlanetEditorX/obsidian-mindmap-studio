@@ -99,6 +99,7 @@ import { selectImageFile, selectAnyFile, uploadCurrentNodeImage } from "./node-i
 import { canMoveNodes, resolveDropPosition } from "./drag-drop";
 import { DocumentHistory } from "./history-manager";
 import { renderOutlineMode } from "./outline-renderer";
+import { loadImageWithFallback } from "./image-failure-view";
 import {
   renderArticleMode,
   renderArticleNodeContent,
@@ -323,26 +324,14 @@ export class MindMapEditor {
   private articleInitialRenderFrame: number | null = null;
   private articleInitialRenderToken = 0;
   /**
-   * 来源变更（图片替换/上传/设默认等）不改变文本布局：置位后下一次文章窗口渲染
-   * 跳过语义位置恢复，直接按渲染前的像素 scrollTop 恢复（配合 warmup 分帧补偿），
-   * 避免 warmup 期间节点高度不准的语义恢复把视口拉走。
-   */
-  private suppressNextArticleSemanticRestore = false;
-  /**
-   * 像素恢复目标：来源变更渲染后由 warmup 分帧钉住。窗口重建时内容高度骤减，
-   * scrollTop 被浏览器钳制丢失大段差额，按帧累计补偿无法精确回到原位；
-   * 记录渲染前的 scrollTop，warmup 每帧直接钉向该目标（内容补足即精确到位）。
+   * 文章窗口重建后的像素恢复目标。warmup 尚未完成时持续钉住该值，避免分帧向前补载
+   * 把视口继续向下推；只有全部窗口补载结束并连续两帧稳定后才释放。
    */
   private pendingArticlePixelRestoreTop: number | null = null;
-  /** 像素恢复期间的 capture 阶段 scroll guard：压制 warmup 完成后残余的程序性滚动。 */
+  /** 像素恢复期间的 capture 阶段 scroll guard：压制 warmup 与其它程序性滚动造成的偏移。 */
   private articlePixelRestoreGuard: (() => void) | null = null;
-  /**
-   * 来源变更重建前捕获的真实滚动位置：文章窗口重渲染先把 scrollHeight 压到极小、
-   * 浏览器把 scrollTop 钳制到顶部，再于 renderWindow 里取 previousScroll.top 只会拿到
-   * 已塌缩的错误目标。必须在此方法（渲染发生前）记录真实 scrollTop，重渲染后以它为
-   * 硬钉目标，warmup 按帧 min(target, 当前 maxScroll) 爬升，内容补齐后精确回原位。
-   */
-  private articleNodeAnchorScroll: number | null = null;
+  /** warmup 完成后的两帧稳定检查；用户接管滚动或新渲染会立即取消。 */
+  private articlePixelRestoreSettleFrame: number | null = null;
   private articleWindowExpansionFrame: number | null = null;
   /** Background hydration frame that grows article DOM without requiring a user scroll. */
   private articleWindowWarmupFrame: number | null = null;
@@ -3109,13 +3098,11 @@ export class MindMapEditor {
       };
       this.articleEl.onwheel = () => {
         this.pendingArticlePixelRestoreTop = null;
-        this.articleNodeAnchorScroll = null;
         this.stopArticlePixelRestoreGuard();
         this.cancelReadingLocationRestore();
       };
       this.articleEl.onpointerdown = () => {
         this.pendingArticlePixelRestoreTop = null;
-        this.articleNodeAnchorScroll = null;
         this.stopArticlePixelRestoreGuard();
         this.cancelReadingLocationRestore();
       };
@@ -3140,21 +3127,10 @@ export class MindMapEditor {
         }
         return;
       }
-      // 来源变更请求的渲染必须走像素恢复：warmup 期间节点高度未就绪，语义恢复会把
-      // 视口拉到错误位置（日志表现为 restore-target-applied targetHeight 0）。
-      const suppressSemanticRestore = this.suppressNextArticleSemanticRestore;
-      this.suppressNextArticleSemanticRestore = false;
-      const location = suppressSemanticRestore ? null : (latestRequestedLocation ?? previousLocation
-        ?? (!existingPage ? this.lastReadingLocation : null));
+      const location = latestRequestedLocation ?? previousLocation
+        ?? (!existingPage ? this.lastReadingLocation : null);
       if (location) this.restoreReadingLocation("article", location);
-      else if (this.articleNodeAnchorScroll !== null) {
-        // 重建前捕获的真实滚动位置（source change 入口）；先硬钉回原位，warmup 分帧
-        // 按 min(target, 当前 maxScroll) 爬升，内容补齐后精确回位。
-        this.pendingArticlePixelRestoreTop = this.articleNodeAnchorScroll;
-        this.articleEl.scrollTop = Math.min(this.articleNodeAnchorScroll, this.articleEl.scrollHeight - this.articleEl.clientHeight);
-        this.articleEl.scrollLeft = previousScroll.left;
-        this.startArticlePixelRestoreGuard(this.articleNodeAnchorScroll);
-      } else {
+      else {
         this.pendingArticlePixelRestoreTop = previousScroll.top;
         this.articleEl.scrollTop = previousScroll.top;
         this.articleEl.scrollLeft = previousScroll.left;
@@ -3324,12 +3300,11 @@ export class MindMapEditor {
       if (loadedBefore) {
         this.blockReadingLocationCapture();
         if (this.pendingArticlePixelRestoreTop !== null) {
-          // 像素目标钉住：每帧直接钉向渲染前的 scrollTop，clamp 丢失的差额
-          // 由分帧补齐后精确回位；到位后立即解除，避免拦截用户滚动。
+          // warmup 尚未结束时即使某一帧已经能到达目标，也不能释放像素钉住；后续继续
+          // prepend 前文仍会增加 scrollHeight。只有完整 warmup 结束后再进入稳定释放阶段。
           const target = this.pendingArticlePixelRestoreTop;
-          const maxScroll = this.articleEl.scrollHeight - this.articleEl.clientHeight;
+          const maxScroll = Math.max(0, this.articleEl.scrollHeight - this.articleEl.clientHeight);
           this.articleEl.scrollTop = Math.min(target, maxScroll);
-          if (this.articleEl.scrollTop >= target - 0.5) this.pendingArticlePixelRestoreTop = null;
         } else {
           this.articleEl.scrollTop = previousTop + Math.max(0, this.articleEl.scrollHeight - previousHeight);
         }
@@ -3343,65 +3318,66 @@ export class MindMapEditor {
         scrollHeight: this.articleEl.scrollHeight,
         selectedId: this.selectedId
       });
+      this.finishArticlePixelRestoreGuard();
     };
     this.articleWindowWarmupFrame = window.requestAnimationFrame(step);
   }
 
   /**
-   * 像素恢复强钉：capture 阶段把任何偏离目标的程序性滚动压回（覆盖 warmup 完成后的残余跳变），
-   * 到位并短暂稳定后解除；用户 wheel/pointerdown 清除目标后自动停止。
+   * 像素恢复强钉：capture 阶段把 warmup 和其它程序性滚动造成的偏离压回目标。
+   * guard 本身不负责判断“已经完成”，避免某个中间帧短暂到位就过早释放。
    */
   private startArticlePixelRestoreGuard(target: number): void {
     this.stopArticlePixelRestoreGuard();
     const scroller = this.articleEl;
-    let settled = 0;
     const guard = (): void => {
       if (this.pendingArticlePixelRestoreTop === null) {
         this.stopArticlePixelRestoreGuard();
         return;
       }
-      const wanted = Math.min(target, scroller.scrollHeight - scroller.clientHeight);
-      if (Math.abs(scroller.scrollTop - wanted) > 1) {
-        scroller.scrollTop = wanted;
-        settled = 0;
-        return;
-      }
-      if (wanted >= target - 1) {
-        settled += 1;
-        if (settled >= 2) {
-          this.pendingArticlePixelRestoreTop = null;
-          this.stopArticlePixelRestoreGuard();
-        }
-      }
+      const wanted = Math.min(target, Math.max(0, scroller.scrollHeight - scroller.clientHeight));
+      if (Math.abs(scroller.scrollTop - wanted) > 1) scroller.scrollTop = wanted;
     };
     scroller.addEventListener("scroll", guard, true);
     this.articlePixelRestoreGuard = () => scroller.removeEventListener("scroll", guard, true);
   }
 
-  /** 停止像素恢复 capture guard 并移除其 scroll 监听。 */
-  private stopArticlePixelRestoreGuard(): void {
-    this.articlePixelRestoreGuard?.();
-    this.articlePixelRestoreGuard = null;
+  /**
+   * 在文章 warmup 全部完成后连续两帧确认像素位置稳定，再释放强钉。若文档最终比旧视口
+   * 更短，则以最终 maxScroll 为合法落点；用户滚轮或指针接管会通过 stop 立即取消。
+   */
+  private finishArticlePixelRestoreGuard(): void {
+    if (this.pendingArticlePixelRestoreTop === null) return;
+    if (this.articlePixelRestoreSettleFrame !== null) window.cancelAnimationFrame(this.articlePixelRestoreSettleFrame);
+    const target = this.pendingArticlePixelRestoreTop;
+    const scroller = this.articleEl;
+    let stableFrames = 0;
+    const settle = (): void => {
+      this.articlePixelRestoreSettleFrame = null;
+      if (this.pendingArticlePixelRestoreTop !== target || this.currentMode !== "article") return;
+      const wanted = Math.min(target, Math.max(0, scroller.scrollHeight - scroller.clientHeight));
+      if (Math.abs(scroller.scrollTop - wanted) > 1) {
+        scroller.scrollTop = wanted;
+        stableFrames = 0;
+      } else {
+        stableFrames += 1;
+      }
+      if (stableFrames >= 2) {
+        this.pendingArticlePixelRestoreTop = null;
+        this.stopArticlePixelRestoreGuard();
+        return;
+      }
+      this.articlePixelRestoreSettleFrame = window.requestAnimationFrame(settle);
+    };
+    this.articlePixelRestoreSettleFrame = window.requestAnimationFrame(settle);
   }
 
-  /**
-   * 在来源变更渲染发生前记录真实滚动位置：文章窗口重渲染会先塌缩 scrollHeight 并把
-   * scrollTop 钳制到顶部，事后（renderWindow）读取 previousScroll.top 只会拿到已塌缩的
-   * 错误目标。这里在 mutate/渲染触发前捕获，重渲染后以它为硬钉目标。
-   *
-   * @param nodeId 包含被操作图片块的节点 ID（用于确认节点存在），不参与滚动计算。
-   */
-  private captureArticleNodeAnchor(nodeId: string): void {
-    this.articleNodeAnchorScroll = null;
-    this.stopArticlePixelRestoreGuard();
-    if (this.currentMode !== "article" || !this.articleEl) return;
-    const selector = nodeId === this.document?.root.id
-      ? `.mms-article-document-title[data-node-id="${CSS.escape(nodeId)}"]`
-      : `.mms-article-node[data-node-id="${CSS.escape(nodeId)}"]`;
-    if (!this.articleEl.querySelector<HTMLElement>(selector)) return;
-    const top = this.articleEl.scrollTop;
-    this.articleNodeAnchorScroll = top;
-    this.pendingArticlePixelRestoreTop = top;
+  /** 停止像素恢复 capture guard、稳定帧检查并移除监听。 */
+  private stopArticlePixelRestoreGuard(): void {
+    if (this.articlePixelRestoreSettleFrame !== null) window.cancelAnimationFrame(this.articlePixelRestoreSettleFrame);
+    this.articlePixelRestoreSettleFrame = null;
+    this.articlePixelRestoreGuard?.();
+    this.articlePixelRestoreGuard = null;
   }
 
   /** Loads another window only when the reader reaches a rendered edge. */
@@ -6616,14 +6592,132 @@ export class MindMapEditor {
   }
 
   /**
+   * 提交图片预览中的来源元数据修改，但不重建整个当前视图。来源变化不改变节点拓扑，
+   * 因此保留统一历史/保存链路后只刷新对应图片块即可，避免文章 DOM、其它图片和滚动进度失效。
+   *
+   * @param nodeId 图片所属节点。
+   * @param blockId 图片内容块。
+   * @param action 对当前图片块执行的同步模型修改。
+   * @param previousSnapshot 异步上传开始前冻结的历史快照；未提供时现场捕获。
+   */
+  private commitImagePreviewSourceChange(
+    nodeId: string,
+    blockId: string,
+    action: () => void,
+    previousSnapshot?: string
+  ): void {
+    if (previousSnapshot !== undefined) this.history.captureSnapshot(previousSnapshot);
+    else this.captureHistorySnapshot();
+    action();
+    this.notifyDocumentChange("none");
+    this.markSaving();
+    this.refreshImagePreviewSourceDom(nodeId, blockId);
+  }
+
+  /**
+   * 只刷新当前来源变更影响到的图片 DOM。导图模式已有成熟的单节点刷新；文章/通读与
+   * 大纲直接替换对应图片元素，保留文章窗口控制器、其它节点和其它图片的加载状态。
+   * 删除最后来源时仅移除该块，并清理已经为空的同行图片容器。
+   */
+  private refreshImagePreviewSourceDom(nodeId: string, blockId: string): void {
+    if (this.currentMode === "mindmap") {
+      this.refreshMindMapNode(nodeId);
+      return;
+    }
+    const located = this.locateImageBlock(nodeId, blockId);
+    const escaped = CSS.escape(blockId);
+    const removeEmptyRow = (element: HTMLElement): void => {
+      const row = element.parentElement;
+      element.remove();
+      if (row?.matches(".mms-article-image-row, .mms-outline-image-row") && row.childElementCount === 0) row.remove();
+    };
+
+    if (this.currentMode === "article" || this.currentMode === "reading") {
+      const shells = Array.from(this.articleEl.querySelectorAll<HTMLElement>(`.mms-article-content-block[data-block-id="${escaped}"]`));
+      if (!located) {
+        shells.forEach(removeEmptyRow);
+        return;
+      }
+      for (const shell of shells) {
+        const previousImage = shell.querySelector<HTMLImageElement>(":scope > img.mms-article-image");
+        // 克隆已有 img 可保留当前 src/尺寸直到新的候选真正接管，同时清掉旧监听器，
+        // 避免每次来源管理都让目标图片本身先闪空或累积 click handler。
+        const image = previousImage
+          ? previousImage.cloneNode(false) as HTMLImageElement
+          : document.createElement("img");
+        if (previousImage) previousImage.replaceWith(image);
+        else shell.prepend(image);
+        image.className = `mms-article-image image-align-${located.block.align ?? "center"}`;
+        image.alt = located.block.alt ?? "图片";
+        image.dataset.blockId = blockId;
+        image.style.width = located.block.width ? `${located.block.width}px` : "";
+        image.style.height = located.block.height ? `${located.block.height}px` : "";
+        let activeResolved: string | null = null;
+        loadImageWithFallback(
+          image,
+          shell,
+          located.block,
+          this.options.imageHostPriorityIds,
+          (source) => this.callbacks.resolveImage(source),
+          (_source, resolved) => { activeResolved = resolved; }
+        );
+        image.addEventListener("click", () => {
+          if (activeResolved) this.openImagePreviewWithSources(nodeId, blockId);
+        });
+      }
+      return;
+    }
+
+    if (this.currentMode === "outline") {
+      const figures = Array.from(this.outlineEl.querySelectorAll<HTMLElement>(`.mms-outline-image[data-block-id="${escaped}"]`));
+      if (!located) {
+        figures.forEach(removeEmptyRow);
+        return;
+      }
+      for (const figure of figures) {
+        const previousImage = figure.querySelector<HTMLImageElement>(":scope > img");
+        const image = previousImage
+          ? previousImage.cloneNode(false) as HTMLImageElement
+          : document.createElement("img");
+        if (previousImage) previousImage.replaceWith(image);
+        else figure.prepend(image);
+        image.alt = located.block.alt ?? "图片";
+        image.loading = "lazy";
+        image.style.width = located.block.width ? `${located.block.width}px` : "";
+        image.style.height = located.block.height ? `${located.block.height}px` : "";
+        let activeResolved: string | null = null;
+        loadImageWithFallback(
+          image,
+          figure,
+          located.block,
+          this.options.imageHostPriorityIds,
+          this.callbacks.resolveImage,
+          (_source, resolved) => { activeResolved = resolved; }
+        );
+        image.addEventListener("click", () => {
+          if (activeResolved) this.openImagePreviewWithSources(nodeId, blockId);
+        });
+        const caption = figure.querySelector<HTMLElement>(":scope > figcaption");
+        if (located.block.alt) {
+          if (caption) caption.textContent = located.block.alt;
+          else figure.createEl("figcaption", { text: located.block.alt });
+        } else {
+          caption?.remove();
+        }
+      }
+      return;
+    }
+
+    this.render();
+  }
+
+  /**
    * 通过统一历史与保存链路执行图片预览弹窗发起的一次来源变更。
    *
    * @returns 图片块是否仍然存在；false 时预览弹窗会自动关闭。
    */
   private async applyImagePreviewSourceChange(nodeId: string, blockId: string, change: ImagePreviewSourceChange): Promise<boolean> {
     if (!this.ensureEditable()) return true;
-    // 图片块总在某个节点内：渲染前记录该节点锚点，重渲染后按节点位置恢复阅读位置。
-    this.captureArticleNodeAnchor(nodeId);
     if (change.type === "reupload") {
       const located = this.locateImageBlock(nodeId, blockId);
       if (!located) {
@@ -6651,25 +6745,22 @@ export class MindMapEditor {
         return false;
       }
       const uploadedAt = new Date().toISOString();
-      this.suppressNextArticleSemanticRestore = true;
-      this.history.captureSnapshot(previousSnapshot);
-      const existing = new Map((merged.block.remoteSources ?? []).map((item) => [item.hostId, item]));
-      batch.successes.forEach((item) => existing.set(item.hostId, {
-        hostId: item.hostId,
-        hostName: item.hostName,
-        url: item.url,
-        deleteKey: item.deleteKey,
-        uploadedAt
-      }));
-      merged.block.remoteSources = Array.from(existing.values());
-      merged.block.source = batch.successes[0]!.url;
-      merged.block.localSource = undefined;
-      merged.block.contentHash = batch.contentHash;
-      if (!merged.block.alt) merged.block.alt = file.name.replace(/\.[^.]+$/, "");
-      replaceNodeContentBlocks(merged.node, merged.blocks);
-      this.notifyDocumentChange("none");
-      this.markSaving();
-      this.render();
+      this.commitImagePreviewSourceChange(nodeId, blockId, () => {
+        const existing = new Map((merged.block.remoteSources ?? []).map((item) => [item.hostId, item]));
+        batch.successes.forEach((item) => existing.set(item.hostId, {
+          hostId: item.hostId,
+          hostName: item.hostName,
+          url: item.url,
+          deleteKey: item.deleteKey,
+          uploadedAt
+        }));
+        merged.block.remoteSources = Array.from(existing.values());
+        merged.block.source = batch.successes[0]!.url;
+        merged.block.localSource = undefined;
+        merged.block.contentHash = batch.contentHash;
+        if (!merged.block.alt) merged.block.alt = file.name.replace(/\.[^.]+$/, "");
+        replaceNodeContentBlocks(merged.node, merged.blocks);
+      }, previousSnapshot);
       new Notice(`已更新并上传到：${batch.successes.map((item) => item.hostName).join("、")}`);
       return true;
     }
@@ -6688,12 +6779,10 @@ export class MindMapEditor {
         new Notice("该地址已经在来源列表中");
         return true;
       }
-      // 来源变更不改变文本布局：mutate 传 null 跳过语义位置恢复，视口由浏览器保持。
-      this.suppressNextArticleSemanticRestore = true;
-      this.mutateWithoutArticleContext(() => {
+      this.commitImagePreviewSourceChange(nodeId, blockId, () => {
         located.block.remoteSources = [...(located.block.remoteSources ?? []), entry];
         replaceNodeContentBlocks(located.node, located.blocks);
-      }, null);
+      });
       return true;
     }
     if (change.type === "replaceLocal") {
@@ -6712,8 +6801,7 @@ export class MindMapEditor {
         new Notice("保存本地图片失败", 7000);
         return true;
       }
-      this.suppressNextArticleSemanticRestore = true;
-      this.mutateWithoutArticleContext(() => {
+      this.commitImagePreviewSourceChange(nodeId, blockId, () => {
         located.block.localSource = path;
         // 当前显示来源若本来指向本地文件，替换后必须跟随新本地路径，
         // 否则旧文件回收后“当前图片”候选将加载失败；图片级默认来源同理。
@@ -6723,9 +6811,7 @@ export class MindMapEditor {
             (sourceWasLocal && item === previousSource) || item === previousLocal ? path : item);
         }
         replaceNodeContentBlocks(located.node, located.blocks);
-      }, null);
-      // 被替换的旧本地图片进入 60 秒延迟回收；撤销恢复引用会自动取消，
-      // 到期前仍做全库引用检查，避免误删其它导图仍在使用的文件。
+      });
       const recycled = new Set<string>();
       if (previousLocal && previousLocal !== path) recycled.add(previousLocal);
       if (sourceWasLocal && previousSource !== path) recycled.add(previousSource);
@@ -6739,11 +6825,10 @@ export class MindMapEditor {
         new Notice("图片已不存在");
         return false;
       }
-      this.suppressNextArticleSemanticRestore = true;
-      this.mutateWithoutArticleContext(() => {
+      this.commitImagePreviewSourceChange(nodeId, blockId, () => {
         clearImageSourceDefault(located.block, change.source);
         replaceNodeContentBlocks(located.node, located.blocks);
-      }, null);
+      });
       return true;
     }
     if (change.type === "setDefault") {
@@ -6752,14 +6837,14 @@ export class MindMapEditor {
         new Notice("图片已不存在");
         return false;
       }
-      if (!setImageSourceDefault(located.block, change.source)) {
+      if (!imageSourceCandidates(located.block, true, []).some((candidate) => candidate.source === change.source)) {
         new Notice("该来源不在当前图片的来源列表中");
         return true;
       }
-      this.suppressNextArticleSemanticRestore = true;
-      this.mutateWithoutArticleContext(() => {
+      this.commitImagePreviewSourceChange(nodeId, blockId, () => {
+        setImageSourceDefault(located.block, change.source);
         replaceNodeContentBlocks(located.node, located.blocks);
-      }, null);
+      });
       return true;
     }
     const located = this.locateImageBlock(nodeId, blockId);
@@ -6769,17 +6854,16 @@ export class MindMapEditor {
     }
     const remaining = removeImageSourceCandidate(located.block, change.source);
     if (!remaining) {
-      await this.removeImageBlock(nodeId, blockId);
+      await this.removeImageBlock(nodeId, blockId, true);
       return false;
     }
-    this.suppressNextArticleSemanticRestore = true;
-    this.mutateWithoutArticleContext(() => {
+    this.commitImagePreviewSourceChange(nodeId, blockId, () => {
       located.block.source = remaining.source;
       located.block.localSource = remaining.localSource;
       located.block.remoteSources = remaining.remoteSources;
       located.block.sourcePriority = remaining.sourcePriority;
       replaceNodeContentBlocks(located.node, located.blocks);
-    }, null);
+    });
     return true;
   }
 
@@ -6946,17 +7030,29 @@ export class MindMapEditor {
     }
   }
 
-  /** 从节点的有序内容块中移除指定图片。 */
-  private async removeImageBlock(nodeId: string, blockId: string): Promise<void> {
+  /**
+   * 从节点的有序内容块中移除指定图片。图片预览来源删除可选择局部刷新，避免重建整篇文章。
+   *
+   * @param nodeId 图片所属节点。
+   * @param blockId 图片内容块。
+   * @param preserveRenderedView 为 true 时只移除当前图片 DOM；普通块删除仍沿用完整渲染。
+   */
+  private async removeImageBlock(nodeId: string, blockId: string, preserveRenderedView = false): Promise<void> {
     const node = this.nodeById(nodeId);
     if (!node || !this.ensureEditable()) return;
     const blocks = nodeContentBlocks(node);
     const removed = blocks.find((block): block is MindMapImageContentBlock => block.type === "image" && block.id === blockId);
     if (!removed) return;
     const removedSnapshot = JSON.parse(JSON.stringify(removed)) as MindMapImageContentBlock;
-    this.mutateWithoutArticleContext(() => {
-      replaceNodeContentBlocks(node, blocks.filter((block) => block.id !== blockId));
-    });
+    if (preserveRenderedView) {
+      this.commitImagePreviewSourceChange(nodeId, blockId, () => {
+        replaceNodeContentBlocks(node, blocks.filter((block) => block.id !== blockId));
+      });
+    } else {
+      this.mutateWithoutArticleContext(() => {
+        replaceNodeContentBlocks(node, blocks.filter((block) => block.id !== blockId));
+      });
+    }
     await this.callbacks.onCleanupRemovedImageRemoteAssets(removedSnapshot, this.getDocument());
   }
 

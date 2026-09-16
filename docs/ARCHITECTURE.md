@@ -162,6 +162,8 @@ Obsidian 读取文本
 
 文章表格列宽拖动是一个受限例外：拖动过程中 DOM 已实时反映最终结果，释放鼠标后 `updateTableColumnWidths()` 直接捕获历史、更新稳定表格块、通知保存并保留现有 DOM，不调用 `render()`，同时通过 `articleContextImpact: "none"` 阻止视图层安排不必要的文章族上下文刷新。边界调整由 `resizeAdjacentTableColumns()` 同时修改当前列与右侧列，总宽度不变；渲染器把保存值转换为百分比列宽，表格继续适配当前页面。该例外仍保留撤销和自动保存，只跳过会造成文章闪烁与阅读位置竞争的同步整页重建。
 
+图片预览来源管理采用相同的局部提交原则：`commitImagePreviewSourceChange()` 先建立历史边界并写回权威图片块，再以 `articleContextImpact: "none"` 通知保存，最后由 `refreshImagePreviewSourceDom()` 只重载目标图片元素（导图模式只刷新所在节点）。来源新增、替换、设默认、取消默认、删除及删除最后来源都不得调用整页 `render()`；这样文章窗口控制器、其它图片 DOM 与 `scrollTop` 不被销毁。只有不支持局部图片容器的其它模式才允许回退完整渲染。文章确需完整重建时，像素恢复目标在整个 window warmup 期间持续钉住，并在 warmup 完成后连续两个动画帧稳定才释放，禁止中间帧短暂到位就提前清除。
+
 不应在 UI 事件中直接修改 `this.document` 后绕过 `mutate()`，否则会产生以下问题：
 
 - 无法撤销。

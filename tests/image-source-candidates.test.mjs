@@ -275,10 +275,11 @@ test("image preview modal exposes source management and editor wires unified-his
   assert.match(editorSource, /applyImagePreviewSourceChange\(nodeId: string, blockId: string, change: ImagePreviewSourceChange\)/);
   assert.match(editorSource, /openImagePreviewWithSources\(nodeId: string, blockId: string\)/);
   assert.match(editorSource, /removeImageSourceCandidate\(located\.block, change\.source\)/);
-  assert.match(editorSource, /await this\.removeImageBlock\(nodeId, blockId\);\s*return false;/s);
+  assert.match(editorSource, /await this\.removeImageBlock\(nodeId, blockId, true\);\s*return false;/s);
   assert.match(editorSource, /change\.type === "replaceLocal"/);
   assert.match(editorSource, /change\.type === "unsetDefault"/);
   assert.match(editorSource, /clearImageSourceDefault\(located\.block, change\.source\)/);
+  assert.match(editorSource, /change\.type === "setDefault"[\s\S]*?commitImagePreviewSourceChange\(nodeId, blockId, \(\) => \{[\s\S]*?setImageSourceDefault\(located\.block, change\.source\)/, "setting a default source must happen inside the undo snapshot boundary");
   assert.match(editorSource, /onSavePastedImage\(file, file\.name\)/);
   assert.match(editorSource, /change\.type === "reupload"[\s\S]*chooseImageHosts\(this\.app, this\.callbacks\.getImageHosts\(\)[\s\S]*selectImageFile\(\)[\s\S]*this\.callbacks\.onUploadImage\(file, file\.name, hostIds\)/, "preview re-upload must open the host picker and the system image file picker");
 

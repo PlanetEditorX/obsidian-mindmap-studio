@@ -1,5 +1,13 @@
 # Modified Files
 
+## 1.52.3 工作区：修复图片来源更新/删除导致文章重载与跳位
+
+- `src/editor/editor.ts`：图片预览来源变化新增 `commitImagePreviewSourceChange()` / `refreshImagePreviewSourceDom()` 局部提交链路；文章/通读/大纲只更新目标图片元素，导图只刷新目标节点；删除最后来源沿用同一路径。图片元素通过克隆当前 `<img>` 保留已有 src/尺寸后再切源，避免目标图先闪空；`setDefault` 写入移入历史边界。文章完整重建的像素恢复延长到 warmup 完成后连续两帧稳定再释放。
+- `main.js`：同步上述运行时代码；当前环境依赖安装被 npm registry DNS `EAI_AGAIN` 阻断，无法执行 production esbuild，已通过 `node --check main.js`。
+- `tests/file-block.test.mjs`、`tests/image-source-candidates.test.mjs`、`tests/incremental-render.test.mjs`：新增/更新局部刷新、最后来源删除、撤销边界和 warmup 像素钉住契约。
+- `README.md`、`docs/ARCHITECTURE.md`、`docs/TESTING.md`、`docs/FUNCTION_REFERENCE.md`、`CHANGELOG.md`：同步行为、架构、手工验证和函数参考。
+- 修复原上传 ZIP 在 Linux 解压出的 `#Uxxxx` 中文路径占位名，恢复 `Agent/项目` 与示例中文文件名；交付源码包按仓库规则不包含未修改 `examples/`。
+
 ## 1.49.5 移除垂直时间线并统一四字主题名
 
 - `src/core/model.ts`、`src/main.ts`：`ArticleTocStyle` 移除 `timeline`，规范化白名单同步（历史值回退默认卡片）。
