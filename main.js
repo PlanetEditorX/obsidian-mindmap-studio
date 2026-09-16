@@ -15179,131 +15179,113 @@ var MindMapEditor = class {
    * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
    */
   renderArticle() {
-      var _a, _b, _c, _d, _e, _f, _g;
-      const reducedMotion = ((_a = window.matchMedia) === null || _a === void 0 ? void 0 : _a.call(window, "(prefers-reduced-motion: reduce)").matches) === true;
-      if (!this.options.articleContextReady) {
-          this.callbacks.onDebugLog("article", "render-waiting-context", { selectedId: this.selectedId, pendingTarget: (_b = this.pendingArticleFocusLocation) === null || _b === void 0 ? void 0 : _b.nodeIds[0], landingMode: (_c = this.document.view) === null || _c === void 0 ? void 0 : _c.articleLandingMode });
-          this.cancelReadingLocationRestore();
-          this.cancelArticleWindowExpansion();
-          this.articleRenderController = null;
-          const target = this.pendingArticleFocusLocation || ((_d = this.document.view) === null || _d === void 0 ? void 0 : _d.articleLandingMode) === "article"
-              ? "article"
-              : "toc";
-          this.renderArticleSkeleton(target);
-          return;
-      }
-      const explicitTarget = this.pendingArticleFocusLocation;
-      const directoryOnly = !explicitTarget
-          && this.options.showArticleToc
-          && this.options.articleTocEntries.length > 0
-          && ((_e = this.document.view) === null || _e === void 0 ? void 0 : _e.articleLandingMode) !== "article";
-      const requestedLocation = directoryOnly ? null : explicitTarget;
-      this.pendingArticleFocusLocation = null;
-      this.callbacks.onDebugLog("article", "render-decision", {
-          selectedId: this.selectedId,
-          explicitTarget: explicitTarget === null || explicitTarget === void 0 ? void 0 : explicitTarget.nodeIds[0],
-          directoryOnly,
-          showArticleToc: this.options.showArticleToc,
-          tocEntries: this.options.articleTocEntries.length,
-          landingMode: (_f = this.document.view) === null || _f === void 0 ? void 0 : _f.articleLandingMode,
-          articleContextReady: this.options.articleContextReady
-      });
-      const existingPage = this.articleEl.querySelector(":scope > .mms-article-page");
-      const existingDirectory = (existingPage === null || existingPage === void 0 ? void 0 : existingPage.querySelector(".mms-article-toc-page")) !== null;
-      const activeRestoreLocation = ((_g = this.activeReadingRestore) === null || _g === void 0 ? void 0 : _g.mode) === "article"
-          ? this.activeReadingRestore.location
-          : null;
-      const previousLocation = !directoryOnly && !requestedLocation && existingPage
-          ? activeRestoreLocation !== null && activeRestoreLocation !== void 0 ? activeRestoreLocation : this.captureCurrentLocation("article")
-          : null;
-      const previousScroll = { top: this.articleEl.scrollTop, left: this.articleEl.scrollLeft };
+    var _a2, _b2, _c, _d, _e, _f, _g;
+    const reducedMotion = ((_a2 = window.matchMedia) == null ? void 0 : _a2.call(window, "(prefers-reduced-motion: reduce)").matches) === true;
+    if (!this.options.articleContextReady) {
+      this.callbacks.onDebugLog("article", "render-waiting-context", { selectedId: this.selectedId, pendingTarget: (_b2 = this.pendingArticleFocusLocation) == null ? void 0 : _b2.nodeIds[0], landingMode: (_c = this.document.view) == null ? void 0 : _c.articleLandingMode });
       this.cancelReadingLocationRestore();
-      const needsEntryTransition = !reducedMotion && (requestedLocation !== null
-          || !existingPage
-          || existingPage.dataset.nodeId !== this.document.root.id
-          || existingDirectory !== directoryOnly);
       this.cancelArticleWindowExpansion();
-      const renderWindow = () => {
-          var _a, _b, _c;
-          if (this.currentMode !== "article" || !this.options.articleContextReady)
-              return;
-          // The explicit target captured by this render owns the current entry transition.
-          // A restore scheduled later by setOptions() may only supply a target when this render
-          // had none; it must never replace the chapter that caused the skeleton to be shown.
-          const latestRequestedLocation = directoryOnly
-              ? null
-              : chooseArticleTransitionLocation(requestedLocation, this.pendingArticleFocusLocation);
-          this.pendingArticleFocusLocation = null;
-          this.articleEl.empty();
-          this.articleEl.removeAttribute("aria-busy");
-          this.articleRenderController = renderArticleMode(this.articleEl, this.articleRendererOptions());
-          this.callbacks.onDebugLog("article", "window-mounted", {
-              directoryOnly, selectedId: this.selectedId, latestTarget: latestRequestedLocation === null || latestRequestedLocation === void 0 ? void 0 : latestRequestedLocation.nodeIds[0],
-              hasController: Boolean(this.articleRenderController), scrollTopBeforeRestore: this.articleEl.scrollTop
-          });
-          (_a = this.articleEl.querySelector(":scope > .mms-article-page")) === null || _a === void 0 ? void 0 : _a.addClass("is-window-entering");
-          this.refreshArticleWindowChrome();
-          this.addArticleScrollToTopButton();
-          this.articleEl.onscroll = () => {
-              this.scheduleReadingLocationCapture("article");
-              this.scheduleArticleWindowExpansion();
-          };
-          this.articleEl.onwheel = () => {
-              this.pendingArticlePixelRestoreTop = null;
-              this.stopArticlePixelRestoreGuard();
-              this.cancelReadingLocationRestore();
-          };
-          this.articleEl.onpointerdown = () => {
-              this.pendingArticlePixelRestoreTop = null;
-              this.stopArticlePixelRestoreGuard();
-              this.cancelReadingLocationRestore();
-          };
-          this.articleEl.ontouchstart = () => this.cancelReadingLocationRestore();
-          if (directoryOnly) {
-              this.blockReadingLocationCapture();
-              this.articleEl.scrollTop = 0;
-              this.articleEl.scrollLeft = 0;
-              const directoryFocusNodeId = this.pendingArticleDirectoryFocusNodeId;
-              this.pendingArticleDirectoryFocusNodeId = null;
-              if (directoryFocusNodeId) {
-                  const selector = `.mms-article-toc-page a[data-node-id="${CSS.escape(directoryFocusNodeId)}"]`;
-                  const target = this.articleEl.querySelector(selector);
-                  if (target) {
-                      (_b = target.closest("li")) === null || _b === void 0 ? void 0 : _b.addClass("is-return-target");
-                      target.scrollIntoView({ block: "center", inline: "nearest" });
-                      this.callbacks.onDebugLog("article", "directory-focus-applied", { directoryFocusNodeId, selector, scrollTop: this.articleEl.scrollTop });
-                  }
-                  else {
-                      this.callbacks.onDebugLog("article", "directory-focus-missing", { directoryFocusNodeId, selector });
-                  }
-              }
-              return;
-          }
-          const location = (_c = latestRequestedLocation !== null && latestRequestedLocation !== void 0 ? latestRequestedLocation : previousLocation) !== null && _c !== void 0 ? _c : (!existingPage ? this.lastReadingLocation : null);
-          if (location)
-              this.restoreReadingLocation("article", location);
-          else {
-              this.pendingArticlePixelRestoreTop = previousScroll.top;
-              this.articleEl.scrollTop = previousScroll.top;
-              this.articleEl.scrollLeft = previousScroll.left;
-              this.startArticlePixelRestoreGuard(previousScroll.top);
-          }
-          this.scheduleArticleWindowWarmup();
-      };
-      if (!needsEntryTransition) {
-          renderWindow();
-          return;
-      }
-      this.renderArticleSkeleton(directoryOnly ? "toc" : "article");
-      const token = ++this.articleInitialRenderToken;
-      this.articleInitialRenderFrame = window.requestAnimationFrame(() => {
-          this.articleInitialRenderFrame = window.requestAnimationFrame(() => {
-              this.articleInitialRenderFrame = null;
-              if (token !== this.articleInitialRenderToken || this.currentMode !== "article")
-                  return;
-              renderWindow();
-          });
+      this.articleRenderController = null;
+      const target = this.pendingArticleFocusLocation || ((_d = this.document.view) == null ? void 0 : _d.articleLandingMode) === "article" ? "article" : "toc";
+      this.renderArticleSkeleton(target);
+      return;
+    }
+    const explicitTarget = this.pendingArticleFocusLocation;
+    const directoryOnly = !explicitTarget && this.options.showArticleToc && this.options.articleTocEntries.length > 0 && ((_e = this.document.view) == null ? void 0 : _e.articleLandingMode) !== "article";
+    const requestedLocation = directoryOnly ? null : explicitTarget;
+    this.pendingArticleFocusLocation = null;
+    this.callbacks.onDebugLog("article", "render-decision", {
+      selectedId: this.selectedId,
+      explicitTarget: explicitTarget == null ? void 0 : explicitTarget.nodeIds[0],
+      directoryOnly,
+      showArticleToc: this.options.showArticleToc,
+      tocEntries: this.options.articleTocEntries.length,
+      landingMode: (_f = this.document.view) == null ? void 0 : _f.articleLandingMode,
+      articleContextReady: this.options.articleContextReady
+    });
+    const existingPage = this.articleEl.querySelector(":scope > .mms-article-page");
+    const existingDirectory = (existingPage == null ? void 0 : existingPage.querySelector(".mms-article-toc-page")) !== null;
+    const activeRestoreLocation = ((_g = this.activeReadingRestore) == null ? void 0 : _g.mode) === "article" ? this.activeReadingRestore.location : null;
+    const previousLocation = !directoryOnly && !requestedLocation && existingPage ? activeRestoreLocation != null ? activeRestoreLocation : this.captureCurrentLocation("article") : null;
+    const previousScroll = { top: this.articleEl.scrollTop, left: this.articleEl.scrollLeft };
+    this.cancelReadingLocationRestore();
+    const needsEntryTransition = !reducedMotion && (requestedLocation !== null || !existingPage || existingPage.dataset.nodeId !== this.document.root.id || existingDirectory !== directoryOnly);
+    this.cancelArticleWindowExpansion();
+    const renderWindow = () => {
+      var _a3, _b3, _c2;
+      if (this.currentMode !== "article" || !this.options.articleContextReady) return;
+      const latestRequestedLocation = directoryOnly ? null : chooseArticleTransitionLocation(requestedLocation, this.pendingArticleFocusLocation);
+      this.pendingArticleFocusLocation = null;
+      this.articleEl.empty();
+      this.articleEl.removeAttribute("aria-busy");
+      this.articleRenderController = renderArticleMode(this.articleEl, this.articleRendererOptions());
+      this.callbacks.onDebugLog("article", "window-mounted", {
+        directoryOnly,
+        selectedId: this.selectedId,
+        latestTarget: latestRequestedLocation == null ? void 0 : latestRequestedLocation.nodeIds[0],
+        hasController: Boolean(this.articleRenderController),
+        scrollTopBeforeRestore: this.articleEl.scrollTop
       });
+      (_a3 = this.articleEl.querySelector(":scope > .mms-article-page")) == null ? void 0 : _a3.addClass("is-window-entering");
+      this.refreshArticleWindowChrome();
+      this.addArticleScrollToTopButton();
+      this.articleEl.onscroll = () => {
+        this.scheduleReadingLocationCapture("article");
+        this.scheduleArticleWindowExpansion();
+      };
+      this.articleEl.onwheel = () => {
+        this.pendingArticlePixelRestoreTop = null;
+        this.stopArticlePixelRestoreGuard();
+        this.cancelReadingLocationRestore();
+      };
+      this.articleEl.onpointerdown = () => {
+        this.pendingArticlePixelRestoreTop = null;
+        this.stopArticlePixelRestoreGuard();
+        this.cancelReadingLocationRestore();
+      };
+      this.articleEl.ontouchstart = () => this.cancelReadingLocationRestore();
+      if (directoryOnly) {
+        this.blockReadingLocationCapture();
+        this.articleEl.scrollTop = 0;
+        this.articleEl.scrollLeft = 0;
+        const directoryFocusNodeId = this.pendingArticleDirectoryFocusNodeId;
+        this.pendingArticleDirectoryFocusNodeId = null;
+        if (directoryFocusNodeId) {
+          const selector = `.mms-article-toc-page a[data-node-id="${CSS.escape(directoryFocusNodeId)}"]`;
+          const target = this.articleEl.querySelector(selector);
+          if (target) {
+            (_b3 = target.closest("li")) == null ? void 0 : _b3.addClass("is-return-target");
+            target.scrollIntoView({ block: "center", inline: "nearest" });
+            this.callbacks.onDebugLog("article", "directory-focus-applied", { directoryFocusNodeId, selector, scrollTop: this.articleEl.scrollTop });
+          } else {
+            this.callbacks.onDebugLog("article", "directory-focus-missing", { directoryFocusNodeId, selector });
+          }
+        }
+        return;
+      }
+      const location = (_c2 = latestRequestedLocation != null ? latestRequestedLocation : previousLocation) != null ? _c2 : !existingPage ? this.lastReadingLocation : null;
+      if (location) this.restoreReadingLocation("article", location);
+      else {
+        this.pendingArticlePixelRestoreTop = previousScroll.top;
+        this.articleEl.scrollTop = previousScroll.top;
+        this.articleEl.scrollLeft = previousScroll.left;
+        this.startArticlePixelRestoreGuard(previousScroll.top);
+      }
+      this.scheduleArticleWindowWarmup();
+    };
+    if (!needsEntryTransition) {
+      renderWindow();
+      return;
+    }
+    this.renderArticleSkeleton(directoryOnly ? "toc" : "article");
+    const token = ++this.articleInitialRenderToken;
+    this.articleInitialRenderFrame = window.requestAnimationFrame(() => {
+      this.articleInitialRenderFrame = window.requestAnimationFrame(() => {
+        this.articleInitialRenderFrame = null;
+        if (token !== this.articleInitialRenderToken || this.currentMode !== "article") return;
+        renderWindow();
+      });
+    });
   }
   /** Paints a bounded article skeleton before the first real target window is mounted. */
   renderArticleSkeleton(target = "article") {
@@ -15410,131 +15392,116 @@ var MindMapEditor = class {
    * is complete, earlier chunks are prepended while preserving the semantic viewport.
    */
   scheduleArticleWindowWarmup() {
-      const controller = this.articleRenderController;
-      if (!controller || this.currentMode !== "article" || this.articleWindowExpansionFrame !== null)
-          return;
-      this.cancelArticleWindowWarmup();
-      const token = ++this.articleWindowWarmupToken;
-      this.callbacks.onDebugLog("article", "window-warmup-start", {
-          hasBefore: controller.hasBefore(),
-          hasAfter: controller.hasAfter(),
-          cacheHit: this.options.articleContextCacheHit
+    const controller = this.articleRenderController;
+    if (!controller || this.currentMode !== "article" || this.articleWindowExpansionFrame !== null) return;
+    this.cancelArticleWindowWarmup();
+    const token = ++this.articleWindowWarmupToken;
+    this.callbacks.onDebugLog("article", "window-warmup-start", {
+      hasBefore: controller.hasBefore(),
+      hasAfter: controller.hasAfter(),
+      cacheHit: this.options.articleContextCacheHit
+    });
+    const step = () => {
+      this.articleWindowWarmupFrame = null;
+      if (token !== this.articleWindowWarmupToken || this.currentMode !== "article" || controller !== this.articleRenderController) return;
+      if (this.articleWindowExpansionFrame !== null) return;
+      if (this.activeReadingRestore) {
+        this.articleWindowWarmupFrame = window.requestAnimationFrame(step);
+        return;
+      }
+      const previousHeight = this.articleEl.scrollHeight;
+      const previousTop = this.articleEl.scrollTop;
+      let changed = false;
+      let loadedBefore = false;
+      let chunks = 0;
+      while (chunks < 4 && controller.hasAfter()) {
+        if (!controller.loadAfter()) break;
+        changed = true;
+        chunks += 1;
+      }
+      while (chunks < 4 && !controller.hasAfter() && controller.hasBefore()) {
+        if (!controller.loadBefore()) break;
+        changed = true;
+        loadedBefore = true;
+        chunks += 1;
+      }
+      if (loadedBefore) {
+        this.blockReadingLocationCapture();
+        if (this.pendingArticlePixelRestoreTop !== null) {
+          const target = this.pendingArticlePixelRestoreTop;
+          const maxScroll = Math.max(0, this.articleEl.scrollHeight - this.articleEl.clientHeight);
+          this.articleEl.scrollTop = Math.min(target, maxScroll);
+        } else {
+          this.articleEl.scrollTop = previousTop + Math.max(0, this.articleEl.scrollHeight - previousHeight);
+        }
+      }
+      if (changed) this.refreshArticleWindowChrome();
+      if (controller.hasAfter() || controller.hasBefore()) {
+        this.articleWindowWarmupFrame = window.requestAnimationFrame(step);
+        return;
+      }
+      this.callbacks.onDebugLog("article", "window-warmup-complete", {
+        scrollHeight: this.articleEl.scrollHeight,
+        selectedId: this.selectedId
       });
-      const step = () => {
-          this.articleWindowWarmupFrame = null;
-          if (token !== this.articleWindowWarmupToken || this.currentMode !== "article" || controller !== this.articleRenderController)
-              return;
-          if (this.articleWindowExpansionFrame !== null)
-              return;
-          if (this.activeReadingRestore) {
-              this.articleWindowWarmupFrame = window.requestAnimationFrame(step);
-              return;
-          }
-          const previousHeight = this.articleEl.scrollHeight;
-          const previousTop = this.articleEl.scrollTop;
-          let changed = false;
-          let loadedBefore = false;
-          let chunks = 0;
-          while (chunks < 4 && controller.hasAfter()) {
-              if (!controller.loadAfter())
-                  break;
-              changed = true;
-              chunks += 1;
-          }
-          while (chunks < 4 && !controller.hasAfter() && controller.hasBefore()) {
-              if (!controller.loadBefore())
-                  break;
-              changed = true;
-              loadedBefore = true;
-              chunks += 1;
-          }
-          if (loadedBefore) {
-              this.blockReadingLocationCapture();
-              if (this.pendingArticlePixelRestoreTop !== null) {
-                  // warmup 尚未结束时即使某一帧已经能到达目标，也不能释放像素钉住；后续继续
-                  // prepend 前文仍会增加 scrollHeight。只有完整 warmup 结束后再进入稳定释放阶段。
-                  const target = this.pendingArticlePixelRestoreTop;
-                  const maxScroll = Math.max(0, this.articleEl.scrollHeight - this.articleEl.clientHeight);
-                  this.articleEl.scrollTop = Math.min(target, maxScroll);
-              }
-              else {
-                  this.articleEl.scrollTop = previousTop + Math.max(0, this.articleEl.scrollHeight - previousHeight);
-              }
-          }
-          if (changed)
-              this.refreshArticleWindowChrome();
-          if (controller.hasAfter() || controller.hasBefore()) {
-              this.articleWindowWarmupFrame = window.requestAnimationFrame(step);
-              return;
-          }
-          this.callbacks.onDebugLog("article", "window-warmup-complete", {
-              scrollHeight: this.articleEl.scrollHeight,
-              selectedId: this.selectedId
-          });
-          this.finishArticlePixelRestoreGuard();
-      };
-      this.articleWindowWarmupFrame = window.requestAnimationFrame(step);
+      this.finishArticlePixelRestoreGuard();
+    };
+    this.articleWindowWarmupFrame = window.requestAnimationFrame(step);
   }
   /**
    * 像素恢复强钉：capture 阶段把 warmup 和其它程序性滚动造成的偏离压回目标。
    * guard 本身不负责判断“已经完成”，避免某个中间帧短暂到位就过早释放。
    */
   startArticlePixelRestoreGuard(target) {
-      this.stopArticlePixelRestoreGuard();
-      const scroller = this.articleEl;
-      const guard = () => {
-          if (this.pendingArticlePixelRestoreTop === null) {
-              this.stopArticlePixelRestoreGuard();
-              return;
-          }
-          const wanted = Math.min(target, Math.max(0, scroller.scrollHeight - scroller.clientHeight));
-          if (Math.abs(scroller.scrollTop - wanted) > 1)
-              scroller.scrollTop = wanted;
-      };
-      scroller.addEventListener("scroll", guard, true);
-      this.articlePixelRestoreGuard = () => scroller.removeEventListener("scroll", guard, true);
+    this.stopArticlePixelRestoreGuard();
+    const scroller = this.articleEl;
+    const guard = () => {
+      if (this.pendingArticlePixelRestoreTop === null) {
+        this.stopArticlePixelRestoreGuard();
+        return;
+      }
+      const wanted = Math.min(target, Math.max(0, scroller.scrollHeight - scroller.clientHeight));
+      if (Math.abs(scroller.scrollTop - wanted) > 1) scroller.scrollTop = wanted;
+    };
+    scroller.addEventListener("scroll", guard, true);
+    this.articlePixelRestoreGuard = () => scroller.removeEventListener("scroll", guard, true);
   }
   /**
    * 在文章 warmup 全部完成后连续两帧确认像素位置稳定，再释放强钉。若文档最终比旧视口
    * 更短，则以最终 maxScroll 为合法落点；用户滚轮或指针接管会通过 stop 立即取消。
    */
   finishArticlePixelRestoreGuard() {
-      if (this.pendingArticlePixelRestoreTop === null)
-          return;
-      if (this.articlePixelRestoreSettleFrame !== null)
-          window.cancelAnimationFrame(this.articlePixelRestoreSettleFrame);
-      const target = this.pendingArticlePixelRestoreTop;
-      const scroller = this.articleEl;
-      let stableFrames = 0;
-      const settle = () => {
-          this.articlePixelRestoreSettleFrame = null;
-          if (this.pendingArticlePixelRestoreTop !== target || this.currentMode !== "article")
-              return;
-          const wanted = Math.min(target, Math.max(0, scroller.scrollHeight - scroller.clientHeight));
-          if (Math.abs(scroller.scrollTop - wanted) > 1) {
-              scroller.scrollTop = wanted;
-              stableFrames = 0;
-          }
-          else {
-              stableFrames += 1;
-          }
-          if (stableFrames >= 2) {
-              this.pendingArticlePixelRestoreTop = null;
-              this.stopArticlePixelRestoreGuard();
-              return;
-          }
-          this.articlePixelRestoreSettleFrame = window.requestAnimationFrame(settle);
-      };
+    if (this.pendingArticlePixelRestoreTop === null) return;
+    if (this.articlePixelRestoreSettleFrame !== null) window.cancelAnimationFrame(this.articlePixelRestoreSettleFrame);
+    const target = this.pendingArticlePixelRestoreTop;
+    const scroller = this.articleEl;
+    let stableFrames = 0;
+    const settle = () => {
+      this.articlePixelRestoreSettleFrame = null;
+      if (this.pendingArticlePixelRestoreTop !== target || this.currentMode !== "article") return;
+      const wanted = Math.min(target, Math.max(0, scroller.scrollHeight - scroller.clientHeight));
+      if (Math.abs(scroller.scrollTop - wanted) > 1) {
+        scroller.scrollTop = wanted;
+        stableFrames = 0;
+      } else {
+        stableFrames += 1;
+      }
+      if (stableFrames >= 2) {
+        this.pendingArticlePixelRestoreTop = null;
+        this.stopArticlePixelRestoreGuard();
+        return;
+      }
       this.articlePixelRestoreSettleFrame = window.requestAnimationFrame(settle);
+    };
+    this.articlePixelRestoreSettleFrame = window.requestAnimationFrame(settle);
   }
   /** 停止像素恢复 capture guard、稳定帧检查并移除监听。 */
   stopArticlePixelRestoreGuard() {
-      var _a;
-      if (this.articlePixelRestoreSettleFrame !== null)
-          window.cancelAnimationFrame(this.articlePixelRestoreSettleFrame);
-      this.articlePixelRestoreSettleFrame = null;
-      (_a = this.articlePixelRestoreGuard) === null || _a === void 0 ? void 0 : _a.call(this);
-      this.articlePixelRestoreGuard = null;
+    var _a2;
+    if (this.articlePixelRestoreSettleFrame !== null) window.cancelAnimationFrame(this.articlePixelRestoreSettleFrame);
+    this.articlePixelRestoreSettleFrame = null;
+    (_a2 = this.articlePixelRestoreGuard) == null ? void 0 : _a2.call(this);
+    this.articlePixelRestoreGuard = null;
   }
   /** Loads another window only when the reader reaches a rendered edge. */
   scheduleArticleWindowExpansion() {
@@ -18512,14 +18479,12 @@ var MindMapEditor = class {
    * @param previousSnapshot 异步上传开始前冻结的历史快照；未提供时现场捕获。
    */
   commitImagePreviewSourceChange(nodeId, blockId, action, previousSnapshot) {
-      if (previousSnapshot !== undefined)
-          this.history.captureSnapshot(previousSnapshot);
-      else
-          this.captureHistorySnapshot();
-      action();
-      this.notifyDocumentChange("none");
-      this.markSaving();
-      this.refreshImagePreviewSourceDom(nodeId, blockId);
+    if (previousSnapshot !== void 0) this.history.captureSnapshot(previousSnapshot);
+    else this.captureHistorySnapshot();
+    action();
+    this.notifyDocumentChange("none");
+    this.markSaving();
+    this.refreshImagePreviewSourceDom(nodeId, blockId);
   }
   /**
    * 只刷新当前来源变更影响到的图片 DOM。导图模式已有成熟的单节点刷新；文章/通读与
@@ -18527,89 +18492,91 @@ var MindMapEditor = class {
    * 删除最后来源时仅移除该块，并清理已经为空的同行图片容器。
    */
   refreshImagePreviewSourceDom(nodeId, blockId) {
-      var _a, _b, _c;
-      if (this.currentMode === "mindmap") {
-          this.refreshMindMapNode(nodeId);
-          return;
+    var _a2, _b2, _c;
+    if (this.currentMode === "mindmap") {
+      this.refreshMindMapNode(nodeId);
+      return;
+    }
+    const located = this.locateImageBlock(nodeId, blockId);
+    const escaped = CSS.escape(blockId);
+    const removeEmptyRow = (element) => {
+      const row = element.parentElement;
+      element.remove();
+      if ((row == null ? void 0 : row.matches(".mms-article-image-row, .mms-outline-image-row")) && row.childElementCount === 0) row.remove();
+    };
+    if (this.currentMode === "article" || this.currentMode === "reading") {
+      const shells = Array.from(this.articleEl.querySelectorAll(`.mms-article-content-block[data-block-id="${escaped}"]`));
+      if (!located) {
+        shells.forEach(removeEmptyRow);
+        return;
       }
-      const located = this.locateImageBlock(nodeId, blockId);
-      const escaped = CSS.escape(blockId);
-      const removeEmptyRow = (element) => {
-          const row = element.parentElement;
-          element.remove();
-          if ((row === null || row === void 0 ? void 0 : row.matches(".mms-article-image-row, .mms-outline-image-row")) && row.childElementCount === 0)
-              row.remove();
-      };
-      if (this.currentMode === "article" || this.currentMode === "reading") {
-          const shells = Array.from(this.articleEl.querySelectorAll(`.mms-article-content-block[data-block-id="${escaped}"]`));
-          if (!located) {
-              shells.forEach(removeEmptyRow);
-              return;
+      for (const shell of shells) {
+        const previousImage = shell.querySelector(":scope > img.mms-article-image");
+        const image = previousImage ? previousImage.cloneNode(false) : document.createElement("img");
+        if (previousImage) previousImage.replaceWith(image);
+        else shell.prepend(image);
+        image.className = `mms-article-image image-align-${(_a2 = located.block.align) != null ? _a2 : "center"}`;
+        image.alt = (_b2 = located.block.alt) != null ? _b2 : "\u56FE\u7247";
+        image.dataset.blockId = blockId;
+        image.style.width = located.block.width ? `${located.block.width}px` : "";
+        image.style.height = located.block.height ? `${located.block.height}px` : "";
+        let activeResolved = null;
+        loadImageWithFallback(
+          image,
+          shell,
+          located.block,
+          this.options.imageHostPriorityIds,
+          (source) => this.callbacks.resolveImage(source),
+          (_source, resolved) => {
+            activeResolved = resolved;
           }
-          for (const shell of shells) {
-              const previousImage = shell.querySelector(":scope > img.mms-article-image");
-              // 克隆已有 img 可保留当前 src/尺寸直到新的候选真正接管，同时清掉旧监听器，
-              // 避免每次来源管理都让目标图片本身先闪空或累积 click handler。
-              const image = previousImage
-                  ? previousImage.cloneNode(false)
-                  : document.createElement("img");
-              if (previousImage)
-                  previousImage.replaceWith(image);
-              else
-                  shell.prepend(image);
-              image.className = `mms-article-image image-align-${(_a = located.block.align) !== null && _a !== void 0 ? _a : "center"}`;
-              image.alt = (_b = located.block.alt) !== null && _b !== void 0 ? _b : "图片";
-              image.dataset.blockId = blockId;
-              image.style.width = located.block.width ? `${located.block.width}px` : "";
-              image.style.height = located.block.height ? `${located.block.height}px` : "";
-              let activeResolved = null;
-              loadImageWithFallback(image, shell, located.block, this.options.imageHostPriorityIds, (source) => this.callbacks.resolveImage(source), (_source, resolved) => { activeResolved = resolved; });
-              image.addEventListener("click", () => {
-                  if (activeResolved)
-                      this.openImagePreviewWithSources(nodeId, blockId);
-              });
-          }
-          return;
+        );
+        image.addEventListener("click", () => {
+          if (activeResolved) this.openImagePreviewWithSources(nodeId, blockId);
+        });
       }
-      if (this.currentMode === "outline") {
-          const figures = Array.from(this.outlineEl.querySelectorAll(`.mms-outline-image[data-block-id="${escaped}"]`));
-          if (!located) {
-              figures.forEach(removeEmptyRow);
-              return;
-          }
-          for (const figure of figures) {
-              const previousImage = figure.querySelector(":scope > img");
-              const image = previousImage
-                  ? previousImage.cloneNode(false)
-                  : document.createElement("img");
-              if (previousImage)
-                  previousImage.replaceWith(image);
-              else
-                  figure.prepend(image);
-              image.alt = (_c = located.block.alt) !== null && _c !== void 0 ? _c : "图片";
-              image.loading = "lazy";
-              image.style.width = located.block.width ? `${located.block.width}px` : "";
-              image.style.height = located.block.height ? `${located.block.height}px` : "";
-              let activeResolved = null;
-              loadImageWithFallback(image, figure, located.block, this.options.imageHostPriorityIds, this.callbacks.resolveImage, (_source, resolved) => { activeResolved = resolved; });
-              image.addEventListener("click", () => {
-                  if (activeResolved)
-                      this.openImagePreviewWithSources(nodeId, blockId);
-              });
-              const caption = figure.querySelector(":scope > figcaption");
-              if (located.block.alt) {
-                  if (caption)
-                      caption.textContent = located.block.alt;
-                  else
-                      figure.createEl("figcaption", { text: located.block.alt });
-              }
-              else {
-                  caption === null || caption === void 0 ? void 0 : caption.remove();
-              }
-          }
-          return;
+      return;
+    }
+    if (this.currentMode === "outline") {
+      const figures = Array.from(this.outlineEl.querySelectorAll(`.mms-outline-image[data-block-id="${escaped}"]`));
+      if (!located) {
+        figures.forEach(removeEmptyRow);
+        return;
       }
-      this.render();
+      for (const figure of figures) {
+        const previousImage = figure.querySelector(":scope > img");
+        const image = previousImage ? previousImage.cloneNode(false) : document.createElement("img");
+        if (previousImage) previousImage.replaceWith(image);
+        else figure.prepend(image);
+        image.alt = (_c = located.block.alt) != null ? _c : "\u56FE\u7247";
+        image.loading = "lazy";
+        image.style.width = located.block.width ? `${located.block.width}px` : "";
+        image.style.height = located.block.height ? `${located.block.height}px` : "";
+        let activeResolved = null;
+        loadImageWithFallback(
+          image,
+          figure,
+          located.block,
+          this.options.imageHostPriorityIds,
+          this.callbacks.resolveImage,
+          (_source, resolved) => {
+            activeResolved = resolved;
+          }
+        );
+        image.addEventListener("click", () => {
+          if (activeResolved) this.openImagePreviewWithSources(nodeId, blockId);
+        });
+        const caption = figure.querySelector(":scope > figcaption");
+        if (located.block.alt) {
+          if (caption) caption.textContent = located.block.alt;
+          else figure.createEl("figcaption", { text: located.block.alt });
+        } else {
+          caption == null ? void 0 : caption.remove();
+        }
+      }
+      return;
+    }
+    this.render();
   }
   /**
    * 通过统一历史与保存链路执行图片预览弹窗发起的一次来源变更。
@@ -18617,165 +18584,154 @@ var MindMapEditor = class {
    * @returns 图片块是否仍然存在；false 时预览弹窗会自动关闭。
    */
   async applyImagePreviewSourceChange(nodeId, blockId, change) {
-      if (!this.ensureEditable())
-          return true;
-      if (change.type === "reupload") {
-          const located = this.locateImageBlock(nodeId, blockId);
-          if (!located) {
-              new import_obsidian15.Notice("图片已不存在");
-              return false;
-          }
-          if (!this.callbacks.getImageHosts().length) {
-              new import_obsidian15.Notice("请先在设置中启用至少一个图床");
-              return true;
-          }
-          const hostIds = await chooseImageHosts(this.app, this.callbacks.getImageHosts(), this.callbacks.getDefaultUploadHostIds());
-          if (!hostIds)
-              return true;
-          const file = await selectImageFile();
-          if (!file)
-              return true;
-          const previousSnapshot = this.currentDocumentSnapshotJson();
-          this.invalidateDocumentSnapshotJson();
-          const batch = await this.callbacks.onUploadImage(file, file.name, hostIds);
-          if (!batch.successes.length) {
-              new import_obsidian15.Notice(`上传失败：${batch.failures.map((item) => `${item.hostName}：${item.error}`).join("；") || "未知错误"}`, 7000);
-              return true;
-          }
-          const merged = this.locateImageBlock(nodeId, blockId);
-          if (!merged) {
-              new import_obsidian15.Notice("图片已在此期间被移除");
-              return false;
-          }
-          const uploadedAt = new Date().toISOString();
-          this.commitImagePreviewSourceChange(nodeId, blockId, () => {
-              var _a;
-              const existing = new Map(((_a = merged.block.remoteSources) !== null && _a !== void 0 ? _a : []).map((item) => [item.hostId, item]));
-              batch.successes.forEach((item) => existing.set(item.hostId, {
-                  hostId: item.hostId,
-                  hostName: item.hostName,
-                  url: item.url,
-                  deleteKey: item.deleteKey,
-                  uploadedAt
-              }));
-              merged.block.remoteSources = Array.from(existing.values());
-              merged.block.source = batch.successes[0].url;
-              merged.block.localSource = undefined;
-              merged.block.contentHash = batch.contentHash;
-              if (!merged.block.alt)
-                  merged.block.alt = file.name.replace(/\.[^.]+$/, "");
-              replaceNodeContentBlocks(merged.node, merged.blocks);
-          }, previousSnapshot);
-          new import_obsidian15.Notice(`已更新并上传到：${batch.successes.map((item) => item.hostName).join("、")}`);
-          return true;
+    if (!this.ensureEditable()) return true;
+    if (change.type === "reupload") {
+      const located2 = this.locateImageBlock(nodeId, blockId);
+      if (!located2) {
+        new import_obsidian15.Notice("\u56FE\u7247\u5DF2\u4E0D\u5B58\u5728");
+        return false;
       }
-      if (change.type === "add") {
-          const located = this.locateImageBlock(nodeId, blockId);
-          if (!located) {
-              new import_obsidian15.Notice("图片已不存在");
-              return false;
-          }
-          const entry = createManualImageRemoteSource(change.url);
-          if (!entry) {
-              new import_obsidian15.Notice("请输入有效的 http(s) 图片地址");
-              return true;
-          }
-          if (imageSourceCandidates(located.block, true, []).some((candidate) => candidate.source === entry.url)) {
-              new import_obsidian15.Notice("该地址已经在来源列表中");
-              return true;
-          }
-          this.commitImagePreviewSourceChange(nodeId, blockId, () => {
-              var _a;
-              located.block.remoteSources = [...((_a = located.block.remoteSources) !== null && _a !== void 0 ? _a : []), entry];
-              replaceNodeContentBlocks(located.node, located.blocks);
-          });
-          return true;
+      if (!this.callbacks.getImageHosts().length) {
+        new import_obsidian15.Notice("\u8BF7\u5148\u5728\u8BBE\u7F6E\u4E2D\u542F\u7528\u81F3\u5C11\u4E00\u4E2A\u56FE\u5E8A");
+        return true;
       }
-      if (change.type === "replaceLocal") {
-          const located = this.locateImageBlock(nodeId, blockId);
-          if (!located) {
-              new import_obsidian15.Notice("图片已不存在");
-              return false;
-          }
-          const previousLocal = located.block.localSource;
-          const previousSource = located.block.source;
-          const sourceWasLocal = !/^https?:\/\//i.test(previousSource);
-          const file = await selectImageFile();
-          if (!file)
-              return true;
-          const path = await this.callbacks.onSavePastedImage(file, file.name);
-          if (!path) {
-              new import_obsidian15.Notice("保存本地图片失败", 7000);
-              return true;
-          }
-          this.commitImagePreviewSourceChange(nodeId, blockId, () => {
-              var _a;
-              located.block.localSource = path;
-              // 当前显示来源若本来指向本地文件，替换后必须跟随新本地路径，
-              // 否则旧文件回收后“当前图片”候选将加载失败；图片级默认来源同理。
-              if (sourceWasLocal)
-                  located.block.source = path;
-              if ((_a = located.block.sourcePriority) === null || _a === void 0 ? void 0 : _a.length) {
-                  located.block.sourcePriority = located.block.sourcePriority.map((item) => (sourceWasLocal && item === previousSource) || item === previousLocal ? path : item);
-              }
-              replaceNodeContentBlocks(located.node, located.blocks);
-          });
-          const recycled = new Set();
-          if (previousLocal && previousLocal !== path)
-              recycled.add(previousLocal);
-          if (sourceWasLocal && previousSource !== path)
-              recycled.add(previousSource);
-          if (recycled.size)
-              this.callbacks.onScheduleFileAssetDeletion([...recycled]);
-          new import_obsidian15.Notice("本地图片已更新");
-          return true;
+      const hostIds = await chooseImageHosts(this.app, this.callbacks.getImageHosts(), this.callbacks.getDefaultUploadHostIds());
+      if (!hostIds) return true;
+      const file = await selectImageFile();
+      if (!file) return true;
+      const previousSnapshot = this.currentDocumentSnapshotJson();
+      this.invalidateDocumentSnapshotJson();
+      const batch = await this.callbacks.onUploadImage(file, file.name, hostIds);
+      if (!batch.successes.length) {
+        new import_obsidian15.Notice(`\u4E0A\u4F20\u5931\u8D25\uFF1A${batch.failures.map((item) => `${item.hostName}\uFF1A${item.error}`).join("\uFF1B") || "\u672A\u77E5\u9519\u8BEF"}`, 7e3);
+        return true;
       }
-      if (change.type === "unsetDefault") {
-          const located = this.locateImageBlock(nodeId, blockId);
-          if (!located) {
-              new import_obsidian15.Notice("图片已不存在");
-              return false;
-          }
-          this.commitImagePreviewSourceChange(nodeId, blockId, () => {
-              clearImageSourceDefault(located.block, change.source);
-              replaceNodeContentBlocks(located.node, located.blocks);
-          });
-          return true;
+      const merged = this.locateImageBlock(nodeId, blockId);
+      if (!merged) {
+        new import_obsidian15.Notice("\u56FE\u7247\u5DF2\u5728\u6B64\u671F\u95F4\u88AB\u79FB\u9664");
+        return false;
       }
-      if (change.type === "setDefault") {
-          const located = this.locateImageBlock(nodeId, blockId);
-          if (!located) {
-              new import_obsidian15.Notice("图片已不存在");
-              return false;
-          }
-          if (!imageSourceCandidates(located.block, true, []).some((candidate) => candidate.source === change.source)) {
-              new import_obsidian15.Notice("该来源不在当前图片的来源列表中");
-              return true;
-          }
-          this.commitImagePreviewSourceChange(nodeId, blockId, () => {
-              setImageSourceDefault(located.block, change.source);
-              replaceNodeContentBlocks(located.node, located.blocks);
-          });
-          return true;
+      const uploadedAt = (/* @__PURE__ */ new Date()).toISOString();
+      this.commitImagePreviewSourceChange(nodeId, blockId, () => {
+        var _a2;
+        const existing = new Map(((_a2 = merged.block.remoteSources) != null ? _a2 : []).map((item) => [item.hostId, item]));
+        batch.successes.forEach((item) => existing.set(item.hostId, {
+          hostId: item.hostId,
+          hostName: item.hostName,
+          url: item.url,
+          deleteKey: item.deleteKey,
+          uploadedAt
+        }));
+        merged.block.remoteSources = Array.from(existing.values());
+        merged.block.source = batch.successes[0].url;
+        merged.block.localSource = void 0;
+        merged.block.contentHash = batch.contentHash;
+        if (!merged.block.alt) merged.block.alt = file.name.replace(/\.[^.]+$/, "");
+        replaceNodeContentBlocks(merged.node, merged.blocks);
+      }, previousSnapshot);
+      new import_obsidian15.Notice(`\u5DF2\u66F4\u65B0\u5E76\u4E0A\u4F20\u5230\uFF1A${batch.successes.map((item) => item.hostName).join("\u3001")}`);
+      return true;
+    }
+    if (change.type === "add") {
+      const located2 = this.locateImageBlock(nodeId, blockId);
+      if (!located2) {
+        new import_obsidian15.Notice("\u56FE\u7247\u5DF2\u4E0D\u5B58\u5728");
+        return false;
       }
-      const located = this.locateImageBlock(nodeId, blockId);
-      if (!located) {
-          new import_obsidian15.Notice("图片已不存在");
-          return false;
+      const entry = createManualImageRemoteSource(change.url);
+      if (!entry) {
+        new import_obsidian15.Notice("\u8BF7\u8F93\u5165\u6709\u6548\u7684 http(s) \u56FE\u7247\u5730\u5740");
+        return true;
       }
-      const remaining = removeImageSourceCandidate(located.block, change.source);
-      if (!remaining) {
-          await this.removeImageBlock(nodeId, blockId, true);
-          return false;
+      if (imageSourceCandidates(located2.block, true, []).some((candidate) => candidate.source === entry.url)) {
+        new import_obsidian15.Notice("\u8BE5\u5730\u5740\u5DF2\u7ECF\u5728\u6765\u6E90\u5217\u8868\u4E2D");
+        return true;
       }
       this.commitImagePreviewSourceChange(nodeId, blockId, () => {
-          located.block.source = remaining.source;
-          located.block.localSource = remaining.localSource;
-          located.block.remoteSources = remaining.remoteSources;
-          located.block.sourcePriority = remaining.sourcePriority;
-          replaceNodeContentBlocks(located.node, located.blocks);
+        var _a2;
+        located2.block.remoteSources = [...(_a2 = located2.block.remoteSources) != null ? _a2 : [], entry];
+        replaceNodeContentBlocks(located2.node, located2.blocks);
       });
       return true;
+    }
+    if (change.type === "replaceLocal") {
+      const located2 = this.locateImageBlock(nodeId, blockId);
+      if (!located2) {
+        new import_obsidian15.Notice("\u56FE\u7247\u5DF2\u4E0D\u5B58\u5728");
+        return false;
+      }
+      const previousLocal = located2.block.localSource;
+      const previousSource = located2.block.source;
+      const sourceWasLocal = !/^https?:\/\//i.test(previousSource);
+      const file = await selectImageFile();
+      if (!file) return true;
+      const path = await this.callbacks.onSavePastedImage(file, file.name);
+      if (!path) {
+        new import_obsidian15.Notice("\u4FDD\u5B58\u672C\u5730\u56FE\u7247\u5931\u8D25", 7e3);
+        return true;
+      }
+      this.commitImagePreviewSourceChange(nodeId, blockId, () => {
+        var _a2;
+        located2.block.localSource = path;
+        if (sourceWasLocal) located2.block.source = path;
+        if ((_a2 = located2.block.sourcePriority) == null ? void 0 : _a2.length) {
+          located2.block.sourcePriority = located2.block.sourcePriority.map((item) => sourceWasLocal && item === previousSource || item === previousLocal ? path : item);
+        }
+        replaceNodeContentBlocks(located2.node, located2.blocks);
+      });
+      const recycled = /* @__PURE__ */ new Set();
+      if (previousLocal && previousLocal !== path) recycled.add(previousLocal);
+      if (sourceWasLocal && previousSource !== path) recycled.add(previousSource);
+      if (recycled.size) this.callbacks.onScheduleFileAssetDeletion([...recycled]);
+      new import_obsidian15.Notice("\u672C\u5730\u56FE\u7247\u5DF2\u66F4\u65B0");
+      return true;
+    }
+    if (change.type === "unsetDefault") {
+      const located2 = this.locateImageBlock(nodeId, blockId);
+      if (!located2) {
+        new import_obsidian15.Notice("\u56FE\u7247\u5DF2\u4E0D\u5B58\u5728");
+        return false;
+      }
+      this.commitImagePreviewSourceChange(nodeId, blockId, () => {
+        clearImageSourceDefault(located2.block, change.source);
+        replaceNodeContentBlocks(located2.node, located2.blocks);
+      });
+      return true;
+    }
+    if (change.type === "setDefault") {
+      const located2 = this.locateImageBlock(nodeId, blockId);
+      if (!located2) {
+        new import_obsidian15.Notice("\u56FE\u7247\u5DF2\u4E0D\u5B58\u5728");
+        return false;
+      }
+      if (!imageSourceCandidates(located2.block, true, []).some((candidate) => candidate.source === change.source)) {
+        new import_obsidian15.Notice("\u8BE5\u6765\u6E90\u4E0D\u5728\u5F53\u524D\u56FE\u7247\u7684\u6765\u6E90\u5217\u8868\u4E2D");
+        return true;
+      }
+      this.commitImagePreviewSourceChange(nodeId, blockId, () => {
+        setImageSourceDefault(located2.block, change.source);
+        replaceNodeContentBlocks(located2.node, located2.blocks);
+      });
+      return true;
+    }
+    const located = this.locateImageBlock(nodeId, blockId);
+    if (!located) {
+      new import_obsidian15.Notice("\u56FE\u7247\u5DF2\u4E0D\u5B58\u5728");
+      return false;
+    }
+    const remaining = removeImageSourceCandidate(located.block, change.source);
+    if (!remaining) {
+      await this.removeImageBlock(nodeId, blockId, true);
+      return false;
+    }
+    this.commitImagePreviewSourceChange(nodeId, blockId, () => {
+      located.block.source = remaining.source;
+      located.block.localSource = remaining.localSource;
+      located.block.remoteSources = remaining.remoteSources;
+      located.block.sourcePriority = remaining.sourcePriority;
+      replaceNodeContentBlocks(located.node, located.blocks);
+    });
+    return true;
   }
   /** 将图片块设置为指定的水平对齐方式。 */
   setImageBlockAlignment(nodeId, blockId, align) {
@@ -18937,25 +18893,22 @@ var MindMapEditor = class {
    * @param preserveRenderedView 为 true 时只移除当前图片 DOM；普通块删除仍沿用完整渲染。
    */
   async removeImageBlock(nodeId, blockId, preserveRenderedView = false) {
-      const node = this.nodeById(nodeId);
-      if (!node || !this.ensureEditable())
-          return;
-      const blocks = nodeContentBlocks(node);
-      const removed = blocks.find((block) => block.type === "image" && block.id === blockId);
-      if (!removed)
-          return;
-      const removedSnapshot = JSON.parse(JSON.stringify(removed));
-      if (preserveRenderedView) {
-          this.commitImagePreviewSourceChange(nodeId, blockId, () => {
-              replaceNodeContentBlocks(node, blocks.filter((block) => block.id !== blockId));
-          });
-      }
-      else {
-          this.mutateWithoutArticleContext(() => {
-              replaceNodeContentBlocks(node, blocks.filter((block) => block.id !== blockId));
-          });
-      }
-      await this.callbacks.onCleanupRemovedImageRemoteAssets(removedSnapshot, this.getDocument());
+    const node = this.nodeById(nodeId);
+    if (!node || !this.ensureEditable()) return;
+    const blocks = nodeContentBlocks(node);
+    const removed = blocks.find((block) => block.type === "image" && block.id === blockId);
+    if (!removed) return;
+    const removedSnapshot = JSON.parse(JSON.stringify(removed));
+    if (preserveRenderedView) {
+      this.commitImagePreviewSourceChange(nodeId, blockId, () => {
+        replaceNodeContentBlocks(node, blocks.filter((block) => block.id !== blockId));
+      });
+    } else {
+      this.mutateWithoutArticleContext(() => {
+        replaceNodeContentBlocks(node, blocks.filter((block) => block.id !== blockId));
+      });
+    }
+    await this.callbacks.onCleanupRemovedImageRemoteAssets(removedSnapshot, this.getDocument());
   }
   /**
    * 打开context menu，并保持模型、界面和持久化状态的一致性。
