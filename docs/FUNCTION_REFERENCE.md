@@ -1940,9 +1940,9 @@ export function normalizeLatexForMathJax(value: string): string
 
 ### 函数 `wrapLatexForLineBreaks`
 
-源码：`src/core/latex.ts:67`
+源码：`src/core/latex.ts:68`
 
-Breaks an over-long inline formula into an `aligned` multi-line block. Long chains such as `R=...=...=...` cannot wrap on their own, so they push out of the page. Every top-level `=` becomes a line break inside an `aligned` environment, which MathJax lays out as one multi-line block that still flows with the surrounding text. Formulas that cannot be split keep their original single-line rendering.
+Breaks an over-long inline formula into an `aligned` multi-line block. Long chains such as `R=...=...=...` cannot wrap on their own, so they push out of the page. The first relation stays on the first line and every later top-level `=` becomes a line break inside an `aligned` environment, which MathJax lays out as one multi-line block that still flows with the surrounding text. Formulas with fewer than two top-level `=` keep their original single-line rendering.
 
 ```ts
 export function wrapLatexForLineBreaks(value: string): string | null
@@ -1950,7 +1950,7 @@ export function wrapLatexForLineBreaks(value: string): string | null
 
 ### 函数 `boxedContent`
 
-源码：`src/core/latex.ts:89`
+源码：`src/core/latex.ts:95`
 
 Returns the content of a source that is exactly one `\boxed{...}` group.
 
@@ -1960,7 +1960,7 @@ function boxedContent(source: string): string | null
 
 ### 函数 `splitLatexAtTopLevelRelation`
 
-源码：`src/core/latex.ts:117`
+源码：`src/core/latex.ts:123`
 
 Splits a formula source before every top-level `=`. Braces, escaped characters and command groups keep their operators intact, so only the relations that separate the steps of the formula become breaks.
 
@@ -1970,7 +1970,7 @@ function splitLatexAtTopLevelRelation(source: string): string[]
 
 ### 函数 `splitLatexText`
 
-源码：`src/core/latex.ts:151`
+源码：`src/core/latex.ts:157`
 
 Splits a text block into plain-text and formula segments. Double-dollar formulas only use display layout when the whole text block contains that formula and whitespace. This recovers legacy content such as `通项公式：$$a_n=...$$` as inline math. Repeated or asymmetric dollar runs from older double-wrapping bugs are also recovered as inline formulas.
 

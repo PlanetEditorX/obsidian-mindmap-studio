@@ -57,10 +57,11 @@ export function normalizeLatexForMathJax(value: string): string {
  * Breaks an over-long inline formula into an `aligned` multi-line block.
  *
  * Long chains such as `R=...=...=...` cannot wrap on their own, so they push
- * out of the page. Every top-level `=` becomes a line break inside an
- * `aligned` environment, which MathJax lays out as one multi-line block that
- * still flows with the surrounding text. Formulas that cannot be split keep
- * their original single-line rendering.
+ * out of the page. The first relation stays on the first line and every later
+ * top-level `=` becomes a line break inside an `aligned` environment, which
+ * MathJax lays out as one multi-line block that still flows with the
+ * surrounding text. Formulas with fewer than two top-level `=` keep their
+ * original single-line rendering.
  *
  * @returns The aligned source, or null when the formula must stay as-is.
  */
@@ -75,8 +76,13 @@ export function wrapLatexForLineBreaks(value: string): string | null {
     return inner ? `\\boxed{${inner}}` : null;
   }
   const parts = splitLatexAtTopLevelRelation(source);
-  if (parts.length < 2 || parts.some((part) => !part.trim())) return null;
-  const lines = parts.map((part, index) => (index ? `& ${part.trim()}` : part.trim()));
+  // 至少要两个顶层 `=` 才能断行：第一个等号留在首行（`a = b = c` → `a = b \\ & = c`），
+  // 避免首行只剩下左侧式子。
+  if (parts.length < 3 || parts.some((part) => !part.trim())) return null;
+  const lines = [
+    `${parts[0]!.trim()} ${parts[1]!.trim()}`,
+    ...parts.slice(2).map((part) => `& ${part.trim()}`)
+  ];
   return `\\begin{aligned} ${lines.join(" \\\\ ")} \\end{aligned}`;
 }
 
