@@ -106,6 +106,20 @@ test("article family refreshes keep the reading position across the skeleton ren
   assert.match(renderArticle, /const location = latestRequestedLocation \?\? previousLocation \?\? rebuildLocation \?\? this\.lastReadingLocation;/, "a rebuilt page keeps the semantic anchor instead of a clamped pixel offset");
 });
 
+test("article warmup re-anchors the semantic position once the window is fully loaded", () => {
+  // 切片阶段节点上方只渲染部分正文，按当时偏移算出的落点会随补载漂移数千像素；
+  // 补载结束后必须用同一语义锚点重新校正一次，否则视口停在离目标很远的位置。
+  assert.match(
+    editorSource,
+    /private reapplyArticleAnchor\(\): void \{[\s\S]*this\.pendingArticleAnchorLocation = null;[\s\S]*this\.restoreReadingLocation\("article", location\)/,
+    "the re-anchor re-applies the recorded semantic anchor"
+  );
+  const warmup = editorSource.match(/private scheduleArticleWindowWarmup\(\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
+  assert.match(warmup, /"window-warmup-complete"[\s\S]*this\.reapplyArticleAnchor\(\);/, "the re-anchor runs right after the window finishes loading");
+  assert.match(editorSource, /this\.pendingArticleAnchorLocation = location;/, "the render records the anchor it applied");
+  assert.match(editorSource, /onwheel = \(\) => \{\s*\n\s*this\.pendingArticlePixelRestoreTop = null;\s*\n\s*this\.pendingArticleAnchorLocation = null;/, "user takeover drops the pending re-anchor");
+});
+
 test("screenshot shortcut remains available while an article line is being edited", () => {
   const keydown = editorSource.match(/private handleKeydown\(event: KeyboardEvent\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
   assert.match(keydown, /this\.shortcutMatches\(event, this\.options\.screenshotShortcut\)[\s\S]*if \(this\.inlineEditingId !== null\) return/);

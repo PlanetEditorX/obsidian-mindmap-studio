@@ -335,6 +335,11 @@ export class MindMapEditor {
    * 把视口继续向下推；只有全部窗口补载结束并连续两帧稳定后才释放。
    */
   private pendingArticlePixelRestoreTop: number | null = null;
+  /**
+   * 本次渲染已应用的语义锚点。窗口分帧向前补载结束后用它再校正一次：切片阶段节点上方
+   * 只渲染了部分正文，按该偏移算出的落点会随补载漂移，必须在 DOM 定型后重新锚定。
+   */
+  private pendingArticleAnchorLocation: ReadingLocation | null = null;
   /** 像素恢复期间的 capture 阶段 scroll guard：压制 warmup 与其它程序性滚动造成的偏移。 */
   private articlePixelRestoreGuard: (() => void) | null = null;
   /** warmup 完成后的两帧稳定检查；用户接管滚动或新渲染会立即取消。 */
@@ -3145,11 +3150,13 @@ export class MindMapEditor {
       };
       this.articleEl.onwheel = () => {
         this.pendingArticlePixelRestoreTop = null;
+        this.pendingArticleAnchorLocation = null;
         this.stopArticlePixelRestoreGuard();
         this.cancelReadingLocationRestore();
       };
       this.articleEl.onpointerdown = () => {
         this.pendingArticlePixelRestoreTop = null;
+        this.pendingArticleAnchorLocation = null;
         this.stopArticlePixelRestoreGuard();
         this.cancelReadingLocationRestore();
       };
@@ -3177,6 +3184,7 @@ export class MindMapEditor {
       // 语义锚点优先于像素锚点：像素偏移在窗口分帧向前补载后会指向另一段内容，
       // 而节点 + 节点内比例在任何窗口切片下都表示同一处正文。
       const location = latestRequestedLocation ?? previousLocation ?? rebuildLocation ?? this.lastReadingLocation;
+      this.pendingArticleAnchorLocation = location;
       if (location) this.restoreReadingLocation("article", location);
       else {
         this.pendingArticlePixelRestoreTop = previousScroll.top;
@@ -3366,9 +3374,24 @@ export class MindMapEditor {
         scrollHeight: this.articleEl.scrollHeight,
         selectedId: this.selectedId
       });
+      this.reapplyArticleAnchor();
       this.finishArticlePixelRestoreGuard();
     };
     this.articleWindowWarmupFrame = window.requestAnimationFrame(step);
+  }
+
+  /**
+   * 窗口分帧向前补载结束后用同一语义锚点再校正一次视口。
+   *
+   * 切片阶段节点上方只渲染了部分正文，按当时偏移算出的落点会随补载漂移（例如在图片前
+   * 添加文字后视口偏离数千像素）。DOM 定型后重新锚定可把节点放回记录的视口比例；用户在
+   * 补载期间滚动或点击会清空锚点，避免与用户操作抢滚动位置。
+   */
+  private reapplyArticleAnchor(): void {
+    const location = this.pendingArticleAnchorLocation;
+    this.pendingArticleAnchorLocation = null;
+    if (!location || this.currentMode !== "article") return;
+    this.restoreReadingLocation("article", location);
   }
 
   /**
