@@ -187,10 +187,12 @@ test("image preview source changes update only the affected image block", () => 
 
 test("article pixel restore stays pinned until warmup really completes", () => {
   const warmup = editorSource.match(/private scheduleArticleWindowWarmup\(\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
+  const prepend = editorSource.match(/private loadArticleChunkBefore\(load: \(\) => boolean\): boolean \{[\s\S]*?\n  \}/)?.[0] ?? "";
   const guard = editorSource.match(/private startArticlePixelRestoreGuard\(target: number\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
   const finish = editorSource.match(/private finishArticlePixelRestoreGuard\(\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
 
-  assert.match(warmup, /this\.articleEl\.scrollTop = Math\.min\(target, maxScroll\)/, "every prepend frame must stay pinned to the recorded pixel target");
+  assert.match(warmup, /this\.loadArticleChunkBefore\(\(\) => controller\.loadBefore\(\)\)/, "every prepend frame goes through the pinned helper");
+  assert.match(prepend, /this\.articleEl\.scrollTop = Math\.min\(pixelTarget, maxScroll\)/, "every prepend frame must stay pinned to the recorded pixel target");
   assert.doesNotMatch(warmup, /scrollTop >= target[\s\S]{0,80}pendingArticlePixelRestoreTop = null/, "an intermediate warmup frame must not release the pin");
   assert.match(warmup, /window-warmup-complete[\s\S]*this\.finishArticlePixelRestoreGuard\(\)/, "release starts only after all before/after chunks are loaded");
   assert.match(guard, /addEventListener\("scroll", guard, true\)/, "capture-phase guard must suppress programmatic drift while warmup is active");

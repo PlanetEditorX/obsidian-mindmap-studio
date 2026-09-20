@@ -120,6 +120,23 @@ test("article warmup re-anchors the semantic position once the window is fully l
   assert.match(editorSource, /onwheel = \(\) => \{\s*\n\s*this\.pendingArticlePixelRestoreTop = null;\s*\n\s*this\.pendingArticleAnchorLocation = null;/, "user takeover drops the pending re-anchor");
 });
 
+test("article window prepends pin a reference node instead of trusting the height delta", () => {
+  // 只按 scrollHeight 差值补偿会漏算部分前文（实测补载约 13.8k 像素时少补 3.7k），
+  // 视口被后续排版推走数千像素；向前补载必须按参照节点的屏幕位移补偿。
+  const helper = editorSource.match(/private loadArticleChunkBefore\(load: \(\) => boolean\): boolean \{[\s\S]*?\n  \}/)?.[0] ?? "";
+  assert.match(helper, /const anchor = pixelTarget === null \? this\.articlePrependAnchor\(\) : null/, "the prepend resolves a DOM reference node");
+  assert.match(helper, /this\.articleEl\.scrollTop \+= nextTop - anchorTop/, "the reference node keeps its screen position");
+  assert.match(helper, /previousTop \+ Math\.max\(0, this\.articleEl\.scrollHeight - previousHeight\)/, "the height delta stays as the fallback");
+  assert.match(helper, /this\.articleEl\.scrollTop = Math\.min\(pixelTarget, maxScroll\)/, "an active pixel pin still wins over the reference node");
+  const anchor = editorSource.match(/private articlePrependAnchor\(\): HTMLElement \| null \{[\s\S]*?\n  \}/)?.[0] ?? "";
+  assert.match(anchor, /this\.pendingArticleAnchorLocation\?\.nodeIds\[0\]/, "the semantic anchor wins while it is still mounted");
+  assert.match(anchor, /querySelector<HTMLElement>\("\.mms-article-node"\)/, "otherwise the front-most window node is the reference");
+  const warmup = editorSource.match(/private scheduleArticleWindowWarmup\(\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
+  assert.match(warmup, /this\.loadArticleChunkBefore\(\(\) => controller\.loadBefore\(\)\)/, "warmup prepends go through the pinned helper");
+  const expand = editorSource.match(/private expandArticleWindow\(direction: "before" \| "after"\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
+  assert.match(expand, /this\.loadArticleChunkBefore\(\(\) => controller\.loadBefore\(\)\)/, "scroll-triggered prepends go through the pinned helper");
+});
+
 test("screenshot shortcut remains available while an article line is being edited", () => {
   const keydown = editorSource.match(/private handleKeydown\(event: KeyboardEvent\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
   assert.match(keydown, /this\.shortcutMatches\(event, this\.options\.screenshotShortcut\)[\s\S]*if \(this\.inlineEditingId !== null\) return/);

@@ -15452,23 +15452,53 @@ var MindMapEditor = class {
     this.articleWindowExpansionFrame = window.requestAnimationFrame(() => {
       this.articleWindowExpansionFrame = window.requestAnimationFrame(() => {
         this.articleWindowExpansionFrame = null;
-        const previousHeight = this.articleEl.scrollHeight;
-        const previousTop = this.articleEl.scrollTop;
-        const changed = direction === "before" ? controller.loadBefore() : controller.loadAfter();
+        const changed = direction === "before" ? this.loadArticleChunkBefore(() => controller.loadBefore()) : controller.loadAfter();
         loader == null ? void 0 : loader.removeClass("is-loading");
         loader == null ? void 0 : loader.removeAttribute("aria-busy");
         if (!changed) {
           this.scheduleArticleWindowWarmup();
           return;
         }
-        if (direction === "before") {
-          this.blockReadingLocationCapture();
-          this.articleEl.scrollTop = previousTop + Math.max(0, this.articleEl.scrollHeight - previousHeight);
-        }
         this.refreshArticleWindowChrome();
         this.scheduleArticleWindowWarmup();
       });
     });
+  }
+  /**
+   * 向前补载一段前文并让视口停在原处。
+   *
+   * 参照节点优先取当前语义锚点，锚点已被用户操作清空时退回窗口内最靠前的节点：前文只会
+   * 插在它上方，钉住它的屏幕位置就钉住了用户正在看的整段正文。只按 `scrollHeight` 差值
+   * 补偿会漏算部分前文（实测补载约 13.8k 像素时少补 3.7k），视口会被后续排版推走数千像素，
+   * 补载结束后再一次性校正就表现为“乱跳”。
+   */
+  loadArticleChunkBefore(load) {
+    const pixelTarget = this.pendingArticlePixelRestoreTop;
+    const anchor = pixelTarget === null ? this.articlePrependAnchor() : null;
+    const anchorTop = anchor ? anchor.getBoundingClientRect().top : null;
+    const previousHeight = this.articleEl.scrollHeight;
+    const previousTop = this.articleEl.scrollTop;
+    if (!load()) return false;
+    this.blockReadingLocationCapture();
+    if (pixelTarget !== null) {
+      const maxScroll = Math.max(0, this.articleEl.scrollHeight - this.articleEl.clientHeight);
+      this.articleEl.scrollTop = Math.min(pixelTarget, maxScroll);
+      return true;
+    }
+    const nextTop = anchor && anchor.isConnected ? anchor.getBoundingClientRect().top : null;
+    if (anchorTop !== null && nextTop !== null) this.articleEl.scrollTop += nextTop - anchorTop;
+    else this.articleEl.scrollTop = previousTop + Math.max(0, this.articleEl.scrollHeight - previousHeight);
+    return true;
+  }
+  /** 向前补载时用于稳定视口的参照节点；没有可用节点时返回 null，调用方退回差值补偿。 */
+  articlePrependAnchor() {
+    var _a2;
+    const nodeId = (_a2 = this.pendingArticleAnchorLocation) == null ? void 0 : _a2.nodeIds[0];
+    if (nodeId) {
+      const target = this.articleEl.querySelector(`.mms-article-node[data-node-id="${CSS.escape(nodeId)}"]`);
+      if (target) return target;
+    }
+    return this.articleEl.querySelector(".mms-article-node");
   }
   /**
    * Hydrates the rest of the current article in small animation-frame batches. The first target
@@ -15494,10 +15524,7 @@ var MindMapEditor = class {
         this.articleWindowWarmupFrame = window.requestAnimationFrame(step);
         return;
       }
-      const previousHeight = this.articleEl.scrollHeight;
-      const previousTop = this.articleEl.scrollTop;
       let changed = false;
-      let loadedBefore = false;
       let chunks = 0;
       while (chunks < 4 && controller.hasAfter()) {
         if (!controller.loadAfter()) break;
@@ -15505,20 +15532,9 @@ var MindMapEditor = class {
         chunks += 1;
       }
       while (chunks < 4 && !controller.hasAfter() && controller.hasBefore()) {
-        if (!controller.loadBefore()) break;
+        if (!this.loadArticleChunkBefore(() => controller.loadBefore())) break;
         changed = true;
-        loadedBefore = true;
         chunks += 1;
-      }
-      if (loadedBefore) {
-        this.blockReadingLocationCapture();
-        if (this.pendingArticlePixelRestoreTop !== null) {
-          const target = this.pendingArticlePixelRestoreTop;
-          const maxScroll = Math.max(0, this.articleEl.scrollHeight - this.articleEl.clientHeight);
-          this.articleEl.scrollTop = Math.min(target, maxScroll);
-        } else {
-          this.articleEl.scrollTop = previousTop + Math.max(0, this.articleEl.scrollHeight - previousHeight);
-        }
       }
       if (changed) this.refreshArticleWindowChrome();
       if (controller.hasAfter() || controller.hasBefore()) {
