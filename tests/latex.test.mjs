@@ -60,7 +60,12 @@ test("multiple inline formulas remain separate text-flow segments", () => {
 test("over-long inline formulas break into an aligned block after the first relation", () => {
   assert.equal(
     latex.wrapLatexForLineBreaks("R = 5.25\\%,\\ R \\times (1-R) = 5\\%"),
-    "\\begin{aligned} R = 5.25\\%,\\ R \\times (1-R) \\\\ & = 5\\% \\end{aligned}"
+    "\\begin{aligned} R & = 5.25\\%,\\ R \\times (1-R) \\\\ & = 5\\% \\end{aligned}"
+  );
+  // 首个等号同时是对齐点，后续等号与它竖直对齐。
+  assert.equal(
+    latex.wrapLatexForLineBreaks("a = b = c"),
+    "\\begin{aligned} a & = b \\\\ & = c \\end{aligned}"
   );
   // 只有一个顶层等号时不换行，首行不会只剩左侧式子。
   assert.equal(latex.wrapLatexForLineBreaks("a = b"), null);
@@ -73,14 +78,14 @@ test("line-break wrapping keeps braces, escapes and existing environments intact
   assert.equal(latex.wrapLatexForLineBreaks("\\left\\{ x = 1 \\right\\}"), null);
   assert.equal(
     latex.wrapLatexForLineBreaks("\\text{甲=乙} = x = y"),
-    "\\begin{aligned} \\text{甲=乙} = x \\\\ & = y \\end{aligned}"
+    "\\begin{aligned} \\text{甲=乙} & = x \\\\ & = y \\end{aligned}"
   );
 });
 
 test("boxed formulas keep the box and break the content inside it", () => {
   assert.equal(
     latex.wrapLatexForLineBreaks("\\boxed{a = b = c}"),
-    "\\boxed{\\begin{aligned} a = b \\\\ & = c \\end{aligned}}"
+    "\\boxed{\\begin{aligned} a & = b \\\\ & = c \\end{aligned}}"
   );
   assert.equal(latex.wrapLatexForLineBreaks("\\boxed{a+b}"), null);
 });

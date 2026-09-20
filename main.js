@@ -4855,7 +4855,7 @@ function wrapLatexForLineBreaks(value) {
   const parts = splitLatexAtTopLevelRelation(source);
   if (parts.length < 3 || parts.some((part) => !part.trim())) return null;
   const lines = [
-    `${parts[0].trim()} ${parts[1].trim()}`,
+    `${parts[0].trim()} & ${parts[1].trim()}`,
     ...parts.slice(2).map((part) => `& ${part.trim()}`)
   ];
   return `\\begin{aligned} ${lines.join(" \\\\ ")} \\end{aligned}`;
