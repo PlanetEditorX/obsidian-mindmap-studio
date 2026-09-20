@@ -1153,7 +1153,11 @@ body {
   white-space: nowrap;
 }
 
+/* 公式整体放大：MathJax 内部以 em 为单位排版，放大容器会等比放大嵌套分数，
+   避免“几分之几里再套几分之几”时嵌套部分过度缩小到难以阅读。
+   可用 --mms-math-scale 自定义倍率（默认 1.2）。 */
 .mms-node-math {
+  font-size: calc(1em * var(--mms-math-scale, 1.2)) !important;
   width: auto !important;
   max-width: 100%;
   overflow: visible !important;
