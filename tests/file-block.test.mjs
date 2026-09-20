@@ -136,6 +136,21 @@ test("replaced and removed image local copies enter deferred recycling", () => {
   assert.match(removeBlock, /removed\.type === "image" && removed\.localSource\) this\.callbacks\.onScheduleFileAssetDeletion\(\[removed\.localSource\]/, "deleted image blocks must recycle their local copy");
 });
 
+test("removing a whole image block recycles its local copy even when the remote host is unreachable", () => {
+  const removeImageBlock = editorSource.match(/private async removeImageBlock\(nodeId: string, blockId: string, preserveRenderedView = false\): Promise<void> \{[\s\S]*?\n  \}/)?.[0] ?? "";
+  assert.match(removeImageBlock, /onCleanupRemovedImageRemoteAssets\(removedSnapshot, this\.getDocument\(\)\)/, "the image block removal must still schedule remote host cleanup");
+  assert.match(removeImageBlock, /if \(removed\.localSource\) this\.callbacks\.onScheduleFileAssetDeletion\(\[removed\.localSource\]\)/, "removing the block must independently recycle its local copy so a dead host does not block local cleanup");
+});
+
+test("image preview auto-falls back to the next working source when the primary one fails to load", () => {
+  assert.match(editorModalsSource, /image\.addEventListener\("error", advanceOnLoadError\)/, "preview image failures must route through the auto-fallback handler");
+  const advance = editorModalsSource.match(/const advanceOnLoadError = \(\): void => \{[\s\S]*?\n    \};/)?.[0] ?? "";
+  assert.match(advance, /failedSources\.add\(activeSource\)/, "the failing source must be recorded so it is not retried in a loop");
+  assert.match(advance, /candidates\(\)\.find\(\(candidate\) => candidate\.source !== activeSource && !failedSources\.has\(candidate\.source\)\)/, "fallback must pick the next ordered candidate that has not failed");
+  assert.match(advance, /switchSource\(next\);/, "fallback must switch to the next candidate instead of staying on the dead source");
+  assert.match(advance, /· 加载失败/, "a failure card is only shown when every candidate has been exhausted");
+});
+
 test("image local copies reveal in the system file explorer with selection", () => {
   assert.match(editorSource, /setTitle\("在文件资源管理器中显示"\)[\s\S]{0,120}onRevealFileInSystemExplorer\(block\.localSource!\)/);
   const reveal = mainSource.match(/async revealFileInSystemExplorer\(vaultPath: string\): Promise<void> \{[\s\S]*?\n  \}/)?.[0] ?? "";

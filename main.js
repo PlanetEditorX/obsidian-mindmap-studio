@@ -7187,6 +7187,7 @@ var ImagePreviewModal = class extends import_obsidian4.Modal {
     let baseWidth = 0;
     let baseHeight = 0;
     let activeSource = this.source;
+    const failedSources = /* @__PURE__ */ new Set();
     let panX = 0;
     let panY = 0;
     let addPanelOpen = false;
@@ -7232,6 +7233,7 @@ var ImagePreviewModal = class extends import_obsidian4.Modal {
     image.addEventListener("pointercancel", endPan);
     image.addEventListener("load", () => {
       var _a2;
+      sourceBar.removeClass("has-error");
       const availableWidth = Math.max(320, imageWrap.clientWidth * 0.9);
       const availableHeight = Math.max(220, imageWrap.clientHeight * 0.9);
       const fit = Math.min(1, availableWidth / Math.max(1, image.naturalWidth), availableHeight / Math.max(1, image.naturalHeight));
@@ -7239,13 +7241,20 @@ var ImagePreviewModal = class extends import_obsidian4.Modal {
       baseHeight = Math.max(1, image.naturalHeight * fit);
       applyScale();
       sourceStatus.setText(`${(_a2 = sourceStatus.dataset.label) != null ? _a2 : "\u5F53\u524D\u56FE\u7247"} \xB7 ${image.naturalWidth}\xD7${image.naturalHeight}`);
-      sourceBar.removeClass("has-error");
     });
-    image.addEventListener("error", () => {
+    const advanceOnLoadError = () => {
       var _a2;
-      sourceStatus.setText(`${(_a2 = sourceStatus.dataset.label) != null ? _a2 : "\u5F53\u524D\u56FE\u7247"} \xB7 \u52A0\u8F7D\u5931\u8D25`);
-      sourceBar.addClass("has-error");
-    });
+      failedSources.add(activeSource);
+      const next = candidates().find((candidate) => candidate.source !== activeSource && !failedSources.has(candidate.source));
+      if (next) {
+        switchSource(next);
+        renderSourceBar();
+      } else {
+        sourceStatus.setText(`${(_a2 = sourceStatus.dataset.label) != null ? _a2 : "\u5F53\u524D\u56FE\u7247"} \xB7 \u52A0\u8F7D\u5931\u8D25`);
+        sourceBar.addClass("has-error");
+      }
+    };
+    image.addEventListener("error", advanceOnLoadError);
     const button = (label, action) => {
       const element = toolbar.createEl("button", { text: label, attr: { type: "button" } });
       element.addEventListener("click", action);
@@ -7273,6 +7282,7 @@ var ImagePreviewModal = class extends import_obsidian4.Modal {
     };
     const switchSource = (candidate) => {
       var _a2, _b2;
+      failedSources.delete(candidate.source);
       const resolved = (_b2 = (_a2 = this.resolveSource) == null ? void 0 : _a2.call(this, candidate.source)) != null ? _b2 : candidate.source;
       this.scale = 1;
       baseWidth = 0;
@@ -12661,6 +12671,8 @@ var MindMapEditor = class {
     this.nodeTreeIndexStale = false;
     /** 下一次允许执行修订序列化抽样校验的时间戳。 */
     this.snapshotAssertionDueAt = 0;
+    /** 记忆的最近聚焦节点 id；空白画布拖拽取消选中后仍保留，用作非导图模式切换的初始落点。 */
+    this.focusAnchorNodeId = "";
     this.selectedIds = /* @__PURE__ */ new Set();
     /** Selection state last synchronized to DOM classes; invalidated when non-canvas views rebuild their DOM. */
     this.appliedSelectionIds = /* @__PURE__ */ new Set();
@@ -12935,6 +12947,7 @@ var MindMapEditor = class {
     this.readOnly = this.currentMode === "article" ? resolveArticleEntryReadOnly(this.options.articleEntryLockMode, documentReadOnly, this.options.articleLastReadOnly) : this.currentMode === "reading" || this.currentMode === "question-bank" ? true : documentReadOnly;
     const restored = this.resolveStoredLocation();
     this.selectedId = (restored == null ? void 0 : restored.filePath) === this.options.currentFilePath ? restored.nodeId : this.document.root.id;
+    this.focusAnchorNodeId = this.selectedId;
     if (fileChanged) this.initialReadingLocationRestorePending = this.currentMode !== "mindmap";
     if (resetHistory) {
       this.history.reset();
@@ -15715,7 +15728,7 @@ var MindMapEditor = class {
       app: this.app,
       document: this.document,
       currentFilePath: this.options.currentFilePath,
-      selectedId: this.selectedId,
+      selectedId: this.selectedId || this.focusAnchorNodeId,
       readOnly: this.readOnly,
       isReadOnly: () => this.readOnly,
       articleBaseDepth: this.options.articleBaseDepth,
@@ -16277,7 +16290,10 @@ var MindMapEditor = class {
   selectNode(id) {
     this.selectedIds.clear();
     this.selectedId = id != null ? id : "";
-    if (id) this.selectedIds.add(id);
+    if (id) {
+      this.selectedIds.add(id);
+      this.focusAnchorNodeId = id;
+    }
     this.applySelectionClasses();
     if (id) {
       this.rememberLocation(this.createSelectionLocation(id));
@@ -18317,6 +18333,7 @@ var MindMapEditor = class {
       }
     }
     this.selectedId = id;
+    this.focusAnchorNodeId = id;
     this.selectedIds.clear();
     this.selectedIds.add(id);
     if (this.currentMode === "article" && id !== this.document.root.id && ((_c = this.document.view) == null ? void 0 : _c.articleLandingMode) !== "article") {
@@ -18965,6 +18982,7 @@ var MindMapEditor = class {
       });
     }
     await this.callbacks.onCleanupRemovedImageRemoteAssets(removedSnapshot, this.getDocument());
+    if (removed.localSource) this.callbacks.onScheduleFileAssetDeletion([removed.localSource]);
   }
   /**
    * 打开context menu，并保持模型、界面和持久化状态的一致性。

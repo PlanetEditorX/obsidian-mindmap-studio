@@ -192,6 +192,8 @@ export class ImagePreviewModal extends Modal {
     let baseWidth = 0;
     let baseHeight = 0;
     let activeSource = this.source;
+    /** 已尝试但加载失败的来源；记录后自动回退到下一个可用来源，避免单一失效图床阻塞预览。 */
+    const failedSources = new Set<string>();
     let panX = 0;
     let panY = 0;
     let addPanelOpen = false;
@@ -236,6 +238,7 @@ export class ImagePreviewModal extends Modal {
     image.addEventListener("pointerup", endPan);
     image.addEventListener("pointercancel", endPan);
     image.addEventListener("load", () => {
+      sourceBar.removeClass("has-error");
       const availableWidth = Math.max(320, imageWrap.clientWidth * 0.9);
       const availableHeight = Math.max(220, imageWrap.clientHeight * 0.9);
       const fit = Math.min(1, availableWidth / Math.max(1, image.naturalWidth), availableHeight / Math.max(1, image.naturalHeight));
@@ -243,12 +246,23 @@ export class ImagePreviewModal extends Modal {
       baseHeight = Math.max(1, image.naturalHeight * fit);
       applyScale();
       sourceStatus.setText(`${sourceStatus.dataset.label ?? "当前图片"} · ${image.naturalWidth}×${image.naturalHeight}`);
-      sourceBar.removeClass("has-error");
     });
-    image.addEventListener("error", () => {
-      sourceStatus.setText(`${sourceStatus.dataset.label ?? "当前图片"} · 加载失败`);
-      sourceBar.addClass("has-error");
-    });
+    /**
+     * 当前来源加载失败时，自动按优先级回退到下一个可用来源（如本地副本），
+     * 而不是停留在失效图床上显示“加载失败”。
+     */
+    const advanceOnLoadError = (): void => {
+      failedSources.add(activeSource);
+      const next = candidates().find((candidate) => candidate.source !== activeSource && !failedSources.has(candidate.source));
+      if (next) {
+        switchSource(next);
+        renderSourceBar();
+      } else {
+        sourceStatus.setText(`${sourceStatus.dataset.label ?? "当前图片"} · 加载失败`);
+        sourceBar.addClass("has-error");
+      }
+    };
+    image.addEventListener("error", advanceOnLoadError);
     const button = (label: string, action: () => void): void => {
       const element = toolbar.createEl("button", { text: label, attr: { type: "button" } });
       element.addEventListener("click", action);
@@ -263,6 +277,8 @@ export class ImagePreviewModal extends Modal {
       return available.length ? available : list.slice(0, 1);
     };
     const switchSource = (candidate: MindMapImageSourceCandidate): void => {
+      // 用户手动重新选择某个来源时允许重试，取消该来源的失败标记。
+      failedSources.delete(candidate.source);
       const resolved = this.resolveSource?.(candidate.source) ?? candidate.source;
       this.scale = 1;
       baseWidth = 0;

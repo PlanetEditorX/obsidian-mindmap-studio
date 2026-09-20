@@ -232,6 +232,8 @@ export class MindMapEditor {
   private snapshotAssertionDueAt = 0;
   private layout: LayoutResult;
   private selectedId: string;
+  /** 记忆的最近聚焦节点 id；空白画布拖拽取消选中后仍保留，用作非导图模式切换的初始落点。 */
+  private focusAnchorNodeId = "";
   private readonly selectedIds = new Set<string>();
   /** Selection state last synchronized to DOM classes; invalidated when non-canvas views rebuild their DOM. */
   private readonly appliedSelectionIds = new Set<string>();
@@ -516,6 +518,7 @@ export class MindMapEditor {
         : documentReadOnly;
     const restored = this.resolveStoredLocation();
     this.selectedId = restored?.filePath === this.options.currentFilePath ? restored.nodeId : this.document.root.id;
+    this.focusAnchorNodeId = this.selectedId;
     if (fileChanged) this.initialReadingLocationRestorePending = this.currentMode !== "mindmap";
     if (resetHistory) {
       this.history.reset();
@@ -3582,7 +3585,7 @@ export class MindMapEditor {
       app: this.app,
       document: this.document,
       currentFilePath: this.options.currentFilePath,
-      selectedId: this.selectedId,
+      selectedId: this.selectedId || this.focusAnchorNodeId,
       readOnly: this.readOnly,
       isReadOnly: () => this.readOnly,
       articleBaseDepth: this.options.articleBaseDepth,
@@ -4203,7 +4206,11 @@ export class MindMapEditor {
   private selectNode(id: string | null): void {
     this.selectedIds.clear();
     this.selectedId = id ?? "";
-    if (id) this.selectedIds.add(id);
+    if (id) {
+      this.selectedIds.add(id);
+      // 空白画布拖拽/取消选中后仍记住最近聚焦节点，供非导图模式初始落点使用。
+      this.focusAnchorNodeId = id;
+    }
     this.applySelectionClasses();
     if (id) {
       this.rememberLocation(this.createSelectionLocation(id));
@@ -6386,6 +6393,7 @@ export class MindMapEditor {
       }
     }
     this.selectedId = id;
+    this.focusAnchorNodeId = id;
     this.selectedIds.clear();
     this.selectedIds.add(id);
     if (this.currentMode === "article"
@@ -7088,6 +7096,9 @@ export class MindMapEditor {
       });
     }
     await this.callbacks.onCleanupRemovedImageRemoteAssets(removedSnapshot, this.getDocument());
+    // 与 removeContentBlock 一致：图片本地副本的引用被显式删除后进入 60 秒延迟回收，
+    // 远端图床删除失败（如 NET::ERR_CONNECTION_REFUSED）不阻塞本地文件的回收。
+    if (removed.localSource) this.callbacks.onScheduleFileAssetDeletion([removed.localSource]);
   }
 
   /**
