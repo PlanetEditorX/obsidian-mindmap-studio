@@ -12757,6 +12757,8 @@ var MindMapEditor = class {
      * 只渲染了部分正文，按该偏移算出的落点会随补载漂移，必须在 DOM 定型后重新锚定。
      */
     this.pendingArticleAnchorLocation = null;
+    /** 语义锚点的逐帧保持：补载与前文异步排版（图片、公式）都会推动锚点，稳定前一直钉住。 */
+    this.articleAnchorHoldFrame = null;
     /** 像素恢复期间的 capture 阶段 scroll guard：压制 warmup 与其它程序性滚动造成的偏移。 */
     this.articlePixelRestoreGuard = null;
     /** warmup 完成后的两帧稳定检查；用户接管滚动或新渲染会立即取消。 */
@@ -15261,6 +15263,7 @@ var MindMapEditor = class {
     var _a2, _b2, _c, _d, _e, _f, _g;
     const reducedMotion = ((_a2 = window.matchMedia) == null ? void 0 : _a2.call(window, "(prefers-reduced-motion: reduce)").matches) === true;
     this.captureArticleRebuildLocation();
+    this.stopArticleAnchorHold();
     if (!this.options.articleContextReady) {
       this.callbacks.onDebugLog("article", "render-waiting-context", { selectedId: this.selectedId, pendingTarget: (_b2 = this.pendingArticleFocusLocation) == null ? void 0 : _b2.nodeIds[0], landingMode: (_c = this.document.view) == null ? void 0 : _c.articleLandingMode });
       this.cancelReadingLocationRestore();
@@ -15318,16 +15321,21 @@ var MindMapEditor = class {
       this.articleEl.onwheel = () => {
         this.pendingArticlePixelRestoreTop = null;
         this.pendingArticleAnchorLocation = null;
+        this.stopArticleAnchorHold();
         this.stopArticlePixelRestoreGuard();
         this.cancelReadingLocationRestore();
       };
       this.articleEl.onpointerdown = () => {
         this.pendingArticlePixelRestoreTop = null;
         this.pendingArticleAnchorLocation = null;
+        this.stopArticleAnchorHold();
         this.stopArticlePixelRestoreGuard();
         this.cancelReadingLocationRestore();
       };
-      this.articleEl.ontouchstart = () => this.cancelReadingLocationRestore();
+      this.articleEl.ontouchstart = () => {
+        this.stopArticleAnchorHold();
+        this.cancelReadingLocationRestore();
+      };
       if (directoryOnly) {
         this.blockReadingLocationCapture();
         this.articleEl.scrollTop = 0;
@@ -15349,8 +15357,10 @@ var MindMapEditor = class {
       }
       const location = (_d2 = (_c2 = latestRequestedLocation != null ? latestRequestedLocation : previousLocation) != null ? _c2 : rebuildLocation) != null ? _d2 : this.lastReadingLocation;
       this.pendingArticleAnchorLocation = location;
-      if (location) this.restoreReadingLocation("article", location);
-      else {
+      if (location) {
+        const resolved = this.restoreReadingLocation("article", location);
+        if (resolved) this.holdArticleAnchor(resolved);
+      } else {
         this.pendingArticlePixelRestoreTop = previousScroll.top;
         this.articleEl.scrollTop = previousScroll.top;
         this.articleEl.scrollLeft = previousScroll.left;
@@ -15561,7 +15571,50 @@ var MindMapEditor = class {
     const location = this.pendingArticleAnchorLocation;
     this.pendingArticleAnchorLocation = null;
     if (!location || this.currentMode !== "article") return;
-    this.restoreReadingLocation("article", location);
+    const resolved = this.restoreReadingLocation("article", location);
+    if (resolved) this.holdArticleAnchor(resolved);
+  }
+  /**
+   * 把语义锚点节点逐帧钉在恢复时的屏幕位置，直到前文排版稳定。
+   *
+   * 补载帧内只能按当时的 DOM 高度补偿，图片和公式往往在之后才撑开正文（实测 warmup 结束后
+   * 仍有约 5.6k 像素的位移）；逐帧重钉能在下一帧就修正，而不是积成一次可见的大跳。用户滚动、
+   * 点击或切换到别的模式会立即释放。
+   */
+  holdArticleAnchor(resolved) {
+    this.stopArticleAnchorHold();
+    const scroller = this.articleEl;
+    const selector = resolved.nodeId === this.document.root.id ? `.mms-article-document-title[data-node-id="${CSS.escape(resolved.nodeId)}"]` : `.mms-article-node[data-node-id="${CSS.escape(resolved.nodeId)}"]`;
+    const stableLimit = 30;
+    const frameLimit = 360;
+    let stableFrames = 0;
+    let frames = 0;
+    const step = () => {
+      this.articleAnchorHoldFrame = null;
+      if (this.currentMode !== "article" || this.articleEl !== scroller) return;
+      const target = scroller.querySelector(selector);
+      if (!target) return;
+      const viewport = scroller.getBoundingClientRect();
+      const rect = target.getBoundingClientRect();
+      const delta = rect.top + rect.height * resolved.nodeRatio - (viewport.top + viewport.height * resolved.viewportRatio);
+      if (Math.abs(delta) > 0.5) {
+        scroller.scrollTop += delta;
+        stableFrames = 0;
+      } else {
+        stableFrames += 1;
+      }
+      frames += 1;
+      const controller = this.articleRenderController;
+      const windowComplete = !controller || !controller.hasBefore() && !controller.hasAfter();
+      if (windowComplete && stableFrames >= stableLimit || frames >= frameLimit) return;
+      this.articleAnchorHoldFrame = window.requestAnimationFrame(step);
+    };
+    this.articleAnchorHoldFrame = window.requestAnimationFrame(step);
+  }
+  /** 停止语义锚点保持。 */
+  stopArticleAnchorHold() {
+    if (this.articleAnchorHoldFrame !== null) window.cancelAnimationFrame(this.articleAnchorHoldFrame);
+    this.articleAnchorHoldFrame = null;
   }
   /**
    * 像素恢复强钉：capture 阶段把 warmup 和其它程序性滚动造成的偏离压回目标。

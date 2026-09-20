@@ -111,8 +111,8 @@ test("article warmup re-anchors the semantic position once the window is fully l
   // 补载结束后必须用同一语义锚点重新校正一次，否则视口停在离目标很远的位置。
   assert.match(
     editorSource,
-    /private reapplyArticleAnchor\(\): void \{[\s\S]*this\.pendingArticleAnchorLocation = null;[\s\S]*this\.restoreReadingLocation\("article", location\)/,
-    "the re-anchor re-applies the recorded semantic anchor"
+    /private reapplyArticleAnchor\(\): void \{[\s\S]*this\.pendingArticleAnchorLocation = null;[\s\S]*const resolved = this\.restoreReadingLocation\("article", location\);[\s\S]*if \(resolved\) this\.holdArticleAnchor\(resolved\);/,
+    "the re-anchor re-applies the recorded semantic anchor and keeps it pinned until the prepended layout settles"
   );
   const warmup = editorSource.match(/private scheduleArticleWindowWarmup\(\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
   assert.match(warmup, /"window-warmup-complete"[\s\S]*this\.reapplyArticleAnchor\(\);/, "the re-anchor runs right after the window finishes loading");
@@ -135,6 +135,19 @@ test("article window prepends pin a reference node instead of trusting the heigh
   assert.match(warmup, /this\.loadArticleChunkBefore\(\(\) => controller\.loadBefore\(\)\)/, "warmup prepends go through the pinned helper");
   const expand = editorSource.match(/private expandArticleWindow\(direction: "before" \| "after"\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
   assert.match(expand, /this\.loadArticleChunkBefore\(\(\) => controller\.loadBefore\(\)\)/, "scroll-triggered prepends go through the pinned helper");
+});
+
+test("article anchor stays pinned frame by frame until the prepended layout settles", () => {
+  // 图片与公式在补载之后才撑开前文（实测 warmup 结束后还有约 5.6k 像素位移），
+  // 只做一次补载后重锚仍会表现为一次可见的大跳；必须逐帧重钉到排版稳定。
+  const hold = editorSource.match(/private holdArticleAnchor\(resolved: ResolvedReadingLocation\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
+  assert.match(hold, /this\.articleAnchorHoldFrame = window\.requestAnimationFrame\(step\)/, "the hold re-pins on every animation frame");
+  assert.match(hold, /scroller\.scrollTop \+= delta/, "each frame corrects the anchor's screen offset");
+  assert.match(hold, /windowComplete && stableFrames >= stableLimit/, "the hold only releases after the window is complete and the layout stops moving");
+  assert.match(hold, /frames >= frameLimit/, "the hold is bounded so it can never lock the viewport");
+  assert.match(editorSource, /private stopArticleAnchorHold\(\): void \{[\s\S]*cancelAnimationFrame/, "the hold can be cancelled");
+  assert.match(editorSource, /onwheel = \(\) => \{[\s\S]*this\.stopArticleAnchorHold\(\)/, "user scrolling releases the hold");
+  assert.match(editorSource, /onpointerdown = \(\) => \{[\s\S]*this\.stopArticleAnchorHold\(\)/, "user clicks release the hold");
 });
 
 test("screenshot shortcut remains available while an article line is being edited", () => {

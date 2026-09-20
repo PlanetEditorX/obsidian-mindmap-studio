@@ -1,16 +1,22 @@
 # obsidian-mindmap-studio 项目交接
 
 - 插件：MindMap Studio（Obsidian 本地优先 .mindmap 导图，含导图/大纲/文章/通读模式、全局搜索、图床、AI 助手与桌面截图链路）。
-- 版本基线：1.51.5（线上 1.51.0 已发布；工作区提交基线 v1.51.3：节点锚点来源变更恢复；本轮工作区：子导图提取/合并迁移本地图片与上传文件（含 60 秒延迟回收）＋截图标注工具增强（箭头/线宽/序号/橡皮擦））。
+- 版本基线：线上已发布 v1.53.8（提交 `a5d1b4d`）；本轮工作区（未提交）为文章模式逐帧锚点保持，发布后应为 v1.53.9。
 - 仓库规则：见根目录 `AGENTS.md`；每轮代码交付三份 ZIP（源码 / 安装 / Agent 交接）共用同一六位后缀；验证入口 `npm run verify`。
 
-## 当前状态（本轮：表格单元格 LaTeX 公式可解析渲染）
+## 当前状态（本轮：文章模式内容变更后视口逐帧钉住，消除异步排版大跳）
 
-- 表格单元格 LaTeX 渲染（`rich-text-dom.ts`）：表格渲染统一走 `renderInlineMarkdown`，此前末参 `latex=false` 关闭了公式识别，导致表格里的 `$...$`/`$$...$$` 不解析。现改为 `latex=true`，表格（导图画布、文章、大纲三种渲染器）单元格内 LaTeX 公式正常渲染为 MathJax；`markdownInlineToRichText` 不吞 `$` 分隔符，与 `splitLatexText` 兼容；单个孤立 `$5` 等无闭合符号仍按纯文本，不误判为公式。
+- 逐帧锚点保持（`editor.ts` 新增 `holdArticleAnchor()` / `stopArticleAnchorHold()` + `articleAnchorHoldFrame`）：文章窗口补载结束只是 DOM 结构定型，前文里的图片与 MathJax 公式往往还会再异步排版一次。实测（日志 `mu9nvpd0-fkza`，1.53.8）`window-warmup-complete` 在 10:15:53.503，重锚在 53.505 已把节点放回视口 480.3，但 53.843 锚点节点又下移 5627px，代码只能滞后约 350ms 再校正一次，肉眼即为「乱跳」。现改为按语义锚点逐帧重钉（每帧一次 `getBoundingClientRect`，`scrollTop += delta`），直到「窗口补载完整 + 连续 30 帧稳定」或 360 帧兜底；用户 wheel / pointerdown / touchstart / 切换模式立即释放。
+- 关键接线：`reapplyArticleAnchor()`（warmup 完成后的重锚）此前只调用一次 `restoreReadingLocation`，现补 `if (resolved) this.holdArticleAnchor(resolved);`。日志里那次 5627px 跳变正好发生在该路径之后，这是 1.53.8 仍然跳的直接原因。
+- 前一轮（1.53.8，已发布）：`loadArticleChunkBefore()` 向前补载按参照节点（语义锚点 → 窗口最前节点）的屏幕位移补偿，替代只按 `scrollHeight - previousHeight` 的差值补偿（1.53.7 实测前文插入 13788.9px 只补 10057.6px，少补 3731px）。本轮新增的 `articlePrependAnchor()` 即该参照节点解析。
+- 契约测试：`tests/reading-editor-contract.test.mjs` 新增「向前补载钉住参照节点」与「逐帧锚点保持」两条；`tests/incremental-render.test.mjs`、`tests/file-block.test.mjs` 断言同步到新的 helper 结构（像素钉住迁入 `loadArticleChunkBefore`）。
+
+- 上一轮（表格单元格 LaTeX 公式可解析渲染）：
+  - 表格单元格 LaTeX 渲染（`rich-text-dom.ts`）：表格渲染统一走 `renderInlineMarkdown`，此前末参 `latex=false` 关闭了公式识别，导致表格里的 `$...$`/`$$...$$` 不解析。现改为 `latex=true`，表格（导图画布、文章、大纲三种渲染器）单元格内 LaTeX 公式正常渲染为 MathJax；`markdownInlineToRichText` 不吞 `$` 分隔符，与 `splitLatexText` 兼容；单个孤立 `$5` 等无闭合符号仍按纯文本，不误判为公式。
   - 回归契约 `scripts/test.mjs` 新增断言：`renderInlineMarkdown` 必须以 `latex=true` 调用 `renderRichTextRuns`。
-- 前一轮（已提交）：
-  - 焦点位置记忆：`focusAnchorNodeId`，`captureCurrentLocation`(mindmap) 与 `articleRendererOptions.selectedId` 两处 `selectedId || focusAnchorNodeId` 兜底，画布拖拽失焦后切文章仍落回最近聚焦节点。
-  - 图片预览失效源自动回退、删除图片本地副本独立回收（前述记录）。
+  - 公式整体放大：`.mms-node-math` 默认 1.2 倍（`--mms-math-scale` 可调），缓解嵌套分数过度缩小。
+  - 图片默认加载优先级：手动选择的默认来源（`sourcePriority`）最高；未手动选择时本地图片优先，本地不存在才按图床顺序（`imageSourceCandidates` 本地候选 `hostRank` 由最大值改为 -1）。
+  - 更早（已提交）：焦点位置记忆 `focusAnchorNodeId`（`captureCurrentLocation` 与 `articleRendererOptions.selectedId` 两处 `selectedId || focusAnchorNodeId` 兜底）；图片预览失效源自动回退；删除图片本地副本独立回收。
 
 - 第二轮反馈修复（应用户实测反馈）：
   - 公式按钮“无任何反应”根因：`node-edit-modal.ts` 中 `new FormulaEditModal(...)` 只构造未调用 `.open()`，Obsidian 的 Modal 必须 `.open()` 才显示。已在构造末尾补 `).open()`。契约测试新增断言公式弹窗会被打开。
@@ -41,11 +47,12 @@
 
 ## 验证基线
 
-- `npm run verify` 本机完整通过：`test:unit` 440/440（含 `tests/article-insert-text.test.mjs` 4 项与 `tests/file-block.test.mjs` 新增 2 项）、`test:regression` 全部通过、`test:docs` 全部通过（1292 处命名声明）、`test:repo` 通过、production esbuild 通过。
+- `npm run verify` 本机完整通过：`test:unit` 446/446（含 `tests/reading-editor-contract.test.mjs` 本轮新增 2 条：向前补载钉住参照节点、逐帧锚点保持）、`test:regression` 全部通过、`test:docs` 全部通过（1298 处命名声明）、`test:repo` 通过、`tsc --noEmit` 与 production esbuild 通过。
 - 详细数据见根目录 `TEST_RESULTS.md`。
 
 ## 待验证事项（需真实 Obsidian 桌面端手工冒烟）
 
+- **文章模式图片节点内容变更后视口稳定（本轮重点，仍待用户实测确认）**：文章模式滚动到较深章节（如第 18 节）→ 在图片块上右键“在上方插入文字”或做其它内容变更 → 页面重建、窗口分帧补载、补载完成后前文图片/公式继续排版的全过程里，视口应停在同一处正文，不再出现数千像素的来回跳；补载期间（约 6 秒）主动滚动或点击应立即接管，不再被钉住。
 - 焦点位置记忆：导图双击某节点编辑 → 点空白画布取消选中 → 拖拽画布 → 切换到文章，应落在上次聚焦节点的文字内容上（不再跳到最前）；再点选其它节点后再切文章应落在新选节点。
 - 图片预览失效源自动回退：图片含图床+本地两来源，停用/失效图床后点击图片预览，短暂尝试图床后应自动回退显示本地图片，不再停留在“加载失败”；来源栏高亮应指向实际显示的本地来源；全部来源失效时才显示失败卡。
 - 删除带失效远端的图片：删除该图片块后约 1 分钟，本地图片应进入系统回收站（不因远端连接失败被阻塞）；即便如此远端删除失败仍会提示“删除失败”，属远端不可达的如实反馈。
@@ -73,6 +80,7 @@
 
 ## 交付说明
 
-- 三份 ZIP 均输出到仓库父目录 `D:\Downloads`，外部文件名：`obsidian-mindmap-studio-<版本>-<后缀>.zip`、`mindmap-studio-<版本>-test-<后缀>.zip`、`Agent-<版本>-handoff-<后缀>.zip`（内部根目录 `Agent/`）。
+- 三份 ZIP 均输出到 `D:\Downloads`（仓库工作区外），外部文件名：`obsidian-mindmap-studio-<版本>-<后缀>.zip`、`mindmap-studio-<版本>-test-<后缀>.zip`、`Agent-<版本>-handoff-<后缀>.zip`（内部根目录 `Agent/`）。
+- 最近交付包（后缀 685177，交付追踪版本 1.53.9）：`obsidian-mindmap-studio-1.53.9-685177.zip`、`mindmap-studio-1.53.9-test-685177.zip`、`Agent-1.53.9-handoff-685177.zip`；实际发布版本以 GitHub Release 为准。
 - 历史交付包记录已清理；历史版本以 GitHub Release 发布为准，本地交付 ZIP 见 `D:\Downloads`。
 - 交付约束：沟通说明与中文 Git 提交说明中**不得**再写“- main.js 已重建。”这条；main.js 由 `npm run verify` 的 build 自动重建，交付时不要单独列出。

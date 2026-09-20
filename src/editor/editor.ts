@@ -340,6 +340,8 @@ export class MindMapEditor {
    * 只渲染了部分正文，按该偏移算出的落点会随补载漂移，必须在 DOM 定型后重新锚定。
    */
   private pendingArticleAnchorLocation: ReadingLocation | null = null;
+  /** 语义锚点的逐帧保持：补载与前文异步排版（图片、公式）都会推动锚点，稳定前一直钉住。 */
+  private articleAnchorHoldFrame: number | null = null;
   /** 像素恢复期间的 capture 阶段 scroll guard：压制 warmup 与其它程序性滚动造成的偏移。 */
   private articlePixelRestoreGuard: (() => void) | null = null;
   /** warmup 完成后的两帧稳定检查；用户接管滚动或新渲染会立即取消。 */
@@ -3077,6 +3079,7 @@ export class MindMapEditor {
   private renderArticle(): void {
     const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true;
     this.captureArticleRebuildLocation();
+    this.stopArticleAnchorHold();
     if (!this.options.articleContextReady) {
       this.callbacks.onDebugLog("article", "render-waiting-context", { selectedId: this.selectedId, pendingTarget: this.pendingArticleFocusLocation?.nodeIds[0], landingMode: this.document.view?.articleLandingMode });
       this.cancelReadingLocationRestore();
@@ -3151,16 +3154,21 @@ export class MindMapEditor {
       this.articleEl.onwheel = () => {
         this.pendingArticlePixelRestoreTop = null;
         this.pendingArticleAnchorLocation = null;
+        this.stopArticleAnchorHold();
         this.stopArticlePixelRestoreGuard();
         this.cancelReadingLocationRestore();
       };
       this.articleEl.onpointerdown = () => {
         this.pendingArticlePixelRestoreTop = null;
         this.pendingArticleAnchorLocation = null;
+        this.stopArticleAnchorHold();
         this.stopArticlePixelRestoreGuard();
         this.cancelReadingLocationRestore();
       };
-      this.articleEl.ontouchstart = () => this.cancelReadingLocationRestore();
+      this.articleEl.ontouchstart = () => {
+        this.stopArticleAnchorHold();
+        this.cancelReadingLocationRestore();
+      };
 
       if (directoryOnly) {
         this.blockReadingLocationCapture();
@@ -3185,8 +3193,10 @@ export class MindMapEditor {
       // 而节点 + 节点内比例在任何窗口切片下都表示同一处正文。
       const location = latestRequestedLocation ?? previousLocation ?? rebuildLocation ?? this.lastReadingLocation;
       this.pendingArticleAnchorLocation = location;
-      if (location) this.restoreReadingLocation("article", location);
-      else {
+      if (location) {
+        const resolved = this.restoreReadingLocation("article", location);
+        if (resolved) this.holdArticleAnchor(resolved);
+      } else {
         this.pendingArticlePixelRestoreTop = previousScroll.top;
         this.articleEl.scrollTop = previousScroll.top;
         this.articleEl.scrollLeft = previousScroll.left;
@@ -3410,7 +3420,59 @@ export class MindMapEditor {
     const location = this.pendingArticleAnchorLocation;
     this.pendingArticleAnchorLocation = null;
     if (!location || this.currentMode !== "article") return;
-    this.restoreReadingLocation("article", location);
+    const resolved = this.restoreReadingLocation("article", location);
+    // 补载结束只是 DOM 结构定型，前文里的图片与公式往往还要再排版一次；这里继续逐帧钉住，
+    // 否则那次异步撑高会以一次可见的大跳形式出现（实测 warmup 后 338ms 又下移 5.6k 像素）。
+    if (resolved) this.holdArticleAnchor(resolved);
+  }
+
+  /**
+   * 把语义锚点节点逐帧钉在恢复时的屏幕位置，直到前文排版稳定。
+   *
+   * 补载帧内只能按当时的 DOM 高度补偿，图片和公式往往在之后才撑开正文（实测 warmup 结束后
+   * 仍有约 5.6k 像素的位移）；逐帧重钉能在下一帧就修正，而不是积成一次可见的大跳。用户滚动、
+   * 点击或切换到别的模式会立即释放。
+   */
+  private holdArticleAnchor(resolved: ResolvedReadingLocation): void {
+    this.stopArticleAnchorHold();
+    const scroller = this.articleEl;
+    const selector = resolved.nodeId === this.document.root.id
+      ? `.mms-article-document-title[data-node-id="${CSS.escape(resolved.nodeId)}"]`
+      : `.mms-article-node[data-node-id="${CSS.escape(resolved.nodeId)}"]`;
+    // 窗口补载完整结束且连续约 0.5 秒不再移动后才释放，避免前文异步排版把视口再次推走；
+    // 上限只作兜底，按帧数而不是时间计算，保证稳定释放不受帧率影响。
+    const stableLimit = 30;
+    const frameLimit = 360;
+    let stableFrames = 0;
+    let frames = 0;
+    const step = (): void => {
+      this.articleAnchorHoldFrame = null;
+      if (this.currentMode !== "article" || this.articleEl !== scroller) return;
+      const target = scroller.querySelector<HTMLElement>(selector);
+      if (!target) return;
+      const viewport = scroller.getBoundingClientRect();
+      const rect = target.getBoundingClientRect();
+      const delta = rect.top + rect.height * resolved.nodeRatio
+        - (viewport.top + viewport.height * resolved.viewportRatio);
+      if (Math.abs(delta) > 0.5) {
+        scroller.scrollTop += delta;
+        stableFrames = 0;
+      } else {
+        stableFrames += 1;
+      }
+      frames += 1;
+      const controller = this.articleRenderController;
+      const windowComplete = !controller || (!controller.hasBefore() && !controller.hasAfter());
+      if ((windowComplete && stableFrames >= stableLimit) || frames >= frameLimit) return;
+      this.articleAnchorHoldFrame = window.requestAnimationFrame(step);
+    };
+    this.articleAnchorHoldFrame = window.requestAnimationFrame(step);
+  }
+
+  /** 停止语义锚点保持。 */
+  private stopArticleAnchorHold(): void {
+    if (this.articleAnchorHoldFrame !== null) window.cancelAnimationFrame(this.articleAnchorHoldFrame);
+    this.articleAnchorHoldFrame = null;
   }
 
   /**
