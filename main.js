@@ -9691,7 +9691,7 @@ var NodeEditModal = class extends import_obsidian10.Modal {
    * 在弹窗或视图打开时创建界面、绑定事件并把当前数据填入控件。
    */
   onOpen() {
-    var _a2, _b2, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s;
+    var _a2, _b2, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t;
     this.modalEl.toggleClass("mms-node-editor-right", this.position === "right");
     if (this.position === "right" && this.panelHost) {
       const positionPanel = () => {
@@ -9723,6 +9723,7 @@ var NodeEditModal = class extends import_obsidian10.Modal {
     const actionRow = form.createDiv({ cls: "mmc-content-block-actions" });
     const blocksEl = form.createDiv({ cls: "mmc-content-block-list" });
     let draggedBlockId = null;
+    let activeTextBlockId = (_a2 = workingBlocks.find((block) => block.type === "text")) == null ? void 0 : _a2.id;
     const cloneBlocks = () => JSON.parse(JSON.stringify(workingBlocks));
     const removeWorkingBlock = (blockId) => {
       const currentIndex = workingBlocks.findIndex((item) => item.id === blockId);
@@ -9824,8 +9825,12 @@ var NodeEditModal = class extends import_obsidian10.Modal {
         }, index === workingBlocks.length - 1);
         control("trash-2", "\u5220\u9664\u5185\u5BB9\u5757", () => removeWorkingBlock(block.id));
         if (block.type === "text") {
+          const bodyEl = card.createDiv({ cls: "mmc-content-block-body" });
+          bodyEl.addEventListener("focusin", () => {
+            activeTextBlockId = block.id;
+          });
           renderNodeRichTextEditor(
-            card.createDiv({ cls: "mmc-content-block-body" }),
+            bodyEl,
             block,
             scheduleAutoSave,
             this.richTextShortcuts
@@ -10076,6 +10081,27 @@ var NodeEditModal = class extends import_obsidian10.Modal {
       renderBlocks2();
       scheduleAutoSave();
     });
+    const addFormula = actionRow.createEl("button", { text: "\u516C\u5F0F", attr: { type: "button", title: "\u63D2\u5165 LaTeX \u516C\u5F0F\u5230\u5F53\u524D\u6587\u5B57\u5757" } });
+    addFormula.addEventListener("click", () => {
+      new FormulaEditModal(this.app, (value) => {
+        var _a3;
+        const formula = value.display ? `$$${value.source}$$` : `$${value.source}$`;
+        const textBlock = workingBlocks.find((item) => item.id === activeTextBlockId && item.type === "text");
+        if (value.display) {
+          const target = textBlock != null ? textBlock : workingBlocks.find((item) => item.type === "text");
+          const idx = target ? workingBlocks.indexOf(target) : workingBlocks.length - 1;
+          workingBlocks.splice(idx + 1, 0, { id: newId(), type: "text", text: formula });
+        } else if (textBlock) {
+          const addition = `${textBlock.text && !/\s$/.test(textBlock.text) ? " " : ""}${formula}`;
+          textBlock.text += addition;
+          if ((_a3 = textBlock.richText) == null ? void 0 : _a3.length) textBlock.richText = [...textBlock.richText, { text: addition }];
+        } else {
+          workingBlocks.push({ id: newId(), type: "text", text: formula });
+        }
+        renderBlocks2();
+        scheduleAutoSave();
+      });
+    });
     const addFile = actionRow.createEl("button", { text: "+ \u6587\u4EF6", attr: { type: "button" } });
     addFile.addEventListener("click", () => {
       void (async () => {
@@ -10112,14 +10138,14 @@ var NodeEditModal = class extends import_obsidian10.Modal {
     const detailsGrid = form.createDiv({ cls: "mmc-form-grid" });
     const iconLabel = detailsGrid.createEl("label", { text: "\u56FE\u6807\u6216 Emoji" });
     const iconInput = iconLabel.createEl("input", { type: "text", attr: { placeholder: "\u4F8B\u5982 \u{1F4A1}" } });
-    iconInput.value = (_a2 = this.node.icon) != null ? _a2 : "";
+    iconInput.value = (_b2 = this.node.icon) != null ? _b2 : "";
     const shapeLabel = detailsGrid.createEl("label", { text: "\u8282\u70B9\u5F62\u72B6" });
     const shapeSelect = shapeLabel.createEl("select");
     for (const [value, label] of [["rounded", "\u5706\u89D2"], ["pill", "\u80F6\u56CA"], ["rectangle", "\u76F4\u89D2"]]) shapeSelect.createEl("option", { text: label, attr: { value } });
-    shapeSelect.value = (_c = (_b2 = this.node.style) == null ? void 0 : _b2.shape) != null ? _c : this.defaultShape;
+    shapeSelect.value = (_d = (_c = this.node.style) == null ? void 0 : _c.shape) != null ? _d : this.defaultShape;
     const tagsLabel = detailsGrid.createEl("label", { text: "\u6807\u7B7E\uFF08\u9017\u53F7\u5206\u9694\uFF09" });
     const tagsInput = tagsLabel.createEl("input", { type: "text" });
-    tagsInput.value = (_e = (_d = this.node.tags) == null ? void 0 : _d.join(", ")) != null ? _e : "";
+    tagsInput.value = (_f = (_e = this.node.tags) == null ? void 0 : _e.join(", ")) != null ? _f : "";
     const numberingControls = createArticleNumberingControls(
       detailsGrid,
       this.node.articleNumberingMode,
@@ -10142,9 +10168,9 @@ var NodeEditModal = class extends import_obsidian10.Modal {
       color.addEventListener("change", scheduleAutoSave);
       return [toggle, color];
     };
-    const [colorToggle, colorInput] = colorControl("\u8282\u70B9\u989C\u8272", (_f = this.node.style) == null ? void 0 : _f.color, "#4f46e5");
-    const [textColorToggle, textColorInput] = colorControl("\u6574\u8282\u70B9\u6587\u5B57\u989C\u8272", (_g = this.node.style) == null ? void 0 : _g.textColor, "#ffffff");
-    const [borderColorToggle, borderColorInput] = colorControl("\u8FB9\u6846\u989C\u8272", (_h = this.node.style) == null ? void 0 : _h.borderColor, "#94a3b8");
+    const [colorToggle, colorInput] = colorControl("\u8282\u70B9\u989C\u8272", (_g = this.node.style) == null ? void 0 : _g.color, "#4f46e5");
+    const [textColorToggle, textColorInput] = colorControl("\u6574\u8282\u70B9\u6587\u5B57\u989C\u8272", (_h = this.node.style) == null ? void 0 : _h.textColor, "#ffffff");
+    const [borderColorToggle, borderColorInput] = colorControl("\u8FB9\u6846\u989C\u8272", (_i = this.node.style) == null ? void 0 : _i.borderColor, "#94a3b8");
     const numberControl = (labelText, current, min, max2, step) => {
       var _a3;
       const label = styleGrid.createEl("label", { text: labelText });
@@ -10152,11 +10178,11 @@ var NodeEditModal = class extends import_obsidian10.Modal {
       input.value = (_a3 = current == null ? void 0 : current.toString()) != null ? _a3 : "";
       return input;
     };
-    const borderWidthInput = numberControl("\u8FB9\u6846\u7C97\u7EC6", (_i = this.node.style) == null ? void 0 : _i.borderWidth, 0, 6, 0.5);
-    const fontSizeInput = numberControl("\u5B57\u53F7", (_j = this.node.style) == null ? void 0 : _j.fontSize, 10, 32, 1);
-    const widthInput = numberControl("\u8282\u70B9\u5BBD\u5EA6\uFF08100\u2013900\uFF09", (_k = this.node.style) == null ? void 0 : _k.width, 100, 900, 10);
+    const borderWidthInput = numberControl("\u8FB9\u6846\u7C97\u7EC6", (_j = this.node.style) == null ? void 0 : _j.borderWidth, 0, 6, 0.5);
+    const fontSizeInput = numberControl("\u5B57\u53F7", (_k = this.node.style) == null ? void 0 : _k.fontSize, 10, 32, 1);
+    const widthInput = numberControl("\u8282\u70B9\u5BBD\u5EA6\uFF08100\u2013900\uFF09", (_l = this.node.style) == null ? void 0 : _l.width, 100, 900, 10);
     widthInput.placeholder = "\u81EA\u52A8\u5BBD\u5EA6";
-    const minHeightInput = numberControl("\u8282\u70B9\u6700\u5C0F\u9AD8\u5EA6\uFF0836\u2013600\uFF09", (_l = this.node.style) == null ? void 0 : _l.minHeight, 36, 600, 10);
+    const minHeightInput = numberControl("\u8282\u70B9\u6700\u5C0F\u9AD8\u5EA6\uFF0836\u2013600\uFF09", (_m = this.node.style) == null ? void 0 : _m.minHeight, 36, 600, 10);
     minHeightInput.placeholder = "\u81EA\u52A8\u9AD8\u5EA6";
     const alignLabel = styleGrid.createEl("label", { text: "\u6587\u5B57\u5BF9\u9F50" });
     const alignSelect = alignLabel.createEl("select");
@@ -10164,7 +10190,7 @@ var NodeEditModal = class extends import_obsidian10.Modal {
     alignSelect.createEl("option", { text: "\u5DE6\u5BF9\u9F50", attr: { value: "left" } });
     alignSelect.createEl("option", { text: "\u5C45\u4E2D", attr: { value: "center" } });
     alignSelect.createEl("option", { text: "\u53F3\u5BF9\u9F50", attr: { value: "right" } });
-    alignSelect.value = (_n = (_m = this.node.style) == null ? void 0 : _m.textAlign) != null ? _n : "inherit";
+    alignSelect.value = (_o = (_n = this.node.style) == null ? void 0 : _n.textAlign) != null ? _o : "inherit";
     const booleanControl = (labelText, current) => {
       const label = styleGrid.createEl("label", { text: labelText });
       const select = label.createEl("select");
@@ -10174,16 +10200,16 @@ var NodeEditModal = class extends import_obsidian10.Modal {
       select.value = current === void 0 ? "inherit" : current ? "true" : "false";
       return select;
     };
-    const boldInput = booleanControl("\u6574\u8282\u70B9\u52A0\u7C97", (_o = this.node.style) == null ? void 0 : _o.bold);
-    const italicInput = booleanControl("\u6574\u8282\u70B9\u659C\u4F53", (_p = this.node.style) == null ? void 0 : _p.italic);
-    const underlineInput = booleanControl("\u6574\u8282\u70B9\u4E0B\u5212\u7EBF", (_q = this.node.style) == null ? void 0 : _q.underline);
+    const boldInput = booleanControl("\u6574\u8282\u70B9\u52A0\u7C97", (_p = this.node.style) == null ? void 0 : _p.bold);
+    const italicInput = booleanControl("\u6574\u8282\u70B9\u659C\u4F53", (_q = this.node.style) == null ? void 0 : _q.italic);
+    const underlineInput = booleanControl("\u6574\u8282\u70B9\u4E0B\u5212\u7EBF", (_r = this.node.style) == null ? void 0 : _r.underline);
     const noteLabel = form.createEl("label", { text: "\u5907\u6CE8\uFF08\u53EF\u9009\uFF09" });
     const noteInput = noteLabel.createEl("textarea");
-    noteInput.value = (_r = this.node.note) != null ? _r : "";
+    noteInput.value = (_s = this.node.note) != null ? _s : "";
     noteInput.rows = 4;
     const linkLabel = form.createEl("label", { text: "\u94FE\u63A5\uFF08\u7F51\u5740\u3001\u7B14\u8BB0\u540D\u6216 [[\u53CC\u94FE]]\uFF09" });
     const linkInput = linkLabel.createEl("input", { type: "text" });
-    linkInput.value = (_s = this.node.link) != null ? _s : "";
+    linkInput.value = (_t = this.node.link) != null ? _t : "";
     const parseBool = (value) => value === "true" ? true : value === "false" ? false : void 0;
     const parseNumber = (value, min, max2) => value.trim() && Number.isFinite(Number(value)) ? Math.min(max2, Math.max(min, Number(value))) : void 0;
     const collectValues = (showNotice) => {
@@ -11574,7 +11600,7 @@ function renderArticleNodeSection(section, info, options) {
   const blocks = articleNodeContentBlocks(info.node, options);
   const firstTextBlock = blocks.find((block) => block.type === "text");
   const contentContainer = info.node.question ? section.createDiv({ cls: "mms-question-card" }) : section;
-  if (firstTextBlock == null ? void 0 : firstTextBlock.text.trim()) {
+  if (firstTextBlock) {
     const blockShell = createArticleContentBlock(contentContainer, firstTextBlock.id);
     const paragraph = blockShell.createEl("p", { cls: `${articleParagraphClass("mms-article-leaf-text", firstTextBlock, options.articleLeafBulletsEnabled && !info.numberedLeaf, options.articleLeafTextAlignment)}${info.numberedLeaf ? " mms-article-leaf-numbered" : ""}` });
     paragraph.dataset.blockId = firstTextBlock.id;
@@ -11756,6 +11782,18 @@ function renderArticleNodeContent(container, node, treatTextAsBody, options) {
         options.selectNode(node.id);
         options.openImageContextMenu(event, node.id, block.id);
       });
+      if (!options.readOnly) {
+        const insertAbove = shell.createEl("button", {
+          cls: "mms-article-insert-above",
+          attr: { type: "button", title: "\u5728\u56FE\u7247\u4E0A\u65B9\u63D2\u5165\u6587\u5B57", "aria-label": "\u5728\u56FE\u7247\u4E0A\u65B9\u63D2\u5165\u6587\u5B57" }
+        });
+        (0, import_obsidian13.setIcon)(insertAbove, "plus");
+        insertAbove.addEventListener("click", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          options.insertTextBlockBefore(node.id, block.id);
+        });
+      }
     } else if (block.type === "table") {
       inlineImageRow = null;
       const shell = createArticleContentBlock(container, block.id, true);
@@ -15726,6 +15764,7 @@ var MindMapEditor = class {
       },
       openImageContextMenu: (event, nodeId, blockId) => this.openImageContextMenu(event, nodeId, blockId),
       openImagePreview: (nodeId, blockId) => this.openImagePreviewWithSources(nodeId, blockId),
+      insertTextBlockBefore: (nodeId, blockId) => this.insertArticleTextBlockBefore(nodeId, blockId),
       editTableBlock: (node, table, blockId) => this.openTableBlockEditor(node, table, blockId),
       updateTableColumnWidths: (node, blockId, widths) => this.updateTableColumnWidths(node, blockId, widths),
       makeInlineEditable: (element, node, placeholder, blockId) => this.makeInlineEditable(element, node, placeholder, blockId),
@@ -18398,6 +18437,10 @@ var MindMapEditor = class {
     if (!node || !block) return;
     const modeLabel = this.options.imageRecognitionMode === "local-ocr" ? "\u672C\u5730 OCR" : "AI \u8BC6\u56FE";
     const menu = new import_obsidian15.Menu();
+    if (!this.readOnly) {
+      menu.addItem((item) => item.setTitle("\u5728\u4E0A\u65B9\u63D2\u5165\u6587\u5B57").setIcon("text-cursor-input").onClick(() => this.insertArticleTextBlockBefore(nodeId, blockId)));
+      menu.addSeparator();
+    }
     menu.addItem((item) => item.setTitle("\u653E\u5927\u9884\u89C8").setIcon("maximize-2").onClick(() => this.previewImageBlock(nodeId, blockId)));
     menu.addItem((item) => item.setTitle(`${modeLabel}\u5E76\u8F6C\u4E3A\u6587\u5B57`).setIcon("scan-text").onClick(() => void this.recognizeImageBlock(nodeId, blockId)));
     if (this.options.questionNodesEnabled) {
@@ -18769,6 +18812,26 @@ var MindMapEditor = class {
       update(block);
       replaceNodeContentBlocks(node, blocks);
     });
+  }
+  /**
+   * 在文章模式的图片块上方插入一个空文字块并立即进入行内编辑。
+   *
+   * 用于“纯图片节点”或正文中的图片块：用户想在图片上方补充一段文字时，
+   * 插入的空文字块会被渲染为可编辑段落（空首 text 块不再是叶子占位缺失），
+   * 插入后立刻聚焦，无需切换到导图再编辑。
+   */
+  insertArticleTextBlockBefore(nodeId, blockId) {
+    const node = this.nodeById(nodeId);
+    if (!node || !this.ensureEditable()) return;
+    const newBlockId = newId();
+    this.mutate(() => {
+      const blocks = nodeContentBlocks(node);
+      const index = blocks.findIndex((block) => block.id === blockId && block.type === "image");
+      if (index < 0) return;
+      blocks.splice(index, 0, { id: newBlockId, type: "text", text: "" });
+      replaceNodeContentBlocks(node, blocks);
+    }, void 0, "structure");
+    if (this.currentMode === "article") this.beginInlineEdit(nodeId, newBlockId, true);
   }
   /** Toggles one article text block between the default first-line indent and flush-left. */
   toggleTextBlockParagraphIndent(nodeId, blockId) {

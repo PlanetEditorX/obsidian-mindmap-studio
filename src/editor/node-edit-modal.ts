@@ -10,6 +10,7 @@ import {
   type MindMapContentBlock,
   type MindMapImageContentBlock,
   type MindMapNode,
+  type MindMapTextContentBlock,
   type NodeShape,
   type NodeTextAlign
 } from "../core/model";
@@ -17,7 +18,7 @@ import { TableEditModal, CodeEditModal } from "./content-modals";
 import { selectNodeImage, selectAnyFile, uploadCurrentNodeImage } from "./node-image-actions";
 import { renderFileCard } from "./file-block-view";
 import { renderNodeRichTextEditor } from "./node-rich-text-editor";
-import { ImagePreviewModal } from "./editor-modals";
+import { FormulaEditModal, ImagePreviewModal } from "./editor-modals";
 import { createArticleNumberingControls } from "./appearance-modal";
 import type { MindMapEditorCallbacks, MindMapEditorOptions } from "./editor-types";
 
@@ -156,6 +157,8 @@ export class NodeEditModal extends Modal {
     const actionRow = form.createDiv({ cls: "mmc-content-block-actions" });
     const blocksEl = form.createDiv({ cls: "mmc-content-block-list" });
     let draggedBlockId: string | null = null;
+    /** 当前聚焦的文字块 id（“插入 LaTeX 公式”写回目标）；无焦点时退回第一个文字块。 */
+    let activeTextBlockId: string | undefined = workingBlocks.find((block): block is MindMapTextContentBlock => block.type === "text")?.id;
 
     const cloneBlocks = (): MindMapContentBlock[] => JSON.parse(JSON.stringify(workingBlocks)) as MindMapContentBlock[];
     /** 从工作块列表移除一个块；文件块引用被删除后进入插件层 60 秒延迟回收。 */
@@ -248,8 +251,10 @@ export class NodeEditModal extends Modal {
         control("arrow-down", "下移", () => { [workingBlocks[index + 1], workingBlocks[index]] = [workingBlocks[index]!, workingBlocks[index + 1]!]; renderBlocks(); scheduleAutoSave(); }, index === workingBlocks.length - 1);
         control("trash-2", "删除内容块", () => removeWorkingBlock(block.id));
         if (block.type === "text") {
+          const bodyEl = card.createDiv({ cls: "mmc-content-block-body" });
+          bodyEl.addEventListener("focusin", () => { activeTextBlockId = block.id; });
           renderNodeRichTextEditor(
-            card.createDiv({ cls: "mmc-content-block-body" }),
+            bodyEl,
             block,
             scheduleAutoSave,
             this.richTextShortcuts
@@ -483,6 +488,26 @@ export class NodeEditModal extends Modal {
     addTable.addEventListener("click", () => { workingBlocks.push({ id: newId(), type: "table", table: { headers: ["列 1", "列 2"], rows: [["", ""]], source: "manual" } }); renderBlocks(); scheduleAutoSave(); });
     const addCode = actionRow.createEl("button", { text: "+ 代码", attr: { type: "button" } });
     addCode.addEventListener("click", () => { workingBlocks.push({ id: newId(), type: "code", code: { language: "bash", code: "" } }); renderBlocks(); scheduleAutoSave(); });
+    const addFormula = actionRow.createEl("button", { text: "公式", attr: { type: "button", title: "插入 LaTeX 公式到当前文字块" } });
+    addFormula.addEventListener("click", () => {
+      new FormulaEditModal(this.app, (value) => {
+        const formula = value.display ? `$$${value.source}$$` : `$${value.source}$`;
+        const textBlock = workingBlocks.find((item): item is MindMapTextContentBlock => item.id === activeTextBlockId && item.type === "text");
+        if (value.display) {
+          const target = textBlock ?? workingBlocks.find((item): item is MindMapTextContentBlock => item.type === "text");
+          const idx = target ? workingBlocks.indexOf(target) : workingBlocks.length - 1;
+          workingBlocks.splice(idx + 1, 0, { id: newId(), type: "text", text: formula });
+        } else if (textBlock) {
+          const addition = `${textBlock.text && !/\s$/.test(textBlock.text) ? " " : ""}${formula}`;
+          textBlock.text += addition;
+          if (textBlock.richText?.length) textBlock.richText = [...textBlock.richText, { text: addition }];
+        } else {
+          workingBlocks.push({ id: newId(), type: "text", text: formula });
+        }
+        renderBlocks();
+        scheduleAutoSave();
+      });
+    });
     const addFile = actionRow.createEl("button", { text: "+ 文件", attr: { type: "button" } });
     addFile.addEventListener("click", () => {
       void (async (): Promise<void> => {

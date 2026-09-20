@@ -1752,7 +1752,7 @@ const command = "example";
   assert.match(mainSource, /returnToTopVisibility: normalizeReturnToTopVisibility\(raw\.returnToTopVisibility\)/, "stored return-to-top visibility thresholds must be normalized");
   assert.match(mainSource, /twoFingerGestureAction: raw\.twoFingerGestureAction === "pan" \? "pan" : "zoom"/, "stored two-finger gesture settings must be normalized");
   assert.match(articleRendererSource, /articleTocDepth\(item\) <= options\.articleTocMaxDepth/, "article TOC rendering should honor the configured maximum depth");
-  assert.match(articleRendererSource, /if \(firstTextBlock\?\.text\.trim\(\)\)/, "table-only article nodes must not create an empty body placeholder");
+  assert.match(articleRendererSource, /if \(firstTextBlock\) \{[\s\S]*?else if \(!options\.readOnly && blocks\.length === 0\)/, "a present (even empty) first text block renders a leaf paragraph, while truly content-free table/image/code nodes keep no empty placeholder");
   assert.match(editorSource, /position-\$\{(?:this|ctx)\.options\.readingProgressPosition\}/);
   assert.match(editorSource, /progress \* 100 >= (?:this|ctx)\.options\.returnToTopVisibility[\s\S]*?button\.toggleClass\("is-visible", visible\)/, "return-to-top visibility must honor the configured percentage threshold");
 

@@ -45,11 +45,13 @@ test("article mode renders and focuses a newly added empty child", () => {
   const addChild = editorSource.match(/private addChild\(\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
   const beginInlineEdit = editorSource.match(/private beginInlineEdit\([\s\S]*?\n  \}/)?.[0] ?? "";
 
-  assert.match(leafBranch, /if \(firstTextBlock\?\.text\.trim\(\)\)/, "non-empty text keeps the normal article paragraph path");
+  // 一个存在的首 text 块（哪怕是空标题，例如图片前插入的文字段落）走叶子段落路径。
+  assert.match(leafBranch, /if \(firstTextBlock\) \{/, "a present first text block keeps the article leaf paragraph path even when empty");
   assert.match(leafBranch, /else if \(!options\.readOnly && blocks\.length === 0\)/, "only a truly content-free editable node gets a transient placeholder");
   assert.match(leafBranch, /renderRichTextRuns\(paragraph, undefined, ""\)/);
   assert.match(leafBranch, /options\.makeInlineEditable\(paragraph, info\.node, "正文段落"\)/);
-  assert.doesNotMatch(leafBranch, /firstTextBlock\?\.text\.trim\(\) \|\|/, "table/image/code nodes must not share the empty-node placeholder condition");
+  // 纯图片/表格/代码节点（无任何 text 块）不显示空占位段落。
+  assert.doesNotMatch(leafBranch, /\|\| blocks\.length === 0/, "content-free placeholder must stay mutually exclusive with an existing empty text block");
   assert.match(addChild, /this\.bringNodeIntoView\(node\.id\);\s*\n\s*this\.beginInlineEdit\(node\.id, undefined, true\)/);
   assert.match(beginInlineEdit, /const nodeScope = scope\.querySelector<HTMLElement>\(`\[data-node-id="\$\{CSS\.escape\(nodeId\)\}"\]`\)/);
   assert.match(beginInlineEdit, /blockId[\s\S]*\[data-block-id="\$\{CSS\.escape\(blockId\)\}"\]\[data-mms-inline-editable="true"\]/);

@@ -3616,6 +3616,7 @@ export class MindMapEditor {
       openAiContextMenu: (event: MouseEvent, nodeId: string, blockId?: string) => { this.selectNode(nodeId); this.openContextMenu(event, blockId); },
       openImageContextMenu: (event: MouseEvent, nodeId: string, blockId: string) => this.openImageContextMenu(event, nodeId, blockId),
       openImagePreview: (nodeId: string, blockId: string) => this.openImagePreviewWithSources(nodeId, blockId),
+      insertTextBlockBefore: (nodeId: string, blockId: string) => this.insertArticleTextBlockBefore(nodeId, blockId),
       editTableBlock: (node: MindMapNode, table: MindMapTable, blockId: string) => this.openTableBlockEditor(node, table, blockId),
       updateTableColumnWidths: (node: MindMapNode, blockId: string, widths: number[]) => this.updateTableColumnWidths(node, blockId, widths),
       makeInlineEditable: (element: HTMLElement, node: MindMapNode, placeholder: string, blockId?: string) => this.makeInlineEditable(element, node, placeholder, blockId),
@@ -6497,6 +6498,13 @@ export class MindMapEditor {
     if (!node || !block) return;
     const modeLabel = this.options.imageRecognitionMode === "local-ocr" ? "本地 OCR" : "AI 识图";
     const menu = new Menu();
+    if (!this.readOnly) {
+      menu.addItem((item) => item
+        .setTitle("在上方插入文字")
+        .setIcon("text-cursor-input")
+        .onClick(() => this.insertArticleTextBlockBefore(nodeId, blockId)));
+      menu.addSeparator();
+    }
     menu.addItem((item) => item
       .setTitle("放大预览")
       .setIcon("maximize-2")
@@ -6906,6 +6914,27 @@ export class MindMapEditor {
       update(block);
       replaceNodeContentBlocks(node, blocks);
     });
+  }
+
+  /**
+   * 在文章模式的图片块上方插入一个空文字块并立即进入行内编辑。
+   *
+   * 用于“纯图片节点”或正文中的图片块：用户想在图片上方补充一段文字时，
+   * 插入的空文字块会被渲染为可编辑段落（空首 text 块不再是叶子占位缺失），
+   * 插入后立刻聚焦，无需切换到导图再编辑。
+   */
+  private insertArticleTextBlockBefore(nodeId: string, blockId: string): void {
+    const node = this.nodeById(nodeId);
+    if (!node || !this.ensureEditable()) return;
+    const newBlockId = newId();
+    this.mutate(() => {
+      const blocks = nodeContentBlocks(node);
+      const index = blocks.findIndex((block) => block.id === blockId && block.type === "image");
+      if (index < 0) return;
+      blocks.splice(index, 0, { id: newBlockId, type: "text", text: "" });
+      replaceNodeContentBlocks(node, blocks);
+    }, undefined, "structure");
+    if (this.currentMode === "article") this.beginInlineEdit(nodeId, newBlockId, true);
   }
 
   /** Toggles one article text block between the default first-line indent and flush-left. */
