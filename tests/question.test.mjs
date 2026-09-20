@@ -445,7 +445,10 @@ test("formula editor boxes the selection and over-long inline formulas wrap by c
   // 超宽行内公式改用 aligned 多行；导图节点与编辑态保持原样。
   assert.match(richTextSource, /wrapLatexForLineBreaks\(source\)/);
   assert.match(richTextSource, /container\.closest\("\.mmc-node-text"\)/);
-  assert.match(richTextSource, /math\.getBoundingClientRect\(\)\.width <= available \+ 1/);
+  // 公式容器带 max-width: 100%，必须解除夹取后测量，否则永远量不出溢出。
+  assert.match(richTextSource, /function measureUnclampedWidth\(/);
+  assert.match(richTextSource, /setProperty\("max-width", "none", "important"\)/);
+  assert.match(richTextSource, /measureUnclampedWidth\(math\) <= available \+ 1/);
   assert.match(richTextSource, /wrapped\.addClass\("is-wrapped"\)/);
   assert.match(richTextSource, /math\.replaceWith\(wrapped\)/);
 });

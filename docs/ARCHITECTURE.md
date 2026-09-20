@@ -70,7 +70,7 @@ src/
 - `src/article/article-style.ts`：文章与通读共用的阅读样式预设和纯样式解析，不依赖编辑器 DOM。
 - `src/editor/editor-types.ts`：编辑器回调与运行参数契约，隔离插件服务和 UI 实现。
 - `src/core/latex.ts`：纯函数解析公式分隔符、恢复历史重复美元、判断行内/独立布局，在渲染前把裸露中文标签转换为 MathJax 可识别的 `\text{...}`，并把无法自行折行的长公式（顶层 `=` 等式链，含整体 `\boxed{}` 包裹）改写为 `aligned` 多行源码；花括号、转义字符、`\text{}` 与 `\left/\right` 成对定界符、已有 `\begin{}` 环境都不得被拆开。
-- `src/editor/rich-text-dom.ts`：富文本运行段与 `contenteditable` DOM 的双向转换，以及 MathJax 渲染。公式先合并全部运行段再解析，因此分隔符跨颜色或加粗边界仍有效；查看态渲染公式，编辑态暂时显示源码，异步 MathJax 回调不得覆盖仍为 `contenteditable=true` 的活动编辑器。行内公式挂载后按容器宽度自检：超过容器宽度且可断行时替换为 `aligned` 多行块（`is-wrapped`），因此长公式不会把文章页面顶宽；容器宽度未知、编辑态与导图节点（节点宽度自适应内容）保持单行。
+- `src/editor/rich-text-dom.ts`：富文本运行段与 `contenteditable` DOM 的双向转换，以及 MathJax 渲染。公式先合并全部运行段再解析，因此分隔符跨颜色或加粗边界仍有效；查看态渲染公式，编辑态暂时显示源码，异步 MathJax 回调不得覆盖仍为 `contenteditable=true` 的活动编辑器。行内公式挂载后按容器宽度自检：超过容器宽度且可断行时替换为 `aligned` 多行块（`is-wrapped`），因此长公式不会把文章页面顶宽；容器宽度未知、编辑态与导图节点（节点宽度自适应内容）保持单行。判断超宽前必须临时解除公式容器 `max-width: 100%` 的夹取（`measureUnclampedWidth()`，量完立即还原）——该夹取会把公式压回容器宽度，直接测量永远得不到溢出宽度。
 - `src/editor/mind-map-node-renderer.ts`：`renderMindMapNode(ctx, ...)` 负责单个导图节点的 DOM 构建、内容块渲染与拖拽/菜单/选择绑定；编辑器经 `MindMapNodeRendererContext` 注入状态读取器（可写字段用 get/set 闭包接回）与交互回调，DOM 输出与拆分前逐字节一致。
 - `src/editor/viewport-controller.ts`：导图画布视口控制器，持有缩放/平移/双指手势状态与变换、适应视图、动画机制；交互监听仍由编辑器注册（与选区逻辑交织），状态经编辑器存取器转发。
 - `src/editor/node-edit-modal.ts`：节点编辑弹窗（内容块编辑、备注、链接、图标、编号覆盖与图片操作），通过 `MindMapEditorCallbacks` 注入宿主能力；`NodeEditValues` 类型随模块导出。

@@ -1,14 +1,18 @@
 # obsidian-mindmap-studio 项目交接
 
 - 插件：MindMap Studio（Obsidian 本地优先 .mindmap 导图，含导图/大纲/文章/通读模式、全局搜索、图床、AI 助手与桌面截图链路）。
-- 版本基线：线上已发布 v1.54.0（提交 `3e99df7`）；本轮工作区（未提交）为长行内公式按容器宽度自动换行与公式编辑器「方框」，发布后应为 v1.54.1。
+- 版本基线：线上已发布 v1.54.1（提交 `546ede8`）；本轮工作区（未提交）为修复长公式自动换行不生效，发布后应为 v1.54.2。
 - 仓库规则：见根目录 `AGENTS.md`；每轮代码交付三份 ZIP（源码 / 安装 / Agent 交接）共用同一六位后缀；验证入口 `npm run verify`。
 
-## 当前状态（本轮：长行内公式按容器宽度自动换行 + 公式编辑器「方框」）
+## 当前状态（本轮：修复长公式自动换行未生效——`max-width: 100%` 夹取导致量不出溢出）
 
-- 需求（用户反馈）：`$\boxed{\Delta \bar{x}=...}$` 需要「方框」入口；长公式（如 `$R = 5.25\%,\ R \times (1-R) = 5.25\% \times (1-5.25\%) = 5\%$`）会超出页面，希望可以换行。用户选定方案为**插件内自动换行**（不改 Obsidian 全局 MathJax 配置）。
-- 断行纯函数（`src/core/latex.ts`）：新增 `wrapLatexForLineBreaks(source)`，只在顶层 `=` 处断行并输出 `\begin{aligned} a \\ & = b \end{aligned}`；花括号、转义字符（`\{`、`\\`）、`\text{}` 内等号、`\left/\right` 成对定界符与已有 `\begin{}` 环境一律不拆（`\left/\right` 跨行会 unbalanced 报错，直接放弃断行）；源码整体是 `\boxed{...}` 时递归断行内层并保留方框；不可断行返回 `null`。辅助函数 `boxedContent()`、`splitLatexAtTopLevelRelation()`。
-- 渲染自动换行（`src/editor/rich-text-dom.ts`）：`renderRichTextRuns()` 挂载行内公式后调用 `wrapOverflowingInlineMath()`——源码长度 ≥ 40 才测量（避免为短公式强制同步布局），容器 `clientWidth` 已知且公式实际宽度超宽时，用断行源码重新 `renderMath(..., false)` 并 `replaceWith`，打上 `is-wrapped`。导图节点（`.mmc-node-text`，宽度自适应内容）、编辑态与容器宽度未知的预览保持单行；断行后渲染失败保留原公式。全流程同步执行，不引入异步重排，避免再次扰动文章模式补载/锚点体系。
+- 用户反馈（1.54.1 实测）：长公式仍然没有换行。排查确认代码路径已生效（已安装 `main.js` 含 `is-wrapped`），失效点是**测量**：行内公式容器 `.mms-node-math:not(.is-display)` 自身带 `max-width: 100%`，超长公式的盒子被夹在容器宽度上，`getBoundingClientRect().width` 永远等于容器宽度，于是「是否超宽」判定恒为否，直接跳过替换。
+- 修复（`src/editor/rich-text-dom.ts`）：新增 `measureUnclampedWidth()`——量宽度前临时给公式容器及其内部 `mjx-container` 打 `max-width: none !important`，量完立即还原（保留原有内联值与优先级），因此不改变公式最终排版；`wrapOverflowingInlineMath()` 改用该真实宽度判定，并保留 `math.scrollWidth` 作为溢出兜底信号。
+- 真机外验证（本地 HTTP + 真实 MathJax v3 + 复刻插件公式 CSS，420px 容器）：`available=420`、`clampedWidth=420`（证实旧判定必然失败）、`scrollWidth=613`、`unclampedWidth=613`（新判定可识别溢出）；断行源码 `\begin{aligned}` 渲染为 4 行、宽 255px、高 111px，截图确认原公式溢出边框而断行版本完整落在框内。
+- 测试与文档：`tests/question.test.mjs` 契约改为断言 `measureUnclampedWidth()` 与 `max-width: none !important` 的解除夹取路径；`docs/ARCHITECTURE.md`、`docs/DEVELOPMENT.md` 明确「判断超宽前必须先解除 `max-width: 100%` 夹取」，`docs/FUNCTION_REFERENCE.md` 重新生成。
+- 上一轮（1.54.1，已发布）：长行内公式按容器宽度自动换行 + 公式编辑器「方框」。
+- 断行纯函数（`src/core/latex.ts`）：`wrapLatexForLineBreaks(source)` 只在顶层 `=` 处断行并输出 `\begin{aligned} a \\ & = b \end{aligned}`；花括号、转义字符（`\{`、`\\`）、`\text{}` 内等号、`\left/\right` 成对定界符与已有 `\begin{}` 环境一律不拆（`\left/\right` 跨行会 unbalanced 报错，直接放弃断行）；源码整体是 `\boxed{...}` 时递归断行内层并保留方框；不可断行返回 `null`。辅助函数 `boxedContent()`、`splitLatexAtTopLevelRelation()`。
+- 渲染自动换行（`src/editor/rich-text-dom.ts`）：`renderRichTextRuns()` 挂载行内公式后调用 `wrapOverflowingInlineMath()`——源码长度 ≥ 40 才测量（避免为短公式强制同步布局），容器 `clientWidth` 已知且公式真实宽度超宽时，用断行源码重新 `renderMath(..., false)` 并 `replaceWith`，打上 `is-wrapped`。导图节点（`.mmc-node-text`，宽度自适应内容）、编辑态与容器宽度未知的预览保持单行；断行后渲染失败保留原公式。全流程同步执行，不引入异步重排，避免再次扰动文章模式补载/锚点体系。
 - 公式编辑器「方框」（`src/editor/editor-modals.ts`）：`FormulaEditModal` 常用结构面板新增「方框」按钮——有选区包住选区；无选区包住整条公式；源码为空时插入 `\boxed{}` 并把光标放进花括号内。
 - 测试：`tests/latex.test.mjs` 新增 3 条（顶层等号断行与 aligned 输出、花括号/转义/`\begin{}`/`\left\right` 保持不拆、`\boxed{}` 内层断行）；`tests/question.test.mjs` 新增 1 条契约（方框按钮写入行为 + 渲染层按宽度换行、跳过导图节点与编辑态）。
 - 文档：`docs/ARCHITECTURE.md`（latex.ts / rich-text-dom.ts / 公式编辑器三条）、`docs/DEVELOPMENT.md`（LaTeX 维护规则补充方框与断行边界）、`docs/FUNCTION_REFERENCE.md` 重新生成。
@@ -57,12 +61,12 @@
 
 ## 验证基线
 
-- `npm run verify` 本机完整通过：`test:unit` 450/450（本轮新增 4 条：`tests/latex.test.mjs` 3 条断行、`tests/question.test.mjs` 1 条方框/换行契约）、`test:regression` 全部通过、`test:docs` 全部通过（1302 处命名声明）、`test:repo` 通过、`tsc --noEmit` 与 production esbuild 通过。
+- `npm run verify` 本机完整通过：`test:unit` 450/450（1.54.1 新增 4 条：`tests/latex.test.mjs` 3 条断行、`tests/question.test.mjs` 1 条方框/换行契约，本轮该契约改为断言解除夹取的测量路径）、`test:regression` 全部通过、`test:docs` 全部通过（1303 处命名声明）、`test:repo` 通过、`tsc --noEmit` 与 production esbuild 通过。
 - 详细数据见根目录 `TEST_RESULTS.md`。
 
 ## 待验证事项（需真实 Obsidian 桌面端手工冒烟）
 
-- **长公式自动换行（本轮新增，待实测）**：文章/通读/大纲/题目预览中插入一条明显超过正文宽度的行内公式（如 `$R = 5.25\%,\ R \times (1-R) = 5.25\% \times (1-5.25\%) = 5.25\% - 0.25\% = 5\%$`），应自动断成按等号对齐的多行、不再把页面顶宽；同一条公式放在导图节点里应保持单行（节点宽度自适应内容）；已渲染的公式在窗口变窄后不会自动重排（判定只发生在重新渲染时），刷新或切换模式后生效。
+- **长公式自动换行（1.54.1 引入、1.54.2 修复测量，待实测）**：文章/通读/大纲/题目预览中插入一条明显超过正文宽度的行内公式（如 `$R = 5.25\%,\ R \times (1-R) = 5.25\% \times (1-5.25\%) = 5.25\% - 0.25\% = 5\%$`），应自动断成按等号对齐的多行、不再把页面顶宽；同一条公式放在导图节点里应保持单行（节点宽度自适应内容）；已渲染的公式在窗口变窄后不会自动重排（判定只发生在重新渲染时），刷新或切换模式后生效。若仍不换行，请提供公式所在位置（文章正文/导图节点/题目预览）与是否含 `\left`/`\right`、`\begin{}` 等不可断行结构。
 - **公式编辑器「方框」（本轮新增，待实测）**：编辑节点内容 →「+ 公式」→ 输入公式后点「方框」，源码应变为 `\boxed{公式}` 且预览出现方框；先选中部分源码再点「方框」只包住选区；源码为空时点「方框」得到 `\boxed{}` 且光标停在花括号内。`\boxed` 依赖 Obsidian 自带 MathJax 的 ams 包，若预览提示“公式语法暂时无法渲染”请回报。
 
 - **文章模式图片节点内容变更后视口稳定（1.54.0 修复，仍待用户实测确认）**：文章模式滚动到较深章节（如第 18 节）→ 在图片块上右键“在上方插入文字”或做其它内容变更 → 页面重建、窗口分帧补载（约 6 秒）、补载完成后前文图片/公式继续排版的全过程里，视口应停在同一处正文，不再出现数千像素的来回跳；补载期间（约 6 秒）主动滚动或点击应立即接管，不再被钉住。该修复针对的是补载**结束瞬间**重锚用旧锚点拽走视口 2017px 的问题。
@@ -96,6 +100,6 @@
 ## 交付说明
 
 - 三份 ZIP 均输出到 `D:\Downloads`（仓库工作区外），外部文件名：`obsidian-mindmap-studio-<版本>-<后缀>.zip`、`mindmap-studio-<版本>-test-<后缀>.zip`、`Agent-<版本>-handoff-<后缀>.zip`（内部根目录 `Agent/`）。本机 `D:\Downloads` 拒绝写入（OS 权限），本轮实际生成在 `%TEMP%\mms-delivery-<后缀>\`，需自行移动。
-- 最近交付包（后缀 450618，交付追踪版本 1.54.1）：`obsidian-mindmap-studio-1.54.1-450618.zip`、`mindmap-studio-1.54.1-test-450618.zip`、`Agent-1.54.1-handoff-450618.zip`；实际发布版本以 GitHub Release 为准。
+- 最近交付包（后缀 179049，交付追踪版本 1.54.2）：`obsidian-mindmap-studio-1.54.2-179049.zip`、`mindmap-studio-1.54.2-test-179049.zip`、`Agent-1.54.2-handoff-179049.zip`；实际发布版本以 GitHub Release 为准。
 - 历史交付包记录已清理；历史版本以 GitHub Release 发布为准，本地交付 ZIP 见 `D:\Downloads`。
 - 交付约束：沟通说明与中文 Git 提交说明中**不得**再写“- main.js 已重建。”这条；main.js 由 `npm run verify` 的 build 自动重建，交付时不要单独列出。

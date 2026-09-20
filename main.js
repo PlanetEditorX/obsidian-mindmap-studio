@@ -5068,7 +5068,8 @@ function wrapOverflowingInlineMath(math, container, source) {
   const wrappedSource = wrapLatexForLineBreaks(source);
   if (!wrappedSource) return;
   const available = container.clientWidth;
-  if (!available || math.getBoundingClientRect().width <= available + 1) return;
+  if (!available) return;
+  if (measureUnclampedWidth(math) <= available + 1 && math.scrollWidth <= available + 1) return;
   try {
     const wrapped = (0, import_obsidian3.renderMath)(normalizeLatexForMathJax(wrappedSource), false);
     wrapped.addClass("mms-node-math");
@@ -5076,6 +5077,21 @@ function wrapOverflowingInlineMath(math, container, source) {
     math.replaceWith(wrapped);
   } catch (e) {
   }
+}
+function measureUnclampedWidth(math) {
+  const targets = [math, ...Array.from(math.querySelectorAll("mjx-container"))];
+  const saved = targets.map((target) => ({
+    target,
+    value: target.style.getPropertyValue("max-width"),
+    priority: target.style.getPropertyPriority("max-width")
+  }));
+  targets.forEach((target) => target.style.setProperty("max-width", "none", "important"));
+  const width = math.getBoundingClientRect().width;
+  saved.forEach(({ target, value, priority }) => {
+    if (value) target.style.setProperty("max-width", value, priority);
+    else target.style.removeProperty("max-width");
+  });
+  return width;
 }
 function renderInlineMarkdown(container, markdown) {
   const parsed = markdownInlineToRichText(markdown);

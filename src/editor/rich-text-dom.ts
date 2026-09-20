@@ -144,7 +144,10 @@ function wrapOverflowingInlineMath(math: HTMLElement, container: HTMLElement, so
   const wrappedSource = wrapLatexForLineBreaks(source);
   if (!wrappedSource) return;
   const available = container.clientWidth;
-  if (!available || math.getBoundingClientRect().width <= available + 1) return;
+  if (!available) return;
+  // 行内公式容器被 `max-width: 100%` 夹住，直接量宽度只会得到容器宽度，
+  // 必须量取解除夹取后的真实宽度；`scrollWidth` 作为溢出的兜底信号。
+  if (measureUnclampedWidth(math) <= available + 1 && math.scrollWidth <= available + 1) return;
   try {
     const wrapped = renderMath(normalizeLatexForMathJax(wrappedSource), false);
     wrapped.addClass("mms-node-math");
@@ -153,6 +156,32 @@ function wrapOverflowingInlineMath(math: HTMLElement, container: HTMLElement, so
   } catch {
     // 断行后无法渲染时保留原公式。
   }
+}
+
+/**
+ * 量取公式容器的真实宽度。
+ *
+ * 行内公式容器带 `max-width: 100%`，公式再长也会被夹在容器宽度上，直接测量永远
+ * 量不到溢出。这里临时解除容器及其内部 `mjx-container` 的夹取，量完立即还原，
+ * 因此不改变公式最终的排版结果。
+ *
+ * @param math 已挂载的公式容器。
+ * @returns 公式解除夹取后的宽度。
+ */
+function measureUnclampedWidth(math: HTMLElement): number {
+  const targets = [math, ...Array.from(math.querySelectorAll<HTMLElement>("mjx-container"))];
+  const saved = targets.map((target) => ({
+    target,
+    value: target.style.getPropertyValue("max-width"),
+    priority: target.style.getPropertyPriority("max-width")
+  }));
+  targets.forEach((target) => target.style.setProperty("max-width", "none", "important"));
+  const width = math.getBoundingClientRect().width;
+  saved.forEach(({ target, value, priority }) => {
+    if (value) target.style.setProperty("max-width", value, priority);
+    else target.style.removeProperty("max-width");
+  });
+  return width;
 }
 
 /** Renders the supported inline Markdown formatting used in table cells, including LaTeX formulas. */

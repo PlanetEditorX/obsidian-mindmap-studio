@@ -8090,9 +8090,19 @@ export function renderRichTextRuns( container: HTMLElement, runs: MindMapTextRun
 function wrapOverflowingInlineMath(math: HTMLElement, container: HTMLElement, source: string): void
 ```
 
+### 函数 `measureUnclampedWidth`
+
+源码：`src/editor/rich-text-dom.ts:171`
+
+量取公式容器的真实宽度。 行内公式容器带 `max-width: 100%`，公式再长也会被夹在容器宽度上，直接测量永远 量不到溢出。这里临时解除容器及其内部 `mjx-container` 的夹取，量完立即还原， 因此不改变公式最终的排版结果。
+
+```ts
+function measureUnclampedWidth(math: HTMLElement): number
+```
+
 ### 函数 `renderInlineMarkdown`
 
-源码：`src/editor/rich-text-dom.ts:159`
+源码：`src/editor/rich-text-dom.ts:188`
 
 Renders the supported inline Markdown formatting used in table cells, including LaTeX formulas.
 
@@ -8102,7 +8112,7 @@ export function renderInlineMarkdown(container: HTMLElement, markdown: string): 
 
 ### 函数 `styleFromElement`
 
-源码：`src/editor/rich-text-dom.ts:171`
+源码：`src/editor/rich-text-dom.ts:200`
 
 合并元素标签、内联样式与继承样式。
 
@@ -8112,7 +8122,7 @@ function styleFromElement(element: HTMLElement, inherited: MindMapTextStyle): Mi
 
 ### 函数 `readRichTextEditor`
 
-源码：`src/editor/rich-text-dom.ts:207`
+源码：`src/editor/rich-text-dom.ts:236`
 
 将 contenteditable DOM 解析回富文本运行段。
 
