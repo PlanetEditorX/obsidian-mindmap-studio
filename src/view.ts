@@ -120,6 +120,21 @@ export class MindMapStudioView extends TextFileView {
   }
 
   /**
+   * 打开导图时按同名不同扩展名重新识别已失效的本地图片引用，并把新路径写回文档。
+   *
+   * 显示层已经通过同名兜底渲染出正确图片，这里只负责把引用持久化，因此不触发重绘。
+   *
+   * @returns 实际改写的图片块数量。
+   */
+  private async relinkMissingImageFiles(): Promise<void> {
+    if (!this.editor) return;
+    const relinked = this.editor.relinkMissingImageFiles((path) => this.plugin.findImageRelinkTarget(path));
+    if (!relinked) return;
+    await this.save();
+    new Notice(`已按同名文件重新识别 ${relinked} 张图片`);
+  }
+
+  /**
    * 接收 Obsidian 读取的文件文本，解析成领域文档并交给编辑器。重新加载时会保留全局显示模式，并异步刷新文章父子上下文。
    *
    * @param data 该参数用于 set view data 流程中的输入或控制。
@@ -320,6 +335,7 @@ export class MindMapStudioView extends TextFileView {
     } else {
       this.scheduleArticleContextRefresh(0);
     }
+    if (this.file) void this.relinkMissingImageFiles();
   }
 
   /**
@@ -871,8 +887,13 @@ export class MindMapStudioView extends TextFileView {
     const file = direct instanceof TFile
       ? direct
       : this.app.metadataCache.getFirstLinkpathDest(target, this.file?.path ?? "");
-    if (!(file instanceof TFile)) return null;
-    return this.app.vault.getResourcePath(file);
+    if (file instanceof TFile) return this.app.vault.getResourcePath(file);
+    // 原文件已被替换为同名其它格式（如 png 改成 svg）时，先按重新识别到的路径渲染，
+    // 让图片立即可见；把引用写回文档由打开导图时的重新识别流程负责。
+    const relinked = this.plugin.findImageRelinkTarget(target);
+    if (!relinked) return null;
+    const relinkedFile = this.app.vault.getAbstractFileByPath(normalizePath(relinked));
+    return relinkedFile instanceof TFile ? this.app.vault.getResourcePath(relinkedFile) : null;
   }
 
   /**

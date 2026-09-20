@@ -1,12 +1,24 @@
 # obsidian-mindmap-studio 项目交接
 
 - 插件：MindMap Studio（Obsidian 本地优先 .mindmap 导图，含导图/大纲/文章/通读模式、全局搜索、图床、AI 助手与桌面截图链路）。
-- 版本基线：线上已发布 v1.54.3（提交 `dc74c72`）；本轮工作区（未提交）为断行对齐修复（首个等号作为对齐点），发布后应为 v1.54.4。
+- 版本基线：线上已发布 v1.54.4（提交 `cc50ea3`）；本轮工作区（未提交）为同名图片自动重新识别，发布后应为 v1.54.5。
 - 仓库规则：见根目录 `AGENTS.md`；每轮代码交付三份 ZIP（源码 / 安装 / Agent 交接）共用同一六位后缀；验证入口 `npm run verify`。
 
-## 当前状态（本轮：断行时首个顶层 `=` 留在首行并作为对齐点）
+## 当前状态（本轮：同名图片自动重新识别 + 显示兜底）
 
-- 用户反馈（本轮实测，v1.54.3 断行版本）：换行已生效、首个 `=` 也留在首行，但首行整段落在 `aligned` 的右对齐列，后续行的 `=` 被排到首行右边界之后，视觉上出现大段空档（“没对齐”）。
+- 用户需求：同一张本地图片被转成其它格式（png → svg、png → jpg 等）并覆盖原文件后，导图里的旧引用断链，希望不必逐张手动替换；确认方案为「自动兜底 + 自动写回 + 设置开关（默认开启）」，匹配范围「同目录优先，其次全库」。
+- 新增纯逻辑 `src/core/image-relink.ts`：`IMAGE_RELINK_EXTENSIONS`（svg 优先，其后 png/jpg/jpeg/webp/gif/bmp/avif/ico）、`localImageReferenceTarget()`（解析裸路径，支持 `![[图.png|别名]]` 与 `#锚点`，远程 http/data/blob 返回 null）、`findImageRelinkTarget()`（主干忽略大小写相同、扩展名必须不同、同目录优先其次全库、同层按扩展名优先级）、`relinkImageBlock()`（改写 `source`/`localSource`/图片级 `sourcePriority` 中的本地引用，远程镜像与 `contentHash` 不变；同一主干一次调用只解析一次）、`relinkDocumentImages()`（遍历整档，经 `replaceNodeContentBlocks()` 写回）。
+- 显示兜底（`src/view.ts` `resolveImage()`）：原路径解析失败时先按重新识别到的文件渲染，图片立即可见；覆盖只读、未保存与打开期间才被替换的场景。
+- 自动写回：`setViewData()` 末尾调用 `MindMapView.relinkMissingImageFiles()` → `MindMapEditor.relinkMissingImageFiles()`。该方法与 `applyImageUploadPatches()` 同属「后台自动纠正」：只更新文档模型 + `notifyDocumentChange("none")` + `markSaving()`，**不 render()**（显示已正确，重绘会扰动文章补载、阅读位置恢复与其它图片加载状态），随后由 View 保存并提示「已按同名文件重新识别 N 张图片」。
+- 插件层（`src/main.ts`）：`findImageRelinkTarget(missingPath)` 在开关关闭、原文件仍存在（用户保留旧文件）或没有同名候选时返回 null，因此不会覆盖用户有意保留的图片；`getVaultImagePaths()` 惰性缓存仓库图片路径，仓库图片文件 create/delete/rename 时失效。
+- 设置（`src/settings.ts`）：新增 `autoRelinkImageFormats`，默认 `true`，面板项「同名图片自动重新识别」放在「图片与图床」分区，位于「远程图片自动故障转移」组之后。
+- 测试：新增 `tests/image-relink.test.mjs`（8 条：同目录优先/全库回退、同扩展名与非图片文件不匹配、主干大小写与 svg 优先、远程镜像与 contentHash 不变、wiki 包裹与别名保留且同一主干只解析一次、远程与完好引用不改写、整档遍历写回、裸路径解析边界），并登记到 `package.json` 的 `test:unit`。
+- 文档：`docs/ARCHITECTURE.md` 新增「同名图片重新识别」小节（含「显示与持久化分两步、写回不得重绘」），`docs/DEVELOPMENT.md` 新增排查规则，`docs/SPECIAL_FEATURES.md` 第 14 节新增用户向说明，`docs/FUNCTION_REFERENCE.md` 重新生成。
+- 验证：`npm run verify` 通过（单元 458 条、文档 1315 处声明、仓库检查、生产构建）。
+- 待手工验证：真实 Obsidian 桌面端把某张本地图片换成同名 svg/jpg 后重开导图，确认图片直接显示、引用被改写为新路径、`撤销` 不因该自动改写产生多余步骤，以及关闭开关后不再改写也不兜底。
+
+- 上一轮（1.54.4，已发布；断行时首个顶层 `=` 留在首行并作为对齐点）
+- 用户反馈（v1.54.3 实测）：换行已生效、首个 `=` 也留在首行，但首行整段落在 `aligned` 的右对齐列，后续行的 `=` 被排到首行右边界之后，视觉上出现大段空档（“没对齐”）。
 - 修复（`src/core/latex.ts`）：首行也写入对齐点 `&`——`a = b = c` → `\begin{aligned} a & = b \\ & = c \end{aligned}`，使首个 `=` 与后续每个 `=` 竖直对齐；**少于两个顶层 `=` 仍返回 `null`**（`a = b` 不换行）。整体 `\boxed{...}` 的内层递归同样遵循该规则；JSDoc 同步说明首行漏写 `&` 的后果。
 - 真机外验证（本地 HTTP + 真实 MathJax v3 + 复刻插件公式 CSS，436px 容器）：旧写法首行 `=` 在 24.94px、后续 `=` 在 274.19px（差 249px，正是空档来源）；新写法全部 `=` 均在 42.65px（差 0），整块宽 290px、4 行，完整落在容器内。
 - 测试：`tests/latex.test.mjs` 三条期望同步更新（新增 `a = b = c` → `a & = b \\ & = c` 用例，`\text{甲=乙} = x = y` 与 `\boxed{a = b = c}` 同步）。

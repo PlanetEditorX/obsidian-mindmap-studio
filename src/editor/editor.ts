@@ -57,6 +57,7 @@ import {
   type NodeTreeIndex,
   moveNodeRelative
 } from "../core/model";
+import { relinkDocumentImages } from "../core/image-relink";
 import { buildBranchColorMap, computeLayout, documentToSvg, edgePath, edgeWidthForDepth, roundedElbowEdgePath, type LayoutResult } from "../render/layout";
 import { buildHierarchyFocusOrder, prioritizeSpatialRenderItems } from "../render/incremental-render";
 import { buildCodeLineNumberText, countCodeLines } from "../render/code-block";
@@ -1429,6 +1430,24 @@ export class MindMapEditor {
     this.markSaving();
     this.render();
     return updated;
+  }
+
+  /**
+   * 把当前文档中已失效的本地图片引用重新指向同名其它格式的仓库文件。
+   *
+   * 与后台图床上传结果合并一致，这是对既有引用的自动纠正而非用户编辑：只更新文档模型并
+   * 通知宿主保存，不重建当前视图。显示层已经通过同名兜底渲染出正确图片，因此无需重绘；
+   * 不重绘也避免扰动文章补载、阅读位置恢复以及其它图片的加载状态。
+   *
+   * @param findReplacement 为失效的本地路径解析替换路径；原文件仍存在或没有同名候选时返回 null。
+   * @returns 实际改写的图片块数量。
+   */
+  relinkMissingImageFiles(findReplacement: (path: string) => string | null): number {
+    const relinked = relinkDocumentImages(this.document, findReplacement);
+    if (!relinked) return 0;
+    this.notifyDocumentChange("none");
+    this.markSaving();
+    return relinked;
   }
 
   /** 根据当前页面或节点范围生成 AI Markdown 修改预览，不直接修改文档。 */

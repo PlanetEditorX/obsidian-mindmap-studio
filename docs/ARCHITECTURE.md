@@ -441,6 +441,17 @@ mindmap-search-index.json
 
 重新打开导图恢复自动上传时，插件按 `TFile` 聚合同时到期的图片并串行处理同一文件。网络响应只生成 `MindMapImageUploadPatch`，随后按稳定节点 ID 和图片块 ID 合并到当前编辑器文档，或重新读取磁盘最新版本后一次写回。后台上传不得保存上传开始时的整份文档快照，也不得为每张图片刷新整个打开视图；这些约束用于避免重复成功通知、界面闪烁和最后写入覆盖造成的节点丢失。
 
+### 同名图片重新识别
+
+本地图片被替换成同名其它格式（png → svg/jpg 等）后，原引用会断链。`src/core/image-relink.ts` 提供纯逻辑匹配：文件名主干忽略大小写相同、候选扩展名属于 `IMAGE_RELINK_EXTENSIONS` 且与原扩展名不同（同名同扩展名就是原文件本身，不参与匹配）；同目录候选优先于全库候选，同一层级内按扩展名优先级选取，因此矢量图 svg 优先。`relinkDocumentImages()` 遍历整份文档，通过 `replaceNodeContentBlocks()` 改写 `source`、`localSource` 与图片级 `sourcePriority` 中的本地引用，远程图床镜像与 `contentHash` 保持不变。
+
+显示与持久化分两步，不能合并成一步：
+
+- `MindMapView.resolveImage()` 在原路径解析失败时先按重新识别到的路径渲染，保证图片立即可见，并覆盖只读、未保存以及打开期间才被替换的场景。
+- `MindMapView.relinkMissingImageFiles()` 在打开导图时调用 `MindMapEditor.relinkMissingImageFiles()`，只更新文档模型并通知宿主保存，**不重建视图**。显示层已经正确，重绘会扰动文章补载、阅读位置恢复和其它图片的加载状态。
+
+插件层 `findImageRelinkTarget()` 在开关关闭、原文件仍存在或没有同名候选时返回 null，因此不会覆盖用户有意保留的旧文件。仓库图片路径由 `getVaultImagePaths()` 惰性缓存，仓库图片文件增删或改名时失效。
+
 - 任务状态交互已删除。模型层仍容忍历史 `task` 字段，以避免旧文件解析失败，但编辑器、设置、导出和渲染均忽略该字段。
 
 ### 工具栏可用性与排序

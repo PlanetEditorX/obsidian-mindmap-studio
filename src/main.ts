@@ -40,6 +40,7 @@ import {
   type MindMapNode,
   type MindMapSubmap
 } from "./core/model";
+import { IMAGE_RELINK_EXTENSIONS, findImageRelinkTarget } from "./core/image-relink";
 import {
   DEFAULT_SETTINGS,
   MindMapStudioSettingTab,
@@ -205,6 +206,8 @@ export default class MindMapStudioPlugin extends Plugin {
   private readonly pendingFileDeletionTimers = new Map<string, number>();
   private readonly autoUploadFileKeys = new WeakMap<TFile, string>();
   private autoUploadFileKeySequence = 0;
+  /** 仓库内全部图片路径的惰性缓存，供同名图片重新识别使用；仓库文件增删改名时失效。 */
+  private vaultImagePathsCache: string[] | null = null;
   private searchIndex!: MindMapSearchIndex;
   private searchIndexReady: Promise<void> = Promise.resolve();
   /** 当前已挂载的全局搜索实例；当前导图族搜索不使用该单例。 */
@@ -398,6 +401,7 @@ export default class MindMapStudioPlugin extends Plugin {
     }));
 
     this.registerEvent(this.app.vault.on("create", (file) => {
+      if (file instanceof TFile && IMAGE_RELINK_EXTENSIONS.includes(file.extension.toLowerCase())) this.vaultImagePathsCache = null;
       if (!(file instanceof TFile) || !this.isMindMapFile(file)) return;
       this.invalidateMindMapCaches(file.path, true);
       this.searchIndex.queueFile(file, 80);
@@ -408,12 +412,17 @@ export default class MindMapStudioPlugin extends Plugin {
       this.searchIndex.queueFile(file);
     }));
     this.registerEvent(this.app.vault.on("delete", (file) => {
+      if (file instanceof TFile && IMAGE_RELINK_EXTENSIONS.includes(file.extension.toLowerCase())) this.vaultImagePathsCache = null;
       if (file instanceof TFile && file.extension.toLowerCase() === MINDMAP_EXTENSION) {
         this.invalidateMindMapCaches(file.path);
         this.searchIndex.removeFile(file.path);
       }
     }));
     this.registerEvent(this.app.vault.on("rename", (file, oldPath) => {
+      if (IMAGE_RELINK_EXTENSIONS.includes(oldPath.split(".").pop()?.toLowerCase() ?? "")
+        || (file instanceof TFile && IMAGE_RELINK_EXTENSIONS.includes(file.extension.toLowerCase()))) {
+        this.vaultImagePathsCache = null;
+      }
       const isMindMapRename = (file instanceof TFile && this.isMindMapFile(file)) || oldPath.toLowerCase().endsWith(`.${MINDMAP_EXTENSION}`);
       if (isMindMapRename) {
         this.invalidateMindMapCaches(oldPath, true);
@@ -949,6 +958,7 @@ export default class MindMapStudioPlugin extends Plugin {
         ? Math.max(2, Math.min(30, Math.round(raw.imageFailoverTimeoutSeconds)))
         : DEFAULT_SETTINGS.imageFailoverTimeoutSeconds,
       imageFailoverUseLocalFallback: raw.imageFailoverUseLocalFallback !== false,
+      autoRelinkImageFormats: raw.autoRelinkImageFormats !== false,
       globalSearchMaxResults: typeof raw.globalSearchMaxResults === "number"
         ? Math.max(20, Math.min(500, Math.round(raw.globalSearchMaxResults)))
         : DEFAULT_SETTINGS.globalSearchMaxResults,
@@ -2295,6 +2305,33 @@ export default class MindMapStudioPlugin extends Plugin {
       .filter((host) => host.enabled)
       .sort((left, right) => left.priority - right.priority || left.name.localeCompare(right.name))
       .map((host) => host.id);
+  }
+
+  /**
+   * 为已失效的本地图片路径寻找同名不同扩展名的仓库图片，供显示兜底与引用改写共用。
+   *
+   * 开关关闭、原文件仍然存在（用户保留了旧文件）或没有同名候选时返回 null，
+   * 因此不会覆盖用户有意保留的图片。
+   *
+   * @param missingPath 图片块中保存的本地路径。
+   * @returns 重新识别到的仓库路径；无需重新识别时返回 null。
+   */
+  findImageRelinkTarget(missingPath: string): string | null {
+    if (!this.settings.autoRelinkImageFormats) return null;
+    const path = missingPath.trim();
+    if (!path) return null;
+    if (this.app.vault.getAbstractFileByPath(normalizePath(path)) instanceof TFile) return null;
+    return findImageRelinkTarget(path, this.getVaultImagePaths())?.path ?? null;
+  }
+
+  /** 返回仓库内全部图片文件路径；结果按需构建，仓库图片文件增删或改名时失效。 */
+  private getVaultImagePaths(): string[] {
+    if (!this.vaultImagePathsCache) {
+      this.vaultImagePathsCache = this.app.vault.getFiles()
+        .filter((file) => IMAGE_RELINK_EXTENSIONS.includes(file.extension.toLowerCase()))
+        .map((file) => file.path);
+    }
+    return this.vaultImagePathsCache;
   }
 
   /**

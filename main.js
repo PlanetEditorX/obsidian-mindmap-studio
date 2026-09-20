@@ -1526,6 +1526,115 @@ function indentedTextToMarkdown(text) {
   }).join("\n");
 }
 
+// src/core/image-relink.ts
+var IMAGE_RELINK_EXTENSIONS = ["svg", "png", "jpg", "jpeg", "webp", "gif", "bmp", "avif", "ico"];
+function splitReferencePath(reference) {
+  const normalized2 = reference.replace(/\\/g, "/").trim();
+  if (!normalized2) return null;
+  const slash = normalized2.lastIndexOf("/");
+  const directory = slash >= 0 ? normalized2.slice(0, slash) : "";
+  const fileName = slash >= 0 ? normalized2.slice(slash + 1) : normalized2;
+  const dot = fileName.lastIndexOf(".");
+  const stem = dot > 0 ? fileName.slice(0, dot) : fileName;
+  if (!stem) return null;
+  return { directory, stem, extension: dot > 0 ? fileName.slice(dot + 1).toLowerCase() : "" };
+}
+function localImageReferenceTarget(reference) {
+  var _a2, _b2, _c, _d;
+  const value = reference.trim();
+  if (!value || /^(https?:|data:|blob:)/i.test(value)) return null;
+  const wiki = value.match(/^!?\[\[([\s\S]+?)\]\]$/);
+  const target = (_d = (_c = (_b2 = ((_a2 = wiki == null ? void 0 : wiki[1]) != null ? _a2 : value).split("|")[0]) == null ? void 0 : _b2.split("#")[0]) == null ? void 0 : _c.trim()) != null ? _d : "";
+  return target || null;
+}
+function replaceReferenceTarget(reference, previous, next) {
+  const index = reference.indexOf(previous);
+  if (index < 0) return next;
+  return `${reference.slice(0, index)}${next}${reference.slice(index + previous.length)}`;
+}
+function findImageRelinkTarget(missingPath, availableFiles) {
+  const missing = splitReferencePath(missingPath);
+  if (!missing) return null;
+  const stemKey = missing.stem.toLowerCase();
+  let sameDirectoryBest = null;
+  let sameDirectoryRank = Number.MAX_SAFE_INTEGER;
+  let fallbackBest = null;
+  let fallbackRank = Number.MAX_SAFE_INTEGER;
+  for (const candidate of availableFiles) {
+    const parsed = splitReferencePath(candidate);
+    if (!parsed || !parsed.extension) continue;
+    if (parsed.stem.toLowerCase() !== stemKey) continue;
+    if (parsed.extension === missing.extension) continue;
+    const rank = IMAGE_RELINK_EXTENSIONS.indexOf(parsed.extension);
+    if (rank < 0) continue;
+    if (parsed.directory === missing.directory) {
+      if (rank < sameDirectoryRank) {
+        sameDirectoryRank = rank;
+        sameDirectoryBest = { path: candidate, sameDirectory: true };
+      }
+      continue;
+    }
+    if (rank < fallbackRank) {
+      fallbackRank = rank;
+      fallbackBest = { path: candidate, sameDirectory: false };
+    }
+  }
+  return sameDirectoryBest != null ? sameDirectoryBest : fallbackBest;
+}
+function relinkImageBlock(block, findReplacement) {
+  const cache = /* @__PURE__ */ new Map();
+  const resolve = (reference) => {
+    var _a2;
+    if (!reference) return null;
+    const target = localImageReferenceTarget(reference);
+    if (!target) return null;
+    if (!cache.has(target)) cache.set(target, findReplacement(target));
+    const next = (_a2 = cache.get(target)) != null ? _a2 : null;
+    if (!next) return null;
+    const rewritten = replaceReferenceTarget(reference, target, next);
+    return rewritten === reference ? null : rewritten;
+  };
+  let changed = false;
+  const nextSource = resolve(block.source);
+  if (nextSource) {
+    block.source = nextSource;
+    changed = true;
+  }
+  const nextLocalSource = resolve(block.localSource);
+  if (nextLocalSource) {
+    block.localSource = nextLocalSource;
+    changed = true;
+  }
+  const priority = block.sourcePriority;
+  if (priority == null ? void 0 : priority.length) {
+    const nextPriority = priority.map((item) => {
+      var _a2;
+      return (_a2 = resolve(item)) != null ? _a2 : item;
+    });
+    if (nextPriority.some((item, index) => item !== priority[index])) {
+      block.sourcePriority = nextPriority;
+      changed = true;
+    }
+  }
+  return changed;
+}
+function relinkDocumentImages(document2, findReplacement) {
+  let changed = 0;
+  for (const node of flattenNodes(document2.root)) {
+    const blocks = nodeContentBlocks(node);
+    let nodeChanged = false;
+    for (const block of blocks) {
+      if (block.type !== "image") continue;
+      if (relinkImageBlock(block, findReplacement)) {
+        nodeChanged = true;
+        changed += 1;
+      }
+    }
+    if (nodeChanged) replaceNodeContentBlocks(node, blocks);
+  }
+  return changed;
+}
+
 // src/settings.ts
 var import_obsidian = require("obsidian");
 
@@ -2360,6 +2469,7 @@ var DEFAULT_SETTINGS = {
   imageFailoverEnabled: true,
   imageFailoverTimeoutSeconds: 8,
   imageFailoverUseLocalFallback: true,
+  autoRelinkImageFormats: true,
   globalSearchMaxResults: 100,
   visibleModes: ["mindmap", "outline", "article", "reading"],
   defaultViewMode: "mindmap",
@@ -3170,6 +3280,10 @@ var MindMapStudioSettingTab = class extends import_obsidian.PluginSettingTab {
         await this.plugin.saveSettings();
       }));
     }
+    new import_obsidian.Setting(containerEl).setName("\u540C\u540D\u56FE\u7247\u81EA\u52A8\u91CD\u65B0\u8BC6\u522B").setDesc("\u5BFC\u56FE\u5F15\u7528\u7684\u672C\u5730\u56FE\u7247\u88AB\u66FF\u6362\u6210\u540C\u540D\u5176\u5B83\u683C\u5F0F\uFF08\u5982 png \u6539\u6210 svg \u6216 jpg\uFF09\u540E\uFF0C\u6253\u5F00\u5BFC\u56FE\u65F6\u6309\u6587\u4EF6\u540D\u4E3B\u5E72\u91CD\u65B0\u8BC6\u522B\uFF1A\u540C\u76EE\u5F55\u4F18\u5148\uFF0C\u5176\u6B21\u5168\u5E93\uFF0C\u5E76\u81EA\u52A8\u628A\u5F15\u7528\u66F4\u65B0\u4E3A\u65B0\u6587\u4EF6\u3002").addToggle((toggle) => toggle.setValue(this.plugin.settings.autoRelinkImageFormats).onChange(async (value) => {
+      this.plugin.settings.autoRelinkImageFormats = value;
+      await this.plugin.saveSettings();
+    }));
     new import_obsidian.Setting(containerEl).setName("\u7C98\u8D34\u56FE\u7247\u540E\u81EA\u52A8\u4E0A\u4F20").setDesc("\u56FE\u7247\u4F1A\u5148\u4FDD\u5B58\u5230\u5F53\u524D\u8111\u56FE\u7684\u672C\u5730\u8D44\u6E90\u6587\u4EF6\u5939\uFF0C\u518D\u6309\u8BBE\u5B9A\u5EF6\u8FDF\u4E0A\u4F20\u3002\u53EA\u6709\u5168\u90E8\u76EE\u6807\u56FE\u5E8A\u6210\u529F\u540E\uFF0C\u624D\u4F1A\u5207\u6362\u4E3A\u8FDC\u7A0B\u7F51\u5740\u3002").addToggle((toggle) => toggle.setValue(this.plugin.settings.autoUploadEnabled).onChange(async (value) => {
       this.plugin.settings.autoUploadEnabled = value;
       await this.plugin.saveSettings();
@@ -13813,6 +13927,23 @@ var MindMapEditor = class {
     this.render();
     return updated;
   }
+  /**
+   * 把当前文档中已失效的本地图片引用重新指向同名其它格式的仓库文件。
+   *
+   * 与后台图床上传结果合并一致，这是对既有引用的自动纠正而非用户编辑：只更新文档模型并
+   * 通知宿主保存，不重建当前视图。显示层已经通过同名兜底渲染出正确图片，因此无需重绘；
+   * 不重绘也避免扰动文章补载、阅读位置恢复以及其它图片的加载状态。
+   *
+   * @param findReplacement 为失效的本地路径解析替换路径；原文件仍存在或没有同名候选时返回 null。
+   * @returns 实际改写的图片块数量。
+   */
+  relinkMissingImageFiles(findReplacement) {
+    const relinked = relinkDocumentImages(this.document, findReplacement);
+    if (!relinked) return 0;
+    this.notifyDocumentChange("none");
+    this.markSaving();
+    return relinked;
+  }
   /** 根据当前页面或节点范围生成 AI Markdown 修改预览，不直接修改文档。 */
   previewAiEdit(responseText, scopeNodeId) {
     return previewAiMarkdownEdit(this.document, scopeNodeId != null ? scopeNodeId : null, responseText);
@@ -20966,6 +21097,20 @@ var MindMapStudioView = class extends import_obsidian17.TextFileView {
     return updated;
   }
   /**
+   * 打开导图时按同名不同扩展名重新识别已失效的本地图片引用，并把新路径写回文档。
+   *
+   * 显示层已经通过同名兜底渲染出正确图片，这里只负责把引用持久化，因此不触发重绘。
+   *
+   * @returns 实际改写的图片块数量。
+   */
+  async relinkMissingImageFiles() {
+    if (!this.editor) return;
+    const relinked = this.editor.relinkMissingImageFiles((path) => this.plugin.findImageRelinkTarget(path));
+    if (!relinked) return;
+    await this.save();
+    new import_obsidian17.Notice(`\u5DF2\u6309\u540C\u540D\u6587\u4EF6\u91CD\u65B0\u8BC6\u522B ${relinked} \u5F20\u56FE\u7247`);
+  }
+  /**
    * 接收 Obsidian 读取的文件文本，解析成领域文档并交给编辑器。重新加载时会保留全局显示模式，并异步刷新文章父子上下文。
    *
    * @param data 该参数用于 set view data 流程中的输入或控制。
@@ -21187,6 +21332,7 @@ var MindMapStudioView = class extends import_obsidian17.TextFileView {
     } else {
       this.scheduleArticleContextRefresh(0);
     }
+    if (this.file) void this.relinkMissingImageFiles();
   }
   /**
    * 异步恢复旧子导图缺失的父级导航，并只刷新受影响的导航控件与文章上下文。
@@ -21745,8 +21891,11 @@ var MindMapStudioView = class extends import_obsidian17.TextFileView {
     const target = (_d = (_c = (_b2 = ((_a2 = wikiMatch == null ? void 0 : wikiMatch[1]) != null ? _a2 : source).split("|")[0]) == null ? void 0 : _b2.split("#")[0]) == null ? void 0 : _c.trim()) != null ? _d : source;
     const direct = this.app.vault.getAbstractFileByPath((0, import_obsidian17.normalizePath)(target.replace(/^\/+/, "")));
     const file = direct instanceof import_obsidian17.TFile ? direct : this.app.metadataCache.getFirstLinkpathDest(target, (_f = (_e = this.file) == null ? void 0 : _e.path) != null ? _f : "");
-    if (!(file instanceof import_obsidian17.TFile)) return null;
-    return this.app.vault.getResourcePath(file);
+    if (file instanceof import_obsidian17.TFile) return this.app.vault.getResourcePath(file);
+    const relinked = this.plugin.findImageRelinkTarget(target);
+    if (!relinked) return null;
+    const relinkedFile = this.app.vault.getAbstractFileByPath((0, import_obsidian17.normalizePath)(relinked));
+    return relinkedFile instanceof import_obsidian17.TFile ? this.app.vault.getResourcePath(relinkedFile) : null;
   }
   /**
    * 执行“export text file”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
@@ -24572,6 +24721,8 @@ var MindMapStudioPlugin = class extends import_obsidian20.Plugin {
     this.pendingFileDeletionTimers = /* @__PURE__ */ new Map();
     this.autoUploadFileKeys = /* @__PURE__ */ new WeakMap();
     this.autoUploadFileKeySequence = 0;
+    /** 仓库内全部图片路径的惰性缓存，供同名图片重新识别使用；仓库文件增删改名时失效。 */
+    this.vaultImagePathsCache = null;
     this.searchIndexReady = Promise.resolve();
     /** 当前已挂载的全局搜索实例；当前导图族搜索不使用该单例。 */
     this.globalSearchModal = null;
@@ -24756,6 +24907,7 @@ var MindMapStudioPlugin = class extends import_obsidian20.Plugin {
       }
     }));
     this.registerEvent(this.app.vault.on("create", (file) => {
+      if (file instanceof import_obsidian20.TFile && IMAGE_RELINK_EXTENSIONS.includes(file.extension.toLowerCase())) this.vaultImagePathsCache = null;
       if (!(file instanceof import_obsidian20.TFile) || !this.isMindMapFile(file)) return;
       this.invalidateMindMapCaches(file.path, true);
       this.searchIndex.queueFile(file, 80);
@@ -24766,12 +24918,17 @@ var MindMapStudioPlugin = class extends import_obsidian20.Plugin {
       this.searchIndex.queueFile(file);
     }));
     this.registerEvent(this.app.vault.on("delete", (file) => {
+      if (file instanceof import_obsidian20.TFile && IMAGE_RELINK_EXTENSIONS.includes(file.extension.toLowerCase())) this.vaultImagePathsCache = null;
       if (file instanceof import_obsidian20.TFile && file.extension.toLowerCase() === MINDMAP_EXTENSION) {
         this.invalidateMindMapCaches(file.path);
         this.searchIndex.removeFile(file.path);
       }
     }));
     this.registerEvent(this.app.vault.on("rename", (file, oldPath) => {
+      var _a3, _b2;
+      if (IMAGE_RELINK_EXTENSIONS.includes((_b2 = (_a3 = oldPath.split(".").pop()) == null ? void 0 : _a3.toLowerCase()) != null ? _b2 : "") || file instanceof import_obsidian20.TFile && IMAGE_RELINK_EXTENSIONS.includes(file.extension.toLowerCase())) {
+        this.vaultImagePathsCache = null;
+      }
       const isMindMapRename = file instanceof import_obsidian20.TFile && this.isMindMapFile(file) || oldPath.toLowerCase().endsWith(`.${MINDMAP_EXTENSION}`);
       if (isMindMapRename) {
         this.invalidateMindMapCaches(oldPath, true);
@@ -25255,6 +25412,7 @@ var MindMapStudioPlugin = class extends import_obsidian20.Plugin {
       imageFailoverEnabled: raw.imageFailoverEnabled !== false,
       imageFailoverTimeoutSeconds: typeof raw.imageFailoverTimeoutSeconds === "number" ? Math.max(2, Math.min(30, Math.round(raw.imageFailoverTimeoutSeconds))) : DEFAULT_SETTINGS.imageFailoverTimeoutSeconds,
       imageFailoverUseLocalFallback: raw.imageFailoverUseLocalFallback !== false,
+      autoRelinkImageFormats: raw.autoRelinkImageFormats !== false,
       globalSearchMaxResults: typeof raw.globalSearchMaxResults === "number" ? Math.max(20, Math.min(500, Math.round(raw.globalSearchMaxResults))) : DEFAULT_SETTINGS.globalSearchMaxResults,
       visibleModes: normalizeVisibleModes(raw.visibleModes),
       visibleToolbarItems: (() => {
@@ -26464,6 +26622,30 @@ var MindMapStudioPlugin = class extends import_obsidian20.Plugin {
   /** Returns enabled image host IDs ordered by render failover priority. */
   getImageHostPriorityIds() {
     return this.settings.imageHosts.filter((host) => host.enabled).sort((left, right) => left.priority - right.priority || left.name.localeCompare(right.name)).map((host) => host.id);
+  }
+  /**
+   * 为已失效的本地图片路径寻找同名不同扩展名的仓库图片，供显示兜底与引用改写共用。
+   *
+   * 开关关闭、原文件仍然存在（用户保留了旧文件）或没有同名候选时返回 null，
+   * 因此不会覆盖用户有意保留的图片。
+   *
+   * @param missingPath 图片块中保存的本地路径。
+   * @returns 重新识别到的仓库路径；无需重新识别时返回 null。
+   */
+  findImageRelinkTarget(missingPath) {
+    var _a2, _b2;
+    if (!this.settings.autoRelinkImageFormats) return null;
+    const path = missingPath.trim();
+    if (!path) return null;
+    if (this.app.vault.getAbstractFileByPath((0, import_obsidian20.normalizePath)(path)) instanceof import_obsidian20.TFile) return null;
+    return (_b2 = (_a2 = findImageRelinkTarget(path, this.getVaultImagePaths())) == null ? void 0 : _a2.path) != null ? _b2 : null;
+  }
+  /** 返回仓库内全部图片文件路径；结果按需构建，仓库图片文件增删或改名时失效。 */
+  getVaultImagePaths() {
+    if (!this.vaultImagePathsCache) {
+      this.vaultImagePathsCache = this.app.vault.getFiles().filter((file) => IMAGE_RELINK_EXTENSIONS.includes(file.extension.toLowerCase())).map((file) => file.path);
+    }
+    return this.vaultImagePathsCache;
   }
   /**
    * 读取并返回default upload host ids，并保持模型、界面和持久化状态的一致性。

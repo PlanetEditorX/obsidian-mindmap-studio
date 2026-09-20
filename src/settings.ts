@@ -363,6 +363,8 @@ export interface MindMapStudioSettings {
   imageFailoverEnabled: boolean;
   imageFailoverTimeoutSeconds: number;
   imageFailoverUseLocalFallback: boolean;
+  /** 本地图片被替换成同名其它格式后，打开导图时自动按文件名主干重新识别并更新引用。 */
+  autoRelinkImageFormats: boolean;
   globalSearchMaxResults: number;
   visibleModes: DisplayMode[];
   defaultViewMode: DisplayMode;
@@ -513,6 +515,7 @@ export const DEFAULT_SETTINGS: MindMapStudioSettings = {
   imageFailoverEnabled: true,
   imageFailoverTimeoutSeconds: 8,
   imageFailoverUseLocalFallback: true,
+  autoRelinkImageFormats: true,
   globalSearchMaxResults: 100,
   visibleModes: ["mindmap", "outline", "article", "reading"],
   defaultViewMode: "mindmap",
@@ -1785,6 +1788,16 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
             await this.plugin.saveSettings();
           }));
     }
+
+    new Setting(containerEl)
+      .setName("同名图片自动重新识别")
+      .setDesc("导图引用的本地图片被替换成同名其它格式（如 png 改成 svg 或 jpg）后，打开导图时按文件名主干重新识别：同目录优先，其次全库，并自动把引用更新为新文件。")
+      .addToggle((toggle) => toggle
+        .setValue(this.plugin.settings.autoRelinkImageFormats)
+        .onChange(async (value) => {
+          this.plugin.settings.autoRelinkImageFormats = value;
+          await this.plugin.saveSettings();
+        }));
 
     new Setting(containerEl)
       .setName("粘贴图片后自动上传")
