@@ -1938,9 +1938,39 @@ Converts unescaped CJK words in math mode into `\text{...}` groups. AI-generated
 export function normalizeLatexForMathJax(value: string): string
 ```
 
+### 函数 `wrapLatexForLineBreaks`
+
+源码：`src/core/latex.ts:67`
+
+Breaks an over-long inline formula into an `aligned` multi-line block. Long chains such as `R=...=...=...` cannot wrap on their own, so they push out of the page. Every top-level `=` becomes a line break inside an `aligned` environment, which MathJax lays out as one multi-line block that still flows with the surrounding text. Formulas that cannot be split keep their original single-line rendering.
+
+```ts
+export function wrapLatexForLineBreaks(value: string): string | null
+```
+
+### 函数 `boxedContent`
+
+源码：`src/core/latex.ts:89`
+
+Returns the content of a source that is exactly one `\boxed{...}` group.
+
+```ts
+function boxedContent(source: string): string | null
+```
+
+### 函数 `splitLatexAtTopLevelRelation`
+
+源码：`src/core/latex.ts:117`
+
+Splits a formula source before every top-level `=`. Braces, escaped characters and command groups keep their operators intact, so only the relations that separate the steps of the formula become breaks.
+
+```ts
+function splitLatexAtTopLevelRelation(source: string): string[]
+```
+
 ### 函数 `splitLatexText`
 
-源码：`src/core/latex.ts:64`
+源码：`src/core/latex.ts:151`
 
 Splits a text block into plain-text and formula segments. Double-dollar formulas only use display layout when the whole text block contains that formula and whitespace. This recovers legacy content such as `通项公式：$$a_n=...$$` as inline math. Repeated or asymmetric dollar runs from older double-wrapping bugs are also recovered as inline formulas.
 
@@ -4016,7 +4046,7 @@ onOpen(): void
 
 ### 方法 `FormulaEditModal.onClose`
 
-源码：`src/editor/editor-modals.ts:573`
+源码：`src/editor/editor-modals.ts:597`
 
 清理公式编辑器 DOM。
 
@@ -4026,7 +4056,7 @@ onClose(): void
 
 ### 类 `ImportExportModal`
 
-源码：`src/editor/editor-modals.ts:581`
+源码：`src/editor/editor-modals.ts:605`
 
 导入、导出或合并思维导图 JSON。
 
@@ -4036,7 +4066,7 @@ export class ImportExportModal extends Modal
 
 ### 构造函数 `ImportExportModal.constructor`
 
-源码：`src/editor/editor-modals.ts:590`
+源码：`src/editor/editor-modals.ts:614`
 
 创建 JSON 传输弹窗。
 
@@ -4046,7 +4076,7 @@ constructor( app: App, private readonly document: MindMapDocument, private reado
 
 ### 方法 `ImportExportModal.onOpen`
 
-源码：`src/editor/editor-modals.ts:609`
+源码：`src/editor/editor-modals.ts:633`
 
 创建 JSON 文本区和文件导入操作。
 
@@ -4056,7 +4086,7 @@ onOpen(): void
 
 ### 方法 `ImportExportModal.onClose`
 
-源码：`src/editor/editor-modals.ts:808`
+源码：`src/editor/editor-modals.ts:832`
 
 Clears import/export controls when the modal closes.
 
@@ -4066,7 +4096,7 @@ onClose(): void
 
 ### 类 `OutlineModal`
 
-源码：`src/editor/editor-modals.ts:816`
+源码：`src/editor/editor-modals.ts:840`
 
 显示只读 Markdown 大纲并提供复制和导出入口。
 
@@ -4076,7 +4106,7 @@ export class OutlineModal extends Modal
 
 ### 构造函数 `OutlineModal.constructor`
 
-源码：`src/editor/editor-modals.ts:824`
+源码：`src/editor/editor-modals.ts:848`
 
 创建 Markdown 大纲弹窗。
 
@@ -4086,7 +4116,7 @@ constructor(app: App, private readonly markdown: string, private readonly onExpo
 
 ### 方法 `OutlineModal.onOpen`
 
-源码：`src/editor/editor-modals.ts:831`
+源码：`src/editor/editor-modals.ts:855`
 
 创建大纲内容和操作按钮。
 
@@ -4096,7 +4126,7 @@ onOpen(): void
 
 ### 方法 `OutlineModal.onClose`
 
-源码：`src/editor/editor-modals.ts:852`
+源码：`src/editor/editor-modals.ts:876`
 
 清理大纲弹窗 DOM。
 
@@ -8050,9 +8080,19 @@ function styleEquals(left: MindMapTextStyle | undefined, right: MindMapTextStyle
 export function renderRichTextRuns( container: HTMLElement, runs: MindMapTextRun[] | undefined, fallbackText: string, latex = true ): void
 ```
 
+### 函数 `wrapOverflowingInlineMath`
+
+源码：`src/editor/rich-text-dom.ts:141`
+
+把超出容器宽度的长行内公式自动断成多行。 等式链等长公式自身无法折行，会把页面顶宽。这里在渲染后测量实际宽度，超宽时 换成 `aligned` 多行排版替换原公式；无法断行、容器宽度未知（未挂载的预览） 以及导图节点（节点宽度自适应内容）都保持原样。
+
+```ts
+function wrapOverflowingInlineMath(math: HTMLElement, container: HTMLElement, source: string): void
+```
+
 ### 函数 `renderInlineMarkdown`
 
-源码：`src/editor/rich-text-dom.ts:127`
+源码：`src/editor/rich-text-dom.ts:159`
 
 Renders the supported inline Markdown formatting used in table cells, including LaTeX formulas.
 
@@ -8062,7 +8102,7 @@ export function renderInlineMarkdown(container: HTMLElement, markdown: string): 
 
 ### 函数 `styleFromElement`
 
-源码：`src/editor/rich-text-dom.ts:139`
+源码：`src/editor/rich-text-dom.ts:171`
 
 合并元素标签、内联样式与继承样式。
 
@@ -8072,7 +8112,7 @@ function styleFromElement(element: HTMLElement, inherited: MindMapTextStyle): Mi
 
 ### 函数 `readRichTextEditor`
 
-源码：`src/editor/rich-text-dom.ts:175`
+源码：`src/editor/rich-text-dom.ts:207`
 
 将 contenteditable DOM 解析回富文本运行段。
 

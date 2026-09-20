@@ -11,7 +11,7 @@ import {
   type MindMapTextRun,
   type MindMapTextStyle
 } from "../core/model";
-import { normalizeLatexForMathJax, splitLatexText } from "../core/latex";
+import { normalizeLatexForMathJax, splitLatexText, wrapLatexForLineBreaks } from "../core/latex";
 
 let mathJaxReady = false;
 let mathJaxLoading: Promise<void> | null = null;
@@ -116,11 +116,43 @@ export function renderRichTextRuns(
       math.toggleClass("is-display", segment.display);
       container.appendChild(math);
       renderedMath = true;
+      wrapOverflowingInlineMath(math, container, segment.source);
     } catch {
       appendRange(segment.start, segment.end);
     }
   }
   if (renderedMath) void finishRenderMath();
+}
+
+/** 行内公式源码达到该长度后才检测宽度，避免为短公式触发同步布局。 */
+const INLINE_MATH_WRAP_MIN_LENGTH = 40;
+
+/**
+ * 把超出容器宽度的长行内公式自动断成多行。
+ *
+ * 等式链等长公式自身无法折行，会把页面顶宽。这里在渲染后测量实际宽度，超宽时
+ * 换成 `aligned` 多行排版替换原公式；无法断行、容器宽度未知（未挂载的预览）
+ * 以及导图节点（节点宽度自适应内容）都保持原样。
+ *
+ * @param math 已挂载的公式容器。
+ * @param container 公式所在的文字容器。
+ * @param source 公式源码。
+ */
+function wrapOverflowingInlineMath(math: HTMLElement, container: HTMLElement, source: string): void {
+  if (source.length < INLINE_MATH_WRAP_MIN_LENGTH) return;
+  if (container.closest('[contenteditable="true"]') || container.closest(".mmc-node-text")) return;
+  const wrappedSource = wrapLatexForLineBreaks(source);
+  if (!wrappedSource) return;
+  const available = container.clientWidth;
+  if (!available || math.getBoundingClientRect().width <= available + 1) return;
+  try {
+    const wrapped = renderMath(normalizeLatexForMathJax(wrappedSource), false);
+    wrapped.addClass("mms-node-math");
+    wrapped.addClass("is-wrapped");
+    math.replaceWith(wrapped);
+  } catch {
+    // 断行后无法渲染时保留原公式。
+  }
 }
 
 /** Renders the supported inline Markdown formatting used in table cells, including LaTeX formulas. */

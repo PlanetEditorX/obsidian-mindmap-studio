@@ -1,12 +1,19 @@
 # obsidian-mindmap-studio 项目交接
 
 - 插件：MindMap Studio（Obsidian 本地优先 .mindmap 导图，含导图/大纲/文章/通读模式、全局搜索、图床、AI 助手与桌面截图链路）。
-- 版本基线：线上已发布 v1.53.9（提交 `2dae41c`）；本轮工作区（未提交）为重锚跟随最后一次应用的锚点，发布后应为 v1.53.10。
+- 版本基线：线上已发布 v1.54.0（提交 `3e99df7`）；本轮工作区（未提交）为长行内公式按容器宽度自动换行与公式编辑器「方框」，发布后应为 v1.54.1。
 - 仓库规则：见根目录 `AGENTS.md`；每轮代码交付三份 ZIP（源码 / 安装 / Agent 交接）共用同一六位后缀；验证入口 `npm run verify`。
 
-## 当前状态（本轮：重锚改为跟随「最后一次真正应用」的语义锚点）
+## 当前状态（本轮：长行内公式按容器宽度自动换行 + 公式编辑器「方框」）
 
-- 根因（日志 `mu9ofat9-7h12`，1.53.9）：一次右键「在上方插入文字」在 12ms 内触发了 3 次窗口重建，restore token 26/27 最终把视口锚在 `n_msd4rorv_9b9ba5q`（viewportRatio 0.573），此后 warmup 的 `holdArticleAnchor` 已把它稳定钉在 targetTop 534.46；但 6 秒后 `window-warmup-complete` 的 `reapplyArticleAnchor()` 读到的却是 token 24/25 留下的**过期**锚点 `n_msd4rorw_37ml8gm`，于是 28.676 把视口强行移动 **2017px** 去把那个旧节点放到 35% 处——补载期间已经稳定的视口被重锚自己拽走。
+- 需求（用户反馈）：`$\boxed{\Delta \bar{x}=...}$` 需要「方框」入口；长公式（如 `$R = 5.25\%,\ R \times (1-R) = 5.25\% \times (1-5.25\%) = 5\%$`）会超出页面，希望可以换行。用户选定方案为**插件内自动换行**（不改 Obsidian 全局 MathJax 配置）。
+- 断行纯函数（`src/core/latex.ts`）：新增 `wrapLatexForLineBreaks(source)`，只在顶层 `=` 处断行并输出 `\begin{aligned} a \\ & = b \end{aligned}`；花括号、转义字符（`\{`、`\\`）、`\text{}` 内等号、`\left/\right` 成对定界符与已有 `\begin{}` 环境一律不拆（`\left/\right` 跨行会 unbalanced 报错，直接放弃断行）；源码整体是 `\boxed{...}` 时递归断行内层并保留方框；不可断行返回 `null`。辅助函数 `boxedContent()`、`splitLatexAtTopLevelRelation()`。
+- 渲染自动换行（`src/editor/rich-text-dom.ts`）：`renderRichTextRuns()` 挂载行内公式后调用 `wrapOverflowingInlineMath()`——源码长度 ≥ 40 才测量（避免为短公式强制同步布局），容器 `clientWidth` 已知且公式实际宽度超宽时，用断行源码重新 `renderMath(..., false)` 并 `replaceWith`，打上 `is-wrapped`。导图节点（`.mmc-node-text`，宽度自适应内容）、编辑态与容器宽度未知的预览保持单行；断行后渲染失败保留原公式。全流程同步执行，不引入异步重排，避免再次扰动文章模式补载/锚点体系。
+- 公式编辑器「方框」（`src/editor/editor-modals.ts`）：`FormulaEditModal` 常用结构面板新增「方框」按钮——有选区包住选区；无选区包住整条公式；源码为空时插入 `\boxed{}` 并把光标放进花括号内。
+- 测试：`tests/latex.test.mjs` 新增 3 条（顶层等号断行与 aligned 输出、花括号/转义/`\begin{}`/`\left\right` 保持不拆、`\boxed{}` 内层断行）；`tests/question.test.mjs` 新增 1 条契约（方框按钮写入行为 + 渲染层按宽度换行、跳过导图节点与编辑态）。
+- 文档：`docs/ARCHITECTURE.md`（latex.ts / rich-text-dom.ts / 公式编辑器三条）、`docs/DEVELOPMENT.md`（LaTeX 维护规则补充方框与断行边界）、`docs/FUNCTION_REFERENCE.md` 重新生成。
+
+- 上一轮（1.54.0，已发布；重锚跟随最后一次应用的语义锚点）：根因（日志 `mu9ofat9-7h12`，1.53.9）：一次右键「在上方插入文字」在 12ms 内触发了 3 次窗口重建，restore token 26/27 最终把视口锚在 `n_msd4rorv_9b9ba5q`（viewportRatio 0.573），此后 warmup 的 `holdArticleAnchor` 已把它稳定钉在 targetTop 534.46；但 6 秒后 `window-warmup-complete` 的 `reapplyArticleAnchor()` 读到的却是 token 24/25 留下的**过期**锚点 `n_msd4rorw_37ml8gm`，于是 28.676 把视口强行移动 **2017px** 去把那个旧节点放到 35% 处——补载期间已经稳定的视口被重锚自己拽走。
 - 为什么过期：`pendingArticleAnchorLocation` 只在 `renderWindow` 里赋值（`const location = latestRequestedLocation ?? previousLocation ?? rebuildLocation ?? this.lastReadingLocation`），而更新的那次恢复是从其它入口（如 `setDisplayMode`）进来的，没有更新该字段。
 - 修复（`editor.ts`）：在 `beginReadingLocationRestore()`（所有恢复应用的唯一漏斗，每次应用前都会记 `restore-transaction-start`）里补 `if (mode === "article") this.pendingArticleAnchorLocation = location;`，让重锚目标始终等于最后一次真正应用的语义位置。补载期间没有其它恢复入口，行为与之前一致；只有出现"多次重建 / 多入口恢复"时不再取到旧锚点。
 - 契约测试：`tests/reading-editor-contract.test.mjs` 在「warmup 完成后重锚」用例里新增断言——`beginReadingLocationRestore` 必须为 article 模式记录锚点，且必须发生在 `restore-transaction-start` 之前。
@@ -50,12 +57,15 @@
 
 ## 验证基线
 
-- `npm run verify` 本机完整通过：`test:unit` 446/446（含 `tests/reading-editor-contract.test.mjs` 本轮新增 2 条：向前补载钉住参照节点、逐帧锚点保持）、`test:regression` 全部通过、`test:docs` 全部通过（1298 处命名声明）、`test:repo` 通过、`tsc --noEmit` 与 production esbuild 通过。
+- `npm run verify` 本机完整通过：`test:unit` 450/450（本轮新增 4 条：`tests/latex.test.mjs` 3 条断行、`tests/question.test.mjs` 1 条方框/换行契约）、`test:regression` 全部通过、`test:docs` 全部通过（1302 处命名声明）、`test:repo` 通过、`tsc --noEmit` 与 production esbuild 通过。
 - 详细数据见根目录 `TEST_RESULTS.md`。
 
 ## 待验证事项（需真实 Obsidian 桌面端手工冒烟）
 
-- **文章模式图片节点内容变更后视口稳定（本轮重点，仍待用户实测确认）**：文章模式滚动到较深章节（如第 18 节）→ 在图片块上右键“在上方插入文字”或做其它内容变更 → 页面重建、窗口分帧补载（约 6 秒）、补载完成后前文图片/公式继续排版的全过程里，视口应停在同一处正文，不再出现数千像素的来回跳；补载期间（约 6 秒）主动滚动或点击应立即接管，不再被钉住。本轮修复针对的是补载**结束瞬间**重锚用旧锚点拽走视口 2017px 的问题。
+- **长公式自动换行（本轮新增，待实测）**：文章/通读/大纲/题目预览中插入一条明显超过正文宽度的行内公式（如 `$R = 5.25\%,\ R \times (1-R) = 5.25\% \times (1-5.25\%) = 5.25\% - 0.25\% = 5\%$`），应自动断成按等号对齐的多行、不再把页面顶宽；同一条公式放在导图节点里应保持单行（节点宽度自适应内容）；已渲染的公式在窗口变窄后不会自动重排（判定只发生在重新渲染时），刷新或切换模式后生效。
+- **公式编辑器「方框」（本轮新增，待实测）**：编辑节点内容 →「+ 公式」→ 输入公式后点「方框」，源码应变为 `\boxed{公式}` 且预览出现方框；先选中部分源码再点「方框」只包住选区；源码为空时点「方框」得到 `\boxed{}` 且光标停在花括号内。`\boxed` 依赖 Obsidian 自带 MathJax 的 ams 包，若预览提示“公式语法暂时无法渲染”请回报。
+
+- **文章模式图片节点内容变更后视口稳定（1.54.0 修复，仍待用户实测确认）**：文章模式滚动到较深章节（如第 18 节）→ 在图片块上右键“在上方插入文字”或做其它内容变更 → 页面重建、窗口分帧补载（约 6 秒）、补载完成后前文图片/公式继续排版的全过程里，视口应停在同一处正文，不再出现数千像素的来回跳；补载期间（约 6 秒）主动滚动或点击应立即接管，不再被钉住。该修复针对的是补载**结束瞬间**重锚用旧锚点拽走视口 2017px 的问题。
 - 焦点位置记忆：导图双击某节点编辑 → 点空白画布取消选中 → 拖拽画布 → 切换到文章，应落在上次聚焦节点的文字内容上（不再跳到最前）；再点选其它节点后再切文章应落在新选节点。
 - 图片预览失效源自动回退：图片含图床+本地两来源，停用/失效图床后点击图片预览，短暂尝试图床后应自动回退显示本地图片，不再停留在“加载失败”；来源栏高亮应指向实际显示的本地来源；全部来源失效时才显示失败卡。
 - 删除带失效远端的图片：删除该图片块后约 1 分钟，本地图片应进入系统回收站（不因远端连接失败被阻塞）；即便如此远端删除失败仍会提示“删除失败”，属远端不可达的如实反馈。
@@ -77,13 +87,15 @@
 
 ## 下一步建议
 
+- 长公式换行只在重新渲染时按容器宽度判定，窗口缩放后不重排；如需跟随窗口变化，可在 resize 后对可见公式重跑一次判定（需评估文章模式锚点抖动风险）。
+- 断行目前只在顶层 `=` 处切分；如需在 `+`/`,` 或不等号处断行，可在 `splitLatexAtTopLevelRelation()` 扩展操作符集合。
 - 文件块可选增强：右键菜单“在系统中显示/复制路径”；大量附件时的资源目录清理入口。
 - 编辑器侧优化：把 `documentSnapshotJson` 失效与 `nodeTreeIndex` 重建收拢进 `mutate()` 单一入口。
 - 编辑器拆分剩余批次（题目系统流程、行内编辑深化）收益递减，按需推进。
 
 ## 交付说明
 
-- 三份 ZIP 均输出到 `D:\Downloads`（仓库工作区外），外部文件名：`obsidian-mindmap-studio-<版本>-<后缀>.zip`、`mindmap-studio-<版本>-test-<后缀>.zip`、`Agent-<版本>-handoff-<后缀>.zip`（内部根目录 `Agent/`）。
-- 最近交付包（后缀 553086，交付追踪版本 1.53.10）：`obsidian-mindmap-studio-1.53.10-553086.zip`、`mindmap-studio-1.53.10-test-553086.zip`、`Agent-1.53.10-handoff-553086.zip`；实际发布版本以 GitHub Release 为准。
+- 三份 ZIP 均输出到 `D:\Downloads`（仓库工作区外），外部文件名：`obsidian-mindmap-studio-<版本>-<后缀>.zip`、`mindmap-studio-<版本>-test-<后缀>.zip`、`Agent-<版本>-handoff-<后缀>.zip`（内部根目录 `Agent/`）。本机 `D:\Downloads` 拒绝写入（OS 权限），本轮实际生成在 `%TEMP%\mms-delivery-<后缀>\`，需自行移动。
+- 最近交付包（后缀 450618，交付追踪版本 1.54.1）：`obsidian-mindmap-studio-1.54.1-450618.zip`、`mindmap-studio-1.54.1-test-450618.zip`、`Agent-1.54.1-handoff-450618.zip`；实际发布版本以 GitHub Release 为准。
 - 历史交付包记录已清理；历史版本以 GitHub Release 发布为准，本地交付 ZIP 见 `D:\Downloads`。
 - 交付约束：沟通说明与中文 Git 提交说明中**不得**再写“- main.js 已重建。”这条；main.js 由 `npm run verify` 的 build 自动重建，交付时不要单独列出。

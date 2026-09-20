@@ -431,3 +431,21 @@ test("question fields insert and preview inline or display LaTeX across every qu
   assert.match(styles, /\.mms-question-ai-process\s*\{/);
   assert.match(styles, /\.mms-question-ai-track\s*\{/);
 });
+
+test("formula editor boxes the selection and over-long inline formulas wrap by container width", async () => {
+  const [formulaSource, richTextSource] = await Promise.all([
+    readFile("src/editor/editor-modals.ts", "utf8"),
+    readFile("src/editor/rich-text-dom.ts", "utf8")
+  ]);
+  // 「方框」按钮：有选区包住选区，无选区包住整条公式，空源码时把光标放进花括号。
+  assert.match(formulaSource, /const insertBoxed = \(\): void => \{/);
+  assert.match(formulaSource, /text: "方框"/);
+  assert.match(formulaSource, /const content = selected \|\| source\.value;/);
+  assert.match(formulaSource, /source\.setSelectionRange\(caret, caret\)/);
+  // 超宽行内公式改用 aligned 多行；导图节点与编辑态保持原样。
+  assert.match(richTextSource, /wrapLatexForLineBreaks\(source\)/);
+  assert.match(richTextSource, /container\.closest\("\.mmc-node-text"\)/);
+  assert.match(richTextSource, /math\.getBoundingClientRect\(\)\.width <= available \+ 1/);
+  assert.match(richTextSource, /wrapped\.addClass\("is-wrapped"\)/);
+  assert.match(richTextSource, /math\.replaceWith\(wrapped\)/);
+});

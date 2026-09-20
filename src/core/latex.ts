@@ -54,6 +54,93 @@ export function normalizeLatexForMathJax(value: string): string {
 }
 
 /**
+ * Breaks an over-long inline formula into an `aligned` multi-line block.
+ *
+ * Long chains such as `R=...=...=...` cannot wrap on their own, so they push
+ * out of the page. Every top-level `=` becomes a line break inside an
+ * `aligned` environment, which MathJax lays out as one multi-line block that
+ * still flows with the surrounding text. Formulas that cannot be split keep
+ * their original single-line rendering.
+ *
+ * @returns The aligned source, or null when the formula must stay as-is.
+ */
+export function wrapLatexForLineBreaks(value: string): string | null {
+  const source = value.trim();
+  if (!source || source.includes("\\begin{") || source.includes("\\end{")) return null;
+  // `\left`/`\right` pairs must stay in one group, so they cannot be split.
+  if (source.includes("\\left") || source.includes("\\right")) return null;
+  const boxed = boxedContent(source);
+  if (boxed !== null) {
+    const inner = wrapLatexForLineBreaks(boxed);
+    return inner ? `\\boxed{${inner}}` : null;
+  }
+  const parts = splitLatexAtTopLevelRelation(source);
+  if (parts.length < 2 || parts.some((part) => !part.trim())) return null;
+  const lines = parts.map((part, index) => (index ? `& ${part.trim()}` : part.trim()));
+  return `\\begin{aligned} ${lines.join(" \\\\ ")} \\end{aligned}`;
+}
+
+/**
+ * Returns the content of a source that is exactly one `\boxed{...}` group.
+ *
+ * @param source Trimmed formula source.
+ * @returns The boxed content, or null when the source is not a single box.
+ */
+function boxedContent(source: string): string | null {
+  const prefix = "\\boxed{";
+  if (!source.startsWith(prefix) || !source.endsWith("}")) return null;
+  let depth = 0;
+  for (let index = prefix.length - 1; index < source.length; index += 1) {
+    const char = source[index]!;
+    if (char === "\\") {
+      index += 1;
+      continue;
+    }
+    if (char === "{") depth += 1;
+    else if (char === "}") {
+      depth -= 1;
+      if (depth === 0) return index === source.length - 1 ? source.slice(prefix.length, index) : null;
+    }
+  }
+  return null;
+}
+
+/**
+ * Splits a formula source before every top-level `=`.
+ *
+ * Braces, escaped characters and command groups keep their operators intact,
+ * so only the relations that separate the steps of the formula become breaks.
+ *
+ * @param source Trimmed formula source.
+ * @returns The parts, with the first part starting the formula.
+ */
+function splitLatexAtTopLevelRelation(source: string): string[] {
+  const parts: string[] = [];
+  let depth = 0;
+  let cursor = 0;
+  for (let index = 0; index < source.length; index += 1) {
+    const char = source[index]!;
+    if (char === "\\") {
+      index += 1;
+      continue;
+    }
+    if (char === "{") {
+      depth += 1;
+      continue;
+    }
+    if (char === "}") {
+      depth = Math.max(0, depth - 1);
+      continue;
+    }
+    if (depth > 0 || char !== "=") continue;
+    parts.push(source.slice(cursor, index));
+    cursor = index;
+  }
+  parts.push(source.slice(cursor));
+  return parts;
+}
+
+/**
  * Splits a text block into plain-text and formula segments.
  *
  * Double-dollar formulas only use display layout when the whole text block

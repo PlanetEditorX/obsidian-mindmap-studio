@@ -535,6 +535,30 @@ export class FormulaEditModal extends Modal {
       const button = palette.createEl("button", { text: label, attr: { type: "button", title } });
       button.addEventListener("click", () => insert(template));
     }
+    /**
+     * 插入方框：选中内容会被包进 `\boxed{}`；没有选区时包住整条公式，
+     * 源码为空则插入空方框并把光标放进花括号内。
+     */
+    const insertBoxed = (): void => {
+      const start = source.selectionStart ?? source.value.length;
+      const end = source.selectionEnd ?? start;
+      const selected = source.value.slice(start, end);
+      const content = selected || source.value;
+      const from = selected ? start : 0;
+      const to = selected ? end : source.value.length;
+      source.setRangeText(`\\boxed{${content}}`, from, to, "end");
+      source.focus();
+      if (!content) {
+        const caret = from + "\\boxed{".length;
+        source.setSelectionRange(caret, caret);
+      }
+      updatePreview();
+    };
+    const boxedButton = palette.createEl("button", {
+      text: "方框",
+      attr: { type: "button", title: "方框：选中内容会被包进 \\boxed{ }，未选中时包住整条公式" }
+    });
+    boxedButton.addEventListener("click", insertBoxed);
     for (const [label, template, title] of arithmetic) {
       const button = arithmeticPalette.createEl("button", {
         text: label,

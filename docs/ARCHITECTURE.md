@@ -69,8 +69,8 @@ src/
 - `src/themes.ts`：内置主题预设。
 - `src/article/article-style.ts`：文章与通读共用的阅读样式预设和纯样式解析，不依赖编辑器 DOM。
 - `src/editor/editor-types.ts`：编辑器回调与运行参数契约，隔离插件服务和 UI 实现。
-- `src/core/latex.ts`：纯函数解析公式分隔符、恢复历史重复美元、判断行内/独立布局，并在渲染前把裸露中文标签转换为 MathJax 可识别的 `\text{...}`。
-- `src/editor/rich-text-dom.ts`：富文本运行段与 `contenteditable` DOM 的双向转换，以及 MathJax 渲染。公式先合并全部运行段再解析，因此分隔符跨颜色或加粗边界仍有效；查看态渲染公式，编辑态暂时显示源码，异步 MathJax 回调不得覆盖仍为 `contenteditable=true` 的活动编辑器。
+- `src/core/latex.ts`：纯函数解析公式分隔符、恢复历史重复美元、判断行内/独立布局，在渲染前把裸露中文标签转换为 MathJax 可识别的 `\text{...}`，并把无法自行折行的长公式（顶层 `=` 等式链，含整体 `\boxed{}` 包裹）改写为 `aligned` 多行源码；花括号、转义字符、`\text{}` 与 `\left/\right` 成对定界符、已有 `\begin{}` 环境都不得被拆开。
+- `src/editor/rich-text-dom.ts`：富文本运行段与 `contenteditable` DOM 的双向转换，以及 MathJax 渲染。公式先合并全部运行段再解析，因此分隔符跨颜色或加粗边界仍有效；查看态渲染公式，编辑态暂时显示源码，异步 MathJax 回调不得覆盖仍为 `contenteditable=true` 的活动编辑器。行内公式挂载后按容器宽度自检：超过容器宽度且可断行时替换为 `aligned` 多行块（`is-wrapped`），因此长公式不会把文章页面顶宽；容器宽度未知、编辑态与导图节点（节点宽度自适应内容）保持单行。
 - `src/editor/mind-map-node-renderer.ts`：`renderMindMapNode(ctx, ...)` 负责单个导图节点的 DOM 构建、内容块渲染与拖拽/菜单/选择绑定；编辑器经 `MindMapNodeRendererContext` 注入状态读取器（可写字段用 get/set 闭包接回）与交互回调，DOM 输出与拆分前逐字节一致。
 - `src/editor/viewport-controller.ts`：导图画布视口控制器，持有缩放/平移/双指手势状态与变换、适应视图、动画机制；交互监听仍由编辑器注册（与选区逻辑交织），状态经编辑器存取器转发。
 - `src/editor/node-edit-modal.ts`：节点编辑弹窗（内容块编辑、备注、链接、图标、编号覆盖与图片操作），通过 `MindMapEditorCallbacks` 注入宿主能力；`NodeEditValues` 类型随模块导出。
@@ -222,7 +222,7 @@ Obsidian 读取文本
 - 同级编号按有效文章层级分别计数，目录、正文、通读和导出不得各自实现另一套规则。通读正文按 `filePath + nodeId` 复用递归目录中的层级和标签；标题编号与富文本标题使用独立 DOM 子元素，富文本重绘不得清空编号。标题编号样式只覆盖 1–8 级；更深结构继续参与标题树和目录深度计算，但不再循环复用 `A.` / `（A）`。第 7、8 级同级数量超过 26 时使用 AA、AB 等无冲突字母序号。末端正文达到阈值后可选择沿用下一层标题编号，或使用独立的带圈数字：`circledNumberLabel()` 仍为纯文本输出提供 1–50 的 Unicode `①–㊿` 与 51+ 可读回退；文章、通读和 HTML 从 `leafNumberingIndex` 取十进制数字并对全部序号使用同一 CSS 圆环，避免操作系统替换字形造成尺寸和基线差异。该样式不受八级标题编号边界限制。
 - 所有正文段落统一使用 `2em` 首行缩进，不根据当前窗口下是否换行动态改变；标题和备注不缩进。代码、表格和图片不改变自身内容缩进，但其内容块整体左边缘与正文首行对齐，避免混排时出现中间过宽的视觉轮廓。文章表格固定为当前内容块的 100% 宽度，保存列宽按比例应用，单元格允许长内容断行且外壳隐藏横向溢出。文章正文内粘贴图片会先提交正在编辑的文字块，再将图片作为该块之后的有序内容块保存，避免浏览器临时图片在重绘后消失。
 - 文章行内文字的公式生命周期固定为“查看态渲染 → 聚焦时还原源码 → 保存或取消失焦后立即重新渲染”。`makeInlineEditable()` 不得在初始化阶段把已挂载的 MathJax DOM替换成源码，也不能只更新模型而等待翻页或整页重绘。行内公式与普通文字共享同一文字块；独立公式仍用 `$$...$$` 表示。
-- 题目编辑器通过同一个 `FormulaEditModal` 向题干、选项、答案和解答插入 `$...$` 或 `$$...$$`，并用 `renderRichTextRuns()` 即时预览。编辑器保存前必须剥离用户粘贴源码自带的美元分隔符，避免再次包裹。双美元公式只有在整个文字块仅包含该公式时才使用独立布局；与说明文字共存时按行内公式恢复。行内公式必须同时覆盖公式外层与 MathJax `mjx-container` 的块级默认样式，保持自适应宽度和行内基线；裸露中文标签只在渲染副本中转换为 `\text{...}`，模型源码不改写。题库练习模块通过注入的 `renderRichText` 回调复用渲染器，避免纯逻辑测试图直接依赖 Obsidian DOM 模块。
+- 题目编辑器通过同一个 `FormulaEditModal` 向题干、选项、答案和解答插入 `$...$` 或 `$$...$$`，并用 `renderRichTextRuns()` 即时预览。编辑器保存前必须剥离用户粘贴源码自带的美元分隔符，避免再次包裹。「方框」按钮把选中内容包进 `\boxed{}`，没有选区时包住整条公式，源码为空时插入空方框并把光标放进花括号内。双美元公式只有在整个文字块仅包含该公式时才使用独立布局；与说明文字共存时按行内公式恢复。行内公式必须同时覆盖公式外层与 MathJax `mjx-container` 的块级默认样式，保持自适应宽度和行内基线；裸露中文标签只在渲染副本中转换为 `\text{...}`，模型源码不改写。题库练习模块通过注入的 `renderRichText` 回调复用渲染器，避免纯逻辑测试图直接依赖 Obsidian DOM 模块。
 - 题目“AI 智能处理”通过可选 `AiStreamUpdate` 回调复用 AI 客户端的 SSE 流。题目弹窗保留五阶段处理状态，并仅显示接口实际返回的 `reasoning_content/reasoning` 与生成内容；最终 JSON 仍经 `parseQuestionEnrichment()` 校验后才回填。没有思考字段的兼容接口仍显示阶段和结构化输出。
 - 编辑器缓存加固：`documentSnapshotJson` 修订序列化缓存由低频抽样自愈校验兜底——缓存命中读取每 10 秒最多一次与当前文档新鲜序列化比对，不一致立即失效并发出 `document-snapshot-cache-mismatch` 调试事件；任何绕过统一失效入口的持久字段写入都会被自动发现。节点树索引由 `nodeTreeIndexStale` 过期标记保护：`captureHistorySnapshot()`、`mutate()` 动作之后与拖拽批量移动流程必须标记过期，`currentNodeTreeIndex()` 在过期/缺失/根替换时重建，`render()` 重建后复位；结构性修改与索引读取之间不得依赖“修改后必然立即 render”的约定。
 - AI 网络请求必须支持主动取消：`AiAskModal` 每轮请求持有 `AbortController`，窗口关闭或再次发送时中止；流式路径把 `AbortSignal` 传入浏览器 Fetch，`consumeAiStreamReader()` 让读取拒绝原样传播；`requestUrl` 路径不支持中途取消，只能在请求前后用 `throwIfSignalAborted()` 校验。取消判定统一走 `isAiRequestCancelled()`，识图串行批处理在每张图片前检查信号，取消错误不计入失败图片。调用方必须区分“已取消”与“请求失败”，不得把取消包装成模型能力错误。

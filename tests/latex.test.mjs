@@ -56,3 +56,29 @@ test("multiple inline formulas remain separate text-flow segments", () => {
   assert.deepEqual(segments.map((segment) => segment.type), ["text", "math", "text", "math", "text"]);
   assert.equal(segments.filter((segment) => segment.type === "math").every((segment) => !segment.display), true);
 });
+
+test("over-long inline formulas break into an aligned block at top-level relations", () => {
+  assert.equal(
+    latex.wrapLatexForLineBreaks("R = 5.25\\%,\\ R \\times (1-R) = 5\\%"),
+    "\\begin{aligned} R \\\\ & = 5.25\\%,\\ R \\times (1-R) \\\\ & = 5\\% \\end{aligned}"
+  );
+  assert.equal(latex.wrapLatexForLineBreaks("a+b+c"), null);
+});
+
+test("line-break wrapping keeps braces, escapes and existing environments intact", () => {
+  assert.equal(latex.wrapLatexForLineBreaks("\\frac{a=b}{c=d}"), null);
+  assert.equal(latex.wrapLatexForLineBreaks("\\begin{cases} x+y=1 \\\\ x-y=0 \\end{cases}"), null);
+  assert.equal(latex.wrapLatexForLineBreaks("\\left\\{ x = 1 \\right\\}"), null);
+  assert.equal(
+    latex.wrapLatexForLineBreaks("\\text{甲=乙} = x"),
+    "\\begin{aligned} \\text{甲=乙} \\\\ & = x \\end{aligned}"
+  );
+});
+
+test("boxed formulas keep the box and break the content inside it", () => {
+  assert.equal(
+    latex.wrapLatexForLineBreaks("\\boxed{a = b}"),
+    "\\boxed{\\begin{aligned} a \\\\ & = b \\end{aligned}}"
+  );
+  assert.equal(latex.wrapLatexForLineBreaks("\\boxed{a+b}"), null);
+});

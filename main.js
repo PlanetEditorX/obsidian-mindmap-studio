@@ -4843,6 +4843,63 @@ function normalizeLatexForMathJax(value) {
     return (_a2 = protectedGroups[Number(index)]) != null ? _a2 : "";
   });
 }
+function wrapLatexForLineBreaks(value) {
+  const source = value.trim();
+  if (!source || source.includes("\\begin{") || source.includes("\\end{")) return null;
+  if (source.includes("\\left") || source.includes("\\right")) return null;
+  const boxed = boxedContent(source);
+  if (boxed !== null) {
+    const inner = wrapLatexForLineBreaks(boxed);
+    return inner ? `\\boxed{${inner}}` : null;
+  }
+  const parts = splitLatexAtTopLevelRelation(source);
+  if (parts.length < 2 || parts.some((part) => !part.trim())) return null;
+  const lines = parts.map((part, index) => index ? `& ${part.trim()}` : part.trim());
+  return `\\begin{aligned} ${lines.join(" \\\\ ")} \\end{aligned}`;
+}
+function boxedContent(source) {
+  const prefix = "\\boxed{";
+  if (!source.startsWith(prefix) || !source.endsWith("}")) return null;
+  let depth = 0;
+  for (let index = prefix.length - 1; index < source.length; index += 1) {
+    const char = source[index];
+    if (char === "\\") {
+      index += 1;
+      continue;
+    }
+    if (char === "{") depth += 1;
+    else if (char === "}") {
+      depth -= 1;
+      if (depth === 0) return index === source.length - 1 ? source.slice(prefix.length, index) : null;
+    }
+  }
+  return null;
+}
+function splitLatexAtTopLevelRelation(source) {
+  const parts = [];
+  let depth = 0;
+  let cursor = 0;
+  for (let index = 0; index < source.length; index += 1) {
+    const char = source[index];
+    if (char === "\\") {
+      index += 1;
+      continue;
+    }
+    if (char === "{") {
+      depth += 1;
+      continue;
+    }
+    if (char === "}") {
+      depth = Math.max(0, depth - 1);
+      continue;
+    }
+    if (depth > 0 || char !== "=") continue;
+    parts.push(source.slice(cursor, index));
+    cursor = index;
+  }
+  parts.push(source.slice(cursor));
+  return parts;
+}
 function splitLatexText(value) {
   const formulas = [];
   let cursor = 0;
@@ -4997,11 +5054,28 @@ function renderRichTextRuns(container, runs, fallbackText, latex = true) {
       math.toggleClass("is-display", segment.display);
       container.appendChild(math);
       renderedMath = true;
+      wrapOverflowingInlineMath(math, container, segment.source);
     } catch (e) {
       appendRange(segment.start, segment.end);
     }
   }
   if (renderedMath) void (0, import_obsidian3.finishRenderMath)();
+}
+var INLINE_MATH_WRAP_MIN_LENGTH = 40;
+function wrapOverflowingInlineMath(math, container, source) {
+  if (source.length < INLINE_MATH_WRAP_MIN_LENGTH) return;
+  if (container.closest('[contenteditable="true"]') || container.closest(".mmc-node-text")) return;
+  const wrappedSource = wrapLatexForLineBreaks(source);
+  if (!wrappedSource) return;
+  const available = container.clientWidth;
+  if (!available || math.getBoundingClientRect().width <= available + 1) return;
+  try {
+    const wrapped = (0, import_obsidian3.renderMath)(normalizeLatexForMathJax(wrappedSource), false);
+    wrapped.addClass("mms-node-math");
+    wrapped.addClass("is-wrapped");
+    math.replaceWith(wrapped);
+  } catch (e) {
+  }
 }
 function renderInlineMarkdown(container, markdown) {
   const parsed = markdownInlineToRichText(markdown);
@@ -7530,6 +7604,27 @@ var FormulaEditModal = class extends import_obsidian4.Modal {
       const button = palette.createEl("button", { text: label, attr: { type: "button", title } });
       button.addEventListener("click", () => insert(template));
     }
+    const insertBoxed = () => {
+      var _a2, _b2;
+      const start = (_a2 = source.selectionStart) != null ? _a2 : source.value.length;
+      const end = (_b2 = source.selectionEnd) != null ? _b2 : start;
+      const selected = source.value.slice(start, end);
+      const content = selected || source.value;
+      const from = selected ? start : 0;
+      const to = selected ? end : source.value.length;
+      source.setRangeText(`\\boxed{${content}}`, from, to, "end");
+      source.focus();
+      if (!content) {
+        const caret = from + "\\boxed{".length;
+        source.setSelectionRange(caret, caret);
+      }
+      updatePreview();
+    };
+    const boxedButton = palette.createEl("button", {
+      text: "\u65B9\u6846",
+      attr: { type: "button", title: "\u65B9\u6846\uFF1A\u9009\u4E2D\u5185\u5BB9\u4F1A\u88AB\u5305\u8FDB \\boxed{ }\uFF0C\u672A\u9009\u4E2D\u65F6\u5305\u4F4F\u6574\u6761\u516C\u5F0F" }
+    });
+    boxedButton.addEventListener("click", insertBoxed);
     for (const [label, template, title] of arithmetic) {
       const button = arithmeticPalette.createEl("button", {
         text: label,
