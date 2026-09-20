@@ -40,6 +40,8 @@ test("article renderer only uses the context-menu insert entry, with no hover pl
 });
 
 test("node editor modal opens the LaTeX formula editor on click", () => {
+  // 与其它内容块按钮一致使用 “+ 公式”
+  assert.match(modalSource, /text: "\+ 公式", attr: \{ type: "button", title: "插入 LaTeX 公式到当前文字块"/);
   assert.match(modalSource, /new FormulaEditModal\(this\.app, \(value\) => \{/);
   // 之前缺少 .open() 导致点击“公式”无任何反应；现在必须打开弹窗
   assert.match(modalSource, /new FormulaEditModal\(this\.app,[\s\S]{0,2000}?\.open\(\);/);

@@ -488,7 +488,7 @@ export class NodeEditModal extends Modal {
     addTable.addEventListener("click", () => { workingBlocks.push({ id: newId(), type: "table", table: { headers: ["列 1", "列 2"], rows: [["", ""]], source: "manual" } }); renderBlocks(); scheduleAutoSave(); });
     const addCode = actionRow.createEl("button", { text: "+ 代码", attr: { type: "button" } });
     addCode.addEventListener("click", () => { workingBlocks.push({ id: newId(), type: "code", code: { language: "bash", code: "" } }); renderBlocks(); scheduleAutoSave(); });
-    const addFormula = actionRow.createEl("button", { text: "公式", attr: { type: "button", title: "插入 LaTeX 公式到当前文字块" } });
+    const addFormula = actionRow.createEl("button", { text: "+ 公式", attr: { type: "button", title: "插入 LaTeX 公式到当前文字块" } });
     addFormula.addEventListener("click", () => {
       new FormulaEditModal(this.app, (value) => {
         const formula = value.display ? `$$${value.source}$$` : `$${value.source}$`;

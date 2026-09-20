@@ -10081,7 +10081,7 @@ var NodeEditModal = class extends import_obsidian10.Modal {
       renderBlocks2();
       scheduleAutoSave();
     });
-    const addFormula = actionRow.createEl("button", { text: "\u516C\u5F0F", attr: { type: "button", title: "\u63D2\u5165 LaTeX \u516C\u5F0F\u5230\u5F53\u524D\u6587\u5B57\u5757" } });
+    const addFormula = actionRow.createEl("button", { text: "+ \u516C\u5F0F", attr: { type: "button", title: "\u63D2\u5165 LaTeX \u516C\u5F0F\u5230\u5F53\u524D\u6587\u5B57\u5757" } });
     addFormula.addEventListener("click", () => {
       new FormulaEditModal(this.app, (value) => {
         var _a3;
