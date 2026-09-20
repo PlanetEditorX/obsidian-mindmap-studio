@@ -5,46 +5,44 @@ import { readFile } from "node:fs/promises";
 let editorSource;
 let modalSource;
 let rendererSource;
-let cssSource;
 
 before(async () => {
-  [editorSource, modalSource, rendererSource, cssSource] = await Promise.all([
+  [editorSource, modalSource, rendererSource] = await Promise.all([
     readFile("src/editor/editor.ts", "utf8"),
     readFile("src/editor/node-edit-modal.ts", "utf8"),
-    readFile("src/editor/article-renderer.ts", "utf8"),
-    readFile("styles.css", "utf8")
+    readFile("src/editor/article-renderer.ts", "utf8")
   ]);
 });
 
-test("article image blocks expose an insert-text entry point (hover button + context menu)", () => {
+test("article image context menu exposes an insert-text entry point", () => {
   // 右键菜单项
   assert.match(editorSource, /\.setTitle\("在上方插入文字"\)/);
   assert.match(editorSource, /\.onClick\(\(\) => this\.insertArticleTextBlockBefore\(nodeId, blockId\)\)/);
-  // 悬停按钮回调通过 ArticleRendererOptions 注入
-  assert.match(rendererSource, /insertTextBlockBefore: \(nodeId: string, blockId: string\) => void;/);
-  assert.match(editorSource, /insertTextBlockBefore: \(nodeId: string, blockId: string\) => this\.insertArticleTextBlockBefore\(nodeId, blockId\)/);
-  assert.match(rendererSource, /mms-article-insert-above/);
-  assert.match(cssSource, /\.mms-article-insert-above \{/);
 });
 
-test("inserting a text block before an image persists via mutate and starts inline editing", () => {
+test("inserting a text block before an image persists via the article-locally-scoped mutate and starts inline editing", () => {
   assert.match(editorSource, /private insertArticleTextBlockBefore\(nodeId: string, blockId: string\): void \{/);
   assert.match(editorSource, /blocks\.splice\(index, 0, \{ id: newBlockId, type: "text", text: "" \}\)/);
   assert.match(editorSource, /replaceNodeContentBlocks\(node, blocks\)/);
-  // 插入属于结构变更，且插入后应立即聚焦到新块行内编辑
-  assert.match(editorSource, /, undefined, "structure"\)/);
-  assert.match(editorSource, /this\.beginInlineEdit\(nodeId, newBlockId, true\)/);
+  // 只插入正文文字块：用 mutateWithoutArticleContext（非 structure 影响），
+  // 避免触发文章族异步重建导致的“文本框闪现/图片抖动回退”。
+  assert.match(editorSource, /private insertArticleTextBlockBefore[\s\S]{0,600}?mutateWithoutArticleContext\(\(\) => \{/);
+  assert.match(editorSource, /this\.mutateWithoutArticleContext\(\(\) => \{/);
+  // 送帧后再聚焦新块行内编辑
+  assert.match(editorSource, /window\.requestAnimationFrame\(\(\) => \{/);
+  assert.match(editorSource, /beginInlineEdit\(nodeId, newBlockId, true\)/);
 });
 
-test("empty first text block on an image-only leaf is still rendered as an editable paragraph", () => {
-  // 纯图片节点的空首 text 块也要显示为可编辑叶子段落，否则插入后无可编辑 DOM。
-  assert.match(rendererSource, /if \(firstTextBlock\) \{/);
-  assert.match(rendererSource, /if \(firstTextBlock\) \{[\s\S]{0,80}?createArticleContentBlock/);
+test("article renderer only uses the context-menu insert entry, with no hover plus button", () => {
+  assert.doesNotMatch(rendererSource, /mms-article-insert-above/, "the hover plus button was removed by user request");
+  assert.doesNotMatch(rendererSource, /insertTextBlockBefore/, "renderer no longer carries the removed hover-button callback");
+  assert.doesNotMatch(rendererSource, /setIcon\(insertAbove/, "no plus button is created above the image");
 });
 
-test("node editor modal offers a LaTeX formula insert that targets the active text block", () => {
-  assert.match(modalSource, /FormulaEditModal/);
-  assert.match(modalSource, /text: "公式"/);
+test("node editor modal opens the LaTeX formula editor on click", () => {
+  assert.match(modalSource, /new FormulaEditModal\(this\.app, \(value\) => \{/);
+  // 之前缺少 .open() 导致点击“公式”无任何反应；现在必须打开弹窗
+  assert.match(modalSource, /new FormulaEditModal\(this\.app,[\s\S]{0,2000}?\.open\(\);/);
   // 记录当前聚焦的文字块 id 作为写回目标
   assert.match(modalSource, /activeTextBlockId/);
   assert.match(modalSource, /focusin/);

@@ -4,12 +4,18 @@
 - 版本基线：1.51.5（线上 1.51.0 已发布；工作区提交基线 v1.51.3：节点锚点来源变更恢复；本轮工作区：子导图提取/合并迁移本地图片与上传文件（含 60 秒延迟回收）＋截图标注工具增强（箭头/线宽/序号/橡皮擦））。
 - 仓库规则：见根目录 `AGENTS.md`；每轮代码交付三份 ZIP（源码 / 安装 / Agent 交接）共用同一六位后缀；验证入口 `npm run verify`。
 
-## 当前状态（本轮：导图节点编辑插入 LaTeX 公式 ＋ 文章图片前插入文字）
+## 当前状态（本轮：修复公式按钮无反应＋图片前插文字回退抖动，按用户意见去掉悬停加号按钮）
 
-- 本轮两个功能（应用户反馈，均已带契约测试并通过 verify）：
+- 第二轮反馈修复（应用户实测反馈）：
+  - 公式按钮“无任何反应”根因：`node-edit-modal.ts` 中 `new FormulaEditModal(...)` 只构造未调用 `.open()`，Obsidian 的 Modal 必须 `.open()` 才显示。已在构造末尾补 `).open()`。契约测试新增断言公式弹窗会被打开。
+  - 文章“右键在上方插入文字”出现“文本框闪现→图片消失→数秒后文本框消失、图片复现”的回退：根因是 `insertArticleTextBlockBefore` 用了默认 `mutate(action, undefined, "structure")`，触发跨文件文章族异步重建从陈旧快照重渲染。已改为 `mutateWithoutArticleContext`（影响级别 “none”，仅改当前页正文、走统一历史/保存），并把聚焦延后到 `window.requestAnimationFrame` 再 `beginInlineEdit(新块, true)`——与已验证可用的“在此块后插入文字”（`insertTextBlock`/`insertTextBlockAfter`）完全一致。
+  - 按用户要求去掉图片块的悬停“+”按钮（“图片+ 去除”）：删除 `article-renderer.ts` 中 `.mms-article-insert-above` 按钮创建与 `ArticleRendererOptions.insertTextBlockBefore` 字段、`assetRendererOptions()` 里的回调注入，及 `styles.css` 的 `.mms-article-insert-above` 样式；保留图片右键“在上方插入文字”。契约测试改为断言悬停按钮已移除且 renderer 不再携带该回调。
+  - 前一轮基础：叶渲染条件由 `if (firstTextBlock?.text.trim())` 改为 `if (firstTextBlock)`，使纯图片节点的空首 text 块渲染为可编辑叶子段落（内容自由占位仍由 `else if blocks.length===0` 独占）。
+
+- 前一轮两个新功能（已交付）：
   - 导图“编辑节点内容”弹窗：新增“公式”按钮（`node-edit-modal.ts`），点击打开 `FormulaEditModal`。display 公式在目标文字块后插入新的块级公式块；行内公式写入当前聚焦文字块末尾（带空格、追加 `richText`），无聚焦文字块时退回第一个文字块、完全无文字块则新增一个。用 `focusin` 实时记录当前聚焦文字块的 `activeTextBlockId` 作为写回目标。契约 `${value.source}` 公式拼接、`splice(idx+1,…)` 插块、`textBlock.text += addition` 追加。
-  - 文章模式“在图片前插入文字”（`article-renderer.ts` + `editor.ts` + `styles.css`）：图片块悬停左上角新增“+”按钮（`.mms-article-insert-above`，默认 `opacity:0`/`pointer-events:none`，悬停显现），图片右键菜单新增“在上方插入文字”项。二者调用新增的 `insertArticleTextBlockBefore(nodeId, blockId)`：`nodeContentBlocks` 在目标图片块前 `splice` 插入空 text 块 → `mutate(…, "structure")` 走统一历史/保存 → 文章模式 `beginInlineEdit(新块, true)` 立即聚焦。叶子渲染条件由 `if (firstTextBlock?.text.trim())` 改为 `if (firstTextBlock)`：纯图片节点插入的空首 text 块现在渲染为可编辑叶子段落（“纯图片但无任何 text 块的任务占位段落仍由 `else if blocks.length===0` 独占，不产生空占位”）。
-  - 契约练习：新增 `tests/article-insert-text.test.mjs`（4 项断言覆盖公式写回、插入入口、mute 结构变更、叶渲染条件与 `.mms-article-insert-above` CSS）；更新 `tests/node-creation.test.mjs:48/52` 与 `scripts/test.mjs:1755` 的叶渲染契约以匹配“空首 text 块可渲染叶子段落、内容自由占位仍独立”的语义。文档同步 `SPECIAL_FEATURES.md`。
+  - 文章模式“在图片前插入文字”（`article-renderer.ts` + `editor.ts` + `styles.css`）：图片右键菜单新增“在上方插入文字”项，调用 `insertArticleTextBlockBefore(nodeId, blockId)`：在目标图片块前 `splice` 插入空 text 块 → 保存/渲染 → 聚焦编辑。
+  - 契约练习：新增 `tests/article-insert-text.test.mjs`（覆盖公式写回与 `.open()`、插入入口、局部影响级 mutate、送帧聚焦，并断言悬停按钮已移除）；更新 `tests/node-creation.test.mjs:48/52` 与 `scripts/test.mjs:1755` 的叶渲染契约。文档同步 `SPECIAL_FEATURES.md`。
   - 修正：`node-edit-modal.ts` 补 `MindMapTextContentBlock` 类型导入，公式写回的 `find` 添加类型谓词（`is ...: MindMapTextContentBlock`）——此前因类型收窄缺失触发 TS2552/2339。
 - 上一轮：导图多选与尺寸缩放手柄修饰键对调 —— 多选统一 `Ctrl/Cmd`（节点点击切换、空白拖拽框选），尺寸缩放手柄改为按住 `Shift` 悬停显示并拖拽；CSS 类 `mmc-ctrl-resize`/`is-ctrl-held` 改名 `mmc-shift-resize`/`is-shift-held`；契约 `scripts/test.mjs`/`tests/settings-layout.test.mjs` 及文档同步。
 - 接上一轮：导图行内编辑回车提交后键盘失焦修复 —— `beginInlineEdit` 失焦提交清理末尾，mindmap + `!related`（回车/Esc 程序性失焦）时 `rootEl.focus({ preventScroll: true })` 拉回焦点，global `handleKeydown`（绑定 rootEl capture）恢复；真实点击不抢焦点。契约测试 `tests/node-creation-focus.test.mjs` 新增 Enter/Esc 提交回拉。
@@ -29,13 +35,13 @@
 
 ## 验证基线
 
-- `npm run verify` 本机完整通过：`test:unit` 437/437（新增 `tests/article-insert-text.test.mjs` 4 项）、`test:regression` 全部通过（含本轮公式写回、图片前插文字、叶渲染新契约）、`test:docs` 全部通过（1292 处命名声明）、`test:repo` 通过、production esbuild 通过。
+- `npm run verify` 本机完整通过：`test:unit` 438/438（含 `tests/article-insert-text.test.mjs` 4 项）、`test:regression` 全部通过（含本轮公式 `.open()`、图片前插文字局部影响级 mutate 与去悬停按钮新契约）、`test:docs` 全部通过（1292 处命名声明）、`test:repo` 通过、production esbuild 通过。
 - 详细数据见根目录 `TEST_RESULTS.md`。
 
 ## 待验证事项（需真实 Obsidian 桌面端手工冒烟）
 
-- 导图“编辑节点内容”→“公式”：点击后弹公式编辑器，行内/块级公式分别写入当前聚焦文字块末尾/在其后新增块级公式块；公式能在导图与文章渲染为 MathJax；多个文字块之间切换聚焦，公式写回正确目标。
-- 文章“在图片前插入文字”：纯图片节点在文章模式悬停图片左上角出现“+”并点击，图片上方出现可编辑空段落并直接聚焦，输入文字提交后保存并在图片前常驻；图片右键菜单“在上方插入文字”同样生效；正文中的图片块（非叶子）前插文字也正常。
+- 导图“编辑节点内容”→“公式”：点击应立即弹出公式编辑器（此前修复了未 `.open()` 的无反应）；选行内/块级公式分别写入当前聚焦文字块末尾/在其后新增块级公式块；公式能在导图与文章渲染为 MathJax；多个文字块之间切换聚焦，公式写回正确目标。
+- 文章“在图片前插入文字”（右键入口，悬停“+”按钮已按要求移除）：纯图片节点右键图片 →“在上方插入文字”，图片上方出现可编辑空段落并直接聚焦，输入文字提交后保存、在图片前常驻且**不再闪现后回退**（右键后应保持稳定、图片不消失）；正文中的图片块（非叶子）前插文字也正常。
 - 多选改 Ctrl/Cmd：按住 Ctrl（macOS Cmd）+点击节点逐个切换选中/取消；空白处按住 Ctrl+拖拽出现框选矩形、覆盖的节点被选中；macOS 下 Cmd+点击不被当作右键菜单。
 - 缩放开 Shift：按住 Shift 悬停节点右下角才显示尺寸控制点并拖拽；常规点击/双击节点不再误触缩放；缩放手柄的双击恢复自动大小仍需按住 Shift；切窗松开 Shift 后手柄立即隐藏。
 - 行内编辑提交后键盘恢复：导图模式下双击节点编辑文字 → 回车提交 → 再按回车应新增兄弟节点、按 Tab 应新增子节点（不再“无反应/焦点丢失/原生 Tab 跳到拖动图标”）；按 Esc 取消后同样恢复；编辑后点击空白或其它节点提交不应被强行拉回编辑框。

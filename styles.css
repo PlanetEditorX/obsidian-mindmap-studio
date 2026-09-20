@@ -4765,38 +4765,6 @@ mjx-container.mms-node-math:not(.is-display),
 .mms-article-image.image-align-center { margin-right: auto; margin-left: auto; }
 .mms-article-image.image-align-right { margin-right: 0; margin-left: auto; }
 
-/* 悬停在图片块上方时显示的“插入文字”按钮，置于图片左上方。 */
-.mms-article-insert-above {
-  position: absolute;
-  z-index: 6;
-  top: 4px;
-  left: 4px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  padding: 0;
-  color: var(--text-normal);
-  background: var(--background-primary);
-  border: 1px solid var(--background-modifier-border);
-  border-radius: var(--radius-s);
-  cursor: pointer;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.12s ease;
-}
-.mms-article-content-block:hover .mms-article-insert-above,
-.mms-article-insert-above:focus-visible {
-  opacity: 1;
-  pointer-events: auto;
-}
-.mms-article-insert-above:hover {
-  color: var(--text-on-accent);
-  background: var(--interactive-accent);
-  border-color: var(--interactive-accent);
-}
-
 .mms-article-table-wrap {
   max-width: 100%;
   margin: 18px 0;

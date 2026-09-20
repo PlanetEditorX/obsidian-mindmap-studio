@@ -3616,7 +3616,6 @@ export class MindMapEditor {
       openAiContextMenu: (event: MouseEvent, nodeId: string, blockId?: string) => { this.selectNode(nodeId); this.openContextMenu(event, blockId); },
       openImageContextMenu: (event: MouseEvent, nodeId: string, blockId: string) => this.openImageContextMenu(event, nodeId, blockId),
       openImagePreview: (nodeId: string, blockId: string) => this.openImagePreviewWithSources(nodeId, blockId),
-      insertTextBlockBefore: (nodeId: string, blockId: string) => this.insertArticleTextBlockBefore(nodeId, blockId),
       editTableBlock: (node: MindMapNode, table: MindMapTable, blockId: string) => this.openTableBlockEditor(node, table, blockId),
       updateTableColumnWidths: (node: MindMapNode, blockId: string, widths: number[]) => this.updateTableColumnWidths(node, blockId, widths),
       makeInlineEditable: (element: HTMLElement, node: MindMapNode, placeholder: string, blockId?: string) => this.makeInlineEditable(element, node, placeholder, blockId),
@@ -6922,19 +6921,25 @@ export class MindMapEditor {
    * 用于“纯图片节点”或正文中的图片块：用户想在图片上方补充一段文字时，
    * 插入的空文字块会被渲染为可编辑段落（空首 text 块不再是叶子占位缺失），
    * 插入后立刻聚焦，无需切换到导图再编辑。
+   *
+   * 使用 `mutateWithoutArticleContext` 而非默认的 `structure` 影响级别：文本块
+   * 只改变当前页正文，不改变跨文件目录/分页拓扑，避免触发文章族异步重建
+   * 造成“文本框闪现后数秒恢复原状、图片消失后复现”的抖动回退。
    */
   private insertArticleTextBlockBefore(nodeId: string, blockId: string): void {
     const node = this.nodeById(nodeId);
     if (!node || !this.ensureEditable()) return;
     const newBlockId = newId();
-    this.mutate(() => {
+    this.mutateWithoutArticleContext(() => {
       const blocks = nodeContentBlocks(node);
       const index = blocks.findIndex((block) => block.id === blockId && block.type === "image");
       if (index < 0) return;
       blocks.splice(index, 0, { id: newBlockId, type: "text", text: "" });
       replaceNodeContentBlocks(node, blocks);
-    }, undefined, "structure");
-    if (this.currentMode === "article") this.beginInlineEdit(nodeId, newBlockId, true);
+    });
+    window.requestAnimationFrame(() => {
+      if (this.currentMode === "article") this.beginInlineEdit(nodeId, newBlockId, true);
+    });
   }
 
   /** Toggles one article text block between the default first-line indent and flush-left. */

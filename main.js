@@ -10100,7 +10100,7 @@ var NodeEditModal = class extends import_obsidian10.Modal {
         }
         renderBlocks2();
         scheduleAutoSave();
-      });
+      }).open();
     });
     const addFile = actionRow.createEl("button", { text: "+ \u6587\u4EF6", attr: { type: "button" } });
     addFile.addEventListener("click", () => {
@@ -11782,18 +11782,6 @@ function renderArticleNodeContent(container, node, treatTextAsBody, options) {
         options.selectNode(node.id);
         options.openImageContextMenu(event, node.id, block.id);
       });
-      if (!options.readOnly) {
-        const insertAbove = shell.createEl("button", {
-          cls: "mms-article-insert-above",
-          attr: { type: "button", title: "\u5728\u56FE\u7247\u4E0A\u65B9\u63D2\u5165\u6587\u5B57", "aria-label": "\u5728\u56FE\u7247\u4E0A\u65B9\u63D2\u5165\u6587\u5B57" }
-        });
-        (0, import_obsidian13.setIcon)(insertAbove, "plus");
-        insertAbove.addEventListener("click", (event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          options.insertTextBlockBefore(node.id, block.id);
-        });
-      }
     } else if (block.type === "table") {
       inlineImageRow = null;
       const shell = createArticleContentBlock(container, block.id, true);
@@ -15764,7 +15752,6 @@ var MindMapEditor = class {
       },
       openImageContextMenu: (event, nodeId, blockId) => this.openImageContextMenu(event, nodeId, blockId),
       openImagePreview: (nodeId, blockId) => this.openImagePreviewWithSources(nodeId, blockId),
-      insertTextBlockBefore: (nodeId, blockId) => this.insertArticleTextBlockBefore(nodeId, blockId),
       editTableBlock: (node, table, blockId) => this.openTableBlockEditor(node, table, blockId),
       updateTableColumnWidths: (node, blockId, widths) => this.updateTableColumnWidths(node, blockId, widths),
       makeInlineEditable: (element, node, placeholder, blockId) => this.makeInlineEditable(element, node, placeholder, blockId),
@@ -18819,19 +18806,25 @@ var MindMapEditor = class {
    * 用于“纯图片节点”或正文中的图片块：用户想在图片上方补充一段文字时，
    * 插入的空文字块会被渲染为可编辑段落（空首 text 块不再是叶子占位缺失），
    * 插入后立刻聚焦，无需切换到导图再编辑。
+   *
+   * 使用 `mutateWithoutArticleContext` 而非默认的 `structure` 影响级别：文本块
+   * 只改变当前页正文，不改变跨文件目录/分页拓扑，避免触发文章族异步重建
+   * 造成“文本框闪现后数秒恢复原状、图片消失后复现”的抖动回退。
    */
   insertArticleTextBlockBefore(nodeId, blockId) {
     const node = this.nodeById(nodeId);
     if (!node || !this.ensureEditable()) return;
     const newBlockId = newId();
-    this.mutate(() => {
+    this.mutateWithoutArticleContext(() => {
       const blocks = nodeContentBlocks(node);
       const index = blocks.findIndex((block) => block.id === blockId && block.type === "image");
       if (index < 0) return;
       blocks.splice(index, 0, { id: newBlockId, type: "text", text: "" });
       replaceNodeContentBlocks(node, blocks);
-    }, void 0, "structure");
-    if (this.currentMode === "article") this.beginInlineEdit(nodeId, newBlockId, true);
+    });
+    window.requestAnimationFrame(() => {
+      if (this.currentMode === "article") this.beginInlineEdit(nodeId, newBlockId, true);
+    });
   }
   /** Toggles one article text block between the default first-line indent and flush-left. */
   toggleTextBlockParagraphIndent(nodeId, blockId) {

@@ -65,8 +65,6 @@ export interface ArticleRendererOptions {
   editTableBlock: (node: MindMapNode, table: MindMapTable, blockId: string) => void;
   updateTableColumnWidths: (node: MindMapNode, blockId: string, widths: number[]) => void;
   makeInlineEditable: (element: HTMLElement, node: MindMapNode, placeholder: string, blockId?: string) => void;
-  /** Inserts an empty text block immediately before the target image block and starts editing it. */
-  insertTextBlockBefore: (nodeId: string, blockId: string) => void;
   makeInlineCodeEditable: (element: HTMLElement, node: MindMapNode, code: MindMapCodeBlock, blockId: string) => void;
   addInlineNodeActions: (container: HTMLElement, node: MindMapNode) => void;
   /** One-render memo for normalized content blocks; callers normally leave this unset. */
@@ -513,18 +511,6 @@ export function renderArticleNodeContent(container: HTMLElement, node: MindMapNo
         options.selectNode(node.id);
         options.openImageContextMenu(event, node.id, block.id);
       });
-      if (!options.readOnly) {
-        const insertAbove = shell.createEl("button", {
-          cls: "mms-article-insert-above",
-          attr: { type: "button", title: "在图片上方插入文字", "aria-label": "在图片上方插入文字" }
-        });
-        setIcon(insertAbove, "plus");
-        insertAbove.addEventListener("click", (event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          options.insertTextBlockBefore(node.id, block.id);
-        });
-      }
     } else if (block.type === "table") {
       inlineImageRow = null;
       const shell = createArticleContentBlock(container, block.id, true);

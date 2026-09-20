@@ -1,11 +1,11 @@
 # Test Results
 
-## 1.52.5 工作区：导图节点编辑插入 LaTeX ＋ 文章图片前插入文字
+## 1.52.6 工作区：导图节点编辑插入 LaTeX ＋ 文章图片前插入文字（含反馈修复）
 
-- 导图“编辑节点内容”弹窗新增“公式”按钮，向当前聚焦文字块写入行内公式或在其后插入块级公式块。
-- 文章模式图片块悬停“+”按钮与右键“在上方插入文字”，在纯图片节点/正文图片块前插入可编辑文字段落并立即聚焦。
+- 导图“编辑节点内容”弹窗新增“公式”按钮：点击打开 `FormulaEditModal`（修复未调用 `.open()` 导致无反应）；行内公式写入当前聚焦文字块末尾并同步 richText，块级公式在其后新增块级公式块。
+- 文章模式图片右键“在上方插入文字”：用 `mutateWithoutArticleContext`（影响级 none）+ 送帧聚焦，修复原 `mutate(structure)` 触发文章族异步重建导致的“文本框闪现/图片消失后数秒回退”；去掉图片块悬停“+”按钮（按用户意见）。
 - 叶子渲染条件由 `if (firstTextBlock?.text.trim())` 改为 `if (firstTextBlock)`：空首 text 块渲染为可编辑叶子段落，内容自由占位仍由 `blocks.length === 0` 独占。
-- `npm run verify`（本机完整执行）：`test:unit` **437 / 437 通过**（新增 `tests/article-insert-text.test.mjs` 4 项）；`test:regression` 全部通过；`test:docs` 通过（1292 个具名声明）；`test:repo` 通过；production esbuild 通过，`main.js` 已重建。需真实 Obsidian 桌面端手工冒烟。
+- `npm run verify`（本机完整执行）：`test:unit` **438 / 438 通过**（含 `tests/article-insert-text.test.mjs` 4 项）；`test:regression` 全部通过；`test:docs` 通过（1292 个具名声明）；`test:repo` 通过；production esbuild 通过，`main.js` 已重建。需真实 Obsidian 桌面端手工冒烟。
 
 ## 1.52.3 工作区：图片来源局部刷新与阅读位置稳定
 

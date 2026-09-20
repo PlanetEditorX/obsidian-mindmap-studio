@@ -506,7 +506,7 @@ export class NodeEditModal extends Modal {
         }
         renderBlocks();
         scheduleAutoSave();
-      });
+      }).open();
     });
     const addFile = actionRow.createEl("button", { text: "+ 文件", attr: { type: "button" } });
     addFile.addEventListener("click", () => {
