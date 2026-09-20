@@ -13045,7 +13045,7 @@ var MindMapEditor = class {
     const articleDirectoryActive = this.currentMode === "article" && options.showArticleToc && options.articleTocEntries.length > 0 && ((_g = this.document.view) == null ? void 0 : _g.articleLandingMode) !== "article";
     const rememberedInitialLocation = this.initialReadingLocationRestorePending && this.currentMode !== "mindmap" && !articleDirectoryActive && ((_h = normalizeReadingLocation(this.lastReadingLocation)) == null ? void 0 : _h.filePath) === this.options.currentFilePath ? this.lastReadingLocation : null;
     if (rememberedInitialLocation) this.initialReadingLocationRestorePending = false;
-    const locationToRestore = rememberedInitialLocation ? rememberedInitialLocation : this.currentMode === "mindmap" && !modeChanged ? null : chooseArticleLandingRefreshLocation(
+    const locationToRestore = rememberedInitialLocation ? rememberedInitialLocation : this.currentMode === "mindmap" && !modeChanged ? null : !preferredCurrentLocation && !articleDirectoryActive && this.visibleWorkingNodeId() ? null : chooseArticleLandingRefreshLocation(
       articleDirectoryActive,
       preferredCurrentLocation,
       renderedLocation,
@@ -13314,6 +13314,25 @@ var MindMapEditor = class {
       Math.max(0, Math.min(1, (anchorY - nearest.rect.top) / nearest.rect.height)),
       viewportRatio
     );
+  }
+  /**
+   * 用户正在主动交互（选中/最近聚焦）且当前仍呈现在文章视口内的节点。
+   *
+   * 同文件内容变更重建时必须钉住当前视口（像素级），而不是按捕获的旧 DOM 视口比例
+   * 做语义重定位：内容插入会改变节点绝对位置，旧比例重定位会把视口从用户所在处拉走
+   * （例如在图片前添加文字后跳到其它小节）。仅当该节点当前确实在屏上时才采用钉住策略，
+   * 用户已滚动离开则回退到视口扫描线语义恢复。
+   */
+  visibleWorkingNodeId() {
+    var _a2;
+    if (this.currentMode !== "article") return null;
+    const nodeId = (_a2 = this.nodeById(this.selectedId || this.focusAnchorNodeId)) == null ? void 0 : _a2.id;
+    if (!nodeId) return null;
+    const el = this.articleEl.querySelector(`.mms-article-node[data-node-id="${CSS.escape(nodeId)}"]`);
+    if (!el) return null;
+    const rect = el.getBoundingClientRect();
+    const viewport = this.articleEl.getBoundingClientRect();
+    return rect.top < viewport.bottom && rect.bottom > viewport.top ? nodeId : null;
   }
   /** 将统一位置写回插件设置；滚动过程会去重并延迟写盘。 */
   rememberLocation(location, immediate = false) {
@@ -15320,7 +15339,7 @@ var MindMapEditor = class {
         }
         return;
       }
-      const location = (_c2 = latestRequestedLocation != null ? latestRequestedLocation : previousLocation) != null ? _c2 : !existingPage ? this.lastReadingLocation : null;
+      const location = (_c2 = latestRequestedLocation != null ? latestRequestedLocation : !this.visibleWorkingNodeId() ? previousLocation : null) != null ? _c2 : !existingPage ? this.lastReadingLocation : null;
       if (location) this.restoreReadingLocation("article", location);
       else {
         this.pendingArticlePixelRestoreTop = previousScroll.top;

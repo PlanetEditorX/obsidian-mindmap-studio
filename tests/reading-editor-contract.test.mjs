@@ -92,6 +92,17 @@ test("mind-map option refresh does not reopen ancestors after collapse-all", () 
   assert.doesNotMatch(setOptions, /this\.restoreReadingLocation\(this\.currentMode, renderedLocation \?\? this\.lastReadingLocation\)/);
 });
 
+test("same-file rebuilds pin the viewport when the working node is on screen instead of re-anchoring", () => {
+  // 内容变更（在图片前添加文字等）触发重建时，若用户正交互的节点仍在视口内，
+  // 恢复必须像素级钉住当前视口；按旧 DOM 视口比例做语义重定位会把视口拉离用户所在小节。
+  assert.match(editorSource, /private visibleWorkingNodeId\(\): string \| null \{[\s\S]*rect\.top < viewport\.bottom && rect\.bottom > viewport\.top/, "a helper detects the selected/focused node still being on screen");
+  const renderArticle = editorSource.match(/private renderArticle\(\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
+  assert.match(renderArticle, /latestRequestedLocation \?\? \(!this\.visibleWorkingNodeId\(\) \? previousLocation : null\)/, "the render's semantic restore is skipped while working on a visible node");
+  assert.match(renderArticle, /this\.pendingArticlePixelRestoreTop = previousScroll\.top;[\s\S]*this\.startArticlePixelRestoreGuard\(previousScroll\.top\)/, "falling through keeps the exact previous viewport via the pixel guard");
+  const setOptions = editorSource.match(/setOptions\(options: MindMapEditorOptions, articleContextOnly = false\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
+  assert.match(setOptions, /!preferredCurrentLocation && !articleDirectoryActive && this\.visibleWorkingNodeId\(\)\s*\n\s*\? null/, "the option refresh must not override the pinned viewport for a visible working node");
+});
+
 test("screenshot shortcut remains available while an article line is being edited", () => {
   const keydown = editorSource.match(/private handleKeydown\(event: KeyboardEvent\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
   assert.match(keydown, /this\.shortcutMatches\(event, this\.options\.screenshotShortcut\)[\s\S]*if \(this\.inlineEditingId !== null\) return/);
