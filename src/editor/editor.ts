@@ -943,10 +943,12 @@ export class MindMapEditor {
     const sections = this.readingLocationSections();
     if (!sections.length) return null;
     if (mode === "mindmap") {
+      // 空白画布拖拽/点击取消选中（selectedId 为空）时，回退到最近聚焦节点
+      // （focusAnchorNodeId），使切换文章仍落在上次聚焦内容而非跳回顶部。
       return createReadingLocation(
         sections,
         this.options.currentFilePath,
-        this.nodeById(this.selectedId)?.id ?? this.document.root.id,
+        this.nodeById(this.selectedId || this.focusAnchorNodeId)?.id ?? this.document.root.id,
         0,
         0.5
       );

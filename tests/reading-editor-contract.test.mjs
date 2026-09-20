@@ -31,6 +31,11 @@ test("switching article families flushes the previous delayed write before repla
   assert.match(editorSource, /this\.lastReadingLocation = options\.readingLocation/);
 });
 
+test("mindmap landing falls back to the last focused node after a blank-canvas drag deselects", () => {
+  const capture = editorSource.match(/private captureCurrentLocation\(mode: DisplayMode\): ReadingLocation \| null \{[\s\S]*?\n  \}/)?.[0] ?? "";
+  assert.match(capture, /this\.nodeById\(this\.selectedId \|\| this\.focusAnchorNodeId\)\?\.id/, "switching out of mindmap without a selection must land on the remembered focused node, not the top");
+});
+
 test("pending local progress is not replaced by stale option refreshes", () => {
   assert.match(editorSource, /this\.readingLocationTimer === null[\s\S]*!sameReadingLocation\(this\.lastReadingLocation, options\.readingLocation\)/);
 });

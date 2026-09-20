@@ -13269,7 +13269,7 @@ var MindMapEditor = class {
       return createReadingLocation(
         sections,
         this.options.currentFilePath,
-        (_b2 = (_a2 = this.nodeById(this.selectedId)) == null ? void 0 : _a2.id) != null ? _b2 : this.document.root.id,
+        (_b2 = (_a2 = this.nodeById(this.selectedId || this.focusAnchorNodeId)) == null ? void 0 : _a2.id) != null ? _b2 : this.document.root.id,
         0,
         0.5
       );

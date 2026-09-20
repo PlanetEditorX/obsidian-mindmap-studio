@@ -8,10 +8,10 @@
 
 - 本轮四项改动（未提交）：
   - “+ 公式”按钮标签统一（`node-edit-modal.ts`）：与其它内容块按钮一致的 `+ 公式`，原“公式”。
-  - 焦点位置记忆（`editor.ts`）：新增 `focusAnchorNodeId` 记住最近聚焦节点。空白画布点击/拖拽取消选中（`selectNode(null)`）只清 `selectedId`、不清锚点；`focusNode` 同步更新锚点；文章/通读等非导图模式的 `articleRendererOptions.selectedId` 用 `selectedId || focusAnchorNodeId`，使编辑某节点后点空白、拖拽画布再切到文章，仍落在上次聚焦的文字上，不再跳到最前。
+  - 焦点位置记忆（`editor.ts`）：新增 `focusAnchorNodeId` 记住最近聚焦节点。空白画布点击/拖拽取消选中（`selectNode(null)`）只清 `selectedId`、不清锚点；`focusNode` 同步更新锚点；两处消费锚点——文章等非导图模式的 `articleRendererOptions.selectedId` 用 `selectedId || focusAnchorNodeId`；更关键的是 `applyDisplayMode` 切换时 `captureCurrentLocation`(mindmap) 用 `selectedId || focusAnchorNodeId` 作为落点语义位置，否则画布拖拽失焦后切文章会因 `selectedId` 为空回退到根节点而跳回顶部。使“编辑某节点→点空白→拖拽画布→切文章”仍落在上次聚焦内容上。
   - 图片预览自动回退（`editor-modals.ts`）：`ImagePreviewModal` 的图片加载失败（如失效图床）时 `advanceOnLoadError` 按 `candidates()` 顺序自动切到下一个可用来源（如本地副本），不再停留在失效图床显示“加载失败”；`failedSources` 阻止无限循环，用户手动重选可重试（`switchSource` 清除该来源失败标记）。
   - 删除图片本地副本独立回收（`editor.ts`）：`removeImageBlock` 此前只安排远端图床清理、不回收本地文件；现与 `removeContentBlock` 一致，删除图片块后 `onScheduleFileAssetDeletion([removed.localSource])` 进入 60 秒延迟回收，远端删除失败（`NET::ERR_CONNECTION_REFUSED`）不阻塞本地回收。
-  - 契约测试 `tests/file-block.test.mjs` 新增“整块删除图片独立回收本地副本”“预览失败自动回退下一来源”两项，单元测试 440/440 通过。
+  - 契约测试 `tests/file-block.test.mjs` 新增“整块删除图片独立回收本地副本”“预览失败自动回退下一来源”两项、`tests/reading-editor-contract.test.mjs` 新增“画布拖拽失焦后切文章回退最近聚焦节点”，单元测试 441/441 通过。
 
 - 第二轮反馈修复（应用户实测反馈）：
   - 公式按钮“无任何反应”根因：`node-edit-modal.ts` 中 `new FormulaEditModal(...)` 只构造未调用 `.open()`，Obsidian 的 Modal 必须 `.open()` 才显示。已在构造末尾补 `).open()`。契约测试新增断言公式弹窗会被打开。
