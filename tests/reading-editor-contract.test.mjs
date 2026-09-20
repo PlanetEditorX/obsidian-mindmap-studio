@@ -92,15 +92,18 @@ test("mind-map option refresh does not reopen ancestors after collapse-all", () 
   assert.doesNotMatch(setOptions, /this\.restoreReadingLocation\(this\.currentMode, renderedLocation \?\? this\.lastReadingLocation\)/);
 });
 
-test("same-file rebuilds pin the viewport when the working node is on screen instead of re-anchoring", () => {
-  // 内容变更（在图片前添加文字等）触发重建时，若用户正交互的节点仍在视口内，
-  // 恢复必须像素级钉住当前视口；按旧 DOM 视口比例做语义重定位会把视口拉离用户所在小节。
-  assert.match(editorSource, /private visibleWorkingNodeId\(\): string \| null \{[\s\S]*rect\.top < viewport\.bottom && rect\.bottom > viewport\.top/, "a helper detects the selected/focused node still being on screen");
+test("article family refreshes keep the reading position across the skeleton render", () => {
+  // 内容变更（在图片前添加文字等）会先刷新文章族并渲染骨架，正文与滚动位置一起丢失。
+  // 刷新前必须暂存当前语义位置，骨架之后的那次真实渲染用它恢复，否则视口会跳到别处。
+  assert.match(
+    editorSource,
+    /private captureArticleRebuildLocation\(\): void \{[\s\S]*querySelector\("\.mms-article-node"\)[\s\S]*this\.captureCurrentLocation\("article"\)[\s\S]*this\.pendingArticleRebuildLocation = location/,
+    "a helper snapshots the semantic location while the previous article body is still mounted"
+  );
   const renderArticle = editorSource.match(/private renderArticle\(\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
-  assert.match(renderArticle, /latestRequestedLocation \?\? \(!this\.visibleWorkingNodeId\(\) \? previousLocation : null\)/, "the render's semantic restore is skipped while working on a visible node");
-  assert.match(renderArticle, /this\.pendingArticlePixelRestoreTop = previousScroll\.top;[\s\S]*this\.startArticlePixelRestoreGuard\(previousScroll\.top\)/, "falling through keeps the exact previous viewport via the pixel guard");
-  const setOptions = editorSource.match(/setOptions\(options: MindMapEditorOptions, articleContextOnly = false\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
-  assert.match(setOptions, /!preferredCurrentLocation && !articleDirectoryActive && this\.visibleWorkingNodeId\(\)\s*\n\s*\? null/, "the option refresh must not override the pinned viewport for a visible working node");
+  assert.match(renderArticle, /this\.captureArticleRebuildLocation\(\);[\s\S]*this\.renderArticleSkeleton/, "the snapshot is taken before the skeleton replaces the article body");
+  assert.match(renderArticle, /const rebuildLocation = this\.pendingArticleRebuildLocation;\s*\n\s*this\.pendingArticleRebuildLocation = null;/, "the snapshot is consumed exactly once by the next real render");
+  assert.match(renderArticle, /const location = latestRequestedLocation \?\? previousLocation \?\? rebuildLocation \?\? this\.lastReadingLocation;/, "a rebuilt page keeps the semantic anchor instead of a clamped pixel offset");
 });
 
 test("screenshot shortcut remains available while an article line is being edited", () => {

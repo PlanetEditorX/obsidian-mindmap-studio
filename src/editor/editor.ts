@@ -320,6 +320,11 @@ export class MindMapEditor {
   private articleScrollButtonCleanup: (() => void) | null = null;
   private articleRenderController: ArticleRenderController | null = null;
   private pendingArticleFocusLocation: ReadingLocation | null = null;
+  /**
+   * 文章族内容刷新会先渲染骨架并清空正文，滚动位置与节点 DOM 一并丢失。刷新前把当前
+   * 语义位置暂存在这里，供骨架之后的那次真实渲染恢复，避免内容变更后视口跳到别处。
+   */
+  private pendingArticleRebuildLocation: ReadingLocation | null = null;
   /** Parent/home return target used only to reveal the matching directory row, never to open article content. */
   private pendingArticleDirectoryFocusNodeId: string | null = null;
   /** Two-frame paint gate used only when an article needs an entry transition. */
@@ -676,8 +681,6 @@ export class MindMapEditor {
       ? rememberedInitialLocation
       : this.currentMode === "mindmap" && !modeChanged
         ? null
-        : !preferredCurrentLocation && !articleDirectoryActive && this.visibleWorkingNodeId()
-          ? null
         : chooseArticleLandingRefreshLocation(
           articleDirectoryActive,
           preferredCurrentLocation,
@@ -1009,22 +1012,15 @@ export class MindMapEditor {
   }
 
   /**
-   * 用户正在主动交互（选中/最近聚焦）且当前仍呈现在文章视口内的节点。
-   *
-   * 同文件内容变更重建时必须钉住当前视口（像素级），而不是按捕获的旧 DOM 视口比例
-   * 做语义重定位：内容插入会改变节点绝对位置，旧比例重定位会把视口从用户所在处拉走
-   * （例如在图片前添加文字后跳到其它小节）。仅当该节点当前确实在屏上时才采用钉住策略，
-   * 用户已滚动离开则回退到视口扫描线语义恢复。
+   * 文章族内容刷新会先渲染骨架并清空正文，滚动位置随之丢失。刷新前把当前语义位置
+   * 暂存下来，供骨架之后的那次真实渲染恢复：只要骨架前的正文还在，就记录 35% 视口
+   * 扫描线所在的节点与比例，避免内容变更（例如在图片前添加文字）后视口跳到别处。
    */
-  private visibleWorkingNodeId(): string | null {
-    if (this.currentMode !== "article") return null;
-    const nodeId = this.nodeById(this.selectedId || this.focusAnchorNodeId)?.id;
-    if (!nodeId) return null;
-    const el = this.articleEl.querySelector<HTMLElement>(`.mms-article-node[data-node-id="${CSS.escape(nodeId)}"]`);
-    if (!el) return null;
-    const rect = el.getBoundingClientRect();
-    const viewport = this.articleEl.getBoundingClientRect();
-    return rect.top < viewport.bottom && rect.bottom > viewport.top ? nodeId : null;
+  private captureArticleRebuildLocation(): void {
+    if (this.currentMode !== "article") return;
+    if (!this.articleEl?.querySelector(".mms-article-node")) return;
+    const location = this.captureCurrentLocation("article");
+    if (location) this.pendingArticleRebuildLocation = location;
   }
 
   /** 将统一位置写回插件设置；滚动过程会去重并延迟写盘。 */
@@ -3075,6 +3071,7 @@ export class MindMapEditor {
    */
   private renderArticle(): void {
     const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true;
+    this.captureArticleRebuildLocation();
     if (!this.options.articleContextReady) {
       this.callbacks.onDebugLog("article", "render-waiting-context", { selectedId: this.selectedId, pendingTarget: this.pendingArticleFocusLocation?.nodeIds[0], landingMode: this.document.view?.articleLandingMode });
       this.cancelReadingLocationRestore();
@@ -3130,6 +3127,8 @@ export class MindMapEditor {
         ? null
         : chooseArticleTransitionLocation(requestedLocation, this.pendingArticleFocusLocation);
       this.pendingArticleFocusLocation = null;
+      const rebuildLocation = this.pendingArticleRebuildLocation;
+      this.pendingArticleRebuildLocation = null;
       this.articleEl.empty();
       this.articleEl.removeAttribute("aria-busy");
       this.articleRenderController = renderArticleMode(this.articleEl, this.articleRendererOptions());
@@ -3175,8 +3174,9 @@ export class MindMapEditor {
         }
         return;
       }
-      const location = latestRequestedLocation ?? (!this.visibleWorkingNodeId() ? previousLocation : null)
-        ?? (!existingPage ? this.lastReadingLocation : null);
+      // 语义锚点优先于像素锚点：像素偏移在窗口分帧向前补载后会指向另一段内容，
+      // 而节点 + 节点内比例在任何窗口切片下都表示同一处正文。
+      const location = latestRequestedLocation ?? previousLocation ?? rebuildLocation ?? this.lastReadingLocation;
       if (location) this.restoreReadingLocation("article", location);
       else {
         this.pendingArticlePixelRestoreTop = previousScroll.top;
