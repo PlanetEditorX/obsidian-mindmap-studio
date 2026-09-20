@@ -1197,6 +1197,9 @@ export class MindMapEditor {
     const nextScrollTop = scroller.scrollTop + targetY - desiredY;
     const previousScrollTop = scroller.scrollTop;
     if (Math.abs(scroller.scrollTop - nextScrollTop) > 0.5) scroller.scrollTop = nextScrollTop;
+    // 语义恢复已成功定位：取消可能在 warmup 完成后用旧文档绝对像素覆盖位置的强钉。
+    this.pendingArticlePixelRestoreTop = null;
+    this.stopArticlePixelRestoreGuard();
     this.callbacks.onDebugLog("navigation", "restore-target-applied", {
       mode, filePath: resolved.filePath, nodeId: resolved.nodeId, selector, previousScrollTop, nextScrollTop,
       actualScrollTop: scroller.scrollTop, nodeRatio: resolved.nodeRatio, viewportRatio: resolved.viewportRatio,

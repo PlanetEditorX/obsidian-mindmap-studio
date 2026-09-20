@@ -13489,6 +13489,8 @@ var MindMapEditor = class {
     const nextScrollTop = scroller.scrollTop + targetY - desiredY;
     const previousScrollTop = scroller.scrollTop;
     if (Math.abs(scroller.scrollTop - nextScrollTop) > 0.5) scroller.scrollTop = nextScrollTop;
+    this.pendingArticlePixelRestoreTop = null;
+    this.stopArticlePixelRestoreGuard();
     this.callbacks.onDebugLog("navigation", "restore-target-applied", {
       mode,
       filePath: resolved.filePath,
