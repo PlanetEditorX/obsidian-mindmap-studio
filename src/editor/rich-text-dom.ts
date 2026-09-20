@@ -123,10 +123,10 @@ export function renderRichTextRuns(
   if (renderedMath) void finishRenderMath();
 }
 
-/** Renders the supported inline Markdown formatting used in table cells. */
+/** Renders the supported inline Markdown formatting used in table cells, including LaTeX formulas. */
 export function renderInlineMarkdown(container: HTMLElement, markdown: string): void {
   const parsed = markdownInlineToRichText(markdown);
-  renderRichTextRuns(container, parsed.richText, parsed.text, false);
+  renderRichTextRuns(container, parsed.richText, parsed.text, true);
 }
 
 /**

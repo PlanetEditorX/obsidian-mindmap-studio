@@ -4,14 +4,13 @@
 - 版本基线：1.51.5（线上 1.51.0 已发布；工作区提交基线 v1.51.3：节点锚点来源变更恢复；本轮工作区：子导图提取/合并迁移本地图片与上传文件（含 60 秒延迟回收）＋截图标注工具增强（箭头/线宽/序号/橡皮擦））。
 - 仓库规则：见根目录 `AGENTS.md`；每轮代码交付三份 ZIP（源码 / 安装 / Agent 交接）共用同一六位后缀；验证入口 `npm run verify`。
 
-## 当前状态（本轮：焦点位置记忆＋图片预览失效源自动回退＋删除图片本地副本独立回收＋公式按钮标签统一）
+## 当前状态（本轮：表格单元格 LaTeX 公式可解析渲染）
 
-- 本轮四项改动（未提交）：
-  - “+ 公式”按钮标签统一（`node-edit-modal.ts`）：与其它内容块按钮一致的 `+ 公式`，原“公式”。
-  - 焦点位置记忆（`editor.ts`）：新增 `focusAnchorNodeId` 记住最近聚焦节点。空白画布点击/拖拽取消选中（`selectNode(null)`）只清 `selectedId`、不清锚点；`focusNode` 同步更新锚点；两处消费锚点——文章等非导图模式的 `articleRendererOptions.selectedId` 用 `selectedId || focusAnchorNodeId`；更关键的是 `applyDisplayMode` 切换时 `captureCurrentLocation`(mindmap) 用 `selectedId || focusAnchorNodeId` 作为落点语义位置，否则画布拖拽失焦后切文章会因 `selectedId` 为空回退到根节点而跳回顶部。使“编辑某节点→点空白→拖拽画布→切文章”仍落在上次聚焦内容上。
-  - 图片预览自动回退（`editor-modals.ts`）：`ImagePreviewModal` 的图片加载失败（如失效图床）时 `advanceOnLoadError` 按 `candidates()` 顺序自动切到下一个可用来源（如本地副本），不再停留在失效图床显示“加载失败”；`failedSources` 阻止无限循环，用户手动重选可重试（`switchSource` 清除该来源失败标记）。
-  - 删除图片本地副本独立回收（`editor.ts`）：`removeImageBlock` 此前只安排远端图床清理、不回收本地文件；现与 `removeContentBlock` 一致，删除图片块后 `onScheduleFileAssetDeletion([removed.localSource])` 进入 60 秒延迟回收，远端删除失败（`NET::ERR_CONNECTION_REFUSED`）不阻塞本地回收。
-  - 契约测试 `tests/file-block.test.mjs` 新增“整块删除图片独立回收本地副本”“预览失败自动回退下一来源”两项、`tests/reading-editor-contract.test.mjs` 新增“画布拖拽失焦后切文章回退最近聚焦节点”，单元测试 441/441 通过。
+- 表格单元格 LaTeX 渲染（`rich-text-dom.ts`）：表格渲染统一走 `renderInlineMarkdown`，此前末参 `latex=false` 关闭了公式识别，导致表格里的 `$...$`/`$$...$$` 不解析。现改为 `latex=true`，表格（导图画布、文章、大纲三种渲染器）单元格内 LaTeX 公式正常渲染为 MathJax；`markdownInlineToRichText` 不吞 `$` 分隔符，与 `splitLatexText` 兼容；单个孤立 `$5` 等无闭合符号仍按纯文本，不误判为公式。
+  - 回归契约 `scripts/test.mjs` 新增断言：`renderInlineMarkdown` 必须以 `latex=true` 调用 `renderRichTextRuns`。
+- 前一轮（已提交）：
+  - 焦点位置记忆：`focusAnchorNodeId`，`captureCurrentLocation`(mindmap) 与 `articleRendererOptions.selectedId` 两处 `selectedId || focusAnchorNodeId` 兜底，画布拖拽失焦后切文章仍落回最近聚焦节点。
+  - 图片预览失效源自动回退、删除图片本地副本独立回收（前述记录）。
 
 - 第二轮反馈修复（应用户实测反馈）：
   - 公式按钮“无任何反应”根因：`node-edit-modal.ts` 中 `new FormulaEditModal(...)` 只构造未调用 `.open()`，Obsidian 的 Modal 必须 `.open()` 才显示。已在构造末尾补 `).open()`。契约测试新增断言公式弹窗会被打开。

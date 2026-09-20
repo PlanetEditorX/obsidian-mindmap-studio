@@ -5005,7 +5005,7 @@ function renderRichTextRuns(container, runs, fallbackText, latex = true) {
 }
 function renderInlineMarkdown(container, markdown) {
   const parsed = markdownInlineToRichText(markdown);
-  renderRichTextRuns(container, parsed.richText, parsed.text, false);
+  renderRichTextRuns(container, parsed.richText, parsed.text, true);
 }
 function styleFromElement(element, inherited) {
   var _a2, _b2;
