@@ -1124,6 +1124,10 @@ export class MindMapEditor {
     this.cancelReadingLocationRestore();
     const token = this.readingRestoreToken;
     this.activeReadingRestore = { token, mode, location, resolved };
+    // 重锚必须跟随“最后一次真正应用”的语义位置：同一次内容变更会连续触发多次窗口重建，
+    // 恢复也可能从 setDisplayMode 等入口进来，若沿用某一次 renderWindow 记下的旧锚点，
+    // 补载结束时会用过期节点把已经稳定的视口再拽走数千像素。
+    if (mode === "article") this.pendingArticleAnchorLocation = location;
     this.callbacks.onDebugLog("navigation", "restore-transaction-start", { token, mode, filePath: resolved.filePath, nodeId: resolved.nodeId, nodeRatio: resolved.nodeRatio, viewportRatio: resolved.viewportRatio });
 
     const apply = (): boolean => {

@@ -117,6 +117,14 @@ test("article warmup re-anchors the semantic position once the window is fully l
   const warmup = editorSource.match(/private scheduleArticleWindowWarmup\(\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
   assert.match(warmup, /"window-warmup-complete"[\s\S]*this\.reapplyArticleAnchor\(\);/, "the re-anchor runs right after the window finishes loading");
   assert.match(editorSource, /this\.pendingArticleAnchorLocation = location;/, "the render records the anchor it applied");
+  // 同一次内容变更会连续重建多次窗口，恢复也可能从 setDisplayMode 等入口进来；
+  // 重锚若沿用某一次 renderWindow 记下的旧锚点，补载结束会把稳定视口再拽走数千像素。
+  const begin = editorSource.match(/private beginReadingLocationRestore\([\s\S]*?\n  \}/)?.[0] ?? "";
+  assert.match(
+    begin,
+    /if \(mode === "article"\) this\.pendingArticleAnchorLocation = location;[\s\S]*"restore-transaction-start"/,
+    "the re-anchor target tracks the last restore that was actually applied"
+  );
   assert.match(editorSource, /onwheel = \(\) => \{\s*\n\s*this\.pendingArticlePixelRestoreTop = null;\s*\n\s*this\.pendingArticleAnchorLocation = null;/, "user takeover drops the pending re-anchor");
 });
 

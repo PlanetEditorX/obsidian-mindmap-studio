@@ -13424,6 +13424,7 @@ var MindMapEditor = class {
     this.cancelReadingLocationRestore();
     const token = this.readingRestoreToken;
     this.activeReadingRestore = { token, mode, location, resolved };
+    if (mode === "article") this.pendingArticleAnchorLocation = location;
     this.callbacks.onDebugLog("navigation", "restore-transaction-start", { token, mode, filePath: resolved.filePath, nodeId: resolved.nodeId, nodeRatio: resolved.nodeRatio, viewportRatio: resolved.viewportRatio });
     const apply = () => {
       var _a2;
