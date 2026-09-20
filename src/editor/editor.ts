@@ -967,6 +967,25 @@ export class MindMapEditor {
       .map((element) => ({ element, rect: element.getBoundingClientRect() }))
       .filter(({ rect }) => rect.height > 0);
     if (!candidates.length) return null;
+    // 内容变更（删除/编辑等）触发重建时，恢复位置应锚定用户正在交互的选中/聚焦节点；
+    // 否则 35% 视口扫描线捕获的锚点会指向其它章节，重建后视口被拉走（例如删除图片后跳别处）。
+    // 仅当该节点当前仍在视口内时才采用其原视图位置，用户已滚动离开则回退到视口扫描线。
+    const preferredNodeId = this.nodeById(this.selectedId || this.focusAnchorNodeId)?.id;
+    const preferred = preferredNodeId
+      ? candidates.find(({ element }) => element.dataset.nodeId === preferredNodeId)
+      : undefined;
+    if (preferred && preferred.rect.top < viewport.bottom && preferred.rect.bottom > viewport.top) {
+      const nodeRatio = 0.5;
+      const nodeViewportRatio = Math.max(0, Math.min(1,
+        (preferred.rect.top + preferred.rect.height * nodeRatio - viewport.top) / viewport.height));
+      return createReadingLocation(
+        sections,
+        preferred.element.dataset.filePath ?? this.options.currentFilePath,
+        preferredNodeId!,
+        nodeRatio,
+        nodeViewportRatio
+      );
+    }
     const containing = candidates
       .filter(({ rect }) => anchorY >= rect.top && anchorY < rect.bottom)
       .sort((left, right) => Math.abs(left.rect.top - anchorY) - Math.abs(right.rect.top - anchorY))[0];

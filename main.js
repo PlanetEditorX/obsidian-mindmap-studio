@@ -13262,7 +13262,7 @@ var MindMapEditor = class {
   }
   /** 从当前模式的选择或滚动视口中提取统一语义位置。 */
   captureCurrentLocation(mode) {
-    var _a2, _b2, _c;
+    var _a2, _b2, _c, _d, _e;
     const sections = this.readingLocationSections();
     if (!sections.length) return null;
     if (mode === "mindmap") {
@@ -13282,6 +13282,22 @@ var MindMapEditor = class {
     const selector = mode === "outline" ? ".mms-outline-row[data-node-id]" : mode === "article" ? ".mms-article-document-title[data-node-id], .mms-article-node[data-node-id]" : "[data-node-id][data-file-path]";
     const candidates = Array.from(scroller.querySelectorAll(selector)).map((element) => ({ element, rect: element.getBoundingClientRect() })).filter(({ rect }) => rect.height > 0);
     if (!candidates.length) return null;
+    const preferredNodeId = (_c = this.nodeById(this.selectedId || this.focusAnchorNodeId)) == null ? void 0 : _c.id;
+    const preferred = preferredNodeId ? candidates.find(({ element }) => element.dataset.nodeId === preferredNodeId) : void 0;
+    if (preferred && preferred.rect.top < viewport.bottom && preferred.rect.bottom > viewport.top) {
+      const nodeRatio = 0.5;
+      const nodeViewportRatio = Math.max(0, Math.min(
+        1,
+        (preferred.rect.top + preferred.rect.height * nodeRatio - viewport.top) / viewport.height
+      ));
+      return createReadingLocation(
+        sections,
+        (_d = preferred.element.dataset.filePath) != null ? _d : this.options.currentFilePath,
+        preferredNodeId,
+        nodeRatio,
+        nodeViewportRatio
+      );
+    }
     const containing = candidates.filter(({ rect }) => anchorY >= rect.top && anchorY < rect.bottom).sort((left, right) => Math.abs(left.rect.top - anchorY) - Math.abs(right.rect.top - anchorY))[0];
     const nearest = containing != null ? containing : candidates.sort((left, right) => {
       const leftDistance = anchorY < left.rect.top ? left.rect.top - anchorY : anchorY - left.rect.bottom;
@@ -13289,7 +13305,7 @@ var MindMapEditor = class {
       return leftDistance - rightDistance;
     })[0];
     const nodeId = nearest == null ? void 0 : nearest.element.dataset.nodeId;
-    const filePath = (_c = nearest == null ? void 0 : nearest.element.dataset.filePath) != null ? _c : this.options.currentFilePath;
+    const filePath = (_e = nearest == null ? void 0 : nearest.element.dataset.filePath) != null ? _e : this.options.currentFilePath;
     if (!nearest || !nodeId || !filePath) return null;
     return createReadingLocation(
       sections,

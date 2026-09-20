@@ -36,6 +36,16 @@ test("mindmap landing falls back to the last focused node after a blank-canvas d
   assert.match(capture, /this\.nodeById\(this\.selectedId \|\| this\.focusAnchorNodeId\)\?\.id/, "switching out of mindmap without a selection must land on the remembered focused node, not the top");
 });
 
+test("article capture anchors to the selected/visible node so a content rebuild does not jump sections", () => {
+  // 删除/编辑触发重建时，恢复必须优先锚定当前选中（或最近聚焦）且仍在视口内的节点，
+  // 并按它的原视图位置（viewportRatio）恢复，而不是捕获 35% 视口扫描线指向的其它章节。
+  const capture = editorSource.match(/private captureCurrentLocation\(mode: DisplayMode\): ReadingLocation \| null \{[\s\S]*?\n  \}/)?.[0] ?? "";
+  assert.match(capture, /const preferredNodeId = this\.nodeById\(this\.selectedId \|\| this\.focusAnchorNodeId\)\?\.id/, "capture must resolve a preferred anchor from the selected/focused node");
+  assert.match(capture, /preferred\.rect\.top < viewport\.bottom && preferred\.rect\.bottom > viewport\.top/, "the preferred node is only used while it is still visible in the viewport");
+  assert.match(capture, /nodeViewportRatio/, "the preferred node keeps its original viewport position, not a fixed 35% scanline");
+  assert.match(capture, /return createReadingLocation\([\s\S]*preferredNodeId!?,[\s\S]*nodeViewportRatio/, "the preferred node location must be returned immediately");
+});
+
 test("pending local progress is not replaced by stale option refreshes", () => {
   assert.match(editorSource, /this\.readingLocationTimer === null[\s\S]*!sameReadingLocation\(this\.lastReadingLocation, options\.readingLocation\)/);
 });
