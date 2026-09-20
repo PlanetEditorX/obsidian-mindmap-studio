@@ -524,7 +524,7 @@ function imageSourceCandidates(block, includeLocal = true, hostPriorityIds = [])
     raw.push({ candidate: { source: block.source, label: "\u5F53\u524D\u56FE\u7247", kind: "current" }, hostRank: Number.MAX_SAFE_INTEGER, order: manualOrder++ });
   }
   if (includeLocal && block.localSource) {
-    raw.push({ candidate: { source: block.localSource, label: "\u672C\u5730\u56FE\u7247", kind: "local" }, hostRank: Number.MAX_SAFE_INTEGER, order: manualOrder++ });
+    raw.push({ candidate: { source: block.localSource, label: "\u672C\u5730\u56FE\u7247", kind: "local" }, hostRank: -1, order: manualOrder++ });
   }
   raw.sort((left, right) => {
     var _a3, _b3;

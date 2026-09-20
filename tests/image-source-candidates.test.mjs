@@ -17,7 +17,7 @@ before(async () => {
 
 after(async () => cleanup?.());
 
-test("image source candidates prefer configured image host priority before local fallback", () => {
+test("image source candidates prefer local image first unless manually pinned", () => {
   const block = {
     id: "img",
     type: "image",
@@ -32,11 +32,11 @@ test("image source candidates prefer configured image host priority before local
   const candidates = model.imageSourceCandidates(block, true, ["fast", "slow"]);
 
   assert.deepEqual(candidates.map((item) => item.source), [
+    "assets/local.png",
     "https://fast.example/a.png",
-    "https://slow.example/a.png",
-    "assets/local.png"
+    "https://slow.example/a.png"
   ]);
-  assert.deepEqual(candidates.map((item) => item.label), ["快图床", "慢图床", "本地图片"]);
+  assert.deepEqual(candidates.map((item) => item.label), ["本地图片", "快图床", "慢图床"]);
 });
 
 test("image source candidates de-duplicate current remote while keeping priority order", () => {
@@ -143,12 +143,12 @@ test("per-image source priority overrides global host priority and default displ
   };
   assert.deepEqual(
     model.imageSourceCandidates(block, true, ["fast", "slow"]).map((candidate) => candidate.source),
-    ["https://fast.example/a.png", "https://slow.example/a.png", "assets/local.png"]
+    ["assets/local.png", "https://fast.example/a.png", "https://slow.example/a.png"]
   );
 
   block.sourcePriority = ["https://slow.example/a.png"];
   const ordered = model.imageSourceCandidates(block, true, ["fast", "slow"]).map((candidate) => candidate.source);
-  assert.deepEqual(ordered, ["https://slow.example/a.png", "https://fast.example/a.png", "assets/local.png"]);
+  assert.deepEqual(ordered, ["https://slow.example/a.png", "assets/local.png", "https://fast.example/a.png"]);
 
   block.sourcePriority = ["assets/local.png"];
   const localFirst = model.imageSourceCandidates(block, true, ["fast", "slow"]);

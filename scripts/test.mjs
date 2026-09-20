@@ -883,23 +883,23 @@ export const setIcon = () => {};
   if (failoverBlock?.type === "image") {
     const initialCandidates = model.imageSourceCandidates(failoverBlock, true);
     assert.deepEqual(initialCandidates.map((item) => item.source), [
+      "Assets/first.png",
       "https://cdn-a.example/first.png",
-      "https://cdn-b.example/first.png",
-      "Assets/first.png"
-    ]);
+      "https://cdn-b.example/first.png"
+    ], "local image should be preferred by default before remote mirrors");
     failoverBlock.source = "https://cdn-b.example/first.png";
     const rotatedCandidates = model.imageSourceCandidates(failoverBlock, true, ["host-a", "host-b"]);
     assert.deepEqual(rotatedCandidates.map((item) => item.source), [
+      "Assets/first.png",
       "https://cdn-a.example/first.png",
-      "https://cdn-b.example/first.png",
-      "Assets/first.png"
-    ], "image mirror failover should follow configured host priority without duplicates");
+      "https://cdn-b.example/first.png"
+    ], "local image first and image mirror failover should follow configured host priority without duplicates");
     const priorityCandidates = model.imageSourceCandidates(failoverBlock, true, ["host-b", "host-a"]);
     assert.deepEqual(priorityCandidates.map((item) => item.source), [
+      "Assets/first.png",
       "https://cdn-b.example/first.png",
-      "https://cdn-a.example/first.png",
-      "Assets/first.png"
-    ], "custom image host priority should be able to prefer the active mirror");
+      "https://cdn-a.example/first.png"
+    ], "local image first and custom image host priority should be able to prefer the active mirror");
   }
 
   const pureImage = model.normalizeDocument({

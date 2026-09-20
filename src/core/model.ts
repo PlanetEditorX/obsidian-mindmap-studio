@@ -973,11 +973,12 @@ function normalizeContentBlock(input: unknown): MindMapContentBlock | null {
 }
 
 /**
- * 为图片内容块构建有序、去重的加载候选列表。远程镜像按图片级来源优先级（`sourcePriority`）
- * 和图床优先级排序，最后按设置选择本地地址，从而支持失效图床自动切换。
+ * 为图片内容块构建有序、去重的加载候选列表。默认优先使用本地图片（只要存在且未手动指定
+ * 默认来源）；用户通过图片级来源优先级（`sourcePriority`）手动固定的来源永远排最前；本地
+ * 图片不存在时才按图床优先级与镜像顺序加载远程镜像，从而支持失效图床自动切换。
  *
  * @param block 当前内容块，通常是文字块或图片块。
- * @param includeLocal 是否把本地图片地址作为最终回退候选。
+ * @param includeLocal 是否把本地图片地址作为候选。
  * @param hostPriorityIds 图床 ID 优先级，越靠前越先尝试。
  * @returns 按当前规则构建的集合结果。
  * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
@@ -1014,7 +1015,8 @@ export function imageSourceCandidates(block: MindMapImageContentBlock, includeLo
     raw.push({ candidate: { source: block.source, label: "当前图片", kind: "current" }, hostRank: Number.MAX_SAFE_INTEGER, order: manualOrder++ });
   }
   if (includeLocal && block.localSource) {
-    raw.push({ candidate: { source: block.localSource, label: "本地图片", kind: "local" }, hostRank: Number.MAX_SAFE_INTEGER, order: manualOrder++ });
+    // 本地图片默认优先：hostRank 取最小，使其在无图片级手动优先级时排在最前。
+    raw.push({ candidate: { source: block.localSource, label: "本地图片", kind: "local" }, hostRank: -1, order: manualOrder++ });
   }
   raw
     .sort((left, right) => {
