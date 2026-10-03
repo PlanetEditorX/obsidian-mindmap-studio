@@ -80,6 +80,65 @@ export function parseClipboardNodes(text: string): MindMapNode[] | null {
   }
 }
 
+export interface ClipboardImageUrl {
+  url: string;
+  confident: boolean;
+}
+
+/**
+ * 识别“仅包含一张远程图片”的剪贴板内容。
+ * 明确的图片扩展名/格式参数可直接信任；无扩展名的 HTTP(S) 地址交给调用方探测。
+ */
+export function parseClipboardImageUrl(text: string, html = ""): ClipboardImageUrl | null {
+  const decodeHtml = (value: string): string => value
+    .replace(/&amp;/gi, "&")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;|&apos;/gi, "'")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">");
+
+  const trimmedHtml = html.trim();
+  if (trimmedHtml) {
+    if (typeof DOMParser !== "undefined") {
+      const document = new DOMParser().parseFromString(trimmedHtml, "text/html");
+      const images = Array.from(document.body.querySelectorAll("img"));
+      const src = images[0]?.getAttribute("src")?.trim() ?? "";
+      if (images.length === 1 && !document.body.textContent?.trim() && /^https?:\/\//i.test(src)) {
+        return { url: src, confident: true };
+      }
+    }
+    const images = Array.from(trimmedHtml.matchAll(/<img\b[^>]*\bsrc\s*=\s*(["'])(.*?)\1[^>]*>/gi));
+    if (images.length === 1) {
+      const remainder = trimmedHtml
+        .replace(images[0]![0], "")
+        .replace(/<\/?(?:a|body|html)\b[^>]*>/gi, "")
+        .replace(/<meta\b[^>]*>/gi, "")
+        .replace(/<!--[^]*?-->/g, "")
+        .trim();
+      const src = decodeHtml(images[0]![2] ?? "").trim();
+      if (!remainder && /^https?:\/\//i.test(src)) return { url: src, confident: true };
+    }
+  }
+
+  const value = text.trim();
+  if (!/^https?:\/\/\S+$/i.test(value)) return null;
+  try {
+    const parsed = new URL(value);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return null;
+    const pathname = decodeURIComponent(parsed.pathname).toLowerCase();
+    const directExtension = /\.(?:avif|bmp|gif|jpe?g|png|svg|webp)$/i.test(pathname);
+    const imageParam = Array.from(parsed.searchParams.entries()).some(([key, raw]) => {
+      const name = key.toLowerCase();
+      const param = raw.toLowerCase();
+      return ((name === "fm" || name === "format" || name === "ext") && /^(?:avif|bmp|gif|jpe?g|png|svg|webp)$/.test(param))
+        || ((name === "type" || name === "content-type" || name === "mime") && /^image\/(?:avif|bmp|gif|jpe?g|png|svg\+xml|webp)$/.test(param));
+    });
+    return { url: value, confident: directExtension || imageParam };
+  } catch {
+    return null;
+  }
+}
+
 /**
  * 解析富剪贴板提供的嵌套 HTML 列表。
  *

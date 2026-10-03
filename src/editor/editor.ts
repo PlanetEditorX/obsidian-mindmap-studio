@@ -95,7 +95,7 @@ import { NodeEditModal } from "./node-edit-modal";
 import { AppearanceModal } from "./appearance-modal";
 import { ViewportController, type TouchGestureState } from "./viewport-controller";
 import { renderMindMapNode as renderMindMapNodeInto, type MindMapNodeRendererContext } from "./mind-map-node-renderer";
-import { parseClipboardContentBlocks, parseClipboardHtml, parseClipboardNodes } from "./clipboard-import";
+import { parseClipboardContentBlocks, parseClipboardHtml, parseClipboardImageUrl, parseClipboardNodes } from "./clipboard-import";
 import { selectImageFile, selectAnyFile, uploadCurrentNodeImage } from "./node-image-actions";
 import { canMoveNodes, resolveDropPosition } from "./drag-drop";
 import { DocumentHistory } from "./history-manager";
@@ -2630,6 +2630,25 @@ export class MindMapEditor {
     });
     element.addEventListener("paste", (event) => {
       const text = event.clipboardData?.getData("text/plain") ?? "";
+      const remoteImage = parseClipboardImageUrl(text, event.clipboardData?.getData("text/html") ?? "");
+      if (remoteImage) {
+        event.preventDefault();
+        event.stopPropagation();
+        const frozenNodeId = node.id;
+        const frozenAfterBlockId = blockId;
+        void (async (): Promise<void> => {
+          const isImage = remoteImage.confident || await this.probeRemoteImageUrl(remoteImage.url);
+          if (!isImage) {
+            if (element.isConnected) document.execCommand("insertText", false, text);
+            return;
+          }
+          element.blur();
+          if (this.insertRemoteImageUrl(frozenNodeId, remoteImage.url, frozenAfterBlockId)) {
+            new Notice("已识别图片链接并插入到当前节点");
+          }
+        })();
+        return;
+      }
       const copiedNodes = parseClipboardNodes(text);
       if (!copiedNodes || !/^\s*\{/.test(text)) return;
       event.preventDefault();
@@ -6306,6 +6325,41 @@ export class MindMapEditor {
     }).open();
   }
 
+  /** 探测没有明显图片后缀的远程 URL 是否能作为图片加载。 */
+  private async probeRemoteImageUrl(url: string): Promise<boolean> {
+    return await new Promise<boolean>((resolve) => {
+      const image = new Image();
+      let settled = false;
+      const finish = (ok: boolean): void => {
+        if (settled) return;
+        settled = true;
+        window.clearTimeout(timer);
+        image.onload = null;
+        image.onerror = null;
+        resolve(ok);
+      };
+      const timer = window.setTimeout(() => finish(false), 4000);
+      image.onload = () => finish(image.naturalWidth > 0 && image.naturalHeight > 0);
+      image.onerror = () => finish(false);
+      image.src = url;
+    });
+  }
+
+  /** 将远程图片 URL 直接作为图片内容块插入，不落盘、不触发图床自动上传。 */
+  private insertRemoteImageUrl(nodeId: string, url: string, afterBlockId?: string): boolean {
+    const node = this.nodeById(nodeId);
+    if (!node || this.readOnly) return false;
+    const imageBlock: MindMapImageContentBlock = { id: newId(), type: "image", source: url };
+    this.mutateWithoutArticleContext(() => {
+      const blocks = nodeContentBlocks(node);
+      const index = afterBlockId ? blocks.findIndex((block) => block.id === afterBlockId) : -1;
+      blocks.splice(index >= 0 ? index + 1 : blocks.length, 0, imageBlock);
+      node.content = blocks;
+      syncNodeContentFields(node);
+    });
+    return true;
+  }
+
   /**
    * 处理编辑器内粘贴：优先识别图片并保存为本地资源，其次识别表格、代码块或节点分支。普通文本也会作为当前节点的子节点插入。
    *
@@ -6391,8 +6445,29 @@ export class MindMapEditor {
 
     if (target.closest("input, textarea, select, [contenteditable='true']")) return;
 
-    const htmlBranch = parseClipboardHtml(data.getData("text/html"));
     const text = data.getData("text/plain");
+    const remoteImage = parseClipboardImageUrl(text, data.getData("text/html"));
+    if (remoteImage) {
+      const targetBlock = target.closest<HTMLElement>("[data-block-id]");
+      const targetNode = target.closest<HTMLElement>("[data-node-id]");
+      const articleTargetAllowed = this.currentMode === "article" || this.currentMode === "reading";
+      const frozenNodeId = articleTargetAllowed
+        ? targetNode?.dataset.nodeId ?? this.activeArticleBlock?.nodeId ?? this.selectedId
+        : this.selectedId;
+      const frozenAfterBlockId = articleTargetAllowed
+        ? targetBlock?.dataset.blockId
+          ?? (this.activeArticleBlock?.nodeId === frozenNodeId ? this.activeArticleBlock.blockId : undefined)
+        : undefined;
+      event.preventDefault();
+      const isImage = remoteImage.confident || await this.probeRemoteImageUrl(remoteImage.url);
+      if (isImage && frozenNodeId && this.insertRemoteImageUrl(frozenNodeId, remoteImage.url, frozenAfterBlockId)) {
+        new Notice("已识别图片链接并插入到当前节点");
+        return;
+      }
+      // 探测失败时继续走普通文本粘贴逻辑，避免吞掉正常网页链接。
+    }
+
+    const htmlBranch = parseClipboardHtml(data.getData("text/html"));
     if (!text.trim() && !htmlBranch) return;
     const selected = this.selectedNode() ?? this.document.root;
     const table = parseMarkdownTable(text);
