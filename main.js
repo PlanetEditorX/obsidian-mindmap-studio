@@ -11260,6 +11260,43 @@ function parseClipboardNodes(text) {
     return [createNode(trimmed)];
   }
 }
+function parseClipboardImageUrl(text, html = "") {
+  var _a2, _b2, _c, _d, _e;
+  const decodeHtml = (value2) => value2.replace(/&amp;/gi, "&").replace(/&quot;/gi, '"').replace(/&#39;|&apos;/gi, "'").replace(/&lt;/gi, "<").replace(/&gt;/gi, ">");
+  const trimmedHtml = html.trim();
+  if (trimmedHtml) {
+    if (typeof DOMParser !== "undefined") {
+      const document2 = new DOMParser().parseFromString(trimmedHtml, "text/html");
+      const images2 = Array.from(document2.body.querySelectorAll("img"));
+      const src = (_c = (_b2 = (_a2 = images2[0]) == null ? void 0 : _a2.getAttribute("src")) == null ? void 0 : _b2.trim()) != null ? _c : "";
+      if (images2.length === 1 && !((_d = document2.body.textContent) == null ? void 0 : _d.trim()) && /^https?:\/\//i.test(src)) {
+        return { url: src, confident: true };
+      }
+    }
+    const images = Array.from(trimmedHtml.matchAll(/<img\b[^>]*\bsrc\s*=\s*(["'])(.*?)\1[^>]*>/gi));
+    if (images.length === 1) {
+      const remainder = trimmedHtml.replace(images[0][0], "").replace(/<\/?(?:a|body|html)\b[^>]*>/gi, "").replace(/<meta\b[^>]*>/gi, "").replace(/<!--[^]*?-->/g, "").trim();
+      const src = decodeHtml((_e = images[0][2]) != null ? _e : "").trim();
+      if (!remainder && /^https?:\/\//i.test(src)) return { url: src, confident: true };
+    }
+  }
+  const value = text.trim();
+  if (!/^https?:\/\/\S+$/i.test(value)) return null;
+  try {
+    const parsed = new URL(value);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return null;
+    const pathname = decodeURIComponent(parsed.pathname).toLowerCase();
+    const directExtension = /\.(?:avif|bmp|gif|jpe?g|png|svg|webp)$/i.test(pathname);
+    const imageParam = Array.from(parsed.searchParams.entries()).some(([key, raw]) => {
+      const name = key.toLowerCase();
+      const param = raw.toLowerCase();
+      return (name === "fm" || name === "format" || name === "ext") && /^(?:avif|bmp|gif|jpe?g|png|svg|webp)$/.test(param) || (name === "type" || name === "content-type" || name === "mime") && /^image\/(?:avif|bmp|gif|jpe?g|png|svg\+xml|webp)$/.test(param);
+    });
+    return { url: value, confident: directExtension || imageParam };
+  } catch (e) {
+    return null;
+  }
+}
 function parseClipboardHtml(html) {
   var _a2;
   if (!html.trim() || typeof DOMParser === "undefined") return null;
@@ -15065,8 +15102,27 @@ var MindMapEditor = class {
       }
     });
     element.addEventListener("paste", (event) => {
-      var _a3, _b2;
+      var _a3, _b2, _c, _d;
       const text = (_b2 = (_a3 = event.clipboardData) == null ? void 0 : _a3.getData("text/plain")) != null ? _b2 : "";
+      const remoteImage = parseClipboardImageUrl(text, (_d = (_c = event.clipboardData) == null ? void 0 : _c.getData("text/html")) != null ? _d : "");
+      if (remoteImage) {
+        event.preventDefault();
+        event.stopPropagation();
+        const frozenNodeId = node.id;
+        const frozenAfterBlockId = blockId;
+        void (async () => {
+          const isImage = remoteImage.confident || await this.probeRemoteImageUrl(remoteImage.url);
+          if (!isImage) {
+            if (element.isConnected) document.execCommand("insertText", false, text);
+            return;
+          }
+          element.blur();
+          if (this.insertRemoteImageUrl(frozenNodeId, remoteImage.url, frozenAfterBlockId)) {
+            new import_obsidian15.Notice("\u5DF2\u8BC6\u522B\u56FE\u7247\u94FE\u63A5\u5E76\u63D2\u5165\u5230\u5F53\u524D\u8282\u70B9");
+          }
+        })();
+        return;
+      }
       const copiedNodes = parseClipboardNodes(text);
       if (!copiedNodes || !/^\s*\{/.test(text)) return;
       event.preventDefault();
@@ -18463,6 +18519,39 @@ var MindMapEditor = class {
       this.mutateWithoutArticleContext(() => this.upsertStructuredBlock(node, "code", next, blockId));
     }).open();
   }
+  /** 探测没有明显图片后缀的远程 URL 是否能作为图片加载。 */
+  async probeRemoteImageUrl(url) {
+    return await new Promise((resolve) => {
+      const image = new Image();
+      let settled = false;
+      const finish = (ok) => {
+        if (settled) return;
+        settled = true;
+        window.clearTimeout(timer);
+        image.onload = null;
+        image.onerror = null;
+        resolve(ok);
+      };
+      const timer = window.setTimeout(() => finish(false), 4e3);
+      image.onload = () => finish(image.naturalWidth > 0 && image.naturalHeight > 0);
+      image.onerror = () => finish(false);
+      image.src = url;
+    });
+  }
+  /** 将远程图片 URL 直接作为图片内容块插入，不落盘、不触发图床自动上传。 */
+  insertRemoteImageUrl(nodeId, url, afterBlockId) {
+    const node = this.nodeById(nodeId);
+    if (!node || this.readOnly) return false;
+    const imageBlock = { id: newId(), type: "image", source: url };
+    this.mutateWithoutArticleContext(() => {
+      const blocks = nodeContentBlocks(node);
+      const index = afterBlockId ? blocks.findIndex((block) => block.id === afterBlockId) : -1;
+      blocks.splice(index >= 0 ? index + 1 : blocks.length, 0, imageBlock);
+      node.content = blocks;
+      syncNodeContentFields(node);
+    });
+    return true;
+  }
   /**
    * 处理编辑器内粘贴：优先识别图片并保存为本地资源，其次识别表格、代码块或节点分支。普通文本也会作为当前节点的子节点插入。
    *
@@ -18470,7 +18559,7 @@ var MindMapEditor = class {
    * @remarks 这是关键流程函数；修改时应同步检查调用方、数据兼容、撤销保存链路以及对应自动测试。
    */
   async handlePaste(event) {
-    var _a2, _b2, _c, _d, _e, _f, _g;
+    var _a2, _b2, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l;
     if (this.readOnly) return;
     const target = event.target;
     const data = event.clipboardData;
@@ -18531,10 +18620,24 @@ var MindMapEditor = class {
       return;
     }
     if (target.closest("input, textarea, select, [contenteditable='true']")) return;
-    const htmlBranch = parseClipboardHtml(data.getData("text/html"));
     const text = data.getData("text/plain");
+    const remoteImage = parseClipboardImageUrl(text, data.getData("text/html"));
+    if (remoteImage) {
+      const targetBlock = target.closest("[data-block-id]");
+      const targetNode = target.closest("[data-node-id]");
+      const articleTargetAllowed = this.currentMode === "article" || this.currentMode === "reading";
+      const frozenNodeId = articleTargetAllowed ? (_i = (_h = targetNode == null ? void 0 : targetNode.dataset.nodeId) != null ? _h : (_g = this.activeArticleBlock) == null ? void 0 : _g.nodeId) != null ? _i : this.selectedId : this.selectedId;
+      const frozenAfterBlockId = articleTargetAllowed ? (_k = targetBlock == null ? void 0 : targetBlock.dataset.blockId) != null ? _k : ((_j = this.activeArticleBlock) == null ? void 0 : _j.nodeId) === frozenNodeId ? this.activeArticleBlock.blockId : void 0 : void 0;
+      event.preventDefault();
+      const isImage = remoteImage.confident || await this.probeRemoteImageUrl(remoteImage.url);
+      if (isImage && frozenNodeId && this.insertRemoteImageUrl(frozenNodeId, remoteImage.url, frozenAfterBlockId)) {
+        new import_obsidian15.Notice("\u5DF2\u8BC6\u522B\u56FE\u7247\u94FE\u63A5\u5E76\u63D2\u5165\u5230\u5F53\u524D\u8282\u70B9");
+        return;
+      }
+    }
+    const htmlBranch = parseClipboardHtml(data.getData("text/html"));
     if (!text.trim() && !htmlBranch) return;
-    const selected = (_g = this.selectedNode()) != null ? _g : this.document.root;
+    const selected = (_l = this.selectedNode()) != null ? _l : this.document.root;
     const table = parseMarkdownTable(text);
     if (table) {
       event.preventDefault();
