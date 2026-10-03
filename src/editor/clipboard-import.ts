@@ -80,6 +80,9 @@ export function parseClipboardNodes(text: string): MindMapNode[] | null {
   }
 }
 
+/**
+ * 剪贴板中识别出的远程图片 URL，以及是否可直接判定为图片。
+ */
 export interface ClipboardImageUrl {
   url: string;
   confident: boolean;
