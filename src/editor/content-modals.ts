@@ -7,6 +7,7 @@
 
 import { App, Modal, Notice } from "obsidian";
 import {
+  newId,
   parseFencedCode,
   parseMarkdownTable,
   tableToMarkdown,
@@ -250,10 +251,27 @@ export class CodeEditModal extends Modal {
       if (languageSelect.value === "__custom__") customLanguage.focus();
     };
 
-    const codeLabel = this.contentEl.createEl("label", { text: "代码内容" });
-    const codeInput = codeLabel.createEl("textarea", { cls: "mmc-code-textarea", attr: { spellcheck: "false", placeholder: "可直接粘贴代码，或粘贴 ```语言 ... ``` fenced code block" } });
-    codeInput.rows = 18;
+    const codeField = this.contentEl.createDiv({ cls: "mmc-code-field" });
+    const codeHeader = codeField.createDiv({ cls: "mmc-code-field-header" });
+    const codeInputId = newId();
+    codeHeader.createEl("label", { text: "代码内容", attr: { for: codeInputId } });
+    const detect = codeHeader.createEl("button", { text: "识别粘贴的代码块", type: "button", cls: "mmc-code-detect" });
+    const codeInput = codeField.createEl("textarea", {
+      cls: "mmc-code-textarea",
+      attr: { id: codeInputId, spellcheck: "false", placeholder: "可直接粘贴代码，或粘贴 ```语言 ... ``` 代码块" }
+    });
+    codeInput.rows = 10;
     codeInput.value = this.block?.code ?? "";
+    detect.addEventListener("click", () => {
+      const parsed = parseFencedCode(codeInput.value);
+      if (!parsed) {
+        new Notice("没有识别到完整的 ``` 代码块");
+        return;
+      }
+      setLanguage(parsed.language);
+      codeInput.value = parsed.code;
+      new Notice("已识别语言并去除围栏");
+    });
 
     const appearance = this.contentEl.createDiv({ cls: "mmc-code-appearance" });
     appearance.createEl("h3", { text: "显示设置" });
@@ -281,15 +299,6 @@ export class CodeEditModal extends Modal {
       ["dracula", "Dracula"]
     ] as const).forEach(([value, label]) => themeSelect.createEl("option", { value, text: label }));
     themeSelect.value = this.block?.theme ?? "";
-
-    const detect = this.contentEl.createEl("button", { text: "识别 fenced code", type: "button" });
-    detect.addEventListener("click", () => {
-      const parsed = parseFencedCode(codeInput.value);
-      if (!parsed) { new Notice("没有识别到完整的 ``` fenced code block"); return; }
-      setLanguage(parsed.language);
-      codeInput.value = parsed.code;
-      new Notice("代码语言和内容已识别");
-    });
 
     const actions = this.contentEl.createDiv({ cls: "mmc-modal-actions" });
     const cancel = actions.createEl("button", { text: "取消", type: "button" });

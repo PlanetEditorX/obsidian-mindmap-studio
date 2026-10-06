@@ -4848,10 +4848,27 @@ var CodeEditModal = class extends import_obsidian2.Modal {
       customLanguage.toggleClass("is-hidden", languageSelect.value !== "__custom__");
       if (languageSelect.value === "__custom__") customLanguage.focus();
     };
-    const codeLabel = this.contentEl.createEl("label", { text: "\u4EE3\u7801\u5185\u5BB9" });
-    const codeInput = codeLabel.createEl("textarea", { cls: "mmc-code-textarea", attr: { spellcheck: "false", placeholder: "\u53EF\u76F4\u63A5\u7C98\u8D34\u4EE3\u7801\uFF0C\u6216\u7C98\u8D34 ```\u8BED\u8A00 ... ``` fenced code block" } });
-    codeInput.rows = 18;
+    const codeField = this.contentEl.createDiv({ cls: "mmc-code-field" });
+    const codeHeader = codeField.createDiv({ cls: "mmc-code-field-header" });
+    const codeInputId = newId();
+    codeHeader.createEl("label", { text: "\u4EE3\u7801\u5185\u5BB9", attr: { for: codeInputId } });
+    const detect = codeHeader.createEl("button", { text: "\u8BC6\u522B\u7C98\u8D34\u7684\u4EE3\u7801\u5757", type: "button", cls: "mmc-code-detect" });
+    const codeInput = codeField.createEl("textarea", {
+      cls: "mmc-code-textarea",
+      attr: { id: codeInputId, spellcheck: "false", placeholder: "\u53EF\u76F4\u63A5\u7C98\u8D34\u4EE3\u7801\uFF0C\u6216\u7C98\u8D34 ```\u8BED\u8A00 ... ``` \u4EE3\u7801\u5757" }
+    });
+    codeInput.rows = 10;
     codeInput.value = (_c = (_b2 = this.block) == null ? void 0 : _b2.code) != null ? _c : "";
+    detect.addEventListener("click", () => {
+      const parsed = parseFencedCode(codeInput.value);
+      if (!parsed) {
+        new import_obsidian2.Notice("\u6CA1\u6709\u8BC6\u522B\u5230\u5B8C\u6574\u7684 ``` \u4EE3\u7801\u5757");
+        return;
+      }
+      setLanguage(parsed.language);
+      codeInput.value = parsed.code;
+      new import_obsidian2.Notice("\u5DF2\u8BC6\u522B\u8BED\u8A00\u5E76\u53BB\u9664\u56F4\u680F");
+    });
     const appearance = this.contentEl.createDiv({ cls: "mmc-code-appearance" });
     appearance.createEl("h3", { text: "\u663E\u793A\u8BBE\u7F6E" });
     appearance.createDiv({ cls: "setting-item-description", text: "\u8282\u70B9\u8BBE\u7F6E\u4F18\u5148\u4E8E\u9875\u9762\u201C\u4E3B\u9898\u4E0E\u5916\u89C2\u201D\uFF0C\u9875\u9762\u8BBE\u7F6E\u4F18\u5148\u4E8E\u63D2\u4EF6\u5168\u5C40\u8BBE\u7F6E\u3002" });
@@ -4878,17 +4895,6 @@ var CodeEditModal = class extends import_obsidian2.Modal {
       ["dracula", "Dracula"]
     ].forEach(([value, label]) => themeSelect.createEl("option", { value, text: label }));
     themeSelect.value = (_g = (_f = this.block) == null ? void 0 : _f.theme) != null ? _g : "";
-    const detect = this.contentEl.createEl("button", { text: "\u8BC6\u522B fenced code", type: "button" });
-    detect.addEventListener("click", () => {
-      const parsed = parseFencedCode(codeInput.value);
-      if (!parsed) {
-        new import_obsidian2.Notice("\u6CA1\u6709\u8BC6\u522B\u5230\u5B8C\u6574\u7684 ``` fenced code block");
-        return;
-      }
-      setLanguage(parsed.language);
-      codeInput.value = parsed.code;
-      new import_obsidian2.Notice("\u4EE3\u7801\u8BED\u8A00\u548C\u5185\u5BB9\u5DF2\u8BC6\u522B");
-    });
     const actions = this.contentEl.createDiv({ cls: "mmc-modal-actions" });
     const cancel = actions.createEl("button", { text: "\u53D6\u6D88", type: "button" });
     const save = actions.createEl("button", { text: "\u4FDD\u5B58\u4EE3\u7801", type: "button", cls: "mod-cta" });

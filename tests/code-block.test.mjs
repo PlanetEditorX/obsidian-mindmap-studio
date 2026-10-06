@@ -57,6 +57,19 @@ test("collapsed code blocks recompute branch positions from measured node height
   assert.match(editorSource, /const previousNodeRects = this\.captureMindMapNodeRects\(\);[\s\S]*playMindMapLayoutAnimation\(previousNodeRects\)/);
 });
 
+test("code modal keeps fenced-code detection inside the code field and still parses on save", async () => {
+  const styles = await readFile("styles.css", "utf8");
+  const codeModalSource = contentModalSource.match(/export class CodeEditModal[\s\S]*/)?.[0] ?? "";
+  assert.match(codeModalSource, /mmc-code-field-header[\s\S]{0,300}mmc-code-detect/);
+  assert.doesNotMatch(contentModalSource, /contentEl\.createEl\("button", \{ text: "识别 fenced code"/);
+  const saveHandler = codeModalSource.match(/save\.addEventListener\("click", \(\) => \{[\s\S]*?\n    \}\);/)?.[0] ?? "";
+  assert.match(saveHandler, /parseFencedCode\(code\)/);
+  assert.match(styles, /\.mmc-code-field-header\s*\{[^}]*justify-content:\s*space-between/s);
+  assert.match(styles, /\.mmc-code-detect\s*\{[^}]*font-size:\s*var\(--font-ui-smaller\)/s);
+  assert.match(codeModalSource, /codeInput\.rows = 10/);
+  assert.match(styles, /\.mmc-code-textarea\s*\{[^}]*max-height:\s*min\(35vh, 300px\)/s);
+});
+
 after(() => cleanup?.());
 
 class FakeClassList {

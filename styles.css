@@ -2064,11 +2064,48 @@ mjx-container.mms-node-math:not(.is-display),
   gap: 7px;
 }
 
+/* 代码内容字段：标题与“识别粘贴的代码块”同处一行，避免按钮孤立在弹窗中段。 */
+.mmc-code-field {
+  display: flex;
+  flex-direction: column;
+  margin-top: 12px;
+  gap: 7px;
+}
+
+.mmc-code-field-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.mmc-code-detect {
+  height: auto;
+  padding: 1px 8px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-s);
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+  line-height: 1.7;
+}
+
+.mmc-code-detect:hover {
+  color: var(--text-normal);
+  background: var(--background-modifier-hover);
+}
+
 .mmc-table-markdown,
 .mmc-code-textarea {
   resize: vertical;
   font-family: var(--font-monospace);
   line-height: 1.5;
+}
+
+/* 代码编辑弹窗需要“代码内容 + 显示设置 + 操作栏”同屏可见，因此限制输入框高度并保留手动拉高。 */
+.mmc-code-textarea {
+  max-height: min(35vh, 300px);
 }
 
 @media (max-width: 700px) {

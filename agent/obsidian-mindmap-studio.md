@@ -1,11 +1,24 @@
 # obsidian-mindmap-studio 项目交接
 
 - 插件：MindMap Studio（Obsidian 本地优先 .mindmap 导图，含导图/大纲/文章/通读模式、全局搜索、图床、AI 助手与桌面截图链路）。
-- 版本基线：线上已发布 v1.54.4（提交 `cc50ea3`）；本轮工作区（未提交）为同名图片自动重新识别，发布后应为 v1.54.5。
+- 版本基线：线上已发布 v1.54.6（提交 `f83e66c`）；本轮工作区（未提交）为代码编辑弹窗的围栏识别按钮整合，发布后应为 v1.54.7。
 - 仓库规则：见根目录 `AGENTS.md`；每轮代码交付三份 ZIP（源码 / 安装 / Agent 交接）共用同一六位后缀；验证入口 `npm run verify`。
 
-## 当前状态（本轮：同名图片自动重新识别 + 显示兜底）
+## 当前状态（本轮：代码编辑弹窗的围栏识别按钮整合）
 
+- 用户反馈（附截图）：「插入或编辑代码」弹窗里的「识别 fenced code」按钮“和其它部分像是不一致，太突兀”，并询问 fenced code 是什么。
+- 该按钮的用途：把用户整体粘贴进来的 ```` ```语言 … ``` ```` 围栏文本拆成「代码语言 + 代码内容」两段（`parseFencedCode()` 取语言并去掉围栏）。它只是**即时反馈**——保存时 `CodeEditModal` 本来就会调用同一个 `parseFencedCode()`，所以不点它也不会把 ``` 写进代码内容。
+- 突兀的根因：按钮此前用 `this.contentEl.createEl("button", …)` 直接挂在弹窗中段、「显示设置」卡片下方，既不属于任何字段行，也没有类名，沿用 Obsidian 默认按钮的描边与尺寸，与上方卡片、下方 `.mmc-modal-actions` 操作栏风格割裂。
+- 修复（`src/editor/content-modals.ts`）：「代码内容」字段改为 `.mmc-code-field` 包裹（标题行 `.mmc-code-field-header` + textarea）；识别按钮改名为「识别粘贴的代码块」并以 `mmc-code-detect` 并入标题行右侧；标题 `<label>` 用 `newId()` 生成的 id + `for` 关联 textarea，保留点击标题聚焦输入框的行为。
+- 样式（`styles.css`）：新增 `.mmc-code-field`（与 `.mmc-code-modal > label` 同间距的纵向布局）、`.mmc-code-field-header`（两端对齐）、`.mmc-code-detect`（小字号 `--font-ui-smaller`、透明底、`--background-modifier-border` 描边、`--text-muted` 文字，hover 用 `--background-modifier-hover`），按钮不再使用默认按钮外观。
+- 文案：输入框占位符与失败提示里的 “fenced code block” 改为「代码块」，成功提示改为「已识别语言并去除围栏」。
+- 高度（同一轮的第二条反馈）：输入框默认高度由 `rows = 18` 降为 `rows = 10`，并在 `styles.css` 为 `.mmc-code-textarea` 增加 `max-height: min(35vh, 300px)`，让标题、两个字段、“显示设置”卡片与「取消 / 保存代码」在常见窗口高度下同屏可见、不必下滑；`resize: vertical` 保留，拖拽结果同样受 `max-height` 约束，界面缩放/字体放大时不会重新撑出滚动。
+- 测试：`tests/code-block.test.mjs` 新增 1 条契约（识别按钮位于 `.mmc-code-field-header` 内、旧的独立按钮不再存在、`保存代码` 仍会 `parseFencedCode(code)`、CSS 保留两端对齐与小字号次要按钮样式、输入框为 10 行且带 `min(35vh, 300px)` 上限）。
+- 文档：`docs/CODE_BLOCK_RENDERING.zh-CN.md` 新增第 12 节说明入口用途、整合原因与“一屏完成编辑”的高度约束，并在第 10/11 节补充断言与手动验收项；`CHANGELOG.md`「未发布」新增条目。
+- 验证：`npm run verify` 通过（单元 459 条、文档 1319 处声明、仓库检查、生产构建）。
+- 待手工验证：真实 Obsidian 桌面端打开「插入或编辑代码」弹窗，确认“显示设置”与「取消 / 保存代码」无需下滑即可看到、识别按钮位于“代码内容”标题行右侧且风格与卡片/操作栏一致；粘贴完整 ``` 代码块后点它应填入语言并去掉围栏，不点直接保存也应得到同样结果；输入框仍可向下拖高。
+
+- 上一轮（1.54.5，已发布 `1cf6531`；本地图片换成同名其它格式后自动重新识别引用 + 显示兜底）
 - 用户需求：同一张本地图片被转成其它格式（png → svg、png → jpg 等）并覆盖原文件后，导图里的旧引用断链，希望不必逐张手动替换；确认方案为「自动兜底 + 自动写回 + 设置开关（默认开启）」，匹配范围「同目录优先，其次全库」。
 - 新增纯逻辑 `src/core/image-relink.ts`：`IMAGE_RELINK_EXTENSIONS`（svg 优先，其后 png/jpg/jpeg/webp/gif/bmp/avif/ico）、`localImageReferenceTarget()`（解析裸路径，支持 `![[图.png|别名]]` 与 `#锚点`，远程 http/data/blob 返回 null）、`findImageRelinkTarget()`（主干忽略大小写相同、扩展名必须不同、同目录优先其次全库、同层按扩展名优先级）、`relinkImageBlock()`（改写 `source`/`localSource`/图片级 `sourcePriority` 中的本地引用，远程镜像与 `contentHash` 不变；同一主干一次调用只解析一次）、`relinkDocumentImages()`（遍历整档，经 `replaceNodeContentBlocks()` 写回）。
 - 显示兜底（`src/view.ts` `resolveImage()`）：原路径解析失败时先按重新识别到的文件渲染，图片立即可见；覆盖只读、未保存与打开期间才被替换的场景。
@@ -80,11 +93,12 @@
 
 ## 验证基线
 
-- `npm run verify` 本机完整通过：`test:unit` 450/450（1.54.1 新增 4 条：`tests/latex.test.mjs` 3 条断行、`tests/question.test.mjs` 1 条方框/换行契约；1.54.2 该契约改为断言解除夹取的测量路径；本轮断行期望改为「首个顶层 `=` 留在首行、少于两个顶层 `=` 返回 `null`」，用例条数不变）、`test:regression` 全部通过、`test:docs` 全部通过（1303 处命名声明）、`test:repo` 通过、`tsc --noEmit` 与 production esbuild 通过。
+- `npm run verify` 本机完整通过：`test:unit` 459/459（本轮工作区新增 1 条 `tests/code-block.test.mjs` 的「识别入口并入代码内容字段 + 保存仍剥离围栏」契约；1.54.5 新增 8 条 `tests/image-relink.test.mjs`；此前 1.54.1~1.54.4 的 latex/question 契约保持通过）、`test:regression` 全部通过、`test:docs` 全部通过（1319 处命名声明）、`test:repo` 通过、`tsc --noEmit` 与 production esbuild 通过。
 - 详细数据见根目录 `TEST_RESULTS.md`。
 
 ## 待验证事项（需真实 Obsidian 桌面端手工冒烟）
 
+- **代码编辑弹窗按钮整合（本轮新增，待实测）**：打开导图 → 节点右键「+ 代码」→ 在弹窗里粘贴一段完整围栏代码块（```` ```python … ``` ````）→ 点“代码内容”标题右侧的「识别粘贴的代码块」，语言应切到 Python、正文去掉围栏；不点它直接「保存代码」也应得到同样结果。视觉上按钮应是标题行右侧的小号描边次要按钮，不再单独悬挂在“显示设置”卡片下方，与卡片和底部「取消 / 保存代码」风格一致；点击“代码内容”标题仍应把光标聚焦到输入框。
 - **长公式自动换行（1.54.1 引入、1.54.2 修复测量、1.54.3 调整断行与对齐，待实测）**：文章/通读/大纲/题目预览中插入一条明显超过正文宽度的行内公式（如 `$R = 5.25\%,\ R \times (1-R) = 5.25\% \times (1-5.25\%) = 5.25\% - 5.25\% \times 5.25\% = 5\%$`），应自动断成按等号对齐的多行、不再把页面顶宽，且**首行必须保留第一个 `=` 并与后续 `=` 竖直对齐**（`R = 5.25\%, R × (1−R)` 首行，之后各行以对齐后的 `=` 开头，不应出现“首行结束后右侧一大段空档再排 `=`”）；只含一个顶层 `=` 的公式（如 `$a = b$`）保持单行不换行。同一条公式放在导图节点里应保持单行（节点宽度自适应内容）；已渲染的公式在窗口变窄后不会自动重排（判定只发生在重新渲染时），刷新或切换模式后生效。若仍不换行，请提供公式所在位置（文章正文/导图节点/题目预览）与是否含 `\left`/`\right`、`\begin{}` 等不可断行结构。
 - **公式编辑器「方框」（本轮新增，待实测）**：编辑节点内容 →「+ 公式」→ 输入公式后点「方框」，源码应变为 `\boxed{公式}` 且预览出现方框；先选中部分源码再点「方框」只包住选区；源码为空时点「方框」得到 `\boxed{}` 且光标停在花括号内。`\boxed` 依赖 Obsidian 自带 MathJax 的 ams 包，若预览提示“公式语法暂时无法渲染”请回报。
 
@@ -118,7 +132,7 @@
 
 ## 交付说明
 
-- 三份 ZIP 均输出到 `D:\Downloads`（仓库工作区外），外部文件名：`obsidian-mindmap-studio-<版本>-<后缀>.zip`、`mindmap-studio-<版本>-test-<后缀>.zip`、`Agent-<版本>-handoff-<后缀>.zip`（内部根目录 `Agent/`）。本机 `D:\Downloads` 拒绝写入（OS 权限），本轮实际生成在 `%TEMP%\mms-delivery-<后缀>\`，需自行移动。
-- 最近交付包（后缀 026498，交付追踪版本 1.54.4）：`obsidian-mindmap-studio-1.54.4-026498.zip`、`mindmap-studio-1.54.4-test-026498.zip`、`Agent-1.54.4-handoff-026498.zip`；实际发布版本以 GitHub Release 为准。
+- 三份 ZIP 均输出到 `D:\Downloads`（仓库工作区外），外部文件名：`obsidian-mindmap-studio-<版本>-<后缀>.zip`、`mindmap-studio-<版本>-test-<后缀>.zip`、`Agent-<版本>-handoff-<后缀>.zip`（内部根目录 `Agent/`）。`D:\Downloads` 在沙箱内写入会被拒绝，需以非沙箱方式运行打包脚本；打包后必须确认仓库工作区内没有任何 `.zip`。
+- 最近交付包（后缀 201597，交付追踪版本 1.54.7）：`obsidian-mindmap-studio-1.54.7-201597.zip`（根目录 `obsidian-mindmap-studio/`）、`mindmap-studio-1.54.7-test-201597.zip`（根目录 `mindmap-studio/`）、`Agent-1.54.7-handoff-201597.zip`（根目录 `Agent/`）；实际发布版本以 GitHub Release 为准。
 - 历史交付包记录已清理；历史版本以 GitHub Release 发布为准，本地交付 ZIP 见 `D:\Downloads`。
 - 交付约束：沟通说明与中文 Git 提交说明中**不得**再写“- main.js 已重建。”这条；main.js 由 `npm run verify` 的 build 自动重建，交付时不要单独列出。
