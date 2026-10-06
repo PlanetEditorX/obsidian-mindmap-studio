@@ -345,4 +345,9 @@ test("management section leads with category order and ends with the destructive
   const bundleCategoryOrder = bundleReadableSource.indexOf("设置分类排序", bundleManage);
   const bundleResetAll = bundleReadableSource.indexOf("恢复初始配置", bundleManage);
   assert.ok(bundleManage >= 0 && bundleCategoryOrder > bundleManage && bundleCategoryOrder < bundleResetAll);
+
+  // 折叠行必须缩进到与同组 setting-item 的文字列同一列，不能贴齐分组标题。
+  assert.match(stylesSource, /\.mms-settings-category-order > summary \{[\s\S]*?padding: 10px 16px/);
+  assert.match(stylesSource, /\.mms-settings-category-order > :not\(summary\) \{[\s\S]*?margin-left: 16px[\s\S]*?margin-right: 16px/);
+  assert.match(stylesSource, /\.mms-settings-category-order > \.setting-item-description \{[\s\S]*?margin: 0 16px 6px/);
 });

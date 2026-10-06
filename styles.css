@@ -5572,14 +5572,20 @@ mjx-container.mms-node-math:not(.is-display),
 }
 
 .mms-settings-category-order > summary {
-  padding: 10px 0;
+  padding: 10px 16px;
   color: var(--text-normal);
   cursor: pointer;
   font-weight: 600;
 }
 
+/* 折叠行与展开内容一起缩进，与同组 setting-item 的文字列对齐，而不是贴齐分组标题那一列。 */
+.mms-settings-category-order > :not(summary) {
+  margin-left: 16px;
+  margin-right: 16px;
+}
+
 .mms-settings-category-order > .setting-item-description {
-  margin: 0 0 6px;
+  margin: 0 16px 6px;
 }
 
 .mms-ai-profile-title {
