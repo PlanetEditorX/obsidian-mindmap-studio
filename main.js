@@ -3628,6 +3628,18 @@ var MindMapStudioSettingTab = class extends import_obsidian.PluginSettingTab {
       }
     }));
     containerEl.createEl("h3", { text: "\u7BA1\u7406\u914D\u7F6E" });
+    const categoryOrder = containerEl.createEl("details", { cls: "mms-settings-category-order" });
+    categoryOrder.createEl("summary", { text: "\u8BBE\u7F6E\u5206\u7C7B\u6392\u5E8F" });
+    categoryOrder.createEl("p", {
+      cls: "setting-item-description",
+      text: "\u4F7F\u7528\u4E0A\u4E0B\u7BAD\u5934\u8C03\u6574\u5404\u8BBE\u7F6E\u5206\u7C7B\u7684\u4F4D\u7F6E\uFF1B\u7BA1\u7406\u914D\u7F6E\u56FA\u5B9A\u663E\u793A\u5728\u6700\u540E\u3002"
+    });
+    new import_obsidian.Setting(categoryOrder).setName("\u6062\u590D\u9ED8\u8BA4\u987A\u5E8F").setDesc("\u6062\u590D\u63A8\u8350\u7684\u8BBE\u7F6E\u5206\u7C7B\u987A\u5E8F\u3002").addButton((button) => button.setButtonText("\u6062\u590D\u9ED8\u8BA4\u987A\u5E8F").onClick(async () => {
+      this.plugin.settings.settingsSectionOrder = [...SETTINGS_SECTION_TITLES];
+      await this.plugin.saveSettings();
+      this.display();
+    }));
+    this.addSettingsSectionOrderControls(categoryOrder);
     new import_obsidian.Setting(containerEl).setName("\u8C03\u8BD5\u6A21\u5F0F").setDesc("\u5F00\u542F\u540E\u4ECE\u63D2\u4EF6\u542F\u52A8\u6216\u672C\u6B21\u542F\u7528\u5F00\u59CB\uFF0C\u5728\u5185\u5B58\u4E2D\u8BB0\u5F55\u64CD\u4F5C\u3001\u5BFC\u822A\u76EE\u6807\u3001\u6587\u7AE0\u7A97\u53E3\u3001\u6EDA\u52A8\u5B9A\u4F4D\u548C\u5F02\u5E38\u3002\u4E0D\u4F1A\u8BB0\u5F55\u6587\u7AE0\u6B63\u6587\uFF1B\u91CD\u542F\u540E\u6E05\u7A7A\u3002\u53EF\u5728\u547D\u4EE4\u9762\u677F\u6267\u884C\u201C\u590D\u5236 MindMap Studio \u8C03\u8BD5\u8BB0\u5F55\u201D\u3002").addToggle((toggle) => toggle.setValue(this.plugin.settings.debugMode).onChange(async (value) => {
       await this.plugin.setDebugMode(value);
       new import_obsidian.Notice(value ? "\u8C03\u8BD5\u6A21\u5F0F\u5DF2\u5F00\u542F\uFF0C\u5F00\u59CB\u8BB0\u5F55\u672C\u6B21\u4F1A\u8BDD" : "\u8C03\u8BD5\u6A21\u5F0F\u5DF2\u5173\u95ED");
@@ -3647,18 +3659,6 @@ var MindMapStudioSettingTab = class extends import_obsidian.PluginSettingTab {
         button.setButtonText("\u68C0\u67E5\u66F4\u65B0");
       }
     }));
-    const categoryOrder = containerEl.createEl("details", { cls: "mms-settings-category-order" });
-    categoryOrder.createEl("summary", { text: "\u8BBE\u7F6E\u5206\u7C7B\u6392\u5E8F" });
-    categoryOrder.createEl("p", {
-      cls: "setting-item-description",
-      text: "\u4F7F\u7528\u4E0A\u4E0B\u7BAD\u5934\u8C03\u6574\u5404\u8BBE\u7F6E\u5206\u7C7B\u7684\u4F4D\u7F6E\uFF1B\u7BA1\u7406\u914D\u7F6E\u56FA\u5B9A\u663E\u793A\u5728\u6700\u540E\u3002"
-    });
-    new import_obsidian.Setting(categoryOrder).setName("\u6062\u590D\u9ED8\u8BA4\u987A\u5E8F").setDesc("\u6062\u590D\u63A8\u8350\u7684\u8BBE\u7F6E\u5206\u7C7B\u987A\u5E8F\u3002").addButton((button) => button.setButtonText("\u6062\u590D\u9ED8\u8BA4\u987A\u5E8F").onClick(async () => {
-      this.plugin.settings.settingsSectionOrder = [...SETTINGS_SECTION_TITLES];
-      await this.plugin.saveSettings();
-      this.display();
-    }));
-    this.addSettingsSectionOrderControls(categoryOrder);
     new import_obsidian.Setting(containerEl).setName("\u6062\u590D\u521D\u59CB\u914D\u7F6E").setDesc("\u6062\u590D\u663E\u793A\u6A21\u5F0F\u3001\u4E3B\u9898\u3001\u8D44\u6E90\u76EE\u5F55\u3001\u56FE\u5E8A\u3001\u641C\u7D22\u548C\u7F16\u8F91\u9009\u9879\u3002\u4E0D\u4F1A\u5220\u9664\u6216\u4FEE\u6539\u4EFB\u4F55 .mindmap \u6587\u4EF6\u3002").addButton((button) => button.setWarning().setButtonText("\u6062\u590D\u521D\u59CB\u914D\u7F6E").onClick(async () => {
       const confirmed = window.confirm("\u786E\u5B9A\u6062\u590D MindMap Studio \u7684\u5168\u90E8\u63D2\u4EF6\u8BBE\u7F6E\u5417\uFF1F\u8111\u56FE\u6587\u4EF6\u4E0D\u4F1A\u88AB\u5220\u9664\u3002");
       if (!confirmed) return;

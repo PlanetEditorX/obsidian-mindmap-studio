@@ -1,7 +1,7 @@
 # obsidian-mindmap-studio 项目交接
 
 - 插件：MindMap Studio（Obsidian 本地优先 .mindmap 导图，含导图/大纲/文章/通读模式、全局搜索、图床、AI 助手与桌面截图链路）。
-- 版本基线：线上已发布 v1.54.6（提交 `f83e66c`）；本轮工作区（未提交）为代码编辑弹窗的围栏识别按钮整合，发布后应为 v1.54.7。
+- 版本基线：线上已发布 v1.54.6（提交 `f83e66c`）；本轮工作区（未提交）包含代码编辑弹窗的围栏识别入口整合、输入框高度压缩，以及「管理配置 → 设置分类排序」上移，发布后应为 v1.54.7。
 - 仓库规则：见根目录 `AGENTS.md`；每轮代码交付三份 ZIP（源码 / 安装 / Agent 交接）共用同一六位后缀；验证入口 `npm run verify`。
 
 ## 当前状态（本轮：代码编辑弹窗的围栏识别按钮整合）
@@ -13,10 +13,11 @@
 - 样式（`styles.css`）：新增 `.mmc-code-field`（与 `.mmc-code-modal > label` 同间距的纵向布局）、`.mmc-code-field-header`（两端对齐）、`.mmc-code-detect`（小字号 `--font-ui-smaller`、透明底、`--background-modifier-border` 描边、`--text-muted` 文字，hover 用 `--background-modifier-hover`），按钮不再使用默认按钮外观。
 - 文案：输入框占位符与失败提示里的 “fenced code block” 改为「代码块」，成功提示改为「已识别语言并去除围栏」。
 - 高度（同一轮的第二条反馈）：输入框默认高度由 `rows = 18` 降为 `rows = 10`，并在 `styles.css` 为 `.mmc-code-textarea` 增加 `max-height: min(35vh, 300px)`，让标题、两个字段、“显示设置”卡片与「取消 / 保存代码」在常见窗口高度下同屏可见、不必下滑；`resize: vertical` 保留，拖拽结果同样受 `max-height` 约束，界面缩放/字体放大时不会重新撑出滚动。
-- 测试：`tests/code-block.test.mjs` 新增 1 条契约（识别按钮位于 `.mmc-code-field-header` 内、旧的独立按钮不再存在、`保存代码` 仍会 `parseFencedCode(code)`、CSS 保留两端对齐与小字号次要按钮样式、输入框为 10 行且带 `min(35vh, 300px)` 上限）。
-- 文档：`docs/CODE_BLOCK_RENDERING.zh-CN.md` 新增第 12 节说明入口用途、整合原因与“一屏完成编辑”的高度约束，并在第 10/11 节补充断言与手动验收项；`CHANGELOG.md`「未发布」新增条目。
-- 验证：`npm run verify` 通过（单元 459 条、文档 1319 处声明、仓库检查、生产构建）。
-- 待手工验证：真实 Obsidian 桌面端打开「插入或编辑代码」弹窗，确认“显示设置”与「取消 / 保存代码」无需下滑即可看到、识别按钮位于“代码内容”标题行右侧且风格与卡片/操作栏一致；粘贴完整 ``` 代码块后点它应填入语言并去掉围栏，不点直接保存也应得到同样结果；输入框仍可向下拖高。
+- 设置分组（同一轮第三条反馈，已确认方案）：把「管理配置 → 设置分类排序」上移为分组第一项，顺序变为 设置分类排序 → 调试模式 → 导出配置 → 导入配置 → 检查插件更新 → 恢复初始配置。理由：它只调整界面分类顺序，属于偏好类入口；带警告样式的破坏性操作「恢复初始配置」恢复为真正的分组末项，不再被可展开面板隔断。实现只是把 `categoryOrder` 这段 `<details>` 移到 h3 之后（`src/settings.ts`）。
+- 测试：`tests/code-block.test.mjs` 新增 1 条契约（识别按钮位于 `.mmc-code-field-header` 内、旧的独立按钮不再存在、`保存代码` 仍会 `parseFencedCode(code)`、CSS 保留两端对齐与小字号次要按钮样式、输入框为 10 行且带 `min(35vh, 300px)` 上限）；`tests/settings-layout.test.mjs` 新增 1 条契约锁定「管理配置」顺序（设置分类排序最先、恢复初始配置最后，并校验构建产物一致）。
+- 文档：`docs/CODE_BLOCK_RENDERING.zh-CN.md` 新增第 12 节说明入口用途、整合原因与“一屏完成编辑”的高度约束，并在第 10/11 节补充断言与手动验收项；`CHANGELOG.md`「未发布」新增两条条目。
+- 验证：`npm run verify` 通过（单元 460 条、文档 1319 处声明、仓库检查、生产构建）。
+- 待手工验证：(1) 真实 Obsidian 桌面端打开「插入或编辑代码」弹窗，确认“显示设置”与「取消 / 保存代码」无需下滑即可看到、识别按钮位于“代码内容”标题行右侧且风格与卡片/操作栏一致；粘贴完整 ``` 代码块后点它应填入语言并去掉围栏，不点直接保存也应得到同样结果；输入框仍可向下拖高。(2) 打开插件设置，「管理配置」中「设置分类排序」应位于分组最上方，展开后调整顺序、点「恢复默认顺序」均正常，「恢复初始配置」仍在最下方。
 
 - 上一轮（1.54.5，已发布 `1cf6531`；本地图片换成同名其它格式后自动重新识别引用 + 显示兜底）
 - 用户需求：同一张本地图片被转成其它格式（png → svg、png → jpg 等）并覆盖原文件后，导图里的旧引用断链，希望不必逐张手动替换；确认方案为「自动兜底 + 自动写回 + 设置开关（默认开启）」，匹配范围「同目录优先，其次全库」。
@@ -133,6 +134,6 @@
 ## 交付说明
 
 - 三份 ZIP 均输出到 `D:\Downloads`（仓库工作区外），外部文件名：`obsidian-mindmap-studio-<版本>-<后缀>.zip`、`mindmap-studio-<版本>-test-<后缀>.zip`、`Agent-<版本>-handoff-<后缀>.zip`（内部根目录 `Agent/`）。`D:\Downloads` 在沙箱内写入会被拒绝，需以非沙箱方式运行打包脚本；打包后必须确认仓库工作区内没有任何 `.zip`。
-- 最近交付包（后缀 201597，交付追踪版本 1.54.7）：`obsidian-mindmap-studio-1.54.7-201597.zip`（根目录 `obsidian-mindmap-studio/`）、`mindmap-studio-1.54.7-test-201597.zip`（根目录 `mindmap-studio/`）、`Agent-1.54.7-handoff-201597.zip`（根目录 `Agent/`）；实际发布版本以 GitHub Release 为准。
+- 最近交付包（后缀 938399，交付追踪版本 1.54.7）：`obsidian-mindmap-studio-1.54.7-938399.zip`（根目录 `obsidian-mindmap-studio/`）、`mindmap-studio-1.54.7-test-938399.zip`（根目录 `mindmap-studio/`）、`Agent-1.54.7-handoff-938399.zip`（根目录 `Agent/`）；实际发布版本以 GitHub Release 为准。
 - 历史交付包记录已清理；历史版本以 GitHub Release 发布为准，本地交付 ZIP 见 `D:\Downloads`。
 - 交付约束：沟通说明与中文 Git 提交说明中**不得**再写“- main.js 已重建。”这条；main.js 由 `npm run verify` 的 build 自动重建，交付时不要单独列出。

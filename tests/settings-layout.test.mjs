@@ -323,3 +323,26 @@ test("article context progress is opt-in and grouped with view and reading setti
   assert.match(mainSource, /showArticleContextProgress: raw\.showArticleContextProgress === true/);
   assert.match(editorSource, /this\.options\.showArticleContextProgress === true[\s\S]*currentMode === "article"[\s\S]*currentMode === "reading"/);
 });
+
+test("management section leads with category order and ends with the destructive reset", () => {
+  const manageSection = settingsSource.indexOf('containerEl.createEl("h3", { text: "管理配置" })');
+  const categoryOrder = settingsSource.indexOf('cls: "mms-settings-category-order"', manageSection);
+  const debugMode = settingsSource.indexOf('.setName("调试模式")', manageSection);
+  const exportSettings = settingsSource.indexOf('.setName("导出配置")', manageSection);
+  const importSettings = settingsSource.indexOf('.setName("导入配置")', manageSection);
+  const updateCheck = settingsSource.indexOf('.setName("检查插件更新")', manageSection);
+  const resetAll = settingsSource.indexOf('.setName("恢复初始配置")', manageSection);
+
+  assert.ok(manageSection >= 0);
+  assert.ok(manageSection < categoryOrder);
+  assert.ok(categoryOrder < debugMode);
+  assert.ok(debugMode < exportSettings);
+  assert.ok(exportSettings < importSettings);
+  assert.ok(importSettings < updateCheck);
+  assert.ok(updateCheck < resetAll);
+
+  const bundleManage = bundleReadableSource.indexOf('text: "管理配置"');
+  const bundleCategoryOrder = bundleReadableSource.indexOf("设置分类排序", bundleManage);
+  const bundleResetAll = bundleReadableSource.indexOf("恢复初始配置", bundleManage);
+  assert.ok(bundleManage >= 0 && bundleCategoryOrder > bundleManage && bundleCategoryOrder < bundleResetAll);
+});

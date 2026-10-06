@@ -2429,6 +2429,23 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
         }));
 
     containerEl.createEl("h3", { text: "管理配置" });
+    const categoryOrder = containerEl.createEl("details", { cls: "mms-settings-category-order" });
+    categoryOrder.createEl("summary", { text: "设置分类排序" });
+    categoryOrder.createEl("p", {
+      cls: "setting-item-description",
+      text: "使用上下箭头调整各设置分类的位置；管理配置固定显示在最后。"
+    });
+    new Setting(categoryOrder)
+      .setName("恢复默认顺序")
+      .setDesc("恢复推荐的设置分类顺序。")
+      .addButton((button) => button
+        .setButtonText("恢复默认顺序")
+        .onClick(async () => {
+          this.plugin.settings.settingsSectionOrder = [...SETTINGS_SECTION_TITLES];
+          await this.plugin.saveSettings();
+          this.display();
+        }));
+    this.addSettingsSectionOrderControls(categoryOrder);
     new Setting(containerEl)
       .setName("调试模式")
       .setDesc("开启后从插件启动或本次启用开始，在内存中记录操作、导航目标、文章窗口、滚动定位和异常。不会记录文章正文；重启后清空。可在命令面板执行“复制 MindMap Studio 调试记录”。")
@@ -2468,23 +2485,6 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
             button.setButtonText("检查更新");
           }
         }));
-    const categoryOrder = containerEl.createEl("details", { cls: "mms-settings-category-order" });
-    categoryOrder.createEl("summary", { text: "设置分类排序" });
-    categoryOrder.createEl("p", {
-      cls: "setting-item-description",
-      text: "使用上下箭头调整各设置分类的位置；管理配置固定显示在最后。"
-    });
-    new Setting(categoryOrder)
-      .setName("恢复默认顺序")
-      .setDesc("恢复推荐的设置分类顺序。")
-      .addButton((button) => button
-        .setButtonText("恢复默认顺序")
-        .onClick(async () => {
-          this.plugin.settings.settingsSectionOrder = [...SETTINGS_SECTION_TITLES];
-          await this.plugin.saveSettings();
-          this.display();
-        }));
-    this.addSettingsSectionOrderControls(categoryOrder);
     new Setting(containerEl)
       .setName("恢复初始配置")
       .setDesc("恢复显示模式、主题、资源目录、图床、搜索和编辑选项。不会删除或修改任何 .mindmap 文件。")
