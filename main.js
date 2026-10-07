@@ -4530,6 +4530,7 @@ var CODE_THEME_CLASS_NAMES = {
   monokai: "mms-code-theme-monokai",
   dracula: "mms-code-theme-dracula"
 };
+var SYNTAX_HIGHLIGHT_MAX_LINES = 2e3;
 function normalizeCodeLineThreshold(value) {
   return Math.max(0, Math.min(1e3, Math.floor(value || 0)));
 }
@@ -4591,32 +4592,42 @@ function installCodeLineNumberLayout(pre, code, lineCount) {
   pre.insertBefore(gutter, code);
 }
 async function renderCodeBlock(options) {
-  var _a2;
   const presentation = resolveCodeBlockPresentation(options.block, options.pageAppearance, options.defaults);
   options.container.replaceChildren();
   options.container.classList.add("mms-code-render-root");
   options.container.classList.remove(...Object.values(CODE_THEME_CLASS_NAMES));
   const themeClass = presentation.theme === "obsidian" ? void 0 : CODE_THEME_CLASS_NAMES[presentation.theme];
   if (themeClass) options.container.classList.add(themeClass);
-  let target = options.container;
-  if (presentation.collapsed) {
-    const details = options.container.ownerDocument.createElement("details");
-    details.className = "mms-code-collapsed";
-    const summary = options.container.ownerDocument.createElement("summary");
-    summary.textContent = `\u5C55\u5F00 ${options.block.language || "code"} \u4EE3\u7801`;
-    details.appendChild(summary);
-    target = options.container.ownerDocument.createElement("div");
-    target.className = "mms-code-collapsed-content";
-    details.appendChild(target);
-    options.container.appendChild(details);
+  const renderInto = async (target2) => {
+    var _a2;
+    const source = presentation.lineCount > SYNTAX_HIGHLIGHT_MAX_LINES ? { ...options.block, language: void 0 } : options.block;
+    await options.renderMarkdown(buildFencedCodeMarkdown(source), target2);
+    const pre = target2.querySelector("pre");
+    const code = (_a2 = pre == null ? void 0 : pre.querySelector(":scope > code")) != null ? _a2 : null;
+    if (!pre || !code) return;
+    pre.classList.add("mms-code-frame");
+    pre.dataset.lineCount = String(presentation.lineCount);
+    if (presentation.showLineNumbers) installCodeLineNumberLayout(pre, code, presentation.lineCount);
+  };
+  if (!presentation.collapsed) {
+    await renderInto(options.container);
+    return;
   }
-  await options.renderMarkdown(buildFencedCodeMarkdown(options.block), target);
-  const pre = target.querySelector("pre");
-  const code = (_a2 = pre == null ? void 0 : pre.querySelector(":scope > code")) != null ? _a2 : null;
-  if (!pre || !code) return;
-  pre.classList.add("mms-code-frame");
-  pre.dataset.lineCount = String(presentation.lineCount);
-  if (presentation.showLineNumbers) installCodeLineNumberLayout(pre, code, presentation.lineCount);
+  const details = options.container.ownerDocument.createElement("details");
+  details.className = "mms-code-collapsed";
+  const summary = options.container.ownerDocument.createElement("summary");
+  summary.textContent = `\u5C55\u5F00 ${options.block.language || "code"} \u4EE3\u7801`;
+  details.appendChild(summary);
+  const target = options.container.ownerDocument.createElement("div");
+  target.className = "mms-code-collapsed-content";
+  details.appendChild(target);
+  options.container.appendChild(details);
+  let requested = false;
+  details.addEventListener("toggle", () => {
+    if (requested || details.open === false) return;
+    requested = true;
+    void renderInto(target);
+  });
 }
 
 // src/editor/content-modals.ts
@@ -21394,7 +21405,9 @@ var MindMapStudioView = class extends import_obsidian17.TextFileView {
         },
         onRenderCode: (block, container) => {
           var _a3;
-          return renderCodeBlock({
+          const startedAt = performance.now();
+          const lines = countCodeLines(block.code);
+          return Promise.resolve(renderCodeBlock({
             block,
             container,
             pageAppearance: (_a3 = this.document) == null ? void 0 : _a3.appearance,
@@ -21409,6 +21422,8 @@ var MindMapStudioView = class extends import_obsidian17.TextFileView {
               var _a4, _b3;
               return import_obsidian17.MarkdownRenderer.render(this.app, markdown, target, (_b3 = (_a4 = this.file) == null ? void 0 : _a4.path) != null ? _b3 : "", this);
             }
+          })).then(() => {
+            this.plugin.logDebug("render", "code-block-render", { lines, elapsedMs: Math.round(performance.now() - startedAt) });
           });
         },
         onDebugLog: (scope, event, details) => {

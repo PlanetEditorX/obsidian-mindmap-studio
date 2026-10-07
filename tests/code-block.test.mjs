@@ -97,6 +97,18 @@ class FakeElement {
     this.textContent = "";
     this.computedStyle = {};
     this.dataset = {};
+    this.listeners = new Map();
+    this.open = false;
+  }
+
+  addEventListener(type, handler) {
+    const handlers = this.listeners.get(type) ?? [];
+    handlers.push(handler);
+    this.listeners.set(type, handlers);
+  }
+
+  dispatch(type) {
+    for (const handler of this.listeners.get(type) ?? []) handler({ type, target: this });
   }
 
   set className(value) {
@@ -296,6 +308,87 @@ test("shared renderer clears stale themes and augments Markdown-highlighted DOM"
   assert.equal(container.querySelector("pre").children.length, 1);
 });
 
+test("collapsed code blocks defer markdown highlight until the first expand", async () => {
+  const ownerDocument = createFakeDocument();
+  const container = new FakeElement("div", ownerDocument);
+  let renderCalls = 0;
+  let renderedMarkdown = "";
+  const renderMarkdown = (markdown, target) => {
+    renderCalls += 1;
+    renderedMarkdown = markdown;
+    const pre = new FakeElement("pre", ownerDocument);
+    const code = new FakeElement("code", ownerDocument);
+    pre.appendChild(code);
+    target.appendChild(pre);
+  };
+  const defaults = {
+    collapsed: true,
+    showLineNumbers: true,
+    theme: "obsidian",
+    autoExpandMaxLines: 0,
+    autoLineNumbersMinLines: 0
+  };
+  const code = Array.from({ length: 9000 }, (_, index) => `const line${index} = ${index};`).join("\n");
+
+  await codeBlock.renderCodeBlock({
+    block: { language: "js", code },
+    container,
+    defaults,
+    renderMarkdown
+  });
+
+  const details = container.children[0];
+  assert.equal(details.tagName, "DETAILS");
+  assert.equal(details.classList.contains("mms-code-collapsed"), true);
+  assert.equal(renderCalls, 0, "折叠状态不得执行 Markdown 解析与语法高亮");
+  assert.equal(container.querySelector("pre"), null);
+
+  details.open = true;
+  details.dispatch("toggle");
+  assert.equal(renderCalls, 1, "首次展开才渲染代码内容");
+  assert.match(renderedMarkdown, /^```\n/, "超过高亮上限的代码块必须去掉语言围栏以跳过词法分析");
+  details.dispatch("toggle");
+  assert.equal(renderCalls, 1, "重复展开与折叠不得重复渲染");
+
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  const pre = container.querySelector("pre");
+  assert.equal(pre.classList.contains("mms-code-frame"), true);
+  assert.equal(pre.dataset.lineCount, "9000");
+  assert.equal(pre.children[0].classList.contains("mms-code-line-numbers"), true);
+});
+
+test("small collapsed code blocks stay lazy and keep their language fence after expand", async () => {
+  const ownerDocument = createFakeDocument();
+  const container = new FakeElement("div", ownerDocument);
+  let renderedMarkdown = "";
+  const renderMarkdown = (markdown, target) => {
+    renderedMarkdown = markdown;
+    const pre = new FakeElement("pre", ownerDocument);
+    pre.appendChild(new FakeElement("code", ownerDocument));
+    target.appendChild(pre);
+  };
+  const defaults = {
+    collapsed: true,
+    showLineNumbers: false,
+    theme: "obsidian",
+    autoExpandMaxLines: 0,
+    autoLineNumbersMinLines: 0
+  };
+
+  await codeBlock.renderCodeBlock({
+    block: { language: "ts", code: "const a = 1;\nconst b = 2;" },
+    container,
+    defaults,
+    renderMarkdown
+  });
+  assert.equal(renderedMarkdown, "");
+
+  const details = container.children[0];
+  details.open = true;
+  details.dispatch("toggle");
+  assert.match(renderedMarkdown, /^```ts\n/);
+});
+
 test("all four display modes use the same host callback and no pseudo-element line numbers remain", async () => {
   const [viewSource, editorSource, outlineSource, articleSource, styles] = await Promise.all([
     readFile("src/view.ts", "utf8"),
@@ -304,7 +397,8 @@ test("all four display modes use the same host callback and no pseudo-element li
     readFile("src/editor/article-renderer.ts", "utf8"),
     readFile("styles.css", "utf8")
   ]);
-  assert.match(viewSource, /onRenderCode:\s*\(block, container\) => renderCodeBlock/);
+  assert.match(viewSource, /onRenderCode:\s*\(block, container\) => \{[\s\S]*?renderCodeBlock\(\{/);
+  assert.match(viewSource, /logDebug\("render", "code-block-render", \{ lines, elapsedMs: Math\.round\(performance\.now\(\) - startedAt\) \}\)/);
   assert.match(editorSource, /this\.callbacks\.onRenderCode\(codeData, rendered\)/);
   assert.match(editorSource, /details\.mms-code-collapsed[\s\S]*addEventListener\("toggle"[\s\S]*scheduleMeasuredMindMapLayout/);
   assert.match(editorSource, /nodeEl\.style\.minHeight = `\$\{Math\.max\(36, node\.style\?\.minHeight \?\? 0\)\}px`/);

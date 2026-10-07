@@ -82,7 +82,7 @@ src/
 - `src/editor/node-rich-text-editor.ts`：节点文字块的选区样式、颜色、格式清理和实时预览。
 - `src/editor/selection-format-toolbar.ts`：文章和大纲模式内联编辑时随文字选区显示的加粗、斜体、下划线及颜色工具栏。
 - `src/editor/content-modals.ts`：表格、代码编辑弹窗。
-- `src/render/code-block.ts`：解析节点/页面/全局代码设置，调用 Obsidian Markdown 高亮，并为四种显示模式安装统一的真实 DOM 行号栏。
+- `src/render/code-block.ts`：解析节点/页面/全局代码设置，调用 Obsidian Markdown 高亮，并为四种显示模式安装统一的真实 DOM 行号栏。折叠块只创建 `<details>` 外壳，首次展开时才渲染正文与行号，折叠态不再高亮不可见内容；超过 `SYNTAX_HIGHLIGHT_MAX_LINES`（2000 行）的代码块去掉语言围栏以跳过词法分析，避免万行级脚本冻结主线程。
 - `src/render/static-render.ts`：Markdown 阅读模式中的只读 SVG 预览。
 - `src/utils/coalesced-json-writer.ts`：将短时间内连续保存请求合并为最新快照，严格串行调用持久化回调，并让每个等待方只在其版本落盘后完成。
 - `src/utils/filename.ts`：跨平台文件名、扩展名、时间戳与图片 MIME 的纯函数。
@@ -147,7 +147,7 @@ Obsidian 读取文本
 → installCodeLineNumberLayout() 插入真实行号栏并共享计算样式
 ```
 
-四种模式只负责提供代码块容器，不分别计算行号。`renderCodeBlock()` 保留 Obsidian 生成的完整 `code` 及 token 子元素；启用行号时，在同一 `pre` 内把 `span.mms-code-line-numbers` 插入到 `code.mms-code-content` 前。两栏共享运行时捕获的字体度量与上下内边距，横向溢出由代码块自身滚动，避免父容器样式覆盖。该结构不依赖伪元素、绝对定位或基线常量，具体不变量见 [代码块渲染说明](CODE_BLOCK_RENDERING.zh-CN.md)。
+四种模式只负责提供代码块容器，不分别计算行号。`renderCodeBlock()` 保留 Obsidian 生成的完整 `code` 及 token 子元素；启用行号时，在同一 `pre` 内把 `span.mms-code-line-numbers` 插入到 `code.mms-code-content` 前。折叠块不进入该流程的重复解析：先只创建 `<details>` 外壳，用户首次展开才执行 Markdown 高亮与行号安装（`display: none` 的隐藏正文此前也会被完整高亮，万行级代码会冻结主线程）。两栏共享运行时捕获的字体度量与上下内边距，横向溢出由代码块自身滚动，避免父容器样式覆盖。该结构不依赖伪元素、绝对定位或基线常量，具体不变量见 [代码块渲染说明](CODE_BLOCK_RENDERING.zh-CN.md)。
 
 ## 4. 编辑事务与历史记录
 

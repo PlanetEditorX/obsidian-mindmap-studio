@@ -23,7 +23,7 @@ import {
   type ImageRecognitionItemResult,
   type RecognizableImage
 } from "./vision/recognition";
-import { renderCodeBlock } from "./render/code-block";
+import { countCodeLines, renderCodeBlock } from "./render/code-block";
 
 export const VIEW_TYPE_MINDMAP_STUDIO = "mindmap-studio-view";
 
@@ -291,19 +291,25 @@ export class MindMapStudioView extends TextFileView {
           this.plugin.settings.articleLastReadOnly = readOnly;
           await this.plugin.saveSettings();
         },
-        onRenderCode: (block, container) => renderCodeBlock({
-          block,
-          container,
-          pageAppearance: this.document?.appearance,
-          defaults: {
-            collapsed: this.plugin.settings.defaultCodeCollapsed,
-            showLineNumbers: this.plugin.settings.defaultCodeShowLineNumbers,
-            theme: this.plugin.settings.defaultCodeTheme,
-            autoExpandMaxLines: this.plugin.settings.codeAutoExpandMaxLines,
-            autoLineNumbersMinLines: this.plugin.settings.codeAutoLineNumbersMinLines
-          },
-          renderMarkdown: (markdown, target) => MarkdownRenderer.render(this.app, markdown, target, this.file?.path ?? "", this)
-        }),
+        onRenderCode: (block, container) => {
+          const startedAt = performance.now();
+          const lines = countCodeLines(block.code);
+          return Promise.resolve(renderCodeBlock({
+            block,
+            container,
+            pageAppearance: this.document?.appearance,
+            defaults: {
+              collapsed: this.plugin.settings.defaultCodeCollapsed,
+              showLineNumbers: this.plugin.settings.defaultCodeShowLineNumbers,
+              theme: this.plugin.settings.defaultCodeTheme,
+              autoExpandMaxLines: this.plugin.settings.codeAutoExpandMaxLines,
+              autoLineNumbersMinLines: this.plugin.settings.codeAutoLineNumbersMinLines
+            },
+            renderMarkdown: (markdown, target) => MarkdownRenderer.render(this.app, markdown, target, this.file?.path ?? "", this)
+          })).then(() => {
+            this.plugin.logDebug("render", "code-block-render", { lines, elapsedMs: Math.round(performance.now() - startedAt) });
+          });
+        },
         onDebugLog: (scope, event, details) => this.plugin.logDebug(scope, event, { filePath: this.file?.path, ...((details && typeof details === "object" && !Array.isArray(details)) ? details as Record<string, unknown> : { details }) })
       }, this.getEditorOptions());
     } else {

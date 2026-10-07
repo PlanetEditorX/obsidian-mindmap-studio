@@ -37,6 +37,14 @@ const CODE_THEME_CLASS_NAMES = {
   dracula: "mms-code-theme-dracula"
 } as const;
 
+/**
+ * 触发语法高亮的行数上限。
+ *
+ * 超过该行数的代码块改为不带语言围栏渲染，让高亮器直接跳过词法分析：
+ * Prism 会为每行切出成百上千个 token 元素，万行级脚本仅高亮一步就会冻结主线程数秒。
+ */
+const SYNTAX_HIGHLIGHT_MAX_LINES = 2000;
+
 /** 将设置中的代码行数阈值限制为受支持的整数范围。 */
 function normalizeCodeLineThreshold(value: number): number {
   return Math.max(0, Math.min(1000, Math.floor(value || 0)));
@@ -142,8 +150,11 @@ export function installCodeLineNumberLayout(pre: HTMLElement, code: HTMLElement,
 /**
  * 使用统一渲染链路创建代码块，并在 Markdown 高亮完成后安装稳定的行号布局。
  *
+ * 折叠块只创建 `<details>` 外壳，首次展开时才真正渲染内容：折叠态下内容不可见，
+ * 却仍会走完整的 Markdown 解析与语法高亮，万行级代码在父节点展开的瞬间就会冻结界面。
+ *
  * @param options 代码数据、宿主容器、继承设置和 Markdown 渲染回调。
- * @returns MarkdownRenderer 完成及 DOM 增强完成后的 Promise。
+ * @returns MarkdownRenderer 完成及 DOM 增强完成后的 Promise；折叠块在外壳创建后立即完成。
  */
 export async function renderCodeBlock(options: CodeBlockRenderOptions): Promise<void> {
   const presentation = resolveCodeBlockPresentation(options.block, options.pageAppearance, options.defaults);
@@ -153,24 +164,37 @@ export async function renderCodeBlock(options: CodeBlockRenderOptions): Promise<
   const themeClass = presentation.theme === "obsidian" ? undefined : CODE_THEME_CLASS_NAMES[presentation.theme];
   if (themeClass) options.container.classList.add(themeClass);
 
-  let target = options.container;
-  if (presentation.collapsed) {
-    const details = options.container.ownerDocument.createElement("details");
-    details.className = "mms-code-collapsed";
-    const summary = options.container.ownerDocument.createElement("summary");
-    summary.textContent = `展开 ${options.block.language || "code"} 代码`;
-    details.appendChild(summary);
-    target = options.container.ownerDocument.createElement("div");
-    target.className = "mms-code-collapsed-content";
-    details.appendChild(target);
-    options.container.appendChild(details);
+  const renderInto = async (target: HTMLElement): Promise<void> => {
+    const source = presentation.lineCount > SYNTAX_HIGHLIGHT_MAX_LINES
+      ? { ...options.block, language: undefined }
+      : options.block;
+    await options.renderMarkdown(buildFencedCodeMarkdown(source), target);
+    const pre = target.querySelector<HTMLElement>("pre");
+    const code = pre?.querySelector<HTMLElement>(":scope > code") ?? null;
+    if (!pre || !code) return;
+    pre.classList.add("mms-code-frame");
+    pre.dataset.lineCount = String(presentation.lineCount);
+    if (presentation.showLineNumbers) installCodeLineNumberLayout(pre, code, presentation.lineCount);
+  };
+
+  if (!presentation.collapsed) {
+    await renderInto(options.container);
+    return;
   }
 
-  await options.renderMarkdown(buildFencedCodeMarkdown(options.block), target);
-  const pre = target.querySelector<HTMLElement>("pre");
-  const code = pre?.querySelector<HTMLElement>(":scope > code") ?? null;
-  if (!pre || !code) return;
-  pre.classList.add("mms-code-frame");
-  pre.dataset.lineCount = String(presentation.lineCount);
-  if (presentation.showLineNumbers) installCodeLineNumberLayout(pre, code, presentation.lineCount);
+  const details = options.container.ownerDocument.createElement("details") as HTMLDetailsElement;
+  details.className = "mms-code-collapsed";
+  const summary = options.container.ownerDocument.createElement("summary");
+  summary.textContent = `展开 ${options.block.language || "code"} 代码`;
+  details.appendChild(summary);
+  const target = options.container.ownerDocument.createElement("div");
+  target.className = "mms-code-collapsed-content";
+  details.appendChild(target);
+  options.container.appendChild(details);
+  let requested = false;
+  details.addEventListener("toggle", () => {
+    if (requested || details.open === false) return;
+    requested = true;
+    void renderInto(target);
+  });
 }
