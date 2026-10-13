@@ -5000,10 +5000,7 @@ export class MindMapEditor {
       appendChild(selected, node);
       this.selectedId = node.id;
     });
-    window.requestAnimationFrame(() => {
-      this.bringNodeIntoView(node.id);
-      this.beginInlineEdit(node.id, undefined, true);
-    });
+    this.focusCreatedStructureNode(node.id);
   }
 
   /**
@@ -5023,10 +5020,7 @@ export class MindMapEditor {
       insertSiblingAfter(this.document.root, selected.id, node, this.currentNodeTreeIndex());
       this.selectedId = node.id;
     });
-    window.requestAnimationFrame(() => {
-      this.bringNodeIntoView(node.id);
-      this.beginInlineEdit(node.id, undefined, true);
-    });
+    this.focusCreatedStructureNode(node.id);
   }
 
   /** Inserts a text block after the context block, or appends it when no block was targeted. */
@@ -8184,6 +8178,75 @@ export class MindMapEditor {
     }
   }
 
+  /** Whether this view's focus and mode permit article-structure insertion. */
+  canRunArticleStructureShortcut(active: Element | null = document.activeElement): boolean {
+    if (this.currentMode !== "article" || this.readOnly || !(active instanceof HTMLElement)) return false;
+    if (!this.rootEl.contains(active) || active.closest("input, textarea, select, .modal-container")) return false;
+    if (active.closest('[contenteditable="true"]:not([data-mms-inline-editable="true"])')) return false;
+    if (this.inlineEditingId && !active.closest('[data-mms-inline-editable="true"]')) return false;
+    return true;
+  }
+
+  /** Save any current inline edit and create the requested article structure node. */
+  createArticleNodeFromShortcut(kind: "sibling" | "child", eventTarget?: EventTarget | null): boolean {
+    if (this.currentMode !== "article" || this.readOnly || !this.ensureEditable()) return false;
+    const active = eventTarget instanceof HTMLElement ? eventTarget : document.activeElement;
+    if (!this.canRunArticleStructureShortcut(active)) return false;
+    const target = active instanceof HTMLElement ? active : null;
+    const liveInline = target?.closest<HTMLElement>('[data-mms-inline-editable="true"]');
+    const sourceId = this.inlineEditingId ?? liveInline?.closest<HTMLElement>("[data-node-id]")?.dataset.nodeId ?? this.selectedId;
+    const inlineEditor = liveInline?.contentEditable === "true"
+      ? liveInline
+      : this.rootEl.querySelector<HTMLElement>('[data-mms-inline-editable="true"][contenteditable="true"]');
+    this.callbacks.onDebugLog("editor", "article-structure-shortcut", {
+      kind, sourceId, hasInlineEditor: Boolean(inlineEditor), mode: this.currentMode
+    });
+    if (inlineEditor) {
+      delete inlineEditor.dataset.mmsProtectInitialFocus;
+      inlineEditor.blur();
+    }
+    if (sourceId && this.nodeById(sourceId)) this.selectNode(sourceId);
+    if (kind === "sibling") this.addSibling();
+    else this.addChild();
+    return true;
+  }
+
+  /** Process Ctrl/Cmd+Enter and Ctrl/Cmd+Tab, including tracked physical modifiers. */
+  handleArticleStructureShortcut(event: KeyboardEvent, modifierHeld = false): boolean {
+    if (this.currentMode !== "article" || this.readOnly || event.isComposing || event.shiftKey || event.altKey) return false;
+    const kind = event.key === "Enter" || event.code === "NumpadEnter" ? "sibling" : event.key === "Tab" ? "child" : null;
+    if (!kind || !(event.ctrlKey || event.metaKey || modifierHeld) || !this.canRunArticleStructureShortcut(event.target as Element)) return false;
+    event.preventDefault();
+    event.stopPropagation();
+    event.stopImmediatePropagation();
+    if (event.repeat) return true;
+    return this.createArticleNodeFromShortcut(kind, event.target);
+  }
+
+  /** Wait for the article's paged DOM to contain the new node before editing. */
+  private focusCreatedStructureNode(nodeId: string): void {
+    let attempts = 0;
+    const run = (): void => {
+      if (!this.nodeById(nodeId) || this.selectedId !== nodeId) return;
+      if (this.currentMode === "article") {
+        const controller = this.articleRenderController;
+        if (controller && !controller.containsNode(nodeId)) controller.ensureNode(nodeId);
+        const nodeEl = this.articleEl.querySelector(`[data-node-id="${CSS.escape(nodeId)}"]`);
+        if (!nodeEl && attempts++ < 15) {
+          window.setTimeout(run, 90);
+          return;
+        }
+        if (!nodeEl) {
+          this.callbacks.onDebugLog("editor", "article-structure-focus-missing", { nodeId, attempts });
+          return;
+        }
+      }
+      this.bringNodeIntoView(nodeId);
+      this.beginInlineEdit(nodeId, undefined, true);
+    };
+    window.requestAnimationFrame(run);
+  }
+
   /**
    * 处理keydown，并保持模型、界面和持久化状态的一致性。
    *
@@ -8226,33 +8289,9 @@ export class MindMapEditor {
       return;
     }
 
-    // Article structure shortcuts also work inside the active title/body editor.
-    // Commit its live text first; otherwise a structural render would detach the
-    // contenteditable and discard pending changes. Leave code editors and other
-    // form controls to their existing keyboard handlers.
-    if (this.currentMode === "article" && !this.readOnly && mod && !event.shiftKey && !event.altKey
-      && !event.isComposing && (event.key === "Enter" || event.key === "Tab")) {
-      const inlineTarget = target.closest<HTMLElement>("[data-mms-inline-editable='true']");
-      if (!target.closest("input, textarea, select")
-        && (!target.closest("[contenteditable='true']") || inlineTarget)
-        && (this.inlineEditingId === null || inlineTarget)) {
-        event.preventDefault();
-        event.stopPropagation();
-        event.stopImmediatePropagation();
-        if (event.repeat) return;
-        const sourceId = this.inlineEditingId ?? inlineTarget?.closest<HTMLElement>("[data-node-id]")?.dataset.nodeId ?? this.selectedId;
-        if (inlineTarget) {
-          // A recently activated article line briefly guards against stray
-          // blur events; an explicit structure command must still commit it.
-          delete inlineTarget.dataset.mmsProtectInitialFocus;
-          inlineTarget.blur();
-        }
-        if (sourceId && this.nodeById(sourceId)) this.selectNode(sourceId);
-        if (event.key === "Enter") this.addSibling();
-        else this.addChild();
-        return;
-      }
-    }
+    // Route to the shared article shortcut entry. A window-capture handler in
+    // the plugin also calls this method before Obsidian can change tabs.
+    if (this.handleArticleStructureShortcut(event)) return;
 
     // Inline title/body editors own unmodified Enter, Escape and formatting keys. Keep
     // other structural shortcuts disabled for the whole editing lifecycle even if a

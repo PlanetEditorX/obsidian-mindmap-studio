@@ -284,6 +284,50 @@ export default class MindMapStudioPlugin extends Plugin {
       event.stopPropagation();
       if (!event.repeat) activeView.openMapFamilySearchFromShortcut();
     }, true);
+    // Observe Ctrl/Cmd combinations at window capture before tab navigation
+    // consumes Ctrl+Tab and before the article's nested contenteditable handlers.
+    let ctrlHeld = false;
+    let metaHeld = false;
+    const forgetModifiers = (): void => { ctrlHeld = false; metaHeld = false; };
+    this.registerDomEvent(window, "keydown", (event: KeyboardEvent) => {
+      if (event.key === "Control") ctrlHeld = true;
+      if (event.key === "Meta") metaHeld = true;
+      const view = this.app.workspace.activeLeaf?.view;
+      if ((event.key === "Enter" || event.key === "Tab") && (event.ctrlKey || event.metaKey || ctrlHeld || metaHeld)) {
+        this.logDebug("article-hotkeys", "window-combination", {
+          key: event.key, ctrl: event.ctrlKey, meta: event.metaKey,
+          trackedCtrl: ctrlHeld, trackedMeta: metaHeld,
+          activeArticle: view instanceof MindMapStudioView && view.canRunArticleStructureShortcut()
+        });
+      }
+      if (view instanceof MindMapStudioView) view.handleArticleStructureShortcut(event, ctrlHeld || metaHeld);
+    }, true);
+    this.registerDomEvent(window, "keyup", (event: KeyboardEvent) => {
+      if (event.key === "Control") ctrlHeld = false;
+      if (event.key === "Meta") metaHeld = false;
+      if (event.key === "Control" || event.key === "Meta" || event.key === "Enter" || event.key === "Tab") {
+        this.logDebug("article-hotkeys", "window-keyup", { key: event.key, ctrl: event.ctrlKey, meta: event.metaKey });
+      }
+    }, true);
+    this.registerDomEvent(window, "blur", forgetModifiers);
+    this.registerDomEvent(document, "visibilitychange", () => { if (document.hidden) forgetModifiers(); });
+    for (const { id, name, kind, key } of [
+      { id: "article-create-sibling", name: "文章模式：创建兄弟节点", kind: "sibling" as const, key: "Enter" },
+      { id: "article-create-child", name: "文章模式：创建子节点", kind: "child" as const, key: "Tab" }
+    ]) {
+      this.addCommand({
+        id, name, hotkeys: [{ modifiers: ["Mod"], key }],
+        checkCallback: (checking: boolean) => {
+          const view = this.app.workspace.activeLeaf?.view;
+          const available = view instanceof MindMapStudioView && view.canRunArticleStructureShortcut();
+          if (available && !checking && view instanceof MindMapStudioView) {
+            this.logDebug("article-hotkeys", "command-fired", { kind });
+            view.createArticleNodeFromShortcut(kind);
+          }
+          return available;
+        }
+      });
+    }
     this.installRuntimeDebugCapture();
     this.addCommand({
       id: "update-mindmap-studio",

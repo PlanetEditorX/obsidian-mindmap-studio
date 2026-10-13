@@ -17289,10 +17289,7 @@ var MindMapEditor = class {
       appendChild(selected, node);
       this.selectedId = node.id;
     });
-    window.requestAnimationFrame(() => {
-      this.bringNodeIntoView(node.id);
-      this.beginInlineEdit(node.id, void 0, true);
-    });
+    this.focusCreatedStructureNode(node.id);
   }
   /**
    * 添加sibling，并保持模型、界面和持久化状态的一致性。
@@ -17311,10 +17308,7 @@ var MindMapEditor = class {
       insertSiblingAfter(this.document.root, selected.id, node, this.currentNodeTreeIndex());
       this.selectedId = node.id;
     });
-    window.requestAnimationFrame(() => {
-      this.bringNodeIntoView(node.id);
-      this.beginInlineEdit(node.id, void 0, true);
-    });
+    this.focusCreatedStructureNode(node.id);
   }
   /** Inserts a text block after the context block, or appends it when no block was targeted. */
   insertTextBlock(afterBlockId) {
@@ -20201,6 +20195,68 @@ var MindMapEditor = class {
         return;
     }
   }
+  /** Perform one article structure insertion, committing the active text editor first. */
+  createArticleNodeFromShortcut(kind, eventTarget) {
+    if (this.currentMode !== "article" || this.readOnly || !this.ensureEditable()) return false;
+    const active = eventTarget instanceof HTMLElement ? eventTarget : document.activeElement;
+    const target = active instanceof HTMLElement && this.rootEl.contains(active) ? active : null;
+    const liveInline = target == null ? void 0 : target.closest('[data-mms-inline-editable="true"]');
+    const sourceId = this.inlineEditingId || (liveInline == null ? void 0 : liveInline.closest("[data-node-id]")?.dataset.nodeId) || this.selectedId;
+    const inlineEditor = liveInline?.contentEditable === "true" ? liveInline : this.rootEl.querySelector('[data-mms-inline-editable="true"][contenteditable="true"]');
+    this.callbacks.onDebugLog("editor", "article-structure-shortcut", {
+      kind,
+      sourceId,
+      hasInlineEditor: Boolean(inlineEditor),
+      mode: this.currentMode
+    });
+    if (inlineEditor) {
+      // The first pointer-focus guard must not postpone the blur commit.
+      delete inlineEditor.dataset.mmsProtectInitialFocus;
+      inlineEditor.blur();
+    }
+    if (sourceId && this.nodeById(sourceId)) this.selectNode(sourceId);
+    if (kind === "sibling") this.addSibling();
+    else this.addChild();
+    return true;
+  }
+  /** Intercept a genuine simultaneous Ctrl/Cmd+Enter or Ctrl/Cmd+Tab in article mode. */
+  handleArticleStructureShortcut(event, modifierHeld = false) {
+    if (this.currentMode !== "article" || this.readOnly || event.isComposing || event.shiftKey || event.altKey) return false;
+    const key = event.key === "Enter" || event.code === "NumpadEnter" ? "sibling" : event.key === "Tab" ? "child" : null;
+    if (!key || !(event.ctrlKey || event.metaKey || modifierHeld)) return false;
+    const target = event.target instanceof HTMLElement ? event.target : null;
+    if (!target || !this.rootEl.contains(target) || target.closest("input, textarea, select, .modal-container")) return false;
+    if (target.closest('[contenteditable="true"]:not([data-mms-inline-editable="true"])')) return false;
+    if (this.inlineEditingId && !target.closest('[data-mms-inline-editable="true"]')) return false;
+    event.preventDefault();
+    event.stopPropagation();
+    event.stopImmediatePropagation();
+    if (event.repeat) return true;
+    return this.createArticleNodeFromShortcut(key, target);
+  }
+  /** Retry after article virtualization/context refresh before focusing a newly inserted node. */
+  focusCreatedStructureNode(nodeId) {
+    let attempts = 0;
+    const run = () => {
+      if (!this.nodeById(nodeId) || this.selectedId !== nodeId) return;
+      if (this.currentMode === "article") {
+        const controller = this.articleRenderController;
+        if (controller && !controller.containsNode(nodeId)) controller.ensureNode(nodeId);
+        const nodeEl = this.articleEl.querySelector(`[data-node-id="${CSS.escape(nodeId)}"]`);
+        if (!nodeEl && attempts++ < 15) {
+          window.setTimeout(run, 90);
+          return;
+        }
+        if (!nodeEl) {
+          this.callbacks.onDebugLog("editor", "article-structure-focus-missing", { nodeId, attempts });
+          return;
+        }
+      }
+      this.bringNodeIntoView(nodeId);
+      this.beginInlineEdit(nodeId, void 0, true);
+    };
+    window.requestAnimationFrame(run);
+  }
   /**
    * 处理keydown，并保持模型、界面和持久化状态的一致性。
    *
@@ -20237,24 +20293,7 @@ var MindMapEditor = class {
       if (!event.repeat) void this.captureScreenshot(false);
       return;
     }
-    if (this.currentMode === "article" && !this.readOnly && mod && !event.shiftKey && !event.altKey && !event.isComposing && (event.key === "Enter" || event.key === "Tab")) {
-      const inlineTarget = target.closest("[data-mms-inline-editable='true']");
-      if (!target.closest("input, textarea, select") && (!target.closest("[contenteditable='true']") || inlineTarget) && (this.inlineEditingId === null || inlineTarget)) {
-        event.preventDefault();
-        event.stopPropagation();
-        event.stopImmediatePropagation();
-        if (event.repeat) return;
-        const sourceId = (_c = (_b2 = this.inlineEditingId) != null ? _b2 : (_a2 = inlineTarget == null ? void 0 : inlineTarget.closest("[data-node-id]")) == null ? void 0 : _a2.dataset.nodeId) != null ? _c : this.selectedId;
-        if (inlineTarget) {
-          delete inlineTarget.dataset.mmsProtectInitialFocus;
-          inlineTarget.blur();
-        }
-        if (sourceId && this.nodeById(sourceId)) this.selectNode(sourceId);
-        if (event.key === "Enter") this.addSibling();
-        else this.addChild();
-        return;
-      }
-    }
+    if (this.handleArticleStructureShortcut(event)) return;
     if (this.inlineEditingId !== null) return;
     if (target.closest("input, textarea, select, [contenteditable='true']")) return;
     if (this.currentMode === "article" && this.activeReadingRestore && ["PageUp", "PageDown", "Home", "End", "ArrowUp", "ArrowDown", " "].includes(event.key)) {
@@ -24955,6 +24994,67 @@ var MindMapStudioPlugin = class extends import_obsidian20.Plugin {
       event.stopPropagation();
       if (!event.repeat) activeView.openMapFamilySearchFromShortcut();
     }, true);
+    // Window capture is needed because Obsidian may consume Ctrl+Tab before
+    // keydown reaches the embedded article editor's root element.
+    let ctrlHeld = false;
+    let metaHeld = false;
+    const forgetModifiers = () => {
+      ctrlHeld = false;
+      metaHeld = false;
+    };
+    this.registerDomEvent(window, "keydown", (event) => {
+      if (event.key === "Control") ctrlHeld = true;
+      if (event.key === "Meta") metaHeld = true;
+      const view = this.app.workspace.activeLeaf?.view;
+      if ((event.key === "Enter" || event.key === "Tab") && (event.ctrlKey || event.metaKey || ctrlHeld || metaHeld)) {
+        this.logDebug("article-hotkeys", "window-combination", {
+          key: event.key,
+          ctrl: event.ctrlKey,
+          meta: event.metaKey,
+          trackedCtrl: ctrlHeld,
+          trackedMeta: metaHeld,
+          activeArticle: view instanceof MindMapStudioView && view.editor?.currentMode === "article"
+        });
+      }
+      if (!(view instanceof MindMapStudioView) || !view.editor) return;
+      // Modifier state is a fallback only while a physical modifier is still
+      // pressed. Keyup/blur clears it; a standalone Enter remains normal Enter.
+      view.editor.handleArticleStructureShortcut(event, ctrlHeld || metaHeld);
+    }, true);
+    this.registerDomEvent(window, "keyup", (event) => {
+      if (event.key === "Control") ctrlHeld = false;
+      if (event.key === "Meta") metaHeld = false;
+      if (event.key === "Control" || event.key === "Meta" || event.key === "Enter" || event.key === "Tab") {
+        this.logDebug("article-hotkeys", "window-keyup", { key: event.key, ctrl: event.ctrlKey, meta: event.metaKey });
+      }
+    }, true);
+    this.registerDomEvent(window, "blur", forgetModifiers);
+    this.registerDomEvent(document, "visibilitychange", () => {
+      if (document.hidden) forgetModifiers();
+    });
+    // Make the mappings visible/remappable in Obsidian's Hotkeys settings.
+    // Its native Ctrl+Tab tab-switching binding must not be allowed to win.
+    for (const [id, name, kind, key] of [
+      ["article-create-sibling", "文章模式：创建兄弟节点", "sibling", "Enter"],
+      ["article-create-child", "文章模式：创建子节点", "child", "Tab"]
+    ]) {
+      this.addCommand({
+        id,
+        name,
+        hotkeys: [{ modifiers: ["Mod"], key }],
+        checkCallback: (checking) => {
+          const view = this.app.workspace.activeLeaf?.view;
+          const editor = view instanceof MindMapStudioView ? view.editor : null;
+          const active = document.activeElement;
+          const available = Boolean(editor && editor.currentMode === "article" && !editor.readOnly && active instanceof HTMLElement && editor.rootEl.contains(active) && !active.closest("input, textarea, select, .modal-container"));
+          if (available && !checking) {
+            this.logDebug("article-hotkeys", "command-fired", { kind, mode: editor.currentMode });
+            editor.createArticleNodeFromShortcut(kind, active);
+          }
+          return available;
+        }
+      });
+    }
     this.installRuntimeDebugCapture();
     this.addCommand({
       id: "update-mindmap-studio",

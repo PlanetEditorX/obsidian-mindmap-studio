@@ -75,6 +75,21 @@ export class MindMapStudioView extends TextFileView {
     return VIEW_TYPE_MINDMAP_STUDIO;
   }
 
+  /** Forward a window-captured article shortcut without exposing editor internals. */
+  handleArticleStructureShortcut(event: KeyboardEvent, modifierHeld = false): boolean {
+    return this.editor?.handleArticleStructureShortcut(event, modifierHeld) ?? false;
+  }
+
+  /** Whether the active editor can accept an article structure command. */
+  canRunArticleStructureShortcut(): boolean {
+    return this.editor?.canRunArticleStructureShortcut() ?? false;
+  }
+
+  /** Obsidian command entry, used if its hotkey dispatcher wins the shortcut. */
+  createArticleNodeFromShortcut(kind: "sibling" | "child"): boolean {
+    return this.editor?.createArticleNodeFromShortcut(kind) ?? false;
+  }
+
   /**
    * 读取并返回display text，并保持模型、界面和持久化状态的一致性。
    * @returns 计算、解析或序列化后的字符串结果。
