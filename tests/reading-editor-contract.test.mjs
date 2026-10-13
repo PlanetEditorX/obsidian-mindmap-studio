@@ -236,9 +236,16 @@ test("article and outline text do not expose edit labels as hover tooltips", () 
   const activateInlineEditable = editorSource.match(/private activateInlineEditable\([\s\S]*?\n  \}/)?.[0] ?? "";
   assert.match(makeInlineEditable, /element\.dataset\.mmsEditLabel = placeholder/);
   assert.doesNotMatch(makeInlineEditable, /element\.setAttr\("aria-label", placeholder\)/);
-  assert.match(editorSource, /private applyInlineEditingAccessibility\(element: HTMLElement\): void/);
-  assert.match(editorSource, /element\.setAttr\("aria-label", element\.dataset\.mmsEditLabel \?\? "编辑文字"\)/);
-  assert.match(editorSource, /private clearInlineEditingAccessibility\(element: HTMLElement\): void[\s\S]*element\.removeAttribute\("aria-label"\)/);
+  const applyAccessibility = editorSource.match(/private applyInlineEditingAccessibility\(element: HTMLElement\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
+  const clearAccessibility = editorSource.match(/private clearInlineEditingAccessibility\(element: HTMLElement\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
+  assert.match(applyAccessibility, /element\.dataset\.mmsEditLabel \?\? "编辑文字"/);
+  assert.match(applyAccessibility, /label\.hidden = true/);
+  assert.match(applyAccessibility, /element\.setAttr\("role", "textbox"\)/);
+  assert.match(applyAccessibility, /element\.setAttr\("aria-labelledby", label\.id\)/);
+  assert.doesNotMatch(applyAccessibility, /setAttr\("aria-label"/);
+  assert.match(clearAccessibility, /label\?\.classList\.contains\("mms-inline-edit-a11y-label"\)/);
+  assert.match(clearAccessibility, /element\.removeAttribute\("aria-label"\)/);
+  assert.match(clearAccessibility, /element\.removeAttribute\("aria-labelledby"\)/);
   assert.match(activateInlineEditable, /this\.applyInlineEditingAccessibility\(element\)/);
 });
 

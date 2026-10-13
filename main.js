@@ -15249,16 +15249,36 @@ var MindMapEditor = class {
       if (element.dataset.mmsProtectInitialFocus === "true") delete element.dataset.mmsProtectInitialFocus;
     }, 120);
   }
-  /** Adds textbox semantics only while an inline line is actively editable. */
+  /** Labels the active textbox without aria-label, which Obsidian displays as a hover tooltip. */
   applyInlineEditingAccessibility(element) {
     var _a2;
+    const labelText = (_a2 = element.dataset.mmsEditLabel) != null ? _a2 : "\u7F16\u8F91\u6587\u5B57";
+    const labelId = element.dataset.mmsA11yLabelId;
+    let label = labelId ? element.ownerDocument.getElementById(labelId) : null;
+    if (!label) {
+      label = element.ownerDocument.createElement("span");
+      label.id = `mms-inline-edit-label-${newId()}`;
+      label.className = "mms-inline-edit-a11y-label";
+      label.hidden = true;
+      element.insertAdjacentElement("afterend", label);
+      element.dataset.mmsA11yLabelId = label.id;
+    }
+    label.textContent = labelText;
     element.setAttr("role", "textbox");
-    element.setAttr("aria-label", (_a2 = element.dataset.mmsEditLabel) != null ? _a2 : "\u7F16\u8F91\u6587\u5B57");
+    element.removeAttribute("aria-label");
+    element.setAttr("aria-labelledby", label.id);
   }
-  /** Removes edit-only semantics so Obsidian does not show hover tooltips on reading text. */
+  /** Removes edit-only semantics and their temporary accessible-name reference. */
   clearInlineEditingAccessibility(element) {
+    const labelId = element.dataset.mmsA11yLabelId;
+    if (labelId) {
+      const label = element.ownerDocument.getElementById(labelId);
+      if (label == null ? void 0 : label.classList.contains("mms-inline-edit-a11y-label")) label.remove();
+      delete element.dataset.mmsA11yLabelId;
+    }
     element.removeAttribute("role");
     element.removeAttribute("aria-label");
+    element.removeAttribute("aria-labelledby");
   }
   /**
    * Activates one article or outline line without changing the surrounding

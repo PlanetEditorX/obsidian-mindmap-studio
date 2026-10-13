@@ -1,5 +1,16 @@
 # Test Results
 
+## 本轮：正文/标题编辑态悬浮提示修复（本地受限验证）
+
+- `node --test tests/reading-editor-contract.test.mjs`：43/43 通过。
+- `node --test tests/repository-cleanup.test.mjs`：4/4 通过（还原原 ZIP 被 Linux unzip 转码的示例中文路径后）。
+- `npm run test:docs`：通过，1319 个有名声明均已记录。
+- `npm run test:repo`：通过。
+- `node --check main.js`：通过。
+- `npm run verify` 首次运行：454 条单测中 451 通过、3 失败；其中 2 条因 npm registry DNS 不通、缺少 esbuild，另 1 条是原 ZIP 解压产生的 `#Uxxxx` 文件名（已修正并复测通过）。随后单独运行 package.json 中配置的其余 41 个单测文件，452/452 通过。综合回归与生产 bundler 需要 esbuild，因此当前环境无法完成全量验证。
+- 待在依赖可用的联网环境执行 `npm ci && npm run verify`，并在真实 Obsidian 中分别悬停阅读态和编辑态的正文、章节标题和文章标题，确认无悬浮提示、编辑保存仍正常。
+
+
 ## 1.52.6 工作区：导图节点编辑插入 LaTeX ＋ 文章图片前插入文字（含反馈修复）
 
 - 导图“编辑节点内容”弹窗新增“公式”按钮：点击打开 `FormulaEditModal`（修复未调用 `.open()` 导致无反应）；行内公式写入当前聚焦文字块末尾并同步 richText，块级公式在其后新增块级公式块。

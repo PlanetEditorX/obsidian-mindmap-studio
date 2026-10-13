@@ -1,5 +1,13 @@
 # Modified Files
 
+## 本轮工作区：文章文字的编辑态黑色悬浮提示
+
+- `src/editor/editor.ts`：行内编辑使用隐藏文本 `aria-labelledby` 取代会触发 Obsidian tooltip 的 `aria-label`；编辑结束或切换只读时回收隐藏标签。
+- `main.js`：同步对应运行时代码。当前沙箱的 npm registry 无法解析、缺少 esbuild，无法重新执行生产 bundler；须在有网络依赖的环境补跑 `npm ci && npm run verify` 重建。
+- `tests/reading-editor-contract.test.mjs`：覆盖编辑态使用 `aria-labelledby`、无 `aria-label`、失焦清理。
+- `docs/HOVER_TOOLTIP_FIX.zh-CN.md`、`docs/FUNCTION_REFERENCE.md`、`CHANGELOG.md`、`TEST_RESULTS.md`：同步行为、函数参考、测试基线。
+
+
 ## 1.52.3 工作区：修复图片来源更新/删除导致文章重载与跳位
 
 - `src/editor/editor.ts`：图片预览来源变化新增 `commitImagePreviewSourceChange()` / `refreshImagePreviewSourceDom()` 局部提交链路；文章/通读/大纲只更新目标图片元素，导图只刷新目标节点；删除最后来源沿用同一路径。图片元素通过克隆当前 `<img>` 保留已有 src/尺寸后再切源，避免目标图先闪空；`setDefault` 写入移入历史边界。文章完整重建的像素恢复延长到 warmup 完成后连续两帧稳定再释放。
