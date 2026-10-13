@@ -38,7 +38,7 @@
 
 ### 文章模式结构快捷键
 
-`tests/article-node-shortcuts.test.mjs` 直接执行文章键盘处理器，验证 Ctrl/Cmd+Enter 创建当前节点的兄弟节点、Ctrl/Cmd+Tab 创建子节点；编辑态必须先通过 blur 提交正文，再按原节点 ID 创建，非编辑态也生效。覆盖只读、输入法组合输入、按键长按、Shift/Alt 修饰键、代码块 textarea 与其它显示模式不被误拦截，并确认 `main.js` 同步了该按键路径。结构操作复用 `addSibling()` / `addChild()` 的统一历史和保存链路，根节点兄弟操作回退为子节点。
+`tests/article-node-shortcuts.test.mjs` 从构建产物 `main.js` 提取并执行实际的 `handleArticleStructureShortcut`、`createArticleNodeFromShortcut`、`focusCreatedStructureNode` 和 `handleKeydown` 方法，不再把 `handleKeydown` 孤立复制到缺失新委托方法的假对象里，避免重构后的假失败。验证 Ctrl/Cmd+Enter 创建当前节点的兄弟节点、Ctrl/Cmd+Tab 创建子节点；编辑态必须先通过 blur 提交正文，再按原节点 ID 创建，非编辑态也生效。覆盖只读、输入法组合输入、按键长按、Shift/Alt 修饰键、代码块 textarea 与其它显示模式不被误拦截，以及窗口捕获监听、Obsidian 命令绑定、物理修饰键状态兜底和虚拟分页渲染后的重试聚焦。契约检查以共享快捷键入口和保存/创建操作为准，而不是要求旧版 `handleKeydown` 内联 if/else 形状。结构操作复用 `addSibling()` / `addChild()` 的统一历史和保存链路，根节点兄弟操作回退为子节点。`tests/node-creation-focus.test.mjs` / `tests/node-creation.test.mjs` 同步验证新建子/同级节点统一调用 `focusCreatedStructureNode()` 并在可见后编辑，正文文字块继续保留自己的即时聚焦路径。
 
 Obsidian 桌面端手动检查：在文章标题、章节标题和正文中分别编辑尚未保存的文字，按 Ctrl+Enter / Ctrl+Tab 后旧文字已保存，新节点紧随正确位置并自动进入输入；确认撤销可恢复、跨模式显示一致。再检查纯选中节点、根节点、只读和代码块编辑器，以及 Ctrl+Tab 未被系统/Obsidian 的标签页切换抢先处理。非修饰 Enter 应保存、Shift+Enter 应插入换行。
 

@@ -1,5 +1,12 @@
 # Modified Files
 
+## 本轮工作区：CI 文章快捷键与节点聚焦测试同步（无运行时代码修改）
+
+- `tests/article-node-shortcuts.test.mjs`：从 `main.js` 提取并执行真实共享快捷键处理、保存后创建及聚焦方法，修复原测试在独立模拟 `handleKeydown` 时缺失委托方法的 7 个失败；新增物理修饰键兜底、分页等待和窗口捕获/命令注册验证。
+- `tests/node-creation-focus.test.mjs`、`tests/node-creation.test.mjs`：从旧版 3 个固定 rAF 匹配迁移到 `focusCreatedStructureNode()` 统一重试聚焦契约，修复其余 2 个失败。
+- `docs/TESTING.md`、`CHANGELOG.md`、`TEST_RESULTS.md`：同步测试边界和验证限制。
+- `src/`、`main.js`、`styles.css`、插件版本未改动；本地仓库依赖无法从 npm 下载，需 GitHub Actions 完成最终 `npm run verify` / build。
+
 ## 本轮工作区：文章模式结构快捷键
 
 - `src/editor/editor.ts`：根元素捕获文章模式 Ctrl/Cmd+Enter 与 Ctrl/Cmd+Tab，包含内容编辑态保存/去除初次焦点保护、按原节点创建同级或子节点；不影响只读、代码编辑器和其它模式的键盘逻辑。

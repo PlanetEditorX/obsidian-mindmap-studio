@@ -1,5 +1,15 @@
 # Test Results
 
+## 本轮：CI 9 项测试与当前快捷键重构同步（测试-only）
+
+- 原始 CI 报错中 81–87、325、329 共 9 条失败，是旧单元测试依赖 `handleKeydown` 内联快捷键结构和 3 处固定 `requestAnimationFrame` 聚焦结构，与当前共享 `handleArticleStructureShortcut` / `focusCreatedStructureNode` 实现脱节。其中 81–85 使用不含委托方法的虚拟对象单独执行 `handleKeydown`，报 `this.handleArticleStructureShortcut is not a function`。
+- `tests/article-node-shortcuts.test.mjs` 改为从已提供的 `main.js` 中提取并执行实际处理方法，模拟可编辑文本、选中节点、只读与代码输入；覆盖窗口捕获、Ctrl/Cmd 修饰键兜底、重复按键、先保存后创建、虚拟分页延迟聚焦，并对照 TypeScript 源码接线。
+- `tests/node-creation-focus.test.mjs` / `tests/node-creation.test.mjs` 跟进新建节点共用的 `focusCreatedStructureNode()`，验证旧的即时文字块插入聚焦不受影响。
+- 本地：`node --test tests/article-node-shortcuts.test.mjs tests/node-creation-focus.test.mjs tests/node-creation.test.mjs` **19/19 通过**；`node tests/article-hotkeys-1552.test.cjs` **13/13 通过**；`npm run test:repo` **通过**；`node --check main.js` **通过**。
+- 本地 `npm run test` / `test:regression` / `test:docs` / `build` 未能完整验证：npm 仓库域名无法解析，`npm ci` 和 offline 安装均无法补齐 `typescript`、`esbuild` 等依赖，导致多个无关测试文件加载失败；这些依赖错误不表示源码单元测试未通过。需在 GitHub Actions 的依赖可用环境运行 `npm ci && npm run verify`，确认完整检查和从 TypeScript 重建的 `main.js`。
+- 源码及本轮安装包的 `main.js` 均保持上传版本不变；当前上传项目的 TypeScript/`main.js` 版本基线差异见 `reference/version-notes.zh-CN.md`。不得将测试-only 修改误描述为运行时热键修复或正式生产构建。
+
+
 ## 本轮：文章模式 Ctrl/Cmd+Enter / Ctrl/Cmd+Tab 创建节点（本地受限验证）
 
 - 新增 7 条行为与安装包契约快捷键测试：执行实际 `handleKeydown` 逻辑，覆盖编辑态保存优先、正确节点目标、非编辑态、只读、IME、长按、防止代码编辑器冲突和其它模式。

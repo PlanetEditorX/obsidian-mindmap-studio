@@ -12,8 +12,18 @@ before(async () => {
 after(() => cleanup?.());
 
 test("node creation flows bring the new node into view before inline editing", () => {
-  const flows = editorSource.match(/window\.requestAnimationFrame\(\(\) => \{\s*\n\s*this\.bringNodeIntoView\([^)]*\);\s*\n\s*this\.beginInlineEdit\([^)]*\);\s*\n\s*\}\);/g) ?? [];
-  assert.equal(flows.length, 3, "addChild, addSibling and insertTextBlock must all keep the created node visible");
+  // Child/sibling creation now shares a focus helper that retries after the
+  // article's paginated DOM renders. Text-block insertion keeps its own frame.
+  const addChild = editorSource.match(/private addChild\(\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
+  const addSibling = editorSource.match(/private addSibling\(\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
+  const insertText = editorSource.match(/private insertTextBlock\([^\n]*\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
+  const focus = editorSource.match(/private focusCreatedStructureNode\(nodeId: string\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
+  assert.match(addChild, /this\.focusCreatedStructureNode\(node\.id\)/);
+  assert.match(addSibling, /this\.focusCreatedStructureNode\(node\.id\)/);
+  assert.match(focus, /this\.bringNodeIntoView\(nodeId\);\s*this\.beginInlineEdit\(nodeId, undefined, true\)/);
+  assert.match(focus, /controller\.ensureNode\(nodeId\)/);
+  assert.match(focus, /window\.setTimeout\(run, 90\)/);
+  assert.match(insertText, /this\.bringNodeIntoView\(selected\.id\);\s*this\.beginInlineEdit\(selected\.id, blockId, true\)/);
   assert.match(editorSource, /private bringNodeIntoView\(nodeId: string\): void \{/);
   assert.match(editorSource, /if \(!dx && !dy\) return;/, "viewport must stay still when the node is already visible");
   assert.match(editorSource, /no forced recentering/);

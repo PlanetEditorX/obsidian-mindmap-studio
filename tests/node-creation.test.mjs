@@ -52,7 +52,10 @@ test("article mode renders and focuses a newly added empty child", () => {
   assert.match(leafBranch, /options\.makeInlineEditable\(paragraph, info\.node, "正文段落"\)/);
   // 纯图片/表格/代码节点（无任何 text 块）不显示空占位段落。
   assert.doesNotMatch(leafBranch, /\|\| blocks\.length === 0/, "content-free placeholder must stay mutually exclusive with an existing empty text block");
-  assert.match(addChild, /this\.bringNodeIntoView\(node\.id\);\s*\n\s*this\.beginInlineEdit\(node\.id, undefined, true\)/);
+  const focusCreated = editorSource.match(/private focusCreatedStructureNode\(nodeId: string\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
+  assert.match(addChild, /this\.focusCreatedStructureNode\(node\.id\)/);
+  assert.match(focusCreated, /this\.bringNodeIntoView\(nodeId\);\s*this\.beginInlineEdit\(nodeId, undefined, true\)/);
+  assert.match(focusCreated, /this\.articleEl\.querySelector/);
   assert.match(beginInlineEdit, /const nodeScope = scope\.querySelector<HTMLElement>\(`\[data-node-id="\$\{CSS\.escape\(nodeId\)\}"\]`\)/);
   assert.match(beginInlineEdit, /blockId[\s\S]*\[data-block-id="\$\{CSS\.escape\(blockId\)\}"\]\[data-mms-inline-editable="true"\]/);
   assert.match(beginInlineEdit, /if \(inlineElement\) this\.activateInlineEditable\(inlineElement, true, protectInitialFocus\)/);
