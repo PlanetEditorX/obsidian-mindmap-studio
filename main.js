@@ -20237,6 +20237,24 @@ var MindMapEditor = class {
       if (!event.repeat) void this.captureScreenshot(false);
       return;
     }
+    if (this.currentMode === "article" && !this.readOnly && mod && !event.shiftKey && !event.altKey && !event.isComposing && (event.key === "Enter" || event.key === "Tab")) {
+      const inlineTarget = target.closest("[data-mms-inline-editable='true']");
+      if (!target.closest("input, textarea, select") && (!target.closest("[contenteditable='true']") || inlineTarget) && (this.inlineEditingId === null || inlineTarget)) {
+        event.preventDefault();
+        event.stopPropagation();
+        event.stopImmediatePropagation();
+        if (event.repeat) return;
+        const sourceId = this.inlineEditingId ?? inlineTarget?.closest("[data-node-id]")?.dataset.nodeId ?? this.selectedId;
+        if (inlineTarget) {
+          delete inlineTarget.dataset.mmsProtectInitialFocus;
+          inlineTarget.blur();
+        }
+        if (sourceId && this.nodeById(sourceId)) this.selectNode(sourceId);
+        if (event.key === "Enter") this.addSibling();
+        else this.addChild();
+        return;
+      }
+    }
     if (this.inlineEditingId !== null) return;
     if (target.closest("input, textarea, select, [contenteditable='true']")) return;
     if (this.currentMode === "article" && this.activeReadingRestore && ["PageUp", "PageDown", "Home", "End", "ArrowUp", "ArrowDown", " "].includes(event.key)) {

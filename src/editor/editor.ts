@@ -8226,8 +8226,36 @@ export class MindMapEditor {
       return;
     }
 
-    // Inline title/body editors own Enter, Escape and formatting keys. Keep
-    // structural shortcuts disabled for the whole editing lifecycle even if a
+    // Article structure shortcuts also work inside the active title/body editor.
+    // Commit its live text first; otherwise a structural render would detach the
+    // contenteditable and discard pending changes. Leave code editors and other
+    // form controls to their existing keyboard handlers.
+    if (this.currentMode === "article" && !this.readOnly && mod && !event.shiftKey && !event.altKey
+      && !event.isComposing && (event.key === "Enter" || event.key === "Tab")) {
+      const inlineTarget = target.closest<HTMLElement>("[data-mms-inline-editable='true']");
+      if (!target.closest("input, textarea, select")
+        && (!target.closest("[contenteditable='true']") || inlineTarget)
+        && (this.inlineEditingId === null || inlineTarget)) {
+        event.preventDefault();
+        event.stopPropagation();
+        event.stopImmediatePropagation();
+        if (event.repeat) return;
+        const sourceId = this.inlineEditingId ?? inlineTarget?.closest<HTMLElement>("[data-node-id]")?.dataset.nodeId ?? this.selectedId;
+        if (inlineTarget) {
+          // A recently activated article line briefly guards against stray
+          // blur events; an explicit structure command must still commit it.
+          delete inlineTarget.dataset.mmsProtectInitialFocus;
+          inlineTarget.blur();
+        }
+        if (sourceId && this.nodeById(sourceId)) this.selectNode(sourceId);
+        if (event.key === "Enter") this.addSibling();
+        else this.addChild();
+        return;
+      }
+    }
+
+    // Inline title/body editors own unmodified Enter, Escape and formatting keys. Keep
+    // other structural shortcuts disabled for the whole editing lifecycle even if a
     // blur changes contenteditable before the original event finishes bubbling.
     // The screenshot shortcut is intentionally handled above so editing text
     // does not make the configured capture command unavailable.

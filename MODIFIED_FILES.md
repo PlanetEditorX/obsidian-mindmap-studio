@@ -1,5 +1,12 @@
 # Modified Files
 
+## 本轮工作区：文章模式结构快捷键
+
+- `src/editor/editor.ts`：根元素捕获文章模式 Ctrl/Cmd+Enter 与 Ctrl/Cmd+Tab，包含内容编辑态保存/去除初次焦点保护、按原节点创建同级或子节点；不影响只读、代码编辑器和其它模式的键盘逻辑。
+- `main.js`：在保留上一轮 `aria-labelledby` 悬浮提示修复的产物上同步同一快捷键行为；当前环境缺少 esbuild，仍需有依赖环境中的生产重建。
+- `tests/article-node-shortcuts.test.mjs`：新增实际键盘处理器的行为测试，并对照 `main.js` 运行时快捷键路径。`package.json`：接入 `test:unit`（未改版本号）。
+- `README.md`、`docs/TESTING.md`、`CHANGELOG.md`、`TEST_RESULTS.md`：补充功能与手工验证、离线测试限制。
+
 ## 本轮工作区：文章文字的编辑态黑色悬浮提示
 
 - `src/editor/editor.ts`：行内编辑使用隐藏文本 `aria-labelledby` 取代会触发 Obsidian tooltip 的 `aria-label`；编辑结束或切换只读时回收隐藏标签。

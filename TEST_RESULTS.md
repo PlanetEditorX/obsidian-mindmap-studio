@@ -1,5 +1,15 @@
 # Test Results
 
+## 本轮：文章模式 Ctrl/Cmd+Enter / Ctrl/Cmd+Tab 创建节点（本地受限验证）
+
+- 新增 7 条行为与安装包契约快捷键测试：执行实际 `handleKeydown` 逻辑，覆盖编辑态保存优先、正确节点目标、非编辑态、只读、IME、长按、防止代码编辑器冲突和其它模式。
+- `node --test tests/article-node-shortcuts.test.mjs tests/reading-editor-contract.test.mjs tests/node-creation.test.mjs tests/node-creation-focus.test.mjs tests/repository-cleanup.test.mjs`：63/63 通过。
+- 具备本地 TypeScript 模块后，排除 `esbuild` 缺失而无法启动的 `plugin-update.test.mjs` 与 `xmind-import.test.mjs`：其余 42 组单测文件合计 459/459 通过。
+- `npm run test:docs`：通过，1319 个已命名声明均有文档；`npm run test:repo`：通过；`node --check main.js`：通过。
+- 原本源 ZIP 根据交付规则未包含未修改的 `examples/`，本轮临时恢复为可读 UTF-8 示例名以运行仓库测试；最终源码 ZIP 按规则仍排除 `examples/`。
+- 受 npm registry DNS 失败、缺少 `esbuild` 限制，`npm run verify` / 综合回归 / 正式生产构建未能完成。`main.js` 基于前一轮已打包的兼容产物作对应键盘方法级同步更新，仍需依赖完整的机器执行 `npm ci && npm run verify` 正式重建。
+- 需真实 Obsidian 验证文章输入中两个快捷键、节点聚焦、保存/撤销、根节点和 Ctrl+Tab 是否受到宿主快捷键占用影响。
+
 ## 本轮：正文/标题编辑态悬浮提示修复（本地受限验证）
 
 - `node --test tests/reading-editor-contract.test.mjs`：43/43 通过。

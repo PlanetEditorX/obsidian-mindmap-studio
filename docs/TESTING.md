@@ -36,6 +36,12 @@
 
 ## 单元测试边界
 
+### 文章模式结构快捷键
+
+`tests/article-node-shortcuts.test.mjs` 直接执行文章键盘处理器，验证 Ctrl/Cmd+Enter 创建当前节点的兄弟节点、Ctrl/Cmd+Tab 创建子节点；编辑态必须先通过 blur 提交正文，再按原节点 ID 创建，非编辑态也生效。覆盖只读、输入法组合输入、按键长按、Shift/Alt 修饰键、代码块 textarea 与其它显示模式不被误拦截，并确认 `main.js` 同步了该按键路径。结构操作复用 `addSibling()` / `addChild()` 的统一历史和保存链路，根节点兄弟操作回退为子节点。
+
+Obsidian 桌面端手动检查：在文章标题、章节标题和正文中分别编辑尚未保存的文字，按 Ctrl+Enter / Ctrl+Tab 后旧文字已保存，新节点紧随正确位置并自动进入输入；确认撤销可恢复、跨模式显示一致。再检查纯选中节点、根节点、只读和代码块编辑器，以及 Ctrl+Tab 未被系统/Obsidian 的标签页切换抢先处理。非修饰 Enter 应保存、Shift+Enter 应插入换行。
+
 ### 显示模式与阅读位置
 
 覆盖：
