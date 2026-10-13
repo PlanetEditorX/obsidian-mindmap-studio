@@ -20207,7 +20207,7 @@ var MindMapEditor = class {
    * @param event 触发当前交互的浏览器或 Obsidian 事件。
    */
   handleKeydown(event) {
-    var _a2;
+    var _a2, _b2, _c, _d;
     const target = event.target;
     const mod = event.ctrlKey || event.metaKey;
     const key = event.key.toLowerCase();
@@ -20244,7 +20244,7 @@ var MindMapEditor = class {
         event.stopPropagation();
         event.stopImmediatePropagation();
         if (event.repeat) return;
-        const sourceId = this.inlineEditingId ?? inlineTarget?.closest("[data-node-id]")?.dataset.nodeId ?? this.selectedId;
+        const sourceId = (_c = (_b2 = this.inlineEditingId) != null ? _b2 : (_a2 = inlineTarget == null ? void 0 : inlineTarget.closest("[data-node-id]")) == null ? void 0 : _a2.dataset.nodeId) != null ? _c : this.selectedId;
         if (inlineTarget) {
           delete inlineTarget.dataset.mmsProtectInitialFocus;
           inlineTarget.blur();
@@ -20272,7 +20272,7 @@ var MindMapEditor = class {
       this.markSaving();
       return;
     }
-    if (this.currentMode === "article" && event.key === "Escape" && ((_a2 = this.options.articleNavigation) == null ? void 0 : _a2.parentPath)) {
+    if (this.currentMode === "article" && event.key === "Escape" && ((_d = this.options.articleNavigation) == null ? void 0 : _d.parentPath)) {
       event.preventDefault();
       const navigation = this.options.articleNavigation;
       void this.navigateWithTransition(
