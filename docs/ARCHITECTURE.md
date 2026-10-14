@@ -266,6 +266,8 @@ Obsidian 读取文本
 
 四种模式使用 `ReadingLocation` 同步阅读进度。记录包含目标物理文件、目标节点到根节点的回退链、跨子导图父挂载链、节点内部比例和视口锚点。恢复顺序为“精确节点 → 当前文件父级 → 父导图挂载节点及其父级 → 文章族根节点”。这种语义锚点不会因不同模式的页面高度差异而漂移。
 
+新建节点（工具栏、Tab/Enter、文章快捷键）属于“创建即导航”例外：`addChild()` / `addSibling()` 显式向 `mutate()` 传入 `null`，跳过变更前旧位置的捕获与恢复——否则文章模式会在重渲染时按旧选中节点恢复视口并重设 `selectedId`，抢走刚创建节点的选择与行内编辑焦点。文章模式另把新节点记入 `pendingStructureFocusNodeId`，交给 `renderWindow()` 作为最高优先级的语义锚点一次消费（`createReadingLocation(..., 0, 0.5)`）：新节点因此成为视口目标，并在分帧补载结束后继续被 `holdArticleAnchor()` 钉住；若文章窗口始终渲染不出该节点（例如上下文未就绪），`focusCreatedStructureNode()` 放弃聚焦时清除该标记，避免它被之后某次无关渲染误用。
+
 导图视口仍由 `initializeMindMapViewport()`、`persistMindMapViewportState()` 和 `applyTransform()` 管理；统一阅读位置优先决定聚焦节点，缩放和平移字段负责保持画布视觉状态。
 
 ## 6. 父子导图结构

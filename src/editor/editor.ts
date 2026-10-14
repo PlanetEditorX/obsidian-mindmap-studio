@@ -322,6 +322,12 @@ export class MindMapEditor {
   private articleRenderController: ArticleRenderController | null = null;
   private pendingArticleFocusLocation: ReadingLocation | null = null;
   /**
+   * 新建节点（Tab/Enter 与文章快捷键）待聚焦标记。文章渲染会用旧语义位置恢复视口并重设
+   * `selectedId`，把刚创建节点的选择与焦点一起抢走；该标记让本次渲染把恢复目标换成新节点，
+   * 由 `renderWindow` 消费一次后清除。
+   */
+  private pendingStructureFocusNodeId: string | null = null;
+  /**
    * 文章族内容刷新会先渲染骨架并清空正文，滚动位置与节点 DOM 一并丢失。刷新前把当前
    * 语义位置暂存在这里，供骨架之后的那次真实渲染恢复，避免内容变更后视口跳到别处。
    */
@@ -3197,6 +3203,19 @@ export class MindMapEditor {
         ? null
         : chooseArticleTransitionLocation(requestedLocation, this.pendingArticleFocusLocation);
       this.pendingArticleFocusLocation = null;
+      // 新建节点要求本次渲染直接定位到它：既避免按旧选中节点恢复位置覆盖新选择，
+      // 也让新节点成为补载期间的语义锚点，补载结束后仍保持在视口内。
+      const structureFocusNodeId = this.pendingStructureFocusNodeId;
+      this.pendingStructureFocusNodeId = null;
+      const structureFocusLocation = structureFocusNodeId && this.nodeById(structureFocusNodeId)
+        ? createReadingLocation(
+          this.readingLocationSections(),
+          this.options.currentFilePath,
+          structureFocusNodeId,
+          0,
+          0.5
+        )
+        : null;
       const rebuildLocation = this.pendingArticleRebuildLocation;
       this.pendingArticleRebuildLocation = null;
       this.articleEl.empty();
@@ -3253,7 +3272,11 @@ export class MindMapEditor {
       }
       // 语义锚点优先于像素锚点：像素偏移在窗口分帧向前补载后会指向另一段内容，
       // 而节点 + 节点内比例在任何窗口切片下都表示同一处正文。
-      const location = latestRequestedLocation ?? previousLocation ?? rebuildLocation ?? this.lastReadingLocation;
+      const location = structureFocusLocation
+        ?? latestRequestedLocation
+        ?? previousLocation
+        ?? rebuildLocation
+        ?? this.lastReadingLocation;
       this.pendingArticleAnchorLocation = location;
       if (location) {
         const resolved = this.restoreReadingLocation("article", location);
@@ -4996,11 +5019,22 @@ export class MindMapEditor {
     if (!this.ensureEditable()) return;
     const selected = this.selectedNode() ?? this.document.root;
     const node = this.createConfiguredNode("");
+    // 创建即导航到新节点：显式传 null 阻止 mutate 用变更前的旧位置恢复视口与选择，
+    // 否则新建节点会立刻失焦、无法进入行内编辑。
+    this.markStructureFocusTarget(node.id);
     this.mutate(() => {
       appendChild(selected, node);
       this.selectedId = node.id;
-    });
+    }, null);
     this.focusCreatedStructureNode(node.id);
+  }
+
+  /**
+   * 记录本次结构创建后要聚焦的节点。文章渲染还会用旧语义位置恢复视口并重设选中节点，
+   * 需要该标记把恢复目标换成新节点；导图与大纲模式只依赖上面的 `null` 跳过恢复。
+   */
+  private markStructureFocusTarget(nodeId: string): void {
+    this.pendingStructureFocusNodeId = this.currentMode === "article" ? nodeId : null;
   }
 
   /**
@@ -5016,10 +5050,11 @@ export class MindMapEditor {
     const parent = this.parentNodeById(selected.id);
     if (!parent) return;
     const node = this.createConfiguredNode("");
+    this.markStructureFocusTarget(node.id);
     this.mutate(() => {
       insertSiblingAfter(this.document.root, selected.id, node, this.currentNodeTreeIndex());
       this.selectedId = node.id;
-    });
+    }, null);
     this.focusCreatedStructureNode(node.id);
   }
 
@@ -8237,6 +8272,9 @@ export class MindMapEditor {
           return;
         }
         if (!nodeEl) {
+          // 文章窗口始终没渲染出新节点（例如文章上下文尚未就绪），放弃聚焦并清掉标记，
+          // 避免它被之后某次无关的文章渲染消费，把视口拉到这个旧节点。
+          this.pendingStructureFocusNodeId = null;
           this.callbacks.onDebugLog("editor", "article-structure-focus-missing", { nodeId, attempts });
           return;
         }

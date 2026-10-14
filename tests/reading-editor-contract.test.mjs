@@ -103,7 +103,11 @@ test("article family refreshes keep the reading position across the skeleton ren
   const renderArticle = editorSource.match(/private renderArticle\(\): void \{[\s\S]*?\n  \}/)?.[0] ?? "";
   assert.match(renderArticle, /this\.captureArticleRebuildLocation\(\);[\s\S]*this\.renderArticleSkeleton/, "the snapshot is taken before the skeleton replaces the article body");
   assert.match(renderArticle, /const rebuildLocation = this\.pendingArticleRebuildLocation;\s*\n\s*this\.pendingArticleRebuildLocation = null;/, "the snapshot is consumed exactly once by the next real render");
-  assert.match(renderArticle, /const location = latestRequestedLocation \?\? previousLocation \?\? rebuildLocation \?\? this\.lastReadingLocation;/, "a rebuilt page keeps the semantic anchor instead of a clamped pixel offset");
+  assert.match(
+    renderArticle,
+    /const location = structureFocusLocation[\s\S]*?\?\? latestRequestedLocation[\s\S]*?\?\? previousLocation[\s\S]*?\?\? rebuildLocation[\s\S]*?\?\? this\.lastReadingLocation;/,
+    "a rebuilt page keeps the semantic anchor instead of a clamped pixel offset"
+  );
 });
 
 test("article warmup re-anchors the semantic position once the window is fully loaded", () => {

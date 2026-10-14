@@ -261,7 +261,7 @@ test("clicking a same-file directory chapter switches to article without reopeni
   assert.match(renderArticle, /const requestedLocation = directoryOnly \? null : explicitTarget/);
   assert.match(renderArticle, /const previousLocation = !directoryOnly && !requestedLocation/);
   assert.match(renderArticle, /const latestRequestedLocation = directoryOnly[\s\S]*chooseArticleTransitionLocation\(requestedLocation, this\.pendingArticleFocusLocation\)/);
-  assert.match(renderArticle, /const location = latestRequestedLocation \?\? previousLocation \?\? rebuildLocation \?\? this\.lastReadingLocation/);
+  assert.match(renderArticle, /const location = structureFocusLocation[\s\S]*?\?\? latestRequestedLocation[\s\S]*?\?\? previousLocation[\s\S]*?\?\? rebuildLocation[\s\S]*?\?\? this\.lastReadingLocation/);
   assert.doesNotMatch(renderArticle, /suppressNextArticleSemanticRestore|suppressSemanticRestore|articleNodeAnchorScroll/);
   assert.match(renderArticle, /if \(location\) \{[\s\S]*this\.restoreReadingLocation\("article", location\)[\s\S]*this\.holdArticleAnchor\(resolved\)/);
   assert.match(renderDirectory, /entry\.filePath === options\.currentFilePath && entry\.nodeId/);

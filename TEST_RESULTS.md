@@ -1,6 +1,17 @@
 # Test Results
 
-## 本轮：修正 test:regression 中过期的节点聚焦契约（测试-only）
+## 本轮：修复文章模式新建节点丢失焦点（运行时修复）
+
+- 现象（真实 Obsidian 反馈）：文章模式行内编辑时按 Ctrl/Cmd+Enter 创建兄弟节点、Ctrl/Cmd+Tab 创建子节点，节点能创建，但新节点不进入行内编辑，也没有获得焦点。
+- 根因：`addChild()` / `addSibling()`（`src/editor/editor.ts:5001` / `:5026`）向 `mutate()` 只传了 `action`，`restoreLocation` 为 `undefined`，于是 `mutate` 按当前模式捕获变更前的 `ReadingLocation` 并在渲染后恢复。文章模式下该恢复把 `selectedId` 重设回来源节点，`renderWindow()` 内部也存在同样的旧位置恢复；`focusCreatedStructureNode()` 的守卫 `this.selectedId !== nodeId` 因此直接 return，新节点既不滚入视口也不进入行内编辑。导图模式本就传 `null`（不恢复），所以只有文章/大纲受影响。
+- 修复 1（跳过旧位置恢复）：`addChild()` / `addSibling()` 显式向 `mutate()` 传入 `null`，语义为“不动阅读位置”，不再用变更前的位置覆盖新选择；导图模式行为不变，大纲模式同样因此恢复聚焦。
+- 修复 2（文章渲染锚定新节点）：新增 `pendingStructureFocusNodeId` 与 `markStructureFocusTarget()`（仅文章模式记录），`renderWindow()` 一次性消费它并以 `createReadingLocation(..., 0, 0.5)` 生成 `structureFocusLocation`，优先级高于 `latestRequestedLocation` / `previousLocation` / `rebuildLocation` / `lastReadingLocation`。新节点因此成为语义锚点，`holdArticleAnchor()` 会在分帧补载结束后继续把它保持在视口内；若文章窗口始终渲染不出该节点，`focusCreatedStructureNode()` 放弃聚焦时清除标记，避免被后续无关渲染误消费。
+- 测试：`tests/article-node-shortcuts.test.mjs` 新增 2 条行为契约（从 `main.js` 编译真实 `addChild` / `addSibling` / `markStructureFocusTarget` / `focusCreatedStructureNode`，用模拟“文章渲染按旧位置恢复并覆盖选择”的 `mutate` 断言：创建必须传 `null`、新节点保持选中、`bringNodeIntoView` 与 `beginInlineEdit(..., true)` 均以新节点调用）+ 1 条源码契约（`renderWindow` 消费 `pendingStructureFocusNodeId` 并把 `structureFocusLocation` 放在恢复链首位）。两条行为契约在修复前对旧 `main.js` 实测失败（`restoreLocation: undefined`），修复后通过。
+- 同步更新：`tests/incremental-render.test.mjs`、`tests/reading-editor-contract.test.mjs` 中锁定恢复链顺序的断言改为新表达式（`structureFocusLocation ?? latestRequestedLocation ?? previousLocation ?? rebuildLocation ?? lastReadingLocation`）。
+- 本机 `npm run verify` 完整通过：`test:unit` **475 / 475**、`test:regression` 全部通过、`test:docs` 1327 处命名声明、`test:repo` 通过、`tsc --noEmit` + production esbuild 通过；`docs/FUNCTION_REFERENCE.md` 已重新生成。
+- 待真实 Obsidian 手工验证：文章模式行内编辑时 Ctrl/Cmd+Enter 应在来源节点后创建兄弟节点并立即滚入视口、进入行内编辑；Ctrl/Cmd+Tab 应创建子节点并同样聚焦（首次聚焦不丢）；大纲模式新建节点同样应进入行内编辑；导图模式 Tab/Enter 行为保持原样；连续快速创建多个节点不出现视口回跳。
+
+## 上一轮：修正 test:regression 中过期的节点聚焦契约（测试-only）
 
 - 现象：`npm run verify` 在 `test:regression`（`scripts/test.mjs`）以退出码 1 失败——`scripts/test.mjs:1561` 期望 `/this\.bringNodeIntoView\(node\.id\);\s*\n\s*(?:this|ctx)\.beginInlineEdit\(node\.id, undefined, true\)/` 匹配由 `tests/helpers/editor-sources.mjs` 拼接的编辑器源码不成立。
 - 根因：断言停留在重构前的即时 `requestAnimationFrame(() => { this.bringNodeIntoView(node.id); this.beginInlineEdit(node.id, …) })` 写法；当前实现已把新建节点聚焦收敛进 `focusCreatedStructureNode(nodeId)`（`src/editor/editor.ts:8227`），使用形参 `nodeId`，`node.id` 不再出现。

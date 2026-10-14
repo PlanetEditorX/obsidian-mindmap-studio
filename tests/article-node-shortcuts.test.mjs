@@ -177,3 +177,93 @@ test("window-capture and Obsidian commands share the article structure entry", a
   assert.match(main, /id: "article-create-sibling"/);
   assert.match(main, /id: "article-create-child"/);
 });
+
+// ---------------------------------------------------------------------------
+// Real addChild/addSibling from the distributable plugin. Article mode renders
+// with a reading-location restore that re-selects the pre-mutation node, which
+// used to steal focus from the node the user just created. The creation must
+// skip that stale restore and hand the new node to the render as its anchor.
+// ---------------------------------------------------------------------------
+
+const structureMethods = ["markStructureFocusTarget", "addChild", "addSibling", "focusCreatedStructureNode"]
+  .filter((name) => new RegExp(`(?:^|\\n)  ${name}\\(`).test(runtime))
+  .map(compiledMethod).join("\n");
+
+function structureRuntime() {
+  const context = {
+    HTMLElement: FakeHTMLElement,
+    document: { activeElement: null },
+    CSS: { escape: (value) => value },
+    window: { requestAnimationFrame: (fn) => fn(), setTimeout: (fn) => fn() },
+    appendChild: (parent, node) => { parent.children.push(node); },
+    insertSiblingAfter: (root, selectedId, node) => {
+      root.children.splice(root.children.findIndex((child) => child.id === selectedId) + 1, 0, node);
+    }
+  };
+  return new Function(...Object.keys(context), `return class StructureEditor { ${structureMethods} };`)(...Object.values(context));
+}
+
+const StructureEditor = structureRuntime();
+
+function setupStructure({ mode = "article", selectedId = "source" } = {}) {
+  const calls = [];
+  const editor = new StructureEditor();
+  editor.currentMode = mode;
+  editor.selectedId = selectedId;
+  editor.pendingStructureFocusNodeId = null;
+  editor.callbacks = { onDebugLog() {} };
+  editor.document = {
+    root: { id: "root", children: [{ id: "source", children: [] }] }
+  };
+  editor.ensureEditable = () => true;
+  editor.selectedNode = () => editor.document.root.children.find((child) => child.id === selectedId);
+  editor.parentNodeById = () => editor.document.root;
+  editor.createConfiguredNode = () => ({ id: "new-node", children: [] });
+  editor.currentNodeTreeIndex = () => ({});
+  editor.nodeById = (id) => ["root", "source", "new-node"].includes(id) ? { id, children: [] } : null;
+  // Models the article render: it anchors the viewport on the pending structure
+  // target and keeps that node selected; without that target it restores the
+  // pre-mutation reading location and overwrites the selection.
+  editor.mutate = (action, restoreLocation) => {
+    calls.push({ restoreLocation });
+    action();
+    const focusTarget = editor.pendingStructureFocusNodeId;
+    editor.pendingStructureFocusNodeId = null;
+    if (focusTarget) editor.selectedId = focusTarget;
+    else if (restoreLocation !== null) editor.selectedId = "source";
+  };
+  editor.articleRenderController = { containsNode: () => true };
+  editor.articleEl = { querySelector: () => ({}) };
+  editor.bringNodeIntoView = (id) => calls.push(`visible:${id}`);
+  editor.beginInlineEdit = (id, blockId, protect) => calls.push(`edit:${id}:${protect}`);
+  return { calls, editor };
+}
+
+test("article Ctrl+Tab node creation hands the new node to the render and keeps inline focus", () => {
+  const { calls, editor } = setupStructure();
+  editor.addChild();
+  assert.equal(editor.document.root.children[0].children.map((child) => child.id).join(","), "new-node",
+    "the child must be appended under the selected node");
+  assert.deepEqual(calls[0], { restoreLocation: null }, "creation must skip the stale reading restore");
+  assert.deepEqual(calls.slice(1), ["visible:new-node", "edit:new-node:true"],
+    "the new child must stay selected, be brought into view and enter inline editing");
+});
+
+test("article Ctrl+Enter node creation hands the new sibling to the render and keeps inline focus", () => {
+  const { calls, editor } = setupStructure();
+  editor.addSibling();
+  assert.equal(editor.document.root.children.map((child) => child.id).join(","), "source,new-node");
+  assert.deepEqual(calls[0], { restoreLocation: null }, "creation must skip the stale reading restore");
+  assert.deepEqual(calls.slice(1), ["visible:new-node", "edit:new-node:true"],
+    "the new sibling must stay selected, be brought into view and enter inline editing");
+});
+
+test("the article render anchors on the pending structure focus instead of the stale location", () => {
+  const renderWindow = source.match(/const renderWindow = \(\): void => \{([\s\S]*?)\n    \};/)?.[1] ?? "";
+  assert.ok(renderWindow, "source must define the article renderWindow closure");
+  assert.match(renderWindow, /const structureFocusNodeId = this\.pendingStructureFocusNodeId;\s*\n\s*this\.pendingStructureFocusNodeId = null;/);
+  assert.match(renderWindow, /const location = structureFocusLocation\s*\n\s*\?\? latestRequestedLocation/);
+  assert.match(renderWindow, /structureFocusNodeId[\s\S]*?createReadingLocation\(/);
+  assert.match(renderWindow, /this\.restoreReadingLocation\("article", location\)/);
+});
+

@@ -1,16 +1,25 @@
 # obsidian-mindmap-studio 项目交接
 
 - 插件：MindMap Studio（Obsidian 本地优先 .mindmap 导图，含导图/大纲/文章/通读模式、全局搜索、图床、AI 助手与桌面截图链路）。
-- 版本基线：工作区版本文件为 1.54.9（Git Release 最高 tag v1.55.2；仓库由用户上传的 1.55.2 运行文件重建，TypeScript/package 基线仍标 1.54.9，详见 `reference/version-notes.zh-CN.md`）；本轮为测试契约修正（未改运行时代码），交付追踪版本 1.55.3。
+- 版本基线：工作区版本文件为 1.54.9（Git Release 最高 tag v1.55.2；仓库由用户上传的 1.55.2 运行文件重建，TypeScript/package 基线仍标 1.54.9，详见 `reference/version-notes.zh-CN.md`）；本轮为文章模式新建节点聚焦的运行时修复，交付追踪版本 1.55.4。
 - 仓库规则：见根目录 `AGENTS.md`；每轮代码交付三份 ZIP（源码 / 安装 / Agent 交接）共用同一六位后缀；验证入口 `npm run verify`。
 
-## 当前状态（本轮：修复 CI 回归脚本中过期的节点聚焦契约）
+## 当前状态（本轮：修复文章模式 Ctrl/Cmd+Enter、Ctrl/Cmd+Tab 新建节点丢失焦点）
+
+- 用户反馈（真实 Obsidian）：文章模式在节点行内编辑时按 Ctrl/Cmd+Enter 会创建兄弟节点、Ctrl/Cmd+Tab 会创建子节点，但新节点没有获得焦点，也没有进入编辑状态；期望新节点立即处于行内编辑。
+- 根因：`addChild()` / `addSibling()`（`src/editor/editor.ts:5001` / `:5026`）调用 `mutate(action)` 时未传 `restoreLocation`，于是 `mutate` 按当前模式捕获**变更前**的 `ReadingLocation` 并在函数末尾恢复；文章模式的 `renderArticle()` → `renderWindow()` 内部还会再次用 `previousLocation`（`captureCurrentLocation("article")`，只能取到旧 DOM 中的来源节点）恢复。两处恢复都会执行 `this.selectedId = resolved.nodeId`，把 `action` 里刚写入的新节点选择覆盖回来源节点，`focusCreatedStructureNode()` 的守卫 `if (!this.nodeById(nodeId) || this.selectedId !== nodeId) return;` 随即直接放弃，新节点既不滚入视口也不进入行内编辑。导图模式本就传 `null`（不恢复）所以正常，只有文章模式（以及大纲模式的 mutate 后恢复）受影响。
+- 修复一（跳过旧位置恢复）：`addChild()` / `addSibling()` 现在显式向 `mutate()` 传入 `null`，即文档中已定义的「不动阅读位置」语义，不再用变更前位置覆盖新选择。导图模式行为不变，大纲模式新建节点也因此重新获得聚焦。
+- 修复二（文章渲染锚定新节点）：新增 `pendingStructureFocusNodeId` 字段与 `markStructureFocusTarget(nodeId)`（仅文章模式记录），`renderWindow()` 在计算恢复位置前一次性读取并清空它，用 `createReadingLocation(this.readingLocationSections(), this.options.currentFilePath, id, 0, 0.5)` 生成 `structureFocusLocation`，恢复链变为 `structureFocusLocation ?? latestRequestedLocation ?? previousLocation ?? rebuildLocation ?? lastReadingLocation`。新节点因此成为语义锚点并被 `restoreReadingLocation` + `holdArticleAnchor` 保持在视口内（分帧补载结束后仍保持）；如果文章窗口始终渲染不出该节点（例如 `articleContextReady` 未就绪），`focusCreatedStructureNode()` 在放弃时会清空该标记，避免它被之后某次无关渲染误消费。
+- 测试：`tests/article-node-shortcuts.test.mjs` 新增 2 条行为契约——从 `main.js` 提取真实的 `addChild` / `addSibling` / `markStructureFocusTarget` / `focusCreatedStructureNode` 执行，用一个「文章渲染会按旧位置恢复并覆盖 `selectedId`」的 `mutate` 模拟，断言创建必须传 `null`、新节点保持选中且 `bringNodeIntoView` / `beginInlineEdit(id, undefined, true)` 都以新节点调用；另加 1 条源码契约锁定 `renderWindow` 对 `pendingStructureFocusNodeId` 的消费与恢复链顺序。两条行为契约在修复前对旧 `main.js` 实测失败（`restoreLocation: undefined`），修复后通过。`tests/incremental-render.test.mjs`、`tests/reading-editor-contract.test.mjs` 中锁定恢复链顺序的断言同步改为新表达式。
+- 验证：`npm run verify` 完整通过——`test:unit` **475 / 475**、`test:regression` 全部通过、`test:docs` 1327 处命名声明、`test:repo` 通过、`tsc --noEmit` + production esbuild 通过；`docs/FUNCTION_REFERENCE.md` 已重新生成；文档同步 `docs/ARCHITECTURE.md`（新增“创建即导航”例外与锚点规则）与 `CHANGELOG.md`。
+- 待手工验证：真实 Obsidian 文章模式行内编辑时 Ctrl/Cmd+Enter 应在来源节点后创建兄弟节点并立即滚入视口、进入行内编辑；Ctrl/Cmd+Tab 应创建子节点并同样聚焦（首次聚焦不丢）；大纲模式新建节点也应进入行内编辑；导图模式 Tab/Enter 行为保持不变；连续快速创建多个节点时视口不回跳。
+
+### 上一轮工作区（修正 test:regression 中过期的节点聚焦契约，仅测试）
 
 - 现象：`npm run verify` 在 `test:regression`（`scripts/test.mjs`）报错退出，断言位于 `scripts/test.mjs:1561`，期望正则 `/this\.bringNodeIntoView\(node\.id\);\s*\n\s*(?:this|ctx)\.beginInlineEdit\(node\.id, undefined, true\)/` 匹配 `editorSource`（由 `tests/helpers/editor-sources.mjs` 拼接的编辑器源码）失败（`operator: 'match'`，进程退出码 1）。
-- 根因：该断言停留在重构前的即时写法 `requestAnimationFrame(() => { this.bringNodeIntoView(node.id); this.beginInlineEdit(node.id, …) })`；当前源码已把「新建节点聚焦」收敛进 `MindMapEditor.focusCreatedStructureNode(nodeId)`（`src/editor/editor.ts:8227`），函数体使用形参 `nodeId`（`this.bringNodeIntoView(nodeId);` + `this.beginInlineEdit(nodeId, undefined, true);`），因此 `node.id` 已不再出现，断言必然失败。
+- 根因：该断言停留在重构前的即时写法 `requestAnimationFrame(() => { this.bringNodeIntoView(node.id); this.beginInlineEdit(node.id, …) })`；当前源码已把「新建节点聚焦」收敛进 `MindMapEditor.focusCreatedStructureNode(nodeId)`，函数体使用形参 `nodeId`（`this.bringNodeIntoView(nodeId);` + `this.beginInlineEdit(nodeId, undefined, true);`），因此 `node.id` 已不再出现。
 - 修复（仅测试契约，未改运行时代码）：把 `scripts/test.mjs:1561` 的 `node\.id` 改为 `nodeId`，与 `tests/node-creation-focus.test.mjs:23`、`tests/node-creation.test.mjs:57` 中已在用的 `nodeId` 断言一致。语义不变，仍锁定「新建 Tab/Enter 节点先滚入视口、再保护首次聚焦行内编辑」。
-- 验证：`npm run verify` 完整通过——`test:unit` 472/472、`test:regression` 全部通过、`test:docs` 1326 处命名声明、`test:repo` 通过、`tsc --noEmit` + production esbuild 通过。本轮无插件源码改动，`main.js` 内容与上一轮一致。
-- 待手工验证：真实 Obsidian 文章模式按 Ctrl/Cmd+Enter 创建兄弟节点、Ctrl/Cmd+Tab 创建子节点后，新节点应立即滚入视口并进入行内编辑且首次聚焦不丢；本条为契约修正，运行时行为未受影响。
+- 验证：`npm run verify` 完整通过——`test:unit` 472/472、`test:regression` 全部通过、`test:docs` 1326 处命名声明、`test:repo` 通过、`tsc --noEmit` + production esbuild 通过。该轮无插件源码改动。
 
 ### 上一轮工作区（折叠代码块惰性渲染，修复万行代码卡死）
 

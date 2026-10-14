@@ -13020,6 +13020,12 @@ var MindMapEditor = class {
     this.articleRenderController = null;
     this.pendingArticleFocusLocation = null;
     /**
+     * 新建节点（Tab/Enter 与文章快捷键）待聚焦标记。文章渲染会用旧语义位置恢复视口并重设
+     * `selectedId`，把刚创建节点的选择与焦点一起抢走；该标记让本次渲染把恢复目标换成新节点，
+     * 由 `renderWindow` 消费一次后清除。
+     */
+    this.pendingStructureFocusNodeId = null;
+    /**
      * 文章族内容刷新会先渲染骨架并清空正文，滚动位置与节点 DOM 一并丢失。刷新前把当前
      * 语义位置暂存在这里，供骨架之后的那次真实渲染恢复，避免内容变更后视口跳到别处。
      */
@@ -15634,10 +15640,19 @@ var MindMapEditor = class {
     const needsEntryTransition = !reducedMotion && (requestedLocation !== null || !existingPage || existingPage.dataset.nodeId !== this.document.root.id || existingDirectory !== directoryOnly);
     this.cancelArticleWindowExpansion();
     const renderWindow = () => {
-      var _a3, _b3, _c2, _d2;
+      var _a3, _b3, _c2, _d2, _e2;
       if (this.currentMode !== "article" || !this.options.articleContextReady) return;
       const latestRequestedLocation = directoryOnly ? null : chooseArticleTransitionLocation(requestedLocation, this.pendingArticleFocusLocation);
       this.pendingArticleFocusLocation = null;
+      const structureFocusNodeId = this.pendingStructureFocusNodeId;
+      this.pendingStructureFocusNodeId = null;
+      const structureFocusLocation = structureFocusNodeId && this.nodeById(structureFocusNodeId) ? createReadingLocation(
+        this.readingLocationSections(),
+        this.options.currentFilePath,
+        structureFocusNodeId,
+        0,
+        0.5
+      ) : null;
       const rebuildLocation = this.pendingArticleRebuildLocation;
       this.pendingArticleRebuildLocation = null;
       this.articleEl.empty();
@@ -15694,7 +15709,7 @@ var MindMapEditor = class {
         }
         return;
       }
-      const location = (_d2 = (_c2 = latestRequestedLocation != null ? latestRequestedLocation : previousLocation) != null ? _c2 : rebuildLocation) != null ? _d2 : this.lastReadingLocation;
+      const location = (_e2 = (_d2 = (_c2 = structureFocusLocation != null ? structureFocusLocation : latestRequestedLocation) != null ? _c2 : previousLocation) != null ? _d2 : rebuildLocation) != null ? _e2 : this.lastReadingLocation;
       this.pendingArticleAnchorLocation = location;
       if (location) {
         const resolved = this.restoreReadingLocation("article", location);
@@ -17285,11 +17300,19 @@ var MindMapEditor = class {
     if (!this.ensureEditable()) return;
     const selected = (_a2 = this.selectedNode()) != null ? _a2 : this.document.root;
     const node = this.createConfiguredNode("");
+    this.markStructureFocusTarget(node.id);
     this.mutate(() => {
       appendChild(selected, node);
       this.selectedId = node.id;
-    });
+    }, null);
     this.focusCreatedStructureNode(node.id);
+  }
+  /**
+   * 记录本次结构创建后要聚焦的节点。文章渲染还会用旧语义位置恢复视口并重设选中节点，
+   * 需要该标记把恢复目标换成新节点；导图与大纲模式只依赖上面的 `null` 跳过恢复。
+   */
+  markStructureFocusTarget(nodeId) {
+    this.pendingStructureFocusNodeId = this.currentMode === "article" ? nodeId : null;
   }
   /**
    * 添加sibling，并保持模型、界面和持久化状态的一致性。
@@ -17304,10 +17327,11 @@ var MindMapEditor = class {
     const parent = this.parentNodeById(selected.id);
     if (!parent) return;
     const node = this.createConfiguredNode("");
+    this.markStructureFocusTarget(node.id);
     this.mutate(() => {
       insertSiblingAfter(this.document.root, selected.id, node, this.currentNodeTreeIndex());
       this.selectedId = node.id;
-    });
+    }, null);
     this.focusCreatedStructureNode(node.id);
   }
   /** Inserts a text block after the context block, or appends it when no block was targeted. */
@@ -20253,6 +20277,7 @@ var MindMapEditor = class {
           return;
         }
         if (!nodeEl) {
+          this.pendingStructureFocusNodeId = null;
           this.callbacks.onDebugLog("editor", "article-structure-focus-missing", { nodeId, attempts });
           return;
         }
