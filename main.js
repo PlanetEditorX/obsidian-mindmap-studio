@@ -6043,9 +6043,74 @@ var wbytes = function(d, b, v) {
   for (; v; ++b)
     d[b] = v, v >>>= 8;
 };
-function deflateSync(data, opts) {
-  return dopt(data, opts || {}, 0, 0);
-}
+var Deflate = /* @__PURE__ */ (function() {
+  function Deflate2(opts, cb) {
+    if (typeof opts == "function")
+      cb = opts, opts = {};
+    this.ondata = cb;
+    this.o = opts || {};
+    this.s = { l: 0, i: 32768, w: 32768, z: 32768 };
+    this.b = new u8(98304);
+    if (this.o.dictionary) {
+      var dict = this.o.dictionary.subarray(-32768);
+      this.b.set(dict, 32768 - dict.length);
+      this.s.i = 32768 - dict.length;
+    }
+  }
+  Deflate2.prototype.p = function(c, f) {
+    this.ondata(dopt(c, this.o, 0, 0, this.s), f);
+  };
+  Deflate2.prototype.push = function(chunk, final) {
+    if (!this.ondata)
+      err(5);
+    if (this.s.l)
+      err(4);
+    var endLen = chunk.length + this.s.z;
+    if (endLen > this.b.length) {
+      if (endLen > 2 * this.b.length - 32768) {
+        var newBuf = new u8(endLen & -32768);
+        newBuf.set(this.b.subarray(0, this.s.z));
+        this.b = newBuf;
+      }
+      var split = this.b.length - this.s.z;
+      this.b.set(chunk.subarray(0, split), this.s.z);
+      this.s.z = this.b.length;
+      this.p(this.b, false);
+      this.b.set(this.b.subarray(-32768));
+      this.b.set(chunk.subarray(split), 32768);
+      this.s.z = chunk.length - split + 32768;
+      this.s.i = 32766, this.s.w = 32768;
+    } else {
+      this.b.set(chunk, this.s.z);
+      this.s.z += chunk.length;
+    }
+    this.s.l = final & 1;
+    if (this.s.z > this.s.w + 8191 || final) {
+      this.p(this.b, final || false);
+      this.s.w = this.s.i, this.s.i -= 2;
+    }
+    if (final) {
+      this.s = this.o = {};
+      this.b = et;
+    }
+  };
+  Deflate2.prototype.flush = function(sync) {
+    if (!this.ondata)
+      err(5);
+    if (this.s.l)
+      err(4);
+    this.p(this.b, false);
+    this.s.w = this.s.i, this.s.i -= 2;
+    if (sync) {
+      var c = new u8(6);
+      c[0] = this.s.r >> 3;
+      var ep = wfblk(c, this.s.r, et);
+      this.s.r = 0;
+      this.ondata(c.subarray(0, ep >> 3), false);
+    }
+  };
+  return Deflate2;
+})();
 var Inflate = /* @__PURE__ */ (function() {
   function Inflate2(opts, cb) {
     if (typeof opts == "function")
@@ -6086,19 +6151,6 @@ var Inflate = /* @__PURE__ */ (function() {
 function inflateSync(data, opts) {
   return inflt(data, { i: 2 }, opts && opts.out, opts && opts.dictionary);
 }
-var fltn = function(d, p, t, o) {
-  for (var k in d) {
-    var val = d[k], n = p + k, op = o;
-    if (Array.isArray(val))
-      op = mrg(o, val[1]), val = val[0];
-    if (ArrayBuffer.isView(val))
-      t[n] = [val, op];
-    else {
-      t[n += "/"] = [new u8(0), op];
-      fltn(val, n, t, o);
-    }
-  }
-};
 var te = typeof TextEncoder != "undefined" && /* @__PURE__ */ new TextEncoder();
 var td = typeof TextDecoder != "undefined" && /* @__PURE__ */ new TextDecoder();
 var tds = 0;
@@ -6171,6 +6223,9 @@ function strFromU8(dat, latin1) {
     return s;
   }
 }
+var dbf = function(l) {
+  return l == 1 ? 3 : l < 6 ? 2 : l == 9 ? 1 : 0;
+};
 var slzh = function(d, b) {
   return b + 30 + b2(d, b + 26) + b2(d, b + 28);
 };
@@ -6256,49 +6311,175 @@ var wzf = function(o, b, c, d, e) {
   wbytes(o, b + 12, d);
   wbytes(o, b + 16, e);
 };
-function zipSync(data, opts) {
-  if (!opts)
-    opts = {};
-  var r = {};
-  var files = [];
-  fltn(data, "", r, opts);
-  var o = 0;
-  var tot = 0;
-  for (var fn in r) {
-    var _a2 = r[fn], file = _a2[0], p = _a2[1];
-    var compression = p.level == 0 ? 0 : 8;
-    var f = strToU8(fn), s = f.length;
-    var com = p.comment, m = com && strToU8(com), ms = m && m.length;
-    var exl = exfl(p.extra);
-    if (s > 65535)
-      err(11);
-    var d = compression ? deflateSync(file, p) : file, l = d.length;
-    var c = crc();
-    c.p(file);
-    files.push(mrg(p, {
-      size: file.length,
-      crc: c.d(),
-      c: d,
-      f,
-      m,
-      u: s != fn.length || m && com.length != ms,
-      o,
-      compression
-    }));
-    o += 30 + s + exl + l;
-    tot += 76 + 2 * (s + exl) + (ms || 0) + l;
+var ZipPassThrough = /* @__PURE__ */ (function() {
+  function ZipPassThrough2(filename) {
+    this.filename = filename;
+    this.c = crc();
+    this.size = 0;
+    this.compression = 0;
   }
-  var out = new u8(tot + 22), oe = o, cdl = tot - o;
-  for (var i = 0; i < files.length; ++i) {
-    var f = files[i];
-    wzh(out, f.o, f, f.f, f.u, f.c.length);
-    var badd = 30 + f.f.length + exfl(f.extra);
-    out.set(f.c, f.o + badd);
-    wzh(out, o, f, f.f, f.u, f.c.length, f.o, f.m), o += 16 + badd + (f.m ? f.m.length : 0);
+  ZipPassThrough2.prototype.process = function(chunk, final) {
+    this.ondata(null, chunk, final);
+  };
+  ZipPassThrough2.prototype.push = function(chunk, final) {
+    if (!this.ondata)
+      err(5);
+    this.c.p(chunk);
+    this.size += chunk.length;
+    if (final)
+      this.crc = this.c.d();
+    this.process(chunk, final || false);
+  };
+  return ZipPassThrough2;
+})();
+var ZipDeflate = /* @__PURE__ */ (function() {
+  function ZipDeflate2(filename, opts) {
+    var _this = this;
+    if (!opts)
+      opts = {};
+    ZipPassThrough.call(this, filename);
+    this.d = new Deflate(opts, function(dat, final) {
+      _this.ondata(null, dat, final);
+    });
+    this.compression = 8;
+    this.flag = dbf(opts.level);
   }
-  wzf(out, o, files.length, cdl, oe);
-  return out;
-}
+  ZipDeflate2.prototype.process = function(chunk, final) {
+    try {
+      this.d.push(chunk, final);
+    } catch (e) {
+      this.ondata(e, null, final);
+    }
+  };
+  ZipDeflate2.prototype.push = function(chunk, final) {
+    ZipPassThrough.prototype.push.call(this, chunk, final);
+  };
+  return ZipDeflate2;
+})();
+var Zip = /* @__PURE__ */ (function() {
+  function Zip2(cb) {
+    this.ondata = cb;
+    this.u = [];
+    this.d = 1;
+  }
+  Zip2.prototype.add = function(file) {
+    var _this = this;
+    if (!this.ondata)
+      err(5);
+    if (this.d & 2)
+      this.ondata(err(4 + (this.d & 1) * 8, 0, 1), null, false);
+    else {
+      var f = strToU8(file.filename), fl_1 = f.length;
+      var com = file.comment, o = com && strToU8(com);
+      var u = fl_1 != file.filename.length || o && com.length != o.length;
+      var hl_1 = fl_1 + exfl(file.extra) + 30;
+      if (fl_1 > 65535)
+        this.ondata(err(11, 0, 1), null, false);
+      var header = new u8(hl_1);
+      wzh(header, 0, file, f, u, -1);
+      var chks_1 = [header];
+      var pAll_1 = function() {
+        for (var _i = 0, chks_2 = chks_1; _i < chks_2.length; _i++) {
+          var chk = chks_2[_i];
+          _this.ondata(null, chk, false);
+        }
+        chks_1 = [];
+      };
+      var tr_1 = this.d;
+      this.d = 0;
+      var ind_1 = this.u.length;
+      var uf_1 = mrg(file, {
+        f,
+        u,
+        o,
+        t: function() {
+          if (file.terminate)
+            file.terminate();
+        },
+        r: function() {
+          pAll_1();
+          if (tr_1) {
+            var nxt = _this.u[ind_1 + 1];
+            if (nxt)
+              nxt.r();
+            else
+              _this.d = 1;
+          }
+          tr_1 = 1;
+        }
+      });
+      var cl_1 = 0;
+      file.ondata = function(err2, dat, final) {
+        if (err2) {
+          _this.ondata(err2, dat, final);
+          _this.terminate();
+        } else {
+          cl_1 += dat.length;
+          chks_1.push(dat);
+          if (final) {
+            var dd = new u8(16);
+            wbytes(dd, 0, 134695760);
+            wbytes(dd, 4, file.crc);
+            wbytes(dd, 8, cl_1);
+            wbytes(dd, 12, file.size);
+            chks_1.push(dd);
+            uf_1.c = cl_1, uf_1.b = hl_1 + cl_1 + 16, uf_1.crc = file.crc, uf_1.size = file.size;
+            if (tr_1)
+              uf_1.r();
+            tr_1 = 1;
+          } else if (tr_1)
+            pAll_1();
+        }
+      };
+      this.u.push(uf_1);
+    }
+  };
+  Zip2.prototype.end = function() {
+    var _this = this;
+    if (this.d & 2) {
+      this.ondata(err(4 + (this.d & 1) * 8, 0, 1), null, true);
+      return;
+    }
+    if (this.d)
+      this.e();
+    else
+      this.u.push({
+        r: function() {
+          if (!(_this.d & 1))
+            return;
+          _this.u.splice(-1, 1);
+          _this.e();
+        },
+        t: function() {
+        }
+      });
+    this.d = 3;
+  };
+  Zip2.prototype.e = function() {
+    var bt = 0, l = 0, tl = 0;
+    for (var _i = 0, _a2 = this.u; _i < _a2.length; _i++) {
+      var f = _a2[_i];
+      tl += 46 + f.f.length + exfl(f.extra) + (f.o ? f.o.length : 0);
+    }
+    var out = new u8(tl + 22);
+    for (var _b2 = 0, _c = this.u; _b2 < _c.length; _b2++) {
+      var f = _c[_b2];
+      wzh(out, bt, f, f.f, f.u, -f.c - 2, l, f.o);
+      bt += 46 + f.f.length + exfl(f.extra) + (f.o ? f.o.length : 0), l += f.b;
+    }
+    wzf(out, bt, this.u.length, tl, l);
+    this.ondata(null, out, true);
+    this.d = 2;
+  };
+  Zip2.prototype.terminate = function() {
+    for (var _i = 0, _a2 = this.u; _i < _a2.length; _i++) {
+      var f = _a2[_i];
+      f.t();
+    }
+    this.d = 2;
+  };
+  return Zip2;
+})();
 var UnzipPassThrough = /* @__PURE__ */ (function() {
   function UnzipPassThrough2() {
   }
@@ -6996,6 +7177,9 @@ function assertArchiveWithinLimits(bytes) {
     }
   });
 }
+function yieldToMainThread() {
+  return new Promise((resolve) => setTimeout(resolve, 0));
+}
 function concatArchiveChunks(chunks, totalLength) {
   const merged = new Uint8Array(totalLength);
   let offset = 0;
@@ -7033,7 +7217,7 @@ async function readArchiveWithLimits(bytes) {
     const end = Math.min(offset + ARCHIVE_UNZIP_CHUNK_BYTES, bytes.length);
     unzipper.push(bytes.subarray(offset, end), end >= bytes.length);
     if (failure) throw failure;
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await yieldToMainThread();
   }
   if (failure) throw failure;
   return files;
@@ -7219,7 +7403,7 @@ function htmlTocList(items) {
 function escapeXml2(value) {
   return escapeHtml(value).replaceAll("'", "&apos;");
 }
-function collectExportTocItems(sections, maxTocDepth, includeTerminalHeadings = true, options = {}) {
+function collectExportTocItems(sections, maxTocDepth, includeTerminalHeadings = true, options = {}, prebuiltInfos) {
   const items = [];
   const childSections = /* @__PURE__ */ new Map();
   sections.forEach((section, index) => {
@@ -7227,6 +7411,7 @@ function collectExportTocItems(sections, maxTocDepth, includeTerminalHeadings = 
     if (key) childSections.set(key, index);
   });
   const collect = (sectionIndex, visited = /* @__PURE__ */ new Set()) => {
+    var _a2;
     if (visited.has(sectionIndex)) return;
     visited.add(sectionIndex);
     const section = sections[sectionIndex];
@@ -7237,7 +7422,8 @@ function collectExportTocItems(sections, maxTocDepth, includeTerminalHeadings = 
     if (sectionIndex > 0 && !parentNodeKey(section.parentFilePath, section.parentNodeId)) {
       push(Math.max(1, section.baseDepth), nodePlainText(section.document.root) || section.document.title, exportAnchor(sectionIndex, `section-${sectionIndex}`));
     }
-    for (const info of buildArticleNodeInfo(section.document.root, section.baseDepth, exportLeafNumbering(section.document, options, section.numberingDisabled))) {
+    const infos = (_a2 = prebuiltInfos == null ? void 0 : prebuiltInfos[sectionIndex]) != null ? _a2 : buildArticleNodeInfo(section.document.root, section.baseDepth, exportLeafNumbering(section.document, options, section.numberingDisabled));
+    for (const info of infos) {
       const title = info.displayTitle || info.title || "\u672A\u547D\u540D";
       const childIndex = childSections.get(`${section.filePath}\0${info.node.id}`);
       if (childIndex !== void 0) {
@@ -7318,7 +7504,47 @@ section{break-inside:auto}.export-toc{margin:2em 0 3em}.export-toc>ul{padding-le
 @media print{body{margin:0;max-width:none}a{color:inherit}}
 </style></head><body><article><h1>${title}</h1>${toc}${body}</article></body></html>`;
 }
-function readingSectionsToDocx(sections, tocMaxDepth = 3, options = {}) {
+var EXPORT_ZIP_CHUNK_BYTES = 256 * 1024;
+async function writeArchiveChunked(entries) {
+  const chunks = [];
+  let totalLength = 0;
+  let failure = null;
+  const archive = new Zip((error, chunk) => {
+    if (error) {
+      failure = error;
+      return;
+    }
+    if (!chunk.length) return;
+    chunks.push(chunk);
+    totalLength += chunk.length;
+  });
+  const pendingFailure = () => failure;
+  for (const [index, entry] of entries.entries()) {
+    const content = entry.content;
+    const file = new ZipDeflate(entry.name);
+    archive.add(file);
+    if (!content.length) file.push(content, true);
+    for (let offset = 0; offset < content.length; offset += EXPORT_ZIP_CHUNK_BYTES) {
+      const end = Math.min(offset + EXPORT_ZIP_CHUNK_BYTES, content.length);
+      file.push(content.subarray(offset, end), end >= content.length);
+      const failed2 = pendingFailure();
+      if (failed2) {
+        archive.terminate();
+        throw failed2;
+      }
+      if (end < content.length) await yieldToMainThread();
+    }
+    if (index < entries.length - 1) await yieldToMainThread();
+  }
+  archive.end();
+  const failed = pendingFailure();
+  if (failed) {
+    archive.terminate();
+    throw failed;
+  }
+  return concatArchiveChunks(chunks, totalLength);
+}
+async function readingSectionsToDocx(sections, tocMaxDepth = 3, options = {}) {
   var _a2;
   const maxTocDepth = normalizedExportTocMaxDepth(tocMaxDepth);
   const first = (_a2 = sections[0]) == null ? void 0 : _a2.document;
@@ -7345,7 +7571,16 @@ function readingSectionsToDocx(sections, tocMaxDepth = 3, options = {}) {
     const bookmarkEnd = anchor ? '<w:bookmarkEnd w:id="' + bookmarkId++ + '"/>' : "";
     return "<w:p><w:pPr>" + properties + "</w:pPr>" + bookmarkStart + '<w:r><w:t xml:space="preserve">' + escapeXml2(text) + "</w:t></w:r>" + bookmarkEnd + "</w:p>";
   };
-  const toc = collectExportTocItems(sections, maxTocDepth, false, options).map((item) => {
+  const sectionInfos = [];
+  for (const [index, section] of sections.entries()) {
+    sectionInfos.push(buildArticleNodeInfo(
+      section.document.root,
+      section.baseDepth,
+      exportLeafNumbering(section.document, options, section.numberingDisabled)
+    ));
+    if (index < sections.length - 1) await yieldToMainThread();
+  }
+  const toc = collectExportTocItems(sections, maxTocDepth, false, options, sectionInfos).map((item) => {
     const indent = Math.max(0, item.depth - 1) * 720;
     return '<w:p><w:pPr><w:ind w:left="' + indent + '"/></w:pPr><w:hyperlink w:anchor="' + wordAnchor(item.anchor) + '" w:history="1"><w:r><w:rPr><w:color w:val="0563C1"/><w:u w:val="single"/></w:rPr><w:t xml:space="preserve">' + escapeXml2(item.title) + "</w:t></w:r></w:hyperlink></w:p>";
   }).join("");
@@ -7356,11 +7591,12 @@ function readingSectionsToDocx(sections, tocMaxDepth = 3, options = {}) {
   });
   const body = [paragraph(title, "Title")];
   if (toc) body.push(paragraph("\u76EE\u5F55", "Heading1"), toc);
-  sections.forEach(({ filePath, document: document2, baseDepth, numberingDisabled }, sectionIndex) => {
+  sections.forEach(({ filePath, document: document2, baseDepth }, sectionIndex) => {
+    var _a3;
     if (sectionIndex > 0) {
       body.push(paragraph(nodePlainText(document2.root) || document2.title, "Heading" + Math.min(6, Math.max(1, baseDepth)), 0, wordAnchor(exportAnchor(sectionIndex, "section-" + sectionIndex))));
     }
-    for (const info of buildArticleNodeInfo(document2.root, baseDepth, exportLeafNumbering(document2, options, numberingDisabled))) {
+    for (const info of (_a3 = sectionInfos[sectionIndex]) != null ? _a3 : []) {
       if (childSectionAnchors.has(filePath + "\0" + info.node.id)) continue;
       const text = info.displayTitle || info.title || "\u672A\u547D\u540D";
       const isWordHeading = info.isHeading && info.node.children.length > 0;
@@ -7371,13 +7607,13 @@ function readingSectionsToDocx(sections, tocMaxDepth = 3, options = {}) {
   const documentXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>' + body.join("") + '<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440"/></w:sectPr></w:body></w:document>';
   const styles = [1, 2, 3, 4, 5, 6].map((level) => '<w:style w:type="paragraph" w:styleId="Heading' + level + '"><w:name w:val="heading ' + level + '"/><w:rPr><w:b/><w:sz w:val="' + Math.max(20, 32 - level * 2) + '"/></w:rPr></w:style>').join("");
   const stylesXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style><w:style w:type="paragraph" w:styleId="Title"><w:name w:val="Title"/><w:rPr><w:b/><w:sz w:val="36"/></w:rPr></w:style>' + styles + "</w:styles>";
-  return zipSync({
-    "[Content_Types].xml": strToU8('<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/></Types>'),
-    "_rels/.rels": strToU8('<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>'),
-    "word/document.xml": strToU8(documentXml),
-    "word/styles.xml": strToU8(stylesXml),
-    "word/_rels/document.xml.rels": strToU8('<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"></Relationships>')
-  });
+  return writeArchiveChunked([
+    { name: "[Content_Types].xml", content: strToU8('<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/></Types>') },
+    { name: "_rels/.rels", content: strToU8('<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>') },
+    { name: "word/document.xml", content: strToU8(documentXml) },
+    { name: "word/styles.xml", content: strToU8(stylesXml) },
+    { name: "word/_rels/document.xml.rels", content: strToU8('<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"></Relationships>') }
+  ]);
 }
 function readingSectionsToMarkdown(sections, tocMaxDepth = 3, options = {}) {
   var _a2;
@@ -22528,7 +22764,8 @@ var MindMapStudioView = class extends import_obsidian17.TextFileView {
       return;
     }
     if (format === "doc") {
-      await this.exportBinaryFile("docx", readingSectionsToDocx(sections, tocMaxDepth, articleExportOptions));
+      const docx = await readingSectionsToDocx(sections, tocMaxDepth, articleExportOptions);
+      await this.exportBinaryFile("docx", docx);
       return;
     }
     const html = readingSectionsToHtml(sections, tocMaxDepth, articleExportOptions);

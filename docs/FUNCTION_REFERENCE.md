@@ -8918,9 +8918,19 @@ function assertArchiveBudget(budget: ArchiveBudget, originalSize: number): void
 function assertArchiveWithinLimits(bytes: Uint8Array): void
 ```
 
-### 函数 `concatArchiveChunks`
+### 函数 `yieldToMainThread`
 
 源码：`src/import/import-export.ts:413`
+
+让出一次宏任务，使主线程有机会处理输入、绘制与其它异步任务。
+
+```ts
+function yieldToMainThread(): Promise<void>
+```
+
+### 函数 `concatArchiveChunks`
+
+源码：`src/import/import-export.ts:418`
 
 合并同一归档条目的分块输出。
 
@@ -8930,7 +8940,7 @@ function concatArchiveChunks(chunks: Uint8Array[], totalLength: number): Uint8Ar
 
 ### 函数 `readArchiveWithLimits`
 
-源码：`src/import/import-export.ts:434`
+源码：`src/import/import-export.ts:439`
 
 在解压炸弹上限约束下分块流式解压归档。 先用中央目录校验条目数与解压后体积，再用 `fflate` 的流式解压器分批推入压缩数据， 每批之间让出一次宏任务：主线程单次最多处理 `ARCHIVE_UNZIP_CHUNK_BYTES` 的压缩输入， 因此大型 XMind 归档导入时不会长时间占用主线程。该实现不依赖 Web Worker， 桌面端与移动端行为一致；解压过程中仍按实际产出累计校验上限。
 
@@ -8940,7 +8950,7 @@ async function readArchiveWithLimits(bytes: Uint8Array): Promise<Unzipped>
 
 ### 函数 `xmindToImportResult`
 
-源码：`src/import/import-export.ts:474`
+源码：`src/import/import-export.ts:479`
 
 Parses a modern XMind archive while retaining images and LaTeX attachments. Embedded images receive temporary tokens so the UI can save each binary once into the current map's asset folder before the document enters edit history.
 
@@ -8950,7 +8960,7 @@ export async function xmindToImportResult(source: ArrayBuffer, fallbackTitle = "
 
 ### 函数 `topicPrimaryTitle`
 
-源码：`src/import/import-export.ts:586`
+源码：`src/import/import-export.ts:591`
 
 Returns the first text block as an imported topic title fallback.
 
@@ -8960,7 +8970,7 @@ function topicPrimaryTitle(node: MindMapNode): string
 
 ### 函数 `materializeXMindImages`
 
-源码：`src/import/import-export.ts:592`
+源码：`src/import/import-export.ts:597`
 
 Saves embedded XMind images once and rewrites every referencing content block.
 
@@ -8970,7 +8980,7 @@ export async function materializeXMindImages( result: XMindImportResult, saveIma
 
 ### 函数 `xmindToDocument`
 
-源码：`src/import/import-export.ts:614`
+源码：`src/import/import-export.ts:619`
 
 Imports an XMind archive as a self-contained document. UI callers should prefer `xmindToImportResult()` plus `materializeXMindImages()` so archive images become normal vault assets.
 
@@ -8980,7 +8990,7 @@ export async function xmindToDocument(source: ArrayBuffer, fallbackTitle = "XMin
 
 ### 接口 `ArticleExportOptions`
 
-源码：`src/import/import-export.ts:631`
+源码：`src/import/import-export.ts:636`
 
 Global defaults used when a physical document does not override terminal numbering.
 
@@ -8990,7 +9000,7 @@ export interface ArticleExportOptions
 
 ### 函数 `exportLeafNumbering`
 
-源码：`src/import/import-export.ts:638`
+源码：`src/import/import-export.ts:643`
 
 Resolves terminal numbering with per-document style taking precedence over plugin defaults.
 
@@ -9000,7 +9010,7 @@ function exportLeafNumbering( document: MindMapDocument, options: ArticleExportO
 
 ### 函数 `htmlArticleDisplayTitle`
 
-源码：`src/import/import-export.ts:652`
+源码：`src/import/import-export.ts:657`
 
 Returns HTML title markup with a font-independent CSS ring for every circled terminal number.
 
@@ -9010,7 +9020,7 @@ function htmlArticleDisplayTitle(info: ArticleNodeInfo): string
 
 ### 函数 `exportAnchor`
 
-源码：`src/import/import-export.ts:661`
+源码：`src/import/import-export.ts:666`
 
 生成跨文件导出时稳定且唯一的标题锚点。
 
@@ -9020,7 +9030,7 @@ function exportAnchor(sectionIndex: number, anchor: string): string
 
 ### 函数 `markdownTitle`
 
-源码：`src/import/import-export.ts:666`
+源码：`src/import/import-export.ts:671`
 
 返回带目录编号的 Markdown 标题文本。
 
@@ -9030,7 +9040,7 @@ function markdownTitle(label: string, title: string, fallback = "未命名"): st
 
 ### 函数 `parentNodeKey`
 
-源码：`src/import/import-export.ts:671`
+源码：`src/import/import-export.ts:676`
 
 返回跨文件目录项映射键。
 
@@ -9040,7 +9050,7 @@ function parentNodeKey(filePath: string | undefined, nodeId: string | undefined)
 
 ### 函数 `normalizedExportTocMaxDepth`
 
-源码：`src/import/import-export.ts:676`
+源码：`src/import/import-export.ts:681`
 
 返回导出目录允许显示的层级。
 
@@ -9050,7 +9060,7 @@ function normalizedExportTocMaxDepth(value: number): number
 
 ### 函数 `markdownHeading`
 
-源码：`src/import/import-export.ts:681`
+源码：`src/import/import-export.ts:686`
 
 生成兼容常用 Markdown 渲染器的标题片段。
 
@@ -9060,7 +9070,7 @@ function markdownHeading(level: number, title: string): string
 
 ### 函数 `markdownAnchor`
 
-源码：`src/import/import-export.ts:686`
+源码：`src/import/import-export.ts:691`
 
 按常见 Markdown 标题规则生成目录片段。
 
@@ -9070,7 +9080,7 @@ function markdownAnchor(title: string): string
 
 ### 函数 `htmlTocList`
 
-源码：`src/import/import-export.ts:697`
+源码：`src/import/import-export.ts:702`
 
 将扁平的层级目录条目转换为兼容 Word 的嵌套列表。
 
@@ -9080,7 +9090,7 @@ function htmlTocList(items: Array<
 
 ### 类型 `TocBranch`
 
-源码：`src/import/import-export.ts:699`
+源码：`src/import/import-export.ts:704`
 
 嵌套目录中的单个章节及其下级章节。
 
@@ -9090,7 +9100,7 @@ type TocBranch =
 
 ### 函数 `escapeXml`
 
-源码：`src/import/import-export.ts:715`
+源码：`src/import/import-export.ts:720`
 
 转义 OOXML 文本内容。
 
@@ -9100,7 +9110,7 @@ function escapeXml(value: string): string
 
 ### 函数 `collectExportTocItems`
 
-源码：`src/import/import-export.ts:720`
+源码：`src/import/import-export.ts:733`
 
 将导出章节收集为父子导图顺序一致的目录项。
 
@@ -9110,7 +9120,7 @@ function collectExportTocItems( sections: ReadingSection[], maxTocDepth: number,
 
 ### 函数 `readingSectionsToHtml`
 
-源码：`src/import/import-export.ts:766`
+源码：`src/import/import-export.ts:782`
 
 Produces one portable article from a map and all recursively collected child maps in the same order used by continuous reading mode.
 
@@ -9118,19 +9128,39 @@ Produces one portable article from a map and all recursively collected child map
 export function readingSectionsToHtml(sections: ReadingSection[], tocMaxDepth = 3, options: ArticleExportOptions =
 ```
 
-### 函数 `readingSectionsToDocx`
+### 接口 `ZipEntryInput`
 
-源码：`src/import/import-export.ts:850`
+源码：`src/import/import-export.ts:869`
 
-Produces a native Word document with bookmarks and internal TOC hyperlinks.
+打包导出中的一个待写入条目。
 
 ```ts
-export function readingSectionsToDocx(sections: ReadingSection[], tocMaxDepth = 3, options: ArticleExportOptions =
+interface ZipEntryInput
+```
+
+### 函数 `writeArchiveChunked`
+
+源码：`src/import/import-export.ts:889`
+
+在不阻塞主线程的前提下分块写出 ZIP 归档。 逐条 `add()` 到流式压缩器后，把每个条目的内容按 `EXPORT_ZIP_CHUNK_BYTES` 分批 `push()`，批次之间让出一次宏任务。因此条目顺序、条目名与未压缩内容都与旧的同步 `zipSync` 完全一致，产物仍是标准 ZIP（条目使用 data descriptor，`unzipSync` 与 Word 均可正常读取），只是主线程单次工作量被限制在一批以内。 不依赖 Web Worker：`AsyncZipDeflate` 在缺少 `Worker` / `URL.createObjectURL` 的环境 会直接抛错，移动端 WebView 也存在风险；分块 + 块间让出在桌面端、移动端与 Node 测试环境行为一致。
+
+```ts
+async function writeArchiveChunked(entries: readonly ZipEntryInput[]): Promise<Uint8Array<ArrayBuffer>>
+```
+
+### 函数 `readingSectionsToDocx`
+
+源码：`src/import/import-export.ts:940`
+
+Produces a native Word document with bookmarks and internal TOC hyperlinks. 导出分三段让出主线程：先按章节构建一次节点信息（目录与正文共用，章节之间 `await`）， 再按 `EXPORT_ZIP_CHUNK_BYTES` 分批流式压缩打包。条目、条目顺序与未压缩内容与旧实现一致。
+
+```ts
+export async function readingSectionsToDocx(sections: ReadingSection[], tocMaxDepth = 3, options: ArticleExportOptions =
 ```
 
 ### 函数 `readingSectionsToMarkdown`
 
-源码：`src/import/import-export.ts:922`
+源码：`src/import/import-export.ts:1024`
 
 Produces article-oriented Markdown with a linked table of contents.
 

@@ -984,7 +984,9 @@ export class MindMapStudioView extends TextFileView {
       return;
     }
     if (format === "doc") {
-      await this.exportBinaryFile("docx", readingSectionsToDocx(sections, tocMaxDepth, articleExportOptions));
+      // 打包导出是异步契约：fflate 流式压缩按 256 KiB 分批并在批次之间让出主线程。
+      const docx = await readingSectionsToDocx(sections, tocMaxDepth, articleExportOptions);
+      await this.exportBinaryFile("docx", docx);
       return;
     }
     const html = readingSectionsToHtml(sections, tocMaxDepth, articleExportOptions);

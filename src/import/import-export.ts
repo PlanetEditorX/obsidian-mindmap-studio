@@ -3,7 +3,7 @@
  * @description 导入导出领域的 XMind 与文章文档转换工具。
  */
 
-import { strFromU8, strToU8, Unzip, UnzipInflate, unzipSync, zipSync, type Unzipped } from "fflate";
+import { strFromU8, strToU8, Unzip, UnzipInflate, Zip, ZipDeflate, unzipSync, type Unzipped } from "fflate";
 import {
   createDefaultDocument,
   createNode,
@@ -409,6 +409,11 @@ function assertArchiveWithinLimits(bytes: Uint8Array): void {
   });
 }
 
+/** 让出一次宏任务，使主线程有机会处理输入、绘制与其它异步任务。 */
+function yieldToMainThread(): Promise<void> {
+  return new Promise<void>((resolve) => setTimeout(resolve, 0));
+}
+
 /** 合并同一归档条目的分块输出。 */
 function concatArchiveChunks(chunks: Uint8Array[], totalLength: number): Uint8Array<ArrayBuffer> {
   const merged = new Uint8Array(totalLength);
@@ -459,7 +464,7 @@ async function readArchiveWithLimits(bytes: Uint8Array): Promise<Unzipped> {
     const end = Math.min(offset + ARCHIVE_UNZIP_CHUNK_BYTES, bytes.length);
     unzipper.push(bytes.subarray(offset, end), end >= bytes.length);
     if (failure) throw failure;
-    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    await yieldToMainThread();
   }
   if (failure) throw failure;
   return files;
@@ -716,12 +721,21 @@ function escapeXml(value: string): string {
   return escapeHtml(value).replaceAll("'", "&apos;");
 }
 
-/** 将导出章节收集为父子导图顺序一致的目录项。 */
+/**
+ * 将导出章节收集为父子导图顺序一致的目录项。
+ *
+ * @param sections 有序章节。
+ * @param maxTocDepth 目录最大层级。
+ * @param includeTerminalHeadings 是否把末端正文也算作目录项。
+ * @param options 文章末端编号配置。
+ * @param prebuiltInfos 可选的按章节预建节点信息；大文档导出时复用同一份，避免对每个章节重复执行一次全树遍历。
+ */
 function collectExportTocItems(
   sections: ReadingSection[],
   maxTocDepth: number,
   includeTerminalHeadings = true,
-  options: ArticleExportOptions = {}
+  options: ArticleExportOptions = {},
+  prebuiltInfos?: readonly (readonly ArticleNodeInfo[] | undefined)[]
 ): Array<{ depth: number; title: string; anchor: string }> {
   const items: Array<{ depth: number; title: string; anchor: string }> = [];
   const childSections = new Map<string, number>();
@@ -740,7 +754,9 @@ function collectExportTocItems(
     if (sectionIndex > 0 && !parentNodeKey(section.parentFilePath, section.parentNodeId)) {
       push(Math.max(1, section.baseDepth), nodePlainText(section.document.root) || section.document.title, exportAnchor(sectionIndex, `section-${sectionIndex}`));
     }
-    for (const info of buildArticleNodeInfo(section.document.root, section.baseDepth, exportLeafNumbering(section.document, options, section.numberingDisabled))) {
+    const infos = prebuiltInfos?.[sectionIndex]
+      ?? buildArticleNodeInfo(section.document.root, section.baseDepth, exportLeafNumbering(section.document, options, section.numberingDisabled));
+    for (const info of infos) {
       const title = info.displayTitle || info.title || "未命名";
       const childIndex = childSections.get(`${section.filePath}\u0000${info.node.id}`);
       if (childIndex !== undefined) {
@@ -841,13 +857,87 @@ section{break-inside:auto}.export-toc{margin:2em 0 3em}.export-toc>ul{padding-le
 }
 
 /**
+ * 打包导出时每批推入压缩器的未压缩字节数；批与批之间让出主线程。
+ *
+ * DOCX 的正文 XML 在大型文档上可达数十 MB，`zipSync` 会在一次同步调用里完成整份
+ * 压缩，期间主线程无法绘制或响应输入。按该粒度分批 `push()` 后，主线程单次最多
+ * 压缩 256 KiB。
+ */
+const EXPORT_ZIP_CHUNK_BYTES = 256 * 1024;
+
+/** 打包导出中的一个待写入条目。 */
+interface ZipEntryInput {
+  name: string;
+  content: Uint8Array;
+}
+
+/**
+ * 在不阻塞主线程的前提下分块写出 ZIP 归档。
+ *
+ * 逐条 `add()` 到流式压缩器后，把每个条目的内容按 `EXPORT_ZIP_CHUNK_BYTES` 分批
+ * `push()`，批次之间让出一次宏任务。因此条目顺序、条目名与未压缩内容都与旧的同步
+ * `zipSync` 完全一致，产物仍是标准 ZIP（条目使用 data descriptor，`unzipSync` 与
+ * Word 均可正常读取），只是主线程单次工作量被限制在一批以内。
+ *
+ * 不依赖 Web Worker：`AsyncZipDeflate` 在缺少 `Worker` / `URL.createObjectURL` 的环境
+ * 会直接抛错，移动端 WebView 也存在风险；分块 + 块间让出在桌面端、移动端与 Node
+ * 测试环境行为一致。
+ *
+ * @param entries 按写入顺序排列的条目。
+ * @returns 完整 ZIP 字节。
+ */
+async function writeArchiveChunked(entries: readonly ZipEntryInput[]): Promise<Uint8Array<ArrayBuffer>> {
+  const chunks: Uint8Array[] = [];
+  let totalLength = 0;
+  let failure: Error | null = null;
+  const archive = new Zip((error, chunk) => {
+    if (error) {
+      failure = error;
+      return;
+    }
+    if (!chunk.length) return;
+    chunks.push(chunk);
+    totalLength += chunk.length;
+  });
+  // 回调在嵌套函数里赋值：通过读取函数取值，避免调用点被误判为永不失败。
+  const pendingFailure = (): Error | null => failure;
+  for (const [index, entry] of entries.entries()) {
+    const content = entry.content;
+    const file = new ZipDeflate(entry.name);
+    archive.add(file);
+    if (!content.length) file.push(content, true);
+    for (let offset = 0; offset < content.length; offset += EXPORT_ZIP_CHUNK_BYTES) {
+      const end = Math.min(offset + EXPORT_ZIP_CHUNK_BYTES, content.length);
+      file.push(content.subarray(offset, end), end >= content.length);
+      const failed = pendingFailure();
+      if (failed) {
+        archive.terminate();
+        throw failed;
+      }
+      if (end < content.length) await yieldToMainThread();
+    }
+    if (index < entries.length - 1) await yieldToMainThread();
+  }
+  archive.end();
+  const failed = pendingFailure();
+  if (failed) {
+    archive.terminate();
+    throw failed;
+  }
+  return concatArchiveChunks(chunks, totalLength);
+}
+
+/**
  * Produces a native Word document with bookmarks and internal TOC hyperlinks.
+ *
+ * 导出分三段让出主线程：先按章节构建一次节点信息（目录与正文共用，章节之间 `await`），
+ * 再按 `EXPORT_ZIP_CHUNK_BYTES` 分批流式压缩打包。条目、条目顺序与未压缩内容与旧实现一致。
  *
  * @param sections Ordered physical maps to merge.
  * @param tocMaxDepth Maximum exported TOC depth resolved from current/global article settings.
- * @returns A complete .docx archive.
+ * @returns A promise of the complete .docx archive.
  */
-export function readingSectionsToDocx(sections: ReadingSection[], tocMaxDepth = 3, options: ArticleExportOptions = {}): Uint8Array {
+export async function readingSectionsToDocx(sections: ReadingSection[], tocMaxDepth = 3, options: ArticleExportOptions = {}): Promise<Uint8Array<ArrayBuffer>> {
   const maxTocDepth = normalizedExportTocMaxDepth(tocMaxDepth);
   const first = sections[0]?.document;
   const title = first ? (nodePlainText(first.root) || first.title) : "导出文档";
@@ -875,7 +965,19 @@ export function readingSectionsToDocx(sections: ReadingSection[], tocMaxDepth = 
     const bookmarkEnd = anchor ? '<w:bookmarkEnd w:id="' + bookmarkId++ + '"/>' : "";
     return '<w:p><w:pPr>' + properties + '</w:pPr>' + bookmarkStart + '<w:r><w:t xml:space="preserve">' + escapeXml(text) + '</w:t></w:r>' + bookmarkEnd + '</w:p>';
   };
-  const toc = collectExportTocItems(sections, maxTocDepth, false, options).map((item) => {
+  // 目录与正文都要用到同一份章节节点信息（标题/编号/锚点）。大文档下每次
+  // `buildArticleNodeInfo()` 就是一次数百毫秒的整棵子树遍历，因此这里按章节只构建一次，
+  // 并在章节之间让出主线程：多文件文章族的单次主线程占用被限制在一个章节以内。
+  const sectionInfos: ArticleNodeInfo[][] = [];
+  for (const [index, section] of sections.entries()) {
+    sectionInfos.push(buildArticleNodeInfo(
+      section.document.root,
+      section.baseDepth,
+      exportLeafNumbering(section.document, options, section.numberingDisabled)
+    ));
+    if (index < sections.length - 1) await yieldToMainThread();
+  }
+  const toc = collectExportTocItems(sections, maxTocDepth, false, options, sectionInfos).map((item) => {
     const indent = Math.max(0, item.depth - 1) * 720;
     return '<w:p><w:pPr><w:ind w:left="' + indent + '"/></w:pPr><w:hyperlink w:anchor="' + wordAnchor(item.anchor) + '" w:history="1"><w:r><w:rPr><w:color w:val="0563C1"/><w:u w:val="single"/></w:rPr><w:t xml:space="preserve">' + escapeXml(item.title) + '</w:t></w:r></w:hyperlink></w:p>';
   }).join("");
@@ -886,11 +988,11 @@ export function readingSectionsToDocx(sections: ReadingSection[], tocMaxDepth = 
   });
   const body: string[] = [paragraph(title, "Title")];
   if (toc) body.push(paragraph("目录", "Heading1"), toc);
-  sections.forEach(({ filePath, document, baseDepth, numberingDisabled }, sectionIndex) => {
+  sections.forEach(({ filePath, document, baseDepth }, sectionIndex) => {
     if (sectionIndex > 0) {
       body.push(paragraph(nodePlainText(document.root) || document.title, "Heading" + Math.min(6, Math.max(1, baseDepth)), 0, wordAnchor(exportAnchor(sectionIndex, "section-" + sectionIndex))));
     }
-    for (const info of buildArticleNodeInfo(document.root, baseDepth, exportLeafNumbering(document, options, numberingDisabled))) {
+    for (const info of sectionInfos[sectionIndex] ?? []) {
       if (childSectionAnchors.has(filePath + "\u0000" + info.node.id)) continue;
       const text = info.displayTitle || info.title || "未命名";
       const isWordHeading = info.isHeading && info.node.children.length > 0;
@@ -903,13 +1005,13 @@ export function readingSectionsToDocx(sections: ReadingSection[], tocMaxDepth = 
   const documentXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>' + body.join("") + '<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440"/></w:sectPr></w:body></w:document>';
   const styles = [1, 2, 3, 4, 5, 6].map((level) => '<w:style w:type="paragraph" w:styleId="Heading' + level + '"><w:name w:val="heading ' + level + '"/><w:rPr><w:b/><w:sz w:val="' + Math.max(20, 32 - level * 2) + '"/></w:rPr></w:style>').join("");
   const stylesXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style><w:style w:type="paragraph" w:styleId="Title"><w:name w:val="Title"/><w:rPr><w:b/><w:sz w:val="36"/></w:rPr></w:style>' + styles + '</w:styles>';
-  return zipSync({
-    "[Content_Types].xml": strToU8('<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/></Types>'),
-    "_rels/.rels": strToU8('<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>'),
-    "word/document.xml": strToU8(documentXml),
-    "word/styles.xml": strToU8(stylesXml),
-    "word/_rels/document.xml.rels": strToU8('<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"></Relationships>')
-  });
+  return writeArchiveChunked([
+    { name: "[Content_Types].xml", content: strToU8('<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/></Types>') },
+    { name: "_rels/.rels", content: strToU8('<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>') },
+    { name: "word/document.xml", content: strToU8(documentXml) },
+    { name: "word/styles.xml", content: strToU8(stylesXml) },
+    { name: "word/_rels/document.xml.rels", content: strToU8('<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"></Relationships>') }
+  ]);
 }
 
 /**

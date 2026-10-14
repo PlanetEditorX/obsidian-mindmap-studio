@@ -2,6 +2,12 @@
 
 ## 未发布
 
+- 大型文档导出加固：Word（`.docx`）导出从同步全量打包改为「分块流式压缩 + 让出主线程」的异步契约：
+  - 新增 `writeArchiveChunked()`，改用 `fflate` 的流式 `Zip` + `ZipDeflate`，逐条 `add()` 后把每个条目的内容按 `EXPORT_ZIP_CHUNK_BYTES`（256 KiB）分批 `push()`，批次之间 `await` 让出一次宏任务。此前 `zipSync()` 会在一次同步调用里压缩整份文档，大型文章族的 `word/document.xml` 可达数十 MB，期间界面完全冻结。
+  - `readingSectionsToDocx()` 因此改为异步 API（`Promise<Uint8Array>`），调用方 `src/view.ts` 的 `exportArticleFamily()` 已 `await`。导出产物的部件顺序、部件名与未压缩内容与旧实现完全一致，仍是标准 ZIP（条目写入 data descriptor，`unzipSync`、Word 与其它 OOXML 工具均可正常读取）。
+  - 同一个导出里目录与正文此前各跑一遍整棵子树的 `buildArticleNodeInfo()`；现在按章节预建一次（`sectionInfos`）并复用（`collectExportTocItems()` 新增可选 `prebuiltInfos` 参数），章节之间让出主线程。多文件文章族的单次主线程占用因此被限制在一个章节以内，总耗时也明显下降；HTML 与 Markdown 导出不传该参数，行为不变。
+  - 与上一轮 XMind 解压相同，未采用 `AsyncZipDeflate`：它在缺少 `Worker` / `URL.createObjectURL` 的环境会直接抛错，移动端 WebView 也有风险；分块 + 块间让出在桌面端、移动端与 Node 测试环境行为一致。解压与打包现在共用同一个「让出宏任务」边界。
+
 - 大型文档与健壮性加固（P0 批次）：
   - 核心树遍历全部改为显式栈（`node-tree.ts` 的 `walkNodes()` / `findAncestors()` / `removeNode()`、`model.ts` 的 `normalizeNode()`、`search/global-search.ts` 的 `buildSearchEntries()`），数千层的深链导图不再因递归展开抛 `RangeError`；遍历顺序与递归版一致（父先于子、同级左到右）。
   - JSON 解析错误与规范化错误分开处理：`parseJsonDocument()` 只吞 `SyntaxError`，合法 JSON 的规范化异常直接抛出，不再把深链/异常文档静默降级为 Markdown 导入（旧行为会把根节点文字变成整段原始 JSON）。

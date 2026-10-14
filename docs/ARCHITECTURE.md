@@ -53,7 +53,7 @@ src/
 ├── search/
 │   └── global-search.ts        本地增量索引与搜索
 ├── import/
-│   └── import-export.ts        XMind 多画布/图片/公式导入与文章导出
+│   └── import-export.ts        XMind 多画布/图片/公式导入与文章导出（含分块流式打包）
 ├── utils/
 │   ├── coalesced-json-writer.ts 连续 JSON 保存请求的合并与串行写入
 │   ├── filename.ts             文件名、扩展名、时间戳与 MIME
@@ -383,6 +383,8 @@ mindmap-search-index.json
 
 静态 Markdown 预览只读取数据并生成 SVG，不绑定编辑事件，也不会修改原始文件。
 
+文章族导出（HTML / Markdown / Word）共用同一份 `ReadingSection` 顺序与文章编号解析，只有终态载体不同：HTML、Markdown 直接拼字符串，Word 需要把 OOXML 部件打包成 ZIP。打包走 `writeArchiveChunked()` 的分块流式压缩（256 KiB 批次 + 批次之间让出主线程），因此 `readingSectionsToDocx()` 是异步 API；HTML 与 Markdown 仍是同步纯函数。
+
 ## 11. 扩展功能时的边界
 
 新增节点字段时：
@@ -465,6 +467,8 @@ mindmap-search-index.json
 - **附件回收取消采用按需扫描**。`MindMapEditor.notifyDocumentChange()` 每次变更都会取消仍在文档中的附件的延迟回收任务，但只有在宿主 `hasPendingFileAssetDeletions()` 返回真时才执行全树扫描；未实现该回调时按「可能有」处理，行为与旧版一致。没有待回收任务时这次扫描是空操作，在大文档下却是每次 mutation 的主线程热点。
 - **撤销历史受总字节预算约束**。`history-manager.ts` 除条数上限外还跟踪 `undoStack` 的累计字节数，超过 `HISTORY_BYTE_BUDGET`（128 MiB）即从最旧一端裁剪。条数与字节双约束同时生效，且始终至少保留一份快照，保证撤销可用。
 - **XMind 归档解压设上限并分块让出主线程**。`import-export.ts` 的 `readArchiveWithLimits()` 先由 `assertArchiveWithinLimits()` 只读中央目录校验条目数 `ARCHIVE_MAX_ENTRIES`（4096）、单条解压后 `ARCHIVE_MAX_ENTRY_BYTES`（64 MiB）与解压总量 `ARCHIVE_MAX_TOTAL_BYTES`（256 MiB）——`filter` 返回 false 时 `fflate` 完全跳过解压，因此在产生任何解压输出前就能拒绝解压炸弹。通过校验后再用 `fflate` 的 `Unzip` + `UnzipInflate` 流式解压，按 `ARCHIVE_UNZIP_CHUNK_BYTES`（256 KiB）分批 `push()`，每批之间 `await` 让出一次宏任务，主线程单次只处理一批压缩输入；解压过程中另按实际产出累计校验单条上限。该实现不依赖 Web Worker，桌面端与移动端行为一致，`tests/xmind-import.test.mjs` 覆盖批次切分与逐字节一致性。因此 `xmindToImportResult()` / `xmindToDocument()` 都是异步 API，调用方必须 `await`。
+- **归档打包导出同样分块让出主线程**。`import-export.ts` 的 `writeArchiveChunked()` 用 `fflate` 的流式 `Zip` + `ZipDeflate` 逐条 `add()`，再把每个条目的内容按 `EXPORT_ZIP_CHUNK_BYTES`（256 KiB）分批 `push()`，批次之间 `await yieldToMainThread()`；`readingSectionsToDocx()` 因此是异步 API（`Promise<Uint8Array>`），`view.ts` 的 `exportArticleFamily()` 必须 `await` 后再交给 `exportBinaryFile()`。旧的同步 `zipSync()` 会在一次调用里压缩整份 `.docx`，大型文章族的 `word/document.xml` 可达数十 MB，期间主线程无法绘制或响应输入。条目的写入顺序、名称与未压缩内容与旧实现一致，产物仍是标准 ZIP（条目使用 data descriptor）。解压与打包共用同一个 `yieldToMainThread()` 边界，且都不依赖 Web Worker——`AsyncZipDeflate` 在缺少 `Worker` / `URL.createObjectURL` 的环境会直接抛错，移动端 WebView 也有风险。
+- **Word 导出对每个章节只构建一次节点信息**。目录与正文都需要同一份 `buildArticleNodeInfo()` 结果，而大文档下这一次调用是整棵子树的同步遍历，因此 `readingSectionsToDocx()` 先按章节预建 `sectionInfos`（章节之间 `await yieldToMainThread()`），再复用给正文循环与 `collectExportTocItems()` 的可选 `prebuiltInfos` 参数。多文件文章族的单次主线程占用因此被限制在一个章节以内；HTML 与 Markdown 导出不传该参数，行为保持原样（仍按需在遍历中构建）。
 
 ### 工具栏可用性与排序
 

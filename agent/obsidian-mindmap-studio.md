@@ -1,10 +1,28 @@
 # obsidian-mindmap-studio 项目交接
 
 - 插件：MindMap Studio（Obsidian 本地优先 .mindmap 导图，含导图/大纲/文章/通读模式、全局搜索、图床、AI 助手与桌面截图链路）。
-- 版本基线：工作区版本文件为 1.55.5（Git Release 已发布 v1.55.5；仓库由用户上传的 1.55.2 运行文件重建）；本轮为「XMind 归档解压迁出主线程」，交付追踪版本 1.55.5，交付后缀 248907。
+- 版本基线：工作区版本文件为 1.55.6（Git Release 已发布 v1.55.6；仓库由用户上传的 1.55.2 运行文件重建）；本轮为「Word 导出打包迁出主线程 + 章节节点信息单次构建」，交付追踪版本 1.55.6，交付后缀 343425。
 - 仓库规则：见根目录 `AGENTS.md`；每轮代码交付三份 ZIP（源码 / 安装 / Agent 交接）共用同一六位后缀；验证入口 `npm run verify`。
 
-## 当前状态（本轮：XMind 归档解压迁出主线程）
+## 当前状态（本轮：Word 导出打包迁出主线程 + 章节节点信息单次构建）
+
+- 触发：上一轮把「XMind 解压迁出主线程」标为已完成，并在下一步里留下「导出/保存链路的阻塞操作」。本轮按同一模式处理导出链路的同步打包：`src/import/import-export.ts` 的 `readingSectionsToDocx()` 此前用一次 `zipSync()` 完成整份 `.docx` 压缩，大型文章族（正文 XML 可达数十 MB）期间主线程完全冻结。
+- 实现（`src/import/import-export.ts`）：
+  - 新增 `writeArchiveChunked(entries)`：改用 `fflate` 的流式 `Zip` + `ZipDeflate`，逐条 `add()` 后把每个条目的内容按新常量 `EXPORT_ZIP_CHUNK_BYTES`（256 KiB）分批 `push()`，批次之间 `await yieldToMainThread()`（新提取的共享边界，XMind 解压循环也改为复用它）。主线程单次最多压缩一批，条目顺序、条目名与未压缩内容与旧实现完全一致，产物仍是标准 ZIP（条目写入 data descriptor）。
+  - 目录与正文此前各跑一遍整棵子树的 `buildArticleNodeInfo()`；现在按章节预建一次 `sectionInfos`（章节之间 `await`），正文循环与 `collectExportTocItems()` 复用同一份（该函数新增可选第 5 参 `prebuiltInfos`，不传时行为不变，HTML/Markdown 导出仍按需构建）。
+  - 契约变化：`readingSectionsToDocx()` 改为 `Promise<Uint8Array<ArrayBuffer>>`；`src/view.ts` 的 `exportArticleFamily()` 改为 `const docx = await readingSectionsToDocx(...)` 再 `await this.exportBinaryFile("docx", docx)`；`scripts/test.mjs` 3 处调用改 `await`，源码契约断言改为新的调用形式并新增「必须先 await 再交给 exportBinaryFile」断言。
+- 设计取舍：未采用 `AsyncZipDeflate`——它在缺少 `Worker` / `URL.createObjectURL` 的环境会直接抛错，移动端 WebView 有风险；分块 + 块间让出在桌面端、移动端与 Node 测试环境行为一致（与上一轮 XMind 解压同一标准）。
+- 实测（隔离 Node 20+/22 环境，40k / 200k 末端节点单章节，预热后）：
+  - 改动前 40k：总耗时 1611 ms，**最长连续主线程阻塞 = 整个导出 1611 ms**；改动后：总耗时 1168 ms，最长阻塞 924 ms（残余 = 该章节单次 `buildArticleNodeInfo()` 遍历）。
+  - 改动前 200k：总耗时 6621 ms，最长阻塞 6621 ms；改动后：总耗时 4746 ms，最长阻塞 3594 ms。
+  - 分块压缩本身：2.1 MB 正文 XML 整块 `push` 需 89.7 ms，按 256 KiB 分块后单批最长 19.4 ms。
+  - `buildArticleNodeInfo()` 为线性：5k 65 ms / 40k 310 ms / 80k 639 ms（≈8 µs/节点），是当前残余阻塞的唯一来源，且位于 `src/article/modes.ts`（文章渲染与三种导出共用），未在本轮改动。
+- 产物一致性核验（本轮真机外验证，不入库脚本）：用 `git show HEAD:src/import/import-export.ts` 打包旧实现，与新实现对同一份丰富文章族 fixture（父导图 + 挂载子导图 + 深层子导图 + 未挂载孤立章节 + `articleNumberingMode: none` + 备注 + 末端节点；`tocMaxDepth` 1/3/8 × 默认/带圈编号两套选项，共 6 组）逐字节比对，**每个 OOXML 部件的未压缩内容与条目顺序全部一致**（PARITY OK），目录超链接锚点与书签顺序也完全一致。另用 Python `zipfile`（独立实现）读取 40k 节点产物：`testzip()` 全部条目 CRC 通过、5 个部件顺序正确、`word/document.xml` 3.71 MB 解压为 40004 段并可被 `ElementTree` 解析。
+- 测试：新建 `tests/docx-export.test.mjs`（5 条）——异步契约；OOXML 部件与顺序不变；5000 段落跨多个 256 KiB 批次的逐字与顺序一致性（并断言未压缩 XML > 256 KiB 以确保真的走了多批路径）；跨文件子导图章节在单次构建路径下仍生成目录超链接（4 条链接全部有对应书签）；源码契约（`export async function`、`EXPORT_ZIP_CHUNK_BYTES`、流式 5 步、`sectionInfos` 复用、`view.ts` 的 await 顺序、`zipSync` 已完全移除）。已登记到 `package.json` 的 `test:unit`。
+- 验证：`npm run verify` 完整通过——`test:unit` **495 / 495**（新增 5 条）、`test:regression` 全部通过、`test:docs` 1337 处命名声明、`test:repo` 通过、`tsc --noEmit` + production esbuild 通过；`docs/FUNCTION_REFERENCE.md` 已重新生成；文档同步 `docs/ARCHITECTURE.md`（新增「归档打包导出同样分块让出主线程」与「Word 导出对每个章节只构建一次节点信息」两条，更新模块表与第 10 节）、`docs/DEVELOPMENT.md`（归档导入/导出排查规则）与 `CHANGELOG.md`「未发布」。
+- 待手工验证：真实 Obsidian 桌面端对大型文章族导出 Word（导出 → 选择保存位置）时界面不应长时间无响应，导出进度提示与完成 Notice 正常；导出产物用 Word / WPS 打开应正常显示目录超链接、章节书签、带圈末端编号与正文缩进（与上一版一致）；多文件文章族（父导图 + 若干子导图）导出后目录项与正文顺序不变。
+
+### 上一轮工作区（XMind 归档解压迁出主线程）
 
 - 触发：上一轮 P0 批次把「XMind 解压迁出主线程」明确留作后续项，本轮回填该项。
 - 实现（`src/import/import-export.ts`）：`readArchiveWithLimits()` 拆成两步。(a) 新增 `assertArchiveWithinLimits()`，用 `unzipSync(bytes, { filter: (file) => { assertArchiveBudget(budget, file.originalSize); return false; } })` 只读中央目录校验条目数 `ARCHIVE_MAX_ENTRIES`（4096）、单条解压后 `ARCHIVE_MAX_ENTRY_BYTES`（64 MiB）、解压总量 `ARCHIVE_MAX_TOTAL_BYTES`（256 MiB）：`filter` 返回 false 时 `fflate` 会完全跳过该条目的解压，因此解压炸弹仍在产生任何解压输出之前被拒绝。(b) 用 `fflate` 的 `Unzip` 流式解压器（注册 `UnzipInflate`）按 `ARCHIVE_UNZIP_CHUNK_BYTES`（256 KiB）分批 `push(bytes.subarray(...), end >= bytes.length)`，每批之间 `await new Promise((resolve) => setTimeout(resolve, 0))` 让出一次宏任务；`onfile` 中按实际产出累计校验单条 64 MiB 上限，并用 `concatArchiveChunks()` 合并分块输出。主线程单次只处理一批压缩输入，大 `content.json` + 多张图片的 XMind 导入不再一次性阻塞界面。
@@ -156,12 +174,13 @@
 
 ## 验证基线
 
-- `npm run verify` 本机完整通过：`test:unit` **488/488**、`test:regression` 全部通过、`test:docs` 全部通过（1330 处命名声明）、`test:repo` 通过、`tsc --noEmit` 与 production esbuild 通过（含本轮大型文档 P0 加固的全部专项测试）。
+- `npm run verify` 本机完整通过：`test:unit` **495/495**、`test:regression` 全部通过、`test:docs` 全部通过（1337 处命名声明）、`test:repo` 通过、`tsc --noEmit` 与 production esbuild 通过（含本轮 Word 导出分块流式打包的全部专项测试）。
 - 详细数据见根目录 `TEST_RESULTS.md`。
 
 ## 待验证事项（需真实 Obsidian 桌面端手工冒烟）
 
-- **大型文档 P0 加固（本轮，待实测）**：打开含大量节点或多张附件的大型 `.mindmap` 应无卡顿（编辑、撤销、重做后附件 60 秒延迟回收仍能正常取消）——门控只在宿主上报有待回收附件时才做全树扫描，未上报时与旧行为一致。导入一份正常 XMind 文件应不受新的解压上限影响（条目数/单条/总量均在限内时行为不变）。构造一份深链（数千层）导图应能正常打开且不再退化为纯文本导入（根节点文字不应变成整段 JSON）。本轮未迁出 XMind 解压线程，超大归档仍同步解压。
+- **Word 导出分块流式打包（本轮，待实测）**：对大型文章族点「导出 → Word」并选择保存位置，导出期间界面不应长时间无响应（改动前 `zipSync()` 会把整份 `.docx` 一次性压缩，实测 40k 节点单次阻塞 1611 ms、200k 节点 6621 ms；改动后残余阻塞来自单章节的 `buildArticleNodeInfo()`，40k/200k 分别约 924 ms / 3594 ms）；导出完成后应有「已导出：<路径>」Notice。产物用 Word / WPS 打开需与上一版完全一致：目录超链接可跳转、章节书签正常、带圈末端编号与 2em 正文缩进不变。若导出报错请附控制台信息（`writeArchiveChunked()` 会把 `fflate` 的压缩错误原样抛出）。
+- **大型文档 P0 加固（上一轮，待实测）**：打开含大量节点或多张附件的大型 `.mindmap` 应无卡顿（编辑、撤销、重做后附件 60 秒延迟回收仍能正常取消）——门控只在宿主上报有待回收附件时才做全树扫描，未上报时与旧行为一致。导入一份正常 XMind 文件应不受新的解压上限影响（条目数/单条/总量均在限内时行为不变）。构造一份深链（数千层）导图应能正常打开且不再退化为纯文本导入（根节点文字不应变成整段 JSON）。
 - **新建节点聚焦契约（上一轮，测试-only，待实测）**：真实 Obsidian 文章模式按 Ctrl/Cmd+Enter 创建兄弟节点、Ctrl/Cmd+Tab 创建子节点后，新节点应立即滚入视口并进入行内编辑且首次聚焦不丢（Ctrl+Tab 需确认未被宿主快捷键占用）。上一轮未改运行时代码，仅修正过期回归断言。
 - **万行级折叠代码块不再卡死（上一轮新增，待实测）**：打开 `浏览器/油猴.mindmap`（242 KB）应立刻可用；展开含接近 1 万行代码块的父节点时不再卡顿数秒。首次展开该代码块应内容完整、逻辑行数与行号正确、可复制、可再次双击编辑保存，只是不再语法着色（超过 2000 行自动跳过高亮）。反复折叠/展开不应重复解析（第二次展开应立即呈现），节点框高与相邻节点避让正常。打开调试模式后导出日志，`render / code-block-render` 中折叠块耗时应为毫秒级（修复前为秒级）。
 - **「管理配置」折叠行缩进（1.54.9 已发布，待实测确认）**：打开插件设置 →「管理配置」，「设置分类排序」这一折叠行的三角与文字应与同组的「调试模式」「导出配置」等 `setting-item` 处于同一缩进列，不再贴齐分组标题「管理配置」那一列；展开后说明文字、「恢复默认顺序」按钮与各分类上下箭头同样缩进 16px；该区块的上下分隔线仍与相邻设置卡片等宽（只缩进内容、不改边框盒）。
@@ -191,8 +210,9 @@
 
 ## 下一步建议
 
-- XMind 解压迁出主线程已完成（当前状态）：`xmindToImportResult()` / `xmindToDocument()` 改为异步 API，`readArchiveWithLimits()` 用 `Unzip` + `UnzipInflate` 按 256 KiB 分批流式解压并在批次之间让出主线程。后续如需进一步降本，可评估把解压放进真正的 Worker（需先确认 Obsidian 移动端 WebView 的 Worker/Blob 支持）或改为按条目惰性解压（仅解压当前需要的资源）。
-- 报告 P1 项（尚未实施）：增量附件引用计数以替代当前的 `hasPendingFileAssetDeletions()` 保守门控；`MutationDelta` 让 mutation 只更新受影响子树而非重建索引；整文档 JSON 序列化/解析与大文档 undo 快照的进一步降本。
+- Word 导出已完成分块流式打包与单次章节遍历（当前状态）。残余阻塞只剩 `src/article/modes.ts` 的 `buildArticleNodeInfo()`——它仍是单次同步 O(N) 遍历（实测线性 ≈8 µs/节点：40k 310 ms、80k 639 ms），且由文章渲染、通读、HTML/Markdown/Word 导出共用。下一步若要把它也分块，需要在该模块提供可让出主线程的增量/生成器 API（或用分帧迭代 + 续跑状态），并同步三种导出的同步契约。
+- 报告 P1 项（尚未实施）：增量附件引用计数以替代当前的 `hasPendingFileAssetDeletions()` 保守门控；`MutationDelta` 让 mutation 只更新受影响子树而非重建索引；**保存链路仍无法异步**——`mutate()` → `notifyDocumentChange()` → `history.createSnapshot(this.document)` 与 Obsidian `TextFileView.getViewData()` 都要求同步返回字符串，因此「保存前整文档 `JSON.stringify`」在不动这两处契约前无法迁出主线程，只能靠 O(Δ)/dirty 校验方向解决；`editor.ts` 的 `assertDocumentSnapshotCacheFresh()` 抽样自愈校验同样每次全量 `JSON.stringify`（每 10 秒最多一次）。
+- XMind 解压迁出主线程已完成（上一轮）：后续如需进一步降本，可评估把解压放进真正的 Worker（需先确认 Obsidian 移动端 WebView 的 Worker/Blob 支持）或改为按条目惰性解压（仅解压当前需要的资源）。
 - 长公式换行只在重新渲染时按容器宽度判定，窗口缩放后不重排；如需跟随窗口变化，可在 resize 后对可见公式重跑一次判定（需评估文章模式锚点抖动风险）。
 - 断行目前只在顶层 `=` 处切分，且首个顶层 `=` 固定留在首行；如需在 `+`/`,` 或不等号处断行，可在 `splitLatexAtTopLevelRelation()` 扩展操作符集合（并保留“首个关系符不断行”的规则）。
 - 文件块可选增强：右键菜单“在系统中显示/复制路径”；大量附件时的资源目录清理入口。
@@ -202,6 +222,6 @@
 ## 交付说明
 
 - 三份 ZIP 均输出到 `D:\Downloads`（仓库工作区外），外部文件名：`obsidian-mindmap-studio-<版本>-<后缀>.zip`、`mindmap-studio-<版本>-test-<后缀>.zip`、`Agent-<版本>-handoff-<后缀>.zip`（内部根目录 `Agent/`）。`D:\Downloads` 在沙箱内写入会被拒绝，需以非沙箱方式运行打包脚本；打包后必须确认仓库工作区内没有任何 `.zip`。
-- 最近交付包（后缀 248907，交付追踪版本 1.55.5）：`obsidian-mindmap-studio-1.55.5-248907.zip`（根目录 `obsidian-mindmap-studio/`）、`mindmap-studio-1.55.5-test-248907.zip`（根目录 `mindmap-studio/`）、`Agent-1.55.5-handoff-248907.zip`（根目录 `Agent/`）；实际发布版本以 GitHub Release 为准。
+- 最近交付包（后缀 343425，交付追踪版本 1.55.6）：`obsidian-mindmap-studio-1.55.6-343425.zip`（根目录 `obsidian-mindmap-studio/`）、`mindmap-studio-1.55.6-test-343425.zip`（根目录 `mindmap-studio/`）、`Agent-1.55.6-handoff-343425.zip`（根目录 `Agent/`）；实际发布版本以 GitHub Release 为准。
 - 历史交付包记录已清理；历史版本以 GitHub Release 发布为准，本地交付 ZIP 见 `D:\Downloads`。
 - 交付约束：沟通说明与中文 Git 提交说明中**不得**再写“- main.js 已重建。”这条；main.js 由 `npm run verify` 的 build 自动重建，交付时不要单独列出。
