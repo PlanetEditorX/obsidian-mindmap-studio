@@ -1,5 +1,15 @@
 # Test Results
 
+## 本轮：XMind 归档解压迁出主线程（运行时加固续）
+
+- 范围：落地上一轮明确延后的报告项——把 XMind 归档解压从一次性 `unzipSync` 改为分块流式解压并在批次之间让出主线程，避免大型 `content.json` + 图片资源归档解压时长时间阻塞界面；容量上限语义保持不变。
+- 实现：`import-export.ts` 的 `readArchiveWithLimits()` 先由新增的 `assertArchiveWithinLimits()` 只读中央目录校验上限——`unzipSync(bytes, { filter: (file) => { assertArchiveBudget(budget, file.originalSize); return false; } })`，`filter` 返回 false 时 `fflate` 会完全跳过该条目的解压，因此条目数 `ARCHIVE_MAX_ENTRIES`（4096）、单条 `ARCHIVE_MAX_ENTRY_BYTES`（64 MiB）、总量 `ARCHIVE_MAX_TOTAL_BYTES`（256 MiB）仍在产生任何解压输出之前命中。校验通过后用 `fflate` 的 `Unzip` 流式解压器（注册 `UnzipInflate`）按 `ARCHIVE_UNZIP_CHUNK_BYTES`（256 KiB）分批 `push(bytes.subarray(...), end >= bytes.length)`，每批之间 `await new Promise((resolve) => setTimeout(resolve, 0))` 让出一次宏任务；`onfile` 中按实际产出累计校验单条 64 MiB 上限，并合并分块输出（`concatArchiveChunks()`）。
+- 契约变化：`readArchiveWithLimits()`、`export function xmindToImportResult()`、`export function xmindToDocument()` 全部改为异步（返回 `Promise`）。调用方已同步：`editor-modals.ts` 的 `parseXMind` 增加 `await`，`scripts/test.mjs` 与 `tests/xmind-import.test.mjs` 的 10 处调用改为 `await`，两条炸弹用例由 `assert.throws` 改为 `await assert.rejects`，`tests/import-mode.test.mjs` 的源码契约断言同步更新为 `export async function` / `await xmindToImportResult(source, fallbackTitle)`。
+- 设计取舍：未使用 `fflate` 的 Worker 版 `AsyncUnzipInflate` 与异步 `unzip()`——前者在缺少 `Worker` / `URL.createObjectURL` 的环境会直接抛错，后者仍会把「解压比接近 1」的已压缩图片资源放在主线程同步展开（`su < 524288 || sc > 0.8 * su` 分支走 `inflateSync`），对真实 XMind 归档收效有限。改为分块流式 + 块间让出后，主线程单次只处理一批压缩输入，且桌面端、移动端与 Node 测试环境行为一致。
+- 测试：`tests/xmind-import.test.mjs` 新增 2 条——`XMind import resolves asynchronously instead of blocking the caller`（`xmindToImportResult()` 返回 `Promise` 的异步契约）与 `multi-chunk XMind resources survive chunked streaming extraction byte for byte`（700 KB 资源跨多个 256 KiB 批次，断言分块解压后逐字节一致）；原有 5 条行为用例改为 `await` 后全部保持通过。
+- 本机 `npm run verify`：`test:unit` **490 / 490**（新增 2 条）、`test:regression` 全部通过、`test:docs` 1334 处命名声明、`test:repo` 通过、`tsc --noEmit` + production esbuild 通过；`docs/FUNCTION_REFERENCE.md` 已重新生成。
+- 待真实 Obsidian 手工验证：桌面端导入大型 XMind（含多张图片资源）时界面不应出现长时间卡死；导入过程中的进度提示（读取 → 解析 XMind 画布和主题 → 提取图片资源 → 生成思维导图）仍按顺序刷新；导入正常与缺失图片资源的 XMind 结果与上一版一致；解压炸弹归档被拒绝时应给出明确错误提示而非静默失败。
+
 ## 本轮：大型文档性能与健壮性 P0 批次（运行时加固）
 
 - 范围：依据第三方深度研究报告定位的 P0 项落地——(1) 核心树遍历迭代化、(2) JSON 解析错误与规范化错误分类、(3) 取消每次 mutation 的全树附件扫描、(4) 撤销历史总字节预算、(5) XMind 解压炸弹限制。

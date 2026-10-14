@@ -8888,29 +8888,69 @@ Merges a linked XMind sheet root into its mount topic. XMind topic links are nes
 function mergeLinkedXMindSheetRoot(target: MindMapNode, linkedRoot: MindMapNode): void
 ```
 
-### 函数 `readArchiveWithLimits`
+### 接口 `ArchiveBudget`
+
+源码：`src/import/import-export.ts:374`
+
+解压过程中的累计用量。
+
+```ts
+interface ArchiveBudget
+```
+
+### 函数 `assertArchiveBudget`
 
 源码：`src/import/import-export.ts:380`
 
-在解压炸弹上限约束下同步解压归档。 `filter` 在 `fflate` 解压每个条目前被调用，因此一旦条目数或解压后体积超限就立刻抛错， 不会先把整个炸弹展开到内存里再检查。
+向累计用量中追加一个条目并校验全部上限，超限立即抛错。
 
 ```ts
-function readArchiveWithLimits(bytes: Uint8Array): Unzipped
+function assertArchiveBudget(budget: ArchiveBudget, originalSize: number): void
+```
+
+### 函数 `assertArchiveWithinLimits`
+
+源码：`src/import/import-export.ts:402`
+
+只扫描中央目录校验归档容量上限，不产生任何解压输出。 `filter` 返回 false 时 `fflate` 会完全跳过该条目的解压，因此这一步只花扫描目录的时间， 就能在展开任何数据之前拒绝解压炸弹。
+
+```ts
+function assertArchiveWithinLimits(bytes: Uint8Array): void
+```
+
+### 函数 `concatArchiveChunks`
+
+源码：`src/import/import-export.ts:413`
+
+合并同一归档条目的分块输出。
+
+```ts
+function concatArchiveChunks(chunks: Uint8Array[], totalLength: number): Uint8Array<ArrayBuffer>
+```
+
+### 函数 `readArchiveWithLimits`
+
+源码：`src/import/import-export.ts:434`
+
+在解压炸弹上限约束下分块流式解压归档。 先用中央目录校验条目数与解压后体积，再用 `fflate` 的流式解压器分批推入压缩数据， 每批之间让出一次宏任务：主线程单次最多处理 `ARCHIVE_UNZIP_CHUNK_BYTES` 的压缩输入， 因此大型 XMind 归档导入时不会长时间占用主线程。该实现不依赖 Web Worker， 桌面端与移动端行为一致；解压过程中仍按实际产出累计校验上限。
+
+```ts
+async function readArchiveWithLimits(bytes: Uint8Array): Promise<Unzipped>
 ```
 
 ### 函数 `xmindToImportResult`
 
-源码：`src/import/import-export.ts:407`
+源码：`src/import/import-export.ts:474`
 
 Parses a modern XMind archive while retaining images and LaTeX attachments. Embedded images receive temporary tokens so the UI can save each binary once into the current map's asset folder before the document enters edit history.
 
 ```ts
-export function xmindToImportResult(source: ArrayBuffer, fallbackTitle = "XMind 导入"): XMindImportResult
+export async function xmindToImportResult(source: ArrayBuffer, fallbackTitle = "XMind 导入"): Promise<XMindImportResult>
 ```
 
 ### 函数 `topicPrimaryTitle`
 
-源码：`src/import/import-export.ts:519`
+源码：`src/import/import-export.ts:586`
 
 Returns the first text block as an imported topic title fallback.
 
@@ -8920,7 +8960,7 @@ function topicPrimaryTitle(node: MindMapNode): string
 
 ### 函数 `materializeXMindImages`
 
-源码：`src/import/import-export.ts:525`
+源码：`src/import/import-export.ts:592`
 
 Saves embedded XMind images once and rewrites every referencing content block.
 
@@ -8930,17 +8970,17 @@ export async function materializeXMindImages( result: XMindImportResult, saveIma
 
 ### 函数 `xmindToDocument`
 
-源码：`src/import/import-export.ts:547`
+源码：`src/import/import-export.ts:614`
 
 Imports an XMind archive as a self-contained document. UI callers should prefer `xmindToImportResult()` plus `materializeXMindImages()` so archive images become normal vault assets.
 
 ```ts
-export function xmindToDocument(source: ArrayBuffer, fallbackTitle = "XMind 导入"): MindMapDocument
+export async function xmindToDocument(source: ArrayBuffer, fallbackTitle = "XMind 导入"): Promise<MindMapDocument>
 ```
 
 ### 接口 `ArticleExportOptions`
 
-源码：`src/import/import-export.ts:564`
+源码：`src/import/import-export.ts:631`
 
 Global defaults used when a physical document does not override terminal numbering.
 
@@ -8950,7 +8990,7 @@ export interface ArticleExportOptions
 
 ### 函数 `exportLeafNumbering`
 
-源码：`src/import/import-export.ts:571`
+源码：`src/import/import-export.ts:638`
 
 Resolves terminal numbering with per-document style taking precedence over plugin defaults.
 
@@ -8960,7 +9000,7 @@ function exportLeafNumbering( document: MindMapDocument, options: ArticleExportO
 
 ### 函数 `htmlArticleDisplayTitle`
 
-源码：`src/import/import-export.ts:585`
+源码：`src/import/import-export.ts:652`
 
 Returns HTML title markup with a font-independent CSS ring for every circled terminal number.
 
@@ -8970,7 +9010,7 @@ function htmlArticleDisplayTitle(info: ArticleNodeInfo): string
 
 ### 函数 `exportAnchor`
 
-源码：`src/import/import-export.ts:594`
+源码：`src/import/import-export.ts:661`
 
 生成跨文件导出时稳定且唯一的标题锚点。
 
@@ -8980,7 +9020,7 @@ function exportAnchor(sectionIndex: number, anchor: string): string
 
 ### 函数 `markdownTitle`
 
-源码：`src/import/import-export.ts:599`
+源码：`src/import/import-export.ts:666`
 
 返回带目录编号的 Markdown 标题文本。
 
@@ -8990,7 +9030,7 @@ function markdownTitle(label: string, title: string, fallback = "未命名"): st
 
 ### 函数 `parentNodeKey`
 
-源码：`src/import/import-export.ts:604`
+源码：`src/import/import-export.ts:671`
 
 返回跨文件目录项映射键。
 
@@ -9000,7 +9040,7 @@ function parentNodeKey(filePath: string | undefined, nodeId: string | undefined)
 
 ### 函数 `normalizedExportTocMaxDepth`
 
-源码：`src/import/import-export.ts:609`
+源码：`src/import/import-export.ts:676`
 
 返回导出目录允许显示的层级。
 
@@ -9010,7 +9050,7 @@ function normalizedExportTocMaxDepth(value: number): number
 
 ### 函数 `markdownHeading`
 
-源码：`src/import/import-export.ts:614`
+源码：`src/import/import-export.ts:681`
 
 生成兼容常用 Markdown 渲染器的标题片段。
 
@@ -9020,7 +9060,7 @@ function markdownHeading(level: number, title: string): string
 
 ### 函数 `markdownAnchor`
 
-源码：`src/import/import-export.ts:619`
+源码：`src/import/import-export.ts:686`
 
 按常见 Markdown 标题规则生成目录片段。
 
@@ -9030,7 +9070,7 @@ function markdownAnchor(title: string): string
 
 ### 函数 `htmlTocList`
 
-源码：`src/import/import-export.ts:630`
+源码：`src/import/import-export.ts:697`
 
 将扁平的层级目录条目转换为兼容 Word 的嵌套列表。
 
@@ -9040,7 +9080,7 @@ function htmlTocList(items: Array<
 
 ### 类型 `TocBranch`
 
-源码：`src/import/import-export.ts:632`
+源码：`src/import/import-export.ts:699`
 
 嵌套目录中的单个章节及其下级章节。
 
@@ -9050,7 +9090,7 @@ type TocBranch =
 
 ### 函数 `escapeXml`
 
-源码：`src/import/import-export.ts:648`
+源码：`src/import/import-export.ts:715`
 
 转义 OOXML 文本内容。
 
@@ -9060,7 +9100,7 @@ function escapeXml(value: string): string
 
 ### 函数 `collectExportTocItems`
 
-源码：`src/import/import-export.ts:653`
+源码：`src/import/import-export.ts:720`
 
 将导出章节收集为父子导图顺序一致的目录项。
 
@@ -9070,7 +9110,7 @@ function collectExportTocItems( sections: ReadingSection[], maxTocDepth: number,
 
 ### 函数 `readingSectionsToHtml`
 
-源码：`src/import/import-export.ts:699`
+源码：`src/import/import-export.ts:766`
 
 Produces one portable article from a map and all recursively collected child maps in the same order used by continuous reading mode.
 
@@ -9080,7 +9120,7 @@ export function readingSectionsToHtml(sections: ReadingSection[], tocMaxDepth = 
 
 ### 函数 `readingSectionsToDocx`
 
-源码：`src/import/import-export.ts:783`
+源码：`src/import/import-export.ts:850`
 
 Produces a native Word document with bookmarks and internal TOC hyperlinks.
 
@@ -9090,7 +9130,7 @@ export function readingSectionsToDocx(sections: ReadingSection[], tocMaxDepth = 
 
 ### 函数 `readingSectionsToMarkdown`
 
-源码：`src/import/import-export.ts:855`
+源码：`src/import/import-export.ts:922`
 
 Produces article-oriented Markdown with a linked table of contents.
 

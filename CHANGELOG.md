@@ -7,7 +7,7 @@
   - JSON 解析错误与规范化错误分开处理：`parseJsonDocument()` 只吞 `SyntaxError`，合法 JSON 的规范化异常直接抛出，不再把深链/异常文档静默降级为 Markdown 导入（旧行为会把根节点文字变成整段原始 JSON）。
   - 附件回收取消改为按需扫描：`notifyDocumentChange()` 仅在宿主 `hasPendingFileAssetDeletions()` 为真时执行全树扫描，没有待回收任务时不再每次 mutation 遍历整棵树。
   - 撤销历史新增总字节预算 `HISTORY_BYTE_BUDGET`（128 MiB）：与条数上限同时生效，超预算从最旧一端裁剪，且始终至少保留一份快照。
-  - XMind 归档导入增加解压上限（条目数 4096、单条 64 MiB、总量 256 MiB），通过 `unzipSync` 的 `filter` 在解压前拦截，避免解压炸弹。
+  - XMind 归档导入的容量上限仍在解压前拦截（条目数 4096、单条 64 MiB、总量 256 MiB），但解压本身改为「先只读中央目录校验上限，再按 256 KiB 分批流式解压、批次之间让出主线程」：不再一次性 `unzipSync` 整个归档，大型 XMind 导入时主线程不会被长时间占用，解压过程中另按实际产出累计校验单条上限。该实现不依赖 Web Worker，桌面端与移动端行为一致。`xmindToImportResult()` / `xmindToDocument()` 因此改为异步 API，调用方必须 `await`。
 
 - 修复文章/大纲模式用 Ctrl/Cmd+Enter（兄弟节点）与 Ctrl/Cmd+Tab（子节点）创建节点后，新节点拿不到焦点、无法进入行内编辑的问题：创建时 `mutate` 会按变更前的旧阅读位置恢复视口并把 `selectedId` 重设回来源节点，随后的聚焦守卫因此直接放弃。现在新建子/兄弟节点显式传入 `null` 跳过该旧位置恢复，文章模式另把新节点记为本次渲染的最高优先级语义锚点（`renderWindow` 一次性消费），使新节点成为视口目标、补载结束后仍保持在视口内，`selectedId` 也留在新节点上，随即进入行内编辑；导图模式行为不变。
 

@@ -6046,6 +6046,43 @@ var wbytes = function(d, b, v) {
 function deflateSync(data, opts) {
   return dopt(data, opts || {}, 0, 0);
 }
+var Inflate = /* @__PURE__ */ (function() {
+  function Inflate2(opts, cb) {
+    if (typeof opts == "function")
+      cb = opts, opts = {};
+    this.ondata = cb;
+    var dict = opts && opts.dictionary && opts.dictionary.subarray(-32768);
+    this.s = { i: 0, b: dict ? dict.length : 0 };
+    this.o = new u8(32768);
+    this.p = new u8(0);
+    if (dict)
+      this.o.set(dict);
+  }
+  Inflate2.prototype.e = function(c) {
+    if (!this.ondata)
+      err(5);
+    if (this.d)
+      err(4);
+    if (!this.p.length)
+      this.p = c;
+    else if (c.length) {
+      var n = new u8(this.p.length + c.length);
+      n.set(this.p), n.set(c, this.p.length), this.p = n;
+    }
+  };
+  Inflate2.prototype.c = function(final) {
+    this.s.i = +(this.d = final || false);
+    var bts = this.s.b;
+    var dt = inflt(this.p, this.s, this.o);
+    this.ondata(slc(dt, bts, this.s.b), this.d);
+    this.o = slc(dt, this.s.b - 32768), this.s.b = this.o.length;
+    this.p = slc(this.p, this.s.p / 8 | 0), this.s.p &= 7;
+  };
+  Inflate2.prototype.push = function(chunk, final) {
+    this.e(chunk), this.c(final);
+  };
+  return Inflate2;
+})();
 function inflateSync(data, opts) {
   return inflt(data, { i: 2 }, opts && opts.out, opts && opts.dictionary);
 }
@@ -6262,6 +6299,163 @@ function zipSync(data, opts) {
   wzf(out, o, files.length, cdl, oe);
   return out;
 }
+var UnzipPassThrough = /* @__PURE__ */ (function() {
+  function UnzipPassThrough2() {
+  }
+  UnzipPassThrough2.prototype.push = function(chunk, final) {
+    this.ondata(null, chunk, final);
+  };
+  UnzipPassThrough2.compression = 0;
+  return UnzipPassThrough2;
+})();
+var UnzipInflate = /* @__PURE__ */ (function() {
+  function UnzipInflate2() {
+    var _this = this;
+    this.i = new Inflate(function(dat, final) {
+      _this.ondata(null, dat, final);
+    });
+  }
+  UnzipInflate2.prototype.push = function(chunk, final) {
+    try {
+      this.i.push(chunk, final);
+    } catch (e) {
+      this.ondata(e, null, final);
+    }
+  };
+  UnzipInflate2.compression = 8;
+  return UnzipInflate2;
+})();
+var Unzip = /* @__PURE__ */ (function() {
+  function Unzip2(cb) {
+    this.onfile = cb;
+    this.k = [];
+    this.o = {
+      0: UnzipPassThrough
+    };
+    this.p = et;
+  }
+  Unzip2.prototype.push = function(chunk, final) {
+    var _this = this;
+    if (!this.onfile)
+      err(5);
+    if (!this.p)
+      err(4);
+    if (this.c > 0) {
+      var len = Math.min(this.c, chunk.length);
+      var toAdd = chunk.subarray(0, len);
+      this.c -= len;
+      if (this.d)
+        this.d.push(toAdd, !this.c);
+      else
+        this.k[0].push(toAdd);
+      chunk = chunk.subarray(len);
+      if (chunk.length)
+        return this.push(chunk, final);
+    } else {
+      var f = 0, i = 0, is = void 0, buf = void 0;
+      if (!this.p.length)
+        buf = chunk;
+      else if (!chunk.length)
+        buf = this.p;
+      else {
+        buf = new u8(this.p.length + chunk.length);
+        buf.set(this.p), buf.set(chunk, this.p.length);
+      }
+      var l = buf.length, oc = this.c, add = oc && this.d;
+      var _loop_2 = function() {
+        var sig = b4(buf, i);
+        if (sig == 67324752) {
+          f = 1, is = i;
+          this_1.d = null;
+          this_1.c = 0;
+          var bf = b2(buf, i + 6), cmp_1 = b2(buf, i + 8), u = bf & 2048, dd = bf & 8, fnl = b2(buf, i + 26), es = b2(buf, i + 28);
+          if (l > i + 30 + fnl + es) {
+            var chks_3 = [];
+            this_1.k.unshift(chks_3);
+            f = 2;
+            var lsc = b4(buf, i + 18), lsu = b4(buf, i + 22);
+            var fn_1 = strFromU8(buf.subarray(i + 30, i += 30 + fnl), !u);
+            var _a2 = z64hs(buf, i, es, 2, lsc, lsu, 0), sc_1 = _a2[0], su_1 = _a2[1], z64 = _a2[3];
+            if (dd)
+              sc_1 = -1 - z64;
+            i += es;
+            this_1.c = sc_1;
+            var d_1;
+            var file_1 = {
+              name: fn_1,
+              compression: cmp_1,
+              start: function() {
+                if (!file_1.ondata)
+                  err(5);
+                if (!sc_1)
+                  file_1.ondata(null, et, true);
+                else {
+                  var ctr = _this.o[cmp_1];
+                  if (!ctr)
+                    file_1.ondata(err(14, "unknown compression type " + cmp_1, 1), null, false);
+                  d_1 = sc_1 < 0 ? new ctr(fn_1) : new ctr(fn_1, sc_1, su_1);
+                  d_1.ondata = function(err2, dat3, final2) {
+                    file_1.ondata(err2, dat3, final2);
+                  };
+                  for (var _i = 0, chks_4 = chks_3; _i < chks_4.length; _i++) {
+                    var dat2 = chks_4[_i];
+                    d_1.push(dat2, false);
+                  }
+                  if (_this.k[0] == chks_3 && _this.c)
+                    _this.d = d_1;
+                  else
+                    d_1.push(et, true);
+                }
+              },
+              terminate: function() {
+                if (d_1 && d_1.terminate)
+                  d_1.terminate();
+              }
+            };
+            if (sc_1 >= 0)
+              file_1.size = sc_1, file_1.originalSize = su_1;
+            this_1.onfile(file_1);
+          }
+          return "break";
+        } else if (oc) {
+          if (sig == 134695760) {
+            is = i += 12 + (oc == -2 && 8), f = 3, this_1.c = 0;
+            return "break";
+          } else if (sig == 33639248) {
+            is = i -= 4, f = 3, this_1.c = 0;
+            return "break";
+          }
+        }
+      };
+      var this_1 = this;
+      for (; i < l - 4; ++i) {
+        var state_1 = _loop_2();
+        if (state_1 === "break")
+          break;
+      }
+      this.p = et;
+      if (oc < 0) {
+        var dat = f ? buf.subarray(0, is - 12 - (oc == -2 && 8) - (b4(buf, is - 16) == 134695760 && 4)) : buf.subarray(0, i);
+        if (add)
+          add.push(dat, !!f);
+        else
+          this.k[+(f == 2)].push(dat);
+      }
+      if (f & 2)
+        return this.push(buf.subarray(i), final);
+      this.p = buf.subarray(i);
+    }
+    if (final) {
+      if (this.c)
+        err(13);
+      this.p = null;
+    }
+  };
+  Unzip2.prototype.register = function(decoder) {
+    this.o[decoder.compression] = decoder;
+  };
+  return Unzip2;
+})();
 function unzipSync(data, opts) {
   var files = {};
   var e = data.length - 22;
@@ -6779,29 +6973,74 @@ ${linkedNote}`;
 var ARCHIVE_MAX_ENTRIES = 4096;
 var ARCHIVE_MAX_ENTRY_BYTES = 64 * 1024 * 1024;
 var ARCHIVE_MAX_TOTAL_BYTES = 256 * 1024 * 1024;
-function readArchiveWithLimits(bytes) {
-  let entryCount = 0;
-  let totalBytes = 0;
-  return unzipSync(bytes, {
+var ARCHIVE_UNZIP_CHUNK_BYTES = 256 * 1024;
+function assertArchiveBudget(budget, originalSize) {
+  budget.entries += 1;
+  budget.bytes += originalSize;
+  if (budget.entries > ARCHIVE_MAX_ENTRIES) {
+    throw new Error(`\u5F52\u6863\u6761\u76EE\u6570\u8D85\u8FC7\u4E0A\u9650\uFF08${ARCHIVE_MAX_ENTRIES}\uFF09\uFF0C\u5DF2\u62D2\u7EDD\u89E3\u538B`);
+  }
+  if (originalSize > ARCHIVE_MAX_ENTRY_BYTES) {
+    throw new Error(`\u5F52\u6863\u4E2D\u5355\u4E2A\u6587\u4EF6\u89E3\u538B\u540E\u8FC7\u5927\uFF0C\u5DF2\u62D2\u7EDD\u89E3\u538B`);
+  }
+  if (budget.bytes > ARCHIVE_MAX_TOTAL_BYTES) {
+    throw new Error(`\u5F52\u6863\u89E3\u538B\u540E\u603B\u4F53\u79EF\u8FC7\u5927\uFF0C\u5DF2\u62D2\u7EDD\u89E3\u538B`);
+  }
+}
+function assertArchiveWithinLimits(bytes) {
+  const budget = { entries: 0, bytes: 0 };
+  unzipSync(bytes, {
     filter: (file) => {
-      entryCount += 1;
-      totalBytes += file.originalSize;
-      if (entryCount > ARCHIVE_MAX_ENTRIES) {
-        throw new Error(`\u5F52\u6863\u6761\u76EE\u6570\u8D85\u8FC7\u4E0A\u9650\uFF08${ARCHIVE_MAX_ENTRIES}\uFF09\uFF0C\u5DF2\u62D2\u7EDD\u89E3\u538B`);
-      }
-      if (file.originalSize > ARCHIVE_MAX_ENTRY_BYTES) {
-        throw new Error(`\u5F52\u6863\u4E2D\u5355\u4E2A\u6587\u4EF6\u89E3\u538B\u540E\u8FC7\u5927\uFF0C\u5DF2\u62D2\u7EDD\u89E3\u538B`);
-      }
-      if (totalBytes > ARCHIVE_MAX_TOTAL_BYTES) {
-        throw new Error(`\u5F52\u6863\u89E3\u538B\u540E\u603B\u4F53\u79EF\u8FC7\u5927\uFF0C\u5DF2\u62D2\u7EDD\u89E3\u538B`);
-      }
-      return true;
+      assertArchiveBudget(budget, file.originalSize);
+      return false;
     }
   });
 }
-function xmindToImportResult(source, fallbackTitle = "XMind \u5BFC\u5165") {
+function concatArchiveChunks(chunks, totalLength) {
+  const merged = new Uint8Array(totalLength);
+  let offset = 0;
+  for (const chunk of chunks) {
+    merged.set(chunk, offset);
+    offset += chunk.length;
+  }
+  return merged;
+}
+async function readArchiveWithLimits(bytes) {
+  assertArchiveWithinLimits(bytes);
+  const files = {};
+  let failure = null;
+  const unzipper = new Unzip((file) => {
+    const chunks = [];
+    let size = 0;
+    file.ondata = (error, chunk, final) => {
+      if (failure) return;
+      if (error) {
+        failure = error;
+        return;
+      }
+      if (size + chunk.length > ARCHIVE_MAX_ENTRY_BYTES) {
+        failure = new Error(`\u5F52\u6863\u4E2D\u5355\u4E2A\u6587\u4EF6\u89E3\u538B\u540E\u8FC7\u5927\uFF0C\u5DF2\u62D2\u7EDD\u89E3\u538B`);
+        return;
+      }
+      size += chunk.length;
+      if (chunk.length) chunks.push(chunk);
+      if (final) files[file.name] = concatArchiveChunks(chunks, size);
+    };
+    file.start();
+  });
+  unzipper.register(UnzipInflate);
+  for (let offset = 0; offset < bytes.length; offset += ARCHIVE_UNZIP_CHUNK_BYTES) {
+    const end = Math.min(offset + ARCHIVE_UNZIP_CHUNK_BYTES, bytes.length);
+    unzipper.push(bytes.subarray(offset, end), end >= bytes.length);
+    if (failure) throw failure;
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+  if (failure) throw failure;
+  return files;
+}
+async function xmindToImportResult(source, fallbackTitle = "XMind \u5BFC\u5165") {
   var _a2, _b2;
-  const archive = readArchiveWithLimits(new Uint8Array(source));
+  const archive = await readArchiveWithLimits(new Uint8Array(source));
   const content = archive["content.json"];
   if (!content) throw new Error("\u4EC5\u652F\u6301\u5305\u542B content.json \u7684\u65B0\u7248 XMind \u6587\u4EF6");
   const parsed = JSON.parse(strFromU8(content));
@@ -7914,7 +8153,7 @@ var ImportExportModal = class extends import_obsidian4.Modal {
       await new Promise((resolve) => window.requestAnimationFrame(() => resolve()));
     };
     const parseXMind = async (source, fallbackTitle) => {
-      const result = xmindToImportResult(source, fallbackTitle);
+      const result = await xmindToImportResult(source, fallbackTitle);
       if (result.images.length) await updateImportProgress(68, `\u6B63\u5728\u63D0\u53D6 ${result.images.length} \u4E2A XMind \u56FE\u7247\u8D44\u6E90`);
       const materialized = await materializeXMindImages(result, async (image) => {
         const content = image.content.slice();

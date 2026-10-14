@@ -464,7 +464,7 @@ mindmap-search-index.json
 - **JSON 解析错误与规范化错误必须分开处理**。`parseJsonDocument()` 只吞 `SyntaxError`（即文本确实不是 JSON 语法），合法 JSON 的规范化异常直接向上抛出，绝不再把文档静默降级成 Markdown 导入——旧实现共用一个宽泛 `catch`，深链合法 JSON 因规范化栈溢出被误判为普通文本，表现为根节点文字变成整段原始 JSON。
 - **附件回收取消采用按需扫描**。`MindMapEditor.notifyDocumentChange()` 每次变更都会取消仍在文档中的附件的延迟回收任务，但只有在宿主 `hasPendingFileAssetDeletions()` 返回真时才执行全树扫描；未实现该回调时按「可能有」处理，行为与旧版一致。没有待回收任务时这次扫描是空操作，在大文档下却是每次 mutation 的主线程热点。
 - **撤销历史受总字节预算约束**。`history-manager.ts` 除条数上限外还跟踪 `undoStack` 的累计字节数，超过 `HISTORY_BYTE_BUDGET`（128 MiB）即从最旧一端裁剪。条数与字节双约束同时生效，且始终至少保留一份快照，保证撤销可用。
-- **XMind 归档解压设上限**。`import-export.ts` 的 `readArchiveWithLimits()` 通过 `unzipSync` 的 `filter` 在解压每个条目前校验：条目数 `ARCHIVE_MAX_ENTRIES`（4096）、单条解压后 `ARCHIVE_MAX_ENTRY_BYTES`（64 MiB）、解压总量 `ARCHIVE_MAX_TOTAL_BYTES`（256 MiB），超限即抛错拒绝，避免解压炸弹。
+- **XMind 归档解压设上限并分块让出主线程**。`import-export.ts` 的 `readArchiveWithLimits()` 先由 `assertArchiveWithinLimits()` 只读中央目录校验条目数 `ARCHIVE_MAX_ENTRIES`（4096）、单条解压后 `ARCHIVE_MAX_ENTRY_BYTES`（64 MiB）与解压总量 `ARCHIVE_MAX_TOTAL_BYTES`（256 MiB）——`filter` 返回 false 时 `fflate` 完全跳过解压，因此在产生任何解压输出前就能拒绝解压炸弹。通过校验后再用 `fflate` 的 `Unzip` + `UnzipInflate` 流式解压，按 `ARCHIVE_UNZIP_CHUNK_BYTES`（256 KiB）分批 `push()`，每批之间 `await` 让出一次宏任务，主线程单次只处理一批压缩输入；解压过程中另按实际产出累计校验单条上限。该实现不依赖 Web Worker，桌面端与移动端行为一致，`tests/xmind-import.test.mjs` 覆盖批次切分与逐字节一致性。因此 `xmindToImportResult()` / `xmindToDocument()` 都是异步 API，调用方必须 `await`。
 
 ### 工具栏可用性与排序
 

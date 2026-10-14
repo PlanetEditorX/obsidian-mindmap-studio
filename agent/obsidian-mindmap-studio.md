@@ -1,17 +1,27 @@
 # obsidian-mindmap-studio 项目交接
 
 - 插件：MindMap Studio（Obsidian 本地优先 .mindmap 导图，含导图/大纲/文章/通读模式、全局搜索、图床、AI 助手与桌面截图链路）。
-- 版本基线：工作区版本文件为 1.55.4（Git Release 最高 tag v1.55.2；仓库由用户上传的 1.55.2 运行文件重建）；本轮为大型文档性能与健壮性 P0 加固，交付追踪版本 1.55.4。
+- 版本基线：工作区版本文件为 1.55.5（Git Release 已发布 v1.55.5；仓库由用户上传的 1.55.2 运行文件重建）；本轮为「XMind 归档解压迁出主线程」，交付追踪版本 1.55.5，交付后缀 248907。
 - 仓库规则：见根目录 `AGENTS.md`；每轮代码交付三份 ZIP（源码 / 安装 / Agent 交接）共用同一六位后缀；验证入口 `npm run verify`。
 
-## 当前状态（本轮：大型文档性能与健壮性 P0 批次）
+## 当前状态（本轮：XMind 归档解压迁出主线程）
+
+- 触发：上一轮 P0 批次把「XMind 解压迁出主线程」明确留作后续项，本轮回填该项。
+- 实现（`src/import/import-export.ts`）：`readArchiveWithLimits()` 拆成两步。(a) 新增 `assertArchiveWithinLimits()`，用 `unzipSync(bytes, { filter: (file) => { assertArchiveBudget(budget, file.originalSize); return false; } })` 只读中央目录校验条目数 `ARCHIVE_MAX_ENTRIES`（4096）、单条解压后 `ARCHIVE_MAX_ENTRY_BYTES`（64 MiB）、解压总量 `ARCHIVE_MAX_TOTAL_BYTES`（256 MiB）：`filter` 返回 false 时 `fflate` 会完全跳过该条目的解压，因此解压炸弹仍在产生任何解压输出之前被拒绝。(b) 用 `fflate` 的 `Unzip` 流式解压器（注册 `UnzipInflate`）按 `ARCHIVE_UNZIP_CHUNK_BYTES`（256 KiB）分批 `push(bytes.subarray(...), end >= bytes.length)`，每批之间 `await new Promise((resolve) => setTimeout(resolve, 0))` 让出一次宏任务；`onfile` 中按实际产出累计校验单条 64 MiB 上限，并用 `concatArchiveChunks()` 合并分块输出。主线程单次只处理一批压缩输入，大 `content.json` + 多张图片的 XMind 导入不再一次性阻塞界面。
+- 契约变化：`readArchiveWithLimits()`、`xmindToImportResult()`、`xmindToDocument()` 均改为 `async`（返回 `Promise`）。调用方同步更新：`src/editor/editor-modals.ts` 的 `parseXMind()` 内改为 `await xmindToImportResult(source, fallbackTitle)`（该方法本就在异步上下文，导入进度条时序不变）；`scripts/test.mjs` 5 处、`tests/xmind-import.test.mjs` 6 处调用改为 `await`，两条炸弹用例由 `assert.throws` 改为 `await assert.rejects`，`tests/import-mode.test.mjs` 的源码契约断言改为 `export async function` 与 `await xmindToImportResult(source, fallbackTitle)`。
+- 设计取舍：未采用 `fflate` 的 Worker 版 `AsyncUnzipInflate` / 异步 `unzip()`——前者在缺少 `Worker`、`URL.createObjectURL` 的环境会直接抛错（Node 测试面与移动端 WebView 都有风险），后者的 `su < 524288 || sc > 0.8 * su` 分支对已压缩图片资源仍走主线程 `inflateSync`，对真实 XMind 归档收效有限。分块流式 + 块间让出在桌面端、移动端与 Node 测试环境行为一致，且不引入新依赖。
+- 测试：`tests/xmind-import.test.mjs` 新增 2 条——异步契约（`xmindToImportResult()` 返回 `Promise`）与多批次逐字节一致性（700 KB 资源跨多个 256 KiB 批次）；原有 5 条行为用例改为 `await` 后保持通过。
+- 验证：`npm run verify` 完整通过——`test:unit` **490 / 490**、`test:regression` 全部通过、`test:docs` 1334 处命名声明、`test:repo` 通过、`tsc --noEmit` + production esbuild 通过；`docs/FUNCTION_REFERENCE.md` 已重新生成；文档同步 `docs/ARCHITECTURE.md`（「XMind 归档解压设上限并分块让出主线程」）与 `CHANGELOG.md`「未发布」。
+- 待手工验证：真实 Obsidian 桌面端导入大型 XMind（含多张图片资源）时界面不应长时间卡死；导入进度提示（读取 → 解析 XMind 画布和主题 → 提取图片资源 → 生成思维导图）仍按顺序刷新；正常与缺图 XMind 的导入结果与上一版一致；解压炸弹归档被拒绝时给出明确错误提示而非静默失败。
+
+### 上一轮工作区（大型文档性能与健壮性 P0 批次）
 
 - 触发：用户上传第三方深度研究报告（大型文件性能、代码问题与未来方向），并授权「开始优化」，落地报告 P0 清单。
 - (1) 核心树遍历迭代化：`src/core/node-tree.ts` 的 `walkNodes()` / `findAncestors()` / `removeNode()`、`src/core/model.ts` 的 `normalizeNode()`、`src/search/global-search.ts` 的 `buildSearchEntries()` 全部改为显式栈前序遍历（逆序入栈子节点，出栈即访问，保持父先于子与同级左→右）。根因确认：V8 的 `JSON.parse` 是迭代实现（实测 20 万层不抛错），栈溢出真正来自递归的 `normalizeNode`，数千层深链文档会抛 `RangeError`。`model.ts` 拆出 `normalizeNodeFields()` 造单节点、`normalizeNode()` 用栈帧 `{ source, target }` 逐层展开子树。
 - (2) JSON 解析错误与规范化错误分类：`parseJsonDocument()` 改为只吞 `SyntaxError`（`catch (error) { if (error instanceof SyntaxError) return null; throw error; }`），合法 JSON 的规范化异常直接抛出。旧实现 `try { return normalizeDocument(JSON.parse(...)) }` 的宽泛 `catch` 会把深链合法 JSON 的栈溢出误判为「非 JSON」并静默降级为 Markdown 导入，表现为根节点文字变成整段原始 JSON。`parseDocument()` 的 JSDoc 同步说明「只有 JSON 语法错误才按 Markdown 导入」。
 - (3) 取消每次 mutation 的全树附件扫描：`editor-types.ts` 新增可选回调 `hasPendingFileAssetDeletions?: () => boolean`（含 JSDoc），`view.ts` 注入 `() => this.plugin.hasPendingFileAssetDeletions()`，`main.ts` 实现 `return this.pendingFileDeletionTimers.size > 0`；`MindMapEditor.notifyDocumentChange()` 改为 `if (this.callbacks.hasPendingFileAssetDeletions?.() !== false) { this.callbacks.onCancelFileAssetDeletion(...) }`。采用保守门控（未做增量引用计数，避免失同步），未实现回调的宿主仍按「可能有」处理，行为与旧版一致。
 - (4) 撤销历史总字节预算：`src/editor/history-manager.ts` 新增模块常量 `HISTORY_BYTE_BUDGET = 128 * 1024 * 1024` 与私有字段 `undoBytes`（只跟踪 `undoStack`，在 `captureSnapshot` / `undoSnapshot` / `redoSnapshot` / `reset` 处同步增减）；构造函数第二参数 `byteLimitProvider` 默认返回该预算，`trim()` 同时施加条数上限与字节上限（字节超限从最旧一端裁剪，且至少保留一份快照）。未新增设置项，对 ~1MB 常规文档不触发。
-- (5) XMind 解压炸弹限制：`src/import/import-export.ts` 新增 `ARCHIVE_MAX_ENTRIES = 4096`、`ARCHIVE_MAX_ENTRY_BYTES = 64 MiB`、`ARCHIVE_MAX_TOTAL_BYTES = 256 MiB` 与 `readArchiveWithLimits()`，在 `unzipSync(bytes, { filter })` 内累计条目数与解压体积并超限抛错（`filter` 在解压每个条目前被调用，抛错直接向上传播）；`xmindToImportResult()` 首行改用该函数。**本轮保留同步 API**：`tests/xmind-import.test.mjs` 有 5 处同步调用 `xmindToImportResult()`，改 async 会破坏测试面，故把「解压迁出主线程」留作后续项。
+- (5) XMind 解压炸弹限制：`src/import/import-export.ts` 新增 `ARCHIVE_MAX_ENTRIES = 4096`、`ARCHIVE_MAX_ENTRY_BYTES = 64 MiB`、`ARCHIVE_MAX_TOTAL_BYTES = 256 MiB` 与 `readArchiveWithLimits()`，在 `unzipSync(bytes, { filter })` 内累计条目数与解压体积并超限抛错（`filter` 在解压每个条目前被调用，抛错直接向上传播）；`xmindToImportResult()` 首行改用该函数。该轮保留了同步 API（`tests/xmind-import.test.mjs` 有 5 处同步调用），「解压迁出主线程」留作后续项，已在下一轮（当前状态）改为分块流式异步解压。
 - 测试：`tests/node-tree.test.mjs` 新增 60000 层深链遍历契约；新建 `tests/model-parse-safety.test.mjs`（4 条：20000 层规范化、20000 层合法 JSON 保持节点树、仅语法错误回退 Markdown、`parseJsonDocument` 源码契约）；`tests/history-snapshot-reuse.test.mjs` 新增 3 条字节预算契约；`tests/xmind-import.test.mjs` 新增 2 条归档上限契约；`tests/file-block.test.mjs` 新增附件扫描门控契约；`tests/global-search-traversal.test.mjs` 新增 4000 层深链 + 显式栈源码契约。`package.json` 的 `test:unit` 已登记新测试文件。
 - 验证：`npm run verify` 完整通过——`test:unit` **488 / 488**、`test:regression` 全部通过、`test:docs` 1330 处命名声明、`test:repo` 通过、`tsc --noEmit` + production esbuild 通过；`docs/FUNCTION_REFERENCE.md` 已重新生成；文档同步 `docs/ARCHITECTURE.md`（新增「大型文档鲁棒性与资源上限」小节）与 `CHANGELOG.md`「未发布」。
 - 待手工验证：真实 Obsidian 打开含大量节点/附件的 `.mindmap` 应无卡顿，编辑、撤销、重做后附件 60 秒延迟回收仍能正常取消；导入正常 XMind 文件不受新上限影响；深链（数千层）导图能正常打开且不再退化为纯文本（根节点文字不应变成整段 JSON）。
@@ -181,7 +191,7 @@
 
 ## 下一步建议
 
-- XMind 解压迁出主线程（报告 P0 剩余项）：`xmindToImportResult()` 目前仍是同步 API，`tests/xmind-import.test.mjs` 有 5 处同步调用；如需迁移需先把该测试面改为 await，再把 `readArchiveWithLimits()` 放进 worker/异步边界，避免大归档阻塞主线程。
+- XMind 解压迁出主线程已完成（当前状态）：`xmindToImportResult()` / `xmindToDocument()` 改为异步 API，`readArchiveWithLimits()` 用 `Unzip` + `UnzipInflate` 按 256 KiB 分批流式解压并在批次之间让出主线程。后续如需进一步降本，可评估把解压放进真正的 Worker（需先确认 Obsidian 移动端 WebView 的 Worker/Blob 支持）或改为按条目惰性解压（仅解压当前需要的资源）。
 - 报告 P1 项（尚未实施）：增量附件引用计数以替代当前的 `hasPendingFileAssetDeletions()` 保守门控；`MutationDelta` 让 mutation 只更新受影响子树而非重建索引；整文档 JSON 序列化/解析与大文档 undo 快照的进一步降本。
 - 长公式换行只在重新渲染时按容器宽度判定，窗口缩放后不重排；如需跟随窗口变化，可在 resize 后对可见公式重跑一次判定（需评估文章模式锚点抖动风险）。
 - 断行目前只在顶层 `=` 处切分，且首个顶层 `=` 固定留在首行；如需在 `+`/`,` 或不等号处断行，可在 `splitLatexAtTopLevelRelation()` 扩展操作符集合（并保留“首个关系符不断行”的规则）。
@@ -192,6 +202,6 @@
 ## 交付说明
 
 - 三份 ZIP 均输出到 `D:\Downloads`（仓库工作区外），外部文件名：`obsidian-mindmap-studio-<版本>-<后缀>.zip`、`mindmap-studio-<版本>-test-<后缀>.zip`、`Agent-<版本>-handoff-<后缀>.zip`（内部根目录 `Agent/`）。`D:\Downloads` 在沙箱内写入会被拒绝，需以非沙箱方式运行打包脚本；打包后必须确认仓库工作区内没有任何 `.zip`。
-- 最近交付包（后缀 906390，交付追踪版本 1.55.4）：`obsidian-mindmap-studio-1.55.4-906390.zip`（根目录 `obsidian-mindmap-studio/`）、`mindmap-studio-1.55.4-test-906390.zip`（根目录 `mindmap-studio/`）、`Agent-1.55.4-handoff-906390.zip`（根目录 `Agent/`）；实际发布版本以 GitHub Release 为准。
+- 最近交付包（后缀 248907，交付追踪版本 1.55.5）：`obsidian-mindmap-studio-1.55.5-248907.zip`（根目录 `obsidian-mindmap-studio/`）、`mindmap-studio-1.55.5-test-248907.zip`（根目录 `mindmap-studio/`）、`Agent-1.55.5-handoff-248907.zip`（根目录 `Agent/`）；实际发布版本以 GitHub Release 为准。
 - 历史交付包记录已清理；历史版本以 GitHub Release 发布为准，本地交付 ZIP 见 `D:\Downloads`。
 - 交付约束：沟通说明与中文 Git 提交说明中**不得**再写“- main.js 已重建。”这条；main.js 由 `npm run verify` 的 build 自动重建，交付时不要单独列出。

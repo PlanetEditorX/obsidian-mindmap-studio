@@ -168,7 +168,7 @@ export const setIcon = () => {};
       { id: "sheet-extra", rootTopic: { title: "未链接画布", children: { attached: [{ title: "独立主题" }] } } }
     ]))
   });
-  const importedXmind = importExport.xmindToDocument(xmindArchive.buffer, "fallback");
+  const importedXmind = await importExport.xmindToDocument(xmindArchive.buffer, "fallback");
   assert.equal(importedXmind.root.text, "XMind 根");
   assert.equal(importedXmind.root.children[0]?.text, "分支 A");
   assert.equal(importedXmind.root.children[1]?.text, "子导图", "linked XMind sheets must remain nested below their source topic");
@@ -191,7 +191,7 @@ export const setIcon = () => {};
     }])),
     "resources/公式 图.png": xmindResourceBytes
   });
-  const xmindRichResult = importExport.xmindToImportResult(xmindRichArchive.buffer, "fallback");
+  const xmindRichResult = await importExport.xmindToImportResult(xmindRichArchive.buffer, "fallback");
   assert.equal(xmindRichResult.images.length, 1, "shared XMind resources must be extracted once");
   assert.equal(xmindRichResult.imageReferenceCount, 2, "every XMind image attachment must become a content block");
   assert.equal(xmindRichResult.equationCount, 2, "XMind equation and formula variants must retain their LaTeX source");
@@ -213,13 +213,13 @@ export const setIcon = () => {};
   const richRootImage = model.nodeContentBlocks(xmindRichResult.document.root).find((block) => block.type === "image");
   assert.equal(richRootImage?.source, "MindMap Assets/XMind/公式 图.png");
   assert.equal(richRootImage?.localSource, "MindMap Assets/XMind/公式 图.png");
-  const selfContainedXmind = importExport.xmindToDocument(xmindRichArchive.buffer, "fallback");
+  const selfContainedXmind = await importExport.xmindToDocument(xmindRichArchive.buffer, "fallback");
   const selfContainedImage = model.nodeContentBlocks(selfContainedXmind.root).find((block) => block.type === "image");
   assert.match(selfContainedImage?.source ?? "", /^data:image\/png;base64,/, "standalone XMind parsing must preserve embedded images as data URLs");
   const xmindMissingArchive = zipSync({
     "content.json": strToU8(JSON.stringify([{ rootTopic: { title: "缺图", image: { src: "xap:resources/missing.png" } } }]))
   });
-  const xmindMissingResult = importExport.xmindToImportResult(xmindMissingArchive.buffer, "fallback");
+  const xmindMissingResult = await importExport.xmindToImportResult(xmindMissingArchive.buffer, "fallback");
   assert.equal(xmindMissingResult.missingImageCount, 1, "missing XMind resources must be reported instead of leaving a broken image token");
   assert.deepEqual(model.nodeContentBlocks(xmindMissingResult.document.root).map((block) => block.type), ["text"]);
   const rootTopicLinkedArchive = zipSync({
@@ -234,7 +234,7 @@ export const setIcon = () => {};
       }
     ]))
   });
-  const rootTopicLinkedDocument = importExport.xmindToDocument(rootTopicLinkedArchive.buffer, "fallback");
+  const rootTopicLinkedDocument = await importExport.xmindToDocument(rootTopicLinkedArchive.buffer, "fallback");
   assert.deepEqual(rootTopicLinkedDocument.root.children.map((node) => node.text), ["节点 A"], "a sheet linked by its root topic ID must not be imported again as an orphan branch");
   assert.equal(rootTopicLinkedDocument.root.children[0]?.children[0]?.text, "子导图内容", "a root-topic-ID link must merge the child map content into its source node");
   const exportedHtml = importExport.readingSectionsToHtml([{ filePath: "root.mindmap", document: importedXmind, baseDepth: 0 }]);

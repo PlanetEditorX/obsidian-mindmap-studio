@@ -652,7 +652,7 @@ export class ImportExportModal extends Modal {
       equationCount: number;
       missingImages: number;
     }> => {
-      const result = xmindToImportResult(source, fallbackTitle);
+      const result = await xmindToImportResult(source, fallbackTitle);
       if (result.images.length) await updateImportProgress(68, `正在提取 ${result.images.length} 个 XMind 图片资源`);
       const materialized = await materializeXMindImages(result, async (image) => {
         const content = image.content.slice();

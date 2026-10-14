@@ -48,8 +48,8 @@ function fixture({ missing = false } = {}) {
   return zipSync(files).buffer;
 }
 
-test("XMind images and LaTeX become ordered content blocks", () => {
-  const result = xmind.xmindToImportResult(fixture(), "fallback");
+test("XMind images and LaTeX become ordered content blocks", async () => {
+  const result = await xmind.xmindToImportResult(fixture(), "fallback");
   assert.equal(result.images.length, 1);
   assert.equal(result.imageReferenceCount, 2);
   assert.equal(result.equationCount, 2);
@@ -62,7 +62,7 @@ test("XMind images and LaTeX become ordered content blocks", () => {
 });
 
 test("shared XMind resources are saved once and every reference is rewritten", async () => {
-  const result = xmind.xmindToImportResult(fixture(), "fallback");
+  const result = await xmind.xmindToImportResult(fixture(), "fallback");
   let saveCalls = 0;
   const materialized = await xmind.materializeXMindImages(result, async (image) => {
     saveCalls += 1;
@@ -79,14 +79,14 @@ test("shared XMind resources are saved once and every reference is rewritten", a
   assert.ok(allImages.every((block) => block.localSource === "MindMap Assets/XMind/公式.png"));
 });
 
-test("standalone XMind parsing embeds archive images instead of losing them", () => {
-  const document = xmind.xmindToDocument(fixture(), "fallback");
+test("standalone XMind parsing embeds archive images instead of losing them", async () => {
+  const document = await xmind.xmindToDocument(fixture(), "fallback");
   const image = model.nodeContentBlocks(document.root).find((block) => block.type === "image");
   assert.match(image?.source ?? "", /^data:image\/png;base64,/);
 });
 
-test("missing XMind resources are reported without broken image blocks", () => {
-  const result = xmind.xmindToImportResult(fixture({ missing: true }), "fallback");
+test("missing XMind resources are reported without broken image blocks", async () => {
+  const result = await xmind.xmindToImportResult(fixture({ missing: true }), "fallback");
   assert.equal(result.missingImageCount, 2);
   assert.equal(result.images.length, 0);
   assert.deepEqual(model.nodeContentBlocks(result.document.root).map((block) => block.type), ["text", "text"]);
@@ -142,7 +142,7 @@ function nestedSheetFixture() {
 }
 
 test("nested linked XMind sheet roots keep images equations and notes at every depth", async () => {
-  const result = xmind.xmindToImportResult(nestedSheetFixture(), "fallback");
+  const result = await xmind.xmindToImportResult(nestedSheetFixture(), "fallback");
   assert.equal(result.images.length, 2);
   assert.equal(result.imageReferenceCount, 2);
   assert.equal(result.equationCount, 1);
@@ -166,7 +166,7 @@ test("nested linked XMind sheet roots keep images equations and notes at every d
   ]);
 });
 
-test("linked XMind sheets merge into their portal even when the root title differs", () => {
+test("linked XMind sheets merge into their portal even when the root title differs", async () => {
   const source = zipSync({
     "content.json": strToU8(JSON.stringify([
       {
@@ -187,7 +187,7 @@ test("linked XMind sheets merge into their portal even when the root title diffe
     ]))
   }).buffer;
 
-  const result = xmind.xmindToImportResult(source, "fallback");
+  const result = await xmind.xmindToImportResult(source, "fallback");
   const portal = result.document.root.children[0];
   assert.equal(result.document.root.children.length, 1);
   assert.equal(portal.text, "子节点入口");
@@ -196,7 +196,7 @@ test("linked XMind sheets merge into their portal even when the root title diffe
   assert.deepEqual(model.nodeContentBlocks(portal).map((block) => block.text), ["子节点入口"]);
 });
 
-test("XMind import rejects an archive with too many entries before decompressing them", () => {
+test("XMind import rejects an archive with too many entries before decompressing them", async () => {
   const files = {};
   for (let index = 0; index < 4200; index += 1) {
     files[`resources/file-${index}.bin`] = new Uint8Array([index & 0xff]);
@@ -204,13 +204,42 @@ test("XMind import rejects an archive with too many entries before decompressing
   files["content.json"] = strToU8("[]");
   const source = zipSync(files).buffer;
 
-  assert.throws(() => xmind.xmindToImportResult(source, "fallback"), /归档条目数超过上限/);
+  await assert.rejects(xmind.xmindToImportResult(source, "fallback"), /归档条目数超过上限/);
 });
 
-test("XMind import rejects a single entry whose uncompressed size exceeds the limit", () => {
+test("XMind import rejects a single entry whose uncompressed size exceeds the limit", async () => {
   // 65 MB 的解压炸弹压缩后只有几十 KB；限制必须在解压该条目前就命中，而不是先展开再检查。
   const bomb = new Uint8Array(65 * 1024 * 1024);
   const source = zipSync({ "content.json": bomb }).buffer;
 
-  assert.throws(() => xmind.xmindToImportResult(source, "fallback"), /单个文件解压后过大/);
+  await assert.rejects(xmind.xmindToImportResult(source, "fallback"), /单个文件解压后过大/);
+});
+
+test("XMind import resolves asynchronously instead of blocking the caller", async () => {
+  const pending = xmind.xmindToImportResult(fixture(), "fallback");
+  assert.ok(pending instanceof Promise, "XMind 解压必须让出主线程，导入入口应为异步契约");
+  await pending;
+});
+
+test("multi-chunk XMind resources survive chunked streaming extraction byte for byte", async () => {
+  // 700 KB 的随机资源会被切成多个 256 KB 批次推入解压器，覆盖批次切分与分块合并路径。
+  const largeBytes = new Uint8Array(700 * 1024);
+  for (let index = 0; index < largeBytes.length; index += 1) {
+    largeBytes[index] = (index * 31 + (index >> 8)) & 0xff;
+  }
+  const source = zipSync({
+    "content.json": strToU8(JSON.stringify([{
+      id: "sheet-large",
+      rootTopic: { title: "大图", image: { src: "xap:resources/大图.png" } }
+    }])),
+    "resources/大图.png": largeBytes
+  }).buffer;
+
+  const result = await xmind.xmindToImportResult(source, "fallback");
+  assert.equal(result.images.length, 1, "跨多个解压批次的归档条目仍必须被完整提取");
+  assert.deepEqual(
+    Array.from(result.images[0].content),
+    Array.from(largeBytes),
+    "分块流式解压必须逐字节保留资源内容"
+  );
 });

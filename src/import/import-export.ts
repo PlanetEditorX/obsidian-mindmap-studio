@@ -3,7 +3,7 @@
  * @description 导入导出领域的 XMind 与文章文档转换工具。
  */
 
-import { strFromU8, strToU8, unzipSync, zipSync, type Unzipped } from "fflate";
+import { strFromU8, strToU8, Unzip, UnzipInflate, unzipSync, zipSync, type Unzipped } from "fflate";
 import {
   createDefaultDocument,
   createNode,
@@ -358,44 +358,111 @@ function mergeLinkedXMindSheetRoot(target: MindMapNode, linkedRoot: MindMapNode)
 }
 
 /**
- * 归档导入的安全上限。XMind 等压缩包来自外部，若不加限制，压缩炸弹可以在同步解压时
- * 瞬间展开成数 GB 数据、冻结主线程甚至耗尽内存。这些上限在解压**每个条目之前**由
- * `fflate` 的 `filter` 回调校验，超限立即抛错中断，不会先解压再检查。
+ * 归档导入的安全上限。XMind 等压缩包来自外部，若不加限制，压缩炸弹可以在解压时
+ * 瞬间展开成数 GB 数据、冻结主线程甚至耗尽内存。条目数与解压后体积会在**开始解压之前**
+ * 先用中央目录校验一次，解压过程中再按实际产出累计一次，超限立即中断。
  */
 const ARCHIVE_MAX_ENTRIES = 4096;
 /** 单个归档条目的解压后大小上限（64 MB）。 */
 const ARCHIVE_MAX_ENTRY_BYTES = 64 * 1024 * 1024;
 /** 整个归档解压后的总大小上限（256 MB）。 */
 const ARCHIVE_MAX_TOTAL_BYTES = 256 * 1024 * 1024;
+/** 流式解压每批推入的压缩字节数；批与批之间让出主线程，避免大归档冻结界面。 */
+const ARCHIVE_UNZIP_CHUNK_BYTES = 256 * 1024;
+
+/** 解压过程中的累计用量。 */
+interface ArchiveBudget {
+  entries: number;
+  bytes: number;
+}
+
+/** 向累计用量中追加一个条目并校验全部上限，超限立即抛错。 */
+function assertArchiveBudget(budget: ArchiveBudget, originalSize: number): void {
+  budget.entries += 1;
+  budget.bytes += originalSize;
+  if (budget.entries > ARCHIVE_MAX_ENTRIES) {
+    throw new Error(`归档条目数超过上限（${ARCHIVE_MAX_ENTRIES}），已拒绝解压`);
+  }
+  if (originalSize > ARCHIVE_MAX_ENTRY_BYTES) {
+    throw new Error(`归档中单个文件解压后过大，已拒绝解压`);
+  }
+  if (budget.bytes > ARCHIVE_MAX_TOTAL_BYTES) {
+    throw new Error(`归档解压后总体积过大，已拒绝解压`);
+  }
+}
 
 /**
- * 在解压炸弹上限约束下同步解压归档。
+ * 只扫描中央目录校验归档容量上限，不产生任何解压输出。
  *
- * `filter` 在 `fflate` 解压每个条目前被调用，因此一旦条目数或解压后体积超限就立刻抛错，
- * 不会先把整个炸弹展开到内存里再检查。
+ * `filter` 返回 false 时 `fflate` 会完全跳过该条目的解压，因此这一步只花扫描目录的时间，
+ * 就能在展开任何数据之前拒绝解压炸弹。
+ *
+ * @param bytes 归档原始字节。
+ */
+function assertArchiveWithinLimits(bytes: Uint8Array): void {
+  const budget: ArchiveBudget = { entries: 0, bytes: 0 };
+  unzipSync(bytes, {
+    filter: (file) => {
+      assertArchiveBudget(budget, file.originalSize);
+      return false;
+    }
+  });
+}
+
+/** 合并同一归档条目的分块输出。 */
+function concatArchiveChunks(chunks: Uint8Array[], totalLength: number): Uint8Array<ArrayBuffer> {
+  const merged = new Uint8Array(totalLength);
+  let offset = 0;
+  for (const chunk of chunks) {
+    merged.set(chunk, offset);
+    offset += chunk.length;
+  }
+  return merged;
+}
+
+/**
+ * 在解压炸弹上限约束下分块流式解压归档。
+ *
+ * 先用中央目录校验条目数与解压后体积，再用 `fflate` 的流式解压器分批推入压缩数据，
+ * 每批之间让出一次宏任务：主线程单次最多处理 `ARCHIVE_UNZIP_CHUNK_BYTES` 的压缩输入，
+ * 因此大型 XMind 归档导入时不会长时间占用主线程。该实现不依赖 Web Worker，
+ * 桌面端与移动端行为一致；解压过程中仍按实际产出累计校验上限。
  *
  * @param bytes 归档原始字节。
  * @returns 解压后的条目表。
  */
-function readArchiveWithLimits(bytes: Uint8Array): Unzipped {
-  let entryCount = 0;
-  let totalBytes = 0;
-  return unzipSync(bytes, {
-    filter: (file) => {
-      entryCount += 1;
-      totalBytes += file.originalSize;
-      if (entryCount > ARCHIVE_MAX_ENTRIES) {
-        throw new Error(`归档条目数超过上限（${ARCHIVE_MAX_ENTRIES}），已拒绝解压`);
+async function readArchiveWithLimits(bytes: Uint8Array): Promise<Unzipped> {
+  assertArchiveWithinLimits(bytes);
+  const files: Unzipped = {};
+  let failure: Error | null = null;
+  const unzipper = new Unzip((file) => {
+    const chunks: Uint8Array[] = [];
+    let size = 0;
+    file.ondata = (error, chunk, final) => {
+      if (failure) return;
+      if (error) {
+        failure = error;
+        return;
       }
-      if (file.originalSize > ARCHIVE_MAX_ENTRY_BYTES) {
-        throw new Error(`归档中单个文件解压后过大，已拒绝解压`);
+      if (size + chunk.length > ARCHIVE_MAX_ENTRY_BYTES) {
+        failure = new Error(`归档中单个文件解压后过大，已拒绝解压`);
+        return;
       }
-      if (totalBytes > ARCHIVE_MAX_TOTAL_BYTES) {
-        throw new Error(`归档解压后总体积过大，已拒绝解压`);
-      }
-      return true;
-    }
+      size += chunk.length;
+      if (chunk.length) chunks.push(chunk);
+      if (final) files[file.name] = concatArchiveChunks(chunks, size);
+    };
+    file.start();
   });
+  unzipper.register(UnzipInflate);
+  for (let offset = 0; offset < bytes.length; offset += ARCHIVE_UNZIP_CHUNK_BYTES) {
+    const end = Math.min(offset + ARCHIVE_UNZIP_CHUNK_BYTES, bytes.length);
+    unzipper.push(bytes.subarray(offset, end), end >= bytes.length);
+    if (failure) throw failure;
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+  }
+  if (failure) throw failure;
+  return files;
 }
 
 /**
@@ -404,8 +471,8 @@ function readArchiveWithLimits(bytes: Uint8Array): Unzipped {
  * Embedded images receive temporary tokens so the UI can save each binary once
  * into the current map's asset folder before the document enters edit history.
  */
-export function xmindToImportResult(source: ArrayBuffer, fallbackTitle = "XMind 导入"): XMindImportResult {
-  const archive = readArchiveWithLimits(new Uint8Array(source));
+export async function xmindToImportResult(source: ArrayBuffer, fallbackTitle = "XMind 导入"): Promise<XMindImportResult> {
+  const archive = await readArchiveWithLimits(new Uint8Array(source));
   const content = archive["content.json"];
   if (!content) throw new Error("仅支持包含 content.json 的新版 XMind 文件");
   const parsed = JSON.parse(strFromU8(content)) as unknown;
@@ -544,8 +611,8 @@ export async function materializeXMindImages(
  * UI callers should prefer `xmindToImportResult()` plus
  * `materializeXMindImages()` so archive images become normal vault assets.
  */
-export function xmindToDocument(source: ArrayBuffer, fallbackTitle = "XMind 导入"): MindMapDocument {
-  const result = xmindToImportResult(source, fallbackTitle);
+export async function xmindToDocument(source: ArrayBuffer, fallbackTitle = "XMind 导入"): Promise<MindMapDocument> {
+  const result = await xmindToImportResult(source, fallbackTitle);
   const replacements = new Map(result.images.map((image) => [
     image.token,
     `data:${image.mimeType};base64,${bytesToBase64(image.content)}`
