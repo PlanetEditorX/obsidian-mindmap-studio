@@ -1,6 +1,14 @@
 # Test Results
 
-## 本轮：CI 9 项测试与当前快捷键重构同步（测试-only）
+## 本轮：修正 test:regression 中过期的节点聚焦契约（测试-only）
+
+- 现象：`npm run verify` 在 `test:regression`（`scripts/test.mjs`）以退出码 1 失败——`scripts/test.mjs:1561` 期望 `/this\.bringNodeIntoView\(node\.id\);\s*\n\s*(?:this|ctx)\.beginInlineEdit\(node\.id, undefined, true\)/` 匹配由 `tests/helpers/editor-sources.mjs` 拼接的编辑器源码不成立。
+- 根因：断言停留在重构前的即时 `requestAnimationFrame(() => { this.bringNodeIntoView(node.id); this.beginInlineEdit(node.id, …) })` 写法；当前实现已把新建节点聚焦收敛进 `focusCreatedStructureNode(nodeId)`（`src/editor/editor.ts:8227`），使用形参 `nodeId`，`node.id` 不再出现。
+- 修复：`scripts/test.mjs:1561` 的 `node\.id` 改为 `nodeId`，与 `tests/node-creation.test.mjs`、`tests/node-creation-focus.test.mjs` 中既有断言一致；仅改测试契约，未动运行时代码与 `main.js`。
+- 本机 `npm run verify` 完整通过：`test:unit` **472 / 472**、`test:regression` 全部通过、`test:docs` 1326 处命名声明、`test:repo` 通过、`tsc --noEmit` + production esbuild 通过。
+- 本轮无运行时行为变更，无需手工回归；如需可在真实 Obsidian 文章模式复验 Ctrl/Cmd+Enter 创建兄弟节点、Ctrl/Cmd+Tab 创建子节点后的滚入视口与首次聚焦。
+
+## 上一轮：CI 9 项测试与当前快捷键重构同步（测试-only）
 
 - 原始 CI 报错中 81–87、325、329 共 9 条失败，是旧单元测试依赖 `handleKeydown` 内联快捷键结构和 3 处固定 `requestAnimationFrame` 聚焦结构，与当前共享 `handleArticleStructureShortcut` / `focusCreatedStructureNode` 实现脱节。其中 81–85 使用不含委托方法的虚拟对象单独执行 `handleKeydown`，报 `this.handleArticleStructureShortcut is not a function`。
 - `tests/article-node-shortcuts.test.mjs` 改为从已提供的 `main.js` 中提取并执行实际处理方法，模拟可编辑文本、选中节点、只读与代码输入；覆盖窗口捕获、Ctrl/Cmd 修饰键兜底、重复按键、先保存后创建、虚拟分页延迟聚焦，并对照 TypeScript 源码接线。

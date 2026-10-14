@@ -20195,14 +20195,24 @@ var MindMapEditor = class {
         return;
     }
   }
-  /** Perform one article structure insertion, committing the active text editor first. */
+  /** Whether this view's focus and mode permit article-structure insertion. */
+  canRunArticleStructureShortcut(active = document.activeElement) {
+    if (this.currentMode !== "article" || this.readOnly || !(active instanceof HTMLElement)) return false;
+    if (!this.rootEl.contains(active) || active.closest("input, textarea, select, .modal-container")) return false;
+    if (active.closest('[contenteditable="true"]:not([data-mms-inline-editable="true"])')) return false;
+    if (this.inlineEditingId && !active.closest('[data-mms-inline-editable="true"]')) return false;
+    return true;
+  }
+  /** Save any current inline edit and create the requested article structure node. */
   createArticleNodeFromShortcut(kind, eventTarget) {
+    var _a2, _b2, _c;
     if (this.currentMode !== "article" || this.readOnly || !this.ensureEditable()) return false;
     const active = eventTarget instanceof HTMLElement ? eventTarget : document.activeElement;
-    const target = active instanceof HTMLElement && this.rootEl.contains(active) ? active : null;
+    if (!this.canRunArticleStructureShortcut(active)) return false;
+    const target = active instanceof HTMLElement ? active : null;
     const liveInline = target == null ? void 0 : target.closest('[data-mms-inline-editable="true"]');
-    const sourceId = this.inlineEditingId || (liveInline == null ? void 0 : liveInline.closest("[data-node-id]")?.dataset.nodeId) || this.selectedId;
-    const inlineEditor = liveInline?.contentEditable === "true" ? liveInline : this.rootEl.querySelector('[data-mms-inline-editable="true"][contenteditable="true"]');
+    const sourceId = (_c = (_b2 = this.inlineEditingId) != null ? _b2 : (_a2 = liveInline == null ? void 0 : liveInline.closest("[data-node-id]")) == null ? void 0 : _a2.dataset.nodeId) != null ? _c : this.selectedId;
+    const inlineEditor = (liveInline == null ? void 0 : liveInline.contentEditable) === "true" ? liveInline : this.rootEl.querySelector('[data-mms-inline-editable="true"][contenteditable="true"]');
     this.callbacks.onDebugLog("editor", "article-structure-shortcut", {
       kind,
       sourceId,
@@ -20210,7 +20220,6 @@ var MindMapEditor = class {
       mode: this.currentMode
     });
     if (inlineEditor) {
-      // The first pointer-focus guard must not postpone the blur commit.
       delete inlineEditor.dataset.mmsProtectInitialFocus;
       inlineEditor.blur();
     }
@@ -20219,22 +20228,18 @@ var MindMapEditor = class {
     else this.addChild();
     return true;
   }
-  /** Intercept a genuine simultaneous Ctrl/Cmd+Enter or Ctrl/Cmd+Tab in article mode. */
+  /** Process Ctrl/Cmd+Enter and Ctrl/Cmd+Tab, including tracked physical modifiers. */
   handleArticleStructureShortcut(event, modifierHeld = false) {
     if (this.currentMode !== "article" || this.readOnly || event.isComposing || event.shiftKey || event.altKey) return false;
-    const key = event.key === "Enter" || event.code === "NumpadEnter" ? "sibling" : event.key === "Tab" ? "child" : null;
-    if (!key || !(event.ctrlKey || event.metaKey || modifierHeld)) return false;
-    const target = event.target instanceof HTMLElement ? event.target : null;
-    if (!target || !this.rootEl.contains(target) || target.closest("input, textarea, select, .modal-container")) return false;
-    if (target.closest('[contenteditable="true"]:not([data-mms-inline-editable="true"])')) return false;
-    if (this.inlineEditingId && !target.closest('[data-mms-inline-editable="true"]')) return false;
+    const kind = event.key === "Enter" || event.code === "NumpadEnter" ? "sibling" : event.key === "Tab" ? "child" : null;
+    if (!kind || !(event.ctrlKey || event.metaKey || modifierHeld) || !this.canRunArticleStructureShortcut(event.target)) return false;
     event.preventDefault();
     event.stopPropagation();
     event.stopImmediatePropagation();
     if (event.repeat) return true;
-    return this.createArticleNodeFromShortcut(key, target);
+    return this.createArticleNodeFromShortcut(kind, event.target);
   }
-  /** Retry after article virtualization/context refresh before focusing a newly inserted node. */
+  /** Wait for the article's paged DOM to contain the new node before editing. */
   focusCreatedStructureNode(nodeId) {
     let attempts = 0;
     const run = () => {
@@ -20263,7 +20268,7 @@ var MindMapEditor = class {
    * @param event 触发当前交互的浏览器或 Obsidian 事件。
    */
   handleKeydown(event) {
-    var _a2, _b2, _c, _d;
+    var _a2;
     const target = event.target;
     const mod = event.ctrlKey || event.metaKey;
     const key = event.key.toLowerCase();
@@ -20311,7 +20316,7 @@ var MindMapEditor = class {
       this.markSaving();
       return;
     }
-    if (this.currentMode === "article" && event.key === "Escape" && ((_d = this.options.articleNavigation) == null ? void 0 : _d.parentPath)) {
+    if (this.currentMode === "article" && event.key === "Escape" && ((_a2 = this.options.articleNavigation) == null ? void 0 : _a2.parentPath)) {
       event.preventDefault();
       const navigation = this.options.articleNavigation;
       void this.navigateWithTransition(
@@ -21252,6 +21257,21 @@ var MindMapStudioView = class extends import_obsidian17.TextFileView {
    */
   getViewType() {
     return VIEW_TYPE_MINDMAP_STUDIO;
+  }
+  /** Forward a window-captured article shortcut without exposing editor internals. */
+  handleArticleStructureShortcut(event, modifierHeld = false) {
+    var _a2, _b2;
+    return (_b2 = (_a2 = this.editor) == null ? void 0 : _a2.handleArticleStructureShortcut(event, modifierHeld)) != null ? _b2 : false;
+  }
+  /** Whether the active editor can accept an article structure command. */
+  canRunArticleStructureShortcut() {
+    var _a2, _b2;
+    return (_b2 = (_a2 = this.editor) == null ? void 0 : _a2.canRunArticleStructureShortcut()) != null ? _b2 : false;
+  }
+  /** Obsidian command entry, used if its hotkey dispatcher wins the shortcut. */
+  createArticleNodeFromShortcut(kind) {
+    var _a2, _b2;
+    return (_b2 = (_a2 = this.editor) == null ? void 0 : _a2.createArticleNodeFromShortcut(kind)) != null ? _b2 : false;
   }
   /**
    * 读取并返回display text，并保持模型、界面和持久化状态的一致性。
@@ -24994,8 +25014,6 @@ var MindMapStudioPlugin = class extends import_obsidian20.Plugin {
       event.stopPropagation();
       if (!event.repeat) activeView.openMapFamilySearchFromShortcut();
     }, true);
-    // Window capture is needed because Obsidian may consume Ctrl+Tab before
-    // keydown reaches the embedded article editor's root element.
     let ctrlHeld = false;
     let metaHeld = false;
     const forgetModifiers = () => {
@@ -25003,9 +25021,10 @@ var MindMapStudioPlugin = class extends import_obsidian20.Plugin {
       metaHeld = false;
     };
     this.registerDomEvent(window, "keydown", (event) => {
+      var _a3;
       if (event.key === "Control") ctrlHeld = true;
       if (event.key === "Meta") metaHeld = true;
-      const view = this.app.workspace.activeLeaf?.view;
+      const view = (_a3 = this.app.workspace.activeLeaf) == null ? void 0 : _a3.view;
       if ((event.key === "Enter" || event.key === "Tab") && (event.ctrlKey || event.metaKey || ctrlHeld || metaHeld)) {
         this.logDebug("article-hotkeys", "window-combination", {
           key: event.key,
@@ -25013,13 +25032,10 @@ var MindMapStudioPlugin = class extends import_obsidian20.Plugin {
           meta: event.metaKey,
           trackedCtrl: ctrlHeld,
           trackedMeta: metaHeld,
-          activeArticle: view instanceof MindMapStudioView && view.editor?.currentMode === "article"
+          activeArticle: view instanceof MindMapStudioView && view.canRunArticleStructureShortcut()
         });
       }
-      if (!(view instanceof MindMapStudioView) || !view.editor) return;
-      // Modifier state is a fallback only while a physical modifier is still
-      // pressed. Keyup/blur clears it; a standalone Enter remains normal Enter.
-      view.editor.handleArticleStructureShortcut(event, ctrlHeld || metaHeld);
+      if (view instanceof MindMapStudioView) view.handleArticleStructureShortcut(event, ctrlHeld || metaHeld);
     }, true);
     this.registerDomEvent(window, "keyup", (event) => {
       if (event.key === "Control") ctrlHeld = false;
@@ -25032,24 +25048,21 @@ var MindMapStudioPlugin = class extends import_obsidian20.Plugin {
     this.registerDomEvent(document, "visibilitychange", () => {
       if (document.hidden) forgetModifiers();
     });
-    // Make the mappings visible/remappable in Obsidian's Hotkeys settings.
-    // Its native Ctrl+Tab tab-switching binding must not be allowed to win.
-    for (const [id, name, kind, key] of [
-      ["article-create-sibling", "文章模式：创建兄弟节点", "sibling", "Enter"],
-      ["article-create-child", "文章模式：创建子节点", "child", "Tab"]
+    for (const { id, name, kind, key } of [
+      { id: "article-create-sibling", name: "\u6587\u7AE0\u6A21\u5F0F\uFF1A\u521B\u5EFA\u5144\u5F1F\u8282\u70B9", kind: "sibling", key: "Enter" },
+      { id: "article-create-child", name: "\u6587\u7AE0\u6A21\u5F0F\uFF1A\u521B\u5EFA\u5B50\u8282\u70B9", kind: "child", key: "Tab" }
     ]) {
       this.addCommand({
         id,
         name,
         hotkeys: [{ modifiers: ["Mod"], key }],
         checkCallback: (checking) => {
-          const view = this.app.workspace.activeLeaf?.view;
-          const editor = view instanceof MindMapStudioView ? view.editor : null;
-          const active = document.activeElement;
-          const available = Boolean(editor && editor.currentMode === "article" && !editor.readOnly && active instanceof HTMLElement && editor.rootEl.contains(active) && !active.closest("input, textarea, select, .modal-container"));
-          if (available && !checking) {
-            this.logDebug("article-hotkeys", "command-fired", { kind, mode: editor.currentMode });
-            editor.createArticleNodeFromShortcut(kind, active);
+          var _a3;
+          const view = (_a3 = this.app.workspace.activeLeaf) == null ? void 0 : _a3.view;
+          const available = view instanceof MindMapStudioView && view.canRunArticleStructureShortcut();
+          if (available && !checking && view instanceof MindMapStudioView) {
+            this.logDebug("article-hotkeys", "command-fired", { kind });
+            view.createArticleNodeFromShortcut(kind);
           }
           return available;
         }

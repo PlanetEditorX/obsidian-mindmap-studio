@@ -1,10 +1,18 @@
 # obsidian-mindmap-studio 项目交接
 
 - 插件：MindMap Studio（Obsidian 本地优先 .mindmap 导图，含导图/大纲/文章/通读模式、全局搜索、图床、AI 助手与桌面截图链路）。
-- 版本基线：线上已发布 v1.54.9（提交 `b57902f`，已包含弹窗整合、输入框高度、排序置顶与设置折叠行缩进四轮改动）；本轮工作区（未提交）为「折叠代码块惰性渲染 + 超大代码块跳过语法高亮」，发布后应为 v1.54.10。
+- 版本基线：工作区版本文件为 1.54.9（Git Release 最高 tag v1.55.2；仓库由用户上传的 1.55.2 运行文件重建，TypeScript/package 基线仍标 1.54.9，详见 `reference/version-notes.zh-CN.md`）；本轮为测试契约修正（未改运行时代码），交付追踪版本 1.55.3。
 - 仓库规则：见根目录 `AGENTS.md`；每轮代码交付三份 ZIP（源码 / 安装 / Agent 交接）共用同一六位后缀；验证入口 `npm run verify`。
 
-## 当前状态（本轮：折叠代码块惰性渲染，修复万行代码卡死）
+## 当前状态（本轮：修复 CI 回归脚本中过期的节点聚焦契约）
+
+- 现象：`npm run verify` 在 `test:regression`（`scripts/test.mjs`）报错退出，断言位于 `scripts/test.mjs:1561`，期望正则 `/this\.bringNodeIntoView\(node\.id\);\s*\n\s*(?:this|ctx)\.beginInlineEdit\(node\.id, undefined, true\)/` 匹配 `editorSource`（由 `tests/helpers/editor-sources.mjs` 拼接的编辑器源码）失败（`operator: 'match'`，进程退出码 1）。
+- 根因：该断言停留在重构前的即时写法 `requestAnimationFrame(() => { this.bringNodeIntoView(node.id); this.beginInlineEdit(node.id, …) })`；当前源码已把「新建节点聚焦」收敛进 `MindMapEditor.focusCreatedStructureNode(nodeId)`（`src/editor/editor.ts:8227`），函数体使用形参 `nodeId`（`this.bringNodeIntoView(nodeId);` + `this.beginInlineEdit(nodeId, undefined, true);`），因此 `node.id` 已不再出现，断言必然失败。
+- 修复（仅测试契约，未改运行时代码）：把 `scripts/test.mjs:1561` 的 `node\.id` 改为 `nodeId`，与 `tests/node-creation-focus.test.mjs:23`、`tests/node-creation.test.mjs:57` 中已在用的 `nodeId` 断言一致。语义不变，仍锁定「新建 Tab/Enter 节点先滚入视口、再保护首次聚焦行内编辑」。
+- 验证：`npm run verify` 完整通过——`test:unit` 472/472、`test:regression` 全部通过、`test:docs` 1326 处命名声明、`test:repo` 通过、`tsc --noEmit` + production esbuild 通过。本轮无插件源码改动，`main.js` 内容与上一轮一致。
+- 待手工验证：真实 Obsidian 文章模式按 Ctrl/Cmd+Enter 创建兄弟节点、Ctrl/Cmd+Tab 创建子节点后，新节点应立即滚入视口并进入行内编辑且首次聚焦不丢；本条为契约修正，运行时行为未受影响。
+
+### 上一轮工作区（折叠代码块惰性渲染，修复万行代码卡死）
 
 - 用户反馈（附 23 条调试日志）：打开 `浏览器/油猴.mindmap`（242 KB）会卡死数秒；补充关键线索——其中一个节点含接近 1 万行的代码块、默认折叠，「父节点一展开就会卡死」。
 - 根因（`src/render/code-block.ts`）：折叠分支虽然把正文塞进 `<details class="mms-code-collapsed">`（`display: none`），却仍然立即 `await options.renderMarkdown(buildFencedCodeMarkdown(block), target)`。也就是说**不可见的正文照样走完整的 Markdown 解析与 Prism 语法高亮**：万行级脚本要为每行切出成百上千个 token 元素并触发样式计算，主线程被冻结数秒。日志中 454 ms 之后到 14 s 无任何事件，正是这段同步渲染；与「展开父节点（让该节点可见）即卡死」完全吻合。
@@ -117,12 +125,13 @@
 
 ## 验证基线
 
-- `npm run verify` 本机完整通过：`test:unit` 462/462（本轮工作区为 `tests/code-block.test.mjs` 新增 2 条折叠代码块惰性渲染契约——展开前不解析、首次展开只渲染一次且超 2000 行去掉语言围栏；上一轮 1.54.9 为 `tests/settings-layout.test.mjs` 的「管理配置」契约新增 3 条折叠行缩进 CSS 断言；1.54.7 新增 1 条 `tests/code-block.test.mjs` 的「识别入口并入代码内容字段 + 保存仍剥离围栏」契约；1.54.5 新增 8 条 `tests/image-relink.test.mjs`；此前 1.54.1~1.54.4 的 latex/question 契约保持通过）、`test:regression` 全部通过、`test:docs` 全部通过（1319 处命名声明）、`test:repo` 通过、`tsc --noEmit` 与 production esbuild 通过。
+- `npm run verify` 本机完整通过：`test:unit` 472/472、`test:regression` 全部通过（本轮修正 `scripts/test.mjs:1561` 的过期正则，`node.id` → `nodeId`）、`test:docs` 全部通过（1326 处命名声明）、`test:repo` 通过、`tsc --noEmit` 与 production esbuild 通过。
 - 详细数据见根目录 `TEST_RESULTS.md`。
 
 ## 待验证事项（需真实 Obsidian 桌面端手工冒烟）
 
-- **万行级折叠代码块不再卡死（本轮新增，待实测）**：打开 `浏览器/油猴.mindmap`（242 KB）应立刻可用；展开含接近 1 万行代码块的父节点时不再卡顿数秒。首次展开该代码块应内容完整、逻辑行数与行号正确、可复制、可再次双击编辑保存，只是不再语法着色（超过 2000 行自动跳过高亮）。反复折叠/展开不应重复解析（第二次展开应立即呈现），节点框高与相邻节点避让正常。打开调试模式后导出日志，`render / code-block-render` 中折叠块耗时应为毫秒级（修复前为秒级）。
+- **新建节点聚焦契约（本轮，测试-only，待实测）**：真实 Obsidian 文章模式按 Ctrl/Cmd+Enter 创建兄弟节点、Ctrl/Cmd+Tab 创建子节点后，新节点应立即滚入视口并进入行内编辑且首次聚焦不丢（Ctrl+Tab 需确认未被宿主快捷键占用）。本轮未改运行时代码，仅修正过期回归断言。
+- **万行级折叠代码块不再卡死（上一轮新增，待实测）**：打开 `浏览器/油猴.mindmap`（242 KB）应立刻可用；展开含接近 1 万行代码块的父节点时不再卡顿数秒。首次展开该代码块应内容完整、逻辑行数与行号正确、可复制、可再次双击编辑保存，只是不再语法着色（超过 2000 行自动跳过高亮）。反复折叠/展开不应重复解析（第二次展开应立即呈现），节点框高与相邻节点避让正常。打开调试模式后导出日志，`render / code-block-render` 中折叠块耗时应为毫秒级（修复前为秒级）。
 - **「管理配置」折叠行缩进（1.54.9 已发布，待实测确认）**：打开插件设置 →「管理配置」，「设置分类排序」这一折叠行的三角与文字应与同组的「调试模式」「导出配置」等 `setting-item` 处于同一缩进列，不再贴齐分组标题「管理配置」那一列；展开后说明文字、「恢复默认顺序」按钮与各分类上下箭头同样缩进 16px；该区块的上下分隔线仍与相邻设置卡片等宽（只缩进内容、不改边框盒）。
 - **代码编辑弹窗按钮整合（1.54.7，待实测）**：打开导图 → 节点右键「+ 代码」→ 在弹窗里粘贴一段完整围栏代码块（```` ```python … ``` ````）→ 点“代码内容”标题右侧的「识别粘贴的代码块」，语言应切到 Python、正文去掉围栏；不点它直接「保存代码」也应得到同样结果。视觉上按钮应是标题行右侧的小号描边次要按钮，不再单独悬挂在“显示设置”卡片下方，与卡片和底部「取消 / 保存代码」风格一致；点击“代码内容”标题仍应把光标聚焦到输入框。
 - **长公式自动换行（1.54.1 引入、1.54.2 修复测量、1.54.3 调整断行与对齐，待实测）**：文章/通读/大纲/题目预览中插入一条明显超过正文宽度的行内公式（如 `$R = 5.25\%,\ R \times (1-R) = 5.25\% \times (1-5.25\%) = 5.25\% - 5.25\% \times 5.25\% = 5\%$`），应自动断成按等号对齐的多行、不再把页面顶宽，且**首行必须保留第一个 `=` 并与后续 `=` 竖直对齐**（`R = 5.25\%, R × (1−R)` 首行，之后各行以对齐后的 `=` 开头，不应出现“首行结束后右侧一大段空档再排 `=`”）；只含一个顶层 `=` 的公式（如 `$a = b$`）保持单行不换行。同一条公式放在导图节点里应保持单行（节点宽度自适应内容）；已渲染的公式在窗口变窄后不会自动重排（判定只发生在重新渲染时），刷新或切换模式后生效。若仍不换行，请提供公式所在位置（文章正文/导图节点/题目预览）与是否含 `\left`/`\right`、`\begin{}` 等不可断行结构。
@@ -159,6 +168,6 @@
 ## 交付说明
 
 - 三份 ZIP 均输出到 `D:\Downloads`（仓库工作区外），外部文件名：`obsidian-mindmap-studio-<版本>-<后缀>.zip`、`mindmap-studio-<版本>-test-<后缀>.zip`、`Agent-<版本>-handoff-<后缀>.zip`（内部根目录 `Agent/`）。`D:\Downloads` 在沙箱内写入会被拒绝，需以非沙箱方式运行打包脚本；打包后必须确认仓库工作区内没有任何 `.zip`。
-- 最近交付包（后缀 870659，交付追踪版本 1.54.10）：`obsidian-mindmap-studio-1.54.10-870659.zip`（根目录 `obsidian-mindmap-studio/`）、`mindmap-studio-1.54.10-test-870659.zip`（根目录 `mindmap-studio/`）、`Agent-1.54.10-handoff-870659.zip`（根目录 `Agent/`）；实际发布版本以 GitHub Release 为准。
+- 最近交付包（后缀 363034，交付追踪版本 1.55.3）：`obsidian-mindmap-studio-1.55.3-363034.zip`（根目录 `obsidian-mindmap-studio/`）、`mindmap-studio-1.55.3-test-363034.zip`（根目录 `mindmap-studio/`）、`Agent-1.55.3-handoff-363034.zip`（根目录 `Agent/`）；实际发布版本以 GitHub Release 为准。
 - 历史交付包记录已清理；历史版本以 GitHub Release 发布为准，本地交付 ZIP 见 `D:\Downloads`。
 - 交付约束：沟通说明与中文 Git 提交说明中**不得**再写“- main.js 已重建。”这条；main.js 由 `npm run verify` 的 build 自动重建，交付时不要单独列出。
