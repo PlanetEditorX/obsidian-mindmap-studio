@@ -135,7 +135,15 @@ function nodeDisplayText(node: MindMapNode): string {
  */
 export function buildSearchEntries(document: MindMapDocument, filePath: string): MindMapSearchEntry[] {
   const entries: MindMapSearchEntry[] = [];
-  const visit = (node: MindMapNode, ancestors: string[], depth: number): void => {
+  const fileTitle = document.title || filePath.split("/").at(-1)?.replace(/\.mindmap$/i, "") || "思维导图";
+  const isSubmapDocument = Boolean(document.navigation?.parentPath);
+  const parentMapPath = document.navigation?.parentPath;
+  // 显式栈前序遍历：深链文档在递归写法下会栈溢出，这里把节点深度从调用栈里解耦。
+  const stack: Array<{ node: MindMapNode; ancestors: string[]; depth: number }> = [
+    { node: document.root, ancestors: [], depth: 0 }
+  ];
+  while (stack.length) {
+    const { node, ancestors, depth } = stack.pop()!;
     const display = nodeDisplayText(node);
     const breadcrumb = [...ancestors, display];
     // Global search is deliberately limited to node text. File information is
@@ -146,7 +154,7 @@ export function buildSearchEntries(document: MindMapDocument, filePath: string):
     entries.push({
       key: `${filePath}::${node.id}`,
       filePath,
-      fileTitle: document.title || filePath.split("/").at(-1)?.replace(/\.mindmap$/i, "") || "思维导图",
+      fileTitle,
       nodeId: node.id,
       nodeText: display,
       breadcrumb,
@@ -154,12 +162,13 @@ export function buildSearchEntries(document: MindMapDocument, filePath: string):
       searchableText: searchText,
       matchedKinds: ["节点文字"],
       submapPath: node.submap?.path,
-      isSubmapDocument: Boolean(document.navigation?.parentPath),
-      parentMapPath: document.navigation?.parentPath
+      isSubmapDocument,
+      parentMapPath
     });
-    node.children.forEach((child) => visit(child, breadcrumb, depth + 1));
-  };
-  visit(document.root, [], 0);
+    for (let index = node.children.length - 1; index >= 0; index -= 1) {
+      stack.push({ node: node.children[index]!, ancestors: breadcrumb, depth: depth + 1 });
+    }
+  }
   return entries;
 }
 

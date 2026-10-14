@@ -3,7 +3,7 @@
  * @description 导入导出领域的 XMind 与文章文档转换工具。
  */
 
-import { strFromU8, strToU8, unzipSync, zipSync } from "fflate";
+import { strFromU8, strToU8, unzipSync, zipSync, type Unzipped } from "fflate";
 import {
   createDefaultDocument,
   createNode,
@@ -358,13 +358,54 @@ function mergeLinkedXMindSheetRoot(target: MindMapNode, linkedRoot: MindMapNode)
 }
 
 /**
+ * 归档导入的安全上限。XMind 等压缩包来自外部，若不加限制，压缩炸弹可以在同步解压时
+ * 瞬间展开成数 GB 数据、冻结主线程甚至耗尽内存。这些上限在解压**每个条目之前**由
+ * `fflate` 的 `filter` 回调校验，超限立即抛错中断，不会先解压再检查。
+ */
+const ARCHIVE_MAX_ENTRIES = 4096;
+/** 单个归档条目的解压后大小上限（64 MB）。 */
+const ARCHIVE_MAX_ENTRY_BYTES = 64 * 1024 * 1024;
+/** 整个归档解压后的总大小上限（256 MB）。 */
+const ARCHIVE_MAX_TOTAL_BYTES = 256 * 1024 * 1024;
+
+/**
+ * 在解压炸弹上限约束下同步解压归档。
+ *
+ * `filter` 在 `fflate` 解压每个条目前被调用，因此一旦条目数或解压后体积超限就立刻抛错，
+ * 不会先把整个炸弹展开到内存里再检查。
+ *
+ * @param bytes 归档原始字节。
+ * @returns 解压后的条目表。
+ */
+function readArchiveWithLimits(bytes: Uint8Array): Unzipped {
+  let entryCount = 0;
+  let totalBytes = 0;
+  return unzipSync(bytes, {
+    filter: (file) => {
+      entryCount += 1;
+      totalBytes += file.originalSize;
+      if (entryCount > ARCHIVE_MAX_ENTRIES) {
+        throw new Error(`归档条目数超过上限（${ARCHIVE_MAX_ENTRIES}），已拒绝解压`);
+      }
+      if (file.originalSize > ARCHIVE_MAX_ENTRY_BYTES) {
+        throw new Error(`归档中单个文件解压后过大，已拒绝解压`);
+      }
+      if (totalBytes > ARCHIVE_MAX_TOTAL_BYTES) {
+        throw new Error(`归档解压后总体积过大，已拒绝解压`);
+      }
+      return true;
+    }
+  });
+}
+
+/**
  * Parses a modern XMind archive while retaining images and LaTeX attachments.
  *
  * Embedded images receive temporary tokens so the UI can save each binary once
  * into the current map's asset folder before the document enters edit history.
  */
 export function xmindToImportResult(source: ArrayBuffer, fallbackTitle = "XMind 导入"): XMindImportResult {
-  const archive = unzipSync(new Uint8Array(source));
+  const archive = readArchiveWithLimits(new Uint8Array(source));
   const content = archive["content.json"];
   if (!content) throw new Error("仅支持包含 content.json 的新版 XMind 文件");
   const parsed = JSON.parse(strFromU8(content)) as unknown;

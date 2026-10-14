@@ -1,10 +1,22 @@
 # obsidian-mindmap-studio 项目交接
 
 - 插件：MindMap Studio（Obsidian 本地优先 .mindmap 导图，含导图/大纲/文章/通读模式、全局搜索、图床、AI 助手与桌面截图链路）。
-- 版本基线：工作区版本文件为 1.54.9（Git Release 最高 tag v1.55.2；仓库由用户上传的 1.55.2 运行文件重建，TypeScript/package 基线仍标 1.54.9，详见 `reference/version-notes.zh-CN.md`）；本轮为文章模式新建节点聚焦的运行时修复，交付追踪版本 1.55.4。
+- 版本基线：工作区版本文件为 1.55.4（Git Release 最高 tag v1.55.2；仓库由用户上传的 1.55.2 运行文件重建）；本轮为大型文档性能与健壮性 P0 加固，交付追踪版本 1.55.4。
 - 仓库规则：见根目录 `AGENTS.md`；每轮代码交付三份 ZIP（源码 / 安装 / Agent 交接）共用同一六位后缀；验证入口 `npm run verify`。
 
-## 当前状态（本轮：修复文章模式 Ctrl/Cmd+Enter、Ctrl/Cmd+Tab 新建节点丢失焦点）
+## 当前状态（本轮：大型文档性能与健壮性 P0 批次）
+
+- 触发：用户上传第三方深度研究报告（大型文件性能、代码问题与未来方向），并授权「开始优化」，落地报告 P0 清单。
+- (1) 核心树遍历迭代化：`src/core/node-tree.ts` 的 `walkNodes()` / `findAncestors()` / `removeNode()`、`src/core/model.ts` 的 `normalizeNode()`、`src/search/global-search.ts` 的 `buildSearchEntries()` 全部改为显式栈前序遍历（逆序入栈子节点，出栈即访问，保持父先于子与同级左→右）。根因确认：V8 的 `JSON.parse` 是迭代实现（实测 20 万层不抛错），栈溢出真正来自递归的 `normalizeNode`，数千层深链文档会抛 `RangeError`。`model.ts` 拆出 `normalizeNodeFields()` 造单节点、`normalizeNode()` 用栈帧 `{ source, target }` 逐层展开子树。
+- (2) JSON 解析错误与规范化错误分类：`parseJsonDocument()` 改为只吞 `SyntaxError`（`catch (error) { if (error instanceof SyntaxError) return null; throw error; }`），合法 JSON 的规范化异常直接抛出。旧实现 `try { return normalizeDocument(JSON.parse(...)) }` 的宽泛 `catch` 会把深链合法 JSON 的栈溢出误判为「非 JSON」并静默降级为 Markdown 导入，表现为根节点文字变成整段原始 JSON。`parseDocument()` 的 JSDoc 同步说明「只有 JSON 语法错误才按 Markdown 导入」。
+- (3) 取消每次 mutation 的全树附件扫描：`editor-types.ts` 新增可选回调 `hasPendingFileAssetDeletions?: () => boolean`（含 JSDoc），`view.ts` 注入 `() => this.plugin.hasPendingFileAssetDeletions()`，`main.ts` 实现 `return this.pendingFileDeletionTimers.size > 0`；`MindMapEditor.notifyDocumentChange()` 改为 `if (this.callbacks.hasPendingFileAssetDeletions?.() !== false) { this.callbacks.onCancelFileAssetDeletion(...) }`。采用保守门控（未做增量引用计数，避免失同步），未实现回调的宿主仍按「可能有」处理，行为与旧版一致。
+- (4) 撤销历史总字节预算：`src/editor/history-manager.ts` 新增模块常量 `HISTORY_BYTE_BUDGET = 128 * 1024 * 1024` 与私有字段 `undoBytes`（只跟踪 `undoStack`，在 `captureSnapshot` / `undoSnapshot` / `redoSnapshot` / `reset` 处同步增减）；构造函数第二参数 `byteLimitProvider` 默认返回该预算，`trim()` 同时施加条数上限与字节上限（字节超限从最旧一端裁剪，且至少保留一份快照）。未新增设置项，对 ~1MB 常规文档不触发。
+- (5) XMind 解压炸弹限制：`src/import/import-export.ts` 新增 `ARCHIVE_MAX_ENTRIES = 4096`、`ARCHIVE_MAX_ENTRY_BYTES = 64 MiB`、`ARCHIVE_MAX_TOTAL_BYTES = 256 MiB` 与 `readArchiveWithLimits()`，在 `unzipSync(bytes, { filter })` 内累计条目数与解压体积并超限抛错（`filter` 在解压每个条目前被调用，抛错直接向上传播）；`xmindToImportResult()` 首行改用该函数。**本轮保留同步 API**：`tests/xmind-import.test.mjs` 有 5 处同步调用 `xmindToImportResult()`，改 async 会破坏测试面，故把「解压迁出主线程」留作后续项。
+- 测试：`tests/node-tree.test.mjs` 新增 60000 层深链遍历契约；新建 `tests/model-parse-safety.test.mjs`（4 条：20000 层规范化、20000 层合法 JSON 保持节点树、仅语法错误回退 Markdown、`parseJsonDocument` 源码契约）；`tests/history-snapshot-reuse.test.mjs` 新增 3 条字节预算契约；`tests/xmind-import.test.mjs` 新增 2 条归档上限契约；`tests/file-block.test.mjs` 新增附件扫描门控契约；`tests/global-search-traversal.test.mjs` 新增 4000 层深链 + 显式栈源码契约。`package.json` 的 `test:unit` 已登记新测试文件。
+- 验证：`npm run verify` 完整通过——`test:unit` **488 / 488**、`test:regression` 全部通过、`test:docs` 1330 处命名声明、`test:repo` 通过、`tsc --noEmit` + production esbuild 通过；`docs/FUNCTION_REFERENCE.md` 已重新生成；文档同步 `docs/ARCHITECTURE.md`（新增「大型文档鲁棒性与资源上限」小节）与 `CHANGELOG.md`「未发布」。
+- 待手工验证：真实 Obsidian 打开含大量节点/附件的 `.mindmap` 应无卡顿，编辑、撤销、重做后附件 60 秒延迟回收仍能正常取消；导入正常 XMind 文件不受新上限影响；深链（数千层）导图能正常打开且不再退化为纯文本（根节点文字不应变成整段 JSON）。
+
+### 上一轮工作区（修复文章模式 Ctrl/Cmd+Enter、Ctrl/Cmd+Tab 新建节点丢失焦点）
 
 - 用户反馈（真实 Obsidian）：文章模式在节点行内编辑时按 Ctrl/Cmd+Enter 会创建兄弟节点、Ctrl/Cmd+Tab 会创建子节点，但新节点没有获得焦点，也没有进入编辑状态；期望新节点立即处于行内编辑。
 - 根因：`addChild()` / `addSibling()`（`src/editor/editor.ts:5001` / `:5026`）调用 `mutate(action)` 时未传 `restoreLocation`，于是 `mutate` 按当前模式捕获**变更前**的 `ReadingLocation` 并在函数末尾恢复；文章模式的 `renderArticle()` → `renderWindow()` 内部还会再次用 `previousLocation`（`captureCurrentLocation("article")`，只能取到旧 DOM 中的来源节点）恢复。两处恢复都会执行 `this.selectedId = resolved.nodeId`，把 `action` 里刚写入的新节点选择覆盖回来源节点，`focusCreatedStructureNode()` 的守卫 `if (!this.nodeById(nodeId) || this.selectedId !== nodeId) return;` 随即直接放弃，新节点既不滚入视口也不进入行内编辑。导图模式本就传 `null`（不恢复）所以正常，只有文章模式（以及大纲模式的 mutate 后恢复）受影响。
@@ -134,12 +146,13 @@
 
 ## 验证基线
 
-- `npm run verify` 本机完整通过：`test:unit` 472/472、`test:regression` 全部通过（本轮修正 `scripts/test.mjs:1561` 的过期正则，`node.id` → `nodeId`）、`test:docs` 全部通过（1326 处命名声明）、`test:repo` 通过、`tsc --noEmit` 与 production esbuild 通过。
+- `npm run verify` 本机完整通过：`test:unit` **488/488**、`test:regression` 全部通过、`test:docs` 全部通过（1330 处命名声明）、`test:repo` 通过、`tsc --noEmit` 与 production esbuild 通过（含本轮大型文档 P0 加固的全部专项测试）。
 - 详细数据见根目录 `TEST_RESULTS.md`。
 
 ## 待验证事项（需真实 Obsidian 桌面端手工冒烟）
 
-- **新建节点聚焦契约（本轮，测试-only，待实测）**：真实 Obsidian 文章模式按 Ctrl/Cmd+Enter 创建兄弟节点、Ctrl/Cmd+Tab 创建子节点后，新节点应立即滚入视口并进入行内编辑且首次聚焦不丢（Ctrl+Tab 需确认未被宿主快捷键占用）。本轮未改运行时代码，仅修正过期回归断言。
+- **大型文档 P0 加固（本轮，待实测）**：打开含大量节点或多张附件的大型 `.mindmap` 应无卡顿（编辑、撤销、重做后附件 60 秒延迟回收仍能正常取消）——门控只在宿主上报有待回收附件时才做全树扫描，未上报时与旧行为一致。导入一份正常 XMind 文件应不受新的解压上限影响（条目数/单条/总量均在限内时行为不变）。构造一份深链（数千层）导图应能正常打开且不再退化为纯文本导入（根节点文字不应变成整段 JSON）。本轮未迁出 XMind 解压线程，超大归档仍同步解压。
+- **新建节点聚焦契约（上一轮，测试-only，待实测）**：真实 Obsidian 文章模式按 Ctrl/Cmd+Enter 创建兄弟节点、Ctrl/Cmd+Tab 创建子节点后，新节点应立即滚入视口并进入行内编辑且首次聚焦不丢（Ctrl+Tab 需确认未被宿主快捷键占用）。上一轮未改运行时代码，仅修正过期回归断言。
 - **万行级折叠代码块不再卡死（上一轮新增，待实测）**：打开 `浏览器/油猴.mindmap`（242 KB）应立刻可用；展开含接近 1 万行代码块的父节点时不再卡顿数秒。首次展开该代码块应内容完整、逻辑行数与行号正确、可复制、可再次双击编辑保存，只是不再语法着色（超过 2000 行自动跳过高亮）。反复折叠/展开不应重复解析（第二次展开应立即呈现），节点框高与相邻节点避让正常。打开调试模式后导出日志，`render / code-block-render` 中折叠块耗时应为毫秒级（修复前为秒级）。
 - **「管理配置」折叠行缩进（1.54.9 已发布，待实测确认）**：打开插件设置 →「管理配置」，「设置分类排序」这一折叠行的三角与文字应与同组的「调试模式」「导出配置」等 `setting-item` 处于同一缩进列，不再贴齐分组标题「管理配置」那一列；展开后说明文字、「恢复默认顺序」按钮与各分类上下箭头同样缩进 16px；该区块的上下分隔线仍与相邻设置卡片等宽（只缩进内容、不改边框盒）。
 - **代码编辑弹窗按钮整合（1.54.7，待实测）**：打开导图 → 节点右键「+ 代码」→ 在弹窗里粘贴一段完整围栏代码块（```` ```python … ``` ````）→ 点“代码内容”标题右侧的「识别粘贴的代码块」，语言应切到 Python、正文去掉围栏；不点它直接「保存代码」也应得到同样结果。视觉上按钮应是标题行右侧的小号描边次要按钮，不再单独悬挂在“显示设置”卡片下方，与卡片和底部「取消 / 保存代码」风格一致；点击“代码内容”标题仍应把光标聚焦到输入框。
@@ -168,6 +181,8 @@
 
 ## 下一步建议
 
+- XMind 解压迁出主线程（报告 P0 剩余项）：`xmindToImportResult()` 目前仍是同步 API，`tests/xmind-import.test.mjs` 有 5 处同步调用；如需迁移需先把该测试面改为 await，再把 `readArchiveWithLimits()` 放进 worker/异步边界，避免大归档阻塞主线程。
+- 报告 P1 项（尚未实施）：增量附件引用计数以替代当前的 `hasPendingFileAssetDeletions()` 保守门控；`MutationDelta` 让 mutation 只更新受影响子树而非重建索引；整文档 JSON 序列化/解析与大文档 undo 快照的进一步降本。
 - 长公式换行只在重新渲染时按容器宽度判定，窗口缩放后不重排；如需跟随窗口变化，可在 resize 后对可见公式重跑一次判定（需评估文章模式锚点抖动风险）。
 - 断行目前只在顶层 `=` 处切分，且首个顶层 `=` 固定留在首行；如需在 `+`/`,` 或不等号处断行，可在 `splitLatexAtTopLevelRelation()` 扩展操作符集合（并保留“首个关系符不断行”的规则）。
 - 文件块可选增强：右键菜单“在系统中显示/复制路径”；大量附件时的资源目录清理入口。
@@ -177,6 +192,6 @@
 ## 交付说明
 
 - 三份 ZIP 均输出到 `D:\Downloads`（仓库工作区外），外部文件名：`obsidian-mindmap-studio-<版本>-<后缀>.zip`、`mindmap-studio-<版本>-test-<后缀>.zip`、`Agent-<版本>-handoff-<后缀>.zip`（内部根目录 `Agent/`）。`D:\Downloads` 在沙箱内写入会被拒绝，需以非沙箱方式运行打包脚本；打包后必须确认仓库工作区内没有任何 `.zip`。
-- 最近交付包（后缀 363034，交付追踪版本 1.55.3）：`obsidian-mindmap-studio-1.55.3-363034.zip`（根目录 `obsidian-mindmap-studio/`）、`mindmap-studio-1.55.3-test-363034.zip`（根目录 `mindmap-studio/`）、`Agent-1.55.3-handoff-363034.zip`（根目录 `Agent/`）；实际发布版本以 GitHub Release 为准。
+- 最近交付包（后缀 906390，交付追踪版本 1.55.4）：`obsidian-mindmap-studio-1.55.4-906390.zip`（根目录 `obsidian-mindmap-studio/`）、`mindmap-studio-1.55.4-test-906390.zip`（根目录 `mindmap-studio/`）、`Agent-1.55.4-handoff-906390.zip`（根目录 `Agent/`）；实际发布版本以 GitHub Release 为准。
 - 历史交付包记录已清理；历史版本以 GitHub Release 发布为准，本地交付 ZIP 见 `D:\Downloads`。
 - 交付约束：沟通说明与中文 Git 提交说明中**不得**再写“- main.js 已重建。”这条；main.js 由 `npm run verify` 的 build 自动重建，交付时不要单独列出。

@@ -60,6 +60,11 @@ export interface MindMapEditorCallbacks {
   onScheduleFileAssetDeletion: (paths: string[]) => void;
   /** Cancels pending deferred deletion jobs for attachment paths that are referenced again. */
   onCancelFileAssetDeletion: (paths: string[]) => void;
+  /**
+   * 是否仍有等待回收的附件。返回 false 时编辑器可跳过每次文档变化的全树附件扫描；
+   * 未实现该回调时编辑器按“可能有”处理，行为与旧版一致。
+   */
+  hasPendingFileAssetDeletions?: () => boolean;
   /** Opens a vault attachment file with Obsidian (unknown desktop types fall back to the system app). */
   onOpenFileAsset: (path: string) => Promise<void>;
   /** Reveals a vault file in the system file explorer with selection (desktop only). */

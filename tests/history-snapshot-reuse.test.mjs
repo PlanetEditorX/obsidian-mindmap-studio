@@ -86,3 +86,37 @@ test("installed bundle carries serialized history snapshot reuse", () => {
   assert.doesNotMatch(mainBundle, /this\.history\.capture\(this\.document\)/);
   assert.match(mainBundle, /const historySnapshot = this\.currentDocumentSnapshotJson\(\);[\s\S]*this\.history\.captureSnapshot\(historySnapshot\)/);
 });
+
+/** 通过连续撤销统计撤销栈的剩余条目数，避免为此暴露新的测试接口。 */
+function countUndoEntries(history) {
+  let count = 0;
+  while (history.undoSnapshot("current") !== null) count += 1;
+  return count;
+}
+
+test("history keeps every snapshot while the byte budget is not exceeded", () => {
+  const { DocumentHistory } = historyModule;
+  const history = new DocumentHistory(() => 10, () => 10_000);
+  for (let index = 0; index < 10; index += 1) history.captureSnapshot("x".repeat(40));
+  assert.equal(countUndoEntries(history), 10);
+});
+
+test("history trims oldest snapshots once the total byte budget is exceeded", () => {
+  const { DocumentHistory } = historyModule;
+  // 数量上限宽松（1000 条），但字节预算只有 100：每份 40 字符的 10 份快照必须被压到 100 字符以内。
+  const history = new DocumentHistory(() => 1000, () => 100);
+  for (let index = 0; index < 10; index += 1) history.captureSnapshot("x".repeat(40));
+
+  assert.equal(history.canUndo(), true, "撤销必须始终可用");
+  // 最后压到 80 字符（2 份 × 40），并保留足够撤销；不会退化成 400 字符的历史占用。
+  assert.equal(countUndoEntries(history), 2);
+});
+
+test("history never trims down to zero snapshots even under a tiny byte budget", () => {
+  const { DocumentHistory } = historyModule;
+  const history = new DocumentHistory(() => 10, () => 1);
+  history.captureSnapshot("x".repeat(200));
+  history.captureSnapshot("x".repeat(200));
+  assert.equal(history.canUndo(), true, "至少保留一份快照，保证撤销始终可用");
+  assert.equal(countUndoEntries(history), 1);
+});

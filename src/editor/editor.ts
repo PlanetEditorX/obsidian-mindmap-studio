@@ -1391,7 +1391,11 @@ export class MindMapEditor {
   private notifyDocumentChange(articleContextImpact: ArticleContextChangeImpact = "structure"): void {
     // 每次文档变化后同步当前引用的附件路径，取消仍在文档中的延迟删除任务
     //（覆盖撤销、重做、粘贴恢复、内容块重排等一切引用恢复场景）。
-    this.callbacks.onCancelFileAssetDeletion(this.collectFileAssetPaths());
+    // 只有确实存在待回收附件时才需要这次全树扫描：没有待删任务时取消操作本身是空操作，
+    // 而大型文档下每次 mutation 都遍历整棵树会成为主线程热点。
+    if (this.callbacks.hasPendingFileAssetDeletions?.() !== false) {
+      this.callbacks.onCancelFileAssetDeletion(this.collectFileAssetPaths());
+    }
     this.callbacks.onChange(this.createDetachedDocumentSnapshot(true), { articleContextImpact });
   }
 

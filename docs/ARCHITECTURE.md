@@ -17,8 +17,8 @@ MindMap Studio 是一个本地优先的 Obsidian 思维导图插件。核心设�
 src/
 ├── main.ts / view.ts           插件入口、Obsidian 视图与跨文件服务
 ├── core/
-│   ├── model.ts                数据模型、规范化与序列化
-│   └── node-tree.ts            节点树遍历、查找与结构移动
+│   ├── model.ts                数据模型、规范化与序列化（迭代式 normalizeNode）
+│   └── node-tree.ts            节点树遍历、查找与结构移动（显式栈遍历）
 ├── editor/
 │   ├── editor.ts               核心控制器：画布/选择/历史/模式调度
 │   ├── node-edit-modal.ts      节点编辑弹窗（内容块/备注/链接/图标）
@@ -455,6 +455,16 @@ mindmap-search-index.json
 插件层 `findImageRelinkTarget()` 在开关关闭、原文件仍存在或没有同名候选时返回 null，因此不会覆盖用户有意保留的旧文件。仓库图片路径由 `getVaultImagePaths()` 惰性缓存，仓库图片文件增删或改名时失效。
 
 - 任务状态交互已删除。模型层仍容忍历史 `task` 字段，以避免旧文件解析失败，但编辑器、设置、导出和渲染均忽略该字段。
+
+### 大型文档鲁棒性与资源上限
+
+大型或恶意输入不得让主线程卡死、静默丢数据或耗尽内存。以下约束必须保持：
+
+- **核心树遍历一律使用显式栈**。`node-tree.ts` 的 `walkNodes()` / `findAncestors()` / `removeNode()`、`model.ts` 的 `normalizeNode()` 以及 `search/global-search.ts` 的 `buildSearchEntries()` 都不得递归展开子树——递归写法在数千层的深链文档上会抛 `RangeError`，且异常可能被上层吞掉。显式栈通过「逆序入栈子节点、出栈即访问」保持父先于子、同级左到右的稳定前序，与递归版的输出顺序完全一致。
+- **JSON 解析错误与规范化错误必须分开处理**。`parseJsonDocument()` 只吞 `SyntaxError`（即文本确实不是 JSON 语法），合法 JSON 的规范化异常直接向上抛出，绝不再把文档静默降级成 Markdown 导入——旧实现共用一个宽泛 `catch`，深链合法 JSON 因规范化栈溢出被误判为普通文本，表现为根节点文字变成整段原始 JSON。
+- **附件回收取消采用按需扫描**。`MindMapEditor.notifyDocumentChange()` 每次变更都会取消仍在文档中的附件的延迟回收任务，但只有在宿主 `hasPendingFileAssetDeletions()` 返回真时才执行全树扫描；未实现该回调时按「可能有」处理，行为与旧版一致。没有待回收任务时这次扫描是空操作，在大文档下却是每次 mutation 的主线程热点。
+- **撤销历史受总字节预算约束**。`history-manager.ts` 除条数上限外还跟踪 `undoStack` 的累计字节数，超过 `HISTORY_BYTE_BUDGET`（128 MiB）即从最旧一端裁剪。条数与字节双约束同时生效，且始终至少保留一份快照，保证撤销可用。
+- **XMind 归档解压设上限**。`import-export.ts` 的 `readArchiveWithLimits()` 通过 `unzipSync` 的 `filter` 在解压每个条目前校验：条目数 `ARCHIVE_MAX_ENTRIES`（4096）、单条解压后 `ARCHIVE_MAX_ENTRY_BYTES`（64 MiB）、解压总量 `ARCHIVE_MAX_TOTAL_BYTES`（256 MiB），超限即抛错拒绝，避免解压炸弹。
 
 ### 工具栏可用性与排序
 

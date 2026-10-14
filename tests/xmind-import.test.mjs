@@ -195,3 +195,22 @@ test("linked XMind sheets merge into their portal even when the root title diffe
   assert.deepEqual(portal.children.map((node) => node.text), ["实际内容"]);
   assert.deepEqual(model.nodeContentBlocks(portal).map((block) => block.text), ["子节点入口"]);
 });
+
+test("XMind import rejects an archive with too many entries before decompressing them", () => {
+  const files = {};
+  for (let index = 0; index < 4200; index += 1) {
+    files[`resources/file-${index}.bin`] = new Uint8Array([index & 0xff]);
+  }
+  files["content.json"] = strToU8("[]");
+  const source = zipSync(files).buffer;
+
+  assert.throws(() => xmind.xmindToImportResult(source, "fallback"), /归档条目数超过上限/);
+});
+
+test("XMind import rejects a single entry whose uncompressed size exceeds the limit", () => {
+  // 65 MB 的解压炸弹压缩后只有几十 KB；限制必须在解压该条目前就命中，而不是先展开再检查。
+  const bomb = new Uint8Array(65 * 1024 * 1024);
+  const source = zipSync({ "content.json": bomb }).buffer;
+
+  assert.throws(() => xmind.xmindToImportResult(source, "fallback"), /单个文件解压后过大/);
+});

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test, before, after } from "node:test";
+import { readFile } from "node:fs/promises";
 import { loadTypeScriptModules } from "./compile-typescript.mjs";
 import { Module } from "node:module";
 
@@ -31,6 +32,7 @@ Module.prototype.require = function(id) {
 
 let searchModule;
 let cleanupFn;
+let searchSource;
 
 before(async () => {
   const { module, cleanup } = await loadTypeScriptModules(
@@ -39,6 +41,7 @@ before(async () => {
   );
   searchModule = module;
   cleanupFn = cleanup;
+  searchSource = await readFile("src/search/global-search.ts", "utf8");
 });
 
 after(async () => {
@@ -269,4 +272,32 @@ test("refreshFamily reads a stale ancestor only once across climb and downward t
   assert.deepEqual([...family].sort(), ["child.mindmap", "parent.mindmap"]);
   assert.equal(readCounts.get("parent.mindmap"), 1);
   assert.equal(readCounts.get("child.mindmap") ?? 0, 0);
+});
+
+test("buildSearchEntries survives a node chain far deeper than the call stack", () => {
+  // 旧实现递归展开子树，深层链会抛 RangeError；显式栈版本必须能处理远超调用栈的深度。
+  const DEPTH = 4000;
+  const root = { id: "root", text: "r", children: [] };
+  let current = root;
+  for (let index = 0; index < DEPTH; index += 1) {
+    const child = { id: `n${index}`, text: "n", children: [] };
+    current.children.push(child);
+    current = child;
+  }
+
+  const entries = searchModule.buildSearchEntries({ title: "Deep", root }, "deep.mindmap");
+
+  assert.equal(entries.length, DEPTH + 1);
+  const deepest = entries.find(entry => entry.nodeId === `n${DEPTH - 1}`);
+  assert.equal(deepest.depth, DEPTH);
+  assert.equal(deepest.breadcrumb.length, DEPTH + 1);
+  assert.equal(deepest.breadcrumb[0], "r");
+});
+
+test("buildSearchEntries walks the tree through an explicit stack instead of recursion", () => {
+  const body = searchSource.match(/export function buildSearchEntries\([\s\S]*?\n\}/)?.[0] ?? "";
+  assert.ok(body, "buildSearchEntries should remain exported from global-search.ts");
+  assert.match(body, /stack\.push\(/, "traversal must drive an explicit stack");
+  assert.doesNotMatch(body, /\bvisit\s*\(/, "traversal must not fall back to a recursive helper");
+  assert.doesNotMatch(body, /node\.children\.forEach\(\(child\) => visit\(/, "recursive forEach traversal must be gone");
 });

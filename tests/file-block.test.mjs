@@ -282,3 +282,17 @@ test("file cards ship shared styles for every host surface", () => {
   assert.match(stylesSource, /\.mms-outline-file \{/);
   assert.match(stylesSource, /\.mmc-file-block-editor \{/);
 });
+
+test("the plugin layer gates undo cancellation on pending file deletions", () => {
+  // 每次 mutation 都遍历整棵树取消附件回收，在大文档下成为主线程热点；
+  // 只有当插件确实存在待回收附件时才需要这次扫描。
+  assert.match(editorTypesSource, /hasPendingFileAssetDeletions\?: \(\) => boolean;/, "the optional hook keeps host layers free to skip the scan");
+  assert.match(viewSource, /hasPendingFileAssetDeletions: \(\) => this\.plugin\.hasPendingFileAssetDeletions\(\),/);
+  const hasPending = mainSource.match(/hasPendingFileAssetDeletions\(\): boolean \{[\s\S]*?\n  \}/)?.[0] ?? "";
+  assert.match(hasPending, /return this\.pendingFileDeletionTimers\.size > 0;/, "the predicate must read the live timer map instead of the whole tree");
+
+  const notify = editorSource.match(/private notifyDocumentChange\([\s\S]*?\n  \}/)?.[0] ?? "";
+  assert.match(notify, /if \(this\.callbacks\.hasPendingFileAssetDeletions\?\.\(\) !== false\) \{/, "a false predicate must skip the whole-tree scan");
+  assert.match(notify, /onCancelFileAssetDeletion\(this\.collectFileAssetPaths\(\)\)/, "the scan must still run whenever pending deletions exist");
+  assert.match(notify, /createDetachedDocumentSnapshot\(true\)/, "document change notification must stay unconditional");
+});

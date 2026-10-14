@@ -244,6 +244,7 @@ export class MindMapStudioView extends TextFileView {
         onSaveAttachmentFile: async (file) => this.plugin.saveAttachmentFile(file, this.file),
         onScheduleFileAssetDeletion: (paths) => this.plugin.scheduleFileAssetDeletion(paths, this.file?.path ?? ""),
         onCancelFileAssetDeletion: (paths) => this.plugin.cancelFileAssetDeletion(paths),
+        hasPendingFileAssetDeletions: () => this.plugin.hasPendingFileAssetDeletions(),
         onOpenFileAsset: async (path) => this.plugin.openFileAsset(path),
         onRevealFileInSystemExplorer: (path) => void this.plugin.revealFileInSystemExplorer(path),
         getImageHosts: () => this.plugin.getImageHostChoices(),

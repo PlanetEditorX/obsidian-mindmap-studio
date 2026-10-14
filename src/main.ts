@@ -2176,6 +2176,18 @@ export default class MindMapStudioPlugin extends Plugin {
   }
 
   /**
+   * 是否存在尚未到期、仍等待回收的附件。
+   *
+   * 供编辑器在每次文档变化前判断是否需要做全树附件扫描：没有待回收任务时，
+   * 取消操作是空操作，跳过扫描可避免大型文档下每次编辑都遍历整棵树。
+   *
+   * @returns 是否有待回收附件。
+   */
+  hasPendingFileAssetDeletions(): boolean {
+    return this.pendingFileDeletionTimers.size > 0;
+  }
+
+  /**
    * 在删除文件块附件前进行最终安全检查：文件必须存在于仓库内，且没有任何 .mindmap 文档仍然引用该路径。
    * 引用检查同时覆盖文件块 source 与图片块本地副本 localSource。
    *

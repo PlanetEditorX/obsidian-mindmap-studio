@@ -2,6 +2,13 @@
 
 ## 未发布
 
+- 大型文档与健壮性加固（P0 批次）：
+  - 核心树遍历全部改为显式栈（`node-tree.ts` 的 `walkNodes()` / `findAncestors()` / `removeNode()`、`model.ts` 的 `normalizeNode()`、`search/global-search.ts` 的 `buildSearchEntries()`），数千层的深链导图不再因递归展开抛 `RangeError`；遍历顺序与递归版一致（父先于子、同级左到右）。
+  - JSON 解析错误与规范化错误分开处理：`parseJsonDocument()` 只吞 `SyntaxError`，合法 JSON 的规范化异常直接抛出，不再把深链/异常文档静默降级为 Markdown 导入（旧行为会把根节点文字变成整段原始 JSON）。
+  - 附件回收取消改为按需扫描：`notifyDocumentChange()` 仅在宿主 `hasPendingFileAssetDeletions()` 为真时执行全树扫描，没有待回收任务时不再每次 mutation 遍历整棵树。
+  - 撤销历史新增总字节预算 `HISTORY_BYTE_BUDGET`（128 MiB）：与条数上限同时生效，超预算从最旧一端裁剪，且始终至少保留一份快照。
+  - XMind 归档导入增加解压上限（条目数 4096、单条 64 MiB、总量 256 MiB），通过 `unzipSync` 的 `filter` 在解压前拦截，避免解压炸弹。
+
 - 修复文章/大纲模式用 Ctrl/Cmd+Enter（兄弟节点）与 Ctrl/Cmd+Tab（子节点）创建节点后，新节点拿不到焦点、无法进入行内编辑的问题：创建时 `mutate` 会按变更前的旧阅读位置恢复视口并把 `selectedId` 重设回来源节点，随后的聚焦守卫因此直接放弃。现在新建子/兄弟节点显式传入 `null` 跳过该旧位置恢复，文章模式另把新节点记为本次渲染的最高优先级语义锚点（`renderWindow` 一次性消费），使新节点成为视口目标、补载结束后仍保持在视口内，`selectedId` 也留在新节点上，随即进入行内编辑；导图模式行为不变。
 
 - 修复 CI 中因旧测试未同步文章快捷键/分页聚焦重构而产生的 9 个误报：更新单元测试以实际执行 `main.js` 的共享快捷键入口和保存后创建路径，验证 window capture、命令注册、修饰键兜底及分页内容加载后的聚焦，保留原有文章快捷键行为。未改动插件运行代码；完整 `npm run verify` 仍须在可安装 npm 依赖的环境中复核。

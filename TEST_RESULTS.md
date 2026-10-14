@@ -1,5 +1,17 @@
 # Test Results
 
+## 本轮：大型文档性能与健壮性 P0 批次（运行时加固）
+
+- 范围：依据第三方深度研究报告定位的 P0 项落地——(1) 核心树遍历迭代化、(2) JSON 解析错误与规范化错误分类、(3) 取消每次 mutation 的全树附件扫描、(4) 撤销历史总字节预算、(5) XMind 解压炸弹限制。
+- (1) 遍历迭代化：`src/core/node-tree.ts` 的 `walkNodes()` / `findAncestors()` / `removeNode()`、`src/core/model.ts` 的 `normalizeNode()`、`src/search/global-search.ts` 的 `buildSearchEntries()` 全部改为显式栈，逆序入栈子节点以保持父先于子、同级左到右的稳定前序。根因是递归展开在深链文档上抛 `RangeError`（V8 的 `JSON.parse` 本身是迭代实现，实测 20 万层不抛错，栈溢出真正来自递归的 `normalizeNode`）。
+- (2) 错误分类：`parseJsonDocument()` 改为只吞 `SyntaxError`，合法 JSON 的规范化异常直接抛出。旧实现用 `try { return normalizeDocument(JSON.parse(...)) }` 的宽泛 `catch` 把深链合法 JSON 的栈溢出误判为「非 JSON」，静默降级为 Markdown 导入，表现为根节点文字变成整段原始 JSON。`parseDocument()` 的 JSDoc 同步说明。
+- (3) 附件扫描门控：`editor-types.ts` 新增可选回调 `hasPendingFileAssetDeletions?: () => boolean`，`view.ts` 注入 `() => this.plugin.hasPendingFileAssetDeletions()`，`main.ts` 实现为 `this.pendingFileDeletionTimers.size > 0`；`notifyDocumentChange()` 以 `?.() !== false` 门控 `onCancelFileAssetDeletion(collectFileAssetPaths())`。未实现回调时按「可能有」处理，与旧行为一致（保守方案，未做引用计数）。
+- (4) 历史字节预算：`history-manager.ts` 新增模块常量 `HISTORY_BYTE_BUDGET = 128 * 1024 * 1024` 与 `undoBytes` 计数（仅跟踪 `undoStack`），`trim()` 同时施加条数上限与字节上限，字节超限时从最旧一端裁剪并保证至少保留一份快照。未新增设置项。
+- (5) 归档上限：`import-export.ts` 新增 `ARCHIVE_MAX_ENTRIES`（4096）/ `ARCHIVE_MAX_ENTRY_BYTES`（64 MiB）/ `ARCHIVE_MAX_TOTAL_BYTES`（256 MiB）与 `readArchiveWithLimits()`，通过 `unzipSync` 的 `filter` 在解压每个条目前校验并抛错拒绝。**本轮保留同步 API**（`tests/xmind-import.test.mjs` 有 5 处同步调用 `xmindToImportResult()`），把解压迁出主线程作为后续项。
+- 专项测试：`tests/node-tree.test.mjs` 新增 `traversal helpers survive a node chain far deeper than the call stack`（60000 层）；新增 `tests/model-parse-safety.test.mjs`（4 条：20000 层规范化、20000 层合法 JSON 保持为节点树、仅语法错误回退 Markdown、`parseJsonDocument` 源码契约）；`tests/history-snapshot-reuse.test.mjs` 新增 3 条字节预算契约；`tests/xmind-import.test.mjs` 新增 2 条归档上限契约；`tests/file-block.test.mjs` 新增附件扫描门控契约；`tests/global-search-traversal.test.mjs` 新增 4000 层深链 + 显式栈源码契约。`package.json` 的 `test:unit` 已登记新测试文件。
+- 本机 `npm run verify` 完整通过：`test:unit` **488 / 488**、`test:regression` 全部通过、`test:docs` 1330 处命名声明、`test:repo` 通过、`tsc --noEmit` + production esbuild 通过；`docs/FUNCTION_REFERENCE.md` 已重新生成。
+- 待真实 Obsidian 手工验证：打开大型 `.mindmap`（含大量节点或多张附件）应无卡顿，编辑/撤销/重做后附件延迟回收仍正常取消；导入正常 XMind 文件不受影响；深链导图（数千层）能正常打开而不再退化为纯文本。
+
 ## 本轮：修复文章模式新建节点丢失焦点（运行时修复）
 
 - 现象（真实 Obsidian 反馈）：文章模式行内编辑时按 Ctrl/Cmd+Enter 创建兄弟节点、Ctrl/Cmd+Tab 创建子节点，节点能创建，但新节点不进入行内编辑，也没有获得焦点。

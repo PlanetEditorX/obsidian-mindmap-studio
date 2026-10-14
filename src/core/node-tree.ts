@@ -77,13 +77,22 @@ export function indexedHasAnyAncestor(index: NodeTreeIndex, id: string, ancestor
   return false;
 }
 
-/** 深度优先遍历节点树，并提供每个节点的父节点。 */
+/**
+ * 深度优先遍历节点树，并提供每个节点的父节点。
+ *
+ * 使用显式栈而非递归：极深的节点链在递归写法下会触发
+ * `RangeError: Maximum call stack size exceeded`，显式栈让遍历成本与节点深度解耦。
+ * 入栈顺序按子节点逆序，出栈后仍是父节点先于子节点、同级从左到右的稳定前序遍历。
+ */
 export function walkNodes(root: MindMapNode, visitor: (node: MindMapNode, parent: MindMapNode | null) => void): void {
-  const visit = (node: MindMapNode, parent: MindMapNode | null): void => {
+  const stack: Array<{ node: MindMapNode; parent: MindMapNode | null }> = [{ node: root, parent: null }];
+  while (stack.length) {
+    const { node, parent } = stack.pop()!;
     visitor(node, parent);
-    node.children.forEach((child) => visit(child, node));
-  };
-  visit(root, null);
+    for (let index = node.children.length - 1; index >= 0; index -= 1) {
+      stack.push({ node: node.children[index]!, parent: node });
+    }
+  }
 }
 
 /** 按深度优先顺序展平节点树。 */
@@ -111,19 +120,25 @@ export function findParent(root: MindMapNode, id: string): MindMapNode | null {
   return result;
 }
 
-/** 返回从根节点到目标节点父级的祖先路径。 */
+/** 返回从根节点到目标节点父级的祖先路径（不含目标节点自身，目标为根时返回空数组）。 */
 export function findAncestors(root: MindMapNode, id: string): MindMapNode[] {
+  // 显式栈 DFS：`path` 始终保存栈顶节点的祖先链，因此命中目标时可直接返回该链。
   const path: MindMapNode[] = [];
-  const visit = (node: MindMapNode): boolean => {
-    if (node.id === id) return true;
-    for (const child of node.children) {
-      path.push(node);
-      if (visit(child)) return true;
-      path.pop();
+  const stack: Array<{ node: MindMapNode; childIndex: number }> = [{ node: root, childIndex: 0 }];
+  while (stack.length) {
+    const frame = stack[stack.length - 1]!;
+    if (frame.node.id === id) return path.slice();
+    if (frame.childIndex >= frame.node.children.length) {
+      stack.pop();
+      if (stack.length) path.pop();
+      continue;
     }
-    return false;
-  };
-  return visit(root) ? path : [];
+    const child = frame.node.children[frame.childIndex]!;
+    frame.childIndex += 1;
+    path.push(frame.node);
+    stack.push({ node: child, childIndex: 0 });
+  }
+  return [];
 }
 
 /** 判断节点树是否包含指定标识。 */
@@ -131,15 +146,19 @@ export function containsNode(root: MindMapNode, id: string): boolean {
   return findNode(root, id) !== null;
 }
 
-/** 从节点树中删除指定节点；根节点本身不会被删除。 */
+/** 从节点树中删除指定节点；根节点本身不会被删除。遍历使用显式栈以避免深链递归溢出。 */
 export function removeNode(root: MindMapNode, id: string): boolean {
-  for (let index = 0; index < root.children.length; index += 1) {
-    if (root.children[index]?.id === id) {
-      root.children.splice(index, 1);
+  const stack: MindMapNode[] = [root];
+  while (stack.length) {
+    const node = stack.pop()!;
+    const matchIndex = node.children.findIndex((child) => child.id === id);
+    if (matchIndex >= 0) {
+      node.children.splice(matchIndex, 1);
       return true;
     }
-    const child = root.children[index];
-    if (child && removeNode(child, id)) return true;
+    for (let index = node.children.length - 1; index >= 0; index -= 1) {
+      stack.push(node.children[index]!);
+    }
   }
   return false;
 }

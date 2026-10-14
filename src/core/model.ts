@@ -1569,13 +1569,13 @@ export function syncMindMapQuestionFields(node: MindMapNode): void {
 }
 
 /**
- * 校验并规范化node，并保持模型、界面和持久化状态的一致性。
+ * 规范化单个节点的**自身字段**（不含子节点），供迭代式 `normalizeNode` 复用。
  *
  * @param input 可能来自磁盘、剪贴板或外部来源的不可信输入。
- * @param fallbackText 该参数用于 normalize node 流程中的输入或控制。
- * @returns 当前操作生成、查找或规范化后的结果。
+ * @param fallbackText 该节点缺少自身文字时使用的回退文本。
+ * @returns 已完成字段规范化、`children` 为空数组的节点。
  */
-function normalizeNode(input: Partial<MindMapNode> | undefined, fallbackText: string): MindMapNode {
+function normalizeNodeFields(input: Partial<MindMapNode> | undefined, fallbackText: string): MindMapNode {
   const fallbackNodeText = typeof input?.text === "string" ? input.text : fallbackText;
   const normalizedContent = Array.isArray(input?.content)
     ? input.content.map(normalizeContentBlock).filter((block): block is MindMapContentBlock => Boolean(block))
@@ -1616,13 +1616,45 @@ function normalizeNode(input: Partial<MindMapNode> | undefined, fallbackText: st
     articleNumberingLevel,
     style: normalizeStyle(input?.style),
     collapsed: input?.collapsed === true || undefined,
-    children: Array.isArray(input?.children)
-      ? input.children.map((child, index) => normalizeNode(child, `节点 ${index + 1}`))
-      : []
+    children: []
   };
   syncNodeContentFields(node);
   syncMindMapQuestionFields(node);
   return node;
+}
+
+/**
+ * 规范化节点及其整棵子树。
+ *
+ * 使用显式栈替代递归：极深的节点链在递归写法下会触发栈溢出，并进而把一份本应合法的
+ * JSON 文档误判为“非 JSON”，静默降级成 Markdown。显式栈让处理深度与调用栈解耦。
+ *
+ * @param input 可能来自磁盘、剪贴板或外部来源的不可信输入。
+ * @param fallbackText 该参数用于 normalize node 流程中的输入或控制。
+ * @returns 当前操作生成、查找或规范化后的结果。
+ */
+function normalizeNode(input: Partial<MindMapNode> | undefined, fallbackText: string): MindMapNode {
+  const root = normalizeNodeFields(input, fallbackText);
+  // 栈帧保存「尚未展开的原始子节点」与「已生成的目标节点」，逐层向下展开。
+  const stack: Array<{ source: Partial<MindMapNode>; target: MindMapNode }> = [];
+  const seed = Array.isArray(input?.children) ? input.children : [];
+  for (let index = 0; index < seed.length; index += 1) {
+    const child = seed[index] as Partial<MindMapNode> | undefined;
+    const normalized = normalizeNodeFields(child, `节点 ${index + 1}`);
+    root.children.push(normalized);
+    stack.push({ source: child ?? {}, target: normalized });
+  }
+  while (stack.length) {
+    const { source, target } = stack.pop()!;
+    const children = Array.isArray(source.children) ? source.children : [];
+    for (let index = 0; index < children.length; index += 1) {
+      const child = children[index] as Partial<MindMapNode> | undefined;
+      const normalized = normalizeNodeFields(child, `节点 ${index + 1}`);
+      target.children.push(normalized);
+      stack.push({ source: child ?? {}, target: normalized });
+    }
+  }
+  return root;
 }
 
 /**
@@ -1734,18 +1766,25 @@ export function serializeDocument(doc: MindMapDocument): string {
 }
 
 /**
- * 解析json document，并保持模型、界面和持久化状态的一致性。
+ * 把一段 JSON 文本解析为文档。
+ *
+ * 关键约定：只有 **JSON 语法错误** 才表示“这段文本不是 JSON”，此时返回 null 交由调用方
+ * 按其它格式（如 Markdown）处理；解析成功后的规范化异常（超深嵌套的资源限制、结构性问题等）
+ * 一律向上抛出，绝不静默降级，否则一份合法 JSON 会被误读成 Markdown 并造成数据损坏。
  *
  * @param value 待校验、转换或比较的输入值。
  * @param fallbackTitle 无法从内容中取得标题时使用的回退标题。
- * @returns 当前操作生成、查找或规范化后的结果。
+ * @returns 解析成功返回文档；确认不是 JSON 时返回 null。
  */
 function parseJsonDocument(value: string, fallbackTitle: string): MindMapDocument | null {
+  let parsed: unknown;
   try {
-    return normalizeDocument(JSON.parse(value) as Partial<MindMapDocument>, fallbackTitle);
-  } catch {
-    return null;
+    parsed = JSON.parse(value);
+  } catch (error) {
+    if (error instanceof SyntaxError) return null;
+    throw error;
   }
+  return normalizeDocument(parsed as Partial<MindMapDocument>, fallbackTitle);
 }
 
 /**
@@ -1762,7 +1801,8 @@ function extractFencedJson(source: string, language: string): string | null {
 }
 
 /**
- * 解析磁盘中的 .mindmap 文本。优先识别原始 JSON 和当前 mindmap-json 围栏；解析失败时按 Markdown 导入，避免视图崩溃。
+ * 解析磁盘中的 .mindmap 文本。优先识别原始 JSON 和当前 mindmap-json 围栏；只有 JSON 语法错误
+ * 才按 Markdown 导入（避免普通笔记无法打开），而合法 JSON 的规范化错误会直接抛出，不再静默降级。
  *
  * @param source 待解析或渲染的原始文本。
  * @param fallbackTitle 无法从内容中取得标题时使用的回退标题。

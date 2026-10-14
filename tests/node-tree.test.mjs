@@ -232,3 +232,47 @@ test("moveNodeRelative reuses a provided tree index for the first structural mov
   assert.deepEqual(root.children[0].children.map((node) => node.id), ["b1"]);
   assert.deepEqual(root.children[1].children.map((node) => node.id), ["b2"]);
 });
+
+function createDeepChain(depth) {
+  const root = createNode("root");
+  let current = root;
+  for (let index = 0; index < depth; index += 1) {
+    const child = createNode(`n${index}`);
+    current.children.push(child);
+    current = child;
+  }
+  return root;
+}
+
+// 旧的递归遍历在低数千层就会命中 RangeError；这里用远超调用栈上限的链式树
+// 锁定遍历、祖先查找与删除都必须基于显式栈完成。
+test("traversal helpers survive a node chain far deeper than the call stack", () => {
+  const DEPTH = 60000;
+  const root = createDeepChain(DEPTH);
+
+  let visited = 0;
+  let lastVisited = null;
+  nodeTree.walkNodes(root, (node) => {
+    visited += 1;
+    lastVisited = node.id;
+  });
+  assert.equal(visited, DEPTH + 1);
+  assert.equal(lastVisited, `n${DEPTH - 1}`);
+
+  const flattened = nodeTree.flattenNodes(root);
+  assert.equal(flattened.length, DEPTH + 1);
+  assert.equal(flattened[flattened.length - 1].id, `n${DEPTH - 1}`);
+
+  assert.equal(nodeTree.findNode(root, `n${DEPTH - 1}`)?.id, `n${DEPTH - 1}`);
+
+  const ancestors = nodeTree.findAncestors(root, `n${DEPTH - 1}`);
+  assert.equal(ancestors.length, DEPTH);
+  assert.equal(ancestors[0].id, "root");
+  assert.equal(ancestors[ancestors.length - 1].id, `n${DEPTH - 2}`);
+  assert.deepEqual(nodeTree.findAncestors(root, "root"), []);
+  assert.deepEqual(nodeTree.findAncestors(root, "missing"), []);
+
+  assert.equal(nodeTree.removeNode(root, `n${DEPTH - 1}`), true);
+  assert.equal(nodeTree.containsNode(root, `n${DEPTH - 1}`), false);
+  assert.equal(nodeTree.flattenNodes(root).length, DEPTH);
+});

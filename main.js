@@ -79,11 +79,14 @@ function indexedHasAnyAncestor(index, id, ancestorIds) {
   return false;
 }
 function walkNodes(root, visitor) {
-  const visit = (node, parent) => {
+  const stack = [{ node: root, parent: null }];
+  while (stack.length) {
+    const { node, parent } = stack.pop();
     visitor(node, parent);
-    node.children.forEach((child) => visit(child, node));
-  };
-  visit(root, null);
+    for (let index = node.children.length - 1; index >= 0; index -= 1) {
+      stack.push({ node: node.children[index], parent: node });
+    }
+  }
 }
 function flattenNodes(root) {
   const nodes = [];
@@ -106,26 +109,34 @@ function findParent(root, id) {
 }
 function findAncestors(root, id) {
   const path = [];
-  const visit = (node) => {
-    if (node.id === id) return true;
-    for (const child of node.children) {
-      path.push(node);
-      if (visit(child)) return true;
-      path.pop();
+  const stack = [{ node: root, childIndex: 0 }];
+  while (stack.length) {
+    const frame = stack[stack.length - 1];
+    if (frame.node.id === id) return path.slice();
+    if (frame.childIndex >= frame.node.children.length) {
+      stack.pop();
+      if (stack.length) path.pop();
+      continue;
     }
-    return false;
-  };
-  return visit(root) ? path : [];
+    const child = frame.node.children[frame.childIndex];
+    frame.childIndex += 1;
+    path.push(frame.node);
+    stack.push({ node: child, childIndex: 0 });
+  }
+  return [];
 }
 function removeNode(root, id) {
-  var _a2;
-  for (let index = 0; index < root.children.length; index += 1) {
-    if (((_a2 = root.children[index]) == null ? void 0 : _a2.id) === id) {
-      root.children.splice(index, 1);
+  const stack = [root];
+  while (stack.length) {
+    const node = stack.pop();
+    const matchIndex = node.children.findIndex((child) => child.id === id);
+    if (matchIndex >= 0) {
+      node.children.splice(matchIndex, 1);
       return true;
     }
-    const child = root.children[index];
-    if (child && removeNode(child, id)) return true;
+    for (let index = node.children.length - 1; index >= 0; index -= 1) {
+      stack.push(node.children[index]);
+    }
   }
   return false;
 }
@@ -862,7 +873,7 @@ function syncMindMapQuestionFields(node) {
   syncNodeContentFields(node);
   node.tags = Array.from(/* @__PURE__ */ new Set([...(_a2 = node.tags) != null ? _a2 : [], ...node.question.tags]));
 }
-function normalizeNode(input, fallbackText) {
+function normalizeNodeFields(input, fallbackText) {
   var _a2, _b2, _c;
   const fallbackNodeText = typeof (input == null ? void 0 : input.text) === "string" ? input.text : fallbackText;
   const normalizedContent = Array.isArray(input == null ? void 0 : input.content) ? input.content.map(normalizeContentBlock).filter((block) => Boolean(block)) : [];
@@ -898,11 +909,33 @@ function normalizeNode(input, fallbackText) {
     articleNumberingLevel,
     style: normalizeStyle(input == null ? void 0 : input.style),
     collapsed: (input == null ? void 0 : input.collapsed) === true || void 0,
-    children: Array.isArray(input == null ? void 0 : input.children) ? input.children.map((child, index) => normalizeNode(child, `\u8282\u70B9 ${index + 1}`)) : []
+    children: []
   };
   syncNodeContentFields(node);
   syncMindMapQuestionFields(node);
   return node;
+}
+function normalizeNode(input, fallbackText) {
+  const root = normalizeNodeFields(input, fallbackText);
+  const stack = [];
+  const seed = Array.isArray(input == null ? void 0 : input.children) ? input.children : [];
+  for (let index = 0; index < seed.length; index += 1) {
+    const child = seed[index];
+    const normalized2 = normalizeNodeFields(child, `\u8282\u70B9 ${index + 1}`);
+    root.children.push(normalized2);
+    stack.push({ source: child != null ? child : {}, target: normalized2 });
+  }
+  while (stack.length) {
+    const { source, target } = stack.pop();
+    const children = Array.isArray(source.children) ? source.children : [];
+    for (let index = 0; index < children.length; index += 1) {
+      const child = children[index];
+      const normalized2 = normalizeNodeFields(child, `\u8282\u70B9 ${index + 1}`);
+      target.children.push(normalized2);
+      stack.push({ source: child != null ? child : {}, target: normalized2 });
+    }
+  }
+  return root;
 }
 function normalizeDocumentView(input) {
   if (!input) return void 0;
@@ -962,11 +995,14 @@ function serializeDocument(doc) {
 `;
 }
 function parseJsonDocument(value, fallbackTitle) {
+  let parsed;
   try {
-    return normalizeDocument(JSON.parse(value), fallbackTitle);
-  } catch (e) {
-    return null;
+    parsed = JSON.parse(value);
+  } catch (error) {
+    if (error instanceof SyntaxError) return null;
+    throw error;
   }
+  return normalizeDocument(parsed, fallbackTitle);
 }
 function extractFencedJson(source, language) {
   var _a2, _b2;
@@ -6740,9 +6776,32 @@ ${linkedNote}`;
   }
   target.children.push(...linkedRoot.children);
 }
+var ARCHIVE_MAX_ENTRIES = 4096;
+var ARCHIVE_MAX_ENTRY_BYTES = 64 * 1024 * 1024;
+var ARCHIVE_MAX_TOTAL_BYTES = 256 * 1024 * 1024;
+function readArchiveWithLimits(bytes) {
+  let entryCount = 0;
+  let totalBytes = 0;
+  return unzipSync(bytes, {
+    filter: (file) => {
+      entryCount += 1;
+      totalBytes += file.originalSize;
+      if (entryCount > ARCHIVE_MAX_ENTRIES) {
+        throw new Error(`\u5F52\u6863\u6761\u76EE\u6570\u8D85\u8FC7\u4E0A\u9650\uFF08${ARCHIVE_MAX_ENTRIES}\uFF09\uFF0C\u5DF2\u62D2\u7EDD\u89E3\u538B`);
+      }
+      if (file.originalSize > ARCHIVE_MAX_ENTRY_BYTES) {
+        throw new Error(`\u5F52\u6863\u4E2D\u5355\u4E2A\u6587\u4EF6\u89E3\u538B\u540E\u8FC7\u5927\uFF0C\u5DF2\u62D2\u7EDD\u89E3\u538B`);
+      }
+      if (totalBytes > ARCHIVE_MAX_TOTAL_BYTES) {
+        throw new Error(`\u5F52\u6863\u89E3\u538B\u540E\u603B\u4F53\u79EF\u8FC7\u5927\uFF0C\u5DF2\u62D2\u7EDD\u89E3\u538B`);
+      }
+      return true;
+    }
+  });
+}
 function xmindToImportResult(source, fallbackTitle = "XMind \u5BFC\u5165") {
   var _a2, _b2;
-  const archive = unzipSync(new Uint8Array(source));
+  const archive = readArchiveWithLimits(new Uint8Array(source));
   const content = archive["content.json"];
   if (!content) throw new Error("\u4EC5\u652F\u6301\u5305\u542B content.json \u7684\u65B0\u7248 XMind \u6587\u4EF6");
   const parsed = JSON.parse(strFromU8(content));
@@ -11340,19 +11399,25 @@ function parseClipboardHtml(html) {
 }
 
 // src/editor/history-manager.ts
+var HISTORY_BYTE_BUDGET = 128 * 1024 * 1024;
 var DocumentHistory = class {
   /**
    * @param limitProvider 动态返回当前允许保留的历史记录数量。
+   * @param byteLimitProvider 动态返回撤销栈允许占用的近似总字节上限。
    */
-  constructor(limitProvider) {
+  constructor(limitProvider, byteLimitProvider = () => HISTORY_BYTE_BUDGET) {
     this.limitProvider = limitProvider;
+    this.byteLimitProvider = byteLimitProvider;
     this.undoStack = [];
     this.redoStack = [];
+    /** 撤销栈中所有快照的字符长度之和，与 `undoStack` 严格同步维护。 */
+    this.undoBytes = 0;
   }
   /** 清空撤销和重做记录。 */
   reset() {
     this.undoStack = [];
     this.redoStack = [];
+    this.undoBytes = 0;
   }
   /** 当前是否存在可撤销的文档快照。 */
   canUndo() {
@@ -11377,6 +11442,7 @@ var DocumentHistory = class {
    */
   captureSnapshot(snapshot) {
     this.undoStack.push(snapshot);
+    this.undoBytes += snapshot.length;
     this.trim();
     this.redoStack = [];
   }
@@ -11398,6 +11464,7 @@ var DocumentHistory = class {
   undoSnapshot(currentSnapshot) {
     const previous = this.undoStack.pop();
     if (!previous) return null;
+    this.undoBytes -= previous.length;
     this.redoStack.push(currentSnapshot);
     return previous;
   }
@@ -11420,13 +11487,23 @@ var DocumentHistory = class {
     const next = this.redoStack.pop();
     if (!next) return null;
     this.undoStack.push(currentSnapshot);
+    this.undoBytes += currentSnapshot.length;
     this.trim();
     return next;
   }
-  /** 按设置限制裁剪最旧的历史快照。 */
+  /**
+   * 按设置的数量上限与固定字节预算裁剪最旧的历史快照，二者取先到者。
+   *
+   * 数量上限控制条目数；字节预算保证超大文档不会因“120 份完整快照”而占用数百 MB。
+   * 无论预算多小都至少保留一份快照，避免撤销功能被裁剪到不可用。
+   */
   trim() {
     const limit = Math.max(10, Math.min(500, this.limitProvider()));
-    while (this.undoStack.length > limit) this.undoStack.shift();
+    while (this.undoStack.length > limit) this.undoBytes -= this.undoStack.shift().length;
+    const byteLimit = Math.max(1, this.byteLimitProvider());
+    while (this.undoStack.length > 1 && this.undoBytes > byteLimit) {
+      this.undoBytes -= this.undoStack.shift().length;
+    }
   }
   /**
    * 将文档转换为与运行时对象隔离的 JSON 快照。
@@ -13944,7 +14021,10 @@ var MindMapEditor = class {
   }
   /** Sends one document snapshot to the host together with the minimum article-context work it requires. */
   notifyDocumentChange(articleContextImpact = "structure") {
-    this.callbacks.onCancelFileAssetDeletion(this.collectFileAssetPaths());
+    var _a2, _b2;
+    if (((_b2 = (_a2 = this.callbacks).hasPendingFileAssetDeletions) == null ? void 0 : _b2.call(_a2)) !== false) {
+      this.callbacks.onCancelFileAssetDeletion(this.collectFileAssetPaths());
+    }
     this.callbacks.onChange(this.createDetachedDocumentSnapshot(true), { articleContextImpact });
   }
   /** 收集当前文档全部文件块引用的附件路径，用于取消延迟删除任务。 */
@@ -21451,6 +21531,7 @@ var MindMapStudioView = class extends import_obsidian17.TextFileView {
           return this.plugin.scheduleFileAssetDeletion(paths, (_b3 = (_a3 = this.file) == null ? void 0 : _a3.path) != null ? _b3 : "");
         },
         onCancelFileAssetDeletion: (paths) => this.plugin.cancelFileAssetDeletion(paths),
+        hasPendingFileAssetDeletions: () => this.plugin.hasPendingFileAssetDeletions(),
         onOpenFileAsset: async (path) => this.plugin.openFileAsset(path),
         onRevealFileInSystemExplorer: (path) => void this.plugin.revealFileInSystemExplorer(path),
         getImageHosts: () => this.plugin.getImageHostChoices(),
@@ -22242,29 +22323,37 @@ function nodeDisplayText(node) {
   return "\u672A\u547D\u540D\u8282\u70B9";
 }
 function buildSearchEntries(document2, filePath) {
+  var _a2, _b2, _c, _d;
   const entries = [];
-  const visit = (node, ancestors, depth) => {
-    var _a2, _b2, _c, _d;
+  const fileTitle = document2.title || ((_a2 = filePath.split("/").at(-1)) == null ? void 0 : _a2.replace(/\.mindmap$/i, "")) || "\u601D\u7EF4\u5BFC\u56FE";
+  const isSubmapDocument = Boolean((_b2 = document2.navigation) == null ? void 0 : _b2.parentPath);
+  const parentMapPath = (_c = document2.navigation) == null ? void 0 : _c.parentPath;
+  const stack = [
+    { node: document2.root, ancestors: [], depth: 0 }
+  ];
+  while (stack.length) {
+    const { node, ancestors, depth } = stack.pop();
     const display = nodeDisplayText(node);
     const breadcrumb = [...ancestors, display];
     const searchText = normalized(nodePlainText(node));
     entries.push({
       key: `${filePath}::${node.id}`,
       filePath,
-      fileTitle: document2.title || ((_a2 = filePath.split("/").at(-1)) == null ? void 0 : _a2.replace(/\.mindmap$/i, "")) || "\u601D\u7EF4\u5BFC\u56FE",
+      fileTitle,
       nodeId: node.id,
       nodeText: display,
       breadcrumb,
       depth,
       searchableText: searchText,
       matchedKinds: ["\u8282\u70B9\u6587\u5B57"],
-      submapPath: (_b2 = node.submap) == null ? void 0 : _b2.path,
-      isSubmapDocument: Boolean((_c = document2.navigation) == null ? void 0 : _c.parentPath),
-      parentMapPath: (_d = document2.navigation) == null ? void 0 : _d.parentPath
+      submapPath: (_d = node.submap) == null ? void 0 : _d.path,
+      isSubmapDocument,
+      parentMapPath
     });
-    node.children.forEach((child) => visit(child, breadcrumb, depth + 1));
-  };
-  visit(document2.root, [], 0);
+    for (let index = node.children.length - 1; index >= 0; index -= 1) {
+      stack.push({ node: node.children[index], ancestors: breadcrumb, depth: depth + 1 });
+    }
+  }
   return entries;
 }
 function mergeHierarchy(prefix, suffix) {
@@ -26763,6 +26852,17 @@ var MindMapStudioPlugin = class extends import_obsidian20.Plugin {
       window.clearTimeout(timer);
       this.pendingFileDeletionTimers.delete(path);
     }
+  }
+  /**
+   * 是否存在尚未到期、仍等待回收的附件。
+   *
+   * 供编辑器在每次文档变化前判断是否需要做全树附件扫描：没有待回收任务时，
+   * 取消操作是空操作，跳过扫描可避免大型文档下每次编辑都遍历整棵树。
+   *
+   * @returns 是否有待回收附件。
+   */
+  hasPendingFileAssetDeletions() {
+    return this.pendingFileDeletionTimers.size > 0;
   }
   /**
    * 在删除文件块附件前进行最终安全检查：文件必须存在于仓库内，且没有任何 .mindmap 文档仍然引用该路径。
