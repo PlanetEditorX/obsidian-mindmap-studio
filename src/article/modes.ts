@@ -481,8 +481,119 @@ export interface ArticleLeafNumberingOptions {
   numberingDisabled?: boolean;
 }
 
+/** 文章节点遍历的一帧：一次「某个上级的候选子节点」列表的遍历进度与编号状态。 */
+interface ArticleInfoFrame {
+  children: MindMapNode[];
+  index: number;
+  defaultLevel: number;
+  siblingHasHeading: boolean;
+  convertLeaves: boolean;
+  numberedIndexes: Map<number, number>;
+}
+
+/**
+ * 惰性展开文章节点，逐项产出与 `buildArticleNodeInfo()` 完全相同的 `ArticleNodeInfo`。
+ *
+ * 导出链路需要在批次之间 `await` 让出主线程，而 `buildArticleNodeInfo()` 是一次同步全量
+ * 遍历（实测 40k 节点约 300–500 ms），是大型文章导出里最后一块无法让出的同步阻塞。迭代器让
+ * 调用方按固定批大小拉取，单次主线程工作量因此有明确上限。
+ *
+ * 遍历使用显式栈：递归 `yield*` 在深链导图上每产出一项都要穿透整条委托链，会退化为
+ * O(节点数 × 深度)，显式栈同时也消除了深树递归风险。遍历顺序与递归版一致：父先于子、同级左到右。
+ *
+ * @param root 文章根节点。
+ * @param baseDepth 根节点所处的起始层级。
+ * @param leafNumbering 末端正文编号配置。
+ * @param primaryText 节点主文本提取器，默认与导图节点一致。
+ * @returns 逐项产出文章节点信息的迭代器。
+ */
+export function* iterateArticleNodeInfo(
+  root: MindMapNode,
+  baseDepth = 0,
+  leafNumbering: ArticleLeafNumberingOptions = { enabled: false, threshold: 4 },
+  primaryText: (node: MindMapNode) => string = nodePrimaryText
+): Generator<ArticleNodeInfo, void, void> {
+  const documentNumberingDisabled = leafNumbering.numberingDisabled === true
+    || isDocumentArticleNumberingDisabled(root);
+  // threshold 与编号样式只取决于配置，与帧无关，提到循环外只求值一次。
+  const threshold = Math.max(1, Math.min(20, Math.floor(leafNumbering.threshold) || 4));
+  const leafNumberingStyle: ArticleLeafNumberingStyle = leafNumbering.style === "circled" ? "circled" : "next-level";
+  const createFrame = (parent: MindMapNode, defaultLevel: number): ArticleInfoFrame => {
+    let siblingHasHeading = false;
+    let terminalCount = 0;
+    for (const child of parent.children) {
+      if (isArticleHeading(child)) siblingHasHeading = true;
+      else if (child.articleNumberingMode !== "none") terminalCount += 1;
+    }
+    // 末端转编号只在有同级标题、且末端数量达到阈值时生效，并受当前层级是否还有可用标签限制。
+    const hasSupportedLeafLabel = leafNumberingStyle === "circled" || defaultLevel <= MAX_ARTICLE_NUMBERING_LEVEL;
+    return {
+      children: parent.children,
+      index: 0,
+      defaultLevel,
+      siblingHasHeading,
+      convertLeaves: !documentNumberingDisabled && leafNumbering.enabled && terminalCount >= threshold && hasSupportedLeafLabel,
+      numberedIndexes: new Map<number, number>()
+    };
+  };
+  const stack: ArticleInfoFrame[] = [createFrame(root, articleChildStartLevel(root, baseDepth))];
+  while (stack.length) {
+    const frame = stack[stack.length - 1]!;
+    if (frame.index >= frame.children.length) {
+      stack.pop();
+      continue;
+    }
+    const child = frame.children[frame.index]!;
+    frame.index += 1;
+    const numbering = resolveArticleNumbering(child, frame.defaultLevel, frame.siblingHasHeading);
+    const numberedLeaf = frame.convertLeaves && !numbering.isHeading && !numbering.skipped;
+    // A converted terminal body always belongs to the level directly below
+    // its parent heading. Its own manual article-level metadata must not move
+    // the generated prefix away from that structural level.
+    const displayLevel = numberedLeaf ? frame.defaultLevel : numbering.level;
+    const numberedIndex = !documentNumberingDisabled && (numbering.shouldNumber || numberedLeaf) && !numbering.skipped
+      ? (frame.numberedIndexes.get(displayLevel) ?? 0) + 1
+      : 0;
+    if (numberedIndex) frame.numberedIndexes.set(displayLevel, numberedIndex);
+    const label = numberedIndex
+      ? numberedLeaf && leafNumberingStyle === "circled"
+        ? circledNumberLabel(numberedIndex)
+        : articleNumberLabel(displayLevel, numberedIndex)
+      : "";
+    const title = primaryText(child) || (numbering.isHeading ? "未命名标题" : "");
+    const plainTextLabel = numberedLeaf
+      && leafNumberingStyle === "circled"
+      && numberedIndex > MAX_NATIVE_CIRCLED_NUMBER
+      ? `◯${label}`
+      : label;
+    yield {
+      node: child,
+      depth: displayLevel,
+      label,
+      title,
+      displayTitle: articleDisplayTitle(plainTextLabel, title),
+      isHeading: numbering.isHeading,
+      numberedLeaf,
+      leafNumberingStyle: numberedLeaf ? leafNumberingStyle : undefined,
+      leafNumberingIndex: numberedLeaf ? numberedIndex : undefined,
+      skipped: numbering.skipped,
+      anchor: `mindmap-article-${child.id.replace(/[^a-zA-Z0-9_-]/g, "-")}`
+    };
+    if (child.children.length) stack.push(createFrame(child, numbering.level + 1));
+  }
+}
+
 /**
  * 展开文章节点，并按同一上级下的末端正文数量决定是否使用下一层序号。
+ *
+ * 这是 `iterateArticleNodeInfo()` 的全量同步包装，供渲染与不需要让出主线程的调用方使用；
+ * 需要分批让出主线程的导出链路应直接迭代 `iterateArticleNodeInfo()`。
+ *
+ * @param root 文章根节点。
+ * @param baseDepth 根节点所处的起始层级。
+ * @param leafNumbering 末端正文编号配置。
+ * @param primaryText 节点主文本提取器，默认与导图节点一致。
+ * @returns 按文章顺序排列的节点信息。
  */
 export function buildArticleNodeInfo(
   root: MindMapNode,
@@ -490,61 +601,7 @@ export function buildArticleNodeInfo(
   leafNumbering: ArticleLeafNumberingOptions = { enabled: false, threshold: 4 },
   primaryText: (node: MindMapNode) => string = nodePrimaryText
 ): ArticleNodeInfo[] {
-  const result: ArticleNodeInfo[] = [];
-  const documentNumberingDisabled = leafNumbering.numberingDisabled === true
-    || isDocumentArticleNumberingDisabled(root);
-  const visitChildren = (parent: MindMapNode, defaultLevel: number): void => {
-    let siblingHasHeading = false;
-    let terminalCount = 0;
-    for (const child of parent.children) {
-      if (isArticleHeading(child)) siblingHasHeading = true;
-      else if (child.articleNumberingMode !== "none") terminalCount += 1;
-    }
-    const threshold = Math.max(1, Math.min(20, Math.floor(leafNumbering.threshold) || 4));
-    const leafNumberingStyle: ArticleLeafNumberingStyle = leafNumbering.style === "circled" ? "circled" : "next-level";
-    const hasSupportedLeafLabel = leafNumberingStyle === "circled" || defaultLevel <= MAX_ARTICLE_NUMBERING_LEVEL;
-    const convertLeaves = !documentNumberingDisabled && leafNumbering.enabled && terminalCount >= threshold && hasSupportedLeafLabel;
-    const numberedIndexes = new Map<number, number>();
-    for (const child of parent.children) {
-      const numbering = resolveArticleNumbering(child, defaultLevel, siblingHasHeading);
-      const numberedLeaf = convertLeaves && !numbering.isHeading && !numbering.skipped;
-      // A converted terminal body always belongs to the level directly below
-      // its parent heading. Its own manual article-level metadata must not move
-      // the generated prefix away from that structural level.
-      const displayLevel = numberedLeaf ? defaultLevel : numbering.level;
-      const numberedIndex = !documentNumberingDisabled && (numbering.shouldNumber || numberedLeaf) && !numbering.skipped
-        ? (numberedIndexes.get(displayLevel) ?? 0) + 1
-        : 0;
-      if (numberedIndex) numberedIndexes.set(displayLevel, numberedIndex);
-      const label = numberedIndex
-        ? numberedLeaf && leafNumberingStyle === "circled"
-          ? circledNumberLabel(numberedIndex)
-          : articleNumberLabel(displayLevel, numberedIndex)
-        : "";
-      const title = primaryText(child) || (numbering.isHeading ? "未命名标题" : "");
-      const plainTextLabel = numberedLeaf
-        && leafNumberingStyle === "circled"
-        && numberedIndex > MAX_NATIVE_CIRCLED_NUMBER
-        ? `◯${label}`
-        : label;
-      result.push({
-        node: child,
-        depth: displayLevel,
-        label,
-        title,
-        displayTitle: articleDisplayTitle(plainTextLabel, title),
-        isHeading: numbering.isHeading,
-        numberedLeaf,
-        leafNumberingStyle: numberedLeaf ? leafNumberingStyle : undefined,
-        leafNumberingIndex: numberedLeaf ? numberedIndex : undefined,
-        skipped: numbering.skipped,
-        anchor: `mindmap-article-${child.id.replace(/[^a-zA-Z0-9_-]/g, "-")}`
-      });
-      if (child.children.length) visitChildren(child, numbering.level + 1);
-    }
-  };
-  visitChildren(root, articleChildStartLevel(root, baseDepth));
-  return result;
+  return Array.from(iterateArticleNodeInfo(root, baseDepth, leafNumbering, primaryText));
 }
 
 /**

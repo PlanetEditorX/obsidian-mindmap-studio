@@ -5,7 +5,7 @@
 - 大型文档导出加固：Word（`.docx`）导出从同步全量打包改为「分块流式压缩 + 让出主线程」的异步契约：
   - 新增 `writeArchiveChunked()`，改用 `fflate` 的流式 `Zip` + `ZipDeflate`，逐条 `add()` 后把每个条目的内容按 `EXPORT_ZIP_CHUNK_BYTES`（256 KiB）分批 `push()`，批次之间 `await` 让出一次宏任务。此前 `zipSync()` 会在一次同步调用里压缩整份文档，大型文章族的 `word/document.xml` 可达数十 MB，期间界面完全冻结。
   - `readingSectionsToDocx()` 因此改为异步 API（`Promise<Uint8Array>`），调用方 `src/view.ts` 的 `exportArticleFamily()` 已 `await`。导出产物的部件顺序、部件名与未压缩内容与旧实现完全一致，仍是标准 ZIP（条目写入 data descriptor，`unzipSync`、Word 与其它 OOXML 工具均可正常读取）。
-  - 同一个导出里目录与正文此前各跑一遍整棵子树的 `buildArticleNodeInfo()`；现在按章节预建一次（`sectionInfos`）并复用（`collectExportTocItems()` 新增可选 `prebuiltInfos` 参数），章节之间让出主线程。多文件文章族的单次主线程占用因此被限制在一个章节以内，总耗时也明显下降；HTML 与 Markdown 导出不传该参数，行为不变。
+  - 同一个导出里目录与正文此前各跑一遍整棵子树的 `buildArticleNodeInfo()`，且该调用本身是一次数百毫秒的同步全量遍历（实测 40k 节点约 300–600 ms，是导出里最后一块无法让出的阻塞）。现在 `src/article/modes.ts` 新增惰性迭代器 `iterateArticleNodeInfo()`（显式栈，避免递归 `yield*` 在深链上退化为 O(节点数 × 深度)），`buildArticleNodeInfo()` 改为它的全量包装；导出按 `EXPORT_ARTICLE_INFO_CHUNK_ITEMS`（2000 项）分批拉取并在批次之间让出主线程，目录与正文复用同一份结果（`collectExportTocItems()` 新增可选 `prebuiltInfos` 参数）。正文段落拼接同样按 `EXPORT_BODY_CHUNK_PARAGRAPHS`（2000 段）分批让出。实测两次让出之间的最长连续同步耗时从整段导出的 470 ms / 2973 ms（40k / 200k 节点，其间事件循环完全不执行）降到 22 ms / 78 ms；HTML 与 Markdown 导出仍是同步纯函数，行为不变。
   - 与上一轮 XMind 解压相同，未采用 `AsyncZipDeflate`：它在缺少 `Worker` / `URL.createObjectURL` 的环境会直接抛错，移动端 WebView 也有风险；分块 + 块间让出在桌面端、移动端与 Node 测试环境行为一致。解压与打包现在共用同一个「让出宏任务」边界。
 
 - 大型文档与健壮性加固（P0 批次）：

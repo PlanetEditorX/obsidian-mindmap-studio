@@ -1,10 +1,26 @@
 # obsidian-mindmap-studio 项目交接
 
 - 插件：MindMap Studio（Obsidian 本地优先 .mindmap 导图，含导图/大纲/文章/通读模式、全局搜索、图床、AI 助手与桌面截图链路）。
-- 版本基线：工作区版本文件为 1.55.6（Git Release 已发布 v1.55.6；仓库由用户上传的 1.55.2 运行文件重建）；本轮为「Word 导出打包迁出主线程 + 章节节点信息单次构建」，交付追踪版本 1.55.6，交付后缀 343425。
+- 版本基线：工作区版本文件为 1.55.7（Git Release 已发布 v1.55.7，上一轮 Word 导出分块打包已入库为 `62826df`）；本轮为「Word 导出的文章节点信息改为惰性迭代 + 分批让出」，交付追踪版本 1.55.7，交付后缀 553719。
 - 仓库规则：见根目录 `AGENTS.md`；每轮代码交付三份 ZIP（源码 / 安装 / Agent 交接）共用同一六位后缀；验证入口 `npm run verify`。
 
-## 当前状态（本轮：Word 导出打包迁出主线程 + 章节节点信息单次构建）
+## 当前状态（本轮：Word 导出的文章节点信息改为惰性迭代 + 分批让出）
+
+- 触发：上一轮把 Word 打包（`zipSync`）迁出主线程后，用阶段探针实测 40k 节点单章节导出，发现残余阻塞全部集中在 `sectionInfos` 阶段 = 474.8 ms（`buildArticleNodeInfo()` 单次同步全量遍历；其余 toc 13.7 / body 88.4 / documentXml 11.5 / 已分块的 zip 255.7），即 `src/article/modes.ts` 是导出链路上最后一块无法让出的同步工作。本轮按同一「分块 + 让出主线程」模式收尾。
+- 实现（`src/article/modes.ts`）：新增惰性迭代器 `export function* iterateArticleNodeInfo(root, baseDepth, leafNumbering, primaryText): Generator<ArticleNodeInfo, void, void>`，逐项产出与原实现**逐字段完全相同**的 `ArticleNodeInfo`；`buildArticleNodeInfo()` 改为 `Array.from(iterateArticleNodeInfo(...))` 的全量同步包装（渲染、HTML/Markdown 导出调用方零改动）。遍历用**显式栈**（新增非导出接口 `ArticleInfoFrame`：children/index/defaultLevel/siblingHasHeading/convertLeaves/numberedIndexes）实现，而不是递归 `yield*`——后者在深链导图上每产出一项都要穿透整条委托链，会退化为 O(节点数 × 深度)；显式栈同时消除了深树递归风险。遍历顺序仍是父先于子、同级左到右。
+- 实现（`src/import/import-export.ts`）：新增常量 `EXPORT_ARTICLE_INFO_CHUNK_ITEMS`（2000 项）与 `EXPORT_BODY_CHUNK_PARAGRAPHS`（2000 段）。`sectionInfos` 改为用 `iterateArticleNodeInfo()` 按 2000 项分批拉取、批次之间 `await yieldToMainThread()`（章节之间同样让出），仍复用给正文循环与 `collectExportTocItems()` 的 `prebuiltInfos`；正文段落拼接改为 `for` 循环并按 2000 段让出（原 `sections.forEach` 无法 `await`）。
+- 实测（隔离 Node，40k / 200k 末端节点单文件，预热后；「最长连续同步段」用探针包装 `yieldToMainThread()` 直接测量，「改动前」因整段同步、事件循环完全不执行，故等效阻塞 = 总耗时）：
+  - 40k：最长连续同步段 **470 ms → 22 ms**；让出次数 58；总耗时 470 → 1130 ms。
+  - 200k：最长连续同步段 **2973 ms → 78 ms**；让出次数 275；总耗时 2973 → 4263 ms。
+  - `monitorEventLoopDelay` 复核（本轮）：40k 最大延迟 44.3 ms / p99 22.5 ms、200k 最大延迟 106.1 ms / p99 27.3 ms（改动前为 0.0 ms —— 全同步调用期间事件循环一次都不执行，直方图看不到）。
+  - 总耗时上升是分批让出的预期代价（`setTimeout(0)` 在浏览器/Node 有 ~1–4 ms 钳制），换来的是主线程可控。
+- 产物一致性核验（本轮真机外验证，不入库脚本）：以 `853998c`（v1.55.6，docx 改造前的同步 `zipSync` 实现）为参考，打包旧 `import-export.ts` + 旧 `modes.ts`，对同一份丰富文章族 fixture（父导图 + 挂载子导图 + 深层子导图 + 未挂载孤立章节 + `articleNumberingMode: none` + manual 层级节点 + 末端节点；`tocMaxDepth` 1/3/8 × 关闭编号/带圈/下一层序号三套选项 = 9 组）比对：**HTML、Markdown 字符串完全一致，`.docx` 每个 OOXML 部件逐字节一致**；`iterateArticleNodeInfo()` 与旧 `buildArticleNodeInfo()` 在 3 套编号选项 × baseDepth 0/1/3 共 9 组上逐字段一致；6000 层深链迭代产出 6000 项、无栈溢出（旧实现递归，深链会溢出）。
+- 测试：新建 `tests/article-node-info-stream.test.mjs`（4 条）——迭代器与全量版逐字段一致（4 套编号选项 × 3 个 baseDepth）；**惰性**（注入计数 `primaryText`，拉取 1 项只调用 1 次，不遍历整棵树）；6000 层深链无栈溢出且逐项产出；源码契约（`export function*`、显式栈、`buildArticleNodeInfo` 是包装、代码中不得出现 `yield*`）。`tests/docx-export.test.mjs` 增至 6 条（新增「大型导出不得同步跑完」——`await Promise.resolve()` 后仍未结束；契约断言补两个新常量与两处分批让出）。`tests/article-content-block.test.mjs` 的源码契约断言改为 `frame.defaultLevel`。均已登记 `package.json` 的 `test:unit`。
+- 验证：`npm run verify` 完整通过——`test:unit` **500 / 500**（新增 5 条）、`test:regression` 通过、`test:docs` 1339 处命名声明、`test:repo` 通过、`tsc --noEmit` + production esbuild 通过；`docs/FUNCTION_REFERENCE.md` 已重新生成；文档同步 `docs/ARCHITECTURE.md`（新增「文章节点信息提供惰性迭代器」「Word 导出按批让出」两条）与 `docs/DEVELOPMENT.md`（长遍历必须走 `iterateArticleNodeInfo()`），`CHANGELOG.md`「未发布」已更新。
+- 待手工验证：真实 Obsidian 桌面端导出大型文章族（Word）期间界面应保持可交互（含滚动、切换视图），导出完成后 Notice 与产物与上一版一致；导出大文档过程中不应出现「界面卡住数秒」的体感。可顺带确认 HTML / Markdown / PDF 导出行为不变。
+- 下一轮候选（按价值排序）：① 报告 P1 增量方向——`collectFileAssetPaths()` 的增量引用计数（或把「取消延迟删除」改为宿主在到期时查询打开视图的未保存引用），注意附件误删属数据丢失类风险，需保守设计；② `MutationDelta` / dirty 子树让 mutation 只更新受影响范围；③ 保存链路 `mutate() → notifyDocumentChange() → history.createSnapshot()` 与 `TextFileView.getViewData()` 的同步契约（在不动这两处前，保存前整文档 `JSON.stringify` 无法迁出主线程）。
+
+### 上一轮工作区（Word 导出打包迁出主线程 + 章节节点信息单次构建）
 
 - 触发：上一轮把「XMind 解压迁出主线程」标为已完成，并在下一步里留下「导出/保存链路的阻塞操作」。本轮按同一模式处理导出链路的同步打包：`src/import/import-export.ts` 的 `readingSectionsToDocx()` 此前用一次 `zipSync()` 完成整份 `.docx` 压缩，大型文章族（正文 XML 可达数十 MB）期间主线程完全冻结。
 - 实现（`src/import/import-export.ts`）：
@@ -174,12 +190,13 @@
 
 ## 验证基线
 
-- `npm run verify` 本机完整通过：`test:unit` **495/495**、`test:regression` 全部通过、`test:docs` 全部通过（1337 处命名声明）、`test:repo` 通过、`tsc --noEmit` 与 production esbuild 通过（含本轮 Word 导出分块流式打包的全部专项测试）。
+- `npm run verify` 本机完整通过：`test:unit` **500/500**、`test:regression` 全部通过、`test:docs` 全部通过（1339 处命名声明）、`test:repo` 通过、`tsc --noEmit` 与 production esbuild 通过（含本轮文章节点信息惰性迭代 + 分批让出的全部专项测试）。
 - 详细数据见根目录 `TEST_RESULTS.md`。
 
 ## 待验证事项（需真实 Obsidian 桌面端手工冒烟）
 
-- **Word 导出分块流式打包（本轮，待实测）**：对大型文章族点「导出 → Word」并选择保存位置，导出期间界面不应长时间无响应（改动前 `zipSync()` 会把整份 `.docx` 一次性压缩，实测 40k 节点单次阻塞 1611 ms、200k 节点 6621 ms；改动后残余阻塞来自单章节的 `buildArticleNodeInfo()`，40k/200k 分别约 924 ms / 3594 ms）；导出完成后应有「已导出：<路径>」Notice。产物用 Word / WPS 打开需与上一版完全一致：目录超链接可跳转、章节书签正常、带圈末端编号与 2em 正文缩进不变。若导出报错请附控制台信息（`writeArchiveChunked()` 会把 `fflate` 的压缩错误原样抛出）。
+- **Word 导出分批让出主线程（本轮，待实测）**：对大型文章族点「导出 → Word」，导出期间界面应保持可交互（滚动、切换视图不卡），完成后出现「已导出：<路径>」Notice；产物用 Word / WPS 打开需与上一版完全一致（目录超链接可跳转、章节书签、带圈末端编号、2em 正文缩进）。实测参考：40k 节点单文件的最长连续同步段由整段导出的 470 ms 降到 22 ms、200k 由 2973 ms 降到 78 ms（总耗时分别升到 1130 / 4263 ms，属让出的预期代价）。
+- **Word 导出分块流式打包（上一轮，已随 v1.55.7 入库）**：对大型文章族点「导出 → Word」并选择保存位置，导出期间界面不应长时间无响应（改动前 `zipSync()` 会把整份 `.docx` 一次性压缩，实测 40k 节点单次阻塞 1611 ms、200k 节点 6621 ms；改动后残余阻塞来自单章节的 `buildArticleNodeInfo()`，40k/200k 分别约 924 ms / 3594 ms）；导出完成后应有「已导出：<路径>」Notice。产物用 Word / WPS 打开需与上一版完全一致：目录超链接可跳转、章节书签正常、带圈末端编号与 2em 正文缩进不变。若导出报错请附控制台信息（`writeArchiveChunked()` 会把 `fflate` 的压缩错误原样抛出）。
 - **大型文档 P0 加固（上一轮，待实测）**：打开含大量节点或多张附件的大型 `.mindmap` 应无卡顿（编辑、撤销、重做后附件 60 秒延迟回收仍能正常取消）——门控只在宿主上报有待回收附件时才做全树扫描，未上报时与旧行为一致。导入一份正常 XMind 文件应不受新的解压上限影响（条目数/单条/总量均在限内时行为不变）。构造一份深链（数千层）导图应能正常打开且不再退化为纯文本导入（根节点文字不应变成整段 JSON）。
 - **新建节点聚焦契约（上一轮，测试-only，待实测）**：真实 Obsidian 文章模式按 Ctrl/Cmd+Enter 创建兄弟节点、Ctrl/Cmd+Tab 创建子节点后，新节点应立即滚入视口并进入行内编辑且首次聚焦不丢（Ctrl+Tab 需确认未被宿主快捷键占用）。上一轮未改运行时代码，仅修正过期回归断言。
 - **万行级折叠代码块不再卡死（上一轮新增，待实测）**：打开 `浏览器/油猴.mindmap`（242 KB）应立刻可用；展开含接近 1 万行代码块的父节点时不再卡顿数秒。首次展开该代码块应内容完整、逻辑行数与行号正确、可复制、可再次双击编辑保存，只是不再语法着色（超过 2000 行自动跳过高亮）。反复折叠/展开不应重复解析（第二次展开应立即呈现），节点框高与相邻节点避让正常。打开调试模式后导出日志，`render / code-block-render` 中折叠块耗时应为毫秒级（修复前为秒级）。
@@ -210,9 +227,13 @@
 
 ## 下一步建议
 
-- Word 导出已完成分块流式打包与单次章节遍历（当前状态）。残余阻塞只剩 `src/article/modes.ts` 的 `buildArticleNodeInfo()`——它仍是单次同步 O(N) 遍历（实测线性 ≈8 µs/节点：40k 310 ms、80k 639 ms），且由文章渲染、通读、HTML/Markdown/Word 导出共用。下一步若要把它也分块，需要在该模块提供可让出主线程的增量/生成器 API（或用分帧迭代 + 续跑状态），并同步三种导出的同步契约。
-- 报告 P1 项（尚未实施）：增量附件引用计数以替代当前的 `hasPendingFileAssetDeletions()` 保守门控；`MutationDelta` 让 mutation 只更新受影响子树而非重建索引；**保存链路仍无法异步**——`mutate()` → `notifyDocumentChange()` → `history.createSnapshot(this.document)` 与 Obsidian `TextFileView.getViewData()` 都要求同步返回字符串，因此「保存前整文档 `JSON.stringify`」在不动这两处契约前无法迁出主线程，只能靠 O(Δ)/dirty 校验方向解决；`editor.ts` 的 `assertDocumentSnapshotCacheFresh()` 抽样自愈校验同样每次全量 `JSON.stringify`（每 10 秒最多一次）。
-- XMind 解压迁出主线程已完成（上一轮）：后续如需进一步降本，可评估把解压放进真正的 Worker（需先确认 Obsidian 移动端 WebView 的 Worker/Blob 支持）或改为按条目惰性解压（仅解压当前需要的资源）。
+- 本轮已完成：Word 导出的文章节点信息改为 `iterateArticleNodeInfo()` 惰性迭代并按 2000 项/段分批让出，导出链路不再有数百毫秒级同步块（残余最大延迟 44 ms @40k、106 ms @200k，主要来自 GC）。
+- 报告 P1 项（尚未实施，按价值排序）：
+  - 增量附件引用：`collectFileAssetPaths()` 目前只在「宿主存在待回收附件」时全树扫描（P0 已门控）。进一步降到 O(Δ) 需要维护增量引用计数，但内容块写入口有 33 处（`replaceNodeContentBlocks` / `moveNodeContentBlock` 遍布 editor / main / import / utils / renderer），漏一处就会误删仍在使用的附件；更稳妥的替代是让宿主在 60 秒到期时查询打开视图的**未保存**引用（`deleteFileAssetIfSafe` 已有全库检查，缺的正是内存态）。
+  - `MutationDelta` / dirty 子树：让 mutation 只更新受影响范围而不是重建索引，同时为上面的增量引用提供 delta 来源。
+  - 保存链路仍是同步契约：`mutate()` → `notifyDocumentChange()` → `history.createSnapshot(this.document)` 与 Obsidian `TextFileView.getViewData()` 都要求同步返回字符串，因此「保存前整文档 `JSON.stringify`」在不动这两处前无法迁出主线程；`editor.ts` 的 `assertDocumentSnapshotCacheFresh()` 还有每 10 秒最多一次的全量抽样序列化。
+  - HTML / Markdown / PDF 导出仍是同步纯函数（`documentToSvg` 亦同）。若要同样让出主线程，需要先决定是否把 `readingSectionsToHtml()` / `readingSectionsToMarkdown()` 改为异步契约。
+- XMind 解压迁出主线程已完成（v1.55.6）：后续如需进一步降本，可评估把解压放进真正的 Worker（需先确认 Obsidian 移动端 WebView 的 Worker/Blob 支持）或按条目惰性解压。
 - 长公式换行只在重新渲染时按容器宽度判定，窗口缩放后不重排；如需跟随窗口变化，可在 resize 后对可见公式重跑一次判定（需评估文章模式锚点抖动风险）。
 - 断行目前只在顶层 `=` 处切分，且首个顶层 `=` 固定留在首行；如需在 `+`/`,` 或不等号处断行，可在 `splitLatexAtTopLevelRelation()` 扩展操作符集合（并保留“首个关系符不断行”的规则）。
 - 文件块可选增强：右键菜单“在系统中显示/复制路径”；大量附件时的资源目录清理入口。
@@ -222,6 +243,6 @@
 ## 交付说明
 
 - 三份 ZIP 均输出到 `D:\Downloads`（仓库工作区外），外部文件名：`obsidian-mindmap-studio-<版本>-<后缀>.zip`、`mindmap-studio-<版本>-test-<后缀>.zip`、`Agent-<版本>-handoff-<后缀>.zip`（内部根目录 `Agent/`）。`D:\Downloads` 在沙箱内写入会被拒绝，需以非沙箱方式运行打包脚本；打包后必须确认仓库工作区内没有任何 `.zip`。
-- 最近交付包（后缀 343425，交付追踪版本 1.55.6）：`obsidian-mindmap-studio-1.55.6-343425.zip`（根目录 `obsidian-mindmap-studio/`）、`mindmap-studio-1.55.6-test-343425.zip`（根目录 `mindmap-studio/`）、`Agent-1.55.6-handoff-343425.zip`（根目录 `Agent/`）；实际发布版本以 GitHub Release 为准。
+- 最近交付包（后缀 553719，交付追踪版本 1.55.7）：`obsidian-mindmap-studio-1.55.7-553719.zip`（根目录 `obsidian-mindmap-studio/`）、`mindmap-studio-1.55.7-test-553719.zip`（根目录 `mindmap-studio/`）、`Agent-1.55.7-handoff-553719.zip`（根目录 `Agent/`）；实际发布版本以 GitHub Release 为准。
 - 历史交付包记录已清理；历史版本以 GitHub Release 发布为准，本地交付 ZIP 见 `D:\Downloads`。
 - 交付约束：沟通说明与中文 Git 提交说明中**不得**再写“- main.js 已重建。”这条；main.js 由 `npm run verify` 的 build 自动重建，交付时不要单独列出。

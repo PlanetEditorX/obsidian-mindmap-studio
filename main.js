@@ -6879,49 +6879,63 @@ function currentArticlePageEntry(navigation) {
   if (!(navigation == null ? void 0 : navigation.parentPath)) return void 0;
   return navigation.entries[navigation.currentIndex];
 }
-function buildArticleNodeInfo(root, baseDepth = 0, leafNumbering = { enabled: false, threshold: 4 }, primaryText = nodePrimaryText) {
-  const result = [];
+function* iterateArticleNodeInfo(root, baseDepth = 0, leafNumbering = { enabled: false, threshold: 4 }, primaryText = nodePrimaryText) {
+  var _a2;
   const documentNumberingDisabled = leafNumbering.numberingDisabled === true || isDocumentArticleNumberingDisabled(root);
-  const visitChildren = (parent, defaultLevel) => {
-    var _a2;
+  const threshold = Math.max(1, Math.min(20, Math.floor(leafNumbering.threshold) || 4));
+  const leafNumberingStyle = leafNumbering.style === "circled" ? "circled" : "next-level";
+  const createFrame = (parent, defaultLevel) => {
     let siblingHasHeading = false;
     let terminalCount = 0;
     for (const child of parent.children) {
       if (isArticleHeading(child)) siblingHasHeading = true;
       else if (child.articleNumberingMode !== "none") terminalCount += 1;
     }
-    const threshold = Math.max(1, Math.min(20, Math.floor(leafNumbering.threshold) || 4));
-    const leafNumberingStyle = leafNumbering.style === "circled" ? "circled" : "next-level";
     const hasSupportedLeafLabel = leafNumberingStyle === "circled" || defaultLevel <= MAX_ARTICLE_NUMBERING_LEVEL;
-    const convertLeaves = !documentNumberingDisabled && leafNumbering.enabled && terminalCount >= threshold && hasSupportedLeafLabel;
-    const numberedIndexes = /* @__PURE__ */ new Map();
-    for (const child of parent.children) {
-      const numbering = resolveArticleNumbering(child, defaultLevel, siblingHasHeading);
-      const numberedLeaf = convertLeaves && !numbering.isHeading && !numbering.skipped;
-      const displayLevel = numberedLeaf ? defaultLevel : numbering.level;
-      const numberedIndex = !documentNumberingDisabled && (numbering.shouldNumber || numberedLeaf) && !numbering.skipped ? ((_a2 = numberedIndexes.get(displayLevel)) != null ? _a2 : 0) + 1 : 0;
-      if (numberedIndex) numberedIndexes.set(displayLevel, numberedIndex);
-      const label = numberedIndex ? numberedLeaf && leafNumberingStyle === "circled" ? circledNumberLabel(numberedIndex) : articleNumberLabel(displayLevel, numberedIndex) : "";
-      const title = primaryText(child) || (numbering.isHeading ? "\u672A\u547D\u540D\u6807\u9898" : "");
-      const plainTextLabel = numberedLeaf && leafNumberingStyle === "circled" && numberedIndex > MAX_NATIVE_CIRCLED_NUMBER ? `\u25EF${label}` : label;
-      result.push({
-        node: child,
-        depth: displayLevel,
-        label,
-        title,
-        displayTitle: articleDisplayTitle(plainTextLabel, title),
-        isHeading: numbering.isHeading,
-        numberedLeaf,
-        leafNumberingStyle: numberedLeaf ? leafNumberingStyle : void 0,
-        leafNumberingIndex: numberedLeaf ? numberedIndex : void 0,
-        skipped: numbering.skipped,
-        anchor: `mindmap-article-${child.id.replace(/[^a-zA-Z0-9_-]/g, "-")}`
-      });
-      if (child.children.length) visitChildren(child, numbering.level + 1);
-    }
+    return {
+      children: parent.children,
+      index: 0,
+      defaultLevel,
+      siblingHasHeading,
+      convertLeaves: !documentNumberingDisabled && leafNumbering.enabled && terminalCount >= threshold && hasSupportedLeafLabel,
+      numberedIndexes: /* @__PURE__ */ new Map()
+    };
   };
-  visitChildren(root, articleChildStartLevel(root, baseDepth));
-  return result;
+  const stack = [createFrame(root, articleChildStartLevel(root, baseDepth))];
+  while (stack.length) {
+    const frame = stack[stack.length - 1];
+    if (frame.index >= frame.children.length) {
+      stack.pop();
+      continue;
+    }
+    const child = frame.children[frame.index];
+    frame.index += 1;
+    const numbering = resolveArticleNumbering(child, frame.defaultLevel, frame.siblingHasHeading);
+    const numberedLeaf = frame.convertLeaves && !numbering.isHeading && !numbering.skipped;
+    const displayLevel = numberedLeaf ? frame.defaultLevel : numbering.level;
+    const numberedIndex = !documentNumberingDisabled && (numbering.shouldNumber || numberedLeaf) && !numbering.skipped ? ((_a2 = frame.numberedIndexes.get(displayLevel)) != null ? _a2 : 0) + 1 : 0;
+    if (numberedIndex) frame.numberedIndexes.set(displayLevel, numberedIndex);
+    const label = numberedIndex ? numberedLeaf && leafNumberingStyle === "circled" ? circledNumberLabel(numberedIndex) : articleNumberLabel(displayLevel, numberedIndex) : "";
+    const title = primaryText(child) || (numbering.isHeading ? "\u672A\u547D\u540D\u6807\u9898" : "");
+    const plainTextLabel = numberedLeaf && leafNumberingStyle === "circled" && numberedIndex > MAX_NATIVE_CIRCLED_NUMBER ? `\u25EF${label}` : label;
+    yield {
+      node: child,
+      depth: displayLevel,
+      label,
+      title,
+      displayTitle: articleDisplayTitle(plainTextLabel, title),
+      isHeading: numbering.isHeading,
+      numberedLeaf,
+      leafNumberingStyle: numberedLeaf ? leafNumberingStyle : void 0,
+      leafNumberingIndex: numberedLeaf ? numberedIndex : void 0,
+      skipped: numbering.skipped,
+      anchor: `mindmap-article-${child.id.replace(/[^a-zA-Z0-9_-]/g, "-")}`
+    };
+    if (child.children.length) stack.push(createFrame(child, numbering.level + 1));
+  }
+}
+function buildArticleNodeInfo(root, baseDepth = 0, leafNumbering = { enabled: false, threshold: 4 }, primaryText = nodePrimaryText) {
+  return Array.from(iterateArticleNodeInfo(root, baseDepth, leafNumbering, primaryText));
 }
 function normalizeVisibleModes(modes) {
   const raw = Array.isArray(modes) ? modes : [];
@@ -7505,6 +7519,8 @@ section{break-inside:auto}.export-toc{margin:2em 0 3em}.export-toc>ul{padding-le
 </style></head><body><article><h1>${title}</h1>${toc}${body}</article></body></html>`;
 }
 var EXPORT_ZIP_CHUNK_BYTES = 256 * 1024;
+var EXPORT_ARTICLE_INFO_CHUNK_ITEMS = 2e3;
+var EXPORT_BODY_CHUNK_PARAGRAPHS = 2e3;
 async function writeArchiveChunked(entries) {
   const chunks = [];
   let totalLength = 0;
@@ -7545,7 +7561,7 @@ async function writeArchiveChunked(entries) {
   return concatArchiveChunks(chunks, totalLength);
 }
 async function readingSectionsToDocx(sections, tocMaxDepth = 3, options = {}) {
-  var _a2;
+  var _a2, _b2;
   const maxTocDepth = normalizedExportTocMaxDepth(tocMaxDepth);
   const first = (_a2 = sections[0]) == null ? void 0 : _a2.document;
   const title = first ? nodePlainText(first.root) || first.title : "\u5BFC\u51FA\u6587\u6863";
@@ -7573,11 +7589,21 @@ async function readingSectionsToDocx(sections, tocMaxDepth = 3, options = {}) {
   };
   const sectionInfos = [];
   for (const [index, section] of sections.entries()) {
-    sectionInfos.push(buildArticleNodeInfo(
+    const infos = [];
+    let sinceYield = 0;
+    for (const info of iterateArticleNodeInfo(
       section.document.root,
       section.baseDepth,
       exportLeafNumbering(section.document, options, section.numberingDisabled)
-    ));
+    )) {
+      infos.push(info);
+      sinceYield += 1;
+      if (sinceYield >= EXPORT_ARTICLE_INFO_CHUNK_ITEMS) {
+        sinceYield = 0;
+        await yieldToMainThread();
+      }
+    }
+    sectionInfos.push(infos);
     if (index < sections.length - 1) await yieldToMainThread();
   }
   const toc = collectExportTocItems(sections, maxTocDepth, false, options, sectionInfos).map((item) => {
@@ -7591,19 +7617,25 @@ async function readingSectionsToDocx(sections, tocMaxDepth = 3, options = {}) {
   });
   const body = [paragraph(title, "Title")];
   if (toc) body.push(paragraph("\u76EE\u5F55", "Heading1"), toc);
-  sections.forEach(({ filePath, document: document2, baseDepth }, sectionIndex) => {
-    var _a3;
+  let bodySinceYield = 0;
+  for (const [sectionIndex, section] of sections.entries()) {
+    const { filePath, document: document2, baseDepth } = section;
     if (sectionIndex > 0) {
       body.push(paragraph(nodePlainText(document2.root) || document2.title, "Heading" + Math.min(6, Math.max(1, baseDepth)), 0, wordAnchor(exportAnchor(sectionIndex, "section-" + sectionIndex))));
     }
-    for (const info of (_a3 = sectionInfos[sectionIndex]) != null ? _a3 : []) {
+    for (const info of (_b2 = sectionInfos[sectionIndex]) != null ? _b2 : []) {
       if (childSectionAnchors.has(filePath + "\0" + info.node.id)) continue;
       const text = info.displayTitle || info.title || "\u672A\u547D\u540D";
       const isWordHeading = info.isHeading && info.node.children.length > 0;
       body.push(isWordHeading ? paragraph(text, "Heading" + Math.min(6, Math.max(1, info.depth)), 0, wordAnchor(exportAnchor(sectionIndex, info.anchor))) : paragraph(text));
       if (info.node.note) body.push(paragraph(info.node.note));
+      bodySinceYield += 1;
+      if (bodySinceYield >= EXPORT_BODY_CHUNK_PARAGRAPHS) {
+        bodySinceYield = 0;
+        await yieldToMainThread();
+      }
     }
-  });
+  }
   const documentXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>' + body.join("") + '<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440"/></w:sectPr></w:body></w:document>';
   const styles = [1, 2, 3, 4, 5, 6].map((level) => '<w:style w:type="paragraph" w:styleId="Heading' + level + '"><w:name w:val="heading ' + level + '"/><w:rPr><w:b/><w:sz w:val="' + Math.max(20, 32 - level * 2) + '"/></w:rPr></w:style>').join("");
   const stylesXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style><w:style w:type="paragraph" w:styleId="Title"><w:name w:val="Title"/><w:rPr><w:b/><w:sz w:val="36"/></w:rPr></w:style>' + styles + "</w:styles>";

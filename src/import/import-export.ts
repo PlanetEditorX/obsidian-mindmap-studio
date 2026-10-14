@@ -19,7 +19,7 @@ import {
   type MindMapNode
 } from "../core/model";
 import { normalizeFormulaEditorSource } from "../core/latex";
-import { buildArticleNodeInfo, type ArticleLeafNumberingOptions, type ArticleNodeInfo, type ReadingSection } from "../article/modes";
+import { buildArticleNodeInfo, iterateArticleNodeInfo, type ArticleLeafNumberingOptions, type ArticleNodeInfo, type ReadingSection } from "../article/modes";
 
 /** 新版 XMind 导入时需要保留的主题字段与画布链接。 */
 type XMindTopic = {
@@ -865,6 +865,18 @@ section{break-inside:auto}.export-toc{margin:2em 0 3em}.export-toc>ul{padding-le
  */
 const EXPORT_ZIP_CHUNK_BYTES = 256 * 1024;
 
+/**
+ * 导出时每批搭建多少个文章节点信息后让出主线程。
+ *
+ * `buildArticleNodeInfo()` 的单次同步遍历在大型文档上要数百毫秒（实测 40k 节点约 300–500 ms），
+ * 因此导出改用 `iterateArticleNodeInfo()` 按该批大小拉取。按项数而非字节数计，因为单项文本量由
+ * 节点自身长度决定；2000 项约合数十毫秒主线程占用。
+ */
+const EXPORT_ARTICLE_INFO_CHUNK_ITEMS = 2000;
+
+/** 导出正文每构建多少个段落（含备注段落）后让出主线程。 */
+const EXPORT_BODY_CHUNK_PARAGRAPHS = 2000;
+
 /** 打包导出中的一个待写入条目。 */
 interface ZipEntryInput {
   name: string;
@@ -930,8 +942,9 @@ async function writeArchiveChunked(entries: readonly ZipEntryInput[]): Promise<U
 /**
  * Produces a native Word document with bookmarks and internal TOC hyperlinks.
  *
- * 导出分三段让出主线程：先按章节构建一次节点信息（目录与正文共用，章节之间 `await`），
- * 再按 `EXPORT_ZIP_CHUNK_BYTES` 分批流式压缩打包。条目、条目顺序与未压缩内容与旧实现一致。
+ * 导出分三段让出主线程：先按章节分批搭建一次节点信息（目录与正文共用，批次与章节之间 `await`），
+ * 再分批拼接正文段落，最后按 `EXPORT_ZIP_CHUNK_BYTES` 分批流式压缩打包。条目、条目顺序与
+ * 未压缩内容与旧实现一致。
  *
  * @param sections Ordered physical maps to merge.
  * @param tocMaxDepth Maximum exported TOC depth resolved from current/global article settings.
@@ -965,16 +978,26 @@ export async function readingSectionsToDocx(sections: ReadingSection[], tocMaxDe
     const bookmarkEnd = anchor ? '<w:bookmarkEnd w:id="' + bookmarkId++ + '"/>' : "";
     return '<w:p><w:pPr>' + properties + '</w:pPr>' + bookmarkStart + '<w:r><w:t xml:space="preserve">' + escapeXml(text) + '</w:t></w:r>' + bookmarkEnd + '</w:p>';
   };
-  // 目录与正文都要用到同一份章节节点信息（标题/编号/锚点）。大文档下每次
-  // `buildArticleNodeInfo()` 就是一次数百毫秒的整棵子树遍历，因此这里按章节只构建一次，
-  // 并在章节之间让出主线程：多文件文章族的单次主线程占用被限制在一个章节以内。
+  // 目录与正文都要用到同一份章节节点信息（标题/编号/锚点）。这里按章节预建并复用，避免
+  // 对整棵子树重复遍历；遍历走 `iterateArticleNodeInfo()` 并按批让出主线程，因此单次主线程
+  // 占用被限制在一批以内，而不是整个章节（多文件文章族再加一层「每章节让出」）。
   const sectionInfos: ArticleNodeInfo[][] = [];
   for (const [index, section] of sections.entries()) {
-    sectionInfos.push(buildArticleNodeInfo(
+    const infos: ArticleNodeInfo[] = [];
+    let sinceYield = 0;
+    for (const info of iterateArticleNodeInfo(
       section.document.root,
       section.baseDepth,
       exportLeafNumbering(section.document, options, section.numberingDisabled)
-    ));
+    )) {
+      infos.push(info);
+      sinceYield += 1;
+      if (sinceYield >= EXPORT_ARTICLE_INFO_CHUNK_ITEMS) {
+        sinceYield = 0;
+        await yieldToMainThread();
+      }
+    }
+    sectionInfos.push(infos);
     if (index < sections.length - 1) await yieldToMainThread();
   }
   const toc = collectExportTocItems(sections, maxTocDepth, false, options, sectionInfos).map((item) => {
@@ -988,7 +1011,11 @@ export async function readingSectionsToDocx(sections: ReadingSection[], tocMaxDe
   });
   const body: string[] = [paragraph(title, "Title")];
   if (toc) body.push(paragraph("目录", "Heading1"), toc);
-  sections.forEach(({ filePath, document, baseDepth }, sectionIndex) => {
+  // 正文段落拼接在大型文档上同样是数百毫秒级的连续工作（实测 40k 段落约 90 ms），
+  // 因此按 `EXPORT_BODY_CHUNK_PARAGRAPHS` 分批构建并在批次之间让出主线程。
+  let bodySinceYield = 0;
+  for (const [sectionIndex, section] of sections.entries()) {
+    const { filePath, document, baseDepth } = section;
     if (sectionIndex > 0) {
       body.push(paragraph(nodePlainText(document.root) || document.title, "Heading" + Math.min(6, Math.max(1, baseDepth)), 0, wordAnchor(exportAnchor(sectionIndex, "section-" + sectionIndex))));
     }
@@ -1000,8 +1027,13 @@ export async function readingSectionsToDocx(sections: ReadingSection[], tocMaxDe
         ? paragraph(text, "Heading" + Math.min(6, Math.max(1, info.depth)), 0, wordAnchor(exportAnchor(sectionIndex, info.anchor)))
         : paragraph(text));
       if (info.node.note) body.push(paragraph(info.node.note));
+      bodySinceYield += 1;
+      if (bodySinceYield >= EXPORT_BODY_CHUNK_PARAGRAPHS) {
+        bodySinceYield = 0;
+        await yieldToMainThread();
+      }
     }
-  });
+  }
   const documentXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>' + body.join("") + '<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440"/></w:sectPr></w:body></w:document>';
   const styles = [1, 2, 3, 4, 5, 6].map((level) => '<w:style w:type="paragraph" w:styleId="Heading' + level + '"><w:name w:val="heading ' + level + '"/><w:rPr><w:b/><w:sz w:val="' + Math.max(20, 32 - level * 2) + '"/></w:rPr></w:style>').join("");
   const stylesXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style><w:style w:type="paragraph" w:styleId="Title"><w:name w:val="Title"/><w:rPr><w:b/><w:sz w:val="36"/></w:rPr></w:style>' + styles + '</w:styles>';

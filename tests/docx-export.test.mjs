@@ -117,6 +117,19 @@ test("DOCX export builds each section's node info once and still links child map
   assert.match(xml, /子图章节 C/, "跨文件挂载章节的子章节仍必须出现在导出正文中");
 });
 
+test("large DOCX export yields to the event loop instead of finishing synchronously", async () => {
+  const document = terminalParagraphDocument(6000);
+  let settled = false;
+  const pending = exporter.readingSectionsToDocx([{ filePath: "root.mindmap", document, baseDepth: 0 }]).then((bytes) => {
+    settled = true;
+    return bytes;
+  });
+  await Promise.resolve();
+  assert.equal(settled, false, "大型导出必须在批次之间让出主线程，而不是一次同步跑完");
+  const bytes = await pending;
+  assert.ok(unzipSync(bytes)["word/document.xml"].length > 256 * 1024);
+});
+
 test("DOCX export contract stays async and chunked on both sides of the boundary", () => {
   assert.match(exportSource, /export async function readingSectionsToDocx\(sections: ReadingSection\[\], tocMaxDepth = 3, options: ArticleExportOptions = \{\}\): Promise<Uint8Array<ArrayBuffer>>/);
   assert.match(exportSource, /const EXPORT_ZIP_CHUNK_BYTES = 256 \* 1024;/);
@@ -126,6 +139,11 @@ test("DOCX export contract stays async and chunked on both sides of the boundary
   assert.match(exportSource, /if \(end < content\.length\) await yieldToMainThread\(\);/);
   assert.match(exportSource, /archive\.end\(\);/);
   assert.doesNotMatch(exportSource, /(?:^|[^A-Za-z])zipSync\(/, "同步 zipSync 打包必须完全移除（unzipSync 仍用于只读校验归档上限）");
+  assert.match(exportSource, /const EXPORT_ARTICLE_INFO_CHUNK_ITEMS = 2000;/);
+  assert.match(exportSource, /const EXPORT_BODY_CHUNK_PARAGRAPHS = 2000;/);
+  assert.match(exportSource, /for \(const info of iterateArticleNodeInfo\(/);
+  assert.match(exportSource, /if \(sinceYield >= EXPORT_ARTICLE_INFO_CHUNK_ITEMS\) \{\s*sinceYield = 0;\s*await yieldToMainThread\(\);/);
+  assert.match(exportSource, /if \(bodySinceYield >= EXPORT_BODY_CHUNK_PARAGRAPHS\) \{\s*bodySinceYield = 0;\s*await yieldToMainThread\(\);/);
   assert.match(exportSource, /const sectionInfos: ArticleNodeInfo\[\]\[\] = \[\];/);
   assert.match(exportSource, /if \(index < sections\.length - 1\) await yieldToMainThread\(\);/);
   assert.match(exportSource, /collectExportTocItems\(sections, maxTocDepth, false, options, sectionInfos\)/);

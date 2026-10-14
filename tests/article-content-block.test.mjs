@@ -128,7 +128,7 @@ test("terminal body siblings can switch to the next article numbering level", as
   assert.match(viewSource, /document\?\.articleStyle\?\.leafNumberingStyle \?\? this\.plugin\.settings\.articleLeafNumberingStyle/);
   assert.match(modesSource, /for \(const child of parent\.children\) \{[\s\S]*else if \(child\.articleNumberingMode !== "none"\) terminalCount \+= 1/);
   assert.match(modesSource, /numberedLeaf/);
-  assert.match(modesSource, /const displayLevel = numberedLeaf \? defaultLevel : numbering\.level/);
+  assert.match(modesSource, /const displayLevel = numberedLeaf \? frame\.defaultLevel : numbering\.level/);
   assert.match(modesSource, /circledNumberLabel\(numberedIndex\)/);
   assert.match(modesSource, /articleNumberLabel\(displayLevel, numberedIndex\)/);
   assert.match(rendererSource, /info\.leafNumberingStyle === "circled"[\s\S]*String\(info\.leafNumberingIndex \?\? 1\)[\s\S]*: info\.label/);

@@ -1706,11 +1706,31 @@ Build the article representation for one physical .mindmap file. `baseDepth` is 
 export interface ArticleLeafNumberingOptions
 ```
 
+### 接口 `ArticleInfoFrame`
+
+源码：`src/article/modes.ts:485`
+
+文章节点遍历的一帧：一次「某个上级的候选子节点」列表的遍历进度与编号状态。
+
+```ts
+interface ArticleInfoFrame
+```
+
+### 函数 `iterateArticleNodeInfo`
+
+源码：`src/article/modes.ts:510`
+
+惰性展开文章节点，逐项产出与 `buildArticleNodeInfo()` 完全相同的 `ArticleNodeInfo`。 导出链路需要在批次之间 `await` 让出主线程，而 `buildArticleNodeInfo()` 是一次同步全量 遍历（实测 40k 节点约 300–500 ms），是大型文章导出里最后一块无法让出的同步阻塞。迭代器让 调用方按固定批大小拉取，单次主线程工作量因此有明确上限。 遍历使用显式栈：递归 `yield*` 在深链导图上每产出一项都要穿透整条委托链，会退化为 O(节点数 × 深度)，显式栈同时也消除了深树递归风险。遍历顺序与递归版一致：父先于子、同级左到右。
+
+```ts
+export function* iterateArticleNodeInfo( root: MindMapNode, baseDepth = 0, leafNumbering: ArticleLeafNumberingOptions =
+```
+
 ### 函数 `buildArticleNodeInfo`
 
-源码：`src/article/modes.ts:487`
+源码：`src/article/modes.ts:598`
 
-展开文章节点，并按同一上级下的末端正文数量决定是否使用下一层序号。
+展开文章节点，并按同一上级下的末端正文数量决定是否使用下一层序号。 这是 `iterateArticleNodeInfo()` 的全量同步包装，供渲染与不需要让出主线程的调用方使用； 需要分批让出主线程的导出链路应直接迭代 `iterateArticleNodeInfo()`。
 
 ```ts
 export function buildArticleNodeInfo( root: MindMapNode, baseDepth = 0, leafNumbering: ArticleLeafNumberingOptions =
@@ -1718,7 +1738,7 @@ export function buildArticleNodeInfo( root: MindMapNode, baseDepth = 0, leafNumb
 
 ### 函数 `normalizeVisibleModes`
 
-源码：`src/article/modes.ts:556`
+源码：`src/article/modes.ts:613`
 
 校验并规范化visible modes，并保持模型、界面和持久化状态的一致性。
 
@@ -9130,7 +9150,7 @@ export function readingSectionsToHtml(sections: ReadingSection[], tocMaxDepth = 
 
 ### 接口 `ZipEntryInput`
 
-源码：`src/import/import-export.ts:869`
+源码：`src/import/import-export.ts:881`
 
 打包导出中的一个待写入条目。
 
@@ -9140,7 +9160,7 @@ interface ZipEntryInput
 
 ### 函数 `writeArchiveChunked`
 
-源码：`src/import/import-export.ts:889`
+源码：`src/import/import-export.ts:901`
 
 在不阻塞主线程的前提下分块写出 ZIP 归档。 逐条 `add()` 到流式压缩器后，把每个条目的内容按 `EXPORT_ZIP_CHUNK_BYTES` 分批 `push()`，批次之间让出一次宏任务。因此条目顺序、条目名与未压缩内容都与旧的同步 `zipSync` 完全一致，产物仍是标准 ZIP（条目使用 data descriptor，`unzipSync` 与 Word 均可正常读取），只是主线程单次工作量被限制在一批以内。 不依赖 Web Worker：`AsyncZipDeflate` 在缺少 `Worker` / `URL.createObjectURL` 的环境 会直接抛错，移动端 WebView 也存在风险；分块 + 块间让出在桌面端、移动端与 Node 测试环境行为一致。
 
@@ -9150,9 +9170,9 @@ async function writeArchiveChunked(entries: readonly ZipEntryInput[]): Promise<U
 
 ### 函数 `readingSectionsToDocx`
 
-源码：`src/import/import-export.ts:940`
+源码：`src/import/import-export.ts:953`
 
-Produces a native Word document with bookmarks and internal TOC hyperlinks. 导出分三段让出主线程：先按章节构建一次节点信息（目录与正文共用，章节之间 `await`）， 再按 `EXPORT_ZIP_CHUNK_BYTES` 分批流式压缩打包。条目、条目顺序与未压缩内容与旧实现一致。
+Produces a native Word document with bookmarks and internal TOC hyperlinks. 导出分三段让出主线程：先按章节分批搭建一次节点信息（目录与正文共用，批次与章节之间 `await`）， 再分批拼接正文段落，最后按 `EXPORT_ZIP_CHUNK_BYTES` 分批流式压缩打包。条目、条目顺序与 未压缩内容与旧实现一致。
 
 ```ts
 export async function readingSectionsToDocx(sections: ReadingSection[], tocMaxDepth = 3, options: ArticleExportOptions =
@@ -9160,7 +9180,7 @@ export async function readingSectionsToDocx(sections: ReadingSection[], tocMaxDe
 
 ### 函数 `readingSectionsToMarkdown`
 
-源码：`src/import/import-export.ts:1024`
+源码：`src/import/import-export.ts:1056`
 
 Produces article-oriented Markdown with a linked table of contents.
 
