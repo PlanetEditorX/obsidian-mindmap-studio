@@ -106,7 +106,7 @@ import {
   renderArticleNodeContent,
   type ArticleRenderController
 } from "./article-renderer";
-import { appendChild, deletionSelectionFallback, deleteNodes, insertSiblingAfter, setAllBranchesCollapsed, topLevelSelectedNodeIds } from "./node-actions";
+import { appendChild, deletionSelectionFallback, deleteNodes, insertSiblingAfter, isNodeEmpty, removeEmptyNodes, setAllBranchesCollapsed, topLevelSelectedNodeIds } from "./node-actions";
 import { attachSelectionFormatToolbar, type SelectionFormatToolbarHandle } from "./selection-format-toolbar";
 import { selectionClassDelta } from "./selection-class-delta";
 import {
@@ -1440,6 +1440,32 @@ export class MindMapEditor {
     this.markSaving();
     this.render();
     return updated;
+  }
+
+  /** 当前编辑器是否被只读锁定；仓库级维护操作据此决定是否跳过该文档。 */
+  get isReadOnly(): boolean {
+    return this.readOnly;
+  }
+
+  /**
+   * 清理当前文档中所有完全空白的节点，把被清理节点的子节点上提到其原位置。
+   *
+   * 这是仓库级维护操作进入单个编辑器的入口：走统一的 `mutate()` 撤销与保存链路，因此
+   * 用户可以撤销恢复；根节点与带子导图引用的节点不会被清理。已有内容时不创建历史快照，
+   * 避免为无可清理内容的文档制造多余撤销项与保存。
+   *
+   * @returns 实际删除的空白节点数量；只读或没有可清理节点时为 0。
+   */
+  cleanEmptyNodes(): number {
+    if (this.readOnly) return 0;
+    const root = this.document.root;
+    if (!flattenNodes(root).some((node) => node !== root && isNodeEmpty(node))) return 0;
+    let removed = 0;
+    this.mutate(() => {
+      removed = removeEmptyNodes(root);
+      if (!this.nodeById(this.selectedId)) this.selectedId = root.id;
+    }, null);
+    return removed;
   }
 
   /**

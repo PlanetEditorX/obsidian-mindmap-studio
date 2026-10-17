@@ -106,6 +106,7 @@ npm run test:docs
 - 子导图问题同时检查父节点 `submap` 与子文档 `navigation`；父级返回必须按当前显示模式调用 `resolveParentReturnIntent()`，不得让导图面包屑直接调用文章目录入口。若 `navigation.parentPath` 缺失，优先检查 `MindMapSearchIndex.findParentNavigationForChild()` 是否能从父节点 `submap.path` 反查当前文件，以及视图是否执行 `applyRecoveredNavigation()`；兼容恢复不得触发 `onChange` 或仅因打开文件写盘。
 - 全局替换问题同时检查“可见结果上限”和“真实替换范围”：列表可以截断，但“全部替换”必须重新查询完整作用域，并在文件写回后同步刷新索引。文章加载进度属于可选 UI，默认关闭；新增阶段时继续通过 `ArticleContextProgress` 上报，不得让隐藏设置跳过真实上下文构建。
 - 搜索快捷键问题同时检查窗口捕获层和编辑器根节点：活动 MindMap Studio 视图中的 `Ctrl/Cmd+F` 必须直接打开当前导图族搜索，不依赖 Obsidian 命令绑定；可配置的全局搜索快捷键优先，弹窗内部不得重复打开搜索。
+- 空白节点清理问题同时检查三层：判定集中在 `src/editor/node-actions.ts` 的纯函数 `isNodeEmpty()`（`tests/empty-node-cleanup.test.mjs` 覆盖），根节点与带 `submap` 的节点不得被清理；仓库级操作由 `main.ts` 的 `cleanVaultEmptyNodes()` 区分已打开（走视图 `cleanEmptyNodes()` 的 `mutate()` 链路）与未打开（磁盘读取后 `vault.modify()` 回写）；只读视图必须报告 `skipped` 而不是静默跳过，且按钮必须二次确认。
 
 ## 发布前检查
 

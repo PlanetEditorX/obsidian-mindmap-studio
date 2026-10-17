@@ -2486,6 +2486,32 @@ export class MindMapStudioSettingTab extends PluginSettingTab {
           }
         }));
     new Setting(containerEl)
+      .setName("清理所有空白节点")
+      .setDesc("删除当前仓库中所有 .mindmap 里完全没有内容的节点：文字全为空白，且没有图片、表格、代码、文件、题目、备注、标签、链接或子导图引用。被清理节点的子节点会上提到原位置；根节点与带子导图引用的节点始终保留。该操作会写回多个导图文件，无法一次性撤销。")
+      .addButton((button) => button
+        .setWarning()
+        .setButtonText("清理所有空白节点")
+        .onClick(async () => {
+          const confirmed = window.confirm("将清理当前仓库中所有 .mindmap 的空白节点，并直接写回这些导图文件。被清理节点的子节点会上提到原位置；此操作无法一次性撤销。确定继续吗？");
+          if (!confirmed) return;
+          button.setDisabled(true);
+          button.setButtonText("清理中…");
+          try {
+            const result = await this.plugin.cleanVaultEmptyNodes();
+            const skipped = result.skipped ? `；另有 ${result.skipped} 个只读导图已跳过` : "";
+            new Notice(result.nodes
+              ? `已清理 ${result.files} 个导图、共 ${result.nodes} 个空白节点${skipped}`
+              : `没有找到可清理的空白节点${skipped}`);
+          } catch (error) {
+            console.error("MindMap Studio clean empty nodes failed", error);
+            new Notice(error instanceof Error ? `清理空白节点失败：${error.message}` : "清理空白节点失败");
+          } finally {
+            button.setDisabled(false);
+            button.setButtonText("清理所有空白节点");
+          }
+        }));
+
+    new Setting(containerEl)
       .setName("恢复初始配置")
       .setDesc("恢复显示模式、主题、资源目录、图床、搜索和编辑选项。不会删除或修改任何 .mindmap 文件。")
       .addButton((button) => button

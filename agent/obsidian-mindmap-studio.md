@@ -1,10 +1,25 @@
 # obsidian-mindmap-studio 项目交接
 
 - 插件：MindMap Studio（Obsidian 本地优先 .mindmap 导图，含导图/大纲/文章/通读模式、全局搜索、图床、AI 助手与桌面截图链路）。
-- 版本基线：工作区版本文件为 1.55.8（Git Release 已发布 v1.55.8，上一轮惰性迭代已入库为 `25c7499`）；本轮为「移动端适配核查 + 导出写入目标冻结」，交付追踪版本 1.55.8，交付后缀 591622。
+- 版本基线：工作区版本文件为 1.55.8（Git Release 已发布 v1.55.8；上一轮导出冻结已入库为 `630c691`）；本轮为「仓库级清理空白节点」，交付追踪版本 1.55.8，交付后缀 274915。
 - 仓库规则：见根目录 `AGENTS.md`；每轮代码交付三份 ZIP（源码 / 安装 / Agent 交接）共用同一六位后缀；验证入口 `npm run verify`。
 
-## 当前状态（本轮：移动端适配核查 + 导出写入目标冻结）
+## 当前状态（本轮：仓库级清理空白节点）
+
+- 触发：用户要求「增加清理空白节点的选项」，并明确否决了画布右键/命令面板的方案，指定「设置页里一个统一的按钮，点击后清理当前仓库中所有空白节点」。
+- 判定语义（集中在 `src/editor/node-actions.ts` 的纯函数 `isNodeEmpty()`）：只有「所有文字块都是空白，且没有图片、表格、代码、文件、题目、备注、标签、链接和子导图引用」才算空白节点；`task` 是已废弃兼容字段，不计入内容。带 `submap` 的节点即使内容为空也保留（删除会破坏父子导图引用）。
+- 清理算法（`removeEmptyNodes(root)`）：显式栈遍历（深链不得递归），根节点永不清理，被清理节点的子节点在它原来的位置提升到父节点下并保持引用与顺序；连续空白链（A 空 → B 空 → C 有内容）在一次调用内解析完毕；有内容的节点不被替换或重建。返回实际删除数量。
+- 入口链路（三层）：
+  - `MindMapEditor.cleanEmptyNodes()`：先 `flattenNodes()` 预判「是否有非根空白节点」，无则直接返回 0，避免为无可清理内容的文档制造多余撤销快照与保存；有则走统一的 `mutate(…, null)`（撤销 + 保存链路），选中节点若被清掉则回退到根节点。新增只读探针 `get isReadOnly()`。
+  - `MindMapStudioView.cleanEmptyNodes(): Promise<EmptyNodeCleanupResult>`（新增导出接口 `EmptyNodeCleanupResult { removed, skipped }`）：只读视图直接返回 `{ removed: 0, skipped: true }`，不静默跳过。
+  - `MindMapStudioPlugin.cleanVaultEmptyNodes()`（`src/main.ts`）：遍历 `vault.getFiles()` 里全部 `.mindmap`，按路径匹配已打开的 `MindMapStudioView`——已打开必须走视图链路（否则写盘与视图内存状态不一致），未打开才 `vault.read()` → `parseDocument()` → `removeEmptyNodes()` → `vault.modify()`；回写沿用既有 vault modify 事件自动失效文档缓存并排队更新搜索索引；返回 `{ files, nodes, skipped }`。
+- 设置入口（`src/settings.ts`「管理配置」分类，位于「检查插件更新」与「恢复初始配置」之间）：`setWarning()` 按钮「清理所有空白节点」+ `window.confirm` 二次确认（跨文件批量清理无法作为单文档撤销），执行中禁用按钮并显示「清理中…」，完成后 Notice 汇总 `已清理 N 个导图、共 M 个空白节点`，只读跳过时追加 `；另有 K 个只读导图已跳过`。
+- 测试：新建 `tests/empty-node-cleanup.test.mjs`（9 条）——空判定正例/反例（图片、表格、代码、文件块、备注、链接、图标、标签、题目、子导图）、叶子删除计数、子节点原地提升（含引用同一个对象与顺序）、连续空白链一次解析、根节点永不清理、非空节点不被替换、2000 层深链无栈溢出、源码契约（显式栈、不得递归）。`scripts/test.mjs` 新增 9 条回归断言（纯函数存在性、`parent.children = kept`、`submap` 守卫、视图导出签名与只读 `skipped`、插件入口与打开/未打开分流、设置按钮文案）。已登记 `package.json` 的 `test:unit`。
+- 验证：`npm run verify` 完整通过——`test:unit` **510 / 510**（新增 9 条）、`test:regression` 通过、`test:docs` **1348 处命名声明（64 个源模块）**、`test:repo` 通过、`tsc --noEmit` + production esbuild 通过；`docs/FUNCTION_REFERENCE.md` 已重新生成；文档同步 `docs/ARCHITECTURE.md`（新增「仓库级清理空白节点必须区分已打开与未打开导图」）、`docs/DEVELOPMENT.md`（空白节点清理三层排查规则）、`README.md`（管理配置说明）、`CHANGELOG.md`「未发布」。
+- 待手工验证：真实 Obsidian 桌面端点击「设置 → 管理配置 → 清理所有空白节点」后，空白节点被删除且其子节点上提到原位置、有内容的节点不受影响、根节点保留；已打开导图清理后可撤销、内容与磁盘一致；只读导图被跳过且 Notice 正确汇总；大量 `.mindmap`（数百个）时按钮保持「清理中…」且界面不卡死。
+- 下一轮候选（按价值排序）：① 让仓库级批量维护（清理空白节点、重建搜索索引）复用同一「已打开走视图 / 未打开走磁盘」的公共遍历器，避免后续维护操作重复实现；② 报告 P1 增量方向——`collectFileAssetPaths()` 的增量引用计数；③ `MutationDelta` / dirty 子树让 mutation 只更新受影响范围。
+
+### 上一轮工作区（移动端适配核查 + 导出写入目标冻结）
 
 - 触发：用户问「手机端匹配了吗、手机上 Obsidian 会不会视图异常」。本轮先做静态与运行核查，再修掉核查中发现的真实隐患。
 - 核查结论（移动端适配，均为实测/产物证据，非推断）：

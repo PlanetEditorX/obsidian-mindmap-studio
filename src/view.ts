@@ -39,6 +39,14 @@ interface ExportWriteTarget {
   title: string | undefined;
 }
 
+/** 仓库级「清理所有空白节点」在单个导图视图上的结果。 */
+export interface EmptyNodeCleanupResult {
+  /** 本次实际删除的空白节点数量。 */
+  removed: number;
+  /** 视图处于只读锁定时为 true，表示该导图已被跳过。 */
+  skipped: boolean;
+}
+
 /**
  * MindMapStudioView 的主要实现类。负责封装相关状态、生命周期和对外操作，避免调用方直接操作内部数据结构。
  */
@@ -144,6 +152,22 @@ export class MindMapStudioView extends TextFileView {
     if (!updated) return 0;
     await this.save();
     return updated;
+  }
+
+  /**
+   * 清理当前导图中所有完全空白的节点并立即保存，供仓库级维护操作调用。
+   *
+   * 只读锁定时不修改文档并返回 `skipped`，由调用方汇总提示；清理会走编辑器的统一撤销与
+   * 保存链路，因此用户仍可撤销。
+   *
+   * @returns 本次删除的空白节点数量，以及是否因只读被跳过。
+   */
+  async cleanEmptyNodes(): Promise<EmptyNodeCleanupResult> {
+    if (!this.editor) return { removed: 0, skipped: false };
+    if (this.editor.isReadOnly) return { removed: 0, skipped: true };
+    const removed = this.editor.cleanEmptyNodes();
+    if (removed) await this.save();
+    return { removed, skipped: false };
   }
 
   /**

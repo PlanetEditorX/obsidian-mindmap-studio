@@ -2,6 +2,8 @@
 
 ## 未发布
 
+- 新增仓库级「清理所有空白节点」维护操作：`src/editor/node-actions.ts` 新增纯函数 `isNodeEmpty()`（所有文字块都是空白，且没有图片、表格、代码、文件、题目、备注、标签、链接和子导图引用才算空；`task` 是已废弃兼容字段不计入内容；带 `submap` 的节点始终保留）与 `removeEmptyNodes()`（显式栈遍历，根节点永不清理，被清理节点的子节点在它原来的位置提升到父节点下，连续空白链一次调用即可解析完毕）。设置页「管理配置」分组新增「清理所有空白节点」按钮，二次确认后由 `main.ts` 的 `cleanVaultEmptyNodes()` 遍历仓库全部 `.mindmap`：已打开的导图走 `MindMapStudioView.cleanEmptyNodes()` → 编辑器 `mutate()`，进入统一撤销与保存链路（只读视图记为跳过并在结果里提示）；未打开的导图从磁盘读取、清理后 `vault.modify()` 回写，沿用既有 vault modify 事件失效文档缓存并排队更新搜索索引。跨文件批量清理无法作为单个文档的撤销，因此按钮带二次确认，结果以 Notice 汇总清理的文件数与节点数。
+
 - 大型文档导出加固：Word（`.docx`）导出从同步全量打包改为「分块流式压缩 + 让出主线程」的异步契约：
   - 新增 `writeArchiveChunked()`，改用 `fflate` 的流式 `Zip` + `ZipDeflate`，逐条 `add()` 后把每个条目的内容按 `EXPORT_ZIP_CHUNK_BYTES`（256 KiB）分批 `push()`，批次之间 `await` 让出一次宏任务。此前 `zipSync()` 会在一次同步调用里压缩整份文档，大型文章族的 `word/document.xml` 可达数十 MB，期间界面完全冻结。
   - `readingSectionsToDocx()` 因此改为异步 API（`Promise<Uint8Array>`），调用方 `src/view.ts` 的 `exportArticleFamily()` 已 `await`。导出产物的部件顺序、部件名与未压缩内容与旧实现完全一致，仍是标准 ZIP（条目写入 data descriptor，`unzipSync`、Word 与其它 OOXML 工具均可正常读取）。

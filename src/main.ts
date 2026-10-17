@@ -133,6 +133,7 @@ import {
 } from "./utils/image-host";
 import { comparePluginVersions, extractPluginReleaseFiles, parsePluginUpdateManifest, verifyPluginArchiveHash } from "./utils/plugin-update";
 import { copyDesktopMarkdownImagesToDocument } from "./utils/desktop-import";
+import { removeEmptyNodes } from "./editor/node-actions";
 
 export const MINDMAP_EXTENSION = "mindmap";
 const FILE_EXPLORER_CONTAINER_SELECTOR = ".nav-files-container, .workspace-leaf-content[data-type='file-explorer']";
@@ -596,6 +597,50 @@ export default class MindMapStudioPlugin extends Plugin {
     await this.searchIndex.rebuildAll();
     const status = this.searchIndex.getStatus();
     new Notice(`搜索索引已重建：${status.files} 个导图，${status.nodes} 个节点`);
+  }
+
+  /**
+   * 清理当前仓库中所有 .mindmap 的完全空白节点。
+   *
+   * 与后台图床上传结果合并一致地处理「已打开 / 未打开」：已打开的导图必须走视图的撤销保存
+   * 链路（`mutate()`），否则直接写盘会与视图内存状态不一致；未打开的导图才从磁盘读取、
+   * 清理并回写。回写会触发既有的 vault modify 事件，自动失效文档缓存并排队更新搜索索引。
+   * 跨文件批量清理无法作为单个文档的撤销，因此调用方必须先让用户明确确认。
+   *
+   * @returns 实际清理的文件数、节点数，以及因只读被跳过的已打开导图数量。
+   */
+  async cleanVaultEmptyNodes(): Promise<{ files: number; nodes: number; skipped: number }> {
+    const files = this.app.vault.getFiles().filter((file) => this.isMindMapFile(file));
+    let changedFiles = 0;
+    let removedNodes = 0;
+    let skipped = 0;
+    for (const file of files) {
+      const views = this.app.workspace.getLeavesOfType(VIEW_TYPE_MINDMAP_STUDIO)
+        .map((leaf) => leaf.view)
+        .filter((view): view is MindMapStudioView => view instanceof MindMapStudioView && view.file?.path === file.path);
+      if (views.length) {
+        for (const view of views) {
+          const result = await view.cleanEmptyNodes();
+          if (result.skipped) { skipped += 1; continue; }
+          if (!result.removed) continue;
+          changedFiles += 1;
+          removedNodes += result.removed;
+        }
+        continue;
+      }
+      try {
+        const document = parseDocument(await this.app.vault.read(file), file.basename);
+        const removed = removeEmptyNodes(document.root);
+        if (!removed) continue;
+        await this.app.vault.modify(file, serializeDocument(document));
+        changedFiles += 1;
+        removedNodes += removed;
+      } catch (error) {
+        console.warn(`MindMap Studio could not clean empty nodes in ${file.path}`, error);
+      }
+    }
+    this.logDebug("maintenance", "clean-vault-empty-nodes", { files: changedFiles, nodes: removedNodes, skipped });
+    return { files: changedFiles, nodes: removedNodes, skipped };
   }
 
   /**

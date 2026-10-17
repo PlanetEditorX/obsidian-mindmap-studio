@@ -3699,6 +3699,23 @@ var MindMapStudioSettingTab = class extends import_obsidian.PluginSettingTab {
         button.setButtonText("\u68C0\u67E5\u66F4\u65B0");
       }
     }));
+    new import_obsidian.Setting(containerEl).setName("\u6E05\u7406\u6240\u6709\u7A7A\u767D\u8282\u70B9").setDesc("\u5220\u9664\u5F53\u524D\u4ED3\u5E93\u4E2D\u6240\u6709 .mindmap \u91CC\u5B8C\u5168\u6CA1\u6709\u5185\u5BB9\u7684\u8282\u70B9\uFF1A\u6587\u5B57\u5168\u4E3A\u7A7A\u767D\uFF0C\u4E14\u6CA1\u6709\u56FE\u7247\u3001\u8868\u683C\u3001\u4EE3\u7801\u3001\u6587\u4EF6\u3001\u9898\u76EE\u3001\u5907\u6CE8\u3001\u6807\u7B7E\u3001\u94FE\u63A5\u6216\u5B50\u5BFC\u56FE\u5F15\u7528\u3002\u88AB\u6E05\u7406\u8282\u70B9\u7684\u5B50\u8282\u70B9\u4F1A\u4E0A\u63D0\u5230\u539F\u4F4D\u7F6E\uFF1B\u6839\u8282\u70B9\u4E0E\u5E26\u5B50\u5BFC\u56FE\u5F15\u7528\u7684\u8282\u70B9\u59CB\u7EC8\u4FDD\u7559\u3002\u8BE5\u64CD\u4F5C\u4F1A\u5199\u56DE\u591A\u4E2A\u5BFC\u56FE\u6587\u4EF6\uFF0C\u65E0\u6CD5\u4E00\u6B21\u6027\u64A4\u9500\u3002").addButton((button) => button.setWarning().setButtonText("\u6E05\u7406\u6240\u6709\u7A7A\u767D\u8282\u70B9").onClick(async () => {
+      const confirmed = window.confirm("\u5C06\u6E05\u7406\u5F53\u524D\u4ED3\u5E93\u4E2D\u6240\u6709 .mindmap \u7684\u7A7A\u767D\u8282\u70B9\uFF0C\u5E76\u76F4\u63A5\u5199\u56DE\u8FD9\u4E9B\u5BFC\u56FE\u6587\u4EF6\u3002\u88AB\u6E05\u7406\u8282\u70B9\u7684\u5B50\u8282\u70B9\u4F1A\u4E0A\u63D0\u5230\u539F\u4F4D\u7F6E\uFF1B\u6B64\u64CD\u4F5C\u65E0\u6CD5\u4E00\u6B21\u6027\u64A4\u9500\u3002\u786E\u5B9A\u7EE7\u7EED\u5417\uFF1F");
+      if (!confirmed) return;
+      button.setDisabled(true);
+      button.setButtonText("\u6E05\u7406\u4E2D\u2026");
+      try {
+        const result = await this.plugin.cleanVaultEmptyNodes();
+        const skipped = result.skipped ? `\uFF1B\u53E6\u6709 ${result.skipped} \u4E2A\u53EA\u8BFB\u5BFC\u56FE\u5DF2\u8DF3\u8FC7` : "";
+        new import_obsidian.Notice(result.nodes ? `\u5DF2\u6E05\u7406 ${result.files} \u4E2A\u5BFC\u56FE\u3001\u5171 ${result.nodes} \u4E2A\u7A7A\u767D\u8282\u70B9${skipped}` : `\u6CA1\u6709\u627E\u5230\u53EF\u6E05\u7406\u7684\u7A7A\u767D\u8282\u70B9${skipped}`);
+      } catch (error) {
+        console.error("MindMap Studio clean empty nodes failed", error);
+        new import_obsidian.Notice(error instanceof Error ? `\u6E05\u7406\u7A7A\u767D\u8282\u70B9\u5931\u8D25\uFF1A${error.message}` : "\u6E05\u7406\u7A7A\u767D\u8282\u70B9\u5931\u8D25");
+      } finally {
+        button.setDisabled(false);
+        button.setButtonText("\u6E05\u7406\u6240\u6709\u7A7A\u767D\u8282\u70B9");
+      }
+    }));
     new import_obsidian.Setting(containerEl).setName("\u6062\u590D\u521D\u59CB\u914D\u7F6E").setDesc("\u6062\u590D\u663E\u793A\u6A21\u5F0F\u3001\u4E3B\u9898\u3001\u8D44\u6E90\u76EE\u5F55\u3001\u56FE\u5E8A\u3001\u641C\u7D22\u548C\u7F16\u8F91\u9009\u9879\u3002\u4E0D\u4F1A\u5220\u9664\u6216\u4FEE\u6539\u4EFB\u4F55 .mindmap \u6587\u4EF6\u3002").addButton((button) => button.setWarning().setButtonText("\u6062\u590D\u521D\u59CB\u914D\u7F6E").onClick(async () => {
       const confirmed = window.confirm("\u786E\u5B9A\u6062\u590D MindMap Studio \u7684\u5168\u90E8\u63D2\u4EF6\u8BBE\u7F6E\u5417\uFF1F\u8111\u56FE\u6587\u4EF6\u4E0D\u4F1A\u88AB\u5220\u9664\u3002");
       if (!confirmed) return;
@@ -7725,6 +7742,46 @@ function deleteNodes(root, ids) {
   for (const id of ids) {
     if (removeNode(root, id)) removed += 1;
   }
+  return removed;
+}
+function isNodeEmpty(node) {
+  var _a2, _b2, _c, _d;
+  if (node.submap) return false;
+  if (node.question) return false;
+  if ((_a2 = node.icon) == null ? void 0 : _a2.trim()) return false;
+  if ((_b2 = node.note) == null ? void 0 : _b2.trim()) return false;
+  if ((_c = node.link) == null ? void 0 : _c.trim()) return false;
+  if ((_d = node.tags) == null ? void 0 : _d.some((tag) => tag.trim())) return false;
+  for (const block of nodeContentBlocks(node)) {
+    if (block.type !== "text") return false;
+    if (block.text.trim()) return false;
+  }
+  return true;
+}
+function removeEmptyNodes(root) {
+  let removed = 0;
+  const stack = [root];
+  while (stack.length) {
+    const node = stack.pop();
+    removed += promoteChildrenOfEmptyNodes(node);
+    for (const child of node.children) stack.push(child);
+  }
+  return removed;
+}
+function promoteChildrenOfEmptyNodes(parent) {
+  let removed = 0;
+  const queue = [...parent.children];
+  const kept = [];
+  while (queue.length) {
+    const node = queue.shift();
+    if (isNodeEmpty(node)) {
+      removed += 1;
+      queue.unshift(...node.children);
+      continue;
+    }
+    kept.push(node);
+  }
+  parent.children = kept;
   return removed;
 }
 function deletionSelectionFallback(root, ids, existingIndex) {
@@ -14577,6 +14634,30 @@ var MindMapEditor = class {
     this.markSaving();
     this.render();
     return updated;
+  }
+  /** 当前编辑器是否被只读锁定；仓库级维护操作据此决定是否跳过该文档。 */
+  get isReadOnly() {
+    return this.readOnly;
+  }
+  /**
+   * 清理当前文档中所有完全空白的节点，把被清理节点的子节点上提到其原位置。
+   *
+   * 这是仓库级维护操作进入单个编辑器的入口：走统一的 `mutate()` 撤销与保存链路，因此
+   * 用户可以撤销恢复；根节点与带子导图引用的节点不会被清理。已有内容时不创建历史快照，
+   * 避免为无可清理内容的文档制造多余撤销项与保存。
+   *
+   * @returns 实际删除的空白节点数量；只读或没有可清理节点时为 0。
+   */
+  cleanEmptyNodes() {
+    if (this.readOnly) return 0;
+    const root = this.document.root;
+    if (!flattenNodes(root).some((node) => node !== root && isNodeEmpty(node))) return 0;
+    let removed = 0;
+    this.mutate(() => {
+      removed = removeEmptyNodes(root);
+      if (!this.nodeById(this.selectedId)) this.selectedId = root.id;
+    }, null);
+    return removed;
   }
   /**
    * 把当前文档中已失效的本地图片引用重新指向同名其它格式的仓库文件。
@@ -21930,6 +22011,21 @@ var MindMapStudioView = class extends import_obsidian17.TextFileView {
     return updated;
   }
   /**
+   * 清理当前导图中所有完全空白的节点并立即保存，供仓库级维护操作调用。
+   *
+   * 只读锁定时不修改文档并返回 `skipped`，由调用方汇总提示；清理会走编辑器的统一撤销与
+   * 保存链路，因此用户仍可撤销。
+   *
+   * @returns 本次删除的空白节点数量，以及是否因只读被跳过。
+   */
+  async cleanEmptyNodes() {
+    if (!this.editor) return { removed: 0, skipped: false };
+    if (this.editor.isReadOnly) return { removed: 0, skipped: true };
+    const removed = this.editor.cleanEmptyNodes();
+    if (removed) await this.save();
+    return { removed, skipped: false };
+  }
+  /**
    * 打开导图时按同名不同扩展名重新识别已失效的本地图片引用，并把新路径写回文档。
    *
    * 显示层已经通过同名兜底渲染出正确图片，这里只负责把引用持久化，因此不触发重绘。
@@ -25963,6 +26059,53 @@ var MindMapStudioPlugin = class extends import_obsidian20.Plugin {
     await this.searchIndex.rebuildAll();
     const status = this.searchIndex.getStatus();
     new import_obsidian20.Notice(`\u641C\u7D22\u7D22\u5F15\u5DF2\u91CD\u5EFA\uFF1A${status.files} \u4E2A\u5BFC\u56FE\uFF0C${status.nodes} \u4E2A\u8282\u70B9`);
+  }
+  /**
+   * 清理当前仓库中所有 .mindmap 的完全空白节点。
+   *
+   * 与后台图床上传结果合并一致地处理「已打开 / 未打开」：已打开的导图必须走视图的撤销保存
+   * 链路（`mutate()`），否则直接写盘会与视图内存状态不一致；未打开的导图才从磁盘读取、
+   * 清理并回写。回写会触发既有的 vault modify 事件，自动失效文档缓存并排队更新搜索索引。
+   * 跨文件批量清理无法作为单个文档的撤销，因此调用方必须先让用户明确确认。
+   *
+   * @returns 实际清理的文件数、节点数，以及因只读被跳过的已打开导图数量。
+   */
+  async cleanVaultEmptyNodes() {
+    const files = this.app.vault.getFiles().filter((file) => this.isMindMapFile(file));
+    let changedFiles = 0;
+    let removedNodes = 0;
+    let skipped = 0;
+    for (const file of files) {
+      const views = this.app.workspace.getLeavesOfType(VIEW_TYPE_MINDMAP_STUDIO).map((leaf) => leaf.view).filter((view) => {
+        var _a2;
+        return view instanceof MindMapStudioView && ((_a2 = view.file) == null ? void 0 : _a2.path) === file.path;
+      });
+      if (views.length) {
+        for (const view of views) {
+          const result = await view.cleanEmptyNodes();
+          if (result.skipped) {
+            skipped += 1;
+            continue;
+          }
+          if (!result.removed) continue;
+          changedFiles += 1;
+          removedNodes += result.removed;
+        }
+        continue;
+      }
+      try {
+        const document2 = parseDocument(await this.app.vault.read(file), file.basename);
+        const removed = removeEmptyNodes(document2.root);
+        if (!removed) continue;
+        await this.app.vault.modify(file, serializeDocument(document2));
+        changedFiles += 1;
+        removedNodes += removed;
+      } catch (error) {
+        console.warn(`MindMap Studio could not clean empty nodes in ${file.path}`, error);
+      }
+    }
+    this.logDebug("maintenance", "clean-vault-empty-nodes", { files: changedFiles, nodes: removedNodes, skipped });
+    return { files: changedFiles, nodes: removedNodes, skipped };
   }
   /**
    * 读取并返回global search index status，并保持模型、界面和持久化状态的一致性。

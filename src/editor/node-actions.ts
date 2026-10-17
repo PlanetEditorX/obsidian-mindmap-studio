@@ -8,6 +8,7 @@ import {
   findParent,
   flattenNodes,
   indexedHasAnyAncestor,
+  nodeContentBlocks,
   removeNode,
   type MindMapNode,
   type NodeTreeIndex
@@ -54,6 +55,76 @@ export function deleteNodes(root: MindMapNode, ids: Iterable<string>): number {
   for (const id of ids) {
     if (removeNode(root, id)) removed += 1;
   }
+  return removed;
+}
+
+/**
+ * 判断节点自身是否完全没有内容，即“空白节点”。
+ *
+ * 只有「没有图片、表格、代码、文件、题目、备注、标签、链接和子导图引用，且所有文字块
+ * 都是空白」时才视为空。带子导图引用的节点即使文字为空也保留——删除它会破坏父子导图
+ * 关系。`task` 是已废弃的兼容字段，当前界面与导出都不再使用，因此不计入内容。
+ *
+ * @param node 待判断的节点。
+ * @returns 节点自身是否完全空白。
+ */
+export function isNodeEmpty(node: MindMapNode): boolean {
+  if (node.submap) return false;
+  if (node.question) return false;
+  if (node.icon?.trim()) return false;
+  if (node.note?.trim()) return false;
+  if (node.link?.trim()) return false;
+  if (node.tags?.some((tag) => tag.trim())) return false;
+  for (const block of nodeContentBlocks(node)) {
+    if (block.type !== "text") return false;
+    if (block.text.trim()) return false;
+  }
+  return true;
+}
+
+/**
+ * 清理节点树中所有空白节点，把被清理节点的子节点原地提升到其父节点下。
+ *
+ * 根节点永远保留：它是文档锚点。有内容的节点不受影响，因此只在空白节点所在的位置用其
+ * 子树替换它。遍历使用显式栈，避免深链导图触发递归栈溢出。
+ *
+ * @param root 文档根节点，会被原地改写。
+ * @returns 实际删除的空白节点数量。
+ */
+export function removeEmptyNodes(root: MindMapNode): number {
+  let removed = 0;
+  const stack: MindMapNode[] = [root];
+  while (stack.length) {
+    const node = stack.pop()!;
+    removed += promoteChildrenOfEmptyNodes(node);
+    for (const child of node.children) stack.push(child);
+  }
+  return removed;
+}
+
+/**
+ * 把某个节点直接子级中的空白节点替换成它们自己的子节点。
+ *
+ * 被提升的子节点本身可能也是空白（连续空白链），因此这里按队列逐层展开到全部为有内容
+ * 的节点为止，保证一次调用后该层级只留下非空节点。
+ *
+ * @param parent 需要整理直接子级的节点，会被原地改写。
+ * @returns 该层级实际删除的空白节点数量。
+ */
+function promoteChildrenOfEmptyNodes(parent: MindMapNode): number {
+  let removed = 0;
+  const queue: MindMapNode[] = [...parent.children];
+  const kept: MindMapNode[] = [];
+  while (queue.length) {
+    const node = queue.shift()!;
+    if (isNodeEmpty(node)) {
+      removed += 1;
+      queue.unshift(...node.children);
+      continue;
+    }
+    kept.push(node);
+  }
+  parent.children = kept;
   return removed;
 }
 
