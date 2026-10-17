@@ -65,6 +65,20 @@ export function sanitizeExportFilename(name: string, fallback = "思维导图"):
   return name.replace(/[<>:"/\\|?*\x00-\x1F]/g, " ").replace(/\s+/g, " ").trim().replace(/[. ]+$/g, "") || fallback;
 }
 
+/**
+ * 解析导出文件主名：优先使用导出开始前冻结的文件名，其次标题，最后回退「思维导图」。
+ *
+ * 文章族导出会持续让出主线程多秒，写入阶段不得再回读视图当前状态；导出入口把文件名与标题
+ * 冻结后传入，这里只做纯解析，便于单测覆盖空文件名/空标题等分支。
+ *
+ * @param file 冻结的当前文件（可为 null）。
+ * @param title 冻结的文档标题（可为 undefined）。
+ * @returns 不含扩展名的导出主名。
+ */
+export function resolveExportBaseName(file: { basename: string } | null | undefined, title: string | undefined): string {
+  return file?.basename ?? title ?? "思维导图";
+}
+
 /** 从 Obsidian 桌面端获取保存对话框；不可用时返回 null。 */
 function getElectronSaveRuntime(): ElectronSaveRuntime | null {
   const requireFunction = typeof window !== "undefined"

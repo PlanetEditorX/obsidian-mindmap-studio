@@ -1470,7 +1470,7 @@ const command = "example";
   assert.match(viewSource, /readingSectionsToHtml\(sections, tocMaxDepth, articleExportOptions\)/);
   assert.match(viewSource, /readingSectionsToMarkdown\(sections, tocMaxDepth, articleExportOptions\)/);
   assert.match(viewSource, /const docx = await readingSectionsToDocx\(sections, tocMaxDepth, articleExportOptions\)/);
-  assert.match(viewSource, /await this\.exportBinaryFile\("docx", docx\)/);
+  assert.match(viewSource, /await this\.exportBinaryFile\("docx", docx, target\)/);
   assert.doesNotMatch(viewSource, /sourceMode === "article"/);
   assert.match(viewSource, /buildDescendantReadingSections\(file, document\)/);
   assert.match(viewSource, /saveDesktopPdfFile/);

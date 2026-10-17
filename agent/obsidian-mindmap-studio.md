@@ -1,10 +1,25 @@
 # obsidian-mindmap-studio 项目交接
 
 - 插件：MindMap Studio（Obsidian 本地优先 .mindmap 导图，含导图/大纲/文章/通读模式、全局搜索、图床、AI 助手与桌面截图链路）。
-- 版本基线：工作区版本文件为 1.55.7（Git Release 已发布 v1.55.7，上一轮 Word 导出分块打包已入库为 `62826df`）；本轮为「Word 导出的文章节点信息改为惰性迭代 + 分批让出」，交付追踪版本 1.55.7，交付后缀 553719。
+- 版本基线：工作区版本文件为 1.55.8（Git Release 已发布 v1.55.8，上一轮惰性迭代已入库为 `25c7499`）；本轮为「移动端适配核查 + 导出写入目标冻结」，交付追踪版本 1.55.8，交付后缀 591622。
 - 仓库规则：见根目录 `AGENTS.md`；每轮代码交付三份 ZIP（源码 / 安装 / Agent 交接）共用同一六位后缀；验证入口 `npm run verify`。
 
-## 当前状态（本轮：Word 导出的文章节点信息改为惰性迭代 + 分批让出）
+## 当前状态（本轮：移动端适配核查 + 导出写入目标冻结）
+
+- 触发：用户问「手机端匹配了吗、手机上 Obsidian 会不会视图异常」。本轮先做静态与运行核查，再修掉核查中发现的真实隐患。
+- 核查结论（移动端适配，均为实测/产物证据，非推断）：
+  - 构建产物 `main.js` 中 `new Worker` 出现次数 = **0**：`AsyncZipDeflate` / `AsyncUnzipInflate` 的 Worker 路径已被摇树移除。`URL.createObjectURL` 仅剩 2 处，且都属于既有桌面功能（JSON 导出下载链接、桌面截图），与本次分块链路无关。
+  - `esbuild` `target: es2018`（`esbuild.config.mjs`），产物保留原生 `function* iterateArticleNodeInfo`、原生 `async/await`；生成器与 async 均为 ES2015/ES2017 语法，Obsidian 移动端 WebView（Android Chromium / iOS WKWebView 14+）原生支持。
+  - `main.js` 中不存在模块作用域的 `require("node:*")` / `require("electron")`：桌面能力仍全部按需动态获取（`getNodeExportRuntime()` 在没有 `require` 时返回 null，`getElectronSaveRuntime()` 同理）。
+  - 运行验证：删掉 `globalThis.Worker`、`globalThis.require`、`URL.createObjectURL`、`globalThis.process` 后重新构建（platform browser + target es2018）并执行——**Word 导出（5000 节点，document.xml 399868 字节，5 个 OOXML 部件齐全）与 XMind 导入（图片 1 张）都正常完成**。即两条分块链路在「无 Worker 的 WebView」里可用。
+  - 移动端降级链：`manifest.json` 的 `isDesktopOnly` 为 `false`；导入导出弹窗的五个格式按钮（SVG/HTML/Word/PDF/Markdown）无条件创建，导出路径在移动端可达；Word 导出走 `saveDesktopExportFile()` → 无 `require` 时返回 null → 回退 `vault.createBinary()` 写入当前库；PDF 在移动端提示「PDF 导出仅支持 Obsidian 桌面端」（既有行为）。
+- 修掉的真实隐患（本轮改动）：长异步导出期间写入目标会被重新读取。`exportArticleFamily()` 虽然一开始捕获了 `file`/`document`，但 `exportTextFile()` / `exportBinaryFile()` 在写入时再次读取 `this.file` / `this.document`；上一轮把导出改成持续让出主线程数秒后，用户在导出期间切换文件（移动端更容易发生）会导致产物写到**另一个导图旁边**并使用**错误文件名**。现在：
+  - `view.ts` 新增模块级 `interface ExportWriteTarget { file: TFile | null; title: string | undefined }`，`exportArticleFamily()` 在开始时冻结 `target` 并传给三个写入调用（md / docx / html）。
+  - 两个写入方法的 `target` 参数有默认值 `{ file: this.file, title: this.document?.title }`，因此无长异步等待的模态导出（SVG / JSON / Markdown 大纲）行为与旧实现完全一致。
+  - 文件名解析抽为纯函数 `resolveExportBaseName(file, title)`（`src/utils/desktop-export.ts`），消除两处重复并补单测；语义与旧表达式 `file?.basename ?? this.document?.title ?? "思维导图"` 逐分支一致。
+- 测试：`tests/desktop-export.test.mjs` 新增「`resolveExportBaseName` 优先冻结文件名、其次标题、最后兜底」5 个断言；`tests/docx-export.test.mjs` 契约断言增加冻结目标（`ExportWriteTarget` 结构、`const target: ExportWriteTarget = ...`、写入方法只读 `target.file` 且不再回读 `this.document`）与三处 `target` 传参；`scripts/test.mjs` 的对应断言同步为 `await this.exportBinaryFile("docx", docx, target)`。
+- 验证：`npm run verify` 完整通过——`test:unit` **501 / 501**（新增 1 条）、`test:regression` 通过、`test:docs` 1341 处命名声明、`test:repo` 通过、`tsc --noEmit` + production esbuild 通过；`docs/FUNCTION_REFERENCE.md` 已重新生成；文档同步 `docs/ARCHITECTURE.md`（新增「导出的写入目标必须在长异步操作前冻结」「移动端可加载性是导出链路的硬约束」两条）、`docs/DEVELOPMENT.md`（新增导出冻结目标与移动端可加载规则）、`CHANGELOG.md`「未发布」。
+- 移动端仍待真机验证（本轮只做了静态 + 隔离环境核查，**没有**在 Android / iOS 真机上跑过）：在手机上打开大型导图 → 导出 Word，界面应保持可交互且产物与桌面端一致；导出期间切换文件，产物应仍落在原导图目录并使用原文件名；XMind 导入大型归档时不应卡死。移动端 CPU 更弱，导出耗时预计是桌面的数倍（分批让出的批次大小是固定 2000 项/段，未按平台调整）。
 
 - 触发：上一轮把 Word 打包（`zipSync`）迁出主线程后，用阶段探针实测 40k 节点单章节导出，发现残余阻塞全部集中在 `sectionInfos` 阶段 = 474.8 ms（`buildArticleNodeInfo()` 单次同步全量遍历；其余 toc 13.7 / body 88.4 / documentXml 11.5 / 已分块的 zip 255.7），即 `src/article/modes.ts` 是导出链路上最后一块无法让出的同步工作。本轮按同一「分块 + 让出主线程」模式收尾。
 - 实现（`src/article/modes.ts`）：新增惰性迭代器 `export function* iterateArticleNodeInfo(root, baseDepth, leafNumbering, primaryText): Generator<ArticleNodeInfo, void, void>`，逐项产出与原实现**逐字段完全相同**的 `ArticleNodeInfo`；`buildArticleNodeInfo()` 改为 `Array.from(iterateArticleNodeInfo(...))` 的全量同步包装（渲染、HTML/Markdown 导出调用方零改动）。遍历用**显式栈**（新增非导出接口 `ArticleInfoFrame`：children/index/defaultLevel/siblingHasHeading/convertLeaves/numberedIndexes）实现，而不是递归 `yield*`——后者在深链导图上每产出一项都要穿透整条委托链，会退化为 O(节点数 × 深度)；显式栈同时消除了深树递归风险。遍历顺序仍是父先于子、同级左到右。
@@ -20,7 +35,7 @@
 - 待手工验证：真实 Obsidian 桌面端导出大型文章族（Word）期间界面应保持可交互（含滚动、切换视图），导出完成后 Notice 与产物与上一版一致；导出大文档过程中不应出现「界面卡住数秒」的体感。可顺带确认 HTML / Markdown / PDF 导出行为不变。
 - 下一轮候选（按价值排序）：① 报告 P1 增量方向——`collectFileAssetPaths()` 的增量引用计数（或把「取消延迟删除」改为宿主在到期时查询打开视图的未保存引用），注意附件误删属数据丢失类风险，需保守设计；② `MutationDelta` / dirty 子树让 mutation 只更新受影响范围；③ 保存链路 `mutate() → notifyDocumentChange() → history.createSnapshot()` 与 `TextFileView.getViewData()` 的同步契约（在不动这两处前，保存前整文档 `JSON.stringify` 无法迁出主线程）。
 
-### 上一轮工作区（Word 导出打包迁出主线程 + 章节节点信息单次构建）
+### 上一轮工作区（Word 导出的文章节点信息改为惰性迭代 + 分批让出）
 
 - 触发：上一轮把「XMind 解压迁出主线程」标为已完成，并在下一步里留下「导出/保存链路的阻塞操作」。本轮按同一模式处理导出链路的同步打包：`src/import/import-export.ts` 的 `readingSectionsToDocx()` 此前用一次 `zipSync()` 完成整份 `.docx` 压缩，大型文章族（正文 XML 可达数十 MB）期间主线程完全冻结。
 - 实现（`src/import/import-export.ts`）：
@@ -190,12 +205,13 @@
 
 ## 验证基线
 
-- `npm run verify` 本机完整通过：`test:unit` **500/500**、`test:regression` 全部通过、`test:docs` 全部通过（1339 处命名声明）、`test:repo` 通过、`tsc --noEmit` 与 production esbuild 通过（含本轮文章节点信息惰性迭代 + 分批让出的全部专项测试）。
+- `npm run verify` 本机完整通过：`test:unit` **501/501**、`test:regression` 全部通过、`test:docs` 全部通过（1341 处命名声明）、`test:repo` 通过、`tsc --noEmit` 与 production esbuild 通过（含本轮导出写入目标冻结与移动端可加载性的核查与测试）。
 - 详细数据见根目录 `TEST_RESULTS.md`。
 
 ## 待验证事项（需真实 Obsidian 桌面端手工冒烟）
 
-- **Word 导出分批让出主线程（本轮，待实测）**：对大型文章族点「导出 → Word」，导出期间界面应保持可交互（滚动、切换视图不卡），完成后出现「已导出：<路径>」Notice；产物用 Word / WPS 打开需与上一版完全一致（目录超链接可跳转、章节书签、带圈末端编号、2em 正文缩进）。实测参考：40k 节点单文件的最长连续同步段由整段导出的 470 ms 降到 22 ms、200k 由 2973 ms 降到 78 ms（总耗时分别升到 1130 / 4263 ms，属让出的预期代价）。
+- **移动端（Android / iOS）真机验证（本轮，尚未做）**：本轮只做了构建产物静态核查 + 隔离环境（无 Worker / 无 require）运行核查，未在真机跑过。请在手机上确认：打开大型导图 → 导出 Word 界面保持可交互、产物与桌面一致；导出过程中切换到另一个导图，产物仍落在原导图目录并用原文件名（本轮修复点）；XMind 大归档导入不卡死；PDF 导出给出「仅支持桌面端」提示。
+- **Word 导出分批让出主线程（上一轮，待实测）**：对大型文章族点「导出 → Word」，导出期间界面应保持可交互（滚动、切换视图不卡），完成后出现「已导出：<路径>」Notice；产物用 Word / WPS 打开需与上一版完全一致（目录超链接可跳转、章节书签、带圈末端编号、2em 正文缩进）。实测参考：40k 节点单文件的最长连续同步段由整段导出的 470 ms 降到 22 ms、200k 由 2973 ms 降到 78 ms（总耗时分别升到 1130 / 4263 ms，属让出的预期代价）。
 - **Word 导出分块流式打包（上一轮，已随 v1.55.7 入库）**：对大型文章族点「导出 → Word」并选择保存位置，导出期间界面不应长时间无响应（改动前 `zipSync()` 会把整份 `.docx` 一次性压缩，实测 40k 节点单次阻塞 1611 ms、200k 节点 6621 ms；改动后残余阻塞来自单章节的 `buildArticleNodeInfo()`，40k/200k 分别约 924 ms / 3594 ms）；导出完成后应有「已导出：<路径>」Notice。产物用 Word / WPS 打开需与上一版完全一致：目录超链接可跳转、章节书签正常、带圈末端编号与 2em 正文缩进不变。若导出报错请附控制台信息（`writeArchiveChunked()` 会把 `fflate` 的压缩错误原样抛出）。
 - **大型文档 P0 加固（上一轮，待实测）**：打开含大量节点或多张附件的大型 `.mindmap` 应无卡顿（编辑、撤销、重做后附件 60 秒延迟回收仍能正常取消）——门控只在宿主上报有待回收附件时才做全树扫描，未上报时与旧行为一致。导入一份正常 XMind 文件应不受新的解压上限影响（条目数/单条/总量均在限内时行为不变）。构造一份深链（数千层）导图应能正常打开且不再退化为纯文本导入（根节点文字不应变成整段 JSON）。
 - **新建节点聚焦契约（上一轮，测试-only，待实测）**：真实 Obsidian 文章模式按 Ctrl/Cmd+Enter 创建兄弟节点、Ctrl/Cmd+Tab 创建子节点后，新节点应立即滚入视口并进入行内编辑且首次聚焦不丢（Ctrl+Tab 需确认未被宿主快捷键占用）。上一轮未改运行时代码，仅修正过期回归断言。
@@ -243,6 +259,6 @@
 ## 交付说明
 
 - 三份 ZIP 均输出到 `D:\Downloads`（仓库工作区外），外部文件名：`obsidian-mindmap-studio-<版本>-<后缀>.zip`、`mindmap-studio-<版本>-test-<后缀>.zip`、`Agent-<版本>-handoff-<后缀>.zip`（内部根目录 `Agent/`）。`D:\Downloads` 在沙箱内写入会被拒绝，需以非沙箱方式运行打包脚本；打包后必须确认仓库工作区内没有任何 `.zip`。
-- 最近交付包（后缀 553719，交付追踪版本 1.55.7）：`obsidian-mindmap-studio-1.55.7-553719.zip`（根目录 `obsidian-mindmap-studio/`）、`mindmap-studio-1.55.7-test-553719.zip`（根目录 `mindmap-studio/`）、`Agent-1.55.7-handoff-553719.zip`（根目录 `Agent/`）；实际发布版本以 GitHub Release 为准。
+- 最近交付包（后缀 591622，交付追踪版本 1.55.8）：`obsidian-mindmap-studio-1.55.8-591622.zip`（根目录 `obsidian-mindmap-studio/`）、`mindmap-studio-1.55.8-test-591622.zip`（根目录 `mindmap-studio/`）、`Agent-1.55.8-handoff-591622.zip`（根目录 `Agent/`）；实际发布版本以 GitHub Release 为准。
 - 历史交付包记录已清理；历史版本以 GitHub Release 发布为准，本地交付 ZIP 见 `D:\Downloads`。
 - 交付约束：沟通说明与中文 Git 提交说明中**不得**再写“- main.js 已重建。”这条；main.js 由 `npm run verify` 的 build 自动重建，交付时不要单独列出。

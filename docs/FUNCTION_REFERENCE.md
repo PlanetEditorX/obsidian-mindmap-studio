@@ -12506,9 +12506,19 @@ export interface DesktopExportResult
 export function sanitizeExportFilename(name: string, fallback = "思维导图"): string
 ```
 
+### 函数 `resolveExportBaseName`
+
+源码：`src/utils/desktop-export.ts:78`
+
+解析导出文件主名：优先使用导出开始前冻结的文件名，其次标题，最后回退「思维导图」。 文章族导出会持续让出主线程多秒，写入阶段不得再回读视图当前状态；导出入口把文件名与标题 冻结后传入，这里只做纯解析，便于单测覆盖空文件名/空标题等分支。
+
+```ts
+export function resolveExportBaseName(file:
+```
+
 ### 函数 `getElectronSaveRuntime`
 
-源码：`src/utils/desktop-export.ts:69`
+源码：`src/utils/desktop-export.ts:83`
 
 从 Obsidian 桌面端获取保存对话框；不可用时返回 null。
 
@@ -12518,7 +12528,7 @@ function getElectronSaveRuntime(): ElectronSaveRuntime | null
 
 ### 函数 `getNodeExportRuntime`
 
-源码：`src/utils/desktop-export.ts:82`
+源码：`src/utils/desktop-export.ts:96`
 
 从 Obsidian 桌面端按需获取 Node.js 文件 API；移动端或受限环境返回 null。
 
@@ -12528,7 +12538,7 @@ function getNodeExportRuntime(): NodeExportRuntime | null
 
 ### 函数 `saveDesktopExportFile`
 
-源码：`src/utils/desktop-export.ts:97`
+源码：`src/utils/desktop-export.ts:111`
 
 保存导出文本到用户选择的位置；无法打开选择器时默认写入桌面。
 
@@ -12538,7 +12548,7 @@ export async function saveDesktopExportFile(extension: DesktopExportExtension, b
 
 ### 函数 `saveDesktopPdfFile`
 
-源码：`src/utils/desktop-export.ts:116`
+源码：`src/utils/desktop-export.ts:130`
 
 使用 Electron 的离屏窗口渲染 HTML，并直接写出 PDF，避免 Obsidian 拦截打印弹窗。
 
@@ -12966,9 +12976,19 @@ export function extractPluginReleaseFiles(archive: ArrayBuffer): PluginReleaseFi
 
 Obsidian TextFileView 适配层。
 
+### 接口 `ExportWriteTarget`
+
+源码：`src/view.ts:37`
+
+导出写入目标：在长异步导出开始前冻结的当前文件与标题。 文章族导出要多秒并持续让出主线程（文章节点信息按 2000 项、Word 打包按 256 KiB 分批）， 期间用户可以切换文件甚至关闭视图。写入阶段若重新读取视图当前状态，产物会被写到另一个 导图旁边并使用错误文件名；因此导出入口捕获一次后传入，写入阶段不再回读视图状态。
+
+```ts
+interface ExportWriteTarget
+```
+
 ### 类 `MindMapStudioView`
 
-源码：`src/view.ts:33`
+源码：`src/view.ts:45`
 
 MindMapStudioView 的主要实现类。负责封装相关状态、生命周期和对外操作，避免调用方直接操作内部数据结构。
 
@@ -12978,7 +12998,7 @@ export class MindMapStudioView extends TextFileView
 
 ### 构造函数 `MindMapStudioView.constructor`
 
-源码：`src/view.ts:65`
+源码：`src/view.ts:77`
 
 创建 MindMapStudioView 实例，保存依赖和初始状态；实际 DOM 构建通常在 onOpen() 或后续渲染流程中完成。
 
@@ -12988,7 +13008,7 @@ constructor(leaf: WorkspaceLeaf, plugin: MindMapStudioPlugin)
 
 ### 方法 `MindMapStudioView.getViewType`
 
-源码：`src/view.ts:74`
+源码：`src/view.ts:86`
 
 读取并返回view type，并保持模型、界面和持久化状态的一致性。
 
@@ -12998,7 +13018,7 @@ getViewType(): string
 
 ### 方法 `MindMapStudioView.handleArticleStructureShortcut`
 
-源码：`src/view.ts:79`
+源码：`src/view.ts:91`
 
 Forward a window-captured article shortcut without exposing editor internals.
 
@@ -13008,7 +13028,7 @@ handleArticleStructureShortcut(event: KeyboardEvent, modifierHeld = false): bool
 
 ### 方法 `MindMapStudioView.canRunArticleStructureShortcut`
 
-源码：`src/view.ts:84`
+源码：`src/view.ts:96`
 
 Whether the active editor can accept an article structure command.
 
@@ -13018,7 +13038,7 @@ canRunArticleStructureShortcut(): boolean
 
 ### 方法 `MindMapStudioView.createArticleNodeFromShortcut`
 
-源码：`src/view.ts:89`
+源码：`src/view.ts:101`
 
 Obsidian command entry, used if its hotkey dispatcher wins the shortcut.
 
@@ -13028,7 +13048,7 @@ createArticleNodeFromShortcut(kind: "sibling" | "child"): boolean
 
 ### 方法 `MindMapStudioView.getDisplayText`
 
-源码：`src/view.ts:97`
+源码：`src/view.ts:109`
 
 读取并返回display text，并保持模型、界面和持久化状态的一致性。
 
@@ -13038,7 +13058,7 @@ getDisplayText(): string
 
 ### 方法 `MindMapStudioView.getIcon`
 
-源码：`src/view.ts:105`
+源码：`src/view.ts:117`
 
 读取并返回icon，并保持模型、界面和持久化状态的一致性。
 
@@ -13048,7 +13068,7 @@ getIcon(): string
 
 ### 方法 `MindMapStudioView.getViewData`
 
-源码：`src/view.ts:114`
+源码：`src/view.ts:126`
 
 返回当前编辑器文档的序列化文本，供 Obsidian 自动保存。保存使用模型层统一序列化，确保字段规范和版本号正确。
 
@@ -13058,7 +13078,7 @@ getViewData(): string
 
 ### 方法 `MindMapStudioView.applyImageUploadPatches`
 
-源码：`src/view.ts:129`
+源码：`src/view.ts:141`
 
 将后台上传结果合并到当前编辑器文档并立即保存，避免用上传开始时的旧快照刷新整棵节点树。
 
@@ -13068,7 +13088,7 @@ async applyImageUploadPatches(patches: readonly MindMapImageUploadPatch[]): Prom
 
 ### 方法 `MindMapStudioView.relinkMissingImageFiles`
 
-源码：`src/view.ts:144`
+源码：`src/view.ts:156`
 
 打开导图时按同名不同扩展名重新识别已失效的本地图片引用，并把新路径写回文档。 显示层已经通过同名兜底渲染出正确图片，这里只负责把引用持久化，因此不触发重绘。
 
@@ -13078,7 +13098,7 @@ private async relinkMissingImageFiles(): Promise<void>
 
 ### 方法 `MindMapStudioView.setViewData`
 
-源码：`src/view.ts:159`
+源码：`src/view.ts:171`
 
 接收 Obsidian 读取的文件文本，解析成领域文档并交给编辑器。重新加载时会保留全局显示模式，并异步刷新文章父子上下文。
 
@@ -13088,7 +13108,7 @@ setViewData(data: string, clear: boolean): void
 
 ### 方法 `MindMapStudioView.recoverMissingSubmapNavigation`
 
-源码：`src/view.ts:370`
+源码：`src/view.ts:382`
 
 异步恢复旧子导图缺失的父级导航，并只刷新受影响的导航控件与文章上下文。 该兼容修复不会把文件标记为已编辑；用户之后产生真实内容修改时，恢复出的导航会随正常保存一并持久化。
 
@@ -13098,7 +13118,7 @@ private async recoverMissingSubmapNavigation(file: TFile, document: MindMapDocum
 
 ### 方法 `MindMapStudioView.clear`
 
-源码：`src/view.ts:395`
+源码：`src/view.ts:407`
 
 执行“clear”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
 
@@ -13108,7 +13128,7 @@ clear(): void
 
 ### 方法 `MindMapStudioView.showArticleDirectory`
 
-源码：`src/view.ts:405`
+源码：`src/view.ts:417`
 
 Displays and persists the generated directory for the top-level article.
 
@@ -13118,7 +13138,7 @@ showArticleDirectory(focusNodeId?: string): void
 
 ### 方法 `MindMapStudioView.currentDocumentSnapshot`
 
-源码：`src/view.ts:417`
+源码：`src/view.ts:429`
 
 Reuses the detached document snapshot received from the editor change callback. Only viewport metadata can change without a document mutation, so persistence merges that small object instead of cloning the complete node tree again.
 
@@ -13128,7 +13148,7 @@ private currentDocumentSnapshot(includeViewport = false): MindMapDocument | null
 
 ### 方法 `MindMapStudioView.save`
 
-源码：`src/view.ts:431`
+源码：`src/view.ts:443`
 
 保存相关数据，并保持模型、界面和持久化状态的一致性。
 
@@ -13138,7 +13158,7 @@ async save(clear?: boolean): Promise<void>
 
 ### 方法 `MindMapStudioView.onClose`
 
-源码：`src/view.ts:457`
+源码：`src/view.ts:469`
 
 在弹窗或视图关闭时释放临时 DOM、计时器和事件状态。
 
@@ -13148,7 +13168,7 @@ async onClose(): Promise<void>
 
 ### 方法 `MindMapStudioView.openMapFamilySearchFromShortcut`
 
-源码：`src/view.ts:470`
+源码：`src/view.ts:482`
 
 从全局快捷键入口打开当前父子导图族搜索。公开边界让窗口捕获阶段在焦点不位于编辑器根节点时仍能可靠触发搜索。
 
@@ -13158,7 +13178,7 @@ openMapFamilySearchFromShortcut(): void
 
 ### 方法 `MindMapStudioView.openMapFamilySearch`
 
-源码：`src/view.ts:477`
+源码：`src/view.ts:489`
 
 保存当前文件后打开当前父子导图族搜索，并把尚未落盘的编辑器文档作为当前文件索引快照。
 
@@ -13168,7 +13188,7 @@ private async openMapFamilySearch(): Promise<void>
 
 ### 方法 `MindMapStudioView.refreshAppearance`
 
-源码：`src/view.ts:490`
+源码：`src/view.ts:502`
 
 刷新appearance，并保持模型、界面和持久化状态的一致性。
 
@@ -13178,7 +13198,7 @@ refreshAppearance(): void
 
 ### 方法 `MindMapStudioView.focusNode`
 
-源码：`src/view.ts:500`
+源码：`src/view.ts:512`
 
 定位node，并保持模型、界面和持久化状态的一致性。
 
@@ -13188,7 +13208,7 @@ focusNode(nodeId: string): void
 
 ### 方法 `MindMapStudioView.markExplicitNavigation`
 
-源码：`src/view.ts:515`
+源码：`src/view.ts:527`
 
 标记当前文件由用户或跨模式导航显式打开。 下一次文章族上下文加载完成时以当前文件为准，避免旧的跨文件阅读记录 立即把视图跳回刚离开的父导图或子导图。
 
@@ -13198,7 +13218,7 @@ markExplicitNavigation(focusNodeId?: string): void
 
 ### 方法 `MindMapStudioView.setDisplayMode`
 
-源码：`src/view.ts:534`
+源码：`src/view.ts:546`
 
 更新并应用display mode，并保持模型、界面和持久化状态的一致性。
 
@@ -13208,7 +13228,7 @@ setDisplayMode(mode: DisplayMode): void
 
 ### 方法 `MindMapStudioView.applyGlobalDisplayMode`
 
-源码：`src/view.ts:543`
+源码：`src/view.ts:555`
 
 应用global display mode，并保持模型、界面和持久化状态的一致性。
 
@@ -13218,7 +13238,7 @@ applyGlobalDisplayMode(mode: DisplayMode): void
 
 ### 方法 `MindMapStudioView.toggleReadOnly`
 
-源码：`src/view.ts:550`
+源码：`src/view.ts:562`
 
 切换read only，并保持模型、界面和持久化状态的一致性。
 
@@ -13228,7 +13248,7 @@ toggleReadOnly(): void
 
 ### 方法 `MindMapStudioView.askAi`
 
-源码：`src/view.ts:555`
+源码：`src/view.ts:567`
 
 打开 AI 询问窗口；默认使用当前页面，节点右键后使用该节点子树。
 
@@ -13238,7 +13258,7 @@ askAi(): void
 
 ### 方法 `MindMapStudioView.captureScreenshot`
 
-源码：`src/view.ts:561`
+源码：`src/view.ts:573`
 
 启动截图并让编辑器根据截图前焦点决定插入节点或保留剪贴板。
 
@@ -13248,7 +13268,7 @@ async captureScreenshot(recognizeAfter = false): Promise<void>
 
 ### 方法 `MindMapStudioView.openAiModal`
 
-源码：`src/view.ts:570`
+源码：`src/view.ts:582`
 
 构建 Markdown 上下文并打开 AI 窗口。
 
@@ -13258,7 +13278,7 @@ private openAiModal(nodeId?: string): void
 
 ### 方法 `MindMapStudioView.recognizeImages`
 
-源码：`src/view.ts:615`
+源码：`src/view.ts:627`
 
 按节点树顺序逐张读取并识别当前页面或节点子树中的全部图片；收到取消信号时停止后续图片。
 
@@ -13268,7 +13288,7 @@ private async recognizeImages(nodeId: string | undefined, profileId: string, ins
 
 ### 方法 `MindMapStudioView.getEditorOptions`
 
-源码：`src/view.ts:645`
+源码：`src/view.ts:657`
 
 读取并返回editor options，并保持模型、界面和持久化状态的一致性。
 
@@ -13278,7 +13298,7 @@ private getEditorOptions(preferCurrentFileLocation = false, preferredCurrentNode
 
 ### 方法 `MindMapStudioView.scheduleArticleContextRefresh`
 
-源码：`src/view.ts:719`
+源码：`src/view.ts:731`
 
 安排延迟执行article context refresh，并保持模型、界面和持久化状态的一致性。
 
@@ -13288,7 +13308,7 @@ private scheduleArticleContextRefresh(delay: number): void
 
 ### 方法 `MindMapStudioView.scheduleArticleContentContextRefresh`
 
-源码：`src/view.ts:732`
+源码：`src/view.ts:744`
 
 Schedules a metadata-only article refresh that never reads another mind-map file.
 
@@ -13298,7 +13318,7 @@ private scheduleArticleContentContextRefresh(delay: number): void
 
 ### 方法 `MindMapStudioView.syncCurrentReadingSection`
 
-源码：`src/view.ts:742`
+源码：`src/view.ts:754`
 
 Replaces only the current physical page inside the already loaded continuous-reading family.
 
@@ -13308,7 +13328,7 @@ private syncCurrentReadingSection(document: MindMapDocument): boolean
 
 ### 方法 `MindMapStudioView.refreshArticleContentContext`
 
-源码：`src/view.ts:757`
+源码：`src/view.ts:769`
 
 Refreshes article titles, numbering, and breadcrumbs from memory without rediscovering the map family.
 
@@ -13318,7 +13338,7 @@ private refreshArticleContentContext(): void
 
 ### 方法 `MindMapStudioView.refreshArticleContext`
 
-源码：`src/view.ts:782`
+源码：`src/view.ts:794`
 
 刷新article context，并保持模型、界面和持久化状态的一致性。
 
@@ -13328,7 +13348,7 @@ private async refreshArticleContext(): Promise<void>
 
 ### 方法 `MindMapStudioView.applyViewClasses`
 
-源码：`src/view.ts:866`
+源码：`src/view.ts:878`
 
 应用view classes，并保持模型、界面和持久化状态的一致性。
 
@@ -13338,7 +13358,7 @@ private applyViewClasses(): void
 
 ### 方法 `MindMapStudioView.scheduleSavedIndicator`
 
-源码：`src/view.ts:875`
+源码：`src/view.ts:887`
 
 安排延迟执行saved indicator，并保持模型、界面和持久化状态的一致性。
 
@@ -13348,7 +13368,7 @@ private scheduleSavedIndicator(): void
 
 ### 方法 `MindMapStudioView.openLink`
 
-源码：`src/view.ts:885`
+源码：`src/view.ts:897`
 
 打开link，并保持模型、界面和持久化状态的一致性。
 
@@ -13358,7 +13378,7 @@ private async openLink(rawLink: string): Promise<void>
 
 ### 方法 `MindMapStudioView.resolveImage`
 
-源码：`src/view.ts:902`
+源码：`src/view.ts:914`
 
 解析并确定image，并保持模型、界面和持久化状态的一致性。
 
@@ -13368,27 +13388,27 @@ private resolveImage(rawSource: string): string | null
 
 ### 方法 `MindMapStudioView.exportTextFile`
 
-源码：`src/view.ts:927`
+源码：`src/view.ts:941`
 
-执行“export text file”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+写出导出文本文件，并在无法打开选择器时落入当前库。
 
 ```ts
-private async exportTextFile(extension: "svg" | "md" | "json" | "html" | "doc", content: string, preferExternal = false): Promise<void>
+private async exportTextFile(extension: "svg" | "md" | "json" | "html" | "doc", content: string, preferExternal = false, target: ExportWriteTarget =
 ```
 
 ### 方法 `MindMapStudioView.exportBinaryFile`
 
-源码：`src/view.ts:944`
+源码：`src/view.ts:964`
 
 将二进制文档写入所选位置或当前库。
 
 ```ts
-private async exportBinaryFile(extension: "docx", content: Uint8Array): Promise<void>
+private async exportBinaryFile(extension: "docx", content: Uint8Array, target: ExportWriteTarget =
 ```
 
 ### 方法 `MindMapStudioView.exportArticleFamily`
 
-源码：`src/view.ts:967`
+源码：`src/view.ts:987`
 
 Exports the current map family as one continuous document. A top-level directory uses its already collected reading sections; a child page starts at the current map and recursively includes descendants only.
 

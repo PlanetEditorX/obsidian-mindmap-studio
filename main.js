@@ -2243,6 +2243,10 @@ function enabledAiProfiles(profiles) {
 function sanitizeExportFilename(name, fallback = "\u601D\u7EF4\u5BFC\u56FE") {
   return name.replace(/[<>:"/\\|?*\x00-\x1F]/g, " ").replace(/\s+/g, " ").trim().replace(/[. ]+$/g, "") || fallback;
 }
+function resolveExportBaseName(file, title) {
+  var _a2, _b2;
+  return (_b2 = (_a2 = file == null ? void 0 : file.basename) != null ? _a2 : title) != null ? _b2 : "\u601D\u7EF4\u5BFC\u56FE";
+}
 function getElectronSaveRuntime() {
   const requireFunction = typeof window !== "undefined" ? window.require : void 0;
   if (!requireFunction) return null;
@@ -22732,15 +22736,17 @@ var MindMapStudioView = class extends import_obsidian17.TextFileView {
     return relinkedFile instanceof import_obsidian17.TFile ? this.app.vault.getResourcePath(relinkedFile) : null;
   }
   /**
-   * 执行“export text file”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+   * 写出导出文本文件，并在无法打开选择器时落入当前库。
    *
-   * @param extension 该参数用于 export text file 流程中的输入或控制。
-   * @param content 该参数用于 export text file 流程中的输入或控制。
+   * @param extension 导出扩展名。
+   * @param content 文本内容。
+   * @param preferExternal 是否优先走桌面端保存对话框。
+   * @param target 冻结的写入目标；省略时按当前视图状态即时求值（无长异步等待的调用方）。
    */
-  async exportTextFile(extension, content, preferExternal = false) {
-    var _a2, _b2, _c, _d, _e;
-    const file = this.file;
-    const baseName = (_c = (_b2 = file == null ? void 0 : file.basename) != null ? _b2 : (_a2 = this.document) == null ? void 0 : _a2.title) != null ? _c : "\u601D\u7EF4\u5BFC\u56FE";
+  async exportTextFile(extension, content, preferExternal = false, target = { file: this.file, title: ((_a2) => (_a2 = this.document) == null ? void 0 : _a2.title)() }) {
+    var _a3, _b2;
+    const file = target.file;
+    const baseName = resolveExportBaseName(file, target.title);
     if (preferExternal) {
       const desktopResult = await saveDesktopExportFile(extension, baseName, content);
       if (desktopResult) {
@@ -22748,22 +22754,28 @@ var MindMapStudioView = class extends import_obsidian17.TextFileView {
         return;
       }
     }
-    const parentPath = (_e = (_d = file == null ? void 0 : file.parent) == null ? void 0 : _d.path) != null ? _e : "";
+    const parentPath = (_b2 = (_a3 = file == null ? void 0 : file.parent) == null ? void 0 : _a3.path) != null ? _b2 : "";
     const path = await this.plugin.getAvailablePath((0, import_obsidian17.normalizePath)(`${parentPath ? `${parentPath}/` : ""}${baseName}.${extension}`));
     await this.app.vault.create(path, content);
     new import_obsidian17.Notice(`\u5DF2\u5BFC\u51FA\uFF1A${path}`);
   }
-  /** 将二进制文档写入所选位置或当前库。 */
-  async exportBinaryFile(extension, content) {
-    var _a2, _b2, _c, _d, _e;
-    const file = this.file;
-    const baseName = (_c = (_b2 = file == null ? void 0 : file.basename) != null ? _b2 : (_a2 = this.document) == null ? void 0 : _a2.title) != null ? _c : "\u601D\u7EF4\u5BFC\u56FE";
+  /**
+   * 将二进制文档写入所选位置或当前库。
+   *
+   * @param extension 导出扩展名。
+   * @param content 二进制内容。
+   * @param target 冻结的写入目标；省略时按当前视图状态即时求值。
+   */
+  async exportBinaryFile(extension, content, target = { file: this.file, title: ((_b2) => (_b2 = this.document) == null ? void 0 : _b2.title)() }) {
+    var _a2, _b3;
+    const file = target.file;
+    const baseName = resolveExportBaseName(file, target.title);
     const desktopResult = await saveDesktopExportFile(extension, baseName, content);
     if (desktopResult) {
       if (desktopResult.path) new import_obsidian17.Notice(`\u5DF2\u5BFC\u51FA\uFF1A${desktopResult.path}`);
       return;
     }
-    const parentPath = (_e = (_d = file == null ? void 0 : file.parent) == null ? void 0 : _d.path) != null ? _e : "";
+    const parentPath = (_b3 = (_a2 = file == null ? void 0 : file.parent) == null ? void 0 : _a2.path) != null ? _b3 : "";
     const path = await this.plugin.getAvailablePath((0, import_obsidian17.normalizePath)(`${parentPath ? `${parentPath}/` : ""}${baseName}.${extension}`));
     const binary = new ArrayBuffer(content.byteLength);
     new Uint8Array(binary).set(content);
@@ -22782,6 +22794,7 @@ var MindMapStudioView = class extends import_obsidian17.TextFileView {
     const file = this.file;
     const document2 = this.document;
     if (!file || !document2) return;
+    const target = { file, title: document2.title };
     await this.save();
     const sections = this.showArticleToc && this.readingSections.length ? this.readingSections : await this.plugin.buildDescendantReadingSections(file, document2);
     const tocMaxDepth = resolveArticleTocMaxDepth((_a2 = document2.view) == null ? void 0 : _a2.articleTocMaxDepth, this.plugin.settings.articleTocMaxDepth);
@@ -22792,12 +22805,12 @@ var MindMapStudioView = class extends import_obsidian17.TextFileView {
     };
     if (format === "md") {
       const markdown = readingSectionsToMarkdown(sections, tocMaxDepth, articleExportOptions);
-      await this.exportTextFile("md", markdown, true);
+      await this.exportTextFile("md", markdown, true, target);
       return;
     }
     if (format === "doc") {
       const docx = await readingSectionsToDocx(sections, tocMaxDepth, articleExportOptions);
-      await this.exportBinaryFile("docx", docx);
+      await this.exportBinaryFile("docx", docx, target);
       return;
     }
     const html = readingSectionsToHtml(sections, tocMaxDepth, articleExportOptions);
@@ -22805,7 +22818,7 @@ var MindMapStudioView = class extends import_obsidian17.TextFileView {
       const result = await saveDesktopPdfFile(file.basename, html);
       if (result == null ? void 0 : result.path) new import_obsidian17.Notice(`\u5DF2\u5BFC\u51FA\uFF1A${result.path}`);
       else if (!result) new import_obsidian17.Notice("PDF \u5BFC\u51FA\u4EC5\u652F\u6301 Obsidian \u684C\u9762\u7AEF");
-    } else await this.exportTextFile(format, html, true);
+    } else await this.exportTextFile(format, html, true, target);
   }
 };
 

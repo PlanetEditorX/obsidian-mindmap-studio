@@ -16,7 +16,7 @@ import { AiAskModal } from "./ai/modal";
 import { enabledAiProfiles } from "./ai/config";
 import { buildAiMarkdownPayload } from "./ai/markdown";
 import { isAiRequestCancelled, throwIfSignalAborted } from "./ai/protocol";
-import { saveDesktopExportFile, saveDesktopPdfFile } from "./utils/desktop-export";
+import { resolveExportBaseName, saveDesktopExportFile, saveDesktopPdfFile } from "./utils/desktop-export";
 import {
   collectRecognizableImages,
   type ImageRecognitionBatchResult,
@@ -26,6 +26,18 @@ import {
 import { countCodeLines, renderCodeBlock } from "./render/code-block";
 
 export const VIEW_TYPE_MINDMAP_STUDIO = "mindmap-studio-view";
+
+/**
+ * 导出写入目标：在长异步导出开始前冻结的当前文件与标题。
+ *
+ * 文章族导出要多秒并持续让出主线程（文章节点信息按 2000 项、Word 打包按 256 KiB 分批），
+ * 期间用户可以切换文件甚至关闭视图。写入阶段若重新读取视图当前状态，产物会被写到另一个
+ * 导图旁边并使用错误文件名；因此导出入口捕获一次后传入，写入阶段不再回读视图状态。
+ */
+interface ExportWriteTarget {
+  file: TFile | null;
+  title: string | undefined;
+}
 
 /**
  * MindMapStudioView 的主要实现类。负责封装相关状态、生命周期和对外操作，避免调用方直接操作内部数据结构。
@@ -919,14 +931,16 @@ export class MindMapStudioView extends TextFileView {
   }
 
   /**
-   * 执行“export text file”相关的内部逻辑。该函数封装单一职责，供所属模块或类的上层流程复用。
+   * 写出导出文本文件，并在无法打开选择器时落入当前库。
    *
-   * @param extension 该参数用于 export text file 流程中的输入或控制。
-   * @param content 该参数用于 export text file 流程中的输入或控制。
+   * @param extension 导出扩展名。
+   * @param content 文本内容。
+   * @param preferExternal 是否优先走桌面端保存对话框。
+   * @param target 冻结的写入目标；省略时按当前视图状态即时求值（无长异步等待的调用方）。
    */
-  private async exportTextFile(extension: "svg" | "md" | "json" | "html" | "doc", content: string, preferExternal = false): Promise<void> {
-    const file = this.file;
-    const baseName = file?.basename ?? this.document?.title ?? "思维导图";
+  private async exportTextFile(extension: "svg" | "md" | "json" | "html" | "doc", content: string, preferExternal = false, target: ExportWriteTarget = { file: this.file, title: this.document?.title }): Promise<void> {
+    const file = target.file;
+    const baseName = resolveExportBaseName(file, target.title);
     if (preferExternal) {
       const desktopResult = await saveDesktopExportFile(extension, baseName, content);
       if (desktopResult) {
@@ -940,10 +954,16 @@ export class MindMapStudioView extends TextFileView {
     new Notice(`已导出：${path}`);
   }
 
-  /** 将二进制文档写入所选位置或当前库。 */
-  private async exportBinaryFile(extension: "docx", content: Uint8Array): Promise<void> {
-    const file = this.file;
-    const baseName = file?.basename ?? this.document?.title ?? "思维导图";
+  /**
+   * 将二进制文档写入所选位置或当前库。
+   *
+   * @param extension 导出扩展名。
+   * @param content 二进制内容。
+   * @param target 冻结的写入目标；省略时按当前视图状态即时求值。
+   */
+  private async exportBinaryFile(extension: "docx", content: Uint8Array, target: ExportWriteTarget = { file: this.file, title: this.document?.title }): Promise<void> {
+    const file = target.file;
+    const baseName = resolveExportBaseName(file, target.title);
     const desktopResult = await saveDesktopExportFile(extension, baseName, content);
     if (desktopResult) {
       if (desktopResult.path) new Notice(`已导出：${desktopResult.path}`);
@@ -968,6 +988,9 @@ export class MindMapStudioView extends TextFileView {
     const file = this.file;
     const document = this.document;
     if (!file || !document) return;
+    // 导出期间可能持续让出主线程（Word 打包分很多批），这里冻结一次写入目标，
+    // 避免中途切换文件后把产物写到别的导图旁边或用错文件名。
+    const target: ExportWriteTarget = { file, title: document.title };
     await this.save();
     const sections = this.showArticleToc && this.readingSections.length
       ? this.readingSections
@@ -980,13 +1003,13 @@ export class MindMapStudioView extends TextFileView {
     };
     if (format === "md") {
       const markdown = readingSectionsToMarkdown(sections, tocMaxDepth, articleExportOptions);
-      await this.exportTextFile("md", markdown, true);
+      await this.exportTextFile("md", markdown, true, target);
       return;
     }
     if (format === "doc") {
-      // 打包导出是异步契约：fflate 流式压缩按 256 KiB 分批并在批次之间让出主线程。
+      // 打包导出是异步契约：文章节点信息按 2000 项、压缩按 256 KiB 分批并在批次之间让出主线程。
       const docx = await readingSectionsToDocx(sections, tocMaxDepth, articleExportOptions);
-      await this.exportBinaryFile("docx", docx);
+      await this.exportBinaryFile("docx", docx, target);
       return;
     }
     const html = readingSectionsToHtml(sections, tocMaxDepth, articleExportOptions);
@@ -995,6 +1018,6 @@ export class MindMapStudioView extends TextFileView {
       if (result?.path) new Notice(`已导出：${result.path}`);
       else if (!result) new Notice("PDF 导出仅支持 Obsidian 桌面端");
     }
-    else await this.exportTextFile(format, html, true);
+    else await this.exportTextFile(format, html, true, target);
   }
 }

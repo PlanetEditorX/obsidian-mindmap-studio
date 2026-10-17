@@ -150,5 +150,11 @@ test("DOCX export contract stays async and chunked on both sides of the boundary
   assert.match(exportSource, /for \(const info of sectionInfos\[sectionIndex\] \?\? \[\]\)/);
   assert.match(exportSource, /const infos = prebuiltInfos\?\.\[sectionIndex\]/);
   assert.match(viewSource, /const docx = await readingSectionsToDocx\(sections, tocMaxDepth, articleExportOptions\)/);
-  assert.match(viewSource, /await this\.exportBinaryFile\("docx", docx\)/);
+  assert.match(viewSource, /await this\.exportBinaryFile\("docx", docx, target\)/);
+  assert.match(viewSource, /interface ExportWriteTarget \{\n  file: TFile \| null;\n  title: string \| undefined;\n\}/);
+  assert.match(viewSource, /const target: ExportWriteTarget = \{ file, title: document\.title \};/);
+  assert.match(viewSource, /const file = target\.file;\n    const baseName = resolveExportBaseName\(file, target\.title\);/);
+  assert.doesNotMatch(viewSource, /const baseName = file\?\.basename \?\? this\.document/, "写入阶段不得回读视图当前状态，必须用冻结的导出目标");
+  assert.match(viewSource, /await this\.exportTextFile\("md", markdown, true, target\)/);
+  assert.match(viewSource, /else await this\.exportTextFile\(format, html, true, target\)/);
 });
